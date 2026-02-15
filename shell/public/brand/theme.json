@@ -1,0 +1,36 @@
+{
+	"brand": {
+		"name": "Cafelua OS",
+		"tagline": "Where Technology meets Emotion",
+		"description": "A sanctuary for postponed dreams"
+	},
+	"colors": {
+		"espresso": "#3B2F2F",
+		"latte": "#D4C4B7",
+		"cream": "#F5F1E6",
+		"wood": "#8D6E63",
+		"wood_deep": "#5D4037",
+		"sage": "#8FBC8F",
+		"forest": "#2F4F4F",
+		"tech_blue": "#5DADE2",
+		"amber": "#FFBF00",
+		"viewport_bg": "#080A0E"
+	},
+	"fonts": {
+		"sans": "Pretendard, Inter, system-ui, sans-serif",
+		"serif": "Merriweather, Georgia, serif",
+		"handwriting": "Nanum Pen Script, cursive"
+	},
+	"spacing": {
+		"unit": 8,
+		"max_width": 1200,
+		"header_height": 80,
+		"border_radius": 12
+	},
+	"assets": {
+		"logo": "/brand/logo.webp",
+		"logo_png": "/brand/cafe_lua_logo_cleaned.png",
+		"alpha_icon": "/brand/alpha-icon.webp",
+		"og_cover": "/brand/og-cover.webp"
+	}
+}

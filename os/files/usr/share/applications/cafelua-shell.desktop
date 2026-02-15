@@ -1,0 +1,8 @@
+[Desktop Entry]
+Name=Cafelua Shell
+Comment=Personal AI avatar shell
+Exec=/usr/bin/cafelua-shell
+Icon=cafelua
+Type=Application
+Categories=Utility;
+StartupWMClass=cafelua-shell

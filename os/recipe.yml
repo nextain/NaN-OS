@@ -1,0 +1,34 @@
+name: cafelua-os
+description: Cafelua OS - Personal AI OS with virtual avatar
+base-image: ghcr.io/ublue-os/bazzite
+image-version: latest
+
+modules:
+  - type: rpm-ostree
+    install:
+      - nodejs
+      - npm
+      # Tauri 2 build dependencies
+      - webkit2gtk4.1-devel
+      - openssl-devel
+      - libappindicator-gtk3-devel
+      - librsvg2-devel
+      - libxdo-devel
+      - gcc
+      - gcc-c++
+      - make
+      - pkg-config
+      # Utilities
+      - sqlite
+      - podman
+
+  - type: script
+    scripts:
+      - install-pnpm.sh
+
+  - type: files
+    files:
+      - source: files
+        destination: /
+
+  - type: signing

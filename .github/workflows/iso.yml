@@ -1,0 +1,52 @@
+name: Generate ISO
+
+on:
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: "Image tag to use"
+        required: false
+        default: "latest"
+
+env:
+  IMAGE_NAME: cafelua-os
+  IMAGE_REGISTRY: ghcr.io/${{ github.repository_owner }}
+
+jobs:
+  build-iso:
+    name: Generate ISO
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Generate ISO
+        uses: jasonn3/build-container-installer@main
+        id: build
+        with:
+          arch: x86_64
+          image_name: ${{ env.IMAGE_NAME }}
+          image_repo: ${{ env.IMAGE_REGISTRY }}
+          image_tag: ${{ inputs.image_tag }}
+          variant: Kinoite
+          iso_name: cafelua-os-${{ inputs.image_tag }}.iso
+
+      - name: Upload ISO as Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: cafelua-os-${{ inputs.image_tag }}
+          path: ${{ steps.build.outputs.iso_path }}
+          retention-days: 7
+          if-no-files-found: error
+
+      - name: Upload to Release
+        if: github.ref == 'refs/heads/main'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: iso-${{ github.run_number }}
+          name: "Cafelua OS ISO (Build #${{ github.run_number }})"
+          files: ${{ steps.build.outputs.iso_path }}
+          draft: true
