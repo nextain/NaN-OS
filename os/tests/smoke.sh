@@ -19,6 +19,9 @@ check() {
 
 echo "=== Cafelua OS Smoke Test ==="
 
+# OS identity
+check "os-release says Cafelua OS" grep -q "Cafelua OS" /usr/lib/os-release
+
 # Node.js 22+
 check "Node.js 22+" node --version
 node_major=$(node --version | sed 's/v\([0-9]*\).*/\1/')

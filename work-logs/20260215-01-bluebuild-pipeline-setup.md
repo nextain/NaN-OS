@@ -39,6 +39,13 @@ BlueBuild 기반 커스텀 Bazzite 이미지 구성:
 | `build.yml` | push to main (os/** 변경 시) | BlueBuild 이미지 빌드 → ghcr.io push |
 | `iso.yml` | workflow_dispatch (수동) | ISO 생성 → GitHub Releases 업로드 |
 
+### 4. OS 브랜딩 (branding.sh)
+
+`/usr/lib/os-release`를 덮어써서 부팅 후 "Cafelua OS"로 표시되도록 변경:
+- `NAME="Cafelua OS"`
+- `PRETTY_NAME="Cafelua OS (Bazzite)"`
+- `neofetch`, 설정 화면, `cat /etc/os-release`에서 확인 가능
+
 ## 참고
 
 - BlueBuild 레시피 타입: `rpm-ostree` (dnf가 아님)

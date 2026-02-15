@@ -25,6 +25,7 @@ modules:
   - type: script
     scripts:
       - install-pnpm.sh
+      - branding.sh
 
   - type: files
     files:
