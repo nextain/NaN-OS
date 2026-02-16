@@ -1,0 +1,165 @@
+description: "Phase 3 detailed plan — hybrid of project-careti + ref-opencode + ref-moltbot patterns"
+mirror: ".users/context/phase3-openclaw-hybrid-plan.md"
+
+approach: hybrid
+  # Phase 3: tools run inside Agent process (no gateway daemon)
+  # Phase 4: add OpenClaw Gateway for channels/skills
+
+origins:
+  project-careti:
+    used: [ToolHandler registry, AutoApprovalSettings UI, requires_approval LLM hint, PreToolUse/PostToolUse hooks]
+    not_used: [VS Code dependency, gRPC/protobuf, Plan/Act mode]
+  ref-opencode:
+    used: [tree-sitter bash parsing, BashArity dictionary, pattern permission (wildcard), once/always/reject, Zod schema, doom loop detection, output truncation]
+    not_used: [Bun runtime, Solid.js TUI, SQLite sessions, MCP]
+  ref-moltbot:
+    used: [gateway protocol reference for Phase 4]
+    not_used: [gateway daemon, channels, device auth, mDNS]
+
+origin_tracking:
+  rule: "All borrowed code has ORIGIN comment header"
+  format: "// ORIGIN: <source-file> | PURPOSE: <why> | MODIFICATIONS: <what changed>"
+
+conflicts_resolved:
+  permission_model:
+    problem: "careti=per-tool toggles, opencode=pattern wildcards, cafelua=tier 0-3"
+    solution: "3-layer: tool-type toggle (UI) → tier hard-block → pattern ruleset + LLM hint"
+    eval_order: [tool_toggle_check, tier3_block, tree_sitter_analysis, pattern_ruleset, llm_hint, ask_user]
+
+  tool_interface:
+    problem: "careti=IToolHandler, opencode=Tool.Info with Zod"
+    solution: "Hybrid ToolDefinition: careti registry + opencode Zod params"
+
+  protocol:
+    problem: "careti=gRPC, opencode=HTTP+SSE, cafelua=stdio"
+    solution: "Extend existing stdio with new chunk types (backward compatible)"
+
+  approval_flow:
+    problem: "careti=yes/no, opencode=once/always/reject+feedback"
+    solution: "Adopt opencode 3-stage with feedback"
+
+sub_phases:
+  3.1:
+    name: "Tool framework + protocol extension"
+    new_files:
+      - agent/src/tools/types.ts
+      - agent/src/tools/registry.ts
+      - agent/src/tools/permission.ts
+      - agent/src/tools/permission-rules.ts
+    modified_files:
+      - agent/src/protocol.ts
+      - agent/src/providers/types.ts
+      - shell/src/lib/types.ts
+    tests:
+      - "registry: register → get → list"
+      - "permission: tier 3 block, pattern eval"
+      - "protocol: new chunk types parseable"
+    done_when: "pnpm --filter agent test passes, 0 tools but framework works"
+
+  3.2:
+    name: "LLM function calling (Gemini first)"
+    new_files:
+      - agent/src/tools/tool-loop.ts
+    modified_files:
+      - agent/src/providers/gemini.ts
+      - agent/src/providers/anthropic.ts
+      - agent/src/providers/xai.ts
+      - agent/src/providers/types.ts
+      - agent/src/index.ts
+    tests:
+      - "gemini: tool_call → execute → re-invoke → final text"
+      - "anthropic: tool_use → same flow"
+      - "xai: function_call → same flow"
+      - "doom loop: 3 failures → approval_request"
+      - "cancel during tool execution"
+    done_when: "mock LLM tool_call → dummy tool → re-invoke → final response, all 3 providers"
+
+  3.3:
+    name: "Basic tools (5): file_read, file_write, glob, grep, bash"
+    new_files:
+      - agent/src/tools/handlers/file-read.ts
+      - agent/src/tools/handlers/file-write.ts
+      - agent/src/tools/handlers/glob.ts
+      - agent/src/tools/handlers/grep.ts
+      - agent/src/tools/handlers/bash.ts
+      - agent/src/tools/bash/parser.ts
+      - agent/src/tools/bash/arity.ts
+      - agent/src/tools/bash/blocked.ts
+    new_deps: [zod, web-tree-sitter, tree-sitter-bash]
+    tests:
+      - "file_read: existing file → content"
+      - "file_read: missing file → error (no crash)"
+      - "file_write: create in ~/tmp → exists"
+      - "file_write: write to /etc → tier 3 block"
+      - "glob: *.ts → matching files"
+      - "grep: pattern → matching lines"
+      - "bash: ls -la → output"
+      - "bash: npm install → approval_request"
+      - "bash: rm -rf / → tier 3 block"
+      - "bash: sudo → tier 3 block"
+      - "bash: external dir access → approval_request"
+      - "bash: timeout → process killed + result"
+      - "permission pattern: npm always → npm run auto-allow"
+      - "permission: once → re-ask on repeat"
+      - "permission: reject with message → feedback to LLM"
+    done_when: "5 tools pass unit + integration tests, tree-sitter works"
+
+  3.4:
+    name: "Shell UI — ToolProgress + PermissionModal"
+    new_files:
+      - shell/src/components/ToolProgress.tsx
+      - shell/src/components/PermissionModal.tsx
+    modified_files:
+      - shell/src/lib/types.ts
+      - shell/src/lib/config.ts
+      - shell/src/components/ChatPanel.tsx
+      - shell/src/stores/chat.ts
+      - shell/src-tauri/src/lib.rs
+    tests:
+      - "ToolProgress: tool_use → render progress"
+      - "ToolProgress: tool_result success/failure → render result"
+      - "PermissionModal: approval_request → show modal"
+      - "PermissionModal: always/once/reject buttons work"
+      - "PermissionModal: reject with feedback"
+      - "PermissionModal: tier-based color (green/yellow/red)"
+      - "E2E: message → tool_use → ToolProgress → result"
+      - "E2E: approval_request → modal → approve → execute"
+    done_when: "component + E2E tests pass, visual verification"
+
+  3.5:
+    name: "Full integration + Settings tool section"
+    modified_files:
+      - shell/src/components/SettingsModal.tsx
+      - shell/src/lib/config.ts
+      - agent/src/index.ts
+    tests:
+      - "full round-trip: user → LLM(tool_call) → tool → LLM(final) → text + TTS"
+      - "multi-tool: LLM calls 2 tools → both execute → final"
+      - "tool + emotion: tool result → [HAPPY] response → emotion tag parsed"
+      - "settings: tool OFF → tool not available to LLM"
+      - "settings: all-auto ON → no approval prompts"
+      - "E2E: glob → file list shown"
+      - "E2E: npm install → modal → approve → result"
+      - "E2E: rm -rf → blocked"
+      - "E2E: settings toggle → reflected"
+    done_when: "all E2E pass, manual verification with real Gemini API"
+
+manual_e2e_checklist:
+  - "이 폴더에 뭐가 있어? → glob → file list"
+  - "package.json 읽어줘 → file_read → content"
+  - "test.md 만들어줘 → file_write → ToolProgress → created"
+  - "TODO 찾아줘 → grep → results"
+  - "npm install 해줘 → PermissionModal → approve → execute"
+  - "npm install 해줘 (2nd) → auto if 'always'"
+  - "rm -rf / → tier 3 blocked"
+  - "sudo → tier 3 blocked"
+  - "Settings tool ON/OFF → reflected"
+  - "Avatar emotion during tool execution"
+  - "TTS works after tool result"
+
+commit_plan:
+  - { branch: "feature/phase3-tool-framework", msg: "feat(agent): add tool registry and permission framework" }
+  - { branch: "feature/phase3-function-calling", msg: "feat(agent): add LLM function calling support" }
+  - { branch: "feature/phase3-basic-tools", msg: "feat(agent): implement file, glob, grep, bash tools" }
+  - { branch: "feature/phase3-tool-ui", msg: "feat(shell): add ToolProgress and PermissionModal" }
+  - { branch: "feature/phase3-integration", msg: "feat: integrate tool system end-to-end" }
