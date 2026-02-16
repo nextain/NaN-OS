@@ -676,6 +676,19 @@ body,
 	color: var(--error);
 }
 
+.settings-toggle-row {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+}
+
+.settings-toggle-row input[type="checkbox"] {
+	width: 18px;
+	height: 18px;
+	accent-color: var(--wood);
+	cursor: pointer;
+}
+
 .voice-picker {
 	display: flex;
 	gap: 6px;

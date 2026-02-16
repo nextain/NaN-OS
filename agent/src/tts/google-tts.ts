@@ -25,7 +25,7 @@ export async function synthesizeSpeech(
 				audioConfig: {
 					audioEncoding: "MP3",
 					speakingRate: 1.0,
-					pitch: 2.0,
+					pitch: 0.0,
 				},
 			}),
 		});

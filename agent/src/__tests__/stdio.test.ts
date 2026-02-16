@@ -114,6 +114,7 @@ describe("handleChatRequest TTS integration", () => {
 				apiKey: "key123",
 			},
 			messages: [{ role: "user", content: "Hello" }],
+			ttsVoice: "ko-KR-Neural2-A",
 		});
 
 		const types = outputs
@@ -126,11 +127,11 @@ describe("handleChatRequest TTS integration", () => {
 		expect(audioChunk.data).toBe("base64audio==");
 		expect(audioChunk.requestId).toBe("req-tts");
 
-		// TTS called with emotion tag stripped (3rd arg = ttsVoice, undefined when not set)
+		// TTS called with emotion tag stripped
 		expect(synthesizeSpeech).toHaveBeenCalledWith(
 			"안녕하세요!",
 			"key123",
-			undefined,
+			"ko-KR-Neural2-A",
 		);
 	});
 

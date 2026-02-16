@@ -49,10 +49,11 @@ export async function handleChatRequest(req: ChatRequest): Promise<void> {
 			}
 		}
 
-		// TTS synthesis — uses dedicated Google API key, falls back to provider key for Gemini
-		const googleKey =
-			ttsApiKey ||
-			(providerConfig.provider === "gemini" ? providerConfig.apiKey : null);
+		// TTS synthesis — only when ttsVoice is set (client controls enable/disable)
+		const googleKey = ttsVoice
+			? ttsApiKey ||
+				(providerConfig.provider === "gemini" ? providerConfig.apiKey : null)
+			: null;
 		if (googleKey && fullText.trim()) {
 			const cleanText = fullText.replace(EMOTION_TAG_RE, "");
 			try {

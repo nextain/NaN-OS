@@ -81,6 +81,12 @@ export function ChatPanel({ onOpenSettings }: ChatPanelProps) {
 	const totalSessionCost = useChatStore((s) => s.totalSessionCost);
 	const provider = useChatStore((s) => s.provider);
 
+	// Read STT toggle from config
+	const configRaw = localStorage.getItem("cafelua-config");
+	const sttEnabled = configRaw
+		? JSON.parse(configRaw).sttEnabled !== false
+		: true;
+
 	const setEmotion = useAvatarStore((s) => s.setEmotion);
 
 	useEffect(() => {
@@ -111,6 +117,7 @@ export function ChatPanel({ onOpenSettings }: ChatPanelProps) {
 			.filter((m) => m.role === "user" || m.role === "assistant")
 			.map((m) => ({ role: m.role, content: m.content }));
 
+		const ttsEnabled = config.ttsEnabled !== false;
 		try {
 			await sendChatMessage({
 				message: text,
@@ -122,8 +129,8 @@ export function ChatPanel({ onOpenSettings }: ChatPanelProps) {
 				history: history.slice(0, -1), // exclude last (just added) user msg
 				onChunk: handleChunk,
 				requestId,
-				ttsVoice: config.ttsVoice,
-				ttsApiKey: config.googleApiKey,
+				ttsVoice: ttsEnabled ? config.ttsVoice : undefined,
+				ttsApiKey: ttsEnabled ? config.googleApiKey : undefined,
 				systemPrompt: buildSystemPrompt(config.persona),
 			});
 		} catch (err) {
@@ -285,17 +292,19 @@ export function ChatPanel({ onOpenSettings }: ChatPanelProps) {
 
 			{/* Input */}
 			<div className="chat-input-bar">
-				<button
-					type="button"
-					className={`chat-mic-btn${isRecording ? " recording" : ""}`}
-					onMouseDown={handleMicStart}
-					onMouseUp={handleMicStop}
-					onMouseLeave={handleMicStop}
-					disabled={isStreaming}
-					title={isRecording ? t("chat.recording") : "STT"}
-				>
-					{isRecording ? "⏺" : "🎤"}
-				</button>
+				{sttEnabled && (
+					<button
+						type="button"
+						className={`chat-mic-btn${isRecording ? " recording" : ""}`}
+						onMouseDown={handleMicStart}
+						onMouseUp={handleMicStop}
+						onMouseLeave={handleMicStop}
+						disabled={isStreaming}
+						title={isRecording ? t("chat.recording") : "STT"}
+					>
+						{isRecording ? "⏺" : "🎤"}
+					</button>
+				)}
 				<textarea
 					ref={inputRef}
 					value={input}

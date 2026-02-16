@@ -20,6 +20,8 @@ export interface AppConfig {
 	locale?: Locale;
 	theme?: ThemeId;
 	backgroundImage?: string;
+	ttsEnabled?: boolean;
+	sttEnabled?: boolean;
 	ttsVoice?: string;
 	googleApiKey?: string;
 	persona?: string;

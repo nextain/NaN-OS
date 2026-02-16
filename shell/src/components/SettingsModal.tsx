@@ -72,6 +72,8 @@ export function SettingsModal({ onClose }: Props) {
 	const [googleApiKey, setGoogleApiKey] = useState(
 		existing?.googleApiKey ?? "",
 	);
+	const [ttsEnabled, setTtsEnabled] = useState(existing?.ttsEnabled ?? true);
+	const [sttEnabled, setSttEnabled] = useState(existing?.sttEnabled ?? true);
 	const [persona, setPersona] = useState(existing?.persona ?? DEFAULT_PERSONA);
 	const [error, setError] = useState("");
 	const [isPreviewing, setIsPreviewing] = useState(false);
@@ -134,6 +136,8 @@ export function SettingsModal({ onClose }: Props) {
 			locale,
 			theme,
 			backgroundImage: backgroundImage || undefined,
+			ttsEnabled,
+			sttEnabled,
 			ttsVoice,
 			googleApiKey: googleApiKey.trim() || undefined,
 			persona:
@@ -241,6 +245,26 @@ export function SettingsModal({ onClose }: Props) {
 
 				<div className="settings-section-divider">
 					<span>{t("settings.voiceSection")}</span>
+				</div>
+
+				<div className="settings-field settings-toggle-row">
+					<label htmlFor="tts-toggle">{t("settings.ttsEnabled")}</label>
+					<input
+						id="tts-toggle"
+						type="checkbox"
+						checked={ttsEnabled}
+						onChange={(e) => setTtsEnabled(e.target.checked)}
+					/>
+				</div>
+
+				<div className="settings-field settings-toggle-row">
+					<label htmlFor="stt-toggle">{t("settings.sttEnabled")}</label>
+					<input
+						id="stt-toggle"
+						type="checkbox"
+						checked={sttEnabled}
+						onChange={(e) => setSttEnabled(e.target.checked)}
+					/>
 				</div>
 
 				<div className="settings-field">

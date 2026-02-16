@@ -69,7 +69,7 @@ describe("SettingsModal", () => {
 		await vi.waitFor(() => {
 			expect(mockInvoke).toHaveBeenCalledWith("preview_tts", {
 				apiKey: "test-key",
-				voice: "ko-KR-Wavenet-A",
+				voice: "ko-KR-Neural2-A",
 				text: "안녕하세요, 저는 알파예요.",
 			});
 		});

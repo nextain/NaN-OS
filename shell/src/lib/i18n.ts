@@ -53,6 +53,8 @@ const translations = {
 		ko: "이름, 성격, 말투, 행동 등을 자유롭게 설정하세요. 감정 태그는 자동 추가됩니다.",
 		en: "Customize name, personality, speech style, behavior. Emotion tags are added automatically.",
 	},
+	"settings.ttsEnabled": { ko: "음성 응답 (TTS)", en: "Voice Response (TTS)" },
+	"settings.sttEnabled": { ko: "음성 입력 (STT)", en: "Voice Input (STT)" },
 	"settings.ttsVoice": { ko: "TTS 음성", en: "TTS Voice" },
 	"settings.voicePreview": { ko: "미리 듣기", en: "Preview" },
 	"settings.voicePreviewing": { ko: "재생 중...", en: "Playing..." },
