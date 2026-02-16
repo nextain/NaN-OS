@@ -1,0 +1,27 @@
+:root {
+	--espresso: #3b2f2f;
+	--latte: #d4c4b7;
+	--cream: #f5f1e6;
+	--wood: #8d6e63;
+	--sage: #8fbc8f;
+	--tech-blue: #5dade2;
+	--amber: #ffbf00;
+}
+
+* {
+	margin: 0;
+	padding: 0;
+	box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+	width: 100%;
+	height: 100%;
+	overflow: hidden;
+	background: var(--espresso);
+	font-family: "Pretendard", "Inter", -apple-system, BlinkMacSystemFont,
+		sans-serif;
+	color: var(--cream);
+}

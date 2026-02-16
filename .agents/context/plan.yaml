@@ -17,25 +17,73 @@ phases:
     name: "Avatar on screen"
     timeline: "Week 1"
     deliverable: "Boot → Alpha VRM avatar auto-starts on screen"
+    stack: "Tauri 2, React 18+/TypeScript/Vite, Three.js r0.182, @pixiv/three-vrm ^3.4.5, shadcn/ui, Zustand, Biome"
     tasks:
-      - "Extract VRM renderer from AIRI stage-ui-three"
-      - "Create Tauri 2 shell with Avatar + basic layout"
-      - "Autostart desktop entry in OS image"
-    done_when: "USB boot → Alpha avatar visible with idle animation"
-    reuse: "AIRI: Three.js + @pixiv/three-vrm"
+      step_1_init:
+        name: "Tauri 2 + React project init"
+        items:
+          - "React + TS + Vite in shell/"
+          - "Biome config (tab, double quote, semicolons)"
+          - "shadcn/ui, Three.js, @pixiv/three-vrm, zustand install"
+          - "Tauri 2 backend (Cargo.toml, tauri.conf.json, main.rs, lib.rs)"
+      step_2_vrm_core:
+        name: "AIRI VRM core extraction"
+        copy_as_is:
+          - { from: "stage-ui-three/composables/vrm/core.ts", to: "src/lib/vrm/core.ts" }
+          - { from: "stage-ui-three/composables/vrm/loader.ts", to: "src/lib/vrm/loader.ts" }
+          - { from: "stage-ui-three/composables/vrm/utils/eye-motions.ts", to: "src/lib/vrm/eye-motions.ts" }
+          - { from: "stage-ui-three/assets/vrm/animations/idle_loop.vrma", to: "public/animations/idle_loop.vrma" }
+        extract_pure_functions:
+          - "loadVRMAnimation, clipFromVRMAnimation, reAnchorRootPositionTrack → src/lib/vrm/animation.ts"
+      step_3_react_hooks:
+        name: "Vue → React hooks porting"
+        items:
+          - "useBlink.ts — Vue ref() → useRef, blink timing logic"
+          - "useIdleEyes.ts — Vue ref() → useRef, saccade logic"
+      step_4_avatar_canvas:
+        name: "AvatarCanvas component"
+        items:
+          - "Three.js WebGLRenderer + Scene + Camera setup"
+          - "VRM loading via core.ts"
+          - "idle animation playback"
+          - "Render loop order: animation → humanoid → lookAt → blink → saccade → expression → springBone"
+      step_5_tauri_window:
+        name: "Tauri window config"
+        items:
+          - "Default window (transparent/borderless = Phase 2)"
+          - "App icon, title: Cafelua Shell"
+      step_6_integration:
+        name: "Integration test"
+        items:
+          - "pnpm tauri dev → avatar visible with idle animation"
+    done_when: "USB boot → Alpha avatar visible with idle animation + blink + saccade"
+    reuse: "AIRI: Three.js + @pixiv/three-vrm (stage-ui-three)"
 
   phase_2:
     name: "Chat with Alpha"
     timeline: "Week 2"
     deliverable: "Text chat with Alpha, avatar lip-sync + emotions"
+    llm_providers: "xAI (Grok), Google (Gemini), Anthropic (Claude) — see project-careti providers for reference"
+    default_provider: "Google (Gemini) — primary for chat/TTS/vision; Claude for coding tasks"
+    compatibility:
+      aaif: "AAIF standard (Agentic AI Foundation, Linux Foundation 2025.12)"
+      pillars:
+        - "AGENTS.md (context layer, OpenAI donated)"
+        - "SKILL.md (execution layer, procedural knowledge)"
+        - "MCP (connectivity layer, Anthropic donated)"
+      claude_code: "Full compatibility — CLAUDE.md, .claude/ ↔ .agents/ interoperable"
+      careti_context: "Agent must consume project-careti .agents/ context as-is"
+      reference: "project-careti F06 (careti-docs/features.en/f06-agent-standard-claude-compat.md)"
+    cost_tracking: "Per-request cost display (project-careti provider pattern)"
     tasks:
-      - "Agent core: LLM provider (Claude API), stdio protocol"
+      - "Agent core: LLM providers (xAI/Google/Claude), stdio protocol"
+      - "AAIF context consumption (.agents/ + AGENTS.md hierarchy)"
       - "Tauri stdio bridge (spawn agent-core as child process)"
-      - "Chat panel UI + streaming response"
-      - "Avatar emotion mapping + lip-sync"
-      - "Onboarding: API key setup on first boot"
-    done_when: "USB boot → API key → chat with Alpha (lip-sync + emotions)"
-    reuse: "Careti: stdio-adapter.ts, lib.rs, LLM providers"
+      - "Chat panel UI + streaming response + cost display"
+      - "Avatar emotion mapping + lip-sync (Google TTS)"
+      - "Onboarding: API key setup on first boot (support xAI, Google, Claude keys)"
+    done_when: "USB boot → API key → chat with Alpha (lip-sync + emotions + cost visible)"
+    reuse: "Careti: stdio-adapter.ts, lib.rs, LLM providers (xAI/Google/Claude), F06 context system"
     public_demo: true
 
   phase_3:

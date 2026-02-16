@@ -68,38 +68,62 @@ git push → GitHub Actions → ghcr.io/luke-n-alpha/cafelua-os:latest
 
 > **결과물**: Bazzite 부팅 → Alpha 아바타가 자동으로 화면에 등장
 
-### 1-1. AIRI Avatar 최소 추출
+### 스택
+- **Tauri 2** (데스크탑 앱)
+- **React 18+ / TypeScript / Vite**
+- **Three.js r0.182 + @pixiv/three-vrm ^3.4.5**
+- **shadcn/ui** (UI 컴포넌트)
+- **Zustand** (상태관리)
+- **Biome** (포맷터: 탭, 더블쿼트, 세미콜론)
+
+### 1-1. Tauri 2 + React 프로젝트 초기화
 
 **작업:**
-- AIRI `packages/stage-ui-three`에서 VRM 로더 추출
-- Three.js + @pixiv/three-vrm 최소 세트
-- 눈 깜빡임, idle 애니메이션
-- 기본 VRM 모델 파일 포함
+- `shell/`에 React + TS + Vite 프로젝트 셋업
+- Biome 설정, shadcn/ui 설치
+- Three.js + @pixiv/three-vrm + zustand 설치
+- Tauri 2 백엔드 (Cargo.toml, tauri.conf.json, main.rs, lib.rs)
 
-**결과:** 독립 HTML/JS로 VRM 아바타 렌더링 데모
+### 1-2. AIRI VRM 코어 추출
 
-### 1-2. Tauri 셸 생성
+**AIRI에서 그대로 복사 (순수 Three.js):**
+| 원본 | 대상 |
+|------|------|
+| `stage-ui-three/composables/vrm/core.ts` | `src/lib/vrm/core.ts` |
+| `stage-ui-three/composables/vrm/loader.ts` | `src/lib/vrm/loader.ts` |
+| `stage-ui-three/composables/vrm/utils/eye-motions.ts` | `src/lib/vrm/eye-motions.ts` |
+| `stage-ui-three/assets/vrm/animations/idle_loop.vrma` | `public/animations/idle_loop.vrma` |
+
+**순수 함수 추출:**
+- `animation.ts` → `loadVRMAnimation`, `clipFromVRMAnimation`, `reAnchorRootPositionTrack`
+
+### 1-3. Vue → React 훅 포팅
+
+| 훅 | 원본 | 변경 내용 |
+|-----|------|-----------|
+| `useBlink.ts` | `animation.ts`의 `useBlink()` | Vue `ref()` → React `useRef` |
+| `useIdleEyes.ts` | `animation.ts`의 `useIdleEyeSaccades()` | Vue `ref()` → React `useRef`, `Ref<>` 제거 |
+
+### 1-4. AvatarCanvas 컴포넌트
 
 **작업:**
-- `shell/` 디렉토리에 Tauri 2 프로젝트 초기화
-- Avatar 렌더러를 webview에 통합
-- 기본 레이아웃 (Avatar 좌측 + 대화 패널 우측)
+- Three.js WebGLRenderer + Scene + Camera 셋업
+- VRM 로딩 (core.ts 사용)
+- idle 애니메이션 재생 (idle_loop.vrma)
+- 렌더 루프 순서: animation → humanoid → lookAt → blink → saccade → expression → springBone
 
-**결과:** `cargo tauri dev` → Alpha 아바타가 창에 표시
+### 1-5. Tauri 윈도우 설정
+- 기본 윈도우 (투명/borderless는 Phase 2에서)
+- 앱 타이틀: "Cafelua Shell"
 
-### 1-3. OS에 탑재
-
-**작업:**
-- Tauri 앱 빌드 → 바이너리를 OS 이미지에 포함
-- 로그인 시 자동 시작 (autostart desktop entry)
-- recipe.yml에 Cafelua Shell 추가
-
-**결과:** ISO → USB → 부팅 → Alpha 아바타 자동 등장
+### 1-6. 통합 확인
+- `pnpm tauri dev` 실행 → 아바타 표시 확인
 
 ### Phase 1 완료 = 첫 데모
 ```
 ✅ USB 부팅하면 Alpha가 화면에 나타남
-✅ VRM 3D 아바타, 눈 깜빡임, idle 모션
+✅ VRM 3D 아바타, 눈 깜빡임, idle 모션, 눈 미세 움직임
+✅ Spring Bone 물리 (머리카락 흔들림)
 ✅ 아직 대화 불가 (다음 Phase)
 ```
 
@@ -111,13 +135,31 @@ git push → GitHub Actions → ghcr.io/luke-n-alpha/cafelua-os:latest
 
 > **결과물**: 채팅 패널에서 Alpha와 텍스트 대화. 표정 변화 + 립싱크.
 
+### 핵심 호환성 요구사항
+
+| 표준 | 설명 | 참조 |
+|------|------|------|
+| **AAIF** | Agentic AI Foundation (리눅스 재단, 2025.12) 3대 표준 준수 | project-careti F06 |
+| **AGENTS.md** | 컨텍스트 레이어 (OpenAI 기증) — 계층적 적용 | AAIF Pillar 1 |
+| **SKILL.md** | 실행 레이어 — 절차적 지식 패키지 | AAIF Pillar 2 |
+| **MCP** | 연결성 레이어 (Anthropic 기증) — 외부 도구 연결 | AAIF Pillar 3 |
+| **Claude Code 호환** | CLAUDE.md, `.claude/` ↔ `.agents/` 상호운용 | project-careti F06 |
+| **Careti 컨텍스트 호환** | project-careti의 `.agents/` 컨텍스트를 그대로 소비 가능 | project-careti F06 |
+
+**기본 프로바이더:** Google (Gemini) — 채팅/TTS/비전 통합; Claude는 코딩 작업용
+**과금 표시:** 요청별 비용 표시 (project-careti 패턴 참고)
+
 ### 2-1. Agent Core 최소 구현
+
+**LLM 프로바이더:** xAI (Grok), Google (Gemini), Anthropic (Claude) — project-careti 프로바이더 참고
 
 **작업:**
 - `agent/`에 Node.js 프로젝트
-- LLM 1개 연결 (Claude API) — Careti 프로바이더 코드 복사
-- stdio JSON lines 프로토콜 — Careti stdio-adapter 복사
+- LLM 3개 연결 (xAI/Google/Claude) — Careti 프로바이더 코드 참고
+- AAIF 컨텍스트 소비 (.agents/ + AGENTS.md 계층)
+- stdio JSON lines 프로토콜 — Careti stdio-adapter 참고
 - Alpha 페르소나 시스템 프롬프트
+- API 사용량/과금 표시 (project-careti 참고)
 
 **결과:** `node agent/core.js --stdio` 로 대화 가능
 
@@ -126,12 +168,12 @@ git push → GitHub Actions → ghcr.io/luke-n-alpha/cafelua-os:latest
 **작업:**
 - Tauri Rust에서 agent-core spawn — Careti `lib.rs` 복사
 - stdio 브릿지 (자동 재시작 포함)
-- 채팅 패널 UI
+- 채팅 패널 UI + 과금 표시
 - 스트리밍 응답 표시
 
 **결과:** 채팅 패널에서 Alpha와 실시간 대화
 
-### 2-3. Avatar 감정 + 립싱크
+### 2-3. Avatar 감정 + 립싱크 (Google TTS)
 
 **작업:**
 - LLM 응답에서 감정 추출
