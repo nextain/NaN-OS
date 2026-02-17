@@ -302,26 +302,48 @@ describe.skipIf(!canRunE2E)("E2E: Agent ↔ Gateway (live)", () => {
 	});
 
 	// ── Node-based tool execution ──
-	// These tests require at least one paired node
+	// These tests require at least one paired node (via node.list)
 	describe("node execution", () => {
 		let nodeId: string | null = null;
 
 		beforeAll(async () => {
 			const result = (await client.request("node.list", {})) as {
-				nodes: Array<{ id: string; name?: string }>;
+				nodes: Array<{ nodeId: string; displayName?: string }>;
 			};
 			if (result.nodes.length > 0) {
-				nodeId = result.nodes[0].id;
+				nodeId = result.nodes[0].nodeId;
 			}
 		});
 
-		it.skipIf(true)("placeholder: node.invoke tests need paired nodes", () => {
-			// When a node is available, test:
-			// - node.invoke with system.run
-			// - read file via node
-			// - write file via node
-			// For now, skip — no nodes paired in dev environment
-			expect(nodeId).toBeDefined();
+		it("node.invoke system.run executes command on paired node", async () => {
+			if (!nodeId) return;
+
+			const payload = (await client.request("node.invoke", {
+				nodeId,
+				command: "system.run",
+				params: { command: ["echo", "node-e2e-ok"] },
+				idempotencyKey: `e2e-${Date.now()}`,
+			})) as { payload?: { stdout?: string; exitCode?: number } };
+
+			expect(payload.payload?.exitCode).toBe(0);
+			expect(payload.payload?.stdout).toContain("node-e2e-ok");
+		});
+
+		it("node.invoke system.which resolves a binary path", async () => {
+			if (!nodeId) return;
+
+			const payload = (await client.request("node.invoke", {
+				nodeId,
+				command: "system.which",
+				params: { bins: ["bash"] },
+				idempotencyKey: `e2e-which-${Date.now()}`,
+			})) as {
+				payload?: { bins?: Record<string, string> };
+			};
+
+			const bins = payload.payload?.bins || {};
+			expect(bins.bash).toBeDefined();
+			expect(bins.bash).toContain("bash");
 		});
 	});
 

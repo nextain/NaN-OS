@@ -308,7 +308,8 @@ async function resolveNodeId(client: GatewayClient): Promise<string | null> {
 	for (const node of nodes) {
 		const nodeRec = asRecord(node);
 		if (!nodeRec) continue;
-		const id = getStringField(nodeRec, "id");
+		const id =
+			getStringField(nodeRec, "nodeId") || getStringField(nodeRec, "id");
 		if (id) {
 			nodeIdCache.set(client, id);
 			return id;
