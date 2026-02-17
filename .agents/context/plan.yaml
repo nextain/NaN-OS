@@ -104,11 +104,59 @@ phases:
     name: "Always-on daemon"
     timeline: "Week 5-7"
     deliverable: "Gateway daemon + external channels + memory"
+    status: "in_progress"
+    strategy: "Gateway first → Phase 3 runtime verification → then new features"
     tasks:
-      - "Gateway WebSocket server (systemd user service)"
-      - "Discord bot + Telegram bot channels"
-      - "Memory persistence (SQLite + vector search)"
-      - "Skills system (weather, memo, system status)"
+      step_4_0:
+        name: "OpenClaw Gateway local setup"
+        description: "Get Gateway running locally to unlock Phase 3 runtime verification"
+        items:
+          - "OpenClaw install + config (setup-openclaw.sh already exists)"
+          - "Gateway local start (cafelua-gateway-wrapper)"
+          - "Shell → Agent → Gateway WebSocket connection verified"
+        done_when: "gateway_health() returns true, Agent connects via WebSocket"
+      step_4_1:
+        name: "Phase 3 E2E verification"
+        description: "Verify all Phase 3 tools work through live Gateway"
+        items:
+          - "8 tools runtime test (read/write/diff/command/search/web_search/browser/spawn)"
+          - "Permission approval flow (Tier 1-2 modal actual UI)"
+          - "Sub-agent parallel execution real verification"
+          - "Audit log actual recording check"
+          - "Fix bugs discovered during runtime testing"
+        done_when: "All 8 tools execute successfully through Gateway"
+      step_4_2:
+        name: "User testing (manual)"
+        description: "Manual end-to-end testing via pnpm tauri dev"
+        items:
+          - "Chat → tool invocation → result display"
+          - "File read/write/edit scenarios"
+          - "Command execution scenarios"
+          - "Error cases (permission reject, timeout)"
+        done_when: "User confirms Phase 3 tools work correctly"
+      step_4_3:
+        name: "Skills system"
+        items:
+          - "Skill registry + matching"
+          - "Built-in skills (weather, memo, system status)"
+          - "Custom skill loader (~/.cafelua/skills/)"
+      step_4_4:
+        name: "Memory persistence"
+        items:
+          - "SQLite conversation storage"
+          - "Vector search (embeddings)"
+          - "Context recall on relevant queries"
+      step_4_5:
+        name: "External channels"
+        items:
+          - "Discord bot (discord.js)"
+          - "Telegram bot (grammY)"
+          - "External channels limited to Tier 0-1"
+      step_4_6:
+        name: "systemd auto-start integration"
+        items:
+          - "Gateway auto-start on boot"
+          - "Health monitoring"
     done_when: "OS boot → auto-start → external channel access → remembers context"
     reuse: "MoltBot: Gateway pattern, channel SDKs, Skills"
 

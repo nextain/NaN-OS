@@ -254,15 +254,53 @@ git push → GitHub Actions → ghcr.io/luke-n-alpha/cafelua-os:latest
 ## Phase 4: Alpha가 항상 켜져있다 (Week 5-7)
 
 > **결과물**: 데몬으로 항상 실행. 외부 채널에서도 접근 가능.
+> **전략**: Gateway 먼저 → Phase 3 실행 검증 → 이후 신규 기능
 
-### 4-1. Gateway 데몬 (MoltBot 패턴)
+### 4-0. OpenClaw Gateway 로컬 설정 (선행)
 
 **작업:**
-- WebSocket 서버 (systemd user service)
-- Shell → Gateway → Agent Core 구조로 전환
-- Shell 닫아도 Gateway 유지
+- OpenClaw 설치 + 설정 (`setup-openclaw.sh` 이미 존재)
+- Gateway 로컬 기동 (`cafelua-gateway-wrapper`)
+- Shell → Agent → Gateway WebSocket 연결 확인
 
-### 4-2. 채널 통합
+**결과:** `gateway_health()` = true, Agent가 WebSocket으로 연결
+
+### 4-1. Phase 3 E2E 검증
+
+**작업:**
+- 8개 도구 런타임 테스트 (read/write/diff/command/search/web_search/browser/spawn)
+- 승인 UI 실제 동작 확인 (Tier 1-2 모달)
+- Sub-agent 병렬 실행 실제 검증
+- Audit log 실제 기록 확인
+- 런타임 테스트 중 발견되는 버그 수정
+
+**결과:** 8개 도구 전부 Gateway를 통해 성공적으로 실행
+
+### 4-2. 사용자 테스트 (수동)
+
+**작업:**
+- `pnpm tauri dev` → 채팅 → 도구 호출 → 결과 확인
+- 파일 읽기/쓰기/편집 시나리오
+- 명령 실행 시나리오
+- 에러 케이스 (권한 거부, 타임아웃 등)
+
+**결과:** Phase 3 도구 정상 동작 사용자 확인
+
+### 4-3. Skills 시스템
+
+**작업:**
+- Skill 레지스트리 + 매칭
+- 기본 Skills (날씨, 메모, 시스템 상태)
+- 커스텀 Skills 로더 (~/.cafelua/skills/)
+
+### 4-4. 메모리 시스템
+
+**작업:**
+- 대화 이력 영속 (SQLite)
+- 벡터 검색 (임베딩)
+- 관련 쿼리 시 컨텍스트 리콜
+
+### 4-5. 채널 통합
 
 **작업:**
 - Discord 봇 (discord.js)
@@ -271,12 +309,11 @@ git push → GitHub Actions → ghcr.io/luke-n-alpha/cafelua-os:latest
 
 **결과:** 밖에서 "집 PC 상태?" → Alpha 응답
 
-### 4-3. 메모리 + Skills
+### 4-6. systemd 자동시작 통합
 
 **작업:**
-- 대화 이력 영속 (SQLite + 벡터 검색)
-- 기본 Skills (날씨, 메모, 시스템 상태)
-- 커스텀 Skills (~/.cafelua/skills/)
+- Gateway 부팅 시 자동 시작
+- 헬스 모니터링
 
 ### Phase 4 완료 = 완성된 AI OS
 ```
