@@ -1,0 +1,152 @@
+description: |
+  Testing strategy and lessons learned for Cafelua OS.
+  Covers test pyramid, tooling, verification checklist, and anti-patterns discovered during development.
+
+mirror: ".users/workflows/testing-strategy.md"
+
+test_pyramid:
+  unit:
+    tool: vitest
+    scope: "Pure functions, store logic, utility modules"
+    examples:
+      - "parseEmotion() returns correct emotion + cleanText"
+      - "useChatStore addStreamingToolUse dedup check"
+      - "encodeWav produces valid WAV header"
+    speed: "< 1s per test"
+    run: "pnpm --filter shell test"
+
+  component:
+    tool: "vitest + @testing-library/react + jsdom"
+    scope: "React components in isolation with mocked dependencies"
+    examples:
+      - "ToolActivity renders status icon and tool name"
+      - "SettingsModal saves enableTools to localStorage"
+      - "ChatPanel renders tool_use chunks as ToolActivity"
+    mocking:
+      - "@tauri-apps/api/core → vi.mock with mockInvoke"
+      - "@tauri-apps/api/event → vi.mock with mockListen"
+      - "localStorage → jsdom built-in"
+    gotchas:
+      - "vi.resetModules() needed between tests that import same module with different mocks"
+      - "vi.clearAllMocks() + vi.resetModules() in afterEach, NOT vi.restoreAllMocks()"
+      - "Dynamic import (await import('../module')) when module has top-level side effects"
+
+  integration:
+    tool: "vitest (agent), cargo test (Rust)"
+    scope: "Multi-module interactions, protocol compliance"
+    examples:
+      - "Gateway client connects, sends tool request, receives result"
+      - "Gemini function calling: tool_call → execute → re-invoke → final text"
+      - "Tauri gateway_health command returns status"
+
+  e2e:
+    tool: "cargo tauri build + manual verification"
+    scope: "Full app launch, agent connection, visual confirmation"
+    checklist:
+      - "cargo tauri build succeeds (tsc + vite + cargo)"
+      - "App window appears"
+      - "Agent core starts (stdio connection)"
+      - "Chat input functional"
+      - "Settings modal opens/saves"
+    note: "Automated E2E (tauri-driver/playwright) planned but not yet implemented"
+
+tooling:
+  test_runner: vitest
+  component_testing: "@testing-library/react"
+  dom_environment: jsdom
+  linter: biome
+  type_checker: "tsc -b (TypeScript project references)"
+  build: "vite build (shell), cargo tauri build (full app)"
+  formatter: "biome (tab, double quote, semicolons)"
+
+verification_checklist:
+  description: "Run these in order before every commit"
+  steps:
+    - cmd: "pnpm --filter shell test"
+      expect: "All tests pass"
+    - cmd: "pnpm --filter agent test"
+      expect: "All tests pass"
+    - cmd: "cd shell && pnpm run check"
+      expect: "Biome: no errors"
+    - cmd: "cd shell && pnpm run build"
+      expect: "tsc + vite build clean"
+    - cmd: "cd shell && cargo tauri build"
+      expect: "Full Tauri app builds"
+      note: "This is VERIFY step — don't skip"
+    - cmd: "Launch built app"
+      expect: "Window appears, agent connects"
+      note: "Manual step — confirms real functionality"
+
+code_review_process:
+  description: "Multi-round review catches bugs that tests miss"
+  rounds:
+    round_1:
+      focus: "CRITICAL issues — security, resource leaks, data loss"
+      examples:
+        - "Event listener leak on invoke() failure"
+        - "No timeout for dangling listeners (resource leak)"
+        - "Raw localStorage.getItem in render path (crash risk)"
+    round_2:
+      focus: "Confirm CRITICALs fixed + find MEDIUM issues"
+      examples:
+        - "enableTools:false dropped by falsy check"
+        - "Missing CSS variables (--error) for dark themes"
+        - "Button element missing CSS reset"
+    round_3:
+      focus: "SHOULD FIX — correctness edge cases"
+      examples:
+        - "Duplicate toolCallId not handled"
+        - "Unknown toolCallId silently ignored"
+        - "Boolean false dropped during save"
+
+lessons_learned:
+  phase_1:
+    problem: "Skipped PLAN/CHECK/TDD, declared 'done' without running"
+    result: "Bugs found by user, trust eroded"
+    fix: "ALWAYS follow PLAN→CHECK→BUILD→VERIFY→CLEAN→COMMIT"
+
+  phase_3_session_3:
+    problem: "Jumped straight to BUILD, skipped process"
+    result: "User caught it twice, had to retrofit code review + E2E"
+    fix: "Read development-cycle.yaml at session start, no exceptions"
+
+  vitest_module_caching:
+    problem: "Test passes alone but fails in suite"
+    cause: "Module-level mock state shared between tests"
+    fix: "afterEach: vi.clearAllMocks() + vi.resetModules(). Use dynamic import."
+
+  enabletools_false:
+    problem: "Boolean false treated as falsy, dropped from config"
+    cause: "enableTools && {...} / enableTools || undefined"
+    fix: "Use enableTools != null for null checks on booleans"
+
+  listener_leak:
+    problem: "Tauri event listener never cleaned up on error path"
+    cause: "No try/catch around invoke() after listen()"
+    fix: "Always wrap invoke in try/catch that calls unlisten(). Add safety timeout."
+
+  css_theme_variables:
+    problem: "New CSS variable (--error) missing from some themes"
+    cause: "Only added to 4/8 theme definitions"
+    fix: "When adding CSS variable, check ALL 8 themes"
+
+anti_patterns:
+  - name: "Skip VERIFY"
+    description: "Declaring done after tests pass but before building/running the app"
+    fix: "VERIFY = actually build AND launch the app"
+
+  - name: "Code first, test later"
+    description: "Writing implementation before tests"
+    fix: "TDD: test FIRST (RED), minimal code (GREEN), refactor"
+
+  - name: "Single review"
+    description: "Doing one code review and assuming everything is caught"
+    fix: "3 rounds: CRITICAL → MEDIUM → SHOULD FIX"
+
+  - name: "console.log debugging"
+    description: "Using console.log/warn/error for debugging"
+    fix: "Use structured Logger only"
+
+  - name: "Trust falsy checks for booleans"
+    description: "Using && or || with boolean values that can be false"
+    fix: "Explicit null/undefined checks: value != null"

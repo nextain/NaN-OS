@@ -106,32 +106,36 @@ sub_phases:
 
   3.4:
     name: "Shell UI — ToolProgress + PermissionModal"
-    new_files:
-      - shell/src/components/ToolProgress.tsx
-      - shell/src/components/PermissionModal.tsx
-    modified_files:
-      - shell/src/lib/types.ts
-      - shell/src/lib/config.ts
-      - shell/src/components/ChatPanel.tsx
-      - shell/src/stores/chat.ts
-      - shell/src-tauri/src/lib.rs
-    tests:
-      - "ToolProgress: tool_use → render progress"
-      - "ToolProgress: tool_result success/failure → render result"
-      - "PermissionModal: approval_request → show modal"
-      - "PermissionModal: always/once/reject buttons work"
-      - "PermissionModal: reject with feedback"
-      - "PermissionModal: tier-based color (green/yellow/red)"
-      - "E2E: message → tool_use → ToolProgress → result"
-      - "E2E: approval_request → modal → approve → execute"
-    done_when: "component + E2E tests pass, visual verification"
+    status: partial  # ToolActivity done, PermissionModal pending
+    commit: "1c74ef9"
+    completed:
+      - shell/src/components/ToolActivity.tsx  # renamed from ToolProgress — inline tool status display
+      - shell/src/components/__tests__/ToolActivity.test.tsx  # 9 tests
+      - shell/src/components/ChatPanel.tsx  # tool_use/tool_result chunk handling
+      - shell/src/components/__tests__/ChatPanel.test.tsx  # +3 tool tests
+      - shell/src/stores/chat.ts  # streamingToolCalls + 3 actions
+      - shell/src/stores/__tests__/chat.test.ts  # +8 tool tests
+      - shell/src/lib/types.ts  # ToolCall interface + ChatMessage extension
+      - shell/src/lib/config.ts  # enableTools, gatewayUrl, gatewayToken
+      - shell/src/lib/chat-service.ts  # tool config passthrough + timeout + cleanup
+      - shell/src/lib/__tests__/chat-service.test.ts  # +2 tests
+      - shell/src/lib/i18n.ts  # 10 tool translation keys
+      - shell/src/styles/global.css  # tool-activity CSS + --error vars
+    remaining:
+      - shell/src/components/PermissionModal.tsx  # approval_request → show modal
+      - shell/src/components/__tests__/PermissionModal.test.tsx
+      - shell/src-tauri/src/lib.rs  # approval_response Tauri command
+    tests_added: 26  # shell 63 → 89
+    done_when: "PermissionModal component + E2E tests pass"
 
   3.5:
     name: "Full integration + Settings tool section"
-    modified_files:
-      - shell/src/components/SettingsModal.tsx
-      - shell/src/lib/config.ts
-      - agent/src/index.ts
+    status: partial  # Settings tool section done in 3.4 commit
+    completed_in_3_4:
+      - shell/src/components/SettingsModal.tsx  # tools section (enableTools, gatewayUrl, gatewayToken)
+      - shell/src/components/__tests__/SettingsModal.test.tsx  # +3 tests
+    remaining_files:
+      - agent/src/index.ts  # receive tool settings via protocol
     tests:
       - "full round-trip: user → LLM(tool_call) → tool → LLM(final) → text + TTS"
       - "multi-tool: LLM calls 2 tools → both execute → final"
