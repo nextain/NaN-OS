@@ -42,6 +42,21 @@ export type AgentResponseChunk =
 	| { type: "text"; requestId: string; text: string }
 	| { type: "audio"; requestId: string; data: string }
 	| {
+			type: "tool_use";
+			requestId: string;
+			toolCallId: string;
+			toolName: string;
+			args: Record<string, unknown>;
+	  }
+	| {
+			type: "tool_result";
+			requestId: string;
+			toolCallId: string;
+			toolName: string;
+			output: string;
+			success: boolean;
+	  }
+	| {
 			type: "usage";
 			requestId: string;
 			inputTokens: number;

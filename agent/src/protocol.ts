@@ -8,6 +8,9 @@ export interface ChatRequest {
 	systemPrompt?: string;
 	ttsVoice?: string;
 	ttsApiKey?: string;
+	enableTools?: boolean;
+	gatewayUrl?: string;
+	gatewayToken?: string;
 }
 
 export interface CancelRequest {

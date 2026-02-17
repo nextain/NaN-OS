@@ -8,14 +8,17 @@ export function createAnthropicProvider(
 	const client = new Anthropic({ apiKey });
 
 	return {
-		async *stream(messages, systemPrompt): AgentStream {
+		async *stream(messages, systemPrompt, _tools): AgentStream {
+			const textMessages = messages.filter(
+				(m) => m.role === "user" || m.role === "assistant",
+			);
 			const stream = await client.messages.create({
 				model,
 				max_tokens: 4096,
 				temperature: 0.7,
 				system: systemPrompt,
-				messages: messages.map((m) => ({
-					role: m.role,
+				messages: textMessages.map((m) => ({
+					role: m.role as "user" | "assistant",
 					content: m.content,
 				})),
 				stream: true,
