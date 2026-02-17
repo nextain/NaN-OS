@@ -7,12 +7,21 @@ import { t } from "../lib/i18n";
 import { Logger } from "../lib/logger";
 import { buildSystemPrompt } from "../lib/persona";
 import { transcribeAudio } from "../lib/stt";
-import type { AgentResponseChunk, ProviderId } from "../lib/types";
+import type {
+	AgentResponseChunk,
+	AuditEvent,
+	AuditFilter,
+	ProviderId,
+} from "../lib/types";
 import { parseEmotion } from "../lib/vrm/expression";
 import { useAvatarStore } from "../stores/avatar";
 import { useChatStore } from "../stores/chat";
+import { useProgressStore } from "../stores/progress";
 import { PermissionModal } from "./PermissionModal";
 import { ToolActivity } from "./ToolActivity";
+import { WorkProgressPanel } from "./WorkProgressPanel";
+
+type TabId = "chat" | "progress";
 
 function generateRequestId(): string {
 	return `req-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
@@ -93,6 +102,7 @@ interface ChatPanelProps {
 export function ChatPanel({ onOpenSettings }: ChatPanelProps) {
 	const [input, setInput] = useState("");
 	const [isRecording, setIsRecording] = useState(false);
+	const [activeTab, setActiveTab] = useState<TabId>("chat");
 	const messagesEndRef = useRef<HTMLDivElement>(null);
 	const inputRef = useRef<HTMLTextAreaElement>(null);
 	const recorderRef = useRef<AudioRecorder | null>(null);
@@ -285,6 +295,32 @@ export function ChatPanel({ onOpenSettings }: ChatPanelProps) {
 		}
 	}
 
+	function handleTabChange(tab: TabId) {
+		setActiveTab(tab);
+		if (tab === "progress") {
+			const store = useProgressStore.getState();
+			store.setLoading(true);
+			const filter: AuditFilter = { limit: 100 };
+			Promise.all([
+				invoke("get_audit_log", { filter }),
+				invoke("get_audit_stats"),
+			])
+				.then(([eventsResult, statsResult]) => {
+					const s = useProgressStore.getState();
+					s.setEvents(eventsResult as AuditEvent[]);
+					s.setStats(statsResult as Parameters<typeof s.setStats>[0]);
+				})
+				.catch((err) => {
+					Logger.warn("ChatPanel", "Failed to load progress data", {
+						error: String(err),
+					});
+				})
+				.finally(() => {
+					useProgressStore.getState().setLoading(false);
+				});
+		}
+	}
+
 	function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
 		if (e.key === "Enter" && !e.shiftKey) {
 			e.preventDefault();
@@ -294,9 +330,24 @@ export function ChatPanel({ onOpenSettings }: ChatPanelProps) {
 
 	return (
 		<div className="chat-panel">
-			{/* Header with session cost */}
+			{/* Header with tabs */}
 			<div className="chat-header">
-				<span className="chat-title">Alpha</span>
+				<div className="chat-tabs">
+					<button
+						type="button"
+						className={`chat-tab${activeTab === "chat" ? " active" : ""}`}
+						onClick={() => handleTabChange("chat")}
+					>
+						{t("progress.tabChat")}
+					</button>
+					<button
+						type="button"
+						className={`chat-tab${activeTab === "progress" ? " active" : ""}`}
+						onClick={() => handleTabChange("progress")}
+					>
+						{t("progress.tabProgress")}
+					</button>
+				</div>
 				<div className="chat-header-right">
 					{totalSessionCost > 0 && (
 						<span className="cost-badge session-cost">
@@ -316,8 +367,11 @@ export function ChatPanel({ onOpenSettings }: ChatPanelProps) {
 				</div>
 			</div>
 
-			{/* Messages */}
-			<div className="chat-messages">
+			{/* Progress tab */}
+			{activeTab === "progress" && <WorkProgressPanel />}
+
+			{/* Messages (chat tab) */}
+			<div className="chat-messages" style={{ display: activeTab === "chat" ? "flex" : "none" }}>
 				{messages.map((msg) => (
 					<div key={msg.id} className={`chat-message ${msg.role}`}>
 						{msg.toolCalls?.map((tc) => (
@@ -362,8 +416,8 @@ export function ChatPanel({ onOpenSettings }: ChatPanelProps) {
 				/>
 			)}
 
-			{/* Input */}
-			<div className="chat-input-bar">
+			{/* Input (chat tab only) */}
+			<div className="chat-input-bar" style={{ display: activeTab === "chat" ? "flex" : "none" }}>
 				{sttEnabled && (
 					<button
 						type="button"

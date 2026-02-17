@@ -87,3 +87,34 @@ export type AgentResponseChunk =
 	  }
 	| { type: "finish"; requestId: string }
 	| { type: "error"; requestId: string; message: string };
+
+// === Audit (matches Rust structs in audit.rs) ===
+
+export interface AuditEvent {
+	id: number;
+	timestamp: string;
+	request_id: string;
+	event_type: string;
+	tool_name: string | null;
+	tool_call_id: string | null;
+	tier: number | null;
+	success: boolean | null;
+	payload: string | null;
+}
+
+export interface AuditFilter {
+	request_id?: string;
+	event_type?: string;
+	tool_name?: string;
+	from?: string;
+	to?: string;
+	limit?: number;
+	offset?: number;
+}
+
+export interface AuditStats {
+	total_events: number;
+	by_event_type: [string, number][];
+	by_tool_name: [string, number][];
+	total_cost: number;
+}

@@ -102,6 +102,21 @@ const translations = {
 		ko: "승인 시간이 초과되었습니다.",
 		en: "Approval timed out.",
 	},
+
+	// Work Progress
+	"progress.title": { ko: "작업 현황", en: "Work Progress" },
+	"progress.loading": { ko: "로딩 중...", en: "Loading..." },
+	"progress.empty": {
+		ko: "기록이 없습니다. 대화를 시작하면 여기에 표시됩니다.",
+		en: "No events yet. Start a conversation to see progress here.",
+	},
+	"progress.refresh": { ko: "새로고침", en: "Refresh" },
+	"progress.totalEvents": { ko: "총 이벤트", en: "Total Events" },
+	"progress.totalCost": { ko: "총 비용", en: "Total Cost" },
+	"progress.toolCount": { ko: "도구 수", en: "Tools Used" },
+	"progress.errorCount": { ko: "에러 수", en: "Errors" },
+	"progress.tabChat": { ko: "채팅", en: "Chat" },
+	"progress.tabProgress": { ko: "작업", en: "Progress" },
 } as const;
 
 type TranslationKey = keyof typeof translations;
