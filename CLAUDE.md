@@ -65,6 +65,28 @@ cafelua-os/
 
 상세 규칙은 `.agents/context/agents-rules.json` 참조.
 
+## 주요 명령어
+
+```bash
+# Shell (Tauri 앱 — Gateway + Agent 자동 관리)
+cd shell && pnpm run tauri dev       # 개발 실행 (Gateway 자동 spawn)
+cd shell && pnpm test                # Shell 테스트
+cd shell && pnpm build               # 프로덕션 빌드
+
+# Agent
+cd agent && pnpm test                # Agent 테스트
+cd agent && pnpm exec tsc --noEmit   # 타입 체크
+
+# Rust
+cargo test --manifest-path shell/src-tauri/Cargo.toml
+
+# Gateway (수동 실행 시)
+~/.cafelua/openclaw/node_modules/.bin/openclaw gateway run --bind loopback --port 18789
+
+# Gateway E2E
+cd agent && CAFE_LIVE_GATEWAY_E2E=1 pnpm exec vitest run src/__tests__/gateway-e2e.test.ts
+```
+
 ## 개발 사이클
 
 **코딩 전 반드시 읽기:** `.agents/workflows/development-cycle.yaml`

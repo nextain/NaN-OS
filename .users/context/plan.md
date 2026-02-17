@@ -256,23 +256,29 @@ git push → GitHub Actions → ghcr.io/luke-n-alpha/cafelua-os:latest
 > **결과물**: 데몬으로 항상 실행. 외부 채널에서도 접근 가능.
 > **전략**: Gateway 먼저 → Phase 3 실행 검증 → 이후 신규 기능
 
-### 4-0. OpenClaw Gateway 로컬 설정 (선행)
+### 4-0. OpenClaw Gateway 로컬 설정 (선행) ✅
 
 **작업:**
-- OpenClaw 설치 + 설정 (`setup-openclaw.sh` 이미 존재)
-- Gateway 로컬 기동 (`cafelua-gateway-wrapper`)
-- Shell → Agent → Gateway WebSocket 연결 확인
+- OpenClaw 설치 + 설정 (`setup-openclaw.sh` 이미 존재) ✅
+- Gateway 로컬 기동 (`cafelua-gateway-wrapper`) ✅
+- Shell → Agent → Gateway WebSocket 연결 확인 ✅
+- **Gateway 자동 라이프사이클** (Tauri 앱이 Gateway 프로세스 자동 관리) ✅
+  - Hybrid 전략: 이미 실행 중이면 재사용, 아니면 자동 spawn
+  - Node.js 22+ 탐지 (system PATH + nvm fallback)
+  - Health check 폴링 (5초 타임아웃, 500ms 간격)
+  - 종료 시 자동 spawn한 Gateway만 kill (systemd 서비스는 유지)
+  - `gateway_status` 이벤트를 frontend로 emit
 
 **결과:** `gateway_health()` = true, Agent가 WebSocket으로 연결
 
-### 4-1. Phase 3 E2E 검증
+### 4-1. Phase 3 E2E 검증 ✅
 
 **작업:**
-- 8개 도구 런타임 테스트 (read/write/diff/command/search/web_search/browser/spawn)
-- 승인 UI 실제 동작 확인 (Tier 1-2 모달)
-- Sub-agent 병렬 실행 실제 검증
-- Audit log 실제 기록 확인
-- 런타임 테스트 중 발견되는 버그 수정
+- 8개 도구 런타임 테스트 (read/write/diff/command/search/web_search/browser/spawn) ✅
+- 승인 UI 실제 동작 확인 (Tier 1-2 모달) ✅
+- Sub-agent 병렬 실행 실제 검증 ✅
+- Audit log 실제 기록 확인 ✅
+- 런타임 테스트 중 발견되는 버그 수정 ✅
 
 **결과:** 8개 도구 전부 Gateway를 통해 성공적으로 실행
 

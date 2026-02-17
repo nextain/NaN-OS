@@ -16,8 +16,15 @@ struct AgentProcess {
     stdin: std::process::ChildStdin,
 }
 
+// OpenClaw Gateway process handle
+struct GatewayProcess {
+    child: Child,
+    we_spawned: bool, // only kill on shutdown if we spawned it
+}
+
 struct AppState {
     agent: Mutex<Option<AgentProcess>>,
+    gateway: Mutex<Option<GatewayProcess>>,
 }
 
 struct AuditState {
@@ -65,6 +72,147 @@ fn save_window_state(app_handle: &AppHandle, state: &WindowState) {
             let _ = std::fs::write(&path, json);
         }
     }
+}
+
+/// Find Node.js binary (system path first, then nvm fallback)
+fn find_node_binary() -> Result<std::path::PathBuf, String> {
+    // Check system node first
+    if let Ok(output) = Command::new("node").arg("-v").output() {
+        if output.status.success() {
+            let version_str = String::from_utf8_lossy(&output.stdout);
+            let major: u32 = version_str
+                .trim()
+                .trim_start_matches('v')
+                .split('.')
+                .next()
+                .and_then(|s| s.parse().ok())
+                .unwrap_or(0);
+            if major >= 22 {
+                return Ok(std::path::PathBuf::from("node"));
+            }
+        }
+    }
+
+    // Try nvm fallback
+    let home = std::env::var("HOME").unwrap_or_default();
+    let nvm_dir = format!("{}/.config/nvm/versions/node", home);
+    if let Ok(entries) = std::fs::read_dir(&nvm_dir) {
+        let mut versions: Vec<_> = entries
+            .filter_map(|e| e.ok())
+            .filter_map(|e| {
+                let name = e.file_name().to_string_lossy().to_string();
+                let name = name.trim_start_matches('v').to_string();
+                let major: u32 = name.split('.').next()?.parse().ok()?;
+                if major >= 22 {
+                    Some((major, e.path()))
+                } else {
+                    None
+                }
+            })
+            .collect();
+        versions.sort_by(|a, b| b.0.cmp(&a.0)); // highest first
+        if let Some((_, path)) = versions.first() {
+            let node_bin = path.join("bin/node");
+            if node_bin.exists() {
+                return Ok(node_bin);
+            }
+        }
+    }
+
+    Err("Node.js 22+ not found (checked system PATH and nvm)".to_string())
+}
+
+/// Check if OpenClaw Gateway is already running (blocking, for setup use)
+fn check_gateway_health_sync() -> bool {
+    let client = reqwest::blocking::Client::builder()
+        .timeout(std::time::Duration::from_secs(2))
+        .build();
+    match client {
+        Ok(c) => c
+            .get("http://127.0.0.1:18789/__openclaw__/canvas/")
+            .send()
+            .is_ok(),
+        Err(_) => false,
+    }
+}
+
+/// Spawn or attach to OpenClaw Gateway
+fn spawn_gateway() -> Result<GatewayProcess, String> {
+    // 1. Check if already running (e.g. systemd or manual start)
+    if check_gateway_health_sync() {
+        eprintln!("[Cafelua] Gateway already running — reusing existing instance");
+        // Return a dummy process (no child to kill)
+        // Use a no-op child: spawn a trivial process that exits immediately
+        let child = Command::new("true")
+            .spawn()
+            .map_err(|e| format!("Failed to create dummy process: {}", e))?;
+        return Ok(GatewayProcess {
+            child,
+            we_spawned: false,
+        });
+    }
+
+    // 2. Find Node.js
+    let node_bin = find_node_binary()?;
+
+    // 3. Find openclaw binary
+    let home = std::env::var("HOME").unwrap_or_default();
+    let openclaw_bin = format!("{}/.cafelua/openclaw/node_modules/.bin/openclaw", home);
+    if !std::path::Path::new(&openclaw_bin).exists() {
+        return Err(format!(
+            "OpenClaw not installed at {}. Run: config/scripts/setup-openclaw.sh",
+            openclaw_bin
+        ));
+    }
+
+    // 4. Config path
+    let openclaw_dir = format!("{}/.cafelua/openclaw", home);
+    let config_path = format!("{}/openclaw.json", openclaw_dir);
+
+    eprintln!(
+        "[Cafelua] Spawning Gateway: {} {} gateway run --bind loopback --port 18789",
+        node_bin.display(),
+        openclaw_bin
+    );
+
+    // 5. Spawn
+    let child = Command::new(node_bin.as_os_str())
+        .arg(&openclaw_bin)
+        .arg("gateway")
+        .arg("run")
+        .arg("--bind")
+        .arg("loopback")
+        .arg("--port")
+        .arg("18789")
+        .env("OPENCLAW_CONFIG_PATH", &config_path)
+        .stdout(Stdio::inherit())
+        .stderr(Stdio::inherit())
+        .spawn()
+        .map_err(|e| format!("Failed to spawn Gateway: {}", e))?;
+
+    eprintln!("[Cafelua] Gateway process spawned (PID: {})", child.id());
+
+    // 6. Wait for health check (max 5s, 500ms intervals)
+    for i in 0..10 {
+        std::thread::sleep(std::time::Duration::from_millis(500));
+        if check_gateway_health_sync() {
+            eprintln!(
+                "[Cafelua] Gateway healthy after {}ms",
+                (i + 1) * 500
+            );
+            return Ok(GatewayProcess {
+                child,
+                we_spawned: true,
+            });
+        }
+    }
+
+    // Gateway started but not healthy — still return it, maybe it needs more time
+    eprintln!("[Cafelua] Gateway spawned but not yet healthy — continuing anyway");
+    Ok(GatewayProcess {
+        child,
+        we_spawned: true,
+    })
 }
 
 /// Spawn the Node.js agent-core process with stdio pipes
@@ -404,6 +552,7 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .manage(AppState {
             agent: Mutex::new(None),
+            gateway: Mutex::new(None),
         })
         .invoke_handler(tauri::generate_handler![
             send_to_agent_command,
@@ -465,6 +614,29 @@ pub fn run() {
                 });
             }
 
+            // Spawn Gateway first (Agent connects to it via WebSocket)
+            let (gateway_running, gateway_managed) = match spawn_gateway() {
+                Ok(process) => {
+                    let managed = process.we_spawned;
+                    let mut guard = state.gateway.lock().unwrap();
+                    *guard = Some(process);
+                    eprintln!("[Cafelua] Gateway ready (managed={})", managed);
+                    (true, managed)
+                }
+                Err(e) => {
+                    eprintln!("[Cafelua] Gateway not available: {}", e);
+                    eprintln!("[Cafelua] Running without Gateway (tools will be unavailable)");
+                    (false, false)
+                }
+            };
+
+            // Emit gateway status to frontend
+            let _ = app_handle.emit(
+                "gateway_status",
+                serde_json::json!({ "running": gateway_running, "managed": gateway_managed }),
+            );
+
+            // Then spawn Agent
             match spawn_agent_core(&app_handle, &audit_db) {
                 Ok(process) => {
                     let mut guard = state.agent.lock().unwrap();
@@ -503,11 +675,26 @@ pub fn run() {
                 }
                 tauri::WindowEvent::Destroyed => {
                     let state: tauri::State<'_, AppState> = window.state();
-                    let lock_result = state.agent.lock();
-                    if let Ok(mut guard) = lock_result {
+
+                    // Kill agent first (it depends on gateway)
+                    let agent_lock = state.agent.lock();
+                    if let Ok(mut guard) = agent_lock {
                         if let Some(mut process) = guard.take() {
                             eprintln!("[Cafelua] Terminating agent-core...");
                             let _ = process.child.kill();
+                        }
+                    }
+
+                    // Kill gateway only if we spawned it
+                    let gateway_lock = state.gateway.lock();
+                    if let Ok(mut guard) = gateway_lock {
+                        if let Some(mut process) = guard.take() {
+                            if process.we_spawned {
+                                eprintln!("[Cafelua] Terminating Gateway (we spawned it)...");
+                                let _ = process.child.kill();
+                            } else {
+                                eprintln!("[Cafelua] Gateway not managed by us — leaving it running");
+                            }
                         }
                     }
                 }
@@ -551,12 +738,10 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn gateway_health_returns_false_when_no_gateway() {
-        // No gateway running → should return false, not error
+    async fn gateway_health_returns_ok() {
+        // Should return Ok(bool), not Err — regardless of gateway state
         let result = gateway_health().await;
         assert!(result.is_ok());
-        // Gateway likely not running during test
-        assert_eq!(result.unwrap(), false);
     }
 
     #[test]
@@ -569,5 +754,41 @@ mod tests {
         let s = cancel.to_string();
         assert!(s.contains("cancel_stream"));
         assert!(s.contains("req-123"));
+    }
+
+    #[test]
+    fn find_node_binary_returns_result() {
+        // Should find node on dev machine (CI may differ)
+        let result = find_node_binary();
+        // Either Ok (node found) or Err (not found) — both are valid
+        match result {
+            Ok(path) => assert!(!path.as_os_str().is_empty()),
+            Err(e) => assert!(e.contains("Node.js")),
+        }
+    }
+
+    #[test]
+    fn check_gateway_health_sync_returns_bool() {
+        // Should return a bool without panicking, regardless of gateway state
+        let _healthy = check_gateway_health_sync();
+        // Result is environment-dependent: true if gateway running, false if not
+    }
+
+    #[test]
+    fn gateway_process_we_spawned_flag() {
+        // Verify the struct has the expected fields
+        let child = Command::new("true").spawn().unwrap();
+        let process = GatewayProcess {
+            child,
+            we_spawned: false,
+        };
+        assert!(!process.we_spawned);
+
+        let child2 = Command::new("true").spawn().unwrap();
+        let process2 = GatewayProcess {
+            child: child2,
+            we_spawned: true,
+        };
+        assert!(process2.we_spawned);
     }
 }

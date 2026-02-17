@@ -23,12 +23,17 @@ USB 꽂기 → Bazzite 부팅 → Alpha(AI 아바타)가 화면에 등장 → �
 │  │  Avatar  │  패널            │    │
 │  │ (VRM 3D) │                  │    │
 │  └──────────┴──────────────────┘    │
-├─────────────────────────────────────┤
-│         Agent Core (AI 엔진)        │
+├──────────────┬──────────────────────┤
+│ stdio JSON   │  Tauri 2 (Rust)     │
+│ lines        │  Gateway lifecycle  │
+├──────────────┴──────────────────────┤
+│         Agent Core (Node.js)        │
 │  LLM 연결 · 도구 · 서브에이전트     │
+│         ↓ WebSocket (ws://127.0.0.1:18789)
 ├─────────────────────────────────────┤
-│         Gateway (항상 실행)          │
-│  채널 통합 · Skills · 메모리         │
+│     OpenClaw Gateway (데몬)         │
+│  도구 실행 · 채널 · Skills · 메모리  │
+│  (앱 시작 시 자동 spawn / 기존 재사용)│
 ├─────────────────────────────────────┤
 │         Bazzite (불변 Linux OS)      │
 │  GPU 드라이버 · Podman · rpm-ostree │
@@ -40,9 +45,11 @@ USB 꽂기 → Bazzite 부팅 → Alpha(AI 아바타)가 화면에 등장 → �
 ```
 cafelua-os/
 ├── shell/          # Cafelua Shell (Tauri 2 + Three.js Avatar)
-├── agent/          # AI 에이전트 코어
-├── gateway/        # 항상 실행되는 데몬
+├── agent/          # AI 에이전트 코어 (Node.js, LLM + 도구)
+├── config/         # OS 이미지 설정 (scripts, systemd, wrapper)
+├── recipes/        # BlueBuild recipe
 ├── os/             # Bazzite 커스텀 이미지 (BlueBuild)
+├── work-logs/      # 개발 작업 로그
 ├── .agents/        # AI용 컨텍스트 (영어, JSON/YAML)
 └── .users/         # 사람용 컨텍스트 (한국어, Markdown)
 ```
@@ -77,14 +84,66 @@ cafelua-os/
 | [OpenCode](https://github.com/anomalyco/opencode) | Client/Server 분리, Provider 추상화 |
 | Careti | LLM 연결, 도구 세트, 서브에이전트, 컨텍스트 관리 |
 
+## 개발 환경
+
+### 전제조건
+
+| 항목 | 버전 | 비고 |
+|------|------|------|
+| Node.js | 22+ | nvm 권장 |
+| Rust | stable | `rustup update` |
+| pnpm | 9+ | `corepack enable` |
+| 시스템 패키지 | — | `sudo dnf install webkit2gtk4.1-devel libappindicator-gtk3-devel librsvg2-devel` (Fedora) |
+
+### Gateway 설치 (최초 1회)
+
+```bash
+# OpenClaw Gateway 설치 (~/.cafelua/openclaw/)
+bash config/scripts/setup-openclaw.sh
+```
+
+### 개발 빌드 + 실행
+
+```bash
+# 1. 의존성 설치
+cd shell && pnpm install
+cd ../agent && pnpm install
+
+# 2. Tauri 앱 실행 (Gateway + Agent 자동 시작)
+cd shell && pnpm run tauri dev
+```
+
+앱 실행 시 자동으로:
+1. OpenClaw Gateway health check → 이미 실행 중이면 재사용, 아니면 자동 spawn
+2. Agent Core spawn (Node.js, stdio 연결)
+3. 앱 종료 시 자동 spawn한 Gateway만 종료 (systemd 서비스는 유지)
+
+### 테스트
+
+```bash
+cd agent && pnpm test              # Agent 유닛 테스트
+cd shell && pnpm test              # Shell 유닛 테스트
+cargo test --manifest-path shell/src-tauri/Cargo.toml  # Rust 테스트
+
+# Gateway E2E (Gateway 실행 중일 때)
+cd agent && CAFE_LIVE_GATEWAY_E2E=1 pnpm exec vitest run src/__tests__/gateway-e2e.test.ts
+```
+
+### 수동 Gateway 실행 (개발용)
+
+```bash
+# 별도 터미널에서 수동 실행 시
+~/.cafelua/openclaw/node_modules/.bin/openclaw gateway run --bind loopback --port 18789
+```
+
 ## 배포
 
 ```
 Phase 0 (Day 1-3):  BlueBuild 파이프라인 → push하면 ISO 자동 생성
 Phase 1 (Week 1):   아바타 탑재 → Alpha가 보이는 ISO
 Phase 2 (Week 2):   대화 추가 → Alpha와 대화하는 ISO ← 공개 데모
-Phase 3 (Week 3-4): 도구 → Alpha가 일하는 ISO
-Phase 4 (Week 5-7): 데몬 → 완성된 AI OS
+Phase 3 (Week 3-4): 도구 → Alpha가 일하는 ISO          ✅ 완료
+Phase 4 (Week 5-7): 데몬 → 완성된 AI OS               🟡 진행 중
 Phase 5 (Week 8+):  게임 → AI랑 마인크래프트
 ```
 
@@ -145,7 +204,8 @@ AI Studio에서 발급한 키는 기본적으로 Gemini만 사용 가능합니�
 
 ## 상태
 
-Phase 2: 대화 + 감정 표정 + TTS 립싱크 + STT 구현 완료
+- **Phase 3 완료**: 8개 도구(파일/터미널/검색/웹/브라우저/서브에이전트), 권한 승인, 감사 로그, 작업 패널
+- **Phase 4 진행 중**: Gateway 자동 라이프사이클, E2E 검증 완료, 수동 테스트 대기
 
 ## 참고
 

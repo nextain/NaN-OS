@@ -11,7 +11,7 @@
 
 | 단계 | 내용 | 상태 |
 |---|---|---|
-| 4.0 | OpenClaw Gateway 로컬 설정 | 🟡 진행 중 |
+| 4.0 | OpenClaw Gateway 로컬 설정 + 자동 라이프사이클 | ✅ 완료 |
 | 4.1 | Phase 3 E2E 검증 (8개 도구 런타임) | ✅ 자동 검증 완료 (25 passed), 수동 검증 대기 |
 | 4.2 | 사용자 테스트 (수동) | 🔲 대기 |
 | 4.3 | Skills 시스템 | 🔲 대기 |
@@ -220,10 +220,35 @@ Alpha Shell (Tauri 2) → stdio → Agent (Node.js, LLM+TTS)
   - Node Host: `bun ... node run --host 127.0.0.1 --port 18789 --display-name CafeLuaLocal`
   - exec-approvals: `~/.openclaw/exec-approvals.json` (`ask: "off"`, `security: "full"`)
 
+**세션 16** — Gateway 자동 라이프사이클 구현:
+- 구현:
+  - `shell/src-tauri/src/lib.rs`:
+    - `GatewayProcess` struct (`child` + `we_spawned` 플래그)
+    - `AppState`에 `gateway: Mutex<Option<GatewayProcess>>` 추가
+    - `find_node_binary()`: system PATH → nvm fallback (v22+)
+    - `check_gateway_health_sync()`: `reqwest::blocking` 기반 동기 health check
+    - `spawn_gateway()`: health check → 이미 실행 중이면 재사용, 아니면 spawn + 5초 폴링
+    - `setup()` 순서: Gateway spawn → `gateway_status` 이벤트 emit → Agent spawn
+    - `Destroyed` 순서: Agent kill → Gateway kill (`we_spawned`일 때만)
+  - `shell/src-tauri/Cargo.toml`: reqwest에 `blocking` feature 추가
+  - 테스트 3개 추가: `find_node_binary_returns_result`, `check_gateway_health_sync_returns_bool`, `gateway_process_we_spawned_flag`
+- 문서 업데이트:
+  - `README.md`: 아키텍처 다이어그램(Gateway 연동), 개발 환경 섹션, 빌드/실행/테스트 명령어, 상태 업데이트
+  - `CLAUDE.md`: 주요 명령어 섹션 추가 (Gateway 포함)
+  - `.agents/context/plan.yaml`: step_4_0 완료, step_4_0_lifecycle 완료 반영
+  - `.users/context/plan.md`: 4-0, 4-1 완료 반영, Gateway 라이프사이클 상세 설명 추가
+- 검증:
+  - `cargo check` → ✅ (warning 1건 — 기존 AgentChunk)
+  - `cargo test` → ✅ 32 passed
+  - 기존 테스트 29개 + 신규 3개 = 32개 전부 통과
+
 ### 수동 테스트 체크리스트 (사용자)
 
 > ✅ 도구 실행 E2E 자동 검증 완료 (5개 도구 + 2개 노드 명령)
 
+- [ ] `pnpm tauri dev` → Gateway 자동 시작 확인 ("[Cafelua] Gateway spawned" 로그)
+- [ ] Gateway 이미 실행 중일 때 → 재사용 확인 ("[Cafelua] Gateway already running" 로그)
+- [ ] 앱 종료 시 → 자동 시작한 Gateway만 종료 확인
 - [ ] `shell`에서 Tools 활성화 + Gateway URL/Token 설정
 - [ ] 채팅으로 `execute_command` 실행 (노드 페어링 환경)
 - [ ] `read_file`/`write_file`/`apply_diff`/`search_files` 런타임 확인
