@@ -1,3 +1,5 @@
+mod audit;
+
 use serde::{Deserialize, Serialize};
 use std::io::{BufRead, BufReader, Write};
 use std::process::{Child, Command, Stdio};
@@ -16,6 +18,10 @@ struct AgentProcess {
 
 struct AppState {
     agent: Mutex<Option<AgentProcess>>,
+}
+
+struct AuditState {
+    db: audit::AuditDb,
 }
 
 /// JSON chunk forwarded from agent-core stdout to the frontend
@@ -62,7 +68,7 @@ fn save_window_state(app_handle: &AppHandle, state: &WindowState) {
 }
 
 /// Spawn the Node.js agent-core process with stdio pipes
-fn spawn_agent_core(app_handle: &AppHandle) -> Result<AgentProcess, String> {
+fn spawn_agent_core(app_handle: &AppHandle, audit_db: &audit::AuditDb) -> Result<AgentProcess, String> {
     let agent_path = std::env::var("CAFELUA_AGENT_PATH")
         .unwrap_or_else(|_| "node".to_string());
 
@@ -130,8 +136,9 @@ fn spawn_agent_core(app_handle: &AppHandle) -> Result<AgentProcess, String> {
         .take()
         .ok_or_else(|| "Failed to get agent stdout".to_string())?;
 
-    // Stdout reader thread: forward JSON lines as Tauri events
+    // Stdout reader thread: forward JSON lines as Tauri events + audit log
     let handle = app_handle.clone();
+    let audit_db_clone = audit_db.clone();
     thread::spawn(move || {
         let reader = BufReader::new(stdout);
         for line in reader.lines() {
@@ -140,6 +147,10 @@ fn spawn_agent_core(app_handle: &AppHandle) -> Result<AgentProcess, String> {
                     let trimmed = json_line.trim();
                     if trimmed.is_empty() || !trimmed.starts_with('{') {
                         continue;
+                    }
+                    // Audit log: parse and record before emitting
+                    if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(trimmed) {
+                        audit::maybe_log_event(&audit_db_clone, &parsed);
                     }
                     // Forward raw JSON to frontend
                     if let Err(e) = handle.emit("agent_response", trimmed) {
@@ -163,7 +174,37 @@ fn send_to_agent(
     state: &AppState,
     message: &str,
     app_handle: Option<&AppHandle>,
+    audit_db: Option<&audit::AuditDb>,
 ) -> Result<(), String> {
+    // Log approval_decision events (shell→agent direction)
+    if let Some(db) = audit_db {
+        if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(message) {
+            if parsed.get("type").and_then(|v| v.as_str()) == Some("approval_response") {
+                let request_id = parsed
+                    .get("requestId")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("");
+                let tool_name = parsed.get("toolName").and_then(|v| v.as_str());
+                let tool_call_id = parsed.get("toolCallId").and_then(|v| v.as_str());
+                let decision = parsed
+                    .get("decision")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("");
+                let payload = serde_json::json!({ "decision": decision }).to_string();
+                let _ = audit::insert_event(
+                    db,
+                    request_id,
+                    "approval_decision",
+                    tool_name,
+                    tool_call_id,
+                    None,
+                    None,
+                    Some(&payload),
+                );
+            }
+        }
+    }
+
     let mut guard = state
         .agent
         .lock()
@@ -177,7 +218,7 @@ fn send_to_agent(
                 *guard = None;
                 drop(guard);
                 if let Some(handle) = app_handle {
-                    return restart_agent(state, handle, message);
+                    return restart_agent(state, handle, message, audit_db);
                 }
                 return Err("agent-core died".to_string());
             }
@@ -199,7 +240,7 @@ fn send_to_agent(
                 *guard = None;
                 drop(guard);
                 if let Some(handle) = app_handle {
-                    restart_agent(state, handle, message)
+                    restart_agent(state, handle, message, audit_db)
                 } else {
                     Err(format!("Write failed: {}", e))
                 }
@@ -208,7 +249,7 @@ fn send_to_agent(
     } else {
         drop(guard);
         if let Some(handle) = app_handle {
-            restart_agent(state, handle, message)
+            restart_agent(state, handle, message, audit_db)
         } else {
             Err("agent-core not running".to_string())
         }
@@ -219,9 +260,21 @@ fn restart_agent(
     state: &AppState,
     app_handle: &AppHandle,
     message: &str,
+    audit_db: Option<&audit::AuditDb>,
 ) -> Result<(), String> {
     eprintln!("[Cafelua] Restarting agent-core...");
-    match spawn_agent_core(app_handle) {
+    // Use a temporary empty db if none provided (shouldn't happen in practice)
+    let empty_db;
+    let db = match audit_db {
+        Some(db) => db,
+        None => {
+            empty_db = std::sync::Arc::new(Mutex::new(
+                rusqlite::Connection::open_in_memory().map_err(|e| format!("DB error: {}", e))?,
+            ));
+            &empty_db
+        }
+    };
+    match spawn_agent_core(app_handle, db) {
         Ok(process) => {
             let mut guard = state
                 .agent
@@ -231,7 +284,7 @@ fn restart_agent(
             eprintln!("[Cafelua] agent-core restarted");
             drop(guard);
             std::thread::sleep(std::time::Duration::from_millis(300));
-            send_to_agent(state, message, None)
+            send_to_agent(state, message, None, audit_db)
         }
         Err(e) => Err(format!("Restart failed: {}", e)),
     }
@@ -242,8 +295,9 @@ async fn send_to_agent_command(
     app: AppHandle,
     message: String,
     state: tauri::State<'_, AppState>,
+    audit_state: tauri::State<'_, AuditState>,
 ) -> Result<(), String> {
-    send_to_agent(&state, &message, Some(&app))
+    send_to_agent(&state, &message, Some(&app), Some(&audit_state.db))
 }
 
 #[tauri::command]
@@ -251,12 +305,28 @@ async fn cancel_stream(
     app: AppHandle,
     request_id: String,
     state: tauri::State<'_, AppState>,
+    audit_state: tauri::State<'_, AuditState>,
 ) -> Result<(), String> {
     let cancel = serde_json::json!({
         "type": "cancel_stream",
         "requestId": request_id
     });
-    send_to_agent(&state, &cancel.to_string(), Some(&app))
+    send_to_agent(&state, &cancel.to_string(), Some(&app), Some(&audit_state.db))
+}
+
+#[tauri::command]
+async fn get_audit_log(
+    filter: audit::AuditFilter,
+    audit_state: tauri::State<'_, AuditState>,
+) -> Result<Vec<audit::AuditEvent>, String> {
+    audit::query_events(&audit_state.db, &filter)
+}
+
+#[tauri::command]
+async fn get_audit_stats(
+    audit_state: tauri::State<'_, AuditState>,
+) -> Result<audit::AuditStats, String> {
+    audit::query_stats(&audit_state.db)
 }
 
 #[tauri::command]
@@ -341,10 +411,26 @@ pub fn run() {
             reset_window_state,
             preview_tts,
             gateway_health,
+            get_audit_log,
+            get_audit_stats,
         ])
         .setup(|app| {
             let app_handle = app.handle().clone();
             let state: tauri::State<'_, AppState> = app.state();
+
+            // Initialize audit DB
+            let audit_db_path = app_handle
+                .path()
+                .app_config_dir()
+                .map(|d| d.join("audit.db"))
+                .map_err(|e| format!("Failed to get config dir: {}", e))?;
+            if let Some(parent) = audit_db_path.parent() {
+                let _ = std::fs::create_dir_all(parent);
+            }
+            let audit_db = audit::init_db(&audit_db_path)
+                .map_err(|e| -> Box<dyn std::error::Error> { format!("Failed to init audit DB: {}", e).into() })?;
+            app.manage(AuditState { db: audit_db.clone() });
+            eprintln!("[Cafelua] Audit DB initialized at: {}", audit_db_path.display());
 
             // Restore or dock window
             if let Some(window) = app.get_webview_window("main") {
@@ -379,7 +465,7 @@ pub fn run() {
                 });
             }
 
-            match spawn_agent_core(&app_handle) {
+            match spawn_agent_core(&app_handle, &audit_db) {
                 Ok(process) => {
                     let mut guard = state.agent.lock().unwrap();
                     *guard = Some(process);
