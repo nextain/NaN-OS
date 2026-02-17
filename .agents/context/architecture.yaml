@@ -31,7 +31,7 @@ three_pillars:
     role: "Runtime backend (daemon + execution environment)"
     provides:
       - "Gateway WebSocket server (systemd, always-on)"
-      - "exec.bash, file operations via Gateway RPC"
+      - "Command/file RPCs (exec.bash, node.invoke/system.run)"
       - "Security: device auth, token scopes, exec approvals"
       - "Channels: Discord, Telegram, WhatsApp, Slack, IRC, etc."
       - "Skills: 50+ built-in (weather, time, memo, etc.)"
@@ -46,10 +46,10 @@ three_pillars:
       methods: "88 methods (agent, sessions.*, exec.*, skills.*, channels.*, etc.)"
     what_cafelua_uses:
       - "Gateway daemon as systemd user service"
-      - "exec.bash for command execution"
+      - "Command execution via exec.bash (preferred) or node.invoke fallback"
       - "exec.approvals for permission system"
-      - "sessions.* for session management"
-      - "skills.* for built-in and custom skills"
+      - "sessions.* for session management (when exposed by gateway config)"
+      - "skills.invoke and/or browser.request for web/browser actions"
       - "channels.* for Discord/Telegram"
       - "agent method for agent interaction"
 
@@ -99,12 +99,13 @@ runtime_architecture:
     │  Role: Execution, security, channels, skills, memory    │
     │  Source: OpenClaw ecosystem (npm: openclaw)              │
     │  Auth: device identity + token scopes (protocol v3)     │
-    │  Methods: 88 (exec.bash, agent, sessions.*, skills.*)   │
+    │  Methods: dynamic by profile (agent, node.invoke,        │
+    │  sessions.*, browser.request, skills.*, channels.* ...)  │
     └─────────────────────────────────────────────────────────┘
 
   data_flow:
     chat: "User → Shell → Agent → LLM → Agent → Shell → User"
-    tool_exec: "LLM → Agent (tool_use) → Gateway (exec.bash) → OS → result → LLM"
+    tool_exec: "LLM → Agent (tool_use) → Gateway (exec.bash or node.invoke) → OS → result → LLM"
     approval: "Gateway → Agent (approval_request) → Shell (modal) → user decision → Agent → Gateway"
     external: "Discord msg → Gateway → Agent → LLM → Agent → Gateway → Discord reply"
 

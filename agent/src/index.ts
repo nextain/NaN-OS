@@ -100,7 +100,7 @@ export async function handleChatRequest(req: ChatRequest): Promise<void> {
 		// Connect to Gateway if tools enabled
 		if (enableTools && gatewayUrl) {
 			gateway = new GatewayClient();
-			await gateway.connect(gatewayUrl, gatewayToken || "");
+			await gateway.connect(gatewayUrl, { token: gatewayToken || "" });
 		}
 
 		// Build conversation messages
@@ -262,7 +262,7 @@ export async function handleChatRequest(req: ChatRequest): Promise<void> {
 				// Execution phase (parallel)
 				const results = await Promise.all(
 					approvedSpawns.map((call) =>
-						executeTool(gateway, call.name, call.args).then(
+						executeTool(gateway!, call.name, call.args).then(
 							(result) => ({ call, result }),
 						),
 					),

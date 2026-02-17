@@ -1,67 +1,36 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { WebSocketServer } from "ws";
 import { GatewayClient } from "../client.js";
 import { GATEWAY_TOOLS, executeTool } from "../tool-bridge.js";
+import { createMockGateway, type MockGateway } from "./mock-gateway.js";
 
-let mockServer: WebSocketServer;
-let serverPort: number;
+let mock: MockGateway;
 let client: GatewayClient;
 let lastCommand: string;
 
 beforeAll(async () => {
-	mockServer = new WebSocketServer({ port: 0 });
-	serverPort = (mockServer.address() as { port: number }).port;
-
-	mockServer.on("connection", (ws) => {
-		ws.on("message", (raw) => {
-			const msg = JSON.parse(raw.toString());
-			if (msg.type === "req") {
-				if (msg.method === "exec.bash") {
-					const cmd = msg.params.command as string;
-					lastCommand = cmd;
-					if (cmd.includes("cat ")) {
-						ws.send(
-							JSON.stringify({
-								type: "res",
-								id: msg.id,
-								ok: true,
-								payload: { stdout: "file contents here", exitCode: 0 },
-							}),
-						);
-					} else {
-						ws.send(
-							JSON.stringify({
-								type: "res",
-								id: msg.id,
-								ok: true,
-								payload: {
-									stdout: `executed: ${cmd}`,
-									exitCode: 0,
-								},
-							}),
-						);
-					}
-				} else if (msg.method === "skills.invoke") {
-					ws.send(
-						JSON.stringify({
-							type: "res",
-							id: msg.id,
-							ok: true,
-							payload: { results: ["result1", "result2"] },
-						}),
-					);
-				}
+	mock = createMockGateway((method, params, respond) => {
+		if (method === "exec.bash") {
+			const cmd = (params as Record<string, unknown>).command as string;
+			lastCommand = cmd;
+			if (cmd.includes("cat ")) {
+				respond.ok({ stdout: "file contents here", exitCode: 0 });
+			} else {
+				respond.ok({ stdout: `executed: ${cmd}`, exitCode: 0 });
 			}
-		});
+		} else if (method === "skills.invoke") {
+			respond.ok({ results: ["result1", "result2"] });
+		} else {
+			respond.error("UNKNOWN", `unknown method: ${method}`);
+		}
 	});
 
 	client = new GatewayClient();
-	await client.connect(`ws://127.0.0.1:${serverPort}`, "test-token");
+	await client.connect(`ws://127.0.0.1:${mock.port}`, { token: "test-token" });
 });
 
 afterAll(() => {
 	client.close();
-	mockServer.close();
+	mock.close();
 });
 
 describe("GATEWAY_TOOLS", () => {
@@ -258,5 +227,243 @@ describe("executeTool", () => {
 		});
 		expect(result.success).toBe(false);
 		expect(result.error).toContain("not connected");
+	});
+
+	it("falls back to node.invoke when exec.bash is unavailable", async () => {
+		const calledMethods: string[] = [];
+		const fallbackMock = createMockGateway(
+			(method, _params, respond) => {
+				calledMethods.push(method);
+				if (method === "node.list") {
+					respond.ok({ nodes: [{ id: "node-1", name: "local-node" }] });
+					return;
+				}
+				if (method === "node.invoke") {
+					respond.ok({
+						result: { stdout: "node invoke ok\n", exitCode: 0 },
+					});
+					return;
+				}
+				respond.error("UNKNOWN", `unknown method: ${method}`);
+			},
+			{
+				methods: ["node.list", "node.invoke"],
+			},
+		);
+
+		const fallbackClient = new GatewayClient();
+		try {
+			await fallbackClient.connect(`ws://127.0.0.1:${fallbackMock.port}`, {
+				token: "test-token",
+			});
+
+			const result = await executeTool(fallbackClient, "execute_command", {
+				command: "echo hello",
+			});
+
+			expect(result.success).toBe(true);
+			expect(result.output).toContain("node invoke ok");
+			expect(calledMethods).toContain("node.list");
+			expect(calledMethods).toContain("node.invoke");
+		} finally {
+			fallbackClient.close();
+			fallbackMock.close();
+		}
+	});
+
+	it("does not retry via node.invoke when exec.bash fails at runtime", async () => {
+		let nodeInvokeCalled = false;
+		const runtimeFailMock = createMockGateway(
+			(method, _params, respond) => {
+				if (method === "exec.bash") {
+					respond.error("TIMEOUT", "exec.bash request timed out");
+					return;
+				}
+				if (method === "node.list") {
+					respond.ok({ nodes: [{ id: "node-1", name: "local-node" }] });
+					return;
+				}
+				if (method === "node.invoke") {
+					nodeInvokeCalled = true;
+					respond.ok({
+						result: { stdout: "unexpected fallback\n", exitCode: 0 },
+					});
+					return;
+				}
+				respond.error("UNKNOWN", `unknown method: ${method}`);
+			},
+			{
+				methods: ["exec.bash", "node.list", "node.invoke"],
+			},
+		);
+
+		const runtimeFailClient = new GatewayClient();
+		try {
+			await runtimeFailClient.connect(`ws://127.0.0.1:${runtimeFailMock.port}`, {
+				token: "test-token",
+			});
+
+			const result = await executeTool(runtimeFailClient, "execute_command", {
+				command: "echo hello",
+			});
+
+			expect(result.success).toBe(false);
+			expect(result.error).toContain("exec.bash");
+			expect(nodeInvokeCalled).toBe(false);
+		} finally {
+			runtimeFailClient.close();
+			runtimeFailMock.close();
+		}
+	});
+
+	it("falls back when exec.bash is advertised but returns unknown method", async () => {
+		let nodeInvokeCalled = false;
+		const staleMethodMock = createMockGateway(
+			(method, _params, respond) => {
+				if (method === "exec.bash") {
+					respond.error("UNKNOWN_METHOD", "unknown method: exec.bash");
+					return;
+				}
+				if (method === "node.list") {
+					respond.ok({ nodes: [{ id: "node-1", name: "local-node" }] });
+					return;
+				}
+				if (method === "node.invoke") {
+					nodeInvokeCalled = true;
+					respond.ok({
+						result: { stdout: "fallback ok\n", exitCode: 0 },
+					});
+					return;
+				}
+				respond.error("UNKNOWN", `unknown method: ${method}`);
+			},
+			{
+				methods: ["exec.bash", "node.list", "node.invoke"],
+			},
+		);
+
+		const staleMethodClient = new GatewayClient();
+		try {
+			await staleMethodClient.connect(
+				`ws://127.0.0.1:${staleMethodMock.port}`,
+				{
+					token: "test-token",
+				},
+			);
+
+			const result = await executeTool(staleMethodClient, "execute_command", {
+				command: "echo hello",
+			});
+
+			expect(result.success).toBe(true);
+			expect(result.output).toContain("fallback ok");
+			expect(nodeInvokeCalled).toBe(true);
+		} finally {
+			staleMethodClient.close();
+			staleMethodMock.close();
+		}
+	});
+
+	it("returns clear error when node.invoke is available but no paired node exists", async () => {
+		const noNodeMock = createMockGateway(
+			(method, _params, respond) => {
+				if (method === "node.list") {
+					respond.ok({ nodes: [] });
+					return;
+				}
+				respond.error("UNKNOWN", `unknown method: ${method}`);
+			},
+			{
+				methods: ["node.list", "node.invoke"],
+			},
+		);
+
+		const noNodeClient = new GatewayClient();
+		try {
+			await noNodeClient.connect(`ws://127.0.0.1:${noNodeMock.port}`, {
+				token: "test-token",
+			});
+
+			const result = await executeTool(noNodeClient, "execute_command", {
+				command: "echo hello",
+			});
+			expect(result.success).toBe(false);
+			expect(result.error).toContain("No paired node");
+		} finally {
+			noNodeClient.close();
+			noNodeMock.close();
+		}
+	});
+
+	it("uses browser.request fallback when skills.invoke is unavailable", async () => {
+		let lastUrl = "";
+		const browserMock = createMockGateway(
+			(method, params, respond) => {
+				if (method === "browser.request") {
+					const body = params.body as Record<string, unknown> | undefined;
+					lastUrl = String(body?.url ?? params.url ?? "");
+					respond.ok({ content: "browser fallback ok" });
+					return;
+				}
+				respond.error("UNKNOWN", `unknown method: ${method}`);
+			},
+			{
+				methods: ["browser.request"],
+			},
+		);
+
+		const browserClient = new GatewayClient();
+		try {
+			await browserClient.connect(`ws://127.0.0.1:${browserMock.port}`, {
+				token: "test-token",
+			});
+
+			const browserResult = await executeTool(browserClient, "browser", {
+				url: "https://example.com",
+			});
+			expect(browserResult.success).toBe(true);
+			expect(lastUrl).toBe("https://example.com");
+
+			const searchResult = await executeTool(browserClient, "web_search", {
+				query: "alpha beta",
+			});
+			expect(searchResult.success).toBe(true);
+			expect(lastUrl).toContain("duckduckgo.com");
+			expect(lastUrl).toContain("alpha%20beta");
+		} finally {
+			browserClient.close();
+			browserMock.close();
+		}
+	});
+
+	it("returns unsupported error for sessions_spawn when RPCs are missing", async () => {
+		const limitedMock = createMockGateway(
+			(method, _params, respond) => {
+				if (method === "health") {
+					respond.ok({ ok: true });
+					return;
+				}
+				respond.error("UNKNOWN", `unknown method: ${method}`);
+			},
+			{
+				methods: ["health"],
+			},
+		);
+
+		const limitedClient = new GatewayClient();
+		try {
+			await limitedClient.connect(`ws://127.0.0.1:${limitedMock.port}`, {
+				token: "test-token",
+			});
+
+			const result = await executeTool(limitedClient, "sessions_spawn", {
+				task: "test",
+			});
+			expect(result.success).toBe(false);
+			expect(result.error).toContain("not available");
+		} finally {
+			limitedClient.close();
+			limitedMock.close();
+		}
 	});
 });

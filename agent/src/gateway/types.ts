@@ -24,10 +24,29 @@ export interface GatewayResponseError {
 export type GatewayResponse = GatewayResponseOk | GatewayResponseError;
 
 export interface GatewayEvent {
-	type: "evt";
+	type: "event" | "evt";
 	event: string;
 	payload?: unknown;
 	seq?: number;
 }
 
 export type GatewayFrame = GatewayRequest | GatewayResponse | GatewayEvent;
+
+/** Device identity for Gateway authentication */
+export interface DeviceIdentity {
+	id: string;
+	publicKey: string;
+	privateKeyPem: string;
+}
+
+/** Options for GatewayClient.connect() */
+export interface GatewayConnectOptions {
+	token: string;
+	clientId?: string;
+	platform?: string;
+	mode?: string;
+	version?: string;
+	role?: string;
+	scopes?: string[];
+	device?: DeviceIdentity;
+}

@@ -1,5 +1,6 @@
+import { randomUUID } from "node:crypto";
 import type { ToolDefinition } from "../providers/types.js";
-import type { GatewayClient } from "./client.js";
+import { GatewayRequestError, type GatewayClient } from "./client.js";
 import { executeSessionsSpawn } from "./sessions-spawn.js";
 
 export type { ToolDefinition };
@@ -170,6 +171,268 @@ function isBlockedCommand(command: string): boolean {
 	return BLOCKED_PATTERNS.some((pattern) => pattern.test(command.trim()));
 }
 
+function hasMethod(client: GatewayClient, method: string): boolean {
+	const methods = client.availableMethods;
+	// Backward-compatible default for tests/mocks that do not provide
+	// method capability metadata from hello-ok.
+	if (!Array.isArray(methods) || methods.length === 0) {
+		return true;
+	}
+	return methods.includes(method);
+}
+
+function hasAllMethods(client: GatewayClient, methods: string[]): boolean {
+	return methods.every((method) => hasMethod(client, method));
+}
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+	if (!value || typeof value !== "object") {
+		return null;
+	}
+	return value as Record<string, unknown>;
+}
+
+function formatError(err: unknown): string {
+	if (err instanceof Error) {
+		return err.message;
+	}
+	return String(err);
+}
+
+function isMethodUnavailableError(err: unknown): boolean {
+	if (err instanceof GatewayRequestError) {
+		const code = err.code.toUpperCase();
+		if (
+			code === "UNKNOWN_METHOD" ||
+			code === "METHOD_NOT_FOUND" ||
+			code === "NOT_IMPLEMENTED" ||
+			code === "UNSUPPORTED_METHOD" ||
+			code === "UNKNOWN"
+		) {
+			return true;
+		}
+	}
+	return /unknown method|method not found|not implemented|unsupported/i.test(
+		formatError(err),
+	);
+}
+
+function getNumberField(
+	rec: Record<string, unknown>,
+	key: string,
+): number | undefined {
+	const value = rec[key];
+	return typeof value === "number" ? value : undefined;
+}
+
+function getStringField(
+	rec: Record<string, unknown>,
+	key: string,
+): string | undefined {
+	const value = rec[key];
+	return typeof value === "string" ? value : undefined;
+}
+
+interface CommandResult {
+	exitCode: number;
+	stdout: string;
+	stderr?: string;
+}
+
+function parseCommandResult(payload: unknown, depth = 0): CommandResult {
+	const rec = asRecord(payload);
+	if (!rec) {
+		return {
+			exitCode: 0,
+			stdout: typeof payload === "string" ? payload : JSON.stringify(payload),
+		};
+	}
+
+	// Handle wrapped payloads from node.invoke implementations (max 3 levels).
+	if (depth < 3) {
+		const nested = asRecord(rec.result) ?? asRecord(rec.payload);
+		if (nested) {
+			return parseCommandResult(nested, depth + 1);
+		}
+	}
+
+	const stdout =
+		getStringField(rec, "stdout") ??
+		getStringField(rec, "output") ??
+		getStringField(rec, "text") ??
+		"";
+	const stderr =
+		getStringField(rec, "stderr") ??
+		getStringField(rec, "error") ??
+		getStringField(rec, "message");
+	const exitCode =
+		getNumberField(rec, "exitCode") ??
+		getNumberField(rec, "code") ??
+		getNumberField(rec, "statusCode") ??
+		0;
+
+	return { exitCode, stdout, stderr };
+}
+
+function toToolResult(result: CommandResult): ToolResult {
+	return {
+		success: result.exitCode === 0,
+		output: result.stdout || result.stderr || "",
+		error: result.exitCode !== 0 ? result.stderr : undefined,
+	};
+}
+
+/** Per-client nodeId cache to avoid repeated node.list RPC calls */
+const nodeIdCache = new WeakMap<GatewayClient, string | null>();
+
+async function resolveNodeId(client: GatewayClient): Promise<string | null> {
+	if (nodeIdCache.has(client)) {
+		return nodeIdCache.get(client)!;
+	}
+
+	if (!hasMethod(client, "node.list")) {
+		nodeIdCache.set(client, null);
+		return null;
+	}
+
+	const payload = await client.request("node.list", {});
+	const rec = asRecord(payload);
+
+	let nodes: unknown[] = [];
+	if (Array.isArray(payload)) {
+		nodes = payload;
+	} else if (rec && Array.isArray(rec.nodes)) {
+		nodes = rec.nodes;
+	}
+
+	for (const node of nodes) {
+		const nodeRec = asRecord(node);
+		if (!nodeRec) continue;
+		const id = getStringField(nodeRec, "id");
+		if (id) {
+			nodeIdCache.set(client, id);
+			return id;
+		}
+	}
+
+	nodeIdCache.set(client, null);
+	return null;
+}
+
+async function runExecBash(
+	client: GatewayClient,
+	command: string,
+	workdir?: string,
+): Promise<ToolResult> {
+	const payload = await client.request("exec.bash", {
+		command,
+		workdir: workdir || undefined,
+	});
+	return toToolResult(parseCommandResult(payload));
+}
+
+async function runNodeInvoke(
+	client: GatewayClient,
+	command: string,
+	workdir?: string,
+): Promise<ToolResult> {
+	const nodeId = await resolveNodeId(client);
+	if (!nodeId) {
+		return {
+			success: false,
+			output: "",
+			error: "No paired node available for node.invoke",
+		};
+	}
+
+	const payload = await client.request("node.invoke", {
+		nodeId,
+		idempotencyKey: randomUUID(),
+		command: "system.run",
+		params: {
+			command: ["bash", "-lc", command],
+			cwd: workdir || undefined,
+		},
+	});
+
+	return toToolResult(parseCommandResult(payload));
+}
+
+async function runShellCommand(
+	client: GatewayClient,
+	command: string,
+	workdir?: string,
+): Promise<ToolResult> {
+	const errors: string[] = [];
+
+	if (hasMethod(client, "exec.bash")) {
+		try {
+			return await runExecBash(client, command, workdir);
+		} catch (err) {
+			if (!isMethodUnavailableError(err)) {
+				return {
+					success: false,
+					output: "",
+					error: `exec.bash: ${formatError(err)}`,
+				};
+			}
+			errors.push(`exec.bash unavailable: ${formatError(err)}`);
+		}
+	}
+
+	if (hasMethod(client, "node.invoke")) {
+		try {
+			return await runNodeInvoke(client, command, workdir);
+		} catch (err) {
+			return {
+				success: false,
+				output: "",
+				error: `node.invoke: ${formatError(err)}`,
+			};
+		}
+	}
+
+	return {
+		success: false,
+		output: "",
+		error:
+			errors.length > 0
+				? errors.join(" | ")
+				: "No supported command execution RPC (exec.bash/node.invoke)",
+	};
+}
+
+async function invokeBrowserRequest(
+	client: GatewayClient,
+	url: string,
+): Promise<unknown> {
+	const attempts: Array<Record<string, unknown>> = [
+		{
+			method: "POST",
+			path: "navigate",
+			body: { url },
+		},
+		{
+			method: "POST",
+			path: "open",
+			body: { url },
+		},
+		// Backward-compat path used by earlier internal adapter assumptions.
+		{ url },
+	];
+
+	const errors: string[] = [];
+	for (const params of attempts) {
+		try {
+			return await client.request("browser.request", params);
+		} catch (err) {
+			errors.push(String(err));
+		}
+	}
+
+	throw new Error(errors.join(" | "));
+}
+
 /** Execute a tool call via the Gateway */
 export async function executeTool(
 	client: GatewayClient,
@@ -190,19 +453,11 @@ export async function executeTool(
 					error: `Blocked: "${command}" is not allowed for safety reasons`,
 				};
 			}
-			try {
-				const result = (await client.request("exec.bash", {
-					command,
-					workdir: args.workdir || undefined,
-				})) as { stdout?: string; stderr?: string; exitCode?: number };
-				return {
-					success: (result.exitCode ?? 0) === 0,
-					output: result.stdout || result.stderr || "",
-					error: result.exitCode !== 0 ? result.stderr : undefined,
-				};
-			} catch (err) {
-				return { success: false, output: "", error: String(err) };
-			}
+			return runShellCommand(
+				client,
+				command,
+				args.workdir as string | undefined,
+			);
 		}
 
 		case "read_file": {
@@ -211,17 +466,7 @@ export async function executeTool(
 			if (pathErr) {
 				return { success: false, output: "", error: pathErr };
 			}
-			try {
-				const result = (await client.request("exec.bash", {
-					command: `cat ${shellEscape(path)}`,
-				})) as { stdout?: string; exitCode?: number };
-				return {
-					success: (result.exitCode ?? 0) === 0,
-					output: result.stdout || "",
-				};
-			} catch (err) {
-				return { success: false, output: "", error: String(err) };
-			}
+			return runShellCommand(client, `cat ${shellEscape(path)}`);
 		}
 
 		case "write_file": {
@@ -230,20 +475,19 @@ export async function executeTool(
 			if (pathErr) {
 				return { success: false, output: "", error: pathErr };
 			}
-			try {
-				const escapedPath = shellEscape(path);
-				const escapedContent = shellEscape(args.content as string);
-				const result = (await client.request("exec.bash", {
-					command: `mkdir -p "$(dirname ${escapedPath})" && printf '%s' ${escapedContent} > ${escapedPath}`,
-				})) as { exitCode?: number; stderr?: string };
-				return {
-					success: (result.exitCode ?? 0) === 0,
-					output: `File written: ${path}`,
-					error: result.exitCode !== 0 ? result.stderr : undefined,
-				};
-			} catch (err) {
-				return { success: false, output: "", error: String(err) };
+			const escapedPath = shellEscape(path);
+			const escapedContent = shellEscape(args.content as string);
+			const result = await runShellCommand(
+				client,
+				`mkdir -p "$(dirname ${escapedPath})" && printf '%s' ${escapedContent} > ${escapedPath}`,
+			);
+			if (!result.success) {
+				return result;
 			}
+			return {
+				success: true,
+				output: `File written: ${path}`,
+			};
 		}
 
 		case "search_files": {
@@ -258,28 +502,46 @@ export async function executeTool(
 					error: patternErr || pathErr || "Invalid input",
 				};
 			}
-			try {
-				const command = args.content
-					? `grep -rl ${shellEscape(pattern)} ${shellEscape(searchPath)} 2>/dev/null | head -20`
-					: `find ${shellEscape(searchPath)} -name ${shellEscape(pattern)} 2>/dev/null | head -20`;
-				const result = (await client.request("exec.bash", {
-					command,
-				})) as { stdout?: string; exitCode?: number };
-				return {
-					success: true,
-					output: result.stdout || "No matches found",
-				};
-			} catch (err) {
-				return { success: false, output: "", error: String(err) };
+			const command = args.content
+				? `grep -rl ${shellEscape(pattern)} ${shellEscape(searchPath)} 2>/dev/null | head -20`
+				: `find ${shellEscape(searchPath)} -name ${shellEscape(pattern)} 2>/dev/null | head -20`;
+			const result = await runShellCommand(client, command);
+			if (!result.success) {
+				return result;
 			}
+			return {
+				success: true,
+				output: result.output || "No matches found",
+			};
 		}
 
 		case "web_search": {
 			try {
-				const result = await client.request("skills.invoke", {
-					skill: "web-search",
-					args: { query: args.query },
-				});
+				let result: unknown;
+				if (hasMethod(client, "skills.invoke")) {
+					result = await client.request("skills.invoke", {
+						skill: "web-search",
+						args: { query: args.query },
+					});
+				} else if (hasMethod(client, "browser.request")) {
+					const query = String(args.query ?? "").trim();
+					if (!query) {
+						return {
+							success: false,
+							output: "",
+							error: "Search query is required",
+						};
+					}
+					const url = `https://duckduckgo.com/?q=${encodeURIComponent(query)}`;
+					result = await invokeBrowserRequest(client, url);
+				} else {
+					return {
+						success: false,
+						output: "",
+						error: "No supported web search RPC (skills.invoke/browser.request)",
+					};
+				}
+
 				return {
 					success: true,
 					output: JSON.stringify(result),
@@ -310,17 +572,13 @@ export async function executeTool(
 			}
 			try {
 				// Read file, replace, write back
-				const readResult = (await client.request("exec.bash", {
-					command: `cat ${shellEscape(path)}`,
-				})) as { stdout?: string; exitCode?: number; stderr?: string };
-				if ((readResult.exitCode ?? 0) !== 0) {
-					return {
-						success: false,
-						output: "",
-						error: readResult.stderr || "Failed to read file",
-					};
-				}
-				const content = readResult.stdout || "";
+				const readResult = await runShellCommand(
+					client,
+					`cat ${shellEscape(path)}`,
+				);
+				if (!readResult.success) return readResult;
+
+				const content = readResult.output || "";
 				if (!content.includes(search)) {
 					return {
 						success: false,
@@ -331,14 +589,15 @@ export async function executeTool(
 				const newContent = content.replace(search, replace);
 				const escapedPath = shellEscape(path);
 				const escapedContent = shellEscape(newContent);
-				const writeResult = (await client.request("exec.bash", {
-					command: `printf '%s' ${escapedContent} > ${escapedPath}`,
-				})) as { exitCode?: number; stderr?: string };
+				const writeResult = await runShellCommand(
+					client,
+					`printf '%s' ${escapedContent} > ${escapedPath}`,
+				);
+				if (!writeResult.success) return writeResult;
+
 				return {
-					success: (writeResult.exitCode ?? 0) === 0,
+					success: true,
 					output: `Applied diff to ${path}`,
-					error:
-						writeResult.exitCode !== 0 ? writeResult.stderr : undefined,
 				};
 			} catch (err) {
 				return { success: false, output: "", error: String(err) };
@@ -351,10 +610,21 @@ export async function executeTool(
 				return { success: false, output: "", error: "URL is required" };
 			}
 			try {
-				const result = await client.request("skills.invoke", {
-					skill: "browser",
-					args: { url },
-				});
+				let result: unknown;
+				if (hasMethod(client, "skills.invoke")) {
+					result = await client.request("skills.invoke", {
+						skill: "browser",
+						args: { url },
+					});
+				} else if (hasMethod(client, "browser.request")) {
+					result = await invokeBrowserRequest(client, url);
+				} else {
+					return {
+						success: false,
+						output: "",
+						error: "No supported browser RPC (skills.invoke/browser.request)",
+					};
+				}
 				return {
 					success: true,
 					output:
@@ -372,6 +642,20 @@ export async function executeTool(
 		}
 
 		case "sessions_spawn": {
+			if (
+				!hasAllMethods(client, [
+					"sessions.spawn",
+					"agent.wait",
+					"sessions.transcript",
+				])
+			) {
+				return {
+					success: false,
+					output: "",
+					error: "sessions_spawn is not available on this Gateway",
+				};
+			}
+
 			return executeSessionsSpawn(client, {
 				task: args.task as string,
 				label: args.label as string | undefined,

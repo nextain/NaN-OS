@@ -54,7 +54,8 @@ OpenClaw의 데몬+실행+채널+스킬 생태계 (런타임 백엔드)
 │  역할: 명령 실행, 보안, 채널, 스킬, 메모리             │
 │  출처: OpenClaw 생태계 (npm: openclaw)                  │
 │  인증: 디바이스 ID + 토큰 스코프 (protocol v3)          │
-│  메서드: 88개 (exec.bash, agent, sessions, skills 등)   │
+│  메서드: 프로파일별 동적 노출 (agent, node.invoke,      │
+│  sessions, browser.request, skills, channels 등)         │
 └─────────────────────────────────────────────────────────┘
 ```
 
@@ -64,7 +65,7 @@ OpenClaw의 데몬+실행+채널+스킬 생태계 (런타임 백엔드)
 
 OpenClaw이 제공하는 것:
 - **Gateway 데몬**: systemd 유저 서비스, 항상 실행
-- **명령 실행**: exec.bash via Gateway RPC
+- **명령 실행**: exec.bash 우선 + node.invoke(system.run) 폴백
 - **보안**: 디바이스 인증, 토큰 스코프, exec approval
 - **채널**: Discord, Telegram, WhatsApp, Slack, IRC 등
 - **스킬**: 50+ 내장 (날씨, 시간, 메모 등)
@@ -97,7 +98,7 @@ OpenCode가 제공하는 것:
 | 시나리오 | 흐름 |
 |---------|------|
 | **채팅** | User → Shell → Agent → LLM → Agent → Shell → User |
-| **도구 실행** | LLM → Agent (tool_use) → Gateway (exec.bash) → OS → result → LLM |
+| **도구 실행** | LLM → Agent (tool_use) → Gateway (exec.bash 또는 node.invoke) → OS → result → LLM |
 | **승인** | Gateway → Agent (approval_request) → Shell (모달) → 사용자 결정 → Agent → Gateway |
 | **외부 채널** | Discord msg → Gateway → Agent → LLM → Agent → Gateway → Discord reply |
 
@@ -123,7 +124,7 @@ Cafelua Agent가 OpenClaw Gateway에 연결하는 과정:
 2. Gateway → connect.challenge 이벤트 (nonce 포함)
 3. Agent → connect 요청 (토큰 + protocol v3 + client info)
 4. Gateway → hello-ok 응답 (88개 메서드 + 기능 목록)
-5. Agent → req/res 프레임으로 도구 실행 (exec.bash 등)
+5. Agent → req/res 프레임으로 도구 실행 (exec.bash / node.invoke 등)
 ```
 
 ### 인증 파라미터

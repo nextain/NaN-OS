@@ -1,10 +1,9 @@
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { WebSocketServer } from "ws";
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { GatewayClient } from "../client.js";
 import { executeSessionsSpawn } from "../sessions-spawn.js";
+import { createMockGateway, type MockGateway } from "./mock-gateway.js";
 
-let mockServer: WebSocketServer;
-let serverPort: number;
+let mock: MockGateway;
 let client: GatewayClient;
 
 /** Track every Gateway RPC method called, in order */
@@ -13,95 +12,52 @@ let methodCalls: string[];
 let paramsByMethod: Record<string, Record<string, unknown>>;
 
 beforeAll(async () => {
-	mockServer = new WebSocketServer({ port: 0 });
-	serverPort = (mockServer.address() as { port: number }).port;
+	mock = createMockGateway((method, params, respond) => {
+		methodCalls.push(method);
+		paramsByMethod[method] = params;
 
-	mockServer.on("connection", (ws) => {
-		ws.on("message", (raw) => {
-			const msg = JSON.parse(raw.toString());
-			if (msg.type !== "req") return;
-
-			methodCalls.push(msg.method);
-			paramsByMethod[msg.method] = msg.params as Record<string, unknown>;
-
-			switch (msg.method) {
-				case "sessions.spawn": {
-					ws.send(
-						JSON.stringify({
-							type: "res",
-							id: msg.id,
-							ok: true,
-							payload: {
-								runId: "run-abc-123",
-								sessionKey: `subagent:${crypto.randomUUID()}`,
-							},
-						}),
-					);
-					break;
-				}
-				case "agent.wait": {
-					ws.send(
-						JSON.stringify({
-							type: "res",
-							id: msg.id,
-							ok: true,
-							payload: { status: "completed" },
-						}),
-					);
-					break;
-				}
-				case "sessions.transcript": {
-					ws.send(
-						JSON.stringify({
-							type: "res",
-							id: msg.id,
-							ok: true,
-							payload: {
-								messages: [
-									{ role: "assistant", content: "Sub-agent result here" },
-								],
-							},
-						}),
-					);
-					break;
-				}
-				default: {
-					ws.send(
-						JSON.stringify({
-							type: "res",
-							id: msg.id,
-							ok: false,
-							error: { code: "UNKNOWN", message: `Unknown method: ${msg.method}` },
-						}),
-					);
-				}
+		switch (method) {
+			case "sessions.spawn": {
+				respond.ok({
+					runId: "run-abc-123",
+					sessionKey: `subagent:${crypto.randomUUID()}`,
+				});
+				break;
 			}
-		});
+			case "agent.wait": {
+				respond.ok({ status: "completed" });
+				break;
+			}
+			case "sessions.transcript": {
+				respond.ok({
+					messages: [
+						{ role: "assistant", content: "Sub-agent result here" },
+					],
+				});
+				break;
+			}
+			default: {
+				respond.error("UNKNOWN", `Unknown method: ${method}`);
+			}
+		}
 	});
 
 	client = new GatewayClient();
-	await client.connect(`ws://127.0.0.1:${serverPort}`, "test-token");
+	await client.connect(`ws://127.0.0.1:${mock.port}`, { token: "test-token" });
 });
 
-beforeAll(() => {
+beforeEach(() => {
 	methodCalls = [];
 	paramsByMethod = {};
 });
 
 afterAll(() => {
 	client.close();
-	mockServer.close();
+	mock.close();
 });
 
 describe("executeSessionsSpawn", () => {
-	// Reset tracking before each test
-	beforeAll(() => {
-		methodCalls = [];
-		paramsByMethod = {};
-	});
-
 	it("calls RPCs in correct order: spawn → wait → transcript", async () => {
-		methodCalls = [];
 		await executeSessionsSpawn(client, { task: "Analyze the log files" });
 		expect(methodCalls).toEqual([
 			"sessions.spawn",
@@ -119,7 +75,6 @@ describe("executeSessionsSpawn", () => {
 	});
 
 	it("passes task and label to sessions.spawn params", async () => {
-		paramsByMethod = {};
 		await executeSessionsSpawn(client, {
 			task: "Check disk usage",
 			label: "disk-check",
@@ -131,7 +86,6 @@ describe("executeSessionsSpawn", () => {
 	});
 
 	it("passes sessionKey from spawn to transcript request", async () => {
-		paramsByMethod = {};
 		await executeSessionsSpawn(client, { task: "Check system status" });
 		const transcriptParams = paramsByMethod["sessions.transcript"];
 		expect(transcriptParams).toBeDefined();
@@ -140,38 +94,18 @@ describe("executeSessionsSpawn", () => {
 	});
 
 	it("handles agent.wait timeout error", async () => {
-		const timeoutServer = new WebSocketServer({ port: 0 });
-		const timeoutPort = (timeoutServer.address() as { port: number }).port;
-
-		timeoutServer.on("connection", (ws) => {
-			ws.on("message", (raw) => {
-				const msg = JSON.parse(raw.toString());
-				if (msg.type !== "req") return;
-
-				if (msg.method === "sessions.spawn") {
-					ws.send(
-						JSON.stringify({
-							type: "res",
-							id: msg.id,
-							ok: true,
-							payload: { runId: "timeout-run", sessionKey: "subagent:timeout" },
-						}),
-					);
-				} else if (msg.method === "agent.wait") {
-					ws.send(
-						JSON.stringify({
-							type: "res",
-							id: msg.id,
-							ok: false,
-							error: { code: "TIMEOUT", message: "Agent run timed out" },
-						}),
-					);
-				}
-			});
+		const timeoutMock = createMockGateway((method, _params, respond) => {
+			if (method === "sessions.spawn") {
+				respond.ok({ runId: "timeout-run", sessionKey: "subagent:timeout" });
+			} else if (method === "agent.wait") {
+				respond.error("TIMEOUT", "Agent run timed out");
+			}
 		});
 
 		const timeoutClient = new GatewayClient();
-		await timeoutClient.connect(`ws://127.0.0.1:${timeoutPort}`, "test-token");
+		await timeoutClient.connect(`ws://127.0.0.1:${timeoutMock.port}`, {
+			token: "test-token",
+		});
 
 		const result = await executeSessionsSpawn(timeoutClient, {
 			task: "Long running task",
@@ -180,7 +114,7 @@ describe("executeSessionsSpawn", () => {
 		expect(result.error).toContain("timed out");
 
 		timeoutClient.close();
-		timeoutServer.close();
+		timeoutMock.close();
 	});
 
 	it("returns error when Gateway is not connected", async () => {
