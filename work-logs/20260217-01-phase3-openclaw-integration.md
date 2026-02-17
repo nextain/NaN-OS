@@ -18,10 +18,11 @@
 | 4 | Shell UI — 도구 표시 + 설정 | ✅ 완료 | `1c74ef9` |
 | 5 | Permission tiers + approval UI | ✅ 완료 | `98afabf` |
 | 6 | Audit log (SQLite) | ✅ 완료 | `78c4eb3` |
+| 7 | Work Progress Panel + 탭 시스템 | ✅ 완료 | `3d1f942` |
 
-**테스트**: Agent 68/68, Shell 89/89, Rust 29/29 (**186 total, 전부 통과**)
+**테스트**: Agent 68/68, Shell 124/124, Rust 29/29 (**221 total, 전부 통과**)
 
-**다음 할 일**: Work progress panel → Sub-agents
+**다음 할 일**: Sub-agents
 
 ---
 
@@ -83,6 +84,16 @@ Alpha Shell (Tauri 2) → stdio → Agent (Node.js, LLM+TTS)
 - [x] i18n 도구명 한국어 번역 (5개 도구 + unknown)
 - [x] CSS: 8개 테마 자동 지원, --error 변수 추가
 - [x] PermissionModal 컴포넌트 (도구 실행 승인 — once/always/reject) — `98afabf`
+
+### 단계 7: Work Progress Panel ✅
+
+- [x] AuditEvent/AuditFilter/AuditStats TypeScript 타입 (Rust 1:1 매핑)
+- [x] Zustand progress store (events, stats, isLoading)
+- [x] WorkProgressPanel 컴포넌트 (통계 카드 + 이벤트 목록 + 페이로드 확장)
+- [x] ChatPanel 탭 시스템 ("채팅 | 작업") + 탭 전환 시 자동 데이터 로드
+- [x] i18n 10개 키 + CSS 스타일
+- [x] 테스트 14개 (progress store 4 + WorkProgressPanel 10)
+- [x] 커밋 `3d1f942`
 
 ### 단계 5: Permission System ✅
 
@@ -217,3 +228,17 @@ UI 연결 완료 후 순차적으로 해결. 잊지 말 것.
 - 커밋: `78c4eb3` (Rust 29/29)
 
 *테스트 현황*: Agent 68/68, Shell 89/89, **Rust 29/29** = **186 total**
+
+**세션 6** — Work Progress Panel + 탭 시스템 (Phase 3.6):
+- Phase 3.6 계획 수립 → 설계 결정 (ChatPanel 내부 탭, Zustand 분리 store, 탭 전환 시 로드)
+- TDD: progress store 테스트 4개 (RED→GREEN), WorkProgressPanel 테스트 10개 (RED→GREEN)
+- types.ts: AuditEvent/AuditFilter/AuditStats 타입 추가 (Rust 1:1 매핑)
+- progress.ts: Zustand store (events, stats, isLoading + setters)
+- WorkProgressPanel.tsx: 통계 2x2 카드 (총 이벤트/비용/도구/에러) + 이벤트 목록 + 페이로드 확장
+- ChatPanel.tsx: "채팅 | 작업" 탭 시스템, 탭 전환 시 get_audit_log/get_audit_stats 호출
+- i18n.ts: 10개 키 추가 (progress.*)
+- global.css: 탭 + 패널 + 통계 + 이벤트 리스트 스타일 (~225줄)
+- 코드 리뷰: types import 중복 수정
+- 커밋: `3d1f942` (Shell 124/124)
+
+*테스트 현황*: Agent 68/68, **Shell 124/124**, Rust 29/29 = **221 total**
