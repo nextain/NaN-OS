@@ -1,0 +1,55 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Cafelua Gateway Wrapper
+# Runs OpenClaw Gateway with Cafelua-safe defaults
+
+OPENCLAW_DIR="${HOME}/.cafelua/openclaw"
+OPENCLAW_BIN="${OPENCLAW_DIR}/node_modules/.bin/openclaw"
+NODE_BIN="$(command -v node || echo /usr/bin/node)"
+
+# Ensure Node.js 22+
+NODE_VERSION=$("${NODE_BIN}" -v 2>/dev/null | sed 's/v//' | cut -d. -f1)
+if [ "${NODE_VERSION:-0}" -lt 22 ]; then
+    # Try nvm
+    if [ -f "${HOME}/.config/nvm/nvm.sh" ]; then
+        export NVM_DIR="${HOME}/.config/nvm"
+        # shellcheck source=/dev/null
+        . "${NVM_DIR}/nvm.sh" --no-use
+        NODE_BIN="${NVM_DIR}/versions/node/$(nvm ls 22 --no-colors 2>/dev/null | head -1 | tr -d '[:space:]>*')/bin/node"
+    fi
+fi
+
+if [ ! -x "${NODE_BIN}" ]; then
+    echo "ERROR: Node.js 22+ not found" >&2
+    exit 1
+fi
+
+# Initialize config if missing
+if [ ! -f "${OPENCLAW_DIR}/openclaw.json" ]; then
+    mkdir -p "${OPENCLAW_DIR}"
+    cat > "${OPENCLAW_DIR}/openclaw.json" <<'CONF'
+{
+  "gateway": {
+    "port": 18789,
+    "bind": "loopback",
+    "auth": { "mode": "token" }
+  },
+  "agents": {
+    "defaults": {
+      "workspace": "~/.cafelua/workspace",
+      "security": "allowlist",
+      "ask": "on-miss",
+      "askFallback": "deny"
+    }
+  }
+}
+CONF
+fi
+
+export OPENCLAW_CONFIG_PATH="${OPENCLAW_DIR}/openclaw.json"
+
+# Run gateway
+exec "${NODE_BIN}" "${OPENCLAW_BIN}" gateway run \
+    --bind loopback \
+    --port 18789

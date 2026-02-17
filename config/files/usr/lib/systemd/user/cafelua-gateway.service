@@ -1,0 +1,22 @@
+[Unit]
+Description=Cafelua OpenClaw Gateway
+Documentation=https://docs.openclaw.ai
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/cafelua-gateway-wrapper
+Restart=on-failure
+RestartSec=5
+Environment=OPENCLAW_PROFILE=cafelua
+Environment=NODE_ENV=production
+
+# Security hardening
+NoNewPrivileges=true
+ProtectHome=read-only
+ReadWritePaths=%h/.cafelua %h/.openclaw
+PrivateTmp=true
+
+[Install]
+WantedBy=default.target

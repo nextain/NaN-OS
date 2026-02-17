@@ -301,6 +301,24 @@ async fn preview_tts(api_key: String, voice: String, text: String) -> Result<Str
         .ok_or_else(|| "No audio content in response".to_string())
 }
 
+/// Check if OpenClaw Gateway is reachable on localhost
+#[tauri::command]
+async fn gateway_health() -> Result<bool, String> {
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(3))
+        .build()
+        .map_err(|e| format!("HTTP client error: {}", e))?;
+
+    match client
+        .get("http://127.0.0.1:18789/__openclaw__/canvas/")
+        .send()
+        .await
+    {
+        Ok(_) => Ok(true),
+        Err(_) => Ok(false),
+    }
+}
+
 #[tauri::command]
 async fn reset_window_state(app: AppHandle) -> Result<(), String> {
     if let Some(path) = window_state_path(&app) {
@@ -322,6 +340,7 @@ pub fn run() {
             cancel_stream,
             reset_window_state,
             preview_tts,
+            gateway_health,
         ])
         .setup(|app| {
             let app_handle = app.handle().clone();
@@ -443,6 +462,15 @@ mod tests {
         let parsed: WindowState = serde_json::from_str(&json).unwrap();
         assert_eq!(parsed.x, 100);
         assert_eq!(parsed.width, 380);
+    }
+
+    #[tokio::test]
+    async fn gateway_health_returns_false_when_no_gateway() {
+        // No gateway running → should return false, not error
+        let result = gateway_health().await;
+        assert!(result.is_ok());
+        // Gateway likely not running during test
+        assert_eq!(result.unwrap(), false);
     }
 
     #[test]
