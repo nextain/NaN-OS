@@ -18,13 +18,25 @@ export interface CancelRequest {
 	requestId: string;
 }
 
-export type AgentRequest = ChatRequest | CancelRequest;
+export interface ApprovalResponse {
+	type: "approval_response";
+	requestId: string;
+	toolCallId: string;
+	decision: "once" | "always" | "reject";
+	message?: string;
+}
+
+export type AgentRequest = ChatRequest | CancelRequest | ApprovalResponse;
 
 export function parseRequest(line: string): AgentRequest | null {
 	try {
 		const obj = JSON.parse(line);
 		if (!obj || typeof obj.type !== "string") return null;
-		if (obj.type === "chat_request" || obj.type === "cancel_stream") {
+		if (
+			obj.type === "chat_request" ||
+			obj.type === "cancel_stream" ||
+			obj.type === "approval_response"
+		) {
 			return obj as AgentRequest;
 		}
 		return null;

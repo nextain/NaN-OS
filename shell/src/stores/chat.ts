@@ -7,6 +7,15 @@ import type {
 	ToolCall,
 } from "../lib/types";
 
+export interface PendingApproval {
+	requestId: string;
+	toolCallId: string;
+	toolName: string;
+	args: Record<string, unknown>;
+	tier: number;
+	description: string;
+}
+
 interface ChatState {
 	messages: ChatMessage[];
 	isStreaming: boolean;
@@ -14,6 +23,7 @@ interface ChatState {
 	streamingToolCalls: ToolCall[];
 	provider: ProviderId;
 	totalSessionCost: number;
+	pendingApproval: PendingApproval | null;
 
 	addMessage: (msg: Pick<ChatMessage, "role" | "content">) => void;
 	startStreaming: () => void;
@@ -31,6 +41,8 @@ interface ChatState {
 	finishStreaming: () => void;
 	addCostEntry: (entry: CostEntry) => void;
 	setProvider: (provider: ProviderId) => void;
+	setPendingApproval: (approval: PendingApproval) => void;
+	clearPendingApproval: () => void;
 }
 
 function generateId(): string {
@@ -44,6 +56,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
 	streamingToolCalls: [],
 	provider: "gemini",
 	totalSessionCost: 0,
+	pendingApproval: null,
 
 	addMessage: (msg) =>
 		set((s) => ({
@@ -105,6 +118,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
 			isStreaming: false,
 			streamingContent: "",
 			streamingToolCalls: [],
+			pendingApproval: null,
 			messages: [
 				...s.messages,
 				{
@@ -139,4 +153,8 @@ export const useChatStore = create<ChatState>()((set, get) => ({
 		}),
 
 	setProvider: (provider) => set({ provider }),
+
+	setPendingApproval: (approval) => set({ pendingApproval: approval }),
+
+	clearPendingApproval: () => set({ pendingApproval: null }),
 }));

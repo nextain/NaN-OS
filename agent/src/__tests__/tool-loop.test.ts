@@ -31,6 +31,13 @@ vi.mock("../gateway/client.js", () => ({
 	},
 }));
 
+// Mock tool-tiers: disable approval for all tools in these tests
+vi.mock("../gateway/tool-tiers.js", () => ({
+	needsApproval: vi.fn().mockReturnValue(false),
+	getToolTier: vi.fn().mockReturnValue(0),
+	getToolDescription: vi.fn().mockReturnValue("test"),
+}));
+
 describe("tool call loop", () => {
 	let writeSpy: ReturnType<typeof vi.spyOn>;
 	let outputs: unknown[];

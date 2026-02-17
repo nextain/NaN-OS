@@ -9,7 +9,11 @@ const { mockGenerateContentStream } = vi.hoisted(() => ({
 function defaultGeminiStream() {
 	return {
 		async *[Symbol.asyncIterator]() {
-			yield { text: "Hello ", usageMetadata: undefined, functionCalls: undefined };
+			yield {
+				text: "Hello ",
+				usageMetadata: undefined,
+				functionCalls: undefined,
+			};
 			yield {
 				text: "world!",
 				functionCalls: undefined,

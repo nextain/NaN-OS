@@ -86,7 +86,9 @@ describe("GatewayClient", () => {
 		const client = new GatewayClient();
 		await client.connect(`ws://127.0.0.1:${serverPort}`, "test-token");
 
-		await expect(client.request("fail", {})).rejects.toThrow("method not found");
+		await expect(client.request("fail", {})).rejects.toThrow(
+			"method not found",
+		);
 
 		client.close();
 	});

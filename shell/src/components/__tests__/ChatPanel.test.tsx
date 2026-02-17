@@ -20,9 +20,9 @@ vi.mock("../../lib/chat-service", () => ({
 	cancelChat: vi.fn().mockResolvedValue(undefined),
 }));
 
-// Mock Tauri APIs (needed by chat-service)
+// Mock Tauri APIs (needed by chat-service and approval flow)
 vi.mock("@tauri-apps/api/core", () => ({
-	invoke: vi.fn(),
+	invoke: vi.fn().mockResolvedValue(undefined),
 }));
 vi.mock("@tauri-apps/api/event", () => ({
 	listen: vi.fn().mockResolvedValue(() => {}),
@@ -198,6 +198,97 @@ describe("ChatPanel", () => {
 		render(<ChatPanel />);
 		// Should render the tool activity label
 		expect(screen.getByText(/파일 읽기|Read File/)).toBeDefined();
+	});
+
+	it("sets pendingApproval on approval_request chunk", async () => {
+		localStorage.setItem(
+			"cafelua-config",
+			JSON.stringify({
+				apiKey: "test-key",
+				provider: "gemini",
+				model: "gemini-2.5-flash",
+			}),
+		);
+
+		render(<ChatPanel />);
+		const input = screen.getByPlaceholderText(/메시지|message/i);
+		fireEvent.change(input, { target: { value: "npm test 실행해" } });
+		fireEvent.keyDown(input, { key: "Enter" });
+
+		await new Promise((r) => setTimeout(r, 50));
+
+		expect(capturedOnChunk).not.toBeNull();
+		capturedOnChunk!({
+			type: "approval_request",
+			requestId: "req-1",
+			toolCallId: "tc-1",
+			toolName: "execute_command",
+			args: { command: "npm test" },
+			tier: 2,
+			description: "명령 실행: npm test",
+		});
+
+		const { pendingApproval } = useChatStore.getState();
+		expect(pendingApproval).not.toBeNull();
+		expect(pendingApproval!.toolName).toBe("execute_command");
+
+		localStorage.removeItem("cafelua-config");
+	});
+
+	it("auto-approves when tool is in allowedTools", async () => {
+		localStorage.setItem(
+			"cafelua-config",
+			JSON.stringify({
+				apiKey: "test-key",
+				provider: "gemini",
+				model: "gemini-2.5-flash",
+				allowedTools: ["execute_command"],
+			}),
+		);
+
+		render(<ChatPanel />);
+		const input = screen.getByPlaceholderText(/메시지|message/i);
+		fireEvent.change(input, { target: { value: "npm test 실행해" } });
+		fireEvent.keyDown(input, { key: "Enter" });
+
+		await new Promise((r) => setTimeout(r, 50));
+
+		expect(capturedOnChunk).not.toBeNull();
+		capturedOnChunk!({
+			type: "approval_request",
+			requestId: "req-1",
+			toolCallId: "tc-1",
+			toolName: "execute_command",
+			args: { command: "npm test" },
+			tier: 2,
+			description: "명령 실행: npm test",
+		});
+
+		// Should NOT set pendingApproval (auto-approved)
+		const { pendingApproval } = useChatStore.getState();
+		expect(pendingApproval).toBeNull();
+
+		localStorage.removeItem("cafelua-config");
+	});
+
+	it("renders PermissionModal when pendingApproval is set", () => {
+		useChatStore.setState({
+			isStreaming: true,
+			streamingContent: "",
+			pendingApproval: {
+				requestId: "req-1",
+				toolCallId: "tc-1",
+				toolName: "execute_command",
+				args: { command: "npm test" },
+				tier: 2,
+				description: "명령 실행: npm test",
+			},
+		});
+
+		render(<ChatPanel />);
+		expect(
+			screen.getByText(/도구 실행 승인|Tool Execution Approval/),
+		).toBeDefined();
 	});
 
 	it("sets isSpeaking and pendingAudio on audio chunk", async () => {

@@ -75,6 +75,33 @@ const translations = {
 	"settings.enableTools": { ko: "도구 사용", en: "Enable Tools" },
 	"settings.gatewayUrl": { ko: "Gateway URL", en: "Gateway URL" },
 	"settings.gatewayToken": { ko: "Gateway 토큰", en: "Gateway Token" },
+	"settings.allowedTools": {
+		ko: "허용된 도구",
+		en: "Allowed Tools",
+	},
+	"settings.clearAllowedTools": {
+		ko: "허용 목록 초기화",
+		en: "Clear Allowed Tools",
+	},
+
+	// Permission modal
+	"permission.title": {
+		ko: "도구 실행 승인",
+		en: "Tool Execution Approval",
+	},
+	"permission.allowOnce": { ko: "이번만 허용", en: "Allow Once" },
+	"permission.allowAlways": { ko: "항상 허용", en: "Always Allow" },
+	"permission.reject": { ko: "거부", en: "Reject" },
+	"permission.tier1": { ko: "알림", en: "Notice" },
+	"permission.tier2": { ko: "주의", en: "Caution" },
+	"permission.rejectReason": {
+		ko: "사용자가 실행을 거부했습니다.",
+		en: "User rejected execution.",
+	},
+	"permission.timeout": {
+		ko: "승인 시간이 초과되었습니다.",
+		en: "Approval timed out.",
+	},
 } as const;
 
 type TranslationKey = keyof typeof translations;

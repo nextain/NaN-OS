@@ -60,6 +60,52 @@ describe("parseRequest", () => {
 		expect(result).not.toBeNull();
 		expect(result!.type).toBe("cancel_stream");
 	});
+
+	it("parses approval_response with decision=once", () => {
+		const input = JSON.stringify({
+			type: "approval_response",
+			requestId: "req-1",
+			toolCallId: "tc-1",
+			decision: "once",
+		});
+		const result = parseRequest(input);
+		expect(result).not.toBeNull();
+		expect(result!.type).toBe("approval_response");
+		if (result!.type === "approval_response") {
+			expect(result!.toolCallId).toBe("tc-1");
+			expect(result!.decision).toBe("once");
+		}
+	});
+
+	it("parses approval_response with decision=always", () => {
+		const input = JSON.stringify({
+			type: "approval_response",
+			requestId: "req-1",
+			toolCallId: "tc-2",
+			decision: "always",
+		});
+		const result = parseRequest(input);
+		expect(result).not.toBeNull();
+		if (result!.type === "approval_response") {
+			expect(result!.decision).toBe("always");
+		}
+	});
+
+	it("parses approval_response with decision=reject and message", () => {
+		const input = JSON.stringify({
+			type: "approval_response",
+			requestId: "req-1",
+			toolCallId: "tc-3",
+			decision: "reject",
+			message: "위험해 보여요",
+		});
+		const result = parseRequest(input);
+		expect(result).not.toBeNull();
+		if (result!.type === "approval_response") {
+			expect(result!.decision).toBe("reject");
+			expect(result!.message).toBe("위험해 보여요");
+		}
+	});
 });
 
 describe("handleChatRequest TTS integration", () => {

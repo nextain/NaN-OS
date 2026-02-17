@@ -28,6 +28,7 @@ export interface AppConfig {
 	enableTools?: boolean;
 	gatewayUrl?: string;
 	gatewayToken?: string;
+	allowedTools?: string[];
 }
 
 const DEFAULT_MODELS: Record<ProviderId, string> = {
@@ -57,4 +58,25 @@ export function hasApiKey(): boolean {
 
 export function getDefaultModel(provider: ProviderId): string {
 	return DEFAULT_MODELS[provider];
+}
+
+export function isToolAllowed(toolName: string): boolean {
+	const config = loadConfig();
+	return config?.allowedTools?.includes(toolName) ?? false;
+}
+
+export function addAllowedTool(toolName: string): void {
+	const config = loadConfig();
+	if (!config) return;
+	const tools = config.allowedTools ?? [];
+	if (!tools.includes(toolName)) {
+		tools.push(toolName);
+	}
+	saveConfig({ ...config, allowedTools: tools });
+}
+
+export function clearAllowedTools(): void {
+	const config = loadConfig();
+	if (!config) return;
+	saveConfig({ ...config, allowedTools: undefined });
 }

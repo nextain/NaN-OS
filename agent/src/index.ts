@@ -1,7 +1,16 @@
 import * as readline from "node:readline";
 import { GatewayClient } from "./gateway/client.js";
 import { GATEWAY_TOOLS, executeTool } from "./gateway/tool-bridge.js";
-import { type ChatRequest, parseRequest } from "./protocol.js";
+import {
+	getToolDescription,
+	getToolTier,
+	needsApproval,
+} from "./gateway/tool-tiers.js";
+import {
+	type ApprovalResponse,
+	type ChatRequest,
+	parseRequest,
+} from "./protocol.js";
 import { calculateCost } from "./providers/cost.js";
 import { buildProvider } from "./providers/factory.js";
 import type { ChatMessage, StreamChunk } from "./providers/types.js";
@@ -12,6 +21,55 @@ const activeStreams = new Map<string, AbortController>();
 
 const EMOTION_TAG_RE = /^\[(?:HAPPY|SAD|ANGRY|SURPRISED|NEUTRAL|THINK)]\s*/i;
 const MAX_TOOL_ITERATIONS = 10;
+const APPROVAL_TIMEOUT_MS = 120_000;
+
+/** Pending approval promises keyed by toolCallId */
+const pendingApprovals = new Map<
+	string,
+	{ resolve: (decision: ApprovalResponse["decision"]) => void }
+>();
+
+export function handleApprovalResponse(resp: ApprovalResponse): void {
+	const pending = pendingApprovals.get(resp.toolCallId);
+	if (pending) {
+		pending.resolve(resp.decision);
+		pendingApprovals.delete(resp.toolCallId);
+	}
+}
+
+function waitForApproval(
+	requestId: string,
+	toolCallId: string,
+	toolName: string,
+	args: Record<string, unknown>,
+): Promise<ApprovalResponse["decision"]> {
+	const tier = getToolTier(toolName);
+	const description = getToolDescription(toolName, args);
+
+	writeLine({
+		type: "approval_request",
+		requestId,
+		toolCallId,
+		toolName,
+		args,
+		tier,
+		description,
+	});
+
+	return new Promise<ApprovalResponse["decision"]>((resolve) => {
+		const timeoutId = setTimeout(() => {
+			pendingApprovals.delete(toolCallId);
+			resolve("reject");
+		}, APPROVAL_TIMEOUT_MS);
+
+		pendingApprovals.set(toolCallId, {
+			resolve: (decision) => {
+				clearTimeout(timeoutId);
+				resolve(decision);
+			},
+		});
+	});
+}
 
 function writeLine(data: unknown): void {
 	process.stdout.write(`${JSON.stringify(data)}\n`);
@@ -37,8 +95,7 @@ export async function handleChatRequest(req: ChatRequest): Promise<void> {
 	try {
 		const provider = buildProvider(providerConfig);
 		const effectiveSystemPrompt = systemPrompt ?? ALPHA_SYSTEM_PROMPT;
-		const tools =
-			enableTools && gatewayUrl ? GATEWAY_TOOLS : undefined;
+		const tools = enableTools && gatewayUrl ? GATEWAY_TOOLS : undefined;
 
 		// Connect to Gateway if tools enabled
 		if (enableTools && gatewayUrl) {
@@ -66,7 +123,11 @@ export async function handleChatRequest(req: ChatRequest): Promise<void> {
 				tools,
 			);
 
-			const toolCalls: { id: string; name: string; args: Record<string, unknown> }[] = [];
+			const toolCalls: {
+				id: string;
+				name: string;
+				args: Record<string, unknown>;
+			}[] = [];
 
 			for await (const chunk of stream) {
 				if (controller.signal.aborted) break;
@@ -107,8 +168,37 @@ export async function handleChatRequest(req: ChatRequest): Promise<void> {
 				})),
 			});
 
-			// Execute each tool and add results
+			// Execute each tool (with approval check for tier 1-2)
 			for (const call of toolCalls) {
+				if (needsApproval(call.name)) {
+					const decision = await waitForApproval(
+						requestId,
+						call.id,
+						call.name,
+						call.args,
+					);
+
+					if (decision === "reject") {
+						const rejectOutput = "User rejected tool execution";
+						writeLine({
+							type: "tool_result",
+							requestId,
+							toolCallId: call.id,
+							toolName: call.name,
+							output: rejectOutput,
+							success: false,
+						});
+						chatMessages.push({
+							role: "tool",
+							content: `Error: ${rejectOutput}`,
+							toolCallId: call.id,
+							name: call.name,
+						});
+						continue;
+					}
+					// decision is "once" or "always" — proceed to execute
+				}
+
 				const result = await executeTool(gateway, call.name, call.args);
 				writeLine({
 					type: "tool_result",
@@ -120,9 +210,7 @@ export async function handleChatRequest(req: ChatRequest): Promise<void> {
 				});
 				chatMessages.push({
 					role: "tool",
-					content: result.success
-						? result.output
-						: `Error: ${result.error}`,
+					content: result.success ? result.output : `Error: ${result.error}`,
 					toolCallId: call.id,
 					name: call.name,
 				});
@@ -170,6 +258,11 @@ export async function handleChatRequest(req: ChatRequest): Promise<void> {
 		if (gateway) {
 			gateway.close();
 		}
+		// Cleanup any pending approvals for this request
+		for (const [toolCallId, pending] of pendingApprovals) {
+			pending.resolve("reject");
+			pendingApprovals.delete(toolCallId);
+		}
 		activeStreams.delete(requestId);
 	}
 }
@@ -200,6 +293,11 @@ function main(): void {
 				controller.abort();
 				activeStreams.delete(request.requestId);
 			}
+			return;
+		}
+
+		if (request.type === "approval_response") {
+			handleApprovalResponse(request);
 			return;
 		}
 

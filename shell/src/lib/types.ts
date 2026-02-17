@@ -76,5 +76,14 @@ export type AgentResponseChunk =
 			cost: number;
 			model: string;
 	  }
+	| {
+			type: "approval_request";
+			requestId: string;
+			toolCallId: string;
+			toolName: string;
+			args: Record<string, unknown>;
+			tier: number;
+			description: string;
+	  }
 	| { type: "finish"; requestId: string }
 	| { type: "error"; requestId: string; message: string };

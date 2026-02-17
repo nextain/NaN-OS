@@ -1,6 +1,13 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { hasApiKey, loadConfig, saveConfig } from "../config";
+import {
+	addAllowedTool,
+	clearAllowedTools,
+	hasApiKey,
+	isToolAllowed,
+	loadConfig,
+	saveConfig,
+} from "../config";
 
 describe("config", () => {
 	beforeEach(() => {
@@ -48,5 +55,52 @@ describe("config", () => {
 			apiKey: "",
 		});
 		expect(hasApiKey()).toBe(false);
+	});
+});
+
+describe("allowedTools", () => {
+	beforeEach(() => {
+		localStorage.clear();
+	});
+
+	afterEach(() => {
+		localStorage.clear();
+	});
+
+	it("isToolAllowed returns false when no config", () => {
+		expect(isToolAllowed("execute_command")).toBe(false);
+	});
+
+	it("isToolAllowed returns false when tool not in list", () => {
+		saveConfig({ provider: "gemini", model: "m", apiKey: "k" });
+		expect(isToolAllowed("execute_command")).toBe(false);
+	});
+
+	it("addAllowedTool adds and isToolAllowed returns true", () => {
+		saveConfig({ provider: "gemini", model: "m", apiKey: "k" });
+		addAllowedTool("execute_command");
+		expect(isToolAllowed("execute_command")).toBe(true);
+	});
+
+	it("addAllowedTool does not duplicate", () => {
+		saveConfig({ provider: "gemini", model: "m", apiKey: "k" });
+		addAllowedTool("write_file");
+		addAllowedTool("write_file");
+		const config = loadConfig()!;
+		expect(config.allowedTools).toEqual(["write_file"]);
+	});
+
+	it("clearAllowedTools removes all", () => {
+		saveConfig({ provider: "gemini", model: "m", apiKey: "k" });
+		addAllowedTool("write_file");
+		addAllowedTool("execute_command");
+		clearAllowedTools();
+		expect(isToolAllowed("write_file")).toBe(false);
+		expect(isToolAllowed("execute_command")).toBe(false);
+	});
+
+	it("clearAllowedTools works when no config", () => {
+		clearAllowedTools(); // no throw
+		expect(isToolAllowed("write_file")).toBe(false);
 	});
 });

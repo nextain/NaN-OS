@@ -201,4 +201,56 @@ describe("useChatStore", () => {
 		// No crash, no state change
 		expect(useChatStore.getState().streamingToolCalls).toEqual([]);
 	});
+
+	// === Pending approval ===
+
+	it("has null pendingApproval initially", () => {
+		expect(useChatStore.getState().pendingApproval).toBeNull();
+	});
+
+	it("setPendingApproval sets the approval data", () => {
+		const store = useChatStore.getState();
+		store.setPendingApproval({
+			requestId: "req-1",
+			toolCallId: "tc-1",
+			toolName: "execute_command",
+			args: { command: "ls" },
+			tier: 2,
+			description: "명령 실행: ls",
+		});
+		const pa = useChatStore.getState().pendingApproval;
+		expect(pa).not.toBeNull();
+		expect(pa!.toolName).toBe("execute_command");
+		expect(pa!.tier).toBe(2);
+	});
+
+	it("clearPendingApproval resets to null", () => {
+		const store = useChatStore.getState();
+		store.setPendingApproval({
+			requestId: "req-1",
+			toolCallId: "tc-1",
+			toolName: "write_file",
+			args: { path: "/tmp/x" },
+			tier: 1,
+			description: "파일 쓰기: /tmp/x",
+		});
+		store.clearPendingApproval();
+		expect(useChatStore.getState().pendingApproval).toBeNull();
+	});
+
+	it("finishStreaming clears pendingApproval", () => {
+		const store = useChatStore.getState();
+		store.startStreaming();
+		store.setPendingApproval({
+			requestId: "req-1",
+			toolCallId: "tc-1",
+			toolName: "write_file",
+			args: {},
+			tier: 1,
+			description: "test",
+		});
+		store.appendStreamChunk("done");
+		store.finishStreaming();
+		expect(useChatStore.getState().pendingApproval).toBeNull();
+	});
 });

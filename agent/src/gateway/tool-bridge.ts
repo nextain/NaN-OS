@@ -200,7 +200,11 @@ export async function executeTool(
 			const patternErr = validatePath(pattern);
 			const pathErr = validatePath(searchPath);
 			if (patternErr || pathErr) {
-				return { success: false, output: "", error: patternErr || pathErr || "Invalid input" };
+				return {
+					success: false,
+					output: "",
+					error: patternErr || pathErr || "Invalid input",
+				};
 			}
 			try {
 				const command = args.content

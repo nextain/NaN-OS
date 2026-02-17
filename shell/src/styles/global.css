@@ -813,3 +813,128 @@ body,
 	white-space: pre-wrap;
 	word-break: break-all;
 }
+
+/* Permission Modal */
+.permission-overlay {
+	position: fixed;
+	inset: 0;
+	background: rgba(0, 0, 0, 0.7);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	z-index: 200;
+}
+
+.permission-modal {
+	background: var(--espresso);
+	border: 1px solid var(--espresso-light);
+	border-radius: 12px;
+	padding: 20px;
+	width: 340px;
+	max-width: 90vw;
+	font-family: var(--mono);
+}
+
+.permission-modal h3 {
+	font-size: 14px;
+	color: var(--latte);
+	margin-bottom: 12px;
+}
+
+.permission-info {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	margin-bottom: 10px;
+}
+
+.permission-tier-badge {
+	font-size: 11px;
+	font-weight: 600;
+	padding: 2px 8px;
+	border-radius: 4px;
+	text-transform: uppercase;
+	letter-spacing: 0.5px;
+	flex-shrink: 0;
+}
+
+.permission-tier-badge.tier-1 {
+	background: var(--amber);
+	color: var(--espresso-dark);
+}
+
+.permission-tier-badge.tier-2 {
+	background: var(--error);
+	color: white;
+}
+
+.permission-tool-name {
+	font-size: 13px;
+	color: var(--cream);
+	word-break: break-all;
+}
+
+.permission-args {
+	margin-bottom: 12px;
+}
+
+.permission-args pre {
+	font-family: var(--mono);
+	font-size: 11px;
+	color: var(--cream-dim);
+	background: var(--espresso-dark);
+	border: 1px solid var(--espresso-light);
+	border-radius: 6px;
+	padding: 8px;
+	white-space: pre-wrap;
+	word-break: break-all;
+	max-height: 120px;
+	overflow-y: auto;
+}
+
+.permission-actions {
+	display: flex;
+	gap: 6px;
+}
+
+.permission-btn-once,
+.permission-btn-always,
+.permission-btn-reject {
+	flex: 1;
+	padding: 8px 4px;
+	border: none;
+	border-radius: 6px;
+	font-size: 12px;
+	font-weight: 600;
+	cursor: pointer;
+	transition: background 0.15s, opacity 0.15s;
+}
+
+.permission-btn-once {
+	background: var(--wood);
+	color: var(--cream);
+}
+
+.permission-btn-once:hover {
+	background: var(--sage);
+}
+
+.permission-btn-always {
+	background: var(--espresso-light);
+	color: var(--cream);
+}
+
+.permission-btn-always:hover {
+	background: var(--wood);
+}
+
+.permission-btn-reject {
+	background: transparent;
+	border: 1px solid var(--espresso-light);
+	color: var(--cream-dim);
+}
+
+.permission-btn-reject:hover {
+	border-color: var(--error);
+	color: var(--error);
+}

@@ -1,7 +1,8 @@
+import { invoke } from "@tauri-apps/api/core";
 import { useEffect, useRef, useState } from "react";
 import { type AudioRecorder, startRecording } from "../lib/audio-recorder";
 import { sendChatMessage } from "../lib/chat-service";
-import { loadConfig } from "../lib/config";
+import { addAllowedTool, isToolAllowed, loadConfig } from "../lib/config";
 import { t } from "../lib/i18n";
 import { Logger } from "../lib/logger";
 import { buildSystemPrompt } from "../lib/persona";
@@ -10,6 +11,7 @@ import type { AgentResponseChunk, ProviderId } from "../lib/types";
 import { parseEmotion } from "../lib/vrm/expression";
 import { useAvatarStore } from "../stores/avatar";
 import { useChatStore } from "../stores/chat";
+import { PermissionModal } from "./PermissionModal";
 import { ToolActivity } from "./ToolActivity";
 
 function generateRequestId(): string {
@@ -66,6 +68,24 @@ function playBase64Audio(base64: string): void {
 	);
 }
 
+function sendApprovalResponse(
+	requestId: string,
+	toolCallId: string,
+	decision: "once" | "always" | "reject",
+): void {
+	const message = JSON.stringify({
+		type: "approval_response",
+		requestId,
+		toolCallId,
+		decision,
+	});
+	invoke("send_to_agent_command", { message }).catch((err) => {
+		Logger.warn("ChatPanel", "Failed to send approval response", {
+			error: String(err),
+		});
+	});
+}
+
 interface ChatPanelProps {
 	onOpenSettings?: () => void;
 }
@@ -83,6 +103,7 @@ export function ChatPanel({ onOpenSettings }: ChatPanelProps) {
 	const streamingToolCalls = useChatStore((s) => s.streamingToolCalls);
 	const totalSessionCost = useChatStore((s) => s.totalSessionCost);
 	const provider = useChatStore((s) => s.provider);
+	const pendingApproval = useChatStore((s) => s.pendingApproval);
 
 	// Read STT toggle from config (safe: loadConfig handles parse errors)
 	const sttEnabled = loadConfig()?.sttEnabled !== false;
@@ -171,6 +192,20 @@ export function ChatPanel({ onOpenSettings }: ChatPanelProps) {
 					chunk.output,
 				);
 				break;
+			case "approval_request":
+				if (isToolAllowed(chunk.toolName)) {
+					sendApprovalResponse(chunk.requestId, chunk.toolCallId, "once");
+				} else {
+					store.setPendingApproval({
+						requestId: chunk.requestId,
+						toolCallId: chunk.toolCallId,
+						toolName: chunk.toolName,
+						args: chunk.args,
+						tier: chunk.tier,
+						description: chunk.description,
+					});
+				}
+				break;
 			case "usage":
 				store.finishStreaming();
 				store.addCostEntry({
@@ -191,6 +226,18 @@ export function ChatPanel({ onOpenSettings }: ChatPanelProps) {
 				store.finishStreaming();
 				break;
 		}
+	}
+
+	function handleApprovalDecision(decision: "once" | "always" | "reject") {
+		const approval = useChatStore.getState().pendingApproval;
+		if (!approval) return;
+
+		if (decision === "always") {
+			addAllowedTool(approval.toolName);
+		}
+
+		sendApprovalResponse(approval.requestId, approval.toolCallId, decision);
+		useChatStore.getState().clearPendingApproval();
 	}
 
 	async function handleMicStart() {
@@ -306,6 +353,14 @@ export function ChatPanel({ onOpenSettings }: ChatPanelProps) {
 
 				<div ref={messagesEndRef} />
 			</div>
+
+			{/* Permission Modal */}
+			{pendingApproval && (
+				<PermissionModal
+					pending={pendingApproval}
+					onDecision={handleApprovalDecision}
+				/>
+			)}
 
 			{/* Input */}
 			<div className="chat-input-bar">

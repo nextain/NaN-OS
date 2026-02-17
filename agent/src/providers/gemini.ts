@@ -1,6 +1,11 @@
 import { randomUUID } from "node:crypto";
 import { FunctionCallingConfigMode, GoogleGenAI } from "@google/genai";
-import type { AgentStream, ChatMessage, LLMProvider, ToolDefinition } from "./types.js";
+import type {
+	AgentStream,
+	ChatMessage,
+	LLMProvider,
+	ToolDefinition,
+} from "./types.js";
 
 function toGeminiContents(messages: ChatMessage[]) {
 	return messages.map((m) => {
@@ -63,7 +68,9 @@ export function createGeminiProvider(
 					temperature: 0.7,
 					tools: geminiTools,
 					toolConfig: geminiTools
-						? { functionCallingConfig: { mode: FunctionCallingConfigMode.AUTO } }
+						? {
+								functionCallingConfig: { mode: FunctionCallingConfigMode.AUTO },
+							}
 						: undefined,
 				},
 			});

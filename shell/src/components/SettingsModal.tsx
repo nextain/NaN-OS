@@ -2,6 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { useState } from "react";
 import {
 	type ThemeId,
+	clearAllowedTools,
 	getDefaultModel,
 	loadConfig,
 	saveConfig,
@@ -86,6 +87,7 @@ export function SettingsModal({ onClose }: Props) {
 	);
 	const [error, setError] = useState("");
 	const [isPreviewing, setIsPreviewing] = useState(false);
+	const allowedToolsCount = existing?.allowedTools?.length ?? 0;
 
 	function handleProviderChange(id: ProviderId) {
 		setProvider(id);
@@ -359,6 +361,24 @@ export function SettingsModal({ onClose }: Props) {
 						onChange={(e) => setGatewayToken(e.target.value)}
 					/>
 				</div>
+
+				{allowedToolsCount > 0 && (
+					<div className="settings-field">
+						<label>
+							{t("settings.allowedTools")} ({allowedToolsCount})
+						</label>
+						<button
+							type="button"
+							className="voice-preview-btn"
+							onClick={() => {
+								clearAllowedTools();
+								window.location.reload();
+							}}
+						>
+							{t("settings.clearAllowedTools")}
+						</button>
+					</div>
+				)}
 
 				<div className="settings-field">
 					<label htmlFor="bg-input">{t("settings.background")}</label>
