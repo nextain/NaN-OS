@@ -573,6 +573,12 @@ body,
 	overflow-y: auto;
 }
 
+.settings-tab {
+	flex: 1;
+	overflow-y: auto;
+	padding: 12px;
+}
+
 .settings-modal h2 {
 	font-size: 18px;
 	margin-bottom: 16px;

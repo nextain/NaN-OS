@@ -23,15 +23,17 @@ import type {
 	ChatMessage,
 	ProviderId,
 } from "../lib/types";
+import { hasApiKey } from "../lib/config";
 import { parseEmotion } from "../lib/vrm/expression";
 import { useAvatarStore } from "../stores/avatar";
 import { useChatStore } from "../stores/chat";
 import { useProgressStore } from "../stores/progress";
 import { PermissionModal } from "./PermissionModal";
+import { SettingsTab } from "./SettingsTab";
 import { ToolActivity } from "./ToolActivity";
 import { WorkProgressPanel } from "./WorkProgressPanel";
 
-type TabId = "chat" | "progress";
+type TabId = "chat" | "progress" | "settings";
 
 function generateRequestId(): string {
 	return `req-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
@@ -105,10 +107,6 @@ function sendApprovalResponse(
 	});
 }
 
-interface ChatPanelProps {
-	onOpenSettings?: () => void;
-}
-
 /** Persist a ChatMessage to the memory DB. Noop if sessionId is not set. */
 function persistMessage(msg: ChatMessage): void {
 	const sessionId = useChatStore.getState().sessionId;
@@ -120,10 +118,12 @@ function persistMessage(msg: ChatMessage): void {
 	});
 }
 
-export function ChatPanel({ onOpenSettings }: ChatPanelProps) {
+export function ChatPanel() {
 	const [input, setInput] = useState("");
 	const [isRecording, setIsRecording] = useState(false);
-	const [activeTab, setActiveTab] = useState<TabId>("chat");
+	const [activeTab, setActiveTab] = useState<TabId>(
+		hasApiKey() ? "chat" : "settings",
+	);
 	const messagesEndRef = useRef<HTMLDivElement>(null);
 	const inputRef = useRef<HTMLTextAreaElement>(null);
 	const recorderRef = useRef<AudioRecorder | null>(null);
@@ -461,6 +461,13 @@ export function ChatPanel({ onOpenSettings }: ChatPanelProps) {
 					>
 						{t("progress.tabProgress")}
 					</button>
+					<button
+						type="button"
+						className={`chat-tab${activeTab === "settings" ? " active" : ""}`}
+						onClick={() => handleTabChange("settings")}
+					>
+						{t("settings.title")}
+					</button>
 				</div>
 				<div className="chat-header-right">
 					{totalSessionCost > 0 && (
@@ -477,21 +484,14 @@ export function ChatPanel({ onOpenSettings }: ChatPanelProps) {
 					>
 						+
 					</button>
-					{onOpenSettings && (
-						<button
-							type="button"
-							className="settings-icon-btn"
-							onClick={onOpenSettings}
-							title={t("chat.settings")}
-						>
-							&#9881;
-						</button>
-					)}
 				</div>
 			</div>
 
 			{/* Progress tab */}
 			{activeTab === "progress" && <WorkProgressPanel />}
+
+			{/* Settings tab */}
+			{activeTab === "settings" && <SettingsTab />}
 
 			{/* Messages (chat tab) */}
 			<div className="chat-messages" style={{ display: activeTab === "chat" ? "flex" : "none" }}>

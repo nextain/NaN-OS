@@ -6,11 +6,7 @@ const MIN_AVATAR_PERCENT = 20;
 const MAX_AVATAR_PERCENT = 70;
 const DEFAULT_AVATAR_PERCENT = 25;
 
-interface SidePanelProps {
-	onOpenSettings?: () => void;
-}
-
-export function SidePanel({ onOpenSettings }: SidePanelProps) {
+export function SidePanel() {
 	const [avatarPercent, setAvatarPercent] = useState(DEFAULT_AVATAR_PERCENT);
 	const panelRef = useRef<HTMLDivElement>(null);
 	const isDragging = useRef(false);
@@ -54,7 +50,7 @@ export function SidePanel({ onOpenSettings }: SidePanelProps) {
 				className="side-panel-chat"
 				style={{ height: `${100 - avatarPercent}%` }}
 			>
-				<ChatPanel onOpenSettings={onOpenSettings} />
+				<ChatPanel />
 			</div>
 		</div>
 	);

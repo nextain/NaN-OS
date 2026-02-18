@@ -12,9 +12,9 @@ const GATEWAY_TOKEN = process.env.CAFE_GATEWAY_TOKEN || "cafelua-dev-token";
 
 describe("02 — Configure Settings", () => {
 	it("should fill settings and save", async () => {
-		// Wait for modal to appear
-		const modal = await $(S.settingsModal);
-		await modal.waitForDisplayed({ timeout: 30_000 });
+		// Wait for settings tab to appear
+		const settingsTab = await $(S.settingsTab);
+		await settingsTab.waitForDisplayed({ timeout: 30_000 });
 
 		await configureSettings({
 			provider: "gemini",

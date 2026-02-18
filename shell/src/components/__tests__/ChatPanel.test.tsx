@@ -59,6 +59,10 @@ describe("ChatPanel", () => {
 	});
 
 	it("does not send empty message", () => {
+		localStorage.setItem(
+			"cafelua-config",
+			JSON.stringify({ apiKey: "test-key", provider: "gemini", model: "gemini-2.5-flash" }),
+		);
 		render(<ChatPanel />);
 		// Send button is the last button in the input bar
 		const buttons = screen.getAllByRole("button");
@@ -66,6 +70,7 @@ describe("ChatPanel", () => {
 		fireEvent.click(sendBtn);
 		// No messages should be added
 		expect(useChatStore.getState().messages).toHaveLength(0);
+		localStorage.removeItem("cafelua-config");
 	});
 
 	it("sends message on Enter", async () => {

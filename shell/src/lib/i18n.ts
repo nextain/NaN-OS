@@ -123,6 +123,9 @@ const translations = {
 
 	// Memory
 	"chat.newConversation": { ko: "새 대화", en: "New Chat" },
+
+	// Settings tab
+	"settings.saved": { ko: "저장됨!", en: "Saved!" },
 } as const;
 
 type TranslationKey = keyof typeof translations;

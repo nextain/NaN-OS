@@ -1,8 +1,8 @@
 import { S } from "./selectors.js";
 
 /**
- * Fill the settings modal and save.
- * Assumes the settings modal is already visible.
+ * Fill the settings tab and save, then switch to chat tab.
+ * Assumes the settings tab is already visible.
  */
 export async function configureSettings(opts: {
 	provider: string;
@@ -20,28 +20,58 @@ export async function configureSettings(opts: {
 	await apiKeyInput.waitForDisplayed();
 	await apiKeyInput.setValue(opts.apiKey);
 
-	// Enable tools
-	const toolsToggle = await $(S.toolsToggle);
-	const isChecked = await toolsToggle.isSelected();
-	if (!isChecked) {
-		await toolsToggle.click();
-	}
+	// Enable tools — use JS click (WebDriver click fails on off-screen checkboxes in WebKitGTK)
+	await browser.execute((sel: string) => {
+		const el = document.querySelector(sel) as HTMLInputElement | null;
+		if (el && !el.checked) {
+			el.click();
+		}
+	}, S.toolsToggle);
 
-	// Gateway URL
-	const gatewayUrlInput = await $(S.gatewayUrlInput);
-	await gatewayUrlInput.clearValue();
-	await gatewayUrlInput.setValue(opts.gatewayUrl);
+	// Gateway URL — use JS to set value (may be off-screen in tab layout)
+	await browser.execute(
+		(sel: string, val: string) => {
+			const el = document.querySelector(sel) as HTMLInputElement | null;
+			if (!el) return;
+			el.scrollIntoView({ block: "center" });
+			const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+			if (setter) setter.call(el, val);
+			else el.value = val;
+			el.dispatchEvent(new Event("input", { bubbles: true }));
+		},
+		S.gatewayUrlInput,
+		opts.gatewayUrl,
+	);
 
 	// Gateway Token
-	const gatewayTokenInput = await $(S.gatewayTokenInput);
-	await gatewayTokenInput.clearValue();
-	await gatewayTokenInput.setValue(opts.gatewayToken);
+	await browser.execute(
+		(sel: string, val: string) => {
+			const el = document.querySelector(sel) as HTMLInputElement | null;
+			if (!el) return;
+			el.scrollIntoView({ block: "center" });
+			const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+			if (setter) setter.call(el, val);
+			else el.value = val;
+			el.dispatchEvent(new Event("input", { bubbles: true }));
+		},
+		S.gatewayTokenInput,
+		opts.gatewayToken,
+	);
 
-	// Save
-	const saveBtn = await $(S.settingsSaveBtn);
-	await saveBtn.click();
+	// Save — use JS click
+	await browser.execute((sel: string) => {
+		const el = document.querySelector(sel) as HTMLElement | null;
+		if (el) {
+			el.scrollIntoView({ block: "center" });
+			el.click();
+		}
+	}, S.settingsSaveBtn);
 
-	// Wait for modal to close
-	const modal = await $(S.settingsModal);
-	await modal.waitForDisplayed({ timeout: 10_000, reverse: true });
+	// Switch to chat tab
+	const chatTab = await $(S.chatTab);
+	await chatTab.click();
+
+	// Wait for chat input to become visible
+	const chatInput = await $(S.chatInput);
+	await chatInput.waitForDisplayed({ timeout: 10_000 });
 }

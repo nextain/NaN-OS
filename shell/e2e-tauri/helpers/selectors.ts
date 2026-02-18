@@ -3,8 +3,9 @@ export const S = {
 	// App
 	appRoot: ".app-root",
 
-	// SettingsModal
-	settingsModal: ".settings-modal",
+	// SettingsTab
+	settingsTab: ".settings-tab",
+	chatTab: ".chat-tab:first-child",
 	providerSelect: "#provider-select",
 	apiKeyInput: "#apikey-input",
 	toolsToggle: "#tools-toggle",
