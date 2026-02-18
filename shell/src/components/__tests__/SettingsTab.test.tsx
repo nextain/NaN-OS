@@ -12,6 +12,14 @@ vi.mock("@tauri-apps/plugin-dialog", () => ({
 	open: vi.fn().mockResolvedValue(null),
 }));
 
+vi.mock("@tauri-apps/api/event", () => ({
+	listen: vi.fn().mockResolvedValue(() => {}),
+}));
+
+vi.mock("@tauri-apps/plugin-opener", () => ({
+	openUrl: vi.fn().mockResolvedValue(undefined),
+}));
+
 import { SettingsTab } from "../SettingsTab";
 
 describe("SettingsTab", () => {

@@ -243,6 +243,37 @@ const translations = {
 	},
 	"settings.bgCustom": { ko: "파일 선택...", en: "Choose File..." },
 	"settings.bgNone": { ko: "기본 그라데이션", en: "Default Gradient" },
+
+	// Lab integration (Phase 5)
+	"onboard.lab.title": {
+		ko: "Lab 계정으로 바로 시작하기",
+		en: "Get started with Lab account",
+	},
+	"onboard.lab.description": {
+		ko: "lab.cafelua.com에 로그인하면 API 키 없이 바로 사용할 수 있어요!",
+		en: "Log in to lab.cafelua.com to start without an API key!",
+	},
+	"onboard.lab.login": { ko: "Lab 로그인", en: "Lab Login" },
+	"onboard.lab.waiting": {
+		ko: "로그인 대기 중...",
+		en: "Waiting for login...",
+	},
+	"onboard.lab.or": { ko: "또는 직접 API 키 입력", en: "or enter API key manually" },
+	"settings.labSection": { ko: "Lab 계정", en: "Lab Account" },
+	"settings.labConnected": { ko: "연결됨", en: "Connected" },
+	"settings.labDisconnected": { ko: "미연결", en: "Not Connected" },
+	"settings.labConnect": { ko: "Lab 로그인", en: "Lab Login" },
+	"settings.labDisconnect": { ko: "연결 해제", en: "Disconnect" },
+	"settings.labDisconnectConfirm": {
+		ko: "Lab 연결을 해제하시겠습니까?",
+		en: "Disconnect Lab account?",
+	},
+	"settings.labUserId": { ko: "유저 ID", en: "User ID" },
+	"cost.labBalance": { ko: "Lab 잔액", en: "Lab Balance" },
+	"cost.labCredits": { ko: "크레딧", en: "credits" },
+	"cost.labCharge": { ko: "크레딧 충전", en: "Charge Credits" },
+	"cost.labLoading": { ko: "잔액 조회 중...", en: "Loading balance..." },
+	"cost.labError": { ko: "잔액 조회 실패", en: "Failed to load balance" },
 } as const;
 
 type TranslationKey = keyof typeof translations;

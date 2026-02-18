@@ -4,9 +4,10 @@ mod memory;
 use serde::{Deserialize, Serialize};
 use std::io::{BufRead, BufReader, Write};
 use std::process::{Child, Command, Stdio};
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 use std::thread;
 use tauri::{AppHandle, Emitter, Manager, PhysicalPosition, PhysicalSize};
+use tauri_plugin_deep_link::DeepLinkExt;
 
 #[cfg(target_os = "linux")]
 use webkit2gtk::PermissionRequestExt;
@@ -27,6 +28,7 @@ struct GatewayProcess {
 struct AppState {
     agent: Mutex<Option<AgentProcess>>,
     gateway: Mutex<Option<GatewayProcess>>,
+    health_monitor_shutdown: Mutex<Option<Arc<std::sync::atomic::AtomicBool>>>,
 }
 
 struct AuditState {
@@ -109,6 +111,181 @@ fn log_both(msg: &str) {
             .unwrap_or(0);
         let _ = writeln!(f, "[{}] {}", secs, msg);
     }
+}
+
+/// Get the run directory (~/.cafelua/run/) for PID files
+fn run_dir() -> std::path::PathBuf {
+    let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".to_string());
+    let dir = std::path::PathBuf::from(home).join(".cafelua/run");
+    let _ = std::fs::create_dir_all(&dir);
+    dir
+}
+
+/// Write PID file for a managed process
+fn write_pid_file(component: &str, pid: u32) {
+    let path = run_dir().join(format!("{}.pid", component));
+    let _ = std::fs::write(&path, pid.to_string());
+    log_both(&format!("[Cafelua] PID file written: {} (PID {})", path.display(), pid));
+}
+
+/// Read PID from a PID file (returns None if file doesn't exist or is invalid)
+fn read_pid_file(component: &str) -> Option<u32> {
+    let path = run_dir().join(format!("{}.pid", component));
+    std::fs::read_to_string(&path)
+        .ok()
+        .and_then(|s| s.trim().parse().ok())
+}
+
+/// Remove a PID file
+fn remove_pid_file(component: &str) {
+    let path = run_dir().join(format!("{}.pid", component));
+    let _ = std::fs::remove_file(&path);
+}
+
+/// Check if a process with the given PID is still running
+fn is_pid_alive(pid: u32) -> bool {
+    // On Linux, sending signal 0 checks if process exists
+    std::path::Path::new(&format!("/proc/{}", pid)).exists()
+}
+
+/// Clean up orphan processes from a previous session
+fn cleanup_orphan_processes() {
+    for component in &["gateway", "node-host"] {
+        if let Some(pid) = read_pid_file(component) {
+            // Guard against PID overflow — negative values target process groups
+            let signed_pid = match i32::try_from(pid) {
+                Ok(p) if p > 0 => p,
+                _ => {
+                    log_both(&format!(
+                        "[Cafelua] Invalid PID {} for {} — skipping",
+                        pid, component
+                    ));
+                    remove_pid_file(component);
+                    continue;
+                }
+            };
+            if is_pid_alive(pid) {
+                log_both(&format!(
+                    "[Cafelua] Orphan {} found (PID {}) — sending SIGTERM",
+                    component, pid
+                ));
+                unsafe {
+                    libc::kill(signed_pid, libc::SIGTERM);
+                }
+                // Give it a moment to terminate gracefully
+                std::thread::sleep(std::time::Duration::from_millis(500));
+                if is_pid_alive(pid) {
+                    log_both(&format!(
+                        "[Cafelua] Orphan {} still alive (PID {}) — sending SIGKILL",
+                        component, pid
+                    ));
+                    unsafe {
+                        libc::kill(signed_pid, libc::SIGKILL);
+                    }
+                }
+            }
+            remove_pid_file(component);
+        }
+    }
+}
+
+/// Start periodic Gateway health monitoring in a background thread.
+/// Emits `gateway_status` events to the frontend and attempts restart on failure.
+/// Returns an Arc<AtomicBool> that can be set to `true` to stop the monitor.
+fn start_gateway_health_monitor(app_handle: AppHandle) -> Arc<std::sync::atomic::AtomicBool> {
+    let shutdown = Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let shutdown_flag = shutdown.clone();
+    thread::spawn(move || {
+        let interval = std::time::Duration::from_secs(30);
+        let mut consecutive_failures: u32 = 0;
+
+        loop {
+            thread::sleep(interval);
+            if shutdown_flag.load(std::sync::atomic::Ordering::Relaxed) {
+                break;
+            }
+
+            let healthy = check_gateway_health_sync();
+
+            if healthy {
+                if consecutive_failures > 0 {
+                    log_both("[Cafelua] Gateway recovered");
+                    consecutive_failures = 0;
+                }
+                let _ = app_handle.emit(
+                    "gateway_status",
+                    serde_json::json!({ "running": true, "healthy": true }),
+                );
+            } else {
+                consecutive_failures += 1;
+                log_both(&format!(
+                    "[Cafelua] Gateway health check failed (consecutive: {})",
+                    consecutive_failures
+                ));
+                let _ = app_handle.emit(
+                    "gateway_status",
+                    serde_json::json!({
+                        "running": false,
+                        "healthy": false,
+                        "failures": consecutive_failures
+                    }),
+                );
+
+                // Auto-restart after 3 consecutive failures
+                if consecutive_failures >= 3 {
+                    log_both("[Cafelua] Attempting Gateway restart...");
+                    let restart_result = {
+                        let state = app_handle.state::<AppState>();
+                        let guard_result = state.gateway.lock();
+                        if let Ok(mut guard) = guard_result {
+                            // Kill existing if any
+                            if let Some(mut old) = guard.take() {
+                                if let Some(ref mut nh) = old.node_host {
+                                    let _ = nh.kill();
+                                }
+                                if old.we_spawned {
+                                    let _ = old.child.kill();
+                                }
+                            }
+                            // Try to respawn
+                            match spawn_gateway() {
+                                Ok(process) => {
+                                    let managed = process.we_spawned;
+                                    *guard = Some(process);
+                                    Some(managed)
+                                }
+                                Err(e) => {
+                                    log_both(&format!(
+                                        "[Cafelua] Gateway restart failed: {}",
+                                        e
+                                    ));
+                                    None
+                                }
+                            }
+                        } else {
+                            None
+                        }
+                    };
+                    if let Some(managed) = restart_result {
+                        consecutive_failures = 0;
+                        log_both(&format!(
+                            "[Cafelua] Gateway restarted (managed={})",
+                            managed
+                        ));
+                        let _ = app_handle.emit(
+                            "gateway_status",
+                            serde_json::json!({
+                                "running": true,
+                                "managed": managed,
+                                "restarted": true
+                            }),
+                        );
+                    }
+                }
+            }
+        }
+    });
+    shutdown
 }
 
 /// Find Node.js binary (system path first, then nvm fallback)
@@ -830,9 +1007,11 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_deep_link::init())
         .manage(AppState {
             agent: Mutex::new(None),
             gateway: Mutex::new(None),
+            health_monitor_shutdown: Mutex::new(None),
         })
         .invoke_handler(tauri::generate_handler![
             send_to_agent_command,
@@ -887,6 +1066,44 @@ pub fn run() {
             app.manage(MemoryState { db: memory_db });
             eprintln!("[Cafelua] Memory DB initialized at: {}", memory_db_path.display());
 
+            // Register deep-link handler for cafelua:// URI scheme
+            #[cfg(desktop)]
+            app.deep_link().register_all().unwrap_or_else(|e| {
+                log_both(&format!("[Cafelua] Deep link registration failed: {}", e));
+            });
+
+            let deep_link_handle = app_handle.clone();
+            app.deep_link().on_open_url(move |event| {
+                let urls = event.urls();
+                for url in urls {
+                    let url_str = url.as_str();
+                    log_both(&format!("[Cafelua] Deep link received: {}", url_str));
+                    // Parse cafelua://auth?key=xxx or cafelua://auth?code=xxx
+                    if let Ok(parsed) = url::Url::parse(url_str) {
+                        if parsed.host_str() == Some("auth") || parsed.path() == "auth" || parsed.path() == "/auth" {
+                            let mut key = None;
+                            let mut user_id = None;
+                            for (k, v) in parsed.query_pairs() {
+                                match k.as_ref() {
+                                    "key" => key = Some(v.to_string()),
+                                    "code" => key = Some(v.to_string()),
+                                    "user_id" => user_id = Some(v.to_string()),
+                                    _ => {}
+                                }
+                            }
+                            if let Some(lab_key) = key {
+                                let payload = serde_json::json!({
+                                    "labKey": lab_key,
+                                    "labUserId": user_id,
+                                });
+                                let _ = deep_link_handle.emit("lab_auth_complete", payload);
+                                log_both("[Cafelua] Lab auth complete — key received via deep link");
+                            }
+                        }
+                    }
+                }
+            });
+
             // Restore or dock window
             if let Some(window) = app.get_webview_window("main") {
                 if let Some(saved) = load_window_state(&app_handle) {
@@ -924,11 +1141,21 @@ pub fn run() {
             log_both("[Cafelua] === Session started ===");
             log_both(&format!("[Cafelua] Log files at: {}", log_dir().display()));
 
+            // Clean up orphan processes from previous sessions
+            cleanup_orphan_processes();
+
             // Spawn Gateway first (Agent connects to it via WebSocket)
             let (gateway_running, gateway_managed) = match spawn_gateway() {
                 Ok(process) => {
                     let managed = process.we_spawned;
                     let has_node_host = process.node_host.is_some();
+                    // Write PID files for managed processes
+                    if managed {
+                        write_pid_file("gateway", process.child.id());
+                    }
+                    if let Some(ref nh) = process.node_host {
+                        write_pid_file("node-host", nh.id());
+                    }
                     let mut guard = state.gateway.lock().unwrap();
                     *guard = Some(process);
                     log_both(&format!(
@@ -949,6 +1176,14 @@ pub fn run() {
                 "gateway_status",
                 serde_json::json!({ "running": gateway_running, "managed": gateway_managed }),
             );
+
+            // Start periodic health monitoring
+            if gateway_running {
+                let shutdown = start_gateway_health_monitor(app_handle.clone());
+                if let Ok(mut guard) = state.health_monitor_shutdown.lock() {
+                    *guard = Some(shutdown);
+                }
+            }
 
             // Then spawn Agent
             match spawn_agent_core(&app_handle, &audit_db) {
@@ -990,6 +1225,13 @@ pub fn run() {
                 tauri::WindowEvent::Destroyed => {
                     let state: tauri::State<'_, AppState> = window.state();
 
+                    // Stop health monitor thread
+                    if let Ok(guard) = state.health_monitor_shutdown.lock() {
+                        if let Some(ref flag) = *guard {
+                            flag.store(true, std::sync::atomic::Ordering::Relaxed);
+                        }
+                    }
+
                     // Kill agent first (it depends on gateway)
                     let agent_lock = state.agent.lock();
                     if let Ok(mut guard) = agent_lock {
@@ -1008,10 +1250,12 @@ pub fn run() {
                                 log_both("[Cafelua] Terminating Node Host...");
                                 let _ = nh.kill();
                             }
+                            remove_pid_file("node-host");
                             // Kill Gateway
                             if process.we_spawned {
                                 log_both("[Cafelua] Terminating Gateway (we spawned it)...");
                                 let _ = process.child.kill();
+                                remove_pid_file("gateway");
                             } else {
                                 log_both("[Cafelua] Gateway not managed by us — leaving it running");
                             }

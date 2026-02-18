@@ -1,4 +1,8 @@
+import { openUrl } from "@tauri-apps/plugin-opener";
+import { useEffect, useState } from "react";
+import { getLabKey, hasLabKey } from "../lib/config";
 import { t } from "../lib/i18n";
+import { Logger } from "../lib/logger";
 import type { ChatMessage } from "../lib/types";
 
 interface CostGroup {
@@ -41,10 +45,73 @@ function formatCost(cost: number): string {
 	return `$${cost.toFixed(3)}`;
 }
 
+const GATEWAY_URL =
+	"https://cafelua-gateway-789741003661.asia-northeast3.run.app";
+
+function LabBalanceSection() {
+	const [balance, setBalance] = useState<number | null>(null);
+	const [loading, setLoading] = useState(true);
+	const [error, setError] = useState(false);
+
+	useEffect(() => {
+		const labKey = getLabKey();
+		if (!labKey) {
+			setLoading(false);
+			return;
+		}
+		fetch(`${GATEWAY_URL}/v1/profile/balance`, {
+			headers: { "X-AnyLLM-Key": `Bearer ${labKey}` },
+		})
+			.then((res) => {
+				if (!res.ok) throw new Error(`HTTP ${res.status}`);
+				return res.json();
+			})
+			.then((data: { balance?: number }) => {
+				setBalance(data.balance ?? 0);
+			})
+			.catch((err) => {
+				Logger.warn("CostDashboard", "Lab balance fetch failed", {
+					error: String(err),
+				});
+				setError(true);
+			})
+			.finally(() => setLoading(false));
+	}, []);
+
+	if (loading) {
+		return <div className="lab-balance-row">{t("cost.labLoading")}</div>;
+	}
+	if (error) {
+		return <div className="lab-balance-row lab-balance-error">{t("cost.labError")}</div>;
+	}
+	if (balance === null) return null;
+
+	return (
+		<div className="lab-balance-section">
+			<div className="lab-balance-row">
+				<span className="lab-balance-label">{t("cost.labBalance")}</span>
+				<span className="lab-balance-value">
+					{balance.toFixed(2)} {t("cost.labCredits")}
+				</span>
+			</div>
+			<button
+				type="button"
+				className="lab-charge-btn"
+				onClick={() =>
+					openUrl("https://lab.cafelua.com/ko/billing").catch(() => {})
+				}
+			>
+				{t("cost.labCharge")}
+			</button>
+		</div>
+	);
+}
+
 export function CostDashboard({ messages }: { messages: ChatMessage[] }) {
 	const groups = groupCosts(messages);
+	const showLabBalance = hasLabKey();
 
-	if (groups.length === 0) {
+	if (groups.length === 0 && !showLabBalance) {
 		return <div className="cost-dashboard-empty">{t("cost.empty")}</div>;
 	}
 
@@ -54,6 +121,7 @@ export function CostDashboard({ messages }: { messages: ChatMessage[] }) {
 
 	return (
 		<div className="cost-dashboard">
+			{showLabBalance && <LabBalanceSection />}
 			<div className="cost-dashboard-title">{t("cost.title")}</div>
 			<table className="cost-table">
 				<thead>

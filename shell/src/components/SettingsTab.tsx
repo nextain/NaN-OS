@@ -1,5 +1,7 @@
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { open } from "@tauri-apps/plugin-dialog";
+import { openUrl } from "@tauri-apps/plugin-opener";
 import { useEffect, useState } from "react";
 import {
 	type ThemeId,
@@ -111,6 +113,9 @@ export function SettingsTab() {
 	const [isPreviewing, setIsPreviewing] = useState(false);
 	const [facts, setFacts] = useState<Fact[]>([]);
 	const allowedToolsCount = existing?.allowedTools?.length ?? 0;
+	const [labKey, setLabKeyState] = useState(existing?.labKey ?? "");
+	const [labUserId, setLabUserIdState] = useState(existing?.labUserId ?? "");
+	const [labWaiting, setLabWaiting] = useState(false);
 
 	useEffect(() => {
 		getAllFacts()
@@ -120,6 +125,21 @@ export function SettingsTab() {
 					error: String(err),
 				});
 			});
+	}, []);
+
+	// Listen for Lab auth deep-link callback
+	useEffect(() => {
+		const unlisten = listen<{ labKey: string; labUserId?: string }>(
+			"lab_auth_complete",
+			(event) => {
+				setLabKeyState(event.payload.labKey);
+				setLabUserIdState(event.payload.labUserId ?? "");
+				setLabWaiting(false);
+			},
+		);
+		return () => {
+			unlisten.then((fn) => fn());
+		};
 	}, []);
 
 	function handleProviderChange(id: ProviderId) {
@@ -192,7 +212,7 @@ export function SettingsTab() {
 	}
 
 	function handleSave() {
-		if (!apiKey.trim()) {
+		if (!apiKey.trim() && !labKey) {
 			setError(t("settings.apiKeyRequired"));
 			return;
 		}
@@ -202,6 +222,8 @@ export function SettingsTab() {
 			provider,
 			model,
 			apiKey: apiKey.trim(),
+			labKey: labKey || undefined,
+			labUserId: labUserId || undefined,
 			locale,
 			theme,
 			vrmModel: vrmModel !== defaultVrm ? vrmModel : undefined,
@@ -376,6 +398,47 @@ export function SettingsTab() {
 					rows={6}
 				/>
 				<div className="settings-hint">{t("settings.personaHint")}</div>
+			</div>
+
+			<div className="settings-section-divider">
+				<span>{t("settings.labSection")}</span>
+			</div>
+
+			<div className="settings-field">
+				<label>{labKey ? t("settings.labConnected") : t("settings.labDisconnected")}</label>
+				{labKey ? (
+					<div className="lab-connected-row">
+						{labUserId && (
+							<span className="lab-user-id">{labUserId}</span>
+						)}
+						<button
+							type="button"
+							className="voice-preview-btn"
+							onClick={() => {
+								if (window.confirm(t("settings.labDisconnectConfirm"))) {
+									setLabKeyState("");
+									setLabUserIdState("");
+								}
+							}}
+						>
+							{t("settings.labDisconnect")}
+						</button>
+					</div>
+				) : (
+					<button
+						type="button"
+						className="voice-preview-btn"
+						disabled={labWaiting}
+						onClick={() => {
+							setLabWaiting(true);
+							openUrl(
+								"https://lab.cafelua.com/ko/login?redirect=desktop",
+							).catch(() => setLabWaiting(false));
+						}}
+					>
+						{labWaiting ? t("onboard.lab.waiting") : t("settings.labConnect")}
+					</button>
+				)}
 			</div>
 
 			<div className="settings-section-divider">

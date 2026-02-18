@@ -27,5 +27,11 @@
 			"csp": null
 		}
 	},
-	"plugins": {}
+	"plugins": {
+		"deep-link": {
+			"desktop": {
+				"schemes": ["cafelua"]
+			}
+		}
+	}
 }

@@ -345,7 +345,7 @@ export function ChatPanel() {
 		const store = useChatStore.getState();
 
 		const config = loadConfig();
-		if (!config?.apiKey) {
+		if (!config?.apiKey && !config?.labKey) {
 			useChatStore.getState().appendStreamChunk(t("chat.noApiKey"));
 			useChatStore.getState().finishStreaming();
 			return;
@@ -365,6 +365,7 @@ export function ChatPanel() {
 					provider: activeProvider,
 					model: config.model || "gemini-2.5-flash",
 					apiKey: config.apiKey,
+					labKey: config.labKey,
 				},
 				history: history.slice(0, -1), // exclude last (just added) user msg
 				onChunk: (chunk) => handleChunk(chunk, activeProvider),

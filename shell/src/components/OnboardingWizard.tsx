@@ -1,4 +1,6 @@
-import { useState } from "react";
+import { listen } from "@tauri-apps/api/event";
+import { openUrl } from "@tauri-apps/plugin-opener";
+import { useEffect, useState } from "react";
 import {
 	getDefaultModel,
 	loadConfig,
@@ -126,13 +128,40 @@ export function OnboardingWizard({
 	const [validationResult, setValidationResult] = useState<
 		"idle" | "success" | "error"
 	>("idle");
+	const [labKey, setLabKey] = useState("");
+	const [labUserId, setLabUserId] = useState("");
+	const [labWaiting, setLabWaiting] = useState(false);
+
+	// Listen for deep-link Lab auth callback
+	useEffect(() => {
+		const unlisten = listen<{ labKey: string; labUserId?: string }>(
+			"lab_auth_complete",
+			(event) => {
+				Logger.info("OnboardingWizard", "Lab auth received", {});
+				setLabKey(event.payload.labKey);
+				setLabUserId(event.payload.labUserId ?? "");
+				setLabWaiting(false);
+				// Jump to complete step, skipping apiKey
+				setStep("complete");
+			},
+		);
+		return () => {
+			unlisten.then((fn) => fn());
+		};
+	}, []);
 
 	const stepIndex = STEPS.indexOf(step);
 	const displayName = agentName.trim() || "Alpha";
 
 	function goNext() {
 		if (stepIndex < STEPS.length - 1) {
-			setStep(STEPS[stepIndex + 1]);
+			const nextStep = STEPS[stepIndex + 1];
+			// Skip apiKey step if Lab key is already set
+			if (nextStep === "apiKey" && labKey) {
+				setStep("complete");
+			} else {
+				setStep(nextStep);
+			}
 		}
 	}
 
@@ -181,14 +210,16 @@ export function OnboardingWizard({
 
 		const defaultVrm = VRM_CHOICES[0].path;
 		saveConfig({
-			provider,
-			model: getDefaultModel(provider),
-			apiKey: apiKey.trim(),
+			provider: labKey ? "gemini" : provider,
+			model: labKey ? getDefaultModel("gemini") : getDefaultModel(provider),
+			apiKey: labKey ? "" : apiKey.trim(),
 			userName: userName.trim() || undefined,
 			agentName: agentName.trim() || undefined,
 			vrmModel: selectedVrm !== defaultVrm ? selectedVrm : undefined,
 			persona,
 			onboardingComplete: true,
+			labKey: labKey || undefined,
+			labUserId: labUserId || undefined,
 		});
 
 		setAvatarModelPath(selectedVrm);
@@ -198,7 +229,7 @@ export function OnboardingWizard({
 	function canProceed(): boolean {
 		switch (step) {
 			case "apiKey":
-				return !!apiKey.trim();
+				return !!apiKey.trim() || !!labKey;
 			default:
 				return true;
 		}
@@ -305,13 +336,46 @@ export function OnboardingWizard({
 				{step === "provider" && (
 					<div className="onboarding-content">
 						<h2>{t("onboard.provider.title")}</h2>
+
+						{/* Lab login option */}
+						<div className="onboarding-lab-section">
+							<button
+								type="button"
+								className={`onboarding-lab-btn${labKey ? " connected" : ""}`}
+								disabled={labWaiting}
+								onClick={() => {
+									setLabWaiting(true);
+									openUrl(
+										"https://lab.cafelua.com/ko/login?redirect=desktop",
+									).catch(() => setLabWaiting(false));
+								}}
+							>
+								{labKey
+									? t("onboard.apiKey.success")
+									: labWaiting
+										? t("onboard.lab.waiting")
+										: t("onboard.lab.login")}
+							</button>
+							<p className="onboarding-lab-desc">
+								{t("onboard.lab.description")}
+							</p>
+						</div>
+
+						<div className="onboarding-divider">
+							<span>{t("onboard.lab.or")}</span>
+						</div>
+
 						<div className="onboarding-provider-cards">
 							{PROVIDERS.map((p) => (
 								<button
 									key={p.id}
 									type="button"
-									className={`onboarding-provider-card${provider === p.id ? " selected" : ""}`}
-									onClick={() => setProvider(p.id)}
+									className={`onboarding-provider-card${!labKey && provider === p.id ? " selected" : ""}`}
+									onClick={() => {
+										setProvider(p.id);
+										setLabKey("");
+										setLabUserId("");
+									}}
 								>
 									<span className="provider-card-label">{p.label}</span>
 									<span className="provider-card-desc">{p.description}</span>

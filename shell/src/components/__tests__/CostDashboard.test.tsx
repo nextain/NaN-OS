@@ -1,7 +1,12 @@
 import { cleanup, render, screen } from "@testing-library/react";
 // @vitest-environment jsdom
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ChatMessage } from "../../lib/types";
+
+vi.mock("@tauri-apps/plugin-opener", () => ({
+	openUrl: vi.fn().mockResolvedValue(undefined),
+}));
+
 import { CostDashboard, groupCosts } from "../CostDashboard";
 
 describe("CostDashboard", () => {

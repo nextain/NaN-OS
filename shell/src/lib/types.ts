@@ -6,6 +6,7 @@ export interface ProviderConfig {
 	provider: ProviderId;
 	model: string;
 	apiKey: string;
+	labKey?: string;
 }
 
 // === Chat Messages ===

@@ -33,6 +33,8 @@ export interface AppConfig {
 	userName?: string;
 	agentName?: string;
 	onboardingComplete?: boolean;
+	labKey?: string;
+	labUserId?: string;
 }
 
 const DEFAULT_MODELS: Record<ProviderId, string> = {
@@ -57,7 +59,7 @@ export function saveConfig(config: AppConfig): void {
 
 export function hasApiKey(): boolean {
 	const config = loadConfig();
-	return !!config?.apiKey;
+	return !!config?.apiKey || !!config?.labKey;
 }
 
 export function getDefaultModel(provider: ProviderId): string {
@@ -92,4 +94,13 @@ export function isOnboardingComplete(): boolean {
 
 export function getUserName(): string | undefined {
 	return loadConfig()?.userName;
+}
+
+export function hasLabKey(): boolean {
+	const config = loadConfig();
+	return !!config?.labKey;
+}
+
+export function getLabKey(): string | undefined {
+	return loadConfig()?.labKey;
 }
