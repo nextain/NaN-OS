@@ -16,9 +16,10 @@ struct AgentProcess {
     stdin: std::process::ChildStdin,
 }
 
-// OpenClaw Gateway process handle
+// OpenClaw Gateway + Node Host process handle
 struct GatewayProcess {
     child: Child,
+    node_host: Option<Child>,
     we_spawned: bool, // only kill on shutdown if we spawned it
 }
 
@@ -71,6 +72,37 @@ fn save_window_state(app_handle: &AppHandle, state: &WindowState) {
         if let Ok(json) = serde_json::to_string(state) {
             let _ = std::fs::write(&path, json);
         }
+    }
+}
+
+/// Get log directory (~/.cafelua/logs/) and ensure it exists
+fn log_dir() -> std::path::PathBuf {
+    let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".to_string());
+    let dir = std::path::PathBuf::from(home).join(".cafelua/logs");
+    let _ = std::fs::create_dir_all(&dir);
+    dir
+}
+
+/// Open a log file for a component (append mode, timestamped per session)
+fn open_log_file(component: &str) -> Option<std::fs::File> {
+    let path = log_dir().join(format!("{}.log", component));
+    std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&path)
+        .ok()
+}
+
+/// Write a line to a log file and stderr
+fn log_both(msg: &str) {
+    eprintln!("{}", msg);
+    if let Some(mut f) = open_log_file("cafelua") {
+        use std::io::Write as _;
+        let secs = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_secs())
+            .unwrap_or(0);
+        let _ = writeln!(f, "[{}] {}", secs, msg);
     }
 }
 
@@ -136,26 +168,9 @@ fn check_gateway_health_sync() -> bool {
     }
 }
 
-/// Spawn or attach to OpenClaw Gateway
-fn spawn_gateway() -> Result<GatewayProcess, String> {
-    // 1. Check if already running (e.g. systemd or manual start)
-    if check_gateway_health_sync() {
-        eprintln!("[Cafelua] Gateway already running — reusing existing instance");
-        // Return a dummy process (no child to kill)
-        // Use a no-op child: spawn a trivial process that exits immediately
-        let child = Command::new("true")
-            .spawn()
-            .map_err(|e| format!("Failed to create dummy process: {}", e))?;
-        return Ok(GatewayProcess {
-            child,
-            we_spawned: false,
-        });
-    }
-
-    // 2. Find Node.js
+/// Find openclaw binary and node binary paths
+fn find_openclaw_paths() -> Result<(std::path::PathBuf, String, String), String> {
     let node_bin = find_node_binary()?;
-
-    // 3. Find openclaw binary
     let home = std::env::var("HOME").unwrap_or_default();
     let openclaw_bin = format!("{}/.cafelua/openclaw/node_modules/.bin/openclaw", home);
     if !std::path::Path::new(&openclaw_bin).exists() {
@@ -164,18 +179,100 @@ fn spawn_gateway() -> Result<GatewayProcess, String> {
             openclaw_bin
         ));
     }
+    let config_path = format!("{}/.cafelua/openclaw/openclaw.json", home);
+    Ok((node_bin, openclaw_bin, config_path))
+}
 
-    // 4. Config path
-    let openclaw_dir = format!("{}/.cafelua/openclaw", home);
-    let config_path = format!("{}/openclaw.json", openclaw_dir);
+/// Spawn Node Host process (connects to Gateway for command execution)
+fn spawn_node_host(
+    node_bin: &std::path::Path,
+    openclaw_bin: &str,
+    config_path: &str,
+) -> Result<Child, String> {
+    log_both("[Cafelua] Spawning Node Host: node run --host 127.0.0.1 --port 18789");
 
-    eprintln!(
+    let gateway_log = open_log_file("node-host");
+    let stdout_cfg = match &gateway_log {
+        Some(_) => Stdio::from(open_log_file("node-host").unwrap()),
+        None => Stdio::inherit(),
+    };
+    let stderr_cfg = match open_log_file("node-host") {
+        Some(f) => Stdio::from(f),
+        None => Stdio::inherit(),
+    };
+
+    let child = Command::new(node_bin.as_os_str())
+        .arg(openclaw_bin)
+        .arg("node")
+        .arg("run")
+        .arg("--host")
+        .arg("127.0.0.1")
+        .arg("--port")
+        .arg("18789")
+        .arg("--display-name")
+        .arg("CafeLuaLocal")
+        .env("OPENCLAW_CONFIG_PATH", config_path)
+        .stdout(stdout_cfg)
+        .stderr(stderr_cfg)
+        .spawn()
+        .map_err(|e| format!("Failed to spawn Node Host: {}", e))?;
+
+    log_both(&format!(
+        "[Cafelua] Node Host spawned (PID: {})",
+        child.id()
+    ));
+    Ok(child)
+}
+
+/// Spawn or attach to OpenClaw Gateway + Node Host
+fn spawn_gateway() -> Result<GatewayProcess, String> {
+    // 1. Check if already running (e.g. systemd or manual start)
+    if check_gateway_health_sync() {
+        log_both("[Cafelua] Gateway already running — reusing existing instance");
+        let child = Command::new("true")
+            .spawn()
+            .map_err(|e| format!("Failed to create dummy process: {}", e))?;
+
+        // Still spawn Node Host if needed (Gateway may be external but node host not running)
+        let node_host = match find_openclaw_paths() {
+            Ok((node_bin, openclaw_bin, config_path)) => {
+                match spawn_node_host(&node_bin, &openclaw_bin, &config_path) {
+                    Ok(nh) => Some(nh),
+                    Err(e) => {
+                        log_both(&format!("[Cafelua] Node Host spawn failed: {}", e));
+                        None
+                    }
+                }
+            }
+            Err(_) => None,
+        };
+
+        return Ok(GatewayProcess {
+            child,
+            node_host,
+            we_spawned: false,
+        });
+    }
+
+    // 2. Find paths
+    let (node_bin, openclaw_bin, config_path) = find_openclaw_paths()?;
+
+    log_both(&format!(
         "[Cafelua] Spawning Gateway: {} {} gateway run --bind loopback --port 18789",
         node_bin.display(),
         openclaw_bin
-    );
+    ));
 
-    // 5. Spawn
+    // 3. Spawn Gateway with log files
+    let gw_stdout = match open_log_file("gateway") {
+        Some(f) => Stdio::from(f),
+        None => Stdio::inherit(),
+    };
+    let gw_stderr = match open_log_file("gateway") {
+        Some(f) => Stdio::from(f),
+        None => Stdio::inherit(),
+    };
+
     let child = Command::new(node_bin.as_os_str())
         .arg(&openclaw_bin)
         .arg("gateway")
@@ -185,32 +282,50 @@ fn spawn_gateway() -> Result<GatewayProcess, String> {
         .arg("--port")
         .arg("18789")
         .env("OPENCLAW_CONFIG_PATH", &config_path)
-        .stdout(Stdio::inherit())
-        .stderr(Stdio::inherit())
+        .stdout(gw_stdout)
+        .stderr(gw_stderr)
         .spawn()
         .map_err(|e| format!("Failed to spawn Gateway: {}", e))?;
 
-    eprintln!("[Cafelua] Gateway process spawned (PID: {})", child.id());
+    log_both(&format!(
+        "[Cafelua] Gateway process spawned (PID: {})",
+        child.id()
+    ));
 
-    // 6. Wait for health check (max 5s, 500ms intervals)
+    // 4. Wait for health check (max 5s, 500ms intervals)
+    let mut gateway_healthy = false;
     for i in 0..10 {
         std::thread::sleep(std::time::Duration::from_millis(500));
         if check_gateway_health_sync() {
-            eprintln!(
+            log_both(&format!(
                 "[Cafelua] Gateway healthy after {}ms",
                 (i + 1) * 500
-            );
-            return Ok(GatewayProcess {
-                child,
-                we_spawned: true,
-            });
+            ));
+            gateway_healthy = true;
+            break;
         }
     }
 
-    // Gateway started but not healthy — still return it, maybe it needs more time
-    eprintln!("[Cafelua] Gateway spawned but not yet healthy — continuing anyway");
+    if !gateway_healthy {
+        log_both("[Cafelua] Gateway spawned but not yet healthy — continuing anyway");
+    }
+
+    // 5. Spawn Node Host (after Gateway is ready)
+    let node_host = match spawn_node_host(&node_bin, &openclaw_bin, &config_path) {
+        Ok(nh) => {
+            // Give Node Host a moment to connect
+            std::thread::sleep(std::time::Duration::from_millis(1000));
+            Some(nh)
+        }
+        Err(e) => {
+            log_both(&format!("[Cafelua] Node Host spawn failed: {}", e));
+            None
+        }
+    };
+
     Ok(GatewayProcess {
         child,
+        node_host,
         we_spawned: true,
     })
 }
@@ -614,18 +729,26 @@ pub fn run() {
                 });
             }
 
+            // Log session start
+            log_both("[Cafelua] === Session started ===");
+            log_both(&format!("[Cafelua] Log files at: {}", log_dir().display()));
+
             // Spawn Gateway first (Agent connects to it via WebSocket)
             let (gateway_running, gateway_managed) = match spawn_gateway() {
                 Ok(process) => {
                     let managed = process.we_spawned;
+                    let has_node_host = process.node_host.is_some();
                     let mut guard = state.gateway.lock().unwrap();
                     *guard = Some(process);
-                    eprintln!("[Cafelua] Gateway ready (managed={})", managed);
+                    log_both(&format!(
+                        "[Cafelua] Gateway ready (managed={}, node_host={})",
+                        managed, has_node_host
+                    ));
                     (true, managed)
                 }
                 Err(e) => {
-                    eprintln!("[Cafelua] Gateway not available: {}", e);
-                    eprintln!("[Cafelua] Running without Gateway (tools will be unavailable)");
+                    log_both(&format!("[Cafelua] Gateway not available: {}", e));
+                    log_both("[Cafelua] Running without Gateway (tools will be unavailable)");
                     (false, false)
                 }
             };
@@ -641,11 +764,11 @@ pub fn run() {
                 Ok(process) => {
                     let mut guard = state.agent.lock().unwrap();
                     *guard = Some(process);
-                    eprintln!("[Cafelua] agent-core started");
+                    log_both("[Cafelua] agent-core started");
                 }
                 Err(e) => {
-                    eprintln!("[Cafelua] agent-core not available: {}", e);
-                    eprintln!("[Cafelua] Running without agent (chat will be unavailable)");
+                    log_both(&format!("[Cafelua] agent-core not available: {}", e));
+                    log_both("[Cafelua] Running without agent (chat will be unavailable)");
                 }
             }
 
@@ -685,18 +808,25 @@ pub fn run() {
                         }
                     }
 
-                    // Kill gateway only if we spawned it
+                    // Kill Node Host + Gateway (only if we spawned)
                     let gateway_lock = state.gateway.lock();
                     if let Ok(mut guard) = gateway_lock {
                         if let Some(mut process) = guard.take() {
+                            // Kill Node Host first
+                            if let Some(ref mut nh) = process.node_host {
+                                log_both("[Cafelua] Terminating Node Host...");
+                                let _ = nh.kill();
+                            }
+                            // Kill Gateway
                             if process.we_spawned {
-                                eprintln!("[Cafelua] Terminating Gateway (we spawned it)...");
+                                log_both("[Cafelua] Terminating Gateway (we spawned it)...");
                                 let _ = process.child.kill();
                             } else {
-                                eprintln!("[Cafelua] Gateway not managed by us — leaving it running");
+                                log_both("[Cafelua] Gateway not managed by us — leaving it running");
                             }
                         }
                     }
+                    log_both("[Cafelua] === Session ended ===");
                 }
                 _ => {}
             }
@@ -780,15 +910,27 @@ mod tests {
         let child = Command::new("true").spawn().unwrap();
         let process = GatewayProcess {
             child,
+            node_host: None,
             we_spawned: false,
         };
         assert!(!process.we_spawned);
+        assert!(process.node_host.is_none());
 
         let child2 = Command::new("true").spawn().unwrap();
+        let nh = Command::new("true").spawn().unwrap();
         let process2 = GatewayProcess {
             child: child2,
+            node_host: Some(nh),
             we_spawned: true,
         };
         assert!(process2.we_spawned);
+        assert!(process2.node_host.is_some());
+    }
+
+    #[test]
+    fn log_dir_creates_directory() {
+        let dir = log_dir();
+        assert!(dir.exists());
+        assert!(dir.ends_with(".cafelua/logs"));
     }
 }
