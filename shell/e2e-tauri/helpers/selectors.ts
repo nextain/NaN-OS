@@ -18,6 +18,11 @@ export const S = {
 	cursorBlink: ".cursor-blink",
 	assistantMessage: ".chat-message.assistant .message-content",
 
+	// Memory
+	newChatBtn: ".new-chat-btn",
+	userMessage: ".chat-message.user",
+	completedAssistantMessage: ".chat-message.assistant:not(.streaming)",
+
 	// ToolActivity
 	toolActivity: ".tool-activity",
 	toolSuccess: ".tool-activity.tool-success",

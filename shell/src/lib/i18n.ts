@@ -120,6 +120,9 @@ const translations = {
 	"progress.errorCount": { ko: "에러 수", en: "Errors" },
 	"progress.tabChat": { ko: "채팅", en: "Chat" },
 	"progress.tabProgress": { ko: "작업", en: "Progress" },
+
+	// Memory
+	"chat.newConversation": { ko: "새 대화", en: "New Chat" },
 } as const;
 
 type TranslationKey = keyof typeof translations;

@@ -109,6 +109,40 @@ runtime_architecture:
     approval: "Gateway → Agent (approval_request) → Shell (modal) → user decision → Agent → Gateway"
     external: "Discord msg → Gateway → Agent → LLM → Agent → Gateway → Discord reply"
 
+memory_architecture:
+  description: "2-tier memory system for Alpha personal AI agent"
+  tiers:
+    short_term:
+      name: "Short-Term Memory (STM)"
+      storage: "Zustand (in-memory) + SQLite messages table"
+      scope: "Current session full messages"
+      lifetime: "Current session ~ recent 7 days"
+      implementation:
+        rust: "memory.rs (sessions + messages tables, Arc<Mutex<Connection>>)"
+        frontend: "db.ts (invoke wrappers) + chat store (sessionId, loadSession)"
+    long_term:
+      name: "Long-Term Memory (LTM)"
+      storage: "SQLite (sessions.summary + facts table)"
+      scope: "Cross-session knowledge"
+      sub_types:
+        episodic: "Session summaries (LLM-generated, stored in sessions.summary)"
+        semantic: "User facts/preferences (extracted by LLM, stored in facts table)"
+  search_evolution:
+    phase_4_4a: "SQLite LIKE (keyword matching)"
+    phase_4_4b: "SQLite FTS5 BM25 (full-text search)"
+    phase_4_5: "Gemini Embedding API (semantic search)"
+    phase_5_plus: "sLLM local embedding (Ollama, llama.cpp)"
+  interface: |
+    MemoryProcessor {
+      summarize(messages): Promise<string>
+      extractFacts?(messages): Promise<Fact[]>
+      semanticSearch?(query, limit): Promise<MessageRow[]>
+    }
+  db_schema:
+    sessions: "id TEXT PK, created_at INT, title TEXT, summary TEXT"
+    messages: "id TEXT PK, session_id TEXT FK, role TEXT, content TEXT, timestamp INT, cost_json TEXT, tool_calls_json TEXT"
+    facts_planned: "id TEXT PK, key TEXT, value TEXT, source TEXT, updated_at INT"
+
 security_layers:
   layer_1_os: "Bazzite immutable rootfs + SELinux"
   layer_2_gateway: "OpenClaw device auth + token scopes + exec approvals"

@@ -17,6 +17,7 @@ export interface PendingApproval {
 }
 
 interface ChatState {
+	sessionId: string | null;
 	messages: ChatMessage[];
 	isStreaming: boolean;
 	streamingContent: string;
@@ -25,6 +26,8 @@ interface ChatState {
 	totalSessionCost: number;
 	pendingApproval: PendingApproval | null;
 
+	setSessionId: (id: string) => void;
+	setMessages: (messages: ChatMessage[]) => void;
 	addMessage: (msg: Pick<ChatMessage, "role" | "content">) => void;
 	startStreaming: () => void;
 	appendStreamChunk: (text: string) => void;
@@ -43,6 +46,7 @@ interface ChatState {
 	setProvider: (provider: ProviderId) => void;
 	setPendingApproval: (approval: PendingApproval) => void;
 	clearPendingApproval: () => void;
+	newConversation: () => void;
 }
 
 function generateId(): string {
@@ -50,6 +54,7 @@ function generateId(): string {
 }
 
 export const useChatStore = create<ChatState>()((set, get) => ({
+	sessionId: null,
 	messages: [],
 	isStreaming: false,
 	streamingContent: "",
@@ -57,6 +62,10 @@ export const useChatStore = create<ChatState>()((set, get) => ({
 	provider: "gemini",
 	totalSessionCost: 0,
 	pendingApproval: null,
+
+	setSessionId: (id) => set({ sessionId: id }),
+
+	setMessages: (messages) => set({ messages }),
 
 	addMessage: (msg) =>
 		set((s) => ({
@@ -157,4 +166,15 @@ export const useChatStore = create<ChatState>()((set, get) => ({
 	setPendingApproval: (approval) => set({ pendingApproval: approval }),
 
 	clearPendingApproval: () => set({ pendingApproval: null }),
+
+	newConversation: () =>
+		set({
+			sessionId: null,
+			messages: [],
+			isStreaming: false,
+			streamingContent: "",
+			streamingToolCalls: [],
+			totalSessionCost: 0,
+			pendingApproval: null,
+		}),
 }));

@@ -150,16 +150,123 @@ phases:
         done_when: "User confirms Phase 3 tools work correctly"
       step_4_3:
         name: "Skills system"
+        status: "complete"
         items:
-          - "Skill registry + matching"
-          - "Built-in skills (weather, memo, system status)"
-          - "Custom skill loader (~/.cafelua/skills/)"
+          - "Skill registry + matching ✅"
+          - "Built-in skills (time ✅, memo ✅, system_status ✅) via Gateway"
+          - "Custom skill loader (~/.cafelua/skills/) ✅"
+          - "E2E tests: 04-skill-time, 05-skill-system, 06-skill-memo ✅"
+        known_issues:
+          - "skill_memo 'list all' hangs occasionally (Gateway response timeout)"
+      step_4_3b:
+        name: "OpenClaw skills migration (all 51)"
+        status: "planned"
+        description: "Port ALL 51 OpenClaw built-in skills to Cafelua Shell. Can run parallel with 4.4."
+        current: "4 built-in (time, memo, system_status, weather)"
+        target: "All 51 OpenClaw built-in skills + E2E tests for each"
+        strategy: |
+          Primary: Gateway proxy via ~/.cafelua/skills/ manifest (bulk migration).
+          Each skill gets a skill.json manifest → Gateway proxies to OpenClaw skill.
+          Batch approach: generate manifests programmatically from OpenClaw SKILL.md frontmatter.
+          E2E test per skill: invoke via agent → verify response format.
+        skills_list:
+          knowledge: "1password, apple-notes, bear-notes, notion, obsidian, nano-pdf, trello"
+          tasks: "apple-reminders, things-mac, oracle"
+          communication: "slack, discord, bluebubbles, imsg, himalaya, wacli"
+          media: "video-frames, openai-image-gen, nano-banana-pro, gifgrep, songsee, summarize"
+          audio: "openai-whisper, openai-whisper-api, sherpa-onnx-tts, sag, voice-call"
+          music: "sonoscli, blucli, spotify-player"
+          smart_home: "openhue, eightctl, camsnap"
+          dev: "coding-agent, github, mcporter, skill-creator"
+          productivity: "gog, goplaces, blogwatcher, food-order, ordercli"
+          ai: "gemini, model-usage, clawhub"
+          system: "tmux, healthcheck, session-logs, weather, canvas"
+        testing: "E2E test per skill: shell/e2e-tauri/specs/09-skills-*.spec.ts"
+        done_when: "All 51 skills registered + E2E tests passing."
       step_4_4:
-        name: "Memory persistence"
-        items:
-          - "SQLite conversation storage"
-          - "Vector search (embeddings)"
-          - "Context recall on relevant queries"
+        name: "Memory + UX + Onboarding"
+        status: "in_progress"
+        architecture: |
+          2-tier memory: Short-Term Memory (STM) + Long-Term Memory (LTM).
+          STM = current session full messages (zustand + SQLite).
+          LTM = session summaries + semantic facts (SQLite, filled by LLM later).
+          Search: SQLite LIKE (4.4a) → FTS5 BM25 (4.4b) → embeddings (4.5) → sLLM (5+).
+          MemoryProcessor interface: pluggable summarize/embed/search.
+        execution_order: "4.4a ✅ → 4.4-ui → 4.4-onboard → 4.4b → 4.4c"
+        order_rationale: |
+          4.4-ui first: tab architecture is structural foundation for history/settings/onboarding.
+          4.4-onboard second: built on new tab UI, creates user profile (name) used by context recall.
+          4.4b third: uses profile from onboarding + session summaries.
+          4.4c last: extends 4.4b with fact extraction.
+        sub_phases:
+          step_4_4a:
+            name: "Conversation persistence (STM)"
+            status: "complete"
+            items:
+              - "Rust memory.rs: sessions + messages tables (SQLite, rusqlite) ✅"
+              - "sessions.summary column prepared (empty, filled in 4.4b) ✅"
+              - "Tauri commands: 8 memory commands registered ✅"
+              - "Frontend db.ts: invoke() wrappers + ChatMessage↔MessageRow conversion ✅"
+              - "Chat store: sessionId, setMessages, newConversation ✅"
+              - "ChatPanel: load previous session on mount, new conversation (+) button ✅"
+              - "ChatPanel: ESC key / ■ button to cancel streaming ✅"
+              - "Avatar emotion reset to neutral on streaming finish ✅"
+              - "E2E test: 08-memory.spec.ts (4 tests: persist, refresh, new chat, fresh session) ✅"
+              - "i18n: chat.newConversation ✅"
+            tests: "Rust 53, Vitest 143, E2E 8 specs (15 tests) — all passing"
+          step_4_4_ui:
+            name: "Shell UX overhaul"
+            status: "next"
+            description: "Restructure UI from modal-based to tab-based architecture"
+            items:
+              - "Tab system: chat | progress | settings (replace settings modal)"
+              - "Cost dashboard: click cost badge → detailed cost breakdown tab"
+              - "Session history: sidebar listing past conversations with resume"
+              - "Progress panel: error count clickable → filter errors only"
+              - "Message queue: edit/reorder pending messages while AI is working (careti-style)"
+            priority: "high — structural foundation for onboarding and history"
+            done_when: "Settings/history/cost accessible as tabs, not modals."
+          step_4_4_onboard:
+            name: "Onboarding wizard (first-run experience)"
+            status: "planned"
+            description: "OpenClaw-style onboarding adapted for GUI. First impression of Alpha."
+            depends_on: "4.4-ui (built on tab architecture)"
+            items:
+              - "First-run detection: config check → show onboarding if no profile"
+              - "Welcome screen: Alpha greets user with animation"
+              - "Name input: '뭐라고 불러줄까요?' → user profile (stored in config + DB)"
+              - "Provider setup: visual card selector (Gemini/xAI/Claude) with API key input"
+              - "API key validation: test call before save"
+              - "Persona selection (optional): Alpha personality preset or custom"
+              - "First message: Alpha initiates '[HAPPY] 반가워요, {name}! 무엇을 도와줄까요?'"
+              - "User profile: name + provider + persona stored in SQLite user_profile table"
+              - "Skip option: power users can skip to settings tab directly"
+            done_when: "First boot → wizard → name + API key → Alpha greets by name."
+            reference: "OpenClaw CLI onboarding: name selection + 'what should I do?'"
+          step_4_4b:
+            name: "Session summarization + context recall"
+            status: "planned"
+            depends_on: "4.4-onboard (user profile provides name/context)"
+            items:
+              - "FTS5 full-text search activation"
+              - "LLM-generated session summary on session end → sessions.summary"
+              - "Inject recent session summaries + user profile into system prompt"
+              - "MemoryProcessor.summarize() implementation (Gemini API)"
+              - "System prompt includes: user name, preferences, recent session summaries"
+            done_when: "New conversation gets context from previous sessions + knows user name."
+          step_4_4c:
+            name: "Semantic memory (facts)"
+            status: "planned"
+            depends_on: "4.4b (builds on summarization pipeline)"
+            items:
+              - "facts table: key-value semantic memory"
+              - "LLM extracts facts from conversations (user preferences, learned info)"
+              - "MemoryProcessor.extractFacts() implementation"
+              - "Facts injected into system prompt alongside session summaries"
+            done_when: "Alpha remembers user preferences across sessions."
+        future_phases:
+          phase_4_5: "Gemini Embedding API for semantic search"
+          phase_5_plus: "sLLM (Ollama/llama.cpp) for local summarize/embed"
       step_4_5:
         name: "External channels"
         items:

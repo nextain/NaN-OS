@@ -2,8 +2,16 @@ import { invoke } from "@tauri-apps/api/core";
 import { useEffect, useRef, useState } from "react";
 import Markdown from "react-markdown";
 import { type AudioRecorder, startRecording } from "../lib/audio-recorder";
-import { sendChatMessage } from "../lib/chat-service";
+import { cancelChat, sendChatMessage } from "../lib/chat-service";
 import { addAllowedTool, isToolAllowed, loadConfig } from "../lib/config";
+import {
+	chatMessageToRow,
+	createSession,
+	generateSessionId,
+	loadOrCreateSession,
+	rowToChatMessage,
+	saveMessage,
+} from "../lib/db";
 import { t } from "../lib/i18n";
 import { Logger } from "../lib/logger";
 import { buildSystemPrompt } from "../lib/persona";
@@ -12,6 +20,7 @@ import type {
 	AgentResponseChunk,
 	AuditEvent,
 	AuditFilter,
+	ChatMessage,
 	ProviderId,
 } from "../lib/types";
 import { parseEmotion } from "../lib/vrm/expression";
@@ -100,6 +109,17 @@ interface ChatPanelProps {
 	onOpenSettings?: () => void;
 }
 
+/** Persist a ChatMessage to the memory DB. Noop if sessionId is not set. */
+function persistMessage(msg: ChatMessage): void {
+	const sessionId = useChatStore.getState().sessionId;
+	if (!sessionId) return;
+	saveMessage(chatMessageToRow(sessionId, msg)).catch((err) => {
+		Logger.warn("ChatPanel", "Failed to persist message", {
+			error: String(err),
+		});
+	});
+}
+
 export function ChatPanel({ onOpenSettings }: ChatPanelProps) {
 	const [input, setInput] = useState("");
 	const [isRecording, setIsRecording] = useState(false);
@@ -107,6 +127,8 @@ export function ChatPanel({ onOpenSettings }: ChatPanelProps) {
 	const messagesEndRef = useRef<HTMLDivElement>(null);
 	const inputRef = useRef<HTMLTextAreaElement>(null);
 	const recorderRef = useRef<AudioRecorder | null>(null);
+	const sessionLoaded = useRef(false);
+	const currentRequestId = useRef<string | null>(null);
 
 	const messages = useChatStore((s) => s.messages);
 	const isStreaming = useChatStore((s) => s.isStreaming);
@@ -121,9 +143,76 @@ export function ChatPanel({ onOpenSettings }: ChatPanelProps) {
 
 	const setEmotion = useAvatarStore((s) => s.setEmotion);
 
+	// Load previous session on mount
+	useEffect(() => {
+		if (sessionLoaded.current) return;
+		sessionLoaded.current = true;
+		loadOrCreateSession()
+			.then(({ session, messages: rows }) => {
+				const store = useChatStore.getState();
+				store.setSessionId(session.id);
+				if (rows.length > 0) {
+					store.setMessages(rows.map(rowToChatMessage));
+				}
+				Logger.info("ChatPanel", "Session loaded", {
+					sessionId: session.id,
+					messageCount: rows.length,
+				});
+			})
+			.catch((err) => {
+				Logger.warn("ChatPanel", "Failed to load session", {
+					error: String(err),
+				});
+			});
+	}, []);
+
 	useEffect(() => {
 		messagesEndRef.current?.scrollIntoView?.({ behavior: "smooth" });
 	}, [messages, streamingContent]);
+
+	function handleCancelStreaming() {
+		const store = useChatStore.getState();
+		if (!store.isStreaming) return;
+		const reqId = currentRequestId.current;
+		if (reqId) {
+			cancelChat(reqId).catch((err) => {
+				Logger.warn("ChatPanel", "Failed to cancel stream", {
+					error: String(err),
+				});
+			});
+		}
+		store.finishStreaming();
+		setEmotion("neutral");
+		currentRequestId.current = null;
+	}
+
+	// ESC key to cancel streaming
+	useEffect(() => {
+		function onKeyDown(e: KeyboardEvent) {
+			if (e.key === "Escape" && useChatStore.getState().isStreaming) {
+				handleCancelStreaming();
+			}
+		}
+		window.addEventListener("keydown", onKeyDown);
+		return () => window.removeEventListener("keydown", onKeyDown);
+	}, []);
+
+	async function handleNewConversation() {
+		const store = useChatStore.getState();
+		store.newConversation();
+		try {
+			const id = generateSessionId();
+			const session = await createSession(id);
+			useChatStore.getState().setSessionId(session.id);
+			Logger.info("ChatPanel", "New conversation started", {
+				sessionId: session.id,
+			});
+		} catch (err) {
+			Logger.warn("ChatPanel", "Failed to create new session", {
+				error: String(err),
+			});
+		}
+	}
 
 	async function handleSend() {
 		const text = input.trim();
@@ -131,9 +220,16 @@ export function ChatPanel({ onOpenSettings }: ChatPanelProps) {
 
 		setInput("");
 		useChatStore.getState().addMessage({ role: "user", content: text });
+
+		// Persist user message
+		const msgs = useChatStore.getState().messages;
+		const userMsg = msgs[msgs.length - 1];
+		if (userMsg) persistMessage(userMsg);
+
 		useChatStore.getState().startStreaming();
 
 		const requestId = generateRequestId();
+		currentRequestId.current = requestId;
 		const store = useChatStore.getState();
 
 		const config = loadConfig();
@@ -220,6 +316,7 @@ export function ChatPanel({ onOpenSettings }: ChatPanelProps) {
 				break;
 			case "usage":
 				store.finishStreaming();
+				setEmotion("neutral");
 				store.addCostEntry({
 					inputTokens: chunk.inputTokens,
 					outputTokens: chunk.outputTokens,
@@ -227,15 +324,30 @@ export function ChatPanel({ onOpenSettings }: ChatPanelProps) {
 					provider: activeProvider,
 					model: chunk.model,
 				});
+				{
+					const asMsgs = useChatStore.getState().messages;
+					const assistantMsg = asMsgs[asMsgs.length - 1];
+					if (assistantMsg) persistMessage(assistantMsg);
+				}
 				break;
 			case "finish":
 				if (store.isStreaming) {
 					store.finishStreaming();
+					setEmotion("neutral");
+					const asMsgs = useChatStore.getState().messages;
+					const assistantMsg = asMsgs[asMsgs.length - 1];
+					if (assistantMsg) persistMessage(assistantMsg);
 				}
 				break;
 			case "error":
 				store.appendStreamChunk(`\n[${t("chat.error")}] ${chunk.message}`);
 				store.finishStreaming();
+				setEmotion("neutral");
+				{
+					const asMsgs = useChatStore.getState().messages;
+					const assistantMsg = asMsgs[asMsgs.length - 1];
+					if (assistantMsg) persistMessage(assistantMsg);
+				}
 				break;
 		}
 	}
@@ -356,6 +468,15 @@ export function ChatPanel({ onOpenSettings }: ChatPanelProps) {
 							{formatCost(totalSessionCost)}
 						</span>
 					)}
+					<button
+						type="button"
+						className="settings-icon-btn new-chat-btn"
+						onClick={handleNewConversation}
+						title={t("chat.newConversation")}
+						disabled={isStreaming}
+					>
+						+
+					</button>
 					{onOpenSettings && (
 						<button
 							type="button"
@@ -449,14 +570,25 @@ export function ChatPanel({ onOpenSettings }: ChatPanelProps) {
 					disabled={isStreaming || isRecording}
 					className="chat-input"
 				/>
-				<button
-					type="button"
-					onClick={handleSend}
-					disabled={isStreaming || !input.trim()}
-					className="chat-send-btn"
-				>
-					↑
-				</button>
+				{isStreaming ? (
+					<button
+						type="button"
+						onClick={handleCancelStreaming}
+						className="chat-send-btn chat-cancel-btn"
+						title="ESC"
+					>
+						■
+					</button>
+				) : (
+					<button
+						type="button"
+						onClick={handleSend}
+						disabled={!input.trim()}
+						className="chat-send-btn"
+					>
+						↑
+					</button>
+				)}
 			</div>
 		</div>
 	);

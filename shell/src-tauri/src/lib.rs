@@ -1,4 +1,5 @@
 mod audit;
+mod memory;
 
 use serde::{Deserialize, Serialize};
 use std::io::{BufRead, BufReader, Write};
@@ -30,6 +31,10 @@ struct AppState {
 
 struct AuditState {
     db: audit::AuditDb,
+}
+
+struct MemoryState {
+    db: memory::MemoryDb,
 }
 
 /// JSON chunk forwarded from agent-core stdout to the frontend
@@ -592,6 +597,74 @@ async fn get_audit_stats(
     audit::query_stats(&audit_state.db)
 }
 
+// === Memory commands ===
+
+#[tauri::command]
+async fn memory_create_session(
+    id: String,
+    title: Option<String>,
+    state: tauri::State<'_, MemoryState>,
+) -> Result<memory::Session, String> {
+    memory::create_session(&state.db, &id, title.as_deref())
+}
+
+#[tauri::command]
+async fn memory_get_last_session(
+    state: tauri::State<'_, MemoryState>,
+) -> Result<Option<memory::Session>, String> {
+    memory::get_last_session(&state.db)
+}
+
+#[tauri::command]
+async fn memory_get_sessions(
+    limit: u32,
+    state: tauri::State<'_, MemoryState>,
+) -> Result<Vec<memory::Session>, String> {
+    memory::get_recent_sessions(&state.db, limit)
+}
+
+#[tauri::command]
+async fn memory_save_message(
+    msg: memory::MessageRow,
+    state: tauri::State<'_, MemoryState>,
+) -> Result<(), String> {
+    memory::insert_message(&state.db, &msg)
+}
+
+#[tauri::command]
+async fn memory_get_messages(
+    session_id: String,
+    state: tauri::State<'_, MemoryState>,
+) -> Result<Vec<memory::MessageRow>, String> {
+    memory::get_session_messages(&state.db, &session_id)
+}
+
+#[tauri::command]
+async fn memory_search(
+    query: String,
+    limit: u32,
+    state: tauri::State<'_, MemoryState>,
+) -> Result<Vec<memory::MessageRow>, String> {
+    memory::search_messages(&state.db, &query, limit)
+}
+
+#[tauri::command]
+async fn memory_delete_session(
+    session_id: String,
+    state: tauri::State<'_, MemoryState>,
+) -> Result<(), String> {
+    memory::delete_session(&state.db, &session_id)
+}
+
+#[tauri::command]
+async fn memory_update_title(
+    session_id: String,
+    title: String,
+    state: tauri::State<'_, MemoryState>,
+) -> Result<(), String> {
+    memory::update_session_title(&state.db, &session_id, &title)
+}
+
 #[tauri::command]
 async fn preview_tts(api_key: String, voice: String, text: String) -> Result<String, String> {
     let url = format!(
@@ -677,6 +750,14 @@ pub fn run() {
             gateway_health,
             get_audit_log,
             get_audit_stats,
+            memory_create_session,
+            memory_get_last_session,
+            memory_get_sessions,
+            memory_save_message,
+            memory_get_messages,
+            memory_search,
+            memory_delete_session,
+            memory_update_title,
         ])
         .setup(|app| {
             let app_handle = app.handle().clone();
@@ -695,6 +776,17 @@ pub fn run() {
                 .map_err(|e| -> Box<dyn std::error::Error> { format!("Failed to init audit DB: {}", e).into() })?;
             app.manage(AuditState { db: audit_db.clone() });
             eprintln!("[Cafelua] Audit DB initialized at: {}", audit_db_path.display());
+
+            // Initialize memory DB
+            let memory_db_path = app_handle
+                .path()
+                .app_config_dir()
+                .map(|d| d.join("memory.db"))
+                .map_err(|e| format!("Failed to get config dir: {}", e))?;
+            let memory_db = memory::init_db(&memory_db_path)
+                .map_err(|e| -> Box<dyn std::error::Error> { format!("Failed to init memory DB: {}", e).into() })?;
+            app.manage(MemoryState { db: memory_db });
+            eprintln!("[Cafelua] Memory DB initialized at: {}", memory_db_path.display());
 
             // Restore or dock window
             if let Some(window) = app.get_webview_window("main") {

@@ -292,19 +292,192 @@ git push → GitHub Actions → ghcr.io/luke-n-alpha/cafelua-os:latest
 
 **결과:** Phase 3 도구 정상 동작 사용자 확인
 
-### 4-3. Skills 시스템
+### 4-3. Skills 시스템 ✅
 
 **작업:**
-- Skill 레지스트리 + 매칭
-- 기본 Skills (날씨, 메모, 시스템 상태)
-- 커스텀 Skills 로더 (~/.cafelua/skills/)
+- Skill 레지스트리 + 매칭 ✅
+- 기본 Skills (시간 ✅, 메모 ✅, 시스템 상태 ✅) — Gateway 내장 스킬 활용
+- 커스텀 Skills 로더 (~/.cafelua/skills/) ✅
+- E2E 테스트: 04-skill-time, 05-skill-system, 06-skill-memo ✅
 
-### 4-4. 메모리 시스템
+**알려진 이슈:**
+- skill_memo "전체 목록 보기"가 간헐적으로 행(Gateway 응답 타임아웃)
 
-**작업:**
-- 대화 이력 영속 (SQLite)
-- 벡터 검색 (임베딩)
-- 관련 쿼리 시 컨텍스트 리콜
+### 4-3b. OpenClaw 스킬 전체 이식 (51개) — 계획됨
+
+> 4.4와 **병렬 진행 가능** (의존성 없음)
+> 현재: 4개 built-in (time, memo, system_status, weather)
+> 목표: **OpenClaw 51개 built-in 스킬 전부 이식 + 각 스킬별 E2E 테스트**
+
+**전략:** Gateway 프록시 방식으로 일괄 이식.
+OpenClaw SKILL.md frontmatter에서 manifest를 자동 생성 → `~/.cafelua/skills/`에 배치.
+각 스킬마다 E2E 테스트 작성.
+
+#### 전체 스킬 목록 (51개)
+
+| 카테고리 | 스킬 |
+|---------|------|
+| 지식/노트 | 1password, apple-notes, bear-notes, notion, obsidian, nano-pdf, trello |
+| 작업/리마인더 | apple-reminders, things-mac, oracle |
+| 커뮤니케이션 | slack, discord, bluebubbles, imsg, himalaya, wacli |
+| 미디어/콘텐츠 | video-frames, openai-image-gen, nano-banana-pro, gifgrep, songsee, summarize |
+| 오디오/음성 | openai-whisper, openai-whisper-api, sherpa-onnx-tts, sag, voice-call |
+| 음악/스피커 | sonoscli, blucli, spotify-player |
+| 스마트홈/IoT | openhue, eightctl, camsnap |
+| 개발/코딩 | coding-agent, github, mcporter, skill-creator |
+| 생산성 | gog, goplaces, blogwatcher, food-order, ordercli |
+| AI/모델 | gemini, model-usage, clawhub |
+| 시스템/터미널 | tmux, healthcheck, session-logs, weather, canvas |
+
+#### 테스트 계획
+- E2E spec: `shell/e2e-tauri/specs/09-skills-*.spec.ts`
+- 각 스킬: invoke → 응답 형식 검증
+
+**완료 조건**: 51개 스킬 등록 + E2E 테스트 통과
+
+---
+
+### 4-4. 메모리 + UX + 온보딩
+
+> **궁극적 목표**: Alpha가 사용자를 기억하고 성장하는 진짜 개인 AI 에이전트
+
+#### 실행 순서
+
+```
+4.4a ✅ → 4.4-ui → 4.4-onboard → 4.4b → 4.4c
+(영속성)   (탭 구조)  (첫인상)     (기억)   (학습)
+```
+
+**순서 근거:**
+- **4.4-ui 먼저**: 탭 아키텍처가 히스토리/설정/온보딩의 구조적 기반
+- **4.4-onboard 다음**: 새 탭 UI 위에 구축, 사용자 프로필(이름) 생성 → context recall이 활용
+- **4.4b 세번째**: 온보딩 프로필 + 세션 요약 활용
+- **4.4c 마지막**: 4.4b 요약 파이프라인 위에 fact 추출 확장
+
+#### 아키텍처
+
+```
+┌─────────────────────────────────────────────────────┐
+│  단기기억 (Short-Term Memory)                        │
+│  = 현재 세션 전체 메시지                              │
+│  = Zustand (메모리) + SQLite messages 테이블          │
+│  수명: 현재 세션 ~ 최근 7일                           │
+└────────────┬────────────────────────────────────────┘
+             │ 세션 종료 시 consolidate()
+             ▼
+┌─────────────────────────────────────────────────────┐
+│  장기기억 (Long-Term Memory)                         │
+│  ┌──────────────┐  ┌─────────────────────────────┐  │
+│  │ Episodic     │  │ Semantic                    │  │
+│  │ (에피소드)    │  │ (사실/선호)                  │  │
+│  │ = 세션 요약   │  │ = "사용자는 Rust 선호"       │  │
+│  │ sessions     │  │ = facts 테이블               │  │
+│  │ .summary     │  │ (key, value, source,        │  │
+│  │              │  │  updated_at)                │  │
+│  └──────────────┘  └─────────────────────────────┘  │
+│                                                      │
+│  사용자 프로필 (온보딩에서 생성):                      │
+│  user_profile 테이블 (name, provider, persona)       │
+│                                                      │
+│  검색 엔진 (교체 가능 — MemoryProcessor 인터페이스):  │
+│  4.4a: SQLite LIKE → 4.4b: FTS5 BM25               │
+│  4.5: Gemini Embedding → 5+: sLLM (Ollama)          │
+└─────────────────────────────────────────────────────┘
+```
+
+#### 단계별 구현
+
+**4-4a. 대화 영속성 (단기기억)** ✅ 완료
+- Rust `memory.rs`: sessions + messages 테이블 (rusqlite) ✅
+- `sessions.summary` 컬럼 미리 준비 (비워둠, 4.4b에서 채움) ✅
+- Tauri commands: 8개 메모리 커맨드 등록 ✅
+- Frontend `db.ts`: invoke() 래퍼 + ChatMessage↔MessageRow 변환 ✅
+- Chat store: sessionId, setMessages, newConversation ✅
+- ChatPanel: 이전 대화 로드, 새 대화(+) 버튼 ✅
+- ChatPanel: ESC 키 / ■ 버튼으로 스트리밍 취소 ✅
+- 아바타 감정 리셋 (스트리밍 종료 시 neutral 복귀) ✅
+- E2E 테스트: 08-memory.spec.ts (4 테스트: 영속/새로고침/새대화/독립세션) ✅
+- 테스트: Rust 53, Vitest 143, E2E 8 specs (15 tests) — 전부 통과
+
+---
+
+**4-4-ui. Shell UX 개편** ← 다음 작업
+> UI를 모달 기반에서 탭 기반으로 전면 개편.
+> 온보딩과 히스토리의 구조적 기반이 되는 작업.
+
+| 항목 | 설명 |
+|------|------|
+| 탭 시스템 | 채팅 \| 작업 \| 설정 (설정 모달 제거) |
+| 비용 대시보드 | 비용 배지 클릭 → 상세 비용 내역 탭 |
+| 세션 히스토리 | 과거 대화 목록 사이드바, 재개 가능 |
+| 에러 필터링 | 작업 탭에서 에러 수 클릭 → 에러만 필터 |
+| 메시지 큐 | AI 작업 중 메시지 편집/재정렬 (careti 스타일) |
+
+**완료 조건**: 설정/히스토리/비용이 모달이 아닌 탭으로 접근 가능
+
+---
+
+**4-4-onboard. 온보딩 위자드 (첫 실행 경험)** — 계획됨
+> OpenClaw CLI 온보딩의 GUI 버전. Alpha와의 첫 만남.
+> 의존: 4.4-ui (탭 구조 위에 구축)
+
+| 단계 | 화면 | 설명 |
+|------|------|------|
+| 1 | Welcome | Alpha 아바타 애니메이션 + "안녕!" |
+| 2 | 이름 입력 | "뭐라고 불러줄까요?" → 사용자 이름 |
+| 3 | Provider 설정 | 시각적 카드 선택 (Gemini/xAI/Claude) + API 키 입력 |
+| 4 | API 키 검증 | 테스트 호출로 키 유효성 확인 |
+| 5 | 페르소나 (선택) | Alpha 성격 프리셋 또는 커스텀 |
+| 6 | 첫 대화 | "[HAPPY] 반가워요, {이름}! 무엇을 도와줄까요?" |
+
+**저장 위치:** SQLite `user_profile` 테이블 (name, provider, persona)
+**건너뛰기:** 파워 유저는 스킵 → 설정 탭으로 직접 이동 가능
+**참조:** OpenClaw CLI 온보딩 (이름 선택 + "무얼 할까요?" 플로우)
+
+**완료 조건**: 첫 부팅 → 위자드 → 이름 + API 키 → Alpha가 이름 불러줌
+
+---
+
+**4-4b. 세션 요약 + 컨텍스트 리콜** — 계획됨
+> 의존: 4.4-onboard (사용자 프로필이 이름/컨텍스트 제공)
+
+- FTS5 전문검색 활성화
+- 세션 종료 시 LLM으로 요약 생성 → sessions.summary
+- 새 대화 시 system prompt에 주입: 사용자 이름 + 선호 + 최근 세션 요약
+- MemoryProcessor.summarize() 구현 (Gemini API)
+- **완료 조건**: 새 대화에서 이전 대화 맥락 + 사용자 이름을 알고 있음
+
+---
+
+**4-4c. 시맨틱 메모리 (facts)** — 계획됨
+> 의존: 4.4b (요약 파이프라인 위에 구축)
+
+- facts 테이블: 키-값 시맨틱 메모리
+- LLM이 대화에서 fact 추출 (사용자 선호, 학습된 정보)
+- facts도 system prompt에 주입 (세션 요약과 함께)
+- MemoryProcessor.extractFacts() 구현
+- **완료 조건**: Alpha가 세션 간 사용자 선호를 기억함
+
+#### 미래 확장
+
+| Phase | 내용 |
+|-------|------|
+| 4.5 | Gemini Embedding API로 의미 검색 |
+| 5+ | sLLM (Ollama, llama.cpp)으로 로컬 요약/임베딩 |
+
+#### MemoryProcessor 인터페이스 (교체 가능)
+
+```typescript
+interface MemoryProcessor {
+  summarize(messages: ChatMessage[]): Promise<string>;
+  extractFacts?(messages: ChatMessage[]): Promise<Fact[]>;
+  semanticSearch?(query: string, limit: number): Promise<MessageRow[]>;
+}
+// 4.4a: 미구현 (SQLite LIKE만)
+// 4.4b: GeminiMemoryProcessor.summarize()
+// 4.5: GeminiMemoryProcessor.semanticSearch()
+// 5+: LocalLLMMemoryProcessor (Ollama)
+```
 
 ### 4-5. 채널 통합
 

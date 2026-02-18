@@ -8,11 +8,50 @@ describe("useChatStore", () => {
 
 	it("has correct initial state", () => {
 		const state = useChatStore.getState();
+		expect(state.sessionId).toBeNull();
 		expect(state.messages).toEqual([]);
 		expect(state.isStreaming).toBe(false);
 		expect(state.streamingContent).toBe("");
 		expect(state.provider).toBe("gemini");
 		expect(state.totalSessionCost).toBe(0);
+	});
+
+	// === Session management ===
+
+	it("setSessionId sets the session id", () => {
+		useChatStore.getState().setSessionId("s1");
+		expect(useChatStore.getState().sessionId).toBe("s1");
+	});
+
+	it("setMessages replaces all messages", () => {
+		const store = useChatStore.getState();
+		store.setMessages([
+			{
+				id: "m1",
+				role: "user",
+				content: "restored",
+				timestamp: 1000,
+			},
+		]);
+		const { messages } = useChatStore.getState();
+		expect(messages).toHaveLength(1);
+		expect(messages[0].content).toBe("restored");
+	});
+
+	it("newConversation resets all state except provider", () => {
+		const store = useChatStore.getState();
+		store.setSessionId("s1");
+		store.addMessage({ role: "user", content: "hi" });
+		store.setProvider("xai");
+
+		store.newConversation();
+
+		const state = useChatStore.getState();
+		expect(state.sessionId).toBeNull();
+		expect(state.messages).toEqual([]);
+		expect(state.totalSessionCost).toBe(0);
+		// provider is preserved (not reset by newConversation)
+		expect(state.provider).toBe("xai");
 	});
 
 	it("addMessage adds user message", () => {

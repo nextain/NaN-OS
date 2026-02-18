@@ -21,8 +21,9 @@ vi.mock("../../lib/chat-service", () => ({
 }));
 
 // Mock Tauri APIs (needed by chat-service and approval flow)
+const mockInvoke = vi.fn().mockResolvedValue(undefined);
 vi.mock("@tauri-apps/api/core", () => ({
-	invoke: vi.fn().mockResolvedValue(undefined),
+	invoke: (...args: unknown[]) => mockInvoke(...args),
 }));
 vi.mock("@tauri-apps/api/event", () => ({
 	listen: vi.fn().mockResolvedValue(() => {}),
@@ -45,6 +46,7 @@ describe("ChatPanel", () => {
 	afterEach(() => {
 		cleanup();
 		capturedOnChunk = null;
+		mockInvoke.mockResolvedValue(undefined);
 		useChatStore.setState(useChatStore.getInitialState());
 		useAvatarStore.setState(useAvatarStore.getInitialState());
 	});
@@ -322,5 +324,95 @@ describe("ChatPanel", () => {
 		expect(useAvatarStore.getState().pendingAudio).toBe("base64audio==");
 
 		localStorage.removeItem("cafelua-config");
+	});
+
+	// === Memory integration ===
+
+	it("loads previous session on mount", async () => {
+		const session = {
+			id: "sess-prev",
+			created_at: 1000,
+			title: null,
+			summary: null,
+		};
+		const rows = [
+			{
+				id: "m1",
+				session_id: "sess-prev",
+				role: "user",
+				content: "이전 메시지",
+				timestamp: 1000,
+				cost_json: null,
+				tool_calls_json: null,
+			},
+			{
+				id: "m2",
+				session_id: "sess-prev",
+				role: "assistant",
+				content: "이전 응답",
+				timestamp: 2000,
+				cost_json: null,
+				tool_calls_json: null,
+			},
+		];
+
+		mockInvoke.mockImplementation((cmd: string) => {
+			if (cmd === "memory_get_last_session") return Promise.resolve(session);
+			if (cmd === "memory_get_messages") return Promise.resolve(rows);
+			return Promise.resolve(undefined);
+		});
+
+		render(<ChatPanel />);
+		await new Promise((r) => setTimeout(r, 100));
+
+		const state = useChatStore.getState();
+		expect(state.sessionId).toBe("sess-prev");
+		expect(state.messages).toHaveLength(2);
+		expect(state.messages[0].content).toBe("이전 메시지");
+		expect(state.messages[1].content).toBe("이전 응답");
+	});
+
+	it("renders new conversation button", () => {
+		render(<ChatPanel />);
+		const btn = screen.getByTitle(/새 대화|New Chat/);
+		expect(btn).toBeDefined();
+		expect(btn.textContent).toBe("+");
+	});
+
+	it("new conversation resets messages and creates session", async () => {
+		// Pre-populate some state
+		useChatStore.setState({
+			sessionId: "old-session",
+			messages: [
+				{
+					id: "m1",
+					role: "user",
+					content: "old",
+					timestamp: 1000,
+				},
+			],
+		});
+
+		const newSession = {
+			id: "new-session",
+			created_at: 5000,
+			title: null,
+			summary: null,
+		};
+		mockInvoke.mockImplementation((cmd: string) => {
+			if (cmd === "memory_create_session")
+				return Promise.resolve(newSession);
+			return Promise.resolve(undefined);
+		});
+
+		render(<ChatPanel />);
+		const btn = screen.getByTitle(/새 대화|New Chat/);
+		fireEvent.click(btn);
+
+		await new Promise((r) => setTimeout(r, 100));
+
+		const state = useChatStore.getState();
+		expect(state.messages).toHaveLength(0);
+		expect(state.sessionId).toBe("new-session");
 	});
 });

@@ -102,6 +102,49 @@ OpenCode가 제공하는 것:
 | **승인** | Gateway → Agent (approval_request) → Shell (모달) → 사용자 결정 → Agent → Gateway |
 | **외부 채널** | Discord msg → Gateway → Agent → LLM → Agent → Gateway → Discord reply |
 
+## 메모리 아키텍처 (2계층)
+
+Alpha가 사용자를 기억하고 성장하기 위한 2계층 메모리 시스템.
+
+### 단기기억 (Short-Term Memory)
+
+| 항목 | 내용 |
+|------|------|
+| **저장소** | Zustand (인메모리) + SQLite messages 테이블 |
+| **범위** | 현재 세션 전체 메시지 |
+| **수명** | 현재 세션 ~ 최근 7일 |
+| **구현** | Rust memory.rs + Frontend db.ts + Chat store |
+
+### 장기기억 (Long-Term Memory)
+
+| 유형 | 저장소 | 내용 |
+|------|--------|------|
+| **Episodic (에피소드)** | sessions.summary | LLM이 생성한 세션 요약 |
+| **Semantic (사실/선호)** | facts 테이블 | "사용자는 Rust 선호" 같은 추출된 사실 |
+
+### 검색 엔진 진화 (MemoryProcessor 인터페이스로 교체 가능)
+
+```
+4.4a: SQLite LIKE (키워드 매칭)
+4.4b: SQLite FTS5 BM25 (전문검색)
+4.5:  Gemini Embedding API (의미 검색)
+5+:   sLLM (Ollama, llama.cpp) 로컬 요약/임베딩
+```
+
+### DB 스키마
+
+```sql
+-- 단기기억
+CREATE TABLE sessions (id TEXT PK, created_at INT, title TEXT, summary TEXT);
+CREATE TABLE messages (id TEXT PK, session_id TEXT FK, role TEXT, content TEXT,
+                       timestamp INT, cost_json TEXT, tool_calls_json TEXT);
+
+-- 장기기억 (Phase 4.4c+)
+CREATE TABLE facts (id TEXT PK, key TEXT, value TEXT, source TEXT, updated_at INT);
+```
+
+---
+
 ## 보안 4계층 (심층 방어)
 
 | 계층 | 역할 | 설정 |
