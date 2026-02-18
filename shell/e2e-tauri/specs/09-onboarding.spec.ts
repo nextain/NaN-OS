@@ -49,8 +49,18 @@ describe("09 — Onboarding Wizard", () => {
 		await apiInput.waitForDisplayed({ timeout: 10_000 });
 	});
 
-	it("should skip from API key step and complete onboarding", async () => {
-		// Use skip to avoid needing a real API key for this test
+	it("should go back to welcome and skip onboarding", async () => {
+		// Go back to welcome step where skip is available
+		const backBtn = await $(S.onboardingBackBtn);
+		await backBtn.waitForClickable({ timeout: 10_000 });
+		await backBtn.click(); // apiKey → provider
+		await browser.pause(300);
+		await backBtn.click(); // provider → name
+		await browser.pause(300);
+		await backBtn.click(); // name → welcome
+		await browser.pause(300);
+
+		// Skip from welcome
 		const skipBtn = await $(S.onboardingSkipBtn);
 		await skipBtn.waitForClickable({ timeout: 10_000 });
 		await skipBtn.click();
@@ -73,7 +83,7 @@ describe("09 — Onboarding Wizard", () => {
 		});
 		expect(config).not.toBeNull();
 		expect(config.onboardingComplete).toBe(true);
-		expect(config.userName).toBe("E2E-User");
+		// userName is NOT saved on skip (only on full completion)
 	});
 
 	it("should restore previous config for remaining tests", async () => {

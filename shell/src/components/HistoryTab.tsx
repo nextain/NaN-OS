@@ -37,7 +37,7 @@ export function HistoryTab({
 		setIsLoading(true);
 		try {
 			const result = await getSessionsWithCount(50);
-			setSessions(result);
+			setSessions(result ?? []);
 		} catch (err) {
 			Logger.warn("HistoryTab", "Failed to load sessions", {
 				error: String(err),

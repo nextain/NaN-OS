@@ -8,13 +8,18 @@ import {
 	chatMessageToRow,
 	createSession,
 	generateSessionId,
+	getAllFacts,
+	getSessionsWithCount,
 	loadOrCreateSession,
 	rowToChatMessage,
 	saveMessage,
+	updateSessionSummary,
+	upsertFact,
 } from "../lib/db";
 import { t } from "../lib/i18n";
 import { Logger } from "../lib/logger";
-import { buildSystemPrompt } from "../lib/persona";
+import { summarizeSession, extractFacts } from "../lib/memory-processor";
+import { type MemoryContext, buildSystemPrompt } from "../lib/persona";
 import { transcribeAudio } from "../lib/stt";
 import type {
 	AgentResponseChunk,
@@ -45,6 +50,72 @@ function formatCost(cost: number): string {
 	if (cost < 0.001) return `$${cost.toFixed(6)}`;
 	if (cost < 0.01) return `$${cost.toFixed(4)}`;
 	return `$${cost.toFixed(3)}`;
+}
+
+/** Summarize a previous session and extract facts (fire-and-forget). */
+async function summarizePreviousSession(
+	sessionId: string,
+	messages: ChatMessage[],
+	apiKey: string,
+	provider: ProviderId,
+) {
+	try {
+		const rows = messages.map((m) => ({
+			id: m.id,
+			session_id: sessionId,
+			role: m.role,
+			content: m.content,
+			timestamp: m.timestamp,
+			cost_json: null,
+			tool_calls_json: null,
+		}));
+		const summary = await summarizeSession(rows, apiKey, provider);
+		if (summary) {
+			await updateSessionSummary(sessionId, summary);
+			Logger.info("ChatPanel", "Session summarized", { sessionId });
+
+			// Extract facts from summary
+			const rawFacts = await extractFacts(rows, summary, apiKey, provider);
+			for (const f of rawFacts) {
+				const now = Date.now();
+				await upsertFact({
+					id: `fact-${f.key}-${now}`,
+					key: f.key,
+					value: f.value,
+					source_session: sessionId,
+					created_at: now,
+					updated_at: now,
+				});
+			}
+		}
+	} catch (err) {
+		Logger.warn("ChatPanel", "Background summarization failed", {
+			error: String(err),
+		});
+	}
+}
+
+/** Build MemoryContext for system prompt injection. */
+async function buildMemoryContext(): Promise<MemoryContext> {
+	const ctx: MemoryContext = {};
+	try {
+		ctx.userName = loadConfig()?.userName;
+
+		const sessions = await getSessionsWithCount(5);
+		ctx.recentSummaries = (sessions ?? [])
+			.filter((s) => s.summary)
+			.map((s) => s.summary as string);
+
+		const facts = await getAllFacts();
+		if (facts && facts.length > 0) {
+			ctx.facts = facts;
+		}
+	} catch (err) {
+		Logger.warn("ChatPanel", "Failed to build memory context", {
+			error: String(err),
+		});
+	}
+	return ctx;
 }
 
 // Keep reference to prevent garbage collection during playback
@@ -207,22 +278,31 @@ export function ChatPanel() {
 			const next = useChatStore.getState().dequeueMessage();
 			if (next) {
 				setInput(next);
-				// Trigger send on next tick
-				setTimeout(() => {
-					const el = inputRef.current;
-					if (el) {
-						el.dispatchEvent(
-							new KeyboardEvent("keydown", { key: "Enter", bubbles: true }),
-						);
-					}
-				}, 50);
+				// Send on next tick after state update
+				setTimeout(() => handleSend(), 50);
 			}
 		}
 	}, [isStreaming, messageQueue.length]);
 
 	async function handleNewConversation() {
 		const store = useChatStore.getState();
+		const prevSessionId = store.sessionId;
+		const prevMessages = store.messages;
 		store.newConversation();
+
+		// Summarize previous session in background
+		if (prevSessionId && prevMessages.length >= 2) {
+			const config = loadConfig();
+			if (config?.apiKey) {
+				summarizePreviousSession(
+					prevSessionId,
+					prevMessages,
+					config.apiKey,
+					config.provider || "gemini",
+				);
+			}
+		}
+
 		try {
 			const id = generateSessionId();
 			const session = await createSession(id);
@@ -275,6 +355,7 @@ export function ChatPanel() {
 
 		const ttsEnabled = config.ttsEnabled !== false;
 		const activeProvider = config.provider || provider;
+		const memoryCtx = await buildMemoryContext();
 		try {
 			await sendChatMessage({
 				message: text,
@@ -288,7 +369,7 @@ export function ChatPanel() {
 				requestId,
 				ttsVoice: ttsEnabled ? config.ttsVoice : undefined,
 				ttsApiKey: ttsEnabled ? config.googleApiKey : undefined,
-				systemPrompt: buildSystemPrompt(config.persona),
+				systemPrompt: buildSystemPrompt(config.persona, memoryCtx),
 				enableTools: config.enableTools,
 				gatewayUrl: config.enableTools
 					? config.gatewayUrl || "ws://localhost:18789"

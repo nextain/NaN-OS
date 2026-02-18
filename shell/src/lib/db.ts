@@ -27,7 +27,8 @@ export interface Fact {
 	id: string;
 	key: string;
 	value: string;
-	source: string | null;
+	source_session: string | null;
+	created_at: number;
 	updated_at: number;
 }
 

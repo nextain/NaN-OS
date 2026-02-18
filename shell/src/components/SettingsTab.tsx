@@ -150,6 +150,7 @@ export function SettingsTab() {
 			return;
 		}
 		saveConfig({
+			...existing,
 			provider,
 			model,
 			apiKey: apiKey.trim(),

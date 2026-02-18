@@ -11,8 +11,16 @@ if (!API_KEY) {
 const GATEWAY_TOKEN = process.env.CAFE_GATEWAY_TOKEN || "cafelua-dev-token";
 
 describe("02 — Configure Settings", () => {
-	it("should fill settings and save", async () => {
-		// Wait for settings tab to appear
+	it("should switch to settings tab and configure", async () => {
+		// After onboarding skip, we need to navigate to settings tab
+		// Click settings tab (3rd tab)
+		const settingsTabBtn = await $(
+			".chat-tab:nth-child(3)",
+		);
+		await settingsTabBtn.waitForClickable({ timeout: 10_000 });
+		await settingsTabBtn.click();
+
+		// Wait for settings tab content
 		const settingsTab = await $(S.settingsTab);
 		await settingsTab.waitForDisplayed({ timeout: 30_000 });
 
