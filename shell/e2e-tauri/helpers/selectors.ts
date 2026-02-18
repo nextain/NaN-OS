@@ -31,4 +31,30 @@ export const S = {
 
 	// PermissionModal
 	permissionAlways: ".permission-btn-always",
+
+	// History tab
+	historyTab: ".chat-tab:nth-child(4)",
+	historyItem: ".history-item",
+	historyItemTitle: ".history-item-title",
+	historyDeleteBtn: ".history-delete-btn",
+	historyEmpty: ".history-tab-empty",
+	historyCurrentBadge: ".history-current-badge",
+
+	// Cost dashboard
+	costBadge: ".cost-badge-clickable",
+	costDashboard: ".cost-dashboard",
+	costTable: ".cost-table",
+
+	// Onboarding wizard
+	onboardingOverlay: ".onboarding-overlay",
+	onboardingNextBtn: ".onboarding-next-btn",
+	onboardingSkipBtn: ".onboarding-skip-btn",
+	onboardingBackBtn: ".onboarding-back-btn",
+	onboardingInput: ".onboarding-input",
+	onboardingProviderCard: ".onboarding-provider-card",
+	onboardingValidateBtn: ".onboarding-validate-btn",
+	onboardingValidationSuccess: ".onboarding-validation-success",
+
+	// Queue badge
+	queueBadge: ".queue-badge",
 } as const;

@@ -666,6 +666,97 @@ async fn memory_update_title(
 }
 
 #[tauri::command]
+async fn memory_get_sessions_with_count(
+    limit: u32,
+    state: tauri::State<'_, MemoryState>,
+) -> Result<Vec<memory::SessionWithCount>, String> {
+    memory::get_sessions_with_count(&state.db, limit)
+}
+
+#[tauri::command]
+async fn memory_update_summary(
+    session_id: String,
+    summary: String,
+    state: tauri::State<'_, MemoryState>,
+) -> Result<(), String> {
+    memory::update_session_summary(&state.db, &session_id, &summary)
+}
+
+#[tauri::command]
+async fn memory_search_fts(
+    query: String,
+    limit: u32,
+    state: tauri::State<'_, MemoryState>,
+) -> Result<Vec<memory::MessageRow>, String> {
+    memory::search_fts(&state.db, &query, limit)
+}
+
+// === Facts commands ===
+
+#[tauri::command]
+async fn memory_get_all_facts(
+    state: tauri::State<'_, MemoryState>,
+) -> Result<Vec<memory::Fact>, String> {
+    memory::get_all_facts(&state.db)
+}
+
+#[tauri::command]
+async fn memory_upsert_fact(
+    fact: memory::Fact,
+    state: tauri::State<'_, MemoryState>,
+) -> Result<(), String> {
+    memory::upsert_fact(&state.db, &fact)
+}
+
+#[tauri::command]
+async fn memory_delete_fact(
+    fact_id: String,
+    state: tauri::State<'_, MemoryState>,
+) -> Result<(), String> {
+    memory::delete_fact(&state.db, &fact_id)
+}
+
+/// Validate an API key by making a test request to the provider
+#[tauri::command]
+async fn validate_api_key(provider: String, api_key: String) -> Result<bool, String> {
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(10))
+        .build()
+        .map_err(|e| format!("HTTP client error: {}", e))?;
+
+    let result = match provider.as_str() {
+        "gemini" => {
+            let url = format!(
+                "https://generativelanguage.googleapis.com/v1beta/models?key={}",
+                api_key
+            );
+            client.get(&url).send().await
+        }
+        "xai" => {
+            client
+                .get("https://api.x.ai/v1/models")
+                .header("Authorization", format!("Bearer {}", api_key))
+                .send()
+                .await
+        }
+        "anthropic" => {
+            client
+                .get("https://api.anthropic.com/v1/models")
+                .header("x-api-key", &api_key)
+                .header("anthropic-version", "2023-06-01")
+                .send()
+                .await
+        }
+        _ => return Err(format!("Unknown provider: {}", provider)),
+    };
+
+    match result {
+        Ok(res) => Ok(res.status().is_success()),
+        Err(_) => Ok(false),
+    }
+}
+
+#[tauri::command]
 async fn preview_tts(api_key: String, voice: String, text: String) -> Result<String, String> {
     let url = format!(
         "https://texttospeech.googleapis.com/v1/text:synthesize?key={}",
@@ -758,6 +849,13 @@ pub fn run() {
             memory_search,
             memory_delete_session,
             memory_update_title,
+            memory_get_sessions_with_count,
+            memory_update_summary,
+            memory_search_fts,
+            memory_get_all_facts,
+            memory_upsert_fact,
+            memory_delete_fact,
+            validate_api_key,
         ])
         .setup(|app| {
             let app_handle = app.handle().clone();

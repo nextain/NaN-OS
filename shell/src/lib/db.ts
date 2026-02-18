@@ -82,6 +82,61 @@ export async function updateSessionTitle(
 	return invoke("memory_update_title", { sessionId, title });
 }
 
+// === Phase 4.4-ui: Sessions with count ===
+
+export interface SessionWithCount {
+	id: string;
+	created_at: number;
+	title: string | null;
+	summary: string | null;
+	message_count: number;
+}
+
+export async function getSessionsWithCount(
+	limit: number,
+): Promise<SessionWithCount[]> {
+	return invoke("memory_get_sessions_with_count", { limit });
+}
+
+// === Phase 4.4b: Summary + FTS ===
+
+export async function updateSessionSummary(
+	sessionId: string,
+	summary: string,
+): Promise<void> {
+	return invoke("memory_update_summary", { sessionId, summary });
+}
+
+export async function searchMessagesFts(
+	query: string,
+	limit: number,
+): Promise<MessageRow[]> {
+	return invoke("memory_search_fts", { query, limit });
+}
+
+// === Phase 4.4c: Facts ===
+
+export async function getAllFacts(): Promise<Fact[]> {
+	return invoke("memory_get_all_facts");
+}
+
+export async function upsertFact(fact: Fact): Promise<void> {
+	return invoke("memory_upsert_fact", { fact });
+}
+
+export async function deleteFact(factId: string): Promise<void> {
+	return invoke("memory_delete_fact", { factId });
+}
+
+// === Onboarding: API key validation ===
+
+export async function validateApiKey(
+	provider: string,
+	apiKey: string,
+): Promise<boolean> {
+	return invoke("validate_api_key", { provider, apiKey });
+}
+
 // === ChatMessage ↔ MessageRow conversion ===
 
 export function chatMessageToRow(

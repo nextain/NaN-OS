@@ -29,6 +29,8 @@ export interface AppConfig {
 	gatewayUrl?: string;
 	gatewayToken?: string;
 	allowedTools?: string[];
+	userName?: string;
+	onboardingComplete?: boolean;
 }
 
 const DEFAULT_MODELS: Record<ProviderId, string> = {
@@ -79,4 +81,13 @@ export function clearAllowedTools(): void {
 	const config = loadConfig();
 	if (!config) return;
 	saveConfig({ ...config, allowedTools: undefined });
+}
+
+export function isOnboardingComplete(): boolean {
+	const config = loadConfig();
+	return config?.onboardingComplete === true;
+}
+
+export function getUserName(): string | undefined {
+	return loadConfig()?.userName;
 }

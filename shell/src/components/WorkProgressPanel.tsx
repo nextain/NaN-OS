@@ -33,6 +33,11 @@ export function WorkProgressPanel() {
 	const stats = useProgressStore((s) => s.stats);
 	const isLoading = useProgressStore((s) => s.isLoading);
 	const [expandedId, setExpandedId] = useState<number | null>(null);
+	const [errorFilterActive, setErrorFilterActive] = useState(false);
+
+	const displayEvents = errorFilterActive
+		? events.filter((e) => e.event_type === "error")
+		: events;
 
 	function handleRefresh() {
 		const store = useProgressStore.getState();
@@ -109,15 +114,32 @@ export function WorkProgressPanel() {
 								<span className="stat-value">{toolCount}</span>
 								<span className="stat-label">{t("progress.toolCount")}</span>
 							</div>
-							<div className="work-progress-stat">
+							<button
+								type="button"
+								className={`work-progress-stat clickable${errorFilterActive ? " active-filter" : ""}`}
+								onClick={() => setErrorFilterActive((v) => !v)}
+							>
 								<span className="stat-value">{errorCount}</span>
-								<span className="stat-label">{t("progress.errorCount")}</span>
-							</div>
+								<span className="stat-label">
+									{errorFilterActive
+										? t("progress.filteredErrors")
+										: t("progress.errorCount")}
+								</span>
+							</button>
 						</div>
 					)}
 
 					<div className="work-progress-events">
-						{events.map((ev) => (
+						{errorFilterActive && (
+							<button
+								type="button"
+								className="error-filter-label"
+								onClick={() => setErrorFilterActive(false)}
+							>
+								{t("progress.showAll")}
+							</button>
+						)}
+						{displayEvents.map((ev) => (
 							<div key={ev.id} className="work-progress-event">
 								<button
 									type="button"

@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
 	type ThemeId,
 	clearAllowedTools,
@@ -7,7 +7,9 @@ import {
 	loadConfig,
 	saveConfig,
 } from "../lib/config";
+import { type Fact, deleteFact, getAllFacts } from "../lib/db";
 import { type Locale, getLocale, setLocale, t } from "../lib/i18n";
+import { Logger } from "../lib/logger";
 import { DEFAULT_PERSONA } from "../lib/persona";
 import type { ProviderId } from "../lib/types";
 
@@ -84,7 +86,18 @@ export function SettingsTab() {
 	const [error, setError] = useState("");
 	const [saved, setSaved] = useState(false);
 	const [isPreviewing, setIsPreviewing] = useState(false);
+	const [facts, setFacts] = useState<Fact[]>([]);
 	const allowedToolsCount = existing?.allowedTools?.length ?? 0;
+
+	useEffect(() => {
+		getAllFacts()
+			.then((result) => setFacts(result ?? []))
+			.catch((err) => {
+				Logger.warn("SettingsTab", "Failed to load facts", {
+					error: String(err),
+				});
+			});
+	}, []);
 
 	function handleProviderChange(id: ProviderId) {
 		setProvider(id);
@@ -407,6 +420,43 @@ export function SettingsTab() {
 					{saved ? t("settings.saved") : t("settings.save")}
 				</button>
 			</div>
+
+			<div className="settings-section-divider">
+				<span>{t("settings.memorySection")}</span>
+			</div>
+
+			{facts.length === 0 ? (
+				<div className="settings-field">
+					<span className="settings-hint">{t("settings.factsEmpty")}</span>
+				</div>
+			) : (
+				<div className="facts-list">
+					{facts.map((f) => (
+						<div key={f.id} className="fact-item">
+							<div className="fact-content">
+								<span className="fact-key">{f.key}</span>
+								<span className="fact-value">{f.value}</span>
+							</div>
+							<button
+								type="button"
+								className="fact-delete-btn"
+								onClick={async () => {
+									try {
+										await deleteFact(f.id);
+										setFacts((prev) => prev.filter((x) => x.id !== f.id));
+									} catch (err) {
+										Logger.warn("SettingsTab", "Failed to delete fact", {
+											error: String(err),
+										});
+									}
+								}}
+							>
+								{t("settings.factDelete")}
+							</button>
+						</div>
+					))}
+				</div>
+			)}
 
 			<div className="settings-danger-zone">
 				<button

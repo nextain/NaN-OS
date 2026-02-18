@@ -29,11 +29,13 @@ import { useAvatarStore } from "../stores/avatar";
 import { useChatStore } from "../stores/chat";
 import { useProgressStore } from "../stores/progress";
 import { PermissionModal } from "./PermissionModal";
+import { CostDashboard } from "./CostDashboard";
+import { HistoryTab } from "./HistoryTab";
 import { SettingsTab } from "./SettingsTab";
 import { ToolActivity } from "./ToolActivity";
 import { WorkProgressPanel } from "./WorkProgressPanel";
 
-type TabId = "chat" | "progress" | "settings";
+type TabId = "chat" | "progress" | "settings" | "history";
 
 function generateRequestId(): string {
 	return `req-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
@@ -124,6 +126,7 @@ export function ChatPanel() {
 	const [activeTab, setActiveTab] = useState<TabId>(
 		hasApiKey() ? "chat" : "settings",
 	);
+	const [showCostDashboard, setShowCostDashboard] = useState(false);
 	const messagesEndRef = useRef<HTMLDivElement>(null);
 	const inputRef = useRef<HTMLTextAreaElement>(null);
 	const recorderRef = useRef<AudioRecorder | null>(null);
@@ -137,6 +140,7 @@ export function ChatPanel() {
 	const totalSessionCost = useChatStore((s) => s.totalSessionCost);
 	const provider = useChatStore((s) => s.provider);
 	const pendingApproval = useChatStore((s) => s.pendingApproval);
+	const messageQueue = useChatStore((s) => s.messageQueue);
 
 	// Read STT toggle from config (safe: loadConfig handles parse errors)
 	const sttEnabled = loadConfig()?.sttEnabled !== false;
@@ -197,6 +201,25 @@ export function ChatPanel() {
 		return () => window.removeEventListener("keydown", onKeyDown);
 	}, []);
 
+	// Auto-send queued messages when streaming ends
+	useEffect(() => {
+		if (!isStreaming && messageQueue.length > 0) {
+			const next = useChatStore.getState().dequeueMessage();
+			if (next) {
+				setInput(next);
+				// Trigger send on next tick
+				setTimeout(() => {
+					const el = inputRef.current;
+					if (el) {
+						el.dispatchEvent(
+							new KeyboardEvent("keydown", { key: "Enter", bubbles: true }),
+						);
+					}
+				}, 50);
+			}
+		}
+	}, [isStreaming, messageQueue.length]);
+
 	async function handleNewConversation() {
 		const store = useChatStore.getState();
 		store.newConversation();
@@ -216,7 +239,14 @@ export function ChatPanel() {
 
 	async function handleSend() {
 		const text = input.trim();
-		if (!text || isStreaming) return;
+		if (!text) return;
+
+		// If streaming, queue the message instead
+		if (isStreaming) {
+			useChatStore.getState().enqueueMessage(text);
+			setInput("");
+			return;
+		}
 
 		setInput("");
 		useChatStore.getState().addMessage({ role: "user", content: text });
@@ -468,12 +498,23 @@ export function ChatPanel() {
 					>
 						{t("settings.title")}
 					</button>
+					<button
+						type="button"
+						className={`chat-tab${activeTab === "history" ? " active" : ""}`}
+						onClick={() => handleTabChange("history")}
+					>
+						{t("history.tabHistory")}
+					</button>
 				</div>
 				<div className="chat-header-right">
 					{totalSessionCost > 0 && (
-						<span className="cost-badge session-cost">
+						<button
+							type="button"
+							className="cost-badge session-cost cost-badge-clickable"
+							onClick={() => setShowCostDashboard((v) => !v)}
+						>
 							{formatCost(totalSessionCost)}
-						</span>
+						</button>
 					)}
 					<button
 						type="button"
@@ -492,6 +533,16 @@ export function ChatPanel() {
 
 			{/* Settings tab */}
 			{activeTab === "settings" && <SettingsTab />}
+
+			{/* History tab */}
+			{activeTab === "history" && (
+				<HistoryTab onLoadSession={() => setActiveTab("chat")} />
+			)}
+
+			{/* Cost dashboard (dropdown) */}
+			{showCostDashboard && activeTab === "chat" && (
+				<CostDashboard messages={messages} />
+			)}
 
 			{/* Messages (chat tab) */}
 			<div className="chat-messages" style={{ display: activeTab === "chat" ? "flex" : "none" }}>
@@ -567,9 +618,14 @@ export function ChatPanel() {
 						isRecording ? t("chat.recording") : t("chat.placeholder")
 					}
 					rows={1}
-					disabled={isStreaming || isRecording}
+					disabled={isRecording}
 					className="chat-input"
 				/>
+				{messageQueue.length > 0 && (
+					<span className="queue-badge">
+						{messageQueue.length} {t("chat.queued")}
+					</span>
+				)}
 				{isStreaming ? (
 					<button
 						type="button"

@@ -25,6 +25,7 @@ interface ChatState {
 	provider: ProviderId;
 	totalSessionCost: number;
 	pendingApproval: PendingApproval | null;
+	messageQueue: string[];
 
 	setSessionId: (id: string) => void;
 	setMessages: (messages: ChatMessage[]) => void;
@@ -47,6 +48,8 @@ interface ChatState {
 	setPendingApproval: (approval: PendingApproval) => void;
 	clearPendingApproval: () => void;
 	newConversation: () => void;
+	enqueueMessage: (text: string) => void;
+	dequeueMessage: () => string | undefined;
 }
 
 function generateId(): string {
@@ -62,6 +65,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
 	provider: "gemini",
 	totalSessionCost: 0,
 	pendingApproval: null,
+	messageQueue: [],
 
 	setSessionId: (id) => set({ sessionId: id }),
 
@@ -176,5 +180,17 @@ export const useChatStore = create<ChatState>()((set, get) => ({
 			streamingToolCalls: [],
 			totalSessionCost: 0,
 			pendingApproval: null,
+			messageQueue: [],
 		}),
+
+	enqueueMessage: (text) =>
+		set((s) => ({ messageQueue: [...s.messageQueue, text] })),
+
+	dequeueMessage: () => {
+		const { messageQueue } = get();
+		if (messageQueue.length === 0) return undefined;
+		const [first, ...rest] = messageQueue;
+		set({ messageQueue: rest });
+		return first;
+	},
 }));

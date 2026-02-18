@@ -1,3 +1,5 @@
+import type { Fact } from "./db";
+
 /** Default Alpha persona — editable by user in settings */
 export const DEFAULT_PERSONA = `You are Alpha (알파), a friendly AI companion living inside Cafelua OS.
 
@@ -19,8 +21,47 @@ Emotion tags:
 - Use [NEUTRAL] for straightforward factual answers
 - Default to [HAPPY] for greetings and positive interactions`;
 
-/** Build full system prompt from persona text */
-export function buildSystemPrompt(persona?: string): string {
+/** Memory context injected into system prompt (Phase 4.4b/c) */
+export interface MemoryContext {
+	userName?: string;
+	recentSummaries?: string[];
+	facts?: Fact[];
+}
+
+/** Build full system prompt from persona text + optional memory context */
+export function buildSystemPrompt(
+	persona?: string,
+	context?: MemoryContext,
+): string {
 	const base = persona?.trim() || DEFAULT_PERSONA;
-	return `${base}\n${EMOTION_INSTRUCTIONS}`;
+	const parts = [base];
+
+	if (context) {
+		const contextLines: string[] = [];
+
+		if (context.userName) {
+			contextLines.push(`The user's name is "${context.userName}". Address them by name occasionally.`);
+		}
+
+		if (context.recentSummaries && context.recentSummaries.length > 0) {
+			contextLines.push("Recent conversation summaries:");
+			for (const s of context.recentSummaries) {
+				contextLines.push(`- ${s}`);
+			}
+		}
+
+		if (context.facts && context.facts.length > 0) {
+			contextLines.push("Known facts about the user:");
+			for (const f of context.facts) {
+				contextLines.push(`- ${f.key}: ${f.value}`);
+			}
+		}
+
+		if (contextLines.length > 0) {
+			parts.push(`\nContext:\n${contextLines.join("\n")}`);
+		}
+	}
+
+	parts.push(EMOTION_INSTRUCTIONS);
+	return parts.join("\n");
 }

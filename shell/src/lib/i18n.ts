@@ -126,6 +126,100 @@ const translations = {
 
 	// Settings tab
 	"settings.saved": { ko: "저장됨!", en: "Saved!" },
+
+	// Cost Dashboard (4.4-ui)
+	"cost.title": { ko: "비용 상세", en: "Cost Details" },
+	"cost.provider": { ko: "프로바이더", en: "Provider" },
+	"cost.model": { ko: "모델", en: "Model" },
+	"cost.messages": { ko: "메시지", en: "Messages" },
+	"cost.inputTokens": { ko: "입력 토큰", en: "Input Tokens" },
+	"cost.outputTokens": { ko: "출력 토큰", en: "Output Tokens" },
+	"cost.total": { ko: "합계", en: "Total" },
+	"cost.empty": { ko: "비용 데이터가 없습니다.", en: "No cost data." },
+
+	// History Tab (4.4-ui)
+	"history.title": { ko: "대화 기록", en: "History" },
+	"history.empty": {
+		ko: "대화 기록이 없습니다.",
+		en: "No conversation history.",
+	},
+	"history.untitled": { ko: "제목 없음", en: "Untitled" },
+	"history.messages": { ko: "메시지", en: "messages" },
+	"history.delete": { ko: "삭제", en: "Delete" },
+	"history.deleteConfirm": {
+		ko: "이 대화를 삭제하시겠습니까?",
+		en: "Delete this conversation?",
+	},
+	"history.current": { ko: "현재", en: "Current" },
+	"history.tabHistory": { ko: "기록", en: "History" },
+
+	// Progress filter (4.4-ui)
+	"progress.showAll": { ko: "전체 보기", en: "Show All" },
+	"progress.filteredErrors": {
+		ko: "에러만 표시 중",
+		en: "Showing errors only",
+	},
+
+	// Message queue (4.4-ui)
+	"chat.queued": { ko: "대기 중", en: "queued" },
+
+	// Onboarding (4.4-onboard)
+	"onboard.welcome.title": {
+		ko: "Cafelua OS에 오신 걸 환영해요!",
+		en: "Welcome to Cafelua OS!",
+	},
+	"onboard.welcome.subtitle": {
+		ko: "저는 Alpha, 당신의 AI 친구예요.",
+		en: "I'm Alpha, your AI companion.",
+	},
+	"onboard.welcome.description": {
+		ko: "함께 시작하기 전에 몇 가지를 알려주세요.",
+		en: "Let me get to know you before we start.",
+	},
+	"onboard.name.title": {
+		ko: "뭐라고 불러줄까요?",
+		en: "What should I call you?",
+	},
+	"onboard.name.placeholder": { ko: "이름을 입력하세요", en: "Enter your name" },
+	"onboard.provider.title": {
+		ko: "어떤 AI 프로바이더를 사용할까요?",
+		en: "Which AI provider would you like to use?",
+	},
+	"onboard.apiKey.title": {
+		ko: "API 키를 입력해주세요",
+		en: "Enter your API key",
+	},
+	"onboard.apiKey.validate": { ko: "연결 확인", en: "Validate" },
+	"onboard.apiKey.validating": { ko: "확인 중...", en: "Validating..." },
+	"onboard.apiKey.success": { ko: "연결 성공!", en: "Connected!" },
+	"onboard.apiKey.error": {
+		ko: "연결 실패. 키를 확인해주세요.",
+		en: "Connection failed. Check your key.",
+	},
+	"onboard.complete.greeting": {
+		ko: "반가워요, {name}!",
+		en: "Nice to meet you, {name}!",
+	},
+	"onboard.complete.start": { ko: "시작하기", en: "Get Started" },
+	"onboard.next": { ko: "다음", en: "Next" },
+	"onboard.back": { ko: "이전", en: "Back" },
+	"onboard.skip": { ko: "건너뛰기", en: "Skip" },
+
+	// Session summarization (4.4b)
+	"chat.summarizing": { ko: "요약 중...", en: "Summarizing..." },
+	"chat.summarized": { ko: "요약 완료", en: "Summarized" },
+
+	// Facts (4.4c)
+	"settings.memorySection": { ko: "기억 (Facts)", en: "Memory (Facts)" },
+	"settings.factsEmpty": {
+		ko: "저장된 기억이 없습니다.",
+		en: "No stored memories.",
+	},
+	"settings.factDelete": { ko: "삭제", en: "Delete" },
+	"chat.extractingFacts": {
+		ko: "기억 추출 중...",
+		en: "Extracting memories...",
+	},
 } as const;
 
 type TranslationKey = keyof typeof translations;
