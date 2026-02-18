@@ -31,6 +31,7 @@ export interface AppConfig {
 	gatewayToken?: string;
 	allowedTools?: string[];
 	userName?: string;
+	agentName?: string;
 	onboardingComplete?: boolean;
 }
 

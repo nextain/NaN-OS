@@ -24,6 +24,7 @@ Emotion tags:
 /** Memory context injected into system prompt (Phase 4.4b/c) */
 export interface MemoryContext {
 	userName?: string;
+	agentName?: string;
 	recentSummaries?: string[];
 	facts?: Fact[];
 }
@@ -38,6 +39,10 @@ export function buildSystemPrompt(
 
 	if (context) {
 		const contextLines: string[] = [];
+
+		if (context.agentName) {
+			contextLines.push(`Your name is "${context.agentName}" (not Alpha). Use this name when referring to yourself.`);
+		}
 
 		if (context.userName) {
 			contextLines.push(`The user's name is "${context.userName}". Address them by name occasionally.`);

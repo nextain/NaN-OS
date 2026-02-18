@@ -163,27 +163,35 @@ const translations = {
 	// Message queue (4.4-ui)
 	"chat.queued": { ko: "대기 중", en: "queued" },
 
-	// Onboarding (4.4-onboard)
-	"onboard.welcome.title": {
-		ko: "Cafelua OS에 오신 걸 환영해요!",
-		en: "Welcome to Cafelua OS!",
+	// Onboarding (conversational)
+	"onboard.agentName.title": {
+		ko: "안녕! 저는 당신의 AI 캐릭터예요.",
+		en: "Hi! I'm your AI character.",
 	},
-	"onboard.welcome.subtitle": {
-		ko: "저는 Alpha, 당신의 AI 친구예요.",
-		en: "I'm Alpha, your AI companion.",
+	"onboard.agentName.description": {
+		ko: "제 이름을 지어주세요!",
+		en: "Give me a name!",
 	},
-	"onboard.welcome.description": {
-		ko: "함께 시작하기 전에 몇 가지를 알려주세요.",
-		en: "Let me get to know you before we start.",
+	"onboard.userName.title": {
+		ko: "저는 {agent}! 당신은 뭐라고 불러드릴까요?",
+		en: "I'm {agent}! What should I call you?",
 	},
-	"onboard.name.title": {
-		ko: "뭐라고 불러줄까요?",
-		en: "What should I call you?",
+	"onboard.userName.description": {
+		ko: "비워두셔도 괜찮아요.",
+		en: "You can leave this empty.",
 	},
 	"onboard.name.placeholder": { ko: "이름을 입력하세요", en: "Enter your name" },
+	"onboard.character.title": {
+		ko: "{agent}의 모습을 골라주세요!",
+		en: "Choose {agent}'s look!",
+	},
+	"onboard.personality.title": {
+		ko: "{agent}의 성격을 골라주세요!",
+		en: "Choose {agent}'s personality!",
+	},
 	"onboard.provider.title": {
-		ko: "어떤 AI 프로바이더를 사용할까요?",
-		en: "Which AI provider would you like to use?",
+		ko: "어떤 AI 두뇌를 사용할까요?",
+		en: "Which AI brain should I use?",
 	},
 	"onboard.apiKey.title": {
 		ko: "API 키를 입력해주세요",
@@ -199,6 +207,10 @@ const translations = {
 	"onboard.complete.greeting": {
 		ko: "반가워요, {name}!",
 		en: "Nice to meet you, {name}!",
+	},
+	"onboard.complete.ready": {
+		ko: "{agent} 준비 완료! 이제 시작해볼까요?",
+		en: "{agent} is ready! Shall we begin?",
 	},
 	"onboard.complete.start": { ko: "시작하기", en: "Get Started" },
 	"onboard.next": { ko: "다음", en: "Next" },

@@ -52,6 +52,8 @@ export const S = {
 	onboardingBackBtn: ".onboarding-back-btn",
 	onboardingInput: ".onboarding-input",
 	onboardingProviderCard: ".onboarding-provider-card",
+	onboardingVrmCard: ".onboarding-vrm-card",
+	onboardingPersonalityCard: ".onboarding-personality-card",
 	onboardingValidateBtn: ".onboarding-validate-btn",
 	onboardingValidationSuccess: ".onboarding-validation-success",
 

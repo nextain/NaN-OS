@@ -1730,6 +1730,90 @@ body,
 	color: var(--cream-dim);
 }
 
+/* Onboarding VRM cards */
+.onboarding-vrm-cards {
+	display: flex;
+	gap: 8px;
+	flex-wrap: wrap;
+	justify-content: center;
+	width: 100%;
+}
+
+.onboarding-vrm-card {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 6px;
+	padding: 12px 8px;
+	background: var(--espresso-dark);
+	border: 2px solid var(--espresso-light);
+	border-radius: 8px;
+	cursor: pointer;
+	color: var(--cream);
+	font: inherit;
+	width: 80px;
+	transition: border-color 0.15s;
+}
+
+.onboarding-vrm-card:hover {
+	border-color: var(--cream-dim);
+}
+
+.onboarding-vrm-card.selected {
+	border-color: var(--wood);
+}
+
+.onboarding-vrm-icon {
+	font-size: 28px;
+	line-height: 1;
+}
+
+.onboarding-vrm-label {
+	font-size: 11px;
+	text-align: center;
+}
+
+/* Onboarding personality cards */
+.onboarding-personality-cards {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	width: 100%;
+}
+
+.onboarding-personality-card {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	padding: 12px;
+	background: var(--espresso-dark);
+	border: 2px solid var(--espresso-light);
+	border-radius: 8px;
+	cursor: pointer;
+	text-align: left;
+	transition: border-color 0.15s;
+	color: var(--cream);
+	font: inherit;
+}
+
+.onboarding-personality-card:hover {
+	border-color: var(--cream-dim);
+}
+
+.onboarding-personality-card.selected {
+	border-color: var(--wood);
+}
+
+.personality-card-label {
+	font-size: 14px;
+	font-weight: 600;
+}
+
+.personality-card-desc {
+	font-size: 11px;
+	color: var(--cream-dim);
+}
+
 .onboarding-validate-btn {
 	padding: 8px 16px;
 	background: var(--espresso-light);

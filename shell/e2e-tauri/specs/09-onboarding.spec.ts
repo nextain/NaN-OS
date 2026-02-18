@@ -13,20 +13,49 @@ describe("09 — Onboarding Wizard", () => {
 		await overlay.waitForDisplayed({ timeout: 30_000 });
 	});
 
-	it("should progress through welcome → name step", async () => {
-		// Welcome step: click Next
+	it("should show agent name step and proceed to user name", async () => {
+		// Agent name step: input field should be visible
+		const agentInput = await $(S.onboardingInput);
+		await agentInput.waitForDisplayed({ timeout: 10_000 });
+		await agentInput.setValue("E2E-Agent");
+
 		const nextBtn = await $(S.onboardingNextBtn);
 		await nextBtn.waitForClickable({ timeout: 10_000 });
 		await nextBtn.click();
 
-		// Name step: input field should appear
-		const nameInput = await $(S.onboardingInput);
-		await nameInput.waitForDisplayed({ timeout: 10_000 });
+		// User name step: input should appear
+		const userInput = await $(S.onboardingInput);
+		await userInput.waitForDisplayed({ timeout: 10_000 });
 	});
 
-	it("should enter name and proceed to provider step", async () => {
-		const nameInput = await $(S.onboardingInput);
-		await nameInput.setValue("E2E-User");
+	it("should enter user name and proceed to character step", async () => {
+		const userInput = await $(S.onboardingInput);
+		await userInput.setValue("E2E-User");
+
+		const nextBtn = await $(S.onboardingNextBtn);
+		await nextBtn.click();
+
+		// VRM cards should appear
+		const vrmCard = await $(S.onboardingVrmCard);
+		await vrmCard.waitForDisplayed({ timeout: 10_000 });
+	});
+
+	it("should select character and proceed to personality step", async () => {
+		// Click first VRM card
+		const vrmCard = await $(S.onboardingVrmCard);
+		await vrmCard.click();
+
+		const nextBtn = await $(S.onboardingNextBtn);
+		await nextBtn.click();
+
+		// Personality cards should appear
+		const personalityCard = await $(S.onboardingPersonalityCard);
+		await personalityCard.waitForDisplayed({ timeout: 10_000 });
+	});
+
+	it("should select personality and proceed to provider step", async () => {
+		const personalityCard = await $(S.onboardingPersonalityCard);
+		await personalityCard.click();
 
 		const nextBtn = await $(S.onboardingNextBtn);
 		await nextBtn.click();
@@ -37,7 +66,6 @@ describe("09 — Onboarding Wizard", () => {
 	});
 
 	it("should select provider and proceed to API key step", async () => {
-		// Click first provider card (Gemini)
 		const providerCard = await $(S.onboardingProviderCard);
 		await providerCard.click();
 
@@ -49,18 +77,22 @@ describe("09 — Onboarding Wizard", () => {
 		await apiInput.waitForDisplayed({ timeout: 10_000 });
 	});
 
-	it("should go back to welcome and skip onboarding", async () => {
-		// Go back to welcome step where skip is available
+	it("should go back to agent name and skip onboarding", async () => {
+		// Go back through all steps to agentName where skip is available
 		const backBtn = await $(S.onboardingBackBtn);
 		await backBtn.waitForClickable({ timeout: 10_000 });
 		await backBtn.click(); // apiKey → provider
 		await browser.pause(300);
-		await backBtn.click(); // provider → name
+		await backBtn.click(); // provider → personality
 		await browser.pause(300);
-		await backBtn.click(); // name → welcome
+		await backBtn.click(); // personality → character
+		await browser.pause(300);
+		await backBtn.click(); // character → userName
+		await browser.pause(300);
+		await backBtn.click(); // userName → agentName
 		await browser.pause(300);
 
-		// Skip from welcome
+		// Skip from agentName
 		const skipBtn = await $(S.onboardingSkipBtn);
 		await skipBtn.waitForClickable({ timeout: 10_000 });
 		await skipBtn.click();
@@ -83,7 +115,6 @@ describe("09 — Onboarding Wizard", () => {
 		});
 		expect(config).not.toBeNull();
 		expect(config.onboardingComplete).toBe(true);
-		// userName is NOT saved on skip (only on full completion)
 	});
 
 	it("should restore previous config for remaining tests", async () => {

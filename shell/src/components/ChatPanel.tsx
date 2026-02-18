@@ -99,7 +99,9 @@ async function summarizePreviousSession(
 async function buildMemoryContext(): Promise<MemoryContext> {
 	const ctx: MemoryContext = {};
 	try {
-		ctx.userName = loadConfig()?.userName;
+		const cfg = loadConfig();
+		ctx.userName = cfg?.userName;
+		ctx.agentName = cfg?.agentName;
 
 		const sessions = await getSessionsWithCount(5);
 		ctx.recentSummaries = (sessions ?? [])

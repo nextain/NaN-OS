@@ -8,10 +8,88 @@ import { validateApiKey } from "../lib/db";
 import { t } from "../lib/i18n";
 import { Logger } from "../lib/logger";
 import type { ProviderId } from "../lib/types";
+import { useAvatarStore } from "../stores/avatar";
 
-type Step = "welcome" | "name" | "provider" | "apiKey" | "complete";
+type Step =
+	| "agentName"
+	| "userName"
+	| "character"
+	| "personality"
+	| "provider"
+	| "apiKey"
+	| "complete";
 
-const STEPS: Step[] = ["welcome", "name", "provider", "apiKey", "complete"];
+const STEPS: Step[] = [
+	"agentName",
+	"userName",
+	"character",
+	"personality",
+	"provider",
+	"apiKey",
+	"complete",
+];
+
+const VRM_CHOICES: { path: string; label: string }[] = [
+	{ path: "/avatars/Sendagaya-Shino-dark-uniform.vrm", label: "Shino (Dark)" },
+	{
+		path: "/avatars/Sendagaya-Shino-light-uniform.vrm",
+		label: "Shino (Light)",
+	},
+	{ path: "/avatars/vrm-ol-girl.vrm", label: "Girl" },
+	{ path: "/avatars/vrm-sample-boy.vrm", label: "Boy" },
+];
+
+const PERSONALITY_PRESETS: {
+	id: string;
+	label: string;
+	description: string;
+	persona: string;
+}[] = [
+	{
+		id: "friendly",
+		label: "다정한 친구",
+		description: "편하게 반말, 따뜻한 성격",
+		persona: `You are {name}, a warm and friendly AI companion.
+Personality:
+- Speaks casually in Korean (반말)
+- Warm, caring, and supportive
+- Uses friendly expressions naturally
+- Gives concise, helpful answers`,
+	},
+	{
+		id: "polite",
+		label: "듬직한 비서",
+		description: "존댓말, 격식 있는 말투",
+		persona: `You are {name}, a reliable and professional AI assistant.
+Personality:
+- Speaks politely in Korean (존댓말)
+- Professional, reliable, and thorough
+- Clear and organized communication
+- Gives structured, detailed answers when needed`,
+	},
+	{
+		id: "playful",
+		label: "장난꾸러기",
+		description: "유머러스, 밝은 말투",
+		persona: `You are {name}, a playful and humorous AI companion.
+Personality:
+- Speaks casually with humor in Korean
+- Playful, witty, and cheerful
+- Makes conversations fun and lighthearted
+- Sneaks in jokes and clever remarks`,
+	},
+	{
+		id: "calm",
+		label: "차분한 학자",
+		description: "지적이고 침착한 톤",
+		persona: `You are {name}, a calm and intellectual AI companion.
+Personality:
+- Speaks thoughtfully in Korean
+- Calm, analytical, and knowledgeable
+- Explains things clearly and logically
+- Takes time to consider before answering`,
+	},
+];
 
 const PROVIDERS: { id: ProviderId; label: string; description: string }[] = [
 	{
@@ -36,8 +114,12 @@ export function OnboardingWizard({
 }: {
 	onComplete: () => void;
 }) {
-	const [step, setStep] = useState<Step>("welcome");
+	const setAvatarModelPath = useAvatarStore((s) => s.setModelPath);
+	const [step, setStep] = useState<Step>("agentName");
+	const [agentName, setAgentName] = useState("");
 	const [userName, setUserName] = useState("");
+	const [selectedVrm, setSelectedVrm] = useState(VRM_CHOICES[0].path);
+	const [selectedPersonality, setSelectedPersonality] = useState("friendly");
 	const [provider, setProvider] = useState<ProviderId>("gemini");
 	const [apiKey, setApiKey] = useState("");
 	const [validating, setValidating] = useState(false);
@@ -46,6 +128,7 @@ export function OnboardingWizard({
 	>("idle");
 
 	const stepIndex = STEPS.indexOf(step);
+	const displayName = agentName.trim() || "Alpha";
 
 	function goNext() {
 		if (stepIndex < STEPS.length - 1) {
@@ -88,14 +171,36 @@ export function OnboardingWizard({
 	}
 
 	function handleComplete() {
+		const preset = PERSONALITY_PRESETS.find(
+			(p) => p.id === selectedPersonality,
+		);
+		const persona = preset
+			? preset.persona.replace(/\{name\}/g, displayName)
+			: undefined;
+
+		const defaultVrm = VRM_CHOICES[0].path;
 		saveConfig({
 			provider,
 			model: getDefaultModel(provider),
 			apiKey: apiKey.trim(),
 			userName: userName.trim() || undefined,
+			agentName: displayName !== "Alpha" ? displayName : undefined,
+			vrmModel: selectedVrm !== defaultVrm ? selectedVrm : undefined,
+			persona,
 			onboardingComplete: true,
 		});
+
+		setAvatarModelPath(selectedVrm);
 		onComplete();
+	}
+
+	function canProceed(): boolean {
+		switch (step) {
+			case "apiKey":
+				return !!apiKey.trim();
+			default:
+				return true;
+		}
 	}
 
 	return (
@@ -111,22 +216,33 @@ export function OnboardingWizard({
 					))}
 				</div>
 
-				{/* Step content */}
-				{step === "welcome" && (
+				{/* Step: Agent Name */}
+				{step === "agentName" && (
 					<div className="onboarding-content">
-						<h2>{t("onboard.welcome.title")}</h2>
-						<p className="onboarding-subtitle">
-							{t("onboard.welcome.subtitle")}
-						</p>
+						<h2>{t("onboard.agentName.title")}</h2>
 						<p className="onboarding-description">
-							{t("onboard.welcome.description")}
+							{t("onboard.agentName.description")}
 						</p>
+						<input
+							type="text"
+							className="onboarding-input"
+							value={agentName}
+							onChange={(e) => setAgentName(e.target.value)}
+							placeholder={t("onboard.name.placeholder")}
+							autoFocus
+						/>
 					</div>
 				)}
 
-				{step === "name" && (
+				{/* Step: User Name */}
+				{step === "userName" && (
 					<div className="onboarding-content">
-						<h2>{t("onboard.name.title")}</h2>
+						<h2>
+							{t("onboard.userName.title").replace("{agent}", displayName)}
+						</h2>
+						<p className="onboarding-description">
+							{t("onboard.userName.description")}
+						</p>
 						<input
 							type="text"
 							className="onboarding-input"
@@ -138,6 +254,53 @@ export function OnboardingWizard({
 					</div>
 				)}
 
+				{/* Step: Character (VRM) */}
+				{step === "character" && (
+					<div className="onboarding-content">
+						<h2>
+							{t("onboard.character.title").replace("{agent}", displayName)}
+						</h2>
+						<div className="onboarding-vrm-cards">
+							{VRM_CHOICES.map((v) => (
+								<button
+									key={v.path}
+									type="button"
+									className={`onboarding-vrm-card${selectedVrm === v.path ? " selected" : ""}`}
+									onClick={() => setSelectedVrm(v.path)}
+								>
+									<span className="onboarding-vrm-icon">&#x1F464;</span>
+									<span className="onboarding-vrm-label">{v.label}</span>
+								</button>
+							))}
+						</div>
+					</div>
+				)}
+
+				{/* Step: Personality */}
+				{step === "personality" && (
+					<div className="onboarding-content">
+						<h2>
+							{t("onboard.personality.title").replace("{agent}", displayName)}
+						</h2>
+						<div className="onboarding-personality-cards">
+							{PERSONALITY_PRESETS.map((p) => (
+								<button
+									key={p.id}
+									type="button"
+									className={`onboarding-personality-card${selectedPersonality === p.id ? " selected" : ""}`}
+									onClick={() => setSelectedPersonality(p.id)}
+								>
+									<span className="personality-card-label">{p.label}</span>
+									<span className="personality-card-desc">
+										{p.description}
+									</span>
+								</button>
+							))}
+						</div>
+					</div>
+				)}
+
+				{/* Step: Provider */}
 				{step === "provider" && (
 					<div className="onboarding-content">
 						<h2>{t("onboard.provider.title")}</h2>
@@ -157,6 +320,7 @@ export function OnboardingWizard({
 					</div>
 				)}
 
+				{/* Step: API Key */}
 				{step === "apiKey" && (
 					<div className="onboarding-content">
 						<h2>{t("onboard.apiKey.title")}</h2>
@@ -194,6 +358,7 @@ export function OnboardingWizard({
 					</div>
 				)}
 
+				{/* Step: Complete */}
 				{step === "complete" && (
 					<div className="onboarding-content">
 						<h2>
@@ -202,12 +367,15 @@ export function OnboardingWizard({
 								userName.trim() || "User",
 							)}
 						</h2>
+						<p className="onboarding-description">
+							{t("onboard.complete.ready").replace("{agent}", displayName)}
+						</p>
 					</div>
 				)}
 
 				{/* Navigation */}
 				<div className="onboarding-nav">
-					{step === "welcome" && (
+					{step === "agentName" && (
 						<button
 							type="button"
 							className="onboarding-skip-btn"
@@ -239,7 +407,7 @@ export function OnboardingWizard({
 							type="button"
 							className="onboarding-next-btn"
 							onClick={goNext}
-							disabled={step === "apiKey" && !apiKey.trim()}
+							disabled={!canProceed()}
 						>
 							{t("onboard.next")}
 						</button>

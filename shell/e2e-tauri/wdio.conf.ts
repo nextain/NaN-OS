@@ -1,5 +1,5 @@
 import type { ChildProcess } from "node:child_process";
-import { spawn } from "node:child_process";
+import { execSync, spawn } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { connect } from "node:net";
 import { homedir } from "node:os";
@@ -119,6 +119,15 @@ export const config = {
 
 	afterSession() {
 		tauriDriver?.kill();
+
+		// Kill orphaned openclaw-node / gateway processes spawned by Tauri app.
+		// When the test app window doesn't close cleanly, WindowEvent::Destroyed
+		// may not fire, leaving Node Host processes as zombies.
+		try {
+			execSync("pkill -f openclaw-node 2>/dev/null || true", {
+				stdio: "ignore",
+			});
+		} catch { /* ignore — no processes to kill */ }
 	},
 
 	async onComplete() {
