@@ -10,9 +10,9 @@ BINARY_NAME="cafelua-shell"
 
 echo "[cafelua] Fetching latest Cafelua Shell release..."
 
-# Get the latest release AppImage download URL
+# Get the latest release AppImage download URL (use jq for portability)
 DOWNLOAD_URL=$(curl -sL "https://api.github.com/repos/${REPO}/releases/latest" \
-  | grep -oP '"browser_download_url":\s*"\K[^"]*\.AppImage(?=")' \
+  | jq -r '.assets[] | select(.name | endswith(".AppImage")) | .browser_download_url' \
   | head -1)
 
 if [[ -z "${DOWNLOAD_URL}" ]]; then

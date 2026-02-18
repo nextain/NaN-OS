@@ -17,6 +17,8 @@ jobs:
   build-linux:
     name: Build Linux (x86_64)
     runs-on: ubuntu-22.04
+    permissions:
+      contents: read
 
     steps:
       - name: Checkout
@@ -32,15 +34,17 @@ jobs:
             librsvg2-dev \
             patchelf
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
         with:
           version: 10
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'pnpm'
+          cache-dependency-path: shell/pnpm-lock.yaml
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
@@ -52,7 +56,7 @@ jobs:
 
       - name: Install frontend dependencies
         working-directory: shell
-        run: pnpm install
+        run: pnpm install --frozen-lockfile
 
       - name: Build Tauri app
         working-directory: shell
@@ -75,7 +79,7 @@ jobs:
             shell/src-tauri/target/release/bundle/appimage/*.AppImage
             shell/src-tauri/target/release/bundle/deb/*.deb
             shell/src-tauri/target/release/bundle/rpm/*.rpm
-          if-no-files-found: warn
+          if-no-files-found: error
 
   release:
     name: Create GitHub Release
@@ -95,13 +99,15 @@ jobs:
 
       - name: Determine version
         id: version
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
         run: |
-          if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
             echo "tag=${GITHUB_REF#refs/tags/}" >> "$GITHUB_OUTPUT"
-          elif [[ -n "${{ inputs.version }}" ]]; then
-            echo "tag=${{ inputs.version }}" >> "$GITHUB_OUTPUT"
+          elif [[ -n "${INPUT_VERSION}" ]]; then
+            echo "tag=${INPUT_VERSION}" >> "$GITHUB_OUTPUT"
           else
-            echo "tag=v0.1.0-dev.$(date +%Y%m%d)" >> "$GITHUB_OUTPUT"
+            echo "tag=v0.1.0-dev.$(date +%Y%m%d)-${GITHUB_RUN_NUMBER}" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Create Release

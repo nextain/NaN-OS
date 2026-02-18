@@ -10,7 +10,7 @@ modules:
       - npm
       # Tauri 2 runtime dependencies
       - webkit2gtk4.1
-      - openssl
+      - openssl-libs
       - libappindicator-gtk3
       - librsvg2
       - libxdo
@@ -22,6 +22,7 @@ modules:
       - fcitx5-qt
       - google-noto-sans-cjk-kr-fonts
       # Utilities
+      - jq
       - sqlite
       - podman
 
