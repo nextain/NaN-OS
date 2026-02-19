@@ -62,7 +62,9 @@ export function createApprovalsSkill(): SkillDefinition {
 				}
 
 				case "set_rules": {
-					const allowedTools = args.allowedTools as string[] | undefined;
+					const allowedTools = args.allowedTools as
+						| string[]
+						| undefined;
 					const blockedPatterns = args.blockedPatterns as
 						| string[]
 						| undefined;
@@ -75,7 +77,7 @@ export function createApprovalsSkill(): SkillDefinition {
 
 				case "resolve": {
 					const requestId = args.requestId as string;
-					const decision = args.decision as "approve" | "reject";
+					const decision = args.decision as string;
 					if (!requestId) {
 						return {
 							success: false,
@@ -83,11 +85,11 @@ export function createApprovalsSkill(): SkillDefinition {
 							error: "requestId is required for resolve action",
 						};
 					}
-					if (!decision) {
+					if (decision !== "approve" && decision !== "reject") {
 						return {
 							success: false,
 							output: "",
-							error: "decision is required for resolve action",
+							error: "decision must be 'approve' or 'reject'",
 						};
 					}
 					const result = await resolveApproval(

@@ -1184,7 +1184,7 @@ export function SettingsTab() {
 				</>
 			)}
 
-			<DevicePairingSection />
+			{enableTools && <DevicePairingSection />}
 
 			<div className="settings-section-divider">
 				<span>{t("settings.memorySection")}</span>

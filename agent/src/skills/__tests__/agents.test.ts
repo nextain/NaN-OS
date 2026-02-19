@@ -233,6 +233,15 @@ describe("skill_agents", () => {
 		expect(result.error).toContain("agentId is required");
 	});
 
+	it("requires path for files_set", async () => {
+		const result = await skill.execute(
+			{ action: "files_set", agentId: "alpha", content: "y" },
+			{ gateway: client },
+		);
+		expect(result.success).toBe(false);
+		expect(result.error).toContain("path is required");
+	});
+
 	it("requires content for files_set", async () => {
 		const result = await skill.execute(
 			{ action: "files_set", agentId: "alpha", path: "x.md" },

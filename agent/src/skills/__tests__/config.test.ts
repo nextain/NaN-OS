@@ -97,6 +97,15 @@ describe("skill_config", () => {
 		expect(parsed.updated).toBe(true);
 	});
 
+	it("requires patch for set action", async () => {
+		const result = await skill.execute(
+			{ action: "set" },
+			{ gateway: client },
+		);
+		expect(result.success).toBe(false);
+		expect(result.error).toContain("patch is required");
+	});
+
 	it("gets schema", async () => {
 		const result = await skill.execute(
 			{ action: "schema" },

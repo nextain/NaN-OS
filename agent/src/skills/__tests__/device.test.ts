@@ -261,6 +261,107 @@ describe("skill_device", () => {
 		expect(parsed.revoked).toBe(true);
 	});
 
+	// --- Validation: missing required params ---
+
+	it("requires nodeId for node_rename", async () => {
+		const result = await skill.execute(
+			{ action: "node_rename", name: "x" },
+			{ gateway: client },
+		);
+		expect(result.success).toBe(false);
+		expect(result.error).toContain("nodeId is required");
+	});
+
+	it("requires name for node_rename", async () => {
+		const result = await skill.execute(
+			{ action: "node_rename", nodeId: "n1" },
+			{ gateway: client },
+		);
+		expect(result.success).toBe(false);
+		expect(result.error).toContain("name is required");
+	});
+
+	it("requires nodeId for pair_request", async () => {
+		const result = await skill.execute(
+			{ action: "pair_request" },
+			{ gateway: client },
+		);
+		expect(result.success).toBe(false);
+		expect(result.error).toContain("nodeId is required");
+	});
+
+	it("requires requestId for pair_approve", async () => {
+		const result = await skill.execute(
+			{ action: "pair_approve" },
+			{ gateway: client },
+		);
+		expect(result.success).toBe(false);
+		expect(result.error).toContain("requestId is required");
+	});
+
+	it("requires requestId for pair_reject", async () => {
+		const result = await skill.execute(
+			{ action: "pair_reject" },
+			{ gateway: client },
+		);
+		expect(result.success).toBe(false);
+		expect(result.error).toContain("requestId is required");
+	});
+
+	it("requires requestId for pair_verify", async () => {
+		const result = await skill.execute(
+			{ action: "pair_verify", code: "123" },
+			{ gateway: client },
+		);
+		expect(result.success).toBe(false);
+		expect(result.error).toContain("requestId is required");
+	});
+
+	it("requires code for pair_verify", async () => {
+		const result = await skill.execute(
+			{ action: "pair_verify", requestId: "req-1" },
+			{ gateway: client },
+		);
+		expect(result.success).toBe(false);
+		expect(result.error).toContain("code is required");
+	});
+
+	it("requires deviceId for device_approve", async () => {
+		const result = await skill.execute(
+			{ action: "device_approve" },
+			{ gateway: client },
+		);
+		expect(result.success).toBe(false);
+		expect(result.error).toContain("deviceId is required");
+	});
+
+	it("requires deviceId for device_reject", async () => {
+		const result = await skill.execute(
+			{ action: "device_reject" },
+			{ gateway: client },
+		);
+		expect(result.success).toBe(false);
+		expect(result.error).toContain("deviceId is required");
+	});
+
+	it("requires deviceId for token_rotate", async () => {
+		const result = await skill.execute(
+			{ action: "token_rotate" },
+			{ gateway: client },
+		);
+		expect(result.success).toBe(false);
+		expect(result.error).toContain("deviceId is required");
+	});
+
+	it("requires deviceId for token_revoke", async () => {
+		const result = await skill.execute(
+			{ action: "token_revoke" },
+			{ gateway: client },
+		);
+		expect(result.success).toBe(false);
+		expect(result.error).toContain("deviceId is required");
+	});
+
 	it("returns error without gateway", async () => {
 		const result = await skill.execute({ action: "node_list" }, {});
 		expect(result.success).toBe(false);

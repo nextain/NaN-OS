@@ -113,7 +113,16 @@ describe("skill_approvals", () => {
 			{ gateway: client },
 		);
 		expect(result.success).toBe(false);
-		expect(result.error).toContain("decision is required");
+		expect(result.error).toContain("decision must be");
+	});
+
+	it("rejects invalid decision value", async () => {
+		const result = await skill.execute(
+			{ action: "resolve", requestId: "req-42", decision: "maybe" },
+			{ gateway: client },
+		);
+		expect(result.success).toBe(false);
+		expect(result.error).toContain("decision must be");
 	});
 
 	it("returns error without gateway", async () => {

@@ -50,7 +50,16 @@ export function createConfigSkill(): SkillDefinition {
 				}
 
 				case "set": {
-					const patch = (args.patch as Record<string, unknown>) ?? {};
+					const patch = args.patch as
+						| Record<string, unknown>
+						| undefined;
+					if (!patch || Object.keys(patch).length === 0) {
+						return {
+							success: false,
+							output: "",
+							error: "patch is required for set action",
+						};
+					}
 					const result = await setConfig(gateway, patch);
 					return { success: true, output: JSON.stringify(result) };
 				}
@@ -66,7 +75,8 @@ export function createConfigSkill(): SkillDefinition {
 				}
 
 				case "patch": {
-					const patch = (args.patch as Record<string, unknown>) ?? {};
+					const patch =
+						(args.patch as Record<string, unknown>) ?? {};
 					const result = await patchConfig(gateway, patch);
 					return { success: true, output: JSON.stringify(result) };
 				}
