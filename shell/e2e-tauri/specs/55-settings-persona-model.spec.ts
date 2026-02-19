@@ -1,6 +1,7 @@
 import { S } from "../helpers/selectors.js";
 import {
 	clickBySelector,
+	ensureAppReady,
 	navigateToSettings,
 	scrollToSection,
 	setNativeValue,
@@ -16,6 +17,7 @@ import {
  */
 describe("55 — settings persona & model", () => {
 	before(async () => {
+		await ensureAppReady();
 		await navigateToSettings();
 		const settingsTab = await $(S.settingsTab);
 		await settingsTab.waitForDisplayed({ timeout: 10_000 });

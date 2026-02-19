@@ -1,6 +1,7 @@
 import { S } from "../helpers/selectors.js";
 import {
 	clickBySelector,
+	ensureAppReady,
 	navigateToSettings,
 	scrollToSection,
 } from "../helpers/settings.js";
@@ -16,6 +17,7 @@ import {
  */
 describe("56 — settings voice", () => {
 	before(async () => {
+		await ensureAppReady();
 		await navigateToSettings();
 		const settingsTab = await $(S.settingsTab);
 		await settingsTab.waitForDisplayed({ timeout: 10_000 });

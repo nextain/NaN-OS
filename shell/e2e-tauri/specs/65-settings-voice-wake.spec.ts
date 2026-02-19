@@ -2,6 +2,7 @@ import { S } from "../helpers/selectors.js";
 import {
 	clickBySelector,
 	enableToolsForSpec,
+	ensureAppReady,
 	navigateToSettings,
 	scrollToSection,
 	setNativeValue,
@@ -20,6 +21,7 @@ describe("65 — settings voice wake", () => {
 	let sectionAvailable = false;
 
 	before(async () => {
+		await ensureAppReady();
 		await enableToolsForSpec([]);
 		await navigateToSettings();
 		const settingsTab = await $(S.settingsTab);

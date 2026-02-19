@@ -1,5 +1,5 @@
 import { S } from "../helpers/selectors.js";
-import { clickBySelector, navigateToSettings } from "../helpers/settings.js";
+import { clickBySelector, ensureAppReady, navigateToSettings } from "../helpers/settings.js";
 
 /**
  * 53 — Settings: Theme & Locale
@@ -11,6 +11,7 @@ import { clickBySelector, navigateToSettings } from "../helpers/settings.js";
  */
 describe("53 — settings theme & locale", () => {
 	before(async () => {
+		await ensureAppReady();
 		await navigateToSettings();
 		const settingsTab = await $(S.settingsTab);
 		await settingsTab.waitForDisplayed({ timeout: 10_000 });

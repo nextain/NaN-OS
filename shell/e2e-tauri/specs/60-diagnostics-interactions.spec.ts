@@ -1,5 +1,5 @@
 import { S } from "../helpers/selectors.js";
-import { clickBySelector } from "../helpers/settings.js";
+import { clickBySelector, ensureAppReady } from "../helpers/settings.js";
 
 /**
  * 60 — Diagnostics Tab Interactions
@@ -13,6 +13,7 @@ describe("60 — diagnostics interactions", () => {
 	let diagAvailable = false;
 
 	before(async () => {
+		await ensureAppReady();
 		await clickBySelector(S.diagnosticsTabBtn);
 		try {
 			const diagPanel = await $(S.diagnosticsTabPanel);

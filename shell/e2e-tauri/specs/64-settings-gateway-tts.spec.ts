@@ -2,6 +2,7 @@ import { S } from "../helpers/selectors.js";
 import {
 	clickBySelector,
 	enableToolsForSpec,
+	ensureAppReady,
 	navigateToSettings,
 	scrollToSection,
 } from "../helpers/settings.js";
@@ -17,6 +18,7 @@ import {
  */
 describe("64 — settings gateway TTS", () => {
 	before(async () => {
+		await ensureAppReady();
 		// Enable tools so Gateway sections render
 		await enableToolsForSpec([]);
 		await navigateToSettings();

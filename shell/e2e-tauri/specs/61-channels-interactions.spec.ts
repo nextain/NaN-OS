@@ -1,5 +1,5 @@
 import { S } from "../helpers/selectors.js";
-import { clickBySelector } from "../helpers/settings.js";
+import { clickBySelector, ensureAppReady } from "../helpers/settings.js";
 
 /**
  * 61 — Channels Tab Interactions
@@ -14,6 +14,7 @@ describe("61 — channels interactions", () => {
 	let tabAvailable = false;
 
 	before(async () => {
+		await ensureAppReady();
 		await clickBySelector(S.channelsTabBtn);
 		try {
 			const panel = await $(S.channelsTabPanel);

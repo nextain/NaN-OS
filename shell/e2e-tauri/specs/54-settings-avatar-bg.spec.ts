@@ -1,5 +1,5 @@
 import { S } from "../helpers/selectors.js";
-import { clickBySelector, navigateToSettings, scrollToSection } from "../helpers/settings.js";
+import { clickBySelector, ensureAppReady, navigateToSettings, scrollToSection } from "../helpers/settings.js";
 
 /**
  * 54 — Settings: Avatar VRM & Background
@@ -12,6 +12,7 @@ import { clickBySelector, navigateToSettings, scrollToSection } from "../helpers
  */
 describe("54 — settings avatar & background", () => {
 	before(async () => {
+		await ensureAppReady();
 		await navigateToSettings();
 		const settingsTab = await $(S.settingsTab);
 		await settingsTab.waitForDisplayed({ timeout: 10_000 });

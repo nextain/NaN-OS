@@ -178,3 +178,56 @@ export async function clickBySelector(selector: string): Promise<void> {
 		if (el) el.click();
 	}, selector);
 }
+
+const API_KEY = process.env.CAFE_E2E_API_KEY || process.env.GEMINI_API_KEY || "";
+
+/**
+ * Ensure the app is ready: bypass onboarding, set base config, wait for tabs.
+ * Safe to call multiple times — skips if already configured.
+ */
+export async function ensureAppReady(): Promise<void> {
+	const alreadyConfigured = await browser.execute(() => {
+		const raw = localStorage.getItem("cafelua-config");
+		if (!raw) return false;
+		const config = JSON.parse(raw);
+		return !!config.onboardingComplete && !!config.apiKey;
+	});
+
+	if (!alreadyConfigured) {
+		await browser.execute((key: string) => {
+			const existing = localStorage.getItem("cafelua-config");
+			const config = existing ? JSON.parse(existing) : {};
+			Object.assign(config, {
+				provider: config.provider || "gemini",
+				model: config.model || "gemini-2.5-flash",
+				apiKey: config.apiKey || key,
+				agentName: config.agentName || "Alpha",
+				userName: config.userName || "Tester",
+				vrmModel: config.vrmModel || "/avatars/Sendagaya-Shino-dark-uniform.vrm",
+				persona: config.persona || "Friendly AI companion",
+				enableTools: true,
+				locale: config.locale || "ko",
+				onboardingComplete: true,
+			});
+			localStorage.setItem("cafelua-config", JSON.stringify(config));
+		}, API_KEY);
+		await browser.refresh();
+	}
+
+	// Wait for app + tabs to be ready
+	const appRoot = await $(S.appRoot);
+	await appRoot.waitForDisplayed({ timeout: 15_000 });
+	await browser.waitUntil(
+		async () => browser.execute(
+			(sel: string) => !document.querySelector(sel),
+			S.onboardingOverlay,
+		),
+		{ timeout: 15_000 },
+	);
+	await browser.waitUntil(
+		async () => browser.execute(
+			() => document.querySelectorAll(".chat-tabs .chat-tab").length >= 8,
+		),
+		{ timeout: 15_000 },
+	);
+}

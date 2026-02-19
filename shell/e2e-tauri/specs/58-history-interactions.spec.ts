@@ -1,6 +1,6 @@
 import { getLastAssistantMessage, sendMessage } from "../helpers/chat.js";
 import { S } from "../helpers/selectors.js";
-import { clickBySelector } from "../helpers/settings.js";
+import { clickBySelector, ensureAppReady } from "../helpers/settings.js";
 
 /**
  * 58 — History Tab Interactions
@@ -12,6 +12,7 @@ import { clickBySelector } from "../helpers/settings.js";
  */
 describe("58 — history interactions", () => {
 	before(async () => {
+		await ensureAppReady();
 		// Ensure we have at least one conversation
 		const chatInput = await $(S.chatInput);
 		await chatInput.waitForEnabled({ timeout: 15_000 });

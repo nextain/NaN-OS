@@ -1,6 +1,7 @@
 import { S } from "../helpers/selectors.js";
 import {
 	clickBySelector,
+	ensureAppReady,
 	navigateToSettings,
 	scrollToSection,
 	setNativeValue,
@@ -19,6 +20,7 @@ describe("57 — settings save & reset", () => {
 	let originalThemeIdx: number;
 
 	before(async () => {
+		await ensureAppReady();
 		await navigateToSettings();
 		const settingsTab = await $(S.settingsTab);
 		await settingsTab.waitForDisplayed({ timeout: 10_000 });
