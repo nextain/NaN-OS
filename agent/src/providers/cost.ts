@@ -15,6 +15,15 @@ const MODEL_PRICING: Record<string, { input: number; output: number }> = {
 	"claude-sonnet-4-5-20250929": { input: 3.0, output: 15.0 },
 	"claude-haiku-4-5-20251001": { input: 0.8, output: 4.0 },
 	"claude-opus-4-6": { input: 15.0, output: 75.0 },
+	// OpenAI
+	"gpt-4o": { input: 2.5, output: 10.0 },
+	"gpt-4o-mini": { input: 0.15, output: 0.6 },
+	"gpt-5-2025-08-07": { input: 1.25, output: 10.0 },
+	"o3-mini": { input: 1.1, output: 4.4 },
+	// zAI (GLM)
+	"glm-4.7": { input: 0.6, output: 2.2 },
+	"glm-4.5": { input: 0.6, output: 2.2 },
+	"glm-4.5-air": { input: 0.2, output: 1.2 },
 };
 
 export function calculateCost(
