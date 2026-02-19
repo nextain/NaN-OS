@@ -1,0 +1,29 @@
+[Unit]
+Description=Cafelua Gateway (OpenClaw)
+Documentation=https://github.com/nichochar/openclaw
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=%h/.cafelua/openclaw/node_modules/.bin/openclaw gateway run --bind loopback --port 18789
+Environment=HOME=%h
+Environment=PATH=%h/.local/bin:%h/.config/nvm/versions/node/v22/bin:/usr/local/bin:/usr/bin:/bin
+WorkingDirectory=%h/.cafelua/openclaw
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=10
+
+# Resource limits
+MemoryMax=512M
+CPUQuota=50%
+
+# Security hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=%h/.cafelua %h/.openclaw
+PrivateTmp=true
+
+[Install]
+WantedBy=default.target
