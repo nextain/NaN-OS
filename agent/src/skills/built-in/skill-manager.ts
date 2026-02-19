@@ -34,7 +34,7 @@ export function createSkillManagerSkill(
 	return {
 		name: "skill_skill_manager",
 		description:
-			"Manage skills: list all skills, search by keyword, get skill info, enable or disable skills. Use this when the user wants to know available skills or toggle them.",
+			"MUST use this tool when the user asks about skills, tools, or capabilities. Actions: 'list' shows all available skills with enabled/disabled status, 'search' finds skills by keyword, 'info' gets details about a specific skill, 'enable' activates a disabled skill, 'disable' deactivates a skill. Always call this tool instead of guessing skill information.",
 		parameters: {
 			type: "object",
 			properties: {
