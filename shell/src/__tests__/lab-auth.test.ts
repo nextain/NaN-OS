@@ -1,5 +1,16 @@
 // @vitest-environment jsdom
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+
+// Mock Tauri store plugin (not available in jsdom)
+vi.mock("@tauri-apps/plugin-store", () => {
+	const store = {
+		get: vi.fn().mockResolvedValue(null),
+		set: vi.fn().mockResolvedValue(undefined),
+		delete: vi.fn().mockResolvedValue(undefined),
+	};
+	return { load: vi.fn().mockResolvedValue(store) };
+});
+
 import {
 	getLabKey,
 	hasApiKey,
@@ -112,7 +123,7 @@ describe("Lab Auth (deep link URL parsing)", () => {
 
 	function parseLabDeepLink(
 		urlStr: string,
-	): { labKey: string; labUserId?: string } | null {
+	): { labKey: string; labUserId?: string; state?: string } | null {
 		try {
 			const url = new URL(urlStr);
 			const isAuth =
@@ -127,6 +138,7 @@ describe("Lab Auth (deep link URL parsing)", () => {
 			return {
 				labKey: key,
 				labUserId: url.searchParams.get("user_id") ?? undefined,
+				state: url.searchParams.get("state") ?? undefined,
 			};
 		} catch {
 			return null;
@@ -163,5 +175,21 @@ describe("Lab Auth (deep link URL parsing)", () => {
 	it("returns null for invalid URLs", () => {
 		const result = parseLabDeepLink("not-a-url");
 		expect(result).toBeNull();
+	});
+
+	it("parses state parameter from deep link", () => {
+		const result = parseLabDeepLink(
+			"cafelua://auth?key=abc123&state=random-state-token",
+		);
+		expect(result).toEqual({
+			labKey: "abc123",
+			labUserId: undefined,
+			state: "random-state-token",
+		});
+	});
+
+	it("state is undefined when not present", () => {
+		const result = parseLabDeepLink("cafelua://auth?key=abc123");
+		expect(result?.state).toBeUndefined();
 	});
 });

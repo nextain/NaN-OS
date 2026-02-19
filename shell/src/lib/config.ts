@@ -1,5 +1,10 @@
 import type { Locale } from "./i18n";
 import type { ProviderId } from "./types";
+import {
+	SECRET_KEYS,
+	getSecretKey,
+	saveSecretKey,
+} from "./secure-store";
 
 const STORAGE_KEY = "cafelua-config";
 
@@ -43,6 +48,8 @@ const DEFAULT_MODELS: Record<ProviderId, string> = {
 	anthropic: "claude-sonnet-4-5-20250929",
 };
 
+// ── Sync API (localStorage only, backwards compatible) ──
+
 export function loadConfig(): AppConfig | null {
 	try {
 		const raw = localStorage.getItem(STORAGE_KEY);
@@ -61,6 +68,94 @@ export function hasApiKey(): boolean {
 	const config = loadConfig();
 	return !!config?.apiKey || !!config?.labKey;
 }
+
+export function hasLabKey(): boolean {
+	const config = loadConfig();
+	return !!config?.labKey;
+}
+
+export function getLabKey(): string | undefined {
+	return loadConfig()?.labKey;
+}
+
+// ── Async API (secure store + localStorage fallback) ──
+
+/**
+ * Load full config: localStorage fields + secrets from secure store.
+ */
+export async function loadConfigWithSecrets(): Promise<AppConfig | null> {
+	const config = loadConfig();
+	if (!config) return null;
+
+	for (const key of SECRET_KEYS) {
+		const secureVal = await getSecretKey(key);
+		if (secureVal) {
+			(config as Record<string, unknown>)[key] = secureVal;
+		}
+	}
+	return config;
+}
+
+/**
+ * Save config: sensitive fields → secure store, rest → localStorage.
+ */
+export async function saveConfigSecure(config: AppConfig): Promise<void> {
+	const publicConfig = { ...config };
+
+	for (const key of SECRET_KEYS) {
+		const val = (config as Record<string, unknown>)[key];
+		if (typeof val === "string" && val.length > 0) {
+			await saveSecretKey(key, val);
+		}
+		(publicConfig as Record<string, unknown>)[key] = undefined;
+	}
+
+	localStorage.setItem(STORAGE_KEY, JSON.stringify(publicConfig));
+}
+
+/**
+ * Migrate secrets from localStorage to secure store.
+ * Call once on app startup. Idempotent.
+ */
+export async function migrateSecretsToSecureStore(): Promise<void> {
+	const config = loadConfig();
+	if (!config) return;
+
+	let migrated = false;
+	for (const key of SECRET_KEYS) {
+		const val = (config as Record<string, unknown>)[key];
+		if (typeof val === "string" && val.length > 0) {
+			const existing = await getSecretKey(key);
+			if (!existing) {
+				await saveSecretKey(key, val);
+			}
+			(config as Record<string, unknown>)[key] = undefined;
+			migrated = true;
+		}
+	}
+
+	if (migrated) {
+		localStorage.setItem(STORAGE_KEY, JSON.stringify(config));
+	}
+}
+
+/**
+ * Async version: check secure store first, then localStorage.
+ */
+export async function hasApiKeySecure(): Promise<boolean> {
+	const apiKey = await getSecretKey("apiKey");
+	const labKey = await getSecretKey("labKey");
+	if (apiKey || labKey) return true;
+	return hasApiKey();
+}
+
+export async function getLabKeySecure(): Promise<string | undefined> {
+	const secureVal = await getSecretKey("labKey");
+	if (secureVal) return secureVal;
+	return getLabKey();
+}
+
+// ── Utility functions (sync, unchanged) ──
 
 export function getDefaultModel(provider: ProviderId): string {
 	return DEFAULT_MODELS[provider];
@@ -94,15 +189,6 @@ export function isOnboardingComplete(): boolean {
 
 export function getUserName(): string | undefined {
 	return loadConfig()?.userName;
-}
-
-export function hasLabKey(): boolean {
-	const config = loadConfig();
-	return !!config?.labKey;
-}
-
-export function getLabKey(): string | undefined {
-	return loadConfig()?.labKey;
 }
 
 /** any-llm Gateway URL (shared with agent/src/providers/lab-proxy.ts) */

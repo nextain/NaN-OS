@@ -31,6 +31,8 @@ struct AppState {
     agent: Mutex<Option<AgentProcess>>,
     gateway: Mutex<Option<GatewayProcess>>,
     health_monitor_shutdown: Mutex<Option<Arc<std::sync::atomic::AtomicBool>>>,
+    /// Random state token for OAuth deep link CSRF protection.
+    oauth_state: Mutex<Option<String>>,
 }
 
 struct AuditState {
@@ -1000,6 +1002,21 @@ async fn gateway_health() -> Result<bool, String> {
     }
 }
 
+/// Generate a random state token for OAuth deep link CSRF protection.
+/// Frontend calls this before opening the OAuth URL and passes state as query param.
+#[tauri::command]
+async fn generate_oauth_state(state: tauri::State<'_, AppState>) -> Result<String, String> {
+    use std::fmt::Write;
+    let mut bytes = [0u8; 32];
+    getrandom::fill(&mut bytes).map_err(|e| format!("RNG error: {}", e))?;
+    let mut hex = String::with_capacity(64);
+    for b in &bytes {
+        write!(hex, "{:02x}", b).unwrap();
+    }
+    *state.oauth_state.lock().unwrap() = Some(hex.clone());
+    Ok(hex)
+}
+
 #[tauri::command]
 async fn reset_window_state(app: AppHandle) -> Result<(), String> {
     if let Some(path) = window_state_path(&app) {
@@ -1015,10 +1032,12 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_deep_link::init())
+        .plugin(tauri_plugin_store::Builder::default().build())
         .manage(AppState {
             agent: Mutex::new(None),
             gateway: Mutex::new(None),
             health_monitor_shutdown: Mutex::new(None),
+            oauth_state: Mutex::new(None),
         })
         .invoke_handler(tauri::generate_handler![
             send_to_agent_command,
@@ -1043,6 +1062,7 @@ pub fn run() {
             memory_upsert_fact,
             memory_delete_fact,
             validate_api_key,
+            generate_oauth_state,
         ])
         .setup(|app| {
             let app_handle = app.handle().clone();
@@ -1080,6 +1100,8 @@ pub fn run() {
             });
 
             let deep_link_handle = app_handle.clone();
+            let deep_link_state: tauri::State<'_, AppState> = app.state();
+            let oauth_state_ref = deep_link_state.oauth_state.clone();
             app.deep_link().on_open_url(move |event| {
                 let urls = event.urls();
                 for url in urls {
@@ -1092,14 +1114,37 @@ pub fn run() {
                         if parsed.host_str() == Some("auth") || parsed.path() == "auth" || parsed.path() == "/auth" {
                             let mut key = None;
                             let mut user_id = None;
+                            let mut incoming_state = None;
                             for (k, v) in parsed.query_pairs() {
                                 match k.as_ref() {
                                     "key" => key = Some(v.to_string()),
                                     "code" => key = Some(v.to_string()),
                                     "user_id" => user_id = Some(v.to_string()),
+                                    "state" => incoming_state = Some(v.to_string()),
                                     _ => {}
                                 }
                             }
+
+                            // Verify OAuth state to prevent CSRF
+                            let expected_state = oauth_state_ref.lock().unwrap().clone();
+                            if let Some(ref expected) = expected_state {
+                                match &incoming_state {
+                                    Some(s) if s == expected => {
+                                        // State matches — clear it (single-use)
+                                        *oauth_state_ref.lock().unwrap() = None;
+                                    }
+                                    Some(_) => {
+                                        log_both("[Cafelua] Deep link rejected: state mismatch");
+                                        continue;
+                                    }
+                                    None => {
+                                        log_both("[Cafelua] Deep link rejected: missing state parameter");
+                                        continue;
+                                    }
+                                }
+                            }
+                            // If no expected state (e.g. manual key entry), allow without check
+
                             // Validate user_id if present: alphanumeric, hyphens, underscores, dots, max 256 chars
                             let validated_user_id = user_id.filter(|uid| {
                                 uid.len() <= 256

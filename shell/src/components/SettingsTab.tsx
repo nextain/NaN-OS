@@ -73,6 +73,8 @@ const THEMES: { id: ThemeId; label: string; preview: string }[] = [
 export function SettingsTab() {
 	const existing = loadConfig();
 	const setAvatarModelPath = useAvatarStore((s) => s.setModelPath);
+	const savedVrmModel =
+		existing?.vrmModel ?? "/avatars/Sendagaya-Shino-dark-uniform.vrm";
 	const [provider, setProvider] = useState<ProviderId>(
 		existing?.provider ?? "gemini",
 	);
@@ -84,9 +86,7 @@ export function SettingsTab() {
 		existing?.locale ?? getLocale(),
 	);
 	const [theme, setTheme] = useState<ThemeId>(existing?.theme ?? "espresso");
-	const [vrmModel, setVrmModel] = useState(
-		existing?.vrmModel ?? "/avatars/Sendagaya-Shino-dark-uniform.vrm",
-	);
+	const [vrmModel, setVrmModel] = useState(savedVrmModel);
 	const [backgroundImage, setBackgroundImage] = useState(
 		existing?.backgroundImage ?? "",
 	);
@@ -142,6 +142,23 @@ export function SettingsTab() {
 		};
 	}, []);
 
+	// Live-preview: apply VRM instantly on selection
+	function handleVrmSelect(path: string) {
+		setVrmModel(path);
+		setAvatarModelPath(path);
+	}
+
+	// Revert VRM on unmount if not saved
+	useEffect(() => {
+		return () => {
+			// Restore saved VRM when leaving settings without saving
+			const current = useAvatarStore.getState().modelPath;
+			if (current !== savedVrmModel) {
+				setAvatarModelPath(savedVrmModel);
+			}
+		};
+	}, [savedVrmModel, setAvatarModelPath]);
+
 	function handleProviderChange(id: ProviderId) {
 		setProvider(id);
 		setModel(getDefaultModel(id));
@@ -164,7 +181,7 @@ export function SettingsTab() {
 			multiple: false,
 		});
 		if (selected) {
-			setVrmModel(selected);
+			handleVrmSelect(selected);
 		}
 	}
 
@@ -289,7 +306,7 @@ export function SettingsTab() {
 							key={v.path}
 							type="button"
 							className={`vrm-card ${vrmModel === v.path ? "active" : ""}`}
-							onClick={() => setVrmModel(v.path)}
+							onClick={() => handleVrmSelect(v.path)}
 							title={v.label}
 						>
 							<span className="vrm-card-icon">&#x1F464;</span>

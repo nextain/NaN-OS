@@ -49,6 +49,30 @@ describe("parseEmotion", () => {
 		expect(result.emotion).toBe("neutral");
 		expect(result.cleanText).toBe("");
 	});
+
+	it("strips mid-text emotion tags", () => {
+		const result = parseEmotion("[HAPPY] 안녕! [SAD] 그런데 슬퍼...");
+		expect(result.emotion).toBe("happy");
+		expect(result.cleanText).toBe("안녕! 그런데 슬퍼...");
+	});
+
+	it("strips emotion tags on new lines", () => {
+		const result = parseEmotion("[HAPPY] 좋아!\n[SAD] 하지만...");
+		expect(result.emotion).toBe("happy");
+		expect(result.cleanText).toBe("좋아!\n하지만...");
+	});
+
+	it("strips standalone emotion tag lines", () => {
+		const result = parseEmotion("[THINK]\n생각 중이야...");
+		expect(result.emotion).toBe("think");
+		expect(result.cleanText).toBe("생각 중이야...");
+	});
+
+	it("strips tag at end of text", () => {
+		const result = parseEmotion("끝이야 [HAPPY]");
+		expect(result.emotion).toBe("happy");
+		expect(result.cleanText).toBe("끝이야");
+	});
 });
 
 describe("createEmotionController", () => {

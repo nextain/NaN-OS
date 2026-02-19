@@ -113,19 +113,22 @@ const EMOTION_STATES: Record<EmotionName, EmotionState> = {
 	},
 };
 
-const EMOTION_TAG_RE = /^\[(HAPPY|SAD|ANGRY|SURPRISED|NEUTRAL|THINK)]\s*/i;
+const EMOTION_TAG_RE = /\[(HAPPY|SAD|ANGRY|SURPRISED|NEUTRAL|THINK)]\s*/gi;
 
 export function parseEmotion(text: string): {
 	emotion: EmotionName;
 	cleanText: string;
 } {
-	const match = text.match(EMOTION_TAG_RE);
-	if (!match) {
-		return { emotion: "neutral", cleanText: text };
-	}
+	let firstEmotion: EmotionName | null = null;
+	const cleanText = text.replace(EMOTION_TAG_RE, (_, tag) => {
+		if (!firstEmotion) {
+			firstEmotion = tag.toLowerCase() as EmotionName;
+		}
+		return "";
+	}).trim();
 	return {
-		emotion: match[1].toLowerCase() as EmotionName,
-		cleanText: text.slice(match[0].length),
+		emotion: firstEmotion ?? "neutral",
+		cleanText,
 	};
 }
 
