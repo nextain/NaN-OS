@@ -56,6 +56,52 @@ describe("11 — Cost Dashboard", () => {
 		expect(rowCount).toBeGreaterThanOrEqual(3);
 	});
 
+	it("should show Lab balance section when labKey is set", async () => {
+		// Dashboard is currently open from previous test — close it first
+		const costBadge = await $(S.costBadge);
+		await costBadge.click();
+		await browser.waitUntil(
+			async () => {
+				return browser.execute(
+					(sel: string) => !document.querySelector(sel),
+					S.costDashboard,
+				);
+			},
+			{ timeout: 5_000 },
+		);
+
+		// Inject a labKey into config to simulate Lab connection
+		await browser.execute(() => {
+			const raw = localStorage.getItem("cafelua-config");
+			if (!raw) return;
+			const config = JSON.parse(raw);
+			config.labKey = "test-lab-key-e2e";
+			localStorage.setItem("cafelua-config", JSON.stringify(config));
+		});
+
+		// Re-open dashboard with new config
+		await costBadge.click();
+
+		const dashboard = await $(S.costDashboard);
+		await dashboard.waitForDisplayed({ timeout: 10_000 });
+
+		// Lab balance section should be visible (loading or content)
+		const hasLabBalance = await browser.execute(
+			(sel: string) => !!document.querySelector(sel),
+			S.labBalanceRow,
+		);
+		expect(hasLabBalance).toBe(true);
+
+		// Remove labKey to restore clean state (dashboard stays open for next test)
+		await browser.execute(() => {
+			const raw = localStorage.getItem("cafelua-config");
+			if (!raw) return;
+			const config = JSON.parse(raw);
+			delete config.labKey;
+			localStorage.setItem("cafelua-config", JSON.stringify(config));
+		});
+	});
+
 	it("should close cost dashboard on second badge click", async () => {
 		const costBadge = await $(S.costBadge);
 		await costBadge.click();

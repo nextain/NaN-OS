@@ -56,6 +56,16 @@ export const S = {
 	onboardingPersonalityCard: ".onboarding-personality-card",
 	onboardingValidateBtn: ".onboarding-validate-btn",
 	onboardingValidationSuccess: ".onboarding-validation-success",
+	onboardingLabSection: ".onboarding-lab-section",
+	onboardingLabBtn: ".onboarding-lab-btn",
+	onboardingLabDesc: ".onboarding-lab-desc",
+	onboardingDivider: ".onboarding-divider",
+
+	// Lab (Settings + CostDashboard)
+	labConnectedRow: ".lab-connected-row",
+	labBalanceSection: ".lab-balance-section",
+	labBalanceRow: ".lab-balance-row",
+	labChargeBtn: ".lab-charge-btn",
 
 	// Queue badge
 	queueBadge: ".queue-badge",

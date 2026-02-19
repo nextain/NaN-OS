@@ -1,6 +1,6 @@
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { useEffect, useState } from "react";
-import { getLabKey, hasLabKey } from "../lib/config";
+import { LAB_GATEWAY_URL, getLabKey, hasLabKey } from "../lib/config";
 import { t } from "../lib/i18n";
 import { Logger } from "../lib/logger";
 import type { ChatMessage } from "../lib/types";
@@ -45,9 +45,7 @@ function formatCost(cost: number): string {
 	return `$${cost.toFixed(3)}`;
 }
 
-// Shared with agent/src/providers/lab-proxy.ts
-const GATEWAY_URL =
-	"https://cafelua-gateway-789741003661.asia-northeast3.run.app";
+const GATEWAY_URL = LAB_GATEWAY_URL;
 
 // Simple cache to avoid re-fetching balance on every mount
 let balanceCache: { value: number; timestamp: number } | null = null;

@@ -104,3 +104,7 @@ export function hasLabKey(): boolean {
 export function getLabKey(): string | undefined {
 	return loadConfig()?.labKey;
 }
+
+/** any-llm Gateway URL (shared with agent/src/providers/lab-proxy.ts) */
+export const LAB_GATEWAY_URL =
+	"https://cafelua-gateway-789741003661.asia-northeast3.run.app";

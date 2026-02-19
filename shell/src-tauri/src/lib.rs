@@ -11,6 +11,8 @@ use tauri_plugin_deep_link::DeepLinkExt;
 
 #[cfg(target_os = "linux")]
 use webkit2gtk::PermissionRequestExt;
+#[cfg(target_os = "linux")]
+use webkit2gtk::glib::object::ObjectExt;
 
 // agent-core process handle
 struct AgentProcess {
@@ -307,28 +309,33 @@ fn find_node_binary() -> Result<std::path::PathBuf, String> {
         }
     }
 
-    // Try nvm fallback
+    // Try nvm fallback (check both standard ~/.nvm and XDG ~/.config/nvm)
     let home = std::env::var("HOME").unwrap_or_default();
-    let nvm_dir = format!("{}/.config/nvm/versions/node", home);
-    if let Ok(entries) = std::fs::read_dir(&nvm_dir) {
-        let mut versions: Vec<_> = entries
-            .filter_map(|e| e.ok())
-            .filter_map(|e| {
-                let name = e.file_name().to_string_lossy().to_string();
-                let name = name.trim_start_matches('v').to_string();
-                let major: u32 = name.split('.').next()?.parse().ok()?;
-                if major >= 22 {
-                    Some((major, e.path()))
-                } else {
-                    None
+    let nvm_dirs = [
+        format!("{}/.nvm/versions/node", home),
+        format!("{}/.config/nvm/versions/node", home),
+    ];
+    for nvm_dir in &nvm_dirs {
+        if let Ok(entries) = std::fs::read_dir(nvm_dir) {
+            let mut versions: Vec<_> = entries
+                .filter_map(|e| e.ok())
+                .filter_map(|e| {
+                    let name = e.file_name().to_string_lossy().to_string();
+                    let name = name.trim_start_matches('v').to_string();
+                    let major: u32 = name.split('.').next()?.parse().ok()?;
+                    if major >= 22 {
+                        Some((major, e.path()))
+                    } else {
+                        None
+                    }
+                })
+                .collect();
+            versions.sort_by(|a, b| b.0.cmp(&a.0)); // highest first
+            if let Some((_, path)) = versions.first() {
+                let node_bin = path.join("bin/node");
+                if node_bin.exists() {
+                    return Ok(node_bin);
                 }
-            })
-            .collect();
-        versions.sort_by(|a, b| b.0.cmp(&a.0)); // highest first
-        if let Some((_, path)) = versions.first() {
-            let node_bin = path.join("bin/node");
-            if node_bin.exists() {
-                return Ok(node_bin);
             }
         }
     }
@@ -939,7 +946,7 @@ async fn preview_tts(api_key: String, voice: String, text: String) -> Result<Str
         "https://texttospeech.googleapis.com/v1/text:synthesize?key={}",
         api_key
     );
-    let language_code = &voice[..5]; // e.g. "ko-KR"
+    let language_code = voice.get(..5).unwrap_or("ko-KR");
     let body = serde_json::json!({
         "input": { "text": text },
         "voice": { "languageCode": language_code, "name": voice },
@@ -1139,13 +1146,17 @@ pub fn run() {
                 let _ = window.show();
             }
 
-            // Enable microphone/media permissions for webkit2gtk
+            // Allow only microphone/media permissions for webkit2gtk (deny all others)
             #[cfg(target_os = "linux")]
             if let Some(webview_window) = app.get_webview_window("main") {
                 let _ = webview_window.with_webview(|webview| {
                     use webkit2gtk::WebViewExt;
                     webview.inner().connect_permission_request(|_, request| {
-                        request.allow();
+                        if request.is::<webkit2gtk::UserMediaPermissionRequest>() {
+                            request.allow();
+                        } else {
+                            request.deny();
+                        }
                         true
                     });
                 });

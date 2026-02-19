@@ -55,5 +55,6 @@ export interface LLMProvider {
 		messages: ChatMessage[],
 		systemPrompt: string,
 		tools?: ToolDefinition[],
+		signal?: AbortSignal,
 	): AgentStream;
 }

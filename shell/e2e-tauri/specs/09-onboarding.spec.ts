@@ -65,6 +65,23 @@ describe("09 — Onboarding Wizard", () => {
 		await providerCard.waitForDisplayed({ timeout: 10_000 });
 	});
 
+	it("should show Lab Login section on provider step", async () => {
+		// Lab section should be visible before provider cards
+		const labSection = await $(S.onboardingLabSection);
+		await labSection.waitForDisplayed({ timeout: 10_000 });
+
+		const labBtn = await $(S.onboardingLabBtn);
+		expect(await labBtn.isDisplayed()).toBe(true);
+
+		// Lab description text should exist
+		const labDesc = await $(S.onboardingLabDesc);
+		expect(await labDesc.isDisplayed()).toBe(true);
+
+		// Divider ("또는") between Lab and manual provider
+		const divider = await $(S.onboardingDivider);
+		expect(await divider.isDisplayed()).toBe(true);
+	});
+
 	it("should select provider and proceed to API key step", async () => {
 		const providerCard = await $(S.onboardingProviderCard);
 		await providerCard.click();

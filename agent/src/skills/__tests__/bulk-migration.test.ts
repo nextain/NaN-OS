@@ -1,7 +1,7 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 import { loadCustomSkills } from "../loader.js";
 import { SkillRegistry } from "../registry.js";
 
@@ -128,6 +128,51 @@ describe("bulk skill migration (51 OpenClaw skills)", () => {
 				fs.existsSync(manifestPath),
 				`Missing manifest: ${manifestPath}`,
 			).toBe(true);
+		}
+	});
+
+	/** Key skills that should have specific parameter schemas (not generic "input") */
+	const KEY_SKILLS_WITH_SCHEMA = [
+		"weather",
+		"github",
+		"slack",
+		"discord",
+		"healthcheck",
+		"session-logs",
+		"notion",
+		"obsidian",
+		"coding-agent",
+		"gemini",
+	];
+
+	it("key skills have specific parameter descriptions (not generic)", () => {
+		for (const name of KEY_SKILLS_WITH_SCHEMA) {
+			const manifestPath = path.join(SKILLS_DIR, name, "skill.json");
+			const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf-8"));
+			const props = manifest.parameters?.properties ?? {};
+			for (const [key, val] of Object.entries(props)) {
+				const desc = (val as Record<string, unknown>).description as string;
+				expect(
+					desc,
+					`${name}.${key} has no description`,
+				).toBeDefined();
+				expect(
+					desc?.startsWith("Input for the "),
+					`${name}.${key} still has generic description: "${desc}"`,
+				).toBe(false);
+			}
+		}
+	});
+
+	it("key skills have at least one required or described parameter", () => {
+		for (const name of KEY_SKILLS_WITH_SCHEMA) {
+			const manifestPath = path.join(SKILLS_DIR, name, "skill.json");
+			const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf-8"));
+			const props = manifest.parameters?.properties ?? {};
+			expect(
+				Object.keys(props).length,
+				`${name} has no parameters defined`,
+			).toBeGreaterThan(0);
 		}
 	});
 });

@@ -51,7 +51,33 @@ describe("02 — Configure Settings", () => {
 		});
 	});
 
+	it("should show Lab section in settings", async () => {
+		// Navigate to settings tab if not already there
+		const settingsTabBtn = await $(".chat-tab:nth-child(3)");
+		await settingsTabBtn.waitForClickable({ timeout: 10_000 });
+		await settingsTabBtn.click();
+
+		const settingsTab = await $(S.settingsTab);
+		await settingsTab.waitForDisplayed({ timeout: 10_000 });
+
+		// Lab section divider should be present
+		const hasLabSection = await browser.execute(() => {
+			const dividers = document.querySelectorAll(
+				".settings-section-divider",
+			);
+			return Array.from(dividers).some((d) =>
+				d.textContent?.includes("Lab"),
+			);
+		});
+		expect(hasLabSection).toBe(true);
+	});
+
 	it("should enable chat input after settings saved", async () => {
+		// Switch back to chat tab
+		const chatTabBtn = await $(S.chatTab);
+		await chatTabBtn.waitForClickable({ timeout: 10_000 });
+		await chatTabBtn.click();
+
 		const chatInput = await $(S.chatInput);
 		await chatInput.waitForEnabled({ timeout: 15_000 });
 	});

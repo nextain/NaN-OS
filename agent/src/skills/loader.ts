@@ -109,6 +109,7 @@ export function loadCustomSkills(
 		}
 
 		if (!manifest.name || !manifest.description || !manifest.type) continue;
+		if (manifest.type !== "gateway" && manifest.type !== "command") continue;
 
 		const name = manifest.name.startsWith("skill_")
 			? manifest.name

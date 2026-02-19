@@ -117,4 +117,54 @@ describe("loadCustomSkills", () => {
 		loadCustomSkills(registry, "/nonexistent/path/skills");
 		expect(registry.list()).toHaveLength(0);
 	});
+
+	it("skips manifest missing name field", () => {
+		writeManifest("no-name", {
+			description: "Has description but no name",
+			type: "gateway",
+			gatewaySkill: "no-name",
+		});
+
+		const registry = new SkillRegistry();
+		loadCustomSkills(registry, tmpDir);
+		expect(registry.has("skill_no-name")).toBe(false);
+	});
+
+	it("skips manifest missing description field", () => {
+		writeManifest("no-desc", {
+			name: "no_desc",
+			type: "command",
+			command: "echo test",
+		});
+
+		const registry = new SkillRegistry();
+		loadCustomSkills(registry, tmpDir);
+		expect(registry.has("skill_no_desc")).toBe(false);
+	});
+
+	it("skips manifest with invalid type field", () => {
+		writeManifest("bad-type", {
+			name: "bad_type",
+			description: "Has bad type",
+			type: "invalid",
+		});
+
+		const registry = new SkillRegistry();
+		loadCustomSkills(registry, tmpDir);
+		expect(registry.has("skill_bad_type")).toBe(false);
+	});
+
+	it("skips gateway skill without gatewaySkill or matching name", () => {
+		writeManifest("gateway-ok", {
+			name: "gateway_ok",
+			description: "Valid gateway skill",
+			type: "gateway",
+			gatewaySkill: "gateway_ok",
+		});
+
+		const registry = new SkillRegistry();
+		loadCustomSkills(registry, tmpDir);
+		// Should load fine since gatewaySkill is provided
+		expect(registry.has("skill_gateway_ok")).toBe(true);
+	});
 });

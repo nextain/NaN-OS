@@ -8,21 +8,24 @@ export function createXAIProvider(apiKey: string, model: string): LLMProvider {
 	});
 
 	return {
-		async *stream(messages, systemPrompt, _tools): AgentStream {
+		async *stream(messages, systemPrompt, _tools, signal): AgentStream {
 			const textMessages = messages.filter((m) => m.role !== "tool");
-			const stream = await client.chat.completions.create({
-				model,
-				temperature: 0.7,
-				messages: [
-					{ role: "system", content: systemPrompt },
-					...textMessages.map((m) => ({
-						role: m.role as "user" | "assistant",
-						content: m.content,
-					})),
-				],
-				stream: true,
-				stream_options: { include_usage: true },
-			});
+			const stream = await client.chat.completions.create(
+				{
+					model,
+					temperature: 0.7,
+					messages: [
+						{ role: "system", content: systemPrompt },
+						...textMessages.map((m) => ({
+							role: m.role as "user" | "assistant",
+							content: m.content,
+						})),
+					],
+					stream: true,
+					stream_options: { include_usage: true },
+				},
+				{ signal: signal ?? undefined },
+			);
 
 			let inputTokens = 0;
 			let outputTokens = 0;

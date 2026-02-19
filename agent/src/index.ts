@@ -27,7 +27,10 @@ const APPROVAL_TIMEOUT_MS = 120_000;
 /** Pending approval promises keyed by toolCallId */
 const pendingApprovals = new Map<
 	string,
-	{ resolve: (decision: ApprovalResponse["decision"]) => void }
+	{
+		requestId: string;
+		resolve: (decision: ApprovalResponse["decision"]) => void;
+	}
 >();
 
 export function handleApprovalResponse(resp: ApprovalResponse): void {
@@ -64,6 +67,7 @@ function waitForApproval(
 		}, APPROVAL_TIMEOUT_MS);
 
 		pendingApprovals.set(toolCallId, {
+			requestId,
 			resolve: (decision) => {
 				clearTimeout(timeoutId);
 				resolve(decision);
@@ -127,6 +131,7 @@ export async function handleChatRequest(req: ChatRequest): Promise<void> {
 				chatMessages,
 				effectiveSystemPrompt,
 				tools,
+				controller.signal,
 			);
 
 			const toolCalls: {
@@ -336,10 +341,12 @@ export async function handleChatRequest(req: ChatRequest): Promise<void> {
 		if (gateway) {
 			gateway.close();
 		}
-		// Cleanup any pending approvals for this request
+		// Cleanup pending approvals for this request only
 		for (const [toolCallId, pending] of pendingApprovals) {
-			pending.resolve("reject");
-			pendingApprovals.delete(toolCallId);
+			if (pending.requestId === requestId) {
+				pending.resolve("reject");
+				pendingApprovals.delete(toolCallId);
+			}
 		}
 		activeStreams.delete(requestId);
 	}
@@ -380,7 +387,13 @@ function main(): void {
 		}
 
 		if (request.type === "chat_request") {
-			handleChatRequest(request);
+			handleChatRequest(request).catch((err) => {
+				writeLine({
+					type: "error",
+					requestId: request.requestId,
+					message: err instanceof Error ? err.message : String(err),
+				});
+			});
 		}
 	});
 

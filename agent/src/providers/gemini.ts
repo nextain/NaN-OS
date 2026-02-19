@@ -45,7 +45,7 @@ export function createGeminiProvider(
 	const client = new GoogleGenAI({ apiKey });
 
 	return {
-		async *stream(messages, systemPrompt, tools): AgentStream {
+		async *stream(messages, systemPrompt, tools, signal): AgentStream {
 			const contents = toGeminiContents(messages);
 
 			const geminiTools = tools
@@ -79,6 +79,7 @@ export function createGeminiProvider(
 			let outputTokens = 0;
 
 			for await (const chunk of response) {
+				if (signal?.aborted) break;
 				const text = chunk.text;
 				if (text) {
 					yield { type: "text", text };

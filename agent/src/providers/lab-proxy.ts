@@ -68,11 +68,12 @@ export function createLabProxyProvider(
 	model: string,
 ): LLMProvider {
 	return {
-		async *stream(messages, systemPrompt, tools): AgentStream {
+		async *stream(messages, systemPrompt, tools, signal): AgentStream {
 			const body: Record<string, unknown> = {
 				model: toGatewayModel(model),
 				messages: toOpenAIMessages(messages, systemPrompt),
 				stream: true,
+				stream_options: { include_usage: true },
 			};
 			if (tools && tools.length > 0) {
 				body.tools = toOpenAITools(tools);
@@ -85,6 +86,7 @@ export function createLabProxyProvider(
 					"X-AnyLLM-Key": `Bearer ${labKey}`,
 				},
 				body: JSON.stringify(body),
+				signal,
 			});
 
 			if (!res.ok) {
