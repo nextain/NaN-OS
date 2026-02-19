@@ -1093,6 +1093,11 @@ pub fn run() {
                                     _ => {}
                                 }
                             }
+                            // Validate user_id if present: alphanumeric, hyphens, underscores, dots, max 256 chars
+                            let validated_user_id = user_id.filter(|uid| {
+                                uid.len() <= 256
+                                    && uid.chars().all(|c| c.is_alphanumeric() || c == '-' || c == '_' || c == '.' || c == '@')
+                            });
                             if let Some(lab_key) = key {
                                 // Validate key: alphanumeric, hyphens, underscores, max 256 chars
                                 let is_valid = lab_key.len() <= 256
@@ -1103,7 +1108,7 @@ pub fn run() {
                                 }
                                 let payload = serde_json::json!({
                                     "labKey": lab_key,
-                                    "labUserId": user_id,
+                                    "labUserId": validated_user_id,
                                 });
                                 let _ = deep_link_handle.emit("lab_auth_complete", payload);
                                 log_both("[Cafelua] Lab auth complete — key received via deep link");
