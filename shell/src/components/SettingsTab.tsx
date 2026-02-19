@@ -5,6 +5,7 @@ import { openUrl } from "@tauri-apps/plugin-opener";
 import { useEffect, useState } from "react";
 import {
 	type ThemeId,
+	LAB_GATEWAY_URL,
 	clearAllowedTools,
 	getDefaultModel,
 	loadConfig,
@@ -17,10 +18,13 @@ import { DEFAULT_PERSONA } from "../lib/persona";
 import type { ProviderId } from "../lib/types";
 import { useAvatarStore } from "../stores/avatar";
 
-const PROVIDERS: { id: ProviderId; label: string }[] = [
+const PROVIDERS: { id: ProviderId; label: string; disabled?: boolean }[] = [
 	{ id: "gemini", label: "Google Gemini" },
-	{ id: "xai", label: "xAI (Grok)" },
-	{ id: "anthropic", label: "Anthropic (Claude)" },
+	{ id: "openai", label: "OpenAI (ChatGPT)", disabled: true },
+	{ id: "anthropic", label: "Anthropic (Claude)", disabled: true },
+	{ id: "xai", label: "xAI (Grok)", disabled: true },
+	{ id: "zai", label: "zAI (GLM)", disabled: true },
+	{ id: "ollama", label: "Ollama (로컬)", disabled: true },
 ];
 
 const TTS_VOICES: { id: string; label: string; price: string }[] = [
@@ -116,6 +120,8 @@ export function SettingsTab() {
 	const [labKey, setLabKeyState] = useState(existing?.labKey ?? "");
 	const [labUserId, setLabUserIdState] = useState(existing?.labUserId ?? "");
 	const [labWaiting, setLabWaiting] = useState(false);
+	const [labBalance, setLabBalance] = useState<number | null>(null);
+	const [labBalanceLoading, setLabBalanceLoading] = useState(false);
 
 	useEffect(() => {
 		getAllFacts()
@@ -126,6 +132,28 @@ export function SettingsTab() {
 				});
 			});
 	}, []);
+
+	// Fetch Lab balance when labKey is available
+	useEffect(() => {
+		if (!labKey) return;
+		setLabBalanceLoading(true);
+		fetch(`${LAB_GATEWAY_URL}/v1/profile/balance`, {
+			headers: { "X-AnyLLM-Key": `Bearer ${labKey}` },
+		})
+			.then((res) => {
+				if (!res.ok) throw new Error(`HTTP ${res.status}`);
+				return res.json();
+			})
+			.then((data: { balance?: number }) => {
+				setLabBalance(data.balance ?? 0);
+			})
+			.catch((err) => {
+				Logger.warn("SettingsTab", "Lab balance fetch failed", {
+					error: String(err),
+				});
+			})
+			.finally(() => setLabBalanceLoading(false));
+	}, [labKey]);
 
 	// Listen for Lab auth deep-link callback
 	useEffect(() => {
@@ -234,7 +262,7 @@ export function SettingsTab() {
 			return;
 		}
 		const defaultVrm = "/avatars/Sendagaya-Shino-dark-uniform.vrm";
-		saveConfig({
+		const newConfig = {
 			...existing,
 			provider,
 			model,
@@ -254,11 +282,51 @@ export function SettingsTab() {
 			enableTools,
 			gatewayUrl: gatewayUrl !== "ws://localhost:18789" ? gatewayUrl : undefined,
 			gatewayToken: gatewayToken.trim() || undefined,
-		});
+		};
+		saveConfig(newConfig);
 		setLocale(locale);
 		setAvatarModelPath(vrmModel);
 		setSaved(true);
 		setTimeout(() => setSaved(false), 2000);
+
+		// Auto-sync to Lab if connected
+		if (labKey && labUserId) {
+			syncConfigToLab(labKey, labUserId, newConfig);
+		}
+	}
+
+	function syncConfigToLab(
+		key: string,
+		userId: string,
+		config: ReturnType<typeof loadConfig>,
+	) {
+		// Strip secrets before syncing
+		const syncData = {
+			provider: config?.provider,
+			model: config?.model,
+			locale: config?.locale,
+			theme: config?.theme,
+			vrmModel: config?.vrmModel,
+			ttsEnabled: config?.ttsEnabled,
+			sttEnabled: config?.sttEnabled,
+			ttsVoice: config?.ttsVoice,
+			persona: config?.persona,
+			userName: config?.userName,
+			agentName: config?.agentName,
+			enableTools: config?.enableTools,
+		};
+		fetch(`${LAB_GATEWAY_URL}/v1/users/${encodeURIComponent(userId)}`, {
+			method: "PATCH",
+			headers: {
+				"Content-Type": "application/json",
+				"X-AnyLLM-Key": `Bearer ${key}`,
+			},
+			body: JSON.stringify({ metadata: { cafelua_config: syncData } }),
+		}).catch((err) => {
+			Logger.warn("SettingsTab", "Lab sync failed", {
+				error: String(err),
+			});
+		});
 	}
 
 	return (
@@ -424,22 +492,53 @@ export function SettingsTab() {
 			<div className="settings-field">
 				<label>{labKey ? t("settings.labConnected") : t("settings.labDisconnected")}</label>
 				{labKey ? (
-					<div className="lab-connected-row">
+					<div className="lab-info-block">
 						{labUserId && (
 							<span className="lab-user-id">{labUserId}</span>
 						)}
-						<button
-							type="button"
-							className="voice-preview-btn"
-							onClick={() => {
-								if (window.confirm(t("settings.labDisconnectConfirm"))) {
-									setLabKeyState("");
-									setLabUserIdState("");
+						<div className="lab-balance-row">
+							<span className="lab-balance-label">{t("settings.labBalance")}</span>
+							<span className="lab-balance-value">
+								{labBalanceLoading
+									? t("settings.labBalanceLoading")
+									: labBalance !== null
+										? `${labBalance.toFixed(2)} ${t("cost.labCredits")}`
+										: "-"}
+							</span>
+						</div>
+						<div className="lab-actions-row">
+							<button
+								type="button"
+								className="voice-preview-btn"
+								onClick={() =>
+									openUrl("https://lab.cafelua.com/ko/dashboard").catch(() => {})
 								}
-							}}
-						>
-							{t("settings.labDisconnect")}
-						</button>
+							>
+								{t("settings.labDashboard")}
+							</button>
+							<button
+								type="button"
+								className="voice-preview-btn"
+								onClick={() =>
+									openUrl("https://lab.cafelua.com/ko/billing").catch(() => {})
+								}
+							>
+								{t("cost.labCharge")}
+							</button>
+							<button
+								type="button"
+								className="voice-preview-btn lab-disconnect-btn"
+								onClick={() => {
+									if (window.confirm(t("settings.labDisconnectConfirm"))) {
+										setLabKeyState("");
+										setLabUserIdState("");
+										setLabBalance(null);
+									}
+								}}
+							>
+								{t("settings.labDisconnect")}
+							</button>
+						</div>
 					</div>
 				) : (
 					<button
@@ -458,6 +557,18 @@ export function SettingsTab() {
 						{labWaiting ? t("onboard.lab.waiting") : t("settings.labConnect")}
 					</button>
 				)}
+			</div>
+
+			<div className="settings-field">
+				<button
+					type="button"
+					className="voice-preview-btn"
+					onClick={() =>
+						openUrl("https://lab.cafelua.com/ko/manual").catch(() => {})
+					}
+				>
+					{t("settings.manual")}
+				</button>
 			</div>
 
 			<div className="settings-section-divider">

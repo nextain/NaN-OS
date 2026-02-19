@@ -594,6 +594,13 @@ export function ChatPanel() {
 					</button>
 					<button
 						type="button"
+						className={`chat-tab${activeTab === "history" ? " active" : ""}`}
+						onClick={() => handleTabChange("history")}
+					>
+						{t("history.tabHistory")}
+					</button>
+					<button
+						type="button"
 						className={`chat-tab${activeTab === "progress" ? " active" : ""}`}
 						onClick={() => handleTabChange("progress")}
 					>
@@ -612,13 +619,6 @@ export function ChatPanel() {
 						onClick={() => handleTabChange("settings")}
 					>
 						{t("settings.title")}
-					</button>
-					<button
-						type="button"
-						className={`chat-tab${activeTab === "history" ? " active" : ""}`}
-						onClick={() => handleTabChange("history")}
-					>
-						{t("history.tabHistory")}
 					</button>
 				</div>
 				<div className="chat-header-right">
@@ -647,7 +647,17 @@ export function ChatPanel() {
 			{activeTab === "progress" && <WorkProgressPanel />}
 
 			{/* Skills tab */}
-			{activeTab === "skills" && <SkillsTab />}
+			{activeTab === "skills" && (
+				<SkillsTab
+					onAskAI={(message) => {
+						setInput(message);
+						setActiveTab("chat");
+						setTimeout(() => {
+							inputRef.current?.focus();
+						}, 50);
+					}}
+				/>
+			)}
 
 			{/* Settings tab */}
 			{activeTab === "settings" && <SettingsTab />}

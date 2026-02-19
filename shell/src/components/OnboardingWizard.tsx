@@ -2,6 +2,7 @@ import { listen } from "@tauri-apps/api/event";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { useEffect, useState } from "react";
 import {
+	LAB_GATEWAY_URL,
 	getDefaultModel,
 	loadConfig,
 	saveConfig,
@@ -11,23 +12,24 @@ import { t } from "../lib/i18n";
 import { Logger } from "../lib/logger";
 import type { ProviderId } from "../lib/types";
 import { useAvatarStore } from "../stores/avatar";
+import { VrmPreview } from "./VrmPreview";
 
 type Step =
+	| "provider"
+	| "apiKey"
 	| "agentName"
 	| "userName"
 	| "character"
 	| "personality"
-	| "provider"
-	| "apiKey"
 	| "complete";
 
 const STEPS: Step[] = [
+	"provider",
+	"apiKey",
 	"agentName",
 	"userName",
 	"character",
 	"personality",
-	"provider",
-	"apiKey",
 	"complete",
 ];
 
@@ -93,21 +95,46 @@ Personality:
 	},
 ];
 
-const PROVIDERS: { id: ProviderId; label: string; description: string }[] = [
+const PROVIDERS: {
+	id: ProviderId;
+	label: string;
+	description: string;
+	disabled?: boolean;
+}[] = [
 	{
 		id: "gemini",
 		label: "Google Gemini",
-		description: "Chat + TTS + Vision",
+		description: "Chat + TTS + Vision + Tool",
 	},
 	{
-		id: "xai",
-		label: "xAI (Grok)",
-		description: "Grok models",
+		id: "openai",
+		label: "OpenAI (ChatGPT)",
+		description: "지원 예정",
+		disabled: true,
 	},
 	{
 		id: "anthropic",
 		label: "Anthropic (Claude)",
-		description: "Claude models",
+		description: "지원 예정",
+		disabled: true,
+	},
+	{
+		id: "xai",
+		label: "xAI (Grok)",
+		description: "지원 예정",
+		disabled: true,
+	},
+	{
+		id: "zai",
+		label: "zAI (GLM)",
+		description: "지원 예정",
+		disabled: true,
+	},
+	{
+		id: "ollama",
+		label: "Ollama (로컬)",
+		description: "지원 예정",
+		disabled: true,
 	},
 ];
 
@@ -117,7 +144,7 @@ export function OnboardingWizard({
 	onComplete: () => void;
 }) {
 	const setAvatarModelPath = useAvatarStore((s) => s.setModelPath);
-	const [step, setStep] = useState<Step>("agentName");
+	const [step, setStep] = useState<Step>("provider");
 	const [agentName, setAgentName] = useState("");
 	const [userName, setUserName] = useState("");
 	const [selectedVrm, setSelectedVrm] = useState(VRM_CHOICES[0].path);
@@ -131,6 +158,7 @@ export function OnboardingWizard({
 	const [labKey, setLabKey] = useState("");
 	const [labUserId, setLabUserId] = useState("");
 	const [labWaiting, setLabWaiting] = useState(false);
+	const [labTimeout, setLabTimeout] = useState(false);
 
 	// Listen for deep-link Lab auth callback
 	useEffect(() => {
@@ -138,11 +166,37 @@ export function OnboardingWizard({
 			"lab_auth_complete",
 			(event) => {
 				Logger.info("OnboardingWizard", "Lab auth received", {});
-				setLabKey(event.payload.labKey);
-				setLabUserId(event.payload.labUserId ?? "");
+				const key = event.payload.labKey;
+				const userId = event.payload.labUserId ?? "";
+				setLabKey(key);
+				setLabUserId(userId);
 				setLabWaiting(false);
-				// Jump to complete step, skipping apiKey
-				setStep("complete");
+				setLabTimeout(false);
+
+				// Restore previous settings if they exist
+				const existing = loadConfig();
+				if (existing?.agentName) setAgentName(existing.agentName);
+				if (existing?.userName) setUserName(existing.userName);
+				if (existing?.vrmModel) {
+					const match = VRM_CHOICES.find(
+						(v) => v.path === existing.vrmModel,
+					);
+					if (match) setSelectedVrm(match.path);
+				}
+				if (existing?.persona) {
+					const match = PERSONALITY_PRESETS.find((p) =>
+						existing.persona?.includes(p.id),
+					);
+					if (match) setSelectedPersonality(match.id);
+				}
+
+				// Returning user with existing settings → complete
+				// First-time user → go through name/character/personality
+				if (existing?.agentName && existing?.userName) {
+					setStep("complete");
+				} else {
+					setStep("agentName");
+				}
 			},
 		);
 		return () => {
@@ -153,34 +207,54 @@ export function OnboardingWizard({
 	const stepIndex = STEPS.indexOf(step);
 	const displayName = agentName.trim() || "Alpha";
 
+	// Enter key advances to next step
+	function handleKeyDown(e: React.KeyboardEvent) {
+		if (e.key === "Enter" && canProceed()) {
+			e.preventDefault();
+			if (step === "complete") {
+				handleComplete();
+			} else {
+				goNext();
+			}
+		}
+	}
+
 	function goNext() {
 		if (stepIndex < STEPS.length - 1) {
-			const nextStep = STEPS[stepIndex + 1];
-			// Skip apiKey step if Lab key is already set
+			let nextStep = STEPS[stepIndex + 1];
+			// Skip apiKey step if Lab key is set
 			if (nextStep === "apiKey" && labKey) {
-				setStep("complete");
-			} else {
-				setStep(nextStep);
+				nextStep = STEPS[stepIndex + 2];
 			}
+			setStep(nextStep);
 		}
 	}
 
 	function goBack() {
 		if (stepIndex > 0) {
-			setStep(STEPS[stepIndex - 1]);
+			let prevStep = STEPS[stepIndex - 1];
+			// Skip apiKey step going back if Lab key is set
+			if (prevStep === "apiKey" && labKey) {
+				prevStep = STEPS[stepIndex - 2];
+			}
+			setStep(prevStep);
 		}
 	}
 
-	function handleSkip() {
-		const existing = loadConfig();
-		saveConfig({
-			...existing,
-			provider: existing?.provider ?? "gemini",
-			model: existing?.model ?? getDefaultModel("gemini"),
-			apiKey: existing?.apiKey ?? "",
-			onboardingComplete: true,
-		});
-		onComplete();
+	async function handleLabLogin() {
+		setLabWaiting(true);
+		setLabTimeout(false);
+		try {
+			await openUrl("https://lab.cafelua.com/ko/login?redirect=desktop");
+		} catch {
+			setLabWaiting(false);
+			return;
+		}
+		// Timeout after 30s
+		setTimeout(() => {
+			setLabWaiting(false);
+			setLabTimeout(true);
+		}, 30_000);
 	}
 
 	async function handleValidate() {
@@ -209,7 +283,7 @@ export function OnboardingWizard({
 			: undefined;
 
 		const defaultVrm = VRM_CHOICES[0].path;
-		saveConfig({
+		const config = {
 			provider,
 			model: getDefaultModel(provider),
 			apiKey: labKey ? "" : apiKey.trim(),
@@ -220,7 +294,39 @@ export function OnboardingWizard({
 			onboardingComplete: true,
 			labKey: labKey || undefined,
 			labUserId: labUserId || undefined,
-		});
+		};
+		saveConfig(config);
+
+		// Sync to Lab if connected
+		if (labKey && labUserId) {
+			const syncData = {
+				provider: config.provider,
+				model: config.model,
+				locale: undefined,
+				theme: undefined,
+				vrmModel: config.vrmModel,
+				persona: config.persona,
+				userName: config.userName,
+				agentName: config.agentName,
+			};
+			fetch(
+				`${LAB_GATEWAY_URL}/v1/users/${encodeURIComponent(labUserId)}`,
+				{
+					method: "PATCH",
+					headers: {
+						"Content-Type": "application/json",
+						"X-AnyLLM-Key": `Bearer ${labKey}`,
+					},
+					body: JSON.stringify({
+						metadata: { cafelua_config: syncData },
+					}),
+				},
+			).catch((err) => {
+				Logger.warn("OnboardingWizard", "Lab sync failed", {
+					error: String(err),
+				});
+			});
+		}
 
 		setAvatarModelPath(selectedVrm);
 		onComplete();
@@ -228,15 +334,21 @@ export function OnboardingWizard({
 
 	function canProceed(): boolean {
 		switch (step) {
+			case "provider":
+				return true;
 			case "apiKey":
 				return !!apiKey.trim() || !!labKey;
+			case "agentName":
+				return !!agentName.trim();
+			case "userName":
+				return !!userName.trim();
 			default:
 				return true;
 		}
 	}
 
 	return (
-		<div className="onboarding-overlay">
+		<div className="onboarding-overlay" onKeyDown={handleKeyDown}>
 			<div className="onboarding-card">
 				{/* Step indicators */}
 				<div className="onboarding-steps">
@@ -248,120 +360,35 @@ export function OnboardingWizard({
 					))}
 				</div>
 
-				{/* Step: Agent Name */}
-				{step === "agentName" && (
-					<div className="onboarding-content">
-						<h2>{t("onboard.agentName.title")}</h2>
-						<p className="onboarding-description">
-							{t("onboard.agentName.description")}
-						</p>
-						<input
-							type="text"
-							className="onboarding-input"
-							value={agentName}
-							onChange={(e) => setAgentName(e.target.value)}
-							placeholder={t("onboard.name.placeholder")}
-							autoFocus
-						/>
-					</div>
-				)}
-
-				{/* Step: User Name */}
-				{step === "userName" && (
-					<div className="onboarding-content">
-						<h2>
-							{t("onboard.userName.title").replace("{agent}", displayName)}
-						</h2>
-						<p className="onboarding-description">
-							{t("onboard.userName.description")}
-						</p>
-						<input
-							type="text"
-							className="onboarding-input"
-							value={userName}
-							onChange={(e) => setUserName(e.target.value)}
-							placeholder={t("onboard.name.placeholder")}
-							autoFocus
-						/>
-					</div>
-				)}
-
-				{/* Step: Character (VRM) */}
-				{step === "character" && (
-					<div className="onboarding-content">
-						<h2>
-							{t("onboard.character.title").replace("{agent}", displayName)}
-						</h2>
-						<div className="onboarding-vrm-cards">
-							{VRM_CHOICES.map((v) => (
-								<button
-									key={v.path}
-									type="button"
-									className={`onboarding-vrm-card${selectedVrm === v.path ? " selected" : ""}`}
-									onClick={() => setSelectedVrm(v.path)}
-								>
-									<span className="onboarding-vrm-icon">&#x1F464;</span>
-									<span className="onboarding-vrm-label">{v.label}</span>
-								</button>
-							))}
-						</div>
-					</div>
-				)}
-
-				{/* Step: Personality */}
-				{step === "personality" && (
-					<div className="onboarding-content">
-						<h2>
-							{t("onboard.personality.title").replace("{agent}", displayName)}
-						</h2>
-						<div className="onboarding-personality-cards">
-							{PERSONALITY_PRESETS.map((p) => (
-								<button
-									key={p.id}
-									type="button"
-									className={`onboarding-personality-card${selectedPersonality === p.id ? " selected" : ""}`}
-									onClick={() => setSelectedPersonality(p.id)}
-								>
-									<span className="personality-card-label">{p.label}</span>
-									<span className="personality-card-desc">
-										{p.description}
-									</span>
-								</button>
-							))}
-						</div>
-					</div>
-				)}
-
-				{/* Step: Provider */}
+				{/* Step: Provider (FIRST) */}
 				{step === "provider" && (
 					<div className="onboarding-content">
 						<h2>{t("onboard.provider.title")}</h2>
 
-						{/* Lab login option */}
-						<div className="onboarding-lab-section">
-							<button
-								type="button"
-								className={`onboarding-lab-btn${labKey ? " connected" : ""}`}
-								disabled={labWaiting}
-								onClick={() => {
-									setLabWaiting(true);
-									openUrl(
-										"https://lab.cafelua.com/ko/login?redirect=desktop",
-									).catch(() => setLabWaiting(false));
-									// Reset after 60s if deep-link callback never arrives
-									setTimeout(() => setLabWaiting(false), 60_000);
-								}}
-							>
+						{/* Lab login — prominent card at top */}
+						<button
+							type="button"
+							className={`onboarding-provider-card lab-card${labKey ? " selected" : ""}`}
+							disabled={labWaiting}
+							onClick={handleLabLogin}
+						>
+							<span className="provider-card-label">
 								{labKey
 									? t("onboard.apiKey.success")
 									: labWaiting
 										? t("onboard.lab.waiting")
-										: t("onboard.lab.login")}
-							</button>
-							<p className="onboarding-lab-desc">
+										: "Cafelua Lab"}
+							</span>
+							<span className="provider-card-desc">
 								{t("onboard.lab.description")}
-							</p>
-						</div>
+							</span>
+						</button>
+
+						{labTimeout && (
+							<div className="onboarding-validation-error">
+								{t("onboard.lab.timeout")}
+							</div>
+						)}
 
 						<div className="onboarding-divider">
 							<span>{t("onboard.lab.or")}</span>
@@ -372,11 +399,14 @@ export function OnboardingWizard({
 								<button
 									key={p.id}
 									type="button"
-									className={`onboarding-provider-card${!labKey && provider === p.id ? " selected" : ""}`}
+									className={`onboarding-provider-card${!labKey && provider === p.id ? " selected" : ""}${p.disabled ? " disabled" : ""}`}
+									disabled={p.disabled}
 									onClick={() => {
+										if (p.disabled) return;
 										setProvider(p.id);
 										setLabKey("");
 										setLabUserId("");
+										setLabTimeout(false);
 									}}
 								>
 									<span className="provider-card-label">{p.label}</span>
@@ -425,6 +455,87 @@ export function OnboardingWizard({
 					</div>
 				)}
 
+				{/* Step: Agent Name */}
+				{step === "agentName" && (
+					<div className="onboarding-content">
+						<h2>{t("onboard.agentName.title")}</h2>
+						<input
+							type="text"
+							className="onboarding-input"
+							value={agentName}
+							onChange={(e) => setAgentName(e.target.value)}
+							placeholder={t("onboard.name.placeholder")}
+							autoFocus
+						/>
+					</div>
+				)}
+
+				{/* Step: User Name */}
+				{step === "userName" && (
+					<div className="onboarding-content">
+						<h2>
+							{t("onboard.userName.title").replace("{agent}", displayName)}
+						</h2>
+						<input
+							type="text"
+							className="onboarding-input"
+							value={userName}
+							onChange={(e) => setUserName(e.target.value)}
+							placeholder={t("onboard.name.placeholder")}
+							autoFocus
+						/>
+					</div>
+				)}
+
+				{/* Step: Character (VRM) with preview */}
+				{step === "character" && (
+					<div className="onboarding-content">
+						<h2>
+							{t("onboard.character.title").replace("{agent}", displayName)}
+						</h2>
+						<VrmPreview modelPath={selectedVrm} />
+						<div className="onboarding-vrm-cards">
+							{VRM_CHOICES.map((v) => (
+								<button
+									key={v.path}
+									type="button"
+									className={`onboarding-vrm-card${selectedVrm === v.path ? " selected" : ""}`}
+									onClick={() => setSelectedVrm(v.path)}
+								>
+									<span className="onboarding-vrm-label">{v.label}</span>
+								</button>
+							))}
+						</div>
+					</div>
+				)}
+
+				{/* Step: Personality */}
+				{step === "personality" && (
+					<div className="onboarding-content">
+						<h2>
+							{t("onboard.personality.title").replace("{agent}", displayName)}
+						</h2>
+						<div className="onboarding-personality-cards">
+							{PERSONALITY_PRESETS.map((p) => (
+								<button
+									key={p.id}
+									type="button"
+									className={`onboarding-personality-card${selectedPersonality === p.id ? " selected" : ""}`}
+									onClick={() => setSelectedPersonality(p.id)}
+								>
+									<span className="personality-card-label">{p.label}</span>
+									<span className="personality-card-desc">
+										{p.description}
+									</span>
+								</button>
+							))}
+						</div>
+						<p className="onboarding-description">
+							{t("onboard.personality.hint")}
+						</p>
+					</div>
+				)}
+
 				{/* Step: Complete */}
 				{step === "complete" && (
 					<div className="onboarding-content">
@@ -442,15 +553,6 @@ export function OnboardingWizard({
 
 				{/* Navigation */}
 				<div className="onboarding-nav">
-					{step === "agentName" && (
-						<button
-							type="button"
-							className="onboarding-skip-btn"
-							onClick={handleSkip}
-						>
-							{t("onboard.skip")}
-						</button>
-					)}
 					{stepIndex > 0 && step !== "complete" && (
 						<button
 							type="button"

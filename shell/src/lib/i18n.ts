@@ -145,6 +145,10 @@ const translations = {
 	"skills.disableAll": { ko: "전체 비활성", en: "Disable All" },
 	"skills.builtInSection": { ko: "기본 스킬", en: "Built-in Skills" },
 	"skills.customSection": { ko: "커스텀 스킬", en: "Custom Skills" },
+	"skills.askAI": {
+		ko: "AI에게 이 스킬에 대해 질문하기",
+		en: "Ask AI about this skill",
+	},
 
 	// Cost Dashboard (4.4-ui)
 	"cost.title": { ko: "비용 상세", en: "Cost Details" },
@@ -183,34 +187,38 @@ const translations = {
 	"chat.queued": { ko: "대기 중", en: "queued" },
 
 	// Onboarding (conversational)
+	"onboard.provider.title": {
+		ko: "어떤 두뇌를 사용할까요?",
+		en: "Which brain should we use?",
+	},
 	"onboard.agentName.title": {
-		ko: "안녕! 저는 당신의 AI 캐릭터예요.",
-		en: "Hi! I'm your AI character.",
+		ko: "안녕! 나에게 이름을 지어줘!",
+		en: "Hi! Give me a name!",
 	},
 	"onboard.agentName.description": {
-		ko: "제 이름을 지어주세요!",
-		en: "Give me a name!",
+		ko: "",
+		en: "",
 	},
 	"onboard.userName.title": {
-		ko: "저는 {agent}! 당신은 뭐라고 불러드릴까요?",
+		ko: "나는 {agent}! 너는 뭐라고 부르면 돼?",
 		en: "I'm {agent}! What should I call you?",
 	},
 	"onboard.userName.description": {
-		ko: "비워두셔도 괜찮아요.",
-		en: "You can leave this empty.",
+		ko: "",
+		en: "",
 	},
-	"onboard.name.placeholder": { ko: "이름을 입력하세요", en: "Enter your name" },
+	"onboard.name.placeholder": { ko: "이름을 입력하세요", en: "Enter a name" },
 	"onboard.character.title": {
-		ko: "{agent}의 모습을 골라주세요!",
+		ko: "{agent}의 모습을 골라줘!",
 		en: "Choose {agent}'s look!",
 	},
 	"onboard.personality.title": {
-		ko: "{agent}의 성격을 골라주세요!",
+		ko: "{agent}의 성격을 골라줘!",
 		en: "Choose {agent}'s personality!",
 	},
-	"onboard.provider.title": {
-		ko: "어떤 AI 두뇌를 사용할까요?",
-		en: "Which AI brain should I use?",
+	"onboard.personality.hint": {
+		ko: "나중에 설정에서 자유롭게 수정할 수 있어요.",
+		en: "You can edit this later in Settings.",
 	},
 	"onboard.apiKey.title": {
 		ko: "API 키를 입력해주세요",
@@ -269,8 +277,8 @@ const translations = {
 		en: "Get started with Lab account",
 	},
 	"onboard.lab.description": {
-		ko: "lab.cafelua.com에 로그인하면 API 키 없이 바로 사용할 수 있어요!",
-		en: "Log in to lab.cafelua.com to start without an API key!",
+		ko: "API 키 없이 무료로 바로 사용할 수 있고, 설정도 저장/복원됩니다.",
+		en: "Free to use without an API key. Settings are saved and restored.",
 	},
 	"onboard.lab.login": { ko: "Lab 로그인", en: "Lab Login" },
 	"onboard.lab.waiting": {
@@ -278,7 +286,11 @@ const translations = {
 		en: "Waiting for login...",
 	},
 	"onboard.lab.or": { ko: "또는 직접 API 키 입력", en: "or enter API key manually" },
-	"settings.labSection": { ko: "Lab 계정", en: "Lab Account" },
+	"onboard.lab.timeout": {
+		ko: "로그인 응답이 없어요. 다시 시도해주세요.",
+		en: "No login response. Please try again.",
+	},
+	"settings.labSection": { ko: "Cafelua 랩 계정", en: "Cafelua Lab Account" },
 	"settings.labConnected": { ko: "연결됨", en: "Connected" },
 	"settings.labDisconnected": { ko: "미연결", en: "Not Connected" },
 	"settings.labConnect": { ko: "Lab 로그인", en: "Lab Login" },
@@ -288,6 +300,13 @@ const translations = {
 		en: "Disconnect Lab account?",
 	},
 	"settings.labUserId": { ko: "유저 ID", en: "User ID" },
+	"settings.manual": { ko: "사용법 매뉴얼", en: "User Manual" },
+	"settings.labDashboard": { ko: "대시보드", en: "Dashboard" },
+	"settings.labBalance": { ko: "크레딧 잔액", en: "Credit Balance" },
+	"settings.labBalanceLoading": {
+		ko: "잔액 조회 중...",
+		en: "Loading balance...",
+	},
 	"cost.labBalance": { ko: "Lab 잔액", en: "Lab Balance" },
 	"cost.labCredits": { ko: "크레딧", en: "credits" },
 	"cost.labCharge": { ko: "크레딧 충전", en: "Charge Credits" },

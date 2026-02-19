@@ -16,6 +16,13 @@ vi.mock("@tauri-apps/plugin-opener", () => ({
 	openUrl: vi.fn().mockResolvedValue(undefined),
 }));
 
+// Mock VrmPreview (Three.js doesn't work in jsdom)
+vi.mock("../VrmPreview", () => ({
+	VrmPreview: ({ modelPath }: { modelPath: string }) => (
+		<div data-testid="vrm-preview" data-model={modelPath} />
+	),
+}));
+
 import { OnboardingWizard } from "../OnboardingWizard";
 
 describe("OnboardingWizard", () => {
@@ -27,51 +34,91 @@ describe("OnboardingWizard", () => {
 		localStorage.removeItem("cafelua-config");
 	});
 
-	it("renders agent name step initially", () => {
+	it("renders provider step first", () => {
 		render(<OnboardingWizard onComplete={onComplete} />);
-		expect(screen.getByText(/AI 캐릭터|AI character/)).toBeDefined();
+		expect(screen.getByText(/두뇌|brain/i)).toBeDefined();
+		expect(screen.getByText("Cafelua Lab")).toBeDefined();
 	});
 
-	it("progresses through steps", () => {
+	it("shows all 5 providers", () => {
+		render(<OnboardingWizard onComplete={onComplete} />);
+		expect(screen.getByText("Google Gemini")).toBeDefined();
+		expect(screen.getByText(/OpenAI/)).toBeDefined();
+		expect(screen.getByText(/Anthropic/)).toBeDefined();
+		expect(screen.getByText(/xAI/)).toBeDefined();
+		expect(screen.getByText(/zAI/)).toBeDefined();
+	});
+
+	it("progresses through steps: provider → apiKey → agentName → ...", () => {
 		render(<OnboardingWizard onComplete={onComplete} />);
 
-		// Agent name → Next
-		const nextBtn = screen.getByText(/다음|Next/);
-		fireEvent.click(nextBtn);
-
-		// User name step
-		expect(screen.getByText(/불러드릴|call you/)).toBeDefined();
-		fireEvent.click(screen.getByText(/다음|Next/));
-
-		// Character step (VRM)
-		expect(screen.getByText(/모습|look/i)).toBeDefined();
-		fireEvent.click(screen.getByText(/다음|Next/));
-
-		// Personality step — title contains "골라주세요" or "personality"
-		expect(screen.getByText(/골라주세요|Choose.*personality/i)).toBeDefined();
-		fireEvent.click(screen.getByText(/다음|Next/));
-
-		// Provider step
-		expect(screen.getByText(/두뇌|brain/i)).toBeDefined();
+		// Provider step → Next
 		fireEvent.click(screen.getByText(/다음|Next/));
 
 		// API key step
 		expect(screen.getByText(/API/)).toBeDefined();
+		const apiInput = screen.getByPlaceholderText("API key...");
+		fireEvent.change(apiInput, { target: { value: "test-key" } });
+		fireEvent.click(screen.getByText(/다음|Next/));
+
+		// Agent name step
+		expect(screen.getByText(/이름|name/i)).toBeDefined();
+		const agentInput = screen.getByPlaceholderText(/이름|name/i);
+		fireEvent.change(agentInput, { target: { value: "Mochi" } });
+		fireEvent.click(screen.getByText(/다음|Next/));
+
+		// User name step
+		expect(screen.getByText(/Mochi/)).toBeDefined();
+		const nameInput = screen.getByPlaceholderText(/이름|name/i);
+		fireEvent.change(nameInput, { target: { value: "Luke" } });
+		fireEvent.click(screen.getByText(/다음|Next/));
+
+		// Character step (VRM)
+		expect(screen.getByText(/모습|look/i)).toBeDefined();
+		expect(screen.getByTestId("vrm-preview")).toBeDefined();
+		fireEvent.click(screen.getByText(/다음|Next/));
+
+		// Personality step
+		expect(screen.getByText(/골라|Choose.*personality/i)).toBeDefined();
+		// Check hint about editing later
+		expect(screen.getByText(/설정에서|Settings/i)).toBeDefined();
+		fireEvent.click(screen.getByText(/다음|Next/));
+
+		// Complete step
+		expect(screen.getByText(/Luke/)).toBeDefined();
 	});
 
-	it("skip saves config and calls onComplete", () => {
+	it("requires agentName (Next disabled when empty)", () => {
 		render(<OnboardingWizard onComplete={onComplete} />);
-		const skipBtn = screen.getByText(/건너뛰기|Skip/);
-		fireEvent.click(skipBtn);
-		expect(onComplete).toHaveBeenCalled();
-		const config = JSON.parse(
-			localStorage.getItem("cafelua-config") || "{}",
-		);
-		expect(config.onboardingComplete).toBe(true);
+
+		// Provider → Next
+		fireEvent.click(screen.getByText(/다음|Next/));
+
+		// API key → fill and Next
+		const apiInput = screen.getByPlaceholderText("API key...");
+		fireEvent.change(apiInput, { target: { value: "key" } });
+		fireEvent.click(screen.getByText(/다음|Next/));
+
+		// Agent name step — Next should be disabled
+		const nextBtn = screen.getByText(/다음|Next/);
+		expect((nextBtn as HTMLButtonElement).disabled).toBe(true);
+
+		// Type a name → Next enabled
+		const agentInput = screen.getByPlaceholderText(/이름|name/i);
+		fireEvent.change(agentInput, { target: { value: "Alpha" } });
+		expect((nextBtn as HTMLButtonElement).disabled).toBe(false);
 	});
 
-	it("complete step saves agentName, userName, persona and calls onComplete", () => {
+	it("complete step saves all config", () => {
 		render(<OnboardingWizard onComplete={onComplete} />);
+
+		// Provider → Next
+		fireEvent.click(screen.getByText(/다음|Next/));
+
+		// API key
+		const apiInput = screen.getByPlaceholderText("API key...");
+		fireEvent.change(apiInput, { target: { value: "test-key" } });
+		fireEvent.click(screen.getByText(/다음|Next/));
 
 		// Agent name
 		const agentInput = screen.getByPlaceholderText(/이름|name/i);
@@ -83,22 +130,13 @@ describe("OnboardingWizard", () => {
 		fireEvent.change(nameInput, { target: { value: "Luke" } });
 		fireEvent.click(screen.getByText(/다음|Next/));
 
-		// Character (VRM) → keep default
+		// Character → Next
 		fireEvent.click(screen.getByText(/다음|Next/));
 
-		// Personality → keep default
+		// Personality → Next
 		fireEvent.click(screen.getByText(/다음|Next/));
 
-		// Provider → keep default
-		fireEvent.click(screen.getByText(/다음|Next/));
-
-		// API key
-		const apiInput = screen.getByPlaceholderText("API key...");
-		fireEvent.change(apiInput, { target: { value: "test-key" } });
-		fireEvent.click(screen.getByText(/다음|Next/));
-
-		// Complete
-		expect(screen.getByText(/Luke/)).toBeDefined();
+		// Complete → Start
 		fireEvent.click(screen.getByText(/시작|Get Started/));
 		expect(onComplete).toHaveBeenCalled();
 

@@ -79,13 +79,31 @@ describe("SkillsTab", () => {
 		expect(screen.getByText("skill_deploy")).toBeDefined();
 	});
 
-	it("shows built-in badge for built-in skills", async () => {
+	it("shows built-in badge when skill is expanded", async () => {
 		mockInvoke.mockResolvedValue(ALL_SKILLS);
 		const { container } = render(<SkillsTab />);
 		await waitFor(() => {
-			const badges = container.querySelectorAll(".skill-badge.built-in");
-			expect(badges.length).toBe(2);
+			expect(screen.getByText("skill_time")).toBeDefined();
 		});
+		// Click to expand the first built-in skill
+		const headers = container.querySelectorAll(".skill-card-header");
+		fireEvent.click(headers[0]);
+		const badges = container.querySelectorAll(".skill-badge.built-in");
+		expect(badges.length).toBeGreaterThanOrEqual(1);
+	});
+
+	it("calls onAskAI when help button is clicked", async () => {
+		const onAskAI = vi.fn();
+		mockInvoke.mockResolvedValue(ALL_SKILLS);
+		const { container } = render(<SkillsTab onAskAI={onAskAI} />);
+		await waitFor(() => {
+			expect(screen.getByText("skill_time")).toBeDefined();
+		});
+		const helpBtns = container.querySelectorAll(".skill-help-btn");
+		expect(helpBtns.length).toBeGreaterThan(0);
+		fireEvent.click(helpBtns[0]);
+		expect(onAskAI).toHaveBeenCalledOnce();
+		expect(onAskAI.mock.calls[0][0]).toContain("skill_time");
 	});
 
 	it("applies disabled class to disabled skills", async () => {

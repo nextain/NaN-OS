@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import {
 	getDisabledSkills,
 	isSkillDisabled,
@@ -16,7 +16,11 @@ function tierLabel(tier: number): string {
 	return `T${tier}`;
 }
 
-export function SkillsTab() {
+export function SkillsTab({
+	onAskAI,
+}: {
+	onAskAI?: (message: string) => void;
+}) {
 	const skills = useSkillsStore((s) => s.skills);
 	const isLoading = useSkillsStore((s) => s.isLoading);
 	const searchQuery = useSkillsStore((s) => s.searchQuery);
@@ -143,6 +147,7 @@ export function SkillsTab() {
 								skill={skill}
 								disabled={false}
 								onToggle={handleToggle}
+								onAskAI={onAskAI}
 							/>
 						))}
 					</>
@@ -159,6 +164,7 @@ export function SkillsTab() {
 								skill={skill}
 								disabled={isSkillDisabled(skill.name)}
 								onToggle={handleToggle}
+								onAskAI={onAskAI}
 							/>
 						))}
 					</>
@@ -172,40 +178,82 @@ function SkillCard({
 	skill,
 	disabled,
 	onToggle,
+	onAskAI,
 }: {
 	skill: SkillManifestInfo;
 	disabled: boolean;
 	onToggle: (name: string) => void;
+	onAskAI?: (message: string) => void;
 }) {
+	const [expanded, setExpanded] = useState(false);
 	const isBuiltIn = skill.type === "built-in";
 
 	return (
-		<div className={`skill-card${disabled ? " disabled" : ""}`}>
-			<div className="skill-card-info">
-				<div className="skill-card-name">{skill.name}</div>
-				<div className="skill-card-desc">{skill.description}</div>
-				<div className="skill-card-badges">
-					{isBuiltIn && (
-						<span className="skill-badge built-in">{t("skills.builtIn")}</span>
+		<div className={`skill-card${disabled ? " disabled" : ""}${expanded ? " expanded" : ""}`}>
+			<div
+				className="skill-card-header"
+				onClick={() => setExpanded(!expanded)}
+			>
+				<div className="skill-card-info">
+					<div className="skill-card-name">{skill.name}</div>
+					<div className="skill-card-desc-short">
+						{skill.description}
+					</div>
+				</div>
+				<div className="skill-card-actions">
+					{onAskAI && (
+						<button
+							type="button"
+							className="skill-help-btn"
+							title={t("skills.askAI")}
+							onClick={(e) => {
+								e.stopPropagation();
+								onAskAI(
+									`"${skill.name}" 스킬에 대해 자세히 설명해줘. 어떤 기능인지, 어떻게 사용하는지, 예시도 알려줘.`,
+								);
+							}}
+						>
+							?
+						</button>
 					)}
 					{!isBuiltIn && (
-						<span className={`skill-badge ${skill.type}`}>
-							{skill.type === "gateway"
-								? t("skills.gateway")
-								: t("skills.command")}
-						</span>
+						<label
+							className="skill-toggle"
+							onClick={(e) => e.stopPropagation()}
+						>
+							<input
+								type="checkbox"
+								checked={!disabled}
+								onChange={() => onToggle(skill.name)}
+							/>
+						</label>
 					)}
-					<span className="skill-badge tier">{tierLabel(skill.tier)}</span>
 				</div>
 			</div>
-			{!isBuiltIn && (
-				<label className="skill-toggle">
-					<input
-						type="checkbox"
-						checked={!disabled}
-						onChange={() => onToggle(skill.name)}
-					/>
-				</label>
+			{expanded && (
+				<div className="skill-card-detail">
+					<div className="skill-card-desc-full">{skill.description}</div>
+					<div className="skill-card-badges">
+						{isBuiltIn && (
+							<span className="skill-badge built-in">
+								{t("skills.builtIn")}
+							</span>
+						)}
+						{!isBuiltIn && (
+							<span className={`skill-badge ${skill.type}`}>
+								{skill.type === "gateway"
+									? t("skills.gateway")
+									: t("skills.command")}
+							</span>
+						)}
+						<span className="skill-badge tier">
+							{tierLabel(skill.tier)}
+						</span>
+						{skill.source && (
+							<span className="skill-badge source">{skill.source}</span>
+						)}
+					</div>
+				</div>
 			)}
 		</div>
 	);

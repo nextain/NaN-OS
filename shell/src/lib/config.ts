@@ -45,8 +45,11 @@ export interface AppConfig {
 
 const DEFAULT_MODELS: Record<ProviderId, string> = {
 	gemini: "gemini-2.5-flash",
-	xai: "grok-3-mini",
+	openai: "gpt-4o",
 	anthropic: "claude-sonnet-4-5-20250929",
+	xai: "grok-3-mini",
+	zai: "glm-4.7",
+	ollama: "llama3.2",
 };
 
 // ── Sync API (localStorage only, backwards compatible) ──

@@ -1,6 +1,12 @@
 // === Provider ===
 
-export type ProviderId = "gemini" | "xai" | "anthropic";
+export type ProviderId =
+	| "gemini"
+	| "openai"
+	| "anthropic"
+	| "xai"
+	| "zai"
+	| "ollama";
 
 export interface ProviderConfig {
 	provider: ProviderId;
