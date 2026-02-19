@@ -15,10 +15,24 @@ describe("buildSystemPrompt", () => {
 		expect(result).not.toContain(DEFAULT_PERSONA);
 	});
 
-	it("injects agentName from context", () => {
+	it("replaces Alpha with agentName in default persona", () => {
 		const result = buildSystemPrompt(undefined, { agentName: "Mochi" });
-		expect(result).toContain("Mochi");
-		expect(result).toContain("not Alpha");
+		expect(result).toContain("You are Mochi");
+		expect(result).not.toContain("You are Alpha");
+	});
+
+	it("replaces Alpha with agentName in custom persona", () => {
+		const result = buildSystemPrompt(
+			"You are Alpha (알파), my custom companion.",
+			{ agentName: "Mochi" },
+		);
+		expect(result).toContain("You are Mochi");
+		expect(result).not.toContain("You are Alpha");
+	});
+
+	it("does not modify persona when agentName is not set", () => {
+		const result = buildSystemPrompt();
+		expect(result).toContain("You are Alpha (알파)");
 	});
 
 	it("injects userName from context", () => {

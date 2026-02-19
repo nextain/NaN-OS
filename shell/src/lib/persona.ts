@@ -34,15 +34,18 @@ export function buildSystemPrompt(
 	persona?: string,
 	context?: MemoryContext,
 ): string {
-	const base = persona?.trim() || DEFAULT_PERSONA;
+	let base = persona?.trim() || DEFAULT_PERSONA;
+
+	// Replace "Alpha (알파)" with the configured agent name directly in persona text
+	if (context?.agentName) {
+		base = base.replace(/Alpha\s*\(알파\)/g, context.agentName);
+		base = base.replace(/\bAlpha\b/g, context.agentName);
+	}
+
 	const parts = [base];
 
 	if (context) {
 		const contextLines: string[] = [];
-
-		if (context.agentName) {
-			contextLines.push(`Your name is "${context.agentName}" (not Alpha). Use this name when referring to yourself.`);
-		}
 
 		if (context.userName) {
 			contextLines.push(`The user's name is "${context.userName}". Address them by name occasionally.`);
