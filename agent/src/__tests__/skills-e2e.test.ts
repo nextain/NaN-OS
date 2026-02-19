@@ -81,11 +81,11 @@ describe.skipIf(!canRunE2E)("E2E: Skills system (live)", () => {
 			expect(names).toContain("skill_weather");
 		});
 
-		it("getAllTools(false) excludes gateway-only skills", () => {
+		it("getAllTools(false) includes local-only skills", () => {
 			const tools = getAllTools(false);
 			const names = tools.map((t) => t.name);
 			expect(names).toContain("skill_time");
-			expect(names).not.toContain("skill_weather");
+			expect(names).toContain("skill_weather");
 		});
 	});
 
@@ -204,20 +204,27 @@ describe.skipIf(!canRunE2E)("E2E: Skills system (live)", () => {
 		});
 	});
 
-	// ── skill_weather (Tier 1, gateway) ──
+	// ── skill_weather (Tier 0, local via wttr.in) ──
 	describe("skill_weather", () => {
-		it("calls gateway skills.invoke for weather", async () => {
-			const hasSkillsInvoke =
-				client.availableMethods.includes("skills.invoke");
-			if (!hasSkillsInvoke) return;
-
-			const result = await executeTool(client, "skill_weather", {
-				location: "Seoul",
-			});
-			// May fail if gateway doesn't have weather skill configured,
-			// but the RPC call itself should not crash
+		it("returns weather data for a location", async () => {
+			const result = await skillRegistry.execute(
+				"skill_weather",
+				{ location: "Seoul" },
+				{},
+			);
+			// May fail in CI without network, but should not crash
 			expect(typeof result.success).toBe("boolean");
 			expect(typeof result.output).toBe("string");
+		});
+
+		it("requires location parameter", async () => {
+			const result = await skillRegistry.execute(
+				"skill_weather",
+				{},
+				{},
+			);
+			expect(result.success).toBe(false);
+			expect(result.error).toContain("location is required");
 		});
 	});
 });

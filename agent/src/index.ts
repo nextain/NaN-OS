@@ -101,13 +101,13 @@ export async function handleChatRequest(req: ChatRequest): Promise<void> {
 	try {
 		const provider = buildProvider(providerConfig);
 		const effectiveSystemPrompt = systemPrompt ?? ALPHA_SYSTEM_PROMPT;
-		const tools =
-			enableTools && gatewayUrl
-				? getAllTools(true, disabledSkills)
-				: undefined;
+		const hasGateway = !!(enableTools && gatewayUrl);
+		const tools = enableTools
+			? getAllTools(hasGateway, disabledSkills)
+			: undefined;
 
-		// Connect to Gateway if tools enabled
-		if (enableTools && gatewayUrl) {
+		// Connect to Gateway if tools enabled and URL provided
+		if (hasGateway) {
 			gateway = new GatewayClient();
 			const device = loadDeviceIdentity();
 			await gateway.connect(gatewayUrl, {
@@ -169,7 +169,7 @@ export async function handleChatRequest(req: ChatRequest): Promise<void> {
 			}
 
 			// No tool calls — done
-			if (toolCalls.length === 0 || !gateway) break;
+			if (toolCalls.length === 0) break;
 
 			// Add assistant's tool call message to conversation
 			chatMessages.push({
@@ -221,7 +221,7 @@ export async function handleChatRequest(req: ChatRequest): Promise<void> {
 					}
 				}
 
-				const result = await executeTool(gateway, call.name, call.args, {
+				const result = await executeTool(gateway ?? null, call.name, call.args, {
 					writeLine,
 					requestId,
 					disabledSkills,
@@ -280,7 +280,7 @@ export async function handleChatRequest(req: ChatRequest): Promise<void> {
 				// Execution phase (parallel)
 				const results = await Promise.all(
 					approvedSpawns.map((call) =>
-						executeTool(gateway!, call.name, call.args, {
+						executeTool(gateway ?? null, call.name, call.args, {
 							writeLine,
 							requestId,
 							disabledSkills,

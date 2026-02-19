@@ -16,7 +16,7 @@ describe("getAllTools disabledSkills filtering", () => {
 
 	it("filters out disabled skill tools", () => {
 		const allTools = getAllTools(false);
-		// Built-in skills registered: skill_time, skill_system_status, skill_memo, skill_weather
+		// Built-in skills: skill_time, skill_system_status, skill_memo, skill_weather, skill_skill_manager
 		const disabled = getAllTools(false, ["skill_time"]);
 		expect(disabled.length).toBe(allTools.length - 1);
 		expect(disabled.find((t) => t.name === "skill_time")).toBeUndefined();

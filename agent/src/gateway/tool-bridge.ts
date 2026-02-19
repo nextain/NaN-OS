@@ -473,14 +473,25 @@ export interface ExecuteToolContext {
 	disabledSkills?: string[];
 }
 
-/** Execute a tool call via the Gateway */
+/** Execute a tool call (gateway tools need client; skills may not) */
 export async function executeTool(
-	client: GatewayClient,
+	client: GatewayClient | null,
 	toolName: string,
 	args: Record<string, unknown>,
 	ctx?: ExecuteToolContext,
 ): Promise<ToolResult> {
-	if (!client.isConnected()) {
+	// Skills can run without gateway
+	if (skillRegistry.has(toolName)) {
+		return skillRegistry.execute(toolName, args, {
+			gateway: client ?? undefined,
+			writeLine: ctx?.writeLine,
+			requestId: ctx?.requestId,
+			disabledSkills: ctx?.disabledSkills,
+		});
+	}
+
+	// Gateway tools require connected client
+	if (!client?.isConnected()) {
 		return { success: false, output: "", error: "Gateway not connected" };
 	}
 
@@ -703,16 +714,7 @@ export async function executeTool(
 			});
 		}
 
-		default: {
-			if (skillRegistry.has(toolName)) {
-				return skillRegistry.execute(toolName, args, {
-					gateway: client,
-					writeLine: ctx?.writeLine,
-					requestId: ctx?.requestId,
-					disabledSkills: ctx?.disabledSkills,
-				});
-			}
+		default:
 			return { success: false, output: "", error: `Unknown tool: ${toolName}` };
-		}
 	}
 }
