@@ -3,8 +3,9 @@ export const S = {
 	// App
 	appRoot: ".app-root",
 
-	// SettingsTab
+	// SettingsTab (5th tab: chat, history, progress, skills, settings)
 	settingsTab: ".settings-tab",
+	settingsTabBtn: ".chat-tab:nth-child(5)",
 	chatTab: ".chat-tab:first-child",
 	providerSelect: "#provider-select",
 	apiKeyInput: "#apikey-input",
@@ -32,8 +33,8 @@ export const S = {
 	// PermissionModal
 	permissionAlways: ".permission-btn-always",
 
-	// History tab
-	historyTab: ".chat-tab:nth-child(5)",
+	// History tab (2nd tab: chat, history, progress, skills, settings)
+	historyTab: ".chat-tab:nth-child(2)",
 	historyItem: ".history-item",
 	historyItemTitle: ".history-item-title",
 	historyDeleteBtn: ".history-delete-btn",
@@ -67,8 +68,8 @@ export const S = {
 	labBalanceRow: ".lab-balance-row",
 	labChargeBtn: ".lab-charge-btn",
 
-	// Skills tab
-	skillsTab: ".chat-tab:nth-child(3)",
+	// Skills tab (4th tab: chat, history, progress, skills, settings)
+	skillsTab: ".chat-tab:nth-child(4)",
 	skillsTabPanel: ".skills-tab",
 	skillsSearch: ".skills-search",
 	skillsCard: ".skill-card",

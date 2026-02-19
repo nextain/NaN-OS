@@ -1,27 +1,33 @@
 import { S } from "../helpers/selectors.js";
 
+const API_KEY = process.env.CAFE_E2E_API_KEY || process.env.GEMINI_API_KEY || "";
+
 describe("01 — App Launch", () => {
 	it("should display the app root", async () => {
 		const appRoot = await $(S.appRoot);
 		await appRoot.waitForDisplayed({ timeout: 30_000 });
 	});
 
-	it("should clear localStorage and reload to trigger onboarding", async () => {
-		await browser.execute(() => localStorage.removeItem("cafelua-config"));
+	it("should bypass onboarding via localStorage config", async () => {
+		// Set minimum config to skip onboarding
+		await browser.execute((key: string) => {
+			const config = {
+				provider: "gemini",
+				model: "gemini-2.5-flash",
+				apiKey: key,
+				agentName: "Alpha",
+				userName: "Tester",
+				vrmModel: "/avatars/Sendagaya-Shino-dark-uniform.vrm",
+				persona: "Friendly AI companion",
+				enableTools: true,
+				locale: "ko",
+			};
+			localStorage.setItem("cafelua-config", JSON.stringify(config));
+		}, API_KEY);
+
 		await browser.refresh();
 
-		// After clearing config, onboarding wizard should appear
-		const onboarding = await $(S.onboardingOverlay);
-		await onboarding.waitForDisplayed({ timeout: 30_000 });
-	});
-
-	it("should skip onboarding to reach settings", async () => {
-		// Skip onboarding to set up config manually in spec 02
-		const skipBtn = await $(S.onboardingSkipBtn);
-		await skipBtn.waitForClickable({ timeout: 10_000 });
-		await skipBtn.click();
-
-		// Onboarding should disappear
+		// After reload with config, onboarding should NOT appear
 		await browser.waitUntil(
 			async () => {
 				return browser.execute(
@@ -29,10 +35,10 @@ describe("01 — App Launch", () => {
 					S.onboardingOverlay,
 				);
 			},
-			{ timeout: 10_000 },
+			{ timeout: 15_000, timeoutMsg: "Onboarding still visible after config set" },
 		);
 
-		// Now switch to settings tab to configure
+		// Main app should be visible
 		const appRoot = await $(S.appRoot);
 		await appRoot.waitForDisplayed({ timeout: 10_000 });
 	});

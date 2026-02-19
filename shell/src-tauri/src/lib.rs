@@ -1149,6 +1149,14 @@ async fn reset_window_state(app: AppHandle) -> Result<(), String> {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
+            // When a second instance is launched (e.g. via deep link),
+            // focus the existing window instead.
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.set_focus();
+            }
+            let _ = args; // deep link URLs are handled by on_open_url
+        }))
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_deep_link::init())

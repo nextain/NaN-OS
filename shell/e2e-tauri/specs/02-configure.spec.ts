@@ -11,16 +11,34 @@ if (!API_KEY) {
 const GATEWAY_TOKEN = process.env.CAFE_GATEWAY_TOKEN || "cafelua-dev-token";
 
 describe("02 — Configure Settings", () => {
+	before(async () => {
+		// Bypass onboarding
+		await browser.execute((key: string) => {
+			const config = {
+				provider: "gemini",
+				model: "gemini-2.5-flash",
+				apiKey: key,
+				agentName: "Alpha",
+				userName: "Tester",
+				vrmModel: "/avatars/Sendagaya-Shino-dark-uniform.vrm",
+				persona: "Friendly AI companion",
+				enableTools: true,
+				locale: "ko",
+			};
+			localStorage.setItem("cafelua-config", JSON.stringify(config));
+		}, API_KEY);
+		await browser.refresh();
+
+		// Wait for app to load
+		const appRoot = await $(S.appRoot);
+		await appRoot.waitForDisplayed({ timeout: 15_000 });
+	});
+
 	it("should switch to settings tab and configure", async () => {
-		// After onboarding skip, we need to navigate to settings tab
-		// Click settings tab (3rd tab)
-		const settingsTabBtn = await $(
-			".chat-tab:nth-child(4)",
-		);
+		const settingsTabBtn = await $(S.settingsTabBtn);
 		await settingsTabBtn.waitForClickable({ timeout: 10_000 });
 		await settingsTabBtn.click();
 
-		// Wait for settings tab content
 		const settingsTab = await $(S.settingsTab);
 		await settingsTab.waitForDisplayed({ timeout: 30_000 });
 
@@ -33,7 +51,6 @@ describe("02 — Configure Settings", () => {
 	});
 
 	it("should pre-approve skill tools for E2E", async () => {
-		// Add skill tools to allowedTools so permission modals don't block tests
 		await browser.execute(() => {
 			const raw = localStorage.getItem("cafelua-config");
 			if (!raw) return;
@@ -42,6 +59,8 @@ describe("02 — Configure Settings", () => {
 				"skill_time",
 				"skill_system_status",
 				"skill_memo",
+				"skill_weather",
+				"skill_skill_manager",
 				"execute_command",
 				"write_file",
 				"read_file",
@@ -52,15 +71,13 @@ describe("02 — Configure Settings", () => {
 	});
 
 	it("should show Lab section in settings", async () => {
-		// Navigate to settings tab if not already there
-		const settingsTabBtn = await $(".chat-tab:nth-child(4)");
+		const settingsTabBtn = await $(S.settingsTabBtn);
 		await settingsTabBtn.waitForClickable({ timeout: 10_000 });
 		await settingsTabBtn.click();
 
 		const settingsTab = await $(S.settingsTab);
 		await settingsTab.waitForDisplayed({ timeout: 10_000 });
 
-		// Lab section divider should be present
 		const hasLabSection = await browser.execute(() => {
 			const dividers = document.querySelectorAll(
 				".settings-section-divider",
@@ -73,7 +90,6 @@ describe("02 — Configure Settings", () => {
 	});
 
 	it("should enable chat input after settings saved", async () => {
-		// Switch back to chat tab
 		const chatTabBtn = await $(S.chatTab);
 		await chatTabBtn.waitForClickable({ timeout: 10_000 });
 		await chatTabBtn.click();
