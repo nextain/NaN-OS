@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { ToolDefinition } from "../providers/types.js";
 import { createMemoSkill } from "../skills/built-in/memo.js";
+import { createSkillManagerSkill } from "../skills/built-in/skill-manager.js";
 import { createSystemStatusSkill } from "../skills/built-in/system-status.js";
 import { createTimeSkill } from "../skills/built-in/time.js";
 import { createWeatherSkill } from "../skills/built-in/weather.js";
@@ -17,6 +18,7 @@ skillRegistry.register(createTimeSkill());
 skillRegistry.register(createSystemStatusSkill());
 skillRegistry.register(createMemoSkill());
 skillRegistry.register(createWeatherSkill());
+skillRegistry.register(createSkillManagerSkill(skillRegistry));
 
 // Load custom skills from ~/.cafelua/skills/
 const customSkillsDir = `${process.env.HOME ?? "~"}/.cafelua/skills`;
@@ -464,11 +466,19 @@ async function invokeBrowserRequest(
 	throw new Error(errors.join(" | "));
 }
 
+/** Extra context passed to skill execution */
+export interface ExecuteToolContext {
+	writeLine?: (data: unknown) => void;
+	requestId?: string;
+	disabledSkills?: string[];
+}
+
 /** Execute a tool call via the Gateway */
 export async function executeTool(
 	client: GatewayClient,
 	toolName: string,
 	args: Record<string, unknown>,
+	ctx?: ExecuteToolContext,
 ): Promise<ToolResult> {
 	if (!client.isConnected()) {
 		return { success: false, output: "", error: "Gateway not connected" };
@@ -695,7 +705,12 @@ export async function executeTool(
 
 		default: {
 			if (skillRegistry.has(toolName)) {
-				return skillRegistry.execute(toolName, args, { gateway: client });
+				return skillRegistry.execute(toolName, args, {
+					gateway: client,
+					writeLine: ctx?.writeLine,
+					requestId: ctx?.requestId,
+					disabledSkills: ctx?.disabledSkills,
+				});
 			}
 			return { success: false, output: "", error: `Unknown tool: ${toolName}` };
 		}

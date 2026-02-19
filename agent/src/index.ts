@@ -221,7 +221,11 @@ export async function handleChatRequest(req: ChatRequest): Promise<void> {
 					}
 				}
 
-				const result = await executeTool(gateway, call.name, call.args);
+				const result = await executeTool(gateway, call.name, call.args, {
+					writeLine,
+					requestId,
+					disabledSkills,
+				});
 				writeLine({
 					type: "tool_result",
 					requestId,
@@ -276,9 +280,11 @@ export async function handleChatRequest(req: ChatRequest): Promise<void> {
 				// Execution phase (parallel)
 				const results = await Promise.all(
 					approvedSpawns.map((call) =>
-						executeTool(gateway!, call.name, call.args).then(
-							(result) => ({ call, result }),
-						),
+						executeTool(gateway!, call.name, call.args, {
+							writeLine,
+							requestId,
+							disabledSkills,
+						}).then((result) => ({ call, result })),
 					),
 				);
 

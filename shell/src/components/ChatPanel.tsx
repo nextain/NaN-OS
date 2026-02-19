@@ -3,7 +3,13 @@ import { useEffect, useRef, useState } from "react";
 import Markdown from "react-markdown";
 import { type AudioRecorder, startRecording } from "../lib/audio-recorder";
 import { cancelChat, sendChatMessage } from "../lib/chat-service";
-import { addAllowedTool, isToolAllowed, loadConfig } from "../lib/config";
+import {
+	addAllowedTool,
+	isToolAllowed,
+	loadConfig,
+	saveConfig,
+} from "../lib/config";
+import { useSkillsStore } from "../stores/skills";
 import {
 	chatMessageToRow,
 	createSession,
@@ -455,6 +461,22 @@ export function ChatPanel() {
 					if (assistantMsg) persistMessage(assistantMsg);
 				}
 				break;
+			case "config_update": {
+				const cfg = loadConfig();
+				if (cfg) {
+					const disabled = cfg.disabledSkills ?? [];
+					if (chunk.action === "enable_skill") {
+						cfg.disabledSkills = disabled.filter((n) => n !== chunk.skillName);
+					} else if (chunk.action === "disable_skill") {
+						if (!disabled.includes(chunk.skillName)) {
+							cfg.disabledSkills = [...disabled, chunk.skillName];
+						}
+					}
+					saveConfig(cfg);
+					useSkillsStore.getState().bumpConfigVersion();
+				}
+				break;
+			}
 			case "error":
 				store.appendStreamChunk(`\n[${t("chat.error")}] ${chunk.message}`);
 				store.finishStreaming();

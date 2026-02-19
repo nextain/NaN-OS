@@ -768,6 +768,7 @@ async fn list_skills() -> Result<Vec<SkillManifestInfo>, String> {
         ("skill_system_status", "Get system status information"),
         ("skill_memo", "Save and retrieve memos"),
         ("skill_weather", "Get weather information for a location"),
+        ("skill_skill_manager", "Manage skills: list, search, enable, disable"),
     ];
     let mut seen_names: std::collections::HashSet<String> = std::collections::HashSet::new();
     for (name, desc) in &builtins {

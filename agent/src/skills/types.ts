@@ -10,6 +10,12 @@ export interface SkillResult {
 /** Context passed to skill handlers */
 export interface SkillExecutionContext {
 	gateway?: GatewayClient;
+	/** Send a JSON chunk to the shell (for config_update etc.) */
+	writeLine?: (data: unknown) => void;
+	/** Current request ID (for addressable chunks) */
+	requestId?: string;
+	/** Currently disabled skill names */
+	disabledSkills?: string[];
 }
 
 /** Skill handler function */

@@ -87,6 +87,12 @@ export type AgentResponseChunk =
 			tier: number;
 			description: string;
 	  }
+	| {
+			type: "config_update";
+			requestId: string;
+			action: "enable_skill" | "disable_skill";
+			skillName: string;
+	  }
 	| { type: "finish"; requestId: string }
 	| { type: "error"; requestId: string; message: string };
 
