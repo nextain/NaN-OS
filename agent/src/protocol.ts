@@ -11,6 +11,7 @@ export interface ChatRequest {
 	enableTools?: boolean;
 	gatewayUrl?: string;
 	gatewayToken?: string;
+	disabledSkills?: string[];
 }
 
 export interface CancelRequest {

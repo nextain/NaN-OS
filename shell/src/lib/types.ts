@@ -49,6 +49,7 @@ export interface AgentRequest {
 	enableTools?: boolean;
 	gatewayUrl?: string;
 	gatewayToken?: string;
+	disabledSkills?: string[];
 }
 
 export type AgentResponseChunk =
@@ -88,6 +89,17 @@ export type AgentResponseChunk =
 	  }
 	| { type: "finish"; requestId: string }
 	| { type: "error"; requestId: string; message: string };
+
+// === Skill Manifest (from ~/.cafelua/skills/{name}/skill.json) ===
+
+export interface SkillManifestInfo {
+	name: string;
+	description: string;
+	type: "gateway" | "command" | "built-in";
+	tier: number;
+	source: string;
+	gatewaySkill?: string;
+}
 
 // === Audit (matches Rust structs in audit.rs) ===
 

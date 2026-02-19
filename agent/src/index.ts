@@ -91,6 +91,7 @@ export async function handleChatRequest(req: ChatRequest): Promise<void> {
 		enableTools,
 		gatewayUrl,
 		gatewayToken,
+		disabledSkills,
 	} = req;
 	const controller = new AbortController();
 	activeStreams.set(requestId, controller);
@@ -101,7 +102,9 @@ export async function handleChatRequest(req: ChatRequest): Promise<void> {
 		const provider = buildProvider(providerConfig);
 		const effectiveSystemPrompt = systemPrompt ?? ALPHA_SYSTEM_PROMPT;
 		const tools =
-			enableTools && gatewayUrl ? getAllTools(true) : undefined;
+			enableTools && gatewayUrl
+				? getAllTools(true, disabledSkills)
+				: undefined;
 
 		// Connect to Gateway if tools enabled
 		if (enableTools && gatewayUrl) {

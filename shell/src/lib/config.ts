@@ -40,6 +40,7 @@ export interface AppConfig {
 	onboardingComplete?: boolean;
 	labKey?: string;
 	labUserId?: string;
+	disabledSkills?: string[];
 }
 
 const DEFAULT_MODELS: Record<ProviderId, string> = {
@@ -159,6 +160,28 @@ export async function getLabKeySecure(): Promise<string | undefined> {
 
 export function getDefaultModel(provider: ProviderId): string {
 	return DEFAULT_MODELS[provider];
+}
+
+export function getDisabledSkills(): string[] {
+	const config = loadConfig();
+	return config?.disabledSkills ?? [];
+}
+
+export function isSkillDisabled(skillName: string): boolean {
+	return getDisabledSkills().includes(skillName);
+}
+
+export function toggleSkill(skillName: string): void {
+	const config = loadConfig();
+	if (!config) return;
+	const disabled = config.disabledSkills ?? [];
+	const idx = disabled.indexOf(skillName);
+	if (idx >= 0) {
+		disabled.splice(idx, 1);
+	} else {
+		disabled.push(skillName);
+	}
+	saveConfig({ ...config, disabledSkills: disabled });
 }
 
 export function isToolAllowed(toolName: string): boolean {

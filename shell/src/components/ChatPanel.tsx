@@ -37,10 +37,11 @@ import { PermissionModal } from "./PermissionModal";
 import { CostDashboard } from "./CostDashboard";
 import { HistoryTab } from "./HistoryTab";
 import { SettingsTab } from "./SettingsTab";
+import { SkillsTab } from "./SkillsTab";
 import { ToolActivity } from "./ToolActivity";
 import { WorkProgressPanel } from "./WorkProgressPanel";
 
-type TabId = "chat" | "progress" | "settings" | "history";
+type TabId = "chat" | "progress" | "skills" | "settings" | "history";
 
 function generateRequestId(): string {
 	return `req-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
@@ -378,6 +379,7 @@ export function ChatPanel() {
 					? config.gatewayUrl || "ws://localhost:18789"
 					: undefined,
 				gatewayToken: config.gatewayToken,
+				disabledSkills: config.enableTools ? config.disabledSkills : undefined,
 			});
 		} catch (err) {
 			useChatStore
@@ -577,6 +579,13 @@ export function ChatPanel() {
 					</button>
 					<button
 						type="button"
+						className={`chat-tab${activeTab === "skills" ? " active" : ""}`}
+						onClick={() => handleTabChange("skills")}
+					>
+						{t("skills.tabSkills")}
+					</button>
+					<button
+						type="button"
 						className={`chat-tab${activeTab === "settings" ? " active" : ""}`}
 						onClick={() => handleTabChange("settings")}
 					>
@@ -614,6 +623,9 @@ export function ChatPanel() {
 
 			{/* Progress tab */}
 			{activeTab === "progress" && <WorkProgressPanel />}
+
+			{/* Skills tab */}
+			{activeTab === "skills" && <SkillsTab />}
 
 			{/* Settings tab */}
 			{activeTab === "settings" && <SettingsTab />}

@@ -33,7 +33,7 @@ export const S = {
 	permissionAlways: ".permission-btn-always",
 
 	// History tab
-	historyTab: ".chat-tab:nth-child(4)",
+	historyTab: ".chat-tab:nth-child(5)",
 	historyItem: ".history-item",
 	historyItemTitle: ".history-item-title",
 	historyDeleteBtn: ".history-delete-btn",
@@ -66,6 +66,18 @@ export const S = {
 	labBalanceSection: ".lab-balance-section",
 	labBalanceRow: ".lab-balance-row",
 	labChargeBtn: ".lab-charge-btn",
+
+	// Skills tab
+	skillsTab: ".chat-tab:nth-child(3)",
+	skillsTabPanel: ".skills-tab",
+	skillsSearch: ".skills-search",
+	skillsCard: ".skill-card",
+	skillsCardName: ".skill-card-name",
+	skillsToggle: ".skill-toggle input",
+	skillsSectionTitle: ".skills-section-title",
+	skillsCount: ".skills-count",
+	skillsEnableAllBtn: ".skills-action-btn:first-child",
+	skillsDisableAllBtn: ".skills-action-btn:last-child",
 
 	// Queue badge
 	queueBadge: ".queue-badge",

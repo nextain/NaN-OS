@@ -32,7 +32,7 @@ struct AppState {
     gateway: Mutex<Option<GatewayProcess>>,
     health_monitor_shutdown: Mutex<Option<Arc<std::sync::atomic::AtomicBool>>>,
     /// Random state token for OAuth deep link CSRF protection.
-    oauth_state: Mutex<Option<String>>,
+    oauth_state: Arc<Mutex<Option<String>>>,
 }
 
 struct AuditState {
@@ -50,6 +50,19 @@ struct AgentChunk {
     chunk_type: String,
     #[serde(flatten)]
     rest: serde_json::Value,
+}
+
+/// Skill manifest info returned from list_skills command
+#[derive(Debug, Serialize, Deserialize, Clone)]
+struct SkillManifestInfo {
+    name: String,
+    description: String,
+    #[serde(rename = "type")]
+    skill_type: String,
+    tier: u32,
+    source: String,
+    #[serde(rename = "gatewaySkill", skip_serializing_if = "Option::is_none")]
+    gateway_skill: Option<String>,
 }
 
 /// Saved window position/size
@@ -744,6 +757,112 @@ fn restart_agent(
     }
 }
 
+/// Scan ~/.cafelua/skills/ for skill manifests + hardcoded built-in skills
+#[tauri::command]
+async fn list_skills() -> Result<Vec<SkillManifestInfo>, String> {
+    let mut skills: Vec<SkillManifestInfo> = Vec::new();
+
+    // Built-in skills (always present, cannot be disabled)
+    let builtins = [
+        ("skill_time", "Get current date and time"),
+        ("skill_system_status", "Get system status information"),
+        ("skill_memo", "Save and retrieve memos"),
+        ("skill_weather", "Get weather information for a location"),
+    ];
+    let mut seen_names: std::collections::HashSet<String> = std::collections::HashSet::new();
+    for (name, desc) in &builtins {
+        seen_names.insert(name.to_string());
+        skills.push(SkillManifestInfo {
+            name: name.to_string(),
+            description: desc.to_string(),
+            skill_type: "built-in".to_string(),
+            tier: 0,
+            source: "built-in".to_string(),
+            gateway_skill: None,
+        });
+    }
+
+    // Scan ~/.cafelua/skills/
+    let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".to_string());
+    let skills_dir = std::path::PathBuf::from(&home).join(".cafelua/skills");
+    if skills_dir.is_dir() {
+        if let Ok(entries) = std::fs::read_dir(&skills_dir) {
+            for entry in entries.flatten() {
+                let manifest_path = entry.path().join("skill.json");
+                if !manifest_path.exists() {
+                    continue;
+                }
+                let data = match std::fs::read_to_string(&manifest_path) {
+                    Ok(d) => d,
+                    Err(e) => {
+                        eprintln!("[list_skills] Failed to read {}: {}", manifest_path.display(), e);
+                        continue;
+                    }
+                };
+                let parsed: serde_json::Value = match serde_json::from_str(&data) {
+                    Ok(v) => v,
+                    Err(e) => {
+                        eprintln!("[list_skills] Failed to parse {}: {}", manifest_path.display(), e);
+                        continue;
+                    }
+                };
+
+                let dir_name = entry.file_name().to_string_lossy().to_string();
+                let raw_name = parsed.get("name")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or(&dir_name)
+                    .to_string();
+                let name = if raw_name.starts_with("skill_") {
+                    raw_name
+                } else {
+                    format!("skill_{}", raw_name)
+                };
+
+                // Skip duplicates (e.g. custom skill with same name as built-in)
+                if !seen_names.insert(name.clone()) {
+                    continue;
+                }
+
+                let description = parsed.get("description")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .to_string();
+
+                let skill_type = parsed.get("type")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("command")
+                    .to_string();
+
+                let tier = parsed.get("tier")
+                    .and_then(|v| v.as_u64())
+                    .unwrap_or(2) as u32;
+
+                let gateway_skill = parsed.get("gatewaySkill")
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.to_string());
+
+                skills.push(SkillManifestInfo {
+                    name,
+                    description,
+                    skill_type,
+                    tier,
+                    source: manifest_path.to_string_lossy().to_string(),
+                    gateway_skill,
+                });
+            }
+        }
+    }
+
+    // Sort: built-in first, then alphabetical
+    skills.sort_by(|a, b| {
+        let a_builtin = a.skill_type == "built-in";
+        let b_builtin = b.skill_type == "built-in";
+        b_builtin.cmp(&a_builtin).then(a.name.cmp(&b.name))
+    });
+
+    Ok(skills)
+}
+
 #[tauri::command]
 async fn send_to_agent_command(
     app: AppHandle,
@@ -1037,9 +1156,10 @@ pub fn run() {
             agent: Mutex::new(None),
             gateway: Mutex::new(None),
             health_monitor_shutdown: Mutex::new(None),
-            oauth_state: Mutex::new(None),
+            oauth_state: Arc::new(Mutex::new(None)),
         })
         .invoke_handler(tauri::generate_handler![
+            list_skills,
             send_to_agent_command,
             cancel_stream,
             reset_window_state,

@@ -22,9 +22,17 @@ skillRegistry.register(createWeatherSkill());
 const customSkillsDir = `${process.env.HOME ?? "~"}/.cafelua/skills`;
 loadCustomSkills(skillRegistry, customSkillsDir);
 
-/** Get all tools: Gateway tools + skill tools */
-export function getAllTools(hasGateway: boolean): ToolDefinition[] {
-	return [...GATEWAY_TOOLS, ...skillRegistry.toToolDefinitions(hasGateway)];
+/** Get all tools: Gateway tools + skill tools (minus disabled) */
+export function getAllTools(
+	hasGateway: boolean,
+	disabledSkills?: string[],
+): ToolDefinition[] {
+	const skillTools = skillRegistry.toToolDefinitions(hasGateway);
+	const filtered =
+		disabledSkills && disabledSkills.length > 0
+			? skillTools.filter((t) => !disabledSkills.includes(t.name))
+			: skillTools;
+	return [...GATEWAY_TOOLS, ...filtered];
 }
 
 /** Result from tool execution */

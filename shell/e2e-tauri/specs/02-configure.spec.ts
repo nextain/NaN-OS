@@ -15,7 +15,7 @@ describe("02 — Configure Settings", () => {
 		// After onboarding skip, we need to navigate to settings tab
 		// Click settings tab (3rd tab)
 		const settingsTabBtn = await $(
-			".chat-tab:nth-child(3)",
+			".chat-tab:nth-child(4)",
 		);
 		await settingsTabBtn.waitForClickable({ timeout: 10_000 });
 		await settingsTabBtn.click();
@@ -53,7 +53,7 @@ describe("02 — Configure Settings", () => {
 
 	it("should show Lab section in settings", async () => {
 		// Navigate to settings tab if not already there
-		const settingsTabBtn = await $(".chat-tab:nth-child(3)");
+		const settingsTabBtn = await $(".chat-tab:nth-child(4)");
 		await settingsTabBtn.waitForClickable({ timeout: 10_000 });
 		await settingsTabBtn.click();
 

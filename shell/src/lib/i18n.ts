@@ -127,6 +127,25 @@ const translations = {
 	// Settings tab
 	"settings.saved": { ko: "저장됨!", en: "Saved!" },
 
+	// Skills Tab
+	"skills.tabSkills": { ko: "스킬", en: "Skills" },
+	"skills.loading": { ko: "스킬 로딩 중...", en: "Loading skills..." },
+	"skills.empty": {
+		ko: "등록된 스킬이 없습니다.",
+		en: "No skills registered.",
+	},
+	"skills.enabled": { ko: "활성", en: "Enabled" },
+	"skills.disabled": { ko: "비활성", en: "Disabled" },
+	"skills.builtIn": { ko: "기본", en: "Built-in" },
+	"skills.custom": { ko: "커스텀", en: "Custom" },
+	"skills.gateway": { ko: "게이트웨이", en: "Gateway" },
+	"skills.command": { ko: "명령", en: "Command" },
+	"skills.search": { ko: "스킬 검색...", en: "Search skills..." },
+	"skills.enableAll": { ko: "전체 활성", en: "Enable All" },
+	"skills.disableAll": { ko: "전체 비활성", en: "Disable All" },
+	"skills.builtInSection": { ko: "기본 스킬", en: "Built-in Skills" },
+	"skills.customSection": { ko: "커스텀 스킬", en: "Custom Skills" },
+
 	// Cost Dashboard (4.4-ui)
 	"cost.title": { ko: "비용 상세", en: "Cost Details" },
 	"cost.provider": { ko: "프로바이더", en: "Provider" },

@@ -14,6 +14,7 @@ interface SendChatOptions {
 	enableTools?: boolean;
 	gatewayUrl?: string;
 	gatewayToken?: string;
+	disabledSkills?: string[];
 }
 
 const RESPONSE_TIMEOUT_MS = 120_000; // Safety: clean up listener if no finish/error
@@ -31,6 +32,7 @@ export async function sendChatMessage(opts: SendChatOptions): Promise<void> {
 		enableTools,
 		gatewayUrl,
 		gatewayToken,
+		disabledSkills,
 	} = opts;
 
 	const request = {
@@ -44,6 +46,7 @@ export async function sendChatMessage(opts: SendChatOptions): Promise<void> {
 		...(enableTools != null && { enableTools }),
 		...(gatewayUrl && { gatewayUrl }),
 		...(gatewayToken && { gatewayToken }),
+		...(disabledSkills && disabledSkills.length > 0 && { disabledSkills }),
 	};
 
 	// Listen for agent responses before sending to avoid race conditions
