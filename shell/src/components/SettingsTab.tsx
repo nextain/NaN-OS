@@ -47,6 +47,188 @@ const LOCALES: { id: Locale; label: string }[] = [
 	{ id: "en", label: "English" },
 ];
 
+interface DeviceNode {
+	nodeId: string;
+	displayName?: string;
+	platform?: string;
+}
+
+interface PairReq {
+	requestId: string;
+	nodeId: string;
+	status: string;
+}
+
+function DevicePairingSection() {
+	const [nodes, setNodes] = useState<DeviceNode[]>([]);
+	const [pairRequests, setPairRequests] = useState<PairReq[]>([]);
+	const [loading, setLoading] = useState(false);
+
+	const fetchDevices = useCallback(async () => {
+		const config = loadConfig();
+		if (!config?.gatewayUrl || !config?.enableTools) return;
+		setLoading(true);
+		try {
+			const [nodesRes, pairRes] = await Promise.all([
+				directToolCall({
+					toolName: "skill_agents",
+					args: { action: "node_list" },
+					requestId: `dev-nodes-${Date.now()}`,
+					gatewayUrl: config.gatewayUrl,
+					gatewayToken: config.gatewayToken,
+				}),
+				directToolCall({
+					toolName: "skill_agents",
+					args: { action: "pair_list" },
+					requestId: `dev-pairs-${Date.now()}`,
+					gatewayUrl: config.gatewayUrl,
+					gatewayToken: config.gatewayToken,
+				}),
+			]);
+
+			if (nodesRes.success && nodesRes.output) {
+				const parsed = JSON.parse(nodesRes.output);
+				setNodes(parsed.nodes || []);
+			}
+			if (pairRes.success && pairRes.output) {
+				const parsed = JSON.parse(pairRes.output);
+				setPairRequests(parsed.requests || []);
+			}
+		} catch (err) {
+			Logger.warn("DevicePairing", "Failed to fetch devices", {
+				error: String(err),
+			});
+		} finally {
+			setLoading(false);
+		}
+	}, []);
+
+	useEffect(() => {
+		fetchDevices();
+	}, [fetchDevices]);
+
+	const handlePairAction = useCallback(
+		async (requestId: string, action: "approve" | "reject") => {
+			const config = loadConfig();
+			try {
+				await directToolCall({
+					toolName: "skill_agents",
+					args: { action: `pair_${action}`, requestId },
+					requestId: `dev-${action}-${Date.now()}`,
+					gatewayUrl: config?.gatewayUrl,
+					gatewayToken: config?.gatewayToken,
+				});
+				fetchDevices();
+			} catch (err) {
+				Logger.warn("DevicePairing", `Failed to ${action}`, {
+					error: String(err),
+				});
+			}
+		},
+		[fetchDevices],
+	);
+
+	return (
+		<>
+			<div className="settings-section-divider">
+				<span>{t("settings.deviceSection")}</span>
+			</div>
+			<div className="settings-field">
+				<span className="settings-hint">{t("settings.deviceHint")}</span>
+			</div>
+
+			{loading ? (
+				<div className="settings-field">
+					<span className="settings-hint">{t("settings.deviceLoading")}</span>
+				</div>
+			) : (
+				<>
+					{/* Paired nodes */}
+					{nodes.length === 0 ? (
+						<div className="settings-field">
+							<span className="settings-hint">{t("settings.deviceEmpty")}</span>
+						</div>
+					) : (
+						<div className="device-nodes-list">
+							{nodes.map((node) => (
+								<div key={node.nodeId} className="device-node-card">
+									<span className="device-node-name">
+										{node.displayName || node.nodeId}
+									</span>
+									{node.platform && (
+										<span className="device-node-platform">
+											{node.platform}
+										</span>
+									)}
+								</div>
+							))}
+						</div>
+					)}
+
+					{/* Pair requests */}
+					{pairRequests.length > 0 && (
+						<>
+							<div className="settings-field">
+								<label>{t("settings.devicePairRequests")}</label>
+							</div>
+							<div className="device-pair-requests">
+								{pairRequests.map((req) => (
+									<div key={req.requestId} className="device-pair-card">
+										<span className="device-pair-node">
+											{req.nodeId}
+										</span>
+										<span className="device-pair-status">
+											{req.status === "pending"
+												? t("settings.devicePending")
+												: req.status}
+										</span>
+										{req.status === "pending" && (
+											<div className="device-pair-actions">
+												<button
+													type="button"
+													className="device-pair-approve"
+													onClick={() =>
+														handlePairAction(
+															req.requestId,
+															"approve",
+														)
+													}
+												>
+													{t("settings.deviceApprove")}
+												</button>
+												<button
+													type="button"
+													className="device-pair-reject"
+													onClick={() =>
+														handlePairAction(
+															req.requestId,
+															"reject",
+														)
+													}
+												>
+													{t("settings.deviceReject")}
+												</button>
+											</div>
+										)}
+									</div>
+								))}
+							</div>
+						</>
+					)}
+
+					{pairRequests.length === 0 && nodes.length > 0 && (
+						<div className="settings-field">
+							<span className="settings-hint">
+								{t("settings.deviceNoPairRequests")}
+							</span>
+						</div>
+					)}
+				</>
+			)}
+		</>
+	);
+}
+
 const VRM_SAMPLES: { path: string; label: string }[] = [
 	{
 		path: "/avatars/Sendagaya-Shino-dark-uniform.vrm",
@@ -1001,6 +1183,8 @@ export function SettingsTab() {
 					)}
 				</>
 			)}
+
+			<DevicePairingSection />
 
 			<div className="settings-section-divider">
 				<span>{t("settings.memorySection")}</span>

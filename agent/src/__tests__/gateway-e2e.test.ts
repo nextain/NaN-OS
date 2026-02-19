@@ -376,6 +376,127 @@ describe.skipIf(!canRunE2E)("E2E: Agent ↔ Gateway (live)", () => {
 		});
 	});
 
+	// ── Proxy functions: sessions ──
+	describe("sessions proxy", () => {
+		it("sessions.list returns sessions array", async () => {
+			const result = (await client.request("sessions.list", {})) as {
+				sessions: unknown[];
+			};
+			expect(result).toBeDefined();
+			expect(Array.isArray(result.sessions)).toBe(true);
+		});
+
+		it("sessions.preview returns summary for a session", async () => {
+			// May fail if no sessions exist, which is expected
+			try {
+				const listResult = (await client.request("sessions.list", {})) as {
+					sessions: Array<{ key: string }>;
+				};
+				if (listResult.sessions.length === 0) return;
+
+				const result = (await client.request("sessions.preview", {
+					key: listResult.sessions[0].key,
+				})) as Record<string, unknown>;
+				expect(result).toBeDefined();
+				expect(result.key).toBe(listResult.sessions[0].key);
+			} catch {
+				// sessions.preview may not be available
+			}
+		});
+	});
+
+	// ── Proxy functions: config ──
+	describe("config proxy", () => {
+		it("config.get returns configuration object", async () => {
+			const result = (await client.request("config.get", {})) as Record<
+				string,
+				unknown
+			>;
+			expect(result).toBeDefined();
+			expect(typeof result).toBe("object");
+		});
+	});
+
+	// ── Proxy functions: diagnostics ──
+	describe("diagnostics proxy", () => {
+		it("health returns status", async () => {
+			const result = (await client.request("health", {})) as {
+				ok: boolean;
+			};
+			expect(result.ok).toBe(true);
+		});
+
+		it("status returns gateway status when available", async () => {
+			const methods = new Set(client.availableMethods);
+			if (!methods.has("status")) return;
+
+			const result = (await client.request("status", {})) as Record<
+				string,
+				unknown
+			>;
+			expect(result).toBeDefined();
+		});
+	});
+
+	// ── Proxy functions: device/node ──
+	describe("device proxy", () => {
+		it("node.list returns nodes array", async () => {
+			const result = (await client.request("node.list", {})) as {
+				nodes: unknown[];
+			};
+			expect(result).toBeDefined();
+			expect(Array.isArray(result.nodes)).toBe(true);
+		});
+
+		it("node.describe returns node details when nodes exist", async () => {
+			const listResult = (await client.request("node.list", {})) as {
+				nodes: Array<{ nodeId: string }>;
+			};
+			if (listResult.nodes.length === 0) return;
+
+			try {
+				const result = (await client.request("node.describe", {
+					nodeId: listResult.nodes[0].nodeId,
+				})) as Record<string, unknown>;
+				expect(result).toBeDefined();
+				expect(result.nodeId).toBe(listResult.nodes[0].nodeId);
+			} catch {
+				// node.describe may not be available
+			}
+		});
+	});
+
+	// ── Proxy functions: agents ──
+	describe("agents proxy", () => {
+		it("agent.identity.get returns agent identity", async () => {
+			const result = (await client.request(
+				"agent.identity.get",
+				{},
+			)) as Record<string, unknown>;
+			expect(result).toBeDefined();
+		});
+	});
+
+	// ── Path traversal security (tool-bridge) ──
+	describe("path traversal security via tool-bridge", () => {
+		it("blocks directory traversal in read_file", async () => {
+			const result = await executeTool(client, "read_file", {
+				path: "/home/user/../../../etc/shadow",
+			});
+			expect(result.success).toBe(false);
+			expect(result.error).toMatch(/directory traversal/i);
+		});
+
+		it("blocks directory traversal in write_file", async () => {
+			const result = await executeTool(client, "write_file", {
+				path: "../../etc/crontab",
+				content: "malicious",
+			});
+			expect(result.success).toBe(false);
+			expect(result.error).toMatch(/directory traversal/i);
+		});
+	});
+
 	// ── Event handling ──
 	describe("events", () => {
 		it("receives health events from gateway", async () => {

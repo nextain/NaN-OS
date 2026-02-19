@@ -99,6 +99,20 @@ export type AgentResponseChunk =
 			action: "enable_skill" | "disable_skill";
 			skillName: string;
 	  }
+	| {
+			type: "gateway_approval_request";
+			requestId: string;
+			toolCallId: string;
+			toolName: string;
+			args: Record<string, unknown>;
+	  }
+	| {
+			type: "log_entry";
+			requestId: string;
+			level: string;
+			message: string;
+			timestamp: string;
+	  }
 	| { type: "finish"; requestId: string }
 	| { type: "error"; requestId: string; message: string };
 
@@ -158,4 +172,37 @@ export interface AuditStats {
 	by_event_type: [string, number][];
 	by_tool_name: [string, number][];
 	total_cost: number;
+}
+
+// === Device Pairing ===
+
+export interface DeviceInfo {
+	deviceId: string;
+	name: string;
+	platform?: string;
+	lastSeen?: string;
+}
+
+export interface PairRequest {
+	requestId: string;
+	nodeId: string;
+	status: "pending" | "approved" | "rejected";
+	createdAt?: string;
+}
+
+// === Gateway Status ===
+
+export interface GatewayStatus {
+	ok: boolean;
+	version?: string;
+	uptime?: number;
+	methods?: string[];
+}
+
+// === Log Entry ===
+
+export interface LogEntry {
+	level: string;
+	message: string;
+	timestamp: string;
 }

@@ -468,6 +468,53 @@ const translations = {
 		ko: "Gateway 연결이 필요합니다. 설정에서 Gateway URL을 확인하세요.",
 		en: "Gateway connection required. Check Gateway URL in settings.",
 	},
+	"agents.filesTitle": { ko: "에이전트 파일", en: "Agent Files" },
+	"agents.filesEmpty": { ko: "파일 없음", en: "No files" },
+	"agents.filesLoading": { ko: "파일 로딩 중...", en: "Loading files..." },
+	"agents.filesSave": { ko: "저장", en: "Save" },
+	"agents.filesSaved": { ko: "저장됨!", en: "Saved!" },
+	"agents.filesFailed": { ko: "저장 실패", en: "Save failed" },
+
+	// Diagnostics tab
+	"diagnostics.tabDiagnostics": { ko: "진단", en: "Diagnostics" },
+	"diagnostics.gatewayStatus": { ko: "Gateway 상태", en: "Gateway Status" },
+	"diagnostics.connected": { ko: "연결됨", en: "Connected" },
+	"diagnostics.disconnected": { ko: "연결 안 됨", en: "Disconnected" },
+	"diagnostics.version": { ko: "버전", en: "Version" },
+	"diagnostics.uptime": { ko: "가동 시간", en: "Uptime" },
+	"diagnostics.methods": { ko: "사용 가능 메서드", en: "Available Methods" },
+	"diagnostics.loading": { ko: "상태 확인 중...", en: "Checking status..." },
+	"diagnostics.error": { ko: "상태 확인 실패", en: "Failed to check status" },
+	"diagnostics.refresh": { ko: "새로고침", en: "Refresh" },
+	"diagnostics.logsTitle": { ko: "실시간 로그", en: "Live Logs" },
+	"diagnostics.logsEmpty": { ko: "로그 없음", en: "No logs" },
+	"diagnostics.logsTailing": { ko: "로그 수신 중...", en: "Tailing logs..." },
+	"diagnostics.logsStart": { ko: "로그 시작", en: "Start Logs" },
+	"diagnostics.logsStop": { ko: "로그 중지", en: "Stop Logs" },
+	"diagnostics.logsClear": { ko: "로그 초기화", en: "Clear Logs" },
+
+	// Device pairing (in Settings)
+	"settings.deviceSection": { ko: "디바이스 페어링", en: "Device Pairing" },
+	"settings.deviceHint": {
+		ko: "Gateway와 연결된 노드(디바이스)를 관리합니다.",
+		en: "Manage nodes (devices) connected to Gateway.",
+	},
+	"settings.deviceLoading": {
+		ko: "디바이스 로딩 중...",
+		en: "Loading devices...",
+	},
+	"settings.deviceEmpty": { ko: "페어링된 디바이스 없음", en: "No paired devices" },
+	"settings.deviceApprove": { ko: "승인", en: "Approve" },
+	"settings.deviceReject": { ko: "거부", en: "Reject" },
+	"settings.devicePending": { ko: "대기 중", en: "Pending" },
+	"settings.devicePairRequests": {
+		ko: "페어링 요청",
+		en: "Pair Requests",
+	},
+	"settings.deviceNoPairRequests": {
+		ko: "대기 중인 요청 없음",
+		en: "No pending requests",
+	},
 } as const;
 
 type TranslationKey = keyof typeof translations;

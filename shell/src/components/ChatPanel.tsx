@@ -38,6 +38,7 @@ import { hasApiKey } from "../lib/config";
 import { parseEmotion } from "../lib/vrm/expression";
 import { useAvatarStore } from "../stores/avatar";
 import { useChatStore } from "../stores/chat";
+import { useLogsStore } from "../stores/logs";
 import { useProgressStore } from "../stores/progress";
 import { PermissionModal } from "./PermissionModal";
 import { CostDashboard } from "./CostDashboard";
@@ -47,9 +48,10 @@ import { SkillsTab } from "./SkillsTab";
 import { ToolActivity } from "./ToolActivity";
 import { AgentsTab } from "./AgentsTab";
 import { ChannelsTab } from "./ChannelsTab";
+import { DiagnosticsTab } from "./DiagnosticsTab";
 import { WorkProgressPanel } from "./WorkProgressPanel";
 
-type TabId = "chat" | "progress" | "skills" | "channels" | "agents" | "settings" | "history";
+type TabId = "chat" | "progress" | "skills" | "channels" | "agents" | "diagnostics" | "settings" | "history";
 
 function generateRequestId(): string {
 	return `req-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
@@ -479,6 +481,24 @@ export function ChatPanel() {
 				}
 				break;
 			}
+			case "gateway_approval_request":
+				// Gateway-originated approval — treat like local approval
+				store.setPendingApproval({
+					requestId: chunk.requestId,
+					toolCallId: chunk.toolCallId,
+					toolName: chunk.toolName,
+					args: chunk.args,
+					tier: 2,
+					description: `Gateway: ${chunk.toolName}`,
+				});
+				break;
+			case "log_entry":
+				useLogsStore.getState().addEntry({
+					level: chunk.level,
+					message: chunk.message,
+					timestamp: chunk.timestamp,
+				});
+				break;
 			case "error":
 				store.appendStreamChunk(`\n[${t("chat.error")}] ${chunk.message}`);
 				store.finishStreaming();
@@ -631,6 +651,13 @@ export function ChatPanel() {
 					</button>
 					<button
 						type="button"
+						className={`chat-tab${activeTab === "diagnostics" ? " active" : ""}`}
+						onClick={() => handleTabChange("diagnostics")}
+					>
+						{t("diagnostics.tabDiagnostics")}
+					</button>
+					<button
+						type="button"
 						className={`chat-tab${activeTab === "settings" ? " active" : ""}`}
 						onClick={() => handleTabChange("settings")}
 					>
@@ -690,6 +717,9 @@ export function ChatPanel() {
 
 			{/* Agents tab */}
 			{activeTab === "agents" && <AgentsTab />}
+
+			{/* Diagnostics tab */}
+			{activeTab === "diagnostics" && <DiagnosticsTab />}
 
 			{/* Settings tab */}
 			{activeTab === "settings" && <SettingsTab />}
