@@ -3,11 +3,12 @@ import { S } from "../helpers/selectors.js";
 /**
  * 28 — Skills Install E2E
  *
- * Verifies Skills tab > Gateway section:
- * - Skills tab displays
- * - Gateway skill status cards (or empty)
- * - Install button presence for ineligible skills
- * - Can switch back to chat
+ * Verifies Skills tab > Gateway skills section:
+ * - Gateway skill cards render with name text
+ * - Eligible/ineligible status shown
+ * - Install button clickable for ineligible skills
+ *
+ * Covers RPC: skills.status
  */
 describe("28 — skills install", () => {
 	it("should navigate to Skills tab", async () => {
@@ -19,31 +20,45 @@ describe("28 — skills install", () => {
 		await skillsPanel.waitForDisplayed({ timeout: 5_000 });
 	});
 
-	it("should show skills tab content", async () => {
-		await browser.pause(2_000);
+	it("should show gateway skill cards with status info", async () => {
+		await browser.pause(3_000);
 
-		const skillsPanel = await $(S.skillsTabPanel);
-		const isDisplayed = await skillsPanel.isDisplayed();
-		expect(isDisplayed).toBe(true);
-	});
+		const gatewayCardCount = await browser.execute(
+			(sel: string) => document.querySelectorAll(sel).length,
+			S.gatewaySkillCard,
+		);
 
-	it("should show gateway skill cards or empty state", async () => {
-		const gatewayCards = await $$(S.gatewaySkillCard);
-		const skillsPanel = await $(S.skillsTabPanel);
-		const panelText = await skillsPanel.getText();
-
-		// Either gateway skill cards exist or we see regular content
-		expect(gatewayCards.length >= 0 || panelText.length > 0).toBe(true);
-	});
-
-	it("should have install buttons for ineligible skills", async () => {
-		const installBtns = await $$(S.skillsInstallBtn);
-		// Install buttons only appear if there are ineligible skills
-		// This is a soft check — gateway may not be connected
-		if (installBtns.length > 0) {
-			const firstBtn = installBtns[0];
-			expect(await firstBtn.isDisplayed()).toBe(true);
+		if (gatewayCardCount > 0) {
+			// Verify first card has text content (skill name)
+			const cardText = await browser.execute((sel: string) => {
+				const card = document.querySelector(sel);
+				return card?.textContent?.trim() ?? "";
+			}, S.gatewaySkillCard);
+			expect(cardText.length).toBeGreaterThan(0);
 		}
+	});
+
+	it("should show install buttons for ineligible skills", async () => {
+		const installBtnCount = await browser.execute(
+			(sel: string) => document.querySelectorAll(sel).length,
+			S.skillsInstallBtn,
+		);
+
+		if (installBtnCount > 0) {
+			const isDisplayed = await browser.execute((sel: string) => {
+				const btn = document.querySelector(sel) as HTMLButtonElement;
+				return btn ? !btn.hidden : false;
+			}, S.skillsInstallBtn);
+			expect(isDisplayed).toBe(true);
+
+			// Verify button is clickable (not disabled)
+			const isEnabled = await browser.execute((sel: string) => {
+				const btn = document.querySelector(sel) as HTMLButtonElement;
+				return btn ? !btn.disabled : false;
+			}, S.skillsInstallBtn);
+			expect(isEnabled).toBe(true);
+		}
+		// No install buttons = all skills eligible — valid state
 	});
 
 	it("should navigate back to chat tab", async () => {

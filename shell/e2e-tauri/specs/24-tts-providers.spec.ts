@@ -4,9 +4,10 @@ import { S } from "../helpers/selectors.js";
  * 24 — TTS Providers E2E
  *
  * Verifies Settings > Gateway TTS section:
- * - Gateway TTS section appears when tools enabled
- * - TTS provider selector shown (or loading/empty state)
- * - Can navigate back to chat
+ * - TTS provider selector renders with options
+ * - Provider options are valid IDs
+ *
+ * Covers RPC: tts.providers
  */
 describe("24 — TTS providers", () => {
 	it("should navigate to Settings tab", async () => {
@@ -18,8 +19,7 @@ describe("24 — TTS providers", () => {
 		await settingsTab.waitForDisplayed({ timeout: 5_000 });
 	});
 
-	it("should show Gateway TTS section when tools enabled", async () => {
-		// Ensure tools toggle is enabled
+	it("should ensure tools are enabled", async () => {
 		const toolsEnabled = await browser.execute((sel: string) => {
 			const el = document.querySelector(sel) as HTMLInputElement | null;
 			return el?.checked ?? false;
@@ -32,20 +32,39 @@ describe("24 — TTS providers", () => {
 			}, S.toolsToggle);
 			await browser.pause(300);
 		}
+	});
 
-		// Wait for Gateway TTS content to load (provider select or hint)
-		await browser.pause(2_000);
+	it("should show TTS provider selector with options", async () => {
+		// Wait for Gateway TTS data to load
+		await browser.pause(3_000);
 
-		// Check either provider select exists OR loading/empty hint
-		const providerSelect = await $(S.gatewayTtsProvider);
-		const providerExists = await providerSelect.isExisting();
+		const providerExists = await browser.execute(
+			(sel: string) => !!document.querySelector(sel),
+			S.gatewayTtsProvider,
+		);
 
 		if (providerExists) {
-			// Provider select rendered — verify it has options
-			const value = await providerSelect.getValue();
+			// Verify it has at least one option
+			const optionCount = await browser.execute((sel: string) => {
+				const select = document.querySelector(sel) as HTMLSelectElement | null;
+				if (!select) return 0;
+				return Array.from(select.options).filter(
+					(o) => o.value && o.value !== "",
+				).length;
+			}, S.gatewayTtsProvider);
+
+			expect(optionCount).toBeGreaterThan(0);
+
+			// Current value should be a valid string
+			const value = await browser.execute((sel: string) => {
+				const select = document.querySelector(sel) as HTMLSelectElement | null;
+				return select?.value ?? "";
+			}, S.gatewayTtsProvider);
+
 			expect(typeof value).toBe("string");
+			expect(value.length).toBeGreaterThan(0);
 		}
-		// If not present, gateway may not be running — that's ok for E2E
+		// Gateway may not be running — ok for E2E
 	});
 
 	it("should navigate back to chat tab", async () => {

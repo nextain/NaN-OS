@@ -3,9 +3,9 @@ export const S = {
 	// App
 	appRoot: ".app-root",
 
-	// SettingsTab (7th tab: chat, history, progress, skills, channels, agents, settings)
+	// SettingsTab (8th tab: chat, history, progress, skills, channels, agents, diagnostics, settings)
 	settingsTab: ".settings-tab",
-	settingsTabBtn: ".chat-tab:nth-child(7)",
+	settingsTabBtn: ".chat-tab:nth-child(8)",
 	chatTab: ".chat-tab:first-child",
 	providerSelect: "#provider-select",
 	apiKeyInput: "#apikey-input",
@@ -107,6 +107,34 @@ export const S = {
 	voiceWakeTriggers: '[data-testid="voice-wake-triggers"]',
 	voiceWakeInput: '[data-testid="voice-wake-input"]',
 	voiceWakeSave: '[data-testid="voice-wake-save"]',
+
+	// Diagnostics tab (7th tab: chat, history, progress, skills, channels, agents, diagnostics, settings)
+	diagnosticsTabBtn: ".chat-tab:nth-child(7)",
+	diagnosticsTabPanel: '[data-testid="diagnostics-tab"]',
+	diagnosticsStatusGrid: ".diagnostics-status-grid",
+	diagnosticsStatusItem: ".diagnostics-status-item",
+	diagnosticsStatusOk: ".diagnostics-value.status-ok",
+	diagnosticsStatusErr: ".diagnostics-value.status-err",
+	diagnosticsRefreshBtn: ".diagnostics-refresh-btn",
+	diagnosticsLogBtn: ".diagnostics-log-btn",
+	diagnosticsLogsContainer: ".diagnostics-logs-container",
+
+	// Agent file management (AgentsTab)
+	agentFilesBtn: ".agent-files-btn",
+	agentFileItem: ".agent-file-item",
+	agentFileTextarea: ".agent-file-textarea",
+	agentFileSaveBtn: ".agent-file-save-btn",
+
+	// Session actions (AgentsTab)
+	sessionCompactBtn: ".session-action-btn.compact",
+	sessionDeleteBtn: ".session-action-btn.delete",
+
+	// Device pairing (SettingsTab)
+	deviceNodeCard: ".device-node-card",
+	deviceNodesList: ".device-nodes-list",
+	devicePairRequests: ".device-pair-requests",
+	devicePairApprove: ".device-pair-approve",
+	devicePairReject: ".device-pair-reject",
 
 	// Queue badge
 	queueBadge: ".queue-badge",

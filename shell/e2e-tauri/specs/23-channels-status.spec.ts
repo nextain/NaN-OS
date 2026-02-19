@@ -1,29 +1,16 @@
 import { S } from "../helpers/selectors.js";
-import { autoApprovePermissions } from "../helpers/permissions.js";
 
 /**
  * 23 — Channels Status E2E
  *
- * Verifies Channels tab > status display:
- * - Channels tab shows loading/empty/list state
- * - Channel cards have expected structure
- * - Status badges show connected/disconnected
- * - Refresh button works
+ * Verifies Channels tab (5th tab):
+ * - Tab renders with channel data or empty/error state
+ * - Channel cards have status badges
+ * - Refresh button reloads data
  *
- * NOTE: This test requires a running Gateway with channels configured.
- * If Gateway is not available, it tests the error/empty state.
+ * Covers RPC: channels.status
  */
 describe("23 — channels status", () => {
-	let disposePermissions: (() => void) | undefined;
-
-	before(async () => {
-		disposePermissions = await autoApprovePermissions();
-	});
-
-	after(() => {
-		disposePermissions?.();
-	});
-
 	it("should navigate to channels tab", async () => {
 		const channelsBtn = await $(S.channelsTabBtn);
 		await channelsBtn.waitForDisplayed({ timeout: 10_000 });
@@ -33,38 +20,50 @@ describe("23 — channels status", () => {
 		await channelsPanel.waitForDisplayed({ timeout: 5_000 });
 	});
 
-	it("should show channels tab content (loading, empty, or list)", async () => {
-		// Wait for loading to complete (max 30s due to Gateway interaction)
-		await browser.pause(3_000);
+	it("should load channel data (cards or empty state)", async () => {
+		// Wait for loading to complete
+		await browser.waitUntil(
+			async () => {
+				return browser.execute(() => {
+					return !document.querySelector(".channels-loading");
+				});
+			},
+			{ timeout: 15_000, timeoutMsg: "Channels loading did not complete" },
+		);
 
-		const panel = await $(S.channelsTabPanel);
-		const text = await panel.getText();
+		const cardCount = await browser.execute(
+			(sel: string) => document.querySelectorAll(sel).length,
+			S.channelCard,
+		);
 
-		// Should show one of: channel cards, empty message, or error
-		const hasContent =
-			text.includes("연결") ||
-			text.includes("Connected") ||
-			text.includes("채널") ||
-			text.includes("Channel") ||
-			text.includes("Gateway") ||
-			text.includes("오류") ||
-			text.includes("Error") ||
-			text.length > 0;
-
-		expect(hasContent).toBe(true);
+		if (cardCount > 0) {
+			// Verify status badges exist
+			const statusCount = await browser.execute(
+				(sel: string) => document.querySelectorAll(sel).length,
+				S.channelStatus,
+			);
+			expect(statusCount).toBeGreaterThan(0);
+		} else {
+			// Empty or error state — should have meaningful text
+			const panel = await $(S.channelsTabPanel);
+			const panelText = await panel.getText();
+			expect(panelText.length).toBeGreaterThan(0);
+		}
 	});
 
-	it("should show refresh button", async () => {
-		// Check if refresh button exists (visible in all states: list, empty, error)
-		const refreshExists = await browser.execute(() => {
-			const buttons = document.querySelectorAll("button");
-			return Array.from(buttons).some(
-				(b) =>
-					b.textContent?.includes("새로고침") ||
-					b.textContent?.includes("Refresh"),
-			);
-		});
-		expect(refreshExists).toBe(true);
+	it("should have refresh button that reloads data", async () => {
+		const refreshBtn = await $(S.channelsRefreshBtn);
+		const exists = await refreshBtn.isExisting();
+
+		if (exists) {
+			expect(await refreshBtn.isDisplayed()).toBe(true);
+			await refreshBtn.click();
+			await browser.pause(2_000);
+
+			// Panel should still be displayed after refresh
+			const panel = await $(S.channelsTabPanel);
+			expect(await panel.isDisplayed()).toBe(true);
+		}
 	});
 
 	it("should navigate back to chat tab", async () => {

@@ -1,30 +1,54 @@
+import {
+	getLastAssistantMessage,
+	sendMessage,
+	waitForToolSuccess,
+} from "../helpers/chat.js";
+import { autoApprovePermissions } from "../helpers/permissions.js";
 import { S } from "../helpers/selectors.js";
 
 /**
  * 30 — Exec Approvals E2E
  *
- * Verifies the approval system UI:
- * - Permission modal exists (tested via high-tier tool invocation)
- * - Chat tab has working permission flow
+ * Verifies approval system via chat (skill_approvals):
+ * - get_rules: retrieve current approval rules
+ * - Auto-approve permissions flow
+ *
+ * Covers RPC: exec.approvals.get
  */
 describe("30 — exec approvals", () => {
-	it("should be on chat tab", async () => {
+	let dispose: (() => void) | undefined;
+
+	before(async () => {
+		dispose = autoApprovePermissions().dispose;
 		const chatInput = await $(S.chatInput);
-		await chatInput.waitForDisplayed({ timeout: 10_000 });
+		await chatInput.waitForEnabled({ timeout: 15_000 });
 	});
 
-	it("should verify chat is functional", async () => {
-		const chatInput = await $(S.chatInput);
-		const isDisplayed = await chatInput.isDisplayed();
-		expect(isDisplayed).toBe(true);
+	after(() => {
+		dispose?.();
 	});
 
-	it("should handle permission button always if modal appears", async () => {
-		// The permission modal only appears when agent tries to use a tier 1+ tool
-		// Check if the always button selector exists in the DOM (may not be visible)
-		const alwaysBtn = await $(S.permissionAlways);
-		const exists = await alwaysBtn.isExisting();
-		// Soft check — modal may not be present without tool invocation
-		expect(typeof exists).toBe("boolean");
+	it("should retrieve approval rules via skill_approvals get_rules", async () => {
+		await sendMessage(
+			"현재 실행 승인 규칙을 확인해줘. skill_approvals 도구의 get_rules 액션을 사용해.",
+		);
+
+		await waitForToolSuccess();
+
+		const text = await getLastAssistantMessage();
+		// Should mention rules/approval/permission or empty rules
+		expect(text).toMatch(/규칙|rule|승인|approval|권한|permission|설정|없/i);
+	});
+
+	it("should handle auto-approve for tool invocations", async () => {
+		// Send a message that triggers a tier 1+ tool — permissions auto-approved
+		await sendMessage(
+			"현재 시각을 확인해줘. skill_time 도구를 사용해.",
+		);
+
+		await waitForToolSuccess();
+
+		const text = await getLastAssistantMessage();
+		expect(text.length).toBeGreaterThan(0);
 	});
 });
