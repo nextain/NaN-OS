@@ -1,7 +1,10 @@
 import {
 	createAgent,
 	deleteAgent,
+	getAgentFile,
+	listAgentFiles,
 	listAgents,
+	setAgentFile,
 	updateAgent,
 } from "../../gateway/agents-proxy.js";
 import type { SkillDefinition, SkillResult } from "../types.js";
@@ -10,19 +13,33 @@ export function createAgentsSkill(): SkillDefinition {
 	return {
 		name: "skill_agents",
 		description:
-			"Manage Gateway agents. Actions: list, create, update, delete.",
+			"Manage Gateway agents. Actions: list, create, update, delete, files_list, files_get, files_set.",
 		parameters: {
 			type: "object",
 			properties: {
 				action: {
 					type: "string",
-					description: "Action: list, create, update, delete",
-					enum: ["list", "create", "update", "delete"],
+					description:
+						"Action: list, create, update, delete, files_list, files_get, files_set",
+					enum: [
+						"list",
+						"create",
+						"update",
+						"delete",
+						"files_list",
+						"files_get",
+						"files_set",
+					],
 				},
 				id: {
 					type: "string",
 					description:
 						"Agent ID. Required for update and delete.",
+				},
+				agentId: {
+					type: "string",
+					description:
+						"Agent ID for file operations (files_list, files_get, files_set).",
 				},
 				name: {
 					type: "string",
@@ -35,6 +52,14 @@ export function createAgentsSkill(): SkillDefinition {
 				model: {
 					type: "string",
 					description: "Model name (optional).",
+				},
+				path: {
+					type: "string",
+					description: "File path (for files_get, files_set).",
+				},
+				content: {
+					type: "string",
+					description: "File content (for files_set).",
 				},
 			},
 			required: ["action"],
@@ -113,6 +138,83 @@ export function createAgentsSkill(): SkillDefinition {
 						};
 					}
 					const result = await deleteAgent(gateway, id);
+					return {
+						success: true,
+						output: JSON.stringify(result),
+					};
+				}
+
+				case "files_list": {
+					const agentId = args.agentId as string;
+					if (!agentId) {
+						return {
+							success: false,
+							output: "",
+							error: "agentId is required for files_list action",
+						};
+					}
+					const result = await listAgentFiles(gateway, agentId);
+					return {
+						success: true,
+						output: JSON.stringify(result),
+					};
+				}
+
+				case "files_get": {
+					const agentId = args.agentId as string;
+					const path = args.path as string;
+					if (!agentId) {
+						return {
+							success: false,
+							output: "",
+							error: "agentId is required for files_get action",
+						};
+					}
+					if (!path) {
+						return {
+							success: false,
+							output: "",
+							error: "path is required for files_get action",
+						};
+					}
+					const result = await getAgentFile(gateway, agentId, path);
+					return {
+						success: true,
+						output: JSON.stringify(result),
+					};
+				}
+
+				case "files_set": {
+					const agentId = args.agentId as string;
+					const path = args.path as string;
+					const content = args.content as string;
+					if (!agentId) {
+						return {
+							success: false,
+							output: "",
+							error: "agentId is required for files_set action",
+						};
+					}
+					if (!path) {
+						return {
+							success: false,
+							output: "",
+							error: "path is required for files_set action",
+						};
+					}
+					if (content == null) {
+						return {
+							success: false,
+							output: "",
+							error: "content is required for files_set action",
+						};
+					}
+					const result = await setAgentFile(
+						gateway,
+						agentId,
+						path,
+						content,
+					);
 					return {
 						success: true,
 						output: JSON.stringify(result),

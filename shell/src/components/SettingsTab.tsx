@@ -71,14 +71,14 @@ function DevicePairingSection() {
 		try {
 			const [nodesRes, pairRes] = await Promise.all([
 				directToolCall({
-					toolName: "skill_agents",
+					toolName: "skill_device",
 					args: { action: "node_list" },
 					requestId: `dev-nodes-${Date.now()}`,
 					gatewayUrl: config.gatewayUrl,
 					gatewayToken: config.gatewayToken,
 				}),
 				directToolCall({
-					toolName: "skill_agents",
+					toolName: "skill_device",
 					args: { action: "pair_list" },
 					requestId: `dev-pairs-${Date.now()}`,
 					gatewayUrl: config.gatewayUrl,
@@ -112,7 +112,7 @@ function DevicePairingSection() {
 			const config = loadConfig();
 			try {
 				await directToolCall({
-					toolName: "skill_agents",
+					toolName: "skill_device",
 					args: { action: `pair_${action}`, requestId },
 					requestId: `dev-${action}-${Date.now()}`,
 					gatewayUrl: config?.gatewayUrl,

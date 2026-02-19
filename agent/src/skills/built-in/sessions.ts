@@ -2,6 +2,9 @@ import {
 	compactSession,
 	deleteSession,
 	listSessions,
+	patchSession,
+	previewSession,
+	resetSession,
 } from "../../gateway/sessions-proxy.js";
 import type { SkillDefinition, SkillResult } from "../types.js";
 
@@ -9,19 +12,32 @@ export function createSessionsSkill(): SkillDefinition {
 	return {
 		name: "skill_sessions",
 		description:
-			"Manage Gateway sub-agent sessions. Actions: list, delete, compact.",
+			"Manage Gateway sub-agent sessions. Actions: list, delete, compact, preview, patch, reset.",
 		parameters: {
 			type: "object",
 			properties: {
 				action: {
 					type: "string",
-					description: "Action: list, delete, compact",
-					enum: ["list", "delete", "compact"],
+					description:
+						"Action: list, delete, compact, preview, patch, reset",
+					enum: [
+						"list",
+						"delete",
+						"compact",
+						"preview",
+						"patch",
+						"reset",
+					],
 				},
 				key: {
 					type: "string",
 					description:
-						"Session key. Required for delete and compact.",
+						"Session key. Required for delete, compact, preview, patch, reset.",
+				},
+				patch: {
+					type: "object",
+					description:
+						"Partial session update (for patch action).",
 				},
 			},
 			required: ["action"],
@@ -76,6 +92,60 @@ export function createSessionsSkill(): SkillDefinition {
 						};
 					}
 					const result = await compactSession(gateway, key);
+					return {
+						success: true,
+						output: JSON.stringify(result),
+					};
+				}
+
+				case "preview": {
+					const key = args.key as string;
+					if (!key) {
+						return {
+							success: false,
+							output: "",
+							error: "key is required for preview action",
+						};
+					}
+					const result = await previewSession(gateway, key);
+					return {
+						success: true,
+						output: JSON.stringify(result),
+					};
+				}
+
+				case "patch": {
+					const key = args.key as string;
+					if (!key) {
+						return {
+							success: false,
+							output: "",
+							error: "key is required for patch action",
+						};
+					}
+					const patchData =
+						(args.patch as Record<string, unknown>) ?? {};
+					const result = await patchSession(
+						gateway,
+						key,
+						patchData,
+					);
+					return {
+						success: true,
+						output: JSON.stringify(result),
+					};
+				}
+
+				case "reset": {
+					const key = args.key as string;
+					if (!key) {
+						return {
+							success: false,
+							output: "",
+							error: "key is required for reset action",
+						};
+					}
+					const result = await resetSession(gateway, key);
 					return {
 						success: true,
 						output: JSON.stringify(result),

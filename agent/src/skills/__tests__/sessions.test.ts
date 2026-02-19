@@ -38,6 +38,18 @@ describe("skill_sessions", () => {
 							removedMessages: 2,
 						});
 						break;
+					case "sessions.preview":
+						respond.ok({
+							key: params.key,
+							summary: "A task about writing tests",
+						});
+						break;
+					case "sessions.patch":
+						respond.ok({ key: params.key, patched: true });
+						break;
+					case "sessions.reset":
+						respond.ok({ key: params.key, reset: true });
+						break;
 					default:
 						respond.error("UNKNOWN", `Unknown: ${method}`);
 				}
@@ -48,6 +60,9 @@ describe("skill_sessions", () => {
 					"sessions.list",
 					"sessions.delete",
 					"sessions.compact",
+					"sessions.preview",
+					"sessions.patch",
+					"sessions.reset",
 				],
 			},
 		);
@@ -108,6 +123,65 @@ describe("skill_sessions", () => {
 		expect(result.success).toBe(true);
 		const parsed = JSON.parse(result.output);
 		expect(parsed.compacted).toBe(true);
+	});
+
+	// --- New actions: preview, patch, reset ---
+
+	it("previews a session", async () => {
+		const result = await skill.execute(
+			{ action: "preview", key: "s1" },
+			{ gateway: client },
+		);
+		expect(result.success).toBe(true);
+		const parsed = JSON.parse(result.output);
+		expect(parsed.summary).toContain("writing tests");
+	});
+
+	it("requires key for preview", async () => {
+		const result = await skill.execute(
+			{ action: "preview" },
+			{ gateway: client },
+		);
+		expect(result.success).toBe(false);
+		expect(result.error).toContain("key is required");
+	});
+
+	it("patches a session", async () => {
+		const result = await skill.execute(
+			{ action: "patch", key: "s1", patch: { label: "Updated" } },
+			{ gateway: client },
+		);
+		expect(result.success).toBe(true);
+		const parsed = JSON.parse(result.output);
+		expect(parsed.patched).toBe(true);
+	});
+
+	it("requires key for patch", async () => {
+		const result = await skill.execute(
+			{ action: "patch" },
+			{ gateway: client },
+		);
+		expect(result.success).toBe(false);
+		expect(result.error).toContain("key is required");
+	});
+
+	it("resets a session", async () => {
+		const result = await skill.execute(
+			{ action: "reset", key: "s1" },
+			{ gateway: client },
+		);
+		expect(result.success).toBe(true);
+		const parsed = JSON.parse(result.output);
+		expect(parsed.reset).toBe(true);
+	});
+
+	it("requires key for reset", async () => {
+		const result = await skill.execute(
+			{ action: "reset" },
+			{ gateway: client },
+		);
+		expect(result.success).toBe(false);
+		expect(result.error).toContain("key is required");
 	});
 
 	it("returns error without gateway", async () => {

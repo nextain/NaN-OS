@@ -37,6 +37,23 @@ describe("skill_agents", () => {
 					case "agents.delete":
 						respond.ok({ id: params.id, deleted: true });
 						break;
+					case "agents.files.list":
+						respond.ok({
+							files: [
+								{ path: "system.md", size: 128 },
+								{ path: "config.yaml", size: 64 },
+							],
+						});
+						break;
+					case "agents.files.get":
+						respond.ok({
+							path: params.path,
+							content: "# Agent instructions\nBe helpful.",
+						});
+						break;
+					case "agents.files.set":
+						respond.ok({ path: params.path, written: true });
+						break;
 					default:
 						respond.error("UNKNOWN", `Unknown: ${method}`);
 				}
@@ -48,6 +65,9 @@ describe("skill_agents", () => {
 					"agents.create",
 					"agents.update",
 					"agents.delete",
+					"agents.files.list",
+					"agents.files.get",
+					"agents.files.set",
 				],
 			},
 		);
@@ -137,6 +157,89 @@ describe("skill_agents", () => {
 		);
 		expect(result.success).toBe(false);
 		expect(result.error).toContain("id is required");
+	});
+
+	// --- File operations ---
+
+	it("lists agent files", async () => {
+		const result = await skill.execute(
+			{ action: "files_list", agentId: "alpha" },
+			{ gateway: client },
+		);
+		expect(result.success).toBe(true);
+		const parsed = JSON.parse(result.output);
+		expect(parsed.files).toHaveLength(2);
+		expect(parsed.files[0].path).toBe("system.md");
+	});
+
+	it("requires agentId for files_list", async () => {
+		const result = await skill.execute(
+			{ action: "files_list" },
+			{ gateway: client },
+		);
+		expect(result.success).toBe(false);
+		expect(result.error).toContain("agentId is required");
+	});
+
+	it("gets agent file content", async () => {
+		const result = await skill.execute(
+			{ action: "files_get", agentId: "alpha", path: "system.md" },
+			{ gateway: client },
+		);
+		expect(result.success).toBe(true);
+		const parsed = JSON.parse(result.output);
+		expect(parsed.content).toContain("Agent instructions");
+	});
+
+	it("requires agentId for files_get", async () => {
+		const result = await skill.execute(
+			{ action: "files_get", path: "system.md" },
+			{ gateway: client },
+		);
+		expect(result.success).toBe(false);
+		expect(result.error).toContain("agentId is required");
+	});
+
+	it("requires path for files_get", async () => {
+		const result = await skill.execute(
+			{ action: "files_get", agentId: "alpha" },
+			{ gateway: client },
+		);
+		expect(result.success).toBe(false);
+		expect(result.error).toContain("path is required");
+	});
+
+	it("sets agent file content", async () => {
+		const result = await skill.execute(
+			{
+				action: "files_set",
+				agentId: "alpha",
+				path: "system.md",
+				content: "# Updated\nNew content.",
+			},
+			{ gateway: client },
+		);
+		expect(result.success).toBe(true);
+		const parsed = JSON.parse(result.output);
+		expect(parsed.written).toBe(true);
+	});
+
+	it("requires agentId for files_set", async () => {
+		const result = await skill.execute(
+			{ action: "files_set", path: "x.md", content: "y" },
+			{ gateway: client },
+		);
+		expect(result.success).toBe(false);
+		expect(result.error).toContain("agentId is required");
+	});
+
+	it("requires content for files_set", async () => {
+		const result = await skill.execute(
+			{ action: "files_set", agentId: "alpha", path: "x.md" },
+			{ gateway: client },
+		);
+		expect(result.success).toBe(false);
+		expect(result.error).toContain("content is required");
 	});
 
 	it("returns error without gateway", async () => {
