@@ -132,3 +132,49 @@ export async function configureSettings(opts: {
 	const chatInput = await $(S.chatInput);
 	await chatInput.waitForDisplayed({ timeout: 10_000 });
 }
+
+/** Navigate to the Settings tab and wait for render. */
+export async function navigateToSettings(): Promise<void> {
+	await browser.execute((sel: string) => {
+		const el = document.querySelector(sel) as HTMLElement | null;
+		if (el) el.click();
+	}, S.settingsTabBtn);
+	await browser.pause(500);
+}
+
+/** Scroll a specific element into view. */
+export async function scrollToSection(selector: string): Promise<void> {
+	await browser.execute((sel: string) => {
+		const el = document.querySelector(sel);
+		if (el) el.scrollIntoView({ behavior: "instant", block: "start" });
+	}, selector);
+	await browser.pause(300);
+}
+
+/** Set an input/textarea value using React-compatible native setter. */
+export async function setNativeValue(selector: string, value: string): Promise<void> {
+	await browser.execute(
+		(sel: string, val: string) => {
+			const el = document.querySelector(sel) as HTMLInputElement | HTMLTextAreaElement | null;
+			if (!el) return;
+			el.scrollIntoView({ block: "center" });
+			const proto = el instanceof HTMLTextAreaElement
+				? HTMLTextAreaElement.prototype
+				: HTMLInputElement.prototype;
+			const setter = Object.getOwnPropertyDescriptor(proto, "value")?.set;
+			if (setter) setter.call(el, val);
+			else el.value = val;
+			el.dispatchEvent(new Event("input", { bubbles: true }));
+		},
+		selector,
+		value,
+	);
+}
+
+/** Click an element by selector using browser.execute (reliable in WebKitGTK). */
+export async function clickBySelector(selector: string): Promise<void> {
+	await browser.execute((sel: string) => {
+		const el = document.querySelector(sel) as HTMLElement | null;
+		if (el) el.click();
+	}, selector);
+}

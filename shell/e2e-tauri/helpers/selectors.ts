@@ -138,4 +138,66 @@ export const S = {
 
 	// Queue badge
 	queueBadge: ".queue-badge",
+
+	// Theme
+	themeSwatch: ".theme-swatch",
+	themeSwatchActive: ".theme-swatch.active",
+
+	// VRM/Avatar
+	vrmCard: ".vrm-card",
+	vrmCardActive: ".vrm-card.active",
+	vrmCardAdd: ".vrm-card.vrm-card-add",
+
+	// Background
+	bgCard: ".bg-card",
+	bgCardActive: ".bg-card.active",
+
+	// Settings inputs
+	localeSelect: "#locale-select",
+	personaInput: "#persona-input",
+	modelInput: "#model-input",
+	ttsToggle: "#tts-toggle",
+	sttToggle: "#stt-toggle",
+	googleApiKeyInput: "#google-apikey-input",
+	ttsVoiceSelect: "#tts-voice-select",
+	voicePreviewBtn: ".voice-preview-btn",
+	settingsResetBtn: ".settings-reset-btn",
+
+	// Lab
+	labInfoBlock: ".lab-info-block",
+	labBalanceValue: ".lab-balance-value",
+
+	// Memory/Facts
+	factsList: ".facts-list",
+	factItem: ".fact-item",
+	factDeleteBtn: ".fact-delete-btn",
+
+	// Voice Wake
+	voiceWakeTag: ".voice-wake-tag",
+	voiceWakeTagRemove: ".voice-wake-tag-remove",
+
+	// History (extended)
+	historyList: ".history-list",
+	historyItemMain: ".history-item-main",
+	historyItemMeta: ".history-item-meta",
+
+	// Skills (extended)
+	skillCardHeader: ".skill-card-header",
+	skillCardExpanded: ".skill-card.expanded",
+	skillCardDetail: ".skill-card-detail",
+
+	// Diagnostics (extended)
+	diagnosticsTailingIndicator: ".diagnostics-tailing-indicator",
+	diagnosticsLogLine: ".diagnostics-log-line",
+
+	// Channels (extended)
+	channelsLoading: ".channels-loading",
+	channelsEmpty: ".channels-empty",
+	channelName: ".channel-name",
+
+	// Agents (extended)
+	agentCardName: ".agent-card-name",
+	agentFileEditor: ".agent-file-editor",
+	agentFileStatus: ".agent-file-status",
+	sessionCardMeta: ".session-card-meta",
 } as const;
