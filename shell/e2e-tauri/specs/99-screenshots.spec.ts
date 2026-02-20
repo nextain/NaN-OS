@@ -127,6 +127,21 @@ describe("99 — manual screenshots", () => {
 		await screenshot("skills-tab");
 	});
 
+	it("should capture channels tab", async () => {
+		await clickTab(S.channelsTabBtn);
+		await screenshot("channels-tab");
+	});
+
+	it("should capture agents tab", async () => {
+		await clickTab(S.agentsTabBtn);
+		await screenshot("agents-tab");
+	});
+
+	it("should capture diagnostics tab", async () => {
+		await clickTab(S.diagnosticsTabBtn);
+		await screenshot("diagnostics-tab");
+	});
+
 	it("should capture skills card expanded", async () => {
 		// Click first skill card to expand
 		await browser.execute((cardSel: string) => {
@@ -193,6 +208,24 @@ describe("99 — manual screenshots", () => {
 		});
 		await browser.pause(300);
 		await screenshot("settings-tools");
+	});
+
+	it("should capture settings channels section", async () => {
+		await browser.execute(() => {
+			const el = document.querySelector(".channels-section");
+			if (el) el.scrollIntoView({ behavior: "instant", block: "start" });
+		});
+		await browser.pause(300);
+		await screenshot("settings-channels");
+	});
+
+	it("should capture settings device section", async () => {
+		await browser.execute(() => {
+			const el = document.querySelector(".device-section, .device-nodes-list");
+			if (el) el.scrollIntoView({ behavior: "instant", block: "start" });
+		});
+		await browser.pause(300);
+		await screenshot("settings-device");
 	});
 
 	it("should capture settings lab section", async () => {
