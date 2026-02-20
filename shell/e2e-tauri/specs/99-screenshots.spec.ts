@@ -31,7 +31,7 @@ async function clickTab(selector: string): Promise<void> {
 		const el = document.querySelector(sel) as HTMLElement | null;
 		if (el) el.click();
 	}, selector);
-	await browser.pause(500);
+	await browser.pause(1000); // Increased pause to let rendering catch up
 }
 
 const API_KEY = process.env.CAFE_E2E_API_KEY || process.env.GEMINI_API_KEY || "";
