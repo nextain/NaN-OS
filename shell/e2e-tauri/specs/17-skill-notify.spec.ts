@@ -5,6 +5,7 @@ import {
 import { autoApprovePermissions } from "../helpers/permissions.js";
 import { S } from "../helpers/selectors.js";
 import { assertSemantic } from "../helpers/semantic.js";
+import { enableToolsForSpec } from "../helpers/settings.js";
 
 /**
  * 17 — Notification Skills E2E
@@ -41,24 +42,10 @@ describe("17 — notification skills", () => {
 	};
 
 	before(async () => {
+		await enableToolsForSpec(["skill_notify_slack", "skill_notify_discord"]);
 		const chatInput = await $(S.chatInput);
 		await chatInput.waitForEnabled({ timeout: 15_000 });
 		disposePermissions = autoApprovePermissions().dispose;
-
-		// Pre-approve notification skills
-		await browser.execute(() => {
-			const raw = localStorage.getItem("cafelua-config");
-			if (!raw) return;
-			const config = JSON.parse(raw);
-			const allowed = config.allowedTools || [];
-			for (const skill of ["skill_notify_slack", "skill_notify_discord"]) {
-				if (!allowed.includes(skill)) {
-					allowed.push(skill);
-				}
-			}
-			config.allowedTools = allowed;
-			localStorage.setItem("cafelua-config", JSON.stringify(config));
-		});
 	});
 
 	after(() => {

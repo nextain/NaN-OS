@@ -14,7 +14,7 @@ describe("10 — History Tab", () => {
 		await assertSemantic(
 			text,
 			"사용자가 '히스토리 테스트용 메시지'라고 보냈다",
-			"AI가 적절히 응답했는가? 에러 메시지나 빈 응답은 FAIL",
+			"AI가 사용자 메시지에 응답했는가? '[오류]'나 빈 응답이면 FAIL. 이전 대화 언급, 인사, 질문 등 자연스러운 답변이면 PASS",
 		);
 	});
 
@@ -76,13 +76,13 @@ describe("10 — History Tab", () => {
 		// Send a message in new conversation
 		const chatInput = await $(S.chatInput);
 		await chatInput.waitForEnabled({ timeout: 10_000 });
-		await sendMessage("두 번째 대화 메시지");
+		await sendMessage("안녕! 새 대화 시작이야.");
 
 		const text = await getLastAssistantMessage();
 		await assertSemantic(
 			text,
-			"사용자가 '두 번째 대화 메시지'라고 보냈다",
-			"AI가 적절히 응답했는가? 에러나 빈 응답은 FAIL",
+			"사용자가 '안녕! 새 대화 시작이야.'라고 인사했다",
+			"AI가 인사에 적절히 응답했는가? 에러나 빈 응답은 FAIL. 도구 호출 없이 자연스러운 답변이면 PASS",
 		);
 
 		// Switch to history tab

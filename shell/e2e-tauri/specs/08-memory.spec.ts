@@ -1,6 +1,7 @@
 import { getLastAssistantMessage, sendMessage } from "../helpers/chat.js";
 import { S } from "../helpers/selectors.js";
 import { assertSemantic } from "../helpers/semantic.js";
+import { safeRefresh } from "../helpers/settings.js";
 
 describe("08 — Memory (conversation persistence)", () => {
 	/**
@@ -63,7 +64,7 @@ describe("08 — Memory (conversation persistence)", () => {
 		expect(userCountBefore).toBeGreaterThanOrEqual(1);
 
 		// Refresh the webview — this triggers loadOrCreateSession() on remount
-		await browser.refresh();
+		await safeRefresh();
 
 		// Wait for app root to be ready
 		const appRoot = await $(S.appRoot);

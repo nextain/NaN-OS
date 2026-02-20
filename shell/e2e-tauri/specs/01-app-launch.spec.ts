@@ -1,4 +1,5 @@
 import { S } from "../helpers/selectors.js";
+import { safeRefresh } from "../helpers/settings.js";
 
 const API_KEY = process.env.CAFE_E2E_API_KEY || process.env.GEMINI_API_KEY || "";
 
@@ -26,7 +27,7 @@ describe("01 — App Launch", () => {
 			localStorage.setItem("cafelua-config", JSON.stringify(config));
 		}, API_KEY);
 
-		await browser.refresh();
+		await safeRefresh();
 
 		// After reload with config, onboarding should NOT appear
 		await browser.waitUntil(

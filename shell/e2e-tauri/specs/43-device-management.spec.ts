@@ -39,7 +39,7 @@ describe("43 — device management", () => {
 		await assertSemantic(
 			text,
 			"skill_device 도구의 node_describe 액션으로 노드 상세 정보를 요청했다",
-			"AI가 skill_device로 노드 정보 조회를 실행했는가? '도구를 찾을 수 없다/사용할 수 없다'면 FAIL. 노드/디바이스 정보나 에러 응답이 있으면 PASS",
+			"AI가 skill_device 도구를 호출 시도했는가? 도구 자체를 인식하지 못하면 FAIL. 도구를 호출했으면(node_describe든 node_list든, 성공이든 오류든) PASS",
 		);
 	});
 

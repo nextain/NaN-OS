@@ -1,6 +1,21 @@
 import { S } from "./selectors.js";
 
 /**
+ * Retry-safe browser.refresh() — WebKitGTK may throw UND_ERR_HEADERS_TIMEOUT.
+ */
+export async function safeRefresh(maxAttempts = 3): Promise<void> {
+	for (let attempt = 0; attempt < maxAttempts; attempt++) {
+		try {
+			await browser.refresh();
+			return;
+		} catch {
+			if (attempt === maxAttempts - 1) throw new Error(`browser.refresh() failed after ${maxAttempts} attempts`);
+			await browser.pause(2_000);
+		}
+	}
+}
+
+/**
  * Enable tools + pre-approve specific tools in localStorage config.
  * Only refreshes the page when config actually changed.
  */
@@ -40,7 +55,16 @@ export async function enableToolsForSpec(tools: string[]): Promise<void> {
 	}, tools);
 
 	if (needsRefresh) {
-		await browser.refresh();
+		// Retry refresh — WebKitGTK may throw UND_ERR_HEADERS_TIMEOUT intermittently
+		for (let attempt = 0; attempt < 3; attempt++) {
+			try {
+				await browser.refresh();
+				break;
+			} catch {
+				if (attempt === 2) throw new Error("browser.refresh() failed after 3 attempts");
+				await browser.pause(2_000);
+			}
+		}
 		// Wait for app to fully load after refresh
 		const chatInput = await $(S.chatInput);
 		await chatInput.waitForEnabled({ timeout: 15_000 });
@@ -211,7 +235,16 @@ export async function ensureAppReady(): Promise<void> {
 			});
 			localStorage.setItem("cafelua-config", JSON.stringify(config));
 		}, API_KEY);
-		await browser.refresh();
+		// Retry refresh — WebKitGTK may throw UND_ERR_HEADERS_TIMEOUT intermittently
+		for (let attempt = 0; attempt < 3; attempt++) {
+			try {
+				await browser.refresh();
+				break;
+			} catch {
+				if (attempt === 2) throw new Error("browser.refresh() failed after 3 attempts in ensureAppReady");
+				await browser.pause(2_000);
+			}
+		}
 	}
 
 	// Wait for app + tabs to be ready

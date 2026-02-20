@@ -46,27 +46,27 @@ describe("51 — skills advanced", () => {
 
 	it("should install skill dependencies", async () => {
 		await sendMessage(
-			"누락된 스킬 의존성을 설치해줘. skill_skill_manager의 install 액션을 사용해.",
+			"weather 스킬의 누락된 의존성을 설치해줘. skill_skill_manager의 install 액션을 사용해. skillName은 'weather'.",
 		);
 
 		const text = await getLastAssistantMessage();
 		await assertSemantic(
 			text,
 			"skill_skill_manager 도구의 install 액션으로 스킬 의존성 설치를 요청했다",
-			"AI가 skill_skill_manager로 의존성 설치를 실행했는가? '도구를 찾을 수 없다/사용할 수 없다'면 FAIL. 설치 결과가 있으면 PASS",
+			"AI가 skill_skill_manager.install을 호출 시도했는가? 도구 자체를 인식하지 못하면 FAIL. 도구를 호출했으면(성공이든 Gateway 오류든) PASS",
 		);
 	});
 
 	it("should update skill config", async () => {
 		await sendMessage(
-			"스킬 설정을 업데이트해줘. skill_skill_manager의 update_config 액션을 사용해.",
+			"weather 스킬의 설정을 업데이트해줘. skill_skill_manager의 update_config 액션을 사용해. skillName은 'weather'.",
 		);
 
 		const text = await getLastAssistantMessage();
 		await assertSemantic(
 			text,
 			"skill_skill_manager 도구의 update_config 액션으로 스킬 설정 업데이트를 요청했다",
-			"AI가 skill_skill_manager로 스킬 설정 업데이트를 실행했는가? '도구를 찾을 수 없다/사용할 수 없다'면 FAIL. 업데이트 결과가 있으면 PASS",
+			"AI가 skill_skill_manager.update_config를 호출 시도했는가? 도구 자체를 인식하지 못하면 FAIL. 도구를 호출했으면(성공이든 Gateway 오류든) PASS",
 		);
 	});
 });

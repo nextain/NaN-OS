@@ -74,7 +74,7 @@ export const config = {
 	],
 
 	logLevel: "warn",
-	bail: 1,
+	bail: 0,
 	waitforTimeout: 30_000,
 	connectionRetryTimeout: 120_000,
 	connectionRetryCount: 3,
@@ -95,7 +95,10 @@ export const config = {
 		try {
 			execSync("lsof -ti:1420 | xargs -r kill -9 2>/dev/null || true", { stdio: "ignore" });
 			execSync("lsof -ti:4444 | xargs -r kill -9 2>/dev/null || true", { stdio: "ignore" });
+			execSync("lsof -ti:4445 | xargs -r kill -9 2>/dev/null || true", { stdio: "ignore" });
 			execSync("pkill -f tauri-driver 2>/dev/null || true", { stdio: "ignore" });
+			execSync("pkill -f WebKitWebDriver 2>/dev/null || true", { stdio: "ignore" });
+			execSync("pkill -f cafelua-shell 2>/dev/null || true", { stdio: "ignore" });
 		} catch { /* ignore */ }
 		// Brief pause to let ports release
 		await new Promise((r) => setTimeout(r, 500));
@@ -120,6 +123,19 @@ export const config = {
 	},
 
 	async beforeSession() {
+		// Kill leftover processes from previous spec's session.
+		// Each spec runs in its own worker process; we must ensure
+		// ports and app processes from the previous worker are fully dead.
+		try {
+			execSync("pkill -9 -f cafelua-shell 2>/dev/null || true", { stdio: "ignore" });
+			execSync("pkill -9 -f openclaw-node 2>/dev/null || true", { stdio: "ignore" });
+			execSync("pkill -9 -f tauri-driver 2>/dev/null || true", { stdio: "ignore" });
+			execSync("pkill -9 -f WebKitWebDriver 2>/dev/null || true", { stdio: "ignore" });
+			execSync("lsof -ti:4444 | xargs -r kill -9 2>/dev/null || true", { stdio: "ignore" });
+			execSync("lsof -ti:4445 | xargs -r kill -9 2>/dev/null || true", { stdio: "ignore" });
+		} catch { /* ignore */ }
+		await new Promise((r) => setTimeout(r, 1_500));
+
 		const driverPath = resolve(homedir(), ".cargo/bin/tauri-driver");
 		tauriDriver = spawn(
 			driverPath,
@@ -133,16 +149,30 @@ export const config = {
 		await waitForPort(4444, 30_000);
 	},
 
+	async before() {
+		// Each spec runs in its own session (fresh app).
+		// Ensure base config is set so the app bypasses onboarding.
+		const { ensureAppReady } = await import("./helpers/settings.js");
+		await ensureAppReady();
+
+		// Auto-approve permission modals globally for all specs.
+		// Prevents tool-call hangs when AI tries to use a tool not yet approved.
+		const { autoApprovePermissions } = await import("./helpers/permissions.js");
+		autoApprovePermissions();
+	},
+
 	afterSession() {
 		tauriDriver?.kill();
 
-		// Kill orphaned openclaw-node / gateway processes spawned by Tauri app.
-		// When the test app window doesn't close cleanly, WindowEvent::Destroyed
-		// may not fire, leaving Node Host processes as zombies.
+		// Kill ALL processes spawned by Tauri app and E2E infrastructure.
+		// Without this, ports 4444/4445 stay occupied and next spec's session fails.
 		try {
-			execSync("pkill -f openclaw-node 2>/dev/null || true", {
-				stdio: "ignore",
-			});
+			execSync("pkill -f openclaw-node 2>/dev/null || true", { stdio: "ignore" });
+			execSync("pkill -f cafelua-shell 2>/dev/null || true", { stdio: "ignore" });
+			execSync("pkill -f WebKitWebDriver 2>/dev/null || true", { stdio: "ignore" });
+			execSync("pkill -f tauri-driver 2>/dev/null || true", { stdio: "ignore" });
+			execSync("lsof -ti:4444 | xargs -r kill -9 2>/dev/null || true", { stdio: "ignore" });
+			execSync("lsof -ti:4445 | xargs -r kill -9 2>/dev/null || true", { stdio: "ignore" });
 		} catch { /* ignore — no processes to kill */ }
 	},
 

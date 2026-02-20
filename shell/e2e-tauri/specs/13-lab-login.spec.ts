@@ -1,4 +1,5 @@
 import { S } from "../helpers/selectors.js";
+import { safeRefresh } from "../helpers/settings.js";
 
 describe("13 — Lab Login Flow", () => {
 	let savedConfig: string | null = null;
@@ -13,7 +14,7 @@ describe("13 — Lab Login Flow", () => {
 		await browser.execute(() => {
 			localStorage.removeItem("cafelua-config");
 		});
-		await browser.refresh();
+		await safeRefresh();
 
 		const overlay = await $(S.onboardingOverlay);
 		await overlay.waitForDisplayed({ timeout: 30_000 });
@@ -44,7 +45,7 @@ describe("13 — Lab Login Flow", () => {
 		});
 
 		// Reload to pick up the new config
-		await browser.refresh();
+		await safeRefresh();
 
 		const appRoot = await $(S.appRoot);
 		await appRoot.waitForDisplayed({ timeout: 30_000 });
@@ -126,7 +127,7 @@ describe("13 — Lab Login Flow", () => {
 				gatewayToken,
 			);
 		}
-		await browser.refresh();
+		await safeRefresh();
 
 		const appRoot = await $(S.appRoot);
 		await appRoot.waitForDisplayed({ timeout: 30_000 });

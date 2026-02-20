@@ -52,10 +52,13 @@ cycle:
       - "Minimize new files. Add to existing files when possible."
       - "Utils/helpers in one place only (shared/ or module utils/)"
       - "Temp code must have // TODO: comment + issue number"
+      - "Every async wait/poll must log what it waits for and current state"
+      - "UI blocking states (modals, dialogs) must be captured in debug traces"
     anti_patterns:
       - "Implementing without tests"
       - "Mixing multiple features in one PR"
       - "Creating duplicate utils like 'helpers.ts', 'utils2.ts'"
+      - "Async code that waits without logging what it is waiting for"
 
   step_4_verify:
     name: "VERIFY"

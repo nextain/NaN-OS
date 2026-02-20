@@ -1,4 +1,5 @@
 import { S } from "../helpers/selectors.js";
+import { safeRefresh } from "../helpers/settings.js";
 
 describe("19 — skills bulk migration", () => {
 	before(async () => {
@@ -9,7 +10,7 @@ describe("19 — skills bulk migration", () => {
 			config.enableTools = true;
 			localStorage.setItem("cafelua-config", JSON.stringify(config));
 		});
-		await browser.refresh();
+		await safeRefresh();
 		const chatInput = await $(S.chatInput);
 		await chatInput.waitForEnabled({ timeout: 15_000 });
 	});

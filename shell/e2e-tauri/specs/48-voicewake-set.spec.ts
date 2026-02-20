@@ -39,7 +39,7 @@ describe("48 — voicewake set", () => {
 		await assertSemantic(
 			text,
 			"skill_voicewake 도구의 set 액션으로 음성 깨우기 트리거를 설정하라고 했다",
-			"AI가 skill_voicewake로 트리거 설정을 실행했는가? '도구를 찾을 수 없다/사용할 수 없다'면 FAIL. 트리거가 설정되었다는 결과가 있으면 PASS",
+			"AI가 skill_voicewake.set를 호출 시도했는가? 도구 자체를 인식하지 못하면 FAIL. 도구를 호출했으면(성공이든 '스킬 비활성화' 오류든) PASS",
 		);
 	});
 

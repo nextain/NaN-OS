@@ -186,3 +186,98 @@ export async function judgeAllSemantics(opts: {
 		reason: reasons.join(" | "),
 	};
 }
+
+export async function judgeVisualSemantics(opts: {
+	task: string;
+	screenshotBase64: string;
+	criteria: string;
+}): Promise<SemanticJudgeResult> {
+	if (!JUDGE_API_KEY) {
+		return {
+			verdict: "FAIL",
+			reason: "Missing judge API key (CAFE_E2E_API_KEY or GEMINI_API_KEY)",
+		};
+	}
+
+	const prompt =
+		`You are a strict E2E semantic judge.\n` +
+		`Task: ${opts.task}\n` +
+		`Criteria: ${opts.criteria}\n` +
+		`Analyze the provided screenshot and return JSON only: {"verdict":"PASS|FAIL","reason":"..."}\n`;
+
+	const controller = new AbortController();
+	const timeoutId = setTimeout(() => controller.abort(), JUDGE_TIMEOUT_MS);
+	const res = await fetch(
+		`https://generativelanguage.googleapis.com/v1beta/models/${JUDGE_MODEL}:generateContent?key=${JUDGE_API_KEY}`,
+		{
+			method: "POST",
+			headers: { "content-type": "application/json" },
+			body: JSON.stringify({
+				contents: [{
+					role: "user",
+					parts: [
+						{ text: prompt },
+						{
+							inlineData: {
+								mimeType: "image/png",
+								data: opts.screenshotBase64
+							}
+						}
+					]
+				}],
+				generationConfig: {
+					temperature: 0,
+				},
+			}),
+			signal: controller.signal,
+		},
+	).catch((err) => {
+		return {
+			ok: false,
+			status: 599,
+			json: async () => ({}),
+			__err: String(err),
+		} as unknown as Response;
+	});
+	clearTimeout(timeoutId);
+
+	if (!res.ok) {
+		return {
+			verdict: "FAIL",
+			reason: `Judge HTTP ${res.status}`,
+		};
+	}
+
+	const body = await res.json();
+	const text: string =
+		body?.candidates?.[0]?.content?.parts?.map((p: { text?: string }) => p.text ?? "").join("") ??
+		"";
+	return extractJson(text);
+}
+
+/**
+ * Assert that an AI response semantically satisfies the given criteria using a screenshot.
+ * Throws an assertion error (via expect) if the judge returns FAIL.
+ *
+ * Usage:
+ *   const screenshot = await browser.takeScreenshot();
+ *   await assertVisual(screenshot, "아바타 표정 확인", "아바타가 웃고 있는 표정이어야 한다");
+ */
+export async function assertVisual(
+	screenshotBase64: string,
+	task: string,
+	criteria: string,
+): Promise<void> {
+	if (!screenshotBase64 || screenshotBase64.trim().length === 0) {
+		logSemantic({ task, answer: "(empty screenshot)", criteria, verdict: "FAIL", reason: "Empty screenshot data" });
+		throw new Error(`Visual Semantic FAIL — empty screenshot for task: "${task}"`);
+	}
+	const result = await judgeVisualSemantics({ task, screenshotBase64, criteria });
+	logSemantic({ task, answer: "(screenshot)", criteria, verdict: result.verdict, reason: result.reason });
+	if (result.verdict !== "PASS") {
+		throw new Error(
+			`Visual Semantic FAIL — task: "${task}"\n` +
+			`  reason: ${result.reason}`,
+		);
+	}
+}

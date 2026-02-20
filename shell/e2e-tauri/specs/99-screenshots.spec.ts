@@ -1,4 +1,5 @@
 import { S } from "../helpers/selectors.js";
+import { safeRefresh } from "../helpers/settings.js";
 import * as fs from "node:fs";
 import * as path from "node:path";
 
@@ -54,7 +55,7 @@ describe("99 — manual screenshots", () => {
 			};
 			localStorage.setItem("cafelua-config", JSON.stringify(config));
 		}, API_KEY);
-		await browser.refresh();
+		await safeRefresh();
 
 		// Wait for app to fully load
 		try {

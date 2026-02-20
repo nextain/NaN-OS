@@ -1,5 +1,9 @@
 import { S } from "../helpers/selectors.js";
-import { clickBySelector, ensureAppReady } from "../helpers/settings.js";
+import {
+	clickBySelector,
+	ensureAppReady,
+	safeRefresh,
+} from "../helpers/settings.js";
 
 /**
  * 63 — Sessions Actions

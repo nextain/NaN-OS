@@ -21,6 +21,14 @@ describe("14 — skills tab", () => {
 	});
 
 	it("should display at least 7 built-in skills", async () => {
+		// Wait for skills to render (may load from Gateway)
+		await browser.waitUntil(
+			async () => {
+				const c = await $$(S.skillsCard);
+				return c.length >= 7;
+			},
+			{ timeout: 10_000, interval: 500, timeoutMsg: "Skills cards did not reach 7 within 10s" },
+		);
 		const cards = await $$(S.skillsCard);
 		expect(cards.length).toBeGreaterThanOrEqual(7);
 

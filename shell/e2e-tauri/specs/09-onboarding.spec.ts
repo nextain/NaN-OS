@@ -1,4 +1,5 @@
 import { S } from "../helpers/selectors.js";
+import { safeRefresh } from "../helpers/settings.js";
 
 const API_KEY = process.env.CAFE_E2E_API_KEY || process.env.GEMINI_API_KEY || "";
 
@@ -7,7 +8,7 @@ describe("09 — Onboarding Wizard", () => {
 		await browser.execute(() => {
 			localStorage.removeItem("cafelua-config");
 		});
-		await browser.refresh();
+		await safeRefresh();
 
 		const overlay = await $(S.onboardingOverlay);
 		await overlay.waitForDisplayed({ timeout: 30_000 });
@@ -94,25 +95,19 @@ describe("09 — Onboarding Wizard", () => {
 				const raw = localStorage.getItem("cafelua-config");
 				const config = raw ? JSON.parse(raw) : {};
 				config.provider = "gemini";
+				config.model = config.model || "gemini-2.5-flash";
 				config.apiKey = key;
 				config.gatewayUrl = "ws://localhost:18789";
 				config.gatewayToken = token;
 				config.onboardingComplete = true;
-				config.allowedTools = [
-					"skill_time",
-					"skill_system_status",
-					"skill_memo",
-					"execute_command",
-					"write_file",
-					"read_file",
-					"search_files",
-				];
+				config.enableTools = true;
+				config.disabledSkills = [];
 				localStorage.setItem("cafelua-config", JSON.stringify(config));
 			},
 			apiKey || "",
 			gatewayToken,
 		);
-		await browser.refresh();
+		await safeRefresh();
 
 		const appRoot = await $(S.appRoot);
 		await appRoot.waitForDisplayed({ timeout: 30_000 });

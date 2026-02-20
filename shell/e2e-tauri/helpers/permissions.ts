@@ -1,7 +1,6 @@
-import { S } from "./selectors.js";
-
 /**
  * Poll for permission modals and auto-approve them (click "Always").
+ * Uses browser.execute for reliable DOM clicks in WebKitGTK.
  * Returns a dispose function to stop polling.
  */
 export function autoApprovePermissions(): { dispose: () => void } {
@@ -10,13 +9,21 @@ export function autoApprovePermissions(): { dispose: () => void } {
 	const poll = async () => {
 		while (running) {
 			try {
-				const btn = await $(S.permissionAlways);
-				if (await btn.isDisplayed()) {
-					await btn.click();
+				const clicked = await browser.execute(() => {
+					const btn = document.querySelector(
+						".permission-btn-always",
+					) as HTMLElement | null;
+					if (btn && btn.offsetParent !== null) {
+						btn.click();
+						return true;
+					}
+					return false;
+				});
+				if (clicked) {
 					await browser.pause(200);
 				}
 			} catch {
-				// Element not found — that's expected
+				// Browser not ready or navigating — expected during page transitions
 			}
 			await browser.pause(500);
 		}

@@ -163,6 +163,30 @@
 				"wrong": "console.log('got response')"
 			}
 		},
+		"debug_logging": {
+			"rule": "Code must produce enough debug traces to diagnose issues without visual inspection.",
+			"principles": [
+				"Every async wait/poll must log what it is waiting for and current state",
+				"UI blocking states (modals, dialogs, loading spinners) must be captured in traces",
+				"State transitions (before → after) must be logged with both values",
+				"Timeout errors must include full context: what was expected, what was found, elapsed time"
+			],
+			"e2e_tracing": {
+				"rule": "E2E test traces must capture all UI states that can block execution flow.",
+				"must_capture": [
+					"Permission/approval modals (presence + button state)",
+					"Loading/streaming indicators",
+					"Error banners and toast notifications",
+					"Dialog/overlay visibility"
+				],
+				"format": "NDJSON with timestamp, context, and full DOM state snapshot"
+			},
+			"release_stripping": {
+				"rule": "Debug logs are dev-only. Release builds must strip them.",
+				"rust": "debug!() and trace!() macros — excluded in release profile",
+				"typescript": "Logger.debug() — stripped by build config or no-op in production"
+			}
+		},
 		"audit_log": {
 			"purpose": "Record all AI actions for security and transparency",
 			"storage": "SQLite (~/.cafelua/audit.db)",

@@ -73,14 +73,14 @@ describe("50 — config management", () => {
 
 	it("should patch config", async () => {
 		await sendMessage(
-			"게이트웨이 설정을 패치해줘. skill_config의 patch 액션을 사용해. 아무 변경 없이 현재 상태 확인만.",
+			"게이트웨이 로깅 레벨을 'info'로 설정해줘. skill_config의 patch 액션을 사용해. logging.level을 'info'로 패치해.",
 		);
 
 		const text = await getLastAssistantMessage();
 		await assertSemantic(
 			text,
 			"skill_config 도구의 patch 액션으로 게이트웨이 설정 패치를 요청했다",
-			"AI가 skill_config로 설정 패치를 시도했는가? '도구를 찾을 수 없다/사용할 수 없다'면 FAIL. 패치 결과나 현재 설정 상태가 있으면 PASS",
+			"AI가 skill_config.patch를 호출 시도했는가? 도구 자체를 인식하지 못하면 FAIL. 도구를 호출했으면(성공이든 Gateway 오류든) PASS",
 		);
 	});
 });

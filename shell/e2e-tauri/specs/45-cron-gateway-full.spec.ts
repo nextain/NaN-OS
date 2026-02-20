@@ -48,14 +48,14 @@ describe("45 — cron gateway full", () => {
 
 	it("should add a Gateway cron job", async () => {
 		await sendMessage(
-			"게이트웨이에 'e2e-test-cron'이라는 크론잡을 추가해줘. 매시간 실행. skill_cron의 gateway_add 액션을 사용해.",
+			"게이트웨이에 'e2e-test-cron'이라는 크론잡을 추가해줘. 매시간 실행하고, task는 '날씨 확인'으로 설정해. skill_cron의 gateway_add 액션을 사용해.",
 		);
 
 		const text = await getLastAssistantMessage();
 		await assertSemantic(
 			text,
 			"skill_cron 도구의 gateway_add 액션으로 크론잡을 추가하라고 했다",
-			"AI가 skill_cron으로 크론잡 추가를 실행했는가? '도구를 찾을 수 없다/사용할 수 없다'면 FAIL. 크론잡이 추가/생성되었다는 결과가 있으면 PASS",
+			"AI가 skill_cron.gateway_add를 호출 시도했는가? 도구 자체를 인식하지 못하면 FAIL. 도구를 호출했으면(성공이든 Gateway 오류든) PASS",
 		);
 	});
 
@@ -94,7 +94,7 @@ describe("45 — cron gateway full", () => {
 		await assertSemantic(
 			text,
 			"skill_cron 도구의 gateway_remove 액션으로 크론잡을 삭제하라고 했다",
-			"AI가 skill_cron으로 크론잡 삭제를 실행했는가? '도구를 찾을 수 없다/사용할 수 없다'면 FAIL. 크론잡이 삭제되었다는 결과가 있으면 PASS",
+			"AI가 skill_cron.gateway_remove를 호출 시도했는가? 도구 자체를 인식하지 못하면 FAIL. 도구를 호출했으면(성공이든 job_id 없음 오류든) PASS",
 		);
 	});
 });

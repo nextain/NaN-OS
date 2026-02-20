@@ -4,6 +4,7 @@ import {
 	waitForToolSuccess,
 } from "../helpers/chat.js";
 import { assertSemantic } from "../helpers/semantic.js";
+import { safeRefresh } from "../helpers/settings.js";
 
 describe("04 — skill_time", () => {
 	before(async () => {
@@ -42,7 +43,7 @@ describe("04 — skill_time", () => {
 			apiKey,
 			gatewayToken,
 		);
-		await browser.refresh();
+		await safeRefresh();
 		const chatInput = await $(".chat-input");
 		await chatInput.waitForEnabled({ timeout: 15_000 });
 	});
