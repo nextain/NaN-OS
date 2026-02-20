@@ -2,10 +2,10 @@ import { readFile } from "node:fs/promises";
 
 export type NotifyProvider = "slack" | "discord" | "google_chat";
 
-const ENV_VAR_MAP: Record<NotifyProvider, string> = {
-        slack: "SLACK_WEBHOOK_URL",
-        discord: "DISCORD_WEBHOOK_URL",
-        google_chat: "GOOGLE_CHAT_WEBHOOK_URL",
+const ENV_VAR_MAP: Record<NotifyProvider, string[]> = {
+	slack: ["SLACK_WEBHOOK_URL", "SLACK_WEBHOOK"],
+	discord: ["DISCORD_WEBHOOK_URL", "DISCORD_WEBHOOK"],
+	google_chat: ["GOOGLE_CHAT_WEBHOOK_URL", "GOOGLE_CHAT_WEBHOOK"],
 };
 /**
  * Resolve webhook URL for a notification provider.
@@ -14,9 +14,9 @@ const ENV_VAR_MAP: Record<NotifyProvider, string> = {
 export async function getNotifyWebhookUrl(
 	provider: NotifyProvider,
 ): Promise<string | null> {
-	// 1. Environment variable (highest priority)
-	const envVar = ENV_VAR_MAP[provider];
-	if (envVar) {
+	// 1. Environment variable (highest priority, check multiple names)
+	const envVars = ENV_VAR_MAP[provider] ?? [];
+	for (const envVar of envVars) {
 		const envValue = process.env[envVar];
 		if (envValue?.trim()) {
 			return envValue.trim();

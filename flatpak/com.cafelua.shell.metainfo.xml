@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>com.cafelua.shell</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>LicenseRef-proprietary</project_license>
+  <name>Cafelua Shell</name>
+  <summary>Personal AI avatar shell</summary>
+  <description>
+    <p>
+      Cafelua Shell is a desktop AI companion application.
+      It features a 3D VRM avatar powered by Three.js and integrates
+      with multiple LLM providers for natural conversation.
+    </p>
+  </description>
+  <developer id="com.cafelua">
+    <name>Cafelua</name>
+  </developer>
+  <url type="homepage">https://cafelua.com</url>
+  <launchable type="desktop-id">com.cafelua.shell.desktop</launchable>
+  <releases>
+    <release version="0.1.0" date="2026-02-20">
+      <description>
+        <p>Initial Flatpak release.</p>
+      </description>
+    </release>
+  </releases>
+  <content_rating type="oars-1.1" />
+</component>

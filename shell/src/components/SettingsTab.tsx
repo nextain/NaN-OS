@@ -8,13 +8,14 @@ import {
 	DEFAULT_GATEWAY_URL,
 	type ThemeId,
 	LAB_GATEWAY_URL,
+	MODEL_OPTIONS,
 	clearAllowedTools,
 	getDefaultModel,
 	loadConfig,
 	resolveGatewayUrl,
 	saveConfig,
 } from "../lib/config";
-import { type Fact, deleteFact, getAllFacts } from "../lib/db";
+import { type Fact, deleteFact, getAllFacts, getRecentSessions, deleteSession } from "../lib/db";
 import { type Locale, getLocale, setLocale, t } from "../lib/i18n";
 import { parseLabCredits } from "../lib/lab-balance";
 import { Logger } from "../lib/logger";
@@ -270,8 +271,11 @@ export function SettingsTab() {
 	const [provider, setProvider] = useState<ProviderId>(
 		existing?.provider ?? "gemini",
 	);
+	const initProvider = existing?.provider ?? "gemini";
+	const savedModel = existing?.model;
+	const modelValid = savedModel && MODEL_OPTIONS[initProvider]?.some((m) => m.id === savedModel);
 	const [model, setModel] = useState(
-		existing?.model ?? getDefaultModel("gemini"),
+		modelValid ? savedModel : getDefaultModel(initProvider),
 	);
 	const [apiKey, setApiKey] = useState(existing?.apiKey ?? "");
 	const [locale, setLocaleState] = useState<Locale>(
@@ -323,6 +327,11 @@ export function SettingsTab() {
 	const [voiceWakeInput, setVoiceWakeInput] = useState("");
 	const [voiceWakeLoading, setVoiceWakeLoading] = useState(false);
 	const [voiceWakeSaved, setVoiceWakeSaved] = useState(false);
+
+	// In-app confirmation state (replaces window.confirm to avoid WebKitGTK double-dialog)
+	const [showResetConfirm, setShowResetConfirm] = useState(false);
+	const [resetClearHistory, setResetClearHistory] = useState(false);
+	const [showLabDisconnect, setShowLabDisconnect] = useState(false);
 
 	const fetchGatewayTts = useCallback(async () => {
 		if (!enableTools) return;
@@ -582,7 +591,20 @@ export function SettingsTab() {
 	}
 
 	function handleReset() {
-		if (!window.confirm(t("settings.resetConfirm"))) return;
+		setShowResetConfirm(true);
+	}
+
+	async function executeReset() {
+		if (resetClearHistory) {
+			try {
+				const sessions = await getRecentSessions(10000);
+				await Promise.all(sessions.map((s) => deleteSession(s.id)));
+			} catch (err) {
+				Logger.warn("SettingsTab", "Failed to clear chat history", {
+					error: String(err),
+				});
+			}
+		}
 		localStorage.removeItem("cafelua-config");
 		localStorage.removeItem("cafelua-camera");
 		invoke("reset_window_state").catch(() => {});
@@ -864,27 +886,48 @@ export function SettingsTab() {
 							>
 								{t("cost.labCharge")}
 							</button>
-							<button
-								type="button"
-								className="voice-preview-btn lab-disconnect-btn"
-								onClick={() => {
-									if (window.confirm(t("settings.labDisconnectConfirm"))) {
-										setLabKeyState("");
-										setLabUserIdState("");
-										setLabBalance(null);
-										const current = loadConfig();
-										if (current) {
-											saveConfig({
-												...current,
-												labKey: undefined,
-												labUserId: undefined,
-											});
-										}
-									}
-								}}
-							>
-								{t("settings.labDisconnect")}
-							</button>
+							{showLabDisconnect ? (
+								<div className="reset-confirm-panel" style={{ marginTop: 8 }}>
+									<p className="reset-confirm-msg">{t("settings.labDisconnectConfirm")}</p>
+									<div className="reset-confirm-actions">
+										<button
+											type="button"
+											className="settings-reset-btn"
+											onClick={() => {
+												setLabKeyState("");
+												setLabUserIdState("");
+												setLabBalance(null);
+												setShowLabDisconnect(false);
+												const current = loadConfig();
+												if (current) {
+													saveConfig({
+														...current,
+														labKey: undefined,
+														labUserId: undefined,
+													});
+												}
+											}}
+										>
+											{t("settings.labDisconnect")}
+										</button>
+										<button
+											type="button"
+											className="settings-cancel-btn"
+											onClick={() => setShowLabDisconnect(false)}
+										>
+											{t("settings.cancel")}
+										</button>
+									</div>
+								</div>
+							) : (
+								<button
+									type="button"
+									className="voice-preview-btn lab-disconnect-btn"
+									onClick={() => setShowLabDisconnect(true)}
+								>
+									{t("settings.labDisconnect")}
+								</button>
+							)}
 						</div>
 					</div>
 				) : (
@@ -941,12 +984,17 @@ export function SettingsTab() {
 
 			<div className="settings-field">
 				<label htmlFor="model-input">{t("settings.model")}</label>
-				<input
+				<select
 					id="model-input"
-					type="text"
 					value={model}
 					onChange={(e) => setModel(e.target.value)}
-				/>
+				>
+					{(MODEL_OPTIONS[provider] ?? []).map((m) => (
+						<option key={m.id} value={m.id}>
+							{m.label}
+						</option>
+					))}
+				</select>
 			</div>
 
 			<div className="settings-field">
@@ -1263,13 +1311,46 @@ export function SettingsTab() {
 			)}
 
 			<div className="settings-danger-zone">
-				<button
-					type="button"
-					className="settings-reset-btn"
-					onClick={handleReset}
-				>
-					{t("settings.reset")}
-				</button>
+				{showResetConfirm ? (
+					<div className="reset-confirm-panel">
+						<p className="reset-confirm-msg">{t("settings.resetConfirm")}</p>
+						<label className="reset-confirm-checkbox">
+							<input
+								type="checkbox"
+								checked={resetClearHistory}
+								onChange={(e) => setResetClearHistory(e.target.checked)}
+							/>
+							{t("settings.resetClearHistory")}
+						</label>
+						<div className="reset-confirm-actions">
+							<button
+								type="button"
+								className="settings-reset-btn"
+								onClick={executeReset}
+							>
+								{t("settings.resetExecute")}
+							</button>
+							<button
+								type="button"
+								className="settings-cancel-btn"
+								onClick={() => {
+									setShowResetConfirm(false);
+									setResetClearHistory(false);
+								}}
+							>
+								{t("settings.cancel")}
+							</button>
+						</div>
+					</div>
+				) : (
+					<button
+						type="button"
+						className="settings-reset-btn"
+						onClick={handleReset}
+					>
+						{t("settings.reset")}
+					</button>
+				)}
 			</div>
 		</div>
 	);

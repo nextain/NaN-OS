@@ -286,10 +286,26 @@ phases:
           phase_5_plus: "sLLM (Ollama/llama.cpp) for local summarize/embed"
       step_4_5:
         name: "External channels"
+        status: "partial"
         items:
-          - "Discord bot (discord.js)"
-          - "Telegram bot (grammY)"
+          - "Discord bot (discord.js) ✅ — lab.cafelua.com 내 별도 프로세스, WebSocket 기반"
+          - "Google Chat webhook ✅ — POST /api/webhooks/googlechat"
+          - "Telegram bot (grammY) — planned"
           - "External channels limited to Tier 0-1"
+        implementation:
+          gateway_changes:
+            - "CaretUser.provider_account_id column added (Discord user ID / Google sub mapping)"
+            - "GET /v1/auth/lookup endpoint (master key, provider + provider_account_id or email)"
+            - "Alembic migration a2f7b8c9d0e1"
+          lab_changes:
+            - "discord-bot.ts: WebSocket bot (mention/DM → user lookup → LLM → reply)"
+            - "webhooks/googlechat/route.ts: POST handler (email lookup → LLM → response)"
+            - "settings/integrations/page.tsx: integration status UI"
+            - "socialLogin() passes providerAccountId, lookupUser() added"
+          pending_manual:
+            - "Run Discord bot: npm run bot:discord"
+            - "Register Google Chat app + webhook URL"
+            - "Production deployment"
       step_4_6:
         name: "systemd auto-start integration"
         items:
@@ -302,7 +318,8 @@ phases:
     name: "lab.cafelua.com integration"
     timeline: "Week 8-9"
     deliverable: "OAuth login via lab.cafelua.com, automatic API key provisioning, credit dashboard"
-    status: "pending"
+    status: "partial"
+    notes: "Deep link (5-1) ✅, Auth flow UI (5-2) partial ✅, LLM proxy (5-3) ✅, Credit display (5-4) partial ✅. Discord/Google Chat integration done via lab."
     architecture: |
       Shell (Tauri) → OAuth → lab.cafelua.com → deep link cafelua:// → gatewayKey stored local
       Agent → X-AnyLLM-Key: Bearer {key} → any-llm Gateway (GCP) → LLM proxy + credit deduction
@@ -349,7 +366,8 @@ phases:
     name: "Tauri app distribution (Linux packages)"
     timeline: "Week 10"
     deliverable: "Standalone Linux app: deb, rpm, AppImage via GitHub Releases"
-    status: "pending"
+    status: "partial"
+    notes: "Flatpak manifest complete + build success (GNOME 47, 204.9MB binary). AppImage/deb/rpm pending."
     tasks:
       step_6_1:
         name: "Tauri bundle config"
@@ -365,10 +383,13 @@ phases:
           - "GitHub Release upload, Linux x86_64 target"
       step_6_3:
         name: "Flathub (optional)"
+        status: "partial"
         items:
-          - "NEW flatpak/com.cafelua.Shell.yml manifest"
-          - "Flathub submission (separate repo)"
-          - "deep-link URI handler registration"
+          - "flatpak/com.cafelua.shell.yml manifest ✅ (GNOME 47, npx pnpm, cargo build)"
+          - "Build success: x86-64 ELF 204.9 MB ✅"
+          - "Known: GNOME 47 EOL but required (Tauri 2 needs webkit2gtk-4.1)"
+          - "Flathub submission (separate repo) — pending"
+          - "deep-link URI handler registration — pending"
     done_when: "AppImage downloadable from GitHub Releases, installable on stock Linux"
 
   phase_7:

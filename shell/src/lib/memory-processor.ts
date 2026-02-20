@@ -95,6 +95,11 @@ const DEFAULT_MEMORY_MODELS: Record<string, string> = {
 	anthropic: "claude-sonnet-4-5-20250929",
 };
 
+/** Gemini 3 series requires temperature 1.0 (lower values cause looping) */
+function geminiTemperature(model: string): number {
+	return model.startsWith("gemini-3") ? 1.0 : 0.3;
+}
+
 /** Generic LLM API call (supports gemini, xai, anthropic) */
 async function callLlmApi(
 	prompt: string,
@@ -138,7 +143,7 @@ async function callGemini(
 		headers: { "Content-Type": "application/json" },
 		body: JSON.stringify({
 			contents: [{ parts: [{ text: prompt }] }],
-			generationConfig: { maxOutputTokens: 256, temperature: 0.3 },
+			generationConfig: { maxOutputTokens: 256, temperature: geminiTemperature(model) },
 		}),
 	});
 	if (!res.ok) throw new Error(`Gemini API error: ${res.status}`);

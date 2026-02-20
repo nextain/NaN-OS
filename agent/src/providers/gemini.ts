@@ -14,6 +14,9 @@ function toGeminiContents(messages: ChatMessage[]) {
 				role: "model",
 				parts: m.toolCalls.map((tc) => ({
 					functionCall: { id: tc.id, name: tc.name, args: tc.args },
+					...(tc.thoughtSignature
+						? { thoughtSignature: tc.thoughtSignature }
+						: {}),
 				})),
 			};
 		}
@@ -38,6 +41,11 @@ function toGeminiContents(messages: ChatMessage[]) {
 	});
 }
 
+/** Gemini 3 series recommends temperature 1.0 (default). Lower values may cause looping. */
+function isGemini3(model: string): boolean {
+	return model.startsWith("gemini-3");
+}
+
 export function createGeminiProvider(
 	apiKey: string,
 	model: string,
@@ -60,12 +68,14 @@ export function createGeminiProvider(
 					]
 				: undefined;
 
+			const temperature = isGemini3(model) ? 1.0 : 0.7;
+
 			const response = await client.models.generateContentStream({
 				model,
 				contents,
 				config: {
 					systemInstruction: systemPrompt,
-					temperature: 0.7,
+					temperature,
 					tools: geminiTools,
 					toolConfig: geminiTools
 						? {
@@ -85,15 +95,19 @@ export function createGeminiProvider(
 					yield { type: "text", text };
 				}
 
-				const functionCalls = chunk.functionCalls;
-				if (functionCalls) {
-					for (const fc of functionCalls) {
-						yield {
-							type: "tool_use",
-							id: fc.id || randomUUID(),
-							name: fc.name || "unknown",
-							args: fc.args || {},
-						};
+				// Access raw parts to capture thoughtSignature (Gemini 3 requirement)
+				const parts = chunk.candidates?.[0]?.content?.parts;
+				if (parts) {
+					for (const part of parts) {
+						if (part.functionCall) {
+							yield {
+								type: "tool_use",
+								id: part.functionCall.id || randomUUID(),
+								name: part.functionCall.name || "unknown",
+								args: (part.functionCall.args as Record<string, unknown>) || {},
+								thoughtSignature: part.thoughtSignature,
+							};
+						}
 					}
 				}
 

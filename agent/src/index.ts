@@ -20,12 +20,37 @@ import type { ChatMessage, StreamChunk } from "./providers/types.js";
 import { convertTts } from "./gateway/tts-proxy.js";
 import { ALPHA_SYSTEM_PROMPT } from "./system-prompt.js";
 import { synthesizeSpeech } from "./tts/google-tts.js";
+import type { ToolDefinition } from "./providers/types.js";
 
 const activeStreams = new Map<string, AbortController>();
 
 const EMOTION_TAG_RE = /^\[(?:HAPPY|SAD|ANGRY|SURPRISED|NEUTRAL|THINK)]\s*/i;
 const MAX_TOOL_ITERATIONS = 10;
 const APPROVAL_TIMEOUT_MS = 120_000;
+
+/** Build system prompt with current tool/gateway status */
+function buildToolStatusPrompt(
+	base: string,
+	enableTools: boolean,
+	wantGateway: boolean,
+	gatewayConnected: boolean,
+	tools?: ToolDefinition[],
+): string {
+	if (!enableTools) {
+		return `${base}\n\n[System Status]\n도구 사용이 비활성화되어 있습니다. 사용자에게 "설정 > 도구 사용"을 켜도록 안내하세요.`;
+	}
+
+	const toolNames = tools?.map((t) => t.name) ?? [];
+	let status = `\n\n[System Status]\n사용 가능한 도구(${toolNames.length}개): ${toolNames.join(", ")}`;
+
+	if (wantGateway && !gatewayConnected) {
+		status += `\n⚠️ Gateway 연결 실패: 일부 도구(채널 관리, 디바이스 페어링 등 Gateway 필요 도구)를 사용할 수 없습니다. Gateway가 필요한 도구를 요청받으면, 앱을 재시작하면 Gateway도 자동으로 재시작된다고 안내하세요.`;
+	} else if (gatewayConnected) {
+		status += "\nGateway 연결됨 ✓";
+	}
+
+	return base + status;
+}
 
 /** Pending approval promises keyed by toolCallId */
 const pendingApprovals = new Map<
@@ -103,28 +128,45 @@ export async function handleChatRequest(req: ChatRequest): Promise<void> {
 
 	try {
 		const provider = buildProvider(providerConfig);
-		const effectiveSystemPrompt = systemPrompt ?? ALPHA_SYSTEM_PROMPT;
-		const hasGateway = !!(enableTools && gatewayUrl);
-		const tools = enableTools
-			? getAllTools(hasGateway, disabledSkills)
-			: undefined;
+		const wantGateway = !!(enableTools && gatewayUrl);
+		let gatewayConnected = false;
 
 		// Connect to Gateway if tools enabled and URL provided
-		if (hasGateway) {
-			gateway = new GatewayClient();
-			const device = loadDeviceIdentity();
-			await gateway.connect(gatewayUrl, {
-				token: gatewayToken || "",
-				device,
-			});
+		if (wantGateway) {
+			try {
+				gateway = new GatewayClient();
+				const device = loadDeviceIdentity();
+				await gateway.connect(gatewayUrl, {
+					token: gatewayToken || "",
+					device,
+				});
+				gatewayConnected = true;
 
-			// Register event handler for Gateway-pushed events
-			const eventHandler = createGatewayEventHandler(
-				writeLine,
-				pendingApprovals as Map<string, { requestId: string; resolve: (decision: "approve" | "reject") => void }>,
-			);
-			gateway.onEvent(eventHandler);
+				// Register event handler for Gateway-pushed events
+				const eventHandler = createGatewayEventHandler(
+					writeLine,
+					pendingApprovals as Map<string, { requestId: string; resolve: (decision: "approve" | "reject") => void }>,
+				);
+				gateway.onEvent(eventHandler);
+			} catch {
+				// Gateway unavailable — continue without it
+				gateway = null;
+			}
 		}
+
+		const tools = enableTools
+			? getAllTools(gatewayConnected, disabledSkills)
+			: undefined;
+
+		// Build system prompt with tool/gateway status context
+		const basePrompt = systemPrompt ?? ALPHA_SYSTEM_PROMPT;
+		const effectiveSystemPrompt = buildToolStatusPrompt(
+			basePrompt,
+			enableTools ?? false,
+			wantGateway,
+			gatewayConnected,
+			tools,
+		);
 
 		// Build conversation messages
 		const chatMessages: ChatMessage[] = rawMessages.map((m) => ({
@@ -151,6 +193,7 @@ export async function handleChatRequest(req: ChatRequest): Promise<void> {
 				id: string;
 				name: string;
 				args: Record<string, unknown>;
+				thoughtSignature?: string;
 			}[] = [];
 
 			for await (const chunk of stream) {
@@ -164,6 +207,7 @@ export async function handleChatRequest(req: ChatRequest): Promise<void> {
 						id: chunk.id,
 						name: chunk.name,
 						args: chunk.args,
+						thoughtSignature: chunk.thoughtSignature,
 					});
 					writeLine({
 						type: "tool_use",
@@ -189,6 +233,7 @@ export async function handleChatRequest(req: ChatRequest): Promise<void> {
 					id: tc.id,
 					name: tc.name,
 					args: tc.args,
+					thoughtSignature: tc.thoughtSignature,
 				})),
 			});
 

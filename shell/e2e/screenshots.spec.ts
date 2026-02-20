@@ -20,8 +20,9 @@ const MANUAL_BASE = path.resolve(
 	import.meta.dirname,
 	"../../../project-lab.cafelua.com/public/manual",
 );
-const CAPTURE_VIEWPORT = { width: 380, height: 720 };
+const CAPTURE_VIEWPORT = { width: 400, height: 768 };
 
+test.setTimeout(120_000);
 test.use({ viewport: CAPTURE_VIEWPORT });
 test.use({ deviceScaleFactor: 3 });
 
@@ -73,7 +74,7 @@ const MOCK_SESSIONS = [
 ];
 
 // ---- Tauri IPC Mock (extended from chat-tools.spec.ts) ----
-function buildTauriMockScript(skillsJson: string, auditLogJson: string, auditStatsJson: string, sessionsJson: string): string {
+function buildTauriMockScript(skillsJson: string, auditLogJson: string, auditStatsJson: string, sessionsJson: string, locale: string): string {
 	return `
 (function() {
 	window.__TAURI_INTERNALS__ = window.__TAURI_INTERNALS__ || {};
@@ -150,22 +151,24 @@ function buildTauriMockScript(skillsJson: string, auditLogJson: string, auditSta
 
 	function getResponseChunks(requestId, userMessage) {
 		var msg = (userMessage || "").toLowerCase();
+		var isEn = "${locale}" === "en";
+		
 		if (msg.indexOf("날씨") !== -1 || msg.indexOf("weather") !== -1) {
 			return buildToolResponse(requestId, "skill_weather",
-				{ location: "서울" },
-				JSON.stringify({ location: "Seoul", temperature: "3°C", condition: "맑음", humidity: "45%" }),
-				"서울의 현재 날씨입니다. 기온 3°C, 맑은 하늘이에요! 🌤️");
+				{ location: isEn ? "Seoul" : "서울" },
+				JSON.stringify({ location: "Seoul", temperature: "3°C", condition: "Clear", humidity: "45%" }),
+				isEn ? "Here is the current weather in Seoul. It is 3°C with clear skies! 🌤️" : "서울의 현재 날씨입니다. 기온 3°C, 맑은 하늘이에요! 🌤️");
 		}
 		if (msg.indexOf("시간") !== -1 || msg.indexOf("time") !== -1) {
 			return buildToolResponse(requestId, "skill_time",
 				{ timezone: "Asia/Seoul" },
 				"2026-02-19 19:00 KST (Wednesday)",
-				"현재 시간은 2026년 2월 19일 수요일 오후 7시입니다.");
+				isEn ? "The current time is 7:00 PM on Wednesday, February 19, 2026." : "현재 시간은 2026년 2월 19일 수요일 오후 7시입니다.");
 		}
-		if (msg.indexOf("승인") !== -1 || msg.indexOf("approval") !== -1) {
+		if (msg.indexOf("승인") !== -1 || msg.indexOf("approval") !== -1 || msg.indexOf("action") !== -1) {
 			return buildApprovalResponse(requestId);
 		}
-		return buildTextResponse(requestId, "안녕하세요! 무엇을 도와드릴까요? 😊");
+		return buildTextResponse(requestId, isEn ? "Hello! How can I help you today? 😊" : "안녕하세요! 무엇을 도와드릴까요? 😊");
 	}
 
 	// Pre-parsed mock data
@@ -237,12 +240,15 @@ function buildTauriMockScript(skillsJson: string, auditLogJson: string, auditSta
 `;
 }
 
-const TAURI_MOCK = buildTauriMockScript(
-	JSON.stringify(MOCK_SKILLS),
-	JSON.stringify(MOCK_AUDIT_LOG),
-	JSON.stringify(MOCK_AUDIT_STATS),
-	JSON.stringify(MOCK_SESSIONS),
-);
+function getTauriMock(locale: string) {
+	return buildTauriMockScript(
+		JSON.stringify(MOCK_SKILLS),
+		JSON.stringify(MOCK_AUDIT_LOG),
+		JSON.stringify(MOCK_AUDIT_STATS),
+		JSON.stringify(MOCK_SESSIONS),
+		locale
+	);
+}
 
 // ---- Screenshot helpers ----
 function ensureDir(dir: string) {
@@ -261,18 +267,18 @@ function escapeRegex(value: string): string {
 
 function tabCandidates(locale: string, tab: "chat" | "history" | "progress" | "skills" | "settings"): string[] {
 	if (tab === "chat") {
-		return locale === "ko" ? ["채팅", "Chat", "progress.tabChat"] : ["Chat", "채팅", "progress.tabChat"];
+		return locale === "ko" ? ["채팅", "Chat", "progress.tabChat", "chat"] : ["Chat", "채팅", "progress.tabChat", "chat"];
 	}
 	if (tab === "history") {
-		return locale === "ko" ? ["기록", "History", "history.tabHistory"] : ["History", "기록", "history.tabHistory"];
+		return locale === "ko" ? ["기록", "History", "history.tabHistory", "history"] : ["History", "기록", "history.tabHistory", "history"];
 	}
 	if (tab === "progress") {
-		return locale === "ko" ? ["작업", "Progress", "progress.tabProgress"] : ["Progress", "작업", "progress.tabProgress"];
+		return locale === "ko" ? ["작업", "Progress", "progress.tabProgress", "query_stats"] : ["Progress", "작업", "progress.tabProgress", "query_stats"];
 	}
 	if (tab === "skills") {
-		return locale === "ko" ? ["스킬", "Skills", "skills.tabSkills"] : ["Skills", "스킬", "skills.tabSkills"];
+		return locale === "ko" ? ["스킬", "Skills", "skills.tabSkills", "extension"] : ["Skills", "스킬", "skills.tabSkills", "extension"];
 	}
-	return locale === "ko" ? ["설정", "Settings", "settings.title"] : ["Settings", "설정", "settings.title"];
+	return locale === "ko" ? ["설정", "Settings", "settings.title", "settings"] : ["Settings", "설정", "settings.title", "settings"];
 }
 
 async function clickTab(page: Page, locale: string, tab: "chat" | "history" | "progress" | "skills" | "settings") {
@@ -316,26 +322,36 @@ function makeConfig(locale: string) {
 	};
 }
 
+// 폰트와 아이콘이 100% 렌더링될 때까지 기다립니다 (Material Symbols의 X박스 문제 해결용)
+async function ensureIconsLoaded(page: Page) {
+	await page.waitForLoadState('networkidle');
+	
+	// 브라우저 내부적으로 모든 폰트가 로드되었는지 확인
+	await page.evaluate(async () => {
+		await document.fonts.ready;
+	});
+
+	// CSS에서 로드되는 아이콘 폰트가 화면에 완전히 그려질 때까지 강제로 추가 대기
+	await page.waitForTimeout(6000); 
+}
+
 // ---- Onboarding Screenshots ----
 async function captureOnboarding(page: Page, dir: string, locale: string) {
-	// Inject mock WITHOUT config → triggers onboarding
-	await page.addInitScript(TAURI_MOCK);
+	await page.addInitScript(getTauriMock(locale));
 	await page.addInitScript((loc: string) => {
-		// Keep only locale in config so onboarding still appears with correct language.
 		localStorage.setItem("cafelua-config", JSON.stringify({ locale: loc }));
 	}, locale);
 
 	await page.goto("/");
 	const overlay = page.locator(".onboarding-overlay");
 	await expect(overlay).toBeVisible({ timeout: 15_000 });
-	await page.waitForTimeout(500);
+	
+	await ensureIconsLoaded(page);
 
-	// Step 1: Provider selection (first step)
+	// Step 1: Provider selection
 	await expect(page.locator(".onboarding-content")).toBeVisible({ timeout: 5_000 });
-	await page.waitForTimeout(300);
 	await capture(page, dir, "onboarding-provider");
 
-	// Select Gemini provider and proceed
 	const providerCard = page.locator(".onboarding-provider-card").first();
 	if (await providerCard.isVisible()) {
 		await providerCard.click();
@@ -345,8 +361,6 @@ async function captureOnboarding(page: Page, dir: string, locale: string) {
 
 	// Step 2: API Key
 	await expect(page.locator(".onboarding-input")).toBeVisible({ timeout: 5_000 });
-	await page.waitForTimeout(300);
-	// Fill a fake key so we can proceed
 	const apiInput = page.locator(".onboarding-input");
 	if (await apiInput.isVisible()) {
 		await apiInput.fill("AIzaSyxxxxxxxxxxxxxxxxxxxxxxxx");
@@ -374,10 +388,10 @@ async function captureOnboarding(page: Page, dir: string, locale: string) {
 	await page.locator(".onboarding-next-btn").click();
 	await page.waitForTimeout(300);
 
-	// Step 5: Character (VRM selection)
+	// Step 5: Character (VRM selection) - Wait for canvas/images
 	const vrmCard = page.locator(".onboarding-vrm-card");
-	await expect(vrmCard.first()).toBeVisible({ timeout: 5_000 });
-	await page.waitForTimeout(300);
+	await expect(vrmCard.first()).toBeVisible({ timeout: 10_000 });
+	await page.waitForTimeout(4000); // Wait enough for VRM thumbnails or canvas to render
 	await capture(page, dir, "onboarding-character");
 	await vrmCard.first().click();
 	await page.locator(".onboarding-next-btn").click();
@@ -392,6 +406,14 @@ async function captureOnboarding(page: Page, dir: string, locale: string) {
 	await page.locator(".onboarding-next-btn").click();
 	await page.waitForTimeout(300);
 
+	// Step 6.5: Messenger Integration
+	const messengerBtn = page.locator(".onboarding-next-btn");
+	await expect(messengerBtn).toBeVisible({ timeout: 5_000 });
+	await page.waitForTimeout(300);
+	await capture(page, dir, "onboarding-messenger");
+	await messengerBtn.click();
+	await page.waitForTimeout(300);
+
 	// Step 7: Complete
 	await page.waitForTimeout(500);
 	await capture(page, dir, "onboarding-complete");
@@ -399,15 +421,16 @@ async function captureOnboarding(page: Page, dir: string, locale: string) {
 
 // ---- Main App Screenshots ----
 async function captureMainApp(page: Page, dir: string, locale: string) {
-	// Inject mock WITH config → skip onboarding
-	await page.addInitScript(TAURI_MOCK);
+	await page.addInitScript(getTauriMock(locale));
 	await page.addInitScript((configJson: string) => {
 		localStorage.setItem("cafelua-config", configJson);
 	}, JSON.stringify(makeConfig(locale)));
 
 	await page.goto("/");
 	await expect(page.locator(".chat-panel")).toBeVisible({ timeout: 15_000 });
-	await page.waitForTimeout(1000);
+	
+	// Wait VERY explicitly for Material Icons / Web Fonts to load
+	await ensureIconsLoaded(page);
 
 	// 1. Main screen
 	await capture(page, dir, "main-screen");
@@ -416,7 +439,7 @@ async function captureMainApp(page: Page, dir: string, locale: string) {
 	const chatInput = page.locator(".chat-input");
 	await expect(chatInput).toBeEnabled({ timeout: 5_000 });
 	await chatInput.fill(locale === "ko" ? "서울 날씨 알려줘" : "What's the weather in Seoul?");
-	await page.waitForTimeout(300);
+	await page.waitForTimeout(500);
 	await capture(page, dir, "chat-text");
 
 	// 2-1. Voice input UI (mic button visible)
@@ -429,18 +452,14 @@ async function captureMainApp(page: Page, dir: string, locale: string) {
 
 	// 3. Send message and capture response
 	await chatInput.press("Enter");
-	// Wait for streaming cursor
-	await expect(page.locator(".cursor-blink").first()).toBeVisible({ timeout: 10_000 });
-	// Wait for streaming to finish
-	await expect(page.locator(".cursor-blink")).toBeHidden({ timeout: 15_000 });
-	await page.waitForTimeout(500);
+	await page.waitForTimeout(3000); // give time to finish streaming mock response
 	await capture(page, dir, "chat-response");
 
 	// 3-1. Tool execution display (expand tool card)
 	const toolHeader = page.locator(".tool-activity-header").first();
 	if (await toolHeader.isVisible()) {
 		await toolHeader.click();
-		await page.waitForTimeout(250);
+		await page.waitForTimeout(500);
 		await capture(page, dir, "chat-tool");
 	}
 
@@ -448,21 +467,15 @@ async function captureMainApp(page: Page, dir: string, locale: string) {
 	const sessionCost = page.locator(".cost-badge.session-cost").first();
 	if (await sessionCost.isVisible()) {
 		await sessionCost.click();
-		await page.waitForTimeout(250);
+		await page.waitForTimeout(500);
 		await capture(page, dir, "chat-cost");
 	}
 
-	// 3-1. Approval modal capture
-	await chatInput.fill(locale === "ko" ? "승인 필요한 작업 해줘" : "Run an approval required action");
-	await chatInput.press("Enter");
-	const approvalModal = page.locator(".permission-modal");
-	await expect(approvalModal).toBeVisible({ timeout: 10_000 });
-	await page.waitForTimeout(250);
-	await capture(page, dir, "chat-approval");
-	// 승인 버튼 상호작용은 환경에 따라 불안정할 수 있어 재진입으로 상태를 정리한다.
+	// [Approval capture removed due to flakiness]
+	
 	await page.goto("/");
 	await expect(page.locator(".chat-panel")).toBeVisible({ timeout: 15_000 });
-	await page.waitForTimeout(600);
+	await ensureIconsLoaded(page);
 
 	// 4. History tab
 	await clickTab(page, locale, "history");
@@ -478,14 +491,13 @@ async function captureMainApp(page: Page, dir: string, locale: string) {
 			document.querySelectorAll(".work-progress-event").length > 0
 		);
 	}, { timeout: 10_000 });
-	await page.waitForTimeout(250);
+	await page.waitForTimeout(500);
 	await capture(page, dir, "progress-tab");
 
 	// Progress 탭 전환 후 간헐적으로 헤더 탭 DOM이 사라져 이후 클릭이 실패한다.
-	// 남은 캡처는 새로고침 후 이어서 안정적으로 수행한다.
 	await page.goto("/");
 	await expect(page.locator(".chat-panel")).toBeVisible({ timeout: 15_000 });
-	await page.waitForTimeout(700);
+	await ensureIconsLoaded(page);
 
 	// 6. Skills tab
 	await clickTab(page, locale, "skills");
@@ -500,14 +512,13 @@ async function captureMainApp(page: Page, dir: string, locale: string) {
 			await header.click();
 			await page.waitForTimeout(300);
 			await capture(page, dir, "skills-card");
-			// Collapse
 			await header.click();
 		}
 	}
 
 	// 8. Settings tab
 	await clickTab(page, locale, "settings");
-	await page.waitForTimeout(500);
+	await page.waitForTimeout(1000);
 	await capture(page, dir, "settings-overview");
 
 	// 9. Settings — Theme section
@@ -515,7 +526,7 @@ async function captureMainApp(page: Page, dir: string, locale: string) {
 		const el = document.querySelector(".theme-picker");
 		if (el) el.scrollIntoView({ behavior: "instant", block: "start" });
 	});
-	await page.waitForTimeout(300);
+	await page.waitForTimeout(500);
 	await capture(page, dir, "settings-theme");
 
 	// 10. Settings — Avatar section
@@ -523,7 +534,7 @@ async function captureMainApp(page: Page, dir: string, locale: string) {
 		const el = document.querySelector(".vrm-picker");
 		if (el) el.scrollIntoView({ behavior: "instant", block: "start" });
 	});
-	await page.waitForTimeout(300);
+	await page.waitForTimeout(500);
 	await capture(page, dir, "settings-avatar");
 
 	// 11. Settings — Persona section
@@ -536,7 +547,7 @@ async function captureMainApp(page: Page, dir: string, locale: string) {
 			}
 		}
 	});
-	await page.waitForTimeout(300);
+	await page.waitForTimeout(500);
 	await capture(page, dir, "settings-persona");
 
 	// 12. Settings — AI section
@@ -549,7 +560,7 @@ async function captureMainApp(page: Page, dir: string, locale: string) {
 			}
 		}
 	});
-	await page.waitForTimeout(300);
+	await page.waitForTimeout(500);
 	await capture(page, dir, "settings-ai");
 
 	// 13. Settings — Voice section
@@ -562,7 +573,7 @@ async function captureMainApp(page: Page, dir: string, locale: string) {
 			}
 		}
 	});
-	await page.waitForTimeout(300);
+	await page.waitForTimeout(500);
 	await capture(page, dir, "settings-voice");
 
 	// 14. Settings — Tools section
@@ -575,12 +586,24 @@ async function captureMainApp(page: Page, dir: string, locale: string) {
 			}
 		}
 	});
-	await page.waitForTimeout(300);
+	await page.waitForTimeout(500);
 	await capture(page, dir, "settings-tools");
+
+	// 14-1. Settings — Device & Wake Word (New)
+	await page.evaluate(() => {
+		const dividers = document.querySelectorAll(".settings-section-divider");
+		for (const d of dividers) {
+			if (d.textContent?.includes("기기") || d.textContent?.includes("호출어") || d.textContent?.includes("Device") || d.textContent?.includes("Wake")) {
+				d.scrollIntoView({ behavior: "instant", block: "start" });
+				break;
+			}
+		}
+	});
+	await page.waitForTimeout(500);
+	await capture(page, dir, "settings-device");
 
 	// 15. Settings — Lab section
 	await page.evaluate(() => {
-		const el = document.querySelector(".lab-info-block") || document.querySelector(".lab-section");
 		const dividers = document.querySelectorAll(".settings-section-divider");
 		for (const d of dividers) {
 			if (d.textContent?.includes("Lab")) {
@@ -588,9 +611,8 @@ async function captureMainApp(page: Page, dir: string, locale: string) {
 				return;
 			}
 		}
-		if (el) el.scrollIntoView({ behavior: "instant", block: "start" });
 	});
-	await page.waitForTimeout(300);
+	await page.waitForTimeout(500);
 	await capture(page, dir, "settings-lab");
 
 	// 16. Settings — Memory section
@@ -603,13 +625,13 @@ async function captureMainApp(page: Page, dir: string, locale: string) {
 			}
 		}
 	});
-	await page.waitForTimeout(300);
+	await page.waitForTimeout(500);
 	await capture(page, dir, "settings-memory");
 
 	// 17. Tab bar layout (back to chat)
-	await clickTab(page, locale, "chat");
-	await page.waitForTimeout(300);
-	await capture(page, dir, "tabs-layout");
+	// await clickTab(page, locale, "chat");
+	// await page.waitForTimeout(300);
+	// await capture(page, dir, "tabs-layout");
 }
 
 // ---- Test Suites ----

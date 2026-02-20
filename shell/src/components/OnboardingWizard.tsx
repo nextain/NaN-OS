@@ -499,7 +499,7 @@ export function OnboardingWizard({
 				{step === "character" && (
 					<div className="onboarding-content">
 						<h2>
-							{t("onboard.character.title").replace("{agent}", displayName)}
+							{t("onboard.character.title").replace("{user}", userName.trim() || "").replace("{agent}", displayName)}
 						</h2>
 						<VrmPreview modelPath={selectedVrm} />
 						<div className="onboarding-vrm-cards">
@@ -514,6 +514,9 @@ export function OnboardingWizard({
 								</button>
 							))}
 						</div>
+						<p className="onboarding-description">
+							{t("onboard.character.hint")}
+						</p>
 					</div>
 				)}
 

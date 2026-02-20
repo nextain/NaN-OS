@@ -2,9 +2,11 @@ import type { VRM } from "@pixiv/three-vrm";
 import { useEffect, useRef } from "react";
 import {
 	AmbientLight,
+	AnimationMixer,
 	CanvasTexture,
 	Clock,
 	DirectionalLight,
+	LoopRepeat,
 	Object3D,
 	PerspectiveCamera,
 	Scene,
@@ -12,6 +14,11 @@ import {
 	WebGLRenderer,
 } from "three";
 import { Logger } from "../lib/logger";
+import {
+	clipFromVRMAnimation,
+	loadVRMAnimation,
+	reAnchorRootPositionTrack,
+} from "../lib/vrm/animation";
 import { loadVrm } from "../lib/vrm/core";
 
 const BLINK_DURATION = 0.2;
@@ -40,6 +47,7 @@ export function VrmPreview({ modelPath }: { modelPath: string }) {
 		let frameId = 0;
 		const clock = new Clock();
 		let vrm: VRM | null = null;
+		let mixer: AnimationMixer | null = null;
 		let blinkName = "blink";
 		let blinkProgress = 0;
 		let isBlinking = false;
@@ -89,6 +97,14 @@ export function VrmPreview({ modelPath }: { modelPath: string }) {
 			frameId = requestAnimationFrame(tick);
 			const delta = Math.min(clock.getDelta(), 0.05);
 
+			if (mixer) {
+				mixer.update(delta);
+			}
+
+			if (vrm) {
+				vrm.humanoid?.update();
+			}
+
 			if (vrm?.expressionManager) {
 				// Blink animation
 				timeSinceLastBlink += delta;
@@ -135,6 +151,19 @@ export function VrmPreview({ modelPath }: { modelPath: string }) {
 					vrm.lookAt.target = new Object3D();
 				}
 				vrm.lookAt.target.position.set(0, 1.4, -1);
+			}
+
+			// Load idle animation to avoid T-pose
+			const vrmAnimation = await loadVRMAnimation("/animations/idle_loop.vrma");
+			if (!disposed && vrmAnimation) {
+				const clip = clipFromVRMAnimation(vrm, vrmAnimation);
+				if (clip) {
+					reAnchorRootPositionTrack(clip, vrm);
+					mixer = new AnimationMixer(vrm.scene);
+					const action = mixer.clipAction(clip);
+					action.setLoop(LoopRepeat, Number.POSITIVE_INFINITY);
+					action.play();
+				}
 			}
 
 			Logger.debug("VrmPreview", "Model loaded", { modelPath });

@@ -17,11 +17,19 @@ const translations = {
 	"settings.backgroundClear": { ko: "제거", en: "Clear" },
 	"settings.reset": { ko: "초기화", en: "Reset All" },
 	"settings.resetConfirm": {
-		ko: "모든 설정과 카메라 위치를 초기화하시겠습니까?",
-		en: "Reset all settings and camera position?",
+		ko: "모든 설정과 카메라 위치를 초기화합니다.",
+		en: "This will reset all settings and camera position.",
+	},
+	"settings.resetClearHistory": {
+		ko: "대화 기록도 함께 삭제",
+		en: "Also delete chat history",
+	},
+	"settings.resetExecute": {
+		ko: "초기화 실행",
+		en: "Execute Reset",
 	},
 	"settings.save": { ko: "저장", en: "Save" },
-	"settings.cancel": { ko: "닫기", en: "Close" },
+	"settings.cancel": { ko: "취소", en: "Cancel" },
 
 	// Chat
 	"chat.placeholder": {
@@ -221,8 +229,12 @@ const translations = {
 	},
 	"onboard.name.placeholder": { ko: "이름을 입력하세요", en: "Enter a name" },
 	"onboard.character.title": {
-		ko: "{agent}의 모습을 골라줘!",
-		en: "Choose {agent}'s look!",
+		ko: "{user}, {agent}의 모습을 골라줘",
+		en: "{user}, choose {agent}'s look",
+	},
+	"onboard.character.hint": {
+		ko: "나중에 설정에서 나만의 VRM 모델을 추가할 수 있어요.",
+		en: "You can add your own VRM model later in Settings.",
 	},
 	"onboard.personality.title": {
 		ko: "{agent}의 성격을 골라줘!",

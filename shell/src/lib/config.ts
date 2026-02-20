@@ -48,12 +48,26 @@ export interface AppConfig {
 }
 
 const DEFAULT_MODELS: Record<ProviderId, string> = {
-	gemini: "gemini-2.5-flash",
+	gemini: "gemini-3-flash-preview",
 	openai: "gpt-4o",
 	anthropic: "claude-sonnet-4-5-20250929",
 	xai: "grok-3-mini",
 	zai: "glm-4.7",
 	ollama: "llama3.2",
+};
+
+export const MODEL_OPTIONS: Record<ProviderId, { id: string; label: string }[]> = {
+	gemini: [
+		{ id: "gemini-3-flash-preview", label: "Gemini 3 Flash" },
+		{ id: "gemini-3.1-pro-preview", label: "Gemini 3.1 Pro" },
+		{ id: "gemini-2.5-pro", label: "Gemini 2.5 Pro" },
+		{ id: "gemini-2.5-flash", label: "Gemini 2.5 Flash" },
+	],
+	openai: [{ id: "gpt-4o", label: "GPT-4o" }],
+	anthropic: [{ id: "claude-sonnet-4-5-20250929", label: "Claude Sonnet 4.5" }],
+	xai: [{ id: "grok-3-mini", label: "Grok 3 Mini" }],
+	zai: [{ id: "glm-4.7", label: "GLM 4.7" }],
+	ollama: [{ id: "llama3.2", label: "Llama 3.2" }],
 };
 
 // ── Sync API (localStorage only, backwards compatible) ──

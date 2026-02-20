@@ -18,6 +18,8 @@ export interface ToolCallInfo {
 	id: string;
 	name: string;
 	args: Record<string, unknown>;
+	/** Gemini 3 thought signature — must be echoed back for tool calling to work */
+	thoughtSignature?: string;
 }
 
 /** Chat message types including tool call/result messages */
@@ -44,6 +46,7 @@ export type StreamChunk =
 			id: string;
 			name: string;
 			args: Record<string, unknown>;
+			thoughtSignature?: string;
 	  }
 	| {
 			type: "usage";

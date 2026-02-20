@@ -479,12 +479,22 @@ interface MemoryProcessor {
 // 5+: LocalLLMMemoryProcessor (Ollama)
 ```
 
-### 4-5. 채널 통합
+### 4-5. 채널 통합 — 부분 완료 ✅
 
-**작업:**
-- Discord 봇 (discord.js)
-- Telegram 봇 (grammY)
-- 외부 채널은 Tier 0-1 권한만
+**완료:**
+- Discord 봇 (discord.js) ✅ — lab.cafelua.com 내 별도 프로세스, WebSocket 기반
+  - 멘션/DM 감지 → 유저 조회 → LLM 호출 → 응답
+  - 미등록 유저 안내 메시지, Rate limiting (분당 10회), 2000자 분할
+- Google Chat 웹훅 ✅ — POST /api/webhooks/googlechat
+  - 이메일 기반 유저 조회 → LLM 호출 → 응답
+- Gateway에 `provider_account_id` 컬럼 + `GET /v1/auth/lookup` 엔드포인트 추가 ✅
+- 연동 설정 UI (settings/integrations) ✅
+
+**남은 작업:**
+- Telegram 봇 (grammY) — 미구현
+- Discord 봇 실제 실행 테스트 (`npm run bot:discord`)
+- Google Chat 앱 등록 + webhook URL 설정
+- 프로덕션 배포
 
 **결과:** 밖에서 "집 PC 상태?" → Alpha 응답
 
@@ -504,9 +514,10 @@ interface MemoryProcessor {
 
 ---
 
-## Phase 5: lab.cafelua.com 통합 (Week 8-9)
+## Phase 5: lab.cafelua.com 통합 (Week 8-9) — 부분 완료
 
 > **결과물**: Lab OAuth 로그인으로 API 키 입력 없이 편리하게 사용. 기존 수동 키 입력 유지.
+> **현황**: Deep link (5-1) ✅, Auth flow UI (5-2) 부분 ✅, LLM proxy (5-3) ✅, Credit display (5-4) 부분 ✅. Discord/Google Chat 연동 완료.
 
 ### 아키텍처
 
@@ -571,9 +582,10 @@ interface MemoryProcessor {
 
 ---
 
-## Phase 6: Tauri 앱 배포 — Linux 패키지 (Week 10)
+## Phase 6: Tauri 앱 배포 — Linux 패키지 (Week 10) — 부분 완료
 
 > **결과물**: ISO 없이 기존 Linux에 설치 가능한 독립 앱
+> **현황**: Flatpak 매니페스트 완성 + 빌드 성공 (GNOME 47, 204.9MB 바이너리). AppImage/deb/rpm 미완.
 
 ### 6-1. Tauri 번들 설정
 
@@ -587,10 +599,14 @@ interface MemoryProcessor {
 - `cargo tauri build` → AppImage, deb, rpm
 - GitHub Release 업로드, Linux x86_64 타겟
 
-### 6-3. Flathub (선택)
+### 6-3. Flathub (선택) — 부분 완료 ✅
 
-- `flatpak/com.cafelua.Shell.yml` 매니페스트
-- Flathub submission (별도 리포)
+- `flatpak/com.cafelua.shell.yml` 매니페스트 완성 ✅
+  - GNOME 47 런타임 (Tauri 2의 webkit2gtk-4.1 호환)
+  - `npx pnpm` + `CI=true`로 SDK 읽기 전용 파일시스템 대응
+  - `cargo build --release`로 바이너리 빌드 (번들링 건너뛰기)
+  - 빌드 성공: x86-64 ELF 204.9 MB
+- Flathub submission (별도 리포) — 미완
 
 ### Phase 6 완료 = 독립 앱 배포
 ```

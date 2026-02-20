@@ -20,6 +20,7 @@ import {
 	rowToChatMessage,
 	saveMessage,
 	updateSessionSummary,
+	updateSessionTitle,
 	upsertFact,
 } from "../lib/db";
 import { t } from "../lib/i18n";
@@ -377,6 +378,16 @@ export function ChatPanel() {
 		const msgs = useChatStore.getState().messages;
 		const userMsg = msgs[msgs.length - 1];
 		if (userMsg) persistMessage(userMsg);
+
+		// Auto-generate session title from first user message
+		const userMessages = msgs.filter((m) => m.role === "user");
+		if (userMessages.length === 1) {
+			const sessionId = useChatStore.getState().sessionId;
+			if (sessionId) {
+				const title = text.length > 40 ? `${text.slice(0, 40)}…` : text;
+				updateSessionTitle(sessionId, title).catch(() => {});
+			}
+		}
 
 		useChatStore.getState().startStreaming();
 

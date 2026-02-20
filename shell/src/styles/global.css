@@ -682,7 +682,12 @@ body,
 .settings-actions {
 	display: flex;
 	gap: 8px;
+	position: sticky;
+	bottom: 0;
+	z-index: 10;
+	padding: 12px 0;
 	margin-top: 12px;
+	background: linear-gradient(transparent, var(--espresso) 20%);
 }
 
 .settings-save-btn {
@@ -741,6 +746,56 @@ body,
 .settings-reset-btn:hover {
 	color: var(--error);
 	opacity: 1;
+}
+
+.reset-confirm-panel {
+	padding: 12px;
+	border: 1px solid var(--error);
+	border-radius: 8px;
+	background: rgba(220, 50, 50, 0.08);
+}
+
+.reset-confirm-msg {
+	margin: 0 0 10px;
+	font-size: 13px;
+	color: var(--cream);
+}
+
+.reset-confirm-checkbox {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	font-size: 12px;
+	color: var(--cream-dim);
+	margin-bottom: 10px;
+	cursor: pointer;
+}
+
+.reset-confirm-checkbox input[type="checkbox"] {
+	accent-color: var(--error);
+}
+
+.reset-confirm-actions {
+	display: flex;
+	gap: 8px;
+}
+
+.reset-confirm-actions .settings-reset-btn {
+	flex: 1;
+	background: var(--error);
+	color: var(--cream);
+	opacity: 1;
+	font-weight: 600;
+	padding: 8px;
+}
+
+.reset-confirm-actions .settings-reset-btn:hover {
+	background: #c0392b;
+	color: var(--cream);
+}
+
+.reset-confirm-actions .settings-cancel-btn {
+	flex: 1;
 }
 
 /* Theme Picker */

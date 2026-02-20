@@ -67,7 +67,15 @@ describe("09 — Onboarding Wizard", () => {
 		await (await $(S.onboardingNextBtn)).click();
 	});
 
+	it("should skip webhooks step", async () => {
+		// Webhooks step — skip without entering anything
+		const nextBtn = await $(S.onboardingNextBtn);
+		await nextBtn.waitForEnabled({ timeout: 10_000 });
+		await nextBtn.click();
+	});
+
 	it("should complete onboarding and hide overlay", async () => {
+		// Now at "complete" step
 		const completeBtn = await $(S.onboardingNextBtn);
 		await completeBtn.waitForEnabled({ timeout: 10_000 });
 		await completeBtn.click();

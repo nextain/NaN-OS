@@ -110,6 +110,18 @@ describe("cost calculation", () => {
 		expect(cost).toBeCloseTo(0.00045, 6);
 	});
 
+	it("calculates Gemini 3.1 Pro cost correctly", () => {
+		const cost = calculateCost("gemini-3.1-pro-preview", 1000, 500);
+		// input: 2.0/1M * 1000 = 0.002, output: 12.0/1M * 500 = 0.006
+		expect(cost).toBeCloseTo(0.008, 6);
+	});
+
+	it("calculates Gemini 3 Flash cost correctly", () => {
+		const cost = calculateCost("gemini-3-flash-preview", 1000, 500);
+		// input: 0.5/1M * 1000 = 0.0005, output: 3.0/1M * 500 = 0.0015
+		expect(cost).toBeCloseTo(0.002, 6);
+	});
+
 	it("calculates xAI cost correctly", () => {
 		const cost = calculateCost("grok-3-mini", 1000, 500);
 		expect(cost).toBeCloseTo(0.00055, 6);
@@ -148,17 +160,64 @@ describe("Gemini provider", () => {
 	});
 });
 
+describe("Gemini 3 provider temperature", () => {
+	it("uses temperature 1.0 for Gemini 3 models", async () => {
+		const { createGeminiProvider } = await import("../providers/gemini.js");
+		const provider = createGeminiProvider(
+			"test-key",
+			"gemini-3.1-pro-preview",
+		);
+
+		const chunks: unknown[] = [];
+		for await (const chunk of provider.stream(
+			[{ role: "user", content: "Hi" }],
+			"system",
+		)) {
+			chunks.push(chunk);
+		}
+
+		const call = mockGenerateContentStream.mock.calls;
+		const lastCall = call[call.length - 1][0] as any;
+		expect(lastCall.config.temperature).toBe(1.0);
+	});
+
+	it("uses temperature 0.7 for Gemini 2.5 models", async () => {
+		const { createGeminiProvider } = await import("../providers/gemini.js");
+		const provider = createGeminiProvider("test-key", "gemini-2.5-flash");
+
+		const chunks: unknown[] = [];
+		for await (const chunk of provider.stream(
+			[{ role: "user", content: "Hi" }],
+			"system",
+		)) {
+			chunks.push(chunk);
+		}
+
+		const call = mockGenerateContentStream.mock.calls;
+		const lastCall = call[call.length - 1][0] as any;
+		expect(lastCall.config.temperature).toBe(0.7);
+	});
+});
+
 describe("Gemini provider function calling", () => {
 	it("yields tool_use chunk when model requests a function call", async () => {
 		mockGenerateContentStream.mockResolvedValueOnce({
 			async *[Symbol.asyncIterator]() {
 				yield {
 					text: undefined,
-					functionCalls: [
+					candidates: [
 						{
-							id: "fc-1",
-							name: "execute_command",
-							args: { command: "echo hello" },
+							content: {
+								parts: [
+									{
+										functionCall: {
+											id: "fc-1",
+											name: "execute_command",
+											args: { command: "echo hello" },
+										},
+									},
+								],
+							},
 						},
 					],
 					usageMetadata: {
@@ -198,6 +257,61 @@ describe("Gemini provider function calling", () => {
 		expect(toolUse.id).toBe("fc-1");
 		expect(toolUse.name).toBe("execute_command");
 		expect(toolUse.args).toEqual({ command: "echo hello" });
+	});
+
+	it("captures thoughtSignature from Gemini 3 function calls", async () => {
+		mockGenerateContentStream.mockResolvedValueOnce({
+			async *[Symbol.asyncIterator]() {
+				yield {
+					text: undefined,
+					candidates: [
+						{
+							content: {
+								parts: [
+									{
+										functionCall: {
+											id: "fc-sig",
+											name: "skill_weather",
+											args: { location: "Seoul" },
+										},
+										thoughtSignature: "base64-opaque-signature-abc",
+									},
+								],
+							},
+						},
+					],
+					usageMetadata: {
+						promptTokenCount: 20,
+						candidatesTokenCount: 10,
+					},
+				};
+			},
+		});
+
+		const { createGeminiProvider } = await import("../providers/gemini.js");
+		const provider = createGeminiProvider("test-key", "gemini-3-flash-preview");
+
+		const tools = [
+			{
+				name: "skill_weather",
+				description: "Get weather",
+				parameters: { type: "object", properties: { location: { type: "string" } } },
+			},
+		];
+
+		const chunks: unknown[] = [];
+		for await (const chunk of provider.stream(
+			[{ role: "user", content: "서울 날씨 알려줘" }],
+			"You are Alpha.",
+			tools,
+		)) {
+			chunks.push(chunk);
+		}
+
+		const toolUse = chunks.find((c: any) => c.type === "tool_use") as any;
+		expect(toolUse).toBeDefined();
+		expect(toolUse.thoughtSignature).toBe("base64-opaque-signature-abc");
+		expect(toolUse.name).toBe("skill_weather");
 	});
 
 	it("passes tool definitions to Gemini API", async () => {
@@ -274,6 +388,47 @@ describe("Gemini provider function calling", () => {
 		expect(lastCall.contents[0].role).toBe("user");
 		expect(lastCall.contents[1].role).toBe("model");
 		expect(lastCall.contents[2].role).toBe("user");
+	});
+
+	it("echoes thoughtSignature in functionCall parts for Gemini 3", async () => {
+		const { createGeminiProvider } = await import("../providers/gemini.js");
+		const provider = createGeminiProvider("test-key", "gemini-3-flash-preview");
+
+		const messages = [
+			{ role: "user" as const, content: "서울 날씨" },
+			{
+				role: "assistant" as const,
+				content: "",
+				toolCalls: [
+					{
+						id: "fc-sig",
+						name: "skill_weather",
+						args: { location: "Seoul" },
+						thoughtSignature: "opaque-sig-xyz",
+					},
+				],
+			},
+			{
+				role: "tool" as const,
+				content: '{"temp": 15}',
+				toolCallId: "fc-sig",
+				name: "skill_weather",
+			},
+		];
+
+		const chunks: unknown[] = [];
+		for await (const chunk of provider.stream(messages, "system")) {
+			chunks.push(chunk);
+		}
+
+		const call = mockGenerateContentStream.mock.calls;
+		const lastCall = call[call.length - 1][0] as any;
+
+		// model message (index 1) should include thoughtSignature
+		const modelContent = lastCall.contents[1];
+		expect(modelContent.role).toBe("model");
+		expect(modelContent.parts[0].functionCall.name).toBe("skill_weather");
+		expect(modelContent.parts[0].thoughtSignature).toBe("opaque-sig-xyz");
 	});
 });
 
