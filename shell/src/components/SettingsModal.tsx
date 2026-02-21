@@ -136,8 +136,8 @@ export function SettingsModal({ onClose }: Props) {
 
 	function handleReset() {
 		if (!window.confirm(t("settings.resetConfirm"))) return;
-		localStorage.removeItem("nan-config");
-		localStorage.removeItem("nan-camera");
+		localStorage.removeItem("naia-config");
+		localStorage.removeItem("naia-camera");
 		invoke("reset_window_state").catch(() => {});
 		setLocale("ko");
 		document.documentElement.setAttribute("data-theme", "espresso");

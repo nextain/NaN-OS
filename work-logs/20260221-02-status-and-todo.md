@@ -12,8 +12,8 @@
 |-------|------|------|------|
 | 0 | 배포 파이프라인 | ✅ 완료 | BlueBuild + GitHub Actions |
 | 1 | Avatar on screen | ✅ 완료 | VRM 아바타, 눈 깜빡임, idle 모션 |
-| 2 | Chat with Nan | ✅ 완료 | 3개 LLM, 립싱크, 감정, 비용 표시 |
-| 3 | Nan does work | ✅ 완료 | 8개 도구, 권한 Tier 0-3, 감사 로그 |
+| 2 | Chat with Naia | ✅ 완료 | 3개 LLM, 립싱크, 감정, 비용 표시 |
+| 3 | Naia does work | ✅ 완료 | 8개 도구, 권한 Tier 0-3, 감사 로그 |
 | 4 | Always-on daemon | ✅ 완료 | Gateway, Skills, 메모리, 온보딩, Discord/Google Chat |
 | 5 | Lab 통합 | 🔄 부분 | Deep link ✅, Auth UI 부분 ✅, LLM proxy ✅ |
 | 6 | 앱 배포 | 🔄 부분 | Flatpak 빌드 성공, AppImage/deb/rpm 미완 |
@@ -48,7 +48,7 @@
 
 1. **Discord 봇 실행 테스트**
    ```bash
-   cd project-nan.nextain.io
+   cd project-naia.nextain.io
    npm run bot:discord
    ```
    - Discord에서 봇 멘션/DM → 응답 확인
@@ -56,7 +56,7 @@
 
 2. **Google Chat 앱 등록**
    - Google Workspace Admin Console에서 Chat 앱 등록
-   - Webhook URL: `https://nan.nextain.io/api/webhooks/googlechat`
+   - Webhook URL: `https://naia.nextain.io/api/webhooks/googlechat`
    - 테스트: Google Chat에서 앱에 메시지 전송 → 응답 확인
 
 3. **any-llm DB 마이그레이션 실행**
@@ -66,21 +66,21 @@
    ```
 
 4. **환경변수 확인**
-   - `nan.nextain.io/.env`: `DISCORD_BOT_TOKEN`, `DISCORD_OAUTH2_URL` 설정 확인
+   - `naia.nextain.io/.env`: `DISCORD_BOT_TOKEN`, `DISCORD_OAUTH2_URL` 설정 확인
    - 프로덕션 환경에도 동일 변수 설정 필요
 
 ### 🟡 권장 (품질)
 
 5. **Flatpak 런타임 테스트**
    ```bash
-   cd NaN-OS
-   flatpak run com.nan.shell
+   cd Naia-OS
+   flatpak run com.naia.shell
    ```
    - 앱 실행, 아바타 렌더링, 채팅 기능 확인
    - (참고: GNOME 47 EOL이지만 Tauri 2 + webkit2gtk-4.1 때문에 불가피)
 
 6. **크레딧 차감 확인**
-   - Discord/Google Chat 대화 후 nan.nextain.io 대시보드에서 사용량 확인
+   - Discord/Google Chat 대화 후 naia.nextain.io 대시보드에서 사용량 확인
 
 ### 🟢 향후 (Phase 5-8)
 
@@ -106,7 +106,7 @@
 
 ```
 ┌─────────────┐     ┌──────────────────┐     ┌──────────────┐
-│ NaN OS  │     │ nan.nextain.io  │     │ any-llm GW   │
+│ Naia OS  │     │ naia.nextain.io  │     │ any-llm GW   │
 │ (Tauri 앱)  │────→│ (Next.js 포털)   │────→│ (FastAPI)    │
 │ Shell+Agent │     │ OAuth + 크레딧    │     │ LLM 프록시    │
 └─────────────┘     └──────────────────┘     └──────────────┘
@@ -130,7 +130,7 @@
 - `routes/auth.py` — socialLogin 수정, lookup 엔드포인트
 - `alembic/versions/a2f7b8c9d0e1_*.py` — 마이그레이션
 
-### nan.nextain.io (Next.js)
+### naia.nextain.io (Next.js)
 - `src/lib/gateway-client.ts` — socialLogin 파라미터, lookupUser()
 - `src/lib/auth.ts` — providerAccountId 전달
 - `src/lib/discord-bot.ts` — 새로 생성
@@ -144,8 +144,8 @@
 - `src/content/manual/{ko,en}/settings.md` — 연동 섹션 추가
 - `src/content/manual/{ko,en}/lab.md` — 연동 섹션 추가
 
-### NaN-OS
-- `flatpak/com.nan.shell.yml` — GNOME 47, npx pnpm, cargo build
+### Naia-OS
+- `flatpak/com.naia.shell.yml` — GNOME 47, npx pnpm, cargo build
 - `.agents/context/plan.yaml` — Phase 4-5-6 상태 업데이트
 - `.users/context/plan.md` — 미러 업데이트
 - `work-logs/20260221-01-discord-googlechat-integration.md` — 작업 로그

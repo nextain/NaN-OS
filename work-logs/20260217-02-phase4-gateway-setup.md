@@ -1,8 +1,8 @@
-# NaN OS Phase 4: Always-on Daemon
+# Naia OS Phase 4: Always-on Daemon
 
 - **시작일**: 2026-02-17
 - **상태**: 🟡 진행 중
-- **프로젝트**: NaN-OS
+- **프로젝트**: Naia-OS
 - **담당**: luke + Claude
 
 ---
@@ -48,7 +48,7 @@ OpenClaw Gateway를 로컬에 띄워서 Phase 3를 실전 검증한 후,
 ## 아키텍처
 
 ```
-Nan Shell (Tauri 2) → stdio → Agent (Node.js, LLM+TTS)
+Naia Shell (Tauri 2) → stdio → Agent (Node.js, LLM+TTS)
                                   ↓ WebSocket (ws://127.0.0.1:18789)
                           OpenClaw Gateway (systemd user service)
                             ├── exec.bash (도구 실행)
@@ -64,8 +64,8 @@ Nan Shell (Tauri 2) → stdio → Agent (Node.js, LLM+TTS)
 | 파일 | 용도 |
 |---|---|
 | `config/scripts/setup-openclaw.sh` | OpenClaw 설치 스크립트 |
-| `config/files/usr/bin/nan-gateway-wrapper` | Gateway 실행 래퍼 |
-| `config/files/usr/lib/systemd/user/nan-gateway.service` | systemd 서비스 |
+| `config/files/usr/bin/naia-gateway-wrapper` | Gateway 실행 래퍼 |
+| `config/files/usr/lib/systemd/user/naia-gateway.service` | systemd 서비스 |
 | `shell/src-tauri/src/lib.rs` (gateway_health) | Gateway 헬스체크 |
 | `agent/src/gateway/client.ts` | WebSocket 클라이언트 |
 | `agent/src/gateway/tool-bridge.ts` | 8개 도구 브릿지 |
@@ -190,7 +190,7 @@ Nan Shell (Tauri 2) → stdio → Agent (Node.js, LLM+TTS)
   - 이전 세션에서 `canRunShellTools=false`로 도구 테스트가 실제 실행되지 않음
   - `node.list`가 빈 배열 반환, `node.invoke` 미작동
 - 원인 분석 (3건):
-  1. **디바이스 인증 필수**: Gateway 토큰(`nan-dev-token`)만으로는 스코프 미부여 → `node.list`가 `missing scope: operator.read`
+  1. **디바이스 인증 필수**: Gateway 토큰(`naia-dev-token`)만으로는 스코프 미부여 → `node.list`가 `missing scope: operator.read`
      - Ed25519 디바이스 서명 포함 시 정상 인증 + 스코프 부여
   2. **exec-approvals 미설정**: 노드 호스트가 `SYSTEM_RUN_DENIED: approval required` 반환
      - `~/.openclaw/exec-approvals.json`에 `defaults: { ask: "off", security: "full" }` + 와일드카드 allowlist 추가

@@ -60,7 +60,7 @@ describe("ChatPanel", () => {
 
 	it("does not send empty message", () => {
 		localStorage.setItem(
-			"nan-config",
+			"naia-config",
 			JSON.stringify({ apiKey: "test-key", provider: "gemini", model: "gemini-2.5-flash" }),
 		);
 		render(<ChatPanel />);
@@ -70,7 +70,7 @@ describe("ChatPanel", () => {
 		fireEvent.click(sendBtn);
 		// No messages should be added
 		expect(useChatStore.getState().messages).toHaveLength(0);
-		localStorage.removeItem("nan-config");
+		localStorage.removeItem("naia-config");
 	});
 
 	it("sends message on Enter", async () => {
@@ -107,7 +107,7 @@ describe("ChatPanel", () => {
 	it("renders ToolActivity for tool_use chunk during streaming", async () => {
 		// Set up API key so sendChatMessage is actually called
 		localStorage.setItem(
-			"nan-config",
+			"naia-config",
 			JSON.stringify({
 				apiKey: "test-key",
 				provider: "gemini",
@@ -137,12 +137,12 @@ describe("ChatPanel", () => {
 		expect(streamingToolCalls[0].toolName).toBe("read_file");
 		expect(streamingToolCalls[0].status).toBe("running");
 
-		localStorage.removeItem("nan-config");
+		localStorage.removeItem("naia-config");
 	});
 
 	it("updates tool call on tool_result chunk", async () => {
 		localStorage.setItem(
-			"nan-config",
+			"naia-config",
 			JSON.stringify({
 				apiKey: "test-key",
 				provider: "gemini",
@@ -178,7 +178,7 @@ describe("ChatPanel", () => {
 		expect(streamingToolCalls[0].status).toBe("success");
 		expect(streamingToolCalls[0].output).toBe("file contents");
 
-		localStorage.removeItem("nan-config");
+		localStorage.removeItem("naia-config");
 	});
 
 	it("renders ToolActivity for completed messages with toolCalls", () => {
@@ -209,7 +209,7 @@ describe("ChatPanel", () => {
 
 	it("sets pendingApproval on approval_request chunk", async () => {
 		localStorage.setItem(
-			"nan-config",
+			"naia-config",
 			JSON.stringify({
 				apiKey: "test-key",
 				provider: "gemini",
@@ -239,12 +239,12 @@ describe("ChatPanel", () => {
 		expect(pendingApproval).not.toBeNull();
 		expect(pendingApproval!.toolName).toBe("execute_command");
 
-		localStorage.removeItem("nan-config");
+		localStorage.removeItem("naia-config");
 	});
 
 	it("auto-approves when tool is in allowedTools", async () => {
 		localStorage.setItem(
-			"nan-config",
+			"naia-config",
 			JSON.stringify({
 				apiKey: "test-key",
 				provider: "gemini",
@@ -275,7 +275,7 @@ describe("ChatPanel", () => {
 		const { pendingApproval } = useChatStore.getState();
 		expect(pendingApproval).toBeNull();
 
-		localStorage.removeItem("nan-config");
+		localStorage.removeItem("naia-config");
 	});
 
 	it("renders PermissionModal when pendingApproval is set", () => {
@@ -301,7 +301,7 @@ describe("ChatPanel", () => {
 	it("sets isSpeaking and pendingAudio on audio chunk", async () => {
 		// Set up API key so sendChatMessage is actually called
 		localStorage.setItem(
-			"nan-config",
+			"naia-config",
 			JSON.stringify({
 				apiKey: "test-key",
 				provider: "gemini",
@@ -328,7 +328,7 @@ describe("ChatPanel", () => {
 		expect(useAvatarStore.getState().isSpeaking).toBe(true);
 		expect(useAvatarStore.getState().pendingAudio).toBe("base64audio==");
 
-		localStorage.removeItem("nan-config");
+		localStorage.removeItem("naia-config");
 	});
 
 	// === Memory integration ===

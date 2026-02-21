@@ -1,9 +1,9 @@
 {
 	"project_identity": {
-		"name": "NaN OS",
+		"name": "Naia OS",
 		"nature": "Bazzite-based personal AI OS with virtual avatar",
 		"philosophy": "OS itself is the AI's tool. Assemble, don't build from scratch.",
-		"core_concept": "USB boot → Nan avatar greets → AI controls OS"
+		"core_concept": "USB boot → Naia avatar greets → AI controls OS"
 	},
 	"architecture": {
 		"layers": {
@@ -127,7 +127,7 @@
 				"Sub-agent spawn → Parallel execution → Results merged"
 			],
 			"os": [
-				"ISO boot → Login → nan Shell auto-starts",
+				"ISO boot → Login → naia Shell auto-starts",
 				"First boot → Onboarding wizard → API key setup → First chat"
 			]
 		},
@@ -150,7 +150,7 @@
 		"forbidden": ["console.log", "console.warn", "console.error"],
 		"rule": "Use structured logger only. No raw console output.",
 		"logger": {
-			"import": "import { Logger } from '@nan/shared/logger'",
+			"import": "import { Logger } from '@naia/shared/logger'",
 			"levels": {
 				"debug": "Development debugging, detailed execution flow",
 				"info": "Important operations completed, state changes",
@@ -189,7 +189,7 @@
 		},
 		"audit_log": {
 			"purpose": "Record all AI actions for security and transparency",
-			"storage": "SQLite (~/.nan/audit.db)",
+			"storage": "SQLite (~/.naia/audit.db)",
 			"fields": ["timestamp", "tier", "action", "target", "result"],
 			"retention": "90 days default, configurable"
 		}
@@ -213,7 +213,7 @@
 			"podman": "Rootless containers for isolation"
 		},
 		"credentials": {
-			"storage": "~/.nan/credentials/ (encrypted, system keyring or age)",
+			"storage": "~/.naia/credentials/ (encrypted, system keyring or age)",
 			"rule": "Agent can USE keys but never SEE or TRANSMIT raw values",
 			"never_log": "API keys, tokens, passwords must never appear in logs or audit"
 		},

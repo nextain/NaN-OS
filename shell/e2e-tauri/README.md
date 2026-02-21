@@ -51,7 +51,7 @@ xvfb-run pnpm run test:e2e:tauri
 
 ```
 tauri-driver (port 4444)
-  └→ nan-shell 바이너리 실행
+  └→ naia-shell 바이너리 실행
        ├→ Gateway 연결 (ws://localhost:18789)
        ├→ Agent-core 스폰
        └→ WebKitGTK webview 렌더링

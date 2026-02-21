@@ -1,27 +1,27 @@
-# NaN OS
+# Naia OS
 
-Bazzite 기반 배포형 AI OS. USB 꽂으면 Nan가 맞이하는 개인 AI 운영체제.
+Bazzite 기반 배포형 AI OS. USB 꽂으면 Naia가 맞이하는 개인 AI 운영체제.
 
 ## 비전
 
 ```
-USB 꽂기 → Bazzite 부팅 → Nan(AI 아바타)가 화면에 등장 → 대화 시작
+USB 꽂기 → Bazzite 부팅 → Naia(AI 아바타)가 화면에 등장 → 대화 시작
 ```
 
 - **OS 자체가 AI의 도구** — AI에게 OS를 통째로 준다
-- **Virtual Avatar** — Nan가 화면에 살아있는 존재
+- **Virtual Avatar** — Naia가 화면에 살아있는 존재
 - **개인 AI 데몬** — 항상 켜져있고, 어디서든 대화 가능
 - **게임도 같이** — AI랑 Minecraft, Factorio 등을 함께 플레이
 
-## 왜 NaN OS인가?
+## 왜 Naia OS인가?
 
 기존 AI 도구들은 **"사람이 AI를 도구로 쓰는"** 구조다. ChatGPT에 질문하고, Copilot에 코드 완성 요청하고, CLI 에이전트에 명령을 내린다. AI는 특정 앱 안에 갇혀 있다.
 
-NaN OS는 이 관계를 뒤집는다 — **"AI에게 OS를 통째로 준다."** Nan는 파일을 읽고 쓰고, 터미널을 실행하고, 앱을 제어한다. 특정 도구가 아니라 운영체제 자체가 AI의 작업 공간이다.
+Naia OS는 이 관계를 뒤집는다 — **"AI에게 OS를 통째로 준다."** Naia는 파일을 읽고 쓰고, 터미널을 실행하고, 앱을 제어한다. 특정 도구가 아니라 운영체제 자체가 AI의 작업 공간이다.
 
 ### 기존 접근과의 차이
 
-| 기존 접근 | 한계 | NaN OS |
+| 기존 접근 | 한계 | Naia OS |
 |-----------|------|-----------|
 | **VS Code 확장** (Copilot, Cline 등) | IDE를 열어야 AI를 쓸 수 있음 | IDE 불필요. 항상 켜져있음 |
 | **CLI 에이전트** (Claude Code, Aider 등) | 터미널 안에서만 동작 | 파일, 브라우저, 시스템 전체를 제어 |
@@ -31,7 +31,7 @@ NaN OS는 이 관계를 뒤집는다 — **"AI에게 OS를 통째로 준다."** 
 
 ### 실제 구현된 차별 기능
 
-- **3D VRM 아바타**: Nan가 Three.js로 렌더링된 3D 캐릭터로 존재. 대화 중 감정 표현(기쁨, 놀람, 생각 중)과 립싱크가 실시간으로 동작
+- **3D VRM 아바타**: Naia가 Three.js로 렌더링된 3D 캐릭터로 존재. 대화 중 감정 표현(기쁨, 놀람, 생각 중)과 립싱크가 실시간으로 동작
 - **불변 OS (Bazzite/Fedora Atomic)**: rpm-ostree 기반으로 시스템이 깨져도 롤백 가능. AI가 OS를 제어해도 안전
 - **멀티 LLM**: Gemini, Grok, Claude 등 여러 LLM 프로바이더를 선택해서 사용. 특정 회사에 종속되지 않음
 - **8개 도구 실행**: 파일 읽기/쓰기/편집, 터미널 명령, 웹 검색, 브라우저 제어, 파일 검색, 서브에이전트 생성이 실제로 동작
@@ -48,7 +48,7 @@ NaN OS는 이 관계를 뒤집는다 — **"AI에게 OS를 통째로 준다."** 
 ┌─────────────────────────────────────┐
 │         Nextain Shell (UI)          │
 │  ┌──────────┬──────────────────┐    │
-│  │  Nan   │  대화 / 작업     │    │
+│  │  Naia   │  대화 / 작업     │    │
 │  │  Avatar  │  패널            │    │
 │  │ (VRM 3D) │                  │    │
 │  └──────────┴──────────────────┘    │
@@ -72,7 +72,7 @@ NaN OS는 이 관계를 뒤집는다 — **"AI에게 OS를 통째로 준다."** 
 ## 프로젝트 구조
 
 ```
-NaN-OS/
+Naia-OS/
 ├── shell/          # Nextain Shell (Tauri 2 + Three.js Avatar)
 ├── agent/          # AI 에이전트 코어 (Node.js, LLM + 도구)
 ├── config/         # OS 이미지 설정 (scripts, systemd, wrapper)
@@ -127,7 +127,7 @@ NaN-OS/
 ### Gateway 설치 (최초 1회)
 
 ```bash
-# OpenClaw Gateway 설치 (~/.nan/openclaw/)
+# OpenClaw Gateway 설치 (~/.naia/openclaw/)
 bash config/scripts/setup-openclaw.sh
 ```
 
@@ -165,16 +165,16 @@ cd agent && CAFE_LIVE_GATEWAY_E2E=1 pnpm exec vitest run src/__tests__/gateway-e
 
 ```bash
 # 별도 터미널에서 수동 실행 시
-~/.nan/openclaw/node_modules/.bin/openclaw gateway run --bind loopback --port 18789
+~/.naia/openclaw/node_modules/.bin/openclaw gateway run --bind loopback --port 18789
 ```
 
 ## 배포
 
 ```
 Phase 0 (Day 1-3):  BlueBuild 파이프라인 → push하면 ISO 자동 생성
-Phase 1 (Week 1):   아바타 탑재 → Nan가 보이는 ISO
-Phase 2 (Week 2):   대화 추가 → Nan와 대화하는 ISO ← 공개 데모
-Phase 3 (Week 3-4): 도구 → Nan가 일하는 ISO          ✅ 완료
+Phase 1 (Week 1):   아바타 탑재 → Naia가 보이는 ISO
+Phase 2 (Week 2):   대화 추가 → Naia와 대화하는 ISO ← 공개 데모
+Phase 3 (Week 3-4): 도구 → Naia가 일하는 ISO          ✅ 완료
 Phase 4 (Week 5-7): 데몬 → 완성된 AI OS               🟡 진행 중
 Phase 5 (Week 8+):  게임 → AI랑 마인크래프트
 ```
@@ -203,7 +203,7 @@ AI Studio에서 발급한 키는 기본적으로 Gemini만 사용 가능합니�
 > - TTS: 월 400만 글자 무료 (WaveNet)
 > - STT: 월 60분 무료
 
-### 3. NaN OS에서 설정
+### 3. Naia OS에서 설정
 
 1. 앱 실행 후 우측 상단 ⚙️ (설정) 클릭
 2. 아래와 같이 입력:

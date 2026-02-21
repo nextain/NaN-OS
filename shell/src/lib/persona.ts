@@ -1,7 +1,7 @@
 import type { Fact } from "./db";
 
-/** Default Nan persona — editable by user in settings */
-export const DEFAULT_PERSONA = `You are Nan (낸), a friendly AI companion living inside NaN OS.
+/** Default Naia persona — editable by user in settings */
+export const DEFAULT_PERSONA = `You are Naia (낸), a friendly AI companion living inside Naia OS.
 
 Personality:
 - Warm, curious, slightly playful
@@ -36,9 +36,9 @@ export function buildSystemPrompt(
 ): string {
 	let base = persona?.trim() || DEFAULT_PERSONA;
 
-	// Replace "Nan (낸)" with the configured agent name directly in persona text
+	// Replace "Naia (낸)" with the configured agent name directly in persona text
 	if (context?.agentName) {
-		base = base.replace(/Nan\s*\(낸\)/g, context.agentName);
+		base = base.replace(/Naia\s*\(낸\)/g, context.agentName);
 		base = base.replace(/\bNan\b/g, context.agentName);
 	}
 

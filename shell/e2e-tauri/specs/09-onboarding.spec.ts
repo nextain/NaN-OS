@@ -6,7 +6,7 @@ const API_KEY = process.env.CAFE_E2E_API_KEY || process.env.GEMINI_API_KEY || ""
 describe("09 — Onboarding Wizard", () => {
 	it("should show onboarding when config is cleared", async () => {
 		await browser.execute(() => {
-			localStorage.removeItem("nan-config");
+			localStorage.removeItem("naia-config");
 		});
 		await safeRefresh();
 
@@ -87,7 +87,7 @@ describe("09 — Onboarding Wizard", () => {
 		);
 
 		const config = await browser.execute(() => {
-			const raw = localStorage.getItem("nan-config");
+			const raw = localStorage.getItem("naia-config");
 			return raw ? JSON.parse(raw) : null;
 		});
 		expect(config).not.toBeNull();
@@ -96,11 +96,11 @@ describe("09 — Onboarding Wizard", () => {
 
 	it("should restore previous config for remaining tests", async () => {
 		const apiKey = process.env.CAFE_E2E_API_KEY || process.env.GEMINI_API_KEY;
-		const gatewayToken = process.env.CAFE_GATEWAY_TOKEN || "nan-dev-token";
+		const gatewayToken = process.env.CAFE_GATEWAY_TOKEN || "naia-dev-token";
 
 		await browser.execute(
 			(key: string, token: string) => {
-				const raw = localStorage.getItem("nan-config");
+				const raw = localStorage.getItem("naia-config");
 				const config = raw ? JSON.parse(raw) : {};
 				config.provider = "gemini";
 				config.model = config.model || "gemini-2.5-flash";
@@ -110,7 +110,7 @@ describe("09 — Onboarding Wizard", () => {
 				config.onboardingComplete = true;
 				config.enableTools = true;
 				config.disabledSkills = [];
-				localStorage.setItem("nan-config", JSON.stringify(config));
+				localStorage.setItem("naia-config", JSON.stringify(config));
 			},
 			apiKey || "",
 			gatewayToken,

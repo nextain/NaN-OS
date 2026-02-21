@@ -34,7 +34,7 @@ import { useAvatarStore } from "../stores/avatar";
 
 const LOOK_AT_TARGET = { x: 0, y: 0, z: -1 };
 const MAX_DELTA = 0.05;
-const CAMERA_STORAGE_KEY = "nan-camera";
+const CAMERA_STORAGE_KEY = "naia-camera";
 
 interface SavedCamera {
 	px: number;
@@ -201,7 +201,7 @@ export function AvatarCanvas() {
 
 		// Load background image (config path or bundled default)
 		try {
-			const configRaw = localStorage.getItem("nan-config");
+			const configRaw = localStorage.getItem("naia-config");
 			const config = configRaw ? JSON.parse(configRaw) : null;
 			const bgSrc = config?.backgroundImage
 				? convertFileSrc(config.backgroundImage)

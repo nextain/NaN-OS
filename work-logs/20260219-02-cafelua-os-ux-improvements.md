@@ -1,11 +1,11 @@
-# NaN OS UX 개선 & 매뉴얼 작업
+# Naia OS UX 개선 & 매뉴얼 작업
 
 ## 날짜
 - 시작: 2026-02-19
 - 완료: 2026-02-19
 
 ## 프로젝트
-`NaN-OS` (Shell + Agent) + `project-nan.nextain.io` (매뉴얼)
+`Naia-OS` (Shell + Agent) + `project-naia.nextain.io` (매뉴얼)
 
 ---
 
@@ -55,7 +55,7 @@
 ### 9. 도구 파이프라인 수정 — Gateway 없이 스킬 사용 가능 ✅ (2026-02-19)
 - **문제**: `index.ts`에서 `enableTools && gatewayUrl` 조건으로 모든 도구를 Gateway에 묶음
   → Gateway URL 미설정 시 `skill_skill_manager`, `skill_time` 등 Gateway 불필요 스킬도 사용 불가
-  → Nan가 스킬 관리 요청에 "그 기능 없다"고 답함
+  → Naia가 스킬 관리 요청에 "그 기능 없다"고 답함
 - **원인 분석**:
   1. `index.ts:104-107`: `tools = enableTools && gatewayUrl ? getAllTools(true, disabled) : undefined`
   2. `index.ts:172`: `if (toolCalls.length === 0 || !gateway) break` — gateway null이면 도구 실행 중단
@@ -79,14 +79,14 @@
 - Prev/Next 네비게이션, 목차로 돌아가기 링크
 - **매뉴얼 섹션 (10개)**: getting-started, main-screen, chat, history, progress, skills, settings, tools, lab, troubleshooting
 - **파일**:
-  - `project-nan.nextain.io/src/app/[lang]/(public)/manual/page.tsx` — TOC 인덱스
-  - `project-nan.nextain.io/src/app/[lang]/(public)/manual/[slug]/page.tsx` — 동적 페이지
-  - `project-nan.nextain.io/src/lib/manual-docs.ts` — 슬러그 기반 마크다운 로더
-  - `project-nan.nextain.io/src/components/manual/manual-markdown.tsx` — 커스텀 렌더러 (이미지, 테이블, 코드 등)
-  - `project-nan.nextain.io/src/content/manual/ko/*.md` — 한국어 콘텐츠 10개
-  - `project-nan.nextain.io/src/content/manual/en/*.md` — 영어 콘텐츠 10개
-  - `project-nan.nextain.io/src/i18n/dictionaries/types.ts` — manual 섹션 타입
-  - `project-nan.nextain.io/src/i18n/dictionaries/ko.ts`, `en.ts` — 번역
+  - `project-naia.nextain.io/src/app/[lang]/(public)/manual/page.tsx` — TOC 인덱스
+  - `project-naia.nextain.io/src/app/[lang]/(public)/manual/[slug]/page.tsx` — 동적 페이지
+  - `project-naia.nextain.io/src/lib/manual-docs.ts` — 슬러그 기반 마크다운 로더
+  - `project-naia.nextain.io/src/components/manual/manual-markdown.tsx` — 커스텀 렌더러 (이미지, 테이블, 코드 등)
+  - `project-naia.nextain.io/src/content/manual/ko/*.md` — 한국어 콘텐츠 10개
+  - `project-naia.nextain.io/src/content/manual/en/*.md` — 영어 콘텐츠 10개
+  - `project-naia.nextain.io/src/i18n/dictionaries/types.ts` — manual 섹션 타입
+  - `project-naia.nextain.io/src/i18n/dictionaries/ko.ts`, `en.ts` — 번역
 
 ---
 
@@ -112,8 +112,8 @@
 - `progress-tab.png` — 작업(진행) 탭
 
 **저장 위치**:
-- `project-nan.nextain.io/public/manual/ko/*.png` (24개)
-- `project-nan.nextain.io/public/manual/en/*.png` (24개)
+- `project-naia.nextain.io/public/manual/ko/*.png` (24개)
+- `project-naia.nextain.io/public/manual/en/*.png` (24개)
 
 **남은 버그 2개**:
 
@@ -124,7 +124,7 @@ resolved to 2 elements
 ```
 - **원인**: `.or()` 로케이터가 `.onboarding-content`와 `.onboarding-input` 둘 다 매칭
 - **적용**: `.or()` 제거, `.onboarding-input` 단일 locator로 변경
-- **위치**: `NaN-OS/shell/e2e/screenshots.spec.ts`
+- **위치**: `Naia-OS/shell/e2e/screenshots.spec.ts`
 
 #### 버그 2: Skills 탭 (4번째 탭) 클릭 타임아웃 (해결)
 ```
@@ -135,26 +135,26 @@ waiting for locator('.chat-tab:nth-child(4)')
 - **적용**:
   - 탭 클릭 헬퍼 추가(`clickTab`): 텍스트 후보 + key 후보 + 인덱스 fallback
   - Progress 캡처 후 `page.goto("/")`로 메인앱 재진입 후 Skills/Settings 캡처
-- **위치**: `NaN-OS/shell/e2e/screenshots.spec.ts`
+- **위치**: `Naia-OS/shell/e2e/screenshots.spec.ts`
 
 **캡처 결과**:
-- 한국어: 24개 캡처 완료 (`project-nan.nextain.io/public/manual/ko/*.png`)
-- 영어: 24개 캡처 완료 (`project-nan.nextain.io/public/manual/en/*.png`)
+- 한국어: 24개 캡처 완료 (`project-naia.nextain.io/public/manual/ko/*.png`)
+- 영어: 24개 캡처 완료 (`project-naia.nextain.io/public/manual/en/*.png`)
 
-**실행 방법**: `cd NaN-OS/shell && pnpm exec playwright test e2e/screenshots.spec.ts`
+**실행 방법**: `cd Naia-OS/shell && pnpm exec playwright test e2e/screenshots.spec.ts`
 **검증 결과**: `4 passed (52.1s)` (경로 수정 후 재검증)
 
 **추가 수정 (2026-02-19)**:
 - 스크린샷 저장 경로 수정:
-  - `NaN-OS/shell/e2e/screenshots.spec.ts`
-  - `MANUAL_BASE`: `../../project-nan.nextain.io/public/manual` → `../../../project-nan.nextain.io/public/manual`
+  - `Naia-OS/shell/e2e/screenshots.spec.ts`
+  - `MANUAL_BASE`: `../../project-naia.nextain.io/public/manual` → `../../../project-naia.nextain.io/public/manual`
 - 매뉴얼 이미지 참조 경로 정합성 업데이트:
-  - `project-nan.nextain.io/src/content/manual/ko/getting-started.md`
-  - `project-nan.nextain.io/src/content/manual/en/getting-started.md`
-  - `project-nan.nextain.io/src/content/manual/ko/chat.md`
-  - `project-nan.nextain.io/src/content/manual/en/chat.md`
-  - `project-nan.nextain.io/src/content/manual/ko/settings.md`
-  - `project-nan.nextain.io/src/content/manual/en/settings.md`
+  - `project-naia.nextain.io/src/content/manual/ko/getting-started.md`
+  - `project-naia.nextain.io/src/content/manual/en/getting-started.md`
+  - `project-naia.nextain.io/src/content/manual/ko/chat.md`
+  - `project-naia.nextain.io/src/content/manual/en/chat.md`
+  - `project-naia.nextain.io/src/content/manual/ko/settings.md`
+  - `project-naia.nextain.io/src/content/manual/en/settings.md`
 
 ---
 
@@ -173,9 +173,9 @@ waiting for locator('.chat-tab:nth-child(4)')
 - 완료: 주요 불일치 경로 수정
 - 완료: `lab.md` 전용 이미지 4종(ko/en) 생성 완료
   - `lab-dashboard.png`, `lab-usage.png`, `lab-logs.png`, `lab-keys.png`
-  - 생성 스크립트: `NaN-OS/shell/scripts/generate-lab-manual-images.mjs`
+  - 생성 스크립트: `Naia-OS/shell/scripts/generate-lab-manual-images.mjs`
 
-### P2. nan.nextain.io 빌드 확인
+### P2. naia.nextain.io 빌드 확인
 - 완료: `npm run build` 성공 (Next.js 16.1.6)
 
 ### P3. 커밋 ✅ (완료 — 2026-02-19)
@@ -196,7 +196,7 @@ waiting for locator('.chat-tab:nth-child(4)')
 
 ## 변경 파일 목록 (커밋 완료)
 
-### NaN-OS/agent
+### Naia-OS/agent
 | 파일 | 작업 | 설명 |
 |------|------|------|
 | `src/index.ts` | MOD | Gateway 없이 스킬 사용 가능 (도구 파이프라인 수정) |
@@ -210,7 +210,7 @@ waiting for locator('.chat-tab:nth-child(4)')
 | `src/providers/factory.ts` | MOD | AbortSignal 전달 |
 | `src/providers/types.ts` | MOD | stream() 시그니처 변경 |
 
-### NaN-OS/shell
+### Naia-OS/shell
 | 파일 | 작업 | 설명 |
 |------|------|------|
 | `src/components/OnboardingWizard.tsx` | MOD | Lab 로그인 스킵 수정 + Lab 동기화 |
@@ -231,7 +231,7 @@ waiting for locator('.chat-tab:nth-child(4)')
 | `e2e-tauri/specs/16-skill-weather.spec.ts` | NEW | 날씨 스킬 E2E |
 | `e2e-tauri/specs/99-screenshots.spec.ts` | NEW | wdio 스크린샷 (Playwright로 대체됨, 삭제 가능) |
 
-### project-nan.nextain.io
+### project-naia.nextain.io
 | 파일 | 작업 | 설명 |
 |------|------|------|
 | `src/app/[lang]/(public)/manual/page.tsx` | NEW→MOD | 목차 인덱스 페이지 |

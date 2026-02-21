@@ -1,4 +1,4 @@
-# NaN OS — Agent Entry Point
+# Naia OS — Agent Entry Point
 
 ## Context Loading (MUST read first)
 

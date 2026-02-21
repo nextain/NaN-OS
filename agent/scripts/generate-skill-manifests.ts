@@ -1,7 +1,7 @@
 #!/usr/bin/env npx tsx
 /**
  * Generate skill.json manifests from OpenClaw SKILL.md files.
- * Reads frontmatter from each skill's SKILL.md, creates ~/.nan/skills/{name}/skill.json.
+ * Reads frontmatter from each skill's SKILL.md, creates ~/.naia/skills/{name}/skill.json.
  *
  * Usage: npx tsx agent/scripts/generate-skill-manifests.ts
  */
@@ -11,14 +11,14 @@ import * as path from "node:path";
 
 const OPENCLAW_SKILLS_DIR = path.join(
 	os.homedir(),
-	".nan",
+	".naia",
 	"openclaw",
 	"node_modules",
 	"openclaw",
 	"skills",
 );
 
-const OUTPUT_DIR = path.join(os.homedir(), ".nan", "skills");
+const OUTPUT_DIR = path.join(os.homedir(), ".naia", "skills");
 
 /** Skills already ported as built-in (skip to avoid duplicates) */
 const SKIP_BUILT_IN = new Set(["time", "memo", "system_status"]);

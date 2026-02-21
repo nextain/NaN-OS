@@ -58,10 +58,10 @@ describe("69 — Discord Notify (Live)", function () {
 	before(async () => {
 		// Set webhook URL in config so agent can find it
 		await browser.execute((url: string) => {
-			const raw = localStorage.getItem("nan-config");
+			const raw = localStorage.getItem("naia-config");
 			const config = raw ? JSON.parse(raw) : {};
 			config.discordWebhookUrl = url;
-			localStorage.setItem("nan-config", JSON.stringify(config));
+			localStorage.setItem("naia-config", JSON.stringify(config));
 		}, DISCORD_WEBHOOK);
 
 		await enableToolsForSpec(["skill_notify_discord"]);

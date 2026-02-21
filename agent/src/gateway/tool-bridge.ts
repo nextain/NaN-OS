@@ -50,8 +50,8 @@ skillRegistry.register(createTtsSkill());
 skillRegistry.register(createVoiceWakeSkill());
 skillRegistry.register(createWeatherSkill());
 
-// Cron skill — persistent store in ~/.nan/cron-jobs.json
-const cronStorePath = `${process.env.HOME ?? "~"}/.nan/cron-jobs.json`;
+// Cron skill — persistent store in ~/.naia/cron-jobs.json
+const cronStorePath = `${process.env.HOME ?? "~"}/.naia/cron-jobs.json`;
 const cronStore = new CronStore(cronStorePath);
 skillRegistry.register(createCronSkill(cronStore));
 
@@ -71,14 +71,14 @@ export const cronScheduler = new CronScheduler((payload) => {
 cronScheduler.restoreFromStore(cronStore);
 
 // Bootstrap default skills from bundled assets (first-run only)
-const customSkillsDir = `${process.env.HOME ?? "~"}/.nan/skills`;
+const customSkillsDir = `${process.env.HOME ?? "~"}/.naia/skills`;
 const bundledSkillsDir = new URL(
 	"../../assets/default-skills",
 	import.meta.url,
 ).pathname;
 bootstrapDefaultSkills(customSkillsDir, bundledSkillsDir);
 
-// Load custom skills from ~/.nan/skills/
+// Load custom skills from ~/.naia/skills/
 loadCustomSkills(skillRegistry, customSkillsDir);
 
 /** Get all tools: Gateway tools + skill tools (minus disabled) */

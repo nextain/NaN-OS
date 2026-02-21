@@ -16,7 +16,7 @@ describe("01 — App Launch", () => {
 				provider: "gemini",
 				model: "gemini-2.5-flash",
 				apiKey: key,
-				agentName: "Nan",
+				agentName: "Naia",
 				userName: "Tester",
 				vrmModel: "/avatars/Sendagaya-Shino-dark-uniform.vrm",
 				persona: "Friendly AI companion",
@@ -24,7 +24,7 @@ describe("01 — App Launch", () => {
 				locale: "ko",
 				onboardingComplete: true,
 			};
-			localStorage.setItem("nan-config", JSON.stringify(config));
+			localStorage.setItem("naia-config", JSON.stringify(config));
 		}, API_KEY);
 
 		await safeRefresh();

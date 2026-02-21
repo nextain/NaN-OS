@@ -5,10 +5,10 @@ describe("19 — skills bulk migration", () => {
 	before(async () => {
 		// Ensure enableTools is set
 		await browser.execute(() => {
-			const raw = localStorage.getItem("nan-config");
+			const raw = localStorage.getItem("naia-config");
 			const config = raw ? JSON.parse(raw) : {};
 			config.enableTools = true;
-			localStorage.setItem("nan-config", JSON.stringify(config));
+			localStorage.setItem("naia-config", JSON.stringify(config));
 		});
 		await safeRefresh();
 		const chatInput = await $(S.chatInput);

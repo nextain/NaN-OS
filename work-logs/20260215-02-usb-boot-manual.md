@@ -1,4 +1,4 @@
-# NaN OS USB 부팅 매뉴얼
+# Naia OS USB 부팅 매뉴얼
 
 **날짜**: 2026-02-15
 
@@ -11,10 +11,10 @@ GitHub push부터 USB 부팅까지의 전체 과정.
 ### GitHub 리포지토리 설정
 
 ```bash
-# 리포지토리: luke-n-alpha/NaN-OS
+# 리포지토리: luke-n-alpha/Naia-OS
 # 이미 설정됨
 git remote -v
-# origin  git@github.com:luke-n-alpha/NaN-OS.git
+# origin  git@github.com:luke-n-alpha/Naia-OS.git
 ```
 
 ### Cosign 서명 키 생성 (최초 1회)
@@ -34,7 +34,7 @@ cosign generate-key-pair
 
 ### GitHub Secrets 설정
 
-1. GitHub → `luke-n-alpha/NaN-OS` → Settings → Secrets and variables → Actions
+1. GitHub → `luke-n-alpha/Naia-OS` → Settings → Secrets and variables → Actions
 2. **New repository secret** 클릭
 3. Name: `SIGNING_SECRET`
 4. Value: `cosign.key` 파일의 전체 내용 붙여넣기
@@ -62,16 +62,16 @@ git push origin main
 
 ### 빌드 확인
 
-1. GitHub → Actions 탭 → "Build NaN OS" 워크플로우
+1. GitHub → Actions 탭 → "Build Naia OS" 워크플로우
 2. 초록색 체크 = 성공 (약 15-30분 소요)
-3. 성공 시 이미지 위치: `ghcr.io/luke-n-alpha/NaN-OS:latest`
+3. 성공 시 이미지 위치: `ghcr.io/luke-n-alpha/Naia-OS:latest`
 
 ### 이미지 확인 (로컬)
 
 ```bash
 # 이미지가 ghcr.io에 올라갔는지 확인
-podman pull ghcr.io/luke-n-alpha/NaN-OS:latest
-podman inspect ghcr.io/luke-n-alpha/NaN-OS:latest | grep -i nan
+podman pull ghcr.io/luke-n-alpha/Naia-OS:latest
+podman inspect ghcr.io/luke-n-alpha/Naia-OS:latest | grep -i naia
 ```
 
 ---
@@ -90,7 +90,7 @@ podman inspect ghcr.io/luke-n-alpha/NaN-OS:latest | grep -i nan
 
 **방법 A: Artifacts에서 다운로드**
 1. 완료된 워크플로우 실행 클릭
-2. 하단 Artifacts 섹션에서 `NaN-OS-latest` 다운로드
+2. 하단 Artifacts 섹션에서 `Naia-OS-latest` 다운로드
 
 **방법 B: Releases에서 다운로드**
 1. GitHub → Releases 탭
@@ -99,7 +99,7 @@ podman inspect ghcr.io/luke-n-alpha/NaN-OS:latest | grep -i nan
 **방법 C: gh CLI로 다운로드**
 ```bash
 # 최신 워크플로우 실행의 artifact 다운로드
-gh run download --repo luke-n-alpha/NaN-OS --name NaN-OS-latest --dir ~/Downloads/
+gh run download --repo luke-n-alpha/Naia-OS --name Naia-OS-latest --dir ~/Downloads/
 ```
 
 ---
@@ -121,7 +121,7 @@ lsblk
 # ⚠️ 반드시 올바른 디바이스인지 확인!
 # 잘못된 디바이스에 쓰면 데이터가 모두 삭제됨
 
-sudo dd if=~/Downloads/NaN-OS-latest.iso of=/dev/sdX bs=4M status=progress oflag=sync
+sudo dd if=~/Downloads/Naia-OS-latest.iso of=/dev/sdX bs=4M status=progress oflag=sync
 # sdX를 실제 USB 디바이스로 변경
 ```
 
@@ -144,7 +144,7 @@ flatpak install flathub org.fedoraproject.MediaWriter
 
 ```bash
 # Ventoy가 이미 설치된 USB라면 ISO를 그냥 복사
-cp ~/Downloads/NaN-OS-latest.iso /run/media/$USER/Ventoy/
+cp ~/Downloads/Naia-OS-latest.iso /run/media/$USER/Ventoy/
 ```
 
 ---
@@ -163,7 +163,7 @@ cp ~/Downloads/NaN-OS-latest.iso /run/media/$USER/Ventoy/
 
 1. 노트북 전원 켜면서 부팅 메뉴 키 연타
 2. USB 선택
-3. NaN OS 설치 화면 진입
+3. Naia OS 설치 화면 진입
 
 ### Secure Boot
 
@@ -177,12 +177,12 @@ Bazzite 기반이므로 Secure Boot는 보통 지원됨.
 ```bash
 # OS 이름 확인
 cat /etc/os-release
-# NAME="NaN OS"
-# PRETTY_NAME="NaN OS (Bazzite)"
+# NAME="Naia OS"
+# PRETTY_NAME="Naia OS (Bazzite)"
 
 # 스모크 테스트 (리포를 클론해서 실행)
-git clone https://github.com/luke-n-alpha/NaN-OS.git
-bash NaN-OS/os/tests/smoke.sh
+git clone https://github.com/luke-n-alpha/Naia-OS.git
+bash Naia-OS/os/tests/smoke.sh
 
 # 또는 개별 확인
 node --version      # v22+
@@ -206,7 +206,7 @@ which gcc           # /usr/bin/gcc
 ### ISO 생성 실패: 이미지를 pull할 수 없음
 
 → ghcr.io 이미지가 public인지 확인:
-  GitHub → Packages → NaN-OS → Package settings → Visibility: Public
+  GitHub → Packages → Naia-OS → Package settings → Visibility: Public
 
 ### USB 부팅 안 됨
 

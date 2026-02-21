@@ -1,9 +1,0 @@
-[Desktop Entry]
-Name=NaN OS
-Comment=Personal AI avatar shell
-Exec=nan-os %u
-Icon=io.nextain.nan
-Type=Application
-Categories=Utility;
-StartupWMClass=nan-os
-MimeType=x-scheme-handler/nanos;

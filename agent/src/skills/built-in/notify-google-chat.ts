@@ -5,7 +5,7 @@ export function createNotifyGoogleChatSkill(): SkillDefinition {
         return {
                 name: "skill_notify_google_chat",
                 description:
-                        "Send a notification message to Google Chat via webhook. Requires GOOGLE_CHAT_WEBHOOK_URL env var or ~/.nan/config.json setup.",
+                        "Send a notification message to Google Chat via webhook. Requires GOOGLE_CHAT_WEBHOOK_URL env var or ~/.naia/config.json setup.",
                 parameters: {
                         type: "object",
                         properties: {
@@ -57,7 +57,7 @@ export function createNotifyGoogleChatSkill(): SkillDefinition {
                                         success: false,
                                         output: "",
                                         error:
-                                                "Google Chat webhook URL not configured. Set GOOGLE_CHAT_WEBHOOK_URL env var or add notifications.google_chat.webhookUrl to ~/.nan/config.json",
+                                                "Google Chat webhook URL not configured. Set GOOGLE_CHAT_WEBHOOK_URL env var or add notifications.google_chat.webhookUrl to ~/.naia/config.json",
                                 };
                         }
 

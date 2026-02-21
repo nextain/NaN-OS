@@ -116,7 +116,7 @@ export type AgentResponseChunk =
 	| { type: "finish"; requestId: string }
 	| { type: "error"; requestId: string; message: string };
 
-// === Skill Manifest (from ~/.nan/skills/{name}/skill.json) ===
+// === Skill Manifest (from ~/.naia/skills/{name}/skill.json) ===
 
 export interface SkillManifestInfo {
 	name: string;

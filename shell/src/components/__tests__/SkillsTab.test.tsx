@@ -19,8 +19,8 @@ const BUILT_IN_SKILLS: SkillManifestInfo[] = [
 ];
 
 const CUSTOM_SKILLS: SkillManifestInfo[] = [
-	{ name: "skill_code_review", description: "Review code changes", type: "gateway", tier: 2, source: "/home/.nan/skills/code-review/skill.json", gatewaySkill: "code-review" },
-	{ name: "skill_deploy", description: "Deploy to production", type: "command", tier: 2, source: "/home/.nan/skills/deploy/skill.json" },
+	{ name: "skill_code_review", description: "Review code changes", type: "gateway", tier: 2, source: "/home/.naia/skills/code-review/skill.json", gatewaySkill: "code-review" },
+	{ name: "skill_deploy", description: "Deploy to production", type: "command", tier: 2, source: "/home/.naia/skills/deploy/skill.json" },
 ];
 
 const ALL_SKILLS = [...BUILT_IN_SKILLS, ...CUSTOM_SKILLS];
@@ -107,7 +107,7 @@ describe("SkillsTab", () => {
 	});
 
 	it("applies disabled class to disabled skills", async () => {
-		localStorage.setItem("nan-config", JSON.stringify({
+		localStorage.setItem("naia-config", JSON.stringify({
 			provider: "gemini",
 			model: "gemini-2.5-flash",
 			apiKey: "test",

@@ -7,16 +7,16 @@ import * as path from "node:path";
  * 99 — Screenshot Capture for Manual
  *
  * Navigates through all app screens and captures screenshots
- * for the user manual on nan.nextain.io.
+ * for the user manual on naia.nextain.io.
  *
  * Run: pnpm run test:e2e:tauri --spec e2e-tauri/specs/99-screenshots.spec.ts
  *
- * Screenshots are saved to: project-nan.nextain.io/public/manual/ko/
+ * Screenshots are saved to: project-naia.nextain.io/public/manual/ko/
  */
 
 const MANUAL_DIR = path.resolve(
 	import.meta.dirname,
-	"../../../../project-nan.nextain.io/public/manual/ko",
+	"../../../../project-naia.nextain.io/public/manual/ko",
 );
 
 async function screenshot(name: string): Promise<void> {
@@ -78,9 +78,9 @@ describe("99 — manual screenshots", () => {
 				onboardingComplete: true,
 				locale: "ko",
 				gatewayUrl: "ws://localhost:18789",
-				gatewayToken: "nan-dev-token",
+				gatewayToken: "naia-dev-token",
 			};
-			localStorage.setItem("nan-config", JSON.stringify(config));
+			localStorage.setItem("naia-config", JSON.stringify(config));
 		}, API_KEY);
 		await safeRefresh();
 

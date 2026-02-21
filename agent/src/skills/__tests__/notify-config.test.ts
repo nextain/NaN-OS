@@ -51,7 +51,7 @@ describe("getNotifyWebhookUrl", () => {
 		const url = await getNotifyWebhookUrl("slack");
 		expect(url).toBe("https://hooks.slack.com/from-config");
 		expect(mockReadFile).toHaveBeenCalledWith(
-			"/home/test/.nan/config.json",
+			"/home/test/.naia/config.json",
 			"utf-8",
 		);
 	});

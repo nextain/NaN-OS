@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>io.nextain.naia</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>LicenseRef-proprietary</project_license>
+  <name>Naia OS</name>
+  <summary>Personal AI avatar shell</summary>
+  <description>
+    <p>
+      Naia OS is a desktop AI companion application.
+      It features a 3D VRM avatar powered by Three.js and integrates
+      with multiple LLM providers for natural conversation.
+    </p>
+  </description>
+  <developer id="io.nextain">
+    <name>Nextain</name>
+  </developer>
+  <url type="homepage">https://naia.nextain.io</url>
+  <launchable type="desktop-id">io.nextain.naia.desktop</launchable>
+  <releases>
+    <release version="0.1.0" date="2026-02-21">
+      <description>
+        <p>Initial Flatpak release.</p>
+      </description>
+    </release>
+  </releases>
+  <content_rating type="oars-1.1" />
+</component>

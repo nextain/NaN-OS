@@ -22,7 +22,7 @@ const MOCK_SKILLS: SkillManifestInfo[] = [
 		description: "Review code changes",
 		type: "gateway",
 		tier: 2,
-		source: "/home/user/.nan/skills/code-review/skill.json",
+		source: "/home/user/.naia/skills/code-review/skill.json",
 		gatewaySkill: "code-review",
 	},
 ];

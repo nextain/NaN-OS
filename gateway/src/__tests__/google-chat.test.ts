@@ -105,12 +105,12 @@ describe("GoogleChatAdapter", () => {
 
 		const response: ChannelResponse = {
 			channelId: "spaces/abc",
-			text: "Hello! I'm Nan.",
+			text: "Hello! I'm Naia.",
 			replyToId: "spaces/abc/messages/msg-1",
 		};
 
 		const formatted = adapter.formatResponse(response);
-		expect(formatted.text).toBe("Hello! I'm Nan.");
+		expect(formatted.text).toBe("Hello! I'm Naia.");
 		expect(formatted.thread?.name).toBe("spaces/abc/messages/msg-1");
 	});
 });

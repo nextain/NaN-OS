@@ -1,8 +1,8 @@
-# NaN OS Phase 3: OpenClaw 통합
+# Naia OS Phase 3: OpenClaw 통합
 
 - **시작일**: 2026-02-17
 - **상태**: ✅ 완료
-- **프로젝트**: NaN-OS
+- **프로젝트**: Naia-OS
 - **담당**: luke + Claude
 
 ---
@@ -26,26 +26,26 @@
 
 **테스트**: Agent 108/108, Shell 124/124, Rust 29/29 (**261 total, 전부 통과**)
 
-**Phase 3 완료** — done_when: "Nan executes real OS tasks with permission system" ✅
+**Phase 3 완료** — done_when: "Naia executes real OS tasks with permission system" ✅
 
 ---
 
 ## 목표
 
-OpenClaw(MoltBot) Gateway를 NaN OS 백엔드로 통합하여,
-Nan VRM 아바타를 통해 일반 유저가 OpenClaw의 50+ 스킬, 20+ 채널, 도구 실행 시스템을 쉽게 사용할 수 있게 한다.
+OpenClaw(MoltBot) Gateway를 Naia OS 백엔드로 통합하여,
+Naia VRM 아바타를 통해 일반 유저가 OpenClaw의 50+ 스킬, 20+ 채널, 도구 실행 시스템을 쉽게 사용할 수 있게 한다.
 
 ## 배경
 
 - OpenClaw = 맥미니 기반 파워유저 CLI AI 게이트웨이
-- NaN OS = 같은 기능을 Bazzite + VRM UI로 일반 유저에게 제공
-- Phase 2 완료 (대화, TTS/STT, 감정, 페르소나) → Phase 3은 "Nan가 실제로 일한다"
+- Naia OS = 같은 기능을 Bazzite + VRM UI로 일반 유저에게 제공
+- Phase 2 완료 (대화, TTS/STT, 감정, 페르소나) → Phase 3은 "Naia가 실제로 일한다"
 - Phase 2 커밋: `e0ee49a`, `06e9747` (Agent 36, Shell 63 = 99 tests)
 
 ## 아키텍처
 
 ```
-Nan Shell (Tauri 2) → stdio → Agent (Node.js, LLM+TTS)
+Naia Shell (Tauri 2) → stdio → Agent (Node.js, LLM+TTS)
                                   ↓ WebSocket
                           OpenClaw Gateway (데몬, 도구/스킬/채널)
 ```
@@ -57,8 +57,8 @@ Nan Shell (Tauri 2) → stdio → Agent (Node.js, LLM+TTS)
 ### 단계 1: OpenClaw 인프라 설정 ✅
 
 - [x] OpenClaw 설치 가능성 확인 (Node.js 22.21.1, v2026.2.14 빌드)
-- [x] systemd 유저 서비스 (`config/files/usr/lib/systemd/user/nan-gateway.service`)
-- [x] Gateway wrapper 스크립트 (`config/files/usr/bin/nan-gateway-wrapper`)
+- [x] systemd 유저 서비스 (`config/files/usr/lib/systemd/user/naia-gateway.service`)
+- [x] Gateway wrapper 스크립트 (`config/files/usr/bin/naia-gateway-wrapper`)
 - [x] 설치 스크립트 (`config/scripts/setup-openclaw.sh`)
 - [x] Tauri `gateway_health` 명령 (`shell/src-tauri/src/lib.rs`)
 
@@ -140,7 +140,7 @@ UI 연결 완료 후 순차적으로 해결. 잊지 말 것.
 |---|---|---|
 | Bazzite (OS) | immutable rootfs, SELinux | 시스템 파일 보호 |
 | OpenClaw Gateway | allowlist + exec approval | `security: "allowlist"`, `ask: "on-miss"` |
-| Nan Shell | 승인 모달 + 도구 on/off | 사용자가 직접 제어 |
+| Naia Shell | 승인 모달 + 도구 on/off | 사용자가 직접 제어 |
 | Agent | Tier 3 차단 + shell escape | `rm -rf`, `sudo`, `chmod 777`, `curl\|bash`, null byte |
 
 **수정 이력**: `3464586` — command injection 방지 (`shellEscape()` single-quote, `validatePath()` null byte)

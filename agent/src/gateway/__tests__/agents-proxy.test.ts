@@ -15,7 +15,7 @@ import { createMockGateway, type MockGateway } from "./mock-gateway.js";
 const MOCK_AGENTS: AgentInfo[] = [
 	{
 		id: "alpha",
-		name: "Nan",
+		name: "Naia",
 		description: "Default AI assistant",
 		model: "gemini-2.0-flash",
 		createdAt: 1700000000000,
@@ -82,7 +82,7 @@ describe("agents-proxy", () => {
 					case "agents.files.get":
 						respond.ok({
 							path: params.path,
-							content: "# System Prompt\nYou are Nan.",
+							content: "# System Prompt\nYou are Naia.",
 						});
 						break;
 					case "agents.files.set":
@@ -123,7 +123,7 @@ describe("agents-proxy", () => {
 
 			expect(result.agents).toHaveLength(2);
 			expect(result.agents[0].id).toBe("alpha");
-			expect(result.agents[0].name).toBe("Nan");
+			expect(result.agents[0].name).toBe("Naia");
 			expect(result.agents[1].id).toBe("researcher");
 		});
 	});
@@ -143,7 +143,7 @@ describe("agents-proxy", () => {
 	describe("updateAgent", () => {
 		it("updates an agent", async () => {
 			const result = await updateAgent(client, "alpha", {
-				name: "Nan v2",
+				name: "Naia v2",
 			});
 
 			expect(result.updated).toBe(true);
@@ -187,7 +187,7 @@ describe("agents-proxy", () => {
 			);
 
 			expect(result.path).toBe("system-prompt.md");
-			expect(result.content).toContain("Nan");
+			expect(result.content).toContain("Naia");
 		});
 	});
 

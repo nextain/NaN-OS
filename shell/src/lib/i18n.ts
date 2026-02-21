@@ -54,8 +54,8 @@ const translations = {
 	},
 	"settings.personaSection": { ko: "페르소나", en: "Persona" },
 	"settings.persona": {
-		ko: "Nan 성격 설정",
-		en: "Nan Personality",
+		ko: "Naia 성격 설정",
+		en: "Naia Personality",
 	},
 	"settings.personaHint": {
 		ko: "이름, 성격, 말투, 행동 등을 자유롭게 설정하세요. 감정 태그는 자동 추가됩니다.",
@@ -536,7 +536,7 @@ let currentLocale: Locale = detectLocale();
 function detectLocale(): Locale {
 	// Check saved config first
 	try {
-		const raw = localStorage.getItem("nan-config");
+		const raw = localStorage.getItem("naia-config");
 		if (raw) {
 			const config = JSON.parse(raw);
 			if (config.locale === "ko" || config.locale === "en") {

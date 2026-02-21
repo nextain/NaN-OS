@@ -12,13 +12,13 @@ import * as path from "node:path";
  *   cd shell && pnpm test:e2e -- screenshots.spec.ts
  *
  * Screenshots saved to:
- *   project-nan.nextain.io/public/manual/ko/
- *   project-nan.nextain.io/public/manual/en/
+ *   project-naia.nextain.io/public/manual/ko/
+ *   project-naia.nextain.io/public/manual/en/
  */
 
 const MANUAL_BASE = path.resolve(
 	import.meta.dirname,
-	"../../../project-nan.nextain.io/public/manual",
+	"../../../project-naia.nextain.io/public/manual",
 );
 const CAPTURE_VIEWPORT = { width: 400, height: 768 };
 
@@ -310,7 +310,7 @@ function makeConfig(locale: string) {
 		provider: "gemini",
 		model: "gemini-2.5-flash",
 		apiKey: MOCK_API_KEY,
-		agentName: "Nan",
+		agentName: "Naia",
 		userName: locale === "ko" ? "사용자" : "User",
 		vrmModel: "/avatars/Sendagaya-Shino-dark-uniform.vrm",
 		persona: "Friendly AI companion",
@@ -339,7 +339,7 @@ async function ensureIconsLoaded(page: Page) {
 async function captureOnboarding(page: Page, dir: string, locale: string) {
 	await page.addInitScript(getTauriMock(locale));
 	await page.addInitScript((loc: string) => {
-		localStorage.setItem("nan-config", JSON.stringify({ locale: loc }));
+		localStorage.setItem("naia-config", JSON.stringify({ locale: loc }));
 	}, locale);
 
 	await page.goto("/");
@@ -373,7 +373,7 @@ async function captureOnboarding(page: Page, dir: string, locale: string) {
 	// Step 3: Agent Name
 	const agentInput = page.locator(".onboarding-input");
 	await expect(agentInput).toBeVisible({ timeout: 5_000 });
-	await agentInput.fill("Nan");
+	await agentInput.fill("Naia");
 	await page.waitForTimeout(200);
 	await capture(page, dir, "onboarding-agent-name");
 	await page.locator(".onboarding-next-btn").click();
@@ -423,7 +423,7 @@ async function captureOnboarding(page: Page, dir: string, locale: string) {
 async function captureMainApp(page: Page, dir: string, locale: string) {
 	await page.addInitScript(getTauriMock(locale));
 	await page.addInitScript((configJson: string) => {
-		localStorage.setItem("nan-config", configJson);
+		localStorage.setItem("naia-config", configJson);
 	}, JSON.stringify(makeConfig(locale)));
 
 	await page.goto("/");

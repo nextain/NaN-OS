@@ -7,7 +7,7 @@ vi.mock("discord.js", async () => {
 	const { EventEmitter } = await import("node:events");
 
 	class MockClient extends EventEmitter {
-		user = { id: "bot-123", tag: "Nan#0001" };
+		user = { id: "bot-123", tag: "Naia#0001" };
 		login = vi.fn().mockResolvedValue("token");
 		destroy = vi.fn().mockResolvedValue(undefined);
 		isReady = vi.fn().mockReturnValue(true);

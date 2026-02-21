@@ -27,7 +27,7 @@ const GATEWAY_URL = "ws://localhost:18789";
 const LIVE_E2E = process.env.CAFE_LIVE_GATEWAY_E2E === "1";
 
 function loadGatewayToken(): string | null {
-	const configPath = join(homedir(), ".nan", "openclaw", "openclaw.json");
+	const configPath = join(homedir(), ".naia", "openclaw", "openclaw.json");
 	try {
 		const config = JSON.parse(readFileSync(configPath, "utf-8"));
 		return config.gateway?.auth?.token || null;

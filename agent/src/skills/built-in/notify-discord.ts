@@ -5,7 +5,7 @@ export function createNotifyDiscordSkill(): SkillDefinition {
 	return {
 		name: "skill_notify_discord",
 		description:
-			"Send a notification message to Discord via webhook. Requires DISCORD_WEBHOOK_URL env var or ~/.nan/config.json setup.",
+			"Send a notification message to Discord via webhook. Requires DISCORD_WEBHOOK_URL env var or ~/.naia/config.json setup.",
 		parameters: {
 			type: "object",
 			properties: {
@@ -61,7 +61,7 @@ export function createNotifyDiscordSkill(): SkillDefinition {
 					success: false,
 					output: "",
 					error:
-						"Discord webhook URL not configured. Set DISCORD_WEBHOOK_URL env var or add notifications.discord.webhookUrl to ~/.nan/config.json",
+						"Discord webhook URL not configured. Set DISCORD_WEBHOOK_URL env var or add notifications.discord.webhookUrl to ~/.naia/config.json",
 				};
 			}
 

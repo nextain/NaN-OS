@@ -605,8 +605,8 @@ export function SettingsTab() {
 				});
 			}
 		}
-		localStorage.removeItem("nan-config");
-		localStorage.removeItem("nan-camera");
+		localStorage.removeItem("naia-config");
+		localStorage.removeItem("naia-camera");
 		invoke("reset_window_state").catch(() => {});
 		setLocale("ko");
 		document.documentElement.setAttribute("data-theme", "espresso");
@@ -872,7 +872,7 @@ export function SettingsTab() {
 								type="button"
 								className="voice-preview-btn"
 								onClick={() =>
-									openUrl("https://nan.nextain.io/ko/dashboard").catch(() => {})
+									openUrl("https://naia.nextain.io/ko/dashboard").catch(() => {})
 								}
 							>
 								{t("settings.labDashboard")}
@@ -881,7 +881,7 @@ export function SettingsTab() {
 								type="button"
 								className="voice-preview-btn"
 								onClick={() =>
-									openUrl("https://nan.nextain.io/ko/billing").catch(() => {})
+									openUrl("https://naia.nextain.io/ko/billing").catch(() => {})
 								}
 							>
 								{t("cost.labCharge")}
@@ -938,7 +938,7 @@ export function SettingsTab() {
 						onClick={() => {
 							setLabWaiting(true);
 							openUrl(
-								"https://nan.nextain.io/ko/login?redirect=desktop",
+								"https://naia.nextain.io/ko/login?redirect=desktop",
 							).catch(() => setLabWaiting(false));
 							// Reset after 60s if deep-link callback never arrives
 							setTimeout(() => setLabWaiting(false), 60_000);
@@ -954,7 +954,7 @@ export function SettingsTab() {
 					type="button"
 					className="voice-preview-btn"
 					onClick={() =>
-						openUrl("https://nan.nextain.io/ko/manual").catch(() => {})
+						openUrl("https://naia.nextain.io/ko/manual").catch(() => {})
 					}
 				>
 					{t("settings.manual")}

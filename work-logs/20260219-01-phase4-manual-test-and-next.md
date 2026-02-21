@@ -1,8 +1,8 @@
-# NaN OS Phase 4: 수동 테스트 + 다음 단계
+# Naia OS Phase 4: 수동 테스트 + 다음 단계
 
 - **시작일**: 2026-02-19
 - **상태**: 🟡 진행 중
-- **프로젝트**: NaN-OS
+- **프로젝트**: Naia-OS
 - **담당**: luke + Claude
 
 ---
@@ -18,15 +18,15 @@
 
 ```bash
 # 1. 회귀 테스트
-cd NaN-OS/agent && pnpm test
-cd NaN-OS/shell && pnpm test
-cargo test --manifest-path NaN-OS/shell/src-tauri/Cargo.toml
+cd Naia-OS/agent && pnpm test
+cd Naia-OS/shell && pnpm test
+cargo test --manifest-path Naia-OS/shell/src-tauri/Cargo.toml
 
 # 2. E2E 테스트 (Playwright — Vite 자동 시작)
-cd NaN-OS/shell && pnpm run test:e2e
+cd Naia-OS/shell && pnpm run test:e2e
 
 # 3. 앱 실행 (수동 테스트)
-cd NaN-OS/shell && pnpm run tauri dev
+cd Naia-OS/shell && pnpm run tauri dev
 ```
 
 ## 수동 테스트 체크리스트

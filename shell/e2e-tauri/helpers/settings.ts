@@ -21,7 +21,7 @@ export async function safeRefresh(maxAttempts = 3): Promise<void> {
  */
 export async function enableToolsForSpec(tools: string[]): Promise<void> {
 	const needsRefresh = await browser.execute((toolNames: string[]) => {
-		const raw = localStorage.getItem("nan-config");
+		const raw = localStorage.getItem("naia-config");
 		const config = raw ? JSON.parse(raw) : {};
 		let changed = false;
 
@@ -49,7 +49,7 @@ export async function enableToolsForSpec(tools: string[]): Promise<void> {
 			}
 		}
 		config.allowedTools = allowed;
-		localStorage.setItem("nan-config", JSON.stringify(config));
+		localStorage.setItem("naia-config", JSON.stringify(config));
 
 		return changed;
 	}, tools);
@@ -211,7 +211,7 @@ const API_KEY = process.env.CAFE_E2E_API_KEY || process.env.GEMINI_API_KEY || ""
  */
 export async function ensureAppReady(): Promise<void> {
 	const alreadyConfigured = await browser.execute(() => {
-		const raw = localStorage.getItem("nan-config");
+		const raw = localStorage.getItem("naia-config");
 		if (!raw) return false;
 		const config = JSON.parse(raw);
 		return !!config.onboardingComplete && !!config.apiKey;
@@ -219,13 +219,13 @@ export async function ensureAppReady(): Promise<void> {
 
 	if (!alreadyConfigured) {
 		await browser.execute((key: string) => {
-			const existing = localStorage.getItem("nan-config");
+			const existing = localStorage.getItem("naia-config");
 			const config = existing ? JSON.parse(existing) : {};
 			Object.assign(config, {
 				provider: config.provider || "gemini",
 				model: config.model || "gemini-2.5-flash",
 				apiKey: config.apiKey || key,
-				agentName: config.agentName || "Nan",
+				agentName: config.agentName || "Naia",
 				userName: config.userName || "Tester",
 				vrmModel: config.vrmModel || "/avatars/Sendagaya-Shino-dark-uniform.vrm",
 				persona: config.persona || "Friendly AI companion",
@@ -233,7 +233,7 @@ export async function ensureAppReady(): Promise<void> {
 				locale: config.locale || "ko",
 				onboardingComplete: true,
 			});
-			localStorage.setItem("nan-config", JSON.stringify(config));
+			localStorage.setItem("naia-config", JSON.stringify(config));
 		}, API_KEY);
 		// Retry refresh — WebKitGTK may throw UND_ERR_HEADERS_TIMEOUT intermittently
 		for (let attempt = 0; attempt < 3; attempt++) {

@@ -6,7 +6,7 @@ import { toOpenAIMessages, toOpenAITools } from "./openai-compat.js";
 import type { AgentStream, LLMProvider, StreamChunk } from "./types.js";
 
 export const GATEWAY_URL =
-	"https://nan-gateway-789741003661.asia-northeast3.run.app";
+	"https://naia-gateway-789741003661.asia-northeast3.run.app";
 
 /** Map local model names to gateway format (provider:model) */
 function toGatewayModel(model: string): string {

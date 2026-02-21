@@ -1,7 +1,7 @@
 /**
  * Minimal structured logger for Phase 1.
  * Replaces forbidden console.log/warn/error.
- * TODO: Replace with @nan/shared/logger in Phase 2.
+ * TODO: Replace with @naia/shared/logger in Phase 2.
  */
 
 type LogLevel = "debug" | "info" | "warn" | "error";

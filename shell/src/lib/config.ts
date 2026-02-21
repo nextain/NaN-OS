@@ -6,7 +6,7 @@ import {
 	saveSecretKey,
 } from "./secure-store";
 
-const STORAGE_KEY = "nan-config";
+const STORAGE_KEY = "naia-config";
 export const DEFAULT_GATEWAY_URL = "ws://localhost:18789";
 
 export type ThemeId =
@@ -245,4 +245,4 @@ export function getUserName(): string | undefined {
 
 /** any-llm Gateway URL (shared with agent/src/providers/lab-proxy.ts) */
 export const LAB_GATEWAY_URL =
-	"https://nan-gateway-789741003661.asia-northeast3.run.app";
+	"https://naia-gateway-789741003661.asia-northeast3.run.app";

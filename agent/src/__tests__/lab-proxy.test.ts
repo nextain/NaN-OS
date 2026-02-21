@@ -38,7 +38,7 @@ describe("Lab Proxy Provider", () => {
 
 		const gen = provider.stream(
 			[{ role: "user", content: "Hello" }],
-			"You are Nan.",
+			"You are Naia.",
 		);
 
 		const chunks = [];
@@ -57,7 +57,7 @@ describe("Lab Proxy Provider", () => {
 		expect(body.stream).toBe(true);
 		expect(body.messages[0]).toEqual({
 			role: "system",
-			content: "You are Nan.",
+			content: "You are Naia.",
 		});
 		expect(body.messages[1]).toEqual({ role: "user", content: "Hello" });
 	});
@@ -366,7 +366,7 @@ describe("buildProvider with labKey", () => {
 		// Verify it called the gateway URL with lab key auth
 		expect(mockFetch).toHaveBeenCalledOnce();
 		const [url, options] = mockFetch.mock.calls[0];
-		expect(url).toContain("nan-gateway");
+		expect(url).toContain("naia-gateway");
 		expect(url).toContain("/v1/chat/completions");
 		expect(options.headers["X-AnyLLM-Key"]).toBe("Bearer lab-key-123");
 	});

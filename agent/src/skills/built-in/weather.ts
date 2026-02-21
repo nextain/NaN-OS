@@ -31,7 +31,7 @@ export function createWeatherSkill(): SkillDefinition {
 			try {
 				const url = `https://wttr.in/${encodeURIComponent(location.trim())}?format=j1`;
 				const res = await fetch(url, {
-					headers: { "User-Agent": "NaN-OS/1.0" },
+					headers: { "User-Agent": "Naia-OS/1.0" },
 					signal: AbortSignal.timeout(10_000),
 				});
 

@@ -4,7 +4,7 @@ import { buildSystemPrompt, DEFAULT_PERSONA } from "../persona";
 describe("buildSystemPrompt", () => {
 	it("uses DEFAULT_PERSONA when no persona provided", () => {
 		const result = buildSystemPrompt();
-		expect(result).toContain("Nan");
+		expect(result).toContain("Naia");
 		expect(result).toContain("Emotion tags:");
 	});
 
@@ -15,24 +15,24 @@ describe("buildSystemPrompt", () => {
 		expect(result).not.toContain(DEFAULT_PERSONA);
 	});
 
-	it("replaces Nan with agentName in default persona", () => {
+	it("replaces Naia with agentName in default persona", () => {
 		const result = buildSystemPrompt(undefined, { agentName: "Mochi" });
 		expect(result).toContain("You are Mochi");
-		expect(result).not.toContain("You are Nan");
+		expect(result).not.toContain("You are Naia");
 	});
 
-	it("replaces Nan with agentName in custom persona", () => {
+	it("replaces Naia with agentName in custom persona", () => {
 		const result = buildSystemPrompt(
-			"You are Nan (낸), my custom companion.",
+			"You are Naia (낸), my custom companion.",
 			{ agentName: "Mochi" },
 		);
 		expect(result).toContain("You are Mochi");
-		expect(result).not.toContain("You are Nan");
+		expect(result).not.toContain("You are Naia");
 	});
 
 	it("does not modify persona when agentName is not set", () => {
 		const result = buildSystemPrompt();
-		expect(result).toContain("You are Nan (낸)");
+		expect(result).toContain("You are Naia (낸)");
 	});
 
 	it("injects userName from context", () => {

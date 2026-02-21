@@ -1,5 +1,5 @@
-name: NaN-OS
-description: NaN OS - Personal AI OS with virtual avatar
+name: Naia-OS
+description: Naia OS - Personal AI OS with virtual avatar
 base-image: ghcr.io/ublue-os/bazzite
 image-version: latest
 
@@ -29,7 +29,7 @@ modules:
   - type: script
     scripts:
       - install-pnpm.sh
-      - install-nan-shell.sh
+      - install-naia-shell.sh
       - branding.sh
 
   - type: files

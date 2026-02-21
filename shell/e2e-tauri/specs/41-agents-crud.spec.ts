@@ -34,7 +34,7 @@ describe("41 — agents CRUD", () => {
 
 	it("should create a test agent via skill_agents create", async () => {
 		await sendMessage(
-			"새 에이전트를 만들어줘. skill_agents 도구의 create 액션으로, name은 'e2e-test-agent', workspace는 '~/.nan/workspace'로 설정해.",
+			"새 에이전트를 만들어줘. skill_agents 도구의 create 액션으로, name은 'e2e-test-agent', workspace는 '~/.naia/workspace'로 설정해.",
 		);
 
 		const text = await getLastAssistantMessage();

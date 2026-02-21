@@ -1,6 +1,6 @@
 {
 	"brand": {
-		"name": "NaN OS",
+		"name": "Naia OS",
 		"tagline": "Where Technology meets Emotion",
 		"description": "A sanctuary for postponed dreams"
 	},
@@ -27,7 +27,7 @@
 	"assets": {
 		"logo": "/brand/logo.png",
 		"logo_png": "/brand/logo.png",
-		"alpha_icon": "/brand/nan-icon.webp",
+		"alpha_icon": "/brand/naia-icon.webp",
 		"og_cover": "/brand/og-cover.webp"
 	}
 }

@@ -4,7 +4,7 @@ set -euo pipefail
 # Download Cafelua Shell AppImage from GitHub Releases and install it.
 # This runs during the BlueBuild container image build.
 
-REPO="nextain/NaN-OS"
+REPO="nextain/Naia-OS"
 INSTALL_DIR="/usr/bin"
 BINARY_NAME="cafelua-shell"
 

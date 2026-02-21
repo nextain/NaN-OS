@@ -1,4 +1,4 @@
-# NaN OS: 독립 AI 에이전트 OS 비전 리서치
+# Naia OS: 독립 AI 에이전트 OS 비전 리서치
 
 > **작성일**: 2026-02-15
 > **상태**: 🟡 리서치 완료, 방향 결정 필요
@@ -29,7 +29,7 @@
 | **스택** | TypeScript, Node.js 22+, Pi Agent Runtime |
 | **강점** | 멀티에이전트 라우팅, 세션 격리, 50+ Skills |
 | **특징** | 로컬 데몬 (self-hosted), Canvas(A2UI), 디바이스 노드 프로토콜 |
-| **NaN OS에 가져올 것** | **Gateway 아키텍처**, 채널 통합, Skills 시스템, 프라이버시 퍼스트 |
+| **Naia OS에 가져올 것** | **Gateway 아키텍처**, 채널 통합, Skills 시스템, 프라이버시 퍼스트 |
 
 ### 2. OpenCode — Provider-Agnostic AI 코딩 에이전트
 
@@ -39,7 +39,7 @@
 | **스택** | TypeScript, Bun 1.3+, Hono, SolidJS |
 | **강점** | LSP 네이티브, MCP 통합, 세션 포크/내보내기, 플러그인 |
 | **특징** | TUI + Web + Desktop(Tauri) 멀티 프론트엔드 |
-| **NaN OS에 가져올 것** | **Client/Server 분리**, Provider 추상화, LSP, Permission 시스템 |
+| **Naia OS에 가져올 것** | **Client/Server 분리**, Provider 추상화, LSP, Permission 시스템 |
 
 ### 3. Careti — VS Code AI 확장 (Cline 포크) + Desktop Mode
 
@@ -49,7 +49,7 @@
 | **스택** | TypeScript, Go (CLI), gRPC, Tauri 2 (Desktop) |
 | **강점** | SmartEditEngine, 다국어 i18n, AAIF 표준, Message Queue |
 | **특징** | Tauri Desktop 모드 이미 구현됨 (3-tier: webview-ui → Tauri → cline-core) |
-| **NaN OS에 가져올 것** | **페르소나 시스템**, SmartEditEngine, 문서 파서, 계정 시스템 |
+| **Naia OS에 가져올 것** | **페르소나 시스템**, SmartEditEngine, 문서 파서, 계정 시스템 |
 
 **Careti Desktop 아키텍처 (이미 구현됨):**
 ```
@@ -61,7 +61,7 @@ cline-core (Node.js 번들, 45MB) — 전체 AI 로직
   ↓ stdout (JSON response)
 ```
 
-**Desktop 장점 (NaN OS 관점):**
+**Desktop 장점 (Naia OS 관점):**
 - 266+ 모델 연결 + 31 프로바이더 — LLM 연결 인프라 그대로 재사용
 - 20+ 코딩 툴 (파일 편집, 브라우저, 터미널 실행, MCP) — 이미 검증된 도구 세트
 - 서브에이전트 구조 (Task tool) — 병렬 에이전트 실행 가능
@@ -78,7 +78,7 @@ cline-core (Node.js 번들, 45MB) — 전체 AI 로직
 | **스택** | Vue 3, Electron, Capacitor, Rust (Tauri 플러그인) |
 | **강점** | 모듈러 플러그인 SDK, Spark 오케스트레이션 프로토콜, MCP |
 | **특징** | Web + Desktop(Electron) + Mobile(Capacitor), DuckDB WASM |
-| **NaN OS에 가져올 것** | **아바타 렌더링(VRM/Live2D)**, 플러그인 프로토콜, 멀티에이전트 조율 |
+| **Naia OS에 가져올 것** | **아바타 렌더링(VRM/Live2D)**, 플러그인 프로토콜, 멀티에이전트 조율 |
 
 ### 5. jikime-adk — Agentic Development Kit
 
@@ -88,7 +88,7 @@ cline-core (Node.js 번들, 45MB) — 전체 AI 로직
 | **스택** | Go 1.24+, SQLite, ChromaDB |
 | **강점** | J.A.R.V.I.S./F.R.I.D.A.Y. 듀얼 오케스트레이션, 2-Layer 메모리 |
 | **특징** | Agent Teams (병렬 멀티에이전트), Ralph Loop (LSP 피드백) |
-| **NaN OS에 가져올 것** | **스킬 카탈로그 패턴**, 에이전트 팀 오케스트레이션, 메모리 아키텍처 |
+| **Naia OS에 가져올 것** | **스킬 카탈로그 패턴**, 에이전트 팀 오케스트레이션, 메모리 아키텍처 |
 
 ### 6. jikime-mem — 세션 메모리 시스템
 
@@ -98,22 +98,22 @@ cline-core (Node.js 번들, 45MB) — 전체 AI 로직
 | **스택** | TypeScript/Bun, Next.js 16, SQLite + ChromaDB |
 | **강점** | 하이브리드 검색 (0.7 벡터 + 0.3 BM25), 프로젝트별 DB 격리 |
 | **특징** | 웹 대시보드, MCP 서버, 훅 기반 자동 수집 |
-| **NaN OS에 가져올 것** | **하이브리드 메모리 검색**, 세션 영속성, 대시보드 UI 패턴 |
+| **Naia OS에 가져올 것** | **하이브리드 메모리 검색**, 세션 영속성, 대시보드 UI 패턴 |
 
 ---
 
-## NaN OS 합성 아키텍처 (초안)
+## Naia OS 합성 아키텍처 (초안)
 
 ### 계층 구조
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│                    NaN OS                            │
+│                    Naia OS                            │
 ├─────────────────────────────────────────────────────────┤
 │                                                         │
 │  [UI Layer]                                             │
-│   ├── Nextain Space (공간 메타포 UX)  ← nan.com    │
-│   ├── Nan Avatar (VRM/Live2D)       ← AIRI           │
+│   ├── Nextain Space (공간 메타포 UX)  ← naia.com    │
+│   ├── Naia Avatar (VRM/Live2D)       ← AIRI           │
 │   ├── TUI Mode (터미널)               ← OpenCode       │
 │   └── 채널 UI (Discord, Telegram...) ← MoltBot         │
 │                                                         │
@@ -153,14 +153,14 @@ Phase 0 (가장 빠른 데모):
   Bazzite ISO + MoltBot 데몬 = "AI가 항상 켜져있는 리눅스"
   → systemd로 MoltBot 자동 시작
   → WebChat으로 로컬 AI 대화
-  → Nan 페르소나 적용 (Careti에서 가져옴)
+  → Naia 페르소나 적용 (Careti에서 가져옴)
 ```
 
-### 본격 경로: NaN OS
+### 본격 경로: Naia OS
 
 ```
 Phase 1: AIRI 아바타 + MoltBot Gateway 통합
-  → Nan가 화면에 상주하면서 멀티채널 대응
+  → Naia가 화면에 상주하면서 멀티채널 대응
 
 Phase 2: OpenCode 코어 + jikime 메모리 합체
   → 코딩 에이전트 기능 + 세션 메모리 영속성
@@ -180,7 +180,7 @@ Phase 3: Nextain Space UX
 | `20260127-01-careti-standalone-architecture.md` | Tauri 독립앱 → **OS의 셸** |
 | `20260114-cline-opencode-caret-analysis.md` | 기술 비교 → **합성 근거** |
 | `20260109-opencode-vs-caret-analysis.md` | OpenCode 강점 → **Core Layer 반영** |
-| `nan.com/data/alpha/project소개.md` | Nan 비전 → **OS의 주인공** |
+| `naia.com/data/alpha/project소개.md` | Naia 비전 → **OS의 주인공** |
 
 ---
 
@@ -200,27 +200,27 @@ Phase 3: Nextain Space UX
 
 ```
 ❌ 맥북 대상 → ✅ Bazzite (배포형 Linux OS)
-❌ 텍스트 채팅 위주 → ✅ Virtual Avatar (Nan, VRM/Live2D)
+❌ 텍스트 채팅 위주 → ✅ Virtual Avatar (Naia, VRM/Live2D)
 ❌ 코딩 도구 느낌 → ✅ 독립 UI (OS 셸)
 ❌ 앱 설치 → ✅ ISO 배포 (설치하면 바로 AI OS)
 ```
 
 ### 왜 Bazzite인가?
 
-| 특성 | NaN OS에 유리한 이유 |
+| 특성 | Naia OS에 유리한 이유 |
 |------|------------------------|
 | **불변 OS** (rpm-ostree) | 사용자가 시스템을 망가뜨릴 수 없음, 원자적 업데이트/롤백 |
 | **GPU 드라이버 내장** | NVIDIA/AMD 자동 설정 → Avatar 렌더링에 필수 |
 | **게이밍 최적화** | 3D 아바타, WebGPU, 실시간 렌더링 성능 보장 |
 | **Fedora Atomic 기반** | 안정적, 최신 패키지, 컨테이너 네이티브 (Podman) |
-| **BlueBuild 커스텀** | 커스텀 이미지 빌드 파이프라인 존재 → NaN OS ISO 제작 가능 |
+| **BlueBuild 커스텀** | 커스텀 이미지 빌드 파이프라인 존재 → Naia OS ISO 제작 가능 |
 | **Steam Deck 호환** | 게이밍 디바이스까지 확장 가능 |
 
 ### 왜 Virtual Avatar인가?
 
 MoltBot이 맥에서 열광받은 이유 = **내 기기에서 돌아가는 강력한 개인 AI**
 하지만 텍스트만으로는 "OS" 느낌이 안 남. Avatar가 있어야:
-- Nan가 **화면에 살아있는** 존재감
+- Naia가 **화면에 살아있는** 존재감
 - 텍스트 채팅 → **음성 대화** 자연 확장
 - 감정 표현, 상태 표시 → **비언어적 소통**
 - "코딩 도구"가 아닌 **"AI 동료가 사는 OS"** 라는 정체성
@@ -229,15 +229,15 @@ MoltBot이 맥에서 열광받은 이유 = **내 기기에서 돌아가는 강�
 
 ## 구체적 구현 계획
 
-### Phase 0: PoC (2주) — "Bazzite에서 Nan가 인사하는 순간"
+### Phase 0: PoC (2주) — "Bazzite에서 Naia가 인사하는 순간"
 
-**목표**: Bazzite 부팅 → Nan 아바타가 화면에 나타나서 대화 가능
+**목표**: Bazzite 부팅 → Naia 아바타가 화면에 나타나서 대화 가능
 
 ```
 [Bazzite ISO]
   → 부팅
   → [Nextain Shell] 자동 시작 (Electron/Tauri)
-      ├── Nan Avatar (VRM, AIRI stage-ui 기반)
+      ├── Naia Avatar (VRM, AIRI stage-ui 기반)
       ├── 채팅 패널 (텍스트 + 음성)
       └── cline-core (백엔드, AI 로직)
   → "안녕, 루크! 오늘 뭐 할까?"
@@ -245,7 +245,7 @@ MoltBot이 맥에서 열광받은 이유 = **내 기기에서 돌아가는 강�
 
 **구체적 작업:**
 
-1. **BlueBuild로 NaN OS 이미지 정의**
+1. **BlueBuild로 Naia OS 이미지 정의**
    ```yaml
    # recipe.yml (BlueBuild)
    base-image: ghcr.io/ublue-os/bazzite
@@ -254,11 +254,11 @@ MoltBot이 맥에서 열광받은 이유 = **내 기기에서 돌아가는 강�
        install: [nodejs, chromium]  # cline-core 런타임
      - type: files
        files:
-         - source: nan-shell
-           destination: /usr/share/nan/
+         - source: naia-shell
+           destination: /usr/share/naia/
      - type: systemd
        system:
-         enabled: [nan-agent.service]
+         enabled: [naia-agent.service]
    ```
 
 2. **AIRI stage-ui에서 Avatar 추출**
@@ -275,10 +275,10 @@ MoltBot이 맥에서 열광받은 이유 = **내 기기에서 돌아가는 강�
 4. **Nextain Shell (독립 UI)**
    ```
    ┌──────────────────────────────────────┐
-   │  NaN OS                    ─ □ × │
+   │  Naia OS                    ─ □ × │
    │ ┌────────────┬───────────────────┐   │
    │ │            │                   │   │
-   │ │   Nan    │   대화 / 작업     │   │
+   │ │   Naia    │   대화 / 작업     │   │
    │ │  (VRM 3D)  │   패널            │   │
    │ │            │                   │   │
    │ │  감정표시   │   [터미널]        │   │
@@ -292,7 +292,7 @@ MoltBot이 맥에서 열광받은 이유 = **내 기기에서 돌아가는 강�
 ### Phase 1: MVP (4주) — "실제로 일을 시키는 OS"
 
 **추가 기능:**
-- **터미널 통합** — Nan가 시스템 명령 직접 실행 (Careti execute_command)
+- **터미널 통합** — Naia가 시스템 명령 직접 실행 (Careti execute_command)
 - **파일 관리** — AI가 파일 편집/생성 (SmartEditEngine)
 - **메모리** — 세션 간 기억 유지 (jikime-mem 패턴, SQLite)
 - **시스템 트레이** — 최소화해도 항상 상주
@@ -302,15 +302,15 @@ MoltBot이 맥에서 열광받은 이유 = **내 기기에서 돌아가는 강�
 
 **추가 기능:**
 - **MoltBot Gateway 통합** — Discord, Telegram 등 외부 채널 연결
-- **서브에이전트** — Nan가 전문 에이전트를 소환 (코딩, 검색, 분석)
+- **서브에이전트** — Naia가 전문 에이전트를 소환 (코딩, 검색, 분석)
 - **Skills 시스템** — 사용자가 스킬 추가 가능 (MoltBot 패턴)
 - **MCP 서버** — 외부 도구 연결 확장
 - **Nextain Space UX** — 공간 메타포 (라운지/아틀리에) 도입
 
 ### Phase 3: 배포 (12주) — "누구나 설치할 수 있는 AI OS"
 
-- **NaN OS ISO** 공개 배포 (BlueBuild CI/CD)
-- **온보딩 위자드** — 첫 부팅 시 Nan가 설정 안내
+- **Naia OS ISO** 공개 배포 (BlueBuild CI/CD)
+- **온보딩 위자드** — 첫 부팅 시 Naia가 설정 안내
 - **API 키 설정** — 사용자 본인 키 or Nextain 프록시
 - **커뮤니티** — 스킬/아바타 마켓플레이스
 
@@ -348,12 +348,12 @@ MoltBot이 맥에서 열광받은 이유 = **내 기기에서 돌아가는 강�
 
 | Careti 자산 | OS에서의 역할 |
 |------------|--------------|
-| 266+ 모델 연결 | Nan의 두뇌 선택지 (사용자가 모델 교체 가능) |
+| 266+ 모델 연결 | Naia의 두뇌 선택지 (사용자가 모델 교체 가능) |
 | 20+ 코딩 툴 | OS의 "시스템 도구" (파일 편집, 검색, 브라우저) |
-| 서브에이전트 (Task tool) | Nan가 전문가를 소환하는 능력 |
+| 서브에이전트 (Task tool) | Naia가 전문가를 소환하는 능력 |
 | 터미널 실행 | AI가 OS를 직접 제어 (패키지 설치, 서비스 관리 등) |
 | SmartEditEngine | 파일 편집 정확도 (코딩뿐 아니라 설정 파일도) |
-| 페르소나 시스템 | Nan의 성격/말투 커스터마이징 |
+| 페르소나 시스템 | Naia의 성격/말투 커스터마이징 |
 | Desktop stdio 프로토콜 | UI ↔ AI Core 분리 이미 검증됨 |
 
 **핵심 통찰**: 코딩 에이전트의 도구들은 "OS 제어 도구"로 자연스럽게 확장됨.
@@ -371,7 +371,7 @@ MoltBot이 맥에서 열광받은 이유 = **내 기기에서 돌아가는 강�
 | `20260127-01-careti-standalone-architecture.md` | Tauri 독립앱 → **OS의 셸** |
 | `20260114-cline-opencode-caret-analysis.md` | 기술 비교 → **합성 근거** |
 | `20260109-opencode-vs-caret-analysis.md` | OpenCode 강점 → **Core Layer 반영** |
-| `nan.com/data/alpha/project소개.md` | Nan 비전 → **OS의 주인공** |
+| `naia.com/data/alpha/project소개.md` | Naia 비전 → **OS의 주인공** |
 
 ---
 
@@ -394,4 +394,4 @@ MoltBot이 맥에서 열광받은 이유 = **내 기기에서 돌아가는 강�
 - `/home/luke/dev/ref-project-airi/` (Project AIRI)
 - `/home/luke/dev/ref-jikime-adk/` (jikime-adk)
 - `/home/luke/dev/ref-jikime-mem/` (jikime-mem)
-- `/home/luke/dev/nan.com/` (Nextain 개인 홈페이지)
+- `/home/luke/dev/naia.com/` (Nextain 개인 홈페이지)

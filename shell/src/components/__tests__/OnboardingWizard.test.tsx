@@ -31,7 +31,7 @@ describe("OnboardingWizard", () => {
 	afterEach(() => {
 		cleanup();
 		onComplete.mockReset();
-		localStorage.removeItem("nan-config");
+		localStorage.removeItem("naia-config");
 	});
 
 	it("renders provider step first", () => {
@@ -105,7 +105,7 @@ describe("OnboardingWizard", () => {
 
 		// Type a name → Next enabled
 		const agentInput = screen.getByPlaceholderText(/이름|name/i);
-		fireEvent.change(agentInput, { target: { value: "Nan" } });
+		fireEvent.change(agentInput, { target: { value: "Naia" } });
 		expect((nextBtn as HTMLButtonElement).disabled).toBe(false);
 	});
 
@@ -141,7 +141,7 @@ describe("OnboardingWizard", () => {
 		expect(onComplete).toHaveBeenCalled();
 
 		const config = JSON.parse(
-			localStorage.getItem("nan-config") || "{}",
+			localStorage.getItem("naia-config") || "{}",
 		);
 		expect(config.userName).toBe("Luke");
 		expect(config.agentName).toBe("Mochi");

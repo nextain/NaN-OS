@@ -25,7 +25,7 @@ function buildRegistry(): SkillRegistry {
 			description: "Review code changes",
 			tier: 2,
 			requiresGateway: true,
-			source: "/home/user/.nan/skills/code-review/skill.json",
+			source: "/home/user/.naia/skills/code-review/skill.json",
 		}),
 	);
 	registry.register(
@@ -34,7 +34,7 @@ function buildRegistry(): SkillRegistry {
 			description: "Search the web for information",
 			tier: 1,
 			requiresGateway: true,
-			source: "/home/user/.nan/skills/web-search/skill.json",
+			source: "/home/user/.naia/skills/web-search/skill.json",
 		}),
 	);
 	return registry;

@@ -32,14 +32,14 @@ describe("37 — execute command", () => {
 
 	it("should execute a shell command via execute_command tool", async () => {
 		await sendMessage(
-			"'echo nan-e2e-test'를 실행해줘. execute_command 도구를 사용해.",
+			"'echo naia-e2e-test'를 실행해줘. execute_command 도구를 사용해.",
 		);
 
 		const text = await getLastAssistantMessage();
 		await assertSemantic(
 			text,
-			"'echo nan-e2e-test'를 실행해줘 (execute_command)",
-			"AI가 execute_command으로 셸 명령을 실행했는가? '도구를 찾을 수 없다/사용할 수 없다'면 FAIL. 명령 실행 결과(nan-e2e-test 출력)를 보여주면 PASS",
+			"'echo naia-e2e-test'를 실행해줘 (execute_command)",
+			"AI가 execute_command으로 셸 명령을 실행했는가? '도구를 찾을 수 없다/사용할 수 없다'면 FAIL. 명령 실행 결과(naia-e2e-test 출력)를 보여주면 PASS",
 		);
 	});
 });

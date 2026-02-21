@@ -1,4 +1,4 @@
-# NaN OS E2E 테스트 인수인계 문서
+# Naia OS E2E 테스트 인수인계 문서
 
 > 작성일: 2026-02-20
 > 작성자: Claude (이전 세션)
@@ -8,14 +8,14 @@
 
 ## 1. 프로젝트 개요
 
-### NaN OS란?
-- **Bazzite 기반 배포형 AI 운영체제** — AI 아바타(Nan)가 상주하는 개인 데스크톱 OS
+### Naia OS란?
+- **Bazzite 기반 배포형 AI 운영체제** — AI 아바타(Naia)가 상주하는 개인 데스크톱 OS
 - **기술 스택**: Tauri 2 (Rust) + React (TypeScript) + Three.js (VRM 3D 아바타) + WebKitGTK
 - **아키텍처**: Shell(UI) + Agent(LLM 연결) + Gateway(항시 실행 데몬, 스킬/메모리/채널)
 
 ### 프로젝트 구조
 ```
-NaN-OS/
+Naia-OS/
 ├── shell/          # Tauri 2 Shell (React UI, E2E 테스트 여기)
 │   ├── src/        # React 앱 소스
 │   ├── src-tauri/  # Rust Tauri 코어
@@ -30,9 +30,9 @@ NaN-OS/
 ```
 
 ### 필수 사전 읽기 파일
-1. `NaN-OS/CLAUDE.md` — 프로젝트 규칙, 명령어, 컨벤션
-2. `NaN-OS/.agents/context/agents-rules.json` — 핵심 규칙 (SoT)
-3. `NaN-OS/.agents/workflows/development-cycle.yaml` — 개발 사이클
+1. `Naia-OS/CLAUDE.md` — 프로젝트 규칙, 명령어, 컨벤션
+2. `Naia-OS/.agents/context/agents-rules.json` — 핵심 규칙 (SoT)
+3. `Naia-OS/.agents/workflows/development-cycle.yaml` — 개발 사이클
 4. 이 문서 (e2e-handoff.md) — E2E 작업 상황
 
 ---
@@ -41,7 +41,7 @@ NaN-OS/
 
 ### 실행 방식
 ```bash
-cd NaN-OS/shell
+cd Naia-OS/shell
 pnpm run test:e2e:tauri  # = wdio run e2e-tauri/wdio.conf.ts
 ```
 
@@ -49,7 +49,7 @@ pnpm run test:e2e:tauri  # = wdio run e2e-tauri/wdio.conf.ts
 ```
 Vite dev server (:1420) 시작
   → tauri-driver (:4444) + WebKitWebDriver (:4445) spawn
-    → Tauri debug 바이너리 실행 (nan-shell)
+    → Tauri debug 바이너리 실행 (naia-shell)
       → OpenClaw Gateway 연결 (ws://localhost:18789)
         → spec 실행 (Mocha + WebDriver)
   → 프로세스 종료
@@ -176,7 +176,7 @@ await assertSemantic(
 
 ### 전체 실행
 ```bash
-cd NaN-OS/shell
+cd Naia-OS/shell
 pnpm run test:e2e:tauri  # ~20분 소요
 ```
 
@@ -201,7 +201,7 @@ pnpm exec wdio run e2e-tauri/wdio.conf.ts \
 ### 디버깅 팁
 - Semantic 로그: `/tmp/e2e-semantic-logs/` (FAIL 파일 확인)
 - wdio 로그: stdout (tee로 파일 저장 권장)
-- 프로세스 정리: `ps aux | grep -E "tauri-driver|nan-shell|openclaw" | grep -v grep`
+- 프로세스 정리: `ps aux | grep -E "tauri-driver|naia-shell|openclaw" | grep -v grep`
 
 ---
 

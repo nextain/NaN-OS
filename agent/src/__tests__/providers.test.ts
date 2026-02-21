@@ -145,7 +145,7 @@ describe("Gemini provider", () => {
 
 		for await (const chunk of provider.stream(
 			[{ role: "user", content: "Hi" }],
-			"You are Nan.",
+			"You are Naia.",
 		)) {
 			chunks.push(chunk);
 		}
@@ -246,7 +246,7 @@ describe("Gemini provider function calling", () => {
 		const chunks: unknown[] = [];
 		for await (const chunk of provider.stream(
 			[{ role: "user", content: "echo hello 해줘" }],
-			"You are Nan.",
+			"You are Naia.",
 			tools,
 		)) {
 			chunks.push(chunk);
@@ -302,7 +302,7 @@ describe("Gemini provider function calling", () => {
 		const chunks: unknown[] = [];
 		for await (const chunk of provider.stream(
 			[{ role: "user", content: "서울 날씨 알려줘" }],
-			"You are Nan.",
+			"You are Naia.",
 			tools,
 		)) {
 			chunks.push(chunk);
@@ -440,7 +440,7 @@ describe("xAI provider", () => {
 
 		for await (const chunk of provider.stream(
 			[{ role: "user", content: "Hi" }],
-			"You are Nan.",
+			"You are Naia.",
 		)) {
 			chunks.push(chunk);
 		}
@@ -467,7 +467,7 @@ describe("Anthropic provider", () => {
 
 		for await (const chunk of provider.stream(
 			[{ role: "user", content: "Hi" }],
-			"You are Nan.",
+			"You are Naia.",
 		)) {
 			chunks.push(chunk);
 		}

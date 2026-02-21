@@ -5,7 +5,7 @@ import { beforeAll, describe, expect, it } from "vitest";
 import { loadCustomSkills } from "../loader.js";
 import { SkillRegistry } from "../registry.js";
 
-const SKILLS_DIR = path.join(os.homedir(), ".nan", "skills");
+const SKILLS_DIR = path.join(os.homedir(), ".naia", "skills");
 
 /** All 51 OpenClaw built-in skill names */
 const EXPECTED_SKILLS = [

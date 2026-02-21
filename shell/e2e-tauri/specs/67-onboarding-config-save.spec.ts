@@ -21,7 +21,7 @@ describe("67 — Onboarding Config Save", () => {
 
 	it("should clear config to trigger onboarding", async () => {
 		await browser.execute(() => {
-			localStorage.removeItem("nan-config");
+			localStorage.removeItem("naia-config");
 		});
 		await safeRefresh();
 
@@ -156,7 +156,7 @@ describe("67 — Onboarding Config Save", () => {
 
 		// Verify saved config
 		const config = await browser.execute(() => {
-			const raw = localStorage.getItem("nan-config");
+			const raw = localStorage.getItem("naia-config");
 			return raw ? JSON.parse(raw) : null;
 		});
 
@@ -171,11 +171,11 @@ describe("67 — Onboarding Config Save", () => {
 		const apiKey =
 			process.env.CAFE_E2E_API_KEY || process.env.GEMINI_API_KEY;
 		const gatewayToken =
-			process.env.CAFE_GATEWAY_TOKEN || "nan-dev-token";
+			process.env.CAFE_GATEWAY_TOKEN || "naia-dev-token";
 
 		await browser.execute(
 			(key: string, token: string) => {
-				const raw = localStorage.getItem("nan-config");
+				const raw = localStorage.getItem("naia-config");
 				const config = raw ? JSON.parse(raw) : {};
 				config.provider = "gemini";
 				config.model = config.model || "gemini-2.5-flash";
@@ -185,7 +185,7 @@ describe("67 — Onboarding Config Save", () => {
 				config.onboardingComplete = true;
 				config.enableTools = true;
 				config.disabledSkills = [];
-				localStorage.setItem("nan-config", JSON.stringify(config));
+				localStorage.setItem("naia-config", JSON.stringify(config));
 			},
 			apiKey || "",
 			gatewayToken,

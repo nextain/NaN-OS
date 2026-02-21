@@ -38,7 +38,7 @@ function asRecord(value: unknown): Record<string, unknown> | null {
 }
 
 function loadGatewayToken(): string | null {
-	const configPath = join(homedir(), ".nan", "openclaw", "openclaw.json");
+	const configPath = join(homedir(), ".naia", "openclaw", "openclaw.json");
 	try {
 		const config = JSON.parse(readFileSync(configPath, "utf-8"));
 		return config.gateway?.auth?.token || null;
@@ -1148,7 +1148,7 @@ describe.skipIf(!canRunE2E)("E2E: Agent ↔ Gateway (live)", () => {
 			"web_search runs",
 			async () => {
 				const result = await executeTool(client, "web_search", {
-					query: "NaN OS",
+					query: "Naia OS",
 				});
 				expect(result.success).toBe(true);
 				expect(result.output.length).toBeGreaterThan(0);

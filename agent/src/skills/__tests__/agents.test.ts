@@ -19,7 +19,7 @@ describe("skill_agents", () => {
 					case "agents.list":
 						respond.ok({
 							agents: [
-								{ id: "alpha", name: "Nan", model: "gemini-2.0-flash" },
+								{ id: "alpha", name: "Naia", model: "gemini-2.0-flash" },
 								{ id: "coder", name: "Coder", model: "gemini-2.0-flash" },
 							],
 						});
@@ -98,7 +98,7 @@ describe("skill_agents", () => {
 		expect(result.success).toBe(true);
 		const parsed = JSON.parse(result.output);
 		expect(parsed.agents).toHaveLength(2);
-		expect(parsed.agents[0].name).toBe("Nan");
+		expect(parsed.agents[0].name).toBe("Naia");
 	});
 
 	it("creates an agent", async () => {
@@ -123,7 +123,7 @@ describe("skill_agents", () => {
 
 	it("updates an agent", async () => {
 		const result = await skill.execute(
-			{ action: "update", id: "alpha", name: "Nan v2" },
+			{ action: "update", id: "alpha", name: "Naia v2" },
 			{ gateway: client },
 		);
 		expect(result.success).toBe(true);

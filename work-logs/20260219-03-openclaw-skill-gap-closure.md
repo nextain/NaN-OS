@@ -5,7 +5,7 @@
 - 최종 업데이트: 2026-02-19
 
 ## 프로젝트
-`NaN-OS` — Agent skill layer + Gateway E2E
+`Naia-OS` — Agent skill layer + Gateway E2E
 
 ## 작업 내용
 

@@ -210,7 +210,7 @@ export function OnboardingWizard({
 	}, []);
 
 	const stepIndex = STEPS.indexOf(step);
-	const displayName = agentName.trim() || "Nan";
+	const displayName = agentName.trim() || "Naia";
 
 	// Enter key advances to next step
 	function handleKeyDown(e: React.KeyboardEvent) {
@@ -250,7 +250,7 @@ export function OnboardingWizard({
 		setLabWaiting(true);
 		setLabTimeout(false);
 		try {
-			await openUrl("https://nan.nextain.io/ko/login?redirect=desktop");
+			await openUrl("https://naia.nextain.io/ko/login?redirect=desktop");
 		} catch {
 			setLabWaiting(false);
 			return;

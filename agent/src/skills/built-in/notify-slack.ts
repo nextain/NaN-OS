@@ -5,7 +5,7 @@ export function createNotifySlackSkill(): SkillDefinition {
 	return {
 		name: "skill_notify_slack",
 		description:
-			"Send a notification message to Slack via webhook. Requires SLACK_WEBHOOK_URL env var or ~/.nan/config.json setup.",
+			"Send a notification message to Slack via webhook. Requires SLACK_WEBHOOK_URL env var or ~/.naia/config.json setup.",
 		parameters: {
 			type: "object",
 			properties: {
@@ -65,7 +65,7 @@ export function createNotifySlackSkill(): SkillDefinition {
 					success: false,
 					output: "",
 					error:
-						"Slack webhook URL not configured. Set SLACK_WEBHOOK_URL env var or add notifications.slack.webhookUrl to ~/.nan/config.json",
+						"Slack webhook URL not configured. Set SLACK_WEBHOOK_URL env var or add notifications.slack.webhookUrl to ~/.naia/config.json",
 				};
 			}
 

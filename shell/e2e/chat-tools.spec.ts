@@ -205,7 +205,7 @@ test.describe("Chat + Tool E2E", () => {
 
 		// Seed localStorage with valid config
 		await page.addInitScript((configJson: string) => {
-			localStorage.setItem("nan-config", configJson);
+			localStorage.setItem("naia-config", configJson);
 		}, JSON.stringify({
 			provider: "gemini",
 			model: "gemini-2.5-flash",

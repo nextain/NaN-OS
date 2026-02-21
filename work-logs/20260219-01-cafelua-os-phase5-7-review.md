@@ -1,11 +1,11 @@
-# NaN OS Phase 5-7 코드 리뷰 & 수정
+# Naia OS Phase 5-7 코드 리뷰 & 수정
 
 ## 날짜
 - 시작: 2026-02-19
 - 진행 중
 
 ## 프로젝트
-`NaN-OS` — Nextain Shell (Tauri 2) + Agent (Node.js) + OS ISO
+`Naia-OS` — Nextain Shell (Tauri 2) + Agent (Node.js) + OS ISO
 
 ## 작업 내용
 
@@ -62,5 +62,5 @@ Phase 5(Lab 통합), Phase 6(앱 배포), Phase 7(OS ISO) 구현 완료 후,
 
 ## 남은 백로그
 - API key 보안 저장소 전환 (localStorage → Tauri secure storage)
-- OAuth nonce/state (nan.nextain.io 서버 변경 필요)
+- OAuth nonce/state (naia.nextain.io 서버 변경 필요)
 - AppImage SHA256 체크섬 검증

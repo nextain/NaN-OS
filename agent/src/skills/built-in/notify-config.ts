@@ -9,7 +9,7 @@ const ENV_VAR_MAP: Record<NotifyProvider, string[]> = {
 };
 /**
  * Resolve webhook URL for a notification provider.
- * Priority: environment variable > ~/.nan/config.json > null
+ * Priority: environment variable > ~/.naia/config.json > null
  */
 export async function getNotifyWebhookUrl(
 	provider: NotifyProvider,
@@ -26,7 +26,7 @@ export async function getNotifyWebhookUrl(
 	// 2. config.json fallback
 	try {
 		const home = process.env.HOME ?? "~";
-		const raw = await readFile(`${home}/.nan/config.json`, "utf-8");
+		const raw = await readFile(`${home}/.naia/config.json`, "utf-8");
 		const config = JSON.parse(raw) as {
 			notifications?: Record<string, { webhookUrl?: string }>;
 			slackWebhookUrl?: string;

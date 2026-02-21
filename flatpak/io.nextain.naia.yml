@@ -1,0 +1,61 @@
+app-id: io.nextain.naia
+runtime: org.gnome.Platform
+runtime-version: '47'
+sdk: org.gnome.Sdk
+sdk-extensions:
+  - org.freedesktop.Sdk.Extension.rust-stable
+  - org.freedesktop.Sdk.Extension.node22
+command: naia-os
+finish-args:
+  - --share=ipc
+  - --socket=fallback-x11
+  - --socket=wayland
+  - --socket=pulseaudio
+  - --device=dri
+  - --share=network
+  - --filesystem=home
+  - --talk-name=org.freedesktop.Flatpak
+  - --talk-name=org.freedesktop.Notifications
+  - --env=FLATPAK=1
+  - --env=WEBKIT_DISABLE_DMABUF_RENDERER=1
+build-options:
+  append-path: /usr/lib/sdk/rust-stable/bin:/usr/lib/sdk/node22/bin
+  build-args:
+    - --share=network
+modules:
+  - shared-modules/libappindicator/libappindicator-gtk3-12.10.json
+  - name: Naia-OS
+    buildsystem: simple
+    sources:
+      - type: dir
+        path: ..
+    build-options:
+      env:
+        CARGO_HOME: /run/build/Naia-OS/cargo
+        CI: "true"
+    build-commands:
+      # Agent build (npx pnpm — Flatpak SDK is read-only so global install fails)
+      - cd agent && npx pnpm install --no-frozen-lockfile
+      - cd agent && npx tsc
+      # Shell frontend + Tauri binary (no bundling — Flatpak handles packaging)
+      - cd shell && npx pnpm install --no-frozen-lockfile
+      - cd shell && npx pnpm run build
+      - cd shell/src-tauri && cargo build --release
+      # Install binary
+      - install -Dm755 shell/src-tauri/target/release/naia-os /app/bin/naia-os
+      # Node.js runtime (for agent)
+      - install -Dm755 /usr/lib/sdk/node22/bin/node /app/bin/node
+      # Agent bundle (dist + node_modules for runtime)
+      - mkdir -p /app/lib/naia-os/agent
+      - cp -r agent/dist /app/lib/naia-os/agent/dist
+      - cp -r agent/node_modules /app/lib/naia-os/agent/node_modules
+      - cp agent/package.json /app/lib/naia-os/agent/
+      # Desktop integration
+      - install -Dm644 flatpak/io.nextain.naia.desktop /app/share/applications/io.nextain.naia.desktop
+      - install -Dm644 flatpak/io.nextain.naia.metainfo.xml /app/share/metainfo/io.nextain.naia.metainfo.xml
+      # Icons
+      - install -Dm644 shell/src-tauri/icons/32x32.png /app/share/icons/hicolor/32x32/apps/io.nextain.naia.png
+      - install -Dm644 shell/src-tauri/icons/64x64.png /app/share/icons/hicolor/64x64/apps/io.nextain.naia.png
+      - install -Dm644 shell/src-tauri/icons/128x128.png /app/share/icons/hicolor/128x128/apps/io.nextain.naia.png
+      - install -Dm644 shell/src-tauri/icons/128x128@2x.png /app/share/icons/hicolor/256x256/apps/io.nextain.naia.png
+      - install -Dm644 shell/src-tauri/icons/icon.png /app/share/icons/hicolor/512x512/apps/io.nextain.naia.png

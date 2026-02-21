@@ -21,7 +21,7 @@ try {
 } catch { /* .env not found — rely on env vars */ }
 
 const SHELL_DIR = resolve(import.meta.dirname, "..");
-const TAURI_BINARY = resolve(SHELL_DIR, "src-tauri/target/debug/nan-shell");
+const TAURI_BINARY = resolve(SHELL_DIR, "src-tauri/target/debug/naia-shell");
 
 let tauriDriver: ChildProcess;
 let viteServer: ChildProcess;
@@ -100,7 +100,7 @@ export const config = {
 			execSync("lsof -ti:4445 | xargs -r kill -9 2>/dev/null || true", { stdio: "ignore" });
 			execSync("pkill -f tauri-driver 2>/dev/null || true", { stdio: "ignore" });
 			execSync("pkill -f WebKitWebDriver 2>/dev/null || true", { stdio: "ignore" });
-			execSync("pkill -f nan-shell 2>/dev/null || true", { stdio: "ignore" });
+			execSync("pkill -f naia-shell 2>/dev/null || true", { stdio: "ignore" });
 		} catch { /* ignore */ }
 		// Brief pause to let ports release
 		await new Promise((r) => setTimeout(r, 500));
@@ -129,7 +129,7 @@ export const config = {
 		// Each spec runs in its own worker process; we must ensure
 		// ports and app processes from the previous worker are fully dead.
 		try {
-			execSync("pkill -9 -f nan-shell 2>/dev/null || true", { stdio: "ignore" });
+			execSync("pkill -9 -f naia-shell 2>/dev/null || true", { stdio: "ignore" });
 			execSync("pkill -9 -f openclaw-node 2>/dev/null || true", { stdio: "ignore" });
 			execSync("pkill -9 -f tauri-driver 2>/dev/null || true", { stdio: "ignore" });
 			execSync("pkill -9 -f WebKitWebDriver 2>/dev/null || true", { stdio: "ignore" });
@@ -170,7 +170,7 @@ export const config = {
 		// Without this, ports 4444/4445 stay occupied and next spec's session fails.
 		try {
 			execSync("pkill -f openclaw-node 2>/dev/null || true", { stdio: "ignore" });
-			execSync("pkill -f nan-shell 2>/dev/null || true", { stdio: "ignore" });
+			execSync("pkill -f naia-shell 2>/dev/null || true", { stdio: "ignore" });
 			execSync("pkill -f WebKitWebDriver 2>/dev/null || true", { stdio: "ignore" });
 			execSync("pkill -f tauri-driver 2>/dev/null || true", { stdio: "ignore" });
 			execSync("lsof -ti:4444 | xargs -r kill -9 2>/dev/null || true", { stdio: "ignore" });

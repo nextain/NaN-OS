@@ -54,7 +54,7 @@ describe("17 — notification skills", () => {
 
 	it("should keep notification skills in allowed tools config", async () => {
 		const hasNotifyTools = await browser.execute(() => {
-			const raw = localStorage.getItem("nan-config");
+			const raw = localStorage.getItem("naia-config");
 			if (!raw) return false;
 			const config = JSON.parse(raw);
 			const allowed = Array.isArray(config.allowedTools) ? config.allowedTools : [];

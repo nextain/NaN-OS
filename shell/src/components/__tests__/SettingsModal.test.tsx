@@ -41,7 +41,7 @@ describe("SettingsModal", () => {
 		expect(onClose).toHaveBeenCalled();
 
 		// Verify saved in localStorage
-		const saved = JSON.parse(localStorage.getItem("nan-config") || "{}");
+		const saved = JSON.parse(localStorage.getItem("naia-config") || "{}");
 		expect(saved.apiKey).toBe("test-key-123");
 	});
 
@@ -56,7 +56,7 @@ describe("SettingsModal", () => {
 		mockInvoke.mockResolvedValue("base64audio");
 		// Set API key so preview has a key to use
 		localStorage.setItem(
-			"nan-config",
+			"naia-config",
 			JSON.stringify({ provider: "gemini", apiKey: "test-key", model: "m" }),
 		);
 		render(<SettingsModal onClose={() => {}} />);
@@ -107,7 +107,7 @@ describe("SettingsModal", () => {
 		fireEvent.click(screen.getByText(/save|저장/i));
 		expect(onClose).toHaveBeenCalled();
 
-		const saved = JSON.parse(localStorage.getItem("nan-config") || "{}");
+		const saved = JSON.parse(localStorage.getItem("naia-config") || "{}");
 		expect(saved.enableTools).toBe(true);
 		expect(saved.gatewayUrl).toBe("ws://localhost:9999");
 	});

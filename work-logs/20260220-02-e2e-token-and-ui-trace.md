@@ -4,7 +4,7 @@
 - 2026-02-20
 
 ## 범위
-- `NaN-OS/shell` UI E2E 디버깅
+- `Naia-OS/shell` UI E2E 디버깅
 - `skill_time`, `skill_weather`, `skill_notify*` 등 스킬 실행 검증
 - 게이트웨이 연결/인증 상태와 UI 메시지 불일치 원인 추적
 
@@ -45,13 +45,13 @@
   - 없음: `CAFE_GATEWAY_TOKEN`
 - 따라서 E2E가 `CAFE_GATEWAY_TOKEN`만 참조하면 인증 실패 가능
 - 관련 fallback 수정 적용:
-  - `CAFE_GATEWAY_TOKEN || GATEWAY_MASTER_KEY || nan-dev-token`
+  - `CAFE_GATEWAY_TOKEN || GATEWAY_MASTER_KEY || naia-dev-token`
 
 ## 산출물(로그)
 - UI 실시간 추적:
-  - `NaN-OS/shell/e2e-tauri/.artifacts/ui-message-trace.ndjson`
+  - `Naia-OS/shell/e2e-tauri/.artifacts/ui-message-trace.ndjson`
 - 앱 런타임 로그:
-  - `~/.nan/logs/nan.log`
+  - `~/.naia/logs/naia.log`
 
 ## 중단 시점 상태
 - 사용자 요청으로 E2E 실행 중지

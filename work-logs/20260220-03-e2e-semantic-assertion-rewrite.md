@@ -4,8 +4,8 @@
 - 2026-02-20 (야간 자동 작업)
 
 ## 범위
-- `NaN-OS/shell/e2e-tauri/specs/29-52` — 24개 spec 파일 수정
-- `NaN-OS/shell/e2e-tauri/helpers/settings.ts` — `enableToolsForSpec()` 헬퍼 추가
+- `Naia-OS/shell/e2e-tauri/specs/29-52` — 24개 spec 파일 수정
+- `Naia-OS/shell/e2e-tauri/helpers/settings.ts` — `enableToolsForSpec()` 헬퍼 추가
 
 ## 배경
 - 이전 세션에서 01-29 spec 통과, 30-52 spec 실패
