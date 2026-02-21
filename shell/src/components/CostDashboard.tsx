@@ -1,9 +1,14 @@
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { useEffect, useState } from "react";
-import { LAB_GATEWAY_URL, getLabKey, hasLabKey } from "../lib/config";
+import {
+	LAB_GATEWAY_URL,
+	getLabKeySecure,
+	hasLabKeySecure,
+} from "../lib/config";
 import { t } from "../lib/i18n";
 import { Logger } from "../lib/logger";
 import type { ChatMessage } from "../lib/types";
+import { parseLabCredits } from "../lib/lab-balance";
 
 interface CostGroup {
 	provider: string;
@@ -62,43 +67,51 @@ function LabBalanceSection() {
 
 	useEffect(() => {
 		// Use cached value if fresh
-		if (balanceCache && Date.now() - balanceCache.timestamp < BALANCE_CACHE_TTL) {
+		if (
+			balanceCache &&
+			Date.now() - balanceCache.timestamp < BALANCE_CACHE_TTL
+		) {
 			setBalance(balanceCache.value);
 			setLoading(false);
 			return;
 		}
 
-		const labKey = getLabKey();
-		if (!labKey) {
-			setLoading(false);
-			return;
-		}
-		fetch(`${GATEWAY_URL}/v1/profile/balance`, {
-			headers: { "X-AnyLLM-Key": `Bearer ${labKey}` },
-		})
-			.then((res) => {
-				if (!res.ok) throw new Error(`HTTP ${res.status}`);
-				return res.json();
+		getLabKeySecure().then((labKey) => {
+			if (!labKey) {
+				setLoading(false);
+				return;
+			}
+			fetch(`${GATEWAY_URL}/v1/profile/balance`, {
+				headers: { "X-AnyLLM-Key": `Bearer ${labKey}` },
 			})
-			.then((data: { balance?: number }) => {
-				const val = data.balance ?? 0;
-				balanceCache = { value: val, timestamp: Date.now() };
-				setBalance(val);
-			})
-			.catch((err) => {
-				Logger.warn("CostDashboard", "Lab balance fetch failed", {
-					error: String(err),
-				});
-				setError(true);
-			})
-			.finally(() => setLoading(false));
+				.then((res) => {
+					if (!res.ok) throw new Error(`HTTP ${res.status}`);
+					return res.json();
+				})
+				.then((data: unknown) => {
+					const val = parseLabCredits(data) ?? 0;
+					balanceCache = { value: val, timestamp: Date.now() };
+					setBalance(val);
+				})
+				.catch((err) => {
+					Logger.warn("CostDashboard", "Lab balance fetch failed", {
+						error: String(err),
+					});
+					setError(true);
+				})
+				.finally(() => setLoading(false));
+		});
 	}, []);
 
 	if (loading) {
 		return <div className="lab-balance-row">{t("cost.labLoading")}</div>;
 	}
 	if (error) {
-		return <div className="lab-balance-row lab-balance-error">{t("cost.labError")}</div>;
+		return (
+			<div className="lab-balance-row lab-balance-error">
+				{t("cost.labError")}
+			</div>
+		);
 	}
 	if (balance === null) return null;
 
@@ -125,7 +138,11 @@ function LabBalanceSection() {
 
 export function CostDashboard({ messages }: { messages: ChatMessage[] }) {
 	const groups = groupCosts(messages);
-	const showLabBalance = hasLabKey();
+	const [showLabBalance, setShowLabBalance] = useState(false);
+
+	useEffect(() => {
+		hasLabKeySecure().then(setShowLabBalance);
+	}, []);
 
 	if (groups.length === 0 && !showLabBalance) {
 		return <div className="cost-dashboard-empty">{t("cost.empty")}</div>;
