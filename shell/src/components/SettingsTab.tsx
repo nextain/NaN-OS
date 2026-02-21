@@ -235,25 +235,27 @@ function DevicePairingSection() {
 	);
 }
 
-const VRM_SAMPLES: { path: string; label: string }[] = [
+const VRM_SAMPLES: { path: string; label: string; previewImage?: string }[] = [
 	{
 		path: "/avatars/Sendagaya-Shino-dark-uniform.vrm",
 		label: "Shino (Dark)",
+		previewImage: "/avatars/Sendagaya-Shino-dark-uniform.webp",
 	},
 	{
 		path: "/avatars/Sendagaya-Shino-light-uniform.vrm",
 		label: "Shino (Light)",
+		previewImage: "/avatars/Sendagaya-Shino-light-uniform.webp",
 	},
 	{ path: "/avatars/vrm-ol-girl.vrm", label: "Girl" },
 	{ path: "/avatars/vrm-sample-boy.vrm", label: "Boy" },
 ];
 
 const BG_SAMPLES: { path: string; label: string }[] = [
-	{ path: "/assets/lounge-sunny.webp", label: "Lounge" },
+	{ path: "/assets/background-space.webp", label: "Space" },
 ];
 
 const THEMES: { id: ThemeId; label: string; preview: string }[] = [
-	{ id: "espresso", label: "Espresso", preview: "#3b2f2f" },
+	{ id: "espresso", label: "Espresso", preview: "#0F172A" },
 	{ id: "midnight", label: "Midnight", preview: "#1a1a2e" },
 	{ id: "ocean", label: "Ocean", preview: "#1b2838" },
 	{ id: "forest", label: "Forest", preview: "#1a2e1a" },
@@ -773,9 +775,16 @@ export function SettingsTab() {
 							className={`vrm-card ${vrmModel === v.path ? "active" : ""}`}
 							onClick={() => handleVrmSelect(v.path)}
 							title={v.label}
+							style={v.previewImage ? { padding: 0, overflow: "hidden" } : {}}
 						>
-							<span className="vrm-card-icon">&#x1F464;</span>
-							<span className="vrm-card-label">{v.label}</span>
+							{v.previewImage ? (
+								<img src={v.previewImage} alt={v.label} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+							) : (
+								<>
+									<span className="vrm-card-icon">&#x1F464;</span>
+									<span className="vrm-card-label">{v.label}</span>
+								</>
+							)}
 						</button>
 					))}
 					{/* Show custom VRM card if selected */}
@@ -815,7 +824,7 @@ export function SettingsTab() {
 						<span
 							className="bg-card-preview"
 							style={{
-								background: "linear-gradient(180deg, #1a1412 0%, #3b2f2f 100%)",
+								background: "linear-gradient(180deg, #1a1412 0%, #0F172A 100%)",
 							}}
 						/>
 						<span className="bg-card-label">{t("settings.bgNone")}</span>

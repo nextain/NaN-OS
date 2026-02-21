@@ -161,7 +161,7 @@ function setDefaultBackground(scene: Scene) {
 		const grad = ctx.createLinearGradient(0, 0, 0, 512);
 		grad.addColorStop(0, "#1a1412");
 		grad.addColorStop(0.5, "#2b2220");
-		grad.addColorStop(1, "#3b2f2f");
+		grad.addColorStop(1, "#0F172A");
 		ctx.fillStyle = grad;
 		ctx.fillRect(0, 0, 2, 512);
 	}
@@ -205,7 +205,7 @@ export function AvatarCanvas() {
 			const config = configRaw ? JSON.parse(configRaw) : null;
 			const bgSrc = config?.backgroundImage
 				? convertFileSrc(config.backgroundImage)
-				: "/assets/lounge-sunny.webp";
+				: "/assets/background-space.webp";
 			const loader = new TextureLoader();
 			loader.load(
 				bgSrc,

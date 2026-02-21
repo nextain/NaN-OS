@@ -70,7 +70,7 @@ export function VrmPreview({ modelPath }: { modelPath: string }) {
 			const grad = ctx.createLinearGradient(0, 0, 0, 256);
 			grad.addColorStop(0, "#1a1412");
 			grad.addColorStop(0.5, "#2b2220");
-			grad.addColorStop(1, "#3b2f2f");
+			grad.addColorStop(1, "#0F172A");
 			ctx.fillStyle = grad;
 			ctx.fillRect(0, 0, 2, 256);
 		}

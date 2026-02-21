@@ -61,8 +61,8 @@ describe("SettingsTab", () => {
 	it("renders VRM model picker with sample cards", () => {
 		mockInvoke.mockResolvedValue([]);
 		render(<SettingsTab />);
-		expect(screen.getByText("Shino (Dark)")).toBeDefined();
-		expect(screen.getByText("Shino (Light)")).toBeDefined();
+		expect(screen.getByAltText("Shino (Dark)")).toBeDefined();
+		expect(screen.getByAltText("Shino (Light)")).toBeDefined();
 		expect(screen.getByText("Girl")).toBeDefined();
 		expect(screen.getByText("Boy")).toBeDefined();
 	});
@@ -71,7 +71,7 @@ describe("SettingsTab", () => {
 		mockInvoke.mockResolvedValue([]);
 		render(<SettingsTab />);
 		expect(screen.getByText(/기본 그라데이션|Default Gradient/i)).toBeDefined();
-		expect(screen.getByText("Lounge")).toBeDefined();
+		expect(screen.getByText("Space")).toBeDefined();
 	});
 
 	it("renders VRM custom file button", () => {

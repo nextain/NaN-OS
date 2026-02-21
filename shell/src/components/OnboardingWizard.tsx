@@ -504,8 +504,14 @@ export function OnboardingWizard({
 									type="button"
 									className={`onboarding-vrm-card${selectedVrm === v.path ? " selected" : ""}`}
 									onClick={() => setSelectedVrm(v.path)}
+									style={v.previewImage ? { padding: 0, overflow: "hidden", display: "flex", flexDirection: "column" } : {}}
 								>
-									<span className="onboarding-vrm-label">{v.label}</span>
+									{v.previewImage && (
+										<img src={v.previewImage} alt={v.label} style={{ width: "100%", height: "60px", objectFit: "cover", flexShrink: 0 }} />
+									)}
+									<span className="onboarding-vrm-label" style={v.previewImage ? { flexGrow: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: "4px" } : {}}>
+										{v.label}
+									</span>
 								</button>
 							))}
 						</div>

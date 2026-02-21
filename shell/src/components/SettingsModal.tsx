@@ -37,7 +37,7 @@ const LOCALES: { id: Locale; label: string }[] = [
 ];
 
 const THEMES: { id: ThemeId; label: string; preview: string }[] = [
-	{ id: "espresso", label: "Espresso", preview: "#3b2f2f" },
+	{ id: "espresso", label: "Espresso", preview: "#0F172A" },
 	{ id: "midnight", label: "Midnight", preview: "#1a1a2e" },
 	{ id: "ocean", label: "Ocean", preview: "#1b2838" },
 	{ id: "forest", label: "Forest", preview: "#1a2e1a" },
