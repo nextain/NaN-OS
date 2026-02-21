@@ -1,9 +1,0 @@
-[Desktop Entry]
-Name=Cafelua Shell
-Comment=Personal AI avatar shell
-Exec=cafelua-shell %u
-Icon=com.cafelua.shell
-Type=Application
-Categories=Utility;
-StartupWMClass=cafelua-shell
-MimeType=x-scheme-handler/cafelua;

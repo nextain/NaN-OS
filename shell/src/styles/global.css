@@ -1,17 +1,17 @@
 :root,
 [data-theme="espresso"] {
-	--espresso: #3b2f2f;
-	--espresso-light: #4a3b3b;
-	--espresso-dark: #2b2020;
-	--latte: #d4c4b7;
-	--cream: #f5f1e6;
-	--cream-dim: #b8b0a3;
-	--wood: #8d6e63;
-	--sage: #8fbc8f;
-	--tech-blue: #5dade2;
-	--amber: #ffbf00;
-	--espresso-medium: #332828;
-	--error: #e74c3c;
+	--espresso: #0b1120;
+	--espresso-light: #1e293b;
+	--espresso-dark: #020617;
+	--espresso-medium: #0f172a;
+	--latte: #94a3b8;
+	--cream: #f8fafc;
+	--cream-dim: #64748b;
+	--wood: #06b6d4;
+	--sage: #10b981;
+	--tech-blue: #2563eb;
+	--amber: #f59e0b;
+	--error: #ef4444;
 	--mono: "JetBrains Mono", "Fira Code", "Cascadia Code", monospace;
 }
 
@@ -77,18 +77,18 @@
 
 /* Light themes */
 [data-theme="latte"] {
-	--espresso: #f5f0e8;
-	--espresso-light: #e0d8cc;
-	--espresso-dark: #ffffff;
-	--espresso-medium: #ece5d8;
-	--latte: #4a3b3b;
-	--cream: #2b2020;
-	--cream-dim: #8b7b6b;
-	--wood: #8d6e63;
-	--sage: #6d9b6d;
-	--tech-blue: #3a7bd5;
-	--amber: #d4a017;
-	--error: #c0392b;
+	--espresso: #ffffff;
+	--espresso-light: #f1f5f9;
+	--espresso-dark: #f8fafc;
+	--espresso-medium: #e2e8f0;
+	--latte: #64748b;
+	--cream: #0f172a;
+	--cream-dim: #94a3b8;
+	--wood: #2563eb;
+	--sage: #10b981;
+	--tech-blue: #06b6d4;
+	--amber: #f59e0b;
+	--error: #ef4444;
 }
 
 [data-theme="sakura"] {
