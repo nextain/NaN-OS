@@ -6,7 +6,11 @@ export function createOpenAIProvider(
 	apiKey: string,
 	model: string,
 ): LLMProvider {
-	const client = new OpenAI({ apiKey });
+	const isOllama = apiKey === "ollama";
+	const client = new OpenAI({
+		apiKey: isOllama ? "ollama" : apiKey,
+		baseURL: isOllama ? "http://127.0.0.1:11434/v1" : undefined,
+	});
 
 	return {
 		async *stream(messages, systemPrompt, tools, signal): AgentStream {
