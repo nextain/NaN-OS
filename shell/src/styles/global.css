@@ -1,15 +1,15 @@
 :root,
 [data-theme="espresso"] {
-	--espresso: #0b1120;
+	--espresso: #0F172A;
 	--espresso-light: #1e293b;
 	--espresso-dark: #020617;
-	--espresso-medium: #0f172a;
+	--espresso-medium: #171717;
 	--latte: #94a3b8;
-	--cream: #f8fafc;
+	--cream: #F8FAFC;
 	--cream-dim: #64748b;
-	--wood: #06b6d4;
-	--sage: #10b981;
-	--tech-blue: #2563eb;
+	--wood: #06B6D4;
+	--sage: #10B981;
+	--tech-blue: #2563EB;
 	--amber: #f59e0b;
 	--error: #ef4444;
 	--mono: "JetBrains Mono", "Fira Code", "Cascadia Code", monospace;

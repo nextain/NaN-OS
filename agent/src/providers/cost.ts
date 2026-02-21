@@ -2,7 +2,7 @@
 export const MODEL_PRICING: Record<string, { input: number; output: number }> = {
 	// Gemini 3
 	"gemini-3.1-pro-preview": { input: 2.0, output: 12.0 },
-	"gemini-3-flash-preview": { input: 0.5, output: 3.0 },
+	"gemini-3-flash": { input: 0.5, output: 3.0 },
 	// Gemini 2.5
 	"gemini-2.5-flash": { input: 0.15, output: 0.6 },
 	"gemini-2.5-pro": { input: 1.25, output: 10.0 },

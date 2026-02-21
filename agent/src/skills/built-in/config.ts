@@ -72,9 +72,10 @@ export function createConfigSkill(): SkillDefinition {
 
 				case "models": {
 					const localModels = [
-						{ id: "gemini-3-flash-preview", name: "Gemini 3 Flash", provider: "gemini" },
-						{ id: "gemini-2.5-flash", name: "Gemini 2.5 Flash", provider: "gemini" },
+						{ id: "gemini-3.1-pro-preview", name: "Gemini 3.1 Pro", provider: "gemini" },
+						{ id: "gemini-3-flash", name: "Gemini 3 Flash", provider: "gemini" },
 						{ id: "gemini-2.5-pro", name: "Gemini 2.5 Pro", provider: "gemini" },
+						{ id: "gemini-2.5-flash", name: "Gemini 2.5 Flash", provider: "gemini" },
 						{ id: "gpt-4o", name: "GPT-4o", provider: "openai" },
 						{ id: "gpt-4o-mini", name: "GPT-4o Mini", provider: "openai" },
 						{ id: "o3-mini", name: "o3 Mini", provider: "openai" },
