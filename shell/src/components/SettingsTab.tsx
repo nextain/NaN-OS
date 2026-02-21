@@ -3,19 +3,26 @@ import { listen } from "@tauri-apps/api/event";
 import { open } from "@tauri-apps/plugin-dialog";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { useCallback, useEffect, useState } from "react";
+import { useLongPress } from "../hooks/useLongPress";
 import { directToolCall } from "../lib/chat-service";
 import {
 	DEFAULT_GATEWAY_URL,
-	type ThemeId,
 	LAB_GATEWAY_URL,
 	MODEL_OPTIONS,
+	type ThemeId,
 	clearAllowedTools,
 	getDefaultModel,
 	loadConfig,
 	resolveGatewayUrl,
 	saveConfig,
 } from "../lib/config";
-import { type Fact, deleteFact, getAllFacts, getRecentSessions, deleteSession } from "../lib/db";
+import {
+	type Fact,
+	deleteFact,
+	deleteSession,
+	getAllFacts,
+	getRecentSessions,
+} from "../lib/db";
 import { type Locale, getLocale, setLocale, t } from "../lib/i18n";
 import { parseLabCredits } from "../lib/lab-balance";
 import { Logger } from "../lib/logger";
@@ -49,6 +56,18 @@ const TTS_VOICES: { id: string; label: string; price: string }[] = [
 const LOCALES: { id: Locale; label: string }[] = [
 	{ id: "ko", label: "한국어" },
 	{ id: "en", label: "English" },
+	{ id: "ja", label: "日本語" },
+	{ id: "zh", label: "中文" },
+	{ id: "fr", label: "Français" },
+	{ id: "de", label: "Deutsch" },
+	{ id: "ru", label: "Русский" },
+	{ id: "es", label: "Español" },
+	{ id: "ar", label: "العربية" },
+	{ id: "hi", label: "हिन्दी" },
+	{ id: "bn", label: "বাংলা" },
+	{ id: "pt", label: "Português" },
+	{ id: "id", label: "Bahasa Indonesia" },
+	{ id: "vi", label: "Tiếng Việt" },
 ];
 
 interface DeviceNode {
@@ -61,6 +80,72 @@ interface PairReq {
 	requestId: string;
 	nodeId: string;
 	status: string;
+}
+
+function CustomAssetCard({
+	path,
+	isSelected,
+	onSelect,
+	onDelete,
+	type,
+}: {
+	path: string;
+	isSelected: boolean;
+	onSelect: () => void;
+	onDelete: () => void;
+	type: "vrm" | "bg";
+}) {
+	const [deleteMode, setDeleteMode] = useState(false);
+	const lp = useLongPress(
+		() => setDeleteMode(true),
+		() => {
+			if (deleteMode) onDelete();
+			else onSelect();
+		},
+	);
+
+	if (type === "vrm") {
+		return (
+			<button
+				type="button"
+				className={`vrm-card ${isSelected ? "active" : ""} ${deleteMode ? "shake" : ""}`}
+				title={path}
+				{...lp}
+				style={{ position: "relative" }}
+				onMouseLeave={() => {
+					lp.onMouseLeave();
+					setDeleteMode(false);
+				}}
+			>
+				<span className="vrm-card-icon">&#x1F464;</span>
+				<span className="vrm-card-label">
+					{path.split("/").pop()?.replace(".vrm", "")}
+				</span>
+				{deleteMode && <div className="delete-overlay">🗑️</div>}
+			</button>
+		);
+	}
+
+	return (
+		<button
+			type="button"
+			className={`bg-card ${isSelected ? "active" : ""} ${deleteMode ? "shake" : ""}`}
+			title={path}
+			{...lp}
+			style={{ position: "relative" }}
+			onMouseLeave={() => {
+				lp.onMouseLeave();
+				setDeleteMode(false);
+			}}
+		>
+			<span
+				className="bg-card-preview"
+				style={{ backgroundImage: `url(${convertFileSrc(path)})` }}
+			/>
+			<span className="bg-card-label">{path.split("/").pop()}</span>
+			{deleteMode && <div className="delete-overlay">🗑️</div>}
+		</button>
+	);
 }
 
 function DevicePairingSection() {
@@ -180,9 +265,7 @@ function DevicePairingSection() {
 							<div className="device-pair-requests">
 								{pairRequests.map((req) => (
 									<div key={req.requestId} className="device-pair-card">
-										<span className="device-pair-node">
-											{req.nodeId}
-										</span>
+										<span className="device-pair-node">{req.nodeId}</span>
 										<span className="device-pair-status">
 											{req.status === "pending"
 												? t("settings.devicePending")
@@ -194,10 +277,7 @@ function DevicePairingSection() {
 													type="button"
 													className="device-pair-approve"
 													onClick={() =>
-														handlePairAction(
-															req.requestId,
-															"approve",
-														)
+														handlePairAction(req.requestId, "approve")
 													}
 												>
 													{t("settings.deviceApprove")}
@@ -206,10 +286,7 @@ function DevicePairingSection() {
 													type="button"
 													className="device-pair-reject"
 													onClick={() =>
-														handlePairAction(
-															req.requestId,
-															"reject",
-														)
+														handlePairAction(req.requestId, "reject")
 													}
 												>
 													{t("settings.deviceReject")}
@@ -237,24 +314,24 @@ function DevicePairingSection() {
 
 const VRM_SAMPLES: { path: string; label: string; previewImage?: string }[] = [
 	{
-		path: "/avatars/Sendagaya-Shino-dark-uniform.vrm",
-		label: "Shino (Dark)",
-		previewImage: "/avatars/Sendagaya-Shino-dark-uniform.webp",
+		path: "/avatars/01-Sendagaya-Shino-uniform.vrm",
+		label: "Shino",
+		previewImage: "/avatars/01-Sendagaya-Shino-uniform.webp",
 	},
 	{
-		path: "/avatars/Sendagaya-Shino-light-uniform.vrm",
-		label: "Shino (Light)",
-		previewImage: "/avatars/Sendagaya-Shino-light-uniform.webp",
+		path: "/avatars/02-Sakurada-Fumiriya.vrm",
+		label: "Sakurada Fumiriya",
+		previewImage: "/avatars/02-Sakurada-Fumiriya.webp",
 	},
-	{ 
-		path: "/avatars/vrm-ol-girl.vrm", 
-		label: "Girl",
-		previewImage: "/avatars/vrm-ol-girl.webp",
+	{
+		path: "/avatars/03-OL_Woman.vrm",
+		label: "OL Woman",
+		previewImage: "/avatars/03-OL_Woman.webp",
 	},
-	{ 
-		path: "/avatars/vrm-sample-boy.vrm", 
-		label: "Boy",
-		previewImage: "/avatars/vrm-sample-boy.webp",
+	{
+		path: "/avatars/04-Hood_Boy.vrm",
+		label: "Hood Boy",
+		previewImage: "/avatars/04-Hood_Boy.webp",
 	},
 ];
 
@@ -263,27 +340,33 @@ const BG_SAMPLES: { path: string; label: string }[] = [
 ];
 
 const THEMES: { id: ThemeId; label: string; preview: string }[] = [
-	{ id: "espresso", label: "Espresso", preview: "#0F172A" },
-	{ id: "midnight", label: "Midnight", preview: "#1a1a2e" },
+	{ id: "espresso", label: "Light", preview: "#ffffff" },
+	{ id: "midnight", label: "Dark", preview: "#1a1a2e" },
 	{ id: "ocean", label: "Ocean", preview: "#1b2838" },
 	{ id: "forest", label: "Forest", preview: "#1a2e1a" },
 	{ id: "rose", label: "Rose", preview: "#2e1a2a" },
-	{ id: "latte", label: "Latte", preview: "#f5f0e8" },
+	{ id: "latte", label: "Latte", preview: "#fffcf5" },
 	{ id: "sakura", label: "Sakura", preview: "#fdf2f8" },
-	{ id: "cloud", label: "Cloud", preview: "#f8f9fa" },
+	{ id: "cloud", label: "Cloud", preview: "#f1f5f9" },
 ];
 
 export function SettingsTab() {
 	const existing = loadConfig();
 	const setAvatarModelPath = useAvatarStore((s) => s.setModelPath);
-	const savedVrmModel =
-		existing?.vrmModel ?? "/avatars/Sendagaya-Shino-dark-uniform.vrm";
+	const setAvatarBackgroundImage = useAvatarStore((s) => s.setBackgroundImage);
+	const [savedVrmModel, setSavedVrmModel] = useState(
+		existing?.vrmModel ?? "/avatars/01-Sendagaya-Shino-uniform.vrm"
+	);
+	const [savedBgImage, setSavedBgImage] = useState(
+		existing?.backgroundImage ?? ""
+	);
 	const [provider, setProvider] = useState<ProviderId>(
 		existing?.provider ?? "gemini",
 	);
 	const initProvider = existing?.provider ?? "gemini";
 	const savedModel = existing?.model;
-	const modelValid = savedModel && MODEL_OPTIONS[initProvider]?.some((m) => m.id === savedModel);
+	const modelValid =
+		savedModel && MODEL_OPTIONS[initProvider]?.some((m) => m.id === savedModel);
 	const [model, setModel] = useState(
 		modelValid ? savedModel : getDefaultModel(initProvider),
 	);
@@ -293,6 +376,12 @@ export function SettingsTab() {
 	);
 	const [theme, setTheme] = useState<ThemeId>(existing?.theme ?? "espresso");
 	const [vrmModel, setVrmModel] = useState(savedVrmModel);
+	const [customVrms, setCustomVrms] = useState<string[]>(
+		existing?.customVrms ?? [],
+	);
+	const [customBgs, setCustomBgs] = useState<string[]>(
+		existing?.customBgs ?? [],
+	);
 	const [backgroundImage, setBackgroundImage] = useState(
 		existing?.backgroundImage ?? "",
 	);
@@ -330,9 +419,16 @@ export function SettingsTab() {
 							if (!grouped[m.provider as ProviderId]) {
 								grouped[m.provider as ProviderId] = [];
 							}
-							if (!grouped[m.provider as ProviderId].some((x) => x.id === m.id)) {
-								const priceStr = m.price ? ` ($${m.price.input} / $${m.price.output})` : "";
-								grouped[m.provider as ProviderId].push({ id: m.id, label: `${m.name || m.id}${priceStr}` });
+							if (
+								!grouped[m.provider as ProviderId].some((x) => x.id === m.id)
+							) {
+								const priceStr = m.price
+									? ` ($${m.price.input} / $${m.price.output})`
+									: "";
+								grouped[m.provider as ProviderId].push({
+									id: m.id,
+									label: `${m.name || m.id}${priceStr}`,
+								});
 							}
 						}
 						setDynamicModels(grouped);
@@ -518,16 +614,25 @@ export function SettingsTab() {
 		setAvatarModelPath(path);
 	}
 
-	// Revert VRM on unmount if not saved
+	function handleBgSelect(path: string) {
+		setBackgroundImage(path);
+		setAvatarBackgroundImage(path);
+	}
+
+	// Revert on unmount if not saved
 	useEffect(() => {
 		return () => {
 			// Restore saved VRM when leaving settings without saving
-			const current = useAvatarStore.getState().modelPath;
-			if (current !== savedVrmModel) {
+			const currentVrm = useAvatarStore.getState().modelPath;
+			if (currentVrm !== savedVrmModel) {
 				setAvatarModelPath(savedVrmModel);
 			}
+			const currentBg = useAvatarStore.getState().backgroundImage;
+			if (currentBg !== savedBgImage) {
+				setAvatarBackgroundImage(savedBgImage);
+			}
 		};
-	}, [savedVrmModel, setAvatarModelPath]);
+	}, [savedVrmModel, savedBgImage, setAvatarModelPath, setAvatarBackgroundImage]);
 
 	function handleProviderChange(id: ProviderId) {
 		setProvider(id);
@@ -551,7 +656,11 @@ export function SettingsTab() {
 			multiple: false,
 		});
 		if (selected) {
-			handleVrmSelect(selected);
+			setCustomVrms((prev) => {
+				if (prev.includes(selected as string)) return prev;
+				return [...prev, selected as string];
+			});
+			handleVrmSelect(selected as string);
 		}
 	}
 
@@ -564,7 +673,11 @@ export function SettingsTab() {
 			multiple: false,
 		});
 		if (selected) {
-			setBackgroundImage(selected);
+			setCustomBgs((prev) => {
+				if (prev.includes(selected as string)) return prev;
+				return [...prev, selected as string];
+			});
+			handleBgSelect(selected as string);
 		}
 	}
 
@@ -666,7 +779,7 @@ export function SettingsTab() {
 			setError(t("settings.apiKeyRequired"));
 			return;
 		}
-		const defaultVrm = "/avatars/Sendagaya-Shino-dark-uniform.vrm";
+		const defaultVrm = "/avatars/01-Sendagaya-Shino-uniform.vrm";
 		const newConfig = {
 			...existing,
 			provider,
@@ -677,6 +790,8 @@ export function SettingsTab() {
 			locale,
 			theme,
 			vrmModel: vrmModel !== defaultVrm ? vrmModel : undefined,
+			customVrms: customVrms.length > 0 ? customVrms : undefined,
+			customBgs: customBgs.length > 0 ? customBgs : undefined,
 			backgroundImage: backgroundImage || undefined,
 			ttsEnabled,
 			sttEnabled,
@@ -686,13 +801,16 @@ export function SettingsTab() {
 				persona.trim() !== DEFAULT_PERSONA.trim() ? persona.trim() : undefined,
 			enableTools,
 			gatewayUrl: enableTools
-				? (gatewayUrl.trim() || DEFAULT_GATEWAY_URL)
+				? gatewayUrl.trim() || DEFAULT_GATEWAY_URL
 				: undefined,
 			gatewayToken: gatewayToken.trim() || undefined,
 		};
 		saveConfig(newConfig);
 		setLocale(locale);
 		setAvatarModelPath(vrmModel);
+		setAvatarBackgroundImage(backgroundImage);
+		setSavedVrmModel(vrmModel);
+		setSavedBgImage(backgroundImage);
 		setSaved(true);
 		setTimeout(() => setSaved(false), 2000);
 
@@ -786,7 +904,11 @@ export function SettingsTab() {
 							style={v.previewImage ? { padding: 0, overflow: "hidden" } : {}}
 						>
 							{v.previewImage ? (
-								<img src={v.previewImage} alt={v.label} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+								<img
+									src={v.previewImage}
+									alt={v.label}
+									style={{ width: "100%", height: "100%", objectFit: "cover" }}
+								/>
 							) : (
 								<>
 									<span className="vrm-card-icon">&#x1F464;</span>
@@ -795,19 +917,21 @@ export function SettingsTab() {
 							)}
 						</button>
 					))}
-					{/* Show custom VRM card if selected */}
-					{!VRM_SAMPLES.some((v) => v.path === vrmModel) && vrmModel && (
-						<button
-							type="button"
-							className="vrm-card active"
-							title={vrmModel}
-						>
-							<span className="vrm-card-icon">&#x1F464;</span>
-							<span className="vrm-card-label">
-								{vrmModel.split("/").pop()?.replace(".vrm", "") ?? "Custom"}
-							</span>
-						</button>
-					)}
+					{customVrms.map((path) => (
+						<CustomAssetCard
+							key={path}
+							type="vrm"
+							path={path}
+							isSelected={vrmModel === path}
+							onSelect={() => handleVrmSelect(path)}
+							onDelete={() => {
+								setCustomVrms((prev) => prev.filter((p) => p !== path));
+								if (vrmModel === path) {
+									handleVrmSelect(VRM_SAMPLES[0].path);
+								}
+							}}
+						/>
+					))}
 					<button
 						type="button"
 						className="vrm-card vrm-card-add"
@@ -826,7 +950,7 @@ export function SettingsTab() {
 					<button
 						type="button"
 						className={`bg-card ${!backgroundImage ? "active" : ""}`}
-						onClick={() => setBackgroundImage("")}
+						onClick={() => handleBgSelect("")}
 						title={t("settings.bgNone")}
 					>
 						<span
@@ -842,7 +966,7 @@ export function SettingsTab() {
 							key={bg.path}
 							type="button"
 							className={`bg-card ${backgroundImage === bg.path ? "active" : ""}`}
-							onClick={() => setBackgroundImage(bg.path)}
+							onClick={() => handleBgSelect(bg.path)}
 							title={bg.label}
 						>
 							<span
@@ -852,25 +976,21 @@ export function SettingsTab() {
 							<span className="bg-card-label">{bg.label}</span>
 						</button>
 					))}
-					{/* Show custom BG card if selected */}
-					{backgroundImage
-						&& !BG_SAMPLES.some((bg) => bg.path === backgroundImage) && (
-						<button
-							type="button"
-							className="bg-card active"
-							title={backgroundImage}
-						>
-							<span
-								className="bg-card-preview"
-								style={{
-									backgroundImage: `url(${convertFileSrc(backgroundImage)})`,
-								}}
-							/>
-							<span className="bg-card-label">
-								{backgroundImage.split("/").pop() ?? "Custom"}
-							</span>
-						</button>
-					)}
+					{customBgs.map((path) => (
+						<CustomAssetCard
+							key={path}
+							type="bg"
+							path={path}
+							isSelected={backgroundImage === path}
+							onSelect={() => handleBgSelect(path)}
+							onDelete={() => {
+								setCustomBgs((prev) => prev.filter((p) => p !== path));
+								if (backgroundImage === path) {
+									handleBgSelect("");
+								}
+							}}
+						/>
+					))}
 					<button
 						type="button"
 						className="bg-card bg-card-add"
@@ -904,14 +1024,16 @@ export function SettingsTab() {
 			</div>
 
 			<div className="settings-field">
-				<label>{labKey ? t("settings.labConnected") : t("settings.labDisconnected")}</label>
+				<label>
+					{labKey ? t("settings.labConnected") : t("settings.labDisconnected")}
+				</label>
 				{labKey ? (
 					<div className="lab-info-block">
-						{labUserId && (
-							<span className="lab-user-id">{labUserId}</span>
-						)}
+						{labUserId && <span className="lab-user-id">{labUserId}</span>}
 						<div className="lab-balance-row">
-							<span className="lab-balance-label">{t("settings.labBalance")}</span>
+							<span className="lab-balance-label">
+								{t("settings.labBalance")}
+							</span>
 							<span className="lab-balance-value">
 								{labBalanceLoading
 									? t("settings.labBalanceLoading")
@@ -925,7 +1047,9 @@ export function SettingsTab() {
 								type="button"
 								className="voice-preview-btn"
 								onClick={() =>
-									openUrl("https://naia.nextain.io/ko/dashboard").catch(() => {})
+									openUrl("https://naia.nextain.io/ko/dashboard").catch(
+										() => {},
+									)
 								}
 							>
 								{t("settings.labDashboard")}
@@ -941,7 +1065,9 @@ export function SettingsTab() {
 							</button>
 							{showLabDisconnect ? (
 								<div className="reset-confirm-panel" style={{ marginTop: 8 }}>
-									<p className="reset-confirm-msg">{t("settings.labDisconnectConfirm")}</p>
+									<p className="reset-confirm-msg">
+										{t("settings.labDisconnectConfirm")}
+									</p>
 									<div className="reset-confirm-actions">
 										<button
 											type="button"
@@ -1023,9 +1149,7 @@ export function SettingsTab() {
 				<select
 					id="provider-select"
 					value={provider}
-					onChange={(e) =>
-						handleProviderChange(e.target.value as ProviderId)
-					}
+					onChange={(e) => handleProviderChange(e.target.value as ProviderId)}
 				>
 					{PROVIDERS.map((p) => (
 						<option key={p.id} value={p.id}>
@@ -1207,12 +1331,13 @@ export function SettingsTab() {
 						<span>{t("settings.channelsSection")}</span>
 					</div>
 					<div className="settings-field">
-						<span className="settings-hint">
-							{t("settings.channelsHint")}
-						</span>
+						<span className="settings-hint">{t("settings.channelsHint")}</span>
 					</div>
 					<div className="settings-field">
-						<span className="settings-hint" data-testid="channels-settings-hint">
+						<span
+							className="settings-hint"
+							data-testid="channels-settings-hint"
+						>
 							{t("settings.channelsOpenTab")}
 						</span>
 					</div>
@@ -1240,9 +1365,7 @@ export function SettingsTab() {
 								id="gateway-tts-provider"
 								data-testid="gateway-tts-provider"
 								value={gatewayTtsProvider}
-								onChange={(e) =>
-									handleGatewayTtsProviderChange(e.target.value)
-								}
+								onChange={(e) => handleGatewayTtsProviderChange(e.target.value)}
 							>
 								{gatewayTtsProviders.map((p) => (
 									<option key={p.id} value={p.id}>
@@ -1266,9 +1389,7 @@ export function SettingsTab() {
 						<span>{t("settings.voiceWakeSection")}</span>
 					</div>
 					<div className="settings-field">
-						<span className="settings-hint">
-							{t("settings.voiceWakeHint")}
-						</span>
+						<span className="settings-hint">{t("settings.voiceWakeHint")}</span>
 					</div>
 					{voiceWakeLoading ? (
 						<div className="settings-field">
@@ -1280,7 +1401,10 @@ export function SettingsTab() {
 						<>
 							<div className="settings-field">
 								<label>{t("settings.voiceWakeTriggers")}</label>
-								<div className="voice-wake-triggers" data-testid="voice-wake-triggers">
+								<div
+									className="voice-wake-triggers"
+									data-testid="voice-wake-triggers"
+								>
 									{voiceWakeTriggers.map((trigger) => (
 										<span key={trigger} className="voice-wake-tag">
 											{trigger}

@@ -199,31 +199,40 @@ export function AvatarCanvas() {
 		// Scene with gradient background
 		const scene = new Scene();
 
-		// Load background image (config path or bundled default)
-		try {
-			const configRaw = localStorage.getItem("naia-config");
-			const config = configRaw ? JSON.parse(configRaw) : null;
-			const bgSrc = config?.backgroundImage
-				? convertFileSrc(config.backgroundImage)
-				: "/assets/background-space.webp";
+		// Helper to load and apply background image
+		const applyBackground = (bgPath: string | undefined | null) => {
+			let bgSrc = "/assets/background-space.webp";
+			if (bgPath) {
+				bgSrc = bgPath.startsWith("/assets/")
+					? bgPath
+					: convertFileSrc(bgPath);
+			}
 			const loader = new TextureLoader();
+			loader.setCrossOrigin("anonymous");
 			loader.load(
 				bgSrc,
 				(texture) => {
 					if (!disposed) scene.background = texture;
 				},
 				undefined,
-				() => {
-					Logger.warn(
-						"AvatarCanvas",
-						"Failed to load background image, using gradient",
-					);
+				(err) => {
+					Logger.warn("AvatarCanvas", "Failed to load background image", { err });
 					setDefaultBackground(scene);
 				},
 			);
-		} catch {
-			setDefaultBackground(scene);
-		}
+		};
+
+		// Initial background load
+		applyBackground(useAvatarStore.getState().backgroundImage);
+
+		// Subscribe to background changes for live preview
+		let prevBg = useAvatarStore.getState().backgroundImage;
+		const unsubBg = useAvatarStore.subscribe((state) => {
+			if (state.backgroundImage !== prevBg) {
+				prevBg = state.backgroundImage;
+				applyBackground(state.backgroundImage);
+			}
+		});
 
 		// Lighting — required for VRM MToon/PBR materials
 		const ambientLight = new AmbientLight(0xffffff, 0.7);
@@ -311,10 +320,9 @@ export function AvatarCanvas() {
 
 		async function init() {
 			// Convert absolute file paths for custom VRM models
-			const vrmUrl = modelPath.startsWith("/")
-				&& !modelPath.startsWith("/avatars/")
-				? convertFileSrc(modelPath)
-				: modelPath;
+			const vrmUrl = modelPath.startsWith("/avatars/")
+				? modelPath
+				: convertFileSrc(modelPath);
 			Logger.info("AvatarCanvas", "Loading VRM model", { modelPath, vrmUrl });
 
 			const result = await loadVrm(vrmUrl, {
@@ -333,6 +341,20 @@ export function AvatarCanvas() {
 			}
 
 			vrm = result._vrm;
+
+			if (vrm.humanoid) {
+				const head = vrm.humanoid.getNormalizedBoneNode("head");
+				if (head) {
+					const headPos = new Vector3();
+					head.getWorldPosition(headPos);
+					const targetY = headPos.y - 0.05;
+					const diffY = targetY - controls.target.y;
+					camera.position.y += diffY;
+					controls.target.y = targetY;
+					controls.update();
+				}
+			}
+
 			emotionCtrl = createEmotionController(vrm);
 			mouthCtrl = createMouthController(vrm);
 
@@ -380,7 +402,7 @@ export function AvatarCanvas() {
 		});
 
 		// Subscribe to currentEmotion changes for avatar expression
-		let prevEmotion: string = "neutral";
+		let prevEmotion = "neutral";
 		const unsubEmotion = useAvatarStore.subscribe((state) => {
 			if (state.currentEmotion !== prevEmotion) {
 				prevEmotion = state.currentEmotion;
@@ -406,6 +428,7 @@ export function AvatarCanvas() {
 			disposed = true;
 			window.removeEventListener("resize", onResize);
 			cancelAnimationFrame(frameId);
+			unsubBg();
 			unsubSpeaking();
 			unsubEmotion();
 			mouthCtrl?.stop();
