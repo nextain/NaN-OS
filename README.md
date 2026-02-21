@@ -46,7 +46,7 @@ Naia OS는 이 관계를 뒤집는다 — **"AI에게 OS를 통째로 준다."**
 
 ```
 ┌─────────────────────────────────────┐
-│         Nextain Shell (UI)          │
+│         Naia Shell (UI)          │
 │  ┌──────────┬──────────────────┐    │
 │  │  Naia   │  대화 / 작업     │    │
 │  │  Avatar  │  패널            │    │
@@ -73,7 +73,7 @@ Naia OS는 이 관계를 뒤집는다 — **"AI에게 OS를 통째로 준다."**
 
 ```
 Naia-OS/
-├── shell/          # Nextain Shell (Tauri 2 + Three.js Avatar)
+├── shell/          # Naia Shell (Tauri 2 + Three.js Avatar)
 ├── agent/          # AI 에이전트 코어 (Node.js, LLM + 도구)
 ├── config/         # OS 이미지 설정 (scripts, systemd, wrapper)
 ├── recipes/        # BlueBuild recipe
