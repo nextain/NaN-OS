@@ -1,4 +1,4 @@
-name: Build Cafelua OS
+name: Build Naia OS
 
 on:
   push:

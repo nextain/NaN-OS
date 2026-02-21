@@ -1,12 +1,12 @@
 [package]
-name = "cafelua-shell"
+name = "naia-shell"
 version = "0.1.0"
-description = "Cafelua Shell - AI Avatar Desktop"
+description = "Naia Shell - AI Avatar Desktop"
 authors = ["Luke"]
 edition = "2021"
 
 [lib]
-name = "cafelua_shell_lib"
+name = "naia_shell_lib"
 crate-type = ["lib", "cdylib", "staticlib"]
 
 [build-dependencies]

@@ -1,16 +1,16 @@
 # Naia OS 리브랜딩 및 컨셉 변경 로그
 
 - **날짜**: 2026-02-21
-- **목표**: Cafelua OS를 Naia OS로, Cafelua Lab을 Nextain Lab / Naia OS Lab으로 전면 리브랜딩
+- **목표**: Naia OS를 Naia OS로, Naia Lab을 Nextain Lab / Naia OS Lab으로 전면 리브랜딩
 
 ## 주요 변경 사항
 
 ### 1. 브랜드 및 캐릭터 변경
-- **제품명**: `Cafelua OS` → `Naia OS`
-- **조직/브랜드명**: `Cafelua` → `Nextain`
+- **제품명**: `Naia OS` → `Naia OS`
+- **조직/브랜드명**: `Naia` → `Nextain`
 - **캐릭터명**: `Alpha (알파)` → `Naia (낸)`
-- **도메인**: `lab.cafelua.com` → `naia.nextain.io` (Vercel 배포 시 반영 예정)
-- **Deep Link URL 스킴**: `cafelua://` → `nanos://`
+- **도메인**: `lab.naia.com` → `naia.nextain.io` (Vercel 배포 시 반영 예정)
+- **Deep Link URL 스킴**: `naia://` → `nanos://`
 
 ### 2. 디자인 및 테마 변경 (`nextain-desing-concept.md` 반영)
 - `Naia OS` 테마(Tailwind CSS 및 `theme.json`) 컬러 그라데이션 및 코어 컬러 변경:

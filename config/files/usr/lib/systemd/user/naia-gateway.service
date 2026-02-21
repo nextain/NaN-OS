@@ -1,21 +1,21 @@
 [Unit]
-Description=Cafelua OpenClaw Gateway
+Description=Naia OpenClaw Gateway
 Documentation=https://docs.openclaw.ai
 After=network-online.target
 Wants=network-online.target
 
 [Service]
 Type=simple
-ExecStart=/usr/bin/cafelua-gateway-wrapper
+ExecStart=/usr/bin/naia-gateway-wrapper
 Restart=on-failure
 RestartSec=5
-Environment=OPENCLAW_PROFILE=cafelua
+Environment=OPENCLAW_PROFILE=naia
 Environment=NODE_ENV=production
 
 # Security hardening
 NoNewPrivileges=true
 ProtectHome=read-only
-ReadWritePaths=%h/.cafelua %h/.openclaw
+ReadWritePaths=%h/.naia %h/.openclaw
 PrivateTmp=true
 
 [Install]

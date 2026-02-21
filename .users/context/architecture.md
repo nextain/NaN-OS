@@ -1,10 +1,10 @@
-# Cafelua OS 하이브리드 아키텍처
+# Naia OS 하이브리드 아키텍처
 
 ## 핵심 설계 철학
 
 > **처음부터 만들지 않는다. 검증된 3개 생태계를 조합한다.**
 
-Cafelua OS는 3개의 모체 프로젝트에서 각각의 강점을 가져와 조합하는 **하이브리드** 방식:
+Naia OS는 3개의 모체 프로젝트에서 각각의 강점을 가져와 조합하는 **하이브리드** 방식:
 
 | 모체 | 역할 | 가져오는 것 |
 |------|------|------------|
@@ -37,13 +37,13 @@ OpenClaw의 데몬+실행+채널+스킬 생태계 (런타임 백엔드)
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│  Cafelua Shell (Tauri 2 + React + Three.js VRM Avatar) │
+│  Naia Shell (Tauri 2 + React + Three.js VRM Avatar) │
 │  역할: 데스크톱 UI, 아바타 렌더링, 채팅 패널           │
-│  출처: Cafelua 자체 + AIRI (VRM) + shadcn/ui            │
+│  출처: Naia 자체 + AIRI (VRM) + shadcn/ui            │
 └──────────────────────┬──────────────────────────────────┘
                        │ stdio JSON lines
 ┌──────────────────────▼──────────────────────────────────┐
-│  Cafelua Agent (Node.js)                                │
+│  Naia Agent (Node.js)                                │
 │  역할: LLM 연결, 도구 오케스트레이션, Alpha 페르소나    │
 │  출처: Careti 프로바이더 + OpenCode 패턴                │
 │  기능: 멀티 LLM, TTS, 감정, 비용 추적                  │
@@ -160,7 +160,7 @@ CREATE TABLE facts (id TEXT PK, key TEXT, value TEXT, source TEXT, updated_at IN
 
 ## Gateway 연결 프로토콜
 
-Cafelua Agent가 OpenClaw Gateway에 연결하는 과정:
+Naia Agent가 OpenClaw Gateway에 연결하는 과정:
 
 ```
 1. WebSocket 연결: ws://127.0.0.1:18789

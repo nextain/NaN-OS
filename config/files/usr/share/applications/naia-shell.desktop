@@ -1,0 +1,9 @@
+[Desktop Entry]
+Name=Naia Shell
+Comment=Personal AI avatar shell
+Exec=/usr/bin/naia-shell %u
+Icon=naia
+Type=Application
+Categories=Utility;
+StartupWMClass=naia-shell
+MimeType=x-scheme-handler/naia;

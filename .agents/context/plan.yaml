@@ -51,7 +51,7 @@ phases:
         name: "Tauri window config"
         items:
           - "Default window (transparent/borderless = Phase 2)"
-          - "App icon, title: Cafelua Shell"
+          - "App icon, title: Naia Shell"
       step_6_integration:
         name: "Integration test"
         items:
@@ -113,7 +113,7 @@ phases:
         status: "complete"
         items:
           - "OpenClaw install + config (setup-openclaw.sh already exists) ✅"
-          - "Gateway local start (cafelua-gateway-wrapper) ✅"
+          - "Gateway local start (naia-gateway-wrapper) ✅"
           - "Shell → Agent → Gateway WebSocket connection verified ✅"
           - "Gateway auto-lifecycle in Tauri (spawn/health/shutdown) ✅"
         done_when: "gateway_health() returns true, Agent connects via WebSocket"
@@ -154,18 +154,18 @@ phases:
         items:
           - "Skill registry + matching ✅"
           - "Built-in skills (time ✅, memo ✅, system_status ✅) via Gateway"
-          - "Custom skill loader (~/.cafelua/skills/) ✅"
+          - "Custom skill loader (~/.naia/skills/) ✅"
           - "E2E tests: 04-skill-time, 05-skill-system, 06-skill-memo ✅"
         known_issues:
           - "skill_memo 'list all' hangs occasionally (Gateway response timeout)"
       step_4_3b:
         name: "OpenClaw skills migration (all 51)"
         status: "planned"
-        description: "Port ALL 51 OpenClaw built-in skills to Cafelua Shell. Can run parallel with 4.4."
+        description: "Port ALL 51 OpenClaw built-in skills to Naia Shell. Can run parallel with 4.4."
         current: "4 built-in (time, memo, system_status, weather)"
         target: "All 51 OpenClaw built-in skills + E2E tests for each"
         strategy: |
-          Primary: Gateway proxy via ~/.cafelua/skills/ manifest (bulk migration).
+          Primary: Gateway proxy via ~/.naia/skills/ manifest (bulk migration).
           Each skill gets a skill.json manifest → Gateway proxies to OpenClaw skill.
           Batch approach: generate manifests programmatically from OpenClaw SKILL.md frontmatter.
           E2E test per skill: invoke via agent → verify response format.
@@ -288,7 +288,7 @@ phases:
         name: "External channels"
         status: "partial"
         items:
-          - "Discord bot (discord.js) ✅ — lab.cafelua.com 내 별도 프로세스, WebSocket 기반"
+          - "Discord bot (discord.js) ✅ — lab.naia.com 내 별도 프로세스, WebSocket 기반"
           - "Google Chat webhook ✅ — POST /api/webhooks/googlechat"
           - "Telegram bot (grammY) — planned"
           - "External channels limited to Tier 0-1"
@@ -315,22 +315,22 @@ phases:
     reuse: "MoltBot: Gateway pattern, channel SDKs, Skills"
 
   phase_5:
-    name: "lab.cafelua.com integration"
+    name: "lab.naia.com integration"
     timeline: "Week 8-9"
-    deliverable: "OAuth login via lab.cafelua.com, automatic API key provisioning, credit dashboard"
+    deliverable: "OAuth login via lab.naia.com, automatic API key provisioning, credit dashboard"
     status: "partial"
     notes: "Deep link (5-1) ✅, Auth flow UI (5-2) partial ✅, LLM proxy (5-3) ✅, Credit display (5-4) partial ✅. Discord/Google Chat integration done via lab."
     architecture: |
-      Shell (Tauri) → OAuth → lab.cafelua.com → deep link cafelua:// → gatewayKey stored local
+      Shell (Tauri) → OAuth → lab.naia.com → deep link naia:// → gatewayKey stored local
       Agent → X-AnyLLM-Key: Bearer {key} → any-llm Gateway (GCP) → LLM proxy + credit deduction
       Existing direct API key mode preserved for offline/self-hosted users.
     tasks:
       step_5_1:
-        name: "Deep link handler (Tauri cafelua:// URI scheme)"
+        name: "Deep link handler (Tauri naia:// URI scheme)"
         items:
-          - "tauri.conf.json: deep-link plugin + cafelua:// scheme registration"
+          - "tauri.conf.json: deep-link plugin + naia:// scheme registration"
           - "Cargo.toml: tauri-plugin-deep-link dependency"
-          - "lib.rs: deep-link event → parse cafelua://auth?key=xxx → emit lab_auth_complete"
+          - "lib.rs: deep-link event → parse naia://auth?key=xxx → emit lab_auth_complete"
           - "capabilities/default.json: deep-link permission"
           - "package.json: @tauri-apps/plugin-deep-link frontend binding"
       step_5_2:
@@ -338,13 +338,13 @@ phases:
         items:
           - "config.ts: labKey?, labUserId? fields + hasLabKey() util"
           - "OnboardingWizard.tsx: 'Lab Login' button alongside provider selection"
-          - "Browser open → lab.cafelua.com/ko/login?redirect=desktop → deep link callback → skip apiKey step"
+          - "Browser open → lab.naia.com/ko/login?redirect=desktop → deep link callback → skip apiKey step"
           - "SettingsTab.tsx: 'Lab Account' section (connected/disconnected status, disconnect button)"
       step_5_3:
         name: "LLM proxy integration"
         items:
           - "NEW agent/src/providers/lab-proxy.ts: OpenAI-compatible proxy provider for any-llm Gateway"
-          - "When labKey set → route through https://cafelua-gateway-*.run.app/v1/chat/completions"
+          - "When labKey set → route through https://naia-gateway-*.run.app/v1/chat/completions"
           - "Header: X-AnyLLM-Key: Bearer {labKey}"
           - "Existing direct provider calls preserved when apiKey is set"
       step_5_4:
@@ -352,7 +352,7 @@ phases:
         items:
           - "CostDashboard.tsx: server balance query + display when Lab connected"
           - "Balance API: GET /v1/profile/balance (labKey auth)"
-          - "'Charge credits' button → lab.cafelua.com/billing link"
+          - "'Charge credits' button → lab.naia.com/billing link"
       step_5_5:
         name: "Tests"
         items:
@@ -385,7 +385,7 @@ phases:
         name: "Flathub (optional)"
         status: "partial"
         items:
-          - "flatpak/com.cafelua.shell.yml manifest ✅ (GNOME 47, npx pnpm, cargo build)"
+          - "flatpak/com.naia.shell.yml manifest ✅ (GNOME 47, npx pnpm, cargo build)"
           - "Build success: x86-64 ELF 204.9 MB ✅"
           - "Known: GNOME 47 EOL but required (Tauri 2 needs webkit2gtk-4.1)"
           - "Flathub submission (separate repo) — pending"
@@ -395,14 +395,14 @@ phases:
   phase_7:
     name: "OS ISO build"
     timeline: "Week 11"
-    deliverable: "Cafelua OS ISO: USB boot → install → complete AI OS"
+    deliverable: "Naia OS ISO: USB boot → install → complete AI OS"
     status: "pending"
     tasks:
       step_7_1:
         name: "Recipe + Tauri app inclusion"
         items:
           - "recipes/recipe.yml: include Phase 6 AppImage/binary in ISO"
-          - "config/files/usr/bin/cafelua-shell or AppImage placement"
+          - "config/files/usr/bin/naia-shell or AppImage placement"
           - "config/scripts/: first-boot setup script update if needed"
       step_7_2:
         name: "ISO build test"
@@ -410,7 +410,7 @@ phases:
           - "GitHub Actions iso.yml workflow dispatch"
           - "ISO download → VM boot test (QEMU/VirtualBox)"
           - "Smoke test execution"
-    done_when: "ISO boots in VM, Cafelua Shell auto-starts with Lab login option"
+    done_when: "ISO boots in VM, Naia Shell auto-starts with Lab login option"
 
   phase_8:
     name: "Gaming with Alpha"

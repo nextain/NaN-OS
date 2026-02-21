@@ -1,17 +1,17 @@
-# Cafelua OS 비전
+# Naia OS 비전
 
 ## 한 줄 요약
 
 > **OS 자체가 AI의 도구다.**
 
 기존 AI 도구들은 "사람이 AI를 도구로 쓰는" 구조.
-Cafelua OS는 뒤집는다 — **AI에게 OS를 통째로 준다.**
+Naia OS는 뒤집는다 — **AI에게 OS를 통째로 준다.**
 
 ## 핵심 컨셉
 
 ```
 기존: 사람 → [AI 도구] → 결과
-Cafelua: 사람 ↔ Alpha(AI) → [OS 전체] → 결과
+Naia: 사람 ↔ Alpha(AI) → [OS 전체] → 결과
 ```
 
 Alpha는 OS 위에서 사는 존재:
@@ -24,7 +24,7 @@ Alpha는 OS 위에서 사는 존재:
 
 ## 왜 OS인가?
 
-| 기존 접근 | 문제 | Cafelua OS |
+| 기존 접근 | 문제 | Naia OS |
 |-----------|------|-----------|
 | VS Code 확장 | IDE 열어야 AI 사용 | 항상 켜져있음 |
 | CLI 에이전트 | 터미널만 제어 | OS 전체 제어 |

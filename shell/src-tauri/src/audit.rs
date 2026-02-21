@@ -128,7 +128,7 @@ pub fn maybe_log_event(db: &AuditDb, chunk: &serde_json::Value) {
         success,
         payload.as_deref(),
     ) {
-        eprintln!("[Cafelua] Audit log error: {}", e);
+        eprintln!("[Naia] Audit log error: {}", e);
     }
 }
 

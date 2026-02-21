@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Setup OpenClaw for Cafelua OS
-# Installs openclaw as a local npm package in ~/.cafelua/openclaw/
+# Setup OpenClaw for Naia OS
+# Installs openclaw as a local npm package in ~/.naia/openclaw/
 
-OPENCLAW_DIR="${HOME}/.cafelua/openclaw"
+OPENCLAW_DIR="${HOME}/.naia/openclaw"
 OPENCLAW_VERSION="2026.2.15"
 
-echo "[cafelua] Setting up OpenClaw Gateway..."
+echo "[naia] Setting up OpenClaw Gateway..."
 
 # Require Node.js 22+
 NODE_VERSION=$(node -v 2>/dev/null | sed 's/v//' | cut -d. -f1)
@@ -23,7 +23,7 @@ mkdir -p "${OPENCLAW_DIR}"
 if [ ! -f "${OPENCLAW_DIR}/package.json" ]; then
     cat > "${OPENCLAW_DIR}/package.json" <<CONF
 {
-  "name": "cafelua-openclaw",
+  "name": "naia-openclaw",
   "version": "1.0.0",
   "private": true,
   "dependencies": {
@@ -40,7 +40,7 @@ npm install --production
 # Verify
 if [ -x "${OPENCLAW_DIR}/node_modules/.bin/openclaw" ]; then
     VERSION=$("${OPENCLAW_DIR}/node_modules/.bin/openclaw" --version 2>/dev/null)
-    echo "[cafelua] OpenClaw ${VERSION} installed at ${OPENCLAW_DIR}"
+    echo "[naia] OpenClaw ${VERSION} installed at ${OPENCLAW_DIR}"
 else
     echo "ERROR: OpenClaw installation failed" >&2
     exit 1
@@ -49,8 +49,8 @@ fi
 # Enable systemd service
 if command -v systemctl &>/dev/null; then
     systemctl --user daemon-reload
-    systemctl --user enable cafelua-gateway.service
-    echo "[cafelua] Gateway service enabled (start with: systemctl --user start cafelua-gateway)"
+    systemctl --user enable naia-gateway.service
+    echo "[naia] Gateway service enabled (start with: systemctl --user start naia-gateway)"
 fi
 
-echo "[cafelua] Setup complete."
+echo "[naia] Setup complete."

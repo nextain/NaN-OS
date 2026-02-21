@@ -105,10 +105,10 @@ shell:
       - "cargo install tauri-driver --locked"
       - "shell/.env with GEMINI_API_KEY"
       - "Gateway running on :18789"
-      - "Debug binary built: cargo build -p cafelua-shell"
+      - "Debug binary built: cargo build -p naia-shell"
     env_vars:
       CAFE_E2E_API_KEY: "Override for GEMINI_API_KEY (optional)"
-      CAFE_GATEWAY_TOKEN: "Gateway auth token (default: cafelua-dev-token)"
+      CAFE_GATEWAY_TOKEN: "Gateway auth token (default: naia-dev-token)"
     run: "cd shell && pnpm run test:e2e:tauri"
     scenarios:
       - name: "01 App launch"
@@ -202,10 +202,10 @@ os:
       Wait for login prompt (or auto-login).
       SSH into VM, check systemd services.
     examples:
-      - "systemctl --user is-active cafelua-agent.service → active"
+      - "systemctl --user is-active naia-agent.service → active"
       - "Node.js available: node --version → v22+"
-      - "Cafelua Shell desktop entry exists"
-      - "~/.cafelua/ directory created"
+      - "Naia Shell desktop entry exists"
+      - "~/.naia/ directory created"
 
   ci:
     how: "GitHub Actions with QEMU. Boot ISO, run smoke tests, screenshot."
@@ -256,7 +256,7 @@ e2e_full_flow:
       steps:
         - "Boot VM from ISO (QEMU)"
         - "Auto-login → desktop session starts"
-        - "Cafelua Shell auto-launches (systemd + desktop entry)"
+        - "Naia Shell auto-launches (systemd + desktop entry)"
         - "Avatar renders (VRM, idle animation)"
         - "Type 'hello' in chat panel"
         - "LLM responds, avatar lip-syncs"
@@ -475,7 +475,7 @@ phase_verification:
       - "[ ] Memory persists across sessions"
       - "[ ] Memory recall works ('what did I say yesterday?')"
       - "[ ] Skills: time, weather, system status, memo"
-      - "[ ] Custom skill loading from ~/.cafelua/skills/"
+      - "[ ] Custom skill loading from ~/.naia/skills/"
     smoke_test: "Close Shell → Discord DM → Alpha responds → Reopen Shell → context preserved"
     e2e: "external_channel"
 

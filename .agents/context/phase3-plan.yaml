@@ -22,7 +22,7 @@ origin_tracking:
 
 conflicts_resolved:
   permission_model:
-    problem: "careti=per-tool toggles, opencode=pattern wildcards, cafelua=tier 0-3"
+    problem: "careti=per-tool toggles, opencode=pattern wildcards, naia=tier 0-3"
     solution: "3-layer: tool-type toggle (UI) → tier hard-block → pattern ruleset + LLM hint"
     eval_order: [tool_toggle_check, tier3_block, tree_sitter_analysis, pattern_ruleset, llm_hint, ask_user]
 
@@ -31,7 +31,7 @@ conflicts_resolved:
     solution: "Hybrid ToolDefinition: careti registry + opencode Zod params"
 
   protocol:
-    problem: "careti=gRPC, opencode=HTTP+SSE, cafelua=stdio"
+    problem: "careti=gRPC, opencode=HTTP+SSE, naia=stdio"
     solution: "Extend existing stdio with new chunk types (backward compatible)"
 
   approval_flow:

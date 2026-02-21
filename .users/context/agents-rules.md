@@ -1,10 +1,10 @@
-# Cafelua OS 프로젝트 규칙
+# Naia OS 프로젝트 규칙
 
 > SoT: `.agents/context/agents-rules.json`의 한국어 미러
 
 ## 프로젝트 정체성
 
-- **이름**: Cafelua OS
+- **이름**: Naia OS
 - **성격**: Bazzite 기반 개인 AI OS, 가상 아바타 탑재
 - **철학**: OS 자체가 AI의 도구. 처음부터 만들지 않고 조립한다.
 - **핵심**: USB 부팅 → Alpha 아바타가 맞이 → AI가 OS를 제어
@@ -29,7 +29,7 @@ Gateway ←채널 SDK→ Discord, Telegram 등
 ### 소스 디렉토리
 
 ```
-cafelua-os/
+naia-os/
 ├── shell/      # Tauri 데스크탑 앱 (Avatar + UI)
 ├── agent/      # AI 에이전트 코어
 ├── gateway/    # 항상 실행되는 데몬
@@ -126,7 +126,7 @@ tests/e2e/*.spec.ts               # E2E
 - 서브에이전트 생성 → 병렬 실행 → 결과 병합
 
 **OS:**
-- ISO 부팅 → 로그인 → Cafelua Shell 자동 시작
+- ISO 부팅 → 로그인 → Naia Shell 자동 시작
 - 첫 부팅 → 온보딩 위자드 → API 키 설정 → 첫 대화
 
 ### 테스트 명령어
@@ -159,7 +159,7 @@ console.error("...")
 
 ### 올바른 사용
 ```typescript
-import { Logger } from "@cafelua/shared/logger";
+import { Logger } from "@naia/shared/logger";
 
 Logger.debug("[AgentCore] Processing message", { id });
 Logger.info("[AgentCore] LLM response received", { model, tokens });
@@ -177,7 +177,7 @@ Logger.error("[Shell] Avatar render failed", error);
 
 ### 감사 로그 (Audit Log)
 - **목적**: AI의 모든 행동을 기록 (보안 + 투명성)
-- **저장**: `~/.cafelua/audit.db` (SQLite)
+- **저장**: `~/.naia/audit.db` (SQLite)
 - **필드**: timestamp, tier, action, target, result
 - **보존**: 90일 기본
 
@@ -206,7 +206,7 @@ Logger.error("[Shell] Avatar render failed", error);
 - **Podman**: 루트리스 컨테이너
 
 ### 인증 정보
-- **저장**: `~/.cafelua/credentials/` (암호화)
+- **저장**: `~/.naia/credentials/` (암호화)
 - **규칙**: Agent는 키를 사용할 수 있지만 값을 볼 수 없음
 - **금지**: API 키, 토큰, 비밀번호는 로그/감사에 절대 노출 불가
 

@@ -1,7 +1,7 @@
-description: Cafelua OS hybrid architecture (mirror of .users/context/architecture.md)
+description: Naia OS hybrid architecture (mirror of .users/context/architecture.md)
 
 design_philosophy: |
-  Cafelua OS is NOT built from scratch. It's a hybrid assembly of 3 proven ecosystems:
+  Naia OS is NOT built from scratch. It's a hybrid assembly of 3 proven ecosystems:
   OpenClaw (Gateway/exec), project-careti (LLM/tools), OpenCode (architecture pattern).
   Each contributes its strongest capability. The result is greater than any single source.
 
@@ -44,7 +44,7 @@ three_pillars:
       auth: "device identity + token scopes (Ed25519 signed nonce)"
       client_id: "cli (paired device identifier)"
       methods: "88 methods (agent, sessions.*, exec.*, skills.*, channels.*, etc.)"
-    what_cafelua_uses:
+    what_naia_uses:
       - "Gateway daemon as systemd user service"
       - "Command execution via exec.bash (preferred) or node.invoke fallback"
       - "exec.approvals for permission system"
@@ -62,7 +62,7 @@ three_pillars:
       - "Alpha persona: system prompt, emotion mapping"
       - "Cost tracking: per-request cost display"
       - "stdio JSON lines protocol: Shell ↔ Agent"
-    what_cafelua_uses:
+    what_naia_uses:
       - "LLM providers (gemini.ts, xai.ts, anthropic.ts)"
       - "Tool loop (max 10 iterations, abort support)"
       - "Permission tiers 0-3"
@@ -74,7 +74,7 @@ three_pillars:
       - "Clean client/server separation"
       - "Provider abstraction layer"
       - "LSP-style communication pattern"
-    what_cafelua_uses:
+    what_naia_uses:
       - "Shell (client) / Agent (server) separation via stdio"
       - "Provider factory pattern (buildProvider)"
       - "Clean module boundaries (shell/agent/gateway)"
@@ -82,13 +82,13 @@ three_pillars:
 runtime_architecture:
   diagram: |
     ┌─────────────────────────────────────────────────────────┐
-    │  Cafelua Shell (Tauri 2 + React + Three.js VRM Avatar) │
+    │  Naia Shell (Tauri 2 + React + Three.js VRM Avatar) │
     │  Role: Desktop UI, avatar rendering, chat panel        │
-    │  Source: Cafelua + AIRI (VRM) + shadcn/ui              │
+    │  Source: Naia + AIRI (VRM) + shadcn/ui              │
     └──────────────────────┬──────────────────────────────────┘
                            │ stdio JSON lines
     ┌──────────────────────▼──────────────────────────────────┐
-    │  Cafelua Agent (Node.js)                                │
+    │  Naia Agent (Node.js)                                │
     │  Role: LLM connection, tool orchestration, Alpha persona│
     │  Source: Careti providers + OpenCode pattern             │
     │  Features: multi-LLM, TTS, emotion, cost tracking       │
@@ -151,7 +151,7 @@ security_layers:
   principle: "Defense in depth. Every layer is independent."
 
 gateway_client_protocol:
-  description: "How Cafelua Agent connects to OpenClaw Gateway"
+  description: "How Naia Agent connects to OpenClaw Gateway"
   steps:
     1_ws_connect: "WebSocket connect to ws://127.0.0.1:18789"
     2_challenge: "Receive connect.challenge event with nonce"

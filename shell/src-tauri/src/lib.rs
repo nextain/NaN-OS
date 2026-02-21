@@ -48,7 +48,7 @@ fn lock_or_recover<'a, T>(mutex: &'a Mutex<T>, name: &str) -> MutexGuard<'a, T> 
         Ok(guard) => guard,
         Err(poisoned) => {
             log_both(&format!(
-                "[Cafelua] Recovered poisoned lock: {} (another task failed)",
+                "[Naia] Recovered poisoned lock: {} (another task failed)",
                 name
             ));
             poisoned.into_inner()
@@ -112,10 +112,10 @@ fn save_window_state(app_handle: &AppHandle, state: &WindowState) {
     }
 }
 
-/// Get log directory (~/.cafelua/logs/) and ensure it exists
+/// Get log directory (~/.naia/logs/) and ensure it exists
 fn log_dir() -> std::path::PathBuf {
     let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".to_string());
-    let dir = std::path::PathBuf::from(home).join(".cafelua/logs");
+    let dir = std::path::PathBuf::from(home).join(".naia/logs");
     let _ = std::fs::create_dir_all(&dir);
     dir
 }
@@ -133,7 +133,7 @@ fn open_log_file(component: &str) -> Option<std::fs::File> {
 /// Write a line to a log file and stderr
 fn log_both(msg: &str) {
     eprintln!("{}", msg);
-    if let Some(mut f) = open_log_file("cafelua") {
+    if let Some(mut f) = open_log_file("naia") {
         use std::io::Write as _;
         let secs = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -147,10 +147,10 @@ fn debug_e2e_enabled() -> bool {
     matches!(std::env::var("CAFE_DEBUG_E2E").ok().as_deref(), Some("1" | "true" | "TRUE"))
 }
 
-/// Get the run directory (~/.cafelua/run/) for PID files
+/// Get the run directory (~/.naia/run/) for PID files
 fn run_dir() -> std::path::PathBuf {
     let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".to_string());
-    let dir = std::path::PathBuf::from(home).join(".cafelua/run");
+    let dir = std::path::PathBuf::from(home).join(".naia/run");
     let _ = std::fs::create_dir_all(&dir);
     dir
 }
@@ -159,7 +159,7 @@ fn run_dir() -> std::path::PathBuf {
 fn write_pid_file(component: &str, pid: u32) {
     let path = run_dir().join(format!("{}.pid", component));
     let _ = std::fs::write(&path, pid.to_string());
-    log_both(&format!("[Cafelua] PID file written: {} (PID {})", path.display(), pid));
+    log_both(&format!("[Naia] PID file written: {} (PID {})", path.display(), pid));
 }
 
 /// Read PID from a PID file (returns None if file doesn't exist or is invalid)
@@ -191,7 +191,7 @@ fn cleanup_orphan_processes() {
                 Ok(p) if p > 0 => p,
                 _ => {
                     log_both(&format!(
-                        "[Cafelua] Invalid PID {} for {} — skipping",
+                        "[Naia] Invalid PID {} for {} — skipping",
                         pid, component
                     ));
                     remove_pid_file(component);
@@ -200,7 +200,7 @@ fn cleanup_orphan_processes() {
             };
             if is_pid_alive(pid) {
                 log_both(&format!(
-                    "[Cafelua] Orphan {} found (PID {}) — sending SIGTERM",
+                    "[Naia] Orphan {} found (PID {}) — sending SIGTERM",
                     component, pid
                 ));
                 unsafe {
@@ -210,7 +210,7 @@ fn cleanup_orphan_processes() {
                 std::thread::sleep(std::time::Duration::from_millis(500));
                 if is_pid_alive(pid) {
                     log_both(&format!(
-                        "[Cafelua] Orphan {} still alive (PID {}) — sending SIGKILL",
+                        "[Naia] Orphan {} still alive (PID {}) — sending SIGKILL",
                         component, pid
                     ));
                     unsafe {
@@ -243,7 +243,7 @@ fn start_gateway_health_monitor(app_handle: AppHandle) -> Arc<std::sync::atomic:
 
             if healthy {
                 if consecutive_failures > 0 {
-                    log_both("[Cafelua] Gateway recovered");
+                    log_both("[Naia] Gateway recovered");
                     consecutive_failures = 0;
                 }
                 let _ = app_handle.emit(
@@ -253,7 +253,7 @@ fn start_gateway_health_monitor(app_handle: AppHandle) -> Arc<std::sync::atomic:
             } else {
                 consecutive_failures += 1;
                 log_both(&format!(
-                    "[Cafelua] Gateway health check failed (consecutive: {})",
+                    "[Naia] Gateway health check failed (consecutive: {})",
                     consecutive_failures
                 ));
                 let _ = app_handle.emit(
@@ -267,7 +267,7 @@ fn start_gateway_health_monitor(app_handle: AppHandle) -> Arc<std::sync::atomic:
 
                 // Auto-restart after 3 consecutive failures
                 if consecutive_failures >= 3 {
-                    log_both("[Cafelua] Attempting Gateway restart...");
+                    log_both("[Naia] Attempting Gateway restart...");
                     let restart_result = {
                         let state = app_handle.state::<AppState>();
                         let guard_result = state.gateway.lock();
@@ -290,7 +290,7 @@ fn start_gateway_health_monitor(app_handle: AppHandle) -> Arc<std::sync::atomic:
                                 }
                                 Err(e) => {
                                     log_both(&format!(
-                                        "[Cafelua] Gateway restart failed: {}",
+                                        "[Naia] Gateway restart failed: {}",
                                         e
                                     ));
                                     None
@@ -303,7 +303,7 @@ fn start_gateway_health_monitor(app_handle: AppHandle) -> Arc<std::sync::atomic:
                     if let Some(managed) = restart_result {
                         consecutive_failures = 0;
                         log_both(&format!(
-                            "[Cafelua] Gateway restarted (managed={})",
+                            "[Naia] Gateway restarted (managed={})",
                             managed
                         ));
                         let _ = app_handle.emit(
@@ -393,14 +393,14 @@ fn check_gateway_health_sync() -> bool {
 fn find_openclaw_paths() -> Result<(std::path::PathBuf, String, String), String> {
     let node_bin = find_node_binary()?;
     let home = std::env::var("HOME").unwrap_or_default();
-    let openclaw_bin = format!("{}/.cafelua/openclaw/node_modules/.bin/openclaw", home);
+    let openclaw_bin = format!("{}/.naia/openclaw/node_modules/.bin/openclaw", home);
     if !std::path::Path::new(&openclaw_bin).exists() {
         return Err(format!(
             "OpenClaw not installed at {}. Run: config/scripts/setup-openclaw.sh",
             openclaw_bin
         ));
     }
-    let config_path = format!("{}/.cafelua/openclaw/openclaw.json", home);
+    let config_path = format!("{}/.naia/openclaw/openclaw.json", home);
     Ok((node_bin, openclaw_bin, config_path))
 }
 
@@ -410,7 +410,7 @@ fn spawn_node_host(
     openclaw_bin: &str,
     config_path: &str,
 ) -> Result<Child, String> {
-    log_both("[Cafelua] Spawning Node Host: node run --host 127.0.0.1 --port 18789");
+    log_both("[Naia] Spawning Node Host: node run --host 127.0.0.1 --port 18789");
 
     let gateway_log = open_log_file("node-host");
     let stdout_cfg = match &gateway_log {
@@ -439,7 +439,7 @@ fn spawn_node_host(
         .map_err(|e| format!("Failed to spawn Node Host: {}", e))?;
 
     log_both(&format!(
-        "[Cafelua] Node Host spawned (PID: {})",
+        "[Naia] Node Host spawned (PID: {})",
         child.id()
     ));
     Ok(child)
@@ -449,7 +449,7 @@ fn spawn_node_host(
 fn spawn_gateway() -> Result<GatewayProcess, String> {
     // 1. Check if already running (e.g. systemd or manual start)
     if check_gateway_health_sync() {
-        log_both("[Cafelua] Gateway already running — reusing existing instance");
+        log_both("[Naia] Gateway already running — reusing existing instance");
         let child = Command::new("true")
             .spawn()
             .map_err(|e| format!("Failed to create dummy process: {}", e))?;
@@ -460,7 +460,7 @@ fn spawn_gateway() -> Result<GatewayProcess, String> {
                 match spawn_node_host(&node_bin, &openclaw_bin, &config_path) {
                     Ok(nh) => Some(nh),
                     Err(e) => {
-                        log_both(&format!("[Cafelua] Node Host spawn failed: {}", e));
+                        log_both(&format!("[Naia] Node Host spawn failed: {}", e));
                         None
                     }
                 }
@@ -479,7 +479,7 @@ fn spawn_gateway() -> Result<GatewayProcess, String> {
     let (node_bin, openclaw_bin, config_path) = find_openclaw_paths()?;
 
     log_both(&format!(
-        "[Cafelua] Spawning Gateway: {} {} gateway run --bind loopback --port 18789",
+        "[Naia] Spawning Gateway: {} {} gateway run --bind loopback --port 18789",
         node_bin.display(),
         openclaw_bin
     ));
@@ -509,7 +509,7 @@ fn spawn_gateway() -> Result<GatewayProcess, String> {
         .map_err(|e| format!("Failed to spawn Gateway: {}", e))?;
 
     log_both(&format!(
-        "[Cafelua] Gateway process spawned (PID: {})",
+        "[Naia] Gateway process spawned (PID: {})",
         child.id()
     ));
 
@@ -519,7 +519,7 @@ fn spawn_gateway() -> Result<GatewayProcess, String> {
         std::thread::sleep(std::time::Duration::from_millis(500));
         if check_gateway_health_sync() {
             log_both(&format!(
-                "[Cafelua] Gateway healthy after {}ms",
+                "[Naia] Gateway healthy after {}ms",
                 (i + 1) * 500
             ));
             gateway_healthy = true;
@@ -528,7 +528,7 @@ fn spawn_gateway() -> Result<GatewayProcess, String> {
     }
 
     if !gateway_healthy {
-        log_both("[Cafelua] Gateway spawned but not yet healthy — continuing anyway");
+        log_both("[Naia] Gateway spawned but not yet healthy — continuing anyway");
     }
 
     // 5. Spawn Node Host (after Gateway is ready)
@@ -539,7 +539,7 @@ fn spawn_gateway() -> Result<GatewayProcess, String> {
             Some(nh)
         }
         Err(e) => {
-            log_both(&format!("[Cafelua] Node Host spawn failed: {}", e));
+            log_both(&format!("[Naia] Node Host spawn failed: {}", e));
             None
         }
     };
@@ -553,11 +553,11 @@ fn spawn_gateway() -> Result<GatewayProcess, String> {
 
 /// Spawn the Node.js agent-core process with stdio pipes
 fn spawn_agent_core(app_handle: &AppHandle, audit_db: &audit::AuditDb) -> Result<AgentProcess, String> {
-    let agent_path = std::env::var("CAFELUA_AGENT_PATH")
+    let agent_path = std::env::var("NAIA_AGENT_PATH")
         .unwrap_or_else(|_| "node".to_string());
 
     // In dev: tsx for TypeScript direct execution; in prod: compiled JS
-    let agent_script = std::env::var("CAFELUA_AGENT_SCRIPT")
+    let agent_script = std::env::var("NAIA_AGENT_SCRIPT")
         .unwrap_or_else(|_| {
             // Try paths relative to current dir (src-tauri/ in dev)
             let candidates = [
@@ -569,7 +569,7 @@ fn spawn_agent_core(app_handle: &AppHandle, audit_db: &audit::AuditDb) -> Result
                     .map(|d| d.join(rel))
                     .unwrap_or_default();
                 if dev_path.exists() {
-                    eprintln!("[Cafelua] Found agent at: {}", dev_path.display());
+                    eprintln!("[Naia] Found agent at: {}", dev_path.display());
                     return dev_path.canonicalize()
                         .unwrap_or(dev_path)
                         .to_string_lossy()
@@ -582,13 +582,13 @@ fn spawn_agent_core(app_handle: &AppHandle, audit_db: &audit::AuditDb) -> Result
 
     let use_tsx = agent_script.ends_with(".ts");
     let runner = if use_tsx {
-        std::env::var("CAFELUA_AGENT_RUNNER")
+        std::env::var("NAIA_AGENT_RUNNER")
             .unwrap_or_else(|_| "npx".to_string())
     } else {
         agent_path.clone()
     };
 
-    eprintln!("[Cafelua] Starting agent-core: {} {}", runner, agent_script);
+    eprintln!("[Naia] Starting agent-core: {} {}", runner, agent_script);
 
     let mut child = if use_tsx {
         Command::new(&runner)
@@ -667,16 +667,16 @@ fn spawn_agent_core(app_handle: &AppHandle, audit_db: &audit::AuditDb) -> Result
                     }
                     // Forward raw JSON to frontend
                     if let Err(e) = handle.emit("agent_response", trimmed) {
-                        eprintln!("[Cafelua] Failed to emit agent_response: {}", e);
+                        eprintln!("[Naia] Failed to emit agent_response: {}", e);
                     }
                 }
                 Err(e) => {
-                    eprintln!("[Cafelua] Error reading agent stdout: {}", e);
+                    eprintln!("[Naia] Error reading agent stdout: {}", e);
                     break;
                 }
             }
         }
-        eprintln!("[Cafelua] agent-core stdout reader ended");
+        eprintln!("[Naia] agent-core stdout reader ended");
     });
 
     Ok(AgentProcess { child, stdin })
@@ -757,7 +757,7 @@ fn send_to_agent(
         // Check if process is still alive
         match process.child.try_wait() {
             Ok(Some(status)) => {
-                eprintln!("[Cafelua] agent-core exited: {:?}", status);
+                eprintln!("[Naia] agent-core exited: {:?}", status);
                 *guard = None;
                 drop(guard);
                 if let Some(handle) = app_handle {
@@ -766,7 +766,7 @@ fn send_to_agent(
                 return Err("agent-core died".to_string());
             }
             Ok(None) => {} // still running
-            Err(e) => eprintln!("[Cafelua] Failed to check agent status: {}", e),
+            Err(e) => eprintln!("[Naia] Failed to check agent status: {}", e),
         }
 
         // Write to stdin
@@ -779,7 +779,7 @@ fn send_to_agent(
                 Ok(())
             }
             Err(e) => {
-                eprintln!("[Cafelua] Write to agent failed: {}", e);
+                eprintln!("[Naia] Write to agent failed: {}", e);
                 *guard = None;
                 drop(guard);
                 if let Some(handle) = app_handle {
@@ -805,7 +805,7 @@ fn restart_agent(
     message: &str,
     audit_db: Option<&audit::AuditDb>,
 ) -> Result<(), String> {
-    eprintln!("[Cafelua] Restarting agent-core...");
+    eprintln!("[Naia] Restarting agent-core...");
     // Use a temporary empty db if none provided (shouldn't happen in practice)
     let empty_db;
     let db = match audit_db {
@@ -821,7 +821,7 @@ fn restart_agent(
         Ok(process) => {
             let mut guard = lock_or_recover(&state.agent, "state.agent(restart_agent)");
             *guard = Some(process);
-            eprintln!("[Cafelua] agent-core restarted");
+            eprintln!("[Naia] agent-core restarted");
             drop(guard);
             std::thread::sleep(std::time::Duration::from_millis(300));
             send_to_agent(state, message, None, audit_db)
@@ -830,7 +830,7 @@ fn restart_agent(
     }
 }
 
-/// Scan ~/.cafelua/skills/ for skill manifests + hardcoded built-in skills
+/// Scan ~/.naia/skills/ for skill manifests + hardcoded built-in skills
 #[tauri::command]
 async fn list_skills() -> Result<Vec<SkillManifestInfo>, String> {
     let mut skills: Vec<SkillManifestInfo> = Vec::new();
@@ -858,9 +858,9 @@ async fn list_skills() -> Result<Vec<SkillManifestInfo>, String> {
         });
     }
 
-    // Scan ~/.cafelua/skills/
+    // Scan ~/.naia/skills/
     let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".to_string());
-    let skills_dir = std::path::PathBuf::from(&home).join(".cafelua/skills");
+    let skills_dir = std::path::PathBuf::from(&home).join(".naia/skills");
     if skills_dir.is_dir() {
         if let Ok(entries) = std::fs::read_dir(&skills_dir) {
             for entry in entries.flatten() {
@@ -1237,7 +1237,7 @@ async fn generate_oauth_state(state: tauri::State<'_, AppState>) -> Result<Strin
 async fn reset_window_state(app: AppHandle) -> Result<(), String> {
     if let Some(path) = window_state_path(&app) {
         let _ = std::fs::remove_file(&path);
-        eprintln!("[Cafelua] Window state reset");
+        eprintln!("[Naia] Window state reset");
     }
     Ok(())
 }
@@ -1307,7 +1307,7 @@ pub fn run() {
             let audit_db = audit::init_db(&audit_db_path)
                 .map_err(|e| -> Box<dyn std::error::Error> { format!("Failed to init audit DB: {}", e).into() })?;
             app.manage(AuditState { db: audit_db.clone() });
-            eprintln!("[Cafelua] Audit DB initialized at: {}", audit_db_path.display());
+            eprintln!("[Naia] Audit DB initialized at: {}", audit_db_path.display());
 
             // Initialize memory DB
             let memory_db_path = app_handle
@@ -1318,12 +1318,12 @@ pub fn run() {
             let memory_db = memory::init_db(&memory_db_path)
                 .map_err(|e| -> Box<dyn std::error::Error> { format!("Failed to init memory DB: {}", e).into() })?;
             app.manage(MemoryState { db: memory_db });
-            eprintln!("[Cafelua] Memory DB initialized at: {}", memory_db_path.display());
+            eprintln!("[Naia] Memory DB initialized at: {}", memory_db_path.display());
 
-            // Register deep-link handler for cafelua:// URI scheme
+            // Register deep-link handler for naia:// URI scheme
             #[cfg(desktop)]
             app.deep_link().register_all().unwrap_or_else(|e| {
-                log_both(&format!("[Cafelua] Deep link registration failed: {}", e));
+                log_both(&format!("[Naia] Deep link registration failed: {}", e));
             });
 
             let deep_link_handle = app_handle.clone();
@@ -1335,8 +1335,8 @@ pub fn run() {
                     let url_str = url.as_str();
                     // Redact query params (may contain lab key)
                     let redacted = url_str.split('?').next().unwrap_or(url_str);
-                    log_both(&format!("[Cafelua] Deep link received: {}?[REDACTED]", redacted));
-                    // Parse cafelua://auth?key=xxx or cafelua://auth?code=xxx
+                    log_both(&format!("[Naia] Deep link received: {}?[REDACTED]", redacted));
+                    // Parse naia://auth?key=xxx or naia://auth?code=xxx
                     if let Ok(parsed) = url::Url::parse(url_str) {
                         if parsed.host_str() == Some("auth") || parsed.path() == "auth" || parsed.path() == "/auth" {
                             let mut key = None;
@@ -1368,11 +1368,11 @@ pub fn run() {
                                         ) = None;
                                     }
                                     Some(_) => {
-                                        log_both("[Cafelua] Deep link rejected: state mismatch");
+                                        log_both("[Naia] Deep link rejected: state mismatch");
                                         continue;
                                     }
                                     None => {
-                                        log_both("[Cafelua] Deep link rejected: missing state parameter");
+                                        log_both("[Naia] Deep link rejected: missing state parameter");
                                         continue;
                                     }
                                 }
@@ -1389,7 +1389,7 @@ pub fn run() {
                                 let is_valid = lab_key.len() <= 256
                                     && lab_key.chars().all(|c| c.is_alphanumeric() || c == '-' || c == '_' || c == '.');
                                 if !is_valid {
-                                    log_both("[Cafelua] Deep link rejected: invalid key format");
+                                    log_both("[Naia] Deep link rejected: invalid key format");
                                     continue;
                                 }
                                 let payload = serde_json::json!({
@@ -1397,7 +1397,7 @@ pub fn run() {
                                     "labUserId": validated_user_id,
                                 });
                                 let _ = deep_link_handle.emit("lab_auth_complete", payload);
-                                log_both("[Cafelua] Lab auth complete — key received via deep link");
+                                log_both("[Naia] Lab auth complete — key received via deep link");
                             }
                         }
                     }
@@ -1409,7 +1409,7 @@ pub fn run() {
                 if let Some(saved) = load_window_state(&app_handle) {
                     let _ = window.set_size(PhysicalSize::new(saved.width, saved.height));
                     let _ = window.set_position(PhysicalPosition::new(saved.x, saved.y));
-                    eprintln!("[Cafelua] Window restored: {}x{} at ({},{})", saved.width, saved.height, saved.x, saved.y);
+                    eprintln!("[Naia] Window restored: {}x{} at ({},{})", saved.width, saved.height, saved.x, saved.y);
                 } else if let Some(monitor) = window.current_monitor().ok().flatten() {
                     let monitor_size = monitor.size();
                     let monitor_pos = monitor.position();
@@ -1420,7 +1420,7 @@ pub fn run() {
                     let y = monitor_pos.y;
                     let _ = window.set_size(PhysicalSize::new(width, height));
                     let _ = window.set_position(PhysicalPosition::new(x, y));
-                    eprintln!("[Cafelua] Window docked: {}x{} at ({},{})", width, height, x, y);
+                    eprintln!("[Naia] Window docked: {}x{} at ({},{})", width, height, x, y);
                 }
                 let _ = window.show();
             }
@@ -1442,8 +1442,8 @@ pub fn run() {
             }
 
             // Log session start
-            log_both("[Cafelua] === Session started ===");
-            log_both(&format!("[Cafelua] Log files at: {}", log_dir().display()));
+            log_both("[Naia] === Session started ===");
+            log_both(&format!("[Naia] Log files at: {}", log_dir().display()));
 
             // Clean up orphan processes from previous sessions
             cleanup_orphan_processes();
@@ -1463,14 +1463,14 @@ pub fn run() {
                     let mut guard = lock_or_recover(&state.gateway, "state.gateway(setup)");
                     *guard = Some(process);
                     log_both(&format!(
-                        "[Cafelua] Gateway ready (managed={}, node_host={})",
+                        "[Naia] Gateway ready (managed={}, node_host={})",
                         managed, has_node_host
                     ));
                     (true, managed)
                 }
                 Err(e) => {
-                    log_both(&format!("[Cafelua] Gateway not available: {}", e));
-                    log_both("[Cafelua] Running without Gateway (tools will be unavailable)");
+                    log_both(&format!("[Naia] Gateway not available: {}", e));
+                    log_both("[Naia] Running without Gateway (tools will be unavailable)");
                     (false, false)
                 }
             };
@@ -1494,11 +1494,11 @@ pub fn run() {
                 Ok(process) => {
                     let mut guard = lock_or_recover(&state.agent, "state.agent(setup)");
                     *guard = Some(process);
-                    log_both("[Cafelua] agent-core started");
+                    log_both("[Naia] agent-core started");
                 }
                 Err(e) => {
-                    log_both(&format!("[Cafelua] agent-core not available: {}", e));
-                    log_both("[Cafelua] Running without agent (chat will be unavailable)");
+                    log_both(&format!("[Naia] agent-core not available: {}", e));
+                    log_both("[Naia] Running without agent (chat will be unavailable)");
                 }
             }
 
@@ -1540,7 +1540,7 @@ pub fn run() {
                     let agent_lock = state.agent.lock();
                     if let Ok(mut guard) = agent_lock {
                         if let Some(mut process) = guard.take() {
-                            eprintln!("[Cafelua] Terminating agent-core...");
+                            eprintln!("[Naia] Terminating agent-core...");
                             let _ = process.child.kill();
                         }
                     }
@@ -1551,21 +1551,21 @@ pub fn run() {
                         if let Some(mut process) = guard.take() {
                             // Kill Node Host first
                             if let Some(ref mut nh) = process.node_host {
-                                log_both("[Cafelua] Terminating Node Host...");
+                                log_both("[Naia] Terminating Node Host...");
                                 let _ = nh.kill();
                             }
                             remove_pid_file("node-host");
                             // Kill Gateway
                             if process.we_spawned {
-                                log_both("[Cafelua] Terminating Gateway (we spawned it)...");
+                                log_both("[Naia] Terminating Gateway (we spawned it)...");
                                 let _ = process.child.kill();
                                 remove_pid_file("gateway");
                             } else {
-                                log_both("[Cafelua] Gateway not managed by us — leaving it running");
+                                log_both("[Naia] Gateway not managed by us — leaving it running");
                             }
                         }
                     }
-                    log_both("[Cafelua] === Session ended ===");
+                    log_both("[Naia] === Session ended ===");
                 }
                 _ => {}
             }
@@ -1670,6 +1670,6 @@ mod tests {
     fn log_dir_creates_directory() {
         let dir = log_dir();
         assert!(dir.exists());
-        assert!(dir.ends_with(".cafelua/logs"));
+        assert!(dir.ends_with(".naia/logs"));
     }
 }

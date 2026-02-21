@@ -1,15 +1,15 @@
 [Unit]
-Description=Cafelua Gateway (OpenClaw)
+Description=Naia Gateway (OpenClaw)
 Documentation=https://github.com/nichochar/openclaw
 After=network-online.target
 Wants=network-online.target
 
 [Service]
 Type=simple
-ExecStart=%h/.cafelua/openclaw/node_modules/.bin/openclaw gateway run --bind loopback --port 18789
+ExecStart=%h/.naia/openclaw/node_modules/.bin/openclaw gateway run --bind loopback --port 18789
 Environment=HOME=%h
 Environment=PATH=%h/.local/bin:%h/.config/nvm/versions/node/v22/bin:/usr/local/bin:/usr/bin:/bin
-WorkingDirectory=%h/.cafelua/openclaw
+WorkingDirectory=%h/.naia/openclaw
 Restart=on-failure
 RestartSec=5
 TimeoutStopSec=10
@@ -22,7 +22,7 @@ CPUQuota=50%
 NoNewPrivileges=true
 ProtectSystem=strict
 ProtectHome=read-only
-ReadWritePaths=%h/.cafelua %h/.openclaw
+ReadWritePaths=%h/.naia %h/.openclaw
 PrivateTmp=true
 
 [Install]

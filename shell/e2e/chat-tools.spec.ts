@@ -59,7 +59,7 @@ const TAURI_MOCK_SCRIPT = `
 	};
 
 	// ---- Simulated response scenarios ----
-	window.__CAFELUA_E2E__ = { emitEvent: emitEvent };
+	window.__NAIA_E2E__ = { emitEvent: emitEvent };
 
 	var tcCounter = 0;
 

@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Cafelua Gateway Wrapper
-# Runs OpenClaw Gateway with Cafelua-safe defaults
+# Naia Gateway Wrapper
+# Runs OpenClaw Gateway with Naia-safe defaults
 
-OPENCLAW_DIR="${HOME}/.cafelua/openclaw"
+OPENCLAW_DIR="${HOME}/.naia/openclaw"
 OPENCLAW_BIN="${OPENCLAW_DIR}/node_modules/.bin/openclaw"
 NODE_BIN="$(command -v node || echo /usr/bin/node)"
 
@@ -38,7 +38,7 @@ if [ ! -f "${OPENCLAW_DIR}/openclaw.json" ]; then
   },
   "agents": {
     "defaults": {
-      "workspace": "~/.cafelua/workspace"
+      "workspace": "~/.naia/workspace"
     }
   }
 }

@@ -1,4 +1,4 @@
-name: Release Cafelua Shell
+name: Release Naia Shell
 
 on:
   push:
@@ -74,7 +74,7 @@ jobs:
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: cafelua-shell-linux-x86_64
+          name: naia-shell-linux-x86_64
           path: |
             shell/src-tauri/target/release/bundle/appimage/*.AppImage
             shell/src-tauri/target/release/bundle/deb/*.deb
@@ -93,7 +93,7 @@ jobs:
       - name: Download artifacts
         uses: actions/download-artifact@v4
         with:
-          name: cafelua-shell-linux-x86_64
+          name: naia-shell-linux-x86_64
           path: artifacts
 
       - name: List downloaded artifacts
@@ -128,9 +128,9 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.version.outputs.tag }}
-          name: "Cafelua Shell ${{ steps.version.outputs.tag }}"
+          name: "Naia Shell ${{ steps.version.outputs.tag }}"
           body: |
-            ## Cafelua Shell ${{ steps.version.outputs.tag }}
+            ## Naia Shell ${{ steps.version.outputs.tag }}
 
             AI Avatar Desktop — Chat with Alpha.
 

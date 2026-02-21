@@ -14,7 +14,7 @@ BlueBuild + GitHub Actions는 push할 때마다 자동으로 OS 이미지를 빌
 
 ## Phase 0: 배포 파이프라인 (Day 1-3)
 
-> **결과물**: GitHub에 push하면 Cafelua OS 이미지가 자동 빌드됨
+> **결과물**: GitHub에 push하면 Naia OS 이미지가 자동 빌드됨
 
 ### 0-1. BlueBuild 템플릿 세팅
 
@@ -25,7 +25,7 @@ BlueBuild + GitHub Actions는 push할 때마다 자동으로 OS 이미지를 빌
 
 ```yaml
 # os/recipe.yml
-name: cafelua-os
+name: naia-os
 description: Personal AI OS with Alpha
 base-image: ghcr.io/ublue-os/bazzite
 image-version: latest
@@ -48,8 +48,8 @@ modules:
 
 **결과:**
 ```
-git push → GitHub Actions → ghcr.io/luke-n-alpha/cafelua-os:latest
-                          → cafelua-os.iso (Releases)
+git push → GitHub Actions → ghcr.io/luke-n-alpha/naia-os:latest
+                          → naia-os.iso (Releases)
 ```
 
 ### Phase 0 완료 = 배포 가능
@@ -60,7 +60,7 @@ git push → GitHub Actions → ghcr.io/luke-n-alpha/cafelua-os:latest
 ✅ USB에 구워서 부팅 확인 (아직 Bazzite 그대로)
 ```
 
-**이 시점에 공유 가능:** "Cafelua OS 첫 이미지 나왔다" (아직은 Bazzite + Node.js뿐이지만)
+**이 시점에 공유 가능:** "Naia OS 첫 이미지 나왔다" (아직은 Bazzite + Node.js뿐이지만)
 
 ---
 
@@ -114,7 +114,7 @@ git push → GitHub Actions → ghcr.io/luke-n-alpha/cafelua-os:latest
 
 ### 1-5. Tauri 윈도우 설정
 - 기본 윈도우 (투명/borderless는 Phase 2에서)
-- 앱 타이틀: "Cafelua Shell"
+- 앱 타이틀: "Naia Shell"
 
 ### 1-6. 통합 확인
 - `pnpm tauri dev` 실행 → 아바타 표시 확인
@@ -260,7 +260,7 @@ git push → GitHub Actions → ghcr.io/luke-n-alpha/cafelua-os:latest
 
 **작업:**
 - OpenClaw 설치 + 설정 (`setup-openclaw.sh` 이미 존재) ✅
-- Gateway 로컬 기동 (`cafelua-gateway-wrapper`) ✅
+- Gateway 로컬 기동 (`naia-gateway-wrapper`) ✅
 - Shell → Agent → Gateway WebSocket 연결 확인 ✅
 - **Gateway 자동 라이프사이클** (Tauri 앱이 Gateway 프로세스 자동 관리) ✅
   - Hybrid 전략: 이미 실행 중이면 재사용, 아니면 자동 spawn
@@ -297,7 +297,7 @@ git push → GitHub Actions → ghcr.io/luke-n-alpha/cafelua-os:latest
 **작업:**
 - Skill 레지스트리 + 매칭 ✅
 - 기본 Skills (시간 ✅, 메모 ✅, 시스템 상태 ✅) — Gateway 내장 스킬 활용
-- 커스텀 Skills 로더 (~/.cafelua/skills/) ✅
+- 커스텀 Skills 로더 (~/.naia/skills/) ✅
 - E2E 테스트: 04-skill-time, 05-skill-system, 06-skill-memo ✅
 
 **알려진 이슈:**
@@ -310,7 +310,7 @@ git push → GitHub Actions → ghcr.io/luke-n-alpha/cafelua-os:latest
 > 목표: **OpenClaw 51개 built-in 스킬 전부 이식 + 각 스킬별 E2E 테스트**
 
 **전략:** Gateway 프록시 방식으로 일괄 이식.
-OpenClaw SKILL.md frontmatter에서 manifest를 자동 생성 → `~/.cafelua/skills/`에 배치.
+OpenClaw SKILL.md frontmatter에서 manifest를 자동 생성 → `~/.naia/skills/`에 배치.
 각 스킬마다 E2E 테스트 작성.
 
 #### 전체 스킬 목록 (51개)
@@ -482,7 +482,7 @@ interface MemoryProcessor {
 ### 4-5. 채널 통합 — 부분 완료 ✅
 
 **완료:**
-- Discord 봇 (discord.js) ✅ — lab.cafelua.com 내 별도 프로세스, WebSocket 기반
+- Discord 봇 (discord.js) ✅ — lab.naia.com 내 별도 프로세스, WebSocket 기반
   - 멘션/DM 감지 → 유저 조회 → LLM 호출 → 응답
   - 미등록 유저 안내 메시지, Rate limiting (분당 10회), 2000자 분할
 - Google Chat 웹훅 ✅ — POST /api/webhooks/googlechat
@@ -514,7 +514,7 @@ interface MemoryProcessor {
 
 ---
 
-## Phase 5: lab.cafelua.com 통합 (Week 8-9) — 부분 완료
+## Phase 5: lab.naia.com 통합 (Week 8-9) — 부분 완료
 
 > **결과물**: Lab OAuth 로그인으로 API 키 입력 없이 편리하게 사용. 기존 수동 키 입력 유지.
 > **현황**: Deep link (5-1) ✅, Auth flow UI (5-2) 부분 ✅, LLM proxy (5-3) ✅, Credit display (5-4) 부분 ✅. Discord/Google Chat 연동 완료.
@@ -523,10 +523,10 @@ interface MemoryProcessor {
 
 ```
 ┌────────────────┐    OAuth     ┌─────────────────────┐
-│  Cafelua Shell │ ──────────→  │  lab.cafelua.com     │
+│  Naia Shell │ ──────────→  │  lab.naia.com     │
 │  (Tauri 앱)    │  ←────────── │  (Next.js 포털)      │
 │                │  deep link   │                       │
-│  gatewayKey    │  cafelua://  │  POST desktop-key     │
+│  gatewayKey    │  naia://  │  POST desktop-key     │
 │  stored local  │              │  → virtual key 발급   │
 └───────┬────────┘              └──────────┬────────────┘
         │ X-AnyLLM-Key: Bearer {key}       │
@@ -539,11 +539,11 @@ interface MemoryProcessor {
 
 ### 5-1. Deep Link 핸들러 (Tauri)
 
-**Tauri `cafelua://` URI 스킴 등록 + 처리.**
+**Tauri `naia://` URI 스킴 등록 + 처리.**
 
 - `shell/src-tauri/tauri.conf.json`: deep-link 플러그인 + 스킴 등록
 - `shell/src-tauri/Cargo.toml`: tauri-plugin-deep-link 의존성
-- `shell/src-tauri/src/lib.rs`: deep-link 이벤트 → `cafelua://auth?key=xxx` 파싱 → emit
+- `shell/src-tauri/src/lib.rs`: deep-link 이벤트 → `naia://auth?key=xxx` 파싱 → emit
 - `shell/src-tauri/capabilities/default.json`: deep-link 퍼미션
 - `shell/package.json`: @tauri-apps/plugin-deep-link 프론트엔드 바인딩
 
@@ -551,7 +551,7 @@ interface MemoryProcessor {
 
 - `config.ts`: `labKey?`, `labUserId?` 필드 + `hasLabKey()` 유틸
 - `OnboardingWizard.tsx`: "Lab 로그인" 버튼 (기존 프로바이더 선택과 병행)
-- 브라우저 → lab.cafelua.com 로그인 → deep link 콜백 → 키 저장 → apiKey 스텝 건너뛰기
+- 브라우저 → lab.naia.com 로그인 → deep link 콜백 → 키 저장 → apiKey 스텝 건너뛰기
 - `SettingsTab.tsx`: "Lab 계정 연결" 섹션 (연결 상태 표시, 해제 버튼)
 
 ### 5-3. LLM 프록시 연동
@@ -565,7 +565,7 @@ interface MemoryProcessor {
 
 - `CostDashboard.tsx`: Lab 연결 시 서버 잔액 조회 + 표시
 - 잔액 API: `GET /v1/profile/balance` (labKey 인증)
-- "크레딧 충전" 버튼 → lab.cafelua.com/billing 링크
+- "크레딧 충전" 버튼 → lab.naia.com/billing 링크
 
 ### 5-5. 테스트
 
@@ -601,7 +601,7 @@ interface MemoryProcessor {
 
 ### 6-3. Flathub (선택) — 부분 완료 ✅
 
-- `flatpak/com.cafelua.shell.yml` 매니페스트 완성 ✅
+- `flatpak/com.naia.shell.yml` 매니페스트 완성 ✅
   - GNOME 47 런타임 (Tauri 2의 webkit2gtk-4.1 호환)
   - `npx pnpm` + `CI=true`로 SDK 읽기 전용 파일시스템 대응
   - `cargo build --release`로 바이너리 빌드 (번들링 건너뛰기)
@@ -619,12 +619,12 @@ interface MemoryProcessor {
 
 ## Phase 7: OS ISO 빌드 (Week 11)
 
-> **결과물**: USB 부팅 → 설치 가능한 완전한 Cafelua OS
+> **결과물**: USB 부팅 → 설치 가능한 완전한 Naia OS
 
 ### 7-1. Recipe에 Tauri 앱 포함
 
 - `recipes/recipe.yml`: Phase 6 AppImage/바이너리 포함
-- `config/files/usr/bin/cafelua-shell` 또는 AppImage 배치
+- `config/files/usr/bin/naia-shell` 또는 AppImage 배치
 - `config/scripts/`: 첫 부팅 설정 스크립트 업데이트
 
 ### 7-2. ISO 빌드 테스트
@@ -635,8 +635,8 @@ interface MemoryProcessor {
 
 ### Phase 7 완료 = 완전한 AI OS ISO
 ```
-✅ USB 부팅 → Cafelua OS 설치
-✅ Cafelua Shell 자동 시작
+✅ USB 부팅 → Naia OS 설치
+✅ Naia Shell 자동 시작
 ✅ Lab 로그인 또는 로컬 모드 선택
 ```
 

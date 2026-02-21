@@ -22,7 +22,7 @@ Phase 3에서는 Agent 프로세스 내부에서 직접 도구를 실행한다.
 ```typescript
 // ORIGIN: ref-opencode/packages/opencode/src/permission/arity.ts
 // PURPOSE: Command arity dictionary for "always allow" pattern scoping
-// MODIFICATIONS: Removed Bun-specific imports, added cafelua-specific commands
+// MODIFICATIONS: Removed Bun-specific imports, added naia-specific commands
 ```
 
 파일 단위로 `ORIGIN` 헤더를 붙이고, 함수/클래스 단위 변경은 인라인 주석으로 표시.
@@ -62,7 +62,7 @@ interface ToolDefinition {
   id: string;                              // from: opencode
   description: string;                     // from: opencode
   parameters: z.ZodType;                   // from: opencode (Zod)
-  tier: PermissionTier;                    // from: cafelua agents-rules.json
+  tier: PermissionTier;                    // from: naia agents-rules.json
   execute(args: unknown, ctx: ToolContext): Promise<ToolResult>;
 }
 
@@ -75,7 +75,7 @@ interface ToolRegistry {                    // from: careti (coordinator pattern
 
 ### 2.3 프로토콜 충돌
 
-| 현재 (Cafelua) | Careti | OpenCode | 해결 |
+| 현재 (Naia) | Careti | OpenCode | 해결 |
 |---------------|--------|----------|------|
 | stdio JSON lines (text, audio, usage, finish, error) | gRPC/protobuf | HTTP + SSE | **기존 stdio 확장**. 새 청크 타입 추가만 |
 
@@ -95,8 +95,8 @@ interface ToolRegistry {                    // from: careti (coordinator pattern
 
 ### 2.5 배치되지 않는 영역 (안전하게 공존)
 
-- **TTS/아바타**: Cafelua 전용 (다른 프로젝트에 해당 없음)
-- **감정 표현**: Cafelua 전용
+- **TTS/아바타**: Naia 전용 (다른 프로젝트에 해당 없음)
+- **감정 표현**: Naia 전용
 - **tree-sitter 파싱**: OpenCode 전용 (Careti에 없음, 충돌 없이 추가)
 - **BashArity 사전**: OpenCode 전용 (독립적, 충돌 없음)
 - **둠 루프 감지**: OpenCode 전용 (독립적, 추가만 하면 됨)
@@ -135,8 +135,8 @@ shell/src/lib/types.ts    # AgentResponseChunk에 tool 관련 타입 추가
 |------|---------|----------|
 | `types.ts` | opencode `tool.ts` | careti `ToolExecutorCoordinator.ts` |
 | `registry.ts` | careti `ToolExecutorCoordinator.ts` | opencode `registry.ts` |
-| `permission.ts` | opencode `next.ts` | cafelua `agents-rules.json` (Tier 0-3) |
-| `permission-rules.ts` | cafelua (Tier 3 blocklist) | opencode (pattern format) |
+| `permission.ts` | opencode `next.ts` | naia `agents-rules.json` (Tier 0-3) |
+| `permission-rules.ts` | naia (Tier 3 blocklist) | opencode (pattern format) |
 
 **E2E 테스트** (agent/tests/integration/):
 ```
@@ -260,7 +260,7 @@ agent/src/tools/bash/
 | `bash.ts` | **opencode `bash.ts`** (핵심 참조) | careti `ExecuteCommandToolHandler` |
 | `parser.ts` | opencode `bash.ts` (tree-sitter 부분) | — |
 | `arity.ts` | **opencode `arity.ts`** (거의 그대로) | — |
-| `blocked.ts` | cafelua `agents-rules.json` Tier 3 | — |
+| `blocked.ts` | naia `agents-rules.json` Tier 3 | — |
 
 **보안 계층** (도구별):
 | 도구 | 기본 Tier | tree-sitter | 패턴 룰셋 |
@@ -337,10 +337,10 @@ shell/src-tauri/src/lib.rs          # approval_response 전달 명령
 **출처 매핑**:
 | 파일 | 주 출처 | 보조 출처 |
 |------|---------|----------|
-| `ToolProgress.tsx` | 원본 플랜 (Cafelua 자체 디자인) | — |
+| `ToolProgress.tsx` | 원본 플랜 (Naia 자체 디자인) | — |
 | `PermissionModal.tsx` | opencode `permission.tsx` (3버튼) | careti 승인 다이얼로그 |
 | `config.ts` 수정 | careti `AutoApprovalSettings` | opencode 패턴 저장 |
-| `chat.ts` 수정 | cafelua 기존 패턴 | — |
+| `chat.ts` 수정 | naia 기존 패턴 | — |
 
 **PermissionModal 디자인** (opencode 3단계 + careti 알림):
 ```
@@ -518,7 +518,7 @@ shell/src-tauri/src/lib.rs      # approval_response 명령
 
 ### Tier 3 차단 목록 (agent/src/tools/bash/blocked.ts)
 ```typescript
-// ORIGIN: cafelua agents-rules.json + additional patterns
+// ORIGIN: naia agents-rules.json + additional patterns
 const TIER3_BLOCKED = [
   /\brm\s+(-[a-zA-Z]*[rR][a-zA-Z]*\s+|.*)\//,  // rm -rf /
   /\bsudo\b/,                                      // sudo anything
@@ -541,7 +541,7 @@ tree-sitter는 파싱 성공한 명령에 대해 더 정밀한 분석 수행.
 
 ## 7. 머징 전략 (향후 업스트림 추적)
 
-### ref-opencode → cafelua-os
+### ref-opencode → naia-os
 ```
 가져온 것:
   - arity.ts → agent/src/tools/bash/arity.ts (거의 그대로, ORIGIN 주석)
@@ -557,7 +557,7 @@ tree-sitter는 파싱 성공한 명령에 대해 더 정밀한 분석 수행.
   git diff HEAD~1 -- packages/opencode/src/permission/next.ts
 ```
 
-### ref-moltbot → cafelua-os (Phase 4 대비)
+### ref-moltbot → naia-os (Phase 4 대비)
 ```
 아직 가져온 것 없음.
 Phase 4에서 가져올 것:
@@ -569,7 +569,7 @@ Phase 4에서 가져올 것:
   cd ref-moltbot && git fetch origin && git merge origin/main
 ```
 
-### project-careti → cafelua-os
+### project-careti → naia-os
 ```
 가져온 것:
   - AutoApprovalSettings 구조 → shell/src/lib/config.ts (ToolSettings)

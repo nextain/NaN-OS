@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Cafelua OS smoke test - run inside VM or booted image
+# Naia OS smoke test - run inside VM or booted image
 PASS=0
 FAIL=0
 
@@ -17,10 +17,10 @@ check() {
   fi
 }
 
-echo "=== Cafelua OS Smoke Test ==="
+echo "=== Naia OS Smoke Test ==="
 
 # OS identity
-check "os-release says Cafelua OS" grep -q "Cafelua OS" /usr/lib/os-release
+check "os-release says Naia OS" grep -q "Naia OS" /usr/lib/os-release
 
 # Node.js 22+
 check "Node.js 22+" node --version

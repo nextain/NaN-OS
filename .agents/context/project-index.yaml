@@ -1,4 +1,4 @@
-description: Cafelua OS context index. Maps AI contexts to human docs.
+description: Naia OS context index. Maps AI contexts to human docs.
 
 sot: .agents/context/agents-rules.json
 
@@ -46,7 +46,7 @@ mirroring_rules:
 work_logs:
   location: work-logs/
   convention: "YYYYMMDD-NN-<topic>.md"
-  note: All cafelua-os work logs live here (not in docs-work-logs)
+  note: All naia-os work logs live here (not in docs-work-logs)
 
 on_demand_loading:
   always_read:
