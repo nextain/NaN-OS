@@ -12,17 +12,19 @@ export function buildProvider(config: ProviderConfig): LLMProvider {
 		return createLabProxyProvider(config.labKey, config.model);
 	}
 
+	const getApiKey = (key: string, envVar: string) => key || process.env[envVar] || "";
+
 	switch (config.provider) {
 		case "gemini":
-			return createGeminiProvider(config.apiKey, config.model);
+			return createGeminiProvider(getApiKey(config.apiKey, "GEMINI_API_KEY"), config.model);
 		case "openai":
-			return createOpenAIProvider(config.apiKey, config.model);
+			return createOpenAIProvider(getApiKey(config.apiKey, "OPENAI_API_KEY"), config.model);
 		case "anthropic":
-			return createAnthropicProvider(config.apiKey, config.model);
+			return createAnthropicProvider(getApiKey(config.apiKey, "ANTHROPIC_API_KEY"), config.model);
 		case "xai":
-			return createXAIProvider(config.apiKey, config.model);
+			return createXAIProvider(getApiKey(config.apiKey, "XAI_API_KEY"), config.model);
 		case "zai":
-			return createZAIProvider(config.apiKey, config.model);
+			return createZAIProvider(getApiKey(config.apiKey, "ZHIPU_API_KEY"), config.model);
 		case "ollama":
 			return createOpenAIProvider("ollama", config.model);
 		default:

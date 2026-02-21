@@ -22,6 +22,7 @@ vi.mock("../../lib/config", () => ({
 		gatewayToken: "test-token",
 		enableTools: true,
 	}),
+	resolveGatewayUrl: (c: any) => c?.gatewayUrl || "",
 	hasApiKey: () => true,
 	saveConfig: vi.fn(),
 	isToolAllowed: () => true,

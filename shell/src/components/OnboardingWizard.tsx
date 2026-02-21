@@ -111,32 +111,27 @@ const PROVIDERS: {
 	{
 		id: "openai",
 		label: "OpenAI (ChatGPT)",
-		description: "지원 예정",
-		disabled: true,
+		description: "API Key 필요",
 	},
 	{
 		id: "anthropic",
 		label: "Anthropic (Claude)",
-		description: "지원 예정",
-		disabled: true,
+		description: "API Key 필요",
 	},
 	{
 		id: "xai",
 		label: "xAI (Grok)",
-		description: "지원 예정",
-		disabled: true,
+		description: "API Key 필요",
 	},
 	{
 		id: "zai",
 		label: "zAI (GLM)",
-		description: "지원 예정",
-		disabled: true,
+		description: "API Key 필요",
 	},
 	{
 		id: "ollama",
 		label: "Ollama (로컬)",
-		description: "지원 예정",
-		disabled: true,
+		description: "로컬 설치 필요",
 	},
 ];
 
