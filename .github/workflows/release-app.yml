@@ -110,7 +110,7 @@ jobs:
 
       - name: Build Flatpak
         run: |
-          flatpak-builder --force-clean --repo=flatpak-repo build-dir flatpak/io.nextain.naia.yml
+          flatpak-builder --force-clean --disable-rofiles-fuse --repo=flatpak-repo build-dir flatpak/io.nextain.naia.yml
 
       - name: Create Flatpak bundle
         run: |
