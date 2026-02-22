@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import { directToolCall } from "../lib/chat-service";
 import {
 	DEFAULT_GATEWAY_URL,
-	LAB_GATEWAY_URL,
 	getDefaultModel,
 	loadConfig,
 	resolveGatewayUrl,
@@ -16,6 +15,8 @@ import { getLocale, t } from "../lib/i18n";
 import { Logger } from "../lib/logger";
 import { syncToOpenClaw } from "../lib/openclaw-sync";
 import { persistDiscordDefaults } from "../lib/discord-auth";
+import { fetchLabConfig, pushConfigToLab } from "../lib/lab-sync";
+import { buildSystemPrompt } from "../lib/persona";
 import type { ProviderId } from "../lib/types";
 import { useAvatarStore } from "../stores/avatar";
 import { VrmPreview } from "./VrmPreview";
@@ -27,6 +28,7 @@ type Step =
 	| "userName"
 	| "character"
 	| "personality"
+	| "speechStyle"
 	| "complete";
 
 const STEPS: Step[] = [
@@ -36,6 +38,7 @@ const STEPS: Step[] = [
 	"userName",
 	"character",
 	"personality",
+	"speechStyle",
 	"complete",
 ];
 
@@ -180,6 +183,8 @@ export function OnboardingWizard({
 	const [labUserId, setLabUserId] = useState("");
 	const [labWaiting, setLabWaiting] = useState(false);
 	const [labTimeout, setLabTimeout] = useState(false);
+	const [selectedSpeechStyle, setSelectedSpeechStyle] = useState("반말");
+	const [honorificInput, setHonorificInput] = useState("");
 	const [discordConnectLoading, setDiscordConnectLoading] = useState(false);
 	const [discordConnected, setDiscordConnected] = useState(false);
 
@@ -187,7 +192,7 @@ export function OnboardingWizard({
 	useEffect(() => {
 		const unlisten = listen<{ labKey: string; labUserId?: string }>(
 			"lab_auth_complete",
-			(event) => {
+			async (event) => {
 				Logger.info("OnboardingWizard", "Lab auth received", {});
 				const key = event.payload.labKey;
 				const userId = event.payload.labUserId ?? "";
@@ -197,27 +202,77 @@ export function OnboardingWizard({
 				setLabWaiting(false);
 				setLabTimeout(false);
 
-					// Restore previous settings if they exist
-					const existing = loadConfig();
-					if (existing?.agentName) {
-						setAgentName(sanitizeName(existing.agentName));
-					}
-					if (existing?.userName) setUserName(existing.userName);
-				if (existing?.vrmModel) {
-					const match = AVATAR_PRESETS.find((v) => v.path === existing.vrmModel);
+				// Try to pull settings from Lab
+				const onlineConfig = userId ? await fetchLabConfig(key, userId) : null;
+
+				// Restore from online or local
+				const existing = loadConfig();
+				const source = onlineConfig ?? existing;
+				if (source?.agentName) {
+					setAgentName(sanitizeName(source.agentName as string));
+				}
+				if (source?.userName) setUserName(source.userName as string);
+				if (onlineConfig?.honorific) setHonorificInput(onlineConfig.honorific);
+				if (onlineConfig?.speechStyle) setSelectedSpeechStyle(onlineConfig.speechStyle);
+
+				const vrmSource = existing?.vrmModel;
+				if (vrmSource) {
+					const match = AVATAR_PRESETS.find((v) => v.path === vrmSource);
 					if (match) setSelectedVrm(match.path);
 				}
-				if (existing?.persona) {
+
+				const personaSource = onlineConfig?.persona ?? existing?.persona;
+				if (personaSource) {
 					const match = PERSONALITY_PRESETS.find((p) =>
-						existing.persona?.includes(p.id),
+						(personaSource as string).includes(p.id),
 					);
 					if (match) setSelectedPersonality(match.id);
 				}
 
-				// Returning user with existing settings → complete
+				// Returning user with existing settings → restore & complete
 				// First-time user → go through name/character/personality
-				if (existing?.agentName && existing?.userName) {
-					setStep("complete");
+				if (source?.agentName && source?.userName) {
+					// Immediately persist config to local storage
+					// Prefer online values, fall back to local existing values
+					const existing = loadConfig();
+					const restored = {
+						...existing,
+						provider: "nextain" as ProviderId,
+						model: getDefaultModel("nextain"),
+						apiKey: "",
+						userName: (onlineConfig?.userName ?? existing?.userName ?? source.userName) as string,
+						agentName: (onlineConfig?.agentName ?? existing?.agentName ?? source.agentName) as string,
+						persona: (onlineConfig?.persona ?? existing?.persona) as string | undefined,
+						honorific: (onlineConfig?.honorific ?? existing?.honorific) as string | undefined,
+						speechStyle: (onlineConfig?.speechStyle ?? existing?.speechStyle) as string | undefined,
+						enableTools: true,
+						onboardingComplete: true,
+						labKey: key,
+						labUserId: userId,
+					};
+					saveConfig(restored);
+
+					// Sync to OpenClaw gateway
+					const fullPrompt = buildSystemPrompt(restored.persona, {
+						agentName: restored.agentName,
+						userName: restored.userName,
+						honorific: restored.honorific,
+						speechStyle: restored.speechStyle,
+						discordDefaultUserId: restored.discordDefaultUserId,
+						discordDmChannelId: restored.discordDmChannelId,
+					});
+					syncToOpenClaw(restored.provider, restored.model, restored.apiKey, restored.persona, restored.agentName, restored.userName, fullPrompt, getLocale(), restored.discordDmChannelId, restored.discordDefaultUserId);
+
+					// Push to Lab if not yet saved online
+					if (!onlineConfig) {
+						pushConfigToLab(key, userId, restored);
+					}
+
+					// Restore avatar and skip directly to chat
+					if (restored.vrmModel) {
+						setAvatarModelPath(restored.vrmModel);
+					}
+					onComplete();
 				} else {
 					setStep("agentName");
 				}
@@ -364,7 +419,10 @@ export function OnboardingWizard({
 
 		const defaultVrm = DEFAULT_AVATAR_MODEL;
 		const effectiveProvider: ProviderId = labKey ? "nextain" : provider;
+		// Merge with existing config to preserve fields set by discord_auth_complete etc.
+		const existing = loadConfig();
 		const config = {
+			...existing,
 			provider: effectiveProvider,
 			model: getDefaultModel(effectiveProvider),
 			apiKey:
@@ -375,6 +433,8 @@ export function OnboardingWizard({
 			agentName: safeAgentName || undefined,
 			vrmModel: selectedVrm !== defaultVrm ? selectedVrm : undefined,
 			persona,
+			honorific: honorificInput.trim() || undefined,
+			speechStyle: selectedSpeechStyle,
 			enableTools: true,
 			onboardingComplete: true,
 			labKey: labKey || undefined,
@@ -382,35 +442,20 @@ export function OnboardingWizard({
 		};
 		saveConfig(config);
 
-		// Sync provider/model to OpenClaw gateway config
-		syncToOpenClaw(config.provider, config.model, config.apiKey);
+		// Sync provider/model + full system prompt to OpenClaw gateway config
+		const fullPrompt = buildSystemPrompt(config.persona, {
+			agentName: config.agentName,
+			userName: config.userName,
+			honorific: config.honorific,
+			speechStyle: config.speechStyle,
+			discordDefaultUserId: config.discordDefaultUserId,
+			discordDmChannelId: config.discordDmChannelId,
+		});
+		syncToOpenClaw(config.provider, config.model, config.apiKey, config.persona, config.agentName, config.userName, fullPrompt, getLocale(), config.discordDmChannelId, config.discordDefaultUserId);
 
 		// Sync to Lab if connected
 		if (labKey && labUserId) {
-			const syncData = {
-				provider: config.provider,
-				model: config.model,
-				locale: undefined,
-				theme: undefined,
-				vrmModel: config.vrmModel,
-				persona: config.persona,
-				userName: config.userName,
-				agentName: config.agentName,
-			};
-			fetch(`${LAB_GATEWAY_URL}/v1/users/${encodeURIComponent(labUserId)}`, {
-				method: "PATCH",
-				headers: {
-					"Content-Type": "application/json",
-					"X-AnyLLM-Key": `Bearer ${labKey}`,
-				},
-				body: JSON.stringify({
-					metadata: { nan_config: syncData },
-				}),
-			}).catch((err) => {
-				Logger.warn("OnboardingWizard", "Lab sync failed", {
-					error: String(err),
-				});
-			});
+			pushConfigToLab(labKey, labUserId, config);
 		}
 
 		setAvatarModelPath(selectedVrm);
@@ -668,7 +713,10 @@ export function OnboardingWizard({
 									key={p.id}
 									type="button"
 									className={`onboarding-personality-card${selectedPersonality === p.id ? " selected" : ""}`}
-									onClick={() => setSelectedPersonality(p.id)}
+									onClick={() => {
+									setSelectedPersonality(p.id);
+									setSelectedSpeechStyle(p.id === "polite" || p.id === "calm" ? "존댓말" : "반말");
+								}}
 								>
 									<span className="personality-card-label">{p.label}</span>
 									<span className="personality-card-desc">{p.description}</span>
@@ -677,6 +725,46 @@ export function OnboardingWizard({
 						</div>
 						<p className="onboarding-description">
 							{t("onboard.personality.hint")}
+						</p>
+					</div>
+				)}
+
+				{/* Step: Speech Style */}
+				{step === "speechStyle" && (
+					<div className="onboarding-content">
+						<h2>
+							{t("onboard.speechStyle.title").replace("{agent}", displayName)}
+						</h2>
+						<div className="onboarding-personality-cards">
+							<button
+								type="button"
+								className={`onboarding-personality-card${selectedSpeechStyle === "반말" ? " selected" : ""}`}
+								onClick={() => setSelectedSpeechStyle("반말")}
+							>
+								<span className="personality-card-label">{t("onboard.speechStyle.casual")}</span>
+								<span className="personality-card-desc">{t("onboard.speechStyle.casualDesc")}</span>
+							</button>
+							<button
+								type="button"
+								className={`onboarding-personality-card${selectedSpeechStyle === "존댓말" ? " selected" : ""}`}
+								onClick={() => setSelectedSpeechStyle("존댓말")}
+							>
+								<span className="personality-card-label">{t("onboard.speechStyle.formal")}</span>
+								<span className="personality-card-desc">{t("onboard.speechStyle.formalDesc")}</span>
+							</button>
+						</div>
+						<div className="settings-field" style={{ marginTop: 16 }}>
+							<label>{t("onboard.speechStyle.honorificLabel")}</label>
+							<input
+								type="text"
+								className="onboarding-input"
+								value={honorificInput}
+								onChange={(e) => setHonorificInput(e.target.value)}
+								placeholder={t("onboard.speechStyle.honorificPlaceholder")}
+							/>
+						</div>
+						<p className="onboarding-description">
+							{t("onboard.speechStyle.hint")}
 						</p>
 					</div>
 				)}
@@ -752,6 +840,7 @@ export function OnboardingWizard({
 							className="onboarding-next-btn"
 							onClick={goNext}
 							disabled={!canProceed()}
+							autoFocus={step === "character" || step === "personality"}
 						>
 							{t("onboard.next")}
 						</button>

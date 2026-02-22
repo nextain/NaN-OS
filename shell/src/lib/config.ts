@@ -15,7 +15,7 @@ export type ThemeId =
 	| "sakura"
 	| "cloud";
 
-export type TtsProviderId = "google" | "edge" | "openai" | "elevenlabs";
+export type TtsProviderId = "google" | "edge" | "openai" | "elevenlabs" | "nextain";
 
 export interface AppConfig {
 	provider: ProviderId;

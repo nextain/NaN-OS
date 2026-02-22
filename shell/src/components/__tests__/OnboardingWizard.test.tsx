@@ -84,8 +84,8 @@ describe("OnboardingWizard", () => {
 		expect(screen.getByText(/설정에서|Settings/i)).toBeDefined();
 		fireEvent.click(screen.getByRole("button", { name: /^다음$|^Next$/ }));
 
-		// Webhook step
-		expect(screen.getByText(/메신저 연동/)).toBeDefined();
+		// Speech style step
+		expect(screen.getByText(/어떻게 말|How should.*talk/i)).toBeDefined();
 		fireEvent.click(screen.getByRole("button", { name: /^다음$|^Next$/ }));
 
 		// Complete step
@@ -140,16 +140,14 @@ describe("OnboardingWizard", () => {
 		// Personality → Next
 		fireEvent.click(screen.getByRole("button", { name: /^다음$|^Next$/ }));
 
-		// Webhook → Next
+		// Speech style → Next
 		fireEvent.click(screen.getByRole("button", { name: /^다음$|^Next$/ }));
 
 		// Complete → Start
 		fireEvent.click(screen.getByText(/시작|Get Started/));
 		expect(onComplete).toHaveBeenCalled();
 
-		const config = JSON.parse(
-			localStorage.getItem("naia-config") || "{}",
-		);
+		const config = JSON.parse(localStorage.getItem("naia-config") || "{}");
 		expect(config.userName).toBe("Luke");
 		expect(config.agentName).toBe("Mochi");
 		expect(config.onboardingComplete).toBe(true);

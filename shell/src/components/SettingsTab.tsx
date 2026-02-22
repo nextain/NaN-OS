@@ -27,6 +27,7 @@ import { type Locale, getLocale, setLocale, t } from "../lib/i18n";
 import { parseLabCredits } from "../lib/lab-balance";
 import { Logger } from "../lib/logger";
 import { syncToOpenClaw } from "../lib/openclaw-sync";
+import { fetchLabConfig, pushConfigToLab, clearLabConfig, diffConfigs } from "../lib/lab-sync";
 import { DEFAULT_PERSONA, buildSystemPrompt } from "../lib/persona";
 import { persistDiscordDefaults } from "../lib/discord-auth";
 import { resetGatewaySession } from "../lib/gateway-sessions";
@@ -186,6 +187,7 @@ const TTS_PROVIDERS: {
 	usesGateway: boolean;
 	gatewayProviderId?: string; // maps to OpenClaw TTS provider ID
 }[] = [
+	{ id: "nextain", label: "Nextain Cloud TTS", needsKey: false, usesGateway: false },
 	{ id: "edge", label: "Edge TTS (Free)", needsKey: false, usesGateway: true, gatewayProviderId: "edge" },
 	{ id: "google", label: "Google Cloud TTS", needsKey: true, keyLabel: "Google API Key", keyPlaceholder: "AIza...", usesGateway: false },
 	{ id: "openai", label: "OpenAI TTS", needsKey: true, keyLabel: "OpenAI API Key", keyPlaceholder: "sk-...", usesGateway: true, gatewayProviderId: "openai" },
@@ -670,6 +672,10 @@ export function SettingsTab() {
 	const [ttsEnabled, setTtsEnabled] = useState(existing?.ttsEnabled ?? true);
 	const [sttEnabled, setSttEnabled] = useState(existing?.sttEnabled ?? true);
 	const [persona, setPersona] = useState(existing?.persona ?? DEFAULT_PERSONA);
+	const [userName, setUserName] = useState(existing?.userName ?? "");
+	const [agentName, setAgentName] = useState(existing?.agentName ?? "");
+	const [honorific, setHonorific] = useState(existing?.honorific ?? "");
+	const [speechStyle, setSpeechStyle] = useState(existing?.speechStyle ?? "반말");
 	const [enableTools, setEnableTools] = useState(
 		existing?.enableTools ?? true,
 	);
@@ -696,6 +702,9 @@ export function SettingsTab() {
 	const [allowedToolsCount, setAllowedToolsCount] = useState(existing?.allowedTools?.length ?? 0);
 	const [labKey, setLabKeyState] = useState(existing?.labKey ?? "");
 	const [labUserId, setLabUserIdState] = useState(existing?.labUserId ?? "");
+	const [syncDialogOpen, setSyncDialogOpen] = useState(false);
+	const [syncDialogOnlineConfig, setSyncDialogOnlineConfig] = useState<Record<string, unknown> | null>(null);
+	const labSyncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
 	useEffect(() => {
 		const modelPrefixPattern =
@@ -886,6 +895,7 @@ export function SettingsTab() {
 	const [showResetConfirm, setShowResetConfirm] = useState(false);
 	const [resetClearHistory, setResetClearHistory] = useState(false);
 	const [showLabDisconnect, setShowLabDisconnect] = useState(false);
+	const [showReOnboarding, setShowReOnboarding] = useState(false);
 
 	const fetchGatewayTts = useCallback(async () => {
 		const effectiveGatewayUrl = gatewayUrl.trim() || DEFAULT_GATEWAY_URL;
@@ -1045,7 +1055,7 @@ export function SettingsTab() {
 	useEffect(() => {
 		const unlisten = listen<{ labKey: string; labUserId?: string }>(
 			"lab_auth_complete",
-			(event) => {
+			async (event) => {
 				const nextLabKey = event.payload.labKey;
 				const nextLabUserId = event.payload.labUserId ?? "";
 				setLabKeyState(nextLabKey);
@@ -1074,10 +1084,24 @@ export function SettingsTab() {
 				const labFullPrompt = buildSystemPrompt(current?.persona, {
 					agentName: current?.agentName,
 					userName: current?.userName,
+					honorific: current?.honorific,
+					speechStyle: current?.speechStyle,
 					discordDefaultUserId: current?.discordDefaultUserId,
 					discordDmChannelId: current?.discordDmChannelId,
 				});
 				syncToOpenClaw("nextain", nextModel, undefined, current?.persona, current?.agentName, current?.userName, labFullPrompt, current?.locale || getLocale(), current?.discordDmChannelId, current?.discordDefaultUserId);
+
+				// Try Lab pull — show diff dialog if settings differ
+				if (nextLabUserId) {
+					const onlineConfig = await fetchLabConfig(nextLabKey, nextLabUserId);
+					if (onlineConfig && current) {
+						const diffs = diffConfigs(current, onlineConfig);
+						if (diffs.length > 0) {
+							setSyncDialogOnlineConfig(onlineConfig as Record<string, unknown>);
+							setSyncDialogOpen(true);
+						}
+					}
+				}
 			},
 		);
 		return () => {
@@ -1192,19 +1216,29 @@ export function SettingsTab() {
 	const ttsProviderMeta = TTS_PROVIDERS.find((p) => p.id === ttsProvider);
 	const ttsUsesGateway = ttsProviderMeta?.usesGateway ?? false;
 
+	function debouncedLabSync() {
+		if (labSyncTimerRef.current) clearTimeout(labSyncTimerRef.current);
+		labSyncTimerRef.current = setTimeout(() => {
+			const cfg = loadConfig();
+			if (labKey && labUserId && cfg) pushConfigToLab(labKey, labUserId, cfg);
+		}, 2000);
+	}
+
 	// Persist TTS voice/provider changes immediately (without full handleSave)
 	function persistTtsVoice(voice: string) {
 		setTtsVoice(voice);
 		if (existing) {
 			saveConfig({ ...existing, ttsVoice: voice });
 		}
+		debouncedLabSync();
 	}
 	function persistTtsProvider(p: TtsProviderId) {
 		setTtsProvider(p);
-		const derivedEngine = p === "google" ? "google" : "openclaw";
+		const derivedEngine = (p === "google" || p === "nextain") ? "google" : "openclaw";
 		if (existing) {
 			saveConfig({ ...existing, ttsProvider: p, ttsEngine: derivedEngine as "google" | "openclaw" });
 		}
+		debouncedLabSync();
 	}
 
 	function getPreviewText(voice: string): string {
@@ -1232,9 +1266,38 @@ export function SettingsTab() {
 		setError("");
 		setIsPreviewing(true);
 		try {
+			// Ensure Gateway TTS provider is initialized before preview
+			const meta = TTS_PROVIDERS.find((p) => p.id === ttsProvider);
+			if (meta?.usesGateway) {
+				const gwId = meta.gatewayProviderId ?? ttsProvider;
+				await handleGatewayTtsProviderChange(gwId);
+			}
 			let base64 = "";
 			const previewText = getPreviewText(ttsVoice);
-			if (ttsProvider === "google") {
+			if (ttsProvider === "nextain") {
+				// Nextain TTS preview — call Gateway directly with labKey
+				if (!labKey) {
+					setError("Nextain TTS를 사용하려면 Naia Lab 로그인이 필요합니다.");
+					return;
+				}
+				const resp = await fetch(`${LAB_GATEWAY_URL}/v1/audio/speech`, {
+					method: "POST",
+					headers: {
+						"Content-Type": "application/json",
+						"X-AnyLLM-Key": `Bearer ${labKey}`,
+					},
+					body: JSON.stringify({
+						input: previewText,
+						voice: ttsVoice,
+						audio_encoding: "MP3",
+					}),
+				});
+				if (!resp.ok) {
+					throw new Error(`Nextain TTS 미리듣기 실패 (${resp.status})`);
+				}
+				const data = await resp.json() as { audio_content?: string };
+				base64 = data.audio_content ?? "";
+			} else if (ttsProvider === "google") {
 				// Direct Google TTS preview via Rust (needs Google API key)
 				const key = googleApiKey.trim() || (provider === "gemini" ? apiKey.trim() : "");
 				if (!key) {
@@ -1445,6 +1508,28 @@ export function SettingsTab() {
 		window.location.reload();
 	}
 
+	function handleSyncDialogApply() {
+		if (!syncDialogOnlineConfig) return;
+		const current = loadConfig();
+		if (!current) return;
+		const merged = { ...current, ...syncDialogOnlineConfig };
+		saveConfig(merged);
+		// Update local state from merged config
+		if (merged.userName) setUserName(merged.userName);
+		if (merged.agentName) setAgentName(merged.agentName);
+		if (merged.honorific !== undefined) setHonorific(merged.honorific ?? "");
+		if (merged.speechStyle) setSpeechStyle(merged.speechStyle);
+		if (merged.persona) setPersona(merged.persona ?? DEFAULT_PERSONA);
+		if (merged.locale) setLocaleState(merged.locale);
+		if (merged.theme) setTheme(merged.theme);
+		if (merged.ttsEnabled !== undefined) setTtsEnabled(merged.ttsEnabled);
+		if (merged.sttEnabled !== undefined) setSttEnabled(merged.sttEnabled);
+		if (merged.ttsVoice) setTtsVoice(merged.ttsVoice);
+		if (merged.ttsProvider) setTtsProvider(merged.ttsProvider);
+		setSyncDialogOpen(false);
+		setSyncDialogOnlineConfig(null);
+	}
+
 	function handleSave() {
 		// Keep previous key when input is empty (password field UX).
 		const resolvedApiKey = apiKey.trim() || existing?.apiKey || "";
@@ -1495,6 +1580,10 @@ export function SettingsTab() {
 				: (existing?.elevenlabsApiKey || undefined),
 			persona:
 				persona.trim() !== DEFAULT_PERSONA.trim() ? persona.trim() : undefined,
+			userName: userName.trim() || undefined,
+			agentName: agentName.trim() || undefined,
+			honorific: honorific.trim() || undefined,
+			speechStyle,
 			enableTools,
 			gatewayUrl: enableTools
 				? gatewayUrl.trim() || DEFAULT_GATEWAY_URL
@@ -1517,6 +1606,8 @@ export function SettingsTab() {
 		const fullPrompt = buildSystemPrompt(newConfig.persona, {
 			agentName: newConfig.agentName,
 			userName: newConfig.userName,
+			honorific: newConfig.honorific,
+			speechStyle: newConfig.speechStyle,
 			discordDefaultUserId: newConfig.discordDefaultUserId,
 			discordDmChannelId: newConfig.discordDmChannelId,
 		});
@@ -1524,44 +1615,8 @@ export function SettingsTab() {
 
 		// Auto-sync to Lab if connected
 		if (labKey && labUserId) {
-			syncConfigToLab(labKey, labUserId, newConfig);
+			pushConfigToLab(labKey, labUserId, newConfig);
 		}
-	}
-
-	function syncConfigToLab(
-		key: string,
-		userId: string,
-		config: ReturnType<typeof loadConfig>,
-	) {
-		// Strip secrets before syncing
-		const syncData = {
-			provider: config?.provider,
-			model: config?.model,
-			locale: config?.locale,
-			theme: config?.theme,
-			vrmModel: config?.vrmModel,
-			ttsEnabled: config?.ttsEnabled,
-			sttEnabled: config?.sttEnabled,
-			ttsVoice: config?.ttsVoice,
-			ttsProvider: config?.ttsProvider,
-			ttsEngine: config?.ttsEngine,
-			persona: config?.persona,
-			userName: config?.userName,
-			agentName: config?.agentName,
-			enableTools: config?.enableTools,
-		};
-		fetch(`${LAB_GATEWAY_URL}/v1/users/${encodeURIComponent(userId)}`, {
-			method: "PATCH",
-			headers: {
-				"Content-Type": "application/json",
-				"X-AnyLLM-Key": `Bearer ${key}`,
-			},
-			body: JSON.stringify({ metadata: { nan_config: syncData } }),
-		}).catch((err) => {
-			Logger.warn("SettingsTab", "Lab sync failed", {
-				error: String(err),
-			});
-			});
 	}
 
 	const providerModels = dynamicModels[provider] ?? [];
@@ -1752,6 +1807,47 @@ export function SettingsTab() {
 
 			<div className="settings-section-divider">
 				<span>{t("settings.personaSection")}</span>
+			</div>
+
+			<div className="settings-field">
+				<label>{t("settings.agentName")}</label>
+				<input
+					type="text"
+					className="settings-input"
+					value={agentName}
+					onChange={(e) => setAgentName(e.target.value)}
+					placeholder="Naia"
+				/>
+			</div>
+			<div className="settings-field">
+				<label>{t("settings.userName")}</label>
+				<input
+					type="text"
+					className="settings-input"
+					value={userName}
+					onChange={(e) => setUserName(e.target.value)}
+				/>
+			</div>
+			<div className="settings-field">
+				<label>{t("settings.honorific")}</label>
+				<input
+					type="text"
+					className="settings-input"
+					value={honorific}
+					onChange={(e) => setHonorific(e.target.value)}
+					placeholder={t("onboard.speechStyle.honorificPlaceholder")}
+				/>
+			</div>
+			<div className="settings-field">
+				<label>{t("settings.speechStyle")}</label>
+				<select
+					className="settings-select"
+					value={speechStyle}
+					onChange={(e) => setSpeechStyle(e.target.value)}
+				>
+					<option value="반말">{t("onboard.speechStyle.casual")} (Casual)</option>
+					<option value="존댓말">{t("onboard.speechStyle.formal")} (Formal)</option>
+				</select>
 			</div>
 
 			<div className="settings-field">
@@ -2023,6 +2119,57 @@ export function SettingsTab() {
 										{t("settings.labDisconnect")}
 									</button>
 								)}
+								{showReOnboarding ? (
+									<div className="reset-confirm-panel" style={{ marginTop: 8 }}>
+										<p className="reset-confirm-msg">
+											{t("settings.reOnboardingConfirm")}
+										</p>
+										<div className="reset-confirm-actions">
+											<button
+												type="button"
+												className="settings-reset-btn"
+												onClick={async () => {
+													// Delete online config first, then reload
+													if (labKey && labUserId) {
+														await clearLabConfig(labKey, labUserId);
+													}
+													// Reset local onboarding state
+													const current = loadConfig();
+													if (current) {
+														saveConfig({
+															...current,
+															onboardingComplete: undefined,
+															userName: undefined,
+															agentName: undefined,
+															persona: undefined,
+															honorific: undefined,
+															speechStyle: undefined,
+														});
+													}
+													// Reload to trigger onboarding
+													window.location.reload();
+												}}
+											>
+												{t("settings.reOnboardingContinue")}
+											</button>
+											<button
+												type="button"
+												className="settings-cancel-btn"
+												onClick={() => setShowReOnboarding(false)}
+											>
+												{t("settings.cancel")}
+											</button>
+										</div>
+									</div>
+								) : (
+									<button
+										type="button"
+										className="voice-preview-btn re-onboarding-btn"
+										onClick={() => setShowReOnboarding(true)}
+									>
+										{t("settings.reOnboarding")}
+									</button>
+								)}
 								</div>
 							</div>
 						) : (
@@ -2097,7 +2244,7 @@ export function SettingsTab() {
 						const newProvider = e.target.value as TtsProviderId;
 						persistTtsProvider(newProvider);
 						// Reset voice to first available for the new provider
-						if (newProvider === "google") {
+						if (newProvider === "google" || newProvider === "nextain") {
 							persistTtsVoice(TTS_VOICES[0]?.id ?? "ko-KR-Neural2-A");
 						} else if (newProvider === "edge") {
 							const edgeVoices = getEdgeVoicesForLocale(locale);
@@ -2184,8 +2331,17 @@ export function SettingsTab() {
 				);
 			})()}
 
-			{/* Voice list — Google voices (google provider) */}
-			{ttsProvider === "google" && (
+			{/* Nextain — labKey required warning */}
+			{ttsProvider === "nextain" && !labKey && (
+				<div className="settings-field">
+					<span className="settings-hint" style={{ color: "var(--color-warning, #f59e0b)" }}>
+						Naia Lab 로그인이 필요합니다. 설정 &gt; Naia Lab에서 로그인하세요.
+					</span>
+				</div>
+			)}
+
+			{/* Voice list — Google voices (google / nextain provider) */}
+			{(ttsProvider === "google" || ttsProvider === "nextain") && (
 				<div className="settings-field">
 					<label htmlFor="tts-voice-select">{t("settings.ttsVoice")}</label>
 					<div className="voice-picker">
@@ -2599,6 +2755,34 @@ export function SettingsTab() {
 					{saved ? t("settings.saved") : t("settings.save")}
 				</button>
 			</div>
+
+			{syncDialogOpen && (
+				<div className="sync-dialog-overlay">
+					<div className="sync-dialog-card">
+						<h3>{t("settings.labSyncDialog.title")}</h3>
+						<p>{t("settings.labSyncDialog.message")}</p>
+						<div className="sync-dialog-actions">
+							<button
+								type="button"
+								className="onboarding-next-btn"
+								onClick={handleSyncDialogApply}
+							>
+								{t("settings.labSyncDialog.useOnline")}
+							</button>
+							<button
+								type="button"
+								className="onboarding-back-btn"
+								onClick={() => {
+									setSyncDialogOpen(false);
+									setSyncDialogOnlineConfig(null);
+								}}
+							>
+								{t("settings.labSyncDialog.keepLocal")}
+							</button>
+						</div>
+					</div>
+				</div>
+			)}
 		</div>
 	);
 }

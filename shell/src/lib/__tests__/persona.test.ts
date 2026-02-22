@@ -1,17 +1,17 @@
 import { describe, expect, it } from "vitest";
-import { buildSystemPrompt, DEFAULT_PERSONA } from "../persona";
+import { DEFAULT_PERSONA, buildSystemPrompt } from "../persona";
 
 describe("buildSystemPrompt", () => {
 	it("uses DEFAULT_PERSONA when no persona provided", () => {
 		const result = buildSystemPrompt();
 		expect(result).toContain("Naia");
-		expect(result).toContain("Emotion tags:");
+		expect(result).toContain("Emotion tags (for Shell avatar only):");
 	});
 
 	it("uses custom persona when provided", () => {
 		const result = buildSystemPrompt("You are Beta.");
 		expect(result).toContain("You are Beta.");
-		expect(result).toContain("Emotion tags:");
+		expect(result).toContain("Emotion tags (for Shell avatar only):");
 		expect(result).not.toContain(DEFAULT_PERSONA);
 	});
 
@@ -65,6 +65,33 @@ describe("buildSystemPrompt", () => {
 		});
 		expect(result).toContain("Known facts about the user:");
 		expect(result).toContain("favorite_lang: Rust");
+	});
+
+	it("injects honorific into system prompt", () => {
+		const result = buildSystemPrompt(undefined, {
+			userName: "Luke",
+			honorific: "오빠",
+		});
+		expect(result).toContain('Call the user "Luke오빠"');
+	});
+
+	it("injects casual speechStyle into system prompt", () => {
+		const result = buildSystemPrompt(undefined, { speechStyle: "반말" });
+		expect(result).toContain("Speak casually in Korean (반말)");
+		expect(result).toContain("Do NOT use 존댓말");
+	});
+
+	it("injects formal speechStyle into system prompt", () => {
+		const result = buildSystemPrompt(undefined, { speechStyle: "존댓말" });
+		expect(result).toContain("Speak politely in Korean (존댓말)");
+		expect(result).toContain("Do NOT use 반말");
+	});
+
+	it("does not inject honorific/speechStyle when not set", () => {
+		const result = buildSystemPrompt(undefined, { userName: "Luke" });
+		expect(result).not.toContain("Call the user");
+		expect(result).not.toContain("Speak casually");
+		expect(result).not.toContain("Speak politely");
 	});
 
 	it("handles empty context gracefully", () => {
