@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { useSkillsStore } from "../skills";
 import type { SkillManifestInfo } from "../../lib/types";
+import { useSkillsStore } from "../skills";
 
 const MOCK_SKILLS: SkillManifestInfo[] = [
 	{

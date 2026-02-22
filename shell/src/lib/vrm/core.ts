@@ -11,13 +11,15 @@ interface GLTFUserdata extends Record<string, unknown> {
 	vrmCore?: VRMCore;
 }
 
-export async function loadVrm(
-	model: string,
-	options?: {
-		scene?: Scene;
-		lookAt?: boolean;
-		onProgress?: (progress: ProgressEvent<EventTarget>) => void | Promise<void>;
-	},
+interface LoadVrmOptions {
+	scene?: Scene;
+	lookAt?: boolean;
+	onProgress?: (progress: ProgressEvent<EventTarget>) => void | Promise<void>;
+}
+
+async function buildLoadResult(
+	gltf: { userData: GLTFUserdata; scene: Object3D },
+	options?: LoadVrmOptions,
 ): Promise<
 	| {
 			_vrm: VRM;
@@ -28,11 +30,6 @@ export async function loadVrm(
 	  }
 	| undefined
 > {
-	const loader = useVRMLoader();
-	const gltf = await loader.loadAsync(model, (progress) =>
-		options?.onProgress?.(progress),
-	);
-
 	const userData = gltf.userData as GLTFUserdata;
 	if (!userData.vrm) {
 		return;
@@ -133,4 +130,34 @@ export async function loadVrm(
 		modelSize,
 		initialCameraOffset,
 	};
+}
+
+export async function loadVrm(
+	model: string,
+	options?: LoadVrmOptions,
+) {
+	const loader = useVRMLoader();
+	const gltf = await loader.loadAsync(model, (progress) =>
+		options?.onProgress?.(progress),
+	);
+	return buildLoadResult(gltf, options);
+}
+
+export async function loadVrmFromArrayBuffer(
+	model: ArrayBuffer,
+	options?: LoadVrmOptions,
+	resourcePath = "",
+) {
+	const loader = useVRMLoader();
+	const gltf = await new Promise<{ userData: GLTFUserdata; scene: Object3D }>(
+		(resolve, reject) => {
+			loader.parse(
+				model,
+				resourcePath,
+				(parsed) => resolve(parsed as { userData: GLTFUserdata; scene: Object3D }),
+				(error) => reject(error),
+			);
+		},
+	);
+	return buildLoadResult(gltf, options);
 }

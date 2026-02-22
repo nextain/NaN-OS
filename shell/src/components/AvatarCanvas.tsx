@@ -1,6 +1,6 @@
 import type { VRM } from "@pixiv/three-vrm";
-import { convertFileSrc } from "@tauri-apps/api/core";
-import { useEffect, useRef } from "react";
+import { convertFileSrc, invoke } from "@tauri-apps/api/core";
+import { useEffect, useRef, useState } from "react";
 import {
 	AmbientLight,
 	AnimationMixer,
@@ -23,7 +23,7 @@ import {
 	loadVRMAnimation,
 	reAnchorRootPositionTrack,
 } from "../lib/vrm/animation";
-import { loadVrm } from "../lib/vrm/core";
+import { loadVrm, loadVrmFromArrayBuffer } from "../lib/vrm/core";
 import {
 	buildExpressionResolver,
 	createEmotionController,
@@ -76,6 +76,67 @@ function randomBlinkInterval() {
 		Math.random() * (MAX_BLINK_INTERVAL - MIN_BLINK_INTERVAL) +
 		MIN_BLINK_INTERVAL
 	);
+}
+
+function normalizeLocalPath(path: string): string {
+	if (!path.startsWith("file://")) return path;
+	try {
+		return decodeURIComponent(new URL(path).pathname);
+	} catch {
+		return path.replace(/^file:\/\//, "");
+	}
+}
+
+function guessMimeType(path: string): string {
+	const ext = path.toLowerCase().split(".").pop() ?? "";
+	switch (ext) {
+		case "png":
+			return "image/png";
+		case "jpg":
+		case "jpeg":
+			return "image/jpeg";
+		case "webp":
+			return "image/webp";
+		case "gif":
+			return "image/gif";
+		case "bmp":
+			return "image/bmp";
+		case "svg":
+			return "image/svg+xml";
+		case "vrm":
+			return "model/gltf-binary";
+		default:
+			return "application/octet-stream";
+	}
+}
+
+function isAbsoluteLocalFilePath(path: string): boolean {
+	return path.startsWith("/");
+}
+
+function resolveAssetUrl(path: string): string {
+	const normalized = normalizeLocalPath(path);
+	if (normalized.startsWith("http://localhost")) {
+		return normalized.replace(
+			/^http:\/\/localhost\/?/,
+			"http://asset.localhost/",
+		);
+	}
+	if (
+		normalized.startsWith("/assets/") ||
+		normalized.startsWith("/avatars/") ||
+		normalized.startsWith("asset:") ||
+		normalized.startsWith("http://asset.localhost") ||
+		normalized.startsWith("tauri://") ||
+		normalized.startsWith("blob:") ||
+		normalized.startsWith("data:")
+	) {
+		return normalized;
+	}
+	const assetUrl = convertFileSrc(normalized);
+	return assetUrl
+		.replace(/^asset:\/\/localhost\/?/, "http://asset.localhost/")
+		.replace(/^http:\/\/localhost\/?/, "http://asset.localhost/");
 }
 
 interface AnimationState {
@@ -172,9 +233,12 @@ export function AvatarCanvas() {
 	const containerRef = useRef<HTMLDivElement>(null);
 	const debugRef = useRef<HTMLDivElement>(null);
 	const modelPath = useAvatarStore((s) => s.modelPath);
+	const isLoaded = useAvatarStore((s) => s.isLoaded);
 	const animationPath = useAvatarStore((s) => s.animationPath);
 	const setLoaded = useAvatarStore((s) => s.setLoaded);
 	const setLoadProgress = useAvatarStore((s) => s.setLoadProgress);
+	const [loadError, setLoadError] = useState("");
+	const [loadStage, setLoadStage] = useState("idle");
 
 	useEffect(() => {
 		const container = containerRef.current;
@@ -185,6 +249,7 @@ export function AvatarCanvas() {
 		const clock = new Clock();
 		const animState = createAnimationState();
 		let vrm: VRM | null = null;
+		const createdObjectUrls: string[] = [];
 		let mixer: AnimationMixer | null = null;
 		let emotionCtrl: ReturnType<typeof createEmotionController> | null = null;
 		let mouthCtrl: ReturnType<typeof createMouthController> | null = null;
@@ -202,24 +267,50 @@ export function AvatarCanvas() {
 		// Helper to load and apply background image
 		const applyBackground = (bgPath: string | undefined | null) => {
 			let bgSrc = "/assets/background-space.webp";
-			if (bgPath) {
-				bgSrc = bgPath.startsWith("/assets/")
-					? bgPath
-					: convertFileSrc(bgPath);
-			}
-			const loader = new TextureLoader();
-			loader.setCrossOrigin("anonymous");
-			loader.load(
-				bgSrc,
-				(texture) => {
-					if (!disposed) scene.background = texture;
-				},
-				undefined,
-				(err) => {
-					Logger.warn("AvatarCanvas", "Failed to load background image", { err });
-					setDefaultBackground(scene);
-				},
-			);
+			const loadBackground = async () => {
+				if (bgPath) {
+					const normalized = normalizeLocalPath(bgPath);
+					if (
+						isAbsoluteLocalFilePath(normalized) &&
+						!normalized.startsWith("/assets/") &&
+						!normalized.startsWith("/avatars/")
+					) {
+						try {
+							const bytes = await invoke<number[]>("read_local_binary", {
+								path: normalized,
+							});
+							const blob = new Blob([new Uint8Array(bytes)], {
+								type: guessMimeType(normalized),
+							});
+							const objectUrl = URL.createObjectURL(blob);
+							createdObjectUrls.push(objectUrl);
+							bgSrc = objectUrl;
+						} catch (err) {
+							Logger.warn("AvatarCanvas", "Failed to read local background", {
+								error: String(err),
+								path: normalized,
+							});
+							bgSrc = resolveAssetUrl(normalized);
+						}
+					} else {
+						bgSrc = resolveAssetUrl(normalized);
+					}
+				}
+				const loader = new TextureLoader();
+				loader.setCrossOrigin("anonymous");
+				loader.load(
+					bgSrc,
+					(texture) => {
+						if (!disposed) scene.background = texture;
+					},
+					undefined,
+					(err) => {
+						Logger.warn("AvatarCanvas", "Failed to load background image", { err });
+						setDefaultBackground(scene);
+					},
+				);
+			};
+			void loadBackground();
 		};
 
 		// Initial background load
@@ -319,28 +410,76 @@ export function AvatarCanvas() {
 		}
 
 		async function init() {
-			// Convert absolute file paths for custom VRM models
-			const vrmUrl = modelPath.startsWith("/avatars/")
-				? modelPath
-				: convertFileSrc(modelPath);
-			Logger.info("AvatarCanvas", "Loading VRM model", { modelPath, vrmUrl });
-
-			const result = await loadVrm(vrmUrl, {
-				scene,
-				lookAt: true,
-				onProgress: (progress) => {
-					if (progress.lengthComputable) {
-						setLoadProgress(progress.loaded / progress.total);
+			let stage = "init";
+			let localReadError = "";
+			try {
+				setLoadError("");
+				setLoaded(false);
+				setLoadStage(stage);
+				// Convert absolute file paths for custom VRM models
+				const normalizedModelPath = normalizeLocalPath(modelPath);
+				let vrmUrl = resolveAssetUrl(normalizedModelPath);
+				let localVrmBytes: Uint8Array | null = null;
+				let resourcePath = "";
+				if (
+					isAbsoluteLocalFilePath(normalizedModelPath) &&
+					!normalizedModelPath.startsWith("/assets/") &&
+					!normalizedModelPath.startsWith("/avatars/")
+				) {
+					try {
+						stage = "read-local-binary";
+						setLoadStage(stage);
+						const bytes = await invoke<number[]>("read_local_binary", {
+							path: normalizedModelPath,
+						});
+						localVrmBytes = new Uint8Array(bytes);
+						const slash = normalizedModelPath.lastIndexOf("/");
+						if (slash > 0) {
+							resourcePath = resolveAssetUrl(
+								normalizedModelPath.slice(0, slash + 1),
+							);
+						}
+					} catch (err) {
+						localReadError = String(err);
+						Logger.warn("AvatarCanvas", "Failed to read local VRM file", {
+							error: String(err),
+							path: normalizedModelPath,
+						});
 					}
-				},
-			});
+				}
+				Logger.info("AvatarCanvas", "Loading VRM model", { modelPath, vrmUrl });
 
-			if (disposed || !result) {
-				if (!result) Logger.error("AvatarCanvas", "Failed to load VRM model");
-				return;
-			}
+				const result = localVrmBytes
+					? await (() => {
+							stage = "load-local-vrm";
+							setLoadStage(stage);
+							const localVrmBuffer = new ArrayBuffer(localVrmBytes.byteLength);
+							new Uint8Array(localVrmBuffer).set(localVrmBytes);
+							return loadVrmFromArrayBuffer(localVrmBuffer, {
+								scene,
+								lookAt: true,
+							}, resourcePath);
+						})()
+					: await (() => {
+							stage = "load-url-vrm";
+							setLoadStage(stage);
+							return loadVrm(vrmUrl, {
+								scene,
+								lookAt: true,
+								onProgress: (progress) => {
+									if (progress.lengthComputable) {
+										setLoadProgress(progress.loaded / progress.total);
+									}
+								},
+							});
+						})();
 
-			vrm = result._vrm;
+				if (disposed || !result) {
+					if (!result) Logger.error("AvatarCanvas", "Failed to load VRM model");
+					return;
+				}
+
+				vrm = result._vrm;
 
 			if (vrm.humanoid) {
 				const head = vrm.humanoid.getNormalizedBoneNode("head");
@@ -372,24 +511,47 @@ export function AvatarCanvas() {
 				});
 			}
 
-			Logger.info("AvatarCanvas", "VRM model loaded", {
-				center: `${result.modelCenter.x.toFixed(2)},${result.modelCenter.y.toFixed(2)},${result.modelCenter.z.toFixed(2)}`,
-			});
+				Logger.info("AvatarCanvas", "VRM model loaded", {
+					center: `${result.modelCenter.x.toFixed(2)},${result.modelCenter.y.toFixed(2)},${result.modelCenter.z.toFixed(2)}`,
+				});
 
-			const vrmAnimation = await loadVRMAnimation(animationPath);
-			if (disposed || !vrmAnimation) return;
+				stage = "vrm-loaded";
+				setLoadStage(stage);
+				setLoaded(true);
+				try {
+					stage = "load-idle-animation";
+					setLoadStage(stage);
+					const vrmAnimation = await loadVRMAnimation(animationPath);
+					if (disposed || !vrmAnimation) return;
 
-			const clip = clipFromVRMAnimation(vrm, vrmAnimation);
-			if (clip) {
-				reAnchorRootPositionTrack(clip, vrm);
-				mixer = new AnimationMixer(vrm.scene);
-				const action = mixer.clipAction(clip);
-				action.setLoop(LoopRepeat, Number.POSITIVE_INFINITY);
-				action.play();
-				Logger.info("AvatarCanvas", "Idle animation started");
+					const clip = clipFromVRMAnimation(vrm, vrmAnimation);
+					if (clip) {
+						reAnchorRootPositionTrack(clip, vrm);
+						mixer = new AnimationMixer(vrm.scene);
+						const action = mixer.clipAction(clip);
+						action.setLoop(LoopRepeat, Number.POSITIVE_INFINITY);
+						action.play();
+						Logger.info("AvatarCanvas", "Idle animation started");
+					}
+					stage = "ready";
+					setLoadStage(stage);
+				} catch (animationErr) {
+					Logger.warn("AvatarCanvas", "Idle animation load failed", {
+						error: String(animationErr),
+						animationPath,
+					});
+				}
+			} catch (err) {
+				setLoadError(
+					`${stage}: ${String(err)}${localReadError ? ` | local-read: ${localReadError}` : ""}`,
+				);
+				setLoadStage(`error:${stage}`);
+				setLoaded(false);
+				Logger.error("AvatarCanvas", "VRM initialization failed", {
+					error: String(err),
+					modelPath,
+				});
 			}
-
-			setLoaded(true);
 		}
 
 		// Subscribe to isSpeaking changes for lip sync
@@ -437,6 +599,9 @@ export function AvatarCanvas() {
 			saveCameraState(camera, controls.target);
 			controls.dispose();
 			renderer.dispose();
+			for (const url of createdObjectUrls) {
+				URL.revokeObjectURL(url);
+			}
 			if (container.contains(renderer.domElement)) {
 				container.removeChild(renderer.domElement);
 			}
@@ -447,6 +612,10 @@ export function AvatarCanvas() {
 	return (
 		<div
 			ref={containerRef}
+			data-avatar-loaded={isLoaded ? "true" : "false"}
+			data-avatar-model-path={modelPath}
+			data-avatar-load-error={loadError}
+			data-avatar-load-stage={loadStage}
 			style={{ width: "100%", height: "100%", position: "relative" }}
 		>
 			<div

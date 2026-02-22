@@ -1,124 +1,148 @@
-import { useCallback, useEffect, useState } from "react";
-import { directToolCall } from "../lib/chat-service";
-import { loadConfig, resolveGatewayUrl } from "../lib/config";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { listen } from "@tauri-apps/api/event";
+import {
+	type DiscordMessage,
+	fetchDiscordMessages,
+	getBotUserId,
+	isDiscordApiAvailable,
+	openDmChannel,
+} from "../lib/discord-api";
+import { loadConfig, saveConfig } from "../lib/config";
+import { discoverAndPersistDiscordDmChannel } from "../lib/gateway-sessions";
 import { t } from "../lib/i18n";
 import { Logger } from "../lib/logger";
-import type { ChannelInfo } from "../lib/types";
 
 interface ChannelsTabProps {
 	onAskAI?: (message: string) => void;
 }
 
-export function ChannelsTab({ onAskAI }: ChannelsTabProps) {
-	const [channels, setChannels] = useState<ChannelInfo[]>([]);
+const POLL_INTERVAL_MS = 10_000;
+
+export function ChannelsTab(_props: ChannelsTabProps) {
+	const [messages, setMessages] = useState<DiscordMessage[]>([]);
 	const [loading, setLoading] = useState(true);
+	const [channelId, setChannelId] = useState<string | null>(null);
+	const [botId, setBotId] = useState<string | null>(null);
 	const [error, setError] = useState<string | null>(null);
+	const [initError, setInitError] = useState<string | null>(null);
+	const messagesEndRef = useRef<HTMLDivElement>(null);
+	const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-	const fetchChannels = useCallback(async () => {
-		setLoading(true);
-		setError(null);
-
+	// Resolve DM channel: config → auto-open from userId → Gateway session discovery
+	const resolveChannel = useCallback(async (): Promise<string | null> => {
 		const config = loadConfig();
-		const gatewayUrl = resolveGatewayUrl(config);
-		if (!gatewayUrl || !config?.enableTools) {
+		if (config?.discordDmChannelId) return config.discordDmChannelId;
+
+		if (config?.discordDefaultUserId) {
+			const id = await openDmChannel(config.discordDefaultUserId);
+			if (id && config) {
+				saveConfig({ ...config, discordDmChannelId: id });
+			}
+			return id;
+		}
+
+		// Fallback: discover from Gateway sessions (works after reset when bot is still connected)
+		const discovered = await discoverAndPersistDiscordDmChannel();
+		if (discovered) return discovered;
+
+		return null;
+	}, []);
+
+	const initDiscord = useCallback(async () => {
+		setLoading(true);
+		setInitError(null);
+
+		const apiOk = await isDiscordApiAvailable();
+		if (!apiOk) {
+			setInitError("봇 토큰을 찾을 수 없습니다.");
 			setLoading(false);
-			setError(t("channels.gatewayRequired"));
 			return;
 		}
 
-		try {
-			const result = await directToolCall({
-				toolName: "skill_channels",
-				args: { action: "status" },
-				requestId: `ch-status-${Date.now()}`,
-				gatewayUrl,
-				gatewayToken: config.gatewayToken,
-			});
+		const dmChannelId = await resolveChannel();
+		if (!dmChannelId) {
+			setInitError("Discord DM 채널을 찾을 수 없습니다. 설정에서 Discord 연동을 확인하세요.");
+			setLoading(false);
+			return;
+		}
 
-			if (result.success && result.output) {
-				const parsed = JSON.parse(result.output) as ChannelInfo[];
-				setChannels(parsed);
-			} else {
-				setChannels([]);
-			}
+		setChannelId(dmChannelId);
+		const bid = await getBotUserId();
+		setBotId(bid);
+	}, [resolveChannel]);
+
+	// Initialize on mount
+	useEffect(() => {
+		initDiscord();
+	}, [initDiscord]);
+
+	// Re-initialize when Discord OAuth completes
+	useEffect(() => {
+		const unlisten = listen("discord_auth_complete", () => {
+			Logger.info("ChannelsTab", "Discord auth completed, re-initializing");
+			initDiscord();
+		});
+		return () => {
+			unlisten.then((fn) => fn());
+		};
+	}, [initDiscord]);
+
+	const fetchHistory = useCallback(async () => {
+		if (!channelId) return;
+
+		try {
+			const msgs = await fetchDiscordMessages(channelId, 50);
+			setMessages(msgs);
+			setError(null);
 		} catch (err) {
-			Logger.warn("ChannelsTab", "Failed to fetch channels", {
+			Logger.warn("ChannelsTab", "Failed to fetch Discord messages", {
 				error: String(err),
 			});
-			setError(t("channels.error"));
+			setError(String(err));
 		} finally {
 			setLoading(false);
 		}
-	}, []);
+	}, [channelId]);
 
+	// Fetch history once channel ID is set
 	useEffect(() => {
-		fetchChannels();
-	}, [fetchChannels]);
+		if (!channelId) return;
+		fetchHistory();
+	}, [channelId, fetchHistory]);
 
-	const handleLogout = useCallback(
-		async (channelId: string) => {
-			if (!confirm(t("channels.logoutConfirm"))) return;
+	// Poll for new messages
+	useEffect(() => {
+		if (!channelId) return;
 
-			const config = loadConfig();
-			const gatewayUrl = resolveGatewayUrl(config);
-			try {
-				await directToolCall({
-					toolName: "skill_channels",
-					args: { action: "logout", channel: channelId },
-					requestId: `ch-logout-${Date.now()}`,
-					gatewayUrl,
-					gatewayToken: config?.gatewayToken,
-				});
-				fetchChannels();
-			} catch (err) {
-				Logger.warn("ChannelsTab", "Logout failed", {
-					error: String(err),
-				});
+		pollRef.current = setInterval(fetchHistory, POLL_INTERVAL_MS);
+		return () => {
+			if (pollRef.current) {
+				clearInterval(pollRef.current);
+				pollRef.current = null;
 			}
-		},
-		[fetchChannels],
-	);
+		};
+	}, [channelId, fetchHistory]);
 
-	const handleLogin = useCallback(
-		(channelId: string) => {
-			if (onAskAI) {
-				onAskAI(
-					`채널 ${channelId} 로그인을 시작해줘. skill_channels의 login_start 액션을 사용해.`,
-				);
-			}
-		},
-		[onAskAI],
-	);
+	// Auto-scroll to bottom
+	useEffect(() => {
+		messagesEndRef.current?.scrollIntoView?.({ behavior: "smooth" });
+	}, [messages]);
 
-	if (loading) {
-		return (
-			<div className="channels-tab" data-testid="channels-tab">
-				<div className="channels-loading">{t("channels.loading")}</div>
-			</div>
-		);
+	function formatTime(ts: string): string {
+		try {
+			const d = new Date(ts);
+			return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+		} catch {
+			return "";
+		}
 	}
 
-	if (error) {
+	// Not connected
+	if (!loading && !channelId) {
 		return (
 			<div className="channels-tab" data-testid="channels-tab">
-				<div className="channels-error">
-					<span>{error}</span>
-					<button type="button" onClick={fetchChannels}>
-						{t("channels.refresh")}
-					</button>
-				</div>
-			</div>
-		);
-	}
-
-	if (channels.length === 0) {
-		return (
-			<div className="channels-tab" data-testid="channels-tab">
-				<div className="channels-empty">
-					<span>{t("channels.empty")}</span>
-					<button type="button" onClick={fetchChannels}>
-						{t("channels.refresh")}
-					</button>
+				<div className="dm-empty">
+					<span>{initError ?? "Discord DM 연결이 필요합니다."}</span>
 				</div>
 			</div>
 		);
@@ -126,77 +150,69 @@ export function ChannelsTab({ onAskAI }: ChannelsTabProps) {
 
 	return (
 		<div className="channels-tab" data-testid="channels-tab">
-			<div className="channels-header">
-				<h3>{t("channels.title")}</h3>
-				<button type="button" className="channels-refresh-btn" onClick={fetchChannels}>
+			{/* Header */}
+			<div className="dm-header">
+				<div className="dm-header-title">
+					<span>Discord DM</span>
+					<span className="dm-header-status connected">
+						{t("channels.connected")}
+					</span>
+				</div>
+				<button
+					type="button"
+					className="channels-refresh-btn"
+					onClick={fetchHistory}
+				>
 					{t("channels.refresh")}
 				</button>
 			</div>
-			<div className="channels-list">
-				{channels.map((ch) => (
-					<div key={ch.id} className="channel-card" data-testid="channel-card">
-						<div className="channel-card-header">
-							<span className="channel-name">{ch.label}</span>
-							<span className="channel-id">{ch.id}</span>
-						</div>
-						{ch.accounts.length === 0 ? (
-							<div className="channel-no-accounts">
-								{t("channels.noAccounts")}
-							</div>
-						) : (
-							ch.accounts.map((acc) => (
-								<div
-									key={acc.accountId}
-									className="channel-account"
-									data-testid="channel-account"
-								>
-									<div className="channel-account-info">
-										<span className="channel-account-name">
-											{acc.name || acc.accountId}
-										</span>
-										<span
-											className={`channel-status-badge ${acc.connected ? "connected" : "disconnected"}`}
-											data-testid="channel-status"
-										>
-											{acc.connected
-												? t("channels.connected")
-												: t("channels.disconnected")}
-										</span>
-										{acc.lastError && (
-											<span className="channel-error-text">
-												{acc.lastError}
-											</span>
-										)}
-									</div>
-									<div className="channel-account-actions">
-										{acc.connected ? (
-											<button
-												type="button"
-												className="channel-action-btn logout"
-												onClick={() =>
-													handleLogout(ch.id)
-												}
-											>
-												{t("channels.logout")}
-											</button>
-										) : (
-											<button
-												type="button"
-												className="channel-action-btn login"
-												onClick={() =>
-													handleLogin(ch.id)
-												}
-											>
-												{t("channels.login")}
-											</button>
-										)}
-									</div>
-								</div>
-							))
-						)}
+
+			{/* Messages (read-only) */}
+			<div className="dm-messages">
+				{loading ? (
+					<div className="dm-loading-more">{t("channels.loading")}</div>
+				) : messages.length === 0 ? (
+					<div className="dm-empty">
+						<span>아직 메시지가 없습니다.</span>
+						<span style={{ fontSize: 11, color: "var(--cream-dim)" }}>
+							Discord에서 봇에게 DM을 보내보세요.
+						</span>
 					</div>
-				))}
+				) : (
+					messages.map((msg) => {
+						const isBot = msg.author.bot === true || msg.author.id === botId;
+						return (
+							<div
+								key={msg.id}
+								className={`dm-message ${isBot ? "outbound" : "inbound"}`}
+							>
+								<span className="dm-message-sender">
+									{msg.author.username}
+								</span>
+								<div className="dm-message-bubble">{msg.content}</div>
+								<span className="dm-message-time">
+									{formatTime(msg.timestamp)}
+								</span>
+							</div>
+						);
+					})
+				)}
+				<div ref={messagesEndRef} />
 			</div>
+
+			{/* Error bar */}
+			{error && (
+				<div
+					style={{
+						padding: "4px 12px",
+						fontSize: 11,
+						color: "var(--error)",
+						borderTop: "1px solid var(--espresso-light)",
+					}}
+				>
+					{error}
+				</div>
+			)}
 		</div>
 	);
 }

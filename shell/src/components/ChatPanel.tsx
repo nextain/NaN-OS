@@ -407,7 +407,7 @@ export function ChatPanel() {
 		// Only "google" provider uses direct Google TTS; all others use Gateway
 		const cfgTtsProvider = config.ttsProvider;
 		const ttsEngine: "google" | "openclaw" = cfgTtsProvider
-			? (cfgTtsProvider === "google" ? "google" : "openclaw")
+			? (cfgTtsProvider === "google" || cfgTtsProvider === "nextain" ? "google" : "openclaw")
 			: ((config.ttsEngine ?? "auto") === "google" ? "google" : "openclaw");
 		const wantsGatewayForTts =
 			ttsEnabled && ttsEngine === "openclaw";

@@ -36,7 +36,10 @@ describe("useProgressStore", () => {
 		const { setStats } = useProgressStore.getState();
 		const stats = {
 			total_events: 42,
-			by_event_type: [["tool_use", 30], ["usage", 12]] as [string, number][],
+			by_event_type: [
+				["tool_use", 30],
+				["usage", 12],
+			] as [string, number][],
 			by_tool_name: [["read_file", 20]] as [string, number][],
 			total_cost: 0.05,
 		};

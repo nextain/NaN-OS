@@ -1139,6 +1139,99 @@ async fn reset_window_state(app: AppHandle) -> Result<(), String> {
     Ok(())
 }
 
+/// Reset OpenClaw session data (agents/main/sessions + memory).
+#[tauri::command]
+fn reset_openclaw_data() -> Result<String, String> {
+    let home = std::env::var("HOME").unwrap_or_default();
+    let base_dirs = [
+        format!("{}/.openclaw", home),
+        format!("{}/.naia/openclaw", home),
+    ];
+
+    let mut removed: Vec<String> = Vec::new();
+
+    for base in &base_dirs {
+        // Remove sessions directory
+        let sessions_dir = format!("{}/agents/main/sessions", base);
+        if std::path::Path::new(&sessions_dir).exists() {
+            let _ = std::fs::remove_dir_all(&sessions_dir);
+            removed.push(sessions_dir);
+        }
+
+        // Remove memory database
+        let memory_dir = format!("{}/memory", base);
+        if std::path::Path::new(&memory_dir).exists() {
+            let _ = std::fs::remove_dir_all(&memory_dir);
+            removed.push(memory_dir);
+        }
+    }
+
+    eprintln!("[Naia] OpenClaw data reset: {:?}", removed);
+    Ok(serde_json::json!({ "removed": removed }).to_string())
+}
+
+/// Read Discord bot token from OpenClaw config (~/.openclaw/openclaw.json).
+#[tauri::command]
+fn read_discord_bot_token() -> Result<String, String> {
+    let home = std::env::var("HOME").unwrap_or_default();
+    let candidates = [
+        format!("{}/.openclaw/openclaw.json", home),
+        format!("{}/.naia/openclaw/openclaw.json", home),
+    ];
+    for path in &candidates {
+        if let Ok(bytes) = std::fs::read(path) {
+            if let Ok(config) = serde_json::from_slice::<serde_json::Value>(&bytes) {
+                if let Some(token) = config
+                    .get("channels")
+                    .and_then(|c| c.get("discord"))
+                    .and_then(|d| d.get("token"))
+                    .and_then(|t| t.as_str())
+                {
+                    if !token.is_empty() {
+                        return Ok(token.to_string());
+                    }
+                }
+            }
+        }
+    }
+    Err("Discord bot token not found in OpenClaw config".to_string())
+}
+
+/// Proxy Discord REST API calls through Rust to bypass CORS.
+/// Returns the JSON response body as a string.
+#[tauri::command]
+async fn discord_api(endpoint: String, method: String, body: Option<String>) -> Result<String, String> {
+    let token = read_discord_bot_token()?;
+    let url = format!("https://discord.com/api/v10{}", endpoint);
+
+    let client = reqwest::Client::new();
+    let mut req = match method.to_uppercase().as_str() {
+        "POST" => client.post(&url),
+        "PUT" => client.put(&url),
+        "DELETE" => client.delete(&url),
+        "PATCH" => client.patch(&url),
+        _ => client.get(&url),
+    };
+
+    req = req
+        .header("Authorization", format!("Bot {}", token))
+        .header("Content-Type", "application/json");
+
+    if let Some(b) = body {
+        req = req.body(b);
+    }
+
+    let res = req.send().await.map_err(|e| format!("Discord API request failed: {}", e))?;
+    let status = res.status().as_u16();
+    let text = res.text().await.map_err(|e| format!("Failed to read response: {}", e))?;
+
+    if status >= 400 {
+        return Err(format!("Discord API error {}: {}", status, &text[..text.len().min(200)]));
+    }
+
+    Ok(text)
+}
+
 #[tauri::command]
 async fn read_local_binary(path: String) -> Result<Vec<u8>, String> {
     let file_path = std::path::PathBuf::from(&path);
@@ -1175,6 +1268,8 @@ struct OpenClawSyncParams {
     agent_name: Option<String>,
     user_name: Option<String>,
     locale: Option<String>,
+    discord_dm_channel_id: Option<String>,
+    discord_default_user_id: Option<String>,
 }
 
 /// Sync Shell provider/model/API-key to ~/.openclaw/openclaw.json so the
@@ -1238,7 +1333,29 @@ async fn sync_openclaw_config(params: OpenClawSyncParams) -> Result<(), String> 
         serde_json::Value::String(model_value.clone()),
     );
 
-    // Atomic write: openclaw.json (model only)
+    // Sync Discord DM defaults into channels.discord so the gateway knows the DM target
+    if let Some(ref user_id) = params.discord_default_user_id {
+        let channels = obj
+            .entry("channels")
+            .or_insert_with(|| serde_json::json!({}))
+            .as_object_mut()
+            .ok_or("channels is not an object")?;
+        let discord = channels
+            .entry("discord")
+            .or_insert_with(|| serde_json::json!({}))
+            .as_object_mut()
+            .ok_or("discord is not an object")?;
+        discord.insert("dmPolicy".to_string(), serde_json::Value::String("allowlist".to_string()));
+        discord.insert("allowFrom".to_string(), serde_json::json!([user_id]));
+        let dm = discord
+            .entry("dm")
+            .or_insert_with(|| serde_json::json!({}))
+            .as_object_mut()
+            .ok_or("dm is not an object")?;
+        dm.insert("enabled".to_string(), serde_json::Value::Bool(true));
+    }
+
+    // Atomic write: openclaw.json
     let dir = std::path::Path::new(&config_path)
         .parent()
         .ok_or("No parent dir")?;
@@ -1503,6 +1620,7 @@ pub fn run() {
             send_to_agent_command,
             cancel_stream,
             reset_window_state,
+            reset_openclaw_data,
             preview_tts,
             gateway_health,
             get_audit_log,
@@ -1513,6 +1631,8 @@ pub fn run() {
             validate_api_key,
             generate_oauth_state,
             read_local_binary,
+            read_discord_bot_token,
+            discord_api,
             sync_openclaw_config,
         ])
         .setup(|app| {
@@ -1700,6 +1820,14 @@ pub fn run() {
                     }
                 }
             });
+
+            // Set window icon explicitly (prevents default yellow WRY icon on Linux)
+            if let Some(window) = app.get_webview_window("main") {
+                let icon_bytes = include_bytes!("../icons/icon.png");
+                if let Ok(icon) = tauri::image::Image::from_bytes(icon_bytes) {
+                    let _ = window.set_icon(icon);
+                }
+            }
 
             // Restore or dock window
             if let Some(window) = app.get_webview_window("main") {

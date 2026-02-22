@@ -19,10 +19,16 @@ function formatDate(timestamp: number): string {
 	});
 }
 
+function isDiscordSession(key: string): boolean {
+	return /^discord:(?:dm|channel):\d+$/.test(key);
+}
+
 export function HistoryTab({
 	onLoadSession,
+	onLoadDiscordSession,
 }: {
 	onLoadSession: () => void;
+	onLoadDiscordSession?: () => void;
 }) {
 	const [sessions, setSessions] = useState<GatewaySession[]>([]);
 	const [isLoading, setIsLoading] = useState(true);
@@ -47,6 +53,11 @@ export function HistoryTab({
 	}
 
 	async function handleLoadSession(key: string) {
+		if (isDiscordSession(key)) {
+			onLoadDiscordSession?.();
+			return;
+		}
+
 		if (key === currentSessionId) return;
 		try {
 			const messages = await getGatewayHistory(key);
@@ -88,39 +99,45 @@ export function HistoryTab({
 	return (
 		<div className="history-tab">
 			<div className="history-list">
-				{sessions.map((s) => (
-					<div
-						key={s.key}
-						className={`history-item${s.key === currentSessionId ? " current" : ""}`}
-					>
-						<button
-							type="button"
-							className="history-item-main"
-							onClick={() => handleLoadSession(s.key)}
+				{sessions.map((s) => {
+					const isDiscord = isDiscordSession(s.key);
+					return (
+						<div
+							key={s.key}
+							className={`history-item${s.key === currentSessionId ? " current" : ""}${isDiscord ? " discord" : ""}`}
 						>
-							<span className="history-item-title">
-								{s.label || t("history.untitled")}
-								{s.key === currentSessionId && (
-									<span className="history-current-badge">
-										{t("history.current")}
-									</span>
-								)}
-							</span>
-							<span className="history-item-meta">
-								{formatDate(s.updatedAt || s.createdAt)} · {s.messageCount}{" "}
-								{t("history.messages")}
-							</span>
-						</button>
-						<button
-							type="button"
-							className="history-delete-btn"
-							onClick={() => handleDeleteSession(s.key)}
-							title={t("history.delete")}
-						>
-							×
-						</button>
-					</div>
-				))}
+							<button
+								type="button"
+								className="history-item-main"
+								onClick={() => handleLoadSession(s.key)}
+							>
+								<span className="history-item-title">
+									{isDiscord && (
+										<span className="history-discord-badge">Discord</span>
+									)}
+									{s.label || (isDiscord ? "Discord DM" : t("history.untitled"))}
+									{s.key === currentSessionId && (
+										<span className="history-current-badge">
+											{t("history.current")}
+										</span>
+									)}
+								</span>
+								<span className="history-item-meta">
+									{formatDate(s.updatedAt || s.createdAt)} · {s.messageCount}{" "}
+									{t("history.messages")}
+								</span>
+							</button>
+							<button
+								type="button"
+								className="history-delete-btn"
+								onClick={() => handleDeleteSession(s.key)}
+								title={t("history.delete")}
+							>
+								×
+							</button>
+						</div>
+					);
+				})}
 			</div>
 		</div>
 	);

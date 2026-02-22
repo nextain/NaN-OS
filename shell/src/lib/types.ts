@@ -1,6 +1,8 @@
 // === Provider ===
 
 export type ProviderId =
+	| "nextain"
+	| "claude-code-cli"
 	| "gemini"
 	| "openai"
 	| "anthropic"
@@ -52,10 +54,15 @@ export interface AgentRequest {
 	systemPrompt?: string;
 	ttsVoice?: string;
 	ttsApiKey?: string;
+	ttsEngine?: "auto" | "openclaw" | "google";
 	enableTools?: boolean;
 	gatewayUrl?: string;
 	gatewayToken?: string;
 	disabledSkills?: string[];
+	routeViaGateway?: boolean;
+	discordDefaultUserId?: string;
+	discordDefaultTarget?: string;
+	discordDmChannelId?: string;
 }
 
 export type AgentResponseChunk =
@@ -112,6 +119,13 @@ export type AgentResponseChunk =
 			level: string;
 			message: string;
 			timestamp: string;
+	  }
+	| {
+			type: "discord_message";
+			requestId: string;
+			from: string;
+			content: string;
+			timestamp?: string;
 	  }
 	| { type: "finish"; requestId: string }
 	| { type: "error"; requestId: string; message: string };
@@ -193,7 +207,8 @@ export interface PairRequest {
 // === Gateway Status ===
 
 export interface GatewayStatus {
-	ok: boolean;
+	ok?: boolean;
+	status?: string;
 	version?: string;
 	uptime?: number;
 	methods?: string[];

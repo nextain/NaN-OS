@@ -138,31 +138,28 @@ export function AgentsTab() {
 		}
 	}, []);
 
-	const handleViewFile = useCallback(
-		async (agentId: string, path: string) => {
-			setSelectedFile(path);
-			const config = loadConfig();
-			const gatewayUrl = resolveGatewayUrl(config);
-			try {
-				const res = await directToolCall({
-					toolName: "skill_agents",
-					args: { action: "files_get", agentId, path },
-					requestId: `ag-fget-${Date.now()}`,
-					gatewayUrl,
-					gatewayToken: config?.gatewayToken,
-				});
-				if (res.success && res.output) {
-					const parsed = JSON.parse(res.output);
-					setFileContent(parsed.content ?? res.output);
-				}
-			} catch (err) {
-				Logger.warn("AgentsTab", "Failed to get file", {
-					error: String(err),
-				});
+	const handleViewFile = useCallback(async (agentId: string, path: string) => {
+		setSelectedFile(path);
+		const config = loadConfig();
+		const gatewayUrl = resolveGatewayUrl(config);
+		try {
+			const res = await directToolCall({
+				toolName: "skill_agents",
+				args: { action: "files_get", agentId, path },
+				requestId: `ag-fget-${Date.now()}`,
+				gatewayUrl,
+				gatewayToken: config?.gatewayToken,
+			});
+			if (res.success && res.output) {
+				const parsed = JSON.parse(res.output);
+				setFileContent(parsed.content ?? res.output);
 			}
-		},
-		[],
-	);
+		} catch (err) {
+			Logger.warn("AgentsTab", "Failed to get file", {
+				error: String(err),
+			});
+		}
+	}, []);
 
 	const handleSaveFile = useCallback(async () => {
 		if (!selectedAgent || !selectedFile || fileContent === null) return;
@@ -271,9 +268,7 @@ export function AgentsTab() {
 									</button>
 								</div>
 								{agent.description && (
-									<div className="agent-card-desc">
-										{agent.description}
-									</div>
+									<div className="agent-card-desc">{agent.description}</div>
 								)}
 								{agent.model && (
 									<div className="agent-card-model">{agent.model}</div>
@@ -291,9 +286,7 @@ export function AgentsTab() {
 						{t("agents.filesTitle")} — {selectedAgent}
 					</h3>
 					{filesLoading ? (
-						<div className="agents-loading">
-							{t("agents.filesLoading")}
-						</div>
+						<div className="agents-loading">{t("agents.filesLoading")}</div>
 					) : agentFiles.length === 0 ? (
 						<div className="agents-empty">{t("agents.filesEmpty")}</div>
 					) : (
@@ -303,15 +296,11 @@ export function AgentsTab() {
 									type="button"
 									key={f.path}
 									className={`agent-file-item${selectedFile === f.path ? " selected" : ""}`}
-									onClick={() =>
-										handleViewFile(selectedAgent, f.path)
-									}
+									onClick={() => handleViewFile(selectedAgent, f.path)}
 								>
 									{f.path}
 									{f.size != null && (
-										<span className="agent-file-size">
-											{f.size}B
-										</span>
+										<span className="agent-file-size">{f.size}B</span>
 									)}
 								</button>
 							))}
@@ -335,9 +324,7 @@ export function AgentsTab() {
 									{t("agents.filesSave")}
 								</button>
 								{fileSaveStatus && (
-									<span className="agent-file-status">
-										{fileSaveStatus}
-									</span>
+									<span className="agent-file-status">{fileSaveStatus}</span>
 								)}
 							</div>
 						</div>
@@ -371,18 +358,14 @@ export function AgentsTab() {
 									<button
 										type="button"
 										className="session-action-btn compact"
-										onClick={() =>
-											handleCompactSession(session.key)
-										}
+										onClick={() => handleCompactSession(session.key)}
 									>
 										{t("agents.compact")}
 									</button>
 									<button
 										type="button"
 										className="session-action-btn delete"
-										onClick={() =>
-											handleDeleteSession(session.key)
-										}
+										onClick={() => handleDeleteSession(session.key)}
 									>
 										{t("agents.deleteSession")}
 									</button>

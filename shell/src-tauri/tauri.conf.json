@@ -24,7 +24,10 @@
 			}
 		],
 		"security": {
-			"csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self' http://localhost:18789 ws://localhost:18789 https://cafelua-gateway-789741003661.asia-northeast3.run.app https://generativelanguage.googleapis.com https://speech.googleapis.com https://api.x.ai https://api.anthropic.com; img-src 'self' asset: blob: data:; media-src 'self' blob: data:; font-src 'self' data:; worker-src 'self' blob:"
+			"assetProtocol": {
+				"scope": ["**"]
+			},
+			"csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self' http://localhost:18789 ws://localhost:18789 https://cafelua-gateway-789741003661.asia-northeast3.run.app https://generativelanguage.googleapis.com https://speech.googleapis.com https://api.x.ai https://api.anthropic.com https://discord.com http://asset.localhost tauri://localhost blob: data:; img-src 'self' asset: http://asset.localhost tauri://localhost blob: data:; media-src 'self' blob: data:; font-src 'self' data:; worker-src 'self' blob:"
 		}
 	},
 	"bundle": {

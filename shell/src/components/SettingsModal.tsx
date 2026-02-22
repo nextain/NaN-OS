@@ -34,17 +34,29 @@ const TTS_VOICES: { id: string; label: string; price: string }[] = [
 const LOCALES: { id: Locale; label: string }[] = [
 	{ id: "ko", label: "한국어" },
 	{ id: "en", label: "English" },
+	{ id: "ja", label: "日本語" },
+	{ id: "zh", label: "中文" },
+	{ id: "fr", label: "Français" },
+	{ id: "de", label: "Deutsch" },
+	{ id: "ru", label: "Русский" },
+	{ id: "es", label: "Español" },
+	{ id: "ar", label: "العربية" },
+	{ id: "hi", label: "हिन्दी" },
+	{ id: "bn", label: "বাংলা" },
+	{ id: "pt", label: "Português" },
+	{ id: "id", label: "Bahasa Indonesia" },
+	{ id: "vi", label: "Tiếng Việt" },
 ];
 
 const THEMES: { id: ThemeId; label: string; preview: string }[] = [
-	{ id: "espresso", label: "Espresso", preview: "#0F172A" },
-	{ id: "midnight", label: "Midnight", preview: "#1a1a2e" },
+	{ id: "espresso", label: "Light", preview: "#ffffff" },
+	{ id: "midnight", label: "Dark", preview: "#1a1a2e" },
 	{ id: "ocean", label: "Ocean", preview: "#1b2838" },
 	{ id: "forest", label: "Forest", preview: "#1a2e1a" },
 	{ id: "rose", label: "Rose", preview: "#2e1a2a" },
-	{ id: "latte", label: "Latte", preview: "#f5f0e8" },
+	{ id: "latte", label: "Latte", preview: "#fffcf5" },
 	{ id: "sakura", label: "Sakura", preview: "#fdf2f8" },
-	{ id: "cloud", label: "Cloud", preview: "#f8f9fa" },
+	{ id: "cloud", label: "Cloud", preview: "#f1f5f9" },
 ];
 
 interface Props {
@@ -84,15 +96,6 @@ export function SettingsModal({ onClose }: Props) {
 	);
 	const [gatewayToken, setGatewayToken] = useState(
 		existing?.gatewayToken ?? "",
-	);
-	const [slackWebhookUrl, setSlackWebhookUrl] = useState(
-		existing?.slackWebhookUrl ?? "",
-	);
-	const [discordWebhookUrl, setDiscordWebhookUrl] = useState(
-		existing?.discordWebhookUrl ?? "",
-	);
-	const [googleChatWebhookUrl, setGoogleChatWebhookUrl] = useState(
-		existing?.googleChatWebhookUrl ?? "",
 	);
 	const [error, setError] = useState("");
 	const [isPreviewing, setIsPreviewing] = useState(false);
@@ -163,11 +166,9 @@ export function SettingsModal({ onClose }: Props) {
 			persona:
 				persona.trim() !== DEFAULT_PERSONA.trim() ? persona.trim() : undefined,
 			enableTools,
-			gatewayUrl: gatewayUrl !== "ws://localhost:18789" ? gatewayUrl : undefined,
+			gatewayUrl:
+				gatewayUrl !== "ws://localhost:18789" ? gatewayUrl : undefined,
 			gatewayToken: gatewayToken.trim() || undefined,
-			slackWebhookUrl: slackWebhookUrl.trim() || undefined,
-			discordWebhookUrl: discordWebhookUrl.trim() || undefined,
-			googleChatWebhookUrl: googleChatWebhookUrl.trim() || undefined,
 		});
 		setLocale(locale);
 		onClose();
@@ -371,45 +372,6 @@ export function SettingsModal({ onClose }: Props) {
 						type="password"
 						value={gatewayToken}
 						onChange={(e) => setGatewayToken(e.target.value)}
-					/>
-				</div>
-
-				<div className="settings-field">
-					<label htmlFor="slack-webhook-input">
-						Slack Webhook URL
-					</label>
-					<input
-						id="slack-webhook-input"
-						type="password"
-						value={slackWebhookUrl}
-						onChange={(e) => setSlackWebhookUrl(e.target.value)}
-						placeholder="https://hooks.slack.com/services/..."
-					/>
-				</div>
-
-				<div className="settings-field">
-					<label htmlFor="discord-webhook-input">
-						Discord Webhook URL
-					</label>
-					<input
-						id="discord-webhook-input"
-						type="password"
-						value={discordWebhookUrl}
-						onChange={(e) => setDiscordWebhookUrl(e.target.value)}
-						placeholder="https://discord.com/api/webhooks/..."
-					/>
-				</div>
-
-				<div className="settings-field">
-					<label htmlFor="google-chat-webhook-input">
-						Google Chat Webhook URL
-					</label>
-					<input
-						id="google-chat-webhook-input"
-						type="password"
-						value={googleChatWebhookUrl}
-						onChange={(e) => setGoogleChatWebhookUrl(e.target.value)}
-						placeholder="https://chat.googleapis.com/v1/spaces/..."
 					/>
 				</div>
 

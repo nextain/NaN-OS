@@ -7,6 +7,16 @@ vi.mock("@tauri-apps/plugin-opener", () => ({
 	openUrl: vi.fn().mockResolvedValue(undefined),
 }));
 
+vi.mock("@tauri-apps/api/event", () => ({
+	listen: vi.fn().mockResolvedValue(() => {}),
+}));
+
+vi.mock("../../lib/config", () => ({
+	LAB_GATEWAY_URL: "https://example.test",
+	getLabKeySecure: vi.fn().mockResolvedValue(null),
+	hasLabKeySecure: vi.fn().mockResolvedValue(false),
+}));
+
 import { CostDashboard, groupCosts } from "../CostDashboard";
 
 describe("CostDashboard", () => {
@@ -71,9 +81,7 @@ describe("CostDashboard", () => {
 	});
 
 	it("renders table with correct totals", () => {
-		const { container } = render(
-			<CostDashboard messages={messagesWithCost} />,
-		);
+		const { container } = render(<CostDashboard messages={messagesWithCost} />);
 		const table = container.querySelector(".cost-table");
 		expect(table).not.toBeNull();
 		// Check that totals row exists

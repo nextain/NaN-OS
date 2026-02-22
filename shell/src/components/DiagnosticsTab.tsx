@@ -6,6 +6,22 @@ import { Logger } from "../lib/logger";
 import type { GatewayStatus } from "../lib/types";
 import { useLogsStore } from "../stores/logs";
 
+const LOG_POLL_INTERVAL_MS = 2000;
+
+/** Parse a Gateway log line (JSON with _meta) into display-friendly entry */
+function parseLogLine(line: string): { level: string; message: string; timestamp: string } | null {
+	try {
+		const parsed = JSON.parse(line);
+		const meta = parsed._meta || {};
+		const level = (meta.logLevelName || "DEBUG").toUpperCase();
+		const msg = parsed["0"] || JSON.stringify(parsed);
+		const timestamp = parsed.time || meta.date || new Date().toISOString();
+		return { level, message: msg, timestamp };
+	} catch {
+		return { level: "DEBUG", message: line, timestamp: new Date().toISOString() };
+	}
+}
+
 export function DiagnosticsTab() {
 	const [status, setStatus] = useState<GatewayStatus | null>(null);
 	const [loading, setLoading] = useState(true);
@@ -14,6 +30,7 @@ export function DiagnosticsTab() {
 	const entries = useLogsStore((s) => s.entries);
 	const isTailing = useLogsStore((s) => s.isTailing);
 	const logsEndRef = useRef<HTMLDivElement>(null);
+	const cursorRef = useRef<number | undefined>(undefined);
 
 	const fetchStatus = useCallback(async () => {
 		setLoading(true);
@@ -56,32 +73,78 @@ export function DiagnosticsTab() {
 		fetchStatus();
 	}, [fetchStatus]);
 
+	// Poll logs while tailing
+	useEffect(() => {
+		if (!isTailing) return;
+
+		let cancelled = false;
+
+		const poll = async () => {
+			const config = loadConfig();
+			const gatewayUrl = resolveGatewayUrl(config);
+			if (!gatewayUrl || !config?.enableTools) return;
+
+			try {
+				const res = await directToolCall({
+					toolName: "skill_diagnostics",
+					args: {
+						action: "logs_poll",
+						...(cursorRef.current != null && { cursor: cursorRef.current }),
+					},
+					requestId: `diag-logs-poll-${Date.now()}`,
+					gatewayUrl,
+					gatewayToken: config.gatewayToken,
+				});
+
+				if (res.success && res.output) {
+					const result = JSON.parse(res.output);
+					if (typeof result.cursor === "number") {
+						cursorRef.current = result.cursor;
+					}
+					const lines: string[] = result.lines || [];
+					const store = useLogsStore.getState();
+					for (const line of lines) {
+						const entry = parseLogLine(line);
+						if (entry) {
+							store.addEntry(entry);
+						}
+					}
+				}
+			} catch (err) {
+				Logger.warn("DiagnosticsTab", "Log poll failed", {
+					error: String(err),
+				});
+			}
+		};
+
+		// Initial poll
+		poll();
+
+		// Set up interval
+		const intervalId = setInterval(() => {
+			if (!cancelled) poll();
+		}, LOG_POLL_INTERVAL_MS);
+
+		return () => {
+			cancelled = true;
+			clearInterval(intervalId);
+		};
+	}, [isTailing]);
+
 	// Auto-scroll logs
 	useEffect(() => {
 		logsEndRef.current?.scrollIntoView?.({ behavior: "smooth" });
 	}, [entries]);
 
-	const handleToggleTailing = useCallback(async () => {
-		const config = loadConfig();
-		const gatewayUrl = resolveGatewayUrl(config);
-		if (!gatewayUrl || !config?.enableTools) return;
-
+	const handleToggleTailing = useCallback(() => {
 		const store = useLogsStore.getState();
-		const action = store.isTailing ? "logs_stop" : "logs_start";
-
-		try {
-			await directToolCall({
-				toolName: "skill_diagnostics",
-				args: { action },
-				requestId: `diag-${action}-${Date.now()}`,
-				gatewayUrl,
-				gatewayToken: config.gatewayToken,
-			});
-			store.setTailing(!store.isTailing);
-		} catch (err) {
-			Logger.warn("DiagnosticsTab", `Failed to ${action}`, {
-				error: String(err),
-			});
+		if (store.isTailing) {
+			// Stop tailing — just flip the flag, polling stops via useEffect cleanup
+			store.setTailing(false);
+		} else {
+			// Start tailing — reset cursor to get recent lines first
+			cursorRef.current = undefined;
+			store.setTailing(true);
 		}
 	}, []);
 
@@ -106,6 +169,7 @@ export function DiagnosticsTab() {
 				return "var(--cream-dim)";
 		}
 	}
+	const isConnected = status?.ok ?? (status != null && !error);
 
 	return (
 		<div className="diagnostics-tab" data-testid="diagnostics-tab">
@@ -123,9 +187,7 @@ export function DiagnosticsTab() {
 				</div>
 
 				{loading ? (
-					<div className="diagnostics-loading">
-						{t("diagnostics.loading")}
-					</div>
+					<div className="diagnostics-loading">{t("diagnostics.loading")}</div>
 				) : error ? (
 					<div className="diagnostics-error">{error}</div>
 				) : status ? (
@@ -135,9 +197,9 @@ export function DiagnosticsTab() {
 								{t("diagnostics.gatewayStatus")}
 							</span>
 							<span
-								className={`diagnostics-value ${status.ok ? "status-ok" : "status-err"}`}
+								className={`diagnostics-value ${isConnected ? "status-ok" : "status-err"}`}
 							>
-								{status.ok
+								{isConnected
 									? t("diagnostics.connected")
 									: t("diagnostics.disconnected")}
 							</span>
@@ -147,9 +209,7 @@ export function DiagnosticsTab() {
 								<span className="diagnostics-label">
 									{t("diagnostics.version")}
 								</span>
-								<span className="diagnostics-value">
-									{status.version}
-								</span>
+								<span className="diagnostics-value">{status.version}</span>
 							</div>
 						)}
 						{status.uptime != null && (

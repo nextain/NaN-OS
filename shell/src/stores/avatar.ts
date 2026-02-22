@@ -1,8 +1,7 @@
 import { create } from "zustand";
+import { DEFAULT_AVATAR_MODEL } from "../lib/avatar-presets";
 import { loadConfig } from "../lib/config";
 import type { EmotionName } from "../lib/vrm/expression";
-
-const DEFAULT_VRM = "/avatars/01-Sendagaya-Shino-uniform.vrm";
 
 interface AvatarState {
 	modelPath: string;
@@ -24,7 +23,7 @@ interface AvatarState {
 
 function getInitialModelPath(): string {
 	const config = loadConfig();
-	return config?.vrmModel || DEFAULT_VRM;
+	return config?.vrmModel || DEFAULT_AVATAR_MODEL;
 }
 
 function getInitialBgImage(): string {

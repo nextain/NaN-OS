@@ -13,20 +13,29 @@ vi.mock("@tauri-apps/api/event", () => ({
 }));
 
 // Mock config
+const mockLoadConfig = vi.fn();
 vi.mock("../../lib/config", () => ({
-	loadConfig: () => ({
-		provider: "gemini",
-		model: "gemini-2.5-flash",
-		apiKey: "test-key",
-		gatewayUrl: "ws://127.0.0.1:18789",
-		gatewayToken: "test-token",
-		enableTools: true,
-	}),
-	resolveGatewayUrl: (c: any) => c?.gatewayUrl || "",
-	hasApiKey: () => true,
+	loadConfig: () => mockLoadConfig(),
 	saveConfig: vi.fn(),
-	isToolAllowed: () => true,
-	addAllowedTool: vi.fn(),
+}));
+
+// Mock gateway-sessions
+vi.mock("../../lib/gateway-sessions", () => ({
+	discoverAndPersistDiscordDmChannel: vi.fn().mockResolvedValue(null),
+}));
+
+// Mock discord-api
+const mockIsAvailable = vi.fn();
+const mockOpenDm = vi.fn();
+const mockFetchMessages = vi.fn();
+const mockGetBotUserId = vi.fn();
+vi.mock("../../lib/discord-api", () => ({
+	isDiscordApiAvailable: () => mockIsAvailable(),
+	openDmChannel: (id: string) => mockOpenDm(id),
+	fetchDiscordMessages: (id: string, limit: number) =>
+		mockFetchMessages(id, limit),
+	getBotUserId: () => mockGetBotUserId(),
+	sendDiscordMessage: vi.fn(),
 }));
 
 import { ChannelsTab } from "../ChannelsTab";
@@ -34,42 +43,88 @@ import { ChannelsTab } from "../ChannelsTab";
 describe("ChannelsTab", () => {
 	afterEach(() => {
 		cleanup();
-		mockInvoke.mockReset();
-		mockListen.mockReset().mockResolvedValue(() => {});
-		localStorage.clear();
-	});
-
-	it("shows loading state initially", () => {
-		// Never resolve the chat message
-		mockInvoke.mockReturnValue(new Promise(() => {}));
-		render(<ChannelsTab />);
-		expect(screen.getByText(/로딩|Loading/)).toBeDefined();
+		vi.clearAllMocks();
 	});
 
 	it("renders with data-testid", () => {
-		mockInvoke.mockReturnValue(new Promise(() => {}));
+		mockIsAvailable.mockReturnValue(new Promise(() => {}));
 		render(<ChannelsTab />);
 		expect(screen.getByTestId("channels-tab")).toBeDefined();
 	});
 
-	it("shows gateway required error when no gateway URL", async () => {
-		// Override config mock for this test
-		const configModule = await import("../../lib/config");
-		const loadConfigSpy = vi.spyOn(configModule, "loadConfig");
-		loadConfigSpy.mockReturnValue({
+	it("shows error when bot token not found", async () => {
+		mockIsAvailable.mockResolvedValue(false);
+		render(<ChannelsTab />);
+
+		await waitFor(() => {
+			expect(screen.getByText(/봇 토큰/)).toBeDefined();
+		});
+	});
+
+	it("shows error when no discord user ID", async () => {
+		mockIsAvailable.mockResolvedValue(true);
+		mockLoadConfig.mockReturnValue({
 			provider: "gemini",
 			model: "gemini-2.5-flash",
 			apiKey: "test-key",
-		} as ReturnType<typeof configModule.loadConfig>);
+		});
 
 		render(<ChannelsTab />);
 
 		await waitFor(() => {
-			expect(
-				screen.getByText(/Gateway|게이트웨이/),
-			).toBeDefined();
+			expect(screen.getByText(/DM 채널을 찾을 수 없습니다/)).toBeDefined();
+		});
+	});
+
+	it("auto-resolves DM channel from userId", async () => {
+		mockIsAvailable.mockResolvedValue(true);
+		mockLoadConfig.mockReturnValue({
+			provider: "gemini",
+			model: "gemini-2.5-flash",
+			apiKey: "test-key",
+			discordDefaultUserId: "865850174651498506",
+		});
+		mockOpenDm.mockResolvedValue("1474816723579306105");
+		mockGetBotUserId.mockResolvedValue("bot-123");
+		mockFetchMessages.mockResolvedValue([]);
+
+		render(<ChannelsTab />);
+
+		await waitFor(() => {
+			expect(mockOpenDm).toHaveBeenCalledWith("865850174651498506");
 		});
 
-		loadConfigSpy.mockRestore();
+		await waitFor(() => {
+			expect(screen.getByText(/메시지가 없습니다/)).toBeDefined();
+		});
+	});
+
+	it("uses existing channelId from config", async () => {
+		mockIsAvailable.mockResolvedValue(true);
+		mockLoadConfig.mockReturnValue({
+			provider: "gemini",
+			model: "gemini-2.5-flash",
+			apiKey: "test-key",
+			discordDmChannelId: "1474816723579306105",
+		});
+		mockGetBotUserId.mockResolvedValue("bot-123");
+		mockFetchMessages.mockResolvedValue([
+			{
+				id: "msg-1",
+				content: "Hello",
+				author: { id: "user-1", username: "fstory97", bot: false },
+				timestamp: "2026-02-22T10:00:00Z",
+			},
+		]);
+
+		render(<ChannelsTab />);
+
+		await waitFor(() => {
+			expect(screen.getByText("Hello")).toBeDefined();
+			expect(screen.getByText("fstory97")).toBeDefined();
+		});
+
+		// Should NOT call openDmChannel since channelId already exists
+		expect(mockOpenDm).not.toHaveBeenCalled();
 	});
 });

@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 // vi.mock factory must not reference variables declared in the same scope
 vi.mock("@tauri-apps/plugin-store", () => {
@@ -15,11 +15,11 @@ vi.mock("@tauri-apps/plugin-store", () => {
 
 // Import after mock
 import {
-	saveSecretKey,
-	getSecretKey,
-	deleteSecretKey,
-	isSecretKey,
 	SECRET_KEYS,
+	deleteSecretKey,
+	getSecretKey,
+	isSecretKey,
+	saveSecretKey,
 } from "../lib/secure-store";
 
 // Get mock store reference
@@ -30,7 +30,11 @@ import {
 // }
 
 describe("secure-store", () => {
-	let mockStore: { get: ReturnType<typeof vi.fn>; set: ReturnType<typeof vi.fn>; delete: ReturnType<typeof vi.fn> };
+	let mockStore: {
+		get: ReturnType<typeof vi.fn>;
+		set: ReturnType<typeof vi.fn>;
+		delete: ReturnType<typeof vi.fn>;
+	};
 
 	beforeEach(async () => {
 		vi.clearAllMocks();

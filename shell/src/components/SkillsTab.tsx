@@ -42,7 +42,7 @@ export function SkillsTab({
 	const fetchGatewayStatus = useCallback(async () => {
 		const config = loadConfig();
 		const gatewayUrl = resolveGatewayUrl(config);
-		if (!gatewayUrl || !config?.enableTools) return;
+		if (!gatewayUrl) return;
 
 		setGatewayLoading(true);
 		try {
@@ -66,29 +66,32 @@ export function SkillsTab({
 		}
 	}, []);
 
-	const handleInstallSkill = useCallback(async (name: string) => {
-		const config = loadConfig();
-		const gatewayUrl = resolveGatewayUrl(config);
-		if (!gatewayUrl) return;
+	const handleInstallSkill = useCallback(
+		async (name: string) => {
+			const config = loadConfig();
+			const gatewayUrl = resolveGatewayUrl(config);
+			if (!gatewayUrl) return;
 
-		setInstallingSkill(name);
-		try {
-			await directToolCall({
-				toolName: "skill_skill_manager",
-				args: { action: "install", skillName: name },
-				requestId: `gw-install-${Date.now()}`,
-				gatewayUrl,
-				gatewayToken: config?.gatewayToken,
-			});
-			fetchGatewayStatus();
-		} catch (err) {
-			Logger.warn("SkillsTab", "Failed to install skill", {
-				error: String(err),
-			});
-		} finally {
-			setInstallingSkill(null);
-		}
-	}, [fetchGatewayStatus]);
+			setInstallingSkill(name);
+			try {
+				await directToolCall({
+					toolName: "skill_skill_manager",
+					args: { action: "install", skillName: name },
+					requestId: `gw-install-${Date.now()}`,
+					gatewayUrl,
+					gatewayToken: config?.gatewayToken,
+				});
+				fetchGatewayStatus();
+			} catch (err) {
+				Logger.warn("SkillsTab", "Failed to install skill", {
+					error: String(err),
+				});
+			} finally {
+				setInstallingSkill(null);
+			}
+		},
+		[fetchGatewayStatus],
+	);
 
 	useEffect(() => {
 		loadSkills();
@@ -242,54 +245,61 @@ export function SkillsTab({
 							{t("skills.gatewayStatusSection")} ({gatewaySkills.length})
 						</div>
 						{gatewaySkills
-							.filter((gs) =>
-								!query ||
-								gs.name.toLowerCase().includes(query) ||
-								(gs.description?.toLowerCase().includes(query) ?? false)
+							.filter(
+								(gs) =>
+									!query ||
+									gs.name.toLowerCase().includes(query) ||
+									(gs.description?.toLowerCase().includes(query) ?? false),
 							)
 							.map((gs) => (
-							<div
-								key={gs.name}
-								className={`skill-card gateway-status${gs.eligible ? " eligible" : " ineligible"}`}
-								data-testid="gateway-skill-card"
-							>
-								<div className="skill-card-header">
-									<div className="skill-card-info">
-										<div className="skill-card-name">{gs.name}</div>
-										{gs.description && (
-											<div className="skill-card-desc-short">{gs.description}</div>
-										)}
+								<div
+									key={gs.name}
+									className={`skill-card gateway-status${gs.eligible ? " eligible" : " ineligible"}`}
+									data-testid="gateway-skill-card"
+								>
+									<div className="skill-card-header">
+										<div className="skill-card-info">
+											<div className="skill-card-name">{gs.name}</div>
+											{gs.description && (
+												<div className="skill-card-desc-short">
+													{gs.description}
+												</div>
+											)}
+										</div>
+										<div className="skill-card-actions">
+											{gs.eligible ? (
+												<span className="skill-badge eligible">
+													{t("skills.eligible")}
+												</span>
+											) : (
+												<button
+													type="button"
+													className="skills-install-btn"
+													data-testid="skills-install-btn"
+													disabled={installingSkill === gs.name}
+													onClick={() => handleInstallSkill(gs.name)}
+												>
+													{installingSkill === gs.name
+														? t("skills.installing")
+														: t("skills.install")}
+												</button>
+											)}
+										</div>
 									</div>
-									<div className="skill-card-actions">
-										{gs.eligible ? (
-											<span className="skill-badge eligible">{t("skills.eligible")}</span>
-										) : (
-											<button
-												type="button"
-												className="skills-install-btn"
-												data-testid="skills-install-btn"
-												disabled={installingSkill === gs.name}
-												onClick={() => handleInstallSkill(gs.name)}
-											>
-												{installingSkill === gs.name
-													? t("skills.installing")
-													: t("skills.install")}
-											</button>
-										)}
-									</div>
+									{gs.missing.length > 0 && (
+										<div className="skill-card-missing">
+											{t("skills.missing")}: {gs.missing.join(", ")}
+										</div>
+									)}
 								</div>
-								{gs.missing.length > 0 && (
-									<div className="skill-card-missing">
-										{t("skills.missing")}: {gs.missing.join(", ")}
-									</div>
-								)}
-							</div>
-						))}
+							))}
 					</>
 				)}
 
 				{gatewayLoading && (
-					<div className="skills-gateway-loading">{t("skills.gatewayLoading")}</div>
+					<div className="skills-gateway-loading">
+						{t("skills.gatewayLoading")}
+					</div>
 				)}
 			</div>
 		</div>
@@ -311,16 +321,13 @@ function SkillCard({
 	const isBuiltIn = skill.type === "built-in";
 
 	return (
-		<div className={`skill-card${disabled ? " disabled" : ""}${expanded ? " expanded" : ""}`}>
-			<div
-				className="skill-card-header"
-				onClick={() => setExpanded(!expanded)}
-			>
+		<div
+			className={`skill-card${disabled ? " disabled" : ""}${expanded ? " expanded" : ""}`}
+		>
+			<div className="skill-card-header" onClick={() => setExpanded(!expanded)}>
 				<div className="skill-card-info">
 					<div className="skill-card-name">{skill.name}</div>
-					<div className="skill-card-desc-short">
-						{skill.description}
-					</div>
+					<div className="skill-card-desc-short">{skill.description}</div>
 				</div>
 				<div className="skill-card-actions">
 					{onAskAI && (
@@ -368,9 +375,7 @@ function SkillCard({
 									: t("skills.command")}
 							</span>
 						)}
-						<span className="skill-badge tier">
-							{tierLabel(skill.tier)}
-						</span>
+						<span className="skill-badge tier">{tierLabel(skill.tier)}</span>
 						{skill.source && (
 							<span className="skill-badge source">{skill.source}</span>
 						)}

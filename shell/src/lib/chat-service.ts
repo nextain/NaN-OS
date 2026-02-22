@@ -11,7 +11,7 @@ interface SendChatOptions {
 	ttsVoice?: string;
 	ttsApiKey?: string;
 	ttsEngine?: "auto" | "openclaw" | "google";
-	ttsProvider?: "google" | "edge" | "openai" | "elevenlabs";
+	ttsProvider?: "google" | "edge" | "openai" | "elevenlabs" | "nextain";
 	systemPrompt?: string;
 	enableTools?: boolean;
 	gatewayUrl?: string;

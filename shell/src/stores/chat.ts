@@ -193,4 +193,5 @@ export const useChatStore = create<ChatState>()((set, get) => ({
 		set({ messageQueue: rest });
 		return first;
 	},
+
 }));

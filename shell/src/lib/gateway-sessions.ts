@@ -1,5 +1,5 @@
 import { directToolCall } from "./chat-service";
-import { loadConfig, resolveGatewayUrl } from "./config";
+import { loadConfig, resolveGatewayUrl, saveConfig } from "./config";
 import { Logger } from "./logger";
 import type { ChatMessage } from "./types";
 
@@ -149,6 +149,31 @@ export async function patchGatewaySession(
 		});
 		return false;
 	}
+}
+
+/**
+ * Discover Discord DM channel ID from Gateway sessions and persist to config.
+ * Call on app init — if config already has discordDmChannelId, skips discovery.
+ * Returns the discovered channel ID or null.
+ */
+export async function discoverAndPersistDiscordDmChannel(): Promise<string | null> {
+	const config = loadConfig();
+	if (config?.discordDmChannelId) return config.discordDmChannelId;
+
+	const sessions = await listGatewaySessions(100);
+	for (const s of sessions) {
+		// Gateway Discord DM sessions have key format: discord:dm:<channelId>
+		const match = s.key.match(/^discord:(?:dm|channel):(\d{10,})$/);
+		if (match) {
+			const channelId = match[1];
+			if (config) {
+				saveConfig({ ...config, discordDmChannelId: channelId });
+			}
+			Logger.info("gateway-sessions", "Discovered Discord DM channel ID from sessions", { channelId });
+			return channelId;
+		}
+	}
+	return null;
 }
 
 /** Reset the current Gateway session (for new conversation) */

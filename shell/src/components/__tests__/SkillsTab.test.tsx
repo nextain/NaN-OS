@@ -1,8 +1,14 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+	cleanup,
+	fireEvent,
+	render,
+	screen,
+	waitFor,
+} from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { useSkillsStore } from "../../stores/skills";
 import type { SkillManifestInfo } from "../../lib/types";
+import { useSkillsStore } from "../../stores/skills";
 
 // Mock Tauri invoke
 const mockInvoke = vi.fn();
@@ -14,13 +20,38 @@ vi.mock("@tauri-apps/api/core", () => ({
 import { SkillsTab } from "../SkillsTab";
 
 const BUILT_IN_SKILLS: SkillManifestInfo[] = [
-	{ name: "skill_time", description: "Get current date and time", type: "built-in", tier: 0, source: "built-in" },
-	{ name: "skill_memo", description: "Save and retrieve memos", type: "built-in", tier: 0, source: "built-in" },
+	{
+		name: "skill_time",
+		description: "Get current date and time",
+		type: "built-in",
+		tier: 0,
+		source: "built-in",
+	},
+	{
+		name: "skill_memo",
+		description: "Save and retrieve memos",
+		type: "built-in",
+		tier: 0,
+		source: "built-in",
+	},
 ];
 
 const CUSTOM_SKILLS: SkillManifestInfo[] = [
-	{ name: "skill_code_review", description: "Review code changes", type: "gateway", tier: 2, source: "/home/.naia/skills/code-review/skill.json", gatewaySkill: "code-review" },
-	{ name: "skill_deploy", description: "Deploy to production", type: "command", tier: 2, source: "/home/.naia/skills/deploy/skill.json" },
+	{
+		name: "skill_code_review",
+		description: "Review code changes",
+		type: "gateway",
+		tier: 2,
+		source: "/home/.naia/skills/code-review/skill.json",
+		gatewaySkill: "code-review",
+	},
+	{
+		name: "skill_deploy",
+		description: "Deploy to production",
+		type: "command",
+		tier: 2,
+		source: "/home/.naia/skills/deploy/skill.json",
+	},
 ];
 
 const ALL_SKILLS = [...BUILT_IN_SKILLS, ...CUSTOM_SKILLS];
@@ -107,12 +138,15 @@ describe("SkillsTab", () => {
 	});
 
 	it("applies disabled class to disabled skills", async () => {
-		localStorage.setItem("naia-config", JSON.stringify({
-			provider: "gemini",
-			model: "gemini-2.5-flash",
-			apiKey: "test",
-			disabledSkills: ["skill_code_review"],
-		}));
+		localStorage.setItem(
+			"naia-config",
+			JSON.stringify({
+				provider: "gemini",
+				model: "gemini-2.5-flash",
+				apiKey: "test",
+				disabledSkills: ["skill_code_review"],
+			}),
+		);
 		mockInvoke.mockResolvedValue(ALL_SKILLS);
 		const { container } = render(<SkillsTab />);
 		await waitFor(() => {

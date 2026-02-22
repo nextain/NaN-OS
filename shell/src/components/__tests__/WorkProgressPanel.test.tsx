@@ -97,7 +97,12 @@ describe("WorkProgressPanel", () => {
 	});
 
 	it("shows error icon for error event type", () => {
-		const errorEvent = { ...sampleEvent, id: 2, event_type: "error", tool_name: null };
+		const errorEvent = {
+			...sampleEvent,
+			id: 2,
+			event_type: "error",
+			tool_name: null,
+		};
 		useProgressStore.setState({
 			events: [errorEvent],
 			stats: sampleStats,

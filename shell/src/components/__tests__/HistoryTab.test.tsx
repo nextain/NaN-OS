@@ -25,6 +25,7 @@ import { HistoryTab } from "../HistoryTab";
 
 describe("HistoryTab", () => {
 	const onLoadSession = vi.fn();
+	const onLoadDiscordSession = vi.fn();
 
 	afterEach(() => {
 		cleanup();
@@ -32,6 +33,7 @@ describe("HistoryTab", () => {
 		mockGetGatewayHistory.mockReset();
 		mockDeleteGatewaySession.mockReset();
 		onLoadSession.mockReset();
+		onLoadDiscordSession.mockReset();
 		useChatStore.setState(useChatStore.getInitialState());
 	});
 
@@ -79,11 +81,11 @@ describe("HistoryTab", () => {
 		});
 	});
 
-	it("loads session on click", async () => {
+	it("loads regular session on click", async () => {
 		mockListGatewaySessions.mockResolvedValue([
 			{
-				key: "discord:channel:123",
-				label: "Discord Chat",
+				key: "agent:main:abc",
+				label: "Regular Chat",
 				messageCount: 2,
 				createdAt: Date.now(),
 				updatedAt: Date.now(),
@@ -93,24 +95,83 @@ describe("HistoryTab", () => {
 			{
 				id: "gw-1",
 				role: "user",
-				content: "Hello from Discord",
+				content: "Hello",
 				timestamp: 1000,
 			},
 		]);
 
-		render(<HistoryTab onLoadSession={onLoadSession} />);
+		render(
+			<HistoryTab
+				onLoadSession={onLoadSession}
+				onLoadDiscordSession={onLoadDiscordSession}
+			/>,
+		);
+		await waitFor(() => {
+			expect(screen.getByText("Regular Chat")).toBeDefined();
+		});
+
+		fireEvent.click(screen.getByText("Regular Chat"));
+
+		await waitFor(() => {
+			expect(onLoadSession).toHaveBeenCalled();
+			expect(onLoadDiscordSession).not.toHaveBeenCalled();
+			const state = useChatStore.getState();
+			expect(state.sessionId).toBe("agent:main:abc");
+			expect(state.messages).toHaveLength(1);
+		});
+	});
+
+	it("routes discord session click to onLoadDiscordSession", async () => {
+		mockListGatewaySessions.mockResolvedValue([
+			{
+				key: "discord:channel:123",
+				label: "Discord Chat",
+				messageCount: 2,
+				createdAt: Date.now(),
+				updatedAt: Date.now(),
+			},
+		]);
+
+		render(
+			<HistoryTab
+				onLoadSession={onLoadSession}
+				onLoadDiscordSession={onLoadDiscordSession}
+			/>,
+		);
 		await waitFor(() => {
 			expect(screen.getByText("Discord Chat")).toBeDefined();
 		});
 
-		const btn = screen.getByText("Discord Chat");
-		fireEvent.click(btn);
+		fireEvent.click(screen.getByText("Discord Chat"));
 
 		await waitFor(() => {
-			expect(onLoadSession).toHaveBeenCalled();
-			const state = useChatStore.getState();
-			expect(state.sessionId).toBe("discord:channel:123");
-			expect(state.messages).toHaveLength(1);
+			expect(onLoadDiscordSession).toHaveBeenCalled();
+			expect(onLoadSession).not.toHaveBeenCalled();
+		});
+	});
+
+	it("shows discord badge on discord sessions", async () => {
+		mockListGatewaySessions.mockResolvedValue([
+			{
+				key: "discord:dm:456",
+				label: "Discord DM",
+				messageCount: 3,
+				createdAt: Date.now(),
+				updatedAt: Date.now(),
+			},
+		]);
+
+		const { container } = render(
+			<HistoryTab
+				onLoadSession={onLoadSession}
+				onLoadDiscordSession={onLoadDiscordSession}
+			/>,
+		);
+		await waitFor(() => {
+			const badge = container.querySelector(".history-discord-badge");
+			expect(badge).not.toBeNull();
+			const discordItem = container.querySelector(".history-item.discord");
+			expect(discordItem).not.toBeNull();
 		});
 	});
 

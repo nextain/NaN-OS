@@ -135,6 +135,18 @@ export function VrmPreview({ modelPath }: { modelPath: string }) {
 			if (disposed || !result) return;
 			vrm = result._vrm;
 
+			// Adjust camera to look at the character's head
+			if (vrm.humanoid) {
+				const head = vrm.humanoid.getNormalizedBoneNode("head");
+				if (head) {
+					const headPos = new Vector3();
+					head.getWorldPosition(headPos);
+					// Bust shot framing relative to the head height
+					camera.position.set(0.0, headPos.y + 0.05, -1.2);
+					camera.lookAt(new Vector3(0, headPos.y - 0.05, 0));
+				}
+			}
+
 			// Resolve blink expression
 			if (vrm.expressionManager) {
 				const names = Object.keys(vrm.expressionManager.expressionMap);

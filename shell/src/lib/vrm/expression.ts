@@ -120,12 +120,14 @@ export function parseEmotion(text: string): {
 	cleanText: string;
 } {
 	let firstEmotion: EmotionName | null = null;
-	const cleanText = text.replace(EMOTION_TAG_RE, (_, tag) => {
-		if (!firstEmotion) {
-			firstEmotion = tag.toLowerCase() as EmotionName;
-		}
-		return "";
-	}).trim();
+	const cleanText = text
+		.replace(EMOTION_TAG_RE, (_, tag) => {
+			if (!firstEmotion) {
+				firstEmotion = tag.toLowerCase() as EmotionName;
+			}
+			return "";
+		})
+		.trim();
 	return {
 		emotion: firstEmotion ?? "neutral",
 		cleanText,

@@ -16,7 +16,11 @@ const EVENT_TYPE_ICONS: Record<string, string> = {
 function formatTime(timestamp: string): string {
 	try {
 		const d = new Date(timestamp);
-		return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+		return d.toLocaleTimeString([], {
+			hour: "2-digit",
+			minute: "2-digit",
+			second: "2-digit",
+		});
 	} catch {
 		return timestamp;
 	}
@@ -107,7 +111,9 @@ export function WorkProgressPanel() {
 								<span className="stat-label">{t("progress.totalEvents")}</span>
 							</div>
 							<div className="work-progress-stat">
-								<span className="stat-value">{formatCost(stats.total_cost)}</span>
+								<span className="stat-value">
+									{formatCost(stats.total_cost)}
+								</span>
 								<span className="stat-label">{t("progress.totalCost")}</span>
 							</div>
 							<div className="work-progress-stat">
