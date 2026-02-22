@@ -1,0 +1,21 @@
+{
+	"name": "skill_channels",
+	"description": "Manage messaging channels (Discord, Slack, Telegram, etc.). Actions: status, logout, login_start, login_wait.",
+	"type": "gateway",
+	"gatewaySkill": "naia-channels",
+	"tier": 1,
+	"parameters": {
+		"type": "object",
+		"properties": {
+			"action": {
+				"type": "string",
+				"description": "Action: status, logout, login_start, login_wait",
+				"enum": ["status", "logout", "login_start", "login_wait"]
+			},
+			"channel": { "type": "string", "description": "Channel ID (e.g., discord, slack)" },
+			"account_id": { "type": "string", "description": "Account ID within the channel" },
+			"probe": { "type": "boolean", "description": "Run health checks (for status)" }
+		},
+		"required": ["action"]
+	}
+}

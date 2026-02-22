@@ -5,8 +5,7 @@ import {
 	getHealth,
 	getUsageCost,
 	getUsageStatus,
-	startLogsTail,
-	stopLogsTail,
+	pollLogsTail,
 } from "../diagnostics-proxy.js";
 import { createMockGateway, type MockGateway } from "./mock-gateway.js";
 
@@ -49,11 +48,12 @@ describe("diagnostics-proxy", () => {
 						});
 						break;
 					case "logs.tail":
-						if (params.action === "start") {
-							respond.ok({ tailing: true });
-						} else {
-							respond.ok({ tailing: false });
-						}
+						respond.ok({
+							file: "/tmp/openclaw/test.log",
+							cursor: params.cursor ?? 1000,
+							size: 1000,
+							lines: params.cursor ? [] : ['{"0":"test log","_meta":{"logLevelName":"INFO"},"time":"2026-01-01T00:00:00Z"}'],
+						});
 						break;
 					default:
 						respond.error("UNKNOWN_METHOD", `Unknown: ${method}`);
@@ -120,19 +120,19 @@ describe("diagnostics-proxy", () => {
 		});
 	});
 
-	describe("startLogsTail", () => {
-		it("starts tailing logs", async () => {
-			const result = await startLogsTail(client);
+	describe("pollLogsTail", () => {
+		it("returns log lines and cursor on initial poll", async () => {
+			const result = await pollLogsTail(client);
 
-			expect(result.tailing).toBe(true);
+			expect(result.file).toBe("/tmp/openclaw/test.log");
+			expect(result.cursor).toBe(1000);
+			expect(result.lines).toHaveLength(1);
 		});
-	});
 
-	describe("stopLogsTail", () => {
-		it("stops tailing logs", async () => {
-			const result = await stopLogsTail(client);
+		it("returns empty lines when polling with cursor at end", async () => {
+			const result = await pollLogsTail(client, 1000);
 
-			expect(result.tailing).toBe(false);
+			expect(result.lines).toHaveLength(0);
 		});
 	});
 

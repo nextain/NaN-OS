@@ -1,0 +1,24 @@
+{
+	"name": "skill_naia_discord",
+	"description": "Discord 메시지 전송/수신 도구. 사용자가 '메시지 보내줘/전송해/DM 보내' 등을 요청하면 반드시 action='send'와 message 파라미터를 사용하세요. action='status'는 연결 상태 확인 전용입니다. action='history'는 최근 메시지 조회입니다.",
+	"type": "gateway",
+	"gatewaySkill": "naia-discord",
+	"tier": 1,
+	"parameters": {
+		"type": "object",
+		"properties": {
+			"action": {
+				"type": "string",
+				"description": "'send' = 메시지 전송, 'status' = 연결 상태 확인, 'history' = 최근 메시지 조회",
+				"enum": ["send", "status", "history"]
+			},
+			"message": { "type": "string", "description": "Message text to send (required for send)" },
+			"to": { "type": "string", "description": "Target override (e.g. channel:123 or user:123)" },
+			"channelId": { "type": "string", "description": "Target channel ID shortcut" },
+			"userId": { "type": "string", "description": "Target user ID shortcut" },
+			"accountId": { "type": "string", "description": "Discord account ID" },
+			"limit": { "type": "number", "description": "Number of messages for history (default: 20)" }
+		},
+		"required": ["action"]
+	}
+}

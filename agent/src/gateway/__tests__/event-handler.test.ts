@@ -73,6 +73,33 @@ describe("event-handler", () => {
 		expect(writeLine).not.toHaveBeenCalled();
 	});
 
+	it("dispatches channel.message as discord_message", () => {
+		const writeLine = vi.fn();
+		const pendingApprovals = new Map();
+		const handler = createGatewayEventHandler(writeLine, pendingApprovals);
+
+		const event: GatewayEvent = {
+			type: "event",
+			event: "channel.message",
+			payload: {
+				from: "user123",
+				content: "Hello from Discord",
+				timestamp: "2026-01-01T00:00:00.000Z",
+			},
+		};
+
+		handler(event);
+
+		expect(writeLine).toHaveBeenCalledOnce();
+		expect(writeLine).toHaveBeenCalledWith({
+			type: "discord_message",
+			requestId: "gateway",
+			from: "user123",
+			content: "Hello from Discord",
+			timestamp: "2026-01-01T00:00:00.000Z",
+		});
+	});
+
 	it("handles events with missing payload gracefully", () => {
 		const writeLine = vi.fn();
 		const pendingApprovals = new Map();

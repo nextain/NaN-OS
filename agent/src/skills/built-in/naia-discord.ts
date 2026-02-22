@@ -4,6 +4,9 @@ import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import type { SkillDefinition, SkillResult } from "../types.js";
 
+/** Strip emotion tags like [HAPPY], [THINK] etc. from message text */
+const EMOTION_TAG_RE = /\[(?:HAPPY|SAD|ANGRY|SURPRISED|NEUTRAL|THINK)]\s*/gi;
+
 function normalizeTarget(args: Record<string, unknown>): string | null {
 	const to = (args.to as string | undefined)?.trim();
 	if (to) return to;
@@ -18,15 +21,51 @@ function normalizeTarget(args: Record<string, unknown>): string | null {
 }
 
 function resolveEnvDefaultTarget(): string | null {
-	const defaultUserId = process.env.DISCORD_DEFAULT_USER_ID?.trim();
-	if (defaultUserId) return `user:${defaultUserId}`;
+	// Prefer explicit channel ID (direct send, most reliable — avoids DM creation failures)
+	const channelId = process.env.DISCORD_DEFAULT_CHANNEL_ID?.trim();
+	if (channelId) return `channel:${channelId}`;
 
 	const explicit = process.env.DISCORD_DEFAULT_TARGET?.trim();
 	if (explicit) return explicit;
 
-	const channelId = process.env.DISCORD_DEFAULT_CHANNEL_ID?.trim();
-	if (channelId) return `channel:${channelId}`;
+	const defaultUserId = process.env.DISCORD_DEFAULT_USER_ID?.trim();
+	if (defaultUserId) return `user:${defaultUserId}`;
 
+	return null;
+}
+
+/**
+ * Discover Discord DM channel ID from Gateway sessions.
+ * When Shell and Discord both route through Gateway, the Discord DM session
+ * holds the actual channel ID that can be used for proactive sends.
+ */
+async function discoverDmChannelFromSessions(
+	gateway: { request: (method: string, params?: unknown) => Promise<unknown> },
+): Promise<string | null> {
+	try {
+		const result = (await gateway.request("sessions.list", {})) as {
+			sessions?: Array<{
+				key: string;
+				channel?: string;
+				origin?: { provider?: string; surface?: string };
+			}>;
+		};
+		const sessions = result.sessions ?? [];
+		// Look for Discord DM sessions — key format: discord:dm:<channelId>
+		for (const s of sessions) {
+			if (s.channel === "discord" || s.origin?.provider === "discord") {
+				const match = s.key.match(/^discord:(?:dm|channel):(\d+)$/);
+				if (match) return `channel:${match[1]}`;
+			}
+			// Also check keys that contain discord with a numeric channel segment
+			if (s.key.startsWith("discord:") && /:\d{10,}$/.test(s.key)) {
+				const channelId = s.key.split(":").pop();
+				if (channelId) return `channel:${channelId}`;
+			}
+		}
+	} catch {
+		// Gateway unavailable or sessions.list failed — non-fatal
+	}
 	return null;
 }
 
@@ -103,6 +142,10 @@ async function resolveTarget(
 	const envTarget = resolveEnvDefaultTarget();
 	if (envTarget) return envTarget;
 
+	// Discover DM channel from Gateway sessions (shared across Shell + Discord)
+	const sessionChannel = await discoverDmChannelFromSessions(gateway);
+	if (sessionChannel) return sessionChannel;
+
 	try {
 		const raw = (await gateway.request("channels.status", {})) as {
 			channelAccounts?: Record<string, Array<Record<string, unknown>>>;
@@ -152,10 +195,11 @@ export function createNaiaDiscordSkill(): SkillDefinition {
 	return {
 		name: "skill_naia_discord",
 		description:
-			"Discord 메시지 전송 도구. 사용자가 '메시지 보내줘/전송해/DM 보내' 등을 요청하면 " +
+			"Discord 메시지 전송/수신 도구. 사용자가 '메시지 보내줘/전송해/DM 보내' 등을 요청하면 " +
 			"반드시 action='send'와 message 파라미터를 사용하세요. " +
 			"수신자(to)는 자동 설정되므로 생략 가능합니다. " +
-			"action='status'는 연결 상태 확인 전용입니다.",
+			"action='status'는 연결 상태 확인 전용입니다. " +
+			"action='history'는 최근 메시지 조회입니다.",
 		parameters: {
 			type: "object",
 			properties: {
@@ -163,8 +207,9 @@ export function createNaiaDiscordSkill(): SkillDefinition {
 					type: "string",
 					description:
 						"'send' = 메시지 전송 (message 필수), " +
-						"'status' = 연결 상태 확인만",
-					enum: ["send", "status"],
+						"'status' = 연결 상태 확인만, " +
+						"'history' = 최근 메시지 조회 (limit 옵션)",
+					enum: ["send", "status", "history"],
 				},
 				message: {
 					type: "string",
@@ -187,6 +232,10 @@ export function createNaiaDiscordSkill(): SkillDefinition {
 				accountId: {
 					type: "string",
 					description: "Optional Discord account ID (default: gateway default account)",
+				},
+				limit: {
+					type: "number",
+					description: "Number of messages to retrieve for history action (default: 20, max: 100)",
 				},
 			},
 			required: ["action"],
@@ -261,6 +310,117 @@ export function createNaiaDiscordSkill(): SkillDefinition {
 				};
 			}
 
+			if (action === "history") {
+				const limit = Math.min(
+					Math.max(Number(args.limit) || 20, 1),
+					100,
+				);
+
+				// Use sessions.list + chat.history to find Discord messages
+				try {
+					const sessionsList = (await gateway.request("sessions.list", {})) as {
+						sessions?: Array<{
+							key: string;
+							channel?: string;
+							origin?: { provider?: string; surface?: string; label?: string };
+							updatedAt?: number;
+						}>;
+					};
+
+					const sessions = sessionsList.sessions ?? [];
+
+					// Find Discord-origin sessions
+					const discordSessions = sessions.filter(
+						(s) =>
+							s.channel === "discord" ||
+							s.origin?.provider === "discord" ||
+							s.origin?.surface === "discord" ||
+							s.key.includes("discord"),
+					);
+
+					// Also include main session if it has Discord origin
+					const mainSession = sessions.find((s) => s.key === "agent:main:main");
+					if (
+						mainSession &&
+						(mainSession.origin?.provider === "discord" ||
+							mainSession.origin?.surface === "webchat") &&
+						!discordSessions.some((s) => s.key === mainSession.key)
+					) {
+						discordSessions.push(mainSession);
+					}
+
+					if (discordSessions.length === 0) {
+						return {
+							success: true,
+							output: JSON.stringify({ messages: [] }),
+						};
+					}
+
+					// Fetch history from each Discord session
+					const allMessages: Array<{
+						id: string;
+						from: string;
+						content: string;
+						timestamp: string;
+						role: string;
+						sessionKey: string;
+					}> = [];
+
+					for (const session of discordSessions) {
+						try {
+							const history = (await gateway.request("chat.history", {
+								sessionKey: session.key,
+							})) as {
+								messages?: Array<{
+									role: string;
+									content: Array<{ type: string; text?: string }>;
+									timestamp?: number;
+								}>;
+							};
+
+							const msgs = history.messages ?? [];
+							for (const msg of msgs.slice(-limit)) {
+								const text = msg.content
+									?.filter((c) => c.type === "text" && c.text)
+									.map((c) => c.text)
+									.join("\n") ?? "";
+								if (!text) continue;
+
+								allMessages.push({
+									id: `${session.key}:${msg.timestamp ?? Date.now()}`,
+									from: msg.role === "user"
+										? (session.origin?.label ?? "Discord User")
+										: "Naia",
+									content: text,
+									timestamp: msg.timestamp
+										? new Date(msg.timestamp).toISOString()
+										: new Date().toISOString(),
+									role: msg.role,
+									sessionKey: session.key,
+								});
+							}
+						} catch {
+							// Skip sessions that fail
+						}
+					}
+
+					// Sort by timestamp and limit
+					allMessages.sort((a, b) => a.timestamp.localeCompare(b.timestamp));
+					const limited = allMessages.slice(-limit);
+
+					return {
+						success: true,
+						output: JSON.stringify({ messages: limited }),
+					};
+				} catch (err) {
+					return {
+						success: false,
+						output: "",
+						error: `Discord history failed: ${err instanceof Error ? err.message : String(err)}`,
+					};
+				}
+			}
+
 			if (action === "send") {
 				if (!Array.isArray(methods) || !methods.includes("send")) {
 					return {
@@ -270,10 +430,12 @@ export function createNaiaDiscordSkill(): SkillDefinition {
 					};
 				}
 
-				const message = (args.message as string | undefined)?.trim();
-				if (!message) {
+				const rawMessage = (args.message as string | undefined)?.trim();
+				if (!rawMessage) {
 					return { success: false, output: "", error: "message is required for send" };
 				}
+				// Strip internal emotion tags — they're for avatar expression, not Discord display
+				const message = rawMessage.replace(EMOTION_TAG_RE, "").trim();
 
 				const target = await resolveTarget(args, gateway);
 				if (!target) {

@@ -46,6 +46,20 @@ export async function patchConfig(
 	client: GatewayClient,
 	patch: Record<string, unknown>,
 ): Promise<{ patched: boolean }> {
-	const payload = await client.request("config.patch", patch);
+	const snapshot = (await client.request("config.get", {})) as {
+		hash?: string;
+		exists?: boolean;
+	};
+	const params: Record<string, unknown> = {
+		raw: JSON.stringify(patch),
+	};
+	if (
+		snapshot?.exists &&
+		typeof snapshot.hash === "string" &&
+		snapshot.hash
+	) {
+		params.baseHash = snapshot.hash;
+	}
+	const payload = await client.request("config.patch", params);
 	return payload as { patched: boolean };
 }

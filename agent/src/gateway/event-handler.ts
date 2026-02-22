@@ -39,8 +39,19 @@ export function createGatewayEventHandler(
 				});
 				break;
 
+			case "channel.message":
+			case "channels.message":
+				writeLine({
+					type: "discord_message",
+					requestId: (payload.requestId ?? "gateway") as string,
+					from: (payload.from ?? payload.author ?? payload.channel ?? "Gateway") as string,
+					content: (payload.content ?? payload.message ?? "") as string,
+					timestamp: (payload.timestamp ?? new Date().toISOString()) as string,
+				});
+				break;
+
 			default:
-				// Unknown events are silently ignored
+				// Silently ignore operational events (health, tick, agent, chat, etc.)
 				break;
 		}
 	};

@@ -1,0 +1,24 @@
+{
+	"name": "skill_cron",
+	"description": "Manage scheduled tasks (cron jobs). Local actions: add, list, remove, update. Gateway actions: gateway_list, gateway_status, gateway_add, gateway_run, gateway_runs, gateway_remove.",
+	"type": "gateway",
+	"gatewaySkill": "naia-cron",
+	"tier": 1,
+	"parameters": {
+		"type": "object",
+		"properties": {
+			"action": {
+				"type": "string",
+				"description": "Action: add, list, remove, update, gateway_list, gateway_status, gateway_add, gateway_run, gateway_runs, gateway_remove",
+				"enum": ["add", "list", "remove", "update", "gateway_list", "gateway_status", "gateway_add", "gateway_run", "gateway_runs", "gateway_remove"]
+			},
+			"label": { "type": "string", "description": "Human-readable label" },
+			"task": { "type": "string", "description": "Task description" },
+			"schedule_type": { "type": "string", "description": "at, every, or cron", "enum": ["at", "every", "cron"] },
+			"schedule_value": { "type": "string", "description": "Schedule value" },
+			"job_id": { "type": "string", "description": "Job ID (for remove/update)" },
+			"enabled": { "type": "boolean", "description": "Enable/disable a job" }
+		},
+		"required": ["action"]
+	}
+}

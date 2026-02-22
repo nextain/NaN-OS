@@ -9,7 +9,7 @@ export interface ChatRequest {
 	ttsVoice?: string;
 	ttsApiKey?: string;
 	ttsEngine?: "auto" | "openclaw" | "google";
-	ttsProvider?: "google" | "edge" | "openai" | "elevenlabs";
+	ttsProvider?: "google" | "edge" | "openai" | "elevenlabs" | "nextain";
 	enableTools?: boolean;
 	gatewayUrl?: string;
 	gatewayToken?: string;

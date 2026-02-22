@@ -1,0 +1,19 @@
+{
+	"name": "skill_config",
+	"description": "Manage Gateway configuration. Actions: get, set, schema, models, patch.",
+	"type": "gateway",
+	"gatewaySkill": "naia-config",
+	"tier": 1,
+	"parameters": {
+		"type": "object",
+		"properties": {
+			"action": {
+				"type": "string",
+				"description": "Action: get, set, schema, models, patch",
+				"enum": ["get", "set", "schema", "models", "patch"]
+			},
+			"patch": { "type": "object", "description": "Configuration key-value pairs (for set and patch)" }
+		},
+		"required": ["action"]
+	}
+}

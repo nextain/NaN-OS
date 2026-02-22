@@ -12,16 +12,17 @@ export function createSessionsSkill(): SkillDefinition {
 	return {
 		name: "skill_sessions",
 		description:
-			"Manage Gateway sub-agent sessions. Actions: list, delete, compact, preview, patch, reset.",
+			"Manage Gateway sub-agent sessions. Actions: list, history, delete, compact, preview, patch, reset.",
 		parameters: {
 			type: "object",
 			properties: {
 				action: {
 					type: "string",
 					description:
-						"Action: list, delete, compact, preview, patch, reset",
+						"Action: list, history, delete, compact, preview, patch, reset",
 					enum: [
 						"list",
+						"history",
 						"delete",
 						"compact",
 						"preview",
@@ -64,6 +65,32 @@ export function createSessionsSkill(): SkillDefinition {
 						success: true,
 						output: JSON.stringify(result),
 					};
+				}
+
+				case "history": {
+					const key = args.key as string;
+					if (!key) {
+						return {
+							success: false,
+							output: "",
+							error: "key is required for history action",
+						};
+					}
+					try {
+						const result = await gateway.request("chat.history", {
+							sessionKey: key,
+						});
+						return {
+							success: true,
+							output: JSON.stringify(result),
+						};
+					} catch (err) {
+						return {
+							success: false,
+							output: "",
+							error: `chat.history failed: ${err instanceof Error ? err.message : String(err)}`,
+						};
+					}
 				}
 
 				case "delete": {

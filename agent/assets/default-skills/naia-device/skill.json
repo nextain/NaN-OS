@@ -1,0 +1,23 @@
+{
+	"name": "skill_device",
+	"description": "Manage Gateway nodes and device pairings. Actions: node_list, node_describe, node_rename, pair_request, pair_list, pair_approve, pair_reject, pair_verify, device_list, device_approve, device_reject, token_rotate, token_revoke.",
+	"type": "gateway",
+	"gatewaySkill": "naia-device",
+	"tier": 1,
+	"parameters": {
+		"type": "object",
+		"properties": {
+			"action": {
+				"type": "string",
+				"description": "Action to perform",
+				"enum": ["node_list", "node_describe", "node_rename", "pair_request", "pair_list", "pair_approve", "pair_reject", "pair_verify", "device_list", "device_approve", "device_reject", "token_rotate", "token_revoke"]
+			},
+			"nodeId": { "type": "string", "description": "Node ID" },
+			"name": { "type": "string", "description": "New name (for node_rename)" },
+			"requestId": { "type": "string", "description": "Pair request ID" },
+			"code": { "type": "string", "description": "Verification code" },
+			"deviceId": { "type": "string", "description": "Device ID" }
+		},
+		"required": ["action"]
+	}
+}

@@ -1,0 +1,23 @@
+{
+	"name": "skill_tts",
+	"description": "Manage Gateway TTS (Text-to-Speech). Actions: status, providers, set_provider, set_auto, set_mode, enable, disable, convert.",
+	"type": "gateway",
+	"gatewaySkill": "naia-tts",
+	"tier": 0,
+	"parameters": {
+		"type": "object",
+		"properties": {
+			"action": {
+				"type": "string",
+				"description": "Action: status, providers, set_provider, set_auto, set_mode, enable, disable, convert",
+				"enum": ["status", "providers", "set_provider", "set_auto", "set_mode", "enable", "disable", "convert"]
+			},
+			"provider": { "type": "string", "description": "TTS provider (for set_provider)" },
+			"text": { "type": "string", "description": "Text to convert (for convert)" },
+			"voice": { "type": "string", "description": "Voice name (for convert)" },
+			"auto": { "type": "string", "description": "Auto mode: off, always, inbound, tagged", "enum": ["off", "always", "inbound", "tagged"] },
+			"mode": { "type": "string", "description": "Output mode: final, all", "enum": ["final", "all"] }
+		},
+		"required": ["action"]
+	}
+}

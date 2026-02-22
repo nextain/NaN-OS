@@ -1,0 +1,17 @@
+{
+	"name": "skill_notify_google_chat",
+	"description": "Send a notification message to Google Chat via webhook. Requires GOOGLE_CHAT_WEBHOOK_URL env var or ~/.naia/config.json setup.",
+	"type": "gateway",
+	"gatewaySkill": "naia-google-chat",
+	"tier": 1,
+	"parameters": {
+		"type": "object",
+		"properties": {
+			"message": {
+				"type": "string",
+				"description": "The message text to send"
+			}
+		},
+		"required": ["message"]
+	}
+}

@@ -1,0 +1,20 @@
+{
+	"name": "skill_sessions",
+	"description": "Manage Gateway sub-agent sessions. Actions: list, history, delete, compact, preview, patch, reset.",
+	"type": "gateway",
+	"gatewaySkill": "naia-sessions",
+	"tier": 1,
+	"parameters": {
+		"type": "object",
+		"properties": {
+			"action": {
+				"type": "string",
+				"description": "Action: list, history, delete, compact, preview, patch, reset",
+				"enum": ["list", "history", "delete", "compact", "preview", "patch", "reset"]
+			},
+			"key": { "type": "string", "description": "Session key (for delete, compact, preview, patch, reset)" },
+			"patch": { "type": "object", "description": "Partial session update (for patch action)" }
+		},
+		"required": ["action"]
+	}
+}

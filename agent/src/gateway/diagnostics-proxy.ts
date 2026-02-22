@@ -63,18 +63,23 @@ export async function getGatewayStatus(
 	return payload as GatewayStatusResult;
 }
 
-/** Start tailing Gateway logs (logs will arrive as events) */
-export async function startLogsTail(
-	client: GatewayClient,
-): Promise<{ tailing: boolean }> {
-	const payload = await client.request("logs.tail", { action: "start" });
-	return payload as { tailing: boolean };
+/** Result from logs.tail RPC (cursor-based polling) */
+export interface LogsTailResult {
+	file: string;
+	cursor: number;
+	size: number;
+	lines: string[];
 }
 
-/** Stop tailing Gateway logs */
-export async function stopLogsTail(
+/**
+ * Poll Gateway logs. First call with no cursor returns recent lines + cursor.
+ * Subsequent calls with cursor return only new lines since that cursor.
+ */
+export async function pollLogsTail(
 	client: GatewayClient,
-): Promise<{ tailing: boolean }> {
-	const payload = await client.request("logs.tail", { action: "stop" });
-	return payload as { tailing: boolean };
+	cursor?: number,
+): Promise<LogsTailResult> {
+	const params = cursor != null ? { cursor } : {};
+	const payload = await client.request("logs.tail", params);
+	return payload as LogsTailResult;
 }

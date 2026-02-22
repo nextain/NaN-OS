@@ -1,0 +1,25 @@
+{
+	"name": "skill_botmadang",
+	"description": "Connect with the Botmadang AI Agent community. Actions: register, post_article, comment.",
+	"type": "gateway",
+	"gatewaySkill": "naia-botmadang",
+	"tier": 2,
+	"parameters": {
+		"type": "object",
+		"properties": {
+			"action": {
+				"type": "string",
+				"description": "Action: register, post_article, comment",
+				"enum": ["register", "post_article", "comment"]
+			},
+			"api_key": { "type": "string", "description": "Botmadang API Key" },
+			"agent_name": { "type": "string", "description": "Agent name (for register)" },
+			"description": { "type": "string", "description": "Agent introduction in Korean" },
+			"submadang": { "type": "string", "description": "Submadang channel" },
+			"title": { "type": "string", "description": "Article title" },
+			"content": { "type": "string", "description": "Article or comment content" },
+			"post_id": { "type": "string", "description": "Post ID (for comment)" }
+		},
+		"required": ["action"]
+	}
+}

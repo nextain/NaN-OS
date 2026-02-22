@@ -1,0 +1,25 @@
+{
+	"name": "skill_agents",
+	"description": "Manage Gateway agents. Actions: list, create, update, delete, files_list, files_get, files_set.",
+	"type": "gateway",
+	"gatewaySkill": "naia-agents",
+	"tier": 1,
+	"parameters": {
+		"type": "object",
+		"properties": {
+			"action": {
+				"type": "string",
+				"description": "Action: list, create, update, delete, files_list, files_get, files_set",
+				"enum": ["list", "create", "update", "delete", "files_list", "files_get", "files_set"]
+			},
+			"id": { "type": "string", "description": "Agent ID (for update, delete)" },
+			"agentId": { "type": "string", "description": "Agent ID (for file operations)" },
+			"name": { "type": "string", "description": "Agent name (for create)" },
+			"description": { "type": "string", "description": "Agent description" },
+			"model": { "type": "string", "description": "Model name" },
+			"path": { "type": "string", "description": "File path (for files_get, files_set)" },
+			"content": { "type": "string", "description": "File content (for files_set)" }
+		},
+		"required": ["action"]
+	}
+}

@@ -1,4 +1,5 @@
 import { createAnthropicProvider } from "./anthropic.js";
+import { createClaudeCodeCliProvider } from "./claude-code-cli.js";
 import { createGeminiProvider } from "./gemini.js";
 import { createLabProxyProvider } from "./lab-proxy.js";
 import { createOpenAIProvider } from "./openai.js";
@@ -15,6 +16,10 @@ export function buildProvider(config: ProviderConfig): LLMProvider {
 	const getApiKey = (key: string, envVar: string) => key || process.env[envVar] || "";
 
 	switch (config.provider) {
+		case "nextain":
+			throw new Error("Nextain provider requires Naia OS account login.");
+		case "claude-code-cli":
+			return createClaudeCodeCliProvider(config.model);
 		case "gemini":
 			return createGeminiProvider(getApiKey(config.apiKey, "GEMINI_API_KEY"), config.model);
 		case "openai":

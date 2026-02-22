@@ -3,8 +3,7 @@ import {
 	getGatewayStatus,
 	getUsageCost,
 	getUsageStatus,
-	startLogsTail,
-	stopLogsTail,
+	pollLogsTail,
 } from "../../gateway/diagnostics-proxy.js";
 import type { SkillDefinition, SkillResult } from "../types.js";
 
@@ -12,22 +11,28 @@ export function createDiagnosticsSkill(): SkillDefinition {
 	return {
 		name: "skill_diagnostics",
 		description:
-			"Gateway diagnostics. Actions: health, status, usage_status, usage_cost, logs_start, logs_stop.",
+			"Gateway diagnostics. Actions: health, status, usage_status, usage_cost, logs_poll.",
 		parameters: {
 			type: "object",
 			properties: {
 				action: {
 					type: "string",
 					description:
-						"Action: health, status, usage_status, usage_cost, logs_start, logs_stop",
+						"Action: health, status, usage_status, usage_cost, logs_poll",
 					enum: [
 						"health",
 						"status",
 						"usage_status",
 						"usage_cost",
+						"logs_poll",
+						// Keep legacy names for backward compatibility
 						"logs_start",
 						"logs_stop",
 					],
+				},
+				cursor: {
+					type: "number",
+					description: "Cursor for logs_poll (omit for initial fetch)",
 				},
 			},
 			required: ["action"],
@@ -68,14 +73,16 @@ export function createDiagnosticsSkill(): SkillDefinition {
 					return { success: true, output: JSON.stringify(result) };
 				}
 
+				case "logs_poll":
 				case "logs_start": {
-					const result = await startLogsTail(gateway);
+					const cursor = typeof args.cursor === "number" ? args.cursor : undefined;
+					const result = await pollLogsTail(gateway, cursor);
 					return { success: true, output: JSON.stringify(result) };
 				}
 
 				case "logs_stop": {
-					const result = await stopLogsTail(gateway);
-					return { success: true, output: JSON.stringify(result) };
+					// No-op — polling is stateless, just return success
+					return { success: true, output: JSON.stringify({ stopped: true }) };
 				}
 
 				default:

@@ -24,6 +24,7 @@ import { ALPHA_SYSTEM_PROMPT } from "./system-prompt.js";
 import { synthesizeEdgeSpeech } from "./tts/edge-tts.js";
 import { synthesizeElevenLabsSpeech } from "./tts/elevenlabs-tts.js";
 import { synthesizeSpeech } from "./tts/google-tts.js";
+import { synthesizeNextainSpeech } from "./tts/nextain-tts.js";
 import { synthesizeOpenAISpeech } from "./tts/openai-tts.js";
 import type { ToolDefinition } from "./providers/types.js";
 
@@ -565,7 +566,15 @@ export async function handleChatRequest(req: ChatRequest): Promise<void> {
 			let audioSent = !cleanText;
 
 			// Direct TTS based on selected provider
-			if (ttsProvider === "openai" && ttsApiKey) {
+			if (ttsProvider === "nextain" && providerConfig.labKey) {
+				try {
+					const audio = await synthesizeNextainSpeech(cleanText, providerConfig.labKey, ttsVoice);
+					if (audio) {
+						writeLine({ type: "audio", requestId, data: audio });
+						audioSent = true;
+					}
+				} catch { /* non-critical */ }
+			} else if (ttsProvider === "openai" && ttsApiKey) {
 				try {
 					const audio = await synthesizeOpenAISpeech(cleanText, ttsApiKey, ttsVoice);
 					if (audio) {

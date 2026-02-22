@@ -24,14 +24,20 @@ describe("skill_channels", () => {
 								discord: "Discord",
 								slack: "Slack",
 							},
-							channels: {},
+							channels: {
+								discord: {
+									configured: true,
+									running: true,
+									lastError: null,
+								},
+							},
 							channelAccounts: {
 								discord: [
 									{
 										accountId: "bot-1",
 										name: "NanBot",
 										enabled: true,
-										connected: true,
+										connected: false,
 									},
 								],
 								slack: [
@@ -112,6 +118,7 @@ describe("skill_channels", () => {
 		expect(parsed).toHaveLength(2);
 		expect(parsed[0].id).toBe("discord");
 		expect(parsed[0].label).toBe("Discord");
+		// Discord bot channels are treated as connected when configured/running.
 		expect(parsed[0].accounts[0].connected).toBe(true);
 		expect(parsed[1].accounts[0].lastError).toBe("Token expired");
 	});

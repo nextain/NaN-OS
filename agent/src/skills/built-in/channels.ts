@@ -63,9 +63,24 @@ export function createChannelsSkill(): SkillDefinition {
 						label: result.channelLabels[id] || id,
 						accounts: (result.channelAccounts[id] || []).map(
 							(a) => ({
+								// Discord bot channel reports may keep `connected` false
+								// even when the account is configured/running.
+								connected: (() => {
+									const channelState = result.channels?.[id] as
+										| { configured?: boolean; running?: boolean; lastError?: string | null }
+										| undefined;
+									if (id === "discord") {
+										const healthyDiscordBot =
+											channelState?.configured === true &&
+											channelState?.running === true &&
+											!channelState?.lastError &&
+											!a.lastError;
+										if (healthyDiscordBot) return true;
+									}
+									return a.connected ?? false;
+								})(),
 								accountId: a.accountId,
 								name: a.name,
-								connected: a.connected ?? false,
 								enabled: a.enabled ?? false,
 								lastError: a.lastError,
 							}),

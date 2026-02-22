@@ -112,14 +112,17 @@ describe("skill_naia_discord", () => {
 	it("derives user target from connected numeric discord accountId", async () => {
 		const prevUser = process.env.DISCORD_DEFAULT_USER_ID;
 		const prevTarget = process.env.DISCORD_DEFAULT_TARGET;
+		const prevChannel = process.env.DISCORD_DEFAULT_CHANNEL_ID;
 		delete process.env.DISCORD_DEFAULT_USER_ID;
 		delete process.env.DISCORD_DEFAULT_TARGET;
+		delete process.env.DISCORD_DEFAULT_CHANNEL_ID;
 
 		const gateway = {
 			isConnected: () => true,
 			availableMethods: ["send", "channels.status"],
 			request: vi
 				.fn()
+				.mockResolvedValueOnce({ sessions: [] }) // sessions.list (no discord sessions)
 				.mockResolvedValueOnce({
 					channelAccounts: {
 						discord: [
@@ -150,9 +153,10 @@ describe("skill_naia_discord", () => {
 		);
 
 		expect(result.success).toBe(true);
-		expect(gateway.request).toHaveBeenNthCalledWith(1, "channels.status", {});
+		expect(gateway.request).toHaveBeenNthCalledWith(1, "sessions.list", {});
+		expect(gateway.request).toHaveBeenNthCalledWith(2, "channels.status", {});
 		expect(gateway.request).toHaveBeenNthCalledWith(
-			2,
+			3,
 			"send",
 			expect.objectContaining({
 				channel: "discord",
@@ -163,19 +167,23 @@ describe("skill_naia_discord", () => {
 
 		if (prevUser !== undefined) process.env.DISCORD_DEFAULT_USER_ID = prevUser;
 		if (prevTarget !== undefined) process.env.DISCORD_DEFAULT_TARGET = prevTarget;
+		if (prevChannel !== undefined) process.env.DISCORD_DEFAULT_CHANNEL_ID = prevChannel;
 	});
 
 	it("derives user target from discord userId field even when accountId is non-numeric", async () => {
 		const prevUser = process.env.DISCORD_DEFAULT_USER_ID;
 		const prevTarget = process.env.DISCORD_DEFAULT_TARGET;
+		const prevChannel = process.env.DISCORD_DEFAULT_CHANNEL_ID;
 		delete process.env.DISCORD_DEFAULT_USER_ID;
 		delete process.env.DISCORD_DEFAULT_TARGET;
+		delete process.env.DISCORD_DEFAULT_CHANNEL_ID;
 
 		const gateway = {
 			isConnected: () => true,
 			availableMethods: ["send", "channels.status"],
 			request: vi
 				.fn()
+				.mockResolvedValueOnce({ sessions: [] }) // sessions.list (no discord sessions)
 				.mockResolvedValueOnce({
 					channelAccounts: {
 						discord: [
@@ -207,9 +215,10 @@ describe("skill_naia_discord", () => {
 		);
 
 		expect(result.success).toBe(true);
-		expect(gateway.request).toHaveBeenNthCalledWith(1, "channels.status", {});
+		expect(gateway.request).toHaveBeenNthCalledWith(1, "sessions.list", {});
+		expect(gateway.request).toHaveBeenNthCalledWith(2, "channels.status", {});
 		expect(gateway.request).toHaveBeenNthCalledWith(
-			2,
+			3,
 			"send",
 			expect.objectContaining({
 				channel: "discord",
@@ -220,6 +229,79 @@ describe("skill_naia_discord", () => {
 
 		if (prevUser !== undefined) process.env.DISCORD_DEFAULT_USER_ID = prevUser;
 		if (prevTarget !== undefined) process.env.DISCORD_DEFAULT_TARGET = prevTarget;
+		if (prevChannel !== undefined) process.env.DISCORD_DEFAULT_CHANNEL_ID = prevChannel;
+	});
+
+	it("strips emotion tags from Discord messages before sending", async () => {
+		const gateway = {
+			isConnected: () => true,
+			availableMethods: ["send"],
+			request: vi.fn().mockResolvedValueOnce({
+				runId: "run-strip-1",
+				channel: "discord",
+				messageId: "m-strip-1",
+			}),
+		};
+
+		const result = await skill.execute(
+			{
+				action: "send",
+				message: "[THINK] 음, 생각해볼게요...",
+				channelId: "12345",
+			},
+			{ gateway: gateway as never },
+		);
+
+		expect(result.success).toBe(true);
+		expect(gateway.request.mock.calls[0][1].message).toBe("음, 생각해볼게요...");
+	});
+
+	it("strips multiple emotion tags from message", async () => {
+		const gateway = {
+			isConnected: () => true,
+			availableMethods: ["send"],
+			request: vi.fn().mockResolvedValueOnce({
+				runId: "run-strip-2",
+				channel: "discord",
+				messageId: "m-strip-2",
+			}),
+		};
+
+		const result = await skill.execute(
+			{
+				action: "send",
+				message: "[HAPPY] 좋은 아침! [NEUTRAL] 오늘 날씨 좋네요",
+				channelId: "12345",
+			},
+			{ gateway: gateway as never },
+		);
+
+		expect(result.success).toBe(true);
+		expect(gateway.request.mock.calls[0][1].message).toBe("좋은 아침! 오늘 날씨 좋네요");
+	});
+
+	it("preserves emoji in Discord messages", async () => {
+		const gateway = {
+			isConnected: () => true,
+			availableMethods: ["send"],
+			request: vi.fn().mockResolvedValueOnce({
+				runId: "run-emoji-1",
+				channel: "discord",
+				messageId: "m-emoji-1",
+			}),
+		};
+
+		const result = await skill.execute(
+			{
+				action: "send",
+				message: "[HAPPY] 좋은 아침이에요! 😊 오늘도 화이팅! ✨",
+				channelId: "12345",
+			},
+			{ gateway: gateway as never },
+		);
+
+		expect(result.success).toBe(true);
+		expect(gateway.request.mock.calls[0][1].message).toBe("좋은 아침이에요! 😊 오늘도 화이팅! ✨");
 	});
 
 	it("sends discord message through gateway send", async () => {

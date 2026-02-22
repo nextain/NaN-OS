@@ -1,0 +1,22 @@
+{
+	"name": "skill_approvals",
+	"description": "Manage Gateway approval rules. Actions: get_rules, set_rules, resolve.",
+	"type": "gateway",
+	"gatewaySkill": "naia-approvals",
+	"tier": 2,
+	"parameters": {
+		"type": "object",
+		"properties": {
+			"action": {
+				"type": "string",
+				"description": "Action: get_rules, set_rules, resolve",
+				"enum": ["get_rules", "set_rules", "resolve"]
+			},
+			"allowedTools": { "type": "array", "items": { "type": "string" }, "description": "Allowed tool names (for set_rules)" },
+			"blockedPatterns": { "type": "array", "items": { "type": "string" }, "description": "Blocked patterns (for set_rules)" },
+			"requestId": { "type": "string", "description": "Approval request ID (for resolve)" },
+			"decision": { "type": "string", "description": "approve or reject (for resolve)", "enum": ["approve", "reject"] }
+		},
+		"required": ["action"]
+	}
+}

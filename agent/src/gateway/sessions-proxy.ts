@@ -15,13 +15,47 @@ export interface SessionsListResult {
 	sessions: SessionInfo[];
 }
 
-/** List all gateway sessions */
+/** List all gateway sessions, enriched with message counts */
 export async function listSessions(
 	client: GatewayClient,
 	options?: { limit?: number },
 ): Promise<SessionsListResult> {
-	const payload = await client.request("sessions.list", options ?? {});
-	return payload as SessionsListResult;
+	const raw = (await client.request("sessions.list", options ?? {})) as {
+		sessions?: Array<Record<string, unknown>>;
+	};
+	const rawSessions = raw.sessions ?? [];
+
+	// Map Gateway response fields and enrich with message counts
+	const sessions: SessionInfo[] = await Promise.all(
+		rawSessions.map(async (s) => {
+			const key = s.key as string;
+			const label =
+				(s.displayName as string | undefined) ??
+				(s.label as string | undefined) ??
+				key;
+
+			// Fetch message count from chat.history
+			let messageCount = 0;
+			try {
+				const history = (await client.request("chat.history", {
+					sessionKey: key,
+				})) as { messages?: unknown[] };
+				messageCount = history.messages?.length ?? 0;
+			} catch {
+				// chat.history may fail for some sessions
+			}
+
+			return {
+				key,
+				label,
+				messageCount,
+				status: s.chatType as string | undefined,
+				...s,
+			};
+		}),
+	);
+
+	return { sessions };
 }
 
 /** Delete a gateway session */

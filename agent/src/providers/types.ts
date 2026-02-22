@@ -1,4 +1,6 @@
 export type ProviderId =
+	| "nextain"
+	| "claude-code-cli"
 	| "gemini"
 	| "openai"
 	| "anthropic"
