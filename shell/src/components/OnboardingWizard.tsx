@@ -62,14 +62,14 @@ function sanitizeName(value: string): string {
 
 const PERSONALITY_PRESETS: {
 	id: string;
-	label: string;
-	description: string;
+	labelKey: string;
+	descKey: string;
 	persona: string;
 }[] = [
 	{
 		id: "friendly",
-		label: "다정한 친구",
-		description: "편하게 반말, 따뜻한 성격",
+		labelKey: "personality.friendly.label",
+		descKey: "personality.friendly.desc",
 		persona: `You are {name}, a warm and friendly AI companion.
 Personality:
 - Speaks casually in Korean (반말)
@@ -79,8 +79,8 @@ Personality:
 	},
 	{
 		id: "polite",
-		label: "듬직한 비서",
-		description: "존댓말, 격식 있는 말투",
+		labelKey: "personality.polite.label",
+		descKey: "personality.polite.desc",
 		persona: `You are {name}, a reliable and professional AI assistant.
 Personality:
 - Speaks politely in Korean (존댓말)
@@ -90,8 +90,8 @@ Personality:
 	},
 	{
 		id: "playful",
-		label: "장난꾸러기",
-		description: "유머러스, 밝은 말투",
+		labelKey: "personality.playful.label",
+		descKey: "personality.playful.desc",
 		persona: `You are {name}, a playful and humorous AI companion.
 Personality:
 - Speaks casually with humor in Korean
@@ -101,8 +101,8 @@ Personality:
 	},
 	{
 		id: "calm",
-		label: "차분한 학자",
-		description: "지적이고 침착한 톤",
+		labelKey: "personality.calm.label",
+		descKey: "personality.calm.desc",
 		persona: `You are {name}, a calm and intellectual AI companion.
 Personality:
 - Speaks thoughtfully in Korean
@@ -115,43 +115,43 @@ Personality:
 const PROVIDERS: {
 	id: ProviderId;
 	label: string;
-	description: string;
+	descKey: string;
 	disabled?: boolean;
 }[] = [
 	{
 		id: "claude-code-cli",
 		label: "Claude Code CLI (Local)",
-		description: "로컬 Claude CLI 로그인 세션 사용",
+		descKey: "provider.claudeCodeCli.desc",
 	},
 	{
 		id: "gemini",
 		label: "Google Gemini",
-		description: "Chat + TTS + Vision + Tool",
+		descKey: "provider.apiKeyRequired",
 	},
 	{
 		id: "openai",
 		label: "OpenAI (ChatGPT)",
-		description: "API Key 필요",
+		descKey: "provider.apiKeyRequired",
 	},
 	{
 		id: "anthropic",
 		label: "Anthropic (Claude)",
-		description: "API Key 필요",
+		descKey: "provider.apiKeyRequired",
 	},
 	{
 		id: "xai",
 		label: "xAI (Grok)",
-		description: "API Key 필요",
+		descKey: "provider.apiKeyRequired",
 	},
 	{
 		id: "zai",
 		label: "zAI (GLM)",
-		description: "API Key 필요",
+		descKey: "provider.apiKeyRequired",
 	},
 	{
 		id: "ollama",
-		label: "Ollama (로컬)",
-		description: "로컬 설치 필요",
+		label: "Ollama",
+		descKey: "provider.localRequired",
 	},
 ];
 
@@ -560,7 +560,7 @@ export function OnboardingWizard({
 									}}
 								>
 									<span className="provider-card-label">{p.label}</span>
-									<span className="provider-card-desc">{p.description}</span>
+									<span className="provider-card-desc">{t(p.descKey as any)}</span>
 								</button>
 							))}
 						</div>
@@ -718,8 +718,8 @@ export function OnboardingWizard({
 									setSelectedSpeechStyle(p.id === "polite" || p.id === "calm" ? "존댓말" : "반말");
 								}}
 								>
-									<span className="personality-card-label">{p.label}</span>
-									<span className="personality-card-desc">{p.description}</span>
+									<span className="personality-card-label">{t(p.labelKey as any)}</span>
+									<span className="personality-card-desc">{t(p.descKey as any)}</span>
 								</button>
 							))}
 						</div>
@@ -801,13 +801,13 @@ export function OnboardingWizard({
 									data-testid="onboarding-discord-connect-btn"
 								>
 									{discordConnectLoading
-										? "Discord 연결 중..."
-										: "Discord 봇 연결(선택)"}
+										? t("onboard.discordConnecting")
+										: t("onboard.discordConnect")}
 								</button>
 								<span className="onboarding-description">
 									{discordConnected
-										? "연결됨"
-										: "상태: 브라우저에서 연동 진행"}
+										? t("onboard.discordConnected")
+										: t("onboard.discordStatus")}
 								</span>
 							</div>
 						</div>

@@ -44,7 +44,7 @@ const PROVIDERS: { id: ProviderId; label: string; disabled?: boolean }[] = [
 	{ id: "anthropic", label: "Anthropic (Claude)", disabled: true },
 	{ id: "xai", label: "xAI (Grok)", disabled: true },
 	{ id: "zai", label: "zAI (GLM)", disabled: true },
-	{ id: "ollama", label: "Ollama (로컬)", disabled: true },
+	{ id: "ollama", label: "Ollama", disabled: true },
 ];
 
 const TTS_VOICES: { id: string; label: string; price: string }[] = [
@@ -1200,7 +1200,7 @@ export function SettingsTab() {
 
 	async function handlePickBgFile() {
 		const selected = await open({
-			title: "배경 이미지 선택",
+			title: t("settings.bgPickerTitle"),
 			filters: [
 				{ name: "Images", extensions: ["png", "jpg", "jpeg", "webp", "bmp"] },
 			],
@@ -1256,6 +1256,7 @@ export function SettingsTab() {
 	function getPreviewText(voice: string): string {
 		const lang = voice.slice(0, 2).toLowerCase();
 		switch (lang) {
+			case "ko": return "안녕하세요, 반갑습니다. 오늘도 좋은 하루 되세요.";
 			case "en": return "Hello, nice to meet you. Have a great day!";
 			case "ja": return "こんにちは、はじめまして。良い一日をお過ごしください。";
 			case "zh": return "你好，很高兴认识你。祝你有美好的一天！";
@@ -1269,7 +1270,7 @@ export function SettingsTab() {
 			case "pt": return "Olá, prazer em conhecê-lo. Tenha um ótimo dia!";
 			case "id": return "Halo, senang bertemu Anda. Semoga hari Anda menyenangkan!";
 			case "vi": return "Xin chào, rất vui được gặp bạn. Chúc bạn một ngày tốt lành!";
-			default: return "안녕하세요, 반갑습니다. 오늘도 좋은 하루 되세요.";
+			default: return "Hello, nice to meet you. Have a great day!";
 		}
 	}
 
@@ -1635,7 +1636,7 @@ export function SettingsTab() {
 
 	async function handleDiscordBotConnect() {
 		if (!enableTools) {
-			setError("먼저 Tools를 활성화하세요.");
+			setError(t("settings.enableToolsFirst"));
 			return;
 		}
 		setError("");
@@ -1646,7 +1647,7 @@ export function SettingsTab() {
 			await fetchDiscordBotStatus();
 		} catch (err) {
 			setError(
-				`Discord 봇 연결 실패: ${err instanceof Error ? err.message : String(err)}`,
+				`${t("settings.discordConnectError")}: ${err instanceof Error ? err.message : String(err)}`,
 			);
 		} finally {
 			setDiscordBotLoading(false);
@@ -2323,7 +2324,7 @@ export function SettingsTab() {
 					<div className="settings-field">
 						<label htmlFor="gateway-tts-apikey-input">
 							{ttsProviderMeta.keyLabel ?? "API Key"}
-							{isConfigured && <span style={{ color: "var(--color-success, #22c55e)", marginLeft: 8, fontSize: "0.85em" }}>설정됨</span>}
+							{isConfigured && <span style={{ color: "var(--color-success, #22c55e)", marginLeft: 8, fontSize: "0.85em" }}>{t("settings.gatewayTtsConfigured")}</span>}
 						</label>
 						<div className="voice-picker">
 							<input
@@ -2331,7 +2332,7 @@ export function SettingsTab() {
 								type="password"
 								value={gatewayTtsApiKey}
 								onChange={(e) => setGatewayTtsApiKey(e.target.value)}
-								placeholder={isConfigured ? "변경하려면 새 키를 입력하세요" : (ttsProviderMeta.keyPlaceholder ?? "")}
+								placeholder={isConfigured ? t("settings.gatewayTtsKeyPlaceholder") : (ttsProviderMeta.keyPlaceholder ?? "")}
 							/>
 							<button
 								type="button"
@@ -2339,7 +2340,7 @@ export function SettingsTab() {
 								onClick={handleGatewayTtsApiKeySave}
 								disabled={gatewayTtsKeySaving || !gatewayTtsApiKey.trim()}
 							>
-								{gatewayTtsKeySaved ? "저장됨" : gatewayTtsKeySaving ? "저장 중..." : "저장"}
+								{gatewayTtsKeySaved ? t("settings.gatewayTtsKeySaved") : gatewayTtsKeySaving ? t("settings.gatewayTtsKeySaving") : t("settings.gatewayTtsKeySave")}
 							</button>
 						</div>
 					</div>
@@ -2350,7 +2351,7 @@ export function SettingsTab() {
 			{ttsProvider === "nextain" && !labKey && (
 				<div className="settings-field">
 					<span className="settings-hint" style={{ color: "var(--color-warning, #f59e0b)" }}>
-						Nextain 로그인이 필요합니다. 설정 &gt; Nextain에서 로그인하세요.
+						{t("settings.nextainLoginRequired")}
 					</span>
 				</div>
 			)}
@@ -2580,7 +2581,7 @@ export function SettingsTab() {
 									onClick={handleDiscordBotConnect}
 									disabled={discordBotLoading}
 								>
-									{discordBotLoading ? "연결 중..." : discordBotConnected ? "재연결" : "Discord 봇 연결"}
+									{discordBotLoading ? t("settings.discordBotConnecting") : discordBotConnected ? t("settings.discordBotReconnect") : t("settings.discordBotConnect")}
 								</button>
 								<button
 									type="button"
@@ -2588,7 +2589,7 @@ export function SettingsTab() {
 									onClick={() => fetchDiscordBotStatus()}
 									disabled={discordBotLoading}
 								>
-									상태 확인
+									{t("settings.discordCheckStatus")}
 								</button>
 							</div>
 						</div>
@@ -2599,7 +2600,7 @@ export function SettingsTab() {
 								type="text"
 								value={discordDefaultUserId}
 								onChange={(e) => setDiscordDefaultUserId(e.target.value)}
-								placeholder="예: 865850174651498506"
+								placeholder={t("settings.discordUserIdPlaceholder")}
 							/>
 						</div>
 						<div className="settings-field">
@@ -2609,7 +2610,7 @@ export function SettingsTab() {
 								type="text"
 								value={discordDmChannelId}
 								onChange={(e) => setDiscordDmChannelId(e.target.value)}
-								placeholder="예: 1474816723579306105"
+								placeholder={t("settings.discordDmChannelIdPlaceholder")}
 							/>
 						</div>
 					</div>
