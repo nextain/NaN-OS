@@ -29,6 +29,15 @@ modules:
     sources:
       - type: dir
         path: ..
+        skip:
+          - .git
+          - .flatpak-builder
+          - flatpak-repo
+          - build-dir
+          - shell/src-tauri/target
+          - shell/node_modules
+          - agent/node_modules
+          - agent/dist
     build-options:
       env:
         CARGO_HOME: /run/build/Naia-OS/cargo
