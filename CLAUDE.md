@@ -99,3 +99,25 @@ PLAN → CHECK → BUILD → VERIFY → CLEAN → COMMIT
 ```
 
 핵심: **기존 코드 먼저 검색, 중복 생성 금지, 미사용 코드 정리, 셀프 리뷰 후 커밋.**
+
+## 병렬 세션 파일 잠금 (File Lock Protocol)
+
+여러 Claude 세션이 동시에 작업할 때 파일 충돌을 방지하는 규칙.
+
+**잠금 파일**: `/home/luke/dev/.claude/file-locks.json` (절대경로, 양쪽 세션 공유)
+
+### 규칙
+
+1. **편집 전 확인**: 파일 수정 전 `file-locks.json`을 읽고 해당 파일이 다른 세션에 잠겨있는지 확인
+2. **잠금 등록**: 새 파일 편집 시작 시 `locks`에 등록 (owner = 브랜치명)
+3. **완료 후 해제**: 작업 완료 시 해당 잠금 제거
+4. **충돌 시 중단**: 잠긴 파일을 수정해야 하면, 사용자에게 알리고 대기
+5. **free 목록**: `free` 배열에 있는 파일은 누구나 자유롭게 생성/수정 가능
+6. **CSS 규칙**: `global.css`가 잠겨있어도, 고유 prefix(`.googlechat-*` 등)의 새 클래스는 추가 가능
+
+### 사용법
+
+```bash
+# 잠금 확인 (세션 시작 시)
+cat /home/luke/dev/.claude/file-locks.json
+```

@@ -17,10 +17,13 @@ cycle:
     description: "Determine what to build, where to put it, and whether it already exists"
     actions:
       - "Summarize requirement in one sentence"
+      - "Define E2E objective in one sentence (what user-visible outcome must succeed?)"
+      - "Define explicit failure phrases/states for this objective (what must be treated as FAIL?)"
       - "Search existing code for same/similar functionality (Grep/Glob)"
       - "If exists: modify/extend existing code (do NOT create new)"
       - "If not: decide which module (shell/agent/gateway) it belongs to"
       - "List affected files"
+      - "Create purpose→implementation mapping for each E2E scenario before coding"
     output: "Work plan (what, where, why)"
     anti_patterns:
       - "Creating new file without checking existing code"
@@ -69,6 +72,10 @@ cycle:
       - "Review changed files (git diff --stat)"
       - "Check for unintended file changes"
       - "Re-confirm new files are truly necessary"
+      - "For each E2E scenario, verify objective vs observed behavior (not only pass signal)"
+      - "If final user-visible response contradicts objective, mark FAIL even when tool/UI signal is green"
+      - "Inspect runtime traces/logs for E2E when result is ambiguous"
+      - "Run the verification yourself first; do not offload first-pass validation to the user"
     security_review:
       - "Correct permission tier assigned for new tools/commands"
       - "Audit log records new AI actions"
@@ -187,6 +194,18 @@ ai_specific_rules:
     - "Remove previous implementation remnants"
     - "Remove unused code (run knip)"
     - "Verify tests pass"
+    - "Verify E2E objective/implementation alignment and document any remaining design gaps"
+    - "Report failures explicitly with root cause and next action; never present uncertain state as success"
+
+e2e_objective_gate:
+  description: "Mandatory gate for E2E quality (purpose-driven verification)"
+  checklist:
+    - "Is the E2E objective explicit and user-visible?"
+    - "Does implementation path actually target that objective?"
+    - "Are known FAIL phrases/states asserted as FAIL?"
+    - "Is there at least one positive case and one negative case where applicable?"
+    - "If test passes, does final user-visible output still match the objective?"
+    - "Are unresolved design gaps documented in context/workflow notes?"
 
   session_handoff:
     description: "Cleanup when ending AI session for next session"

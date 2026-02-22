@@ -1,0 +1,53 @@
+description: skill_naia_discord — Discord messaging skill for Naia OS agent.
+
+actions:
+  send:
+    description: Send a Discord DM or channel message
+    required_params: [message]
+    optional_params: [to, channelId, userId, accountId]
+    gateway_method: send
+    target_resolution:
+      1_explicit: "to / channelId / userId param"
+      2_env: "DISCORD_DEFAULT_USER_ID / DISCORD_DEFAULT_TARGET / DISCORD_DEFAULT_CHANNEL_ID"
+      3_gateway_status: "channels.status → extractUserTargetFromChannelsStatus()"
+      4_null: "Error — target required"
+
+  status:
+    description: Check Discord connection status
+    gateway_method: channels.status
+    returns: Discord channel accounts with connection state
+
+  history:
+    description: Read recent Discord messages
+    optional_params: [limit, to, channelId, userId]
+    gateway_method: channels.discord.readMessages
+    default_limit: 20
+    max_limit: 100
+
+discord_user_id_flow:
+  normal_path:
+    - "OAuth login at naia.nextain.io"
+    - "Callback → deep link with discord_user_id"
+    - "Rust parses deep link → discord_auth_complete event"
+    - "persistDiscordDefaults() → config.discordDefaultUserId"
+    - "ChatPanel loadConfig() → sendChatMessage → agent env"
+    - "process.env.DISCORD_DEFAULT_USER_ID"
+    - "resolveEnvDefaultTarget()"
+  fallback: "extractUserTargetFromChannelsStatus() from channels.status"
+  warning: "discordUserId comes from OAuth, NOT from .env hardcoding"
+
+allowlist:
+  purpose: Ensure DM target is in discord-allowFrom.json so they can reply
+  file: "~/.openclaw/credentials/discord-allowFrom.json"
+  function: ensureDiscordAllowlisted()
+  trigger: Before every send to user:<id>
+
+key_files:
+  - agent/src/skills/built-in/naia-discord.ts
+  - shell/src/lib/discord-auth.ts
+  - shell/src-tauri/src/lib.rs (lines 1378-1505, deep link parsing)
+
+constraints:
+  - OpenClaw source NOT modifiable
+  - All target resolution happens in our agent code
+  - Gateway must be connected for any action

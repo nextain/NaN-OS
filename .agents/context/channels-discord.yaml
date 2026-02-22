@@ -1,0 +1,90 @@
+description: End-to-end Discord integration architecture (Gateway ↔ Agent ↔ Shell).
+
+components:
+  gateway:
+    role: OpenClaw Gateway manages Discord bot connection
+    methods:
+      - channels.status        # Connection status
+      - channels.discord.readMessages  # Read recent messages
+      - send                   # Send message to channel/user
+    config:
+      - "~/.openclaw/credentials/discord-allowFrom.json"  # DM allowlist
+      - "~/.openclaw/openclaw.json"  # Provider/model config
+    constraint: Source NOT modifiable
+
+  agent:
+    role: Skill execution layer between Shell and Gateway
+    skills:
+      - skill_naia_discord (send/status/history)
+    chat_routing:
+      - routeViaGateway: true → chat.send RPC → Gateway Agent → LLM (unified session)
+      - routeViaGateway: false → direct LLM call (existing fallback)
+      - Config: chatRouting = "auto" | "gateway" | "direct" (default: "auto")
+    event_handling:
+      - exec.approval.requested → Shell approval modal
+      - logs.entry → Shell log panel
+      - channel.message / channels.message → Shell discord_message display
+      - agent.delta → streaming text/tool_use during Gateway chat
+      - agent.run.finished / chat.finished → usage + finish
+      - unknown events → debug logging
+
+  shell:
+    role: User-facing UI (Tauri 2 + React)
+    features:
+      - ChatPanel displays Discord messages with [Discord] prefix
+      - SettingsTab / OnboardingWizard trigger OpenClaw sync
+      - ChannelsTab shows connection status
+      - OAuth deep-link handles discord_auth_complete
+
+oauth_deep_link:
+  flow:
+    - User clicks "Discord 봇 연결" in Shell
+    - Browser opens naia.nextain.io integrations page
+    - OAuth flow completes
+    - Deep link callback: naia://auth/discord?user_id=<id>&channel_id=<id>
+    - Rust parses deep link → emits discord_auth_complete event
+    - Shell persists defaults → config → agent env
+  payload:
+    discordUserId: "Numeric Discord user ID"
+    discordChannelId: "Optional channel ID"
+    discordTarget: "Optional pre-formatted target"
+
+bootstrap_file_mapping:
+  SOUL.md: Full system prompt (persona + emotion tags + context)
+  IDENTITY.md: Agent name
+  USER.md: User name
+  openclaw.json: Provider/model settings
+  auth-profiles.json: API credentials
+
+chat_routing:
+  description: Shell chat can be routed through Gateway for unified session management
+  modes:
+    auto: Route via Gateway when connected, fallback to direct LLM when not
+    gateway: Always route via Gateway (fail if disconnected)
+    direct: Always use direct LLM (original behavior)
+  flow_gateway: "Shell → Agent → Gateway chat.send RPC → Gateway Agent → LLM"
+  flow_direct: "Shell → Agent → direct LLM API (no Gateway)"
+  key_files:
+    - agent/src/gateway/gateway-chat.ts  # Gateway chat routing
+    - agent/src/index.ts                 # Route branching (routeViaGateway flag)
+    - shell/src/lib/config.ts            # chatRouting setting
+    - shell/src/lib/chat-service.ts      # routeViaGateway in request
+
+shell_conversation_sync:
+  current:
+    - Manual polling via skill_naia_discord action=history
+    - Real-time via Gateway channel.message events (when connected)
+  display: "[Discord: <sender>] <message>" in ChatPanel
+  gateway_events:
+    - channel.message → discord_message writeLine → Shell display
+    - agent.delta → streaming text during Gateway chat
+
+known_limitations:
+  - Gateway chat.send RPC availability depends on OpenClaw version
+  - Fallback batch path (agent → agent.wait → transcript) loses streaming
+  - Emotion tags in SOUL.md may not be supported by all Gateway LLM providers
+
+future_improvements:
+  - Offline → online message sync via chat.inject
+  - Discord thread/channel support beyond DMs
+  - Gateway session history browsing in Shell

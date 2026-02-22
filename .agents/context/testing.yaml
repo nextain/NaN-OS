@@ -149,6 +149,26 @@ shell:
       llm_nondeterminism: |
         Gemini may not always use requested tools.
         Use flexible assertions: check tool-success element OR text pattern.
+    methodology:
+      principles:
+        - "E2E must fail when the AI response explicitly says feature unavailable or failed."
+        - "Do not mark PASS from a single UI signal (e.g. tool-success badge) if the final AI message contradicts it."
+        - "Validate with semantic criteria for user-visible behavior, plus structural checks for config state."
+        - "Every E2E must start from a documented objective (user-visible success condition) and end with objective-vs-implementation review."
+        - "Always check for missing/incorrect implementation paths before declaring PASS."
+      assertion_style:
+        - "Prefer semantic validation for final assistant messages (task + pass/fail criteria)."
+        - "Avoid brittle literal matching and avoid relying only on `expect` equality."
+        - "When semantic checks are used, define explicit FAIL phrases (e.g. '사용할 수 없다', 'tool not found')."
+        - "When objective requires real delivery/integration, include at least one positive end-to-end success scenario."
+      logging:
+        - "Always inspect message traces when a spec passes unexpectedly."
+        - "Primary trace: shell/e2e-tauri/.artifacts/ui-message-trace.ndjson"
+        - "Agent/runtime logs: ~/.naia/logs/naia.log and worker output"
+        - "Log objective, expected implementation path, observed path, and mismatch point for failed E2E."
+      execution:
+        - "Run one spec at a time while stabilizing: `pnpm exec wdio run e2e-tauri/wdio.conf.ts --spec <file>`"
+        - "Do not trust `pnpm run test:e2e:tauri -- --spec ...` if it fans out to full-suite workers in current setup."
 
 gateway:
   description: "WebSocket daemon. Always running."

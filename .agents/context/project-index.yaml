@@ -32,6 +32,18 @@ mirror_pairs:
     users: null
     description: Concrete testing strategy per module, E2E scenarios, phase verification
 
+  - agents: .agents/context/openclaw-sync.yaml
+    users: .users/context/openclaw-sync.md
+    description: Shell → OpenClaw gateway config sync architecture (provider, model, persona, SOUL.md, chat routing)
+
+  - agents: .agents/context/skill-naia-discord.yaml
+    users: .users/context/skill-naia-discord.md
+    description: skill_naia_discord definition (send/status/history), target resolution, OAuth flow
+
+  - agents: .agents/context/channels-discord.yaml
+    users: .users/context/channels-discord.md
+    description: E2E Discord integration architecture (Gateway ↔ Agent ↔ Shell), OAuth deep-link, conversation sync, chat routing via Gateway
+
   - agents: .agents/workflows/development-cycle.yaml
     users: .users/workflows/development-cycle.md
     description: PLAN→CHECK→BUILD→VERIFY→CLEAN→COMMIT cycle, review gates, AI rules
@@ -57,5 +69,8 @@ on_demand_loading:
     - .agents/context/architecture.yaml (when working on agent/gateway integration — ALWAYS read before gateway work)
     - .agents/context/careti-reuse.yaml (when porting code from careti)
     - .agents/context/testing.yaml (when writing or running tests)
+    - .agents/context/openclaw-sync.yaml (when working on OpenClaw sync or persona/settings)
+    - .agents/context/skill-naia-discord.yaml (when working on Discord skill or messaging)
+    - .agents/context/channels-discord.yaml (when working on Discord integration, OAuth, or Shell conversation sync)
     - .agents/workflows/development-cycle.yaml (when coding — ALWAYS read before building)
     - .agents/workflows/* (when executing specific workflows)
