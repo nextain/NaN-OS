@@ -32,7 +32,16 @@ formats:
     variant: Kinoite (KDE Plasma)
     fedora_version: "43"
     recipe: recipes/recipe.yml
-    status: blocked (GHCR image not published yet)
+    output_name: naia-os-latest.iso
+    status: working
+    notes:
+      - GHCR package must be public for skopeo to pull without auth
+      - iso_path output is directory (dirname), iso_name is filename
+      - Upload uses iso_path/iso_name pattern (not iso_path alone)
+      - ISO ~7GB, generation takes ~12-15 minutes
+      - GitHub Release file size limit is 2GB — ISO uploaded as Actions Artifact only
+      - Artifact retention: 30 days
+      - CHECKSUM file uploaded to Release for verification
 
 release:
   current_version: v0.1.0
@@ -101,5 +110,10 @@ os_image:
     - config/scripts/setup-openclaw.sh (gateway systemd service)
   systemd_services:
     - config/files/usr/lib/systemd/user/naia-gateway.service
-  status: blocked
-  blocker: ".gitmodules submodule mapping error in BlueBuild Docker context"
+  registry: ghcr.io/nextain/naia-os
+  tags: [latest, YYYYMMDD, fedora-version, YYYYMMDD-fedora-version]
+  status: working
+  notes:
+    - Recipe name must be lowercase (Docker stage name constraint)
+    - Checkout needs submodules:true for shared-modules
+    - GHCR package visibility must be public (org setting)

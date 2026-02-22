@@ -48,18 +48,21 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: naia-os-${{ inputs.image_tag || 'latest' }}
-          path: ${{ steps.build.outputs.iso_path }}/${{ steps.build.outputs.iso_name }}
-          retention-days: 7
+          path: |
+            ${{ steps.build.outputs.iso_path }}/${{ steps.build.outputs.iso_name }}
+            ${{ steps.build.outputs.iso_path }}/${{ steps.build.outputs.iso_name }}-CHECKSUM
+          retention-days: 30
           if-no-files-found: error
 
-      - name: Upload to Release
+      - name: Upload CHECKSUM to Release
         if: github.ref == 'refs/heads/main'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: iso-${{ github.run_number }}
           name: "Naia OS ISO (Build #${{ github.run_number }})"
-          files: |
-            ${{ steps.build.outputs.iso_path }}/${{ steps.build.outputs.iso_name }}
-            ${{ steps.build.outputs.iso_path }}/${{ steps.build.outputs.iso_name }}-CHECKSUM
+          body: |
+            ISO is available as a GitHub Actions Artifact (too large for Release upload).
+            Download from: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          files: ${{ steps.build.outputs.iso_path }}/${{ steps.build.outputs.iso_name }}-CHECKSUM
           draft: true
           overwrite_files: true
