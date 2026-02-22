@@ -56,8 +56,8 @@ modules:
       - install -Dm755 /usr/lib/sdk/node22/bin/node /app/bin/node
       # Agent bundle (dist + node_modules for runtime)
       - mkdir -p /app/lib/naia-os/agent
-      - cp -r agent/dist /app/lib/naia-os/agent/dist
-      - cp -r agent/node_modules /app/lib/naia-os/agent/node_modules
+      - cp -rL agent/dist /app/lib/naia-os/agent/dist
+      - cp -rL agent/node_modules /app/lib/naia-os/agent/node_modules
       - cp agent/package.json /app/lib/naia-os/agent/
       # Desktop integration
       - install -Dm644 flatpak/io.nextain.naia.desktop /app/share/applications/io.nextain.naia.desktop
