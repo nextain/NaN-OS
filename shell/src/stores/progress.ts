@@ -20,3 +20,6 @@ export const useProgressStore = create<ProgressState>()((set) => ({
 	setStats: (stats) => set({ stats }),
 	setLoading: (loading) => set({ isLoading: loading }),
 }));
+
+// Expose for Playwright screenshot capture & dev tools
+if (typeof window !== "undefined") (window as any).useProgressStore = useProgressStore;

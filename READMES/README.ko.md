@@ -1,6 +1,6 @@
 [English](../README.md) | [한국어](README.ko.md) | [日本語](README.ja.md) | [中文](README.zh.md) | [Français](README.fr.md) | [Deutsch](README.de.md) | [Русский](README.ru.md) | [Español](README.es.md) | [Português](README.pt.md) | [Tiếng Việt](README.vi.md) | [Bahasa Indonesia](README.id.md) | [العربية](README.ar.md) | [हिन्दी](README.hi.md) | [বাংলা](README.bn.md)
 
-# Naia OS
+# Naia
 
 **The Next Generation AI OS** — AI 아바타가 살고 있는 개인 데스크톱 운영체제
 
@@ -8,9 +8,9 @@
 
 > "OS 자체가 AI의 도구다. AI가 OS 위에서 실행되는 게 아니라, AI가 OS를 제어한다."
 
-## Naia OS란?
+## Naia란?
 
-Naia OS는 3D 아바타 AI가 상주하는 Linux 데스크톱 앱입니다. 채팅과 음성으로 AI와 대화하고, AI가 파일 관리, 터미널 명령, 웹 검색, 코드 작성까지 직접 수행합니다. 개발자가 아니어도 누구나 자신만의 AI 에이전트를 가질 수 있습니다.
+Naia는 3D 아바타 AI가 상주하는 Linux 데스크톱 앱입니다. 채팅과 음성으로 AI와 대화하고, AI가 파일 관리, 터미널 명령, 웹 검색, 코드 작성까지 직접 수행합니다. 개발자가 아니어도 누구나 자신만의 AI 에이전트를 가질 수 있습니다.
 
 ### 핵심 기능
 
@@ -25,11 +25,11 @@ Naia OS는 3D 아바타 AI가 상주하는 Linux 데스크톱 앱입니다. 채�
 - **Nextain 계정** — API 키 없이 크레딧 기반으로 바로 사용 가능
 - **개인화** — 이름, 성격, 말투, 아바타, 테마(8종) 모두 커스터마이즈
 
-## 왜 Naia OS인가?
+## 왜 Naia인가?
 
-기존 AI 도구들은 "사람이 AI를 도구로 쓰는" 구조입니다. Naia OS는 이 관계를 뒤집습니다 — **"AI에게 OS를 통째로 준다."**
+기존 AI 도구들은 "사람이 AI를 도구로 쓰는" 구조입니다. Naia는 이 관계를 뒤집습니다 — **"AI에게 OS를 통째로 준다."**
 
-| 기존 접근 | 한계 | Naia OS |
+| 기존 접근 | 한계 | Naia |
 |-----------|------|---------|
 | **VS Code 확장** (Copilot, Cline) | IDE를 열어야 AI 사용 | IDE 불필요. 항상 켜져있음 |
 | **CLI 에이전트** (Claude Code, Aider) | 터미널 안에서만 동작 | 파일, 브라우저, 시스템 전체 제어 |
@@ -39,9 +39,9 @@ Naia OS는 3D 아바타 AI가 상주하는 Linux 데스크톱 앱입니다. 채�
 
 ## OpenClaw과의 관계
 
-Naia OS는 [OpenClaw](https://github.com/openclaw-ai/openclaw) 생태계 위에 구축되었지만, 근본적으로 다른 제품입니다.
+Naia는 [OpenClaw](https://github.com/openclaw-ai/openclaw) 생태계 위에 구축되었지만, 근본적으로 다른 제품입니다.
 
-| | OpenClaw | Naia OS |
+| | OpenClaw | Naia |
 |---|---------|---------|
 | **형태** | CLI 데몬 + 터미널 | 데스크톱 앱 + 3D 아바타 |
 | **대상** | 개발자 | 누구나 |
@@ -58,7 +58,7 @@ Naia OS는 [OpenClaw](https://github.com/openclaw-ai/openclaw) 생태계 위에 
 
 **OpenClaw에서 가져온 것:** 데몬 아키텍처, 도구 실행 엔진, 채널 시스템, 스킬 생태계 (5,700+ Clawhub 스킬 호환)
 
-**Naia OS가 새로 만든 것:** Tauri Shell, VRM 아바타 시스템, 멀티 LLM 에이전트, 감정 엔진, TTS/STT 통합, 온보딩 마법사, 비용 추적, Nextain 계정 연동, 메모리 시스템 (STM/LTM), 보안 계층
+**Naia가 새로 만든 것:** Tauri Shell, VRM 아바타 시스템, 멀티 LLM 에이전트, 감정 엔진, TTS/STT 통합, 온보딩 마법사, 비용 추적, Nextain 계정 연동, 메모리 시스템 (STM/LTM), 보안 계층
 
 ## 아키텍처
 
@@ -190,7 +190,7 @@ flatpak run io.nextain.naia
 
 ## 보안 모델
 
-Naia OS는 **다층 방어(Defense in Depth)** 보안 모델을 적용합니다:
+Naia는 **다층 방어(Defense in Depth)** 보안 모델을 적용합니다:
 
 | 계층 | 보호 수단 |
 |------|----------|

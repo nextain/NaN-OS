@@ -1,4 +1,4 @@
-description: Naia OS distribution and release pipeline
+description: Naia distribution and release pipeline
 
 formats:
   flatpak:
@@ -106,7 +106,7 @@ os_image:
   scripts:
     - config/scripts/install-pnpm.sh
     - config/scripts/install-naia-shell.sh (downloads AppImage from GitHub Release)
-    - config/scripts/branding.sh (os-release → Naia OS, URLs → naia.nextain.io)
+    - config/scripts/branding.sh (os-release → Naia, URLs → naia.nextain.io)
     - config/scripts/setup-openclaw.sh (gateway systemd service, runs on first boot)
   deployed_files:
     - config/files/usr/share/applications/naia-shell.desktop (app launcher)

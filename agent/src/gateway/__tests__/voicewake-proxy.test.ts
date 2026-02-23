@@ -64,10 +64,10 @@ describe("voicewake-proxy", () => {
 		it("sets new triggers", async () => {
 			const result = await setVoiceWakeTriggers(client, [
 				"낸",
-				"Nextain",
+				"Naia",
 			]);
 
-			expect(result.triggers).toEqual(["낸", "Nextain"]);
+			expect(result.triggers).toEqual(["낸", "Naia"]);
 		});
 
 		it("allows empty trigger list (falls back to defaults)", async () => {

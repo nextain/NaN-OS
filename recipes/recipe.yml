@@ -1,5 +1,5 @@
 name: naia-os
-description: Naia OS - Personal AI OS with virtual avatar
+description: Naia - Personal AI OS with virtual avatar
 base-image: ghcr.io/ublue-os/bazzite
 image-version: latest
 

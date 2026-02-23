@@ -1,4 +1,4 @@
-# Naia OS
+# Naia
 
 Bazzite 기반 배포형 AI OS. Naia(AI 아바타)가 상주하는 개인 운영체제.
 

@@ -1,7 +1,7 @@
 import { type Page, expect, test } from "@playwright/test";
 
 /**
- * Nextain Shell E2E — Chat + Tool execution verification.
+ * Naia Shell E2E — Chat + Tool execution verification.
  *
  * Prerequisites:
  *   pnpm tauri dev  (must be running — Vite serves UI at localhost:1420)

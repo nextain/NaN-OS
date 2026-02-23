@@ -1,6 +1,6 @@
 [English](../README.md) | [한국어](README.ko.md) | [日本語](README.ja.md) | [中文](README.zh.md) | [Français](README.fr.md) | [Deutsch](README.de.md) | [Русский](README.ru.md) | [Español](README.es.md) | [Português](README.pt.md) | [Tiếng Việt](README.vi.md) | [Bahasa Indonesia](README.id.md) | [العربية](README.ar.md) | [हिन्दी](README.hi.md) | [বাংলা](README.bn.md)
 
-# Naia OS
+# Naia
 
 **The Next Generation AI OS** — AIアバターが住むパーソナルデスクトップOS
 
@@ -8,9 +8,9 @@
 
 > 「OS自体がAIのツールだ。AIがOSの上で動くのではなく、AIがOSを制御する。」
 
-## Naia OSとは？
+## Naiaとは？
 
-Naia OSは、3DアバターAIが常駐するLinuxデスクトップアプリです。チャットと音声でAIと会話し、AIがファイル管理、ターミナルコマンド、Web検索、コード作成まで直接実行します。開発者でなくても、誰でも自分だけのAIエージェントを持つことができます。
+Naiaは、3DアバターAIが常駐するLinuxデスクトップアプリです。チャットと音声でAIと会話し、AIがファイル管理、ターミナルコマンド、Web検索、コード作成まで直接実行します。開発者でなくても、誰でも自分だけのAIエージェントを持つことができます。
 
 ### コア機能
 
@@ -25,11 +25,11 @@ Naia OSは、3DアバターAIが常駐するLinuxデスクトップアプリで�
 - **Nextainアカウント** — APIキー不要、クレジットベースですぐに利用可能
 - **パーソナライズ** — 名前、性格、話し方、アバター、テーマ（8種類）すべてカスタマイズ可能
 
-## なぜNaia OSなのか？
+## なぜNaiaなのか？
 
-既存のAIツールは「人がAIをツールとして使う」構造です。Naia OSはこの関係を逆転させます — **「AIにOS丸ごと渡す」**
+既存のAIツールは「人がAIをツールとして使う」構造です。Naiaはこの関係を逆転させます — **「AIにOS丸ごと渡す」**
 
-| 既存のアプローチ | 限界 | Naia OS |
+| 既存のアプローチ | 限界 | Naia |
 |-----------------|------|---------|
 | **VS Code拡張** (Copilot, Cline) | IDEを開かないとAIを使えない | IDE不要。常時起動 |
 | **CLIエージェント** (Claude Code, Aider) | ターミナル内でしか動作しない | ファイル、ブラウザ、システム全体を制御 |
@@ -39,9 +39,9 @@ Naia OSは、3DアバターAIが常駐するLinuxデスクトップアプリで�
 
 ## OpenClawとの関係
 
-Naia OSは[OpenClaw](https://github.com/openclaw-ai/openclaw)エコシステムの上に構築されていますが、根本的に異なる製品です。
+Naiaは[OpenClaw](https://github.com/openclaw-ai/openclaw)エコシステムの上に構築されていますが、根本的に異なる製品です。
 
-| | OpenClaw | Naia OS |
+| | OpenClaw | Naia |
 |---|---------|---------|
 | **形態** | CLIデーモン + ターミナル | デスクトップアプリ + 3Dアバター |
 | **対象** | 開発者 | 誰でも |
@@ -58,7 +58,7 @@ Naia OSは[OpenClaw](https://github.com/openclaw-ai/openclaw)エコシステム�
 
 **OpenClawから取り入れたもの：** デーモンアーキテクチャ、ツール実行エンジン、チャネルシステム、スキルエコシステム（5,700+ Clawhubスキル互換）
 
-**Naia OSが新たに構築したもの：** Tauri Shell、VRMアバターシステム、マルチLLMエージェント、感情エンジン、TTS/STT統合、オンボーディングウィザード、コスト追跡、Nextainアカウント連携、メモリシステム（STM/LTM）、セキュリティレイヤー
+**Naiaが新たに構築したもの：** Tauri Shell、VRMアバターシステム、マルチLLMエージェント、感情エンジン、TTS/STT統合、オンボーディングウィザード、コスト追跡、Nextainアカウント連携、メモリシステム（STM/LTM）、セキュリティレイヤー
 
 ## アーキテクチャ
 
@@ -190,7 +190,7 @@ flatpak run io.nextain.naia
 
 ## セキュリティモデル
 
-Naia OSは**多層防御（Defense in Depth）**セキュリティモデルを適用しています：
+Naiaは**多層防御（Defense in Depth）**セキュリティモデルを適用しています：
 
 | レイヤー | 保護手段 |
 |---------|---------|

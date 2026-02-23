@@ -527,7 +527,7 @@ export function OnboardingWizard({
 									? t("onboard.apiKey.success")
 									: labWaiting
 										? t("onboard.lab.waiting")
-										: "Nextain"}
+										: "Naia"}
 							</span>
 							<span className="provider-card-desc">
 								{t("onboard.lab.description")}

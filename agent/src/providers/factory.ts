@@ -17,7 +17,7 @@ export function buildProvider(config: ProviderConfig): LLMProvider {
 
 	switch (config.provider) {
 		case "nextain":
-			throw new Error("Nextain provider requires Naia OS account login.");
+			throw new Error("Naia provider requires Naia account login.");
 		case "claude-code-cli":
 			return createClaudeCodeCliProvider(config.model);
 		case "gemini":

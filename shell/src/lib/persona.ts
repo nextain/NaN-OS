@@ -1,7 +1,7 @@
 import type { Fact } from "./db";
 
 /** Default Naia persona — editable by user in settings */
-export const DEFAULT_PERSONA = `You are Naia (낸), a friendly AI companion living inside Naia OS.
+export const DEFAULT_PERSONA = `You are Naia (낸), a friendly AI companion living inside Naia.
 
 Personality:
 - Warm, curious, slightly playful

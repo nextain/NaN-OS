@@ -91,14 +91,14 @@ describe("SettingsTab", () => {
 		expect(screen.getByLabelText(/^API/i)).toBeDefined();
 	});
 
-	it("replaces API key input with Nextain account UI", () => {
+	it("replaces API key input with Naia account UI", () => {
 		mockInvoke.mockResolvedValue([]);
 		render(<SettingsTab />);
 		const providerSelect = document.getElementById("provider-select") as HTMLSelectElement;
 		fireEvent.change(providerSelect, { target: { value: "nextain" } });
 		expect(screen.queryByLabelText(/^API/i)).toBeNull();
 		expect(
-			screen.getByText("Nextain provider는 API 키 대신 Nextain 계정 로그인을 사용합니다."),
+			screen.getByText("Naia 계정 로그인으로 API 키 없이 사용할 수 있습니다."),
 		).toBeDefined();
 	});
 

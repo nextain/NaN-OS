@@ -7,7 +7,7 @@
  *
  * Verifies:
  *   1. Gateway TTS RPC methods work (status, providers, convert)
- *   2. Nextain provider → always uses Gateway TTS (not Google direct)
+ *   2. Naia provider → always uses Gateway TTS (not Google direct)
  *   3. TTS engine selection logic: openclaw vs "nextain cloud tts" (google)
  *   4. Config save/load for TTS settings
  *
@@ -169,13 +169,13 @@ describe.skipIf(!canRunE2E)("E2E: TTS Settings + Pipeline", () => {
 	});
 
 	// ═══════════════════════════════════════
-	// 5. Nextain provider TTS routing
+	// 5. Naia provider TTS routing
 	// ═══════════════════════════════════════
-	describe("Nextain provider TTS routing", () => {
-		it("Gateway TTS works for Nextain provider (no Google API key needed)", async () => {
+	describe("Naia provider TTS routing", () => {
+		it("Gateway TTS works for Naia provider (no Google API key needed)", async () => {
 			if (!hasMethod("tts.convert")) return;
 
-			// Nextain provider uses Gateway TTS exclusively
+			// Naia provider uses Gateway TTS exclusively
 			// This test verifies that TTS works without any Google API key
 			const result = await convertTts(
 				client,

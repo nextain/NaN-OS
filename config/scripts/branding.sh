@@ -65,3 +65,64 @@ Categories=System;Utility;
 X-KDE-Wayland-VirtualKeyboard=true
 DESKTOP
 fi
+
+# ============================================================
+# Branding: Replace Fedora/Bazzite logos with Naia OS
+# ============================================================
+
+# System pixmaps — symlink Fedora logos to Naia OS
+ln -sf naia-os-logo.png /usr/share/pixmaps/fedora-logo.png
+ln -sf naia-os-logo.png /usr/share/pixmaps/fedora-logo-sprite.png
+ln -sf naia-os-logo.png /usr/share/pixmaps/system-logo-white.png
+ln -sf naia-os-logo-small.png /usr/share/pixmaps/fedora-logo-small.png
+
+# ============================================================
+# KDE Plasma: Set NaiaOS as default wallpaper
+# ============================================================
+mkdir -p /usr/etc/skel/.config
+cat > /usr/etc/skel/.config/plasma-org.kde.plasma.desktop-appletsrc.naia <<'PLASMA'
+[Containments][1][Wallpaper][org.kde.image][General]
+Image=/usr/share/wallpapers/NaiaOS/
+PLASMA
+
+# ============================================================
+# Plymouth: Set Naia as default boot theme
+# ============================================================
+if [ -d /usr/share/plymouth/themes/naia ]; then
+    plymouth-set-default-theme naia 2>/dev/null || \
+        ln -sf /usr/share/plymouth/themes/naia/naia.plymouth /usr/share/plymouth/default.plymouth
+fi
+
+# ============================================================
+# SDDM: Set Naia login background
+# ============================================================
+SDDM_THEME_DIR=""
+# Find active SDDM theme (Bazzite uses breeze or a custom theme)
+for d in /usr/share/sddm/themes/01-breeze-fedora /usr/share/sddm/themes/breeze /usr/share/sddm/themes/breezelight; do
+    if [ -d "$d" ]; then
+        SDDM_THEME_DIR="$d"
+        break
+    fi
+done
+if [ -n "$SDDM_THEME_DIR" ] && [ -f /usr/share/backgrounds/naia-os/login-background.jpg ]; then
+    # Create theme.conf.user to override background
+    cat > "${SDDM_THEME_DIR}/theme.conf.user" <<'SDDMCONF'
+[General]
+background=/usr/share/backgrounds/naia-os/login-background.jpg
+SDDMCONF
+fi
+
+# ============================================================
+# GRUB: Set Naia boot background
+# ============================================================
+if [ -f /usr/share/backgrounds/naia-os/grub-background.jpg ]; then
+    mkdir -p /usr/etc/default
+    # Append GRUB background if not already set
+    if [ -f /usr/etc/default/grub ]; then
+        if ! grep -q 'GRUB_BACKGROUND' /usr/etc/default/grub; then
+            echo 'GRUB_BACKGROUND="/usr/share/backgrounds/naia-os/grub-background.jpg"' >> /usr/etc/default/grub
+        fi
+    else
+        echo 'GRUB_BACKGROUND="/usr/share/backgrounds/naia-os/grub-background.jpg"' > /usr/etc/default/grub
+    fi
+fi

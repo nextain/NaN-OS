@@ -1,6 +1,6 @@
 # Careti에서 가져올 전략
 
-> project-careti 개발 경험과 코드를 Naia OS에 재사용하는 전략
+> project-careti 개발 경험과 코드를 Naia에 재사용하는 전략
 
 ## 직접 재사용 가능한 코드
 
@@ -83,7 +83,7 @@ Naia: shell      → Tauri → agent-core (stdio)
 - 빌드 타임 `__PLATFORM__` 주입
 - 플랫폼별 설정 JSON
 
-**적용:** Naia OS도 향후 Web/Mobile 확장 시 동일 패턴 사용
+**적용:** Naia도 향후 Web/Mobile 확장 시 동일 패턴 사용
 
 ### 7. 메시지 큐 패턴
 
@@ -151,7 +151,7 @@ Naia: shell      → Tauri → agent-core (stdio)
 └── workflows/
 ```
 
-**Naia OS에서의 활용:**
+**Naia에서의 활용:**
 - Alpha의 프로젝트/작업 컨텍스트 관리에 동일 패턴 적용
 - **Alpha가 새 프로젝트를 만들 때** 자동으로 `.agents/context/` 구조 생성
 - 사용자 문서와 AI 컨텍스트를 1:1 미러링
@@ -166,7 +166,7 @@ Naia: shell      → Tauri → agent-core (stdio)
 트리거: 규칙 변경 → 전파: .users/ 미러
 ```
 
-**Naia OS에서의 활용:**
+**Naia에서의 활용:**
 - Alpha가 파일/설정을 변경하면 관련 컨텍스트 자동 업데이트
 - Skills 추가/제거 시 관련 문서 자동 갱신
 - **Alpha 스스로가 자신의 컨텍스트를 관리**
@@ -175,7 +175,7 @@ Naia: shell      → Tauri → agent-core (stdio)
 
 **출처:** 각 서브모듈의 진입점 파일
 
-**Naia OS에서의 활용:**
+**Naia에서의 활용:**
 - 각 프로젝트/작업 디렉토리에 Alpha용 컨텍스트 파일
 - Alpha가 새 디렉토리에 진입 시 해당 컨텍스트 자동 로드
 - 사용자가 "이 프로젝트는 이렇게 작업해줘"를 파일로 지시 가능
@@ -191,7 +191,7 @@ done/    → 완료
 파일명: YYYYMMDD-{번호}-{주제}.md
 ```
 
-**Naia OS에서의 활용:**
+**Naia에서의 활용:**
 - Alpha의 작업 이력을 동일 포맷으로 자동 기록
 - 사용자가 "어제 뭐 했어?" → 작업 로그에서 조회
 - 일간/주간/월간 요약 자동 생성
@@ -200,7 +200,7 @@ done/    → 완료
 
 ```
 기존 Careti: 개발자가 컨텍스트 파일을 수동으로 관리
-Naia OS: Alpha가 자신의 컨텍스트를 스스로 관리
+Naia: Alpha가 자신의 컨텍스트를 스스로 관리
 
 - 새 작업 시작 → 작업 로그 자동 생성
 - 프로젝트 구조 변경 → 컨텍스트 자동 갱신 (cascade)
@@ -230,11 +230,11 @@ Alpha는 **자기가 아는 것을 정리하고, 업데이트하고, 활용하�
 방법 1: 코드 복사 후 정리 (권장)
   - Careti에서 필요한 파일만 복사
   - Cline/VS Code 의존성 제거
-  - Naia OS 구조에 맞게 리팩토링
+  - Naia 구조에 맞게 리팩토링
 
 방법 2: 패키지로 분리
   - 공통 코드를 npm 패키지로 추출
-  - Careti와 Naia OS 모두에서 사용
+  - Careti와 Naia 모두에서 사용
   - 유지보수 비용은 높아짐
 
 방법 3: 참조만 (새로 구현)

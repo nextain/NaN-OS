@@ -389,7 +389,7 @@ phases:
   phase_7:
     name: "OS ISO build"
     timeline: "Week 11"
-    deliverable: "Naia OS ISO: USB boot → install → complete AI OS"
+    deliverable: "Naia ISO: USB boot → install → complete AI OS"
     status: "pending"
     tasks:
       step_7_1:

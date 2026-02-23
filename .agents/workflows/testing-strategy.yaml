@@ -1,5 +1,5 @@
 description: |
-  Testing strategy and lessons learned for Naia OS.
+  Testing strategy and lessons learned for Naia.
   Covers test pyramid, tooling, verification checklist, and anti-patterns discovered during development.
 
 mirror: ".users/workflows/testing-strategy.md"

@@ -1,6 +1,6 @@
 [English](../README.md) | [한국어](README.ko.md) | [日本語](README.ja.md) | [中文](README.zh.md) | [Français](README.fr.md) | [Deutsch](README.de.md) | [Русский](README.ru.md) | [Español](README.es.md) | [Português](README.pt.md) | [Tiếng Việt](README.vi.md) | [Bahasa Indonesia](README.id.md) | [العربية](README.ar.md) | [हिन्दी](README.hi.md) | [বাংলা](README.bn.md)
 
-# Naia OS
+# Naia
 
 **The Next Generation AI OS** — AI虚拟形象常驻的个人桌面操作系统
 
@@ -8,9 +8,9 @@
 
 > "操作系统本身就是AI的工具。AI不是运行在操作系统之上，而是AI控制着操作系统。"
 
-## 什么是Naia OS？
+## 什么是Naia？
 
-Naia OS是一款3D虚拟形象AI常驻的Linux桌面应用。通过聊天和语音与AI对话，AI可以直接执行文件管理、终端命令、网页搜索和代码编写。即使不是开发者，任何人都可以拥有自己的AI代理。
+Naia是一款3D虚拟形象AI常驻的Linux桌面应用。通过聊天和语音与AI对话，AI可以直接执行文件管理、终端命令、网页搜索和代码编写。即使不是开发者，任何人都可以拥有自己的AI代理。
 
 ### 核心功能
 
@@ -25,11 +25,11 @@ Naia OS是一款3D虚拟形象AI常驻的Linux桌面应用。通过聊天和语�
 - **Nextain账户** — 无需API密钥，基于积分即可立即使用
 - **个性化** — 自定义名称、性格、语气、虚拟形象和主题（8种）
 
-## 为什么选择Naia OS？
+## 为什么选择Naia？
 
-现有的AI工具遵循"人类将AI作为工具使用"的范式。Naia OS颠覆了这种关系 — **"把整个操作系统交给AI。"**
+现有的AI工具遵循"人类将AI作为工具使用"的范式。Naia颠覆了这种关系 — **"把整个操作系统交给AI。"**
 
-| 现有方案 | 局限性 | Naia OS |
+| 现有方案 | 局限性 | Naia |
 |---------|--------|---------|
 | **VS Code扩展** (Copilot, Cline) | 必须打开IDE才能使用AI | 无需IDE。始终在线 |
 | **CLI代理** (Claude Code, Aider) | 仅在终端内工作 | 控制文件、浏览器和整个系统 |
@@ -39,9 +39,9 @@ Naia OS是一款3D虚拟形象AI常驻的Linux桌面应用。通过聊天和语�
 
 ## 与OpenClaw的关系
 
-Naia OS构建于[OpenClaw](https://github.com/openclaw-ai/openclaw)生态系统之上，但是一个根本不同的产品。
+Naia构建于[OpenClaw](https://github.com/openclaw-ai/openclaw)生态系统之上，但是一个根本不同的产品。
 
-| | OpenClaw | Naia OS |
+| | OpenClaw | Naia |
 |---|---------|---------|
 | **形态** | CLI守护进程 + 终端 | 桌面应用 + 3D虚拟形象 |
 | **目标用户** | 开发者 | 所有人 |
@@ -58,7 +58,7 @@ Naia OS构建于[OpenClaw](https://github.com/openclaw-ai/openclaw)生态系统�
 
 **从OpenClaw继承的：** 守护进程架构、工具执行引擎、频道系统、技能生态系统（兼容5,700+ Clawhub技能）
 
-**Naia OS全新构建的：** Tauri Shell、VRM虚拟形象系统、多LLM代理、情感引擎、TTS/STT集成、引导向导、费用追踪、Nextain账户集成、记忆系统（STM/LTM）、安全层
+**Naia全新构建的：** Tauri Shell、VRM虚拟形象系统、多LLM代理、情感引擎、TTS/STT集成、引导向导、费用追踪、Nextain账户集成、记忆系统（STM/LTM）、安全层
 
 ## 架构
 
@@ -190,7 +190,7 @@ flatpak run io.nextain.naia
 
 ## 安全模型
 
-Naia OS采用**纵深防御（Defense in Depth）**安全模型：
+Naia采用**纵深防御（Defense in Depth）**安全模型：
 
 | 层级 | 保护措施 |
 |------|---------|

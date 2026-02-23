@@ -1,4 +1,4 @@
-name: Build Naia OS
+name: Build Naia
 
 on:
   push:

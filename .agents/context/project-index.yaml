@@ -1,4 +1,4 @@
-description: Naia OS context index. Maps AI contexts to human docs.
+description: Naia context index. Maps AI contexts to human docs.
 
 sot: .agents/context/agents-rules.json
 

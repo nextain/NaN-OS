@@ -1,6 +1,6 @@
 [English](../README.md) | [한국어](README.ko.md) | [日本語](README.ja.md) | [中文](README.zh.md) | [Français](README.fr.md) | [Deutsch](README.de.md) | [Русский](README.ru.md) | [Español](README.es.md) | [Português](README.pt.md) | [Tiếng Việt](README.vi.md) | [Bahasa Indonesia](README.id.md) | [العربية](README.ar.md) | [हिन्दी](README.hi.md) | [বাংলা](README.bn.md)
 
-# Naia OS
+# Naia
 
 **The Next Generation AI OS** — He dieu hanh desktop ca nhan noi avatar AI sinh song
 
@@ -8,9 +8,9 @@
 
 > "Ban than he dieu hanh la cong cu cua AI. AI khong chay tren he dieu hanh — AI dieu khien he dieu hanh."
 
-## Naia OS la gi?
+## Naia la gi?
 
-Naia OS la mot ung dung desktop Linux noi avatar AI 3D thuong tru. Tro chuyen voi AI qua chat va giong noi, va AI truc tiep thuc hien quan ly tep, lenh terminal, tim kiem web va viet ma. Bat ky ai — khong chi lap trinh vien — deu co the co tro ly AI rieng cua minh.
+Naia la mot ung dung desktop Linux noi avatar AI 3D thuong tru. Tro chuyen voi AI qua chat va giong noi, va AI truc tiep thuc hien quan ly tep, lenh terminal, tim kiem web va viet ma. Bat ky ai — khong chi lap trinh vien — deu co the co tro ly AI rieng cua minh.
 
 ### Tinh nang cot loi
 
@@ -25,11 +25,11 @@ Naia OS la mot ung dung desktop Linux noi avatar AI 3D thuong tru. Tro chuyen vo
 - **Tai khoan Nextain** — Bat dau ngay voi su dung dua tren tin dung, khong can khoa API
 - **Ca nhan hoa** — Tuy chinh ten, tinh cach, phong cach noi, avatar va chu de (8 loai)
 
-## Tai sao chon Naia OS?
+## Tai sao chon Naia?
 
-Cac cong cu AI hien tai theo mo hinh "con nguoi su dung AI nhu cong cu". Naia OS dao nguoc moi quan he nay — **"Trao cho AI toan bo he dieu hanh."**
+Cac cong cu AI hien tai theo mo hinh "con nguoi su dung AI nhu cong cu". Naia dao nguoc moi quan he nay — **"Trao cho AI toan bo he dieu hanh."**
 
-| Cach tiep can hien tai | Han che | Naia OS |
+| Cach tiep can hien tai | Han che | Naia |
 |-----------------------|---------|---------|
 | **Mo rong VS Code** (Copilot, Cline) | Phai mo IDE de su dung AI | Khong can IDE. Luon bat |
 | **Agent CLI** (Claude Code, Aider) | Chi hoat dong trong terminal | Dieu khien tep, trinh duyet, toan bo he thong |
@@ -39,9 +39,9 @@ Cac cong cu AI hien tai theo mo hinh "con nguoi su dung AI nhu cong cu". Naia OS
 
 ## Moi quan he voi OpenClaw
 
-Naia OS duoc xay dung tren he sinh thai [OpenClaw](https://github.com/openclaw-ai/openclaw), nhung la mot san pham khac biet ve ban chat.
+Naia duoc xay dung tren he sinh thai [OpenClaw](https://github.com/openclaw-ai/openclaw), nhung la mot san pham khac biet ve ban chat.
 
-| | OpenClaw | Naia OS |
+| | OpenClaw | Naia |
 |---|---------|---------|
 | **Hinh thuc** | Daemon CLI + terminal | Ung dung desktop + avatar 3D |
 | **Doi tuong** | Lap trinh vien | Tat ca moi nguoi |
@@ -58,7 +58,7 @@ Naia OS duoc xay dung tren he sinh thai [OpenClaw](https://github.com/openclaw-a
 
 **Nhung gi chung toi lay tu OpenClaw:** Kien truc daemon, dong co thuc thi cong cu, he thong kenh, he sinh thai ky nang (tuong thich 5.700+ ky nang Clawhub)
 
-**Nhung gi Naia OS xay dung moi:** Tauri Shell, he thong avatar VRM, agent da LLM, dong co cam xuc, tich hop TTS/STT, tro ly onboarding, theo doi chi phi, tich hop tai khoan Nextain, he thong bo nho (STM/LTM), cac lop bao mat
+**Nhung gi Naia xay dung moi:** Tauri Shell, he thong avatar VRM, agent da LLM, dong co cam xuc, tich hop TTS/STT, tro ly onboarding, theo doi chi phi, tich hop tai khoan Nextain, he thong bo nho (STM/LTM), cac lop bao mat
 
 ## Kien truc
 
@@ -190,7 +190,7 @@ flatpak run io.nextain.naia
 
 ## Mo hinh bao mat
 
-Naia OS ap dung mo hinh bao mat **Phong thu theo chieu sau (Defense in Depth)**:
+Naia ap dung mo hinh bao mat **Phong thu theo chieu sau (Defense in Depth)**:
 
 | Lop | Bao ve |
 |-----|--------|

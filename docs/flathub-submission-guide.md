@@ -1,6 +1,6 @@
 # Flathub 등록 가이드
 
-Naia OS (io.nextain.naia) Flatpak 앱을 Flathub에 등록하는 절차.
+Naia (io.nextain.naia) Flatpak 앱을 Flathub에 등록하는 절차.
 
 ## 사전 조건
 
@@ -77,14 +77,14 @@ io.nextain.naia/
 
 ```bash
 git add io.nextain.naia/
-git commit -m "Add io.nextain.naia (Naia OS)"
+git commit -m "Add io.nextain.naia (Naia)"
 git push origin io.nextain.naia
 
 gh pr create \
   --repo flathub/flathub \
   --base new-pr \
   --title "Add io.nextain.naia" \
-  --body "## New App: Naia OS
+  --body "## New App: Naia
 
 Personal AI avatar desktop shell built with Tauri 2.
 

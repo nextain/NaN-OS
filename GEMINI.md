@@ -1,4 +1,4 @@
-# Naia OS — Gemini CLI Entry Point
+# Naia — Gemini CLI Entry Point
 
 ## 필수 읽기 (세션 시작 시)
 

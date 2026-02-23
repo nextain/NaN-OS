@@ -1,0 +1,34 @@
+// Naia OS Plymouth boot splash script
+
+// Load splash logo
+logo_image = Image("naia-splash.png");
+logo_sprite = Sprite(logo_image);
+
+// Center the logo
+logo_sprite.SetX(Window.GetWidth() / 2 - logo_image.GetWidth() / 2);
+logo_sprite.SetY(Window.GetHeight() / 2 - logo_image.GetHeight() / 2);
+
+// Simple spinner animation
+spinner_count = 0;
+
+fun refresh_callback() {
+    spinner_count++;
+    // Subtle pulse effect via opacity
+    opacity = Math.Abs(Math.Sin(spinner_count * 0.05)) * 0.3 + 0.7;
+    logo_sprite.SetOpacity(opacity);
+}
+
+Plymouth.SetRefreshFunction(refresh_callback);
+
+// Password prompt handling
+fun display_password_callback(prompt, bullets) {
+    // Use default password dialog
+}
+
+Plymouth.SetDisplayPasswordFunction(display_password_callback);
+
+// Message handling
+fun message_callback(text) {
+}
+
+Plymouth.SetMessageFunction(message_callback);

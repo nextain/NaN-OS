@@ -65,13 +65,13 @@ describe("skill_voicewake", () => {
 
 	it("sets new triggers", async () => {
 		const result = await skill.execute(
-			{ action: "set", triggers: ["낸", "Nextain", "hey alpha"] },
+			{ action: "set", triggers: ["낸", "Naia", "hey alpha"] },
 			{ gateway: client },
 		);
 
 		expect(result.success).toBe(true);
 		const parsed = JSON.parse(result.output);
-		expect(parsed.triggers).toEqual(["낸", "Nextain", "hey alpha"]);
+		expect(parsed.triggers).toEqual(["낸", "Naia", "hey alpha"]);
 	});
 
 	it("requires triggers for set action", async () => {

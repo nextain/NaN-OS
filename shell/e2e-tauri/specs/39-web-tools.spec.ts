@@ -40,13 +40,13 @@ describe("39 — web tools", () => {
 
 	it("should perform a web search via web_search tool", async () => {
 		await sendMessage(
-			"'Naia OS' 키워드로 웹 검색해줘. web_search 도구를 사용해.",
+			"'Naia' 키워드로 웹 검색해줘. web_search 도구를 사용해.",
 		);
 
 		const text = await getLastAssistantMessage();
 		await assertSemantic(
 			text,
-			"'Naia OS' 키워드로 웹 검색해줘 (web_search)",
+			"'Naia' 키워드로 웹 검색해줘 (web_search)",
 			"AI가 web_search으로 웹 검색을 실행했는가? '도구를 찾을 수 없다/사용할 수 없다'면 FAIL. 검색 결과를 보여주거나 검색 시도에 대해 안내하면 PASS",
 		);
 	});

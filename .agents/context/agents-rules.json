@@ -1,6 +1,6 @@
 {
 	"project_identity": {
-		"name": "Naia OS",
+		"name": "Naia",
 		"nature": "Bazzite-based personal AI OS with virtual avatar",
 		"philosophy": "OS itself is the AI's tool. Assemble, don't build from scratch.",
 		"core_concept": "USB boot → Naia avatar greets → AI controls OS"

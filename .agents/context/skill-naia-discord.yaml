@@ -1,4 +1,4 @@
-description: skill_naia_discord — Discord messaging skill for Naia OS agent.
+description: skill_naia_discord — Discord messaging skill for Naia agent.
 
 actions:
   send:

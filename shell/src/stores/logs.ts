@@ -21,3 +21,6 @@ export const useLogsStore = create<LogsStore>((set) => ({
 	setTailing: (tailing) => set({ isTailing: tailing }),
 	clear: () => set({ entries: [] }),
 }));
+
+// Expose for Playwright screenshot capture & dev tools
+if (typeof window !== "undefined") (window as any).useLogsStore = useLogsStore;

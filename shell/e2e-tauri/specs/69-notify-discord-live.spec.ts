@@ -69,7 +69,7 @@ describe("69 — Discord Notify (Live)", () => {
 
 	it("should send a Discord notification successfully", async () => {
 		const text = await sendAndResolveResult(
-			"Discord로 'Nextain E2E 테스트 알림입니다 🎉' 메시지를 보내줘. skill_notify_discord 도구를 반드시 사용해.",
+			"Discord로 'Naia E2E 테스트 알림입니다 🎉' 메시지를 보내줘. skill_notify_discord 도구를 반드시 사용해.",
 		);
 
 		expect(text).not.toMatch(/\[오류\]|API key not valid|Bad Request/i);

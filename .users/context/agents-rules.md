@@ -1,10 +1,10 @@
-# Naia OS 프로젝트 규칙
+# Naia 프로젝트 규칙
 
 > SoT: `.agents/context/agents-rules.json`의 한국어 미러
 
 ## 프로젝트 정체성
 
-- **이름**: Naia OS
+- **이름**: Naia
 - **성격**: Bazzite 기반 개인 AI OS, 가상 아바타 탑재
 - **철학**: OS 자체가 AI의 도구. 처음부터 만들지 않고 조립한다.
 - **핵심**: USB 부팅 → Alpha 아바타가 맞이 → AI가 OS를 제어

@@ -59,7 +59,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: iso-${{ github.run_number }}
-          name: "Naia OS ISO (Build #${{ github.run_number }})"
+          name: "Naia ISO (Build #${{ github.run_number }})"
           body: |
             ISO is available as a GitHub Actions Artifact (too large for Release upload).
             Download from: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}

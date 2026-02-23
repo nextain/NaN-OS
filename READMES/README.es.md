@@ -1,6 +1,6 @@
 [English](../README.md) | [한국어](README.ko.md) | [日本語](README.ja.md) | [中文](README.zh.md) | [Français](README.fr.md) | [Deutsch](README.de.md) | [Русский](README.ru.md) | [Español](README.es.md) | [Português](README.pt.md) | [Tiếng Việt](README.vi.md) | [Bahasa Indonesia](README.id.md) | [العربية](README.ar.md) | [हिन्दी](README.hi.md) | [বাংলা](README.bn.md)
 
-# Naia OS
+# Naia
 
 **The Next Generation AI OS** — Un sistema operativo de escritorio personal donde vive un avatar de IA
 
@@ -8,9 +8,9 @@
 
 > "El SO en si es la herramienta de la IA. La IA no se ejecuta sobre el SO — la IA controla el SO."
 
-## Que es Naia OS?
+## Que es Naia?
 
-Naia OS es una aplicacion de escritorio Linux donde reside permanentemente un avatar de IA 3D. Habla con la IA a traves de chat y voz, y ella ejecuta directamente la gestion de archivos, comandos de terminal, busquedas web y escritura de codigo. Cualquier persona — no solo desarrolladores — puede tener su propio agente de IA.
+Naia es una aplicacion de escritorio Linux donde reside permanentemente un avatar de IA 3D. Habla con la IA a traves de chat y voz, y ella ejecuta directamente la gestion de archivos, comandos de terminal, busquedas web y escritura de codigo. Cualquier persona — no solo desarrolladores — puede tener su propio agente de IA.
 
 ### Funciones principales
 
@@ -25,11 +25,11 @@ Naia OS es una aplicacion de escritorio Linux donde reside permanentemente un av
 - **Cuenta Nextain** — Comienza inmediatamente con uso basado en creditos, sin necesidad de clave API
 - **Personalizacion** — Personaliza nombre, personalidad, estilo de habla, avatar y tema (8 tipos)
 
-## Por que Naia OS?
+## Por que Naia?
 
-Las herramientas de IA existentes siguen el paradigma "los humanos usan la IA como herramienta". Naia OS invierte esta relacion — **"Dale a la IA el SO completo."**
+Las herramientas de IA existentes siguen el paradigma "los humanos usan la IA como herramienta". Naia invierte esta relacion — **"Dale a la IA el SO completo."**
 
-| Enfoque existente | Limitacion | Naia OS |
+| Enfoque existente | Limitacion | Naia |
 |-------------------|------------|---------|
 | **Extensiones VS Code** (Copilot, Cline) | Hay que abrir el IDE para usar IA | No necesita IDE. Siempre encendido |
 | **Agentes CLI** (Claude Code, Aider) | Solo funciona dentro del terminal | Controla archivos, navegador, todo el sistema |
@@ -39,9 +39,9 @@ Las herramientas de IA existentes siguen el paradigma "los humanos usan la IA co
 
 ## Relacion con OpenClaw
 
-Naia OS esta construido sobre el ecosistema [OpenClaw](https://github.com/openclaw-ai/openclaw), pero es un producto fundamentalmente diferente.
+Naia esta construido sobre el ecosistema [OpenClaw](https://github.com/openclaw-ai/openclaw), pero es un producto fundamentalmente diferente.
 
-| | OpenClaw | Naia OS |
+| | OpenClaw | Naia |
 |---|---------|---------|
 | **Forma** | Demonio CLI + terminal | Aplicacion de escritorio + avatar 3D |
 | **Objetivo** | Desarrolladores | Todos |
@@ -58,7 +58,7 @@ Naia OS esta construido sobre el ecosistema [OpenClaw](https://github.com/opencl
 
 **Lo que tomamos de OpenClaw:** Arquitectura de demonio, motor de ejecucion de herramientas, sistema de canales, ecosistema de habilidades (compatible con 5,700+ habilidades Clawhub)
 
-**Lo que Naia OS construyo nuevo:** Tauri Shell, sistema de avatar VRM, agente multi-LLM, motor de emociones, integracion TTS/STT, asistente de onboarding, seguimiento de costos, integracion de cuenta Nextain, sistema de memoria (STM/LTM), capas de seguridad
+**Lo que Naia construyo nuevo:** Tauri Shell, sistema de avatar VRM, agente multi-LLM, motor de emociones, integracion TTS/STT, asistente de onboarding, seguimiento de costos, integracion de cuenta Nextain, sistema de memoria (STM/LTM), capas de seguridad
 
 ## Arquitectura
 
@@ -190,7 +190,7 @@ flatpak run io.nextain.naia
 
 ## Modelo de seguridad
 
-Naia OS aplica un modelo de seguridad de **Defensa en profundidad (Defense in Depth)**:
+Naia aplica un modelo de seguridad de **Defensa en profundidad (Defense in Depth)**:
 
 | Capa | Proteccion |
 |------|-----------|

@@ -14,7 +14,7 @@ BlueBuild + GitHub Actions는 push할 때마다 자동으로 OS 이미지를 빌
 
 ## Phase 0: 배포 파이프라인 (Day 1-3)
 
-> **결과물**: GitHub에 push하면 Naia OS 이미지가 자동 빌드됨
+> **결과물**: GitHub에 push하면 Naia 이미지가 자동 빌드됨
 
 ### 0-1. BlueBuild 템플릿 세팅
 
@@ -60,7 +60,7 @@ git push → GitHub Actions → ghcr.io/luke-n-alpha/naia-os:latest
 ✅ USB에 구워서 부팅 확인 (아직 Bazzite 그대로)
 ```
 
-**이 시점에 공유 가능:** "Naia OS 첫 이미지 나왔다" (아직은 Bazzite + Node.js뿐이지만)
+**이 시점에 공유 가능:** "Naia 첫 이미지 나왔다" (아직은 Bazzite + Node.js뿐이지만)
 
 ---
 
@@ -613,7 +613,7 @@ interface MemoryProcessor {
 
 ## Phase 7: OS ISO 빌드 (Week 11)
 
-> **결과물**: USB 부팅 → 설치 가능한 완전한 Naia OS
+> **결과물**: USB 부팅 → 설치 가능한 완전한 Naia
 
 ### 7-1. Recipe에 Tauri 앱 포함
 
@@ -629,7 +629,7 @@ interface MemoryProcessor {
 
 ### Phase 7 완료 = 완전한 AI OS ISO
 ```
-✅ USB 부팅 → Naia OS 설치
+✅ USB 부팅 → Naia 설치
 ✅ Naia Shell 자동 시작
 ✅ Nextain 로그인 또는 로컬 모드 선택
 ```

@@ -106,7 +106,7 @@ describe("02 — Configure Settings", () => {
 		const hasLabSection = await browser.execute(() => {
 			const dividers = document.querySelectorAll(".settings-section-divider");
 			return Array.from(dividers).some((d) =>
-				/Naia OS|Nextain|Lab|계정|Account/i.test(d.textContent ?? ""),
+				/Naia|Lab|계정|Account/i.test(d.textContent ?? ""),
 			);
 		});
 		expect(hasLabSection).toBe(true);

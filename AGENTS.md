@@ -1,4 +1,4 @@
-# Naia OS — Agent Entry Point
+# Naia — Agent Entry Point
 
 ## Context Loading (MUST read first)
 

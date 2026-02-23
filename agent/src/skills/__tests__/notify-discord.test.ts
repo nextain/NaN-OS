@@ -84,7 +84,7 @@ describe("skill_notify_discord", () => {
 			.mockResolvedValueOnce(new Response("ok", { status: 200 }));
 
 		const result = await skill.execute(
-			{ message: "Alert!", username: "NextainBot" },
+			{ message: "Alert!", username: "NaiaBot" },
 			{},
 		);
 		expect(result.success).toBe(true);
@@ -92,7 +92,7 @@ describe("skill_notify_discord", () => {
 		const call = fetchSpy.mock.calls[0];
 		const body = JSON.parse(call[1]!.body as string);
 		expect(body.content).toBe("Alert!");
-		expect(body.username).toBe("NextainBot");
+		expect(body.username).toBe("NaiaBot");
 	});
 
 	it("handles webhook 500 error", async () => {

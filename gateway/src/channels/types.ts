@@ -2,7 +2,7 @@
  * Channel adapter interface for external messaging platforms.
  *
  * Each adapter bridges an external platform (Discord, Google Chat, etc.)
- * to the Nextain Agent via the OpenClaw Gateway.
+ * to the Naia Agent via the OpenClaw Gateway.
  *
  * Security: External channels are restricted to Tier 0-1 operations only.
  * No file writes, command execution, or admin actions.

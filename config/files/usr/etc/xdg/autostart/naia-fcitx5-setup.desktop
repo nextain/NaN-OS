@@ -1,0 +1,8 @@
+[Desktop Entry]
+Name=Naia Fcitx5 Setup
+Comment=Configure fcitx5 as default virtual keyboard on first login
+Exec=/usr/bin/naia-fcitx5-setup
+Type=Application
+X-GNOME-Autostart-enabled=true
+X-KDE-autostart-after=panel
+NoDisplay=true

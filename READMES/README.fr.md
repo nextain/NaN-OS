@@ -1,6 +1,6 @@
 [English](../README.md) | [한국어](README.ko.md) | [日本語](README.ja.md) | [中文](README.zh.md) | [Français](README.fr.md) | [Deutsch](README.de.md) | [Русский](README.ru.md) | [Español](README.es.md) | [Português](README.pt.md) | [Tiếng Việt](README.vi.md) | [Bahasa Indonesia](README.id.md) | [العربية](README.ar.md) | [हिन्दी](README.hi.md) | [বাংলা](README.bn.md)
 
-# Naia OS
+# Naia
 
 **The Next Generation AI OS** — Un systeme d'exploitation de bureau personnel ou vit un avatar IA
 
@@ -8,9 +8,9 @@
 
 > "L'OS lui-meme est l'outil de l'IA. L'IA ne s'execute pas au-dessus de l'OS — l'IA controle l'OS."
 
-## Qu'est-ce que Naia OS ?
+## Qu'est-ce que Naia ?
 
-Naia OS est une application de bureau Linux dans laquelle reside un avatar IA 3D. Communiquez avec l'IA par chat et voix, et elle execute directement la gestion de fichiers, les commandes terminal, les recherches web et l'ecriture de code. Tout le monde — pas seulement les developpeurs — peut avoir son propre agent IA.
+Naia est une application de bureau Linux dans laquelle reside un avatar IA 3D. Communiquez avec l'IA par chat et voix, et elle execute directement la gestion de fichiers, les commandes terminal, les recherches web et l'ecriture de code. Tout le monde — pas seulement les developpeurs — peut avoir son propre agent IA.
 
 ### Fonctionnalites principales
 
@@ -25,11 +25,11 @@ Naia OS est une application de bureau Linux dans laquelle reside un avatar IA 3D
 - **Compte Nextain** — Demarrez immediatement avec une utilisation basee sur les credits, sans cle API
 - **Personnalisation** — Personnalisez le nom, la personnalite, le style de parole, l'avatar et le theme (8 types)
 
-## Pourquoi Naia OS ?
+## Pourquoi Naia ?
 
-Les outils IA existants suivent le paradigme "les humains utilisent l'IA comme outil". Naia OS inverse cette relation — **"Donner tout l'OS a l'IA."**
+Les outils IA existants suivent le paradigme "les humains utilisent l'IA comme outil". Naia inverse cette relation — **"Donner tout l'OS a l'IA."**
 
-| Approche existante | Limitation | Naia OS |
+| Approche existante | Limitation | Naia |
 |-------------------|------------|---------|
 | **Extensions VS Code** (Copilot, Cline) | Il faut ouvrir l'IDE pour utiliser l'IA | Pas besoin d'IDE. Toujours actif |
 | **Agents CLI** (Claude Code, Aider) | Fonctionne uniquement dans le terminal | Controle les fichiers, le navigateur, tout le systeme |
@@ -39,9 +39,9 @@ Les outils IA existants suivent le paradigme "les humains utilisent l'IA comme o
 
 ## Relation avec OpenClaw
 
-Naia OS est construit sur l'ecosysteme [OpenClaw](https://github.com/openclaw-ai/openclaw), mais c'est un produit fondamentalement different.
+Naia est construit sur l'ecosysteme [OpenClaw](https://github.com/openclaw-ai/openclaw), mais c'est un produit fondamentalement different.
 
-| | OpenClaw | Naia OS |
+| | OpenClaw | Naia |
 |---|---------|---------|
 | **Forme** | Daemon CLI + terminal | Application de bureau + avatar 3D |
 | **Cible** | Developpeurs | Tout le monde |
@@ -58,7 +58,7 @@ Naia OS est construit sur l'ecosysteme [OpenClaw](https://github.com/openclaw-ai
 
 **Ce que nous avons pris d'OpenClaw :** Architecture daemon, moteur d'execution d'outils, systeme de canaux, ecosysteme de competences (compatible avec 5 700+ competences Clawhub)
 
-**Ce que Naia OS a construit de nouveau :** Tauri Shell, systeme d'avatar VRM, agent multi-LLM, moteur d'emotions, integration TTS/STT, assistant d'onboarding, suivi des couts, integration du compte Nextain, systeme de memoire (STM/LTM), couches de securite
+**Ce que Naia a construit de nouveau :** Tauri Shell, systeme d'avatar VRM, agent multi-LLM, moteur d'emotions, integration TTS/STT, assistant d'onboarding, suivi des couts, integration du compte Nextain, systeme de memoire (STM/LTM), couches de securite
 
 ## Architecture
 
@@ -190,7 +190,7 @@ flatpak run io.nextain.naia
 
 ## Modele de securite
 
-Naia OS applique un modele de securite **Defense en profondeur (Defense in Depth)** :
+Naia applique un modele de securite **Defense en profondeur (Defense in Depth)** :
 
 | Couche | Protection |
 |--------|-----------|

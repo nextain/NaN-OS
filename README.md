@@ -1,6 +1,6 @@
 [English](README.md) | [한국어](READMES/README.ko.md) | [日本語](READMES/README.ja.md) | [中文](READMES/README.zh.md) | [Français](READMES/README.fr.md) | [Deutsch](READMES/README.de.md) | [Русский](READMES/README.ru.md) | [Español](READMES/README.es.md) | [Português](READMES/README.pt.md) | [Tiếng Việt](READMES/README.vi.md) | [Bahasa Indonesia](READMES/README.id.md) | [العربية](READMES/README.ar.md) | [हिन्दी](READMES/README.hi.md) | [বাংলা](READMES/README.bn.md)
 
-# Naia OS
+# Naia
 
 **The Next Generation AI OS** — A personal desktop operating system where an AI avatar lives
 
@@ -8,9 +8,9 @@
 
 > "The OS itself is the AI's tool. The AI doesn't run on top of the OS — the AI controls the OS."
 
-## What is Naia OS?
+## What is Naia?
 
-Naia OS is a Linux desktop app where a 3D avatar AI resides. Talk to the AI through chat and voice, and it directly performs file management, terminal commands, web searches, and code writing. Anyone — not just developers — can have their own AI agent.
+Naia is a Linux desktop app where a 3D avatar AI resides. Talk to the AI through chat and voice, and it directly performs file management, terminal commands, web searches, and code writing. Anyone — not just developers — can have their own AI agent.
 
 ### Core Features
 
@@ -25,11 +25,11 @@ Naia OS is a Linux desktop app where a 3D avatar AI resides. Talk to the AI thro
 - **Nextain Account** — Start immediately with credit-based usage, no API key needed
 - **Personalization** — Customize name, personality, speech style, avatar, and theme (8 types)
 
-## Why Naia OS?
+## Why Naia?
 
-Existing AI tools follow a "humans use AI as a tool" paradigm. Naia OS flips this relationship — **"Give the AI the entire OS."**
+Existing AI tools follow a "humans use AI as a tool" paradigm. Naia flips this relationship — **"Give the AI the entire OS."**
 
-| Existing Approach | Limitation | Naia OS |
+| Existing Approach | Limitation | Naia |
 |-------------------|------------|---------|
 | **VS Code Extensions** (Copilot, Cline) | Must open IDE to use AI | No IDE needed. Always on |
 | **CLI Agents** (Claude Code, Aider) | Only works inside terminal | Controls files, browser, entire system |
@@ -39,9 +39,9 @@ Existing AI tools follow a "humans use AI as a tool" paradigm. Naia OS flips thi
 
 ## Relationship with OpenClaw
 
-Naia OS is built on top of the [OpenClaw](https://github.com/openclaw-ai/openclaw) ecosystem, but it is a fundamentally different product.
+Naia is built on top of the [OpenClaw](https://github.com/openclaw-ai/openclaw) ecosystem, but it is a fundamentally different product.
 
-| | OpenClaw | Naia OS |
+| | OpenClaw | Naia |
 |---|---------|---------|
 | **Form** | CLI daemon + terminal | Desktop app + 3D avatar |
 | **Target** | Developers | Everyone |
@@ -58,7 +58,7 @@ Naia OS is built on top of the [OpenClaw](https://github.com/openclaw-ai/opencla
 
 **What we took from OpenClaw:** Daemon architecture, tool execution engine, channel system, skill ecosystem (5,700+ Clawhub skill compatible)
 
-**What Naia OS built new:** Tauri Shell, VRM avatar system, multi-LLM agent, emotion engine, TTS/STT integration, onboarding wizard, cost tracking, Nextain account integration, memory system (STM/LTM), security layers
+**What Naia built new:** Tauri Shell, VRM avatar system, multi-LLM agent, emotion engine, TTS/STT integration, onboarding wizard, cost tracking, Nextain account integration, memory system (STM/LTM), security layers
 
 ## Architecture
 
@@ -190,7 +190,7 @@ flatpak run io.nextain.naia
 
 ## Security Model
 
-Naia OS applies a **Defense in Depth** security model:
+Naia applies a **Defense in Depth** security model:
 
 | Layer | Protection |
 |-------|-----------|

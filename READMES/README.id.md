@@ -1,6 +1,6 @@
 [English](../README.md) | [한국어](README.ko.md) | [日本語](README.ja.md) | [中文](README.zh.md) | [Français](README.fr.md) | [Deutsch](README.de.md) | [Русский](README.ru.md) | [Español](README.es.md) | [Português](README.pt.md) | [Tiếng Việt](README.vi.md) | [Bahasa Indonesia](README.id.md) | [العربية](README.ar.md) | [हिन्दी](README.hi.md) | [বাংলা](README.bn.md)
 
-# Naia OS
+# Naia
 
 **The Next Generation AI OS** — Sistem operasi desktop pribadi tempat avatar AI tinggal
 
@@ -8,9 +8,9 @@
 
 > "OS itu sendiri adalah alat AI. AI tidak berjalan di atas OS — AI mengendalikan OS."
 
-## Apa itu Naia OS?
+## Apa itu Naia?
 
-Naia OS adalah aplikasi desktop Linux di mana avatar AI 3D tinggal secara permanen. Berkomunikasi dengan AI melalui chat dan suara, dan AI langsung menjalankan manajemen file, perintah terminal, pencarian web, dan penulisan kode. Siapa pun — tidak hanya pengembang — dapat memiliki agen AI sendiri.
+Naia adalah aplikasi desktop Linux di mana avatar AI 3D tinggal secara permanen. Berkomunikasi dengan AI melalui chat dan suara, dan AI langsung menjalankan manajemen file, perintah terminal, pencarian web, dan penulisan kode. Siapa pun — tidak hanya pengembang — dapat memiliki agen AI sendiri.
 
 ### Fitur Utama
 
@@ -25,11 +25,11 @@ Naia OS adalah aplikasi desktop Linux di mana avatar AI 3D tinggal secara perman
 - **Akun Nextain** — Mulai langsung dengan penggunaan berbasis kredit, tanpa perlu kunci API
 - **Personalisasi** — Sesuaikan nama, kepribadian, gaya bicara, avatar, dan tema (8 jenis)
 
-## Mengapa Naia OS?
+## Mengapa Naia?
 
-Alat AI yang ada mengikuti paradigma "manusia menggunakan AI sebagai alat". Naia OS membalikkan hubungan ini — **"Berikan AI seluruh OS."**
+Alat AI yang ada mengikuti paradigma "manusia menggunakan AI sebagai alat". Naia membalikkan hubungan ini — **"Berikan AI seluruh OS."**
 
-| Pendekatan yang Ada | Keterbatasan | Naia OS |
+| Pendekatan yang Ada | Keterbatasan | Naia |
 |--------------------|-------------|---------|
 | **Ekstensi VS Code** (Copilot, Cline) | Harus membuka IDE untuk menggunakan AI | Tidak perlu IDE. Selalu aktif |
 | **Agen CLI** (Claude Code, Aider) | Hanya bekerja di dalam terminal | Mengendalikan file, browser, seluruh sistem |
@@ -39,9 +39,9 @@ Alat AI yang ada mengikuti paradigma "manusia menggunakan AI sebagai alat". Naia
 
 ## Hubungan dengan OpenClaw
 
-Naia OS dibangun di atas ekosistem [OpenClaw](https://github.com/openclaw-ai/openclaw), tetapi merupakan produk yang secara fundamental berbeda.
+Naia dibangun di atas ekosistem [OpenClaw](https://github.com/openclaw-ai/openclaw), tetapi merupakan produk yang secara fundamental berbeda.
 
-| | OpenClaw | Naia OS |
+| | OpenClaw | Naia |
 |---|---------|---------|
 | **Bentuk** | Daemon CLI + terminal | Aplikasi desktop + avatar 3D |
 | **Target** | Pengembang | Semua orang |
@@ -58,7 +58,7 @@ Naia OS dibangun di atas ekosistem [OpenClaw](https://github.com/openclaw-ai/ope
 
 **Apa yang kami ambil dari OpenClaw:** Arsitektur daemon, mesin eksekusi alat, sistem kanal, ekosistem keterampilan (kompatibel dengan 5.700+ keterampilan Clawhub)
 
-**Apa yang Naia OS bangun baru:** Tauri Shell, sistem avatar VRM, agen multi-LLM, mesin emosi, integrasi TTS/STT, wizard onboarding, pelacakan biaya, integrasi akun Nextain, sistem memori (STM/LTM), lapisan keamanan
+**Apa yang Naia bangun baru:** Tauri Shell, sistem avatar VRM, agen multi-LLM, mesin emosi, integrasi TTS/STT, wizard onboarding, pelacakan biaya, integrasi akun Nextain, sistem memori (STM/LTM), lapisan keamanan
 
 ## Arsitektur
 
@@ -190,7 +190,7 @@ flatpak run io.nextain.naia
 
 ## Model Keamanan
 
-Naia OS menerapkan model keamanan **Pertahanan Berlapis (Defense in Depth)**:
+Naia menerapkan model keamanan **Pertahanan Berlapis (Defense in Depth)**:
 
 | Lapisan | Perlindungan |
 |---------|-------------|

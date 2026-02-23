@@ -512,7 +512,7 @@ fn spawn_gateway() -> Result<GatewayProcess, String> {
         None => Stdio::inherit(),
     };
 
-    // Load extra env vars from gateway-env.json (e.g. OPENAI_TTS_BASE_URL for Nextain TTS)
+    // Load extra env vars from gateway-env.json (e.g. OPENAI_TTS_BASE_URL for Naia TTS)
     let mut cmd = Command::new(node_bin.as_os_str());
     cmd.arg(&openclaw_bin)
         .arg("gateway")
@@ -1572,7 +1572,7 @@ async fn sync_openclaw_config(params: OpenClawSyncParams) -> Result<(), String> 
     }
 
     // Write OPENAI_TTS_BASE_URL env file for gateway to pick up on (re)start.
-    // When using Nextain TTS via Lab gateway, point OpenClaw's openai TTS to Lab.
+    // When using Naia TTS via Lab gateway, point OpenClaw's openai TTS to Lab.
     {
         let openclaw_dir = std::path::Path::new(&config_path)
             .parent()

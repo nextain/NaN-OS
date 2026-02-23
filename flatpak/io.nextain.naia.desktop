@@ -1,5 +1,5 @@
 [Desktop Entry]
-Name=Naia OS
+Name=Naia
 Comment=Personal AI avatar shell
 Exec=naia-os %u
 Icon=io.nextain.naia

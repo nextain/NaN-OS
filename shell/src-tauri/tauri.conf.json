@@ -1,6 +1,6 @@
 {
 	"$schema": "https://raw.githubusercontent.com/nicollasricas/tauri-settings-schema/refs/heads/master/schemas/v2/tauri.conf.json",
-	"productName": "Naia Shell",
+	"productName": "Naia",
 	"version": "0.1.0",
 	"identifier": "com.naia.shell",
 	"build": {
@@ -13,7 +13,7 @@
 		"withGlobalTauri": false,
 		"windows": [
 			{
-				"title": "Naia Shell",
+				"title": "Naia",
 				"width": 380,
 				"height": 900,
 				"resizable": true,

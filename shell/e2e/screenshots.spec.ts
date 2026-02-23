@@ -3,7 +3,7 @@ import * as path from "node:path";
 import { type Page, expect, test } from "@playwright/test";
 
 /**
- * Nextain Shell — Playwright Screenshot Capture for Manual
+ * Naia Shell — Playwright Screenshot Capture for Manual
  *
  * Captures all app screens (onboarding + main UI) for both Korean and English.
  * Uses mocked Tauri IPC — no real Tauri binary needed.

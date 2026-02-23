@@ -1,7 +1,7 @@
-description: Naia OS hybrid architecture (mirror of .users/context/architecture.md)
+description: Naia hybrid architecture (mirror of .users/context/architecture.md)
 
 design_philosophy: |
-  Naia OS is NOT built from scratch. It's a hybrid assembly of 3 proven ecosystems:
+  Naia is NOT built from scratch. It's a hybrid assembly of 3 proven ecosystems:
   OpenClaw (Gateway/exec), project-careti (LLM/tools), OpenCode (architecture pattern).
   Each contributes its strongest capability. The result is greater than any single source.
 

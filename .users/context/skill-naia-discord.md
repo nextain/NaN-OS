@@ -2,7 +2,7 @@
 
 ## 개요
 
-Naia OS agent의 Discord 메시지 전송/수신 스킬입니다.
+Naia agent의 Discord 메시지 전송/수신 스킬입니다.
 OpenClaw Gateway의 Discord 채널을 통해 DM/채널 메시지를 보내고 받습니다.
 
 ## 액션

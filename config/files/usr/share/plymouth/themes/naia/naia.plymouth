@@ -1,0 +1,8 @@
+[Plymouth Theme]
+Name=Naia OS
+Description=Naia OS boot splash
+ModuleName=script
+
+[script]
+ImageDir=/usr/share/plymouth/themes/naia
+ScriptFile=/usr/share/plymouth/themes/naia/naia.script

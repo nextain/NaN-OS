@@ -1,5 +1,5 @@
 /**
- * E2E tests: Nextain Agent ↔ OpenClaw Gateway (live connection)
+ * E2E tests: Naia Agent ↔ OpenClaw Gateway (live connection)
  *
  * Prerequisites:
  *   - OpenClaw Gateway running on localhost:18789
@@ -1148,7 +1148,7 @@ describe.skipIf(!canRunE2E)("E2E: Agent ↔ Gateway (live)", () => {
 			"web_search runs",
 			async () => {
 				const result = await executeTool(client, "web_search", {
-					query: "Naia OS",
+					query: "Naia",
 				});
 				expect(result.success).toBe(true);
 				expect(result.output.length).toBeGreaterThan(0);

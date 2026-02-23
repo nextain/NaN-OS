@@ -37,7 +37,7 @@ import { useAvatarStore } from "../stores/avatar";
 import { useChatStore } from "../stores/chat";
 
 const PROVIDERS: { id: ProviderId; label: string; disabled?: boolean }[] = [
-	{ id: "nextain", label: "Nextain (Naia OS)" },
+	{ id: "nextain", label: "Naia" },
 	{ id: "claude-code-cli", label: "Claude Code CLI (Local)" },
 	{ id: "gemini", label: "Google Gemini" },
 	{ id: "openai", label: "OpenAI (ChatGPT)", disabled: true },
@@ -187,7 +187,7 @@ const TTS_PROVIDERS: {
 	usesGateway: boolean;
 	gatewayProviderId?: string; // maps to OpenClaw TTS provider ID
 }[] = [
-	{ id: "nextain", label: "Nextain Cloud TTS", needsKey: false, usesGateway: false },
+	{ id: "nextain", label: "Naia Cloud TTS", needsKey: false, usesGateway: false },
 	{ id: "edge", label: "Edge TTS (Free)", needsKey: false, usesGateway: true, gatewayProviderId: "edge" },
 	{ id: "google", label: "Google Cloud TTS", needsKey: true, keyLabel: "Google API Key", keyPlaceholder: "AIza...", usesGateway: false },
 	{ id: "openai", label: "OpenAI TTS", needsKey: true, keyLabel: "OpenAI API Key", keyPlaceholder: "sk-...", usesGateway: true, gatewayProviderId: "openai" },
@@ -823,7 +823,7 @@ export function SettingsTab() {
 				resolveProvider(m.provider) || resolveProviderFromId(m.id);
 			if (mappedProvider) pushModel(mappedProvider);
 			if (mappedProvider === "anthropic") pushModel("claude-code-cli");
-			// Nextain only supports curated Gemini models
+			// Naia only supports curated Gemini models
 			if (mappedProvider === "gemini") {
 				const NEXTAIN_ALLOWED = [
 					"gemini-3.1-pro-preview",
@@ -1167,7 +1167,7 @@ export function SettingsTab() {
 		setModel(getDefaultModel(id));
 		setError("");
 		if (id === "nextain" && !labKey) {
-			setError("Nextain 계정 로그인이 필요합니다. 먼저 Nextain에 로그인하세요.");
+			setError("Naia 계정 로그인이 필요합니다. 먼저 Naia에 로그인하세요.");
 			startLabLogin();
 		}
 	}
@@ -1288,9 +1288,9 @@ export function SettingsTab() {
 			let base64 = "";
 			const previewText = getPreviewText(ttsVoice);
 			if (ttsProvider === "nextain") {
-				// Nextain TTS preview — call Gateway directly with labKey
+				// Naia TTS preview — call Gateway directly with labKey
 				if (!labKey) {
-					setError("Nextain TTS를 사용하려면 Nextain 로그인이 필요합니다.");
+					setError("Naia TTS를 사용하려면 Naia 로그인이 필요합니다.");
 					return;
 				}
 				const resp = await fetch(`${LAB_GATEWAY_URL}/v1/audio/speech`, {
@@ -1306,7 +1306,7 @@ export function SettingsTab() {
 					}),
 				});
 				if (!resp.ok) {
-					throw new Error(`Nextain TTS 미리듣기 실패 (${resp.status})`);
+					throw new Error(`Naia TTS 미리듣기 실패 (${resp.status})`);
 				}
 				const data = await resp.json() as { audio_content?: string };
 				base64 = data.audio_content ?? "";
@@ -1544,7 +1544,7 @@ export function SettingsTab() {
 		const isApiKeyOptionalProvider =
 			provider === "claude-code-cli" || provider === "ollama";
 		if (isNextainProvider && !labKey) {
-			setError("Nextain 계정 로그인이 필요합니다. Nextain 계정 연결 후 저장하세요.");
+			setError("Naia 계정 로그인이 필요합니다. Naia 계정 연결 후 저장하세요.");
 			return;
 		}
 		if (
@@ -2039,7 +2039,7 @@ export function SettingsTab() {
 				<div className="settings-field">
 					<label>{t("settings.labSection")}</label>
 					<div className="settings-hint">
-						Nextain provider는 API 키 대신 Nextain 계정 로그인을 사용합니다.
+						Naia 계정 로그인으로 API 키 없이 사용할 수 있습니다.
 					</div>
 						{labKey ? (
 							<div className="lab-info-block">
@@ -2347,7 +2347,7 @@ export function SettingsTab() {
 				);
 			})()}
 
-			{/* Nextain — labKey required warning */}
+			{/* Naia — labKey required warning */}
 			{ttsProvider === "nextain" && !labKey && (
 				<div className="settings-field">
 					<span className="settings-hint" style={{ color: "var(--color-warning, #f59e0b)" }}>

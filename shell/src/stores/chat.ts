@@ -195,3 +195,6 @@ export const useChatStore = create<ChatState>()((set, get) => ({
 	},
 
 }));
+
+// Expose for Playwright screenshot capture & dev tools
+if (typeof window !== "undefined") (window as any).useChatStore = useChatStore;

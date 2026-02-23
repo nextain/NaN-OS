@@ -1,4 +1,4 @@
-# Flathub manifest for Naia OS
+# Flathub manifest for Naia
 # This manifest differs from the CI version (../io.nextain.naia.yml):
 #   - Uses git source with tag/commit pinning instead of type: dir
 #   - No --share=network in build-args (Flathub requires offline builds)
