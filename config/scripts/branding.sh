@@ -77,6 +77,13 @@ ln -sf naia-os-logo.png /usr/share/pixmaps/system-logo-white.png
 ln -sf naia-os-logo-small.png /usr/share/pixmaps/fedora-logo-small.png
 
 # ============================================================
+# KDE Plasma: Replace app launcher (start-here) icon with Naia
+# ============================================================
+# config/files/ copies start-here.png (all sizes) + start-here.svg
+# Refresh icon cache so KDE picks up the new start-here icon
+gtk-update-icon-cache -f -t /usr/share/icons/hicolor 2>/dev/null || true
+
+# ============================================================
 # KDE Plasma: Set NaiaOS as default wallpaper
 # ============================================================
 mkdir -p /usr/etc/skel/.config
