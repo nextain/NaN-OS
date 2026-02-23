@@ -398,13 +398,19 @@ fn check_gateway_health_sync() -> bool {
 fn find_openclaw_paths() -> Result<(std::path::PathBuf, String, String), String> {
     let node_bin = find_node_binary()?;
     let home = std::env::var("HOME").unwrap_or_default();
-    let openclaw_bin = format!("{}/.naia/openclaw/node_modules/.bin/openclaw", home);
-    if !std::path::Path::new(&openclaw_bin).exists() {
-        return Err(format!(
-            "OpenClaw not installed at {}. Run: config/scripts/setup-openclaw.sh",
-            openclaw_bin
-        ));
-    }
+    // Search order: system install → user install
+    let candidates = [
+        "/usr/share/naia/openclaw/node_modules/.bin/openclaw".to_string(),
+        format!("{}/.naia/openclaw/node_modules/.bin/openclaw", home),
+    ];
+    let openclaw_bin = candidates
+        .iter()
+        .find(|p| std::path::Path::new(p).exists())
+        .cloned()
+        .ok_or_else(|| {
+            "OpenClaw not installed. Expected at /usr/share/naia/openclaw/ or ~/.naia/openclaw/"
+                .to_string()
+        })?;
     // Prefer ~/.openclaw/openclaw.json (standard path), fallback to legacy ~/.naia/openclaw/
     let primary = format!("{}/.openclaw/openclaw.json", home);
     let legacy = format!("{}/.naia/openclaw/openclaw.json", home);
@@ -613,6 +619,12 @@ fn spawn_agent_core(app_handle: &AppHandle, audit_db: &audit::AuditDb) -> Result
                     eprintln!("[Naia] Found bundled agent at: {}", bundled.display());
                     return bundled.to_string_lossy().to_string();
                 }
+            }
+            // Flatpak: agent installed at /app/lib/naia-os/agent/
+            let flatpak_path = std::path::PathBuf::from("/app/lib/naia-os/agent/dist/index.js");
+            if flatpak_path.exists() {
+                eprintln!("[Naia] Found Flatpak agent at: {}", flatpak_path.display());
+                return flatpak_path.to_string_lossy().to_string();
             }
             // Fallback: relative path (legacy)
             "../agent/dist/index.js".to_string()
