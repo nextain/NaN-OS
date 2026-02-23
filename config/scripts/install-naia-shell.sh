@@ -32,6 +32,6 @@ echo "[naia] Downloading: ${DOWNLOAD_URL}"
 TMP_FILE=$(mktemp)
 curl -fL -o "${TMP_FILE}" "${CURL_AUTH[@]+"${CURL_AUTH[@]}"}" "${DOWNLOAD_URL}"
 mv "${TMP_FILE}" "${INSTALL_DIR}/${BINARY_NAME}"
-chmod +x "${INSTALL_DIR}/${BINARY_NAME}"
+chmod 755 "${INSTALL_DIR}/${BINARY_NAME}"
 
 echo "[naia] Installed ${BINARY_NAME} to ${INSTALL_DIR}/${BINARY_NAME}"

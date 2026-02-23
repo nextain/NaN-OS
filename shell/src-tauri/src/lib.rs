@@ -2058,11 +2058,23 @@ pub fn run() {
                 let _ = window.show();
             }
 
-            // Allow only microphone/media permissions for webkit2gtk (deny all others)
+            // WebKit GPU/permission settings for Linux
             #[cfg(target_os = "linux")]
             if let Some(webview_window) = app.get_webview_window("main") {
                 let _ = webview_window.with_webview(|webview| {
-                    use webkit2gtk::WebViewExt;
+                    use webkit2gtk::{SettingsExt, WebViewExt};
+
+                    // Disable hardware acceleration to avoid EGL_BAD_PARAMETER
+                    // on Intel iGPU + XWayland (AppImage GTK hook forces GDK_BACKEND=x11).
+                    // Three.js VRM avatar will use software rendering — acceptable
+                    // trade-off vs a white screen.
+                    if let Some(settings) = webview.inner().settings() {
+                        settings.set_hardware_acceleration_policy(
+                            webkit2gtk::HardwareAccelerationPolicy::Never,
+                        );
+                    }
+
+                    // Allow only microphone/media permissions (deny all others)
                     webview.inner().connect_permission_request(|_, request| {
                         if request.is::<webkit2gtk::UserMediaPermissionRequest>() {
                             request.allow();
