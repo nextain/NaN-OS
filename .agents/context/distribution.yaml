@@ -106,10 +106,13 @@ os_image:
   scripts:
     - config/scripts/install-pnpm.sh
     - config/scripts/install-naia-shell.sh (downloads AppImage from GitHub Release)
-    - config/scripts/branding.sh (os-release customization)
-    - config/scripts/setup-openclaw.sh (gateway systemd service)
-  systemd_services:
-    - config/files/usr/lib/systemd/user/naia-gateway.service
+    - config/scripts/branding.sh (os-release → Naia OS, URLs → naia.nextain.io)
+    - config/scripts/setup-openclaw.sh (gateway systemd service, runs on first boot)
+  deployed_files:
+    - config/files/usr/share/applications/naia-shell.desktop (app launcher)
+    - config/files/usr/etc/xdg/autostart/naia-shell.desktop (login autostart)
+    - config/files/usr/lib/systemd/user/naia-gateway.service (gateway daemon)
+    - config/files/usr/bin/naia-gateway-wrapper (gateway runner script)
   registry: ghcr.io/nextain/naia-os
   tags: [latest, YYYYMMDD, fedora-version, YYYYMMDD-fedora-version]
   status: working
@@ -117,3 +120,12 @@ os_image:
     - Recipe name must be lowercase (Docker stage name constraint)
     - Checkout needs submodules:true for shared-modules
     - GHCR package visibility must be public (org setting)
+    - Naia Shell autostart on login via XDG autostart entry
+
+bootable_usb:
+  create: "sudo dd if=naia-os-latest.iso of=/dev/sdX bs=4M status=progress oflag=sync"
+  verify: "lsblk /dev/sdX -o NAME,SIZE,LABEL,FSTYPE (label should be naia-x86_64-latest)"
+  notes:
+    - Must unmount USB first (sudo umount /dev/sdX1)
+    - ISO is hybrid — works for both UEFI and legacy BIOS boot
+    - USB label changes from old branding to naia-x86_64-latest
