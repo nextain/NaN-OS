@@ -9,7 +9,7 @@ BASE_VERSION_ID=$(grep -oP '(?<=^VERSION_ID=).*' /usr/lib/os-release | tr -d '"'
 cat > /usr/lib/os-release <<OSRELEASE
 NAME="Naia OS"
 PRETTY_NAME="Naia OS 0.1.0 (Bazzite)"
-ID=naia-os
+ID=fedora
 ID_LIKE="fedora"
 VERSION_ID="${BASE_VERSION_ID}"
 NAIA_VERSION="0.1.0"
