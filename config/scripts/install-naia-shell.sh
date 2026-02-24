@@ -31,7 +31,17 @@ fi
 echo "[naia] Downloading: ${DOWNLOAD_URL}"
 TMP_FILE=$(mktemp)
 curl -fL -o "${TMP_FILE}" "${CURL_AUTH[@]+"${CURL_AUTH[@]}"}" "${DOWNLOAD_URL}"
-mv "${TMP_FILE}" "${INSTALL_DIR}/${BINARY_NAME}"
+mv "${TMP_FILE}" "${INSTALL_DIR}/${BINARY_NAME}-bin"
+chmod 755 "${INSTALL_DIR}/${BINARY_NAME}-bin"
+
+# Create wrapper script with EGL/GPU fallback
+cat > "${INSTALL_DIR}/${BINARY_NAME}" <<'WRAPPER'
+#!/usr/bin/env bash
+# Naia Shell launcher with GPU fallback
+# WebKitGTK may fail EGL init on some hardware (live USB, VMs, etc.)
+export WEBKIT_DISABLE_DMABUF_RENDERER=1
+exec /usr/bin/naia-shell-bin "$@"
+WRAPPER
 chmod 755 "${INSTALL_DIR}/${BINARY_NAME}"
 
 echo "[naia] Installed ${BINARY_NAME} to ${INSTALL_DIR}/${BINARY_NAME}"

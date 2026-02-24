@@ -30,7 +30,7 @@ jobs:
 
       - name: Build ISO
         id: build
-        uses: ublue-os/titanoboa@main
+        uses: nextain/titanoboa@main
         with:
           image-ref: ${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}:latest
           hook-post-rootfs: ${{ github.workspace }}/installer/hook-post-rootfs.sh
@@ -40,18 +40,16 @@ jobs:
 
       - name: Generate Checksum
         run: |
-          ISO_PATH="${{ steps.build.outputs.iso-dest }}"
-          echo "ISO path: $ISO_PATH"
-          ls -lh "$ISO_PATH"
-          sha256sum "$ISO_PATH" > "${ISO_PATH}-CHECKSUM"
+          cd ${{ github.workspace }}
+          sha256sum naia-os-live-amd64.iso > naia-os-live-amd64.iso-CHECKSUM
 
       - name: Upload ISO as Artifact
         uses: actions/upload-artifact@v4
         with:
           name: naia-os-live
           path: |
-            ${{ steps.build.outputs.iso-dest }}
-            ${{ steps.build.outputs.iso-dest }}-CHECKSUM
+            naia-os-live-amd64.iso
+            naia-os-live-amd64.iso-CHECKSUM
           retention-days: 30
           if-no-files-found: error
 
@@ -64,5 +62,5 @@ jobs:
           body: |
             ISO is available as a GitHub Actions Artifact.
             Download from: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
-          files: ${{ steps.build.outputs.iso-dest }}-CHECKSUM
+          files: naia-os-live-amd64.iso-CHECKSUM
           draft: true
