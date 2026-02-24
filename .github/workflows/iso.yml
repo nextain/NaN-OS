@@ -40,16 +40,18 @@ jobs:
 
       - name: Generate Checksum
         run: |
-          cd ${{ github.workspace }}
-          sha256sum naia-os-live-amd64.iso > naia-os-live-amd64.iso-CHECKSUM
+          ISO_PATH="${{ steps.build.outputs.iso-dest }}"
+          echo "ISO path: $ISO_PATH"
+          ls -lh "$ISO_PATH"
+          sha256sum "$ISO_PATH" > "${ISO_PATH}-CHECKSUM"
 
       - name: Upload ISO as Artifact
         uses: actions/upload-artifact@v4
         with:
           name: naia-os-live
           path: |
-            naia-os-live-amd64.iso
-            naia-os-live-amd64.iso-CHECKSUM
+            ${{ steps.build.outputs.iso-dest }}
+            ${{ steps.build.outputs.iso-dest }}-CHECKSUM
           retention-days: 30
           if-no-files-found: error
 
@@ -62,5 +64,5 @@ jobs:
           body: |
             ISO is available as a GitHub Actions Artifact.
             Download from: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
-          files: naia-os-live-amd64.iso-CHECKSUM
+          files: ${{ steps.build.outputs.iso-dest }}-CHECKSUM
           draft: true
