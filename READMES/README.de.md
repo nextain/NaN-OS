@@ -2,40 +2,55 @@
 
 # Naia
 
-**The Next Generation AI OS** — Ein persoenliches Desktop-Betriebssystem, in dem ein KI-Avatar lebt
+**The Next Generation AI OS** — Ein persoenliches KI-Betriebssystem, in dem Ihre eigene KI lebt
 
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](../LICENSE)
 
-> "Das OS selbst ist das Werkzeug der KI. Die KI laeuft nicht auf dem OS — die KI steuert das OS."
+> "Ihre KI, Ihre Regeln. Waehlen Sie Ihre KI, formen Sie ihr Gedaechtnis und ihre Persoenlichkeit, geben Sie ihr Ihre Stimme — alles auf Ihrem eigenen Rechner."
 
 ## Was ist Naia?
 
-Naia ist eine Linux-Desktop-App, in der ein 3D-Avatar-KI dauerhaft lebt. Unterhalten Sie sich per Chat und Sprache mit der KI, und sie fuehrt direkt Dateiverwaltung, Terminal-Befehle, Websuchen und Code-Erstellung durch. Jeder — nicht nur Entwickler — kann seinen eigenen KI-Agenten haben.
+Naia ist ein persoenliches KI-OS, das Einzelpersonen die volle Souveraenitaet ueber ihre KI gibt. Waehlen Sie, welche KI Sie nutzen moechten (einschliesslich lokaler Modelle), konfigurieren Sie Gedaechtnis und Persoenlichkeit lokal, passen Sie den 3D-Avatar und die Stimme an — alles bleibt auf Ihrem Rechner, unter Ihrer Kontrolle.
 
-### Kernfunktionen
+Dies ist nicht nur ein weiteres KI-Werkzeug. Es ist ein Betriebssystem, in dem Ihre KI lebt, waechst und an Ihrer Seite arbeitet. Heute ist es ein Desktop-OS mit einem 3D-Avatar. Morgen — Echtzeit-Video-Avatare, Singen, Spielen und schliesslich Ihre eigene Physical AI (Android-OS).
 
-- **3D-Avatar** — VRM-Charakter liefert lebendige Gespraeche mit Emotionsausdruecken (Freude/Traurigkeit/Ueberraschung/Nachdenken usw.) und Lippensynchronisation
-- **Multi-LLM** — Unterstuetzt 7 Anbieter: Gemini, Claude, GPT, Grok, zAI, Ollama, Claude Code CLI
-- **Werkzeug-Ausfuehrung** — 8 Werkzeuge einschliesslich Datei-Lesen/Schreiben, Terminal-Ausfuehrung, Websuche, Browser, Sub-Agent
-- **70 Faehigkeiten** — 7 eingebaut + 63 benutzerdefiniert (Wetter, GitHub, Slack, Notion, Spotify, Discord usw.)
-- **Sprachgespraech** — TTS mit 5 Anbietern (Nextain Cloud, Edge, Google, OpenAI, ElevenLabs) + STT
+### Kernphilosophie
+
+- **KI-Souveraenitaet** — Sie waehlen Ihre KI. Cloud oder lokal. Das OS bestimmt nicht.
+- **Volle Kontrolle** — Gedaechtnis, Persoenlichkeit, Einstellungen — alles lokal gespeichert. Keine Cloud-Abhaengigkeit.
+- **Ihre eigene KI** — Avatar, Stimme, Name, Persoenlichkeit anpassen. Machen Sie sie wirklich zu Ihrer.
+- **Immer lebendig** — KI laeuft rund um die Uhr im Hintergrund, empfaengt Nachrichten und arbeitet auch in Ihrer Abwesenheit.
+- **Zukunftsvision** — VRM 3D-Avatare → Echtzeit-Video-Avatare → zusammen singen und spielen → Physical AI
+
+### Funktionen
+
+- **3D-Avatar** — VRM-Charakter mit Emotionsausdruecken (Freude/Traurigkeit/Ueberraschung/Nachdenken) und Lippensynchronisation
+- **KI-Freiheit** — 7 Cloud-Anbieter (Gemini, Claude, GPT, Grok, zAI) + lokale KI (Ollama) + Claude Code CLI
+- **Lokal zuerst** — Gedaechtnis, Persoenlichkeit, alle Einstellungen auf Ihrem Rechner gespeichert
+- **Werkzeug-Ausfuehrung** — 8 Werkzeuge: Datei-Lesen/Schreiben, Terminal, Websuche, Browser, Sub-Agent
+- **70+ Faehigkeiten** — 7 eingebaut + 63 benutzerdefiniert + 5.700+ ClawHub-Community-Faehigkeiten
+- **Stimme** — 5 TTS-Anbieter + STT + Lippensynchronisation. Geben Sie Ihrer KI die Stimme, die Sie moechten.
 - **14 Sprachen** — Koreanisch, Englisch, Japanisch, Chinesisch, Franzoesisch, Deutsch, Russisch und mehr
-- **Kanal-Integration** — Sprechen Sie jederzeit und ueberall per Discord DM mit der KI
-- **4-Stufen-Sicherheit** — Berechtigungshierarchie von T0 (Lesen) bis T3 (Gefaehrlich), werkzeugspezifisches Genehmigungssystem, Audit-Logs
-- **Nextain-Konto** — Sofort mit kreditbasierter Nutzung starten, kein API-Schluessel noetig
-- **Personalisierung** — Name, Persoenlichkeit, Sprechstil, Avatar und Theme (8 Typen) anpassen
+- **Immer aktiv** — OpenClaw-Gateway-Daemon haelt Ihre KI im Hintergrund am Laufen
+- **Kanal-Integration** — Sprechen Sie mit Ihrer KI per Discord DM, jederzeit, ueberall
+- **4-Stufen-Sicherheit** — T0 (Lesen) bis T3 (Gefaehrlich), werkzeugspezifische Genehmigung, Audit-Logs
+- **Personalisierung** — Name, Persoenlichkeit, Sprechstil, Avatar, Theme (8 Typen)
 
 ## Warum Naia?
 
-Bestehende KI-Werkzeuge folgen dem Paradigma "Menschen nutzen KI als Werkzeug". Naia kehrt diese Beziehung um — **"Gib der KI das gesamte OS."**
+Andere KI-Werkzeuge sind nur "Werkzeuge". Naia ist **"Ihre eigene KI"**.
 
-| Bestehender Ansatz | Einschraenkung | Naia |
-|-------------------|----------------|---------|
-| **VS Code-Erweiterungen** (Copilot, Cline) | IDE muss geoeffnet werden, um KI zu nutzen | Kein IDE noetig. Immer aktiv |
-| **CLI-Agenten** (Claude Code, Aider) | Funktioniert nur im Terminal | Steuert Dateien, Browser, gesamtes System |
-| **Chatbot-Apps** (ChatGPT, Gemini) | Kann nur chatten, nicht ausfuehren | Chat + Ausfuehrung. Sagen Sie "erstelle eine Datei" und es passiert wirklich |
-| **macOS-Daemon** (OpenClaw) | brew install, nur macOS, CLI | Desktop-App + 3D-Avatar. Linux-basiert |
-| **KI-Frameworks** (LangChain) | Nur von Entwicklern nutzbar | 7-Schritte-Onboarding fuer jeden |
+| | Andere KI-Werkzeuge | Naia |
+|---|-------------------|------|
+| **Philosophie** | KI als Werkzeug nutzen | Der KI das OS geben. Zusammen leben. |
+| **Zielgruppe** | Nur Entwickler | Jeder, der seine eigene KI moechte |
+| **KI-Wahl** | Die Plattform entscheidet | 7 Cloud + lokale KI — Sie entscheiden |
+| **Daten** | In der Cloud gesperrt | Gedaechtnis, Persoenlichkeit, Einstellungen alle lokal |
+| **Avatar** | Keiner | VRM 3D-Charakter + Emotionen + Lippensynchronisation |
+| **Stimme** | Nur Text oder einfaches TTS | 5 TTS + STT + die Stimme Ihrer KI |
+| **Bereitstellung** | npm / brew / pip | Desktop-App oder bootfaehiges USB-OS |
+| **Plattform** | macOS / CLI / Web | Nativer Linux-Desktop → Zukunft: Physical AI |
+| **Kosten** | Separate API-Schluessel erforderlich | Kostenlose Credits zum Starten, lokale KI voellig kostenlos |
 
 ## Beziehung zu OpenClaw
 

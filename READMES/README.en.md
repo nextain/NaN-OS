@@ -2,40 +2,55 @@
 
 # Naia
 
-**The Next Generation AI OS** — A personal desktop operating system where an AI avatar lives
+**The Next Generation AI OS** — A personal AI operating system where your own AI lives
 
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](../LICENSE)
 
-> "The OS itself is the AI's tool. The AI doesn't run on top of the OS — the AI controls the OS."
+> "Your AI, your rules. Choose your AI, shape its memory and personality, give it your voice — all on your own machine."
 
 ## What is Naia?
 
-Naia is a Linux desktop app where a 3D avatar AI resides. Talk to the AI through chat and voice, and it directly performs file management, terminal commands, web searches, and code writing. Anyone — not just developers — can have their own AI agent.
+Naia is a personal AI OS that gives individuals full sovereignty over their AI. Choose which AI to use (including local models), configure its memory and personality locally, customize its 3D avatar and voice — everything stays on your machine, under your control.
 
-### Core Features
+This isn't just another AI tool. It's an operating system where your AI lives, grows, and works alongside you. Today it's a desktop OS with a 3D avatar. Tomorrow — real-time video avatars, singing, gaming, and eventually your own Physical AI (android OS).
 
-- **3D Avatar** — VRM character delivers lifelike conversations with emotion expressions (joy/sadness/surprise/thinking, etc.) and lip-sync
-- **Multi LLM** — Supports 7 providers: Gemini, Claude, GPT, Grok, zAI, Ollama, Claude Code CLI
-- **Tool Execution** — 8 tools including file read/write, terminal execution, web search, browser, sub-agent
-- **70 Skills** — 7 built-in + 63 custom (weather, GitHub, Slack, Notion, Spotify, Discord, etc.)
-- **Voice Conversation** — TTS with 5 providers (Nextain Cloud, Edge, Google, OpenAI, ElevenLabs) + STT
+### Core Philosophy
+
+- **AI Sovereignty** — You choose your AI. Cloud or local. The OS doesn't dictate.
+- **Complete Control** — Memory, personality, settings — all stored locally. No cloud dependency.
+- **Your Own AI** — Customize avatar, voice, name, personality. Make it truly yours.
+- **Always Alive** — AI runs 24/7 in the background, receiving messages and doing work even when you're away.
+- **Future Vision** — VRM 3D avatars → real-time video avatars → singing & gaming together → Physical AI
+
+### Features
+
+- **3D Avatar** — VRM character with emotion expressions (joy/sadness/surprise/thinking) and lip-sync
+- **AI Freedom** — 7 cloud providers (Gemini, Claude, GPT, Grok, zAI) + local AI (Ollama) + Claude Code CLI
+- **Local-First** — Memory, personality, all settings stored on your machine
+- **Tool Execution** — 8 tools: file read/write, terminal, web search, browser, sub-agent
+- **70+ Skills** — 7 built-in + 63 custom + 5,700+ ClawHub community skills
+- **Voice** — 5 TTS providers + STT + lip-sync. Give your AI the voice you want.
 - **14 Languages** — Korean, English, Japanese, Chinese, French, German, Russian, and more
-- **Channel Integration** — Talk to AI anytime, anywhere via Discord DM
-- **4-Tier Security** — Permission hierarchy from T0 (read) to T3 (dangerous), per-tool approval system, audit logs
-- **Nextain Account** — Start immediately with credit-based usage, no API key needed
-- **Personalization** — Customize name, personality, speech style, avatar, and theme (8 types)
+- **Always-On** — OpenClaw gateway daemon keeps your AI running in the background
+- **Channel Integration** — Talk to your AI via Discord DM, anytime, anywhere
+- **4-Tier Security** — T0 (read) to T3 (dangerous), per-tool approval, audit logs
+- **Personalization** — Name, personality, speech style, avatar, theme (8 types)
 
 ## Why Naia?
 
-Existing AI tools follow a "humans use AI as a tool" paradigm. Naia flips this relationship — **"Give the AI the entire OS."**
+Other AI tools are just "tools". Naia is **"your own AI"**.
 
-| Existing Approach | Limitation | Naia |
-|-------------------|------------|---------|
-| **VS Code Extensions** (Copilot, Cline) | Must open IDE to use AI | No IDE needed. Always on |
-| **CLI Agents** (Claude Code, Aider) | Only works inside terminal | Controls files, browser, entire system |
-| **Chatbot Apps** (ChatGPT, Gemini) | Can only chat, can't execute | Chat + Execute. Say "create a file" and it actually does |
-| **macOS Daemon** (OpenClaw) | brew install, macOS only, CLI | Desktop app + 3D avatar. Linux-based |
-| **AI Frameworks** (LangChain) | Only usable by developers | 7-step onboarding for anyone to start |
+| | Other AI Tools | Naia |
+|---|----------------|------|
+| **Philosophy** | Use AI as a tool | Give AI the OS. Live together. |
+| **Target** | Developers only | Everyone who wants their own AI |
+| **AI Choice** | Platform decides | 7 cloud + local AI — you decide |
+| **Data** | Cloud-locked | Memory, personality, settings all local |
+| **Avatar** | None | VRM 3D character + emotions + lip-sync |
+| **Voice** | Text only or basic TTS | 5 TTS + STT + your AI's own voice |
+| **Deployment** | npm / brew / pip | Desktop app or bootable USB OS |
+| **Platform** | macOS / CLI / Web | Linux native desktop → future: Physical AI |
+| **Cost** | Separate API keys required | Free credits to start, local AI completely free |
 
 ## Relationship with OpenClaw
 

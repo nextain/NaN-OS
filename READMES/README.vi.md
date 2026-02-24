@@ -2,40 +2,55 @@
 
 # Naia
 
-**The Next Generation AI OS** — He dieu hanh desktop ca nhan noi avatar AI sinh song
+**The Next Generation AI OS** — He dieu hanh AI ca nhan noi AI cua ban sinh song
 
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](../LICENSE)
 
-> "Ban than he dieu hanh la cong cu cua AI. AI khong chay tren he dieu hanh — AI dieu khien he dieu hanh."
+> "AI cua ban, quy tac cua ban. Chon AI, dinh hinh tri nho va tinh cach cua no, cho no giong noi — tat ca tren may tinh cua ban."
 
 ## Naia la gi?
 
-Naia la mot ung dung desktop Linux noi avatar AI 3D thuong tru. Tro chuyen voi AI qua chat va giong noi, va AI truc tiep thuc hien quan ly tep, lenh terminal, tim kiem web va viet ma. Bat ky ai — khong chi lap trinh vien — deu co the co tro ly AI rieng cua minh.
+Naia la mot he dieu hanh AI ca nhan mang lai quyen tu chu hoan toan ve AI cho moi ca nhan. Chon AI nao de su dung (bao gom ca mo hinh cuc bo), cau hinh tri nho va tinh cach cuc bo, tuy chinh avatar 3D va giong noi — moi thu deu o tren may tinh cua ban, duoi su kiem soat cua ban.
 
-### Tinh nang cot loi
+Day khong chi la mot cong cu AI khac. Day la he dieu hanh noi AI cua ban sinh song, truong thanh va lam viec ben canh ban. Hom nay la he dieu hanh desktop voi avatar 3D. Ngay mai — avatar video thoi gian thuc, hat, choi game, va cuoi cung la Physical AI cua rieng ban (he dieu hanh android).
 
-- **Avatar 3D** — Nhan vat VRM mang den cuoc tro chuyen song dong voi bieu cam cam xuc (vui/buon/ngac nhien/suy nghi, v.v.) va dong bo moi
-- **Da LLM** — Ho tro 7 nha cung cap: Gemini, Claude, GPT, Grok, zAI, Ollama, Claude Code CLI
-- **Thuc thi cong cu** — 8 cong cu bao gom doc/ghi tep, thuc thi terminal, tim kiem web, trinh duyet, sub-agent
-- **70 ky nang** — 7 tich hop san + 63 tuy chinh (thoi tiet, GitHub, Slack, Notion, Spotify, Discord, v.v.)
-- **Hoi thoai giong noi** — TTS voi 5 nha cung cap (Nextain Cloud, Edge, Google, OpenAI, ElevenLabs) + STT
+### Triet ly cot loi
+
+- **Chu quyen AI** — Ban chon AI. Dam may hay cuc bo. He dieu hanh khong ap dat.
+- **Kiem soat hoan toan** — Tri nho, tinh cach, cai dat — tat ca luu tru cuc bo. Khong phu thuoc dam may.
+- **AI cua rieng ban** — Tuy chinh avatar, giong noi, ten, tinh cach. Bien no thanh cua ban.
+- **Luon hoat dong** — AI chay 24/7 trong nen, nhan tin nhan va lam viec ngay ca khi ban vang mat.
+- **Tam nhin tuong lai** — Avatar VRM 3D → avatar video thoi gian thuc → hat va choi game cung nhau → Physical AI
+
+### Tinh nang
+
+- **Avatar 3D** — Nhan vat VRM voi bieu cam cam xuc (vui/buon/ngac nhien/suy nghi) va dong bo moi
+- **Tu do AI** — 7 nha cung cap dam may (Gemini, Claude, GPT, Grok, zAI) + AI cuc bo (Ollama) + Claude Code CLI
+- **Cuc bo la uu tien** — Tri nho, tinh cach, tat ca cai dat luu tren may tinh cua ban
+- **Thuc thi cong cu** — 8 cong cu: doc/ghi tep, terminal, tim kiem web, trinh duyet, sub-agent
+- **70+ ky nang** — 7 tich hop san + 63 tuy chinh + 5.700+ ky nang cong dong ClawHub
+- **Giong noi** — 5 nha cung cap TTS + STT + dong bo moi. Cho AI giong noi ban muon.
 - **14 ngon ngu** — Tieng Han, Tieng Anh, Tieng Nhat, Tieng Trung, Tieng Phap, Tieng Duc, Tieng Nga va nhieu hon
-- **Tich hop kenh** — Noi chuyen voi AI bat cu luc nao qua Discord DM
-- **Bao mat 4 cap** — Phan cap quyen tu T0 (doc) den T3 (nguy hiem), he thong phe duyet theo cong cu, nhat ky kiem toan
-- **Tai khoan Nextain** — Bat dau ngay voi su dung dua tren tin dung, khong can khoa API
-- **Ca nhan hoa** — Tuy chinh ten, tinh cach, phong cach noi, avatar va chu de (8 loai)
+- **Luon bat** — Daemon OpenClaw Gateway giu AI chay trong nen
+- **Tich hop kenh** — Noi chuyen voi AI qua Discord DM, bat cu luc nao, bat cu noi dau
+- **Bao mat 4 cap** — T0 (doc) den T3 (nguy hiem), phe duyet theo cong cu, nhat ky kiem toan
+- **Ca nhan hoa** — Ten, tinh cach, phong cach noi, avatar, chu de (8 loai)
 
 ## Tai sao chon Naia?
 
-Cac cong cu AI hien tai theo mo hinh "con nguoi su dung AI nhu cong cu". Naia dao nguoc moi quan he nay — **"Trao cho AI toan bo he dieu hanh."**
+Cac cong cu AI khac chi la "cong cu". Naia la **"AI cua rieng ban"**.
 
-| Cach tiep can hien tai | Han che | Naia |
-|-----------------------|---------|---------|
-| **Mo rong VS Code** (Copilot, Cline) | Phai mo IDE de su dung AI | Khong can IDE. Luon bat |
-| **Agent CLI** (Claude Code, Aider) | Chi hoat dong trong terminal | Dieu khien tep, trinh duyet, toan bo he thong |
-| **Ung dung chatbot** (ChatGPT, Gemini) | Chi co the chat, khong the thuc thi | Chat + Thuc thi. Noi "tao tep" va no thuc su tao |
-| **Daemon macOS** (OpenClaw) | brew install, chi macOS, CLI | Ung dung desktop + avatar 3D. Dua tren Linux |
-| **Framework AI** (LangChain) | Chi lap trinh vien su dung duoc | Onboarding 7 buoc de bat ky ai cung bat dau |
+| | Cac cong cu AI khac | Naia |
+|---|---------------------|------|
+| **Triet ly** | Su dung AI nhu cong cu | Trao AI he dieu hanh. Song cung nhau. |
+| **Doi tuong** | Chi lap trinh vien | Tat ca nhung ai muon AI cua rieng minh |
+| **Chon AI** | Nen tang quyet dinh | 7 dam may + AI cuc bo — ban quyet dinh |
+| **Du lieu** | Bi khoa tren dam may | Tri nho, tinh cach, cai dat tat ca cuc bo |
+| **Avatar** | Khong co | Nhan vat VRM 3D + cam xuc + dong bo moi |
+| **Giong noi** | Chi van ban hoac TTS co ban | 5 TTS + STT + giong noi rieng cua AI |
+| **Trien khai** | npm / brew / pip | Ung dung desktop hoac he dieu hanh USB khoi dong |
+| **Nen tang** | macOS / CLI / Web | Desktop Linux native → tuong lai: Physical AI |
+| **Chi phi** | Can khoa API rieng | Tin dung mien phi de bat dau, AI cuc bo hoan toan mien phi |
 
 ## Moi quan he voi OpenClaw
 

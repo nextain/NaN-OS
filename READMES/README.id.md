@@ -2,40 +2,55 @@
 
 # Naia
 
-**The Next Generation AI OS** — Sistem operasi desktop pribadi tempat avatar AI tinggal
+**The Next Generation AI OS** — Sistem operasi AI pribadi tempat AI Anda sendiri tinggal
 
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](../LICENSE)
 
-> "OS itu sendiri adalah alat AI. AI tidak berjalan di atas OS — AI mengendalikan OS."
+> "AI Anda, aturan Anda. Pilih AI Anda, bentuk memori dan kepribadiannya, berikan suara Anda — semuanya di mesin Anda sendiri."
 
 ## Apa itu Naia?
 
-Naia adalah aplikasi desktop Linux di mana avatar AI 3D tinggal secara permanen. Berkomunikasi dengan AI melalui chat dan suara, dan AI langsung menjalankan manajemen file, perintah terminal, pencarian web, dan penulisan kode. Siapa pun — tidak hanya pengembang — dapat memiliki agen AI sendiri.
+Naia adalah OS AI pribadi yang memberikan kedaulatan penuh atas AI kepada individu. Pilih AI mana yang akan digunakan (termasuk model lokal), konfigurasikan memori dan kepribadiannya secara lokal, kustomisasi avatar 3D dan suaranya — semuanya tetap di mesin Anda, di bawah kendali Anda.
 
-### Fitur Utama
+Ini bukan sekadar alat AI biasa. Ini adalah sistem operasi tempat AI Anda tinggal, tumbuh, dan bekerja bersama Anda. Hari ini berupa OS desktop dengan avatar 3D. Besok — avatar video real-time, bernyanyi, bermain game, dan pada akhirnya Physical AI (OS android) Anda sendiri.
 
-- **Avatar 3D** — Karakter VRM menghadirkan percakapan yang hidup dengan ekspresi emosi (senang/sedih/terkejut/berpikir, dll.) dan sinkronisasi bibir
-- **Multi LLM** — Mendukung 7 penyedia: Gemini, Claude, GPT, Grok, zAI, Ollama, Claude Code CLI
-- **Eksekusi Alat** — 8 alat termasuk baca/tulis file, eksekusi terminal, pencarian web, browser, sub-agen
-- **70 Keterampilan** — 7 bawaan + 63 kustom (cuaca, GitHub, Slack, Notion, Spotify, Discord, dll.)
-- **Percakapan Suara** — TTS dengan 5 penyedia (Nextain Cloud, Edge, Google, OpenAI, ElevenLabs) + STT
+### Filosofi Inti
+
+- **Kedaulatan AI** — Anda yang memilih AI. Cloud atau lokal. OS tidak memaksakan.
+- **Kendali Penuh** — Memori, kepribadian, pengaturan — semuanya disimpan lokal. Tanpa ketergantungan cloud.
+- **AI Milik Anda** — Kustomisasi avatar, suara, nama, kepribadian. Jadikan benar-benar milik Anda.
+- **Selalu Hidup** — AI berjalan 24/7 di latar belakang, menerima pesan dan mengerjakan tugas bahkan saat Anda pergi.
+- **Visi Masa Depan** — Avatar 3D VRM → avatar video real-time → bernyanyi & bermain game bersama → Physical AI
+
+### Fitur
+
+- **Avatar 3D** — Karakter VRM dengan ekspresi emosi (senang/sedih/terkejut/berpikir) dan sinkronisasi bibir
+- **Kebebasan AI** — 7 penyedia cloud (Gemini, Claude, GPT, Grok, zAI) + AI lokal (Ollama) + Claude Code CLI
+- **Lokal-First** — Memori, kepribadian, semua pengaturan disimpan di mesin Anda
+- **Eksekusi Alat** — 8 alat: baca/tulis file, terminal, pencarian web, browser, sub-agen
+- **70+ Keterampilan** — 7 bawaan + 63 kustom + 5.700+ keterampilan komunitas ClawHub
+- **Suara** — 5 penyedia TTS + STT + sinkronisasi bibir. Berikan AI Anda suara yang Anda inginkan.
 - **14 Bahasa** — Korea, Inggris, Jepang, Cina, Prancis, Jerman, Rusia, dan lainnya
-- **Integrasi Kanal** — Berbicara dengan AI kapan saja melalui Discord DM
-- **Keamanan 4 Tingkat** — Hierarki izin dari T0 (baca) hingga T3 (berbahaya), sistem persetujuan per alat, log audit
-- **Akun Nextain** — Mulai langsung dengan penggunaan berbasis kredit, tanpa perlu kunci API
-- **Personalisasi** — Sesuaikan nama, kepribadian, gaya bicara, avatar, dan tema (8 jenis)
+- **Selalu Aktif** — Daemon gateway OpenClaw menjaga AI Anda tetap berjalan di latar belakang
+- **Integrasi Kanal** — Berbicara dengan AI melalui Discord DM, kapan saja, di mana saja
+- **Keamanan 4 Tingkat** — T0 (baca) hingga T3 (berbahaya), persetujuan per alat, log audit
+- **Personalisasi** — Nama, kepribadian, gaya bicara, avatar, tema (8 jenis)
 
 ## Mengapa Naia?
 
-Alat AI yang ada mengikuti paradigma "manusia menggunakan AI sebagai alat". Naia membalikkan hubungan ini — **"Berikan AI seluruh OS."**
+Alat AI lain hanyalah "alat". Naia adalah **"AI milik Anda sendiri"**.
 
-| Pendekatan yang Ada | Keterbatasan | Naia |
-|--------------------|-------------|---------|
-| **Ekstensi VS Code** (Copilot, Cline) | Harus membuka IDE untuk menggunakan AI | Tidak perlu IDE. Selalu aktif |
-| **Agen CLI** (Claude Code, Aider) | Hanya bekerja di dalam terminal | Mengendalikan file, browser, seluruh sistem |
-| **Aplikasi Chatbot** (ChatGPT, Gemini) | Hanya bisa chat, tidak bisa mengeksekusi | Chat + Eksekusi. Katakan "buat file" dan benar-benar membuat |
-| **Daemon macOS** (OpenClaw) | brew install, hanya macOS, CLI | Aplikasi desktop + avatar 3D. Berbasis Linux |
-| **Framework AI** (LangChain) | Hanya dapat digunakan oleh pengembang | Onboarding 7 langkah agar siapa pun bisa memulai |
+| | Alat AI Lain | Naia |
+|---|----------------|------|
+| **Filosofi** | Menggunakan AI sebagai alat | Berikan AI OS-nya. Hidup bersama. |
+| **Target** | Hanya pengembang | Semua orang yang ingin memiliki AI sendiri |
+| **Pilihan AI** | Platform yang menentukan | 7 cloud + AI lokal — Anda yang memutuskan |
+| **Data** | Terkunci di cloud | Memori, kepribadian, pengaturan semuanya lokal |
+| **Avatar** | Tidak ada | Karakter 3D VRM + emosi + sinkronisasi bibir |
+| **Suara** | Hanya teks atau TTS dasar | 5 TTS + STT + suara AI Anda sendiri |
+| **Deployment** | npm / brew / pip | Aplikasi desktop atau USB OS bootable |
+| **Platform** | macOS / CLI / Web | Desktop native Linux → masa depan: Physical AI |
+| **Biaya** | Perlu kunci API terpisah | Kredit gratis untuk memulai, AI lokal sepenuhnya gratis |
 
 ## Hubungan dengan OpenClaw
 

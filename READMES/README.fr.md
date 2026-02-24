@@ -2,40 +2,55 @@
 
 # Naia
 
-**The Next Generation AI OS** — Un systeme d'exploitation de bureau personnel ou vit un avatar IA
+**The Next Generation AI OS** — Un systeme d'exploitation IA personnel ou vit votre propre IA
 
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](../LICENSE)
 
-> "L'OS lui-meme est l'outil de l'IA. L'IA ne s'execute pas au-dessus de l'OS — l'IA controle l'OS."
+> "Votre IA, vos regles. Choisissez votre IA, faconnez sa memoire et sa personnalite, donnez-lui votre voix — le tout sur votre propre machine."
 
 ## Qu'est-ce que Naia ?
 
-Naia est une application de bureau Linux dans laquelle reside un avatar IA 3D. Communiquez avec l'IA par chat et voix, et elle execute directement la gestion de fichiers, les commandes terminal, les recherches web et l'ecriture de code. Tout le monde — pas seulement les developpeurs — peut avoir son propre agent IA.
+Naia est un OS IA personnel qui donne aux individus une souverainete totale sur leur IA. Choisissez quelle IA utiliser (y compris les modeles locaux), configurez sa memoire et sa personnalite localement, personnalisez son avatar 3D et sa voix — tout reste sur votre machine, sous votre controle.
 
-### Fonctionnalites principales
+Ce n'est pas qu'un simple outil IA. C'est un systeme d'exploitation ou votre IA vit, grandit et travaille a vos cotes. Aujourd'hui, c'est un OS de bureau avec un avatar 3D. Demain — des avatars video en temps reel, du chant, du jeu, et a terme votre propre Physical AI (OS android).
 
-- **Avatar 3D** — Un personnage VRM offre des conversations vivantes avec des expressions d'emotions (joie/tristesse/surprise/reflexion, etc.) et la synchronisation labiale
-- **Multi LLM** — Prise en charge de 7 fournisseurs : Gemini, Claude, GPT, Grok, zAI, Ollama, Claude Code CLI
-- **Execution d'outils** — 8 outils incluant lecture/ecriture de fichiers, execution terminal, recherche web, navigateur, sous-agent
-- **70 competences** — 7 integrees + 63 personnalisees (meteo, GitHub, Slack, Notion, Spotify, Discord, etc.)
-- **Conversation vocale** — TTS avec 5 fournisseurs (Nextain Cloud, Edge, Google, OpenAI, ElevenLabs) + STT
+### Philosophie fondamentale
+
+- **Souverainete IA** — Vous choisissez votre IA. Cloud ou local. L'OS ne dicte rien.
+- **Controle total** — Memoire, personnalite, parametres — tout est stocke localement. Aucune dependance au cloud.
+- **Votre propre IA** — Personnalisez l'avatar, la voix, le nom, la personnalite. Rendez-la vraiment votre.
+- **Toujours en vie** — L'IA fonctionne 24h/24 et 7j/7 en arriere-plan, recevant des messages et travaillant meme en votre absence.
+- **Vision future** — Avatars VRM 3D → avatars video en temps reel → chanter et jouer ensemble → Physical AI
+
+### Fonctionnalites
+
+- **Avatar 3D** — Personnage VRM avec expressions d'emotions (joie/tristesse/surprise/reflexion) et synchronisation labiale
+- **Liberte IA** — 7 fournisseurs cloud (Gemini, Claude, GPT, Grok, zAI) + IA locale (Ollama) + Claude Code CLI
+- **Local d'abord** — Memoire, personnalite, tous les parametres stockes sur votre machine
+- **Execution d'outils** — 8 outils : lecture/ecriture de fichiers, terminal, recherche web, navigateur, sous-agent
+- **70+ competences** — 7 integrees + 63 personnalisees + 5 700+ competences communautaires ClawHub
+- **Voix** — 5 fournisseurs TTS + STT + synchronisation labiale. Donnez a votre IA la voix que vous voulez.
 - **14 langues** — Coreen, anglais, japonais, chinois, francais, allemand, russe et plus
-- **Integration de canaux** — Parlez a l'IA a tout moment via Discord DM
-- **Securite a 4 niveaux** — Hierarchie de permissions de T0 (lecture) a T3 (dangereux), systeme d'approbation par outil, journaux d'audit
-- **Compte Nextain** — Demarrez immediatement avec une utilisation basee sur les credits, sans cle API
-- **Personnalisation** — Personnalisez le nom, la personnalite, le style de parole, l'avatar et le theme (8 types)
+- **Toujours actif** — Le daemon gateway OpenClaw garde votre IA en fonctionnement en arriere-plan
+- **Integration de canaux** — Parlez a votre IA via Discord DM, a tout moment, ou que vous soyez
+- **Securite a 4 niveaux** — T0 (lecture) a T3 (dangereux), approbation par outil, journaux d'audit
+- **Personnalisation** — Nom, personnalite, style de parole, avatar, theme (8 types)
 
 ## Pourquoi Naia ?
 
-Les outils IA existants suivent le paradigme "les humains utilisent l'IA comme outil". Naia inverse cette relation — **"Donner tout l'OS a l'IA."**
+Les autres outils IA ne sont que des "outils". Naia est **"votre propre IA"**.
 
-| Approche existante | Limitation | Naia |
-|-------------------|------------|---------|
-| **Extensions VS Code** (Copilot, Cline) | Il faut ouvrir l'IDE pour utiliser l'IA | Pas besoin d'IDE. Toujours actif |
-| **Agents CLI** (Claude Code, Aider) | Fonctionne uniquement dans le terminal | Controle les fichiers, le navigateur, tout le systeme |
-| **Applications chatbot** (ChatGPT, Gemini) | Ne peut que discuter, pas executer | Discussion + Execution. Dites "cree un fichier" et il le fait vraiment |
-| **Daemon macOS** (OpenClaw) | Installation brew, macOS uniquement, CLI | Application de bureau + avatar 3D. Base sur Linux |
-| **Frameworks IA** (LangChain) | Utilisable uniquement par les developpeurs | Onboarding en 7 etapes pour que tout le monde puisse commencer |
+| | Autres outils IA | Naia |
+|---|-----------------|------|
+| **Philosophie** | Utiliser l'IA comme outil | Donner l'OS a l'IA. Vivre ensemble. |
+| **Cible** | Developpeurs uniquement | Tous ceux qui veulent leur propre IA |
+| **Choix de l'IA** | La plateforme decide | 7 cloud + IA locale — vous decidez |
+| **Donnees** | Verrouillees dans le cloud | Memoire, personnalite, parametres tous en local |
+| **Avatar** | Aucun | Personnage VRM 3D + emotions + synchronisation labiale |
+| **Voix** | Texte seul ou TTS basique | 5 TTS + STT + la voix de votre IA |
+| **Deploiement** | npm / brew / pip | Application de bureau ou cle USB bootable |
+| **Plateforme** | macOS / CLI / Web | Bureau Linux natif → futur : Physical AI |
+| **Cout** | Cles API separees requises | Credits gratuits pour commencer, IA locale entierement gratuite |
 
 ## Relation avec OpenClaw
 

@@ -2,40 +2,55 @@
 
 # Naia
 
-**The Next Generation AI OS** — Un sistema operativo de escritorio personal donde vive un avatar de IA
+**The Next Generation AI OS** — Un sistema operativo de IA personal donde vive tu propia IA
 
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](../LICENSE)
 
-> "El SO en si es la herramienta de la IA. La IA no se ejecuta sobre el SO — la IA controla el SO."
+> "Tu IA, tus reglas. Elige tu IA, moldea su memoria y personalidad, dale tu voz — todo en tu propia maquina."
 
 ## Que es Naia?
 
-Naia es una aplicacion de escritorio Linux donde reside permanentemente un avatar de IA 3D. Habla con la IA a traves de chat y voz, y ella ejecuta directamente la gestion de archivos, comandos de terminal, busquedas web y escritura de codigo. Cualquier persona — no solo desarrolladores — puede tener su propio agente de IA.
+Naia es un SO de IA personal que otorga a las personas soberania total sobre su IA. Elige que IA usar (incluyendo modelos locales), configura su memoria y personalidad localmente, personaliza su avatar 3D y voz — todo permanece en tu maquina, bajo tu control.
 
-### Funciones principales
+Esto no es solo otra herramienta de IA. Es un sistema operativo donde tu IA vive, crece y trabaja junto a ti. Hoy es un SO de escritorio con un avatar 3D. Manana — avatares de video en tiempo real, cantar, jugar, y eventualmente tu propio Physical AI (SO para androide).
 
-- **Avatar 3D** — Personaje VRM ofrece conversaciones vividas con expresiones de emociones (alegria/tristeza/sorpresa/reflexion, etc.) y sincronizacion labial
-- **Multi LLM** — Soporte para 7 proveedores: Gemini, Claude, GPT, Grok, zAI, Ollama, Claude Code CLI
-- **Ejecucion de herramientas** — 8 herramientas incluyendo lectura/escritura de archivos, ejecucion de terminal, busqueda web, navegador, sub-agente
-- **70 habilidades** — 7 integradas + 63 personalizadas (clima, GitHub, Slack, Notion, Spotify, Discord, etc.)
-- **Conversacion por voz** — TTS con 5 proveedores (Nextain Cloud, Edge, Google, OpenAI, ElevenLabs) + STT
+### Filosofia central
+
+- **Soberania de IA** — Tu eliges tu IA. Nube o local. El SO no dicta.
+- **Control completo** — Memoria, personalidad, configuracion — todo almacenado localmente. Sin dependencia de la nube.
+- **Tu propia IA** — Personaliza avatar, voz, nombre, personalidad. Hazla verdaderamente tuya.
+- **Siempre activa** — La IA funciona 24/7 en segundo plano, recibiendo mensajes y trabajando incluso cuando no estas.
+- **Vision de futuro** — Avatares VRM 3D → avatares de video en tiempo real → cantar y jugar juntos → Physical AI
+
+### Funcionalidades
+
+- **Avatar 3D** — Personaje VRM con expresiones de emociones (alegria/tristeza/sorpresa/reflexion) y sincronizacion labial
+- **Libertad de IA** — 7 proveedores en la nube (Gemini, Claude, GPT, Grok, zAI) + IA local (Ollama) + Claude Code CLI
+- **Local primero** — Memoria, personalidad, toda la configuracion almacenada en tu maquina
+- **Ejecucion de herramientas** — 8 herramientas: lectura/escritura de archivos, terminal, busqueda web, navegador, sub-agente
+- **70+ habilidades** — 7 integradas + 63 personalizadas + 5,700+ habilidades de la comunidad ClawHub
+- **Voz** — 5 proveedores TTS + STT + sincronizacion labial. Dale a tu IA la voz que quieras.
 - **14 idiomas** — Coreano, ingles, japones, chino, frances, aleman, ruso y mas
-- **Integracion de canales** — Habla con la IA en cualquier momento via Discord DM
-- **Seguridad de 4 niveles** — Jerarquia de permisos desde T0 (lectura) hasta T3 (peligroso), sistema de aprobacion por herramienta, registros de auditoria
-- **Cuenta Nextain** — Comienza inmediatamente con uso basado en creditos, sin necesidad de clave API
-- **Personalizacion** — Personaliza nombre, personalidad, estilo de habla, avatar y tema (8 tipos)
+- **Siempre encendido** — El demonio OpenClaw Gateway mantiene tu IA funcionando en segundo plano
+- **Integracion de canales** — Habla con tu IA via Discord DM, en cualquier momento, desde cualquier lugar
+- **Seguridad de 4 niveles** — T0 (lectura) a T3 (peligroso), aprobacion por herramienta, registros de auditoria
+- **Personalizacion** — Nombre, personalidad, estilo de habla, avatar, tema (8 tipos)
 
 ## Por que Naia?
 
-Las herramientas de IA existentes siguen el paradigma "los humanos usan la IA como herramienta". Naia invierte esta relacion — **"Dale a la IA el SO completo."**
+Otras herramientas de IA son solo "herramientas". Naia es **"tu propia IA"**.
 
-| Enfoque existente | Limitacion | Naia |
-|-------------------|------------|---------|
-| **Extensiones VS Code** (Copilot, Cline) | Hay que abrir el IDE para usar IA | No necesita IDE. Siempre encendido |
-| **Agentes CLI** (Claude Code, Aider) | Solo funciona dentro del terminal | Controla archivos, navegador, todo el sistema |
-| **Apps de chatbot** (ChatGPT, Gemini) | Solo puede chatear, no ejecutar | Chat + Ejecucion. Di "crea un archivo" y realmente lo crea |
-| **Demonio macOS** (OpenClaw) | brew install, solo macOS, CLI | Aplicacion de escritorio + avatar 3D. Basado en Linux |
-| **Frameworks de IA** (LangChain) | Solo usable por desarrolladores | Onboarding de 7 pasos para que cualquiera empiece |
+| | Otras herramientas de IA | Naia |
+|---|--------------------------|------|
+| **Filosofia** | Usar IA como herramienta | Darle a la IA el SO. Vivir juntos. |
+| **Publico** | Solo desarrolladores | Todos los que quieran su propia IA |
+| **Eleccion de IA** | La plataforma decide | 7 nube + IA local — tu decides |
+| **Datos** | Atrapados en la nube | Memoria, personalidad, configuracion todo local |
+| **Avatar** | Ninguno | Personaje VRM 3D + emociones + sincronizacion labial |
+| **Voz** | Solo texto o TTS basico | 5 TTS + STT + la voz propia de tu IA |
+| **Despliegue** | npm / brew / pip | Aplicacion de escritorio o SO en USB arrancable |
+| **Plataforma** | macOS / CLI / Web | Escritorio Linux nativo → futuro: Physical AI |
+| **Costo** | Se requieren claves API por separado | Creditos gratis para empezar, IA local completamente gratis |
 
 ## Relacion con OpenClaw
 
