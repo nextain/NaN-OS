@@ -11,10 +11,9 @@ REPO_DIR="/tmp/naia-os-repo"
 # 0. Clone repo to access assets
 # ==============================================================================
 
-# Bazzite sets per-repo exclude filters (e.g. fedora.exclude=...) via dnf5 config-manager.
-# Temporarily clear all repo excludes so anaconda-live and its NetworkManager deps can install.
-dnf5 -y config-manager setopt "*fedora*".exclude=""
-dnf5 -y config-manager setopt "*updates*".exclude=""
+# Bazzite bakes per-repo exclude= lines into /etc/yum.repos.d/*.repo files.
+# Strip all exclude lines so anaconda-live (needs NetworkManager) can install.
+sed -i '/^exclude=/d' /etc/yum.repos.d/*.repo 2>/dev/null || true
 
 dnf install -y --allowerasing \
     git anaconda-live libblockdev-btrfs libblockdev-lvm libblockdev-dm
