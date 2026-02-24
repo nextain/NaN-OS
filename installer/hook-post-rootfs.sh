@@ -11,9 +11,10 @@ REPO_DIR="/tmp/naia-os-repo"
 # 0. Clone repo to access assets
 # ==============================================================================
 
-# Bazzite bakes per-repo exclude= lines into /etc/yum.repos.d/*.repo files.
-# Strip all exclude lines so anaconda-live (needs NetworkManager) can install.
-sed -i '/^exclude=/d' /etc/yum.repos.d/*.repo 2>/dev/null || true
+# Bazzite versionlocks NetworkManager (COPR build) and sets repo-level excludes
+# via dnf5 config-manager (repos.override.d). Clear both so anaconda-live can install.
+dnf -qy versionlock clear 2>/dev/null || true
+rm -f /etc/dnf/repos.override.d/99-config_manager.repo 2>/dev/null || true
 
 dnf install -y --allowerasing \
     git anaconda-live libblockdev-btrfs libblockdev-lvm libblockdev-dm
