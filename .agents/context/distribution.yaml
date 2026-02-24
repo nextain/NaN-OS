@@ -27,21 +27,29 @@ formats:
     status: working
 
   iso:
-    builder: jasonn3/build-container-installer@v1.4.0
+    builder: ublue-os/titanoboa@main
+    type: live ISO (squashfs + ephemeral overlay)
     base_image: ghcr.io/nextain/naia-os:latest
-    variant: Kinoite (KDE Plasma)
-    fedora_version: "43"
-    recipe: recipes/recipe.yml
-    output_name: naia-os-latest.iso
+    output_name: naia-os-live-amd64.iso
     status: working
+    hook: installer/hook-post-rootfs.sh
+    flatpaks: installer/flatpaks (Chrome, Discord — baked into squashfs)
+    customizations:
+      - Anaconda installer + Naia branding (sidebar, topbar, CSS)
+      - Anaconda profile (BTRFS + zstd, Naia CSS)
+      - KDE taskbar pin (Naia Shell)
+      - fcitx5 hangul default config (Korean input)
+      - Live wallpaper
+      - Live session warning dialog (kdialog, Korean)
     notes:
-      - GHCR package must be public for skopeo to pull without auth
-      - iso_path output is directory (dirname), iso_name is filename
-      - Upload uses iso_path/iso_name pattern (not iso_path alone)
-      - ISO ~7GB, generation takes ~12-15 minutes
-      - GitHub Release file size limit is 2GB — ISO uploaded as Actions Artifact only
+      - GHCR package must be public for image pull
+      - Hook clones repo via git (repo must be public)
+      - Titanoboa GRUB is hardcoded (label from os-release PRETTY_NAME)
+      - CDLABEL is always 'titanoboa_boot' (not customizable)
+      - Pre-installed flatpaks survive reboot (in squashfs), user data does not
+      - ISO uploaded as Actions Artifact (too large for Release)
       - Artifact retention: 30 days
-      - CHECKSUM file uploaded to Release for verification
+      - CHECKSUM file uploaded to Release draft
 
 release:
   current_version: v0.1.0
@@ -123,9 +131,14 @@ os_image:
     - Naia Shell autostart on login via XDG autostart entry
 
 bootable_usb:
-  create: "sudo dd if=naia-os-latest.iso of=/dev/sdX bs=4M status=progress oflag=sync"
-  verify: "lsblk /dev/sdX -o NAME,SIZE,LABEL,FSTYPE (label should be naia-x86_64-latest)"
+  create: "sudo dd if=naia-os-live-amd64.iso of=/dev/sdX bs=4M status=progress oflag=sync"
+  verify: "lsblk /dev/sdX -o NAME,SIZE,LABEL,FSTYPE (label should be titanoboa_boot)"
+  behavior:
+    - Live session = read-only squashfs + RAM overlay (ephemeral)
+    - Pre-installed apps (Chrome, Discord, Naia Shell) persist across boots
+    - User data, settings, AI conversations are lost on reboot
+    - "Install to Hard Drive" for permanent installation
   notes:
     - Must unmount USB first (sudo umount /dev/sdX1)
     - ISO is hybrid — works for both UEFI and legacy BIOS boot
-    - USB label changes from old branding to naia-x86_64-latest
+    - CDLABEL is titanoboa_boot (hardcoded by titanoboa)

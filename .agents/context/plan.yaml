@@ -10,7 +10,7 @@ phases:
     tasks:
       - "os/recipe.yml (BlueBuild recipe, base: bazzite)"
       - ".github/workflows/build.yml (GitHub Actions)"
-      - "ISO generation (ublue-os/isogenerator)"
+      - "ISO generation (ublue-os/titanoboa, live ISO)"
     done_when: "USB boot = Bazzite + Node.js (no custom yet)"
 
   phase_1:
