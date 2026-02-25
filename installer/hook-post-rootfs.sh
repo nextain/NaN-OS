@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
 # hook-post-rootfs.sh — Titanoboa ISO post-rootfs hook
 # Runs inside podman --rootfs (the extracted container image IS /)
-# Our repo is mounted at /app by Titanoboa
+# /app is titanoboa's own repo, NOT ours — clone naia-os to get assets.
 set -euo pipefail
 
-SRC="/app"
+REPO_URL="https://github.com/nextain/naia-os.git"
+SRC="/tmp/naia-os-repo"
 
 # ==============================================================================
 # 1. Install Anaconda + branding
@@ -16,7 +17,9 @@ dnf -qy versionlock clear 2>/dev/null || true
 rm -f /etc/dnf/repos.override.d/99-config_manager.repo 2>/dev/null || true
 
 dnf install -y --allowerasing \
-    anaconda-live libblockdev-btrfs libblockdev-lvm libblockdev-dm
+    git anaconda-live libblockdev-btrfs libblockdev-lvm libblockdev-dm
+
+git clone --depth 1 --quiet "${REPO_URL}" "${SRC}"
 
 # Branding assets
 cp "${SRC}/assets/installer/sidebar-logo.png" /usr/share/anaconda/pixmaps/
@@ -161,5 +164,6 @@ EOF
 # 8. Cleanup
 # ==============================================================================
 
+rm -rf "${SRC}"
 systemctl disable rpm-ostree-countme.timer 2>/dev/null || true
 dnf clean all
