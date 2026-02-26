@@ -30,8 +30,8 @@ cd "${OPENCLAW_DIR}"
 npm install --production
 
 # Verify
-if [ -x "${OPENCLAW_DIR}/node_modules/.bin/openclaw" ]; then
-    VERSION=$("${OPENCLAW_DIR}/node_modules/.bin/openclaw" --version 2>/dev/null || echo "${OPENCLAW_VERSION}")
+if [ -f "${OPENCLAW_DIR}/node_modules/openclaw/openclaw.mjs" ]; then
+    VERSION=$(node "${OPENCLAW_DIR}/node_modules/openclaw/openclaw.mjs" --version 2>/dev/null || echo "${OPENCLAW_VERSION}")
     echo "[naia] OpenClaw ${VERSION} installed at ${OPENCLAW_DIR}"
 else
     echo "ERROR: OpenClaw installation failed" >&2

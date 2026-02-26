@@ -84,7 +84,7 @@ cargo test --manifest-path shell/src-tauri/Cargo.toml
 cd shell && pnpm run test:e2e:tauri
 
 # Gateway (수동 실행 시)
-~/.naia/openclaw/node_modules/.bin/openclaw gateway run --bind loopback --port 18789
+node ~/.naia/openclaw/node_modules/openclaw/openclaw.mjs gateway run --bind loopback --port 18789
 
 # Gateway E2E
 cd agent && CAFE_LIVE_GATEWAY_E2E=1 pnpm exec vitest run src/__tests__/gateway-e2e.test.ts

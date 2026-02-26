@@ -6,7 +6,7 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-ExecStart=%h/.naia/openclaw/node_modules/.bin/openclaw gateway run --bind loopback --port 18789
+ExecStart=/usr/bin/node %h/.naia/openclaw/node_modules/openclaw/openclaw.mjs gateway run --bind loopback --port 18789
 Environment=HOME=%h
 Environment=PATH=%h/.local/bin:%h/.config/nvm/versions/node/v22/bin:/usr/local/bin:/usr/bin:/bin
 WorkingDirectory=%h/.naia/openclaw

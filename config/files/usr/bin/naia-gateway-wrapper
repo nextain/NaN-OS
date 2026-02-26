@@ -7,15 +7,15 @@ set -euo pipefail
 
 SYSTEM_OPENCLAW="/usr/share/naia/openclaw"
 USER_OPENCLAW="${HOME}/.naia/openclaw"
-OPENCLAW_BIN="${SYSTEM_OPENCLAW}/node_modules/.bin/openclaw"
+OPENCLAW_BIN="${SYSTEM_OPENCLAW}/node_modules/openclaw/openclaw.mjs"
 NODE_BIN="$(command -v node || echo /usr/bin/node)"
 
 # Fall back to user-local install if system install not found
-if [ ! -x "${OPENCLAW_BIN}" ] && [ -x "${USER_OPENCLAW}/node_modules/.bin/openclaw" ]; then
-    OPENCLAW_BIN="${USER_OPENCLAW}/node_modules/.bin/openclaw"
+if [ ! -x "${OPENCLAW_BIN}" ] && [ -x "${USER_OPENCLAW}/node_modules/openclaw/openclaw.mjs" ]; then
+    OPENCLAW_BIN="${USER_OPENCLAW}/node_modules/openclaw/openclaw.mjs"
 fi
 
-if [ ! -x "${OPENCLAW_BIN}" ]; then
+if [ ! -f "${OPENCLAW_BIN}" ]; then
     echo "ERROR: OpenClaw not found at ${SYSTEM_OPENCLAW} or ${USER_OPENCLAW}" >&2
     exit 1
 fi

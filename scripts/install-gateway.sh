@@ -19,7 +19,7 @@ OPENCLAW_DIR="$HOME/.naia/openclaw"
 CONFIG_DIR="$HOME/.openclaw"
 CONFIG_FILE="$CONFIG_DIR/openclaw.json"
 WORKSPACE_DIR="$CONFIG_DIR/workspace"
-OPENCLAW_BIN="$OPENCLAW_DIR/node_modules/.bin/openclaw"
+OPENCLAW_BIN="$OPENCLAW_DIR/node_modules/openclaw/openclaw.mjs"
 REQUIRED_NODE_MAJOR=22
 OPENCLAW_VERSION="2026.2.22-2"
 GATEWAY_PORT=18789
@@ -153,16 +153,11 @@ done
 # ── Step 4: Verify installation ──────────────────────────────────────────────
 step "Step 4/5: Verifying installation"
 
-if [[ ! -x "$OPENCLAW_BIN" ]]; then
-    # Check if it exists but isn't executable
-    if [[ -f "$OPENCLAW_BIN" ]]; then
-        chmod +x "$OPENCLAW_BIN"
-    else
-        die "OpenClaw binary not found at $OPENCLAW_BIN. Installation may have failed."
-    fi
+if [[ ! -f "$OPENCLAW_BIN" ]]; then
+    die "OpenClaw not found at $OPENCLAW_BIN. Installation may have failed."
 fi
 
-OPENCLAW_VER=$("$OPENCLAW_BIN" --version 2>/dev/null || echo "unknown")
+OPENCLAW_VER=$(node "$OPENCLAW_BIN" --version 2>/dev/null || echo "unknown")
 success "OpenClaw installed: $OPENCLAW_VER"
 success "Binary: $OPENCLAW_BIN"
 
@@ -202,7 +197,7 @@ echo -e "${GREEN}${BOLD}============================================${RESET}"
 echo ""
 echo -e "  ${BOLD}To start the gateway:${RESET}"
 echo ""
-echo -e "    ${CYAN}node ~/.naia/openclaw/node_modules/.bin/openclaw gateway run --bind loopback --port $GATEWAY_PORT${RESET}"
+echo -e "    ${CYAN}node ~/.naia/openclaw/node_modules/openclaw/openclaw.mjs gateway run --bind loopback --port $GATEWAY_PORT${RESET}"
 echo ""
 echo -e "  ${BOLD}To verify it's running:${RESET}"
 echo ""
