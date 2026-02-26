@@ -6,4 +6,4 @@ Icon=io.nextain.naia
 Type=Application
 Categories=Utility;
 StartupWMClass=naia-os
-MimeType=x-scheme-handler/nanos;
+MimeType=x-scheme-handler/naia;

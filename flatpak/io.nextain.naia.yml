@@ -1,6 +1,6 @@
 app-id: io.nextain.naia
 runtime: org.gnome.Platform
-runtime-version: '47'
+runtime-version: '49'
 sdk: org.gnome.Sdk
 sdk-extensions:
   - org.freedesktop.Sdk.Extension.rust-stable
@@ -44,12 +44,14 @@ modules:
         CI: "true"
     build-commands:
       # Agent build (npx pnpm — Flatpak SDK is read-only so global install fails)
-      - cd agent && npx pnpm install --no-frozen-lockfile
+      - cd agent && npx pnpm install --no-frozen-lockfile --shamefully-hoist
       - cd agent && npx tsc
-      # Shell frontend + Tauri binary (no bundling — Flatpak handles packaging)
+      # Shell frontend + Tauri binary (tauri build embeds frontend properly for WebKitGTK)
+      # 1. pnpm install + vite build (frontend dist)
+      # 2. tauri build --no-bundle with beforeBuildCommand disabled (already built above)
       - cd shell && npx pnpm install --no-frozen-lockfile
       - cd shell && npx pnpm run build
-      - cd shell/src-tauri && cargo build --release
+      - cd shell && npx tauri build --no-bundle --config src-tauri/tauri.conf.flatpak.json
       # Install binary
       - install -Dm755 shell/src-tauri/target/release/naia-shell /app/bin/naia-os
       # Node.js runtime (for agent)
@@ -59,6 +61,17 @@ modules:
       - cp -rL agent/dist /app/lib/naia-os/agent/dist
       - cp -rL agent/node_modules /app/lib/naia-os/agent/node_modules
       - cp agent/package.json /app/lib/naia-os/agent/
+      # OpenClaw Gateway (npm install during build, bundle to /app/lib/naia-os/openclaw/)
+      - mkdir -p /run/build/Naia-OS/openclaw-build
+      - |
+        cat > /run/build/Naia-OS/openclaw-build/package.json << 'CONF'
+        {"name":"naia-openclaw","version":"1.0.0","private":true,"dependencies":{"openclaw":"2026.2.22-2"}}
+        CONF
+      - cd /run/build/Naia-OS/openclaw-build && npm install --production
+      - rm -rf /run/build/Naia-OS/openclaw-build/node_modules/@node-llama-cpp
+      - mkdir -p /app/lib/naia-os/openclaw
+      - cp -rL /run/build/Naia-OS/openclaw-build/node_modules /app/lib/naia-os/openclaw/node_modules
+      - cp /run/build/Naia-OS/openclaw-build/package.json /app/lib/naia-os/openclaw/
       # Desktop integration
       - install -Dm644 flatpak/io.nextain.naia.desktop /app/share/applications/io.nextain.naia.desktop
       - install -Dm644 flatpak/io.nextain.naia.metainfo.xml /app/share/metainfo/io.nextain.naia.metainfo.xml
