@@ -147,20 +147,38 @@
 		}
 	},
 	"logging": {
-		"forbidden": ["console.log", "console.warn", "console.error"],
-		"rule": "Use structured logger only. No raw console output.",
-		"logger": {
-			"import": "import { Logger } from '@naia/shared/logger'",
-			"levels": {
-				"debug": "Development debugging, detailed execution flow",
-				"info": "Important operations completed, state changes",
-				"warn": "Potential issues, degraded performance",
-				"error": "Actual errors, exceptions"
+		"rule": "Use structured logger only. No raw console/eprintln output.",
+		"typescript": {
+			"forbidden": ["console.log", "console.warn", "console.error"],
+			"logger": {
+				"import": "import { Logger } from '@naia/shared/logger'",
+				"levels": {
+					"debug": "Development debugging, detailed execution flow",
+					"info": "Important operations completed, state changes",
+					"warn": "Potential issues, degraded performance",
+					"error": "Actual errors, exceptions"
+				},
+				"format": "[ComponentName] message",
+				"examples": {
+					"correct": "Logger.info('[AgentCore] LLM response received', { model, tokens })",
+					"wrong": "console.log('got response')"
+				}
+			}
+		},
+		"rust": {
+			"forbidden": ["raw eprintln!", "println!"],
+			"functions": {
+				"log_both": "Important messages — always stderr + file. Use for: session start/end, errors, auth events, critical state changes.",
+				"log_verbose": "Debug messages — file always, stderr only in debug builds (cfg!(debug_assertions)). Use for: paths found, PID info, env vars, progress, window state, process lifecycle.",
+				"log_to_file": "File only — no stderr. Use for: high-frequency internal events."
 			},
-			"format": "[ComponentName] message",
+			"location": "shell/src-tauri/src/lib.rs (log_both, log_verbose, log_to_file)",
+			"log_files": "~/.naia/logs/ (naia.log, gateway.log, node-host.log)",
+			"security": "Never log API keys, tokens, passwords. Use *** masking for env var values.",
 			"examples": {
-				"correct": "Logger.info('[AgentCore] LLM response received', { model, tokens })",
-				"wrong": "console.log('got response')"
+				"correct_important": "log_both(\"[Naia] Gateway healthy after 25s\")",
+				"correct_verbose": "log_verbose(&format!(\"[Naia] Found agent at: {}\", path.display()))",
+				"wrong": "eprintln!(\"[Naia] some debug info\")"
 			}
 		},
 		"debug_logging": {
@@ -183,7 +201,7 @@
 			},
 			"release_stripping": {
 				"rule": "Debug logs are dev-only. Release builds must strip them.",
-				"rust": "debug!() and trace!() macros — excluded in release profile",
+				"rust": "log_verbose() — stderr only in debug builds, always written to file",
 				"typescript": "Logger.debug() — stripped by build config or no-op in production"
 			}
 		},
@@ -262,7 +280,7 @@
 				"No duplicate code (same logic in 2+ places)?",
 				"No unused imports/functions/files (knip clean)?",
 				"No zombie code from previous implementation?",
-				"Logging uses structured logger (no console.log)?"
+				"Logging uses structured logger (no console.log, no raw eprintln!)?"
 			],
 			"checklist_security": [
 				"Permission tier correctly assigned for new tools?",

@@ -149,15 +149,10 @@ pnpm test:coverage     # 커버리지 포함
 
 ## 로깅
 
-### 금지
-```typescript
-// ❌ 절대 금지
-console.log("...")
-console.warn("...")
-console.error("...")
-```
+### TypeScript (Shell frontend, Agent)
 
-### 올바른 사용
+**금지**: `console.log`, `console.warn`, `console.error`
+
 ```typescript
 import { Logger } from "@naia/shared/logger";
 
@@ -167,13 +162,36 @@ Logger.warn("[Gateway] Channel reconnecting", { channel: "discord" });
 Logger.error("[Shell] Avatar render failed", error);
 ```
 
-### 로그 레벨
 | 레벨 | 용도 |
 |------|------|
-| debug | 개발 디버깅, 상세 실행 흐름 |
+| debug | 개발 디버깅 (프로덕션에서 strip) |
 | info | 중요한 작업 완료, 상태 변경 |
 | warn | 잠재적 문제, 성능 저하 |
 | error | 실제 오류, 예외 |
+
+### Rust (Tauri backend — `shell/src-tauri/src/lib.rs`)
+
+**금지**: raw `eprintln!`, `println!`
+
+| 함수 | stderr | 파일 | 용도 |
+|------|--------|------|------|
+| `log_both` | 항상 | 항상 | 세션 시작/종료, 에러, 인증 이벤트, 중요 상태 변경 |
+| `log_verbose` | debug 빌드만 | 항상 | 경로 탐색, PID, 환경변수, 진행 상황, 윈도우 상태 |
+| `log_to_file` | 안 찍힘 | 항상 | 고빈도 내부 이벤트 |
+
+```rust
+// ✅ 올바른 사용
+log_both("[Naia] Gateway healthy after 25s");                    // 릴리즈에서도 보임
+log_verbose(&format!("[Naia] Found agent at: {}", path));        // 릴리즈에서 파일만
+log_verbose(&format!("[Naia] Gateway env: {}=***", key));        // 값은 마스킹
+
+// ❌ 금지
+eprintln!("[Naia] some debug info");  // raw eprintln 금지
+```
+
+**보안**: API 키, 토큰, 비밀번호는 절대 로그에 노출 불가. 환경변수 값은 `***`로 마스킹.
+
+**로그 파일 위치**: `~/.naia/logs/` (naia.log, gateway.log, node-host.log)
 
 ### 감사 로그 (Audit Log)
 - **목적**: AI의 모든 행동을 기록 (보안 + 투명성)
