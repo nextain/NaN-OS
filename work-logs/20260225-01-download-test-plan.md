@@ -6,6 +6,51 @@
 
 ---
 
+## 사전 검증 결과 (AI 자동 검증, 2026-02-25)
+
+### 통과 항목
+| 항목 | 결과 | 비고 |
+|------|------|------|
+| Gateway 설치 스크립트 (install-gateway.sh) | **PASS** | nvm XDG 경로, 멱등성 확인 |
+| OpenClaw 설치 (2026.2.22-2) | **PASS** | 바이너리 정상, 버전 확인 |
+| 체크섬 (DEB/RPM/AppImage/Flatpak) | **PASS** | SHA256 전부 일치 |
+| AppImage 실행 | **PASS** | Shell UI 정상 시작, Window 생성, DB 초기화 |
+| AppImage → Gateway 연결 | **PASS** | 기존 gateway에 자동 연결 |
+| DEB 패키지 메타데이터 | **PASS** | 패키지명, 의존성, 아이콘 정상 |
+| RPM 패키지 메타데이터 | **PASS** | 패키지명, 아키텍처, 설명 정상 |
+| Flatpak 내부 구조 | **PASS** | agent + node 바이너리 포함 확인 |
+| 다운로드 페이지 (ko/en) | **PASS** | Coming Soon, 복사 버튼, OpenClaw 안내, 검증 순차 오픈 배너 |
+
+### 발견된 문제
+| 항목 | 심각도 | 내용 |
+|------|--------|------|
+| AppImage agent-core 누락 | **HIGH** | `agent/dist/index.js`가 AppImage 번들에 없음. Shell UI만 뜸, AI 불가 |
+| DEB/RPM agent-core 누락 | **HIGH** | 동일 — Tauri 바이너리만 포함, agent 없음 |
+| Flatpak만 agent 포함 | INFO | Flatpak은 `/app/lib/naia-os/agent/` + `/app/bin/node` 포함되어 완전 |
+
+### 결론
+- **ISO**: 빌드 성공! 7.9GB, SHA256 검증 완료, bootable ISO 형식 확인. USB 부팅 테스트 필요
+- **Flatpak**: 가장 완전한 패키지 (agent + node 포함). stock Bazzite에서 실기 테스트 필요
+- **AppImage/DEB/RPM**: Shell UI만 동작. agent 번들링 수정 후 재배포 필요
+- **Gateway 스크립트**: 검증 완료, 바로 사용 가능
+
+### ISO 빌드 기록
+| 시도 | Run ID | 결과 | 실패 원인 |
+|------|--------|------|-----------|
+| #6 | 22359430109 | FAIL | NetworkManager exclude (sed 방식 잘못됨) |
+| #7 | - | FAIL | installer assets 미커밋 |
+| #8 | 22360135283 | FAIL | Generate Checksum (하드코딩된 ISO 경로) |
+| #9 | 22361987987 | **SUCCESS** | 35m7s, 7.9GB ISO 생성 |
+
+### ISO 파일 정보
+- **파일**: `/home/luke/Downloads/naia-os-live/naia-os-live-amd64.iso`
+- **크기**: 7.9GB
+- **SHA256**: `900a437826b525789b86d47a52a0556c59a90e7f5260e742aadf27654f579c4c`
+- **형식**: ISO 9660, DOS/MBR boot sector, bootable
+- **라벨**: `titanoboa_boot`
+
+---
+
 ## A. ISO 테스트 (빌드 성공 시)
 
 ### A-1. 다운로드 및 USB 준비
