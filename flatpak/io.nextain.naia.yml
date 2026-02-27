@@ -73,6 +73,8 @@ modules:
       - mkdir -p /app/lib/naia-os/openclaw
       - cp -rL /run/build/Naia-OS/openclaw-build/node_modules /app/lib/naia-os/openclaw/node_modules
       - cp /run/build/Naia-OS/openclaw-build/package.json /app/lib/naia-os/openclaw/
+      # Bootstrap config template (single source of truth for openclaw.json defaults)
+      - install -Dm644 config/defaults/openclaw-bootstrap.json /app/lib/naia-os/openclaw-bootstrap.json
       # Desktop integration
       - install -Dm644 flatpak/io.nextain.naia.desktop /app/share/applications/io.nextain.naia.desktop
       - install -Dm644 flatpak/io.nextain.naia.metainfo.xml /app/share/metainfo/io.nextain.naia.metainfo.xml

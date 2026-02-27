@@ -447,36 +447,69 @@ fn find_openclaw_paths() -> Result<(std::path::PathBuf, String, String), String>
     Ok((node_bin, openclaw_bin, config_path))
 }
 
+/// Load bootstrap config from bundled template file, with hardcoded fallback.
+/// Single source of truth: config/defaults/openclaw-bootstrap.json
+fn load_bootstrap_config() -> serde_json::Value {
+    // Search: Flatpak bundle → dev-mode relative → hardcoded fallback
+    let candidates = [
+        "/app/lib/naia-os/openclaw-bootstrap.json".to_string(),
+        // Dev mode: relative to src-tauri/
+        {
+            let mut p = std::env::current_exe()
+                .unwrap_or_default()
+                .parent()
+                .unwrap_or(std::path::Path::new("."))
+                .to_path_buf();
+            // Walk up from target/debug to repo root
+            for _ in 0..4 {
+                p = p.parent().unwrap_or(std::path::Path::new(".")).to_path_buf();
+            }
+            p.join("config/defaults/openclaw-bootstrap.json")
+                .to_string_lossy()
+                .to_string()
+        },
+    ];
+    for candidate in &candidates {
+        if let Ok(raw) = std::fs::read_to_string(candidate) {
+            if let Ok(val) = serde_json::from_str::<serde_json::Value>(&raw) {
+                log_verbose(&format!("[Naia] Loaded bootstrap config from {}", candidate));
+                return val;
+            }
+        }
+    }
+    // Hardcoded fallback (should never be needed if build is correct)
+    log_verbose("[Naia] Using hardcoded bootstrap config (template file not found)");
+    serde_json::json!({
+        "gateway": {
+            "mode": "local",
+            "port": 18789,
+            "bind": "loopback",
+            "auth": { "mode": "token" },
+            "reload": { "mode": "off" }
+        },
+        "agents": {
+            "defaults": {
+                "workspace": "~/.openclaw/workspace"
+            }
+        }
+    })
+}
+
 /// Ensure ~/.openclaw/openclaw.json exists with minimal required fields.
-/// If the file is missing, write the bootstrap config matching install-gateway.sh.
-/// If the file exists but gateway.mode is missing, patch it in.
+/// Reads bootstrap template from config/defaults/openclaw-bootstrap.json (SoT).
+/// If the file exists but gateway.mode is missing, patches it in.
 fn ensure_openclaw_config(config_path: &str) {
     let path = std::path::Path::new(config_path);
 
     if !path.exists() {
-        // Bootstrap: create full minimal config
         if let Some(parent) = path.parent() {
             let _ = std::fs::create_dir_all(parent);
         }
-        let bootstrap = serde_json::json!({
-            "gateway": {
-                "mode": "local",
-                "port": 18789,
-                "bind": "loopback",
-                "auth": { "mode": "token" },
-                "reload": { "mode": "off" }
-            },
-            "agents": {
-                "defaults": {
-                    "workspace": "~/.openclaw/workspace"
-                }
-            }
-        });
+        let bootstrap = load_bootstrap_config();
         if let Ok(pretty) = serde_json::to_string_pretty(&bootstrap) {
             let _ = std::fs::write(path, pretty.as_bytes());
             log_both(&format!("[Naia] Bootstrap config created: {}", config_path));
         }
-        // Also create workspace directory
         let home = std::env::var("HOME").unwrap_or_default();
         let _ = std::fs::create_dir_all(format!("{}/.openclaw/workspace", home));
         return;

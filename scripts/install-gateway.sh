@@ -171,7 +171,14 @@ if [[ -f "$CONFIG_FILE" ]]; then
     warn "Config already exists: $CONFIG_FILE (skipping)"
     info "Delete it and re-run this script to regenerate."
 else
-    cat > "$CONFIG_FILE" <<'EOF'
+    # SoT: config/defaults/openclaw-bootstrap.json
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    BOOTSTRAP="${SCRIPT_DIR}/../config/defaults/openclaw-bootstrap.json"
+    if [[ -f "$BOOTSTRAP" ]]; then
+        cp "$BOOTSTRAP" "$CONFIG_FILE"
+    else
+        warn "Bootstrap template not found at $BOOTSTRAP, using fallback"
+        cat > "$CONFIG_FILE" <<'EOF'
 {
   "gateway": {
     "mode": "local",
@@ -187,6 +194,7 @@ else
   }
 }
 EOF
+    fi
     success "Created config: $CONFIG_FILE"
 fi
 
