@@ -11,27 +11,30 @@ Bazzite 기반 배포형 AI OS. Naia(AI 아바타)가 상주하는 개인 운영
 
 필요 시 `.agents/context/`에서 관련 컨텍스트를 온디맨드로 로드합니다.
 
-## Dual-directory (컨텍스트 구조)
+## Triple-mirror 컨텍스트 구조
 
 ```
 .agents/                    # AI용 (영어, JSON/YAML, 토큰 최적화)
 ├── context/
 │   ├── agents-rules.json   # SoT ← 필수 읽기
-│   ├── project-index.yaml  # 인덱스 + 미러링 ← 필수 읽기
+│   ├── project-index.yaml  # 인덱스 + 미러링 규칙 ← 필수 읽기
 │   ├── architecture.yaml   # 아키텍처 (agent/gateway/Rust)
 │   ├── distribution.yaml   # 배포 (Flatpak/ISO/AppImage)
-│   ├── testing.yaml        # 테스트 전략
+│   ├── bazzite-rebranding.yaml # Bazzite 리브랜딩 가이드
 │   ├── openclaw-sync.yaml  # OpenClaw 동기화
-│   ├── vision.yaml         # 비전
-│   ├── plan.yaml           # 구현 계획
 │   └── ...                 # 전체 목록은 project-index.yaml 참조
 ├── workflows/              # 작업 워크플로우 (온디맨드)
 └── skills/                 # 스킬 정의
 
 .users/                     # 사람용 (한국어, Markdown, 상세)
-├── context/                # .agents/context/ 미러 (1:1)
+├── context/                # .agents/context/ 한국어 미러
+│   └── en/                 # 영문 미러 (오픈소스 커뮤니티용)
 └── workflows/              # .agents/workflows/ 미러
 ```
+
+**삼중 미러링**: `.agents/` (AI) ↔ `.users/context/` (한국어) ↔ `.users/context/en/` (영문)
+- README는 한국어 유지, 컨텍스트 문서는 세 버전 모두 관리
+- 변경 시 세 레이어 모두 전파
 
 ## 핵심 원칙
 

@@ -246,6 +246,21 @@ PLAN → CHECK → BUILD (TDD) → VERIFY → CLEAN → COMMIT
 - **Commits** — English, `<type>(<scope>): <description>`
 - **Formatter** — Biome (tab, double quote, semicolons)
 
+## Documentation
+
+Context documents are maintained in a triple-mirror structure:
+
+| Layer | Path | Language | Purpose |
+|-------|------|----------|---------|
+| AI context | `.agents/context/` | English (YAML/JSON) | Token-optimized for AI agents |
+| Human docs | `.users/context/` | Korean (Markdown) | Primary human documentation |
+| English docs | `.users/context/en/` | English (Markdown) | Open-source community |
+
+Key documents:
+- [Bazzite Rebranding Guide](.users/context/en/bazzite-rebranding.md) — How to replace all Bazzite/Fedora branding
+- [Architecture](.users/context/architecture.md) — Hybrid architecture design (KO)
+- [OpenClaw Sync](.users/context/openclaw-sync.md) — Shell ↔ Gateway config sync (KO)
+
 ## Reference Projects
 
 | Project | What We Take |

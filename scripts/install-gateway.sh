@@ -177,7 +177,8 @@ else
     "mode": "local",
     "port": 18789,
     "bind": "loopback",
-    "auth": { "mode": "token" }
+    "auth": { "mode": "token" },
+    "reload": { "mode": "off" }
   },
   "agents": {
     "defaults": {

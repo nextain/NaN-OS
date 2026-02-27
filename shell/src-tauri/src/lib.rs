@@ -434,12 +434,15 @@ fn find_openclaw_paths() -> Result<(std::path::PathBuf, String, String), String>
                 .to_string()
         })?;
     // Prefer ~/.openclaw/openclaw.json (standard path), fallback to legacy ~/.naia/openclaw/
+    // When neither exists, default to primary (standard) so bootstrap creates it there.
     let primary = format!("{}/.openclaw/openclaw.json", home);
     let legacy = format!("{}/.naia/openclaw/openclaw.json", home);
     let config_path = if std::path::Path::new(&primary).exists() {
         primary
-    } else {
+    } else if std::path::Path::new(&legacy).exists() {
         legacy
+    } else {
+        primary // New installs use standard path
     };
     Ok((node_bin, openclaw_bin, config_path))
 }
@@ -559,6 +562,7 @@ fn spawn_gateway() -> Result<GatewayProcess, String> {
         // Still spawn Node Host if needed (Gateway may be external but node host not running)
         let node_host = match find_openclaw_paths() {
             Ok((node_bin, openclaw_bin, config_path)) => {
+                ensure_openclaw_config(&config_path);
                 match spawn_node_host(&node_bin, &openclaw_bin, &config_path) {
                     Ok(nh) => Some(nh),
                     Err(e) => {

@@ -50,6 +50,7 @@ mirror_pairs:
 
   - agents: .agents/context/bazzite-rebranding.yaml
     users: .users/context/bazzite-rebranding.md
+    users_en: .users/context/en/bazzite-rebranding.md
     description: Bazzite OS rebranding guide — all assets, layers, and scripts needed to replace Bazzite/Fedora logos
 
   - agents: .agents/context/phase3-plan.yaml
@@ -61,11 +62,26 @@ mirror_pairs:
     description: PLAN→CHECK→BUILD→VERIFY→CLEAN→COMMIT cycle, review gates, AI rules
 
 mirroring_rules:
-  - When .users/ doc is updated, update corresponding .agents/ context
-  - When .agents/ context is updated, update corresponding .users/ doc
-  - AI can read .agents/ for token-efficient context
-  - AI can read .users/ for detailed human-level understanding
-  - New document = create both .agents/ and .users/ versions
+  structure: triple-mirror
+  layers:
+    - path: .agents/context/
+      lang: en
+      format: YAML/JSON
+      purpose: AI consumption (token-optimized)
+    - path: .users/context/
+      lang: ko
+      format: Markdown
+      purpose: Korean human docs (primary)
+    - path: .users/context/en/
+      lang: en
+      format: Markdown
+      purpose: English human docs (open-source community)
+  rules:
+    - When any layer is updated, propagate to the other two
+    - AI reads .agents/ for token-efficient context
+    - AI reads .users/ (ko or en) for detailed human-level understanding
+    - New document = create all three versions
+    - README.md stays in Korean (project primary language)
 
 work_logs:
   location: work-logs/
