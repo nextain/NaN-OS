@@ -80,7 +80,28 @@ session_sot:
     - shell/src/lib/db.ts                # Facts-only (shrunk from ~230 to ~35 lines)
     - shell/src-tauri/src/memory.rs      # Facts-only (shrunk from ~1230 to ~160 lines)
 
+bootstrap:
+  description: >
+    First-launch config creation for Flatpak/ISO installs where install-gateway.sh
+    does not run. ensure_openclaw_config() in lib.rs is the single bootstrap path.
+  function: ensure_openclaw_config (lib.rs)
+  called_from:
+    - spawn_gateway (before launching Gateway process)
+    - sync_openclaw_config (before reading/writing config)
+  behavior:
+    no_config: Creates full minimal config matching install-gateway.sh defaults
+    existing_config_missing_mode: Patches gateway.mode=local into existing file
+    existing_config_ok: No-op
+  required_fields:
+    - gateway.mode: "local"       # OpenClaw refuses to start without this
+    - gateway.port: 18789
+    - gateway.bind: "loopback"
+    - gateway.auth.mode: "token"
+    - gateway.reload.mode: "off"  # Prevent file-watcher race conditions
+    - agents.defaults.workspace: "~/.openclaw/workspace"
+
 constraints:
   - OpenClaw source code is NOT modifiable
   - Sync is best-effort; errors are logged but never block UI
   - SOUL.md receives the FULL system prompt (emotion tags + name + context)
+  - gateway.mode=local is REQUIRED — without it OpenClaw exits immediately

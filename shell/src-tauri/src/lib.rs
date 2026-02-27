@@ -444,6 +444,68 @@ fn find_openclaw_paths() -> Result<(std::path::PathBuf, String, String), String>
     Ok((node_bin, openclaw_bin, config_path))
 }
 
+/// Ensure ~/.openclaw/openclaw.json exists with minimal required fields.
+/// If the file is missing, write the bootstrap config matching install-gateway.sh.
+/// If the file exists but gateway.mode is missing, patch it in.
+fn ensure_openclaw_config(config_path: &str) {
+    let path = std::path::Path::new(config_path);
+
+    if !path.exists() {
+        // Bootstrap: create full minimal config
+        if let Some(parent) = path.parent() {
+            let _ = std::fs::create_dir_all(parent);
+        }
+        let bootstrap = serde_json::json!({
+            "gateway": {
+                "mode": "local",
+                "port": 18789,
+                "bind": "loopback",
+                "auth": { "mode": "token" },
+                "reload": { "mode": "off" }
+            },
+            "agents": {
+                "defaults": {
+                    "workspace": "~/.openclaw/workspace"
+                }
+            }
+        });
+        if let Ok(pretty) = serde_json::to_string_pretty(&bootstrap) {
+            let _ = std::fs::write(path, pretty.as_bytes());
+            log_both(&format!("[Naia] Bootstrap config created: {}", config_path));
+        }
+        // Also create workspace directory
+        let home = std::env::var("HOME").unwrap_or_default();
+        let _ = std::fs::create_dir_all(format!("{}/.openclaw/workspace", home));
+        return;
+    }
+
+    // Existing file: ensure gateway.mode is set
+    if let Ok(raw) = std::fs::read_to_string(path) {
+        if let Ok(mut root) = serde_json::from_str::<serde_json::Value>(&raw) {
+            let needs_patch = root
+                .get("gateway")
+                .and_then(|gw| gw.get("mode"))
+                .is_none();
+            if needs_patch {
+                if let Some(obj) = root.as_object_mut() {
+                    let gw = obj
+                        .entry("gateway")
+                        .or_insert_with(|| serde_json::json!({}));
+                    if let Some(gw_obj) = gw.as_object_mut() {
+                        gw_obj
+                            .entry("mode")
+                            .or_insert_with(|| serde_json::Value::String("local".to_string()));
+                    }
+                    if let Ok(pretty) = serde_json::to_string_pretty(&root) {
+                        let _ = std::fs::write(path, pretty.as_bytes());
+                        log_both("[Naia] Patched gateway.mode=local into existing config");
+                    }
+                }
+            }
+        }
+    }
+}
+
 /// Spawn Node Host process (connects to Gateway for command execution)
 fn spawn_node_host(
     node_bin: &std::path::Path,
@@ -517,6 +579,10 @@ fn spawn_gateway() -> Result<GatewayProcess, String> {
 
     // 2. Find paths
     let (node_bin, openclaw_bin, config_path) = find_openclaw_paths()?;
+
+    // 2.5. Ensure minimal config exists so OpenClaw doesn't reject startup.
+    // This covers first-launch on Flatpak where install-gateway.sh wasn't run.
+    ensure_openclaw_config(&config_path);
 
     log_verbose(&format!(
         "[Naia] Spawning Gateway: {} {} gateway run --bind loopback --port 18789",
@@ -1414,14 +1480,15 @@ async fn sync_openclaw_config(params: OpenClawSyncParams) -> Result<(), String> 
         primary
     };
 
-    // Read existing config or start fresh
-    let mut root: serde_json::Value = if std::path::Path::new(&config_path).exists() {
+    // Ensure config file exists with required gateway fields before reading.
+    // Single bootstrap path: ensure_openclaw_config handles both creation and patching.
+    ensure_openclaw_config(&config_path);
+
+    let mut root: serde_json::Value = {
         let raw = std::fs::read_to_string(&config_path)
             .map_err(|e| format!("Failed to read {}: {}", config_path, e))?;
         serde_json::from_str(&raw)
             .map_err(|e| format!("Failed to parse {}: {}", config_path, e))?
-    } else {
-        serde_json::json!({})
     };
 
     // Set agents.defaults.model.primary = "{oc_provider}/{model}"
@@ -1447,8 +1514,8 @@ async fn sync_openclaw_config(params: OpenClawSyncParams) -> Result<(), String> 
         serde_json::Value::String(model_value.clone()),
     );
 
-    // Disable file-watcher auto-reload so our explicit restartGateway is the only trigger.
-    // Without this, the file watcher races with restartGateway causing crashes.
+    // gateway.mode=local is already ensured by ensure_openclaw_config above.
+    // Here we only set reload.mode=off to prevent file-watcher race conditions.
     let gw = obj
         .entry("gateway")
         .or_insert_with(|| serde_json::json!({}))
