@@ -1,9 +1,0 @@
-[Desktop Entry]
-Name=Naia
-Comment=Personal AI avatar shell
-Exec=flatpak run io.nextain.naia %u
-Icon=naia
-Type=Application
-Categories=Utility;
-StartupWMClass=naia-shell
-MimeType=x-scheme-handler/naia;

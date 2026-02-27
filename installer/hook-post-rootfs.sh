@@ -72,7 +72,7 @@ for (var i = 0; i < allPanels.length; ++i) {
         if (widget.type === "org.kde.plasma.icontasks") {
             widget.currentConfigGroup = ["General"];
             widget.writeConfig("launchers", [
-                "applications:naia-shell.desktop",
+                "applications:io.nextain.naia.desktop",
                 "preferred://browser",
                 "preferred://filemanager"
             ]);
@@ -89,7 +89,7 @@ JSEOF
 mkdir -p /etc/xdg
 cat > /etc/xdg/kicker-extra-favoritesrc <<'EOF'
 [General]
-Prepend=naia-shell.desktop;com.google.Chrome.desktop;com.discordapp.Discord.desktop;
+Prepend=io.nextain.naia.desktop;com.google.Chrome.desktop;com.discordapp.Discord.desktop;
 IgnoreDefaults=false
 EOF
 

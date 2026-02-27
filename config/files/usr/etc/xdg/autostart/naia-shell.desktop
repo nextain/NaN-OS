@@ -2,7 +2,7 @@
 Name=Naia
 Comment=Personal AI avatar shell
 Exec=flatpak run io.nextain.naia
-Icon=naia
+Icon=io.nextain.naia
 Type=Application
 X-GNOME-Autostart-enabled=true
 X-KDE-autostart-after=panel

@@ -127,15 +127,12 @@ os_image:
   base: ghcr.io/ublue-os/bazzite (Fedora Atomic)
   recipe: recipes/recipe.yml
   scripts:
-    - config/scripts/install-pnpm.sh
-    - config/scripts/install-naia-shell.sh (downloads AppImage from GitHub Release)
+    - config/scripts/install-naia-shell.sh (downloads Flatpak bundle from GitHub Release + creates first-boot service)
     - config/scripts/branding.sh (os-release → Naia, URLs → naia.nextain.io)
-    - config/scripts/setup-openclaw.sh (gateway systemd service, runs on first boot)
   deployed_files:
-    - config/files/usr/share/applications/naia-shell.desktop (app launcher)
-    - config/files/usr/etc/xdg/autostart/naia-shell.desktop (login autostart)
-    - config/files/usr/lib/systemd/user/naia-gateway.service (gateway daemon)
-    - config/files/usr/bin/naia-gateway-wrapper (gateway runner script)
+    - config/files/usr/etc/xdg/autostart/naia-shell.desktop (login autostart → flatpak run)
+  iso_hook:
+    - installer/hook-post-rootfs.sh (installs Flatpak + GNOME Platform 49 for live session)
   registry: ghcr.io/nextain/naia-os
   tags: [latest, YYYYMMDD, fedora-version, YYYYMMDD-fedora-version]
   status: working
