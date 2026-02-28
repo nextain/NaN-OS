@@ -1,4 +1,4 @@
-description: Naia hybrid architecture (mirror of .users/context/architecture.md)
+description: Naia hybrid architecture (mirror of .users/context/ko/architecture.md)
 
 design_philosophy: |
   Naia is NOT built from scratch. It's a hybrid assembly of 3 proven ecosystems:

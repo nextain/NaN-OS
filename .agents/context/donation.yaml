@@ -50,5 +50,5 @@ license_note: |
   is mutual support. Donation is the simplest way to honor that spirit.
 
 mirrors:
-  korean: ".users/context/donation.md"
-  english: ".users/context/en/donation.md"
+  korean: ".users/context/ko/donation.md"
+  english: ".users/context/donation.md"

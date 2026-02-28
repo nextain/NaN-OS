@@ -45,5 +45,5 @@ principles:
       - "CC-BY-SA licensing preserves the contribution chain"
 
 mirrors:
-  korean: ".users/context/philosophy.md"
-  english: ".users/context/en/philosophy.md"
+  korean: ".users/context/ko/philosophy.md"
+  english: ".users/context/philosophy.md"

@@ -511,6 +511,20 @@ phase_verification:
     smoke_test: "'Join minecraft' → bot connects → 'mine wood' → bot mines"
     e2e: "game_session"
 
+  demo_video:
+    location: "shell/e2e/demo-video.spec.ts"
+    tool: "Playwright"
+    context: ".agents/context/demo-video.yaml"
+    how: |
+      Playwright records full app demo with mocked Tauri IPC.
+      SceneTimeline logs actual timestamps → timeline.json.
+      Separate TTS + ffmpeg steps merge narration.
+    run: "cd shell && pnpm test:e2e -- demo-video.spec.ts"
+    outputs:
+      - "demo-output/demo-raw.webm (video)"
+      - "demo-output/timeline.json (scene timing)"
+    note: "Not a pass/fail test — produces video artifact. See .agents/context/demo-video.yaml for full pipeline."
+
 mocking_strategy:
   llm_api: |
     Use msw (Mock Service Worker) to intercept HTTP requests to LLM APIs.

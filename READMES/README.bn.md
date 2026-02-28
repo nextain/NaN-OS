@@ -154,17 +154,17 @@ AI এজেন্ট এবং মানব ডেভেলপারদের �
 
 | AI প্রসঙ্গ (`.agents/`) | মানব ডকুমেন্ট (`.users/`) | বিবরণ |
 |---|---|---|
-| [`context/agents-rules.json`](../.agents/context/agents-rules.json) | [`context/agents-rules.md`](../.users/context/en/agents-rules.md) | প্রকল্প নিয়ম (SoT) |
+| [`context/agents-rules.json`](../.agents/context/agents-rules.json) | [`context/agents-rules.md`](../.users/context/agents-rules.md) | প্রকল্প নিয়ম (SoT) |
 | [`context/project-index.yaml`](../.agents/context/project-index.yaml) | — | প্রসঙ্গ সূচক + মিররিং নিয়ম |
-| [`context/vision.yaml`](../.agents/context/vision.yaml) | [`context/vision.md`](../.users/context/en/vision.md) | প্রকল্প দৃষ্টি, মূল ধারণা |
-| [`context/plan.yaml`](../.agents/context/plan.yaml) | [`context/plan.md`](../.users/context/en/plan.md) | বাস্তবায়ন পরিকল্পনা, পর্যায়ভিত্তিক অবস্থা |
-| [`context/architecture.yaml`](../.agents/context/architecture.yaml) | [`context/architecture.md`](../.users/context/en/architecture.md) | হাইব্রিড আর্কিটেকচার, নিরাপত্তা স্তর |
-| [`context/openclaw-sync.yaml`](../.agents/context/openclaw-sync.yaml) | [`context/openclaw-sync.md`](../.users/context/en/openclaw-sync.md) | OpenClaw Gateway সিঙ্ক্রোনাইজেশন |
-| [`context/channels-discord.yaml`](../.agents/context/channels-discord.yaml) | [`context/channels-discord.md`](../.users/context/en/channels-discord.md) | Discord ইন্টিগ্রেশন আর্কিটেকচার |
-| [`context/philosophy.yaml`](../.agents/context/philosophy.yaml) | [`context/philosophy.md`](../.users/context/en/philosophy.md) | Core philosophy (AI sovereignty, privacy) |
-| [`context/contributing.yaml`](../.agents/context/contributing.yaml) | [`context/contributing.md`](../.users/context/en/contributing.md) | Contribution guide for AI agents and humans |
-| [`context/brand.yaml`](../.agents/context/brand.yaml) | [`context/brand.md`](../.users/context/en/brand.md) | Brand identity, character design, color system |
-| [`context/donation.yaml`](../.agents/context/donation.yaml) | [`context/donation.md`](../.users/context/en/donation.md) | Donation policy and open source sustainability |
+| [`context/vision.yaml`](../.agents/context/vision.yaml) | [`context/vision.md`](../.users/context/vision.md) | প্রকল্প দৃষ্টি, মূল ধারণা |
+| [`context/plan.yaml`](../.agents/context/plan.yaml) | [`context/plan.md`](../.users/context/plan.md) | বাস্তবায়ন পরিকল্পনা, পর্যায়ভিত্তিক অবস্থা |
+| [`context/architecture.yaml`](../.agents/context/architecture.yaml) | [`context/architecture.md`](../.users/context/architecture.md) | হাইব্রিড আর্কিটেকচার, নিরাপত্তা স্তর |
+| [`context/openclaw-sync.yaml`](../.agents/context/openclaw-sync.yaml) | [`context/openclaw-sync.md`](../.users/context/openclaw-sync.md) | OpenClaw Gateway সিঙ্ক্রোনাইজেশন |
+| [`context/channels-discord.yaml`](../.agents/context/channels-discord.yaml) | [`context/channels-discord.md`](../.users/context/channels-discord.md) | Discord ইন্টিগ্রেশন আর্কিটেকচার |
+| [`context/philosophy.yaml`](../.agents/context/philosophy.yaml) | [`context/philosophy.md`](../.users/context/philosophy.md) | Core philosophy (AI sovereignty, privacy) |
+| [`context/contributing.yaml`](../.agents/context/contributing.yaml) | [`context/contributing.md`](../.users/context/contributing.md) | Contribution guide for AI agents and humans |
+| [`context/brand.yaml`](../.agents/context/brand.yaml) | [`context/brand.md`](../.users/context/brand.md) | Brand identity, character design, color system |
+| [`context/donation.yaml`](../.agents/context/donation.yaml) | [`context/donation.md`](../.users/context/donation.md) | Donation policy and open source sustainability |
 | [`workflows/development-cycle.yaml`](../.agents/workflows/development-cycle.yaml) | [`workflows/development-cycle.md`](../.users/workflows/development-cycle.md) | ডেভেলপমেন্ট সাইকেল (PLAN->BUILD->VERIFY) |
 
 **মিররিং নিয়ম:** যখন একদিক পরিবর্তন করা হয়, অন্যদিক সর্বদা সিঙ্ক্রোনাইজ করতে হবে।

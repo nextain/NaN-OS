@@ -1,4 +1,4 @@
-description: Implementation plan (token-optimized mirror of .users/context/plan.md)
+description: Implementation plan (token-optimized mirror of .users/context/ko/plan.md)
 
 strategy: "Deploy first, add features incrementally. Every push = new ISO."
 

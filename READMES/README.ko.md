@@ -155,17 +155,17 @@ AI 에이전트와 사람 개발자를 위한 이중 문서 구조입니다. `.a
 
 | AI 컨텍스트 (`.agents/`) | 사람 문서 (`.users/`) | 설명 |
 |---|---|---|
-| [`context/agents-rules.json`](../.agents/context/agents-rules.json) | [`context/agents-rules.md`](../.users/context/agents-rules.md) | 프로젝트 규칙 (SoT) |
+| [`context/agents-rules.json`](../.agents/context/agents-rules.json) | [`context/agents-rules.md`](../.users/context/ko/agents-rules.md) | 프로젝트 규칙 (SoT) |
 | [`context/project-index.yaml`](../.agents/context/project-index.yaml) | — | 컨텍스트 인덱스 + 미러링 규칙 |
-| [`context/vision.yaml`](../.agents/context/vision.yaml) | [`context/vision.md`](../.users/context/vision.md) | 프로젝트 비전, 핵심 컨셉 |
-| [`context/plan.yaml`](../.agents/context/plan.yaml) | [`context/plan.md`](../.users/context/plan.md) | 구현 계획, 페이즈별 진행 상태 |
-| [`context/architecture.yaml`](../.agents/context/architecture.yaml) | [`context/architecture.md`](../.users/context/architecture.md) | 하이브리드 아키텍처, 보안 계층 |
-| [`context/openclaw-sync.yaml`](../.agents/context/openclaw-sync.yaml) | [`context/openclaw-sync.md`](../.users/context/openclaw-sync.md) | OpenClaw Gateway 동기화 |
-| [`context/channels-discord.yaml`](../.agents/context/channels-discord.yaml) | [`context/channels-discord.md`](../.users/context/channels-discord.md) | Discord 통합 아키텍처 |
-| [`context/philosophy.yaml`](../.agents/context/philosophy.yaml) | [`context/philosophy.md`](../.users/context/philosophy.md) | 핵심 철학 (AI 주권, 프라이버시) |
-| [`context/contributing.yaml`](../.agents/context/contributing.yaml) | [`context/contributing.md`](../.users/context/contributing.md) | AI/사람 기여 가이드 |
-| [`context/brand.yaml`](../.agents/context/brand.yaml) | [`context/brand.md`](../.users/context/brand.md) | 브랜드, 캐릭터 디자인, 색상 시스템 |
-| [`context/donation.yaml`](../.agents/context/donation.yaml) | [`context/donation.md`](../.users/context/donation.md) | 후원 정책, 오픈소스 지속 가능성 |
+| [`context/vision.yaml`](../.agents/context/vision.yaml) | [`context/vision.md`](../.users/context/ko/vision.md) | 프로젝트 비전, 핵심 컨셉 |
+| [`context/plan.yaml`](../.agents/context/plan.yaml) | [`context/plan.md`](../.users/context/ko/plan.md) | 구현 계획, 페이즈별 진행 상태 |
+| [`context/architecture.yaml`](../.agents/context/architecture.yaml) | [`context/architecture.md`](../.users/context/ko/architecture.md) | 하이브리드 아키텍처, 보안 계층 |
+| [`context/openclaw-sync.yaml`](../.agents/context/openclaw-sync.yaml) | [`context/openclaw-sync.md`](../.users/context/ko/openclaw-sync.md) | OpenClaw Gateway 동기화 |
+| [`context/channels-discord.yaml`](../.agents/context/channels-discord.yaml) | [`context/channels-discord.md`](../.users/context/ko/channels-discord.md) | Discord 통합 아키텍처 |
+| [`context/philosophy.yaml`](../.agents/context/philosophy.yaml) | [`context/philosophy.md`](../.users/context/ko/philosophy.md) | 핵심 철학 (AI 주권, 프라이버시) |
+| [`context/contributing.yaml`](../.agents/context/contributing.yaml) | [`context/contributing.md`](../.users/context/ko/contributing.md) | AI/사람 기여 가이드 |
+| [`context/brand.yaml`](../.agents/context/brand.yaml) | [`context/brand.md`](../.users/context/ko/brand.md) | 브랜드, 캐릭터 디자인, 색상 시스템 |
+| [`context/donation.yaml`](../.agents/context/donation.yaml) | [`context/donation.md`](../.users/context/ko/donation.md) | 후원 정책, 오픈소스 지속 가능성 |
 | [`workflows/development-cycle.yaml`](../.agents/workflows/development-cycle.yaml) | [`workflows/development-cycle.md`](../.users/workflows/development-cycle.md) | 개발 사이클 (PLAN->BUILD->VERIFY) |
 
 **미러링 규칙:** 한쪽을 수정하면 반드시 다른 쪽도 동기화합니다.

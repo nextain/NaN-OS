@@ -5,7 +5,7 @@ sot: .agents/context/agents-rules.json
 mirror_pairs:
   # AI context (JSON/YAML) ↔ Human doc (Markdown)
   - agents: .agents/context/agents-rules.json
-    users: .users/context/agents-rules.md
+    users: .users/context/ko/agents-rules.md
     description: Project rules, conventions, testing, logging, security, dev process
 
   - agents: .agents/context/project-index.yaml
@@ -13,19 +13,19 @@ mirror_pairs:
     description: This index file (AI-only)
 
   - agents: .agents/context/vision.yaml
-    users: .users/context/vision.md
+    users: .users/context/ko/vision.md
     description: Project vision, core concept, usage scenarios
 
   - agents: .agents/context/plan.yaml
-    users: .users/context/plan.md
+    users: .users/context/ko/plan.md
     description: Implementation plan, phases, deliverables, timeline
 
   - agents: .agents/context/architecture.yaml
-    users: .users/context/architecture.md
+    users: .users/context/ko/architecture.md
     description: Hybrid architecture design (OpenClaw + Careti + OpenCode), security layers, Gateway protocol
 
   - agents: .agents/context/careti-reuse.yaml
-    users: .users/context/careti-reuse.md
+    users: .users/context/ko/careti-reuse.md
     description: Code/pattern reuse strategy from project-careti
 
   - agents: .agents/context/testing.yaml
@@ -33,15 +33,15 @@ mirror_pairs:
     description: Concrete testing strategy per module, E2E scenarios, phase verification
 
   - agents: .agents/context/openclaw-sync.yaml
-    users: .users/context/openclaw-sync.md
+    users: .users/context/ko/openclaw-sync.md
     description: Shell → OpenClaw gateway config sync architecture (provider, model, persona, SOUL.md, chat routing)
 
   - agents: .agents/context/skill-naia-discord.yaml
-    users: .users/context/skill-naia-discord.md
+    users: .users/context/ko/skill-naia-discord.md
     description: skill_naia_discord definition (send/status/history), target resolution, OAuth flow
 
   - agents: .agents/context/channels-discord.yaml
-    users: .users/context/channels-discord.md
+    users: .users/context/ko/channels-discord.md
     description: E2E Discord integration architecture (Gateway ↔ Agent ↔ Shell), OAuth deep-link, conversation sync, chat routing via Gateway
 
   - agents: .agents/context/distribution.yaml
@@ -50,32 +50,32 @@ mirror_pairs:
 
   - agents: .agents/context/bazzite-rebranding.yaml
     users: .users/context/bazzite-rebranding.md
-    users_en: .users/context/en/bazzite-rebranding.md
+    users_ko: .users/context/ko/bazzite-rebranding.md
     description: Bazzite OS rebranding guide — all assets, layers, and scripts needed to replace Bazzite/Fedora logos
 
   - agents: .agents/context/demo-video.yaml
     users: .users/context/demo-video.md
-    users_en: .users/context/en/demo-video.md
+    users_ko: .users/context/ko/demo-video.md
     description: Demo video pipeline — Playwright recording, Google Cloud TTS narration, ffmpeg merge
 
   - agents: .agents/context/philosophy.yaml
     users: .users/context/philosophy.md
-    users_en: .users/context/en/philosophy.md
+    users_ko: .users/context/ko/philosophy.md
     description: Core philosophy — why this project exists (AI sovereignty, privacy, transparency)
 
   - agents: .agents/context/contributing.yaml
     users: .users/context/contributing.md
-    users_en: .users/context/en/contributing.md
+    users_ko: .users/context/ko/contributing.md
     description: Contribution guide — how AI agents and humans should contribute
 
   - agents: .agents/context/donation.yaml
     users: .users/context/donation.md
-    users_en: .users/context/en/donation.md
+    users_ko: .users/context/ko/donation.md
     description: Donation policy — sponsorship guidance for forks and pattern reuse
 
   - agents: .agents/context/brand.yaml
     users: .users/context/brand.md
-    users_en: .users/context/en/brand.md
+    users_ko: .users/context/ko/brand.md
     description: Brand identity — Naia/Nextain origin, character design, color system, reference assets
 
   - agents: .agents/tests/license-protection-test.md
@@ -83,7 +83,7 @@ mirror_pairs:
     description: License protection test scenarios — verify AI agents refuse CC-BY-SA 4.0 violations
 
   - agents: .agents/context/phase3-plan.yaml
-    users: .users/context/phase3-openclaw-hybrid-plan.md
+    users: .users/context/ko/phase3-openclaw-hybrid-plan.md
     description: Phase 3 detailed plan — hybrid OpenClaw + Agent architecture
 
   - agents: .agents/workflows/development-cycle.yaml
@@ -98,18 +98,21 @@ mirroring_rules:
       format: YAML/JSON
       purpose: AI consumption (token-optimized)
     - path: .users/context/
-      lang: ko
-      format: Markdown
-      purpose: Korean human docs (primary)
-    - path: .users/context/en/
       lang: en
       format: Markdown
-      purpose: English human docs (open-source community)
+      purpose: English human docs (default, open-source community)
+    - path: .users/context/ko/
+      lang: ko
+      format: Markdown
+      purpose: Korean human docs (maintainer language)
+  community_translations:
+    rule: "Contributors may add .users/context/{lang}/ for their language via PR"
+    validation: "CI checks structural sync with English (section count, headers)"
   rules:
     - When any layer is updated, propagate to the other two
     - AI reads .agents/ for token-efficient context
-    - AI reads .users/ (ko or en) for detailed human-level understanding
-    - New document = create all three versions
+    - AI reads .users/ for detailed human-level understanding
+    - New document = create English version first, then mirror to ko/ and .agents/
     - README.md stays in Korean (project primary language)
 
 work_logs:

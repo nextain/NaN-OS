@@ -1,0 +1,141 @@
+description: |
+  Demo video pipeline for Naia OS promotional/documentation videos.
+  Records ~3 min demo via Playwright E2E (mock Tauri IPC),
+  generates Korean TTS narration, merges with ffmpeg.
+
+pipeline:
+  overview: |
+    4-file architecture. Run in order:
+      1. demo-script.ts — Scene definitions (shared by all steps)
+      2. demo-video.spec.ts — Playwright records WebM + timeline.json
+      3. demo-tts.ts — Google Cloud TTS generates MP3 per scene
+      4. demo-merge.sh — ffmpeg merges video + audio at exact timestamps
+
+  output: shell/e2e/demo-output/naia-demo.mp4
+
+files:
+  demo_script:
+    path: shell/e2e/demo-script.ts
+    purpose: Scene definitions — id, narration text, estimated duration, phase
+    exports:
+      - "DemoScene (interface)"
+      - "DEMO_SCENES (array, 25 scenes)"
+      - "TOTAL_DURATION (~183s)"
+      - "getSceneTimings() — cumulative start times"
+    scenes_overview:
+      phase_onboarding: "intro → provider → apikey → agent-name → user-name → character → personality → messenger → complete (~55s)"
+      phase_main: "chat-hello → chat-response → chat-weather → chat-tool-result → chat-time → history-tab → skills-list → skills-detail → channels-tab → agents-tab → diagnostics-tab → settings-ai → settings-voice → settings-memory → progress-tab → outro (~128s)"
+    editing: |
+      To change narration: edit the `narration` field (Korean text).
+      To change timing: edit the `duration` field (seconds).
+      To add/remove scenes: update DEMO_SCENES array + demo-merge.sh SCENE_TTS map.
+
+  demo_video_spec:
+    path: shell/e2e/demo-video.spec.ts
+    purpose: Playwright spec that records the full demo as WebM
+    approach: mock_tauri_ipc
+    key_components:
+      - name: buildDemoMockScript()
+        description: |
+          Extended Tauri IPC mock. Injects window.__TAURI_INTERNALS__ with:
+          - invoke() handlers for all Tauri commands
+          - Event system (emit/listen)
+          - Mock data: skills(12), sessions(3), audit log(5), channels, agents, diagnostics
+          - Chat simulation: send_to_agent_command returns streaming SSE-style responses
+          - Tool execution: tool_request handler for directToolCall tabs
+      - name: SceneTimeline
+        description: |
+          Records actual Date.now() offsets during recording.
+          enter(sceneId) marks scene start relative to t0.
+          save(filepath) writes timeline.json with startMs/endMs per scene.
+          This enables accurate TTS-to-video sync in merge step.
+      - name: helpers
+        list:
+          - "ensureIconsLoaded() — waits for Material Icons font"
+          - "sceneDuration(id) — returns duration from DEMO_SCENES"
+          - "clickTabByIndex(n) — clicks sidebar tabs"
+          - "typeSlowly(locator, text, delay) — realistic typing"
+          - "sendChatMessage(page, text) — types + sends chat"
+    config:
+      viewport: "400x768 (mobile portrait)"
+      scale: 2 (retina)
+      video: "mode: on"
+      timeout: "300s (5min)"
+    phases:
+      - name: "Phase 1 (Onboarding)"
+        config: "Fresh state (no saved config)"
+        flow: "Navigate onboarding wizard steps"
+      - name: "Phase 2 (Main App)"
+        config: "Reload with makeConfig() — simulates completed setup"
+        flow: "Chat conversations + tab tour"
+    outputs:
+      - "demo-output/demo-raw.webm (video)"
+      - "demo-output/timeline.json (scene timestamps)"
+
+  demo_tts:
+    path: shell/e2e/demo-tts.ts
+    purpose: Generate Korean TTS MP3 narration for each scene
+    provider: "Google Cloud TTS REST API"
+    endpoint: "texttospeech.googleapis.com/v1/text:synthesize"
+    voice: "ko-KR-Neural2-A (Korean female neural)"
+    speaking_rate: 0.95
+    auth:
+      method: "gcloud service account token"
+      gcloud_path: "/home/luke/google-cloud-sdk/bin/gcloud"
+      project: "project-a8b18af5-b980-43e7-8ec"
+      required_header: "x-goog-user-project (for quota billing)"
+    features:
+      - "Idempotent: skips existing MP3 files"
+      - "Retry: 3 attempts with 3s delay for transient errors"
+      - "Rate limit: 500ms delay between requests"
+    output: "demo-output/tts/01-intro.mp3 ... 25-outro.mp3"
+
+  demo_merge:
+    path: shell/e2e/demo-merge.sh
+    purpose: Merge video + TTS audio with accurate timing
+    dependencies: ["ffmpeg", "python3 (for JSON parsing)"]
+    approach: |
+      1. Read timeline.json for actual scene timestamps
+      2. Map scene IDs to TTS filenames via SCENE_TTS associative array
+      3. Build ffmpeg filter: adelay per track at exact startMs
+      4. amix combines all narration tracks
+      5. Encode: H.264 + AAC → MP4
+    fallback: "Hardcoded estimated timings if timeline.json missing"
+    output: "demo-output/naia-demo.mp4"
+
+execution:
+  prerequisites:
+    - "gcloud CLI authenticated (service account with TTS access)"
+    - "ffmpeg + python3 installed"
+    - "Playwright installed: cd shell && pnpm exec playwright install chromium"
+
+  commands:
+    step1_record: "cd naia-os/shell && pnpm test:e2e -- demo-video.spec.ts"
+    step2_tts: "cd naia-os/shell && npx tsx e2e/demo-tts.ts"
+    step3_merge: "cd naia-os/shell && bash e2e/demo-merge.sh"
+
+  timing_sync: |
+    SceneTimeline in demo-video.spec.ts logs actual timestamps
+    during Playwright recording → timeline.json.
+    demo-merge.sh reads timeline.json and positions each TTS MP3
+    at the exact recorded millisecond offset using ffmpeg adelay filter.
+    This ensures narration matches video regardless of timing variations.
+
+  re_recording: |
+    To re-record only video: run step1, then step3 (TTS is idempotent).
+    To regenerate TTS: delete demo-output/tts/*.mp3, run step2, then step3.
+    To change scenes: edit demo-script.ts, then run all 3 steps.
+    To update SCENE_TTS map: edit demo-merge.sh when adding/removing scenes.
+
+mock_data_reference:
+  source: "Reused patterns from shell/e2e/screenshots.spec.ts"
+  extended_for_demo:
+    - "tool_request handler (directToolCall for skill_sessions, skill_agents, skill_diagnostics)"
+    - "discord_api mock (channels status)"
+    - "sync_openclaw_config (returns undefined)"
+    - "Chat streaming simulation (SSE-style delayed responses)"
+
+known_issues:
+  - "Chat errors may appear if mock responses don't match expected format — check buildDemoMockScript() invoke handlers"
+  - "Timing drift: if Playwright execution is slow (CI), scene durations stretch — timeline.json compensates"
+  - "TTS 503 errors are transient — retry logic handles them"

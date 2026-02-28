@@ -104,5 +104,5 @@ language:
   commit_messages: "English"
 
 mirrors:
-  korean: ".users/context/contributing.md"
-  english: ".users/context/en/contributing.md"
+  korean: ".users/context/ko/contributing.md"
+  english: ".users/context/contributing.md"

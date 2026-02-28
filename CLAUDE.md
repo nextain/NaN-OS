@@ -26,14 +26,14 @@ Bazzite 기반 배포형 AI OS. Naia(AI 아바타)가 상주하는 개인 운영
 ├── workflows/              # 작업 워크플로우 (온디맨드)
 └── skills/                 # 스킬 정의
 
-.users/                     # 사람용 (한국어, Markdown, 상세)
-├── context/                # .agents/context/ 한국어 미러
-│   └── en/                 # 영문 미러 (오픈소스 커뮤니티용)
+.users/                     # 사람용 (Markdown, 상세)
+├── context/                # .agents/context/ 영문 미러 (기본)
+│   └── ko/                 # 한국어 미러 (메인테이너 언어)
 └── workflows/              # .agents/workflows/ 미러
 ```
 
-**삼중 미러링**: `.agents/` (AI) ↔ `.users/context/` (한국어) ↔ `.users/context/en/` (영문)
-- README는 한국어 유지, 컨텍스트 문서는 세 버전 모두 관리
+**삼중 미러링**: `.agents/` (AI) ↔ `.users/context/` (영문, 기본) ↔ `.users/context/ko/` (한국어)
+- English가 기본 문서, 커뮤니티 기여자가 자기 언어 폴더(`{lang}/`) 추가 가능
 - 변경 시 세 레이어 모두 전파
 
 ## 핵심 원칙

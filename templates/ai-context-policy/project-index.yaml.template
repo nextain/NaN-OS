@@ -21,17 +21,17 @@ mirror_pairs:
 
   - agents: .agents/context/philosophy.yaml
     users: .users/context/philosophy.md
-    users_en: .users/context/en/philosophy.md
+    users_ko: .users/context/ko/philosophy.md
     description: Core philosophy — why this project exists
 
   - agents: .agents/context/contributing.yaml
     users: .users/context/contributing.md
-    users_en: .users/context/en/contributing.md
+    users_ko: .users/context/ko/contributing.md
     description: Contribution guide for AI agents and humans
 
   - agents: .agents/context/donation.yaml
     users: .users/context/donation.md
-    users_en: .users/context/en/donation.md
+    users_ko: .users/context/ko/donation.md
     description: Donation policy and sponsorship guidance
 
   # === 프로젝트별 컨텍스트 추가 ===
@@ -47,13 +47,13 @@ mirroring_rules:
       format: YAML/JSON
       purpose: AI consumption (token-optimized)
     - path: .users/context/
-      lang: "{{PRIMARY_LANGUAGE_CODE}}"
-      format: Markdown
-      purpose: "Primary human docs ({{PRIMARY_LANGUAGE}})"
-    - path: .users/context/en/
       lang: en
       format: Markdown
       purpose: English human docs (open-source community)
+    - path: .users/context/ko/
+      lang: "{{PRIMARY_LANGUAGE_CODE}}"
+      format: Markdown
+      purpose: "Primary human docs ({{PRIMARY_LANGUAGE}})"
   rules:
     - When any layer is updated, propagate to the other two
     - AI reads .agents/ for token-efficient context

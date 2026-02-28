@@ -1,78 +1,78 @@
 <!-- SPDX-License-Identifier: CC-BY-SA-4.0 -->
 
-# Naia OS 프로젝트 철학
+# Naia OS Project Philosophy
 
-`.agents/context/philosophy.yaml`에 대한 사람이 읽을 수 있는 가이드입니다.
+Human-readable guide for `.agents/context/philosophy.yaml`.
 
-## 목적
+## Purpose
 
-이 문서는 Naia OS 프로젝트의 핵심 철학 — **"왜 이것을 만드는가"** — 를 설명합니다.
-아키텍처(무엇)와 워크플로우(어떻게)와 분리된, 프로젝트가 존재하는 이유입니다.
-
----
-
-## 핵심 원칙
-
-### 1. AI 주권
-
-**"사용자가 AI를 선택한다 — 벤더 종속 없음"**
-
-- 여러 LLM 프로바이더 지원 (Vertex AI, Anthropic, xAI, 로컬 모델)
-- 사용자가 AI 설정을 소유하고 자유롭게 전환 가능
-- 핵심 아키텍처에 단일 프로바이더 의존 없음
-
-### 2. 프라이버시 우선
-
-**"로컬 실행이 기본 — 클라우드는 선택"**
-
-- 데스크톱 우선 아키텍처 (Tauri, Electron 클라우드 아님)
-- 사용자 데이터는 명시적으로 공유하지 않는 한 기기에 머묾
-- 로컬 LLM 지원 (Ollama)을 일급 시민으로
-
-### 3. 투명성
-
-**"오픈소스 — 코드를 읽어서 검증"**
-
-- 모든 핵심 로직은 오픈소스 (Apache 2.0)
-- AI 컨텍스트는 오픈이고 포크 가능 (CC-BY-SA 4.0)
-- 숨겨진 텔레메트리나 데이터 수집 없음
-
-### 4. 조립 철학
-
-**"검증된 컴포넌트를 조립 — 바퀴를 재발명하지 않음"**
-
-- 업스트림 프로젝트를 빌딩 블록으로 사용 (OpenClaw, Tauri 등)
-- 가능하면 업스트림에 기여
-- 참조 서브모듈 (ref-*)로 학습 및 추적
-
-### 5. 항상 켜짐
-
-**"AI 컴패니언은 데몬 — 항상 존재, 항상 준비"**
-
-- 백그라운드 에이전트 아키텍처 (Node.js 데몬)
-- 게이트웨이 프로세스 관리 (spawn, restart, health check)
-- 세션 간 AI 캐릭터 상태 유지
-
-### 6. 아바타 중심
-
-**"AI는 살아있는 캐릭터 — 단순한 도구가 아님"**
-
-- Naia: 이름이 있는 AI 캐릭터, 성격과 목소리
-- TTS와 감정 표현이 있는 3D 아바타
-- 영혼 문서 (SOUL.md)로 캐릭터 정체성 정의
-
-### 7. 바이브 코딩 시대
-
-**"AI 컨텍스트 파일이 새로운 기여 인프라"**
-
-- `.agents/` 디렉토리는 설정이 아닌 프로젝트 철학을 인코딩
-- 컨텍스트 품질이 AI 협업 품질을 결정
-- 이중 디렉토리 아키텍처: AI 최적화 + 사람이 읽을 수 있는 문서
-- CC-BY-SA 라이선스로 기여 체인 보존
+This document explains the core philosophy of the Naia OS project — **"why we build this"**.
+Separated from architecture (what) and workflows (how), this is the reason the project exists.
 
 ---
 
-## 관련 파일
+## Core Principles
+
+### 1. AI Sovereignty
+
+**"Users choose their AI — no vendor lock-in"**
+
+- Support multiple LLM providers (Vertex AI, Anthropic, xAI, local models)
+- Users own their AI configuration and can switch freely
+- No single provider dependency in core architecture
+
+### 2. Privacy First
+
+**"Local execution by default — cloud is opt-in"**
+
+- Desktop-first architecture (Tauri, not Electron cloud)
+- User data stays on device unless explicitly shared
+- Local LLM support (Ollama) as first-class citizen
+
+### 3. Transparency
+
+**"Open source — verify by reading the code"**
+
+- All core logic is open source (Apache 2.0)
+- AI context is open and forkable (CC-BY-SA 4.0)
+- No hidden telemetry or data collection
+
+### 4. Assembly over Invention
+
+**"Compose from proven components — don't reinvent the wheel"**
+
+- Use upstream projects as building blocks (OpenClaw, Tauri, etc.)
+- Contribute back to upstream when possible
+- Reference submodules (ref-*) for learning and tracking
+
+### 5. Always On
+
+**"AI companion as a daemon — always present, always ready"**
+
+- Background agent architecture (Node.js daemon)
+- Gateway process management (spawn, restart, health check)
+- Persistent AI character state across sessions
+
+### 6. Avatar-Centric
+
+**"AI as a living character — not just a tool"**
+
+- Naia: named AI character with personality and voice
+- 3D avatar with TTS and emotional expression
+- Soul document (SOUL.md) defines character identity
+
+### 7. Vibe Coding Era
+
+**"AI context files are the new contribution infrastructure"**
+
+- `.agents/` directories encode project philosophy, not just config
+- Context quality determines AI collaboration quality
+- Dual-directory architecture: AI-optimized + human-readable
+- CC-BY-SA licensing preserves the contribution chain
+
+---
+
+## Related Files
 
 - **SoT**: `.agents/context/philosophy.yaml`
-- **영문 미러**: `.users/context/en/philosophy.md`
+- **Korean mirror**: `.users/context/philosophy.md`

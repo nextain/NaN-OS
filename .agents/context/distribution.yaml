@@ -108,6 +108,17 @@ local_build:
       - "NEVER use cargo build --release for Flatpak — causes white screen"
       - "ALWAYS use npx tauri build --no-bundle --config src-tauri/tauri.conf.flatpak.json"
 
+dev_environment:
+  host_os: Bazzite (Fedora Atomic + KDE Plasma)
+  dev_container: Ubuntu (distrobox/toolbox)
+  critical_notes:
+    - "flatpak commands (install/uninstall/run) MUST run on HOST, not inside container"
+    - "local-reinstall-run-naia-flatpak.sh MUST run on HOST terminal"
+    - "flatpak-builder can run inside container, but flatpak install cannot (D-Bus socket unavailable)"
+    - "Container lacks Flatpak system helper socket → 'Could not connect: No such file or directory'"
+    - "Claude Code terminal = inside container → flatpak install fails here too"
+    - "Use host desktop terminal (Konsole) for install/run, container terminal for build/dev"
+
 flathub_submission:
   guide: docs/flathub-submission-guide.md
   status: not_started

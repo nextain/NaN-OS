@@ -173,32 +173,32 @@ Want to adopt the same pattern? Here's what Naia does that you can reuse:
 5. **Test scenarios** — verify that AI agents actually refuse violations before shipping.
 6. **CONTEXT-LICENSE file** — clear scope definition for what CC-BY-SA 4.0 covers.
 
-See [Contributing Guide](.users/context/en/contributing.md) for the full license protection details.
+See [Contributing Guide](.users/context/ko/contributing.md) for the full license protection details.
 
 ## Context Documents (Dual-directory Architecture)
 
-A dual documentation structure for AI agents and human developers. `.agents/` contains token-efficient JSON/YAML for AI, `.users/` contains readable Markdown for humans. **New to this project? Start with the human docs in the recommended reading order below** — [English](.users/context/en/) | [Korean](.users/context/).
+A dual documentation structure for AI agents and human developers. `.agents/` contains token-efficient JSON/YAML for AI, `.users/` contains readable Markdown for humans. **New to this project? Start with the human docs in the recommended reading order below** — [English](.users/context/) | [한국어](.users/context/ko/).
 
 ### Recommended Reading Order
 
 | # | AI Context (`.agents/`) | Human Docs (`.users/`) | Description |
 |---|---|---|---|
-| 1 | [`context/philosophy.yaml`](.agents/context/philosophy.yaml) | [`context/philosophy.md`](.users/context/philosophy.md) | **Why** — Core philosophy (AI sovereignty, privacy, transparency) |
-| 2 | [`context/vision.yaml`](.agents/context/vision.yaml) | [`context/vision.md`](.users/context/vision.md) | **What** — Project vision, core concepts |
-| 3 | [`context/brand.yaml`](.agents/context/brand.yaml) | [`context/brand.md`](.users/context/brand.md) | **Who** — Brand identity, Naia character, color system |
-| 4 | [`context/architecture.yaml`](.agents/context/architecture.yaml) | [`context/architecture.md`](.users/context/architecture.md) | **How** — Hybrid architecture, security layers |
-| 5 | [`context/plan.yaml`](.agents/context/plan.yaml) | [`context/plan.md`](.users/context/plan.md) | **Status** — Implementation plan, phase-by-phase |
-| 6 | [`context/contributing.yaml`](.agents/context/contributing.yaml) | [`context/contributing.md`](.users/context/contributing.md) | **Contribute** — Guide for AI agents and humans |
-| 7 | [`context/donation.yaml`](.agents/context/donation.yaml) | [`context/donation.md`](.users/context/donation.md) | **Sustain** — Donation policy, open source sustainability |
+| 1 | [`context/philosophy.yaml`](.agents/context/philosophy.yaml) | [`context/philosophy.md`](.users/context/ko/philosophy.md) | **Why** — Core philosophy (AI sovereignty, privacy, transparency) |
+| 2 | [`context/vision.yaml`](.agents/context/vision.yaml) | [`context/vision.md`](.users/context/ko/vision.md) | **What** — Project vision, core concepts |
+| 3 | [`context/brand.yaml`](.agents/context/brand.yaml) | [`context/brand.md`](.users/context/ko/brand.md) | **Who** — Brand identity, Naia character, color system |
+| 4 | [`context/architecture.yaml`](.agents/context/architecture.yaml) | [`context/architecture.md`](.users/context/ko/architecture.md) | **How** — Hybrid architecture, security layers |
+| 5 | [`context/plan.yaml`](.agents/context/plan.yaml) | [`context/plan.md`](.users/context/ko/plan.md) | **Status** — Implementation plan, phase-by-phase |
+| 6 | [`context/contributing.yaml`](.agents/context/contributing.yaml) | [`context/contributing.md`](.users/context/ko/contributing.md) | **Contribute** — Guide for AI agents and humans |
+| 7 | [`context/donation.yaml`](.agents/context/donation.yaml) | [`context/donation.md`](.users/context/ko/donation.md) | **Sustain** — Donation policy, open source sustainability |
 
 ### Technical Deep Dives
 
 | AI Context (`.agents/`) | Human Docs (`.users/`) | Description |
 |---|---|---|
-| [`context/agents-rules.json`](.agents/context/agents-rules.json) | [`context/agents-rules.md`](.users/context/agents-rules.md) | Project rules — Source of Truth (SoT) |
+| [`context/agents-rules.json`](.agents/context/agents-rules.json) | [`context/agents-rules.md`](.users/context/ko/agents-rules.md) | Project rules — Source of Truth (SoT) |
 | [`context/project-index.yaml`](.agents/context/project-index.yaml) | — | Context index + mirroring rules |
-| [`context/openclaw-sync.yaml`](.agents/context/openclaw-sync.yaml) | [`context/openclaw-sync.md`](.users/context/openclaw-sync.md) | OpenClaw Gateway synchronization |
-| [`context/channels-discord.yaml`](.agents/context/channels-discord.yaml) | [`context/channels-discord.md`](.users/context/channels-discord.md) | Discord integration architecture |
+| [`context/openclaw-sync.yaml`](.agents/context/openclaw-sync.yaml) | [`context/openclaw-sync.md`](.users/context/ko/openclaw-sync.md) | OpenClaw Gateway synchronization |
+| [`context/channels-discord.yaml`](.agents/context/channels-discord.yaml) | [`context/channels-discord.md`](.users/context/ko/channels-discord.md) | Discord integration architecture |
 | [`workflows/development-cycle.yaml`](.agents/workflows/development-cycle.yaml) | [`workflows/development-cycle.md`](.users/workflows/development-cycle.md) | Development cycle (PLAN→BUILD→VERIFY) |
 
 **Mirroring rule:** When one side is modified, the other must always be synchronized.
@@ -315,13 +315,13 @@ Context documents are maintained in a triple-mirror structure:
 | Layer | Path | Language | Purpose |
 |-------|------|----------|---------|
 | AI context | `.agents/context/` | English (YAML/JSON) | Token-optimized for AI agents |
-| Human docs (KO) | `.users/context/` | Korean (Markdown) | Korean documentation |
-| Human docs (EN) | `.users/context/en/` | English (Markdown) | English documentation |
+| Human docs (EN) | `.users/context/` | English (Markdown) | English documentation (default) |
+| Human docs (KO) | `.users/context/ko/` | Korean (Markdown) | Korean documentation |
 
 Key documents:
-- [Bazzite Rebranding Guide](.users/context/en/bazzite-rebranding.md) — How to replace all Bazzite/Fedora branding
-- [Architecture](.users/context/en/architecture.md) — Hybrid architecture design
-- [OpenClaw Sync](.users/context/en/openclaw-sync.md) — Shell ↔ Gateway config sync
+- [Bazzite Rebranding Guide](.users/context/bazzite-rebranding.md) — How to replace all Bazzite/Fedora branding
+- [Contributing Guide](.users/context/contributing.md) — How to contribute (AI agents and humans)
+- [Philosophy](.users/context/philosophy.md) — Core principles (AI sovereignty, privacy, transparency)
 
 ## Reference Projects
 
@@ -338,7 +338,7 @@ Naia exists because these projects exist. We are deeply grateful to all the open
 
 ## Contributing
 
-See [Contributing Guide](.users/context/en/contributing.md) for how to contribute.
+See [Contributing Guide](.users/context/contributing.md) for how to contribute.
 AI agents: read [AGENTS.md](AGENTS.md) and `.agents/context/contributing.yaml`.
 
 ### For International Contributors
@@ -347,7 +347,7 @@ The project's primary documentation is maintained in Korean and English. Korean 
 
 If you're contributing from outside Korea:
 
-1. **Read the English docs** at `.users/context/en/` — all context documents are mirrored in English
+1. **Read the English docs** at `.users/context/` — English is the default documentation language
 2. **Code comments and commit messages** should be in English
 3. **AI context files** (`.agents/`) are already in English — these are the source of truth
 4. **PRs and issues** can be written in English

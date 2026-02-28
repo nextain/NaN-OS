@@ -323,7 +323,7 @@
 	"context_management": {
 		"dual_directory": {
 			".agents": "AI-optimized (English, JSON/YAML, token-efficient)",
-			".users": "Human-readable (Korean, Markdown, detailed)"
+			".users": "Human-readable (English default, Markdown, detailed; .users/context/ko/ for Korean)"
 		},
 		"sot": ".agents/context/agents-rules.json is the Single Source of Truth",
 		"mirror_rule": "Changes to .agents/ must be reflected in .users/ and vice versa",
