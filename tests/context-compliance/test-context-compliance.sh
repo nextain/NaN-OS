@@ -22,6 +22,8 @@ PROVIDER="${1:-claude}"
 ENV_FILE="$REPO_ROOT/shell/.env"
 if [ -f "$ENV_FILE" ]; then
   export GEMINI_API_KEY="${GEMINI_API_KEY:-$(grep '^GEMINI_API_KEY=' "$ENV_FILE" | cut -d= -f2)}"
+  # OpenCode uses GOOGLE_GENERATIVE_AI_API_KEY for Gemini
+  export GOOGLE_GENERATIVE_AI_API_KEY="${GOOGLE_GENERATIVE_AI_API_KEY:-$GEMINI_API_KEY}"
 fi
 RESULTS_DIR="$SCRIPT_DIR/results"
 mkdir -p "$RESULTS_DIR"
@@ -87,9 +89,10 @@ ask_ai() {
       ;;
     opencode)
       # OpenCode CLI: run = non-interactive headless mode
+      # Capture both stdout+stderr, then strip ANSI escape codes
       opencode run "$prompt" \
         --dir "$REPO_ROOT" \
-        2>/dev/null > "$output_file" || true
+        2>&1 | sed 's/\x1b\[[0-9;]*[a-zA-Z]//g' > "$output_file" || true
       ;;
   esac
 
