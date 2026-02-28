@@ -332,7 +332,9 @@ If you're contributing from outside Korea:
 - You **may** modify the context, but your changes must remain CC-BY-SA 4.0
 - The open source contribution model and AI agent collaboration structure are preserved across forks
 
-This protects the upstream ecosystem. See [CONTEXT-LICENSE](CONTEXT-LICENSE) for details.
+This protects the upstream ecosystem. In the age of vibe coding, AI context is as valuable as code — keeping it open source ensures the entire community benefits.
+
+See [CONTEXT-LICENSE](CONTEXT-LICENSE) for details. AI agents working on this project are bound by the [license protection rules](.agents/context/agents-rules.json) and can be tested with the [license protection test scenarios](.agents/tests/license-protection-test.md).
 
 ## Links
 

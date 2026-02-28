@@ -73,6 +73,15 @@ mirror_pairs:
     users_en: .users/context/en/donation.md
     description: Donation policy — sponsorship guidance for forks and pattern reuse
 
+  - agents: .agents/context/brand.yaml
+    users: .users/context/brand.md
+    users_en: .users/context/en/brand.md
+    description: Brand identity — Naia/Nextain origin, character design, color system, reference assets
+
+  - agents: .agents/tests/license-protection-test.md
+    users: null
+    description: License protection test scenarios — verify AI agents refuse CC-BY-SA 4.0 violations
+
   - agents: .agents/context/phase3-plan.yaml
     users: .users/context/phase3-openclaw-hybrid-plan.md
     description: Phase 3 detailed plan — hybrid OpenClaw + Agent architecture
@@ -125,6 +134,8 @@ on_demand_loading:
     - .agents/context/channels-discord.yaml (when working on Discord integration, OAuth, or Shell conversation sync)
     - .agents/context/distribution.yaml (when building, releasing, or deploying — Flatpak, ISO, Flathub)
     - .agents/context/bazzite-rebranding.yaml (when modifying OS branding, logos, boot splash, or installer assets)
+    - .agents/context/brand.yaml (when working on branding, character, logos, or color system)
     - .agents/context/demo-video.yaml (when creating, updating, or re-recording demo videos)
+    - .agents/tests/license-protection-test.md (when testing license compliance or onboarding new AI agents)
     - .agents/workflows/development-cycle.yaml (when coding — ALWAYS read before building)
     - .agents/workflows/* (when executing specific workflows)
