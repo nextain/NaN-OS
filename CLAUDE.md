@@ -54,12 +54,12 @@ Naia-OS/
 ├── recipes/        # BlueBuild recipe
 ├── config/         # BlueBuild config (scripts, files)
 ├── os/             # OS 테스트, 유틸리티
-└── work-logs/      # 개발 작업 로그 (이 프로젝트 전용)
+└── assets/         # 로고, 월페이퍼, 인스톨러 이미지
 ```
 
 ## 컨벤션 (요약)
 
-- **한국어 응답**
+- **응답 언어**: 기여자의 선호 언어
 - **커밋**: 영어, `<type>(<scope>): <description>`
 - **포맷터**: Biome (tab, double quote, semicolons)
 - **테스트**: Integration-first TDD (Vitest + tauri-driver)
@@ -91,6 +91,11 @@ node ~/.naia/openclaw/node_modules/openclaw/openclaw.mjs gateway run --bind loop
 
 # Gateway E2E
 cd agent && CAFE_LIVE_GATEWAY_E2E=1 pnpm exec vitest run src/__tests__/gateway-e2e.test.ts
+
+# 데모 영상 (상세: .agents/context/demo-video.yaml)
+cd shell && pnpm test:e2e -- demo-video.spec.ts   # 1) Playwright 녹화
+cd shell && npx tsx e2e/demo-tts.ts                # 2) TTS 나레이션 생성
+cd shell && bash e2e/demo-merge.sh                 # 3) ffmpeg 합성 → MP4
 ```
 
 ## 배포 빌드
