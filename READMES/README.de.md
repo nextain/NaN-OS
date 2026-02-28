@@ -130,14 +130,18 @@ Eine duale Dokumentationsstruktur fuer KI-Agenten und menschliche Entwickler. `.
 
 | KI-Kontext (`.agents/`) | Menschliche Doku (`.users/`) | Beschreibung |
 |---|---|---|
-| `context/agents-rules.json` | `context/agents-rules.md` | Projektregeln (SoT) |
-| `context/project-index.yaml` | — | Kontext-Index + Spiegelungsregeln |
-| `context/vision.yaml` | `context/vision.md` | Projektvision, Kernkonzepte |
-| `context/plan.yaml` | `context/plan.md` | Implementierungsplan, phasenweiser Status |
-| `context/architecture.yaml` | `context/architecture.md` | Hybride Architektur, Sicherheitsschichten |
-| `context/openclaw-sync.yaml` | `context/openclaw-sync.md` | OpenClaw Gateway-Synchronisation |
-| `context/channels-discord.yaml` | `context/channels-discord.md` | Discord-Integrationsarchitektur |
-| `workflows/development-cycle.yaml` | `workflows/development-cycle.md` | Entwicklungszyklus (PLAN->BUILD->VERIFY) |
+| [`context/agents-rules.json`](../.agents/context/agents-rules.json) | [`context/agents-rules.md`](../.users/context/en/agents-rules.md) | Projektregeln (SoT) |
+| [`context/project-index.yaml`](../.agents/context/project-index.yaml) | — | Kontext-Index + Spiegelungsregeln |
+| [`context/vision.yaml`](../.agents/context/vision.yaml) | [`context/vision.md`](../.users/context/en/vision.md) | Projektvision, Kernkonzepte |
+| [`context/plan.yaml`](../.agents/context/plan.yaml) | [`context/plan.md`](../.users/context/en/plan.md) | Implementierungsplan, phasenweiser Status |
+| [`context/architecture.yaml`](../.agents/context/architecture.yaml) | [`context/architecture.md`](../.users/context/en/architecture.md) | Hybride Architektur, Sicherheitsschichten |
+| [`context/openclaw-sync.yaml`](../.agents/context/openclaw-sync.yaml) | [`context/openclaw-sync.md`](../.users/context/en/openclaw-sync.md) | OpenClaw Gateway-Synchronisation |
+| [`context/channels-discord.yaml`](../.agents/context/channels-discord.yaml) | [`context/channels-discord.md`](../.users/context/en/channels-discord.md) | Discord-Integrationsarchitektur |
+| [`context/philosophy.yaml`](../.agents/context/philosophy.yaml) | [`context/philosophy.md`](../.users/context/en/philosophy.md) | Core philosophy (AI sovereignty, privacy) |
+| [`context/contributing.yaml`](../.agents/context/contributing.yaml) | [`context/contributing.md`](../.users/context/en/contributing.md) | Contribution guide for AI agents and humans |
+| [`context/brand.yaml`](../.agents/context/brand.yaml) | [`context/brand.md`](../.users/context/en/brand.md) | Brand identity, character design, color system |
+| [`context/donation.yaml`](../.agents/context/donation.yaml) | [`context/donation.md`](../.users/context/en/donation.md) | Donation policy and open source sustainability |
+| [`workflows/development-cycle.yaml`](../.agents/workflows/development-cycle.yaml) | [`workflows/development-cycle.md`](../.users/workflows/development-cycle.md) | Entwicklungszyklus (PLAN->BUILD->VERIFY) |
 
 **Spiegelungsregel:** Wenn eine Seite geaendert wird, muss die andere immer synchronisiert werden.
 
