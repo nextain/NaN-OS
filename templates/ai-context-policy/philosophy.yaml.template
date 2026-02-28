@@ -1,0 +1,49 @@
+# SPDX-License-Identifier: CC-BY-SA-4.0
+#
+# Core philosophy of {{PROJECT_NAME}}.
+# This is the "why" — separated from "what" (architecture) and "how" (workflows).
+#
+# Based on Naia OS AI Context Policy Template
+# Original: https://github.com/nextain/naia-os
+
+version: 1
+
+principles:
+  # === 아래 원칙을 프로젝트에 맞게 수정하세요 ===
+
+  principle_1:
+    title: "{{PRINCIPLE_1_TITLE}}"
+    statement: "{{PRINCIPLE_1_STATEMENT}}"
+    details:
+      - "{{DETAIL_1}}"
+      - "{{DETAIL_2}}"
+
+  principle_2:
+    title: "{{PRINCIPLE_2_TITLE}}"
+    statement: "{{PRINCIPLE_2_STATEMENT}}"
+    details:
+      - "{{DETAIL_1}}"
+      - "{{DETAIL_2}}"
+
+  # === 권장 원칙 (오픈소스 AI 프로젝트에 공통) ===
+
+  transparency:
+    title: "Transparency"
+    statement: "Open source — verify by reading the code"
+    details:
+      - "All core logic is open source"
+      - "AI context is open and forkable (CC-BY-SA 4.0)"
+      - "No hidden telemetry or data collection"
+
+  vibe_coding_era:
+    title: "Vibe Coding Era"
+    statement: "AI context files are the new contribution infrastructure"
+    details:
+      - ".agents/ directories encode project philosophy, not just config"
+      - "Context quality determines AI collaboration quality"
+      - "Dual-directory architecture: AI-optimized + human-readable"
+      - "CC-BY-SA licensing preserves the contribution chain"
+
+mirrors:
+  korean: ".users/context/philosophy.md"
+  english: ".users/context/en/philosophy.md"

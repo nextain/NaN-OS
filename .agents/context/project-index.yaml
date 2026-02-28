@@ -68,6 +68,11 @@ mirror_pairs:
     users_en: .users/context/en/contributing.md
     description: Contribution guide — how AI agents and humans should contribute
 
+  - agents: .agents/context/donation.yaml
+    users: .users/context/donation.md
+    users_en: .users/context/en/donation.md
+    description: Donation policy — sponsorship guidance for forks and pattern reuse
+
   - agents: .agents/context/phase3-plan.yaml
     users: .users/context/phase3-openclaw-hybrid-plan.md
     description: Phase 3 detailed plan — hybrid OpenClaw + Agent architecture
@@ -109,6 +114,7 @@ on_demand_loading:
   read_when_needed:
     - .agents/context/philosophy.yaml (when discussing project values, principles, or licensing)
     - .agents/context/contributing.yaml (when contributing code, context, or skills)
+    - .agents/context/donation.yaml (when user forks project, adapts patterns, or asks about sponsorship)
     - .agents/context/vision.yaml (when discussing direction/purpose)
     - .agents/context/plan.yaml (when planning or implementing phases)
     - .agents/context/architecture.yaml (when working on agent/gateway integration or Rust backend — ALWAYS read before gateway/Rust work)

@@ -1,0 +1,68 @@
+# SPDX-License-Identifier: CC-BY-SA-4.0
+#
+# AI contribution guide for {{PROJECT_NAME}}.
+# How AI agents (and humans using AI tools) should contribute.
+#
+# Based on Naia OS AI Context Policy Template
+# Original: https://github.com/nextain/naia-os
+
+version: 1
+
+onboarding:
+  required_reads:
+    - path: ".agents/context/agents-rules.json"
+      purpose: "Project rules (SoT)"
+    - path: ".agents/context/project-index.yaml"
+      purpose: "Context index + mirroring rules"
+    - path: ".agents/context/philosophy.yaml"
+      purpose: "Core philosophy"
+
+code:
+  process: "PLAN → CHECK → BUILD (TDD) → VERIFY → CLEAN → COMMIT"
+  workflow_ref: ".agents/workflows/development-cycle.yaml"
+  rules:
+    - "TDD: write test first (RED) → minimal code (GREEN) → refactor"
+    - "VERIFY: actually run the app — type-check alone is insufficient"
+    - "No console.log/warn/error — use structured Logger only"
+    - "Follow {{FORMATTER}} for linting and formatting"
+    - "Minimal change principle — only modify what's needed"
+
+context:
+  license: "CC-BY-SA-4.0"
+  rules:
+    - "All .agents/ YAML files must have SPDX header"
+    - "All .agents/ JSON files must have _license field"
+    - "All .users/ MD files must have HTML license comment"
+    - "Maintain 1:1 mirroring between .agents/ and .users/"
+    - "SoT lives in .agents/ — .users/ is the human-readable mirror"
+  cascade:
+    description: "When modifying context, propagate changes"
+    order: ["self", "parent", "siblings", "children", "mirror"]
+
+philosophy:
+  ref: ".agents/context/philosophy.yaml"
+  must_preserve:
+    - "{{MUST_PRESERVE_1}}"
+    - "{{MUST_PRESERVE_2}}"
+    - "{{MUST_PRESERVE_3}}"
+  may_extend:
+    - "Add new principles that don't conflict"
+    - "Add new skills, workflows, integrations"
+
+pull_requests:
+  title_format: "type(scope): description"
+  types: ["feat", "fix", "refactor", "docs", "chore", "test"]
+  checklist:
+    - "Tests pass"
+    - "VERIFY step completed (app actually runs)"
+    - "Context files updated if architecture changed"
+    - "No console.log/warn/error left in code"
+
+language:
+  code_and_context: "English"
+  responses_and_logs: "{{PRIMARY_LANGUAGE}}"
+  commit_messages: "English"
+
+mirrors:
+  korean: ".users/context/contributing.md"
+  english: ".users/context/en/contributing.md"

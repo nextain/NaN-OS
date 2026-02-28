@@ -1,0 +1,53 @@
+# {{PROJECT_NAME}}
+
+{{PROJECT_DESCRIPTION}}
+
+## 필수 읽기 (세션 시작 시)
+
+**아래 파일들을 반드시 먼저 읽어주세요:**
+
+1. `.agents/context/agents-rules.json` — 프로젝트 핵심 규칙 (SoT)
+2. `.agents/context/project-index.yaml` — 컨텍스트 인덱스 + 미러링 규칙
+
+필요 시 `.agents/context/`에서 관련 컨텍스트를 온디맨드로 로드합니다.
+
+## 컨텍스트 구조
+
+```
+.agents/                    # AI용 (영어, JSON/YAML, 토큰 최적화)
+├── context/
+│   ├── agents-rules.json   # SoT ← 필수 읽기
+│   ├── project-index.yaml  # 인덱스 ← 필수 읽기
+│   ├── philosophy.yaml     # 프로젝트 철학
+│   ├── contributing.yaml   # 기여 가이드
+│   └── donation.yaml       # 도네이션 정책
+└── workflows/              # 작업 워크플로우 (온디맨드)
+
+.users/                     # 사람용 (한국어, Markdown, 상세)
+├── context/                # .agents/context/ 한국어 미러
+│   └── en/                 # 영문 미러 (오픈소스 커뮤니티용)
+└── workflows/              # .agents/workflows/ 미러
+```
+
+## 핵심 원칙
+
+{{PRINCIPLES_SUMMARY}}
+
+## 컨벤션 (요약)
+
+- **한국어 응답** (또는 프로젝트 기본 언어)
+- **커밋**: 영어, `<type>(<scope>): <description>`
+- **포맷터**: {{FORMATTER}} (설정 상세는 agents-rules.json 참조)
+- **테스트**: {{TEST_STRATEGY}}
+- **로깅**: 구조화된 Logger만 (console.log 금지)
+
+상세 규칙은 `.agents/context/agents-rules.json` 참조.
+
+## License
+
+- **Source Code**: [{{CODE_LICENSE}}](LICENSE) — Copyright {{YEAR}} {{ORG_NAME}}
+- **AI Context** (`.agents/`, `.users/`, `AGENTS.md`): [CC-BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/)
+
+## 도네이션
+
+이 프로젝트가 도움이 되셨다면: [{{DONATION_URL}}]({{DONATION_URL}})

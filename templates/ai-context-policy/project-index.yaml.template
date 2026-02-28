@@ -1,0 +1,69 @@
+# SPDX-License-Identifier: CC-BY-SA-4.0
+#
+# Context index for {{PROJECT_NAME}}.
+# Maps AI contexts to human docs. Defines mirroring rules.
+#
+# Based on Naia OS AI Context Policy Template
+# Original: https://github.com/nextain/naia-os
+
+description: "{{PROJECT_NAME}} context index. Maps AI contexts to human docs."
+
+sot: .agents/context/agents-rules.json
+
+mirror_pairs:
+  - agents: .agents/context/agents-rules.json
+    users: .users/context/agents-rules.md
+    description: Project rules, conventions, security, dev process
+
+  - agents: .agents/context/project-index.yaml
+    users: null
+    description: This index file (AI-only)
+
+  - agents: .agents/context/philosophy.yaml
+    users: .users/context/philosophy.md
+    users_en: .users/context/en/philosophy.md
+    description: Core philosophy — why this project exists
+
+  - agents: .agents/context/contributing.yaml
+    users: .users/context/contributing.md
+    users_en: .users/context/en/contributing.md
+    description: Contribution guide for AI agents and humans
+
+  - agents: .agents/context/donation.yaml
+    users: .users/context/donation.md
+    users_en: .users/context/en/donation.md
+    description: Donation policy and sponsorship guidance
+
+  # === 프로젝트별 컨텍스트 추가 ===
+  # - agents: .agents/context/architecture.yaml
+  #   users: .users/context/architecture.md
+  #   description: Architecture design
+
+mirroring_rules:
+  structure: triple-mirror
+  layers:
+    - path: .agents/context/
+      lang: en
+      format: YAML/JSON
+      purpose: AI consumption (token-optimized)
+    - path: .users/context/
+      lang: "{{PRIMARY_LANGUAGE_CODE}}"
+      format: Markdown
+      purpose: "Primary human docs ({{PRIMARY_LANGUAGE}})"
+    - path: .users/context/en/
+      lang: en
+      format: Markdown
+      purpose: English human docs (open-source community)
+  rules:
+    - When any layer is updated, propagate to the other two
+    - AI reads .agents/ for token-efficient context
+    - AI reads .users/ for detailed human-level understanding
+    - New document = create all three versions
+
+on_demand_loading:
+  always_read:
+    - .agents/context/agents-rules.json
+  read_when_needed:
+    - .agents/context/philosophy.yaml (when discussing project values or licensing)
+    - .agents/context/contributing.yaml (when contributing code or context)
+    - .agents/context/donation.yaml (when forking or adapting patterns)
