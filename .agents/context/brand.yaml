@@ -1,0 +1,96 @@
+# SPDX-License-Identifier: CC-BY-SA-4.0
+# Naia OS — Brand Context
+
+origin:
+  words: "Next AI Networks"
+  company: "Nextain"
+  character: "Naia"
+  slogan: "Next AI Networks"
+  relation: "Nextain is the company, Naia is the AI character who lives inside the OS. The shell is the OS, Naia is the soul."
+  brand_principle: "Use 'Naia' without 'OS' suffix — like Windows, macOS, Bazzite"
+  nhn_homage: "NHN (Next Human Networks) — homage to the company that grew Luke"
+  korean_persona: "Official name is '나이아', but the avatar greets with '나야(Na-ya)!' as a pun"
+
+history:
+  original_name: "NaN"
+  renamed_reason: "existing OS brand conflict"
+  current_name: "Naia"
+  legacy_retired: "Caretive, Careti — all terminated and deprecated"
+
+name_meanings:
+  - language: "Greek (Naiad)"
+    meaning: "Water nymph of springs and streams"
+  - language: "Basque"
+    meaning: "Wave, sea foam; aspiration, wish (from Nahia)"
+  - language: "Hawaiian"
+    meaning: "Dolphin"
+
+avatar:
+  samples: "VRM samples from https://hub.vroid.com/"
+  mascot_status: "in progress"
+  format: "VRM"
+  character_reference: "assets/character/naia-character-reference-prompt.md"
+
+reference_assets:
+  character_dir: "assets/character/"
+  character_images:
+    - "assets/character/naia-character.png"           # main character design
+    - "assets/character/naia-default-character.png"    # default pose
+    - "assets/character/naia-varaiations.png"          # variations sheet
+    - "assets/character/background-space.png"          # space background
+  logos_dir: "assets/logos/"
+  logo_images:
+    - "assets/logos/app-logo.png"                      # app icon
+    - "assets/logos/naia-dark-text-logo.png"            # dark mode text logo
+    - "assets/logos/naia-light-text-logo.png"           # light mode text logo
+    - "assets/logos/text-naia-logo.png"                 # text-only logo
+    - "assets/logos/text-mix-naia-logo.png"             # text + icon logo
+    - "assets/logos/logo-trans-256x256.png"             # transparent logo 256px
+    - "assets/logos/logo-trans-48x48.png"               # transparent logo 48px
+    - "assets/logos/sidebar-logo.png"                   # sidebar icon
+    - "assets/logos/start-launcher-icon.png"            # start menu icon
+    - "assets/logos/start-launcher-icon.svg"            # start menu icon (vector)
+    - "assets/logos/Playmouth-300x300.png"              # Plymouth boot logo
+  design_guides:
+    - "assets/logos/brand-meaning.md"                   # brand name meanings
+    - "assets/logos/desgin_guide.md"                    # color system + design guide
+    - "assets/character/naia-character-reference-prompt.md"  # 3D character prompt
+
+character_design:
+  material: "translucent frosted glass (glassmorphism), smooth glossy finish"
+  internal: "glowing Flow Cyan (#06B6D4) digital circuit patterns and micro-node networks"
+  eyes: "large solid black glossy orbs"
+  mouth: "minimalist 'w' shaped cat mouth"
+  ears: "cute cat-like ears"
+  tail: "thin translucent cat tail (back view)"
+  hair: "bob-style, gradient Nextain Blue (#2563EB) to Evolution Green (#10B981), holographic sheen"
+  logo: "glowing cyan equilateral triangle with nodes at vertices, floats above head as halo (formerly NaN OS logo, now Naia logo)"
+  chest_emblem: "triangle logo + 'Naia' text etched in glowing cyan"
+  variants:
+    - "with hair (bob-style, gradient holographic)"
+    - "without hair (clean android style)"
+  colors:
+    nextain_blue: { hex: "#2563EB", role: "trust, network base, gradient start" }
+    flow_cyan: { hex: "#06B6D4", role: "data flow, AI connection, hover/progress" }
+    evolution_green: { hex: "#10B981", role: "growth, ecosystem, gradient end" }
+    terminal_black: { hex: "#171717", role: "main text, 'next' and 'OS' logo font" }
+    cloud_white: { hex: "#F8FAFC", role: "light mode background" }
+    deep_node: { hex: "#0F172A", role: "dark mode background" }
+  gradient: "diagonal linear, bottom-left (#2563EB) to top-right (#10B981)"
+
+positioning: "OpenClaw AI agent + VRM avatar combined next-generation AI OS"
+
+ui_layout:
+  top: "Naia"
+  bottom: "Next AI Networks OS"
+  bottom_right: "Powered by Nextain"
+
+design_tips:
+  website: "Cloud White background, core gradient only on header logo and CTA buttons"
+  naia_interface: "Deep Node dark mode default, Flow Cyan glow on agent Naia appearance/notifications"
+  gradient_direction: "bottom-left (#2563EB) to top-right (#10B981), diagonal linear"
+
+links:
+  company: "https://about.nextain.io"
+  portal: "https://naia.nextain.io"
+  github: "https://github.com/nextain/naia-os"

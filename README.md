@@ -2,11 +2,17 @@
 
 # Naia
 
+<p align="center">
+  <img src="assets/readme-hero.jpg" alt="Naia OS" width="800" />
+</p>
+
 **The Next Generation AI OS** — A personal AI operating system where your own AI lives
 
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 
 > "Open source. Your AI, your rules. Choose your AI, shape its memory and personality, give it your voice — all on your own machine, all verifiable in code."
+
+> **Note:** The VRM avatar samples shown are from [VRoid Hub](https://hub.vroid.com/). Naia's official mascot VRM is currently in progress.
 
 ## What is Naia?
 
@@ -130,16 +136,18 @@ A dual documentation structure for AI agents and human developers. `.agents/` co
 
 | AI Context (`.agents/`) | Human Docs (`.users/`) | Description |
 |---|---|---|
-| `context/agents-rules.json` | `context/agents-rules.md` | Project rules (SoT) |
-| `context/project-index.yaml` | — | Context index + mirroring rules |
-| `context/vision.yaml` | `context/vision.md` | Project vision, core concepts |
-| `context/plan.yaml` | `context/plan.md` | Implementation plan, phase-by-phase status |
-| `context/architecture.yaml` | `context/architecture.md` | Hybrid architecture, security layers |
-| `context/openclaw-sync.yaml` | `context/openclaw-sync.md` | OpenClaw Gateway synchronization |
-| `context/channels-discord.yaml` | `context/channels-discord.md` | Discord integration architecture |
-| `context/philosophy.yaml` | `context/philosophy.md` | Core philosophy (AI sovereignty, privacy) |
-| `context/contributing.yaml` | `context/contributing.md` | Contribution guide for AI agents and humans |
-| `workflows/development-cycle.yaml` | `workflows/development-cycle.md` | Development cycle (PLAN->BUILD->VERIFY) |
+| [`context/agents-rules.json`](.agents/context/agents-rules.json) | [`context/agents-rules.md`](.users/context/agents-rules.md) | Project rules (SoT) |
+| [`context/project-index.yaml`](.agents/context/project-index.yaml) | — | Context index + mirroring rules |
+| [`context/vision.yaml`](.agents/context/vision.yaml) | [`context/vision.md`](.users/context/vision.md) | Project vision, core concepts |
+| [`context/plan.yaml`](.agents/context/plan.yaml) | [`context/plan.md`](.users/context/plan.md) | Implementation plan, phase-by-phase status |
+| [`context/architecture.yaml`](.agents/context/architecture.yaml) | [`context/architecture.md`](.users/context/architecture.md) | Hybrid architecture, security layers |
+| [`context/openclaw-sync.yaml`](.agents/context/openclaw-sync.yaml) | [`context/openclaw-sync.md`](.users/context/openclaw-sync.md) | OpenClaw Gateway synchronization |
+| [`context/channels-discord.yaml`](.agents/context/channels-discord.yaml) | [`context/channels-discord.md`](.users/context/channels-discord.md) | Discord integration architecture |
+| [`context/philosophy.yaml`](.agents/context/philosophy.yaml) | [`context/philosophy.md`](.users/context/philosophy.md) | Core philosophy (AI sovereignty, privacy) |
+| [`context/contributing.yaml`](.agents/context/contributing.yaml) | [`context/contributing.md`](.users/context/contributing.md) | Contribution guide for AI agents and humans |
+| [`context/brand.yaml`](.agents/context/brand.yaml) | [`context/brand.md`](.users/context/brand.md) | Brand identity, character design, color system |
+| [`context/donation.yaml`](.agents/context/donation.yaml) | [`context/donation.md`](.users/context/donation.md) | Donation policy and open source sustainability |
+| [`workflows/development-cycle.yaml`](.agents/workflows/development-cycle.yaml) | [`workflows/development-cycle.md`](.users/workflows/development-cycle.md) | Development cycle (PLAN->BUILD->VERIFY) |
 
 **Mirroring rule:** When one side is modified, the other must always be synchronized.
 
