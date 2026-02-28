@@ -106,10 +106,8 @@ assert_contains() {
 
   if echo "$response" | grep -qi "$keyword"; then
     log_pass "$description"
-    return 0
   else
     log_fail "$description (expected: '$keyword')"
-    return 1
   fi
 }
 
@@ -120,10 +118,8 @@ assert_not_contains() {
 
   if echo "$response" | grep -qi "$keyword"; then
     log_fail "$description (found forbidden: '$keyword')"
-    return 1
   else
     log_pass "$description"
-    return 0
   fi
 }
 
