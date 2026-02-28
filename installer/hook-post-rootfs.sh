@@ -328,8 +328,70 @@ INPUT_METHOD=fcitx
 XMODIFIERS=@im=fcitx
 EOF
 
+# Symlink fcitx5.sh into /etc/profile.d/ so login shells source it.
+# Bazzite ships it in /usr/etc/profile.d/ which is NOT sourced by /etc/profile.
+ln -sf /usr/etc/profile.d/fcitx5.sh /etc/profile.d/fcitx5.sh
+
+# Switch xinputrc alternative from ibus to fcitx5.
+# Bazzite defaults to ibus.conf which sets GTK_IM_MODULE=ibus globally.
+if [ -f /etc/X11/xinit/xinput.d/fcitx5.conf ]; then
+    ln -sf /etc/X11/xinit/xinput.d/fcitx5.conf /etc/alternatives/xinputrc
+fi
+
+# Patch kde-ptyxis wrapper: remove hardcoded GTK_IM_MODULE=ibus.
+# Bazzite's kde-ptyxis forces `env GTK_IM_MODULE=ibus` which overrides
+# fcitx5's Wayland-native frontend and breaks Korean character composition.
+if [ -f /usr/bin/kde-ptyxis ] && grep -q 'GTK_IM_MODULE=ibus' /usr/bin/kde-ptyxis; then
+    sed -i 's/env GTK_IM_MODULE=ibus //g' /usr/bin/kde-ptyxis
+fi
+
 # ==============================================================================
-# 14. Cleanup
+# 14. OpenClaw gateway — ensure gateway.mode=local in config
+#     Without this field, the gateway refuses to start (requires explicit mode
+#     or --allow-unconfigured flag). Naia's ensure_openclaw_config() handles
+#     this at runtime, but for the systemd user service and first-boot, the
+#     config must be pre-seeded.
+# ==============================================================================
+
+OPENCLAW_DIR="/var/home/liveuser/.openclaw"
+OPENCLAW_CFG="${OPENCLAW_DIR}/openclaw.json"
+mkdir -p "${OPENCLAW_DIR}"
+if [ -f "${OPENCLAW_CFG}" ]; then
+    # Patch existing config: add gateway.mode if missing
+    python3 -c "
+import json, sys
+with open('${OPENCLAW_CFG}') as f:
+    cfg = json.load(f)
+gw = cfg.setdefault('gateway', {})
+if 'mode' not in gw:
+    gw['mode'] = 'local'
+    gw.setdefault('port', 18789)
+    gw.setdefault('bind', 'loopback')
+    with open('${OPENCLAW_CFG}', 'w') as f:
+        json.dump(cfg, f, indent=2)
+    print('[naia] Patched gateway.mode=local into openclaw.json')
+else:
+    print('[naia] gateway.mode already set: ' + gw['mode'])
+" 2>/dev/null || true
+else
+    cat > "${OPENCLAW_CFG}" <<'GWEOF'
+{
+  "gateway": {
+    "mode": "local",
+    "port": 18789,
+    "bind": "loopback",
+    "reload": {
+      "mode": "off"
+    }
+  }
+}
+GWEOF
+    echo "[naia] Created bootstrap openclaw.json with gateway.mode=local"
+fi
+chown -R liveuser:liveuser "${OPENCLAW_DIR}" 2>/dev/null || true
+
+# ==============================================================================
+# 15. Cleanup
 # ==============================================================================
 
 rm -rf "${SRC}"

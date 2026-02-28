@@ -6,16 +6,24 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-ExecStart=/usr/bin/naia-gateway-wrapper
+ExecStart=/usr/bin/node %h/.naia/openclaw/node_modules/openclaw/openclaw.mjs gateway run --bind loopback --port 18789 --allow-unconfigured
+Environment=HOME=%h
+Environment=PATH=%h/.local/bin:%h/.config/nvm/versions/node/v22/bin:/usr/local/bin:/usr/bin:/bin
+Environment=OPENCLAW_CONFIG_PATH=%h/.openclaw/openclaw.json
+WorkingDirectory=%h/.naia/openclaw
 Restart=on-failure
 RestartSec=5
-Environment=OPENCLAW_PROFILE=naia
-Environment=NODE_ENV=production
+TimeoutStopSec=10
+
+# Resource limits
+MemoryMax=512M
+CPUQuota=50%
 
 # Security hardening
 NoNewPrivileges=true
+ProtectSystem=strict
 ProtectHome=read-only
-ReadWritePaths=%h/.naia
+ReadWritePaths=%h/.naia %h/.openclaw
 PrivateTmp=true
 
 [Install]
