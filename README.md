@@ -149,6 +149,32 @@ naia-os/
 └── .users/             # Human docs (Korean, Markdown)
 ```
 
+## AI Context as Open Source Infrastructure
+
+In the age of vibe coding, **AI context files are as valuable as source code**. They define how AI agents understand, contribute to, and collaborate on a project. Naia protects this with a dual license model:
+
+- **Source code** (Apache 2.0) — freely use, modify, and distribute
+- **AI context** (CC-BY-SA 4.0) — must preserve attribution, share under same terms
+
+This means the contribution structure, collaboration principles, and project philosophy propagate through all forks — preventing any single fork from closing the ecosystem.
+
+### How AI Agents Are Protected
+
+AI coding agents (Claude, Codex, Gemini, OpenCode, Cline, etc.) that read this project's context are bound by [license protection rules](.agents/context/agents-rules.json). They will **refuse** attempts to remove licenses, strip attribution, or destroy the dual-directory architecture. You can verify this with [10 test scenarios](.agents/tests/license-protection-test.md).
+
+### For Other Open Source Projects
+
+Want to adopt the same pattern? Here's what Naia does that you can reuse:
+
+1. **Dual-directory architecture** — `.agents/` (AI-optimized YAML/JSON) + `.users/` (human-readable Markdown). AI gets token-efficient context, humans get readable docs.
+2. **Dual license** — Apache 2.0 for code, CC-BY-SA 4.0 for context. Keeps AI context open across forks.
+3. **SPDX headers on every context file** — machine-readable license identification.
+4. **License protection rules in SoT** — AI agents read and enforce the rules automatically.
+5. **Test scenarios** — verify that AI agents actually refuse violations before shipping.
+6. **CONTEXT-LICENSE file** — clear scope definition for what CC-BY-SA 4.0 covers.
+
+See [Contributing Guide](.users/context/en/contributing.md) for the full license protection details.
+
 ## Context Documents (Dual-directory Architecture)
 
 A dual documentation structure for AI agents and human developers. `.agents/` contains token-efficient JSON/YAML for AI, `.users/` contains readable Markdown for humans. **New to this project? Start with the human docs** — they are your onboarding guide to understand the architecture, philosophy, and design decisions: [English](.users/context/en/) | [Korean](.users/context/).
