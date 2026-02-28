@@ -151,7 +151,7 @@ naia-os/
 
 ## Context Documents (Dual-directory Architecture)
 
-A dual documentation structure for AI agents and human developers. `.agents/` contains token-efficient JSON/YAML for AI, `.users/` contains Korean Markdown for humans.
+A dual documentation structure for AI agents and human developers. `.agents/` contains token-efficient JSON/YAML for AI, `.users/` contains readable Markdown for humans. **New to this project? Start with the human docs** — they are your onboarding guide to understand the architecture, philosophy, and design decisions: [English](.users/context/en/) | [Korean](.users/context/).
 
 | AI Context (`.agents/`) | Human Docs (`.users/`) | Description |
 |---|---|---|
