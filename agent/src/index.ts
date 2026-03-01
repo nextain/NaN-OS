@@ -400,6 +400,8 @@ export async function handleChatRequest(req: ChatRequest): Promise<void> {
 				if (chunk.type === "text") {
 					fullText += chunk.text;
 					writeLine({ type: "text", requestId, text: chunk.text });
+				} else if (chunk.type === "thinking") {
+					writeLine({ type: "thinking", requestId, text: chunk.text });
 				} else if (chunk.type === "tool_use") {
 					toolCalls.push({
 						id: chunk.id,

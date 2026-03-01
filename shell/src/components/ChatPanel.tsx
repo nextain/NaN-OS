@@ -10,7 +10,7 @@ import {
 	loadConfig,
 	saveConfig,
 } from "../lib/config";
-import { hasApiKey } from "../lib/config";
+import { isApiKeyOptional, isReadyToChat } from "../lib/config";
 import {
 	getAllFacts,
 	upsertFact,
@@ -232,7 +232,7 @@ export function ChatPanel() {
 	const [input, setInput] = useState("");
 	const [isRecording, setIsRecording] = useState(false);
 	const [activeTab, setActiveTab] = useState<TabId>(
-		hasApiKey() ? "chat" : "settings",
+		isReadyToChat() ? "chat" : "settings",
 	);
 	const [showCostDashboard, setShowCostDashboard] = useState(false);
 	const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -244,6 +244,7 @@ export function ChatPanel() {
 	const messages = useChatStore((s) => s.messages);
 	const isStreaming = useChatStore((s) => s.isStreaming);
 	const streamingContent = useChatStore((s) => s.streamingContent);
+	const streamingThinking = useChatStore((s) => s.streamingThinking);
 	const streamingToolCalls = useChatStore((s) => s.streamingToolCalls);
 	const totalSessionCost = useChatStore((s) => s.totalSessionCost);
 	const provider = useChatStore((s) => s.provider);
@@ -389,13 +390,12 @@ export function ChatPanel() {
 			useChatStore.getState().finishStreaming();
 			return;
 			}
-			const isApiKeyOptionalProvider =
-				config?.provider === "claude-code-cli" || config?.provider === "ollama";
-			if (!isApiKeyOptionalProvider && !config?.apiKey && !config?.labKey) {
+			if (!isApiKeyOptional(config?.provider) && !config?.apiKey && !config?.labKey) {
 				useChatStore.getState().appendStreamChunk(t("chat.noApiKey"));
 				useChatStore.getState().finishStreaming();
 				return;
 			}
+		if (!config) return;
 
 		const history = store.messages
 			.filter((m) => m.role === "user" || m.role === "assistant")
@@ -482,6 +482,9 @@ export function ChatPanel() {
 				}
 				break;
 			}
+			case "thinking":
+				store.appendThinkingChunk(chunk.text);
+				break;
 			case "audio":
 				playBase64Audio(chunk.data);
 				break;
@@ -856,6 +859,12 @@ export function ChatPanel() {
 			>
 				{messages.map((msg) => (
 					<div key={msg.id} className={`chat-message ${msg.role}`}>
+						{msg.thinking && (
+							<details className="thinking-block">
+								<summary>{t("chat.thinking") || "Thinking..."}</summary>
+								<div className="thinking-content">{msg.thinking}</div>
+							</details>
+						)}
 						{msg.toolCalls?.map((tc) => (
 							<ToolActivity key={tc.toolCallId} tool={tc} />
 						))}
@@ -879,6 +888,12 @@ export function ChatPanel() {
 				{/* Streaming content */}
 				{isStreaming && (
 					<div className="chat-message assistant streaming">
+						{streamingThinking && (
+							<details className="thinking-block" open>
+								<summary>{t("chat.thinking") || "Thinking..."}</summary>
+								<div className="thinking-content">{streamingThinking}</div>
+							</details>
+						)}
 						{streamingToolCalls.map((tc) => (
 							<ToolActivity key={tc.toolCallId} tool={tc} />
 						))}

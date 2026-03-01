@@ -74,7 +74,7 @@ describe("skill_config", () => {
 	it("has correct metadata", () => {
 		expect(skill.name).toBe("skill_config");
 		expect(skill.tier).toBe(1);
-		expect(skill.requiresGateway).toBe(true);
+		expect(skill.requiresGateway).toBe(false);
 	});
 
 	it("gets config", async () => {
@@ -123,7 +123,8 @@ describe("skill_config", () => {
 		);
 		expect(result.success).toBe(true);
 		const parsed = JSON.parse(result.output);
-		expect(parsed.models).toHaveLength(2);
+		// Gateway returns 2 models + 19 local models (minus 1 overlap: grok-3-mini) = 20
+		expect(parsed.models).toHaveLength(20);
 	});
 
 	it("patches config", async () => {

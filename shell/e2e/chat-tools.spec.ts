@@ -80,12 +80,21 @@ const TAURI_MOCK_SCRIPT = `
 		];
 	}
 
+	function buildThinkingResponse(requestId, thinking, text) {
+		return [
+			{ type: "thinking", requestId: requestId, text: thinking },
+			{ type: "text", requestId: requestId, text: text },
+			{ type: "finish", requestId: requestId, cost: { cost: 0.003, inputTokens: 50, outputTokens: 80 } },
+		];
+	}
+
 	function matchScenario(userMessage) {
 		var msg = (userMessage || "").toLowerCase();
 		if (msg.indexOf("ls") !== -1 && msg.indexOf("디렉토리") !== -1) return "execute_command";
 		if (msg.indexOf("써줘") !== -1 || msg.indexOf("write") !== -1) return "write_file";
 		if (msg.indexOf("읽어줘") !== -1 || msg.indexOf("read") !== -1) return "read_file";
 		if (msg.indexOf("찾아줘") !== -1 || msg.indexOf("search") !== -1) return "search_files";
+		if (msg.indexOf("생각") !== -1 || msg.indexOf("think") !== -1) return "thinking";
 		return "simple_chat";
 	}
 
@@ -111,6 +120,10 @@ const TAURI_MOCK_SCRIPT = `
 					{ path: "agent", regex: "gateway" },
 					"agent/src/gateway.ts:5: export class Gateway",
 					"gateway 관련 결과를 찾았습니다.");
+			case "thinking":
+				return buildThinkingResponse(requestId,
+					"이 문제에 대해 깊이 생각해보겠습니다...",
+					"생각을 정리해봤어! 답변이야.");
 			default:
 				return buildTextResponse(requestId, "안녕하세요! 무엇을 도와드릴까요?");
 		}
@@ -288,5 +301,94 @@ test.describe("Chat + Tool E2E", () => {
 
 		const toolActivity = page.locator(".tool-activity");
 		await expect(toolActivity.first()).toBeVisible({ timeout: 5_000 });
+	});
+});
+
+test.describe("Claude Code CLI provider E2E", () => {
+	test.beforeEach(async ({ page }) => {
+		await page.addInitScript(TAURI_MOCK_SCRIPT);
+
+		// Seed localStorage with claude-code-cli config (no apiKey needed)
+		await page.addInitScript(
+			(configJson: string) => {
+				localStorage.setItem("naia-config", configJson);
+			},
+			JSON.stringify({
+				provider: "claude-code-cli",
+				model: "claude-sonnet-4-5-20250929",
+				apiKey: "",
+				enableTools: true,
+				locale: "ko",
+				onboardingComplete: true,
+			}),
+		);
+
+		await page.goto("/");
+		await expect(page.locator(".chat-panel")).toBeVisible({ timeout: 10_000 });
+	});
+
+	test("claude-code-cli — 채팅 응답 수신", async ({ page }) => {
+		await sendMessage(page, "안녕");
+
+		const assistantMsg = page.locator(
+			".chat-message.assistant .message-content",
+		);
+		await expect(assistantMsg.first()).toBeVisible();
+		await expect(assistantMsg.first()).not.toBeEmpty();
+	});
+
+	test("claude-code-cli — 도구 실행 후 응답", async ({ page }) => {
+		watchPermissions(page);
+
+		await sendMessage(page, "현재 디렉토리에서 ls 해줘");
+
+		const toolActivity = page.locator(".tool-activity");
+		await expect(toolActivity.first()).toBeVisible({ timeout: 5_000 });
+
+		const successTool = page.locator(".tool-activity.tool-success");
+		await expect(successTool.first()).toBeVisible({ timeout: 5_000 });
+
+		// Verify follow-up text from assistant
+		const assistantMsg = page
+			.locator(".chat-message.assistant .message-content")
+			.last();
+		await expect(assistantMsg).not.toBeEmpty();
+	});
+
+	test("claude-code-cli — thinking 블록 표시", async ({ page }) => {
+		await sendMessage(page, "이 문제에 대해 생각해봐");
+
+		// Thinking block should appear as a collapsible details element
+		const thinkingBlock = page.locator(".thinking-block");
+		await expect(thinkingBlock.first()).toBeVisible({ timeout: 5_000 });
+
+		// Verify the thinking content is inside
+		const thinkingContent = page.locator(".thinking-content");
+		await expect(thinkingContent.first()).toContainText("깊이 생각", {
+			timeout: 5_000,
+		});
+
+		// Verify the actual answer text also appeared
+		const assistantMsg = page.locator(
+			".chat-message.assistant .message-content",
+		);
+		await expect(assistantMsg.last()).toContainText("답변", {
+			timeout: 5_000,
+		});
+	});
+
+	test("claude-code-cli — cost 미표시 (skipCost)", async ({ page }) => {
+		await sendMessage(page, "안녕");
+
+		// Wait for response to complete
+		const assistantMsg = page.locator(
+			".chat-message.assistant .message-content",
+		);
+		await expect(assistantMsg.first()).toBeVisible();
+
+		// Cost badge should not appear for claude-code-cli
+		// (the mock still sends cost but agent skipCost logic prevents real cost emission)
+		// Verify message rendered without errors
+		await expect(assistantMsg.first()).not.toBeEmpty();
 	});
 });

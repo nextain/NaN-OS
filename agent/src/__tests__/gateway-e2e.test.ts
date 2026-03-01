@@ -38,7 +38,7 @@ function asRecord(value: unknown): Record<string, unknown> | null {
 }
 
 function loadGatewayToken(): string | null {
-	const configPath = join(homedir(), ".naia", "openclaw", "openclaw.json");
+	const configPath = join(homedir(), ".openclaw", "openclaw.json");
 	try {
 		const config = JSON.parse(readFileSync(configPath, "utf-8"));
 		return config.gateway?.auth?.token || null;

@@ -21,6 +21,7 @@ interface ChatState {
 	messages: ChatMessage[];
 	isStreaming: boolean;
 	streamingContent: string;
+	streamingThinking: string;
 	streamingToolCalls: ToolCall[];
 	provider: ProviderId;
 	totalSessionCost: number;
@@ -32,6 +33,7 @@ interface ChatState {
 	addMessage: (msg: Pick<ChatMessage, "role" | "content">) => void;
 	startStreaming: () => void;
 	appendStreamChunk: (text: string) => void;
+	appendThinkingChunk: (text: string) => void;
 	addStreamingToolUse: (
 		toolCallId: string,
 		toolName: string,
@@ -61,6 +63,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
 	messages: [],
 	isStreaming: false,
 	streamingContent: "",
+	streamingThinking: "",
 	streamingToolCalls: [],
 	provider: "gemini",
 	totalSessionCost: 0,
@@ -80,10 +83,13 @@ export const useChatStore = create<ChatState>()((set, get) => ({
 		})),
 
 	startStreaming: () =>
-		set({ isStreaming: true, streamingContent: "", streamingToolCalls: [] }),
+		set({ isStreaming: true, streamingContent: "", streamingThinking: "", streamingToolCalls: [] }),
 
 	appendStreamChunk: (text) =>
 		set((s) => ({ streamingContent: s.streamingContent + text })),
+
+	appendThinkingChunk: (text) =>
+		set((s) => ({ streamingThinking: s.streamingThinking + text })),
 
 	addStreamingToolUse: (toolCallId, toolName, args) =>
 		set((s) => {
@@ -123,13 +129,14 @@ export const useChatStore = create<ChatState>()((set, get) => ({
 		}),
 
 	finishStreaming: () => {
-		const { isStreaming, streamingContent, streamingToolCalls } = get();
+		const { isStreaming, streamingContent, streamingThinking, streamingToolCalls } = get();
 		if (!isStreaming) return;
 		const toolCalls =
 			streamingToolCalls.length > 0 ? streamingToolCalls : undefined;
 		set((s) => ({
 			isStreaming: false,
 			streamingContent: "",
+			streamingThinking: "",
 			streamingToolCalls: [],
 			pendingApproval: null,
 			messages: [
@@ -138,6 +145,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
 					id: generateId(),
 					role: "assistant" as const,
 					content: streamingContent,
+					thinking: streamingThinking || undefined,
 					timestamp: Date.now(),
 					toolCalls,
 				},
@@ -177,6 +185,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
 			messages: [],
 			isStreaming: false,
 			streamingContent: "",
+			streamingThinking: "",
 			streamingToolCalls: [],
 			totalSessionCost: 0,
 			pendingApproval: null,

@@ -43,6 +43,7 @@ export interface ToolDefinition {
 /** Chunk types emitted by a provider stream */
 export type StreamChunk =
 	| { type: "text"; text: string }
+	| { type: "thinking"; text: string }
 	| {
 			type: "tool_use";
 			id: string;

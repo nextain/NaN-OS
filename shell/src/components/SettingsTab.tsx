@@ -13,6 +13,7 @@ import {
 	type TtsProviderId,
 	clearAllowedTools,
 	getDefaultModel,
+	isApiKeyOptional,
 	loadConfig,
 	resolveGatewayUrl,
 	saveConfig,
@@ -1541,15 +1542,13 @@ export function SettingsTab() {
 		// Keep previous key when input is empty (password field UX).
 		const resolvedApiKey = apiKey.trim() || existing?.apiKey || "";
 		const isNextainProvider = provider === "nextain";
-		const isApiKeyOptionalProvider =
-			provider === "claude-code-cli" || provider === "ollama";
 		if (isNextainProvider && !labKey) {
 			setError("Naia 계정 로그인이 필요합니다. Naia 계정 연결 후 저장하세요.");
 			return;
 		}
 		if (
 			!isNextainProvider &&
-			!isApiKeyOptionalProvider &&
+			!isApiKeyOptional(provider) &&
 			!resolvedApiKey &&
 			!labKey
 		) {
@@ -1564,7 +1563,7 @@ export function SettingsTab() {
 			...existing,
 			provider,
 			model,
-			apiKey: isNextainProvider || isApiKeyOptionalProvider ? "" : resolvedApiKey,
+			apiKey: isNextainProvider || isApiKeyOptional(provider) ? "" : resolvedApiKey,
 			labKey: labKey || undefined,
 			labUserId: labUserId || undefined,
 			locale,

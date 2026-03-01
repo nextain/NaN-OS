@@ -39,6 +39,7 @@ export interface ChatMessage {
 	id: string;
 	role: "user" | "assistant";
 	content: string;
+	thinking?: string;
 	timestamp: number;
 	cost?: CostEntry;
 	toolCalls?: ToolCall[];
@@ -67,6 +68,7 @@ export interface AgentRequest {
 
 export type AgentResponseChunk =
 	| { type: "text"; requestId: string; text: string }
+	| { type: "thinking"; requestId: string; text: string }
 	| { type: "audio"; requestId: string; data: string }
 	| {
 			type: "tool_use";

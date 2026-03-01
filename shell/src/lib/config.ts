@@ -83,7 +83,6 @@ export const MODEL_OPTIONS: Record<
 	"claude-code-cli": [
 		{ id: "claude-sonnet-4-5-20250929", label: "Claude Sonnet 4.5" },
 		{ id: "claude-haiku-4-5-20251001", label: "Claude Haiku 4.5" },
-		{ id: "claude-3-7-sonnet-20250219", label: "Claude Sonnet 3.7" },
 	],
 	gemini: [
 		{ id: "gemini-3.1-pro-preview", label: "Gemini 3.1 Pro ($2.00 / $12.00)" },
@@ -119,9 +118,19 @@ export function saveConfig(config: AppConfig): void {
 	localStorage.setItem(STORAGE_KEY, JSON.stringify(config));
 }
 
+export function isApiKeyOptional(provider: ProviderId | undefined): boolean {
+	return provider === "claude-code-cli" || provider === "ollama";
+}
+
 export function hasApiKey(): boolean {
 	const config = loadConfig();
 	return !!config?.apiKey || !!config?.labKey;
+}
+
+export function isReadyToChat(): boolean {
+	const config = loadConfig();
+	if (!config) return false;
+	return isApiKeyOptional(config.provider) || !!config.apiKey || !!config.labKey;
 }
 
 export function hasLabKey(): boolean {

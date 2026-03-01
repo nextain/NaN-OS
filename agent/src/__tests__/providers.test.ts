@@ -107,7 +107,8 @@ beforeEach(() => {
 describe("cost calculation", () => {
 	it("calculates Gemini cost correctly", () => {
 		const cost = calculateCost("gemini-2.5-flash", 1000, 500);
-		expect(cost).toBeCloseTo(0.00045, 6);
+		// input: 0.3/1M * 1000 = 0.0003, output: 2.5/1M * 500 = 0.00125
+		expect(cost).toBeCloseTo(0.00155, 6);
 	});
 
 	it("calculates Gemini 3.1 Pro cost correctly", () => {
