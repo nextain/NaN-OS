@@ -17,7 +17,8 @@ dnf -qy versionlock clear 2>/dev/null || true
 rm -f /etc/dnf/repos.override.d/99-config_manager.repo 2>/dev/null || true
 
 dnf install -y --allowerasing \
-    git anaconda-live libblockdev-btrfs libblockdev-lvm libblockdev-dm
+    git anaconda-live libblockdev-btrfs libblockdev-lvm libblockdev-dm \
+    libblockdev-mpath firefox
 
 git clone --depth 1 --quiet "${REPO_URL}" "${SRC}"
 
