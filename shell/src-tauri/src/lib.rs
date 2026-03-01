@@ -735,7 +735,11 @@ fn spawn_gateway() -> Result<GatewayProcess, String> {
 /// Spawn the Node.js agent-core process with stdio pipes
 fn spawn_agent_core(app_handle: &AppHandle, audit_db: &audit::AuditDb) -> Result<AgentProcess, String> {
     let agent_path = std::env::var("NAIA_AGENT_PATH")
-        .unwrap_or_else(|_| "node".to_string());
+        .unwrap_or_else(|_| {
+            find_node_binary()
+                .map(|p| p.to_string_lossy().to_string())
+                .unwrap_or_else(|_| "node".to_string())
+        });
 
     // In dev: tsx for TypeScript direct execution; in prod: compiled JS from bundle
     let agent_script = std::env::var("NAIA_AGENT_SCRIPT")

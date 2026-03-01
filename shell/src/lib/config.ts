@@ -61,10 +61,10 @@ export interface AppConfig {
 
 const DEFAULT_MODELS: Record<ProviderId, string> = {
 	nextain: "gemini-3-flash-preview",
-	"claude-code-cli": "claude-sonnet-4-5-20250929",
+	"claude-code-cli": "claude-sonnet-4-6",
 	gemini: "gemini-3-flash-preview",
 	openai: "gpt-4o",
-	anthropic: "claude-sonnet-4-5-20250929",
+	anthropic: "claude-sonnet-4-6",
 	xai: "grok-3-mini",
 	zai: "glm-4.7",
 	ollama: "llama3.2",
@@ -81,7 +81,8 @@ export const MODEL_OPTIONS: Record<
 		{ id: "gemini-2.5-flash", label: "Gemini 2.5 Flash" },
 	],
 	"claude-code-cli": [
-		{ id: "claude-sonnet-4-5-20250929", label: "Claude Sonnet 4.5" },
+		{ id: "claude-opus-4-6", label: "Claude Opus 4.6" },
+		{ id: "claude-sonnet-4-6", label: "Claude Sonnet 4.6" },
 		{ id: "claude-haiku-4-5-20251001", label: "Claude Haiku 4.5" },
 	],
 	gemini: [
@@ -93,8 +94,16 @@ export const MODEL_OPTIONS: Record<
 	openai: [{ id: "gpt-4o", label: "GPT-4o ($2.50 / $10.00)" }],
 	anthropic: [
 		{
-			id: "claude-sonnet-4-5-20250929",
-			label: "Claude Sonnet 4.5 ($3.00 / $15.00)",
+			id: "claude-opus-4-6",
+			label: "Claude Opus 4.6 ($15.00 / $75.00)",
+		},
+		{
+			id: "claude-sonnet-4-6",
+			label: "Claude Sonnet 4.6 ($3.00 / $15.00)",
+		},
+		{
+			id: "claude-haiku-4-5-20251001",
+			label: "Claude Haiku 4.5 ($0.80 / $4.00)",
 		},
 	],
 	xai: [{ id: "grok-3-mini", label: "Grok 3 Mini ($0.30 / $0.50)" }],
