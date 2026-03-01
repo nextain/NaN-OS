@@ -225,15 +225,17 @@ JSEOF
 mkdir -p /etc/xdg/autostart /usr/libexec
 cat > /usr/libexec/naia-live-warning.sh <<'SCRIPT'
 #!/usr/bin/env bash
-# Only show in live session (liveuser account)
-[ "$(whoami)" = "liveuser" ] || exit 0
-
 kdialog --msgbox "Welcome to Naia OS!\n\nRun 'Install to Hard Drive' on the desktop\nto install to your computer.\n\n[ Live USB Usage ]\n1. Connect to Wi-Fi\n2. Sign in to Google in browser\n3. Launch Naia Shell\n\n[ Input Method ]\nKorean input is configured by default (Ctrl+Space to toggle).\nTo use another language (Japanese, Chinese, etc.),\nchange the locale during installation. It will apply automatically.\n\n* Live session resets on reboot.\n* You can view this guide again from the desktop." \
     --title "Naia OS Live"
 SCRIPT
 chmod +x /usr/libexec/naia-live-warning.sh
 
-cat > /etc/xdg/autostart/naia-live-warning.desktop <<'EOF'
+# Autostart + desktop shortcut — liveuser only (not carried to installed OS)
+LIVEUSER_AUTOSTART="/var/home/liveuser/.config/autostart"
+DESKTOP_DIR="/var/home/liveuser/Desktop"
+mkdir -p "${LIVEUSER_AUTOSTART}" "${DESKTOP_DIR}"
+
+cat > "${LIVEUSER_AUTOSTART}/naia-live-warning.desktop" <<'EOF'
 [Desktop Entry]
 Type=Application
 Name=Naia Live Session Warning
@@ -241,10 +243,6 @@ Exec=/usr/libexec/naia-live-warning.sh
 X-KDE-autostart-phase=2
 OnlyShowIn=KDE;
 EOF
-
-# Desktop shortcut to re-open the welcome dialog
-DESKTOP_DIR="/var/home/liveuser/Desktop"
-mkdir -p "${DESKTOP_DIR}"
 
 cat > "${DESKTOP_DIR}/Naia-Guide.desktop" <<'DESKEOF'
 [Desktop Entry]
@@ -255,7 +253,7 @@ Exec=/usr/libexec/naia-live-warning.sh
 Terminal=false
 DESKEOF
 chmod +x "${DESKTOP_DIR}/Naia-Guide.desktop"
-chown -R liveuser:liveuser "${DESKTOP_DIR}" 2>/dev/null || true
+chown -R liveuser:liveuser /var/home/liveuser 2>/dev/null || true
 
 # ==============================================================================
 # 9. Install Naia Shell Flatpak for live session
