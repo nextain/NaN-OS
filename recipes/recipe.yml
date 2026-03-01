@@ -38,7 +38,6 @@ modules:
           name: flathub
           title: Flathub
         install:
-          - com.google.Chrome
           - com.discordapp.Discord
 
   - type: signing

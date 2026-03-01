@@ -109,9 +109,10 @@ JSEOF
 mkdir -p /etc/xdg
 cat > /etc/xdg/kicker-extra-favoritesrc <<'EOF'
 [General]
-Prepend=io.nextain.naia.desktop;com.google.Chrome.desktop;com.discordapp.Discord.desktop;
+Prepend=io.nextain.naia.desktop;firefox.desktop;com.discordapp.Discord.desktop;
 IgnoreDefaults=false
 EOF
+
 
 # ==============================================================================
 # 5. Live session — Korean input (fcitx5)
@@ -176,15 +177,15 @@ cat > /usr/libexec/naia-live-warning.sh <<'SCRIPT'
 case "${LANG:-en_US.UTF-8}" in
     ko*|ko_KR*)
         TITLE="Naia OS 라이브"
-        MSG="Naia OS에 오신 것을 환영합니다!\n\n바탕화면의 'Install to Hard Drive'를 실행하면\n데스크톱에 설치할 수 있습니다.\n\n[ 라이브 USB 사용법 ]\n1. Wi-Fi 연결\n2. Chrome에서 Google 로그인\n3. Naia Shell 실행\n\n※ 라이브 세션은 재부팅 시 초기화됩니다.\n※ 이 안내는 바탕화면에서 다시 볼 수 있습니다."
+        MSG="Naia OS에 오신 것을 환영합니다!\n\n바탕화면의 'Install to Hard Drive'를 실행하면\n데스크톱에 설치할 수 있습니다.\n\n[ 라이브 USB 사용법 ]\n1. Wi-Fi 연결\n2. 브라우저에서 Google 로그인\n3. Naia Shell 실행\n\n※ 라이브 세션은 재부팅 시 초기화됩니다.\n※ 이 안내는 바탕화면에서 다시 볼 수 있습니다."
         ;;
     ja*|ja_JP*)
         TITLE="Naia OS ライブ"
-        MSG="Naia OSへようこそ!\n\nデスクトップの「Install to Hard Drive」を実行すると\nデスクトップにインストールできます。\n\n[ ライブUSBの使い方 ]\n1. Wi-Fi接続\n2. ChromeでGoogleログイン\n3. Naia Shell起動\n\n※ ライブセッションは再起動時にリセットされます。\n※ この案内はデスクトップから再表示できます。"
+        MSG="Naia OSへようこそ!\n\nデスクトップの「Install to Hard Drive」を実行すると\nデスクトップにインストールできます。\n\n[ ライブUSBの使い方 ]\n1. Wi-Fi接続\n2. ブラウザでGoogleログイン\n3. Naia Shell起動\n\n※ ライブセッションは再起動時にリセットされます。\n※ この案内はデスクトップから再表示できます。"
         ;;
     *)
         TITLE="Naia OS Live"
-        MSG="Welcome to Naia OS!\n\nRun 'Install to Hard Drive' on the desktop\nto install to your computer.\n\n[ Live USB Usage ]\n1. Connect to Wi-Fi\n2. Sign in to Google on Chrome\n3. Launch Naia Shell\n\n* Live session resets on reboot.\n* You can view this guide again from the desktop."
+        MSG="Welcome to Naia OS!\n\nRun 'Install to Hard Drive' on the desktop\nto install to your computer.\n\n[ Live USB Usage ]\n1. Connect to Wi-Fi\n2. Sign in to Google in browser\n3. Launch Naia Shell\n\n* Live session resets on reboot.\n* You can view this guide again from the desktop."
         ;;
 esac
 kdialog --msgbox "$MSG" --title "$TITLE"
@@ -215,7 +216,7 @@ Run "Install to Hard Drive" on the desktop.
 
 [ 라이브 USB 사용법 / Live USB Usage ]
 1. Wi-Fi 연결 / Connect to Wi-Fi
-2. Chrome에서 Google 로그인 / Sign in to Google on Chrome
+2. 브라우저에서 Google 로그인 / Sign in to Google in browser
 3. Naia Shell 실행 / Launch Naia Shell
 
 [ 주의사항 / Notes ]
@@ -226,7 +227,7 @@ Run "Install to Hard Drive" on the desktop.
 
 [ 문제 해결 / Troubleshooting ]
 - Wi-Fi 연결 안 됨: 설정 > 네트워크에서 수동 연결
-- Chrome 로딩 안 됨: Chrome 재시작 후 다시 시도
+- 브라우저 로딩 안 됨: 브라우저 재시작 후 다시 시도
 - Naia Shell 실행 안 됨: 터미널에서 flatpak run io.nextain.naia
 
 https://naia.nextain.io
@@ -313,50 +314,7 @@ mkdir -p /etc/modprobe.d
 echo "options iwlwifi power_save=0" > /etc/modprobe.d/naia-iwlwifi.conf
 
 # ==============================================================================
-# 11. Chrome policy — disable Secure DNS / async DNS (breaks on live session)
-# ==============================================================================
-
-mkdir -p /etc/opt/chrome/policies/managed
-cat > /etc/opt/chrome/policies/managed/naia-dns.json <<'EOF'
-{
-  "DnsOverHttpsMode": "off",
-  "BuiltInDnsClientEnabled": false
-}
-EOF
-
-# Flatpak Chrome also reads from /etc/chromium
-mkdir -p /etc/chromium/policies/managed
-cp /etc/opt/chrome/policies/managed/naia-dns.json /etc/chromium/policies/managed/
-
-# ==============================================================================
-# 12. Live session — KWallet disable + Chrome password store fallback
-#     KWallet is uninitialized on live session → Chrome hangs waiting for cookie
-#     encryption key. Disable KWallet UI and use basic password store.
-#     Installed OS is unaffected (PAM auto-initializes KWallet at login).
-# ==============================================================================
-
-# Disable KWallet daemon autostart in live session
-mkdir -p /etc/xdg/autostart
-cat > /etc/xdg/autostart/kwalletd6-disable.desktop <<'EOF'
-[Desktop Entry]
-Type=Application
-Name=KWallet Disable (Live Session)
-Hidden=true
-EOF
-
-# Disable KWallet in KDE settings (live session skel)
-mkdir -p /etc/xdg
-cat >> /etc/xdg/kwalletrc <<'EOF'
-[Wallet]
-Enabled=false
-First Use=false
-EOF
-
-# Chrome: use basic password store (bypass KWallet)
-flatpak override --system com.google.Chrome --env=CHROMIUM_FLAGS="--password-store=basic" 2>/dev/null || true
-
-# ==============================================================================
-# 13. Live session — fcitx5 input method environment variables
+# 11. fcitx5 input method environment variables
 #     System defaults to ibus; override to fcitx5 for Korean input.
 # ==============================================================================
 
@@ -373,7 +331,7 @@ EOF
 
 
 # ==============================================================================
-# 14. OpenClaw gateway — ensure gateway.mode=local in config
+# 12. OpenClaw gateway — ensure gateway.mode=local in config
 #     Without this field, the gateway refuses to start (requires explicit mode
 #     or --allow-unconfigured flag). Naia's ensure_openclaw_config() handles
 #     this at runtime, but for the systemd user service and first-boot, the
@@ -418,7 +376,7 @@ fi
 chown -R liveuser:liveuser "${OPENCLAW_DIR}" 2>/dev/null || true
 
 # ==============================================================================
-# 15. Cleanup
+# 13. Cleanup
 # ==============================================================================
 
 rm -rf "${SRC}"
