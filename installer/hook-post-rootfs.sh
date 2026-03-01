@@ -228,15 +228,15 @@ cat > /usr/libexec/naia-live-warning.sh <<'SCRIPT'
 case "${LANG:-en_US.UTF-8}" in
     ko*|ko_KR*)
         TITLE="Naia OS 라이브"
-        MSG="Naia OS에 오신 것을 환영합니다!\n\n바탕화면의 'Install to Hard Drive'를 실행하면\n데스크톱에 설치할 수 있습니다.\n\n[ 라이브 USB 사용법 ]\n1. Wi-Fi 연결\n2. 브라우저에서 Google 로그인\n3. Naia Shell 실행\n\n※ 라이브 세션은 재부팅 시 초기화됩니다.\n※ 이 안내는 바탕화면에서 다시 볼 수 있습니다."
+        MSG="Naia OS에 오신 것을 환영합니다!\n\n바탕화면의 'Install to Hard Drive'를 실행하면\n데스크톱에 설치할 수 있습니다.\n\n[ 라이브 USB 사용법 ]\n1. Wi-Fi 연결\n2. 브라우저에서 Google 로그인\n3. Naia Shell 실행\n\n[ 입력기 ]\n한국어 입력이 기본 설정되어 있습니다 (Ctrl+Space 전환).\n다른 언어(일본어/중국어 등)로 변경하려면\n설치 시 로케일을 변경하세요. 자동으로 반영됩니다.\n\n※ 라이브 세션은 재부팅 시 초기화됩니다.\n※ 이 안내는 바탕화면에서 다시 볼 수 있습니다."
         ;;
     ja*|ja_JP*)
         TITLE="Naia OS ライブ"
-        MSG="Naia OSへようこそ!\n\nデスクトップの「Install to Hard Drive」を実行すると\nデスクトップにインストールできます。\n\n[ ライブUSBの使い方 ]\n1. Wi-Fi接続\n2. ブラウザでGoogleログイン\n3. Naia Shell起動\n\n※ ライブセッションは再起動時にリセットされます。\n※ この案内はデスクトップから再表示できます。"
+        MSG="Naia OSへようこそ!\n\nデスクトップの「Install to Hard Drive」を実行すると\nデスクトップにインストールできます。\n\n[ ライブUSBの使い方 ]\n1. Wi-Fi接続\n2. ブラウザでGoogleログイン\n3. Naia Shell起動\n\n[ 入力方法 ]\n韓国語入力がデフォルト設定です (Ctrl+Space切替)。\n他の言語に変更するには、インストール時にロケールを\n変更してください。自動的に反映されます。\n\n※ ライブセッションは再起動時にリセットされます。\n※ この案内はデスクトップから再表示できます。"
         ;;
     *)
         TITLE="Naia OS Live"
-        MSG="Welcome to Naia OS!\n\nRun 'Install to Hard Drive' on the desktop\nto install to your computer.\n\n[ Live USB Usage ]\n1. Connect to Wi-Fi\n2. Sign in to Google in browser\n3. Launch Naia Shell\n\n* Live session resets on reboot.\n* You can view this guide again from the desktop."
+        MSG="Welcome to Naia OS!\n\nRun 'Install to Hard Drive' on the desktop\nto install to your computer.\n\n[ Live USB Usage ]\n1. Connect to Wi-Fi\n2. Sign in to Google in browser\n3. Launch Naia Shell\n\n[ Input Method ]\nKorean input is configured by default (Ctrl+Space to toggle).\nTo use another language (Japanese, Chinese, etc.),\nchange the locale during installation. It will apply automatically.\n\n* Live session resets on reboot.\n* You can view this guide again from the desktop."
         ;;
 esac
 kdialog --msgbox "$MSG" --title "$TITLE"
@@ -345,14 +345,16 @@ echo "options iwlwifi power_save=0" > /etc/modprobe.d/naia-iwlwifi.conf
 # ==============================================================================
 
 mkdir -p /etc/environment.d
-# On Wayland, GTK_IM_MODULE and QT_IM_MODULE must NOT be set globally.
-# Setting them overrides fcitx5's Wayland-native frontend, breaking Korean
-# character composition (moasseugi) in terminals and some apps.
-# Only XMODIFIERS is needed (for legacy X11 forwarding compatibility).
-# See: https://fcitx-im.org/wiki/Using_Fcitx_5_on_Wayland#KDE_Plasma
+# Set fcitx5 as default input method — match host Bazzite settings.
+# GTK_IM_MODULE and QT_IM_MODULE are set unconditionally (including Wayland)
+# because terminals (Konsole, Ptyxis) require them for Korean composition.
 cat > /etc/environment.d/input-method.conf <<'EOF'
 INPUT_METHOD=fcitx
 XMODIFIERS=@im=fcitx
+GTK_IM_MODULE=fcitx
+QT_IM_MODULE=fcitx
+SDL_IM_MODULE=fcitx
+GLFW_IM_MODULE=fcitx
 EOF
 
 
