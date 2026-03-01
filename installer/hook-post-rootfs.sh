@@ -328,39 +328,6 @@ INPUT_METHOD=fcitx
 XMODIFIERS=@im=fcitx
 EOF
 
-# Symlink fcitx5.sh into /etc/profile.d/ so login shells source it.
-# Bazzite ships it in /usr/etc/profile.d/ which is NOT sourced by /etc/profile.
-ln -sf /usr/etc/profile.d/fcitx5.sh /etc/profile.d/fcitx5.sh
-
-# Switch xinputrc alternative from ibus to fcitx5.
-# Bazzite defaults to ibus.conf which sets GTK_IM_MODULE=ibus globally.
-if [ -f /etc/X11/xinit/xinput.d/fcitx5.conf ]; then
-    ln -sf /etc/X11/xinit/xinput.d/fcitx5.conf /etc/alternatives/xinputrc
-fi
-
-# Patch kde-ptyxis wrapper: remove hardcoded GTK_IM_MODULE=ibus.
-# Bazzite's kde-ptyxis forces `env GTK_IM_MODULE=ibus` which overrides
-# fcitx5's Wayland-native frontend and breaks Korean character composition.
-if [ -f /usr/bin/kde-ptyxis ] && grep -q 'GTK_IM_MODULE=ibus' /usr/bin/kde-ptyxis; then
-    sed -i 's/env GTK_IM_MODULE=ibus //g' /usr/bin/kde-ptyxis
-fi
-
-# KDE Plasma startup env: unset GTK/QT_IM_MODULE on Wayland.
-# startplasma-wayland propagates its environment to systemd user env via
-# KUpdateLaunchEnvironmentJob. If GTK_IM_MODULE=ibus leaks into the session
-# (e.g. from xinputrc or profile.d), it poisons ALL GTK4 apps including
-# the terminal emulator. This script ensures it's unset before propagation.
-mkdir -p /etc/xdg/plasma-workspace/env
-cat > /etc/xdg/plasma-workspace/env/unset-gtk-im.sh <<'ENVEOF'
-#!/bin/sh
-# On Wayland, GTK_IM_MODULE must NOT be set so that GTK4 apps use
-# the Wayland text-input protocol for fcitx5 input method support.
-if [ "$XDG_SESSION_TYPE" = "wayland" ]; then
-    unset GTK_IM_MODULE
-    unset QT_IM_MODULE
-fi
-ENVEOF
-chmod +x /etc/xdg/plasma-workspace/env/unset-gtk-im.sh
 
 # ==============================================================================
 # 14. OpenClaw gateway — ensure gateway.mode=local in config

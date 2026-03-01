@@ -7,6 +7,18 @@ SCRIPT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 
 cd "$SCRIPT_DIR"
 
+# ── Check: must run on host, not inside distrobox/toolbox ─────────────────
+if [[ -f /run/.containerenv ]] || [[ -f /.dockerenv ]]; then
+    echo ""
+    echo "  ERROR: 이 스크립트는 호스트에서 실행해야 합니다."
+    echo "  Distrobox/Toolbox 컨테이너 안에서는 flatpak install이 동작하지 않습니다."
+    echo ""
+    echo "  호스트 터미널(Konsole)에서 실행하세요:"
+    echo "    bash $0"
+    echo ""
+    exit 1
+fi
+
 # ── Check build output ──────────────────────────────────────────────────────
 if [[ ! -d "flatpak-repo" ]]; then
     echo ""
