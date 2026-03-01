@@ -176,15 +176,15 @@ cat > /usr/libexec/naia-live-warning.sh <<'SCRIPT'
 case "${LANG:-en_US.UTF-8}" in
     ko*|ko_KR*)
         TITLE="Naia OS 라이브"
-        MSG="라이브 세션입니다.\n재부팅하면 모든 변경사항이 사라집니다.\n바탕화면의 'Install to Hard Drive'로 설치할 수 있습니다.\n\n[ Naia 사용법 ]\n1. Wi-Fi 연결\n2. Chrome 설정\n3. Naia Shell 실행"
+        MSG="Naia OS에 오신 것을 환영합니다!\n\n바탕화면의 'Install to Hard Drive'를 실행하면\n데스크톱에 설치할 수 있습니다.\n\n[ 라이브 USB 사용법 ]\n1. Wi-Fi 연결\n2. Chrome에서 Google 로그인\n3. Naia Shell 실행\n\n※ 라이브 세션은 재부팅 시 초기화됩니다.\n※ 이 안내는 바탕화면에서 다시 볼 수 있습니다."
         ;;
     ja*|ja_JP*)
         TITLE="Naia OS ライブ"
-        MSG="ライブセッションです。\n再起動するとすべての変更が失われます。\nデスクトップの「Install to Hard Drive」からインストールできます。\n\n[ Naiaの使い方 ]\n1. Wi-Fi接続\n2. Chrome設定\n3. Naia Shell起動"
+        MSG="Naia OSへようこそ!\n\nデスクトップの「Install to Hard Drive」を実行すると\nデスクトップにインストールできます。\n\n[ ライブUSBの使い方 ]\n1. Wi-Fi接続\n2. ChromeでGoogleログイン\n3. Naia Shell起動\n\n※ ライブセッションは再起動時にリセットされます。\n※ この案内はデスクトップから再表示できます。"
         ;;
     *)
         TITLE="Naia OS Live"
-        MSG="This is a live session.\nAll changes will be lost on reboot.\nUse 'Install to Hard Drive' on the desktop to install.\n\n[ Using Naia ]\n1. Connect to Wi-Fi\n2. Set up Chrome\n3. Launch Naia Shell"
+        MSG="Welcome to Naia OS!\n\nRun 'Install to Hard Drive' on the desktop\nto install to your computer.\n\n[ Live USB Usage ]\n1. Connect to Wi-Fi\n2. Sign in to Google on Chrome\n3. Launch Naia Shell\n\n* Live session resets on reboot.\n* You can view this guide again from the desktop."
         ;;
 esac
 kdialog --msgbox "$MSG" --title "$TITLE"
@@ -201,6 +201,48 @@ Exec=/usr/libexec/naia-live-warning.sh
 X-KDE-autostart-phase=2
 OnlyShowIn=KDE;
 EOF
+
+# Desktop guide file + shortcut to re-open the welcome dialog
+DESKTOP_DIR="/var/home/liveuser/Desktop"
+mkdir -p "${DESKTOP_DIR}"
+
+cat > "${DESKTOP_DIR}/Naia-Guide.txt" <<'GUIDE'
+=== Naia OS 사용 가이드 / Usage Guide ===
+
+[ 데스크톱 설치 / Install to Desktop ]
+바탕화면의 "Install to Hard Drive"를 실행하세요.
+Run "Install to Hard Drive" on the desktop.
+
+[ 라이브 USB 사용법 / Live USB Usage ]
+1. Wi-Fi 연결 / Connect to Wi-Fi
+2. Chrome에서 Google 로그인 / Sign in to Google on Chrome
+3. Naia Shell 실행 / Launch Naia Shell
+
+[ 주의사항 / Notes ]
+- 라이브 세션은 재부팅 시 모든 데이터가 초기화됩니다.
+  Live session resets all data on reboot.
+- 데스크톱 설치 후에는 데이터가 유지됩니다.
+  Data persists after desktop installation.
+
+[ 문제 해결 / Troubleshooting ]
+- Wi-Fi 연결 안 됨: 설정 > 네트워크에서 수동 연결
+- Chrome 로딩 안 됨: Chrome 재시작 후 다시 시도
+- Naia Shell 실행 안 됨: 터미널에서 flatpak run io.nextain.naia
+
+https://naia.nextain.io
+GUIDE
+
+cat > "${DESKTOP_DIR}/Naia-Guide.desktop" <<'DESKEOF'
+[Desktop Entry]
+Type=Application
+Name=Naia 사용 가이드
+Name[en]=Naia Guide
+Icon=help-contents
+Exec=/usr/libexec/naia-live-warning.sh
+Terminal=false
+DESKEOF
+chmod +x "${DESKTOP_DIR}/Naia-Guide.desktop"
+chown -R liveuser:liveuser "${DESKTOP_DIR}" 2>/dev/null || true
 
 # ==============================================================================
 # 8. Install Naia Shell Flatpak for live session
