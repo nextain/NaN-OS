@@ -225,21 +225,11 @@ JSEOF
 mkdir -p /etc/xdg/autostart /usr/libexec
 cat > /usr/libexec/naia-live-warning.sh <<'SCRIPT'
 #!/usr/bin/env bash
-case "${LANG:-en_US.UTF-8}" in
-    ko*|ko_KR*)
-        TITLE="Naia OS 라이브"
-        MSG="Naia OS에 오신 것을 환영합니다!\n\n바탕화면의 'Install to Hard Drive'를 실행하면\n데스크톱에 설치할 수 있습니다.\n\n[ 라이브 USB 사용법 ]\n1. Wi-Fi 연결\n2. 브라우저에서 Google 로그인\n3. Naia Shell 실행\n\n[ 입력기 ]\n한국어 입력이 기본 설정되어 있습니다 (Ctrl+Space 전환).\n다른 언어(일본어/중국어 등)로 변경하려면\n설치 시 로케일을 변경하세요. 자동으로 반영됩니다.\n\n※ 라이브 세션은 재부팅 시 초기화됩니다.\n※ 이 안내는 바탕화면에서 다시 볼 수 있습니다."
-        ;;
-    ja*|ja_JP*)
-        TITLE="Naia OS ライブ"
-        MSG="Naia OSへようこそ!\n\nデスクトップの「Install to Hard Drive」を実行すると\nデスクトップにインストールできます。\n\n[ ライブUSBの使い方 ]\n1. Wi-Fi接続\n2. ブラウザでGoogleログイン\n3. Naia Shell起動\n\n[ 入力方法 ]\n韓国語入力がデフォルト設定です (Ctrl+Space切替)。\n他の言語に変更するには、インストール時にロケールを\n変更してください。自動的に反映されます。\n\n※ ライブセッションは再起動時にリセットされます。\n※ この案内はデスクトップから再表示できます。"
-        ;;
-    *)
-        TITLE="Naia OS Live"
-        MSG="Welcome to Naia OS!\n\nRun 'Install to Hard Drive' on the desktop\nto install to your computer.\n\n[ Live USB Usage ]\n1. Connect to Wi-Fi\n2. Sign in to Google in browser\n3. Launch Naia Shell\n\n[ Input Method ]\nKorean input is configured by default (Ctrl+Space to toggle).\nTo use another language (Japanese, Chinese, etc.),\nchange the locale during installation. It will apply automatically.\n\n* Live session resets on reboot.\n* You can view this guide again from the desktop."
-        ;;
-esac
-kdialog --msgbox "$MSG" --title "$TITLE"
+# Only show in live session (liveuser account)
+[ "$(whoami)" = "liveuser" ] || exit 0
+
+kdialog --msgbox "Welcome to Naia OS!\n\nRun 'Install to Hard Drive' on the desktop\nto install to your computer.\n\n[ Live USB Usage ]\n1. Connect to Wi-Fi\n2. Sign in to Google in browser\n3. Launch Naia Shell\n\n[ Input Method ]\nKorean input is configured by default (Ctrl+Space to toggle).\nTo use another language (Japanese, Chinese, etc.),\nchange the locale during installation. It will apply automatically.\n\n* Live session resets on reboot.\n* You can view this guide again from the desktop." \
+    --title "Naia OS Live"
 SCRIPT
 chmod +x /usr/libexec/naia-live-warning.sh
 
@@ -247,8 +237,6 @@ cat > /etc/xdg/autostart/naia-live-warning.desktop <<'EOF'
 [Desktop Entry]
 Type=Application
 Name=Naia Live Session Warning
-Name[ko]=Naia OS 라이브 세션 경고
-Name[ja]=Naia OS ライブセッション警告
 Exec=/usr/libexec/naia-live-warning.sh
 X-KDE-autostart-phase=2
 OnlyShowIn=KDE;
@@ -262,8 +250,6 @@ cat > "${DESKTOP_DIR}/Naia-Guide.desktop" <<'DESKEOF'
 [Desktop Entry]
 Type=Application
 Name=Naia Guide
-Name[ko]=Naia 사용 가이드
-Name[ja]=Naia ガイド
 Icon=help-contents
 Exec=/usr/libexec/naia-live-warning.sh
 Terminal=false
