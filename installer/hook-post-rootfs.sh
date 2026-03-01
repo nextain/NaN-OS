@@ -71,7 +71,58 @@ hidden_spokes = NetworkSpoke
 EOF
 
 # ==============================================================================
-# 3. Live session — KDE taskbar pins (Plasma update script)
+# 3. Anaconda pre-install cleanup wrapper
+#    Stop Naia Shell, OpenClaw Gateway, and other runtime processes before
+#    Anaconda's rsync copies the live filesystem. Running processes create
+#    transient files (sockets, PID files, locks) that vanish during rsync,
+#    causing exit code 23 (partial transfer).
+# ==============================================================================
+
+cat > /usr/libexec/naia-liveinst-wrapper.sh <<'WRAPPER'
+#!/usr/bin/env bash
+set -euo pipefail
+
+echo "[naia] Stopping runtime processes before installation..."
+
+# 1. Stop Naia Shell (Flatpak)
+flatpak kill io.nextain.naia 2>/dev/null || true
+
+# 2. Stop OpenClaw Gateway (Node.js)
+pkill -f "openclaw.*gateway" 2>/dev/null || true
+
+# 3. Stop fcitx5 (input method — creates temp files)
+pkill -f fcitx5 2>/dev/null || true
+
+# 4. Clean up transient runtime files that rsync might trip on
+LIVEUSER_HOME="/var/home/liveuser"
+rm -rf "${LIVEUSER_HOME}/.openclaw/"*.lock 2>/dev/null || true
+rm -rf "${LIVEUSER_HOME}/.openclaw/"*.pid 2>/dev/null || true
+rm -rf "${LIVEUSER_HOME}/.openclaw/"*.sock 2>/dev/null || true
+rm -rf "${LIVEUSER_HOME}/.cache/fcitx5" 2>/dev/null || true
+rm -rf "${LIVEUSER_HOME}/.local/share/fcitx5/rime" 2>/dev/null || true
+
+# 5. Wait briefly for processes to fully exit
+sleep 1
+
+echo "[naia] Cleanup done. Launching Anaconda installer..."
+exec /usr/bin/liveinst "$@"
+WRAPPER
+chmod +x /usr/libexec/naia-liveinst-wrapper.sh
+
+# Override the "Install to Hard Drive" desktop entry to use our wrapper
+# Anaconda's liveinst-setup copies it to Desktop; we override the system .desktop
+ANACONDA_DESKTOP="/usr/share/applications/org.fedoraproject.AnacondaInstaller.desktop"
+if [ -f "$ANACONDA_DESKTOP" ]; then
+    sed -i 's|Exec=.*liveinst.*|Exec=/usr/libexec/naia-liveinst-wrapper.sh|' "$ANACONDA_DESKTOP"
+fi
+# Also check alternative desktop entry location
+ANACONDA_DESKTOP2="/usr/share/applications/liveinst.desktop"
+if [ -f "$ANACONDA_DESKTOP2" ]; then
+    sed -i 's|Exec=.*liveinst.*|Exec=/usr/libexec/naia-liveinst-wrapper.sh|' "$ANACONDA_DESKTOP2"
+fi
+
+# ==============================================================================
+# 4. Live session — KDE taskbar pins (Plasma update script)
 #    Bazzite uses this approach: runs once per user when plasmashell detects it.
 # ==============================================================================
 
@@ -103,7 +154,7 @@ for (var i = 0; i < allPanels.length; ++i) {
 JSEOF
 
 # ==============================================================================
-# 4. Live session — Kickoff (start menu) favorites
+# 5. Live session — Kickoff (start menu) favorites
 # ==============================================================================
 
 mkdir -p /etc/xdg
@@ -115,7 +166,7 @@ EOF
 
 
 # ==============================================================================
-# 5. Live session — Korean input (fcitx5)
+# 6. Live session — Korean input (fcitx5)
 #    Bazzite already ships fcitx5 + fcitx5-hangul + fcitx5-wayland-launcher.
 #    Use /etc/xdg/ system-wide defaults instead of /etc/skel/ (more reliable).
 # ==============================================================================
@@ -152,7 +203,7 @@ mkdir -p /etc/xdg/autostart
 cp /usr/etc/xdg/autostart/naia-fcitx5-setup.desktop /etc/xdg/autostart/ 2>/dev/null || true
 
 # ==============================================================================
-# 6. Live session — wallpaper (Plasma update script)
+# 7. Live session — wallpaper (Plasma update script)
 # ==============================================================================
 
 cp "${SRC}/assets/installer/live-wallpaper.jpg" /usr/share/wallpapers/naia-live.jpg
@@ -168,7 +219,7 @@ for (var i = 0; i < allDesktops.length; ++i) {
 JSEOF
 
 # ==============================================================================
-# 7. Live session — warning notification (data is ephemeral)
+# 8. Live session — warning notification (data is ephemeral)
 # ==============================================================================
 
 mkdir -p /etc/xdg/autostart /usr/libexec
@@ -246,7 +297,7 @@ chmod +x "${DESKTOP_DIR}/Naia-Guide.desktop"
 chown -R liveuser:liveuser "${DESKTOP_DIR}" 2>/dev/null || true
 
 # ==============================================================================
-# 8. Install Naia Shell Flatpak for live session
+# 9. Install Naia Shell Flatpak for live session
 #    The bundle was baked into the image by install-naia-shell.sh (BlueBuild).
 #    On installed OS, naia-flatpak-install.service handles this on first boot.
 # ==============================================================================
@@ -265,7 +316,7 @@ else
 fi
 
 # ==============================================================================
-# 9. Live session — DNS fallback
+# 10. Live session — DNS fallback
 #    Some networks don't push DNS via DHCP; ensure a fallback is present.
 # ==============================================================================
 
@@ -296,7 +347,7 @@ rm -f /etc/resolv.conf
 printf "nameserver 8.8.8.8\nnameserver 1.1.1.1\n" > /etc/resolv.conf
 
 # ==============================================================================
-# 10. Wi-Fi power save off (Intel iwlwifi bug workaround)
+# 11. Wi-Fi power save off (Intel iwlwifi bug workaround)
 #     Intel 8265 etc. connect but drop all packets with power_save on.
 # ==============================================================================
 
@@ -314,7 +365,7 @@ mkdir -p /etc/modprobe.d
 echo "options iwlwifi power_save=0" > /etc/modprobe.d/naia-iwlwifi.conf
 
 # ==============================================================================
-# 11. fcitx5 input method environment variables
+# 12. fcitx5 input method environment variables
 #     System defaults to ibus; override to fcitx5 for Korean input.
 # ==============================================================================
 
@@ -331,7 +382,7 @@ EOF
 
 
 # ==============================================================================
-# 12. OpenClaw gateway — ensure gateway.mode=local in config
+# 13. OpenClaw gateway — ensure gateway.mode=local in config
 #     Without this field, the gateway refuses to start (requires explicit mode
 #     or --allow-unconfigured flag). Naia's ensure_openclaw_config() handles
 #     this at runtime, but for the systemd user service and first-boot, the
@@ -376,7 +427,7 @@ fi
 chown -R liveuser:liveuser "${OPENCLAW_DIR}" 2>/dev/null || true
 
 # ==============================================================================
-# 13. Cleanup
+# 14. Cleanup
 # ==============================================================================
 
 rm -rf "${SRC}"
