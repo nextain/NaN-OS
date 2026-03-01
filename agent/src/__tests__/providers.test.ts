@@ -111,8 +111,8 @@ describe("cost calculation", () => {
 		expect(cost).toBeCloseTo(0.00155, 6);
 	});
 
-	it("calculates Gemini 3.1 Pro cost correctly", () => {
-		const cost = calculateCost("gemini-3.1-pro-preview", 1000, 500);
+	it("calculates Gemini 3 Pro cost correctly", () => {
+		const cost = calculateCost("gemini-3-pro-preview", 1000, 500);
 		// input: 2.0/1M * 1000 = 0.002, output: 12.0/1M * 500 = 0.006
 		expect(cost).toBeCloseTo(0.008, 6);
 	});
@@ -166,7 +166,7 @@ describe("Gemini 3 provider temperature", () => {
 		const { createGeminiProvider } = await import("../providers/gemini.js");
 		const provider = createGeminiProvider(
 			"test-key",
-			"gemini-3.1-pro-preview",
+			"gemini-3-pro-preview",
 		);
 
 		const chunks: unknown[] = [];

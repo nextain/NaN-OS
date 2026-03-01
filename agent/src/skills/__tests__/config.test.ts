@@ -123,8 +123,8 @@ describe("skill_config", () => {
 		);
 		expect(result.success).toBe(true);
 		const parsed = JSON.parse(result.output);
-		// Gateway returns 2 models + 19 local models (minus 1 overlap: grok-3-mini) = 20
-		expect(parsed.models).toHaveLength(20);
+		// Gateway returns 2 models + 23 local models (minus 1 overlap: grok-3-mini) = 24
+		expect(parsed.models).toHaveLength(24);
 	});
 
 	it("patches config", async () => {
