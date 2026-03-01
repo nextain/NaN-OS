@@ -70,5 +70,4 @@ flatpak install --user "./$FLATPAK_FILE" -y
 echo "[5/5] Setting Flatpak as default naia:// handler..."
 xdg-mime default io.nextain.naia.desktop x-scheme-handler/naia 2>/dev/null || true
 
-echo "Running..."
-flatpak run "$APP_ID"
+exec bash "$(dirname "$0")/flatpak-run.sh"

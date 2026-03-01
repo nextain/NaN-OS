@@ -100,7 +100,10 @@ local_build:
       build: "flatpak-builder --force-clean --disable-rofiles-fuse --repo=flatpak-repo build-dir flatpak/io.nextain.naia.yml"
       bundle: "flatpak build-bundle flatpak-repo Naia-Shell-x86_64.flatpak io.nextain.naia"
       upload: "gh release upload v0.1.0 Naia-Shell-x86_64.flatpak --clobber"
-    script: "bash scripts/local-reinstall-run-naia-flatpak.sh (bundle + uninstall + install + run)"
+    scripts:
+      run: "bash scripts/flatpak-run.sh"
+      reinstall_and_run: "bash scripts/flatpak-reinstall-and-run.sh (bundle + uninstall + install + run)"
+      rebuild_and_run: "bash scripts/flatpak-rebuild-and-run.sh (clean + build + install + run)"
     important_notes:
       - MUST clean flatpak-repo before build to avoid 'invalid rdev' corruption
       - Old app-id artifacts (com.naia.shell) can corrupt the ostree repo
@@ -113,7 +116,7 @@ dev_environment:
   dev_container: Ubuntu (distrobox/toolbox)
   critical_notes:
     - "flatpak commands (install/uninstall/run) MUST run on HOST, not inside container"
-    - "local-reinstall-run-naia-flatpak.sh MUST run on HOST terminal"
+    - "flatpak-reinstall-and-run.sh / flatpak-rebuild-and-run.sh MUST run on HOST terminal"
     - "flatpak-builder can run inside container, but flatpak install cannot (D-Bus socket unavailable)"
     - "Container lacks Flatpak system helper socket → 'Could not connect: No such file or directory'"
     - "Claude Code terminal = inside container → flatpak install fails here too"

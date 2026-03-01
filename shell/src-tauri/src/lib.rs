@@ -594,31 +594,40 @@ fn spawn_node_host(
 fn spawn_gateway() -> Result<GatewayProcess, String> {
     // 1. Check if already running (e.g. systemd or manual start)
     if check_gateway_health_sync() {
-        log_both("[Naia] Gateway already running — reusing existing instance");
-        let child = Command::new("true")
-            .spawn()
-            .map_err(|e| format!("Failed to create dummy process: {}", e))?;
+        log_both("[Naia] Gateway detected on port 18789 — killing stale process and starting fresh");
+        // Kill existing gateway to ensure clean state on app restart.
+        // Previous app exit may have left gateway in a half-alive state
+        // (HTTP responds but WebSocket/Node Host connections are broken).
+        let _ = Command::new("pkill").arg("-f").arg("openclaw.*gateway").output();
+        std::thread::sleep(std::time::Duration::from_millis(500));
+        // If it's still alive (e.g. systemd auto-restart), reuse it
+        if check_gateway_health_sync() {
+            log_both("[Naia] Gateway still running after pkill (managed externally) — reusing");
+            let child = Command::new("true")
+                .spawn()
+                .map_err(|e| format!("Failed to create dummy process: {}", e))?;
 
-        // Still spawn Node Host if needed (Gateway may be external but node host not running)
-        let node_host = match find_openclaw_paths() {
-            Ok((node_bin, openclaw_bin, config_path)) => {
-                ensure_openclaw_config(&config_path);
-                match spawn_node_host(&node_bin, &openclaw_bin, &config_path) {
-                    Ok(nh) => Some(nh),
-                    Err(e) => {
-                        log_both(&format!("[Naia] Node Host spawn failed: {}", e));
-                        None
+            let node_host = match find_openclaw_paths() {
+                Ok((node_bin, openclaw_bin, config_path)) => {
+                    ensure_openclaw_config(&config_path);
+                    match spawn_node_host(&node_bin, &openclaw_bin, &config_path) {
+                        Ok(nh) => Some(nh),
+                        Err(e) => {
+                            log_both(&format!("[Naia] Node Host spawn failed: {}", e));
+                            None
+                        }
                     }
                 }
-            }
-            Err(_) => None,
-        };
+                Err(_) => None,
+            };
 
-        return Ok(GatewayProcess {
-            child,
-            node_host,
-            we_spawned: false,
-        });
+            return Ok(GatewayProcess {
+                child,
+                node_host,
+                we_spawned: false,
+            });
+        }
+        log_both("[Naia] Stale gateway cleared — spawning fresh instance");
     }
 
     // 2. Find paths

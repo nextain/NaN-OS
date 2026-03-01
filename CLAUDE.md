@@ -125,7 +125,8 @@ gh workflow run iso.yml
 ### Flatpak 주의사항
 - **NEVER use `cargo build --release`** — 흰 화면 발생 (WebKitGTK asset protocol 미설정)
 - **ALWAYS use `npx tauri build --no-bundle --config src-tauri/tauri.conf.flatpak.json`**
-- 로컬 테스트: `bash scripts/local-reinstall-run-naia-flatpak.sh`
+- 로컬 테스트: `bash scripts/flatpak-reinstall-and-run.sh`
+- 풀 리빌드: `bash scripts/flatpak-rebuild-and-run.sh`
 - 상세: `.agents/context/distribution.yaml`
 
 ## 개발 사이클
