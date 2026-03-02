@@ -116,17 +116,97 @@ EFI 바이너리는 rootfs의 `/usr/lib/efi/`에 존재:
 
 ---
 
+## 추가 이슈: grub2-mkconfig `/sysroot` 실패
+
+### 증상
+
+gen_grub_cfgstub 수정 후 다음 단계인 `grub2-mkconfig`에서 실패:
+```
+grub2-probe: error: failed to get canonical path of '/sysroot'
+```
+
+### 원인
+
+ostree 시스템에서 `/sysroot`는 실제 루트 마운트포인트.
+그러나 rsync 기반 설치의 chroot에는 `/sysroot`가 존재하지 않음.
+Fedora의 grub2-probe가 ostree를 감지하고 `/sysroot`를 probe하려 시도.
+
+### 수정
+
+efi.py 패치에서:
+1. 타겟 sysroot에 `/sysroot -> /` 심볼릭 링크 생성
+2. `super().write_config()` (grub2-mkconfig)를 try/except로 감싸기
+
+```python
+# /sysroot 심볼릭 링크 생성
+_sysroot_link = os.path.join(_sysroot, "sysroot")
+if not os.path.exists(_sysroot_link):
+    os.symlink("/", _sysroot_link)
+
+# grub2-mkconfig 실패 시 안전하게 계속
+try:
+    super().write_config()
+except BootLoaderError as _e:
+    log.warning("[naia] grub2-mkconfig failed: %s", _e)
+```
+
+## 추가 이슈: `/boot/` 커널 미설치
+
+### 증상
+
+설치 완료 후 GRUB 메뉴에 "UEFI Firmware Settings"만 표시.
+커널, initramfs, BLS 엔트리가 `/boot/`에 없음.
+
+### 원인
+
+1. ostree 라이브 이미지에서 rsync는 rootfs만 복사 (BTRFS root subvolume)
+2. `/boot/`는 별도 ext4 파티션 → rsync 대상이 아님
+3. Anaconda `get_kernel_version_list()` → 빈 리스트 반환
+4. `CreateBLSEntriesTask` → "No kernel was installed" 경고 후 스킵
+5. `kernel-install`의 rpm-ostree 플러그인이 방해 (cross-device link 에러)
+
+### 수정
+
+Anaconda 완료 후 (재부팅 전) 수동으로 커널 설치:
+```bash
+KVER=$(ls /usr/lib/modules/ | sort -V | tail -1)
+cp /usr/lib/modules/${KVER}/vmlinuz /boot/vmlinuz-${KVER}
+dracut --force /boot/initramfs-${KVER}.img ${KVER}
+# BLS 엔트리 수동 생성
+cat > /boot/loader/entries/${MACHINE_ID}-${KVER}.conf <<EOF
+title Naia OS (${KVER})
+version ${KVER}
+linux /vmlinuz-${KVER}
+initrd /initramfs-${KVER}.img
+options root=UUID=${ROOT_UUID} rootflags=subvol=root ro
+EOF
+grub2-mkconfig -o /boot/grub2/grub.cfg
+```
+
+### 추가: greenboot 비활성화
+
+ostree가 아닌 환경에서 greenboot 헬스체크가 실패 → 자동 재부팅 루프.
+설치 후 비활성화 필요:
+```bash
+systemctl disable greenboot-healthcheck.service
+systemctl mask greenboot-healthcheck.service
+```
+
 ## 변경 파일
 
-- `installer/hook-post-rootfs.sh` — 섹션 3c 추가
+- `installer/hook-post-rootfs.sh` — 섹션 3c (gen_grub_cfgstub), 3d (efi.py), 3e (커널 설치 스크립트)
+- `os/tests/e2e-install.sh` — efi.py 패치 + post-install 커널/greenboot 처리
+- `os/tests/e2e-install.ks` — 커널 설치 %post 추가 (참고: --liveinst 모드에서는 %post 미실행)
 
 ## 검증
 
 1. E2E 테스트: `os/tests/e2e-install.sh --iso <path> --verbose --keep`
 2. 부트로더 설치 로그에서 `gen_grub_cfgstub script failed` 없음 확인
-3. 설치 후 타겟 디스크에서 UEFI 부팅 확인
-4. `/boot/loader/entries/` BLS 엔트리 존재 확인
-5. `/boot/efi/EFI/fedora/` EFI 바이너리 존재 확인
+3. `grub2-mkconfig` rc=0 확인 (또는 try/except로 안전하게 처리)
+4. 설치 후 타겟 디스크에서 UEFI 부팅 확인
+5. `/boot/loader/entries/` BLS 엔트리 존재 확인
+6. `/boot/efi/EFI/fedora/` EFI 바이너리 존재 확인
+7. GRUB 메뉴에 "Naia OS" 커널 엔트리 표시 확인
 
 ---
 

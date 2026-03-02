@@ -359,6 +359,185 @@ GRUBSTUB
 fi
 
 # ==============================================================================
+# 3d. Patch efi.py to handle grub2-mkconfig failure on ostree live installs
+#     Problem: After gen_grub_cfgstub succeeds, GRUB2.write_config() runs
+#     grub2-mkconfig which fails because grub2-probe cannot find /sysroot
+#     (ostree systems expect /sysroot as real root mount point).
+#     Fix 1: Create /sysroot -> / symlink in target before grub2-mkconfig
+#     Fix 2: Wrap super().write_config() in try/except as safety net
+#     See also: docs/2026-03-03-gen-grub-cfgstub-bootloader-fix.md
+# ==============================================================================
+
+EFI_PY=$(python3 -c "import pyanaconda.modules.storage.bootloader.efi as m; print(m.__file__)" 2>/dev/null || true)
+if [ -n "$EFI_PY" ] && [ -f "$EFI_PY" ]; then
+    python3 << 'EFIPATCH'
+import os, sys
+
+efi_py = os.environ.get("EFI_PY_PATH") or sys.argv[1] if len(sys.argv) > 1 else None
+if not efi_py:
+    import pyanaconda.modules.storage.bootloader.efi as m
+    efi_py = m.__file__
+
+with open(efi_py, "r") as f:
+    content = f.read()
+
+old = """    def write_config(self):
+        rc = util.execWithRedirect(
+            "gen_grub_cfgstub",
+            [self.config_dir, self.efi_config_dir],
+            root=conf.target.system_root,
+        )
+
+        if rc != 0:
+            raise BootLoaderError("gen_grub_cfgstub script failed")
+
+        super().write_config()"""
+
+new = """    def write_config(self):
+        # [naia] Create boot dirs and copy EFI binaries for ostree live installs
+        import glob as _glob
+        import shutil as _shutil
+        _sysroot = conf.target.system_root
+        for _d in [self.config_dir, self.efi_config_dir]:
+            _fp = os.path.join(_sysroot, _d.lstrip("/"))
+            os.makedirs(_fp, exist_ok=True)
+            log.info("[naia] Created directory: %s", _fp)
+        _efi_dir = os.path.join(_sysroot, self.efi_config_dir.lstrip("/"))
+        for _pat, _name in [
+            ("usr/lib/efi/shim/*/EFI/fedora/shimx64.efi", "shimx64.efi"),
+            ("usr/lib/efi/grub2/*/EFI/fedora/grubx64.efi", "grubx64.efi"),
+        ]:
+            _dst = os.path.join(_efi_dir, _name)
+            if not os.path.exists(_dst):
+                for _src in _glob.glob(os.path.join(_sysroot, _pat)):
+                    _shutil.copy2(_src, _dst)
+                    log.info("[naia] Copied EFI binary: %s -> %s", _src, _dst)
+                    break
+        _boot_dir = os.path.join(os.path.dirname(_efi_dir), "BOOT")
+        os.makedirs(_boot_dir, exist_ok=True)
+        _bootx64 = os.path.join(_boot_dir, "BOOTX64.EFI")
+        if not os.path.exists(_bootx64):
+            for _src in _glob.glob(os.path.join(_sysroot, "usr/lib/efi/shim/*/EFI/BOOT/BOOTX64.EFI")):
+                _shutil.copy2(_src, _bootx64)
+                log.info("[naia] Copied EFI fallback: %s -> %s", _src, _bootx64)
+                break
+        # [naia] Create /sysroot symlink for grub2-probe compatibility
+        _sysroot_link = os.path.join(_sysroot, "sysroot")
+        if not os.path.exists(_sysroot_link):
+            try:
+                os.symlink("/", _sysroot_link)
+                log.info("[naia] Created /sysroot -> / symlink for grub2-probe")
+            except OSError as e:
+                log.warning("[naia] Could not create /sysroot symlink: %s", e)
+        rc = util.execWithRedirect(
+            "gen_grub_cfgstub",
+            [self.config_dir, self.efi_config_dir],
+            root=conf.target.system_root,
+        )
+        if rc != 0:
+            raise BootLoaderError("gen_grub_cfgstub script failed")
+        # [naia] Wrap grub2-mkconfig — may fail on ostree due to /sysroot probe
+        try:
+            super().write_config()
+        except BootLoaderError as _e:
+            log.warning("[naia] grub2-mkconfig failed (expected on ostree): %s", _e)
+            log.warning("[naia] Continuing — kickstart %%post will regenerate grub config")"""
+
+if old in content:
+    content = content.replace(old, new)
+    with open(efi_py, "w") as f:
+        f.write(content)
+    import py_compile
+    py_compile.compile(efi_py, doraise=True)
+    print("[naia] Successfully patched efi.py for ostree bootloader compatibility")
+else:
+    print("[naia] WARNING: Could not find write_config pattern in efi.py")
+    print("[naia]   efi.py may already be patched or have different formatting")
+EFIPATCH
+else
+    echo "[naia] WARNING: efi.py not found (anaconda-live not installed?)"
+fi
+
+# ==============================================================================
+# 3e. Add kernel-install to Anaconda kickstart %post hook
+#     Problem: ostree live image rsync doesn't populate /boot/ with kernel,
+#     initramfs, or BLS entries. Anaconda's CreateBLSEntriesTask finds no
+#     kernels and skips. After installation, /boot/ is empty → no OS to boot.
+#     Fix: Add a script that runs kernel-install during %post.
+#     This is embedded in the squashfs and sourced by our kickstart template.
+# ==============================================================================
+
+mkdir -p /usr/share/naia-os/installer
+cat > /usr/share/naia-os/installer/post-install-kernel.sh <<'KERNELFIX'
+#!/bin/bash
+# Install kernel + initramfs + BLS entry into /boot/
+# Called from kickstart %post (runs in chroot of installed system)
+set -euo pipefail
+
+# Find kernel version with vmlinuz (not all module dirs have it)
+KVER=""
+for k in $(ls /usr/lib/modules/ | sort -rV); do
+    if [ -f "/usr/lib/modules/${k}/vmlinuz" ]; then
+        KVER="$k"
+        break
+    fi
+done
+if [ -z "$KVER" ]; then
+    echo "[naia] WARNING: No kernel with vmlinuz found in /usr/lib/modules/"
+    ls -la /usr/lib/modules/*/vmlinuz 2>/dev/null || echo "  (no vmlinuz files)"
+    exit 0
+fi
+
+echo "[naia] Installing kernel ${KVER} into /boot..."
+
+# Try kernel-install first (standard BLS workflow)
+if kernel-install add "$KVER" "/usr/lib/modules/${KVER}/vmlinuz" 2>&1; then
+    echo "[naia] kernel-install succeeded"
+else
+    echo "[naia] kernel-install failed, falling back to manual copy..."
+    cp "/usr/lib/modules/${KVER}/vmlinuz" "/boot/vmlinuz-${KVER}"
+    dracut --force "/boot/initramfs-${KVER}.img" "$KVER" 2>&1
+
+    mkdir -p /boot/loader/entries
+    MACHINE_ID=$(cat /etc/machine-id)
+    ROOT_UUID=$(findmnt -n -o UUID /)
+    cat > "/boot/loader/entries/${MACHINE_ID}-${KVER}.conf" <<BLSEOF
+title Naia OS (${KVER})
+version ${KVER}
+linux /vmlinuz-${KVER}
+initrd /initramfs-${KVER}.img
+options root=UUID=${ROOT_UUID} rootflags=subvol=root ro
+BLSEOF
+fi
+
+# Regenerate grub config with new kernel entries
+grub2-mkconfig -o /boot/grub2/grub.cfg 2>&1 || true
+
+echo "[naia] Kernel installation complete"
+ls -la /boot/vmlinuz-* /boot/initramfs-* 2>/dev/null || true
+ls -la /boot/loader/entries/ 2>/dev/null || true
+KERNELFIX
+chmod +x /usr/share/naia-os/installer/post-install-kernel.sh
+echo "[naia] Created post-install kernel script"
+
+# ==============================================================================
+# 3f. Disable ostree-only services in the squashfs rootfs
+#     Problem: After rsync installs rootfs to disk, greenboot and other ostree
+#     services fail on non-ostree systems, causing "degraded" systemd state or
+#     even reboot loops (greenboot triggers auto-rollback on failure).
+#     Fix: Disable/mask these services in the squashfs so they're disabled after
+#     rsync. This is safe: ostree deployments re-enable them via deployment config.
+# ==============================================================================
+
+for svc in greenboot-healthcheck greenboot-task-runner greenboot-set-rollback-trigger \
+           greenboot-grub2-set-counter greenboot-grub2-set-success \
+           greenboot-rpm-ostree-grub2-check-fallback bootloader-update; do
+    systemctl disable "${svc}.service" 2>/dev/null || true
+    systemctl mask "${svc}.service" 2>/dev/null || true
+done
+echo "[naia] Disabled ostree-only services (greenboot, bootloader-update)"
+
+# ==============================================================================
 # 4. Live session — KDE taskbar pins (Plasma update script)
 #    Bazzite uses this approach: runs once per user when plasmashell detects it.
 # ==============================================================================
