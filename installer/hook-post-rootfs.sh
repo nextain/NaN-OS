@@ -122,6 +122,121 @@ if [ -f "$ANACONDA_DESKTOP2" ]; then
 fi
 
 # ==============================================================================
+# 3b. Patch Anaconda's InstallFromImageTask to handle ostree symlink conflicts
+#     Problem: The source image uses ostree-style symlinks (e.g. /home -> var/home)
+#     but Anaconda creates BTRFS subvolumes and mounts /home as a real directory.
+#     rsync cannot replace a mounted directory with a symlink, causing exit code 23
+#     ("Device or resource busy").
+#     Fix: After rsync, unmount conflicting paths, replace dirs with symlinks,
+#     then remount. This is done by patching installation.py in-place.
+# ==============================================================================
+
+INSTALL_PY="$(python3 -c 'import pyanaconda.modules.payloads.payload.live_image.installation as m; print(m.__file__)')"
+
+if [ -f "$INSTALL_PY" ]; then
+    cp "$INSTALL_PY" "${INSTALL_PY}.orig"
+
+    cat > /tmp/naia-patch-installation.py <<'PATCHEOF'
+import sys, re
+
+filepath = sys.argv[1]
+with open(filepath, 'r') as f:
+    content = f.read()
+
+# Find the InstallFromImageTask.run() method and add ostree symlink fixup
+# after the main rsync block (after the try/except for rsync)
+old_block = '''        except (OSError, RuntimeError) as e:
+            msg = "Failed to install image: {}".format(e)
+            raise PayloadInstallationError(msg) from None
+
+        if os.path.exists(os.path.join(self._mount_point, "boot/efi")):'''
+
+new_block = '''        except (OSError, RuntimeError) as e:
+            msg = "Failed to install image: {}".format(e)
+            raise PayloadInstallationError(msg) from None
+
+        # Fix ostree-style root symlinks that conflict with mounted subvolumes.
+        # The source image may have /home -> var/home (symlink), but the target
+        # has /home as a mounted BTRFS subvolume. rsync cannot replace a mounted
+        # directory with a symlink, so we fix them up after rsync completes.
+        self._fixup_ostree_symlinks()
+
+        if os.path.exists(os.path.join(self._mount_point, "boot/efi")):'''
+
+if old_block in content:
+    content = content.replace(old_block, new_block)
+else:
+    print("WARNING: Could not find rsync error handler block to patch", file=sys.stderr)
+    sys.exit(1)
+
+# Add the _fixup_ostree_symlinks method before _parse_rsync_update
+old_parse = '''    def _parse_rsync_update(self, line):'''
+
+new_method = '''    def _fixup_ostree_symlinks(self):
+        """Fix ostree-style symlinks that rsync could not create.
+
+        On ostree/bootc-based images, several top-level directories are symlinks
+        into /var (e.g. /home -> var/home). When Anaconda sets up BTRFS with a
+        /home subvolume, that path becomes a mounted directory. rsync with -l
+        copies symlinks as symlinks, but cannot replace a mounted directory with
+        a symlink (EBUSY). This method detects such conflicts and resolves them
+        by unmounting, removing the directory, and creating the correct symlink.
+        """
+        import subprocess
+
+        for entry in os.listdir(self._mount_point):
+            src_path = os.path.join(self._mount_point, entry)
+            dst_path = os.path.join(self._sysroot, entry)
+
+            if not os.path.islink(src_path):
+                continue
+
+            link_target = os.readlink(src_path)
+
+            # Only fix if destination is a directory (not already a symlink)
+            if os.path.islink(dst_path):
+                continue
+            if not os.path.isdir(dst_path):
+                continue
+
+            log.info("Fixing ostree symlink conflict: %s -> %s", entry, link_target)
+
+            # Unmount if it is a mount point
+            ret = subprocess.run(["mountpoint", "-q", dst_path], capture_output=True)
+            if ret.returncode == 0:
+                log.info("Unmounting %s before replacing with symlink", dst_path)
+                subprocess.run(["umount", "-l", dst_path], capture_output=True)
+
+            # Remove the directory (should be empty after unmount)
+            try:
+                os.rmdir(dst_path)
+            except OSError:
+                import shutil
+                shutil.rmtree(dst_path, ignore_errors=True)
+
+            # Create the symlink
+            os.symlink(link_target, dst_path)
+            log.info("Created symlink: %s -> %s", dst_path, link_target)
+
+    def _parse_rsync_update(self, line):'''
+
+if old_parse in content:
+    content = content.replace(old_parse, new_method, 1)
+else:
+    print("WARNING: Could not find _parse_rsync_update to insert method", file=sys.stderr)
+    sys.exit(1)
+
+with open(filepath, 'w') as f:
+    f.write(content)
+
+print("Successfully patched", filepath)
+PATCHEOF
+
+    python3 /tmp/naia-patch-installation.py "$INSTALL_PY"
+    rm -f /tmp/naia-patch-installation.py
+fi
+
+# ==============================================================================
 # 4. Live session — KDE taskbar pins (Plasma update script)
 #    Bazzite uses this approach: runs once per user when plasmashell detects it.
 # ==============================================================================
