@@ -90,16 +90,11 @@ flatpak kill io.nextain.naia 2>/dev/null || true
 # 2. Stop OpenClaw Gateway (Node.js)
 pkill -f "openclaw.*gateway" 2>/dev/null || true
 
-# 3. Stop fcitx5 (input method — creates temp files)
-pkill -f fcitx5 2>/dev/null || true
-
-# 4. Clean up transient runtime files that rsync might trip on
+# 3. Clean up transient runtime files
 LIVEUSER_HOME="/var/home/liveuser"
 rm -rf "${LIVEUSER_HOME}/.openclaw/"*.lock 2>/dev/null || true
 rm -rf "${LIVEUSER_HOME}/.openclaw/"*.pid 2>/dev/null || true
 rm -rf "${LIVEUSER_HOME}/.openclaw/"*.sock 2>/dev/null || true
-rm -rf "${LIVEUSER_HOME}/.cache/fcitx5" 2>/dev/null || true
-rm -rf "${LIVEUSER_HOME}/.local/share/fcitx5/rime" 2>/dev/null || true
 
 # 5. Wait briefly for processes to fully exit
 sleep 1

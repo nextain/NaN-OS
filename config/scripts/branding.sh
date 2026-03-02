@@ -157,24 +157,6 @@ background=/usr/share/backgrounds/naia-os/login-background.jpg
 SDDMCONF
 fi
 
-# ============================================================
-# GRUB: Set Naia theme with graphical boot menu
-# ============================================================
-GRUB_THEME_DIR="/usr/share/grub/themes/naia"
-if [ -d "$GRUB_THEME_DIR" ]; then
-    mkdir -p /usr/etc/default
-    # Build GRUB config — replace or create
-    # Remove old GRUB_BACKGROUND/GRUB_THEME/GRUB_TERMINAL_OUTPUT/GRUB_GFXMODE lines
-    if [ -f /usr/etc/default/grub ]; then
-        sed -i '/^GRUB_BACKGROUND=/d; /^GRUB_THEME=/d; /^GRUB_TERMINAL_OUTPUT=/d; /^GRUB_GFXMODE=/d' \
-            /usr/etc/default/grub
-    fi
-    cat >> /usr/etc/default/grub <<'GRUBCFG'
-GRUB_TERMINAL_OUTPUT="gfxterm"
-GRUB_GFXMODE="auto"
-GRUB_THEME="/usr/share/grub/themes/naia/theme.txt"
-GRUBCFG
-fi
 
 # ============================================================
 # Wi-Fi: Disable iwlwifi power save (Intel bug workaround)
