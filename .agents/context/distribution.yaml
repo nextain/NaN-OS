@@ -45,14 +45,59 @@ formats:
     output_name: naia-os-live-amd64.iso
     status: working
     hook: installer/hook-post-rootfs.sh
-    flatpaks: installer/flatpaks (Chrome, Discord — baked into squashfs)
+    flatpaks: installer/flatpaks (Chrome, Discord, Firefox — baked into squashfs)
+    install_method: ostreecontainer (Bazzite upstream)
+    install_flow:
+      summary: "hook-post-rootfs.sh generates interactive-defaults.ks with ostreecontainer directive + 4 post-scripts"
+      kickstart_directives:
+        - "ostreecontainer --url=<image-ref>:<tag> --transport=containers-storage --no-signature-verification"
+      post_scripts:
+        - install-configure-upgrade.ks: "bootc switch --mutate-in-place (registry-based updates)"
+        - install-flatpaks.ks: "rsync flatpak to ostree deployment path"
+        - disable-fedora-flatpak.ks: "disable flatpak-add-fedora-repos.service"
+        - install-naia-customizations.ks: "copy Plasma scripts, wallpaper, lock screen, fcitx5 to installed system"
+      image_ref_source: "/usr/share/ublue-os/image-info.json (fallback: ghcr.io/nextain/naia-os:latest)"
+      reference_impl: "titanoboa/.github/workflows/ci_dummy_hook_postrootfs.sh (Bazzite upstream)"
     customizations:
       - Anaconda installer + Naia branding (sidebar, topbar, CSS)
       - Anaconda profile (BTRFS + zstd, Naia CSS)
-      - KDE taskbar pin (Naia Shell)
+      - ostreecontainer kickstart + post-scripts (Bazzite upstream 방식)
+      - KDE taskbar pin (Naia prepend to Bazzite defaults, not replace)
       - fcitx5 hangul default config (Korean input)
-      - Live wallpaper
+      - Desktop wallpaper (live-wallpaper.jpg)
+      - Login/lock screen background (login-background.jpg via SDDM + kscreenlocker)
+      - Plymouth boot splash (start-launcher-icon.png + text-mix-naia-logo.png)
       - Live session warning dialog (kdialog, Korean)
+      - Post-install customizations copied to installed system via install-naia-customizations.ks
+    local_build:
+      prerequisites:
+        - "podman, just, xorriso (~50GB free disk)"
+        - "titanoboa repo cloned at ../titanoboa"
+      command: |
+        cd titanoboa
+        sudo HOOK_post_rootfs="$(realpath ../naia-os/installer/hook-post-rootfs.sh)" \
+          just build "ghcr.io/nextain/naia-os:latest" 1 \
+          "$(realpath ../naia-os/installer/flatpaks)" squashfs
+      output: "work/output.iso (~7-8GB)"
+      build_time: "20-40 min (depends on network + disk speed)"
+      stages:
+        1_pull: "podman pull base image from GHCR"
+        2_rootfs: "podman export → tar extract to work/rootfs"
+        3_hook: "podman --rootfs runs hook-post-rootfs.sh (Anaconda, branding, KDE, Korean, flatpaks)"
+        4_container_load: "podman pull image into rootfs containers-storage (for ostreecontainer)"
+        5_dracut: "generate initramfs with dmsquash-live module"
+        6_squashfs: "mksquashfs rootfs → LiveOS/rootfs.img"
+        7_grub: "GRUB template + xorriso → bootable ISO"
+      host_notes:
+        - "/var partition may be small (69GB ext4) — podman images fill it fast"
+        - "Workaround: symlink root podman storage to /var/home/.containers-storage"
+        - "squashfs-tools must be available (host or builder container)"
+    e2e_test:
+      script: os/tests/e2e-install.sh
+      kickstart: os/tests/e2e-install.ks
+      command: "./os/tests/e2e-install.sh --iso /path/to/output.iso --verbose --keep"
+      prerequisites: "qemu-system-x86_64, xorriso, sshpass, socat, OVMF"
+      test_flow: "QEMU VM → boot ISO → inject kickstart → Anaconda install → reboot → smoke tests"
     notes:
       - GHCR package must be public for image pull
       - Hook clones repo via git (repo must be public)
@@ -62,6 +107,8 @@ formats:
       - ISO uploaded as Actions Artifact (too large for Release)
       - Artifact retention: 30 days
       - CHECKSUM file uploaded to Release draft
+      - "image-info.json may return Bazzite ref instead of Naia (base image artifact)"
+      - "rsync workaround patches (3b-3f) removed 2026-03-03 in favor of ostreecontainer"
 
 release:
   current_version: v0.1.0
@@ -122,6 +169,51 @@ dev_environment:
     - "Claude Code terminal = inside container → flatpak install fails here too"
     - "Use host desktop terminal (Konsole) for install/run, container terminal for build/dev"
 
+troubleshooting:
+  pnpm_store_corruption:
+    symptom: |
+      "Invalid package config ... Unexpected end of JSON input" or
+      "ERR_INVALID_PACKAGE_CONFIG" when running pnpm dev / cargo tauri dev.
+      Multiple package.json files in node_modules are 0 bytes.
+    cause: |
+      pnpm content-addressable store (~/.local/share/pnpm/store/v10) gets corrupted.
+      pnpm uses hardlinks from store → node_modules, so corrupted store files
+      produce 0-byte hardlinks on every subsequent pnpm install.
+      Even pnpm store prune + pnpm install --force does NOT fix it
+      because prune only removes orphans, not corrupted content files.
+    diagnosis:
+      - "find node_modules -name 'package.json' -empty | wc -l  # should be 0"
+      - "find ~/.local/share/pnpm/store/v10 -empty -type f | wc -l  # should be ~0"
+    fix: |
+      rm -rf ~/.local/share/pnpm/store/v10
+      rm -rf shell/node_modules agent/node_modules shell/src-tauri/target/debug/agent/node_modules
+      cd shell && pnpm install
+      cd agent && pnpm install
+      cd shell/src-tauri/target/debug/agent && CI=true pnpm install --shamefully-hoist
+    prevention: |
+      If corruption recurs, use node-linker=hoisted to avoid hardlinks:
+        pnpm install --config.node-linker=hoisted
+      This copies files instead of hardlinking, immune to store corruption.
+      Caution: hoisted layout allows phantom dependency access.
+    incident: "2026-03-03 — 2300 empty files in store, affected shell + agent node_modules"
+
+  agent_node_modules_missing_ws:
+    symptom: |
+      agent-core crashes with "Cannot find package 'ws'" at startup.
+      Path: shell/src-tauri/target/debug/agent/node_modules/ws
+    cause: |
+      Bundled agent at target/debug/agent/ uses pnpm default isolated node_modules.
+      ws is an indirect dependency not hoisted to top level.
+    fix: |
+      cd shell/src-tauri/target/debug/agent
+      CI=true pnpm install --shamefully-hoist
+    note: "--shamefully-hoist is REQUIRED for bundled agent (indirect deps like ws, p-retry)"
+
+  vite_white_screen_after_cargo_build:
+    symptom: "App launches but shows white/blank screen"
+    cause: "Used cargo build --release instead of npx tauri build --no-bundle"
+    fix: "ALWAYS use npx tauri build --no-bundle (WebKitGTK asset protocol)"
+
 flathub_submission:
   guide: docs/flathub-submission-guide.md
   status: not_started
@@ -161,7 +253,7 @@ bootable_usb:
   verify: "lsblk /dev/sdX -o NAME,SIZE,LABEL,FSTYPE (label should be titanoboa_boot)"
   behavior:
     - Live session = read-only squashfs + RAM overlay (ephemeral)
-    - Pre-installed apps (Chrome, Discord, Naia Shell) persist across boots
+    - Pre-installed apps (Chrome, Discord, Firefox, Naia Shell) persist across boots
     - User data, settings, AI conversations are lost on reboot
     - "Install to Hard Drive" for permanent installation
   notes:
