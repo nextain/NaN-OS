@@ -659,8 +659,11 @@ export function SettingsTab() {
 	const [backgroundImage, setBackgroundImage] = useState(
 		normalizeLocalPath(existing?.backgroundImage ?? ""),
 	);
+	const defaultVoiceForProvider = (existing?.ttsProvider ?? "edge") === "edge"
+		? "ko-KR-SunHiNeural"
+		: "ko-KR-Neural2-A";
 	const [ttsVoice, setTtsVoice] = useState(
-		existing?.ttsVoice ?? "ko-KR-Neural2-A",
+		existing?.ttsVoice ?? defaultVoiceForProvider,
 	);
 	const [googleApiKey, setGoogleApiKey] = useState(
 		existing?.googleApiKey ?? "",
