@@ -5,6 +5,7 @@ import { SidePanel } from "./components/SidePanel";
 import { TitleBar } from "./components/TitleBar";
 import { type ThemeId, isOnboardingComplete, loadConfig } from "./lib/config";
 import { persistDiscordDefaults } from "./lib/discord-auth";
+import { syncLinkedChannels } from "./lib/channel-sync";
 
 function applyTheme(theme: ThemeId) {
 	document.documentElement.setAttribute("data-theme", theme);
@@ -29,6 +30,16 @@ export function App() {
 			discordTarget?: string | null;
 		}>("discord_auth_complete", (event) => {
 			persistDiscordDefaults(event.payload);
+		});
+		return () => {
+			unlisten.then((fn) => fn());
+		};
+	}, []);
+
+	// After Lab login, sync linked channels (e.g. Discord DM) from gateway
+	useEffect(() => {
+		const unlisten = listen("lab_auth_complete", () => {
+			void syncLinkedChannels();
 		});
 		return () => {
 			unlisten.then((fn) => fn());

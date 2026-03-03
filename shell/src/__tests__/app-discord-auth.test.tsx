@@ -60,4 +60,18 @@ describe("App discord deep-link persistence", () => {
 		expect(saved.discordDefaultUserId).toBe("865850174651498506");
 		expect(saved.discordDefaultTarget).toBe("user:865850174651498506");
 	});
+
+	it("registers lab_auth_complete listener for channel sync", () => {
+		localStorage.setItem(
+			"naia-config",
+			JSON.stringify({
+				provider: "gemini",
+				model: "gemini-3-flash-preview",
+				apiKey: "",
+				onboardingComplete: true,
+			}),
+		);
+		render(<App />);
+		expect(typeof listeners.lab_auth_complete).toBe("function");
+	});
 });

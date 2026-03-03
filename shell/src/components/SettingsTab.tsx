@@ -28,6 +28,7 @@ import { type Locale, getLocale, setLocale, t } from "../lib/i18n";
 import { parseLabCredits } from "../lib/lab-balance";
 import { Logger } from "../lib/logger";
 import { syncToOpenClaw, restartGateway } from "../lib/openclaw-sync";
+import { syncLinkedChannels } from "../lib/channel-sync";
 import { fetchLabConfig, pushConfigToLab, clearLabConfig, diffConfigs } from "../lib/lab-sync";
 import { DEFAULT_PERSONA, buildSystemPrompt } from "../lib/persona";
 import { persistDiscordDefaults } from "../lib/discord-auth";
@@ -1097,6 +1098,9 @@ export function SettingsTab() {
 				});
 				await syncToOpenClaw("nextain", nextModel, undefined, current?.persona, current?.agentName, current?.userName, labFullPrompt, current?.locale || getLocale(), current?.discordDmChannelId, current?.discordDefaultUserId, undefined, undefined, undefined, undefined, nextLabKey);
 				await restartGateway();
+
+				// Sync linked channels (e.g. Discord) after login
+				void syncLinkedChannels();
 
 				// Try Lab pull — show diff dialog if settings differ
 				if (nextLabUserId) {

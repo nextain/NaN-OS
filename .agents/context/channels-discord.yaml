@@ -36,16 +36,54 @@ components:
       - ChannelsTab shows connection status
       - OAuth deep-link handles discord_auth_complete
 
+login_channel_separation:
+  description: Login and channel logic are fully separated since the refactoring.
+  login_flow:
+    - Deep link: naia://auth?key=gw-xxx&user_id=xxx&state=xxx
+    - No discord fields in deep link — login is provider-agnostic
+    - Callback page issues desktop key only, no channel resolution
+  channel_flow:
+    - After lab_auth_complete, Shell calls syncLinkedChannels()
+    - Shell fetches GET /api/gateway/linked-channels (BFF) with X-Desktop-Key + X-User-Id
+    - BFF calls Gateway lookupUser → reads linked_accounts from metadata
+    - Returns: { channels: [{ type: "discord", userId: "..." }] }
+    - Shell persists discordDefaultUserId to config
+    - Shell calls openDmChannel(discordUserId) via Rust Discord Bot API → gets DM channel ID
+    - Shell persists discordDmChannelId to config
+    - Shell syncs to Gateway runtime (allowlist config.patch) + OpenClaw (openclaw.json + restart)
+  dm_channel_refresh:
+    description: DM channel ID is ALWAYS refreshed on every syncLinkedChannels() call
+    why:
+      - Required for fetchDiscordMessages() (conversation history)
+      - Required for receiving Discord DMs
+      - Must be in openclaw.json for Gateway to route messages
+    how: openDmChannel(userId) → Discord API POST /users/@me/channels → channel ID
+  two_layer_sync:
+    runtime_patch: skill_config tool call with channels.discord.dm — immediate in-memory
+    persistent_config: syncToOpenClaw() + restartGateway() — survives restarts
+  key_files:
+    - shell/src/lib/channel-sync.ts  # Main channel sync logic
+    - shell/src/lib/discord-api.ts   # Discord REST API client (via Rust proxy)
+    - naia.nextain.io/src/app/api/gateway/linked-channels/route.ts  # BFF API
+    - naia.nextain.io/src/lib/deep-link.ts  # Simplified (no discord params)
+    - shell/src-tauri/src/lib.rs  # No user_id→discord fallback in deep link handler
+  test_files:
+    - shell/src/lib/__tests__/channel-sync.test.ts  # Unit tests (9 cases)
+    - shell/e2e-tauri/specs/70-channel-sync-dm.spec.ts  # Tauri E2E
+
 oauth_deep_link:
   flow:
-    - User clicks "Discord 봇 연결" in Shell
-    - Browser opens naia.nextain.io integrations page
-    - OAuth flow completes
-    - Deep link callback: naia://auth/discord?user_id=<id>&channel_id=<id>
-    - Rust parses deep link → emits discord_auth_complete event
-    - Shell persists defaults → config → agent env
-  payload:
-    discordUserId: "Numeric Discord user ID"
+    - User clicks login in Shell → browser opens naia.nextain.io
+    - OAuth flow completes (Google or Discord)
+    - Deep link callback: naia://auth?key=gw-xxx&user_id=xxx&state=xxx
+    - Rust parses deep link → emits lab_auth_complete event
+    - Shell saves key/userId → triggers syncLinkedChannels()
+    - discord_auth_complete event still supported for explicit discord deep links
+  payload_lab_auth:
+    labKey: "Gateway API key (gw-* prefix)"
+    labUserId: "Gateway user UUID"
+  payload_discord_auth:
+    discordUserId: "Numeric Discord user ID (only when explicitly provided)"
     discordChannelId: "Optional channel ID"
     discordTarget: "Optional pre-formatted target"
 

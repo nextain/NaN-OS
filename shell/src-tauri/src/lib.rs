@@ -753,23 +753,17 @@ fn spawn_agent_core(app_handle: &AppHandle, audit_db: &audit::AuditDb) -> Result
     // In dev: tsx for TypeScript direct execution; in prod: compiled JS from bundle
     let agent_script = std::env::var("NAIA_AGENT_SCRIPT")
         .unwrap_or_else(|_| {
-            // Try paths relative to current dir (src-tauri/ in dev)
-            let candidates = [
-                "../../agent/src/index.ts",  // from src-tauri/
-                "../agent/src/index.ts",     // from shell/
-            ];
-            for rel in &candidates {
-                let dev_path = std::env::current_dir()
-                    .map(|d| d.join(rel))
-                    .unwrap_or_default();
-                if dev_path.exists() {
-                    log_verbose(&format!("[Naia] Found agent at: {}", dev_path.display()));
-                    return dev_path.canonicalize()
-                        .unwrap_or(dev_path)
-                        .to_string_lossy()
-                        .to_string();
+            let is_flatpak = std::env::var("FLATPAK").map(|v| v == "1").unwrap_or(false);
+
+            // Flatpak: bundled agent FIRST (--filesystem=home can expose dev paths)
+            if is_flatpak {
+                let flatpak_path = std::path::PathBuf::from("/app/lib/naia-os/agent/dist/index.js");
+                if flatpak_path.exists() {
+                    log_verbose(&format!("[Naia] Found Flatpak agent at: {}", flatpak_path.display()));
+                    return flatpak_path.to_string_lossy().to_string();
                 }
             }
+
             // Production: bundled agent via Tauri resources
             if let Ok(resource_dir) = app_handle.path().resource_dir() {
                 let bundled = resource_dir.join("agent/dist/index.js");
@@ -778,7 +772,28 @@ fn spawn_agent_core(app_handle: &AppHandle, audit_db: &audit::AuditDb) -> Result
                     return bundled.to_string_lossy().to_string();
                 }
             }
-            // Flatpak: agent installed at /app/lib/naia-os/agent/
+
+            // Dev: tsx for TypeScript direct execution (NOT in Flatpak)
+            if !is_flatpak {
+                let candidates = [
+                    "../../agent/src/index.ts",  // from src-tauri/
+                    "../agent/src/index.ts",     // from shell/
+                ];
+                for rel in &candidates {
+                    let dev_path = std::env::current_dir()
+                        .map(|d| d.join(rel))
+                        .unwrap_or_default();
+                    if dev_path.exists() {
+                        log_verbose(&format!("[Naia] Found agent at: {}", dev_path.display()));
+                        return dev_path.canonicalize()
+                            .unwrap_or(dev_path)
+                            .to_string_lossy()
+                            .to_string();
+                    }
+                }
+            }
+
+            // Flatpak fallback (resource_dir didn't work)
             let flatpak_path = std::path::PathBuf::from("/app/lib/naia-os/agent/dist/index.js");
             if flatpak_path.exists() {
                 log_verbose(&format!("[Naia] Found Flatpak agent at: {}", flatpak_path.display()));
@@ -1491,6 +1506,34 @@ async fn read_local_binary(path: String) -> Result<Vec<u8>, String> {
     std::fs::read(&file_path).map_err(|e| format!("Failed to read {}: {}", path, e))
 }
 
+/// Fetch linked messaging channels for the current user from naia.nextain.io BFF.
+/// Returns JSON string: { "channels": [{ "type": "discord", "userId": "..." }] }
+#[tauri::command]
+async fn fetch_linked_channels(lab_key: String, user_id: String) -> Result<String, String> {
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(10))
+        .build()
+        .map_err(|e| format!("HTTP client error: {}", e))?;
+
+    let res = client
+        .get("https://naia.nextain.io/api/gateway/linked-channels")
+        .header("X-Desktop-Key", &lab_key)
+        .header("X-User-Id", &user_id)
+        .send()
+        .await
+        .map_err(|e| format!("linked-channels request failed: {}", e))?;
+
+    if !res.status().is_success() {
+        let status = res.status();
+        let body = res.text().await.unwrap_or_default();
+        return Err(format!("linked-channels API error {}: {}", status, body));
+    }
+
+    res.text()
+        .await
+        .map_err(|e| format!("Failed to read response: {}", e))
+}
+
 /// Parameters for syncing Shell provider settings to OpenClaw gateway config
 #[derive(Deserialize)]
 struct OpenClawSyncParams {
@@ -2024,6 +2067,7 @@ pub fn run() {
             read_discord_bot_token,
             discord_api,
             sync_openclaw_config,
+            fetch_linked_channels,
         ])
         .setup(|app| {
             let app_handle = app.handle().clone();
@@ -2168,13 +2212,6 @@ pub fn run() {
                                 || discord_target.is_some();
                             if is_discord_flow {
                                 let validated_discord_user_id = discord_user_id
-                                    .or_else(|| {
-                                        if matches!(channel.as_deref(), Some("discord")) {
-                                            user_id.clone()
-                                        } else {
-                                            None
-                                        }
-                                    })
                                     .filter(|uid| is_valid_discord_snowflake(uid));
                                 let validated_discord_channel_id = discord_channel_id
                                     .filter(|cid| is_valid_discord_snowflake(cid));
