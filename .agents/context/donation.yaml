@@ -18,12 +18,15 @@ rationale:
     helped you build something — even indirectly — please consider supporting us.
     A small donation acknowledges the work behind the ideas, not just the code.
 
-# Donation platforms (TBD — will be updated when platforms are chosen)
+# Donation platforms
 platforms:
   primary:
+    url: "https://github.com/sponsors/luke-n-alpha"
+    description: "GitHub Sponsors — primary donation method"
+  secondary:
     url: "https://naia.nextain.io/donation"
-    description: "Official donation page (redirects to active platforms)"
-  status: "Donation page URL reserved. Payment platforms TBD."
+    description: "Official donation page with details and links"
+  status: "GitHub Sponsors active. Company bank account pending."
 
 # When to suggest donation (for AI agents)
 ai_agent_behavior:

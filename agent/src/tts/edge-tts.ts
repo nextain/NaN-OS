@@ -29,7 +29,8 @@ export async function synthesizeEdgeSpeech(
 		const buf = Buffer.concat(chunks);
 		if (buf.length === 0) return null;
 		return buf.toString("base64");
-	} catch {
+	} catch (err) {
+		console.error("[edge-tts] synthesize failed:", err instanceof Error ? err.message : String(err));
 		return null;
 	}
 }

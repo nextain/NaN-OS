@@ -685,7 +685,12 @@ export async function handleToolRequest(req: ToolRequest): Promise<void> {
 
 	try {
 		if (gatewayUrl) {
-			gateway = await connectGatewayWithRetry(gatewayUrl, gatewayToken);
+			try {
+				gateway = await connectGatewayWithRetry(gatewayUrl, gatewayToken);
+			} catch {
+				// Gateway unavailable — continue without it (e.g. Edge TTS preview works offline)
+				gateway = null;
+			}
 		}
 
 		const result = await executeTool(gateway, toolName, args, {
