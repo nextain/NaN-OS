@@ -193,7 +193,7 @@ async function syncOpenClawWithChannels(
 			discordUserId,
 			config.ttsProvider,
 			config.ttsVoice,
-			config.ttsEnabled ? "on" : undefined,
+			config.ttsEnabled ? "always" : "off",
 			undefined,
 			config.labKey,
 		);
