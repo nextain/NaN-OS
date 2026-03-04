@@ -61,7 +61,7 @@ describe("11 — Cost Dashboard", () => {
 		expect(rowCount).toBeGreaterThanOrEqual(3);
 	});
 
-	it("should show Lab balance section when labKey is set", async () => {
+	it("should show Lab balance section when naiaKey is set", async () => {
 		// Dashboard is currently open from previous test — close it first
 		const costBadge = await $(S.costBadge);
 		await costBadge.click();
@@ -75,12 +75,12 @@ describe("11 — Cost Dashboard", () => {
 			{ timeout: 5_000 },
 		);
 
-		// Inject a labKey into config to simulate Lab connection
+		// Inject a naiaKey into config to simulate Lab connection
 		await browser.execute(() => {
 			const raw = localStorage.getItem("naia-config");
 			if (!raw) return;
 			const config = JSON.parse(raw);
-			config.labKey = "test-lab-key-e2e";
+			config.naiaKey = "test-lab-key-e2e";
 			localStorage.setItem("naia-config", JSON.stringify(config));
 		});
 
@@ -97,12 +97,12 @@ describe("11 — Cost Dashboard", () => {
 		);
 		expect(hasLabBalance).toBe(true);
 
-		// Remove labKey to restore clean state (dashboard stays open for next test)
+		// Remove naiaKey to restore clean state (dashboard stays open for next test)
 		await browser.execute(() => {
 			const raw = localStorage.getItem("naia-config");
 			if (!raw) return;
 			const config = JSON.parse(raw);
-			delete config.labKey;
+			delete config.naiaKey;
 			localStorage.setItem("naia-config", JSON.stringify(config));
 		});
 	});

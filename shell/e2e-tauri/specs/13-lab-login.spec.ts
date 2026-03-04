@@ -29,15 +29,15 @@ describe("13 — Lab Login Flow", () => {
 		await labBtn.waitForDisplayed({ timeout: 10_000 });
 	});
 
-	it("should inject labKey and verify config persistence", async () => {
+	it("should inject naiaKey and verify config persistence", async () => {
 		// Note: Tauri deep-link events (listen/emit) cannot be simulated
-		// in WebDriver E2E. Instead, we directly inject labKey into
+		// in WebDriver E2E. Instead, we directly inject naiaKey into
 		// localStorage to test the downstream UI flow.
 		await browser.execute(() => {
 			const raw = localStorage.getItem("naia-config");
 			const config = raw ? JSON.parse(raw) : {};
-			config.labKey = "e2e-test-lab-key-12345";
-			config.labUserId = "e2e-lab-user";
+			config.naiaKey = "e2e-test-lab-key-12345";
+			config.naiaUserId = "e2e-lab-user";
 			config.provider = "gemini";
 			config.model = "gemini-2.5-flash";
 			config.onboardingComplete = true;
@@ -50,18 +50,18 @@ describe("13 — Lab Login Flow", () => {
 		const appRoot = await $(S.appRoot);
 		await appRoot.waitForDisplayed({ timeout: 30_000 });
 
-		// Verify labKey is persisted
+		// Verify naiaKey is persisted
 		const config = await browser.execute(() => {
 			const raw = localStorage.getItem("naia-config");
 			return raw ? JSON.parse(raw) : null;
 		});
 		expect(config).not.toBeNull();
-		expect(config.labKey).toBe("e2e-test-lab-key-12345");
-		expect(config.labUserId).toBe("e2e-lab-user");
+		expect(config.naiaKey).toBe("e2e-test-lab-key-12345");
+		expect(config.naiaUserId).toBe("e2e-lab-user");
 	});
 
-	it("should show Lab balance section in cost dashboard with labKey", async () => {
-		// With labKey set, cost dashboard should show Lab balance section
+	it("should show Lab balance section in cost dashboard with naiaKey", async () => {
+		// With naiaKey set, cost dashboard should show Lab balance section
 		// First need a message exchange to show the cost badge
 		// If cost badge is not visible, the dashboard won't be accessible
 		const hasCostBadge = await browser.execute(

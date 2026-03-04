@@ -336,12 +336,12 @@ describe("Lab Proxy Provider", () => {
 	});
 });
 
-describe("buildProvider with labKey", () => {
+describe("buildProvider with naiaKey", () => {
 	beforeEach(() => {
 		mockFetch.mockReset();
 	});
 
-	it("returns lab proxy that calls gateway URL when labKey is set", async () => {
+	it("returns lab proxy that calls gateway URL when naiaKey is set", async () => {
 		mockFetch.mockResolvedValue({
 			ok: true,
 			body: createSSEStream(["data: [DONE]\n\n"]),
@@ -352,7 +352,7 @@ describe("buildProvider with labKey", () => {
 			provider: "gemini",
 			model: "gemini-2.5-flash",
 			apiKey: "ignored",
-			labKey: "lab-key-123",
+			naiaKey: "lab-key-123",
 		});
 
 		const gen = provider.stream(
@@ -371,7 +371,7 @@ describe("buildProvider with labKey", () => {
 		expect(options.headers["X-AnyLLM-Key"]).toBe("Bearer lab-key-123");
 	});
 
-	it("returns direct provider when labKey is not set", async () => {
+	it("returns direct provider when naiaKey is not set", async () => {
 		const { buildProvider } = await import("../providers/factory.js");
 		const provider = buildProvider({
 			provider: "gemini",

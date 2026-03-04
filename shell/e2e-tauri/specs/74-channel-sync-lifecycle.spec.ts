@@ -50,14 +50,14 @@ describe("74 — Channel Sync Lifecycle", () => {
 	});
 
 	it("should sync Discord channel on login", async () => {
-		// Simulate lab_auth_complete by injecting credentials + calling syncLinkedChannels
+		// Simulate naia_auth_complete by injecting credentials + calling syncLinkedChannels
 		// Step 1: Inject lab credentials (simulating deep-link callback)
 		await browser.execute(
 			(key: string, userId: string) => {
 				const raw = localStorage.getItem("naia-config");
 				const config = raw ? JSON.parse(raw) : {};
-				config.labKey = key;
-				config.labUserId = userId;
+				config.naiaKey = key;
+				config.naiaUserId = userId;
 				config.onboardingComplete = true;
 				// Clear any stale Discord config to test fresh sync
 				delete config.discordDefaultUserId;
@@ -159,7 +159,7 @@ describe("74 — Channel Sync Lifecycle", () => {
 		expect(config.discordDefaultUserId).toMatch(/^\d{17,20}$/);
 		expect(config.discordDmChannelId).toMatch(/^\d{17,20}$/);
 		expect(config.discordDefaultTarget).toBeTruthy();
-		expect(config.labKey).toBe(LAB_KEY);
+		expect(config.naiaKey).toBe(LAB_KEY);
 
 		console.log(
 			`[e2e] Config verified: userId=${config.discordDefaultUserId}, channelId=${config.discordDmChannelId}`,
@@ -217,8 +217,8 @@ describe("74 — Channel Sync Lifecycle", () => {
 			const raw = localStorage.getItem("naia-config");
 			const config = raw ? JSON.parse(raw) : {};
 			// Clear lab credentials
-			delete config.labKey;
-			delete config.labUserId;
+			delete config.naiaKey;
+			delete config.naiaUserId;
 			// Clear Discord config
 			delete config.discordDefaultUserId;
 			delete config.discordDmChannelId;
@@ -237,8 +237,8 @@ describe("74 — Channel Sync Lifecycle", () => {
 		});
 
 		expect(config).not.toBeNull();
-		expect(config.labKey).toBeUndefined();
-		expect(config.labUserId).toBeUndefined();
+		expect(config.naiaKey).toBeUndefined();
+		expect(config.naiaUserId).toBeUndefined();
 		expect(config.discordDefaultUserId).toBeUndefined();
 		expect(config.discordDmChannelId).toBeUndefined();
 		expect(config.discordDefaultTarget).toBeUndefined();
@@ -258,7 +258,7 @@ describe("74 — Channel Sync Lifecycle", () => {
 		});
 
 		expect(config).not.toBeNull();
-		expect(config.labKey).toBeUndefined();
+		expect(config.naiaKey).toBeUndefined();
 		expect(config.discordDefaultUserId).toBeUndefined();
 		expect(config.discordDmChannelId).toBeUndefined();
 

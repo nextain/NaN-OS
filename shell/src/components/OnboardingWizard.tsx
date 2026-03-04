@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import { directToolCall } from "../lib/chat-service";
 import {
 	DEFAULT_GATEWAY_URL,
+	DEFAULT_OLLAMA_HOST,
+	fetchOllamaModels,
 	getDefaultModel,
 	loadConfig,
 	resolveGatewayUrl,
@@ -24,6 +26,7 @@ import { VrmPreview } from "./VrmPreview";
 type Step =
 	| "provider"
 	| "apiKey"
+	| "ollamaConfig"
 	| "agentName"
 	| "userName"
 	| "character"
@@ -34,6 +37,7 @@ type Step =
 const STEPS: Step[] = [
 	"provider",
 	"apiKey",
+	"ollamaConfig",
 	"agentName",
 	"userName",
 	"character",
@@ -179,25 +183,29 @@ export function OnboardingWizard({
 	const [validationResult, setValidationResult] = useState<
 		"idle" | "success" | "error"
 	>("idle");
-	const [labKey, setLabKey] = useState("");
-	const [labUserId, setLabUserId] = useState("");
+	const [naiaKey, setNaiaKey] = useState("");
+	const [naiaUserId, setNaiaUserId] = useState("");
 	const [labWaiting, setLabWaiting] = useState(false);
 	const [labTimeout, setLabTimeout] = useState(false);
 	const [selectedSpeechStyle, setSelectedSpeechStyle] = useState("반말");
 	const [honorificInput, setHonorificInput] = useState("");
 	const [discordConnectLoading, setDiscordConnectLoading] = useState(false);
 	const [discordConnected, setDiscordConnected] = useState(false);
+	const [ollamaHost, setOllamaHost] = useState(DEFAULT_OLLAMA_HOST);
+	const [ollamaModels, setOllamaModels] = useState<{ id: string; label: string }[]>([]);
+	const [ollamaConnected, setOllamaConnected] = useState(false);
+	const [selectedOllamaModel, setSelectedOllamaModel] = useState("");
 
 	// Listen for deep-link Lab auth callback
 	useEffect(() => {
-		const unlisten = listen<{ labKey: string; labUserId?: string }>(
-			"lab_auth_complete",
+		const unlisten = listen<{ naiaKey: string; naiaUserId?: string }>(
+			"naia_auth_complete",
 			async (event) => {
 				Logger.info("OnboardingWizard", "Lab auth received", {});
-				const key = event.payload.labKey;
-				const userId = event.payload.labUserId ?? "";
-				setLabKey(key);
-				setLabUserId(userId);
+				const key = event.payload.naiaKey;
+				const userId = event.payload.naiaUserId ?? "";
+				setNaiaKey(key);
+				setNaiaUserId(userId);
 				setProvider("nextain");
 				setLabWaiting(false);
 				setLabTimeout(false);
@@ -247,8 +255,8 @@ export function OnboardingWizard({
 						speechStyle: (onlineConfig?.speechStyle ?? existing?.speechStyle) as string | undefined,
 						enableTools: true,
 						onboardingComplete: true,
-						labKey: key,
-						labUserId: userId,
+						naiaKey: key,
+						naiaUserId: userId,
 					};
 					saveConfig(restored);
 
@@ -349,26 +357,24 @@ export function OnboardingWizard({
 	}
 
 	function goNext() {
-		const skipApiKey = labKey || provider === "claude-code-cli" || provider === "ollama";
+		const skipApiKey = naiaKey || provider === "claude-code-cli" || provider === "ollama";
+		const skipOllamaConfig = provider !== "ollama";
 		if (stepIndex < STEPS.length - 1) {
-			let nextStep = STEPS[stepIndex + 1];
-			// Skip apiKey step if Lab key is set
-			if (nextStep === "apiKey" && skipApiKey) {
-				nextStep = STEPS[stepIndex + 2];
-			}
-			setStep(nextStep);
+			let next = stepIndex + 1;
+			if (STEPS[next] === "apiKey" && skipApiKey) next++;
+			if (STEPS[next] === "ollamaConfig" && skipOllamaConfig) next++;
+			setStep(STEPS[next]);
 		}
 	}
 
 	function goBack() {
-		const skipApiKey = labKey || provider === "claude-code-cli" || provider === "ollama";
+		const skipApiKey = naiaKey || provider === "claude-code-cli" || provider === "ollama";
+		const skipOllamaConfig = provider !== "ollama";
 		if (stepIndex > 0) {
-			let prevStep = STEPS[stepIndex - 1];
-			// Skip apiKey step going back if Lab key is set
-			if (prevStep === "apiKey" && skipApiKey) {
-				prevStep = STEPS[stepIndex - 2];
-			}
-			setStep(prevStep);
+			let prev = stepIndex - 1;
+			if (STEPS[prev] === "ollamaConfig" && skipOllamaConfig) prev--;
+			if (STEPS[prev] === "apiKey" && skipApiKey) prev--;
+			setStep(STEPS[prev]);
 		}
 	}
 
@@ -418,15 +424,15 @@ export function OnboardingWizard({
 			: undefined;
 
 		const defaultVrm = DEFAULT_AVATAR_MODEL;
-		const effectiveProvider: ProviderId = labKey ? "nextain" : provider;
+		const effectiveProvider: ProviderId = naiaKey ? "nextain" : provider;
 		// Merge with existing config to preserve fields set by discord_auth_complete etc.
 		const existing = loadConfig();
 		const config = {
 			...existing,
 			provider: effectiveProvider,
-			model: getDefaultModel(effectiveProvider),
+			model: effectiveProvider === "ollama" ? selectedOllamaModel : getDefaultModel(effectiveProvider),
 			apiKey:
-				labKey || provider === "claude-code-cli" || provider === "ollama"
+				naiaKey || provider === "claude-code-cli" || provider === "ollama"
 					? ""
 					: apiKey.trim(),
 			userName: userName.trim() || undefined,
@@ -437,8 +443,9 @@ export function OnboardingWizard({
 			speechStyle: selectedSpeechStyle,
 			enableTools: true,
 			onboardingComplete: true,
-			labKey: labKey || undefined,
-			labUserId: labUserId || undefined,
+			naiaKey: naiaKey || undefined,
+			naiaUserId: naiaUserId || undefined,
+			ollamaHost: effectiveProvider === "ollama" ? ollamaHost : undefined,
 		};
 		saveConfig(config);
 
@@ -451,11 +458,11 @@ export function OnboardingWizard({
 			discordDefaultUserId: config.discordDefaultUserId,
 			discordDmChannelId: config.discordDmChannelId,
 		});
-		syncToOpenClaw(config.provider, config.model, config.apiKey, config.persona, config.agentName, config.userName, fullPrompt, getLocale(), config.discordDmChannelId, config.discordDefaultUserId, undefined, undefined, undefined, undefined, labKey || undefined);
+		syncToOpenClaw(config.provider, config.model, config.apiKey, config.persona, config.agentName, config.userName, fullPrompt, getLocale(), config.discordDmChannelId, config.discordDefaultUserId, undefined, undefined, undefined, undefined, naiaKey || undefined, config.ollamaHost || undefined);
 
 		// Sync to Lab if connected
-		if (labKey && labUserId) {
-			pushConfigToLab(labKey, labUserId, config);
+		if (naiaKey && naiaUserId) {
+			pushConfigToLab(naiaKey, naiaUserId, config);
 		}
 
 		setAvatarModelPath(selectedVrm);
@@ -469,10 +476,12 @@ export function OnboardingWizard({
 			case "apiKey":
 				return (
 					!!apiKey.trim() ||
-					!!labKey ||
+					!!naiaKey ||
 					provider === "claude-code-cli" ||
 					provider === "ollama"
 				);
+			case "ollamaConfig":
+				return ollamaConnected && !!selectedOllamaModel;
 			case "agentName":
 				return !!sanitizeName(agentName);
 			case "userName":
@@ -518,12 +527,12 @@ export function OnboardingWizard({
 						{/* Lab login — prominent card at top */}
 						<button
 							type="button"
-							className={`onboarding-provider-card lab-card${labKey ? " selected" : ""}`}
+							className={`onboarding-provider-card lab-card${naiaKey ? " selected" : ""}`}
 							disabled={labWaiting}
 							onClick={handleLabLogin}
 						>
 							<span className="provider-card-label">
-								{labKey
+								{naiaKey
 									? t("onboard.apiKey.success")
 									: labWaiting
 										? t("onboard.lab.waiting")
@@ -549,13 +558,13 @@ export function OnboardingWizard({
 								<button
 									key={p.id}
 									type="button"
-									className={`onboarding-provider-card${!labKey && provider === p.id ? " selected" : ""}${p.disabled ? " disabled" : ""}`}
+									className={`onboarding-provider-card${!naiaKey && provider === p.id ? " selected" : ""}${p.disabled ? " disabled" : ""}`}
 									disabled={p.disabled}
 									onClick={() => {
 										if (p.disabled) return;
 										setProvider(p.id);
-										setLabKey("");
-										setLabUserId("");
+										setNaiaKey("");
+										setNaiaUserId("");
 										setLabTimeout(false);
 									}}
 								>
@@ -600,6 +609,61 @@ export function OnboardingWizard({
 						{validationResult === "error" && (
 							<div className="onboarding-validation-error">
 								{t("onboard.apiKey.error")}
+							</div>
+						)}
+					</div>
+				)}
+
+				{/* Step: Ollama Config */}
+				{step === "ollamaConfig" && (
+					<div className="onboarding-content">
+						<h2>Ollama 설정</h2>
+						<div className="settings-field">
+							<label>Host URL</label>
+							<input
+								type="text"
+								className="onboarding-input"
+								value={ollamaHost}
+								onChange={(e) => setOllamaHost(e.target.value)}
+								placeholder={DEFAULT_OLLAMA_HOST}
+								autoFocus
+							/>
+						</div>
+						<button
+							type="button"
+							className="onboarding-validate-btn"
+							onClick={async () => {
+								const result = await fetchOllamaModels(ollamaHost);
+								setOllamaConnected(result.connected);
+								setOllamaModels(result.models);
+								if (result.models.length > 0 && !selectedOllamaModel) {
+									setSelectedOllamaModel(result.models[0].id);
+								}
+							}}
+						>
+							연결 확인
+						</button>
+						{ollamaConnected && ollamaModels.length > 0 && (
+							<select
+								className="onboarding-input"
+								value={selectedOllamaModel}
+								onChange={(e) => setSelectedOllamaModel(e.target.value)}
+							>
+								{ollamaModels.map((m) => (
+									<option key={m.id} value={m.id}>
+										{m.label}
+									</option>
+								))}
+							</select>
+						)}
+						{ollamaConnected && ollamaModels.length === 0 && (
+							<div className="onboarding-validation-error">
+								모델 없음 — `ollama pull` 명령으로 모델을 설치하세요
+							</div>
+						)}
+						{!ollamaConnected && ollamaModels.length === 0 && (
+							<div className="settings-hint">
+								Ollama 서버에 연결하려면 위 버튼을 클릭하세요
 							</div>
 						)}
 					</div>

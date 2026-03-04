@@ -13,8 +13,8 @@ vi.mock("@tauri-apps/api/event", () => ({
 
 vi.mock("../../lib/config", () => ({
 	LAB_GATEWAY_URL: "https://example.test",
-	getLabKeySecure: vi.fn().mockResolvedValue(null),
-	hasLabKeySecure: vi.fn().mockResolvedValue(false),
+	getNaiaKeySecure: vi.fn().mockResolvedValue(null),
+	hasNaiaKeySecure: vi.fn().mockResolvedValue(false),
 }));
 
 import { CostDashboard, groupCosts } from "../CostDashboard";

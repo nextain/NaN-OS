@@ -1,5 +1,5 @@
 import type { Locale } from "./i18n";
-import { SECRET_KEYS, getSecretKey, saveSecretKey } from "./secure-store";
+import { SECRET_KEYS, deleteSecretKey, getSecretKey, saveSecretKey } from "./secure-store";
 import type { ProviderId } from "./types";
 
 const STORAGE_KEY = "naia-config";
@@ -49,8 +49,8 @@ export interface AppConfig {
 	honorific?: string;
 	speechStyle?: string;
 	onboardingComplete?: boolean;
-	labKey?: string;
-	labUserId?: string;
+	naiaKey?: string;
+	naiaUserId?: string;
 	disabledSkills?: string[];
 	slackWebhookUrl?: string;
 	discordWebhookUrl?: string;
@@ -63,6 +63,7 @@ export interface AppConfig {
 	panelVisible?: boolean;
 	panelSize?: number;
 	discordSessionMigrated?: boolean;
+	ollamaHost?: string;
 }
 
 const DEFAULT_MODELS: Record<ProviderId, string> = {
@@ -73,7 +74,7 @@ const DEFAULT_MODELS: Record<ProviderId, string> = {
 	anthropic: "claude-sonnet-4-6",
 	xai: "grok-3-mini",
 	zai: "glm-4.7",
-	ollama: "llama3.2",
+	ollama: "",
 };
 
 export const MODEL_OPTIONS: Record<
@@ -114,7 +115,7 @@ export const MODEL_OPTIONS: Record<
 	],
 	xai: [{ id: "grok-3-mini", label: "Grok 3 Mini ($0.30 / $0.50)" }],
 	zai: [{ id: "glm-4.7", label: "GLM 4.7 ($0.60 / $2.20)" }],
-	ollama: [{ id: "llama3.2", label: "Llama 3.2" }],
+	ollama: [],
 };
 
 // ── Sync API (localStorage only, backwards compatible) ──
@@ -139,22 +140,22 @@ export function isApiKeyOptional(provider: ProviderId | undefined): boolean {
 
 export function hasApiKey(): boolean {
 	const config = loadConfig();
-	return !!config?.apiKey || !!config?.labKey;
+	return !!config?.apiKey || !!config?.naiaKey;
 }
 
 export function isReadyToChat(): boolean {
 	const config = loadConfig();
 	if (!config) return false;
-	return isApiKeyOptional(config.provider) || !!config.apiKey || !!config.labKey;
+	return isApiKeyOptional(config.provider) || !!config.apiKey || !!config.naiaKey;
 }
 
-export function hasLabKey(): boolean {
+export function hasNaiaKey(): boolean {
 	const config = loadConfig();
-	return !!config?.labKey;
+	return !!config?.naiaKey;
 }
 
-export function getLabKey(): string | undefined {
-	return loadConfig()?.labKey;
+export function getNaiaKey(): string | undefined {
+	return loadConfig()?.naiaKey;
 }
 
 export function resolveGatewayUrl(
@@ -231,20 +232,56 @@ export async function migrateSecretsToSecureStore(): Promise<void> {
  */
 export async function hasApiKeySecure(): Promise<boolean> {
 	const apiKey = await getSecretKey("apiKey");
-	const labKey = await getSecretKey("labKey");
-	if (apiKey || labKey) return true;
+	const naiaKey = await getSecretKey("naiaKey");
+	if (apiKey || naiaKey) return true;
 	return hasApiKey();
 }
 
-export async function getLabKeySecure(): Promise<string | undefined> {
-	const secureVal = await getSecretKey("labKey");
+export async function getNaiaKeySecure(): Promise<string | undefined> {
+	const secureVal = await getSecretKey("naiaKey");
 	if (secureVal) return secureVal;
-	return getLabKey();
+	return getNaiaKey();
 }
 
-export async function hasLabKeySecure(): Promise<boolean> {
-	const key = await getLabKeySecure();
+export async function hasNaiaKeySecure(): Promise<boolean> {
+	const key = await getNaiaKeySecure();
 	return !!key;
+}
+
+/**
+ * Migrate labKey/labUserId → naiaKey/naiaUserId.
+ * Call once on app startup after migrateSecretsToSecureStore(). Idempotent.
+ */
+export async function migrateLabKeyToNaiaKey(): Promise<void> {
+	// 1. Secure store: labKey → naiaKey (skip if Tauri not available)
+	try {
+		const oldKey = await getSecretKey("labKey" as any);
+		if (oldKey) {
+			await saveSecretKey("naiaKey", oldKey);
+			await deleteSecretKey("labKey" as any);
+		}
+	} catch {
+		// Tauri store not available (e.g. tests) — skip secure store migration
+	}
+
+	// 2. localStorage: labKey → naiaKey, labUserId → naiaUserId
+	const config = loadConfig();
+	if (!config) return;
+	const raw = config as any;
+	let changed = false;
+	if (raw.labKey && !raw.naiaKey) {
+		raw.naiaKey = raw.labKey;
+		delete raw.labKey;
+		changed = true;
+	}
+	if (raw.labUserId && !raw.naiaUserId) {
+		raw.naiaUserId = raw.labUserId;
+		delete raw.labUserId;
+		changed = true;
+	}
+	if (changed) {
+		localStorage.setItem("naia-config", JSON.stringify(raw));
+	}
 }
 
 // ── Utility functions (sync, unchanged) ──
@@ -308,3 +345,29 @@ export function getUserName(): string | undefined {
 /** any-llm Gateway URL (shared with agent/src/providers/lab-proxy.ts) */
 export const LAB_GATEWAY_URL =
 	"https://naia-gateway-181404717065.asia-northeast3.run.app";
+
+export const DEFAULT_OLLAMA_HOST = "http://localhost:11434";
+
+export async function fetchOllamaModels(
+	host?: string,
+): Promise<{ models: { id: string; label: string }[]; connected: boolean }> {
+	const base = (host || DEFAULT_OLLAMA_HOST).replace(/\/+$/, "");
+	try {
+		const res = await fetch(`${base}/api/tags`);
+		if (!res.ok) return { models: [], connected: false };
+		const data = await res.json();
+		const models = (data.models ?? []).map((m: any) => {
+			const sizeGB = m.size ? `${(m.size / 1e9).toFixed(1)}GB` : "";
+			const quant = m.details?.quantization_level ?? "";
+			const params = m.details?.parameter_size ?? "";
+			const extra = [params, sizeGB, quant].filter(Boolean).join(", ");
+			return {
+				id: m.name,
+				label: extra ? `${m.name} (${extra})` : m.name,
+			};
+		});
+		return { models, connected: true };
+	} catch {
+		return { models: [], connected: false };
+	}
+}

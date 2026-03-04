@@ -41,7 +41,7 @@ export async function deleteSecretKey(name: string): Promise<void> {
 export const SECRET_KEYS = [
 	"apiKey",
 	"googleApiKey",
-	"labKey",
+	"naiaKey",
 	"gatewayToken",
 ] as const;
 

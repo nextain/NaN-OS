@@ -7,18 +7,20 @@ import { useLongPress } from "../hooks/useLongPress";
 import { directToolCall } from "../lib/chat-service";
 import {
 	DEFAULT_GATEWAY_URL,
+	DEFAULT_OLLAMA_HOST,
 	LAB_GATEWAY_URL,
 	MODEL_OPTIONS,
 	type PanelPosition,
 	type ThemeId,
 	type TtsProviderId,
 	clearAllowedTools,
+	fetchOllamaModels,
 	getDefaultModel,
 	isApiKeyOptional,
 	loadConfig,
 	resolveGatewayUrl,
 	saveConfig,
-	getLabKeySecure,
+	getNaiaKeySecure,
 } from "../lib/config";
 import {
 	type Fact,
@@ -46,7 +48,7 @@ const PROVIDERS: { id: ProviderId; label: string; disabled?: boolean }[] = [
 	{ id: "anthropic", label: "Anthropic (Claude)", disabled: true },
 	{ id: "xai", label: "xAI (Grok)", disabled: true },
 	{ id: "zai", label: "zAI (GLM)", disabled: true },
-	{ id: "ollama", label: "Ollama", disabled: true },
+	{ id: "ollama", label: "Ollama" },
 ];
 
 const TTS_VOICES: { id: string; label: string; price: string }[] = [
@@ -686,6 +688,8 @@ export function SettingsTab() {
 		existing?.enableTools ?? true,
 	);
 	const [dynamicModels, setDynamicModels] = useState(MODEL_OPTIONS);
+	const [ollamaHost, setOllamaHost] = useState(existing?.ollamaHost ?? DEFAULT_OLLAMA_HOST);
+	const [ollamaConnected, setOllamaConnected] = useState(false);
 	const [gatewayUrl, setGatewayUrl] = useState(
 		existing?.gatewayUrl ?? "ws://localhost:18789",
 	);
@@ -706,8 +710,8 @@ export function SettingsTab() {
 	const [isPreviewing, setIsPreviewing] = useState(false);
 	const [facts, setFacts] = useState<Fact[]>([]);
 	const [allowedToolsCount, setAllowedToolsCount] = useState(existing?.allowedTools?.length ?? 0);
-	const [labKey, setLabKeyState] = useState(existing?.labKey ?? "");
-	const [labUserId, setLabUserIdState] = useState(existing?.labUserId ?? "");
+	const [naiaKey, setNaiaKeyState] = useState(existing?.naiaKey ?? "");
+	const [naiaUserId, setNaiaUserIdState] = useState(existing?.naiaUserId ?? "");
 	const [syncDialogOpen, setSyncDialogOpen] = useState(false);
 	const [syncDialogOnlineConfig, setSyncDialogOnlineConfig] = useState<Record<string, unknown> | null>(null);
 	const labSyncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -853,12 +857,25 @@ export function SettingsTab() {
 	}, [gatewayUrl, gatewayToken]);
 
 	useEffect(() => {
-		getLabKeySecure().then((key) => {
-			if (key && key !== labKey) {
-				setLabKeyState(key);
+		if (provider !== "ollama") return;
+		fetchOllamaModels(ollamaHost).then(({ models, connected }) => {
+			setOllamaConnected(connected);
+			if (models.length > 0) {
+				setDynamicModels((prev) => ({ ...prev, ollama: models }));
+				if (!model || !models.some((m) => m.id === model)) {
+					setModel(models[0].id);
+				}
 			}
 		});
-	}, [labKey]);
+	}, [provider, ollamaHost]);
+
+	useEffect(() => {
+		getNaiaKeySecure().then((key) => {
+			if (key && key !== naiaKey) {
+				setNaiaKeyState(key);
+			}
+		});
+	}, [naiaKey]);
 	const [labWaiting, setLabWaiting] = useState(false);
 	const [labBalance, setLabBalance] = useState<number | null>(null);
 	const [labBalanceLoading, setLabBalanceLoading] = useState(false);
@@ -1032,12 +1049,12 @@ export function SettingsTab() {
 			});
 	}, []);
 
-	// Fetch Lab balance when labKey is available
+	// Fetch Lab balance when naiaKey is available
 	useEffect(() => {
-		if (!labKey) return;
+		if (!naiaKey) return;
 		setLabBalanceLoading(true);
 		fetch(`${LAB_GATEWAY_URL}/v1/profile/balance`, {
-			headers: { "X-AnyLLM-Key": `Bearer ${labKey}` },
+			headers: { "X-AnyLLM-Key": `Bearer ${naiaKey}` },
 		})
 			.then((res) => {
 				if (!res.ok) {
@@ -1057,17 +1074,17 @@ export function SettingsTab() {
 				});
 			})
 			.finally(() => setLabBalanceLoading(false));
-	}, [labKey]);
+	}, [naiaKey]);
 
 	// Listen for Lab auth deep-link callback
 	useEffect(() => {
-		const unlisten = listen<{ labKey: string; labUserId?: string }>(
-			"lab_auth_complete",
+		const unlisten = listen<{ naiaKey: string; naiaUserId?: string }>(
+			"naia_auth_complete",
 			async (event) => {
-				const nextLabKey = event.payload.labKey;
-				const nextLabUserId = event.payload.labUserId ?? "";
-				setLabKeyState(nextLabKey);
-				setLabUserIdState(nextLabUserId);
+				const nextNaiaKey = event.payload.naiaKey;
+				const nextNaiaUserId = event.payload.naiaUserId ?? "";
+				setNaiaKeyState(nextNaiaKey);
+				setNaiaUserIdState(nextNaiaUserId);
 				setProvider("nextain");
 				setModel((prev) => prev || getDefaultModel("nextain"));
 				setError("");
@@ -1083,13 +1100,13 @@ export function SettingsTab() {
 						...current,
 						provider: "nextain",
 						model: nextModel,
-						labKey: nextLabKey,
-						labUserId: nextLabUserId || undefined,
+						naiaKey: nextNaiaKey,
+						naiaUserId: nextNaiaUserId || undefined,
 					});
 				}
 
 				// Sync to OpenClaw (no API key for Lab proxy)
-				const labFullPrompt = buildSystemPrompt(current?.persona, {
+				const naiaFullPrompt = buildSystemPrompt(current?.persona, {
 					agentName: current?.agentName,
 					userName: current?.userName,
 					honorific: current?.honorific,
@@ -1097,7 +1114,7 @@ export function SettingsTab() {
 					discordDefaultUserId: current?.discordDefaultUserId,
 					discordDmChannelId: current?.discordDmChannelId,
 				});
-				await syncToOpenClaw("nextain", nextModel, undefined, current?.persona, current?.agentName, current?.userName, labFullPrompt, current?.locale || getLocale(), current?.discordDmChannelId, current?.discordDefaultUserId, undefined, undefined, undefined, undefined, nextLabKey);
+				await syncToOpenClaw("nextain", nextModel, undefined, current?.persona, current?.agentName, current?.userName, naiaFullPrompt, current?.locale || getLocale(), current?.discordDmChannelId, current?.discordDefaultUserId, undefined, undefined, undefined, undefined, nextNaiaKey);
 				await restartGateway();
 
 				// Sync linked channels (e.g. Discord) after login
@@ -1107,8 +1124,8 @@ export function SettingsTab() {
 				});
 
 				// Try Lab pull — show diff dialog if settings differ
-				if (nextLabUserId) {
-					const onlineConfig = await fetchLabConfig(nextLabKey, nextLabUserId);
+				if (nextNaiaUserId) {
+					const onlineConfig = await fetchLabConfig(nextNaiaKey, nextNaiaUserId);
 					if (onlineConfig && current) {
 						const diffs = diffConfigs(current, onlineConfig);
 						if (diffs.length > 0) {
@@ -1173,9 +1190,11 @@ export function SettingsTab() {
 
 	function handleProviderChange(id: ProviderId) {
 		setProvider(id);
-		setModel(getDefaultModel(id));
+		if (id !== "ollama") {
+			setModel(getDefaultModel(id));
+		}
 		setError("");
-		if (id === "nextain" && !labKey) {
+		if (id === "nextain" && !naiaKey) {
 			setError("Naia 계정 로그인이 필요합니다. 먼저 Naia에 로그인하세요.");
 			startLabLogin();
 		}
@@ -1243,14 +1262,14 @@ export function SettingsTab() {
 		labSyncTimerRef.current = setTimeout(() => {
 			const cfg = loadConfig();
 			if (!cfg) return;
-			if (labKey && labUserId) pushConfigToLab(labKey, labUserId, cfg);
+			if (naiaKey && naiaUserId) pushConfigToLab(naiaKey, naiaUserId, cfg);
 			// Also sync TTS settings to OpenClaw gateway config
 			syncToOpenClaw(
 				cfg.provider, cfg.model,
 				undefined, undefined, undefined, undefined, undefined, undefined,
 				undefined, undefined,
 				cfg.ttsProvider, cfg.ttsVoice, gatewayTtsAuto, gatewayTtsMode,
-				labKey || undefined,
+				naiaKey || undefined,
 			);
 		}, 2000);
 	}
@@ -1307,8 +1326,8 @@ export function SettingsTab() {
 			let base64 = "";
 			const previewText = getPreviewText(ttsVoice);
 			if (ttsProvider === "nextain") {
-				// Naia TTS preview — call Gateway directly with labKey
-				if (!labKey) {
+				// Naia TTS preview — call Gateway directly with naiaKey
+				if (!naiaKey) {
 					setError("Naia TTS를 사용하려면 Naia 로그인이 필요합니다.");
 					return;
 				}
@@ -1316,7 +1335,7 @@ export function SettingsTab() {
 					method: "POST",
 					headers: {
 						"Content-Type": "application/json",
-						"X-AnyLLM-Key": `Bearer ${labKey}`,
+						"X-AnyLLM-Key": `Bearer ${naiaKey}`,
 					},
 					body: JSON.stringify({
 						input: previewText,
@@ -1416,7 +1435,7 @@ export function SettingsTab() {
 			undefined, undefined, undefined, undefined, undefined, undefined,
 			undefined, undefined,
 			ttsProvider, ttsVoice, auto, gatewayTtsMode,
-			labKey || undefined,
+			naiaKey || undefined,
 		);
 		await restartGateway();
 	}
@@ -1430,7 +1449,7 @@ export function SettingsTab() {
 			undefined, undefined, undefined, undefined, undefined, undefined,
 			undefined, undefined,
 			ttsProvider, ttsVoice, gatewayTtsAuto, mode,
-			labKey || undefined,
+			naiaKey || undefined,
 		);
 		await restartGateway();
 	}
@@ -1560,7 +1579,7 @@ export function SettingsTab() {
 		// Keep previous key when input is empty (password field UX).
 		const resolvedApiKey = apiKey.trim() || existing?.apiKey || "";
 		const isNextainProvider = provider === "nextain";
-		if (isNextainProvider && !labKey) {
+		if (isNextainProvider && !naiaKey) {
 			setError("Naia 계정 로그인이 필요합니다. Naia 계정 연결 후 저장하세요.");
 			return;
 		}
@@ -1568,7 +1587,7 @@ export function SettingsTab() {
 			!isNextainProvider &&
 			!isApiKeyOptional(provider) &&
 			!resolvedApiKey &&
-			!labKey
+			!naiaKey
 		) {
 			setError(t("settings.apiKeyRequired"));
 			return;
@@ -1582,8 +1601,8 @@ export function SettingsTab() {
 			provider,
 			model,
 			apiKey: isNextainProvider || isApiKeyOptional(provider) ? "" : resolvedApiKey,
-			labKey: labKey || undefined,
-			labUserId: labUserId || undefined,
+			naiaKey: naiaKey || undefined,
+			naiaUserId: naiaUserId || undefined,
 			locale,
 			theme,
 			vrmModel: vrmModel !== defaultVrm ? vrmModel : undefined,
@@ -1618,6 +1637,7 @@ export function SettingsTab() {
 			discordDmChannelId: discordDmChannelId.trim() || undefined,
 			gatewayTtsAuto,
 			gatewayTtsMode,
+			ollamaHost: provider === "ollama" ? ollamaHost.trim() || undefined : existing?.ollamaHost,
 		};
 		saveConfig(newConfig);
 		setLocale(locale);
@@ -1637,12 +1657,12 @@ export function SettingsTab() {
 			discordDefaultUserId: newConfig.discordDefaultUserId,
 			discordDmChannelId: newConfig.discordDmChannelId,
 		});
-		syncToOpenClaw(newConfig.provider, newConfig.model, resolvedApiKey, newConfig.persona, newConfig.agentName, newConfig.userName, fullPrompt, newConfig.locale || getLocale(), newConfig.discordDmChannelId, newConfig.discordDefaultUserId, newConfig.ttsProvider, newConfig.ttsVoice, gatewayTtsAuto, gatewayTtsMode, labKey || undefined)
+		syncToOpenClaw(newConfig.provider, newConfig.model, resolvedApiKey, newConfig.persona, newConfig.agentName, newConfig.userName, fullPrompt, newConfig.locale || getLocale(), newConfig.discordDmChannelId, newConfig.discordDefaultUserId, newConfig.ttsProvider, newConfig.ttsVoice, gatewayTtsAuto, gatewayTtsMode, naiaKey || undefined, newConfig.ollamaHost || undefined)
 			.then(() => restartGateway());
 
 		// Auto-sync to Lab if connected
-		if (labKey && labUserId) {
-			pushConfigToLab(labKey, labUserId, newConfig);
+		if (naiaKey && naiaUserId) {
+			pushConfigToLab(naiaKey, naiaUserId, newConfig);
 		}
 	}
 
@@ -1919,13 +1939,13 @@ export function SettingsTab() {
 
 						<div className="settings-field">
 							<label>
-								{labKey
+								{naiaKey
 									? t("settings.labConnected")
 									: t("settings.labDisconnected")}
 							</label>
-							{labKey ? (
+							{naiaKey ? (
 								<div className="lab-info-block">
-							{labUserId && <span className="lab-user-id">{labUserId}</span>}
+							{naiaUserId && <span className="lab-user-id">{naiaUserId}</span>}
 							<div className="lab-balance-row">
 								<span className="lab-balance-label">
 								{t("settings.labBalance")}
@@ -1969,8 +1989,8 @@ export function SettingsTab() {
 											type="button"
 											className="settings-reset-btn"
 											onClick={async () => {
-												setLabKeyState("");
-												setLabUserIdState("");
+												setNaiaKeyState("");
+												setNaiaUserIdState("");
 												setLabBalance(null);
 													setProvider("gemini");
 													setModel(getDefaultModel("gemini"));
@@ -1990,8 +2010,8 @@ export function SettingsTab() {
 															current.provider === "nextain"
 																? getDefaultModel("gemini")
 																: current.model,
-														labKey: undefined,
-														labUserId: undefined,
+														naiaKey: undefined,
+														naiaUserId: undefined,
 														discordDefaultUserId: undefined,
 														discordDmChannelId: undefined,
 														discordDefaultTarget: undefined,
@@ -2015,7 +2035,7 @@ export function SettingsTab() {
 														updated.ttsVoice,
 														undefined,
 														undefined,
-														undefined, // labKey cleared
+														undefined, // naiaKey cleared
 													);
 													await restartGateway();
 												}
@@ -2108,10 +2128,10 @@ export function SettingsTab() {
 					<div className="settings-hint">
 						Naia 계정 로그인으로 API 키 없이 사용할 수 있습니다.
 					</div>
-						{labKey ? (
+						{naiaKey ? (
 							<div className="lab-info-block">
 								<span className="settings-hint">
-									로그인됨{labUserId ? ` (${labUserId})` : ""}
+									로그인됨{naiaUserId ? ` (${naiaUserId})` : ""}
 								</span>
 								<div className="lab-balance-row">
 									<span className="lab-balance-label">{t("settings.labBalance")}</span>
@@ -2152,8 +2172,8 @@ export function SettingsTab() {
 												type="button"
 												className="settings-reset-btn"
 												onClick={async () => {
-													setLabKeyState("");
-													setLabUserIdState("");
+													setNaiaKeyState("");
+													setNaiaUserIdState("");
 													setLabBalance(null);
 													setProvider("gemini");
 													setModel(getDefaultModel("gemini"));
@@ -2173,8 +2193,8 @@ export function SettingsTab() {
 																current.provider === "nextain"
 																	? getDefaultModel("gemini")
 																	: current.model,
-															labKey: undefined,
-															labUserId: undefined,
+															naiaKey: undefined,
+															naiaUserId: undefined,
 															discordDefaultUserId: undefined,
 															discordDmChannelId: undefined,
 															discordDefaultTarget: undefined,
@@ -2198,7 +2218,7 @@ export function SettingsTab() {
 															updated.ttsVoice,
 															undefined,
 															undefined,
-															undefined, // labKey cleared
+															undefined, // naiaKey cleared
 														);
 														await restartGateway();
 													}
@@ -2235,8 +2255,8 @@ export function SettingsTab() {
 												className="settings-reset-btn"
 												onClick={async () => {
 													// Delete online config first, then reload
-													if (labKey && labUserId) {
-														await clearLabConfig(labKey, labUserId);
+													if (naiaKey && naiaUserId) {
+														await clearLabConfig(naiaKey, naiaUserId);
 													}
 													// Reset local onboarding state
 													const current = loadConfig();
@@ -2289,13 +2309,27 @@ export function SettingsTab() {
 					)}
 					{error && <div className="settings-error">{error}</div>}
 				</div>
-				) : provider === "claude-code-cli" || provider === "ollama" ? (
+				) : provider === "ollama" ? (
+					<div className="settings-field">
+						<label>Ollama Host</label>
+						<input
+							type="text"
+							value={ollamaHost}
+							onChange={(e) => setOllamaHost(e.target.value)}
+							placeholder={DEFAULT_OLLAMA_HOST}
+						/>
+						<div className="settings-hint">
+							{ollamaConnected
+								? `연결됨 — ${(dynamicModels.ollama ?? []).length}개 모델`
+								: "연결 안 됨 — Ollama 서버가 실행 중인지 확인하세요"}
+						</div>
+						{error && <div className="settings-error">{error}</div>}
+					</div>
+				) : provider === "claude-code-cli" ? (
 					<div className="settings-field">
 						<label>{t("settings.apiKey")}</label>
 						<div className="settings-hint">
-							{provider === "claude-code-cli"
-								? "Claude Code CLI provider는 로컬 CLI 로그인 세션을 사용합니다."
-								: "Ollama provider는 API 키가 필요 없습니다."}
+							Claude Code CLI provider는 로컬 CLI 로그인 세션을 사용합니다.
 						</div>
 						{error && <div className="settings-error">{error}</div>}
 					</div>
@@ -2442,8 +2476,8 @@ export function SettingsTab() {
 				);
 			})()}
 
-			{/* Naia — labKey required warning */}
-			{ttsProvider === "nextain" && !labKey && (
+			{/* Naia — naiaKey required warning */}
+			{ttsProvider === "nextain" && !naiaKey && (
 				<div className="settings-field">
 					<span className="settings-hint" style={{ color: "var(--color-warning, #f59e0b)" }}>
 						{t("settings.nextainLoginRequired")}

@@ -17,7 +17,7 @@ function toGatewayModel(model: string): string {
 }
 
 export function createLabProxyProvider(
-	labKey: string,
+	naiaKey: string,
 	model: string,
 ): LLMProvider {
 	return {
@@ -36,7 +36,7 @@ export function createLabProxyProvider(
 				method: "POST",
 				headers: {
 					"Content-Type": "application/json",
-					"X-AnyLLM-Key": `Bearer ${labKey}`,
+					"X-AnyLLM-Key": `Bearer ${naiaKey}`,
 				},
 				body: JSON.stringify(body),
 				signal,

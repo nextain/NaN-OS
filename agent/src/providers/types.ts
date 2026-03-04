@@ -12,7 +12,8 @@ export interface ProviderConfig {
 	provider: ProviderId;
 	model: string;
 	apiKey: string;
-	labKey?: string;
+	naiaKey?: string;
+	ollamaHost?: string;
 }
 
 /** Tool call info returned by LLM function calling */

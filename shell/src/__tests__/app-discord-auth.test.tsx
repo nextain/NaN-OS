@@ -65,7 +65,7 @@ describe("App discord deep-link persistence", () => {
 		expect(saved.discordDefaultTarget).toBe("user:865850174651498506");
 	});
 
-	it("registers lab_auth_complete listener for channel sync", () => {
+	it("registers naia_auth_complete listener for channel sync", () => {
 		localStorage.setItem(
 			"naia-config",
 			JSON.stringify({
@@ -76,6 +76,6 @@ describe("App discord deep-link persistence", () => {
 			}),
 		);
 		render(<App />);
-		expect(typeof listeners.lab_auth_complete).toBe("function");
+		expect(typeof listeners.naia_auth_complete).toBe("function");
 	});
 });

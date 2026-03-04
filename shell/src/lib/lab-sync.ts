@@ -49,14 +49,14 @@ function pickSyncFields(config: Partial<AppConfig>): Partial<SyncConfig> {
 
 /** Fetch config from Lab via BFF API */
 export async function fetchLabConfig(
-	labKey: string,
-	labUserId: string,
+	naiaKey: string,
+	naiaUserId: string,
 ): Promise<Partial<SyncConfig> | null> {
 	try {
 		const res = await fetch(LAB_API_BASE, {
 			headers: {
-				"X-Desktop-Key": labKey,
-				"X-User-Id": labUserId,
+				"X-Desktop-Key": naiaKey,
+				"X-User-Id": naiaUserId,
 			},
 		});
 		if (!res.ok) return null;
@@ -74,8 +74,8 @@ export async function fetchLabConfig(
 
 /** Push config to Lab via BFF API */
 export function pushConfigToLab(
-	labKey: string,
-	labUserId: string,
+	naiaKey: string,
+	naiaUserId: string,
 	config: Partial<AppConfig>,
 ): void {
 	const syncData = pickSyncFields(config);
@@ -83,8 +83,8 @@ export function pushConfigToLab(
 		method: "PATCH",
 		headers: {
 			"Content-Type": "application/json",
-			"X-Desktop-Key": labKey,
-			"X-User-Id": labUserId,
+			"X-Desktop-Key": naiaKey,
+			"X-User-Id": naiaUserId,
 		},
 		body: JSON.stringify({ config: syncData }),
 	}).catch((err) => {
@@ -93,14 +93,14 @@ export function pushConfigToLab(
 }
 
 /** Delete all config from Lab (reset nan_config to empty) */
-export async function clearLabConfig(labKey: string, labUserId: string): Promise<void> {
+export async function clearLabConfig(naiaKey: string, naiaUserId: string): Promise<void> {
 	try {
 		await fetch(LAB_API_BASE, {
 			method: "PATCH",
 			headers: {
 				"Content-Type": "application/json",
-				"X-Desktop-Key": labKey,
-				"X-User-Id": labUserId,
+				"X-Desktop-Key": naiaKey,
+				"X-User-Id": naiaUserId,
 			},
 			body: JSON.stringify({ config: {} }),
 		});

@@ -568,9 +568,9 @@ export async function handleChatRequest(req: ChatRequest): Promise<void> {
 			let audioSent = !cleanText;
 
 			// Direct TTS based on selected provider
-			if (ttsProvider === "nextain" && providerConfig.labKey) {
+			if (ttsProvider === "nextain" && providerConfig.naiaKey) {
 				try {
-					const audio = await synthesizeNextainSpeech(cleanText, providerConfig.labKey, ttsVoice);
+					const audio = await synthesizeNextainSpeech(cleanText, providerConfig.naiaKey, ttsVoice);
 					if (audio) {
 						writeLine({ type: "audio", requestId, data: audio });
 						audioSent = true;

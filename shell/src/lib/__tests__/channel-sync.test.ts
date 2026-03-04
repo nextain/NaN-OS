@@ -31,8 +31,8 @@ function seedConfig(overrides: Record<string, unknown> = {}) {
 		provider: "gemini",
 		model: "gemini-2.5-flash",
 		apiKey: "test-key",
-		labKey: "gw-test-lab-key",
-		labUserId: "test-user-id",
+		naiaKey: "gw-test-lab-key",
+		naiaUserId: "test-user-id",
 		agentName: "Naia",
 		userName: "Tester",
 		persona: "friendly",
@@ -190,7 +190,7 @@ describe("syncLinkedChannels", () => {
 	});
 
 	it("sends correct headers to linked-channels BFF", async () => {
-		seedConfig({ labKey: "gw-my-key", labUserId: "uid-123" });
+		seedConfig({ naiaKey: "gw-my-key", naiaUserId: "uid-123" });
 		const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
 			mockLinkedChannelsResponse([]),
 		);

@@ -9,8 +9,8 @@ import { createZAIProvider } from "./zai.js";
 
 export function buildProvider(config: ProviderConfig): LLMProvider {
 	// Lab proxy mode: route through any-llm Gateway
-	if (config.labKey) {
-		return createLabProxyProvider(config.labKey, config.model);
+	if (config.naiaKey) {
+		return createLabProxyProvider(config.naiaKey, config.model);
 	}
 
 	const getApiKey = (key: string, envVar: string) => key || process.env[envVar] || "";
@@ -31,7 +31,7 @@ export function buildProvider(config: ProviderConfig): LLMProvider {
 		case "zai":
 			return createZAIProvider(getApiKey(config.apiKey, "ZHIPU_API_KEY"), config.model);
 		case "ollama":
-			return createOpenAIProvider("ollama", config.model);
+			return createOpenAIProvider("ollama", config.model, config.ollamaHost);
 		default:
 			throw new Error(`Unknown provider: ${config.provider}`);
 	}

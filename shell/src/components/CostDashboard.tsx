@@ -3,8 +3,8 @@ import { openUrl } from "@tauri-apps/plugin-opener";
 import { useCallback, useEffect, useState } from "react";
 import {
 	LAB_GATEWAY_URL,
-	getLabKeySecure,
-	hasLabKeySecure,
+	getNaiaKeySecure,
+	hasNaiaKeySecure,
 } from "../lib/config";
 import { getLocale, t } from "../lib/i18n";
 import { Logger } from "../lib/logger";
@@ -67,13 +67,13 @@ function LabBalanceSection() {
 	const [error, setError] = useState(false);
 
 	const fetchBalance = useCallback(async () => {
-		const labKey = await getLabKeySecure();
-		if (!labKey) {
+		const naiaKey = await getNaiaKeySecure();
+		if (!naiaKey) {
 			setLoading(false);
 			return;
 		}
 		fetch(`${GATEWAY_URL}/v1/profile/balance`, {
-			headers: { "X-AnyLLM-Key": `Bearer ${labKey}` },
+			headers: { "X-AnyLLM-Key": `Bearer ${naiaKey}` },
 		})
 			.then((res) => {
 				if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -108,7 +108,7 @@ function LabBalanceSection() {
 	}, [fetchBalance]);
 
 	useEffect(() => {
-		const unlisten = listen("lab_auth_complete", () => {
+		const unlisten = listen("naia_auth_complete", () => {
 			balanceCache = null;
 			setLoading(true);
 			fetchBalance();
@@ -156,11 +156,11 @@ export function CostDashboard({ messages }: { messages: ChatMessage[] }) {
 	const [showLabBalance, setShowLabBalance] = useState(false);
 
 	useEffect(() => {
-		hasLabKeySecure().then(setShowLabBalance);
+		hasNaiaKeySecure().then(setShowLabBalance);
 	}, []);
 
 	useEffect(() => {
-		const unlisten = listen("lab_auth_complete", () => {
+		const unlisten = listen("naia_auth_complete", () => {
 			setShowLabBalance(true);
 		});
 		return () => {

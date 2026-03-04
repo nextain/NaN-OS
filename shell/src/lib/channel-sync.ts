@@ -21,14 +21,14 @@ interface LinkedChannelsResponse {
  * Uses desktop key + user id for authentication.
  */
 async function fetchLinkedChannels(
-	labKey: string,
-	labUserId: string,
+	naiaKey: string,
+	naiaUserId: string,
 ): Promise<LinkedChannel[]> {
 	try {
 		const res = await fetch(LINKED_CHANNELS_API, {
 			headers: {
-				"X-Desktop-Key": labKey,
-				"X-User-Id": labUserId,
+				"X-Desktop-Key": naiaKey,
+				"X-User-Id": naiaUserId,
 			},
 		});
 		if (!res.ok) {
@@ -49,7 +49,7 @@ async function fetchLinkedChannels(
 
 /**
  * Sync linked channels after login.
- * Called from lab_auth_complete handler in App.tsx / SettingsTab.
+ * Called from naia_auth_complete handler in App.tsx / SettingsTab.
  *
  * Flow:
  * 1. Fetch linked channels from BFF
@@ -58,12 +58,12 @@ async function fetchLinkedChannels(
  */
 export async function syncLinkedChannels(): Promise<void> {
 	const config = loadConfig();
-	if (!config?.labKey || !config?.labUserId) {
+	if (!config?.naiaKey || !config?.naiaUserId) {
 		Logger.info("channel-sync", "No lab credentials, skipping channel sync");
 		return;
 	}
 
-	const channels = await fetchLinkedChannels(config.labKey, config.labUserId);
+	const channels = await fetchLinkedChannels(config.naiaKey, config.naiaUserId);
 	if (channels.length === 0) {
 		Logger.info("channel-sync", "No linked channels found");
 		return;
@@ -152,7 +152,7 @@ async function syncOpenClawWithChannels(
 			config.ttsVoice,
 			config.ttsEnabled ? "always" : "off",
 			undefined,
-			config.labKey,
+			config.naiaKey,
 		);
 		await restartGateway();
 		Logger.info("channel-sync", "OpenClaw config updated with channel IDs", {

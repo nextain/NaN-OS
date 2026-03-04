@@ -1521,7 +1521,7 @@ async fn read_local_binary(path: String) -> Result<Vec<u8>, String> {
 /// Fetch linked messaging channels for the current user from naia.nextain.io BFF.
 /// Returns JSON string: { "channels": [{ "type": "discord", "userId": "..." }] }
 #[tauri::command]
-async fn fetch_linked_channels(lab_key: String, user_id: String) -> Result<String, String> {
+async fn fetch_linked_channels(naia_key: String, user_id: String) -> Result<String, String> {
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(10))
         .build()
@@ -1529,7 +1529,7 @@ async fn fetch_linked_channels(lab_key: String, user_id: String) -> Result<Strin
 
     let res = client
         .get("https://naia.nextain.io/api/gateway/linked-channels")
-        .header("X-Desktop-Key", &lab_key)
+        .header("X-Desktop-Key", &naia_key)
         .header("X-User-Id", &user_id)
         .send()
         .await
@@ -1562,7 +1562,8 @@ struct OpenClawSyncParams {
     tts_voice: Option<String>,
     tts_auto: Option<String>,
     tts_mode: Option<String>,
-    lab_key: Option<String>,
+    naia_key: Option<String>,
+    ollama_host: Option<String>,
 }
 
 /// Sync Shell provider/model/API-key to ~/.openclaw/openclaw.json so the
@@ -1576,7 +1577,8 @@ async fn sync_openclaw_config(params: OpenClawSyncParams) -> Result<(), String> 
         "openai" => "openai",
         "xai" => "xai",
         "zai" => "zai",
-        // claude-code-cli and ollama don't use openclaw config
+        "ollama" => "ollama",
+        // claude-code-cli doesn't use openclaw config
         _ => return Ok(()),
     };
 
@@ -1627,6 +1629,35 @@ async fn sync_openclaw_config(params: OpenClawSyncParams) -> Result<(), String> 
         serde_json::Value::String(model_value.clone()),
     );
 
+    // Write custom Ollama baseUrl into openclaw.json for OpenClaw to use.
+    // OpenClaw reads models.providers.ollama.baseUrl (not OLLAMA_HOST env).
+    if oc_provider == "ollama" {
+        let models_section = obj
+            .entry("models")
+            .or_insert_with(|| serde_json::json!({}))
+            .as_object_mut()
+            .ok_or("models is not an object")?;
+        let providers_section = models_section
+            .entry("providers")
+            .or_insert_with(|| serde_json::json!({}))
+            .as_object_mut()
+            .ok_or("providers is not an object")?;
+        let ollama_cfg = providers_section
+            .entry("ollama")
+            .or_insert_with(|| serde_json::json!({}))
+            .as_object_mut()
+            .ok_or("ollama provider config is not an object")?;
+        if let Some(ref host) = params.ollama_host {
+            let clean = host.trim_end_matches('/').trim_end_matches("/v1");
+            ollama_cfg.insert(
+                "baseUrl".to_string(),
+                serde_json::Value::String(clean.to_string()),
+            );
+        } else {
+            ollama_cfg.remove("baseUrl");
+        }
+    }
+
     // Always ensure gateway.mode=local (defense-in-depth: ensure_openclaw_config may
     // have failed silently, or config was overwritten by another code path).
     let gw = obj
@@ -1676,10 +1707,10 @@ async fn sync_openclaw_config(params: OpenClawSyncParams) -> Result<(), String> 
     }
 
     // Sync TTS settings into messages.tts so the gateway uses the right provider/voice
-    // When provider is "nextain" and labKey is available, route through Lab gateway's
+    // When provider is "nextain" and naiaKey is available, route through Lab gateway's
     // OpenAI-compatible TTS endpoint instead of falling back to edge.
     let use_nextain_via_lab = matches!(params.tts_provider.as_deref(), Some("nextain"))
-        && params.lab_key.as_ref().map_or(false, |k| !k.is_empty());
+        && params.naia_key.as_ref().map_or(false, |k| !k.is_empty());
 
     if params.tts_provider.is_some() || params.tts_voice.is_some() || params.tts_auto.is_some() || params.tts_mode.is_some() {
         let messages = obj
@@ -1714,7 +1745,7 @@ async fn sync_openclaw_config(params: OpenClawSyncParams) -> Result<(), String> 
                 .as_object_mut()
                 .ok_or("tts openai section is not an object")?;
             openai_obj.insert("apiKey".to_string(),
-                serde_json::Value::String(params.lab_key.as_ref().unwrap().clone()));
+                serde_json::Value::String(params.naia_key.as_ref().unwrap().clone()));
             if let Some(ref voice) = params.tts_voice {
                 openai_obj.insert("voice".to_string(), serde_json::Value::String(voice.clone()));
             }
@@ -1815,6 +1846,14 @@ async fn sync_openclaw_config(params: OpenClawSyncParams) -> Result<(), String> 
                 serde_json::Value::String("https://naia-gateway-181404717065.asia-northeast3.run.app/v1".to_string()));
         } else {
             env_obj.remove("OPENAI_TTS_BASE_URL");
+        }
+        // Write OLLAMA_API_KEY for OpenClaw to register Ollama as a provider.
+        // OpenClaw requires this env var (any non-empty value) to enable Ollama.
+        if params.provider == "ollama" {
+            env_obj.insert("OLLAMA_API_KEY".to_string(),
+                serde_json::Value::String("ollama-local".to_string()));
+        } else {
+            env_obj.remove("OLLAMA_API_KEY");
         }
         let env_pretty = serde_json::to_string_pretty(&serde_json::Value::Object(env_obj))
             .map_err(|e| format!("JSON serialize env: {}", e))?;
@@ -2210,21 +2249,21 @@ pub fn run() {
                                 None
                             };
 
-                            if let Some(lab_key) = resolved_key {
+                            if let Some(naia_key) = resolved_key {
                                 // Validate key format: gw- prefix + [A-Za-z0-9_-], max 256 chars
-                                let is_valid = lab_key.starts_with("gw-")
-                                    && lab_key.len() <= 256
-                                    && lab_key.chars().all(|c| c.is_alphanumeric() || c == '-' || c == '_');
+                                let is_valid = naia_key.starts_with("gw-")
+                                    && naia_key.len() <= 256
+                                    && naia_key.chars().all(|c| c.is_alphanumeric() || c == '-' || c == '_');
                                 if !is_valid {
                                     log_both("[Naia] Deep link rejected: invalid key format");
                                     continue;
                                 }
                                 let payload = serde_json::json!({
-                                    "labKey": lab_key,
-                                    "labUserId": validated_user_id,
+                                    "naiaKey": naia_key,
+                                    "naiaUserId": validated_user_id,
                                 });
-                                let _ = deep_link_handle.emit("lab_auth_complete", payload);
-                                log_both("[Naia] Lab auth complete — key received via deep link");
+                                let _ = deep_link_handle.emit("naia_auth_complete", payload);
+                                log_both("[Naia] Naia auth complete — key received via deep link");
                             }
 
                             let is_discord_flow = matches!(channel.as_deref(), Some("discord"))

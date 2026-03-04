@@ -25,7 +25,8 @@ export async function syncToOpenClaw(
 	ttsVoice?: string,
 	ttsAuto?: string,
 	ttsMode?: string,
-	labKey?: string,
+	naiaKey?: string,
+	ollamaHost?: string,
 ): Promise<void> {
 	try {
 		// Build the complete system prompt that includes emotion tags,
@@ -52,7 +53,8 @@ export async function syncToOpenClaw(
 				tts_voice: ttsVoice || null,
 				tts_auto: ttsAuto || null,
 				tts_mode: ttsMode || null,
-				lab_key: labKey || null,
+				naia_key: naiaKey || null,
+			ollama_host: ollamaHost || null,
 			},
 		});
 	} catch (err) {

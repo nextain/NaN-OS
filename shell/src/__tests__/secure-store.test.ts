@@ -67,7 +67,7 @@ describe("secure-store", () => {
 
 	it("identifies secret key names", () => {
 		expect(isSecretKey("apiKey")).toBe(true);
-		expect(isSecretKey("labKey")).toBe(true);
+		expect(isSecretKey("naiaKey")).toBe(true);
 		expect(isSecretKey("gatewayToken")).toBe(true);
 		expect(isSecretKey("provider")).toBe(false);
 		expect(isSecretKey("model")).toBe(false);
@@ -76,7 +76,7 @@ describe("secure-store", () => {
 	it("SECRET_KEYS includes expected keys", () => {
 		expect(SECRET_KEYS).toContain("apiKey");
 		expect(SECRET_KEYS).toContain("googleApiKey");
-		expect(SECRET_KEYS).toContain("labKey");
+		expect(SECRET_KEYS).toContain("naiaKey");
 		expect(SECRET_KEYS).toContain("gatewayToken");
 	});
 });

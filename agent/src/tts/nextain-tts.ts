@@ -2,10 +2,10 @@ import { GATEWAY_URL } from "../providers/lab-proxy.js";
 
 export async function synthesizeNextainSpeech(
 	text: string,
-	labKey: string,
+	naiaKey: string,
 	voice?: string,
 ): Promise<string | null> {
-	if (!text.trim() || !labKey) return null;
+	if (!text.trim() || !naiaKey) return null;
 
 	const selectedVoice = voice || "ko-KR-Neural2-A";
 
@@ -14,7 +14,7 @@ export async function synthesizeNextainSpeech(
 			method: "POST",
 			headers: {
 				"Content-Type": "application/json",
-				"X-AnyLLM-Key": `Bearer ${labKey}`,
+				"X-AnyLLM-Key": `Bearer ${naiaKey}`,
 			},
 			body: JSON.stringify({
 				input: text.slice(0, 5000),

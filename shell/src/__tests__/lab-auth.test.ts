@@ -12,9 +12,9 @@ vi.mock("@tauri-apps/plugin-store", () => {
 });
 
 import {
-	getLabKey,
+	getNaiaKey,
 	hasApiKey,
-	hasLabKey,
+	hasNaiaKey,
 	loadConfig,
 	saveConfig,
 } from "../lib/config";
@@ -24,50 +24,50 @@ describe("Lab Auth (config integration)", () => {
 		localStorage.clear();
 	});
 
-	it("hasLabKey returns false when no config", () => {
-		expect(hasLabKey()).toBe(false);
+	it("hasNaiaKey returns false when no config", () => {
+		expect(hasNaiaKey()).toBe(false);
 	});
 
-	it("hasLabKey returns true when labKey is set", () => {
+	it("hasNaiaKey returns true when naiaKey is set", () => {
 		saveConfig({
 			provider: "gemini",
 			model: "gemini-2.5-flash",
 			apiKey: "",
-			labKey: "test-lab-key-123",
+			naiaKey: "test-lab-key-123",
 		});
-		expect(hasLabKey()).toBe(true);
+		expect(hasNaiaKey()).toBe(true);
 	});
 
-	it("getLabKey returns the stored key", () => {
+	it("getNaiaKey returns the stored key", () => {
 		saveConfig({
 			provider: "gemini",
 			model: "gemini-2.5-flash",
 			apiKey: "",
-			labKey: "my-lab-key",
+			naiaKey: "my-lab-key",
 		});
-		expect(getLabKey()).toBe("my-lab-key");
+		expect(getNaiaKey()).toBe("my-lab-key");
 	});
 
-	it("getLabKey returns undefined when no labKey", () => {
+	it("getNaiaKey returns undefined when no naiaKey", () => {
 		saveConfig({
 			provider: "gemini",
 			model: "gemini-2.5-flash",
 			apiKey: "direct-key",
 		});
-		expect(getLabKey()).toBeUndefined();
+		expect(getNaiaKey()).toBeUndefined();
 	});
 
-	it("hasApiKey returns true when labKey is set (no apiKey)", () => {
+	it("hasApiKey returns true when naiaKey is set (no apiKey)", () => {
 		saveConfig({
 			provider: "gemini",
 			model: "gemini-2.5-flash",
 			apiKey: "",
-			labKey: "lab-key",
+			naiaKey: "lab-key",
 		});
 		expect(hasApiKey()).toBe(true);
 	});
 
-	it("hasApiKey returns true when apiKey is set (no labKey)", () => {
+	it("hasApiKey returns true when apiKey is set (no naiaKey)", () => {
 		saveConfig({
 			provider: "gemini",
 			model: "gemini-2.5-flash",
@@ -85,35 +85,35 @@ describe("Lab Auth (config integration)", () => {
 		expect(hasApiKey()).toBe(false);
 	});
 
-	it("config preserves labKey and labUserId on save/load", () => {
+	it("config preserves naiaKey and naiaUserId on save/load", () => {
 		saveConfig({
 			provider: "gemini",
 			model: "gemini-2.5-flash",
 			apiKey: "",
-			labKey: "key-abc",
-			labUserId: "user-123",
+			naiaKey: "key-abc",
+			naiaUserId: "user-123",
 		});
 		const config = loadConfig();
-		expect(config?.labKey).toBe("key-abc");
-		expect(config?.labUserId).toBe("user-123");
+		expect(config?.naiaKey).toBe("key-abc");
+		expect(config?.naiaUserId).toBe("user-123");
 	});
 
-	it("labKey can be cleared by saving without it", () => {
+	it("naiaKey can be cleared by saving without it", () => {
 		saveConfig({
 			provider: "gemini",
 			model: "gemini-2.5-flash",
 			apiKey: "",
-			labKey: "key-abc",
+			naiaKey: "key-abc",
 		});
-		expect(hasLabKey()).toBe(true);
+		expect(hasNaiaKey()).toBe(true);
 
 		saveConfig({
 			provider: "gemini",
 			model: "gemini-2.5-flash",
 			apiKey: "new-direct-key",
 		});
-		expect(hasLabKey()).toBe(false);
-		expect(loadConfig()?.labKey).toBeUndefined();
+		expect(hasNaiaKey()).toBe(false);
+		expect(loadConfig()?.naiaKey).toBeUndefined();
 	});
 });
 
@@ -123,7 +123,7 @@ describe("Lab Auth (deep link URL parsing)", () => {
 
 	function parseLabDeepLink(
 		urlStr: string,
-	): { labKey: string; labUserId?: string; state?: string } | null {
+	): { naiaKey: string; naiaUserId?: string; state?: string } | null {
 		try {
 			const url = new URL(urlStr);
 			const isAuth =
@@ -139,8 +139,8 @@ describe("Lab Auth (deep link URL parsing)", () => {
 			if (!resolved.startsWith("gw-")) return null;
 
 			return {
-				labKey: resolved,
-				labUserId: url.searchParams.get("user_id") ?? undefined,
+				naiaKey: resolved,
+				naiaUserId: url.searchParams.get("user_id") ?? undefined,
 				state: url.searchParams.get("state") ?? undefined,
 			};
 		} catch {
@@ -188,7 +188,7 @@ describe("Lab Auth (deep link URL parsing)", () => {
 
 	it("parses nanos://auth?key=xxx", () => {
 		const result = parseLabDeepLink("nanos://auth?key=gw-test_key-123");
-		expect(result).toEqual({ labKey: "gw-test_key-123", labUserId: undefined });
+		expect(result).toEqual({ naiaKey: "gw-test_key-123", naiaUserId: undefined });
 	});
 
 	it("returns null for nanos://auth?code=xxx when code is not gw key", () => {
@@ -198,14 +198,14 @@ describe("Lab Auth (deep link URL parsing)", () => {
 
 	it("parses nanos://auth?code=xxx when code is gw key", () => {
 		const result = parseLabDeepLink("nanos://auth?code=gw-from-code_456");
-		expect(result).toEqual({ labKey: "gw-from-code_456", labUserId: undefined });
+		expect(result).toEqual({ naiaKey: "gw-from-code_456", naiaUserId: undefined });
 	});
 
 	it("parses nanos://auth?key=xxx&user_id=yyy", () => {
 		const result = parseLabDeepLink(
 			"nanos://auth?key=gw-abc123&user_id=user-42",
 		);
-		expect(result).toEqual({ labKey: "gw-abc123", labUserId: "user-42" });
+		expect(result).toEqual({ naiaKey: "gw-abc123", naiaUserId: "user-42" });
 	});
 
 	it("returns null for non-auth paths", () => {
@@ -228,8 +228,8 @@ describe("Lab Auth (deep link URL parsing)", () => {
 			"nanos://auth?key=gw-abc123&state=random-state-token",
 		);
 		expect(result).toEqual({
-			labKey: "gw-abc123",
-			labUserId: undefined,
+			naiaKey: "gw-abc123",
+			naiaUserId: undefined,
 			state: "random-state-token",
 		});
 	});

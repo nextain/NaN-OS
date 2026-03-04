@@ -9,6 +9,7 @@ import {
 	type ThemeId,
 	isOnboardingComplete,
 	loadConfig,
+	migrateLabKeyToNaiaKey,
 	saveConfig,
 } from "./lib/config";
 import { persistDiscordDefaults } from "./lib/discord-auth";
@@ -26,6 +27,9 @@ export function App() {
 	const layoutRef = useRef<HTMLDivElement>(null);
 
 	useEffect(() => {
+		// One-time migration: labKey/labUserId → naiaKey/naiaUserId
+		void migrateLabKeyToNaiaKey();
+
 		const config = loadConfig();
 		applyTheme(config?.theme ?? "espresso");
 		if (config?.panelPosition) setPanelPosition(config.panelPosition);
@@ -120,7 +124,7 @@ export function App() {
 
 	// After Lab login, sync linked channels (e.g. Discord DM) from gateway
 	useEffect(() => {
-		const unlisten = listen("lab_auth_complete", () => {
+		const unlisten = listen("naia_auth_complete", () => {
 			void syncLinkedChannels();
 		});
 		return () => {
