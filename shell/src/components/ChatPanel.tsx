@@ -681,15 +681,18 @@ export function ChatPanel() {
 			});
 			audioPlayerRef.current = player;
 
-			// Wire session events — use upsert to avoid incremental transcript duplication
+			// Wire session events — accumulate incremental transcript chunks
 			let inputTurnDirty = false;
 			let outputTurnDirty = false;
+			let inputAccum = "";
+			let outputAccum = "";
 
 			session.onAudio = (pcmBase64) => player.enqueue(pcmBase64);
 			session.onInputTranscript = (text) => {
 				const store = useChatStore.getState();
+				inputAccum += text;
 				if (inputTurnDirty) {
-					store.updateLastMessage("user", text);
+					store.updateLastMessage("user", inputAccum);
 				} else {
 					store.addMessage({ role: "user", content: text });
 					inputTurnDirty = true;
@@ -697,8 +700,9 @@ export function ChatPanel() {
 			};
 			session.onOutputTranscript = (text) => {
 				const store = useChatStore.getState();
+				outputAccum += text;
 				if (outputTurnDirty) {
-					store.updateLastMessage("assistant", text);
+					store.updateLastMessage("assistant", outputAccum);
 				} else {
 					store.addMessage({ role: "assistant", content: text });
 					outputTurnDirty = true;
@@ -706,14 +710,16 @@ export function ChatPanel() {
 			};
 			session.onInterrupted = () => {
 				player.clear();
-				// Reset dirty flags — barge-in starts a new turn without turnComplete
 				inputTurnDirty = false;
 				outputTurnDirty = false;
+				inputAccum = "";
+				outputAccum = "";
 			};
 			session.onTurnEnd = () => {
-				// Finalize current turn — next transcript starts a new message
 				inputTurnDirty = false;
 				outputTurnDirty = false;
+				inputAccum = "";
+				outputAccum = "";
 			};
 			session.onToolCall = async (callId, toolName, args) => {
 				try {
