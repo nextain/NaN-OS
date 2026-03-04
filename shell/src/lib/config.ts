@@ -179,8 +179,16 @@ export async function loadConfigWithSecrets(): Promise<AppConfig | null> {
 	if (!config) return null;
 
 	for (const key of SECRET_KEYS) {
+		const localVal = (config as any)[key];
 		const secureVal = await getSecretKey(key);
-		if (secureVal) {
+		if (localVal) {
+			// localStorage has a fresh value (e.g. just saved by login handler)
+			// Sync to secure store if different
+			if (localVal !== secureVal) {
+				await saveSecretKey(key, localVal);
+			}
+		} else if (secureVal) {
+			// Only use secure store when localStorage doesn't have the value
 			(config as any)[key] = secureVal;
 		}
 	}
