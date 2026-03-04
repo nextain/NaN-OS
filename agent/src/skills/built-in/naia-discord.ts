@@ -4,7 +4,15 @@ import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import type { SkillDefinition, SkillResult } from "../types.js";
 
-/** Strip emotion tags like [HAPPY], [THINK] etc. from message text */
+/** Map emotion tags to emoji for Discord messages */
+const EMOTION_EMOJI: Record<string, string> = {
+	HAPPY: "😊",
+	SAD: "😢",
+	ANGRY: "😠",
+	SURPRISED: "😮",
+	NEUTRAL: "",
+	THINK: "🤔",
+};
 const EMOTION_TAG_RE = /\[(?:HAPPY|SAD|ANGRY|SURPRISED|NEUTRAL|THINK)]\s*/gi;
 
 function normalizeTarget(args: Record<string, unknown>): string | null {
@@ -342,8 +350,7 @@ export function createNaiaDiscordSkill(): SkillDefinition {
 					const mainSession = sessions.find((s) => s.key === "agent:main:main");
 					if (
 						mainSession &&
-						(mainSession.origin?.provider === "discord" ||
-							mainSession.origin?.surface === "webchat") &&
+						mainSession.origin?.provider === "discord" &&
 						!discordSessions.some((s) => s.key === mainSession.key)
 					) {
 						discordSessions.push(mainSession);
@@ -434,8 +441,11 @@ export function createNaiaDiscordSkill(): SkillDefinition {
 				if (!rawMessage) {
 					return { success: false, output: "", error: "message is required for send" };
 				}
-				// Strip internal emotion tags — they're for avatar expression, not Discord display
-				const message = rawMessage.replace(EMOTION_TAG_RE, "").trim();
+				// Replace emotion tags with emoji for Discord
+				const message = rawMessage.replace(EMOTION_TAG_RE, (match) => {
+					const tag = match.replace(/[\[\]\s]/g, "").toUpperCase();
+					return EMOTION_EMOJI[tag] ?? "";
+				}).trim();
 
 				const target = await resolveTarget(args, gateway);
 				if (!target) {

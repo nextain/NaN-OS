@@ -17,7 +17,7 @@ Login and channel logic are fully separated:
 5. Shell persists `discordDefaultUserId` to config
 6. Shell calls `openDmChannel(discordUserId)` via Rust Discord Bot API → gets DM channel ID
 7. Shell persists `discordDmChannelId` to config
-8. Shell syncs to Gateway runtime (allowlist config.patch) + OpenClaw (openclaw.json + restart)
+8. Shell awaits `syncOpenClawWithChannels()` → writes `openclaw.json` + restarts Gateway
 
 ### DM Channel ID Refresh
 - DM channel ID is **always refreshed** on every `syncLinkedChannels()` call, even if already set
@@ -59,12 +59,13 @@ This is populated automatically when a user logs in with multiple providers usin
 
 The `GET /v1/auth/lookup` endpoint now returns `linked_accounts` in its response.
 
-## Two-Layer Gateway Sync
+## Gateway Sync
 
-After DM channel ID is resolved, channel-sync.ts performs two syncs:
+After DM channel ID is resolved, `channel-sync.ts` performs a single **awaited** sync:
 
-1. **Runtime patch** (`syncDiscordToGateway`): `skill_config` tool call with `channels.discord.dm` config — immediate in-memory update, enables DM allowlist
-2. **Persistent config** (`syncOpenClawWithChannels`): Writes to `openclaw.json` via `syncToOpenClaw()` + `restartGateway()` — survives Gateway restarts
+- **Persistent config** (`syncOpenClawWithChannels`): Writes to `openclaw.json` via `syncToOpenClaw()` + `restartGateway()` — survives Gateway restarts
+
+> **Note:** The previous runtime patch (`syncDiscordToGateway` via `skill_config` tool call) was removed to prevent race conditions from concurrent file writes to `openclaw.json`.
 
 ## Extensibility
 

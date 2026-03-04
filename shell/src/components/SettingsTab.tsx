@@ -32,7 +32,6 @@ import { syncToOpenClaw, restartGateway } from "../lib/openclaw-sync";
 import { syncLinkedChannels } from "../lib/channel-sync";
 import { fetchLabConfig, pushConfigToLab, clearLabConfig, diffConfigs } from "../lib/lab-sync";
 import { DEFAULT_PERSONA, buildSystemPrompt } from "../lib/persona";
-import { persistDiscordDefaults } from "../lib/discord-auth";
 import { resetGatewaySession } from "../lib/gateway-sessions";
 import type { ProviderId } from "../lib/types";
 import { AVATAR_PRESETS, DEFAULT_AVATAR_MODEL } from "../lib/avatar-presets";
@@ -1102,7 +1101,10 @@ export function SettingsTab() {
 				await restartGateway();
 
 				// Sync linked channels (e.g. Discord) after login
-				void syncLinkedChannels();
+				// Re-check Discord bot status after sync + gateway restart
+				syncLinkedChannels().then(() => {
+					setTimeout(() => fetchDiscordBotStatus(), 3000);
+				});
 
 				// Try Lab pull — show diff dialog if settings differ
 				if (nextLabUserId) {
@@ -1122,21 +1124,18 @@ export function SettingsTab() {
 		};
 	}, []);
 
-	// Listen for Discord auth deep-link callback
+	// Listen for Discord auth deep-link callback — UI state only (App.tsx handles persist)
 	useEffect(() => {
 		const unlisten = listen<{
 			discordUserId?: string | null;
 			discordChannelId?: string | null;
 			discordTarget?: string | null;
 		}>("discord_auth_complete", (event) => {
-			const next = persistDiscordDefaults(event.payload);
-			if (!next) {
-				return;
-			}
-
-			setDiscordDefaultUserId(next.discordDefaultUserId ?? "");
-			setDiscordDefaultTarget(next.discordDefaultTarget ?? "");
-			setDiscordDmChannelId(next.discordDmChannelId ?? "");
+			const { discordUserId, discordChannelId, discordTarget } = event.payload;
+			if (discordUserId) setDiscordDefaultUserId(discordUserId);
+			if (discordTarget) setDiscordDefaultTarget(discordTarget);
+			else if (discordUserId) setDiscordDefaultTarget(`user:${discordUserId}`);
+			if (discordChannelId) setDiscordDmChannelId(discordChannelId);
 			setDiscordBotConnected(true);
 		});
 		return () => {

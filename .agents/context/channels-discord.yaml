@@ -50,7 +50,7 @@ login_channel_separation:
     - Shell persists discordDefaultUserId to config
     - Shell calls openDmChannel(discordUserId) via Rust Discord Bot API → gets DM channel ID
     - Shell persists discordDmChannelId to config
-    - Shell syncs to Gateway runtime (allowlist config.patch) + OpenClaw (openclaw.json + restart)
+    - Shell awaits syncOpenClawWithChannels() → writes openclaw.json + restarts Gateway
   dm_channel_refresh:
     description: DM channel ID is ALWAYS refreshed on every syncLinkedChannels() call
     why:
@@ -58,9 +58,9 @@ login_channel_separation:
       - Required for receiving Discord DMs
       - Must be in openclaw.json for Gateway to route messages
     how: openDmChannel(userId) → Discord API POST /users/@me/channels → channel ID
-  two_layer_sync:
-    runtime_patch: skill_config tool call with channels.discord.dm — immediate in-memory
-    persistent_config: syncToOpenClaw() + restartGateway() — survives restarts
+  sync_strategy:
+    description: Single-layer persistent sync (runtime patch removed to prevent race condition)
+    persistent_config: await syncToOpenClaw() + restartGateway() — writes openclaw.json, restarts Gateway
   key_files:
     - shell/src/lib/channel-sync.ts  # Main channel sync logic
     - shell/src/lib/discord-api.ts   # Discord REST API client (via Rust proxy)

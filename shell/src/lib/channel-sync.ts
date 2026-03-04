@@ -1,8 +1,7 @@
-import { loadConfig, resolveGatewayUrl, saveConfig } from "./config";
+import { loadConfig, saveConfig } from "./config";
 import { getLocale } from "./i18n";
 import { openDmChannel } from "./discord-api";
 import { Logger } from "./logger";
-import { directToolCall } from "./chat-service";
 import { syncToOpenClaw, restartGateway } from "./openclaw-sync";
 import { buildSystemPrompt } from "./persona";
 
@@ -110,50 +109,9 @@ export async function syncLinkedChannels(): Promise<void> {
 		});
 	}
 
-	// Sync to Gateway runtime (allowlist patch)
-	void syncDiscordToGateway(discordUserId);
-
 	// Sync to openclaw.json + restart so Gateway picks up the channel ID
 	if (dmChannelId) {
-		void syncOpenClawWithChannels(discordUserId, dmChannelId);
-	}
-}
-
-/**
- * Sync Discord DM defaults to Gateway runtime via config.patch.
- * Fire-and-forget — never blocks the caller.
- */
-async function syncDiscordToGateway(userId: string): Promise<void> {
-	try {
-		const config = loadConfig();
-		const gatewayUrl = resolveGatewayUrl(config);
-		if (!gatewayUrl) return;
-
-		await directToolCall({
-			toolName: "skill_config",
-			args: {
-				action: "patch",
-				patch: {
-					channels: {
-						discord: {
-							dm: {
-								enabled: true,
-								policy: "allowlist",
-								allowFrom: [userId],
-							},
-						},
-					},
-				},
-			},
-			requestId: `channel-sync-${Date.now()}`,
-			gatewayUrl,
-			gatewayToken: config?.gatewayToken,
-		});
-		Logger.info("channel-sync", "Synced Discord DM config to Gateway runtime", { userId });
-	} catch (err) {
-		Logger.warn("channel-sync", "Failed to sync Discord config to Gateway", {
-			error: String(err),
-		});
+		await syncOpenClawWithChannels(discordUserId, dmChannelId);
 	}
 }
 
@@ -161,7 +119,6 @@ async function syncDiscordToGateway(userId: string): Promise<void> {
  * Sync discord channel IDs to openclaw.json and restart Gateway.
  * This ensures the persistent config includes the DM channel ID
  * so it survives Gateway restarts.
- * Fire-and-forget — never blocks the caller.
  */
 async function syncOpenClawWithChannels(
 	discordUserId: string,

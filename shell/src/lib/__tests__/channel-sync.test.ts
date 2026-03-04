@@ -12,10 +12,6 @@ vi.mock("../openclaw-sync", () => ({
 	restartGateway: vi.fn().mockResolvedValue(undefined),
 }));
 
-// Mock chat-service (directToolCall for gateway runtime patch)
-vi.mock("../chat-service", () => ({
-	directToolCall: vi.fn().mockResolvedValue(undefined),
-}));
 
 // Mock persona
 vi.mock("../persona", () => ({
@@ -171,9 +167,6 @@ describe("syncLinkedChannels", () => {
 
 		await syncLinkedChannels();
 
-		// Wait for fire-and-forget promises to settle
-		await new Promise((r) => setTimeout(r, 50));
-
 		expect(syncToOpenClaw).toHaveBeenCalledWith(
 			"gemini",
 			"gemini-2.5-flash",
@@ -187,7 +180,7 @@ describe("syncLinkedChannels", () => {
 			discordUserId,
 			undefined, // ttsProvider
 			undefined, // ttsVoice
-			undefined, // ttsAuto
+			"off", // ttsAuto (ttsEnabled unset → "off")
 			undefined, // ttsMode
 			"gw-test-lab-key",
 		);

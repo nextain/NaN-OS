@@ -105,6 +105,8 @@ export class DiscordAdapter implements ChannelAdapter {
 					msg.channel.send(text).catch(() => {});
 				});
 			})
-			.catch(() => {});
+			.catch((err: unknown) => {
+				console.error("[discord] message handler error:", err);
+			});
 	}
 }

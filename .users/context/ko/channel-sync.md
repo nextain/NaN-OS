@@ -17,7 +17,7 @@
 5. Shell이 `discordDefaultUserId`를 config에 저장
 6. Shell이 `openDmChannel(discordUserId)` 호출 (Rust Discord Bot API 경유) → DM 채널 ID 획득
 7. Shell이 `discordDmChannelId`를 config에 저장
-8. Shell이 Gateway 런타임 동기화 (allowlist config.patch) + OpenClaw 동기화 (openclaw.json + 재시작)
+8. Shell이 `syncOpenClawWithChannels()` await → `openclaw.json` 기록 + Gateway 재시작
 
 ### DM 채널 ID 갱신
 - DM 채널 ID는 `syncLinkedChannels()` 호출 시 **항상 갱신** (이미 설정되어 있어도)
@@ -59,12 +59,13 @@ Gateway는 연결된 프로바이더 계정을 `CaretUser.metadata_.linked_accou
 
 `GET /v1/auth/lookup` 엔드포인트가 이제 응답에 `linked_accounts`를 포함.
 
-## 2단계 Gateway 동기화
+## Gateway 동기화
 
-DM 채널 ID 해결 후, channel-sync.ts가 2단계 동기화 수행:
+DM 채널 ID 해결 후, `channel-sync.ts`가 단일 **await** 동기화 수행:
 
-1. **런타임 패치** (`syncDiscordToGateway`): `skill_config` 도구 호출로 `channels.discord.dm` 설정 — 즉시 메모리 업데이트, DM allowlist 활성화
-2. **영구 설정** (`syncOpenClawWithChannels`): `syncToOpenClaw()` + `restartGateway()`로 `openclaw.json` 기록 — Gateway 재시작 시에도 유지
+- **영구 설정** (`syncOpenClawWithChannels`): `syncToOpenClaw()` + `restartGateway()`로 `openclaw.json` 기록 — Gateway 재시작 시에도 유지
+
+> **참고:** 기존 런타임 패치(`syncDiscordToGateway` → `skill_config` 도구 호출)는 `openclaw.json` 동시 쓰기 race condition 방지를 위해 제거됨.
 
 ## 확장성
 

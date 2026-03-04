@@ -23,6 +23,7 @@ export function ChannelsTab(_props: ChannelsTabProps) {
 	const [loading, setLoading] = useState(true);
 	const [channelId, setChannelId] = useState<string | null>(null);
 	const [botId, setBotId] = useState<string | null>(null);
+	const [apiAvailable, setApiAvailable] = useState(true);
 	const [error, setError] = useState<string | null>(null);
 	const [initError, setInitError] = useState<string | null>(null);
 	const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -53,6 +54,7 @@ export function ChannelsTab(_props: ChannelsTabProps) {
 		setInitError(null);
 
 		const apiOk = await isDiscordApiAvailable();
+		setApiAvailable(apiOk);
 		if (!apiOk) {
 			setInitError("봇 토큰을 찾을 수 없습니다.");
 			setLoading(false);
@@ -154,8 +156,8 @@ export function ChannelsTab(_props: ChannelsTabProps) {
 			<div className="dm-header">
 				<div className="dm-header-title">
 					<span>Discord DM</span>
-					<span className="dm-header-status connected">
-						{t("channels.connected")}
+					<span className={`dm-header-status ${apiAvailable ? "connected" : ""}`}>
+						{apiAvailable ? t("channels.connected") : t("channels.disconnected") || "연결 안됨"}
 					</span>
 				</div>
 				<button
