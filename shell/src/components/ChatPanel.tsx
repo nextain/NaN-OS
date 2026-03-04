@@ -750,7 +750,12 @@ export function ChatPanel() {
 					outputTurnDirty = true;
 				}
 			};
-			session.onInterrupted = () => player.clear();
+			session.onInterrupted = () => {
+				player.clear();
+				// Reset dirty flags — barge-in starts a new turn without turnComplete
+				inputTurnDirty = false;
+				outputTurnDirty = false;
+			};
 			session.onTurnEnd = () => {
 				// Finalize current turn — next transcript starts a new message
 				inputTurnDirty = false;
