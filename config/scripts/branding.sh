@@ -117,13 +117,49 @@ for (var i = 0; i < allPanels.length; ++i) {
 JSEOF
 
 # ============================================================
+# KDE Plasma: Pin Naia Shell to taskbar
+# ============================================================
+cat > /usr/share/plasma/shells/org.kde.plasma.desktop/contents/updates/naia-pins.js <<'JSEOF'
+var allPanels = panels();
+for (var i = 0; i < allPanels.length; ++i) {
+    var panel = allPanels[i];
+    var widgets = panel.widgets();
+    for (var j = 0; j < widgets.length; ++j) {
+        var widget = widgets[j];
+        if (widget.type === "org.kde.plasma.icontasks") {
+            widget.currentConfigGroup = ["General"];
+            widget.writeConfig("launchers", [
+                "applications:io.nextain.naia.desktop",
+                "preferred://browser",
+                "preferred://filemanager"
+            ]);
+            widget.reloadConfig();
+        }
+    }
+}
+JSEOF
+
+# ============================================================
 # KDE Plasma: Set NaiaOS as default wallpaper
 # ============================================================
-mkdir -p /usr/etc/skel/.config
-cat > /usr/etc/skel/.config/plasma-org.kde.plasma.desktop-appletsrc.naia <<'PLASMA'
-[Containments][1][Wallpaper][org.kde.image][General]
-Image=/usr/share/wallpapers/NaiaOS/
-PLASMA
+cat > /usr/share/plasma/shells/org.kde.plasma.desktop/contents/updates/naia-wallpaper.js <<'JSEOF'
+var allDesktops = desktops();
+for (var i = 0; i < allDesktops.length; ++i) {
+    var d = allDesktops[i];
+    d.wallpaperPlugin = "org.kde.image";
+    d.currentConfigGroup = ["Wallpaper", "org.kde.image", "General"];
+    d.writeConfig("Image", "/usr/share/wallpapers/NaiaOS/");
+}
+JSEOF
+
+# ============================================================
+# KDE Plasma: Set Naia lock screen wallpaper
+# ============================================================
+cat > /usr/etc/skel/.config/kscreenlockerrc <<'LOCKSCREEN'
+[Greeter][Wallpaper][org.kde.image][General]
+Image=file:///usr/share/backgrounds/naia-os/login-background.jpg
+PreviewImage=file:///usr/share/backgrounds/naia-os/login-background.jpg
+LOCKSCREEN
 
 # ============================================================
 # Plymouth: Set Naia as default boot theme
