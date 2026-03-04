@@ -63,6 +63,7 @@ fn is_valid_discord_snowflake(value: &str) -> bool {
 
 /// JSON chunk forwarded from agent-core stdout to the frontend
 #[derive(Debug, Serialize, Deserialize, Clone)]
+#[allow(dead_code)]
 struct AgentChunk {
     #[serde(rename = "type")]
     chunk_type: String,
@@ -1548,6 +1549,7 @@ async fn fetch_linked_channels(naia_key: String, user_id: String) -> Result<Stri
 
 /// Parameters for syncing Shell provider settings to OpenClaw gateway config
 #[derive(Deserialize)]
+#[allow(dead_code)]
 struct OpenClawSyncParams {
     provider: String,
     model: String,
@@ -2341,7 +2343,7 @@ pub fn run() {
             #[cfg(target_os = "linux")]
             if let Some(webview_window) = app.get_webview_window("main") {
                 let _ = webview_window.with_webview(|webview| {
-                    use webkit2gtk::{SettingsExt, WebViewExt};
+                    use webkit2gtk::WebViewExt;
 
                     // EGL crash workaround: WEBKIT_DISABLE_DMABUF_RENDERER=1 (set in main.rs)
                     // keeps HW accel enabled for WebGL (VRM/Three.js) while avoiding
