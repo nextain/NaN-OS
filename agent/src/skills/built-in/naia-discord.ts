@@ -59,13 +59,17 @@ async function discoverDmChannelFromSessions(
 			}>;
 		};
 		const sessions = result.sessions ?? [];
-		// Look for Discord DM sessions — key format: discord:dm:<channelId>
 		for (const s of sessions) {
+			// Legacy format: discord:dm:<channelId> or discord:channel:<channelId>
 			if (s.channel === "discord" || s.origin?.provider === "discord") {
 				const match = s.key.match(/^discord:(?:dm|channel):(\d+)$/);
 				if (match) return `channel:${match[1]}`;
 			}
-			// Also check keys that contain discord with a numeric channel segment
+			// per-channel-peer format: agent:main:discord:direct:<peerId>
+			// peerId is a user ID — return as user: target for DM resolution
+			const peerMatch = s.key.match(/^agent:[^:]+:discord:direct:(\d+)$/);
+			if (peerMatch) return `user:${peerMatch[1]}`;
+			// Legacy fallback: discord:*:<numericId>
 			if (s.key.startsWith("discord:") && /:\d{10,}$/.test(s.key)) {
 				const channelId = s.key.split(":").pop();
 				if (channelId) return `channel:${channelId}`;

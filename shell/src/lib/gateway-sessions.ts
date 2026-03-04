@@ -162,7 +162,7 @@ export async function discoverAndPersistDiscordDmChannel(): Promise<string | nul
 
 	const sessions = await listGatewaySessions(100);
 	for (const s of sessions) {
-		// Gateway Discord DM sessions have key format: discord:dm:<channelId>
+		// Legacy format: discord:dm:<channelId> — extract channel ID directly
 		const match = s.key.match(/^discord:(?:dm|channel):(\d{10,})$/);
 		if (match) {
 			const channelId = match[1];
@@ -171,6 +171,15 @@ export async function discoverAndPersistDiscordDmChannel(): Promise<string | nul
 			}
 			Logger.info("gateway-sessions", "Discovered Discord DM channel ID from sessions", { channelId });
 			return channelId;
+		}
+		// per-channel-peer format: agent:main:discord:direct:<peerId>
+		// peerId is a USER ID, not channel ID — save as discordDefaultUserId
+		// and let ChannelsTab.resolveChannel() convert via openDmChannel()
+		const peerMatch = s.key.match(/^agent:[^:]+:discord:direct:(\d{10,})$/);
+		if (peerMatch && config && !config.discordDefaultUserId) {
+			const userId = peerMatch[1];
+			saveConfig({ ...config, discordDefaultUserId: userId });
+			Logger.info("gateway-sessions", "Discovered Discord user ID from session", { userId });
 		}
 	}
 	return null;

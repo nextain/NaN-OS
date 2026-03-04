@@ -20,7 +20,10 @@ function formatDate(timestamp: number): string {
 }
 
 function isDiscordSession(key: string): boolean {
-	return /^discord:(?:dm|channel):\d+$/.test(key);
+	// Legacy: "discord:dm:<channelId>" / "discord:channel:<channelId>"
+	// per-channel-peer dmScope: "agent:main:discord:direct:<peerId>"
+	return /^discord:(?:dm|channel):\d+$/.test(key)
+		|| /^agent:[^:]+:discord:direct:/.test(key);
 }
 
 export function HistoryTab({

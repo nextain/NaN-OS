@@ -140,19 +140,19 @@ describe.skipIf(!canRunE2E)("E2E: Discord DM send + history pipeline", () => {
 				.map((s) => ({ key: s.key, channel: s.channel, origin: s.origin })),
 		);
 
-		// Look for discord:dm:* or discord:channel:* sessions
+		// Look for Discord sessions (legacy or per-channel-peer format)
 		const dmSession = sessions.find((s) => {
-			const match = s.key.match(/^discord:(?:dm|channel):(\d+)$/);
-			return match !== null;
+			return /^discord:(?:dm|channel):(\d+)$/.test(s.key)
+				|| /^agent:[^:]+:discord:direct:(\d+)$/.test(s.key);
 		});
 
 		if (dmSession) {
-			const channelId = dmSession.key.split(":").pop();
-			console.log("Discovered DM channel ID from sessions:", channelId);
-			expect(channelId).toMatch(/^\d{10,}$/);
+			const id = dmSession.key.split(":").pop();
+			console.log("Discovered Discord session ID from sessions:", id, "key:", dmSession.key);
+			expect(id).toMatch(/^\d{10,}$/);
 		} else {
 			console.log(
-				"No discord:dm:* session found — DM session may not yet exist. " +
+				"No Discord session found — DM session may not yet exist. " +
 					"This is expected if Discord bot hasn't received a DM in current Gateway lifecycle.",
 			);
 		}

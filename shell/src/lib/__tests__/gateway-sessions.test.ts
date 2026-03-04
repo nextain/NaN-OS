@@ -65,6 +65,29 @@ describe("gateway-sessions", () => {
 			expect(sessions[1].summary).toBeUndefined();
 		});
 
+		it("includes per-channel-peer Discord sessions", async () => {
+			mockDirectToolCall.mockResolvedValueOnce({
+				success: true,
+				output: JSON.stringify({
+					sessions: [
+						{
+							key: "agent:main:discord:direct:865850174651498506",
+							label: "Discord DM",
+							messageCount: 10,
+							createdAt: 1000,
+							updatedAt: 3000,
+						},
+					],
+				}),
+			});
+
+			const { listGatewaySessions } = await import("../gateway-sessions");
+			const sessions = await listGatewaySessions(50);
+
+			expect(sessions).toHaveLength(1);
+			expect(sessions[0].key).toBe("agent:main:discord:direct:865850174651498506");
+		});
+
 		it("returns empty array when Gateway unavailable", async () => {
 			(resolveGatewayUrl as ReturnType<typeof vi.fn>).mockReturnValue(null);
 

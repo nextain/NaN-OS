@@ -99,8 +99,9 @@ describe.skipIf(!canRunE2E)("E2E: Gateway chat.history & sessions", () => {
 	});
 
 	it("fetches chat.history for Discord channel session", async () => {
-		// Try the Discord sessions we know exist
+		// Try Discord sessions — both legacy and per-channel-peer formats
 		const discordKeys = [
+			"agent:main:discord:direct:865850174651498506",
 			"agent:main:discord:channel:1474553973405913290",
 			"agent:main:discord:channel:default",
 			"agent:main:discord:channel:1275535550845292640",
@@ -124,7 +125,7 @@ describe.skipIf(!canRunE2E)("E2E: Gateway chat.history & sessions", () => {
 	it("tries sessions.preview for Discord session", async () => {
 		try {
 			const result = await client.request("sessions.preview", {
-				key: "agent:main:discord:channel:1474553973405913290",
+				key: "agent:main:discord:direct:865850174651498506",
 			});
 			console.log(
 				"sessions.preview (discord):",

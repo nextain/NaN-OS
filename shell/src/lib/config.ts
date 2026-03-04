@@ -62,6 +62,7 @@ export interface AppConfig {
 	panelPosition?: PanelPosition;
 	panelVisible?: boolean;
 	panelSize?: number;
+	discordSessionMigrated?: boolean;
 }
 
 const DEFAULT_MODELS: Record<ProviderId, string> = {

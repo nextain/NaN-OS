@@ -3,13 +3,13 @@ import { useEffect, useRef, useState } from "react";
 import Markdown from "react-markdown";
 import { type AudioRecorder, startRecording } from "../lib/audio-recorder";
 import { cancelChat, sendChatMessage } from "../lib/chat-service";
-import { resetDiscordPollState } from "../lib/discord-poll";
 import {
 	addAllowedTool,
 	isToolAllowed,
 	loadConfig,
 	saveConfig,
 } from "../lib/config";
+import { restartGateway } from "../lib/openclaw-sync";
 import { isApiKeyOptional, isReadyToChat } from "../lib/config";
 import {
 	getAllFacts,
@@ -265,12 +265,24 @@ export function ChatPanel() {
 			const store = useChatStore.getState();
 			store.setSessionId("agent:main:main");
 
-			const messages = await getGatewayHistory("agent:main:main");
-			if (messages.length > 0) {
-				store.setMessages(messages);
-				Logger.info("ChatPanel", "Session loaded from Gateway", {
-					messageCount: messages.length,
-				});
+			const config = loadConfig();
+			if (!config?.discordSessionMigrated) {
+				// One-time migration: restart Gateway to pick up session.dmScope,
+				// then reset the contaminated main session (Discord DMs mixed in).
+				await restartGateway();
+				await resetGatewaySession("agent:main:main");
+				if (config) {
+					saveConfig({ ...config, discordSessionMigrated: true });
+				}
+				Logger.info("ChatPanel", "One-time reset: cleared Discord-contaminated main session");
+			} else {
+				const messages = await getGatewayHistory("agent:main:main");
+				if (messages.length > 0) {
+					store.setMessages(messages);
+					Logger.info("ChatPanel", "Session loaded from Gateway", {
+						messageCount: messages.length,
+					});
+				}
 			}
 		};
 
@@ -281,7 +293,10 @@ export function ChatPanel() {
 		});
 
 		// Auto-discover Discord DM channel ID from Gateway sessions
-		discoverAndPersistDiscordDmChannel().catch(() => {});
+		// (skip on migration run — no new sessions exist yet)
+		if (loadConfig()?.discordSessionMigrated) {
+			discoverAndPersistDiscordDmChannel().catch(() => {});
+		}
 	}, []);
 
 	useEffect(() => {
@@ -334,7 +349,6 @@ export function ChatPanel() {
 		const store = useChatStore.getState();
 		const prevMessages = store.messages;
 		store.newConversation();
-		resetDiscordPollState();
 
 		// Summarize previous session in background + extract facts
 		if (prevMessages.length >= 2) {

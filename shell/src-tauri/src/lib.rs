@@ -520,14 +520,18 @@ fn ensure_openclaw_config(config_path: &str) {
         return;
     }
 
-    // Existing file: ensure gateway.mode is set
+    // Existing file: ensure gateway.mode and session.dmScope are set
     if let Ok(raw) = std::fs::read_to_string(path) {
         if let Ok(mut root) = serde_json::from_str::<serde_json::Value>(&raw) {
-            let needs_patch = root
+            let needs_gw_patch = root
                 .get("gateway")
                 .and_then(|gw| gw.get("mode"))
                 .is_none();
-            if needs_patch {
+            let needs_session_patch = root
+                .get("session")
+                .and_then(|s| s.get("dmScope"))
+                .is_none();
+            if needs_gw_patch || needs_session_patch {
                 if let Some(obj) = root.as_object_mut() {
                     let gw = obj
                         .entry("gateway")
@@ -537,9 +541,17 @@ fn ensure_openclaw_config(config_path: &str) {
                             .entry("mode")
                             .or_insert_with(|| serde_json::Value::String("local".to_string()));
                     }
+                    // Isolate DM sessions from Shell chat (prevents Discord DM pollution)
+                    let session = obj
+                        .entry("session")
+                        .or_insert_with(|| serde_json::json!({}));
+                    if let Some(session_obj) = session.as_object_mut() {
+                        session_obj.entry("dmScope")
+                            .or_insert_with(|| serde_json::Value::String("per-channel-peer".to_string()));
+                    }
                     if let Ok(pretty) = serde_json::to_string_pretty(&root) {
                         match std::fs::write(path, pretty.as_bytes()) {
-                            Ok(_) => log_both("[Naia] Patched gateway.mode=local into existing config"),
+                            Ok(_) => log_both("[Naia] Patched config (gateway.mode + session.dmScope)"),
                             Err(e) => log_both(&format!("[Naia] ERROR: Failed to patch config {}: {}", config_path, e)),
                         }
                     }
@@ -1631,6 +1643,15 @@ async fn sync_openclaw_config(params: OpenClawSyncParams) -> Result<(), String> 
         .as_object_mut()
         .ok_or("reload is not an object")?;
     reload.insert("mode".to_string(), serde_json::Value::String("off".to_string()));
+
+    // Isolate DM sessions from Shell chat (defense-in-depth, mirrors ensure_openclaw_config)
+    let session_obj = obj
+        .entry("session")
+        .or_insert_with(|| serde_json::json!({}))
+        .as_object_mut()
+        .ok_or("session is not an object")?;
+    session_obj.entry("dmScope")
+        .or_insert_with(|| serde_json::Value::String("per-channel-peer".to_string()));
 
     // Sync Discord DM defaults into channels.discord so the gateway knows the DM target
     if let Some(ref user_id) = params.discord_default_user_id {

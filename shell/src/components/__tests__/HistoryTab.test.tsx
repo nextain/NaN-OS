@@ -150,7 +150,7 @@ describe("HistoryTab", () => {
 		});
 	});
 
-	it("shows discord badge on discord sessions", async () => {
+	it("shows discord badge on discord sessions (legacy key)", async () => {
 		mockListGatewaySessions.mockResolvedValue([
 			{
 				key: "discord:dm:456",
@@ -172,6 +172,60 @@ describe("HistoryTab", () => {
 			expect(badge).not.toBeNull();
 			const discordItem = container.querySelector(".history-item.discord");
 			expect(discordItem).not.toBeNull();
+		});
+	});
+
+	it("shows discord badge on per-channel-peer sessions", async () => {
+		mockListGatewaySessions.mockResolvedValue([
+			{
+				key: "agent:main:discord:direct:865850174651498506",
+				label: "Discord DM (per-channel-peer)",
+				messageCount: 5,
+				createdAt: Date.now(),
+				updatedAt: Date.now(),
+			},
+		]);
+
+		const { container } = render(
+			<HistoryTab
+				onLoadSession={onLoadSession}
+				onLoadDiscordSession={onLoadDiscordSession}
+			/>,
+		);
+		await waitFor(() => {
+			const badge = container.querySelector(".history-discord-badge");
+			expect(badge).not.toBeNull();
+			const discordItem = container.querySelector(".history-item.discord");
+			expect(discordItem).not.toBeNull();
+		});
+	});
+
+	it("routes per-channel-peer discord session click to onLoadDiscordSession", async () => {
+		mockListGatewaySessions.mockResolvedValue([
+			{
+				key: "agent:main:discord:direct:865850174651498506",
+				label: "Discord DM",
+				messageCount: 2,
+				createdAt: Date.now(),
+				updatedAt: Date.now(),
+			},
+		]);
+
+		render(
+			<HistoryTab
+				onLoadSession={onLoadSession}
+				onLoadDiscordSession={onLoadDiscordSession}
+			/>,
+		);
+		await waitFor(() => {
+			expect(screen.getByText("Discord DM")).toBeDefined();
+		});
+
+		fireEvent.click(screen.getByText("Discord DM"));
+
+		await waitFor(() => {
+			expect(onLoadDiscordSession).toHaveBeenCalled();
+			expect(onLoadSession).not.toHaveBeenCalled();
 		});
 	});
 

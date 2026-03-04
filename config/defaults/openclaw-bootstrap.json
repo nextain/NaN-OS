@@ -10,5 +10,8 @@
     "defaults": {
       "workspace": "~/.openclaw/workspace"
     }
+  },
+  "session": {
+    "dmScope": "per-channel-peer"
   }
 }
