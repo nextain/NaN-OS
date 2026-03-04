@@ -14,7 +14,6 @@ vi.mock("@tauri-apps/plugin-store", () => {
 });
 
 import {
-	loadConfig,
 	loadConfigWithSecrets,
 	saveConfig,
 } from "../config";
