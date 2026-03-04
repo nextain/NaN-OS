@@ -1,6 +1,11 @@
 import { getCurrentWindow } from "@tauri-apps/api/window";
 
-export function TitleBar() {
+interface TitleBarProps {
+	panelVisible: boolean;
+	onTogglePanel: () => void;
+}
+
+export function TitleBar({ panelVisible, onTogglePanel }: TitleBarProps) {
 	const appWindow = getCurrentWindow();
 
 	function handleDragStart(e: React.MouseEvent) {
@@ -14,6 +19,24 @@ export function TitleBar() {
 		<div className="titlebar" onMouseDown={handleDragStart}>
 			<span className="titlebar-label">Naia</span>
 			<div className="titlebar-buttons">
+				<button
+					type="button"
+					className="titlebar-btn"
+					onClick={onTogglePanel}
+					title={
+						panelVisible
+							? "채팅 숨기기 (Ctrl+B)"
+							: "채팅 보이기 (Ctrl+B)"
+					}
+				>
+					<svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5">
+						<rect x="1" y="1" width="12" height="12" rx="1.5" />
+						{panelVisible
+							? <line x1="6" y1="1" x2="6" y2="13" />
+							: <line x1="6" y1="1" x2="6" y2="13" strokeDasharray="2 2" />
+						}
+					</svg>
+				</button>
 				<button
 					type="button"
 					className="titlebar-btn"

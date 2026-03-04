@@ -17,6 +17,8 @@ export type ThemeId =
 
 export type TtsProviderId = "google" | "edge" | "openai" | "elevenlabs" | "nextain";
 
+export type PanelPosition = "left" | "right" | "bottom";
+
 export interface AppConfig {
 	provider: ProviderId;
 	model: string;
@@ -57,6 +59,8 @@ export interface AppConfig {
 	elevenlabsApiKey?: string;
 	gatewayTtsAuto?: string;
 	gatewayTtsMode?: string;
+	panelPosition?: PanelPosition;
+	panelVisible?: boolean;
 }
 
 const DEFAULT_MODELS: Record<ProviderId, string> = {

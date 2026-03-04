@@ -30,6 +30,8 @@ export const LAB_SYNC_FIELDS = [
 	"slackWebhookUrl",
 	"discordWebhookUrl",
 	"googleChatWebhookUrl",
+	"panelPosition",
+	"panelVisible",
 ] as const;
 
 type SyncField = (typeof LAB_SYNC_FIELDS)[number];

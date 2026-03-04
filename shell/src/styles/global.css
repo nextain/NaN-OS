@@ -206,37 +206,43 @@ body,
 }
 
 .main-area {
-	display: none; /* Phase 3+: 활성화 */
-	flex: 1;
-	background: var(--espresso-dark);
-}
-
-/* Side Panel */
-.side-panel {
 	flex: 1;
 	min-width: 0;
+	min-height: 0;
+	position: relative;
+	overflow: hidden;
+}
+
+/* Panel position: right */
+.app-layout[data-panel-position="right"] {
+	flex-direction: row-reverse;
+}
+
+/* Panel position: bottom — side-panel comes first in DOM, reverse to put it at bottom */
+.app-layout[data-panel-position="bottom"] {
+	flex-direction: column-reverse;
+}
+
+/* Side Panel (chat/tabs only — avatar is in main-area) */
+.side-panel {
+	flex: none;
+	width: 40%;
+	min-width: 280px;
+	max-width: 50%;
 	height: 100%;
 	display: flex;
 	flex-direction: column;
 	background: var(--espresso);
 }
 
-.side-panel-avatar {
-	position: relative;
-	overflow: hidden;
-	flex-shrink: 0;
-}
-
-.side-panel-divider {
-	height: 4px;
-	cursor: ns-resize;
-	background: var(--espresso-light);
-	flex-shrink: 0;
-	transition: background 0.15s;
-}
-
-.side-panel-divider:hover {
-	background: var(--wood);
+/* Bottom layout: panel spans full width, limited height */
+.app-layout[data-panel-position="bottom"] .side-panel {
+	width: 100%;
+	max-width: none;
+	min-width: 0;
+	height: 40%;
+	min-height: 200px;
+	max-height: 50%;
 }
 
 .side-panel-chat {
@@ -857,6 +863,33 @@ body,
 
 .theme-swatch.active {
 	border-color: var(--cream);
+}
+
+/* Panel Position Picker */
+.panel-position-picker {
+	display: flex;
+	gap: 4px;
+}
+
+.panel-position-btn {
+	flex: 1;
+	padding: 6px 0;
+	border: 1px solid rgba(255, 255, 255, 0.12);
+	border-radius: 6px;
+	background: rgba(255, 255, 255, 0.06);
+	color: var(--cream);
+	font-size: 12px;
+	cursor: pointer;
+	transition: background 0.15s, border-color 0.15s;
+}
+
+.panel-position-btn:hover {
+	background: rgba(255, 255, 255, 0.12);
+}
+
+.panel-position-btn.active {
+	background: rgba(255, 255, 255, 0.18);
+	border-color: var(--wood);
 }
 
 /* VRM Model Picker */

@@ -580,15 +580,17 @@ export function AvatarCanvas() {
 			if (disposed || !container) return;
 			const w = container.clientWidth;
 			const h = container.clientHeight;
+			if (w === 0 || h === 0) return;
 			renderer.setSize(w, h);
 			camera.aspect = w / h;
 			camera.updateProjectionMatrix();
 		}
-		window.addEventListener("resize", onResize);
+		const ro = new ResizeObserver(onResize);
+		ro.observe(container);
 
 		return () => {
 			disposed = true;
-			window.removeEventListener("resize", onResize);
+			ro.disconnect();
 			cancelAnimationFrame(frameId);
 			unsubBg();
 			unsubSpeaking();

@@ -9,6 +9,7 @@ import {
 	DEFAULT_GATEWAY_URL,
 	LAB_GATEWAY_URL,
 	MODEL_OPTIONS,
+	type PanelPosition,
 	type ThemeId,
 	type TtsProviderId,
 	clearAllowedTools,
@@ -650,6 +651,7 @@ export function SettingsTab() {
 		existing?.locale ?? getLocale(),
 	);
 	const [theme, setTheme] = useState<ThemeId>(existing?.theme ?? "espresso");
+	const [panelPos, setPanelPos] = useState<PanelPosition>(existing?.panelPosition ?? "bottom");
 	const [vrmModel, setVrmModel] = useState(savedVrmModel);
 	const [customVrms, setCustomVrms] = useState<string[]>(
 		(existing?.customVrms ?? []).map(normalizeLocalPath),
@@ -1190,6 +1192,16 @@ export function SettingsTab() {
 		document.documentElement.setAttribute("data-theme", id);
 	}
 
+	function handlePanelPositionChange(pos: PanelPosition) {
+		setPanelPos(pos);
+		const config = loadConfig();
+		if (config) saveConfig({ ...config, panelPosition: pos });
+		// Dispatch custom event so App.tsx can react
+		window.dispatchEvent(
+			new CustomEvent("naia:panel-position", { detail: pos }),
+		);
+	}
+
 	async function handlePickVrmFile() {
 		const selected = await open({
 			title: "VRM 파일 선택",
@@ -1701,6 +1713,28 @@ export function SettingsTab() {
 							onClick={() => handleThemeChange(th.id)}
 							title={th.label}
 						/>
+					))}
+				</div>
+			</div>
+
+			<div className="settings-field">
+				<label>{t("settings.panelPosition")}</label>
+				<div className="panel-position-picker">
+					{(
+						[
+							{ id: "left", label: t("settings.panelLeft") },
+							{ id: "right", label: t("settings.panelRight") },
+							{ id: "bottom", label: t("settings.panelBottom") },
+						] as const
+					).map((opt) => (
+						<button
+							key={opt.id}
+							type="button"
+							className={`panel-position-btn ${panelPos === opt.id ? "active" : ""}`}
+							onClick={() => handlePanelPositionChange(opt.id)}
+						>
+							{opt.label}
+						</button>
 					))}
 				</div>
 			</div>

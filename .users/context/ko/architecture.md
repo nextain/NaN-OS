@@ -93,6 +93,23 @@ OpenCode가 제공하는 것:
 
 ---
 
+## Shell UI 레이아웃
+
+```
+App
+├── TitleBar (패널 토글 버튼 + 창 컨트롤)
+└── .app-layout [data-panel-position="left"|"right"|"bottom"]
+    ├── .side-panel (ChatPanel — panelVisible=true일 때만 렌더링)
+    └── .main-area (AvatarCanvas — 항상 표시)
+```
+
+- **panelPosition**: `"left" | "right" | "bottom"` — CSS flex-direction으로 패널 위치 제어
+- **panelVisible**: `boolean` — 채팅 패널 토글; 아바타는 항상 표시
+- **아바타 리사이즈**: `ResizeObserver`로 컨테이너 크기 변경 감지 (window resize 아님)
+- **설정 동기화**: panelPosition + panelVisible은 Lab에 동기화 (`LAB_SYNC_FIELDS`)
+
+---
+
 ## 데이터 흐름
 
 | 시나리오 | 흐름 |

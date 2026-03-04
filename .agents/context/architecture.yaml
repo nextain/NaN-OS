@@ -103,6 +103,19 @@ runtime_architecture:
     │  sessions.*, browser.request, skills.*, channels.* ...)  │
     └─────────────────────────────────────────────────────────┘
 
+  shell_ui_layout:
+    description: "Shell component hierarchy and layout"
+    structure: |
+      App
+      ├── TitleBar (panel toggle button + window controls)
+      └── .app-layout [data-panel-position="left"|"right"|"bottom"]
+          ├── .side-panel (ChatPanel — only when panelVisible=true)
+          └── .main-area (AvatarCanvas — always visible)
+    panelPosition: "'left' | 'right' | 'bottom' — controls CSS flex-direction on .app-layout"
+    panelVisible: "boolean — toggles .side-panel presence; avatar always stays"
+    avatar_sizing: "ResizeObserver on container (not window resize)"
+    config_sync: "panelPosition + panelVisible synced to Lab via LAB_SYNC_FIELDS"
+
   data_flow:
     chat: "User → Shell → Agent → LLM → Agent → Shell → User"
     tool_exec: "LLM → Agent (tool_use) → Gateway (exec.bash or node.invoke) → OS → result → LLM"

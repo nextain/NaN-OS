@@ -21,8 +21,12 @@ vi.mock("../components/OnboardingWizard", () => ({
 	),
 }));
 
-vi.mock("../components/SidePanel", () => ({
-	SidePanel: () => <div>side</div>,
+vi.mock("../components/AvatarCanvas", () => ({
+	AvatarCanvas: () => <div>avatar</div>,
+}));
+
+vi.mock("../components/ChatPanel", () => ({
+	ChatPanel: () => <div>chat</div>,
 }));
 
 vi.mock("../components/TitleBar", () => ({
