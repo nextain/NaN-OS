@@ -61,6 +61,7 @@ export interface AppConfig {
 	gatewayTtsMode?: string;
 	panelPosition?: PanelPosition;
 	panelVisible?: boolean;
+	panelSize?: number;
 }
 
 const DEFAULT_MODELS: Record<ProviderId, string> = {

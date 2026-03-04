@@ -9,8 +9,14 @@ export function TitleBar({ panelVisible, onTogglePanel }: TitleBarProps) {
 	const appWindow = getCurrentWindow();
 
 	function handleDragStart(e: React.MouseEvent) {
-		// Only drag from the titlebar itself, not from buttons
 		if ((e.target as HTMLElement).closest(".titlebar-buttons")) return;
+		// Double-click: toggle maximize/restore (same as OS native titlebar)
+		if (e.detail === 2) {
+			appWindow.isMaximized().then((maximized) => {
+				maximized ? appWindow.unmaximize() : appWindow.maximize();
+			});
+			return;
+		}
 		e.preventDefault();
 		appWindow.startDragging();
 	}
