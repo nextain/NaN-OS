@@ -1324,13 +1324,16 @@ export function SettingsTab() {
 				await handleGatewayTtsProviderChange(gwId);
 			}
 			let base64 = "";
-			const previewText = getPreviewText(ttsVoice);
 			if (ttsProvider === "nextain") {
-				// Naia TTS preview — call Gateway directly with naiaKey
+				// Naia TTS preview — use liveVoice (Chirp 3 HD)
 				if (!naiaKey) {
 					setError("Naia TTS를 사용하려면 Naia 로그인이 필요합니다.");
 					return;
 				}
+				const cfg = loadConfig();
+				const voiceName = cfg?.liveVoice ?? "Kore";
+				const fullVoice = `ko-KR-Chirp3-HD-${voiceName}`;
+				const previewText = getPreviewText(fullVoice);
 				const resp = await fetch(`${LAB_GATEWAY_URL}/v1/audio/speech`, {
 					method: "POST",
 					headers: {
@@ -1339,7 +1342,7 @@ export function SettingsTab() {
 					},
 					body: JSON.stringify({
 						input: previewText,
-						voice: ttsVoice,
+						voice: fullVoice,
 						audio_encoding: "MP3",
 					}),
 				});
@@ -1355,6 +1358,7 @@ export function SettingsTab() {
 					setError("TTS 미리듣기를 사용하려면 Google TTS API Key를 입력하세요.");
 					return;
 				}
+				const previewText = getPreviewText(ttsVoice);
 				base64 = await invoke<string>("preview_tts", {
 					apiKey: key,
 					voice: ttsVoice,
@@ -1362,6 +1366,7 @@ export function SettingsTab() {
 				});
 			} else {
 				// Direct TTS preview via agent (edge/openai/elevenlabs — no Gateway needed)
+				const previewText = getPreviewText(ttsVoice);
 				const previewArgs: Record<string, unknown> = {
 					action: "preview",
 					provider: ttsProvider,
@@ -2389,8 +2394,10 @@ export function SettingsTab() {
 						const newProvider = e.target.value as TtsProviderId;
 						persistTtsProvider(newProvider);
 						// Reset voice to first available for the new provider
-						if (newProvider === "google" || newProvider === "nextain") {
+						if (newProvider === "google") {
 							persistTtsVoice(TTS_VOICES[0]?.id ?? "ko-KR-Neural2-A");
+						} else if (newProvider === "nextain") {
+							// liveVoice is managed separately — no ttsVoice reset needed
 						} else if (newProvider === "edge") {
 							const edgeVoices = getEdgeVoicesForLocale(locale);
 							persistTtsVoice(edgeVoices[0] ?? "ko-KR-SunHiNeural");
@@ -2485,8 +2492,47 @@ export function SettingsTab() {
 				</div>
 			)}
 
-			{/* Voice list — Google voices (google / nextain provider) */}
-			{(ttsProvider === "google" || ttsProvider === "nextain") && (
+			{/* Voice list — Naia (Chirp 3 HD, shared with Live) */}
+			{ttsProvider === "nextain" && (
+				<div className="settings-field">
+					<label htmlFor="tts-voice-select">{t("settings.naiaVoice")}</label>
+					<div className="voice-picker">
+						<select
+							id="tts-voice-select"
+							value={existing?.liveVoice ?? "Kore"}
+							onChange={(e) => {
+								if (existing) saveConfig({ ...existing, liveVoice: e.target.value });
+							}}
+						>
+							<option value="Kore">Kore (여성, 차분)</option>
+							<option value="Puck">Puck (남성, 활발)</option>
+							<option value="Charon">Charon (남성, 깊은)</option>
+							<option value="Aoede">Aoede (여성, 밝은)</option>
+							<option value="Fenrir">Fenrir (남성, 낮은)</option>
+							<option value="Leda">Leda (여성, 부드러운)</option>
+							<option value="Orus">Orus (남성, 단단한)</option>
+							<option value="Zephyr">Zephyr (중성)</option>
+							<option value="Achernar">Achernar</option>
+							<option value="Gacrux">Gacrux</option>
+							<option value="Sulafat">Sulafat</option>
+							<option value="Umbriel">Umbriel</option>
+						</select>
+						<button
+							type="button"
+							className="voice-preview-btn"
+							onClick={handleVoicePreview}
+							disabled={isPreviewing}
+						>
+							{isPreviewing
+								? t("settings.voicePreviewing")
+								: t("settings.voicePreview")}
+						</button>
+					</div>
+				</div>
+			)}
+
+			{/* Voice list — Google Cloud TTS (Neural2) */}
+			{ttsProvider === "google" && (
 				<div className="settings-field">
 					<label htmlFor="tts-voice-select">{t("settings.ttsVoice")}</label>
 					<div className="voice-picker">
@@ -2746,26 +2792,6 @@ export function SettingsTab() {
 
 					<div className="settings-section-divider">
 						<span>{t("settings.voiceConversation")}</span>
-					</div>
-					<div className="settings-field">
-						<label className="settings-label">{t("settings.liveVoice")}</label>
-						<select
-							className="settings-select"
-							value={existing?.liveVoice ?? "Puck"}
-							onChange={(e) => {
-								if (existing) saveConfig({ ...existing, liveVoice: e.target.value });
-							}}
-						>
-							<option value="Puck">Puck</option>
-							<option value="Charon">Charon</option>
-							<option value="Kore">Kore</option>
-							<option value="Fenrir">Fenrir</option>
-							<option value="Aoede">Aoede</option>
-						</select>
-					</div>
-
-					<div className="settings-section-divider">
-						<span>{t("settings.voiceWakeSection")}</span>
 					</div>
 					<div className="settings-field">
 						<span className="settings-hint">{t("settings.voiceWakeHint")}</span>
