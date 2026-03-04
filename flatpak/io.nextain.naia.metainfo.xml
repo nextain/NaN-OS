@@ -29,6 +29,18 @@
   </branding>
   <launchable type="desktop-id">io.nextain.naia.desktop</launchable>
   <releases>
+    <release version="0.1.1" date="2026-03-05">
+      <description>
+        <p>Voice conversation, TTS unification, and credential storage improvements.</p>
+        <ul>
+          <li>Real-time voice conversation via Gemini Live API</li>
+          <li>Unified voice setting: same Chirp 3 HD voice for live conversation and TTS</li>
+          <li>TTS works independently of LLM provider selection</li>
+          <li>Credential storage with Tauri secure store (encrypted persistence)</li>
+          <li>Bug fixes: multi-turn voice sessions, AudioContext resume, Rust warning cleanup</li>
+        </ul>
+      </description>
+    </release>
     <release version="0.1.0" date="2026-02-22">
       <description>
         <p>Initial release of Naia Shell.</p>

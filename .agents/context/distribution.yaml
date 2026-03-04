@@ -124,13 +124,14 @@ formats:
       - "rsync workaround patches (3b-3f) removed 2026-03-03 in favor of ostreecontainer"
 
 release:
-  current_version: v0.1.0
+  current_version: v0.1.1
   assets:
-    - Naia.Shell_0.1.0_amd64.AppImage
-    - Naia.Shell_0.1.0_amd64.deb
-    - Naia.Shell-0.1.0-1.x86_64.rpm
+    - Naia-Shell-x86_64.AppImage
+    - Naia-Shell-x86_64.deb
+    - Naia-Shell-x86_64.rpm
     - Naia-Shell-x86_64.flatpak
     - SHA256SUMS
+  naming_convention: "Version-independent filenames for stable /latest/ download URLs"
   download_page: https://naia.nextain.io/download
   download_page_repo: naia.nextain.io/
 

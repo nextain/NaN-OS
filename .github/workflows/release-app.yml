@@ -80,14 +80,20 @@ jobs:
           echo "=== RPM ==="
           ls -la shell/src-tauri/target/release/bundle/rpm/ 2>/dev/null || echo "No rpm"
 
+      - name: Normalize artifact filenames (remove version for stable download URLs)
+        run: |
+          cp shell/src-tauri/target/release/bundle/appimage/*.AppImage Naia-Shell-x86_64.AppImage
+          cp shell/src-tauri/target/release/bundle/deb/*.deb Naia-Shell-x86_64.deb
+          cp shell/src-tauri/target/release/bundle/rpm/*.rpm Naia-Shell-x86_64.rpm
+
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
           name: naia-shell-linux-x86_64
           path: |
-            shell/src-tauri/target/release/bundle/appimage/*.AppImage
-            shell/src-tauri/target/release/bundle/deb/*.deb
-            shell/src-tauri/target/release/bundle/rpm/*.rpm
+            Naia-Shell-x86_64.AppImage
+            Naia-Shell-x86_64.deb
+            Naia-Shell-x86_64.rpm
           if-no-files-found: error
 
   build-flatpak:

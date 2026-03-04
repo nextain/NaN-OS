@@ -8,11 +8,11 @@ BASE_VERSION_ID=$(grep -oP '(?<=^VERSION_ID=).*' /usr/lib/os-release | tr -d '"'
 # Override os-release to identify as Naia OS
 cat > /usr/lib/os-release <<OSRELEASE
 NAME="Naia OS"
-PRETTY_NAME="Naia OS 0.1.0 (Bazzite)"
+PRETTY_NAME="Naia OS 0.1.1 (Bazzite)"
 ID=naia-os
 ID_LIKE="fedora"
 VERSION_ID="${BASE_VERSION_ID}"
-NAIA_VERSION="0.1.0"
+NAIA_VERSION="0.1.1"
 HOME_URL="https://naia.nextain.io"
 DOCUMENTATION_URL="https://naia.nextain.io"
 SUPPORT_URL="https://naia.nextain.io"
@@ -23,8 +23,8 @@ OSRELEASE
 
 # Set fcitx5 as default virtual keyboard for Korean input
 # KDE Plasma (Bazzite base) virtual keyboard config
-mkdir -p /usr/etc/skel/.config
-cat > /usr/etc/skel/.config/fcitx5-profile <<'FCITX'
+mkdir -p /usr/etc/skel/.config/fcitx5
+cat > /usr/etc/skel/.config/fcitx5/profile <<'FCITX'
 [Groups/0]
 Name=Default
 Default Layout=us
