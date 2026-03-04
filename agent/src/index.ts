@@ -236,6 +236,7 @@ export async function handleChatRequest(req: ChatRequest): Promise<void> {
 	const {
 		requestId,
 		provider: providerConfig,
+		naiaKey: reqNaiaKey,
 		messages: rawMessages,
 		systemPrompt,
 		ttsVoice,
@@ -568,9 +569,10 @@ export async function handleChatRequest(req: ChatRequest): Promise<void> {
 			let audioSent = !cleanText;
 
 			// Direct TTS based on selected provider
-			if (ttsProvider === "nextain" && providerConfig.naiaKey) {
+			const effectiveNaiaKey = reqNaiaKey || providerConfig.naiaKey;
+			if (ttsProvider === "nextain" && effectiveNaiaKey) {
 				try {
-					const audio = await synthesizeNextainSpeech(cleanText, providerConfig.naiaKey, ttsVoice);
+					const audio = await synthesizeNextainSpeech(cleanText, effectiveNaiaKey, ttsVoice);
 					if (audio) {
 						writeLine({ type: "audio", requestId, data: audio });
 						audioSent = true;

@@ -8,6 +8,7 @@ interface SendChatOptions {
 	history: { role: "user" | "assistant"; content: string }[];
 	onChunk: (chunk: AgentResponseChunk) => void;
 	requestId: string;
+	naiaKey?: string;
 	ttsVoice?: string;
 	ttsApiKey?: string;
 	ttsEngine?: "auto" | "openclaw" | "google";
@@ -35,6 +36,7 @@ export async function sendChatMessage(opts: SendChatOptions): Promise<void> {
 		history,
 		onChunk,
 		requestId,
+		naiaKey,
 		ttsVoice,
 		ttsApiKey,
 		ttsEngine,
@@ -58,6 +60,7 @@ export async function sendChatMessage(opts: SendChatOptions): Promise<void> {
 		requestId,
 		provider,
 		messages: [...history, { role: "user", content: message }],
+		...(naiaKey && { naiaKey }),
 		...(ttsVoice && { ttsVoice }),
 		...(ttsApiKey && { ttsApiKey }),
 		...(ttsEngine && { ttsEngine }),

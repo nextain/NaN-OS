@@ -6,6 +6,7 @@ export interface ChatRequest {
 	provider: ProviderConfig;
 	messages: { role: "user" | "assistant"; content: string }[];
 	systemPrompt?: string;
+	naiaKey?: string;
 	ttsVoice?: string;
 	ttsApiKey?: string;
 	ttsEngine?: "auto" | "openclaw" | "google";

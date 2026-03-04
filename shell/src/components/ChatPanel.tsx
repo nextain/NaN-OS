@@ -448,6 +448,7 @@ export function ChatPanel() {
 					naiaKey: activeProvider === "nextain" ? config.naiaKey : undefined,
 					ollamaHost: activeProvider === "ollama" ? config.ollamaHost : undefined,
 				},
+				naiaKey: config.naiaKey || undefined,
 				history: history.slice(0, -1), // exclude last (just added) user msg
 				onChunk: (chunk) => handleChunk(chunk, activeProvider),
 				requestId,
