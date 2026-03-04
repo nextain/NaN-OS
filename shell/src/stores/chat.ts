@@ -31,6 +31,7 @@ interface ChatState {
 	setSessionId: (id: string) => void;
 	setMessages: (messages: ChatMessage[]) => void;
 	addMessage: (msg: Pick<ChatMessage, "role" | "content">) => void;
+	updateLastMessage: (role: ChatMessage["role"], content: string) => void;
 	startStreaming: () => void;
 	appendStreamChunk: (text: string) => void;
 	appendThinkingChunk: (text: string) => void;
@@ -81,6 +82,24 @@ export const useChatStore = create<ChatState>()((set, get) => ({
 				{ ...msg, id: generateId(), timestamp: Date.now() },
 			],
 		})),
+
+	updateLastMessage: (role, content) =>
+		set((s) => {
+			for (let i = s.messages.length - 1; i >= 0; i--) {
+				if (s.messages[i].role === role) {
+					const updated = [...s.messages];
+					updated[i] = { ...updated[i], content };
+					return { messages: updated };
+				}
+			}
+			// No existing message — add new one
+			return {
+				messages: [
+					...s.messages,
+					{ role, content, id: generateId(), timestamp: Date.now() },
+				],
+			};
+		}),
 
 	startStreaming: () =>
 		set({ isStreaming: true, streamingContent: "", streamingThinking: "", streamingToolCalls: [] }),

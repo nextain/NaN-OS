@@ -727,17 +727,34 @@ export function ChatPanel() {
 			});
 			audioPlayerRef.current = player;
 
-			// Wire session events
+			// Wire session events — use upsert to avoid incremental transcript duplication
+			let inputTurnDirty = false;
+			let outputTurnDirty = false;
+
 			session.onAudio = (pcmBase64) => player.enqueue(pcmBase64);
 			session.onInputTranscript = (text) => {
-				useChatStore.getState().addMessage({ role: "user", content: text });
+				const store = useChatStore.getState();
+				if (inputTurnDirty) {
+					store.updateLastMessage("user", text);
+				} else {
+					store.addMessage({ role: "user", content: text });
+					inputTurnDirty = true;
+				}
 			};
 			session.onOutputTranscript = (text) => {
-				useChatStore.getState().addMessage({ role: "assistant", content: text });
+				const store = useChatStore.getState();
+				if (outputTurnDirty) {
+					store.updateLastMessage("assistant", text);
+				} else {
+					store.addMessage({ role: "assistant", content: text });
+					outputTurnDirty = true;
+				}
 			};
 			session.onInterrupted = () => player.clear();
 			session.onTurnEnd = () => {
-				// Avatar stops speaking when audio player finishes (via onPlaybackEnd)
+				// Finalize current turn — next transcript starts a new message
+				inputTurnDirty = false;
+				outputTurnDirty = false;
 			};
 			session.onToolCall = async (callId, toolName, args) => {
 				try {
@@ -788,6 +805,8 @@ export function ChatPanel() {
 		} catch (err) {
 			Logger.warn("ChatPanel", "Voice connection failed", { error: String(err) });
 			useChatStore.getState().addMessage({ role: "assistant", content: `${t("chat.voiceError")}: ${err}` });
+			// Detach onDisconnect before cleanup to prevent double-cleanup
+			if (voiceSessionRef.current) voiceSessionRef.current.onDisconnect = null;
 			voiceSessionRef.current?.disconnect();
 			micStreamRef.current?.stop();
 			audioPlayerRef.current?.destroy();

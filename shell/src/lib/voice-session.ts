@@ -114,8 +114,12 @@ export function createVoiceSession(): VoiceSession {
 
 				ws.onclose = () => {
 					clearTimeout(timeout);
+					const wasConnected = connected;
 					connected = false;
 					Logger.info("VoiceSession", "disconnected");
+					if (!wasConnected) {
+						reject(new Error("Connection closed before setup completed"));
+					}
 					session.onDisconnect?.();
 				};
 			});
