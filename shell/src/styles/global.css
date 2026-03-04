@@ -638,35 +638,70 @@ body.resizing-row {
 	border-radius: 6px;
 	border: none;
 	background: transparent;
-	color: var(--espresso-light);
 	cursor: pointer;
 	padding: 0;
 	display: flex;
 	align-items: center;
 	justify-content: center;
+	gap: 2px;
 	flex-shrink: 0;
-	transition: background 0.15s, color 0.15s;
+	transition: background 0.15s;
 }
 
 .chat-voice-btn:hover:not(:disabled) {
 	background: var(--espresso-light);
-	color: var(--cream);
 }
 
-.chat-voice-btn.connecting {
-	color: #e9a820;
-	animation: mic-pulse 1s ease-in-out infinite;
+/* Wave bars inside button — staggered idle heights */
+.voice-bar {
+	width: 3px;
+	border-radius: 2px;
+	background: var(--latte);
+	transition: background 0.15s, height 0.2s;
+}
+.voice-bar:nth-child(1) { height: 6px; }
+.voice-bar:nth-child(2) { height: 12px; }
+.voice-bar:nth-child(3) { height: 9px; }
+.voice-bar:nth-child(4) { height: 5px; }
+
+.chat-voice-btn:hover:not(:disabled) .voice-bar {
+	background: var(--cream);
 }
 
+/* Connecting — yellow bars with staggered pulse */
+.chat-voice-btn.connecting .voice-bar {
+	background: #e9a820;
+	animation: voice-wave 0.8s ease-in-out infinite;
+}
+.chat-voice-btn.connecting .voice-bar:nth-child(1) { animation-delay: 0s; }
+.chat-voice-btn.connecting .voice-bar:nth-child(2) { animation-delay: 0.15s; }
+.chat-voice-btn.connecting .voice-bar:nth-child(3) { animation-delay: 0.3s; }
+.chat-voice-btn.connecting .voice-bar:nth-child(4) { animation-delay: 0.45s; }
+
+/* Active — green bars with wave animation */
 .chat-voice-btn.active {
+	background: rgba(42, 157, 42, 0.15);
+}
+.chat-voice-btn.active .voice-bar {
 	background: #2a9d2a;
-	color: var(--cream);
-	animation: mic-pulse 2s ease-in-out infinite;
+	animation: voice-wave 1s ease-in-out infinite;
+}
+.chat-voice-btn.active .voice-bar:nth-child(1) { animation-delay: 0s; }
+.chat-voice-btn.active .voice-bar:nth-child(2) { animation-delay: 0.2s; }
+.chat-voice-btn.active .voice-bar:nth-child(3) { animation-delay: 0.4s; }
+.chat-voice-btn.active .voice-bar:nth-child(4) { animation-delay: 0.6s; }
+
+@keyframes voice-wave {
+	0%, 100% { height: 4px; }
+	50% { height: 16px; }
 }
 
 .chat-voice-btn:disabled {
 	opacity: 0.4;
 	cursor: not-allowed;
+}
+.chat-voice-btn:disabled .voice-bar {
+	animation: none;
 }
 
 /* Settings Modal */

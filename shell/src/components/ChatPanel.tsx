@@ -1,7 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { useEffect, useRef, useState } from "react";
 import Markdown from "react-markdown";
-import { type AudioRecorder, startRecording } from "../lib/audio-recorder";
 import { type AudioPlayer, createAudioPlayer } from "../lib/audio-player";
 import { cancelChat, directToolCall, sendChatMessage } from "../lib/chat-service";
 import { resetDiscordPollState } from "../lib/discord-poll";
@@ -31,7 +30,6 @@ import { t } from "../lib/i18n";
 import { Logger } from "../lib/logger";
 import { extractFacts, summarizeSession } from "../lib/memory-processor";
 import { type MemoryContext, buildSystemPrompt } from "../lib/persona";
-import { transcribeAudio } from "../lib/stt";
 import { type VoiceSession, createVoiceSession } from "../lib/voice-session";
 import type {
 	AgentResponseChunk,
@@ -237,7 +235,6 @@ function sendApprovalResponse(
 
 export function ChatPanel() {
 	const [input, setInput] = useState("");
-	const [isRecording, setIsRecording] = useState(false);
 	const [activeTab, setActiveTab] = useState<TabId>(
 		isReadyToChat() ? "chat" : "settings",
 	);
@@ -245,7 +242,6 @@ export function ChatPanel() {
 	const [voiceMode, setVoiceMode] = useState<"off" | "connecting" | "active">("off");
 	const messagesEndRef = useRef<HTMLDivElement>(null);
 	const inputRef = useRef<HTMLTextAreaElement>(null);
-	const recorderRef = useRef<AudioRecorder | null>(null);
 	const sessionLoaded = useRef(false);
 	const currentRequestId = useRef<string | null>(null);
 	const voiceSessionRef = useRef<VoiceSession | null>(null);
@@ -262,8 +258,6 @@ export function ChatPanel() {
 	const pendingApproval = useChatStore((s) => s.pendingApproval);
 	const messageQueue = useChatStore((s) => s.messageQueue);
 
-	// Read STT toggle from config (safe: loadConfig handles parse errors)
-	const sttEnabled = loadConfig()?.sttEnabled !== false;
 
 	const setEmotion = useAvatarStore((s) => s.setEmotion);
 
@@ -457,7 +451,11 @@ export function ChatPanel() {
 				history: history.slice(0, -1), // exclude last (just added) user msg
 				onChunk: (chunk) => handleChunk(chunk, activeProvider),
 				requestId,
-				ttsVoice: ttsEnabled ? config.ttsVoice : undefined,
+				ttsVoice: ttsEnabled
+					? (cfgTtsProvider === "nextain" && config.liveVoice
+						? `ko-KR-Chirp3-HD-${config.liveVoice}`
+						: config.ttsVoice)
+					: undefined,
 				ttsApiKey: ttsEnabled
 					? (cfgTtsProvider === "google"
 						? (config.googleApiKey || (activeProvider === "gemini" ? config.apiKey : ""))
@@ -632,50 +630,6 @@ export function ChatPanel() {
 		useChatStore.getState().clearPendingApproval();
 	}
 
-	async function handleMicStart() {
-		if (isRecording || isStreaming) return;
-
-		try {
-			const recorder = await startRecording();
-			recorderRef.current = recorder;
-			setIsRecording(true);
-		} catch (err) {
-			Logger.warn("ChatPanel", "Microphone access failed", {
-				error: String(err),
-			});
-			setIsRecording(false);
-		}
-	}
-
-	async function handleMicStop() {
-		const recorder = recorderRef.current;
-		if (!recorder) return;
-		recorderRef.current = null;
-
-		try {
-			const wavBlob = await recorder.stop();
-			setIsRecording(false);
-
-			if (wavBlob.size <= 44) return; // WAV header only = silence
-
-			const config = loadConfig();
-			const googleKey =
-				config?.googleApiKey ||
-				(config?.provider === "gemini" ? config?.apiKey : null);
-			if (!googleKey) return;
-
-			const text = await transcribeAudio(wavBlob, googleKey);
-			if (text) {
-				setInput((prev) => (prev ? `${prev} ${text}` : text));
-				inputRef.current?.focus();
-			}
-		} catch (err) {
-			Logger.warn("ChatPanel", "STT processing failed", {
-				error: String(err),
-			});
-			setIsRecording(false);
-		}
-	}
 
 	// Cleanup voice session on unmount
 	useEffect(() => {
@@ -794,7 +748,7 @@ export function ChatPanel() {
 				naiaKey,
 				voice: config.liveVoice ?? "Puck",
 				systemInstruction: systemPrompt,
-				model: config.liveModel,
+				model: config.liveModel ?? "gemini-live-2.5-flash-native-audio",
 			});
 
 			// Create mic stream
@@ -1107,31 +1061,19 @@ export function ChatPanel() {
 					disabled={isStreaming}
 					title={voiceMode === "off" ? t("chat.voiceStart") : voiceMode === "connecting" ? t("chat.voiceConnecting") : t("chat.voiceEnd")}
 				>
-					{voiceMode === "off" ? "📞" : voiceMode === "connecting" ? "⏳" : "🔊"}
+					<span className="voice-bar" />
+				<span className="voice-bar" />
+				<span className="voice-bar" />
+				<span className="voice-bar" />
 				</button>
-				{sttEnabled && voiceMode === "off" && (
-					<button
-						type="button"
-						className={`chat-mic-btn${isRecording ? " recording" : ""}`}
-						onMouseDown={handleMicStart}
-						onMouseUp={handleMicStop}
-						onMouseLeave={handleMicStop}
-						disabled={isStreaming}
-						title={isRecording ? t("chat.recording") : "STT"}
-					>
-						{isRecording ? "⏺" : "🎤"}
-					</button>
-				)}
 				<textarea
 					ref={inputRef}
 					value={input}
 					onChange={(e) => setInput(e.target.value)}
 					onKeyDown={handleKeyDown}
-					placeholder={
-						isRecording ? t("chat.recording") : t("chat.placeholder")
-					}
+					placeholder={t("chat.placeholder")}
 					rows={1}
-					disabled={isRecording}
+					disabled={voiceMode !== "off"}
 					className="chat-input"
 				/>
 				{messageQueue.length > 0 && (

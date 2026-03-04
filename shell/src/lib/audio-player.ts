@@ -28,6 +28,10 @@ export function createAudioPlayer(opts: AudioPlayerOptions = {}): AudioPlayer {
 	function enqueue(base64Pcm: string) {
 		if (destroyed) return;
 
+		if (ctx.state === "suspended") {
+			ctx.resume();
+		}
+
 		const bytes = base64ToUint8Array(base64Pcm);
 		const int16 = new Int16Array(bytes.buffer, bytes.byteOffset, bytes.byteLength / 2);
 		const float32 = int16ToFloat32(int16);
@@ -63,6 +67,7 @@ export function createAudioPlayer(opts: AudioPlayerOptions = {}): AudioPlayer {
 	}
 
 	function clear() {
+		const wasPlaying = activeSourceCount > 0;
 		for (const src of activeSources) {
 			try { src.stop(); } catch { /* already stopped */ }
 		}
@@ -70,7 +75,9 @@ export function createAudioPlayer(opts: AudioPlayerOptions = {}): AudioPlayer {
 		nextStartTime = 0;
 		activeSourceCount = 0;
 		Logger.info("AudioPlayer", "cleared");
-		opts.onPlaybackEnd?.();
+		if (wasPlaying) {
+			opts.onPlaybackEnd?.();
+		}
 	}
 
 	function destroy() {
