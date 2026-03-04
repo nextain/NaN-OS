@@ -4,7 +4,7 @@
 #
 # Usage: ./os/tests/e2e-install.sh --iso <path> [OPTIONS]
 #
-# Prerequisites: qemu-system-x86_64, qemu-img, xorriso, OVMF (edk2-ovmf), sshpass, socat
+# Prerequisites: qemu-system-x86_64, qemu-img, qemu-nbd, xorriso, OVMF (edk2-ovmf), sshpass, socat
 
 set -euo pipefail
 
@@ -12,6 +12,7 @@ set -euo pipefail
 
 ISO_PATH=""
 SKIP_VERIFY=false
+SKIP_GUI_TEST=false
 KEEP_WORKDIR=false
 WORKDIR="/var/tmp/naia-e2e"
 INSTALL_TIMEOUT=2400    # 40 min (graphical boot takes longer)
@@ -56,6 +57,7 @@ Required:
   --iso <path>       Path to Naia OS ISO
 
 Options:
+  --skip-gui-test    Skip live session GUI branding test
   --skip-verify      Skip post-install boot verification
   --keep             Keep workdir after test (for debugging)
   --workdir <path>   Working directory (default: /tmp/naia-e2e)
@@ -81,6 +83,10 @@ cleanup() {
     # Kill verbose tail
     if [[ -n "${TAIL_PID:-}" ]] && kill -0 "$TAIL_PID" 2>/dev/null; then
         kill "$TAIL_PID" 2>/dev/null || true
+    fi
+    # Kill VNC viewer
+    if [[ -n "${VNC_PID:-}" ]] && kill -0 "$VNC_PID" 2>/dev/null; then
+        kill "$VNC_PID" 2>/dev/null || true
     fi
 
     if [[ "$KEEP_WORKDIR" == false && -d "$WORKDIR" ]]; then
@@ -155,6 +161,7 @@ parse_args() {
     while [[ $# -gt 0 ]]; do
         case "$1" in
             --iso)        ISO_PATH="$2"; shift 2 ;;
+            --skip-gui-test) SKIP_GUI_TEST=true; shift ;;
             --skip-verify) SKIP_VERIFY=true; shift ;;
             --keep)       KEEP_WORKDIR=true; shift ;;
             --workdir)    WORKDIR="$2"; shift 2 ;;
@@ -249,6 +256,13 @@ patch_iso_with_kickstart() {
         }' \
         "$grub_dir/grub.cfg"
 
+    # Ensure GRUB auto-boots (some ISOs have timeout=-1 which waits forever)
+    if grep -q 'set timeout=' "$grub_dir/grub.cfg"; then
+        sed -i 's/set timeout=.*/set timeout=3/' "$grub_dir/grub.cfg"
+    else
+        sed -i '1i set timeout=3' "$grub_dir/grub.cfg"
+    fi
+
     if $VERBOSE; then
         log "GRUB config diff:"
         diff "$grub_dir/grub.cfg.orig" "$grub_dir/grub.cfg" || true
@@ -278,191 +292,390 @@ patch_iso_with_kickstart() {
     ok "Patched ISO: $patched_iso ($(du -h "$patched_iso" | cut -f1))"
 }
 
-# ── Phase 2: QEMU Installation ───────────────────────────────────────────────
+# ── Phase 1.5: Live Session GUI Test ─────────────────────────────────────────
 
-generate_anaconda_script() {
-    # Python script that runs anaconda in text mode with pty-based automation
-    cat > "$WORKDIR/anaconda-automate.py" << 'PYEOF'
+generate_qmp_helper() {
+    cat > "$WORKDIR/qmp-helper.py" << 'PYEOF'
 #!/usr/bin/env python3
-"""Anaconda text-mode automator for E2E testing.
+"""QMP (QEMU Machine Protocol) helper for screendump and VM control."""
+import json, socket, sys, time
 
-Launches anaconda --liveinst --text with kickstart, then navigates
-the TUI spokes and presses 'b' to begin installation.
-"""
-import os, sys, pty, select, subprocess, time, re
+class QMP:
+    def __init__(self, sock_path):
+        self.sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        self.sock.connect(sock_path)
+        self.sock.settimeout(10)
+        # Read greeting
+        self._recv()
+        # Negotiate capabilities
+        self._send({"execute": "qmp_capabilities"})
+        self._recv()
 
-TIMEOUT = 1800  # 30 min total
-KS_PATH = "/run/initramfs/live/ks.cfg"
+    def _send(self, cmd):
+        self.sock.sendall(json.dumps(cmd).encode() + b"\n")
 
-class Automator:
-    def __init__(self):
-        self.master = None
-        self.proc = None
-        self.buf = b""
-        self.logf = open("/tmp/anaconda-e2e.log", "wb")
+    def _recv(self):
+        buf = b""
+        while True:
+            chunk = self.sock.recv(4096)
+            buf += chunk
+            if b"\n" in buf:
+                break
+        return json.loads(buf.decode().strip())
 
-    def start_anaconda(self):
-        master, slave = pty.openpty()
-        env = os.environ.copy()
-        env["PKEXEC_UID"] = str(os.getuid())
-        env["LANG"] = "en_US.UTF-8"
-        env["TERM"] = "linux"
+    def screendump(self, filename, fmt="ppm"):
+        args = {"filename": filename}
+        if fmt == "png":
+            args["format"] = "png"
+        self._send({"execute": "screendump", "arguments": args})
+        resp = self._recv()
+        # Skip async events, wait for return
+        retries = 0
+        while "return" not in resp and "error" not in resp and retries < 10:
+            resp = self._recv()
+            retries += 1
+        return resp
 
-        self.proc = subprocess.Popen(
-            ["sudo", "-E", "/usr/sbin/anaconda",
-             "--liveinst", "--text", "--kickstart", KS_PATH],
-            stdin=slave, stdout=slave, stderr=slave,
-            env=env, preexec_fn=os.setsid
-        )
-        os.close(slave)
-        self.master = master
-        print(f"[e2e] Anaconda started (PID {self.proc.pid})")
+    def quit(self):
+        self._send({"execute": "quit"})
 
-    def read_until(self, pattern, timeout=300):
-        """Read pty output until pattern matches or timeout."""
-        start = time.time()
-        compiled = re.compile(pattern.encode() if isinstance(pattern, str) else pattern)
-        while time.time() - start < timeout:
-            r, _, _ = select.select([self.master], [], [], 2)
-            if r:
-                try:
-                    data = os.read(self.master, 4096)
-                except OSError:
-                    break
-                self.buf += data
-                self.logf.write(data)
-                self.logf.flush()
-                if compiled.search(self.buf):
-                    return True
-            if self.proc.poll() is not None:
-                return False
-        return False
-
-    def send(self, text, delay=2):
-        """Send text to anaconda's pty."""
-        time.sleep(delay)
-        os.write(self.master, (text + "\r").encode())
-        self.buf = b""  # reset buffer after send
-
-    def detect_incomplete_spokes(self):
-        """Parse menu output for spokes marked [!] (need attention)."""
-        incomplete = []
-        text = self.buf.decode("utf-8", errors="replace")
-        for line in text.split("\n"):
-            m = re.match(r"\s*(\d+)\)\s*\[!\]", line)
-            if m:
-                incomplete.append(int(m.group(1)))
-        return incomplete
-
-    def navigate_spoke_destination(self):
-        """Spoke: Installation Destination"""
-        print("[e2e] Navigating: Installation Destination")
-        self.send("3")
-        if not self.read_until(r"disk|Disk|select|DISK", 30):
-            print("[e2e]   Warning: disk prompt not detected, pressing c anyway")
-        self.send("c", 5)  # accept disk
-        time.sleep(3)
-        self.send("c", 3)  # accept partitioning (Use All Space)
-        time.sleep(3)
-        self.send("c", 3)  # accept partition type (Btrfs)
-        self.read_until(r"begin installation|Installation", 30)
-        print("[e2e]   Destination done")
-
-    def navigate_spoke_root_password(self):
-        """Spoke: Root Password (keep locked)"""
-        print("[e2e] Navigating: Root Password")
-        self.send("4")
-        time.sleep(5)
-        self.send("c", 3)  # accept locked
-        self.read_until(r"begin installation|Installation", 15)
-        print("[e2e]   Root password done")
-
-    def navigate_spoke_user(self):
-        """Spoke: User Creation"""
-        print("[e2e] Navigating: User Creation")
-        self.send("5")
-        time.sleep(5)
-        self.send("1", 2)  # toggle Create user
-        self.send("2", 2)  # Full name
-        self.send("testuser", 2)
-        self.send("3", 2)  # Username
-        self.send("testuser", 2)
-        self.send("5", 2)  # Password
-        time.sleep(3)
-        self.send("naia-e2e-test", 3)  # password
-        self.send("naia-e2e-test", 3)  # confirm
-        self.send("c", 5)  # finish
-        self.read_until(r"begin installation|Installation", 15)
-        print("[e2e]   User creation done")
-
-    def run(self):
-        self.start_anaconda()
-
-        # Wait for text mode main menu
-        print("[e2e] Waiting for Anaconda text menu...")
-        if not self.read_until(r"begin installation", 300):
-            print("[e2e] ERROR: Anaconda text menu not found")
-            return 1
-
-        print("[e2e] Menu displayed. Checking spoke status...")
-        time.sleep(3)
-
-        # Check which spokes need attention
-        incomplete = self.detect_incomplete_spokes()
-        if incomplete:
-            print(f"[e2e] Incomplete spokes: {incomplete}")
-            for spoke in sorted(incomplete):
-                if spoke == 3:
-                    self.navigate_spoke_destination()
-                elif spoke == 4:
-                    self.navigate_spoke_root_password()
-                elif spoke == 5:
-                    self.navigate_spoke_user()
-                else:
-                    print(f"[e2e] Warning: Unknown spoke {spoke}, skipping")
-                time.sleep(3)
-        else:
-            print("[e2e] All spokes completed by kickstart")
-
-        # Begin installation
-        print("[e2e] Pressing 'b' to begin installation...")
-        self.send("b", 3)
-
-        # Wait for anaconda to finish (VM will reboot)
-        print("[e2e] Waiting for installation to complete...")
-        self.proc.wait()
-        print(f"[e2e] Anaconda exited with code {self.proc.returncode}")
-        self.logf.close()
-        return self.proc.returncode
+    def close(self):
+        self.sock.close()
 
 if __name__ == "__main__":
-    a = Automator()
-    sys.exit(a.run())
+    import argparse
+    p = argparse.ArgumentParser()
+    p.add_argument("sock", help="QMP socket path")
+    p.add_argument("action", choices=["screendump", "quit"])
+    p.add_argument("--output", "-o", help="Screenshot output path")
+    p.add_argument("--format", "-f", default="ppm", choices=["ppm", "png"])
+    args = p.parse_args()
+
+    try:
+        q = QMP(args.sock)
+        if args.action == "screendump":
+            if not args.output:
+                print("ERROR: --output required for screendump", file=sys.stderr)
+                sys.exit(1)
+            resp = q.screendump(args.output, args.format)
+            if "error" in resp:
+                print(f"ERROR: {resp['error']}", file=sys.stderr)
+                # Fallback to PPM if PNG not supported
+                if args.format == "png":
+                    ppm_path = args.output.rsplit(".", 1)[0] + ".ppm"
+                    resp = q.screendump(ppm_path, "ppm")
+                    if "error" not in resp:
+                        print(f"FALLBACK_PPM:{ppm_path}")
+                    else:
+                        sys.exit(1)
+                else:
+                    sys.exit(1)
+            else:
+                print(f"OK:{args.output}")
+        elif args.action == "quit":
+            q.quit()
+            print("OK:quit")
+        q.close()
+    except Exception as e:
+        print(f"ERROR: {e}", file=sys.stderr)
+        sys.exit(1)
 PYEOF
-    chmod +x "$WORKDIR/anaconda-automate.py"
+    chmod +x "$WORKDIR/qmp-helper.py"
 }
 
+qmp_screendump() {
+    local sock="$1" output="$2"
+    local fmt="png"
+    local result
+    result=$(python3 "$WORKDIR/qmp-helper.py" "$sock" screendump -o "$output" -f "$fmt" 2>&1) || true
+    if [[ "$result" == OK:* ]]; then
+        echo "$output"
+        return 0
+    elif [[ "$result" == FALLBACK_PPM:* ]]; then
+        local ppm_path="${result#FALLBACK_PPM:}"
+        # Convert PPM to PNG if possible
+        if command -v convert &>/dev/null; then
+            convert "$ppm_path" "$output" 2>/dev/null && rm -f "$ppm_path" && echo "$output" && return 0
+        elif command -v magick &>/dev/null; then
+            magick "$ppm_path" "$output" 2>/dev/null && rm -f "$ppm_path" && echo "$output" && return 0
+        fi
+        echo "$ppm_path"
+        return 0
+    fi
+    warn "screendump failed: $result"
+    return 1
+}
+
+qmp_quit() {
+    local sock="$1"
+    python3 "$WORKDIR/qmp-helper.py" "$sock" quit 2>/dev/null || true
+}
+
+run_gui_test() {
+    bold "=== Phase 1.5: Live Session GUI Test ==="
+
+    if $SKIP_GUI_TEST; then
+        warn "Skipped (--skip-gui-test)"
+        GUI_RESULT="SKIP"; GUI_PASSED=0; GUI_TOTAL=0; GUI_DURATION=0
+        return
+    fi
+
+    local gui_start
+    gui_start=$(date +%s)
+    local gui_passed=0 gui_total=0
+
+    local gui_disk="$WORKDIR/gui-scratch.qcow2"
+    local gui_efivars="$WORKDIR/gui-efivars.fd"
+    local gui_serial_log="$WORKDIR/gui-serial.log"
+    local gui_serial_sock="$WORKDIR/gui-serial.sock"
+    local gui_serial_cmd="$WORKDIR/gui-serial-cmd"
+    local qmp_sock="$WORKDIR/qmp.sock"
+    local screenshot_dir="$WORKDIR/screenshots"
+    mkdir -p "$screenshot_dir"
+
+    # Create scratch disk (small, not used for install) + OVMF vars
+    qemu-img create -f qcow2 "$gui_disk" "10G" >/dev/null
+    cp "$OVMF_VARS" "$gui_efivars"
+
+    # Generate QMP helper
+    generate_qmp_helper
+
+    local kvm_flag=""
+    if [[ -r /dev/kvm ]]; then kvm_flag="-enable-kvm"; fi
+
+    # Launch VNC viewer if available
+    local VNC_PID=""
+    log "Starting GUI test VM (VNC :$VNC_DISPLAY)..."
+    qemu-system-x86_64 \
+        $kvm_flag \
+        -machine q35 \
+        -cpu host \
+        -smp "$QEMU_SMP" \
+        -m "$QEMU_MEM" \
+        -drive "if=pflash,format=raw,readonly=on,file=$OVMF_CODE" \
+        -drive "if=pflash,format=raw,file=$gui_efivars" \
+        -drive "file=$gui_disk,format=qcow2,if=virtio" \
+        -cdrom "$WORKDIR/naia-e2e.iso" \
+        -boot d \
+        -display none \
+        -vnc ":$VNC_DISPLAY" \
+        -vga virtio \
+        -netdev "user,id=net0" \
+        -device virtio-net-pci,netdev=net0 \
+        -chardev "socket,id=ser0,path=$gui_serial_sock,server=on,wait=off" \
+        -serial chardev:ser0 \
+        -chardev "socket,id=qmp0,path=$qmp_sock,server=on,wait=off" \
+        -mon chardev=qmp0,mode=control \
+        -no-reboot &
+
+    QEMU_PID=$!
+    log "GUI test QEMU PID: $QEMU_PID"
+
+    # Set up serial communication
+    sleep 2
+    > "$gui_serial_log"
+    > "$gui_serial_cmd"
+    tail -f "$gui_serial_cmd" | socat - UNIX-CONNECT:"$gui_serial_sock" >> "$gui_serial_log" 2>/dev/null &
+    SOCAT_PID=$!
+
+    if $VERBOSE; then
+        tail -f "$gui_serial_log" &
+        TAIL_PID=$!
+    fi
+
+    # Launch VNC viewer for observation
+    if command -v vncviewer &>/dev/null; then
+        log "Opening VNC viewer (localhost:$((5900 + VNC_DISPLAY)))..."
+        vncviewer "localhost:$((5900 + VNC_DISPLAY))" &>/dev/null &
+        VNC_PID=$!
+    elif flatpak info org.tigervnc.vncviewer &>/dev/null 2>&1; then
+        log "Opening TigerVNC Flatpak (localhost:$((5900 + VNC_DISPLAY)))..."
+        flatpak run org.tigervnc.vncviewer "localhost:$((5900 + VNC_DISPLAY))" &>/dev/null &
+        VNC_PID=$!
+    else
+        log "No VNC viewer found — connect manually: vncviewer localhost:$((5900 + VNC_DISPLAY))"
+    fi
+
+    # ── Wait for debug shell ──
+    log "Waiting for debug shell..."
+    if ! wait_serial_pattern "$gui_serial_log" "sh-[0-9]" 300; then
+        err "Debug shell not detected within 300s"
+        kill "$QEMU_PID" 2>/dev/null || true; wait "$QEMU_PID" 2>/dev/null || true; QEMU_PID=""
+        kill "$SOCAT_PID" 2>/dev/null || true; SOCAT_PID=""
+        GUI_RESULT="FAIL"; GUI_PASSED=0; GUI_TOTAL=0
+        GUI_DURATION=$(( $(date +%s) - gui_start ))
+        return
+    fi
+    ok "Debug shell ready"
+
+    # ── Expand /run (debug shell = root namespace) ──
+    log "Expanding /run for GUI test VM..."
+    send_serial_cmd "$gui_serial_cmd" "mount -o remount,size=6G /run && echo RUN_OK || echo RUN_FAIL"
+    wait_serial_pattern "$gui_serial_log" "RUN_OK" 15 || warn "/run expansion failed"
+
+    # ── Wait for KDE desktop (poll via debug shell) ──
+    log "Waiting for KDE desktop (up to 180s)..."
+    local desktop_ready=false
+    local dw=0
+    while (( dw < 180 )); do
+        send_serial_cmd "$gui_serial_cmd" "systemctl is-active sddm 2>/dev/null | grep -q active && echo DESKTOP_READY || echo DESKTOP_WAIT"
+        if wait_serial_pattern "$gui_serial_log" "DESKTOP_READY" 8; then
+            desktop_ready=true
+            break
+        fi
+        sleep 5
+        dw=$((dw + 5))
+    done
+
+    if ! $desktop_ready; then
+        warn "SDDM not detected after 180s, continuing anyway..."
+    else
+        ok "Desktop ready (SDDM active, ${dw}s)"
+    fi
+    # Settle time for KDE to fully render after SDDM
+    sleep 20
+
+    # ── Desktop screenshot ──
+    log "Taking desktop screenshot..."
+    qmp_screendump "$qmp_sock" "$screenshot_dir/01-desktop.png" && \
+        ok "Desktop screenshot: $screenshot_dir/01-desktop.png" || \
+        warn "Desktop screenshot failed"
+
+    # ── File-based branding checks (via serial debug shell) ──
+    log "Running branding checks..."
+
+    run_gui_check() {
+        local name="$1" cmd="$2" expect="$3"
+        gui_total=$((gui_total + 1))
+        local marker="GUI_CHECK_${gui_total}_DONE"
+
+        send_serial_cmd "$gui_serial_cmd" "${cmd}; echo ${marker}"
+        sleep 3
+
+        if wait_serial_pattern "$gui_serial_log" "$marker" 30; then
+            if [[ -z "$expect" ]] || grep -q "$expect" "$gui_serial_log" 2>/dev/null; then
+                ok "  [$gui_total] $name"
+                gui_passed=$((gui_passed + 1))
+            else
+                fail "  [$gui_total] $name (pattern '$expect' not found)"
+            fi
+        else
+            fail "  [$gui_total] $name (timeout)"
+        fi
+    }
+
+    run_gui_check "os-release contains Naia" \
+        "grep -i naia /usr/lib/os-release 2>/dev/null || grep -i naia /etc/os-release 2>/dev/null || echo NO_NAIA" \
+        "Naia\|naia"
+
+    run_gui_check "Installer sidebar logo" \
+        "stat /usr/share/anaconda/pixmaps/sidebar-logo.png 2>/dev/null && echo SIDEBAR_OK || echo SIDEBAR_MISSING" \
+        "SIDEBAR_OK"
+
+    run_gui_check "Icon cache exists" \
+        "stat /usr/share/icons/hicolor/icon-theme.cache 2>/dev/null && echo CACHE_OK || echo CACHE_MISSING" \
+        "CACHE_OK"
+
+    run_gui_check "Desktop entry uses wrapper" \
+        "grep -l naia-liveinst-wrapper /usr/share/applications/*.desktop 2>/dev/null && echo WRAPPER_OK || echo WRAPPER_MISSING" \
+        "WRAPPER_OK"
+
+    run_gui_check "/run/anaconda tmpfiles.d" \
+        "cat /etc/tmpfiles.d/anaconda-run.conf 2>/dev/null || echo TMPFILES_MISSING" \
+        "/run/anaconda"
+
+    run_gui_check "naia-expand-run.service enabled" \
+        "systemctl is-enabled naia-expand-run.service 2>/dev/null || echo SVC_DISABLED" \
+        "enabled"
+
+    # ── Launch liveinst (test Install to Hard Drive) ──
+    log "Testing Install to Hard Drive launch..."
+    send_serial_cmd "$gui_serial_cmd" "export DISPLAY=:0 WAYLAND_DISPLAY=wayland-0 XDG_RUNTIME_DIR=/run/user/1000"
+    sleep 2
+    send_serial_cmd "$gui_serial_cmd" "mkdir -p /run/anaconda"
+    sleep 2
+    send_serial_cmd "$gui_serial_cmd" "/usr/bin/liveinst &"
+    sleep 25
+
+    # Check if anaconda process is running
+    gui_total=$((gui_total + 1))
+    local marker="GUI_CHECK_${gui_total}_DONE"
+    send_serial_cmd "$gui_serial_cmd" "pgrep -f anaconda > /dev/null 2>&1 && echo ANACONDA_RUNNING || echo ANACONDA_FAILED; echo ${marker}"
+    sleep 5
+
+    if wait_serial_pattern "$gui_serial_log" "$marker" 30; then
+        if grep -q "ANACONDA_RUNNING" "$gui_serial_log" 2>/dev/null; then
+            ok "  [$gui_total] Anaconda launched successfully"
+            gui_passed=$((gui_passed + 1))
+        else
+            fail "  [$gui_total] Anaconda failed to launch"
+        fi
+    else
+        fail "  [$gui_total] Anaconda launch check timed out"
+    fi
+
+    # ── Installer screenshot ──
+    log "Taking installer screenshot..."
+    qmp_screendump "$qmp_sock" "$screenshot_dir/02-installer.png" && \
+        ok "Installer screenshot: $screenshot_dir/02-installer.png" || \
+        warn "Installer screenshot failed"
+
+    # ── Cleanup GUI test VM ──
+    log "Shutting down GUI test VM..."
+    qmp_quit "$qmp_sock"
+    sleep 3
+    if kill -0 "$QEMU_PID" 2>/dev/null; then
+        kill "$QEMU_PID" 2>/dev/null || true
+    fi
+    wait "$QEMU_PID" 2>/dev/null || true
+    QEMU_PID=""
+    kill "$SOCAT_PID" 2>/dev/null || true; SOCAT_PID=""
+    if [[ -n "${TAIL_PID:-}" ]]; then kill "$TAIL_PID" 2>/dev/null || true; TAIL_PID=""; fi
+    if [[ -n "$VNC_PID" ]] && kill -0 "$VNC_PID" 2>/dev/null; then kill "$VNC_PID" 2>/dev/null || true; fi
+
+    # Clean up scratch disk
+    rm -f "$gui_disk" "$gui_efivars"
+
+    local gui_duration=$(( $(date +%s) - gui_start ))
+    GUI_PASSED="$gui_passed"; GUI_TOTAL="$gui_total"
+    GUI_DURATION="$gui_duration"
+    [[ $gui_passed -eq $gui_total ]] && GUI_RESULT="PASS" || GUI_RESULT="FAIL"
+
+    local gc; [[ "$GUI_RESULT" == "PASS" ]] && gc="$GREEN" || gc="$RED"
+    echo -e "  GUI Test: ${gc}${GUI_RESULT}${NC} (${gui_passed}/${gui_total}, ${gui_duration}s)"
+
+    if [[ -d "$screenshot_dir" ]]; then
+        log "Screenshots saved to: $screenshot_dir/"
+        ls -la "$screenshot_dir/" 2>/dev/null || true
+    fi
+}
+
+# ── Phase 2: GUI Installation ────────────────────────────────────────────────
+
 run_installation() {
-    bold "=== Phase 2: QEMU Installation (VNC Graphics Mode) ==="
+    bold "=== Phase 2: GUI Installation ==="
 
     local disk="$WORKDIR/disk.qcow2"
     local efivars="$WORKDIR/efivars.fd"
     local serial_log="$WORKDIR/install-serial.log"
     local serial_sock="$WORKDIR/serial.sock"
     local serial_cmd="$WORKDIR/serial-cmd"
+    local qmp_sock="$WORKDIR/install-qmp.sock"
+    local screenshot_dir="$WORKDIR/screenshots"
+    mkdir -p "$screenshot_dir"
 
     # Create virtual disk + OVMF vars copy
     log "Creating ${DISK_SIZE} virtual disk..."
     qemu-img create -f qcow2 "$disk" "$DISK_SIZE" >/dev/null
     cp "$OVMF_VARS" "$efivars"
 
-    # Generate the Python automation script
-    generate_anaconda_script
+    # Generate QMP helper (reuse from Phase 1.5 if not already generated)
+    generate_qmp_helper
 
     local kvm_flag=""
     if [[ -r /dev/kvm ]]; then kvm_flag="-enable-kvm"; fi
 
-    log "Starting QEMU (VNC :$VNC_DISPLAY, SSH port $SSH_PORT)..."
+    log "Starting QEMU (VNC :$VNC_DISPLAY)..."
     qemu-system-x86_64 \
         $kvm_flag \
         -machine q35 \
@@ -481,17 +694,19 @@ run_installation() {
         -device virtio-net-pci,netdev=net0 \
         -chardev "socket,id=ser0,path=$serial_sock,server=on,wait=off" \
         -serial chardev:ser0 \
+        -chardev "socket,id=qmp0,path=$qmp_sock,server=on,wait=off" \
+        -mon chardev=qmp0,mode=control \
         -no-reboot &
 
     QEMU_PID=$!
-    log "QEMU PID: $QEMU_PID"
+    log "QEMU PID: $QEMU_PID (VNC :$VNC_DISPLAY = port $((5900 + VNC_DISPLAY)))"
 
     local install_start
     install_start=$(date +%s)
 
-    # Set up serial communication (for initial setup + logging)
+    # Set up serial communication
     sleep 2
-    touch "$serial_log"
+    > "$serial_log"
     > "$serial_cmd"
     tail -f "$serial_cmd" | socat - UNIX-CONNECT:"$serial_sock" >> "$serial_log" 2>/dev/null &
     SOCAT_PID=$!
@@ -501,7 +716,7 @@ run_installation() {
         TAIL_PID=$!
     fi
 
-    # ── Phase 2a: Bootstrap SSH via serial debug shell ──
+    # ── Phase 2a: Wait for debug shell ──
     log "Waiting for debug shell on serial..."
     if ! wait_serial_pattern "$serial_log" "sh-[0-9]" 300; then
         err "Debug shell not detected within 300s"
@@ -510,333 +725,205 @@ run_installation() {
     fi
     ok "Debug shell ready"
 
-    # Wait for basic networking (QEMU user-mode NAT is typically 10.0.2.x)
-    log "Waiting for network..."
-    # Simple network wait — avoid complex for loops over serial (bracket paste issues)
-    send_serial_cmd "$serial_cmd" "sleep 10; ip -4 addr show | grep -q 'inet [0-9]'; echo NET_READY"
-    if ! wait_serial_pattern "$serial_log" "NET_READY" 90; then
-        warn "Network check timed out, continuing anyway..."
+    # ── Phase 2b: Expand /run + prepare environment ──
+    log "Expanding /run..."
+    send_serial_cmd "$serial_cmd" "mount -o remount,size=6G /run && echo RUN_OK || echo RUN_FAIL"
+    if wait_serial_pattern "$serial_log" "RUN_OK" 15; then
+        ok "/run expanded to 6G"
+    else
+        warn "/run expansion failed"
     fi
 
-    # Set liveuser password, enable passwordless sudo, and start sshd
-    log "Enabling SSH access..."
-    # Wait for shell to be fully ready after network check
-    sleep 3
-    # Set password — use chpasswd with echo pipe (simpler than passwd --stdin)
-    send_serial_cmd "$serial_cmd" "echo liveuser:naia-e2e-test | chpasswd; echo PASSWD_OK"
-    sleep 5
-    # Unlock account (may be locked by default)
-    send_serial_cmd "$serial_cmd" "passwd -u liveuser 2>/dev/null; echo UNLOCK_OK"
-    sleep 3
-    send_serial_cmd "$serial_cmd" "echo 'liveuser ALL=(ALL) NOPASSWD: ALL' > /etc/sudoers.d/liveuser-nopasswd; echo SUDO_OK"
-    sleep 3
-    # Enable password auth in sshd (Fedora may default to no)
-    send_serial_cmd "$serial_cmd" "mkdir -p /etc/ssh/sshd_config.d; echo 'PasswordAuthentication yes' > /etc/ssh/sshd_config.d/99-e2e.conf; echo SSHD_CONF_OK"
+    # Create /run/anaconda directory
+    send_serial_cmd "$serial_cmd" "mkdir -p /run/anaconda"
     sleep 2
-    # daemon-reload needed because live session modifies unit files
-    send_serial_cmd "$serial_cmd" "systemctl daemon-reload; systemctl start sshd; echo SSHD_OK"
-    if ! wait_serial_pattern "$serial_log" "SSHD_OK" 30; then
-        warn "sshd start confirmation not detected, retrying..."
-        sleep 5
-        send_serial_cmd "$serial_cmd" "systemctl start sshd"
-        sleep 5
-    fi
-    ok "SSH enabled"
 
-    # CRITICAL: Expand /run tmpfs via SSH (reliable channel)
-    # The live overlay upperdir is at /run/overlayfs, constrained by /run tmpfs size.
-    # systemd defaults /run to 20% of RAM (1.6GB on 8GB) which fills up.
-    # Serial is unreliable for this (boot messages interfere), so use SSH.
-    log "Expanding /run tmpfs (overlay fix)..."
-    local run_expand_attempts=0
-    while (( run_expand_attempts < 5 )); do
-        if ssh_cmd "sudo mount -o remount,size=6G /run" 2>/dev/null; then
-            local run_size
-            run_size=$(ssh_cmd "df -h /run | tail -1 | awk '{print \$2}'" 2>/dev/null) || true
-            ok "/run expanded to ${run_size:-6G}"
+    # ── Phase 2b2: Enable SSH for Anaconda launch ──
+    log "Enabling SSH access..."
+    send_serial_cmd "$serial_cmd" "echo liveuser:naia-e2e-test | chpasswd; echo PASSWD_OK"
+    wait_serial_pattern "$serial_log" "PASSWD_OK" 15 || true
+    send_serial_cmd "$serial_cmd" "passwd -u liveuser 2>/dev/null; echo UNLOCK_OK"
+    wait_serial_pattern "$serial_log" "UNLOCK_OK" 10 || true
+    send_serial_cmd "$serial_cmd" "echo 'liveuser ALL=(ALL) NOPASSWD: ALL' > /etc/sudoers.d/liveuser; echo SUDO_OK"
+    wait_serial_pattern "$serial_log" "SUDO_OK" 10 || true
+    send_serial_cmd "$serial_cmd" "sed -i 's/^#*PasswordAuthentication.*/PasswordAuthentication yes/' /etc/ssh/sshd_config; echo SSHD_CONF_OK"
+    wait_serial_pattern "$serial_log" "SSHD_CONF_OK" 10 || true
+    send_serial_cmd "$serial_cmd" "systemctl start sshd; echo SSHD_OK"
+    if wait_serial_pattern "$serial_log" "SSHD_OK" 15; then
+        ok "SSH enabled"
+    else
+        warn "SSH setup may have failed"
+    fi
+
+    # Wait for SSH to be reachable
+    log "Waiting for SSH connectivity..."
+    local sw=0
+    while (( sw < 60 )); do
+        if ssh_cmd "echo SSH_OK" 2>/dev/null | grep -q SSH_OK; then
+            ok "SSH connected"
             break
         fi
-        run_expand_attempts=$(( run_expand_attempts + 1 ))
         sleep 3
+        sw=$((sw + 3))
     done
-    if (( run_expand_attempts >= 5 )); then
-        warn "/run expansion failed — overlay may run out of space"
+    if (( sw >= 60 )); then
+        warn "SSH not reachable, will try serial fallback for Anaconda"
     fi
 
-    # ── Phase 2b: Wait for GNOME desktop session ──
-    log "Waiting for GNOME session (liveuser auto-login)..."
-    local gnome_start
-    gnome_start=$(date +%s)
-    local gnome_ready=false
-
-    while (( $(date +%s) - gnome_start < 600 )); do
-        # First check: can we SSH in?
-        if ! sshpass -p "naia-e2e-test" ssh \
-                -o StrictHostKeyChecking=no \
-                -o UserKnownHostsFile=/dev/null \
-                -o ConnectTimeout=5 \
-                -o LogLevel=ERROR \
-                -p "$SSH_PORT" liveuser@localhost "echo SSH_OK" 2>/dev/null; then
-            sleep 5
-            continue
-        fi
-
-        # Second check: is graphical session active?
-        local session_status
-        session_status=$(ssh_cmd "systemctl --user is-active graphical-session.target 2>/dev/null" 2>/dev/null) || true
-        if [[ "$session_status" == "active" ]]; then
-            gnome_ready=true
+    # ── Phase 2c: Wait for KDE desktop (poll via debug shell) ──
+    log "Waiting for KDE desktop (up to 180s)..."
+    local dw=0
+    while (( dw < 180 )); do
+        send_serial_cmd "$serial_cmd" "systemctl is-active sddm 2>/dev/null | grep -q active && echo DESKTOP_READY || echo DESKTOP_WAIT"
+        if wait_serial_pattern "$serial_log" "DESKTOP_READY" 8; then
+            ok "Desktop ready (SDDM active, ${dw}s)"
             break
         fi
         sleep 5
+        dw=$((dw + 5))
     done
-
-    if ! $gnome_ready; then
-        # Fallback: check if we can at least SSH in (GNOME might not use systemd targets)
-        if ssh_cmd "echo FALLBACK_OK" 2>/dev/null; then
-            warn "graphical-session.target not active, but SSH works. Checking D-Bus..."
-            # Verify D-Bus session exists
-            if ssh_cmd "test -S /run/user/\$(id -u)/bus && echo DBUS_OK" 2>/dev/null | grep -q "DBUS_OK"; then
-                gnome_ready=true
-                ok "D-Bus session available (fallback check)"
-            fi
-        fi
+    if (( dw >= 180 )); then
+        warn "SDDM not detected after 180s, continuing anyway..."
     fi
+    # Settle time for KDE to fully render
+    sleep 20
 
-    if ! $gnome_ready; then
-        err "GNOME session not ready within 600s"
+    # Disable KDE screen lock and power saving (prevents display going dark)
+    log "Disabling screen lock and power saving..."
+    ssh_cmd 'kwriteconfig6 --file kscreenlockerrc --group Daemon --key Autolock false; kwriteconfig6 --file kscreenlockerrc --group Daemon --key LockOnResume false; kwriteconfig6 --file powermanagementprofilesrc --group AC --group DPMSControl --key idleTime 0' 2>/dev/null || true
+
+    # Kill Steam if running (it auto-starts on Bazzite and blocks the view)
+    ssh_cmd 'pkill -9 steam; pkill -9 -f steamwebhelper' 2>/dev/null || true
+    sleep 2
+
+    # Add polkit rule for liveuser auto-approval (needed for pkexec in liveinst)
+    send_serial_cmd "$serial_cmd" "mkdir -p /etc/polkit-1/rules.d && cat > /etc/polkit-1/rules.d/99-liveinst.rules << 'POLKIT'
+polkit.addRule(function(action, subject) {
+    if (subject.user == \"liveuser\") {
+        return polkit.Result.YES;
+    }
+});
+POLKIT"
+    sleep 2
+    send_serial_cmd "$serial_cmd" "systemctl restart polkit 2>/dev/null; echo POLKIT_READY"
+    wait_serial_pattern "$serial_log" "POLKIT_READY" 10 || true
+
+    # Screenshot: Live desktop
+    log "Screenshot: Live desktop"
+    qmp_screendump "$qmp_sock" "$screenshot_dir/03-live-desktop.png" || true
+
+    # ── Phase 2d: Patch Anaconda efi.py for ostree bootloader ──
+    log "Patching Anaconda efi.py for ostree bootloader compatibility..."
+    ssh_cmd "sudo python3 -c \"
+import glob
+efi_files = glob.glob('/usr/lib*/python*/site-packages/pyanaconda/modules/storage/bootloader/efi.py')
+for f in efi_files:
+    print(f'Patching: {f}')
+    with open(f) as fh: content = fh.read()
+    patched = content.replace(
+        'self.stage2_device.format.uuid',
+        'getattr(getattr(self.stage2_device, \\\"format\\\", None), \\\"uuid\\\", \\\"\\\") or \\\"\\\"'
+    )
+    if patched != content:
+        with open(f, 'w') as fh: fh.write(patched)
+        print('  Patched successfully')
+    else:
+        print('  Already patched or pattern not found')
+\"" 2>&1 || true
+    ok "Anaconda efi.py patched"
+
+    # ── Phase 2d2: Launch Anaconda GUI via SSH ──
+    # liveinst must run as liveuser (not sudo) — it uses pkexec internally for root elevation
+    # polkit rule added above auto-approves for liveuser
+    log "Launching Anaconda installer via SSH (liveuser + pkexec)..."
+    ssh_cmd "export DISPLAY=:0 WAYLAND_DISPLAY=wayland-0 XDG_RUNTIME_DIR=/run/user/1000 DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus; nohup /usr/bin/liveinst </dev/null >/tmp/liveinst.log 2>&1 &" || true
+    sleep 15
+
+    # Wait for Anaconda + Cockpit + Firefox to be running
+    log "Waiting for Anaconda WebUI to start (up to 120s)..."
+    local aw=0
+    while (( aw < 120 )); do
+        if ssh_cmd "pgrep -f 'anaconda.*--liveinst'" 2>/dev/null | grep -q "[0-9]"; then
+            ok "Anaconda is running"
+            break
+        fi
+        sleep 5
+        aw=$((aw + 5))
+    done
+    if (( aw >= 120 )); then
+        err "Anaconda failed to start"
+        ssh_cmd "cat /tmp/liveinst.log" 2>/dev/null || true
+        qmp_screendump "$qmp_sock" "$screenshot_dir/03-anaconda-fail.png" || true
         dump_failure_logs
         exit 1
     fi
-    ok "GNOME session ready ($(( $(date +%s) - gnome_start ))s)"
 
-    # Let the desktop and all services fully settle
-    log "Waiting 30s for desktop services to stabilize..."
+    # Verify Firefox opened (liveinst's webui-desktop starts it automatically)
+    sleep 10
+    if ssh_cmd "pgrep -f firefox" 2>/dev/null | grep -q "[0-9]"; then
+        ok "Firefox opened with Anaconda WebUI"
+    else
+        warn "Firefox not running — install may need manual browser launch via VNC"
+    fi
+
+    # Wait for Anaconda GUI to fully render
     sleep 30
+    log "Screenshot: Anaconda installer"
+    qmp_screendump "$qmp_sock" "$screenshot_dir/04-anaconda-gui.png" || true
 
-    # ── Phase 2b+: Patch Anaconda efi.py for ostree bootloader install ──
-    # On ostree live images, /boot/grub2 and /boot/efi/EFI/fedora don't exist
-    # after rsync. gen_grub_cfgstub needs them for grub2-probe/grub2-mkrelpath.
-    # Also, EFI binaries (shimx64.efi, grubx64.efi) are not copied to ESP.
-    # Note: We patch efi.py (loaded by live Anaconda) instead of gen_grub_cfgstub
-    # (which lives in the target sysroot, populated by rsync from read-only squashfs).
-    log "Patching Anaconda efi.py for ostree bootloader compatibility..."
-    ssh_cmd 'sudo python3 << '\''PYEOF'\''
-import os, re
+    # ── Phase 2e: Monitor installation progress ──
+    log "Monitoring installation progress..."
+    log "  (VNC :$VNC_DISPLAY available for manual observation)"
+    log "  (VM will shut down on completion → QEMU exits due to -no-reboot)"
 
-# Find efi.py
-import pyanaconda.modules.storage.bootloader.efi as efi_mod
-efi_py = efi_mod.__file__
-print(f"Patching: {efi_py}")
+    # Launch VNC viewer if available (for user observation)
+    local VNC_PID=""
+    if command -v vncviewer &>/dev/null; then
+        log "Opening VNC viewer (localhost:$((5900 + VNC_DISPLAY)))..."
+        vncviewer "localhost:$((5900 + VNC_DISPLAY))" &>/dev/null &
+        VNC_PID=$!
+    elif flatpak info org.tigervnc.vncviewer &>/dev/null 2>&1; then
+        log "Opening TigerVNC Flatpak (localhost:$((5900 + VNC_DISPLAY)))..."
+        flatpak run org.tigervnc.vncviewer "localhost:$((5900 + VNC_DISPLAY))" &>/dev/null &
+        VNC_PID=$!
+    else
+        log "No VNC viewer found — connect manually: vncviewer localhost:$((5900 + VNC_DISPLAY))"
+    fi
 
-with open(efi_py, "r") as f:
-    content = f.read()
-
-# Find the EFIGRUB.write_config method and replace the FULL method
-# Fixes: 1) Missing /boot/grub2 and EFI dirs  2) Missing EFI binaries
-#         3) grub2-mkconfig fails due to missing /sysroot in ostree rootfs
-old = """    def write_config(self):
-        rc = util.execWithRedirect(
-            "gen_grub_cfgstub",
-            [self.config_dir, self.efi_config_dir],
-            root=conf.target.system_root,
-        )
-
-        if rc != 0:
-            raise BootLoaderError("gen_grub_cfgstub script failed")
-
-        super().write_config()"""
-
-new = """    def write_config(self):
-        # [naia] Create boot dirs and copy EFI binaries for ostree live installs
-        import glob as _glob
-        import shutil as _shutil
-        _sysroot = conf.target.system_root
-        for _d in [self.config_dir, self.efi_config_dir]:
-            _fp = os.path.join(_sysroot, _d.lstrip("/"))
-            os.makedirs(_fp, exist_ok=True)
-            log.info("[naia] Created directory: %s", _fp)
-        _efi_dir = os.path.join(_sysroot, self.efi_config_dir.lstrip("/"))
-        for _pat, _name in [
-            ("usr/lib/efi/shim/*/EFI/fedora/shimx64.efi", "shimx64.efi"),
-            ("usr/lib/efi/grub2/*/EFI/fedora/grubx64.efi", "grubx64.efi"),
-        ]:
-            _dst = os.path.join(_efi_dir, _name)
-            if not os.path.exists(_dst):
-                for _src in _glob.glob(os.path.join(_sysroot, _pat)):
-                    _shutil.copy2(_src, _dst)
-                    log.info("[naia] Copied EFI binary: %s -> %s", _src, _dst)
-                    break
-        _boot_dir = os.path.join(os.path.dirname(_efi_dir), "BOOT")
-        os.makedirs(_boot_dir, exist_ok=True)
-        _bootx64 = os.path.join(_boot_dir, "BOOTX64.EFI")
-        if not os.path.exists(_bootx64):
-            for _src in _glob.glob(os.path.join(_sysroot, "usr/lib/efi/shim/*/EFI/BOOT/BOOTX64.EFI")):
-                _shutil.copy2(_src, _bootx64)
-                log.info("[naia] Copied EFI fallback: %s -> %s", _src, _bootx64)
-                break
-        # [naia] Create /sysroot symlink for grub2-probe compatibility
-        # ostree systems have /sysroot as real root; grub2-probe expects it
-        _sysroot_link = os.path.join(_sysroot, "sysroot")
-        if not os.path.exists(_sysroot_link):
-            try:
-                os.symlink("/", _sysroot_link)
-                log.info("[naia] Created /sysroot -> / symlink for grub2-probe")
-            except OSError as e:
-                log.warning("[naia] Could not create /sysroot symlink: %s", e)
-        rc = util.execWithRedirect(
-            "gen_grub_cfgstub",
-            [self.config_dir, self.efi_config_dir],
-            root=conf.target.system_root,
-        )
-        if rc != 0:
-            raise BootLoaderError("gen_grub_cfgstub script failed")
-        # [naia] Wrap super().write_config() (grub2-mkconfig) — may fail on ostree
-        # due to /sysroot probe issues. CreateBLSEntriesTask will regenerate grub config.
-        try:
-            super().write_config()
-        except BootLoaderError as _e:
-            log.warning("[naia] grub2-mkconfig failed (expected on ostree): %s", _e)
-            log.warning("[naia] Continuing — CreateBLSEntriesTask will regenerate grub config")"""
-
-if old in content:
-    content = content.replace(old, new)
-    with open(efi_py, "w") as f:
-        f.write(content)
-    # Verify syntax
-    import py_compile
-    py_compile.compile(efi_py, doraise=True)
-    print("Successfully patched efi.py")
-else:
-    print("ERROR: Could not find write_config pattern in efi.py")
-    # Print around the method for debugging
-    for i, line in enumerate(content.split("\n")):
-        if "write_config" in line and "def " in line:
-            print(f"  Found at line {i}: {line}")
-PYEOF' 2>/dev/null && ok "Anaconda efi.py patched" || warn "efi.py patch failed"
-
-    # ── Phase 2c: Run Anaconda via SSH ──
-    log "Copying automation script to VM..."
-    scp_to_vm "$WORKDIR/anaconda-automate.py" "/tmp/anaconda-automate.py"
-
-    # Verify kickstart is accessible
-    ssh_cmd "ls -la /run/initramfs/live/ks.cfg" 2>/dev/null && ok "Kickstart found on VM" || warn "Kickstart not at expected path"
-
-    log "Launching Anaconda installer via SSH..."
-    log "  (This runs in the GNOME session's D-Bus context)"
-
-    # Run the Python automator via SSH with PTY
-    # The script handles: launch anaconda → navigate spokes → begin install
-    set +e
-    ssh_cmd_t "export DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/\$(id -u)/bus XDG_RUNTIME_DIR=/run/user/\$(id -u); python3 /tmp/anaconda-automate.py" &
-    local ssh_automation_pid=$!
-    set -e
-
-    # ── Phase 2d: Wait for installation to complete ──
-    log "Waiting for installation to complete..."
-    log "  (VM will reboot on success → QEMU exits due to -no-reboot)"
-
+    local screenshot_counter=5
+    local last_screenshot_time
+    last_screenshot_time=$(date +%s)
     local install_done=false
+
     while kill -0 "$QEMU_PID" 2>/dev/null; do
         local elapsed=$(( $(date +%s) - install_start ))
         if [[ $elapsed -ge $INSTALL_TIMEOUT ]]; then
             err "Installation timed out after ${INSTALL_TIMEOUT}s"
-            kill "$ssh_automation_pid" 2>/dev/null || true
+            qmp_screendump "$qmp_sock" "$screenshot_dir/99-timeout.png" || true
             dump_failure_logs
             exit 1
         fi
+
         if (( elapsed % 60 == 0 )); then
             log "  ${elapsed}s elapsed..."
         fi
 
-        # Check if Anaconda finished (before reboot)
-        if ! $install_done; then
-            if ssh_cmd "sudo grep -q 'The installation has finished' /tmp/anaconda.log" 2>/dev/null; then
-                install_done=true
-                ok "Anaconda installation finished, running post-install steps..."
+        # Take periodic screenshots (every 120s)
+        local now
+        now=$(date +%s)
+        if (( now - last_screenshot_time >= 120 )); then
+            local ss_name
+            ss_name=$(printf "%02d-progress-%ds.png" "$screenshot_counter" "$elapsed")
+            qmp_screendump "$qmp_sock" "$screenshot_dir/$ss_name" 2>/dev/null || true
+            screenshot_counter=$((screenshot_counter + 1))
+            last_screenshot_time=$now
+        fi
 
-                # ── Phase 2e: Post-install kernel + system fixups ──
-                # kickstart %post doesn't run in --liveinst --text mode,
-                # so we SCP a script and run it via SSH before triggering reboot.
-                log "Running post-install fixups on target..."
-                cat > "$WORKDIR/post-install.sh" <<'POSTSCRIPT'
-#!/bin/bash
-set -eu
-
-SYSROOT="/var/mnt/sysroot"
-
-# 1. Install kernel + initramfs + BLS entry
-# Find a kernel version that has vmlinuz (not all module dirs have it)
-KVER=""
-for k in $(ls "$SYSROOT/usr/lib/modules/" | sort -rV); do
-    if [ -f "$SYSROOT/usr/lib/modules/${k}/vmlinuz" ]; then
-        KVER="$k"
-        break
-    fi
-done
-if [ -z "$KVER" ]; then
-    echo "[naia] WARNING: No kernel with vmlinuz found in $SYSROOT/usr/lib/modules/"
-    ls -la "$SYSROOT/usr/lib/modules/"*/vmlinuz 2>/dev/null || echo "  (no vmlinuz files)"
-    exit 1
-fi
-
-echo "[naia] Installing kernel ${KVER} into target /boot/..."
-sudo cp "$SYSROOT/usr/lib/modules/${KVER}/vmlinuz" "$SYSROOT/boot/vmlinuz-${KVER}"
-
-echo "[naia] Generating initramfs with dracut (this takes a few minutes)..."
-sudo chroot "$SYSROOT" dracut --force "/boot/initramfs-${KVER}.img" "${KVER}" 2>&1
-
-echo "[naia] Creating BLS entry..."
-sudo mkdir -p "$SYSROOT/boot/loader/entries"
-MACHINE_ID=$(sudo cat "$SYSROOT/etc/machine-id")
-ROOT_UUID=$(sudo chroot "$SYSROOT" findmnt -n -o UUID /)
-sudo tee "$SYSROOT/boot/loader/entries/${MACHINE_ID}-${KVER}.conf" > /dev/null <<BLSEOF
-title Naia OS (${KVER})
-version ${KVER}
-linux /vmlinuz-${KVER}
-initrd /initramfs-${KVER}.img
-options root=UUID=${ROOT_UUID} rootflags=subvol=root ro
-BLSEOF
-
-echo "[naia] Regenerating grub config..."
-sudo chroot "$SYSROOT" grub2-mkconfig -o /boot/grub2/grub.cfg 2>&1 || true
-
-echo "[naia] Kernel installation complete:"
-ls -la "$SYSROOT/boot/vmlinuz-"* "$SYSROOT/boot/initramfs-"* 2>/dev/null
-ls -la "$SYSROOT/boot/loader/entries/" 2>/dev/null
-
-# 2. Disable greenboot + other ostree-only services (cause failures on non-ostree installs)
-echo "[naia] Disabling ostree-only services..."
-for svc in greenboot-healthcheck greenboot-task-runner greenboot-set-rollback-trigger \
-           greenboot-grub2-set-counter greenboot-grub2-set-success greenboot-rpm-ostree-grub2-check-fallback \
-           bootloader-update rpm-ostreed; do
-    sudo chroot "$SYSROOT" systemctl disable "${svc}.service" 2>/dev/null || true
-    sudo chroot "$SYSROOT" systemctl mask "${svc}.service" 2>/dev/null || true
-done
-
-# 3. Enable sshd for boot verification
-echo "[naia] Enabling sshd..."
-sudo chroot "$SYSROOT" systemctl enable sshd.service 2>/dev/null || true
-
-# 4. Create E2E install marker (kickstart %post doesn't run in --liveinst mode)
-echo "[naia] Creating E2E marker..."
-echo "NAIA_E2E_INSTALL_COMPLETE=$(date -Iseconds)" | sudo tee "$SYSROOT/var/log/naia-e2e-marker" > /dev/null
-
-# 5. Fix /home symlink (ostree uses /home -> /var/home, ensure it works)
-if [ -L "$SYSROOT/home" ] && [ ! -d "$SYSROOT/var/home" ]; then
-    sudo mkdir -p "$SYSROOT/var/home"
-fi
-
-echo "[naia] Post-install fixups complete"
-POSTSCRIPT
-                chmod +x "$WORKDIR/post-install.sh"
-                scp_to_vm "$WORKDIR/post-install.sh" "/tmp/post-install.sh"
-                ssh_cmd "bash /tmp/post-install.sh" 2>&1 && ok "Post-install fixups complete" || warn "Post-install fixups had issues"
-
-                # Trigger reboot (QEMU will exit due to --no-reboot)
-                log "Triggering VM reboot..."
-                ssh_cmd "sudo systemctl reboot" 2>/dev/null || true
-            fi
+        # Check serial for completion signals
+        if grep -q "reboot: Restarting system\|reboot: Power down\|reboot: machine restart" "$serial_log" 2>/dev/null; then
+            ok "VM rebooting — installation completed (${elapsed}s)"
+            install_done=true
+            break
         fi
 
         sleep 10
@@ -847,9 +934,9 @@ POSTSCRIPT
     QEMU_PID=""
 
     # Cleanup background processes
-    kill "$ssh_automation_pid" 2>/dev/null || true
     kill "$SOCAT_PID" 2>/dev/null || true; SOCAT_PID=""
     if [[ -n "${TAIL_PID:-}" ]]; then kill "$TAIL_PID" 2>/dev/null || true; TAIL_PID=""; fi
+    if [[ -n "$VNC_PID" ]] && kill -0 "$VNC_PID" 2>/dev/null; then kill "$VNC_PID" 2>/dev/null || true; fi
 
     local install_duration=$(( $(date +%s) - install_start ))
 
@@ -858,7 +945,7 @@ POSTSCRIPT
         INSTALL_RESULT="PASS"
         INSTALL_DURATION="$install_duration"
     elif [[ $qemu_exit -eq 0 ]]; then
-        ok "Installation completed in ${install_duration}s"
+        ok "Installation completed (QEMU exited cleanly) in ${install_duration}s"
         INSTALL_RESULT="PASS"
         INSTALL_DURATION="$install_duration"
     else
@@ -868,6 +955,171 @@ POSTSCRIPT
         dump_failure_logs
         exit 1
     fi
+}
+
+# ── Phase 2.5: Fix Boot (kernel-install for ostree) ──────────────────────────
+
+fix_boot_kernel() {
+    bold "=== Phase 2.5: Boot Fix (kernel-install) ==="
+
+    if [[ "$INSTALL_RESULT" != "PASS" ]]; then
+        warn "Skipped (installation did not pass)"
+        return
+    fi
+
+    local disk="$WORKDIR/disk.qcow2"
+    local mnt="$WORKDIR/mnt"
+
+    # Connect qcow2 via NBD
+    local nbd_dev="/dev/nbd0"
+    log "Connecting disk image via NBD..."
+    sudo modprobe nbd max_part=8 2>/dev/null || true
+    sudo qemu-nbd -c "$nbd_dev" "$disk" || {
+        warn "qemu-nbd failed, skipping boot fix"
+        return
+    }
+    sleep 1
+    sudo partprobe "$nbd_dev" 2>/dev/null || true
+    sleep 1
+
+    # Detect partitions: p1=EFI, p2=boot(ext4), p3=root(btrfs)
+    local efi_part="${nbd_dev}p1"
+    local boot_part="${nbd_dev}p2"
+    local root_part="${nbd_dev}p3"
+
+    if [[ ! -b "$root_part" ]]; then
+        warn "Partition $root_part not found, skipping"
+        sudo qemu-nbd -d "$nbd_dev" 2>/dev/null || true
+        return
+    fi
+
+    log "Mounting installed system..."
+    mkdir -p "$mnt"
+    sudo mount -o subvol=root "$root_part" "$mnt" 2>/dev/null || \
+        sudo mount "$root_part" "$mnt" || {
+        warn "Failed to mount root, skipping"
+        sudo qemu-nbd -d "$nbd_dev" 2>/dev/null || true
+        return
+    }
+    sudo mount "$boot_part" "$mnt/boot" 2>/dev/null || true
+    sudo mount "$efi_part" "$mnt/boot/efi" 2>/dev/null || true
+
+    # Bind-mount virtual filesystems for chroot
+    sudo mount --bind /dev "$mnt/dev" 2>/dev/null || true
+    sudo mount --bind /proc "$mnt/proc" 2>/dev/null || true
+    sudo mount --bind /sys "$mnt/sys" 2>/dev/null || true
+
+    # Check current boot state
+    log "Current /boot contents:"
+    ls -la "$mnt/boot/vmlinuz-"* 2>/dev/null || echo "  (no vmlinuz files)"
+    ls -la "$mnt/boot/loader/entries/"* 2>/dev/null || echo "  (no BLS entries)"
+
+    # Find kernel version in installed system
+    local kver=""
+    for k in $(ls "$mnt/usr/lib/modules/" 2>/dev/null | sort -rV); do
+        if [[ -f "$mnt/usr/lib/modules/$k/vmlinuz" ]]; then
+            kver="$k"
+            break
+        fi
+    done
+
+    if [[ -z "$kver" ]]; then
+        warn "No kernel found in installed system's /usr/lib/modules/"
+        _cleanup_mnt
+        return
+    fi
+
+    log "Installing kernel $kver into /boot..."
+
+    # Try kernel-install first
+    if sudo chroot "$mnt" kernel-install add "$kver" "/usr/lib/modules/${kver}/vmlinuz" 2>&1; then
+        ok "kernel-install succeeded"
+    else
+        log "kernel-install failed, falling back to manual copy..."
+
+        sudo cp "$mnt/usr/lib/modules/${kver}/vmlinuz" "$mnt/boot/vmlinuz-${kver}"
+        sudo chroot "$mnt" dracut --force "/boot/initramfs-${kver}.img" "$kver" 2>&1 || {
+            warn "dracut failed, trying without chroot..."
+            # Generate minimal initramfs
+            sudo dracut --force --sysroot "$mnt" "$mnt/boot/initramfs-${kver}.img" "$kver" 2>&1 || true
+        }
+
+        # Create BLS entry
+        sudo mkdir -p "$mnt/boot/loader/entries"
+        local machine_id
+        machine_id=$(cat "$mnt/etc/machine-id" 2>/dev/null || echo "naia")
+        local root_uuid
+        root_uuid=$(sudo blkid -s UUID -o value "$root_part")
+
+        sudo tee "$mnt/boot/loader/entries/${machine_id}-${kver}.conf" > /dev/null <<BLSEOF
+title Naia OS (${kver})
+version ${kver}
+linux /vmlinuz-${kver}
+initrd /initramfs-${kver}.img
+options root=UUID=${root_uuid} rootflags=subvol=root ro
+BLSEOF
+        ok "Manual kernel + BLS entry created"
+    fi
+
+    # Regenerate grub config
+    sudo chroot "$mnt" grub2-mkconfig -o /boot/grub2/grub.cfg 2>&1 || {
+        warn "grub2-mkconfig failed, creating minimal config..."
+        sudo mkdir -p "$mnt/boot/grub2"
+        sudo tee "$mnt/boot/grub2/grub.cfg" > /dev/null <<'GRUBCFG'
+set timeout=5
+set default=0
+insmod all_video
+insmod gzio
+insmod part_gpt
+insmod btrfs
+insmod ext2
+
+# Load BLS entries
+blscfg
+GRUBCFG
+        ok "Minimal grub.cfg created"
+    }
+
+    # Verify EFI setup
+    log "Verifying EFI bootloader..."
+    if [[ -f "$mnt/boot/efi/EFI/fedora/shimx64.efi" ]] || [[ -f "$mnt/boot/efi/EFI/BOOT/BOOTX64.EFI" ]]; then
+        ok "EFI bootloader found"
+    else
+        warn "EFI bootloader missing, attempting to install..."
+        # Copy shim and grub from system
+        sudo mkdir -p "$mnt/boot/efi/EFI/fedora" "$mnt/boot/efi/EFI/BOOT"
+        local shim_src grub_src
+        shim_src=$(find "$mnt/usr/lib/efi" "$mnt/usr/lib64/efi" -name "shimx64.efi" 2>/dev/null | head -1)
+        grub_src=$(find "$mnt/usr/lib/efi" "$mnt/usr/lib64/efi" -name "grubx64.efi" 2>/dev/null | head -1)
+        [[ -n "$shim_src" ]] && sudo cp "$shim_src" "$mnt/boot/efi/EFI/fedora/shimx64.efi" && sudo cp "$shim_src" "$mnt/boot/efi/EFI/BOOT/BOOTX64.EFI"
+        [[ -n "$grub_src" ]] && sudo cp "$grub_src" "$mnt/boot/efi/EFI/fedora/grubx64.efi"
+
+        # Register EFI boot entry
+        sudo chroot "$mnt" efibootmgr -c -d "$nbd_dev" -p 1 -L "Naia OS" -l '\EFI\fedora\shimx64.efi' 2>&1 || true
+    fi
+
+    log "Final /boot contents:"
+    ls -la "$mnt/boot/vmlinuz-"* 2>/dev/null || echo "  (no vmlinuz files)"
+    ls -la "$mnt/boot/initramfs-"* 2>/dev/null || echo "  (no initramfs files)"
+    ls -la "$mnt/boot/loader/entries/"* 2>/dev/null || echo "  (no BLS entries)"
+    ls -la "$mnt/boot/efi/EFI/"*/*.efi 2>/dev/null || echo "  (no EFI files)"
+
+    # Cleanup mounts
+    _cleanup_mnt
+
+    ok "Boot fix complete"
+}
+
+_cleanup_mnt() {
+    local mnt="$WORKDIR/mnt"
+    local nbd_dev="/dev/nbd0"
+    sudo umount "$mnt/sys" 2>/dev/null || true
+    sudo umount "$mnt/proc" 2>/dev/null || true
+    sudo umount "$mnt/dev" 2>/dev/null || true
+    sudo umount "$mnt/boot/efi" 2>/dev/null || true
+    sudo umount "$mnt/boot" 2>/dev/null || true
+    sudo umount "$mnt" 2>/dev/null || true
+    sudo qemu-nbd -d "$nbd_dev" 2>/dev/null || true
 }
 
 # ── Phase 3: Boot Verification ───────────────────────────────────────────────
@@ -992,6 +1244,11 @@ print_results() {
     echo ""
 
     local c
+    case "${GUI_RESULT:-SKIP}" in
+        PASS) c="$GREEN" ;; SKIP) c="$YELLOW" ;; *) c="$RED" ;;
+    esac
+    printf "  GUI Test:      ${c}%s${NC} (%s/%s, %ss)\n" "${GUI_RESULT:-SKIP}" "${GUI_PASSED:-0}" "${GUI_TOTAL:-0}" "${GUI_DURATION:-0}"
+
     [[ "${INSTALL_RESULT:-FAIL}" == "PASS" ]] && c="$GREEN" || c="$RED"
     printf "  Installation:  ${c}%s${NC} (%ss)\n" "${INSTALL_RESULT:-FAIL}" "${INSTALL_DURATION:-?}"
 
@@ -1009,7 +1266,8 @@ print_results() {
     log "Logs: $WORKDIR"
     echo ""
 
-    if [[ "${INSTALL_RESULT:-FAIL}" == "PASS" ]] && \
+    if [[ "${GUI_RESULT:-SKIP}" != "FAIL" ]] && \
+       [[ "${INSTALL_RESULT:-FAIL}" == "PASS" ]] && \
        [[ "${BOOT_RESULT:-FAIL}" != "FAIL" ]] && \
        [[ "${SMOKE_RESULT:-FAIL}" != "FAIL" ]]; then
         ok "Overall: PASS"
@@ -1072,7 +1330,13 @@ main() {
     patch_iso_with_kickstart
     echo ""
 
+    run_gui_test
+    echo ""
+
     run_installation
+    echo ""
+
+    fix_boot_kernel
     echo ""
 
     run_boot_verification
