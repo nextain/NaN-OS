@@ -275,7 +275,7 @@ voice_architecture:
           session.receive() iterator breaks after each turnComplete (SDK behavior).
           Wrapped in `while True` to support multi-turn conversations.
           Token usage accumulated with += across turns for correct billing.
-    auth: "Lab API key (X-AnyLLM-Key: Bearer {labKey}) → any-llm gateway verifies → creates Gemini session via Vertex AI"
+    auth: "Lab API key (X-AnyLLM-Key: Bearer {naiaKey}) → any-llm gateway verifies → creates Gemini session via Vertex AI"
     model: "gemini-live-2.5-flash-native-audio (configurable via config.liveModel)"
 
   tts:
@@ -284,7 +284,7 @@ voice_architecture:
       nextain:
         route: "ChatPanel → agent (IPC) → nextain-tts.ts → any-llm gateway /v1/audio/speech → Google Cloud TTS"
         voice_derivation: "config.liveVoice → 'ko-KR-Chirp3-HD-{name}' (same voice as live conversation)"
-        auth: "labKey via X-AnyLLM-Key header"
+        auth: "naiaKey via X-AnyLLM-Key header"
       google:
         route: "ChatPanel → agent → Rust preview_tts command → Google Cloud TTS API directly"
         voices: "Neural2 series (ko-KR-Neural2-A, etc.)"

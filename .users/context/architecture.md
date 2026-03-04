@@ -233,3 +233,81 @@ How Naia Agent connects to OpenClaw Gateway:
 | client.mode | "cli" | Client mode |
 | minProtocol | 3 | Minimum protocol version |
 | maxProtocol | 3 | Maximum protocol version |
+
+---
+
+## Voice Architecture
+
+> Last updated: 2026-03-05
+
+### Overview
+
+Naia supports two voice output modes that share a single voice setting:
+
+1. **Live Voice Conversation** — real-time bidirectional audio via Gemini Live API
+2. **TTS (Text-to-Speech)** — text chat responses read aloud
+
+Naia account users use the same Chirp 3 HD voice (e.g., "Kore") for both modes.
+
+### Voice Setting Unification
+
+| Item | Value |
+|------|-------|
+| Config field | `liveVoice` |
+| Stored value | Short name (e.g., `"Kore"`, `"Puck"`) |
+| Live API usage | Passed directly as voice parameter |
+| TTS usage | ChatPanel derives full name: `ko-KR-Chirp3-HD-{liveVoice}` |
+
+**Available voices:**
+Kore (female, calm), Puck (male, lively), Charon (male, deep), Aoede (female, bright), Fenrir (male, low), Leda (female, soft), Orus (male, firm), Zephyr (neutral), Achernar, Gacrux, Sulafat, Umbriel
+
+Non-Naia providers (google, edge, openai, elevenlabs) use a separate `ttsVoice` field.
+
+### Live Voice Conversation (Gemini Live API)
+
+```
+┌──────────┐  mic PCM 16kHz   ┌──────────────┐  WebSocket   ┌──────────────┐  gRPC   ┌─────────────┐
+│  Shell   │ ────────────────→ │ voice-session │ ──────────→ │  any-llm GW  │ ──────→ │ Gemini Live │
+│(ChatPanel)│ ←──────────────── │  (browser WS) │ ←────────── │  (live.py)   │ ←────── │    API      │
+└──────────┘  PCM 24kHz audio  └──────────────┘  JSON+audio  └──────────────┘         └─────────────┘
+```
+
+**Key components:**
+
+| File | Role |
+|------|------|
+| `shell/src/components/ChatPanel.tsx` | UI state (off/connecting/active), event wiring, transcript accumulation |
+| `shell/src/lib/voice-session.ts` | WebSocket client to any-llm gateway `/v1/live` |
+| `shell/src/lib/audio-player.ts` | Continuous PCM playback (24kHz Int16 mono → AudioContext) |
+| `shell/src/lib/mic-stream.ts` | Mic capture, downsample to 16kHz PCM, emit base64 chunks |
+| `project-any-llm/.../routes/live.py` | WebSocket proxy: client ↔ Gemini Live SDK session |
+
+**Key technical details:**
+- `session.receive()` iterator breaks after `turnComplete` (SDK behavior) → wrapped in `while True` for multi-turn
+- Token usage accumulated with `+=` across turns for correct billing
+- AudioContext auto-suspends in webkit2gtk → requires `ctx.resume()` call
+- Transcripts arrive word-by-word → accumulated via `inputAccum`/`outputAccum` (not overwritten)
+
+**Auth:** Naia API key (`X-AnyLLM-Key: Bearer {naiaKey}`) → any-llm gateway verifies → creates Gemini session via Vertex AI
+
+**Model:** `gemini-live-2.5-flash-native-audio` (configurable via config.liveModel)
+
+### TTS (Text-to-Speech)
+
+| Provider | Route | Voices |
+|----------|-------|--------|
+| nextain | ChatPanel → agent → nextain-tts.ts → any-llm gateway → Google Cloud TTS | Chirp 3 HD (derived from liveVoice) |
+| google | ChatPanel → agent → Rust preview_tts → Google Cloud TTS directly | Neural2 series |
+| edge | ChatPanel → agent → OpenClaw gateway → Edge TTS | Free |
+| openai | ChatPanel → agent → OpenClaw gateway → OpenAI TTS | OpenAI voices |
+| elevenlabs | ChatPanel → agent → OpenClaw gateway → ElevenLabs | ElevenLabs voices |
+
+### STT Status
+
+Legacy STT (`stt.ts`, `audio-recorder.ts`) has been removed.
+Real-time speech input is handled entirely by Gemini Live API's built-in speech recognition (`inputTranscription` events).
+
+### Billing
+
+- **Live conversation:** $0.10/M input tokens + $0.40/M output tokens (Gemini Live)
+- **TTS:** Varies by provider (Chirp 3 HD, Neural2, Edge free, OpenAI, ElevenLabs)

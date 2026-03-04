@@ -233,3 +233,81 @@ Naia Agent가 OpenClaw Gateway에 연결하는 과정:
 | client.mode | "cli" | 클라이언트 모드 |
 | minProtocol | 3 | 최소 프로토콜 버전 |
 | maxProtocol | 3 | 최대 프로토콜 버전 |
+
+---
+
+## 음성 아키텍처
+
+> 최종 업데이트: 2026-03-05
+
+### 개요
+
+Naia는 두 가지 음성 출력 모드를 지원하며, 하나의 음성 설정을 공유한다:
+
+1. **실시간 음성 대화** — Gemini Live API를 통한 양방향 실시간 오디오
+2. **TTS (텍스트 음성 변환)** — 텍스트 채팅 응답을 소리로 읽어줌
+
+Naia 계정 사용자는 동일한 Chirp 3 HD 음성(예: "Kore")을 양쪽 모두에 사용한다.
+
+### 음성 설정 통합
+
+| 항목 | 값 |
+|------|-----|
+| 설정 필드 | `liveVoice` |
+| 저장 형식 | 짧은 이름 (예: `"Kore"`, `"Puck"`) |
+| Live API 사용 | 직접 voice 파라미터로 전달 |
+| TTS 사용 | ChatPanel에서 `ko-KR-Chirp3-HD-{liveVoice}` 형식으로 변환 |
+
+**사용 가능한 음성:**
+Kore (여성, 차분), Puck (남성, 활발), Charon (남성, 깊은), Aoede (여성, 밝은), Fenrir (남성, 낮은), Leda (여성, 부드러운), Orus (남성, 단단한), Zephyr (중성), Achernar, Gacrux, Sulafat, Umbriel
+
+비-Naia 프로바이더(google, edge, openai, elevenlabs)는 별도의 `ttsVoice` 필드 사용.
+
+### 실시간 음성 대화 (Gemini Live API)
+
+```
+┌──────────┐  mic PCM 16kHz   ┌──────────────┐  WebSocket   ┌──────────────┐  gRPC   ┌─────────────┐
+│  Shell   │ ────────────────→ │ voice-session │ ──────────→ │  any-llm GW  │ ──────→ │ Gemini Live │
+│(ChatPanel)│ ←──────────────── │  (browser WS) │ ←────────── │  (live.py)   │ ←────── │    API      │
+└──────────┘  PCM 24kHz audio  └──────────────┘  JSON+audio  └──────────────┘         └─────────────┘
+```
+
+**주요 컴포넌트:**
+
+| 파일 | 역할 |
+|------|------|
+| `shell/src/components/ChatPanel.tsx` | UI 상태 (off/connecting/active), 이벤트 연결, 트랜스크립트 누적 |
+| `shell/src/lib/voice-session.ts` | any-llm gateway `/v1/live` WebSocket 클라이언트 |
+| `shell/src/lib/audio-player.ts` | 연속 PCM 재생 (24kHz Int16 mono → AudioContext) |
+| `shell/src/lib/mic-stream.ts` | 마이크 캡처, 16kHz PCM 다운샘플, base64 청크 전송 |
+| `project-any-llm/.../routes/live.py` | WebSocket 프록시: 클라이언트 ↔ Gemini Live SDK |
+
+**핵심 기술 사항:**
+- `session.receive()` 이터레이터는 `turnComplete` 후 종료 (SDK 동작) → `while True`로 래핑하여 멀티턴 지원
+- 토큰 사용량은 턴마다 `+=`로 누적 (정확한 과금)
+- AudioContext는 webkit2gtk에서 자동 suspend → `ctx.resume()` 호출 필요
+- 트랜스크립트는 단어 단위로 점진적 도착 → `inputAccum`/`outputAccum`으로 누적 (덮어쓰기 아님)
+
+**인증:** Naia API 키 (`X-AnyLLM-Key: Bearer {naiaKey}`) → any-llm gateway 검증 → Vertex AI로 Gemini 세션 생성
+
+**모델:** `gemini-live-2.5-flash-native-audio` (config.liveModel으로 설정 가능)
+
+### TTS (텍스트 음성 변환)
+
+| 프로바이더 | 경로 | 음성 |
+|-----------|------|------|
+| nextain | ChatPanel → agent → nextain-tts.ts → any-llm gateway → Google Cloud TTS | Chirp 3 HD (liveVoice에서 변환) |
+| google | ChatPanel → agent → Rust preview_tts → Google Cloud TTS 직접 호출 | Neural2 시리즈 |
+| edge | ChatPanel → agent → OpenClaw gateway → Edge TTS | 무료 |
+| openai | ChatPanel → agent → OpenClaw gateway → OpenAI TTS | OpenAI 음성 |
+| elevenlabs | ChatPanel → agent → OpenClaw gateway → ElevenLabs | ElevenLabs 음성 |
+
+### STT 상태
+
+레거시 STT (`stt.ts`, `audio-recorder.ts`)는 제거됨.
+실시간 음성 입력은 Gemini Live API의 내장 음성 인식 (`inputTranscription` 이벤트)으로 처리.
+
+### 과금
+
+- **실시간 음성 대화:** $0.10/M 입력 토큰 + $0.40/M 출력 토큰 (Gemini Live)
+- **TTS:** 프로바이더별 상이 (Chirp 3 HD, Neural2, Edge 무료, OpenAI, ElevenLabs)
