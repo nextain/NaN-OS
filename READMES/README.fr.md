@@ -301,16 +301,19 @@ Mise a jour base Bazzite → Reconstruction auto hebdomadaire → Test de fumee 
                                                                                       ↘ Push GHCR → mise a jour bootc utilisateur
 ```
 
-## Processus de developpement
+## Processus de Développement
+
+### Développement de fonctionnalités (par défaut) — Issue-Driven Development
 
 ```
-PLAN → CHECK → BUILD (TDD) → VERIFY → CLEAN → COMMIT
+ISSUE → UNDERSTAND → SCOPE → INVESTIGATE → PLAN → BUILD → REVIEW → E2E → SYNC → COMMIT
 ```
 
-- **BUILD = TDD** — Tests d'abord (RED) -> implementation minimale (GREEN) -> refactoring
-- **VERIFY** — Confirmer en executant reellement l'application (la verification de types seule est insuffisante)
+- **3 portes obligatoires** — Confirmation utilisateur requise à UNDERSTAND, SCOPE et PLAN
+- **Après approbation du plan** — L'IA exécute BUILD jusqu'à COMMIT en continu sans s'arrêter
+- **Principes** — Lire le code upstream d'abord (pas de devinettes). Modification minimale. Ne jamais casser le code fonctionnel.
 - **Commits** — Anglais, `<type>(<scope>): <description>`
-- **Formateur** — Biome (tab, double quote, points-virgules)
+- **Formateur** — Biome (tab, guillemets doubles, points-virgules)
 
 ## Projets de reference
 

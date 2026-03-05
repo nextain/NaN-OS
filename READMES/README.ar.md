@@ -302,12 +302,15 @@ Naia OS مبني على [Bazzite](https://github.com/ublue-os/bazzite) (Fedora A
 
 ## عملية التطوير
 
+### تطوير الميزات (افتراضي) — Issue-Driven Development
+
 ```
-PLAN → CHECK → BUILD (TDD) → VERIFY → CLEAN → COMMIT
+ISSUE → UNDERSTAND → SCOPE → INVESTIGATE → PLAN → BUILD → REVIEW → E2E → SYNC → COMMIT
 ```
 
-- **BUILD = TDD** — الاختبارات أولاً (RED) -> تنفيذ أدنى (GREEN) -> إعادة هيكلة
-- **VERIFY** — التأكيد بتشغيل التطبيق فعلياً (فحص الأنواع وحده غير كافٍ)
+- **3 بوابات إلزامية** — مطلوب تأكيد المستخدم عند UNDERSTAND وSCOPE وPLAN
+- **بعد الموافقة على الخطة** — يقوم الذكاء الاصطناعي بتنفيذ BUILD حتى COMMIT بشكل مستمر دون توقف
+- **المبادئ** — قراءة كود upstream أولاً (بدون تخمين). تعديل أدنى. عدم كسر الكود العامل أبداً.
 - **الالتزامات** — إنجليزي، `<type>(<scope>): <description>`
 - **المنسق** — Biome (مسافة، علامات اقتباس مزدوجة، فاصلة منقوطة)
 

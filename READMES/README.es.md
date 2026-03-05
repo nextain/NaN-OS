@@ -303,12 +303,15 @@ Actualizacion base Bazzite → Reconstruccion auto semanal → Prueba de humo co
 
 ## Proceso de desarrollo
 
+### Desarrollo de funcionalidades (por defecto) — Issue-Driven Development
+
 ```
-PLAN → CHECK → BUILD (TDD) → VERIFY → CLEAN → COMMIT
+ISSUE → UNDERSTAND → SCOPE → INVESTIGATE → PLAN → BUILD → REVIEW → E2E → SYNC → COMMIT
 ```
 
-- **BUILD = TDD** — Pruebas primero (RED) -> implementacion minima (GREEN) -> refactorizacion
-- **VERIFY** — Confirmar ejecutando realmente la aplicacion (la verificacion de tipos sola es insuficiente)
+- **3 puertas obligatorias** — Confirmacion del usuario requerida en UNDERSTAND, SCOPE y PLAN
+- **Despues de aprobacion del plan** — La IA ejecuta BUILD hasta COMMIT continuamente sin detenerse
+- **Principios** — Leer codigo upstream primero (sin adivinar). Modificacion minima. Nunca romper codigo funcional.
 - **Commits** — Ingles, `<type>(<scope>): <description>`
 - **Formateador** — Biome (tab, comillas dobles, puntos y coma)
 

@@ -303,12 +303,15 @@ Bazzite基础更新 → 每周自动重建 → 容器冒烟测试 → ISO重建 
 
 ## 开发流程
 
+### 功能开发（默认）— Issue-Driven Development
+
 ```
-PLAN → CHECK → BUILD (TDD) → VERIFY → CLEAN → COMMIT
+ISSUE → UNDERSTAND → SCOPE → INVESTIGATE → PLAN → BUILD → REVIEW → E2E → SYNC → COMMIT
 ```
 
-- **BUILD = TDD** — 先写测试（RED）→ 最小实现（GREEN）→ 重构
-- **VERIFY** — 实际运行应用确认（仅类型检查不够）
+- **3个必需门控** — 在UNDERSTAND、SCOPE和PLAN阶段需要用户确认
+- **Plan批准后** — AI从BUILD到COMMIT连续执行不停顿
+- **原则** — 先阅读upstream代码（禁止猜测）。最小修改。不破坏正常工作的代码。
 - **提交** — 英文，`<type>(<scope>): <description>`
 - **格式化** — Biome（tab、双引号、分号）
 

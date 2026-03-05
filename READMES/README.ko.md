@@ -303,12 +303,15 @@ Bazzite 베이스 업데이트 → 매주 자동 리빌드 → 컨테이너 smok
 
 ## 개발 프로세스
 
+### 기능 개발 (기본값) — Issue-Driven Development
+
 ```
-PLAN → CHECK → BUILD (TDD) → VERIFY → CLEAN → COMMIT
+ISSUE → UNDERSTAND → SCOPE → INVESTIGATE → PLAN → BUILD → REVIEW → E2E → SYNC → COMMIT
 ```
 
-- **BUILD = TDD** — 테스트 먼저 (RED) → 최소 구현 (GREEN) → 리팩터
-- **VERIFY** — 실제 앱 실행 확인 (타입체크만으로 불충분)
+- **필수 게이트 3개** — UNDERSTAND, SCOPE, PLAN에서 사용자 확인 필수
+- **Plan 승인 후** — AI가 BUILD부터 COMMIT까지 멈추지 않고 연속 실행
+- **원칙** — upstream 코드 먼저 읽기 (추측 금지). 최소 수정. 동작하는 코드 보존.
 - **커밋** — 영어, `<type>(<scope>): <description>`
 - **포매터** — Biome (tab, double quote, semicolons)
 

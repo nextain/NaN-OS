@@ -303,12 +303,15 @@ Bazziteベース更新 → 毎週自動リビルド → コンテナスモーク
 
 ## 開発プロセス
 
+### 機能開発（デフォルト）— Issue-Driven Development
+
 ```
-PLAN → CHECK → BUILD (TDD) → VERIFY → CLEAN → COMMIT
+ISSUE → UNDERSTAND → SCOPE → INVESTIGATE → PLAN → BUILD → REVIEW → E2E → SYNC → COMMIT
 ```
 
-- **BUILD = TDD** — テスト先行（RED）→ 最小実装（GREEN）→ リファクタ
-- **VERIFY** — 実際にアプリを実行して確認（型チェックだけでは不十分）
+- **必須ゲート3つ** — UNDERSTAND、SCOPE、PLANでユーザー確認が必要
+- **Plan承認後** — AIがBUILDからCOMMITまで停止せず連続実行
+- **原則** — upstreamコードを先に読む（推測禁止）。最小限の修正。動作するコードを壊さない。
 - **コミット** — 英語、`<type>(<scope>): <description>`
 - **フォーマッター** — Biome（tab、ダブルクォート、セミコロン）
 

@@ -302,12 +302,15 @@ Pembaruan basis Bazzite → Rebuild otomatis mingguan → Smoke test kontainer �
 
 ## Proses Pengembangan
 
+### Pengembangan Fitur (default) — Issue-Driven Development
+
 ```
-PLAN → CHECK → BUILD (TDD) → VERIFY → CLEAN → COMMIT
+ISSUE → UNDERSTAND → SCOPE → INVESTIGATE → PLAN → BUILD → REVIEW → E2E → SYNC → COMMIT
 ```
 
-- **BUILD = TDD** — Tes dulu (RED) -> implementasi minimal (GREEN) -> refaktor
-- **VERIFY** — Konfirmasi dengan benar-benar menjalankan aplikasi (pemeriksaan tipe saja tidak cukup)
+- **3 gerbang wajib** — Konfirmasi pengguna diperlukan di UNDERSTAND, SCOPE, dan PLAN
+- **Setelah persetujuan rencana** — AI menjalankan BUILD hingga COMMIT secara terus-menerus tanpa berhenti
+- **Prinsip** — Baca kode upstream terlebih dahulu (jangan menebak). Modifikasi minimal. Jangan pernah merusak kode yang berfungsi.
 - **Commit** — Inggris, `<type>(<scope>): <description>`
 - **Formatter** — Biome (tab, tanda kutip ganda, titik koma)
 

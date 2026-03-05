@@ -301,16 +301,19 @@ Atualizacao base Bazzite → Reconstrucao auto semanal → Smoke test do contain
                                                                                ↘ Push GHCR → atualizacao bootc do usuario
 ```
 
-## Processo de desenvolvimento
+## Processo de Desenvolvimento
+
+### Desenvolvimento de funcionalidades (padrão) — Issue-Driven Development
 
 ```
-PLAN → CHECK → BUILD (TDD) → VERIFY → CLEAN → COMMIT
+ISSUE → UNDERSTAND → SCOPE → INVESTIGATE → PLAN → BUILD → REVIEW → E2E → SYNC → COMMIT
 ```
 
-- **BUILD = TDD** — Testes primeiro (RED) -> implementacao minima (GREEN) -> refatoracao
-- **VERIFY** — Confirmar executando realmente o app (verificacao de tipos sozinha e insuficiente)
-- **Commits** — Ingles, `<type>(<scope>): <description>`
-- **Formatador** — Biome (tab, aspas duplas, ponto e virgula)
+- **3 portões obrigatórios** — Confirmação do usuário necessária em UNDERSTAND, SCOPE e PLAN
+- **Após aprovação do plano** — IA executa de BUILD até COMMIT continuamente sem parar
+- **Princípios** — Ler código upstream primeiro (sem adivinhar). Modificação mínima. Nunca quebrar código funcional.
+- **Commits** — Inglês, `<type>(<scope>): <description>`
+- **Formatador** — Biome (tab, aspas duplas, ponto e vírgula)
 
 ## Projetos de referencia
 

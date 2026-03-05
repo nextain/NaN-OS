@@ -103,7 +103,7 @@ mirror_pairs:
 
   - agents: .agents/workflows/development-cycle.yaml
     users: .users/workflows/development-cycle.md
-    description: PLAN→CHECK→BUILD→VERIFY→CLEAN→COMMIT cycle, review gates, AI rules
+    description: Coding-level development cycle — TDD, code quality gates, security review, AI pair-programming rules
 
 mirroring_rules:
   structure: triple-mirror

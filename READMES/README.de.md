@@ -303,12 +303,15 @@ Bazzite-Basis-Update → Woechentlicher Auto-Rebuild → Container-Smoke-Test �
 
 ## Entwicklungsprozess
 
+### Feature-Entwicklung (Standard) — Issue-Driven Development
+
 ```
-PLAN → CHECK → BUILD (TDD) → VERIFY → CLEAN → COMMIT
+ISSUE → UNDERSTAND → SCOPE → INVESTIGATE → PLAN → BUILD → REVIEW → E2E → SYNC → COMMIT
 ```
 
-- **BUILD = TDD** — Tests zuerst (RED) -> minimale Implementierung (GREEN) -> Refactoring
-- **VERIFY** — Bestaetigung durch tatsaechliches Ausfuehren der App (Typ-Pruefung allein ist unzureichend)
+- **3 Pflicht-Gates** — Benutzerbestaetigung bei UNDERSTAND, SCOPE und PLAN erforderlich
+- **Nach Plan-Genehmigung** — KI fuehrt BUILD bis COMMIT durchgehend ohne Unterbrechung aus
+- **Prinzipien** — Upstream-Code zuerst lesen (kein Raten). Minimale Aenderungen. Funktionierenden Code nie beschaedigen.
 - **Commits** — Englisch, `<type>(<scope>): <description>`
 - **Formatierer** — Biome (Tab, doppelte Anfuehrungszeichen, Semikolons)
 

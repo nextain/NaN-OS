@@ -147,13 +147,34 @@ gh workflow run iso.yml
 - 풀 리빌드: `bash scripts/flatpak-rebuild-and-run.sh`
 - 상세: `.agents/context/distribution.yaml`
 
-## 개발 사이클
+## 개발 프로세스
 
-**코딩 전 반드시 읽기:** `.agents/workflows/development-cycle.yaml`
+### 기능 개발 (기본값) — Issue-Driven Development
 
-```
-PLAN → CHECK → BUILD → VERIFY → CLEAN → COMMIT
-```
+기능 단위 작업(신규 기능, 기능 단위 버그 수정)의 기본 워크플로우.
+
+**필수 게이트 — 사용자 확인 없이 진행 금지:**
+1. 이슈 이해 확인
+2. 조사 범위/깊이 제안 → 사용자 승인
+3. 코드 조사 (발견이 없을 때까지 반복, file:line 인용 필수)
+4. 구현 계획 제안 → 사용자 승인
+
+**Plan 승인 후 — 멈추지 않고 연속 실행:**
+5. BUILD → REVIEW (반복) → E2E TEST → SYNC → COMMIT
+
+원칙: upstream 코드 먼저 읽기 (추측 금지). 최소 수정. 동작하는 코드 보존. 개선안은 제안만.
+
+상세: 워크스페이스 루트 `.agents/workflows/issue-driven-development.yaml`
+
+### 단순 변경 (경량 사이클)
+
+기능 변경이 아닌 단순 지시(오타, 설정값, 간단한 수정).
+
+상세: `.agents/workflows/development-cycle.yaml`
+
+### 코딩 가이드
+
+상세: `.agents/workflows/development-cycle.yaml`
 
 핵심: **기존 코드 먼저 검색, 중복 생성 금지, 미사용 코드 정리, 셀프 리뷰 후 커밋.**
 

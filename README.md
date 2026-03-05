@@ -339,12 +339,15 @@ Update pipeline details: [`.agents/context/update-pipeline.yaml`](.agents/contex
 
 ## Development Process
 
+### Feature Development (default) — Issue-Driven Development
+
 ```
-PLAN → CHECK → BUILD (TDD) → VERIFY → CLEAN → COMMIT
+ISSUE → UNDERSTAND → SCOPE → INVESTIGATE → PLAN → BUILD → REVIEW → E2E → SYNC → COMMIT
 ```
 
-- **BUILD = TDD** — Test first (RED) -> minimal implementation (GREEN) -> refactor
-- **VERIFY** — Confirm by actually running the app (type checking alone is insufficient)
+- **3 mandatory gates** — User confirmation required at UNDERSTAND, SCOPE, and PLAN
+- **After plan approval** — AI runs BUILD through COMMIT continuously without stopping
+- **Principles** — Read upstream code first (no guessing). Minimal modification. Never break working code.
 - **Commits** — English, `<type>(<scope>): <description>`
 - **Formatter** — Biome (tab, double quote, semicolons)
 
