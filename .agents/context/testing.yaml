@@ -138,7 +138,21 @@ shell:
       - name: "07 Cleanup"
         steps: ["Delete e2e-test memo"]
         assert: "Deletion confirmed"
+      - name: "14 Skills tab"
+        steps: ["Navigate to Skills tab (JS click)", "Verify 20+ skill cards", "Check count header", "Search filter", "Verify built-in no toggle"]
+        assert: "Skills listed, search filters, built-in skills have no toggle"
+        note: "Uses clickBySelector (JS click) — WebDriver click fails in WebKitGTK"
+
+      - name: "28 Skills install"
+        steps: ["Navigate to Skills tab", "Check gateway skill cards", "Check install buttons for ineligible", "Click install", "Verify feedback"]
+        assert: "Gateway cards render, install button works, success/error feedback appears"
+        note: "Install result depends on host environment (brew/npm availability)"
+
     gotchas:
+      webkitgtk_click: |
+        WebDriver element.click() returns "unsupported operation" in WebKitGTK/wry.
+        Use browser.execute(() => el.click()) via clickBySelector helper instead.
+        All passing E2E specs use JS click, not WebDriver click.
       stale_elements: |
         WebKitGTK invalidates element refs on React re-renders.
         Always use browser.execute() with fresh document.querySelector().
