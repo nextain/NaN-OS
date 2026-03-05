@@ -160,6 +160,13 @@ jobs:
       - name: List downloaded artifacts
         run: find artifacts -type f | head -20
 
+      - name: Checkout (for version detection)
+        if: ${{ !startsWith(github.ref, 'refs/tags/v') && inputs.version == '' }}
+        uses: actions/checkout@v4
+        with:
+          sparse-checkout: shell/src-tauri/tauri.conf.json
+          sparse-checkout-cone-mode: false
+
       - name: Determine version
         id: version
         env:
@@ -174,7 +181,8 @@ jobs:
             fi
             echo "tag=${INPUT_VERSION}" >> "$GITHUB_OUTPUT"
           else
-            echo "tag=v0.1.0-dev.$(date +%Y%m%d)-${GITHUB_RUN_NUMBER}" >> "$GITHUB_OUTPUT"
+            APP_VERSION=$(grep -o '"version": *"[^"]*"' shell/src-tauri/tauri.conf.json | head -1 | cut -d'"' -f4)
+            echo "tag=v${APP_VERSION}-dev.$(date +%Y%m%d)-${GITHUB_RUN_NUMBER}" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Generate SHA256 checksums

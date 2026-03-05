@@ -134,8 +134,8 @@ body,
 	height: 100%;
 	overflow: hidden;
 	background: var(--espresso);
-	font-family: "Pretendard", "Inter", -apple-system, BlinkMacSystemFont,
-		sans-serif;
+	font-family: "Pretendard", "Inter", "Noto Sans CJK KR", "Noto Sans CJK JP",
+		"Noto Sans CJK SC", -apple-system, BlinkMacSystemFont, sans-serif;
 	color: var(--cream);
 }
 

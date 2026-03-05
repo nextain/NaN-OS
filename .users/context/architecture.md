@@ -198,25 +198,106 @@ OAuth deep-link payloads must be persisted regardless of whether specific tabs (
   - Saving auth payloads only inside tab components.
   - Duplicating different fallback rules across components.
 
-## Memory Architecture (2-tier)
+## Memory Architecture (Dual-Origin)
 
-A 2-tier memory system for Alpha to remember and grow with the user.
+Memory lives in **two systems** that serve different purposes and connect at session boundaries.
 
-### Short-Term Memory
+- **Shell** owns "who is the user" (facts)
+- **OpenClaw** owns "what happened" (session transcripts + semantic search index)
+
+### Shell Memory (Tauri)
+
+#### Short-Term Memory
 
 | Item | Details |
 |------|---------|
 | **Storage** | Zustand (in-memory) + SQLite messages table |
 | **Scope** | All messages in current session |
 | **Lifetime** | Current session ~ last 7 days |
-| **Implementation** | Rust memory.rs + Frontend db.ts + Chat store |
+| **Implementation** | Rust `memory.rs` + Frontend `db.ts` + Chat store |
 
-### Long-Term Memory
+#### Long-Term Memory — Facts
 
-| Type | Storage | Content |
-|------|---------|---------|
-| **Episodic** | sessions.summary | LLM-generated session summaries |
-| **Semantic (facts/preferences)** | facts table | Extracted facts like "user prefers Rust" |
+| Item | Details |
+|------|---------|
+| **Storage** | `~/.config/naia-os/memory.db` (SQLite, facts table) |
+| **Scope** | Cross-session user knowledge (name, birthday, preferences, decisions) |
+| **Extraction** | `memory-processor.ts` `extractFacts()` — LLM parses conversation → `{key, value}[]` |
+| **Injection** | `persona.ts` `buildSystemPrompt()` → `"Known facts about the user: ..."` in system prompt |
+
+### OpenClaw Memory (Daemon)
+
+#### Session Transcripts
+
+| Item | Details |
+|------|---------|
+| **Storage** | `~/.openclaw/agents/main/sessions/` (`sessions.json` + `*.jsonl` per session) |
+| **Scope** | Full conversation history per session key (`agent:main:main`, `discord:dm:*`, etc.) |
+| **RPC** | `sessions.list`, `chat.history`, `sessions.transcript`, `sessions.compact` |
+| **Hook** | `session-memory` — on `/new` or `/reset`, saves conversation to `workspace/memory/*.md` |
+
+#### Semantic Search Index
+
+| Item | Details |
+|------|---------|
+| **Storage** | `~/.openclaw/memory/main.sqlite` (SQLite with embeddings) |
+| **Tools** | `memory_search` (semantic search), `memory_get` (retrieve entry) |
+| **Scope** | Cross-session searchable index (sessions + `workspace/memory/*.md` files) |
+
+#### Workspace Bootstrap Files
+
+| Item | Details |
+|------|---------|
+| **Storage** | `~/.openclaw/workspace/` (`SOUL.md`, `IDENTITY.md`, `USER.md`) |
+| **Sync** | Shell writes these via `sync_openclaw_config` (`lib.rs`) on settings change |
+| **Note** | Regenerable from Shell settings — not primary data |
+
+### Data Flow (How the Two Systems Connect)
+
+```
+SESSION START
+  Shell: buildMemoryContext() → getAllFacts() from Shell DB
+  Shell: buildSystemPrompt(persona, {facts, userName, locale, ...})
+  → System prompt with user facts sent to Agent
+
+DURING SESSION
+  Agent ↔ OpenClaw: messages stored in session transcript (*.jsonl)
+  OpenClaw: memory_search tool available for LLM to query past sessions
+  Shell: Zustand store holds current messages for UI
+
+SESSION END (user clicks "New Conversation")
+  Shell [fire-and-forget]:
+    1. summarizeSession(messages) → LLM generates 2-3 sentence summary
+    2. patchGatewaySession("agent:main:main", {summary}) → OpenClaw session metadata
+    3. extractFacts(messages, summary) → LLM extracts {key, value}[] user facts
+    4. upsertFact() × N → Shell facts DB (memory.db)
+  OpenClaw:
+    session-memory hook saves conversation to workspace/memory/YYYY-MM-DD-slug.md
+    semantic index updated with new session content
+
+NEXT SESSION
+  Shell: loads facts → injects into system prompt ("Known facts about the user")
+  OpenClaw: memory_search finds content from previous sessions
+  → User is "remembered" through both system prompt facts AND searchable history
+```
+
+### Discord Channel Memory
+
+Discord messages flow through OpenClaw sessions (key: `agent:main:discord:direct:<userId>`).
+These are stored in OpenClaw session transcripts and indexed by `memory_search`.
+However, Shell fact extraction (`summarizePreviousSession`) only runs on Shell chat sessions —
+**Discord conversations do NOT trigger fact extraction yet**.
+
+### Device Migration — Backup Required
+
+| Path | Content | Required? |
+|------|---------|-----------|
+| `~/.config/naia-os/memory.db` | Shell facts (user knowledge) | **Must backup** |
+| `~/.openclaw/memory/main.sqlite` | Semantic search index | **Must backup** (rebuildable but slow) |
+| `~/.openclaw/agents/main/sessions/` | Conversation transcripts | Recommended |
+| `~/.openclaw/openclaw.json` | Gateway config (API keys, model) | Recommended |
+| `~/.openclaw/workspace/` | SOUL/IDENTITY/USER.md | Regenerable from Shell |
+| `~/.openclaw/credentials/` | OAuth tokens | Re-authenticatable |
 
 ### Search Engine Evolution (swappable via MemoryProcessor interface)
 
@@ -230,14 +311,59 @@ A 2-tier memory system for Alpha to remember and grow with the user.
 ### DB Schema
 
 ```sql
--- Short-term memory
-CREATE TABLE sessions (id TEXT PK, created_at INT, title TEXT, summary TEXT);
-CREATE TABLE messages (id TEXT PK, session_id TEXT FK, role TEXT, content TEXT,
-                       timestamp INT, cost_json TEXT, tool_calls_json TEXT);
+-- Shell facts (user knowledge, cross-session)
+CREATE TABLE facts (id TEXT PK, key TEXT UNIQUE, value TEXT,
+                    source_session TEXT, created_at INT, updated_at INT);
 
--- Long-term memory (Phase 4.4c+)
-CREATE TABLE facts (id TEXT PK, key TEXT, value TEXT, source TEXT, updated_at INT);
+-- OpenClaw sessions: ~/.openclaw/agents/main/sessions/sessions.json (metadata)
+--                  + *.jsonl per session (transcripts)
+-- OpenClaw semantic: ~/.openclaw/memory/main.sqlite (embeddings index)
 ```
+
+---
+
+## Skill System
+
+Skill management: built-in skills, Gateway skills, and install flow. *(Updated: 2026-03-05)*
+
+### Built-in Skills
+
+- **Count**: 20 skills
+- **Sync locations** (all 4 must list the same 20 skills):
+  1. `shell/src-tauri/src/lib.rs` — `list_skills` Tauri command
+  2. `shell/src/components/ChatPanel.tsx` — `BUILTIN_SKILLS` Set (guards against disable)
+  3. `agent/src/skills/built-in/*.ts` — tool-bridge registry
+  4. `agent/scripts/generate-skill-manifests.ts` — `SKIP_BUILT_IN` list
+- **Rule**: Adding a new built-in requires updating all 4 locations.
+
+### Gateway Skills
+
+- **Source**: OpenClaw Gateway `skills.status` RPC
+- **Response fields**: `name`, `description`, `eligible`, `missing[]`, `install[]` (`{ id, kind, label }`)
+- **Install kinds**: `brew`, `node`, `go`, `uv`, `download`
+
+### Install Flow
+
+```
+1. Shell SkillsTab calls fetchGatewayStatus()
+   → directToolCall({ action: "gateway_status" })
+   → Agent skill_skill_manager → Gateway skills.status RPC
+   → Returns skills[] with install[] arrays
+
+2. User clicks Install button
+   → Shell resolves installId from gs.install[0].id
+   → directToolCall({ action: "install", skillName, installId })
+   → Agent skill_skill_manager → Gateway skills.install RPC
+   → Gateway runs installer (brew/npm/go/etc)
+   → Returns success/error
+
+3. Shell shows install result feedback
+   → Re-fetches gateway status to update UI
+```
+
+- **RPC params**: `skills.status: { agentId? }`, `skills.install: { name, installId }` — `installId` is REQUIRED (from `install[].id`)
+- **directToolCall flow**: Shell → Tauri stdin → Agent `handleToolRequest()` → `executeTool(skill_skill_manager)` → Gateway RPC → result back to Shell
+- **Event cleanup**: `GatewayClient.offEvent(handler)` must be called after `delegateStreaming` completes to prevent event handler memory leaks.
 
 ---
 
