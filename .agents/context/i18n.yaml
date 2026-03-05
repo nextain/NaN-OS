@@ -1,0 +1,61 @@
+# Internationalization (i18n) — AI context
+# How Naia Shell handles multilingual UI and AI response language
+
+supported_locales:
+  - ko  # Korean
+  - en  # English (default fallback)
+  - ja  # Japanese
+  - zh  # Chinese
+  - fr  # French
+  - de  # German
+  - ru  # Russian
+  - es  # Spanish
+  - ar  # Arabic
+  - hi  # Hindi
+  - bn  # Bengali
+  - pt  # Portuguese
+  - id  # Indonesian
+  - vi  # Vietnamese
+
+architecture:
+  ui_translations:
+    file: shell/src/lib/i18n.ts
+    type: "inline Record<TranslationKey, Record<Locale, string>>"
+    detection: "config.locale > navigator.language > 'en'"
+    function: "t(key) returns localized string for currentLocale"
+
+  ai_response_language:
+    file: shell/src/lib/persona.ts
+    mechanism: "buildSystemPrompt injects 'IMPORTANT: Respond in {Language}' based on context.locale"
+    fallback: "getLocale() (browser detection, default 'en')"
+    persona_default: "language-neutral ('Speaks naturally in the user's preferred language')"
+
+  locale_aware_features:
+    speech_style:
+      description: "반말/존댓말 toggle — Korean-only concept"
+      guard: "locale === 'ko' or locale undefined"
+      ui_visibility: "hidden when locale !== 'ko'"
+    honorific:
+      description: "Korean honorific suffix (오빠, 님, etc)"
+      guard: "locale === 'ko' or locale undefined"
+      ui_visibility: "hidden when locale !== 'ko'"
+    emotion_examples:
+      description: "Emotion tag examples in system prompt"
+      behavior: "locale-specific greeting example for all 14 locales"
+
+  locale_propagation:
+    - "ChatPanel.buildMemoryContext() — loads config.locale || getLocale()"
+    - "SettingsTab save — passes locale to buildSystemPrompt + syncToOpenClaw"
+    - "OnboardingWizard — passes locale to buildSystemPrompt + syncToOpenClaw"
+    - "channel-sync — passes locale to buildSystemPrompt"
+
+key_files:
+  - shell/src/lib/i18n.ts          # UI translation strings + locale detection
+  - shell/src/lib/persona.ts       # AI prompt language injection
+  - shell/src/components/ChatPanel.tsx      # buildMemoryContext with locale
+  - shell/src/components/SettingsTab.tsx    # locale UI + save propagation
+  - shell/src/components/OnboardingWizard.tsx  # locale propagation on setup
+
+testing:
+  unit: shell/src/lib/__tests__/persona.test.ts  # locale-aware prompt tests
+  e2e: shell/e2e-tauri/specs/54-settings-locale-prompt.spec.ts

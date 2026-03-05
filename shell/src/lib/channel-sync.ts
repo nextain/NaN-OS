@@ -133,6 +133,7 @@ async function syncOpenClawWithChannels(
 			userName: config.userName,
 			honorific: config.honorific,
 			speechStyle: config.speechStyle,
+			locale: config.locale || getLocale(),
 			discordDefaultUserId: discordUserId,
 			discordDmChannelId: dmChannelId,
 		});

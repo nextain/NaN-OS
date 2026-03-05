@@ -25,7 +25,7 @@ import {
 	patchGatewaySession,
 	resetGatewaySession,
 } from "../lib/gateway-sessions";
-import { t } from "../lib/i18n";
+import { getLocale, t } from "../lib/i18n";
 import { Logger } from "../lib/logger";
 import { extractFacts, summarizeSession } from "../lib/memory-processor";
 import { type MemoryContext, buildSystemPrompt } from "../lib/persona";
@@ -154,6 +154,9 @@ async function buildMemoryContext(): Promise<MemoryContext> {
 		const cfg = loadConfig();
 		ctx.userName = cfg?.userName;
 		ctx.agentName = cfg?.agentName;
+		ctx.locale = cfg?.locale || getLocale();
+		ctx.honorific = cfg?.honorific;
+		ctx.speechStyle = cfg?.speechStyle;
 		ctx.discordDefaultUserId = cfg?.discordDefaultUserId;
 		ctx.discordDmChannelId = cfg?.discordDmChannelId;
 

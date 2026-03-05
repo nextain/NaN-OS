@@ -268,10 +268,11 @@ export function OnboardingWizard({
 						userName: restored.userName,
 						honorific: restored.honorific,
 						speechStyle: restored.speechStyle,
+						locale: restored.locale || getLocale(),
 						discordDefaultUserId: restored.discordDefaultUserId,
 						discordDmChannelId: restored.discordDmChannelId,
 					});
-					syncToOpenClaw(restored.provider, restored.model, restored.apiKey, restored.persona, restored.agentName, restored.userName, fullPrompt, getLocale(), restored.discordDmChannelId, restored.discordDefaultUserId, undefined, undefined, undefined, undefined, key);
+					syncToOpenClaw(restored.provider, restored.model, restored.apiKey, restored.persona, restored.agentName, restored.userName, fullPrompt, restored.locale || getLocale(), restored.discordDmChannelId, restored.discordDefaultUserId, undefined, undefined, undefined, undefined, key);
 
 					// Push to Lab if not yet saved online
 					if (!onlineConfig) {
@@ -458,10 +459,11 @@ export function OnboardingWizard({
 			userName: config.userName,
 			honorific: config.honorific,
 			speechStyle: config.speechStyle,
+			locale: config.locale || getLocale(),
 			discordDefaultUserId: config.discordDefaultUserId,
 			discordDmChannelId: config.discordDmChannelId,
 		});
-		syncToOpenClaw(config.provider, config.model, config.apiKey, config.persona, config.agentName, config.userName, fullPrompt, getLocale(), config.discordDmChannelId, config.discordDefaultUserId, undefined, undefined, undefined, undefined, naiaKey || undefined, config.ollamaHost || undefined);
+		syncToOpenClaw(config.provider, config.model, config.apiKey, config.persona, config.agentName, config.userName, fullPrompt, config.locale || getLocale(), config.discordDmChannelId, config.discordDefaultUserId, undefined, undefined, undefined, undefined, naiaKey || undefined, config.ollamaHost || undefined);
 
 		// Sync to Lab if connected
 		if (naiaKey && naiaUserId) {

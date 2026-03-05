@@ -1113,6 +1113,7 @@ export function SettingsTab() {
 					userName: current?.userName,
 					honorific: current?.honorific,
 					speechStyle: current?.speechStyle,
+					locale: current?.locale || getLocale(),
 					discordDefaultUserId: current?.discordDefaultUserId,
 					discordDmChannelId: current?.discordDmChannelId,
 				});
@@ -1662,6 +1663,7 @@ export function SettingsTab() {
 			userName: newConfig.userName,
 			honorific: newConfig.honorific,
 			speechStyle: newConfig.speechStyle,
+			locale: newConfig.locale || getLocale(),
 			discordDefaultUserId: newConfig.discordDefaultUserId,
 			discordDmChannelId: newConfig.discordDmChannelId,
 		});
@@ -1905,27 +1907,31 @@ export function SettingsTab() {
 					onChange={(e) => setUserName(e.target.value)}
 				/>
 			</div>
-			<div className="settings-field">
-				<label>{t("settings.honorific")}</label>
-				<input
-					type="text"
-					className="settings-input"
-					value={honorific}
-					onChange={(e) => setHonorific(e.target.value)}
-					placeholder={t("onboard.speechStyle.honorificPlaceholder")}
-				/>
-			</div>
-			<div className="settings-field">
-				<label>{t("settings.speechStyle")}</label>
-				<select
-					className="settings-select"
-					value={speechStyle}
-					onChange={(e) => setSpeechStyle(e.target.value)}
-				>
-					<option value="반말">{t("onboard.speechStyle.casual")} (Casual)</option>
-					<option value="존댓말">{t("onboard.speechStyle.formal")} (Formal)</option>
-				</select>
-			</div>
+			{locale === "ko" && (
+				<>
+					<div className="settings-field">
+						<label>{t("settings.honorific")}</label>
+						<input
+							type="text"
+							className="settings-input"
+							value={honorific}
+							onChange={(e) => setHonorific(e.target.value)}
+							placeholder={t("onboard.speechStyle.honorificPlaceholder")}
+						/>
+					</div>
+					<div className="settings-field">
+						<label>{t("settings.speechStyle")}</label>
+						<select
+							className="settings-select"
+							value={speechStyle}
+							onChange={(e) => setSpeechStyle(e.target.value)}
+						>
+							<option value="반말">{t("onboard.speechStyle.casual")} (Casual)</option>
+							<option value="존댓말">{t("onboard.speechStyle.formal")} (Formal)</option>
+						</select>
+					</div>
+				</>
+			)}
 
 			<div className="settings-field">
 				<label htmlFor="persona-input">{t("settings.persona")}</label>

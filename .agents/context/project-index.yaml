@@ -91,6 +91,16 @@ mirror_pairs:
     users_ko: .users/context/ko/charter-draft.md
     description: "Charter draft: AI-era open source community — collaboration efficiency, context as infrastructure, AI agent participation experiment"
 
+  - agents: .agents/context/i18n.yaml
+    users: .users/context/i18n.md
+    users_ko: .users/context/ko/i18n.md
+    description: Internationalization — 14 supported locales, UI translation, AI response language, locale-aware features
+
+  - agents: .agents/context/update-pipeline.yaml
+    users: .users/context/update-pipeline.md
+    users_ko: .users/context/ko/update-pipeline.md
+    description: Automatic update pipeline — Bazzite propagation, testing tiers, R2 rollback, known risks
+
   - agents: .agents/workflows/development-cycle.yaml
     users: .users/workflows/development-cycle.md
     description: PLAN→CHECK→BUILD→VERIFY→CLEAN→COMMIT cycle, review gates, AI rules
@@ -141,6 +151,8 @@ on_demand_loading:
     - .agents/context/skill-naia-discord.yaml (when working on Discord skill or messaging)
     - .agents/context/channels-discord.yaml (when working on Discord integration, OAuth, or Shell conversation sync)
     - .agents/context/distribution.yaml (when building, releasing, or deploying — Flatpak, ISO, Flathub)
+    - .agents/context/update-pipeline.yaml (when working on OS updates, Bazzite sync, CI pipeline, or testing)
+    - .agents/context/i18n.yaml (when working on translations, locale handling, AI response language, or multilingual features)
     - .agents/context/bazzite-rebranding.yaml (when modifying OS branding, logos, boot splash, or installer assets)
     - .agents/context/brand.yaml (when working on branding, character, logos, or color system)
     - .agents/context/demo-video.yaml (when creating, updating, or re-recording demo videos)

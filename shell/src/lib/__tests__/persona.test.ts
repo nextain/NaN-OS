@@ -119,4 +119,66 @@ describe("buildSystemPrompt", () => {
 		expect(result).toContain("Talked about Rust");
 		expect(result).toContain("role: developer");
 	});
+
+	describe("locale-aware prompt", () => {
+		it("adds English instruction when locale is 'en'", () => {
+			const result = buildSystemPrompt(undefined, { locale: "en" });
+			expect(result).toContain("Respond in English");
+		});
+
+		it("adds Korean instruction when locale is 'ko'", () => {
+			const result = buildSystemPrompt(undefined, { locale: "ko" });
+			expect(result).toContain("Respond in Korean");
+		});
+
+		it("does not add locale instruction when locale is undefined", () => {
+			const result = buildSystemPrompt(undefined, {});
+			expect(result).not.toContain("Respond in");
+		});
+
+		it("skips speechStyle when locale is not Korean", () => {
+			const result = buildSystemPrompt(undefined, { locale: "en", speechStyle: "반말" });
+			expect(result).not.toContain("반말");
+			expect(result).toContain("Respond in English");
+		});
+
+		it("applies speechStyle when locale is Korean", () => {
+			const result = buildSystemPrompt(undefined, { locale: "ko", speechStyle: "반말" });
+			expect(result).toContain("반말");
+			expect(result).toContain("Respond in Korean");
+		});
+
+		it("maps all supported locales to language names", () => {
+			for (const locale of ["ja", "zh", "fr", "de", "ru", "es"]) {
+				const result = buildSystemPrompt(undefined, { locale });
+				expect(result).toContain("Respond in");
+			}
+		});
+
+		it("uses locale-appropriate emotion example for English", () => {
+			const result = buildSystemPrompt(undefined, { locale: "en" });
+			expect(result).toContain("Good morning");
+			expect(result).not.toContain("좋은 아침이에요");
+		});
+
+		it("uses Korean emotion example for Korean locale", () => {
+			const result = buildSystemPrompt(undefined, { locale: "ko" });
+			expect(result).toContain("좋은 아침이에요");
+		});
+
+		it("uses locale-appropriate emotion example for Japanese", () => {
+			const result = buildSystemPrompt(undefined, { locale: "ja" });
+			expect(result).toContain("おはようございます");
+		});
+
+		it("skips honorific when locale is not Korean", () => {
+			const result = buildSystemPrompt(undefined, { locale: "en", userName: "Luke", honorific: "오빠" });
+			expect(result).not.toContain("오빠");
+		});
+
+		it("applies honorific when locale is Korean", () => {
+			const result = buildSystemPrompt(undefined, { locale: "ko", userName: "Luke", honorific: "오빠" });
+			expect(result).toContain("Luke오빠");
+		});
+	});
 });
