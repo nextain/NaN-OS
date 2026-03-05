@@ -3,7 +3,6 @@ import { useEffect, useRef, useState } from "react";
 import Markdown from "react-markdown";
 import { type AudioPlayer, createAudioPlayer } from "../lib/audio-player";
 import { cancelChat, directToolCall, sendChatMessage } from "../lib/chat-service";
-import { resetDiscordPollState } from "../lib/discord-poll";
 import {
 	LAB_GATEWAY_URL,
 	addAllowedTool,
