@@ -2,7 +2,7 @@ name: Generate ISO
 
 on:
   workflow_run:
-    workflows: ["Release Naia Shell"]
+    workflows: ["Build Naia"]
     types: [completed]
   workflow_dispatch:
 

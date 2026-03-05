@@ -12,6 +12,9 @@ on:
     paths:
       - "recipes/**"
       - "config/**"
+  workflow_run:
+    workflows: ["Release Naia Shell"]
+    types: [completed]
   workflow_dispatch:
 
 env:
@@ -21,6 +24,9 @@ jobs:
   build:
     name: Build Image
     runs-on: ubuntu-latest
+    if: >-
+      github.event_name != 'workflow_run' ||
+      github.event.workflow_run.conclusion == 'success'
     permissions:
       contents: read
       packages: write
