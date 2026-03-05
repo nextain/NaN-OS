@@ -512,6 +512,21 @@ searches=
 servers=8.8.8.8,1.1.1.1
 EOF
 
+# Method 2: Direct resolv.conf fallback (in case NM doesn't apply global-dns)
+cat > /etc/NetworkManager/dispatcher.d/99-naia-dns-fallback <<'DISPATCH'
+#!/usr/bin/env bash
+# If resolv.conf has no working nameserver, inject Google/Cloudflare DNS
+if ! grep -q '^nameserver' /etc/resolv.conf 2>/dev/null || \
+   ! timeout 2 getent hosts google.com &>/dev/null; then
+    printf "nameserver 8.8.8.8\nnameserver 1.1.1.1\n" >> /etc/resolv.conf
+fi
+DISPATCH
+chmod +x /etc/NetworkManager/dispatcher.d/99-naia-dns-fallback
+
+# Method 3: Replace resolv.conf (may be a systemd-resolved symlink that breaks DNS)
+rm -f /etc/resolv.conf
+printf "nameserver 8.8.8.8\nnameserver 1.1.1.1\n" > /etc/resolv.conf
+
 # ==============================================================================
 # 11. Wi-Fi power save off (Intel iwlwifi bug workaround)
 #     Intel 8265 etc. connect but drop all packets with power_save on.
