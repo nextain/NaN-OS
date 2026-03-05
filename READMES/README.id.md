@@ -272,8 +272,33 @@ Naia menerapkan model keamanan **Pertahanan Berlapis (Defense in Depth)**:
 | 3 | Eksekusi alat (8 alat + izin + audit) | ✅ Selesai |
 | 4 | Daemon selalu aktif (Gateway + Skills + Memori + Discord) | ✅ Selesai |
 | 5 | Integrasi akun Nextain (OAuth + kredit + proxy LLM) | ✅ Selesai |
-| 6 | Distribusi aplikasi Tauri (Flatpak/DEB/RPM/AppImage) | 🟡 Sedang Berlangsung |
-| 7 | Image ISO OS (boot USB -> AI OS) | ⏳ Direncanakan |
+| 6 | Distribusi aplikasi Tauri (Flatpak/DEB/RPM/AppImage) | ✅ Selesai |
+| 7 | Image ISO OS (boot USB -> instalasi -> AI OS) | ✅ Selesai |
+
+## Unduh
+
+| Format | Tautan | Deskripsi |
+|--------|--------|-----------|
+| **Naia OS (ISO)** | [Unduh (~7,2 GB)](https://pub-affd0538517845d98ce44a5aec11dd98.r2.dev/naia-os-live-amd64.iso) | OS AI lengkap — boot dari USB, instal ke hard drive |
+| Flatpak | [GitHub Release](https://github.com/nextain/naia-os/releases/latest/download/Naia-Shell-x86_64.flatpak) | Hanya aplikasi Naia Shell (untuk Linux yang sudah ada) |
+| AppImage | [GitHub Release](https://github.com/nextain/naia-os/releases/latest/download/Naia-Shell-x86_64.AppImage) | Aplikasi portabel (tanpa perlu instalasi) |
+| DEB / RPM | [Semua Rilis](https://github.com/nextain/naia-os/releases) | Untuk Debian/Ubuntu atau Fedora/openSUSE |
+
+Lihat [naia.nextain.io/download](https://naia.nextain.io/id/download) untuk detail dan checksum.
+
+## Pembaruan OS
+
+Naia OS dibangun di atas [Bazzite](https://github.com/ublue-os/bazzite) (Fedora Atomic). Pembaruan bersifat **atomik dan aman**:
+
+- **Otomatis**: Rebuild mingguan mengambil patch keamanan dan pembaruan Bazzite terbaru
+- **Atomik**: Image baru di-deploy bersama yang saat ini — jika gagal, image lama tetap utuh
+- **Rollback**: Pilih versi sebelumnya dari menu GRUB untuk pemulihan instan
+- **Overlay kami**: Hanya menambahkan paket (fcitx5, font) + Naia Shell (Flatpak, sandbox) + konfigurasi branding — tidak pernah menyentuh kernel, bootloader, atau inti systemd
+
+```
+Pembaruan basis Bazzite → Rebuild otomatis mingguan → Smoke test kontainer → Rebuild ISO → Upload R2
+                                                                           ↘ Push GHCR → pembaruan bootc pengguna
+```
 
 ## Proses Pengembangan
 

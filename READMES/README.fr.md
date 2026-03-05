@@ -273,8 +273,33 @@ Naia applique un modele de securite **Defense en profondeur (Defense in Depth)**
 | 3 | Execution d'outils (8 outils + permissions + audit) | ✅ Termine |
 | 4 | Daemon permanent (Gateway + Skills + Memoire + Discord) | ✅ Termine |
 | 5 | Integration compte Nextain (OAuth + credits + proxy LLM) | ✅ Termine |
-| 6 | Distribution app Tauri (Flatpak/DEB/RPM/AppImage) | 🟡 En cours |
-| 7 | Image ISO OS (demarrage USB -> AI OS) | ⏳ Prevu |
+| 6 | Distribution app Tauri (Flatpak/DEB/RPM/AppImage) | ✅ Termine |
+| 7 | Image ISO OS (demarrage USB -> installation -> AI OS) | ✅ Termine |
+
+## Telechargement
+
+| Format | Lien | Description |
+|--------|------|-------------|
+| **Naia OS (ISO)** | [Telecharger (~7.2 Go)](https://pub-affd0538517845d98ce44a5aec11dd98.r2.dev/naia-os-live-amd64.iso) | OS IA complet — demarrer depuis USB, installer sur disque dur |
+| Flatpak | [GitHub Release](https://github.com/nextain/naia-os/releases/latest/download/Naia-Shell-x86_64.flatpak) | Application Naia Shell uniquement (pour Linux existant) |
+| AppImage | [GitHub Release](https://github.com/nextain/naia-os/releases/latest/download/Naia-Shell-x86_64.AppImage) | Application portable (pas d'installation requise) |
+| DEB / RPM | [Toutes les versions](https://github.com/nextain/naia-os/releases) | Pour Debian/Ubuntu ou Fedora/openSUSE |
+
+Voir [naia.nextain.io/download](https://naia.nextain.io/fr/download) pour les details et les checksums.
+
+## Mises a jour de l'OS
+
+Naia OS est construit sur [Bazzite](https://github.com/ublue-os/bazzite) (Fedora Atomic). Les mises a jour sont **atomiques et sures** :
+
+- **Automatiques** : La reconstruction hebdomadaire recupere les derniers correctifs de securite et mises a jour Bazzite
+- **Atomiques** : La nouvelle image se deploie a cote de l'actuelle — en cas d'echec, l'ancienne image est intacte
+- **Retour en arriere** : Selectionnez la version precedente depuis le menu GRUB pour une recuperation instantanee
+- **Notre surcouche** : Ajoute uniquement des paquets (fcitx5, polices) + Naia Shell (Flatpak, sandboxe) + configurations de marque — ne touche jamais au noyau, au bootloader ou au coeur de systemd
+
+```
+Mise a jour base Bazzite → Reconstruction auto hebdomadaire → Test de fumee conteneur → Reconstruction ISO → Upload R2
+                                                                                      ↘ Push GHCR → mise a jour bootc utilisateur
+```
 
 ## Processus de developpement
 

@@ -64,9 +64,15 @@ jobs:
           AWS_REGION: auto
         run: |
           ISO_PATH="${{ steps.build.outputs.iso-dest }}"
+          # Backup previous ISO before overwriting
+          aws s3 cp s3://naia-releases/naia-os-live-amd64.iso \
+                    s3://naia-releases/previous/naia-os-live-amd64.iso --no-progress || true
+          aws s3 cp s3://naia-releases/naia-os-live-amd64.iso-CHECKSUM \
+                    s3://naia-releases/previous/naia-os-live-amd64.iso-CHECKSUM --no-progress || true
+          # Upload new ISO
           aws s3 cp "$ISO_PATH" s3://naia-releases/naia-os-live-amd64.iso --no-progress
           aws s3 cp "${ISO_PATH}-CHECKSUM" s3://naia-releases/naia-os-live-amd64.iso-CHECKSUM --no-progress
-          echo "✅ Uploaded to R2: naia-os-live-amd64.iso"
+          echo "Uploaded to R2: naia-os-live-amd64.iso (previous backed up)"
 
       - name: Upload CHECKSUM to Release
         if: github.ref == 'refs/heads/main'

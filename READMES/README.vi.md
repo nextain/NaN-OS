@@ -273,8 +273,33 @@ Naia ap dung mo hinh bao mat **Phong thu theo chieu sau (Defense in Depth)**:
 | 3 | Thuc thi cong cu (8 cong cu + quyen + kiem toan) | ✅ Hoan thanh |
 | 4 | Daemon luon bat (Gateway + Skills + Bo nho + Discord) | ✅ Hoan thanh |
 | 5 | Tich hop tai khoan Nextain (OAuth + tin dung + proxy LLM) | ✅ Hoan thanh |
-| 6 | Phan phoi ung dung Tauri (Flatpak/DEB/RPM/AppImage) | 🟡 Dang tien hanh |
-| 7 | Anh ISO he dieu hanh (khoi dong USB -> AI OS) | ⏳ Du kien |
+| 6 | Phan phoi ung dung Tauri (Flatpak/DEB/RPM/AppImage) | ✅ Hoan thanh |
+| 7 | Anh ISO he dieu hanh (khoi dong USB -> cai dat -> AI OS) | ✅ Hoan thanh |
+
+## Tai xuong
+
+| Dinh dang | Lien ket | Mo ta |
+|-----------|----------|-------|
+| **Naia OS (ISO)** | [Tai xuong (~7,2 GB)](https://pub-affd0538517845d98ce44a5aec11dd98.r2.dev/naia-os-live-amd64.iso) | He dieu hanh AI day du — khoi dong tu USB, cai dat vao o cung |
+| Flatpak | [GitHub Release](https://github.com/nextain/naia-os/releases/latest/download/Naia-Shell-x86_64.flatpak) | Chi ung dung Naia Shell (cho Linux hien co) |
+| AppImage | [GitHub Release](https://github.com/nextain/naia-os/releases/latest/download/Naia-Shell-x86_64.AppImage) | Ung dung di dong (khong can cai dat) |
+| DEB / RPM | [Tat ca phien ban](https://github.com/nextain/naia-os/releases) | Cho Debian/Ubuntu hoac Fedora/openSUSE |
+
+Xem [naia.nextain.io/download](https://naia.nextain.io/vi/download) de biet chi tiet va checksum.
+
+## Cap nhat he dieu hanh
+
+Naia OS duoc xay dung tren [Bazzite](https://github.com/ublue-os/bazzite) (Fedora Atomic). Cap nhat la **nguyen tu va an toan**:
+
+- **Tu dong**: Rebuild hang tuan lay cac ban va bao mat va cap nhat Bazzite moi nhat
+- **Nguyen tu**: Anh moi duoc trien khai song song voi anh hien tai — neu that bai, anh cu khong bi anh huong
+- **Khoi phuc**: Chon phien ban truoc tu menu GRUB de khoi phuc ngay lap tuc
+- **Lop phu cua chung toi**: Chi them cac goi (fcitx5, font) + Naia Shell (Flatpak, sandbox) + cau hinh thuong hieu — khong bao gio cham vao kernel, bootloader hoac loi systemd
+
+```
+Cap nhat co so Bazzite → Rebuild tu dong hang tuan → Smoke test container → Rebuild ISO → Upload R2
+                                                                          ↘ Push GHCR → cap nhat bootc nguoi dung
+```
 
 ## Quy trinh phat trien
 

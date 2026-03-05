@@ -273,8 +273,33 @@ Naia는 **다층 방어(Defense in Depth)** 보안 모델을 적용합니다:
 | 3 | 도구 실행 (8개 도구 + 권한 + 감사) | ✅ 완료 |
 | 4 | 상시 데몬 (Gateway + Skills + 메모리 + Discord) | ✅ 완료 |
 | 5 | Nextain 계정 연동 (OAuth + 크레딧 + LLM 프록시) | ✅ 완료 |
-| 6 | Tauri 앱 배포 (Flatpak/DEB/RPM/AppImage) | 🟡 진행 중 |
-| 7 | OS ISO 이미지 (USB 부팅 → AI OS) | ⏳ 예정 |
+| 6 | Tauri 앱 배포 (Flatpak/DEB/RPM/AppImage) | ✅ 완료 |
+| 7 | OS ISO 이미지 (USB 부팅 → 설치 → AI OS) | ✅ 완료 |
+
+## 다운로드
+
+| 형식 | 링크 | 설명 |
+|------|------|------|
+| **Naia OS (ISO)** | [다운로드 (~7.2 GB)](https://pub-affd0538517845d98ce44a5aec11dd98.r2.dev/naia-os-live-amd64.iso) | 전체 AI OS — USB로 부팅, 하드 드라이브에 설치 |
+| Flatpak | [GitHub Release](https://github.com/nextain/naia-os/releases/latest/download/Naia-Shell-x86_64.flatpak) | Naia Shell 앱 단독 (기존 Linux용) |
+| AppImage | [GitHub Release](https://github.com/nextain/naia-os/releases/latest/download/Naia-Shell-x86_64.AppImage) | 포터블 앱 (설치 불필요) |
+| DEB / RPM | [전체 릴리스](https://github.com/nextain/naia-os/releases) | Debian/Ubuntu 또는 Fedora/openSUSE용 |
+
+자세한 내용과 체크섬은 [naia.nextain.io/download](https://naia.nextain.io/ko/download)를 참고하세요.
+
+## OS 업데이트
+
+Naia OS는 [Bazzite](https://github.com/ublue-os/bazzite) (Fedora Atomic) 기반입니다. 업데이트는 **원자적이고 안전**합니다:
+
+- **자동**: 매주 리빌드로 최신 Bazzite 보안 패치 및 업데이트 반영
+- **원자적**: 새 이미지를 기존과 나란히 배포 — 실패 시 기존 이미지는 그대로
+- **롤백**: GRUB 메뉴에서 이전 버전 선택하면 즉시 복구
+- **우리 커스텀 범위**: 패키지(fcitx5, 폰트) + Naia Shell(Flatpak, 샌드박스) + 브랜딩 설정만 추가 — 커널, 부트로더, systemd 핵심은 건드리지 않음
+
+```
+Bazzite 베이스 업데이트 → 매주 자동 리빌드 → 컨테이너 smoke test → ISO 리빌드 → R2 업로드
+                                                                   ↘ GHCR push → 사용자 bootc 업데이트
+```
 
 ## 개발 프로세스
 

@@ -1,6 +1,8 @@
 name: Build Naia
 
 on:
+  schedule:
+    - cron: "0 6 * * 3" # every Wednesday 6:00 UTC — pick up Bazzite base updates
   push:
     branches: [main]
     paths:
@@ -45,3 +47,15 @@ jobs:
           cosign_private_key: ${{ secrets.SIGNING_SECRET }}
           registry_token: ${{ github.token }}
           pr_event_number: ${{ github.event.number }}
+
+      - name: Smoke Test
+        run: |
+          podman run --rm ${{ env.IMAGE_REGISTRY }}/naia-os:latest bash -c '
+            set -e
+            rpm -q fcitx5 fcitx5-hangul google-noto-sans-cjk-kr-fonts
+            grep -q "Naia" /usr/lib/os-release
+            test -f /usr/share/naia/Naia-Shell-x86_64.flatpak
+            ls /usr/share/plasma/shells/org.kde.plasma.desktop/contents/updates/naia-*.js
+            test -f /usr/etc/xdg/autostart/naia-shell.desktop
+            echo "ALL SMOKE TESTS PASSED"
+          '

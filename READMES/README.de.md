@@ -273,8 +273,33 @@ Naia wendet ein **Tiefenverteidigung (Defense in Depth)** Sicherheitsmodell an:
 | 3 | Werkzeug-Ausfuehrung (8 Werkzeuge + Berechtigungen + Audit) | ✅ Abgeschlossen |
 | 4 | Immer-an-Daemon (Gateway + Skills + Gedaechtnis + Discord) | ✅ Abgeschlossen |
 | 5 | Nextain-Konto-Integration (OAuth + Credits + LLM-Proxy) | ✅ Abgeschlossen |
-| 6 | Tauri-App-Verteilung (Flatpak/DEB/RPM/AppImage) | 🟡 In Arbeit |
-| 7 | OS-ISO-Image (USB-Boot -> KI-OS) | ⏳ Geplant |
+| 6 | Tauri-App-Verteilung (Flatpak/DEB/RPM/AppImage) | ✅ Abgeschlossen |
+| 7 | OS-ISO-Image (USB-Boot -> Installation -> KI-OS) | ✅ Abgeschlossen |
+
+## Download
+
+| Format | Link | Beschreibung |
+|--------|------|-------------|
+| **Naia OS (ISO)** | [Herunterladen (~7,2 GB)](https://pub-affd0538517845d98ce44a5aec11dd98.r2.dev/naia-os-live-amd64.iso) | Vollstaendiges KI-OS — von USB booten, auf Festplatte installieren |
+| Flatpak | [GitHub Release](https://github.com/nextain/naia-os/releases/latest/download/Naia-Shell-x86_64.flatpak) | Nur Naia Shell App (fuer vorhandenes Linux) |
+| AppImage | [GitHub Release](https://github.com/nextain/naia-os/releases/latest/download/Naia-Shell-x86_64.AppImage) | Portable App (keine Installation noetig) |
+| DEB / RPM | [Alle Releases](https://github.com/nextain/naia-os/releases) | Fuer Debian/Ubuntu oder Fedora/openSUSE |
+
+Siehe [naia.nextain.io/download](https://naia.nextain.io/de/download) fuer Details und Pruefsummen.
+
+## OS-Updates
+
+Naia OS basiert auf [Bazzite](https://github.com/ublue-os/bazzite) (Fedora Atomic). Updates sind **atomar und sicher**:
+
+- **Automatisch**: Woechentlicher Rebuild uebernimmt die neuesten Bazzite-Sicherheitspatches und Updates
+- **Atomar**: Neues Image wird neben dem aktuellen bereitgestellt — bei Fehler bleibt das alte Image unberuehrt
+- **Rollback**: Fruehere Version im GRUB-Menue auswaehlen zur sofortigen Wiederherstellung
+- **Unser Overlay**: Fuegt nur Pakete (fcitx5, Schriftarten) + Naia Shell (Flatpak, Sandbox) + Branding-Konfigurationen hinzu — beruehrt niemals Kernel, Bootloader oder systemd-Kern
+
+```
+Bazzite-Basis-Update → Woechentlicher Auto-Rebuild → Container-Smoke-Test → ISO-Rebuild → R2-Upload
+                                                                           ↘ GHCR-Push → Benutzer-bootc-Update
+```
 
 ## Entwicklungsprozess
 

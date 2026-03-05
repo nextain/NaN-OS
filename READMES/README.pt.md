@@ -273,8 +273,33 @@ Naia aplica um modelo de seguranca de **Defesa em profundidade (Defense in Depth
 | 3 | Execucao de ferramentas (8 ferramentas + permissoes + auditoria) | ✅ Concluido |
 | 4 | Daemon sempre ativo (Gateway + Skills + Memoria + Discord) | ✅ Concluido |
 | 5 | Integracao de conta Nextain (OAuth + creditos + proxy LLM) | ✅ Concluido |
-| 6 | Distribuicao do app Tauri (Flatpak/DEB/RPM/AppImage) | 🟡 Em andamento |
-| 7 | Imagem ISO do SO (boot USB -> IA SO) | ⏳ Planejado |
+| 6 | Distribuicao do app Tauri (Flatpak/DEB/RPM/AppImage) | ✅ Concluido |
+| 7 | Imagem ISO do SO (boot USB -> instalacao -> IA SO) | ✅ Concluido |
+
+## Download
+
+| Formato | Link | Descricao |
+|---------|------|-----------|
+| **Naia OS (ISO)** | [Download (~7,2 GB)](https://pub-affd0538517845d98ce44a5aec11dd98.r2.dev/naia-os-live-amd64.iso) | SO IA completo — iniciar do USB, instalar no disco rigido |
+| Flatpak | [GitHub Release](https://github.com/nextain/naia-os/releases/latest/download/Naia-Shell-x86_64.flatpak) | Apenas o app Naia Shell (para Linux existente) |
+| AppImage | [GitHub Release](https://github.com/nextain/naia-os/releases/latest/download/Naia-Shell-x86_64.AppImage) | App portatil (sem necessidade de instalacao) |
+| DEB / RPM | [Todas as versoes](https://github.com/nextain/naia-os/releases) | Para Debian/Ubuntu ou Fedora/openSUSE |
+
+Veja [naia.nextain.io/download](https://naia.nextain.io/pt/download) para detalhes e checksums.
+
+## Atualizacoes do SO
+
+Naia OS e construido sobre o [Bazzite](https://github.com/ublue-os/bazzite) (Fedora Atomic). As atualizacoes sao **atomicas e seguras**:
+
+- **Automaticas**: Reconstrucao semanal obtem os ultimos patches de seguranca e atualizacoes do Bazzite
+- **Atomicas**: Nova imagem e implantada ao lado da atual — se falhar, a imagem antiga permanece intacta
+- **Rollback**: Selecione a versao anterior no menu GRUB para recuperacao instantanea
+- **Nosso overlay**: Apenas adiciona pacotes (fcitx5, fontes) + Naia Shell (Flatpak, sandboxed) + configuracoes de marca — nunca toca no kernel, bootloader ou nucleo do systemd
+
+```
+Atualizacao base Bazzite → Reconstrucao auto semanal → Smoke test do container → Reconstrucao ISO → Upload R2
+                                                                               ↘ Push GHCR → atualizacao bootc do usuario
+```
 
 ## Processo de desenvolvimento
 

@@ -272,8 +272,33 @@ flatpak run io.nextain.naia
 | 3 | تنفيذ الأدوات (8 أدوات + أذونات + تدقيق) | ✅ مكتمل |
 | 4 | خفي دائم (Gateway + Skills + ذاكرة + Discord) | ✅ مكتمل |
 | 5 | تكامل حساب Nextain (OAuth + رصيد + وكيل LLM) | ✅ مكتمل |
-| 6 | توزيع تطبيق Tauri (Flatpak/DEB/RPM/AppImage) | 🟡 قيد التقدم |
-| 7 | صورة ISO لنظام التشغيل (إقلاع USB -> AI OS) | ⏳ مخطط |
+| 6 | توزيع تطبيق Tauri (Flatpak/DEB/RPM/AppImage) | ✅ مكتمل |
+| 7 | صورة ISO لنظام التشغيل (إقلاع USB -> تثبيت -> AI OS) | ✅ مكتمل |
+
+## التحميل
+
+| الصيغة | الرابط | الوصف |
+|--------|--------|-------|
+| **Naia OS (ISO)** | [تحميل (~7.2 جيجابايت)](https://pub-affd0538517845d98ce44a5aec11dd98.r2.dev/naia-os-live-amd64.iso) | نظام تشغيل ذكاء اصطناعي كامل — الإقلاع من USB، التثبيت على القرص الصلب |
+| Flatpak | [GitHub Release](https://github.com/nextain/naia-os/releases/latest/download/Naia-Shell-x86_64.flatpak) | تطبيق Naia Shell فقط (لنظام Linux الموجود) |
+| AppImage | [GitHub Release](https://github.com/nextain/naia-os/releases/latest/download/Naia-Shell-x86_64.AppImage) | تطبيق محمول (لا حاجة للتثبيت) |
+| DEB / RPM | [جميع الإصدارات](https://github.com/nextain/naia-os/releases) | لـ Debian/Ubuntu أو Fedora/openSUSE |
+
+راجع [naia.nextain.io/download](https://naia.nextain.io/ar/download) للتفاصيل والتحقق.
+
+## تحديثات نظام التشغيل
+
+Naia OS مبني على [Bazzite](https://github.com/ublue-os/bazzite) (Fedora Atomic). التحديثات **ذرية وآمنة**:
+
+- **تلقائية**: إعادة البناء الأسبوعية تلتقط أحدث تصحيحات الأمان وتحديثات Bazzite
+- **ذرية**: الصورة الجديدة تُنشر بجانب الحالية — إذا فشلت، تبقى الصورة القديمة سليمة
+- **التراجع**: اختر الإصدار السابق من قائمة GRUB للاسترداد الفوري
+- **طبقتنا**: تضيف فقط حزم (fcitx5، خطوط) + Naia Shell (Flatpak، معزول) + تكوينات العلامة التجارية — لا تمس النواة أو محمل الإقلاع أو نواة systemd أبداً
+
+```
+تحديث قاعدة Bazzite → إعادة بناء تلقائية أسبوعية → اختبار دخان الحاوية → إعادة بناء ISO → رفع R2
+                                                                           ↘ دفع GHCR → تحديث bootc المستخدم
+```
 
 ## عملية التطوير
 

@@ -248,8 +248,33 @@ Naia applies a **Defense in Depth** security model:
 | 3 | Tool execution (8 tools + permissions + audit) | ✅ Complete |
 | 4 | Always-on daemon (Gateway + Skills + Memory + Discord) | ✅ Complete |
 | 5 | Nextain account integration (OAuth + credits + LLM proxy) | ✅ Complete |
-| 6 | Tauri app distribution (Flatpak/DEB/RPM/AppImage) | 🟡 In Progress |
-| 7 | OS ISO image (USB boot -> AI OS) | ⏳ Planned |
+| 6 | Tauri app distribution (Flatpak/DEB/RPM/AppImage) | ✅ Complete |
+| 7 | OS ISO image (USB boot -> install -> AI OS) | ✅ Complete |
+
+## Download
+
+| Format | Link | Description |
+|--------|------|-------------|
+| **Naia OS (ISO)** | [Download (~7.2 GB)](https://pub-affd0538517845d98ce44a5aec11dd98.r2.dev/naia-os-live-amd64.iso) | Full AI OS — boot from USB, install to hard drive |
+| Flatpak | [GitHub Release](https://github.com/nextain/naia-os/releases/latest/download/Naia-Shell-x86_64.flatpak) | Naia Shell app only (for existing Linux) |
+| AppImage | [GitHub Release](https://github.com/nextain/naia-os/releases/latest/download/Naia-Shell-x86_64.AppImage) | Portable app (no install needed) |
+| DEB / RPM | [All Releases](https://github.com/nextain/naia-os/releases) | For Debian/Ubuntu or Fedora/openSUSE |
+
+See [naia.nextain.io/download](https://naia.nextain.io/en/download) for details and checksums.
+
+## OS Updates
+
+Naia OS is built on [Bazzite](https://github.com/ublue-os/bazzite) (Fedora Atomic). Updates are **atomic and safe**:
+
+- **Automatic**: Weekly rebuild picks up latest Bazzite security patches and updates
+- **Atomic**: New image deploys alongside current — if it fails, old image is untouched
+- **Rollback**: Select previous version from GRUB menu to instantly recover
+- **Our overlay**: Only adds packages (fcitx5, fonts) + Naia Shell (Flatpak, sandboxed) + branding configs — never touches kernel, bootloader, or systemd core
+
+```
+Bazzite base update → Weekly auto-rebuild → Container smoke test → ISO rebuild → R2 upload
+                                                                 ↘ GHCR push → user bootc update
+```
 
 ## Development Process
 

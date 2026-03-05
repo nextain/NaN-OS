@@ -1,0 +1,162 @@
+description: Naia OS automatic update pipeline — Bazzite base propagation, testing, rollback
+
+update_architecture:
+  overview: |
+    Naia OS is a BlueBuild overlay on Bazzite. Updates flow:
+    Bazzite base image → Naia container rebuild → GHCR push → user bootc update
+    ISO is also rebuilt and uploaded to R2 for new installations.
+
+  image_chain:
+    upstream: ghcr.io/ublue-os/bazzite:latest
+    ours: ghcr.io/nextain/naia-os:latest
+    recipe: recipes/recipe.yml
+    overlay_scope:
+      safe:
+        - rpm-ostree packages (fcitx5, fonts, jq, sqlite, podman)
+        - Flatpak app (Naia Shell — sandboxed, independent update)
+        - XDG autostart entry
+      caution:
+        - KDE Plasma update scripts (naia-kickoff.js, naia-pins.js, naia-wallpaper.js)
+        - Plymouth theme config (plymouthd.conf — visual only, no boot breakage)
+        - SDDM login background
+        - os-release override (NAME, PRETTY_NAME, HOME_URL)
+      not_involved_in_updates:
+        - hook-post-rootfs.sh (ISO installation only, never runs during bootc update)
+        - installer/ directory (ISO build artifacts)
+
+  safety_guarantees:
+    ostree_rollback: |
+      ostree/bootc keeps previous deployment. If new image fails to boot,
+      user selects previous entry from GRUB menu to recover instantly.
+    atomic_updates: |
+      New image deployed alongside current. Switch happens at reboot.
+      If deployment fails, old image remains untouched.
+    our_overlay_risk: |
+      We only add packages + configs + Flatpak. We never touch:
+      kernel, initrd, bootloader, systemd core, SELinux policy, ostree/bootc internals.
+      Risk of our overlay breaking boot is very low.
+
+scheduled_rebuild:
+  trigger: "cron: 0 6 * * 3 (every Wednesday 06:00 UTC)"
+  pipeline_chain:
+    1_build: "Build Naia (build.yml) — BlueBuild container rebuild"
+    2_iso: "Generate ISO (iso.yml) — triggered by workflow_run"
+    3_upload: "R2 upload (naia-os-live-amd64.iso) — inside iso.yml"
+  other_triggers:
+    - push to main (recipes/config changes)
+    - "Release Naia Shell" workflow completion
+    - manual workflow_dispatch
+
+testing_strategy:
+  overview: |
+    Three-tier testing: container smoke test (CI), ISO boot test (CI/manual),
+    manual verification (major updates only).
+
+  tier1_container_smoke:
+    description: "Fast automated checks after container build, before GHCR push"
+    where: build.yml (new step after BlueBuild)
+    checks:
+      - "Naia packages installed: rpm -q fcitx5 fcitx5-hangul"
+      - "Branding applied: grep 'Naia' /usr/lib/os-release"
+      - "Naia Shell bundle exists: test -f /usr/share/naia/Naia-Shell-x86_64.flatpak"
+      - "KDE Plasma scripts exist: ls /usr/share/plasma/shells/org.kde.plasma.desktop/contents/updates/naia-*.js"
+      - "Plymouth config: grep 'Theme=naia' /etc/plymouth/plymouthd.conf"
+      - "Autostart entry: test -f /usr/etc/xdg/autostart/naia-shell.desktop"
+    implementation: |
+      podman run --rm ghcr.io/nextain/naia-os:latest bash -c '
+        set -e
+        rpm -q fcitx5 fcitx5-hangul google-noto-sans-cjk-kr-fonts
+        grep -q "Naia" /usr/lib/os-release
+        test -f /usr/share/naia/Naia-Shell-x86_64.flatpak
+        ls /usr/share/plasma/shells/org.kde.plasma.desktop/contents/updates/naia-*.js
+        echo "ALL SMOKE TESTS PASSED"
+      '
+    failure_action: "Block GHCR push — do not deploy broken image"
+    catches: "Missing packages, broken branding, missing Naia Shell bundle"
+    misses: "Runtime issues, KDE integration bugs, boot problems"
+
+  tier2_iso_boot_test:
+    description: "QEMU boot test after ISO build — verify ISO boots to live session"
+    where: iso.yml (new step after ISO build, before R2 upload)
+    checks:
+      - "ISO boots to GRUB (QEMU serial output)"
+      - "Live session reaches SDDM/KDE (optional, time-dependent)"
+    implementation: |
+      # Minimal: boot to GRUB and check kernel loads
+      timeout 120 qemu-system-x86_64 -nographic -m 4096 \
+        -cdrom naia-os-live-amd64.iso \
+        -serial stdio -boot d 2>&1 | tee boot.log
+      grep -q "Linux version" boot.log || exit 1
+    limitations:
+      - "GitHub Actions runners lack KVM — boot is slow (emulated)"
+      - "Full KDE session verification not practical in CI"
+      - "10-minute timeout may not reach desktop"
+    alternative: |
+      Skip CI boot test, rely on:
+      1. Container smoke test (tier 1) catches most issues
+      2. R2 backup of previous ISO for rollback
+      3. Manual test for major version bumps
+    catches: "Corrupted ISO, kernel panic, broken initrd"
+    misses: "KDE session issues, Naia Shell launch, DNS, network"
+
+  tier3_manual_verification:
+    description: "Human verification for major updates (Fedora version bump, Bazzite major release)"
+    when:
+      - "Bazzite Fedora version change (e.g., F43 → F44)"
+      - "Bazzite major architecture change"
+      - "Our overlay scope change (new scripts, new packages)"
+    checklist:
+      - "QEMU VNC: ISO boots → live session → Naia Shell visible"
+      - "QEMU VNC: Install to Hard Drive → reboot → desktop loads"
+      - "Installed system: Naia Shell launches, wallpaper correct, taskbar pins present"
+      - "Installed system: fcitx5 Korean input works"
+      - "Installed system: DNS works (ping + nslookup)"
+      - "Physical USB: boot → install → reboot (final gate)"
+
+  tier4_update_path_test:
+    description: "Verify bootc update works on installed system (most critical, least automated)"
+    when: "Before enabling auto-update for users"
+    checklist:
+      - "Existing VM with naia-os installed"
+      - "Run: sudo bootc upgrade"
+      - "Reboot → system boots normally"
+      - "Naia Shell still works, settings preserved"
+      - "rollback: select previous entry in GRUB → boots fine"
+    automation_status: "not automated — requires persistent VM state"
+
+r2_rollback:
+  description: "Keep previous ISO on R2 for rollback"
+  mechanism: |
+    Before uploading new ISO, copy current to previous/:
+    aws s3 cp s3://naia-releases/naia-os-live-amd64.iso \
+              s3://naia-releases/previous/naia-os-live-amd64.iso
+  restore: |
+    aws s3 cp s3://naia-releases/previous/naia-os-live-amd64.iso \
+              s3://naia-releases/naia-os-live-amd64.iso
+
+known_risks:
+  bazzite_breaking_change:
+    severity: medium
+    description: "Bazzite pushes broken latest tag → our rebuild propagates it"
+    mitigation: "Tier 1 smoke test catches package/config issues; ostree rollback for runtime issues"
+
+  origin_file_format_change:
+    severity: high
+    scope: "ISO installation only (not updates)"
+    description: "bootc/ostree changes .origin file format → hook sed pattern fails"
+    mitigation: "Monitor titanoboa/Bazzite upstream; manual test on Fedora version bumps"
+
+  kde_config_conflict:
+    severity: low
+    description: "Bazzite changes KDE defaults → conflicts with our Plasma update scripts"
+    mitigation: "Our scripts use naia-* prefix, run after Bazzite defaults; user-session scope"
+
+  plymouth_not_updating:
+    severity: low
+    description: "Plymouth theme may revert to Bazzite after bootc update (initrd regeneration)"
+    mitigation: "Visual-only issue, does not affect boot. Fix requires dracut trigger."
+
+monitoring:
+  github_actions: "Check weekly build status — failed builds mean Bazzite compatibility issue"
+  notification: "GitHub Actions email notification on failure (default)"
+  future: "Consider Slack/Discord webhook for build failure alerts"

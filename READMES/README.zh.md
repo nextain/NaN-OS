@@ -273,8 +273,33 @@ Naia采用**纵深防御（Defense in Depth）**安全模型：
 | 3 | 工具执行（8个工具 + 权限 + 审计） | ✅ 完成 |
 | 4 | 常驻守护进程（Gateway + Skills + 记忆 + Discord） | ✅ 完成 |
 | 5 | Nextain账户集成（OAuth + 积分 + LLM代理） | ✅ 完成 |
-| 6 | Tauri应用分发（Flatpak/DEB/RPM/AppImage） | 🟡 进行中 |
-| 7 | OS ISO镜像（USB启动 → AI OS） | ⏳ 计划中 |
+| 6 | Tauri应用分发（Flatpak/DEB/RPM/AppImage） | ✅ 完成 |
+| 7 | OS ISO镜像（USB启动 → 安装 → AI OS） | ✅ 完成 |
+
+## 下载
+
+| 格式 | 链接 | 说明 |
+|------|------|------|
+| **Naia OS (ISO)** | [下载 (~7.2 GB)](https://pub-affd0538517845d98ce44a5aec11dd98.r2.dev/naia-os-live-amd64.iso) | 完整AI OS — 从USB启动，安装到硬盘 |
+| Flatpak | [GitHub Release](https://github.com/nextain/naia-os/releases/latest/download/Naia-Shell-x86_64.flatpak) | 仅Naia Shell应用（适用于现有Linux） |
+| AppImage | [GitHub Release](https://github.com/nextain/naia-os/releases/latest/download/Naia-Shell-x86_64.AppImage) | 便携应用（无需安装） |
+| DEB / RPM | [所有版本](https://github.com/nextain/naia-os/releases) | 适用于Debian/Ubuntu或Fedora/openSUSE |
+
+详情和校验和请参见 [naia.nextain.io/download](https://naia.nextain.io/zh/download)。
+
+## OS更新
+
+Naia OS构建于[Bazzite](https://github.com/ublue-os/bazzite)（Fedora Atomic）之上。更新是**原子性且安全的**：
+
+- **自动**: 每周重建获取最新的Bazzite安全补丁和更新
+- **原子性**: 新镜像与当前镜像并行部署 — 如果失败，旧镜像不受影响
+- **回滚**: 从GRUB菜单选择之前的版本即可立即恢复
+- **我们的叠加层**: 仅添加软件包（fcitx5、字体）+ Naia Shell（Flatpak、沙箱化）+ 品牌配置 — 从不触及内核、引导加载器或systemd核心
+
+```
+Bazzite基础更新 → 每周自动重建 → 容器冒烟测试 → ISO重建 → R2上传
+                                                ↘ GHCR推送 → 用户bootc更新
+```
 
 ## 开发流程
 
