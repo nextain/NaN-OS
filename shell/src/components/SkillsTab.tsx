@@ -14,11 +14,18 @@ import { Logger } from "../lib/logger";
 import type { SkillManifestInfo } from "../lib/types";
 import { useSkillsStore } from "../stores/skills";
 
+interface GatewayInstallOption {
+	id: string;
+	kind: string;
+	label?: string;
+}
+
 interface GatewaySkillStatus {
 	name: string;
 	description?: string;
 	eligible: boolean;
 	missing: string[];
+	install?: GatewayInstallOption[];
 }
 
 function tierLabel(tier: number): string {
@@ -84,9 +91,27 @@ export function SkillsTab({
 				return next;
 			});
 			try {
+				// Resolve installId from gateway skill status
+				const gs = gatewaySkills.find((s) => s.name === name);
+				const installId = gs?.install?.[0]?.id;
+				if (!installId) {
+					setInstallResults((prev) =>
+						new Map(prev).set(name, {
+							success: false,
+							message: t("skills.installFailed"),
+						}),
+					);
+					setInstallingSkills((prev) => {
+						const next = new Set(prev);
+						next.delete(name);
+						return next;
+					});
+					return;
+				}
+
 				const res = await directToolCall({
 					toolName: "skill_skill_manager",
-					args: { action: "install", skillName: name },
+					args: { action: "install", skillName: name, installId },
 					requestId: `gw-install-${Date.now()}`,
 					gatewayUrl,
 					gatewayToken: config?.gatewayToken,
@@ -125,7 +150,7 @@ export function SkillsTab({
 				});
 			}
 		},
-		[fetchGatewayStatus],
+		[fetchGatewayStatus, gatewaySkills],
 	);
 
 	useEffect(() => {

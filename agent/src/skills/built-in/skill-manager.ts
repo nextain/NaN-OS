@@ -238,6 +238,14 @@ export function createSkillManagerSkill(
 							error: "skillName is required for install action",
 						};
 					}
+					const installId = args.installId as string | undefined;
+					if (!installId) {
+						return {
+							success: false,
+							output: "",
+							error: "installId is required for install action",
+						};
+					}
 					const gateway = ctx.gateway;
 					if (!gateway?.isConnected()) {
 						return {
@@ -246,7 +254,7 @@ export function createSkillManagerSkill(
 							error: "Gateway not connected. install requires a running Gateway.",
 						};
 					}
-					const result = await installSkill(gateway, skillName);
+					const result = await installSkill(gateway, skillName, installId);
 					return {
 						success: true,
 						output: JSON.stringify(result),

@@ -109,7 +109,7 @@ describe("skills-proxy", () => {
 
 	describe("installSkill", () => {
 		it("installs a skill", async () => {
-			const result = await installSkill(client, "web-search");
+			const result = await installSkill(client, "web-search", "node-0");
 
 			expect(result.installed).toBe(true);
 			expect(result.name).toBe("web-search");
@@ -117,7 +117,7 @@ describe("skills-proxy", () => {
 
 		it("throws for failed install", async () => {
 			await expect(
-				installSkill(client, "nonexistent-skill"),
+				installSkill(client, "nonexistent-skill", "node-0"),
 			).rejects.toThrow();
 		});
 	});

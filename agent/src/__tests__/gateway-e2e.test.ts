@@ -849,6 +849,7 @@ describe.skipIf(!canRunE2E)("E2E: Agent ↔ Gateway (live)", () => {
 			if (!hasMethod("skills.install")) return;
 			const result = await safeRequest("skills.install", {
 				name: "e2e-nonexistent-skill",
+				installId: "node-0",
 			});
 			// May error (no such skill) — validates endpoint exists
 			expect(true).toBe(true);

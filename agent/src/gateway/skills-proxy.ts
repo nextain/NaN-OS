@@ -39,8 +39,12 @@ export async function getSkillsBins(
 export async function installSkill(
 	client: GatewayClient,
 	name: string,
+	installId: string,
 ): Promise<{ installed: boolean; name: string }> {
-	const payload = await client.request("skills.install", { name });
+	const payload = await client.request("skills.install", {
+		name,
+		installId,
+	});
 	return payload as { installed: boolean; name: string };
 }
 
