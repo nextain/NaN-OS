@@ -57,7 +57,7 @@ jobs:
             echo "=== Check: os-release branding ==="
             grep "Naia" /usr/lib/os-release
             echo "=== Check: Naia Shell flatpak bundle ==="
-            test -f /usr/share/naia/Naia-Shell-x86_64.flatpak && echo "OK" || { echo "MISSING: /usr/share/naia/Naia-Shell-x86_64.flatpak"; exit 1; }
+            test -f /usr/share/naia/naia-shell.flatpak && echo "OK" || { echo "MISSING: /usr/share/naia/naia-shell.flatpak"; exit 1; }
             echo "=== Check: Plasma update scripts ==="
             ls /usr/share/plasma/shells/org.kde.plasma.desktop/contents/updates/naia-*.js
             echo "=== Check: autostart desktop entry ==="

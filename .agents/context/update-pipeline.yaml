@@ -58,7 +58,7 @@ testing_strategy:
     checks:
       - "Naia packages installed: rpm -q fcitx5 fcitx5-hangul"
       - "Branding applied: grep 'Naia' /usr/lib/os-release"
-      - "Naia Shell bundle exists: test -f /usr/share/naia/Naia-Shell-x86_64.flatpak"
+      - "Naia Shell bundle exists: test -f /usr/share/naia/naia-shell.flatpak"
       - "KDE Plasma scripts exist: ls /usr/share/plasma/shells/org.kde.plasma.desktop/contents/updates/naia-*.js"
       - "Plymouth config: grep 'Theme=naia' /etc/plymouth/plymouthd.conf"
       - "Autostart entry: test -f /usr/etc/xdg/autostart/naia-shell.desktop"
@@ -67,7 +67,7 @@ testing_strategy:
         set -e
         rpm -q fcitx5 fcitx5-hangul google-noto-sans-cjk-vf-fonts
         grep -q "Naia" /usr/lib/os-release
-        test -f /usr/share/naia/Naia-Shell-x86_64.flatpak
+        test -f /usr/share/naia/naia-shell.flatpak
         ls /usr/share/plasma/shells/org.kde.plasma.desktop/contents/updates/naia-*.js
         echo "ALL SMOKE TESTS PASSED"
       '
