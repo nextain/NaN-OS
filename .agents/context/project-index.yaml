@@ -152,6 +152,17 @@ mirroring_rules:
     - New document = create English version first, then mirror to ko/ and .agents/
     - README.md stays in Korean (project primary language)
 
+docs:
+  location: docs/
+  structure:
+    reports: "docs/reports/YYYYMMDD-<topic>.md — investigation reports, design documents, retrospectives"
+    installation_guide: "docs/installation-guide/ — end-user installation guide with screenshots"
+  rules:
+    - "Use subdirectories by document type (reports/, guides/, etc.) — no loose files in docs/"
+    - "Report filenames include date prefix: YYYYMMDD-<topic>.md"
+    - "Language: English (public docs)"
+  note: "docs/ is for standalone documents not suited to .agents/ or .users/ context structure"
+
 work_logs:
   location: work-logs/
   convention: "YYYYMMDD-NN-<topic>.md"
