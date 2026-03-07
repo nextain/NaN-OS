@@ -74,12 +74,7 @@ export async function judgeSemantics(opts: {
 		};
 	}
 
-	const prompt =
-		`You are a strict E2E semantic judge.\n` +
-		`Task: ${opts.task}\n` +
-		`Answer: ${opts.answer}\n` +
-		`Criteria: ${opts.criteria}\n` +
-		`Return JSON only: {"verdict":"PASS|FAIL","reason":"..."}\n`;
+	const prompt = `You are a strict E2E semantic judge.\nTask: ${opts.task}\nAnswer: ${opts.answer}\nCriteria: ${opts.criteria}\nReturn JSON only: {"verdict":"PASS|FAIL","reason":"..."}\n`;
 
 	const controller = new AbortController();
 	const timeoutId = setTimeout(() => controller.abort(), JUDGE_TIMEOUT_MS);
@@ -220,11 +215,7 @@ export async function judgeVisualSemantics(opts: {
 		};
 	}
 
-	const prompt =
-		`You are a strict E2E semantic judge.\n` +
-		`Task: ${opts.task}\n` +
-		`Criteria: ${opts.criteria}\n` +
-		`Analyze the provided screenshot and return JSON only: {"verdict":"PASS|FAIL","reason":"..."}\n`;
+	const prompt = `You are a strict E2E semantic judge.\nTask: ${opts.task}\nCriteria: ${opts.criteria}\nAnalyze the provided screenshot and return JSON only: {"verdict":"PASS|FAIL","reason":"..."}\n`;
 
 	const controller = new AbortController();
 	const timeoutId = setTimeout(() => controller.abort(), JUDGE_TIMEOUT_MS);

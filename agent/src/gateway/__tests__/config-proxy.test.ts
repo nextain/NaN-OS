@@ -7,7 +7,7 @@ import {
 	patchConfig,
 	setConfig,
 } from "../config-proxy.js";
-import { createMockGateway, type MockGateway } from "./mock-gateway.js";
+import { type MockGateway, createMockGateway } from "./mock-gateway.js";
 
 const MOCK_CONFIG = {
 	provider: "gemini",
@@ -125,9 +125,7 @@ describe("config-proxy", () => {
 		it("throws when client is not connected", async () => {
 			const disconnected = new GatewayClient();
 
-			await expect(getConfig(disconnected)).rejects.toThrow(
-				/not connected/i,
-			);
+			await expect(getConfig(disconnected)).rejects.toThrow(/not connected/i);
 		});
 	});
 });

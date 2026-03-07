@@ -24,9 +24,7 @@ function loadGatewayToken(): string | null {
 		try {
 			const config = JSON.parse(readFileSync(path, "utf-8"));
 			return config.gateway?.auth?.token || null;
-		} catch {
-			continue;
-		}
+		} catch {}
 	}
 	return null;
 }
@@ -53,20 +51,29 @@ describe.skipIf(!canRunE2E)("E2E: sessions.list with messageCount", () => {
 
 	it("lists sessions with message counts", async () => {
 		const result = await listSessions(client);
-		console.log("Sessions:", JSON.stringify(result.sessions.map(s => ({
-			key: s.key,
-			label: s.label,
-			messageCount: s.messageCount,
-			status: s.status,
-		})), null, 2));
+		console.log(
+			"Sessions:",
+			JSON.stringify(
+				result.sessions.map((s) => ({
+					key: s.key,
+					label: s.label,
+					messageCount: s.messageCount,
+					status: s.status,
+				})),
+				null,
+				2,
+			),
+		);
 
 		expect(result.sessions.length).toBeGreaterThan(0);
 
 		// main session should have messages
-		const mainSession = result.sessions.find(s => s.key === "agent:main:main");
+		const mainSession = result.sessions.find(
+			(s) => s.key === "agent:main:main",
+		);
 		expect(mainSession).toBeDefined();
-		expect(mainSession!.messageCount).toBeGreaterThan(0);
-		console.log(`main session: ${mainSession!.messageCount} msgs`);
+		expect(mainSession?.messageCount).toBeGreaterThan(0);
+		console.log(`main session: ${mainSession?.messageCount} msgs`);
 
 		// Each session should have label
 		for (const s of result.sessions) {

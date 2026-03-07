@@ -44,12 +44,7 @@ async function main() {
 	);
 
 	// 2. Ollama (Local)
-	await testProvider(
-		"Ollama",
-		"ollama",
-		"deepseek-r1:8b",
-		"ollama",
-	);
+	await testProvider("Ollama", "ollama", "deepseek-r1:8b", "ollama");
 
 	console.log("\n🎉 All Live E2E tests completed!");
 }

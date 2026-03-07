@@ -30,7 +30,9 @@ export interface VoiceSession {
 	onAudio: ((pcmBase64: string) => void) | null;
 	onInputTranscript: ((text: string) => void) | null;
 	onOutputTranscript: ((text: string) => void) | null;
-	onToolCall: ((id: string, name: string, args: Record<string, unknown>) => void) | null;
+	onToolCall:
+		| ((id: string, name: string, args: Record<string, unknown>) => void)
+		| null;
 	onTurnEnd: (() => void) | null;
 	onInterrupted: (() => void) | null;
 	onError: ((error: Error) => void) | null;
@@ -56,7 +58,7 @@ export function createVoiceSession(): VoiceSession {
 		},
 
 		async connect(config: VoiceSessionConfig) {
-			const wsUrl = config.gatewayUrl.replace(/^http/, "ws") + "/v1/live";
+			const wsUrl = `${config.gatewayUrl.replace(/^http/, "ws")}/v1/live`;
 			ws = new WebSocket(wsUrl);
 
 			return new Promise<void>((resolve, reject) => {
@@ -69,7 +71,7 @@ export function createVoiceSession(): VoiceSession {
 
 				ws.onopen = () => {
 					Logger.info("VoiceSession", "WebSocket connected, sending setup");
-					ws!.send(
+					ws?.send(
 						JSON.stringify({
 							setup: {
 								apiKey: `Bearer ${config.naiaKey}`,
@@ -130,7 +132,9 @@ export function createVoiceSession(): VoiceSession {
 			ws.send(
 				JSON.stringify({
 					realtimeInput: {
-						mediaChunks: [{ mimeType: "audio/pcm;rate=16000", data: pcmBase64 }],
+						mediaChunks: [
+							{ mimeType: "audio/pcm;rate=16000", data: pcmBase64 },
+						],
 					},
 				}),
 			);
@@ -171,7 +175,9 @@ export function createVoiceSession(): VoiceSession {
 	function handleMessage(msg: Record<string, unknown>) {
 		const sc = msg.serverContent as Record<string, unknown> | undefined;
 		if (sc) {
-			const mt = sc.modelTurn as { parts?: { inlineData?: { data: string }; text?: string }[] } | undefined;
+			const mt = sc.modelTurn as
+				| { parts?: { inlineData?: { data: string }; text?: string }[] }
+				| undefined;
 			if (mt?.parts) {
 				for (const part of mt.parts) {
 					if (part.inlineData?.data) {
@@ -199,7 +205,15 @@ export function createVoiceSession(): VoiceSession {
 			}
 		}
 
-		const tc = msg.toolCall as { functionCalls?: { id: string; name: string; args: Record<string, unknown> }[] } | undefined;
+		const tc = msg.toolCall as
+			| {
+					functionCalls?: {
+						id: string;
+						name: string;
+						args: Record<string, unknown>;
+					}[];
+			  }
+			| undefined;
 		if (tc?.functionCalls) {
 			for (const fc of tc.functionCalls) {
 				session.onToolCall?.(fc.id, fc.name, fc.args ?? {});

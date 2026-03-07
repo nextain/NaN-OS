@@ -24,9 +24,7 @@ export interface UsageCostResult {
 }
 
 /** Get Gateway health status */
-export async function getHealth(
-	client: GatewayClient,
-): Promise<HealthResult> {
+export async function getHealth(client: GatewayClient): Promise<HealthResult> {
 	const payload = await client.request("health", {});
 	return payload as HealthResult;
 }

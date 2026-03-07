@@ -102,7 +102,12 @@ export const useChatStore = create<ChatState>()((set, get) => ({
 		}),
 
 	startStreaming: () =>
-		set({ isStreaming: true, streamingContent: "", streamingThinking: "", streamingToolCalls: [] }),
+		set({
+			isStreaming: true,
+			streamingContent: "",
+			streamingThinking: "",
+			streamingToolCalls: [],
+		}),
 
 	appendStreamChunk: (text) =>
 		set((s) => ({ streamingContent: s.streamingContent + text })),
@@ -148,7 +153,12 @@ export const useChatStore = create<ChatState>()((set, get) => ({
 		}),
 
 	finishStreaming: () => {
-		const { isStreaming, streamingContent, streamingThinking, streamingToolCalls } = get();
+		const {
+			isStreaming,
+			streamingContent,
+			streamingThinking,
+			streamingToolCalls,
+		} = get();
 		if (!isStreaming) return;
 		const toolCalls =
 			streamingToolCalls.length > 0 ? streamingToolCalls : undefined;
@@ -221,7 +231,6 @@ export const useChatStore = create<ChatState>()((set, get) => ({
 		set({ messageQueue: rest });
 		return first;
 	},
-
 }));
 
 // Expose for Playwright screenshot capture & dev tools

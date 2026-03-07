@@ -91,8 +91,7 @@ describe("28 — skills install", () => {
 				{
 					timeout: 30_000,
 					interval: 1_000,
-					timeoutMsg:
-						"Install result feedback did not appear within 30s",
+					timeoutMsg: "Install result feedback did not appear within 30s",
 				},
 			);
 

@@ -120,6 +120,11 @@ mirror_pairs:
     users_ko: .users/context/ko/i18n.md
     description: Internationalization — 14 supported locales, UI translation, AI response language, locale-aware features
 
+  - agents: .agents/context/translating.yaml
+    users: null
+    human_doc: TRANSLATING.md
+    description: Translation contribution guide — 13 surfaces across 3 repos, locale conventions, status matrix
+
   - agents: .agents/context/update-pipeline.yaml
     users: .users/context/update-pipeline.md
     users_ko: .users/context/ko/update-pipeline.md
@@ -202,6 +207,7 @@ on_demand_loading:
     - .agents/context/distribution.yaml (when building, releasing, or deploying — Flatpak, ISO, Flathub)
     - .agents/context/update-pipeline.yaml (when working on OS updates, Bazzite sync, CI pipeline, or testing)
     - .agents/context/i18n.yaml (when working on translations, locale handling, AI response language, or multilingual features)
+    - .agents/context/translating.yaml (when reviewing translation PRs, onboarding translation contributors, or updating translation status)
     - .agents/context/bazzite-rebranding.yaml (when modifying OS branding, logos, boot splash, or installer assets)
     - .agents/context/brand.yaml (when working on branding, character, logos, or color system)
     - .agents/context/demo-video.yaml (when creating, updating, or re-recording demo videos)

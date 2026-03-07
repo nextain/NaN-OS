@@ -74,10 +74,10 @@ describe("CostDashboard", () => {
 		expect(groups).toHaveLength(2);
 		const gemini = groups.find((g) => g.provider === "gemini");
 		expect(gemini).toBeDefined();
-		expect(gemini!.count).toBe(2);
-		expect(gemini!.inputTokens).toBe(300);
-		expect(gemini!.outputTokens).toBe(150);
-		expect(gemini!.cost).toBeCloseTo(0.003);
+		expect(gemini?.count).toBe(2);
+		expect(gemini?.inputTokens).toBe(300);
+		expect(gemini?.outputTokens).toBe(150);
+		expect(gemini?.cost).toBeCloseTo(0.003);
 	});
 
 	it("renders table with correct totals", () => {

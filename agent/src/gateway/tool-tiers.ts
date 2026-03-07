@@ -47,7 +47,8 @@ const TOOL_DESCRIPTIONS: Record<
 	skill_system_status: () => "시스템 상태 조회",
 	skill_weather: (args) => `날씨 조회: ${args.location ?? ""}`,
 	skill_memo: (args) => `메모 ${args.action ?? ""}: ${args.key ?? ""}`,
-	skill_cron: (args) => `예약 작업 ${args.action ?? ""}: ${args.label ?? args.job_id ?? ""}`,
+	skill_cron: (args) =>
+		`예약 작업 ${args.action ?? ""}: ${args.label ?? args.job_id ?? ""}`,
 	skill_naia_discord: (args) =>
 		`디스코드 ${args.action ?? ""}: ${(args.to as string) ?? (args.channelId as string) ?? (args.userId as string) ?? ""}`,
 };

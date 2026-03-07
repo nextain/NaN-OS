@@ -9,7 +9,7 @@ import {
 	removeCronJob,
 	runCronJob,
 } from "../cron-proxy.js";
-import { createMockGateway, type MockGateway } from "./mock-gateway.js";
+import { type MockGateway, createMockGateway } from "./mock-gateway.js";
 
 const MOCK_JOBS: CronJobInfo[] = [
 	{
@@ -55,10 +55,7 @@ describe("cron-proxy", () => {
 						if (params.jobId === "job-1") {
 							respond.ok({ removed: true, jobId: params.jobId });
 						} else {
-							respond.error(
-								"NOT_FOUND",
-								`Job not found: ${params.jobId}`,
-							);
+							respond.error("NOT_FOUND", `Job not found: ${params.jobId}`);
 						}
 						break;
 					case "cron.run":
@@ -144,9 +141,7 @@ describe("cron-proxy", () => {
 		});
 
 		it("throws for unknown job", async () => {
-			await expect(
-				removeCronJob(client, "nonexistent"),
-			).rejects.toThrow();
+			await expect(removeCronJob(client, "nonexistent")).rejects.toThrow();
 		});
 	});
 

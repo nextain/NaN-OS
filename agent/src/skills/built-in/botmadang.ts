@@ -17,7 +17,8 @@ export function createBotmadangSkill(): SkillDefinition {
 				},
 				api_key: {
 					type: "string",
-					description: "Botmadang API Key (required for post_article and comment)",
+					description:
+						"Botmadang API Key (required for post_article and comment)",
 				},
 				agent_name: {
 					type: "string",
@@ -29,7 +30,8 @@ export function createBotmadangSkill(): SkillDefinition {
 				},
 				submadang: {
 					type: "string",
-					description: "Submadang channel (e.g., 'general', 'tech') (required for post_article)",
+					description:
+						"Submadang channel (e.g., 'general', 'tech') (required for post_article)",
 				},
 				title: {
 					type: "string",
@@ -37,7 +39,8 @@ export function createBotmadangSkill(): SkillDefinition {
 				},
 				content: {
 					type: "string",
-					description: "Article or comment content in Korean (required for post_article and comment)",
+					description:
+						"Article or comment content in Korean (required for post_article and comment)",
 				},
 				post_id: {
 					type: "string",
@@ -57,7 +60,11 @@ export function createBotmadangSkill(): SkillDefinition {
 					case "register": {
 						const { agent_name, description } = args;
 						if (!agent_name || !description) {
-							return { success: false, output: "", error: "agent_name and description are required" };
+							return {
+								success: false,
+								output: "",
+								error: "agent_name and description are required",
+							};
 						}
 						const res = await fetch(`${BOTMADANG_API_URL}/agents/register`, {
 							method: "POST",
@@ -75,7 +82,11 @@ export function createBotmadangSkill(): SkillDefinition {
 					case "post_article": {
 						const { api_key, submadang, title, content } = args;
 						if (!api_key || !submadang || !title || !content) {
-							return { success: false, output: "", error: "api_key, submadang, title, and content are required" };
+							return {
+								success: false,
+								output: "",
+								error: "api_key, submadang, title, and content are required",
+							};
 						}
 						const res = await fetch(`${BOTMADANG_API_URL}/posts`, {
 							method: "POST",
@@ -89,33 +100,48 @@ export function createBotmadangSkill(): SkillDefinition {
 						return {
 							success: res.ok,
 							output: JSON.stringify(data),
-							error: res.ok ? undefined : `Failed to post article: ${res.status}`,
+							error: res.ok
+								? undefined
+								: `Failed to post article: ${res.status}`,
 						};
 					}
 
 					case "comment": {
 						const { api_key, post_id, content } = args;
 						if (!api_key || !post_id || !content) {
-							return { success: false, output: "", error: "api_key, post_id, and content are required" };
+							return {
+								success: false,
+								output: "",
+								error: "api_key, post_id, and content are required",
+							};
 						}
-						const res = await fetch(`${BOTMADANG_API_URL}/posts/${post_id}/comments`, {
-							method: "POST",
-							headers: {
-								"Content-Type": "application/json",
-								Authorization: `Bearer ${api_key}`,
+						const res = await fetch(
+							`${BOTMADANG_API_URL}/posts/${post_id}/comments`,
+							{
+								method: "POST",
+								headers: {
+									"Content-Type": "application/json",
+									Authorization: `Bearer ${api_key}`,
+								},
+								body: JSON.stringify({ content }),
 							},
-							body: JSON.stringify({ content }),
-						});
+						);
 						const data = await res.json();
 						return {
 							success: res.ok,
 							output: JSON.stringify(data),
-							error: res.ok ? undefined : `Failed to add comment: ${res.status}`,
+							error: res.ok
+								? undefined
+								: `Failed to add comment: ${res.status}`,
 						};
 					}
 
 					default:
-						return { success: false, output: "", error: `Unknown action: ${action}` };
+						return {
+							success: false,
+							output: "",
+							error: `Unknown action: ${action}`,
+						};
 				}
 			} catch (err) {
 				return {

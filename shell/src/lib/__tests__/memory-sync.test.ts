@@ -3,11 +3,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // Mock Tauri invoke
 const mockInvoke = vi.fn().mockResolvedValue(undefined);
-vi.mock("@tauri-apps/api/core", () => ({ invoke: (...args: unknown[]) => mockInvoke(...args) }));
+vi.mock("@tauri-apps/api/core", () => ({
+	invoke: (...args: unknown[]) => mockInvoke(...args),
+}));
 
 // Mock config
 const mockLoadConfig = vi.fn();
-vi.mock("../config", () => ({ loadConfig: (...args: unknown[]) => mockLoadConfig(...args) }));
+vi.mock("../config", () => ({
+	loadConfig: (...args: unknown[]) => mockLoadConfig(...args),
+}));
 
 // Mock db
 const mockUpsertFact = vi.fn().mockResolvedValue(undefined);
@@ -35,7 +39,11 @@ import { syncFromOpenClawMemory } from "../memory-sync";
 
 beforeEach(() => {
 	mockInvoke.mockClear();
-	mockLoadConfig.mockReturnValue({ apiKey: "test-key", provider: "gemini", model: "gemini-3-flash" });
+	mockLoadConfig.mockReturnValue({
+		apiKey: "test-key",
+		provider: "gemini",
+		model: "gemini-3-flash",
+	});
 	mockExtractFacts.mockResolvedValue([]);
 	mockUpsertFact.mockResolvedValue(undefined);
 	mockSyncToOpenClaw.mockResolvedValue(undefined);
@@ -61,10 +69,9 @@ describe("syncFromOpenClawMemory", () => {
 
 		await syncFromOpenClawMemory();
 
-		expect(mockInvoke).toHaveBeenCalledWith(
-			"read_openclaw_memory_files",
-			{ since_ms: 1000 },
-		);
+		expect(mockInvoke).toHaveBeenCalledWith("read_openclaw_memory_files", {
+			since_ms: 1000,
+		});
 	});
 
 	it("defaults since_ms to 0 when no localStorage value", async () => {
@@ -72,10 +79,9 @@ describe("syncFromOpenClawMemory", () => {
 
 		await syncFromOpenClawMemory();
 
-		expect(mockInvoke).toHaveBeenCalledWith(
-			"read_openclaw_memory_files",
-			{ since_ms: 0 },
-		);
+		expect(mockInvoke).toHaveBeenCalledWith("read_openclaw_memory_files", {
+			since_ms: 0,
+		});
 	});
 
 	it("does nothing when no new memory files", async () => {
@@ -113,16 +119,16 @@ describe("syncFromOpenClawMemory", () => {
 	});
 
 	it("triggers syncToOpenClaw when new facts are extracted", async () => {
-		mockInvoke.mockResolvedValue([
-			["2026-03-05-chat.md", "content", 2000],
-		]);
-		mockExtractFacts.mockResolvedValue([
-			{ key: "name", value: "Luke" },
-		]);
+		mockInvoke.mockResolvedValue([["2026-03-05-chat.md", "content", 2000]]);
+		mockExtractFacts.mockResolvedValue([{ key: "name", value: "Luke" }]);
 
 		await syncFromOpenClawMemory();
 
-		expect(mockSyncToOpenClaw).toHaveBeenCalledWith("gemini", "gemini-3-flash", "test-key");
+		expect(mockSyncToOpenClaw).toHaveBeenCalledWith(
+			"gemini",
+			"gemini-3-flash",
+			"test-key",
+		);
 	});
 
 	it("does NOT trigger syncToOpenClaw when no facts extracted", async () => {

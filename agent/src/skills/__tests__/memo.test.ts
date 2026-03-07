@@ -37,14 +37,8 @@ describe("skill_memo", () => {
 	});
 
 	it("lists memos", async () => {
-		await skill.execute(
-			{ action: "save", key: "list-a", content: "aaa" },
-			{},
-		);
-		await skill.execute(
-			{ action: "save", key: "list-b", content: "bbb" },
-			{},
-		);
+		await skill.execute({ action: "save", key: "list-a", content: "aaa" }, {});
+		await skill.execute({ action: "save", key: "list-b", content: "bbb" }, {});
 		const list = await skill.execute({ action: "list" }, {});
 		expect(list.success).toBe(true);
 		const keys = JSON.parse(list.output);
@@ -53,10 +47,7 @@ describe("skill_memo", () => {
 	});
 
 	it("deletes a memo", async () => {
-		await skill.execute(
-			{ action: "save", key: "del-me", content: "temp" },
-			{},
-		);
+		await skill.execute({ action: "save", key: "del-me", content: "temp" }, {});
 		const del = await skill.execute({ action: "delete", key: "del-me" }, {});
 		expect(del.success).toBe(true);
 

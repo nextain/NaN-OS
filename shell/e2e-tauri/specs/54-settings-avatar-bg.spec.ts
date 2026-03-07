@@ -42,7 +42,8 @@ describe("54 — settings avatar & background", () => {
 				if (
 					all[i].classList.contains("vrm-card-add") ||
 					all[i].classList.contains("active")
-				) continue;
+				)
+					continue;
 				// trigger mousedown+up instead of click due to useLongPress
 				const el = all[i] as HTMLElement;
 				el.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
@@ -78,7 +79,8 @@ describe("54 — settings avatar & background", () => {
 				if (
 					all[i].classList.contains("bg-card-add") ||
 					all[i].classList.contains("active")
-				) continue;
+				)
+					continue;
 				// trigger mousedown+up instead of click due to useLongPress
 				const el = all[i] as HTMLElement;
 				el.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));

@@ -17,10 +17,52 @@
 	"linter": {
 		"enabled": true,
 		"rules": {
-			"recommended": true
+			"recommended": true,
+			"a11y": {
+				"useKeyWithClickEvents": "warn",
+				"useValidAriaRole": "warn",
+				"noSvgWithoutTitle": "warn",
+				"noLabelWithoutControl": "warn"
+			},
+			"suspicious": {
+				"noExplicitAny": "warn"
+			},
+			"complexity": {
+				"noForEach": "warn"
+			},
+			"correctness": {
+				"useExhaustiveDependencies": "warn"
+			},
+			"style": {
+				"noNonNullAssertion": "warn"
+			}
 		}
 	},
 	"files": {
-		"ignore": ["node_modules", "dist", "src-tauri/target"]
-	}
+		"ignore": [
+			"node_modules",
+			"dist",
+			"src-tauri/target",
+			"e2e/demo-output",
+			"test-results",
+			"src-tauri/gen"
+		]
+	},
+	"overrides": [
+		{
+			"include": [
+				"e2e/**",
+				"e2e-tauri/**",
+				"src/__tests__/**",
+				"src/components/__tests__/**"
+			],
+			"linter": {
+				"rules": {
+					"suspicious": {
+						"noExplicitAny": "off"
+					}
+				}
+			}
+		}
+	]
 }

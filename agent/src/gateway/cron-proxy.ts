@@ -4,7 +4,12 @@ import type { GatewayClient } from "./client.js";
 export interface CronJobInfo {
 	id: string;
 	name: string;
-	schedule: { type: string; expression?: string; intervalMs?: number; date?: string };
+	schedule: {
+		type: string;
+		expression?: string;
+		intervalMs?: number;
+		date?: string;
+	};
 	enabled: boolean;
 	[key: string]: unknown;
 }
@@ -42,7 +47,12 @@ export async function addCronJob(
 	client: GatewayClient,
 	params: {
 		name: string;
-		schedule: { type: string; expression?: string; intervalMs?: number; date?: string };
+		schedule: {
+			type: string;
+			expression?: string;
+			intervalMs?: number;
+			date?: string;
+		};
 		payload?: Record<string, unknown>;
 	},
 ): Promise<{ id: string; name: string; created: boolean }> {
@@ -74,7 +84,13 @@ export async function getCronRuns(
 	client: GatewayClient,
 	jobId: string,
 	limit?: number,
-): Promise<{ jobId: string; runs: Array<{ firedAt: number; result: string }> }> {
+): Promise<{
+	jobId: string;
+	runs: Array<{ firedAt: number; result: string }>;
+}> {
 	const payload = await client.request("cron.runs", { jobId, limit });
-	return payload as { jobId: string; runs: Array<{ firedAt: number; result: string }> };
+	return payload as {
+		jobId: string;
+		runs: Array<{ firedAt: number; result: string }>;
+	};
 }

@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { WebSocketServer } from "ws";
 import { GatewayClient } from "../client.js";
-import { createMockGateway, type MockGateway } from "./mock-gateway.js";
+import { type MockGateway, createMockGateway } from "./mock-gateway.js";
 
 let mock: MockGateway;
 
@@ -30,14 +30,18 @@ afterAll(() => {
 describe("GatewayClient — handshake", () => {
 	it("completes protocol v3 handshake (challenge → connect → hello-ok)", async () => {
 		const client = new GatewayClient();
-		await client.connect(`ws://127.0.0.1:${mock.port}`, { token: "test-token" });
+		await client.connect(`ws://127.0.0.1:${mock.port}`, {
+			token: "test-token",
+		});
 		expect(client.isConnected()).toBe(true);
 		client.close();
 	});
 
 	it("stores available methods from hello-ok response", async () => {
 		const client = new GatewayClient();
-		await client.connect(`ws://127.0.0.1:${mock.port}`, { token: "test-token" });
+		await client.connect(`ws://127.0.0.1:${mock.port}`, {
+			token: "test-token",
+		});
 		expect(client.availableMethods).toContain("exec.bash");
 		expect(client.availableMethods).toContain("sessions.spawn");
 		client.close();
@@ -74,27 +78,27 @@ describe("GatewayClient — handshake", () => {
 		});
 
 		const client = new GatewayClient();
-			await client.connect(`ws://127.0.0.1:${capturePort}`, {
-				token: "my-secret-token",
-				clientId: "desktop",
-				platform: "linux",
-				mode: "gui",
-			});
+		await client.connect(`ws://127.0.0.1:${capturePort}`, {
+			token: "my-secret-token",
+			clientId: "desktop",
+			platform: "linux",
+			mode: "gui",
+		});
 
-			expect(connectParams).toBeDefined();
-			if (!connectParams) {
-				throw new Error("connect params not captured");
-			}
-			const params = connectParams as unknown as Record<string, unknown>;
-			expect(params.auth).toEqual({
-				token: "my-secret-token",
-			});
-			expect(params.minProtocol).toBe(3);
-			expect(params.maxProtocol).toBe(3);
-			const clientInfo = params.client as Record<string, unknown>;
-			expect(clientInfo.id).toBe("desktop");
-			expect(clientInfo.platform).toBe("linux");
-			expect(clientInfo.mode).toBe("gui");
+		expect(connectParams).toBeDefined();
+		if (!connectParams) {
+			throw new Error("connect params not captured");
+		}
+		const params = connectParams as unknown as Record<string, unknown>;
+		expect(params.auth).toEqual({
+			token: "my-secret-token",
+		});
+		expect(params.minProtocol).toBe(3);
+		expect(params.maxProtocol).toBe(3);
+		const clientInfo = params.client as Record<string, unknown>;
+		expect(clientInfo.id).toBe("desktop");
+		expect(clientInfo.platform).toBe("linux");
+		expect(clientInfo.mode).toBe("gui");
 
 		client.close();
 		captureMock.close();
@@ -173,17 +177,17 @@ describe("GatewayClient — handshake", () => {
 			});
 		});
 
-			const client = new GatewayClient();
-			await client.connect(`ws://127.0.0.1:${defaultPort}`, { token: "tok" });
-			expect(connectParams).toBeDefined();
-			if (!connectParams) {
-				throw new Error("connect params not captured");
-			}
-			const params = connectParams as unknown as Record<string, unknown>;
-			const clientInfo = params.client as Record<string, unknown>;
-			expect(clientInfo.id).toBe("cli");
-			expect(clientInfo.platform).toBe("linux");
-			expect(clientInfo.mode).toBe("cli");
+		const client = new GatewayClient();
+		await client.connect(`ws://127.0.0.1:${defaultPort}`, { token: "tok" });
+		expect(connectParams).toBeDefined();
+		if (!connectParams) {
+			throw new Error("connect params not captured");
+		}
+		const params = connectParams as unknown as Record<string, unknown>;
+		const clientInfo = params.client as Record<string, unknown>;
+		expect(clientInfo.id).toBe("cli");
+		expect(clientInfo.platform).toBe("linux");
+		expect(clientInfo.mode).toBe("cli");
 
 		client.close();
 		defaultMock.close();
@@ -246,7 +250,9 @@ describe("GatewayClient — handshake", () => {
 describe("GatewayClient — request/response", () => {
 	it("sends request and receives response", async () => {
 		const client = new GatewayClient();
-		await client.connect(`ws://127.0.0.1:${mock.port}`, { token: "test-token" });
+		await client.connect(`ws://127.0.0.1:${mock.port}`, {
+			token: "test-token",
+		});
 
 		const result = await client.request("health", {});
 		expect(result).toEqual({ status: "ok", uptime: 123 });
@@ -256,7 +262,9 @@ describe("GatewayClient — request/response", () => {
 
 	it("executes bash command via gateway", async () => {
 		const client = new GatewayClient();
-		await client.connect(`ws://127.0.0.1:${mock.port}`, { token: "test-token" });
+		await client.connect(`ws://127.0.0.1:${mock.port}`, {
+			token: "test-token",
+		});
 
 		const result = await client.request("exec.bash", {
 			command: "echo hello world",
@@ -268,7 +276,9 @@ describe("GatewayClient — request/response", () => {
 
 	it("handles error responses", async () => {
 		const client = new GatewayClient();
-		await client.connect(`ws://127.0.0.1:${mock.port}`, { token: "test-token" });
+		await client.connect(`ws://127.0.0.1:${mock.port}`, {
+			token: "test-token",
+		});
 
 		await expect(client.request("fail", {})).rejects.toThrow(
 			"method not found",
@@ -279,7 +289,9 @@ describe("GatewayClient — request/response", () => {
 
 	it("receives events via onEvent handler", async () => {
 		const client = new GatewayClient();
-		await client.connect(`ws://127.0.0.1:${mock.port}`, { token: "test-token" });
+		await client.connect(`ws://127.0.0.1:${mock.port}`, {
+			token: "test-token",
+		});
 
 		const events: unknown[] = [];
 		client.onEvent((evt) => events.push(evt));

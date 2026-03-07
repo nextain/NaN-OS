@@ -2,10 +2,7 @@ import OpenAI from "openai";
 import { toOpenAIMessages, toOpenAITools } from "./openai-compat.js";
 import type { AgentStream, LLMProvider } from "./types.js";
 
-export function createZAIProvider(
-	apiKey: string,
-	model: string,
-): LLMProvider {
+export function createZAIProvider(apiKey: string, model: string): LLMProvider {
 	const client = new OpenAI({
 		baseURL: "https://open.bigmodel.cn/api/paas/v4",
 		apiKey,

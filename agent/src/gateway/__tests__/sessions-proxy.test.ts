@@ -9,7 +9,7 @@ import {
 	previewSession,
 	resetSession,
 } from "../sessions-proxy.js";
-import { createMockGateway, type MockGateway } from "./mock-gateway.js";
+import { type MockGateway, createMockGateway } from "./mock-gateway.js";
 
 const MOCK_SESSIONS: SessionInfo[] = [
 	{
@@ -43,10 +43,7 @@ describe("sessions-proxy", () => {
 						if (params.key === "sess-abc-123") {
 							respond.ok({ deleted: true, key: params.key });
 						} else {
-							respond.error(
-								"NOT_FOUND",
-								`Session not found: ${params.key}`,
-							);
+							respond.error("NOT_FOUND", `Session not found: ${params.key}`);
 						}
 						break;
 					case "sessions.compact":
@@ -116,9 +113,7 @@ describe("sessions-proxy", () => {
 		});
 
 		it("throws for unknown session", async () => {
-			await expect(
-				deleteSession(client, "unknown-key"),
-			).rejects.toThrow();
+			await expect(deleteSession(client, "unknown-key")).rejects.toThrow();
 		});
 	});
 

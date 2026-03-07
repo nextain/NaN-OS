@@ -75,7 +75,7 @@ describe("73 — Edge TTS preview", () => {
 			);
 			for (const el of errorEls) {
 				const text = (el as HTMLElement).textContent?.trim();
-				if (text && text.includes("TTS")) return text;
+				if (text?.includes("TTS")) return text;
 			}
 			return "";
 		});
@@ -88,7 +88,10 @@ describe("73 — Edge TTS preview", () => {
 					return btn ? !btn.disabled : true;
 				}, S.voicePreviewBtn);
 			},
-			{ timeout: 30_000, timeoutMsg: "Voice preview did not complete within 30s" },
+			{
+				timeout: 30_000,
+				timeoutMsg: "Voice preview did not complete within 30s",
+			},
 		);
 
 		// Verify no TTS error occurred

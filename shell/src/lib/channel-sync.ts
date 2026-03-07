@@ -1,11 +1,12 @@
 import { loadConfig, saveConfig } from "./config";
-import { getLocale } from "./i18n";
 import { openDmChannel } from "./discord-api";
+import { getLocale } from "./i18n";
 import { Logger } from "./logger";
-import { syncToOpenClaw, restartGateway } from "./openclaw-sync";
+import { restartGateway, syncToOpenClaw } from "./openclaw-sync";
 import { buildSystemPrompt } from "./persona";
 
-const LINKED_CHANNELS_API = "https://naia.nextain.io/api/gateway/linked-channels";
+const LINKED_CHANNELS_API =
+	"https://naia.nextain.io/api/gateway/linked-channels";
 
 interface LinkedChannel {
 	type: string;
@@ -76,7 +77,9 @@ export async function syncLinkedChannels(): Promise<void> {
 	}
 
 	const discordUserId = discordChannel.userId;
-	Logger.info("channel-sync", "Found linked Discord account", { discordUserId });
+	Logger.info("channel-sync", "Found linked Discord account", {
+		discordUserId,
+	});
 
 	// Persist discord user ID to config
 	const current = loadConfig();
@@ -85,7 +88,8 @@ export async function syncLinkedChannels(): Promise<void> {
 	saveConfig({
 		...current,
 		discordDefaultUserId: discordUserId,
-		discordDefaultTarget: current.discordDefaultTarget || `user:${discordUserId}`,
+		discordDefaultTarget:
+			current.discordDefaultTarget || `user:${discordUserId}`,
 	});
 
 	// Always discover/refresh DM channel ID via Bot API

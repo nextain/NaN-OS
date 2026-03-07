@@ -47,4 +47,3 @@ describe("persistDiscordDefaults", () => {
 		expect(loadConfig()).toBeNull();
 	});
 });
-

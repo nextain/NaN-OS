@@ -2,7 +2,11 @@ import { invoke } from "@tauri-apps/api/core";
 import { useEffect, useRef, useState } from "react";
 import Markdown from "react-markdown";
 import { type AudioPlayer, createAudioPlayer } from "../lib/audio-player";
-import { cancelChat, directToolCall, sendChatMessage } from "../lib/chat-service";
+import {
+	cancelChat,
+	directToolCall,
+	sendChatMessage,
+} from "../lib/chat-service";
 import {
 	LAB_GATEWAY_URL,
 	addAllowedTool,
@@ -12,13 +16,8 @@ import {
 	resolveGatewayUrl,
 	saveConfig,
 } from "../lib/config";
-import { restartGateway, syncToOpenClaw } from "../lib/openclaw-sync";
 import { isApiKeyOptional, isReadyToChat } from "../lib/config";
-import { type MicStream, createMicStream } from "../lib/mic-stream";
-import {
-	getAllFacts,
-	upsertFact,
-} from "../lib/db";
+import { getAllFacts, upsertFact } from "../lib/db";
 import {
 	discoverAndPersistDiscordDmChannel,
 	getGatewayHistory,
@@ -29,8 +28,9 @@ import { getLocale, t } from "../lib/i18n";
 import { Logger } from "../lib/logger";
 import { extractFacts, summarizeSession } from "../lib/memory-processor";
 import { startMemorySync } from "../lib/memory-sync";
+import { type MicStream, createMicStream } from "../lib/mic-stream";
+import { restartGateway, syncToOpenClaw } from "../lib/openclaw-sync";
 import { type MemoryContext, buildSystemPrompt } from "../lib/persona";
-import { type VoiceSession, createVoiceSession } from "../lib/voice-session";
 import type {
 	AgentResponseChunk,
 	AuditEvent,
@@ -38,6 +38,7 @@ import type {
 	ChatMessage,
 	ProviderId,
 } from "../lib/types";
+import { type VoiceSession, createVoiceSession } from "../lib/voice-session";
 import { parseEmotion } from "../lib/vrm/expression";
 import { useAvatarStore } from "../stores/avatar";
 import { useChatStore } from "../stores/chat";
@@ -293,14 +294,15 @@ function sendApprovalResponse(
 	});
 }
 
-
 export function ChatPanel() {
 	const [input, setInput] = useState("");
 	const [activeTab, setActiveTab] = useState<TabId>(
 		isReadyToChat() ? "chat" : "settings",
 	);
 	const [showCostDashboard, setShowCostDashboard] = useState(false);
-	const [voiceMode, setVoiceMode] = useState<"off" | "connecting" | "active">("off");
+	const [voiceMode, setVoiceMode] = useState<"off" | "connecting" | "active">(
+		"off",
+	);
 	const messagesEndRef = useRef<HTMLDivElement>(null);
 	const inputRef = useRef<HTMLTextAreaElement>(null);
 	const sessionLoaded = useRef(false);
@@ -319,7 +321,6 @@ export function ChatPanel() {
 	const provider = useChatStore((s) => s.provider);
 	const pendingApproval = useChatStore((s) => s.pendingApproval);
 	const messageQueue = useChatStore((s) => s.messageQueue);
-
 
 	const setEmotion = useAvatarStore((s) => s.setEmotion);
 
@@ -341,7 +342,10 @@ export function ChatPanel() {
 				if (config) {
 					saveConfig({ ...config, discordSessionMigrated: true });
 				}
-				Logger.info("ChatPanel", "One-time reset: cleared Discord-contaminated main session");
+				Logger.info(
+					"ChatPanel",
+					"One-time reset: cleared Discord-contaminated main session",
+				);
 			} else {
 				const messages = await getGatewayHistory("agent:main:main");
 				if (messages.length > 0) {
@@ -478,7 +482,7 @@ export function ChatPanel() {
 		const store = useChatStore.getState();
 
 		const config = await loadConfigWithSecrets();
-			if (config?.provider === "nextain" && !config?.naiaKey) {
+		if (config?.provider === "nextain" && !config?.naiaKey) {
 			useChatStore
 				.getState()
 				.appendStreamChunk(
@@ -486,12 +490,16 @@ export function ChatPanel() {
 				);
 			useChatStore.getState().finishStreaming();
 			return;
-			}
-			if (!isApiKeyOptional(config?.provider) && !config?.apiKey && !config?.naiaKey) {
-				useChatStore.getState().appendStreamChunk(t("chat.noApiKey"));
-				useChatStore.getState().finishStreaming();
-				return;
-			}
+		}
+		if (
+			!isApiKeyOptional(config?.provider) &&
+			!config?.apiKey &&
+			!config?.naiaKey
+		) {
+			useChatStore.getState().appendStreamChunk(t("chat.noApiKey"));
+			useChatStore.getState().finishStreaming();
+			return;
+		}
 		if (!config) return;
 
 		const history = store.messages
@@ -504,10 +512,13 @@ export function ChatPanel() {
 		// Only "google" provider uses direct Google TTS; all others use Gateway
 		const cfgTtsProvider = config.ttsProvider;
 		const ttsEngine: "google" | "openclaw" = cfgTtsProvider
-			? (cfgTtsProvider === "google" || cfgTtsProvider === "nextain" ? "google" : "openclaw")
-			: ((config.ttsEngine ?? "auto") === "google" ? "google" : "openclaw");
-		const wantsGatewayForTts =
-			ttsEnabled && ttsEngine === "openclaw";
+			? cfgTtsProvider === "google" || cfgTtsProvider === "nextain"
+				? "google"
+				: "openclaw"
+			: (config.ttsEngine ?? "auto") === "google"
+				? "google"
+				: "openclaw";
+		const wantsGatewayForTts = ttsEnabled && ttsEngine === "openclaw";
 		const memoryCtx = await buildMemoryContext();
 		try {
 			await sendChatMessage({
@@ -517,25 +528,27 @@ export function ChatPanel() {
 					model: config.model || "gemini-2.5-flash",
 					apiKey: config.apiKey,
 					naiaKey: activeProvider === "nextain" ? config.naiaKey : undefined,
-					ollamaHost: activeProvider === "ollama" ? config.ollamaHost : undefined,
+					ollamaHost:
+						activeProvider === "ollama" ? config.ollamaHost : undefined,
 				},
 				naiaKey: config.naiaKey || undefined,
 				history: history.slice(0, -1), // exclude last (just added) user msg
 				onChunk: (chunk) => handleChunk(chunk, activeProvider),
 				requestId,
 				ttsVoice: ttsEnabled
-					? (cfgTtsProvider === "nextain" && config.liveVoice
+					? cfgTtsProvider === "nextain" && config.liveVoice
 						? `ko-KR-Chirp3-HD-${config.liveVoice}`
-						: config.ttsVoice)
+						: config.ttsVoice
 					: undefined,
 				ttsApiKey: ttsEnabled
-					? (cfgTtsProvider === "google"
-						? (config.googleApiKey || (activeProvider === "gemini" ? config.apiKey : ""))
+					? cfgTtsProvider === "google"
+						? config.googleApiKey ||
+							(activeProvider === "gemini" ? config.apiKey : "")
 						: cfgTtsProvider === "openai"
-						? (config.openaiTtsApiKey || undefined)
-						: cfgTtsProvider === "elevenlabs"
-						? (config.elevenlabsApiKey || undefined)
-						: undefined)
+							? config.openaiTtsApiKey || undefined
+							: cfgTtsProvider === "elevenlabs"
+								? config.elevenlabsApiKey || undefined
+								: undefined
 					: undefined,
 				ttsEngine: ttsEnabled ? ttsEngine : undefined,
 				ttsProvider: ttsEnabled ? cfgTtsProvider : undefined,
@@ -717,7 +730,6 @@ export function ChatPanel() {
 		useChatStore.getState().clearPendingApproval();
 	}
 
-
 	// Cleanup voice session on unmount
 	useEffect(() => {
 		return () => {
@@ -737,11 +749,16 @@ export function ChatPanel() {
 			lastExtractedIdx.current = allMsgs.length;
 			const config = loadConfig();
 			if (config?.apiKey) {
-				extractRecentFacts(allMsgs.slice(-unextracted), config.apiKey, config.provider || "gemini");
+				extractRecentFacts(
+					allMsgs.slice(-unextracted),
+					config.apiKey,
+					config.provider || "gemini",
+				);
 			}
 		}
 		document.addEventListener("visibilitychange", onVisibilityChange);
-		return () => document.removeEventListener("visibilitychange", onVisibilityChange);
+		return () =>
+			document.removeEventListener("visibilitychange", onVisibilityChange);
 	}, []);
 
 	async function handleVoiceToggle() {
@@ -764,7 +781,10 @@ export function ChatPanel() {
 			const naiaKey = config?.naiaKey;
 			if (!naiaKey) {
 				Logger.warn("ChatPanel", "Voice chat requires Naia key");
-				useChatStore.getState().addMessage({ role: "assistant", content: t("chat.voiceNeedLabKey") });
+				useChatStore.getState().addMessage({
+					role: "assistant",
+					content: t("chat.voiceNeedLabKey"),
+				});
 				setVoiceMode("off");
 				return;
 			}
@@ -841,7 +861,10 @@ export function ChatPanel() {
 			};
 			session.onError = (err) => {
 				Logger.warn("ChatPanel", "Voice session error", { error: err.message });
-				useChatStore.getState().addMessage({ role: "assistant", content: `${t("chat.voiceError")}: ${err.message}` });
+				useChatStore.getState().addMessage({
+					role: "assistant",
+					content: `${t("chat.voiceError")}: ${err.message}`,
+				});
 				setVoiceMode("off");
 			};
 			session.onDisconnect = () => {
@@ -872,8 +895,13 @@ export function ChatPanel() {
 			setVoiceMode("active");
 			Logger.info("ChatPanel", "Voice conversation started");
 		} catch (err) {
-			Logger.warn("ChatPanel", "Voice connection failed", { error: String(err) });
-			useChatStore.getState().addMessage({ role: "assistant", content: `${t("chat.voiceError")}: ${err}` });
+			Logger.warn("ChatPanel", "Voice connection failed", {
+				error: String(err),
+			});
+			useChatStore.getState().addMessage({
+				role: "assistant",
+				content: `${t("chat.voiceError")}: ${err}`,
+			});
 			// Detach onDisconnect before cleanup to prevent double-cleanup
 			if (voiceSessionRef.current) voiceSessionRef.current.onDisconnect = null;
 			voiceSessionRef.current?.disconnect();
@@ -1169,12 +1197,18 @@ export function ChatPanel() {
 					className={`chat-voice-btn${voiceMode === "connecting" ? " connecting" : voiceMode === "active" ? " active" : ""}`}
 					onClick={handleVoiceToggle}
 					disabled={isStreaming}
-					title={voiceMode === "off" ? t("chat.voiceStart") : voiceMode === "connecting" ? t("chat.voiceConnecting") : t("chat.voiceEnd")}
+					title={
+						voiceMode === "off"
+							? t("chat.voiceStart")
+							: voiceMode === "connecting"
+								? t("chat.voiceConnecting")
+								: t("chat.voiceEnd")
+					}
 				>
 					<span className="voice-bar" />
-				<span className="voice-bar" />
-				<span className="voice-bar" />
-				<span className="voice-bar" />
+					<span className="voice-bar" />
+					<span className="voice-bar" />
+					<span className="voice-bar" />
 				</button>
 				<textarea
 					ref={inputRef}

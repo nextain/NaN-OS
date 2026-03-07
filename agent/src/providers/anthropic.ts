@@ -42,9 +42,7 @@ function toAnthropicMessages(
 	return result;
 }
 
-function toAnthropicTools(
-	tools: ToolDefinition[],
-): Anthropic.Messages.Tool[] {
+function toAnthropicTools(tools: ToolDefinition[]): Anthropic.Messages.Tool[] {
 	return tools.map((t) => ({
 		name: t.name,
 		description: t.description,

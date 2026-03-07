@@ -24,8 +24,8 @@ description: A test skill for testing.
 # Test Skill`;
 		const result = parseFrontmatter(content);
 		expect(result).not.toBeNull();
-		expect(result!.name).toBe("test-skill");
-		expect(result!.description).toBe("A test skill for testing.");
+		expect(result?.name).toBe("test-skill");
+		expect(result?.description).toBe("A test skill for testing.");
 	});
 
 	it("strips surrounding quotes from values", () => {
@@ -34,8 +34,8 @@ name: "quoted-skill"
 description: 'Single quoted description'
 ---`;
 		const result = parseFrontmatter(content);
-		expect(result!.name).toBe("quoted-skill");
-		expect(result!.description).toBe("Single quoted description");
+		expect(result?.name).toBe("quoted-skill");
+		expect(result?.description).toBe("Single quoted description");
 	});
 
 	it("returns null when name is missing", () => {
@@ -61,7 +61,7 @@ description: Has homepage
 homepage: https://example.com
 ---`;
 		const result = parseFrontmatter(content);
-		expect(result!.homepage).toBe("https://example.com");
+		expect(result?.homepage).toBe("https://example.com");
 	});
 
 	it("parses inline JSON metadata", () => {
@@ -71,8 +71,8 @@ description: Has metadata
 metadata: {"openclaw":{"emoji":"🔧","requires":{"env":["API_KEY"]}}}
 ---`;
 		const result = parseFrontmatter(content);
-		expect(result!.metadata?.openclaw?.emoji).toBe("🔧");
-		expect(result!.metadata?.openclaw?.requires?.env).toContain("API_KEY");
+		expect(result?.metadata?.openclaw?.emoji).toBe("🔧");
+		expect(result?.metadata?.openclaw?.requires?.env).toContain("API_KEY");
 	});
 });
 
@@ -137,11 +137,7 @@ describe.skipIf(!hasRefMoltbot)(
 
 			let parsed = 0;
 			for (const entry of entries) {
-				const skillMdPath = path.join(
-					REF_SKILLS_DIR,
-					entry.name,
-					"SKILL.md",
-				);
+				const skillMdPath = path.join(REF_SKILLS_DIR, entry.name, "SKILL.md");
 				if (!fs.existsSync(skillMdPath)) continue;
 
 				const content = fs.readFileSync(skillMdPath, "utf-8");

@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createAudioPlayer } from "../audio-player";
 
 // Minimal AudioContext mock
@@ -35,7 +35,8 @@ class MockAudioContext {
 	destination = {} as AudioDestinationNode;
 	createBuffer = (_channels: number, length: number, sampleRate: number) =>
 		new MockAudioBuffer({ length, sampleRate }) as unknown as AudioBuffer;
-	createBufferSource = () => new MockAudioBufferSourceNode() as unknown as AudioBufferSourceNode;
+	createBufferSource = () =>
+		new MockAudioBufferSourceNode() as unknown as AudioBufferSourceNode;
 	resume = vi.fn().mockResolvedValue(undefined);
 	close = vi.fn().mockResolvedValue(undefined);
 }

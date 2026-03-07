@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { GatewayClient } from "../client.js";
-import { createMockGateway, type MockGateway } from "./mock-gateway.js";
+import { type MockGateway, createMockGateway } from "./mock-gateway.js";
 
 describe("GatewayClient.offEvent", () => {
 	let mock: MockGateway;

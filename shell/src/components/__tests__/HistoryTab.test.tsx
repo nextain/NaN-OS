@@ -17,7 +17,8 @@ const mockDeleteGatewaySession = vi.fn();
 vi.mock("../../lib/gateway-sessions", () => ({
 	listGatewaySessions: (...args: unknown[]) => mockListGatewaySessions(...args),
 	getGatewayHistory: (...args: unknown[]) => mockGetGatewayHistory(...args),
-	deleteGatewaySession: (...args: unknown[]) => mockDeleteGatewaySession(...args),
+	deleteGatewaySession: (...args: unknown[]) =>
+		mockDeleteGatewaySession(...args),
 }));
 
 // Import after mocks

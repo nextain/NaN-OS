@@ -1,4 +1,9 @@
-import { getDefaultModel, loadConfig, saveConfig, type AppConfig } from "./config";
+import {
+	type AppConfig,
+	getDefaultModel,
+	loadConfig,
+	saveConfig,
+} from "./config";
 import { openDmChannel } from "./discord-api";
 import { Logger } from "./logger";
 
@@ -31,7 +36,9 @@ function ensureBaseConfig(existing: AppConfig | null): AppConfig {
 	};
 }
 
-export function persistDiscordDefaults(payload: DiscordAuthPayload): AppConfig | null {
+export function persistDiscordDefaults(
+	payload: DiscordAuthPayload,
+): AppConfig | null {
 	const discordUserId = normalizeSnowflake(payload.discordUserId);
 	const discordChannelId = normalizeSnowflake(payload.discordChannelId);
 	const explicitTarget = normalizeTarget(payload.discordTarget);
@@ -52,7 +59,10 @@ export function persistDiscordDefaults(payload: DiscordAuthPayload): AppConfig |
 	saveConfig(next);
 
 	// Auto-discover DM channel ID if we have a user ID but no channel ID
-	if ((discordUserId || next.discordDefaultUserId) && !next.discordDmChannelId) {
+	if (
+		(discordUserId || next.discordDefaultUserId) &&
+		!next.discordDmChannelId
+	) {
 		const targetUserId = discordUserId || next.discordDefaultUserId!;
 		void discoverDmChannelId(targetUserId);
 	}

@@ -65,9 +65,7 @@ export async function listGatewaySessions(
 }
 
 /** Get chat history for a Gateway session key */
-export async function getGatewayHistory(
-	key: string,
-): Promise<ChatMessage[]> {
+export async function getGatewayHistory(key: string): Promise<ChatMessage[]> {
 	const opts = getGatewayOpts();
 	if (!opts) return [];
 
@@ -156,7 +154,9 @@ export async function patchGatewaySession(
  * Call on app init — if config already has discordDmChannelId, skips discovery.
  * Returns the discovered channel ID or null.
  */
-export async function discoverAndPersistDiscordDmChannel(): Promise<string | null> {
+export async function discoverAndPersistDiscordDmChannel(): Promise<
+	string | null
+> {
 	const config = loadConfig();
 	if (config?.discordDmChannelId) return config.discordDmChannelId;
 
@@ -169,7 +169,11 @@ export async function discoverAndPersistDiscordDmChannel(): Promise<string | nul
 			if (config) {
 				saveConfig({ ...config, discordDmChannelId: channelId });
 			}
-			Logger.info("gateway-sessions", "Discovered Discord DM channel ID from sessions", { channelId });
+			Logger.info(
+				"gateway-sessions",
+				"Discovered Discord DM channel ID from sessions",
+				{ channelId },
+			);
 			return channelId;
 		}
 		// per-channel-peer format: agent:main:discord:direct:<peerId>
@@ -179,7 +183,11 @@ export async function discoverAndPersistDiscordDmChannel(): Promise<string | nul
 		if (peerMatch && config && !config.discordDefaultUserId) {
 			const userId = peerMatch[1];
 			saveConfig({ ...config, discordDefaultUserId: userId });
-			Logger.info("gateway-sessions", "Discovered Discord user ID from session", { userId });
+			Logger.info(
+				"gateway-sessions",
+				"Discovered Discord user ID from session",
+				{ userId },
+			);
 		}
 	}
 	return null;

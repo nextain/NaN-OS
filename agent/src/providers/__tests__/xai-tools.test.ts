@@ -193,8 +193,14 @@ describe("xai provider — tool calling", () => {
 
 		const toolUseChunks = chunks.filter((c) => c.type === "tool_use");
 		expect(toolUseChunks).toHaveLength(2);
-		expect(toolUseChunks[0]).toMatchObject({ name: "skill_time", args: { format: "iso" } });
-		expect(toolUseChunks[1]).toMatchObject({ name: "skill_time", args: { format: "unix" } });
+		expect(toolUseChunks[0]).toMatchObject({
+			name: "skill_time",
+			args: { format: "iso" },
+		});
+		expect(toolUseChunks[1]).toMatchObject({
+			name: "skill_time",
+			args: { format: "unix" },
+		});
 	});
 
 	it("formats tool call history in messages correctly", async () => {

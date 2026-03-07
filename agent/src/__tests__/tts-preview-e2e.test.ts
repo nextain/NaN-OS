@@ -22,7 +22,7 @@ describe("TTS Preview E2E", () => {
 		it("synthesizes Korean text with default voice", async () => {
 			const audio = await synthesizeEdgeSpeech("안녕하세요 테스트입니다.");
 			expect(audio).not.toBeNull();
-			expect(audio!.length).toBeGreaterThan(100);
+			expect(audio?.length).toBeGreaterThan(100);
 		}, 15000);
 
 		it("synthesizes with specific voice", async () => {
@@ -31,7 +31,7 @@ describe("TTS Preview E2E", () => {
 				"en-US-MichelleNeural",
 			);
 			expect(audio).not.toBeNull();
-			expect(audio!.length).toBeGreaterThan(100);
+			expect(audio?.length).toBeGreaterThan(100);
 		}, 15000);
 
 		it("returns null for empty text", async () => {
@@ -45,22 +45,19 @@ describe("TTS Preview E2E", () => {
 	// ═══════════════════════════════════════
 	describe("OpenAI TTS", () => {
 		it("synthesizes with OpenAI TTS API", async () => {
-			const response = await fetch(
-				"https://api.openai.com/v1/audio/speech",
-				{
-					method: "POST",
-					headers: {
-						Authorization: `Bearer ${OPENAI_API_KEY}`,
-						"Content-Type": "application/json",
-					},
-					body: JSON.stringify({
-						model: "tts-1",
-						input: "안녕하세요 테스트입니다.",
-						voice: "nova",
-						response_format: "mp3",
-					}),
+			const response = await fetch("https://api.openai.com/v1/audio/speech", {
+				method: "POST",
+				headers: {
+					Authorization: `Bearer ${OPENAI_API_KEY}`,
+					"Content-Type": "application/json",
 				},
-			);
+				body: JSON.stringify({
+					model: "tts-1",
+					input: "안녕하세요 테스트입니다.",
+					voice: "nova",
+					response_format: "mp3",
+				}),
+			});
 			console.log("OpenAI TTS status:", response.status);
 			if (response.ok) {
 				const buf = Buffer.from(await response.arrayBuffer());
@@ -82,12 +79,9 @@ describe("TTS Preview E2E", () => {
 	describe("ElevenLabs TTS", () => {
 		it("synthesizes with ElevenLabs API", async () => {
 			// First get available voices
-			const voicesRes = await fetch(
-				"https://api.elevenlabs.io/v1/voices",
-				{
-					headers: { "xi-api-key": ELEVENLABS_API_KEY },
-				},
-			);
+			const voicesRes = await fetch("https://api.elevenlabs.io/v1/voices", {
+				headers: { "xi-api-key": ELEVENLABS_API_KEY },
+			});
 			console.log("ElevenLabs voices status:", voicesRes.status);
 			if (!voicesRes.ok) {
 				const err = await voicesRes.text();
@@ -123,10 +117,7 @@ describe("TTS Preview E2E", () => {
 				if (ttsRes.ok) {
 					const buf = Buffer.from(await ttsRes.arrayBuffer());
 					const base64 = buf.toString("base64");
-					console.log(
-						"ElevenLabs audio base64 length:",
-						base64.length,
-					);
+					console.log("ElevenLabs audio base64 length:", base64.length);
 					expect(base64.length).toBeGreaterThan(100);
 				} else {
 					const err = await ttsRes.text();

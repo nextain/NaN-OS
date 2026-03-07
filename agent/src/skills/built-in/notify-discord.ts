@@ -35,7 +35,7 @@ export function createNotifyDiscordSkill(): SkillDefinition {
 
 			// 1st: Try Gateway relay
 			const gateway = ctx.gateway;
-			if (gateway && gateway.isConnected()) {
+			if (gateway?.isConnected()) {
 				try {
 					const methods = (gateway as { availableMethods?: string[] })
 						.availableMethods;

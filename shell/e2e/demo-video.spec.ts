@@ -1,7 +1,6 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { type Page, expect, test } from "@playwright/test";
-import { DEMO_SCENES } from "./demo-script";
 import {
 	DEMO_INPUTS,
 	DEMO_MOCK_DATA,
@@ -9,6 +8,7 @@ import {
 	DEMO_SECTION_LABELS,
 	type NarrationLang,
 } from "./demo-narrations-i18n";
+import { DEMO_SCENES } from "./demo-script";
 
 /**
  * Naia OS 3-minute Demo Video — Playwright Recording (Multilingual)
@@ -36,38 +36,179 @@ const MOCK_API_KEY = "e2e-mock-key-demo";
 // ---- Mock data (language-independent) ----
 
 const MOCK_SKILLS = [
-	{ name: "skill_time", description: "현재 시간/날짜 조회", type: "built-in", tier: 0, source: "built-in" },
-	{ name: "skill_system_status", description: "시스템 상태 확인", type: "built-in", tier: 0, source: "built-in" },
-	{ name: "skill_memo", description: "메모 저장/조회/삭제", type: "built-in", tier: 1, source: "built-in" },
-	{ name: "skill_weather", description: "현재 날씨 조회", type: "built-in", tier: 0, source: "built-in" },
-	{ name: "skill_skill_manager", description: "스킬 관리 (검색/활성화/비활성화)", type: "built-in", tier: 1, source: "built-in" },
-	{ name: "execute_command", description: "셸 명령 실행", type: "gateway", tier: 2, source: "gateway", gatewaySkill: "execute_command" },
-	{ name: "write_file", description: "파일 쓰기", type: "gateway", tier: 2, source: "gateway", gatewaySkill: "write_file" },
-	{ name: "read_file", description: "파일 읽기", type: "gateway", tier: 1, source: "gateway", gatewaySkill: "read_file" },
-	{ name: "search_files", description: "파일 검색", type: "gateway", tier: 1, source: "gateway", gatewaySkill: "search_files" },
-	{ name: "list_files", description: "디렉토리 목록", type: "gateway", tier: 1, source: "gateway", gatewaySkill: "list_files" },
-	{ name: "code_review", description: "코드 리뷰", type: "gateway", tier: 1, source: "gateway", gatewaySkill: "code_review" },
-	{ name: "web_search", description: "웹 검색", type: "gateway", tier: 0, source: "gateway", gatewaySkill: "web_search" },
+	{
+		name: "skill_time",
+		description: "현재 시간/날짜 조회",
+		type: "built-in",
+		tier: 0,
+		source: "built-in",
+	},
+	{
+		name: "skill_system_status",
+		description: "시스템 상태 확인",
+		type: "built-in",
+		tier: 0,
+		source: "built-in",
+	},
+	{
+		name: "skill_memo",
+		description: "메모 저장/조회/삭제",
+		type: "built-in",
+		tier: 1,
+		source: "built-in",
+	},
+	{
+		name: "skill_weather",
+		description: "현재 날씨 조회",
+		type: "built-in",
+		tier: 0,
+		source: "built-in",
+	},
+	{
+		name: "skill_skill_manager",
+		description: "스킬 관리 (검색/활성화/비활성화)",
+		type: "built-in",
+		tier: 1,
+		source: "built-in",
+	},
+	{
+		name: "execute_command",
+		description: "셸 명령 실행",
+		type: "gateway",
+		tier: 2,
+		source: "gateway",
+		gatewaySkill: "execute_command",
+	},
+	{
+		name: "write_file",
+		description: "파일 쓰기",
+		type: "gateway",
+		tier: 2,
+		source: "gateway",
+		gatewaySkill: "write_file",
+	},
+	{
+		name: "read_file",
+		description: "파일 읽기",
+		type: "gateway",
+		tier: 1,
+		source: "gateway",
+		gatewaySkill: "read_file",
+	},
+	{
+		name: "search_files",
+		description: "파일 검색",
+		type: "gateway",
+		tier: 1,
+		source: "gateway",
+		gatewaySkill: "search_files",
+	},
+	{
+		name: "list_files",
+		description: "디렉토리 목록",
+		type: "gateway",
+		tier: 1,
+		source: "gateway",
+		gatewaySkill: "list_files",
+	},
+	{
+		name: "code_review",
+		description: "코드 리뷰",
+		type: "gateway",
+		tier: 1,
+		source: "gateway",
+		gatewaySkill: "code_review",
+	},
+	{
+		name: "web_search",
+		description: "웹 검색",
+		type: "gateway",
+		tier: 0,
+		source: "gateway",
+		gatewaySkill: "web_search",
+	},
 ];
 
 const MOCK_AUDIT_LOG = [
-	{ id: 1, timestamp: "2026-02-19T10:00:00Z", request_id: "r1", event_type: "tool_use", tool_name: "skill_time", tool_call_id: "tc1", tier: 0, success: true, payload: '{"args":{"timezone":"Asia/Seoul"}}' },
-	{ id: 2, timestamp: "2026-02-19T10:00:01Z", request_id: "r1", event_type: "tool_result", tool_name: "skill_time", tool_call_id: "tc1", tier: 0, success: true, payload: '{"output":"2026-02-19 19:00 KST"}' },
-	{ id: 3, timestamp: "2026-02-19T10:01:00Z", request_id: "r2", event_type: "tool_use", tool_name: "execute_command", tool_call_id: "tc2", tier: 2, success: true, payload: '{"args":{"command":"ls"}}' },
-	{ id: 4, timestamp: "2026-02-19T10:01:02Z", request_id: "r2", event_type: "tool_result", tool_name: "execute_command", tool_call_id: "tc2", tier: 2, success: true, payload: '{"output":"file1.txt\\nfile2.txt"}' },
-	{ id: 5, timestamp: "2026-02-19T10:02:00Z", request_id: "r3", event_type: "usage", tool_name: null, tool_call_id: null, tier: null, success: null, payload: '{"cost":0.003,"inputTokens":150,"outputTokens":80}' },
+	{
+		id: 1,
+		timestamp: "2026-02-19T10:00:00Z",
+		request_id: "r1",
+		event_type: "tool_use",
+		tool_name: "skill_time",
+		tool_call_id: "tc1",
+		tier: 0,
+		success: true,
+		payload: '{"args":{"timezone":"Asia/Seoul"}}',
+	},
+	{
+		id: 2,
+		timestamp: "2026-02-19T10:00:01Z",
+		request_id: "r1",
+		event_type: "tool_result",
+		tool_name: "skill_time",
+		tool_call_id: "tc1",
+		tier: 0,
+		success: true,
+		payload: '{"output":"2026-02-19 19:00 KST"}',
+	},
+	{
+		id: 3,
+		timestamp: "2026-02-19T10:01:00Z",
+		request_id: "r2",
+		event_type: "tool_use",
+		tool_name: "execute_command",
+		tool_call_id: "tc2",
+		tier: 2,
+		success: true,
+		payload: '{"args":{"command":"ls"}}',
+	},
+	{
+		id: 4,
+		timestamp: "2026-02-19T10:01:02Z",
+		request_id: "r2",
+		event_type: "tool_result",
+		tool_name: "execute_command",
+		tool_call_id: "tc2",
+		tier: 2,
+		success: true,
+		payload: '{"output":"file1.txt\\nfile2.txt"}',
+	},
+	{
+		id: 5,
+		timestamp: "2026-02-19T10:02:00Z",
+		request_id: "r3",
+		event_type: "usage",
+		tool_name: null,
+		tool_call_id: null,
+		tier: null,
+		success: null,
+		payload: '{"cost":0.003,"inputTokens":150,"outputTokens":80}',
+	},
 ];
 
 const MOCK_AUDIT_STATS = {
 	total_events: 5,
-	by_event_type: [["tool_use", 2], ["tool_result", 2], ["usage", 1]],
-	by_tool_name: [["skill_time", 2], ["execute_command", 2]],
+	by_event_type: [
+		["tool_use", 2],
+		["tool_result", 2],
+		["usage", 1],
+	],
+	by_tool_name: [
+		["skill_time", 2],
+		["execute_command", 2],
+	],
 	total_cost: 0.005,
 };
 
 const MOCK_CHANNELS_STATUS = {
 	channels: [
-		{ name: "discord", status: "connected", account: "Naia#1234", lastActivity: "2026-02-19T10:00:00Z" },
+		{
+			name: "discord",
+			status: "connected",
+			account: "Naia#1234",
+			lastActivity: "2026-02-19T10:00:00Z",
+		},
 	],
 };
 
@@ -75,7 +216,11 @@ const MOCK_DIAGNOSTICS = {
 	gateway: { status: "ok", port: 18789, uptime: "2h 15m" },
 	agent: { status: "ok", pid: 12345, model: "gemini-2.5-flash" },
 	memory: { status: "ok", dbSize: "2.1 MB", sessions: 15 },
-	system: { os: "Naia OS (Bazzite)", kernel: "6.12.5", memory: "8.2 GB / 16 GB" },
+	system: {
+		os: "Naia OS (Bazzite)",
+		kernel: "6.12.5",
+		memory: "8.2 GB / 16 GB",
+	},
 };
 
 // ---- Tauri IPC Mock (extended for demo) ----
@@ -87,7 +232,13 @@ function buildDemoMockScript(lang: NarrationLang): string {
 
 	const mockAgentsList = {
 		agents: [
-			{ id: "agent-1", name: "naia-main", status: "running", uptime: "2h 15m", model: "gemini-2.5-flash" },
+			{
+				id: "agent-1",
+				name: "naia-main",
+				status: "running",
+				uptime: "2h 15m",
+				model: "gemini-2.5-flash",
+			},
 		],
 		sessions: [mockData.agentSession],
 	};
@@ -107,12 +258,40 @@ function buildDemoMockScript(lang: NarrationLang): string {
 
 	// Weather/time keywords per language for matching user input
 	const weatherKeywords = JSON.stringify([
-		"날씨", "weather", "天気", "天气", "météo", "wetter", "погод", "clima", "cuaca", "thời tiết",
-		"طقس", "मौसम", "আবহাওয়া", "tempo",
+		"날씨",
+		"weather",
+		"天気",
+		"天气",
+		"météo",
+		"wetter",
+		"погод",
+		"clima",
+		"cuaca",
+		"thời tiết",
+		"طقس",
+		"मौसम",
+		"আবহাওয়া",
+		"tempo",
 	]);
 	const timeKeywords = JSON.stringify([
-		"시간", "몇 시", "time", "何時", "今何時", "几点", "heure", "uhr", "spät", "час", "hora",
-		"jam", "giờ", "الساعة", "समय", "সময়", "কটা", "horas",
+		"시간",
+		"몇 시",
+		"time",
+		"何時",
+		"今何時",
+		"几点",
+		"heure",
+		"uhr",
+		"spät",
+		"час",
+		"hora",
+		"jam",
+		"giờ",
+		"الساعة",
+		"समय",
+		"সময়",
+		"কটা",
+		"horas",
 	]);
 
 	return `
@@ -389,7 +568,9 @@ class SceneTimeline {
 		this.endCurrent();
 		const startMs = Date.now() - this.t0;
 		this.currentScene = { id, startMs };
-		console.log(`[timeline] ${this.fmt(startMs)} ENTER  ${id}${notes ? ` — ${notes}` : ""}`);
+		console.log(
+			`[timeline] ${this.fmt(startMs)} ENTER  ${id}${notes ? ` — ${notes}` : ""}`,
+		);
 	}
 
 	/** Mark a point-in-time event within the current scene */
@@ -403,7 +584,9 @@ class SceneTimeline {
 		if (this.currentScene) {
 			const endMs = Date.now() - this.t0;
 			this.logs.push({ ...this.currentScene, endMs, notes: "" });
-			console.log(`[timeline] ${this.fmt(endMs)} EXIT   ${this.currentScene.id}  (${endMs - this.currentScene.startMs}ms)`);
+			console.log(
+				`[timeline] ${this.fmt(endMs)} EXIT   ${this.currentScene.id}  (${endMs - this.currentScene.startMs}ms)`,
+			);
 			this.currentScene = null;
 		}
 	}
@@ -435,7 +618,9 @@ class SceneTimeline {
 /** Wait for all fonts and icons to load */
 async function ensureIconsLoaded(page: Page) {
 	await page.waitForLoadState("networkidle");
-	await page.evaluate(async () => { await document.fonts.ready; });
+	await page.evaluate(async () => {
+		await document.fonts.ready;
+	});
 	await page.waitForTimeout(4000);
 }
 
@@ -471,8 +656,12 @@ async function sendChatMessage(page: Page, text: string) {
 	await input.press("Enter");
 
 	await Promise.race([
-		expect(page.locator(".cursor-blink").first()).toBeVisible({ timeout: 10_000 }).catch(() => {}),
-		expect(page.locator(".chat-message.assistant")).toHaveCount(beforeCount + 1, { timeout: 10_000 }).catch(() => {}),
+		expect(page.locator(".cursor-blink").first())
+			.toBeVisible({ timeout: 10_000 })
+			.catch(() => {}),
+		expect(page.locator(".chat-message.assistant"))
+			.toHaveCount(beforeCount + 1, { timeout: 10_000 })
+			.catch(() => {}),
 	]);
 	await expect(page.locator(".cursor-blink")).toBeHidden({ timeout: 15_000 });
 }
@@ -518,7 +707,9 @@ test.describe("Demo Video Recording", () => {
 
 		// Scene: provider
 		tl.enter("provider", "select Gemini");
-		await expect(page.locator(".onboarding-content")).toBeVisible({ timeout: 5_000 });
+		await expect(page.locator(".onboarding-content")).toBeVisible({
+			timeout: 5_000,
+		});
 		await page.waitForTimeout(2000);
 		const providerCard = page.locator(".onboarding-provider-card").first();
 		if (await providerCard.isVisible()) {
@@ -532,7 +723,9 @@ test.describe("Demo Video Recording", () => {
 
 		// Scene: apikey
 		tl.enter("apikey", "type API key");
-		await expect(page.locator(".onboarding-input")).toBeVisible({ timeout: 5_000 });
+		await expect(page.locator(".onboarding-input")).toBeVisible({
+			timeout: 5_000,
+		});
 		await typeSlowly(page, ".onboarding-input", "AIzaSyxxxxxxxxxxxxxxxx");
 		tl.mark("key typed");
 		await page.waitForTimeout(1000);
@@ -607,7 +800,9 @@ test.describe("Demo Video Recording", () => {
 		tl.enter("reload", "reload with completed config");
 		await page.addInitScript(buildDemoMockScript(DEMO_LANG));
 		await page.addInitScript(
-			(configJson: string) => { localStorage.setItem("naia-config", configJson); },
+			(configJson: string) => {
+				localStorage.setItem("naia-config", configJson);
+			},
 			JSON.stringify(makeConfig(DEMO_LANG)),
 		);
 		await page.goto("/");

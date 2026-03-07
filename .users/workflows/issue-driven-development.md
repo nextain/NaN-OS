@@ -12,7 +12,7 @@ For non-feature changes (typos, config values, simple directives), use `developm
 
 ---
 
-## 10 Phases
+## 13 Phases
 
 ### User-Involved (front-loaded)
 
@@ -30,9 +30,12 @@ For non-feature changes (typos, config values, simple directives), use `developm
 |---|-------|-------------|
 | 6 | **Build** | Implement per plan (TDD) |
 | 7 | **Review** | Self-review loop (2 consecutive clean passes) |
-| 8 | **E2E Test** | End-to-end test through real user path |
-| 9 | **Sync** | Update .agents/ + .users/ context (2 consecutive clean passes) |
-| 10 | **Commit** | Commit with Issue reference, create PR |
+| 8 | **E2E Test** | End-to-end test through real user path (fully clean) |
+| 9 | **Post-test Review** | Re-review after tests (2 consecutive clean passes) |
+| 10 | **Sync** | Update .agents/ + .users/ context |
+| 11 | **Sync Verify** | Verify context accuracy (2 consecutive clean passes) |
+| 12 | **Report** | Summarize results to user and Issue |
+| 13 | **Commit** | Commit with Issue reference, create PR |
 
 ---
 

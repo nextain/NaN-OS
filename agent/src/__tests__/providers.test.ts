@@ -164,10 +164,7 @@ describe("Gemini provider", () => {
 describe("Gemini 3 provider temperature", () => {
 	it("uses temperature 1.0 for Gemini 3 models", async () => {
 		const { createGeminiProvider } = await import("../providers/gemini.js");
-		const provider = createGeminiProvider(
-			"test-key",
-			"gemini-3-pro-preview",
-		);
+		const provider = createGeminiProvider("test-key", "gemini-3-pro-preview");
 
 		const chunks: unknown[] = [];
 		for await (const chunk of provider.stream(
@@ -296,7 +293,10 @@ describe("Gemini provider function calling", () => {
 			{
 				name: "skill_weather",
 				description: "Get weather",
-				parameters: { type: "object", properties: { location: { type: "string" } } },
+				parameters: {
+					type: "object",
+					properties: { location: { type: "string" } },
+				},
 			},
 		];
 

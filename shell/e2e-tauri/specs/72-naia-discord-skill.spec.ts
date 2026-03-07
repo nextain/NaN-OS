@@ -76,8 +76,8 @@ describe("72 — skill_naia_discord", () => {
 				),
 			{ timeout: 60_000, timeoutMsg: "No tool activity appeared" },
 		);
-		const isSuccess = await browser.execute(() =>
-			!!document.querySelector(".tool-activity.tool-success"),
+		const isSuccess = await browser.execute(
+			() => !!document.querySelector(".tool-activity.tool-success"),
 		);
 		return isSuccess ? "success" : "error";
 	}
@@ -124,8 +124,8 @@ describe("72 — skill_naia_discord", () => {
 			// Only keep discordDefaultUserId if it looks like a real Discord snowflake (17-20 digits, not all zeros)
 			const uid = config.discordDefaultUserId;
 			if (uid && (/^0+1?$/.test(uid) || uid.length < 17)) {
-				delete config.discordDefaultUserId;
-				delete config.discordDefaultTarget;
+				config.discordDefaultUserId = undefined;
+				config.discordDefaultTarget = undefined;
 			}
 			localStorage.setItem("naia-config", JSON.stringify(config));
 		});
@@ -143,7 +143,9 @@ describe("72 — skill_naia_discord", () => {
 			const raw = localStorage.getItem("naia-config");
 			if (!raw) return { ok: false, reason: "naia-config missing" };
 			const config = JSON.parse(raw);
-			const allowed = Array.isArray(config.allowedTools) ? config.allowedTools : [];
+			const allowed = Array.isArray(config.allowedTools)
+				? config.allowedTools
+				: [];
 			const disabled = Array.isArray(config.disabledSkills)
 				? config.disabledSkills
 				: [];
@@ -229,9 +231,7 @@ describe("72 — skill_naia_discord", () => {
 			const isTargetRequired = /target is required|대상이 필요/i.test(text);
 			if (isTargetRequired) {
 				throw new Error(
-					`Auto-target failed: skill returned "target is required" despite ` +
-						`config having userId="${configCheck.userId}" target="${configCheck.target}". ` +
-						`Config → agent env 전달 경로에 문제가 있습니다. assistant="${text.slice(0, 300)}"`,
+					`Auto-target failed: skill returned "target is required" despite config having userId="${configCheck.userId}" target="${configCheck.target}". Config → agent env 전달 경로에 문제가 있습니다. assistant="${text.slice(0, 300)}"`,
 				);
 			}
 			// Discord API error but target was resolved → auto-target worked

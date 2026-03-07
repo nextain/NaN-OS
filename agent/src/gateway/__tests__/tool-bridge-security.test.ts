@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { GatewayClient } from "../client.js";
 import { executeTool } from "../tool-bridge.js";
-import { createMockGateway, type MockGateway } from "./mock-gateway.js";
+import { type MockGateway, createMockGateway } from "./mock-gateway.js";
 
 describe("tool-bridge security — path traversal", () => {
 	let mock: MockGateway;

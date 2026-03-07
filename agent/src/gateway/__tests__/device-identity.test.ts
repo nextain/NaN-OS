@@ -1,4 +1,4 @@
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { DeviceIdentity } from "../types.js";
@@ -32,16 +32,18 @@ describe("loadDeviceIdentity", () => {
 			JSON.stringify({
 				version: 1,
 				deviceId: "abc123",
-				publicKeyPem: "-----BEGIN PUBLIC KEY-----\ntest\n-----END PUBLIC KEY-----\n",
-				privateKeyPem: "-----BEGIN PRIVATE KEY-----\ntest\n-----END PRIVATE KEY-----\n",
+				publicKeyPem:
+					"-----BEGIN PUBLIC KEY-----\ntest\n-----END PUBLIC KEY-----\n",
+				privateKeyPem:
+					"-----BEGIN PRIVATE KEY-----\ntest\n-----END PRIVATE KEY-----\n",
 			}),
 		);
 
 		const identity = loadDeviceIdentity();
 		expect(identity).toBeDefined();
-		expect(identity!.id).toBe("abc123");
-		expect(identity!.publicKey).toContain("PUBLIC KEY");
-		expect(identity!.privateKeyPem).toContain("PRIVATE KEY");
+		expect(identity?.id).toBe("abc123");
+		expect(identity?.publicKey).toContain("PUBLIC KEY");
+		expect(identity?.privateKeyPem).toContain("PRIVATE KEY");
 	});
 
 	it("returns undefined when identity file does not exist", () => {

@@ -148,9 +148,7 @@ describe("Lab Auth (deep link URL parsing)", () => {
 		}
 	}
 
-	function parseDiscordDeepLink(
-		urlStr: string,
-	): {
+	function parseDiscordDeepLink(urlStr: string): {
 		discordUserId?: string;
 		discordChannelId?: string;
 		discordTarget?: string;
@@ -188,7 +186,10 @@ describe("Lab Auth (deep link URL parsing)", () => {
 
 	it("parses nanos://auth?key=xxx", () => {
 		const result = parseLabDeepLink("nanos://auth?key=gw-test_key-123");
-		expect(result).toEqual({ naiaKey: "gw-test_key-123", naiaUserId: undefined });
+		expect(result).toEqual({
+			naiaKey: "gw-test_key-123",
+			naiaUserId: undefined,
+		});
 	});
 
 	it("returns null for nanos://auth?code=xxx when code is not gw key", () => {
@@ -198,7 +199,10 @@ describe("Lab Auth (deep link URL parsing)", () => {
 
 	it("parses nanos://auth?code=xxx when code is gw key", () => {
 		const result = parseLabDeepLink("nanos://auth?code=gw-from-code_456");
-		expect(result).toEqual({ naiaKey: "gw-from-code_456", naiaUserId: undefined });
+		expect(result).toEqual({
+			naiaKey: "gw-from-code_456",
+			naiaUserId: undefined,
+		});
 	});
 
 	it("parses nanos://auth?key=xxx&user_id=yyy", () => {

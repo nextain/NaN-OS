@@ -8,7 +8,7 @@ function nextCronOccurrence(expression: string, now: Date): number | null {
 	const parts = expression.trim().split(/\s+/);
 	if (parts.length !== 5) return null;
 
-	const [minStr, hourStr, , , ] = parts;
+	const [minStr, hourStr, , ,] = parts;
 	const targetMin = minStr === "*" ? -1 : Number.parseInt(minStr, 10);
 	const targetHour = hourStr === "*" ? -1 : Number.parseInt(hourStr, 10);
 
@@ -60,8 +60,7 @@ export class CronScheduler {
 
 		switch (job.schedule.type) {
 			case "at": {
-				const targetMs =
-					new Date(job.schedule.date).getTime() - Date.now();
+				const targetMs = new Date(job.schedule.date).getTime() - Date.now();
 				if (targetMs <= 0) return; // Already past
 				const timer = setTimeout(() => {
 					this.fire(job);

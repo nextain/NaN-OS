@@ -26,9 +26,17 @@ export async function cancelWizard(
 }
 
 /** Get wizard status */
-export async function getWizardStatus(
-	client: GatewayClient,
-): Promise<{ active: boolean; step: string; stepIndex: number; totalSteps: number }> {
+export async function getWizardStatus(client: GatewayClient): Promise<{
+	active: boolean;
+	step: string;
+	stepIndex: number;
+	totalSteps: number;
+}> {
 	const payload = await client.request("wizard.status", {});
-	return payload as { active: boolean; step: string; stepIndex: number; totalSteps: number };
+	return payload as {
+		active: boolean;
+		step: string;
+		stepIndex: number;
+		totalSteps: number;
+	};
 }

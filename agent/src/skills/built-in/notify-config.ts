@@ -34,10 +34,13 @@ export async function getNotifyWebhookUrl(
 			googleChatWebhookUrl?: string;
 		};
 		// Check new flat structure first
-		if (provider === "slack" && config.slackWebhookUrl?.trim()) return config.slackWebhookUrl.trim();
-		if (provider === "discord" && config.discordWebhookUrl?.trim()) return config.discordWebhookUrl.trim();
-		if (provider === "google_chat" && config.googleChatWebhookUrl?.trim()) return config.googleChatWebhookUrl.trim();
-		
+		if (provider === "slack" && config.slackWebhookUrl?.trim())
+			return config.slackWebhookUrl.trim();
+		if (provider === "discord" && config.discordWebhookUrl?.trim())
+			return config.discordWebhookUrl.trim();
+		if (provider === "google_chat" && config.googleChatWebhookUrl?.trim())
+			return config.googleChatWebhookUrl.trim();
+
 		// Fallback to old nested structure
 		const url = config.notifications?.[provider]?.webhookUrl;
 		if (url?.trim()) {

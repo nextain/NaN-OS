@@ -94,7 +94,9 @@ describe("SettingsTab", () => {
 	it("replaces API key input with Naia account UI", () => {
 		mockInvoke.mockResolvedValue([]);
 		render(<SettingsTab />);
-		const providerSelect = document.getElementById("provider-select") as HTMLSelectElement;
+		const providerSelect = document.getElementById(
+			"provider-select",
+		) as HTMLSelectElement;
 		fireEvent.change(providerSelect, { target: { value: "nextain" } });
 		expect(screen.queryByLabelText(/^API/i)).toBeNull();
 		expect(
@@ -122,11 +124,15 @@ describe("SettingsTab", () => {
 	it("hides API key input for Claude Code CLI provider", () => {
 		mockInvoke.mockResolvedValue([]);
 		render(<SettingsTab />);
-		const providerSelect = document.getElementById("provider-select") as HTMLSelectElement;
+		const providerSelect = document.getElementById(
+			"provider-select",
+		) as HTMLSelectElement;
 		fireEvent.change(providerSelect, { target: { value: "claude-code-cli" } });
 		expect(screen.queryByLabelText(/^API/i)).toBeNull();
 		expect(
-			screen.getByText("Claude Code CLI provider는 로컬 CLI 로그인 세션을 사용합니다."),
+			screen.getByText(
+				"Claude Code CLI provider는 로컬 CLI 로그인 세션을 사용합니다.",
+			),
 		).toBeDefined();
 	});
 

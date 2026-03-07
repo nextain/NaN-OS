@@ -47,9 +47,9 @@ function resolveEnvDefaultTarget(): string | null {
  * When Shell and Discord both route through Gateway, the Discord DM session
  * holds the actual channel ID that can be used for proactive sends.
  */
-async function discoverDmChannelFromSessions(
-	gateway: { request: (method: string, params?: unknown) => Promise<unknown> },
-): Promise<string | null> {
+async function discoverDmChannelFromSessions(gateway: {
+	request: (method: string, params?: unknown) => Promise<unknown>;
+}): Promise<string | null> {
 	try {
 		const result = (await gateway.request("sessions.list", {})) as {
 			sessions?: Array<{
@@ -88,7 +88,9 @@ function extractUserTargetFromChannelsStatus(payload: {
 	const discordAccounts = payload.channelAccounts?.discord ?? [];
 	const preferredId = payload.channelDefaultAccountId?.discord;
 
-	const extractNumericUserId = (account: Record<string, unknown>): string | null => {
+	const extractNumericUserId = (
+		account: Record<string, unknown>,
+	): string | null => {
 		const nestedProfile =
 			typeof account.profile === "object" && account.profile
 				? (account.profile as Record<string, unknown>)
@@ -184,7 +186,10 @@ export async function ensureDiscordAllowlisted(
 		const base = openclawDir ?? join(homedir(), ".openclaw");
 		const filePath = join(base, "credentials", "discord-allowFrom.json");
 
-		let data: { version: number; allowFrom: string[] } = { version: 1, allowFrom: [] };
+		let data: { version: number; allowFrom: string[] } = {
+			version: 1,
+			allowFrom: [],
+		};
 
 		if (existsSync(filePath)) {
 			const raw = JSON.parse(readFileSync(filePath, "utf-8"));
@@ -197,7 +202,7 @@ export async function ensureDiscordAllowlisted(
 
 		data.allowFrom.push(userId);
 		mkdirSync(dirname(filePath), { recursive: true });
-		writeFileSync(filePath, JSON.stringify(data, null, "\t") + "\n");
+		writeFileSync(filePath, `${JSON.stringify(data, null, "\t")}\n`);
 	} catch {
 		// Never block send on allowlist errors
 	}
@@ -235,7 +240,8 @@ export function createNaiaDiscordSkill(): SkillDefinition {
 				},
 				channelId: {
 					type: "string",
-					description: "Shortcut: target channel ID (converted to to=channel:<id>)",
+					description:
+						"Shortcut: target channel ID (converted to to=channel:<id>)",
 				},
 				userId: {
 					type: "string",
@@ -243,11 +249,13 @@ export function createNaiaDiscordSkill(): SkillDefinition {
 				},
 				accountId: {
 					type: "string",
-					description: "Optional Discord account ID (default: gateway default account)",
+					description:
+						"Optional Discord account ID (default: gateway default account)",
 				},
 				limit: {
 					type: "number",
-					description: "Number of messages to retrieve for history action (default: 20, max: 100)",
+					description:
+						"Number of messages to retrieve for history action (default: 20, max: 100)",
 				},
 			},
 			required: ["action"],
@@ -263,11 +271,13 @@ export function createNaiaDiscordSkill(): SkillDefinition {
 				return {
 					success: false,
 					output: "",
-					error: "Gateway not connected. skill_naia_discord requires a running Gateway.",
+					error:
+						"Gateway not connected. skill_naia_discord requires a running Gateway.",
 				};
 			}
 
-			const methods = (gateway as { availableMethods?: string[] }).availableMethods;
+			const methods = (gateway as { availableMethods?: string[] })
+				.availableMethods;
 
 			if (action === "status") {
 				if (!Array.isArray(methods) || !methods.includes("channels.status")) {
@@ -292,8 +302,8 @@ export function createNaiaDiscordSkill(): SkillDefinition {
 				const accounts = payload.channelAccounts ?? {};
 				const resolvedUserTarget =
 					extractUserTargetFromChannelsStatus({
-					channelAccounts: accounts,
-					channelDefaultAccountId: payload.channelDefaultAccountId,
+						channelAccounts: accounts,
+						channelDefaultAccountId: payload.channelDefaultAccountId,
 					}) ?? resolveEnvDefaultTarget();
 				const discordOnly = order
 					.filter((id) => id === "discord")
@@ -323,10 +333,7 @@ export function createNaiaDiscordSkill(): SkillDefinition {
 			}
 
 			if (action === "history") {
-				const limit = Math.min(
-					Math.max(Number(args.limit) || 20, 1),
-					100,
-				);
+				const limit = Math.min(Math.max(Number(args.limit) || 20, 1), 100);
 
 				// Use sessions.list + chat.history to find Discord messages
 				try {
@@ -391,17 +398,19 @@ export function createNaiaDiscordSkill(): SkillDefinition {
 
 							const msgs = history.messages ?? [];
 							for (const msg of msgs.slice(-limit)) {
-								const text = msg.content
-									?.filter((c) => c.type === "text" && c.text)
-									.map((c) => c.text)
-									.join("\n") ?? "";
+								const text =
+									msg.content
+										?.filter((c) => c.type === "text" && c.text)
+										.map((c) => c.text)
+										.join("\n") ?? "";
 								if (!text) continue;
 
 								allMessages.push({
 									id: `${session.key}:${msg.timestamp ?? Date.now()}`,
-									from: msg.role === "user"
-										? (session.origin?.label ?? "Discord User")
-										: "Naia",
+									from:
+										msg.role === "user"
+											? (session.origin?.label ?? "Discord User")
+											: "Naia",
 									content: text,
 									timestamp: msg.timestamp
 										? new Date(msg.timestamp).toISOString()
@@ -443,13 +452,19 @@ export function createNaiaDiscordSkill(): SkillDefinition {
 
 				const rawMessage = (args.message as string | undefined)?.trim();
 				if (!rawMessage) {
-					return { success: false, output: "", error: "message is required for send" };
+					return {
+						success: false,
+						output: "",
+						error: "message is required for send",
+					};
 				}
 				// Replace emotion tags with emoji for Discord
-				const message = rawMessage.replace(EMOTION_TAG_RE, (match) => {
-					const tag = match.replace(/[\[\]\s]/g, "").toUpperCase();
-					return EMOTION_EMOJI[tag] ?? "";
-				}).trim();
+				const message = rawMessage
+					.replace(EMOTION_TAG_RE, (match) => {
+						const tag = match.replace(/[\[\]\s]/g, "").toUpperCase();
+						return EMOTION_EMOJI[tag] ?? "";
+					})
+					.trim();
 
 				const target = await resolveTarget(args, gateway);
 				if (!target) {
@@ -485,9 +500,7 @@ export function createNaiaDiscordSkill(): SkillDefinition {
 					return {
 						success: false,
 						output: "",
-						error:
-							`Discord send failed: ${err instanceof Error ? err.message : String(err)}. ` +
-							"Check bot channel permissions and use numeric target IDs (channel:<id> or user:<id>).",
+						error: `Discord send failed: ${err instanceof Error ? err.message : String(err)}. Check bot channel permissions and use numeric target IDs (channel:<id> or user:<id>).`,
 					};
 				}
 			}

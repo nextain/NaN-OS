@@ -246,9 +246,7 @@ describe("SkillsTab gateway install", () => {
 		expect(installBtn?.textContent).toMatch(/설치|Install/);
 
 		// screenshot is eligible → should show eligible badge
-		const eligibleBadges = container.querySelectorAll(
-			".skill-badge.eligible",
-		);
+		const eligibleBadges = container.querySelectorAll(".skill-badge.eligible");
 		expect(eligibleBadges.length).toBe(1);
 	});
 
@@ -393,14 +391,10 @@ describe("SkillsTab gateway install", () => {
 		// Second attempt — should clear error, then show success
 		fireEvent.click(installBtn);
 		await waitFor(() => {
-			const success = container.querySelector(
-				".skill-install-result.success",
-			);
+			const success = container.querySelector(".skill-install-result.success");
 			expect(success).not.toBeNull();
 		});
 		// Error result should be gone
-		expect(
-			container.querySelector(".skill-install-result.error"),
-		).toBeNull();
+		expect(container.querySelector(".skill-install-result.error")).toBeNull();
 	});
 });

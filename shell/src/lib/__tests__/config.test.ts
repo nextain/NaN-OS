@@ -30,9 +30,9 @@ describe("config", () => {
 		});
 		const config = loadConfig();
 		expect(config).not.toBeNull();
-		expect(config!.provider).toBe("gemini");
-		expect(config!.model).toBe("gemini-2.5-flash");
-		expect(config!.apiKey).toBe("test-key-123");
+		expect(config?.provider).toBe("gemini");
+		expect(config?.model).toBe("gemini-2.5-flash");
+		expect(config?.apiKey).toBe("test-key-123");
 	});
 
 	it("hasApiKey returns false when not set", () => {

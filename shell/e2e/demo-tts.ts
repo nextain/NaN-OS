@@ -1,8 +1,12 @@
 import { execSync } from "node:child_process";
 import * as fs from "node:fs";
 import * as path from "node:path";
+import {
+	NARRATIONS,
+	type NarrationLang,
+	TTS_VOICES,
+} from "./demo-narrations-i18n";
 import { DEMO_SCENES } from "./demo-script";
-import { NARRATIONS, TTS_VOICES, type NarrationLang } from "./demo-narrations-i18n";
 
 /**
  * Naia OS Demo — TTS Narration Generator (multilingual)
@@ -93,9 +97,7 @@ async function synthesizeSpeech(
 
 	if (!response.ok) {
 		const errorText = await response.text();
-		throw new Error(
-			`TTS API error (${response.status}): ${errorText}`,
-		);
+		throw new Error(`TTS API error (${response.status}): ${errorText}`);
 	}
 
 	const data = (await response.json()) as { audioContent: string };
@@ -114,7 +116,9 @@ async function main() {
 	const accessToken = await getAccessToken();
 
 	console.log(`[demo-tts] Generating ${DEMO_SCENES.length} narration files...`);
-	console.log(`[demo-tts] Voice: ${voice.voiceName}, Rate: ${TTS_SPEAKING_RATE}`);
+	console.log(
+		`[demo-tts] Voice: ${voice.voiceName}, Rate: ${TTS_SPEAKING_RATE}`,
+	);
 	console.log(`[demo-tts] Output: ${OUTPUT_DIR}\n`);
 
 	for (let i = 0; i < DEMO_SCENES.length; i++) {
@@ -124,18 +128,20 @@ async function main() {
 
 		const text = narrations[scene.id];
 		if (!text) {
-			console.log(`[${i + 1}/${DEMO_SCENES.length}] SKIP (no narration for ${scene.id})`);
+			console.log(
+				`[${i + 1}/${DEMO_SCENES.length}] SKIP (no narration for ${scene.id})`,
+			);
 			continue;
 		}
 
 		if (fs.existsSync(outputPath)) {
-			console.log(`[${i + 1}/${DEMO_SCENES.length}] SKIP (exists): ${filename}`);
+			console.log(
+				`[${i + 1}/${DEMO_SCENES.length}] SKIP (exists): ${filename}`,
+			);
 			continue;
 		}
 
-		console.log(
-			`[${i + 1}/${DEMO_SCENES.length}] Generating: ${filename}`,
-		);
+		console.log(`[${i + 1}/${DEMO_SCENES.length}] Generating: ${filename}`);
 		console.log(`  "${text}"`);
 
 		let retries = 3;
@@ -155,7 +161,9 @@ async function main() {
 		await new Promise((r) => setTimeout(r, 500));
 	}
 
-	console.log(`\n[demo-tts] Done! ${DEMO_SCENES.length} files in ${OUTPUT_DIR}`);
+	console.log(
+		`\n[demo-tts] Done! ${DEMO_SCENES.length} files in ${OUTPUT_DIR}`,
+	);
 
 	// Print timing summary
 	console.log("\n[demo-tts] Scene timing summary:");
@@ -164,7 +172,9 @@ async function main() {
 		console.log(`  ${scene.id.padEnd(20)} ${scene.duration}s`);
 		totalSec += scene.duration;
 	}
-	console.log(`  ${"TOTAL".padEnd(20)} ${totalSec}s (${(totalSec / 60).toFixed(1)}min)`);
+	console.log(
+		`  ${"TOTAL".padEnd(20)} ${totalSec}s (${(totalSec / 60).toFixed(1)}min)`,
+	);
 }
 
 main().catch((err) => {

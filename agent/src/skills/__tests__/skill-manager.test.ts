@@ -11,14 +11,27 @@ function makeSkill(overrides: Partial<SkillDefinition>): SkillDefinition {
 		tier: overrides.tier ?? 0,
 		requiresGateway: overrides.requiresGateway ?? false,
 		source: overrides.source ?? "built-in",
-		execute: overrides.execute ?? (async () => ({ success: true, output: "ok" })),
+		execute:
+			overrides.execute ?? (async () => ({ success: true, output: "ok" })),
 	};
 }
 
 function buildRegistry(): SkillRegistry {
 	const registry = new SkillRegistry();
-	registry.register(makeSkill({ name: "skill_time", description: "Get current time", source: "built-in" }));
-	registry.register(makeSkill({ name: "skill_memo", description: "Save and read memos", source: "built-in" }));
+	registry.register(
+		makeSkill({
+			name: "skill_time",
+			description: "Get current time",
+			source: "built-in",
+		}),
+	);
+	registry.register(
+		makeSkill({
+			name: "skill_memo",
+			description: "Save and read memos",
+			source: "built-in",
+		}),
+	);
 	registry.register(
 		makeSkill({
 			name: "skill_code_review",
@@ -40,7 +53,9 @@ function buildRegistry(): SkillRegistry {
 	return registry;
 }
 
-function makeCtx(overrides?: Partial<SkillExecutionContext>): SkillExecutionContext {
+function makeCtx(
+	overrides?: Partial<SkillExecutionContext>,
+): SkillExecutionContext {
 	return {
 		writeLine: overrides?.writeLine ?? vi.fn(),
 		requestId: overrides?.requestId ?? "req-123",
@@ -69,10 +84,14 @@ describe("skill_skill_manager", () => {
 			const parsed = JSON.parse(result.output);
 			expect(parsed.skills).toHaveLength(4);
 
-			const codeReview = parsed.skills.find((s: { name: string }) => s.name === "skill_code_review");
+			const codeReview = parsed.skills.find(
+				(s: { name: string }) => s.name === "skill_code_review",
+			);
 			expect(codeReview.enabled).toBe(false);
 
-			const time = parsed.skills.find((s: { name: string }) => s.name === "skill_time");
+			const time = parsed.skills.find(
+				(s: { name: string }) => s.name === "skill_time",
+			);
 			expect(time.enabled).toBe(true);
 		});
 
@@ -92,7 +111,10 @@ describe("skill_skill_manager", () => {
 	describe("action: search", () => {
 		it("finds skills by name keyword", async () => {
 			const ctx = makeCtx();
-			const result = await skill.execute({ action: "search", query: "code" }, ctx);
+			const result = await skill.execute(
+				{ action: "search", query: "code" },
+				ctx,
+			);
 			expect(result.success).toBe(true);
 
 			const parsed = JSON.parse(result.output);
@@ -102,7 +124,10 @@ describe("skill_skill_manager", () => {
 
 		it("finds skills by description keyword", async () => {
 			const ctx = makeCtx();
-			const result = await skill.execute({ action: "search", query: "memo" }, ctx);
+			const result = await skill.execute(
+				{ action: "search", query: "memo" },
+				ctx,
+			);
 			expect(result.success).toBe(true);
 
 			const parsed = JSON.parse(result.output);
@@ -112,7 +137,10 @@ describe("skill_skill_manager", () => {
 
 		it("returns empty for no match", async () => {
 			const ctx = makeCtx();
-			const result = await skill.execute({ action: "search", query: "zzz_nonexistent" }, ctx);
+			const result = await skill.execute(
+				{ action: "search", query: "zzz_nonexistent" },
+				ctx,
+			);
 			expect(result.success).toBe(true);
 			const parsed = JSON.parse(result.output);
 			expect(parsed.results).toHaveLength(0);
@@ -129,7 +157,10 @@ describe("skill_skill_manager", () => {
 	describe("action: info", () => {
 		it("returns detailed info for a skill", async () => {
 			const ctx = makeCtx({ disabledSkills: ["skill_code_review"] });
-			const result = await skill.execute({ action: "info", skillName: "skill_code_review" }, ctx);
+			const result = await skill.execute(
+				{ action: "info", skillName: "skill_code_review" },
+				ctx,
+			);
 			expect(result.success).toBe(true);
 
 			const parsed = JSON.parse(result.output);
@@ -142,7 +173,10 @@ describe("skill_skill_manager", () => {
 
 		it("fails for unknown skill", async () => {
 			const ctx = makeCtx();
-			const result = await skill.execute({ action: "info", skillName: "skill_nonexistent" }, ctx);
+			const result = await skill.execute(
+				{ action: "info", skillName: "skill_nonexistent" },
+				ctx,
+			);
 			expect(result.success).toBe(false);
 			expect(result.error).toMatch(/not found/i);
 		});
@@ -253,7 +287,11 @@ describe("skill_skill_manager", () => {
 				request: vi.fn().mockResolvedValue({
 					skills: [
 						{ name: "web-search", eligible: true, missing: [] },
-						{ name: "screenshot", eligible: false, missing: ["gnome-screenshot"] },
+						{
+							name: "screenshot",
+							eligible: false,
+							missing: ["gnome-screenshot"],
+						},
 					],
 				}),
 			};
@@ -284,7 +322,10 @@ describe("skill_skill_manager", () => {
 				}),
 			};
 			const ctx = makeCtx({ gateway: mockGateway as never });
-			const result = await skill.execute({ action: "install", skillName: "web-search" }, ctx);
+			const result = await skill.execute(
+				{ action: "install", skillName: "web-search" },
+				ctx,
+			);
 			expect(result.success).toBe(true);
 
 			const parsed = JSON.parse(result.output);
@@ -301,7 +342,10 @@ describe("skill_skill_manager", () => {
 
 		it("fails when gateway not connected", async () => {
 			const ctx = makeCtx();
-			const result = await skill.execute({ action: "install", skillName: "web-search" }, ctx);
+			const result = await skill.execute(
+				{ action: "install", skillName: "web-search" },
+				ctx,
+			);
 			expect(result.success).toBe(false);
 			expect(result.error).toMatch(/gateway/i);
 		});

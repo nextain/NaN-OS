@@ -66,7 +66,7 @@ describe("sessions_spawn e2e", () => {
 		const { handleChatRequest } = await import("../index.js");
 
 		// Mock Gateway to respond to the 3-step RPC sequence
-		let rpcCalls: string[] = [];
+		const rpcCalls: string[] = [];
 		mockGatewayRequest.mockImplementation(
 			async (method: string, params: unknown) => {
 				rpcCalls.push(method);
@@ -205,9 +205,7 @@ describe("sessions_spawn e2e", () => {
 					}
 					case "sessions.transcript":
 						return {
-							messages: [
-								{ role: "assistant", content: "Result done" },
-							],
+							messages: [{ role: "assistant", content: "Result done" }],
 						};
 					default:
 						throw new Error(`Unexpected: ${method}`);
@@ -261,9 +259,7 @@ describe("sessions_spawn e2e", () => {
 		});
 
 		// All 3 tool_results should be present
-		const toolResults = outputs.filter(
-			(o: any) => o.type === "tool_result",
-		);
+		const toolResults = outputs.filter((o: any) => o.type === "tool_result");
 		expect(toolResults).toHaveLength(3);
 		expect(toolResults.every((r: any) => r.success)).toBe(true);
 

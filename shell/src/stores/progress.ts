@@ -22,4 +22,5 @@ export const useProgressStore = create<ProgressState>()((set) => ({
 }));
 
 // Expose for Playwright screenshot capture & dev tools
-if (typeof window !== "undefined") (window as any).useProgressStore = useProgressStore;
+if (typeof window !== "undefined")
+	(window as any).useProgressStore = useProgressStore;

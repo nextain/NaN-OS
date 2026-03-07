@@ -163,50 +163,59 @@ export async function directToolCall(opts: {
 		...(discordDmChannelId !== undefined && { discordDmChannelId }),
 	};
 
-	return new Promise(async (resolve, reject) => {
-		let result = { success: false, output: "" };
+	let result = { success: false, output: "" };
+	let resolvePromise!: (value: { success: boolean; output: string }) => void;
+	let rejectPromise!: (reason: unknown) => void;
 
-		const unlisten = await listen<string>("agent_response", (event) => {
-			try {
-				const raw =
-					typeof event.payload === "string"
-						? event.payload
-						: JSON.stringify(event.payload);
-				const chunk = JSON.parse(raw) as AgentResponseChunk;
-				if (chunk.requestId !== requestId) return;
+	const promise = new Promise<{ success: boolean; output: string }>(
+		(resolve, reject) => {
+			resolvePromise = resolve;
+			rejectPromise = reject;
+		},
+	);
 
-				if (chunk.type === "tool_result") {
-					result = {
-						success: chunk.success,
-						output: chunk.output,
-					};
-				} else if (chunk.type === "finish") {
-					clearTimeout(timeoutId);
-					unlisten();
-					resolve(result);
-				} else if (chunk.type === "error") {
-					clearTimeout(timeoutId);
-					unlisten();
-					reject(new Error(chunk.message));
-				}
-			} catch {
-				// Ignore malformed events
-			}
-		});
-
-		const timeoutId = setTimeout(() => {
-			unlisten();
-			reject(new Error("Tool request timeout"));
-		}, RESPONSE_TIMEOUT_MS);
-
+	const unlisten = await listen<string>("agent_response", (event) => {
 		try {
-			await invoke("send_to_agent_command", {
-				message: JSON.stringify(request),
-			});
-		} catch (err) {
-			clearTimeout(timeoutId);
-			unlisten();
-			reject(err);
+			const raw =
+				typeof event.payload === "string"
+					? event.payload
+					: JSON.stringify(event.payload);
+			const chunk = JSON.parse(raw) as AgentResponseChunk;
+			if (chunk.requestId !== requestId) return;
+
+			if (chunk.type === "tool_result") {
+				result = {
+					success: chunk.success,
+					output: chunk.output,
+				};
+			} else if (chunk.type === "finish") {
+				clearTimeout(timeoutId);
+				unlisten();
+				resolvePromise(result);
+			} else if (chunk.type === "error") {
+				clearTimeout(timeoutId);
+				unlisten();
+				rejectPromise(new Error(chunk.message));
+			}
+		} catch {
+			// Ignore malformed events
 		}
 	});
+
+	const timeoutId = setTimeout(() => {
+		unlisten();
+		rejectPromise(new Error("Tool request timeout"));
+	}, RESPONSE_TIMEOUT_MS);
+
+	try {
+		await invoke("send_to_agent_command", {
+			message: JSON.stringify(request),
+		});
+	} catch (err) {
+		clearTimeout(timeoutId);
+		unlisten();
+		rejectPromise(err);
+	}
+
+	return promise;
 }

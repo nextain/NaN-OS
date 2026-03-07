@@ -10,9 +10,7 @@ export class SkillRegistry {
 
 	register(skill: SkillDefinition): void {
 		if (!skill.name.startsWith("skill_")) {
-			throw new Error(
-				`Skill name "${skill.name}" must have skill_ prefix`,
-			);
+			throw new Error(`Skill name "${skill.name}" must have skill_ prefix`);
 		}
 		if (this.skills.has(skill.name)) {
 			throw new Error(`Skill "${skill.name}" is already registered`);

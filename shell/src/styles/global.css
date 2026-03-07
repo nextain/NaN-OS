@@ -659,10 +659,18 @@ body.resizing-row {
 	background: var(--latte);
 	transition: background 0.15s, height 0.2s;
 }
-.voice-bar:nth-child(1) { height: 6px; }
-.voice-bar:nth-child(2) { height: 12px; }
-.voice-bar:nth-child(3) { height: 9px; }
-.voice-bar:nth-child(4) { height: 5px; }
+.voice-bar:nth-child(1) {
+	height: 6px;
+}
+.voice-bar:nth-child(2) {
+	height: 12px;
+}
+.voice-bar:nth-child(3) {
+	height: 9px;
+}
+.voice-bar:nth-child(4) {
+	height: 5px;
+}
 
 .chat-voice-btn:hover:not(:disabled) .voice-bar {
 	background: var(--cream);
@@ -673,10 +681,18 @@ body.resizing-row {
 	background: #e9a820;
 	animation: voice-wave 0.8s ease-in-out infinite;
 }
-.chat-voice-btn.connecting .voice-bar:nth-child(1) { animation-delay: 0s; }
-.chat-voice-btn.connecting .voice-bar:nth-child(2) { animation-delay: 0.15s; }
-.chat-voice-btn.connecting .voice-bar:nth-child(3) { animation-delay: 0.3s; }
-.chat-voice-btn.connecting .voice-bar:nth-child(4) { animation-delay: 0.45s; }
+.chat-voice-btn.connecting .voice-bar:nth-child(1) {
+	animation-delay: 0s;
+}
+.chat-voice-btn.connecting .voice-bar:nth-child(2) {
+	animation-delay: 0.15s;
+}
+.chat-voice-btn.connecting .voice-bar:nth-child(3) {
+	animation-delay: 0.3s;
+}
+.chat-voice-btn.connecting .voice-bar:nth-child(4) {
+	animation-delay: 0.45s;
+}
 
 /* Active — green bars with wave animation */
 .chat-voice-btn.active {
@@ -686,14 +702,27 @@ body.resizing-row {
 	background: #2a9d2a;
 	animation: voice-wave 1s ease-in-out infinite;
 }
-.chat-voice-btn.active .voice-bar:nth-child(1) { animation-delay: 0s; }
-.chat-voice-btn.active .voice-bar:nth-child(2) { animation-delay: 0.2s; }
-.chat-voice-btn.active .voice-bar:nth-child(3) { animation-delay: 0.4s; }
-.chat-voice-btn.active .voice-bar:nth-child(4) { animation-delay: 0.6s; }
+.chat-voice-btn.active .voice-bar:nth-child(1) {
+	animation-delay: 0s;
+}
+.chat-voice-btn.active .voice-bar:nth-child(2) {
+	animation-delay: 0.2s;
+}
+.chat-voice-btn.active .voice-bar:nth-child(3) {
+	animation-delay: 0.4s;
+}
+.chat-voice-btn.active .voice-bar:nth-child(4) {
+	animation-delay: 0.6s;
+}
 
 @keyframes voice-wave {
-	0%, 100% { height: 4px; }
-	50% { height: 16px; }
+	0%,
+	100% {
+		height: 4px;
+	}
+	50% {
+		height: 16px;
+	}
 }
 
 .chat-voice-btn:disabled {

@@ -1,8 +1,17 @@
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import {
+	existsSync,
+	mkdirSync,
+	readFileSync,
+	rmSync,
+	writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
-import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
-import { createNaiaDiscordSkill, ensureDiscordAllowlisted } from "../built-in/naia-discord.js";
+import { join } from "node:path";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+	createNaiaDiscordSkill,
+	ensureDiscordAllowlisted,
+} from "../built-in/naia-discord.js";
 
 describe("skill_naia_discord", () => {
 	const skill = createNaiaDiscordSkill();
@@ -34,7 +43,10 @@ describe("skill_naia_discord", () => {
 			}),
 		};
 
-		const result = await skill.execute({ action: "status" }, { gateway: gateway as never });
+		const result = await skill.execute(
+			{ action: "status" },
+			{ gateway: gateway as never },
+		);
 		expect(result.success).toBe(true);
 		const parsed = JSON.parse(result.output);
 		expect(parsed).toHaveLength(1);
@@ -50,10 +62,10 @@ describe("skill_naia_discord", () => {
 		const prevTarget = process.env.DISCORD_DEFAULT_TARGET;
 		const prevChannelId = process.env.DISCORD_DEFAULT_CHANNEL_ID;
 		const prevUserId = process.env.DISCORD_DEFAULT_USER_ID;
-		delete process.env.DISCORD_BOT_TOKEN;
-		delete process.env.DISCORD_DEFAULT_TARGET;
-		delete process.env.DISCORD_DEFAULT_CHANNEL_ID;
-		delete process.env.DISCORD_DEFAULT_USER_ID;
+		process.env.DISCORD_BOT_TOKEN = undefined;
+		process.env.DISCORD_DEFAULT_TARGET = undefined;
+		process.env.DISCORD_DEFAULT_CHANNEL_ID = undefined;
+		process.env.DISCORD_DEFAULT_USER_ID = undefined;
 
 		const gateway = {
 			isConnected: () => true,
@@ -69,10 +81,12 @@ describe("skill_naia_discord", () => {
 		expect(result.error).toContain("target is required");
 
 		if (prevToken !== undefined) process.env.DISCORD_BOT_TOKEN = prevToken;
-		if (prevTarget !== undefined) process.env.DISCORD_DEFAULT_TARGET = prevTarget;
+		if (prevTarget !== undefined)
+			process.env.DISCORD_DEFAULT_TARGET = prevTarget;
 		if (prevChannelId !== undefined)
 			process.env.DISCORD_DEFAULT_CHANNEL_ID = prevChannelId;
-		if (prevUserId !== undefined) process.env.DISCORD_DEFAULT_USER_ID = prevUserId;
+		if (prevUserId !== undefined)
+			process.env.DISCORD_DEFAULT_USER_ID = prevUserId;
 	});
 
 	it("uses DISCORD_DEFAULT_USER_ID when target args are omitted", async () => {
@@ -106,16 +120,16 @@ describe("skill_naia_discord", () => {
 		});
 
 		if (prev !== undefined) process.env.DISCORD_DEFAULT_USER_ID = prev;
-		else delete process.env.DISCORD_DEFAULT_USER_ID;
+		else process.env.DISCORD_DEFAULT_USER_ID = undefined;
 	});
 
 	it("derives user target from connected numeric discord accountId", async () => {
 		const prevUser = process.env.DISCORD_DEFAULT_USER_ID;
 		const prevTarget = process.env.DISCORD_DEFAULT_TARGET;
 		const prevChannel = process.env.DISCORD_DEFAULT_CHANNEL_ID;
-		delete process.env.DISCORD_DEFAULT_USER_ID;
-		delete process.env.DISCORD_DEFAULT_TARGET;
-		delete process.env.DISCORD_DEFAULT_CHANNEL_ID;
+		process.env.DISCORD_DEFAULT_USER_ID = undefined;
+		process.env.DISCORD_DEFAULT_TARGET = undefined;
+		process.env.DISCORD_DEFAULT_CHANNEL_ID = undefined;
 
 		const gateway = {
 			isConnected: () => true,
@@ -166,17 +180,19 @@ describe("skill_naia_discord", () => {
 		);
 
 		if (prevUser !== undefined) process.env.DISCORD_DEFAULT_USER_ID = prevUser;
-		if (prevTarget !== undefined) process.env.DISCORD_DEFAULT_TARGET = prevTarget;
-		if (prevChannel !== undefined) process.env.DISCORD_DEFAULT_CHANNEL_ID = prevChannel;
+		if (prevTarget !== undefined)
+			process.env.DISCORD_DEFAULT_TARGET = prevTarget;
+		if (prevChannel !== undefined)
+			process.env.DISCORD_DEFAULT_CHANNEL_ID = prevChannel;
 	});
 
 	it("derives user target from discord userId field even when accountId is non-numeric", async () => {
 		const prevUser = process.env.DISCORD_DEFAULT_USER_ID;
 		const prevTarget = process.env.DISCORD_DEFAULT_TARGET;
 		const prevChannel = process.env.DISCORD_DEFAULT_CHANNEL_ID;
-		delete process.env.DISCORD_DEFAULT_USER_ID;
-		delete process.env.DISCORD_DEFAULT_TARGET;
-		delete process.env.DISCORD_DEFAULT_CHANNEL_ID;
+		process.env.DISCORD_DEFAULT_USER_ID = undefined;
+		process.env.DISCORD_DEFAULT_TARGET = undefined;
+		process.env.DISCORD_DEFAULT_CHANNEL_ID = undefined;
 
 		const gateway = {
 			isConnected: () => true,
@@ -228,8 +244,10 @@ describe("skill_naia_discord", () => {
 		);
 
 		if (prevUser !== undefined) process.env.DISCORD_DEFAULT_USER_ID = prevUser;
-		if (prevTarget !== undefined) process.env.DISCORD_DEFAULT_TARGET = prevTarget;
-		if (prevChannel !== undefined) process.env.DISCORD_DEFAULT_CHANNEL_ID = prevChannel;
+		if (prevTarget !== undefined)
+			process.env.DISCORD_DEFAULT_TARGET = prevTarget;
+		if (prevChannel !== undefined)
+			process.env.DISCORD_DEFAULT_CHANNEL_ID = prevChannel;
 	});
 
 	it("strips emotion tags from Discord messages before sending", async () => {
@@ -253,7 +271,9 @@ describe("skill_naia_discord", () => {
 		);
 
 		expect(result.success).toBe(true);
-		expect(gateway.request.mock.calls[0][1].message).toBe("음, 생각해볼게요...");
+		expect(gateway.request.mock.calls[0][1].message).toBe(
+			"음, 생각해볼게요...",
+		);
 	});
 
 	it("strips multiple emotion tags from message", async () => {
@@ -277,7 +297,9 @@ describe("skill_naia_discord", () => {
 		);
 
 		expect(result.success).toBe(true);
-		expect(gateway.request.mock.calls[0][1].message).toBe("좋은 아침! 오늘 날씨 좋네요");
+		expect(gateway.request.mock.calls[0][1].message).toBe(
+			"좋은 아침! 오늘 날씨 좋네요",
+		);
 	});
 
 	it("preserves emoji in Discord messages", async () => {
@@ -301,7 +323,9 @@ describe("skill_naia_discord", () => {
 		);
 
 		expect(result.success).toBe(true);
-		expect(gateway.request.mock.calls[0][1].message).toBe("좋은 아침이에요! 😊 오늘도 화이팅! ✨");
+		expect(gateway.request.mock.calls[0][1].message).toBe(
+			"좋은 아침이에요! 😊 오늘도 화이팅! ✨",
+		);
 	});
 
 	it("sends discord message through gateway send", async () => {
@@ -362,7 +386,10 @@ describe("ensureDiscordAllowlisted", () => {
 	let allowlistPath: string;
 
 	beforeEach(() => {
-		tempDir = join(tmpdir(), `naia-discord-test-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+		tempDir = join(
+			tmpdir(),
+			`naia-discord-test-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+		);
 		allowlistPath = join(tempDir, "credentials", "discord-allowFrom.json");
 	});
 

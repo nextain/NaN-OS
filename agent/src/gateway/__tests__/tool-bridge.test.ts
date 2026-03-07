@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { GatewayClient } from "../client.js";
 import { GATEWAY_TOOLS, executeTool } from "../tool-bridge.js";
-import { createMockGateway, type MockGateway } from "./mock-gateway.js";
+import { type MockGateway, createMockGateway } from "./mock-gateway.js";
 
 let mock: MockGateway;
 let client: GatewayClient;
@@ -299,9 +299,12 @@ describe("executeTool", () => {
 
 		const runtimeFailClient = new GatewayClient();
 		try {
-			await runtimeFailClient.connect(`ws://127.0.0.1:${runtimeFailMock.port}`, {
-				token: "test-token",
-			});
+			await runtimeFailClient.connect(
+				`ws://127.0.0.1:${runtimeFailMock.port}`,
+				{
+					token: "test-token",
+				},
+			);
 
 			const result = await executeTool(runtimeFailClient, "execute_command", {
 				command: "echo hello",

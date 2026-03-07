@@ -137,13 +137,19 @@ describe("buildSystemPrompt", () => {
 		});
 
 		it("skips speechStyle when locale is not Korean", () => {
-			const result = buildSystemPrompt(undefined, { locale: "en", speechStyle: "반말" });
+			const result = buildSystemPrompt(undefined, {
+				locale: "en",
+				speechStyle: "반말",
+			});
 			expect(result).not.toContain("반말");
 			expect(result).toContain("Respond in English");
 		});
 
 		it("applies speechStyle when locale is Korean", () => {
-			const result = buildSystemPrompt(undefined, { locale: "ko", speechStyle: "반말" });
+			const result = buildSystemPrompt(undefined, {
+				locale: "ko",
+				speechStyle: "반말",
+			});
 			expect(result).toContain("반말");
 			expect(result).toContain("Respond in Korean");
 		});
@@ -172,12 +178,20 @@ describe("buildSystemPrompt", () => {
 		});
 
 		it("skips honorific when locale is not Korean", () => {
-			const result = buildSystemPrompt(undefined, { locale: "en", userName: "Luke", honorific: "오빠" });
+			const result = buildSystemPrompt(undefined, {
+				locale: "en",
+				userName: "Luke",
+				honorific: "오빠",
+			});
 			expect(result).not.toContain("오빠");
 		});
 
 		it("applies honorific when locale is Korean", () => {
-			const result = buildSystemPrompt(undefined, { locale: "ko", userName: "Luke", honorific: "오빠" });
+			const result = buildSystemPrompt(undefined, {
+				locale: "ko",
+				userName: "Luke",
+				honorific: "오빠",
+			});
 			expect(result).toContain("Luke오빠");
 		});
 	});

@@ -25,9 +25,7 @@ function loadGatewayToken(): string | null {
 		try {
 			const config = JSON.parse(readFileSync(path, "utf-8"));
 			return config.gateway?.auth?.token || null;
-		} catch {
-			continue;
-		}
+		} catch {}
 	}
 	return null;
 }
@@ -109,9 +107,8 @@ describe.skipIf(!canRunE2E)("E2E: Discord DM send + history pipeline", () => {
 			}
 
 			// Check if our sent message appears in history
-			const found = parsed.messages.some(
-				(m: { content: string }) =>
-					m.content.includes(sentMarker),
+			const found = parsed.messages.some((m: { content: string }) =>
+				m.content.includes(sentMarker),
 			);
 			console.log("Sent message found in history:", found);
 			// Note: message may not appear immediately in history depending on session routing
@@ -142,13 +139,20 @@ describe.skipIf(!canRunE2E)("E2E: Discord DM send + history pipeline", () => {
 
 		// Look for Discord sessions (legacy or per-channel-peer format)
 		const dmSession = sessions.find((s) => {
-			return /^discord:(?:dm|channel):(\d+)$/.test(s.key)
-				|| /^agent:[^:]+:discord:direct:(\d+)$/.test(s.key);
+			return (
+				/^discord:(?:dm|channel):(\d+)$/.test(s.key) ||
+				/^agent:[^:]+:discord:direct:(\d+)$/.test(s.key)
+			);
 		});
 
 		if (dmSession) {
 			const id = dmSession.key.split(":").pop();
-			console.log("Discovered Discord session ID from sessions:", id, "key:", dmSession.key);
+			console.log(
+				"Discovered Discord session ID from sessions:",
+				id,
+				"key:",
+				dmSession.key,
+			);
 			expect(id).toMatch(/^\d{10,}$/);
 		} else {
 			console.log(

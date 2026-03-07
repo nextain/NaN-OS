@@ -13,10 +13,7 @@ vi.mock("@tauri-apps/plugin-store", () => {
 	};
 });
 
-import {
-	loadConfigWithSecrets,
-	saveConfig,
-} from "../config";
+import { loadConfigWithSecrets, saveConfig } from "../config";
 
 describe("loadConfigWithSecrets", () => {
 	let mockStore: {

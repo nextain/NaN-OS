@@ -45,9 +45,11 @@ describe("skill_weather", () => {
 			],
 		};
 
-		const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
-			new Response(JSON.stringify(mockResponse), { status: 200 }),
-		);
+		const fetchSpy = vi
+			.spyOn(globalThis, "fetch")
+			.mockResolvedValueOnce(
+				new Response(JSON.stringify(mockResponse), { status: 200 }),
+			);
 
 		const result = await skill.execute({ location: "Seoul" }, {});
 		expect(result.success).toBe(true);

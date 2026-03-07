@@ -1,4 +1,3 @@
-import { MODEL_PRICING } from "../../providers/cost.js";
 import {
 	getConfig,
 	getConfigSchema,
@@ -6,6 +5,7 @@ import {
 	patchConfig,
 	setConfig,
 } from "../../gateway/config-proxy.js";
+import { MODEL_PRICING } from "../../providers/cost.js";
 import type { SkillDefinition, SkillResult } from "../types.js";
 
 export function createConfigSkill(): SkillDefinition {
@@ -40,7 +40,8 @@ export function createConfigSkill(): SkillDefinition {
 				return {
 					success: false,
 					output: "",
-					error: "Gateway not connected. Config management requires a running Gateway.",
+					error:
+						"Gateway not connected. Config management requires a running Gateway.",
 				};
 			}
 
@@ -51,9 +52,7 @@ export function createConfigSkill(): SkillDefinition {
 				}
 
 				case "set": {
-					const patch = args.patch as
-						| Record<string, unknown>
-						| undefined;
+					const patch = args.patch as Record<string, unknown> | undefined;
 					if (!patch || Object.keys(patch).length === 0) {
 						return {
 							success: false,
@@ -72,27 +71,63 @@ export function createConfigSkill(): SkillDefinition {
 
 				case "models": {
 					const localModels = [
-						{ id: "gemini-3-pro-preview", name: "Gemini 3 Pro", provider: "gemini" },
-						{ id: "gemini-3-flash-preview", name: "Gemini 3 Flash", provider: "gemini" },
-						{ id: "gemini-2.5-pro", name: "Gemini 2.5 Pro", provider: "gemini" },
-						{ id: "gemini-2.5-flash", name: "Gemini 2.5 Flash", provider: "gemini" },
+						{
+							id: "gemini-3-pro-preview",
+							name: "Gemini 3 Pro",
+							provider: "gemini",
+						},
+						{
+							id: "gemini-3-flash-preview",
+							name: "Gemini 3 Flash",
+							provider: "gemini",
+						},
+						{
+							id: "gemini-2.5-pro",
+							name: "Gemini 2.5 Pro",
+							provider: "gemini",
+						},
+						{
+							id: "gemini-2.5-flash",
+							name: "Gemini 2.5 Flash",
+							provider: "gemini",
+						},
 						{ id: "gpt-5.2", name: "GPT-5.2", provider: "openai" },
 						{ id: "gpt-5.1", name: "GPT-5.1", provider: "openai" },
 						{ id: "gpt-4.1", name: "GPT-4.1", provider: "openai" },
 						{ id: "gpt-4.1-mini", name: "GPT-4.1 Mini", provider: "openai" },
 						{ id: "o4-mini", name: "o4 Mini", provider: "openai" },
-						{ id: "claude-sonnet-4-5-20250929", name: "Claude Sonnet 4.5", provider: "anthropic" },
-						{ id: "claude-sonnet-4-20250514", name: "Claude Sonnet 4", provider: "anthropic" },
-						{ id: "claude-haiku-4-5-20251001", name: "Claude Haiku 4.5", provider: "anthropic" },
-						{ id: "claude-opus-4-5-20251101", name: "Claude Opus 4.5", provider: "anthropic" },
+						{
+							id: "claude-sonnet-4-5-20250929",
+							name: "Claude Sonnet 4.5",
+							provider: "anthropic",
+						},
+						{
+							id: "claude-sonnet-4-20250514",
+							name: "Claude Sonnet 4",
+							provider: "anthropic",
+						},
+						{
+							id: "claude-haiku-4-5-20251001",
+							name: "Claude Haiku 4.5",
+							provider: "anthropic",
+						},
+						{
+							id: "claude-opus-4-5-20251101",
+							name: "Claude Opus 4.5",
+							provider: "anthropic",
+						},
 						{ id: "grok-4", name: "Grok 4", provider: "xai" },
-						{ id: "grok-4-1-fast-reasoning", name: "Grok 4.1 Fast", provider: "xai" },
+						{
+							id: "grok-4-1-fast-reasoning",
+							name: "Grok 4.1 Fast",
+							provider: "xai",
+						},
 						{ id: "grok-code-fast-1", name: "Grok Code Fast", provider: "xai" },
 						{ id: "grok-3-mini", name: "Grok 3 Mini", provider: "xai" },
 						{ id: "glm-4.7", name: "GLM 4.7", provider: "zai" },
 						{ id: "glm-4.6", name: "GLM 4.6", provider: "zai" },
 						{ id: "glm-4.5", name: "GLM 4.5", provider: "zai" },
-					].map(m => {
+					].map((m) => {
 						const price = MODEL_PRICING[m.id];
 						return price ? { ...m, price } : m;
 					});
@@ -126,7 +161,7 @@ export function createConfigSkill(): SkillDefinition {
 					// Merge, preferring gateway models if IDs conflict
 					const merged = [...gatewayModels];
 					for (const lm of [...localModels, ...ollamaModels]) {
-						if (!merged.find(m => m.id === lm.id)) {
+						if (!merged.find((m) => m.id === lm.id)) {
 							merged.push(lm);
 						}
 					}
@@ -135,8 +170,7 @@ export function createConfigSkill(): SkillDefinition {
 				}
 
 				case "patch": {
-					const patch =
-						(args.patch as Record<string, unknown>) ?? {};
+					const patch = (args.patch as Record<string, unknown>) ?? {};
 					const result = await patchConfig(gateway!, patch);
 					return { success: true, output: JSON.stringify(result) };
 				}

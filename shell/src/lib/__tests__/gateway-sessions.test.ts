@@ -85,7 +85,9 @@ describe("gateway-sessions", () => {
 			const sessions = await listGatewaySessions(50);
 
 			expect(sessions).toHaveLength(1);
-			expect(sessions[0].key).toBe("agent:main:discord:direct:865850174651498506");
+			expect(sessions[0].key).toBe(
+				"agent:main:discord:direct:865850174651498506",
+			);
 		});
 
 		it("returns empty array when Gateway unavailable", async () => {

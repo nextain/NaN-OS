@@ -12,16 +12,15 @@ vi.mock("../openclaw-sync", () => ({
 	restartGateway: vi.fn().mockResolvedValue(undefined),
 }));
 
-
 // Mock persona
 vi.mock("../persona", () => ({
 	buildSystemPrompt: vi.fn().mockReturnValue("mock-system-prompt"),
 }));
 
 import { invoke } from "@tauri-apps/api/core";
-import { loadConfig } from "../config";
 import { syncLinkedChannels } from "../channel-sync";
-import { syncToOpenClaw, restartGateway } from "../openclaw-sync";
+import { loadConfig } from "../config";
+import { restartGateway, syncToOpenClaw } from "../openclaw-sync";
 
 const mockedInvoke = invoke as unknown as ReturnType<typeof vi.fn>;
 
@@ -42,7 +41,9 @@ function seedConfig(overrides: Record<string, unknown> = {}) {
 }
 
 /** Create a mock fetch response for linked-channels API. */
-function mockLinkedChannelsResponse(channels: Array<{ type: string; userId: string }>) {
+function mockLinkedChannelsResponse(
+	channels: Array<{ type: string; userId: string }>,
+) {
 	return {
 		ok: true,
 		status: 200,
@@ -72,7 +73,10 @@ describe("syncLinkedChannels", () => {
 	});
 
 	it("skips when no lab credentials", async () => {
-		localStorage.setItem("naia-config", JSON.stringify({ provider: "gemini", model: "", apiKey: "" }));
+		localStorage.setItem(
+			"naia-config",
+			JSON.stringify({ provider: "gemini", model: "", apiKey: "" }),
+		);
 		const fetchSpy = vi.spyOn(globalThis, "fetch");
 
 		await syncLinkedChannels();
@@ -83,9 +87,9 @@ describe("syncLinkedChannels", () => {
 
 	it("skips when linked-channels returns no channels", async () => {
 		seedConfig();
-		const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
-			mockLinkedChannelsResponse([]),
-		);
+		const fetchSpy = vi
+			.spyOn(globalThis, "fetch")
+			.mockResolvedValue(mockLinkedChannelsResponse([]));
 
 		await syncLinkedChannels();
 
@@ -97,9 +101,11 @@ describe("syncLinkedChannels", () => {
 
 	it("skips when no discord channel in response", async () => {
 		seedConfig();
-		const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
-			mockLinkedChannelsResponse([{ type: "slack", userId: "U123" }]),
-		);
+		const fetchSpy = vi
+			.spyOn(globalThis, "fetch")
+			.mockResolvedValue(
+				mockLinkedChannelsResponse([{ type: "slack", userId: "U123" }]),
+			);
 
 		await syncLinkedChannels();
 
@@ -112,9 +118,13 @@ describe("syncLinkedChannels", () => {
 		const discordUserId = "865850174651498506";
 		const dmChannelId = "1234567890123456789";
 
-		const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
-			mockLinkedChannelsResponse([{ type: "discord", userId: discordUserId }]),
-		);
+		const fetchSpy = vi
+			.spyOn(globalThis, "fetch")
+			.mockResolvedValue(
+				mockLinkedChannelsResponse([
+					{ type: "discord", userId: discordUserId },
+				]),
+			);
 
 		await syncLinkedChannels();
 
@@ -142,9 +152,13 @@ describe("syncLinkedChannels", () => {
 			discordDefaultUserId: "865850174651498506",
 		});
 
-		const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
-			mockLinkedChannelsResponse([{ type: "discord", userId: "865850174651498506" }]),
-		);
+		const fetchSpy = vi
+			.spyOn(globalThis, "fetch")
+			.mockResolvedValue(
+				mockLinkedChannelsResponse([
+					{ type: "discord", userId: "865850174651498506" },
+				]),
+			);
 
 		await syncLinkedChannels();
 
@@ -161,9 +175,13 @@ describe("syncLinkedChannels", () => {
 		const discordUserId = "865850174651498506";
 		const dmChannelId = "1234567890123456789";
 
-		const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
-			mockLinkedChannelsResponse([{ type: "discord", userId: discordUserId }]),
-		);
+		const fetchSpy = vi
+			.spyOn(globalThis, "fetch")
+			.mockResolvedValue(
+				mockLinkedChannelsResponse([
+					{ type: "discord", userId: discordUserId },
+				]),
+			);
 
 		await syncLinkedChannels();
 
@@ -191,9 +209,9 @@ describe("syncLinkedChannels", () => {
 
 	it("sends correct headers to linked-channels BFF", async () => {
 		seedConfig({ naiaKey: "gw-my-key", naiaUserId: "uid-123" });
-		const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
-			mockLinkedChannelsResponse([]),
-		);
+		const fetchSpy = vi
+			.spyOn(globalThis, "fetch")
+			.mockResolvedValue(mockLinkedChannelsResponse([]));
 
 		await syncLinkedChannels();
 
@@ -214,9 +232,13 @@ describe("syncLinkedChannels", () => {
 		seedConfig();
 		mockedInvoke.mockRejectedValue(new Error("Bot token missing"));
 
-		const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
-			mockLinkedChannelsResponse([{ type: "discord", userId: "865850174651498506" }]),
-		);
+		const fetchSpy = vi
+			.spyOn(globalThis, "fetch")
+			.mockResolvedValue(
+				mockLinkedChannelsResponse([
+					{ type: "discord", userId: "865850174651498506" },
+				]),
+			);
 
 		// Should not throw
 		await syncLinkedChannels();

@@ -47,7 +47,8 @@ export async function getTtsProviders(
 	// Gateway may return { providers: [...], active: "..." } or a plain array
 	if (Array.isArray(payload)) return payload as TtsProviderInfo[];
 	const wrapped = payload as Record<string, unknown>;
-	if (Array.isArray(wrapped.providers)) return wrapped.providers as TtsProviderInfo[];
+	if (Array.isArray(wrapped.providers))
+		return wrapped.providers as TtsProviderInfo[];
 	return [];
 }
 

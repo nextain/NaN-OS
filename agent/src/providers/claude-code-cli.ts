@@ -1,8 +1,8 @@
-import { randomUUID } from "node:crypto";
 import { spawn } from "node:child_process";
-import { writeFileSync, unlinkSync, existsSync } from "node:fs";
-import { join } from "node:path";
+import { randomUUID } from "node:crypto";
+import { existsSync, unlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
+import { join } from "node:path";
 import type {
 	AgentStream,
 	ChatMessage,
@@ -159,15 +159,14 @@ export function createClaudeCodeCliProvider(model: string): LLMProvider {
 			const cliPath = process.env.CLAUDE_CODE_PATH || "claude";
 
 			// Flatpak detection: use flatpak-spawn --host to access host CLI
-			const isFlatpak = existsSync("/run/flatpak-info") || process.env.FLATPAK === "1";
+			const isFlatpak =
+				existsSync("/run/flatpak-info") || process.env.FLATPAK === "1";
 
 			// System prompt: use temp file for large prompts or Windows
 			let systemPromptFile: string | undefined;
 			const args: string[] = [];
 
-			if (
-				systemPrompt.length > SYSTEM_PROMPT_FILE_THRESHOLD
-			) {
+			if (systemPrompt.length > SYSTEM_PROMPT_FILE_THRESHOLD) {
 				systemPromptFile = join(
 					tmpdir(),
 					`claude-system-prompt-${randomUUID()}.txt`,
@@ -195,8 +194,8 @@ export function createClaudeCodeCliProvider(model: string): LLMProvider {
 			// unset CLAUDECODE to allow nested invocation from within Claude Code sessions.
 			// Ref: Careti — set sensible defaults while respecting user overrides.
 			const env = { ...process.env };
-			delete env.ANTHROPIC_API_KEY;
-			delete env.CLAUDECODE;
+			env.ANTHROPIC_API_KEY = undefined;
+			env.CLAUDECODE = undefined;
 			env.CLAUDE_CODE_MAX_OUTPUT_TOKENS =
 				process.env.CLAUDE_CODE_MAX_OUTPUT_TOKENS || DEFAULT_MAX_OUTPUT_TOKENS;
 			env.CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC =
@@ -231,9 +230,7 @@ export function createClaudeCodeCliProvider(model: string): LLMProvider {
 
 			try {
 				if (!child.stdin || !child.stdout || !child.stderr) {
-					throw new Error(
-						"Failed to start Claude Code CLI stdio pipes.",
-					);
+					throw new Error("Failed to start Claude Code CLI stdio pipes.");
 				}
 
 				child.stderr.setEncoding("utf8");
@@ -295,9 +292,10 @@ export function createClaudeCodeCliProvider(model: string): LLMProvider {
 
 				// Process remaining buffer
 				if (buffer.trim()) {
-					const msg = partialData !== null
-						? attemptParseChunk(partialData + buffer.trim())
-						: attemptParseChunk(buffer.trim());
+					const msg =
+						partialData !== null
+							? attemptParseChunk(partialData + buffer.trim())
+							: attemptParseChunk(buffer.trim());
 					if (msg) {
 						yield* processMessage(msg);
 					} else if (partialData !== null) {
@@ -307,7 +305,7 @@ export function createClaudeCodeCliProvider(model: string): LLMProvider {
 
 				// Truncated assistant recovery (Careti pattern):
 				// If output was truncated, try to salvage partial assistant message
-				if (partialData && partialData.startsWith('{"type":"assistant"')) {
+				if (partialData?.startsWith('{"type":"assistant"')) {
 					// Best effort: yield the partial data as raw text
 					yield { type: "text", text: "[Truncated response]" };
 				}
@@ -316,10 +314,7 @@ export function createClaudeCodeCliProvider(model: string): LLMProvider {
 				const timeoutPromise = new Promise<number>((resolve) =>
 					setTimeout(() => resolve(-999), CLAUDE_CODE_TIMEOUT_MS),
 				);
-				const exitCode = await Promise.race([
-					exitPromise,
-					timeoutPromise,
-				]);
+				const exitCode = await Promise.race([exitPromise, timeoutPromise]);
 
 				if (exitCode === -999) {
 					if (!child.killed) child.kill("SIGTERM");
@@ -355,8 +350,7 @@ export function createClaudeCodeCliProvider(model: string): LLMProvider {
 						);
 					}
 					throw new Error(
-						errMsg ||
-							`Claude Code CLI exited with code ${String(exitCode)}.`,
+						errMsg || `Claude Code CLI exited with code ${String(exitCode)}.`,
 					);
 				}
 
@@ -383,8 +377,7 @@ export function createClaudeCodeCliProvider(model: string): LLMProvider {
 
 			function* processMessage(msg: ClaudeCodeMessage) {
 				if (msg.type === "error") {
-					const errMsg =
-						msg.error?.message || "Claude Code CLI error";
+					const errMsg = msg.error?.message || "Claude Code CLI error";
 					throw new Error(errMsg);
 				}
 
@@ -411,10 +404,7 @@ export function createClaudeCodeCliProvider(model: string): LLMProvider {
 					}
 
 					for (const block of msg.message.content ?? []) {
-						if (
-							block.type === "text" &&
-							typeof block.text === "string"
-						) {
+						if (block.type === "text" && typeof block.text === "string") {
 							// Detect API Error in content text (enhanced: extract JSON)
 							if (
 								block.text.startsWith("API Error:") ||
@@ -425,14 +415,11 @@ export function createClaudeCodeCliProvider(model: string): LLMProvider {
 							yield { type: "text" as const, text: block.text };
 						} else if (
 							block.type === "thinking" &&
-							typeof (block as { thinking?: string })
-								.thinking === "string"
+							typeof (block as { thinking?: string }).thinking === "string"
 						) {
 							yield {
 								type: "thinking" as const,
-								text: (
-									block as { thinking: string }
-								).thinking,
+								text: (block as { thinking: string }).thinking,
 							};
 						} else if (block.type === "redacted_thinking") {
 							// Yield redacted thinking as indicator (from Careti)
@@ -448,13 +435,11 @@ export function createClaudeCodeCliProvider(model: string): LLMProvider {
 								input?: unknown;
 							};
 							const toolId =
-								typeof toolBlock.id === "string" &&
-								toolBlock.id.length > 0
+								typeof toolBlock.id === "string" && toolBlock.id.length > 0
 									? toolBlock.id
 									: randomUUID();
 							const toolName =
-								typeof toolBlock.name === "string" &&
-								toolBlock.name.length > 0
+								typeof toolBlock.name === "string" && toolBlock.name.length > 0
 									? toolBlock.name
 									: "unknown";
 							yield {
@@ -462,12 +447,8 @@ export function createClaudeCodeCliProvider(model: string): LLMProvider {
 								id: toolId,
 								name: toolName,
 								args:
-									toolBlock.input &&
-									typeof toolBlock.input === "object"
-										? (toolBlock.input as Record<
-												string,
-												unknown
-											>)
+									toolBlock.input && typeof toolBlock.input === "object"
+										? (toolBlock.input as Record<string, unknown>)
 										: {},
 							};
 						}

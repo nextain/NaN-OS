@@ -347,9 +347,9 @@ export function SkillsTab({
 									</div>
 									{installResults.has(gs.name) && (
 										<div
-											className={`skill-install-result ${installResults.get(gs.name)!.success ? "success" : "error"}`}
+											className={`skill-install-result ${installResults.get(gs.name)?.success ? "success" : "error"}`}
 										>
-											{installResults.get(gs.name)!.message}
+											{installResults.get(gs.name)?.message}
 										</div>
 									)}
 									{gs.missing.length > 0 && (

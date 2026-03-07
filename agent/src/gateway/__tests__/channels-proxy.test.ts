@@ -1,12 +1,12 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { GatewayClient } from "../client.js";
 import {
 	type ChannelAccount,
 	type ChannelsStatusResult,
 	getChannelsStatus,
 	logoutChannel,
 } from "../channels-proxy.js";
-import { createMockGateway, type MockGateway } from "./mock-gateway.js";
+import { GatewayClient } from "../client.js";
+import { type MockGateway, createMockGateway } from "./mock-gateway.js";
 
 const MOCK_STATUS_RESPONSE: ChannelsStatusResult = {
 	ts: Date.now(),
@@ -57,14 +57,10 @@ describe("channels-proxy", () => {
 						respond.ok(MOCK_STATUS_RESPONSE);
 						break;
 					case "channels.logout":
-						if (
-							params.channel === "discord" ||
-							params.channel === "slack"
-						) {
+						if (params.channel === "discord" || params.channel === "slack") {
 							respond.ok({
 								channel: params.channel,
-								accountId:
-									params.accountId || "default",
+								accountId: params.accountId || "default",
 								cleared: true,
 								loggedOut: true,
 							});
@@ -80,11 +76,7 @@ describe("channels-proxy", () => {
 				}
 			},
 			{
-				methods: [
-					"exec.bash",
-					"channels.status",
-					"channels.logout",
-				],
+				methods: ["exec.bash", "channels.status", "channels.logout"],
 			},
 		);
 
@@ -103,16 +95,10 @@ describe("channels-proxy", () => {
 		it("returns parsed channel status with accounts", async () => {
 			const result = await getChannelsStatus(client);
 
-			expect(result.channelOrder).toEqual([
-				"discord",
-				"slack",
-				"telegram",
-			]);
+			expect(result.channelOrder).toEqual(["discord", "slack", "telegram"]);
 			expect(result.channelLabels.discord).toBe("Discord");
 			expect(result.channelAccounts.discord).toHaveLength(1);
-			expect(result.channelAccounts.discord[0].accountId).toBe(
-				"discord-bot-1",
-			);
+			expect(result.channelAccounts.discord[0].accountId).toBe("discord-bot-1");
 			expect(result.channelAccounts.discord[0].connected).toBe(true);
 		});
 
@@ -142,20 +128,14 @@ describe("channels-proxy", () => {
 		});
 
 		it("logs out with specific accountId", async () => {
-			const result = await logoutChannel(
-				client,
-				"slack",
-				"slack-bot-1",
-			);
+			const result = await logoutChannel(client, "slack", "slack-bot-1");
 
 			expect(result.cleared).toBe(true);
 			expect(result.channel).toBe("slack");
 		});
 
 		it("throws error for unknown channel", async () => {
-			await expect(
-				logoutChannel(client, "unknown-channel"),
-			).rejects.toThrow();
+			await expect(logoutChannel(client, "unknown-channel")).rejects.toThrow();
 		});
 	});
 
@@ -163,9 +143,9 @@ describe("channels-proxy", () => {
 		it("throws when client is not connected", async () => {
 			const disconnected = new GatewayClient();
 
-			await expect(
-				getChannelsStatus(disconnected),
-			).rejects.toThrow(/not connected/i);
+			await expect(getChannelsStatus(disconnected)).rejects.toThrow(
+				/not connected/i,
+			);
 		});
 	});
 });

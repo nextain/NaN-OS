@@ -1,8 +1,8 @@
 import { randomUUID } from "node:crypto";
 import * as fs from "node:fs";
-import type { ToolDefinition } from "../providers/types.js";
 import { CronScheduler } from "../cron/scheduler.js";
 import { CronStore } from "../cron/store.js";
+import type { ToolDefinition } from "../providers/types.js";
 import { createAgentsSkill } from "../skills/built-in/agents.js";
 import { createApprovalsSkill } from "../skills/built-in/approvals.js";
 import { createBotmadangSkill } from "../skills/built-in/botmadang.js";
@@ -25,7 +25,7 @@ import { createVoiceWakeSkill } from "../skills/built-in/voicewake.js";
 import { createWeatherSkill } from "../skills/built-in/weather.js";
 import { bootstrapDefaultSkills, loadCustomSkills } from "../skills/loader.js";
 import { SkillRegistry } from "../skills/registry.js";
-import { GatewayRequestError, type GatewayClient } from "./client.js";
+import { type GatewayClient, GatewayRequestError } from "./client.js";
 import { executeSessionsSpawn } from "./sessions-spawn.js";
 
 export type { ToolDefinition };
@@ -74,10 +74,8 @@ cronScheduler.restoreFromStore(cronStore);
 
 // Bootstrap default skills from bundled assets (first-run only)
 const customSkillsDir = `${process.env.HOME ?? "~"}/.naia/skills`;
-const bundledSkillsDir = new URL(
-	"../../assets/default-skills",
-	import.meta.url,
-).pathname;
+const bundledSkillsDir = new URL("../../assets/default-skills", import.meta.url)
+	.pathname;
 bootstrapDefaultSkills(customSkillsDir, bundledSkillsDir);
 
 // Load custom skills from ~/.naia/skills/
@@ -105,7 +103,7 @@ export interface ToolResult {
 
 /** Escape a string for safe use inside a shell single-quoted context */
 function shellEscape(s: string): string {
-	return "'" + s.replace(/'/g, "'\\''") + "'";
+	return `'${s.replace(/'/g, "'\\''")}'`;
 }
 
 /** Validate path has no null bytes or directory traversal */
@@ -468,7 +466,9 @@ async function runShellCommand(
 			const escaped = command.replace(/'/g, "'\\''");
 			actualCommand = `flatpak-spawn --host bash -c '${escaped}'`;
 		}
-	} catch { /* ignore */ }
+	} catch {
+		/* ignore */
+	}
 
 	if (hasMethod(client, "exec.bash")) {
 		try {
@@ -662,7 +662,8 @@ export async function executeTool(
 					return {
 						success: false,
 						output: "",
-						error: "No supported web search RPC (skills.invoke/browser.request)",
+						error:
+							"No supported web search RPC (skills.invoke/browser.request)",
 					};
 				}
 
@@ -751,10 +752,7 @@ export async function executeTool(
 				}
 				return {
 					success: true,
-					output:
-						typeof result === "string"
-							? result
-							: JSON.stringify(result),
+					output: typeof result === "string" ? result : JSON.stringify(result),
 				};
 			} catch (err) {
 				return {

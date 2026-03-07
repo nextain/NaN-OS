@@ -42,9 +42,7 @@ function loadGatewayToken(): string | null {
 		try {
 			const config = JSON.parse(readFileSync(p, "utf-8"));
 			return config.gateway?.auth?.token || null;
-		} catch {
-			continue;
-		}
+		} catch {}
 	}
 	return null;
 }
@@ -125,9 +123,7 @@ describe.skipIf(!canRunE2E)("E2E: TTS Settings + Pipeline", () => {
 			const result = await client.request("tts.providers", {});
 			const providers = Array.isArray(result)
 				? result
-				: Array.isArray(
-							(result as Record<string, unknown>).providers,
-					  )
+				: Array.isArray((result as Record<string, unknown>).providers)
 					? ((result as Record<string, unknown>).providers as unknown[])
 					: Object.keys(result as Record<string, unknown>);
 			expect(providers.length).toBeGreaterThan(0);
@@ -177,10 +173,7 @@ describe.skipIf(!canRunE2E)("E2E: TTS Settings + Pipeline", () => {
 
 			// Naia provider uses Gateway TTS exclusively
 			// This test verifies that TTS works without any Google API key
-			const result = await convertTts(
-				client,
-				"나이아 OS 테스트 음성입니다.",
-			);
+			const result = await convertTts(client, "나이아 OS 테스트 음성입니다.");
 			expect(result).toBeDefined();
 			// If Gateway has a configured provider, should get audio
 			if (result.audio) {
@@ -207,8 +200,7 @@ describe.skipIf(!canRunE2E)("E2E: TTS Settings + Pipeline", () => {
 				unknown
 			>;
 			// TTS config may be under tts or voice section
-			const hasTts =
-				"tts" in config || "voice" in config || "audio" in config;
+			const hasTts = "tts" in config || "voice" in config || "audio" in config;
 			// It's fine if tts config doesn't exist (means default)
 			expect(typeof config).toBe("object");
 			if (hasTts) {
@@ -230,8 +222,7 @@ describe.skipIf(!canRunE2E)("E2E: TTS Settings + Pipeline", () => {
 				// biome-ignore lint: gateway config is dynamic
 				any
 			>;
-			const originalAuto =
-				cfgBefore?.messages?.tts?.auto ?? "off";
+			const originalAuto = cfgBefore?.messages?.tts?.auto ?? "off";
 
 			// Change
 			const target = originalAuto === "always" ? "inbound" : "always";
@@ -257,8 +248,7 @@ describe.skipIf(!canRunE2E)("E2E: TTS Settings + Pipeline", () => {
 				// biome-ignore lint: gateway config is dynamic
 				any
 			>;
-			const originalMode =
-				cfgBefore?.messages?.tts?.mode ?? "final";
+			const originalMode = cfgBefore?.messages?.tts?.mode ?? "final";
 
 			// Change
 			const target = originalMode === "all" ? "final" : "all";

@@ -79,10 +79,7 @@ describe("bulk skill migration (51 OpenClaw skills)", () => {
 		for (const name of EXPECTED_SKILLS) {
 			// Loader uses manifest name as-is with skill_ prefix (hyphens preserved)
 			const skillName = `skill_${name}`;
-			expect(
-				registry.has(skillName),
-				`Missing skill: ${skillName}`,
-			).toBe(true);
+			expect(registry.has(skillName), `Missing skill: ${skillName}`).toBe(true);
 		}
 	});
 
@@ -152,10 +149,7 @@ describe("bulk skill migration (51 OpenClaw skills)", () => {
 			const props = manifest.parameters?.properties ?? {};
 			for (const [key, val] of Object.entries(props)) {
 				const desc = (val as Record<string, unknown>).description as string;
-				expect(
-					desc,
-					`${name}.${key} has no description`,
-				).toBeDefined();
+				expect(desc, `${name}.${key} has no description`).toBeDefined();
 				expect(
 					desc?.startsWith("Input for the "),
 					`${name}.${key} still has generic description: "${desc}"`,

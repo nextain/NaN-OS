@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
-	getNotifyWebhookUrl,
 	type NotifyProvider,
+	getNotifyWebhookUrl,
 } from "../built-in/notify-config.js";
 
 // Mock fs/promises for config.json reading
@@ -39,7 +39,7 @@ describe("getNotifyWebhookUrl", () => {
 	});
 
 	it("falls back to config.json when env var is not set", async () => {
-		delete process.env.SLACK_WEBHOOK_URL;
+		process.env.SLACK_WEBHOOK_URL = undefined;
 		mockReadFile.mockResolvedValueOnce(
 			JSON.stringify({
 				notifications: {
@@ -65,7 +65,7 @@ describe("getNotifyWebhookUrl", () => {
 	});
 
 	it("returns null when neither env var nor config.json is set", async () => {
-		delete process.env.SLACK_WEBHOOK_URL;
+		process.env.SLACK_WEBHOOK_URL = undefined;
 		mockReadFile.mockRejectedValueOnce(new Error("ENOENT"));
 
 		const url = await getNotifyWebhookUrl("slack");
@@ -73,7 +73,7 @@ describe("getNotifyWebhookUrl", () => {
 	});
 
 	it("returns null when config.json has no matching provider", async () => {
-		delete process.env.DISCORD_WEBHOOK_URL;
+		process.env.DISCORD_WEBHOOK_URL = undefined;
 		mockReadFile.mockResolvedValueOnce(
 			JSON.stringify({
 				notifications: {
@@ -87,7 +87,7 @@ describe("getNotifyWebhookUrl", () => {
 	});
 
 	it("returns null when config.json is invalid JSON", async () => {
-		delete process.env.SLACK_WEBHOOK_URL;
+		process.env.SLACK_WEBHOOK_URL = undefined;
 		mockReadFile.mockResolvedValueOnce("not valid json {{{");
 
 		const url = await getNotifyWebhookUrl("slack");

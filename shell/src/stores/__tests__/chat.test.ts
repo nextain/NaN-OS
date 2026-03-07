@@ -213,8 +213,8 @@ describe("useChatStore", () => {
 
 		const msg = useChatStore.getState().messages[0];
 		expect(msg.toolCalls).toHaveLength(1);
-		expect(msg.toolCalls![0].toolCallId).toBe("tc-1");
-		expect(msg.toolCalls![0].status).toBe("success");
+		expect(msg.toolCalls?.[0].toolCallId).toBe("tc-1");
+		expect(msg.toolCalls?.[0].status).toBe("success");
 	});
 
 	it("finishStreaming omits toolCalls when empty", () => {
@@ -259,8 +259,8 @@ describe("useChatStore", () => {
 		});
 		const pa = useChatStore.getState().pendingApproval;
 		expect(pa).not.toBeNull();
-		expect(pa!.toolName).toBe("execute_command");
-		expect(pa!.tier).toBe(2);
+		expect(pa?.toolName).toBe("execute_command");
+		expect(pa?.tier).toBe(2);
 	});
 
 	it("clearPendingApproval resets to null", () => {

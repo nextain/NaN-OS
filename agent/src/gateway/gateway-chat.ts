@@ -95,7 +95,11 @@ async function handleChatStreaming(
 		const timer = setTimeout(() => {
 			if (!settled) {
 				settled = true;
-				writeLine({ type: "error", requestId, message: "Gateway chat timeout" });
+				writeLine({
+					type: "error",
+					requestId,
+					message: "Gateway chat timeout",
+				});
 				reject(new Error("Gateway chat timeout"));
 			}
 		}, CHAT_TIMEOUT_MS);
@@ -112,7 +116,11 @@ async function handleChatStreaming(
 		};
 
 		if (signal) {
-			signal.addEventListener("abort", () => settle(new Error("Chat cancelled")), { once: true });
+			signal.addEventListener(
+				"abort",
+				() => settle(new Error("Chat cancelled")),
+				{ once: true },
+			);
 		}
 
 		client.onEvent((event: GatewayEvent) => {
@@ -146,7 +154,9 @@ async function handleChatStreaming(
 				if (state === "delta" || state === "final") {
 					// Extract text from message.content[0].text
 					const msg = payload.message as Record<string, unknown> | undefined;
-					const contentArr = msg?.content as Array<Record<string, unknown>> | undefined;
+					const contentArr = msg?.content as
+						| Array<Record<string, unknown>>
+						| undefined;
 					if (contentArr && contentArr.length > 0) {
 						const text = contentArr[0].text as string | undefined;
 						if (text && !emittedText) {
@@ -196,7 +206,9 @@ async function handleChatBatch(
 			key: sessionKey,
 		})) as TranscriptPayload;
 
-		const assistantMsgs = transcript.messages.filter((m) => m.role === "assistant");
+		const assistantMsgs = transcript.messages.filter(
+			(m) => m.role === "assistant",
+		);
 		const lastMsg = assistantMsgs[assistantMsgs.length - 1]?.content ?? "";
 
 		if (lastMsg) {

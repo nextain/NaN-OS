@@ -11,8 +11,7 @@ export function createSystemStatusSkill(): SkillDefinition {
 			properties: {
 				section: {
 					type: "string",
-					description:
-						"Section to return: all (default), memory, cpu, os",
+					description: "Section to return: all (default), memory, cpu, os",
 					enum: ["all", "memory", "cpu", "os"],
 				},
 			},

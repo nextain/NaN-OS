@@ -1,5 +1,4 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { GatewayClient } from "../client.js";
 import {
 	type AgentInfo,
 	createAgent,
@@ -10,7 +9,8 @@ import {
 	setAgentFile,
 	updateAgent,
 } from "../agents-proxy.js";
-import { createMockGateway, type MockGateway } from "./mock-gateway.js";
+import { GatewayClient } from "../client.js";
+import { type MockGateway, createMockGateway } from "./mock-gateway.js";
 
 const MOCK_AGENTS: AgentInfo[] = [
 	{
@@ -60,10 +60,7 @@ describe("agents-proxy", () => {
 								updated: true,
 							});
 						} else {
-							respond.error(
-								"NOT_FOUND",
-								`Agent not found: ${params.id}`,
-							);
+							respond.error("NOT_FOUND", `Agent not found: ${params.id}`);
 						}
 						break;
 					case "agents.delete":
@@ -180,11 +177,7 @@ describe("agents-proxy", () => {
 
 	describe("getAgentFile", () => {
 		it("returns file content", async () => {
-			const result = await getAgentFile(
-				client,
-				"alpha",
-				"system-prompt.md",
-			);
+			const result = await getAgentFile(client, "alpha", "system-prompt.md");
 
 			expect(result.path).toBe("system-prompt.md");
 			expect(result.content).toContain("Naia");
@@ -209,9 +202,7 @@ describe("agents-proxy", () => {
 		it("throws when client is not connected", async () => {
 			const disconnected = new GatewayClient();
 
-			await expect(listAgents(disconnected)).rejects.toThrow(
-				/not connected/i,
-			);
+			await expect(listAgents(disconnected)).rejects.toThrow(/not connected/i);
 		});
 	});
 });

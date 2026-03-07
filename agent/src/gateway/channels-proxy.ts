@@ -73,10 +73,7 @@ export async function startWebLogin(
 		accountId?: string;
 	},
 ): Promise<{ qrCode?: string; expiresAt?: number; [key: string]: unknown }> {
-	const payload = await client.request(
-		"web.login.start",
-		options ?? {},
-	);
+	const payload = await client.request("web.login.start", options ?? {});
 	return payload as { qrCode?: string; expiresAt?: number };
 }
 
@@ -85,9 +82,6 @@ export async function waitWebLogin(
 	client: GatewayClient,
 	options?: { timeoutMs?: number; accountId?: string },
 ): Promise<{ connected: boolean; [key: string]: unknown }> {
-	const payload = await client.request(
-		"web.login.wait",
-		options ?? {},
-	);
+	const payload = await client.request("web.login.wait", options ?? {});
 	return payload as { connected: boolean };
 }

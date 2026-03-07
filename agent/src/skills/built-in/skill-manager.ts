@@ -4,7 +4,11 @@ import {
 	updateSkillConfig,
 } from "../../gateway/skills-proxy.js";
 import type { SkillRegistry } from "../registry.js";
-import type { SkillDefinition, SkillExecutionContext, SkillResult } from "../types.js";
+import type {
+	SkillDefinition,
+	SkillExecutionContext,
+	SkillResult,
+} from "../types.js";
 
 interface SkillInfo {
 	name: string;
@@ -47,7 +51,16 @@ export function createSkillManagerSkill(
 					type: "string",
 					description:
 						"Action to perform: list, search, info, enable, disable, gateway_status, install, update_config",
-					enum: ["list", "search", "info", "enable", "disable", "gateway_status", "install", "update_config"],
+					enum: [
+						"list",
+						"search",
+						"info",
+						"enable",
+						"disable",
+						"gateway_status",
+						"install",
+						"update_config",
+					],
 				},
 				query: {
 					type: "string",
@@ -61,8 +74,7 @@ export function createSkillManagerSkill(
 				},
 				enabled: {
 					type: "boolean",
-					description:
-						"Enable/disable flag (for action: update_config).",
+					description: "Enable/disable flag (for action: update_config).",
 				},
 			},
 			required: ["action"],
@@ -88,9 +100,7 @@ export function createSkillManagerSkill(
 
 			switch (action) {
 				case "list": {
-					const skills = allSkills.map((s) =>
-						toSkillInfo(s, disabledSkills),
-					);
+					const skills = allSkills.map((s) => toSkillInfo(s, disabledSkills));
 					return {
 						success: true,
 						output: JSON.stringify({ skills }),
@@ -139,9 +149,7 @@ export function createSkillManagerSkill(
 					}
 					return {
 						success: true,
-						output: JSON.stringify(
-							toSkillInfo(skill, disabledSkills),
-						),
+						output: JSON.stringify(toSkillInfo(skill, disabledSkills)),
 					};
 				}
 
@@ -219,7 +227,8 @@ export function createSkillManagerSkill(
 						return {
 							success: false,
 							output: "",
-							error: "Gateway not connected. gateway_status requires a running Gateway.",
+							error:
+								"Gateway not connected. gateway_status requires a running Gateway.",
 						};
 					}
 					const result = await getSkillsStatus(gateway);
@@ -251,7 +260,8 @@ export function createSkillManagerSkill(
 						return {
 							success: false,
 							output: "",
-							error: "Gateway not connected. install requires a running Gateway.",
+							error:
+								"Gateway not connected. install requires a running Gateway.",
 						};
 					}
 					const result = await installSkill(gateway, skillName, installId);
@@ -275,7 +285,8 @@ export function createSkillManagerSkill(
 						return {
 							success: false,
 							output: "",
-							error: "Gateway not connected. update_config requires a running Gateway.",
+							error:
+								"Gateway not connected. update_config requires a running Gateway.",
 						};
 					}
 					const patch: { enabled?: boolean } = {};

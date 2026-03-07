@@ -1,12 +1,5 @@
 import { PassThrough } from "node:stream";
-import {
-	afterEach,
-	beforeEach,
-	describe,
-	expect,
-	it,
-	vi,
-} from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { StreamChunk } from "../types.js";
 
 // Hoisted mocks
@@ -102,9 +95,9 @@ async function collectChunks(
 describe("claude-code-cli provider", () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
-		delete process.env.CLAUDE_CODE_PATH;
-		delete process.env.CLAUDE_CODE_MAX_OUTPUT_TOKENS;
-		delete process.env.MAX_THINKING_TOKENS;
+		process.env.CLAUDE_CODE_PATH = undefined;
+		process.env.CLAUDE_CODE_MAX_OUTPUT_TOKENS = undefined;
+		process.env.MAX_THINKING_TOKENS = undefined;
 	});
 
 	afterEach(() => {
@@ -119,7 +112,9 @@ describe("claude-code-cli provider", () => {
 			const { createClaudeCodeCliProvider } = await import(
 				"../claude-code-cli.js"
 			);
-			const provider = createClaudeCodeCliProvider("claude-sonnet-4-5-20250929");
+			const provider = createClaudeCodeCliProvider(
+				"claude-sonnet-4-5-20250929",
+			);
 
 			const streamPromise = collectChunks(
 				provider,
@@ -154,9 +149,7 @@ describe("claude-code-cli provider", () => {
 
 			const textChunks = chunks.filter((c) => c.type === "text");
 			expect(textChunks).toHaveLength(1);
-			expect((textChunks[0] as { text: string }).text).toBe(
-				"Hello! I'm Naia.",
-			);
+			expect((textChunks[0] as { text: string }).text).toBe("Hello! I'm Naia.");
 
 			const usageChunks = chunks.filter((c) => c.type === "usage");
 			expect(usageChunks).toHaveLength(1);
@@ -179,7 +172,9 @@ describe("claude-code-cli provider", () => {
 			const { createClaudeCodeCliProvider } = await import(
 				"../claude-code-cli.js"
 			);
-			const provider = createClaudeCodeCliProvider("claude-sonnet-4-5-20250929");
+			const provider = createClaudeCodeCliProvider(
+				"claude-sonnet-4-5-20250929",
+			);
 
 			const streamPromise = collectChunks(
 				provider,
@@ -230,7 +225,9 @@ describe("claude-code-cli provider", () => {
 			const { createClaudeCodeCliProvider } = await import(
 				"../claude-code-cli.js"
 			);
-			const provider = createClaudeCodeCliProvider("claude-sonnet-4-5-20250929");
+			const provider = createClaudeCodeCliProvider(
+				"claude-sonnet-4-5-20250929",
+			);
 
 			const streamPromise = collectChunks(
 				provider,
@@ -274,7 +271,9 @@ describe("claude-code-cli provider", () => {
 			const { createClaudeCodeCliProvider } = await import(
 				"../claude-code-cli.js"
 			);
-			const provider = createClaudeCodeCliProvider("claude-sonnet-4-5-20250929");
+			const provider = createClaudeCodeCliProvider(
+				"claude-sonnet-4-5-20250929",
+			);
 
 			const streamPromise = collectChunks(
 				provider,
@@ -319,7 +318,9 @@ describe("claude-code-cli provider", () => {
 			const { createClaudeCodeCliProvider } = await import(
 				"../claude-code-cli.js"
 			);
-			const provider = createClaudeCodeCliProvider("claude-sonnet-4-5-20250929");
+			const provider = createClaudeCodeCliProvider(
+				"claude-sonnet-4-5-20250929",
+			);
 
 			const streamPromise = collectChunks(
 				provider,
@@ -344,7 +345,9 @@ describe("claude-code-cli provider", () => {
 			const chunks = await streamPromise;
 			const thinkingChunks = chunks.filter((c) => c.type === "thinking");
 			expect(thinkingChunks).toHaveLength(1);
-			expect((thinkingChunks[0] as { text: string }).text).toBe("[Redacted thinking block]");
+			expect((thinkingChunks[0] as { text: string }).text).toBe(
+				"[Redacted thinking block]",
+			);
 			const textChunks = chunks.filter((c) => c.type === "text");
 			expect(textChunks).toHaveLength(1);
 			expect((textChunks[0] as { text: string }).text).toBe("Visible text.");
@@ -359,7 +362,9 @@ describe("claude-code-cli provider", () => {
 			const { createClaudeCodeCliProvider } = await import(
 				"../claude-code-cli.js"
 			);
-			const provider = createClaudeCodeCliProvider("claude-sonnet-4-5-20250929");
+			const provider = createClaudeCodeCliProvider(
+				"claude-sonnet-4-5-20250929",
+			);
 
 			const streamPromise = collectChunks(
 				provider,
@@ -384,7 +389,9 @@ describe("claude-code-cli provider", () => {
 			const { createClaudeCodeCliProvider } = await import(
 				"../claude-code-cli.js"
 			);
-			const provider = createClaudeCodeCliProvider("claude-sonnet-4-5-20250929");
+			const provider = createClaudeCodeCliProvider(
+				"claude-sonnet-4-5-20250929",
+			);
 
 			const streamPromise = collectChunks(
 				provider,
@@ -418,7 +425,9 @@ describe("claude-code-cli provider", () => {
 			const { createClaudeCodeCliProvider } = await import(
 				"../claude-code-cli.js"
 			);
-			const provider = createClaudeCodeCliProvider("claude-sonnet-4-5-20250929");
+			const provider = createClaudeCodeCliProvider(
+				"claude-sonnet-4-5-20250929",
+			);
 
 			const streamPromise = collectChunks(
 				provider,
@@ -438,7 +447,9 @@ describe("claude-code-cli provider", () => {
 			const { createClaudeCodeCliProvider } = await import(
 				"../claude-code-cli.js"
 			);
-			const provider = createClaudeCodeCliProvider("claude-sonnet-4-5-20250929");
+			const provider = createClaudeCodeCliProvider(
+				"claude-sonnet-4-5-20250929",
+			);
 
 			const streamPromise = collectChunks(
 				provider,
@@ -458,7 +469,9 @@ describe("claude-code-cli provider", () => {
 			const { createClaudeCodeCliProvider } = await import(
 				"../claude-code-cli.js"
 			);
-			const provider = createClaudeCodeCliProvider("claude-sonnet-4-5-20250929");
+			const provider = createClaudeCodeCliProvider(
+				"claude-sonnet-4-5-20250929",
+			);
 
 			const streamPromise = collectChunks(
 				provider,
@@ -486,7 +499,9 @@ describe("claude-code-cli provider", () => {
 			const { createClaudeCodeCliProvider } = await import(
 				"../claude-code-cli.js"
 			);
-			const provider = createClaudeCodeCliProvider("claude-sonnet-4-5-20250929");
+			const provider = createClaudeCodeCliProvider(
+				"claude-sonnet-4-5-20250929",
+			);
 
 			const longPrompt = "x".repeat(66_000); // > 64KB (65536)
 
@@ -526,7 +541,9 @@ describe("claude-code-cli provider", () => {
 			const { createClaudeCodeCliProvider } = await import(
 				"../claude-code-cli.js"
 			);
-			const provider = createClaudeCodeCliProvider("claude-sonnet-4-5-20250929");
+			const provider = createClaudeCodeCliProvider(
+				"claude-sonnet-4-5-20250929",
+			);
 
 			const streamPromise = collectChunks(
 				provider,
@@ -561,7 +578,9 @@ describe("claude-code-cli provider", () => {
 			const { createClaudeCodeCliProvider } = await import(
 				"../claude-code-cli.js"
 			);
-			const provider = createClaudeCodeCliProvider("claude-sonnet-4-5-20250929");
+			const provider = createClaudeCodeCliProvider(
+				"claude-sonnet-4-5-20250929",
+			);
 
 			const controller = new AbortController();
 
@@ -598,7 +617,9 @@ describe("claude-code-cli provider", () => {
 			const { createClaudeCodeCliProvider } = await import(
 				"../claude-code-cli.js"
 			);
-			const provider = createClaudeCodeCliProvider("claude-sonnet-4-5-20250929");
+			const provider = createClaudeCodeCliProvider(
+				"claude-sonnet-4-5-20250929",
+			);
 
 			const streamPromise = collectChunks(
 				provider,
@@ -619,15 +640,12 @@ describe("claude-code-cli provider", () => {
 
 			await streamPromise;
 
-			const spawnEnv = mockSpawn.mock.calls[0][2].env as Record<
-				string,
-				string
-			>;
+			const spawnEnv = mockSpawn.mock.calls[0][2].env as Record<string, string>;
 			expect(spawnEnv.ANTHROPIC_API_KEY).toBeUndefined();
 			expect(spawnEnv.CLAUDECODE).toBeUndefined();
 			expect(spawnEnv.CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC).toBe("1");
 
-			delete process.env.ANTHROPIC_API_KEY;
+			process.env.ANTHROPIC_API_KEY = undefined;
 		});
 	});
 
@@ -639,7 +657,9 @@ describe("claude-code-cli provider", () => {
 			const { createClaudeCodeCliProvider } = await import(
 				"../claude-code-cli.js"
 			);
-			const provider = createClaudeCodeCliProvider("claude-sonnet-4-5-20250929");
+			const provider = createClaudeCodeCliProvider(
+				"claude-sonnet-4-5-20250929",
+			);
 
 			const streamPromise = collectChunks(
 				provider,
@@ -683,7 +703,9 @@ describe("claude-code-cli provider", () => {
 			const { createClaudeCodeCliProvider } = await import(
 				"../claude-code-cli.js"
 			);
-			const provider = createClaudeCodeCliProvider("claude-sonnet-4-5-20250929");
+			const provider = createClaudeCodeCliProvider(
+				"claude-sonnet-4-5-20250929",
+			);
 
 			const streamPromise = collectChunks(
 				provider,
@@ -725,7 +747,9 @@ describe("claude-code-cli provider", () => {
 			const { createClaudeCodeCliProvider } = await import(
 				"../claude-code-cli.js"
 			);
-			const provider = createClaudeCodeCliProvider("claude-sonnet-4-5-20250929");
+			const provider = createClaudeCodeCliProvider(
+				"claude-sonnet-4-5-20250929",
+			);
 
 			const messages = [
 				{ role: "user" as const, content: "Hello" },
@@ -757,7 +781,9 @@ describe("claude-code-cli provider", () => {
 			const { createClaudeCodeCliProvider } = await import(
 				"../claude-code-cli.js"
 			);
-			const provider = createClaudeCodeCliProvider("claude-sonnet-4-5-20250929");
+			const provider = createClaudeCodeCliProvider(
+				"claude-sonnet-4-5-20250929",
+			);
 
 			const messages = [
 				{ role: "user" as const, content: "run ls" },

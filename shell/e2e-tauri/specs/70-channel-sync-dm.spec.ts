@@ -44,8 +44,7 @@ describe("70 — Channel Sync (DM Channel ID)", () => {
 							},
 						},
 					);
-					if (!res.ok)
-						return { error: `HTTP ${res.status}`, channels: [] };
+					if (!res.ok) return { error: `HTTP ${res.status}`, channels: [] };
 					const data = await res.json();
 					return { error: null, channels: data.channels || [] };
 				} catch (err) {
@@ -117,10 +116,7 @@ describe("70 — Channel Sync (DM Channel ID)", () => {
 			bffResult,
 		);
 
-		console.log(
-			"[e2e] DM channel result:",
-			JSON.stringify(dmChannelResult),
-		);
+		console.log("[e2e] DM channel result:", JSON.stringify(dmChannelResult));
 		expect(dmChannelResult.error).toBeNull();
 		expect(dmChannelResult.channelId).toMatch(/^\d{17,20}$/);
 

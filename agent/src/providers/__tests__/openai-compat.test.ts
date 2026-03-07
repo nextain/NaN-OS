@@ -85,9 +85,7 @@ describe("openai-compat", () => {
 			const result = toOpenAIMessages(messages, "sys");
 
 			expect(result[1].role).toBe("assistant");
-			const toolCalls = (
-				result[1] as { tool_calls: unknown[] }
-			).tool_calls;
+			const toolCalls = (result[1] as { tool_calls: unknown[] }).tool_calls;
 			expect(toolCalls).toHaveLength(2);
 		});
 	});

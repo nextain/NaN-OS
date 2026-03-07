@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useRef, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { AvatarCanvas } from "./components/AvatarCanvas";
 import { ChatPanel } from "./components/ChatPanel";
 import { OnboardingWizard } from "./components/OnboardingWizard";
 import { TitleBar } from "./components/TitleBar";
+import { syncLinkedChannels } from "./lib/channel-sync";
 import {
 	type PanelPosition,
 	type ThemeId,
@@ -13,7 +14,6 @@ import {
 	saveConfig,
 } from "./lib/config";
 import { persistDiscordDefaults } from "./lib/discord-auth";
-import { syncLinkedChannels } from "./lib/channel-sync";
 
 function applyTheme(theme: ThemeId) {
 	document.documentElement.setAttribute("data-theme", theme);
@@ -34,7 +34,8 @@ export function App() {
 		applyTheme(config?.theme ?? "espresso");
 		if (config?.panelPosition) setPanelPosition(config.panelPosition);
 		if (config?.panelVisible === false) setPanelVisible(false);
-		if (config?.panelSize) setPanelSize(Math.max(15, Math.min(80, config.panelSize)));
+		if (config?.panelSize)
+			setPanelSize(Math.max(15, Math.min(80, config.panelSize)));
 		if (!isOnboardingComplete()) {
 			setShowOnboarding(true);
 		}
@@ -61,41 +62,44 @@ export function App() {
 		});
 	}, []);
 
-	const onResizeStart = useCallback((e: React.PointerEvent) => {
-		e.preventDefault();
-		const rect = layoutRef.current?.getBoundingClientRect();
-		if (!rect) return;
+	const onResizeStart = useCallback(
+		(e: React.PointerEvent) => {
+			e.preventDefault();
+			const rect = layoutRef.current?.getBoundingClientRect();
+			if (!rect) return;
 
-		const isBottom = panelPosition === "bottom";
-		const isRight = panelPosition === "right";
-		document.body.classList.add(isBottom ? "resizing-row" : "resizing-col");
+			const isBottom = panelPosition === "bottom";
+			const isRight = panelPosition === "right";
+			document.body.classList.add(isBottom ? "resizing-row" : "resizing-col");
 
-		const onMove = (ev: PointerEvent) => {
-			let pct: number;
-			if (isBottom) {
-				pct = ((rect.bottom - ev.clientY) / rect.height) * 100;
-			} else if (isRight) {
-				pct = ((rect.right - ev.clientX) / rect.width) * 100;
-			} else {
-				pct = ((ev.clientX - rect.left) / rect.width) * 100;
-			}
-			setPanelSize(Math.max(15, Math.min(80, pct)));
-		};
+			const onMove = (ev: PointerEvent) => {
+				let pct: number;
+				if (isBottom) {
+					pct = ((rect.bottom - ev.clientY) / rect.height) * 100;
+				} else if (isRight) {
+					pct = ((rect.right - ev.clientX) / rect.width) * 100;
+				} else {
+					pct = ((ev.clientX - rect.left) / rect.width) * 100;
+				}
+				setPanelSize(Math.max(15, Math.min(80, pct)));
+			};
 
-		const onUp = () => {
-			document.body.classList.remove("resizing-row", "resizing-col");
-			window.removeEventListener("pointermove", onMove);
-			window.removeEventListener("pointerup", onUp);
-			setPanelSize((current) => {
-				const cfg = loadConfig();
-				if (cfg) saveConfig({ ...cfg, panelSize: current });
-				return current;
-			});
-		};
+			const onUp = () => {
+				document.body.classList.remove("resizing-row", "resizing-col");
+				window.removeEventListener("pointermove", onMove);
+				window.removeEventListener("pointerup", onUp);
+				setPanelSize((current) => {
+					const cfg = loadConfig();
+					if (cfg) saveConfig({ ...cfg, panelSize: current });
+					return current;
+				});
+			};
 
-		window.addEventListener("pointermove", onMove);
-		window.addEventListener("pointerup", onUp);
-	}, [panelPosition]);
+			window.addEventListener("pointermove", onMove);
+			window.addEventListener("pointerup", onUp);
+		},
+		[panelPosition],
+	);
 
 	// Listen for panel position changes from SettingsTab
 	useEffect(() => {
@@ -135,10 +139,7 @@ export function App() {
 	if (showOnboarding) {
 		return (
 			<div className="app-root">
-				<TitleBar
-					panelVisible={panelVisible}
-					onTogglePanel={togglePanel}
-				/>
+				<TitleBar panelVisible={panelVisible} onTogglePanel={togglePanel} />
 				<OnboardingWizard onComplete={() => setShowOnboarding(false)} />
 			</div>
 		);
@@ -146,10 +147,7 @@ export function App() {
 
 	return (
 		<div className="app-root">
-			<TitleBar
-				panelVisible={panelVisible}
-				onTogglePanel={togglePanel}
-			/>
+			<TitleBar panelVisible={panelVisible} onTogglePanel={togglePanel} />
 			<div
 				className="app-layout"
 				ref={layoutRef}

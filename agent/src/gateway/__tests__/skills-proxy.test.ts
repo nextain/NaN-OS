@@ -7,7 +7,7 @@ import {
 	installSkill,
 	updateSkillConfig,
 } from "../skills-proxy.js";
-import { createMockGateway, type MockGateway } from "./mock-gateway.js";
+import { type MockGateway, createMockGateway } from "./mock-gateway.js";
 
 const MOCK_SKILLS: SkillStatusInfo[] = [
 	{
@@ -47,10 +47,7 @@ describe("skills-proxy", () => {
 								name: params.name,
 							});
 						} else {
-							respond.error(
-								"INSTALL_FAILED",
-								`Cannot install: ${params.name}`,
-							);
+							respond.error("INSTALL_FAILED", `Cannot install: ${params.name}`);
 						}
 						break;
 					case "skills.update":

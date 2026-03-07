@@ -2,7 +2,10 @@
 import { render } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-const listeners: Record<string, ((event: { payload: any }) => void) | undefined> = {};
+const listeners: Record<
+	string,
+	((event: { payload: any }) => void) | undefined
+> = {};
 
 vi.mock("@tauri-apps/api/event", () => ({
 	listen: vi.fn((name: string, cb: (event: { payload: any }) => void) => {

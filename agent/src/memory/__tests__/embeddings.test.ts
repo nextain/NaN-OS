@@ -7,7 +7,7 @@ import {
 	it,
 	vi,
 } from "vitest";
-import { embedText, embedTexts, EMBEDDING_DIMS } from "../embeddings.js";
+import { EMBEDDING_DIMS, embedText, embedTexts } from "../embeddings.js";
 
 /**
  * Unit tests for Gemini text-embedding-004 API wrapper.
@@ -68,9 +68,7 @@ describe("embeddings", () => {
 			await embedText("test input", "my-key");
 
 			expect(globalThis.fetch).toHaveBeenCalledWith(
-				expect.stringContaining(
-					"models/text-embedding-004:batchEmbedContents",
-				),
+				expect.stringContaining("models/text-embedding-004:batchEmbedContents"),
 				expect.objectContaining({
 					method: "POST",
 					headers: { "Content-Type": "application/json" },
@@ -92,9 +90,7 @@ describe("embeddings", () => {
 		});
 
 		it("throws on empty response", async () => {
-			(
-				globalThis.fetch as ReturnType<typeof vi.fn>
-			).mockResolvedValueOnce({
+			(globalThis.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
 				ok: true,
 				json: async () => ({ embeddings: [] }),
 			});
@@ -110,10 +106,7 @@ describe("embeddings", () => {
 			const vectors = [FAKE_VECTOR, FAKE_VECTOR.map((v) => -v)];
 			mockFetchOk(vectors);
 
-			const result = await embedTexts(
-				["hello", "world"],
-				"test-api-key",
-			);
+			const result = await embedTexts(["hello", "world"], "test-api-key");
 
 			expect(result).toHaveLength(2);
 			expect(result[0]).toHaveLength(EMBEDDING_DIMS);
@@ -127,8 +120,7 @@ describe("embeddings", () => {
 			await embedTexts(["a", "b"], "key");
 
 			const callBody = JSON.parse(
-				(globalThis.fetch as ReturnType<typeof vi.fn>).mock
-					.calls[0][1].body,
+				(globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls[0][1].body,
 			);
 			expect(callBody.requests).toHaveLength(2);
 			expect(callBody.requests[0].content.parts[0].text).toBe("a");

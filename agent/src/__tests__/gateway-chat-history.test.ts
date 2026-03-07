@@ -23,9 +23,7 @@ function loadGatewayToken(): string | null {
 		try {
 			const config = JSON.parse(readFileSync(path, "utf-8"));
 			return config.gateway?.auth?.token || null;
-		} catch {
-			continue;
-		}
+		} catch {}
 	}
 	return null;
 }
@@ -37,102 +35,106 @@ const canRunE2E =
 
 let client: GatewayClient;
 
-describe.skipIf(!canRunE2E)("E2E: Gateway chat.history & sessions", () => {
-	beforeAll(async () => {
-		client = new GatewayClient();
-		await client.connect(GATEWAY_URL, {
-			token: gatewayToken!,
-			device: deviceIdentity,
-		});
-	});
-
-	afterAll(() => {
-		client?.close();
-	});
-
-	it("lists available methods related to chat/sessions", () => {
-		const methods = client.availableMethods;
-		const relevant = methods.filter(
-			(m) =>
-				m.includes("chat") ||
-				m.includes("session") ||
-				m.includes("channel") ||
-				m.includes("send"),
-		);
-		console.log("Chat/session/channel methods:", JSON.stringify(relevant, null, 2));
-
-		expect(methods).toContain("chat.history");
-		expect(methods).toContain("sessions.list");
-	});
-
-	it("lists sessions and finds Discord sessions", async () => {
-		const result = (await client.request("sessions.list", {})) as Record<
-			string,
-			unknown
-		>;
-		console.log(
-			"sessions.list response keys:",
-			Object.keys(result),
-		);
-		console.log(
-			"sessions.list full response:",
-			JSON.stringify(result, null, 2).slice(0, 3000),
-		);
-
-		// Should have sessions
-		expect(result).toBeDefined();
-	});
-
-	it("fetches chat.history for main session", async () => {
-		try {
-			const result = await client.request("chat.history", {
-				sessionKey: "agent:main:main",
+describe.skipIf(!canRunE2E)(
+	"E2E: Gateway chat.history & sessions",
+	() => {
+		beforeAll(async () => {
+			client = new GatewayClient();
+			await client.connect(GATEWAY_URL, {
+				token: gatewayToken!,
+				device: deviceIdentity,
 			});
+		});
+
+		afterAll(() => {
+			client?.close();
+		});
+
+		it("lists available methods related to chat/sessions", () => {
+			const methods = client.availableMethods;
+			const relevant = methods.filter(
+				(m) =>
+					m.includes("chat") ||
+					m.includes("session") ||
+					m.includes("channel") ||
+					m.includes("send"),
+			);
 			console.log(
-				"chat.history (main) response:",
+				"Chat/session/channel methods:",
+				JSON.stringify(relevant, null, 2),
+			);
+
+			expect(methods).toContain("chat.history");
+			expect(methods).toContain("sessions.list");
+		});
+
+		it("lists sessions and finds Discord sessions", async () => {
+			const result = (await client.request("sessions.list", {})) as Record<
+				string,
+				unknown
+			>;
+			console.log("sessions.list response keys:", Object.keys(result));
+			console.log(
+				"sessions.list full response:",
 				JSON.stringify(result, null, 2).slice(0, 3000),
 			);
+
+			// Should have sessions
 			expect(result).toBeDefined();
-		} catch (err) {
-			console.log("chat.history error:", String(err));
-		}
-	});
+		});
 
-	it("fetches chat.history for Discord channel session", async () => {
-		// Try Discord sessions — both legacy and per-channel-peer formats
-		const discordKeys = [
-			"agent:main:discord:direct:865850174651498506",
-			"agent:main:discord:channel:1474553973405913290",
-			"agent:main:discord:channel:default",
-			"agent:main:discord:channel:1275535550845292640",
-		];
-
-		for (const key of discordKeys) {
+		it("fetches chat.history for main session", async () => {
 			try {
 				const result = await client.request("chat.history", {
-					sessionKey: key,
+					sessionKey: "agent:main:main",
 				});
 				console.log(
-					`chat.history (${key}):`,
+					"chat.history (main) response:",
+					JSON.stringify(result, null, 2).slice(0, 3000),
+				);
+				expect(result).toBeDefined();
+			} catch (err) {
+				console.log("chat.history error:", String(err));
+			}
+		});
+
+		it("fetches chat.history for Discord channel session", async () => {
+			// Try Discord sessions — both legacy and per-channel-peer formats
+			const discordKeys = [
+				"agent:main:discord:direct:865850174651498506",
+				"agent:main:discord:channel:1474553973405913290",
+				"agent:main:discord:channel:default",
+				"agent:main:discord:channel:1275535550845292640",
+			];
+
+			for (const key of discordKeys) {
+				try {
+					const result = await client.request("chat.history", {
+						sessionKey: key,
+					});
+					console.log(
+						`chat.history (${key}):`,
+						JSON.stringify(result, null, 2).slice(0, 2000),
+					);
+				} catch (err) {
+					console.log(`chat.history (${key}) error:`, String(err));
+				}
+			}
+		});
+
+		it("tries sessions.preview for Discord session", async () => {
+			try {
+				const result = await client.request("sessions.preview", {
+					key: "agent:main:discord:direct:865850174651498506",
+				});
+				console.log(
+					"sessions.preview (discord):",
 					JSON.stringify(result, null, 2).slice(0, 2000),
 				);
 			} catch (err) {
-				console.log(`chat.history (${key}) error:`, String(err));
+				console.log("sessions.preview error:", String(err));
 			}
-		}
-	});
-
-	it("tries sessions.preview for Discord session", async () => {
-		try {
-			const result = await client.request("sessions.preview", {
-				key: "agent:main:discord:direct:865850174651498506",
-			});
-			console.log(
-				"sessions.preview (discord):",
-				JSON.stringify(result, null, 2).slice(0, 2000),
-			);
-		} catch (err) {
-			console.log("sessions.preview error:", String(err));
-		}
-	});
-}, 60_000);
+		});
+	},
+	60_000,
+);

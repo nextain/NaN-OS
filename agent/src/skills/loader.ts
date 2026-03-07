@@ -4,7 +4,11 @@ import * as path from "node:path";
 import type { GatewayClient } from "../gateway/client.js";
 import type { GatewayEvent } from "../gateway/types.js";
 import type { SkillRegistry } from "./registry.js";
-import type { SkillDefinition, SkillExecutionContext, SkillResult } from "./types.js";
+import type {
+	SkillDefinition,
+	SkillExecutionContext,
+	SkillResult,
+} from "./types.js";
 
 interface SkillManifest {
 	name: string;
@@ -19,7 +23,9 @@ interface SkillManifest {
 /**
  * Resolve the first paired node ID from the Gateway.
  */
-async function resolveNodeId(client: GatewayClient): Promise<string | undefined> {
+async function resolveNodeId(
+	client: GatewayClient,
+): Promise<string | undefined> {
 	if (!client.availableMethods.includes("node.list")) return undefined;
 	try {
 		const payload = await client.request("node.list", {});
@@ -74,19 +80,27 @@ async function runCommand(
 		}
 	}
 
-	return { success: false, output: "", error: "No command execution RPC available (exec.bash/node.invoke)" };
+	return {
+		success: false,
+		output: "",
+		error: "No command execution RPC available (exec.bash/node.invoke)",
+	};
 }
 
 function parseCommandPayload(payload: unknown): SkillResult {
 	const rec = payload as Record<string, unknown> | null;
 	// Unwrap nested result/payload from node.invoke
-	const inner = (rec?.result ?? rec?.payload ?? rec) as Record<string, unknown> | null;
-	const actual = (inner && typeof inner === "object") ? inner : rec;
+	const inner = (rec?.result ?? rec?.payload ?? rec) as Record<
+		string,
+		unknown
+	> | null;
+	const actual = inner && typeof inner === "object" ? inner : rec;
 	const stdout =
 		(actual && typeof actual.stdout === "string" ? actual.stdout : "") ||
 		(actual && typeof actual.output === "string" ? actual.output : "") ||
 		(typeof payload === "string" ? payload : JSON.stringify(payload));
-	const exitCode = actual && typeof actual.exitCode === "number" ? actual.exitCode : 0;
+	const exitCode =
+		actual && typeof actual.exitCode === "number" ? actual.exitCode : 0;
 	return {
 		success: exitCode === 0,
 		output: stdout,
@@ -96,10 +110,17 @@ function parseCommandPayload(payload: unknown): SkillResult {
 
 function makeCommandHandler(
 	command: string,
-): (args: Record<string, unknown>, ctx: SkillExecutionContext) => Promise<SkillResult> {
+): (
+	args: Record<string, unknown>,
+	ctx: SkillExecutionContext,
+) => Promise<SkillResult> {
 	return async (_args, ctx) => {
 		if (!ctx.gateway) {
-			return { success: false, output: "", error: "Gateway connection required for command execution" };
+			return {
+				success: false,
+				output: "",
+				error: "Gateway connection required for command execution",
+			};
 		}
 		return runCommand(ctx.gateway, command);
 	};
@@ -116,10 +137,17 @@ const AGENT_TIMEOUT_MS = 120_000;
  */
 function makeGatewayHandler(
 	gatewaySkill: string,
-): (args: Record<string, unknown>, ctx: SkillExecutionContext) => Promise<SkillResult> {
+): (
+	args: Record<string, unknown>,
+	ctx: SkillExecutionContext,
+) => Promise<SkillResult> {
 	return async (args, ctx) => {
 		if (!ctx.gateway) {
-			return { success: false, output: "", error: "Gateway connection required" };
+			return {
+				success: false,
+				output: "",
+				error: "Gateway connection required",
+			};
 		}
 
 		// Build a natural-language prompt for the Gateway agent
@@ -135,7 +163,12 @@ function makeGatewayHandler(
 		const client = ctx.gateway;
 
 		try {
-			return await delegateToGatewayAgent(client, message, sessionKey, idempotencyKey);
+			return await delegateToGatewayAgent(
+				client,
+				message,
+				sessionKey,
+				idempotencyKey,
+			);
 		} catch (err) {
 			return {
 				success: false,
@@ -166,7 +199,11 @@ async function delegateToGatewayAgent(
 		return delegateBatch(client, message, sessionKey, idempotencyKey);
 	}
 
-	return { success: false, output: "", error: "Gateway does not support chat.send or agent methods" };
+	return {
+		success: false,
+		output: "",
+		error: "Gateway does not support chat.send or agent methods",
+	};
 }
 
 async function delegateStreaming(
@@ -226,7 +263,9 @@ async function delegateStreaming(
 				const state = payload.state as string | undefined;
 				if (state === "final") {
 					const msg = payload.message as Record<string, unknown> | undefined;
-					const contentArr = msg?.content as Array<Record<string, unknown>> | undefined;
+					const contentArr = msg?.content as
+						| Array<Record<string, unknown>>
+						| undefined;
 					if (contentArr?.[0]?.text && chunks.length === 0) {
 						chunks.push(contentArr[0].text as string);
 					}
@@ -261,7 +300,9 @@ async function delegateBatch(
 			key: sessionKey,
 		})) as { messages: Array<{ role: string; content: string }> };
 
-		const assistantMsgs = transcript.messages.filter((m) => m.role === "assistant");
+		const assistantMsgs = transcript.messages.filter(
+			(m) => m.role === "assistant",
+		);
 		const lastMsg = assistantMsgs[assistantMsgs.length - 1]?.content ?? "";
 		return { success: true, output: lastMsg || "(no response)" };
 	} catch {

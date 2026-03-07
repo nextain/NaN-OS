@@ -48,7 +48,8 @@ export function createChannelsSkill(): SkillDefinition {
 				return {
 					success: false,
 					output: "",
-					error: "Gateway not connected. Channel management requires a running Gateway.",
+					error:
+						"Gateway not connected. Channel management requires a running Gateway.",
 				};
 			}
 
@@ -61,30 +62,32 @@ export function createChannelsSkill(): SkillDefinition {
 					const summary = result.channelOrder.map((id) => ({
 						id,
 						label: result.channelLabels[id] || id,
-						accounts: (result.channelAccounts[id] || []).map(
-							(a) => ({
-								// Discord bot channel reports may keep `connected` false
-								// even when the account is configured/running.
-								connected: (() => {
-									const channelState = result.channels?.[id] as
-										| { configured?: boolean; running?: boolean; lastError?: string | null }
-										| undefined;
-									if (id === "discord") {
-										const healthyDiscordBot =
-											channelState?.configured === true &&
-											channelState?.running === true &&
-											!channelState?.lastError &&
-											!a.lastError;
-										if (healthyDiscordBot) return true;
-									}
-									return a.connected ?? false;
-								})(),
-								accountId: a.accountId,
-								name: a.name,
-								enabled: a.enabled ?? false,
-								lastError: a.lastError,
-							}),
-						),
+						accounts: (result.channelAccounts[id] || []).map((a) => ({
+							// Discord bot channel reports may keep `connected` false
+							// even when the account is configured/running.
+							connected: (() => {
+								const channelState = result.channels?.[id] as
+									| {
+											configured?: boolean;
+											running?: boolean;
+											lastError?: string | null;
+									  }
+									| undefined;
+								if (id === "discord") {
+									const healthyDiscordBot =
+										channelState?.configured === true &&
+										channelState?.running === true &&
+										!channelState?.lastError &&
+										!a.lastError;
+									if (healthyDiscordBot) return true;
+								}
+								return a.connected ?? false;
+							})(),
+							accountId: a.accountId,
+							name: a.name,
+							enabled: a.enabled ?? false,
+							lastError: a.lastError,
+						})),
 					}));
 
 					return {

@@ -71,10 +71,7 @@ async function safeRequest(
 	params: Record<string, unknown>,
 ): Promise<Record<string, unknown> | null> {
 	try {
-		return (await client.request(method, params)) as Record<
-			string,
-			unknown
-		>;
+		return (await client.request(method, params)) as Record<string, unknown>;
 	} catch {
 		return null;
 	}
@@ -108,8 +105,7 @@ describe.skipIf(!canRunE2E)("E2E: Agent ↔ Gateway (live)", () => {
 				const rec = asRecord(tabsPayload);
 				const running = rec?.running === true;
 				const tabs = rec?.tabs;
-				canRunWebTools =
-					running && Array.isArray(tabs) && tabs.length > 0;
+				canRunWebTools = running && Array.isArray(tabs) && tabs.length > 0;
 			} catch {
 				canRunWebTools = false;
 			}
@@ -123,14 +119,17 @@ describe.skipIf(!canRunE2E)("E2E: Agent ↔ Gateway (live)", () => {
 				});
 				const rec = asRecord(testResult);
 				canRunShellTools =
-					typeof rec?.stdout === "string" &&
-					rec.stdout.includes("e2e-probe");
+					typeof rec?.stdout === "string" && rec.stdout.includes("e2e-probe");
 			} catch {
 				canRunShellTools = false;
 			}
 		}
 
-		if (!canRunShellTools && methods.has("node.invoke") && methods.has("node.list")) {
+		if (
+			!canRunShellTools &&
+			methods.has("node.invoke") &&
+			methods.has("node.list")
+		) {
 			try {
 				const listResult = (await client.request("node.list", {})) as {
 					nodes?: Array<{ nodeId: string; status?: string }>;
@@ -202,9 +201,7 @@ describe.skipIf(!canRunE2E)("E2E: Agent ↔ Gateway (live)", () => {
 		});
 
 		it("rejects unknown method", async () => {
-			await expect(
-				client.request("nonexistent.method", {}),
-			).rejects.toThrow();
+			await expect(client.request("nonexistent.method", {})).rejects.toThrow();
 		});
 	});
 
@@ -257,7 +254,9 @@ describe.skipIf(!canRunE2E)("E2E: Agent ↔ Gateway (live)", () => {
 				key: listResult.sessions[0].key,
 			});
 			if (!result) return;
-			expect(result.compacted !== undefined || result.key !== undefined).toBe(true);
+			expect(result.compacted !== undefined || result.key !== undefined).toBe(
+				true,
+			);
 		});
 
 		it("sessions.reset resets a session", async () => {
@@ -534,8 +533,7 @@ describe.skipIf(!canRunE2E)("E2E: Agent ↔ Gateway (live)", () => {
 		});
 
 		it("agents.create + delete lifecycle", async () => {
-			if (!hasMethod("agents.create") || !hasMethod("agents.delete"))
-				return;
+			if (!hasMethod("agents.create") || !hasMethod("agents.delete")) return;
 
 			const createResult = await safeRequest("agents.create", {
 				name: "e2e-test-agent",
@@ -555,8 +553,7 @@ describe.skipIf(!canRunE2E)("E2E: Agent ↔ Gateway (live)", () => {
 		});
 
 		it("agents.files.list returns files when agents exist", async () => {
-			if (!hasMethod("agents.files.list") || !hasMethod("agents.list"))
-				return;
+			if (!hasMethod("agents.files.list") || !hasMethod("agents.list")) return;
 			const listResult = (await client.request("agents.list", {})) as {
 				agents: Array<{ id: string }>;
 			};
@@ -1086,10 +1083,7 @@ describe.skipIf(!canRunE2E)("E2E: Agent ↔ Gateway (live)", () => {
 				}>;
 			};
 			const onlineNode = result.nodes.find(
-				(n) =>
-					n.status === "online" ||
-					n.status === "connected" ||
-					!n.status,
+				(n) => n.status === "online" || n.status === "connected" || !n.status,
 			);
 			if (onlineNode) {
 				// Verify node is actually reachable
@@ -1145,16 +1139,13 @@ describe.skipIf(!canRunE2E)("E2E: Agent ↔ Gateway (live)", () => {
 	// 18. Full E2E (opt-in via CAFE_LIVE_GATEWAY_E2E_FULL=1)
 	// ═══════════════════════════════════════
 	describe("full e2e (opt-in)", () => {
-		it.skipIf(!FULL_E2E || !canRunWebTools)(
-			"web_search runs",
-			async () => {
-				const result = await executeTool(client, "web_search", {
-					query: "Naia",
-				});
-				expect(result.success).toBe(true);
-				expect(result.output.length).toBeGreaterThan(0);
-			},
-		);
+		it.skipIf(!FULL_E2E || !canRunWebTools)("web_search runs", async () => {
+			const result = await executeTool(client, "web_search", {
+				query: "Naia",
+			});
+			expect(result.success).toBe(true);
+			expect(result.output.length).toBeGreaterThan(0);
+		});
 
 		it.skipIf(!FULL_E2E || !canRunWebTools)(
 			"browser fetches a page",

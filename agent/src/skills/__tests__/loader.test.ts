@@ -2,8 +2,8 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { SkillRegistry } from "../registry.js";
 import { loadCustomSkills } from "../loader.js";
+import { SkillRegistry } from "../registry.js";
 
 let tmpDir: string;
 

@@ -34,11 +34,11 @@ async function captureUiSnapshot(context: string): Promise<void> {
 		mkdirSync(UI_TRACE_DIR, { recursive: true });
 		appendFileSync(
 			UI_TRACE_FILE,
-			JSON.stringify({
+			`${JSON.stringify({
 				ts: new Date().toISOString(),
 				context,
 				...snapshot,
-			}) + "\n",
+			})}\n`,
 		);
 	} catch {
 		// best-effort trace; never block tests on tracing failure
@@ -92,11 +92,11 @@ function createDeltaTracer(context: string) {
 			mkdirSync(UI_TRACE_DIR, { recursive: true });
 			appendFileSync(
 				UI_TRACE_FILE,
-				JSON.stringify({
+				`${JSON.stringify({
 					ts: new Date().toISOString(),
 					context,
 					...snapshot,
-				}) + "\n",
+				})}\n`,
 			);
 		} catch {
 			// best-effort trace
@@ -387,8 +387,7 @@ export async function getLastToolName(): Promise<string> {
  */
 export async function verifyWithSubAgent(subject: string): Promise<string> {
 	await sendMessage(
-		`방금 결과를 독립적으로 검증해줘. sessions_spawn 도구를 사용해서 교차검증 후 ` +
-			`반드시 'VALID' 또는 'INVALID'로 시작해서 한 문장으로 답해. 대상: ${subject}`,
+		`방금 결과를 독립적으로 검증해줘. sessions_spawn 도구를 사용해서 교차검증 후 반드시 'VALID' 또는 'INVALID'로 시작해서 한 문장으로 답해. 대상: ${subject}`,
 	);
 	await waitForToolSuccess();
 	return getLastAssistantMessage();

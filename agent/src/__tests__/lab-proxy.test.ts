@@ -70,10 +70,7 @@ describe("Lab Proxy Provider", () => {
 			body: createSSEStream(["data: [DONE]\n\n"]),
 		});
 
-		const gen = xaiProvider.stream(
-			[{ role: "user", content: "Hi" }],
-			"sys",
-		);
+		const gen = xaiProvider.stream([{ role: "user", content: "Hi" }], "sys");
 		for await (const _ of gen) {
 			/* consume */
 		}
@@ -92,10 +89,7 @@ describe("Lab Proxy Provider", () => {
 			body: createSSEStream(["data: [DONE]\n\n"]),
 		});
 
-		const gen = claudeProvider.stream(
-			[{ role: "user", content: "Hi" }],
-			"sys",
-		);
+		const gen = claudeProvider.stream([{ role: "user", content: "Hi" }], "sys");
 		for await (const _ of gen) {
 			/* consume */
 		}
@@ -116,10 +110,7 @@ describe("Lab Proxy Provider", () => {
 			body: createSSEStream(sseData),
 		});
 
-		const gen = provider.stream(
-			[{ role: "user", content: "Hi" }],
-			"sys",
-		);
+		const gen = provider.stream([{ role: "user", content: "Hi" }], "sys");
 
 		const chunks = [];
 		for await (const chunk of gen) {
@@ -149,7 +140,10 @@ describe("Lab Proxy Provider", () => {
 				{
 					name: "read_file",
 					description: "Read file",
-					parameters: { type: "object", properties: { path: { type: "string" } } },
+					parameters: {
+						type: "object",
+						properties: { path: { type: "string" } },
+					},
 				},
 			],
 		);
@@ -227,10 +221,7 @@ describe("Lab Proxy Provider", () => {
 			body: createSSEStream(sseData),
 		});
 
-		const gen = provider.stream(
-			[{ role: "user", content: "Hi" }],
-			"sys",
-		);
+		const gen = provider.stream([{ role: "user", content: "Hi" }], "sys");
 
 		const chunks = [];
 		for await (const chunk of gen) {
@@ -252,10 +243,7 @@ describe("Lab Proxy Provider", () => {
 			text: async () => "Insufficient credits",
 		});
 
-		const gen = provider.stream(
-			[{ role: "user", content: "Hi" }],
-			"sys",
-		);
+		const gen = provider.stream([{ role: "user", content: "Hi" }], "sys");
 
 		await expect(async () => {
 			for await (const _ of gen) {
@@ -355,10 +343,7 @@ describe("buildProvider with naiaKey", () => {
 			naiaKey: "lab-key-123",
 		});
 
-		const gen = provider.stream(
-			[{ role: "user", content: "test" }],
-			"sys",
-		);
+		const gen = provider.stream([{ role: "user", content: "test" }], "sys");
 		for await (const _ of gen) {
 			/* consume */
 		}

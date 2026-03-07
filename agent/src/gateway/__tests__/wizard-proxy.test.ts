@@ -6,7 +6,7 @@ import {
 	nextWizardStep,
 	startWizard,
 } from "../wizard-proxy.js";
-import { createMockGateway, type MockGateway } from "./mock-gateway.js";
+import { type MockGateway, createMockGateway } from "./mock-gateway.js";
 
 describe("wizard-proxy", () => {
 	let mock: MockGateway;
@@ -106,9 +106,7 @@ describe("wizard-proxy", () => {
 		it("throws when client is not connected", async () => {
 			const disconnected = new GatewayClient();
 
-			await expect(startWizard(disconnected)).rejects.toThrow(
-				/not connected/i,
-			);
+			await expect(startWizard(disconnected)).rejects.toThrow(/not connected/i);
 		});
 	});
 });

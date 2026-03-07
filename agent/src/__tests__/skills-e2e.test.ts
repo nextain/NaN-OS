@@ -126,11 +126,7 @@ describe.skipIf(!canRunE2E)("E2E: Skills system (live)", () => {
 	// ── skill_system_status (Tier 0, local) ──
 	describe("skill_system_status", () => {
 		it("returns full system status", async () => {
-			const result = await executeTool(
-				client,
-				"skill_system_status",
-				{},
-			);
+			const result = await executeTool(client, "skill_system_status", {});
 			expect(result.success).toBe(true);
 			const data = JSON.parse(result.output);
 			expect(data.os).toBeDefined();
@@ -218,11 +214,7 @@ describe.skipIf(!canRunE2E)("E2E: Skills system (live)", () => {
 		});
 
 		it("requires location parameter", async () => {
-			const result = await skillRegistry.execute(
-				"skill_weather",
-				{},
-				{},
-			);
+			const result = await skillRegistry.execute("skill_weather", {}, {});
 			expect(result.success).toBe(false);
 			expect(result.error).toContain("location is required");
 		});

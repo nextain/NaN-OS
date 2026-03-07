@@ -1,4 +1,7 @@
 import {
+	type TtsAutoMode,
+	type TtsMode,
+	type TtsProvider,
 	convertTts,
 	disableTts,
 	enableTts,
@@ -7,9 +10,6 @@ import {
 	setTtsAutoMode,
 	setTtsOutputMode,
 	setTtsProvider,
-	type TtsAutoMode,
-	type TtsMode,
-	type TtsProvider,
 } from "../../gateway/tts-proxy.js";
 import { synthesizeEdgeSpeech } from "../../tts/edge-tts.js";
 import { synthesizeElevenLabsSpeech } from "../../tts/elevenlabs-tts.js";
@@ -82,7 +82,8 @@ export function createTtsSkill(): SkillDefinition {
 				return {
 					success: false,
 					output: "",
-					error: "Gateway not connected. TTS management requires a running Gateway.",
+					error:
+						"Gateway not connected. TTS management requires a running Gateway.",
 				};
 			}
 
@@ -184,18 +185,37 @@ export function createTtsSkill(): SkillDefinition {
 					if (provider === "openai") {
 						const key = args.apiKey as string;
 						if (!key) {
-							return { success: false, output: "", error: "apiKey is required for OpenAI preview" };
+							return {
+								success: false,
+								output: "",
+								error: "apiKey is required for OpenAI preview",
+							};
 						}
-						audio = await synthesizeOpenAISpeech(text, key, args.voice as string | undefined);
+						audio = await synthesizeOpenAISpeech(
+							text,
+							key,
+							args.voice as string | undefined,
+						);
 					} else if (provider === "elevenlabs") {
 						const key = args.apiKey as string;
 						if (!key) {
-							return { success: false, output: "", error: "apiKey is required for ElevenLabs preview" };
+							return {
+								success: false,
+								output: "",
+								error: "apiKey is required for ElevenLabs preview",
+							};
 						}
-						audio = await synthesizeElevenLabsSpeech(text, key, args.voice as string | undefined);
+						audio = await synthesizeElevenLabsSpeech(
+							text,
+							key,
+							args.voice as string | undefined,
+						);
 					} else {
 						// Default: Edge TTS (free)
-						audio = await synthesizeEdgeSpeech(text, args.voice as string | undefined);
+						audio = await synthesizeEdgeSpeech(
+							text,
+							args.voice as string | undefined,
+						);
 					}
 					if (audio) {
 						return {

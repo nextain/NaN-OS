@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useRef, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { loadConfig, saveConfig } from "../lib/config";
 import {
 	type DiscordMessage,
 	fetchDiscordMessages,
@@ -7,7 +8,6 @@ import {
 	isDiscordApiAvailable,
 	openDmChannel,
 } from "../lib/discord-api";
-import { loadConfig, saveConfig } from "../lib/config";
 import { discoverAndPersistDiscordDmChannel } from "../lib/gateway-sessions";
 import { t } from "../lib/i18n";
 import { Logger } from "../lib/logger";
@@ -63,7 +63,9 @@ export function ChannelsTab(_props: ChannelsTabProps) {
 
 		const dmChannelId = await resolveChannel();
 		if (!dmChannelId) {
-			setInitError("Discord DM 채널을 찾을 수 없습니다. 설정에서 Discord 연동을 확인하세요.");
+			setInitError(
+				"Discord DM 채널을 찾을 수 없습니다. 설정에서 Discord 연동을 확인하세요.",
+			);
 			setLoading(false);
 			return;
 		}
@@ -156,8 +158,12 @@ export function ChannelsTab(_props: ChannelsTabProps) {
 			<div className="dm-header">
 				<div className="dm-header-title">
 					<span>Discord DM</span>
-					<span className={`dm-header-status ${apiAvailable ? "connected" : ""}`}>
-						{apiAvailable ? t("channels.connected") : t("channels.disconnected") || "연결 안됨"}
+					<span
+						className={`dm-header-status ${apiAvailable ? "connected" : ""}`}
+					>
+						{apiAvailable
+							? t("channels.connected")
+							: t("channels.disconnected") || "연결 안됨"}
 					</span>
 				</div>
 				<button
@@ -188,9 +194,7 @@ export function ChannelsTab(_props: ChannelsTabProps) {
 								key={msg.id}
 								className={`dm-message ${isBot ? "outbound" : "inbound"}`}
 							>
-								<span className="dm-message-sender">
-									{msg.author.username}
-								</span>
+								<span className="dm-message-sender">{msg.author.username}</span>
 								<div className="dm-message-bubble">{msg.content}</div>
 								<span className="dm-message-time">
 									{formatTime(msg.timestamp)}

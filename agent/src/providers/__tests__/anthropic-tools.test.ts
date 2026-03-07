@@ -50,7 +50,10 @@ describe("anthropic provider — tool calling", () => {
 		);
 
 		const { createAnthropicProvider } = await import("../anthropic.js");
-		const provider = createAnthropicProvider("test-key", "claude-sonnet-4-5-20250929");
+		const provider = createAnthropicProvider(
+			"test-key",
+			"claude-sonnet-4-5-20250929",
+		);
 
 		for await (const _ of provider.stream([], "system", SAMPLE_TOOLS)) {
 			// consume
@@ -83,7 +86,10 @@ describe("anthropic provider — tool calling", () => {
 		);
 
 		const { createAnthropicProvider } = await import("../anthropic.js");
-		const provider = createAnthropicProvider("test-key", "claude-sonnet-4-5-20250929");
+		const provider = createAnthropicProvider(
+			"test-key",
+			"claude-sonnet-4-5-20250929",
+		);
 
 		for await (const _ of provider.stream([], "system")) {
 			// consume
@@ -135,7 +141,10 @@ describe("anthropic provider — tool calling", () => {
 		);
 
 		const { createAnthropicProvider } = await import("../anthropic.js");
-		const provider = createAnthropicProvider("test-key", "claude-sonnet-4-5-20250929");
+		const provider = createAnthropicProvider(
+			"test-key",
+			"claude-sonnet-4-5-20250929",
+		);
 
 		const chunks: StreamChunk[] = [];
 		for await (const chunk of provider.stream([], "system", SAMPLE_TOOLS)) {
@@ -203,7 +212,10 @@ describe("anthropic provider — tool calling", () => {
 		);
 
 		const { createAnthropicProvider } = await import("../anthropic.js");
-		const provider = createAnthropicProvider("test-key", "claude-sonnet-4-5-20250929");
+		const provider = createAnthropicProvider(
+			"test-key",
+			"claude-sonnet-4-5-20250929",
+		);
 
 		const chunks: StreamChunk[] = [];
 		for await (const chunk of provider.stream([], "system", SAMPLE_TOOLS)) {
@@ -241,7 +253,10 @@ describe("anthropic provider — tool calling", () => {
 		);
 
 		const { createAnthropicProvider } = await import("../anthropic.js");
-		const provider = createAnthropicProvider("test-key", "claude-sonnet-4-5-20250929");
+		const provider = createAnthropicProvider(
+			"test-key",
+			"claude-sonnet-4-5-20250929",
+		);
 
 		const messages: ChatMessage[] = [
 			{ role: "user", content: "What time is it?" },
@@ -322,7 +337,10 @@ describe("anthropic provider — tool calling", () => {
 		);
 
 		const { createAnthropicProvider } = await import("../anthropic.js");
-		const provider = createAnthropicProvider("test-key", "claude-sonnet-4-5-20250929");
+		const provider = createAnthropicProvider(
+			"test-key",
+			"claude-sonnet-4-5-20250929",
+		);
 
 		const chunks: StreamChunk[] = [];
 		for await (const chunk of provider.stream([], "system", SAMPLE_TOOLS)) {

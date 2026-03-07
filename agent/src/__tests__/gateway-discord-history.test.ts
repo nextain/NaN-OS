@@ -24,9 +24,7 @@ function loadGatewayToken(): string | null {
 		try {
 			const config = JSON.parse(readFileSync(path, "utf-8"));
 			return config.gateway?.auth?.token || null;
-		} catch {
-			continue;
-		}
+		} catch {}
 	}
 	return null;
 }
@@ -71,8 +69,14 @@ describe.skipIf(!canRunE2E)("E2E: Discord history via chat.history", () => {
 		console.log("Parsed messages count:", parsed.messages?.length ?? 0);
 
 		if (parsed.messages?.length > 0) {
-			console.log("First message:", JSON.stringify(parsed.messages[0], null, 2));
-			console.log("Last message:", JSON.stringify(parsed.messages[parsed.messages.length - 1], null, 2));
+			console.log(
+				"First message:",
+				JSON.stringify(parsed.messages[0], null, 2),
+			);
+			console.log(
+				"Last message:",
+				JSON.stringify(parsed.messages[parsed.messages.length - 1], null, 2),
+			);
 
 			// Verify message structure
 			for (const msg of parsed.messages) {

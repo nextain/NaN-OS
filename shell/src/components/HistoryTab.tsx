@@ -22,8 +22,10 @@ function formatDate(timestamp: number): string {
 function isDiscordSession(key: string): boolean {
 	// Legacy: "discord:dm:<channelId>" / "discord:channel:<channelId>"
 	// per-channel-peer dmScope: "agent:main:discord:direct:<peerId>"
-	return /^discord:(?:dm|channel):\d+$/.test(key)
-		|| /^agent:[^:]+:discord:direct:/.test(key);
+	return (
+		/^discord:(?:dm|channel):\d+$/.test(key) ||
+		/^agent:[^:]+:discord:direct:/.test(key)
+	);
 }
 
 export function HistoryTab({
@@ -118,7 +120,8 @@ export function HistoryTab({
 									{isDiscord && (
 										<span className="history-discord-badge">Discord</span>
 									)}
-									{s.label || (isDiscord ? "Discord DM" : t("history.untitled"))}
+									{s.label ||
+										(isDiscord ? "Discord DM" : t("history.untitled"))}
 									{s.key === currentSessionId && (
 										<span className="history-current-badge">
 											{t("history.current")}

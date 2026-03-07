@@ -102,7 +102,7 @@ describe("11 — Cost Dashboard", () => {
 			const raw = localStorage.getItem("naia-config");
 			if (!raw) return;
 			const config = JSON.parse(raw);
-			delete config.naiaKey;
+			config.naiaKey = undefined;
 			localStorage.setItem("naia-config", JSON.stringify(config));
 		});
 	});

@@ -32,9 +32,9 @@ describe("parseRequest", () => {
 			| import("../protocol.js").ChatRequest
 			| null;
 		expect(result).not.toBeNull();
-		expect(result!.type).toBe("chat_request");
-		expect(result!.requestId).toBe("req-1");
-		expect(result!.messages).toHaveLength(1);
+		expect(result?.type).toBe("chat_request");
+		expect(result?.requestId).toBe("req-1");
+		expect(result?.messages).toHaveLength(1);
 	});
 
 	it("returns null for invalid JSON", () => {
@@ -58,7 +58,7 @@ describe("parseRequest", () => {
 		});
 		const result = parseRequest(input);
 		expect(result).not.toBeNull();
-		expect(result!.type).toBe("cancel_stream");
+		expect(result?.type).toBe("cancel_stream");
 	});
 
 	it("parses approval_response with decision=once", () => {
@@ -70,10 +70,10 @@ describe("parseRequest", () => {
 		});
 		const result = parseRequest(input);
 		expect(result).not.toBeNull();
-		expect(result!.type).toBe("approval_response");
-		if (result!.type === "approval_response") {
-			expect(result!.toolCallId).toBe("tc-1");
-			expect(result!.decision).toBe("once");
+		expect(result?.type).toBe("approval_response");
+		if (result?.type === "approval_response") {
+			expect(result?.toolCallId).toBe("tc-1");
+			expect(result?.decision).toBe("once");
 		}
 	});
 
@@ -86,8 +86,8 @@ describe("parseRequest", () => {
 		});
 		const result = parseRequest(input);
 		expect(result).not.toBeNull();
-		if (result!.type === "approval_response") {
-			expect(result!.decision).toBe("always");
+		if (result?.type === "approval_response") {
+			expect(result?.decision).toBe("always");
 		}
 	});
 
@@ -101,9 +101,9 @@ describe("parseRequest", () => {
 		});
 		const result = parseRequest(input);
 		expect(result).not.toBeNull();
-		if (result!.type === "approval_response") {
-			expect(result!.decision).toBe("reject");
-			expect(result!.message).toBe("위험해 보여요");
+		if (result?.type === "approval_response") {
+			expect(result?.decision).toBe("reject");
+			expect(result?.message).toBe("위험해 보여요");
 		}
 	});
 });

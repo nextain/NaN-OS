@@ -1,9 +1,9 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { GatewayClient } from "../../gateway/client.js";
 import {
-	createMockGateway,
 	type MockGateway,
+	createMockGateway,
 } from "../../gateway/__tests__/mock-gateway.js";
+import { GatewayClient } from "../../gateway/client.js";
 import { createSessionsSkill } from "../built-in/sessions.js";
 import type { SkillDefinition } from "../types.js";
 
@@ -86,10 +86,7 @@ describe("skill_sessions", () => {
 	});
 
 	it("lists sessions", async () => {
-		const result = await skill.execute(
-			{ action: "list" },
-			{ gateway: client },
-		);
+		const result = await skill.execute({ action: "list" }, { gateway: client });
 		expect(result.success).toBe(true);
 		const parsed = JSON.parse(result.output);
 		expect(parsed.sessions).toHaveLength(1);

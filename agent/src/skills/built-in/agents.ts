@@ -33,8 +33,7 @@ export function createAgentsSkill(): SkillDefinition {
 				},
 				id: {
 					type: "string",
-					description:
-						"Agent ID. Required for update and delete.",
+					description: "Agent ID. Required for update and delete.",
 				},
 				agentId: {
 					type: "string",
@@ -75,7 +74,8 @@ export function createAgentsSkill(): SkillDefinition {
 				return {
 					success: false,
 					output: "",
-					error: "Gateway not connected. Agent management requires a running Gateway.",
+					error:
+						"Gateway not connected. Agent management requires a running Gateway.",
 				};
 			}
 
@@ -209,12 +209,7 @@ export function createAgentsSkill(): SkillDefinition {
 							error: "content is required for files_set action",
 						};
 					}
-					const result = await setAgentFile(
-						gateway,
-						agentId,
-						path,
-						content,
-					);
+					const result = await setAgentFile(gateway, agentId, path, content);
 					return {
 						success: true,
 						output: JSON.stringify(result),

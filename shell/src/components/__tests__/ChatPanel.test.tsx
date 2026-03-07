@@ -144,7 +144,7 @@ describe("ChatPanel", () => {
 		await new Promise((r) => setTimeout(r, 50));
 
 		expect(capturedOnChunk).not.toBeNull();
-		capturedOnChunk!({
+		capturedOnChunk?.({
 			type: "tool_use",
 			requestId: "req-1",
 			toolCallId: "tc-1",
@@ -178,7 +178,7 @@ describe("ChatPanel", () => {
 
 		await new Promise((r) => setTimeout(r, 50));
 
-		capturedOnChunk!({
+		capturedOnChunk?.({
 			type: "tool_use",
 			requestId: "req-1",
 			toolCallId: "tc-1",
@@ -186,7 +186,7 @@ describe("ChatPanel", () => {
 			args: { path: "/test.txt" },
 		});
 
-		capturedOnChunk!({
+		capturedOnChunk?.({
 			type: "tool_result",
 			requestId: "req-1",
 			toolCallId: "tc-1",
@@ -246,7 +246,7 @@ describe("ChatPanel", () => {
 		await new Promise((r) => setTimeout(r, 50));
 
 		expect(capturedOnChunk).not.toBeNull();
-		capturedOnChunk!({
+		capturedOnChunk?.({
 			type: "approval_request",
 			requestId: "req-1",
 			toolCallId: "tc-1",
@@ -258,7 +258,7 @@ describe("ChatPanel", () => {
 
 		const { pendingApproval } = useChatStore.getState();
 		expect(pendingApproval).not.toBeNull();
-		expect(pendingApproval!.toolName).toBe("execute_command");
+		expect(pendingApproval?.toolName).toBe("execute_command");
 
 		localStorage.removeItem("naia-config");
 	});
@@ -282,7 +282,7 @@ describe("ChatPanel", () => {
 		await new Promise((r) => setTimeout(r, 50));
 
 		expect(capturedOnChunk).not.toBeNull();
-		capturedOnChunk!({
+		capturedOnChunk?.({
 			type: "approval_request",
 			requestId: "req-1",
 			toolCallId: "tc-1",
@@ -339,7 +339,7 @@ describe("ChatPanel", () => {
 
 		// Simulate audio chunk via captured callback
 		expect(capturedOnChunk).not.toBeNull();
-		capturedOnChunk!({
+		capturedOnChunk?.({
 			type: "audio",
 			requestId: "req-1",
 			data: "base64audio==",

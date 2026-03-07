@@ -9,7 +9,9 @@ import { useLogsStore } from "../stores/logs";
 const LOG_POLL_INTERVAL_MS = 2000;
 
 /** Parse a Gateway log line (JSON with _meta) into display-friendly entry */
-function parseLogLine(line: string): { level: string; message: string; timestamp: string } | null {
+function parseLogLine(
+	line: string,
+): { level: string; message: string; timestamp: string } | null {
 	try {
 		const parsed = JSON.parse(line);
 		const meta = parsed._meta || {};
@@ -18,7 +20,11 @@ function parseLogLine(line: string): { level: string; message: string; timestamp
 		const timestamp = parsed.time || meta.date || new Date().toISOString();
 		return { level, message: msg, timestamp };
 	} catch {
-		return { level: "DEBUG", message: line, timestamp: new Date().toISOString() };
+		return {
+			level: "DEBUG",
+			message: line,
+			timestamp: new Date().toISOString(),
+		};
 	}
 }
 

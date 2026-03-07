@@ -4,7 +4,7 @@ import {
 	getVoiceWakeTriggers,
 	setVoiceWakeTriggers,
 } from "../voicewake-proxy.js";
-import { createMockGateway, type MockGateway } from "./mock-gateway.js";
+import { type MockGateway, createMockGateway } from "./mock-gateway.js";
 
 describe("voicewake-proxy", () => {
 	let mock: MockGateway;
@@ -20,14 +20,8 @@ describe("voicewake-proxy", () => {
 						});
 						break;
 					case "voicewake.set":
-						if (
-							!params.triggers ||
-							!Array.isArray(params.triggers)
-						) {
-							respond.error(
-								"INVALID_REQUEST",
-								"triggers must be an array",
-							);
+						if (!params.triggers || !Array.isArray(params.triggers)) {
+							respond.error("INVALID_REQUEST", "triggers must be an array");
 						} else {
 							respond.ok({ triggers: params.triggers });
 						}
@@ -62,10 +56,7 @@ describe("voicewake-proxy", () => {
 
 	describe("setVoiceWakeTriggers", () => {
 		it("sets new triggers", async () => {
-			const result = await setVoiceWakeTriggers(client, [
-				"낸",
-				"Naia",
-			]);
+			const result = await setVoiceWakeTriggers(client, ["낸", "Naia"]);
 
 			expect(result.triggers).toEqual(["낸", "Naia"]);
 		});
@@ -81,9 +72,9 @@ describe("voicewake-proxy", () => {
 		it("throws when client is not connected", async () => {
 			const disconnected = new GatewayClient();
 
-			await expect(
-				getVoiceWakeTriggers(disconnected),
-			).rejects.toThrow(/not connected/i);
+			await expect(getVoiceWakeTriggers(disconnected)).rejects.toThrow(
+				/not connected/i,
+			);
 		});
 	});
 });

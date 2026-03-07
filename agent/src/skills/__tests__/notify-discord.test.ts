@@ -51,10 +51,7 @@ describe("skill_notify_discord", () => {
 			.spyOn(globalThis, "fetch")
 			.mockResolvedValueOnce(new Response("ok", { status: 200 }));
 
-		const result = await skill.execute(
-			{ message: "Deploy complete" },
-			{},
-		);
+		const result = await skill.execute({ message: "Deploy complete" }, {});
 		expect(result.success).toBe(true);
 		expect(result.output).toContain("Discord");
 
@@ -70,7 +67,7 @@ describe("skill_notify_discord", () => {
 
 		// Verify Discord payload uses "content" not "text"
 		const call = fetchSpy.mock.calls[0];
-		const body = JSON.parse(call[1]!.body as string);
+		const body = JSON.parse(call[1]?.body as string);
 		expect(body.content).toBe("Deploy complete");
 		expect(body.text).toBeUndefined();
 	});
@@ -90,7 +87,7 @@ describe("skill_notify_discord", () => {
 		expect(result.success).toBe(true);
 
 		const call = fetchSpy.mock.calls[0];
-		const body = JSON.parse(call[1]!.body as string);
+		const body = JSON.parse(call[1]?.body as string);
 		expect(body.content).toBe("Alert!");
 		expect(body.username).toBe("NaiaBot");
 	});
@@ -128,9 +125,12 @@ describe("skill_notify_discord", () => {
 			availableMethods: ["skills.invoke"],
 		};
 
-		const result = await skill.execute({ message: "via gateway" }, {
-			gateway: mockGateway as never,
-		});
+		const result = await skill.execute(
+			{ message: "via gateway" },
+			{
+				gateway: mockGateway as never,
+			},
+		);
 		expect(result.success).toBe(true);
 		expect(mockGateway.request).toHaveBeenCalledWith("skills.invoke", {
 			skill: "discord",
@@ -152,9 +152,12 @@ describe("skill_notify_discord", () => {
 			new Response("ok", { status: 200 }),
 		);
 
-		const result = await skill.execute({ message: "fallback test" }, {
-			gateway: mockGateway as never,
-		});
+		const result = await skill.execute(
+			{ message: "fallback test" },
+			{
+				gateway: mockGateway as never,
+			},
+		);
 		expect(result.success).toBe(true);
 		expect(result.output).toContain("Discord");
 	});

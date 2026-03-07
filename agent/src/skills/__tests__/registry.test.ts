@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import type { SkillDefinition, SkillResult } from "../types.js";
 import { SkillRegistry } from "../registry.js";
+import type { SkillDefinition, SkillResult } from "../types.js";
 
 function makeSkill(overrides: Partial<SkillDefinition> = {}): SkillDefinition {
 	return {
@@ -10,7 +10,8 @@ function makeSkill(overrides: Partial<SkillDefinition> = {}): SkillDefinition {
 			type: "object",
 			properties: {},
 		},
-		execute: overrides.execute ?? (async () => ({ success: true, output: "ok" })),
+		execute:
+			overrides.execute ?? (async () => ({ success: true, output: "ok" })),
 		tier: overrides.tier ?? 0,
 		requiresGateway: overrides.requiresGateway ?? false,
 		source: overrides.source ?? "built-in",
@@ -88,7 +89,9 @@ describe("SkillRegistry", () => {
 
 	it("toToolDefinitions() filters out gateway skills when hasGateway=false", () => {
 		const registry = new SkillRegistry();
-		registry.register(makeSkill({ name: "skill_local", requiresGateway: false }));
+		registry.register(
+			makeSkill({ name: "skill_local", requiresGateway: false }),
+		);
 		registry.register(
 			makeSkill({ name: "skill_remote", requiresGateway: true }),
 		);
@@ -103,16 +106,16 @@ describe("SkillRegistry", () => {
 
 	it("register() rejects names without skill_ prefix", () => {
 		const registry = new SkillRegistry();
-		expect(() =>
-			registry.register(makeSkill({ name: "bad_name" })),
-		).toThrow(/skill_ prefix/);
+		expect(() => registry.register(makeSkill({ name: "bad_name" }))).toThrow(
+			/skill_ prefix/,
+		);
 	});
 
 	it("register() rejects duplicate names", () => {
 		const registry = new SkillRegistry();
 		registry.register(makeSkill({ name: "skill_dup" }));
-		expect(() =>
-			registry.register(makeSkill({ name: "skill_dup" })),
-		).toThrow(/already registered/);
+		expect(() => registry.register(makeSkill({ name: "skill_dup" }))).toThrow(
+			/already registered/,
+		);
 	});
 });

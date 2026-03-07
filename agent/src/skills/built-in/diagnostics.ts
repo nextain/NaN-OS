@@ -1,6 +1,6 @@
 import {
-	getHealth,
 	getGatewayStatus,
+	getHealth,
 	getUsageCost,
 	getUsageStatus,
 	pollLogsTail,
@@ -48,7 +48,8 @@ export function createDiagnosticsSkill(): SkillDefinition {
 				return {
 					success: false,
 					output: "",
-					error: "Gateway not connected. Diagnostics requires a running Gateway.",
+					error:
+						"Gateway not connected. Diagnostics requires a running Gateway.",
 				};
 			}
 
@@ -75,7 +76,8 @@ export function createDiagnosticsSkill(): SkillDefinition {
 
 				case "logs_poll":
 				case "logs_start": {
-					const cursor = typeof args.cursor === "number" ? args.cursor : undefined;
+					const cursor =
+						typeof args.cursor === "number" ? args.cursor : undefined;
 					const result = await pollLogsTail(gateway, cursor);
 					return { success: true, output: JSON.stringify(result) };
 				}

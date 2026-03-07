@@ -250,8 +250,11 @@ describe("claude-code-cli E2E (tool-loop)", () => {
 		const { handleChatRequest } = await import("../index.js");
 
 		vi.mocked(buildProvider).mockReturnValue({
+			// biome-ignore lint/correctness/useYield: intentionally throws before yielding
 			stream: async function* () {
-				throw new Error("Claude Code CLI not found. Install `claude` or set CLAUDE_CODE_PATH.");
+				throw new Error(
+					"Claude Code CLI not found. Install `claude` or set CLAUDE_CODE_PATH.",
+				);
 			},
 		});
 

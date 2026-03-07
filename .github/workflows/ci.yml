@@ -1,0 +1,329 @@
+name: CI
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+    branches: [main, dev]
+
+jobs:
+  lint-format:
+    name: Lint & Format
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: "pnpm"
+          cache-dependency-path: |
+            shell/pnpm-lock.yaml
+            agent/pnpm-lock.yaml
+
+      - name: Install shell dependencies
+        working-directory: shell
+        run: pnpm install --frozen-lockfile
+
+      - name: Install agent dependencies
+        working-directory: agent
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint & format shell
+        working-directory: shell
+        run: pnpm exec biome check .
+
+      - name: Lint & format agent
+        working-directory: agent
+        run: pnpm exec biome check .
+
+  typecheck:
+    name: Type Check
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: "pnpm"
+          cache-dependency-path: |
+            shell/pnpm-lock.yaml
+            agent/pnpm-lock.yaml
+
+      - name: Install shell dependencies
+        working-directory: shell
+        run: pnpm install --frozen-lockfile
+
+      - name: Install agent dependencies
+        working-directory: agent
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck shell
+        working-directory: shell
+        run: pnpm exec tsc --noEmit
+
+      - name: Typecheck agent
+        working-directory: agent
+        run: pnpm exec tsc --noEmit
+
+  build-test:
+    name: Build & Test
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libgtk-3-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            patchelf
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: "pnpm"
+          cache-dependency-path: |
+            shell/pnpm-lock.yaml
+            agent/pnpm-lock.yaml
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: shell/src-tauri
+
+      - name: Build & test agent
+        working-directory: agent
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm run build
+          pnpm test
+
+      - name: Build & test shell
+        working-directory: shell
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm run build
+          pnpm test
+
+      - name: Test Rust
+        run: cargo test --manifest-path shell/src-tauri/Cargo.toml
+
+  license-check:
+    name: License Headers
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check SPDX headers
+        run: |
+          EXIT_CODE=0
+
+          echo "=== Checking .agents/ YAML files for SPDX headers ==="
+          for f in $(find .agents/ -name "*.yaml" -type f); do
+            if ! head -5 "$f" | grep -q "SPDX-License-Identifier"; then
+              echo "::warning file=$f::Missing SPDX-License-Identifier header"
+              EXIT_CODE=1
+            fi
+          done
+
+          echo "=== Checking .agents/ JSON files for license/copyright fields ==="
+          for f in $(find .agents/ -name "*.json" -type f); do
+            if ! grep -q '"_license"\|"_copyright"\|"SPDX-License-Identifier"' "$f"; then
+              echo "::warning file=$f::Missing _license or _copyright field"
+              EXIT_CODE=1
+            fi
+          done
+
+          echo "=== Checking .agents/ Markdown files for SPDX headers ==="
+          for f in $(find .agents/ -name "*.md" -type f); do
+            if ! head -5 "$f" | grep -q "SPDX-License-Identifier\|CC-BY-SA"; then
+              echo "::warning file=$f::Missing SPDX or license reference"
+              EXIT_CODE=1
+            fi
+          done
+
+          if [ "$EXIT_CODE" -eq 0 ]; then
+            echo "All license headers present."
+          else
+            echo ""
+            echo "::notice::Some files are missing license headers. Please add SPDX-License-Identifier headers."
+          fi
+
+          # Warning only — do not fail the workflow
+          exit 0
+
+  context-mirror-check:
+    name: Context Mirror Sync
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check mirror file existence
+        run: |
+          EXIT_CODE=0
+
+          # Files that don't follow simple name-based mirror convention:
+          # - project-index: AI-only index (users: null in project-index.yaml)
+          # - distribution: has supplements, no direct mirror (users: null)
+          # - phase3-plan: mirror uses different name (phase3-openclaw-hybrid-plan)
+          FORWARD_EXCEPTIONS="project-index distribution phase3-plan"
+
+          # .users/ files that are supplements or renamed mirrors (no matching .agents/ source by name)
+          REVERSE_EXCEPTIONS="distribution-troubleshooting channel-sync phase3-openclaw-hybrid-plan"
+
+          is_forward_exception() {
+            local base="$1"
+            for ex in $FORWARD_EXCEPTIONS; do
+              [ "$base" = "$ex" ] && return 0
+            done
+            return 1
+          }
+
+          is_reverse_exception() {
+            local base="$1"
+            for ex in $REVERSE_EXCEPTIONS; do
+              [ "$base" = "$ex" ] && return 0
+            done
+            return 1
+          }
+
+          echo "=== Checking .agents/ ↔ .users/ mirror sync ==="
+
+          # Check: every .agents/context/*.yaml should have a .users/context/*.md counterpart
+          for f in $(find .agents/context/ -name "*.yaml" -type f); do
+            base=$(basename "$f" .yaml)
+            is_forward_exception "$base" && continue
+
+            users_file=".users/context/${base}.md"
+            users_ko_file=".users/context/ko/${base}.md"
+
+            if [ ! -f "$users_file" ]; then
+              echo "::warning file=$f::Missing English mirror: $users_file"
+              EXIT_CODE=1
+            fi
+
+            if [ ! -f "$users_ko_file" ]; then
+              echo "::warning file=$f::Missing Korean mirror: $users_ko_file"
+              EXIT_CODE=1
+            fi
+          done
+
+          # Check: every .agents/context/*.json should have a .users/context/*.md counterpart
+          for f in $(find .agents/context/ -name "*.json" -type f); do
+            base=$(basename "$f" .json)
+            is_forward_exception "$base" && continue
+
+            users_file=".users/context/${base}.md"
+            users_ko_file=".users/context/ko/${base}.md"
+
+            if [ ! -f "$users_file" ]; then
+              echo "::warning file=$f::Missing English mirror: $users_file"
+              EXIT_CODE=1
+            fi
+
+            if [ ! -f "$users_ko_file" ]; then
+              echo "::warning file=$f::Missing Korean mirror: $users_ko_file"
+              EXIT_CODE=1
+            fi
+          done
+
+          # Check: every .agents/workflows/*.yaml should have a .users/workflows/*.md counterpart
+          for f in $(find .agents/workflows/ -name "*.yaml" -type f); do
+            base=$(basename "$f" .yaml)
+            users_file=".users/workflows/${base}.md"
+
+            if [ ! -f "$users_file" ]; then
+              echo "::warning file=$f::Missing workflow mirror: $users_file"
+              EXIT_CODE=1
+            fi
+          done
+
+          # Reverse check: orphaned .users/ files without .agents/ source
+          for f in $(find .users/context/ -maxdepth 1 -name "*.md" -type f); do
+            base=$(basename "$f" .md)
+            is_reverse_exception "$base" && continue
+
+            if [ ! -f ".agents/context/${base}.yaml" ] && [ ! -f ".agents/context/${base}.json" ]; then
+              echo "::warning file=$f::Orphaned mirror — no .agents/ source found"
+              EXIT_CODE=1
+            fi
+          done
+
+          if [ "$EXIT_CODE" -eq 0 ]; then
+            echo "All mirror files in sync."
+          else
+            echo ""
+            echo "::notice::Some mirror files are missing or orphaned. See warnings above."
+          fi
+
+          # Warning only — do not fail the workflow
+          exit 0
+
+  ai-attribution-check:
+    name: AI Attribution
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check AI disclosure in PR
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          PR_BODY=$(gh api repos/${{ github.repository }}/pulls/${PR_NUMBER} --jq '.body // ""')
+
+          echo "=== Checking AI attribution in PR #${PR_NUMBER} ==="
+
+          # Check for AI disclosure checkbox (any of the three options checked)
+          if echo "$PR_BODY" | grep -qE '\[x\]\s*(AI-assisted|Fully AI-generated|No AI used)'; then
+            echo "AI disclosure found."
+          else
+            echo "::warning::No AI disclosure checkbox checked in PR description. Please check one of: AI-assisted, Fully AI-generated, or No AI used."
+          fi
+
+          # Check for Assisted-by trailer in commits
+          COMMITS=$(gh api repos/${{ github.repository }}/pulls/${PR_NUMBER}/commits --jq '.[].commit.message')
+          if echo "$COMMITS" | grep -qi 'Assisted-by:\|Co-Authored-By:.*anthropic\|Co-Authored-By:.*openai\|Co-Authored-By:.*google'; then
+            echo "AI attribution found in commit messages."
+          else
+            echo "::notice::Consider adding 'Assisted-by: {tool}' trailer to commit messages if AI tools were used."
+          fi
+
+          # Warning only — do not fail the workflow
+          exit 0

@@ -169,9 +169,7 @@ describe("openai provider — tool calling", () => {
 			{
 				role: "assistant" as const,
 				content: "",
-				toolCalls: [
-					{ id: "c1", name: "skill_time", args: { format: "iso" } },
-				],
+				toolCalls: [{ id: "c1", name: "skill_time", args: { format: "iso" } }],
 			},
 			{
 				role: "tool" as const,

@@ -11,7 +11,7 @@ import {
 	getTtsStatus,
 	setTtsProvider,
 } from "../tts-proxy.js";
-import { createMockGateway, type MockGateway } from "./mock-gateway.js";
+import { type MockGateway, createMockGateway } from "./mock-gateway.js";
 
 const MOCK_STATUS: TtsStatusResult = {
 	enabled: true,

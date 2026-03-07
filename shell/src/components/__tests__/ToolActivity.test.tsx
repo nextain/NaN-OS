@@ -76,7 +76,7 @@ describe("ToolActivity", () => {
 		// Expand
 		fireEvent.click(screen.getByText(/파일 읽기|Read File/));
 		const body = screen.getByText(/^a+…$/);
-		expect(body.textContent!.length).toBeLessThanOrEqual(504); // 500 + "…" + possible whitespace
+		expect(body.textContent?.length).toBeLessThanOrEqual(504); // 500 + "…" + possible whitespace
 	});
 
 	it("maps execute_command tool name", () => {

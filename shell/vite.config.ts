@@ -6,7 +6,12 @@ const host = process.env.TAURI_DEV_HOST;
 export default defineConfig(async () => ({
 	plugins: [react()],
 	test: {
-		exclude: ["e2e/**", "e2e-tauri/**", "node_modules/**", "src-tauri/target/**"],
+		exclude: [
+			"e2e/**",
+			"e2e-tauri/**",
+			"node_modules/**",
+			"src-tauri/target/**",
+		],
 	},
 	clearScreen: false,
 	server: {

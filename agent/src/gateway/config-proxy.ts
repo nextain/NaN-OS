@@ -53,11 +53,7 @@ export async function patchConfig(
 	const params: Record<string, unknown> = {
 		raw: JSON.stringify(patch),
 	};
-	if (
-		snapshot?.exists &&
-		typeof snapshot.hash === "string" &&
-		snapshot.hash
-	) {
+	if (snapshot?.exists && typeof snapshot.hash === "string" && snapshot.hash) {
 		params.baseHash = snapshot.hash;
 	}
 	const payload = await client.request("config.patch", params);

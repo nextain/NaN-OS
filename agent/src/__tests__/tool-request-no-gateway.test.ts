@@ -8,8 +8,8 @@
  *   pnpm exec vitest run src/__tests__/tool-request-no-gateway.test.ts
  */
 import { describe, expect, it } from "vitest";
-import { synthesizeEdgeSpeech } from "../tts/edge-tts.js";
 import { createTtsSkill } from "../skills/built-in/tts.js";
+import { synthesizeEdgeSpeech } from "../tts/edge-tts.js";
 
 describe("tool_request without Gateway", () => {
 	it("Edge TTS preview succeeds with gateway=null", async () => {
@@ -56,6 +56,6 @@ describe("tool_request without Gateway", () => {
 			"게이트웨이 연결 없이도 Edge TTS는 동작합니다.",
 		);
 		expect(audio).not.toBeNull();
-		expect(audio!.length).toBeGreaterThan(100);
+		expect(audio?.length).toBeGreaterThan(100);
 	}, 15000);
 });

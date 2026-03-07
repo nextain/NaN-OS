@@ -38,7 +38,18 @@ export function createCronSkill(store: CronStore): SkillDefinition {
 					type: "string",
 					description:
 						"Action to perform: add, list, remove, update, gateway_list, gateway_status, gateway_add, gateway_run, gateway_runs, gateway_remove",
-					enum: ["add", "list", "remove", "update", "gateway_list", "gateway_status", "gateway_add", "gateway_run", "gateway_runs", "gateway_remove"],
+					enum: [
+						"add",
+						"list",
+						"remove",
+						"update",
+						"gateway_list",
+						"gateway_status",
+						"gateway_add",
+						"gateway_run",
+						"gateway_runs",
+						"gateway_remove",
+					],
 				},
 				label: {
 					type: "string",
@@ -61,7 +72,8 @@ export function createCronSkill(store: CronStore): SkillDefinition {
 				},
 				job_id: {
 					type: "string",
-					description: "Job ID (for remove/update/gateway_run/gateway_runs/gateway_remove)",
+					description:
+						"Job ID (for remove/update/gateway_run/gateway_runs/gateway_remove)",
 				},
 				enabled: {
 					type: "boolean",
@@ -109,10 +121,7 @@ export function createCronSkill(store: CronStore): SkillDefinition {
 						return {
 							success: false,
 							output: "",
-							error:
-								err instanceof Error
-									? err.message
-									: String(err),
+							error: err instanceof Error ? err.message : String(err),
 						};
 					}
 				}
@@ -137,9 +146,7 @@ export function createCronSkill(store: CronStore): SkillDefinition {
 					const removed = store.remove(jobId);
 					return {
 						success: removed,
-						output: removed
-							? `Job ${jobId} removed`
-							: `Job ${jobId} not found`,
+						output: removed ? `Job ${jobId} removed` : `Job ${jobId} not found`,
 						error: removed ? undefined : "Job not found",
 					};
 				}
@@ -154,8 +161,7 @@ export function createCronSkill(store: CronStore): SkillDefinition {
 						};
 					}
 					const patch: Record<string, unknown> = {};
-					if (args.enabled !== undefined)
-						patch.enabled = args.enabled;
+					if (args.enabled !== undefined) patch.enabled = args.enabled;
 					if (args.label !== undefined) patch.label = args.label;
 					if (args.task !== undefined) patch.task = args.task;
 
@@ -183,7 +189,8 @@ export function createCronSkill(store: CronStore): SkillDefinition {
 						return {
 							success: false,
 							output: "",
-							error: "Gateway not connected. gateway_list requires a running Gateway.",
+							error:
+								"Gateway not connected. gateway_list requires a running Gateway.",
 						};
 					}
 					const result = await listCronJobs(gateway);
@@ -196,7 +203,8 @@ export function createCronSkill(store: CronStore): SkillDefinition {
 						return {
 							success: false,
 							output: "",
-							error: "Gateway not connected. gateway_status requires a running Gateway.",
+							error:
+								"Gateway not connected. gateway_status requires a running Gateway.",
 						};
 					}
 					const result = await getCronStatus(gateway);
@@ -209,23 +217,34 @@ export function createCronSkill(store: CronStore): SkillDefinition {
 						return {
 							success: false,
 							output: "",
-							error: "Gateway not connected. gateway_add requires a running Gateway.",
+							error:
+								"Gateway not connected. gateway_add requires a running Gateway.",
 						};
 					}
 					const name = (args.label as string) || "Unnamed job";
 					const scheduleType = (args.schedule_type as string) || "cron";
 					const scheduleValue = (args.schedule_value as string) || "";
 					if (!scheduleValue) {
-						return { success: false, output: "", error: "schedule_value is required" };
+						return {
+							success: false,
+							output: "",
+							error: "schedule_value is required",
+						};
 					}
 					const schedule: Record<string, unknown> = { type: scheduleType };
 					if (scheduleType === "cron") schedule.expression = scheduleValue;
-					else if (scheduleType === "every") schedule.intervalMs = Number.parseInt(scheduleValue, 10);
+					else if (scheduleType === "every")
+						schedule.intervalMs = Number.parseInt(scheduleValue, 10);
 					else if (scheduleType === "at") schedule.date = scheduleValue;
 
 					const result = await addCronJob(gateway, {
 						name,
-						schedule: schedule as { type: string; expression?: string; intervalMs?: number; date?: string },
+						schedule: schedule as {
+							type: string;
+							expression?: string;
+							intervalMs?: number;
+							date?: string;
+						},
 					});
 					return { success: true, output: JSON.stringify(result) };
 				}
@@ -236,12 +255,17 @@ export function createCronSkill(store: CronStore): SkillDefinition {
 						return {
 							success: false,
 							output: "",
-							error: "Gateway not connected. gateway_run requires a running Gateway.",
+							error:
+								"Gateway not connected. gateway_run requires a running Gateway.",
 						};
 					}
 					const jobId = args.job_id as string;
 					if (!jobId) {
-						return { success: false, output: "", error: "job_id is required for gateway_run" };
+						return {
+							success: false,
+							output: "",
+							error: "job_id is required for gateway_run",
+						};
 					}
 					const result = await runCronJob(gateway, jobId);
 					return { success: true, output: JSON.stringify(result) };
@@ -253,12 +277,17 @@ export function createCronSkill(store: CronStore): SkillDefinition {
 						return {
 							success: false,
 							output: "",
-							error: "Gateway not connected. gateway_runs requires a running Gateway.",
+							error:
+								"Gateway not connected. gateway_runs requires a running Gateway.",
 						};
 					}
 					const jobId = args.job_id as string;
 					if (!jobId) {
-						return { success: false, output: "", error: "job_id is required for gateway_runs" };
+						return {
+							success: false,
+							output: "",
+							error: "job_id is required for gateway_runs",
+						};
 					}
 					const result = await getCronRuns(gateway, jobId);
 					return { success: true, output: JSON.stringify(result) };
@@ -270,12 +299,17 @@ export function createCronSkill(store: CronStore): SkillDefinition {
 						return {
 							success: false,
 							output: "",
-							error: "Gateway not connected. gateway_remove requires a running Gateway.",
+							error:
+								"Gateway not connected. gateway_remove requires a running Gateway.",
 						};
 					}
 					const jobId = args.job_id as string;
 					if (!jobId) {
-						return { success: false, output: "", error: "job_id is required for gateway_remove" };
+						return {
+							success: false,
+							output: "",
+							error: "job_id is required for gateway_remove",
+						};
 					}
 					const result = await removeCronJob(gateway, jobId);
 					return { success: true, output: JSON.stringify(result) };

@@ -26,9 +26,7 @@ describe("getAllTools disabledSkills filtering", () => {
 		const allTools = getAllTools(true);
 		const disabled = getAllTools(true, ["execute_command"]);
 		// Gateway tools are not filtered because they are not in skillRegistry
-		const hasExecCommand = disabled.find(
-			(t) => t.name === "execute_command",
-		);
+		const hasExecCommand = disabled.find((t) => t.name === "execute_command");
 		expect(hasExecCommand).toBeDefined();
 	});
 

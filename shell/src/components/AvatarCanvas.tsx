@@ -305,7 +305,9 @@ export function AvatarCanvas() {
 					},
 					undefined,
 					(err) => {
-						Logger.warn("AvatarCanvas", "Failed to load background image", { err });
+						Logger.warn("AvatarCanvas", "Failed to load background image", {
+							err,
+						});
 						setDefaultBackground(scene);
 					},
 				);
@@ -418,7 +420,7 @@ export function AvatarCanvas() {
 				setLoadStage(stage);
 				// Convert absolute file paths for custom VRM models
 				const normalizedModelPath = normalizeLocalPath(modelPath);
-				let vrmUrl = resolveAssetUrl(normalizedModelPath);
+				const vrmUrl = resolveAssetUrl(normalizedModelPath);
 				let localVrmBytes: Uint8Array | null = null;
 				let resourcePath = "";
 				if (
@@ -455,10 +457,14 @@ export function AvatarCanvas() {
 							setLoadStage(stage);
 							const localVrmBuffer = new ArrayBuffer(localVrmBytes.byteLength);
 							new Uint8Array(localVrmBuffer).set(localVrmBytes);
-							return loadVrmFromArrayBuffer(localVrmBuffer, {
-								scene,
-								lookAt: true,
-							}, resourcePath);
+							return loadVrmFromArrayBuffer(
+								localVrmBuffer,
+								{
+									scene,
+									lookAt: true,
+								},
+								resourcePath,
+							);
 						})()
 					: await (() => {
 							stage = "load-url-vrm";
@@ -481,35 +487,35 @@ export function AvatarCanvas() {
 
 				vrm = result._vrm;
 
-			if (vrm.humanoid) {
-				const head = vrm.humanoid.getNormalizedBoneNode("head");
-				if (head) {
-					const headPos = new Vector3();
-					head.getWorldPosition(headPos);
-					const targetY = headPos.y - 0.05;
-					const diffY = targetY - controls.target.y;
-					camera.position.y += diffY;
-					controls.target.y = targetY;
-					controls.update();
+				if (vrm.humanoid) {
+					const head = vrm.humanoid.getNormalizedBoneNode("head");
+					if (head) {
+						const headPos = new Vector3();
+						head.getWorldPosition(headPos);
+						const targetY = headPos.y - 0.05;
+						const diffY = targetY - controls.target.y;
+						camera.position.y += diffY;
+						controls.target.y = targetY;
+						controls.update();
+					}
 				}
-			}
 
-			emotionCtrl = createEmotionController(vrm);
-			mouthCtrl = createMouthController(vrm);
+				emotionCtrl = createEmotionController(vrm);
+				mouthCtrl = createMouthController(vrm);
 
-			// Resolve blink expression name for VRM 0.0/1.0 compat
-			if (vrm.expressionManager) {
-				const resolve = buildExpressionResolver(
-					vrm.expressionManager.expressionMap,
-				);
-				blinkExprName = resolve("blink") ?? "blink";
-				const available = Object.keys(vrm.expressionManager.expressionMap);
-				Logger.info("AvatarCanvas", "VRM expressions available", {
-					count: available.length,
-					names: available.join(", "),
-					blinkResolved: blinkExprName,
-				});
-			}
+				// Resolve blink expression name for VRM 0.0/1.0 compat
+				if (vrm.expressionManager) {
+					const resolve = buildExpressionResolver(
+						vrm.expressionManager.expressionMap,
+					);
+					blinkExprName = resolve("blink") ?? "blink";
+					const available = Object.keys(vrm.expressionManager.expressionMap);
+					Logger.info("AvatarCanvas", "VRM expressions available", {
+						count: available.length,
+						names: available.join(", "),
+						blinkResolved: blinkExprName,
+					});
+				}
 
 				Logger.info("AvatarCanvas", "VRM model loaded", {
 					center: `${result.modelCenter.x.toFixed(2)},${result.modelCenter.y.toFixed(2)},${result.modelCenter.z.toFixed(2)}`,

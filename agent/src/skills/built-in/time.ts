@@ -10,8 +10,7 @@ export function createTimeSkill(): SkillDefinition {
 			properties: {
 				format: {
 					type: "string",
-					description:
-						"Output format: locale (default), iso, or unix",
+					description: "Output format: locale (default), iso, or unix",
 					enum: ["locale", "iso", "unix"],
 				},
 				timezone: {
@@ -61,9 +60,7 @@ export function createTimeSkill(): SkillDefinition {
 					const options: Intl.DateTimeFormatOptions = tz
 						? { timeZone: tz, dateStyle: "full", timeStyle: "long" }
 						: { dateStyle: "full", timeStyle: "long" };
-					output = new Intl.DateTimeFormat("ko-KR", options).format(
-						now,
-					);
+					output = new Intl.DateTimeFormat("ko-KR", options).format(now);
 					break;
 				}
 			}

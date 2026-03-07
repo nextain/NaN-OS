@@ -33,13 +33,15 @@ export const DEMO_SCENES: DemoScene[] = [
 	},
 	{
 		id: "apikey",
-		narration: "선택한 제공자의 API 키를 입력합니다. 키는 로컬에만 안전하게 저장됩니다.",
+		narration:
+			"선택한 제공자의 API 키를 입력합니다. 키는 로컬에만 안전하게 저장됩니다.",
 		duration: 7,
 		phase: "onboarding",
 	},
 	{
 		id: "agent-name",
-		narration: 'AI 에이전트의 이름을 정해줍니다. 여기서는 "나이아"로 설정하겠습니다.',
+		narration:
+			'AI 에이전트의 이름을 정해줍니다. 여기서는 "나이아"로 설정하겠습니다.',
 		duration: 6,
 		phase: "onboarding",
 	},
@@ -51,7 +53,8 @@ export const DEMO_SCENES: DemoScene[] = [
 	},
 	{
 		id: "character",
-		narration: "나이아의 3D 아바타를 선택합니다. VRM 모델을 직접 추가할 수도 있습니다.",
+		narration:
+			"나이아의 3D 아바타를 선택합니다. VRM 모델을 직접 추가할 수도 있습니다.",
 		duration: 8,
 		phase: "onboarding",
 	},
@@ -64,7 +67,8 @@ export const DEMO_SCENES: DemoScene[] = [
 	},
 	{
 		id: "messenger",
-		narration: "메신저 연동을 설정할 수 있습니다. 나중에 설정에서도 변경 가능합니다.",
+		narration:
+			"메신저 연동을 설정할 수 있습니다. 나중에 설정에서도 변경 가능합니다.",
 		duration: 5,
 		phase: "onboarding",
 	},
@@ -126,22 +130,19 @@ export const DEMO_SCENES: DemoScene[] = [
 	},
 	{
 		id: "skills-detail",
-		narration:
-			"스킬 카드를 펼치면 상세 설명과 설정을 확인할 수 있습니다.",
+		narration: "스킬 카드를 펼치면 상세 설명과 설정을 확인할 수 있습니다.",
 		duration: 7,
 		phase: "main",
 	},
 	{
 		id: "channels-tab",
-		narration:
-			"채널 탭에서는 디스코드 등 메신저 연동 상태를 관리합니다.",
+		narration: "채널 탭에서는 디스코드 등 메신저 연동 상태를 관리합니다.",
 		duration: 10,
 		phase: "main",
 	},
 	{
 		id: "agents-tab",
-		narration:
-			"에이전트 탭에서는 실행 중인 에이전트와 세션을 모니터링합니다.",
+		narration: "에이전트 탭에서는 실행 중인 에이전트와 세션을 모니터링합니다.",
 		duration: 10,
 		phase: "main",
 	},
@@ -167,22 +168,19 @@ export const DEMO_SCENES: DemoScene[] = [
 	},
 	{
 		id: "settings-memory",
-		narration:
-			"기억 설정에서 나이아가 기억하는 사실들을 관리할 수 있습니다.",
+		narration: "기억 설정에서 나이아가 기억하는 사실들을 관리할 수 있습니다.",
 		duration: 5,
 		phase: "main",
 	},
 	{
 		id: "progress-tab",
-		narration:
-			"작업 탭에서는 AI 사용량, 비용, 도구 실행 통계를 확인합니다.",
+		narration: "작업 탭에서는 AI 사용량, 비용, 도구 실행 통계를 확인합니다.",
 		duration: 8,
 		phase: "main",
 	},
 	{
 		id: "outro",
-		narration:
-			"나이아 OS, 당신만의 AI 파트너와 함께하세요. 감사합니다.",
+		narration: "나이아 OS, 당신만의 AI 파트너와 함께하세요. 감사합니다.",
 		duration: 5,
 		phase: "main",
 	},
@@ -195,7 +193,11 @@ export const TOTAL_DURATION = DEMO_SCENES.reduce(
 );
 
 /** Get cumulative start time (seconds) for each scene */
-export function getSceneTimings(): { id: string; startSec: number; duration: number }[] {
+export function getSceneTimings(): {
+	id: string;
+	startSec: number;
+	duration: number;
+}[] {
 	let offset = 0;
 	return DEMO_SCENES.map((s) => {
 		const entry = { id: s.id, startSec: offset, duration: s.duration };

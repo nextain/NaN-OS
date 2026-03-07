@@ -15,7 +15,9 @@ export interface MicStreamOptions {
 	bufferSize?: number;
 }
 
-export async function createMicStream(opts: MicStreamOptions): Promise<MicStream> {
+export async function createMicStream(
+	opts: MicStreamOptions,
+): Promise<MicStream> {
 	const sampleRate = opts.sampleRate ?? 16000;
 	const bufferSize = opts.bufferSize ?? 4096;
 

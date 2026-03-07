@@ -184,9 +184,7 @@ const TAURI_MOCK_SCRIPT = `
  * a new assistant message, then wait for streaming to finish.
  */
 async function sendMessage(page: Page, text: string) {
-	const beforeCount = await page
-		.locator(".chat-message.assistant")
-		.count();
+	const beforeCount = await page.locator(".chat-message.assistant").count();
 
 	const input = page.locator(".chat-input");
 	await expect(input).toBeEnabled({ timeout: 5_000 });
@@ -196,8 +194,12 @@ async function sendMessage(page: Page, text: string) {
 	// Wait for streaming to start (cursor appears) OR a new assistant message to appear.
 	// Mock responses can resolve so fast that cursor-blink is never caught.
 	await Promise.race([
-		expect(page.locator(".cursor-blink").first()).toBeVisible({ timeout: 10_000 }).catch(() => {}),
-		expect(page.locator(".chat-message.assistant")).toHaveCount(beforeCount + 1, { timeout: 10_000 }).catch(() => {}),
+		expect(page.locator(".cursor-blink").first())
+			.toBeVisible({ timeout: 10_000 })
+			.catch(() => {}),
+		expect(page.locator(".chat-message.assistant"))
+			.toHaveCount(beforeCount + 1, { timeout: 10_000 })
+			.catch(() => {}),
 	]);
 
 	// Then wait for streaming to finish (cursor disappears)

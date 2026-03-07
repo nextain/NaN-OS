@@ -1,7 +1,8 @@
 import { S } from "../helpers/selectors.js";
 
 const LOCAL_VRM = "/home/luke/dev/naia-os/assets/AvatarSample_B.vrm";
-const LOCAL_BG = "/home/luke/dev/naia-os/assets/branding/naia-app-icon-square.png";
+const LOCAL_BG =
+	"/home/luke/dev/naia-os/assets/branding/naia-app-icon-square.png";
 
 describe("71 — local avatar file loading", () => {
 	it("should load local VRM/background from absolute paths", async () => {

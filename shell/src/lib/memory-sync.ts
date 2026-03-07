@@ -82,8 +82,13 @@ export async function syncFromOpenClawMemory(): Promise<void> {
 	setLastScanMs(maxMtime);
 
 	if (newFactCount > 0) {
-		Logger.info("memory-sync", `Extracted ${newFactCount} facts from ${files.length} OpenClaw memory files`);
-		syncToOpenClaw(config.provider, config.model, config.apiKey).catch(() => {});
+		Logger.info(
+			"memory-sync",
+			`Extracted ${newFactCount} facts from ${files.length} OpenClaw memory files`,
+		);
+		syncToOpenClaw(config.provider, config.model, config.apiKey).catch(
+			() => {},
+		);
 	}
 }
 

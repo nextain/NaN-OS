@@ -19,7 +19,7 @@ export interface AudioPlayerOptions {
 
 export function createAudioPlayer(opts: AudioPlayerOptions = {}): AudioPlayer {
 	const sampleRate = opts.sampleRate ?? 24000;
-	let ctx = new AudioContext({ sampleRate });
+	const ctx = new AudioContext({ sampleRate });
 	let nextStartTime = 0;
 	let activeSourceCount = 0;
 	let destroyed = false;
@@ -33,7 +33,11 @@ export function createAudioPlayer(opts: AudioPlayerOptions = {}): AudioPlayer {
 		}
 
 		const bytes = base64ToUint8Array(base64Pcm);
-		const int16 = new Int16Array(bytes.buffer, bytes.byteOffset, bytes.byteLength / 2);
+		const int16 = new Int16Array(
+			bytes.buffer,
+			bytes.byteOffset,
+			bytes.byteLength / 2,
+		);
 		const float32 = int16ToFloat32(int16);
 
 		const buffer = ctx.createBuffer(1, float32.length, sampleRate);
@@ -69,7 +73,11 @@ export function createAudioPlayer(opts: AudioPlayerOptions = {}): AudioPlayer {
 	function clear() {
 		const wasPlaying = activeSourceCount > 0;
 		for (const src of activeSources) {
-			try { src.stop(); } catch { /* already stopped */ }
+			try {
+				src.stop();
+			} catch {
+				/* already stopped */
+			}
 		}
 		activeSources.clear();
 		nextStartTime = 0;

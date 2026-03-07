@@ -149,7 +149,9 @@ test.describe("Memory Sync E2E", () => {
 		await expect(page.locator(".chat-panel")).toBeVisible({ timeout: 10_000 });
 	});
 
-	test("startup sync: syncToOpenClaw fires on app mount with facts", async ({ page }) => {
+	test("startup sync: syncToOpenClaw fires on app mount with facts", async ({
+		page,
+	}) => {
 		// Wait for startup sync to complete (async, fires in useEffect)
 		await page.waitForFunction(
 			() => (window as any).__MEMORY_E2E__?.syncCalls.length > 0,
@@ -169,7 +171,9 @@ test.describe("Memory Sync E2E", () => {
 		expect(lastSync.persona).toContain("Known facts about the user");
 	});
 
-	test("startup sync: persona includes user context from config", async ({ page }) => {
+	test("startup sync: persona includes user context from config", async ({
+		page,
+	}) => {
 		await page.waitForFunction(
 			() => (window as any).__MEMORY_E2E__?.syncCalls.length > 0,
 			{},
@@ -198,7 +202,9 @@ test.describe("Memory Sync E2E", () => {
 		expect(e2eState.factsRequested).toBeGreaterThanOrEqual(1);
 	});
 
-	test("memory-sync: read_openclaw_memory_files called on startup", async ({ page }) => {
+	test("memory-sync: read_openclaw_memory_files called on startup", async ({
+		page,
+	}) => {
 		// startMemorySync fires after 5s delay
 		await page.waitForFunction(
 			() => (window as any).__MEMORY_E2E__?.memoryFileReads > 0,

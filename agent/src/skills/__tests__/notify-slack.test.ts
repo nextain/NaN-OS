@@ -44,9 +44,7 @@ describe("skill_notify_slack", () => {
 	});
 
 	it("sends message via webhook successfully", async () => {
-		mockGetUrl.mockResolvedValueOnce(
-			"https://hooks.slack.com/services/T/B/X",
-		);
+		mockGetUrl.mockResolvedValueOnce("https://hooks.slack.com/services/T/B/X");
 		const fetchSpy = vi
 			.spyOn(globalThis, "fetch")
 			.mockResolvedValueOnce(new Response("ok", { status: 200 }));
@@ -67,14 +65,12 @@ describe("skill_notify_slack", () => {
 
 		// Verify payload format
 		const call = fetchSpy.mock.calls[0];
-		const body = JSON.parse(call[1]!.body as string);
+		const body = JSON.parse(call[1]?.body as string);
 		expect(body.text).toBe("Build complete");
 	});
 
 	it("sends message with optional channel and username", async () => {
-		mockGetUrl.mockResolvedValueOnce(
-			"https://hooks.slack.com/services/T/B/X",
-		);
+		mockGetUrl.mockResolvedValueOnce("https://hooks.slack.com/services/T/B/X");
 		const fetchSpy = vi
 			.spyOn(globalThis, "fetch")
 			.mockResolvedValueOnce(new Response("ok", { status: 200 }));
@@ -86,16 +82,14 @@ describe("skill_notify_slack", () => {
 		expect(result.success).toBe(true);
 
 		const call = fetchSpy.mock.calls[0];
-		const body = JSON.parse(call[1]!.body as string);
+		const body = JSON.parse(call[1]?.body as string);
 		expect(body.text).toBe("Deploy done");
 		expect(body.channel).toBe("#ops");
 		expect(body.username).toBe("NaiaBot");
 	});
 
 	it("handles webhook 500 error", async () => {
-		mockGetUrl.mockResolvedValueOnce(
-			"https://hooks.slack.com/services/T/B/X",
-		);
+		mockGetUrl.mockResolvedValueOnce("https://hooks.slack.com/services/T/B/X");
 		vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
 			new Response("Internal Server Error", { status: 500 }),
 		);
@@ -106,9 +100,7 @@ describe("skill_notify_slack", () => {
 	});
 
 	it("handles network error", async () => {
-		mockGetUrl.mockResolvedValueOnce(
-			"https://hooks.slack.com/services/T/B/X",
-		);
+		mockGetUrl.mockResolvedValueOnce("https://hooks.slack.com/services/T/B/X");
 		vi.spyOn(globalThis, "fetch").mockRejectedValueOnce(
 			new Error("Network error"),
 		);
@@ -125,9 +117,12 @@ describe("skill_notify_slack", () => {
 			availableMethods: ["skills.invoke"],
 		};
 
-		const result = await skill.execute({ message: "via gateway" }, {
-			gateway: mockGateway as never,
-		});
+		const result = await skill.execute(
+			{ message: "via gateway" },
+			{
+				gateway: mockGateway as never,
+			},
+		);
 		expect(result.success).toBe(true);
 		expect(mockGateway.request).toHaveBeenCalledWith("skills.invoke", {
 			skill: "slack",
@@ -142,16 +137,17 @@ describe("skill_notify_slack", () => {
 			availableMethods: ["skills.invoke"],
 		};
 
-		mockGetUrl.mockResolvedValueOnce(
-			"https://hooks.slack.com/services/T/B/X",
-		);
+		mockGetUrl.mockResolvedValueOnce("https://hooks.slack.com/services/T/B/X");
 		vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
 			new Response("ok", { status: 200 }),
 		);
 
-		const result = await skill.execute({ message: "fallback test" }, {
-			gateway: mockGateway as never,
-		});
+		const result = await skill.execute(
+			{ message: "fallback test" },
+			{
+				gateway: mockGateway as never,
+			},
+		);
 		expect(result.success).toBe(true);
 		expect(result.output).toContain("Slack");
 	});

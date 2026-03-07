@@ -14,9 +14,20 @@
 	},
 	"linter": {
 		"enabled": true,
-		"rules": { "recommended": true }
+		"rules": {
+			"recommended": true,
+			"style": {
+				"noNonNullAssertion": "warn"
+			},
+			"suspicious": {
+				"noExplicitAny": "warn"
+			},
+			"complexity": {
+				"noUselessSwitchCase": "warn"
+			}
+		}
 	},
 	"files": {
-		"ignore": ["node_modules", "dist"]
+		"ignore": ["node_modules", "dist", "assets/default-skills"]
 	}
 }

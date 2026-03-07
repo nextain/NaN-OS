@@ -1,0 +1,172 @@
+# SPDX-License-Identifier: CC-BY-SA-4.0
+#
+# Translation Contribution Guide — AI context
+# Human-readable version: TRANSLATING.md (repo root)
+
+version: 1
+name: translating
+human_doc: TRANSLATING.md
+
+locale_convention:
+  format: "IETF short codes"
+  reference: "shell/src/lib/i18n.ts"
+  rule: "Use zh, not zh-CN. Regional variants added when needed."
+  supported: [en, ko, ja, zh, fr, de, ru, es, ar, hi, bn, pt, id, vi]
+  status:
+    maintained: [en, ko]
+    ai_baseline: [ja, zh, fr, de, ru, es, ar, hi, bn, pt, id, vi]
+
+surfaces:
+  - id: 1
+    name: context_docs
+    repo: naia-os
+    path: ".users/context/{lang}/*.md"
+    scale: "7 files in scope (23 total, rest are internal)"
+    tier: priority
+    mode: new_translation
+    source: ".users/context/*.md (English)"
+
+  - id: 2
+    name: shell_ui
+    repo: naia-os
+    path: "shell/src/lib/i18n.ts"
+    scale: "~314 keys, 14 locales inline"
+    tier: priority
+    mode: native_review
+    note: "Single file, all locales inline"
+
+  - id: 3
+    name: readme
+    repo: naia-os
+    path: "READMES/README.{lang}.md"
+    scale: "14 files"
+    tier: welcome
+    mode: native_review
+
+  - id: 4
+    name: demo_video
+    repo: naia-os
+    path: "shell/e2e/demo-output/{lang}/"
+    scale: "14 langs (MP4 + TTS + JSON)"
+    tier: welcome
+    mode: native_review
+    note: "Source for surface #8 (manual video). Pipeline: demo-video.yaml"
+
+  - id: 5
+    name: portal_ui
+    repo: naia.nextain.io
+    path: "src/i18n/dictionaries/{lang}.ts"
+    scale: "~470 lines/lang, 14 files"
+    tier: priority
+    mode: native_review
+
+  - id: 6
+    name: manual_text
+    repo: naia.nextain.io
+    path: "src/content/manual/{lang}/*.md"
+    scale: "20 pages/lang, 14 langs"
+    tier: priority
+    mode: native_review
+
+  - id: 7
+    name: manual_images
+    repo: naia.nextain.io
+    path: "public/manual/{lang}/*.png"
+    scale: "~39 images/lang"
+    tier: welcome
+    mode: screenshot_capture
+    prerequisite: "Naia Shell dev environment or running installation"
+    rule: "Filenames must match public/manual/en/ exactly"
+
+  - id: 8
+    name: manual_video
+    repo: naia.nextain.io
+    path: "public/manual/{lang}/demo.mp4"
+    scale: "1 per lang"
+    tier: welcome
+    mode: native_review
+    note: "Copy of surface #4 demo video"
+
+  - id: 9
+    name: faq
+    repo: naia.nextain.io
+    path: "src/content/home/{lang}/faq.md"
+    scale: "en + ko only"
+    tier: welcome
+    mode: new_translation
+
+  - id: 10
+    name: legal_docs
+    repo: naia.nextain.io
+    path: "src/content/legal/{lang}/*.md"
+    scale: "5 docs, en + ko only"
+    tier: welcome
+    mode: new_translation
+    rule: "Must include disclaimer: unofficial translation, English is legally binding"
+
+  - id: 11
+    name: blog_posts
+    repo: naia.nextain.io
+    path: "public/posts/{slug}/index.{lang}.md"
+    scale: "14 langs per post"
+    tier: low
+    mode: native_review
+
+  - id: 12
+    name: portal_readme
+    repo: naia.nextain.io
+    path: "README.{lang}.md"
+    scale: "ko only"
+    tier: low
+    mode: new_translation
+
+  - id: 13
+    name: corporate_site
+    repo: about.nextain.io
+    path: "messages/{lang}.json"
+    scale: "~376 lines, en + ko only"
+    tier: low
+    mode: new_translation
+    format: "next-intl JSON"
+
+contribution_modes:
+  new_translation:
+    description: "Translate from English source where no baseline exists"
+  native_review:
+    description: "Review and fix AI-generated baseline translations"
+  screenshot_capture:
+    description: "Capture localized UI screenshots for manual"
+    steps:
+      - "Launch Naia Shell, change language to target locale"
+      - "Navigate to matching screen"
+      - "Capture with same area/dimensions as English"
+      - "Save with identical filename as public/manual/en/"
+
+pr_convention:
+  branch: "translation/{lang}-{surface}"
+  title: "docs(i18n): add/fix {lang} translation for {surface}"
+  body: "Contributes to #8 (never Closes #8)"
+  routing:
+    surfaces_1_to_4: naia-os
+    surfaces_5_to_12: naia.nextain.io
+    surface_13: about.nextain.io
+
+quality_criteria:
+  - "Accurate translation from English source"
+  - "No content omission or addition"
+  - "SPDX license headers preserved"
+  - "Markdown formatting maintained"
+  - "Image filenames must match English counterparts within {lang}/ dir (referenced by name in manual markdown)"
+
+new_language:
+  difficulty: medium
+  requires_code_changes: true
+  steps:
+    - "naia-os: Add to Locale type + all keys in shell/src/lib/i18n.ts"
+    - "naia.nextain.io: Create dictionary + update config.ts"
+    - "about.nextain.io: Create messages JSON + update next-intl config"
+  rule: "Open an issue first to discuss"
+
+context_mirror:
+  rule: "Contributors who wish to maintain .users/context/{lang}/ mirror can request via PR or issue"
+  expansion: "Dedicated language contributors keep translations in sync as project evolves"

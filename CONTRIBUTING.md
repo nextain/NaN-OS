@@ -111,7 +111,7 @@ When editing context:
 |-------|----------|
 | Issues, PR descriptions | Any language welcome |
 | Code, commits, context files | English |
-| Work-logs (personal notes) | Your preferred language |
+| Work-logs (personal notes) | Your preferred language (tip: keep in a separate private repo) |
 
 ## Development workflow
 
@@ -122,6 +122,18 @@ ISSUE → UNDERSTAND → SCOPE → INVESTIGATE → PLAN → BUILD → REVIEW →
 ```
 
 Details: [`.agents/workflows/issue-driven-development.yaml`](.agents/workflows/issue-driven-development.yaml)
+
+## Translation
+
+Want to help translate? See [TRANSLATING.md](TRANSLATING.md) for the full guide — locale codes, file locations, scope, and how to submit.
+
+Quick start: [Issue #8](https://github.com/nextain/naia-os/issues/8)
+
+## Rewards
+
+Naia OS is an early-stage open source project. We do not have a bounty or reward program at this time — all contributions are volunteer work.
+
+We genuinely appreciate every contribution. As the project and company grow, we plan to explore contributor reward programs in the future.
 
 ## License
 

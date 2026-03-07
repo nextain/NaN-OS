@@ -1,9 +1,9 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { GatewayClient } from "../../gateway/client.js";
 import {
-	createMockGateway,
 	type MockGateway,
+	createMockGateway,
 } from "../../gateway/__tests__/mock-gateway.js";
+import { GatewayClient } from "../../gateway/client.js";
 import { createVoiceWakeSkill } from "../built-in/voicewake.js";
 import type { SkillDefinition } from "../types.js";
 
@@ -53,10 +53,7 @@ describe("skill_voicewake", () => {
 	});
 
 	it("returns current triggers", async () => {
-		const result = await skill.execute(
-			{ action: "get" },
-			{ gateway: client },
-		);
+		const result = await skill.execute({ action: "get" }, { gateway: client });
 
 		expect(result.success).toBe(true);
 		const parsed = JSON.parse(result.output);
@@ -75,10 +72,7 @@ describe("skill_voicewake", () => {
 	});
 
 	it("requires triggers for set action", async () => {
-		const result = await skill.execute(
-			{ action: "set" },
-			{ gateway: client },
-		);
+		const result = await skill.execute({ action: "set" }, { gateway: client });
 
 		expect(result.success).toBe(false);
 		expect(result.error).toContain("triggers");

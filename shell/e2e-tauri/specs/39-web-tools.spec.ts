@@ -39,9 +39,7 @@ describe("39 — web tools", () => {
 	});
 
 	it("should perform a web search via web_search tool", async () => {
-		await sendMessage(
-			"'Naia' 키워드로 웹 검색해줘. web_search 도구를 사용해.",
-		);
+		await sendMessage("'Naia' 키워드로 웹 검색해줘. web_search 도구를 사용해.");
 
 		const text = await getLastAssistantMessage();
 		await assertSemantic(

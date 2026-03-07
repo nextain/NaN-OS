@@ -37,8 +37,7 @@ export function createSessionsSkill(): SkillDefinition {
 				},
 				patch: {
 					type: "object",
-					description:
-						"Partial session update (for patch action).",
+					description: "Partial session update (for patch action).",
 				},
 			},
 			required: ["action"],
@@ -54,7 +53,8 @@ export function createSessionsSkill(): SkillDefinition {
 				return {
 					success: false,
 					output: "",
-					error: "Gateway not connected. Session management requires a running Gateway.",
+					error:
+						"Gateway not connected. Session management requires a running Gateway.",
 				};
 			}
 
@@ -150,13 +150,8 @@ export function createSessionsSkill(): SkillDefinition {
 							error: "key is required for patch action",
 						};
 					}
-					const patchData =
-						(args.patch as Record<string, unknown>) ?? {};
-					const result = await patchSession(
-						gateway,
-						key,
-						patchData,
-					);
+					const patchData = (args.patch as Record<string, unknown>) ?? {};
+					const result = await patchSession(gateway, key, patchData);
 					return {
 						success: true,
 						output: JSON.stringify(result),

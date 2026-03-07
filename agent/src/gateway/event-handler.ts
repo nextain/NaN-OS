@@ -44,7 +44,10 @@ export function createGatewayEventHandler(
 				writeLine({
 					type: "discord_message",
 					requestId: (payload.requestId ?? "gateway") as string,
-					from: (payload.from ?? payload.author ?? payload.channel ?? "Gateway") as string,
+					from: (payload.from ??
+						payload.author ??
+						payload.channel ??
+						"Gateway") as string,
 					content: (payload.content ?? payload.message ?? "") as string,
 					timestamp: (payload.timestamp ?? new Date().toISOString()) as string,
 				});

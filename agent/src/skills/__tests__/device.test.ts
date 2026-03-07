@@ -1,9 +1,9 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { GatewayClient } from "../../gateway/client.js";
 import {
-	createMockGateway,
 	type MockGateway,
+	createMockGateway,
 } from "../../gateway/__tests__/mock-gateway.js";
+import { GatewayClient } from "../../gateway/client.js";
 import { createDeviceSkill } from "../built-in/device.js";
 import type { SkillDefinition } from "../types.js";
 

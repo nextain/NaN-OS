@@ -20,13 +20,13 @@ import {
 import { calculateCost } from "./providers/cost.js";
 import { buildProvider } from "./providers/factory.js";
 import type { ChatMessage, StreamChunk } from "./providers/types.js";
+import type { ToolDefinition } from "./providers/types.js";
 import { ALPHA_SYSTEM_PROMPT } from "./system-prompt.js";
 import { synthesizeEdgeSpeech } from "./tts/edge-tts.js";
 import { synthesizeElevenLabsSpeech } from "./tts/elevenlabs-tts.js";
 import { synthesizeSpeech } from "./tts/google-tts.js";
 import { synthesizeNextainSpeech } from "./tts/nextain-tts.js";
 import { synthesizeOpenAISpeech } from "./tts/openai-tts.js";
-import type { ToolDefinition } from "./providers/types.js";
 
 const activeStreams = new Map<string, AbortController>();
 
@@ -50,7 +50,8 @@ function buildToolStatusPrompt(
 	let status = `\n\n[System Status]\n사용 가능한 도구(${toolNames.length}개): ${toolNames.join(", ")}`;
 
 	if (wantGateway && !gatewayConnected) {
-		status += `\n⚠️ Gateway 연결 실패: 일부 도구(채널 관리, 디바이스 페어링 등 Gateway 필요 도구)를 사용할 수 없습니다. Gateway가 필요한 도구를 요청받으면, 앱을 재시작하면 Gateway도 자동으로 재시작된다고 안내하세요.`;
+		status +=
+			"\n⚠️ Gateway 연결 실패: 일부 도구(채널 관리, 디바이스 페어링 등 Gateway 필요 도구)를 사용할 수 없습니다. Gateway가 필요한 도구를 요청받으면, 앱을 재시작하면 Gateway도 자동으로 재시작된다고 안내하세요.";
 	} else if (gatewayConnected) {
 		status += "\nGateway 연결됨 ✓";
 	}
@@ -272,7 +273,9 @@ export async function handleChatRequest(req: ChatRequest): Promise<void> {
 		const provider = buildProvider(providerConfig);
 		const wantGatewayForTools = !!(enableTools && gatewayUrl);
 		const wantGatewayForTts =
-			!!gatewayUrl && !!ttsVoice && (ttsEngine === "openclaw" || ttsEngine === "auto");
+			!!gatewayUrl &&
+			!!ttsVoice &&
+			(ttsEngine === "openclaw" || ttsEngine === "auto");
 		const wantGateway = wantGatewayForTools || wantGatewayForTts;
 		let gatewayConnected = false;
 
@@ -285,7 +288,13 @@ export async function handleChatRequest(req: ChatRequest): Promise<void> {
 				// Register event handler for Gateway-pushed events
 				const eventHandler = createGatewayEventHandler(
 					writeLine,
-					pendingApprovals as Map<string, { requestId: string; resolve: (decision: "approve" | "reject") => void }>,
+					pendingApprovals as Map<
+						string,
+						{
+							requestId: string;
+							resolve: (decision: "approve" | "reject") => void;
+						}
+					>,
 				);
 				gateway.onEvent(eventHandler);
 			} catch {
@@ -440,12 +449,8 @@ export async function handleChatRequest(req: ChatRequest): Promise<void> {
 
 			// Execute each tool (with approval check for tier 1-2)
 			// Partition: sessions_spawn runs in parallel, others sequential
-			const spawnCalls = toolCalls.filter(
-				(c) => c.name === "sessions_spawn",
-			);
-			const otherCalls = toolCalls.filter(
-				(c) => c.name !== "sessions_spawn",
-			);
+			const spawnCalls = toolCalls.filter((c) => c.name === "sessions_spawn");
+			const otherCalls = toolCalls.filter((c) => c.name !== "sessions_spawn");
 
 			// Process sequential tools first
 			for (const call of otherCalls) {
@@ -550,9 +555,7 @@ export async function handleChatRequest(req: ChatRequest): Promise<void> {
 					});
 					chatMessages.push({
 						role: "tool",
-						content: result.success
-							? result.output
-							: `Error: ${result.error}`,
+						content: result.success ? result.output : `Error: ${result.error}`,
 						toolCallId: call.id,
 						name: call.name,
 					});
@@ -572,29 +575,50 @@ export async function handleChatRequest(req: ChatRequest): Promise<void> {
 			const effectiveNaiaKey = reqNaiaKey || providerConfig.naiaKey;
 			if (ttsProvider === "nextain" && effectiveNaiaKey) {
 				try {
-					const audio = await synthesizeNextainSpeech(cleanText, effectiveNaiaKey, ttsVoice);
+					const audio = await synthesizeNextainSpeech(
+						cleanText,
+						effectiveNaiaKey,
+						ttsVoice,
+					);
 					if (audio) {
 						writeLine({ type: "audio", requestId, data: audio });
 						audioSent = true;
 					}
-				} catch { /* non-critical */ }
+				} catch {
+					/* non-critical */
+				}
 			} else if (ttsProvider === "openai" && ttsApiKey) {
 				try {
-					const audio = await synthesizeOpenAISpeech(cleanText, ttsApiKey, ttsVoice);
+					const audio = await synthesizeOpenAISpeech(
+						cleanText,
+						ttsApiKey,
+						ttsVoice,
+					);
 					if (audio) {
 						writeLine({ type: "audio", requestId, data: audio });
 						audioSent = true;
 					}
-				} catch { /* non-critical */ }
+				} catch {
+					/* non-critical */
+				}
 			} else if (ttsProvider === "elevenlabs" && ttsApiKey) {
 				try {
-					const audio = await synthesizeElevenLabsSpeech(cleanText, ttsApiKey, ttsVoice);
+					const audio = await synthesizeElevenLabsSpeech(
+						cleanText,
+						ttsApiKey,
+						ttsVoice,
+					);
 					if (audio) {
 						writeLine({ type: "audio", requestId, data: audio });
 						audioSent = true;
 					}
-				} catch { /* non-critical */ }
-			} else if (ttsProvider === "edge" || (!ttsProvider && ttsEngine === "openclaw")) {
+				} catch {
+					/* non-critical */
+				}
+			} else if (
+				ttsProvider === "edge" ||
+				(!ttsProvider && ttsEngine === "openclaw")
+			) {
 				// Edge TTS: try direct msedge-tts first
 				try {
 					const audio = await synthesizeEdgeSpeech(cleanText, ttsVoice);
@@ -602,17 +626,28 @@ export async function handleChatRequest(req: ChatRequest): Promise<void> {
 						writeLine({ type: "audio", requestId, data: audio });
 						audioSent = true;
 					}
-				} catch { /* non-critical */ }
+				} catch {
+					/* non-critical */
+				}
 			}
 
 			// Fallback: Google Cloud TTS
-			if (!audioSent && (ttsProvider === "google" || ttsEngine === "google" || ttsEngine === "auto")) {
+			if (
+				!audioSent &&
+				(ttsProvider === "google" ||
+					ttsEngine === "google" ||
+					ttsEngine === "auto")
+			) {
 				const googleKey =
 					ttsApiKey ||
 					(providerConfig.provider === "gemini" ? providerConfig.apiKey : null);
 				if (googleKey) {
 					try {
-						const audio = await synthesizeSpeech(cleanText, googleKey, ttsVoice);
+						const audio = await synthesizeSpeech(
+							cleanText,
+							googleKey,
+							ttsVoice,
+						);
 						if (audio) {
 							writeLine({ type: "audio", requestId, data: audio });
 						}

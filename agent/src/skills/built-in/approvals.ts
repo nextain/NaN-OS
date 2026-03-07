@@ -51,7 +51,8 @@ export function createApprovalsSkill(): SkillDefinition {
 				return {
 					success: false,
 					output: "",
-					error: "Gateway not connected. Approval management requires a running Gateway.",
+					error:
+						"Gateway not connected. Approval management requires a running Gateway.",
 				};
 			}
 
@@ -62,12 +63,8 @@ export function createApprovalsSkill(): SkillDefinition {
 				}
 
 				case "set_rules": {
-					const allowedTools = args.allowedTools as
-						| string[]
-						| undefined;
-					const blockedPatterns = args.blockedPatterns as
-						| string[]
-						| undefined;
+					const allowedTools = args.allowedTools as string[] | undefined;
+					const blockedPatterns = args.blockedPatterns as string[] | undefined;
 					const result = await setApprovalRules(gateway, {
 						allowedTools,
 						blockedPatterns,
@@ -92,11 +89,7 @@ export function createApprovalsSkill(): SkillDefinition {
 							error: "decision must be 'approve' or 'reject'",
 						};
 					}
-					const result = await resolveApproval(
-						gateway,
-						requestId,
-						decision,
-					);
+					const result = await resolveApproval(gateway, requestId, decision);
 					return { success: true, output: JSON.stringify(result) };
 				}
 

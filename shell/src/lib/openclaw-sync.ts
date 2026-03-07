@@ -39,19 +39,16 @@ export async function syncToOpenClaw(
 		// This ensures SOUL.md contains user facts regardless of caller.
 		const cfg = loadConfig();
 		const facts = await getAllFacts().catch(() => []);
-		const fullPrompt = buildSystemPrompt(
-			persona || cfg?.persona || undefined,
-			{
-				agentName: agentName || cfg?.agentName || undefined,
-				userName: userName || cfg?.userName || undefined,
-				locale: locale || cfg?.locale || getLocale(),
-				honorific: cfg?.honorific,
-				speechStyle: cfg?.speechStyle,
-				discordDefaultUserId: discordDefaultUserId || cfg?.discordDefaultUserId,
-				discordDmChannelId: discordDmChannelId || cfg?.discordDmChannelId,
-				facts: facts.length > 0 ? facts : undefined,
-			},
-		);
+		const fullPrompt = buildSystemPrompt(persona || cfg?.persona || undefined, {
+			agentName: agentName || cfg?.agentName || undefined,
+			userName: userName || cfg?.userName || undefined,
+			locale: locale || cfg?.locale || getLocale(),
+			honorific: cfg?.honorific,
+			speechStyle: cfg?.speechStyle,
+			discordDefaultUserId: discordDefaultUserId || cfg?.discordDefaultUserId,
+			discordDmChannelId: discordDmChannelId || cfg?.discordDmChannelId,
+			facts: facts.length > 0 ? facts : undefined,
+		});
 
 		await invoke("sync_openclaw_config", {
 			params: {

@@ -7,7 +7,7 @@ import {
 	getUsageStatus,
 	pollLogsTail,
 } from "../diagnostics-proxy.js";
-import { createMockGateway, type MockGateway } from "./mock-gateway.js";
+import { type MockGateway, createMockGateway } from "./mock-gateway.js";
 
 describe("diagnostics-proxy", () => {
 	let mock: MockGateway;
@@ -52,7 +52,11 @@ describe("diagnostics-proxy", () => {
 							file: "/tmp/openclaw/test.log",
 							cursor: params.cursor ?? 1000,
 							size: 1000,
-							lines: params.cursor ? [] : ['{"0":"test log","_meta":{"logLevelName":"INFO"},"time":"2026-01-01T00:00:00Z"}'],
+							lines: params.cursor
+								? []
+								: [
+										'{"0":"test log","_meta":{"logLevelName":"INFO"},"time":"2026-01-01T00:00:00Z"}',
+									],
 						});
 						break;
 					default:
@@ -140,9 +144,7 @@ describe("diagnostics-proxy", () => {
 		it("throws when client is not connected", async () => {
 			const disconnected = new GatewayClient();
 
-			await expect(getHealth(disconnected)).rejects.toThrow(
-				/not connected/i,
-			);
+			await expect(getHealth(disconnected)).rejects.toThrow(/not connected/i);
 		});
 	});
 });

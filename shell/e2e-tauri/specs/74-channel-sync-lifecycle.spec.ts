@@ -60,9 +60,9 @@ describe("74 — Channel Sync Lifecycle", () => {
 				config.naiaUserId = userId;
 				config.onboardingComplete = true;
 				// Clear any stale Discord config to test fresh sync
-				delete config.discordDefaultUserId;
-				delete config.discordDmChannelId;
-				delete config.discordDefaultTarget;
+				config.discordDefaultUserId = undefined;
+				config.discordDmChannelId = undefined;
+				config.discordDefaultTarget = undefined;
 				localStorage.setItem("naia-config", JSON.stringify(config));
 			},
 			LAB_KEY,
@@ -82,8 +82,7 @@ describe("74 — Channel Sync Lifecycle", () => {
 							},
 						},
 					);
-					if (!res.ok)
-						return { error: `HTTP ${res.status}`, channels: [] };
+					if (!res.ok) return { error: `HTTP ${res.status}`, channels: [] };
 					const data = await res.json();
 					return { error: null, channels: data.channels || [] };
 				} catch (err) {
@@ -104,26 +103,23 @@ describe("74 — Channel Sync Lifecycle", () => {
 		expect(discord.userId).toMatch(/^\d{17,20}$/);
 
 		// Step 3: Open DM channel via Rust discord_api
-		const dmResult = await browser.execute(
-			async (discordUserId: string) => {
-				try {
-					// @ts-expect-error — Tauri 2 internal API
-					const internals = (window as any).__TAURI_INTERNALS__;
-					if (!internals?.invoke)
-						return { error: "No Tauri internals", channelId: "" };
-					const raw = await internals.invoke("discord_api", {
-						endpoint: "/users/@me/channels",
-						method: "POST",
-						body: JSON.stringify({ recipient_id: discordUserId }),
-					});
-					const parsed = JSON.parse(raw);
-					return { error: null, channelId: parsed.id || "" };
-				} catch (err) {
-					return { error: String(err), channelId: "" };
-				}
-			},
-			discord.userId,
-		);
+		const dmResult = await browser.execute(async (discordUserId: string) => {
+			try {
+				// @ts-expect-error — Tauri 2 internal API
+				const internals = (window as any).__TAURI_INTERNALS__;
+				if (!internals?.invoke)
+					return { error: "No Tauri internals", channelId: "" };
+				const raw = await internals.invoke("discord_api", {
+					endpoint: "/users/@me/channels",
+					method: "POST",
+					body: JSON.stringify({ recipient_id: discordUserId }),
+				});
+				const parsed = JSON.parse(raw);
+				return { error: null, channelId: parsed.id || "" };
+			} catch (err) {
+				return { error: String(err), channelId: "" };
+			}
+		}, discord.userId);
 
 		console.log("[e2e] DM channel:", JSON.stringify(dmResult));
 		expect(dmResult.error).toBeNull();
@@ -217,12 +213,12 @@ describe("74 — Channel Sync Lifecycle", () => {
 			const raw = localStorage.getItem("naia-config");
 			const config = raw ? JSON.parse(raw) : {};
 			// Clear lab credentials
-			delete config.naiaKey;
-			delete config.naiaUserId;
+			config.naiaKey = undefined;
+			config.naiaUserId = undefined;
 			// Clear Discord config
-			delete config.discordDefaultUserId;
-			delete config.discordDmChannelId;
-			delete config.discordDefaultTarget;
+			config.discordDefaultUserId = undefined;
+			config.discordDmChannelId = undefined;
+			config.discordDefaultTarget = undefined;
 			// Reset provider from nextain
 			if (config.provider === "nextain") {
 				config.provider = "gemini";

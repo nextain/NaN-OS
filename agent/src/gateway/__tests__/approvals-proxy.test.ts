@@ -1,11 +1,11 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { GatewayClient } from "../client.js";
 import {
 	getApprovalRules,
 	resolveApproval,
 	setApprovalRules,
 } from "../approvals-proxy.js";
-import { createMockGateway, type MockGateway } from "./mock-gateway.js";
+import { GatewayClient } from "../client.js";
+import { type MockGateway, createMockGateway } from "./mock-gateway.js";
 
 const MOCK_RULES = {
 	allowedTools: ["skill_time", "skill_weather", "read_file"],

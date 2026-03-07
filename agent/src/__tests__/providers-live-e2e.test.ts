@@ -50,9 +50,7 @@ function loadEnvKeys(): Record<string, string> {
 				keys[trimmed.slice(0, eq)] = trimmed.slice(eq + 1);
 			}
 			return keys;
-		} catch {
-			continue;
-		}
+		} catch {}
 	}
 	return {};
 }
@@ -102,8 +100,11 @@ function assertBasicResponse(chunks: StreamChunk[]) {
 	return combined;
 }
 
-const SYSTEM_PROMPT = "You are a helpful assistant. Reply briefly in one sentence.";
-const TEST_MESSAGE = [{ role: "user" as const, content: "Say hello in Korean." }];
+const SYSTEM_PROMPT =
+	"You are a helpful assistant. Reply briefly in one sentence.";
+const TEST_MESSAGE = [
+	{ role: "user" as const, content: "Say hello in Korean." },
+];
 const TIMEOUT = 30_000;
 
 describe.skipIf(!LIVE_E2E)("Live Provider E2E", () => {
@@ -113,9 +114,7 @@ describe.skipIf(!LIVE_E2E)("Live Provider E2E", () => {
 		it.skipIf(!apiKey)(
 			"streams text response from gemini-2.5-flash",
 			async () => {
-				const { createGeminiProvider } = await import(
-					"../providers/gemini.js"
-				);
+				const { createGeminiProvider } = await import("../providers/gemini.js");
 				const provider = createGeminiProvider(apiKey, "gemini-2.5-flash");
 				const chunks = await collectChunks(
 					provider.stream(TEST_MESSAGE, SYSTEM_PROMPT),
@@ -133,9 +132,7 @@ describe.skipIf(!LIVE_E2E)("Live Provider E2E", () => {
 		it.skipIf(!apiKey)(
 			"streams text response from gpt-4.1-mini",
 			async () => {
-				const { createOpenAIProvider } = await import(
-					"../providers/openai.js"
-				);
+				const { createOpenAIProvider } = await import("../providers/openai.js");
 				const provider = createOpenAIProvider(apiKey, "gpt-4.1-mini");
 				const chunks = await collectChunks(
 					provider.stream(TEST_MESSAGE, SYSTEM_PROMPT),
@@ -176,9 +173,7 @@ describe.skipIf(!LIVE_E2E)("Live Provider E2E", () => {
 		it.skipIf(!apiKey)(
 			"streams text response from grok-3-mini",
 			async () => {
-				const { createXAIProvider } = await import(
-					"../providers/xai.js"
-				);
+				const { createXAIProvider } = await import("../providers/xai.js");
 				const provider = createXAIProvider(apiKey, "grok-3-mini");
 				const chunks = await collectChunks(
 					provider.stream(TEST_MESSAGE, SYSTEM_PROMPT),
@@ -196,9 +191,7 @@ describe.skipIf(!LIVE_E2E)("Live Provider E2E", () => {
 		it.skipIf(!apiKey)(
 			"streams text response from glm-4.7",
 			async () => {
-				const { createZAIProvider } = await import(
-					"../providers/zai.js"
-				);
+				const { createZAIProvider } = await import("../providers/zai.js");
 				const provider = createZAIProvider(apiKey, "glm-4.7");
 				const chunks = await collectChunks(
 					provider.stream(TEST_MESSAGE, SYSTEM_PROMPT),
@@ -230,9 +223,7 @@ describe.skipIf(!LIVE_E2E)("Live Provider E2E", () => {
 		it.skipIf(!geminiKey)(
 			"Gemini returns tool_use when tool is available",
 			async () => {
-				const { createGeminiProvider } = await import(
-					"../providers/gemini.js"
-				);
+				const { createGeminiProvider } = await import("../providers/gemini.js");
 				const provider = createGeminiProvider(geminiKey, "gemini-2.5-flash");
 				const chunks = await collectChunks(
 					provider.stream(
@@ -275,9 +266,7 @@ function loadGatewayToken(): string | null {
 		try {
 			const config = JSON.parse(readFileSync(p, "utf-8"));
 			return config.gateway?.auth?.token || null;
-		} catch {
-			continue;
-		}
+		} catch {}
 	}
 	return null;
 }
@@ -324,7 +313,8 @@ describe.skipIf(!canRunGatewayE2E)("Provider → Gateway Tool-Loop E2E", () => {
 		userMessage: string,
 		tools: import("../providers/types.js").ToolDefinition[],
 	): Promise<{ text: string; toolsExecuted: string[] }> {
-		const systemPrompt = "You are a helpful assistant. You MUST use the available tools to answer. Reply briefly.";
+		const systemPrompt =
+			"You are a helpful assistant. You MUST use the available tools to answer. Reply briefly.";
 		const messages: ChatMessage[] = [{ role: "user", content: userMessage }];
 		const toolsExecuted: string[] = [];
 		let fullText = "";
@@ -378,93 +368,82 @@ describe.skipIf(!canRunGatewayE2E)("Provider → Gateway Tool-Loop E2E", () => {
 		return { text: fullText, toolsExecuted };
 	}
 
-	it(
-		"Gemini: tool_use → Gateway execute_command → follow-up response",
-		async () => {
-			const geminiKey = getKey("GEMINI_API_KEY");
-			if (!geminiKey) return;
+	it("Gemini: tool_use → Gateway execute_command → follow-up response", async () => {
+		const geminiKey = getKey("GEMINI_API_KEY");
+		if (!geminiKey) return;
 
-			const { createGeminiProvider } = await import("../providers/gemini.js");
-			const provider = createGeminiProvider(geminiKey, "gemini-2.5-flash");
+		const { createGeminiProvider } = await import("../providers/gemini.js");
+		const provider = createGeminiProvider(geminiKey, "gemini-2.5-flash");
 
-			const tools = getAllTools(true);
-			const result = await toolLoop(
-				provider,
-				"현재 날짜와 시간이 뭐야? date 명령어로 확인해줘",
-				tools,
-			);
+		const tools = getAllTools(true);
+		const result = await toolLoop(
+			provider,
+			"현재 날짜와 시간이 뭐야? date 명령어로 확인해줘",
+			tools,
+		);
 
-			// Model should have called execute_command
-			expect(result.toolsExecuted.length).toBeGreaterThan(0);
-			// Final text should contain some response
-			expect(result.text.length).toBeGreaterThan(0);
-		},
-		60_000,
-	);
+		// Model should have called execute_command
+		expect(result.toolsExecuted.length).toBeGreaterThan(0);
+		// Final text should contain some response
+		expect(result.text.length).toBeGreaterThan(0);
+	}, 60_000);
 
-	it(
-		"Anthropic: tool_use → Gateway execute_command → follow-up response",
-		async () => {
-			const anthropicKey = getKey("ANTHROPIC_API_KEY");
-			if (!anthropicKey) return;
+	it("Anthropic: tool_use → Gateway execute_command → follow-up response", async () => {
+		const anthropicKey = getKey("ANTHROPIC_API_KEY");
+		if (!anthropicKey) return;
 
-			const { createAnthropicProvider } = await import("../providers/anthropic.js");
-			const provider = createAnthropicProvider(anthropicKey, "claude-sonnet-4-5-20250929");
+		const { createAnthropicProvider } = await import(
+			"../providers/anthropic.js"
+		);
+		const provider = createAnthropicProvider(
+			anthropicKey,
+			"claude-sonnet-4-5-20250929",
+		);
 
-			const tools = getAllTools(true);
-			const result = await toolLoop(
-				provider,
-				"현재 날짜와 시간이 뭐야? date 명령어로 확인해줘",
-				tools,
-			);
+		const tools = getAllTools(true);
+		const result = await toolLoop(
+			provider,
+			"현재 날짜와 시간이 뭐야? date 명령어로 확인해줘",
+			tools,
+		);
 
-			expect(result.toolsExecuted.length).toBeGreaterThan(0);
-			expect(result.text.length).toBeGreaterThan(0);
-		},
-		60_000,
-	);
+		expect(result.toolsExecuted.length).toBeGreaterThan(0);
+		expect(result.text.length).toBeGreaterThan(0);
+	}, 60_000);
 
-	it(
-		"xAI: tool_use → Gateway execute_command → follow-up response",
-		async () => {
-			const xaiKey = getKey("XAI_API_KEY");
-			if (!xaiKey) return;
+	it("xAI: tool_use → Gateway execute_command → follow-up response", async () => {
+		const xaiKey = getKey("XAI_API_KEY");
+		if (!xaiKey) return;
 
-			const { createXAIProvider } = await import("../providers/xai.js");
-			const provider = createXAIProvider(xaiKey, "grok-3-mini");
+		const { createXAIProvider } = await import("../providers/xai.js");
+		const provider = createXAIProvider(xaiKey, "grok-3-mini");
 
-			const tools = getAllTools(true);
-			const result = await toolLoop(
-				provider,
-				"현재 날짜와 시간이 뭐야? date 명령어로 확인해줘",
-				tools,
-			);
+		const tools = getAllTools(true);
+		const result = await toolLoop(
+			provider,
+			"현재 날짜와 시간이 뭐야? date 명령어로 확인해줘",
+			tools,
+		);
 
-			expect(result.toolsExecuted.length).toBeGreaterThan(0);
-			expect(result.text.length).toBeGreaterThan(0);
-		},
-		60_000,
-	);
+		expect(result.toolsExecuted.length).toBeGreaterThan(0);
+		expect(result.text.length).toBeGreaterThan(0);
+	}, 60_000);
 
-	it(
-		"OpenAI: tool_use → Gateway execute_command → follow-up response",
-		async () => {
-			const openaiKey = getKey("OPENAI_API_KEY");
-			if (!openaiKey) return;
+	it("OpenAI: tool_use → Gateway execute_command → follow-up response", async () => {
+		const openaiKey = getKey("OPENAI_API_KEY");
+		if (!openaiKey) return;
 
-			const { createOpenAIProvider } = await import("../providers/openai.js");
-			const provider = createOpenAIProvider(openaiKey, "gpt-4.1-mini");
+		const { createOpenAIProvider } = await import("../providers/openai.js");
+		const provider = createOpenAIProvider(openaiKey, "gpt-4.1-mini");
 
-			const tools = getAllTools(true);
-			const result = await toolLoop(
-				provider,
-				"현재 날짜와 시간이 뭐야? date 명령어로 확인해줘",
-				tools,
-			);
+		const tools = getAllTools(true);
+		const result = await toolLoop(
+			provider,
+			"현재 날짜와 시간이 뭐야? date 명령어로 확인해줘",
+			tools,
+		);
 
-			expect(result.toolsExecuted.length).toBeGreaterThan(0);
-			expect(result.text.length).toBeGreaterThan(0);
-		},
-		60_000,
-	);
+		expect(result.toolsExecuted.length).toBeGreaterThan(0);
+		expect(result.text.length).toBeGreaterThan(0);
+	}, 60_000);
 });

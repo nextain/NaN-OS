@@ -167,10 +167,9 @@ describe("No duplicate registration", () => {
 		const toolNames = tools.map((t) => t.name);
 
 		for (const skill of NAIA_BUILT_IN_SKILLS) {
-			expect(
-				toolNames,
-				`${skill.name} should be in getAllTools`,
-			).toContain(skill.name);
+			expect(toolNames, `${skill.name} should be in getAllTools`).toContain(
+				skill.name,
+			);
 		}
 	});
 

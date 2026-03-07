@@ -233,10 +233,7 @@ describe("skill_cron", () => {
 		});
 
 		it("gateway actions fail without gateway", async () => {
-			const result = await skill.execute(
-				{ action: "gateway_list" },
-				{},
-			);
+			const result = await skill.execute({ action: "gateway_list" }, {});
 			expect(result.success).toBe(false);
 			expect(result.error).toMatch(/gateway/i);
 		});

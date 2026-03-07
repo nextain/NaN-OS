@@ -1,15 +1,21 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 // Mock Tauri invoke
 const mockInvoke = vi.fn().mockResolvedValue(undefined);
-vi.mock("@tauri-apps/api/core", () => ({ invoke: (...args: unknown[]) => mockInvoke(...args) }));
+vi.mock("@tauri-apps/api/core", () => ({
+	invoke: (...args: unknown[]) => mockInvoke(...args),
+}));
 
 // Mock dependencies added for facts-in-SOUL.md feature
 const mockLoadConfig = vi.fn();
-vi.mock("../config", () => ({ loadConfig: (...args: unknown[]) => mockLoadConfig(...args) }));
+vi.mock("../config", () => ({
+	loadConfig: (...args: unknown[]) => mockLoadConfig(...args),
+}));
 
 const mockGetAllFacts = vi.fn().mockResolvedValue([]);
-vi.mock("../db", () => ({ getAllFacts: (...args: unknown[]) => mockGetAllFacts(...args) }));
+vi.mock("../db", () => ({
+	getAllFacts: (...args: unknown[]) => mockGetAllFacts(...args),
+}));
 
 vi.mock("../i18n", () => ({ getLocale: () => "ko" }));
 vi.mock("../logger", () => ({ Logger: { warn: vi.fn(), info: vi.fn() } }));
@@ -75,8 +81,22 @@ describe("syncToOpenClaw", () => {
 
 	it("includes facts in persona (SOUL.md) when facts exist", async () => {
 		mockGetAllFacts.mockResolvedValue([
-			{ id: "f1", key: "birthday", value: "1990-01-15", source_session: null, created_at: 0, updated_at: 0 },
-			{ id: "f2", key: "favorite_food", value: "pizza", source_session: null, created_at: 0, updated_at: 0 },
+			{
+				id: "f1",
+				key: "birthday",
+				value: "1990-01-15",
+				source_session: null,
+				created_at: 0,
+				updated_at: 0,
+			},
+			{
+				id: "f2",
+				key: "favorite_food",
+				value: "pizza",
+				source_session: null,
+				created_at: 0,
+				updated_at: 0,
+			},
 		]);
 
 		await syncToOpenClaw("gemini", "gemini-3-flash-preview");
@@ -88,10 +108,14 @@ describe("syncToOpenClaw", () => {
 	});
 
 	it("ignores _systemPrompt parameter and always builds internally", async () => {
-		mockLoadConfig.mockReturnValue({ persona: "Custom persona", userName: "Luke" });
+		mockLoadConfig.mockReturnValue({
+			persona: "Custom persona",
+			userName: "Luke",
+		});
 
 		await syncToOpenClaw(
-			"gemini", "gemini-3-flash-preview",
+			"gemini",
+			"gemini-3-flash-preview",
 			undefined, // apiKey
 			undefined, // persona (will fall back to config)
 			undefined, // agentName
@@ -117,7 +141,8 @@ describe("syncToOpenClaw", () => {
 
 		// Caller passes agentName override but not userName
 		await syncToOpenClaw(
-			"gemini", "gemini-3-flash-preview",
+			"gemini",
+			"gemini-3-flash-preview",
 			undefined, // apiKey
 			undefined, // persona (falls back to config)
 			"CallerAgent", // agentName override

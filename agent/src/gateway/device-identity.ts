@@ -8,12 +8,7 @@ import type { DeviceIdentity } from "./types.js";
  * Returns undefined if the file is missing, malformed, or incomplete.
  */
 export function loadDeviceIdentity(): DeviceIdentity | undefined {
-	const identityPath = join(
-		homedir(),
-		".openclaw",
-		"identity",
-		"device.json",
-	);
+	const identityPath = join(homedir(), ".openclaw", "identity", "device.json");
 	try {
 		const raw = JSON.parse(readFileSync(identityPath, "utf-8"));
 		const deviceId = raw.deviceId;

@@ -21,7 +21,7 @@ export function createVoiceWakeSkill(): SkillDefinition {
 					type: "array",
 					items: { type: "string" },
 					description:
-						"Wake word triggers (e.g., [\"낸\", \"hey alpha\"]). Required for set.",
+						'Wake word triggers (e.g., ["낸", "hey alpha"]). Required for set.',
 				},
 			},
 			required: ["action"],
@@ -37,7 +37,8 @@ export function createVoiceWakeSkill(): SkillDefinition {
 				return {
 					success: false,
 					output: "",
-					error: "Gateway not connected. Voice wake management requires a running Gateway.",
+					error:
+						"Gateway not connected. Voice wake management requires a running Gateway.",
 				};
 			}
 
@@ -59,10 +60,7 @@ export function createVoiceWakeSkill(): SkillDefinition {
 							error: "triggers array is required for set action",
 						};
 					}
-					const result = await setVoiceWakeTriggers(
-						gateway,
-						triggers,
-					);
+					const result = await setVoiceWakeTriggers(gateway, triggers);
 					return {
 						success: true,
 						output: JSON.stringify(result),

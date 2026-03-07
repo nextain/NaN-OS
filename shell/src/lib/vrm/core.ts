@@ -132,10 +132,7 @@ async function buildLoadResult(
 	};
 }
 
-export async function loadVrm(
-	model: string,
-	options?: LoadVrmOptions,
-) {
+export async function loadVrm(model: string, options?: LoadVrmOptions) {
 	const loader = useVRMLoader();
 	const gltf = await loader.loadAsync(model, (progress) =>
 		options?.onProgress?.(progress),
@@ -154,7 +151,8 @@ export async function loadVrmFromArrayBuffer(
 			loader.parse(
 				model,
 				resourcePath,
-				(parsed) => resolve(parsed as { userData: GLTFUserdata; scene: Object3D }),
+				(parsed) =>
+					resolve(parsed as { userData: GLTFUserdata; scene: Object3D }),
 				(error) => reject(error),
 			);
 		},

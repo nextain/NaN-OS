@@ -29,9 +29,7 @@ function loadGatewayToken(): string | null {
 		try {
 			const config = JSON.parse(readFileSync(path, "utf-8"));
 			return config.gateway?.auth?.token || null;
-		} catch {
-			continue;
-		}
+		} catch {}
 	}
 	return null;
 }
@@ -128,9 +126,13 @@ describe.skipIf(!canRunE2E)("E2E: Gateway chat.send events", () => {
 
 		console.log("\n=== Summary ===");
 		console.log(`Total events: ${allEvents.length}`);
-		console.log(`Event types: ${[...new Set(allEvents.map((e) => e.event))].join(", ")}`);
+		console.log(
+			`Event types: ${[...new Set(allEvents.map((e) => e.event))].join(", ")}`,
+		);
 		console.log(`WriteLine messages: ${writeLineOutput.length}`);
-		console.log(`WriteLine types: ${[...new Set(writeLineOutput.map((w) => (w as Record<string, unknown>).type))].join(", ")}`);
+		console.log(
+			`WriteLine types: ${[...new Set(writeLineOutput.map((w) => (w as Record<string, unknown>).type))].join(", ")}`,
+		);
 
 		// Should get text + finish
 		expect(writeLineOutput.length).toBeGreaterThanOrEqual(2);
@@ -142,14 +144,19 @@ describe.skipIf(!canRunE2E)("E2E: Gateway chat.send events", () => {
 		expect((firstOutput.text as string).length).toBeGreaterThan(0);
 
 		// Last should be finish
-		const lastOutput = writeLineOutput[writeLineOutput.length - 1] as Record<string, unknown>;
+		const lastOutput = writeLineOutput[writeLineOutput.length - 1] as Record<
+			string,
+			unknown
+		>;
 		expect(lastOutput.type).toBe("finish");
 	}, 180_000);
 
 	it("tests chat.send RPC directly if available", async () => {
 		const methods = new Set(client.availableMethods);
 		if (!methods.has("chat.send")) {
-			console.log("SKIP: chat.send not available, testing agent method instead");
+			console.log(
+				"SKIP: chat.send not available, testing agent method instead",
+			);
 
 			if (methods.has("agent")) {
 				try {

@@ -16,7 +16,7 @@ import {
 	rotateDeviceToken,
 	verifyNodePair,
 } from "../device-proxy.js";
-import { createMockGateway, type MockGateway } from "./mock-gateway.js";
+import { type MockGateway, createMockGateway } from "./mock-gateway.js";
 
 const MOCK_NODES: NodeInfo[] = [
 	{
@@ -261,9 +261,7 @@ describe("device-proxy", () => {
 		it("throws when client is not connected", async () => {
 			const disconnected = new GatewayClient();
 
-			await expect(listNodes(disconnected)).rejects.toThrow(
-				/not connected/i,
-			);
+			await expect(listNodes(disconnected)).rejects.toThrow(/not connected/i);
 		});
 	});
 });

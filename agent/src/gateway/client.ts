@@ -129,9 +129,8 @@ export class GatewayClient {
 						typeof (frame.payload as Record<string, unknown>)?.nonce ===
 							"string"
 					) {
-						const challengeNonce = (
-							frame.payload as Record<string, unknown>
-						).nonce as string;
+						const challengeNonce = (frame.payload as Record<string, unknown>)
+							.nonce as string;
 
 						// Step 3: Build connect params
 						connectId = randomUUID();
@@ -166,9 +165,7 @@ export class GatewayClient {
 									token,
 									challengeNonce,
 								].join("|");
-								const key = createPrivateKey(
-									device.privateKeyPem,
-								);
+								const key = createPrivateKey(device.privateKeyPem);
 								signature = sign(
 									null,
 									Buffer.from(payload, "utf8"),
@@ -202,28 +199,17 @@ export class GatewayClient {
 					// Step 5: Receive hello-ok / error
 					if (frame.type === "res" && frame.id === connectId) {
 						if (frame.ok) {
-							const payload = frame.payload as Record<
-								string,
-								unknown
-							>;
+							const payload = frame.payload as Record<string, unknown>;
 							const features = payload?.features as
 								| Record<string, unknown>
 								| undefined;
-							this._availableMethods =
-								(features?.methods as string[]) || [];
+							this._availableMethods = (features?.methods as string[]) || [];
 							handshakeDone = true;
 							this.ws = ws;
 							settle();
 						} else {
-							const error = frame.error as
-								| { message: string }
-								| undefined;
-							settle(
-								new Error(
-									error?.message ||
-										"Gateway handshake failed",
-								),
-							);
+							const error = frame.error as { message: string } | undefined;
+							settle(new Error(error?.message || "Gateway handshake failed"));
 						}
 						return;
 					}
@@ -256,7 +242,7 @@ export class GatewayClient {
 			}, REQUEST_TIMEOUT_MS);
 
 			this.pending.set(id, { resolve, reject, timer });
-			this.ws!.send(JSON.stringify(req));
+			this.ws?.send(JSON.stringify(req));
 		});
 	}
 

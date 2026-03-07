@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { GatewayClient } from "../client.js";
 import { executeSessionsSpawn } from "../sessions-spawn.js";
-import { createMockGateway, type MockGateway } from "./mock-gateway.js";
+import { type MockGateway, createMockGateway } from "./mock-gateway.js";
 
 let mock: MockGateway;
 let client: GatewayClient;
@@ -30,9 +30,7 @@ beforeAll(async () => {
 			}
 			case "sessions.transcript": {
 				respond.ok({
-					messages: [
-						{ role: "assistant", content: "Sub-agent result here" },
-					],
+					messages: [{ role: "assistant", content: "Sub-agent result here" }],
 				});
 				break;
 			}

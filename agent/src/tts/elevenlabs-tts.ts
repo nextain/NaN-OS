@@ -15,7 +15,8 @@ export async function synthesizeElevenLabsSpeech(
 		// If voiceIdOrName looks like a name (not a hex ID), resolve it
 		let voiceId = voiceIdOrName || DEFAULT_VOICE_ID;
 		if (voiceIdOrName && !/^[a-zA-Z0-9]{20,}$/.test(voiceIdOrName)) {
-			voiceId = await resolveVoiceName(apiKey, voiceIdOrName) || DEFAULT_VOICE_ID;
+			voiceId =
+				(await resolveVoiceName(apiKey, voiceIdOrName)) || DEFAULT_VOICE_ID;
 		}
 
 		const response = await fetch(
@@ -69,8 +70,8 @@ async function resolveVoiceName(
 	name: string,
 ): Promise<string | null> {
 	const voices = await listElevenLabsVoices(apiKey);
-	const match = voices.find(
-		(v) => v.name.toLowerCase().includes(name.toLowerCase()),
+	const match = voices.find((v) =>
+		v.name.toLowerCase().includes(name.toLowerCase()),
 	);
 	return match?.voice_id ?? null;
 }

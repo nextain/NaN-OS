@@ -119,7 +119,9 @@ function parseYamlLike(raw: string): SkillFrontmatter | null {
 			result.metadata = JSON.parse(metaMatch[1]);
 		} catch {
 			// Try multi-line JSON
-			const fullJson = raw.slice(raw.indexOf("metadata:") + "metadata:".length).trim();
+			const fullJson = raw
+				.slice(raw.indexOf("metadata:") + "metadata:".length)
+				.trim();
 			// Find the JSON object
 			const jsonMatch = fullJson.match(/^\s*(\{[\s\S]*\})/);
 			if (jsonMatch) {
@@ -189,11 +191,7 @@ function main() {
 			continue;
 		}
 
-		const skillMdPath = path.join(
-			OPENCLAW_SKILLS_DIR,
-			entry.name,
-			"SKILL.md",
-		);
+		const skillMdPath = path.join(OPENCLAW_SKILLS_DIR, entry.name, "SKILL.md");
 		if (!fs.existsSync(skillMdPath)) {
 			console.warn(`  SKIP ${entry.name}: no SKILL.md`);
 			skipped++;
