@@ -204,6 +204,7 @@ phases:
 
   commit:
     description: "Commit and link to Issue"
+    prerequisite: "ALL prior phases (build, review, e2e_test, sync) must be complete before committing"
     steps:
       - "Stage relevant files only"
       - "Commit with descriptive message referencing Issue number"
