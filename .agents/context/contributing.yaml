@@ -225,7 +225,8 @@ ai_native_onboarding:
 language:
   code_and_context: "English"
   ai_responses: "Contributor's preferred language"
-  issues_and_prs: "Any language welcome — maintainers use AI translation"
+  issue_submission: "Any language welcome for submitting issues and PR descriptions — maintainers use AI translation"
+  development_artifacts: "English for findings, plans, and decisions shared as Issue comments during development process"
   work_logs: "Contributor's preferred language (work-logs/, gitignored, project-internal)"
   commit_messages: "English"
 

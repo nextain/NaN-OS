@@ -59,8 +59,8 @@ Naia-OS/
 
 ## 컨벤션 (요약)
 
-- **한국어 응답**
-- **커밋**: 영어, `<type>(<scope>): <description>`
+- **언어 원칙**: Git/공유 (커밋, Issue 코멘트, PR, 컨텍스트) → 영어 | 개인 (work-logs/) → 자유 | AI 응답 → 기여자 언어
+- **커밋**: `<type>(<scope>): <description>` (영어)
 - **포맷터**: Biome (tab, double quote, semicolons)
 - **테스트**: Integration-first TDD (Vitest + tauri-driver)
 - **로깅**: 구조화된 Logger만 (console.log 금지)
@@ -88,8 +88,8 @@ Naia-OS/
 
 ## 기여하기 (Contributing)
 
-**Any language is welcome.** 이슈, PR, 디스커션은 모국어로 작성 가능 — AI가 번역합니다.
-코드, 커밋 메시지, 컨텍스트 파일은 영어.
+**Any language is welcome.** 이슈 제출, PR 설명, 디스커션은 모국어 가능 — AI가 번역합니다.
+Git 기록 (코드, 커밋, 컨텍스트, 개발 산출물 공유)은 영어. 개인 노트 (work-logs/)는 자유.
 
 ### 코드 기여 핵심
 
