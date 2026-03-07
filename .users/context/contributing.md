@@ -43,7 +43,7 @@ New contributors (including AI agents) must read these files in order:
 
 ## Code and Context Are One Unit
 
-When changing code, update relevant `.agents/` context files **in the same commit**. Never separate code changes from context updates. AI agents must follow the cascade rules in `agents-rules.json`.
+When changing code, include tests and update relevant `.agents/` context files **in the same commit**. Code + tests + context = one unit. Never separate them. AI agents must follow the cascade rules in `agents-rules.json`.
 
 ---
 
@@ -170,6 +170,18 @@ Full operations model: `.agents/context/open-source-operations.yaml`
 
 Context contributions are valued equally to code contributions.
 
+### PR Completeness Rule
+
+**Code PRs must include all three**: code + tests + context updates. Never submit code without tests or without updating relevant context files.
+
+| Type | What to include in PR |
+|------|----------------------|
+| Code/PR | Code + tests (TDD) + context updates |
+| New Feature | Code + tests (TDD) + context updates |
+| Skill | Skill code + LLM tests + context (if architecture changes) |
+| Documentation | English + Korean mirror + AI context (when all three exist) |
+| Design/UX | If implementing: code + tests + context in same PR |
+
 ---
 
 ## Skill Contribution
@@ -199,6 +211,7 @@ type(scope): description
 
 ### Checklist
 
+- [ ] Tests included (new code requires new tests)
 - [ ] Tests pass (`pnpm test`)
 - [ ] App actually runs (VERIFY step)
 - [ ] Context files updated if architecture changed

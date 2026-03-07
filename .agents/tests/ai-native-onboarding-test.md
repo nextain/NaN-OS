@@ -71,7 +71,8 @@ These scenarios verify that AI coding agents (Claude Code, Codex, Gemini, OpenCo
 **Expected:**
 - Agent describes: pick issue → create branch (`issue-{N}-{desc}`) → code → self-review → PR
 - Agent mentions TDD (test first)
-- Agent mentions the PR checklist (tests pass, app runs, context updated)
+- Agent mentions "code + tests + context = one PR" (all three required together)
+- Agent mentions the PR checklist (tests included, tests pass, app runs, context updated)
 - Agent mentions AI attribution (`Assisted-by` trailer)
 - Agent mentions commit messages must be in English
 

@@ -99,7 +99,9 @@ contribution_types:
       - "Each skill needs skill.json with proper metadata"
       - "Follow existing skill naming: naia-{name}/"
       - "Test with actual LLM calls, not mocks"
+      - "Update .agents/ context if new skill changes architecture"
       - "Submit PR"
+    rule: "Skill code + tests + context = one PR."
     issue_template: "skill_proposal.yml"
 
   new_feature:
@@ -109,7 +111,10 @@ contribution_types:
       - "Discuss design with maintainer"
       - "Fork → create branch issue-{N}-{desc}"
       - "Implement following code rules below"
+      - "Write tests (TDD)"
+      - "Update .agents/ + .users/ context"
       - "Submit PR"
+    rule: "Code + tests + context = one PR."
     issue_template: "feature_request.yml"
 
   bug_report:
@@ -127,8 +132,11 @@ contribution_types:
       - "Pick an existing issue"
       - "Create branch: issue-{N}-{desc}"
       - "Code with AI assistance (follow code rules below)"
+      - "Write tests (TDD: test first → minimal code → refactor)"
+      - "Update .agents/ + .users/ context if architecture changed"
       - "Self-review with AI (checklist below)"
       - "Submit PR with AI attribution"
+    rule: "Code + tests + context = one PR. Never submit code without tests or context updates."
     rules_ref: "code section (above)"
 
   documentation:
@@ -138,7 +146,9 @@ contribution_types:
       - "Identify unclear or missing docs"
       - "Edit .users/ docs"
       - "Mirror changes to .agents/ (if applicable)"
+      - "Mirror to .users/context/ko/ (Korean)"
       - "Submit PR"
+    rule: "English + Korean + AI context = one PR when all three exist."
     issue_template: "docs_improvement.yml"
 
   testing:
@@ -153,6 +163,7 @@ contribution_types:
       - "Open issue with mockup, design proposal, or asset"
       - "VRM avatar models, icons, UI/UX improvements welcome"
       - "Discuss with maintainer before large changes"
+      - "If implementing: include tests + context updates in same PR"
     issue_template: "feature_request.yml"
 
   security_report:
@@ -188,7 +199,9 @@ skills:
 pull_requests:
   title_format: "type(scope): description"
   types: ["feat", "fix", "refactor", "docs", "chore", "test"]
+  completeness_rule: "Code PRs must include: code + tests + context updates. Incomplete PRs will be requested to add missing parts."
   checklist:
+    - "Tests included (new code requires new tests)"
     - "Tests pass (pnpm test)"
     - "VERIFY step completed (app actually runs)"
     - "Context files updated if architecture changed"
@@ -227,7 +240,7 @@ language:
 # When changing code, update relevant .agents/ context in the same commit.
 # AI agents must follow cascade rules in agents-rules.json.
 code_context_unity:
-  principle: "Code change + context update = one commit. Never separate."
+  principle: "Code + tests + context = one commit. Never separate."
   cascade_ref: "agents-rules.json cascadeRules"
 
 mirrors:
