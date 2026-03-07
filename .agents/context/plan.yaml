@@ -360,8 +360,8 @@ phases:
     name: "Tauri app distribution (Linux packages)"
     timeline: "Week 10"
     deliverable: "Standalone Linux app: deb, rpm, AppImage via GitHub Releases"
-    status: "partial"
-    notes: "Flatpak manifest complete + build success (GNOME 47, 204.9MB binary). AppImage/deb/rpm pending."
+    status: "complete"
+    notes: "All formats available in GitHub Releases: Flatpak, AppImage, DEB, RPM. CI: release-app.yml."
     tasks:
       step_6_1:
         name: "Tauri bundle config"
@@ -390,7 +390,8 @@ phases:
     name: "OS ISO build"
     timeline: "Week 11"
     deliverable: "Naia ISO: USB boot → install → complete AI OS"
-    status: "pending"
+    status: "complete"
+    notes: "ISO builds live (iso-77, iso-78). Download via R2 CDN. CI: iso.yml."
     tasks:
       step_7_1:
         name: "Recipe + Tauri app inclusion"

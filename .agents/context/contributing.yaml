@@ -96,12 +96,29 @@ pull_requests:
     - "No console.log/warn/error left in code"
     - "Work log entry if significant change"
 
+# Onboarding
+# Target: developers who vibe-code with AI tools.
+# Clone → AI reads .agents/ → AI guides contributor in their language.
+ai_native_onboarding:
+  principle: "Clone the repo, open with any AI coding tool, ask in your language."
+  context_entry_points: ["CLAUDE.md", "AGENTS.md", "GEMINI.md"]
+  human_entry_point: "CONTRIBUTING.md"
+  note: "CONTRIBUTING.md is a minimal guide for people browsing GitHub without AI tools."
+
 # Communication
 language:
   code_and_context: "English"
   ai_responses: "Contributor's preferred language"
-  work_logs: "Korean (private repo)"
+  issues_and_prs: "Any language welcome — maintainers use AI translation"
+  work_logs: "Developer's preferred language (private repo, per developer)"
   commit_messages: "English"
+
+# Code and context are one unit.
+# When changing code, update relevant .agents/ context in the same commit.
+# AI agents must follow cascade rules in agents-rules.json.
+code_context_unity:
+  principle: "Code change + context update = one commit. Never separate."
+  cascade_ref: "agents-rules.json cascadeRules"
 
 mirrors:
   korean: ".users/context/ko/contributing.md"

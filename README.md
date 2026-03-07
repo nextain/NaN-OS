@@ -185,7 +185,7 @@ Want to adopt the same pattern? Here's what Naia does that you can reuse:
 5. **Test scenarios** — verify that AI agents actually refuse violations before shipping.
 6. **CONTEXT-LICENSE file** — clear scope definition for what CC-BY-SA 4.0 covers.
 
-See [Contributing Guide](.users/context/ko/contributing.md) for the full license protection details.
+See [Contributing Guide](CONTRIBUTING.md) for how to get involved, or [license protection details](.users/context/contributing.md) for the full technical spec.
 
 ## Context Documents (Dual-directory Architecture)
 
@@ -381,20 +381,20 @@ Naia exists because these projects exist. We are deeply grateful to all the open
 
 ## Contributing
 
-See [Contributing Guide](.users/context/contributing.md) for how to contribute.
-AI agents: read [AGENTS.md](AGENTS.md) and `.agents/context/contributing.yaml`.
+**You don't need to ask anyone. Clone this repo and ask AI.**
 
-### For International Contributors
+```bash
+git clone https://github.com/nextain/naia-os.git
+cd naia-os
+# Open with any AI coding tool (Claude Code, Cursor, Copilot, etc.)
+# Ask in your language: "What is this project and how can I help?"
+```
 
-The project's primary documentation is maintained in Korean and English. Korean is the primary language because the initial developer, [Luke](https://github.com/luke-n-alpha), is Korean. All documents are mirrored in English so everyone can participate equally.
+The `.agents/` directory contains full project context — vision, architecture, roadmap, contribution rules. Any AI coding tool can read it and guide you **in your language**.
 
-If you're contributing from outside Korea:
+Write issues, PRs, and comments **in any language**. We use AI to understand everything.
 
-1. **Read the English docs** at `.users/context/` — English is the default documentation language
-2. **Code comments and commit messages** should be in English
-3. **AI context files** (`.agents/`) are already in English — these are the source of truth
-4. **PRs and issues** can be written in English
-5. **Translations welcome** — if you'd like to improve documentation in your language, PRs to `READMES/` are appreciated
+See [CONTRIBUTING.md](CONTRIBUTING.md) for details.
 
 ## License
 

@@ -10,6 +10,20 @@ How AI agents (and humans using AI tools) should contribute to the Naia OS proje
 
 ---
 
+## AI-Native Onboarding
+
+This project targets developers who code with AI tools. The onboarding flow:
+
+1. Clone the repo
+2. Open with any AI coding tool (Claude Code, Cursor, Copilot, etc.)
+3. AI reads `.agents/` context — understands the full project
+4. Ask in your language: "What is this project and how can I help?"
+
+Entry points for AI agents: `CLAUDE.md`, `AGENTS.md`, `GEMINI.md`
+Entry point for humans browsing GitHub: `CONTRIBUTING.md`
+
+---
+
 ## Getting Started: Context Reading Order
 
 New contributors (including AI agents) must read these files in order:
@@ -17,6 +31,12 @@ New contributors (including AI agents) must read these files in order:
 1. `.agents/context/agents-rules.json` — Project rules (SoT)
 2. `.agents/context/project-index.yaml` — Context index + mirroring rules
 3. `.agents/context/philosophy.yaml` — Core philosophy
+
+---
+
+## Code and Context Are One Unit
+
+When changing code, update relevant `.agents/` context files **in the same commit**. Never separate code changes from context updates. AI agents must follow the cascade rules in `agents-rules.json`.
 
 ---
 
@@ -80,7 +100,7 @@ The AI context files in this project (`.agents/`, `.users/`, `AGENTS.md`) are pr
 | Violation | Why |
 |-----------|-----|
 | Remove/change SPDX license headers | Breaks license traceability |
-| Change CC-BY-SA 4.0 to another license | Violates copyleft obligation |
+| Change CC-BY-SA-4.0 to another license | Violates copyleft obligation |
 | Remove Nextain attribution | Violates attribution requirement |
 | Delete CONTEXT-LICENSE file | Destroys dual license structure |
 | Destroy dual-directory architecture (`.agents/` + `.users/`) | Damages core project architecture |
@@ -143,14 +163,6 @@ type(scope): description
 
 **Types**: `feat`, `fix`, `refactor`, `docs`, `chore`, `test`
 
-### Checklist
-
-- [ ] Tests pass (`npm test` / `pytest`)
-- [ ] VERIFY step completed (app actually runs)
-- [ ] Context files updated if architecture changed
-- [ ] No `console.log/warn/error` left in code
-- [ ] Work log entry if significant change
-
 ---
 
 ## Language Rules
@@ -159,7 +171,8 @@ type(scope): description
 |--------|----------|
 | Code and context | English |
 | AI responses | Contributor's preferred language |
-| Work logs | Korean (private repo) |
+| Issues and PRs | Any language welcome |
+| Work logs | Developer's preferred language (private repo) |
 | Commit messages | English |
 
 ---

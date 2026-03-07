@@ -1,5 +1,7 @@
 # Naia Shell Cross-Platform Port Analysis
 
+> **GitHub Issue**: https://github.com/nextain/naia-os/issues/4
+
 Target: Windows (Store/Steam) + macOS + SteamOS + Linux (current)
 Date: 2026-03-06
 

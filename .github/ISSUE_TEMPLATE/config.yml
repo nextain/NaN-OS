@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: "Not sure where to start?"
+    url: "https://github.com/nextain/naia-os/blob/main/CONTRIBUTING.md"
+    about: "Clone the repo and ask any AI coding tool in your language — it knows the full project context."

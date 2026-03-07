@@ -1,0 +1,22 @@
+name: Bug Report
+description: Something isn't working
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **Any language is welcome.** Write in whatever language you're comfortable with.
+
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened?
+      placeholder: Describe the bug. Screenshots and logs are helpful.
+    validations:
+      required: true
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment (optional)
+      placeholder: "OS, Naia version, hardware, etc."

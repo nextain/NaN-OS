@@ -576,10 +576,10 @@ interface MemoryProcessor {
 
 ---
 
-## Phase 6: Tauri 앱 배포 — Linux 패키지 (Week 10) — 부분 완료
+## Phase 6: Tauri 앱 배포 — Linux 패키지 (Week 10) — 완료
 
 > **결과물**: ISO 없이 기존 Linux에 설치 가능한 독립 앱
-> **현황**: Flatpak 매니페스트 완성 + 빌드 성공 (GNOME 47, 204.9MB 바이너리). AppImage/deb/rpm 미완.
+> **현황**: 모든 포맷 GitHub Releases에 배포 완료 (Flatpak, AppImage, DEB, RPM). CI: release-app.yml.
 
 ### 6-1. Tauri 번들 설정
 
@@ -611,9 +611,10 @@ interface MemoryProcessor {
 
 ---
 
-## Phase 7: OS ISO 빌드 (Week 11)
+## Phase 7: OS ISO 빌드 (Week 11) — 완료
 
 > **결과물**: USB 부팅 → 설치 가능한 완전한 Naia
+> **현황**: ISO 빌드 라이브 (iso-77, iso-78). R2 CDN 다운로드. CI: iso.yml.
 
 ### 7-1. Recipe에 Tauri 앱 포함
 
