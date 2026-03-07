@@ -176,8 +176,8 @@ gh workflow run iso.yml
 
 **SoT**: `.agents/workflows/issue-driven-development.yaml` — 매 세션 시작 시 반드시 읽을 것.
 
-**핵심 흐름** (10 phases):
-Issue → Understand (gate) → Scope (gate) → Investigate → Plan (gate) → Build → Review → E2E Test → Sync → Commit
+**핵심 흐름** (13 phases):
+Issue → Understand (gate) → Scope (gate) → Investigate → Plan (gate) → Build → Review → E2E Test → Post-test Review → Sync → Sync Verify → Report → Commit
 
 **Gate**: understand, scope, plan에서 사용자 확인 필수 (진행 전 STOP).
 

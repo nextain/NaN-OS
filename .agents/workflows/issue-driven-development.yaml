@@ -60,7 +60,7 @@ principles:
 iteration_rule:
   description: "All loops in this workflow terminate only after TWO consecutive clean passes"
   rationale: "A single clean pass can be a false negative. Two consecutive clean passes reduce the risk of missed issues."
-  applies_to: ["investigate", "plan", "review", "sync"]
+  applies_to: ["investigate", "plan", "review", "post_test_review", "sync_verify"]
 
 # ─── Phases ───────────────────────────────────────────────────
 
@@ -182,6 +182,7 @@ phases:
       - "Test through the real UI/Shell path"
       - "Never use simplified or shortcut test paths"
       - "The test must match what a real user would do"
+      - "Tests must pass completely clean (no partial passes)"
     rules:
       - "No runtime patches to make tests pass"
       - "No manual post-processing"
@@ -190,21 +191,47 @@ phases:
       implementation_issue: "→ return to BUILD"
       design_issue: "→ return to PLAN"
       investigation_gap: "→ return to INVESTIGATE"
-    output: "Passing E2E test"
+    output: "Passing E2E test (fully clean)"
+
+  post_test_review:
+    description: "Re-review after tests pass — catch issues that testing context reveals"
+    steps:
+      - "loop:"
+      - "  - Re-read ALL new/modified files (fresh eyes after testing)"
+      - "  - Review against same checklist as initial review"
+      - "  - Fix any issues found"
+      - "  - If TWO consecutive passes find no issues → post-test review complete"
+    output: "Final clean code"
 
   sync:
     description: "Synchronize contexts"
     steps:
+      - "Update .agents/ context files if implementation changed project knowledge"
+      - "Update .users/ mirrors (1:1 mirroring)"
+      - "Update entry points (AGENTS.md/CLAUDE.md/GEMINI.md) if needed"
+    output: "Updated context files"
+
+  sync_verify:
+    description: "Verify context updates are accurate and complete"
+    steps:
       - "loop:"
-      - "  - Check if .agents/ needs updates → update"
-      - "  - Check if .users/ needs updates → update (1:1 mirror)"
-      - "  - Check if entry points (AGENTS.md/CLAUDE.md/GEMINI.md) need updates → update"
-      - "  - If TWO consecutive passes find nothing to update → sync complete"
-    output: "Synchronized context files"
+      - "  - Re-read all updated context files"
+      - "  - Check accuracy against actual implementation"
+      - "  - Check mirror consistency (.agents/ ↔ .users/ ↔ .users/ko/)"
+      - "  - Fix any inaccuracies or missing updates"
+      - "  - If TWO consecutive passes find nothing to fix → verification complete"
+    output: "Verified, synchronized context files"
+
+  report:
+    description: "Report results to user and Issue"
+    steps:
+      - "Summarize what was done, what changed, and any remaining items"
+      - "Post completion status as Issue comment (English)"
+    output: "Completion report"
 
   commit:
     description: "Commit and link to Issue"
-    prerequisite: "ALL prior phases (build, review, e2e_test, sync) must be complete before committing"
+    prerequisite: "ALL prior phases (build, review, e2e_test, post_test_review, sync, sync_verify) must be complete before committing"
     steps:
       - "Stage relevant files only"
       - "Commit with descriptive message referencing Issue number"
