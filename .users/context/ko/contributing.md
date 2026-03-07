@@ -172,8 +172,8 @@ AI 컨텍스트 파일은 **CC-BY-SA 4.0**으로 라이선스됩니다.
 
 - **형식**: OpenClaw `skill.json` 스펙
 - **위치**: `agent/assets/default-skills/`
-- **네이밍**: `naia-{이름}/` 패턴
-- **테스트**: 실제 LLM 호출로 테스트 (mock 아님)
+- **네이밍**: Naia 전용 스킬은 `naia-{이름}/` 사용. 업스트림 OpenClaw 스킬은 원래 이름 유지.
+- **테스트**: 통합 테스트 우선. 격리된 로직의 mock 기반 단위 테스트 허용. 실제 게이트웨이 E2E: `CAFE_LIVE_GATEWAY_E2E=1` 환경변수로 opt-in.
 
 ---
 
@@ -190,6 +190,10 @@ type(scope): description
 - **Git 트레일러**: `Assisted-by: {도구명}` (예: `Assisted-by: Claude Code`)
 - **PR 공개**: PR 템플릿 체크박스 (AI 보조 / 완전 AI 생성 / AI 미사용)
 - **원칙**: 강제하되 차단하지 않음 — 교육적 접근
+
+### PR 크기
+
+PR당 20개 파일 이하 권장.
 
 ### 체크리스트
 
@@ -210,7 +214,7 @@ type(scope): description
 | 코드 및 컨텍스트 | 영어 |
 | AI 응답 | 기여자의 선호 언어 |
 | 이슈 및 PR | 아무 언어 환영 |
-| 작업 로그 | 개발자 선호 언어 (private repo) |
+| 작업 로그 | 기여자 선호 언어 (work-logs/, gitignored) |
 | 커밋 메시지 | 영어 |
 
 ---

@@ -14,9 +14,11 @@ Traditional software has unit tests. Context files need **AI behavior tests**.
 
 1. **Headless testing** — Run tests in separate, fresh AI sessions (not the session that wrote the context)
 2. **Black-box verification** — Test what the AI *does*, not what it *knows*
-3. **Multi-agent coverage** — Test across multiple AI tools (Claude Code, Codex, Gemini, etc.)
+3. **Multi-agent coverage** — Test across multiple AI tools (Codex + Gemini minimum)
 4. **Reproducible prompts** — Same prompt → consistent expected behavior
 5. **Pass/fail criteria** — Each test has clear, checkable expected outcomes
+6. **Structural problem first** — When tests fail, analyze structural issues (doc vs code mismatch, unreachable references, information architecture) before attributing to AI tool characteristics
+7. **Two consecutive clean passes** — Iteration loops terminate after two consecutive passes with no new findings
 
 ## Test Types
 
@@ -99,13 +101,35 @@ For each test scenario, check:
 | 50-69% pass | Significant gaps | Review context structure, add missing information |
 | <50% pass | Context is insufficient | Major rewrite needed |
 
-### Step 5: Iterate
+**Structural root cause check**: If failures trace to doc-code mismatches, broken references, or unreachable files, fix the structural issue first — not just "enrich context."
+
+### Step 5: Failure Analysis Protocol
+
+When tests fail, follow this order:
+
+1. **Structural analysis** — Are all referenced files accessible? Do paths resolve? Does the file actually exist in the repo?
+2. **Doc vs code comparison** — Does the documented rule match what the code actually does?
+3. **Reference tracing** — Follow every reference chain (entry point → context file → referenced file) and verify each link
+4. **Information architecture** — Is the info in the right place? Is it discoverable from the entry point?
+5. **Only then**: Consider tool-specific behavior as a factor (and record as observation, not permanent characterization)
+
+### Step 6: Iterate
 
 If tests fail:
-1. Identify which context file is responsible for the gap
-2. Update the context file
+1. Apply failure analysis protocol (Step 5) to identify root cause
+2. Fix structural issues first, then context gaps
 3. Re-run only the failed tests in a fresh session
 4. Repeat until all tests pass
+
+### Step 7: Per-Fix Structural Verification
+
+After applying fixes (before headless testing), verify:
+- [ ] Every path reference in entry points resolves to existing file
+- [ ] Every rule in context files matches actual codebase
+- [ ] Entry points are byte-identical (AGENTS.md = CLAUDE.md = GEMINI.md)
+- [ ] project-index.yaml lists all new files with correct mirrors
+- [ ] Mirror pairs exist and are structurally consistent
+- [ ] No workspace-specific absolute paths remain
 
 ## Lessons Learned (from actual testing)
 
@@ -128,13 +152,15 @@ codex exec "prompt" --full-auto
 gemini -p "prompt" --approval-mode yolo
 ```
 
-### Tool-specific behaviors
+### Tool-specific observations (from testing, not permanent characterizations)
 
-| Tool | Entry point | Depth | Notes |
-|------|-------------|-------|-------|
-| Claude Code | `CLAUDE.md` | Reads deep (contributing.yaml, agents-rules.json) | Most thorough |
-| Codex | `AGENTS.md` | Entry point + 1-2 referenced files | Good but shallow |
-| Gemini CLI | `GEMINI.md` | Entry point primarily | Shallowest; global persona settings (`~/.gemini/GEMINI.md`) can override project context |
+| Tool | Entry point | Observed behavior | Notes |
+|------|-------------|-------------------|-------|
+| Claude Code | `CLAUDE.md` | Read contributing.yaml, agents-rules.json in addition to entry point | Observation from Test 1-4 (2026-03-07) |
+| Codex | `AGENTS.md` | Read entry point + contributing.yaml for Test 10/11, but missed agents-rules.json | Observation from Test 5/10/11 (2026-03-07) |
+| Gemini CLI | `GEMINI.md` | Entry point primarily; global persona (`~/.gemini/GEMINI.md`) can override | Observation from initial test (2026-03-07) |
+
+**Important**: These are observations from specific test runs, not fixed tool characteristics. When tests fail, investigate structural problems (broken references, doc-code mismatches) before assuming tool limitations.
 
 ### Self-evaluation bias
 

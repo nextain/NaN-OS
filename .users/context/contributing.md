@@ -188,8 +188,8 @@ Context contributions are valued equally to code contributions.
 
 - **Format**: OpenClaw `skill.json` spec
 - **Location**: `agent/assets/default-skills/`
-- **Naming**: `naia-{name}/` pattern
-- **Testing**: Test with actual LLM calls, not mocks
+- **Naming**: New Naia-specific skills use `naia-{name}/`. Upstream OpenClaw skills keep their original names.
+- **Testing**: Integration tests preferred. Mock-based unit tests acceptable for isolated logic. E2E with real gateway: opt-in via `CAFE_LIVE_GATEWAY_E2E=1`.
 
 ---
 
@@ -208,6 +208,10 @@ type(scope): description
 - **Git trailer**: `Assisted-by: {tool name}` (e.g., `Assisted-by: Claude Code`)
 - **PR disclosure**: Checkbox in PR template (AI-assisted / fully AI-generated / no AI)
 - **Principle**: Enforced but not blocking — educational, not punitive
+
+### PR Size
+
+Under 20 files per PR recommended.
 
 ### Checklist
 
@@ -228,7 +232,7 @@ type(scope): description
 | Code and context | English |
 | AI responses | Contributor's preferred language |
 | Issues and PRs | Any language welcome |
-| Work logs | Developer's preferred language (private repo) |
+| Work logs | Contributor's preferred language (work-logs/, gitignored) |
 | Commit messages | English |
 
 ---

@@ -1,0 +1,89 @@
+# SPDX-License-Identifier: CC-BY-SA-4.0
+#
+# Multi-Project Workspace Guide
+# For maintainers and power users who manage multiple projects
+# from a single workspace (e.g., ~/dev/ with multiple repos).
+#
+# Single-project contributors (git clone one repo) do NOT need this.
+
+version: 1
+
+# ─── When to Use This Guide ─────────────────────────────────
+
+scope:
+  for: "Users who work on multiple projects from a shared workspace directory"
+  not_for: "Contributors who clone and work on a single repo"
+  example: "~/dev/ containing naia-os/, about.nextain.io/, docs-work-logs/, etc."
+
+# ─── Context Layering ───────────────────────────────────────
+
+context_layering:
+  principle: "Project-level context takes precedence over workspace-level context"
+  resolution_order:
+    - "Project entry point (e.g., naia-os/AGENTS.md)"
+    - "Project .agents/ context files"
+    - "Workspace entry point (e.g., ~/dev/CLAUDE.md)"
+    - "Workspace .agents/ context files"
+  rules:
+    - "When the same concept exists at both levels, project-level wins"
+    - "Workspace-level provides cross-project conventions and shared tooling"
+    - "AI tools typically auto-load the project entry point; workspace entry point may be loaded by tool config"
+
+# ─── Name Collision Awareness ────────────────────────────────
+
+name_collisions:
+  description: "Files with the same name at workspace and project level may have different content"
+  known_cases:
+    - file: "development-cycle.yaml"
+      workspace: "Lightweight cycle (27 lines, typos/config)"
+      project: "Full coding cycle with TDD and security review (217 lines)"
+      resolution: "Project version is the correct one for coding work"
+  rule: "Always check relative paths. When in doubt, use the project-internal version."
+
+# ─── Work-Logs Strategy ─────────────────────────────────────
+
+work_logs:
+  single_project:
+    location: "work-logs/ (gitignored, project-internal)"
+    convention: "{username}/YYYYMMDD-NN-topic.md"
+    note: "This is the default for all contributors"
+  multi_project:
+    option_a:
+      description: "Per-project work-logs (recommended)"
+      location: "Each project's work-logs/ directory"
+      advantage: "Co-located, AI finds them naturally"
+    option_b:
+      description: "Centralized work-logs repo"
+      location: "Separate repo (e.g., docs-work-logs/)"
+      advantage: "Cross-project visibility for team members"
+      caveat: "Requires workspace-specific paths; not portable"
+  recommendation: "Use per-project work-logs/ as the AI-facing default. Centralized repos are a personal/team choice."
+
+# ─── File Lock Protocol ─────────────────────────────────────
+
+file_lock:
+  purpose: "Prevent file conflicts when multiple AI sessions work in the same workspace"
+  scope: "Workspace-level (not project-level) — only needed when running parallel AI sessions"
+  lock_file: ".claude/file-locks.json (relative to workspace root)"
+  rules:
+    - "Before editing: read lock file, check if file is locked by another session"
+    - "Lock register: add entry with owner = branch name"
+    - "Unlock: remove entry when work is done"
+    - "Conflict: if file is locked, notify user instead of editing"
+    - "Free list: files in 'free' array can be freely modified by anyone"
+    - "CSS rule: even locked CSS files allow adding classes with unique prefix"
+  note: "External contributors working on a single repo do NOT need this protocol"
+
+# ─── Submodule Management ───────────────────────────────────
+
+submodules:
+  principle: "When working in a submodule, read its entry point first"
+  init: "git submodule update --init --recursive"
+  rules:
+    - "Each submodule has its own AGENTS.md/CLAUDE.md/GEMINI.md"
+    - "Submodule context takes precedence over parent workspace context"
+    - "Cross-submodule references should use relative paths"
+
+mirrors:
+  english: ".users/context/multi-project-workspace.md"
+  korean: ".users/context/ko/multi-project-workspace.md"

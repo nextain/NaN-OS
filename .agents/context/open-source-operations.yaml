@@ -33,8 +33,8 @@ premises:
     detail: "AI assists contributors in coding; AI assists maintainers in triage and review"
 
   - id: english_lingua_franca
-    statement: "Everything on Git is in English; AI translates"
-    detail: "Code, commits, PR titles in English. Issue/PR body allows native language."
+    statement: "Public sharing on Git is in English; private work logs in native language; AI translates"
+    detail: "Code, commits, PR titles, Issue comments in English. Work-logs (gitignored) in contributor's preferred language."
 
   - id: mixed_skill_levels
     statement: "Beginners to experts; AI adapts guidance"

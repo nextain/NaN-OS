@@ -1,0 +1,271 @@
+# SPDX-License-Identifier: CC-BY-SA-4.0
+#
+# Issue-Driven Development Cycle
+#
+# Upstream-first, code-centric development methodology
+# for fork-based / upstream-dependent projects (e.g., Naia OS on Bazzite).
+#
+# Key insight: front-load user involvement (issue understanding, scope, plan),
+# then AI executes autonomously with built-in quality gates.
+#
+# Scope: Default for all feature-level work (new features, broad bug fixes).
+# For non-feature changes (typos, config values, simple directives), use development-cycle.yaml.
+
+version: 1
+name: issue-driven-development
+mirror: ".users/workflows/issue-driven-development.md"
+
+scope:
+  applies_to: "Default for all feature-level work"
+  includes:
+    - "New feature development"
+    - "Bug fixes that touch a broadly-built feature (most bugs lead to full feature review)"
+    - "Any work where surrounding code quality is uncertain"
+  unit: "Feature (may span multiple issues)"
+  not_for: "Non-feature changes (typos, config values, simple directives) — use development-cycle.yaml"
+
+# ─── Principles ───────────────────────────────────────────────
+
+principles:
+  upstream_analysis_first:
+    rule: "Before writing code, fully understand how upstream implements the feature"
+    anti_pattern: "Guessing upstream behavior without reading the code"
+
+  minimal_modification:
+    rule: "Follow upstream's working flow, overlay customizations with minimal changes"
+    anti_pattern: "Rebuilding what upstream already provides"
+
+  no_guessing:
+    rule: "Never design based on assumptions — read the actual code"
+    anti_pattern: "Assuming behavior from docs or naming conventions alone"
+
+  no_symptom_patching:
+    rule: "Before stacking patches, verify you're on the correct path"
+    anti_pattern: "Fixing symptoms with 5 patches when 1 root-cause fix suffices"
+
+  no_autonomous_development:
+    rule: "Propose improvements to the user — never decide to build on your own"
+    anti_pattern: "Deciding 'this would be better' and implementing without asking"
+
+  working_code_preservation:
+    rule: "Never break working code by 'improving' or 'switching modes'"
+    anti_pattern: "Refactoring a working flow into a 'better' one that crashes"
+
+  structural_problem_first:
+    rule: "When tests fail or AI behaves unexpectedly, analyze structural issues (doc vs code mismatch, unreachable references, information architecture) before attributing to AI tool characteristics"
+    anti_pattern: "Blaming 'AI reads shallow' when the real problem is a broken file reference"
+
+# ─── Iteration Termination Rule ───────────────────────────────
+
+iteration_rule:
+  description: "All loops in this workflow terminate only after TWO consecutive clean passes"
+  rationale: "A single clean pass can be a false negative. Two consecutive clean passes reduce the risk of missed issues."
+  applies_to: ["investigate", "plan", "review", "sync"]
+
+# ─── Phases ───────────────────────────────────────────────────
+
+phases:
+
+  # ── User-Involved (front-loaded) ──────────────────────────
+
+  issue:
+    description: "Define or receive the issue"
+    steps:
+      - "Identify or create a GitHub Issue"
+      - "All subsequent artifacts link back to this Issue"
+    output: "GitHub Issue URL"
+
+  understand:
+    description: "Confirm understanding of the issue before investigating"
+    gate: true  # must not proceed without user confirmation
+    steps:
+      - "Analyze the issue and summarize understanding"
+      - "Present to user: 'Is my understanding correct?'"
+      - "User confirms or corrects"
+    output: "Confirmed issue understanding"
+    record: "Post understanding summary as Issue comment (English)"
+
+  scope:
+    description: "Define investigation scope and depth, with user approval"
+    gate: true  # must not proceed without user confirmation
+    steps:
+      - "Propose scope (which files/modules/repos to examine)"
+      - "Propose depth for each scope area"
+      - "Present to user with rationale"
+      - "User confirms or adjusts"
+    output: "Confirmed scope and depth"
+    record: "Post scope definition as Issue comment (English)"
+
+    scope_levels:
+      L1: "Files to be directly modified"
+      L2: "Dependencies of L1 (imports, callers, callees)"
+      L3: "Upstream originals (how the same feature is implemented upstream)"
+
+    depth_levels:
+      surface: "Function signatures, config values, interfaces only"
+      flow: "Execution flow tracing (call chains, ordering)"
+      internal: "Line-by-line implementation logic"
+
+  investigate:
+    description: "Code-centric investigation within confirmed scope"
+    steps:
+      - "loop:"
+      - "  - Read ALL code in scope (not just until first finding)"
+      - "  - List findings with evidence (file:line citations required)"
+      - "  - Re-read scope for additional findings"
+      - "  - If new findings → continue loop"
+      - "  - If TWO consecutive passes find nothing new → investigation complete"
+    rules:
+      - "NEVER stop at the first bug found — complete full scope review"
+      - "Every finding MUST cite specific code location (file:line)"
+      - "No 'it seems like...' — only evidence-backed findings"
+      - "Code over docs — read actual implementation, not just documentation"
+      - "Distinguish CI/dummy code from production code"
+    output: "Complete findings list with evidence"
+    record: "Post investigation results as Issue comment (English)"
+
+  plan:
+    description: "Comprehensive plan based on ALL findings"
+    gate: true  # must not proceed without user confirmation
+    steps:
+      - "Draft plan addressing all findings (not just the first one)"
+      - "loop:"
+      - "  - Re-read plan against findings and actual code"
+      - "  - Check for missing items, inconsistencies, unverified references"
+      - "  - If corrections needed → update plan, continue loop"
+      - "  - If TWO consecutive passes find nothing to fix → plan is stable"
+      - "Present stable plan to user for approval"
+      - "User confirms or adjusts"
+    output: "Approved implementation plan"
+    record: "Post plan as Issue comment (English)"
+
+  # ── AI-Autonomous (with quality gates) ────────────────────
+
+  build:
+    description: "Implement according to approved plan"
+    steps:
+      - "Create branch: issue-N-description"
+      - "Implement changes per plan"
+      - "Follow TDD where applicable (RED → GREEN → REFACTOR)"
+    rules:
+      - "Stay within plan scope — no unplanned changes"
+      - "Follow upstream patterns, don't invent new ones"
+    output: "Implementation on feature branch"
+
+  review:
+    description: "Self-review against plan AND original issue"
+    trigger: "After EVERY phase completion (not just at the end)"
+    steps:
+      - "loop:"
+      - "  - Read ALL new/modified files (not from memory — re-read)"
+      - "  - Review code against checklist"
+      - "  - Fix any issues found"
+      - "  - Re-review (read again after fixes)"
+      - "  - If TWO consecutive passes find no issues → review complete"
+      - "Multi-phase builds: run review after each phase before proceeding"
+    output: "Clean, reviewed code"
+
+    checklist:
+      - "plan_compliance: Does the code implement every item in the plan?"
+      - "issue_resolution: Does it actually solve the original issue?"
+      - "scope_discipline: Are there changes beyond what was planned?"
+      - "working_code_preserved: Does it break anything that was working?"
+      - "upstream_pattern: Does it follow upstream conventions, not invent new ones?"
+      - "side_effects: Could this change affect other parts unexpectedly?"
+      - "hardcoded_strings: Are there any hardcoded UI strings that should use i18n?"
+      - "type_safety: Are there any unvalidated external inputs (body, params)?"
+      - "unused_code: Are there unused props, imports, or dead code paths?"
+
+  e2e_test:
+    description: "End-to-end test through actual user path"
+    steps:
+      - "Test through the real UI/Shell path"
+      - "Never use simplified or shortcut test paths"
+      - "The test must match what a real user would do"
+    rules:
+      - "No runtime patches to make tests pass"
+      - "No manual post-processing"
+      - "User's goal must be achieved without additional intervention"
+    on_failure:
+      implementation_issue: "→ return to BUILD"
+      design_issue: "→ return to PLAN"
+      investigation_gap: "→ return to INVESTIGATE"
+    output: "Passing E2E test"
+
+  sync:
+    description: "Synchronize contexts"
+    steps:
+      - "loop:"
+      - "  - Check if .agents/ needs updates → update"
+      - "  - Check if .users/ needs updates → update (1:1 mirror)"
+      - "  - Check if entry points (AGENTS.md/CLAUDE.md/GEMINI.md) need updates → update"
+      - "  - If TWO consecutive passes find nothing to update → sync complete"
+    output: "Synchronized context files"
+
+  commit:
+    description: "Commit and link to Issue"
+    steps:
+      - "Stage relevant files only"
+      - "Commit with descriptive message referencing Issue number"
+      - "Create PR linked to Issue"
+    output: "PR ready for merge"
+
+# ─── Gates (user confirmation required) ──────────────────────
+
+gates:
+  - phase: understand
+    prompt: "Is my understanding of this issue correct?"
+  - phase: scope
+    prompt: "I propose investigating scope L{n} / depth {level}. Does this look right?"
+  - phase: plan
+    prompt: "Here is my implementation plan. Shall I proceed?"
+
+# ─── Artifact Storage ────────────────────────────────────────
+
+artifact_storage:
+  principle: "Intermediate artifacts go to GitHub Issues; permanent knowledge goes to context files"
+  rules:
+    intermediate:
+      location: "GitHub Issue comments"
+      includes: ["investigation findings", "plans", "analysis", "decisions in progress"]
+      rationale: "Transparent (public), compact-resilient (AI can re-read via gh issue view), no repo bloat"
+    final:
+      location: ".agents/ context files"
+      includes: ["confirmed rules", "architecture decisions", "stable processes"]
+      rationale: "Permanent AI context, version-controlled, mirrored to .users/"
+    must_not:
+      - "Store work-in-progress artifacts in .agents/ (it's for permanent context only)"
+      - "Store intermediate plans as files in the repo"
+
+# ─── Work Logs ───────────────────────────────────────────────
+
+work_logs:
+  location: "work-logs/ (gitignored, project-internal)"
+  convention: "{username}/YYYYMMDD-NN-topic.md"
+  language: "Contributor's preferred language"
+  purpose: "Personal session notes, detailed progress, native-language thinking"
+  backup: "Optional — contributor may git init inside work-logs/ for private backup"
+  note: "Key findings and decisions must ALSO be posted to the Issue (English, public)"
+
+# ─── Language Principle ──────────────────────────────────────
+
+language:
+  public:
+    scope: "Git commits, Issue comments, PR titles/bodies, context files"
+    language: "English"
+    rationale: "Transparency for global open source community"
+  private:
+    scope: "work-logs/, personal notes"
+    language: "Contributor's preferred language"
+    rationale: "Thinking and recording in native language is more effective"
+  ai_responses:
+    language: "Contributor's preferred language"
+
+# ─── Git Integration ─────────────────────────────────────────
+
+git_integration:
+  issue: "Each cycle starts from a GitHub Issue"
+  branch: "issue-{number}-{short-description}"
+  comments: "Investigation results, scope, plan, decisions posted as Issue comments (English)"
+  pr: "Links back to Issue on completion"
+  transparency: "Full decision trail visible in Issue timeline"

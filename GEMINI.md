@@ -54,7 +54,7 @@ Naia-OS/
 ├── recipes/        # BlueBuild recipe
 ├── config/         # BlueBuild config (scripts, files)
 ├── os/             # OS 테스트, 유틸리티
-└── work-logs/      # 개발 작업 로그 (이 프로젝트 전용)
+└── work-logs/      # 개발 작업 로그 (gitignored, {username}/ 하위)
 ```
 
 ## 컨벤션 (요약)
@@ -91,12 +91,21 @@ Naia-OS/
 **Any language is welcome.** 이슈, PR, 디스커션은 모국어로 작성 가능 — AI가 번역합니다.
 코드, 커밋 메시지, 컨텍스트 파일은 영어.
 
+### 코드 기여 핵심
+
+1. **이슈 먼저** — 코드 작성 전 GitHub Issue 생성 또는 기존 이슈 선택
+2. **브랜치**: `issue-{N}-{desc}`
+3. **TDD**: 테스트 먼저 → 최소 코드 → 리팩토링
+4. **하나의 PR**: code + tests + context = one PR (분리 금지)
+5. **PR 제목**: `type(scope): description` (feat, fix, refactor, docs, chore, test)
+6. **PR 크기**: 20 파일 이하 권장
+
 기여 유형 10가지: 번역, 스킬, 신기능, 버그 리포트, 코드/PR, 문서, 테스팅, 디자인/UX/에셋, 보안 리포트, 컨텍스트.
 컨텍스트 기여는 코드 기여와 동등한 가치.
 
 AI 귀속: `Assisted-by: {tool}` git trailer + PR 템플릿 체크박스 (교육적 접근, 차단하지 않음).
 
-상세: `.agents/context/contributing.yaml`
+상세 프로세스는 아래 **개발 프로세스** 섹션 참조. 상세 규칙: `.agents/context/contributing.yaml`
 
 ## 주요 명령어
 
@@ -163,24 +172,22 @@ gh workflow run iso.yml
 
 ### 기능 개발 (기본값) — Issue-Driven Development
 
-기능 단위 작업(신규 기능, 기능 단위 버그 수정)의 기본 워크플로우. **매 세션 시작 시 반드시 이 10단계를 인식할 것.**
+기능 단위 작업(신규 기능, 기능 단위 버그 수정)의 기본 워크플로우.
 
-1. **이슈 등록** — GitHub Issue 생성 (영어)
-2. **이해 피드백** — 이슈 이해를 정리하여 사용자에게 확인 (gate)
-3. **계획 수립** — 조사 → 구현 계획 제안 → 사용자 승인 (gate)
-4. **계획 반복 분석** — 수정 사항이 안 나올 때까지 계획을 반복 검토
-5. **구현** — 승인된 계획대로 코딩
-6. **페이스별 반복 리뷰** — 구현이 페이스/단계로 나뉘면, 각 완료 시 수정 없을 때까지 반복 리뷰
-7. **최종 리뷰** — 전체 변경 사항 다시 읽고 최종 검토
-8. **컨텍스트 업데이트** — 개발 내용을 기반으로 `.agents/` + `.users/` 컨텍스트 동시 업데이트 (삼중 미러)
-9. **컨텍스트 반복 분석** — 컨텍스트 현행화, 수정 사항 안 나올 때까지 반복
-10. **커밋 & 푸시** — Issue 번호 참조하여 커밋
+**SoT**: `.agents/workflows/issue-driven-development.yaml` — 매 세션 시작 시 반드시 읽을 것.
 
-**"반복 리뷰"란**: 파일을 다시 읽고, 수정 사항을 찾고, 고치고, 다시 읽는 것을 **수정이 더 이상 안 나올 때까지** 반복하는 것. 1회 검토가 아님.
+**핵심 흐름** (10 phases):
+Issue → Understand (gate) → Scope (gate) → Investigate → Plan (gate) → Build → Review → E2E Test → Sync → Commit
+
+**Gate**: understand, scope, plan에서 사용자 확인 필수 (진행 전 STOP).
+
+**반복 리뷰**: 파일을 다시 읽고, 수정하고, 다시 읽는 것을 **연속 2회 수정이 안 나올 때까지** 반복. 1회 검토가 아님.
+
+**산출물 위치**: 중간 결과(발견, 계획, 분석) → GitHub Issue 코멘트 (영어). 최종 결론 → `.agents/` 컨텍스트 파일.
 
 원칙: upstream 코드 먼저 읽기 (추측 금지). 최소 수정. 동작하는 코드 보존. 개선안은 제안만.
 
-상세: 워크스페이스 루트 `.agents/workflows/issue-driven-development.yaml`
+코드 기여 시에는 **기여하기** 섹션도 참조.
 
 ### 단순 변경 (경량 사이클)
 
@@ -194,24 +201,6 @@ gh workflow run iso.yml
 
 핵심: **기존 코드 먼저 검색, 중복 생성 금지, 미사용 코드 정리, 셀프 리뷰 후 커밋.**
 
-## 병렬 세션 파일 잠금 (File Lock Protocol)
+## 멀티 프로젝트 워크스페이스
 
-여러 Claude 세션이 동시에 작업할 때 파일 충돌을 방지하는 규칙.
-
-**잠금 파일**: `/home/luke/dev/.claude/file-locks.json` (절대경로, 양쪽 세션 공유)
-
-### 규칙
-
-1. **편집 전 확인**: 파일 수정 전 `file-locks.json`을 읽고 해당 파일이 다른 세션에 잠겨있는지 확인
-2. **잠금 등록**: 새 파일 편집 시작 시 `locks`에 등록 (owner = 브랜치명)
-3. **완료 후 해제**: 작업 완료 시 해당 잠금 제거
-4. **충돌 시 중단**: 잠긴 파일을 수정해야 하면, 사용자에게 알리고 대기
-5. **free 목록**: `free` 배열에 있는 파일은 누구나 자유롭게 생성/수정 가능
-6. **CSS 규칙**: `global.css`가 잠겨있어도, 고유 prefix(`.googlechat-*` 등)의 새 클래스는 추가 가능
-
-### 사용법
-
-```bash
-# 잠금 확인 (세션 시작 시)
-cat /home/luke/dev/.claude/file-locks.json
-```
+여러 프로젝트를 동시에 관리하는 경우(예: `~/dev/`에 여러 레포): `.agents/context/multi-project-workspace.yaml` 참조.

@@ -140,9 +140,9 @@ These scenarios verify that AI coding agents (Claude Code, Codex, Gemini, OpenCo
 **Expected:**
 - Agent explains skill location: `agent/assets/default-skills/`
 - Agent mentions OpenClaw `skill.json` spec
-- Agent mentions naming convention: `naia-{name}/`
+- Agent mentions naming convention: Naia-specific skills use `naia-{name}/`, upstream OpenClaw skills keep original names
 - Agent mentions using the `skill_proposal.yml` issue template
-- Agent mentions testing with actual LLM calls, not mocks
+- Agent mentions testing approach: integration tests preferred, mock-based unit tests acceptable for isolated logic
 
 ---
 
@@ -178,6 +178,60 @@ These scenarios verify that AI coding agents (Claude Code, Codex, Gemini, OpenCo
 
 ---
 
+---
+
+## Test 13: Artifact Storage
+
+**Prompt:**
+> I've been investigating a bug and have detailed findings. Where should I save them?
+
+**Expected:**
+- Agent recommends posting findings as a GitHub Issue comment (not as a file in the repo)
+- Agent mentions Issue comments provide transparency and are accessible to all contributors
+- Agent mentions `.agents/` is for permanent context only, not work-in-progress artifacts
+- Agent may mention `work-logs/` for personal notes
+
+---
+
+## Test 14: Language Principle
+
+**Prompt:**
+> I want to write a progress report about my work. Should I write it in Korean?
+
+**Expected:**
+- Agent distinguishes between public and private writing
+- Agent says: Issue comments, PR descriptions, commits → English (public, transparent)
+- Agent says: work-logs, personal notes → any language (private, native language)
+- Agent does NOT say "everything must be in English"
+
+---
+
+## Test 15: Work-Logs Convention
+
+**Prompt:**
+> Where do I keep my personal notes while working on this project?
+
+**Expected:**
+- Agent mentions `work-logs/` directory (gitignored, project-internal)
+- Agent mentions `{username}/` subdirectory convention
+- Agent mentions file naming: `YYYYMMDD-NN-topic.md`
+- Agent mentions these are private (gitignored) and in contributor's preferred language
+
+---
+
+## Test 16: Multi-Project Workspace
+
+**Prompt:**
+> I manage multiple repos in ~/dev/. How should I set up my AI context?
+
+**Expected:**
+- Agent references `.agents/context/multi-project-workspace.yaml`
+- Agent explains context layering (project-level takes precedence over workspace-level)
+- Agent mentions potential name collisions between workspace and project files
+- Agent does NOT assume single-project setup is the only option
+
+---
+
 ## Verification Checklist
 
 After running all tests, verify:
@@ -194,23 +248,17 @@ After running all tests, verify:
 - [ ] Agent knew skill contribution details (Test 10)
 - [ ] Agent described full PR template (Test 11)
 - [ ] Agent described quality strategy without "gatekeeping" framing (Test 12)
+- [ ] Agent recommended Issue comments for findings, not file storage (Test 13)
+- [ ] Agent distinguished public (English) vs private (any language) (Test 14)
+- [ ] Agent knew work-logs convention (Test 15)
+- [ ] Agent referenced multi-project workspace guide (Test 16)
 - [ ] Agent was welcoming and encouraging in all responses
-
-## Compatible Agents
-
-- **Claude Code** — reads CLAUDE.md → agents-rules.json → contributing.yaml → open-source-operations.yaml
-- **OpenAI Codex** — reads AGENTS.md
-- **Google Gemini** — reads GEMINI.md
-- **OpenCode** — reads AGENTS.md
-- **Cline** — reads AGENTS.md
-- **Cursor** — reads AGENTS.md
-- **Any AAIF-compatible agent** — reads AGENTS.md
 
 ## Scoring
 
 | Score | Result |
 |-------|--------|
-| 12/12 | Full AI-native onboarding works |
-| 9-11/12 | Mostly works, minor gaps in context |
-| 6-8/12 | Partial — context needs enrichment |
-| <6/12 | Context is insufficient — major gaps |
+| 16/16 | Full AI-native onboarding works |
+| 12-15/16 | Mostly works, minor gaps in context |
+| 8-11/16 | Partial — context needs enrichment |
+| <8/16 | Context is insufficient — major gaps |

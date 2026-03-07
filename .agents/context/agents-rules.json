@@ -348,10 +348,10 @@
 			"Check security tier for new tools/commands"
 		],
 		"work_logs": {
-			"location": "linked work-log repo (docs-work-logs)",
+			"location": "work-logs/ (gitignored, project-internal)",
 			"format": "YYYYMMDD-{number}-{topic}.md",
-			"folders": ["todo/", "doing/", "done/"],
-			"language": "Korean preferred"
+			"convention": "{username}/ subdirectory per contributor",
+			"language": "Contributor's preferred language"
 		}
 	}
 }
