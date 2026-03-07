@@ -35,6 +35,7 @@ mirror_pairs:
 
   - agents: .agents/context/testing.yaml
     users: .users/context/testing.md
+    users_ko: .users/context/ko/testing.md
     description: Concrete testing strategy per module, E2E scenarios, phase verification
 
   - agents: .agents/context/openclaw-sync.yaml
@@ -51,10 +52,16 @@ mirror_pairs:
     users: .users/context/channels-discord.md
     users_ko: .users/context/ko/channels-discord.md
     description: E2E Discord integration architecture (Gateway ↔ Agent ↔ Shell), OAuth deep-link, conversation sync, chat routing via Gateway
+    supplements:
+      - .users/context/channel-sync.md
+      - .users/context/ko/channel-sync.md
 
   - agents: .agents/context/distribution.yaml
     users: null
     description: Distribution pipeline (Flatpak, AppImage, DEB, RPM, ISO), local build commands, Flathub submission status
+    supplements:
+      - .users/context/distribution-troubleshooting.md
+      - .users/context/ko/distribution-troubleshooting.md
 
   - agents: .agents/context/bazzite-rebranding.yaml
     users: .users/context/bazzite-rebranding.md
@@ -99,7 +106,8 @@ mirror_pairs:
     description: Context update test methodology — how to verify AI behavior after context changes
 
   - agents: .agents/context/phase3-plan.yaml
-    users: .users/context/ko/phase3-openclaw-hybrid-plan.md
+    users: .users/context/phase3-openclaw-hybrid-plan.md
+    users_ko: .users/context/ko/phase3-openclaw-hybrid-plan.md
     description: Phase 3 detailed plan — hybrid OpenClaw + Agent architecture
 
   - agents: .agents/context/charter-draft.yaml
