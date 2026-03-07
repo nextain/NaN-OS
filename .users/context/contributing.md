@@ -151,6 +151,27 @@ Extensions are welcome:
 
 ---
 
+## Contribution Types (10)
+
+Full operations model: `.agents/context/open-source-operations.yaml`
+
+| # | Type | Difficulty | Issue Template |
+|---|------|-----------|----------------|
+| 1 | **Translation** | Low | `translation.yml` |
+| 2 | **Skill** | Medium | `skill_proposal.yml` |
+| 3 | **New Feature** | High | `feature_request.yml` |
+| 4 | **Bug Report** | Low | `bug_report.yml` |
+| 5 | **Code/PR** | Medium-High | (pick an existing issue) |
+| 6 | **Documentation** | Low-Medium | `docs_improvement.yml` |
+| 7 | **Testing** | Low | (open any issue) |
+| 8 | **Design/UX/Assets** | Medium | `feature_request.yml` |
+| 9 | **Security Report** | Medium-High | GitHub Security Advisory |
+| 10 | **Context** | Medium | `context_contribution.yml` |
+
+Context contributions are valued equally to code contributions.
+
+---
+
 ## Skill Contribution
 
 - **Format**: OpenClaw `skill.json` spec
@@ -169,6 +190,21 @@ type(scope): description
 ```
 
 **Types**: `feat`, `fix`, `refactor`, `docs`, `chore`, `test`
+
+### AI Attribution
+
+- **Git trailer**: `Assisted-by: {tool name}` (e.g., `Assisted-by: Claude Code`)
+- **PR disclosure**: Checkbox in PR template (AI-assisted / fully AI-generated / no AI)
+- **Principle**: Enforced but not blocking — educational, not punitive
+
+### Checklist
+
+- [ ] Tests pass (`pnpm test`)
+- [ ] App actually runs (VERIFY step)
+- [ ] Context files updated if architecture changed
+- [ ] No console.log/warn/error left in code
+- [ ] License headers present on new files
+- [ ] AI attribution included
 
 ---
 

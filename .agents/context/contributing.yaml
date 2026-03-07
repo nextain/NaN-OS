@@ -76,7 +76,106 @@ philosophy:
     - "Add new principles that don't conflict"
     - "Add new skills, workflows, integrations"
 
-# Skill contribution
+# ─── Contribution Types (10) ────────────────────────────────
+# Full operations model: .agents/context/open-source-operations.yaml
+
+contribution_types:
+  translation:
+    difficulty: low
+    location: ".users/context/{lang}/"
+    process:
+      - "Select English doc from .users/context/"
+      - "Create .users/context/{lang}/ directory"
+      - "Translate with AI assistance (preserve technical terms)"
+      - "Submit PR → CI checks structural sync with English"
+    issue_template: "translation.yml"
+
+  skill:
+    difficulty: medium
+    location: "agent/assets/default-skills/"
+    format: "OpenClaw skill.json spec"
+    process:
+      - "Open issue with skill_proposal template"
+      - "Each skill needs skill.json with proper metadata"
+      - "Follow existing skill naming: naia-{name}/"
+      - "Test with actual LLM calls, not mocks"
+      - "Submit PR"
+    issue_template: "skill_proposal.yml"
+
+  new_feature:
+    difficulty: high
+    process:
+      - "Open issue with feature_request template"
+      - "Discuss design with maintainer"
+      - "Fork → create branch issue-{N}-{desc}"
+      - "Implement following code rules below"
+      - "Submit PR"
+    issue_template: "feature_request.yml"
+
+  bug_report:
+    difficulty: low
+    process:
+      - "Describe issue to AI in native language"
+      - "AI searches existing issues for duplicates"
+      - "AI helps fill English issue template"
+      - "Submit issue"
+    issue_template: "bug_report.yml"
+
+  code_pr:
+    difficulty: medium-high
+    process:
+      - "Pick an existing issue"
+      - "Create branch: issue-{N}-{desc}"
+      - "Code with AI assistance (follow code rules below)"
+      - "Self-review with AI (checklist below)"
+      - "Submit PR with AI attribution"
+    rules_ref: "code section (above)"
+
+  documentation:
+    difficulty: low-medium
+    location: ".users/context/"
+    process:
+      - "Identify unclear or missing docs"
+      - "Edit .users/ docs"
+      - "Mirror changes to .agents/ (if applicable)"
+      - "Submit PR"
+    issue_template: "docs_improvement.yml"
+
+  testing:
+    difficulty: low
+    process:
+      - "Install and use the app"
+      - "Open issue with feedback, bugs, or UX observations"
+
+  design_ux_assets:
+    difficulty: medium
+    process:
+      - "Open issue with mockup, design proposal, or asset"
+      - "VRM avatar models, icons, UI/UX improvements welcome"
+      - "Discuss with maintainer before large changes"
+    issue_template: "feature_request.yml"
+
+  security_report:
+    difficulty: medium-high
+    process:
+      - "Use GitHub Security Advisory (private vulnerability reporting)"
+      - "Do NOT open a public issue for security vulnerabilities"
+    channel: "GitHub Security Advisories (GHSA)"
+
+  context_contribution:
+    difficulty: medium
+    location: ".agents/context/"
+    process:
+      - "Improve .agents/ YAML/JSON files"
+      - "Mirror to .users/context/ (English) and .users/context/ko/ (Korean)"
+      - "Verify SPDX license headers (CC-BY-SA-4.0)"
+      - "Submit PR → CI checks triple-mirror sync"
+    issue_template: "context_contribution.yml"
+    note: "Context contributions are valued equally to code contributions"
+
+# ─── Code Contribution Rules ───────────────────────────────
+
+# Skill contribution (legacy alias — see contribution_types.skill)
 skills:
   format: "OpenClaw skill.json spec"
   location: "agent/assets/default-skills/"
@@ -90,11 +189,16 @@ pull_requests:
   title_format: "type(scope): description"
   types: ["feat", "fix", "refactor", "docs", "chore", "test"]
   checklist:
-    - "Tests pass (npm test / pytest)"
+    - "Tests pass (pnpm test)"
     - "VERIFY step completed (app actually runs)"
     - "Context files updated if architecture changed"
     - "No console.log/warn/error left in code"
-    - "Work log entry if significant change"
+    - "License headers present on new files"
+    - "AI attribution included (Assisted-by trailer)"
+  ai_attribution:
+    trailer: "Assisted-by: {tool name}"
+    pr_disclosure: "Checkbox in PR template (AI-assisted / fully AI-generated / no AI)"
+    principle: "Enforced but not blocking — educational, not punitive"
 
 # Onboarding
 # Target: developers who vibe-code with AI tools.

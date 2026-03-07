@@ -1,0 +1,32 @@
+name: Documentation Improvement
+description: Suggest or contribute a documentation improvement
+labels: ["documentation"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **Any language is welcome.** Write in whatever language you're comfortable with.
+
+        Documentation lives in `.users/context/` (human-readable) and `.agents/context/` (AI-readable).
+        Changes to one must be mirrored to the other.
+
+  - type: textarea
+    id: description
+    attributes:
+      label: What needs improvement?
+      placeholder: Which doc is unclear, missing, or outdated?
+    validations:
+      required: true
+
+  - type: textarea
+    id: suggestion
+    attributes:
+      label: Suggested change (optional)
+      placeholder: What would you change?
+
+  - type: checkboxes
+    id: ai_disclosure
+    attributes:
+      label: AI disclosure
+      options:
+        - label: I used an AI tool to help write this

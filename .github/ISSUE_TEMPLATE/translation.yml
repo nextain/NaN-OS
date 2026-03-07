@@ -1,0 +1,45 @@
+name: Translation
+description: Contribute a translation to your language
+labels: ["translation", "good first issue"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **Any language is welcome.** Write in whatever language you're comfortable with.
+
+        Translation is one of the easiest ways to contribute. You can translate:
+        - User docs in `.users/context/` → `.users/context/{your-lang}/`
+        - i18n dictionaries (if working on the web portal)
+
+  - type: input
+    id: language
+    attributes:
+      label: Target language
+      placeholder: "e.g., Japanese, Spanish, French"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: scope
+    attributes:
+      label: What are you translating?
+      options:
+        - User docs (.users/context/)
+        - i18n dictionary
+        - README / CONTRIBUTING
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: details
+    attributes:
+      label: Details (optional)
+      placeholder: Which files are you planning to translate?
+
+  - type: checkboxes
+    id: ai_disclosure
+    attributes:
+      label: AI disclosure
+      options:
+        - label: I used an AI tool to help with translation

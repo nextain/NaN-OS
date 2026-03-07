@@ -20,3 +20,10 @@ body:
     attributes:
       label: Environment (optional)
       placeholder: "OS, Naia version, hardware, etc."
+
+  - type: checkboxes
+    id: ai_disclosure
+    attributes:
+      label: AI disclosure
+      options:
+        - label: I used an AI tool to help write this report

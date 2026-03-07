@@ -1,0 +1,39 @@
+name: Skill Proposal
+description: Propose a new AI skill for Naia
+labels: ["skill"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **Any language is welcome.** Write in whatever language you're comfortable with.
+
+        Skills live in `agent/assets/default-skills/`. See `.agents/context/contributing.yaml` for skill contribution rules.
+
+  - type: input
+    id: skill_name
+    attributes:
+      label: Skill name
+      placeholder: "e.g., weather, calendar-sync, file-search"
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: What should this skill do?
+      placeholder: Describe the skill's purpose and expected behavior.
+    validations:
+      required: true
+
+  - type: textarea
+    id: api
+    attributes:
+      label: External APIs or dependencies (optional)
+      placeholder: Does it need any external APIs, services, or packages?
+
+  - type: checkboxes
+    id: ai_disclosure
+    attributes:
+      label: AI disclosure
+      options:
+        - label: I used an AI tool to help write this proposal

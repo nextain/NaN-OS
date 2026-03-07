@@ -135,6 +135,27 @@ AI 컨텍스트 파일은 **CC-BY-SA 4.0**으로 라이선스됩니다.
 
 ---
 
+## 기여 유형 (10가지)
+
+전체 운영 모델: `.agents/context/open-source-operations.yaml`
+
+| # | 유형 | 난이도 | 이슈 템플릿 |
+|---|------|--------|------------|
+| 1 | **번역** | 낮음 | `translation.yml` |
+| 2 | **스킬** | 중간 | `skill_proposal.yml` |
+| 3 | **신기능** | 높음 | `feature_request.yml` |
+| 4 | **버그 리포트** | 낮음 | `bug_report.yml` |
+| 5 | **코드/PR** | 중간~높음 | (기존 이슈 선택) |
+| 6 | **문서** | 낮음~중간 | `docs_improvement.yml` |
+| 7 | **테스팅** | 낮음 | (아무 이슈나 등록) |
+| 8 | **디자인/UX/에셋** | 중간 | `feature_request.yml` |
+| 9 | **보안 리포트** | 중간~높음 | GitHub Security Advisory |
+| 10 | **컨텍스트** | 중간 | `context_contribution.yml` |
+
+컨텍스트 기여는 코드 기여와 동등한 가치를 가집니다.
+
+---
+
 ## 스킬 기여
 
 - **형식**: OpenClaw `skill.json` 스펙
@@ -151,6 +172,21 @@ type(scope): description
 ```
 
 **타입**: `feat`, `fix`, `refactor`, `docs`, `chore`, `test`
+
+### AI 귀속 표기
+
+- **Git 트레일러**: `Assisted-by: {도구명}` (예: `Assisted-by: Claude Code`)
+- **PR 공개**: PR 템플릿 체크박스 (AI 보조 / 완전 AI 생성 / AI 미사용)
+- **원칙**: 강제하되 차단하지 않음 — 교육적 접근
+
+### 체크리스트
+
+- [ ] 테스트 통과 (`pnpm test`)
+- [ ] 앱 실제 실행 확인 (VERIFY 단계)
+- [ ] 아키텍처 변경 시 컨텍스트 파일 업데이트
+- [ ] console.log/warn/error 없음
+- [ ] 새 파일에 라이선스 헤더 포함
+- [ ] AI 귀속 표기 포함
 
 ---
 

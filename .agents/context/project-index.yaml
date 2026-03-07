@@ -101,6 +101,11 @@ mirror_pairs:
     users_ko: .users/context/ko/update-pipeline.md
     description: Automatic update pipeline — Bazzite propagation, testing tiers, R2 rollback, known risks
 
+  - agents: .agents/context/open-source-operations.yaml
+    users: .users/context/open-source-operations.md
+    users_ko: .users/context/ko/open-source-operations.md
+    description: AI-native open source operations model — contribution types, flows, quality strategy, phased growth
+
   - agents: .agents/workflows/development-cycle.yaml
     users: .users/workflows/development-cycle.md
     description: Coding-level development cycle — TDD, code quality gates, security review, AI pair-programming rules
@@ -157,6 +162,7 @@ on_demand_loading:
     - .agents/context/brand.yaml (when working on branding, character, logos, or color system)
     - .agents/context/demo-video.yaml (when creating, updating, or re-recording demo videos)
     - .agents/context/charter-draft.yaml (when discussing open source sustainability, AI collaboration, or community experiment)
+    - .agents/context/open-source-operations.yaml (when reviewing contribution workflows, community operations, or maintainer processes)
     - .agents/tests/license-protection-test.md (when testing license compliance or onboarding new AI agents)
     - .agents/workflows/development-cycle.yaml (when coding — ALWAYS read before building)
     - .agents/workflows/* (when executing specific workflows)

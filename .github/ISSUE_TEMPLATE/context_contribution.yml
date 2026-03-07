@@ -1,0 +1,39 @@
+name: Context Contribution
+description: Improve .agents/ context files (AI-readable project knowledge)
+labels: ["context"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **Any language is welcome.** Write in whatever language you're comfortable with.
+
+        Context contributions are valued equally to code contributions.
+        A good `.agents/` file helps every AI contributor produce better code.
+
+        Rules:
+        - `.agents/` files use SPDX-License-Identifier: CC-BY-SA-4.0
+        - Changes must be mirrored to `.users/context/` (English) and `.users/context/ko/` (Korean)
+        - See `.agents/context/contributing.yaml` for full rules
+
+  - type: input
+    id: file
+    attributes:
+      label: Which context file?
+      placeholder: "e.g., .agents/context/architecture.yaml"
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: What would you improve?
+      placeholder: What's missing, outdated, or unclear in the context file?
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: ai_disclosure
+    attributes:
+      label: AI disclosure
+      options:
+        - label: I used an AI tool to help with this

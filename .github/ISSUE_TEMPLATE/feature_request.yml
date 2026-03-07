@@ -1,0 +1,43 @@
+name: Feature Request
+description: Suggest a new feature or improvement
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **Any language is welcome.** Write in whatever language you're comfortable with.
+
+        Tip: If you're using an AI coding tool, ask it to help you fill this out — it knows the project context from `.agents/`.
+
+  - type: textarea
+    id: description
+    attributes:
+      label: What would you like?
+      placeholder: Describe the feature. What problem does it solve?
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered (optional)
+      placeholder: Have you considered other approaches?
+
+  - type: dropdown
+    id: component
+    attributes:
+      label: Component (optional)
+      options:
+        - Shell (Tauri app)
+        - Agent (AI core)
+        - Gateway (daemon)
+        - OS (Bazzite/ISO)
+        - Context (.agents/)
+        - Other
+
+  - type: checkboxes
+    id: ai_disclosure
+    attributes:
+      label: AI disclosure
+      options:
+        - label: I used an AI tool to help write this issue

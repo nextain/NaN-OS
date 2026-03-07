@@ -1,0 +1,307 @@
+# SPDX-License-Identifier: CC-BY-SA-4.0
+#
+# AI-Native Open Source Operations Model
+# How Naia OS operates as an AI-native open source project.
+# Covers: contribution types, contributor/maintainer flows,
+# quality strategy, communication, and phased growth.
+#
+# Related: contributing.yaml (code-level rules), charter-draft.yaml (philosophy)
+# Report: docs/ai-native-opensource-operations-report.md
+
+version: 1
+
+# ─── Core Position ───────────────────────────────────────────
+
+position:
+  statement: "Design WITH AI, not defend AGAINST AI"
+  context: |
+    Most open source projects in 2025-2026 are defending against AI contributions
+    (curl, Ghostty, tldraw). Naia OS takes the opposite approach: structurally
+    embrace AI contributions by making the project context so rich that AI-assisted
+    contributions are high quality by default.
+  key_insight: "Rich .agents/ context → better AI understanding → higher contribution quality"
+
+# ─── Five Premises ───────────────────────────────────────────
+
+premises:
+  - id: minimum_environment
+    statement: "AI coding tool + Git integration is the minimum"
+    detail: "Contributors use Claude Code, Cursor, Windsurf, OpenCode, Gemini, etc."
+
+  - id: bilateral_ai
+    statement: "Both contributors and maintainers use AI"
+    detail: "AI assists contributors in coding; AI assists maintainers in triage and review"
+
+  - id: english_lingua_franca
+    statement: "Everything on Git is in English; AI translates"
+    detail: "Code, commits, PR titles in English. Issue/PR body allows native language."
+
+  - id: mixed_skill_levels
+    statement: "Beginners to experts; AI adapts guidance"
+    detail: "AI reads .agents/ and adjusts explanation depth to contributor's level"
+
+  - id: communication_flow
+    statement: "Person → AI → Git (English) → AI → Person"
+    detail: "Bidirectional AI translation eliminates language barriers"
+
+# ─── Contribution Types (10) ────────────────────────────────
+
+contribution_types:
+  - id: translation
+    difficulty: low
+    description: "Add .users/context/{lang}/ or i18n dictionary entries"
+    process_ref: "contributing.yaml"
+
+  - id: skill
+    difficulty: medium
+    description: "Create AI skill in agent/assets/default-skills/"
+    process_ref: "contributing.yaml skills section"
+
+  - id: new_feature
+    difficulty: high
+    description: "Propose or implement new features"
+    process: "Issue (feature_request) → discuss → fork → implement → PR"
+
+  - id: bug_report
+    difficulty: low
+    description: "Report bugs via issue template"
+    process: "AI helps check duplicates → fill English template → submit"
+
+  - id: code_pr
+    difficulty: medium-high
+    description: "Pick an issue, submit a PR"
+    process_ref: "contributing.yaml code section"
+
+  - id: documentation
+    difficulty: low-medium
+    description: "Improve .users/context/ docs"
+    process: "Edit → mirror to all 3 layers → PR"
+
+  - id: testing
+    difficulty: low
+    description: "Use the app and share feedback"
+    process: "Install → test → open issue with findings"
+
+  - id: design_ux_assets
+    difficulty: medium
+    description: "UI/UX improvements, mockups, icons, VRM avatar models"
+    process: "Issue with mockup/design → discuss → implement"
+
+  - id: security_report
+    difficulty: medium-high
+    description: "Report vulnerabilities via GitHub Security Advisory"
+    process: "Use private vulnerability reporting (GHSA)"
+
+  - id: context_contribution
+    difficulty: medium
+    description: "Improve .agents/ context files (equal value to code)"
+    process: "Edit .agents/ → mirror to .users/ (en + ko) → PR"
+    note: "One good context file prevents 100 AI slop PRs"
+
+# ─── Contributor Flow ───────────────────────────────────────
+
+contributor_flow:
+  onboarding:
+    steps:
+      - "Clone: git clone https://github.com/nextain/naia-os.git"
+      - "Open with any AI coding tool"
+      - "Ask in native language: 'What is this project and how can I help?'"
+      - "AI reads .agents/ and explains (in contributor's language)"
+      - "AI recommends contribution type based on skill level and interest"
+
+  code_contribution:
+    steps:
+      - "Check existing issues or create new one (AI checks duplicates)"
+      - "Create branch: issue-{number}-{short-description}"
+      - "Code with AI assistance (AI guides patterns, conventions, tests)"
+      - "Self-review with AI (contributing.yaml checklist)"
+      - "Submit PR (English title, AI attribution, small focused PR)"
+      - "CI auto-verification (lint, test, license, mirror sync)"
+
+  non_code_contribution:
+    translation:
+      - "Select English doc from .users/context/"
+      - "Create .users/context/{lang}/ directory"
+      - "Translate with AI (preserve technical terms)"
+      - "PR → CI checks structural sync with English"
+    bug_report:
+      - "Describe issue to AI in native language"
+      - "AI searches existing issues for duplicates"
+      - "AI helps fill English issue template"
+      - "Submit issue"
+    context:
+      - "Edit .agents/ YAML/JSON"
+      - "Mirror to .users/context/ (English) and .users/context/ko/ (Korean)"
+      - "Verify SPDX license headers (CC-BY-SA-4.0)"
+      - "PR → CI checks triple-mirror sync"
+
+# ─── Maintainer Flow ───────────────────────────────────────
+
+maintainer_flow:
+  issue_triage:
+    steps:
+      - "Issue submitted by contributor"
+      - "Auto-labeling (GitHub Agentic Workflow, Phase 2)"
+      - "Maintainer confirms: valid → assign | needs-info → ask | slop → decline politely"
+    labels:
+      type: [bug, feature, question, translation, skill, docs, security, context]
+      priority: [P0-critical, P1-high, P2-medium, P3-low]
+      component: [shell, agent, gateway, os, context]
+
+  pr_review:
+    gates:
+      L1_ci: "Build, test, lint, license headers, mirror sync"
+      L2_ai_review: "PR Agent / CodeRabbit auto-review (Phase 2)"
+      L3_maintainer: "Code quality, architecture fit, convention compliance"
+    actions:
+      approve: "Squash merge + release notes"
+      request_changes: "AI translates feedback to contributor's language"
+      decline: "Explain why, suggest alternative approach"
+
+# ─── Quality Strategy ──────────────────────────────────────
+
+quality_strategy:
+  approach: "Structure ensures quality, not gatekeeping"
+  layers:
+    - level: L1
+      name: "Context"
+      mechanism: ".agents/ directory"
+      purpose: "AI understands project before generating code"
+    - level: L2
+      name: "Automation"
+      mechanism: "CI gates (build, test, lint)"
+      purpose: "Enforce baseline quality"
+    - level: L3
+      name: "AI Review"
+      mechanism: "PR Agent auto-review"
+      purpose: "Detect pattern violations, security issues"
+    - level: L4
+      name: "Human Judgment"
+      mechanism: "Maintainer final review"
+      purpose: "Architecture and direction decisions"
+    - level: L5
+      name: "Escalation"
+      mechanism: "Vouch system (when community grows)"
+      purpose: "Manage repeat low-quality contributors"
+
+  core_principle: "When L1-L3 are strong enough, L4 burden decreases"
+
+# ─── AI Attribution Policy ─────────────────────────────────
+
+ai_attribution:
+  principle: "Transparent, not punitive"
+  rules:
+    - "AI usage is welcomed; transparency is required"
+    - "Responsibility for AI-generated code lies with the contributor"
+    - "Attribution is enforced but not blocking (educational approach)"
+  git_trailer: "Assisted-by: {tool name}"
+  pr_disclosure: "Checkbox in PR template (AI-assisted / fully AI-generated / no AI)"
+
+# ─── Communication ─────────────────────────────────────────
+
+communication:
+  language_flow: "Person (native) → AI → Git (English) → AI → Person (native)"
+  channels:
+    - name: "GitHub Issues"
+      purpose: "Bugs, feature requests, questions"
+      language: "English preferred (native allowed)"
+    - name: "GitHub PRs"
+      purpose: "Code/doc review"
+      language: "English"
+    - name: "GitHub Discussions"
+      purpose: "Design discussion, RFC"
+      language: "English"
+    - name: "Discord"
+      purpose: "Real-time community (optional)"
+      language: "Multilingual (per channel)"
+
+  skill_level_adaptation:
+    beginner: "Project explanation, dev setup, starter issues"
+    intermediate: "Architecture explanation, related code, implementation direction"
+    expert: "Core logic, design intent, autonomous contribution support"
+
+# ─── Phased Growth ─────────────────────────────────────────
+
+phases:
+  - id: phase1
+    condition: "0-5 contributors (current)"
+    infrastructure:
+      - "Issue templates (bug, feature, translation, skill, docs, context)"
+      - "PR template with AI disclosure + checklist"
+      - "CI pipeline (build, test, lint, license)"
+      - "Expand contributing.yaml (10 contribution types)"
+      - "open-source-operations.yaml (this file)"
+
+  - id: phase2
+    condition: "5-20 contributors"
+    infrastructure:
+      - "GitHub Agentic Workflow (issue triage)"
+      - "AI PR review tool (CodeRabbit or PR Agent)"
+      - "Expand CONTRIBUTING.md"
+      - "Enable GitHub Discussions"
+
+  - id: phase3
+    condition: "20-100 contributors"
+    infrastructure:
+      - "Vouch system integration"
+      - "Community reviewer program"
+      - "RFC process"
+      - "Contributor recognition (CONTRIBUTORS.md, leaderboard)"
+
+  - id: phase4
+    condition: "100+ contributors"
+    infrastructure:
+      - "Structured governance"
+      - "Distributed decision-making"
+
+# ─── Risk Management ──────────────────────────────────────
+
+risks:
+  - id: ai_slop_flood
+    likelihood: high
+    impact: high
+    mitigation: "L1-L4 layered defense + context quality investment"
+
+  - id: security_vulnerabilities
+    likelihood: medium
+    impact: high
+    mitigation: "CI security scanning + maintainer review"
+
+  - id: license_violations
+    likelihood: medium
+    impact: high
+    mitigation: "CI license check + AI protection rules in contributing.yaml"
+
+  - id: maintainer_burnout
+    likelihood: high
+    impact: critical
+    mitigation: "Maximize automation + AI review assist + community reviewers"
+
+  - id: context_pollution
+    likelihood: low
+    impact: medium
+    mitigation: "Triple-mirror CI verification"
+
+  - id: translation_quality
+    likelihood: medium
+    impact: low
+    mitigation: "Native reviewers or AI cross-verification"
+
+# ─── References ───────────────────────────────────────────
+
+references:
+  external:
+    - "GitHub 'Eternal September of open source' (2026-02)"
+    - "arXiv 2601.15494 'Vibe Coding Kills Open Source' (2026-01)"
+    - "Responsible Vibe Coding Manifesto (vibe-coding-manifesto.com)"
+    - "Mitchell Hashimoto Vouch (github.com/mitchellh/vouch)"
+    - "GitHub Agentic Workflows (technical preview, 2026-02)"
+    - "AGENTS.md standard (agents.md, Linux Foundation AAIF)"
+  internal:
+    - ".agents/context/contributing.yaml"
+    - ".agents/context/charter-draft.yaml"
+    - ".agents/context/philosophy.yaml"
+
+mirrors:
+  english: ".users/context/open-source-operations.md"
+  korean: ".users/context/ko/open-source-operations.md"
