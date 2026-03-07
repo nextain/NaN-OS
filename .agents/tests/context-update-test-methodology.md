@@ -107,18 +107,51 @@ If tests fail:
 3. Re-run only the failed tests in a fresh session
 4. Repeat until all tests pass
 
-## Automation (Future)
+## Lessons Learned (from actual testing)
 
-### Phase 1 (Current): Manual headless testing
+### Entry point files are the bottleneck
 
-- Human opens fresh AI sessions
-- Human pastes prompts and records responses
-- Human evaluates pass/fail
+AI tools (especially Codex, Gemini) primarily read the entry point file (`CLAUDE.md`, `AGENTS.md`, `GEMINI.md`) and may not proactively read deeper context files like `contributing.yaml`. **Key information must be surfaced in the entry point**, not buried in on-demand files.
+
+**Example**: "Any language is welcome" was in `contributing.yaml` but missing from entry points. Codex failed this criterion (3/4). After adding it to entry points, Codex passed (4/4).
+
+### CLI headless commands
+
+```bash
+# Claude Code (must unset env vars if running from within Claude Code)
+env -u CLAUDECODE -u CLAUDE_CODE_SESSION_ID claude -p "prompt" --print --allowedTools "Read,Glob,Grep"
+
+# Codex
+codex exec "prompt" --full-auto
+
+# Gemini CLI
+gemini -p "prompt" --approval-mode yolo
+```
+
+### Tool-specific behaviors
+
+| Tool | Entry point | Depth | Notes |
+|------|-------------|-------|-------|
+| Claude Code | `CLAUDE.md` | Reads deep (contributing.yaml, agents-rules.json) | Most thorough |
+| Codex | `AGENTS.md` | Entry point + 1-2 referenced files | Good but shallow |
+| Gemini CLI | `GEMINI.md` | Entry point primarily | Shallowest; global persona settings (`~/.gemini/GEMINI.md`) can override project context |
+
+### Self-evaluation bias
+
+When using subagents to test, they self-evaluate as PASS. Always verify by **reading the actual response content**. Self-evaluation is useful as a first filter but not sufficient.
+
+## Automation
+
+### Phase 1 (Current): CLI headless testing
+
+- Run AI CLI tools in `--print`/`exec`/`-p` mode
+- Capture output to file
+- Human evaluates pass/fail by reading actual responses
 
 ### Phase 2: Semi-automated
 
-- Script spawns fresh AI sessions via CLI (Claude Code `--prompt`, Codex CLI, etc.)
-- Script captures responses
+- Script runs all test scenarios across all AI tools in parallel
+- Script captures and formats responses
 - Human evaluates pass/fail
 
 ### Phase 3: Fully automated
