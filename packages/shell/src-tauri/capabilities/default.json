@@ -28,7 +28,6 @@
 		"process:default",
 		"store:default",
 		"stt:default",
-		"updater:default",
-		"wdio-webdriver:default"
+		"updater:default"
 	]
 }

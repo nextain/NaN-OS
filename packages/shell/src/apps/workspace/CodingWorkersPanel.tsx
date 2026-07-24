@@ -22,6 +22,8 @@ interface CodingWorkersPanelProps {
 	initialWorkers?: CodingWorker[];
 	/** ADK control plane: settings and skills live here; Codex writes at the target. */
 	controlRoot?: string;
+	/** Keeps a course report actionable by opening its fixed files in Shell. */
+	onOpenCourseFiles?: (worker: CodingWorker) => void;
 }
 
 type PendingAction =
@@ -76,10 +78,30 @@ function mergeWorker(
 	return workers.map((worker) => (worker.id === next.id ? next : worker));
 }
 
+function courseReport(worker: CodingWorker): string {
+	switch (worker.state) {
+		case "queued":
+			return t("workspace.codingWorkersCourseReportQueued");
+		case "running":
+			return t("workspace.codingWorkersCourseReportRunning");
+		case "cancelling":
+			return t("workspace.codingWorkersCourseReportCancelling");
+		case "completed":
+			return worker.verificationSummary
+				? t("workspace.codingWorkersCourseReportCompleted")
+				: t("workspace.codingWorkersCourseReportUnverified");
+		case "failed":
+			return t("workspace.codingWorkersCourseReportFailed");
+		case "cancelled":
+			return t("workspace.codingWorkersCourseReportCancelled");
+	}
+}
+
 export function CodingWorkersPanel({
 	adapter,
 	initialWorkers = [],
 	controlRoot,
+	onOpenCourseFiles,
 }: CodingWorkersPanelProps) {
 	const [workers, setWorkers] = useState<CodingWorker[]>(initialWorkers);
 	const [worktree, setWorktree] = useState("");
@@ -231,6 +253,15 @@ export function CodingWorkersPanel({
 	}
 
 	const isMutating = pendingAction !== null;
+	const enteredCourseTarget = worktree.trim();
+	const courseTargetMatchesInput =
+		courseTarget?.workspacePath === enteredCourseTarget;
+	// A blank target is not a match. This also covers the short interval while a
+	// persisted target is loading, so a course job cannot race the visible guard.
+	const courseTargetNeedsSaving = coursePreset && !courseTargetMatchesInput;
+	const courseTargetStartMessage = !courseTarget
+		? t("workspace.codingWorkersCourseSaveBeforeStart")
+		: t("workspace.codingWorkersCourseTargetMismatch");
 
 	return (
 		<section className="coding-workers" data-testid="coding-workers">
@@ -329,10 +360,20 @@ export function CodingWorkersPanel({
 										</code>
 										<span>{courseTarget.allowedFiles.join(", ")}</span>
 									</>
-								) : (
-									t("workspace.codingWorkersCourseTargetNone")
-								)}
-							</output>
+							) : (
+								t("workspace.codingWorkersCourseTargetNone")
+							)}
+						</output>
+						{courseTargetNeedsSaving && (
+							<p
+								className="coding-workers__course-start-blocked"
+								data-testid="coding-worker-course-start-blocked"
+								id="coding-worker-course-start-blocked"
+								role="status"
+							>
+								{courseTargetStartMessage}
+							</p>
+						)}
 							<button
 								type="button"
 								className="coding-workers__secondary-action"
@@ -351,7 +392,12 @@ export function CodingWorkersPanel({
 						type="submit"
 						className="coding-workers__primary-action"
 						data-testid="coding-worker-start"
-						disabled={isMutating}
+						disabled={isMutating || courseTargetNeedsSaving}
+						aria-describedby={
+							courseTargetNeedsSaving
+								? "coding-worker-course-start-blocked"
+								: undefined
+						}
 					>
 						{pendingAction === "create"
 							? t("workspace.codingWorkersCreatePending")
@@ -410,13 +456,33 @@ export function CodingWorkersPanel({
 								</div>
 							</dl>
 							{worker.executionMode === "selected_workspace" && (
-								<p
-									className="coding-workers__boundary"
-									data-testid={`coding-worker-course-boundary-${worker.id}`}
-								>
-									{t("workspace.codingWorkersCourseBoundary")}:{" "}
-									{worker.allowedFiles.join(", ")}
-								</p>
+								<>
+									<p
+										className="coding-workers__boundary"
+										data-testid={`coding-worker-course-boundary-${worker.id}`}
+									>
+										{t("workspace.codingWorkersCourseBoundary")}:{" "}
+										{worker.allowedFiles.join(", ")}
+									</p>
+									<section
+										className="coding-workers__course-report"
+										data-testid={`coding-worker-course-report-${worker.id}`}
+										aria-live="polite"
+									>
+										<strong>{t("workspace.codingWorkersCourseReport")}</strong>
+										<p>{courseReport(worker)}</p>
+									</section>
+									{onOpenCourseFiles && (
+										<button
+											type="button"
+											className="coding-workers__secondary-action"
+											data-testid={`coding-worker-open-course-files-${worker.id}`}
+											onClick={() => onOpenCourseFiles(worker)}
+										>
+											{t("workspace.codingWorkersOpenCourseFiles")}
+										</button>
+									)}
+								</>
 							)}
 							{worker.verificationSummary && (
 								<p

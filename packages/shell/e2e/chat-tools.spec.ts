@@ -414,11 +414,11 @@ test.describe("Claude Code CLI provider E2E", () => {
 		await sendMessage(page, "이 문제에 대해 생각해봐");
 
 		// Thinking block should appear as a collapsible details element
-		const thinkingBlock = page.locator(".thinking-block");
+		const thinkingBlock = page.locator(".thinking-inline");
 		await expect(thinkingBlock.first()).toBeVisible({ timeout: 5_000 });
 
 		// Verify the thinking content is inside
-		const thinkingContent = page.locator(".thinking-content");
+		const thinkingContent = page.locator(".thinking-inline-content");
 		await expect(thinkingContent.first()).toContainText("깊이 생각", {
 			timeout: 5_000,
 		});

@@ -464,6 +464,13 @@ fn reconcile_agent_child_lease_locked(lock: &AgentChildLeaseLock) -> Result<(), 
     let Some(lease) = read_agent_child_lease_locked(lock)? else {
         return Ok(());
     };
+    // A force-killed desktop process can leave its direct Node child alive on
+    // Windows.  Reap only the exact, nonce-marked child after the platform has
+    // verified that its parent Shell process is gone; a live sibling Shell
+    // remains protected by the lease below.
+    if let Some(pid) = lease.pid {
+        let _ = platform::reap_orphaned_agent_process(pid, &lease.marker)?;
+    }
     reconcile_agent_child_lease_with(
         &lease,
         |pid| platform::agent_process_marker(pid, &lease.marker),
@@ -4436,6 +4443,292 @@ fn read_cascade_loader_profile(manifest: &std::path::Path) -> Option<String> {
     Some(profile.to_string())
 }
 
+/// The Settings UI must distinguish an installed runtime that has not been
+/// started from a developer checkout that merely happens to contain a loader.
+/// This deliberately has no installer side effects: a status refresh must not
+/// download a model, create a venv, or start a GPU process.
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct CascadeInstallationStep {
+    id: &'static str,
+    label: &'static str,
+    state: &'static str,
+    action: &'static str,
+    action_available: bool,
+    progress_percent: u8,
+    retryable: bool,
+    failure: Option<CascadeInstallationFailure>,
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct CascadeInstallationFailure {
+    code: &'static str,
+    message: &'static str,
+    retryable: bool,
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct CascadeInstallationStatus {
+    phase: &'static str,
+    ready: bool,
+    can_start: bool,
+    summary: String,
+    steps: Vec<CascadeInstallationStep>,
+}
+
+#[derive(Clone, Debug)]
+struct CascadeInstallationProbe {
+    loader: bool,
+    python_runtime: bool,
+    cascade_service_bundle: bool,
+    ditto_engine: bool,
+    voxcpm2_model: bool,
+    reference_voices: bool,
+    facade_healthy: bool,
+}
+
+fn cascade_runtime_root() -> std::path::PathBuf {
+    std::env::var_os("NAIA_CASCADE_RUNTIME_ROOT")
+        .filter(|value| !value.is_empty())
+        .map(std::path::PathBuf::from)
+        .or_else(|| dirs::home_dir().map(|home| home.join("naia-omni")))
+        .unwrap_or_else(|| std::path::PathBuf::from("naia-omni"))
+}
+
+fn directory_has_extension(dir: &std::path::Path, extension: &str) -> bool {
+    std::fs::read_dir(dir)
+        .ok()
+        .into_iter()
+        .flatten()
+        .filter_map(Result::ok)
+        .any(|entry| {
+            entry.path().is_file()
+                && entry
+                    .path()
+                    .extension()
+                    .is_some_and(|value| value.eq_ignore_ascii_case(extension))
+        })
+}
+
+fn cascade_python_can_import_loader(python: &str, loader_dir: &str) -> bool {
+    Command::new(python)
+        .args(["-c", "import loader"])
+        .current_dir(loader_dir)
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .is_ok_and(|status| status.success())
+}
+
+fn probe_cascade_installation(
+    loader_dir: &str,
+    adk_path: Option<&str>,
+) -> CascadeInstallationProbe {
+    let runtime_root = cascade_runtime_root();
+    let repos_root = adk_path
+        .and_then(infer_repos_adk_root)
+        .map(std::path::PathBuf::from)
+        .or_else(|| {
+            std::path::Path::new(loader_dir)
+                .parent()
+                .and_then(|parent| parent.parent())
+                .map(std::path::Path::to_path_buf)
+        });
+    let cascade_dir = repos_root
+        .as_ref()
+        .map(|root| root.join("projects").join("naia-omni-cascade"));
+    let python = std::env::var("NAIA_CASCADE_PYTHON").unwrap_or_else(|_| {
+        if cfg!(windows) {
+            "python".to_string()
+        } else {
+            "python3".to_string()
+        }
+    });
+    let venv_python = if cfg!(windows) {
+        runtime_root
+            .join(".venv-ditto")
+            .join("Scripts")
+            .join("python.exe")
+    } else {
+        runtime_root.join(".venv-ditto").join("bin").join("python")
+    };
+    let ditto_engine = ["ditto_trt_native", "ditto_trt_Ampere_Plus"]
+        .iter()
+        .any(|name| {
+            directory_has_extension(&runtime_root.join("checkpoints").join(name), "engine")
+        })
+        && runtime_root
+            .join("checkpoints")
+            .join("ditto_cfg")
+            .join("v0.4_hubert_cfg_trt_online.pkl")
+            .is_file()
+        && runtime_root
+            .join("bundle")
+            .join("unpacked")
+            .join("grid_sample_3d_plugin.dll")
+            .is_file();
+    let voxcpm2_model = runtime_root
+        .join(".cache")
+        .join("huggingface")
+        .join("hub")
+        .join("models--openbmb--VoxCPM2")
+        .exists()
+        || dirs::cache_dir()
+            .map(|cache| {
+                cache
+                    .join("huggingface")
+                    .join("hub")
+                    .join("models--openbmb--VoxCPM2")
+                    .exists()
+            })
+            .unwrap_or(false);
+    let reference_voices = cascade_dir
+        .as_ref()
+        .is_some_and(|dir| directory_has_extension(&dir.join("assets").join("ref_audio"), "wav"));
+
+    CascadeInstallationProbe {
+        loader: std::path::Path::new(loader_dir)
+            .join("loader")
+            .join("__init__.py")
+            .is_file(),
+        python_runtime: cascade_python_can_import_loader(&python, loader_dir),
+        cascade_service_bundle: cascade_dir.is_some_and(|dir| {
+            dir.join("services").is_dir() && dir.join("output_cascade").is_dir()
+        }),
+        ditto_engine,
+        // A venv without cached VoxCPM2 weights is not a runnable TTS runtime.
+        voxcpm2_model: venv_python.is_file() && voxcpm2_model,
+        reference_voices,
+        facade_healthy: false,
+    }
+}
+
+fn cascade_install_step(
+    id: &'static str,
+    label: &'static str,
+    action: &'static str,
+    complete: bool,
+    failure_code: &'static str,
+    failure_message: &'static str,
+) -> CascadeInstallationStep {
+    CascadeInstallationStep {
+        id,
+        label,
+        state: if complete { "complete" } else { "blocked" },
+        action,
+        // The Shell has no packaged installer manifest yet. Never present a
+        // download button that cannot complete the requested artifact.
+        action_available: false,
+        progress_percent: if complete { 100 } else { 0 },
+        retryable: false,
+        failure: (!complete).then_some(CascadeInstallationFailure {
+            code: failure_code,
+            message: failure_message,
+            retryable: false,
+        }),
+    }
+}
+
+fn classify_cascade_installation(probe: CascadeInstallationProbe) -> CascadeInstallationStatus {
+    let prerequisites_complete = probe.loader
+        && probe.python_runtime
+        && probe.cascade_service_bundle
+        && probe.ditto_engine
+        && probe.voxcpm2_model
+        && probe.reference_voices;
+    let ready = prerequisites_complete && probe.facade_healthy;
+    let phase = if ready {
+        "ready"
+    } else if prerequisites_complete {
+        "ready-to-start"
+    } else {
+        "blocked"
+    };
+    let summary = match phase {
+        "ready" => "Local voice and avatar services are running and healthy.".to_string(),
+        "ready-to-start" => "Local runtime files are ready. Services have not been started yet.".to_string(),
+        _ => "Local runtime cannot start because one or more required artifacts are missing. This build will not pretend to download them.".to_string(),
+    };
+    CascadeInstallationStatus {
+        phase,
+        ready,
+        can_start: prerequisites_complete,
+        summary,
+        steps: vec![
+            cascade_install_step(
+                "loader",
+                "Cascade loader",
+                "verify",
+                probe.loader,
+                "CASCADE_LOADER_MISSING",
+                "The cascade loader is not packaged or available.",
+            ),
+            cascade_install_step(
+                "python-runtime",
+                "Python runtime",
+                "install",
+                probe.python_runtime,
+                "CASCADE_PYTHON_RUNTIME_MISSING",
+                "Python cannot import the cascade loader.",
+            ),
+            cascade_install_step(
+                "cascade-service-bundle",
+                "Cascade service bundle",
+                "install",
+                probe.cascade_service_bundle,
+                "CASCADE_SERVICE_BUNDLE_MISSING",
+                "VoxCPM2, Ditto, or facade service files are not packaged.",
+            ),
+            cascade_install_step(
+                "ditto-engine",
+                "Ditto engine",
+                "download",
+                probe.ditto_engine,
+                "DITTO_ENGINE_MISSING",
+                "The required Ditto TensorRT engine is not installed.",
+            ),
+            cascade_install_step(
+                "voxcpm2-model",
+                "VoxCPM2 model",
+                "download",
+                probe.voxcpm2_model,
+                "VOXCPM2_MODEL_MISSING",
+                "The VoxCPM2 runtime or cached model is not installed.",
+            ),
+            cascade_install_step(
+                "reference-voices",
+                "Reference voices",
+                "download",
+                probe.reference_voices,
+                "REFERENCE_VOICES_MISSING",
+                "Bundled reference voice files are not available.",
+            ),
+        ],
+    }
+}
+
+#[tauri::command]
+async fn cascade_installation_status(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, AppState>,
+) -> Result<CascadeInstallationStatus, String> {
+    let adk_path = dirs::home_dir()
+        .and_then(|home| std::fs::read_to_string(home.join(".naia").join("adk-path")).ok())
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty());
+    let loader_dir = resolve_cascade_loader_dir(&app, adk_path.as_deref().unwrap_or_default());
+    let mut probe = tokio::task::spawn_blocking(move || {
+        probe_cascade_installation(&loader_dir, adk_path.as_deref())
+    })
+    .await
+    .map_err(|error| format!("cascade installation status task failed: {error}"))?;
+    probe.facade_healthy = cascade_status(state).await.unwrap_or(false);
+    Ok(classify_cascade_installation(probe))
+}
+
 /// 濡쒖뺄 cascade loader supervisor 瑜??ъ씠?쒖뭅濡?spawn. stdout `CASCADE_READY {json}`
 /// ?몃뱶?곗씠?щ줈 以鍮꾩셿猷??먯젙(紐⑤뜽 濡쒕뱶媛 湲몄뼱 timeout ?됰꼮??. ???꾨줈?몄뒪瑜?kill ?섎㈃
 /// loader 媛 VoxCPM2 ???먯떇 ?쒕퉬?ㅻ? teardown ?쒕떎(?먭꺽 湲덉?쨌濡쒖뺄 ?꾨쿋??.
@@ -4668,6 +4961,20 @@ async fn start_cascade(
         .ok_or_else(|| "adk path not set (naia-settings ?뚰겕?ㅽ럹?댁뒪 誘몄꽕??".to_string())?;
     // ?꾨쿋?? 踰덈뱾??loader(resource_dir) ?곗꽑 ???몃? adk 泥댄겕?꾩썐 誘몄쓽議?
     let loader_dir = resolve_cascade_loader_dir(&app, &adk_path);
+
+    // The frontend normally checks this first, but IPC callers must not be
+    // able to bypass the standalone-installation boundary.
+    let install_probe = tokio::task::spawn_blocking({
+        let loader_dir = loader_dir.clone();
+        let adk_path = adk_path.clone();
+        move || probe_cascade_installation(&loader_dir, Some(&adk_path))
+    })
+    .await
+    .map_err(|e| format!("cascade installation check task failed: {e}"))?;
+    let installation = classify_cascade_installation(install_probe);
+    if !installation.can_start {
+        return Err(installation.summary);
+    }
 
     // A prior interrupted loader can leave its :8901/:8902/:8910 children
     // alive even when no supervisor is held in AppState. Clean those exact
@@ -5065,7 +5372,65 @@ fn read_agent_secret(adk_path: &str, env_key: &str) -> Result<zeroize::Zeroizing
     }
 }
 
+/// Parse only the Discord bot-token field from an E2E-only dotenv fixture.
+/// This intentionally does not implement a general dotenv loader: the fixture is
+/// a narrowly-scoped bridge for live acceptance runs and never becomes runtime
+/// configuration for a released Shell.
+fn parse_e2e_discord_bot_token(
+    contents: &[u8],
+) -> Result<Option<zeroize::Zeroizing<Vec<u8>>>, String> {
+    let contents = std::str::from_utf8(contents)
+        .map_err(|_| "e2e_discord_token_file_invalid".to_string())?;
+    for raw_line in contents.lines() {
+        let line = raw_line.trim();
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+        let line = line.strip_prefix("export ").unwrap_or(line);
+        let Some((key, raw_value)) = line.split_once('=') else {
+            continue;
+        };
+        if key.trim() != "DISCORD_BOT_TOKEN" {
+            continue;
+        }
+        let value = raw_value.trim();
+        let value = if value.len() >= 2
+            && ((value.starts_with('\"') && value.ends_with('\"'))
+                || (value.starts_with('\'') && value.ends_with('\'')))
+        {
+            &value[1..value.len() - 1]
+        } else {
+            value
+        };
+        return Ok(Some(zeroize::Zeroizing::new(value.as_bytes().to_vec())));
+    }
+    Ok(None)
+}
+
+/// A live Discord credential may be supplied to the *owned* native E2E runtime
+/// as a file path. It is deliberately unavailable in production and is never
+/// copied into WebView storage, a config file, or the DPAPI key store.
+fn read_e2e_discord_bot_token() -> Result<Option<zeroize::Zeroizing<Vec<u8>>>, String> {
+    if !debug_e2e_enabled() {
+        return Ok(None);
+    }
+    let Some(path) = std::env::var_os("NAIA_E2E_DISCORD_TOKEN_FILE") else {
+        return Ok(None);
+    };
+    let metadata = std::fs::metadata(&path)
+        .map_err(|_| "e2e_discord_token_file_unavailable".to_string())?;
+    if !metadata.is_file() || metadata.len() > 8 * 1024 {
+        return Err("e2e_discord_token_file_invalid".to_string());
+    }
+    let contents = std::fs::read(path)
+        .map_err(|_| "e2e_discord_token_file_unavailable".to_string())?;
+    parse_e2e_discord_bot_token(&contents)
+}
+
 fn read_discord_bot_token() -> Result<zeroize::Zeroizing<Vec<u8>>, String> {
+    if let Some(token) = read_e2e_discord_bot_token()? {
+        return Ok(token);
+    }
     read_agent_secret(&current_adk_path()?, DISCORD_TOKEN_KEY)
 }
 
@@ -5195,6 +5560,17 @@ async fn discord_connection_status() -> Result<DiscordConnectionStatus, String> 
 }
 
 fn capture_discord_token_native() -> Result<zeroize::Zeroizing<String>, String> {
+    // Native WebDriver cannot dismiss a Windows password window. The owned E2E
+    // runtime requests the same cancellation result before any OS prompt is
+    // opened; production builds never honour this environment variable.
+    if debug_e2e_enabled()
+        && matches!(
+            std::env::var("NAIA_E2E_DISCORD_CAPTURE").ok().as_deref(),
+            Some("cancel")
+        )
+    {
+        return Err("capture_cancelled".to_string());
+    }
     #[cfg(target_os = "linux")]
     let candidates: &[(&str, &[&str])] = &[
         ("kdialog", &["--password", "Discord bot token"]),
@@ -7525,6 +7901,36 @@ fn parse_jeonju_course_target_json(raw: &str) -> Result<serde_json::Value, Strin
     Ok(target)
 }
 
+/// Re-check the explicit Shell-owned target at the native start boundary. The
+/// WebView gate is useful guidance, but must not be the only authority for a
+/// selected-workspace job.
+fn verify_jeonju_course_target_matches_workspace(
+    adk_path: &str,
+    workspace_path: &str,
+) -> Result<(), String> {
+    let control_root =
+        std::fs::canonicalize(adk_path).map_err(|_| "course_target_not_ready".to_string())?;
+    let target_path = control_root
+        .join("naia-settings")
+        .join(JEONJU_COURSE_TARGET_FILE);
+    let raw = std::fs::read_to_string(target_path)
+        .map_err(|_| "course_target_not_ready".to_string())?;
+    let target = parse_jeonju_course_target_json(&raw)?;
+    let saved_workspace_path = target
+        .get("workspacePath")
+        .and_then(serde_json::Value::as_str)
+        .ok_or_else(|| "course_target_invalid".to_string())?;
+    let saved_root = std::fs::canonicalize(saved_workspace_path)
+        .map_err(|_| "course_target_not_ready".to_string())?;
+    let requested_root = std::fs::canonicalize(workspace_path)
+        .map_err(|_| "course_target_not_ready".to_string())?;
+
+    if !saved_root.starts_with(&control_root) || saved_root != requested_root {
+        return Err("course_target_not_ready".to_string());
+    }
+    Ok(())
+}
+
 /// Load the host-owned Discord course target. The Agent parses this file again
 /// at process start; Shell validates its shape here so the UI never presents a
 /// broadened or hand-edited target as ready.
@@ -7661,6 +8067,7 @@ async fn start_coding_job(
     state: tauri::State<'_, AppState>,
 ) -> Result<serde_json::Value, String> {
     let (execution_mode, allowed_files) = if course_preset {
+        verify_jeonju_course_target_matches_workspace(&current_adk_path()?, &workspace_path)?;
         verify_jeonju_course_workspace(&workspace_path)?;
         (
             agent_grpc::pb::CodingJobExecutionMode::SelectedWorkspace as i32,
@@ -8766,6 +9173,7 @@ pub fn run() {
             read_naia_config,
             write_naia_config,
             write_slots_manifest,
+            cascade_installation_status,
             start_cascade,
             stop_cascade,
             cascade_status,
@@ -9249,6 +9657,38 @@ pub fn run() {
 mod tests {
     use super::*;
 
+    #[test]
+    fn jeonju_course_target_must_match_the_requested_workspace() {
+        let control = tempfile::tempdir().unwrap();
+        let saved = control.path().join("projects").join("course-site");
+        let other = control.path().join("projects").join("other-site");
+        std::fs::create_dir_all(control.path().join("naia-settings")).unwrap();
+        std::fs::create_dir_all(&saved).unwrap();
+        std::fs::create_dir_all(&other).unwrap();
+        std::fs::write(
+            control
+                .path()
+                .join("naia-settings")
+                .join(JEONJU_COURSE_TARGET_FILE),
+            serde_json::to_string(&jeonju_course_target_json(saved.to_str().unwrap())).unwrap(),
+        )
+        .unwrap();
+
+        assert!(verify_jeonju_course_target_matches_workspace(
+            control.path().to_str().unwrap(),
+            saved.to_str().unwrap(),
+        )
+        .is_ok());
+        assert_eq!(
+            verify_jeonju_course_target_matches_workspace(
+                control.path().to_str().unwrap(),
+                other.to_str().unwrap(),
+            )
+            .unwrap_err(),
+            "course_target_not_ready"
+        );
+    }
+
     fn unknown_length_response(body: Vec<u8>) -> (String, std::thread::JoinHandle<()>) {
         let server = tiny_http::Server::http("127.0.0.1:0").unwrap();
         let address = server.server_addr().to_ip().unwrap();
@@ -9546,6 +9986,61 @@ mod tests {
     }
 
     #[test]
+    fn cascade_installation_blocks_missing_artifacts_without_advertising_download() {
+        let status = classify_cascade_installation(CascadeInstallationProbe {
+            loader: true,
+            python_runtime: true,
+            cascade_service_bundle: false,
+            ditto_engine: false,
+            voxcpm2_model: false,
+            reference_voices: false,
+            facade_healthy: false,
+        });
+
+        assert_eq!(status.phase, "blocked");
+        assert!(!status.can_start);
+        assert!(!status.ready);
+        assert!(status.steps.iter().all(|step| !step.action_available));
+        assert_eq!(
+            status
+                .steps
+                .iter()
+                .find(|step| step.id == "cascade-service-bundle")
+                .unwrap()
+                .failure
+                .as_ref()
+                .unwrap()
+                .code,
+            "CASCADE_SERVICE_BUNDLE_MISSING"
+        );
+    }
+
+    #[test]
+    fn cascade_installation_requires_a_live_facade_before_reporting_ready() {
+        let prerequisites = CascadeInstallationProbe {
+            loader: true,
+            python_runtime: true,
+            cascade_service_bundle: true,
+            ditto_engine: true,
+            voxcpm2_model: true,
+            reference_voices: true,
+            facade_healthy: false,
+        };
+        let not_started = classify_cascade_installation(prerequisites.clone());
+        assert_eq!(not_started.phase, "ready-to-start");
+        assert!(not_started.can_start);
+        assert!(!not_started.ready);
+
+        let running = classify_cascade_installation(CascadeInstallationProbe {
+            facade_healthy: true,
+            ..prerequisites
+        });
+        assert_eq!(running.phase, "ready");
+        assert!(running.can_start);
+        assert!(running.ready);
+    }
+
+    #[test]
     fn cascade_facade_url_accepts_only_a_valid_public_readiness_port() {
         assert_eq!(
             cascade_facade_url_from_ready(r#"{"facade_port":8910}"#).as_deref(),
@@ -9703,6 +10198,24 @@ mod tests {
         assert_eq!(
             validate_discord_token(&vec![b'x'; 513]),
             Err("token_invalid".to_string())
+        );
+    }
+
+    #[test]
+    fn e2e_discord_dotenv_parser_reads_only_the_bot_token_field() {
+        let token = parse_e2e_discord_bot_token(
+            b"DISCORD_APP_ID=123\nexport DISCORD_BOT_TOKEN=fixture.token-value\nDISCORD_GUILD_ID=456\n",
+        )
+        .unwrap()
+        .unwrap();
+        assert_eq!(token.as_slice(), b"fixture.token-value");
+        assert_eq!(
+            parse_e2e_discord_bot_token(b"DISCORD_APP_ID=123\n").unwrap(),
+            None
+        );
+        assert_eq!(
+            parse_e2e_discord_bot_token(b"DISCORD_BOT_TOKEN=\xff"),
+            Err("e2e_discord_token_file_invalid".to_string())
         );
     }
 

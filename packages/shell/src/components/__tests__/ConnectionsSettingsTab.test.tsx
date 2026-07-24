@@ -117,12 +117,21 @@ describe("ConnectionsSettingsTab Discord binding", () => {
 		render(<ConnectionsSettingsTab />);
 
 		await screen.findByText(t("settings.connectionsDisconnected"));
+		expect(
+			screen.getByTestId("discord-setup-flow"),
+		).toHaveTextContent(t("settings.connectionsSetupFlow"));
+		expect(
+			screen.getByText(t("settings.connectionsNativePromptHelp")),
+		).toHaveAttribute("id", "discord-native-prompt-help");
 		expect(screen.queryByLabelText(/token/i)).toBeNull();
-		fireEvent.click(
-			screen.getByRole("button", {
-				name: t("settings.connectionsConnect"),
-			}),
+		const connect = screen.getByRole("button", {
+			name: t("settings.connectionsConnect"),
+		});
+		expect(connect).toHaveAttribute(
+			"aria-describedby",
+			"discord-native-prompt-help",
 		);
+		fireEvent.click(connect);
 
 		await waitFor(() =>
 			expect(mockInvoke).toHaveBeenCalledWith("discord_capture_bot_token"),
@@ -228,6 +237,16 @@ describe("ConnectionsSettingsTab Discord binding", () => {
 			}),
 		);
 		await waitFor(() => expect(screen.getByRole("status")).toBeDefined());
+		const handoff = await screen.findByTestId("discord-inbox-handoff");
+		expect(handoff).toHaveTextContent(t("settings.connectionsOpenInbox"));
+		const opened = vi.fn();
+		window.addEventListener("naia-open-discord-inbox", opened, { once: true });
+		fireEvent.click(
+			screen.getByRole("button", {
+				name: t("settings.connectionsOpenInbox"),
+			}),
+		);
+		expect(opened).toHaveBeenCalledTimes(1);
 	});
 
 	it("allows the first binding save when no manifest generation exists", async () => {

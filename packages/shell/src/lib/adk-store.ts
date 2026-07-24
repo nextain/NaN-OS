@@ -145,7 +145,7 @@ const UI_ONLY_CONFIG_KEYS = new Set([
 	"bgmTrack", "bgmSource", "bgmYoutubeVideoId", "bgmYoutubeTitle",
 	"bgmYoutubeChannel", "bgmYoutubeThumbnail", "bgmVolume", "bgmPlaying",
 	// Opt-in proactive speech profile (shell configures agent at startup)
-	"proactiveSpeechProfile", "proactiveSpeechIdleMs", "proactiveSpeechIntervalMs",
+	"proactiveSpeechProfile", "proactiveSpeechPermitted", "proactiveSpeechIdleMs", "proactiveSpeechIntervalMs",
 	"proactiveSpeechTimezone", "proactiveSpeechBgmAutoPlay",
 	"proactiveSpeechWeatherConsented", "proactiveSpeechWeatherLatitude",
 	"proactiveSpeechWeatherLongitude", "proactiveSpeechKnowledgeScope",

@@ -258,6 +258,7 @@ For the Jeonju course, the user explicitly selects a Git root and enables course
 - The allowed file list is fixed by Shell IPC to `index.html` and `hero.svg`. WebView input, Discord messages, LLM text, and task text cannot supply or change that list.
 - **Proposal then apply:** the selected provider is a read-only proposal producer, not the filesystem authority. It returns only a versioned complete-file JSON proposal. Naia parses that fixed schema, applies the accepted subset of `index.html` and `hero.svg`, then runs the existing Git and content verification. This contract is shared by Codex, a model authenticated through the user's Naia account, and any later compatible provider.
 - The worker card shows the returned verification summary. A failed check preserves student changes for manual review; Shell never resets or cleans the student workspace.
+- **Visible course interaction:** Shell keeps the course start action disabled until the saved Discord course target is the same Git root currently entered by the instructor. The selected-workspace card is the student-facing Naia report: it states whether the proposal is queued, running, cancelling, completed with verification, completed without verification, failed, or cancelled. A verified completion tells the student to inspect the two files, check the page in a browser, and then make the Git commit; its `수업 파일 열기` action opens `index.html` directly in the Shell editor. Failed or cancelled work explicitly says that success was not claimed and that remaining files are preserved for review.
 - If readiness fails, no worker is created and the UI gives a safe instruction to review the selected folder rather than exposing raw Git or Agent output.
 
 ### UC-JEONJU-DISCORD-COURSE-TARGET
@@ -273,7 +274,7 @@ Success means the visible confirmation identifies the saved target and fixed bou
 
 ## Test Coverage Map (P02)
 
-**UC-JEONJU-COURSE-WORKER** maps to `apps/__tests__/coding-workers.test.tsx` and `apps/workspace/__tests__/coding-workers-tauri.test.ts` for the explicit preset, fixed boundary, preflight rejection, proposal/apply explanation, and verification summary. Its native acceptance spec is `e2e-tauri/specs/91-jeonju-course-worker.spec.ts`; it runs serially with the paired Agent and an isolated fixture repository. The proposal worker may inherit a read-only parent sandbox, because it no longer writes the course repository: Naia performs the constrained apply and post-apply verification.
+**UC-JEONJU-COURSE-WORKER** maps to `apps/__tests__/coding-workers.test.tsx` and `apps/workspace/__tests__/coding-workers-tauri.test.ts` for the explicit preset, saved-target start gate, fixed boundary, preflight rejection, proposal/apply explanation, state-specific Naia report, and verification summary. Its native acceptance specs are `e2e-tauri/specs/91-jeonju-course-worker.spec.ts` (first build → student commit → revision and completed report) and `97-course-worker-guidance.spec.ts` (visible blocked start before target save); they run with the paired Agent and an isolated fixture repository. The proposal worker may inherit a read-only parent sandbox, because it no longer writes the course repository: Naia performs the constrained apply and post-apply verification.
 
 **UC-JEONJU-DISCORD-COURSE-TARGET** maps to `apps/__tests__/coding-workers.test.tsx` and `apps/workspace/__tests__/jeonju-course-target.test.ts` for the explicit save action, fixed schema parser, and no caller-supplied allowed files. `src-tauri/src/lib.rs` contracts cover canonical containment and exact schema rejection. Its native Tauri coverage extends the Jeonju course acceptance fixture so the saved target exists before Agent startup.
 
@@ -483,6 +484,33 @@ Test Coverage Map:
   `persists validated proactive settings after cache-clear native reload`,
   `starts exhibition introduction without waiting for ordinary chat`.
 
+## UC-PROACTIVE-COST-CONTROL — AI/TTS 옆에서 능동 발화를 통제한다
+
+Naia가 개인 라디오 DJ나 전시 소개를 제안하거나 시작하려 할 때, 사용자는 아바타 영역의
+AI·TTS 제어 바에서 **능동 발화** 상태를 항상 확인하고 즉시 바꿀 수 있다. 이 제어는
+프로필 설정과 다르다. 프로필은 무엇을 할지(개인 라디오/전시 소개)를 정하고, 능동 발화
+제어는 지금 LLM·TTS·선택적 BGM을 사용해도 되는지를 정한다.
+
+- 꺼짐: agent는 능동 발화를 시작하지 않고, 이미 진행 중인 activity는 안전하게 중단한다.
+- 준비됨: 선택된 프로필과 현재 AI/TTS 경로를 표시한다. agent의 판단은 시작 **제안**으로
+  보이며, 사용자는 버튼에서 허가하거나 계속 꺼 둘 수 있다.
+- 실행 중: 현재 프로필과 사용 중인 AI/TTS 경로를 표시한다. 버튼 한 번으로 즉시 중단한다.
+- 차단됨: TTS가 꺼져 있거나 로컬 음성/아바타 준비가 안 된 경우, 시작하지 않고 정확한
+  차단 이유를 표시한다. 클라우드·로컬 비용을 추정값으로 꾸며 표시하지 않는다.
+
+LLM은 좁은 능동 발화 도구로 profile 시작을 **요청 또는 제안**할 수 있지만, Shell의 현재
+허가 상태·오디오 가능 여부·사용자 중단을 우회할 수 없다. 설정 화면은 시간대·개인정보
+동의·간격·BGM 자동재생 같은 정책만 보관하며, 숨은 opt-in 토글이 런타임 허가를 대신하지 않는다.
+
+Test Coverage Map:
+
+- 컴포넌트: `AiControlBar`가 꺼짐/준비됨/실행 중/차단됨의 라벨, `aria-pressed`, 설명과
+  시작·중단 요청을 올바르게 표현한다.
+- 구성: `proactive-speech-settings`가 profile 정책과 사용자 허가를 별도로 저장·정규화하고,
+  TTS-off/미구성 profile을 fail-closed 한다.
+- 실제 Tauri: 새 `e2e-tauri` 시나리오가 버튼으로 시작·중단한 뒤 agent의 profile 설정과
+  activity stop을 확인하고, 로컬 음성 준비 실패는 실행 성공으로 표시하지 않는지 확인한다.
+
 ## UC-WIRE-V1 — 이미지·Discord·RAG·처리 공개 공통 채팅 경계 (#384 / naia-agent #89)
 
 셸 사용자는 기존 텍스트 대화를 그대로 사용하면서 필요할 때 안전한 이미지 참조,
@@ -522,7 +550,7 @@ P02 검증:
 
 ### UC-DISCORD-1: 개인 봇 연결과 채널 활동 허용
 
-사용자는 나이아에게 Discord 연결 방법을 물어본다. 나이아는 사용자가 Discord에서 봇을 만들고 자신의 서버에 초대해야 함을 설명한 뒤 연결 설정으로 안내한다. 사용자는 보안 입력을 통해 봇을 연결하고, 나이아가 접근 가능한 채널 중 활동을 허용할 채널을 선택한다. 이후 나이아는 허용 채널에서만 다른 참여자와 대화한다.
+사용자는 나이아에게 Discord 연결 방법을 물어본다. 나이아는 사용자가 Discord에서 봇을 만들고 자신의 서버에 초대해야 함을 설명한 뒤 연결 설정으로 안내한다. 연결 화면은 **봇 만들기·초대 → Windows 보안 입력창에 토큰 입력 → 연결 확인 → 활동 채널 선택** 순서를 먼저 보여 준다. 토큰은 WebView 입력칸·채팅·일반 설정에 나타나지 않으며, 사용자가 `Discord 연결`을 누를 때만 열리는 운영체제 보안 입력창에서 처리한다. 나이아가 접근 가능한 채널 중 활동을 허용할 채널을 선택한 뒤에만, 이후 나이아는 허용 채널에서 다른 참여자와 대화한다.
 
 - 성공: 연결 상태와 허용 채널이 보이고, 봇은 허용 채널에서만 동작한다.
 - 실패: 토큰 오류, 봇 미초대, 권한 부족, 채널 삭제는 원인을 보여 주며 다른 채널에는 영향을 주지 않는다.
@@ -534,6 +562,16 @@ P02 검증:
 
 - 좁은 화면: 목록과 대화를 동시에 강제로 넣지 않고, 목록 → 대화 → 뒤로 가기 흐름으로 전환한다.
 - 넓은 화면: 목록과 선택된 대화를 함께 보여 줄 수 있다.
+
+### UC-DISCORD-1B: 연결 설정에서 채널 대화함으로 이어가기
+
+사용자는 **연결 → Discord**에서 봇 토큰을 보안 입력으로 저장하고 활동을 허용할 채널을 선택한다. 저장이 성공하면 같은 화면에서 `Discord 대화함 열기`를 선택해 지구본 채널 탭으로 이동한다. 채널 탭은 방금 허용한 채널들을 서버·채널명으로 표시하고, 아직 메시지가 없어도 “대기 중”으로 구분한다.
+
+아직 토큰이 없으면 채널 탭은 구형 Gateway 오류를 보여 주지 않고, Discord를 연결하고 채널을 허용하라는 안내와 연결 설정으로 가는 버튼을 보여 준다. 토큰은 있지만 허용 채널이 없으면 채널 선택으로 돌아가는 버튼을 보여 준다. 채널 하나라도 허용된 뒤에는 Shell 개인 채팅과 섞지 않고, 선택된 Discord 채널의 기록만 보여 준다.
+
+- 성공: 저장 직후 같은 허용 목록이 대화함에 보이고, 사용자 선택 또는 최근 채널이 열리며 개인 채팅으로 복사되지 않는다.
+- 실패: 미연결·미허용·상태 조회 실패를 서로 구분해 안내한다. 오류 원문·토큰·Agent 내부 상태는 표시하지 않는다.
+- 경계: `연결`은 자격 증명과 활동 권한을 정하는 곳이고, 지구본은 허용된 Discord 채널의 읽기 전용 대화함이다. 두 화면은 동일한 binding 식별자만 공유한다.
 - 비어 있음: 허용 채널이 없으면 연결·권한 설정을 안내한다.
 
 ### UC-DISCORD-3: 실시간 공동 대화
@@ -549,7 +587,8 @@ P02 검증:
 | Scenario | Unit / contract | UI / integration | Real Discord E2E |
 |---|---|---|---|
 | UC-DISCORD-1 | credential boundary, allow-list, participation policy | Settings connection flow | bot invite, permissions, allowed-channel activation |
-| UC-DISCORD-1A | `ConnectionsSettingsTab.test.tsx`: native credential result/status-generation classification, incomplete-discovery fail-closed, binding conflict | `e2e/discord-settings-secure.spec.ts`: no inline token and no-argument native-command contract; `e2e-tauri/specs/92-discord-secure-cancel.spec.ts`: isolated real Tauri WebView cancellation; `e2e/discord-channel-agent.spec.ts`: allow-list save. | provisioned test bot: OS keychain store → discover → allow-list save → Agent authority `ready` |
+| UC-DISCORD-1A | `ConnectionsSettingsTab.test.tsx`: visible four-step setup, native credential result/status-generation classification, incomplete-discovery fail-closed, binding conflict; Rust dotenv parser accepts only `DISCORD_BOT_TOKEN` for debug E2E | `e2e/discord-settings-secure.spec.ts`: no inline token and no-argument native-command contract; `e2e-tauri/specs/92-discord-secure-cancel.spec.ts`: isolated real Tauri native-cancellation seam; `e2e-tauri/specs/94-discord-live-auth.spec.ts`: private dotenv → live bot authentication/discovery without DPAPI/WebView persistence; `e2e/discord-channel-agent.spec.ts`: allow-list save. | provisioned test bot: allow-list save → Agent authority `ready` |
+| UC-DISCORD-1B | `ConnectionsSettingsTab.test.tsx`: save exposes inbox handoff only for a saved binding; `ChannelsTab.test.tsx`: disconnected/unconfigured/allowed empty states and binding-scoped records; no raw status leak | `e2e-tauri/specs/93-discord-inbox-handoff.spec.ts`: real Shell settings → channels handoff and empty-state route | provisioned test bot: binding save → inbox channel list → inbound/outbound records remain in their binding |
 | UC-DISCORD-2 | recency and selected-channel persistence | narrow/wide channel inbox navigation | multi-channel history visibility |
 | UC-DISCORD-3 | Gateway event deduplication, per-channel context, reconnect | live status and unread rendering | two-channel message/reply/reconnect flow |
 

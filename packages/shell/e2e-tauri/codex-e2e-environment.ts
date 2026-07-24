@@ -1,6 +1,6 @@
 import type { ChildProcess } from "node:child_process";
-import { spawn } from "node:child_process";
-import { cpSync, existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { execFileSync, spawn } from "node:child_process";
+import { cpSync, existsSync, mkdirSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { connect } from "node:net";
 import { homedir } from "node:os";
 import { basename, dirname, resolve } from "node:path";
@@ -46,6 +46,8 @@ export const E2E_TARGET_DIR = resolve(
 const E2E_VITE_PORT = 1422;
 const E2E_AVATAR_ENABLED = process.env.NAIA_E2E_AVATAR === "1";
 const E2E_NVA_SOURCE = process.env.NAIA_E2E_NVA_SOURCE;
+const PAIRED_AGENT_ROOT = "D:/alpha-adk/projects/naia-agent-worktrees";
+const REQUIRED_AGENT_COMMIT = "734b1f6f8604f176fe49e2558de98e69abeee614";
 
 let viteServer: ChildProcess | undefined;
 let e2eApp: ChildProcess | undefined;
@@ -59,6 +61,29 @@ function assertOwnedRoot(path: string): void {
 	) {
 		throw new Error(`Refusing to clean a non-E2E path: ${candidate}`);
 	}
+}
+
+/** Keep the spawned agent identical to the commit verified by build-e2e-tauri. */
+export function resolveRequiredPairedAgent(): string {
+	const explicit = process.env.NAIA_E2E_AGENT_ROOT;
+	const candidates = explicit ? [explicit] : readdirSync(PAIRED_AGENT_ROOT, { withFileTypes: true })
+		.filter((entry) => entry.isDirectory())
+		.map((entry) => resolve(PAIRED_AGENT_ROOT, entry.name));
+	for (const candidate of candidates) {
+		if (!existsSync(resolve(candidate, "scripts/builds/agent-stdio-entry.mjs"))) continue;
+		if (!existsSync(resolve(candidate, "src/main/adapters/grpc/naia_agent.proto"))) continue;
+		try {
+			if (
+				execFileSync("git", ["-C", candidate, "rev-parse", "HEAD"], { encoding: "utf8" }).trim() === REQUIRED_AGENT_COMMIT &&
+				execFileSync("git", ["-C", candidate, "status", "--porcelain"], { encoding: "utf8" }).trim() === ""
+			) {
+				return candidate;
+			}
+		} catch {
+			// Keep searching; a malformed auxiliary checkout is not an E2E candidate.
+		}
+	}
+	throw new Error(`No paired naia-agent checkout contains ${REQUIRED_AGENT_COMMIT}`);
 }
 
 /**
@@ -79,14 +104,9 @@ export function configureCodexE2eEnvironment(): void {
 	process.env.NAIA_E2E_DISCORD_CAPTURE = "cancel";
 	process.env.NAIA_BGM_PORT = String(E2E_BGM_PORT);
 	process.env.VITE_NAIA_BGM_BASE = `http://127.0.0.1:${E2E_BGM_PORT}`;
-	process.env.NAIA_AGENT_SCRIPT = resolve(
-		"D:/alpha-adk/projects/naia-agent-worktrees/codex-job-terminal",
-		"scripts/builds/agent-stdio-entry.mjs",
-	);
-	process.env.NAIA_AGENT_PROTO_DIR = resolve(
-		"D:/alpha-adk/projects/naia-agent-worktrees/codex-job-terminal",
-		"src/main/adapters/grpc",
-	);
+	const pairedAgent = resolveRequiredPairedAgent();
+	process.env.NAIA_AGENT_SCRIPT = resolve(pairedAgent, "scripts/builds/agent-stdio-entry.mjs");
+	process.env.NAIA_AGENT_PROTO_DIR = resolve(pairedAgent, "src/main/adapters/grpc");
 }
 
 export function resetCodexE2eRoot(): void {

@@ -453,6 +453,10 @@ export function ConnectionsSettingsTab() {
 		}
 	}
 
+	function openDiscordInbox() {
+		window.dispatchEvent(new Event("naia-open-discord-inbox"));
+	}
+
 	const statusLabel =
 		state === "checking"
 			? t("settings.connectionsChecking")
@@ -463,6 +467,7 @@ export function ConnectionsSettingsTab() {
 					: state === "disconnected"
 						? t("settings.connectionsDisconnected")
 						: t("settings.connectionsError");
+	const credentialNeeded = state === "disconnected" || state === "error";
 
 	return (
 		<section
@@ -472,6 +477,19 @@ export function ConnectionsSettingsTab() {
 		>
 			<h2 id="discord-connection-title">{t("settings.connectionsDiscord")}</h2>
 			<p className="settings-hint">{t("settings.connectionsSecureHelp")}</p>
+			<div className="settings-field" data-testid="discord-setup-flow">
+				<h3>{t("settings.connectionsSetupFlow")}</h3>
+				<ol className="connection-setup-steps">
+					<li>{t("settings.connectionsSetupHelp")}</li>
+					<li id="discord-native-prompt-help">
+						{t("settings.connectionsNativePromptHelp")}
+					</li>
+					<li>
+						{t("settings.connectionsRefresh")}: {statusLabel}
+					</li>
+					<li>{t("settings.connectionsPermissions")}</li>
+				</ol>
+			</div>
 			<div className="settings-field">
 				<span>{t("settings.connectionsStatus")}</span>
 				<strong aria-live="polite">{statusLabel}</strong>
@@ -488,6 +506,9 @@ export function ConnectionsSettingsTab() {
 				<button
 					type="button"
 					disabled={credentialOperationPending}
+					aria-describedby={
+						credentialNeeded ? "discord-native-prompt-help" : undefined
+					}
 					onClick={() => void captureCredential()}
 				>
 					{state === "connected" || state === "configured"
@@ -741,7 +762,14 @@ export function ConnectionsSettingsTab() {
 							{t("settings.save")}
 						</button>
 					</div>
-					{saved && <output>{t("settings.connectionsBindingsSaved")}</output>}
+					{saved && (
+						<div className="settings-actions" data-testid="discord-inbox-handoff">
+							<output>{t("settings.connectionsBindingsSaved")}</output>
+							<button type="button" onClick={openDiscordInbox}>
+								{t("settings.connectionsOpenInbox")}
+							</button>
+						</div>
+					)}
 				</>
 			)}
 

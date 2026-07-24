@@ -1698,6 +1698,12 @@ export function WorkspaceCenterArea({ naia }: AppCenterProps) {
 						<CodingWorkersPanel
 							adapter={codingWorkersAdapter}
 							controlRoot={resolvedRoot}
+							onOpenCourseFiles={(worker) => {
+								const first = worker.allowedFiles[0];
+								if (!first) return;
+								openFile(`${worker.worktree}\\${first}`);
+								setEditorBadge("");
+							}}
 						/>
 					)}
 					{terminals.length > 0 ? (

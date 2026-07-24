@@ -733,12 +733,19 @@ export function ChatArea({
 		messagesEndRef.current?.scrollIntoView?.({ behavior: "smooth" });
 	}, [messages, streamingContent]);
 
-	// VN (home) is a focused conversation surface with no tab navigation. If we
-	// enter VN while a non-chat tab was active (e.g. user left it on History in a
-	// panel, then closed the panel), snap back to chat so the input stays visible.
+	// Home/VN exposes Chat, History, and Channels in its compact tab bar. Keep
+	// those user-selectable surfaces intact, but reset unsupported workspace-only
+	// tabs when moving into VN so the compact layout cannot become blank.
 	// Pure UI guard — touches no voice/session state.
 	useEffect(() => {
-		if (variant === "vn" && activeTab !== "chat") setActiveTab("chat");
+		if (
+			variant === "vn" &&
+			activeTab !== "chat" &&
+			activeTab !== "history" &&
+			activeTab !== "channels"
+		) {
+			setActiveTab("chat");
+		}
 	}, [variant, activeTab]);
 
 	function isChatRequestActive(): boolean {
@@ -939,11 +946,11 @@ export function ChatArea({
 	useEffect(() => {
 		let disposed = false;
 		let unlisten: (() => void) | undefined;
-		void loadConfigWithSecrets().then((config) => {
-			if (!config || disposed) return;
-			void configureSpeechProfile(toSpeechProfileCommandInput(
-				normalizeProactiveSpeechSettings({
-				profile: config.proactiveSpeechProfile ?? "disabled",
+		const configurePersistedProfile = async (config: AppConfig) => {
+			const profile = config.proactiveSpeechProfile ?? "disabled";
+			const permitted = config.proactiveSpeechPermitted ?? (profile !== "disabled");
+			const settings = normalizeProactiveSpeechSettings({
+				profile: permitted ? profile : "disabled",
 				idleMs: config.proactiveSpeechIdleMs,
 				intervalMs: config.proactiveSpeechIntervalMs,
 				timezone: config.proactiveSpeechTimezone ?? "UTC",
@@ -952,8 +959,12 @@ export function ChatArea({
 				weatherLatitude: config.proactiveSpeechWeatherLatitude,
 				weatherLongitude: config.proactiveSpeechWeatherLongitude,
 				knowledgeScope: config.proactiveSpeechKnowledgeScope,
-				}),
-			));
+			});
+			return configureSpeechProfile(toSpeechProfileCommandInput(settings));
+		};
+		void loadConfigWithSecrets().then((config) => {
+			if (!config || disposed) return;
+			void configurePersistedProfile(config);
 		});
 		const retireActiveSpeech = () => {
 			acceptSpeechActivitiesRef.current = false;
@@ -961,11 +972,28 @@ export function ChatArea({
 			const active = activeSpeechActivityRef.current;
 			if (active) retiredSpeechActivityIdsRef.current.add(active.activityId);
 			activeSpeechActivityRef.current = null;
+			window.dispatchEvent(new CustomEvent("naia-proactive-activity-state", {
+				detail: { active: false },
+			}));
+		};
+		const handlePermissionChange = (event: Event) => {
+			const permitted = (event as CustomEvent<{ permitted?: boolean }>).detail?.permitted === true;
+			void (async () => {
+				const config = await loadConfigWithSecrets();
+				if (!config || disposed) return;
+				if (!permitted) {
+					const active = activeSpeechActivityRef.current;
+					retireActiveSpeech();
+					if (active) await controlSpeechActivity("stop", active.activityId);
+				}
+				await configurePersistedProfile({ ...config, proactiveSpeechPermitted: permitted });
+			})();
 		};
 		window.addEventListener(
 			"naia-proactive-profile-changing",
 			retireActiveSpeech,
 		);
+		window.addEventListener("naia-proactive-permission-change", handlePermissionChange);
 		const acceptConfiguredProfile = (event: Event) => {
 			const detail = (event as CustomEvent<{
 				ok?: boolean;
@@ -998,7 +1026,14 @@ export function ChatArea({
 			const profileGeneration = Number(chunk.profileGeneration ?? 0);
 			const active = activeSpeechActivityRef.current;
 			if (!acceptSpeechActivitiesRef.current) return;
-			if (subscriptionEpoch !== speechActivitySubscriptionEpochRef.current) return;
+			// A profile save retires the old stream before its final Configure ACK
+			// reaches this WebView. A newer epoch is therefore authoritative and may
+			// arrive first; accept it and advance the fence. Older activity remains
+			// rejected, so a late pre-save stream can never reclaim the voice lane.
+			if (subscriptionEpoch < speechActivitySubscriptionEpochRef.current) return;
+			if (subscriptionEpoch > speechActivitySubscriptionEpochRef.current) {
+				speechActivitySubscriptionEpochRef.current = subscriptionEpoch;
+			}
 			if (retiredSpeechActivityIdsRef.current.has(activityId)) return;
 			if (
 				active
@@ -1012,6 +1047,9 @@ export function ChatArea({
 				}
 			}
 			activeSpeechActivityRef.current = { activityId, profileGeneration };
+			window.dispatchEvent(new CustomEvent("naia-proactive-activity-state", {
+				detail: { active: true },
+			}));
 			// A direct Live/omni model would answer visitor audio outside the
 			// exhibition KB/privacy path. Proactive profiles therefore own the
 			// voice lane; pipeline STT remains available for grounded questions.
@@ -1065,6 +1103,9 @@ export function ChatArea({
 				if (activeSpeechActivityRef.current?.activityId === activityId) {
 					retiredSpeechActivityIdsRef.current.add(activityId);
 					activeSpeechActivityRef.current = null;
+					window.dispatchEvent(new CustomEvent("naia-proactive-activity-state", {
+						detail: { active: false },
+					}));
 				}
 			}
 		}).then((off) => {
@@ -1082,6 +1123,7 @@ export function ChatArea({
 				"naia-proactive-profile-configured",
 				acceptConfiguredProfile,
 			);
+			window.removeEventListener("naia-proactive-permission-change", handlePermissionChange);
 		};
 	}, []);
 
@@ -1148,6 +1190,9 @@ export function ChatArea({
 			activityResume = await yieldSpeechActivity(speechActivity.activityId);
 			if (activeSpeechActivityRef.current?.activityId === speechActivity.activityId) {
 				activeSpeechActivityRef.current = null;
+				window.dispatchEvent(new CustomEvent("naia-proactive-activity-state", {
+					detail: { active: false },
+				}));
 			}
 		}
 
@@ -1410,6 +1455,8 @@ export function ChatArea({
 				saveConfig({
 					...config,
 					proactiveSpeechProfile: profile,
+					// A spoken explicit start is direct user permission; settings changes are not.
+					proactiveSpeechPermitted: profile !== "disabled",
 					...(profile !== "disabled" && config.proactiveSpeechIdleMs == null
 						? { proactiveSpeechIdleMs: profile === "personal_radio_dj" ? 5_000 : 1_000 }
 						: {}),
@@ -1431,6 +1478,9 @@ export function ChatArea({
 		if (action === "stop") {
 			retiredSpeechActivityIdsRef.current.add(activity.activityId);
 			activeSpeechActivityRef.current = null;
+			window.dispatchEvent(new CustomEvent("naia-proactive-activity-state", {
+				detail: { active: false },
+			}));
 		}
 		setInput("");
 		useChatStore.getState().addMessage({ role: "user", content: text });
@@ -3044,6 +3094,13 @@ export function ChatArea({
 				});
 		}
 	}
+
+	useEffect(() => {
+		const openDiscordInbox = () => setActiveTab("channels");
+		window.addEventListener("naia-open-discord-inbox", openDiscordInbox);
+		return () =>
+			window.removeEventListener("naia-open-discord-inbox", openDiscordInbox);
+	}, []);
 
 	// ── @ mention: track input changes ──────────────────────────────────
 	const handleInputChange = useCallback(

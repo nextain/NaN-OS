@@ -1194,6 +1194,16 @@ body.resizing-col .naia-work-rail::before {
 	box-shadow: 0 0 0 2px rgba(52, 211, 153, 0.18);
 }
 
+.bgm-ai-toggle--blocked {
+	border-color: rgba(251, 191, 36, 0.42);
+	color: rgba(254, 243, 199, 0.86);
+}
+
+.bgm-ai-toggle--blocked .bgm-ai-toggle__dot {
+	background: #fbbf24;
+	box-shadow: 0 0 0 2px rgba(251, 191, 36, 0.18);
+}
+
 /* Right content area — receives margin-left via inline style in JSX */
 .right-area {
 	flex: 1;
@@ -1444,9 +1454,11 @@ body.resizing-col .naia-work-rail::before {
 		inset 0 1px 0 rgba(255, 255, 255, 0.06);
 }
 
-/* VN variant chat surface: no tab chrome (focused talk), larger readable text */
+/* VN keeps the compact chat surface, but navigation remains available.
+ * Hiding these tabs made transcript history and channel conversations impossible
+ * to reach from the default Home view. */
 .chat-panel--vn .chat-tabs {
-	display: none;
+	display: flex;
 }
 
 .chat-panel--vn .chat-header {
@@ -2717,6 +2729,30 @@ body.resizing-row {
 
 .settings-field {
 	margin-bottom: 12px;
+}
+
+.connection-setup-steps {
+	margin: 8px 0 0;
+	padding-left: 22px;
+	color: var(--cream-dim);
+	font-size: 12px;
+	line-height: 1.55;
+}
+
+.connection-setup-steps li + li {
+	margin-top: 4px;
+}
+
+/* Keep the Codex readiness result and its action visibly separate. */
+.codex-readiness-actions {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	margin-top: 8px;
+}
+
+.codex-readiness-actions [aria-live] {
+	flex: 1;
 }
 
 /* Sub-fields shown conditionally below a dropdown — always full width, stacked */
@@ -8544,6 +8580,14 @@ body.resizing-col * {
 	color: var(--text-secondary, #aaa);
 }
 
+.coding-workers__course-start-blocked {
+	margin: 0;
+	padding: 8px;
+	border-left: 3px solid var(--warning, #d6a34a);
+	background: color-mix(in srgb, var(--warning, #d6a34a) 12%, transparent);
+	color: var(--text-primary, #eee);
+}
+
 .coding-workers__form-actions {
 	display: flex;
 	justify-content: flex-end;
@@ -8702,6 +8746,21 @@ body.resizing-col * {
 
 .coding-workers__verification {
 	background: var(--surface-hover, #2e2e2e);
+}
+
+.coding-workers__course-report {
+	display: grid;
+	gap: 4px;
+	padding: 8px;
+	border-left: 3px solid var(--accent, #6d8cff);
+	background: color-mix(in srgb, var(--accent, #6d8cff) 8%, transparent);
+	border-radius: 4px;
+	line-height: 1.45;
+}
+
+.coding-workers__course-report p {
+	margin: 0;
+	color: var(--text-secondary, #aaa);
 }
 
 .coding-workers__card time {

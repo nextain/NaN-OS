@@ -319,6 +319,7 @@ describe("SettingsTab", () => {
 		render(<SettingsTab />);
 		gotoSettingsTab("brain");
 		const check = await screen.findByTestId("codex-readiness-check");
+		expect(check.parentElement).toHaveClass("codex-readiness-actions");
 		fireEvent.click(check);
 
 		await vi.waitFor(() => {

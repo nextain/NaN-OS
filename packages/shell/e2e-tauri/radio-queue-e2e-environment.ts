@@ -4,6 +4,7 @@ import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { connect } from "node:net";
 import { resolve } from "node:path";
 import { execPath } from "node:process";
+import { resolveRequiredPairedAgent } from "./codex-e2e-environment.js";
 
 export const shellDir = resolve(import.meta.dirname, "..");
 export const e2ePort = Number(process.env.NAIA_E2E_WEBDRIVER_PORT ?? "4472");
@@ -46,8 +47,9 @@ export function configure() {
  process.env.APPDATA = resolve(appData, "roaming");
  process.env.LOCALAPPDATA = resolve(appData, "local");
  process.env.VITE_NAIA_BGM_BASE = `http://127.0.0.1:${bgmPort}`;
- process.env.NAIA_AGENT_SCRIPT = resolve("D:/alpha-adk/projects/naia-agent-worktrees/codex-job-terminal", "scripts/builds/agent-stdio-entry.mjs");
- process.env.NAIA_AGENT_PROTO_DIR = resolve("D:/alpha-adk/projects/naia-agent-worktrees/codex-job-terminal", "src/main/adapters/grpc");
+ const pairedAgent = resolveRequiredPairedAgent();
+ process.env.NAIA_AGENT_SCRIPT = resolve(pairedAgent, "scripts/builds/agent-stdio-entry.mjs");
+ process.env.NAIA_AGENT_PROTO_DIR = resolve(pairedAgent, "src/main/adapters/grpc");
 }
 export function reset() {
  assertOwnedRoot(root); rmSync(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });

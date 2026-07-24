@@ -1,8 +1,6 @@
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 import {
-	E2E_WEBDRIVER_PORT,
-	E2E_WEBVIEW2_DATA,
 	E2E_TARGET_DIR,
 	assertCodexE2eIsolation,
 	cleanupCodexE2eRoot,
@@ -18,21 +16,22 @@ const EXE = process.platform === "win32" ? ".exe" : "";
 const TAURI_BINARY = process.env.TAURI_BINARY
 	? process.env.TAURI_BINARY
 	: resolve(E2E_TARGET_DIR, "debug", `naia-shell${EXE}`);
+const TOKEN_FILE = process.env.NAIA_E2E_DISCORD_TOKEN_FILE;
+
+if (!TOKEN_FILE || !existsSync(TOKEN_FILE)) {
+	throw new Error(
+		"Set NAIA_E2E_DISCORD_TOKEN_FILE to an existing private dotenv file before running the live Discord acceptance test.",
+	);
+}
 
 configureCodexE2eEnvironment();
 
 export const config = {
 	runner: "local" as const,
-	specs: [
-		"./specs/92-discord-secure-cancel.spec.ts",
-		"./specs/93-discord-inbox-handoff.spec.ts",
-	],
+	specs: ["./specs/94-discord-live-auth.spec.ts"],
 	maxInstances: 1,
 	hostname: "127.0.0.1",
-	// The embedded application and WebDriver client must use the same port.
-	// `codex-e2e-environment` owns the default (4450) and honors an explicit
-	// NAIA_E2E_WEBDRIVER_PORT override for parallel native suites.
-	port: E2E_WEBDRIVER_PORT,
+	port: Number(process.env.NAIA_E2E_WEBDRIVER_PORT ?? "4465"),
 	capabilities: [
 		{
 			maxInstances: 1,
@@ -74,11 +73,6 @@ export const config = {
 				timeoutMsg: "embedded Tauri webview never reached dedicated E2E Vite",
 			},
 		);
-		if (!existsSync(E2E_WEBVIEW2_DATA)) {
-			throw new Error(
-				"WebView2 test profile was not created under the owned E2E root",
-			);
-		}
 	},
 	async onComplete() {
 		try {

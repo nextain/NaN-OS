@@ -121,6 +121,19 @@ describe("Jeonju course worker through the isolated real Tauri Shell", () => {
 		expect(
 			await card.$("[data-testid^='coding-worker-verification-']").getText(),
 		).toContain("only index.html and hero.svg changed");
+		const courseReport = await card.$(
+			"[data-testid^='coding-worker-course-report-']",
+		);
+		expect(await courseReport.getText()).toMatch(/Naia course report|Naia/);
+		expect(await courseReport.getText()).toMatch(
+			/inspect index\.html and hero\.svg|index\.html/,
+		);
+		await (
+			await card.$("[data-testid^='coding-worker-open-course-files-']")
+		).click();
+		const filename = await $(".workspace-editor__filename");
+		await filename.waitForDisplayed({ timeout: 30_000 });
+		expect(await filename.getText()).toMatch(/(?:^|[\\\\/])index\.html$/);
 
 		expect(changedFiles().sort()).toEqual(["hero.svg", "index.html"]);
 		expect(git(["rev-list", "--count", "HEAD"]).trim()).toBe("1");

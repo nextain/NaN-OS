@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { SEED_ADK_PATH, TAURI_BASE_MOCK_FALLBACK } from "./helpers/tauri-base-mock";
+import { SEED_ADK_PATH } from "./helpers/tauri-base-mock";
 
 /**
  * S05 (sessions 관리 — 대화 transcript 영속/로드) UC E2E. 실 셸 UI(ChatPanel 탭 → HistoryTab →
@@ -21,10 +21,11 @@ const TRANSCRIPT_CHAT1 = [
 	JSON.stringify({ role: "assistant", content: "저도 반가워요 루크", timestamp: 1001 }),
 ].join("\n");
 
-const FLAGS = `window.__NAIA_NEW_CORE__ = true; window.__E2E_OUTBOUND__ = []; window.__E2E_DELETED__ = [];`;
+const FLAGS = `window.__NAIA_NEW_CORE__ = true; window.__E2E_OUTBOUND__ = []; window.__E2E_DELETED__ = []; window.__E2E_IPC_CALLS__ = [];`;
 
 // IPC mock: list_conversations → {sessions} JSON 문자열(conversation-store 가 JSON.parse), read_conversation → JSONL,
-// delete_conversation → null(성공) + 호출 sessionId 기록. 그 외 cmd 는 undefined → TAURI_BASE_MOCK_FALLBACK.
+// delete_conversation → null(성공) + 호출 sessionId 기록. 이 spec은 mock 자체가
+// 필요한 boot defaults도 제공해 init-script 등록 순서에 의존하지 않는다.
 const MOCK_SCRIPT = `
 (function () {
   window.__TAURI_INTERNALS__ = window.__TAURI_INTERNALS__ || {};
@@ -35,7 +36,12 @@ const MOCK_SCRIPT = `
   window.__TAURI_INTERNALS__.unregisterCallback = function (id) { callbacks.delete(id); };
   window.__TAURI_INTERNALS__.runCallback = function (id, data) { var cb = callbacks.get(id); if (cb) cb(data); };
   var eventListeners = new Map();
-  window.__TAURI_EVENT_PLUGIN_INTERNALS__.unregisterListener = function () {};
+  function removeListener(event, id) {
+    var handlers = eventListeners.get(event) || [];
+    eventListeners.set(event, handlers.filter(function (handler) { return handler !== id; }));
+    callbacks.delete(id);
+  }
+  window.__TAURI_EVENT_PLUGIN_INTERNALS__.unregisterListener = removeListener;
   function emitEvent(event, payload) { var hs = eventListeners.get(event) || []; for (var i = 0; i < hs.length; i++) window.__TAURI_INTERNALS__.runCallback(hs[i], { event: event, payload: payload }); }
   window.__TAURI_INTERNALS__.convertFileSrc = function (p, proto) { return (proto || "asset") + "://localhost/" + encodeURIComponent(p); };
 
@@ -43,13 +49,22 @@ const MOCK_SCRIPT = `
   var TRANSCRIPT = ${JSON.stringify(TRANSCRIPT_CHAT1)};
 
   window.__TAURI_INTERNALS__.invoke = async function (cmd, args) {
+    window.__E2E_IPC_CALLS__.push({ cmd: cmd, args: args });
     if (cmd === "plugin:event|listen") { if (!eventListeners.has(args.event)) eventListeners.set(args.event, []); eventListeners.get(args.event).push(args.handler); return args.handler; }
     if (cmd === "plugin:event|emit") { emitEvent(args.event, args.payload); return null; }
-    if (cmd === "plugin:event|unlisten") return;
+    if (cmd === "plugin:event|unlisten") { removeListener(args.event, args.eventId); return; }
     if (cmd === "list_conversations") return SESSIONS_JSON;
     if (cmd === "read_conversation") return (args && args.sessionId === "chat-1") ? TRANSCRIPT : "";
     if (cmd === "delete_conversation") { window.__E2E_DELETED__.push(args && args.sessionId); return null; }
-    return undefined;
+    if (cmd === "read_naia_config" || cmd === "read_naia_ui_config") return null;
+    if (cmd === "list_naia_assets" || cmd === "list_skills" || cmd === "list_stt_models") return [];
+    if (cmd === "plugin:store|load") return 1;
+    if (cmd === "plugin:store|get") return [null, false];
+    if (cmd === "plugin:store|entries") return [];
+    if (cmd === "plugin:store|set" || cmd === "plugin:store|save" || cmd === "frontend_log") return null;
+    if (cmd === "workspace_detect_adk_root") return null;
+    if (cmd === "panel_list_installed") return [];
+    return null;
   };
 })();
 `;
@@ -61,13 +76,15 @@ function configScript(cfg: Record<string, unknown>): string {
 async function boot(page: Page) {
 	await page.addInitScript(FLAGS);
 	await page.addInitScript({ content: MOCK_SCRIPT });
-	await page.addInitScript({ content: TAURI_BASE_MOCK_FALLBACK });
 	await page.addInitScript({ content: SEED_ADK_PATH });
 	await page.addInitScript({
 		content: configScript({ provider: "gemini", model: "gemini-2.5-flash", apiKey: "e2e-mock-key", enableTools: false, locale: "ko", onboardingComplete: true }),
 	});
 	await page.goto("/");
 	await expect(page.locator(".chat-panel")).toBeVisible({ timeout: 10_000 });
+	// App config hydration can remount the Home chat once; begin the user flow
+	// only after that startup boundary has settled.
+	await page.waitForTimeout(500);
 }
 
 const openHistory = (page: Page) => page.locator(".chat-tab", { hasText: "🕘" });
@@ -76,6 +93,16 @@ test.describe("S05 — 대화 transcript History (list/restore/delete · IPC moc
 	test("History 탭 → list_conversations 세션 목록 렌더(updatedAt desc)", async ({ page }) => {
 		await boot(page);
 		await openHistory(page).click();
+		await expect.poll(() => page.evaluate(() =>
+			(window as unknown as { __E2E_IPC_CALLS__: Array<{ cmd: string }> }).__E2E_IPC_CALLS__
+				.some((call) => call.cmd === "list_conversations"),
+		)).toBe(true);
+		await expect.poll(() => page.evaluate(async () => {
+			const json = await (window as unknown as {
+				__TAURI_INTERNALS__: { invoke: (cmd: string, args: { adkPath: string }) => Promise<string> };
+			}).__TAURI_INTERNALS__.invoke("list_conversations", { adkPath: "/tmp/mock-naia-adk-workspace" });
+			return JSON.parse(json).sessions.length;
+		})).toBe(2);
 		await expect(page.locator(".history-item")).toHaveCount(2, { timeout: 10_000 });
 		// 정렬: chat-2(updatedAt 2001) 먼저
 		await expect(page.locator(".history-item-title").first()).toContainText("날씨 어때");

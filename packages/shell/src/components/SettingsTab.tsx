@@ -2918,6 +2918,12 @@ export function SettingsTab() {
 							const next: AppConfig = {
 								...current,
 								proactiveSpeechProfile: settings.profile,
+								// Selecting policy must not silently spend AI/TTS. The visible
+								// control bar grants runtime permission.
+								proactiveSpeechPermitted:
+									settings.profile === "disabled"
+										? false
+										: (current.proactiveSpeechPermitted ?? false),
 								proactiveSpeechTimezone: settings.timezone,
 								proactiveSpeechIdleMs: settings.idleMs,
 								proactiveSpeechIntervalMs: settings.intervalMs,
@@ -2948,7 +2954,7 @@ export function SettingsTab() {
 								weatherConsented: false,
 							});
 							if (!disabled) return false;
-							if (settings.profile === "disabled") return true;
+							if (!next.proactiveSpeechPermitted || settings.profile === "disabled") return true;
 							return configureSpeechProfile(toSpeechProfileCommandInput(settings));
 						}}
 					/>
@@ -3948,7 +3954,7 @@ export function SettingsTab() {
 							<div className="settings-hint">
 								{t("settings.codexReadinessHint")}
 							</div>
-							<div className="settings-row">
+							<div className="settings-row codex-readiness-actions">
 								<span aria-live="polite" data-testid="codex-readiness-status">
 									{t(CODEX_PREFLIGHT_LABELS[codexPreflightStatus])}
 								</span>

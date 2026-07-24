@@ -152,13 +152,24 @@ describe("CodingWorkersPanel", () => {
 		const workerAdapter = adapter({
 			create: vi.fn().mockResolvedValue(selectedWorkspaceWorker),
 		});
-		render(<CodingWorkersPanel adapter={workerAdapter} />);
+		readJeonjuCourseTarget.mockResolvedValue({
+			version: 1,
+			workspacePath: selectedWorkspaceWorker.worktree,
+			allowedFiles: ["index.html", "hero.svg"],
+		});
+		render(
+			<CodingWorkersPanel
+				adapter={workerAdapter}
+				controlRoot="D:\\alpha-adk"
+			/>,
+		);
 
 		fillCreateForm(
 			selectedWorkspaceWorker.worktree,
 			selectedWorkspaceWorker.task,
 		);
 		fireEvent.click(screen.getByTestId("coding-worker-jeonju-course-preset"));
+		await screen.findByTestId("coding-worker-course-target-saved");
 		fireEvent.click(screen.getByTestId("coding-worker-start"));
 
 		await waitFor(() =>
@@ -250,6 +261,82 @@ describe("CodingWorkersPanel", () => {
 		expect(screen.queryByLabelText(/allowed files/i)).not.toBeInTheDocument();
 	});
 
+	it("blocks a course start until the visible saved target matches the entered Git root", async () => {
+		const workerAdapter = adapter({ create: vi.fn() });
+		render(
+			<CodingWorkersPanel
+				adapter={workerAdapter}
+				controlRoot="D:\\alpha-adk"
+			/>,
+		);
+		fireEvent.click(screen.getByTestId("coding-worker-jeonju-course-preset"));
+
+		// A saved target can still be loading. The course action must remain
+		// unavailable until an execution root is visibly matched, not merely
+		// until the ordinary required-field handler runs.
+		expect(screen.getByTestId("coding-worker-start")).toBeDisabled();
+		expect(
+			screen.getByTestId("coding-worker-course-start-blocked"),
+		).toHaveTextContent("Save this Git root as the Discord course target");
+		fireEvent.click(screen.getByTestId("coding-worker-start"));
+		expect(workerAdapter.create).not.toHaveBeenCalled();
+
+		fillCreateForm("D:\\alpha-adk\\projects\\course-site", "Prepare the page");
+		expect(screen.getByTestId("coding-worker-start")).toBeDisabled();
+		expect(
+			screen.getByTestId("coding-worker-course-start-blocked"),
+		).toHaveTextContent("Save this Git root as the Discord course target");
+		fireEvent.click(screen.getByTestId("coding-worker-start"));
+		expect(workerAdapter.create).not.toHaveBeenCalled();
+
+		saveJeonjuCourseTarget.mockResolvedValue({
+			version: 1,
+			workspacePath: "D:\\alpha-adk\\projects\\course-site",
+			allowedFiles: ["index.html", "hero.svg"],
+		});
+		fireEvent.click(screen.getByTestId("coding-worker-save-course-target"));
+		await screen.findByTestId("coding-worker-course-target-saved");
+		expect(screen.getByTestId("coding-worker-start")).not.toBeDisabled();
+
+		fillCreateForm("D:\\alpha-adk\\projects\\another-course", "Prepare the page");
+		expect(screen.getByTestId("coding-worker-start")).toBeDisabled();
+		expect(
+			screen.getByTestId("coding-worker-course-start-blocked"),
+		).toHaveTextContent("differs from the saved course target");
+	});
+
+	it("reports a course worker's verified result and the student's next interaction", () => {
+		const completedCourseWorker: CodingWorker = {
+			...runningWorker,
+			id: "course-completed",
+			state: "completed",
+			executionMode: "selected_workspace",
+			allowedFiles: ["index.html", "hero.svg"],
+			verificationSummary: "only index.html and hero.svg changed",
+		};
+		const openCourseFiles = vi.fn();
+		render(
+			<CodingWorkersPanel
+				adapter={adapter()}
+				initialWorkers={[completedCourseWorker]}
+				onOpenCourseFiles={openCourseFiles}
+			/>,
+		);
+		expect(
+			screen.getByTestId("coding-worker-course-report-course-completed"),
+		).toHaveTextContent("Naia course report");
+		expect(
+			screen.getByTestId("coding-worker-course-report-course-completed"),
+		).toHaveTextContent("inspect index.html and hero.svg");
+		expect(
+			screen.getByTestId("coding-worker-verification-course-completed"),
+		).toHaveTextContent("only index.html and hero.svg changed");
+		fireEvent.click(
+			screen.getByTestId("coding-worker-open-course-files-course-completed"),
+		);
+		expect(openCourseFiles).toHaveBeenCalledWith(completedCourseWorker);
+	});
+
 	it("requires the fixed course preset again for a follow-up request in the same student repository", async () => {
 		const first: CodingWorker = {
 			...runningWorker,
@@ -265,10 +352,21 @@ describe("CodingWorkersPanel", () => {
 			.mockResolvedValueOnce(first)
 			.mockResolvedValueOnce(second);
 		const workerAdapter = adapter({ create });
-		render(<CodingWorkersPanel adapter={workerAdapter} />);
+		readJeonjuCourseTarget.mockResolvedValue({
+			version: 1,
+			workspacePath: first.worktree,
+			allowedFiles: ["index.html", "hero.svg"],
+		});
+		render(
+			<CodingWorkersPanel
+				adapter={workerAdapter}
+				controlRoot="D:\\alpha-adk"
+			/>,
+		);
 
 		fillCreateForm(first.worktree, "Create the initial course page");
 		fireEvent.click(screen.getByTestId("coding-worker-jeonju-course-preset"));
+		await screen.findByTestId("coding-worker-course-target-saved");
 		fireEvent.click(screen.getByTestId("coding-worker-start"));
 		await waitFor(() => expect(create).toHaveBeenCalledTimes(1));
 
@@ -388,9 +486,20 @@ describe("CodingWorkersPanel", () => {
 		const workerAdapter = adapter({
 			create: vi.fn().mockRejectedValue(new CourseWorkspaceNotReadyError()),
 		});
-		render(<CodingWorkersPanel adapter={workerAdapter} />);
+		readJeonjuCourseTarget.mockResolvedValue({
+			version: 1,
+			workspacePath: "D:\\not-a-clean-git-root",
+			allowedFiles: ["index.html", "hero.svg"],
+		});
+		render(
+			<CodingWorkersPanel
+				adapter={workerAdapter}
+				controlRoot="D:\\alpha-adk"
+			/>,
+		);
 		fillCreateForm("D:\\not-a-clean-git-root", "Change the hero");
 		fireEvent.click(screen.getByTestId("coding-worker-jeonju-course-preset"));
+		await screen.findByTestId("coding-worker-course-target-saved");
 		fireEvent.click(screen.getByTestId("coding-worker-start"));
 
 		await waitFor(() =>

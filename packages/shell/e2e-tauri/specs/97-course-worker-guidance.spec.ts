@@ -56,6 +56,15 @@ describe("Jeonju course worker guidance through the real Tauri Shell", () => {
 		const targetStatus = await $(
 			"[data-testid='coding-worker-course-target-status']",
 		);
+		const target = await $("[data-testid='coding-worker-worktree']");
+		const blocked = await $("[data-testid='coding-worker-course-start-blocked']");
+		await blocked.waitForDisplayed({ timeout: 10_000 });
+		expect(await $("[data-testid='coding-worker-start']").isEnabled()).toBe(false);
+		expect(await blocked.getText()).toMatch(/Save this Git root|Discord/);
+
+		await target.setValue("D:\\course-workspace");
+		expect(await blocked.getText()).toMatch(/Save this Git root|Discord/);
+		expect(await $("[data-testid='coding-worker-start']").isEnabled()).toBe(false);
 		expect(await targetStatus.getText()).toMatch(
 			/No Discord course target has been saved|저장된 Discord 수업 대상이 없습니다/,
 		);
