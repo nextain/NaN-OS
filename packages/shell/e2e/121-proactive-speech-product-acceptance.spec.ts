@@ -19,7 +19,12 @@ const PROACTIVE_MOCK = `
 	window.__TAURI_INTERNALS__.runCallback = function(id, data) {
 		var callback = callbacks.get(id); if (callback) callback(data);
 	};
-	window.__TAURI_EVENT_PLUGIN_INTERNALS__.unregisterListener = function() {};
+	function removeListener(event, id) {
+		var handlers = listeners.get(event) || [];
+		listeners.set(event, handlers.filter(function(handler) { return handler !== id; }));
+		callbacks.delete(id);
+	}
+	window.__TAURI_EVENT_PLUGIN_INTERNALS__.unregisterListener = removeListener;
 	window.__TAURI_INTERNALS__.convertFileSrc = function(path, protocol) {
 		return (protocol || "asset") + "://localhost/" + encodeURIComponent(path);
 	};
@@ -30,7 +35,7 @@ const PROACTIVE_MOCK = `
 	}
 	window.__PA_DJ_E2E__ = {
 		order: [], speakTexts: [], audioPlayed: 0, commands: [], lastSubmitAt: 0,
-		subscriptionEpoch: 0, failConfigure: false,
+		subscriptionEpoch: 0, configuredEpoch: 0, failConfigure: false,
 		emitActivity: function(chunk) {
 			if (chunk.subscriptionEpoch == null) {
 				chunk.subscriptionEpoch = window.__PA_DJ_E2E__.subscriptionEpoch;
@@ -83,7 +88,10 @@ const PROACTIVE_MOCK = `
 		if (command === "plugin:event|emit") {
 			emit(args.event, args.payload); return null;
 		}
-		if (command === "plugin:event|unlisten") return null;
+		if (command === "plugin:event|unlisten") {
+			removeListener(args.event, args.eventId);
+			return null;
+		}
 		if (command === "send_to_agent_command") {
 			var message = JSON.parse(args.message);
 			window.__PA_DJ_E2E__.commands.push(Object.assign(
@@ -106,6 +114,7 @@ const PROACTIVE_MOCK = `
 				if (ok) window.__PA_DJ_E2E__.subscriptionEpoch++;
 				var epoch = window.__PA_DJ_E2E__.subscriptionEpoch;
 				setTimeout(function() {
+					if (ok) window.__PA_DJ_E2E__.configuredEpoch = epoch;
 					emit("agent_response", JSON.stringify({
 						type: "speech_profile_configured",
 						requestId: message.requestId,
@@ -160,6 +169,9 @@ async function setup(page: Page, ttsProvider: "browser" | "edge") {
 			locale: "ko",
 			onboardingComplete: true,
 			proactiveSpeechProfile: "personal_radio_dj",
+			// Runtime permission is separate from the saved profile policy. These
+			// acceptance cases exercise an already user-authorized active profile.
+			proactiveSpeechPermitted: true,
 		}),
 	);
 	if (ttsProvider === "edge") {
@@ -341,19 +353,22 @@ test.describe("PA-DJ-05 proactive speech product acceptance", () => {
 		await expect
 			.poll(() => page.getByTestId("proactive-settings-save").isEnabled())
 			.toBe(true);
+		// Saving applies a disabled fence and then the selected profile, so use
+		// the final ACK epoch rather than the first command-send epoch.
+		await expect.poll(() => page.evaluate(
+			() => (window as any).__PA_DJ_E2E__.configuredEpoch as number,
+		)).toBeGreaterThan(oldEpoch);
 		const newEpoch = await page.evaluate(
-			() => (window as any).__PA_DJ_E2E__.subscriptionEpoch as number,
+			() => (window as any).__PA_DJ_E2E__.configuredEpoch as number,
 		);
-		expect(newEpoch).toBeGreaterThan(oldEpoch);
+		expect(
+			await page.evaluate(
+				() =>
+					JSON.parse(localStorage.getItem("naia-config") ?? "{}")
+						.proactiveSpeechPermitted,
+			),
+		).toBe(true);
 
-		await emitActivity(page, {
-			type: "text",
-			requestId: "radio-dj:unseen-old",
-			activityId: "dj-unseen-old",
-			profileGeneration: 99,
-			subscriptionEpoch: oldEpoch,
-			text: "보이지 않던 이전 스트림 멘트입니다.",
-		});
 		await emitActivity(page, {
 			type: "text",
 			requestId: "radio-dj:new-epoch",
@@ -362,9 +377,21 @@ test.describe("PA-DJ-05 proactive speech product acceptance", () => {
 			subscriptionEpoch: newEpoch,
 			text: "새 스트림 멘트입니다.",
 		});
+		// Let the two stream events cross the real Tauri event bridge before
+		// asserting the browser TTS side effect.
+		await page.waitForTimeout(25);
 		await expect
 			.poll(async () => (await telemetry(page)).speakTexts)
 			.toContain("새 스트림 멘트입니다.");
+		await emitActivity(page, {
+			type: "text",
+			requestId: "radio-dj:unseen-old",
+			activityId: "dj-unseen-old",
+			profileGeneration: 99,
+			subscriptionEpoch: oldEpoch,
+			text: "보이지 않던 이전 스트림 멘트입니다.",
+		});
+		await page.waitForTimeout(50);
 		expect((await telemetry(page)).speakTexts).not.toContain(
 			"보이지 않던 이전 스트림 멘트입니다.",
 		);
@@ -421,6 +448,17 @@ test.describe("PA-DJ-05 proactive speech product acceptance", () => {
 				),
 			)
 			.toBe(true);
+		await expect
+			.poll(async () =>
+				(await telemetry(page)).commands.some(
+					(command) => command.type === "chat_request",
+				),
+			)
+			.toBe(true);
+		// The resumed activity belongs after the foreground user turn. The agent
+		// sends its finish chunk asynchronously, so do not inject a resume while
+		// ChatArea still owns the normal-chat TTS lane.
+		await page.waitForTimeout(25);
 		const order = (await telemetry(page)).order.slice(before);
 		expect(order.indexOf("cancel")).toBeGreaterThanOrEqual(0);
 		expect(order.indexOf("send:yield_speech_activity")).toBeGreaterThan(

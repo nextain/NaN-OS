@@ -1,5 +1,6 @@
-import { useRef, useState } from "react";
-import { loadConfig, saveConfig } from "../lib/config";
+import { useEffect, useRef, useState } from "react";
+import { writeNaiaUiConfig } from "../lib/adk-store";
+import { loadConfig, loadConfigWithSecrets, saveConfig, type AppConfig } from "../lib/config";
 import { t } from "../lib/i18n";
 import { getCameraActions } from "../lib/avatar/camera-actions";
 import { useAppStore } from "../stores/app";
@@ -21,6 +22,63 @@ export function AiControlBar() {
 	const joystickActiveRef = useRef(false);
 	const [panActive, setPanActive] = useState(false);
 	const panActiveRef = useRef(false);
+	const [proactive, setProactive] = useState({
+		profile: "disabled" as NonNullable<AppConfig["proactiveSpeechProfile"]>,
+		permitted: false,
+		activityActive: false,
+	});
+
+	useEffect(() => {
+		let disposed = false;
+		const refresh = () => {
+			void loadConfigWithSecrets().then((config) => {
+				if (!config || disposed) return;
+				const profile = config.proactiveSpeechProfile ?? "disabled";
+				setProactive((current) => ({
+					...current,
+					profile,
+					// Existing saved profiles retain their behaviour until a user changes it.
+					permitted: config.proactiveSpeechPermitted ?? (profile !== "disabled"),
+				}));
+			});
+		};
+		const onActivity = (event: Event) => {
+			const active = (event as CustomEvent<{ active?: boolean }>).detail?.active === true;
+			setProactive((current) => ({ ...current, activityActive: active }));
+		};
+		refresh();
+		window.addEventListener("naia-config-changed", refresh);
+		window.addEventListener("naia-proactive-activity-state", onActivity);
+		return () => {
+			disposed = true;
+			window.removeEventListener("naia-config-changed", refresh);
+			window.removeEventListener("naia-proactive-activity-state", onActivity);
+		};
+	}, []);
+
+	const proactiveBlocked = proactive.profile === "disabled" || !ttsEnabled;
+	const proactiveActive = proactive.permitted && proactive.activityActive;
+	const proactiveTitle = proactiveBlocked
+		? t("ai.proactiveBlocked")
+		: proactive.permitted
+			? t("ai.proactiveStop")
+			: t("ai.proactiveStart");
+
+	const toggleProactive = () => {
+		if (proactiveBlocked) return;
+		void (async () => {
+			const config = await loadConfigWithSecrets();
+			if (!config) return;
+			const permitted = !proactive.permitted;
+			const next = { ...config, proactiveSpeechPermitted: permitted };
+			const persisted = await writeNaiaUiConfig(next as unknown as Record<string, unknown>);
+			if (!persisted) return;
+			saveConfig(next);
+			window.dispatchEvent(new CustomEvent("naia-proactive-permission-change", {
+				detail: { permitted },
+			}));
+		})();
+	};
 
 	return (
 		<div className="ai-control-bar">
@@ -48,6 +106,19 @@ export function AiControlBar() {
 			>
 				<span className="bgm-ai-toggle__dot" />
 				TTS
+			</button>
+
+			<button
+				type="button"
+				className={`bgm-ai-toggle${proactive.permitted ? " bgm-ai-toggle--active" : ""}${proactiveBlocked ? " bgm-ai-toggle--blocked" : ""}`}
+				onClick={toggleProactive}
+				aria-pressed={proactive.permitted}
+				aria-label={proactiveTitle}
+				title={proactiveTitle}
+				data-proactive-state={proactiveBlocked ? "blocked" : proactiveActive ? "active" : proactive.permitted ? "ready" : "off"}
+			>
+				<span className="bgm-ai-toggle__dot" />
+				{t("ai.proactive")}
 			</button>
 
 			<div className="ai-control-bar__sep" />

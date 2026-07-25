@@ -38,6 +38,9 @@ const ALLOWED_ORIGINS = new Set([
 	"http://tauri.localhost",
 	"https://tauri.localhost",
 	"http://localhost:1420",
+	// The isolated native Shell runs Vite on this loopback origin. Keep it
+	// explicit: this is not a wildcard CORS relaxation for the sidecar.
+	"http://127.0.0.1:1422",
 ]);
 
 function cors(req: IncomingMessage, res: ServerResponse) {

@@ -1,6 +1,19 @@
-<!-- src-sha: 40fa012a363d8ddd -->
-<!-- 자동 번역 미러 (M13-mirror). 원본: .agents/context/process-status.json -->
+<!-- src-sha: e2fe6424a4462339 -->
 
+## Coding Workers visual and UX gate — 2026-07-23
+
+- Scope: hierarchy, saved-course-target feedback, narrow layout, and mutation/error states.
+- Passed: 104 focused Shell tests; TypeScript and production builds; paired Agent/Shell native build; and isolated Tauri WebDriver with the exact paired Agent checkout.
+- Native course acceptance passed: the Shell saved the exact `jeonju-discord-course.json` contract, Codex created only `index.html` and `hero.svg`, the student committed the result, and a second request modified only `hero.svg`.
+- Adversarial review closed E2E isolation gaps for runtime-owned logs and the fixed Vite port. A real Discord server smoke still requires configured bot credentials and is separate from this isolated Shell acceptance.
+
+## Coding Workers visual and UX gate — 2026-07-22
+
+- Scope: hierarchy, saved-course-target feedback, narrow layout, and mutation/error states.
+- Passed: focused React tests, browser Playwright E2E, TypeScript, production build, paired Agent/Shell native bundle, and the isolated Tauri WebDriver session with the exact paired Agent checkout.
+- Not passed: the first real Codex course job did not reach a terminal state within the 300-second acceptance limit. The native UC remains incomplete.
+- Adversarial review corrected the persisted-course-boundary second-request regression and two E2E wiring defects (WebDriver port and paired Agent checkout).
+<!-- Human mirror of .agents/context/process-status.json -->
 # 프로세스 현황 (Process Status) SoT
 
 **스키마 버전**: 1.0

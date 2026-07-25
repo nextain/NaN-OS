@@ -21,12 +21,13 @@
  */
 
 import { DEFAULT_LOCAL_VOICE_HOST, type TtsProviderId } from "../config";
+import { BGM_SIDECAR_BASE_URL } from "../bgm-sidecar-url";
 import { resolveEdgeVoice } from "./edge-tts";
 
 // Edge neural TTS runs in the bgm/media sidecar (node msedge-tts) — the in-app
 // webview can't do the MS WebSocket handshake (it can't set the required
 // headers/Origin → 400). The shell fetches the sidecar's /edge-tts (#363).
-const EDGE_TTS_SIDECAR_URL = "http://localhost:18791/edge-tts";
+const EDGE_TTS_SIDECAR_URL = `${BGM_SIDECAR_BASE_URL}/edge-tts`;
 
 export interface SynthesizeOpts {
 	/** Text to speak (emotion tags / emoji already stripped by caller). */
@@ -286,19 +287,27 @@ async function synthNaiaLocalVoice(
 		/\/$/,
 		"",
 	);
-	const resp = await fetch(`${base}/tts`, {
+	const resp = await fetch(`${base}/v1/audio/speech`, {
 		method: "POST",
 		headers: { "Content-Type": "application/json" },
 		body: JSON.stringify({
 			// :8910 owns the private VoxCPM2 (:8901) implementation detail.
 			// The facade contract intentionally remains `{ text, voice }`.
+			model: "voxcpm2",
+			input: opts.text,
+			// Retained as an ignored compatibility field for facades that share
+			// the same request parser with their optional `/tts` route.
 			text: opts.text,
 			// RefAudioSection stores a preset URL in voiceRefUrl. ChatArea resolves
 			// it to this facade palette id; keep it intact all the way to :8910.
+			// The standalone facade ships this CC0 preset with the Shell bundle.
+			// `naia-default` was only a former server-side alias; it is not present
+			// in the Windows facade palette and causes a 400 after a fresh install.
 			voice:
 				!opts.voice || opts.voice === "default"
-					? "naia-default"
+					? "cc0-ko-female-01.wav"
 					: opts.voice,
+			response_format: "wav",
 		}),
 		signal: opts.signal,
 	});

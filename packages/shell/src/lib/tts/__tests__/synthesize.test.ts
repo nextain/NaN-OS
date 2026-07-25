@@ -262,6 +262,26 @@ describe("synthesizeTts — naia-local-voice (cascade /tts facade contract)", ()
 		text: async () => "",
 	});
 
+	it("uses the standard facade endpoint and required OpenAI-compatible fields", async () => {
+		const fetchMock = vi.fn().mockResolvedValue(wavResponse());
+		vi.stubGlobal("fetch", fetchMock);
+		await synthesizeTts({
+			text: "hello",
+			voice: "cc0-ko-female-01.wav",
+			provider: "naia-local-voice",
+			vllmTtsHost: "http://localhost:8910",
+		});
+		expect(fetchMock.mock.calls[0][0]).toBe(
+			"http://localhost:8910/v1/audio/speech",
+		);
+		expect(JSON.parse(fetchMock.mock.calls[0][1].body as string)).toMatchObject({
+			model: "voxcpm2",
+			input: "hello",
+			voice: "cc0-ko-female-01.wav",
+			response_format: "wav",
+		});
+	});
+
 	it("POSTs to {host}/tts with the facade payload and passes the WAV through", async () => {
 		const fetchMock = vi.fn().mockResolvedValue(wavResponse());
 		vi.stubGlobal("fetch", fetchMock);
@@ -270,13 +290,15 @@ describe("synthesizeTts — naia-local-voice (cascade /tts facade contract)", ()
 			provider: "naia-local-voice",
 			vllmTtsHost: "http://localhost:8910/",
 		});
-		expect(fetchMock.mock.calls[0][0]).toBe("http://localhost:8910/tts");
+		expect(fetchMock.mock.calls[0][0]).toBe(
+			"http://localhost:8910/v1/audio/speech",
+		);
 		const init = fetchMock.mock.calls[0][1];
 		const body = JSON.parse(init.body as string);
 		expect(init.headers).toEqual({ "Content-Type": "application/json" });
-		expect(body).toEqual({
+		expect(body).toMatchObject({
 			text: "안녕",
-			voice: "naia-default",
+			voice: "cc0-ko-female-01.wav",
 		});
 		// WAV bytes 무변환 패스스루 (AudioQueue/ttsAudioToWav 가 RIFF 네이티브 감지)
 		const out = Uint8Array.from(atob(res.audioBase64), (c) => c.charCodeAt(0));
@@ -296,7 +318,7 @@ describe("synthesizeTts — naia-local-voice (cascade /tts facade contract)", ()
 		const body = JSON.parse(fetchMock.mock.calls[0][1].body as string);
 		expect(body).toMatchObject({
 			text: "x",
-			voice: "naia-default",
+			voice: "cc0-ko-female-01.wav",
 		});
 	});
 
@@ -312,7 +334,7 @@ describe("synthesizeTts — naia-local-voice (cascade /tts facade contract)", ()
 		const body = JSON.parse(fetchMock.mock.calls[0][1].body as string);
 		expect(body).toMatchObject({
 			text: "x",
-			voice: "naia-default",
+			voice: "cc0-ko-female-01.wav",
 		});
 	});
 
@@ -341,7 +363,9 @@ describe("synthesizeTts — naia-local-voice (cascade /tts facade contract)", ()
 			vllmHost: "http://localhost:8000", // LLM — 무시
 			vllmTtsHost: "http://localhost:8910",
 		});
-		expect(fetchMock.mock.calls[0][0]).toBe("http://localhost:8910/tts");
+		expect(fetchMock.mock.calls[0][0]).toBe(
+			"http://localhost:8910/v1/audio/speech",
+		);
 	});
 
 	it("defaults to :8910 facade when no voice host (never the LLM vllmHost)", async () => {
@@ -352,7 +376,9 @@ describe("synthesizeTts — naia-local-voice (cascade /tts facade contract)", ()
 			provider: "naia-local-voice",
 			vllmHost: "http://localhost:9000", // LLM — 폴백 안 함
 		});
-		expect(fetchMock.mock.calls[0][0]).toBe("http://localhost:8910/tts");
+		expect(fetchMock.mock.calls[0][0]).toBe(
+			"http://localhost:8910/v1/audio/speech",
+		);
 	});
 
 	it("throws on service error (5xx)", async () => {

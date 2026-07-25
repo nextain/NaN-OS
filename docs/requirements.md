@@ -311,6 +311,11 @@ localStorage `naia-config` 는 파일에서 하이드레이트되는 **순수 �
 | **FR-CONT-SHELL.9** | proactive text는 browser/synthesized TTS 소비선을 각각 호출한다. music-only/talk-less/talk-more/change-vibe/next/stop 및 ordinary chat 끼어들기에서 250ms 안에 TTS를 먼저 취소한다. Configure ACK와 subscription epoch로 이전 stream을 폐기하고, ordinary yield/resume의 같은 activity는 유지한다. | Playwright `121` 7/7 + native `71` file-backed 설정 1/1 | Done |
 | **FR-CONT-SHELL.6** | transcript read/delete의 session basename은 agent writer와 동일하다. canonical `[A-Za-z0-9_-]+` 최대 128자는 그대로, 나머지는 UTF-8 SHA-256 전체 hex를 쓰고 양쪽 공통 벡터를 검증한다. | Rust `safe_session_base` + agent shared-vector contract | Pending (후속 hardening) |
 
+| **FR-PROACTIVE-CONTROL.1** | Shell은 AI·TTS 제어 바에 능동 발화 런타임 제어를 제공한다. 상태는 `off`, `ready`, `active`, `blocked`로 구분하고, profile·AI 경로·TTS 경로와 실제 차단 이유를 함께 표시한다. | AiControlBar RTL + native Tauri 상태 전이 | Pending |
+| **FR-PROACTIVE-CONTROL.2** | persisted profile 정책과 `proactiveSpeechPermitted` 런타임 허가를 분리한다. 허가가 false이면 Shell은 agent에 disabled profile을 전송하고 진행 중 activity를 stop한다. 허가를 켜도 유효한 profile과 실행 가능 조건이 없으면 `ready`나 `active`로 가장하지 않는다. | config normalization + ChatArea wire contract + Tauri negative path | Pending |
+| **FR-PROACTIVE-CONTROL.3** | 능동 발화 시작/제안은 Shell의 허가·TTS·audio/avatar capability·현재 session을 통과해야 한다. LLM 또는 agent의 요청은 이 조건을 우회할 수 없고, 사용자의 버튼 중단은 다음 activity보다 우선한다. | agent/Shell contract + real Tauri start/stop | Pending |
+| **NFR-PROACTIVE-CONTROL-cost** | UI는 현재 선택된 AI/TTS 제공 경로와 BGM 자동재생 여부를 보이되, 측정하지 않은 금액·토큰·절감률을 표시하지 않는다. 로컬 엔진 미준비·서비스 오류는 성공/실행 중 상태로 표현하지 않는다. | visual/ARIA review + Tauri blocked-state test | Pending |
+
 NFR: agent-owned(반복·deadline·memory를 셸에 복제 금지), bounded(session 구독 registry는 dispatcher 수명과
 현재 session 집합에 한정), wire-compatible(기존 AgentEvent union 재사용), observable(debug 로그에
 session subscribe/start/terminal/disconnect와 requestId, 시크릿 없음).
@@ -392,14 +397,20 @@ stable-code-only wire, localized presentation.
 
 ## Discord setup/preflight policy (#388)
 
-> Status: Contract frozen. The production Discord setup wizard remains hidden
-> until native secret-backed setup/preflight facts are wired. Handoff note:
-> `docs/progress/99.dev-comm/discord-wizard-prefreeze-policy-2026-07-19.md`.
+> Status: the isolated Windows Tauri WebDriver verifies both the visible native
+> credential **cancellation** path and a live private-token authentication/discovery
+> path. The latter reads an explicitly supplied E2E dotenv file only in the debug
+> acceptance runtime; it does not create a DPAPI key or WebView token form. Binding
+> save, Agent authority, Gateway receive/reconnect, and same-channel reply remain
+> separate live acceptance gates.
 
 | ID | Requirement | UC/Scenario | Verification | Status |
 |---|---|---|---|:---:|
-| **FR-DISCORD-SETUP-01** | Discord install URL policy uses only a canonical snowflake client id, `bot` scope, and minimum permissions/intents. Raw bot tokens must not cross WebView string IPC or UI persistence boundaries. | UC10/S36/S37, UC12 auth | `src/test/discord-install-policy.contract.test.ts` | Contract frozen; raw-token IPC guard enforced |
-| **FR-DISCORD-SETUP-02** | Discord preflight policy classifies network, rate limit, token validity, message-content intent, guild install, channel visibility, permissions, and agent readiness into stable codes; malformed/unknown facts fail closed. This change freezes the policy only; production setup must supply native preflight facts before enabling the wizard. | UC10, UC14 degradation | `src/test/discord-preflight.contract.test.ts` | Contract frozen |
+| **FR-DISCORD-SETUP-01** | Discord install URL policy uses only a canonical snowflake client id, `bot` scope, and minimum permissions/intents. A raw bot token must not cross WebView string IPC, UI persistence, or diagnostics. `discord_capture_bot_token` opens a native OS password prompt and returns only configured/error metadata. | UC-DISCORD-1A | Rust credential tests; `ConnectionsSettingsTab` no-argument contract; `e2e-tauri/specs/92-discord-secure-cancel.spec.ts` isolated native cancellation; `94-discord-live-auth.spec.ts` private-token live authentication/discovery with no DPAPI/WebView persistence | Native boundary and live authentication/discovery verified; binding/authority acceptance pending |
+| **FR-DISCORD-SETUP-04** | The Connections page is a user-facing setup flow, not a runtime diagnostics console: it visibly explains **create/invite bot → native secure token input → test connection → choose allowed channels** before exposing channel bindings. It must state that the `Discord 연결` action opens the operating-system password window and never renders an inline token field. Runtime generations, stale bindings, and discovery uncertainty remain fail-closed but are shown only as troubleshooting detail. | UC-DISCORD-1 / 1A | component setup-flow contract; isolated native Tauri cancellation test; `94-discord-live-auth.spec.ts` live discovery | Native flow and live authentication/discovery verified; channel permission/authority acceptance pending |
+| **FR-DISCORD-SETUP-05** | Connections and the globe inbox are one user journey. After a successful allow-list save, Connections offers a direct inbox handoff. The inbox classifies `not configured`, `configured but no allowed channels`, `allowed channels with no messages`, and retrieval failure without exposing raw runtime errors. It shows only records for saved bindings and never copies Discord content into private chat. | UC-DISCORD-1B / 2 | Connections/Channels component contracts; `93-discord-inbox-handoff` real Tauri E2E; provisioned-bot acceptance | Native setup/handoff verified; live bot acceptance pending |
+| **FR-DISCORD-SETUP-02** | The visible Settings flow must classify native credential cancellation, token/storage failure, current runtime authority, message-content intent, incomplete discovery, and generation conflict using stable native facts. Unknown or incomplete discovery fails closed: it cannot save an allow-list or claim `연결됨`. | UC-DISCORD-1A | Rust status/discovery contracts; component, Playwright, and Tauri WebDriver Settings tests; `94-discord-live-auth.spec.ts` | Partial: native cancellation and live discovery verified; authority pending |
+| **FR-DISCORD-SETUP-03** | `연결됨` is shown only when token presence, binding generation, runtime `ready`, and Agent authority agree. A stored token without that authority is `설정됨`; a reported runtime failure is an error, not a successful configuration. | UC-DISCORD-1A | `ConnectionsSettingsTab` status tests and native Tauri status-view test | Implementing E2E recovery |
 
 ## Steam Windows launch-readiness requirements (#314)
 
@@ -476,7 +487,7 @@ Steamworks 포털 설정·SteamPipe 자격증명·스토어 심사 제출은 #31
 | ID | 요구사항 | 검증 기준 |
 |---|---|---|
 | **FR-LLM-ROLE.1** | 설정에서 Codex를 API key 없는 local-login provider로 선택할 수 있다. | provider option과 keyless chat config 계약 |
-| **FR-LLM-ROLE.2** | main/sub/memory 역할의 provider·model·credentialRef를 독립 저장하고 복원한다. | role config roundtrip 계약 |
+| **FR-LLM-ROLE.2** | main/sub/memory 역할의 provider·model·credentialRef를 독립 저장하고 복원한다. sub와 memory는 기본 main 상속을 제공하고, 역할에서 지원하지 않는 provider의 직접 선택을 막는다. | role config roundtrip + SettingsTab + native Tauri 설정 E2E |
 | **FR-LLM-ROLE.3** | dev/stage/Tauri build는 동일한 정확한 Agent commit과 proto SHA를 강제하며 임의 sibling checkout을 사용하지 않는다. | paired contract와 dirty/wrong-commit negative test |
 
 - **NFR-LLM-ROLE-secret**: Codex 로그인 파일이나 토큰을 Shell 설정·wire·로그로 복사하지 않는다.
@@ -486,7 +497,7 @@ Steamworks 포털 설정·SteamPipe 자격증명·스토어 심사 제출은 #31
 
 | ID | 요구사항 | 검증 기준 |
 |---|---|---|
-| **FR-COURSE-CODEX.1** | 사용자가 설정의 두뇌에서 Codex를 main provider로 선택했을 때, Shell은 `Codex 연결 확인`으로 해당 PC의 Codex CLI 설치와 로그인 상태를 확인하고 `준비됨`·`설치 필요`·`로그인 필요`·`확인 실패`을 구분해 표시한다. | Rust 명령 계약 테스트에서 Windows와 비-Windows 실행 경로·상태 분류를 확인하고, Settings 단위 테스트에서 상태 표시와 재시도를 확인한다. |
+| **FR-COURSE-CODEX.1** | 사용자가 설정의 두뇌에서 Codex를 main provider로 선택했을 때, Shell은 `Codex 연결 확인`으로 해당 PC의 Codex CLI 설치와 로그인 상태를 확인하고 `준비됨`·`설치 필요`·`로그인 필요`·`확인 실패`을 구분해 표시한다. | Rust 명령 계약 테스트에서 Windows와 비-Windows 실행 경로·상태 분류를 확인하고, Settings 단위 테스트에서 상태 표시와 재시도를 확인한다. 로그인된 실제 Shell은 `e2e-tauri/specs/96-codex-readiness.spec.ts`에서 `준비됨`까지 검증한다. |
 | **FR-COURSE-CODEX.2** | Codex 준비 확인은 인증 토큰·계정 식별자·CLI 출력 원문을 UI·설정·agent 요청·로그에 저장하거나 표시하지 않으며, provider·모델·워크스페이스 설정을 변경하지 않는다. | 실패 상태 단위 테스트와 IPC 결과 직렬화 검사에서 안전한 상태 코드만 노출되는지 확인한다. |
 | **FR-COURSE-CODEX.3** | Codex가 아닌 provider를 선택하면 Codex 준비 확인 UI를 노출하지 않는다. Codex 선택으로 돌아오면 사용자가 명시적으로 다시 확인할 수 있다. | Settings FE 테스트에서 provider 전환과 재시도 동작을 확인한다. |
 
@@ -494,9 +505,14 @@ Steamworks 포털 설정·SteamPipe 자격증명·스토어 심사 제출은 #31
 
 | ID | Requirement | Verification |
 |---|---|---|
-| **FR-CODEX-WORKER.6** | Jeonju course mode is explicit and leaves the default isolated worktree behavior unchanged. Shell preflights the selected Git root, clean working tree, and remote before asking Agent for selected-workspace execution. | Shell UI/adapter contract and native preflight contract; normal workers remain `ISOLATED_WORKTREE`. |
+| **FR-CODEX-WORKER.6** | Jeonju course mode is explicit and leaves the default isolated worktree behavior unchanged. The form changes its workspace-root label and explains the direct-course boundary when that mode is selected. Shell preflights the selected Git root, clean working tree, and remote before asking Agent for selected-workspace execution. | Shell UI/adapter contract and native preflight contract; normal workers remain `ISOLATED_WORKTREE`. |
 | **FR-CODEX-WORKER.7** | The course file boundary is fixed in Rust IPC to `index.html` and `hero.svg`. WebView, LLM, Discord, and task text cannot provide or modify allowed files. Shell displays Agent's verification summary. | typed Tauri invoke contract, selected-workspace Agent contract, and Tauri E2E with an isolated course fixture. |
 | **FR-CODEX-WORKER.8** | On course preflight or verification failure Shell creates no success state, gives a safe folder-readiness message, and preserves student changes for review. | rejection unit/adapter test and paired Agent failure contract. |
+| **FR-CODEX-WORKER.9** | Shell distinguishes the Naia ADK control root from Codex's execution-target Git root. The visible default is the current ADK root; project work selects a Git root below it, while direct ADK-root work remains an explicit target choice. Agent accepts selected-workspace course execution only at that root or a descendant, and starts Codex in the selected target rather than broadening write authority to the control root. | Shell component + native Tauri guidance E2E; Agent selected-workspace containment contract; course E2E fixture under `workspace/projects/`. |
+| **FR-CODEX-WORKER.10** | In course mode the selected brain is a read-only proposal producer. It returns a versioned complete-file proposal only; Naia validates, applies, and verifies it. The authority contract is provider-neutral, so a Naia-account model or another compatible provider can replace Codex without obtaining direct workspace-write authority. | Agent proposal parser/apply/verify contracts; Shell course-mode explanation and native Tauri acceptance. |
+| **FR-CODEX-WORKER.11** | Before Agent startup, Shell can persist one trusted Jeonju Discord course target at the active ADK control root. The dedicated `naia-settings/jeonju-discord-course.json` document is schema-versioned and contains a canonical clean Git root plus exactly `index.html` and `hero.svg`. Rust, not WebView input, fixes the file list and rejects a target outside the control root. | Shell target parser/UI contract, Rust schema and containment contracts, and native Jeonju course fixture. |
+| **FR-CODEX-WORKER.12** | Discord message text, task text, and model output cannot create, replace, or widen a trusted course target. Only the explicit Shell action may write it; a failed update leaves the last valid target unchanged. | invoke contract rejects caller-supplied file lists and invalid paths; negative UI and Rust tests. |
+| **FR-CODEX-WORKER.13** | A Jeonju course worker may start only after the visible saved course target exactly matches the entered execution-target Git root. Shell repeats that target-to-workspace comparison at its native start boundary; WebView state alone is not authority. Every selected-workspace card shows a user-facing Naia course report: queued/running/cancelling status, verified result or explicit lack of verification, preserved-failure/cancellation guidance, and the student's next action. Its `수업 파일 열기` action opens the first fixed course file in the Shell editor so the report leads directly to student inspection. Shell must not imply that an unverified or cancelled job succeeded. | `CodingWorkersPanel` component contracts for blank/mismatched target gating, state reports, and file-open action; native target-match unit contract; `97-course-worker-guidance` native Shell E2E for the blocked start; `91-jeonju-course-worker` native Shell E2E for the completed report, editor handoff, and verified two-file result. |
 
 | ID | 요구사항 | 검증 기준 |
 |---|---|---|
@@ -505,5 +521,16 @@ Steamworks 포털 설정·SteamPipe 자격증명·스토어 심사 제출은 #31
 | **FR-CODEX-WORKER.3** | `queued`·`running`·`cancelling` worker가 점유한 worktree에는 새 worker를 요청하지 않고 충돌 이유를 표시한다. 병렬 작업은 서로 다른 격리 worktree에서만 시작한다. | same-worktree negative UI 테스트. |
 | **FR-CODEX-WORKER.4** | 취소와 재개는 각각 worker adapter의 대상 ID 요청으로만 수행한다. 재개는 checkpoint ID가 있는 `cancelled` 또는 `failed` worker에만 가능하며, PTY kill 또는 새 shell 생성은 재개가 아니다. | cancel/resume adapter 호출 및 checkpoint negative 테스트. |
 | **FR-CODEX-WORKER.5** | Shell은 원본 adapter 오류, Codex 로그인 토큰, 계정 식별자, CLI 출력 원문을 worker UI·로그·persistent config에 노출하지 않는다. | unavailable/error sanitization 테스트. |
+| **FR-CODEX-WORKER.6** | Coding Workers는 제어 루트·실행 대상·고정된 수업 파일 경계와 수업 대상의 저장/적용 시점을 구분해 표시한다. 수업 대상 저장 후에는 다음 Agent 시작 시 적용됨을 명시하며, 현재 Agent가 즉시 다시 읽었다고 표시하지 않는다. | 컴포넌트·Playwright·native Tauri 테스트에서 저장 전/후 상태와 `다음 Agent 시작` 안내를 검증한다. |
+| **FR-CODEX-WORKER.7** | Coding Workers는 빈 목록, 요청 중, 성공, 실패, 취소 가능, 재개 가능 상태를 사용자 행동 중심으로 표시한다. 원시 상태값·원문 adapter 오류·원문 ISO 시각만으로 상태를 전달하지 않으며, mutation 요청은 진행 중 중복 전송하지 않는다. | 상태 배지/시간/빈 상태/중복 차단/안전한 오류 맥락에 대한 컴포넌트 및 UI E2E 테스트. |
+| **NFR-VISUAL-UX-GATE.1** | Shell의 기능 UI 변경은 P02에서 기본·빈 목록·진행·성공·오류·좁은 폭 상태를 명시하고, P04에서 컴포넌트·Playwright와 해당 시 native Tauri Shell로 시각·접근성·복구 행동을 검증해야 한다. 기능 계약만으로 P05 완료를 선언할 수 없다. | `verify-visual-ux` 결과와 변경 기능의 UI E2E 증거가 모두 PASS여야 한다. |
 
 - **NFR-CODEX-WORKER-contract**: Agent gRPC schema가 확정되기 전에는 Shell adapter가 worker lifecycle의 성공을 반환하거나 PTY를 worker로 위장하지 않는다.
+
+## Cascade standalone install-plan requirements (2026-07-22)
+
+| ID | Requirement | Verification |
+|---|---|---|
+| **FR-CASCADE.2** | Shell owns the 4060 cascade installation-plan status. Each of `loader`, `python-runtime`, `cascade-service-bundle`, `ditto-engine`, `voxcpm2-model`, and `reference-voices` supplies `complete|waiting|blocked`, 0–100 progress, `install|download|verify`, retryability, and a failure reason. | Rust pure-plan contract tests and SettingsTab IPC rendering test. |
+| **FR-CASCADE.3** | `ready=true` only when all install steps are complete and the Shell-owned :8910 façade reports every requested TTS/avatar service healthy. Prerequisites without a started service are `ready-to-start`, not ready. | Rust live-status classification tests. |
+| **FR-CASCADE.4** | Querying install status is read-only: no model download, service spawn, or user-file mutation. A profile warm with `canStart=false` must not call `start_cascade`. Missing package metadata must be reported as unavailable, never as an active download. | SettingsTab negative invocation test plus command contract review. |

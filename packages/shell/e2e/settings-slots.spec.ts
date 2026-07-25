@@ -213,7 +213,7 @@ test.describe("S-SLOT settings — gate + 6 cloud slots (#gate-slots)", () => {
 		});
 		expect(saved.localGpuTier).toBe("local-llm-voice-16g");
 		expect(saved.provider).toBe("ollama"); // 두뇌 → 로컬
-		expect(saved.model).toBe("hf.co/mradermacher/DNA3.0-4B-GGUF:Q4_K_M"); // compact 기본
+		expect(saved.model).toBe("dna3:latest"); // installed Ollama tag
 		expect(saved.ttsProvider).toBe("naia-local-voice"); // 음성 → 로컬
 		expect(saved.ttsEnabled).toBe(true);
 		expect(saved.vllmTtsHost).toBe("http://localhost:8910"); // 원격 잔재 → 로컬 façade 교정
@@ -256,7 +256,7 @@ test.describe("S-SLOT settings — gate + 6 cloud slots (#gate-slots)", () => {
 		});
 		expect(saved.localGpuTier).toBe("laptop-4060-8g");
 		expect(saved.provider).toBe("ollama");
-		expect(saved.model).toBe("hf.co/mradermacher/DNA3.0-4B-GGUF:Q4_K_M");
+		expect(saved.model).toBe("dna3:latest");
 		expect(saved.ttsProvider).toBe("naia-local-voice");
 		expect(saved.ttsEnabled).toBe(true);
 		expect(saved.vllmTtsHost).toBe("http://localhost:8910");

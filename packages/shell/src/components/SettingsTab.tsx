@@ -10,6 +10,7 @@ import {
 	clearAdkPath,
 	getAdkPath,
 	listNaiaAssets,
+	readNaiaConfig,
 	setAdkPath,
 	toLocalBlobUrl,
 	writeAgentKey,
@@ -23,7 +24,6 @@ import {
 	DEFAULT_NVA_MODEL,
 	getDefaultTtsVoiceForAvatar,
 	getDefaultVoiceForAvatar,
-	isLegacyBundledVrmModel,
 } from "../lib/avatar-presets";
 import {
 	localFacadeUrlFromReady,
@@ -68,6 +68,7 @@ import {
 	type SttProviderId,
 	type ThemeId,
 	type TtsProviderId,
+	type LlmRoleConfig,
 	clearAllowedTools,
 	loadConfig,
 	loadConfigWithSecrets,
@@ -106,9 +107,9 @@ import {
 	isApiKeyOptional,
 	isOmniModel,
 	listLlmProviders,
-	providerSupportsRole,
 } from "../lib/llm";
-import { readConfiguredLlmRoles } from "../lib/llm/roles";
+import { readConfiguredLlmRoles, writeConfiguredLlmRole } from "../lib/llm/roles";
+import { providerSupportsRole } from "../lib/llm/registry";
 import { Logger } from "../lib/logger";
 import { DEFAULT_PERSONA, FORMALITY_LOCALES } from "../lib/persona";
 import { toSpeechProfileCommandInput } from "../lib/proactive-speech-settings";
@@ -155,6 +156,36 @@ const CODEX_PREFLIGHT_LABELS: Record<CodexPreflightStatus, TranslationKey> = {
 	"login-required": "settings.codexReadinessLoginRequired",
 	error: "settings.codexReadinessError",
 };
+
+type CascadeInstallationStatus = {
+	phase: "ready" | "ready-to-start" | "requires-action" | "blocked";
+	ready: boolean;
+	canStart: boolean;
+	summary: string;
+	steps: Array<{
+		id: string;
+		label: string;
+		state: "complete" | "waiting" | "blocked";
+		action: "install" | "download" | "verify";
+		actionAvailable: boolean;
+		progressPercent: number;
+		retryable: boolean;
+		failure?: { code: string; message: string; retryable: boolean } | null;
+	}>;
+};
+
+function isCascadeInstallationStatus(
+	value: unknown,
+): value is CascadeInstallationStatus {
+	if (!value || typeof value !== "object") return false;
+	const candidate = value as Partial<CascadeInstallationStatus>;
+	return (
+		typeof candidate.canStart === "boolean" &&
+		typeof candidate.ready === "boolean" &&
+		typeof candidate.summary === "string" &&
+		Array.isArray(candidate.steps)
+	);
+}
 
 function vramTierLabelKey(id: VramTierId) {
 	return `settings.vramTier.${id}` as const;
@@ -501,7 +532,7 @@ export function SettingsTab() {
 	const storeTtsEnabled = useAppStore((s) => s.ttsEnabled);
 	const setStoreTtsEnabled = useAppStore((s) => s.setTtsEnabled);
 	const [savedVrmModel, setSavedVrmModel] = useState(
-		normalizeLocalPath(existing?.vrmModel ?? ""),
+		normalizeLocalPath(existing?.vrmModel ?? DEFAULT_AVATAR_MODEL),
 	);
 	const [provider, setProvider] = useState<ProviderId>(
 		existing?.provider ?? "gemini",
@@ -515,6 +546,28 @@ export function SettingsTab() {
 	const [model, setModel] = useState(
 		modelValid ? savedModel : getDefaultLlmModel(initProvider),
 	);
+	// SettingsTab remains mounted while the Shell starts.  The workspace config
+	// hydrates asynchronously, so its initial state can otherwise keep showing
+	// the bootstrap provider even after the agent has loaded the workspace's
+	// actual brain. Keep the editable main-brain controls synchronized with the
+	// config SoT; user changes emit the same event and therefore converge on
+	// their persisted selection rather than being reverted.
+	useEffect(() => {
+		const syncMainBrainFromConfig = () => {
+			const cfg = loadConfig();
+			if (!cfg?.provider) return;
+			const nextProvider = cfg.provider as ProviderId;
+			setProvider(nextProvider);
+			setModel(
+				typeof cfg.model === "string" && cfg.model.trim()
+					? cfg.model
+					: getDefaultLlmModel(nextProvider),
+			);
+		};
+		window.addEventListener("naia-config-changed", syncMainBrainFromConfig);
+		return () =>
+			window.removeEventListener("naia-config-changed", syncMainBrainFromConfig);
+	}, []);
 	const [apiKey, setApiKey] = useState(existing?.apiKey ?? "");
 	// config.json 은 비밀을 strip(키는 키체인/credentials 매니페스트)하므로 existing.apiKey 는 항상 "".
 	// provider 에 저장된 키가 있으면 입력란을 `*****`(저장됨)로 마스킹 표기(값은 안 읽음 — agentKeyExists 는
@@ -662,11 +715,35 @@ export function SettingsTab() {
 	const [cascadeRunning, setCascadeRunning] = useState(false);
 	const [cascadeBusy, setCascadeBusy] = useState(false);
 	const [cascadeMsg, setCascadeMsg] = useState("");
+	const [cascadeInstallation, setCascadeInstallation] =
+		useState<CascadeInstallationStatus | null>(null);
+	const refreshCascadeInstallation = useCallback(async () => {
+		try {
+			const status = await invoke<unknown>(
+				"cascade_installation_status",
+			);
+			if (!isCascadeInstallationStatus(status)) {
+				Logger.warn("Settings", "Malformed cascade installation status", {});
+				setCascadeInstallation(null);
+				return null;
+			}
+			setCascadeInstallation(status);
+			return status;
+		} catch (error) {
+			Logger.warn("Settings", "Cascade installation status unavailable", {
+				error: String(error),
+			});
+			return null;
+		}
+	}, []);
 	useEffect(() => {
 		invoke<boolean>("cascade_status")
 			.then(setCascadeRunning)
 			.catch(() => {});
 	}, []);
+	useEffect(() => {
+		void refreshCascadeInstallation();
+	}, [refreshCascadeInstallation]);
 	// 슬롯 오버뷰 실시간 상태 — facade /health({ok,tts,avatar,tts_enabled,avatar_enabled})를
 	// 폴링해 로컬 음성/아바타 슬롯이 실제로 도는지 표시. 좀비(facade 는 떴으나 tts_enabled=false 로
 	// 붙은 상태)를 가시화한다. localFacadeUrl 없으면(로컬 cascade 미가동) 상태 = null.
@@ -724,6 +801,29 @@ export function SettingsTab() {
 			persistConfig({ vllmTtsHost: DEFAULT_LOCAL_VOICE_HOST });
 		}
 	}, [ttsProvider]);
+	// A loader's CASCADE_READY payload only proves its ports were bound.  Rust
+	// checks the facade too; repeat that public check here so an IPC stub or an
+	// older loader cannot make the Shell show a false ready state.
+	const startCascadeAndConfirm = async (): Promise<{
+		ready: string | null;
+		message?: string;
+	}> => {
+		const installation = await refreshCascadeInstallation();
+		if (!installation?.canStart) {
+			return {
+				ready: null,
+				message: installation?.summary,
+			};
+		}
+		const ready = await invoke<string>("start_cascade");
+		const afterStart = await refreshCascadeInstallation();
+		return afterStart?.ready
+			? { ready }
+			: {
+					ready: null,
+					message: afterStart?.summary,
+				};
+	};
 	const handleToggleCascade = async () => {
 		setCascadeBusy(true);
 		setCascadeMsg("");
@@ -741,8 +841,13 @@ export function SettingsTab() {
 				// start_cascade 는 CASCADE_READY 페이로드({facade_port,services}) 를 반환 —
 				// facade_port 로 로컬 cascade URL 을 유도해 VideoAvatarCanvas(아바타 립싱크)가
 				// 로컬 facade 에 붙게 한다(focus=avatar 로 avatar 서비스가 떴을 때 입 움직임).
-				const ready = await invoke<string>("start_cascade");
-				const localUrl = localFacadeUrlFromReady(ready);
+				const start = await startCascadeAndConfirm();
+				if (!start.ready) {
+					setCascadeRunning(false);
+					setCascadeMsg(start.message ?? t("settings.cascadeError"));
+					return;
+				}
+				const localUrl = localFacadeUrlFromReady(start.ready);
 				useCascadeAvatarStore.getState().setLocalFacadeUrl(localUrl);
 				setCascadeRunning(true);
 				setCascadeMsg(t("settings.cascadeStarted"));
@@ -885,10 +990,15 @@ export function SettingsTab() {
 					: undefined,
 			} as AppConfig;
 			await writeSlotsManifest(cfg);
-			const ready = await invoke<string>("start_cascade");
+			const start = await startCascadeAndConfirm();
+			if (!start.ready) {
+				setCascadeRunning(false);
+				setCascadeMsg(start.message ?? t("settings.cascadeError"));
+				return;
+			}
 			useCascadeAvatarStore
 				.getState()
-				.setLocalFacadeUrl(localFacadeUrlFromReady(ready));
+				.setLocalFacadeUrl(localFacadeUrlFromReady(start.ready));
 			setCascadeRunning(true);
 			warmedProfileRef.current = key;
 			setCascadeMsg(t("settings.cascadeStarted"));
@@ -1028,40 +1138,46 @@ export function SettingsTab() {
 	const [memoryEmbeddingModel, setMemoryEmbeddingModel] = useState(
 		existing?.memoryEmbeddingModel ?? "",
 	);
-	const configuredRoles = readConfiguredLlmRoles(
+	const initialLlmRoles = readConfiguredLlmRoles(
 		existing ?? { provider: "gemini", model: getDefaultLlmModel("gemini"), apiKey: "" },
 	);
-	const [memoryLlmProvider, setMemoryLlmProvider] = useState<ProviderId | "">(
-		configuredRoles.memory?.inherit
-			? ""
-			: configuredRoles.memory?.provider ??
-				(existing?.memoryLlmProvider === "none" ? "" : existing?.memoryLlmProvider ?? ""),
+	const [subLlmRole, setSubLlmRole] = useState<LlmRoleConfig>(
+		initialLlmRoles.sub ?? { inherit: "main" },
 	);
-	const [memoryLlmBaseUrl, setMemoryLlmBaseUrl] = useState(
-		configuredRoles.memory?.inherit ? "" : configuredRoles.memory?.baseUrl ?? existing?.memoryLlmBaseUrl ?? "",
+	const [memoryLlmRole, setMemoryLlmRole] = useState<LlmRoleConfig>(
+		initialLlmRoles.memory ?? { inherit: "sub" },
 	);
-	const [memoryLlmApiKey, setMemoryLlmApiKey] = useState(
-		existing?.memoryLlmApiKey ?? "",
-	);
-	const [memoryLlmModel, setMemoryLlmModel] = useState(
-		configuredRoles.memory?.inherit ? "" : configuredRoles.memory?.model ?? existing?.memoryLlmModel ?? "",
-	);
-	const [subLlmProvider, setSubLlmProvider] = useState<ProviderId>(
-		configuredRoles.sub?.inherit ? "" : configuredRoles.sub?.provider ?? "",
-	);
-	const [subLlmModel, setSubLlmModel] = useState(
-		configuredRoles.sub?.inherit ? "" : configuredRoles.sub?.model ?? "",
-	);
-	const [subLlmBaseUrl, setSubLlmBaseUrl] = useState(
-		configuredRoles.sub?.inherit ? "" : configuredRoles.sub?.baseUrl ?? "",
-	);
-	const [subLlmApiKey, setSubLlmApiKey] = useState(existing?.subLlmApiKey ?? "");
-	const [subLlmInheritMain, setSubLlmInheritMain] = useState(
-		configuredRoles.sub?.inherit === "main",
-	);
-	const [memoryLlmInheritMain, setMemoryLlmInheritMain] = useState(
-		configuredRoles.memory?.inherit === "main",
-	);
+	// The roles have their own staged controls. Rehydrate them alongside the
+	// main brain after a workspace switch or WebView restart; otherwise the
+	// persisted explicit sub-brain is rendered as the initial inherit default.
+	useEffect(() => {
+		const syncLlmRolesFromConfig = () => {
+			const cfg = loadConfig();
+			if (!cfg) return;
+			const roles = readConfiguredLlmRoles(cfg);
+			setSubLlmRole(roles.sub ?? { inherit: "main" });
+			setMemoryLlmRole(roles.memory ?? { inherit: "sub" });
+		};
+		syncLlmRolesFromConfig();
+		// The workspace files are the config SoT.  Settings can be mounted after
+		// the boot hydration event (or while WebView restart effects race), so an
+		// event-only subscription leaves its staged role controls at defaults.
+		// Read the file once on mount as the deterministic fallback.
+		void readNaiaConfig().then((fileConfig) => {
+			if (!fileConfig) return;
+			const roles = readConfiguredLlmRoles({
+				provider: existing?.provider ?? "gemini",
+				model: existing?.model ?? getDefaultLlmModel("gemini"),
+				apiKey: existing?.apiKey ?? "",
+				...fileConfig,
+			});
+			setSubLlmRole(roles.sub ?? { inherit: "main" });
+			setMemoryLlmRole(roles.memory ?? { inherit: "sub" });
+		});
+		window.addEventListener("naia-config-changed", syncLlmRolesFromConfig);
+		return () =>
+			window.removeEventListener("naia-config-changed", syncLlmRolesFromConfig);
+	}, []);
 	const [backupPassword, setBackupPassword] = useState("");
 	const [backupStatus, setBackupStatus] = useState<
 		"idle" | "exporting" | "importing" | "done" | "error"
@@ -1885,6 +2001,17 @@ export function SettingsTab() {
 		void writeNaiaConfig(next as unknown as Record<string, unknown>);
 	}
 
+	function persistLlmRole(
+		role: "sub" | "memory",
+		value: LlmRoleConfig,
+	) {
+		const cfg = loadConfig();
+		if (!cfg) return;
+		const next = writeConfiguredLlmRole(cfg, role, value);
+		saveConfig(next);
+		void writeNaiaConfig(next as unknown as Record<string, unknown>);
+	}
+
 	function persistVideoAvatarSelection(nextNva?: string) {
 		const selectedNva = nextNva || nvaModel || DEFAULT_NVA_MODEL;
 		setAvatarProvider("naia-video-avatar");
@@ -1914,15 +2041,21 @@ export function SettingsTab() {
 		}
 		// UC-MODEL-SELECT contract: persist the provider/model switch so the gRPC
 		// agent reloads with it (prev. only Save persisted → stale provider/model).
-		const provSel = applyModelSelectionToConfig(
+		const selectedModel = id !== "ollama"
+			? getDefaultLlmModel(id)
+			: ((loadConfig()?.model as string | undefined) ?? "");
+		const legacySelection = applyModelSelectionToConfig(
 			loadConfig() as Record<string, unknown> | null,
 			id,
-			id !== "ollama"
-				? getDefaultLlmModel(id)
-				: ((loadConfig()?.model as string | undefined) ?? ""),
+			selectedModel,
+		);
+		const provSel = writeConfiguredLlmRole(
+			legacySelection as unknown as AppConfig,
+			"main",
+			{ provider: id, model: selectedModel },
 		);
 		saveConfig(provSel as unknown as Parameters<typeof saveConfig>[0]);
-		void writeNaiaConfig(provSel);
+		void writeNaiaConfig(provSel as unknown as Record<string, unknown>);
 	}
 
 	async function checkCodexReadiness() {
@@ -1969,17 +2102,6 @@ export function SettingsTab() {
 		listNaiaAssets("vrm-files").then((paths) => {
 			const vrms = paths.filter((p) => p.toLowerCase().endsWith(".vrm"));
 			setNaiaVrms(vrms);
-			if (vrms.length > 0) {
-				setVrmModel((current) => {
-					const savedFilename = current.split(/[/\\]/).pop() ?? "";
-					const isInstalled = vrms.some(
-						(path) => path.split(/[/\\]/).pop() === savedFilename,
-					);
-					return !current || isLegacyBundledVrmModel(current) || !isInstalled
-						? vrms[0]
-						: current;
-				});
-			}
 		});
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, []);
@@ -2232,22 +2354,6 @@ export function SettingsTab() {
 			setError(t("settings.apiKeyRequired"));
 			return;
 		}
-		if (subLlmInheritMain && !providerSupportsRole(provider, "sub")) {
-			setError(t("settings.mainOnlyRoleWarning"));
-			return;
-		}
-		if (!subLlmInheritMain && (!subLlmProvider || !subLlmModel)) {
-			setError(t("settings.roleConfigRequired"));
-			return;
-		}
-		if (memoryLlmInheritMain && !providerSupportsRole(provider, "memory")) {
-			setError(t("settings.mainOnlyRoleWarning"));
-			return;
-		}
-		if (!memoryLlmInheritMain && (!memoryLlmProvider || !memoryLlmModel)) {
-			setError(t("settings.roleConfigRequired"));
-			return;
-		}
 		const defaultVrm = DEFAULT_AVATAR_MODEL;
 		// Derive ttsEngine from ttsProvider for agent compatibility
 		// Only "google" uses direct Google TTS; all others (including nextain) use Gateway
@@ -2256,35 +2362,10 @@ export function SettingsTab() {
 			cascadeAvatarPossible && avatarProvider === "naia-video-avatar"
 				? "naia-video-avatar"
 				: "vrm";
-		const persistedRoles = readConfiguredLlmRoles(
-			existing ?? { provider, model, apiKey: "" },
-		);
-		const nextLlmRoles = {
-			main: { ...(persistedRoles.main ?? {}), provider, model },
-			sub: subLlmInheritMain
-				? { inherit: "main" as const }
-				: {
-					provider: subLlmProvider,
-					model: subLlmModel,
-					...(subLlmBaseUrl.trim()
-						? { baseUrl: subLlmBaseUrl.trim() }
-						: {}),
-				},
-			memory: memoryLlmInheritMain
-				? { inherit: "main" as const }
-				: {
-					provider: memoryLlmProvider,
-					model: memoryLlmModel,
-					...(memoryLlmBaseUrl.trim()
-						? { baseUrl: memoryLlmBaseUrl.trim() }
-						: {}),
-				},
-		};
-		const newConfig = {
+		let newConfig: AppConfig = {
 			...existing,
 			provider,
 			model,
-			llmRoles: nextLlmRoles,
 			apiKey:
 				isNextainProvider || isApiKeyOptional(provider) ? "" : resolvedApiKey,
 			naiaKey: naiaKey || undefined,
@@ -2387,40 +2468,13 @@ export function SettingsTab() {
 				memoryAdapter === "qdrant" ? qdrantUrl || undefined : undefined,
 			qdrantApiKey:
 				memoryAdapter === "qdrant" ? qdrantApiKey || undefined : undefined,
-			memoryLlmProvider:
-				!memoryLlmInheritMain &&
-				(memoryLlmProvider === "naia" ||
-					memoryLlmProvider === "vllm" ||
-					memoryLlmProvider === "ollama")
-					? memoryLlmProvider
-					: undefined,
-			memoryLlmBaseUrl:
-				!memoryLlmInheritMain &&
-				(memoryLlmProvider === "vllm" || memoryLlmProvider === "ollama")
-					? memoryLlmBaseUrl || undefined
-					: undefined,
-			memoryLlmApiKey:
-				!memoryLlmInheritMain &&
-				(memoryLlmProvider === "vllm" || memoryLlmProvider === "ollama")
-					? memoryLlmApiKey || undefined
-					: undefined,
-			memoryLlmModel:
-				!memoryLlmInheritMain && memoryLlmProvider
-					? memoryLlmModel || undefined
-					: undefined,
-			subLlmProvider:
-				!subLlmInheritMain && subLlmProvider ? subLlmProvider : undefined,
-			subLlmModel:
-				!subLlmInheritMain && subLlmModel ? subLlmModel : undefined,
-			subLlmBaseUrl:
-				!subLlmInheritMain && subLlmBaseUrl.trim()
-					? subLlmBaseUrl.trim()
-					: undefined,
-			subLlmApiKey:
-				!subLlmInheritMain && subLlmApiKey.trim()
-					? subLlmApiKey.trim()
-					: undefined,
 		};
+		newConfig = writeConfiguredLlmRole(newConfig, "main", {
+			provider,
+			model,
+		});
+		newConfig = writeConfiguredLlmRole(newConfig, "sub", subLlmRole);
+		newConfig = writeConfiguredLlmRole(newConfig, "memory", memoryLlmRole);
 		saveConfig(newConfig);
 		// Also persist to naia-settings/config.json so ADK reload restores the same settings
 		void writeNaiaConfig(newConfig as unknown as Record<string, unknown>);
@@ -2430,10 +2484,6 @@ export function SettingsTab() {
 		if (resolvedApiKey)
 			void writeAgentKey(newConfig.provider, "apiKey", resolvedApiKey);
 		if (naiaKey) void writeAgentKey(newConfig.provider, "naiaKey", naiaKey);
-		if (!subLlmInheritMain && subLlmProvider && subLlmApiKey.trim())
-			void writeAgentKey(subLlmProvider, "apiKey", subLlmApiKey.trim());
-		if (!memoryLlmInheritMain && memoryLlmProvider && memoryLlmApiKey.trim())
-			void writeAgentKey(memoryLlmProvider, "apiKey", memoryLlmApiKey.trim());
 		// #18: 메모리 비밀(embed/qdrant/llm apiKey)도 OS 키체인에 기록 — config.json 에선 strip 되므로
 		// agent loadMemoryConfig 가 키체인 account(NAIA_MEMORY_*_API_KEY)로 읽는다(provider 무관 → writeAgentSecret).
 		if (newConfig.memoryEmbeddingApiKey)
@@ -2492,6 +2542,96 @@ export function SettingsTab() {
 	}
 
 	const providerModels = dynamicModels[provider] ?? [];
+	const renderLlmRoleEditor = (
+		role: "sub" | "memory",
+		labelKey: TranslationKey,
+		roleConfig: LlmRoleConfig,
+		setRoleConfig: (value: LlmRoleConfig) => void,
+		inheritTargets: readonly ("main" | "sub")[],
+	) => {
+		const compatibleProviders = LLM_PROVIDERS.filter((candidate) =>
+			providerSupportsRole(candidate.id, role),
+		);
+		const mode = roleConfig.inherit
+			? `inherit:${roleConfig.inherit}`
+			: "explicit";
+		const updateRole = (next: LlmRoleConfig) => {
+			setRoleConfig(next);
+			persistLlmRole(role, next);
+		};
+		return (
+			<div className="settings-field" data-testid={`${role}-llm-role`}>
+				<label htmlFor={`${role}-llm-mode`}>{t(labelKey)}</label>
+				<select
+					id={`${role}-llm-mode`}
+					data-testid={`${role}-llm-mode`}
+					value={mode}
+					onChange={(event) => {
+						if (event.target.value.startsWith("inherit:")) {
+							updateRole({
+								inherit: event.target.value.slice("inherit:".length) as "main" | "sub",
+							});
+							return;
+						}
+						const selectedProvider = compatibleProviders.find(
+							(candidate) => candidate.id === provider,
+						) ?? compatibleProviders[0];
+						if (!selectedProvider) return;
+						updateRole({
+							provider: selectedProvider.id,
+							model: getDefaultLlmModel(selectedProvider.id),
+						});
+					}}
+				>
+					{inheritTargets.map((target) => (
+						<option key={target} value={`inherit:${target}`}>
+							{target === "main"
+								? t("settings.roleInheritMain")
+								: t("settings.roleInheritSub")}
+						</option>
+					))}
+					<option value="explicit">{t("settings.roleExplicit")}</option>
+				</select>
+				{!roleConfig.inherit && (
+					<div className="settings-field" style={{ marginTop: "8px" }}>
+						<label htmlFor={`${role}-llm-provider`}>
+							{t("settings.provider")}
+						</label>
+						<select
+							id={`${role}-llm-provider`}
+							data-testid={`${role}-llm-provider`}
+							value={roleConfig.provider ?? ""}
+							onChange={(event) =>
+								updateRole({
+									provider: event.target.value as ProviderId,
+									model: getDefaultLlmModel(event.target.value),
+								})
+							}
+						>
+							{compatibleProviders.map((candidate) => (
+								<option key={candidate.id} value={candidate.id}>
+									{candidate.name}
+								</option>
+							))}
+						</select>
+						<label htmlFor={`${role}-llm-model`}>
+							{t("settings.model")}
+						</label>
+						<input
+							id={`${role}-llm-model`}
+							data-testid={`${role}-llm-model`}
+							type="text"
+							value={roleConfig.model ?? ""}
+							onChange={(event) =>
+								updateRole({ ...roleConfig, model: event.target.value })
+							}
+							placeholder={getDefaultLlmModel(roleConfig.provider ?? "")}
+						/>
+					</div>
+				)}
+			</div>
+		);
+	};
 	const selectedModelMeta = providerModels.find((m) => m.id === model);
 	const hasSelectedModel = Boolean(selectedModelMeta);
 	const isSelectedOmni =
@@ -2640,7 +2780,9 @@ export function SettingsTab() {
 		void writeNaiaConfig(next as unknown as Record<string, unknown>);
 		setProvider(next.provider);
 		setModel(next.model);
-		if (next.memoryLlmProvider) setMemoryLlmProvider(next.memoryLlmProvider);
+		const nextRoles = readConfiguredLlmRoles(next);
+		setSubLlmRole(nextRoles.sub ?? { inherit: "main" });
+		setMemoryLlmRole(nextRoles.memory ?? { inherit: "sub" });
 		if (next.memoryEmbeddingProvider)
 			setMemoryEmbeddingProvider(next.memoryEmbeddingProvider);
 	}
@@ -2776,6 +2918,12 @@ export function SettingsTab() {
 							const next: AppConfig = {
 								...current,
 								proactiveSpeechProfile: settings.profile,
+								// Selecting policy must not silently spend AI/TTS. The visible
+								// control bar grants runtime permission.
+								proactiveSpeechPermitted:
+									settings.profile === "disabled"
+										? false
+										: (current.proactiveSpeechPermitted ?? false),
 								proactiveSpeechTimezone: settings.timezone,
 								proactiveSpeechIdleMs: settings.idleMs,
 								proactiveSpeechIntervalMs: settings.intervalMs,
@@ -2806,7 +2954,7 @@ export function SettingsTab() {
 								weatherConsented: false,
 							});
 							if (!disabled) return false;
-							if (settings.profile === "disabled") return true;
+							if (!next.proactiveSpeechPermitted || settings.profile === "disabled") return true;
 							return configureSpeechProfile(toSpeechProfileCommandInput(settings));
 						}}
 					/>
@@ -3682,6 +3830,26 @@ export function SettingsTab() {
 											: cascadeMsg}
 								</div>
 							)}
+						{naiaKey &&
+							localGpuTier !== "off" &&
+							cascadeInstallation && (
+								<div
+									className="settings-hint"
+									data-testid="cascade-installation-status"
+								>
+									<div data-testid="cascade-installation-summary">
+										{cascadeInstallation.summary}
+									</div>
+									<ul data-testid="cascade-installation-steps">
+										{cascadeInstallation.steps.map((step) => (
+											<li key={step.id} data-cascade-install-step={step.id}>
+												{step.label}: {step.state} · {step.progressPercent}%
+												{step.failure ? ` · ${step.failure.message}` : ""}
+											</li>
+										))}
+									</ul>
+								</div>
+							)}
 					</div>
 
 					{/* 배타 티어(8G: 로컬 LLM · 아바타 · 둘다) 로컬 집중 택1. 음성=클라우드. FR-3: 로그인 필요. */}
@@ -3786,7 +3954,7 @@ export function SettingsTab() {
 							<div className="settings-hint">
 								{t("settings.codexReadinessHint")}
 							</div>
-							<div className="settings-row">
+							<div className="settings-row codex-readiness-actions">
 								<span aria-live="polite" data-testid="codex-readiness-status">
 									{t(CODEX_PREFLIGHT_LABELS[codexPreflightStatus])}
 								</span>
@@ -3881,15 +4049,20 @@ export function SettingsTab() {
 								// (e.g. an omni gemini-2.5-flash-live from a prior voice session) survived.
 								// Skip while a nextain login is pending (naia_auth_complete persists then).
 								if (!(provider === "nextain" && !naiaKey)) {
-									const nextSel = applyModelSelectionToConfig(
+									const legacySelection = applyModelSelectionToConfig(
 										loadConfig() as Record<string, unknown> | null,
 										provider,
 										e.target.value,
 									);
+									const nextSel = writeConfiguredLlmRole(
+										legacySelection as unknown as AppConfig,
+										"main",
+										{ provider, model: e.target.value },
+									);
 									saveConfig(
 										nextSel as unknown as Parameters<typeof saveConfig>[0],
 									);
-									void writeNaiaConfig(nextSel);
+									void writeNaiaConfig(nextSel as unknown as Record<string, unknown>);
 								}
 								// When switching to an omni model, set default voice if not already set
 								const newMeta = providerModels.find(
@@ -4074,136 +4247,20 @@ export function SettingsTab() {
 					<div className="settings-section-divider">
 						<span>{t("settings.brainSubSection")}</span>
 					</div>
-					<div className="settings-field" data-testid="sub-llm-role-settings">
-						<label className="settings-toggle-row">
-							<input
-								type="checkbox"
-								checked={subLlmInheritMain}
-								onChange={(event) => setSubLlmInheritMain(event.target.checked)}
-							/>
-							<span>{t("settings.inheritMainLlm")}</span>
-						</label>
-						{subLlmInheritMain && !providerSupportsRole(provider, "sub") && (
-							<div className="settings-hint" data-testid="sub-llm-main-only-warning">
-								{t("settings.mainOnlyRoleWarning")}
-							</div>
-						)}
-						{!subLlmInheritMain && (
-							<div className="settings-field">
-								<select
-									aria-label={t("settings.provider")}
-									data-testid="sub-llm-provider"
-									value={subLlmProvider}
-									onChange={(event) => {
-										const next = event.target.value as ProviderId;
-										setSubLlmProvider(next);
-										setSubLlmModel(getDefaultLlmModel(next));
-									}}
-								>
-									<option value="">{t("settings.memoryLlmNone")}</option>
-									{LLM_PROVIDERS.filter((item) =>
-										providerSupportsRole(item.id, "sub"),
-									).map((item) => (
-										<option key={item.id} value={item.id}>{item.name}</option>
-									))}
-								</select>
-								<select
-									aria-label={t("settings.model")}
-									data-testid="sub-llm-model"
-									value={subLlmModel}
-									onChange={(event) => setSubLlmModel(event.target.value)}
-									disabled={!subLlmProvider}
-								>
-									{(getLlmProvider(subLlmProvider)?.models ?? []).map((item) => (
-										<option key={item.id} value={item.id}>{item.label}</option>
-									))}
-								</select>
-								{subLlmProvider && subLlmProvider !== "nextain" && (
-									<input
-										type="url"
-										value={subLlmBaseUrl}
-										onChange={(event) => setSubLlmBaseUrl(event.target.value)}
-										placeholder="http://localhost:11434/v1"
-									/>
-								)}
-								{subLlmProvider && subLlmProvider !== "nextain" &&
-									!getLlmProvider(subLlmProvider)?.isLocal && (
-										<input
-											type="password"
-											value={subLlmApiKey}
-											onChange={(event) => setSubLlmApiKey(event.target.value)}
-											placeholder={t("settings.apiKey")}
-										/>
-									)}
-							</div>
-						)}
-					</div>
-					<div className="settings-field">
-						<label>{t("settings.memorySection")}</label>
-						<div className="settings-hint">{t("settings.modelsSmallLlmHint")}</div>
-						<label className="settings-toggle-row">
-							<input
-								type="checkbox"
-								checked={memoryLlmInheritMain}
-								onChange={(event) => setMemoryLlmInheritMain(event.target.checked)}
-							/>
-							<span>{t("settings.inheritMainLlm")}</span>
-						</label>
-						{memoryLlmInheritMain && !providerSupportsRole(provider, "memory") && (
-							<div className="settings-hint" data-testid="memory-llm-main-only-warning">
-								{t("settings.mainOnlyRoleWarning")}
-							</div>
-						)}
-						{!memoryLlmInheritMain && (
-							<div className="settings-field" data-testid="memory-llm-role-settings">
-								<select
-									aria-label={t("settings.provider")}
-									data-testid="memory-llm-provider"
-									value={memoryLlmProvider}
-									onChange={(event) => {
-										const next = event.target.value as ProviderId;
-										setMemoryLlmProvider(next);
-										setMemoryLlmModel(getDefaultLlmModel(next));
-									}}
-								>
-									<option value="">{t("settings.memoryLlmNone")}</option>
-									{LLM_PROVIDERS.filter((item) =>
-										providerSupportsRole(item.id, "memory"),
-									).map((item) => (
-										<option key={item.id} value={item.id}>{item.name}</option>
-									))}
-								</select>
-								<select
-									aria-label={t("settings.model")}
-									data-testid="memory-llm-model"
-									value={memoryLlmModel}
-									onChange={(event) => setMemoryLlmModel(event.target.value)}
-									disabled={!memoryLlmProvider}
-								>
-									{(getLlmProvider(memoryLlmProvider)?.models ?? []).map((item) => (
-										<option key={item.id} value={item.id}>{item.label}</option>
-									))}
-								</select>
-								{memoryLlmProvider && memoryLlmProvider !== "nextain" && (
-								<input
-									type="url"
-									value={memoryLlmBaseUrl}
-									onChange={(e) => setMemoryLlmBaseUrl(e.target.value)}
-									placeholder="http://localhost:8000"
-								/>
-								)}
-								{memoryLlmProvider && memoryLlmProvider !== "nextain" &&
-									!getLlmProvider(memoryLlmProvider)?.isLocal && (
-								<input
-									type="password"
-									value={memoryLlmApiKey}
-									onChange={(e) => setMemoryLlmApiKey(e.target.value)}
-									placeholder={t("settings.apiKey")}
-								/>
-								)}
-							</div>
-						)}
-					</div>
+					{renderLlmRoleEditor(
+						"sub",
+						"settings.brainSubSection",
+						subLlmRole,
+						setSubLlmRole,
+						["main"],
+					)}
+					{renderLlmRoleEditor(
+						"memory",
+						"settings.memoryLlm",
+						memoryLlmRole,
+						setMemoryLlmRole,
+						["main", "sub"],
+					)}
 
 					<div className="settings-actions">
 						<button

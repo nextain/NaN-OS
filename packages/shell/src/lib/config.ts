@@ -243,6 +243,8 @@ export interface AppConfig {
 	bgmPlaying?: boolean;
 	/** Opt-in proactive speech mode. Disabled unless explicitly persisted. */
 	proactiveSpeechProfile?: "disabled" | "personal_radio_dj" | "exhibition_intro";
+	/** Runtime permission for proactive LLM/TTS use. Profile policy alone never implies permission. */
+	proactiveSpeechPermitted?: boolean;
 	proactiveSpeechIdleMs?: number;
 	proactiveSpeechIntervalMs?: number;
 	proactiveSpeechTimezone?: string;

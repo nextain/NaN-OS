@@ -44,6 +44,29 @@ pub(crate) fn agent_process_marker(pid: u32, marker: &str) -> Result<Option<bool
     }
 }
 
+/// Terminate only an owned agent child that was orphaned by a force-closed
+/// Shell.  A marker match alone is not sufficient: the direct parent must no
+/// longer exist, otherwise a concurrently running Shell would lose its agent.
+pub(crate) fn reap_orphaned_agent_process(pid: u32, marker: &str) -> Result<bool, String> {
+    let script = format!(
+        "$p=Get-CimInstance Win32_Process -Filter \"ProcessId={pid}\" -ErrorAction Stop; if($null -eq $p){{'__NOT_FOUND__'}}elseif($null -eq $p.CommandLine -or $p.CommandLine -notlike '*{marker}*'){{'__FOREIGN__'}}else{{$parent=Get-CimInstance Win32_Process -Filter \"ProcessId=$($p.ParentProcessId)\" -ErrorAction SilentlyContinue; if($null -ne $parent){{'__SUPERVISED__'}}else{{$result=Invoke-CimMethod -InputObject $p -MethodName Terminate; if($result.ReturnValue -eq 0){{'__REAPED__'}}else{{'__REAP_FAILED__'}}}}}}"
+    );
+    let mut command = Command::new("powershell");
+    command.args(["-NoProfile", "-NonInteractive", "-Command", &script]);
+    hide_console(&mut command);
+    let output = command
+        .output()
+        .map_err(|_| "agent_lease_identity_query_failed".to_string())?;
+    if !output.status.success() {
+        return Err("agent_lease_identity_query_failed".to_string());
+    }
+    match String::from_utf8_lossy(&output.stdout).trim() {
+        "__REAPED__" => Ok(true),
+        "__NOT_FOUND__" | "__FOREIGN__" | "__SUPERVISED__" => Ok(false),
+        _ => Err("agent_lease_orphan_reap_failed".to_string()),
+    }
+}
+
 pub(crate) fn find_agent_process_by_marker(marker: &str) -> Result<bool, String> {
     let script = format!(
         "Get-CimInstance Win32_Process -ErrorAction Stop | Where-Object {{ $null -ne $_.CommandLine -and (($_.CommandLine -split '\\s+') -contains '{marker}') }} | ForEach-Object {{ $_.ProcessId }}"

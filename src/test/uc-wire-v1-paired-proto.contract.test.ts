@@ -11,6 +11,8 @@ const BUILD_RS = readText("packages/shell/src-tauri/build.rs");
 const TAURI_WITH_MODE = readText("packages/shell/scripts/tauri-with-mode.mjs");
 const STAGE_RUNTIME = readText("packages/shell/scripts/stage-runtime.mjs");
 const STAGE_AGENT = readText("packages/shell/scripts/stage-agent.mjs");
+const BUILD_E2E_TAURI = readText("packages/shell/scripts/build-e2e-tauri.mjs");
+const CODEX_E2E_ENVIRONMENT = readText("packages/shell/e2e-tauri/codex-e2e-environment.ts");
 const PAIRING = JSON.parse(readText("packages/shell/agent-pairing.json")) as {
 	agentCommit: string;
 	protoSha256: string;
@@ -191,6 +193,14 @@ describe("UC-WIRE-V1 paired proto build", () => {
 		expect(STAGE_AGENT).toContain("staged proto SHA256");
 		expect(STAGE_AGENT).toContain("staged agent entrypoint hash does not match paired source");
 		expect(STAGE_AGENT).not.toContain('const AGENT = resolve(SHELL, "../../../naia-agent")');
+	});
+
+	it("uses the same pairing manifest for isolated native E2E", () => {
+		expect(BUILD_E2E_TAURI).toContain('from "./agent-pairing.mjs"');
+		expect(CODEX_E2E_ENVIRONMENT).toContain('"agent-pairing.json"');
+		expect(CODEX_E2E_ENVIRONMENT).not.toMatch(
+			/REQUIRED_AGENT_COMMIT\s*=\s*"[0-9a-f]{40}"/,
+		);
 	});
 
 	it("executes stage-agent fail-closed validation before staging side effects", () => {
