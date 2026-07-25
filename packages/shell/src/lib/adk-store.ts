@@ -110,7 +110,7 @@ export async function copyBundledAssets(adkPath: string): Promise<void> {
 const SECRET_CONFIG_KEYS = new Set([
 	"apiKey", "naiaKey", "googleApiKey",
 	"openaiTtsApiKey", "elevenlabsApiKey", "gatewayToken", "openaiRealtimeApiKey",
-	"memoryEmbeddingApiKey", "memoryLlmApiKey", "qdrantApiKey",
+	"memoryEmbeddingApiKey", "memoryLlmApiKey", "subLlmApiKey", "qdrantApiKey",
 ]);
 
 // G-08: UI-only fields — naia-agent doesn't consume these. Stripped to prevent
@@ -362,7 +362,23 @@ export function applyModelSelectionToConfig(
 	provider: string,
 	model: string,
 ): Record<string, unknown> {
-	const next: Record<string, unknown> = { ...(current ?? {}), provider, model };
+	const previousRoles = current?.llmRoles;
+	const roles = previousRoles && typeof previousRoles === "object" && !Array.isArray(previousRoles)
+		? previousRoles as Record<string, unknown>
+		: {};
+	const previousMain = roles.main;
+	const main = previousMain && typeof previousMain === "object" && !Array.isArray(previousMain)
+		? previousMain as Record<string, unknown>
+		: {};
+	// A provider/model switch is an immediate main-role edit too. Keeping only
+	// the legacy flat fields here was the stale-main-provider seam that made
+	// the UI and the reloaded agent disagree until a later Apply click.
+	const next: Record<string, unknown> = {
+		...(current ?? {}),
+		provider,
+		model,
+		llmRoles: { ...roles, main: { ...main, provider, model } },
+	};
 	return { ...next, ...buildNaiaConfigEnv(next as Parameters<typeof buildNaiaConfigEnv>[0]) };
 }
 

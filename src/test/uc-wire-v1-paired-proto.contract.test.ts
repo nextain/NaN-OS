@@ -11,6 +11,10 @@ const BUILD_RS = readText("packages/shell/src-tauri/build.rs");
 const TAURI_WITH_MODE = readText("packages/shell/scripts/tauri-with-mode.mjs");
 const STAGE_RUNTIME = readText("packages/shell/scripts/stage-runtime.mjs");
 const STAGE_AGENT = readText("packages/shell/scripts/stage-agent.mjs");
+const PAIRING = JSON.parse(readText("packages/shell/agent-pairing.json")) as {
+	agentCommit: string;
+	protoSha256: string;
+};
 
 describe("UC-WIRE-V1 paired proto build", () => {
 	it("requires an explicit NAIA_AGENT_PROTO_DIR", () => {
@@ -30,10 +34,10 @@ describe("UC-WIRE-V1 paired proto build", () => {
 
 	it("pins the paired agent ancestry and build evidence", () => {
 		expect(BUILD_RS).toContain(
-            'REQUIRED_AGENT_COMMIT: &str = "e44b0f575549d607f4207f433a0284cb15c44746"',
+			`REQUIRED_AGENT_COMMIT: &str = "${PAIRING.agentCommit}"`,
 		);
 		expect(BUILD_RS).toContain(
-            'REQUIRED_PROTO_SHA256: &str =\n        "18000e2902410c5279f2d0d38a04c1ecb6c6f3d6566532c2d3b81ddecc9c8d3b"',
+			`REQUIRED_PROTO_SHA256: &str =\n        "${PAIRING.protoSha256}"`,
 		);
 		expect(BUILD_RS).not.toContain("merge-base");
 		expect(BUILD_RS).toContain("NAIA_AGENT_REQUIRED_COMMIT");
@@ -85,12 +89,7 @@ describe("UC-WIRE-V1 paired proto build", () => {
 		}
 	});
 	it("selects and validates one exact paired agent/proto checkout", () => {
-		expect(TAURI_WITH_MODE).toContain(
-            'REQUIRED_AGENT_COMMIT = "e44b0f575549d607f4207f433a0284cb15c44746"',
-		);
-		expect(TAURI_WITH_MODE).toContain(
-            'REQUIRED_PROTO_SHA256 = "18000e2902410c5279f2d0d38a04c1ecb6c6f3d6566532c2d3b81ddecc9c8d3b"',
-		);
+		expect(TAURI_WITH_MODE).toContain('from "./agent-pairing.mjs"');
 		expect(TAURI_WITH_MODE).toContain("naia-agent-issue-388-proto");
 		expect(TAURI_WITH_MODE).not.toContain("merge-base");
 		expect(TAURI_WITH_MODE).not.toContain("--is-ancestor");
@@ -137,12 +136,7 @@ describe("UC-WIRE-V1 paired proto build", () => {
 	});
 
 	it("applies the same paired agent/proto env before direct Tauri bundle builds", () => {
-		expect(STAGE_RUNTIME).toContain(
-            'REQUIRED_AGENT_COMMIT = "e44b0f575549d607f4207f433a0284cb15c44746"',
-		);
-		expect(STAGE_RUNTIME).toContain(
-            'REQUIRED_PROTO_SHA256 = "18000e2902410c5279f2d0d38a04c1ecb6c6f3d6566532c2d3b81ddecc9c8d3b"',
-		);
+		expect(STAGE_RUNTIME).toContain('from "./agent-pairing.mjs"');
 		expect(STAGE_RUNTIME).toContain("applyPairedAgentEnv(process.env)");
 		expect(STAGE_RUNTIME).toContain("AGENT_WORKTREE_ROOTS");
 		expect(STAGE_RUNTIME).toContain('"naia-agent-worktrees"');
@@ -181,12 +175,7 @@ describe("UC-WIRE-V1 paired proto build", () => {
 	});
 
 	it("requires stage-agent to stage the same validated paired checkout", () => {
-		expect(STAGE_AGENT).toContain(
-            'REQUIRED_AGENT_COMMIT = "e44b0f575549d607f4207f433a0284cb15c44746"',
-		);
-		expect(STAGE_AGENT).toContain(
-            'REQUIRED_PROTO_SHA256 = "18000e2902410c5279f2d0d38a04c1ecb6c6f3d6566532c2d3b81ddecc9c8d3b"',
-		);
+		expect(STAGE_AGENT).toContain('from "./agent-pairing.mjs"');
 		expect(STAGE_AGENT).toContain("NAIA_AGENT_SCRIPT and NAIA_AGENT_PROTO_DIR are required");
 		expect(STAGE_AGENT).toContain("const AGENT = gitRootForPath(AGENT_SCRIPT, true)");
 		expect(STAGE_AGENT).toContain("NAIA_AGENT_SCRIPT and NAIA_AGENT_PROTO_DIR must come from the same checkout");

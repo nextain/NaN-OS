@@ -30,6 +30,9 @@ export function readConfiguredLlmRoles(config: AppConfig): Partial<Record<LlmRol
 				}
 			: undefined
 	);
+	// A fresh configuration must be usable after selecting the main brain once.
+	// Legacy configurations that explicitly supplied a memory LLM keep their old
+	// sub<-memory interpretation, but new/default roles inherit from main.
 	const sub = structured.sub ?? (
 		config.subLlmProvider
 			? {
@@ -39,10 +42,10 @@ export function readConfiguredLlmRoles(config: AppConfig): Partial<Record<LlmRol
 					credentialRef: config.subLlmCredentialRef,
 				}
 			: memory
-				? { inherit: "memory" }
-				: undefined
+				? { inherit: "memory" as const }
+				: { inherit: "main" as const }
 	);
-	const effectiveMemory = memory ?? (sub ? { inherit: "sub" as const } : undefined);
+	const effectiveMemory = memory ?? { inherit: "main" as const };
 	return {
 		...(main ? { main } : {}),
 		...(sub ? { sub } : {}),

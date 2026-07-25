@@ -292,6 +292,56 @@ describe("SettingsTab", () => {
 		expect(JSON.parse(localStorage.getItem("naia-config") || "{}").apiKey).toBe("");
 	});
 
+	it("saves main, sub, and memory brains as role settings", () => {
+		localStorage.setItem(
+			"naia-config",
+			JSON.stringify({
+				onboardingComplete: true,
+				provider: "codex",
+				model: "gpt-5.4",
+				apiKey: "",
+			}),
+		);
+		mockInvoke.mockResolvedValue([]);
+		render(<SettingsTab />);
+		gotoSettingsTab("brain");
+
+		const sub = screen.getByTestId("sub-llm-role-settings");
+		const inherit = sub.querySelector('input[type="checkbox"]') as HTMLInputElement;
+		expect(inherit.checked).toBe(true);
+		fireEvent.click(inherit);
+		const subProvider = sub.querySelector("select") as HTMLSelectElement;
+		fireEvent.change(subProvider, { target: { value: "nextain" } });
+		const memorySettings = screen.getByTestId("memory-llm-main-only-warning").parentElement!;
+		fireEvent.click(memorySettings.querySelector('input[type="checkbox"]') as HTMLInputElement);
+		fireEvent.change(screen.getByTestId("memory-llm-provider"), {
+			target: { value: "nextain" },
+		});
+
+		fireEvent.click(screen.getByRole("button", { name: "Apply" }));
+		const saved = JSON.parse(localStorage.getItem("naia-config") || "{}");
+		expect(saved.llmRoles).toEqual(expect.objectContaining({
+			main: expect.objectContaining({ provider: "codex", model: "gpt-5.4" }),
+			sub: expect.objectContaining({ provider: "nextain", model: "gemini-3.1-flash-lite" }),
+			memory: expect.objectContaining({ provider: "nextain", model: "gemini-3.1-flash-lite" }),
+		}));
+	});
+
+	it("does not silently save Codex as a sub or memory brain", () => {
+		localStorage.setItem(
+			"naia-config",
+			JSON.stringify({ onboardingComplete: true, provider: "codex", model: "gpt-5.4", apiKey: "" }),
+		);
+		mockInvoke.mockResolvedValue([]);
+		render(<SettingsTab />);
+		gotoSettingsTab("brain");
+
+		expect(screen.getByTestId("sub-llm-main-only-warning")).toBeTruthy();
+		expect(screen.getByTestId("memory-llm-main-only-warning")).toBeTruthy();
+		fireEvent.click(screen.getByRole("button", { name: "Apply" }));
+		expect(JSON.parse(localStorage.getItem("naia-config") || "{}").llmRoles).toBeUndefined();
+	});
+
 	it("shows a safe Codex login-required state and clears it on provider switch", async () => {
 		localStorage.setItem(
 			"naia-config",

@@ -36,6 +36,7 @@ import {
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { gzipSync } from "node:zlib";
+import { REQUIRED_AGENT_COMMIT, REQUIRED_PROTO_SHA256 } from "./agent-pairing.mjs";
 
 const SHELL = resolve(dirname(fileURLToPath(import.meta.url)), ".."); // packages/shell
 const REPO_ROOT = resolve(SHELL, "../..");
@@ -48,8 +49,6 @@ const CASCADE_LOADER_SIBLING = resolve(
 	SHELL,
 	"../../../naia-omni-windows-manager/loader",
 );
-const REQUIRED_AGENT_COMMIT = "4e488abaef2a6d76a7abceefab3924a3b6423656";
-const REQUIRED_PROTO_SHA256 = "b77761930c0991ee825b6d2827adad264fc352a9f220404912a284fc166b691b";
 const STATIC_AGENT_CANDIDATES = [
 	resolve(REPO_ROOT, "..", "naia-agent"),
 	resolve(REPO_ROOT, "..", "..", "naia-agent"),

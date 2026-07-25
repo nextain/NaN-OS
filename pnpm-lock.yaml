@@ -195,7 +195,7 @@ importers:
         version: 8.18.1
       '@vitejs/plugin-react':
         specifier: ^4.3.0
-        version: 4.7.0(vite@6.4.3(@types/node@25.9.2)(jiti@2.7.0)(tsx@4.22.4))
+        version: 4.7.0(vite@6.4.3(@types/node@25.9.2)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0))
       '@vitest/ui':
         specifier: ^4.0.18
         version: 4.1.8(vitest@4.1.8)
@@ -228,10 +228,10 @@ importers:
         version: 5.9.3
       vite:
         specifier: ^6.0.0
-        version: 6.4.3(@types/node@25.9.2)(jiti@2.7.0)(tsx@4.22.4)
+        version: 6.4.3(@types/node@25.9.2)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0)
       vitest:
         specifier: ^4.0.18
-        version: 4.1.8(@types/node@25.9.2)(@vitest/ui@4.1.8)(jsdom@28.1.0)(vite@6.4.3(@types/node@25.9.2)(jiti@2.7.0)(tsx@4.22.4))
+        version: 4.1.8(@types/node@25.9.2)(@vitest/ui@4.1.8)(jsdom@28.1.0)(vite@6.4.3(@types/node@25.9.2)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0))
       wdio-video-reporter:
         specifier: ^6.2.0
         version: 6.2.0(expect-webdriverio@5.6.8)(webdriverio@9.27.2)
@@ -4685,6 +4685,11 @@ packages:
   yallist@3.1.1:
     resolution: {integrity: sha512-a4UGQaWPH59mOXUYnAG2ewncQS4i4F43Tv3JoAM+s2VDAmS9NsK8GpDMLrCHPksFT7h3K6TOoUNn2pb7RoXx4g==}
 
+  yaml@2.9.0:
+    resolution: {integrity: sha512-2AvhNX3mb8zd6Zy7INTtSpl1F15HW6Wnqj0srWlkKLcpYl/gMIMJiyuGq2KeI2YFxUPjdlB+3Lc10seMLtL4cA==}
+    engines: {node: '>= 14.6'}
+    hasBin: true
+
   yargs-parser@20.2.9:
     resolution: {integrity: sha512-y11nGElTIV+CT3Zv9t7VKl+Q3hTQoT9a1Qzezhhl6Rp21gJ/IVTW7Z3y9EWXhuUBC2Shnf+DX0antecpAwSP8w==}
     engines: {node: '>=10'}
@@ -6236,7 +6241,7 @@ snapshots:
       d3-selection: 3.0.0
       d3-transition: 3.0.1(d3-selection@3.0.0)
 
-  '@vitejs/plugin-react@4.7.0(vite@6.4.3(@types/node@25.9.2)(jiti@2.7.0)(tsx@4.22.4))':
+  '@vitejs/plugin-react@4.7.0(vite@6.4.3(@types/node@25.9.2)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0))':
     dependencies:
       '@babel/core': 7.29.7
       '@babel/plugin-transform-react-jsx-self': 7.29.7(@babel/core@7.29.7)
@@ -6244,7 +6249,7 @@ snapshots:
       '@rolldown/pluginutils': 1.0.0-beta.27
       '@types/babel__core': 7.20.5
       react-refresh: 0.17.0
-      vite: 6.4.3(@types/node@25.9.2)(jiti@2.7.0)(tsx@4.22.4)
+      vite: 6.4.3(@types/node@25.9.2)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0)
     transitivePeerDependencies:
       - supports-color
 
@@ -6272,13 +6277,13 @@ snapshots:
     optionalDependencies:
       vite: 5.4.21(@types/node@25.9.2)
 
-  '@vitest/mocker@4.1.8(vite@6.4.3(@types/node@25.9.2)(jiti@2.7.0)(tsx@4.22.4))':
+  '@vitest/mocker@4.1.8(vite@6.4.3(@types/node@25.9.2)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0))':
     dependencies:
       '@vitest/spy': 4.1.8
       estree-walker: 3.0.3
       magic-string: 0.30.21
     optionalDependencies:
-      vite: 6.4.3(@types/node@25.9.2)(jiti@2.7.0)(tsx@4.22.4)
+      vite: 6.4.3(@types/node@25.9.2)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0)
 
   '@vitest/pretty-format@2.1.9':
     dependencies:
@@ -6326,7 +6331,7 @@ snapshots:
       sirv: 3.0.2
       tinyglobby: 0.2.17
       tinyrainbow: 3.1.0
-      vitest: 4.1.8(@types/node@25.9.2)(@vitest/ui@4.1.8)(jsdom@28.1.0)(vite@6.4.3(@types/node@25.9.2)(jiti@2.7.0)(tsx@4.22.4))
+      vitest: 4.1.8(@types/node@25.9.2)(@vitest/ui@4.1.8)(jsdom@28.1.0)(vite@6.4.3(@types/node@25.9.2)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0))
 
   '@vitest/utils@2.1.9':
     dependencies:
@@ -9313,7 +9318,7 @@ snapshots:
       '@types/node': 25.9.2
       fsevents: 2.3.3
 
-  vite@6.4.3(@types/node@25.9.2)(jiti@2.7.0)(tsx@4.22.4):
+  vite@6.4.3(@types/node@25.9.2)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0):
     dependencies:
       esbuild: 0.25.12
       fdir: 6.5.0(picomatch@4.0.4)
@@ -9326,6 +9331,7 @@ snapshots:
       fsevents: 2.3.3
       jiti: 2.7.0
       tsx: 4.22.4
+      yaml: 2.9.0
 
   vitest@2.1.9(@types/node@25.9.2)(jsdom@28.1.0):
     dependencies:
@@ -9363,10 +9369,10 @@ snapshots:
       - supports-color
       - terser
 
-  vitest@4.1.8(@types/node@25.9.2)(@vitest/ui@4.1.8)(jsdom@28.1.0)(vite@6.4.3(@types/node@25.9.2)(jiti@2.7.0)(tsx@4.22.4)):
+  vitest@4.1.8(@types/node@25.9.2)(@vitest/ui@4.1.8)(jsdom@28.1.0)(vite@6.4.3(@types/node@25.9.2)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0)):
     dependencies:
       '@vitest/expect': 4.1.8
-      '@vitest/mocker': 4.1.8(vite@6.4.3(@types/node@25.9.2)(jiti@2.7.0)(tsx@4.22.4))
+      '@vitest/mocker': 4.1.8(vite@6.4.3(@types/node@25.9.2)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0))
       '@vitest/pretty-format': 4.1.8
       '@vitest/runner': 4.1.8
       '@vitest/snapshot': 4.1.8
@@ -9383,7 +9389,7 @@ snapshots:
       tinyexec: 1.2.4
       tinyglobby: 0.2.17
       tinyrainbow: 3.1.0
-      vite: 6.4.3(@types/node@25.9.2)(jiti@2.7.0)(tsx@4.22.4)
+      vite: 6.4.3(@types/node@25.9.2)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0)
       why-is-node-running: 2.3.0
     optionalDependencies:
       '@types/node': 25.9.2
@@ -9549,6 +9555,9 @@ snapshots:
   y18n@5.0.8: {}
 
   yallist@3.1.1: {}
+
+  yaml@2.9.0:
+    optional: true
 
   yargs-parser@20.2.9: {}
 

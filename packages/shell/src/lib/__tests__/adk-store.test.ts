@@ -48,6 +48,9 @@ describe("applyModelSelectionToConfig (UI selection → persisted agent config)"
 		expect(out.model).toBe("gemini-3.1-flash-lite");
 		expect(out.NAIA_MAIN_MODEL).toBe("gemini-3.1-flash-lite");
 		expect(out.NAIA_MAIN_PROVIDER).toBe("naia"); // nextain → "naia" env
+		expect(out.llmRoles).toEqual({
+			main: { provider: "nextain", model: "gemini-3.1-flash-lite" },
+		});
 	});
 	it("carries a provider switch through to NAIA_MAIN_PROVIDER/MODEL", () => {
 		const out = applyModelSelectionToConfig(

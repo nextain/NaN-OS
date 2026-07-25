@@ -42,6 +42,33 @@ const IS_WINDOWS = process.platform === "win32";
 const EXE = IS_WINDOWS ? ".exe" : "";
 
 const SHELL_DIR = resolve(import.meta.dirname, "..");
+const pairedAgent = JSON.parse(
+	readFileSync(resolve(SHELL_DIR, "agent-pairing.json"), "utf8"),
+) as { agentCommit: string };
+const PAIRED_AGENT_DIR = resolve(
+	SHELL_DIR,
+	"..",
+	"..",
+	"..",
+	"naia-agent-worktrees",
+	`shell-pair-${pairedAgent.agentCommit.slice(0, 7)}`,
+);
+const PAIRED_AGENT_SCRIPT = resolve(
+	PAIRED_AGENT_DIR,
+	"scripts/builds/agent-stdio-entry.mjs",
+);
+const PAIRED_AGENT_PROTO_DIR = resolve(
+	PAIRED_AGENT_DIR,
+	"src/main/adapters/grpc",
+);
+if (!existsSync(PAIRED_AGENT_SCRIPT) || !existsSync(resolve(PAIRED_AGENT_PROTO_DIR, "naia_agent.proto"))) {
+	throw new Error(`paired naia-agent checkout is unavailable: ${PAIRED_AGENT_DIR}`);
+}
+// The test launches the debug executable directly, bypassing tauri-with-mode.
+// Inject the same verified pair used by `pnpm run tauri:dev`; without this the
+// app opens but deliberately disables chat because no agent script is present.
+process.env.NAIA_AGENT_SCRIPT = PAIRED_AGENT_SCRIPT;
+process.env.NAIA_AGENT_PROTO_DIR = PAIRED_AGENT_PROTO_DIR;
 const TAURI_BINARY = process.env.TAURI_BINARY
 	? resolve(process.env.TAURI_BINARY)
 	: resolve(SHELL_DIR, `src-tauri/target/debug/naia-shell${EXE}`);
@@ -157,6 +184,29 @@ function waitForPort(port: number, timeoutMs = 30_000): Promise<void> {
 	});
 }
 
+/** Wait until a previously-owned test port is actually released before reuse. */
+function waitForPortClosed(port: number, timeoutMs = 10_000): Promise<void> {
+	return new Promise((ok, fail) => {
+		const deadline = Date.now() + timeoutMs;
+		const tryConnect = () => {
+			const sock = connect(port, "127.0.0.1");
+			sock.once("connect", () => {
+				sock.destroy();
+				if (Date.now() > deadline) {
+					fail(new Error(`Port ${port} was not released within ${timeoutMs}ms`));
+				} else {
+					setTimeout(tryConnect, 150);
+				}
+			});
+			sock.once("error", () => {
+				sock.destroy();
+				ok();
+			});
+		};
+		tryConnect();
+	});
+}
+
 export const config = {
 	runner: "local" as const,
 
@@ -216,8 +266,9 @@ export const config = {
 			killByName("WebKitWebDriver");
 		}
 		killByName("naia-shell");
-		// Brief pause to let ports release
-		await new Promise((r) => setTimeout(r, 500));
+		await waitForPortClosed(1420);
+		await waitForPortClosed(4448);
+		await waitForPortClosed(4449);
 
 		// Start Vite dev server (debug binary loads from devUrl localhost:1420).
 		viteServer = spawn(execPath, [VITE_ENTRY], {
@@ -239,37 +290,25 @@ export const config = {
 	},
 
 	async beforeSession() {
-		// Kill leftover processes from previous spec's session.
-		// Each spec runs in its own worker process; we must ensure
-		// ports and app processes from the previous worker are fully dead.
+		// The native drivers are an external boundary. Clear only leftovers before
+		// creating a fresh session; the previous session is never killed mid-start.
 		killByName("naia-shell", true);
-		if (!IS_WINDOWS) {
-			// Linux-only: naia-node is a legacy pkill pattern for the Agent child.
-			// On Windows the Agent runs as `node.exe` and is cleaned up when
-			// naia-shell.exe exits (Tauri child-process lifetime).
-			killByName("naia-node", true);
-		}
+		if (!IS_WINDOWS) killByName("naia-node", true);
 		killByName("tauri-driver", true);
-		if (IS_WINDOWS) {
-			killByName("msedgedriver", true);
-		} else {
-			killByName("WebKitWebDriver", true);
-		}
+		if (IS_WINDOWS) killByName("msedgedriver", true);
+		else killByName("WebKitWebDriver", true);
 		killByPort(4448);
 		killByPort(4449);
-		await new Promise((r) => setTimeout(r, 1_500));
+		await waitForPortClosed(4448);
+		await waitForPortClosed(4449);
 
 		tauriDriver = spawn(
 			TAURI_DRIVER,
-			[
-				"--port",
-				"4448",
-				"--native-driver",
-				NATIVE_DRIVER,
-				"--native-port",
-				"4449",
-			],
-			{ stdio: [null, process.stdout, process.stderr] },
+			["--port", "4448", "--native-driver", NATIVE_DRIVER],
+			{
+				stdio: [null, process.stdout, process.stderr],
+				env: { ...process.env, RUST_LOG: process.env.RUST_LOG ?? "tauri_driver=debug" },
+			},
 		);
 		await waitForPort(4448, 30_000);
 	},
@@ -323,10 +362,8 @@ export const config = {
 	},
 
 	afterSession() {
-		tauriDriver?.kill();
-
-		// Kill ALL processes spawned by Tauri app and E2E infrastructure.
-		// Without this, ports 4444/4445 stay occupied and next spec's session fails.
+		// The service owns the driver processes. Only clean the app/legacy child
+		// after a session so the next native spec starts from a known state.
 		if (!IS_WINDOWS) {
 			killByName("naia-node");
 		}

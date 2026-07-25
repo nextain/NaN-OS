@@ -62,6 +62,8 @@ export const SECRET_KEYS = [
 	"naiaKey",
 	"gatewayToken",
 	"openaiRealtimeApiKey",
+	"subLlmApiKey",
+	"memoryLlmApiKey",
 ] as const;
 
 export type SecretKeyName = (typeof SECRET_KEYS)[number];
