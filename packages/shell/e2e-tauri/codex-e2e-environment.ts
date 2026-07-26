@@ -139,15 +139,6 @@ export function resetCodexE2eRoot(): void {
 	const config = {
 		provider: "codex",
 		model: "gpt-5.4",
-		NAIA_MAIN_PROVIDER: "codex",
-		NAIA_MAIN_MODEL: "gpt-5.4",
-		llmRoles: {
-			main: {
-				provider: "codex",
-				model: "gpt-5.4",
-				credentialRef: "codex-login",
-			},
-		},
 		...(E2E_AVATAR_ENABLED
 			? {
 					avatarProvider: "naia-video-avatar",
