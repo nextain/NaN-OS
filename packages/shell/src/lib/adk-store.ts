@@ -6,6 +6,21 @@ import { buildSlotsManifest, serializeSlotsManifest } from "./slots/manifest";
 
 const ADK_PATH_KEY = "naia-adk-path";
 
+// App starts children before the workspace-owned config files have finished
+// hydrating. A child may persist a harmless UI preference during that window,
+// but its incomplete bootstrap object must never replace the config SoT.
+// Standalone utility/test callers never begin this gate and retain the normal
+// immediate-write behavior.
+let configHydrationPending = false;
+
+export function beginNaiaConfigHydration(): void {
+	configHydrationPending = true;
+}
+
+export function completeNaiaConfigHydration(): void {
+	configHydrationPending = false;
+}
+
 // ── ADK Path ──────────────────────────────────────────────────────────────────
 
 export function getAdkPath(): string | null {
@@ -110,7 +125,7 @@ export async function copyBundledAssets(adkPath: string): Promise<void> {
 const SECRET_CONFIG_KEYS = new Set([
 	"apiKey", "naiaKey", "googleApiKey",
 	"openaiTtsApiKey", "elevenlabsApiKey", "gatewayToken", "openaiRealtimeApiKey",
-	"memoryEmbeddingApiKey", "memoryLlmApiKey", "qdrantApiKey",
+	"memoryEmbeddingApiKey", "memoryLlmApiKey", "subLlmApiKey", "qdrantApiKey",
 ]);
 
 // G-08: UI-only fields — naia-agent doesn't consume these. Stripped to prevent
@@ -130,7 +145,7 @@ const UI_ONLY_CONFIG_KEYS = new Set([
 	"bgmTrack", "bgmSource", "bgmYoutubeVideoId", "bgmYoutubeTitle",
 	"bgmYoutubeChannel", "bgmYoutubeThumbnail", "bgmVolume", "bgmPlaying",
 	// Opt-in proactive speech profile (shell configures agent at startup)
-	"proactiveSpeechProfile", "proactiveSpeechIdleMs", "proactiveSpeechIntervalMs",
+	"proactiveSpeechProfile", "proactiveSpeechPermitted", "proactiveSpeechIdleMs", "proactiveSpeechIntervalMs",
 	"proactiveSpeechTimezone", "proactiveSpeechBgmAutoPlay",
 	"proactiveSpeechWeatherConsented", "proactiveSpeechWeatherLatitude",
 	"proactiveSpeechWeatherLongitude", "proactiveSpeechKnowledgeScope",
@@ -328,16 +343,18 @@ export async function agentKeyExists(
 	return invoke<boolean>("agent_key_exists", { adkPath, envKey }).catch(() => false);
 }
 
-export async function readNaiaConfig(): Promise<Record<
-	string,
-	unknown
-> | null> {
+/**
+ * Reads the workspace configuration file.  A workspace may be in the middle of
+ * first-run creation, so callers must treat this as a partial configuration and
+ * provide their own required-field defaults before using it as an AppConfig.
+ */
+export async function readNaiaConfig(): Promise<Partial<AppConfig> | null> {
 	const adkPath = getAdkPath();
 	if (!adkPath) return null;
 	try {
 		const json = await invoke<string>("read_naia_config", { adkPath });
 		if (!json) return null;
-		return JSON.parse(json) as Record<string, unknown>;
+		return JSON.parse(json) as Partial<AppConfig>;
 	} catch {
 		return null;
 	}
@@ -362,7 +379,23 @@ export function applyModelSelectionToConfig(
 	provider: string,
 	model: string,
 ): Record<string, unknown> {
-	const next: Record<string, unknown> = { ...(current ?? {}), provider, model };
+	const previousRoles = current?.llmRoles;
+	const roles = previousRoles && typeof previousRoles === "object" && !Array.isArray(previousRoles)
+		? previousRoles as Record<string, unknown>
+		: {};
+	const previousMain = roles.main;
+	const main = previousMain && typeof previousMain === "object" && !Array.isArray(previousMain)
+		? previousMain as Record<string, unknown>
+		: {};
+	// A provider/model switch is an immediate main-role edit too. Keeping only
+	// the legacy flat fields here was the stale-main-provider seam that made
+	// the UI and the reloaded agent disagree until a later Apply click.
+	const next: Record<string, unknown> = {
+		...(current ?? {}),
+		provider,
+		model,
+		llmRoles: { ...roles, main: { ...main, provider, model } },
+	};
 	return { ...next, ...buildNaiaConfigEnv(next as Parameters<typeof buildNaiaConfigEnv>[0]) };
 }
 
@@ -385,26 +418,51 @@ const UI_PERSIST_KEYS: readonly string[] = [...UI_ONLY_CONFIG_KEYS].filter(
 	(k) => !UI_SESSION_ONLY_KEYS.has(k),
 );
 
-function extractUiConfig(
-	config: Record<string, unknown>,
+/**
+ * Applies a UI-config patch without treating an omitted key as a delete.
+ *
+ * During boot several independent UI components persist their own small state
+ * (for example BGM volume).  Those callers do not necessarily have the fully
+ * hydrated configuration yet.  Replacing ui-config.json with that subset
+ * erased the selected NVA and local voice host.  An own property with
+ * `undefined` remains an explicit delete, so Settings can still clear a
+ * persisted choice deliberately.
+ */
+function mergeUiConfigPatch(
+	persisted: Record<string, unknown> | null,
+	patch: Record<string, unknown>,
 ): Record<string, unknown> {
-	const out: Record<string, unknown> = {};
-	for (const k of UI_PERSIST_KEYS) {
-		if (config[k] !== undefined) out[k] = config[k];
+	const next = { ...(persisted ?? {}) };
+	for (const key of UI_PERSIST_KEYS) {
+		if (!Object.prototype.hasOwnProperty.call(patch, key)) continue;
+		if (patch[key] === undefined) {
+			delete next[key];
+		} else {
+			next[key] = patch[key];
+		}
 	}
-	return out;
+	return next;
 }
 
 /** UI 정체성 키만 `{adkPath}/naia-settings/ui-config.json` 에 저장(FR-WS.2). 비치명. */
 export async function writeNaiaUiConfig(
 	config: Record<string, unknown>,
 ): Promise<boolean> {
+	if (configHydrationPending) return false;
 	const adkPath = getAdkPath();
 	if (!adkPath) return false;
 	try {
+		// Preserve existing selections when a pre-hydration caller supplies only
+		// the UI fields it owns. readNaiaUiConfig is fail-soft, so a missing/corrupt
+		// file still creates a valid config from this patch.
+		const json = JSON.stringify(
+			mergeUiConfigPatch(await readNaiaUiConfig(), config),
+			null,
+			2,
+		);
 		await invoke("write_naia_ui_config", {
 			adkPath,
-			json: JSON.stringify(extractUiConfig(config), null, 2),
+			json,
 		});
 		return true;
 	} catch {
@@ -484,6 +542,7 @@ export async function writeSlotsManifest(
 export async function writeNaiaConfig(
 	config: Record<string, unknown>,
 ): Promise<void> {
+	if (configHydrationPending) return;
 	const adkPath = getAdkPath();
 	if (!adkPath) return;
 	await invoke("write_naia_config", {

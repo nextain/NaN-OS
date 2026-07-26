@@ -140,9 +140,9 @@ test("scenario 3: skill registry + Rust IPC wires fire (main shell mounted)", as
 	const feLog = cmds.filter((e) => e.cmd === "frontend_log");
 	expect(feLog.length, "frontend_log proxied to Rust backend").toBeGreaterThanOrEqual(1);
 
-	// Panel listing (registered panel system alive)
-	const panelList = cmds.filter((e) => e.cmd === "panel_list_installed");
-	expect(panelList.length, "panel_list_installed invoked").toBeGreaterThanOrEqual(1);
+	// Built-in panel skills are registered directly from the static registry.
+	// `panel_list_installed` is only for optional installed panels and must not be
+	// required for the built-in skill wire to be alive.
 });
 
 test("scenario 5: ADK detection probe fires when wizard is shown (no ADK path)", async ({ page }) => {
@@ -174,7 +174,7 @@ test("scenario 4: panel_skills frames carry skill registrations from agent (brow
 	const frames = await page.evaluate(() => {
 		const log: { cmd: string; args: { message?: string } | null }[] =
 			(window as unknown as { __INVOKE_LOG__: { cmd: string; args: { message?: string } | null }[] }).__INVOKE_LOG__ ?? [];
-		const out: { panelId: string; toolCount: number }[] = [];
+		const out: { appId: string; toolCount: number }[] = [];
 		for (const e of log) {
 			if (e.cmd !== "send_to_agent_command") continue;
 			const m = e.args?.message;
@@ -182,7 +182,7 @@ test("scenario 4: panel_skills frames carry skill registrations from agent (brow
 			try {
 				const obj = JSON.parse(m);
 				if (obj?.type === "panel_skills") {
-					out.push({ panelId: obj.panelId, toolCount: (obj.tools || []).length });
+					out.push({ appId: obj.appId, toolCount: (obj.tools || []).length });
 				}
 			} catch {
 				// ignore non-JSON
@@ -194,12 +194,12 @@ test("scenario 4: panel_skills frames carry skill registrations from agent (brow
 	console.log("panel_skills frames captured:", JSON.stringify(frames));
 
 	// Expect both browser + workspace panels to register their skills via the agent IPC
-	const panelIds = frames.map((f) => f.panelId);
+	const panelIds = frames.map((f) => f.appId);
 	expect(panelIds, "browser panel registered skills").toContain("browser");
 	expect(panelIds, "workspace panel registered skills").toContain("workspace");
 
 	// Each panel should have at least one tool
 	for (const f of frames) {
-		expect(f.toolCount, `${f.panelId} has tools`).toBeGreaterThanOrEqual(1);
+		expect(f.toolCount, `${f.appId} has tools`).toBeGreaterThanOrEqual(1);
 	}
 });

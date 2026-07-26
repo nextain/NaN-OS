@@ -7,6 +7,7 @@ import {
 	waitFor,
 } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { t } from "../../lib/i18n";
 
 const mockInvoke = vi.fn();
 const mockListen = vi.fn().mockResolvedValue(() => {});
@@ -60,13 +61,58 @@ describe("ChannelsTab", () => {
 
 	it("shows the localized empty state without reading Discord REST in WebView", async () => {
 		mockInvoke.mockImplementation((command: string) => {
-			if (command === "discord_inbox_snapshot") return Promise.resolve([]);
+			if (command === "discord_inbox_snapshot")
+				return Promise.reject(new Error("discord_bindings_unavailable"));
 			if (command === "discord_get_last_binding") return Promise.resolve(null);
+			if (command === "discord_connection_status")
+				return Promise.resolve({ tokenConfigured: false });
+			if (command === "discord_binding_snapshot")
+				return Promise.resolve({ bindings: [] });
 			return Promise.resolve();
 		});
 		render(<ChannelsTab />);
-		await waitFor(() => expect(screen.getByText(/없|No/i)).toBeDefined());
+		await waitFor(() =>
+			expect(screen.getByTestId("discord-inbox-empty-state")).toHaveTextContent(
+				t("channels.setupRequired"),
+			),
+		);
 		expect(mockInvoke).toHaveBeenCalledWith("discord_inbox_snapshot");
+	});
+
+	it("distinguishes a configured bot with no allowed channel", async () => {
+		mockInvoke.mockImplementation((command: string) => {
+			if (command === "discord_inbox_snapshot") return Promise.resolve([]);
+			if (command === "discord_get_last_binding") return Promise.resolve(null);
+			if (command === "discord_connection_status")
+				return Promise.resolve({ tokenConfigured: true });
+			if (command === "discord_binding_snapshot")
+				return Promise.resolve({ bindings: [] });
+			return Promise.resolve();
+		});
+		render(<ChannelsTab />);
+		await waitFor(() =>
+			expect(screen.getByTestId("discord-inbox-empty-state")).toHaveTextContent(
+				t("channels.noAllowedChannels"),
+			),
+		);
+	});
+
+	it("keeps an inaccessible saved binding separate from an unconfigured inbox", async () => {
+		mockInvoke.mockImplementation((command: string) => {
+			if (command === "discord_inbox_snapshot") return Promise.resolve([]);
+			if (command === "discord_get_last_binding") return Promise.resolve(null);
+			if (command === "discord_connection_status")
+				return Promise.resolve({ tokenConfigured: true });
+			if (command === "discord_binding_snapshot")
+				return Promise.resolve({ bindings: [{ bindingId: "binding_1" }] });
+			return Promise.resolve();
+		});
+		render(<ChannelsTab />);
+		await waitFor(() =>
+			expect(screen.getByTestId("discord-inbox-empty-state")).toHaveTextContent(
+				t("channels.noAccessibleChannels"),
+			),
+		);
 	});
 
 	it("shows a safe localized error when the native snapshot fails", async () => {

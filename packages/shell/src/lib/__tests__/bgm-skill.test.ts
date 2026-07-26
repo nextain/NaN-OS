@@ -9,6 +9,7 @@ import {
 	type BgmSearchResult,
 	type BgmSkillDeps,
 } from "../bgm-skill";
+import { createBgmPlaybackPort } from "../bgm-playback";
 
 function mkDeps(results: BgmSearchResult[] = []) {
 	const emitted: Record<string, unknown>[] = [];
@@ -21,6 +22,7 @@ function mkDeps(results: BgmSearchResult[] = []) {
 		emitBgm: async (p) => {
 			emitted.push(p);
 		},
+		playback: createBgmPlaybackPort(),
 	};
 	return { deps, emitted, searched };
 }
@@ -38,6 +40,33 @@ describe("SKILL_YOUTUBE_BGM descriptor (계약)", () => {
 });
 
 describe("executeBgmSkill", () => {
+	it("preserves the active track and returns an explicit queued receipt for the next request", async () => {
+		const { deps, emitted } = mkDeps();
+		const first = JSON.parse(
+			await executeBgmSkill(
+				{ action: "play", videoId: "first", title: "First" },
+				deps,
+			),
+		);
+		const second = JSON.parse(
+			await executeBgmSkill(
+				{ action: "play", videoId: "second", title: "Second" },
+				deps,
+			),
+		);
+
+		expect(first.playback.status).toBe("requested");
+		expect(second).toMatchObject({
+			queued: { position: 1, selected: { videoId: "second" } },
+			announceTrack: false,
+		});
+		expect(emitted.map((event) => event.type)).toEqual([
+			"bgm_youtube_play",
+			"bgm_youtube_enqueue",
+		]);
+		expect(deps.playback.current()?.selected.videoId).toBe("first");
+	});
+
 	it("play+query → 검색 후 첫 결과 재생 (bgm_youtube_play {videoId,title} — 위젯 리스너 형상)", async () => {
 		const { deps, emitted, searched } = mkDeps([
 			{ id: "v1", title: "Lofi Beats", thumbnail: "http://t/1.jpg" },
@@ -53,11 +82,12 @@ describe("executeBgmSkill", () => {
 				thumbnail: "http://t/1.jpg",
 			},
 		]);
-		expect(JSON.parse(out)).toEqual({
+		expect(JSON.parse(out)).toMatchObject({
 			ok: true,
 			action: "play",
-			videoId: "v1",
-			title: "Lofi Beats",
+			playback: { status: "requested", sequence: 1 },
+			selected: { videoId: "v1", title: "Lofi Beats" },
+			announceTrack: false,
 		});
 	});
 
@@ -71,11 +101,12 @@ describe("executeBgmSkill", () => {
 		expect(emitted).toEqual([
 			{ type: "bgm_youtube_play", videoId: "abc123", title: "직접곡" },
 		]);
-		expect(JSON.parse(out)).toEqual({
+		expect(JSON.parse(out)).toMatchObject({
 			ok: true,
 			action: "play",
-			videoId: "abc123",
-			title: "직접곡",
+			playback: { status: "requested", sequence: 1 },
+			selected: { videoId: "abc123", title: "직접곡" },
+			announceTrack: false,
 		});
 	});
 
@@ -88,7 +119,10 @@ describe("executeBgmSkill", () => {
 
 	it("play — 검색 결과 0 → 구조화 실패 (emit 안 함)", async () => {
 		const { deps, emitted } = mkDeps([]);
-		const out = await executeBgmSkill({ action: "play", query: "없는곡" }, deps);
+		const out = await executeBgmSkill(
+			{ action: "play", query: "없는곡" },
+			deps,
+		);
 		expect(JSON.parse(out)).toEqual({
 			ok: false,
 			action: "play",
@@ -104,6 +138,7 @@ describe("executeBgmSkill", () => {
 				throw new Error("BGM 검색 서버 오류 (HTTP 503)");
 			},
 			emitBgm: async () => {},
+			playback: createBgmPlaybackPort(),
 		};
 		await expect(
 			executeBgmSkill({ action: "play", query: "x" }, deps),
@@ -123,7 +158,11 @@ describe("executeBgmSkill", () => {
 		const { deps, emitted } = mkDeps();
 		const out = await executeBgmSkill({ action: "volume", volume: 0.3 }, deps);
 		expect(emitted).toEqual([{ type: "bgm_youtube_volume", volume: 0.3 }]);
-		expect(JSON.parse(out)).toEqual({ ok: true, action: "volume", volume: 0.3 });
+		expect(JSON.parse(out)).toEqual({
+			ok: true,
+			action: "volume",
+			volume: 0.3,
+		});
 	});
 
 	it("unknown/누락 action → throw", async () => {

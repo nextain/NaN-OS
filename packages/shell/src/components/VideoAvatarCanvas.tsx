@@ -8,6 +8,7 @@ import {
 import {
 	CascadeAvatarRenderer,
 	ensureRemoteCharacter,
+	localCascadeUrlFromConfig,
 	localFacadeUrlFromReady,
 	probeCascadeHealth,
 	remoteCascadeUrlFromConfig,
@@ -161,10 +162,14 @@ export function VideoAvatarCanvas({ nvaModel }: VideoAvatarCanvasProps) {
 			//   URL 을 확보한다(self-heal): localFacadeUrl store 는 인메모리라 앱 재시작으로 비고,
 			//   start_cascade 는 실행 중이면 캐시 ready 반환(재spawn 아님) → facade_port 확보.
 			const configuredCascadeUrl = remoteCascadeUrlFromConfig(cfg);
+			const configuredLocalFacadeUrl = canLocalCascade
+				? localCascadeUrlFromConfig(cfg)
+				: undefined;
 			// An explicitly configured NVA Host is a user routing decision. It must
 			// win over a local profile facade and must never trigger local Ditto as
 			// an implicit fallback when the remote health check is transiently down.
-			let cascadeUrl = configuredCascadeUrl || localFacadeUrl?.trim();
+			let cascadeUrl =
+				configuredCascadeUrl || configuredLocalFacadeUrl || localFacadeUrl?.trim();
 			if (!cascadeUrl) {
 				try {
 					if (await invoke<boolean>("cascade_status")) {
@@ -207,13 +212,32 @@ export function VideoAvatarCanvas({ nvaModel }: VideoAvatarCanvasProps) {
 					}
 					// 로컬 임베드 cascade 면 번들 디렉토리로 캐릭터 등록(원격이면 경로 부재로 실패 → 무시).
 					try {
-						await fetch(`${cascadeUrl.replace(/\/$/, "")}/load_nva`, {
-							method: "POST",
-							headers: { "Content-Type": "application/json" },
-							body: JSON.stringify({ dir: bundleDir }),
-						});
-					} catch {
-						/* 등록 실패 비치명 — cascade 기본 캐릭터/idle 가능 */
+						const response = await fetch(
+							`${cascadeUrl.replace(/\/$/, "")}/load_nva`,
+							{
+								method: "POST",
+								headers: { "Content-Type": "application/json" },
+								body: JSON.stringify({ dir: bundleDir }),
+							},
+						);
+						const payload = (await response.json().catch(() => null)) as {
+							ok?: boolean;
+							detail?: string;
+							error?: string;
+						} | null;
+						if (!response.ok || payload?.ok !== true) {
+							throw new Error(
+								payload?.detail ||
+									payload?.error ||
+									`load_nva HTTP ${response.status}`,
+							);
+						}
+					} catch (error) {
+						if (disposed) return;
+						setError(`cascade-nva-load-failed: ${String(error)}`);
+						setMode("unavailable");
+						setLoaded(false);
+						return;
 					}
 					if (disposed) return;
 					cascadeCfgRef.current = { url: cascadeUrl, name: bundleName };

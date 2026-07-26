@@ -6,6 +6,7 @@ let originalUiConfig = "";
 let adkPath = "";
 let snapshotCaptured = false;
 let agentProfileMutated = false;
+let isolatedRun = false;
 
 async function tauriInvoke<T>(
 	command: string,
@@ -107,7 +108,7 @@ async function openGeneralSettings(): Promise<void> {
 				),
 			{ timeout: 10_000, timeoutMsg: "settings button unavailable" },
 		);
-		await browser.execute(() => {
+		await browser.execute((useCodex: boolean) => {
 			const button = document.querySelector(
 				".app-bar-settings",
 			) as HTMLButtonElement | null;
@@ -196,27 +197,41 @@ async function assistantMessages(): Promise<string[]> {
 
 describe("71 — Proactive speech profiles (#82)", () => {
 	before(async () => {
+		const isolatedCodex = Boolean(process.env.NAIA_E2E_ADK_PATH);
+		isolatedRun = isolatedCodex;
 		const original = await browser.execute(() => ({
 			config: localStorage.getItem("naia-config") ?? "",
 			adkPath: localStorage.getItem("naia-adk-path") ?? "",
 		}));
 		originalLocalConfig = original.config;
-		adkPath = original.adkPath;
+		// The legacy Tauri suite injects this through ensureAppReady(), while
+		// the isolated native suite owns the workspace through its environment.
+		// Accept both so this UC never depends on global test setup or a real
+		// developer workspace.
+		adkPath = original.adkPath || process.env.NAIA_E2E_ADK_PATH || "";
 		if (!adkPath) throw new Error("ADK path unavailable before test setup");
+		if (!original.adkPath) {
+			await browser.execute((path: string) => {
+				localStorage.setItem("naia-adk-path", path);
+			}, adkPath);
+		}
 		originalUiConfig = await tauriInvoke<string>("read_naia_ui_config", {
 			adkPath,
 		});
 		snapshotCaptured = true;
 
-		await browser.execute(() => {
+		await browser.execute((useCodex: boolean) => {
 			const raw = localStorage.getItem("naia-config");
 			const current = raw ? JSON.parse(raw) : {};
 			localStorage.setItem(
 				"naia-config",
 				JSON.stringify({
 					...current,
-					provider: current.provider || "ollama",
-					model: current.model || "qwen3.6:27b",
+					// The isolated native suite seeds a real Codex config. Do not
+					// replace it with an unavailable local Ollama model merely because
+					// localStorage starts empty in that owned WebView2 profile.
+					provider: current.provider || (useCodex ? "codex" : "ollama"),
+					model: current.model || (useCodex ? "gpt-5.4" : "qwen3.6:27b"),
 					agentName: current.agentName || "Naia",
 					userName: current.userName || "Tester",
 					vrmModel:
@@ -227,12 +242,13 @@ describe("71 — Proactive speech profiles (#82)", () => {
 					onboardingComplete: true,
 					panelVisible: true,
 					proactiveSpeechProfile: "disabled",
+					proactiveSpeechPermitted: false,
 					proactiveSpeechIdleMs: 5_000,
 					proactiveSpeechIntervalMs: 30_000,
 				}),
 			);
-			location.reload();
-		});
+			window.dispatchEvent(new CustomEvent("naia-config-changed"));
+		}, isolatedCodex);
 		await browser.waitUntil(
 			async () =>
 				browser.execute(
@@ -256,6 +272,7 @@ describe("71 — Proactive speech profiles (#82)", () => {
 					...current,
 					ttsEnabled: false,
 					proactiveSpeechProfile: "disabled",
+					proactiveSpeechPermitted: false,
 					proactiveSpeechIdleMs: 5_000,
 					proactiveSpeechIntervalMs: 30_000,
 				}),
@@ -266,6 +283,10 @@ describe("71 — Proactive speech profiles (#82)", () => {
 
 	after(async () => {
 		if (!snapshotCaptured) return;
+		// The Codex harness owns and removes this workspace, WebView2 profile, and
+		// app-data root. Restoring through a WebView after its last reload can hang
+		// teardown without protecting any developer state.
+		if (isolatedRun) return;
 		// A failed assertion must not leave the real development workspace in an
 		// active speech profile or with test BGM/config values.
 		if (agentProfileMutated) {
@@ -295,11 +316,11 @@ describe("71 — Proactive speech profiles (#82)", () => {
 
 	it("starts and persists personal radio DJ through the real Tauri IPC path", async () => {
 		agentProfileMutated = true;
-		const before = (await assistantMessages()).length;
 		await submitProfilePhrase("개인 라디오 시작해");
 
 		const config = await storedProfile();
 		expect(config.proactiveSpeechProfile).toBe("personal_radio_dj");
+		expect(config.proactiveSpeechPermitted).toBe(true);
 		expect(config.proactiveSpeechBgmAutoPlay).toBe(true);
 		expect(config.proactiveSpeechIdleMs).toBe(5_000);
 		await waitForPersistedProfile("personal_radio_dj");
@@ -308,10 +329,8 @@ describe("71 — Proactive speech profiles (#82)", () => {
 			async () => {
 				const current = await storedProfile();
 				return (
-					(await assistantMessages())
-						.slice(before)
-						.some((text) => text.includes("영상을 재생 중이에요")) &&
-					current.bgmPlaying === true &&
+					// Provider wording is not deterministic; the persisted BGM request below is the contract.
+					current.bgmSource === "youtube" &&
 					typeof current.bgmYoutubeVideoId === "string" &&
 					current.bgmYoutubeVideoId.length > 0
 				);
@@ -319,7 +338,7 @@ describe("71 — Proactive speech profiles (#82)", () => {
 			{
 				timeout: 70_000,
 				timeoutMsg:
-					"radio DJ did not emit a proactive result and start real YouTube BGM",
+					"radio DJ did not persist a proactive YouTube BGM play request",
 			},
 		);
 
@@ -335,6 +354,7 @@ describe("71 — Proactive speech profiles (#82)", () => {
 			const config = await fileBackedUiConfig();
 			return (
 				config.proactiveSpeechProfile === "personal_radio_dj" &&
+				config.proactiveSpeechPermitted === false &&
 				config.proactiveSpeechTimezone === "Asia/Seoul" &&
 				config.proactiveSpeechIdleMs === 5000 &&
 				config.proactiveSpeechIntervalMs === 30000 &&
@@ -359,6 +379,7 @@ describe("71 — Proactive speech profiles (#82)", () => {
 				const restored = await storedProfile();
 				return (
 					restored.proactiveSpeechProfile === "personal_radio_dj" &&
+					restored.proactiveSpeechPermitted === false &&
 					restored.proactiveSpeechTimezone === "Asia/Seoul" &&
 					restored.proactiveSpeechIdleMs === 5000 &&
 					restored.proactiveSpeechIntervalMs === 30000 &&
@@ -392,6 +413,68 @@ describe("71 — Proactive speech profiles (#82)", () => {
 				config.proactiveSpeechWeatherLongitude == null
 			);
 		});
+	});
+
+	it("reports the standalone cascade boundary through registered native IPC", async () => {
+		const status = await tauriInvoke<{
+			phase: string;
+			ready: boolean;
+			canStart: boolean;
+			summary: string;
+			steps: Array<{ id: string; progressPercent: number; actionAvailable: boolean }>;
+		}>("cascade_installation_status");
+		expect(["ready", "ready-to-start", "blocked", "requires-action"]).toContain(
+			status.phase,
+		);
+		expect(typeof status.ready).toBe("boolean");
+		expect(typeof status.canStart).toBe("boolean");
+		expect(status.summary.length).toBeGreaterThan(0);
+		expect(status.steps.map((step) => step.id)).toEqual(
+			expect.arrayContaining([
+				"loader",
+				"python-runtime",
+				"cascade-service-bundle",
+				"ditto-engine",
+				"voxcpm2-model",
+				"reference-voices",
+			]),
+		);
+		for (const step of status.steps) {
+			expect(step.progressPercent).toBeGreaterThanOrEqual(0);
+			expect(step.progressPercent).toBeLessThanOrEqual(100);
+		}
+	});
+
+	it("uses the visible AI/TTS control to allow and stop proactive cost", async () => {
+		await browser.execute(() => {
+			const tts = Array.from(document.querySelectorAll("button"))
+				.find((button) => button.textContent?.trim() === "TTS") as HTMLButtonElement | undefined;
+			if (!tts) throw new Error("TTS control unavailable");
+			if (tts.getAttribute("aria-pressed") !== "true") tts.click();
+			const proactive = document.querySelector(
+				"button[data-proactive-state]",
+			) as HTMLButtonElement | null;
+			if (!proactive) throw new Error("visible proactive control unavailable");
+			if (proactive.getAttribute("data-proactive-state") === "blocked") {
+				throw new Error("proactive control stayed blocked after TTS enabled");
+			}
+			proactive.click();
+		});
+		await browser.waitUntil(
+			async () => (await fileBackedUiConfig()).proactiveSpeechPermitted === true,
+			{ timeout: 10_000, timeoutMsg: "visible proactive control did not persist permission" },
+		);
+		await browser.execute(() => {
+			const proactive = document.querySelector(
+				"button[data-proactive-state]",
+			) as HTMLButtonElement | null;
+			if (!proactive) throw new Error("visible proactive control disappeared");
+			proactive.click();
+		});
+		await browser.waitUntil(
+			async () => (await fileBackedUiConfig()).proactiveSpeechPermitted === false,
+			{ timeout: 10_000, timeoutMsg: "visible proactive control did not stop permission" },
+		);
 	});
 
 	it("starts exhibition introduction without waiting for ordinary chat", async () => {

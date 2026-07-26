@@ -1,4 +1,4 @@
-﻿mod agent_grpc;
+mod agent_grpc;
 mod app;
 mod audit;
 mod browser;
@@ -39,6 +39,21 @@ fn is_valid_gateway_key(value: &str) -> bool {
 /// 諛쏆븘 redirect: `http://127.0.0.1:18792/auth/callback?key=...&state=...&user_id=...`.
 /// ?숈씪 query ?뚮씪誘명꽣 ?뗭씠??`process_deep_link_url` ??寃利?濡쒖쭅 洹몃?濡??쒖슜.
 pub(crate) const OAUTH_CALLBACK_PORT: u16 = 18792;
+
+/// Native E2E must never claim the user's OAuth callback port. The override is
+/// honoured only by the explicit debug acceptance runtime.
+fn oauth_callback_port() -> u16 {
+    if debug_e2e_enabled() {
+        if let Ok(port) = std::env::var("NAIA_E2E_OAUTH_CALLBACK_PORT") {
+            if let Ok(port) = port.parse::<u16>() {
+                if port != 0 {
+                    return port;
+                }
+            }
+        }
+    }
+    OAUTH_CALLBACK_PORT
+}
 pub(crate) const OAUTH_CALLBACK_PATH: &str = "/auth/callback";
 
 /// Process a deep-link URL (naia://auth?key=xxx). Extracted as a function
@@ -202,7 +217,7 @@ pub(crate) fn spawn_oauth_callback_server(
 ) -> Result<(), String> {
     use tiny_http::{Header, Response, Server};
 
-    let bind_addr = format!("127.0.0.1:{}", OAUTH_CALLBACK_PORT);
+    let bind_addr = format!("127.0.0.1:{}", oauth_callback_port());
     let server = Server::http(&bind_addr).map_err(|e| {
         format!(
             "[Naia] OAuth callback server bind failed ({}): {}",
@@ -227,7 +242,7 @@ pub(crate) fn spawn_oauth_callback_server(
             // Reuse `process_deep_link_url` so the parameter parsing, state CSRF
             // verification, and event emit stay identical to the deep-link path.
             // The function only inspects scheme-agnostic parts (path + query).
-            let url_str = format!("http://127.0.0.1:{}{}", OAUTH_CALLBACK_PORT, raw_url);
+            let url_str = format!("http://127.0.0.1:{}{}", oauth_callback_port(), raw_url);
             process_deep_link_url(&url_str, &app_handle, Some(&oauth_state), "http_callback");
 
             // Send a small HTML page that closes the tab and informs the user.
@@ -290,6 +305,9 @@ struct AgentChildLeaseLock {
 }
 
 fn agent_child_lease_path() -> Result<std::path::PathBuf, String> {
+    if let Some(runtime) = e2e_runtime_dir() {
+        return Ok(runtime.join("agent-child-lease.json"));
+    }
     Ok(dirs::home_dir()
         .ok_or_else(|| "agent_lease_home_unavailable".to_string())?
         .join(".naia")
@@ -297,6 +315,9 @@ fn agent_child_lease_path() -> Result<std::path::PathBuf, String> {
 }
 
 fn agent_child_lease_lock_path() -> Result<std::path::PathBuf, String> {
+    if let Some(runtime) = e2e_runtime_dir() {
+        return Ok(runtime.join("agent-child-lease.lock"));
+    }
     Ok(dirs::home_dir()
         .ok_or_else(|| "agent_lease_home_unavailable".to_string())?
         .join(".naia")
@@ -347,8 +368,8 @@ fn read_agent_child_lease_locked(
     let bytes = std::fs::read(path).map_err(|_| "agent_lease_read_failed".to_string())?;
     let lease = serde_json::from_slice::<AgentChildLease>(&bytes)
         .map_err(|_| "agent_lease_invalid".to_string())?;
-    let nonce_valid = lease.nonce.len() == 32
-        && lease.nonce.bytes().all(|byte| byte.is_ascii_hexdigit());
+    let nonce_valid =
+        lease.nonce.len() == 32 && lease.nonce.bytes().all(|byte| byte.is_ascii_hexdigit());
     if lease.version != 1
         || !nonce_valid
         || lease.marker != format!("--naia-agent-child={}", lease.nonce)
@@ -363,9 +384,7 @@ fn write_agent_child_lease_locked(
     _lock: &AgentChildLeaseLock,
     lease: &AgentChildLease,
 ) -> Result<(), String> {
-    persist_agent_child_lease_with(lease, |path, bytes| {
-        write_owner_only_atomic(path, bytes)
-    })
+    persist_agent_child_lease_with(lease, |path, bytes| write_owner_only_atomic(path, bytes))
 }
 
 fn persist_agent_child_lease_before<T, W, N>(
@@ -381,16 +400,12 @@ where
     next()
 }
 
-fn persist_agent_child_lease_with<W>(
-    lease: &AgentChildLease,
-    write: W,
-) -> Result<(), String>
+fn persist_agent_child_lease_with<W>(lease: &AgentChildLease, write: W) -> Result<(), String>
 where
     W: FnOnce(&std::path::Path, &[u8]) -> Result<(), String>,
 {
     let bytes = serde_json::to_vec(lease).map_err(|_| "agent_lease_invalid".to_string())?;
-    write(&agent_child_lease_path()?, &bytes)
-        .map_err(|_| "agent_lease_write_failed".to_string())
+    write(&agent_child_lease_path()?, &bytes).map_err(|_| "agent_lease_write_failed".to_string())
 }
 
 fn remove_matching_agent_child_lease_locked(
@@ -424,9 +439,7 @@ where
     Ok(true)
 }
 
-fn new_agent_child_lease(
-    runtime: Option<std::path::PathBuf>,
-) -> Result<AgentChildLease, String> {
+fn new_agent_child_lease(runtime: Option<std::path::PathBuf>) -> Result<AgentChildLease, String> {
     let nonce = new_agent_nonce()?;
     Ok(AgentChildLease {
         version: 1,
@@ -451,6 +464,13 @@ fn reconcile_agent_child_lease_locked(lock: &AgentChildLeaseLock) -> Result<(), 
     let Some(lease) = read_agent_child_lease_locked(lock)? else {
         return Ok(());
     };
+    // A force-killed desktop process can leave its direct Node child alive on
+    // Windows.  Reap only the exact, nonce-marked child after the platform has
+    // verified that its parent Shell process is gone; a live sibling Shell
+    // remains protected by the lease below.
+    if let Some(pid) = lease.pid {
+        let _ = platform::reap_orphaned_agent_process(pid, &lease.marker)?;
+    }
     reconcile_agent_child_lease_with(
         &lease,
         |pid| platform::agent_process_marker(pid, &lease.marker),
@@ -782,11 +802,8 @@ impl Drop for PendingDiscordReaper {
 }
 
 #[cfg(test)]
-fn run_pending_discord_reaper<R, Q>(
-    pending: PendingDiscordReaper,
-    reap_child: R,
-    retry_cleanup: Q,
-) where
+fn run_pending_discord_reaper<R, Q>(pending: PendingDiscordReaper, reap_child: R, retry_cleanup: Q)
+where
     R: FnOnce(),
     Q: FnOnce(),
 {
@@ -838,11 +855,7 @@ impl DiscordReaperOwnership {
 type DiscordReaperContainer = Arc<Mutex<Option<DiscordReaperOwnership>>>;
 type DiscordReaperTask = Box<dyn FnOnce() + Send + 'static>;
 
-fn finish_owned_discord_reaper<T>(
-    ownership: T,
-    confirmed: bool,
-    diagnostic: &'static str,
-) {
+fn finish_owned_discord_reaper<T>(ownership: T, confirmed: bool, diagnostic: &'static str) {
     if confirmed {
         drop(ownership);
     } else {
@@ -851,9 +864,7 @@ fn finish_owned_discord_reaper<T>(
     }
 }
 
-fn take_discord_reaper_ownership(
-    container: &DiscordReaperContainer,
-) -> DiscordReaperOwnership {
+fn take_discord_reaper_ownership(container: &DiscordReaperContainer) -> DiscordReaperOwnership {
     lock_or_recover(container, "discord_reaper_ownership")
         .take()
         .expect("reaper ownership must be present")
@@ -1249,7 +1260,14 @@ fn save_window_state(app_handle: &AppHandle, state: &WindowState) {
 
 /// Get log directory (~/.naia/logs/) and ensure it exists
 fn log_dir() -> std::path::PathBuf {
-    let dir = std::path::PathBuf::from(home_dir()).join(".naia/logs");
+    let dir = if std::env::var("CAFE_DEBUG_E2E").ok().as_deref() == Some("1") {
+        std::env::var_os("NAIA_E2E_RUNTIME_DIR")
+            .map(std::path::PathBuf::from)
+            .map(|runtime| runtime.join("logs"))
+            .unwrap_or_else(|| std::path::PathBuf::from(home_dir()).join(".naia/logs"))
+    } else {
+        std::path::PathBuf::from(home_dir()).join(".naia/logs")
+    };
     let _ = std::fs::create_dir_all(&dir);
     dir
 }
@@ -1298,9 +1316,57 @@ fn debug_e2e_enabled() -> bool {
     )
 }
 
+#[cfg(feature = "webdriver-e2e")]
+#[tauri::command]
+fn e2e_emit_bgm_event(
+    app: tauri::AppHandle,
+    action: String,
+    video_id: Option<String>,
+    title: Option<String>,
+) -> Result<(), String> {
+    if !debug_e2e_enabled() {
+        return Err("e2e runtime is not enabled".to_string());
+    }
+    let event_type = match action.as_str() {
+        "play" | "enqueue" => {
+            if !video_id
+                .as_deref()
+                .is_some_and(|value| !value.trim().is_empty())
+                || !title
+                    .as_deref()
+                    .is_some_and(|value| !value.trim().is_empty())
+            {
+                return Err("video_id and title are required for play and enqueue".to_string());
+            }
+            if action == "play" {
+                "bgm_youtube_play"
+            } else {
+                "e2e_bgm_enqueue"
+            }
+        }
+        "stop" => "bgm_youtube_stop",
+        _ => return Err("action must be play, enqueue, or stop".to_string()),
+    };
+    app.emit(
+        "agent_response",
+        serde_json::json!({ "type": event_type, "videoId": video_id, "title": title }).to_string(),
+    )
+    .map_err(|error| error.to_string())
+}
+
+fn e2e_runtime_dir() -> Option<std::path::PathBuf> {
+    if !debug_e2e_enabled() {
+        return None;
+    }
+    std::env::var_os("NAIA_E2E_RUNTIME_DIR")
+        .map(std::path::PathBuf::from)
+        .filter(|path| path.is_absolute())
+}
+
 /// Get the run directory (~/.naia/run/) for PID files
 fn run_dir() -> std::path::PathBuf {
-    let dir = std::path::PathBuf::from(home_dir()).join(".naia/run");
+    let dir =
+        e2e_runtime_dir().unwrap_or_else(|| std::path::PathBuf::from(home_dir()).join(".naia/run"));
     let _ = std::fs::create_dir_all(&dir);
     dir
 }
@@ -1699,11 +1765,7 @@ fn runtime_git_output(dir: &std::path::Path, args: &[&str]) -> Result<String, St
         .output()
         .map_err(|e| format!("git invocation failed for {}: {e}", dir.display()))?;
     if !output.status.success() {
-        return Err(format!(
-            "git {:?} failed for {}",
-            args,
-            dir.display()
-        ));
+        return Err(format!("git {:?} failed for {}", args, dir.display()));
     }
     String::from_utf8(output.stdout)
         .map(|value| value.trim().to_string())
@@ -1715,6 +1777,19 @@ fn sha256_file_hex(path: &std::path::Path) -> Result<String, String> {
     let bytes = std::fs::read(path)
         .map_err(|e| format!("failed to read {} for SHA256: {e}", path.display()))?;
     Ok(format!("{:x}", Sha256::digest(&bytes)))
+}
+
+/// The paired proto is a content contract. A Windows checkout can use CRLF
+/// while build.rs validated the identical LF content, so runtime uses the same
+/// canonical representation before comparing its recorded digest.
+fn sha256_proto_file_hex(path: &std::path::Path) -> Result<String, String> {
+    use sha2::{Digest, Sha256};
+    let text = std::fs::read_to_string(path)
+        .map_err(|e| format!("failed to read {} for SHA256: {e}", path.display()))?;
+    Ok(format!(
+        "{:x}",
+        Sha256::digest(text.replace("\r\n", "\n").as_bytes())
+    ))
 }
 
 fn validate_runtime_agent_script_override(agent_script: &str) -> Result<(), String> {
@@ -1757,7 +1832,7 @@ fn validate_runtime_agent_script_override(agent_script: &str) -> Result<(), Stri
     let expected_proto_hash = option_env!("NAIA_AGENT_PAIRED_PROTO_SHA256")
         .ok_or_else(|| "NAIA_AGENT_PAIRED_PROTO_SHA256 build evidence missing".to_string())?;
     let proto_path = root_path.join("src/main/adapters/grpc/naia_agent.proto");
-    let actual_proto_hash = sha256_file_hex(&proto_path)?;
+    let actual_proto_hash = sha256_proto_file_hex(&proto_path)?;
     if actual_proto_hash != expected_proto_hash {
         return Err(format!(
             "NAIA_AGENT_PROTO hash must remain {expected_proto_hash}; got {actual_proto_hash}"
@@ -1796,7 +1871,7 @@ fn resolve_paired_bundled_agent_script(app_handle: &AppHandle) -> Result<String,
     }
     let expected_proto_hash = option_env!("NAIA_AGENT_PAIRED_PROTO_SHA256")
         .ok_or_else(|| "NAIA_AGENT_PAIRED_PROTO_SHA256 build evidence missing".to_string())?;
-    let actual_proto_hash = sha256_file_hex(&bundled_proto)?;
+    let actual_proto_hash = sha256_proto_file_hex(&bundled_proto)?;
     if actual_proto_hash != expected_proto_hash {
         return Err(format!(
             "bundled paired agent proto hash must remain {expected_proto_hash}; got {actual_proto_hash}"
@@ -1822,6 +1897,14 @@ where
 }
 
 fn spawn_adk_path_snapshot() -> Option<String> {
+    if debug_e2e_enabled() {
+        if let Ok(path) = std::env::var("NAIA_E2E_ADK_PATH") {
+            let path = path.trim().to_string();
+            if !path.is_empty() {
+                return Some(path);
+            }
+        }
+    }
     spawn_adk_path_snapshot_with(|| {
         dirs::home_dir()
             .and_then(|home| std::fs::read_to_string(home.join(".naia").join("adk-path")).ok())
@@ -1954,14 +2037,11 @@ fn spawn_agent_core(
             if let Ok(metadata) = std::fs::metadata(&bindings_path) {
                 if metadata.is_file() && metadata.len() <= 512 * 1024 {
                     if let Ok(bindings_json) = std::fs::read_to_string(&bindings_path) {
-                        let generation =
-                            serde_json::from_str::<serde_json::Value>(&bindings_json)
-                                .ok()
-                                .and_then(|value| {
-                                    value
-                                        .get("generation")
-                                        .and_then(|item| item.as_u64())
-                                });
+                        let generation = serde_json::from_str::<serde_json::Value>(&bindings_json)
+                            .ok()
+                            .and_then(|value| {
+                                value.get("generation").and_then(|item| item.as_u64())
+                            });
                         if let Some(generation) = generation {
                             if let Ok(token) = read_discord_bot_token() {
                                 if validate_discord_token(&token).is_ok() {
@@ -1976,14 +2056,10 @@ fn spawn_agent_core(
                                         "generation": generation.clone(),
                                     });
                                     let authority_bytes = serde_json::to_vec(&authority)
-                                        .map_err(|_| {
-                                            "discord_authority_invalid".to_string()
-                                        })?;
+                                        .map_err(|_| "discord_authority_invalid".to_string())?;
                                     persist_agent_child_lease_before(
                                         &child_lease,
-                                        |lease| {
-                                            write_agent_child_lease_locked(&lease_lock, lease)
-                                        },
+                                        |lease| write_agent_child_lease_locked(&lease_lock, lease),
                                         || {
                                             issue_discord_runtime_authority(
                                                 discord_quarantined,
@@ -1993,9 +2069,7 @@ fn spawn_agent_core(
                                                         &authority_bytes,
                                                     )
                                                 },
-                                                || {
-                                                    quarantine_discord_runtime_files(&runtime_dir)
-                                                },
+                                                || quarantine_discord_runtime_files(&runtime_dir),
                                             )
                                         },
                                     )?;
@@ -2006,10 +2080,7 @@ fn spawn_agent_core(
                                         "NAIA_DISCORD_STATUS_PATH",
                                         runtime_dir.join("status.json"),
                                     );
-                                    cmd.env(
-                                        "NAIA_DISCORD_AUTHORITY_PATH",
-                                        &authority_path,
-                                    );
+                                    cmd.env("NAIA_DISCORD_AUTHORITY_PATH", &authority_path);
                                     cmd.env(
                                         "NAIA_DISCORD_DEDUPE_PATH",
                                         runtime_dir.join("dedupe.json"),
@@ -2074,7 +2145,10 @@ fn spawn_agent_core(
 
     let lease_update = write_agent_child_lease_locked(
         &lease_lock,
-        spawned.lease.as_ref().expect("spawned lease must be present"),
+        spawned
+            .lease
+            .as_ref()
+            .expect("spawned lease must be present"),
     );
     drop(lease_lock);
     if let Err(error) = lease_update {
@@ -2095,9 +2169,7 @@ fn spawn_agent_core(
                 &mut spawned,
             );
         };
-        let write_result = stdin
-            .write_all(&frame)
-            .and_then(|_| stdin.flush());
+        let write_result = stdin.write_all(&frame).and_then(|_| stdin.flush());
         drop(stdin);
         if write_result.is_err() {
             return fail_spawned_discord_agent_startup(
@@ -2160,8 +2232,7 @@ fn spawn_agent_core(
 
     // 硫붿떆吏 梨꾨꼸: send_to_agent(sync) ??dispatcher task(async, gRPC ?대씪 ?뚯쑀). nested runtime ?뚰뵾.
     let (tx, rx) = tokio::sync::mpsc::unbounded_channel::<String>();
-    let (shutdown_tx, shutdown_rx) =
-        tokio::sync::mpsc::unbounded_channel::<AgentShutdownCommand>();
+    let (shutdown_tx, shutdown_rx) = tokio::sync::mpsc::unbounded_channel::<AgentShutdownCommand>();
     tauri::async_runtime::spawn(agent_shutdown_dispatcher(addr.clone(), shutdown_rx));
     tauri::async_runtime::spawn(agent_dispatcher(
         addr.clone(),
@@ -2259,8 +2330,7 @@ async fn agent_dispatcher(
     // Proactive speech is a session-level server stream, independent from an
     // ordinary chat request. Keep one subscription alive for the shell's main
     // session so activity events can arrive while the input box is idle.
-    let (activity_shutdown_tx, mut activity_shutdown_rx) =
-        tokio::sync::watch::channel(0_u64);
+    let (activity_shutdown_tx, mut activity_shutdown_rx) = tokio::sync::watch::channel(0_u64);
     {
         let mut activity_client = client.clone();
         let activity_app = app.clone();
@@ -2315,7 +2385,11 @@ async fn agent_dispatcher(
         };
         match v.get("type").and_then(|x| x.as_str()).unwrap_or("") {
             "chat_request" => {
-                let request_id = v.get("requestId").and_then(|x| x.as_str()).unwrap_or("").to_string();
+                let request_id = v
+                    .get("requestId")
+                    .and_then(|x| x.as_str())
+                    .unwrap_or("")
+                    .to_string();
                 let req = match agent_grpc::try_json_to_chat_request(&v) {
                     Ok(req) => req,
                     Err(e) => {
@@ -2776,6 +2850,19 @@ async fn agent_dispatcher(
 ///  - stderr ??~/.naia/logs/bgm-server-stderr.log (crashes visible in GUI mode)
 ///  - hide_console on Windows (no console flash in release builds)
 ///  - kill() called on Tauri WindowEvent::Destroyed (no orphan process)
+fn bgm_server_port() -> u16 {
+    if debug_e2e_enabled() {
+        if let Ok(port) = std::env::var("NAIA_BGM_PORT") {
+            if let Ok(port) = port.parse::<u16>() {
+                if port != 0 {
+                    return port;
+                }
+            }
+        }
+    }
+    18791
+}
+
 fn spawn_youtube_bgm_server(app_handle: &AppHandle) -> Result<BgmServerProcess, String> {
     // Node binary ??same resolution chain as spawn_agent_core
     let node_path = resolve_spawn_node(app_handle, "NAIA_BGM_NODE_PATH");
@@ -2894,7 +2981,9 @@ fn spawn_youtube_bgm_server(app_handle: &AppHandle) -> Result<BgmServerProcess, 
             .map_err(|e| format!("Failed to create BGM health nonce: {e}"))?
             .as_nanos()
     );
+    let bgm_port = bgm_server_port();
     cmd.env("NAIA_BGM_HEALTH_NONCE", &health_nonce);
+    cmd.env("NAIA_BGM_PORT", bgm_port.to_string());
 
     #[cfg(windows)]
     platform::hide_console(&mut cmd);
@@ -2905,8 +2994,8 @@ fn spawn_youtube_bgm_server(app_handle: &AppHandle) -> Result<BgmServerProcess, 
 
     let pid = child.id();
     log_both(&format!(
-        "[Naia] BGM server spawned (pid={}, port=18791)",
-        pid
+        "[Naia] BGM server spawned (pid={}, port={})",
+        pid, bgm_port
     ));
 
     // Persist PID so the next session's cleanup_orphan_processes() can kill an
@@ -2914,26 +3003,31 @@ fn spawn_youtube_bgm_server(app_handle: &AppHandle) -> Result<BgmServerProcess, 
     // review finding 1). The on-exit handler calls remove_pid_file("bgm-server").
     write_pid_file("bgm-server", pid);
 
-    // Readiness probe ??poll /health for up to 3s (#335 codex review finding
+    // Readiness probe ??poll /health for up to 10s (#335 codex review finding
     // 2). Catches EADDRINUSE and other startup failures that the spawn handle
     // can't see (server.on("error") in youtube-server.ts logs but doesn't exit).
     // Non-fatal: BGM is optional; we only log a warning on timeout so users
     // see a recovery hint in ~/.naia/logs/naia.log.
-    if !probe_bgm_server_ready(std::time::Duration::from_secs(3), &health_nonce) {
-        log_both(
-            "[Naia] WARN BGM server did not respond on http://127.0.0.1:18791/health within 3s",
-        );
-        log_both(
-            "[Naia] WARN BGM player may show connection-refused; restart the app or kill any stray Node process bound to 18791",
-        );
+    if !probe_bgm_server_ready(std::time::Duration::from_secs(10), &health_nonce, bgm_port) {
+        log_both(&format!(
+            "[Naia] WARN BGM server did not respond on http://127.0.0.1:{}/health within 10s",
+            bgm_port
+        ));
+        log_both(&format!(
+            "[Naia] WARN BGM player may show connection-refused; inspect the owned BGM sidecar on port {}",
+            bgm_port
+        ));
     } else {
-        log_both("[Naia] BGM server ready @ http://127.0.0.1:18791/health");
+        log_both(&format!(
+            "[Naia] BGM server ready @ http://127.0.0.1:{}/health",
+            bgm_port
+        ));
     }
 
     Ok(BgmServerProcess { child })
 }
 
-/// Poll `http://127.0.0.1:18791/health` every 100 ms for up to `timeout`.
+/// Poll the selected BGM port health endpoint every 100 ms for up to `timeout`.
 /// Returns `true` as soon as a 2xx response arrives; `false` on timeout.
 /// Used by `spawn_youtube_bgm_server` to detect EADDRINUSE / startup failure.
 fn bgm_health_matches(body: &serde_json::Value, expected_nonce: &str) -> bool {
@@ -2941,8 +3035,8 @@ fn bgm_health_matches(body: &serde_json::Value, expected_nonce: &str) -> bool {
         && body.get("nonce").and_then(|value| value.as_str()) == Some(expected_nonce)
 }
 
-fn probe_bgm_server_ready(timeout: std::time::Duration, expected_nonce: &str) -> bool {
-    let url = "http://127.0.0.1:18791/health";
+fn probe_bgm_server_ready(timeout: std::time::Duration, expected_nonce: &str, port: u16) -> bool {
+    let url = format!("http://127.0.0.1:{}/health", port);
     let deadline = std::time::Instant::now() + timeout;
     let interval = std::time::Duration::from_millis(100);
     loop {
@@ -2950,7 +3044,7 @@ fn probe_bgm_server_ready(timeout: std::time::Duration, expected_nonce: &str) ->
         let agent = ureq::AgentBuilder::new()
             .timeout(std::time::Duration::from_millis(200))
             .build();
-        if let Ok(resp) = agent.get(url).call() {
+        if let Ok(resp) = agent.get(&url).call() {
             if resp.status() >= 200
                 && resp.status() < 300
                 && resp
@@ -3205,25 +3299,29 @@ fn restart_agent_for_discord_config_unmarked(
         revoke_discord_runtime_authority()?;
     }
     let mut previous = {
-        let mut guard =
-            lock_or_recover(&state.agent, "state.agent(restart_agent_for_discord_config)");
+        let mut guard = lock_or_recover(
+            &state.agent,
+            "state.agent(restart_agent_for_discord_config)",
+        );
         guard.take()
     };
     if let Some(process) = previous.as_mut() {
         if let Err(error) = graceful_shutdown_and_reap_agent(process) {
-            let mut guard =
-                lock_or_recover(&state.agent, "state.agent(restart_agent_for_discord_config)");
+            let mut guard = lock_or_recover(
+                &state.agent,
+                "state.agent(restart_agent_for_discord_config)",
+            );
             *guard = previous;
             return Err(error);
         }
         let outcome = process.finish_owned_cleanup(true);
-        if let Err(error) = require_owned_cleanup_complete(
-            &outcome,
-            true,
-            "discord_agent_owned_cleanup_incomplete",
-        ) {
-            let mut guard =
-                lock_or_recover(&state.agent, "state.agent(restart_agent_for_discord_config)");
+        if let Err(error) =
+            require_owned_cleanup_complete(&outcome, true, "discord_agent_owned_cleanup_incomplete")
+        {
+            let mut guard = lock_or_recover(
+                &state.agent,
+                "state.agent(restart_agent_for_discord_config)",
+            );
             *guard = previous;
             return Err(error);
         }
@@ -3240,8 +3338,10 @@ fn restart_agent_for_discord_config_unmarked(
         true,
     ) {
         Ok(process) => {
-            let mut guard =
-                lock_or_recover(&state.agent, "state.agent(restart_agent_for_discord_config)");
+            let mut guard = lock_or_recover(
+                &state.agent,
+                "state.agent(restart_agent_for_discord_config)",
+            );
             *guard = Some(process);
             drop(guard);
             replay_startup_messages_to_agent(state);
@@ -3254,9 +3354,7 @@ fn restart_agent_for_discord_config_unmarked(
                     guard.take()
                 };
                 if let Some(process) = failed.as_mut() {
-                    if let Err(cleanup_error) =
-                        graceful_shutdown_and_reap_agent(process)
-                    {
+                    if let Err(cleanup_error) = graceful_shutdown_and_reap_agent(process) {
                         let mut guard = lock_or_recover(
                             &state.agent,
                             "state.agent(restart_agent_for_discord_config)",
@@ -3367,12 +3465,7 @@ where
     }
 
     if request_graceful_shutdown().is_ok()
-        && wait_for_discord_child_exit_with(
-            child,
-            graceful_timeout,
-            &mut now,
-            &mut sleep,
-        )?
+        && wait_for_discord_child_exit_with(child, graceful_timeout, &mut now, &mut sleep)?
     {
         return Ok(());
     }
@@ -3392,9 +3485,7 @@ fn classify_agent_shutdown_ack(
 ) -> Result<(), String> {
     match result {
         Ok(AgentShutdownOutcome::Accepted | AgentShutdownOutcome::Ambiguous) => Ok(()),
-        Ok(AgentShutdownOutcome::Rejected) => {
-            Err("agent_graceful_shutdown_rejected".to_string())
-        }
+        Ok(AgentShutdownOutcome::Rejected) => Err("agent_graceful_shutdown_rejected".to_string()),
         // The request may already be accepted while only its ACK is delayed
         // or lost. The caller must observe the child for the graceful deadline
         // before escalating.
@@ -3706,19 +3797,13 @@ fn wait_for_discord_runtime_ready(expected_generation: Option<u64>) -> Result<()
     let runtime = settings.join("discord-runtime");
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
     loop {
-        let status = read_bounded_json::<DiscordRuntimeStatusFile>(
-            &runtime.join("status.json"),
-            16 * 1024,
-        )?;
+        let status =
+            read_bounded_json::<DiscordRuntimeStatusFile>(&runtime.join("status.json"), 16 * 1024)?;
         let authority = read_bounded_json::<DiscordRuntimeAuthorityFile>(
             &runtime.join("authority.json"),
             16 * 1024,
         )?;
-        if discord_runtime_matches_generation(
-            &expected,
-            status.as_ref(),
-            authority.as_ref(),
-        ) {
+        if discord_runtime_matches_generation(&expected, status.as_ref(), authority.as_ref()) {
             return Ok(());
         }
         if std::time::Instant::now() >= deadline {
@@ -4358,6 +4443,292 @@ fn read_cascade_loader_profile(manifest: &std::path::Path) -> Option<String> {
     Some(profile.to_string())
 }
 
+/// The Settings UI must distinguish an installed runtime that has not been
+/// started from a developer checkout that merely happens to contain a loader.
+/// This deliberately has no installer side effects: a status refresh must not
+/// download a model, create a venv, or start a GPU process.
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct CascadeInstallationStep {
+    id: &'static str,
+    label: &'static str,
+    state: &'static str,
+    action: &'static str,
+    action_available: bool,
+    progress_percent: u8,
+    retryable: bool,
+    failure: Option<CascadeInstallationFailure>,
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct CascadeInstallationFailure {
+    code: &'static str,
+    message: &'static str,
+    retryable: bool,
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct CascadeInstallationStatus {
+    phase: &'static str,
+    ready: bool,
+    can_start: bool,
+    summary: String,
+    steps: Vec<CascadeInstallationStep>,
+}
+
+#[derive(Clone, Debug)]
+struct CascadeInstallationProbe {
+    loader: bool,
+    python_runtime: bool,
+    cascade_service_bundle: bool,
+    ditto_engine: bool,
+    voxcpm2_model: bool,
+    reference_voices: bool,
+    facade_healthy: bool,
+}
+
+fn cascade_runtime_root() -> std::path::PathBuf {
+    std::env::var_os("NAIA_CASCADE_RUNTIME_ROOT")
+        .filter(|value| !value.is_empty())
+        .map(std::path::PathBuf::from)
+        .or_else(|| dirs::home_dir().map(|home| home.join("naia-omni")))
+        .unwrap_or_else(|| std::path::PathBuf::from("naia-omni"))
+}
+
+fn directory_has_extension(dir: &std::path::Path, extension: &str) -> bool {
+    std::fs::read_dir(dir)
+        .ok()
+        .into_iter()
+        .flatten()
+        .filter_map(Result::ok)
+        .any(|entry| {
+            entry.path().is_file()
+                && entry
+                    .path()
+                    .extension()
+                    .is_some_and(|value| value.eq_ignore_ascii_case(extension))
+        })
+}
+
+fn cascade_python_can_import_loader(python: &str, loader_dir: &str) -> bool {
+    Command::new(python)
+        .args(["-c", "import loader"])
+        .current_dir(loader_dir)
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .is_ok_and(|status| status.success())
+}
+
+fn probe_cascade_installation(
+    loader_dir: &str,
+    adk_path: Option<&str>,
+) -> CascadeInstallationProbe {
+    let runtime_root = cascade_runtime_root();
+    let repos_root = adk_path
+        .and_then(infer_repos_adk_root)
+        .map(std::path::PathBuf::from)
+        .or_else(|| {
+            std::path::Path::new(loader_dir)
+                .parent()
+                .and_then(|parent| parent.parent())
+                .map(std::path::Path::to_path_buf)
+        });
+    let cascade_dir = repos_root
+        .as_ref()
+        .map(|root| root.join("projects").join("naia-omni-cascade"));
+    let python = std::env::var("NAIA_CASCADE_PYTHON").unwrap_or_else(|_| {
+        if cfg!(windows) {
+            "python".to_string()
+        } else {
+            "python3".to_string()
+        }
+    });
+    let venv_python = if cfg!(windows) {
+        runtime_root
+            .join(".venv-ditto")
+            .join("Scripts")
+            .join("python.exe")
+    } else {
+        runtime_root.join(".venv-ditto").join("bin").join("python")
+    };
+    let ditto_engine = ["ditto_trt_native", "ditto_trt_Ampere_Plus"]
+        .iter()
+        .any(|name| {
+            directory_has_extension(&runtime_root.join("checkpoints").join(name), "engine")
+        })
+        && runtime_root
+            .join("checkpoints")
+            .join("ditto_cfg")
+            .join("v0.4_hubert_cfg_trt_online.pkl")
+            .is_file()
+        && runtime_root
+            .join("bundle")
+            .join("unpacked")
+            .join("grid_sample_3d_plugin.dll")
+            .is_file();
+    let voxcpm2_model = runtime_root
+        .join(".cache")
+        .join("huggingface")
+        .join("hub")
+        .join("models--openbmb--VoxCPM2")
+        .exists()
+        || dirs::cache_dir()
+            .map(|cache| {
+                cache
+                    .join("huggingface")
+                    .join("hub")
+                    .join("models--openbmb--VoxCPM2")
+                    .exists()
+            })
+            .unwrap_or(false);
+    let reference_voices = cascade_dir
+        .as_ref()
+        .is_some_and(|dir| directory_has_extension(&dir.join("assets").join("ref_audio"), "wav"));
+
+    CascadeInstallationProbe {
+        loader: std::path::Path::new(loader_dir)
+            .join("loader")
+            .join("__init__.py")
+            .is_file(),
+        python_runtime: cascade_python_can_import_loader(&python, loader_dir),
+        cascade_service_bundle: cascade_dir.is_some_and(|dir| {
+            dir.join("services").is_dir() && dir.join("output_cascade").is_dir()
+        }),
+        ditto_engine,
+        // A venv without cached VoxCPM2 weights is not a runnable TTS runtime.
+        voxcpm2_model: venv_python.is_file() && voxcpm2_model,
+        reference_voices,
+        facade_healthy: false,
+    }
+}
+
+fn cascade_install_step(
+    id: &'static str,
+    label: &'static str,
+    action: &'static str,
+    complete: bool,
+    failure_code: &'static str,
+    failure_message: &'static str,
+) -> CascadeInstallationStep {
+    CascadeInstallationStep {
+        id,
+        label,
+        state: if complete { "complete" } else { "blocked" },
+        action,
+        // The Shell has no packaged installer manifest yet. Never present a
+        // download button that cannot complete the requested artifact.
+        action_available: false,
+        progress_percent: if complete { 100 } else { 0 },
+        retryable: false,
+        failure: (!complete).then_some(CascadeInstallationFailure {
+            code: failure_code,
+            message: failure_message,
+            retryable: false,
+        }),
+    }
+}
+
+fn classify_cascade_installation(probe: CascadeInstallationProbe) -> CascadeInstallationStatus {
+    let prerequisites_complete = probe.loader
+        && probe.python_runtime
+        && probe.cascade_service_bundle
+        && probe.ditto_engine
+        && probe.voxcpm2_model
+        && probe.reference_voices;
+    let ready = prerequisites_complete && probe.facade_healthy;
+    let phase = if ready {
+        "ready"
+    } else if prerequisites_complete {
+        "ready-to-start"
+    } else {
+        "blocked"
+    };
+    let summary = match phase {
+        "ready" => "Local voice and avatar services are running and healthy.".to_string(),
+        "ready-to-start" => "Local runtime files are ready. Services have not been started yet.".to_string(),
+        _ => "Local runtime cannot start because one or more required artifacts are missing. This build will not pretend to download them.".to_string(),
+    };
+    CascadeInstallationStatus {
+        phase,
+        ready,
+        can_start: prerequisites_complete,
+        summary,
+        steps: vec![
+            cascade_install_step(
+                "loader",
+                "Cascade loader",
+                "verify",
+                probe.loader,
+                "CASCADE_LOADER_MISSING",
+                "The cascade loader is not packaged or available.",
+            ),
+            cascade_install_step(
+                "python-runtime",
+                "Python runtime",
+                "install",
+                probe.python_runtime,
+                "CASCADE_PYTHON_RUNTIME_MISSING",
+                "Python cannot import the cascade loader.",
+            ),
+            cascade_install_step(
+                "cascade-service-bundle",
+                "Cascade service bundle",
+                "install",
+                probe.cascade_service_bundle,
+                "CASCADE_SERVICE_BUNDLE_MISSING",
+                "VoxCPM2, Ditto, or facade service files are not packaged.",
+            ),
+            cascade_install_step(
+                "ditto-engine",
+                "Ditto engine",
+                "download",
+                probe.ditto_engine,
+                "DITTO_ENGINE_MISSING",
+                "The required Ditto TensorRT engine is not installed.",
+            ),
+            cascade_install_step(
+                "voxcpm2-model",
+                "VoxCPM2 model",
+                "download",
+                probe.voxcpm2_model,
+                "VOXCPM2_MODEL_MISSING",
+                "The VoxCPM2 runtime or cached model is not installed.",
+            ),
+            cascade_install_step(
+                "reference-voices",
+                "Reference voices",
+                "download",
+                probe.reference_voices,
+                "REFERENCE_VOICES_MISSING",
+                "Bundled reference voice files are not available.",
+            ),
+        ],
+    }
+}
+
+#[tauri::command]
+async fn cascade_installation_status(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, AppState>,
+) -> Result<CascadeInstallationStatus, String> {
+    let adk_path = dirs::home_dir()
+        .and_then(|home| std::fs::read_to_string(home.join(".naia").join("adk-path")).ok())
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty());
+    let loader_dir = resolve_cascade_loader_dir(&app, adk_path.as_deref().unwrap_or_default());
+    let mut probe = tokio::task::spawn_blocking(move || {
+        probe_cascade_installation(&loader_dir, adk_path.as_deref())
+    })
+    .await
+    .map_err(|error| format!("cascade installation status task failed: {error}"))?;
+    probe.facade_healthy = cascade_status(state).await.unwrap_or(false);
+    Ok(classify_cascade_installation(probe))
+}
+
 /// 濡쒖뺄 cascade loader supervisor 瑜??ъ씠?쒖뭅濡?spawn. stdout `CASCADE_READY {json}`
 /// ?몃뱶?곗씠?щ줈 以鍮꾩셿猷??먯젙(紐⑤뜽 濡쒕뱶媛 湲몄뼱 timeout ?됰꼮??. ???꾨줈?몄뒪瑜?kill ?섎㈃
 /// loader 媛 VoxCPM2 ???먯떇 ?쒕퉬?ㅻ? teardown ?쒕떎(?먭꺽 湲덉?쨌濡쒖뺄 ?꾨쿋??.
@@ -4496,7 +4867,7 @@ fn spawn_cascade(
                 if std::time::Instant::now() >= deadline {
                     let _ = child.kill();
                     return Err(
-                        "cascade readiness handshake timeout (CASCADE_READY 誘몄닔??".to_string()
+                        "cascade readiness handshake timeout (CASCADE_READY 誘몄닔??".to_string(),
                     );
                 }
             }
@@ -4506,6 +4877,45 @@ fn spawn_cascade(
     write_pid_file("cascade", child.id());
     log_both(&format!("[Naia] local cascade ready: {}", ready));
     Ok(CascadeProcess { child, ready })
+}
+
+/// Resolve the public facade URL only from the loader's readiness payload.
+/// The individual VoxCPM2 and Ditto ports are private implementation details;
+/// a live Shell must be able to reach the single :8910 facade before reporting
+/// that the local cascade is running.
+fn cascade_facade_url_from_ready(ready: &str) -> Option<String> {
+    let payload: serde_json::Value = serde_json::from_str(ready).ok()?;
+    let port = payload.get("facade_port")?.as_u64()?;
+    if port == 0 || port > u16::MAX as u64 {
+        return None;
+    }
+    Some(format!("http://127.0.0.1:{port}/health"))
+}
+
+/// A loader process can still be alive while its facade or a child service has
+/// died. Do not turn that supervisor-only state into a false "running" UI
+/// state: the desktop-facing public contract is the facade health endpoint.
+async fn cascade_facade_is_healthy(ready: &str) -> bool {
+    let Some(url) = cascade_facade_url_from_ready(ready) else {
+        return false;
+    };
+    let Ok(client) = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(2))
+        .build()
+    else {
+        return false;
+    };
+    match client.get(url).send().await {
+        Ok(response) if response.status().is_success() => {
+            response
+                .json::<serde_json::Value>()
+                .await
+                .ok()
+                .and_then(|body| body.get("ok").and_then(serde_json::Value::as_bool))
+                == Some(true)
+        }
+        _ => false,
+    }
 }
 
 /// R2.2b: ?ㅼ젙?먯꽌 "濡쒖뺄 ?뚯꽦/cascade ?쒖옉". manifest(R2.2a 媛 write) + 媛먯? VRAM(total)?쇰줈
@@ -4519,14 +4929,30 @@ async fn start_cascade(
     // IPC call then returns the same ready payload instead of cleaning the
     // first launch's child services out from underneath it.
     let _start_guard = state.cascade_start.lock().await;
-    {
+    let prior_ready = {
         let mut guard = lock_or_recover(&state.cascade, "cascade");
         if let Some(c) = guard.as_mut() {
             if matches!(c.child.try_wait(), Ok(None)) {
-                return Ok(c.ready.clone());
+                Some(c.ready.clone())
+            } else {
+                let _ = guard.take(); // 二쎌뼱?덉쑝硫??뺣━ ???ш린??
+                None
             }
-            let _ = guard.take(); // 二쎌뼱?덉쑝硫??뺣━ ???ш린??
+        } else {
+            None
         }
+    };
+    if let Some(ready) = prior_ready {
+        if cascade_facade_is_healthy(&ready).await {
+            return Ok(ready);
+        }
+        // The supervisor is not useful without its public facade. Drop only
+        // the process owned by this AppState, then let the normal exact-port
+        // stale cleanup and fresh loader launch recover it below.
+        log_both(
+            "[Naia] Local cascade supervisor is alive but its facade is unavailable; restarting it",
+        );
+        let _ = lock_or_recover(&state.cascade, "cascade").take();
     }
     let adk_path = dirs::home_dir()
         .and_then(|h| std::fs::read_to_string(h.join(".naia").join("adk-path")).ok())
@@ -4535,6 +4961,20 @@ async fn start_cascade(
         .ok_or_else(|| "adk path not set (naia-settings ?뚰겕?ㅽ럹?댁뒪 誘몄꽕??".to_string())?;
     // ?꾨쿋?? 踰덈뱾??loader(resource_dir) ?곗꽑 ???몃? adk 泥댄겕?꾩썐 誘몄쓽議?
     let loader_dir = resolve_cascade_loader_dir(&app, &adk_path);
+
+    // The frontend normally checks this first, but IPC callers must not be
+    // able to bypass the standalone-installation boundary.
+    let install_probe = tokio::task::spawn_blocking({
+        let loader_dir = loader_dir.clone();
+        let adk_path = adk_path.clone();
+        move || probe_cascade_installation(&loader_dir, Some(&adk_path))
+    })
+    .await
+    .map_err(|e| format!("cascade installation check task failed: {e}"))?;
+    let installation = classify_cascade_installation(install_probe);
+    if !installation.can_start {
+        return Err(installation.summary);
+    }
 
     // A prior interrupted loader can leave its :8901/:8902/:8910 children
     // alive even when no supervisor is held in AppState. Clean those exact
@@ -4571,9 +5011,20 @@ async fn stop_cascade(state: tauri::State<'_, AppState>) -> Result<(), String> {
 /// R2.2b: 濡쒖뺄 cascade 媛???곹깭(?ㅼ젙 ?좉? ?쒖떆??.
 #[tauri::command]
 async fn cascade_status(state: tauri::State<'_, AppState>) -> Result<bool, String> {
-    let mut guard = lock_or_recover(&state.cascade, "cascade");
-    Ok(match guard.as_mut() {
-        Some(c) => matches!(c.child.try_wait(), Ok(None)),
+    let ready = {
+        let mut guard = lock_or_recover(&state.cascade, "cascade");
+        if let Some(c) = guard.as_mut() {
+            let ready = matches!(c.child.try_wait(), Ok(None)).then(|| c.ready.clone());
+            if ready.is_none() {
+                let _ = guard.take();
+            }
+            ready
+        } else {
+            None
+        }
+    };
+    Ok(match ready {
+        Some(ready) => cascade_facade_is_healthy(&ready).await,
         None => false,
     })
 }
@@ -4784,6 +5235,14 @@ async fn reset_window_state(app: AppHandle) -> Result<(), String> {
 const DISCORD_TOKEN_KEY: &str = "NAIA_DISCORD_BOT_TOKEN";
 
 fn current_adk_path() -> Result<String, String> {
+    if debug_e2e_enabled() {
+        if let Ok(path) = std::env::var("NAIA_E2E_ADK_PATH") {
+            let path = path.trim().to_string();
+            if !path.is_empty() {
+                return Ok(path);
+            }
+        }
+    }
     let path = dirs::home_dir()
         .and_then(|home| std::fs::read_to_string(home.join(".naia").join("adk-path")).ok())
         .ok_or_else(|| "adk_path_unavailable".to_string())?;
@@ -4834,16 +5293,11 @@ fn classify_agent_secret_lookup(
 }
 
 #[cfg(any(target_os = "windows", test))]
-fn classify_agent_secret_file_presence(
-    presence: std::io::Result<bool>,
-) -> Result<bool, String> {
+fn classify_agent_secret_file_presence(presence: std::io::Result<bool>) -> Result<bool, String> {
     presence.map_err(|_| "keychain_unavailable".to_string())
 }
 
-fn read_agent_secret(
-    adk_path: &str,
-    env_key: &str,
-) -> Result<zeroize::Zeroizing<Vec<u8>>, String> {
+fn read_agent_secret(adk_path: &str, env_key: &str) -> Result<zeroize::Zeroizing<Vec<u8>>, String> {
     #[cfg(not(target_os = "windows"))]
     let _ = adk_path;
     #[cfg(target_os = "windows")]
@@ -4855,7 +5309,10 @@ fn read_agent_secret(
         if !classify_agent_secret_file_presence(file.try_exists())? {
             return Err("token_not_found".to_string());
         }
-        let path = file.to_string_lossy().replace('\'', "''").replace('\\', "\\\\");
+        let path = file
+            .to_string_lossy()
+            .replace('\'', "''")
+            .replace('\\', "\\\\");
         let script = format!(
             "Add-Type -AssemblyName System.Security; $e=[IO.File]::ReadAllBytes('{path}'); \
              $b=[Security.Cryptography.ProtectedData]::Unprotect($e,$null,\
@@ -4865,18 +5322,26 @@ fn read_agent_secret(
         let mut command = std::process::Command::new("powershell");
         command.args(["-NonInteractive", "-Command", &script]);
         platform::hide_console(&mut command);
-        let output = command.output().map_err(|_| "keychain_unavailable".to_string())?;
+        let output = command
+            .output()
+            .map_err(|_| "keychain_unavailable".to_string())?;
         if !output.status.success() {
             return Err("keychain_unavailable".to_string());
         }
-        std::str::from_utf8(&output.stdout)
-            .map_err(|_| "keychain_value_invalid".to_string())?;
+        std::str::from_utf8(&output.stdout).map_err(|_| "keychain_value_invalid".to_string())?;
         return Ok(zeroize::Zeroizing::new(output.stdout));
     }
     #[cfg(target_os = "macos")]
     {
         let output = std::process::Command::new("security")
-            .args(["find-generic-password", "-a", env_key, "-s", "naia-agent", "-w"])
+            .args([
+                "find-generic-password",
+                "-a",
+                env_key,
+                "-s",
+                "naia-agent",
+                "-w",
+            ])
             .output()
             .map_err(|_| "keychain_unavailable".to_string())?;
         classify_agent_secret_lookup(
@@ -4907,7 +5372,65 @@ fn read_agent_secret(
     }
 }
 
+/// Parse only the Discord bot-token field from an E2E-only dotenv fixture.
+/// This intentionally does not implement a general dotenv loader: the fixture is
+/// a narrowly-scoped bridge for live acceptance runs and never becomes runtime
+/// configuration for a released Shell.
+fn parse_e2e_discord_bot_token(
+    contents: &[u8],
+) -> Result<Option<zeroize::Zeroizing<Vec<u8>>>, String> {
+    let contents = std::str::from_utf8(contents)
+        .map_err(|_| "e2e_discord_token_file_invalid".to_string())?;
+    for raw_line in contents.lines() {
+        let line = raw_line.trim();
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+        let line = line.strip_prefix("export ").unwrap_or(line);
+        let Some((key, raw_value)) = line.split_once('=') else {
+            continue;
+        };
+        if key.trim() != "DISCORD_BOT_TOKEN" {
+            continue;
+        }
+        let value = raw_value.trim();
+        let value = if value.len() >= 2
+            && ((value.starts_with('\"') && value.ends_with('\"'))
+                || (value.starts_with('\'') && value.ends_with('\'')))
+        {
+            &value[1..value.len() - 1]
+        } else {
+            value
+        };
+        return Ok(Some(zeroize::Zeroizing::new(value.as_bytes().to_vec())));
+    }
+    Ok(None)
+}
+
+/// A live Discord credential may be supplied to the *owned* native E2E runtime
+/// as a file path. It is deliberately unavailable in production and is never
+/// copied into WebView storage, a config file, or the DPAPI key store.
+fn read_e2e_discord_bot_token() -> Result<Option<zeroize::Zeroizing<Vec<u8>>>, String> {
+    if !debug_e2e_enabled() {
+        return Ok(None);
+    }
+    let Some(path) = std::env::var_os("NAIA_E2E_DISCORD_TOKEN_FILE") else {
+        return Ok(None);
+    };
+    let metadata = std::fs::metadata(&path)
+        .map_err(|_| "e2e_discord_token_file_unavailable".to_string())?;
+    if !metadata.is_file() || metadata.len() > 8 * 1024 {
+        return Err("e2e_discord_token_file_invalid".to_string());
+    }
+    let contents = std::fs::read(path)
+        .map_err(|_| "e2e_discord_token_file_unavailable".to_string())?;
+    parse_e2e_discord_bot_token(&contents)
+}
+
 fn read_discord_bot_token() -> Result<zeroize::Zeroizing<Vec<u8>>, String> {
+    if let Some(token) = read_e2e_discord_bot_token()? {
+        return Ok(token);
+    }
     read_agent_secret(&current_adk_path()?, DISCORD_TOKEN_KEY)
 }
 
@@ -4980,9 +5503,8 @@ fn discord_runtime_is_authoritative(
     authority: Option<&DiscordRuntimeAuthorityFile>,
 ) -> bool {
     token_configured
-        && expected.is_some_and(|value| {
-            discord_runtime_matches_generation(value, status, authority)
-        })
+        && expected
+            .is_some_and(|value| discord_runtime_matches_generation(value, status, authority))
 }
 
 #[derive(serde::Serialize)]
@@ -4999,8 +5521,7 @@ struct DiscordConnectionStatus {
 async fn discord_connection_status() -> Result<DiscordConnectionStatus, String> {
     let token_configured = discord_bot_token_available().await?;
     let settings = std::path::PathBuf::from(current_adk_path()?).join("naia-settings");
-    let manifest =
-        read_discord_binding_manifest(&settings.join("discord-bindings.json"))?;
+    let manifest = read_discord_binding_manifest(&settings.join("discord-bindings.json"))?;
     let generation = manifest.as_ref().map(|value| value.generation);
     let runtime = settings.join("discord-runtime");
     let status =
@@ -5039,6 +5560,17 @@ async fn discord_connection_status() -> Result<DiscordConnectionStatus, String> 
 }
 
 fn capture_discord_token_native() -> Result<zeroize::Zeroizing<String>, String> {
+    // Native WebDriver cannot dismiss a Windows password window. The owned E2E
+    // runtime requests the same cancellation result before any OS prompt is
+    // opened; production builds never honour this environment variable.
+    if debug_e2e_enabled()
+        && matches!(
+            std::env::var("NAIA_E2E_DISCORD_CAPTURE").ok().as_deref(),
+            Some("cancel")
+        )
+    {
+        return Err("capture_cancelled".to_string());
+    }
     #[cfg(target_os = "linux")]
     let candidates: &[(&str, &[&str])] = &[
         ("kdialog", &["--password", "Discord bot token"]),
@@ -5100,7 +5632,9 @@ fn capture_discord_token_native() -> Result<zeroize::Zeroizing<String>, String> 
         let mut command = std::process::Command::new("powershell");
         command.args(["-NoProfile", "-Command", script]);
         platform::hide_console(&mut command);
-        let output = command.output().map_err(|_| "native_prompt_unavailable".to_string())?;
+        let output = command
+            .output()
+            .map_err(|_| "native_prompt_unavailable".to_string())?;
         if !output.status.success() {
             return Err("capture_cancelled".to_string());
         }
@@ -5173,25 +5707,19 @@ fn quarantine_discord_runtime_locked(state: &AppState) -> Result<(), String> {
         discord_runtime_dir().and_then(|runtime| write_discord_quarantine_marker(&runtime));
     let initial_revoke_result = revoke_discord_runtime_authority();
     let mut process = {
-        let mut guard =
-            lock_or_recover(&state.agent, "state.agent(quarantine_discord_runtime)");
+        let mut guard = lock_or_recover(&state.agent, "state.agent(quarantine_discord_runtime)");
         guard.take()
     };
     let process_result = if let Some(process) = process.as_mut() {
         graceful_shutdown_and_reap_agent(process).and_then(|_| {
             let outcome = process.finish_owned_cleanup(true);
-            require_owned_cleanup_complete(
-                &outcome,
-                true,
-                "discord_agent_owned_cleanup_incomplete",
-            )
+            require_owned_cleanup_complete(&outcome, true, "discord_agent_owned_cleanup_incomplete")
         })
     } else {
         Ok(())
     };
     if process_result.is_err() {
-        let mut guard =
-            lock_or_recover(&state.agent, "state.agent(quarantine_discord_runtime)");
+        let mut guard = lock_or_recover(&state.agent, "state.agent(quarantine_discord_runtime)");
         *guard = process;
     }
     let final_revoke_result = revoke_discord_runtime_authority();
@@ -5229,7 +5757,7 @@ async fn discord_capture_bot_token(
     let previous = discord_token_preimage()?;
     let expected_generation =
         read_discord_binding_manifest(&discord_settings_dir()?.join("discord-bindings.json"))?
-    .map(|manifest| manifest.generation);
+            .map(|manifest| manifest.generation);
     let token = capture_discord_token_native()?;
     let mutation = write_agent_key(
         adk_path.clone(),
@@ -5251,9 +5779,7 @@ async fn discord_capture_bot_token(
         let remove_path = adk_path.clone();
         let rollback = rollback_discord_credential(
             previous,
-            move |previous| {
-                write_agent_key(restore_path, DISCORD_TOKEN_KEY.to_string(), previous)
-            },
+            move |previous| write_agent_key(restore_path, DISCORD_TOKEN_KEY.to_string(), previous),
             move || async move { remove_agent_key(&remove_path, DISCORD_TOKEN_KEY).await },
             || {
                 let expected_generation = read_discord_binding_manifest(
@@ -5292,8 +5818,7 @@ async fn discord_remove_bot_token(
 ) -> Result<(), String> {
     let _operation = state.discord_config_operation.lock().await;
     let adk_path = current_adk_path()?;
-    let previous = discord_token_preimage()?
-        .ok_or_else(|| "token_not_found".to_string())?;
+    let previous = discord_token_preimage()?.ok_or_else(|| "token_not_found".to_string())?;
     let expected_generation =
         read_discord_binding_manifest(&discord_settings_dir()?.join("discord-bindings.json"))?
             .map(|manifest| manifest.generation);
@@ -5313,9 +5838,7 @@ async fn discord_remove_bot_token(
         let remove_path = adk_path.clone();
         let rollback = rollback_discord_credential(
             Some(previous),
-            move |previous| {
-                write_agent_key(restore_path, DISCORD_TOKEN_KEY.to_string(), previous)
-            },
+            move |previous| write_agent_key(restore_path, DISCORD_TOKEN_KEY.to_string(), previous),
             move || async move { remove_agent_key(&remove_path, DISCORD_TOKEN_KEY).await },
             || {
                 restart_agent_for_discord_config(
@@ -5506,18 +6029,15 @@ fn discord_bot_member_endpoint(guild_id: &str, bot_id: &str) -> String {
 
 fn discord_guilds_endpoint(after: Option<&str>) -> String {
     match after {
-        Some(after) => format!(
-            "/users/@me/guilds?limit={DISCORD_GUILD_DISCOVERY_PAGE_SIZE}&after={after}"
-        ),
-        None => format!(
-            "/users/@me/guilds?limit={DISCORD_GUILD_DISCOVERY_PAGE_SIZE}"
-        ),
+        Some(after) => {
+            format!("/users/@me/guilds?limit={DISCORD_GUILD_DISCOVERY_PAGE_SIZE}&after={after}")
+        }
+        None => format!("/users/@me/guilds?limit={DISCORD_GUILD_DISCOVERY_PAGE_SIZE}"),
     }
 }
 
 fn discord_guild_discovery_truncated(total: usize, last_page_len: usize) -> bool {
-    total >= DISCORD_GUILD_DISCOVERY_LIMIT
-        && last_page_len == DISCORD_GUILD_DISCOVERY_PAGE_SIZE
+    total >= DISCORD_GUILD_DISCOVERY_LIMIT && last_page_len == DISCORD_GUILD_DISCOVERY_PAGE_SIZE
 }
 
 fn discord_channel_history_endpoint(channel_id: &str) -> String {
@@ -5640,8 +6160,8 @@ async fn discord_discover_channels() -> Result<DiscordDiscovery, String> {
     let bot = discord_get_json::<DiscordApiUser>(&client, "/users/@me").await?;
     let application =
         discord_get_json::<DiscordApiApplication>(&client, "/oauth2/applications/@me").await?;
-    let message_content_intent = application.flags & (DISCORD_GATEWAY_MESSAGE_CONTENT
-        | DISCORD_GATEWAY_MESSAGE_CONTENT_LIMITED)
+    let message_content_intent = application.flags
+        & (DISCORD_GATEWAY_MESSAGE_CONTENT | DISCORD_GATEWAY_MESSAGE_CONTENT_LIMITED)
         != 0;
     if !is_valid_discord_snowflake(&bot.id) {
         return Err("discord_response_invalid".to_string());
@@ -5708,8 +6228,7 @@ async fn discord_discover_channels() -> Result<DiscordDiscovery, String> {
         let mut channel_rows = channels
             .into_iter()
             .filter(|channel| {
-                (channel.kind == 0 || channel.kind == 5)
-                    && is_valid_discord_snowflake(&channel.id)
+                (channel.kind == 0 || channel.kind == 5) && is_valid_discord_snowflake(&channel.id)
             })
             .map(|channel| {
                 let effective = apply_discord_overwrites(
@@ -5930,18 +6449,12 @@ fn read_discord_binding_manifest(
     path: &std::path::Path,
 ) -> Result<Option<DiscordBindingManifest>, String> {
     let manifest = read_bounded_json::<DiscordBindingManifest>(path, 512 * 1024)?;
-    if manifest
-        .as_ref()
-        .is_some_and(|value| value.version != 1)
-    {
+    if manifest.as_ref().is_some_and(|value| value.version != 1) {
         return Err("discord_bindings_upgrade_required".to_string());
     }
-    if manifest
-        .as_ref()
-        .is_some_and(|value| {
-            value.generation == 0 || value.generation > DISCORD_MAX_SAFE_GENERATION
-        })
-    {
+    if manifest.as_ref().is_some_and(|value| {
+        value.generation == 0 || value.generation > DISCORD_MAX_SAFE_GENERATION
+    }) {
         return Err("discord_bindings_generation_invalid".to_string());
     }
     if manifest
@@ -5974,24 +6487,18 @@ async fn discord_binding_snapshot() -> Result<DiscordBindingSnapshot, String> {
 #[tauri::command]
 async fn discord_get_last_binding() -> Result<Option<String>, String> {
     let settings = discord_settings_dir()?;
-    let preference = read_bounded_json::<DiscordUiPreference>(
-        &settings.join("discord-ui.json"),
-        16 * 1024,
-    )?;
+    let preference =
+        read_bounded_json::<DiscordUiPreference>(&settings.join("discord-ui.json"), 16 * 1024)?;
     let Some(binding_id) = preference.and_then(|value| value.last_binding_id) else {
         return Ok(None);
     };
-    let manifest =
-        read_discord_binding_manifest(&settings.join("discord-bindings.json"))?;
+    let manifest = read_discord_binding_manifest(&settings.join("discord-bindings.json"))?;
     let usable = discord_usable_channel_keys().await?;
     Ok(manifest
         .is_some_and(|value| {
-            value
-                .bindings
-                .iter()
-                .any(|binding| {
-                    binding.binding_id == binding_id && discord_binding_is_usable(binding, &usable)
-                })
+            value.bindings.iter().any(|binding| {
+                binding.binding_id == binding_id && discord_binding_is_usable(binding, &usable)
+            })
         })
         .then_some(binding_id))
 }
@@ -6007,9 +6514,8 @@ async fn discord_set_last_binding(
         if value.is_empty() || value.len() > 128 {
             return Err("discord_binding_invalid".to_string());
         }
-        let manifest =
-            read_discord_binding_manifest(&settings.join("discord-bindings.json"))?
-        .ok_or_else(|| "discord_bindings_unavailable".to_string())?;
+        let manifest = read_discord_binding_manifest(&settings.join("discord-bindings.json"))?
+            .ok_or_else(|| "discord_bindings_unavailable".to_string())?;
         let binding = manifest
             .bindings
             .iter()
@@ -6024,8 +6530,8 @@ async fn discord_set_last_binding(
         version: 1,
         last_binding_id: binding_id,
     };
-    let bytes = serde_json::to_vec(&preference)
-        .map_err(|_| "discord_preference_invalid".to_string())?;
+    let bytes =
+        serde_json::to_vec(&preference).map_err(|_| "discord_preference_invalid".to_string())?;
     write_owner_only_atomic(&settings.join("discord-ui.json"), &bytes)
 }
 
@@ -6331,7 +6837,7 @@ async fn discord_save_bindings(
                 return Err(error);
             }
             Ok(generation)
-        }
+        },
     )
     .await
 }
@@ -6459,21 +6965,21 @@ fn read_discord_inbox_snapshot(
     allowed_binding_ids: &std::collections::BTreeSet<String>,
 ) -> Result<Vec<DiscordInboxChannelSnapshot>, String> {
     let runtime = settings.join("discord-runtime");
-    let inbox =
-        read_bounded_json::<DiscordInboxDocumentNative>(&runtime.join("inbox.json"), 16 * 1024 * 1024)?
-            .unwrap_or(DiscordInboxDocumentNative {
-                version: 1,
-                generation: manifest.generation.to_string(),
-                channels: std::collections::BTreeMap::new(),
-            });
+    let inbox = read_bounded_json::<DiscordInboxDocumentNative>(
+        &runtime.join("inbox.json"),
+        16 * 1024 * 1024,
+    )?
+    .unwrap_or(DiscordInboxDocumentNative {
+        version: 1,
+        generation: manifest.generation.to_string(),
+        channels: std::collections::BTreeMap::new(),
+    });
     if inbox.version != 1 || inbox.generation != manifest.generation.to_string() {
         return Err("discord_cache_generation_mismatch".to_string());
     }
-    let mut cursors = read_bounded_json::<DiscordInboxCursors>(
-        &runtime.join("inbox-cursors.json"),
-        512 * 1024,
-    )?
-    .unwrap_or_default();
+    let mut cursors =
+        read_bounded_json::<DiscordInboxCursors>(&runtime.join("inbox-cursors.json"), 512 * 1024)?
+            .unwrap_or_default();
     let generation = manifest.generation.to_string();
     if cursors.version != 1 || cursors.generation != generation {
         cursors = DiscordInboxCursors {
@@ -6517,9 +7023,8 @@ async fn discord_inbox_snapshot(
     state: tauri::State<'_, AppState>,
 ) -> Result<Vec<DiscordInboxChannelSnapshot>, String> {
     let settings = std::path::PathBuf::from(current_adk_path()?).join("naia-settings");
-    let manifest =
-        read_discord_binding_manifest(&settings.join("discord-bindings.json"))?
-            .ok_or_else(|| "discord_bindings_unavailable".to_string())?;
+    let manifest = read_discord_binding_manifest(&settings.join("discord-bindings.json"))?
+        .ok_or_else(|| "discord_bindings_unavailable".to_string())?;
     let usable = discord_usable_channel_keys().await?;
     let allowed_binding_ids: std::collections::BTreeSet<String> = manifest
         .bindings
@@ -6548,10 +7053,11 @@ async fn discord_inbox_snapshot_cached(
         return Err("discord_binding_invalid".to_string());
     }
     let settings = std::path::PathBuf::from(current_adk_path()?).join("naia-settings");
-    let manifest =
-        read_discord_binding_manifest(&settings.join("discord-bindings.json"))?
-            .ok_or_else(|| "discord_bindings_unavailable".to_string())?;
-    let requested_binding_ids = binding_ids.into_iter().collect::<std::collections::BTreeSet<_>>();
+    let manifest = read_discord_binding_manifest(&settings.join("discord-bindings.json"))?
+        .ok_or_else(|| "discord_bindings_unavailable".to_string())?;
+    let requested_binding_ids = binding_ids
+        .into_iter()
+        .collect::<std::collections::BTreeSet<_>>();
     let authorized = state.discord_inbox_authorized_bindings.lock().await;
     let allowed_binding_ids = authorized
         .as_ref()
@@ -6575,9 +7081,8 @@ async fn discord_fetch_channel_history(
         return Err("discord_binding_invalid".to_string());
     }
     let settings = discord_settings_dir()?;
-    let manifest =
-        read_discord_binding_manifest(&settings.join("discord-bindings.json"))?
-    .ok_or_else(|| "discord_bindings_unavailable".to_string())?;
+    let manifest = read_discord_binding_manifest(&settings.join("discord-bindings.json"))?
+        .ok_or_else(|| "discord_bindings_unavailable".to_string())?;
     let binding = manifest
         .bindings
         .iter()
@@ -6641,9 +7146,8 @@ async fn discord_mark_inbox_read(
         return Err("discord_cursor_invalid".to_string());
     }
     let settings = std::path::PathBuf::from(current_adk_path()?).join("naia-settings");
-    let manifest =
-        read_discord_binding_manifest(&settings.join("discord-bindings.json"))?
-    .ok_or_else(|| "discord_bindings_unavailable".to_string())?;
+    let manifest = read_discord_binding_manifest(&settings.join("discord-bindings.json"))?
+        .ok_or_else(|| "discord_bindings_unavailable".to_string())?;
     let binding = manifest
         .bindings
         .iter()
@@ -6662,16 +7166,16 @@ async fn discord_mark_inbox_read(
     let generation = manifest.generation.to_string();
     let runtime = discord_runtime_dir()?;
     let path = runtime.join("inbox-cursors.json");
-    let cursors =
-        read_bounded_json::<DiscordInboxCursors>(&path, 512 * 1024)?.unwrap_or(DiscordInboxCursors {
+    let cursors = read_bounded_json::<DiscordInboxCursors>(&path, 512 * 1024)?.unwrap_or(
+        DiscordInboxCursors {
             version: 1,
             generation: generation.clone(),
             cursors: std::collections::BTreeMap::new(),
-        });
+        },
+    );
     let cursors =
         update_discord_inbox_cursor(cursors, &generation, &active_keys, cursor_key, created_at)?;
-    let bytes =
-        serde_json::to_vec(&cursors).map_err(|_| "discord_cursor_invalid".to_string())?;
+    let bytes = serde_json::to_vec(&cursors).map_err(|_| "discord_cursor_invalid".to_string())?;
     write_owner_only_atomic(&path, &bytes)
 }
 
@@ -7358,8 +7862,123 @@ async fn compile_knowledge(
     }))
 }
 
+const JEONJU_COURSE_ALLOWED_FILES: [&str; 2] = ["index.html", "hero.svg"];
+const JEONJU_COURSE_TARGET_FILE: &str = "jeonju-discord-course.json";
+
+fn jeonju_course_target_json(workspace_path: &str) -> serde_json::Value {
+    serde_json::json!({
+        "version": 1,
+        "workspacePath": workspace_path,
+        "allowedFiles": JEONJU_COURSE_ALLOWED_FILES,
+    })
+}
+
+fn parse_jeonju_course_target_json(raw: &str) -> Result<serde_json::Value, String> {
+    let target: serde_json::Value =
+        serde_json::from_str(raw).map_err(|_| "course_target_invalid".to_string())?;
+    let object = target
+        .as_object()
+        .ok_or_else(|| "course_target_invalid".to_string())?;
+    let expected_files: Vec<serde_json::Value> = JEONJU_COURSE_ALLOWED_FILES
+        .iter()
+        .map(|file| serde_json::Value::String((*file).to_string()))
+        .collect();
+    if object.len() != 3
+        || object.get("version") != Some(&serde_json::json!(1))
+        || object
+            .get("workspacePath")
+            .and_then(serde_json::Value::as_str)
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .is_none()
+        || object
+            .get("allowedFiles")
+            .and_then(serde_json::Value::as_array)
+            != Some(&expected_files)
+    {
+        return Err("course_target_invalid".to_string());
+    }
+    Ok(target)
+}
+
+/// Re-check the explicit Shell-owned target at the native start boundary. The
+/// WebView gate is useful guidance, but must not be the only authority for a
+/// selected-workspace job.
+fn verify_jeonju_course_target_matches_workspace(
+    adk_path: &str,
+    workspace_path: &str,
+) -> Result<(), String> {
+    let control_root =
+        std::fs::canonicalize(adk_path).map_err(|_| "course_target_not_ready".to_string())?;
+    let target_path = control_root
+        .join("naia-settings")
+        .join(JEONJU_COURSE_TARGET_FILE);
+    let raw = std::fs::read_to_string(target_path)
+        .map_err(|_| "course_target_not_ready".to_string())?;
+    let target = parse_jeonju_course_target_json(&raw)?;
+    let saved_workspace_path = target
+        .get("workspacePath")
+        .and_then(serde_json::Value::as_str)
+        .ok_or_else(|| "course_target_invalid".to_string())?;
+    let saved_root = std::fs::canonicalize(saved_workspace_path)
+        .map_err(|_| "course_target_not_ready".to_string())?;
+    let requested_root = std::fs::canonicalize(workspace_path)
+        .map_err(|_| "course_target_not_ready".to_string())?;
+
+    if !saved_root.starts_with(&control_root) || saved_root != requested_root {
+        return Err("course_target_not_ready".to_string());
+    }
+    Ok(())
+}
+
+/// Load the host-owned Discord course target. The Agent parses this file again
+/// at process start; Shell validates its shape here so the UI never presents a
+/// broadened or hand-edited target as ready.
+#[tauri::command]
+async fn read_jeonju_course_target(adk_path: String) -> Result<String, String> {
+    let path = std::path::PathBuf::from(adk_path)
+        .join("naia-settings")
+        .join(JEONJU_COURSE_TARGET_FILE);
+    if !path.exists() {
+        return Ok(String::new());
+    }
+    let raw = std::fs::read_to_string(path).map_err(|_| "course_target_invalid".to_string())?;
+    let target = parse_jeonju_course_target_json(&raw)?;
+    serde_json::to_string(&target).map_err(|_| "course_target_invalid".to_string())
+}
+
+/// Persist one explicit course Git root under the ADK control root. No chat or
+/// Discord payload can choose this path: the fixed two-file boundary is written
+/// by Shell only after the target passes the same readiness guard as a job.
+#[tauri::command]
+async fn write_jeonju_course_target(
+    adk_path: String,
+    workspace_path: String,
+) -> Result<String, String> {
+    let control_root =
+        std::fs::canonicalize(&adk_path).map_err(|_| "course_target_not_ready".to_string())?;
+    let workspace_root = std::fs::canonicalize(&workspace_path)
+        .map_err(|_| "course_target_not_ready".to_string())?;
+    if !workspace_root.starts_with(&control_root) {
+        return Err("course_target_not_ready".to_string());
+    }
+    verify_jeonju_course_workspace(&workspace_path)
+        .map_err(|_| "course_target_not_ready".to_string())?;
+    // `canonicalize` returns a Windows extended-length (`\\?\\`) path. Keep
+    // that representation for the containment check only; the persisted target
+    // is a normal user-selected path that Node/Git and the UI can consume.
+    let target = jeonju_course_target_json(workspace_path.trim());
+    let json =
+        serde_json::to_string_pretty(&target).map_err(|_| "course_target_invalid".to_string())?;
+    let settings_dir = control_root.join("naia-settings");
+    std::fs::create_dir_all(&settings_dir).map_err(|_| "course_target_not_ready".to_string())?;
+    std::fs::write(settings_dir.join(JEONJU_COURSE_TARGET_FILE), json)
+        .map_err(|_| "course_target_not_ready".to_string())?;
+    serde_json::to_string(&target).map_err(|_| "course_target_invalid".to_string())
+}
+
 fn coding_job_to_shell_value(job: agent_grpc::pb::CodingJob) -> Result<serde_json::Value, String> {
-    use agent_grpc::pb::CodingJobState;
+    use agent_grpc::pb::{CodingJobExecutionMode, CodingJobState};
 
     let state = match CodingJobState::try_from(job.state).ok() {
         Some(CodingJobState::Queued) => "queued",
@@ -7370,6 +7989,20 @@ fn coding_job_to_shell_value(job: agent_grpc::pb::CodingJob) -> Result<serde_jso
         Some(CodingJobState::Failed) => "failed",
         _ => return Err("coding worker returned an invalid state".to_string()),
     };
+    let execution_mode = match CodingJobExecutionMode::try_from(job.execution_mode).ok() {
+        Some(CodingJobExecutionMode::IsolatedWorktree) => "isolated_worktree",
+        Some(CodingJobExecutionMode::SelectedWorkspace) => "selected_workspace",
+        _ => return Err("coding worker returned an invalid execution mode".to_string()),
+    };
+    let expected_course_files: Vec<String> = JEONJU_COURSE_ALLOWED_FILES
+        .iter()
+        .map(|file| (*file).to_string())
+        .collect();
+    if (execution_mode == "isolated_worktree" && !job.allowed_files.is_empty())
+        || (execution_mode == "selected_workspace" && job.allowed_files != expected_course_files)
+    {
+        return Err("coding worker returned an invalid course boundary".to_string());
+    }
     Ok(serde_json::json!({
         "id": job.job_id,
         "provider": "codex",
@@ -7378,7 +8011,42 @@ fn coding_job_to_shell_value(job: agent_grpc::pb::CodingJob) -> Result<serde_jso
         "state": state,
         "updatedAt": job.updated_at,
         "resumable": job.resumable,
+        "executionMode": execution_mode,
+        "allowedFiles": job.allowed_files,
+        "verificationSummary": job.verification_summary,
     }))
+}
+
+fn course_git_output(workspace_path: &str, args: &[&str]) -> Result<String, String> {
+    let output = Command::new("git")
+        .arg("-C")
+        .arg(workspace_path)
+        .args(args)
+        .output()
+        .map_err(|_| "course_workspace_not_ready".to_string())?;
+    if !output.status.success() {
+        return Err("course_workspace_not_ready".to_string());
+    }
+    String::from_utf8(output.stdout)
+        .map(|text| text.trim().to_string())
+        .map_err(|_| "course_workspace_not_ready".to_string())
+}
+
+/// Course mode is a deliberate exception to isolated workers. The Agent repeats
+/// this guard, but Shell rejects an unready folder before opening an RPC session.
+fn verify_jeonju_course_workspace(workspace_path: &str) -> Result<(), String> {
+    let selected = std::fs::canonicalize(workspace_path)
+        .map_err(|_| "course_workspace_not_ready".to_string())?;
+    let git_root = course_git_output(workspace_path, &["rev-parse", "--show-toplevel"])?;
+    let root =
+        std::fs::canonicalize(git_root).map_err(|_| "course_workspace_not_ready".to_string())?;
+    if selected != root
+        || !course_git_output(workspace_path, &["status", "--porcelain"])?.is_empty()
+        || course_git_output(workspace_path, &["config", "--get", "remote.origin.url"])?.is_empty()
+    {
+        return Err("course_workspace_not_ready".to_string());
+    }
+    Ok(())
 }
 
 fn coding_job_grpc_addr(state: &AppState) -> Result<String, String> {
@@ -7389,19 +8057,37 @@ fn coding_job_grpc_addr(state: &AppState) -> Result<String, String> {
         .ok_or_else(|| "coding worker service is not connected".to_string())
 }
 
-/// Creates an Agent-owned Codex worker in a generated, leased worktree.
+/// Creates an Agent-owned isolated worker, or the reviewed Jeonju course worker.
+/// The only selected-workspace boundary is this fixed two-file preset.
 #[tauri::command]
 async fn start_coding_job(
     workspace_path: String,
     task: String,
+    course_preset: bool,
     state: tauri::State<'_, AppState>,
 ) -> Result<serde_json::Value, String> {
+    let (execution_mode, allowed_files) = if course_preset {
+        verify_jeonju_course_target_matches_workspace(&current_adk_path()?, &workspace_path)?;
+        verify_jeonju_course_workspace(&workspace_path)?;
+        (
+            agent_grpc::pb::CodingJobExecutionMode::SelectedWorkspace as i32,
+            JEONJU_COURSE_ALLOWED_FILES
+                .iter()
+                .map(|file| (*file).to_string())
+                .collect(),
+        )
+    } else {
+        (
+            agent_grpc::pb::CodingJobExecutionMode::IsolatedWorktree as i32,
+            Vec::new(),
+        )
+    };
     let addr = coding_job_grpc_addr(&state)?;
     let mut client = agent_grpc::AgentGrpc::connect(format!("http://{}", addr))
         .await
         .map_err(|_| "coding worker service is not connected".to_string())?;
     let job = client
-        .start_coding_job(workspace_path, task)
+        .start_coding_job(workspace_path, task, execution_mode, allowed_files)
         .await
         .map_err(|_| "coding worker request could not be completed".to_string())?;
     coding_job_to_shell_value(job)
@@ -8182,11 +8868,7 @@ async fn delete_naia_adk(
             log_verbose("[Naia] Terminating agent-core before adk delete...");
             graceful_shutdown_and_reap_agent(&mut process)?;
             let outcome = process.finish_owned_cleanup(true);
-            require_owned_cleanup_complete(
-                &outcome,
-                true,
-                "agent_owned_cleanup_incomplete",
-            )?;
+            require_owned_cleanup_complete(&outcome, true, "agent_owned_cleanup_incomplete")?;
         }
     }
     // Kill gateway + node host
@@ -8404,9 +9086,17 @@ pub fn run() {
         .plugin(tauri_plugin_stt::init());
 
     // Flatpak manages its own updates; skip updater plugin in Flatpak builds
-    if !is_flatpak {
+    if !is_flatpak && !debug_e2e_enabled() {
         builder = builder.plugin(tauri_plugin_updater::Builder::new().build());
     }
+    #[cfg(feature = "webdriver-e2e")]
+    {
+        builder = builder.plugin(tauri_plugin_wdio_webdriver::init());
+    }
+    #[cfg(feature = "webdriver-e2e")]
+    let context = tauri::generate_context!("tauri.e2e.conf.json");
+    #[cfg(not(feature = "webdriver-e2e"))]
+    let context = tauri::generate_context!();
 
     builder.manage(AppState {
             agent: Mutex::new(None),
@@ -8483,6 +9173,7 @@ pub fn run() {
             read_naia_config,
             write_naia_config,
             write_slots_manifest,
+            cascade_installation_status,
             start_cascade,
             stop_cascade,
             cascade_status,
@@ -8492,6 +9183,8 @@ pub fn run() {
             write_naia_knowledge_config,
             read_naia_knowledge_kb,
             compile_knowledge,
+            read_jeonju_course_target,
+            write_jeonju_course_target,
             start_coding_job,
             list_coding_jobs,
             cancel_coding_job,
@@ -8565,6 +9258,8 @@ pub fn run() {
             pty::pty_kill,
             pty::pty_execute_sync,
             enable_webview2_ime,
+            #[cfg(feature = "webdriver-e2e")]
+            e2e_emit_bgm_event,
         ])
         .setup(|app| {
             let app_handle = app.handle().clone();
@@ -8769,11 +9464,13 @@ pub fn run() {
             }
 
             // Clean up orphan processes from previous sessions
-            platform::cleanup_orphan_processes();
-            platform::kill_stale_gateway();
+            if !debug_e2e_enabled() {
+                platform::cleanup_orphan_processes();
+                platform::kill_stale_gateway();
+            }
             // ?꿤ascade 怨좎븘(uvicorn facade ?먯옄, PID 誘몄텛?? ?뺣━ ??8910 EADDRINUSE 諛⑹?(R2.2b).
             // dev 諛섎났 湲곕룞 ???댁쟾 ?몄뀡??cascade 媛 ??二쎄퀬 ?⑥븘 ?ㅼ쓬 start_cascade 瑜?留됰뒗??
-            platform::kill_stale_cascade();
+            if !debug_e2e_enabled() { platform::kill_stale_cascade(); }
 
             // Spawn Gateway first (Agent connects to it via WebSocket)
             let (gateway_running, gateway_managed) = match spawn_gateway() {
@@ -8952,13 +9649,45 @@ pub fn run() {
                 _ => {}
             }
         })
-        .run(tauri::generate_context!())
+        .run(context)
         .expect("error while running tauri application");
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn jeonju_course_target_must_match_the_requested_workspace() {
+        let control = tempfile::tempdir().unwrap();
+        let saved = control.path().join("projects").join("course-site");
+        let other = control.path().join("projects").join("other-site");
+        std::fs::create_dir_all(control.path().join("naia-settings")).unwrap();
+        std::fs::create_dir_all(&saved).unwrap();
+        std::fs::create_dir_all(&other).unwrap();
+        std::fs::write(
+            control
+                .path()
+                .join("naia-settings")
+                .join(JEONJU_COURSE_TARGET_FILE),
+            serde_json::to_string(&jeonju_course_target_json(saved.to_str().unwrap())).unwrap(),
+        )
+        .unwrap();
+
+        assert!(verify_jeonju_course_target_matches_workspace(
+            control.path().to_str().unwrap(),
+            saved.to_str().unwrap(),
+        )
+        .is_ok());
+        assert_eq!(
+            verify_jeonju_course_target_matches_workspace(
+                control.path().to_str().unwrap(),
+                other.to_str().unwrap(),
+            )
+            .unwrap_err(),
+            "course_target_not_ready"
+        );
+    }
 
     fn unknown_length_response(body: Vec<u8>) -> (String, std::thread::JoinHandle<()>) {
         let server = tiny_http::Server::http("127.0.0.1:0").unwrap();
@@ -9183,7 +9912,10 @@ mod tests {
             classify_codex_preflight(false, "'codex.cmd' is not recognized"),
             "not-installed"
         );
-        assert_eq!(classify_codex_preflight(false, "unexpected failure"), "error");
+        assert_eq!(
+            classify_codex_preflight(false, "unexpected failure"),
+            "error"
+        );
     }
 
     #[test]
@@ -9251,6 +9983,106 @@ mod tests {
         std::fs::write(&manifest, r#"{"gpu":{"loaderProfile":"laptop;rm"}}"#).unwrap();
 
         assert_eq!(read_cascade_loader_profile(&manifest), None);
+    }
+
+    #[test]
+    fn cascade_installation_blocks_missing_artifacts_without_advertising_download() {
+        let status = classify_cascade_installation(CascadeInstallationProbe {
+            loader: true,
+            python_runtime: true,
+            cascade_service_bundle: false,
+            ditto_engine: false,
+            voxcpm2_model: false,
+            reference_voices: false,
+            facade_healthy: false,
+        });
+
+        assert_eq!(status.phase, "blocked");
+        assert!(!status.can_start);
+        assert!(!status.ready);
+        assert!(status.steps.iter().all(|step| !step.action_available));
+        assert_eq!(
+            status
+                .steps
+                .iter()
+                .find(|step| step.id == "cascade-service-bundle")
+                .unwrap()
+                .failure
+                .as_ref()
+                .unwrap()
+                .code,
+            "CASCADE_SERVICE_BUNDLE_MISSING"
+        );
+    }
+
+    #[test]
+    fn cascade_installation_requires_a_live_facade_before_reporting_ready() {
+        let prerequisites = CascadeInstallationProbe {
+            loader: true,
+            python_runtime: true,
+            cascade_service_bundle: true,
+            ditto_engine: true,
+            voxcpm2_model: true,
+            reference_voices: true,
+            facade_healthy: false,
+        };
+        let not_started = classify_cascade_installation(prerequisites.clone());
+        assert_eq!(not_started.phase, "ready-to-start");
+        assert!(not_started.can_start);
+        assert!(!not_started.ready);
+
+        let running = classify_cascade_installation(CascadeInstallationProbe {
+            facade_healthy: true,
+            ..prerequisites
+        });
+        assert_eq!(running.phase, "ready");
+        assert!(running.can_start);
+        assert!(running.ready);
+    }
+
+    #[test]
+    fn cascade_facade_url_accepts_only_a_valid_public_readiness_port() {
+        assert_eq!(
+            cascade_facade_url_from_ready(r#"{"facade_port":8910}"#).as_deref(),
+            Some("http://127.0.0.1:8910/health")
+        );
+        assert_eq!(cascade_facade_url_from_ready(r#"{"facade_port":0}"#), None);
+        assert_eq!(
+            cascade_facade_url_from_ready(r#"{"facade_port":65536}"#),
+            None
+        );
+        assert_eq!(cascade_facade_url_from_ready(r#"{"services":[]}"#), None);
+        assert_eq!(cascade_facade_url_from_ready("not-json"), None);
+    }
+
+    #[tokio::test]
+    async fn cascade_facade_health_requires_the_public_facade_endpoint() {
+        let server = tiny_http::Server::http("127.0.0.1:0").unwrap();
+        let port = server.server_addr().to_ip().unwrap().port();
+        let responder = std::thread::spawn(move || {
+            let request = server.recv().unwrap();
+            assert_eq!(request.url(), "/health");
+            let response = tiny_http::Response::from_string(r#"{"ok":true}"#)
+                .with_status_code(tiny_http::StatusCode(200));
+            request.respond(response).unwrap();
+        });
+
+        assert!(cascade_facade_is_healthy(&format!(r#"{{"facade_port":{port}}}"#)).await);
+        responder.join().unwrap();
+
+        let incomplete_server = tiny_http::Server::http("127.0.0.1:0").unwrap();
+        let incomplete_port = incomplete_server.server_addr().to_ip().unwrap().port();
+        let incomplete_responder = std::thread::spawn(move || {
+            let request = incomplete_server.recv().unwrap();
+            let response = tiny_http::Response::from_string(r#"{"tts":"ready"}"#)
+                .with_status_code(tiny_http::StatusCode(200));
+            request.respond(response).unwrap();
+        });
+        assert!(
+            !cascade_facade_is_healthy(&format!(r#"{{"facade_port":{incomplete_port}}}"#)).await
+        );
+        incomplete_responder.join().unwrap();
+        assert!(!cascade_facade_is_healthy(r#"{"facade_port":0}"#).await);
     }
 
     #[test]
@@ -9355,7 +10187,10 @@ mod tests {
     #[test]
     fn discord_token_validation_is_bounded_and_printable() {
         assert!(validate_discord_token(b"abc.DEF-123").is_ok());
-        assert_eq!(validate_discord_token(b""), Err("token_invalid".to_string()));
+        assert_eq!(
+            validate_discord_token(b""),
+            Err("token_invalid".to_string())
+        );
         assert_eq!(
             validate_discord_token(b"contains space"),
             Err("token_invalid".to_string())
@@ -9363,6 +10198,24 @@ mod tests {
         assert_eq!(
             validate_discord_token(&vec![b'x'; 513]),
             Err("token_invalid".to_string())
+        );
+    }
+
+    #[test]
+    fn e2e_discord_dotenv_parser_reads_only_the_bot_token_field() {
+        let token = parse_e2e_discord_bot_token(
+            b"DISCORD_APP_ID=123\nexport DISCORD_BOT_TOKEN=fixture.token-value\nDISCORD_GUILD_ID=456\n",
+        )
+        .unwrap()
+        .unwrap();
+        assert_eq!(token.as_slice(), b"fixture.token-value");
+        assert_eq!(
+            parse_e2e_discord_bot_token(b"DISCORD_APP_ID=123\n").unwrap(),
+            None
+        );
+        assert_eq!(
+            parse_e2e_discord_bot_token(b"DISCORD_BOT_TOKEN=\xff"),
+            Err("e2e_discord_token_file_invalid".to_string())
         );
     }
 
@@ -9396,30 +10249,15 @@ mod tests {
             Err("keychain_unavailable".to_string())
         );
         assert_eq!(
-            classify_agent_secret_lookup(
-                AgentSecretLookupPlatform::Linux,
-                false,
-                Some(1),
-                b"",
-            ),
+            classify_agent_secret_lookup(AgentSecretLookupPlatform::Linux, false, Some(1), b"",),
             Err("token_not_found".to_string())
         );
         assert_eq!(
-            classify_agent_secret_lookup(
-                AgentSecretLookupPlatform::Linux,
-                false,
-                None,
-                b"",
-            ),
+            classify_agent_secret_lookup(AgentSecretLookupPlatform::Linux, false, None, b"",),
             Err("keychain_unavailable".to_string())
         );
         assert_eq!(
-            classify_agent_secret_lookup(
-                AgentSecretLookupPlatform::Linux,
-                false,
-                Some(2),
-                b"",
-            ),
+            classify_agent_secret_lookup(AgentSecretLookupPlatform::Linux, false, Some(2), b"",),
             Err("keychain_unavailable".to_string())
         );
         assert_eq!(
@@ -9432,12 +10270,7 @@ mod tests {
             Err("keychain_unavailable".to_string())
         );
         assert_eq!(
-            classify_agent_secret_lookup(
-                AgentSecretLookupPlatform::Linux,
-                true,
-                Some(0),
-                b"",
-            ),
+            classify_agent_secret_lookup(AgentSecretLookupPlatform::Linux, true, Some(0), b"",),
             Ok(())
         );
     }
@@ -9539,15 +10372,11 @@ mod tests {
     #[test]
     fn agent_restart_treats_lost_ack_as_uncertain_acceptance() {
         assert_eq!(
-            classify_agent_shutdown_ack(Err(
-                std::sync::mpsc::RecvTimeoutError::Timeout
-            )),
+            classify_agent_shutdown_ack(Err(std::sync::mpsc::RecvTimeoutError::Timeout)),
             Ok(())
         );
         assert_eq!(
-            classify_agent_shutdown_ack(Err(
-                std::sync::mpsc::RecvTimeoutError::Disconnected
-            )),
+            classify_agent_shutdown_ack(Err(std::sync::mpsc::RecvTimeoutError::Disconnected)),
             Err("agent_graceful_shutdown_dispatch_failed".to_string())
         );
         assert_eq!(
@@ -9896,12 +10725,7 @@ mod tests {
             Some(&authority),
         ));
         assert!(
-            !discord_runtime_is_authoritative(
-                false,
-                Some("42"),
-                Some(&ready),
-                Some(&authority),
-            ),
+            !discord_runtime_is_authoritative(false, Some("42"), Some(&ready), Some(&authority),),
             "a matching stale tuple cannot be authoritative without a token"
         );
         assert!(!discord_runtime_matches_generation(
@@ -10207,8 +11031,7 @@ mod tests {
             finish_discord_clear_activation(
                 Err("initial authority revoke failed".to_string()),
                 || {
-                    successful_quarantine_calls
-                        .set(successful_quarantine_calls.get() + 1);
+                    successful_quarantine_calls.set(successful_quarantine_calls.get() + 1);
                     Ok(())
                 },
             ),
@@ -10218,14 +11041,10 @@ mod tests {
 
         let uncertain_quarantine_calls = std::cell::Cell::new(0);
         assert_eq!(
-            finish_discord_clear_activation(
-                Err("restart failed".to_string()),
-                || {
-                    uncertain_quarantine_calls
-                        .set(uncertain_quarantine_calls.get() + 1);
-                    Err("reap failed".to_string())
-                },
-            ),
+            finish_discord_clear_activation(Err("restart failed".to_string()), || {
+                uncertain_quarantine_calls.set(uncertain_quarantine_calls.get() + 1);
+                Err("reap failed".to_string())
+            },),
             Err("discord_bindings_clear_quarantine_uncertain".to_string())
         );
         assert_eq!(uncertain_quarantine_calls.get(), 1);
@@ -10417,7 +11236,10 @@ mod tests {
         let (_runner, mut command) = direct_agent_command(
             "/runtime/node",
             "/agent/entry.ts",
-            Some(("/runtime/node".to_string(), "/agent/tsx/cli.mjs".to_string())),
+            Some((
+                "/runtime/node".to_string(),
+                "/agent/tsx/cli.mjs".to_string(),
+            )),
         )
         .unwrap();
         command.arg(marker);
@@ -10742,7 +11564,10 @@ mod tests {
         persist_agent_child_lease_before(
             &lease,
             |value| {
-                assert_eq!(value.runtime.as_deref(), Some(std::path::Path::new("/exact/runtime")));
+                assert_eq!(
+                    value.runtime.as_deref(),
+                    Some(std::path::Path::new("/exact/runtime"))
+                );
                 phases.borrow_mut().push("runtime-intent");
                 Ok(())
             },
@@ -10958,8 +11783,7 @@ mod tests {
 
     #[test]
     fn discord_ready_timeout_retains_ownership_across_transient_lease_remove_failure() {
-        let ready_result: Result<(), String> =
-            Err("discord_runtime_ready_timeout".to_string());
+        let ready_result: Result<(), String> = Err("discord_runtime_ready_timeout".to_string());
         assert!(ready_result.is_err());
         let lease = test_agent_child_lease(42);
         let mut retained_owner = Some(lease.clone());
@@ -10975,11 +11799,8 @@ mod tests {
             || panic!("runtime cleanup is not required"),
             || Ok(false),
         );
-        let first_gate = require_owned_cleanup_complete(
-            &first,
-            true,
-            "discord_agent_owned_cleanup_incomplete",
-        );
+        let first_gate =
+            require_owned_cleanup_complete(&first, true, "discord_agent_owned_cleanup_incomplete");
         if first_gate.is_ok() {
             retained_owner = None;
         }
@@ -11001,11 +11822,8 @@ mod tests {
             || panic!("runtime cleanup is not required"),
             || Ok(true),
         );
-        let retry_gate = require_owned_cleanup_complete(
-            &retry,
-            true,
-            "discord_agent_owned_cleanup_incomplete",
-        );
+        let retry_gate =
+            require_owned_cleanup_complete(&retry, true, "discord_agent_owned_cleanup_incomplete");
         if retry_gate.is_ok() {
             retained_owner = None;
         }
@@ -11035,10 +11853,9 @@ mod tests {
 
         let replacement: Result<(), String> = Err("replacement failed".to_string());
         assert!(replacement.is_err());
-        let authority: serde_json::Value = serde_json::from_slice(
-            &std::fs::read(runtime.path().join("authority.json")).unwrap(),
-        )
-        .unwrap();
+        let authority: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(runtime.path().join("authority.json")).unwrap())
+                .unwrap();
         assert_eq!(authority["generation"], "revoked");
         assert!(!runtime.path().join("status.json").exists());
         assert!(!runtime.path().join("quarantine.json").exists());
@@ -11352,7 +12169,10 @@ mod tests {
     #[test]
     fn parent_directory_persistence_errors_are_propagated() {
         assert!(sync_parent_directory_with(
-            || Err::<(), _>(std::io::Error::new(std::io::ErrorKind::PermissionDenied, "open")),
+            || Err::<(), _>(std::io::Error::new(
+                std::io::ErrorKind::PermissionDenied,
+                "open"
+            )),
             |_| Ok(()),
         )
         .is_err());
@@ -11444,8 +12264,7 @@ mod tests {
 
     #[test]
     fn discord_cursor_updates_preserve_other_channels_and_monotonic_max() {
-        let active_keys =
-            std::collections::BTreeSet::from(["one".to_string(), "two".to_string()]);
+        let active_keys = std::collections::BTreeSet::from(["one".to_string(), "two".to_string()]);
         let cursors = DiscordInboxCursors {
             version: 1,
             generation: "42".to_string(),
@@ -11455,8 +12274,7 @@ mod tests {
             update_discord_inbox_cursor(cursors, "42", &active_keys, "one".to_string(), 10)
                 .unwrap();
         let cursors =
-            update_discord_inbox_cursor(cursors, "42", &active_keys, "one".to_string(), 5)
-                .unwrap();
+            update_discord_inbox_cursor(cursors, "42", &active_keys, "one".to_string(), 5).unwrap();
         assert_eq!(cursors.cursors.get("one"), Some(&10));
         assert_eq!(cursors.cursors.get("two"), Some(&7));
     }
@@ -11490,10 +12308,7 @@ mod tests {
             "/channels/300/messages?limit=50"
         );
         assert!(!discord_bot_member_endpoint("100", "200").contains("/users/@me/"));
-        assert_eq!(
-            discord_guilds_endpoint(None),
-            "/users/@me/guilds?limit=100"
-        );
+        assert_eq!(discord_guilds_endpoint(None), "/users/@me/guilds?limit=100");
         assert_eq!(
             discord_guilds_endpoint(Some("999")),
             "/users/@me/guilds?limit=100&after=999"
@@ -11506,10 +12321,7 @@ mod tests {
 
     #[test]
     fn discord_snowflake_timestamp_is_bounded_and_deterministic() {
-        assert_eq!(
-            discord_snowflake_timestamp_ms("0"),
-            Some(1_420_070_400_000)
-        );
+        assert_eq!(discord_snowflake_timestamp_ms("0"), Some(1_420_070_400_000));
         assert!(discord_snowflake_timestamp_ms("not-a-snowflake").is_none());
     }
 
@@ -11536,13 +12348,8 @@ mod tests {
                 deny: DISCORD_SEND_MESSAGES.to_string(),
             },
         ];
-        let effective = apply_discord_overwrites(
-            "100",
-            "300",
-            &["200".to_string()],
-            base,
-            &overwrites,
-        );
+        let effective =
+            apply_discord_overwrites("100", "300", &["200".to_string()], base, &overwrites);
         let summary = discord_permission_summary(effective);
         assert!(summary.view_channel);
         assert!(summary.read_message_history);

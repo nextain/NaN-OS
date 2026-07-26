@@ -3,6 +3,7 @@ import { listen } from "@tauri-apps/api/event";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { t } from "../lib/i18n";
 import { Logger } from "../lib/logger";
+import { useAppStore } from "../stores/app";
 
 interface InboxRecord {
 	readonly recordId: string;
@@ -27,6 +28,21 @@ interface InboxChannel {
 	readonly unread: number;
 	readonly lastActivity?: number;
 }
+
+interface DiscordConnectionStatus {
+	readonly tokenConfigured: boolean;
+}
+
+interface DiscordBindingSnapshot {
+	readonly bindings: readonly unknown[];
+}
+
+type EmptyInboxState =
+	| "checking"
+	| "not-configured"
+	| "no-bindings"
+	| "no-accessible-channels"
+	| "error";
 
 function formatTime(timestamp?: number): string {
 	if (!timestamp) return "";
@@ -91,6 +107,37 @@ export function ChannelsTab() {
 	const [detailOpen, setDetailOpen] = useState(false);
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState(false);
+	const [emptyInboxState, setEmptyInboxState] =
+		useState<EmptyInboxState>("checking");
+
+	async function classifyEmptyInbox(): Promise<EmptyInboxState> {
+		try {
+			const [status, snapshot] = await Promise.all([
+				invoke<DiscordConnectionStatus>("discord_connection_status"),
+				invoke<DiscordBindingSnapshot>("discord_binding_snapshot"),
+			]);
+			if (!status?.tokenConfigured) return "not-configured";
+			if (!Array.isArray(snapshot?.bindings) || snapshot.bindings.length === 0)
+				return "no-bindings";
+			return "no-accessible-channels";
+		} catch {
+			return "error";
+		}
+	}
+
+	function openDiscordConnections() {
+		useAppStore.getState().setActiveApp("settings");
+		window.dispatchEvent(
+			new CustomEvent("naia-open-settings", { detail: { tab: "connections" } }),
+		);
+		window.setTimeout(() => {
+			document
+				.querySelector<HTMLButtonElement>(
+					'[data-settings-tab="connections"]',
+				)
+				?.click();
+		}, 0);
+	}
 
 	const syncChannelHistory = useCallback(async (bindingId: string) => {
 		try {
@@ -139,6 +186,9 @@ export function ChannelsTab() {
 				(channel) => channel.bindingId,
 			);
 			setChannels(snapshot);
+			setEmptyInboxState(
+				snapshot.length === 0 ? await classifyEmptyInbox() : "checking",
+			);
 			selectedIdRef.current = nextSelected;
 			setSelectedId(nextSelected);
 			if (syncHistory && nextSelected) {
@@ -192,7 +242,13 @@ export function ChannelsTab() {
 			setChannels([]);
 			selectedIdRef.current = null;
 			setSelectedId(null);
-			setError(true);
+			if (String(cause).includes("discord_bindings_unavailable")) {
+				setError(false);
+				setEmptyInboxState(await classifyEmptyInbox());
+			} else {
+				setError(true);
+				setEmptyInboxState("error");
+			}
 		} finally {
 			setLoading(false);
 		}
@@ -311,10 +367,29 @@ export function ChannelsTab() {
 	}
 
 	if (error || channels.length === 0) {
+		const emptyMessage =
+			emptyInboxState === "not-configured"
+				? t("channels.setupRequired")
+				: emptyInboxState === "no-bindings"
+					? t("channels.noAllowedChannels")
+					: emptyInboxState === "no-accessible-channels"
+						? t("channels.noAccessibleChannels")
+						: error || emptyInboxState === "error"
+							? t("channels.error")
+							: t("channels.loading");
+		const needsConnectionSetup =
+			emptyInboxState === "not-configured" ||
+			emptyInboxState === "no-bindings" ||
+			emptyInboxState === "no-accessible-channels";
 		return (
 			<div className="channels-tab" data-testid="channels-tab">
 				<div className="dm-empty">
-					<span>{error ? t("channels.error") : t("channels.empty")}</span>
+					<span data-testid="discord-inbox-empty-state">{emptyMessage}</span>
+					{needsConnectionSetup && (
+						<button type="button" onClick={openDiscordConnections}>
+							{t("channels.openConnections")}
+						</button>
+					)}
 					<button type="button" onClick={() => void refresh(true)}>
 						{t("channels.refresh")}
 					</button>

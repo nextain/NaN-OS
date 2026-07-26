@@ -99,6 +99,98 @@ describe("ConnectionsSettingsTab Discord binding", () => {
 		expect(screen.getByRole("checkbox", { name: /private/ })).toBeDisabled();
 	});
 
+	it("opens only the native credential operation and reports a cancelled secure prompt", async () => {
+		mockInvoke.mockImplementation((command: string) => {
+			if (command === "discord_connection_status")
+				return Promise.resolve({
+					tokenConfigured: false,
+					generation: null,
+					state: "disconnected",
+					authoritative: false,
+				});
+			if (command === "discord_binding_snapshot")
+				return Promise.resolve(bindingSnapshot([], null));
+			if (command === "discord_capture_bot_token")
+				return Promise.reject(new Error("capture_cancelled"));
+			return Promise.resolve();
+		});
+		render(<ConnectionsSettingsTab />);
+
+		await screen.findByText(t("settings.connectionsDisconnected"));
+		expect(
+			screen.getByTestId("discord-setup-flow"),
+		).toHaveTextContent(t("settings.connectionsSetupFlow"));
+		expect(
+			screen.getByText(t("settings.connectionsNativePromptHelp")),
+		).toHaveAttribute("id", "discord-native-prompt-help");
+		expect(screen.queryByLabelText(/token/i)).toBeNull();
+		const connect = screen.getByRole("button", {
+			name: t("settings.connectionsConnect"),
+		});
+		expect(connect).toHaveAttribute(
+			"aria-describedby",
+			"discord-native-prompt-help",
+		);
+		fireEvent.click(connect);
+
+		await waitFor(() =>
+			expect(mockInvoke).toHaveBeenCalledWith("discord_capture_bot_token"),
+		);
+		expect(
+			mockInvoke.mock.calls.find(
+				([command]) => command === "discord_capture_bot_token",
+			),
+		).toEqual(["discord_capture_bot_token"]);
+		await screen.findByText(t("settings.connectionsCaptureCancelled"));
+		expect(screen.queryByLabelText(/token/i)).toBeNull();
+	});
+
+	it("fails closed when the runtime is stopped instead of presenting a configured connection", async () => {
+		mockInvoke.mockImplementation((command: string) => {
+			if (command === "discord_connection_status")
+				return Promise.resolve({
+					tokenConfigured: true,
+					generation: 1,
+					state: "stopped",
+					authoritative: false,
+				});
+			if (command === "discord_binding_snapshot")
+				return Promise.resolve(bindingSnapshot([]));
+			return Promise.resolve();
+		});
+		render(<ConnectionsSettingsTab />);
+
+		await screen.findByText(t("settings.connectionsRuntimeUnavailable"));
+		expect(screen.getByText(t("settings.connectionsError"))).toBeDefined();
+		expect(mockInvoke).not.toHaveBeenCalledWith("discord_discover_channels");
+	});
+
+	it("does not expose channel binding writes while discovery is incomplete", async () => {
+		mockInvoke.mockImplementation((command: string) => {
+			if (command === "discord_connection_status")
+				return Promise.resolve({
+					tokenConfigured: true,
+					generation: 1,
+					state: "ready",
+					authoritative: true,
+				});
+			if (command === "discord_binding_snapshot")
+				return Promise.resolve(bindingSnapshot([]));
+			if (command === "discord_discover_channels")
+				return Promise.resolve({
+					...discovery,
+					degradedGuildIds: ["200"],
+				});
+			return Promise.resolve();
+		});
+		render(<ConnectionsSettingsTab />);
+
+		await screen.findByText(t("settings.connectionsDiscoveryIncomplete"));
+		expect(screen.getByRole("checkbox", { name: /general/ })).toBeDisabled();
+		expect(screen.getByRole("button", { name: /저장|Save|Apply/i })).toBeDisabled();
+		expect(mockInvoke).not.toHaveBeenCalledWith("discord_save_bindings", expect.anything());
+	});
+
 	it("saves only usable selected channels with explicit users and participation", async () => {
 		mockInvoke.mockImplementation((command: string) => {
 			if (command === "discord_connection_status")
@@ -145,6 +237,16 @@ describe("ConnectionsSettingsTab Discord binding", () => {
 			}),
 		);
 		await waitFor(() => expect(screen.getByRole("status")).toBeDefined());
+		const handoff = await screen.findByTestId("discord-inbox-handoff");
+		expect(handoff).toHaveTextContent(t("settings.connectionsOpenInbox"));
+		const opened = vi.fn();
+		window.addEventListener("naia-open-discord-inbox", opened, { once: true });
+		fireEvent.click(
+			screen.getByRole("button", {
+				name: t("settings.connectionsOpenInbox"),
+			}),
+		);
+		expect(opened).toHaveBeenCalledTimes(1);
 	});
 
 	it("allows the first binding save when no manifest generation exists", async () => {

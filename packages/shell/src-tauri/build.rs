@@ -8,9 +8,9 @@ fn main() {
         env,
         path::{Path, PathBuf},
     };
-    const REQUIRED_AGENT_COMMIT: &str = "5c496c394e2d54bdffdce37d3730353e34832827";
+    const REQUIRED_AGENT_COMMIT: &str = "f7d094f41382618dbfd9281d93190a86e0c2036a";
     const REQUIRED_PROTO_SHA256: &str =
-        "ebde3daeac8f697fe880ec8306391092c99649dec687cab30f922cef074f2de3";
+        "b77761930c0991ee825b6d2827adad264fc352a9f220404912a284fc166b691b";
     const REQUIRED_PROTO_MARKERS: &[&str] = &[
         "repeated AttachmentRef attachments = 4;",
         "message AttachmentRef",
@@ -26,6 +26,12 @@ fn main() {
         "message ShutdownRequest { string nonce = 1; }",
         "rpc StartCodingJob(StartCodingJobRequest) returns (CodingJob);",
         "string task = 11;",
+        "enum CodingJobExecutionMode {",
+        "CodingJobExecutionMode execution_mode = 12;",
+        "repeated string allowed_files = 13;",
+        "optional string verification_summary = 14;",
+        "CodingJobExecutionMode execution_mode = 4;",
+        "repeated string allowed_files = 5;",
         "enum WireErrorCode",
         "ATTACHMENT_INVALID_REF",
     ];

@@ -32,6 +32,10 @@ pub(crate) fn agent_process_marker(pid: u32, marker: &str) -> Result<Option<bool
     }
 }
 
+pub(crate) fn reap_orphaned_agent_process(_pid: u32, _marker: &str) -> Result<bool, String> {
+    Ok(false)
+}
+
 pub(crate) fn find_agent_process_by_marker(marker: &str) -> Result<bool, String> {
     let output = Command::new("ps")
         .args(["-ww", "-axo", "pid=,command="])

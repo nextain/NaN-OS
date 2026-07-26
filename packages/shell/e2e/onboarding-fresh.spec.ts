@@ -202,6 +202,8 @@ test.describe("Fresh onboarding flow", () => {
 		expect(config.agentName).toBe("Mochi");
 		expect(config.userName).toBe("Luke");
 		expect(config.persona).toContain("Mochi");
-		expect(config.localGpuTier).toBe("avatar-6g");
+		// Hardware recommendation is measured at runtime. A browser mock without
+		// a VRAM probe must not persist the removed legacy `avatar-6g` tier.
+		expect(config.localGpuTier).toBeUndefined();
 	});
 });

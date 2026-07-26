@@ -15,6 +15,9 @@ export const CODING_WORKER_STATES = [
 ] as const;
 
 export type CodingWorkerState = (typeof CODING_WORKER_STATES)[number];
+export type CodingWorkerExecutionMode =
+	| "isolated_worktree"
+	| "selected_workspace";
 
 export interface CodingWorker {
 	id: string;
@@ -25,12 +28,20 @@ export interface CodingWorker {
 	updatedAt: string;
 	/** The Agent exposes only whether a durable checkpoint exists, never its id. */
 	resumable: boolean;
+	/** Selected workspace is reserved for the reviewed Jeonju course preset. */
+	executionMode: CodingWorkerExecutionMode;
+	/** Present only for the fixed selected-workspace course boundary. */
+	allowedFiles: readonly string[];
+	/** Agent-owned post-run result; failed changes remain available for review. */
+	verificationSummary?: string;
 }
 
 export interface CreateCodingWorkerRequest {
 	provider: "codex";
 	worktree: string;
 	task: string;
+	/** False by default: ordinary workers stay in an Agent-created worktree. */
+	coursePreset?: boolean;
 }
 
 export interface CodingWorkersAdapter {
@@ -44,6 +55,14 @@ export class CodingWorkerApiUnavailableError extends Error {
 	constructor() {
 		super("Coding-worker API is not paired with the Agent runtime.");
 		this.name = "CodingWorkerApiUnavailableError";
+	}
+}
+
+/** Safe, local preflight outcome; no Git command output is exposed to WebView. */
+export class CourseWorkspaceNotReadyError extends Error {
+	constructor() {
+		super("The selected course workspace is not ready.");
+		this.name = "CourseWorkspaceNotReadyError";
 	}
 }
 
@@ -85,4 +104,31 @@ export function canResumeCodingWorker(worker: CodingWorker): boolean {
 
 export function canCancelCodingWorker(worker: CodingWorker): boolean {
 	return worker.state === "queued" || worker.state === "running";
+}
+
+function isTerminalCodingWorkerState(state: CodingWorkerState): boolean {
+	return state === "cancelled" || state === "completed" || state === "failed";
+}
+
+/**
+ * Agent snapshots are authoritative, but an older in-flight poll must never
+ * turn a terminal card back into a live one. This keeps the visible lifecycle
+ * monotonic while the next fresh poll catches up.
+ */
+export function reconcileCodingWorkers(
+	current: readonly CodingWorker[],
+	observed: readonly CodingWorker[],
+): CodingWorker[] {
+	const currentById = new Map(current.map((worker) => [worker.id, worker]));
+	return observed.map((next) => {
+		const previous = currentById.get(next.id);
+		if (
+			previous &&
+			isTerminalCodingWorkerState(previous.state) &&
+			!isTerminalCodingWorkerState(next.state)
+		) {
+			return previous;
+		}
+		return next;
+	});
 }

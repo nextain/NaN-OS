@@ -6,6 +6,7 @@ export {
 	isOmniModel,
 	getDefaultLlmModel,
 	isApiKeyOptional,
+	providerSupportsRole,
 	getStaticModelsRecord,
 	fetchNaiaPricing,
 	fetchNaiaModelCapabilities,

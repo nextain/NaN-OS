@@ -168,8 +168,8 @@ foundation UC 카탈로그와 직교하는 셸 feature(S72 선례). 각 시나�
 | **S-EMBKO** (한글 오프라인 임베딩, FR-SLOT.6 — 2026-07-15) | 한국어 사용자가 기억(memory) 임베딩을 **CPU 오프라인**으로 돌릴 때, 영어 전용(all-MiniLM/all-mpnet) 대신 **다국어(한국어) 모델을 선택**할 수 있다 — offline 모델 선택지에 `multilingual-e5-large`(1024d) 추가. 백엔드 naia-memory `OfflineEmbeddingProvider` 가 이미 지원(e5 query/passage 프리픽스·`device=cpu` 존중) → **셸이 노출만**(백엔드 무변경, 경계 준수). 기본값 무변경(선택지로만) | 제어면(설정) — 임베딩 슬롯 한글 모델 노출 | `settings-slots.contract.test.ts`(offline 모델 union·roundtrip). ⚠️ 실 다운로드/한글 회상=수동 프리페치 검증(부스 전, 2026-07-16) |
 | **S-VREC** (#2 후속, FR-VRAM.4 — 2026-06-30) | GPU 프로파일(VRAM)을 정하면 **그 예산 안에서 각 슬롯에 로컬 추천이 보인다** — 두뇌 탭 GPU 프로파일 아래 추천 요약, 음성/아바타/메인 셀렉터의 추천 옵션 배지, 프로파일 슬롯 개요 배지, 온보딩에도 추천 표시. **외부 슬롯은 숨기지 않고 추천만**(선택·확인은 사용자) | 제어면(설정) — VRAM 예산→슬롯 추천 | `tier-slots.test.ts`(6/6). ⚠️ 실제 로컬 기동=Round 2(wm 로더, DEFER) |
 | **S-VOICE** (FR-VOICE — 2026-06-30) | naia-local-voice(로컬 GPU 음성)를 고르면 **로컬 음성 호스트로 합성**(LLM 호스트 오용 수정). 로컬 엔진 미실행/미연결 시 **무료 음성으로 조용히 위장하지 않고** "로컬 음성 미가용"을 1회 명확히 알리고 무음. 음성 picker 채움 | 표현(speech) — 로컬 음성 정직화 | `synthesize.test.ts`(naia-local-voice host 라우팅 3건). ⚠️ 실제 합성 동작=로컬 cascade 기동(Round 2, DEFER) |
-| **S-VOICE-AVATAR** (FR-VOICE.5 — 2026-07-15) | 두뇌=로컬 LLM(ollama DNA) · 음성=**원격 omni**(`vllmTtsHost`→`/v1/audio/speech`, 음색 서버 해석) · 아바타=**로컬 Ditto TRT(8g avatar-only)** 인 부스 토폴로지에서, 나이아가 말하면 **셸이 합성한 WAV 가 즉시 재생되면서(AudioQueue) 같은 오디오가 muted 로 Ditto `/stream` 에 흘러 입이 맞춰 움직인다**. avatar-only 파사드는 자체 TTS 가 없으므로 `/stream_text`(텍스트) 폴백은 무음 = 오답. 음성 서버 미가용이면 S-VOICE 정직 원칙(1회 알림+무음, 랜덤/위장 음색 금지) | 표현(speech+avatar) — 원격 음성·로컬 립싱크 합성점 | `synthesize.test.ts`: 신 표면 계약(POST `/v1/audio/speech`·Bearer·voice=naia-default·WAV 패스스루) 5건 + `streamsAvatarPcm` 게이트(naia-local-voice=true·edge/browser=false) 3건 [계약]. 실 립싱크=부스 리허설(수동, 2026-07-16) |
-| **S-VRAM-AUTO / S-VOICE-AUTO / S-VOICE-PRESET / S-ECHO** (FR-VRAM.5·VOICE.6·VOICE.7·ECHO.1 — 2026-07-15) | 사용자가 GPU 프로파일에서 **"16GB: 로컬 LLM + 음성"** 하나를 고르면 두뇌(ollama/DNA-4B)·음성(naia-local-voice→로컬 :8910 façade)·아바타(VRM 복원)가 **자동 설정**된다. 원격 GPU(Tailscale) 음성 호스트를 쓰던 사용자는 프로파일을 만져도 그 호스트가 보존된다(로컬 잔재만 교정). 프리셋 음색을 고르면 그 파일명이 façade 팔레트 id 로 전달돼 실제로 음색이 바뀐다(남성 선택 시 남성). 음성 대화 중 나이아 자기 목소리가 마이크로 되들어와도 (1)재생 중 마이크 정지 (2)직전 발화 유사도 스킵으로 사용자 입력에 섞이지 않으며, **"좋아/네" 같은 짧은 정상 답변은 삼켜지지 않는다** | 제어면(프로파일 자동설정) + 표현(음색·에코) | `vram-tiers.test.ts`·`SettingsTab.test.tsx`·`slots-manifest.contract.test.ts`·`synthesize.test.ts`·`echo-text-filter.test.ts`·e2e `settings-slots.spec.ts`(16G 자동설정). 실 음색/에코=부스 리허설(수동 2026-07-16). ⚠️ 부팅 SoT 시크릿/세션키 보존 회귀=후속 |
+| **S-VOICE-AVATAR** (FR-VOICE.5 — 2026-07-22) | 8645H+RTX 4060 half-duplex 프로파일에서 두뇌는 CPU/NPU Ollama DNA3, 표현은 VRAM VoxCPM2+Ditto가 맡는다. `naia-local-voice`는 public façade `:8910/tts`에 `{text,voice}`를 보내고, 선택한 내장 레퍼런스 음색 id를 유지한 RIFF WAV를 받는다. Shell은 그 WAV를 AudioQueue로 재생하고 **같은 WAV를 muted로 Ditto `/stream`에 직렬 전달**해 립싱크한다. avatar-only 파사드에는 TTS가 없으므로 `/stream_text` 폴백은 사용하지 않는다. 음성 서버 미가용이면 S-VOICE 정직 원칙(1회 알림+무음, 랜덤/위장 음색 금지)을 유지한다. | 표현(speech+avatar) — CPU/NPU 두뇌와 GPU 표현의 half-duplex 결합점 | `synthesize.test.ts`: `POST /tts` URL·`{text,voice}`·RIFF 패스스루·음색 id·:8910 기본값 + `streamsAvatarPcm` 게이트. `cascade-renderer.test.ts`: RIFF WAV→`/stream` 전달. P04는 실행 중인 실제 :8910→:8901/:8902 façade probe와 Tauri 재생/speaking/lipsync 관찰을 함께 통과해야 한다. |
+| **S-VRAM-AUTO / S-VOICE-AUTO / S-VOICE-PRESET / S-ECHO** (FR-VRAM.5·VOICE.6·VOICE.7·ECHO.1 — 2026-07-22) | 사용자가 **8645H+RTX 4060 8GB** 프로파일을 고르면 두뇌는 CPU/NPU Ollama DNA3(`ollamaNumGpu=0`), 표현은 VRAM VoxCPM2 int8 3.47GB+Ditto 2.6GB(계획 6.07GB)로 자동 설정되고 half-duplex로 동작한다. Shell은 필요한 로컬 모델·런타임을 다운로드 중/준비 중/실행 중으로 일관되게 보여 준다. 16GB 프로파일은 기존 로컬 LLM+음성·VRM 경로를 유지한다. 두 경우 모두 음성은 `naia-local-voice`→로컬 :8910 façade이며, 원격 GPU(Tailscale) 호스트는 보존한다. 프리셋 음색은 façade 팔레트 id로 전달된다. 음성 대화 중 나이아 자기 목소리가 마이크로 되들어와도 (1)재생 중 마이크 정지 (2)직전 발화 유사도 스킵으로 사용자 입력에 섞이지 않으며, **"좋아/네" 같은 짧은 정상 답변은 삼켜지지 않는다** | 제어면(프로파일·다운로드/준비 상태) + 표현(음색·에코) | `vram-tiers.test.ts`·`SettingsTab.test.tsx`·`slots-manifest.contract.test.ts`·`synthesize.test.ts`·`echo-text-filter.test.ts`·loader `plan --profile laptop_4060_8g`·Tauri `settings-slots` 및 다운로드/준비 상태 UC. 실제 음색/립싱크는 실행 중 :8910→:8901/:8902와 Tauri 관찰을 함께 통과해야 한다. |
 | **S-BGM-SKILL** (UC8/FR-BGM.1 — 2026-07-16, 시연 크리티컬) | 사용자가 나이아에게 **"잔잔한 음악 틀어줘"** 라고 하면 나이아가 `skill_youtube_bgm` 도구로 BGM 위젯을 제어한다 — 검색(사이드카 :18791) 첫 결과 재생·정지·일시정지·재개·다음/이전(즐겨찾기)·볼륨. 구 monolith 의 내장 BGM 스킬이 new-core 이식에서 누락돼(위젯·사이드카·에이전트 UC8 어댑터는 있으나 **도구 등록 배선 0**) 나이아가 BGM 존재 자체를 몰랐던 갭 해소. 배선 = **패널(환경) 도구 경로**(E1 — agent 무변경): 부팅 등록 → `panel_tool_call` → 셸 실행 → 위젯이 이미 듣는 `bgm_youtube_*` 이벤트 | 환경(ambiance) — 위젯 도구화, 뇌 무변경 | `bgm-skill.test.ts`(액션 라우팅·검색→첫결과·볼륨 clamp·인자검증·이벤트 payload 형상) [단위] + **`e2e/bgm-skill.spec.ts`(실 UI 배선 회귀 가드: (A) 부팅 panel_skills 에 skill_youtube_bgm 등록 (B) 채팅 턴 panel_tool_call → BgmPlayer 실제 재생 `.bgm-icon--playing`)** — 단위테스트로 못 잡는 *배선 누락*(이번 회귀 유형)을 실 UI 로 고정. 실 음악 재생=부스 리허설(수동, 2026-07-16) |
 | **S-CASCADE** (FR-CASCADE — Round 2, 2026-06-30) | 설정에서 **"로컬 음성 엔진 시작"** 을 누르면 naia-os가 로컬 cascade(VoxCPM2 등)를 **로컬에서 직접 기동**(원격 아님) — windows-manager loader를 사이드카로 띄워 VRAM 예산 내 서비스를 spawn·감독, 준비되면 사용 가능. "중지"로 내림. 8GB는 음성 단독(6.9G)까지. | 제어면/표현 — 로컬 cascade lifecycle 임베딩 | windows-manager `test_launcher.py`(9) · naia-os cargo check · `cascade-toggle` UI. ⚠️ 실기동 RTF/모델·venv 설치=R2.3(DEFER) |
 | **S-8G** (8G 재티어링, 2026-07-08) | 8GB GPU 사용자가 프로파일에서 **로컬 집중 3모드 택1**(로컬 LLM만 / 비디오 아바타만 / 둘 다) — 동시 구동 불가라 배타 선택, **음성은 8G에선 항상 클라우드**. VRAM 부족 시 로컬 LLM이 클라우드로 강등되며 그 사실을 **정직히 알림**(무료 위장 금지). 아바타는 로컬 avatar 제공(또는 로그인) 없으면 선택 불가 | 제어면(설정) — 8G 배타 capability 해소 + VRAM 프리플라이트 | `vram-tiers.test.ts`·wm `test_manifest.py`(focus 배타·비8G 무시·voice→avatar)·`capability-settings.spec.ts`(FR-5 focus 3옵션·FR-6 립싱크·FR-7 아바타 게이트). ⚠️ 실 아바타 렌더 RTF=실 GPU(사용자 실기) |
@@ -205,10 +205,14 @@ foundation UC 카탈로그와 직교하는 셸 feature(S72 선례). 각 시나�
 ## UC-CODEX-ROLES — Codex를 main으로 쓰고 역할별 모델을 분리한다
 
 사용자는 설정에서 Codex를 main provider로 선택한다. API key 입력 없이 로컬 Codex 로그인으로 대화하며,
-sub와 memory 역할은 서로 다른 provider/model로 유지할 수 있다. 재시작 뒤에도 역할 설정이 보존되고,
+sub와 memory 역할은 처음에는 main 설정을 상속한다. 사용자가 역할별 설정을 선택하면 각 역할에서 지원하는
+provider/model을 독립적으로 지정하고, 다시 시작해도 그 선택을 복원한다. Codex처럼 main 전용 provider는
+sub 또는 memory의 직접 선택지에 표시하지 않고, main 상속으로만 사용한다. 재시작 뒤에도 역할 설정이 보존되고,
 Shell은 빌드 때 고정된 정확한 Agent 런타임만 실행한다.
 
 검증은 `SettingsTab`, `adk-store`, `chat-service`, `uc-wire-v1-paired-proto` 계약과 실제 Codex smoke를 함께 사용한다.
+설정 화면 통합 검증은 `e2e-tauri/specs/95-llm-role-settings.spec.ts`에서 상속 전환, 역할별 provider/model 저장,
+재시작 뒤 config 복원을 확인한다.
 
 ## UC-JEONJU-COURSE-READINESS — 강의용 Codex 준비 상태를 확인한다
 
@@ -220,6 +224,8 @@ Shell은 빌드 때 고정된 정확한 Agent 런타임만 실행한다.
 - 실패: 설치되지 않았거나 로그인되지 않았으면 원인을 구분해 표시하고, 이전 provider·모델·워크스페이스 설정은 바꾸지 않는다.
 - 재시도: 사용자가 설치 또는 로그인을 마친 뒤 같은 화면에서 다시 확인할 수 있다.
 - 경계: 이 확인은 Codex에게 파일 작성·Git commit·push·배포를 맡기지 않는다. Git과 GitHub Pages는 수강생이 별도 단계에서 직접 수행한다.
+
+이 UC의 상태 분류과 토큰 비노출은 Rust·Settings 단위 테스트로, 실제 로그인된 Codex CLI와 Brain 화면의 준비 상태 표시는 `e2e-tauri/specs/96-codex-readiness.spec.ts` 네이티브 Tauri E2E로 검증한다.
 
 ## UC-CODEX-WORKER-LIFECYCLE — 격리된 Codex 코딩 작업자를 관리한다
 
@@ -233,11 +239,54 @@ Shell은 빌드 때 고정된 정확한 Agent 런타임만 실행한다.
 - 실패: API 미연결·요청 실패·동일 worktree 충돌은 안전한 오류만 표시하며 새 상태·비밀값·원본 adapter 오류는 화면이나 로그에 남기지 않는다.
 - 경계: 로그인 토큰·계정 식별자·Codex CLI 출력은 worker request·UI·로그에 포함하지 않는다. 실제 gRPC schema가 확정되기 전 Shell은 작업자 실행을 흉내 내지 않는다.
 
+### 시각·사용성 수용 기준
+
+사용자는 작업자 패널을 열었을 때 제어 루트, 실행 대상, 현재 수업 대상의 저장 상태, 다음 행동을 한 화면에서 구분한다. 선택할 수 없는 provider를 선택 상자처럼 보이지 않게 하며, 상태는 원시 enum이나 원문 시간만으로 전달하지 않는다. 패널은 1,100px 이하의 Shell 분할 폭에서도 입력·수업 경계·실행 버튼이 한 열의 의도된 순서로 유지된다.
+
+- 빈 목록: 작업자가 없다는 사실과 첫 작업을 시작할 수 있는 입력 흐름을 표시한다.
+- 진행 중: 저장·시작·취소·재개 요청 중에는 해당 행동을 중복 전송하지 않고 진행 상태를 표시한다.
+- 오류: 안전한 원인과 재시도 전에 확인할 행동을 해당 요청 맥락에서 표시한다. 주기적 연결 오류가 사용자의 저장·시작 결과를 덮어쓰지 않는다.
+- 수업 대상: 저장된 대상은 `다음 Agent 시작 시 적용`임을 명시하고, 저장되지 않았거나 아직 적용되지 않은 상태를 구분한다.
+
+## UC-JEONJU-COURSE-WORKER
+
+For the Jeonju course, the user explicitly selects a Git root and enables course mode. The default remains an Agent-created isolated worktree. Course mode is the only route that can run in the selected workspace.
+
+- **ADK control root and execution target:** Shell shows the currently selected Naia ADK root as the control root. Skills, settings, and job state remain there. The user separately enters an execution-target Git root: normally `naia-adk/projects/<project>`, or the ADK root itself only for an explicit ADK-maintenance task. Codex is started with that target as its working directory; it does not receive a blanket write scope for every project under the ADK root.
+- **Course containment:** a direct course target must be the control root itself or a descendant Git root. A sibling checkout or an unrelated absolute path fails closed before the worker is created. This keeps the default ADK workspace useful while allowing an independently versioned project below `projects/` to be the actual write target.
+- Shell and Agent both fail closed unless the selected folder is the exact clean Git root with a remote.
+- The allowed file list is fixed by Shell IPC to `index.html` and `hero.svg`. WebView input, Discord messages, LLM text, and task text cannot supply or change that list.
+- **Proposal then apply:** the selected provider is a read-only proposal producer, not the filesystem authority. It returns only a versioned complete-file JSON proposal. Naia parses that fixed schema, applies the accepted subset of `index.html` and `hero.svg`, then runs the existing Git and content verification. This contract is shared by Codex, a model authenticated through the user's Naia account, and any later compatible provider.
+- The worker card shows the returned verification summary. A failed check preserves student changes for manual review; Shell never resets or cleans the student workspace.
+- **Visible course interaction:** Shell keeps the course start action disabled until the saved Discord course target is the same Git root currently entered by the instructor. The selected-workspace card is the student-facing Naia report: it states whether the proposal is queued, running, cancelling, completed with verification, completed without verification, failed, or cancelled. A verified completion tells the student to inspect the two files, check the page in a browser, and then make the Git commit; its `수업 파일 열기` action opens `index.html` directly in the Shell editor. Failed or cancelled work explicitly says that success was not claimed and that remaining files are preserved for review.
+- If readiness fails, no worker is created and the UI gives a safe instruction to review the selected folder rather than exposing raw Git or Agent output.
+
+### UC-JEONJU-DISCORD-COURSE-TARGET
+
+Before starting the Agent, the instructor opens **Coding Workers**, enables Jeonju course mode, and explicitly saves the Discord course target. Shell writes the target only to the active ADK control root at `naia-settings/jeonju-discord-course.json`.
+
+- The persisted document is versioned (`version: 1`) and contains the canonical selected Git root plus the exact fixed file list `index.html`, `hero.svg`.
+- Rust accepts only a clean Git root with `origin` that is the control root or its descendant. A sibling checkout, arbitrary absolute path, dirty repository, missing remote, malformed document, or altered file list fails closed.
+- The form exposes the fixed file boundary as status only. Discord messages, chat task text, and model output never supply a workspace path or allowed-file list.
+- Agent startup consumes this trusted target document. The saved target is distinct from an ordinary Coding Worker request, so normal workers continue to use isolated worktrees.
+
+Success means the visible confirmation identifies the saved target and fixed boundary without exposing a token or raw Git output. A failed save keeps the prior target unchanged and gives only the folder-readiness guidance.
+
 ## Test Coverage Map (P02)
+
+**UC-JEONJU-COURSE-WORKER** maps to `apps/__tests__/coding-workers.test.tsx` and `apps/workspace/__tests__/coding-workers-tauri.test.ts` for the explicit preset, saved-target start gate, fixed boundary, preflight rejection, proposal/apply explanation, state-specific Naia report, and verification summary. Its native acceptance specs are `e2e-tauri/specs/91-jeonju-course-worker.spec.ts` (first build → student commit → revision and completed report) and `97-course-worker-guidance.spec.ts` (visible blocked start before target save); they run with the paired Agent and an isolated fixture repository. The proposal worker may inherit a read-only parent sandbox, because it no longer writes the course repository: Naia performs the constrained apply and post-apply verification.
+
+**UC-JEONJU-DISCORD-COURSE-TARGET** maps to `apps/__tests__/coding-workers.test.tsx` and `apps/workspace/__tests__/jeonju-course-target.test.ts` for the explicit save action, fixed schema parser, and no caller-supplied allowed files. `src-tauri/src/lib.rs` contracts cover canonical containment and exact schema rejection. Its native Tauri coverage extends the Jeonju course acceptance fixture so the saved target exists before Agent startup.
+
+The worker form shows the control-root path separately from the execution-target input, then changes the target label and help text immediately when course mode is selected. This prevents the default ADK workspace from being mistaken for Codex's write target and prevents the default isolated-worktree route from being mistaken for direct course-repository work. `apps/__tests__/coding-workers.test.tsx` verifies the transition, root/target explanation, and Korean explanatory labels while retaining the technical terms. `e2e-tauri/specs/97-course-worker-guidance.spec.ts` verifies the same transition in the actual Tauri Shell; `91-jeonju-course-worker.spec.ts` creates the course repository below the isolated ADK fixture's `projects/` directory.
+
+**시각 검토 게이트:** 기능 UI 변경은 구현 전 상태 매트릭스(기본·빈 목록·진행·성공·오류·좁은 폭)를 P02에 기록한다. P04에서는 해당 상태를 컴포넌트/Playwright와 실제 Tauri Shell에서 확인하고, 스크린샷 또는 동등한 DOM·레이아웃 증거를 남긴다. 기능 계약 테스트만 통과한 경우에는 P05 완료로 선언하지 않는다.
 
 | UC | 단위/계약 | UI 통합 |
 |---|---|---|
 | UC-CODEX-WORKER-LIFECYCLE | `apps/workspace/__tests__/coding-workers.test.tsx`: form validation, same-worktree collision, state rendering, checkpoint-only resume, unavailable adapter의 no-fake-success | `e2e/coding-workers.spec.ts` (후속): Tauri adapter fixture로 두 isolated worktree와 cancel/reconciliation을 검증한다. 실제 Agent schema 수신 전에는 fixture가 성공 실행을 가장하지 않는다. |
+| UC-CODEX-WORKER-LIFECYCLE 시각 수용 | `apps/__tests__/coding-workers.test.tsx`: provider 표현, 빈 목록, 상태 배지, 수업 대상의 다음 Agent 적용 상태, 요청 중 중복 차단, 안전한 오류 맥락 | `e2e/coding-workers.spec.ts`: Shell 분할 폭(1,100px 이하)에서 입력·수업 경계·주요 행동의 순서와 접근 가능한 상태 표현을 검증. `e2e-tauri/specs/97-course-worker-guidance.spec.ts`: 실제 Tauri WebView에서 같은 안내·상태·레이아웃을 확인. |
+| UC-CODEX-ROLES | `src/lib/llm/__tests__/roles.test.ts`, `src/components/__tests__/SettingsTab.test.tsx`: main 상속, 역할별 provider/model 저장, main 전용 provider 차단 | `e2e-tauri/specs/95-llm-role-settings.spec.ts`: 실제 Shell 설정 화면에서 역할 설정 저장과 재시작 복원 |
 
 각 시나리오의 **검증 3단(verification stack)** — 어느 하나로 "됐다" 판정 금지(R1 codex·gemini 보강):
 1. **Old-Baseline 측정**(이식 *전*, old): 입력/출력 trace + **상태 전이**(세션·캐시·fs·프로세스·권한 = hidden state, trace만으론 부족) + 설정/버전/키 상태 + **오류 분류축**(아래). **환경 정규화**(외부 의존 stub/mock → 루크 env 부작용을 코드 로직으로 오인 방지). **flaky**=1회 측정 금지, 반복+안정도 표기. **record-replay 한계**(외부시간·랜덤·네트워크·ws/streaming 재현 불안정) 명시.
@@ -435,6 +484,33 @@ Test Coverage Map:
   `persists validated proactive settings after cache-clear native reload`,
   `starts exhibition introduction without waiting for ordinary chat`.
 
+## UC-PROACTIVE-COST-CONTROL — AI/TTS 옆에서 능동 발화를 통제한다
+
+Naia가 개인 라디오 DJ나 전시 소개를 제안하거나 시작하려 할 때, 사용자는 아바타 영역의
+AI·TTS 제어 바에서 **능동 발화** 상태를 항상 확인하고 즉시 바꿀 수 있다. 이 제어는
+프로필 설정과 다르다. 프로필은 무엇을 할지(개인 라디오/전시 소개)를 정하고, 능동 발화
+제어는 지금 LLM·TTS·선택적 BGM을 사용해도 되는지를 정한다.
+
+- 꺼짐: agent는 능동 발화를 시작하지 않고, 이미 진행 중인 activity는 안전하게 중단한다.
+- 준비됨: 선택된 프로필과 현재 AI/TTS 경로를 표시한다. agent의 판단은 시작 **제안**으로
+  보이며, 사용자는 버튼에서 허가하거나 계속 꺼 둘 수 있다.
+- 실행 중: 현재 프로필과 사용 중인 AI/TTS 경로를 표시한다. 버튼 한 번으로 즉시 중단한다.
+- 차단됨: TTS가 꺼져 있거나 로컬 음성/아바타 준비가 안 된 경우, 시작하지 않고 정확한
+  차단 이유를 표시한다. 클라우드·로컬 비용을 추정값으로 꾸며 표시하지 않는다.
+
+LLM은 좁은 능동 발화 도구로 profile 시작을 **요청 또는 제안**할 수 있지만, Shell의 현재
+허가 상태·오디오 가능 여부·사용자 중단을 우회할 수 없다. 설정 화면은 시간대·개인정보
+동의·간격·BGM 자동재생 같은 정책만 보관하며, 숨은 opt-in 토글이 런타임 허가를 대신하지 않는다.
+
+Test Coverage Map:
+
+- 컴포넌트: `AiControlBar`가 꺼짐/준비됨/실행 중/차단됨의 라벨, `aria-pressed`, 설명과
+  시작·중단 요청을 올바르게 표현한다.
+- 구성: `proactive-speech-settings`가 profile 정책과 사용자 허가를 별도로 저장·정규화하고,
+  TTS-off/미구성 profile을 fail-closed 한다.
+- 실제 Tauri: 새 `e2e-tauri` 시나리오가 버튼으로 시작·중단한 뒤 agent의 profile 설정과
+  activity stop을 확인하고, 로컬 음성 준비 실패는 실행 성공으로 표시하지 않는지 확인한다.
+
 ## UC-WIRE-V1 — 이미지·Discord·RAG·처리 공개 공통 채팅 경계 (#384 / naia-agent #89)
 
 셸 사용자는 기존 텍스트 대화를 그대로 사용하면서 필요할 때 안전한 이미지 참조,
@@ -474,7 +550,7 @@ P02 검증:
 
 ### UC-DISCORD-1: 개인 봇 연결과 채널 활동 허용
 
-사용자는 나이아에게 Discord 연결 방법을 물어본다. 나이아는 사용자가 Discord에서 봇을 만들고 자신의 서버에 초대해야 함을 설명한 뒤 연결 설정으로 안내한다. 사용자는 보안 입력을 통해 봇을 연결하고, 나이아가 접근 가능한 채널 중 활동을 허용할 채널을 선택한다. 이후 나이아는 허용 채널에서만 다른 참여자와 대화한다.
+사용자는 나이아에게 Discord 연결 방법을 물어본다. 나이아는 사용자가 Discord에서 봇을 만들고 자신의 서버에 초대해야 함을 설명한 뒤 연결 설정으로 안내한다. 연결 화면은 **봇 만들기·초대 → Windows 보안 입력창에 토큰 입력 → 연결 확인 → 활동 채널 선택** 순서를 먼저 보여 준다. 토큰은 WebView 입력칸·채팅·일반 설정에 나타나지 않으며, 사용자가 `Discord 연결`을 누를 때만 열리는 운영체제 보안 입력창에서 처리한다. 나이아가 접근 가능한 채널 중 활동을 허용할 채널을 선택한 뒤에만, 이후 나이아는 허용 채널에서 다른 참여자와 대화한다.
 
 - 성공: 연결 상태와 허용 채널이 보이고, 봇은 허용 채널에서만 동작한다.
 - 실패: 토큰 오류, 봇 미초대, 권한 부족, 채널 삭제는 원인을 보여 주며 다른 채널에는 영향을 주지 않는다.
@@ -486,6 +562,16 @@ P02 검증:
 
 - 좁은 화면: 목록과 대화를 동시에 강제로 넣지 않고, 목록 → 대화 → 뒤로 가기 흐름으로 전환한다.
 - 넓은 화면: 목록과 선택된 대화를 함께 보여 줄 수 있다.
+
+### UC-DISCORD-1B: 연결 설정에서 채널 대화함으로 이어가기
+
+사용자는 **연결 → Discord**에서 봇 토큰을 보안 입력으로 저장하고 활동을 허용할 채널을 선택한다. 저장이 성공하면 같은 화면에서 `Discord 대화함 열기`를 선택해 지구본 채널 탭으로 이동한다. 채널 탭은 방금 허용한 채널들을 서버·채널명으로 표시하고, 아직 메시지가 없어도 “대기 중”으로 구분한다.
+
+아직 토큰이 없으면 채널 탭은 구형 Gateway 오류를 보여 주지 않고, Discord를 연결하고 채널을 허용하라는 안내와 연결 설정으로 가는 버튼을 보여 준다. 토큰은 있지만 허용 채널이 없으면 채널 선택으로 돌아가는 버튼을 보여 준다. 채널 하나라도 허용된 뒤에는 Shell 개인 채팅과 섞지 않고, 선택된 Discord 채널의 기록만 보여 준다.
+
+- 성공: 저장 직후 같은 허용 목록이 대화함에 보이고, 사용자 선택 또는 최근 채널이 열리며 개인 채팅으로 복사되지 않는다.
+- 실패: 미연결·미허용·상태 조회 실패를 서로 구분해 안내한다. 오류 원문·토큰·Agent 내부 상태는 표시하지 않는다.
+- 경계: `연결`은 자격 증명과 활동 권한을 정하는 곳이고, 지구본은 허용된 Discord 채널의 읽기 전용 대화함이다. 두 화면은 동일한 binding 식별자만 공유한다.
 - 비어 있음: 허용 채널이 없으면 연결·권한 설정을 안내한다.
 
 ### UC-DISCORD-3: 실시간 공동 대화
@@ -501,5 +587,9 @@ P02 검증:
 | Scenario | Unit / contract | UI / integration | Real Discord E2E |
 |---|---|---|---|
 | UC-DISCORD-1 | credential boundary, allow-list, participation policy | Settings connection flow | bot invite, permissions, allowed-channel activation |
+| UC-DISCORD-1A | `ConnectionsSettingsTab.test.tsx`: visible four-step setup, native credential result/status-generation classification, incomplete-discovery fail-closed, binding conflict; Rust dotenv parser accepts only `DISCORD_BOT_TOKEN` for debug E2E | `e2e/discord-settings-secure.spec.ts`: no inline token and no-argument native-command contract; `e2e-tauri/specs/92-discord-secure-cancel.spec.ts`: isolated real Tauri native-cancellation seam; `e2e-tauri/specs/94-discord-live-auth.spec.ts`: private dotenv → live bot authentication/discovery without DPAPI/WebView persistence; `e2e/discord-channel-agent.spec.ts`: allow-list save. | provisioned test bot: allow-list save → Agent authority `ready` |
+| UC-DISCORD-1B | `ConnectionsSettingsTab.test.tsx`: save exposes inbox handoff only for a saved binding; `ChannelsTab.test.tsx`: disconnected/unconfigured/allowed empty states and binding-scoped records; no raw status leak | `e2e-tauri/specs/93-discord-inbox-handoff.spec.ts`: real Shell settings → channels handoff and empty-state route | provisioned test bot: binding save → inbox channel list → inbound/outbound records remain in their binding |
 | UC-DISCORD-2 | recency and selected-channel persistence | narrow/wide channel inbox navigation | multi-channel history visibility |
 | UC-DISCORD-3 | Gateway event deduplication, per-channel context, reconnect | live status and unread rendering | two-channel message/reply/reconnect flow |
+
+| **S-CASCADE-INSTALL-PLAN** (FR-CASCADE.2 — 2026-07-22) | 4060 profile users see a Shell-checked local-runtime plan. Loader, Python runtime, cascade service bundle, Ditto engine, VoxCPM2 model, and bundled reference voices each report a name, progress, next action, retryability, and failure reason. With no packaged artifact or download manifest, Shell reports that boundary and does not pretend to download or start anything. `ready` is true only when all prerequisites and the live :8910 requested services are verified. | Rust `cascade_installation_status` contract tests (missing prerequisite, queued model download, ready-to-start, live ready) and `SettingsTab.test.tsx` (profile plan display; no `start_cascade` when `canStart=false`). Actual download/install and Tauri voice+lipsync remain a separate E2E gate after packaged artifacts exist. |

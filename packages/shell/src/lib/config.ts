@@ -103,6 +103,8 @@ export interface AppConfig {
 	subLlmProvider?: ProviderId;
 	subLlmModel?: string;
 	subLlmBaseUrl?: string;
+	/** API key for an explicit sub-brain provider. Stored only in the secure store. */
+	subLlmApiKey?: string;
 	subLlmCredentialRef?: string;
 	memoryLlmCredentialRef?: string;
 	locale?: Locale;
@@ -241,6 +243,8 @@ export interface AppConfig {
 	bgmPlaying?: boolean;
 	/** Opt-in proactive speech mode. Disabled unless explicitly persisted. */
 	proactiveSpeechProfile?: "disabled" | "personal_radio_dj" | "exhibition_intro";
+	/** Runtime permission for proactive LLM/TTS use. Profile policy alone never implies permission. */
+	proactiveSpeechPermitted?: boolean;
 	proactiveSpeechIdleMs?: number;
 	proactiveSpeechIntervalMs?: number;
 	proactiveSpeechTimezone?: string;
@@ -272,7 +276,8 @@ export interface AppConfig {
 	/** Embedding model name (vLLM/Ollama). */
 	memoryEmbeddingModel?: string;
 	/** LLM provider used for memory fact extraction. Defaults to 'none' (heuristic). */
-	memoryLlmProvider?: "none" | "naia" | "vllm" | "ollama";
+	/** Legacy compatibility mirror for memory role. `llmRoles.memory` is authoritative. */
+	memoryLlmProvider?: ProviderId | "none";
 	/** Base URL for vLLM/Ollama LLM endpoint (memory fact extraction). */
 	memoryLlmBaseUrl?: string;
 	/** API key for LLM endpoint (memory fact extraction). */

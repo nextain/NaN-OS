@@ -21,12 +21,13 @@
  */
 
 import { DEFAULT_LOCAL_VOICE_HOST, type TtsProviderId } from "../config";
+import { BGM_SIDECAR_BASE_URL } from "../bgm-sidecar-url";
 import { resolveEdgeVoice } from "./edge-tts";
 
 // Edge neural TTS runs in the bgm/media sidecar (node msedge-tts) — the in-app
 // webview can't do the MS WebSocket handshake (it can't set the required
 // headers/Origin → 400). The shell fetches the sidecar's /edge-tts (#363).
-const EDGE_TTS_SIDECAR_URL = "http://localhost:18791/edge-tts";
+const EDGE_TTS_SIDECAR_URL = `${BGM_SIDECAR_BASE_URL}/edge-tts`;
 
 export interface SynthesizeOpts {
 	/** Text to speak (emotion tags / emoji already stripped by caller). */
@@ -47,9 +48,9 @@ export interface SynthesizeOpts {
 	vllmHost?: string;
 	/**
 	 * Local voice engine host (naia-local-voice provider) — distinct from
-	 * `vllmHost` (which is the LLM host). When unset for naia-local-voice,
-	 * synthesis falls back to `vllmHost` then fails honestly (no silent
-	 * free-voice substitution — see ChatArea catch).
+	 * `vllmHost` (which is the LLM host). When unset, it uses the installed
+	 * cascade facade at `http://localhost:8910`; it never falls back to the
+	 * LLM host or a cloud voice.
 	 */
 	vllmTtsHost?: string;
 	/** Abort signal for cancellation / interrupt. */
@@ -230,8 +231,7 @@ async function synthElevenlabs(
 	return { audioBase64: arrayBufferToBase64(await resp.arrayBuffer()) };
 }
 
-/** vllm → local OpenAI-compatible `/v1/audio/speech`. naia-local-voice uses
- * the same façade surface but has separate reference-voice semantics. */
+/** vllm → local OpenAI-compatible `/v1/audio/speech`. */
 async function synthVllm(opts: SynthesizeOpts): Promise<SynthesizeResult> {
 	const base = opts.vllmHost?.replace(/\/$/, "");
 	if (!base) {
@@ -275,7 +275,7 @@ async function synthEdge(opts: SynthesizeOpts): Promise<SynthesizeResult> {
 // is needed before it is queued for playback or avatar lip sync.
 
 /**
- * naia-local-voice → the cascade façade's OpenAI-compatible speech surface.
+ * naia-local-voice → the cascade façade's public `/tts` speech surface.
  * The 8GB profile exposes :8910; raw VoxCPM2 on :8901 stays private. The
  * façade resolves the selected reference voice and returns RIFF WAV without a
  * bearer token.
@@ -291,15 +291,21 @@ async function synthNaiaLocalVoice(
 		method: "POST",
 		headers: { "Content-Type": "application/json" },
 		body: JSON.stringify({
-			// `naia-local-voice` is the shell provider id. The cascade's
-			// OpenAI-compatible contract names its actual backend explicitly.
+			// :8910 owns the private VoxCPM2 (:8901) implementation detail.
+			// The facade contract intentionally remains `{ text, voice }`.
 			model: "voxcpm2",
 			input: opts.text,
+			// Retained as an ignored compatibility field for facades that share
+			// the same request parser with their optional `/tts` route.
+			text: opts.text,
 			// RefAudioSection stores a preset URL in voiceRefUrl. ChatArea resolves
 			// it to this facade palette id; keep it intact all the way to :8910.
+			// The standalone facade ships this CC0 preset with the Shell bundle.
+			// `naia-default` was only a former server-side alias; it is not present
+			// in the Windows facade palette and causes a 400 after a fresh install.
 			voice:
 				!opts.voice || opts.voice === "default"
-					? "naia-default"
+					? "cc0-ko-female-01.wav"
 					: opts.voice,
 			response_format: "wav",
 		}),
@@ -317,11 +323,12 @@ async function synthNaiaLocalVoice(
 /**
  * 아바타 립싱크에 셸 합성 오디오(WAV/PCM)를 직접 흘릴 수 있는 provider 인가 (FR-VOICE.5).
  *  - nextain: 게이트웨이 LINEAR16(WAV) — 기존.
- *  - naia-local-voice: OpenAI 표면 `/v1/audio/speech` 가 WAV 반환, **음색은 합성 시점에
- *    서버가 해석**(voice→ref). 파사드 음색 상태를 우회하지 않으므로 PCM 직결이 안전하고,
- *    8g avatar-only 파사드(자체 TTS 없음)에선 /stream_text 가 무음이라 이것이 유일한
- *    립싱크 경로다. (구 raw /tts 직결의 "무지문 랜덤 음색" 금지 사유는 표면 전환으로 소멸.)
- * false = facade 내장 TTS(/stream_text) 폴백(full cascade 전제) 또는 브라우저 발화.
+ *  - naia-local-voice: cascade public `/tts` returns WAV and **the facade
+ *    resolves the selected reference voice**. The shell does not bypass that
+ *    ownership, so one selected preset is used consistently for playback and Ditto.
+ *    In the 8GB profile, the same WAV is queued for playback and serialized
+ *    into the Ditto `/stream` request. This is deliberately half-duplex.
+ * false = a provider whose result is not suitable for direct Ditto audio input.
  */
 export function streamsAvatarPcm(provider: string): boolean {
 	return provider === "nextain" || provider === "naia-local-voice";

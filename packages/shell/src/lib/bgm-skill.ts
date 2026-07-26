@@ -14,11 +14,18 @@
 
 import { emit } from "@tauri-apps/api/event";
 import type { NaiaTool } from "./app-registry";
+import { BGM_SIDECAR_BASE_URL } from "./bgm-sidecar-url";
+import {
+	bgmPlayback,
+	toBgmPlayToolResult,
+	toBgmQueuedToolResult,
+	type BgmPlaybackPort,
+} from "./bgm-playback";
 
 /** panelExec 등록용 패널 id — 위젯 전용(앱 아님), panel_skills_clear 대상 아님(항상 유지). */
 export const BGM_PANEL_ID = "bgm-widget";
 
-const YT_BASE = "http://localhost:18791";
+const YT_BASE = BGM_SIDECAR_BASE_URL;
 
 export const BGM_ACTIONS = [
 	"play",
@@ -43,7 +50,10 @@ export const SKILL_YOUTUBE_BGM: NaiaTool = {
 				enum: [...BGM_ACTIONS],
 				description: BGM_ACTIONS.join(" | "),
 			},
-			query: { type: "string", description: "검색어 (play 에서 videoId 없을 때)" },
+			query: {
+				type: "string",
+				description: "검색어 (play 에서 videoId 없을 때)",
+			},
 			videoId: { type: "string", description: "YouTube video id (play, 선택)" },
 			title: { type: "string", description: "제목 (play+videoId, 선택)" },
 			volume: { type: "number", description: "0.0~1.0 (volume)" },
@@ -64,6 +74,7 @@ export interface BgmSkillDeps {
 	search: (query: string) => Promise<BgmSearchResult[]>;
 	/** 위젯(BgmPlayer)이 listen("agent_response") 로 받는 payload 를 발사. */
 	emitBgm: (payload: Record<string, unknown>) => Promise<void>;
+	playback: BgmPlaybackPort;
 }
 
 /** 사이드카 검색 — BgmPlayer.ytSearch 동형 표면(GET /yt/search?q=&max=). */
@@ -83,6 +94,7 @@ const defaultDeps: BgmSkillDeps = {
 	search: sidecarSearch,
 	// Tauri emit 은 JS listen("agent_response") 리스너에도 브로드캐스트 — BgmPlayer 가 즉시 반응.
 	emitBgm: (payload) => emit("agent_response", JSON.stringify(payload)),
+	playback: bgmPlayback,
 };
 
 /** 도메인: volume 0..1 clamp(순수) — agent UC8 어댑터 clampVolume 동형. 비유한=0.5. */
@@ -108,29 +120,52 @@ export async function executeBgmSkill(
 	}
 	const act = action as BgmAction;
 
+	const enqueueTrack = async (track: BgmSearchResult): Promise<string> => {
+		const result = deps.playback.enqueue({
+			videoId: track.id,
+			title: track.title,
+		});
+		if (result.disposition === "play") {
+			await deps.emitBgm({
+				type: "bgm_youtube_play",
+				videoId: track.id,
+				title: track.title,
+				...(track.thumbnail ? { thumbnail: track.thumbnail } : {}),
+			});
+			return JSON.stringify(toBgmPlayToolResult(result.playback));
+		}
+		await deps.emitBgm({
+			type: "bgm_youtube_enqueue",
+			videoId: track.id,
+			title: track.title,
+			queueId: result.queued.queueId,
+			position: result.queued.position,
+			...(track.thumbnail ? { thumbnail: track.thumbnail } : {}),
+		});
+		return JSON.stringify(
+			toBgmQueuedToolResult(result.queued, result.queueLength),
+		);
+	};
+
 	if (act === "play") {
 		const videoId = args.videoId;
-		if (typeof videoId === "string" && videoId.trim()) {
-			const title = typeof args.title === "string" ? args.title : "";
-			await deps.emitBgm({ type: "bgm_youtube_play", videoId, title });
-			return JSON.stringify({ ok: true, action: act, videoId, title });
-		}
+		if (typeof videoId === "string" && videoId.trim())
+			return enqueueTrack({
+				id: videoId,
+				title: typeof args.title === "string" ? args.title : "",
+			});
 		const query = args.query;
-		if (typeof query !== "string" || !query.trim()) {
-			throw new Error("play 에는 query(검색어) 또는 videoId 가 필요합니다");
-		}
+		if (typeof query !== "string" || !query.trim())
+			throw new Error("play requires query or videoId");
 		const results = await deps.search(query);
-		if (results.length === 0) {
-			return JSON.stringify({ ok: false, action: act, reason: "no_search_results", query });
-		}
-		const top = results[0];
-		await deps.emitBgm({
-			type: "bgm_youtube_play",
-			videoId: top.id,
-			title: top.title,
-			...(top.thumbnail ? { thumbnail: top.thumbnail } : {}),
-		});
-		return JSON.stringify({ ok: true, action: act, videoId: top.id, title: top.title });
+		if (results.length === 0)
+			return JSON.stringify({
+				ok: false,
+				action: act,
+				reason: "no_search_results",
+				query,
+			});
+		return enqueueTrack(results[0]);
 	}
 
 	if (act === "volume") {

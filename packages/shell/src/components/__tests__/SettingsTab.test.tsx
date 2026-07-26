@@ -176,6 +176,45 @@ describe("SettingsTab", () => {
 		expect(providerSelect.value).toBe("nextain");
 	});
 
+	it("persists role-specific models while keeping main-only Codex out of sub and memory", () => {
+		localStorage.setItem(
+			"naia-config",
+			JSON.stringify({ provider: "codex", model: "gpt-5.4", apiKey: "" }),
+		);
+		mockInvoke.mockResolvedValue([]);
+		render(<SettingsTab />);
+		gotoSettingsTab("brain");
+
+		const subMode = screen.getByTestId("sub-llm-mode") as HTMLSelectElement;
+		const memoryMode = screen.getByTestId(
+			"memory-llm-mode",
+		) as HTMLSelectElement;
+		expect(subMode.value).toBe("inherit:main");
+		expect(memoryMode.value).toBe("inherit:main");
+
+		fireEvent.change(subMode, { target: { value: "explicit" } });
+		const subProvider = screen.getByTestId(
+			"sub-llm-provider",
+		) as HTMLSelectElement;
+		expect([...subProvider.options].map((option) => option.value)).not.toContain(
+			"codex",
+		);
+		fireEvent.change(subProvider, { target: { value: "gemini" } });
+		const subModel = screen.getByTestId("sub-llm-model") as HTMLInputElement;
+		fireEvent.change(subModel, { target: { value: "gemini-3.1-flash-lite" } });
+		fireEvent.blur(subModel);
+		fireEvent.change(memoryMode, { target: { value: "inherit:main" } });
+
+		const saved = JSON.parse(localStorage.getItem("naia-config") || "{}");
+		expect(saved.llmRoles).toMatchObject({
+			sub: { provider: "gemini", model: "gemini-3.1-flash-lite" },
+			memory: { inherit: "main" },
+		});
+		expect(saved.subLlmProvider).toBe("gemini");
+		expect(saved.subLlmModel).toBe("gemini-3.1-flash-lite");
+		expect(saved.memoryLlmProvider).toBeUndefined();
+	});
+
 	it("persists Naia auth callback even when no config exists yet", async () => {
 		mockInvoke.mockResolvedValue([]);
 		const authReady = vi.fn();
@@ -280,6 +319,7 @@ describe("SettingsTab", () => {
 		render(<SettingsTab />);
 		gotoSettingsTab("brain");
 		const check = await screen.findByTestId("codex-readiness-check");
+		expect(check.parentElement).toHaveClass("codex-readiness-actions");
 		fireEvent.click(check);
 
 		await vi.waitFor(() => {
@@ -290,6 +330,71 @@ describe("SettingsTab", () => {
 		expect(mockInvoke).toHaveBeenCalledWith("codex_preflight");
 		expect(screen.queryByText("private@example.com")).toBeNull();
 		expect(JSON.parse(localStorage.getItem("naia-config") || "{}").apiKey).toBe("");
+	});
+
+	it("saves main, sub, and memory brains as role settings", () => {
+		localStorage.setItem(
+			"naia-config",
+			JSON.stringify({
+				onboardingComplete: true,
+				provider: "codex",
+				model: "gpt-5.4",
+				apiKey: "",
+			}),
+		);
+		mockInvoke.mockResolvedValue([]);
+		render(<SettingsTab />);
+		gotoSettingsTab("brain");
+
+		const subMode = screen.getByTestId("sub-llm-mode");
+		fireEvent.change(subMode, { target: { value: "explicit" } });
+		const subProvider = screen.getByTestId("sub-llm-provider") as HTMLSelectElement;
+		fireEvent.change(subProvider, { target: { value: "nextain" } });
+		fireEvent.change(screen.getByTestId("memory-llm-mode"), {
+			target: { value: "explicit" },
+		});
+		fireEvent.change(screen.getByTestId("memory-llm-provider"), {
+			target: { value: "nextain" },
+		});
+
+		fireEvent.click(screen.getByRole("button", { name: "Apply" }));
+		const saved = JSON.parse(localStorage.getItem("naia-config") || "{}");
+		expect(saved.llmRoles).toEqual(expect.objectContaining({
+			main: expect.objectContaining({ provider: "codex", model: "gpt-5.4" }),
+			sub: expect.objectContaining({ provider: "nextain", model: "gemini-3.1-flash-lite" }),
+			memory: expect.objectContaining({ provider: "nextain", model: "gemini-3.1-flash-lite" }),
+		}));
+	});
+
+	it("does not silently save Codex as a sub or memory brain", () => {
+		localStorage.setItem(
+			"naia-config",
+			JSON.stringify({ onboardingComplete: true, provider: "codex", model: "gpt-5.4", apiKey: "" }),
+		);
+		mockInvoke.mockResolvedValue([]);
+		render(<SettingsTab />);
+		gotoSettingsTab("brain");
+
+		fireEvent.change(screen.getByTestId("sub-llm-mode"), {
+			target: { value: "explicit" },
+		});
+		fireEvent.change(screen.getByTestId("memory-llm-mode"), {
+			target: { value: "explicit" },
+		});
+		expect(
+			[...(screen.getByTestId("sub-llm-provider") as HTMLSelectElement).options].map(
+				(option) => option.value,
+			),
+		).not.toContain("codex");
+		expect(
+			[...(screen.getByTestId("memory-llm-provider") as HTMLSelectElement).options].map(
+				(option) => option.value,
+			),
+		).not.toContain("codex");
+		fireEvent.click(screen.getByRole("button", { name: "Apply" }));
+		const roles = JSON.parse(localStorage.getItem("naia-config") || "{}").llmRoles;
+		expect(roles.sub.provider).not.toBe("codex");
+		expect(roles.memory.provider).not.toBe("codex");
 	});
 
 	it("shows a safe Codex login-required state and clears it on provider switch", async () => {
@@ -587,6 +692,58 @@ describe("SettingsTab — memory tab (#298)", () => {
 		expect(saved.nvaModel).toBeTruthy();
 	});
 
+	it("shows the 4060 install plan and does not start a missing runtime", async () => {
+		localStorage.setItem(
+			"naia-config",
+			JSON.stringify({
+				provider: "nextain",
+				model: "gemini-3.5-flash",
+				naiaKey: "nk",
+				localGpuTier: "laptop-4060-8g",
+				local8gFocus: "llm",
+			}),
+		);
+		mockInvoke.mockImplementation((cmd: string) => {
+			if (cmd === "detect_gpu_vram") return Promise.resolve(8);
+			if (cmd === "cascade_installation_status") {
+				return Promise.resolve(
+					{
+						phase: "blocked",
+						ready: false,
+						canStart: false,
+						summary: "Local runtime installation is blocked because required package artifacts are missing.",
+						steps: [
+							{
+								id: "cascade-service-bundle",
+								label: "Cascade service bundle",
+								state: "blocked",
+								action: "install",
+								actionAvailable: false,
+								progressPercent: 0,
+								retryable: false,
+								failure: {
+									code: "CASCADE_SERVICE_BUNDLE_MISSING",
+									message: "VoxCPM2, Ditto, or facade service files are not packaged.",
+									retryable: false,
+								},
+							},
+						],
+					},
+				);
+			}
+			if (cmd === "cascade_status") return Promise.resolve(false);
+			return Promise.resolve([]);
+		});
+
+		render(<SettingsTab />);
+		await vi.waitFor(() => {
+			expect(screen.getByTestId("cascade-installation-status").textContent).toMatch(
+				/Cascade service bundle.*blocked.*0%/i,
+			);
+			expect(mockInvoke).not.toHaveBeenCalledWith("start_cascade");
+		});
+	});
+
 	it("restores an explicitly saved 8GB profile as CPU/NPU brain plus local cascade", async () => {
 		localStorage.setItem(
 			"naia-config",
@@ -600,6 +757,15 @@ describe("SettingsTab — memory tab (#298)", () => {
 		);
 		mockInvoke.mockImplementation((cmd: string) => {
 			if (cmd === "detect_gpu_vram") return Promise.resolve(8);
+			if (cmd === "cascade_installation_status") {
+				return Promise.resolve({
+					phase: "ready-to-start",
+					ready: false,
+					canStart: true,
+					summary: "Local runtime files are ready. Services have not been started yet.",
+					steps: [],
+				});
+			}
 			if (cmd === "start_cascade") {
 				return Promise.resolve(
 					JSON.stringify({ facade_port: 8910, services: [] }),

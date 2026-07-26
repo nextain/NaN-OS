@@ -19,14 +19,13 @@ import { createHash } from "node:crypto";
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { platform } from "node:os";
 import { dirname, resolve } from "node:path";
+import { REQUIRED_AGENT_COMMIT, REQUIRED_PROTO_SHA256 } from "./agent-pairing.mjs";
 
 const mode = process.argv[2] === "prod" ? "prod" : "dev";
 
 const HERE = import.meta.dirname; // packages/shell/scripts
 const SHELL = resolve(HERE, ".."); // packages/shell
 const OS_ROOT = resolve(SHELL, "..", ".."); // new-naia-os
-const REQUIRED_AGENT_COMMIT = "5c496c394e2d54bdffdce37d3730353e34832827";
-const REQUIRED_PROTO_SHA256 = "ebde3daeac8f697fe880ec8306391092c99649dec687cab30f922cef074f2de3";
 const STATIC_AGENT_CANDIDATES = [
 	resolve(OS_ROOT, "..", "naia-agent"),
 	resolve(OS_ROOT, "..", "..", "naia-agent"),

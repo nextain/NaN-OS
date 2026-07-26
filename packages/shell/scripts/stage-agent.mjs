@@ -27,13 +27,12 @@ import { execFileSync, execSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { cpSync, existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
+import { REQUIRED_AGENT_COMMIT, REQUIRED_PROTO_SHA256 } from "./agent-pairing.mjs";
 
 const SHELL = process.cwd(); // packages/shell
 const STAGE = resolve(SHELL, "src-tauri/agent");
-const REQUIRED_AGENT_COMMIT = "5c496c394e2d54bdffdce37d3730353e34832827";
 // Hash text after CRLF normalization: the paired checkout may use a different
 // Windows git autocrlf setting while still containing the identical proto.
-const REQUIRED_PROTO_SHA256 = "ebde3daeac8f697fe880ec8306391092c99649dec687cab30f922cef074f2de3";
 
 function die(message) {
 	console.error(message);
