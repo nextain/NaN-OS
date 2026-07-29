@@ -207,16 +207,25 @@ export async function sendMessage(text: string): Promise<void> {
 
 		await setTextareaAndSend(S.chatInput, text);
 
-		// Wait for streaming to start — query DOM fresh each check
+		// Wait for streaming to start or for a fast non-streaming response to
+		// finish. A local Gateway can add the completed assistant message between
+		// WebDriver polls, so requiring cursor-blink to be observed is racy.
 		await browser.waitUntil(
 			async () => {
 				await traceDelta();
 				return browser.execute(
-					(sel: string) => !!document.querySelector(sel),
+					(sel: string, msgSel: string, baseCount: number) =>
+						!!document.querySelector(sel) ||
+						document.querySelectorAll(msgSel).length > baseCount,
 					S.cursorBlink,
+					".chat-message.assistant:not(.streaming) .message-content",
+					beforeCount,
 				);
 			},
-			{ timeout: 60_000, timeoutMsg: "Streaming did not start (cursor-blink)" },
+			{
+				timeout: 60_000,
+				timeoutMsg: "Response did not start or complete",
+			},
 		);
 
 		// Wait for streaming to finish — cursor-blink disappears

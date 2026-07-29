@@ -52,6 +52,15 @@ export const MODEL_CAPABILITY_VALUES: readonly ModelCapability[] = [
 /** Provider ID — extensible via LLM registry. */
 export type ProviderId = string;
 
+export interface BillingReceipt {
+	requestId: string;
+	attempt: number;
+	priceVersionId: string;
+	currency: string;
+	customerCost: string;
+	status: "settled";
+}
+
 export interface ProviderConfig {
 	provider: ProviderId;
 	model: string;
@@ -74,6 +83,9 @@ export interface CostEntry {
 	cost: number;
 	provider: ProviderId;
 	model: string;
+	billingStatus?: "confirmed" | "estimated" | "unavailable" | "error";
+	customerCost?: string;
+	billingReceipts?: BillingReceipt[];
 }
 
 export interface ToolCall {
@@ -155,8 +167,11 @@ export type AgentResponseChunk =
 			requestId: string;
 			inputTokens: number;
 			outputTokens: number;
-			cost: number;
-			model: string;
+			cost?: number;
+			model?: string;
+			billingStatus?: "confirmed" | "estimated" | "unavailable" | "error";
+			customerCost?: string;
+			billingReceipts?: BillingReceipt[];
 	  }
 	| {
 			type: "approval_request";

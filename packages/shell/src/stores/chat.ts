@@ -220,11 +220,10 @@ export const useChatStore = create<ChatState>()((set, get) => ({
 						...messages[i],
 						cost: prev
 							? {
+									...entry,
 									inputTokens: prev.inputTokens + entry.inputTokens,
 									outputTokens: prev.outputTokens + entry.outputTokens,
 									cost: prev.cost + entry.cost,
-									provider: entry.provider,
-									model: entry.model,
 								}
 							: entry,
 					};

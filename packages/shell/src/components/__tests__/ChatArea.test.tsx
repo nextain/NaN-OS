@@ -106,6 +106,27 @@ describe("ChatArea", () => {
 		expect(buttons.length).toBeGreaterThanOrEqual(2);
 	});
 
+	it("renders hosted billing metadata loss as unavailable, never as a free $0 charge", async () => {
+		localStorage.setItem(
+			"naia-config",
+			JSON.stringify({ provider: "nextain", model: "gateway-model", naiaKey: "test-key" }),
+		);
+		render(<ChatArea />);
+		const input = screen.getByPlaceholderText(/메시지|message/i);
+		fireEvent.change(input, { target: { value: "billing status" } });
+		fireEvent.keyDown(input, { key: "Enter" });
+		await waitFor(() => expect(capturedRequests).toHaveLength(1));
+
+		capturedOnChunk?.({ type: "text", requestId: capturedRequests[0].requestId, text: "answer" });
+		// 구 Agent payload: legacy cost는 있지만 billingStatus/authority tuple은 없다.
+		capturedOnChunk?.({ type: "usage", requestId: capturedRequests[0].requestId, inputTokens: 0, outputTokens: 0, cost: 0, model: "gateway-model" });
+		capturedOnChunk?.({ type: "finish", requestId: capturedRequests[0].requestId });
+
+		await waitFor(() => expect(screen.getByText(/과금 정보 확인 불가|Billing unavailable/i)).toBeDefined());
+		expect(screen.queryByText(/^\$0(?:\.0+)?\s*·/)).toBeNull();
+		localStorage.removeItem("naia-config");
+	});
+
 	it("distinguishes Discord connection setup from ordinary Discord requests", () => {
 		expect(isDiscordConnectionIntent("디스코드 연결 설정해")).toBe(true);
 		expect(isDiscordConnectionIntent("Configure my Discord bot token")).toBe(

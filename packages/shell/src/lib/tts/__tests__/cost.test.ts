@@ -1,7 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { estimateSttCost, estimateTtsCost } from "../cost";
+import { estimateSttCost, estimateTtsCost, resolveTtsCost } from "../cost";
 
 describe("estimateTtsCost", () => {
+	it("uses the gateway customer price without a second Shell markup", () => {
+		expect(resolveTtsCost("nextain", 1_000_000, "ko-KR-Neural2-C", 17.6)).toBe(17.6);
+	});
+
+	it("falls back to a local estimate when the gateway omits its price", () => {
+		expect(resolveTtsCost("nextain", 1_000_000, "ko-KR-Neural2-C", undefined)).toBeCloseTo(16, 5);
+	});
+
 	it("edge is free", () => {
 		expect(estimateTtsCost("edge", 1000)).toBe(0);
 	});

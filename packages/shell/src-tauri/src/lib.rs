@@ -13,6 +13,7 @@ mod workspace;
 
 use serde::{Deserialize, Serialize};
 use std::io::{BufRead, BufReader, Write};
+use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::sync::{Arc, Mutex, MutexGuard, OnceLock};
 use std::thread;
@@ -1096,6 +1097,43 @@ struct AppState {
     /// to agent-core after every restart so credentials are never permanently lost.
     /// Deduplicated by type: latest message of each type wins.
     startup_messages: Mutex<Vec<String>>,
+    pending_file_open: Mutex<Option<String>>,
+}
+
+fn resolve_markdown_arg(args: &[String], cwd: &Path) -> Option<String> {
+    args.iter()
+        .filter(|arg| !arg.starts_with('-') && !arg.contains("://"))
+        .find_map(|arg| {
+            let candidate = PathBuf::from(arg);
+            let candidate = if candidate.is_absolute() {
+                candidate
+            } else {
+                cwd.join(candidate)
+            };
+            let canonical = candidate.canonicalize().ok()?;
+            let ext = canonical
+                .extension()?
+                .to_string_lossy()
+                .to_ascii_lowercase();
+            if canonical.is_file() && matches!(ext.as_str(), "md" | "mdx") {
+                Some(canonical.to_string_lossy().into_owned())
+            } else {
+                None
+            }
+        })
+}
+
+fn publish_file_open(app: &AppHandle, path: String) {
+    if let Some(state) = app.try_state::<AppState>() {
+        *lock_or_recover(&state.pending_file_open, "pending_file_open") = Some(path.clone());
+    }
+    log::info!("[Naia] Markdown file open: {}", path);
+    let _ = app.emit("file_open", path);
+}
+
+#[tauri::command]
+fn take_pending_file_open(state: tauri::State<'_, AppState>) -> Option<String> {
+    lock_or_recover(&state.pending_file_open, "pending_file_open").take()
 }
 
 struct AuditState {
@@ -9106,7 +9144,7 @@ pub fn run() {
         .register_uri_scheme_protocol("naia-bridge", |_ctx, request| {
             browser_webview::handle_bridge_request(request)
         })
-        .plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
+        .plugin(tauri_plugin_single_instance::init(|app, args, cwd| {
             // When a second instance is launched (e.g. via deep link),
             // focus the existing window instead.
             if let Some(window) = app.get_webview_window("main") {
@@ -9115,10 +9153,13 @@ pub fn run() {
             let oauth_state = app
                 .try_state::<AppState>()
                 .map(|state| state.oauth_state.clone());
-            for arg in args {
+            for arg in &args {
                 if arg.starts_with("naia://") {
                     process_deep_link_url(&arg, app, oauth_state.as_ref(), "single-instance");
                 }
+            }
+            if let Some(path) = resolve_markdown_arg(&args, Path::new(&cwd)) {
+                publish_file_open(app, path);
             }
         }))
         .plugin(tauri_plugin_opener::init())
@@ -9158,6 +9199,7 @@ pub fn run() {
             gemini_live: gemini_live::new_shared_handle(),
             last_agent_restart: Mutex::new(None),
             startup_messages: Mutex::new(Vec::new()),
+            pending_file_open: Mutex::new(None),
         })
         .manage(workspace::new_shared_watcher())
         .manage(pty::new_registry())
@@ -9168,6 +9210,7 @@ pub fn run() {
             download_stt_model,
             delete_stt_model,
             store_startup_message,
+            take_pending_file_open,
             send_to_agent_command,
             cancel_stream,
             reset_window_state,
@@ -9308,6 +9351,13 @@ pub fn run() {
             let app_handle = app.handle().clone();
             let state: tauri::State<'_, AppState> = app.state();
 
+            let startup_args: Vec<String> = std::env::args().skip(1).collect();
+            if let Ok(cwd) = std::env::current_dir() {
+                if let Some(path) = resolve_markdown_arg(&startup_args, &cwd) {
+                    publish_file_open(&app_handle, path);
+                }
+            }
+
             // Initialize audit DB
             let audit_db_path = app_handle
                 .path()
@@ -9436,15 +9486,21 @@ pub fn run() {
                         .flatten()
                         .or_else(|| window.primary_monitor().ok().flatten())
                     {
-                        if let Ok(size) = window.outer_size() {
-                            let fitted = centered_window_state(size, monitor_bounds(&monitor));
-                            let _ = window.set_size(PhysicalSize::new(fitted.width, fitted.height));
-                            let _ = window.set_position(PhysicalPosition::new(fitted.x, fitted.y));
-                            log_verbose(&format!(
-                                "[Naia] Window centered: {}x{} at ({},{})",
-                                fitted.width, fitted.height, fitted.x, fitted.y
-                            ));
-                        }
+                        // A hidden WebKit/Tauri window can report 1x1 before its
+                        // compositor performs the first configure. Reusing that
+                        // transient value leaves first launch permanently tiny,
+                        // especially under the Linux native E2E compositor.
+                        // Keep this in sync with the tauri.conf.json default.
+                        let fitted = centered_window_state(
+                            PhysicalSize::new(1366, 768),
+                            monitor_bounds(&monitor),
+                        );
+                        let _ = window.set_size(PhysicalSize::new(fitted.width, fitted.height));
+                        let _ = window.set_position(PhysicalPosition::new(fitted.x, fitted.y));
+                        log_verbose(&format!(
+                            "[Naia] Window centered: {}x{} at ({},{})",
+                            fitted.width, fitted.height, fitted.x, fitted.y
+                        ));
                     }
                 }
                 let _ = window.show();
@@ -9699,6 +9755,27 @@ pub fn run() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn markdown_argv_resolves_relative_and_absolute_files_only() {
+        let root = tempfile::tempdir().unwrap();
+        let markdown = root.path().join("notes.md");
+        let text = root.path().join("notes.txt");
+        std::fs::write(&markdown, "# Notes").unwrap();
+        std::fs::write(&text, "notes").unwrap();
+
+        let relative = resolve_markdown_arg(&["notes.md".into()], root.path()).unwrap();
+        assert_eq!(PathBuf::from(relative), markdown.canonicalize().unwrap());
+        assert_eq!(
+            resolve_markdown_arg(&[markdown.to_string_lossy().into_owned()], root.path()),
+            Some(markdown.canonicalize().unwrap().to_string_lossy().into_owned())
+        );
+        assert_eq!(
+            resolve_markdown_arg(&[text.to_string_lossy().into_owned()], root.path()),
+            None
+        );
+        assert_eq!(resolve_markdown_arg(&["missing.md".into()], root.path()), None);
+    }
 
     #[test]
     fn jeonju_course_target_must_match_the_requested_workspace() {

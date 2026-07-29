@@ -13,7 +13,7 @@ import {
  */
 const naiaConfig: AppConfig = {
 	provider: "nextain",
-	model: "gemini-3.5-flash",
+	model: "gemini-3.6-flash",
 	naiaKey: "nk",
 	memoryLlmProvider: "naia",
 	memoryLlmModel: "gemini-3.1-flash-lite",
@@ -36,7 +36,7 @@ describe("slots-manifest · 빌드(AppConfig → 매니페스트)", () => {
 		const m = buildSlotsManifest(naiaConfig);
 		expect(m.slots.main).toEqual({
 			provider: "nextain",
-			model: "gemini-3.5-flash",
+			model: "gemini-3.6-flash",
 		});
 		expect(m.slots.sub).toEqual({
 			provider: "naia",

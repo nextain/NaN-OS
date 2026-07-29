@@ -1,8 +1,6 @@
 import { MODEL_CAPABILITY_VALUES, type ModelCapability } from "../types.js";
 import type { LlmModelMeta, LlmProviderMeta, LlmRoleId, LlmVoiceMeta } from "./types";
 
-const NAIA_PRICE_MARKUP = 1.1;
-
 const providers = new Map<string, LlmProviderMeta>();
 
 /** Register an LLM provider. */
@@ -160,11 +158,12 @@ export async function fetchNaiaPricing(
 
 		const pricingMap = new Map<string, [number, number]>();
 		for (const entry of entries) {
-			if (!entry.model_key.startsWith("vertexai:")) continue;
-			const modelId = entry.model_key.replace("vertexai:", "");
+			const modelId = entry.model_key.startsWith("vertexai:")
+				? entry.model_key.replace("vertexai:", "")
+				: entry.model_key;
 			pricingMap.set(modelId, [
-				entry.input_price_per_million * NAIA_PRICE_MARKUP,
-				entry.output_price_per_million * NAIA_PRICE_MARKUP,
+				entry.input_price_per_million,
+				entry.output_price_per_million,
 			]);
 		}
 
@@ -273,7 +272,10 @@ export function applyCapabilityOverrides(
 ): LlmModelMeta[] {
 	if (!capMap) return models;
 	return models.map((model) => {
-		const caps = capMap.get(model.id);
+		const bareId = model.id.includes(":")
+			? (model.id.split(":").pop() ?? model.id)
+			: model.id;
+		const caps = capMap.get(model.id) ?? capMap.get(bareId);
 		return caps && caps.length > 0 ? { ...model, capabilities: caps } : model;
 	});
 }
@@ -333,10 +335,12 @@ registerLlmProvider({
 	requiresApiKey: false,
 	requiresNaiaKey: true,
 	defaultModel: "gemini-3.1-flash-lite",
-	// 사용자 확정 model lineup (순서 갱신, 2026-06-03):
+	// 사용자 확정 model lineup (순서 갱신, 2026-07-29):
 	//   1) Gemini 3.1 Flash Lite  2) Naia Local (own GPU)
-	//   3) Gemini 3.5 Flash  4) Gemini 2.5 Flash Live (Realtime Voice)
-	//   5) Naia 0.9 Omni 24G (Realtime Voice) — 아직 미라이브: comingSoon 플래그로
+	//   3) Gemini 3.6 Flash  4) Solar Open 2 (beta, price pending)
+	//   5) DeepSeek V4 Flash / GPT-5.6 Sol (Azure deployments pending)
+	//   6) Gemini 2.5 Flash Live (Realtime Voice)
+	//   7) Naia 0.9 Omni 24G (Realtime Voice) — 아직 미라이브: comingSoon 플래그로
 	//      맨 아래에 "(준비중)" 표기, 선택해도 Apply(저장) 버튼 비활성.
 	// Naia 공식 명칭 컨벤션: {모델명}-{버전}-{모델성격}-{필요vram} = naia-0.9-omni-24g
 	// (SoT: naia-model-infra MODEL-NAMING.md). 서비스명 naia-talk 폐기 — 모델명으로 통합.
@@ -360,9 +364,27 @@ registerLlmProvider({
 			transcriptProvided: true,
 		},
 		{
-			id: "gemini-3.5-flash",
-			label: "Gemini 3.5 Flash",
+			id: "gemini-3.6-flash",
+			label: "Gemini 3.6 Flash",
 			capabilities: ["llm"],
+		},
+		{
+			id: "upstage:solar-open2",
+			label: "Solar Open 2 (beta pricing pending)",
+			capabilities: ["llm"],
+			comingSoon: true,
+		},
+		{
+			id: "azure:DeepSeek-V4-Flash",
+			label: "DeepSeek V4 Flash (Azure deployment pending)",
+			capabilities: ["llm"],
+			comingSoon: true,
+		},
+		{
+			id: "azureopenai:gpt-5.6-sol",
+			label: "GPT-5.6 Sol (Azure deployment pending)",
+			capabilities: ["llm"],
+			comingSoon: true,
 		},
 		{
 			id: "gemini-2.5-flash-live",
@@ -427,11 +449,11 @@ registerLlmProvider({
 	description: "Google Gemini API — requires Google API key.",
 	descKey: "provider.apiKeyRequired",
 	requiresApiKey: true,
-	defaultModel: "gemini-3.5-flash",
+	defaultModel: "gemini-3.6-flash",
 	models: [
 		{
-			id: "gemini-3.5-flash",
-			label: "Gemini 3.5 Flash",
+			id: "gemini-3.6-flash",
+			label: "Gemini 3.6 Flash",
 			capabilities: ["llm"],
 		},
 		{

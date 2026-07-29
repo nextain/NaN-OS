@@ -10,6 +10,7 @@ export const WIRE_ERROR_CODES = [
 	"PROVIDER_SESSION_MISMATCH", "PROVIDER_SESSION_EXPIRED", "PROVIDER_SESSION_CLOSED",
 	"PROCESSING_PROFILE_REQUIRED", "PROCESSING_DESTINATION_UNKNOWN",
 	"EXTERNAL_PROCESSING_FORBIDDEN", "EXTERNAL_PROCESSING_CONFIRMATION_REQUIRED",
+	"BILLING_INTEGRITY",
 ] as const;
 
 export type WireErrorCode = (typeof WIRE_ERROR_CODES)[number];
@@ -39,6 +40,7 @@ const KEYS: Record<WireErrorCode, TranslationKey> = {
 	PROCESSING_DESTINATION_UNKNOWN: "chat.wireError.processing",
 	EXTERNAL_PROCESSING_FORBIDDEN: "chat.wireError.processing",
 	EXTERNAL_PROCESSING_CONFIRMATION_REQUIRED: "chat.wireError.processing",
+	BILLING_INTEGRITY: "cost.billingUnavailable",
 };
 
 export function isWireErrorCode(value: unknown): value is WireErrorCode {

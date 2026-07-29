@@ -20,7 +20,7 @@ const targetDir = resolve(
 const e2eTauriConfig = resolve(shellDir, "src-tauri", "tauri.e2e.conf.json");
 const bgmSidecar = resolve(shellDir, "..", "bgm-sidecar");
 const cargo = process.platform === "win32" ? "cargo.exe" : "cargo";
-const pairedAgentRoot = "D:/alpha-adk/projects/naia-agent-worktrees";
+const pairedAgentRoot = resolve(workspaceRoot, "..", "naia-agent-worktrees");
 
 function gitOutput(directory, args) {
 	const result = spawnSync("git", ["-C", directory, ...args], {

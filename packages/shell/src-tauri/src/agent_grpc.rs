@@ -44,6 +44,49 @@ pub fn agent_event_to_ui_json(ev: &pb::AgentEvent) -> Value {
             if let Some(m) = &u.model {
                 o["model"] = json!(m);
             }
+            if let Some(value) = &u.customer_cost {
+                o["customerCost"] = json!(value);
+            }
+            if !u.billing_receipts.is_empty() {
+                o["billingReceipts"] = json!(u
+                    .billing_receipts
+                    .iter()
+                    .map(|receipt| {
+                        let status = pb::BillingReceiptStatus::try_from(receipt.status)
+                            .ok()
+                            .filter(|value| {
+                                *value != pb::BillingReceiptStatus::BillingReceiptUnspecified
+                            })
+                            .map(|value| {
+                                value
+                                    .as_str_name()
+                                    .strip_prefix("BILLING_RECEIPT_")
+                                    .unwrap_or("UNSPECIFIED")
+                                    .to_ascii_lowercase()
+                            })
+                            .unwrap_or_else(|| "unspecified".to_string());
+                        json!({
+                            "requestId": receipt.request_id,
+                            "attempt": receipt.attempt,
+                            "priceVersionId": receipt.price_version_id,
+                            "currency": receipt.currency,
+                            "customerCost": receipt.customer_cost,
+                            "status": status,
+                        })
+                    })
+                    .collect::<Vec<_>>());
+            }
+            if let Some(raw) = u.billing_status {
+                if let Ok(status) = pb::BillingStatus::try_from(raw) {
+                    if status != pb::BillingStatus::Unspecified {
+                        o["billingStatus"] = json!(status
+                            .as_str_name()
+                            .strip_prefix("BILLING_")
+                            .unwrap_or("UNAVAILABLE")
+                            .to_ascii_lowercase());
+                    }
+                }
+            }
             o
         }
         Some(Event::LogEntry(l)) => {
@@ -941,6 +984,35 @@ mod transcode_tests {
             processing_json["processingProfileRef"],
             "profile-local-cloud-001"
         );
+    }
+
+    #[test]
+    fn gateway_billing_usage_preserves_exact_string_and_integrity_status() {
+        let value = agent_event_to_ui_json(&pb::AgentEvent {
+            request_id: "wire-billing-1".into(),
+            event: Some(Event::Usage(pb::UsageEvent {
+                input_tokens: 0,
+                output_tokens: 0,
+                cost: Some(0.3000001),
+                model: Some("gateway-model".into()),
+                customer_cost: Some("0.30000010".into()),
+                billing_status: Some(pb::BillingStatus::BillingConfirmed as i32),
+                billing_receipts: vec![pb::BillingReceipt {
+                    request_id: "gw-1".into(),
+                    attempt: 2,
+                    price_version_id: "pv-1".into(),
+                    currency: "USD".into(),
+                    customer_cost: "0.30000010".into(),
+                    status: pb::BillingReceiptStatus::BillingReceiptSettled as i32,
+                }],
+            })),
+            ..Default::default()
+        });
+        assert_eq!(value["customerCost"], "0.30000010");
+        assert_eq!(value["billingReceipts"][0]["priceVersionId"], "pv-1");
+        assert_eq!(value["billingReceipts"][0]["attempt"], 2);
+        assert_eq!(value["billingReceipts"][0]["status"], "settled");
+        assert_eq!(value["billingStatus"], "confirmed");
     }
 
     #[test]

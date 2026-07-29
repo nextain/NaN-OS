@@ -57,7 +57,7 @@ describe("registry — Codex app-server provider", () => {
 
 describe("registry — Naia (nextain) provider models", () => {
 	it("models have no static pricing (fetched from gateway at startup)", () => {
-		const model = getLlmModel("nextain", "gemini-3.5-flash");
+		const model = getLlmModel("nextain", "gemini-3.6-flash");
 		expect(model).toBeDefined();
 		expect(model?.pricing).toBeUndefined();
 	});
@@ -152,18 +152,18 @@ describe("registry — 모델 카탈로그 정합 + 최신화 (2026-06-18)", () 
 		}
 	});
 
-	it("최신 모델 등록(opus-4-8 / gpt-5.5 / gemini-3.5-flash / grok-4.3 / glm-5.2)", () => {
+	it("최신 모델 등록(opus-4-8 / gpt-5.5 / gemini-3.6-flash / grok-4.3 / glm-5.2)", () => {
 		expect(getLlmModel("anthropic", "claude-opus-4-8")).toBeDefined();
 		expect(getLlmModel("claude-code-cli", "claude-opus-4-8")).toBeDefined();
 		expect(getLlmModel("openai", "gpt-5.5")).toBeDefined();
-		expect(getLlmModel("gemini", "gemini-3.5-flash")).toBeDefined();
+		expect(getLlmModel("gemini", "gemini-3.6-flash")).toBeDefined();
 		expect(getLlmModel("xai", "grok-4.3")).toBeDefined();
 		expect(getLlmModel("zai", "glm-5.2")).toBeDefined();
 	});
 
-	it("default 최신 승격(openai=gpt-5.5, gemini=gemini-3.5-flash)", () => {
+	it("default 최신 승격(openai=gpt-5.5, gemini=gemini-3.6-flash)", () => {
 		expect(getDefaultLlmModel("openai")).toBe("gpt-5.5");
-		expect(getDefaultLlmModel("gemini")).toBe("gemini-3.5-flash");
+		expect(getDefaultLlmModel("gemini")).toBe("gemini-3.6-flash");
 	});
 
 	it("구 모델 ID 제거(anthropic/claude-code-cli 의 claude-opus-4-6)", () => {
@@ -186,7 +186,7 @@ describe("registry — 모델 카탈로그 정합 + 최신화 (2026-06-18)", () 
 		expect(snapshot).toEqual({
 			anthropic: ["claude-opus-4-8", "claude-sonnet-4-6", "claude-haiku-4-5-20251001"],
 			openai: ["gpt-5.5", "gpt-5.4", "gpt-4.1", "gpt-4.1-mini", "o4-mini", "gpt-4o"],
-			gemini: ["gemini-3.5-flash", "gemini-3.1-flash-lite", "gemini-3.1-pro-preview", "gemini-3-flash-preview", "gemini-2.5-pro", "gemini-2.5-flash"],
+			gemini: ["gemini-3.6-flash", "gemini-3.1-flash-lite", "gemini-3.1-pro-preview", "gemini-3-flash-preview", "gemini-2.5-pro", "gemini-2.5-flash"],
 			xai: ["grok-4.3", "grok-4", "grok-4.1-fast", "grok-code-fast-1", "grok-3-mini"],
 			zai: ["glm-5.2", "glm-5.1", "glm-5-turbo", "glm-4.7", "glm-4.5-air"],
 		});
@@ -228,10 +228,10 @@ describe("registry — fetchNaiaPricing", () => {
 		vi.restoreAllMocks();
 	});
 
-	it("overlays gateway pricing with 1.1x markup onto Naia model list", async () => {
+	it("uses gateway-billed pricing without applying a second markup", async () => {
 		const gatewayResponse = [
 			{ model_key: "vertexai:gemini-3.1-flash-lite", input_price_per_million: 0.15, output_price_per_million: 0.6, cached_price_per_million: 0.04 },
-			{ model_key: "vertexai:gemini-3.5-flash", input_price_per_million: 1.25, output_price_per_million: 10.0, cached_price_per_million: null },
+			{ model_key: "vertexai:gemini-3.6-flash", input_price_per_million: 1.65, output_price_per_million: 8.25, cached_price_per_million: null },
 			{ model_key: "openai:gpt-4o", input_price_per_million: 2.5, output_price_per_million: 10.0, cached_price_per_million: null },
 		];
 		vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
@@ -241,10 +241,10 @@ describe("registry — fetchNaiaPricing", () => {
 		expect(models).not.toBeNull();
 
 		const flashLite = models!.find((m) => m.id === "gemini-3.1-flash-lite");
-		expect(flashLite?.pricing).toEqual([0.165, 0.66]);
+		expect(flashLite?.pricing).toEqual([0.15, 0.6]);
 
-		const flash = models!.find((m) => m.id === "gemini-3.5-flash");
-		expect(flash?.pricing).toEqual([1.375, 11.0]);
+		const flash = models!.find((m) => m.id === "gemini-3.6-flash");
+		expect(flash?.pricing).toEqual([1.65, 8.25]);
 
 		const gpt4o = models!.find((m) => m.id === "gpt-4o");
 		expect(gpt4o).toBeUndefined();
@@ -261,23 +261,23 @@ describe("registry — fetchNaiaPricing", () => {
 		const models = await fetchNaiaPricing("https://example.com");
 		expect(models).not.toBeNull();
 
-		const flash = models!.find((m) => m.id === "gemini-3.5-flash");
+		const flash = models!.find((m) => m.id === "gemini-3.6-flash");
 		expect(flash?.pricing).toBeUndefined();
 
 		vi.restoreAllMocks();
 	});
 
 	it("does not mutate original provider models (returns new objects)", async () => {
-		const staticFlashBefore = getLlmModel("nextain", "gemini-3.5-flash");
+		const staticFlashBefore = getLlmModel("nextain", "gemini-3.6-flash");
 
 		vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
 			new Response(JSON.stringify([
-				{ model_key: "vertexai:gemini-3.5-flash", input_price_per_million: 99.0, output_price_per_million: 99.0, cached_price_per_million: null },
+				{ model_key: "vertexai:gemini-3.6-flash", input_price_per_million: 99.0, output_price_per_million: 99.0, cached_price_per_million: null },
 			]), { status: 200 }),
 		);
 		await fetchNaiaPricing("https://example.com");
 
-		const staticFlashAfter = getLlmModel("nextain", "gemini-3.5-flash");
+		const staticFlashAfter = getLlmModel("nextain", "gemini-3.6-flash");
 		expect(staticFlashAfter?.pricing).toEqual(staticFlashBefore?.pricing);
 
 		vi.restoreAllMocks();
@@ -286,9 +286,9 @@ describe("registry — fetchNaiaPricing", () => {
 
 describe("registry — formatModelLabel", () => {
 	it("returns base label when no pricing", () => {
-		const model = getLlmModel("nextain", "gemini-3.5-flash")!;
+		const model = getLlmModel("nextain", "gemini-3.6-flash")!;
 		const label = formatModelLabel(model);
-		expect(label).toBe("Gemini 3.5 Flash");
+		expect(label).toBe("Gemini 3.6 Flash");
 	});
 
 	it("formats label with pricing when provided", () => {

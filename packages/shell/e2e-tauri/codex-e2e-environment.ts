@@ -15,6 +15,7 @@ import { basename, dirname, resolve } from "node:path";
 import { execPath } from "node:process";
 
 export const SHELL_DIR = resolve(import.meta.dirname, "..");
+const WORKSPACE_ROOT = resolve(SHELL_DIR, "..", "..");
 const pairing = JSON.parse(
 	readFileSync(resolve(SHELL_DIR, "agent-pairing.json"), "utf8"),
 ) as { agentCommit: string };
@@ -54,10 +55,14 @@ export const E2E_TARGET_DIR = resolve(
 );
 // Must match src-tauri/tauri.e2e.conf.json's devUrl. Keeping this explicit
 // avoids a rebuilt test binary silently waiting on a different Vite server.
-const E2E_VITE_PORT = 1422;
+const E2E_VITE_PORT = 1420;
 const E2E_AVATAR_ENABLED = process.env.NAIA_E2E_AVATAR === "1";
 const E2E_NVA_SOURCE = process.env.NAIA_E2E_NVA_SOURCE;
-const PAIRED_AGENT_ROOT = "D:/alpha-adk/projects/naia-agent-worktrees";
+const E2E_PROVIDER = process.env.NAIA_E2E_PROVIDER ?? "codex";
+const E2E_MODEL = process.env.NAIA_E2E_MODEL ?? "gpt-5.4";
+const E2E_GATEWAY_URL = process.env.NAIA_E2E_GATEWAY_URL;
+const E2E_NAIA_KEY = process.env.NAIA_E2E_NAIA_KEY;
+const PAIRED_AGENT_ROOT = resolve(WORKSPACE_ROOT, "..", "naia-agent-worktrees");
 const REQUIRED_AGENT_COMMIT = pairing.agentCommit;
 
 let viteServer: ChildProcess | undefined;
@@ -112,6 +117,8 @@ export function configureCodexE2eEnvironment(): void {
 	process.env.WEBVIEW2_USER_DATA_FOLDER = E2E_WEBVIEW2_DATA;
 	process.env.APPDATA = resolve(E2E_APPDATA, "roaming");
 	process.env.LOCALAPPDATA = resolve(E2E_APPDATA, "local");
+	process.env.XDG_CONFIG_HOME = resolve(E2E_APPDATA, "xdg-config");
+	process.env.XDG_DATA_HOME = resolve(E2E_APPDATA, "xdg-data");
 	process.env.NAIA_E2E_DISCORD_CAPTURE = "cancel";
 	process.env.NAIA_BGM_PORT = String(E2E_BGM_PORT);
 	process.env.VITE_NAIA_BGM_BASE = `http://127.0.0.1:${E2E_BGM_PORT}`;
@@ -137,8 +144,24 @@ export function resetCodexE2eRoot(): void {
 	mkdirSync(E2E_ARTIFACTS, { recursive: true });
 	mkdirSync(E2E_RUNTIME, { recursive: true });
 	const config = {
-		provider: "codex",
-		model: "gpt-5.4",
+		provider: E2E_PROVIDER,
+		model: E2E_MODEL,
+		onboardingComplete: true,
+		...(E2E_NAIA_KEY ? { naiaKey: E2E_NAIA_KEY } : {}),
+		...(E2E_GATEWAY_URL
+			? {
+					naiaGatewayUrl: E2E_GATEWAY_URL,
+					llmRoles: {
+						main: {
+							provider: E2E_PROVIDER,
+							model: E2E_MODEL,
+							baseUrl: E2E_GATEWAY_URL,
+						},
+						sub: { inherit: "main" },
+						memory: { inherit: "sub" },
+					},
+			  }
+			: {}),
 		...(E2E_AVATAR_ENABLED
 			? {
 					avatarProvider: "naia-video-avatar",
@@ -248,8 +271,8 @@ export async function startOwnedViteServer(): Promise<void> {
 				...process.env,
 			BROWSER: "none",
 			VITE_NAIA_E2E_ADK_PATH: E2E_WORKSPACE,
-			VITE_NAIA_E2E_PROVIDER: "codex",
-			VITE_NAIA_E2E_MODEL: "gpt-5.4",
+			VITE_NAIA_E2E_PROVIDER: E2E_PROVIDER,
+			VITE_NAIA_E2E_MODEL: E2E_MODEL,
 				...(E2E_AVATAR_ENABLED ? {} : { VITE_NAIA_E2E_NO_AVATAR: "1" }),
 				// The BGM acceptance fixture is same-origin and never contacts YouTube.
 				VITE_NAIA_E2E_BGM_IFRAME_URL: "/e2e/bgm-playback-fixture.html",

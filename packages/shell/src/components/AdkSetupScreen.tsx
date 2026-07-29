@@ -11,8 +11,9 @@ import {
 	setAdkPath,
 } from "../lib/adk-store";
 import { NAIA_WEB_BASE_URL } from "../lib/config";
-import { applyNaiaSlotDefaults, NAIA_SLOT_DEFAULTS } from "../lib/slots/model";
+import { buildAdkLoginConfig, buildDesktopLoginUrl } from "../lib/desktop-auth";
 import { getLocale, t, type TranslationKey } from "../lib/i18n";
+import { Logger } from "../lib/logger";
 
 interface AdkSetupScreenProps {
 	onComplete: () => void;
@@ -152,15 +153,11 @@ export function AdkSetupScreen({ onComplete }: AdkSetupScreenProps) {
 				);
 				// FR-SLOT.3 / R2-1: naia 게이트 통과 → 미설정 슬롯에 Gemini 기본값 자동 적용(비파괴).
 				// §9 #5: stale hardcode gemini-2.5-flash → NAIA_SLOT_DEFAULTS.main.model(gemini-3.5-flash).
-				const loginConfig = applyNaiaSlotDefaults({
-					provider: "nextain",
-					model: NAIA_SLOT_DEFAULTS.main.model,
-					apiKey: "",
-					...(existing as Record<string, unknown>),
-					naiaKey: event.payload.naiaKey,
-					naiaUserId: event.payload.naiaUserId,
-					onboardingComplete: true,
-				} as import("../lib/config").AppConfig);
+				const loginConfig = buildAdkLoginConfig(
+					existing,
+					event.payload.naiaKey,
+					event.payload.naiaUserId,
+				);
 				localStorage.setItem(
 					"naia-config",
 					JSON.stringify(preserveWorkspaceRoot(
@@ -336,27 +333,27 @@ export function AdkSetupScreen({ onComplete }: AdkSetupScreenProps) {
 
 		try {
 			const lang = getLocale();
-			const loginUrl = `${getNaiaWebBaseUrl()}/${lang}/login?redirect=desktop&source=embedded`;
+			const state = await invoke<string>("generate_oauth_state").catch(
+				() => "",
+			);
+			const loginUrl = buildDesktopLoginUrl(
+				getNaiaWebBaseUrl(),
+				lang,
+				state,
+				"embedded",
+			);
+			Logger.info("AdkSetupScreen", "opening embedded Naia login");
 			const ok = await invoke("browser_open_login", { url: loginUrl }).then(
 				() => true,
 				() => false,
 			);
 			if (ok) {
-				clearTimeout(timer);
 				return;
 			}
-			const state = await invoke<string>("generate_oauth_state").catch(
-				() => "",
-			);
-			const params = new URLSearchParams({
-				redirect: "desktop",
-				source: "desktop",
-			});
-			if (state) params.set("state", state);
-			await openUrl(
-				`${getNaiaWebBaseUrl()}/${lang}/login?${params.toString()}`,
-			);
-		} catch {
+			Logger.warn("AdkSetupScreen", "embedded login unavailable; using system browser");
+			await openUrl(buildDesktopLoginUrl(getNaiaWebBaseUrl(), lang, state, "desktop"));
+		} catch (cause) {
+			Logger.error("AdkSetupScreen", "Naia login failed to open", { cause: String(cause) });
 			clearTimeout(timer);
 			setLoginWaiting(false);
 		}

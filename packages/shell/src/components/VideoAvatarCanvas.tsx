@@ -1,4 +1,4 @@
-import { invoke } from "@tauri-apps/api/core";
+import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getAdkPath, writeSlotsManifest } from "../lib/adk-store";
 import {
@@ -15,6 +15,8 @@ import {
 } from "../lib/avatar/cascade-renderer";
 import { hasExplicitLocalAvatarProfile } from "../lib/avatar/nva-gate";
 import { loadConfig } from "../lib/config";
+import { Logger } from "../lib/logger";
+import { defaultClipOf, parseNvaManifest, resolveNvaAssetPath } from "../lib/nva";
 import { useAvatarStore } from "../stores/avatar";
 import { useCascadeAvatarStore } from "../stores/cascade-avatar";
 
@@ -98,6 +100,8 @@ export function VideoAvatarCanvas({ nvaModel }: VideoAvatarCanvasProps) {
 	const localFacadeUrl = useCascadeAvatarStore((s) => s.localFacadeUrl);
 	const [mode, setMode] = useState<Mode>("loading");
 	const [error, setError] = useState("");
+	const [idleSrc, setIdleSrc] = useState("");
+	const [cascadeVisible, setCascadeVisible] = useState(false);
 	// cascade 비디오 콜백 ref 가 렌더러를 만들 때 쓰는 설정(메인 effect 가 결정).
 	const cascadeCfgRef = useRef<{ url: string; name: string } | null>(null);
 	const rendererRef = useRef<CascadeAvatarRenderer | null>(null);
@@ -129,6 +133,7 @@ export function VideoAvatarCanvas({ nvaModel }: VideoAvatarCanvasProps) {
 	// biome-ignore lint/correctness/useExhaustiveDependencies: nvaModel 변경 시에만 리셋
 	useEffect(() => {
 		autoStartAttemptedRef.current = false;
+		setCascadeVisible(false);
 	}, [nvaModel]);
 
 	useEffect(() => {
@@ -138,6 +143,7 @@ export function VideoAvatarCanvas({ nvaModel }: VideoAvatarCanvasProps) {
 		async function load() {
 			setMode("loading");
 			setLoaded(false);
+			setIdleSrc("");
 			setError("");
 			const adkPath = getAdkPath();
 			if (!adkPath || !nvaModel) {
@@ -151,6 +157,27 @@ export function VideoAvatarCanvas({ nvaModel }: VideoAvatarCanvasProps) {
 				nvaModel.split(/[/\\]/).filter(Boolean).pop() ?? nvaModel;
 			const sep = adkPath.includes("\\") ? "\\" : "/";
 			const bundleDir = `${adkPath}${sep}naia-settings${sep}nva-files${sep}${bundleName}`;
+			try {
+				const manifestRaw = await invoke<string>("workspace_read_file", {
+					path: `${bundleDir}${sep}manifest.json`,
+				});
+				const idlePath = resolveNvaAssetPath(
+					bundleDir,
+					defaultClipOf(parseNvaManifest(manifestRaw)).video,
+				);
+				if (disposed) return;
+				setIdleSrc(convertFileSrc(idlePath));
+				Logger.info("VideoAvatarCanvas", "local idle clip ready", { bundleName });
+			} catch (cause) {
+				if (disposed) return;
+				Logger.error("VideoAvatarCanvas", "local idle clip failed", {
+					bundleName,
+					cause: String(cause),
+				});
+				setError(`idle-load-failed: ${String(cause)}`);
+				setMode("error");
+				return;
+			}
 
 			// Local cascade may start only from an explicit avatar-capable local profile.
 			// Legacy auto/off or stale remote config must not unlock local NVA after logout.
@@ -207,7 +234,6 @@ export function VideoAvatarCanvas({ nvaModel }: VideoAvatarCanvasProps) {
 						if (disposed) return;
 						cascadeCfgRef.current = { url: cascadeUrl, name: "" };
 						setMode("cascade");
-						setLoaded(true);
 						return;
 					}
 					// 로컬 임베드 cascade 면 번들 디렉토리로 캐릭터 등록(원격이면 경로 부재로 실패 → 무시).
@@ -236,25 +262,21 @@ export function VideoAvatarCanvas({ nvaModel }: VideoAvatarCanvasProps) {
 						if (disposed) return;
 						setError(`cascade-nva-load-failed: ${String(error)}`);
 						setMode("unavailable");
-						setLoaded(false);
 						return;
 					}
 					if (disposed) return;
 					cascadeCfgRef.current = { url: cascadeUrl, name: bundleName };
 					setMode("cascade");
-					setLoaded(true);
 					return;
 				}
 			}
 			if (configuredCascadeUrl) {
 				setMode("unavailable");
-				setLoaded(false);
 				return;
 			}
 
 			// (B) cascade 미연결 — 로컬 프로파일이 있으면 cascade 를 자동 기동(1회)한다.
-			// ★사용자 요구: 비디오 아바타는 cascade(Ditto 립싱크)에 연결됐을 때만 노출한다.
-			//   미연결 시 정적 idle 클립을 "사진처럼" 세워두지 않는다(불투명 UX 제거).
+			// Lip-sync readiness is independent from the already visible local idle loop.
 			if (canLocalCascade && !autoStartAttemptedRef.current) {
 				autoStartAttemptedRef.current = true;
 				setMode("loading");
@@ -281,7 +303,6 @@ export function VideoAvatarCanvas({ nvaModel }: VideoAvatarCanvasProps) {
 			if (disposed) return;
 			if (canLocalCascade) {
 				setMode("standby");
-				setLoaded(false);
 				const poll = async () => {
 					if (disposed) return;
 					try {
@@ -302,9 +323,8 @@ export function VideoAvatarCanvas({ nvaModel }: VideoAvatarCanvasProps) {
 				};
 				retryTimer = setTimeout(poll, RETRY_POLL_MS);
 			} else {
-				// 로컬 프로파일 없음/원격 미도달 → 아바타 노출 안 함.
+				// 로컬 프로파일 없음/원격 미도달 → idle만 계속 재생.
 				setMode("unavailable");
-				setLoaded(false);
 			}
 		}
 
@@ -348,7 +368,7 @@ export function VideoAvatarCanvas({ nvaModel }: VideoAvatarCanvasProps) {
 			data-video-avatar
 			data-nva-model={nvaModel ?? ""}
 			data-video-avatar-mode={mode}
-			data-video-avatar-loaded={mode === "cascade" ? "true" : "false"}
+			data-video-avatar-loaded={idleSrc ? "true" : "false"}
 			data-video-avatar-error={error}
 			style={{
 				position: "relative",
@@ -359,6 +379,23 @@ export function VideoAvatarCanvas({ nvaModel }: VideoAvatarCanvasProps) {
 				placeItems: "center",
 			}}
 		>
+			{idleSrc && (
+				<video
+					data-video-avatar-idle
+					src={idleSrc}
+					autoPlay
+					playsInline
+					muted
+					loop
+					onPlaying={() => setLoaded(true)}
+					style={{
+						...VIDEO_BASE_STYLE,
+						gridArea: "1 / 1",
+						transform: videoTransform(pan),
+						visibility: cascadeVisible ? "hidden" : "visible",
+					}}
+				/>
+			)}
 			{mode === "cascade" ? (
 				// host = idle 루프(/idle). 렌더러가 src 와 발화 오버레이(buf)를 관리. 마스크 불요(cascade 가 알파/프레이밍 소유).
 				<video
@@ -367,9 +404,10 @@ export function VideoAvatarCanvas({ nvaModel }: VideoAvatarCanvasProps) {
 					playsInline
 					muted
 					loop
-					style={{ ...VIDEO_BASE_STYLE, transform: videoTransform(pan) }}
+					onPlaying={() => setCascadeVisible(true)}
+					style={{ ...VIDEO_BASE_STYLE, gridArea: "1 / 1", transform: videoTransform(pan) }}
 				/>
-			) : (
+			) : !idleSrc ? (
 				// ★cascade 미연결 → 캐릭터(비디오)를 노출하지 않는다(정적 사진 폴백 제거).
 				//   상태만 은은하게 표면화(멀뚱히 선 "사진"으로 오해되지 않도록).
 				<div
@@ -391,7 +429,7 @@ export function VideoAvatarCanvas({ nvaModel }: VideoAvatarCanvasProps) {
 								? `비디오 아바타 연결 실패${error ? ` — ${error}` : ""}`
 								: "비디오 아바타 미연결 — 설정에서 로컬 GPU 프로파일과 로그인을 확인하세요."}
 				</div>
-			)}
+			) : null}
 		</div>
 	);
 }

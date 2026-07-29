@@ -27,7 +27,10 @@ describe("LLM registry — gateway model exclusion (#248)", () => {
 		expect(ids).toEqual([
 			"gemini-3.1-flash-lite",
 			"naia-local",
-			"gemini-3.5-flash",
+			"gemini-3.6-flash",
+			"upstage:solar-open2",
+			"azure:DeepSeek-V4-Flash",
+			"azureopenai:gpt-5.6-sol",
 			"gemini-2.5-flash-live",
 			"naia-0.9-omni-24g",
 		]);
@@ -101,7 +104,10 @@ describe("shouldMigrateNextainModel (#248 follow-up migration)", () => {
 			"gemini-3.1-flash-lite",
 			"naia-0.9-omni-24g",
 			"naia-local",
-			"gemini-3.5-flash",
+			"gemini-3.6-flash",
+			"upstage:solar-open2",
+			"azure:DeepSeek-V4-Flash",
+			"azureopenai:gpt-5.6-sol",
 			"gemini-2.5-flash-live",
 		]) {
 			expect(shouldMigrateNextainModel("nextain", valid).migrate).toBe(false);

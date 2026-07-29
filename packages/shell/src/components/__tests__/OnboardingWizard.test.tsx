@@ -249,7 +249,7 @@ describe("OnboardingWizard", () => {
 
 		const config = JSON.parse(localStorage.getItem("naia-config") || "{}");
 		expect(config.provider).toBe("gemini");
-		expect(config.model).toBe("gemini-3.5-flash");
+		expect(config.model).toBe("gemini-3.6-flash");
 		expect(config.apiKey).toBeUndefined();
 		expect(config.naiaKey).toBeUndefined();
 		expect(config.onboardingComplete).toBe(true);

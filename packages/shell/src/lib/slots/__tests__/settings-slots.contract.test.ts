@@ -173,10 +173,10 @@ describe("S-SLOT · FR-SLOT.5 필드명 유지 (memoryLlmProvider, rename 아님
 });
 
 describe("S-SLOT · FR-SLOT.3 naia 계정 Gemini 기본값 자동 적용 (R2-1, §9 #5 해결)", () => {
-	it("NAIA_SLOT_DEFAULTS main = nextain / gemini-3.5-flash (실존 모델, §9 #5)", () => {
+	it("NAIA_SLOT_DEFAULTS main = nextain / gemini-3.6-flash (실존 모델, §9 #5)", () => {
 		expect(NAIA_SLOT_DEFAULTS.main).toEqual({
 			provider: "nextain",
-			model: "gemini-3.5-flash",
+			model: "gemini-3.6-flash",
 		});
 		// stale hardcode gemini-2.5-flash 회귀 금지
 		expect(NAIA_SLOT_DEFAULTS.main.model).not.toBe("gemini-2.5-flash");
@@ -209,7 +209,7 @@ describe("S-SLOT · FR-SLOT.3 naia 계정 Gemini 기본값 자동 적용 (R2-1, 
 		// 빈 config → 전 슬롯 기본값
 		const filled = applyNaiaSlotDefaults({} as AppConfig);
 		expect(filled.provider).toBe("nextain");
-		expect(filled.model).toBe("gemini-3.5-flash");
+		expect(filled.model).toBe("gemini-3.6-flash");
 		expect(filled.memoryLlmProvider).toBe("naia");
 		expect(filled.memoryLlmModel).toBe("gemini-3.1-flash-lite");
 		expect(filled.memoryEmbeddingProvider).toBe("offline");

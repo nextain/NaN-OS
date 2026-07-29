@@ -10199,10 +10199,8 @@ body.resizing-col * {
  * @page margin:0 kills browser header/footer (date, title, URL).
  * box-decoration-break:clone repeats padding on every page fragment. */
 @page {
-	margin-top: 0;
-	margin-right: 0;
-	margin-bottom: 0;
-	margin-left: 0;
+	size: auto;
+	margin: 12mm 15mm;
 }
 
 @media print {
@@ -10295,10 +10293,10 @@ body.resizing-col * {
 		flex: none !important;
 		background: white !important;
 		color: black !important;
-		padding: 12mm 15mm !important;
+		padding: 0 !important;
 		box-sizing: border-box !important;
-		-webkit-box-decoration-break: clone !important;
-		box-decoration-break: clone !important;
+		max-width: 100% !important;
+		overflow-wrap: anywhere !important;
 	}
 
 	/* CodeMirror */
@@ -10308,7 +10306,7 @@ body.resizing-col * {
 		position: static !important;
 		height: auto !important;
 		overflow: visible !important;
-		padding: 12mm 15mm !important;
+		padding: 0 !important;
 		box-sizing: border-box !important;
 		-webkit-box-decoration-break: clone !important;
 		box-decoration-break: clone !important;
@@ -10338,11 +10336,18 @@ body.resizing-col * {
 		object-fit: contain !important;
 	}
 
-	/* Code blocks & figures: avoid split */
-	.workspace-editor__preview figure,
-	.workspace-editor__preview pre {
+	/* Figures stay together when possible; long code must be allowed to paginate. */
+	.workspace-editor__preview figure {
 		break-inside: avoid !important;
 		page-break-inside: avoid !important;
+	}
+	.workspace-editor__preview pre {
+		break-inside: auto !important;
+		page-break-inside: auto !important;
+		white-space: pre-wrap !important;
+		overflow-wrap: anywhere !important;
+		word-break: break-word !important;
+		max-width: 100% !important;
 	}
 
 	/* ── Mermaid: force light theme for print ────────────────────────── */
@@ -10461,6 +10466,17 @@ body.resizing-col * {
 	.workspace-editor__preview tr {
 		break-inside: avoid !important;
 		page-break-inside: avoid !important;
+	}
+	.workspace-editor__preview table {
+		width: 100% !important;
+		max-width: 100% !important;
+		table-layout: fixed !important;
+		border-collapse: collapse !important;
+	}
+	.workspace-editor__preview th,
+	.workspace-editor__preview td {
+		overflow-wrap: anywhere !important;
+		word-break: break-word !important;
 	}
 
 	/* Paragraphs: at least 3 lines before/after break */

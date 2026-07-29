@@ -52,6 +52,14 @@
 			"icons/icon.ico",
 			"icons/icon.png"
 		],
+		"fileAssociations": [
+			{
+				"ext": ["md", "mdx"],
+				"mimeType": "text/markdown",
+				"description": "Markdown document",
+				"role": "Editor"
+			}
+		],
 		"category": "Utility",
 		"shortDescription": "AI Avatar Desktop — Chat with Naia",
 		"longDescription": "Naia Shell is a desktop AI companion powered by LLM providers. Features an interactive VRM avatar (Naia), tool execution, and always-on daemon."

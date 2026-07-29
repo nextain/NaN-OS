@@ -50,6 +50,12 @@ export const config = {
 	framework: "mocha",
 	mochaOpts: { ui: "bdd", timeout: 300_000 },
 	reporters: ["spec"],
+	// Node 26's fetch compatibility wrapper rejects WebdriverIO's precomputed
+	// Content-Length. The unchanged JSON body lets fetch calculate it safely.
+	transformRequest: (request: { headers: Headers }) => {
+		request.headers.delete("Content-Length");
+		return request;
+	},
 	async onPrepare() {
 		if (!existsSync(TAURI_BINARY)) {
 			throw new Error(

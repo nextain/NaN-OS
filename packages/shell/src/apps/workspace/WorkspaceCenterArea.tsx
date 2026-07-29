@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import {
 	Fragment,
 	useCallback,
@@ -233,6 +234,19 @@ export function WorkspaceCenterArea({ naia }: AppCenterProps) {
 	}, []);
 
 	const { openFilePath, openFile, goBack, goForward } = useFileNavHistory();
+	useEffect(() => {
+		const accept = (path: unknown) => {
+			if (typeof path !== "string" || !path) return;
+			Logger.info("WorkspaceCenterArea", "opening OS Markdown file", { path });
+			useAppStore.getState().setActiveApp("workspace");
+			openFile(path);
+		};
+		void invoke<string | null>("take_pending_file_open").then(accept).catch((cause) => {
+			Logger.warn("WorkspaceCenterArea", "pending Markdown file check failed", { cause: String(cause) });
+		});
+		const unlisten = listen<string>("file_open", (event) => accept(event.payload));
+		return () => { void unlisten.then((stop) => stop()); };
+	}, [openFile]);
 	const editorRef = useRef<EditorHandle>(null);
 	const [editorBadge, setEditorBadge] = useState("");
 	const [sessions, setSessions] = useState<SessionInfo[]>([]);

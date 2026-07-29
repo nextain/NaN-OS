@@ -51,6 +51,26 @@ export function estimateTtsCost(
 	return rate * textLength;
 }
 
+/**
+ * Prefer the gateway's customer price verbatim. The gateway is the only layer
+ * that applies platform margin; Shell must never add a second markup.
+ */
+export function resolveTtsCost(
+	provider: string,
+	textLength: number,
+	voice: string | undefined,
+	serverReportedCost: number | undefined,
+): number {
+	if (
+		typeof serverReportedCost === "number" &&
+		Number.isFinite(serverReportedCost) &&
+		serverReportedCost >= 0
+	) {
+		return serverReportedCost;
+	}
+	return estimateTtsCost(provider, textLength, voice);
+}
+
 /** Estimate STT cost in USD. $0.006 per 15-second increment. */
 export function estimateSttCost(
 	provider: string,

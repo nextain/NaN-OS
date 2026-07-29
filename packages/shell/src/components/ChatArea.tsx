@@ -22,6 +22,7 @@ import {
 	onAiInterferenceEvent,
 } from "../lib/ai-interference";
 import { type AudioPlayer, createAudioPlayer } from "../lib/audio-player";
+import { usageToCostEntry } from "../lib/billing";
 import { makeCoreAudioPlayer } from "../lib/voice-core";
 import { getDefaultVoiceForAvatar } from "../lib/avatar-presets";
 import {
@@ -91,7 +92,7 @@ import {
 	getSttProvider,
 } from "../lib/stt";
 import { getTtsProviderMeta } from "../lib/tts";
-import { estimateSttCost, estimateTtsCost } from "../lib/tts/cost";
+import { estimateSttCost, resolveTtsCost } from "../lib/tts/cost";
 import { streamsAvatarPcm, synthesizeTts } from "../lib/tts/synthesize";
 import { isLikelySelfEcho } from "../lib/voice/echo-gate";
 import type {
@@ -1344,7 +1345,7 @@ export function ChatArea({
 					vllmHost: activeProvider === "vllm" ? config.vllmHost : undefined,
 				},
 				history: history.slice(0, -1),
-				onChunk: (chunk) => handleChunk(chunk, activeProvider),
+				onChunk: (chunk) => handleChunk(chunk, activeProvider, resolvedModel),
 				requestId,
 				// A validated exhibition resume is bound to the proactive profile
 				// session, not the conversation's rotating local transcript ID.
@@ -1571,7 +1572,7 @@ export function ChatArea({
 		}
 	}
 
-	function handleChunk(chunk: AgentResponseChunk, activeProvider: ProviderId) {
+	function handleChunk(chunk: AgentResponseChunk, activeProvider: ProviderId, fallbackModel: string) {
 		const store = useChatStore.getState();
 
 		if ("requestId" in chunk && chunk.requestId !== currentRequestId.current) {
@@ -1682,13 +1683,7 @@ export function ChatArea({
 			case "usage": {
 				store.finishStreaming();
 				setEmotion("neutral");
-				store.addCostEntry({
-					inputTokens: chunk.inputTokens,
-					outputTokens: chunk.outputTokens,
-					cost: chunk.cost,
-					provider: activeProvider,
-					model: chunk.model,
-				});
+				store.addCostEntry(usageToCostEntry(chunk, activeProvider, fallbackModel));
 				break;
 			}
 			case "finish":
@@ -2003,19 +1998,15 @@ export function ChatArea({
 				} else {
 					audioQueueRef.current?.enqueueOrdered(seq, audioBase64);
 				}
-				// Track TTS cost: server cost for Naia Cloud, estimate for others.
-				// Naia account (nextain): apply 10% service markup on top of base cost.
-				const NAIA_TTS_MARKUP = 1.1;
+				// Track the gateway customer price verbatim; only estimate when absent.
+				// Platform margin belongs exclusively to Gateway, never to Shell.
 				const isNaiaTts = ttsProviderForCost === "nextain";
-				const baseTtsCost =
-					costUsd != null
-						? costUsd
-						: estimateTtsCost(
-								ttsProviderForCost,
-								clean.length,
-								ttsVoiceForCost,
-							);
-				const ttsCost = isNaiaTts ? baseTtsCost * NAIA_TTS_MARKUP : baseTtsCost;
+				const ttsCost = resolveTtsCost(
+					ttsProviderForCost,
+					clean.length,
+					ttsVoiceForCost,
+					costUsd,
+				);
 				if (ttsCost > 0) {
 					// addSessionCostEntry keeps TTS in a separate row in CostDashboard
 					useChatStore.getState().addSessionCostEntry({
@@ -2023,9 +2014,7 @@ export function ChatArea({
 						outputTokens: 0,
 						cost: ttsCost,
 						provider: ttsProviderForCost as ProviderId,
-						model: isNaiaTts
-							? "tts:nextain (+10%)"
-							: `tts:${ttsProviderForCost}`,
+						model: isNaiaTts ? "tts:nextain" : `tts:${ttsProviderForCost}`,
 					});
 				}
 			})
@@ -3415,7 +3404,11 @@ export function ChatArea({
 								</div>
 								{msg.cost && provider !== "ollama" && provider !== "vllm" && (
 									<span className="cost-badge">
-										{formatCost(msg.cost.cost)} ·{" "}
+										{msg.cost.billingStatus === "error" || msg.cost.billingStatus === "unavailable"
+											? t("cost.billingUnavailable")
+											: msg.cost.billingStatus === "confirmed" && msg.cost.customerCost
+											? `${msg.cost.billingReceipts?.[0]?.currency ?? "USD"} ${msg.cost.customerCost}`
+												: formatCost(msg.cost.cost)} ·{" "}
 										{msg.cost.inputTokens + msg.cost.outputTokens}{" "}
 										{t("chat.tokens")}
 									</span>
