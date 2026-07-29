@@ -165,7 +165,7 @@ function stripForAgent(config: Record<string, unknown>): Record<string, unknown>
 		if (SECRET_CONFIG_KEYS.has(k) || UI_ONLY_CONFIG_KEYS.has(k)) continue;
 		if (k === "llmRoles" && v && typeof v === "object" && !Array.isArray(v)) {
 			const roles: Record<string, unknown> = {};
-			for (const role of ["main", "sub", "memory"]) {
+			for (const role of ["expert", "main", "sub", "memory"]) {
 				const raw = (v as Record<string, unknown>)[role];
 				if (!raw || typeof raw !== "object" || Array.isArray(raw)) continue;
 				const source = raw as Record<string, unknown>;

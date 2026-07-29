@@ -176,7 +176,7 @@ describe("SettingsTab", () => {
 		expect(providerSelect.value).toBe("nextain");
 	});
 
-	it("persists role-specific models while keeping main-only Codex out of sub and memory", () => {
+	it("allows Codex for sub while keeping memory orthogonal", () => {
 		localStorage.setItem(
 			"naia-config",
 			JSON.stringify({ provider: "codex", model: "gpt-5.4", apiKey: "" }),
@@ -190,15 +190,13 @@ describe("SettingsTab", () => {
 			"memory-llm-mode",
 		) as HTMLSelectElement;
 		expect(subMode.value).toBe("inherit:main");
-		expect(memoryMode.value).toBe("inherit:main");
+		expect(memoryMode.value).toBe("inherit:sub");
 
 		fireEvent.change(subMode, { target: { value: "explicit" } });
 		const subProvider = screen.getByTestId(
 			"sub-llm-provider",
 		) as HTMLSelectElement;
-		expect([...subProvider.options].map((option) => option.value)).not.toContain(
-			"codex",
-		);
+		expect([...subProvider.options].map((option) => option.value)).toContain("codex");
 		fireEvent.change(subProvider, { target: { value: "gemini" } });
 		const subModel = screen.getByTestId("sub-llm-model") as HTMLInputElement;
 		fireEvent.change(subModel, { target: { value: "gemini-3.1-flash-lite" } });
@@ -366,7 +364,7 @@ describe("SettingsTab", () => {
 		}));
 	});
 
-	it("does not silently save Codex as a sub or memory brain", () => {
+	it("allows an explicit Codex sub brain but excludes Codex from memory", () => {
 		localStorage.setItem(
 			"naia-config",
 			JSON.stringify({ onboardingComplete: true, provider: "codex", model: "gpt-5.4", apiKey: "" }),
@@ -385,7 +383,7 @@ describe("SettingsTab", () => {
 			[...(screen.getByTestId("sub-llm-provider") as HTMLSelectElement).options].map(
 				(option) => option.value,
 			),
-		).not.toContain("codex");
+		).toContain("codex");
 		expect(
 			[...(screen.getByTestId("memory-llm-provider") as HTMLSelectElement).options].map(
 				(option) => option.value,
@@ -393,7 +391,7 @@ describe("SettingsTab", () => {
 		).not.toContain("codex");
 		fireEvent.click(screen.getByRole("button", { name: "Apply" }));
 		const roles = JSON.parse(localStorage.getItem("naia-config") || "{}").llmRoles;
-		expect(roles.sub.provider).not.toBe("codex");
+		expect(roles.sub).toMatchObject({ provider: "codex", model: "gpt-5.4" });
 		expect(roles.memory.provider).not.toBe("codex");
 	});
 

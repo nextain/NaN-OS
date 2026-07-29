@@ -1141,6 +1141,9 @@ export function SettingsTab() {
 	const initialLlmRoles = readConfiguredLlmRoles(
 		existing ?? { provider: "gemini", model: getDefaultLlmModel("gemini"), apiKey: "" },
 	);
+	const [expertLlmRole, setExpertLlmRole] = useState<LlmRoleConfig>(
+		initialLlmRoles.expert ?? { inherit: "main" },
+	);
 	const [subLlmRole, setSubLlmRole] = useState<LlmRoleConfig>(
 		initialLlmRoles.sub ?? { inherit: "main" },
 	);
@@ -1156,6 +1159,7 @@ export function SettingsTab() {
 			if (!cfg) return;
 			const roles = readConfiguredLlmRoles(cfg);
 			setSubLlmRole(roles.sub ?? { inherit: "main" });
+			setExpertLlmRole(roles.expert ?? { inherit: "main" });
 			setMemoryLlmRole(roles.memory ?? { inherit: "sub" });
 		};
 		syncLlmRolesFromConfig();
@@ -2002,7 +2006,7 @@ export function SettingsTab() {
 	}
 
 	function persistLlmRole(
-		role: "sub" | "memory",
+		role: "expert" | "sub" | "memory",
 		value: LlmRoleConfig,
 	) {
 		const cfg = loadConfig();
@@ -2474,6 +2478,7 @@ export function SettingsTab() {
 			model,
 		});
 		newConfig = writeConfiguredLlmRole(newConfig, "sub", subLlmRole);
+		newConfig = writeConfiguredLlmRole(newConfig, "expert", expertLlmRole);
 		newConfig = writeConfiguredLlmRole(newConfig, "memory", memoryLlmRole);
 		saveConfig(newConfig);
 		// Also persist to naia-settings/config.json so ADK reload restores the same settings
@@ -2543,11 +2548,11 @@ export function SettingsTab() {
 
 	const providerModels = dynamicModels[provider] ?? [];
 	const renderLlmRoleEditor = (
-		role: "sub" | "memory",
+		role: "expert" | "sub" | "memory",
 		labelKey: TranslationKey,
 		roleConfig: LlmRoleConfig,
 		setRoleConfig: (value: LlmRoleConfig) => void,
-		inheritTargets: readonly ("main" | "sub")[],
+		inheritTargets: readonly ("expert" | "main" | "sub")[],
 	) => {
 		const compatibleProviders = LLM_PROVIDERS.filter((candidate) =>
 			providerSupportsRole(candidate.id, role),
@@ -2569,7 +2574,7 @@ export function SettingsTab() {
 					onChange={(event) => {
 						if (event.target.value.startsWith("inherit:")) {
 							updateRole({
-								inherit: event.target.value.slice("inherit:".length) as "main" | "sub",
+								inherit: event.target.value.slice("inherit:".length) as "expert" | "main" | "sub",
 							});
 							return;
 						}
@@ -4229,6 +4234,7 @@ export function SettingsTab() {
 						/>
 					</div>
 					<div className="settings-field settings-toggle-row">
+					{/* expert role editor */}
 						<label htmlFor="thinking-toggle">
 							{t("settings.enableThinking")}
 						</label>
@@ -4243,7 +4249,16 @@ export function SettingsTab() {
 						/>
 					</div>
 
-					{/* #11: 보조두뇌 (sub-LLM = memoryLlm) — 요약·사실추출용 */}
+					<div className="settings-section-divider">
+						<span>{t("settings.brainExpertSection")}</span>
+					</div>
+					{renderLlmRoleEditor(
+						"expert",
+						"settings.brainExpertSection",
+						expertLlmRole,
+						setExpertLlmRole,
+						["main"]
+					)}
 					<div className="settings-section-divider">
 						<span>{t("settings.brainSubSection")}</span>
 					</div>

@@ -33,12 +33,12 @@ describe("registry — provider registration", () => {
 });
 
 describe("registry — Codex app-server provider", () => {
-	it("API key가 필요 없고 main 역할만 지원한다", () => {
+	it("API key가 필요 없고 expert/main/sub 역할을 지원한다", () => {
 		const provider = getLlmProvider("codex");
 		expect(provider?.requiresApiKey).toBe(false);
 		expect(getDefaultLlmModel("codex")).toBe("gpt-5.4");
 		expect(providerSupportsRole("codex", "main")).toBe(true);
-		expect(providerSupportsRole("codex", "sub")).toBe(false);
+		expect(providerSupportsRole("codex", "sub")).toBe(true);
 		expect(providerSupportsRole("codex", "memory")).toBe(false);
 	});
 
@@ -48,9 +48,9 @@ describe("registry — Codex app-server provider", () => {
 		expect(providerSupportsRole("ollama", "memory")).toBe(true);
 	});
 
-	it("Anthropic Messages API는 OpenAI-compat batch/memory 역할에서 제외", () => {
+	it("Anthropic Messages API는 expert/main/sub를 지원하고 memory에서 제외", () => {
 		expect(providerSupportsRole("anthropic", "main")).toBe(true);
-		expect(providerSupportsRole("anthropic", "sub")).toBe(false);
+		expect(providerSupportsRole("anthropic", "sub")).toBe(true);
 		expect(providerSupportsRole("anthropic", "memory")).toBe(false);
 	});
 });

@@ -106,11 +106,11 @@ describe("Discord install policy", () => {
 		);
 	});
 
-	it("does not claim the hidden production wizard is implemented", () => {
+	it("reports verified setup slices without claiming full production completion", () => {
 		const section = REQUIREMENTS_MD.split("## Discord setup/preflight policy (#388)")[1]
 			?.split("## Steam Windows launch-readiness requirements (#314)")[0];
-		expect(section).toContain("Status: Contract frozen");
-		expect(section).toContain("production setup must supply native preflight facts");
+		expect(section).toContain("isolated Windows Tauri WebDriver verifies");
+		expect(section).toContain("same-channel reply remain");
 		expect(section).not.toContain("Status: Implemented");
 	});
 });

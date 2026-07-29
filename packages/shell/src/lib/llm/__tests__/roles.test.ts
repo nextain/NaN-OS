@@ -15,7 +15,7 @@ const base = (): AppConfig => ({
 	memoryLlmBaseUrl: "http://localhost:11434/v1",
 });
 
-describe("Shell main/sub/memory 역할 설정", () => {
+describe("Shell expert/main/sub + memory role settings", () => {
 	it("legacy memory는 memory로 보존되고 sub에서만 legacy 상속한다", () => {
 		const configured = readConfiguredLlmRoles(base());
 		expect(configured.memory?.provider).toBe("ollama");
@@ -23,9 +23,12 @@ describe("Shell main/sub/memory 역할 설정", () => {
 		const result = resolveEffectiveLlmRoles(base());
 		expect(result.ok).toBe(true);
 		if (!result.ok) return;
-		expect(result.roles[0].provider).toBe("codex");
-		expect(result.roles[1].provenance).toBe("legacy-inherit");
-		expect(result.roles[2].provider).toBe("ollama");
+		expect(result.roles.map((role) => [role.role, role.provider, role.provenance])).toEqual([
+			["expert", "codex", "inherit"],
+			["main", "codex", "explicit"],
+			["sub", "ollama", "legacy-inherit"],
+			["memory", "ollama", "explicit"],
+		]);
 	});
 
 	it("sub와 memory를 독립 저장하고 다른 역할 필드를 덮어쓰지 않는다", () => {
@@ -45,37 +48,39 @@ describe("Shell main/sub/memory 역할 설정", () => {
 		const result = resolveEffectiveLlmRoles(withMemory);
 		expect(result.ok).toBe(true);
 		if (!result.ok) return;
-		expect(result.roles.map((role) => role.provider)).toEqual(["codex", "nextain", "ollama"]);
+		expect(result.roles.map((role) => role.provider)).toEqual(["codex", "codex", "nextain", "ollama"]);
 	});
 
 	it("memory=sub 상속과 provider role capability를 판정한다", () => {
 		let config = writeConfiguredLlmRole(base(), "sub", { provider: "ollama", model: "small" });
 		config = writeConfiguredLlmRole(config, "memory", { inherit: "sub" });
 		const inherited = resolveEffectiveLlmRoles(config);
-		expect(inherited.ok && inherited.roles[2]).toMatchObject({
+		expect(inherited.ok && inherited.roles[3]).toMatchObject({
 			provider: "ollama",
 			provenance: "inherit",
 			inheritedFromRole: "sub",
 		});
 
-		const unsupported = writeConfiguredLlmRole(config, "sub", { provider: "codex", model: "gpt-5.4" });
-		expect(resolveEffectiveLlmRoles(unsupported)).toEqual({ ok: false, role: "sub", reason: "unsupported" });
+		const unsupported = writeConfiguredLlmRole(config, "memory", { provider: "codex", model: "gpt-5.4" });
+		expect(resolveEffectiveLlmRoles(unsupported)).toEqual({ ok: false, role: "memory", reason: "unsupported" });
 	});
 
-	it("main만 있는 기존 사용자는 sub/memory를 main에서 기본 상속한다", () => {
+	it("main-only legacy configuration defaults expert/sub from main and memory from sub", () => {
 		const config: AppConfig = { provider: "openai", model: "gpt-5.4", apiKey: "key" };
 		expect(readConfiguredLlmRoles(config)).toEqual({
+			expert: { inherit: "main" },
 			main: { provider: "openai", model: "gpt-5.4" },
 			sub: { inherit: "main" },
-			memory: { inherit: "main" },
+			memory: { inherit: "sub" },
 		});
 		const resolved = resolveEffectiveLlmRoles(config);
 		expect(resolved.ok).toBe(true);
 		if (!resolved.ok) return;
-		expect(resolved.roles.map((role) => [role.role, role.provider, role.provenance])).toEqual([
-			["main", "openai", "explicit"],
-			["sub", "openai", "inherit"],
-			["memory", "openai", "inherit"],
+		expect(resolved.roles.map((role) => [role.role, role.provider, role.provenance, role.inheritedFromRole])).toEqual([
+			["expert", "openai", "inherit", "main"],
+			["main", "openai", "explicit", undefined],
+			["sub", "openai", "inherit", "main"],
+			["memory", "openai", "inherit", "sub"],
 		]);
 	});
 });

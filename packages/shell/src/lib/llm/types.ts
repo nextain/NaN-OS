@@ -1,6 +1,6 @@
 import type { ModelCapability } from "../types.js";
 
-export type LlmRoleId = "main" | "sub" | "memory";
+export type LlmRoleId = "expert" | "main" | "sub" | "memory";
 
 /** Voice option for omni/tts models. */
 export interface LlmVoiceMeta {

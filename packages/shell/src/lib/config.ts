@@ -84,7 +84,8 @@ export type TtsProviderId =
 
 export type PanelPosition = "left" | "right" | "bottom";
 
-export type LlmRoleId = "main" | "sub" | "memory";
+/** Development tiers are expert/main/sub; memory remains orthogonal. */
+export type LlmRoleId = "expert" | "main" | "sub" | "memory";
 export interface LlmRoleConfig {
 	provider?: ProviderId;
 	model?: string;

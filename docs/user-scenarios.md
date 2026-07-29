@@ -593,3 +593,16 @@ P02 검증:
 | UC-DISCORD-3 | Gateway event deduplication, per-channel context, reconnect | live status and unread rendering | two-channel message/reply/reconnect flow |
 
 | **S-CASCADE-INSTALL-PLAN** (FR-CASCADE.2 — 2026-07-22) | 4060 profile users see a Shell-checked local-runtime plan. Loader, Python runtime, cascade service bundle, Ditto engine, VoxCPM2 model, and bundled reference voices each report a name, progress, next action, retryability, and failure reason. With no packaged artifact or download manifest, Shell reports that boundary and does not pretend to download or start anything. `ready` is true only when all prerequisites and the live :8910 requested services are verified. | Rust `cascade_installation_status` contract tests (missing prerequisite, queued model download, ready-to-start, live ready) and `SettingsTab.test.tsx` (profile plan display; no `start_cascade` when `canStart=false`). Actual download/install and Tauri voice+lipsync remain a separate E2E gate after packaged artifacts exist. |
+
+## UC-LLM-THREE-TIER ? Pi-only development roles
+
+The user configures `expert`, `main`, and `sub` independently in Shell. Each role selects a Codex or Claude model (or inherits another role); `memory` remains a separate consumer role. Shell writes only provider/model/credential-reference metadata to `naia-settings/config.json` and never writes credentials.
+
+When a development task is delegated, Shell hands the saved workspace configuration and task to naia-agent. The agent resolves the selected role, validates it, then starts and supervises an embedded Pi session with that provider/model. OpenCode is neither displayed nor selected nor used as fallback on this path.
+
+### Test Coverage Map
+
+| Scenario | Unit / contract | Integration |
+|---|---|---|
+| three tiers persist and inherit | `lib/llm/roles.test.ts`, `lib/adk-store.test.ts` | config file roundtrip |
+| Pi-only role handoff | Agent `pi-role-runner.contract.test.ts` | fake Pi session through supervisor |

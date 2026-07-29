@@ -534,3 +534,11 @@ Steamworks 포털 설정·SteamPipe 자격증명·스토어 심사 제출은 #31
 | **FR-CASCADE.2** | Shell owns the 4060 cascade installation-plan status. Each of `loader`, `python-runtime`, `cascade-service-bundle`, `ditto-engine`, `voxcpm2-model`, and `reference-voices` supplies `complete|waiting|blocked`, 0–100 progress, `install|download|verify`, retryability, and a failure reason. | Rust pure-plan contract tests and SettingsTab IPC rendering test. |
 | **FR-CASCADE.3** | `ready=true` only when all install steps are complete and the Shell-owned :8910 façade reports every requested TTS/avatar service healthy. Prerequisites without a started service are `ready-to-start`, not ready. | Rust live-status classification tests. |
 | **FR-CASCADE.4** | Querying install status is read-only: no model download, service spawn, or user-file mutation. A profile warm with `canStart=false` must not call `start_cascade`. Missing package metadata must be reported as unavailable, never as an active download. | SettingsTab negative invocation test plus command contract review. |
+
+## Three-tier LLM profiles (Pi-only execution)
+
+| ID | Requirement | Verification |
+|---|---|---|
+| **FR-LLM-ROLE.4** | Shell persists `expert`, `main`, and `sub` profile selections independently; each can explicitly select a compatible Codex or Claude model or inherit another role. | role roundtrip and role-editor tests |
+| **FR-LLM-ROLE.5** | Memory remains orthogonal to the three development tiers and may inherit one without becoming a development tier. | resolver contract |
+| **FR-LLM-ROLE.6** | Shell-to-Agent development delegation uses only Agent-managed Pi. OpenCode is not exposed, called, installed, or a fallback in this route. | Agent Pi role factory and negative OpenCode assertions |

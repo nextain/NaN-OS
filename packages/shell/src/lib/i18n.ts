@@ -34,6 +34,10 @@ function codingWorkerText(ko: string, en: string) {
 }
 
 const codingWorkerUxTranslations = {
+	"settings.brainExpertSection": codingWorkerText(
+		"Expert brain",
+		"Expert brain",
+	),
 	"workspace.codingWorkersTaskWorkspace": codingWorkerText(
 		"작업 대상",
 		"Work target",

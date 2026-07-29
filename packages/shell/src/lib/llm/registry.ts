@@ -391,7 +391,7 @@ registerLlmProvider({
 	description: "Claude Code CLI — uses local Claude installation.",
 	descKey: "provider.claudeCodeCli.desc",
 	requiresApiKey: false,
-	supportedRoles: ["main"],
+	supportedRoles: ["expert", "main", "sub"],
 	defaultModel: "claude-sonnet-4-6",
 	models: [
 		{ id: "claude-opus-4-8", label: "Claude Opus 4.8", capabilities: ["llm"] },
@@ -414,7 +414,7 @@ registerLlmProvider({
 	description: "Codex app-server — uses your local Codex login.",
 	descKey: "provider.codex.desc",
 	requiresApiKey: false,
-	supportedRoles: ["main"],
+	supportedRoles: ["expert", "main", "sub"],
 	defaultModel: "gpt-5.4",
 	models: [
 		{ id: "gpt-5.4", label: "GPT-5.4 (Codex)", capabilities: ["llm"] },
@@ -509,7 +509,7 @@ registerLlmProvider({
 	description: "Claude models — requires Anthropic API key.",
 	descKey: "provider.apiKeyRequired",
 	requiresApiKey: true,
-	supportedRoles: ["main"],
+	supportedRoles: ["expert", "main", "sub"],
 	defaultModel: "claude-sonnet-4-6",
 	models: [
 		{

@@ -20,6 +20,7 @@ const clean = (value: string | undefined): string | undefined => value?.trim() |
 export function readConfiguredLlmRoles(config: AppConfig): Partial<Record<LlmRoleId, LlmRoleConfig>> {
 	const structured = config.llmRoles ?? {};
 	const main = structured.main ?? { provider: config.provider, model: config.model };
+	const expert = structured.expert ?? { inherit: "main" as const };
 	const memory = structured.memory ?? (
 		config.memoryLlmProvider && config.memoryLlmProvider !== "none"
 			? {
@@ -45,8 +46,9 @@ export function readConfiguredLlmRoles(config: AppConfig): Partial<Record<LlmRol
 				? { inherit: "memory" as const }
 				: { inherit: "main" as const }
 	);
-	const effectiveMemory = memory ?? { inherit: "main" as const };
+	const effectiveMemory = memory ?? { inherit: "sub" as const };
 	return {
+		...(expert ? { expert } : {}),
 		...(main ? { main } : {}),
 		...(sub ? { sub } : {}),
 		...(effectiveMemory ? { memory: effectiveMemory } : {}),
@@ -83,7 +85,7 @@ export function writeConfiguredLlmRole(
 }
 
 export function resolveEffectiveLlmRoles(config: AppConfig):
-	| { ok: true; roles: readonly [EffectiveShellLlmRole, EffectiveShellLlmRole, EffectiveShellLlmRole] }
+	| { ok: true; roles: readonly [EffectiveShellLlmRole, EffectiveShellLlmRole, EffectiveShellLlmRole, EffectiveShellLlmRole] }
 	| { ok: false; role: LlmRoleId; reason: "missing" | "incomplete" | "cycle" | "unsupported" } {
 	const configured = readConfiguredLlmRoles(config);
 	const cache = new Map<LlmRoleId, EffectiveShellLlmRole>();
@@ -136,13 +138,13 @@ export function resolveEffectiveLlmRoles(config: AppConfig):
 		return effective;
 	};
 	const roles: EffectiveShellLlmRole[] = [];
-	for (const role of ["main", "sub", "memory"] as const) {
+	for (const role of ["expert", "main", "sub", "memory"] as const) {
 		const effective = resolveOne(role);
 		if ("ok" in effective) return effective;
 		roles.push(effective);
 	}
 	return {
 		ok: true,
-		roles: roles as unknown as readonly [EffectiveShellLlmRole, EffectiveShellLlmRole, EffectiveShellLlmRole],
+		roles: roles as unknown as readonly [EffectiveShellLlmRole, EffectiveShellLlmRole, EffectiveShellLlmRole, EffectiveShellLlmRole],
 	};
 }

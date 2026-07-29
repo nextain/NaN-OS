@@ -2074,7 +2074,50 @@ fn spawn_agent_core(
                                         },
                                     )?;
                                     cmd.env("NAIA_DISCORD_TOKEN_PIPE", "stdin");
-                                    cmd.env("NAIA_DISCORD_BINDINGS_JSON", bindings_json);
+                                    cmd.env("NAIA_DISCORD_BINDINGS_JSON", &bindings_json);
+                                    // Outbound delivery uses the same Shell-owned allowlist as
+                                    // Discord ingress.  The agent receives opaque destination IDs
+                                    // only: bound channels and explicitly allowed users as DMs.
+                                    // It never receives a token or arbitrary WebView recipient.
+                                    let mut outbound_destinations = Vec::<serde_json::Value>::new();
+                                    let mut outbound_users = std::collections::BTreeSet::<String>::new();
+                                    if let Some(bindings) = serde_json::from_str::<serde_json::Value>(&bindings_json)
+                                        .ok()
+                                        .and_then(|value| value.get("bindings").and_then(|item| item.as_array()).cloned())
+                                    {
+                                        for binding in bindings {
+                                            let binding_id = binding.get("bindingId").and_then(|item| item.as_str());
+                                            let guild_id = binding.get("guildId").and_then(|item| item.as_str());
+                                            let channel_id = binding.get("channelId").and_then(|item| item.as_str());
+                                            if let (Some(binding_id), Some(guild_id), Some(channel_id)) = (binding_id, guild_id, channel_id) {
+                                                outbound_destinations.push(serde_json::json!({
+                                                    "id": binding_id,
+                                                    "kind": "channel",
+                                                    "guildId": guild_id,
+                                                    "channelId": channel_id,
+                                                }));
+                                            }
+                                            if let Some(users) = binding.get("allowedUserIds").and_then(|item| item.as_array()) {
+                                                for user in users.iter().filter_map(|item| item.as_str()) {
+                                                    outbound_users.insert(user.to_string());
+                                                }
+                                            }
+                                        }
+                                    }
+                                    for user_id in outbound_users {
+                                        outbound_destinations.push(serde_json::json!({
+                                            "id": format!("dm_{user_id}"),
+                                            "kind": "dm",
+                                            "userId": user_id,
+                                        }));
+                                    }
+                                    let outbound_policy = serde_json::json!({
+                                        "version": 1,
+                                        "destinations": outbound_destinations,
+                                    });
+                                    if let Ok(outbound_json) = serde_json::to_string(&outbound_policy) {
+                                        cmd.env("NAIA_DISCORD_OUTBOUND_JSON", outbound_json);
+                                    }
                                     cmd.env("NAIA_DISCORD_GENERATION", &generation);
                                     cmd.env(
                                         "NAIA_DISCORD_STATUS_PATH",
