@@ -36,7 +36,7 @@ naia-shell은 **Naia Visual Agent를 위한 데스크톱 셸(앱)**이다. 사�
 | **다중 모달 표현** | 하나의 표현 의도를 음성/아바타/로봇 몸체가 함께 소비 | 🔜 egress 분화 자리 예약 |
 
 > ✅ = 새 코어에 구현+테스트(Playwright e2e 포함). 🔜 = 설계/옛 경로 존재, 이식 진행.
-> 정확한 추적은 `docs/user-scenarios.md`(UC SoT)와 `docs/requirements.md` 참조.
+> 정확한 추적은 `docs/user-scenarios.md`(UC SoT)와 `docs/requirements.md` 참조. Windows RTX 8GB NVA는 [`docs/windows-8gb-nva.md`](docs/windows-8gb-nva.md)가 운영 기준이다.
 > 실제 Tauri 검증은 profile 저장·복원, DJ 실제 YouTube BGM·첫 결과·stop, 전시 greeting·stop까지다.
 > audible TTS·live 질문 끼어들기·모든 제어·장시간/현장 품질은 아직 native 검증으로 주장하지 않는다.
 
