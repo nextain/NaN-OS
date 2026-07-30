@@ -274,11 +274,14 @@ Success means the visible confirmation identifies the saved target and fixed bou
 
 ## UC-NAIA-AZURE-MODELS — Naia 계정으로 Azure 모델을 일반 대화에 사용한다
 
-Naia 계정으로 로그인한 사용자는 설정의 Naia 모델 목록에서 `grok-4.3`과
-`deepseek-v4-pro`를 선택하고 저장할 수 있다. 재시작 후 선택이 복원되며 일반 채팅은
+Naia 계정으로 로그인한 사용자는 설정의 Naia 모델 목록에서 `grok-4.3`,
+`deepseek-v4-pro`, `gpt-5.6-sol`, `gpt-5.6-luna`를 선택하고 저장할 수 있다.
+`claude-opus-5`는 Azure quota가 열리기 전까지 준비중으로 보이며 적용되지 않는다.
+재시작 후 선택이 복원되며 일반 채팅은
 기존 Shell→Agent provider pipeline과 같은 Naia 키를 통해 선택한 정확한 모델로 전달된다.
 Gateway가 제공한 Azure provenance와 tool 지원 여부는 정직하게 반영하고, gateway가
 일시적으로 응답하지 않으면 정적 fallback을 사용하되 다른 모델/provider로 바꾸지 않는다.
+Gateway의 가격은 이미 10%가 반영된 고객가이므로 Shell은 다시 가산하지 않는다.
 
 이번 UC는 Coding Workers·Pi 작업 시작/취소/재개를 포함하지 않는다. 상세 계약은
 `docs/progress/99.dev-comm/naia-account-model-connection-2026-07-30.md`이다.

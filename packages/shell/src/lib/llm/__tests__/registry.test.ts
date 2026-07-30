@@ -33,9 +33,12 @@ describe("registry — provider registration", () => {
 		expect(getLlmProvider("unknown-xyz")).toBeUndefined();
 	});
 
-	it("Naia exposes Grok for tools and DeepSeek as analysis-only without claiming live provenance", () => {
+	it("Naia exposes Azure models without claiming unverified live provenance", () => {
 		expect(getLlmModel("nextain", "grok-4.3")).toMatchObject({ supportsTools: true, upstreamProvider: "unknown", lifecycle: "unknown" });
 		expect(getLlmModel("nextain", "deepseek-v4-pro")).toMatchObject({ supportsTools: false, upstreamProvider: "unknown", lifecycle: "unknown" });
+		expect(getLlmModel("nextain", "gpt-5.6-sol")).toMatchObject({ supportsTools: true, upstreamProvider: "unknown" });
+		expect(getLlmModel("nextain", "gpt-5.6-luna")).toMatchObject({ supportsTools: true, upstreamProvider: "unknown" });
+		expect(getLlmModel("nextain", "claude-opus-5")).toMatchObject({ protocol: "anthropic_messages", operationalStatus: "quota_blocked", comingSoon: true });
 	});
 });
 
@@ -235,7 +238,7 @@ describe("registry — fetchNaiaPricing", () => {
 		vi.restoreAllMocks();
 	});
 
-	it("overlays gateway pricing with 1.1x markup onto Naia model list", async () => {
+	it("uses final customer pricing from the gateway without double markup", async () => {
 		const gatewayResponse = [
 			{ model_key: "vertexai:gemini-3.1-flash-lite", input_price_per_million: 0.15, output_price_per_million: 0.6, cached_price_per_million: 0.04 },
 			{ model_key: "vertexai:gemini-3.5-flash", input_price_per_million: 1.25, output_price_per_million: 10.0, cached_price_per_million: null },
@@ -249,15 +252,14 @@ describe("registry — fetchNaiaPricing", () => {
 		expect(models).not.toBeNull();
 
 		const flashLite = models!.find((m) => m.id === "gemini-3.1-flash-lite");
-		expect(flashLite?.pricing).toEqual([0.165, 0.66]);
+		expect(flashLite?.pricing).toEqual([0.15, 0.6]);
 
 		const flash = models!.find((m) => m.id === "gemini-3.5-flash");
-		expect(flash?.pricing).toEqual([1.375, 11.0]);
+		expect(flash?.pricing).toEqual([1.25, 10.0]);
 
 		const gpt4o = models!.find((m) => m.id === "gpt-4o");
 		expect(gpt4o).toBeUndefined();
-		expect(models!.find((m) => m.id === "grok-4.3")?.pricing?.[0]).toBeCloseTo(0.44);
-		expect(models!.find((m) => m.id === "grok-4.3")?.pricing?.[1]).toBeCloseTo(1.32);
+		expect(models!.find((m) => m.id === "grok-4.3")?.pricing).toEqual([0.4, 1.2]);
 
 		vi.restoreAllMocks();
 	});
@@ -299,11 +301,15 @@ describe("registry — Naia Azure model metadata", () => {
 		vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(new Response(JSON.stringify([
 			{ model_key: "grok-4.3", capabilities: ["llm"], supports_tools: true, upstream_provider: "azure", lifecycle: "preview" },
 			{ model_key: "deepseek-v4-pro", capabilities: ["llm"], supports_tools: true, upstream_provider: "wrong", lifecycle: "ga" },
+			{ model_key: "gpt-5.6-sol", capabilities: ["llm"], supports_tools: true, upstream_provider: "azure", lifecycle: "ga", protocol: "openai_chat_completions", operational_status: "live" },
+			{ model_key: "claude-opus-5", capabilities: ["llm"], supports_tools: true, upstream_provider: "azure", lifecycle: "ga", protocol: "anthropic_messages", operational_status: "quota_blocked" },
 		]), { status: 200 }));
 		const metadata = await fetchNaiaModelMetadata("https://example.com");
 		const models = applyNaiaModelMetadata(getLlmProvider("nextain")!.models, metadata);
 		expect(models.find((m) => m.id === "grok-4.3")).toMatchObject({ supportsTools: true, upstreamProvider: "azure" });
 		expect(models.find((m) => m.id === "deepseek-v4-pro")).toMatchObject({ supportsTools: false, upstreamProvider: "wrong" });
+		expect(models.find((m) => m.id === "gpt-5.6-sol")).toMatchObject({ protocol: "openai_chat_completions", operationalStatus: "live", comingSoon: false });
+		expect(models.find((m) => m.id === "claude-opus-5")).toMatchObject({ protocol: "anthropic_messages", operationalStatus: "quota_blocked", comingSoon: true });
 		vi.restoreAllMocks();
 	});
 

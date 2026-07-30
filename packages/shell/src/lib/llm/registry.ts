@@ -1,8 +1,6 @@
 import { MODEL_CAPABILITY_VALUES, type ModelCapability } from "../types.js";
 import type { LlmModelMeta, LlmProviderMeta, LlmRoleId, LlmVoiceMeta } from "./types";
 
-const NAIA_PRICE_MARKUP = 1.1;
-
 const providers = new Map<string, LlmProviderMeta>();
 
 /** Register an LLM provider. */
@@ -164,8 +162,8 @@ export async function fetchNaiaPricing(
 			if (!isNaiaRoute) continue;
 			const modelId = entry.model_key.slice(entry.model_key.indexOf(":") + 1);
 			pricingMap.set(modelId, [
-				entry.input_price_per_million * NAIA_PRICE_MARKUP,
-				entry.output_price_per_million * NAIA_PRICE_MARKUP,
+				entry.input_price_per_million,
+				entry.output_price_per_million,
 			]);
 		}
 
@@ -268,6 +266,8 @@ export interface NaiaModelCatalogMetadata {
 	supportsTools?: boolean;
 	upstreamProvider?: string;
 	lifecycle?: string;
+	protocol?: string;
+	operationalStatus?: string;
 }
 
 /** Fetch the richer `/v1/models` contract used for Naia route provenance and tool policy. */
@@ -283,6 +283,8 @@ export async function fetchNaiaModelMetadata(
 			supports_tools?: boolean;
 			upstream_provider?: string;
 			lifecycle?: string;
+			protocol?: string;
+			operational_status?: string;
 		}>;
 		const map = new Map<string, NaiaModelCatalogMetadata>();
 		for (const entry of entries) {
@@ -292,6 +294,8 @@ export async function fetchNaiaModelMetadata(
 				...(typeof entry.supports_tools === "boolean" ? { supportsTools: entry.supports_tools } : {}),
 				...(typeof entry.upstream_provider === "string" ? { upstreamProvider: entry.upstream_provider } : {}),
 				...(typeof entry.lifecycle === "string" ? { lifecycle: entry.lifecycle } : {}),
+				...(typeof entry.protocol === "string" ? { protocol: entry.protocol } : {}),
+				...(typeof entry.operational_status === "string" ? { operationalStatus: entry.operational_status } : {}),
 			});
 		}
 		return map;
@@ -317,6 +321,9 @@ export function applyNaiaModelMetadata(
 			...(live.supportsTools !== undefined ? { supportsTools: live.supportsTools } : {}),
 			...(live.upstreamProvider ? { upstreamProvider: live.upstreamProvider } : {}),
 			...(live.lifecycle ? { lifecycle: live.lifecycle } : {}),
+			...(live.protocol ? { protocol: live.protocol } : {}),
+			...(live.operationalStatus ? { operationalStatus: live.operationalStatus } : {}),
+			...(live.operationalStatus ? { comingSoon: live.operationalStatus !== "live" } : {}),
 		};
 		// Security/capability floor: a stale or malformed catalog cannot turn tool
 		// calling back on for Azure DeepSeek-V4-Pro.
@@ -426,6 +433,33 @@ registerLlmProvider({
 			supportsTools: false,
 			upstreamProvider: "unknown",
 			lifecycle: "unknown",
+		},
+		{
+			id: "gpt-5.6-sol",
+			label: "GPT-5.6 Sol (Naia)",
+			capabilities: ["llm"],
+			supportsTools: true,
+			upstreamProvider: "unknown",
+			lifecycle: "unknown",
+		},
+		{
+			id: "gpt-5.6-luna",
+			label: "GPT-5.6 Luna (Naia)",
+			capabilities: ["llm"],
+			supportsTools: true,
+			upstreamProvider: "unknown",
+			lifecycle: "unknown",
+		},
+		{
+			id: "claude-opus-5",
+			label: "Claude Opus 5 (Naia · Azure quota pending)",
+			capabilities: ["llm"],
+			supportsTools: true,
+			upstreamProvider: "unknown",
+			lifecycle: "unknown",
+			protocol: "anthropic_messages",
+			operationalStatus: "quota_blocked",
+			comingSoon: true,
 		},
 		{
 			// Naia Local — run the omni-24g container on your OWN GPU and point

@@ -3,11 +3,26 @@
 ## Scope
 
 This Shell slice only connects the existing Naia account/provider pipeline to
-`grok-4.3` and `deepseek-v4-pro`. It covers catalog display, capability metadata,
+`grok-4.3`, `deepseek-v4-pro`, `gpt-5.6-sol`, `gpt-5.6-luna`, and the quota-blocked
+`claude-opus-5`. It covers catalog display, capability metadata,
 selection, persistence, reload and ordinary chat responses.
 
 Shell Coding Workers, Pi task lifecycle and Workspace coding UX are explicitly
 deferred to the next large Workspace improvement issue.
+
+## Azure Foundry extension (#399)
+
+- `gpt-5.6-sol` and `gpt-5.6-luna` are live Azure routes with controlled tool-call evidence.
+- `claude-opus-5` is catalogued with the Anthropic Messages protocol but remains
+  `quota_blocked` and cannot be applied while this subscription has zero quota.
+- Gateway pricing is the final customer price (official source price × 1.10).
+  Shell now displays that value directly instead of applying a second 10% markup.
+- Verification: 99 focused registry/Settings tests, 1,391 full Shell regression
+  tests, and the production build pass (13 environment/opt-in tests skipped).
+- Adversarial primary-evidence review found and fixed the Azure GPT-5.6
+  `max_tokens` incompatibility. The real AnyLLM Azure SDK path then returned one
+  tool call from each Sol and Luna deployment. External review CLIs timed out,
+  so no multi-AI consensus is claimed for this extension.
 
 ## Traceability
 

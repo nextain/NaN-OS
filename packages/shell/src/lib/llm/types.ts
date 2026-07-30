@@ -22,6 +22,10 @@ export interface LlmModelMeta {
 	upstreamProvider?: string;
 	/** Provider lifecycle signal such as ga or preview. */
 	lifecycle?: string;
+	/** Upstream wire contract; keeps OpenAI-compatible and Anthropic Messages routes distinct. */
+	protocol?: string;
+	/** Runtime availability advertised by the gateway (for example live or quota_blocked). */
+	operationalStatus?: string;
 	/** Omni: user can select voice in settings. */
 	voiceSelectable?: boolean;
 	/** Omni: available voices. */

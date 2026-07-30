@@ -1360,7 +1360,7 @@ export function SettingsTab() {
 						};
 
 						const mappedProvider =
-							(m.provider.toLowerCase() === "azure" && (modelId === "grok-4.3" || modelId === "deepseek-v4-pro")
+							(m.provider.toLowerCase() === "azure" && ["grok-4.3", "deepseek-v4-pro", "gpt-5.6-sol", "gpt-5.6-luna", "claude-opus-5"].includes(modelId)
 								? "nextain"
 								: resolveProvider(m.provider) || resolveProviderFromId(m.id));
 						if (mappedProvider) pushModel(mappedProvider);

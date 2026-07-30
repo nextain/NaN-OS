@@ -26,6 +26,11 @@ describe("LLM registry — gateway model exclusion (#248)", () => {
 		const ids = naia!.models.map((m) => m.id);
 		expect(ids).toEqual([
 			"gemini-3.1-flash-lite",
+			"grok-4.3",
+			"deepseek-v4-pro",
+			"gpt-5.6-sol",
+			"gpt-5.6-luna",
+			"claude-opus-5",
 			"naia-local",
 			"gemini-3.5-flash",
 			"gemini-2.5-flash-live",

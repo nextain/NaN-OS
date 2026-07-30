@@ -364,7 +364,7 @@ describe("SettingsTab", () => {
 		}));
 	});
 
-	it.each(["grok-4.3", "deepseek-v4-pro"])("keeps the Naia Azure model %s selectable and persisted", async (modelId) => {
+	it.each(["grok-4.3", "deepseek-v4-pro", "gpt-5.6-sol", "gpt-5.6-luna"])("keeps the live Naia Azure model %s selectable and persisted", async (modelId) => {
 		localStorage.setItem("naia-config", JSON.stringify({
 			onboardingComplete: true,
 			provider: "nextain",
