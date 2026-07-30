@@ -19,6 +19,7 @@ import {
 	bgmPlayback,
 	toBgmPlayToolResult,
 	toBgmQueuedToolResult,
+	toBgmObservedContext,
 	type BgmPlaybackPort,
 } from "./bgm-playback";
 
@@ -34,6 +35,7 @@ export const BGM_ACTIONS = [
 	"resume",
 	"next",
 	"prev",
+	"status",
 	"volume",
 ] as const;
 export type BgmAction = (typeof BGM_ACTIONS)[number];
@@ -75,6 +77,7 @@ export interface BgmSkillDeps {
 	/** 위젯(BgmPlayer)이 listen("agent_response") 로 받는 payload 를 발사. */
 	emitBgm: (payload: Record<string, unknown>) => Promise<void>;
 	playback: BgmPlaybackPort;
+	now?: () => number;
 }
 
 /** 사이드카 검색 — BgmPlayer.ytSearch 동형 표면(GET /yt/search?q=&max=). */
@@ -146,6 +149,14 @@ export async function executeBgmSkill(
 			toBgmQueuedToolResult(result.queued, result.queueLength),
 		);
 	};
+
+	if (act === "status") {
+		return JSON.stringify({
+			ok: true,
+			action: act,
+			...toBgmObservedContext(deps.playback.current(), deps.now?.() ?? Date.now(), deps.playback.queue()),
+		});
+	}
 
 	if (act === "play") {
 		const videoId = args.videoId;

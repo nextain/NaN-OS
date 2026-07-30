@@ -93,7 +93,7 @@ import {
 import { getTtsProviderMeta } from "../lib/tts";
 import { estimateSttCost, estimateTtsCost } from "../lib/tts/cost";
 import { streamsAvatarPcm, synthesizeTts } from "../lib/tts/synthesize";
-import { isLikelySelfEcho } from "../lib/voice/echo-gate";
+import { decideSttBargeIn, isLikelySelfEcho, shouldPauseSttForTts } from "../lib/voice/echo-gate";
 import type {
 	AgentResponseChunk,
 	AuditEvent,
@@ -699,8 +699,15 @@ export function ChatArea({
 				// One-time migration: reset the contaminated main session (Discord DMs mixed in).
 				// (restartGateway 제거됨 2026-06-12 — gateway 없음(#201). resetGatewaySession=agent skill_sessions 유지.)
 				await resetGatewaySession("agent:main:main");
-				if (config) {
-					saveConfig({ ...config, discordSessionMigrated: true });
+				// Config hydration can complete while the async reset is in flight.
+				// Re-read the cache after the await so a pre-hydration snapshot can
+				// never erase freshly restored avatar/voice/profile settings.
+				const currentConfig = loadConfig();
+				if (currentConfig) {
+					saveConfig({
+						...currentConfig,
+						discordSessionMigrated: true,
+					});
 				}
 				Logger.info(
 					"ChatArea",
@@ -2206,12 +2213,12 @@ export function ChatArea({
 							clearTimeout(sttCooldownTimerRef.current);
 							sttCooldownTimerRef.current = null;
 						}
-						// ★자기발화 1차 방어(2026-07-15 루크 "발화 때 마이크 죽이기"):
-						// 재생 중엔 마이크(인식 세션)를 정지해 캡처 자체를 차단한다. 결과-도착 게이트
-						// (ttsPlayingRef)만으로는 web-speech 연속 인식이 재생 중 캡처한 오디오를
-						// 게이트 해제 후 늦게 배달하는 누수를 못 막는다(실증). barge-in 은 버튼식이라 안전.
+						// 일반 TTS는 기존처럼 마이크를 닫아 에코를 차단한다. 선제발화 활동은 사용자가
+						// 언제든 끼어들 수 있어야 하므로 STT를 유지하고 최종 transcript의 자기 에코만
+						// decideSttBargeIn에서 거른다.
 						try {
-							sttPauseRef.current?.();
+							if (shouldPauseSttForTts(activeSpeechActivityRef.current !== null))
+								sttPauseRef.current?.();
 						} catch {
 							/* 마이크 정지 실패 = 비치명 (2차 텍스트 필터가 방어) */
 						}
@@ -2294,32 +2301,24 @@ export function ChatArea({
 						});
 						if (!pipelineActiveRef.current) return;
 
-						if (
-							ttsPlayingRef.current ||
-							Date.now() < ttsCooldownUntilRef.current
-						) {
-							Logger.info(
-								"ChatArea",
-								"STT result suppressed (TTS playing/cooldown)",
-							);
+						const ttsActive = ttsPlayingRef.current || Date.now() < ttsCooldownUntilRef.current;
+						const selfEcho = cleanResult.isFinal && isLikelySelfEcho(
+							cleanResult.transcript,
+							recentTtsTextsRef.current,
+						);
+						const bargeIn = decideSttBargeIn({ isFinal: cleanResult.isFinal, ttsActive, selfEcho });
+						if (bargeIn === "suppress") {
+							Logger.info("ChatArea", selfEcho
+								? "STT result skipped (self-echo)"
+								: "STT partial suppressed (TTS playing/cooldown)");
 							return;
+						}
+						if (bargeIn === "interrupt") {
+							Logger.info("ChatArea", "STT user barge-in interrupts TTS");
+							interruptTts();
+							ttsCooldownUntilRef.current = 0;
 						}
 
-						// 자기발화 2차 방어(2026-07-15 루크 "일정 이상 유사도면 스킵"):
-						// 최근 나이아 TTS 문장과 유사하면 에코로 보고 버린다 — 재생 중 캡처분이
-						// 게이트 해제 후 늦게 배달되는 web-speech 누수를 텍스트로 차단.
-						if (
-							cleanResult.isFinal &&
-							isLikelySelfEcho(
-								cleanResult.transcript,
-								recentTtsTextsRef.current,
-							)
-						) {
-							Logger.info("ChatArea", "STT result skipped (self-echo)", {
-								transcript: cleanResult.transcript.slice(0, 40),
-							});
-							return;
-						}
 
 						if (!cleanResult.isFinal) {
 							setSttPartial(cleanResult.transcript);

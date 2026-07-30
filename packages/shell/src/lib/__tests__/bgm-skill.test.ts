@@ -110,6 +110,37 @@ describe("executeBgmSkill", () => {
 		});
 	});
 
+	it("status returns observed iframe playback without emitting a command", async () => {
+		let now = 1_000;
+		const playback = createBgmPlaybackPort(() => now);
+		const { deps, emitted } = mkDeps();
+		deps.playback = playback;
+		deps.now = () => now;
+		const requested = playback.request({ videoId: "v1", title: "Track A" });
+		playback.observe({ playbackId: requested.playbackId, sequence: 2, status: "playing" });
+
+		const playing = JSON.parse(await executeBgmSkill({ action: "status" }, deps));
+		expect(playing).toMatchObject({
+			ok: true,
+			action: "status",
+			playback: { playbackId: requested.playbackId, status: "playing", sequence: 2 },
+			currentTrack: { videoId: "v1", title: "Track A" },
+			announceTrack: true,
+		});
+		expect(emitted).toEqual([]);
+
+		now += 1;
+		playback.observe({ playbackId: requested.playbackId, sequence: 3, status: "ended" });
+		const ended = JSON.parse(await executeBgmSkill({ action: "status" }, deps));
+		expect(ended).toMatchObject({
+			ok: true,
+			action: "status",
+			playback: { playbackId: requested.playbackId, status: "ended", sequence: 3 },
+			currentTrack: null,
+			announceTrack: false,
+		});
+		expect(emitted).toEqual([]);
+	});
 	it("play — query·videoId 둘 다 없음 → throw", async () => {
 		const { deps } = mkDeps();
 		await expect(executeBgmSkill({ action: "play" }, deps)).rejects.toThrow(

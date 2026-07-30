@@ -3,7 +3,8 @@ import { copyFileSync, existsSync, readFileSync, readdirSync } from "node:fs";
 import { resolve } from "node:path";
 
 const shellDir = resolve(import.meta.dirname, "..");
-const agent = "D:/alpha-adk/projects/naia-agent-worktrees/codex-job-terminal";
+const agent = process.env.NAIA_E2E_AGENT_DIR
+ ?? "D:/alpha-adk/projects/naia-agent-worktrees/shell-pair-cef794d";
 const script = resolve(agent, "scripts/builds/agent-stdio-entry.mjs");
 const proto = resolve(agent, "src/main/adapters/grpc");
 const workspaceRoot = resolve(shellDir, "..", "..");

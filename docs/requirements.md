@@ -159,11 +159,18 @@ localStorage `naia-config` 는 파일에서 하이드레이트되는 **순수 �
 
 ## 기능 요구사항 (FR) — Shell 기본 라디오 DJ·행사 소개 스킬 (#362, 계획)
 
-> **2026-07-22 재생 관측 경계:** `skill_youtube_bgm`은 이제 현재 재생 중이라는
-> 주장 대신 재생 요청 접수만 반환한다. 선택한 제목은 활성 로컬 iframe이 `playing`을
-> 보고할 때까지 Shell→agent 현재 곡 맥락에서 제외하며, 오래된 playback ID와 낮은
-> sequence 이벤트는 무시한다. 이는 FR-RADIO-DJ.1/2의 사실 경계만 구현한 것으로,
-> agent 소유 `skill_radio_dj`, 선제 발화 허가, 날씨 요구사항의 완료를 뜻하지 않는다.
+> **2026-07-30 라디오 MVP 재검증:** `skill_youtube_bgm`은 재생 요청 접수와 실제
+> 관측 상태를 구분하고 `status`로 `requested/loading/playing/paused/ended/error/timeout`
+> 스냅샷을 반환한다. naia-agent는 요청 결과만으로 곡을 소개하지 않고, 같은
+> `playbackId`의 관측된 `playing`을 확인한 뒤에만 DJ 발화를 시작한다. `ended`·오류·시간초과는
+> 대체곡/재평가 경로로 보낸다. 결정론적 iframe fixture와 실제 Tauri 큐 검증을 기본으로 하며,
+> 외부 YouTube 성공은 CI 합격 조건으로 두지 않는다. 사용자의 최종 STT는 DJ TTS를 중단하고
+> 일반 대화를 우선하며, 응답 뒤 라디오 활동을 재개한다.
+>
+> 아직 완료로 보지 않는 항목은 재생 위치/길이(`currentTime/duration`), sequence와 freshness를
+> 묶어 TTS 직전에 원자적으로 소비하는 단일 사용 `speakPermit`, 물리적 TTS 종료 ACK, 날씨
+> 동의/캐시 정책이다. 따라서 현재 상태는 **라디오 기능 MVP 경로 완료**이며 FR-RADIO-DJ.1~7
+> 전체 완료를 뜻하지 않는다.
 
 > 범위: 이 절은 구현 계획의 정본이다. 반복 발화의 일정·침묵·사용자 우선순위는 naia-agent가 소유하고, Shell은 실제 재생과 환경 관측 사실을 제공한다. `skill_youtube_bgm`은 저수준 제어로 유지하며 `skill_radio_dj`가 이를 조합하는 기본 스킬이다.
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isLikelySelfEcho } from "../echo-gate";
+import { decideSttBargeIn, isLikelySelfEcho, shouldPauseSttForTts } from "../echo-gate";
 
 // 자기발화(에코) 텍스트 필터 계약 (2026-07-15 루크 지시: "일정 이상 유사도면 스킵").
 // 1차 방어 = 재생 중 마이크 정지, 이 필터 = web-speech 지연 배달 누수의 2차 방어.
@@ -60,5 +60,24 @@ describe("isLikelySelfEcho — 파이프라인 자기발화 스킵", () => {
 
 	it("최근 발화 목록이 비면 항상 false", () => {
 		expect(isLikelySelfEcho("안녕하세요 저는 나이아입니다", [])).toBe(false);
+	});
+});
+
+describe("decideSttBargeIn — TTS 중 실제 사용자 발화 우선", () => {
+	it("최종 자기 에코만 버리고 다른 최종 발화는 즉시 끼어든다", () => {
+		expect(decideSttBargeIn({ isFinal: true, ttsActive: true, selfEcho: true })).toBe("suppress");
+		expect(decideSttBargeIn({ isFinal: true, ttsActive: true, selfEcho: false })).toBe("interrupt");
+	});
+
+	it("부분 인식은 TTS 중 보류하고 TTS가 없으면 정상 진행한다", () => {
+		expect(decideSttBargeIn({ isFinal: false, ttsActive: true, selfEcho: false })).toBe("suppress");
+		expect(decideSttBargeIn({ isFinal: true, ttsActive: false, selfEcho: false })).toBe("continue");
+	});
+});
+
+describe("microphone pause policy", () => {
+	it("선제발화 활동에서는 STT를 열어 두고 일반 TTS에서는 기존 에코 방어를 유지한다", () => {
+		expect(shouldPauseSttForTts(true)).toBe(false);
+		expect(shouldPauseSttForTts(false)).toBe(true);
 	});
 });

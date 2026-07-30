@@ -102,6 +102,22 @@ export function isLikelySelfEcho(
 	return false;
 }
 
+export type SttBargeInDecision = "continue" | "suppress" | "interrupt";
+
+export function decideSttBargeIn(input: {
+	readonly isFinal: boolean;
+	readonly ttsActive: boolean;
+	readonly selfEcho: boolean;
+}): SttBargeInDecision {
+	if (input.selfEcho) return "suppress";
+	if (!input.ttsActive) return "continue";
+	return input.isFinal ? "interrupt" : "suppress";
+}
+
+export function shouldPauseSttForTts(proactiveActivityActive: boolean): boolean {
+	return !proactiveActivityActive;
+}
+
 function base64ToUint8Array(b64: string): Uint8Array {
 	let bin: string;
 	try {
