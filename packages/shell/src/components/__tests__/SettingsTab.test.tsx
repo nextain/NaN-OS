@@ -388,6 +388,23 @@ describe("SettingsTab", () => {
 		);
 	});
 
+	it.each(["grok-4.3", "deepseek-v4-pro", "gpt-5.6-sol", "gpt-5.6-luna"])("keeps the live Naia Azure model %s selectable and persisted", async (modelId) => {
+		localStorage.setItem("naia-config", JSON.stringify({
+			onboardingComplete: true,
+			provider: "nextain",
+			model: modelId,
+			apiKey: "",
+		}));
+		mockInvoke.mockResolvedValue([]);
+		render(<SettingsTab />);
+		gotoSettingsTab("brain");
+		const select = screen.getByRole("combobox", { name: /model/i }) as HTMLSelectElement;
+		expect([...select.options].map((option) => option.value)).toContain(modelId);
+		expect(select.value).toBe(modelId);
+		fireEvent.click(screen.getByRole("button", { name: "Apply" }));
+		expect(JSON.parse(localStorage.getItem("naia-config") || "{}")).toMatchObject({ provider: "nextain", model: modelId });
+	});
+
 	it("allows an explicit Codex sub brain but excludes Codex from memory", () => {
 		localStorage.setItem(
 			"naia-config",

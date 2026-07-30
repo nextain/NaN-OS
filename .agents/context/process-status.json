@@ -17,6 +17,15 @@
     "started": "2026-06-08T00:00:00Z",
     "last_updated": "2026-07-23T18:28:00+09:00",
     "status": "in_progress",
+    "naia_account_models_396": {
+      "issue": "https://github.com/nextain/naia-shell/issues/396",
+      "extension_issue": "https://github.com/nextain/naia-shell/issues/399",
+      "scope": "Naia account LLM connection only: grok-4.3, deepseek-v4-pro, gpt-5.6-sol, gpt-5.6-luna and quota-blocked claude-opus-5 catalog, selection, persistence, final-customer pricing and ordinary chat",
+      "contract": "docs/progress/99.dev-comm/naia-account-model-connection-2026-07-30.md",
+      "status": "done",
+      "deferred": "Coding Workers, Pi lifecycle and Workspace coding UX are the next large Workspace improvement goal",
+      "last_updated": "2026-07-30T23:45:00+09:00"
+    },
     "jeonju_course_vertical_acceptance": {
       "date": "2026-07-23",
       "shell_revision": "integration/overnight-uc (native acceptance pending integration commit)",
