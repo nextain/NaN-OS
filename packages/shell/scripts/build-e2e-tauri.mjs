@@ -14,7 +14,7 @@ const manifestPath = resolve(shellDir, "src-tauri", "Cargo.toml");
 const targetDir = resolve(
 	process.env.NAIA_E2E_TARGET_DIR ??
 		(process.platform === "win32"
-			? "C:/tmp/naia-shell-e2e"
+			? `C:/tmp/naia-shell-e2e-${REQUIRED_AGENT_COMMIT.slice(0, 7)}`
 			: resolve(shellDir, "src-tauri", "target-e2e")),
 );
 const e2eTauriConfig = resolve(shellDir, "src-tauri", "tauri.e2e.conf.json");

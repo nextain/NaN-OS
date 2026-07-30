@@ -18,7 +18,9 @@ vi.mock("@tauri-apps/api/event", () => ({
 
 vi.mock("@tauri-apps/api/core", () => ({
 	convertFileSrc: vi.fn((path: string) => path),
-	invoke: vi.fn(() => Promise.resolve(null)),
+	invoke: vi.fn((command: string) =>
+		Promise.resolve(command === "detect_gpu_vram" ? 8 : null),
+	),
 }));
 
 // App 마운트 effect(secure-store via migrate*/loadConfig)가 @tauri-apps/plugin-store `load` 를 호출한다.
@@ -159,7 +161,7 @@ describe("App discord deep-link persistence", () => {
 		expect(screen.getByText("avatar")).toBeTruthy();
 	});
 
-	it("mounts video avatar for a logged-out explicit local avatar profile", () => {
+	it("mounts video avatar for a logged-out explicit local avatar profile", async () => {
 		localStorage.setItem("naia-adk-path", "C:\\naia");
 		localStorage.setItem(
 			"naia-config",
@@ -176,6 +178,6 @@ describe("App discord deep-link persistence", () => {
 
 		render(<App />);
 
-		expect(screen.getByText("video-avatar")).toBeTruthy();
+		expect(await screen.findByText("video-avatar")).toBeTruthy();
 	});
 });

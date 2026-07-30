@@ -106,6 +106,43 @@ describe("ChatArea", () => {
 		expect(buttons.length).toBeGreaterThanOrEqual(2);
 	});
 
+	it("does not overwrite hydrated avatar settings after async session migration", async () => {
+		let finishReset: (() => void) | undefined;
+		const resetPending = new Promise<boolean>((resolve) => {
+			finishReset = () => resolve(true);
+		});
+		const { resetGatewaySession } = await import("../../lib/gateway-sessions");
+		(resetGatewaySession as ReturnType<typeof vi.fn>).mockReturnValueOnce(
+			resetPending,
+		);
+		localStorage.setItem(
+			"naia-config",
+			JSON.stringify({ provider: "codex", model: "e2e" }),
+		);
+
+		render(<ChatArea />);
+		await waitFor(() => expect(resetGatewaySession).toHaveBeenCalled());
+		localStorage.setItem(
+			"naia-config",
+			JSON.stringify({
+				provider: "codex",
+				model: "e2e",
+				avatarProvider: "naia-video-avatar",
+				localGpuTier: "laptop-4060-8g",
+				ttsProvider: "naia-local-voice",
+			}),
+		);
+		finishReset?.();
+
+		await waitFor(() => {
+			const saved = JSON.parse(localStorage.getItem("naia-config") ?? "{}");
+			expect(saved.discordSessionMigrated).toBe(true);
+			expect(saved.avatarProvider).toBe("naia-video-avatar");
+			expect(saved.localGpuTier).toBe("laptop-4060-8g");
+			expect(saved.ttsProvider).toBe("naia-local-voice");
+		});
+	});
+
 	it("distinguishes Discord connection setup from ordinary Discord requests", () => {
 		expect(isDiscordConnectionIntent("디스코드 연결 설정해")).toBe(true);
 		expect(isDiscordConnectionIntent("Configure my Discord bot token")).toBe(

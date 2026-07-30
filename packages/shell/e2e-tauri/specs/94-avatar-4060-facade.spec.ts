@@ -59,6 +59,15 @@ describe("4060 local voice and Ditto avatar through the real Tauri Shell", () =>
 			adkPath: adkPath ?? "",
 		});
 		const bootUi = JSON.parse(bootUiJson) as Record<string, unknown>;
+		const bootConfigJson = await tauriInvoke<string>("read_naia_config", {
+			adkPath: adkPath ?? "",
+		});
+		const bootFileConfig = JSON.parse(bootConfigJson) as Record<string, unknown>;
+		const detectedVramGb = await tauriInvoke<number | null>(
+			"detect_gpu_vram",
+			{},
+		);
+		expect(detectedVramGb).toBeGreaterThanOrEqual(8);
 		// A normal shell boot must not let early BGM/default UI state replace the
 		// stored 4060 voice/avatar selection before the renderer hydrates.
 		expect(bootUi).toMatchObject({
@@ -70,8 +79,9 @@ describe("4060 local voice and Ditto avatar through the real Tauri Shell", () =>
 		expect(["127.0.0.1", "localhost"]).toContain(
 			new URL(String(bootUi.vllmTtsHost)).hostname,
 		);
-		await browser.waitUntil(
-			async () => {
+		try {
+			await browser.waitUntil(
+				async () => {
 				const bootConfig = await browser.execute(
 					() =>
 						JSON.parse(localStorage.getItem("naia-config") ?? "{}") as Record<
@@ -89,12 +99,21 @@ describe("4060 local voice and Ditto avatar through the real Tauri Shell", () =>
 						return host === "127.0.0.1" || host === "localhost";
 					})()
 				);
-			},
-			{
-				timeout: 20_000,
-				timeoutMsg: "file-backed 4060 voice/avatar settings never hydrated into Shell",
-			},
-		);
+				},
+				{
+					timeout: 20_000,
+					timeoutMsg:
+						"file-backed 4060 voice/avatar settings never hydrated into Shell",
+				},
+			);
+		} catch (error) {
+			const observed = await browser.execute(() =>
+				JSON.parse(localStorage.getItem("naia-config") ?? "{}"),
+			);
+			throw new Error(
+				`${error instanceof Error ? error.message : String(error)}; observed=${JSON.stringify(observed)}; bootFileConfig=${JSON.stringify(bootFileConfig)}; bootUi=${JSON.stringify(bootUi)}; detectedVramGb=${detectedVramGb}`,
+			);
+		}
 		await browser.waitUntil(
 			() =>
 				browser.execute(
@@ -124,6 +143,16 @@ describe("4060 local voice and Ditto avatar through the real Tauri Shell", () =>
 				timeoutMsg: "cascade avatar did not receive its idle media",
 			},
 		);
+		await browser.waitUntil(
+			() => browser.execute(() => !document.querySelector(".splash-screen")),
+			{
+				timeout: 30_000,
+				timeoutMsg: "splash overlay did not dismiss after NVA became ready",
+			},
+		);
+		if (process.env.NAIA_E2E_IDLE_SCREENSHOT) {
+			await browser.saveScreenshot(process.env.NAIA_E2E_IDLE_SCREENSHOT);
+		}
 
 		// Keep this a real Shell path: observe the live browser fetches but forward
 		// every request unchanged. The LLM response must be synthesized by the
@@ -181,5 +210,8 @@ describe("4060 local voice and Ditto avatar through the real Tauri Shell", () =>
 					"Shell chat did not complete both local VoxCPM2 synthesis and Ditto lip-sync streaming",
 			},
 		);
+		if (process.env.NAIA_E2E_SPEAKING_SCREENSHOT) {
+			await browser.saveScreenshot(process.env.NAIA_E2E_SPEAKING_SCREENSHOT);
+		}
 	});
 });

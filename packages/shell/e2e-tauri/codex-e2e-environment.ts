@@ -49,7 +49,7 @@ export const VITE_ENTRY = resolve(SHELL_DIR, "node_modules/vite/bin/vite.js");
 export const E2E_TARGET_DIR = resolve(
 	process.env.NAIA_E2E_TARGET_DIR ??
 		(process.platform === "win32"
-			? "C:/tmp/naia-shell-e2e"
+			? `C:/tmp/naia-shell-e2e-${pairing.agentCommit.slice(0, 7)}`
 			: resolve(SHELL_DIR, "src-tauri", "target-e2e")),
 );
 // Must match src-tauri/tauri.e2e.conf.json's devUrl. Keeping this explicit
