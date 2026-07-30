@@ -4403,6 +4403,21 @@ fn detect_vram_gb_blocking() -> Option<f64> {
     }
 }
 
+const MIN_NVA_VRAM_GB: f64 = 8.0;
+
+fn validate_cascade_vram(vram_gb: Option<f64>) -> Result<f64, String> {
+    match vram_gb {
+        Some(vram) if vram >= MIN_NVA_VRAM_GB => Ok(vram),
+        Some(vram) => Err(format!(
+            "NVA local avatar requires NVIDIA RTX GPU VRAM 8GB or more (detected {vram:.0}GB)"
+        )),
+        None => Err(
+            "NVA local avatar requires a detected NVIDIA RTX GPU with VRAM 8GB or more"
+                .to_string(),
+        ),
+    }
+}
+
 fn path_to_string(path: std::path::PathBuf) -> String {
     path.to_string_lossy().into_owned()
 }
@@ -5005,6 +5020,14 @@ async fn start_cascade(
     // ?꾨쿋?? 踰덈뱾??loader(resource_dir) ?곗꽑 ???몃? adk 泥댄겕?꾩썐 誘몄쓽議?
     let loader_dir = resolve_cascade_loader_dir(&app, &adk_path);
 
+    // Fail closed before probing, cleanup, or spawning any local service. The
+    // 6.07GB model footprint still needs display/WDDM/runtime headroom, so a
+    // sub-8GB device is unsupported even when a stale profile is present.
+    let vram = tokio::task::spawn_blocking(detect_vram_gb_blocking)
+        .await
+        .map_err(|e| format!("VRAM detection task failed: {e}"))?;
+    let vram = validate_cascade_vram(vram)?;
+
     // The frontend normally checks this first, but IPC callers must not be
     // able to bypass the standalone-installation boundary.
     let install_probe = tokio::task::spawn_blocking({
@@ -5026,8 +5049,7 @@ async fn start_cascade(
     platform::kill_stale_cascade();
 
     let proc = tokio::task::spawn_blocking(move || {
-        let vram = detect_vram_gb_blocking();
-        spawn_cascade(&loader_dir, &adk_path, vram)
+        spawn_cascade(&loader_dir, &adk_path, Some(vram))
     })
     .await
     .map_err(|e| format!("task error: {e}"))??;
@@ -10017,6 +10039,15 @@ mod tests {
             read_cascade_loader_profile(&manifest).as_deref(),
             Some("laptop_4060_8g")
         );
+    }
+
+    #[test]
+    fn cascade_vram_requires_detected_nvidia_8gb_or_more() {
+        assert_eq!(validate_cascade_vram(Some(8.0)).unwrap(), 8.0);
+        assert_eq!(validate_cascade_vram(Some(16.0)).unwrap(), 16.0);
+        assert!(validate_cascade_vram(Some(6.0)).is_err());
+        assert!(validate_cascade_vram(Some(7.9)).is_err());
+        assert!(validate_cascade_vram(None).is_err());
     }
 
     #[test]

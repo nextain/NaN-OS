@@ -41,13 +41,21 @@ export type VramTierId =
 
 /** 저장된 config 하위호환 — 구 티어 id → 신 id (2026-07-08 리네임 + 2026-07-15). */
 const LEGACY_TIER_ALIAS: Record<string, VramTierId> = {
-	"external-llm-6g": "avatar-6g",
-	"avatar-or-voice-8g": "local-llm-avatar-8g",
-	"avatar-voice-12g": "local-voice-12g",
-	"full-local-24g": "full-realtime-24g",
+	"avatar-or-voice-8g": "laptop-4060-8g",
+	"local-llm-avatar-8g": "laptop-4060-8g",
+	"avatar-voice-12g": "laptop-4060-8g",
+	"local-voice-12g": "laptop-4060-8g",
+	"full-local-24g": "laptop-4060-8g",
+	"full-realtime-24g": "laptop-4060-8g",
 	// 2026-07-15: LLM+음성 티어를 8g → 16g 로 정직화 (fp16 음성 6.1G 기준 — int8 미검증).
-	"local-llm-voice-8g": "local-llm-voice-16g",
+	"local-llm-voice-8g": "laptop-4060-8g",
+	"local-llm-voice-16g": "laptop-4060-8g",
 };
+
+/** Retired profiles must never unlock NVA on sub-8GB hardware. */
+const RETIRED_TIER_IDS = new Set(["avatar-6g", "external-llm-6g"]);
+
+export const MIN_NVA_VRAM_GB = 8;
 
 /**
  * 8G 배타 티어의 로컬 선택(2026-07-08 확정). 8G 는 로컬 LLM + 아바타를 넉넉히 동시에 올리기엔
@@ -146,15 +154,14 @@ export const VRAM_TIERS: readonly VramTier[] = [
 	{
 		id: "laptop-4060-8g",
 		label:
-			"8GB RTX 4060 laptop: local DNA LLM on AMD XDNA NPU + local int8 voice + video avatar",
+			"Windows NVIDIA RTX 8GB+: external LLM + TensorRT VoxCPM2 voice + Ditto video avatar",
 		minVramGb: 8,
-		llm: "own",
-		localCapabilities: ["llm", "tts", "avatar"],
+		llm: "external",
+		localCapabilities: ["tts", "avatar"],
 		approxLocalVramGb: 6.07,
-		capabilityCostGb: { llm: 0 },
-		loaderProfile: "laptop_4060_8g",
+		loaderProfile: "windows_trt_8g",
 		realtime: "measurement-gated",
-		note: "RTX 4060 Laptop 8GB + Ryzen 8845H/8655H/8845H class: laptop_4060_8g profile. Main LLM is routed to the local compact DNA model on AMD XDNA/NPU budget (0 GPU VRAM); GPU hosts VoxCPM2 int8 TTS + Ditto avatar. NPU acceleration still requires the local runtime to be installed and measured.",
+		note: "Windows NVIDIA RTX 30/40 series with at least 8GB VRAM: keep the Naia account, remote Ollama, or external API LLM unchanged; the local GPU hosts only TensorRT VoxCPM2 int8 TTS and Ditto avatar. Real-time speed is not required. RTX 50 support requires the TensorRT 10.8+ follow-up package.",
 	},
 	{
 		id: "local-voice-12g",
@@ -182,6 +189,7 @@ export const VRAM_TIERS: readonly VramTier[] = [
 		// 2026-07-15 루크 실증: auto 가 숨긴 12g 를 골라 NVA 를 심었음). 3080 Ti 16G 시연 정본.
 		localCapabilities: ["llm", "tts"],
 		approxLocalVramGb: 10.0, // fp16 음성 6.1 + compact LLM ~3.9 (int8 검증 전 정직 산술)
+		hidden: true,
 		realtime: "measurement-gated",
 		note: "로컬 LLM(compact) + 로컬 음성(VoxCPM2 fp16). Ditto 아바타 없음 — 아바타는 VRM(셸 렌더, GPU 미미) 또는 클라우드. 음성 표면 = 로컬 cascade façade /v1/audio/speech. 실기 검증: 3080 Ti 16G (2026-07-15).",
 	},
@@ -228,6 +236,7 @@ export function normalizeTierId(
 	id: string | null | undefined,
 ): VramTierId | null {
 	if (!id) return null;
+	if (RETIRED_TIER_IDS.has(id)) return null;
 	const aliased = LEGACY_TIER_ALIAS[id] ?? id;
 	return VRAM_TIERS.some((t) => t.id === aliased)
 		? (aliased as VramTierId)
@@ -256,7 +265,11 @@ export function resolveActiveTier(
 	}
 	// 하위호환: 저장된 구 티어 id 를 신 id 로 정규화한 뒤 조회.
 	const id = normalizeTierId(setting);
-	return id ? (VRAM_TIERS.find((t) => t.id === id) ?? null) : null;
+	const tier = id ? (VRAM_TIERS.find((t) => t.id === id) ?? null) : null;
+	if (tier && detectedVramGb != null && detectedVramGb < tier.minVramGb) {
+		return null;
+	}
+	return tier;
 }
 
 /**
@@ -349,7 +362,10 @@ export function fitLocalCapabilitiesToVram(
 	marginGb = 1.0,
 	tier?: VramTier | null,
 ): VramFitResult {
-	const requiredGb = caps.reduce((s, c) => s + capabilityVramCostGb(c, tier), 0);
+	const requiredGb = caps.reduce(
+		(s, c) => s + capabilityVramCostGb(c, tier),
+		0,
+	);
 	if (availableVramGb == null) {
 		return {
 			caps,

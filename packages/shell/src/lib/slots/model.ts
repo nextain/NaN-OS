@@ -1,10 +1,10 @@
+import { effectiveAvatarProviderFromConfig } from "../avatar/nva-gate";
 // S-SLOT 순수 모델 — FR-SLOT.1~5 (docs/requirements.md), R1/R2 정정 반영.
 // 게이트(naia 계정 binary) → 6 클라우드 슬롯(main·sub·embedding·stt·tts·avatar) 각각 독립 설정.
 // I/O 0(DOM/localStorage 접근 금지) — SettingsTab UI·온보딩 기본값 양쪽이 동일 로직 소비(비일관 방지).
 // SoT: .agents/progress/naia-model-slots-architecture-2026-06-28.md
 import type { AppConfig, SttProviderId, TtsProviderId } from "../config";
 import type { ProviderId } from "../types";
-import { effectiveAvatarProviderFromConfig } from "../avatar/nva-gate";
 
 // ── FR-SLOT.2: 6 슬롯 (순서 권위) ──
 export type SlotId = "main" | "sub" | "embedding" | "stt" | "tts" | "avatar";
@@ -102,7 +102,8 @@ export interface SlotSnapshot {
 /** AppConfig → 6슬롯 스냅샷 읽기(순수). */
 export function readSlots(config: AppConfig): SlotSnapshot {
 	const isNvaAvatar =
-		effectiveAvatarProviderFromConfig(config) === "naia-video-avatar";
+		effectiveAvatarProviderFromConfig(config, Number.POSITIVE_INFINITY) ===
+		"naia-video-avatar";
 	return {
 		main: { provider: config.provider, model: config.model },
 		sub: {
@@ -222,9 +223,7 @@ function isSubSet(c: AppConfig): boolean {
 	return !!c.memoryLlmProvider && c.memoryLlmProvider !== "none";
 }
 function isEmbeddingSet(c: AppConfig): boolean {
-	return (
-		!!c.memoryEmbeddingProvider && c.memoryEmbeddingProvider !== "none"
-	);
+	return !!c.memoryEmbeddingProvider && c.memoryEmbeddingProvider !== "none";
 }
 function isSttSet(c: AppConfig): boolean {
 	// web-speech = loadConfig 브라우저 자동기본(사용자 미선택 간주) → naia 기본값 적용 대상.

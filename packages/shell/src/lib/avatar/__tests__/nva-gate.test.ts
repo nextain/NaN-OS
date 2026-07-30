@@ -13,9 +13,9 @@ describe("NVA login/local gate", () => {
 			naiaKey: "",
 		};
 
-		expect(hasExplicitLocalAvatarProfile(config)).toBe(false);
-		expect(canUseVideoAvatarFromConfig(config)).toBe(false);
-		expect(effectiveAvatarProviderFromConfig(config)).toBe("vrm");
+		expect(hasExplicitLocalAvatarProfile(config, 8)).toBe(false);
+		expect(canUseVideoAvatarFromConfig(config, 8)).toBe(false);
+		expect(effectiveAvatarProviderFromConfig(config, 8)).toBe("vrm");
 	});
 
 	it("allows logged-out NVA only for an explicit local avatar-capable profile", () => {
@@ -25,9 +25,11 @@ describe("NVA login/local gate", () => {
 			naiaKey: "",
 		};
 
-		expect(hasExplicitLocalAvatarProfile(config)).toBe(true);
-		expect(canUseVideoAvatarFromConfig(config)).toBe(true);
-		expect(effectiveAvatarProviderFromConfig(config)).toBe("naia-video-avatar");
+		expect(hasExplicitLocalAvatarProfile(config, 8)).toBe(true);
+		expect(canUseVideoAvatarFromConfig(config, 8)).toBe(true);
+		expect(effectiveAvatarProviderFromConfig(config, 8)).toBe(
+			"naia-video-avatar",
+		);
 	});
 
 	it("keeps legacy auto/off profiles from unlocking logged-out NVA", () => {
@@ -38,9 +40,9 @@ describe("NVA login/local gate", () => {
 				naiaKey: "",
 			};
 
-			expect(hasExplicitLocalAvatarProfile(config)).toBe(false);
-			expect(canUseVideoAvatarFromConfig(config)).toBe(false);
-			expect(effectiveAvatarProviderFromConfig(config)).toBe("vrm");
+			expect(hasExplicitLocalAvatarProfile(config, 8)).toBe(false);
+			expect(canUseVideoAvatarFromConfig(config, 8)).toBe(false);
+			expect(effectiveAvatarProviderFromConfig(config, 8)).toBe("vrm");
 		}
 	});
 
@@ -51,8 +53,24 @@ describe("NVA login/local gate", () => {
 			naiaKey: "naia_test_key",
 		};
 
-		expect(hasExplicitLocalAvatarProfile(config)).toBe(false);
-		expect(canUseVideoAvatarFromConfig(config)).toBe(true);
-		expect(effectiveAvatarProviderFromConfig(config)).toBe("naia-video-avatar");
+		expect(hasExplicitLocalAvatarProfile(config, 8)).toBe(false);
+		expect(canUseVideoAvatarFromConfig(config, 8)).toBe(true);
+		expect(effectiveAvatarProviderFromConfig(config, 8)).toBe(
+			"naia-video-avatar",
+		);
+	});
+
+	it("disables NVA below 8GB or when VRAM cannot be verified, even when logged in", () => {
+		const config = {
+			avatarProvider: "naia-video-avatar" as const,
+			localGpuTier: "laptop-4060-8g" as const,
+			naiaKey: "naia_test_key",
+		};
+		for (const detectedVramGb of [6, 7, null] as const) {
+			expect(canUseVideoAvatarFromConfig(config, detectedVramGb)).toBe(false);
+			expect(effectiveAvatarProviderFromConfig(config, detectedVramGb)).toBe(
+				"vrm",
+			);
+		}
 	});
 });

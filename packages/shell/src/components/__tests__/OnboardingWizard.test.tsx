@@ -211,11 +211,17 @@ describe("OnboardingWizard", () => {
 		expect(screen.getByText(/Detected VRAM: 16 GB/)).toBeDefined();
 		expect(
 			// 새 계약(2026-07-15): 추천 = 검증 티어만 → 16GB LLM+음성
-			screen.getByText(/16GB: local LLM \+ voice/),
+			screen.getByText(/Windows NVIDIA RTX 8GB\+/),
 		).toBeDefined();
 		expect(
 			screen.getByText(/does not download or launch local models/),
 		).toBeDefined();
+		expect(
+			screen.getByTestId("onboarding-nva-vram-requirement"),
+		).toHaveTextContent(/NVIDIA RTX GPU.*8GB VRAM or more/);
+		expect(
+			screen.getByTestId("onboarding-cloud-cascade-coming-soon"),
+		).toHaveTextContent(/cloud cascade service.*provided separately.*future/i);
 	});
 
 	it("uses a direct provider and stores the entered BYO API key securely on clean install", async () => {
@@ -231,7 +237,9 @@ describe("OnboardingWizard", () => {
 		});
 		advanceFromAgentNameToProvider();
 
-		fireEvent.click(screen.getByRole("button", { name: /직접 설정|Direct setup/ }));
+		fireEvent.click(
+			screen.getByRole("button", { name: /직접 설정|Direct setup/ }),
+		);
 		fireEvent.change(screen.getByPlaceholderText("sk-... / gw-..."), {
 			target: { value: "byo-test-key" },
 		});
@@ -253,7 +261,7 @@ describe("OnboardingWizard", () => {
 		expect(config.apiKey).toBeUndefined();
 		expect(config.naiaKey).toBeUndefined();
 		expect(config.onboardingComplete).toBe(true);
-		expect(config.localGpuTier).toBe("local-llm-voice-16g"); // 검증 티어만 추천(2026-07-15)
+		expect(config.localGpuTier).toBe("laptop-4060-8g"); // 8GB+ uses external LLM + Windows TRT expression
 		expect(secureStore.set).toHaveBeenCalledWith("apiKey", "byo-test-key");
 	});
 

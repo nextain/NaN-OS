@@ -81,7 +81,7 @@ describe("config", () => {
 		expect(loadConfig()?.model).toBe("my-local-model");
 	});
 
-	it("restores the explicit 4060 profile to CPU/NPU DNA3 and local facade", () => {
+	it("restores the explicit 8GB profile without changing its external LLM", () => {
 		const restored = reconcileExplicitLocalProfile({
 			provider: "nextain",
 			model: "gemini-3.5-flash",
@@ -90,9 +90,9 @@ describe("config", () => {
 			vllmTtsHost: "http://localhost:8901",
 		});
 
-		expect(restored.provider).toBe("ollama");
-		expect(restored.model).toBe("dna3:latest");
-		expect(restored.ollamaNumGpu).toBe(0);
+		expect(restored.provider).toBe("nextain");
+		expect(restored.model).toBe("gemini-3.5-flash");
+		expect(restored.ollamaNumGpu).toBeUndefined();
 		expect(restored.ttsProvider).toBe("naia-local-voice");
 		expect(restored.vllmTtsHost).toBe("http://localhost:8910");
 		expect(restored.avatarProvider).toBe("naia-video-avatar");

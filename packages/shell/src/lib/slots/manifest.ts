@@ -1,3 +1,4 @@
+import { isNvaHardwareEligible } from "../avatar/nva-gate";
 import type { Local8gFocus } from "../capabilities/vram-tiers";
 import { normalizeTierId, resolveActiveTier } from "../capabilities/vram-tiers";
 // slots-manifest — Phase 2 계약(§5.2.1/2.2): naia-os 가 write 하고 windows-manager 가 read 하는
@@ -52,6 +53,9 @@ export function buildSlotsManifest(
 	opts: { detectedVramGb?: number; now?: () => string } = {},
 ): SlotsManifest {
 	const snap: SlotSnapshot = readSlots(config);
+	const nvaHardwareEligible = isNvaHardwareEligible(
+		opts.detectedVramGb ?? null,
+	);
 	const naiaAccount = !!config.naiaKey;
 	const mode = deriveGate(naiaAccount);
 	return {
@@ -70,9 +74,13 @@ export function buildSlotsManifest(
 			stt: snap.stt.provider ? { provider: snap.stt.provider } : {},
 			tts: snap.tts.provider ? { provider: snap.tts.provider } : {},
 			avatar: {
-				...(snap.avatar.provider ? { provider: snap.avatar.provider } : {}),
-				...(snap.avatar.model ? { model: snap.avatar.model } : {}),
-				...(config.naiaLocalUrl ? { localUrl: config.naiaLocalUrl } : {}),
+				provider: nvaHardwareEligible ? snap.avatar.provider : "vrm",
+				...(nvaHardwareEligible && snap.avatar.model
+					? { model: snap.avatar.model }
+					: {}),
+				...(nvaHardwareEligible && config.naiaLocalUrl
+					? { localUrl: config.naiaLocalUrl }
+					: {}),
 			},
 		},
 		gpu: {

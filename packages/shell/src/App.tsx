@@ -4,32 +4,41 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AdkSetupScreen } from "./components/AdkSetupScreen";
 import { AiControlBar } from "./components/AiControlBar";
+import { AnnouncementBanner } from "./components/AnnouncementBanner";
+import { AppBar } from "./components/AppBar";
+import { AppInstallDialog } from "./components/AppInstallDialog";
 import { AvatarCanvas } from "./components/AvatarCanvas";
-import { VideoAvatarCanvas } from "./components/VideoAvatarCanvas";
 import { ChatArea } from "./components/ChatArea";
 import { ErrorBoundary } from "./components/ErrorBoundary";
-import { AppBar } from "./components/AppBar";
 import { OnboardingWizard } from "./components/OnboardingWizard";
-import { AppInstallDialog } from "./components/AppInstallDialog";
 import { SplashScreen } from "./components/SplashScreen";
 import { TitleBar } from "./components/TitleBar";
 import { UpdateBanner } from "./components/UpdateBanner";
+import { VideoAvatarCanvas } from "./components/VideoAvatarCanvas";
 import { getBridgeForPanel } from "./lib/active-bridge";
 import {
-	getAdkPath,
 	beginNaiaConfigHydration,
+	buildNaiaConfigEnv,
 	completeNaiaConfigHydration,
+	getAdkPath,
 	isAdkInitialized,
 	listNaiaAssets,
 	readNaiaConfig,
 	readNaiaUiConfig,
 	setAdkPath,
 	toLocalBlobUrl,
-	buildNaiaConfigEnv,
 	writeNaiaConfig,
 } from "./lib/adk-store";
 import { emitAiInterferenceEvent } from "./lib/ai-interference";
+import {
+	type Announcement,
+	fetchUnreadAnnouncements,
+} from "./lib/announcements";
+import { loadInstalledApps } from "./lib/app-loader";
+import { appRegistry } from "./lib/app-registry";
+import { effectiveAvatarProviderFromConfig } from "./lib/avatar/nva-gate";
 import { BGM_PANEL_ID, SKILL_YOUTUBE_BGM } from "./lib/bgm-skill";
+import { detectGpuVramGb } from "./lib/capabilities/gpu";
 import { syncLinkedChannels } from "./lib/channel-sync";
 import {
 	isNewCore,
@@ -45,27 +54,19 @@ import {
 	isOnboardingComplete,
 	loadConfig,
 	loadConfigWithSecrets,
+	mergeBootConfig,
 	migrateLabKeyToNaiaKey,
 	migrateLegacyDna3OllamaModel,
 	migrateLiveProviderToUnifiedModel,
 	migrateSpeechStyleValues,
-	saveConfig,
-	mergeBootConfig,
 	reconcileExplicitLocalProfile,
+	saveConfig,
 } from "./lib/config";
 import { persistDiscordDefaults } from "./lib/discord-auth";
 import { startIframeBridge } from "./lib/iframe-bridge";
-import { Logger } from "./lib/logger";
-import { loadInstalledApps } from "./lib/app-loader";
 import { shouldMigrateNextainModel } from "./lib/llm/registry";
-import { appRegistry } from "./lib/app-registry";
+import { Logger } from "./lib/logger";
 import { type UpdateInfo, checkForUpdate } from "./lib/updater";
-import { effectiveAvatarProviderFromConfig } from "./lib/avatar/nva-gate";
-import {
-	type Announcement,
-	fetchUnreadAnnouncements,
-} from "./lib/announcements";
-import { AnnouncementBanner } from "./components/AnnouncementBanner";
 import { useAvatarStore } from "./stores/avatar";
 import "./apps/browser/index"; // register browser panel
 import "./apps/workspace/index"; // register workspace panel
@@ -169,7 +170,8 @@ export function App() {
 	// only the explicitly supplied E2E workspace before first render so the
 	// real application follows its normal hydrated-config path.
 	const e2eAdkPath = import.meta.env.VITE_NAIA_E2E_ADK_PATH?.trim();
-	const e2eProvider = import.meta.env.VITE_NAIA_E2E_PROVIDER?.trim() || "ollama";
+	const e2eProvider =
+		import.meta.env.VITE_NAIA_E2E_PROVIDER?.trim() || "ollama";
 	const e2eModel = import.meta.env.VITE_NAIA_E2E_MODEL?.trim() || "e2e";
 	// A native E2E run owns its ADK root.  WebView2 can retain a prior profile
 	// while Windows tears it down, so merely filling an absent cache lets an
@@ -266,19 +268,25 @@ export function App() {
 	);
 	const [avatarProvider, setAvatarProvider] = useState<
 		"vrm" | "naia-video-avatar"
-	>(() => effectiveAvatarProviderFromConfig(loadConfig()));
+	>("vrm");
 	const [nvaModel, setNvaModel] = useState(() => loadConfig()?.nvaModel ?? "");
+	const [detectedVramGb, setDetectedVramGb] = useState<number | null>(null);
+
+	useEffect(() => {
+		void detectGpuVramGb().then(setDetectedVramGb);
+	}, []);
 
 	useEffect(() => {
 		function syncAvatarConfig() {
 			const cfg = loadConfig();
-			setAvatarProvider(effectiveAvatarProviderFromConfig(cfg));
+			setAvatarProvider(effectiveAvatarProviderFromConfig(cfg, detectedVramGb));
 			setNvaModel(cfg?.nvaModel ?? "");
 		}
+		syncAvatarConfig();
 		window.addEventListener("naia-config-changed", syncAvatarConfig);
 		return () =>
 			window.removeEventListener("naia-config-changed", syncAvatarConfig);
-	}, []);
+	}, [detectedVramGb]);
 
 	// Window starts hidden (visible:false in tauri.conf.json) to prevent white flash.
 	// Show it on first render — splash screen's dark background is already painted.
@@ -424,8 +432,8 @@ export function App() {
 			// 되면 이 effect 가 재실행돼 파일→캐시 하이드레이션 후 게이트를 연다.
 			return;
 		}
-		Promise.all([readNaiaConfig(), readNaiaUiConfig()]).then(
-			([fileConfig, uiConfig]) => {
+		Promise.all([readNaiaConfig(), readNaiaUiConfig()])
+			.then(([fileConfig, uiConfig]) => {
 				const merged = mergeBootConfig(
 					loadConfig() as unknown as Record<string, unknown> | null,
 					fileConfig ?? null,
@@ -445,16 +453,16 @@ export function App() {
 				// Re-run the gateway-mode sync now that the file value is in cache
 				// (the immediate sync on mount was gated off until this point).
 				window.dispatchEvent(new CustomEvent("naia-config-changed"));
-			},
-		).catch((error: unknown) => {
-			// Keep the writeback gate closed when workspace hydration fails. The
-			// provider/model are intentionally omitted from the log; this is a
-			// seam diagnostic, not configuration telemetry.
-			Logger.error("App", "workspace config hydration failed", {
-				error: error instanceof Error ? error.message : String(error),
+			})
+			.catch((error: unknown) => {
+				// Keep the writeback gate closed when workspace hydration fails. The
+				// provider/model are intentionally omitted from the log; this is a
+				// seam diagnostic, not configuration telemetry.
+				Logger.error("App", "workspace config hydration failed", {
+					error: error instanceof Error ? error.message : String(error),
+				});
+				completeNaiaConfigHydration();
 			});
-			completeNaiaConfigHydration();
-		});
 	}, [showAdkSetup]);
 
 	// Auto-allow built-in skills that are always available (no per-session approval needed).
@@ -851,9 +859,7 @@ export function App() {
 		</>
 	);
 
-	const activeAppDescriptor = activeApp
-		? appRegistry.get(activeApp)
-		: null;
+	const activeAppDescriptor = activeApp ? appRegistry.get(activeApp) : null;
 	const CenterComponent = activeAppDescriptor?.center ?? null;
 
 	// ── UI mode (single signal — derived from activeApp, no separate SoT) ──
@@ -880,8 +886,7 @@ export function App() {
 		uiMode === "home" ? "vn" : uiMode === "workspace" ? "rail" : "floating";
 
 	const keepAlivePanels = useMemo(
-		() =>
-			appRegistry.list().filter((p) => p.builtIn && p.keepAlive !== false),
+		() => appRegistry.list().filter((p) => p.builtIn && p.keepAlive !== false),
 		[],
 	);
 

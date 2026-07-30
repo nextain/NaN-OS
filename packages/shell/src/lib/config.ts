@@ -1,3 +1,4 @@
+import { DEFAULT_NVA_MODEL } from "./avatar-presets";
 import type { VramTierId } from "./capabilities/vram-tiers";
 import type { Locale } from "./i18n";
 import {
@@ -7,7 +8,6 @@ import {
 	saveSecretKey,
 } from "./secure-store";
 import type { ProviderId } from "./types";
-import { DEFAULT_NVA_MODEL } from "./avatar-presets";
 // LiveProviderId kept for migration only — will be removed after migration period
 import type { LiveProviderId } from "./voice/types";
 
@@ -243,7 +243,10 @@ export interface AppConfig {
 	/** Whether BGM was playing when the app was closed. */
 	bgmPlaying?: boolean;
 	/** Opt-in proactive speech mode. Disabled unless explicitly persisted. */
-	proactiveSpeechProfile?: "disabled" | "personal_radio_dj" | "exhibition_intro";
+	proactiveSpeechProfile?:
+		| "disabled"
+		| "personal_radio_dj"
+		| "exhibition_intro";
 	/** Runtime permission for proactive LLM/TTS use. Profile policy alone never implies permission. */
 	proactiveSpeechPermitted?: boolean;
 	proactiveSpeechIdleMs?: number;
@@ -751,8 +754,7 @@ export const DEV_GATEWAY_URL = _DEV_GATEWAY || _PROD_GATEWAY;
 // (도메인 이전 2026-07: naia.nextain.io → www.naia.land. 둘 다 307/200 라이브이나
 //  www.naia.land 가 정본. 컴포넌트는 이 상수를 쓸 것 — 직접 하드코딩 금지.)
 export const NAIA_WEB_BASE_URL =
-	(import.meta.env.VITE_NAIA_WEB_BASE_URL as string) ||
-	"https://www.naia.land";
+	(import.meta.env.VITE_NAIA_WEB_BASE_URL as string) || "https://www.naia.land";
 
 export const DEFAULT_OLLAMA_HOST = "http://localhost:11434";
 // 로컬 GPU 프로파일(llm capability) 선택 시 두뇌 자동 기본값 — wm `llm_main_compact` 와 동형
@@ -762,8 +764,7 @@ export const DEFAULT_OLLAMA_HOST = "http://localhost:11434";
 // This must be an installed Ollama tag. The 8GB laptop profile provisions
 // dna3:latest; a Hugging Face reference is not resolvable by /api/chat.
 export const DEFAULT_LOCAL_LLM_MODEL = "dna3:latest";
-const LEGACY_DNA3_OLLAMA_MODEL =
-	"hf.co/mradermacher/DNA3.0-4B-GGUF:Q4_K_M";
+const LEGACY_DNA3_OLLAMA_MODEL = "hf.co/mradermacher/DNA3.0-4B-GGUF:Q4_K_M";
 export const DEFAULT_VLLM_HOST = "http://localhost:8000";
 // 로컬 음성(naia-local-voice = VoxCPM2) 기본 호스트 = **로컬 cascade façade(:8910)**.
 // 셸 소비자는 OpenAI 정본 표면 /v1/audio/speech 만 쓰는데(3자 합의 2026-07-15), raw
@@ -774,12 +775,7 @@ export const DEFAULT_VLLM_HOST = "http://localhost:8000";
 // private behind this facade.
 export const DEFAULT_LOCAL_VOICE_HOST = "http://localhost:8910";
 
-/**
- * Restore the contract of an explicitly selected 8GB laptop profile after a
- * restart. Older config files kept their previous cloud main model even though
- * the profile was already stored, so the UI could warm Ditto/VoxCPM2 while the
- * agent still answered through the remote provider.
- */
+/** Restore the Windows 8GB expression profile without changing the LLM route. */
 export function reconcileExplicitLocalProfile(config: AppConfig): AppConfig {
 	if (config.localGpuTier !== "laptop-4060-8g") return config;
 	const isLocalHostUrl = /^(https?:\/\/)?(localhost|127\.0\.0\.1)([:/]|$)/i;
@@ -787,12 +783,6 @@ export function reconcileExplicitLocalProfile(config: AppConfig): AppConfig {
 		!config.vllmTtsHost || isLocalHostUrl.test(config.vllmTtsHost);
 	return {
 		...config,
-		provider: "ollama",
-		model:
-			config.provider === "ollama" && config.model
-				? config.model
-				: DEFAULT_LOCAL_LLM_MODEL,
-		ollamaNumGpu: 0,
 		ttsProvider: "naia-local-voice",
 		ttsEnabled: true,
 		...(shouldUseFacade ? { vllmTtsHost: DEFAULT_LOCAL_VOICE_HOST } : {}),
@@ -811,8 +801,7 @@ export function migrateLegacyDna3OllamaModel(): void {
 	const config = loadConfig();
 	if (!config) return;
 	const model =
-		config.provider === "ollama" &&
-		config.model === LEGACY_DNA3_OLLAMA_MODEL
+		config.provider === "ollama" && config.model === LEGACY_DNA3_OLLAMA_MODEL
 			? DEFAULT_LOCAL_LLM_MODEL
 			: config.model;
 	const vllmTtsHost =

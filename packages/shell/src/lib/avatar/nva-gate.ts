@@ -1,4 +1,5 @@
 import {
+	MIN_NVA_VRAM_GB,
 	normalizeLocal8gFocus,
 	normalizeTierSetting,
 	resolveActiveTier,
@@ -19,10 +20,12 @@ type VideoAvatarGateConfig = Pick<
 
 export function hasExplicitLocalAvatarProfile(
 	config: VideoAvatarGateConfig | null | undefined,
+	detectedVramGb: number | null = null,
 ): boolean {
+	if (!isNvaHardwareEligible(detectedVramGb)) return false;
 	const setting = normalizeTierSetting(config?.localGpuTier);
 	if (setting === "off" || setting === "auto") return false;
-	const tier = resolveActiveTier(setting, null);
+	const tier = resolveActiveTier(setting, detectedVramGb);
 	return resolveLocalCapabilities(
 		tier,
 		normalizeLocal8gFocus(
@@ -33,14 +36,25 @@ export function hasExplicitLocalAvatarProfile(
 
 export function canUseVideoAvatarFromConfig(
 	config: VideoAvatarGateConfig | null | undefined,
+	detectedVramGb: number | null = null,
 ): boolean {
-	return !!config?.naiaKey || hasExplicitLocalAvatarProfile(config);
+	return (
+		isNvaHardwareEligible(detectedVramGb) &&
+		(!!config?.naiaKey || hasExplicitLocalAvatarProfile(config, detectedVramGb))
+	);
+}
+
+export function isNvaHardwareEligible(detectedVramGb: number | null): boolean {
+	return detectedVramGb != null && detectedVramGb >= MIN_NVA_VRAM_GB;
 }
 
 export function effectiveAvatarProviderFromConfig(
 	config: VideoAvatarGateConfig | null | undefined,
+	detectedVramGb: number | null = null,
 ): AvatarProvider {
 	const provider = config?.avatarProvider ?? "vrm";
 	if (provider !== "naia-video-avatar") return "vrm";
-	return canUseVideoAvatarFromConfig(config) ? "naia-video-avatar" : "vrm";
+	return canUseVideoAvatarFromConfig(config, detectedVramGb)
+		? "naia-video-avatar"
+		: "vrm";
 }

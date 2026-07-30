@@ -190,10 +190,7 @@ test.describe("VRAM tier local profile (#2, FR-1/FR-3)", () => {
 			.evaluateAll((els) => els.map((el) => (el as HTMLOptionElement).value));
 		expect(optionValues).toContain("off");
 		expect(optionValues).toContain("laptop-4060-8g");
-		expect(optionValues).toContain("local-llm-voice-16g");
-		await expect(
-			tierSelect.locator('option[value="local-llm-voice-16g"]'),
-		).toContainText("16");
+		expect(optionValues).not.toContain("local-llm-voice-16g");
 		// 2026-07-15: "auto" was removed after it selected unverified hidden tiers.
 		await expect(tierSelect.locator('option[value="auto"]')).toHaveCount(0);
 		for (const hiddenTierValue of [
@@ -292,6 +289,20 @@ test.describe("VRAM tier local profile (#2, FR-1/FR-3)", () => {
 		await expect(
 			page.locator('[data-testid="local-focus-select"]'),
 		).toHaveCount(0);
+		await expect(
+			page.locator('[data-testid="nva-vram-requirement"]'),
+		).toContainText(/8GB/i);
+		await expect(
+			page.locator('[data-testid="cloud-cascade-coming-soon"]'),
+		).toContainText(/future|향후/i);
+	});
+
+	test("below 8GB keeps the Windows TRT profile disabled", async ({ page }) => {
+		await gotoModelSettings(page, { vramGb: 6, model: "gemini-3.5-flash" });
+		await page.locator('[data-settings-tab="profile"]').click();
+		await expect(
+			page.locator('#local-gpu-tier option[value="laptop-4060-8g"]'),
+		).toBeDisabled();
 	});
 });
 
@@ -315,15 +326,18 @@ test.describe("FR-6: NVA lip-sync note (avatar tab)", () => {
 });
 
 test.describe("FR-7: video avatar gated by cascade capability", () => {
-	test("logged-in shell can stage video avatar without an avatar local profile", async ({
+	test("logged-in shell still disables video avatar below 8GB", async ({
 		page,
 	}) => {
-		// 로컬 avatar 프로파일이 없어도 로그인 사용자는 원격 cascade Host URL을 지정할 수 있다.
+		// Cloud cascade is future-only; current NVA requires verified local 8GB hardware.
 		await gotoModelSettings(page, { vramGb: 4, model: "gemini-3.5-flash" });
 		await page.locator('[data-settings-tab="avatar"]').click();
 		await expect(
 			page.locator('option[value="naia-video-avatar"]'),
-		).toBeEnabled();
+		).toBeDisabled();
+		await expect(
+			page.locator('[data-testid="avatar-vram-requirement"]'),
+		).toContainText(/8GB/i);
 	});
 
 	test("logged out without explicit local profile keeps video-avatar disabled", async ({

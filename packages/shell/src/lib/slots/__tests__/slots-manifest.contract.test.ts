@@ -48,7 +48,7 @@ describe("slots-manifest · 빌드(AppConfig → 매니페스트)", () => {
 		});
 		expect(m.slots.stt).toEqual({ provider: "vosk" });
 		expect(m.slots.tts).toEqual({ provider: "nextain" });
-		expect(m.slots.avatar.localUrl).toBe("ws://127.0.0.1:8892");
+		expect(m.slots.avatar.localUrl).toBeUndefined();
 	});
 
 	it("비밀(naiaKey/apiKey) 절대 미포함 — wm 으로 새는 비밀 누수 0", () => {
@@ -72,7 +72,7 @@ describe("slots-manifest · 빌드(AppConfig → 매니페스트)", () => {
 		expect(m.gpu.detectedVramGb).toBe(24);
 		// ★"auto" 는 해석된 tier id 로 기록 — wm loader(EXCLUSIVE_8G_TIERS) 가 매칭해야
 		// avatar_ditto_trt 를 선택. "auto" 를 그대로 쓰면 loader 가 avatar 를 안 띄움(캐릭터 미표시).
-		expect(m.gpu.tier).toBe("local-llm-voice-16g"); // auto = 검증 티어만(2026-07-15) — 24G 도 유일 검증 티어로
+		expect(m.gpu.tier).toBe("laptop-4060-8g"); // 8GB+ external LLM + Windows TRT expression profile
 	});
 
 	it("★auto tier 해석 — 8GB 는 검증 티어 없음 → tier 생략 (2026-07-15 재계약)", () => {
@@ -81,7 +81,7 @@ describe("slots-manifest · 빌드(AppConfig → 매니페스트)", () => {
 		const m = buildSlotsManifest(naiaConfig, { detectedVramGb: 8 });
 		expect(m.gpu).toMatchObject({
 			tier: "laptop-4060-8g",
-			loaderProfile: "laptop_4060_8g",
+			loaderProfile: "windows_trt_8g",
 		});
 	});
 
@@ -99,7 +99,7 @@ describe("slots-manifest · 빌드(AppConfig → 매니페스트)", () => {
 			} as unknown as AppConfig,
 			{ detectedVramGb: 8 },
 		);
-		expect(m.gpu.tier).toBe("local-llm-avatar-8g");
+		expect(m.gpu.tier).toBe("laptop-4060-8g");
 	});
 
 	it("writes 4060 8GB laptop loader profile for windows-manager", () => {
@@ -121,7 +121,7 @@ describe("slots-manifest · 빌드(AppConfig → 매니페스트)", () => {
 		expect(m.gpu).toMatchObject({
 			detectedVramGb: 8,
 			tier: "laptop-4060-8g",
-			loaderProfile: "laptop_4060_8g",
+			loaderProfile: "windows_trt_8g",
 		});
 	});
 
@@ -141,9 +141,24 @@ describe("slots-manifest · 빌드(AppConfig → 매니페스트)", () => {
 			model: "naia.nva",
 		});
 		expect(m.gpu).toMatchObject({
-			tier: "local-llm-avatar-8g",
+			tier: "laptop-4060-8g",
 			localFocus: "avatar",
 		});
+	});
+
+	it("strips NVA and loader profile below 8GB", () => {
+		const m = buildSlotsManifest(
+			{
+				...naiaConfig,
+				localGpuTier: "laptop-4060-8g",
+				avatarProvider: "naia-video-avatar",
+				nvaModel: "naia.nva",
+			} as AppConfig,
+			{ detectedVramGb: 6 },
+		);
+		expect(m.slots.avatar).toEqual({ provider: "vrm" });
+		expect(m.gpu.tier).toBeUndefined();
+		expect(m.gpu.loaderProfile).toBeUndefined();
 	});
 });
 

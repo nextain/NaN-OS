@@ -1,6 +1,10 @@
 import { invoke } from "@tauri-apps/api/core";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { getAdkPath, writeSlotsManifest } from "../lib/adk-store";
+import {
+	getAdkPath,
+	toLocalBlobUrl,
+	writeSlotsManifest,
+} from "../lib/adk-store";
 import {
 	clearCameraActions,
 	registerCameraActions,
@@ -13,8 +17,18 @@ import {
 	probeCascadeHealth,
 	remoteCascadeUrlFromConfig,
 } from "../lib/avatar/cascade-renderer";
-import { hasExplicitLocalAvatarProfile } from "../lib/avatar/nva-gate";
+import {
+	hasExplicitLocalAvatarProfile,
+	isNvaHardwareEligible,
+} from "../lib/avatar/nva-gate";
+import { detectGpuVramGb } from "../lib/capabilities/gpu";
 import { loadConfig } from "../lib/config";
+import { t } from "../lib/i18n";
+import {
+	defaultClipOf,
+	parseNvaManifest,
+	resolveNvaAssetPath,
+} from "../lib/nva";
 import { useAvatarStore } from "../stores/avatar";
 import { useCascadeAvatarStore } from "../stores/cascade-avatar";
 
@@ -98,6 +112,10 @@ export function VideoAvatarCanvas({ nvaModel }: VideoAvatarCanvasProps) {
 	const localFacadeUrl = useCascadeAvatarStore((s) => s.localFacadeUrl);
 	const [mode, setMode] = useState<Mode>("loading");
 	const [error, setError] = useState("");
+	const [idleUrl, setIdleUrl] = useState("");
+	const [idleError, setIdleError] = useState("");
+	const [retryNonce, setRetryNonce] = useState(0);
+	const [detectedVramGb, setDetectedVramGb] = useState<number | null>(null);
 	// cascade 비디오 콜백 ref 가 렌더러를 만들 때 쓰는 설정(메인 effect 가 결정).
 	const cascadeCfgRef = useRef<{ url: string; name: string } | null>(null);
 	const rendererRef = useRef<CascadeAvatarRenderer | null>(null);
@@ -107,6 +125,53 @@ export function VideoAvatarCanvas({ nvaModel }: VideoAvatarCanvasProps) {
 	const [pan, setPan] = useState<NvaPan>(loadNvaPan);
 	const panRef = useRef(pan);
 	panRef.current = pan;
+
+	useEffect(() => {
+		void detectGpuVramGb().then(setDetectedVramGb);
+	}, []);
+
+	// The bundle idle clip is a display asset, not a cascade readiness signal.
+	// Load it independently so slow TensorRT initialization never blanks NVA.
+	useEffect(() => {
+		let disposed = false;
+		let ownedUrl = "";
+		setIdleUrl("");
+		setIdleError("");
+		const adkPath = getAdkPath();
+		if (!adkPath || !nvaModel) return;
+		const bundleName =
+			nvaModel.split(/[/\\]/).filter(Boolean).pop() ?? nvaModel;
+		const sep = adkPath.includes("\\") ? "\\" : "/";
+		const bundleDir = `${adkPath}${sep}naia-settings${sep}nva-files${sep}${bundleName}`;
+		void (async () => {
+			try {
+				const b64 = await invoke<string>("read_local_binary", {
+					path: `${bundleDir}${sep}manifest.json`,
+					allowedBase: adkPath,
+				});
+				const raw = atob(b64);
+				const bytes = Uint8Array.from(raw, (char) => char.charCodeAt(0));
+				const clip = defaultClipOf(
+					parseNvaManifest(new TextDecoder().decode(bytes)),
+				);
+				ownedUrl = await toLocalBlobUrl(
+					resolveNvaAssetPath(bundleDir, clip.video),
+				);
+				if (disposed) {
+					if (ownedUrl.startsWith("blob:")) URL.revokeObjectURL(ownedUrl);
+					return;
+				}
+				setIdleUrl(ownedUrl);
+				setLoaded(true);
+			} catch (cause) {
+				if (!disposed) setIdleError(String(cause));
+			}
+		})();
+		return () => {
+			disposed = true;
+			if (ownedUrl.startsWith("blob:")) URL.revokeObjectURL(ownedUrl);
+		};
+	}, [nvaModel, setLoaded]);
 
 	// AiControlBar(⊕/✥/⌂)가 조작할 액션을 이 아바타 구현으로 등록. 2D 비디오라 회전은
 	// 개념 없음(no-op) — 사용자 요청 = '이동(pan) 컨트롤러 동작'. VRM 이 대신 마운트되면
@@ -132,12 +197,13 @@ export function VideoAvatarCanvas({ nvaModel }: VideoAvatarCanvasProps) {
 	}, [nvaModel]);
 
 	useEffect(() => {
+		void retryNonce;
 		let disposed = false;
 		let retryTimer: ReturnType<typeof setTimeout> | null = null;
 
 		async function load() {
 			setMode("loading");
-			setLoaded(false);
+			setLoaded(Boolean(idleUrl));
 			setError("");
 			const adkPath = getAdkPath();
 			if (!adkPath || !nvaModel) {
@@ -155,7 +221,15 @@ export function VideoAvatarCanvas({ nvaModel }: VideoAvatarCanvasProps) {
 			// Local cascade may start only from an explicit avatar-capable local profile.
 			// Legacy auto/off or stale remote config must not unlock local NVA after logout.
 			const cfg = loadConfig();
-			const canLocalCascade = hasExplicitLocalAvatarProfile(cfg);
+			if (!isNvaHardwareEligible(detectedVramGb)) {
+				setError("nva-vram-below-minimum");
+				setMode("unavailable");
+				return;
+			}
+			const canLocalCascade = hasExplicitLocalAvatarProfile(
+				cfg,
+				detectedVramGb,
+			);
 
 			// (A) cascade 토킹 모드 — 명시한 원격 NVA Host 또는 로컬 spawn facade가 /health에 도달할 때.
 			// ★알려진 URL 이 없어도 이미 떠 있는 cascade(warm/이전 세션/설정 탭 기동)가 있으면 그 facade
@@ -169,7 +243,9 @@ export function VideoAvatarCanvas({ nvaModel }: VideoAvatarCanvasProps) {
 			// win over a local profile facade and must never trigger local Ditto as
 			// an implicit fallback when the remote health check is transiently down.
 			let cascadeUrl =
-				configuredCascadeUrl || configuredLocalFacadeUrl || localFacadeUrl?.trim();
+				configuredCascadeUrl ||
+				configuredLocalFacadeUrl ||
+				localFacadeUrl?.trim();
 			if (!cascadeUrl) {
 				try {
 					if (await invoke<boolean>("cascade_status")) {
@@ -236,7 +312,7 @@ export function VideoAvatarCanvas({ nvaModel }: VideoAvatarCanvasProps) {
 						if (disposed) return;
 						setError(`cascade-nva-load-failed: ${String(error)}`);
 						setMode("unavailable");
-						setLoaded(false);
+						setLoaded(Boolean(idleUrl));
 						return;
 					}
 					if (disposed) return;
@@ -245,10 +321,11 @@ export function VideoAvatarCanvas({ nvaModel }: VideoAvatarCanvasProps) {
 					setLoaded(true);
 					return;
 				}
+				setError("cascade-unreachable");
 			}
 			if (configuredCascadeUrl) {
 				setMode("unavailable");
-				setLoaded(false);
+				setLoaded(Boolean(idleUrl));
 				return;
 			}
 
@@ -271,6 +348,9 @@ export function VideoAvatarCanvas({ nvaModel }: VideoAvatarCanvasProps) {
 				} catch (e) {
 					if (disposed) return;
 					setError(`cascade-start-failed: ${String(e)}`);
+					setMode("error");
+					setLoaded(Boolean(idleUrl));
+					return;
 				}
 			}
 
@@ -281,7 +361,7 @@ export function VideoAvatarCanvas({ nvaModel }: VideoAvatarCanvasProps) {
 			if (disposed) return;
 			if (canLocalCascade) {
 				setMode("standby");
-				setLoaded(false);
+				setLoaded(Boolean(idleUrl));
 				const poll = async () => {
 					if (disposed) return;
 					try {
@@ -302,9 +382,10 @@ export function VideoAvatarCanvas({ nvaModel }: VideoAvatarCanvasProps) {
 				};
 				retryTimer = setTimeout(poll, RETRY_POLL_MS);
 			} else {
+				setError("cascade-profile-unavailable");
 				// 로컬 프로파일 없음/원격 미도달 → 아바타 노출 안 함.
 				setMode("unavailable");
-				setLoaded(false);
+				setLoaded(Boolean(idleUrl));
 			}
 		}
 
@@ -313,7 +394,14 @@ export function VideoAvatarCanvas({ nvaModel }: VideoAvatarCanvasProps) {
 			disposed = true;
 			if (retryTimer) clearTimeout(retryTimer);
 		};
-	}, [nvaModel, setLoaded, localFacadeUrl]);
+	}, [
+		nvaModel,
+		setLoaded,
+		localFacadeUrl,
+		idleUrl,
+		detectedVramGb,
+		retryNonce,
+	]);
 
 	// cascade 비디오 콜백 ref — 요소 마운트 시 렌더러 생성+start+store등록, 언마운트 시 stop+해제.
 	// key={nvaModel} 로 캐릭터 변경 시 재마운트 → 새 렌더러.
@@ -348,8 +436,10 @@ export function VideoAvatarCanvas({ nvaModel }: VideoAvatarCanvasProps) {
 			data-video-avatar
 			data-nva-model={nvaModel ?? ""}
 			data-video-avatar-mode={mode}
-			data-video-avatar-loaded={mode === "cascade" ? "true" : "false"}
-			data-video-avatar-error={error}
+			data-video-avatar-loaded={
+				mode === "cascade" || idleUrl ? "true" : "false"
+			}
+			data-video-avatar-error={error || idleError}
 			style={{
 				position: "relative",
 				width: "100%",
@@ -370,27 +460,55 @@ export function VideoAvatarCanvas({ nvaModel }: VideoAvatarCanvasProps) {
 					style={{ ...VIDEO_BASE_STYLE, transform: videoTransform(pan) }}
 				/>
 			) : (
-				// ★cascade 미연결 → 캐릭터(비디오)를 노출하지 않는다(정적 사진 폴백 제거).
-				//   상태만 은은하게 표면화(멀뚱히 선 "사진"으로 오해되지 않도록).
-				<div
-					data-video-avatar-status={mode}
-					style={{
-						fontSize: "0.85em",
-						opacity: 0.5,
-						textAlign: "center",
-						padding: "1em",
-						lineHeight: 1.6,
-						pointerEvents: "none",
-					}}
-				>
-					{mode === "loading"
-						? "비디오 아바타 불러오는 중…"
-						: mode === "standby"
-							? "비디오 아바타 준비 중… (잠시 후 표시됩니다)"
-							: mode === "error"
-								? `비디오 아바타 연결 실패${error ? ` — ${error}` : ""}`
-								: "비디오 아바타 미연결 — 설정에서 로컬 GPU 프로파일과 로그인을 확인하세요."}
-				</div>
+				<>
+					{idleUrl && (
+						<video
+							data-video-avatar-idle
+							src={idleUrl}
+							autoPlay
+							playsInline
+							muted
+							loop
+							style={{ ...VIDEO_BASE_STYLE, transform: videoTransform(pan) }}
+						/>
+					)}
+					<output
+						data-video-avatar-status={mode}
+						aria-live="polite"
+						style={{
+							position: "absolute",
+							bottom: "1rem",
+							fontSize: "0.85em",
+							opacity: 0.5,
+							textAlign: "center",
+							padding: "1em",
+							lineHeight: 1.6,
+							pointerEvents: "auto",
+						}}
+					>
+						{mode === "loading"
+							? t("avatar.videoLoading")
+							: mode === "standby"
+								? t("avatar.videoPreparing")
+								: mode === "error"
+									? t("avatar.videoFailed")
+									: error === "nva-vram-below-minimum"
+										? t("avatar.videoUnavailable")
+										: t("avatar.videoUnavailableGeneric")}
+						{(mode === "error" || mode === "unavailable") && (
+							<button
+								type="button"
+								data-testid="nva-retry"
+								onClick={() => {
+									autoStartAttemptedRef.current = false;
+									setRetryNonce((value) => value + 1);
+								}}
+							>
+								{t("avatar.videoRetry")}
+							</button>
+						)}
+					</output>
+				</>
 			)}
 		</div>
 	);

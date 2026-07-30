@@ -2,24 +2,37 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { useEffect, useRef, useState } from "react";
-import { buildNaiaConfigEnv, getAdkPath, listNaiaAssets, toAssetUrl, toLocalBlobUrl, writeAgentKey, writeNaiaConfig } from "../lib/adk-store";
-import { isLegacyBundledVrmModel } from "../lib/avatar-presets";
-import { isNewCore, sendAuthUpdate } from "../lib/chat-service";
-import { type AppConfig, NAIA_WEB_BASE_URL, loadConfig, saveConfigSecure } from "../lib/config";
-import { getDefaultLlmModel } from "../lib/llm";
-import { applyNaiaSlotDefaults, NAIA_SLOT_DEFAULTS } from "../lib/slots/model";
 import {
-	makeOnboardingSession,
-	type OnboardingSession,
-	type StepInput,
-} from "../lib/onboarding-core";
-import { getLocale, t, type TranslationKey } from "../lib/i18n";
+	buildNaiaConfigEnv,
+	getAdkPath,
+	listNaiaAssets,
+	toAssetUrl,
+	toLocalBlobUrl,
+	writeAgentKey,
+	writeNaiaConfig,
+} from "../lib/adk-store";
+import { isLegacyBundledVrmModel } from "../lib/avatar-presets";
 import { detectGpuVramGb } from "../lib/capabilities/gpu";
+import { tierRecommendedSlots } from "../lib/capabilities/tier-slots";
 import {
 	type VramTierId,
 	selectVramTier,
 } from "../lib/capabilities/vram-tiers";
-import { tierRecommendedSlots } from "../lib/capabilities/tier-slots";
+import { isNewCore, sendAuthUpdate } from "../lib/chat-service";
+import {
+	type AppConfig,
+	NAIA_WEB_BASE_URL,
+	loadConfig,
+	saveConfigSecure,
+} from "../lib/config";
+import { type TranslationKey, getLocale, t } from "../lib/i18n";
+import { getDefaultLlmModel } from "../lib/llm";
+import {
+	type OnboardingSession,
+	type StepInput,
+	makeOnboardingSession,
+} from "../lib/onboarding-core";
+import { NAIA_SLOT_DEFAULTS, applyNaiaSlotDefaults } from "../lib/slots/model";
 import type { SlotId } from "../lib/slots/model";
 import { useAvatarStore } from "../stores/avatar";
 import { useChatStore } from "../stores/chat";
@@ -148,7 +161,8 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
 	const [naiaLoginDone, setNaiaLoginDone] = useState(hasNaiaKey);
 	const [detectedVramGb, setDetectedVramGb] = useState<number | null>(null);
 	// Auth payload from OAuth — held until wizard completes
-	const [naiaAuthPayload, setNaiaAuthPayload] = useState<NaiaAuthPayload | null>(null);
+	const [naiaAuthPayload, setNaiaAuthPayload] =
+		useState<NaiaAuthPayload | null>(null);
 	// memoryAI step state — default to "naia" when Naia key already present
 	const [memoryEmbeddingProvider, setMemoryEmbeddingProvider] = useState<
 		"none" | "offline" | "vllm" | "ollama" | "naia"
@@ -304,10 +318,15 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
 					paths.map(async (p) => {
 						const type = getBackgroundMediaType(p);
 						// Videos: use asset:// URL (blob URL crashes WebView2 for large files).
-						const url = type === "video" ? toAssetUrl(p) : await toLocalBlobUrl(p);
+						const url =
+							type === "video" ? toAssetUrl(p) : await toLocalBlobUrl(p);
 						return {
 							url,
-							label: p.split(/[/\\]/).pop()?.replace(/\.[^.]+$/, "") ?? p,
+							label:
+								p
+									.split(/[/\\]/)
+									.pop()
+									?.replace(/\.[^.]+$/, "") ?? p,
 							path: p,
 							type,
 						};
@@ -318,8 +337,7 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
 					// Default to the "space" background (naia 우주선) — it's the default shown in the app.
 					// Fall back to the first available background if not found.
 					const spaceBg =
-						bgs.find((b) => b.path.toLowerCase().includes("space")) ??
-						bgs[0];
+						bgs.find((b) => b.path.toLowerCase().includes("space")) ?? bgs[0];
 					setSelectedBg(spaceBg.url);
 				}
 			})
@@ -343,33 +361,32 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
 	// Listen for Naia OAuth callback in provider step.
 	// [] dep — register once. onCompleteRef.current always points to latest prop.
 	useEffect(() => {
-		const unlisten = listen<NaiaAuthPayload>(
-			"naia_auth_complete",
-			(event) => {
-				if (naiaTimerRef.current) clearTimeout(naiaTimerRef.current);
-				localStorage.setItem("naia-remote-key", event.payload.naiaKey);
-				if (event.payload.naiaUserId) {
-					localStorage.setItem("naia-remote-user-id", event.payload.naiaUserId);
-				}
-				setNaiaLoginWaiting(false);
-				setNaiaLoginDone(true);
-				setNaiaAuthPayload(event.payload);
-				// Cache before sending so crash-restart can replay the key.
-				invoke("store_startup_message", {
-					message: JSON.stringify({
-						type: "auth_update",
-						naiaKey: event.payload.naiaKey,
-					}),
-				})
-					.catch(() => {})
-					.then(() => sendAuthUpdate(event.payload.naiaKey).catch(() => {}));
-				// core mirror(비파괴 추가): naiaLoginDone=게이트 해제 + NAIA_ANYLLM_API_KEY 키체인
-				// (idempotent, completeWith 와 동값). 기존 sendAuthUpdate(런타임 push)·store_startup_message 유지 = 보완.
-				void core()?.onNaiaAuthCallback(event.payload.naiaKey).catch(() => {});
-				// Advance to complete step after Naia login
-				setStep("complete");
-			},
-		);
+		const unlisten = listen<NaiaAuthPayload>("naia_auth_complete", (event) => {
+			if (naiaTimerRef.current) clearTimeout(naiaTimerRef.current);
+			localStorage.setItem("naia-remote-key", event.payload.naiaKey);
+			if (event.payload.naiaUserId) {
+				localStorage.setItem("naia-remote-user-id", event.payload.naiaUserId);
+			}
+			setNaiaLoginWaiting(false);
+			setNaiaLoginDone(true);
+			setNaiaAuthPayload(event.payload);
+			// Cache before sending so crash-restart can replay the key.
+			invoke("store_startup_message", {
+				message: JSON.stringify({
+					type: "auth_update",
+					naiaKey: event.payload.naiaKey,
+				}),
+			})
+				.catch(() => {})
+				.then(() => sendAuthUpdate(event.payload.naiaKey).catch(() => {}));
+			// core mirror(비파괴 추가): naiaLoginDone=게이트 해제 + NAIA_ANYLLM_API_KEY 키체인
+			// (idempotent, completeWith 와 동값). 기존 sendAuthUpdate(런타임 push)·store_startup_message 유지 = 보완.
+			void core()
+				?.onNaiaAuthCallback(event.payload.naiaKey)
+				.catch(() => {});
+			// Advance to complete step after Naia login
+			setStep("complete");
+		});
 		return () => {
 			unlisten.then((fn) => fn());
 			if (naiaTimerRef.current) clearTimeout(naiaTimerRef.current);
@@ -392,7 +409,11 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
 			if (next !== "complete") {
 				addMessage({
 					role: "assistant",
-					content: stepChat(next, agentName.trim() || "나이아", userName.trim()),
+					content: stepChat(
+						next,
+						agentName.trim() || "나이아",
+						userName.trim(),
+					),
 				});
 			}
 			transitioning.current = false;
@@ -474,15 +495,16 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
 		const isByo = !!snapshot.apiKey.trim() && !snapshot.naiaLoginDone && !auth;
 		const base = loadConfig() ?? {
 			provider: isByo ? "gemini" : "nextain",
-			model: isByo ? getDefaultLlmModel("gemini") : NAIA_SLOT_DEFAULTS.main.model,
+			model: isByo
+				? getDefaultLlmModel("gemini")
+				: NAIA_SLOT_DEFAULTS.main.model,
 			apiKey: "",
 		};
 		const vrmPath = snapshot.selectedVrm || naiaVrms[0] || undefined;
 		const selectedBgOption = snapshot.backgrounds.find(
 			(bg) => bg.url === snapshot.selectedBg,
 		);
-		const bgFilename =
-			selectedBgOption?.path.split(/[/\\]/).pop() ?? undefined;
+		const bgFilename = selectedBgOption?.path.split(/[/\\]/).pop() ?? undefined;
 
 		const speechDesc =
 			snapshot.speechStyle === "casual"
@@ -512,9 +534,7 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
 			...(snapshot.apiKey.trim() && !snapshot.naiaLoginDone && !auth
 				? { apiKey: snapshot.apiKey.trim() }
 				: {}),
-			...(auth
-				? { naiaKey: auth.naiaKey, naiaUserId: auth.naiaUserId }
-				: {}),
+			...(auth ? { naiaKey: auth.naiaKey, naiaUserId: auth.naiaUserId } : {}),
 			workspaceRoot: getAdkPath() || base.workspaceRoot || undefined,
 			onboardingComplete: true,
 			...(recommendedVramTier ? { localGpuTier: recommendedVramTier.id } : {}),
@@ -536,7 +556,9 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
 	}
 
 	async function handleComplete() {
-		const completedFlat = await saveCompletedConfig(naiaAuthPayload ?? undefined);
+		const completedFlat = await saveCompletedConfig(
+			naiaAuthPayload ?? undefined,
+		);
 		// UC12 graft (isNewCore): 새 core OnboardingController.completeWith(§D 신규계약)가
 		// categorize(secret/ui/agent) + persist(secret=키체인 전담, stale-credential fix) + markComplete.
 		// 미설정(기본)=기존 writeNaiaConfig/writeAgentKey 경로 보존(비파괴). UC1 chat-service graft 와 동일.
@@ -545,10 +567,24 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
 		} else {
 			// G-01: sync to naia-settings/config.json so standalone agent picks up the onboarding result.
 			const saved = loadConfig();
-			if (saved) void writeNaiaConfig({ ...(saved as unknown as Record<string, unknown>), ...buildNaiaConfigEnv(saved) });
+			if (saved)
+				void writeNaiaConfig({
+					...(saved as unknown as Record<string, unknown>),
+					...buildNaiaConfigEnv(saved),
+				});
 			// Write naiaKey to OS keychain so standalone naia-agent can read it.
-			if (typeof completedFlat.naiaKey === "string") void writeAgentKey(String(completedFlat.provider || "nextain"), "naiaKey", completedFlat.naiaKey);
-			if (typeof completedFlat.apiKey === "string") void writeAgentKey(String(completedFlat.provider || "anthropic"), "apiKey", completedFlat.apiKey);
+			if (typeof completedFlat.naiaKey === "string")
+				void writeAgentKey(
+					String(completedFlat.provider || "nextain"),
+					"naiaKey",
+					completedFlat.naiaKey,
+				);
+			if (typeof completedFlat.apiKey === "string")
+				void writeAgentKey(
+					String(completedFlat.provider || "anthropic"),
+					"apiKey",
+					completedFlat.apiKey,
+				);
 			// (gateway sync 제거됨 2026-06-12 — gateway.json 미사용 죽은 경로. config 영속=naia-settings,
 			//  naiaKey/apiKey=키체인(위 writeAgentKey). memory 설정 연결=다른 세션 재설계.)
 		}
@@ -813,6 +849,14 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
 								{onboardingGpuSummary}
 								<br />
 								{onboardingGpuRecommendation}
+								<br />
+								<span data-testid="onboarding-nva-vram-requirement">
+									{t("settings.nvaVramRequirement")}
+								</span>
+								<br />
+								<span data-testid="onboarding-cloud-cascade-coming-soon">
+									{t("settings.cloudCascadeComingSoon")}
+								</span>
 								<br />
 								{t("onboard.connect.runtimeBoundary")}
 							</p>

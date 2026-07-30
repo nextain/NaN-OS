@@ -29,7 +29,10 @@ import {
 	localFacadeUrlFromReady,
 	remoteCascadeUrlFromConfig,
 } from "../lib/avatar/cascade-renderer";
-import { effectiveAvatarProviderFromConfig } from "../lib/avatar/nva-gate";
+import {
+	effectiveAvatarProviderFromConfig,
+	isNvaHardwareEligible,
+} from "../lib/avatar/nva-gate";
 import { detectGpuVramGb } from "../lib/capabilities/gpu";
 import { deriveSettingsSlots } from "../lib/capabilities/slots";
 import {
@@ -64,11 +67,11 @@ import {
 	DEFAULT_OLLAMA_HOST,
 	DEFAULT_VLLM_HOST,
 	LAB_GATEWAY_URL,
+	type LlmRoleConfig,
 	NAIA_WEB_BASE_URL,
 	type SttProviderId,
 	type ThemeId,
 	type TtsProviderId,
-	type LlmRoleConfig,
 	clearAllowedTools,
 	loadConfig,
 	loadConfigWithSecrets,
@@ -108,8 +111,11 @@ import {
 	isOmniModel,
 	listLlmProviders,
 } from "../lib/llm";
-import { readConfiguredLlmRoles, writeConfiguredLlmRole } from "../lib/llm/roles";
 import { providerSupportsRole } from "../lib/llm/registry";
+import {
+	readConfiguredLlmRoles,
+	writeConfiguredLlmRole,
+} from "../lib/llm/roles";
 import { Logger } from "../lib/logger";
 import { DEFAULT_PERSONA, FORMALITY_LOCALES } from "../lib/persona";
 import { toSpeechProfileCommandInput } from "../lib/proactive-speech-settings";
@@ -132,11 +138,11 @@ import { useAvatarStore } from "../stores/avatar";
 import { useCascadeAvatarStore } from "../stores/cascade-avatar";
 import { useChatStore } from "../stores/chat";
 import { clearSavedCamera } from "./AvatarCanvas";
+import { ConnectionsSettingsTab } from "./ConnectionsSettingsTab";
 import { KnowledgeSettingsTab } from "./KnowledgeSettingsTab";
 import { ProactiveSpeechSettingsSection } from "./ProactiveSpeechSettingsSection";
 import { RefAudioSection } from "./RefAudioSection";
 import { SkillsTab } from "./SkillsTab";
-import { ConnectionsSettingsTab } from "./ConnectionsSettingsTab";
 
 const LLM_PROVIDERS = listLlmProviders();
 
@@ -541,8 +547,10 @@ export function SettingsTab() {
 	const savedModel = existing?.model;
 	const modelValid =
 		savedModel &&
-		(getLlmProvider(initProvider)?.models.some((m) => m.id === savedModel) ??
-			false);
+		(initProvider === "ollama" ||
+			initProvider === "vllm" ||
+			(getLlmProvider(initProvider)?.models.some((m) => m.id === savedModel) ??
+				false));
 	const [model, setModel] = useState(
 		modelValid ? savedModel : getDefaultLlmModel(initProvider),
 	);
@@ -566,7 +574,10 @@ export function SettingsTab() {
 		};
 		window.addEventListener("naia-config-changed", syncMainBrainFromConfig);
 		return () =>
-			window.removeEventListener("naia-config-changed", syncMainBrainFromConfig);
+			window.removeEventListener(
+				"naia-config-changed",
+				syncMainBrainFromConfig,
+			);
 	}, []);
 	const [apiKey, setApiKey] = useState(existing?.apiKey ?? "");
 	// config.json 은 비밀을 strip(키는 키체인/credentials 매니페스트)하므로 existing.apiKey 는 항상 "".
@@ -719,9 +730,7 @@ export function SettingsTab() {
 		useState<CascadeInstallationStatus | null>(null);
 	const refreshCascadeInstallation = useCallback(async () => {
 		try {
-			const status = await invoke<unknown>(
-				"cascade_installation_status",
-			);
+			const status = await invoke<unknown>("cascade_installation_status");
 			if (!isCascadeInstallationStatus(status)) {
 				Logger.warn("Settings", "Malformed cascade installation status", {});
 				setCascadeInstallation(null);
@@ -931,10 +940,6 @@ export function SettingsTab() {
 		};
 	};
 
-	const forceCpuNpuBrain = (tier: typeof localGpuTier) =>
-		resolveActiveTier(tier, detectedVramGb)?.loaderProfile ===
-		"laptop_4060_8g";
-
 	// R4: 스테이징 config 로 백엔드 warm(기동·대기). 티어/포커스 변경 시 재기동(manifest 반영).
 	const warmLocalProfile = async (
 		tier: typeof localGpuTier,
@@ -947,7 +952,8 @@ export function SettingsTab() {
 			mainModel: string;
 		},
 	) => {
-		if (!naiaKey || tier === "off") {
+		const resolvedTier = resolveActiveTier(tier, detectedVramGb);
+		if (!naiaKey || tier === "off" || !resolvedTier) {
 			// 로컬 해제 → 백엔드 정지
 			if (cascadeRunning) {
 				try {
@@ -984,10 +990,6 @@ export function SettingsTab() {
 				ttsProvider: staged.tts,
 				provider: staged.mainProvider,
 				model: staged.mainModel,
-			ollamaNumGpu:
-				staged.mainProvider === "ollama" && forceCpuNpuBrain(tier)
-					? 0
-					: undefined,
 			} as AppConfig;
 			await writeSlotsManifest(cfg);
 			const start = await startCascadeAndConfirm();
@@ -1037,10 +1039,6 @@ export function SettingsTab() {
 			// 프로파일 = 자동 설정: 두뇌(main)도 스테이징 값으로 영속 (2026-07-15 루크).
 			provider: staged.mainProvider,
 			model: staged.mainModel,
-			ollamaNumGpu:
-				staged.mainProvider === "ollama" && forceCpuNpuBrain(tier)
-					? 0
-					: undefined,
 			...(staged.tts === "naia-local-voice" ? { ttsEnabled: true } : {}),
 		});
 	};
@@ -1061,10 +1059,6 @@ export function SettingsTab() {
 			vllmTtsHost: staged.ttsHost || undefined,
 			provider: staged.mainProvider,
 			model: staged.mainModel,
-			ollamaNumGpu:
-				staged.mainProvider === "ollama" && forceCpuNpuBrain(localGpuTier)
-					? 0
-					: undefined,
 			// 로컬 음성(both/voice)을 켜면 립싱크를 위해 TTS on.
 			...(staged.tts === "naia-local-voice" ? { ttsEnabled: true } : {}),
 		});
@@ -1139,7 +1133,11 @@ export function SettingsTab() {
 		existing?.memoryEmbeddingModel ?? "",
 	);
 	const initialLlmRoles = readConfiguredLlmRoles(
-		existing ?? { provider: "gemini", model: getDefaultLlmModel("gemini"), apiKey: "" },
+		existing ?? {
+			provider: "gemini",
+			model: getDefaultLlmModel("gemini"),
+			apiKey: "",
+		},
 	);
 	const [expertLlmRole, setExpertLlmRole] = useState<LlmRoleConfig>(
 		initialLlmRoles.expert ?? { inherit: "main" },
@@ -1211,12 +1209,7 @@ export function SettingsTab() {
 	useEffect(() => {
 		// `auto` only describes detected hardware. It is not an explicit request
 		// to replace the user's configured remote model on startup.
-		if (
-			!naiaKey ||
-			localGpuTier === "off" ||
-			localGpuTier === "auto"
-		)
-			return;
+		if (!naiaKey || localGpuTier === "off" || localGpuTier === "auto") return;
 		const key = `${localGpuTier}|${local8gFocus}`;
 		if (restoredLocalProfileRef.current === key) return;
 		restoredLocalProfileRef.current = key;
@@ -1232,10 +1225,6 @@ export function SettingsTab() {
 			vllmTtsHost: staged.ttsHost || undefined,
 			provider: staged.mainProvider,
 			model: staged.mainModel,
-			ollamaNumGpu:
-				staged.mainProvider === "ollama" && forceCpuNpuBrain(localGpuTier)
-					? 0
-					: undefined,
 			...(staged.tts === "naia-local-voice" ? { ttsEnabled: true } : {}),
 		});
 	}, [naiaKey, localGpuTier, local8gFocus]);
@@ -2045,9 +2034,10 @@ export function SettingsTab() {
 		}
 		// UC-MODEL-SELECT contract: persist the provider/model switch so the gRPC
 		// agent reloads with it (prev. only Save persisted → stale provider/model).
-		const selectedModel = id !== "ollama"
-			? getDefaultLlmModel(id)
-			: ((loadConfig()?.model as string | undefined) ?? "");
+		const selectedModel =
+			id !== "ollama"
+				? getDefaultLlmModel(id)
+				: ((loadConfig()?.model as string | undefined) ?? "");
 		const legacySelection = applyModelSelectionToConfig(
 			loadConfig() as Record<string, unknown> | null,
 			id,
@@ -2433,10 +2423,6 @@ export function SettingsTab() {
 				provider === "ollama"
 					? ollamaHost.trim() || undefined
 					: existing?.ollamaHost,
-			ollamaNumGpu:
-				provider === "ollama" && forceCpuNpuBrain(localGpuTier)
-					? 0
-					: undefined,
 			vllmHost:
 				provider === "vllm" ? vllmHost.trim() || undefined : existing?.vllmHost,
 			naiaLocalUrl: naiaLocalUrl.trim() || undefined,
@@ -2574,13 +2560,17 @@ export function SettingsTab() {
 					onChange={(event) => {
 						if (event.target.value.startsWith("inherit:")) {
 							updateRole({
-								inherit: event.target.value.slice("inherit:".length) as "expert" | "main" | "sub",
+								inherit: event.target.value.slice("inherit:".length) as
+									| "expert"
+									| "main"
+									| "sub",
 							});
 							return;
 						}
-						const selectedProvider = compatibleProviders.find(
-							(candidate) => candidate.id === provider,
-						) ?? compatibleProviders[0];
+						const selectedProvider =
+							compatibleProviders.find(
+								(candidate) => candidate.id === provider,
+							) ?? compatibleProviders[0];
 						if (!selectedProvider) return;
 						updateRole({
 							provider: selectedProvider.id,
@@ -2619,9 +2609,7 @@ export function SettingsTab() {
 								</option>
 							))}
 						</select>
-						<label htmlFor={`${role}-llm-model`}>
-							{t("settings.model")}
-						</label>
+						<label htmlFor={`${role}-llm-model`}>{t("settings.model")}</label>
 						<input
 							id={`${role}-llm-model`}
 							data-testid={`${role}-llm-model`}
@@ -2686,7 +2674,9 @@ export function SettingsTab() {
 		localGpuTier === "auto" ? null : configuredLocalTier,
 		local8gFocus,
 	).includes("avatar");
-	const cascadeAvatarPossible = !!naiaKey || localAvatarCapable;
+	const nvaHardwareEligible = isNvaHardwareEligible(detectedVramGb);
+	const cascadeAvatarPossible =
+		nvaHardwareEligible && (!!naiaKey || localAvatarCapable);
 	const remoteCascadeConfigAllowed = !!naiaKey;
 	const effectiveAvatarProvider =
 		avatarProvider === "naia-video-avatar" && !cascadeAvatarPossible
@@ -2702,8 +2692,10 @@ export function SettingsTab() {
 	// 슬롯 오버뷰 = **적용(applied) 상태**(라이브). 피커/셀렉터는 스테이징(React state)이고
 	// "적용"(handleSave)이 스테이징→적용으로 커밋한다. 그래서 요약은 loadConfig() 을 읽는다.
 	const appliedCfg = loadConfig();
-	const appliedEffectiveAvatarProvider =
-		effectiveAvatarProviderFromConfig(appliedCfg);
+	const appliedEffectiveAvatarProvider = effectiveAvatarProviderFromConfig(
+		appliedCfg,
+		detectedVramGb,
+	);
 	const slotSnapshot = readSlots(appliedCfg ?? ({} as AppConfig));
 
 	const SLOT_LABEL_KEYS: Record<SlotId, string> = {
@@ -2959,8 +2951,14 @@ export function SettingsTab() {
 								weatherConsented: false,
 							});
 							if (!disabled) return false;
-							if (!next.proactiveSpeechPermitted || settings.profile === "disabled") return true;
-							return configureSpeechProfile(toSpeechProfileCommandInput(settings));
+							if (
+								!next.proactiveSpeechPermitted ||
+								settings.profile === "disabled"
+							)
+								return true;
+							return configureSpeechProfile(
+								toSpeechProfileCommandInput(settings),
+							);
 						}}
 					/>
 					<div className="settings-field">
@@ -3228,11 +3226,19 @@ export function SettingsTab() {
 								{t("settings.avatarVideoCascadeHint")}
 							</div>
 						)}
-						{slotRecommendation(
-							activeLocalTier,
-							"avatar",
-							local8gFocus,
-						) && (
+						<div
+							className="settings-hint"
+							data-testid="avatar-vram-requirement"
+						>
+							{t("settings.nvaVramRequirement")}
+						</div>
+						<div
+							className="settings-hint"
+							data-testid="avatar-cloud-cascade-coming-soon"
+						>
+							{t("settings.cloudCascadeComingSoon")}
+						</div>
+						{slotRecommendation(activeLocalTier, "avatar", local8gFocus) && (
 							<div className="settings-hint" data-testid="avatar-tier-hint">
 								{t("settings.tierRecommendSummary")}: naia-video-avatar (
 								{t("settings.tierRecommendLocalTag")})
@@ -3784,7 +3790,6 @@ export function SettingsTab() {
 					{/* engine-core-summary 제거(2026-06-30): slot-groups 두뇌 그룹과 100% 중복
 					    (동일 Main/Sub/Embedding + 동일 brain/memory 편집 네비). 중복 카드 정리. */}
 
-
 					{/* FR-1(2026-07-01): GPU 프로파일 편집을 두뇌 → 프로파일 탭으로 이관.
 					    "이 기기가 어떻게 서빙하나(로컬 GPU / 원격 cascade)"는 프로파일 개념. */}
 					<div className="settings-field">
@@ -3808,7 +3813,13 @@ export function SettingsTab() {
 							{VRAM_TIERS.filter((tier) => !tier.hidden).map((tier) => (
 								// hidden = 실기 미검증 티어 비노출 (2026-07-15 루크 — 잘못 골라 무음/포화 방지).
 								// 저장된 hidden 티어 id 는 로직·하위호환 유지(선택지만 안 보임).
-								<option key={tier.id} value={tier.id}>
+								<option
+									key={tier.id}
+									value={tier.id}
+									disabled={
+										detectedVramGb == null || detectedVramGb < tier.minVramGb
+									}
+								>
 									{t(vramTierLabelKey(tier.id))}
 								</option>
 							))}
@@ -3823,6 +3834,15 @@ export function SettingsTab() {
 										)
 									: t("settings.localGpuHint")}
 						</div>
+						<div className="settings-hint" data-testid="nva-vram-requirement">
+							{t("settings.nvaVramRequirement")}
+						</div>
+						<div
+							className="settings-hint"
+							data-testid="cloud-cascade-coming-soon"
+						>
+							{t("settings.cloudCascadeComingSoon")}
+						</div>
 						{/* R4: 로컬 프로파일 선택 시 백엔드 warm(대기) 상태. */}
 						{naiaKey &&
 							localGpuTier !== "off" &&
@@ -3835,26 +3855,24 @@ export function SettingsTab() {
 											: cascadeMsg}
 								</div>
 							)}
-						{naiaKey &&
-							localGpuTier !== "off" &&
-							cascadeInstallation && (
-								<div
-									className="settings-hint"
-									data-testid="cascade-installation-status"
-								>
-									<div data-testid="cascade-installation-summary">
-										{cascadeInstallation.summary}
-									</div>
-									<ul data-testid="cascade-installation-steps">
-										{cascadeInstallation.steps.map((step) => (
-											<li key={step.id} data-cascade-install-step={step.id}>
-												{step.label}: {step.state} · {step.progressPercent}%
-												{step.failure ? ` · ${step.failure.message}` : ""}
-											</li>
-										))}
-									</ul>
+						{naiaKey && localGpuTier !== "off" && cascadeInstallation && (
+							<div
+								className="settings-hint"
+								data-testid="cascade-installation-status"
+							>
+								<div data-testid="cascade-installation-summary">
+									{cascadeInstallation.summary}
 								</div>
-							)}
+								<ul data-testid="cascade-installation-steps">
+									{cascadeInstallation.steps.map((step) => (
+										<li key={step.id} data-cascade-install-step={step.id}>
+											{step.label}: {step.state} · {step.progressPercent}%
+											{step.failure ? ` · ${step.failure.message}` : ""}
+										</li>
+									))}
+								</ul>
+							</div>
+						)}
 					</div>
 
 					{/* 배타 티어(8G: 로컬 LLM · 아바타 · 둘다) 로컬 집중 택1. 음성=클라우드. FR-3: 로그인 필요. */}
@@ -3883,7 +3901,10 @@ export function SettingsTab() {
 										: t("settings.localFocusLlmHint")}
 							</div>
 							{localLlmFallbackToCloud && (
-								<div className="settings-hint" data-testid="local-llm-vram-fallback">
+								<div
+									className="settings-hint"
+									data-testid="local-llm-vram-fallback"
+								>
 									⚠️ {t("settings.localLlmVramFallback")}
 								</div>
 							)}
@@ -3940,11 +3961,7 @@ export function SettingsTab() {
 								</option>
 							))}
 						</select>
-						{slotRecommendation(
-							activeLocalTier,
-							"main",
-							local8gFocus,
-						) && (
+						{slotRecommendation(activeLocalTier, "main", local8gFocus) && (
 							<div className="settings-hint" data-testid="main-tier-hint">
 								{t("settings.tierRecommendSummary")}: ollama (
 								{t("settings.tierRecommendLocalTag")})
@@ -3976,33 +3993,32 @@ export function SettingsTab() {
 						</div>
 					)}
 
-					{provider !== "nextain" &&
-						!isApiKeyOptional(provider) && (
-							<div className="settings-field">
-								<label htmlFor="apikey-input">{t("settings.apiKey")}</label>
-								<input
-									id="apikey-input"
-									type="password"
-									value={apiKey}
-									onChange={(e) => {
-										setApiKey(e.target.value);
-										setError("");
-									}}
-									placeholder={
-										hasStoredApiKey
-											? "•••••••• (저장됨 — 변경하려면 입력)"
-											: "sk-..."
-									}
-								/>
-								{provider === "zai" && (
-									<div className="settings-hint">
-										Z.AI <strong>Coding Plan</strong> 구독 후 발급된 API Key를
-										입력하세요.
-									</div>
-								)}
-								{error && <div className="settings-error">{error}</div>}
-							</div>
-						)}
+					{provider !== "nextain" && !isApiKeyOptional(provider) && (
+						<div className="settings-field">
+							<label htmlFor="apikey-input">{t("settings.apiKey")}</label>
+							<input
+								id="apikey-input"
+								type="password"
+								value={apiKey}
+								onChange={(e) => {
+									setApiKey(e.target.value);
+									setError("");
+								}}
+								placeholder={
+									hasStoredApiKey
+										? "•••••••• (저장됨 — 변경하려면 입력)"
+										: "sk-..."
+								}
+							/>
+							{provider === "zai" && (
+								<div className="settings-hint">
+									Z.AI <strong>Coding Plan</strong> 구독 후 발급된 API Key를
+									입력하세요.
+								</div>
+							)}
+							{error && <div className="settings-error">{error}</div>}
+						</div>
+					)}
 
 					{provider === "ollama" && (
 						<div className="settings-field">
@@ -4067,7 +4083,9 @@ export function SettingsTab() {
 									saveConfig(
 										nextSel as unknown as Parameters<typeof saveConfig>[0],
 									);
-									void writeNaiaConfig(nextSel as unknown as Record<string, unknown>);
+									void writeNaiaConfig(
+										nextSel as unknown as Record<string, unknown>,
+									);
 								}
 								// When switching to an omni model, set default voice if not already set
 								const newMeta = providerModels.find(
@@ -4234,7 +4252,7 @@ export function SettingsTab() {
 						/>
 					</div>
 					<div className="settings-field settings-toggle-row">
-					{/* expert role editor */}
+						{/* expert role editor */}
 						<label htmlFor="thinking-toggle">
 							{t("settings.enableThinking")}
 						</label>
@@ -4257,7 +4275,7 @@ export function SettingsTab() {
 						"settings.brainExpertSection",
 						expertLlmRole,
 						setExpertLlmRole,
-						["main"]
+						["main"],
 					)}
 					<div className="settings-section-divider">
 						<span>{t("settings.brainSubSection")}</span>
@@ -4616,11 +4634,7 @@ export function SettingsTab() {
 								</option>
 							))}
 						</select>
-						{slotRecommendation(
-							activeLocalTier,
-							"tts",
-							local8gFocus,
-						) && (
+						{slotRecommendation(activeLocalTier, "tts", local8gFocus) && (
 							<div className="settings-hint" data-testid="tts-tier-hint">
 								{t("settings.tierRecommendSummary")}: naia-local-voice (
 								{t("settings.tierRecommendLocalTag")})
