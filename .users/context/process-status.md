@@ -1,5 +1,12 @@
 <!-- src-sha: e2fe6424a4462339 -->
 
+## Naia 계정 일반 LLM 연결 — 2026-07-30 (#396)
+
+- `grok-4.3`과 `deepseek-v4-pro`를 Naia provider의 Azure 모델로 카탈로그·선택·저장한다.
+- gateway metadata의 `supports_tools`, `upstream_provider`, `lifecycle`를 소비하며, stale metadata에서도 DeepSeek는 무도구로 fail-closed 한다.
+- 범위는 Settings와 일반 채팅 연결뿐이다. Coding Workers, Pi lifecycle, Workspace 코딩 UX는 다음 큰 작업으로 보류한다.
+- 검증: registry/Settings 계약 테스트와 Shell 코어·production build. 실제 Naia/Azure 호출은 자격증명 부재로 `OPERATIONAL_UNVERIFIED`다.
+
 ## Coding Workers visual and UX gate — 2026-07-23
 
 - Scope: hierarchy, saved-course-target feedback, narrow layout, and mutation/error states.

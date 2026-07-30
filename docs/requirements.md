@@ -84,6 +84,17 @@ localStorage `naia-config` 는 파일에서 하이드레이트되는 **순수 �
 
 > NFR: NFR-isolation(gateway 미가용 시 static fallback·무회귀) · NFR-port-canon(/v1/models 스키마). 동작 보존 = 적대 리뷰로 `showVoiceSection ≡ !isSelectedOmni`(전 모델) 확인.
 
+### Naia account Azure text models (#396, 2026-07-30)
+
+| ID | Requirement | Verification |
+|---|---|---|
+| **FR-NAIA-AZURE.1** | Naia provider는 `grok-4.3`과 `deepseek-v4-pro`를 정적 fallback과 gateway catalog에서 노출한다. | registry/catalog unit |
+| **FR-NAIA-AZURE.2** | 선택은 기존 `naia-settings/config.json` SoT에 저장되고 재시작 후 복원된다. | config roundtrip + Settings FE |
+| **FR-NAIA-AZURE.3** | 일반 chat은 기존 Shell→Agent provider pipeline과 Naia key를 사용해 정확한 model ID를 보낸다. DeepSeek 요청은 tools/tool_choice를 보내지 않고 Grok은 기존 tool policy를 유지한다. 별도 Azure/direct-provider transport를 만들지 않는다. | request-body capture + controlled integration |
+| **FR-NAIA-AZURE.4** | gateway의 `supports_tools`와 `upstream_provider=azure`를 반영하며, gateway 실패 시 다른 provider/model로 silent fallback하지 않는다. | positive/negative catalog tests |
+
+**Deferred**: Coding Workers, Pi lifecycle, Workspace coding UX and role eligibility are not part of #396.
+
 ## 기능 요구사항 (FR) — VRAM tier 로컬 프로파일 (#2, 셸측 슬라이스 — 2026-06-25)
 
 > 범위: private deployment draft 의 **naia-shell UI측만**. 로더(fetch/launch)·auto-download = device RTF hardware gate=DEFER. 정본 tier manifest = private tier manifest (outside this repo). **hard rule F1: 측정 RTF 없이 realtime 단정 금지.** 트랙: `naia-vram-tier-capability-bridge-2026-06-25.md`.

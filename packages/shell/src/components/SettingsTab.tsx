@@ -94,9 +94,9 @@ import { parseLabCredits } from "../lib/lab-balance";
 import { diffConfigs, fetchLabConfig, pushConfigToLab } from "../lib/lab-sync";
 import {
 	type LlmModelMeta,
-	applyCapabilityOverrides,
+	applyNaiaModelMetadata,
 	fetchGatewayModelCatalog,
-	fetchNaiaModelCapabilities,
+	fetchNaiaModelMetadata,
 	fetchNaiaPricing,
 	fetchOllamaModels,
 	fetchVllmModels,
@@ -1360,7 +1360,9 @@ export function SettingsTab() {
 						};
 
 						const mappedProvider =
-							resolveProvider(m.provider) || resolveProviderFromId(m.id);
+							(m.provider.toLowerCase() === "azure" && (modelId === "grok-4.3" || modelId === "deepseek-v4-pro")
+								? "nextain"
+								: resolveProvider(m.provider) || resolveProviderFromId(m.id));
 						if (mappedProvider) pushModel(mappedProvider);
 						// Claude Code CLI uses subscription — add models without pricing
 						if (mappedProvider === "anthropic") {
@@ -1434,17 +1436,17 @@ export function SettingsTab() {
 		// If the catalog fetch fails, models keep their static capabilities.
 		Promise.all([
 			fetchNaiaPricing(LAB_GATEWAY_URL),
-			fetchNaiaModelCapabilities(LAB_GATEWAY_URL),
-		]).then(([liveModels, capMap]) => {
+			fetchNaiaModelMetadata(LAB_GATEWAY_URL),
+		]).then(([liveModels, metadata]) => {
 			// Apply gateway capabilities even if pricing failed (the two are
 			// independent): override the priced live models, or fall back to the
 			// existing static nextain models when pricing is unavailable.
-			if (!liveModels && !capMap) return;
+			if (!liveModels && !metadata) return;
 			setDynamicModels((prev) => ({
 				...prev,
-				nextain: applyCapabilityOverrides(
+				nextain: applyNaiaModelMetadata(
 					liveModels ?? prev.nextain ?? [],
-					capMap,
+					metadata,
 				),
 			}));
 		});

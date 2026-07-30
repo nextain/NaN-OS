@@ -16,6 +16,12 @@ export interface LlmModelMeta {
 	capabilities: ModelCapability[];
 	/** Per-1M-token pricing: [input, output]. */
 	pricing?: [number, number];
+	/** Whether this exact Naia route accepts tool definitions. */
+	supportsTools?: boolean;
+	/** Auditable upstream route advertised by the Naia gateway. */
+	upstreamProvider?: string;
+	/** Provider lifecycle signal such as ga or preview. */
+	lifecycle?: string;
 	/** Omni: user can select voice in settings. */
 	voiceSelectable?: boolean;
 	/** Omni: available voices. */

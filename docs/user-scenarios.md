@@ -272,6 +272,17 @@ Before starting the Agent, the instructor opens **Coding Workers**, enables Jeon
 
 Success means the visible confirmation identifies the saved target and fixed boundary without exposing a token or raw Git output. A failed save keeps the prior target unchanged and gives only the folder-readiness guidance.
 
+## UC-NAIA-AZURE-MODELS — Naia 계정으로 Azure 모델을 일반 대화에 사용한다
+
+Naia 계정으로 로그인한 사용자는 설정의 Naia 모델 목록에서 `grok-4.3`과
+`deepseek-v4-pro`를 선택하고 저장할 수 있다. 재시작 후 선택이 복원되며 일반 채팅은
+기존 Shell→Agent provider pipeline과 같은 Naia 키를 통해 선택한 정확한 모델로 전달된다.
+Gateway가 제공한 Azure provenance와 tool 지원 여부는 정직하게 반영하고, gateway가
+일시적으로 응답하지 않으면 정적 fallback을 사용하되 다른 모델/provider로 바꾸지 않는다.
+
+이번 UC는 Coding Workers·Pi 작업 시작/취소/재개를 포함하지 않는다. 상세 계약은
+`docs/progress/99.dev-comm/naia-account-model-connection-2026-07-30.md`이다.
+
 ## Test Coverage Map (P02)
 
 **UC-JEONJU-COURSE-WORKER** maps to `apps/__tests__/coding-workers.test.tsx` and `apps/workspace/__tests__/coding-workers-tauri.test.ts` for the explicit preset, saved-target start gate, fixed boundary, preflight rejection, proposal/apply explanation, state-specific Naia report, and verification summary. Its native acceptance specs are `e2e-tauri/specs/91-jeonju-course-worker.spec.ts` (first build → student commit → revision and completed report) and `97-course-worker-guidance.spec.ts` (visible blocked start before target save); they run with the paired Agent and an isolated fixture repository. The proposal worker may inherit a read-only parent sandbox, because it no longer writes the course repository: Naia performs the constrained apply and post-apply verification.
@@ -287,6 +298,7 @@ The worker form shows the control-root path separately from the execution-target
 | UC-CODEX-WORKER-LIFECYCLE | `apps/workspace/__tests__/coding-workers.test.tsx`: form validation, same-worktree collision, state rendering, checkpoint-only resume, unavailable adapter의 no-fake-success | `e2e/coding-workers.spec.ts` (후속): Tauri adapter fixture로 두 isolated worktree와 cancel/reconciliation을 검증한다. 실제 Agent schema 수신 전에는 fixture가 성공 실행을 가장하지 않는다. |
 | UC-CODEX-WORKER-LIFECYCLE 시각 수용 | `apps/__tests__/coding-workers.test.tsx`: provider 표현, 빈 목록, 상태 배지, 수업 대상의 다음 Agent 적용 상태, 요청 중 중복 차단, 안전한 오류 맥락 | `e2e/coding-workers.spec.ts`: Shell 분할 폭(1,100px 이하)에서 입력·수업 경계·주요 행동의 순서와 접근 가능한 상태 표현을 검증. `e2e-tauri/specs/97-course-worker-guidance.spec.ts`: 실제 Tauri WebView에서 같은 안내·상태·레이아웃을 확인. |
 | UC-CODEX-ROLES | `src/lib/llm/__tests__/roles.test.ts`, `src/components/__tests__/SettingsTab.test.tsx`: main 상속, 역할별 provider/model 저장, main 전용 provider 차단 | `e2e-tauri/specs/95-llm-role-settings.spec.ts`: 실제 Shell 설정 화면에서 역할 설정 저장과 재시작 복원 |
+| UC-NAIA-AZURE-MODELS | registry/catalog/config contract: 두 모델, Azure provenance, tool metadata, static fallback | Settings FE + controlled Shell→Agent ordinary-chat integration + manual acceptance |
 
 각 시나리오의 **검증 3단(verification stack)** — 어느 하나로 "됐다" 판정 금지(R1 codex·gemini 보강):
 1. **Old-Baseline 측정**(이식 *전*, old): 입력/출력 trace + **상태 전이**(세션·캐시·fs·프로세스·권한 = hidden state, trace만으론 부족) + 설정/버전/키 상태 + **오류 분류축**(아래). **환경 정규화**(외부 의존 stub/mock → 루크 env 부작용을 코드 로직으로 오인 방지). **flaky**=1회 측정 금지, 반복+안정도 표기. **record-replay 한계**(외부시간·랜덤·네트워크·ws/streaming 재현 불안정) 명시.

@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 import {
 	fetchNaiaPricing,
+	fetchNaiaModelMetadata,
+	applyNaiaModelMetadata,
 	formatModelLabel,
 	getDefaultLlmModel,
 	getLlmModel,
@@ -29,6 +31,11 @@ describe("registry — provider registration", () => {
 
 	it("getLlmProvider returns undefined for unknown id", () => {
 		expect(getLlmProvider("unknown-xyz")).toBeUndefined();
+	});
+
+	it("Naia exposes Grok for tools and DeepSeek as analysis-only without claiming live provenance", () => {
+		expect(getLlmModel("nextain", "grok-4.3")).toMatchObject({ supportsTools: true, upstreamProvider: "unknown", lifecycle: "unknown" });
+		expect(getLlmModel("nextain", "deepseek-v4-pro")).toMatchObject({ supportsTools: false, upstreamProvider: "unknown", lifecycle: "unknown" });
 	});
 });
 
@@ -233,6 +240,7 @@ describe("registry — fetchNaiaPricing", () => {
 			{ model_key: "vertexai:gemini-3.1-flash-lite", input_price_per_million: 0.15, output_price_per_million: 0.6, cached_price_per_million: 0.04 },
 			{ model_key: "vertexai:gemini-3.5-flash", input_price_per_million: 1.25, output_price_per_million: 10.0, cached_price_per_million: null },
 			{ model_key: "openai:gpt-4o", input_price_per_million: 2.5, output_price_per_million: 10.0, cached_price_per_million: null },
+			{ model_key: "azure:grok-4.3", input_price_per_million: 0.4, output_price_per_million: 1.2, cached_price_per_million: null },
 		];
 		vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
 			new Response(JSON.stringify(gatewayResponse), { status: 200 }),
@@ -248,6 +256,8 @@ describe("registry — fetchNaiaPricing", () => {
 
 		const gpt4o = models!.find((m) => m.id === "gpt-4o");
 		expect(gpt4o).toBeUndefined();
+		expect(models!.find((m) => m.id === "grok-4.3")?.pricing?.[0]).toBeCloseTo(0.44);
+		expect(models!.find((m) => m.id === "grok-4.3")?.pricing?.[1]).toBeCloseTo(1.32);
 
 		vi.restoreAllMocks();
 	});
@@ -281,6 +291,29 @@ describe("registry — fetchNaiaPricing", () => {
 		expect(staticFlashAfter?.pricing).toEqual(staticFlashBefore?.pricing);
 
 		vi.restoreAllMocks();
+	});
+});
+
+describe("registry — Naia Azure model metadata", () => {
+	it("maps gateway provenance/tool policy and clamps stale DeepSeek tool support", async () => {
+		vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(new Response(JSON.stringify([
+			{ model_key: "grok-4.3", capabilities: ["llm"], supports_tools: true, upstream_provider: "azure", lifecycle: "preview" },
+			{ model_key: "deepseek-v4-pro", capabilities: ["llm"], supports_tools: true, upstream_provider: "wrong", lifecycle: "ga" },
+		]), { status: 200 }));
+		const metadata = await fetchNaiaModelMetadata("https://example.com");
+		const models = applyNaiaModelMetadata(getLlmProvider("nextain")!.models, metadata);
+		expect(models.find((m) => m.id === "grok-4.3")).toMatchObject({ supportsTools: true, upstreamProvider: "azure" });
+		expect(models.find((m) => m.id === "deepseek-v4-pro")).toMatchObject({ supportsTools: false, upstreamProvider: "wrong" });
+		vi.restoreAllMocks();
+	});
+
+	it("keeps provenance unknown when live metadata is unavailable or omits the model", () => {
+		const base = getLlmProvider("nextain")!.models;
+		for (const metadata of [null, new Map()]) {
+			const models = applyNaiaModelMetadata(base, metadata);
+			expect(models.find((m) => m.id === "grok-4.3")?.upstreamProvider).toBe("unknown");
+			expect(models.find((m) => m.id === "deepseek-v4-pro")).toMatchObject({ supportsTools: false, upstreamProvider: "unknown" });
+		}
 	});
 });
 

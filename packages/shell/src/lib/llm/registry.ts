@@ -160,8 +160,9 @@ export async function fetchNaiaPricing(
 
 		const pricingMap = new Map<string, [number, number]>();
 		for (const entry of entries) {
-			if (!entry.model_key.startsWith("vertexai:")) continue;
-			const modelId = entry.model_key.replace("vertexai:", "");
+			const isNaiaRoute = entry.model_key.startsWith("vertexai:") || entry.model_key.startsWith("azure:");
+			if (!isNaiaRoute) continue;
+			const modelId = entry.model_key.slice(entry.model_key.indexOf(":") + 1);
 			pricingMap.set(modelId, [
 				entry.input_price_per_million * NAIA_PRICE_MARKUP,
 				entry.output_price_per_million * NAIA_PRICE_MARKUP,
@@ -262,6 +263,69 @@ export async function fetchNaiaModelCapabilities(
 	}
 }
 
+export interface NaiaModelCatalogMetadata {
+	capabilities: ModelCapability[];
+	supportsTools?: boolean;
+	upstreamProvider?: string;
+	lifecycle?: string;
+}
+
+/** Fetch the richer `/v1/models` contract used for Naia route provenance and tool policy. */
+export async function fetchNaiaModelMetadata(
+	gatewayHttpUrl: string,
+): Promise<Map<string, NaiaModelCatalogMetadata> | null> {
+	try {
+		const resp = await fetch(`${gatewayHttpUrl}/v1/models`, { signal: AbortSignal.timeout(5000) });
+		if (!resp.ok) return null;
+		const entries = (await resp.json()) as Array<{
+			model_key: string;
+			capabilities?: string[];
+			supports_tools?: boolean;
+			upstream_provider?: string;
+			lifecycle?: string;
+		}>;
+		const map = new Map<string, NaiaModelCatalogMetadata>();
+		for (const entry of entries) {
+			const id = entry.model_key.includes(":") ? (entry.model_key.split(":").pop() ?? entry.model_key) : entry.model_key;
+			map.set(id, {
+				capabilities: (entry.capabilities ?? []).filter(_isModelCapability),
+				...(typeof entry.supports_tools === "boolean" ? { supportsTools: entry.supports_tools } : {}),
+				...(typeof entry.upstream_provider === "string" ? { upstreamProvider: entry.upstream_provider } : {}),
+				...(typeof entry.lifecycle === "string" ? { lifecycle: entry.lifecycle } : {}),
+			});
+		}
+		return map;
+	} catch {
+		return null;
+	}
+}
+
+export function applyNaiaModelMetadata(
+	models: LlmModelMeta[],
+	metadata: Map<string, NaiaModelCatalogMetadata> | null,
+): LlmModelMeta[] {
+	return models.map((model) => {
+		const live = metadata?.get(model.id);
+		if (!live) {
+			return model.id === "deepseek-v4-pro"
+				? { ...model, supportsTools: false, upstreamProvider: "unknown", lifecycle: "unknown" }
+				: { ...model, upstreamProvider: "unknown", lifecycle: "unknown" };
+		}
+		const merged = {
+			...model,
+			...(live.capabilities.length > 0 ? { capabilities: live.capabilities } : {}),
+			...(live.supportsTools !== undefined ? { supportsTools: live.supportsTools } : {}),
+			...(live.upstreamProvider ? { upstreamProvider: live.upstreamProvider } : {}),
+			...(live.lifecycle ? { lifecycle: live.lifecycle } : {}),
+		};
+		// Security/capability floor: a stale or malformed catalog cannot turn tool
+		// calling back on for Azure DeepSeek-V4-Pro.
+		return model.id === "deepseek-v4-pro"
+			? { ...merged, supportsTools: false }
+			: merged;
+	});
+}
+
 /**
  * Apply gateway-declared capabilities onto a model list (gateway = SoT).
  * Models the gateway doesn't mention keep their static capabilities (fallback).
@@ -346,6 +410,22 @@ registerLlmProvider({
 			id: "gemini-3.1-flash-lite",
 			label: "Gemini 3.1 Flash Lite",
 			capabilities: ["llm"],
+		},
+		{
+			id: "grok-4.3",
+			label: "Grok 4.3 (Naia)",
+			capabilities: ["llm"],
+			supportsTools: true,
+			upstreamProvider: "unknown",
+			lifecycle: "unknown",
+		},
+		{
+			id: "deepseek-v4-pro",
+			label: "DeepSeek V4 Pro (Naia · Analysis only)",
+			capabilities: ["llm"],
+			supportsTools: false,
+			upstreamProvider: "unknown",
+			lifecycle: "unknown",
 		},
 		{
 			// Naia Local — run the omni-24g container on your OWN GPU and point
