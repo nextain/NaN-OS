@@ -47,6 +47,12 @@ Naia account / remote Ollama / external API
 
 프로파일 선택과 복원은 기존 LLM provider, model, Naia 계정/API 경로와 사용자가 지정한 원격 Ollama host를 보존한다.
 
+### TalkingKiosk와 다른 지연 최적화 경계
+
+Naia Shell과 이 cascade 프로파일에는 완성된 음성·영상 응답 캐시를 넣지 않는다. Shell은 외부 LLM과 자유롭게 대화하므로 동일한 완성 응답이 재사용될 가능성이 낮고, 음성지문·아바타·모델이 바뀔 때 캐시를 정확히 폐기하는 비용이 기대 효과보다 크다. 반복 안내 문구의 재사용률이 높은 TalkingKiosk의 완성 응답 캐시는 해당 제품에만 둔다.
+
+Shell에 적용할 후속 지연 개선은 Ditto 단일 실행과 `429 Retry-After` 역압력, 짧은 GOP의 fragmented MP4 재생, Ditto 네이티브 512×512 렌더 후 Shell 확대·합성, VoxCPM2→Ditto→ffmpeg 취소 전파로 제한한다.
+
 ## Shell 동작
 
 1. Shell이 NVIDIA VRAM을 감지한다.
