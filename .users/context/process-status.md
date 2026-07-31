@@ -5,7 +5,7 @@
 - `grok-4.3`과 `deepseek-v4-pro`를 Naia provider의 Azure 모델로 카탈로그·선택·저장한다.
 - gateway metadata의 `supports_tools`, `upstream_provider`, `lifecycle`를 소비하며, stale metadata에서도 DeepSeek는 무도구로 fail-closed 한다.
 - 범위는 Settings와 일반 채팅 연결뿐이다. Coding Workers, Pi lifecycle, Workspace 코딩 UX는 다음 큰 작업으로 보류한다.
-- 검증: registry/Settings 계약 테스트와 Shell 코어·production build. 실제 Naia/Azure 호출은 자격증명 부재로 `OPERATIONAL_UNVERIFIED`다.
+- 검증: 2026-07-31 registry/capability/Settings 105개 테스트와 Shell production build가 통과했다. 운영 `/health`와 모델 카탈로그에서 Grok·DeepSeek·Sol·Luna의 Azure live 상태를 확인했고, 동일 gateway를 쓰는 Agent Pi에서 실제 Grok·DeepSeek 계정 호출·사용량·크레딧 차감까지 통과했다.
 
 ## Coding Workers visual and UX gate — 2026-07-23
 

@@ -24,7 +24,8 @@
       "contract": "docs/progress/99.dev-comm/naia-account-model-connection-2026-07-30.md",
       "status": "done",
       "deferred": "Coding Workers, Pi lifecycle and Workspace coding UX are the next large Workspace improvement goal",
-      "last_updated": "2026-07-30T23:45:00+09:00"
+      "last_updated": "2026-07-31T10:45:00+09:00",
+      "live_verification": "PASS 2026-07-31: production /health and catalog expose Grok, DeepSeek, Sol and Luna as live Azure models; 105 registry/capability/Settings tests and the Shell production build passed. Agent Pi verified real Grok and DeepSeek account traffic, usage and credit charging through the same gateway."
     },
     "jeonju_course_vertical_acceptance": {
       "date": "2026-07-23",
