@@ -39,8 +39,8 @@ vi.mock("../../lib/voice/audio-queue", () => ({
 			ttsSyncMocks.nextSeq += 1;
 			return seq;
 		}
-		enqueueOrdered(seq: number, audio: string) {
-			ttsSyncMocks.enqueueOrdered(seq, audio);
+		enqueueOrdered(seq: number, audio: string, callbacks?: unknown) {
+			ttsSyncMocks.enqueueOrdered(seq, audio, callbacks);
 		}
 		skipOrdered(seq: number) {
 			ttsSyncMocks.skipOrdered(seq);
@@ -690,7 +690,7 @@ describe("ChatArea", () => {
 
 	// === Local conversation ownership ===
 
-	it("serializes reversed TTS completions and keeps successful avatar audio embedded", async () => {
+	it("serializes local TTS synthesis and avatar playback on the shared GPU", async () => {
 		const firstTts = deferred<{ audioBase64: string; costUsd: number }>();
 		const secondTts = deferred<{ audioBase64: string; costUsd: number }>();
 		const firstPlayback = deferred<void>();
@@ -721,11 +721,8 @@ describe("ChatArea", () => {
 		const request = capturedRequests[0];
 		request.onChunk({ type: "text", requestId: request.requestId, text: "First sentence." });
 		request.onChunk({ type: "text", requestId: request.requestId, text: "Second sentence." });
-		await waitFor(() => expect(ttsSyncMocks.synthesizeTts).toHaveBeenCalledTimes(2));
-
-		secondTts.resolve({ audioBase64: "audio-2", costUsd: 0 });
-		await Promise.resolve();
-		expect(speakAudio).not.toHaveBeenCalled();
+		await waitFor(() => expect(ttsSyncMocks.synthesizeTts).toHaveBeenCalledTimes(1));
+		expect(ttsSyncMocks.synthesizeTts.mock.calls[0][0].text).toBe("First sentence.");
 		firstTts.resolve({ audioBase64: "audio-1", costUsd: 0 });
 		await waitFor(() => expect(speakAudio).toHaveBeenCalledTimes(1));
 		expect(speakAudio.mock.calls[0][0]).toBe("audio-1");
@@ -736,6 +733,9 @@ describe("ChatArea", () => {
 		expect(ttsSyncMocks.enqueueOrdered).not.toHaveBeenCalled();
 
 		firstPlayback.resolve();
+		await waitFor(() => expect(ttsSyncMocks.synthesizeTts).toHaveBeenCalledTimes(2));
+		expect(ttsSyncMocks.synthesizeTts.mock.calls[1][0].text).toBe("Second sentence.");
+		secondTts.resolve({ audioBase64: "audio-2", costUsd: 0 });
 		await waitFor(() => expect(speakAudio).toHaveBeenCalledTimes(2));
 		expect(speakAudio.mock.calls[1][0]).toBe("audio-2");
 		expect(ttsSyncMocks.enqueueOrdered).not.toHaveBeenCalled();
@@ -771,11 +771,165 @@ describe("ChatArea", () => {
 		const request = capturedRequests[0];
 		request.onChunk({ type: "text", requestId: request.requestId, text: "Avatar failure sentence." });
 
-		await waitFor(() =>
-			expect(ttsSyncMocks.enqueueOrdered).toHaveBeenCalledWith(0, "fallback-audio"),
-		);
+		await waitFor(() => expect(ttsSyncMocks.enqueueOrdered).toHaveBeenCalledWith(
+			0,
+			"fallback-audio",
+			expect.objectContaining({
+				onPlaybackStart: expect.any(Function),
+				onPlaybackUnavailable: expect.any(Function),
+			}),
+		));
 		expect(speakAudio.mock.calls[0][2]).toEqual(expect.objectContaining({ muted: false }));
 		expect(ttsSyncMocks.enqueueOrdered).toHaveBeenCalledTimes(1);
+		localStorage.removeItem("naia-config");
+	});
+
+	it("reveals TTS chat text only when embedded avatar playback starts", async () => {
+		const playback = deferred<void>();
+		const interrupt = vi.fn();
+		const speakAudio = vi.fn((
+			_audio: string,
+			_rate: number,
+			_options: { onPlaybackReady?: () => void },
+		) => playback.promise);
+		useCascadeAvatarStore.setState({ renderer: {
+			speakAudio,
+			speak: vi.fn().mockResolvedValue(undefined),
+			interrupt,
+		} as never });
+		ttsSyncMocks.streamsAvatarPcm.mockReturnValue(true);
+		ttsSyncMocks.synthesizeTts.mockResolvedValue({ audioBase64: "synced-audio", costUsd: 0 });
+		localStorage.setItem("naia-config", JSON.stringify({
+			apiKey: "test-key", provider: "gemini", model: "gemini-2.5-flash",
+			ttsEnabled: true, ttsProvider: "naia-local-voice",
+			vllmTtsHost: "http://localhost:8910",
+		}));
+
+		render(<ChatArea />);
+		const input = screen.getByPlaceholderText(/message/i);
+		fireEvent.change(input, { target: { value: "sync test" } });
+		fireEvent.keyDown(input, { key: "Enter" });
+		await waitFor(() => expect(capturedRequests).toHaveLength(1));
+		const request = capturedRequests[0];
+		request.onChunk({ type: "text", requestId: request.requestId, text: "Visible with speech." });
+
+		await waitFor(() => expect(speakAudio).toHaveBeenCalledTimes(1));
+		expect(screen.queryByText("Visible with speech.")).toBeNull();
+		expect(screen.getByRole("status").getAttribute("data-stage")).toBe("render");
+		const playbackOptions = speakAudio.mock.calls[0][2] as {
+			onPlaybackReady?: () => void;
+		};
+		playbackOptions.onPlaybackReady?.();
+		await waitFor(() => expect(screen.getByText("Visible with speech.")).toBeDefined());
+		expect(screen.queryByRole("status")).toBeNull();
+		interrupt.mockClear();
+		const cancel = screen.getByTitle("ESC");
+		fireEvent.click(cancel);
+		await waitFor(() => expect(interrupt).toHaveBeenCalledTimes(1));
+		await waitFor(() => expect(screen.queryByTitle("ESC")).toBeNull());
+		expect(screen.getByText("Visible with speech.")).toBeDefined();
+
+		playback.resolve();
+		localStorage.removeItem("naia-config");
+	});
+
+	it("keeps the completed message masked and preserves CJK spacing across sentences", async () => {
+		const firstPlayback = deferred<void>();
+		const secondPlayback = deferred<void>();
+		const speakAudio = vi.fn()
+			.mockImplementationOnce(() => firstPlayback.promise)
+			.mockImplementationOnce(() => secondPlayback.promise);
+		useCascadeAvatarStore.setState({ renderer: {
+			speakAudio,
+			speak: vi.fn().mockResolvedValue(undefined),
+			interrupt: vi.fn(),
+		} as never });
+		ttsSyncMocks.streamsAvatarPcm.mockReturnValue(true);
+		ttsSyncMocks.synthesizeTts.mockResolvedValue({ audioBase64: "audio", costUsd: 0 });
+		localStorage.setItem("naia-config", JSON.stringify({
+			apiKey: "test-key", provider: "gemini", model: "gemini-2.5-flash",
+			ttsEnabled: true, ttsProvider: "naia-local-voice",
+			vllmTtsHost: "http://localhost:8910",
+		}));
+
+		render(<ChatArea />);
+		const input = screen.getByPlaceholderText(/message/i);
+		fireEvent.change(input, { target: { value: "中文同步" } });
+		fireEvent.keyDown(input, { key: "Enter" });
+		await waitFor(() => expect(capturedRequests).toHaveLength(1));
+		const request = capturedRequests[0];
+		const first = "这是第一句测试内容。";
+		const second = "这是第二句测试内容。";
+		let completedBeforePlayback = false;
+		const completedObserver = new MutationObserver(() => {
+			if (document.body.textContent?.includes(first + second)) {
+				completedBeforePlayback = true;
+			}
+		});
+		completedObserver.observe(document.body, {
+			childList: true,
+			characterData: true,
+			subtree: true,
+		});
+		request.onChunk({ type: "text", requestId: request.requestId, text: first });
+		request.onChunk({ type: "text", requestId: request.requestId, text: second });
+		request.onChunk({
+			type: "usage", requestId: request.requestId,
+			inputTokens: 1, outputTokens: 2, cost: 0, model: "test",
+		});
+		request.onChunk({ type: "finish", requestId: request.requestId });
+
+		await waitFor(() => expect(speakAudio).toHaveBeenCalledTimes(1));
+		expect(completedBeforePlayback).toBe(false);
+		completedObserver.disconnect();
+		expect(screen.queryByText(first + second)).toBeNull();
+		const firstOptions = speakAudio.mock.calls[0][2] as { onPlaybackReady?: () => void };
+		firstOptions.onPlaybackReady?.();
+		await waitFor(() => expect(screen.getByText(first)).toBeDefined());
+		expect(document.body.textContent).not.toContain(`${first} ${second}`);
+
+		firstPlayback.resolve();
+		await waitFor(() => expect(speakAudio).toHaveBeenCalledTimes(2));
+		const secondOptions = speakAudio.mock.calls[1][2] as { onPlaybackReady?: () => void };
+		secondOptions.onPlaybackReady?.();
+		await waitFor(() => expect(document.body.textContent).toContain(first + second));
+		expect(document.body.textContent).not.toContain(`${first} ${second}`);
+		secondPlayback.resolve();
+		localStorage.removeItem("naia-config");
+	});
+
+	it("does not retarget the completed-message mask to a later TTS failure notice", async () => {
+		let rejectSynthesis!: (reason?: unknown) => void;
+		const synthesis = new Promise<{ audioBase64: string; costUsd: number }>((_resolve, reject) => {
+			rejectSynthesis = reject;
+		});
+		ttsSyncMocks.synthesizeTts.mockReturnValue(synthesis);
+		ttsSyncMocks.streamsAvatarPcm.mockReturnValue(false);
+		localStorage.setItem("naia-config", JSON.stringify({
+			apiKey: "test-key", provider: "gemini", model: "gemini-2.5-flash",
+			ttsEnabled: true, ttsProvider: "naia-local-voice",
+			vllmTtsHost: "http://localhost:8910",
+		}));
+
+		render(<ChatArea />);
+		const input = screen.getByPlaceholderText(/message/i);
+		fireEvent.change(input, { target: { value: "failure mask" } });
+		fireEvent.keyDown(input, { key: "Enter" });
+		await waitFor(() => expect(capturedRequests).toHaveLength(1));
+		const request = capturedRequests[0];
+		const answer = "This sentence remains the answer.";
+		request.onChunk({ type: "text", requestId: request.requestId, text: answer });
+		request.onChunk({
+			type: "usage", requestId: request.requestId,
+			inputTokens: 1, outputTokens: 2, cost: 0, model: "test",
+		});
+		rejectSynthesis(new Error("voice offline"));
+
+		await waitFor(() => expect(screen.getByText(answer)).toBeDefined());
+		await waitFor(() => expect(screen.getByText(/Can't reach the local voice engine/)).toBeDefined());
+		request.onChunk({ type: "finish", requestId: request.requestId });
+		await waitFor(() => expect(screen.getAllByText(answer)).toHaveLength(1));
+		expect(screen.getByText(/Can't reach the local voice engine/)).toBeDefined();
 		localStorage.removeItem("naia-config");
 	});
 

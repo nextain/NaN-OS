@@ -161,8 +161,49 @@ describe("4060 local voice and Ditto avatar through the real Tauri Shell", () =>
 			const w = window as typeof window & {
 				__naiaCascadeFetches?: Array<{ url: string; status: number }>;
 				__naiaOriginalFetch?: typeof fetch;
+				__naiaOutputStages?: Array<{ stage: string; at: number; text: string }>;
+				__naiaAvatarPlaybackStarts?: number[];
 			};
 			w.__naiaCascadeFetches = [];
+			w.__naiaOutputStages = [];
+			w.__naiaAvatarPlaybackStarts = [];
+			let lastStage = "";
+			let lastText = "";
+			const captureOutput = () => {
+				const stage =
+					document.querySelector<HTMLElement>(".chat-output-stage[data-stage]")
+						?.dataset.stage ?? "";
+				const messages = Array.from(
+					document.querySelectorAll<HTMLElement>(
+						".chat-message.assistant .message-content",
+					),
+				);
+				const text = messages.at(-1)?.innerText.trim() ?? "";
+				if (stage !== lastStage || text !== lastText) {
+					w.__naiaOutputStages?.push({ stage, at: performance.now(), text });
+					lastStage = stage;
+					lastText = text;
+				}
+			};
+			new MutationObserver(captureOutput).observe(document.body, {
+				attributes: true,
+				childList: true,
+				characterData: true,
+				subtree: true,
+				attributeFilter: ["data-stage"],
+			});
+			const avatarVideos = Array.from(
+				document.querySelectorAll<HTMLVideoElement>(
+				"[data-video-avatar] video",
+				),
+			);
+			const backVideo =
+				avatarVideos.find((candidate) => candidate.style.zIndex === "1") ??
+				avatarVideos.at(-1);
+			backVideo?.addEventListener("playing", () => {
+					w.__naiaAvatarPlaybackStarts?.push(performance.now());
+			});
+			captureOutput();
 			if (!w.__naiaOriginalFetch) {
 				w.__naiaOriginalFetch = window.fetch.bind(window);
 				window.fetch = async (...args) => {
@@ -209,6 +250,55 @@ describe("4060 local voice and Ditto avatar through the real Tauri Shell", () =>
 				timeoutMsg:
 					"Shell chat did not complete both local VoxCPM2 synthesis and Ditto lip-sync streaming",
 			},
+		);
+		await browser.waitUntil(
+			() =>
+				browser.execute(() => {
+					const events = (window as typeof window & {
+						__naiaOutputStages?: Array<{ text: string }>;
+					}).__naiaOutputStages ?? [];
+					return events.some((event) => event.text.includes("안녕."));
+				}),
+			{
+				timeout: 30_000,
+				timeoutMsg: "assistant text was not revealed with avatar playback",
+			},
+		);
+		const syncEvidence = await browser.execute(() => {
+			const w = window as typeof window & {
+				__naiaCascadeFetches?: Array<{ url: string; status: number }>;
+				__naiaOutputStages?: Array<{ stage: string; at: number; text: string }>;
+				__naiaAvatarPlaybackStarts?: number[];
+			};
+			return {
+				fetches: w.__naiaCascadeFetches ?? [],
+				events: w.__naiaOutputStages ?? [],
+				playbackStarts: w.__naiaAvatarPlaybackStarts ?? [],
+			};
+		});
+		process.stdout.write(
+			`[avatar-4060-evidence] ${JSON.stringify(syncEvidence)}\n`,
+		);
+		const stages = syncEvidence.events
+			.map((event) => event.stage)
+			.filter((stage, index, all) => stage && stage !== all[index - 1]);
+		const thinkingIndex = stages.indexOf("thinking");
+		const ttsIndex = stages.indexOf("tts", thinkingIndex + 1);
+		const renderIndex = stages.indexOf("render", ttsIndex + 1);
+		expect(thinkingIndex).toBeGreaterThanOrEqual(0);
+		expect(ttsIndex).toBeGreaterThan(thinkingIndex);
+		expect(renderIndex).toBeGreaterThan(ttsIndex);
+		const renderWhileMasked = syncEvidence.events.find(
+			(event) => event.stage === "render" && event.text === "",
+		);
+		expect(renderWhileMasked).toBeTruthy();
+		const firstRevealed = syncEvidence.events.find((event) =>
+			event.text.includes("안녕."),
+		);
+		expect(firstRevealed).toBeTruthy();
+		expect(syncEvidence.playbackStarts.length).toBeGreaterThan(0);
+		expect(firstRevealed!.at).toBeGreaterThanOrEqual(
+			Math.min(...syncEvidence.playbackStarts),
 		);
 		if (process.env.NAIA_E2E_SPEAKING_SCREENSHOT) {
 			await browser.saveScreenshot(process.env.NAIA_E2E_SPEAKING_SCREENSHOT);

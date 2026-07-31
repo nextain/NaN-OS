@@ -28,6 +28,7 @@ import {
 	applyRefAudioPreset,
 	deleteRefAudio,
 	getLocalRefAudioB64,
+	getLocalRefAudioPresets,
 	getRefAudioContent,
 	getRefAudioPresets,
 	getRefAudioStatus,
@@ -241,7 +242,9 @@ export function RefAudioSection() {
 	const S = pickStrings();
 	// Naia Local runs on the user's own GPU — recording/uploading a reference
 	// voice is free and never touches the gateway, so hide the $0.01 hints.
-	const isLocal = loadConfig()?.model === "naia-local";
+	const config = loadConfig();
+	const isLocal = config?.ttsProvider === "naia-local-voice";
+	const localVoiceHost = config?.vllmTtsHost;
 	const [active, setActive] = useState<RefAudioActive | null>(null);
 	const [loading, setLoading] = useState(true);
 	const [busy, setBusy] = useState(false);
@@ -279,6 +282,39 @@ export function RefAudioSection() {
 	const refresh = useCallback(async () => {
 		// A Naia Local recorded clip lives only in localStorage (no gateway slot) —
 		// reflect it directly so the card matches the voice actually being sent.
+		if (isLocal) {
+			try {
+				const list = await getLocalRefAudioPresets(localVoiceHost);
+				const selectedName = config?.voiceRefUrl
+					?.split(/[?#]/)[0]
+					.split(/[/\\]/)
+					.pop();
+				const selected =
+					list.find((preset) => preset.id === selectedName) ??
+					list.find((preset) => preset.name.includes("(default)")) ??
+					list[0];
+				setPresets(list);
+				setActive(
+					selected
+						? {
+								kind: "preset",
+								uploadedAt: "",
+								sizeBytes: 0,
+								durationSeconds: selected.durationSeconds,
+								presetId: selected.id,
+								presetName: selected.name,
+							}
+						: null,
+				);
+				setError("");
+			} catch (err) {
+				Logger.warn(TAG, "local status fetch failed", { error: String(err) });
+				setError(describeError(err, S));
+			} finally {
+				setLoading(false);
+			}
+			return;
+		}
 		if (getLocalRefAudioB64()) {
 			setActive({
 				kind: "upload",
@@ -300,7 +336,7 @@ export function RefAudioSection() {
 		} finally {
 			setLoading(false);
 		}
-	}, [S]);
+	}, [S, config?.voiceRefUrl, isLocal, localVoiceHost]);
 
 	useEffect(() => {
 		void refresh();
@@ -310,7 +346,9 @@ export function RefAudioSection() {
 		if (presets !== null || presetsLoading) return;
 		setPresetsLoading(true);
 		try {
-			const list = await getRefAudioPresets();
+			const list = isLocal
+				? await getLocalRefAudioPresets(localVoiceHost)
+				: await getRefAudioPresets();
 			setPresets(list);
 			setError("");
 		} catch (err) {
@@ -320,7 +358,7 @@ export function RefAudioSection() {
 		} finally {
 			setPresetsLoading(false);
 		}
-	}, [presets, presetsLoading, S]);
+	}, [presets, presetsLoading, S, isLocal, localVoiceHost]);
 
 	// Stop any playback + free objectURL + abort a live recording on unmount.
 	const stopPlayback = useCallback(() => {
@@ -389,7 +427,11 @@ export function RefAudioSection() {
 			if (active.kind === "preset") {
 				// Presets store no GCS blob — the content endpoint 404s for them.
 				// Preview via the preset's public sampleUrl instead.
-				const list = presets ?? (await getRefAudioPresets());
+				const list =
+					presets ??
+					(isLocal
+						? await getLocalRefAudioPresets(localVoiceHost)
+						: await getRefAudioPresets());
 				if (presets === null) setPresets(list);
 				const p = list.find((x) => x.id === active.presetId);
 				if (!p) {
@@ -419,7 +461,16 @@ export function RefAudioSection() {
 			setError(describeError(err, S));
 			setPreviewState("idle");
 		}
-	}, [active, previewState, presets, playUrl, stopPlayback, S]);
+	}, [
+		active,
+		previewState,
+		presets,
+		playUrl,
+		stopPlayback,
+		S,
+		isLocal,
+		localVoiceHost,
+	]);
 
 	// ── Upload (file) ──
 	const handleUploadBlob = useCallback(
@@ -589,6 +640,18 @@ export function RefAudioSection() {
 				new CustomEvent("naia:voice-ref-audio", { detail: null }),
 			);
 			try {
+				if (isLocal) {
+					setActive({
+						kind: "preset",
+						uploadedAt: new Date().toISOString(),
+						sizeBytes: 0,
+						durationSeconds: preset.durationSeconds,
+						presetId: preset.id,
+						presetName: preset.name,
+					});
+					setNotice(S.presetApplySuccess(preset.name));
+					return;
+				}
 				const result = await applyRefAudioPreset(preset.id);
 				setActive({
 					kind: "preset",
@@ -606,7 +669,7 @@ export function RefAudioSection() {
 				setBusy(false);
 			}
 		},
-		[S],
+		[S, isLocal],
 	);
 
 	// ── Remove (in-app confirm — WebKitGTK double-dialog parity with SettingsTab) ──
@@ -757,8 +820,9 @@ export function RefAudioSection() {
 					)}
 				</div>
 
-				{/* ── Make your voice: record + upload ── */}
-				<div style={{ marginTop: 12 }}>
+				{/* Local VoxCPM2 accepts only the facade's validated palette. Recording
+				    is a cloud realtime-voice feature and must not pretend to apply here. */}
+				{!isLocal && <div style={{ marginTop: 12 }}>
 					<div style={{ fontSize: 12, opacity: 0.7, marginBottom: 6 }}>
 						{S.myVoiceTitle}
 					</div>
@@ -848,7 +912,7 @@ export function RefAudioSection() {
 					<div className="settings-hint" style={{ marginTop: 6 }}>
 						{isLocal ? S.costLocal : S.cost}
 					</div>
-				</div>
+				</div>}
 
 				{/* ── Presets (collapsible, lazy-loaded) ── */}
 				<details

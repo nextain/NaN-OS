@@ -25,6 +25,7 @@ const ENDED_WAIT_CAP_MS = 300_000;
 
 /** ?딄?(?몃뜑?? 諛⑹????뚮웾 ?꾨━踰꾪띁(珥? ??泥?泥?겕 利됱떆 ?ъ깮 ????대쭔???볦? ???쒖옉. */
 const PREBUFFER_S = 0.2;
+const MAX_MSE_QUEUED_BYTES = 16 * 1024 * 1024;
 
 export interface CascadeRendererConfig {
 	/** cascade facade(output_cascade) ?덈?/?곷? URL. ?? http://127.0.0.1:8910 ?먮뒗 https://gpu-pc/avatar */
@@ -761,6 +762,7 @@ export class CascadeAvatarRenderer {
 
 		sb = ms.addSourceBuffer(this.codec);
 		const queue: Uint8Array[] = [];
+		let queuedBytes = 0;
 		let ended = false;
 		let swapped = false;
 		let playStarted = false;
@@ -783,7 +785,9 @@ export class CascadeAvatarRenderer {
 			if (!sb || sb.updating || my !== this.gen) return;
 			if (queue.length) {
 				try {
-					sb.appendBuffer(queue.shift()! as BufferSource);
+					const next = queue.shift()!;
+					queuedBytes -= next.byteLength;
+					sb.appendBuffer(next as BufferSource);
 				} catch {
 					/* SourceBuffer ?ロ옒/?쒓굅 寃쏀빀 ??臾댁떆 */
 				}
@@ -818,6 +822,10 @@ export class CascadeAvatarRenderer {
 			if (my !== this.gen || this.disposed) return;
 			if (value) {
 				first = false;
+				queuedBytes += value.byteLength;
+				if (queuedBytes > MAX_MSE_QUEUED_BYTES) {
+					throw new Error("cascade media buffer exceeded bounded queue");
+				}
 				queue.push(value);
 				pump();
 			}

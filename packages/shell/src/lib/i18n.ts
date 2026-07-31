@@ -1591,6 +1591,24 @@ const translations = {
 		id: "Berpikir...",
 		vi: "Đang suy nghĩ...",
 	},
+	"chat.outputStage.thinking": {
+		ko: "생각 중…", en: "Thinking…", ja: "考えています…", zh: "正在思考…",
+		fr: "Réflexion en cours…", de: "Denke nach…", ru: "Обдумываю…", es: "Pensando…",
+		ar: "جارٍ التفكير…", hi: "सोच रही हूँ…", bn: "ভাবছি…", pt: "Pensando…",
+		id: "Sedang berpikir…", vi: "Đang suy nghĩ…",
+	},
+	"chat.outputStage.tts": {
+		ko: "음성 처리 중…", en: "Processing voice…", ja: "音声を処理しています…", zh: "正在处理语音…",
+		fr: "Traitement de la voix…", de: "Stimme wird verarbeitet…", ru: "Обрабатываю голос…", es: "Procesando la voz…",
+		ar: "جارٍ معالجة الصوت…", hi: "आवाज़ तैयार हो रही है…", bn: "কণ্ঠস্বর প্রস্তুত হচ্ছে…", pt: "Processando a voz…",
+		id: "Memproses suara…", vi: "Đang xử lý giọng nói…",
+	},
+	"chat.outputStage.render": {
+		ko: "렌더 중…", en: "Rendering…", ja: "レンダリングしています…", zh: "正在渲染…",
+		fr: "Rendu en cours…", de: "Wird gerendert…", ru: "Выполняю рендеринг…", es: "Renderizando…",
+		ar: "جارٍ التصيير…", hi: "रेंडर हो रहा है…", bn: "রেন্ডার হচ্ছে…", pt: "Renderizando…",
+		id: "Merender…", vi: "Đang kết xuất…",
+	},
 	"chat.error": {
 		ko: "오류",
 		en: "Error",

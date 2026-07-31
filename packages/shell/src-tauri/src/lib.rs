@@ -5070,13 +5070,16 @@ async fn start_cascade(
         if cascade_facade_is_healthy(&ready).await {
             return Ok(ready);
         }
-        // The supervisor is not useful without its public facade. Drop only
-        // the process owned by this AppState, then let the normal exact-port
-        // stale cleanup and fresh loader launch recover it below.
+        // VoxCPM2/Ditto may monopolize the shared 8GB GPU long enough for the
+        // facade health request to exceed its short UI probe timeout. A single
+        // transient miss must not tear down an in-flight utterance: the loader
+        // supervisor already exits and tears down the full tree when any child
+        // process actually dies. Keep the live supervisor and let explicit
+        // status polling report the temporary unavailable state.
         log_both(
-            "[Naia] Local cascade supervisor is alive but its facade is unavailable; restarting it",
+            "[Naia] Local cascade facade probe timed out while its supervisor is alive; preserving the in-flight runtime",
         );
-        let _ = lock_or_recover(&state.cascade, "cascade").take();
+        return Ok(ready);
     }
     let adk_path = dirs::home_dir()
         .and_then(|h| std::fs::read_to_string(h.join(".naia").join("adk-path")).ok())

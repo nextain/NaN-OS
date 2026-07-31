@@ -267,7 +267,7 @@ describe("synthesizeTts — naia-local-voice (cascade /tts facade contract)", ()
 		vi.stubGlobal("fetch", fetchMock);
 		await synthesizeTts({
 			text: "hello",
-			voice: "cc0-ko-female-01.wav",
+			voice: "ref_ko_485.wav",
 			provider: "naia-local-voice",
 			vllmTtsHost: "http://localhost:8910",
 		});
@@ -277,7 +277,7 @@ describe("synthesizeTts — naia-local-voice (cascade /tts facade contract)", ()
 		expect(JSON.parse(fetchMock.mock.calls[0][1].body as string)).toMatchObject({
 			model: "voxcpm2",
 			input: "hello",
-			voice: "cc0-ko-female-01.wav",
+			voice: "ref_ko_485.wav",
 			response_format: "wav",
 		});
 	});
@@ -298,7 +298,7 @@ describe("synthesizeTts — naia-local-voice (cascade /tts facade contract)", ()
 		expect(init.headers).toEqual({ "Content-Type": "application/json" });
 		expect(body).toMatchObject({
 			text: "안녕",
-			voice: "cc0-ko-female-01.wav",
+			voice: "ref_ko_485.wav",
 		});
 		// WAV bytes 무변환 패스스루 (AudioQueue/ttsAudioToWav 가 RIFF 네이티브 감지)
 		const out = Uint8Array.from(atob(res.audioBase64), (c) => c.charCodeAt(0));
@@ -318,7 +318,7 @@ describe("synthesizeTts — naia-local-voice (cascade /tts facade contract)", ()
 		const body = JSON.parse(fetchMock.mock.calls[0][1].body as string);
 		expect(body).toMatchObject({
 			text: "x",
-			voice: "cc0-ko-female-01.wav",
+			voice: "ref_ko_485.wav",
 		});
 	});
 
@@ -334,7 +334,7 @@ describe("synthesizeTts — naia-local-voice (cascade /tts facade contract)", ()
 		const body = JSON.parse(fetchMock.mock.calls[0][1].body as string);
 		expect(body).toMatchObject({
 			text: "x",
-			voice: "cc0-ko-female-01.wav",
+			voice: "ref_ko_485.wav",
 		});
 	});
 

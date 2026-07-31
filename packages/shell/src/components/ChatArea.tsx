@@ -290,14 +290,14 @@ const mdComponents: Components = {
  *  않아 음색이 팔레트 기본으로 고정되던 버그 — 남성 음색을 골라도 여성으로 나옴.)
  *  비팔레트 형식(녹음/업로드 data·로컬경로)은 façade 가 400 fail-closed 라 기본 음색 폴백. */
 function naiaLocalVoiceId(voiceRefUrl?: string): string {
-	if (!voiceRefUrl) return "naia-default";
+	if (!voiceRefUrl) return "ref_ko_485.wav";
 	// 쿼리/프래그먼트 제거 후 basename — GCS 서명 URL(...wav?X-Goog-...) 이나 프리셋
 	// sampleUrl 의 쿼리스트링 때문에 정규식이 빗나가 프리셋이 무시되던 것 방지(2026-07-15 리뷰).
 	const noQuery = voiceRefUrl.split(/[?#]/)[0];
 	const base = noQuery.split(/[/\\]/).pop()?.trim() ?? "";
 	// façade 팔레트 id = .wav 파일명. 팔레트 밖 값(녹음/업로드 data·경로)은 서버가 모르는
 	// id 를 200+랜덤음색으로 받으므로(측정), 안전한 기본 음색으로 폴백한다.
-	return /^[\w.-]+\.wav$/i.test(base) ? base : "naia-default";
+	return /^[\w.-]+\.wav$/i.test(base) ? base : "ref_ko_485.wav";
 }
 
 /** TTS provider 별 voice id 해석 (단일 SoT — 파이프라인·Live 두 경로가 공유해 분기 드리프트
@@ -529,6 +529,24 @@ export function ChatArea({
 	variant = "floating",
 }: { variant?: ChatVariant } = {}) {
 	const [input, setInput] = useState("");
+	type OutputStage = "thinking" | "tts" | "render" | null;
+	const [outputStage, setOutputStage] = useState<OutputStage>(null);
+	const [ttsVisibleContent, setTtsVisibleContent] = useState("");
+	const [ttsMaskedMessageId, setTtsMaskedMessageId] = useState<string | null>(
+		null,
+	);
+	const ttsTextSyncRef = useRef({
+		generation: 0,
+		active: false,
+		pending: 0,
+		llmFinished: false,
+		canonical: "",
+		revealCursor: 0,
+		nextReservation: 0,
+		nextReveal: 0,
+		ready: new Map<number, string>(),
+	});
+	const cascadeTtsJobsRef = useRef(0);
 	// UC-compaction: agent 가 예산 압박으로 이전 대화를 요약했을 때 표시할 알림(흡수된 메시지 수). null=숨김.
 	const [compactionNotice, setCompactionNotice] = useState<number | null>(null);
 	const [activeTab, setActiveTab] = useState<TabId>("chat");
@@ -792,7 +810,10 @@ export function ChatArea({
 
 	function handleCancelStreaming() {
 		const store = useChatStore.getState();
-		if (!store.isStreaming) return;
+		const ttsActive = ttsTextSyncRef.current.active ||
+			activeTtsRequestsRef.current.size > 0 ||
+			audioQueueRef.current?.isActive === true;
+		if (!store.isStreaming && !ttsActive) return;
 		// Cancelling the response is also a speech barge-in. Without clearing
 		// the TTS generation here, a late avatar failure callback can replay
 		// fallback audio from the response the user just stopped.
@@ -805,7 +826,7 @@ export function ChatArea({
 				});
 			});
 		}
-		store.finishStreaming();
+		if (store.isStreaming) store.finishStreaming();
 		setEmotion("neutral");
 		completeCurrentRequest(reqId);
 	}
@@ -813,7 +834,12 @@ export function ChatArea({
 	// ESC key to cancel streaming
 	useEffect(() => {
 		function onKeyDown(e: KeyboardEvent) {
-			if (e.key === "Escape" && useChatStore.getState().isStreaming) {
+			if (
+				e.key === "Escape" &&
+				(useChatStore.getState().isStreaming ||
+					ttsTextSyncRef.current.active ||
+					ttsPlayingRef.current)
+			) {
 				handleCancelStreaming();
 			}
 		}
@@ -900,6 +926,16 @@ export function ChatArea({
 	 * tracking, and resets the speaking/avatar state.
 	 */
 	function interruptTts(): void {
+		// Reveal the canonical response immediately on interruption and invalidate
+		// late playback callbacks from the superseded turn.
+		ttsTextSyncRef.current.generation++;
+		ttsTextSyncRef.current.active = false;
+		ttsTextSyncRef.current.pending = 0;
+		ttsTextSyncRef.current.llmFinished = false;
+		ttsTextSyncRef.current.ready.clear();
+		cascadeTtsJobsRef.current = 0;
+		setTtsMaskedMessageId(null);
+		setOutputStage(null);
 		audioQueueRef.current?.clear();
 		sentenceChunkerRef.current?.clear();
 		activeTtsRequestsRef.current.clear();
@@ -919,6 +955,103 @@ export function ChatArea({
 		ttsPlayingRef.current = false;
 		setTtsPlaying(false);
 		useAvatarStore.getState().setSpeaking(false);
+	}
+
+	function beginCascadeTtsJob(): () => void {
+		const generation = ttsTextSyncRef.current.generation;
+		let ended = false;
+		cascadeTtsJobsRef.current++;
+		ttsPlayingRef.current = true;
+		setTtsPlaying(true);
+		return () => {
+			if (ended) return;
+			ended = true;
+			if (generation !== ttsTextSyncRef.current.generation) return;
+			cascadeTtsJobsRef.current = Math.max(0, cascadeTtsJobsRef.current - 1);
+			if (cascadeTtsJobsRef.current === 0) {
+				ttsPlayingRef.current = false;
+				setTtsPlaying(false);
+			}
+		};
+	}
+
+	function beginTtsTextSync(): void {
+		const sync = ttsTextSyncRef.current;
+		sync.generation++;
+		sync.active = true;
+		sync.pending = 0;
+		sync.llmFinished = false;
+		sync.canonical = "";
+		sync.revealCursor = 0;
+		sync.nextReservation = 0;
+		sync.nextReveal = 0;
+		sync.ready.clear();
+		setTtsVisibleContent("");
+		setTtsMaskedMessageId(null);
+		setOutputStage("thinking");
+	}
+
+	function reserveTtsTextReveal(sentence: string): () => void {
+		const sync = ttsTextSyncRef.current;
+		if (!sync.active) return () => {};
+		const generation = sync.generation;
+		const reservation = sync.nextReservation++;
+		sync.pending++;
+		setOutputStage("tts");
+		let revealed = false;
+		return () => {
+			if (revealed) return;
+			revealed = true;
+			const current = ttsTextSyncRef.current;
+			if (!current.active || current.generation !== generation) return;
+			current.ready.set(reservation, sentence);
+			while (current.ready.has(current.nextReveal)) {
+				const readySentence = current.ready.get(current.nextReveal) ?? "";
+				current.ready.delete(current.nextReveal);
+				current.nextReveal++;
+				current.pending = Math.max(0, current.pending - 1);
+				const needle = readySentence.trim();
+				const found = needle
+					? current.canonical.indexOf(needle, current.revealCursor)
+					: -1;
+				if (found >= 0) {
+					let end = found + needle.length;
+					while (end < current.canonical.length && /\s/.test(current.canonical[end])) end++;
+					current.revealCursor = end;
+				} else {
+					current.revealCursor = current.canonical.length;
+				}
+			}
+			setTtsVisibleContent(current.canonical.slice(0, current.revealCursor));
+			if (current.pending === 0) setOutputStage(null);
+			if (current.llmFinished && current.pending === 0) {
+				current.active = false;
+				setTtsMaskedMessageId(null);
+				setOutputStage(null);
+			}
+		};
+	}
+
+	function finishStreamingWithTtsMask(terminal = true): void {
+		const store = useChatStore.getState();
+		const wasStreaming = store.isStreaming;
+		if (wasStreaming) store.finishStreaming();
+		const sync = ttsTextSyncRef.current;
+		if (!sync.active) return;
+		if (terminal) sync.llmFinished = true;
+		if (wasStreaming) {
+			const completed = useChatStore
+				.getState()
+				.messages.slice()
+				.reverse()
+				.find((message) => message.role === "assistant");
+			setTtsMaskedMessageId(completed?.id ?? null);
+		}
+		if (terminal && sync.pending === 0) {
+			sync.active = false;
+			setTtsMaskedMessageId(null);
+			setOutputStage(null);
+		}
 	}
 
 	function initializeSpeechTts(config: AppConfig): void {
@@ -1310,6 +1443,7 @@ export function ChatArea({
 		// Initialize/update SentenceChunker + AudioQueue for chat TTS
 		if (chatTtsEnabled) {
 			initializeSpeechTts(config);
+			beginTtsTextSync();
 		}
 
 		const memoryCtx = await buildMemoryContext();
@@ -1405,13 +1539,13 @@ export function ChatArea({
 		} catch (err) {
 			const errStr = String(err);
 			if (errStr.includes("Naia provider requires")) {
-				useChatStore.getState().finishStreaming();
+				finishStreamingWithTtsMask();
 				setShowNoAuthModal(true);
 				completeCurrentRequest(requestId);
 			} else {
 				useChatStore.getState().appendStreamChunk(`
 [${t("chat.error")}] ${errStr}`);
-				useChatStore.getState().finishStreaming();
+				finishStreamingWithTtsMask();
 				completeCurrentRequest(requestId);
 			}
 		}
@@ -1619,6 +1753,9 @@ export function ChatArea({
 		switch (chunk.type) {
 			case "text": {
 				store.appendStreamChunk(chunk.text);
+				if (ttsTextSyncRef.current.active) {
+					ttsTextSyncRef.current.canonical += chunk.text;
+				}
 				// Parse emotion from accumulated text (tag may span multiple chunks)
 				const accumulated = store.streamingContent;
 				if (accumulated.length <= 30 && accumulated.length >= 4) {
@@ -1696,7 +1833,7 @@ export function ChatArea({
 				break;
 			}
 			case "usage": {
-				store.finishStreaming();
+				finishStreamingWithTtsMask(false);
 				setEmotion("neutral");
 				store.addCostEntry({
 					inputTokens: chunk.inputTokens,
@@ -1722,9 +1859,7 @@ export function ChatArea({
 						sentenceChunkerRef.current = null;
 					}
 				}
-				if (store.isStreaming) {
-					store.finishStreaming();
-				}
+				finishStreamingWithTtsMask();
 				setEmotion("neutral");
 				completeCurrentRequest(chunk.requestId);
 				break;
@@ -1792,8 +1927,9 @@ export function ChatArea({
 				Logger.warn("ChatArea", "Agent error chunk", {
 					message: chunk.message,
 				});
-				// Pipeline voice: flush remaining text to TTS before finishing
-				if (pipelineActiveRef.current && sentenceChunkerRef.current) {
+				// Flush any partial sentence before finishing. Chat TTS needs the same
+				// terminal behavior as pipeline voice or its mask can remain pending.
+				if (sentenceChunkerRef.current) {
 					const remaining = sentenceChunkerRef.current.flush();
 					if (remaining) {
 						Logger.info("ChatArea", "Pipeline voice flush on error", {
@@ -1801,9 +1937,10 @@ export function ChatArea({
 						});
 						sendSentenceToTts(remaining);
 					}
+					if (!pipelineActiveRef.current) sentenceChunkerRef.current = null;
 				}
 				store.appendStreamChunk(`\n[${t("chat.error")}] ${wireErrorMessage(chunk.code, chunk.message)}`);
-				store.finishStreaming();
+				finishStreamingWithTtsMask();
 				setEmotion("neutral");
 				completeCurrentRequest(chunk.requestId);
 				break;
@@ -1911,6 +2048,7 @@ export function ChatArea({
 			.replace(/[\p{Emoji_Presentation}\p{Extended_Pictographic}]/gu, "")
 			.trim();
 		if (!clean) return;
+		const revealText = reserveTtsTextReveal(sentence);
 
 		// cascade 토킹 아바타 활성 시: 셸이 합성한 TTS 오디오를 cascade /stream 으로 보내 Ditto
 		// 립싱크를 구동한다(8GB avatar-only facade 엔 TTS 가 없어 텍스트 /stream_text 는 무음).
@@ -1921,7 +2059,12 @@ export function ChatArea({
 		if (cascadeAvatar && configuredCascadeUrl) {
 			// An explicit NVA Host owns TTS and avatar rendering. This keeps the proven
 			// remote cascade independent from a failed or stale local voice facade.
-			void cascadeAvatar.speak(clean);
+			setOutputStage("render");
+			const endCascadeJob = beginCascadeTtsJob();
+			void cascadeAvatar.speak(clean, undefined, {
+				onPlaybackReady: revealText,
+				onPlaybackFailure: revealText,
+			}).finally(endCascadeJob);
 			return;
 		}
 
@@ -1963,23 +2106,40 @@ export function ChatArea({
 		// Manages the avatar speaking state + clears the request on end/error.
 		const speakViaBrowser = (): void => {
 			if (typeof window !== "undefined" && "speechSynthesis" in window) {
+				const browserGeneration = ttsTextSyncRef.current.generation;
+				const isCurrentBrowserTurn = () =>
+					browserGeneration === ttsTextSyncRef.current.generation;
 				const utter = new SpeechSynthesisUtterance(clean);
 				utter.lang =
 					voiceCfg?.voice || document.documentElement.lang || "ko-KR";
-				utter.onstart = () => useAvatarStore.getState().setSpeaking(true);
+				utter.onstart = () => {
+					if (!isCurrentBrowserTurn()) return;
+					revealText();
+					ttsPlayingRef.current = true;
+					setTtsPlaying(true);
+					useAvatarStore.getState().setSpeaking(true);
+				};
 				utter.onend = () => {
+					if (!isCurrentBrowserTurn()) return;
+					ttsPlayingRef.current = false;
+					setTtsPlaying(false);
 					useAvatarStore.getState().setSpeaking(false);
 					activeTtsRequestsRef.current.delete(reqId);
 				};
 				// onerror too, else a failure after onstart leaves the avatar stuck
 				// in the speaking state (#363 review).
 				utter.onerror = () => {
+					if (!isCurrentBrowserTurn()) return;
+					revealText();
+					ttsPlayingRef.current = false;
+					setTtsPlaying(false);
 					useAvatarStore.getState().setSpeaking(false);
 					activeTtsRequestsRef.current.delete(reqId);
 				};
 				window.speechSynthesis.speak(utter);
 			} else {
 				Logger.warn("ChatArea", "Browser TTS not available");
+				revealText();
 				activeTtsRequestsRef.current.delete(reqId);
 			}
 		};
@@ -1988,8 +2148,14 @@ export function ChatArea({
 		const ttsMeta = getTtsProviderMeta(ttsProviderForCost);
 		if (ttsMeta?.isClientSide) {
 			// 브라우저 TTS 는 버퍼가 없음 → 아바타면 facade 텍스트 경로, 아니면 브라우저 발화.
-			if (cascadeAvatar) void cascadeAvatar.speak(clean);
-			else speakViaBrowser();
+			if (cascadeAvatar) {
+				setOutputStage("render");
+				const endCascadeJob = beginCascadeTtsJob();
+				void cascadeAvatar.speak(clean, undefined, {
+					onPlaybackReady: revealText,
+					onPlaybackFailure: revealText,
+				}).finally(endCascadeJob);
+			} else speakViaBrowser();
 			return;
 		}
 
@@ -1999,18 +2165,33 @@ export function ChatArea({
 		// interrupt/cleanup cancel the in-flight fetch/WS (and stop paid TTS).
 		const abort = new AbortController();
 		ttsAbortControllersRef.current.set(reqId, abort);
-		synthesizeTts({
-			text: clean,
-			voice: voiceCfg?.voice,
-			encoding: avatarPcm ? "LINEAR16" : undefined,
-			provider: ttsProviderForCost as TtsProviderId,
-			apiKey: voiceCfg?.ttsApiKey,
-			naiaKey: voiceCfg?.naiaKey,
-			gatewayUrl: voiceCfg?.gatewayUrl,
-			vllmHost: voiceCfg?.vllmHost,
-			vllmTtsHost: voiceCfg?.vllmTtsHost,
-			signal: abort.signal,
-		})
+		const synthesize = () => {
+			if (!activeTtsRequestsRef.current.has(reqId)) {
+				return Promise.reject(new DOMException("TTS request superseded", "AbortError"));
+			}
+			setOutputStage("tts");
+			return synthesizeTts({
+				text: clean,
+				voice: voiceCfg?.voice,
+				encoding: avatarPcm ? "LINEAR16" : undefined,
+				provider: ttsProviderForCost as TtsProviderId,
+				apiKey: voiceCfg?.ttsApiKey,
+				naiaKey: voiceCfg?.naiaKey,
+				gatewayUrl: voiceCfg?.gatewayUrl,
+				vllmHost: voiceCfg?.vllmHost,
+				vllmTtsHost: voiceCfg?.vllmTtsHost,
+				signal: abort.signal,
+			});
+		};
+		// The Windows 8GB path shares one GPU between VoxCPM2 and Ditto. Starting
+		// the next synthesis while the previous Ditto render is active produced
+		// large latency variance and occasional partial responses. Keep this path
+		// strictly half-duplex; cloud TTS providers retain parallel synthesis.
+		const synthesis =
+			avatarPcm && ttsProviderForCost === "naia-local-voice"
+				? previousAvatarPlayback.then(() => synthesize())
+				: synthesize();
+		synthesis
 			.then(async ({ audioBase64, costUsd }) => {
 				// Drop stale audio AND skip billing for a superseded/aborted turn:
 				// interruptTts() cleared activeTtsRequestsRef and reset the AudioQueue
@@ -2036,23 +2217,38 @@ export function ChatArea({
 							"Avatar playback unavailable; releasing fallback TTS audio",
 							{ reqId, seq },
 						);
-						audioQueueRef.current?.enqueueOrdered(seq, audioBase64);
+						audioQueueRef.current?.enqueueOrdered(seq, audioBase64, {
+							onPlaybackStart: revealText,
+							onPlaybackUnavailable: revealText,
+						});
 					};
+					setOutputStage("render");
+					const endCascadeJob = beginCascadeTtsJob();
 					await cascadeAvatar
 						?.speakAudio(audioBase64, 24000, {
 							muted: false,
+							onPlaybackReady: revealText,
 							onPlaybackFailure: releaseFallbackAudio,
 						})
 						.finally(() => {
 							activeTtsRequestsRef.current.delete(reqId);
+							endCascadeJob();
 						});
 				} else if (cascadeAvatar) {
 					activeTtsRequestsRef.current.delete(reqId);
 					// nextain 외 아바타: facade 내장 TTS 경로(best-effort, full cascade 전제).
-					void cascadeAvatar.speak(clean);
+					setOutputStage("render");
+					const endCascadeJob = beginCascadeTtsJob();
+					void cascadeAvatar.speak(clean, undefined, {
+						onPlaybackReady: revealText,
+						onPlaybackFailure: revealText,
+					}).finally(endCascadeJob);
 				} else {
 					activeTtsRequestsRef.current.delete(reqId);
-					audioQueueRef.current?.enqueueOrdered(seq, audioBase64);
+					audioQueueRef.current?.enqueueOrdered(seq, audioBase64, {
+						onPlaybackStart: revealText,
+						onPlaybackUnavailable: revealText,
+					});
 				}
 				// Track TTS cost: server cost for Naia Cloud, estimate for others.
 				// Naia account (nextain): apply 10% service markup on top of base cost.
@@ -2097,6 +2293,7 @@ export function ChatArea({
 					ttsProviderForCost === "naia-local-voice" ||
 					ttsProviderForCost === "vllm";
 				if (isLocalVoiceProvider) {
+					revealText();
 					Logger.warn(
 						"ChatArea",
 						"Local voice engine unavailable — no free fallback",
@@ -3282,6 +3479,18 @@ export function ChatArea({
 			});
 		}
 	}
+	// `finishStreaming()` moves the streaming text into `messages` synchronously,
+	// while React state updates for the concrete message id are batched. Derive the
+	// just-completed target during that handoff so the full answer cannot flash for
+	// one paint before `ttsMaskedMessageId` catches up.
+	const effectiveTtsMaskedMessageId =
+		ttsMaskedMessageId ??
+		(!isStreaming && ttsTextSyncRef.current.active
+			? messages
+					.slice()
+					.reverse()
+					.find((message) => message.role === "assistant")?.id ?? null
+			: null);
 
 	return (
 		<>
@@ -3417,7 +3626,7 @@ export function ChatArea({
 					className="chat-messages"
 					style={{ display: activeTab === "chat" ? "flex" : "none" }}
 				>
-					{messages
+				{messages
 						.filter((msg) => {
 							if (
 								msg.role === "user" &&
@@ -3451,7 +3660,11 @@ export function ChatArea({
 								<div className="message-content">
 									{msg.role === "assistant" ? (
 										<Markdown components={mdComponents}>
-											{extractExpression(msg.content).cleanText}
+										{extractExpression(
+											msg.id === effectiveTtsMaskedMessageId
+												? ttsVisibleContent
+												: msg.content,
+										).cleanText}
 										</Markdown>
 									) : (
 										msg.content
@@ -3488,12 +3701,28 @@ export function ChatArea({
 							<div className="message-content">
 								{streamingContent ? (
 									<Markdown components={mdComponents}>
-										{extractExpression(streamingContent).cleanText}
+										{extractExpression(
+											ttsTextSyncRef.current.active
+												? ttsVisibleContent
+												: streamingContent,
+										).cleanText}
 									</Markdown>
 								) : null}
 								<span className="cursor-blink">▌</span>
 							</div>
 						</div>
+					)}
+
+					{outputStage && (
+						<output
+							className="chat-output-stage"
+							aria-live="polite"
+							aria-atomic="true"
+							data-stage={outputStage}
+						>
+							<span className="voice-status-spinner" aria-hidden="true" />
+							<span>{t(`chat.outputStage.${outputStage}`)}</span>
+						</output>
 					)}
 
 					<div ref={messagesEndRef} />
@@ -3601,7 +3830,7 @@ export function ChatArea({
 							{messageQueue.length} {t("chat.queued")}
 						</span>
 					)}
-					{isStreaming ? (
+					{isStreaming || ttsMaskedMessageId !== null || outputStage !== null || ttsPlaying ? (
 						<button
 							type="button"
 							onClick={handleCancelStreaming}

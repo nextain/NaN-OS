@@ -20,6 +20,7 @@ import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { platform } from "node:os";
 import { dirname, resolve } from "node:path";
 import { REQUIRED_AGENT_COMMIT, REQUIRED_PROTO_SHA256 } from "./agent-pairing.mjs";
+import { interactiveLaunchEnv } from "./launch-env.mjs";
 
 const mode = process.argv[2] === "prod" ? "prod" : "dev";
 
@@ -102,7 +103,7 @@ function firstPairedAgentCheckout() {
 
 const WINDOWS_MANAGER = resolve(OS_ROOT, "..", "naia-omni-windows-manager");
 
-const env = { ...process.env };
+const env = interactiveLaunchEnv(process.env);
 
 // ── 새 코어 + 분리 에이전트 (new-naia-os 불변) ──
 env.VITE_NAIA_NEW_CORE = env.VITE_NAIA_NEW_CORE ?? "1";

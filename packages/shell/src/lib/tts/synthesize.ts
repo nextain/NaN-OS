@@ -305,7 +305,7 @@ async function synthNaiaLocalVoice(
 			// in the Windows facade palette and causes a 400 after a fresh install.
 			voice:
 				!opts.voice || opts.voice === "default"
-					? "cc0-ko-female-01.wav"
+					? "ref_ko_485.wav"
 					: opts.voice,
 			response_format: "wav",
 		}),

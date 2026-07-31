@@ -15,25 +15,40 @@ export interface AudioQueueCallbacks {
 	outputDeviceId?: string;
 }
 
+export interface AudioQueueItemCallbacks {
+	/** Fires when this exact sentence starts playing, not merely when queued. */
+	onPlaybackStart?: () => void;
+	/** Fires if this sentence cannot start playback. */
+	onPlaybackUnavailable?: () => void;
+}
+
+interface AudioQueueItem extends AudioQueueItemCallbacks {
+	audioBase64: string;
+}
+
 export class AudioQueue {
-	private queue: string[] = [];
+	private queue: AudioQueueItem[] = [];
 	private current: HTMLAudioElement | null = null;
 	private playing = false;
+	private generation = 0;
 	private callbacks: AudioQueueCallbacks;
 
 	// Ordered enqueue: buffer out-of-order items until their turn.
 	// A `null` value marks a reserved slot whose synthesis failed / fell back —
 	// it advances the cursor without playing, so later seqs don't stall.
 	private nextExpectedSeq = 0;
-	private pendingOrdered: Map<number, string | null> = new Map();
+	private pendingOrdered: Map<number, AudioQueueItem | null> = new Map();
 
 	constructor(callbacks: AudioQueueCallbacks = {}) {
 		this.callbacks = callbacks;
 	}
 
 	/** Add MP3 base64 audio to the queue. Starts playback if idle. */
-	enqueue(mp3Base64: string): void {
-		this.queue.push(mp3Base64);
+	enqueue(
+		mp3Base64: string,
+		callbacks: AudioQueueItemCallbacks = {},
+	): void {
+		this.queue.push({ audioBase64: mp3Base64, ...callbacks });
 		if (!this.playing) {
 			this.playNext();
 		}
@@ -51,8 +66,12 @@ export class AudioQueue {
 	 * Enqueue audio by sequence number. Buffers out-of-order items
 	 * and flushes them in order when their turn arrives.
 	 */
-	enqueueOrdered(seq: number, mp3Base64: string): void {
-		this.pendingOrdered.set(seq, mp3Base64);
+	enqueueOrdered(
+		seq: number,
+		mp3Base64: string,
+		callbacks: AudioQueueItemCallbacks = {},
+	): void {
+		this.pendingOrdered.set(seq, { audioBase64: mp3Base64, ...callbacks });
 		this.flushOrdered();
 	}
 
@@ -77,16 +96,17 @@ export class AudioQueue {
 
 	private flushOrdered(): void {
 		while (this.pendingOrdered.has(this.flushCursor)) {
-			const mp3 = this.pendingOrdered.get(this.flushCursor);
+			const item = this.pendingOrdered.get(this.flushCursor);
 			this.pendingOrdered.delete(this.flushCursor);
 			this.flushCursor++;
 			// null = skipped slot (failed/fell-back synthesis); advance only.
-			if (mp3) this.enqueue(mp3);
+			if (item) this.enqueue(item.audioBase64, item);
 		}
 	}
 
 	/** Stop current playback and clear all queued audio. */
 	clear(): void {
+		this.generation++;
 		this.queue = [];
 		this.pendingOrdered.clear();
 		this.flushCursor = 0;
@@ -119,7 +139,14 @@ export class AudioQueue {
 			return;
 		}
 
-		const mp3Base64 = this.queue.shift()!;
+		const item = this.queue.shift();
+		if (!item) {
+			this.playing = false;
+			this.callbacks.onPlaybackEnd?.();
+			return;
+		}
+		const mp3Base64 = item.audioBase64;
+		const generation = this.generation;
 		const wasPlaying = this.playing;
 		this.playing = true;
 
@@ -137,7 +164,27 @@ export class AudioQueue {
 		}
 		this.current = audio;
 
+		let started = false;
+		let unavailableSignaled = false;
+		let advanced = false;
+		const isCurrent = () =>
+			generation === this.generation && this.current === audio;
+		const signalUnavailable = () => {
+			if (!isCurrent() || started || unavailableSignaled) return;
+			unavailableSignaled = true;
+			item.onPlaybackUnavailable?.();
+		};
+		const advance = () => {
+			if (!isCurrent() || advanced) return;
+			advanced = true;
+			this.current = null;
+			this.playNext();
+		};
+
 		audio.onplay = () => {
+			if (!isCurrent()) return;
+			started = true;
+			item.onPlaybackStart?.();
 			// Only fire onPlaybackStart for the first chunk in a sequence
 			if (!wasPlaying) {
 				this.callbacks.onPlaybackStart?.();
@@ -145,20 +192,19 @@ export class AudioQueue {
 		};
 
 		audio.onended = () => {
-			this.current = null;
-			this.playNext();
+			advance();
 		};
 
 		audio.onerror = (e) => {
 			Logger.warn("AudioQueue", "Audio playback error", { error: String(e) });
-			this.current = null;
-			this.playNext();
+			signalUnavailable();
+			advance();
 		};
 
 		audio.play().catch((err) => {
 			Logger.warn("AudioQueue", "Audio play rejected", { error: String(err) });
-			this.current = null;
-			this.playNext();
+			signalUnavailable();
+			advance();
 		});
 	}
 }

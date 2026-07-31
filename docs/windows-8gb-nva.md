@@ -37,7 +37,7 @@ Naia account / remote Ollama / external API
              NVA video avatar
 ```
 
-정식 loader 프로파일 이름은 `windows_trt_8g`이다. `laptop-4060-8g`은 기존 설정과 UI를 위한 호환 ID이며 같은 프로파일로 정규화된다. 로컬 GPU에는 VoxCPM2 W8A16 + TensorRT LocDiT 계획 비용 3.70GB와 Ditto TensorRT 2.6GB, 합계 6.30GB를 배정한다. RTX 4060 Laptop 실기동에서는 데스크톱 부하를 제외한 결합 스택이 약 6.56GB로 관측됐다.
+정식 loader 프로파일 이름은 `windows_trt_8g`이다. `laptop-4060-8g`과 과거 `kiosk_8g`은 기존 설정과 UI를 위한 호환 ID이며 같은 TRT 프로파일로 정규화된다. 세 ID 모두 `tts_voxcpm2_trt + avatar_ditto_trt + cascade_facade`를 실행한다. 로컬 GPU에는 VoxCPM2 W8A16 + TensorRT LocDiT 계획 비용 3.70GB와 Ditto TensorRT 2.6GB, 합계 6.30GB를 배정한다. RTX 4060 Laptop 실기동에서는 데스크톱 부하를 제외한 결합 스택이 약 6.56GB로 관측됐다.
 
 이 프로파일은 다음을 설치하거나 실행하지 않는다.
 
@@ -65,6 +65,18 @@ Shell에 적용할 후속 지연 개선은 Ditto 단일 실행과 `429 Retry-Aft
 6. 준비 실패 시 NVA idle 화면을 지우지 않고 실패 상태와 재시도를 제공한다.
 
 VoxCPM2 또는 Ditto가 늦게 초기화되거나 실패하더라도 Shell 전체 화면이나 NVA idle 출력이 비어서는 안 된다.
+
+### 느린 응답의 진행 상태와 자막 동기
+
+TTS가 켜진 일반 채팅은 응답을 한꺼번에 먼저 표시하지 않고 다음 세 단계를 현재 Shell 언어로 보여 준다.
+
+1. `생각 중` — 외부 LLM 응답을 기다리거나 수신한다.
+2. `음성 처리 중` — 표시할 문장을 VoxCPM2로 합성한다.
+3. `렌더 중` — 같은 합성 오디오를 Ditto에 보내 NVA 영상을 준비한다.
+
+완료된 답변의 원문은 canonical 대화 기록에 즉시 보존하지만 화면에서는 실제 재생 전까지 가린다. 브라우저 음성은 `SpeechSynthesis.onstart`, 일반 음성 큐는 오디오 재생 시작, NVA는 뒤쪽 영상 요소의 `playing` 이벤트에서 음소거를 해제하는 시점에 해당 문장을 표시한다. 중단·ESC·새 발화가 발생하면 이전 세대의 합성·렌더·자막 표시를 함께 무효화한다.
+
+2026-08-01 RTX 4060 Laptop 실제 Tauri E2E에서는 `생각 중 7.72초 → 음성 처리 중 15.80초 → 렌더 중 19.53초(자막 없음) → Ditto playing 21.383초 → 자막 21.388초`로 관측됐다. 재생과 자막 차이는 약 4.6ms였고 완료 전환 중 전체 답변이 잠깐 보이는 현상은 0회였다. 이 검증은 한국어를 포함한 14개 Shell 언어의 상태 키 존재 여부도 함께 검사한다.
 
 ## 8GB 미만과 감지 실패
 
@@ -116,12 +128,40 @@ python -m loader plan --gpu 7.1 --profile windows_trt_8g --json
 - 외부 Codex LLM 응답 수신
 - VoxCPM2 `/v1/audio/speech` HTTP 200
 - Ditto `/stream` HTTP 200 및 발화 상태 전환
-- Shell Vitest 1,395 passed, 13 skipped
+- Shell Vitest 1,422 passed, 13 skipped
 - FE Playwright 166 passed, 39 조건부/manual skipped
-- Windows manager pytest 73 passed
+- 실제 4060 Tauri NVA E2E 1 passed: Naia 응답, VoxCPM2 200, Ditto 200, 상태 순서, 재생 동기 자막
+- Windows manager pytest 76 passed
+- Shell Rust library tests 179 passed
+- naia-labs avatar/service GPU 비의존 테스트 22 passed
+- output cascade 자원 경계 테스트 4 passed
 - 프로덕션 빌드와 TypeScript 검사 통과
 
 정지 화면은 시간축 립싱크 자체를 증명하지 않는다. 립싱크 수용 판정은 동일 합성 오디오가 Ditto `/stream`으로 전달되고 Shell의 발화 상태가 완료되는 네이티브 통합 테스트를 기준으로 한다.
+
+### 속도와 누적 안정성 실측
+
+속도는 텍스트 길이·문장 구조·timesteps에 따라 달라지므로 하나의 “배속”으로 보장하지 않는다.
+
+- 기존 고정 문장: 4.62초 오디오를 평균 9.18초에 합성해 RTF 약 1.99였다. 따라서 과거의 일괄적인 1.6배 표기는 사용하지 않는다.
+- `--quality low` 재기동 후 고정 문장: 5.10초 오디오의 첫 요청 9.44초, warm 4회 6.22~6.34초로 RTF 약 1.22~1.24였다.
+- Ditto 반복 10회: 4.330~4.439초, 첫 4.380초·마지막 4.395초로 누적 지연 추세가 없었다. 작업 세트 증가는 약 2.6MB였다.
+- VoxCPM2·Ditto 각각 동시 요청 2개: 첫 요청 200, 겹친 요청 429와 `Retry-After: 1`로 즉시 거부됐다. GPU 작업을 무한 대기열에 쌓지 않는다.
+
+Ditto 성공·오류·클라이언트 연결 중단 경로는 모두 SDK 세션을 닫는다. 입력은 TTS 64KiB/1,000자, Ditto PCM 16MiB/60초로 제한하며, 잘린 본문과 잘못된 chunk 요청을 거부한다. 프로세스 자체 주기 재시작은 manager가 한 자식 종료를 cascade 전체 장애로 취급하므로 현재 적용하지 않는다.
+
+## Windows 설치 파일과 Steam 배포 경계
+
+현재 NSIS 산출물은 Shell 핵심 런타임(Node, Agent, BGM, Vosk DLL, MSVC CRT, WebView2 offline)을 포함한다. 그러나 Windows 8GB NVA를 새 PC에서 바로 실행하는 데 필요한 Python 환경, VoxCPM2·Ditto 모델, TensorRT 엔진·플러그인과 NVIDIA 드라이버는 아직 설치 파일에 완전히 포함되지 않는다. `cascade-loader` 소스가 들어 있다는 사실만으로 독립 설치가 완료된 것은 아니다.
+
+따라서 현재 상태는 다음과 같이 판정한다.
+
+- 기존에 TRT 런타임과 모델이 준비된 이 노트북: 지원 및 실측 완료
+- 깨끗한 Windows PC의 단일 설치 파일만으로 NVA 실행: 미완료
+- Steam depot의 Shell 독립 기동: 가능하지만 NVA TRT 자산 자동 설치·검증과 SteamPipe 배포 자동화는 후속
+- 코드 서명: 현재 NSIS는 미서명
+
+Steam 또는 일반 사용자 배포 전에 GPU/드라이버 확인, 서명된 TRT 자산 manifest, 원자적 다운로드와 SHA-256 검증, 디스크 용량 검사, 첫 기동 warm-up, 제거/업데이트 정책, 실제 깨끗한 VM 설치 E2E를 완료해야 한다. 향후 Nextain cloud cascade는 이 로컬 설치의 조용한 폴백이 아니라 별도 유료 서비스로 표시한다.
 
 ## 과거 정책과의 관계
 

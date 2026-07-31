@@ -14,7 +14,11 @@
  * durations, and status codes go through `Logger`.
  */
 
-import { LAB_GATEWAY_URL, getNaiaKeySecure } from "../config";
+import {
+	DEFAULT_LOCAL_VOICE_HOST,
+	LAB_GATEWAY_URL,
+	getNaiaKeySecure,
+} from "../config";
 import { Logger } from "../logger";
 import { encodeRefAudio } from "./ref-audio";
 
@@ -78,6 +82,63 @@ export interface RefAudioPreset {
 	sampleSha256?: string;
 	source: string;
 	license: string;
+}
+
+/**
+ * Read the voice palette exposed by the local cascade facade.
+ *
+ * This endpoint is deliberately unauthenticated and loopback-only. It is the
+ * source of truth for voices that VoxCPM2 can actually resolve; using the
+ * cloud preset endpoint here made preview fail whenever the LLM was external
+ * but TTS used `naia-local-voice`.
+ */
+export async function getLocalRefAudioPresets(
+	baseUrl = DEFAULT_LOCAL_VOICE_HOST,
+): Promise<RefAudioPreset[]> {
+	const base = baseUrl.trim().replace(/\/+$/, "") || DEFAULT_LOCAL_VOICE_HOST;
+	let res: Response;
+	try {
+		res = await fetch(`${base}/ref/voices`);
+	} catch (err) {
+		Logger.warn(TAG, "local presets GET network error", {
+			error: String(err),
+		});
+		throw new RefAudioApiError("network", 0, String(err));
+	}
+	if (!res.ok) {
+		const body = await readErrorBody(res);
+		throw new RefAudioApiError(
+			mapErrorCode(res.status, body),
+			res.status,
+			`GET /ref/voices failed (${res.status})`,
+			body,
+		);
+	}
+	const body = (await res.json()) as {
+		voices?: Array<{
+			name?: string;
+			url?: string;
+			gender?: string;
+			lang?: string;
+			idx?: number;
+			default?: boolean;
+		}>;
+	};
+	return (body.voices ?? [])
+		.filter((voice) => voice.name && voice.url)
+		.map((voice) => ({
+			id: voice.name as string,
+			name: voice.default
+				? `${voice.name} (default)`
+				: (voice.name as string),
+			locale: voice.lang ?? "",
+			gender: voice.gender,
+			durationSeconds: 0,
+			sampleUrl: voice.url as string,
+			sampleFormat: "wav",
+			source: "local-cascade",
+			license: "bundled",
+		}));
 }
 
 export interface RefAudioUploadResult {

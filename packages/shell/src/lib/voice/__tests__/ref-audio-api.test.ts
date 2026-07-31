@@ -5,6 +5,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("../../config", () => ({
+	DEFAULT_LOCAL_VOICE_HOST: "http://localhost:8910",
 	LAB_GATEWAY_URL: "https://gateway.test",
 	getNaiaKeySecure: vi.fn().mockResolvedValue("gw-test-key"),
 }));
@@ -21,6 +22,7 @@ vi.mock("../../logger", () => ({
 import {
 	RefAudioApiError,
 	applyRefAudioPreset,
+	getLocalRefAudioPresets,
 	getRefAudioContent,
 	getRefAudioPresets,
 	getRefAudioStatus,
@@ -28,6 +30,61 @@ import {
 } from "../ref-audio-api";
 
 const originalFetch = globalThis.fetch;
+
+describe("local cascade voice palette", () => {
+	const mockFetch = vi.fn();
+
+	beforeEach(() => {
+		globalThis.fetch = mockFetch as unknown as typeof fetch;
+		mockFetch.mockReset();
+	});
+
+	afterEach(() => {
+		globalThis.fetch = originalFetch;
+	});
+
+	it("loads /ref/voices without a Naia account and maps the facade contract", async () => {
+		mockFetch.mockResolvedValue(
+			new Response(
+				JSON.stringify({
+					voices: [
+						{
+							name: "ref_ko_485.wav",
+							url: "http://127.0.0.1:8910/ref/audio/ref_ko_485.wav",
+							gender: "female",
+							lang: "ko",
+							default: true,
+						},
+					],
+				}),
+				{ status: 200 },
+			),
+		);
+
+		const presets = await getLocalRefAudioPresets("http://localhost:8910/");
+		expect(mockFetch).toHaveBeenCalledWith(
+			"http://localhost:8910/ref/voices",
+		);
+		expect(presets).toEqual([
+			expect.objectContaining({
+				id: "ref_ko_485.wav",
+				name: "ref_ko_485.wav (default)",
+				locale: "ko",
+				gender: "female",
+				sampleUrl:
+					"http://127.0.0.1:8910/ref/audio/ref_ko_485.wav",
+			}),
+		]);
+	});
+
+	it("maps an unreachable local facade to a network error", async () => {
+		mockFetch.mockRejectedValue(new Error("offline"));
+		await expect(getLocalRefAudioPresets()).rejects.toMatchObject({
+			code: "network",
+			status: 0,
+		});
+	});
+});
 
 describe("ref-audio-api error mapping (W5 매진 UX 포함)", () => {
 	const mockFetch = vi.fn();
