@@ -140,7 +140,9 @@ describe("useCascadeCharacter — 피커 폴더명 → 서버 bundle_id 해석 +
 			.mockResolvedValueOnce({ ok: true, json: async () => REGISTRY });
 		vi.stubGlobal("fetch", fetchMock);
 		try {
-			expect(await useCascadeCharacter("http://gpu:9449", "unknown")).toBe(false);
+			expect(await useCascadeCharacter("http://gpu:9449", "unknown")).toBe(
+				false,
+			);
 			expect(fetchMock).toHaveBeenCalledTimes(1);
 		} finally {
 			vi.unstubAllGlobals();
@@ -150,14 +152,21 @@ describe("useCascadeCharacter — 피커 폴더명 → 서버 bundle_id 해석 +
 
 describe("마스크 키잉 헬퍼 — NVA 플레이어(에디터 compose) 이식", () => {
 	// 4×4 프레임 헬퍼: 단색 배경 위 중앙 2×2 캐릭터 픽셀.
-	const frame = (bg: [number, number, number, number], fg: [number, number, number, number]) => {
+	const frame = (
+		bg: [number, number, number, number],
+		fg: [number, number, number, number],
+	) => {
 		const d = new Uint8ClampedArray(4 * 4 * 4);
 		for (let i = 0; i < 16; i++) d.set(bg, i * 4);
 		for (const i of [5, 6, 9, 10]) d.set(fg, i * 4);
 		return d;
 	};
 
-	const solid = (w: number, h: number, rgba: [number, number, number, number]) => {
+	const solid = (
+		w: number,
+		h: number,
+		rgba: [number, number, number, number],
+	) => {
 		const d = new Uint8ClampedArray(w * h * 4);
 		for (let i = 0; i < w * h; i++) d.set(rgba, i * 4);
 		return d;
@@ -166,7 +175,9 @@ describe("마스크 키잉 헬퍼 — NVA 플레이어(에디터 compose) 이식
 	it("sampleCornerKey: 불투명 단색 배경 → 배경색 반환 (인셋 지점 샘플)", () => {
 		const big = solid(64, 64, [255, 242, 214, 255]);
 		expect(sampleCornerKey(big, 64, 64)).toEqual([255, 242, 214]);
-		expect(sampleCornerKey(solid(16, 16, [255, 242, 214, 255]), 16, 16)).toBeNull(); // 최소 크기 미달
+		expect(
+			sampleCornerKey(solid(16, 16, [255, 242, 214, 255]), 16, 16),
+		).toBeNull(); // 최소 크기 미달
 	});
 
 	it("sampleCornerKey: 최외곽 어두운 테두리(h264 경계 아티팩트)에 속지 않는다 — 인셋 샘플", () => {
@@ -196,7 +207,7 @@ describe("마스크 키잉 헬퍼 — NVA 플레이어(에디터 compose) 이식
 		const d = frame([255, 242, 214, 255], [0, 200, 255, 255]);
 		chromaKeyImage(d, 255, 242, 214);
 		expect(d[3]).toBe(0); // 배경(0,0) 투명
-		expect(d[(5 * 4) + 3]).toBe(255); // 캐릭터(1,1) 보존
+		expect(d[5 * 4 + 3]).toBe(255); // 캐릭터(1,1) 보존
 	});
 });
 
@@ -344,7 +355,8 @@ describe("CascadeAvatarRenderer.speak — Content-Type 라우팅 (webm=Blob / mp
 				String(input).includes("/idle")
 					? mockRes(
 							"video/mp4",
-							async () => new Blob([new Uint8Array([9])], { type: "video/mp4" }),
+							async () =>
+								new Blob([new Uint8Array([9])], { type: "video/mp4" }),
 						)
 					: mockRes("video/webm", blobSpy),
 			) as never;
@@ -363,7 +375,9 @@ describe("CascadeAvatarRenderer.speak — Content-Type 라우팅 (webm=Blob / mp
 		await withStubs(vi.fn(), async () => {
 			const blob = async () =>
 				new Blob([new Uint8Array([1])], { type: "video/webm" });
-			globalThis.fetch = vi.fn(async () => mockRes("video/webm", blob)) as never;
+			globalThis.fetch = vi.fn(async () =>
+				mockRes("video/webm", blob),
+			) as never;
 			const host = makeHost();
 			const onPlaybackReady = vi.fn();
 			const r = new CascadeAvatarRenderer({
@@ -379,7 +393,9 @@ describe("CascadeAvatarRenderer.speak — Content-Type 라우팅 (webm=Blob / mp
 		await withStubs(vi.fn(), async () => {
 			const blob = async () =>
 				new Blob([new Uint8Array([1])], { type: "video/webm" });
-			globalThis.fetch = vi.fn(async () => mockRes("video/webm", blob)) as never;
+			globalThis.fetch = vi.fn(async () =>
+				mockRes("video/webm", blob),
+			) as never;
 			const host = makeHost();
 			const onPlaybackFailure = vi.fn();
 			let mutedAtPlaybackStart = true;
@@ -405,7 +421,10 @@ describe("CascadeAvatarRenderer.speak — Content-Type 라우팅 (webm=Blob / mp
 		await withStubs(vi.fn(), async () => {
 			globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
 				if (String(input).includes("/idle")) {
-					return mockRes("video/mp4", async () => new Blob([new Uint8Array([1])]));
+					return mockRes(
+						"video/mp4",
+						async () => new Blob([new Uint8Array([1])]),
+					);
 				}
 				return {
 					ok: false,
@@ -429,7 +448,10 @@ describe("CascadeAvatarRenderer.speak — Content-Type 라우팅 (webm=Blob / mp
 		await withStubs(vi.fn(), async () => {
 			globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
 				if (String(input).includes("/idle")) {
-					return mockRes("video/mp4", async () => new Blob([new Uint8Array([1])]));
+					return mockRes(
+						"video/mp4",
+						async () => new Blob([new Uint8Array([1])]),
+					);
 				}
 				return {
 					ok: false,
@@ -462,7 +484,8 @@ describe("CascadeAvatarRenderer.speak — Content-Type 라우팅 (webm=Blob / mp
 				String(input).includes("/idle")
 					? mockRes(
 							"video/mp4",
-							async () => new Blob([new Uint8Array([9])], { type: "video/mp4" }),
+							async () =>
+								new Blob([new Uint8Array([9])], { type: "video/mp4" }),
 						)
 					: mockRes("video/mp4", blobSpy),
 			) as never;
@@ -536,6 +559,40 @@ describe("CascadeAvatarRenderer.speak — Content-Type 라우팅 (webm=Blob / mp
 			expect(started).toBeLessThanOrEqual(1); // 첫 발화만 시작됐거나(경합) 0건
 		});
 	});
+
+	it.each(["interrupt", "stop"] as const)(
+		"%s aborts the active cascade HTTP request",
+		async (action) => {
+			await withStubs(vi.fn(), async () => {
+				const blob = async () =>
+					new Blob([new Uint8Array([1])], { type: "video/mp4" });
+				let streamSignal: AbortSignal | undefined;
+				globalThis.fetch = vi.fn(
+					async (input: RequestInfo | URL, init?: RequestInit) => {
+						if (String(input).includes("/idle"))
+							return mockRes("video/mp4", blob);
+						streamSignal = init?.signal ?? undefined;
+						return new Promise<Response>((_resolve, reject) => {
+							streamSignal?.addEventListener("abort", () =>
+								reject(new DOMException("aborted", "AbortError")),
+							);
+						});
+					},
+				) as never;
+				const host = makeHost();
+				const renderer = new CascadeAvatarRenderer({
+					runtimeUrl: "http://127.0.0.1:8910",
+				});
+				renderer.start(host);
+				const speaking = renderer.speak("hello");
+				for (let i = 0; i < 10 && !streamSignal; i++) await Promise.resolve();
+				expect(streamSignal).toBeDefined();
+				renderer[action]();
+				await speaking;
+				expect(streamSignal?.aborted).toBe(true);
+			});
+		},
+	);
 });
 
 describe("localFacadeUrlFromReady", () => {
@@ -638,7 +695,9 @@ describe("localCascadeUrlFromConfig", () => {
 });
 
 describe("ensureRemoteCharacter — 미등록 시 업로드 후 재전환 (재부팅 /tmp 소실 대응)", () => {
-	const ONLY_NAIA = [{ bundle_id: "Naia (기본 캐릭터)", name: "Naia (기본 캐릭터)" }];
+	const ONLY_NAIA = [
+		{ bundle_id: "Naia (기본 캐릭터)", name: "Naia (기본 캐릭터)" },
+	];
 	const WITH_JINA = [
 		{ bundle_id: "Naia (기본 캐릭터)", name: "Naia (기본 캐릭터)" },
 		{ bundle_id: "Jina", name: "Jina" },

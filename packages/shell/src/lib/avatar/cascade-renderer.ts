@@ -331,6 +331,7 @@ export class CascadeAvatarRenderer {
 	private gen = 0; // 諛쒗솕 ?몃? ??barge-in/以묐났 臾댄슚??
 	private disposed = false;
 	private teardown: (() => void) | null = null;
+	private requestAbort: AbortController | null = null;
 	private idleObjectUrl: string | null = null;
 	// ?? 留덉뒪??諛곌꼍 ?쒓굅) 罹붾쾭????NVA ?뚮젅?댁뼱(?먮뵒??compose 猷⑦봽) ?댁떇 ??
 	// NVA 怨꾩빟? ?щ챸 諛곌꼍 罹먮┃??manifest background=transparent)?몃뜲, cascade 遺덊닾紐?mp4)
@@ -607,6 +608,8 @@ export class CascadeAvatarRenderer {
 			onPlaybackReady?.();
 		};
 		this.runTeardown();
+		const requestAbort = new AbortController();
+		this.requestAbort = requestAbort;
 		const back = this.buf;
 
 		try {
@@ -615,11 +618,13 @@ export class CascadeAvatarRenderer {
 						method: "POST",
 						headers: { "Content-Type": "application/octet-stream" },
 						body: audioWav as BodyInit,
+						signal: requestAbort.signal,
 					})
 				: await fetch(this.streamUrl("/stream_text"), {
 						method: "POST",
 						headers: { "Content-Type": "application/json" },
 						body: JSON.stringify({ text: t }),
+						signal: requestAbort.signal,
 					});
 			if (my !== this.gen || this.disposed) return;
 			if (!res.ok || !res.body) throw new Error(`cascade stream ${res.status}`);
@@ -637,6 +642,8 @@ export class CascadeAvatarRenderer {
 			}
 		} finally {
 			// Never swallow speech when rendering fails or returns an empty stream.
+			if (this.requestAbort === requestAbort) this.requestAbort = null;
+
 			if (!playbackReadySignaled) onPlaybackFailure?.();
 			signalPlaybackReady();
 			// ?낇쁽 ?몃?留??먭린 ?뺣━瑜??쒕떎. 諛쒗솕媛 ??speak/interrupt/stop ?쇰줈 ?泥대릺硫?gen ???щ씪媛怨?
@@ -914,6 +921,8 @@ export class CascadeAvatarRenderer {
 	interrupt(): void {
 		this.clearSpeakQueue();
 		this.gen++;
+		this.requestAbort?.abort();
+		this.requestAbort = null;
 		this.runTeardown();
 		try {
 			if (this.buf) {
@@ -932,6 +941,8 @@ export class CascadeAvatarRenderer {
 		this.disposed = true;
 		this.gen++;
 		this.runTeardown();
+		this.requestAbort?.abort();
+		this.requestAbort = null;
 		// 諛쒗솕 以??뺤?(?몃쭏?댄듃 ??硫?setSpeaking(true) 媛 ?꾩뿭 ?ㅽ넗?댁뿉 ?⑥? ?딅룄濡??댁젣(interrupt ? ?移?.
 		this.onTalking?.(false);
 		try {

@@ -53,6 +53,8 @@ Naia Shell과 이 cascade 프로파일에는 완성된 음성·영상 응답 캐
 
 Shell에 적용할 후속 지연 개선은 Ditto 단일 실행과 `429 Retry-After` 역압력, 짧은 GOP의 fragmented MP4 재생, Ditto 네이티브 512×512 렌더 후 Shell 확대·합성, VoxCPM2→Ditto→ffmpeg 취소 전파로 제한한다.
 
+지연 개선 추적의 정본은 [alpha-adk #14](https://github.com/nextain/alpha-adk/issues/14)와 `UC-WIN-NVA-LATENCY`, `FR-CASCADE.15~19`다. 같은 텍스트·음성지문·NVA·warm 상태에서 첫 오디오, 첫 미디어 바이트, 첫 Shell 발화 프레임, 전체 완료, A/V 종료차, 취소 회수 시간을 각각 기록한다. 서비스의 첫 바이트만 빨라지고 Shell 화면이 그대로인 경우에는 사용자 체감 개선으로 판정하지 않는다.
+
 ## Shell 동작
 
 1. Shell이 NVIDIA VRAM을 감지한다.

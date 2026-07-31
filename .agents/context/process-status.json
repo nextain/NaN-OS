@@ -15,8 +15,17 @@
     "issue_doc": "docs/progress/ (F0-baseline, F0-contract, F{1,2,3}-baseline-contract, F0-graft) + 00-PHASES.md",
     "github_issue": null,
     "started": "2026-06-08T00:00:00Z",
-    "last_updated": "2026-07-23T18:28:00+09:00",
+    "last_updated": "2026-07-31T18:00:00+09:00",
     "status": "in_progress",
+    "windows_trt_latency_14": {
+      "issue": "https://github.com/nextain/alpha-adk/issues/14",
+      "scope": "Windows windows_trt_8g first-audio and first-NVA-frame latency: Ditto admission, render boundary, fragmented MP4 evidence, and end-to-end cancellation; completed A/V response cache excluded",
+      "requirements": "docs/requirements.md FR-CASCADE.15~19",
+      "scenario": "docs/user-scenarios.md UC-WIN-NVA-LATENCY",
+      "status": "done",
+      "last_updated": "2026-07-31T23:30:00+09:00",
+      "verification": "Ditto admission 15 tests, Shell renderer 42 tests and production build, manager 74 tests, cascade cancellation tests, native Tauri NVA acceptance, and real H.264/AAC output passed; measured first media byte 8.0s and A/V end delta 19.9ms on RTX 4060 Laptop 8GB"
+    },
     "naia_account_models_396": {
       "issue": "https://github.com/nextain/naia-shell/issues/396",
       "extension_issue": "https://github.com/nextain/naia-shell/issues/399",
