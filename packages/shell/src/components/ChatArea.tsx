@@ -591,6 +591,10 @@ export function ChatArea({
 	const audioQueueRef = useRef<AudioQueue | null>(null);
 	const sentenceChunkerRef = useRef<SentenceChunker | null>(null);
 	const activeTtsRequestsRef = useRef<Set<string>>(new Set());
+	// Ditto must receive synthesized sentences in their reserved audio order,
+	// even when later TTS requests finish first. Each sentence owns one slot in
+	// this promise tail and releases the next only after its video completes.
+	const avatarPlaybackTailRef = useRef<Promise<void>>(Promise.resolve());
 	// Per-sentence AbortControllers so interrupt/cleanup actually cancels the
 	// in-flight TTS fetch/WS (and stops billing for superseded paid TTS) — #363
 	// cross-review HIGH.
@@ -789,6 +793,10 @@ export function ChatArea({
 	function handleCancelStreaming() {
 		const store = useChatStore.getState();
 		if (!store.isStreaming) return;
+		// Cancelling the response is also a speech barge-in. Without clearing
+		// the TTS generation here, a late avatar failure callback can replay
+		// fallback audio from the response the user just stopped.
+		interruptTts();
 		const reqId = currentRequestId.current;
 		if (reqId) {
 			cancelChat(reqId).catch((err) => {
@@ -895,6 +903,7 @@ export function ChatArea({
 		audioQueueRef.current?.clear();
 		sentenceChunkerRef.current?.clear();
 		activeTtsRequestsRef.current.clear();
+		avatarPlaybackTailRef.current = Promise.resolve();
 		// Cancel in-flight TTS fetch/WS so a barge-in stops paid synthesis (#363).
 		for (const ac of ttsAbortControllersRef.current.values()) ac.abort();
 		ttsAbortControllersRef.current.clear();
@@ -1932,6 +1941,16 @@ export function ChatArea({
 		// 전환되며 음색이 **합성 시점에 서버에서 해석**되어 사유가 소멸했다. 오히려 8g avatar-only
 		// 파사드(자체 TTS 없음)에선 /stream_text 폴백이 무음이라 PCM 직결이 유일한 립싱크 경로.
 		const avatarPcm = !!cascadeAvatar && streamsAvatarPcm(ttsProviderForCost);
+		const previousAvatarPlayback = avatarPcm
+			? avatarPlaybackTailRef.current
+			: Promise.resolve();
+		let releaseAvatarSlot = () => {};
+		if (avatarPcm) {
+			const slot = new Promise<void>((resolve) => {
+				releaseAvatarSlot = resolve;
+			});
+			avatarPlaybackTailRef.current = previousAvatarPlayback.then(() => slot);
+		}
 		const ttsVoiceForCost = voiceCfg?.voice;
 		Logger.info("ChatArea", "Sending TTS request", {
 			reqId,
@@ -1992,22 +2011,47 @@ export function ChatArea({
 			vllmTtsHost: voiceCfg?.vllmTtsHost,
 			signal: abort.signal,
 		})
-			.then(({ audioBase64, costUsd }) => {
+			.then(async ({ audioBase64, costUsd }) => {
 				// Drop stale audio AND skip billing for a superseded/aborted turn:
 				// interruptTts() cleared activeTtsRequestsRef and reset the AudioQueue
 				// sequence, so a late response must NOT enqueue (would replay as the
 				// new turn's first audio) nor record cost.
 				if (!activeTtsRequestsRef.current.has(reqId)) return;
-				activeTtsRequestsRef.current.delete(reqId);
 				if (avatarPcm) {
-					// Keep voice playback independent from remote rendering. The remote video
-					// follows muted, so a media event or render failure can never cause silence.
-					audioQueueRef.current?.enqueueOrdered(seq, audioBase64);
-					void cascadeAvatar?.speakAudio(audioBase64, 24000, { muted: true });
+					await previousAvatarPlayback;
+					if (!activeTtsRequestsRef.current.has(reqId)) return;
+					// The cascade MP4/WebM already contains the exact input audio. Let the
+					// video element play that track so lips and voice share one media clock;
+					// a separate AudioQueue clock can lead on prebuffer and drift on stalls.
+					// Only fall back to the local queue when avatar playback never starts.
+					let fallbackReleased = false;
+					const releaseFallbackAudio = () => {
+						if (fallbackReleased) return;
+						// Barge-in clears this request set. A late failure callback must
+						// never resurrect audio from the interrupted response.
+						if (!activeTtsRequestsRef.current.delete(reqId)) return;
+						fallbackReleased = true;
+						Logger.debug(
+							"ChatArea",
+							"Avatar playback unavailable; releasing fallback TTS audio",
+							{ reqId, seq },
+						);
+						audioQueueRef.current?.enqueueOrdered(seq, audioBase64);
+					};
+					await cascadeAvatar
+						?.speakAudio(audioBase64, 24000, {
+							muted: false,
+							onPlaybackFailure: releaseFallbackAudio,
+						})
+						.finally(() => {
+							activeTtsRequestsRef.current.delete(reqId);
+						});
 				} else if (cascadeAvatar) {
+					activeTtsRequestsRef.current.delete(reqId);
 					// nextain 외 아바타: facade 내장 TTS 경로(best-effort, full cascade 전제).
 					void cascadeAvatar.speak(clean);
 				} else {
+					activeTtsRequestsRef.current.delete(reqId);
 					audioQueueRef.current?.enqueueOrdered(seq, audioBase64);
 				}
 				// Track TTS cost: server cost for Naia Cloud, estimate for others.
@@ -2080,6 +2124,7 @@ export function ChatArea({
 			})
 			.finally(() => {
 				ttsAbortControllersRef.current.delete(reqId);
+				releaseAvatarSlot();
 			});
 	}
 

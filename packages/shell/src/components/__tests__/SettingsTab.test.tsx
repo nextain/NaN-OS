@@ -5,6 +5,7 @@ import {
 	render,
 	screen,
 } from "@testing-library/react";
+import { StrictMode } from "react";
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -87,6 +88,41 @@ describe("SettingsTab", () => {
 		eventListeners.clear();
 		vi.clearAllMocks();
 		vi.unstubAllGlobals();
+		Reflect.deleteProperty(window, "__TAURI_INTERNALS__");
+	});
+
+	it("loads the Naia credit balance after the StrictMode effect replay", async () => {
+		localStorage.setItem(
+			"naia-config",
+			JSON.stringify({
+				provider: "nextain",
+				model: "gemini-2.5-flash",
+				apiKey: "",
+				naiaKey: "strict-mode-key",
+			}),
+		);
+		mockInvoke.mockImplementation((command: string) => {
+			if (command === "fetch_naia_balance") {
+				return Promise.resolve({ balance: 5_204_139_000 });
+			}
+			return Promise.resolve([]);
+		});
+		Object.defineProperty(window, "__TAURI_INTERNALS__", {
+			configurable: true,
+			value: {},
+		});
+
+		render(
+			<StrictMode>
+				<SettingsTab />
+			</StrictMode>,
+		);
+
+		expect(await screen.findByText(/52041\.39/)).toBeDefined();
+		expect(mockInvoke).toHaveBeenCalledWith("fetch_naia_balance", {
+			gatewayUrl: expect.any(String),
+			naiaKey: "strict-mode-key",
+		});
 	});
 
 	it("places Connections between Skills and General and never renders a token field", async () => {

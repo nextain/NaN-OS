@@ -1,3 +1,5 @@
+import { invoke } from "@tauri-apps/api/core";
+
 /**
  * Gateway balance is expressed in micro-dollars (`balance`), while the
  * naia.land account endpoint returns already-normalized `credits`. Accept both
@@ -24,4 +26,30 @@ export function parseLabCredits(payload: unknown): number | null {
 		(record.data && typeof record.data === "object"
 			? parse(record.data as Record<string, unknown>)
 			: null);
+}
+
+/** Use native HTTP inside Tauri to avoid WebView CORS/PNA balance failures. */
+export async function fetchLabBalancePayload(
+	gatewayUrl: string,
+	naiaKey: string,
+	signal?: AbortSignal,
+): Promise<unknown> {
+	if (
+		typeof window !== "undefined" &&
+		"__TAURI_INTERNALS__" in window
+	) {
+		return invoke<unknown>("fetch_naia_balance", {
+			gatewayUrl,
+			naiaKey,
+		});
+	}
+	const response = await fetch(
+		`${gatewayUrl.replace(/\/+$/, "")}/v1/profile/balance`,
+		{
+			headers: { "X-AnyLLM-Key": `Bearer ${naiaKey}` },
+			signal,
+		},
+	);
+	if (!response.ok) throw new Error(`HTTP ${response.status}`);
+	return response.json();
 }

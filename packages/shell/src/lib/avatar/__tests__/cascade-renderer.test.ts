@@ -375,6 +375,32 @@ describe("CascadeAvatarRenderer.speak — Content-Type 라우팅 (webm=Blob / mp
 		});
 	});
 
+	it("uses the embedded media audio clock after avatar playback starts", async () => {
+		await withStubs(vi.fn(), async () => {
+			const blob = async () =>
+				new Blob([new Uint8Array([1])], { type: "video/webm" });
+			globalThis.fetch = vi.fn(async () => mockRes("video/webm", blob)) as never;
+			const host = makeHost();
+			const onPlaybackFailure = vi.fn();
+			let mutedAtPlaybackStart = true;
+			const r = new CascadeAvatarRenderer({
+				runtimeUrl: "http://127.0.0.1:8910",
+			});
+			r.start(host);
+			const overlay = host.parentElement?.querySelectorAll("video")[1];
+			expect(overlay?.muted).toBe(true);
+			await r.speak("hello", undefined, {
+				muted: false,
+				onPlaybackReady: () => {
+					mutedAtPlaybackStart = overlay?.muted ?? true;
+				},
+				onPlaybackFailure,
+			});
+			expect(mutedAtPlaybackStart).toBe(false);
+			expect(onPlaybackFailure).not.toHaveBeenCalled();
+		});
+	});
+
 	it("releases split-mode audio once when avatar rendering fails", async () => {
 		await withStubs(vi.fn(), async () => {
 			globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
@@ -396,6 +422,33 @@ describe("CascadeAvatarRenderer.speak — Content-Type 라우팅 (webm=Blob / mp
 			r.start(host);
 			await r.speak("hello", undefined, { muted: true, onPlaybackReady });
 			expect(onPlaybackReady).toHaveBeenCalledTimes(1);
+		});
+	});
+
+	it("reports embedded-media playback failure for the local-audio fallback", async () => {
+		await withStubs(vi.fn(), async () => {
+			globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
+				if (String(input).includes("/idle")) {
+					return mockRes("video/mp4", async () => new Blob([new Uint8Array([1])]));
+				}
+				return {
+					ok: false,
+					status: 503,
+					body: {},
+					headers: { get: () => "video/mp4" },
+				};
+			}) as never;
+			const host = makeHost();
+			const onPlaybackFailure = vi.fn();
+			const r = new CascadeAvatarRenderer({
+				runtimeUrl: "http://127.0.0.1:8910",
+			});
+			r.start(host);
+			await r.speak("hello", undefined, {
+				muted: false,
+				onPlaybackFailure,
+			});
+			expect(onPlaybackFailure).toHaveBeenCalledTimes(1);
 		});
 	});
 

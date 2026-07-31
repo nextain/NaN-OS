@@ -7,7 +7,10 @@ import {
 	hasNaiaKeySecure,
 } from "../lib/config";
 import { getLocale, t } from "../lib/i18n";
-import { parseLabCredits } from "../lib/lab-balance";
+import {
+	fetchLabBalancePayload,
+	parseLabCredits,
+} from "../lib/lab-balance";
 import { Logger } from "../lib/logger";
 import type { ChatMessage, CostEntry } from "../lib/types";
 
@@ -111,12 +114,12 @@ function LabBalanceSection() {
 			BALANCE_FETCH_TIMEOUT_MS,
 		);
 		try {
-			const res = await fetch(`${GATEWAY_URL}/v1/profile/balance`, {
-				headers: { "X-AnyLLM-Key": `Bearer ${naiaKey}` },
-				signal: controller.signal,
-			});
-			if (!res.ok) throw new Error(`HTTP ${res.status}`);
-			const val = parseLabCredits(await res.json()) ?? 0;
+			const payload = await fetchLabBalancePayload(
+				GATEWAY_URL,
+				naiaKey,
+				controller.signal,
+			);
+			const val = parseLabCredits(payload) ?? 0;
 			balanceCache = { value: val, timestamp: Date.now() };
 			setBalance(val);
 			setError(false);

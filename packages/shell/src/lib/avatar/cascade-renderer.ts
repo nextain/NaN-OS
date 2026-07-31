@@ -350,6 +350,7 @@ export class CascadeAvatarRenderer {
 		audioWav?: Uint8Array;
 		muted?: boolean;
 		onPlaybackReady?: () => void;
+		onPlaybackFailure?: () => void;
 		resolve: () => void;
 	}> = [];
 	private draining = false;
@@ -534,7 +535,11 @@ export class CascadeAvatarRenderer {
 	async speak(
 		text: string,
 		audioWav?: Uint8Array,
-		opts?: { muted?: boolean; onPlaybackReady?: () => void },
+		opts?: {
+			muted?: boolean;
+			onPlaybackReady?: () => void;
+			onPlaybackFailure?: () => void;
+		},
 	): Promise<void> {
 		const t = text.trim();
 		if ((!t && !audioWav) || this.disposed || !this.buf) return;
@@ -544,6 +549,7 @@ export class CascadeAvatarRenderer {
 				audioWav,
 				muted: opts?.muted,
 				onPlaybackReady: opts?.onPlaybackReady,
+				onPlaybackFailure: opts?.onPlaybackFailure,
 				resolve,
 			});
 			void this.drainSpeakQueue();
@@ -564,6 +570,7 @@ export class CascadeAvatarRenderer {
 						item.audioWav,
 						item.muted,
 						item.onPlaybackReady,
+						item.onPlaybackFailure,
 					);
 				} finally {
 					item.resolve();
@@ -588,6 +595,7 @@ export class CascadeAvatarRenderer {
 		audioWav?: Uint8Array,
 		muted = false,
 		onPlaybackReady?: () => void,
+		onPlaybackFailure?: () => void,
 	): Promise<void> {
 		const t = text.trim();
 		if ((!t && !audioWav) || this.disposed || !this.buf) return;
@@ -629,6 +637,7 @@ export class CascadeAvatarRenderer {
 			}
 		} finally {
 			// Never swallow speech when rendering fails or returns an empty stream.
+			if (!playbackReadySignaled) onPlaybackFailure?.();
 			signalPlaybackReady();
 			// ?낇쁽 ?몃?留??먭린 ?뺣━瑜??쒕떎. 諛쒗솕媛 ??speak/interrupt/stop ?쇰줈 ?泥대릺硫?gen ???щ씪媛怨?
 			//   洹??泥댁옄媛 ?먭린 ?쒖옉 ??runTeardown ?쇰줈 **???몃???* cleanup ???대? ?ㅽ뻾?쒕떎. ?ш린??
@@ -787,9 +796,8 @@ export class CascadeAvatarRenderer {
 			swapped = true;
 			this.onTalking?.(true);
 			back.style.opacity = "1";
-			onPlaybackReady?.();
-			// Split mode keeps the stream muted; the first frame releases local audio.
 			if (!muted) back.muted = false;
+			onPlaybackReady?.();
 			this.active = back;
 		};
 		swapFn = swap;
@@ -861,9 +869,8 @@ export class CascadeAvatarRenderer {
 			if (my !== this.gen) return;
 			this.onTalking?.(true);
 			back.style.opacity = "1";
-			onPlaybackReady?.();
-			// A WebM may contain Opus. Split mode stays muted because local audio is released here.
 			if (!muted) back.muted = false;
+			onPlaybackReady?.();
 			this.active = back;
 		};
 		swapFn = swap;
@@ -886,7 +893,11 @@ export class CascadeAvatarRenderer {
 	async speakAudio(
 		audioBase64: string,
 		sampleRate = 24000,
-		opts?: { muted?: boolean; onPlaybackReady?: () => void },
+		opts?: {
+			muted?: boolean;
+			onPlaybackReady?: () => void;
+			onPlaybackFailure?: () => void;
+		},
 	): Promise<void> {
 		if (!audioBase64 || this.disposed) return;
 		return this.speak("(audio)", ttsAudioToWav(audioBase64, sampleRate), opts);

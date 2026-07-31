@@ -4320,6 +4320,56 @@ async fn validate_api_key(provider: String, api_key: String) -> Result<bool, Str
     }
 }
 
+fn naia_balance_endpoint(gateway_url: &str) -> Result<url::Url, String> {
+    let base = url::Url::parse(gateway_url.trim())
+        .map_err(|_| "Invalid Naia gateway URL".to_string())?;
+    let host = base
+        .host_str()
+        .ok_or_else(|| "Naia gateway URL has no host".to_string())?;
+    let is_loopback = host.eq_ignore_ascii_case("localhost")
+        || host == "127.0.0.1"
+        || host == "::1";
+    let is_nextain_https = base.scheme() == "https"
+        && (host.eq_ignore_ascii_case("nextain.io")
+            || host.to_ascii_lowercase().ends_with(".nextain.io"));
+    if !is_nextain_https && !(is_loopback && matches!(base.scheme(), "http" | "https")) {
+        return Err("Naia balance requests require HTTPS on nextain.io".to_string());
+    }
+    base.join("/v1/profile/balance")
+        .map_err(|_| "Invalid Naia balance endpoint".to_string())
+}
+
+/// Fetch account balance in the native process. WebView fetch can be blocked by
+/// browser CORS/PNA even though the authenticated desktop account is valid.
+#[tauri::command]
+async fn fetch_naia_balance(
+    gateway_url: String,
+    naia_key: String,
+) -> Result<serde_json::Value, String> {
+    let endpoint = naia_balance_endpoint(&gateway_url)?;
+    let key = naia_key.trim();
+    if key.is_empty() {
+        return Err("Missing Naia account key".to_string());
+    }
+    let response = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(8))
+        .build()
+        .map_err(|e| format!("Naia balance client error: {e}"))?
+        .get(endpoint)
+        .header("X-AnyLLM-Key", format!("Bearer {key}"))
+        .send()
+        .await
+        .map_err(|e| format!("Naia balance request failed: {e}"))?;
+    let status = response.status();
+    if !status.is_success() {
+        return Err(format!("Naia balance HTTP {}", status.as_u16()));
+    }
+    response
+        .json::<serde_json::Value>()
+        .await
+        .map_err(|e| format!("Invalid Naia balance response: {e}"))
+}
+
 /// List available PipeWire output sinks via `pw-dump` (JSON, no env-var setup needed).
 /// Filters to idle/running state only ??suspended = disconnected HDMI port.
 /// Excludes virtual/loopback sinks.
@@ -4570,6 +4620,36 @@ fn directory_has_extension(dir: &std::path::Path, extension: &str) -> bool {
         })
 }
 
+fn voxcpm2_model_is_cached_in_hubs(hubs: &[std::path::PathBuf]) -> bool {
+    hubs.iter()
+        .any(|hub| hub.join("models--openbmb--VoxCPM2").exists())
+}
+
+fn voxcpm2_model_is_cached(runtime_root: &std::path::Path) -> bool {
+    let mut hubs = vec![runtime_root
+        .join(".cache")
+        .join("huggingface")
+        .join("hub")];
+
+    // Match huggingface_hub's cache resolution. On Windows, dirs::cache_dir()
+    // points at LocalAppData, while the default model cache is normally under
+    // %USERPROFILE%\.cache\huggingface.
+    if let Ok(path) = std::env::var("HUGGINGFACE_HUB_CACHE") {
+        hubs.push(std::path::PathBuf::from(path));
+    }
+    if let Ok(path) = std::env::var("HF_HOME") {
+        hubs.push(std::path::PathBuf::from(path).join("hub"));
+    }
+    if let Some(home) = dirs::home_dir() {
+        hubs.push(home.join(".cache").join("huggingface").join("hub"));
+    }
+    if let Some(cache) = dirs::cache_dir() {
+        hubs.push(cache.join("huggingface").join("hub"));
+    }
+
+    voxcpm2_model_is_cached_in_hubs(&hubs)
+}
+
 fn cascade_python_can_import_loader(python: &str, loader_dir: &str) -> bool {
     Command::new(python)
         .args(["-c", "import loader"])
@@ -4628,21 +4708,7 @@ fn probe_cascade_installation(
             .join("unpacked")
             .join("grid_sample_3d_plugin.dll")
             .is_file();
-    let voxcpm2_model = runtime_root
-        .join(".cache")
-        .join("huggingface")
-        .join("hub")
-        .join("models--openbmb--VoxCPM2")
-        .exists()
-        || dirs::cache_dir()
-            .map(|cache| {
-                cache
-                    .join("huggingface")
-                    .join("hub")
-                    .join("models--openbmb--VoxCPM2")
-                    .exists()
-            })
-            .unwrap_or(false);
+    let voxcpm2_model = voxcpm2_model_is_cached(&runtime_root);
     let reference_voices = cascade_dir
         .as_ref()
         .is_some_and(|dir| directory_has_extension(&dir.join("assets").join("ref_audio"), "wav"));
@@ -9205,6 +9271,7 @@ pub fn run() {
             memory_export_backup,
             memory_import_backup,
             validate_api_key,
+            fetch_naia_balance,
             list_audio_output_devices,
             detect_gpu_vram,
             generate_oauth_state,
@@ -10112,6 +10179,41 @@ mod tests {
         assert_eq!(running.phase, "ready");
         assert!(running.can_start);
         assert!(running.ready);
+    }
+
+    #[test]
+    fn voxcpm2_cache_probe_accepts_the_huggingface_home_hub_layout() {
+        let dir = tempfile::tempdir().unwrap();
+        let missing_hub = dir.path().join("missing").join("hub");
+        let installed_hub = dir.path().join(".cache").join("huggingface").join("hub");
+        assert!(!voxcpm2_model_is_cached_in_hubs(&[
+            missing_hub.clone(),
+            installed_hub.clone(),
+        ]));
+
+        std::fs::create_dir_all(installed_hub.join("models--openbmb--VoxCPM2")).unwrap();
+        assert!(voxcpm2_model_is_cached_in_hubs(&[
+            missing_hub,
+            installed_hub,
+        ]));
+    }
+
+    #[test]
+    fn naia_balance_endpoint_accepts_nextain_https_and_loopback_only() {
+        assert_eq!(
+            naia_balance_endpoint("https://api.nextain.io")
+                .unwrap()
+                .as_str(),
+            "https://api.nextain.io/v1/profile/balance"
+        );
+        assert_eq!(
+            naia_balance_endpoint("http://127.0.0.1:8080/base")
+                .unwrap()
+                .as_str(),
+            "http://127.0.0.1:8080/v1/profile/balance"
+        );
+        assert!(naia_balance_endpoint("http://api.nextain.io").is_err());
+        assert!(naia_balance_endpoint("https://example.test").is_err());
     }
 
     #[test]

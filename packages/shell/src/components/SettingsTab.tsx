@@ -93,7 +93,7 @@ import {
 	setLocale,
 	t,
 } from "../lib/i18n";
-import { parseLabCredits } from "../lib/lab-balance";
+import { fetchLabBalancePayload, parseLabCredits } from "../lib/lab-balance";
 import { diffConfigs, fetchLabConfig, pushConfigToLab } from "../lib/lab-sync";
 import {
 	type LlmModelMeta,
@@ -1638,6 +1638,10 @@ export function SettingsTab() {
 	const [labBalanceError, setLabBalanceError] = useState(false);
 	const mountedRef = useRef(true);
 	useEffect(() => {
+		// React StrictMode runs effect setup → cleanup → setup in development.
+		// Re-arm the ref on every setup or the first synthetic cleanup leaves
+		// balance loading permanently disabled for the lifetime of this mount.
+		mountedRef.current = true;
 		return () => {
 			mountedRef.current = false;
 		};
@@ -1732,27 +1736,7 @@ export function SettingsTab() {
 			() => controller.abort(),
 			LAB_BALANCE_FETCH_TIMEOUT_MS,
 		);
-		return fetch(`${LAB_GATEWAY_URL}/v1/profile/balance`, {
-			headers: { "X-AnyLLM-Key": `Bearer ${key}` },
-			signal: controller.signal,
-		})
-			.then((res) => {
-				if (!mountedRef.current) throw new Error("BALANCE_ABORTED");
-				if (res.status === 401) {
-					Logger.warn(
-						"SettingsTab",
-						"Lab balance unauthorized; preserving Naia login state",
-					);
-					setLabBalanceError(true);
-					throw new Error("BALANCE_UNAUTHORIZED");
-				}
-				if (!res.ok) {
-					return res.text().then((text) => {
-						throw new Error(`HTTP ${res.status}: ${text.slice(0, 300)}`);
-					});
-				}
-				return res.json();
-			})
+		return fetchLabBalancePayload(LAB_GATEWAY_URL, key, controller.signal)
 			.then((data: unknown) => {
 				if (!mountedRef.current) return;
 				const credits = parseLabCredits(data);
@@ -1761,7 +1745,6 @@ export function SettingsTab() {
 			})
 			.catch((err) => {
 				if (!mountedRef.current) return;
-				if (String(err).includes("BALANCE_UNAUTHORIZED")) return;
 				Logger.warn("SettingsTab", "Lab balance fetch failed", {
 					error: String(err),
 				});

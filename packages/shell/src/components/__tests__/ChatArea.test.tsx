@@ -10,8 +10,58 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { AgentResponseChunk } from "../../lib/types";
 import { useAppStore } from "../../stores/app";
 import { useAvatarStore } from "../../stores/avatar";
+import { useCascadeAvatarStore } from "../../stores/cascade-avatar";
 import { useChatStore } from "../../stores/chat";
 import { ChatArea, isDiscordConnectionIntent } from "../ChatArea";
+
+const ttsSyncMocks = vi.hoisted(() => ({
+	synthesizeTts: vi.fn().mockResolvedValue({
+		audioBase64: "default-audio",
+		costUsd: 0,
+	}),
+	streamsAvatarPcm: vi.fn(() => false),
+	enqueueOrdered: vi.fn(),
+	skipOrdered: vi.fn(),
+	clear: vi.fn(),
+	destroy: vi.fn(),
+	nextSeq: 0,
+}));
+
+vi.mock("../../lib/tts/synthesize", () => ({
+	synthesizeTts: ttsSyncMocks.synthesizeTts,
+	streamsAvatarPcm: ttsSyncMocks.streamsAvatarPcm,
+}));
+
+vi.mock("../../lib/voice/audio-queue", () => ({
+	AudioQueue: class {
+		reserveSeq() {
+			const seq = ttsSyncMocks.nextSeq;
+			ttsSyncMocks.nextSeq += 1;
+			return seq;
+		}
+		enqueueOrdered(seq: number, audio: string) {
+			ttsSyncMocks.enqueueOrdered(seq, audio);
+		}
+		skipOrdered(seq: number) {
+			ttsSyncMocks.skipOrdered(seq);
+		}
+		clear() {
+			ttsSyncMocks.nextSeq = 0;
+			ttsSyncMocks.clear();
+		}
+		destroy() {
+			ttsSyncMocks.destroy();
+		}
+	},
+}));
+
+function deferred<T>() {
+	let resolve!: (value: T | PromiseLike<T>) => void;
+	const promise = new Promise<T>((res) => {
+		resolve = res;
+	});
+	return { promise, resolve };
+}
 
 vi.mock("@tauri-apps/plugin-store", () => {
 	const store = {
@@ -96,7 +146,14 @@ describe("ChatArea", () => {
 		mockInvoke.mockResolvedValue(undefined);
 		useChatStore.setState(useChatStore.getInitialState());
 		useAvatarStore.setState(useAvatarStore.getInitialState());
+		useCascadeAvatarStore.setState(useCascadeAvatarStore.getInitialState());
 		useAppStore.setState({ activeApp: null });
+		ttsSyncMocks.nextSeq = 0;
+		ttsSyncMocks.streamsAvatarPcm.mockReturnValue(false);
+		ttsSyncMocks.synthesizeTts.mockResolvedValue({
+			audioBase64: "default-audio",
+			costUsd: 0,
+		});
 	});
 
 	it("renders input field and buttons", () => {
@@ -632,6 +689,138 @@ describe("ChatArea", () => {
 	});
 
 	// === Local conversation ownership ===
+
+	it("serializes reversed TTS completions and keeps successful avatar audio embedded", async () => {
+		const firstTts = deferred<{ audioBase64: string; costUsd: number }>();
+		const secondTts = deferred<{ audioBase64: string; costUsd: number }>();
+		const firstPlayback = deferred<void>();
+		const secondPlayback = deferred<void>();
+		const speakAudio = vi.fn()
+			.mockImplementationOnce(() => firstPlayback.promise)
+			.mockImplementationOnce(() => secondPlayback.promise);
+		useCascadeAvatarStore.setState({ renderer: {
+			speakAudio,
+			speak: vi.fn().mockResolvedValue(undefined),
+			interrupt: vi.fn(),
+		} as never });
+		ttsSyncMocks.streamsAvatarPcm.mockReturnValue(true);
+		ttsSyncMocks.synthesizeTts.mockImplementation(({ text }: { text: string }) =>
+			text.startsWith("First") ? firstTts.promise : secondTts.promise,
+		);
+		localStorage.setItem("naia-config", JSON.stringify({
+			apiKey: "test-key", provider: "gemini", model: "gemini-2.5-flash",
+			ttsEnabled: true, ttsProvider: "naia-local-voice",
+			vllmTtsHost: "http://localhost:8910",
+		}));
+
+		render(<ChatArea />);
+		const input = screen.getByPlaceholderText(/message/i);
+		fireEvent.change(input, { target: { value: "ordering test" } });
+		fireEvent.keyDown(input, { key: "Enter" });
+		await waitFor(() => expect(capturedRequests).toHaveLength(1));
+		const request = capturedRequests[0];
+		request.onChunk({ type: "text", requestId: request.requestId, text: "First sentence." });
+		request.onChunk({ type: "text", requestId: request.requestId, text: "Second sentence." });
+		await waitFor(() => expect(ttsSyncMocks.synthesizeTts).toHaveBeenCalledTimes(2));
+
+		secondTts.resolve({ audioBase64: "audio-2", costUsd: 0 });
+		await Promise.resolve();
+		expect(speakAudio).not.toHaveBeenCalled();
+		firstTts.resolve({ audioBase64: "audio-1", costUsd: 0 });
+		await waitFor(() => expect(speakAudio).toHaveBeenCalledTimes(1));
+		expect(speakAudio.mock.calls[0][0]).toBe("audio-1");
+		expect(speakAudio.mock.calls[0][2]).toEqual(expect.objectContaining({
+			muted: false,
+			onPlaybackFailure: expect.any(Function),
+		}));
+		expect(ttsSyncMocks.enqueueOrdered).not.toHaveBeenCalled();
+
+		firstPlayback.resolve();
+		await waitFor(() => expect(speakAudio).toHaveBeenCalledTimes(2));
+		expect(speakAudio.mock.calls[1][0]).toBe("audio-2");
+		expect(ttsSyncMocks.enqueueOrdered).not.toHaveBeenCalled();
+		secondPlayback.resolve();
+		localStorage.removeItem("naia-config");
+	});
+
+	it("falls back to AudioQueue only when avatar playback fails", async () => {
+		const speakAudio = vi.fn(
+			(_audio: string, _rate: number, opts: { onPlaybackFailure?: () => void }) => {
+				opts.onPlaybackFailure?.();
+				return Promise.resolve();
+			},
+		);
+		useCascadeAvatarStore.setState({ renderer: {
+			speakAudio,
+			speak: vi.fn().mockResolvedValue(undefined),
+			interrupt: vi.fn(),
+		} as never });
+		ttsSyncMocks.streamsAvatarPcm.mockReturnValue(true);
+		ttsSyncMocks.synthesizeTts.mockResolvedValue({ audioBase64: "fallback-audio", costUsd: 0 });
+		localStorage.setItem("naia-config", JSON.stringify({
+			apiKey: "test-key", provider: "gemini", model: "gemini-2.5-flash",
+			ttsEnabled: true, ttsProvider: "naia-local-voice",
+			vllmTtsHost: "http://localhost:8910",
+		}));
+
+		render(<ChatArea />);
+		const input = screen.getByPlaceholderText(/message/i);
+		fireEvent.change(input, { target: { value: "failure test" } });
+		fireEvent.keyDown(input, { key: "Enter" });
+		await waitFor(() => expect(capturedRequests).toHaveLength(1));
+		const request = capturedRequests[0];
+		request.onChunk({ type: "text", requestId: request.requestId, text: "Avatar failure sentence." });
+
+		await waitFor(() =>
+			expect(ttsSyncMocks.enqueueOrdered).toHaveBeenCalledWith(0, "fallback-audio"),
+		);
+		expect(speakAudio.mock.calls[0][2]).toEqual(expect.objectContaining({ muted: false }));
+		expect(ttsSyncMocks.enqueueOrdered).toHaveBeenCalledTimes(1);
+		localStorage.removeItem("naia-config");
+	});
+
+	it("does not release stale avatar fallback audio after an interrupt", async () => {
+		const playback = deferred<void>();
+		let playbackFailure = () => {};
+		const interrupt = vi.fn();
+		const speakAudio = vi.fn(
+			(_audio: string, _rate: number, opts: { onPlaybackFailure?: () => void }) => {
+				playbackFailure = opts.onPlaybackFailure ?? (() => {});
+				return playback.promise;
+			},
+		);
+		useCascadeAvatarStore.setState({ renderer: {
+			speakAudio,
+			speak: vi.fn().mockResolvedValue(undefined),
+			interrupt,
+		} as never });
+		ttsSyncMocks.streamsAvatarPcm.mockReturnValue(true);
+		ttsSyncMocks.synthesizeTts.mockResolvedValue({ audioBase64: "stale-audio", costUsd: 0 });
+		localStorage.setItem("naia-config", JSON.stringify({
+			apiKey: "test-key", provider: "gemini", model: "gemini-2.5-flash",
+			ttsEnabled: true, ttsProvider: "naia-local-voice",
+			vllmTtsHost: "http://localhost:8910",
+		}));
+
+		render(<ChatArea />);
+		const input = screen.getByPlaceholderText(/message/i);
+		fireEvent.change(input, { target: { value: "interrupt test" } });
+		fireEvent.keyDown(input, { key: "Enter" });
+		await waitFor(() => expect(capturedRequests).toHaveLength(1));
+		const request = capturedRequests[0];
+		request.onChunk({ type: "text", requestId: request.requestId, text: "Interrupted sentence." });
+		await waitFor(() => expect(speakAudio).toHaveBeenCalledTimes(1));
+		interrupt.mockClear();
+		const cancel = screen.getByTitle("ESC");
+		fireEvent.click(cancel);
+		await waitFor(() => expect(screen.queryByTitle("ESC")).toBeNull());
+		expect(interrupt).toHaveBeenCalledTimes(1);
+		playbackFailure();
+		playback.resolve();
+		await Promise.resolve();
+		expect(ttsSyncMocks.enqueueOrdered).not.toHaveBeenCalledWith(0, "stale-audio");
+		localStorage.removeItem("naia-config");
+	});
 
 	it("does not hydrate stale Gateway history over the local conversation", async () => {
 		// A completed first turn must remain the source of the second request.
