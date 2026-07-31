@@ -9,7 +9,7 @@
 | 운영체제 | Windows |
 | GPU | 실측: RTX 4060 Laptop, RTX 4070. RTX 30/40은 목표 지원 범위이며 모델별 Ditto 엔진 호환 확인 필요 |
 | 최소 VRAM | 감지 가능한 8GB 이상 |
-| 로컬 TTS | VoxCPM2 weight-only INT8, CUDA/PyTorch (`tts_server.py`) |
+| 로컬 TTS | VoxCPM2 W8A16 host + FP16 TensorRT LocDiT (`tts_server.py`) |
 | 로컬 아바타 | TensorRT-native Ditto + NVA Player |
 | LLM | Naia 계정, 원격 Ollama 또는 외부 API |
 | 실시간 성능 | 지원 조건이 아님. 응답이 느려도 기능이 완료되면 정상 |
@@ -18,7 +18,7 @@
 
 “8GB 이상”은 Shell의 NVA 활성화 최소 VRAM 조건이며 모든 RTX 모델의 엔진 호환성을 뜻하지 않는다. 전체 경로는 RTX 4060 Laptop 8188MiB에서, manager의 기존 native core는 RTX 4070에서 실측했다. 그 밖의 RTX 30/40 모델은 목표 지원 범위이며 배포 전 모델별 Ditto TensorRT 엔진 확인이 필요하다.
 
-> **백엔드 정직성:** 프로파일 이름은 하위 호환 때문에 `windows_trt_8g`이지만 현재 TensorRT-native인 구성요소는 Ditto뿐이다. VoxCPM2는 CUDA/PyTorch weight-only INT8 경로다. VoxCPM2 TensorRT 전환은 아직 완료되지 않은 별도 요구사항이며, 완료 전에는 “VoxCPM2 TRT”로 표기하지 않는다.
+> **백엔드 정직성:** VoxCPM2 전체가 하나의 TensorRT 엔진인 것은 아니다. 8GB 경로는 BaseLM·ResidualLM·LocEnc·AudioVAE와 생성 제어를 PyTorch W8A16으로 유지하고, 고정 형상의 LocDiT estimator만 FP16 TensorRT로 실행한다. Ditto는 별도 TensorRT 8.6 프로세스에서 실행하며 두 TensorRT 세대의 DLL을 한 프로세스에 섞지 않는다.
 
 ## 구성 경계
 
@@ -30,14 +30,14 @@ Naia account / remote Ollama / external API
                     │ text
                     ▼
       output cascade facade :8910
-             ├─ VoxCPM2 INT8 :8901 ── WAV/PCM
+             ├─ VoxCPM2 TRT LocDiT :8901 ── WAV/PCM
              └─ Ditto TRT    :8902 ◀── same synthesized audio
                     │
                     ▼
              NVA video avatar
 ```
 
-정식 loader 프로파일 이름은 `windows_trt_8g`이다. `laptop-4060-8g`은 기존 설정과 UI를 위한 호환 ID이며 같은 프로파일로 정규화된다. 이 이름의 `trt`는 현재 Ditto TensorRT-native 경로를 가리킨다. 로컬 GPU에는 VoxCPM2 CUDA/PyTorch INT8 약 3.47GB와 Ditto TensorRT 약 2.6GB, 합계 약 6.07GB만 계획한다.
+정식 loader 프로파일 이름은 `windows_trt_8g`이다. `laptop-4060-8g`은 기존 설정과 UI를 위한 호환 ID이며 같은 프로파일로 정규화된다. 로컬 GPU에는 VoxCPM2 W8A16 + TensorRT LocDiT 계획 비용 3.70GB와 Ditto TensorRT 2.6GB, 합계 6.30GB를 배정한다. RTX 4060 Laptop 실기동에서는 데스크톱 부하를 제외한 결합 스택이 약 6.56GB로 관측됐다.
 
 이 프로파일은 다음을 설치하거나 실행하지 않는다.
 
@@ -83,7 +83,7 @@ python -m loader plan --gpu 7.1 --profile windows_trt_8g --json
 
 준비 상태:
 
-- `http://127.0.0.1:8901/health` — VoxCPM2 ready
+- `http://127.0.0.1:8901/health` — VoxCPM2 `backend=tensorrt_locdit`, 엔진 SHA-256, 모델 revision, SM, TensorRT 버전
 - `http://127.0.0.1:8902/health` — Ditto `tensorrt-native`
 - `http://127.0.0.1:8910/health` — `tts=true`, `avatar=true`, `mode=full`
 
