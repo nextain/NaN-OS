@@ -51,9 +51,10 @@ localStorage `naia-config` 는 파일에서 하이드레이트되는 **순수 �
 |----|----------|-----|------|
 | **FR-CONFIG-SOT.1** | 부팅 시 `naia-config` 는 **파일에서 하이드레이트**된다 — 병합에서 `...local` base 제거 → `{ ...(fileConfig ?? {}), ...(uiConfig ?? {}) }`(파일 절대 우선, `applyWorkspaceConfigToLocal` 와 동형). 부트스트랩 키(`workspaceRoot`/adkPath·`onboardingComplete`)만 명시 보존. `if(!fileConfig && !uiConfig)` = 캐시 wipe 방지. 순수함수 `mergeBootConfig` 로 추출(테스트 가능) | S-CONFIG-SOT-1 | 부팅 병합 계약(스테일 persona 를 파일이 덮는가) |
 | **FR-CONFIG-SOT.2** | `syncConfigToFile()`(localStorage→config.json 되쓰기)은 **하이드레이션 완료 후에만** 실행. 하이드레이션 전 스테일 localStorage 를 파일에 되쓰지 않는다(800ms 디바운스 레이스 차단). stale-URL 대비 sync 는 하이드레이트 후 재실행 | S-CONFIG-SOT-2 | 되쓰기 게이트 계약(하이드레이션 전 write 없음) |
-| **FR-CONFIG-SOT.3** | 무회귀 — `writeNaiaConfig`·`stripForAgent`·키체인·107곳 동기 `loadConfig()` 리더 **무변경**. 캐시의 권위만 박탈 | S-CONFIG-SOT-3 | 기존 adk-store/config 테스트 무회귀 |
+| **FR-CONFIG-SOT.3** | 무회귀 — `stripForAgent`·키체인·107곳 동기 `loadConfig()` 리더 **무변경**. 캐시의 권위만 박탈 | S-CONFIG-SOT-3 | 기존 adk-store/config 테스트 무회귀 |
 | **FR-CONFIG-SOT.4** | **UI 설정 SoT 완성** — `extractUiConfig`(ui-config.json write) 가 `UI_IDENTITY_KEYS`(9개) 대신 **`UI_ONLY_CONFIG_KEYS` 전체**를 뽑는다. "config.json 에서 strip 하는 UI 키 = ui-config.json 에 쓰는 키" 가 일치해야, 파일 SoT 없는 키(vllmTtsHost·theme·panelPosition·bgmVolume·ttsProvider·liveProvider 등)가 부팅 시 리셋되지 않는다. read/병합은 이미 통짜(`{...file, ...ui}`)라 대칭 자동. ⚠️ FR-CONFIG-SOT.1 도입 시 드러난 회귀(로컬 보이스 호스트 `vllmTtsHost` 미저장)의 근본 수정 | S-CONFIG-SOT-4 | ui-config 왕복 계약(UI_ONLY 전체 write→read 라운드트립) |
 | **FR-CONFIG-SOT.5** | **AdkSetup 화면 중 되쓰기 게이트 유지** — `showAdkSetup` 분기에서 `configHydratedRef=true` 로 선마킹하지 않는다(하이드레이션 없이 게이트가 열려 mount-time `syncConfigToFile` 이 스테일 캐시를 파일에 되쓴 2026-07-16 시연장 클로버의 한 축). 설정 완료 → `showAdkSetup=false` → 하이드레이션 effect 재실행 후에만 게이트 개방 | S-CONFIG-SOT-2 | `e2e/config-sot-boot.spec.ts`(실 UI 부팅 3계약: 하이드레이션·무클로버·읽기지연 경쟁) |
+| **FR-CONFIG-SOT.6** | `write_naia_config`는 입력이 JSON 객체인지 먼저 검증하고, UTF-8 임시 파일 전체 기록·디스크 동기화 후 같은 디렉터리에서 원자 교체한다. 중단·잘못된 입력·쓰기 실패 시 기존 `config.json`을 손상시키지 않는다 | S-CONFIG-SOT-5 | Rust 원자 저장 계약(한국어 왕복·덮어쓰기·invalid 입력 보존) |
 
 ### NFR
 - **동기 렌더 제약**: localStorage 캐시는 유지한다(rip-out 불가 — 107곳 sync 리더가 React 렌더/이벤트/store init 에서 await 불가). 캐시는 read-through, 권위는 파일.

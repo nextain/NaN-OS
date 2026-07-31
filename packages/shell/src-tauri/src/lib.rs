@@ -7881,12 +7881,22 @@ async fn read_naia_config(adk_path: String) -> Result<String, String> {
     std::fs::read_to_string(&path).map_err(|e| e.to_string())
 }
 
+fn write_naia_config_atomic(path: &std::path::Path, json: &str) -> Result<(), String> {
+    let value: serde_json::Value =
+        serde_json::from_str(json).map_err(|_| "naia_config_invalid_json".to_string())?;
+    if !value.is_object() {
+        return Err("naia_config_invalid_json".to_string());
+    }
+    write_owner_only_atomic(path, json.as_bytes())
+        .map_err(|_| "naia_config_write_failed".to_string())
+}
+
 /// Write `{adk_path}/naia-settings/config.json`.
 #[tauri::command]
 async fn write_naia_config(adk_path: String, json: String) -> Result<(), String> {
     let dir = std::path::PathBuf::from(&adk_path).join("naia-settings");
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-    std::fs::write(dir.join("config.json"), json).map_err(|e| e.to_string())?;
+    write_naia_config_atomic(&dir.join("config.json"), &json)?;
     // The paired agent treats processing.json as a strict trust boundary for
     // live settings reload. A fresh standalone install has no policies yet,
     // so seed the valid empty policy rather than letting every model change
@@ -9788,6 +9798,41 @@ pub fn run() {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn naia_config_atomic_write_replaces_existing_utf8_json() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.json");
+        std::fs::write(&path, r#"{"agentName":"old"}"#).unwrap();
+        let next = r#"{"agentName":"나이아","persona":"한국어 설정"}"#;
+
+        write_naia_config_atomic(&path, next).unwrap();
+
+        let bytes = std::fs::read(&path).unwrap();
+        assert_eq!(String::from_utf8(bytes).unwrap(), next);
+        assert_eq!(
+            serde_json::from_str::<serde_json::Value>(next).unwrap(),
+            serde_json::from_str::<serde_json::Value>(&std::fs::read_to_string(path).unwrap())
+                .unwrap()
+        );
+    }
+
+    #[test]
+    fn naia_config_atomic_write_rejects_invalid_input_without_clobbering() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.json");
+        let original = r#"{"provider":"nextain","model":"grok-4.3"}"#;
+        std::fs::write(&path, original).unwrap();
+
+        assert_eq!(
+            write_naia_config_atomic(&path, "{broken").unwrap_err(),
+            "naia_config_invalid_json"
+        );
+        assert_eq!(
+            write_naia_config_atomic(&path, "null").unwrap_err(),
+            "naia_config_invalid_json"
+        );
+        assert_eq!(std::fs::read_to_string(path).unwrap(), original);
+    }
 
     #[test]
     fn jeonju_course_target_must_match_the_requested_workspace() {
