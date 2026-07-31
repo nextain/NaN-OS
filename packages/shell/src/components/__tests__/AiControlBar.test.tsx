@@ -50,6 +50,7 @@ describe("AiControlBar proactive cost control", () => {
 		const button = await screen.findByRole("button", { name: /requires a profile and TTS/i });
 		expect(button).toHaveAttribute("data-proactive-state", "blocked");
 		expect(button).toHaveAttribute("aria-pressed", "false");
+		expect(button.textContent).toBe("");
 	});
 
 	it("persists visible permission and requests profile start", async () => {

@@ -222,6 +222,43 @@ describe("SettingsTab", () => {
 		expect(providerSelect.value).toBe("nextain");
 	});
 
+	it("shows clean Naia model names and a localized per-token price basis", async () => {
+		localStorage.setItem(
+			"naia-config",
+			JSON.stringify({
+				provider: "nextain",
+				model: "grok-4.3",
+				apiKey: "",
+			}),
+		);
+		mockInvoke.mockResolvedValue([]);
+		stubPricingFetch([
+			{
+				model_key: "azure:grok-4.3",
+				input_price_per_million: 0.4,
+				output_price_per_million: 1.2,
+				cached_price_per_million: null,
+			},
+		]);
+
+		render(<SettingsTab />);
+		gotoSettingsTab("brain");
+
+		await screen.findByText(
+			"Price per 1M tokens: Input $0.400 · Output $1.200",
+		);
+		const modelSelect = document.getElementById(
+			"model-select",
+		) as HTMLSelectElement;
+		const labels = [...modelSelect.options].map((option) => option.text);
+		expect(labels).toContain("Grok 4.3");
+		expect(labels.some((label) => label.includes("(Naia)"))).toBe(false);
+		expect(labels.some((label) => label.includes("Analysis only"))).toBe(false);
+		expect([...modelSelect.options].map((option) => option.value)).not.toContain(
+			"naia-local",
+		);
+	});
+
 	it("allows Codex for sub while keeping memory orthogonal", () => {
 		localStorage.setItem(
 			"naia-config",

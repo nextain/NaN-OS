@@ -49,7 +49,12 @@ interface SetupOpts {
 	model?: string;
 	/** Gateway /v1/models override entries (capability SoT). */
 	catalog?: Array<{ model_key: string; capabilities: string[] }>;
-	/** FR-3: when false, seed a logged-out (no naiaKey / BYO) config. */
+	pricing?: Array<{
+		model_key: string;
+		input_price_per_million: number;
+		output_price_per_million: number;
+		cached_price_per_million: number | null;
+	}> /** FR-3: when false, seed a logged-out (no naiaKey / BYO) config. */;
 	loggedIn?: boolean;
 	/** Override ttsEnabled (FR-6 lip-sync note). Defaults to true. */
 	ttsEnabled?: boolean;
@@ -81,7 +86,11 @@ async function gotoModelSettings(
 
 	// Pricing fetch → empty (independent of capability catalog); models → catalog.
 	await page.route("**/v1/pricing", (route) =>
-		route.fulfill({ status: 200, contentType: "application/json", body: "[]" }),
+		route.fulfill({
+			status: 200,
+			contentType: "application/json",
+			body: JSON.stringify(opts.pricing ?? []),
+		}),
 	);
 	await page.route("**/v1/models", (route) =>
 		route.fulfill({
@@ -100,6 +109,36 @@ async function gotoModelSettings(
 }
 
 test.describe("Capability-driven settings (#365)", () => {
+	test("Naia model names stay clean and pricing states its token basis", async ({
+		page,
+	}) => {
+		await gotoModelSettings(page, {
+			model: "grok-4.3",
+			pricing: [
+				{
+					model_key: "azure:grok-4.3",
+					input_price_per_million: 0.4,
+					output_price_per_million: 1.2,
+					cached_price_per_million: null,
+				},
+			],
+		});
+
+		const modelSelect = page.locator("#model-select");
+		await expect(modelSelect.locator('option[value="grok-4.3"]')).toHaveText(
+			"Grok 4.3",
+		);
+		await expect(modelSelect.locator('option[value="naia-local"]')).toHaveCount(
+			0,
+		);
+		await expect(
+			page.locator(".settings-hint").filter({ hasText: "100만 토큰당 가격" }),
+		).toContainText("입력 $0.400 · 출력 $1.200");
+
+		const proactiveButton = page.locator("button[data-proactive-state]");
+		await expect(proactiveButton).toHaveText("");
+		await expect(proactiveButton).toHaveAttribute("aria-label", /능동 발화/);
+	});
 	test("STT section always available; omni model shows an 'optional' hint", async ({
 		page,
 	}) => {

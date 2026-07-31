@@ -17,7 +17,6 @@ import { describe, expect, it } from "vitest";
 
 describe("LLM registry — gateway model exclusion (#248)", () => {
 	// 2026-05-29: nextain provider trimmed to the user-confirmed 4-model lineup.
-	// 2026-06-03: + naia-local (Naia Local container on the user's own GPU, #313).
 	// 2026-06-03: naia-0.9-omni-24g not yet live → comingSoon flag, moved LAST.
 	it("Naia (gateway) provider exposes the confirmed model lineup in order", async () => {
 		const { getLlmProvider } = await import("../registry.js");
@@ -31,10 +30,20 @@ describe("LLM registry — gateway model exclusion (#248)", () => {
 			"gpt-5.6-sol",
 			"gpt-5.6-luna",
 			"claude-opus-5",
-			"naia-local",
 			"gemini-3.5-flash",
 			"gemini-2.5-flash-live",
 			"naia-0.9-omni-24g",
+		]);
+		expect(naia!.models.map((m) => m.label)).toEqual([
+			"Gemini 3.1 Flash Lite",
+			"Grok 4.3",
+			"DeepSeek V4 Pro",
+			"GPT-5.6 Sol",
+			"GPT-5.6 Luna",
+			"Claude Opus 5",
+			"Gemini 3.5 Flash",
+			"Gemini 2.5 Flash Live",
+			"Naia 0.9 Omni 24G",
 		]);
 	});
 
@@ -43,7 +52,6 @@ describe("LLM registry — gateway model exclusion (#248)", () => {
 		const naia = getLlmProvider("nextain");
 		const omni = naia!.models.filter((m) => m.capabilities.includes("omni"));
 		expect(omni.map((m) => m.id)).toEqual([
-			"naia-local",
 			"gemini-2.5-flash-live",
 			"naia-0.9-omni-24g",
 		]);
@@ -105,7 +113,6 @@ describe("shouldMigrateNextainModel (#248 follow-up migration)", () => {
 		for (const valid of [
 			"gemini-3.1-flash-lite",
 			"naia-0.9-omni-24g",
-			"naia-local",
 			"gemini-3.5-flash",
 			"gemini-2.5-flash-live",
 		]) {

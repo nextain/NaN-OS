@@ -118,7 +118,6 @@ export function AiControlBar() {
 				data-proactive-state={proactiveBlocked ? "blocked" : proactiveActive ? "active" : proactive.permitted ? "ready" : "off"}
 			>
 				<span className="bgm-ai-toggle__dot" />
-				{t("ai.proactive")}
 			</button>
 
 			<div className="ai-control-bar__sep" />

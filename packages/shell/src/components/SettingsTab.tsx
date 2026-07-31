@@ -4096,18 +4096,21 @@ export function SettingsTab() {
 								.filter((m) => !m.capabilities.includes("asr"))
 								.map((m) => (
 									<option key={m.id} value={m.id}>
-										{formatModelLabel(m)}
+										{formatModelLabel(provider === "nextain" ? { ...m, pricing: undefined } : m)}
 									</option>
 								))}
 						</select>
 						<div className="settings-hint">
 							{provider === "nextain" && selectedModelMeta?.pricing ? (
 								<span style={{ color: "var(--accent-color, #64a0ff)" }}>
-									Naia {t("settings.pricing")}:{" "}
-									{selectedModelMeta.capabilities.includes("omni")
-										? `$${selectedModelMeta.pricing[0].toFixed(2)}/hr`
-										: `$${selectedModelMeta.pricing[0].toFixed(3)} / $${selectedModelMeta.pricing[1].toFixed(3)}`}
+									{t("settings.pricingPerMillionTokens")}:{" "}
+									{t("settings.priceInput")} $
+									{selectedModelMeta.pricing[0].toFixed(3)} ·{" "}
+									{t("settings.priceOutput")} $
+									{selectedModelMeta.pricing[1].toFixed(3)}
 								</span>
+							) : provider === "nextain" ? (
+								t("settings.pricingUnavailable")
 							) : (
 								(selectedModelMeta?.label ?? model)
 							)}

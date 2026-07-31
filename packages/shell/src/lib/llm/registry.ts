@@ -404,14 +404,8 @@ registerLlmProvider({
 	requiresApiKey: false,
 	requiresNaiaKey: true,
 	defaultModel: "gemini-3.1-flash-lite",
-	// 사용자 확정 model lineup (순서 갱신, 2026-06-03):
-	//   1) Gemini 3.1 Flash Lite  2) Naia Local (own GPU)
-	//   3) Gemini 3.5 Flash  4) Gemini 2.5 Flash Live (Realtime Voice)
-	//   5) Naia 0.9 Omni 24G (Realtime Voice) — 아직 미라이브: comingSoon 플래그로
-	//      맨 아래에 "(준비중)" 표기, 선택해도 Apply(저장) 버튼 비활성.
-	// Naia 공식 명칭 컨벤션: {모델명}-{버전}-{모델성격}-{필요vram} = naia-0.9-omni-24g
-	// (SoT: naia-model-infra MODEL-NAMING.md). 서비스명 naia-talk 폐기 — 모델명으로 통합.
-	// 2.5-flash-live 와 naia-omni 둘 다 realtime voice — 표기 통일.
+	// Model names stay canonical; availability and capability status belong in
+	// metadata and localized UI hints, not in the model label.
 	models: [
 		{
 			id: "gemini-3.1-flash-lite",
@@ -420,7 +414,7 @@ registerLlmProvider({
 		},
 		{
 			id: "grok-4.3",
-			label: "Grok 4.3 (Naia)",
+			label: "Grok 4.3",
 			capabilities: ["llm"],
 			supportsTools: true,
 			upstreamProvider: "unknown",
@@ -428,7 +422,7 @@ registerLlmProvider({
 		},
 		{
 			id: "deepseek-v4-pro",
-			label: "DeepSeek V4 Pro (Naia · Analysis only)",
+			label: "DeepSeek V4 Pro",
 			capabilities: ["llm"],
 			supportsTools: false,
 			upstreamProvider: "unknown",
@@ -436,7 +430,7 @@ registerLlmProvider({
 		},
 		{
 			id: "gpt-5.6-sol",
-			label: "GPT-5.6 Sol (Naia)",
+			label: "GPT-5.6 Sol",
 			capabilities: ["llm"],
 			supportsTools: true,
 			upstreamProvider: "unknown",
@@ -444,7 +438,7 @@ registerLlmProvider({
 		},
 		{
 			id: "gpt-5.6-luna",
-			label: "GPT-5.6 Luna (Naia)",
+			label: "GPT-5.6 Luna",
 			capabilities: ["llm"],
 			supportsTools: true,
 			upstreamProvider: "unknown",
@@ -452,7 +446,7 @@ registerLlmProvider({
 		},
 		{
 			id: "claude-opus-5",
-			label: "Claude Opus 5 (Naia · Azure quota pending)",
+			label: "Claude Opus 5",
 			capabilities: ["llm"],
 			supportsTools: true,
 			upstreamProvider: "unknown",
@@ -462,25 +456,13 @@ registerLlmProvider({
 			comingSoon: true,
 		},
 		{
-			// Naia Local — run the omni-24g container on your OWN GPU and point
-			// Naia OS at it. Same realtime-voice wire as naia-0.9-omni-24g, but
-			// the WebSocket goes direct to a local ws:// address (set in Settings)
-			// instead of the cloud gateway. The logged-in Naia key is reused so the
-			// container validates the subscription (no key input). id starts with
-			// "naia-" + the omni capability → routes to liveProvider "naia-omni".
-			id: "naia-local",
-			label: "Naia Local (Realtime Voice · own GPU)",
-			capabilities: ["llm", "omni"],
-			transcriptProvided: true,
-		},
-		{
 			id: "gemini-3.5-flash",
 			label: "Gemini 3.5 Flash",
 			capabilities: ["llm"],
 		},
 		{
 			id: "gemini-2.5-flash-live",
-			label: "Gemini 2.5 Flash Live (Realtime Voice)",
+			label: "Gemini 2.5 Flash Live",
 			capabilities: ["llm", "omni"],
 			voiceSelectable: true,
 			voices: [...GEMINI_LIVE_VOICES],
@@ -491,7 +473,7 @@ registerLlmProvider({
 			// flagged comingSoon → rendered LAST with a "(준비중)" tag and the
 			// Apply (save) button is blocked while it is the selected model.
 			id: "naia-0.9-omni-24g",
-			label: "Naia 0.9 Omni 24G (Realtime Voice)",
+			label: "Naia 0.9 Omni 24G",
 			capabilities: ["llm", "omni"],
 			transcriptProvided: true,
 			comingSoon: true,
