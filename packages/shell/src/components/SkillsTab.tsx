@@ -1,5 +1,11 @@
 import { invoke } from "@tauri-apps/api/core";
-import { type ReactNode, useCallback, useEffect, useState } from "react";
+import {
+	Fragment,
+	type ReactNode,
+	useCallback,
+	useEffect,
+	useState,
+} from "react";
 import { directToolCall } from "../lib/chat-service";
 import {
 	getDisabledSkills,
@@ -206,6 +212,9 @@ export function SkillsTab({
 
 	const builtInSkills = filtered.filter((s) => s.type === "built-in");
 	const customSkills = filtered.filter((s) => s.type !== "built-in");
+	const hasVisibleMemoSkill = builtInSkills.some(
+		(skill) => skill.name === "skill_memo",
+	);
 
 	const disabledSkills = getDisabledSkills();
 	const disabledSet = new Set(disabledSkills);
@@ -269,18 +278,20 @@ export function SkillsTab({
 							{t("skills.builtInSection")} ({builtInSkills.length})
 						</div>
 						{builtInSkills.map((skill) => (
-							<SkillCard
-								key={skill.name}
-								skill={skill}
-								disabled={false}
-								onToggle={handleToggle}
-								onAskAI={onAskAI}
-							/>
+							<Fragment key={skill.name}>
+								{skill.name === "skill_memo" && children}
+								<SkillCard
+									skill={skill}
+									disabled={false}
+									onToggle={handleToggle}
+									onAskAI={onAskAI}
+								/>
+							</Fragment>
 						))}
 					</>
 				)}
 
-				{children}
+				{!hasVisibleMemoSkill && children}
 
 				{customSkills.length > 0 && (
 					<>

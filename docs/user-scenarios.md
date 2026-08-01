@@ -213,7 +213,7 @@ foundation UC 카탈로그와 직교하는 셸 feature(S72 선례). 각 시나�
 | **S-RADIO-DJ-6** | CI는 외부 YouTube 의존 없이 로컬 iframe event fixture로 ready/playing/error/ended와 도구 결과·발화 조건을 검증한다. 실제 YouTube 검증은 부스/릴리스 전 선택적 smoke로 분리한다. | 결정론적 Tauri E2E + 선택적 smoke: FR-RADIO-DJ.7. |
 | **S-RADIO-DJ-7** | 외부 LLM과 Windows 로컬 TRT를 함께 쓰는 개인 라디오에서 곡 A의 `playing`을 확인한 뒤 자동 DJ 문장을 만든다. 문장은 음성 준비 전에는 채팅에 노출하지 않고, VoxCPM2가 만든 같은 오디오를 Ditto에 보내 영상 재생이 시작될 때 표시한다. activity가 곡 B를 요청하면 현재 곡과 대기열을 교체하고 B의 `playing`을 확인한 뒤 한 번만 다시 말한다. 렌더 중 사용자가 Enter로 끼어들면 250ms 안에 현재 렌더를 취소하되 BGM은 유지한다. | 실제 Tauri + TRT NVA 통합: `94-avatar-4060-facade.spec.ts`; Shell #405, agent #103. 일반 채팅의 BGM 요청은 기존 대기열 의미를 유지한다. |
 
-| **S-RADIO-DJ-8** | 사용자가 설정의 스킬 탭을 열면 `라디오 DJ`가 다른 기본 스킬과 같은 2열 카드로 보인다. 접힌 상태에는 짧은 설명만 표시되고, 카드를 누르면 대기시간·멘트 간격·시간대·BGM 자동재생 상세 설정이 펼쳐진다. 처음 열어도 숫자 입력이 비어 있지 않으며 자동 발화는 사용자가 켜기 전까지 시작하지 않는다. | FR-RADIO-DJ.9. Settings RTL + `settings-slots.spec.ts` Playwright. |
+| **S-RADIO-DJ-8** | 사용자가 설정의 스킬 탭을 열면 `Youtube Radio DJ`가 시스템 스킬 다음이자 `memo` 바로 앞에 다른 기본 스킬과 같은 2열 카드로 보인다. 접힌 상태에는 짧은 설명만 표시되고, 카드를 누르면 대기시간·멘트 간격·시간대·BGM 자동재생 상세 설정이 펼쳐진다. 처음 열어도 숫자 입력이 비어 있지 않으며 자동 발화는 사용자가 켜기 전까지 시작하지 않는다. | FR-RADIO-DJ.9. Settings RTL + `settings-slots.spec.ts` Playwright. |
 
 ## UC-CODEX-ROLES — Codex를 main으로 쓰고 역할별 모델을 분리한다
 

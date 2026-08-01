@@ -103,6 +103,22 @@ describe("SkillsTab", () => {
 		});
 	});
 
+	it("places injected Radio DJ immediately before memo", async () => {
+		mockInvoke.mockResolvedValue(ALL_SKILLS);
+		const { container } = render(
+			<SkillsTab>
+				<div data-testid="radio-dj-order">Youtube Radio DJ</div>
+			</SkillsTab>,
+		);
+		await waitFor(() => expect(screen.getByText("skill_memo")).toBeDefined());
+		const ordered = Array.from(
+			container.querySelectorAll(".skill-card, [data-testid='radio-dj-order']"),
+		).map((element) => element.textContent);
+		expect(ordered[0]).toContain("skill_time");
+		expect(ordered[1]).toContain("Youtube Radio DJ");
+		expect(ordered[2]).toContain("skill_memo");
+	});
+
 	it("filters skills by search query", async () => {
 		mockInvoke.mockResolvedValue(ALL_SKILLS);
 		render(<SkillsTab />);

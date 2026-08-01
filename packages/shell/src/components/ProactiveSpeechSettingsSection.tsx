@@ -43,7 +43,9 @@ export function RadioDjSettingsCard(props: {
 				onClick={toggleExpanded}
 			>
 				<div className="skill-card-info">
-					<div className="skill-card-name">{t("settings.proactiveDj")}</div>
+					<div className="skill-card-name">
+						{t("settings.radioDjSkillName")}
+					</div>
 					<div className="skill-card-desc-short">
 						{t("settings.radioDjSkillDesc")}
 					</div>

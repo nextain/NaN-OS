@@ -762,10 +762,12 @@ describe("SettingsTab — memory tab (#298)", () => {
 		gotoSettingsTab("skills");
 		const radioDjCard = await screen.findByTestId("youtube-bgm-skill-settings");
 		expect(radioDjCard).toBeDefined();
-		expect(screen.getByText(/Radio DJ|라디오 DJ/)).toBeDefined();
+		expect(screen.getByText("Youtube Radio DJ")).toBeDefined();
 		expect(screen.queryByText("skill_youtube_bgm")).toBeNull();
 		expect(screen.queryByTestId("proactive-speech-profile")).toBeNull();
-		fireEvent.click(screen.getByRole("button", { name: /Radio DJ|라디오 DJ/ }));
+		fireEvent.click(
+			screen.getByRole("button", { name: /Youtube Radio DJ/ }),
+		);
 		expect(screen.getByText("skill_youtube_bgm")).toBeDefined();
 		const skillProfile = screen.getByTestId(
 			"proactive-speech-profile",

@@ -35,6 +35,10 @@ function buildMock(vramGb: number | null): string {
 		if (cmd === "plugin:event|emit" || cmd === "plugin:event|unlisten") return null;
 		if (cmd === "detect_gpu_vram") return ${vramGb === null ? "null" : vramGb};
 		if (cmd === "write_naia_config") return null;
+		if (cmd === "list_skills") return [
+			{ name: "skill_time", description: "Get current date and time", type: "built-in", tier: 0, source: "built-in" },
+			{ name: "skill_memo", description: "Save and retrieve memos", type: "built-in", tier: 0, source: "built-in" }
+		];
 		return undefined; // TAURI_BASE_MOCK_FALLBACK handles the rest
 	};
 })();
@@ -80,7 +84,7 @@ async function openSlotSettings(
 }
 
 test.describe("S-SLOT settings — gate + 6 cloud slots (#gate-slots)", () => {
-	test("Radio DJ uses the two-column skill card and expands populated settings", async ({
+	test("Youtube Radio DJ precedes memo and expands populated settings", async ({
 		page,
 	}) => {
 		await openSlotSettings(page, {
@@ -90,7 +94,7 @@ test.describe("S-SLOT settings — gate + 6 cloud slots (#gate-slots)", () => {
 
 		const card = page.getByTestId("youtube-bgm-skill-settings");
 		await expect(card).toBeVisible();
-		await expect(card).toContainText("Radio DJ");
+		await expect(card).toContainText("Youtube Radio DJ");
 		await expect(card).not.toContainText("skill_youtube_bgm");
 		await expect(page.getByTestId("proactive-speech-profile")).toHaveCount(0);
 
@@ -99,7 +103,21 @@ test.describe("S-SLOT settings — gate + 6 cloud slots (#gate-slots)", () => {
 		);
 		expect(columns).toBe(2);
 
-		await card.getByRole("button", { name: /Radio DJ/ }).click();
+		const memoCard = page.locator(".skill-card", { hasText: "skill_memo" });
+		await expect(memoCard).toBeVisible();
+		expect(
+			await card.evaluate((radio) => {
+				const cards = Array.from(
+					document.querySelectorAll(".skills-list > .skill-card"),
+				);
+				const memoIndex = cards.findIndex((item) =>
+					item.textContent?.includes("skill_memo"),
+				);
+				return cards.indexOf(radio) === memoIndex - 1;
+			}),
+		).toBe(true);
+
+		await card.getByRole("button", { name: /Youtube Radio DJ/ }).click();
 		await expect(card).toContainText("skill_youtube_bgm");
 		await expect(page.getByTestId("proactive-idle-ms")).toHaveValue("120000");
 		await expect(page.getByTestId("proactive-interval-ms")).toHaveValue("900000");
