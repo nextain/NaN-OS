@@ -14,13 +14,14 @@ const eventListeners = vi.hoisted(
 		new Map<string, (event: { payload: unknown }) => void | Promise<void>>(),
 );
 
+const secureStoreMock = vi.hoisted(() => ({
+	get: vi.fn().mockResolvedValue(null),
+	set: vi.fn().mockResolvedValue(undefined),
+	delete: vi.fn().mockResolvedValue(undefined),
+}));
+
 vi.mock("@tauri-apps/plugin-store", () => {
-	const store = {
-		get: vi.fn().mockResolvedValue(null),
-		set: vi.fn().mockResolvedValue(undefined),
-		delete: vi.fn().mockResolvedValue(undefined),
-	};
-	return { load: vi.fn().mockResolvedValue(store) };
+	return { load: vi.fn().mockResolvedValue(secureStoreMock) };
 });
 
 const mockInvoke = vi.fn();
@@ -87,6 +88,7 @@ describe("SettingsTab", () => {
 		localStorage.clear();
 		eventListeners.clear();
 		vi.clearAllMocks();
+		secureStoreMock.get.mockResolvedValue(null);
 		vi.unstubAllGlobals();
 		Reflect.deleteProperty(window, "__TAURI_INTERNALS__");
 	});
@@ -254,9 +256,9 @@ describe("SettingsTab", () => {
 		expect(labels).toContain("Grok 4.3");
 		expect(labels.some((label) => label.includes("(Naia)"))).toBe(false);
 		expect(labels.some((label) => label.includes("Analysis only"))).toBe(false);
-		expect([...modelSelect.options].map((option) => option.value)).not.toContain(
-			"naia-local",
-		);
+		expect(
+			[...modelSelect.options].map((option) => option.value),
+		).not.toContain("naia-local");
 	});
 
 	it("allows Codex for sub while keeping memory orthogonal", () => {
@@ -461,22 +463,34 @@ describe("SettingsTab", () => {
 		);
 	});
 
-	it.each(["grok-4.3", "deepseek-v4-pro", "gpt-5.6-sol", "gpt-5.6-luna"])("keeps the live Naia Azure model %s selectable and persisted", async (modelId) => {
-		localStorage.setItem("naia-config", JSON.stringify({
-			onboardingComplete: true,
-			provider: "nextain",
-			model: modelId,
-			apiKey: "",
-		}));
-		mockInvoke.mockResolvedValue([]);
-		render(<SettingsTab />);
-		gotoSettingsTab("brain");
-		const select = screen.getByRole("combobox", { name: /model/i }) as HTMLSelectElement;
-		expect([...select.options].map((option) => option.value)).toContain(modelId);
-		expect(select.value).toBe(modelId);
-		fireEvent.click(screen.getByRole("button", { name: "Apply" }));
-		expect(JSON.parse(localStorage.getItem("naia-config") || "{}")).toMatchObject({ provider: "nextain", model: modelId });
-	});
+	it.each(["grok-4.3", "deepseek-v4-pro", "gpt-5.6-sol", "gpt-5.6-luna"])(
+		"keeps the live Naia Azure model %s selectable and persisted",
+		async (modelId) => {
+			localStorage.setItem(
+				"naia-config",
+				JSON.stringify({
+					onboardingComplete: true,
+					provider: "nextain",
+					model: modelId,
+					apiKey: "",
+				}),
+			);
+			mockInvoke.mockResolvedValue([]);
+			render(<SettingsTab />);
+			gotoSettingsTab("brain");
+			const select = screen.getByRole("combobox", {
+				name: /model/i,
+			}) as HTMLSelectElement;
+			expect([...select.options].map((option) => option.value)).toContain(
+				modelId,
+			);
+			expect(select.value).toBe(modelId);
+			fireEvent.click(screen.getByRole("button", { name: "Apply" }));
+			expect(
+				JSON.parse(localStorage.getItem("naia-config") || "{}"),
+			).toMatchObject({ provider: "nextain", model: modelId });
+		},
+	);
 
 	it("allows an explicit Codex sub brain but excludes Codex from memory", () => {
 		localStorage.setItem(
@@ -818,6 +832,78 @@ describe("SettingsTab — memory tab (#298)", () => {
 		expect(saved.nvaModel).toBeTruthy();
 	});
 
+	it("GPU profile 6GB stages VoxCPM2 with VRM while preserving the external LLM", async () => {
+		localStorage.setItem(
+			"naia-config",
+			JSON.stringify({
+				provider: "ollama",
+				model: "qwen3:8b",
+				ollamaHost: "http://gpu-box.local:11434",
+				naiaKey: "nk",
+				ttsProvider: "nextain",
+				avatarProvider: "naia-video-avatar",
+				nvaModel: "stale.nva",
+			}),
+		);
+		mockInvoke.mockImplementation((cmd: string) => {
+			if (cmd === "detect_gpu_vram") return Promise.resolve(6);
+			if (cmd === "start_cascade") {
+				return Promise.resolve(
+					JSON.stringify({ facade_port: 8910, services: ["tts"] }),
+				);
+			}
+			return Promise.resolve([]);
+		});
+		render(<SettingsTab />);
+		gotoSettingsTab("profile");
+
+		const select = document.getElementById(
+			"local-gpu-tier",
+		) as HTMLSelectElement;
+		const option = select.querySelector(
+			'option[value="windows-voice-6g"]',
+		) as HTMLOptionElement;
+		await vi.waitFor(() => expect(option.disabled).toBe(false));
+		fireEvent.change(select, { target: { value: "windows-voice-6g" } });
+
+		const saved = JSON.parse(localStorage.getItem("naia-config") || "{}");
+		expect(saved.localGpuTier).toBe("windows-voice-6g");
+		expect(saved.provider).toBe("ollama");
+		expect(saved.model).toBe("qwen3:8b");
+		expect(saved.ollamaHost).toBe("http://gpu-box.local:11434");
+		expect(saved.ttsProvider).toBe("naia-local-voice");
+		expect(saved.ttsEnabled).toBe(true);
+		expect(saved.vllmTtsHost).toBe("http://localhost:8910");
+		expect(saved.avatarProvider).toBe("vrm");
+		expect(saved.nvaModel).toBe("stale.nva");
+	});
+
+	it("blocks a hardware profile change without a Naia login", async () => {
+		localStorage.setItem(
+			"naia-config",
+			JSON.stringify({ provider: "ollama", model: "qwen3:8b" }),
+		);
+		mockInvoke.mockImplementation((cmd: string) => {
+			if (cmd === "detect_gpu_vram") return Promise.resolve(6);
+			return Promise.resolve([]);
+		});
+		render(<SettingsTab />);
+		gotoSettingsTab("profile");
+
+		const select = document.getElementById(
+			"local-gpu-tier",
+		) as HTMLSelectElement;
+		expect(select.disabled).toBe(true);
+		fireEvent.change(select, { target: { value: "windows-voice-6g" } });
+
+		const saved = JSON.parse(localStorage.getItem("naia-config") || "{}");
+		expect(saved.localGpuTier).toBeUndefined();
+		expect(mockInvoke).not.toHaveBeenCalledWith("start_cascade");
+		expect(screen.getByTestId("local-profile-hint").textContent).toMatch(
+			/registered Naia members.*log in/i,
+		);
+	});
+
 	it("shows the 4060 install plan and does not start a missing runtime", async () => {
 		localStorage.setItem(
 			"naia-config",
@@ -871,6 +957,7 @@ describe("SettingsTab — memory tab (#298)", () => {
 	});
 
 	it("restores an explicitly saved 8GB profile without replacing the external LLM", async () => {
+		localStorage.setItem("naia-adk-path", "/home/user/naia-adk");
 		localStorage.setItem(
 			"naia-config",
 			JSON.stringify({
@@ -911,7 +998,121 @@ describe("SettingsTab — memory tab (#298)", () => {
 			expect(saved.ttsProvider).toBe("naia-local-voice");
 			expect(saved.vllmTtsHost).toBe("http://localhost:8910");
 			expect(saved.avatarProvider).toBe("naia-video-avatar");
-			expect(mockInvoke).toHaveBeenCalledWith("start_cascade");
+			expect(mockInvoke).toHaveBeenCalledWith("start_cascade", {
+				expectedLoaderProfile: "windows_trt_8g",
+			});
+		});
+	});
+
+	it("restores a secret-backed 6GB profile and writes an account-gated voice manifest", async () => {
+		localStorage.setItem("naia-adk-path", "/home/user/naia-adk");
+		localStorage.setItem(
+			"naia-config",
+			JSON.stringify({
+				provider: "codex",
+				model: "gpt-5.4",
+				localGpuTier: "windows-voice-6g",
+				local8gFocus: "avatar",
+			}),
+		);
+		secureStoreMock.get.mockImplementation((key: string) =>
+			Promise.resolve(key === "naiaKey" ? "gw-restored-member" : null),
+		);
+		mockInvoke.mockImplementation((cmd: string) => {
+			if (cmd === "detect_gpu_vram") return Promise.resolve(8);
+			if (cmd === "cascade_installation_status") {
+				return Promise.resolve({
+					phase: "ready-to-start",
+					ready: false,
+					canStart: true,
+					summary: "Ready",
+					steps: [],
+				});
+			}
+			if (cmd === "start_cascade") {
+				return Promise.resolve(
+					JSON.stringify({ facade_port: 8910, services: [] }),
+				);
+			}
+			return Promise.resolve([]);
+		});
+
+		render(<SettingsTab />);
+
+		await vi.waitFor(() => {
+			const profileWrites = mockInvoke.mock.calls
+				.filter(([cmd]) => cmd === "write_slots_manifest")
+				.map((call) => JSON.parse(call[1]?.json as string));
+			const write = mockInvoke.mock.calls
+				.filter(([cmd]) => cmd === "write_slots_manifest")
+				.find((call) => {
+					const value = JSON.parse(call[1]?.json as string);
+					return (
+						value.gate.naiaAccount === true &&
+						value.gpu.loaderProfile === "windows_trt_6g" &&
+						value.slots.avatar.provider === "vrm"
+					);
+				});
+			expect(write).toBeDefined();
+			const manifest = JSON.parse(write?.[1]?.json as string);
+			expect(manifest.gate.naiaAccount).toBe(true);
+			expect(manifest.gpu).toMatchObject({
+				tier: "windows-voice-6g",
+				loaderProfile: "windows_trt_6g",
+			});
+			expect(manifest.slots.main).toMatchObject({
+				provider: "codex",
+				model: "gpt-5.4",
+			});
+			expect(manifest.slots.tts.provider).toBe("naia-local-voice");
+			expect(manifest.slots.avatar.provider).toBe("vrm");
+			expect(mockInvoke).toHaveBeenCalledWith("start_cascade", {
+				expectedLoaderProfile: "windows_trt_6g",
+			});
+			expect(profileWrites.at(-1)?.gate.naiaAccount).toBe(true);
+		});
+	});
+
+	it("stops cascade and writes a dormant manifest when the member logs out", async () => {
+		localStorage.setItem("naia-adk-path", "/home/user/naia-adk");
+		localStorage.setItem(
+			"naia-config",
+			JSON.stringify({
+				provider: "nextain",
+				model: "gemini-3.5-flash",
+				naiaKey: "gw-member",
+				localGpuTier: "windows-voice-6g",
+				ttsProvider: "naia-local-voice",
+				avatarProvider: "vrm",
+			}),
+		);
+		mockInvoke.mockImplementation((cmd: string) => {
+			if (cmd === "detect_gpu_vram") return Promise.resolve(8);
+			if (cmd === "cascade_status") return Promise.resolve(true);
+			if (cmd === "fetch_naia_balance") return Promise.resolve({ balance: 1 });
+			return Promise.resolve([]);
+		});
+
+		render(<SettingsTab />);
+		await vi.waitFor(() =>
+			expect(document.querySelector(".lab-disconnect-btn")).toBeTruthy(),
+		);
+		fireEvent.click(document.querySelector(".lab-disconnect-btn")!);
+		fireEvent.click(
+			document.querySelector(
+				".reset-confirm-panel .settings-reset-btn",
+			)!,
+		);
+
+		await vi.waitFor(() => {
+			expect(mockInvoke).toHaveBeenCalledWith("stop_cascade");
+			const writes = mockInvoke.mock.calls.filter(
+				([cmd]) => cmd === "write_slots_manifest",
+			);
+			const manifest = JSON.parse(writes.at(-1)?.[1]?.json as string);
+			expect(manifest.gate.naiaAccount).toBe(false);
+			expect(manifest.gpu.tier).toBeUndefined();
+			expect(manifest.gpu.loaderProfile).toBeUndefined();
 		});
 	});
 

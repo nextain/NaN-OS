@@ -775,17 +775,33 @@ export const DEFAULT_VLLM_HOST = "http://localhost:8000";
 // private behind this facade.
 export const DEFAULT_LOCAL_VOICE_HOST = "http://localhost:8910";
 
-/** Restore the Windows 8GB expression profile without changing the LLM route. */
+/** Restore explicit Windows TRT profiles without changing the external LLM route. */
 export function reconcileExplicitLocalProfile(config: AppConfig): AppConfig {
-	if (config.localGpuTier !== "laptop-4060-8g") return config;
+	// Persisted tiers stay dormant until the secure Naia credential is restored.
+	// Boot hydration must not turn a logged-out profile into local GPU services.
+	if (!config.naiaKey) return config;
+	if (
+		config.localGpuTier !== "laptop-4060-8g" &&
+		config.localGpuTier !== "windows-voice-6g"
+	) return config;
 	const isLocalHostUrl = /^(https?:\/\/)?(localhost|127\.0\.0\.1)([:/]|$)/i;
 	const shouldUseFacade =
 		!config.vllmTtsHost || isLocalHostUrl.test(config.vllmTtsHost);
-	return {
+	const voiceConfig: AppConfig = {
 		...config,
 		ttsProvider: "naia-local-voice",
 		ttsEnabled: true,
 		...(shouldUseFacade ? { vllmTtsHost: DEFAULT_LOCAL_VOICE_HOST } : {}),
+	};
+	if (config.localGpuTier === "windows-voice-6g") {
+		return {
+			...voiceConfig,
+			avatarProvider: "vrm",
+			nvaModel: undefined,
+		};
+	}
+	return {
+		...voiceConfig,
 		avatarProvider: "naia-video-avatar",
 		nvaModel: config.nvaModel || DEFAULT_NVA_MODEL,
 	};

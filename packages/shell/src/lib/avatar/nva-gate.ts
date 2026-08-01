@@ -22,6 +22,7 @@ export function hasExplicitLocalAvatarProfile(
 	config: VideoAvatarGateConfig | null | undefined,
 	detectedVramGb: number | null = null,
 ): boolean {
+	if (!config?.naiaKey) return false;
 	if (!isNvaHardwareEligible(detectedVramGb)) return false;
 	const setting = normalizeTierSetting(config?.localGpuTier);
 	if (setting === "off" || setting === "auto") return false;
@@ -40,7 +41,9 @@ export function canUseVideoAvatarFromConfig(
 ): boolean {
 	return (
 		isNvaHardwareEligible(detectedVramGb) &&
-		(!!config?.naiaKey || hasExplicitLocalAvatarProfile(config, detectedVramGb))
+		!!config?.naiaKey &&
+		(config.avatarProvider === "naia-video-avatar" ||
+			hasExplicitLocalAvatarProfile(config, detectedVramGb))
 	);
 }
 

@@ -6,7 +6,8 @@
 
 import { load } from "@tauri-apps/plugin-store";
 
-const STORE_FILE = "secure-keys.dat";
+const STORE_FILE =
+	import.meta.env.VITE_NAIA_SECURE_STORE_FILE || "secure-keys.dat";
 const STORE_LOAD_RETRIES = 3;
 const STORE_RETRY_DELAY_MS = 150;
 

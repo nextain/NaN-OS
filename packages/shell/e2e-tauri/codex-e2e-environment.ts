@@ -43,6 +43,10 @@ export const E2E_ARTIFACTS = resolve(E2E_ROOT, "artifacts");
 export const E2E_RUNTIME = resolve(E2E_ROOT, "runtime");
 export const E2E_CONFIG_PATH = resolve(E2E_SETTINGS, "config.json");
 export const E2E_UI_CONFIG_PATH = resolve(E2E_SETTINGS, "ui-config.json");
+export const E2E_SLOTS_MANIFEST_PATH = resolve(
+	E2E_SETTINGS,
+	"slots-manifest.json",
+);
 export const VITE_ENTRY = resolve(SHELL_DIR, "node_modules/vite/bin/vite.js");
 // Keep Windows CMake/MSVC paths short without sharing the live Shell target.
 // This must match scripts/build-e2e-tauri.mjs.
@@ -56,7 +60,9 @@ export const E2E_TARGET_DIR = resolve(
 // avoids a rebuilt test binary silently waiting on a different Vite server.
 const E2E_VITE_PORT = 1422;
 const E2E_AVATAR_ENABLED = process.env.NAIA_E2E_AVATAR === "1";
+const E2E_VOICE_6G_ENABLED = process.env.NAIA_E2E_VOICE_6G === "1";
 const E2E_NVA_SOURCE = process.env.NAIA_E2E_NVA_SOURCE;
+const E2E_VRM_SOURCE = process.env.NAIA_E2E_VRM_SOURCE;
 const PAIRED_AGENT_ROOT = "D:/alpha-adk/projects/naia-agent-worktrees";
 const REQUIRED_AGENT_COMMIT = pairing.agentCommit;
 
@@ -77,16 +83,26 @@ function assertOwnedRoot(path: string): void {
 /** Keep the spawned agent identical to the commit verified by build-e2e-tauri. */
 export function resolveRequiredPairedAgent(): string {
 	const explicit = process.env.NAIA_E2E_AGENT_ROOT;
-	const candidates = explicit ? [explicit] : readdirSync(PAIRED_AGENT_ROOT, { withFileTypes: true })
-		.filter((entry) => entry.isDirectory())
-		.map((entry) => resolve(PAIRED_AGENT_ROOT, entry.name));
+	const candidates = explicit
+		? [explicit]
+		: readdirSync(PAIRED_AGENT_ROOT, { withFileTypes: true })
+				.filter((entry) => entry.isDirectory())
+				.map((entry) => resolve(PAIRED_AGENT_ROOT, entry.name));
 	for (const candidate of candidates) {
-		if (!existsSync(resolve(candidate, "scripts/builds/agent-stdio-entry.mjs"))) continue;
-		if (!existsSync(resolve(candidate, "src/main/adapters/grpc/naia_agent.proto"))) continue;
+		if (!existsSync(resolve(candidate, "scripts/builds/agent-stdio-entry.mjs")))
+			continue;
+		if (
+			!existsSync(resolve(candidate, "src/main/adapters/grpc/naia_agent.proto"))
+		)
+			continue;
 		try {
 			if (
-				execFileSync("git", ["-C", candidate, "rev-parse", "HEAD"], { encoding: "utf8" }).trim() === REQUIRED_AGENT_COMMIT &&
-				execFileSync("git", ["-C", candidate, "status", "--porcelain"], { encoding: "utf8" }).trim() === ""
+				execFileSync("git", ["-C", candidate, "rev-parse", "HEAD"], {
+					encoding: "utf8",
+				}).trim() === REQUIRED_AGENT_COMMIT &&
+				execFileSync("git", ["-C", candidate, "status", "--porcelain"], {
+					encoding: "utf8",
+				}).trim() === ""
 			) {
 				return candidate;
 			}
@@ -94,7 +110,9 @@ export function resolveRequiredPairedAgent(): string {
 			// Keep searching; a malformed auxiliary checkout is not an E2E candidate.
 		}
 	}
-	throw new Error(`No paired naia-agent checkout contains ${REQUIRED_AGENT_COMMIT}`);
+	throw new Error(
+		`No paired naia-agent checkout contains ${REQUIRED_AGENT_COMMIT}`,
+	);
 }
 
 /**
@@ -109,15 +127,30 @@ export function configureCodexE2eEnvironment(): void {
 	process.env.NAIA_E2E_ADK_PATH = E2E_WORKSPACE;
 	process.env.NAIA_E2E_RUNTIME_DIR = E2E_RUNTIME;
 	process.env.NAIA_E2E_ARTIFACTS_DIR = E2E_ARTIFACTS;
+	process.env.NAIA_E2E_SECURE_STORE_FILE = resolve(
+		E2E_RUNTIME,
+		"secure-keys.dat",
+	);
 	process.env.WEBVIEW2_USER_DATA_FOLDER = E2E_WEBVIEW2_DATA;
 	process.env.APPDATA = resolve(E2E_APPDATA, "roaming");
 	process.env.LOCALAPPDATA = resolve(E2E_APPDATA, "local");
 	process.env.NAIA_E2E_DISCORD_CAPTURE = "cancel";
 	process.env.NAIA_BGM_PORT = String(E2E_BGM_PORT);
+	process.env.NAIA_REPOS_ADK ??= resolve(SHELL_DIR, "../../../..");
+	process.env.NAIA_CASCADE_LOADER_DIR ??= resolve(
+		process.env.NAIA_REPOS_ADK,
+		"projects/naia-omni-windows-manager",
+	);
 	process.env.VITE_NAIA_BGM_BASE = `http://127.0.0.1:${E2E_BGM_PORT}`;
 	const pairedAgent = resolveRequiredPairedAgent();
-	process.env.NAIA_AGENT_SCRIPT = resolve(pairedAgent, "scripts/builds/agent-stdio-entry.mjs");
-	process.env.NAIA_AGENT_PROTO_DIR = resolve(pairedAgent, "src/main/adapters/grpc");
+	process.env.NAIA_AGENT_SCRIPT = resolve(
+		pairedAgent,
+		"scripts/builds/agent-stdio-entry.mjs",
+	);
+	process.env.NAIA_AGENT_PROTO_DIR = resolve(
+		pairedAgent,
+		"src/main/adapters/grpc",
+	);
 }
 
 export function resetCodexE2eRoot(): void {
@@ -136,11 +169,36 @@ export function resetCodexE2eRoot(): void {
 	mkdirSync(E2E_APPDATA, { recursive: true });
 	mkdirSync(E2E_ARTIFACTS, { recursive: true });
 	mkdirSync(E2E_RUNTIME, { recursive: true });
+	const voiceVrmPath = resolve(
+		E2E_SETTINGS,
+		"vrm-files",
+		"03-OL_Woman.vrm",
+	);
+	if (E2E_VOICE_6G_ENABLED) {
+		if (!E2E_VRM_SOURCE || !existsSync(E2E_VRM_SOURCE)) {
+			throw new Error(
+				"NAIA_E2E_VOICE_6G=1 requires NAIA_E2E_VRM_SOURCE pointing to a real VRM",
+			);
+		}
+		mkdirSync(dirname(voiceVrmPath), { recursive: true });
+		cpSync(E2E_VRM_SOURCE, voiceVrmPath);
+	}
 	const config = {
 		provider: "codex",
 		model: "gpt-5.4",
+		...(E2E_VOICE_6G_ENABLED
+			? {
+					localGpuTier: "windows-voice-6g",
+					ttsProvider: "naia-local-voice",
+					ttsEnabled: true,
+					vllmTtsHost: "http://127.0.0.1:8910",
+					avatarProvider: "vrm",
+					vrmModel: voiceVrmPath,
+				}
+			: {}),
 		...(E2E_AVATAR_ENABLED
 			? {
+					naiaKey: "gw-e2e-registered-naia-member",
 					avatarProvider: "naia-video-avatar",
 					nvaModel: "naia",
 					localGpuTier: "laptop-4060-8g",
@@ -162,6 +220,49 @@ export function resetCodexE2eRoot(): void {
 	writeFileSync(E2E_CONFIG_PATH, JSON.stringify(config, null, 2), {
 		mode: 0o600,
 	});
+	if (E2E_VOICE_6G_ENABLED) {
+		writeFileSync(
+			E2E_SLOTS_MANIFEST_PATH,
+			JSON.stringify(
+				{
+					version: 1,
+					gate: { naiaAccount: true, mode: "naia" },
+					slots: {
+						main: { provider: "codex", model: "gpt-5.4" },
+						sub: { provider: "none" },
+						embedding: { provider: "none" },
+						stt: {},
+						tts: { provider: "naia-local-voice" },
+						avatar: { provider: "vrm" },
+					},
+					gpu: {
+						detectedVramGb: 8,
+						tier: "windows-voice-6g",
+						loaderProfile: "windows_trt_6g",
+					},
+				},
+				null,
+				2,
+			),
+			{ mode: 0o600 },
+		);
+		writeFileSync(
+			E2E_UI_CONFIG_PATH,
+			JSON.stringify(
+				{
+					avatarProvider: "vrm",
+					vrmModel: voiceVrmPath,
+					localGpuTier: "windows-voice-6g",
+					ttsProvider: "naia-local-voice",
+					ttsEnabled: true,
+					vllmTtsHost: "http://127.0.0.1:8910",
+				},
+				null,
+				2,
+			),
+			{ mode: 0o600 },
+		);
+	}
 	if (E2E_AVATAR_ENABLED) {
 		writeFileSync(
 			E2E_UI_CONFIG_PATH,
@@ -246,11 +347,15 @@ export async function startOwnedViteServer(): Promise<void> {
 			stdio: ["ignore", "pipe", "pipe"],
 			env: {
 				...process.env,
-			BROWSER: "none",
-			VITE_NAIA_E2E_ADK_PATH: E2E_WORKSPACE,
-			VITE_NAIA_E2E_PROVIDER: "codex",
-			VITE_NAIA_E2E_MODEL: "gpt-5.4",
-				...(E2E_AVATAR_ENABLED ? {} : { VITE_NAIA_E2E_NO_AVATAR: "1" }),
+				VITE_NAIA_SECURE_STORE_FILE:
+					process.env.NAIA_E2E_SECURE_STORE_FILE,
+				BROWSER: "none",
+				VITE_NAIA_E2E_ADK_PATH: E2E_WORKSPACE,
+				VITE_NAIA_E2E_PROVIDER: "codex",
+				VITE_NAIA_E2E_MODEL: "gpt-5.4",
+				...(E2E_AVATAR_ENABLED || E2E_VOICE_6G_ENABLED
+					? {}
+					: { VITE_NAIA_E2E_NO_AVATAR: "1" }),
 				// The BGM acceptance fixture is same-origin and never contacts YouTube.
 				VITE_NAIA_E2E_BGM_IFRAME_URL: "/e2e/bgm-playback-fixture.html",
 			},

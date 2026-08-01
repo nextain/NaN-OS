@@ -2,7 +2,11 @@ import { invoke } from "@tauri-apps/api/core";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { type AppConfig, LAB_GATEWAY_URL } from "./config";
 import { Logger } from "./logger";
-import { buildSlotsManifest, serializeSlotsManifest } from "./slots/manifest";
+import {
+	buildSlotsManifest,
+	serializeSlotsManifest,
+	type SlotsManifest,
+} from "./slots/manifest";
 
 const ADK_PATH_KEY = "naia-adk-path";
 
@@ -511,12 +515,14 @@ export async function applyWorkspaceConfigToLocal(): Promise<void> {
  * windows-manager loader 가 read 해 어느 로컬 서비스(VoxCPM2 등)를 띄울지 결정(Phase 2 계약).
  * 비밀(naiaKey/apiKey) 미포함 — buildSlotsManifest 가 provider/model/localUrl 만 직렬화.
  */
-export async function writeSlotsManifest(
+let slotsManifestWriteTail: Promise<void> = Promise.resolve();
+
+async function writeSlotsManifestNow(
 	config: AppConfig,
 	detectedVramGb?: number,
-): Promise<void> {
+): Promise<SlotsManifest | null> {
 	const adkPath = getAdkPath();
-	if (!adkPath) return;
+	if (!adkPath) return null;
 	// ★tier 해석(buildSlotsManifest 가 "auto" → 해석된 id 로)에 VRAM 이 필요.
 	// 호출처가 vram 을 안 넘기면 자체 감지(detect_gpu_vram IPC) — 모든 write 경로가
 	// manifest 에 해석된 tier 를 기록하도록 보장(loader 가 avatar_ditto_trt 를 선택).
@@ -537,9 +543,28 @@ export async function writeSlotsManifest(
 		adkPath,
 		json: serializeSlotsManifest(manifest),
 	});
+	return manifest;
 }
 
-export async function writeNaiaConfig(
+/** Serialize native manifest writes so hydration, profile restore, and logout
+ * cannot race and leave an older account/tier snapshot on disk. */
+export function writeSlotsManifest(
+	config: AppConfig,
+	detectedVramGb?: number,
+): Promise<SlotsManifest | null> {
+	const operation = slotsManifestWriteTail.then(() =>
+		writeSlotsManifestNow(config, detectedVramGb),
+	);
+	slotsManifestWriteTail = operation.then(
+		() => undefined,
+		() => undefined,
+	);
+	return operation;
+}
+
+let naiaConfigWriteTail: Promise<void> = Promise.resolve();
+
+async function writeNaiaConfigNow(
 	config: Record<string, unknown>,
 ): Promise<void> {
 	if (configHydrationPending) return;
@@ -567,4 +592,17 @@ export async function writeNaiaConfig(
 	} catch {
 		/* 에이전트 미연결(온보딩/기동 전) — 다음 기동 시 SetWorkspace 가 로딩 */
 	}
+}
+
+/** Keep config, UI config, and the derived slots manifest as one ordered
+ * transaction. In particular, logout must remain after any pending restore. */
+export function writeNaiaConfig(
+	config: Record<string, unknown>,
+): Promise<void> {
+	const operation = naiaConfigWriteTail.then(() => writeNaiaConfigNow(config));
+	naiaConfigWriteTail = operation.then(
+		() => undefined,
+		() => undefined,
+	);
+	return operation;
 }

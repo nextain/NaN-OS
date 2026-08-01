@@ -813,18 +813,24 @@ export function SettingsTab() {
 	// A loader's CASCADE_READY payload only proves its ports were bound.  Rust
 	// checks the facade too; repeat that public check here so an IPC stub or an
 	// older loader cannot make the Shell show a false ready state.
-	const startCascadeAndConfirm = async (): Promise<{
+	const startCascadeAndConfirm = async (
+		expectedLoaderProfile?: string,
+	): Promise<{
 		ready: string | null;
 		message?: string;
 	}> => {
-		const installation = await refreshCascadeInstallation();
-		if (!installation?.canStart) {
-			return {
-				ready: null,
-				message: installation?.summary,
-			};
+		if (!expectedLoaderProfile) {
+			const installation = await refreshCascadeInstallation();
+			if (!installation?.canStart) {
+				return {
+					ready: null,
+					message: installation?.summary,
+				};
+			}
 		}
-		const ready = await invoke<string>("start_cascade");
+		const ready = await invoke<string>("start_cascade", {
+			expectedLoaderProfile,
+		});
 		const afterStart = await refreshCascadeInstallation();
 		return afterStart?.ready
 			? { ready }
@@ -846,11 +852,24 @@ export function SettingsTab() {
 			} else {
 				// 기동 직전 manifest 동기화(설정 변경이 반영된 최신 상태로 launch).
 				const cfg = loadConfig();
-				if (cfg) await writeSlotsManifest(cfg);
+				const resolvedTier = resolveActiveTier(
+					cfg?.localGpuTier,
+					detectedVramGb,
+				);
+				if (!cfg || !naiaKey || !resolvedTier?.loaderProfile) {
+					setCascadeMsg(t("settings.localProfileLoginRequired"));
+					return;
+				}
+				await writeSlotsManifest(
+					{ ...cfg, naiaKey },
+					detectedVramGb ?? undefined,
+				);
 				// start_cascade 는 CASCADE_READY 페이로드({facade_port,services}) 를 반환 —
 				// facade_port 로 로컬 cascade URL 을 유도해 VideoAvatarCanvas(아바타 립싱크)가
 				// 로컬 facade 에 붙게 한다(focus=avatar 로 avatar 서비스가 떴을 때 입 움직임).
-				const start = await startCascadeAndConfirm();
+				const start = await startCascadeAndConfirm(
+					resolvedTier.loaderProfile,
+				);
 				if (!start.ready) {
 					setCascadeRunning(false);
 					setCascadeMsg(start.message ?? t("settings.cascadeError"));
@@ -862,7 +881,11 @@ export function SettingsTab() {
 				setCascadeMsg(t("settings.cascadeStarted"));
 			}
 		} catch (e) {
-			setCascadeMsg(`${t("settings.cascadeError")}: ${String(e)}`);
+			setCascadeMsg(
+				String(e).includes("cascade_naia_member_required")
+					? t("settings.localProfileLoginRequired")
+					: `${t("settings.cascadeError")}: ${String(e)}`,
+			);
 		} finally {
 			setCascadeBusy(false);
 		}
@@ -983,6 +1006,10 @@ export function SettingsTab() {
 			}
 			const cfg = {
 				...(loadConfig() ?? {}),
+				// The persisted config intentionally excludes secrets. Include the
+				// restored credential only in this in-memory manifest build so the
+				// member gate is regenerated correctly after an app restart.
+				naiaKey,
 				localGpuTier: tier,
 				local8gFocus: focus,
 				avatarProvider: staged.avatar,
@@ -991,13 +1018,25 @@ export function SettingsTab() {
 				provider: staged.mainProvider,
 				model: staged.mainModel,
 			} as AppConfig;
-			await writeSlotsManifest(cfg);
-			const start = await startCascadeAndConfirm();
+			const manifest = await writeSlotsManifest(cfg);
+			if (
+				!manifest?.gate.naiaAccount ||
+				manifest.gpu.loaderProfile !== resolvedTier.loaderProfile
+			) {
+				throw new Error("cascade_profile_manifest_not_ready");
+			}
+			const start = await startCascadeAndConfirm(
+				resolvedTier.loaderProfile,
+			);
 			if (!start.ready) {
 				setCascadeRunning(false);
 				setCascadeMsg(start.message ?? t("settings.cascadeError"));
 				return;
 			}
+			// A pre-reload WebView can finish an older manifest write while the
+			// model is loading. Re-assert the authenticated profile after readiness
+			// so subsequent cached-ready checks remain fail-closed and startable.
+			await writeSlotsManifest(cfg, detectedVramGb ?? undefined);
 			useCascadeAvatarStore
 				.getState()
 				.setLocalFacadeUrl(localFacadeUrlFromReady(start.ready));
@@ -1005,13 +1044,18 @@ export function SettingsTab() {
 			warmedProfileRef.current = key;
 			setCascadeMsg(t("settings.cascadeStarted"));
 		} catch (e) {
-			setCascadeMsg(`${t("settings.cascadeError")}: ${String(e)}`);
+			setCascadeMsg(
+				String(e).includes("cascade_naia_member_required")
+					? t("settings.localProfileLoginRequired")
+					: `${t("settings.cascadeError")}: ${String(e)}`,
+			);
 		} finally {
 			setCascadeBusy(false);
 		}
 	};
 
 	const handleSelectLocalTier = (tier: typeof localGpuTier) => {
+		if (!naiaKey) return;
 		setLocalGpuTier(tier);
 		const staged =
 			tier === "off"
@@ -1190,6 +1234,9 @@ export function SettingsTab() {
 		existing?.allowedTools?.length ?? 0,
 	);
 	const [naiaKey, setNaiaKeyState] = useState(existing?.naiaKey ?? "");
+	const [secureNaiaCredentialReady, setSecureNaiaCredentialReady] =
+		useState(false);
+	const naiaCredentialEpochRef = useRef(0);
 	const [naiaUserId, setNaiaUserIdState] = useState(existing?.naiaUserId ?? "");
 	const [sttModelModalOpen, setSttModelModalOpen] = useState(false);
 	const [syncDialogOpen, setSyncDialogOpen] = useState(false);
@@ -1209,7 +1256,13 @@ export function SettingsTab() {
 	useEffect(() => {
 		// `auto` only describes detected hardware. It is not an explicit request
 		// to replace the user's configured remote model on startup.
-		if (!naiaKey || localGpuTier === "off" || localGpuTier === "auto") return;
+		if (
+			!naiaKey ||
+			!secureNaiaCredentialReady ||
+			localGpuTier === "off" ||
+			localGpuTier === "auto"
+		)
+			return;
 		const key = `${localGpuTier}|${local8gFocus}`;
 		if (restoredLocalProfileRef.current === key) return;
 		restoredLocalProfileRef.current = key;
@@ -1227,7 +1280,7 @@ export function SettingsTab() {
 			model: staged.mainModel,
 			...(staged.tts === "naia-local-voice" ? { ttsEnabled: true } : {}),
 		});
-	}, [naiaKey, localGpuTier, local8gFocus]);
+	}, [naiaKey, secureNaiaCredentialReady, localGpuTier, local8gFocus]);
 
 	// Hide Chrome X11 embed while STT model modal is open
 	useEffect(() => {
@@ -1349,9 +1402,16 @@ export function SettingsTab() {
 						};
 
 						const mappedProvider =
-							(m.provider.toLowerCase() === "azure" && ["grok-4.3", "deepseek-v4-pro", "gpt-5.6-sol", "gpt-5.6-luna", "claude-opus-5"].includes(modelId)
+							m.provider.toLowerCase() === "azure" &&
+							[
+								"grok-4.3",
+								"deepseek-v4-pro",
+								"gpt-5.6-sol",
+								"gpt-5.6-luna",
+								"claude-opus-5",
+							].includes(modelId)
 								? "nextain"
-								: resolveProvider(m.provider) || resolveProviderFromId(m.id));
+								: resolveProvider(m.provider) || resolveProviderFromId(m.id);
 						if (mappedProvider) pushModel(mappedProvider);
 						// Claude Code CLI uses subscription — add models without pricing
 						if (mappedProvider === "anthropic") {
@@ -1617,10 +1677,17 @@ export function SettingsTab() {
 
 	useEffect(() => {
 		let cancelled = false;
+		const credentialEpoch = naiaCredentialEpochRef.current;
 		loadConfigWithSecrets()
 			.then((cfg) => {
-				if (cancelled || !cfg?.naiaKey) return;
+				if (
+					cancelled ||
+					credentialEpoch !== naiaCredentialEpochRef.current ||
+					!cfg?.naiaKey
+				)
+					return;
 				setNaiaKeyState(cfg.naiaKey);
+				setSecureNaiaCredentialReady(true);
 				setNaiaUserIdState(cfg.naiaUserId ?? "");
 				if (cfg.provider === "nextain") {
 					setProvider("nextain");
@@ -1767,6 +1834,7 @@ export function SettingsTab() {
 		const unlisten = listen<{ naiaKey: string; naiaUserId?: string }>(
 			"naia_auth_complete",
 			async (event) => {
+				naiaCredentialEpochRef.current += 1;
 				const nextNaiaKey = event.payload.naiaKey;
 				const nextNaiaUserId = event.payload.naiaUserId ?? "";
 				sendAuthUpdate(nextNaiaKey).catch(() => {});
@@ -1791,6 +1859,7 @@ export function SettingsTab() {
 
 				// Persist to both secure store and localStorage
 				await saveSecretKey("naiaKey", nextNaiaKey);
+				setSecureNaiaCredentialReady(true);
 				// CostDashboard receives the Tauri callback concurrently. Notify it only
 				// after the secure store has the key, otherwise its first balance request
 				// races the login write and the balance stays hidden until a restart.
@@ -1976,7 +2045,12 @@ export function SettingsTab() {
 		if (!cfg) return;
 		const next = { ...cfg, ...updates };
 		saveConfig(next);
-		void writeNaiaConfig(next as unknown as Record<string, unknown>);
+		// Public config deliberately omits secrets, but manifest generation needs
+		// the restored credential to keep an active member profile startable.
+		void writeNaiaConfig({
+			...next,
+			...(naiaKey ? { naiaKey } : {}),
+		} as unknown as Record<string, unknown>);
 	}
 
 	function persistLlmRole(
@@ -1987,7 +2061,10 @@ export function SettingsTab() {
 		if (!cfg) return;
 		const next = writeConfiguredLlmRole(cfg, role, value);
 		saveConfig(next);
-		void writeNaiaConfig(next as unknown as Record<string, unknown>);
+		void writeNaiaConfig({
+			...next,
+			...(naiaKey ? { naiaKey } : {}),
+		} as unknown as Record<string, unknown>);
 	}
 
 	function persistVideoAvatarSelection(nextNva?: string) {
@@ -2651,17 +2728,19 @@ export function SettingsTab() {
 	);
 	// free VRAM 부족으로 로컬 LLM 이 클라우드로 강등됐는지 — 프라이버시 정직 위해 UI 경고 표시.
 	const localLlmFallbackToCloud = localVramFit.llmFallbackToCloud;
-	// NVA selection is available when either an account-backed remote cascade is
-	// configured or an explicit local tier provides avatar capability. Stale
-	// localStorage alone must not unlock remote Host controls after logout.
-	// Keep activeLocalTier login-scoped for remote/cost/account-bound summaries.
+	// NVA is account-gated even when a stale explicit local tier remains after
+	// logout. The saved tier is dormant until the secure Naia credential returns.
 	const localAvatarCapable = resolveLocalCapabilities(
 		localGpuTier === "auto" ? null : configuredLocalTier,
 		local8gFocus,
 	).includes("avatar");
 	const nvaHardwareEligible = isNvaHardwareEligible(detectedVramGb);
+	const hasExplicitLocalTier =
+		localGpuTier !== "off" && localGpuTier !== "auto";
 	const cascadeAvatarPossible =
-		nvaHardwareEligible && (!!naiaKey || localAvatarCapable);
+		nvaHardwareEligible &&
+		!!naiaKey &&
+		(!hasExplicitLocalTier || localAvatarCapable);
 	const remoteCascadeConfigAllowed = !!naiaKey;
 	const effectiveAvatarProvider =
 		avatarProvider === "naia-video-avatar" && !cascadeAvatarPossible
@@ -3596,7 +3675,18 @@ export function SettingsTab() {
 													type="button"
 													className="settings-reset-btn"
 													onClick={async () => {
-														setNaiaKeyState("");
+														try {
+															await invoke("stop_cascade");
+														} catch {
+															/* already stopped */
+														}
+														setCascadeRunning(false);
+														useCascadeAvatarStore
+															.getState()
+															.setLocalFacadeUrl(null);
+												naiaCredentialEpochRef.current += 1;
+												setNaiaKeyState("");
+												setSecureNaiaCredentialReady(false);
 														setNaiaUserIdState("");
 														setLabBalance(null);
 														setProvider("gemini");
@@ -3608,7 +3698,7 @@ export function SettingsTab() {
 														await deleteSecretKey("naiaKey");
 														const current = loadConfig();
 														if (current) {
-															saveConfig({
+															const loggedOutConfig = {
 																...current,
 																provider:
 																	current.provider === "nextain"
@@ -3631,7 +3721,15 @@ export function SettingsTab() {
 																discordDefaultUserId: undefined,
 																discordDmChannelId: undefined,
 																discordDefaultTarget: undefined,
-															});
+													};
+													saveConfig(loggedOutConfig);
+													await writeNaiaConfig(
+														loggedOutConfig as unknown as Record<
+															string,
+															unknown
+														>,
+													);
+													await writeSlotsManifest(loggedOutConfig);
 														}
 													}}
 												>
@@ -4096,7 +4194,9 @@ export function SettingsTab() {
 								.filter((m) => !m.capabilities.includes("asr"))
 								.map((m) => (
 									<option key={m.id} value={m.id}>
-										{formatModelLabel(provider === "nextain" ? { ...m, pricing: undefined } : m)}
+										{formatModelLabel(
+											provider === "nextain" ? { ...m, pricing: undefined } : m,
+										)}
 									</option>
 								))}
 						</select>

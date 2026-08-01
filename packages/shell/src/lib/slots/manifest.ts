@@ -56,6 +56,8 @@ export function buildSlotsManifest(
 	const nvaHardwareEligible = isNvaHardwareEligible(
 		opts.detectedVramGb ?? null,
 	);
+	const nvaSelected =
+		nvaHardwareEligible && config.avatarProvider === "naia-video-avatar";
 	const naiaAccount = !!config.naiaKey;
 	const mode = deriveGate(naiaAccount);
 	return {
@@ -74,11 +76,11 @@ export function buildSlotsManifest(
 			stt: snap.stt.provider ? { provider: snap.stt.provider } : {},
 			tts: snap.tts.provider ? { provider: snap.tts.provider } : {},
 			avatar: {
-				provider: nvaHardwareEligible ? snap.avatar.provider : "vrm",
-				...(nvaHardwareEligible && snap.avatar.model
+				provider: nvaSelected ? snap.avatar.provider : "vrm",
+				...(nvaSelected && snap.avatar.model
 					? { model: snap.avatar.model }
 					: {}),
-				...(nvaHardwareEligible && config.naiaLocalUrl
+				...(nvaSelected && config.naiaLocalUrl
 					? { localUrl: config.naiaLocalUrl }
 					: {}),
 			},
@@ -92,6 +94,9 @@ export function buildSlotsManifest(
 			// resolveActiveTier → normalizeTierId 로 **해석된 tier id** 를 쓴다.
 			// 미검출/비활성(off) → 생략. 명시 id 는 정규화(구 id 호환) 후 기록.
 			...(() => {
+				// Hardware profiles are a Naia member benefit. A stale persisted
+				// tier must not survive logout into a startable loader manifest.
+				if (!naiaAccount) return {};
 				const resolved = resolveActiveTier(
 					config.localGpuTier,
 					opts.detectedVramGb ?? null,

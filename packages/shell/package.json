@@ -26,6 +26,7 @@
     "test:e2e:tauri:codex": "pnpm run build:e2e:tauri && wdio run e2e-tauri/wdio.conf.codex.ts",
     "test:e2e:tauri:codex-delegation": "pnpm run build:e2e:tauri && wdio run e2e-tauri/wdio.conf.codex-delegation.ts",
     "test:e2e:tauri:avatar-4060": "pnpm run build:e2e:tauri && wdio run e2e-tauri/wdio.conf.avatar-4060.ts",
+    "test:e2e:tauri:voice-6g": "node scripts/run-voice-6g-e2e.mjs",
     "test:e2e:tauri:jeonju-course": "pnpm run build:e2e:tauri && node scripts/run-jeonju-course-e2e.mjs",
 		"test:e2e:tauri:discord-settings": "pnpm run build:e2e:tauri && node scripts/run-discord-settings-e2e.mjs",
 

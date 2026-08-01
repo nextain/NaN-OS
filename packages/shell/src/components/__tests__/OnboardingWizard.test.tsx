@@ -261,7 +261,7 @@ describe("OnboardingWizard", () => {
 		expect(config.apiKey).toBeUndefined();
 		expect(config.naiaKey).toBeUndefined();
 		expect(config.onboardingComplete).toBe(true);
-		expect(config.localGpuTier).toBe("laptop-4060-8g"); // 8GB+ uses external LLM + Windows TRT expression
+		expect(config.localGpuTier).toBeUndefined(); // hardware profiles require a Naia login
 		expect(secureStore.set).toHaveBeenCalledWith("apiKey", "byo-test-key");
 	});
 
@@ -336,8 +336,16 @@ describe("OnboardingWizard", () => {
 	});
 
 	it("completes onboarding immediately after Naia login succeeds", async () => {
+		const { invoke } = await import("@tauri-apps/api/core");
+		(invoke as ReturnType<typeof vi.fn>).mockImplementation((cmd: string) => {
+			if (cmd === "detect_gpu_vram") return Promise.resolve(16);
+			return Promise.resolve(true);
+		});
 		localStorage.setItem("naia-adk-path", "D:\\alpha-adk\\projects\\naia-adk");
 		renderAtAgentName();
+		await act(async () => {
+			await Promise.resolve();
+		});
 
 		const clickNext = () => {
 			const buttons = screen.getAllByRole("button");
@@ -398,6 +406,7 @@ describe("OnboardingWizard", () => {
 		expect(config.userName).toBe("Luke");
 		expect(config.agentName).toBe("Mochi");
 		expect(config.workspaceRoot).toBe("D:\\alpha-adk\\projects\\naia-adk");
+		expect(config.localGpuTier).toBe("laptop-4060-8g");
 		expect(secureStore.set).toHaveBeenCalledWith("naiaKey", "gw-test-key");
 	});
 

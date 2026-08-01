@@ -22,6 +22,7 @@ import {
 	isNvaHardwareEligible,
 } from "../lib/avatar/nva-gate";
 import { detectGpuVramGb } from "../lib/capabilities/gpu";
+import { resolveActiveTier } from "../lib/capabilities/vram-tiers";
 import { loadConfig } from "../lib/config";
 import { t } from "../lib/i18n";
 import {
@@ -221,6 +222,10 @@ export function VideoAvatarCanvas({ nvaModel }: VideoAvatarCanvasProps) {
 			// Local cascade may start only from an explicit avatar-capable local profile.
 			// Legacy auto/off or stale remote config must not unlock local NVA after logout.
 			const cfg = loadConfig();
+			const expectedLoaderProfile = resolveActiveTier(
+				cfg?.localGpuTier,
+				detectedVramGb,
+			)?.loaderProfile;
 			if (!isNvaHardwareEligible(detectedVramGb)) {
 				setError("nva-vram-below-minimum");
 				setMode("unavailable");
@@ -251,7 +256,9 @@ export function VideoAvatarCanvas({ nvaModel }: VideoAvatarCanvasProps) {
 					if (await invoke<boolean>("cascade_status")) {
 						if (disposed) return;
 						const url = localFacadeUrlFromReady(
-							await invoke<string>("start_cascade"),
+							await invoke<string>("start_cascade", {
+								expectedLoaderProfile,
+							}),
 						);
 						if (url) {
 							cascadeUrl = url;
@@ -337,7 +344,9 @@ export function VideoAvatarCanvas({ nvaModel }: VideoAvatarCanvasProps) {
 				setMode("loading");
 				try {
 					if (cfg) await writeSlotsManifest(cfg);
-					const ready = await invoke<string>("start_cascade");
+					const ready = await invoke<string>("start_cascade", {
+						expectedLoaderProfile,
+					});
 					if (disposed) return;
 					const localUrl = localFacadeUrlFromReady(ready);
 					if (localUrl) {
@@ -367,7 +376,9 @@ export function VideoAvatarCanvas({ nvaModel }: VideoAvatarCanvasProps) {
 					try {
 						const running = await invoke<boolean>("cascade_status");
 						if (!disposed && running) {
-							const ready = await invoke<string>("start_cascade"); // 실행 중이면 캐시 ready
+							const ready = await invoke<string>("start_cascade", {
+								expectedLoaderProfile,
+							}); // 실행 중이면 캐시 ready
 							if (disposed) return;
 							const url = localFacadeUrlFromReady(ready);
 							if (url) {

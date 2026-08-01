@@ -63,8 +63,11 @@ describe("slots-manifest · 빌드(AppConfig → 매니페스트)", () => {
 		const m = buildSlotsManifest({
 			provider: "gemini",
 			model: "gpt-4o",
+			localGpuTier: "windows-voice-6g",
 		} as AppConfig);
 		expect(m.gate).toEqual({ naiaAccount: false, mode: "byo" });
+		expect(m.gpu.tier).toBeUndefined();
+		expect(m.gpu.loaderProfile).toBeUndefined();
 	});
 
 	it("GPU 정보 옵션(detectedVramGb/tier)", () => {
@@ -122,6 +125,25 @@ describe("slots-manifest · 빌드(AppConfig → 매니페스트)", () => {
 			detectedVramGb: 8,
 			tier: "laptop-4060-8g",
 			loaderProfile: "windows_trt_8g",
+		});
+	});
+
+	it("writes the 6GB TRT voice-only loader profile and keeps VRM avatar", () => {
+		const m = buildSlotsManifest(
+			{
+				...naiaConfig,
+				localGpuTier: "windows-voice-6g",
+				ttsProvider: "naia-local-voice",
+				avatarProvider: "vrm",
+			} as AppConfig,
+			{ detectedVramGb: 6 },
+		);
+		expect(m.slots.tts).toEqual({ provider: "naia-local-voice" });
+		expect(m.slots.avatar).toEqual({ provider: "vrm" });
+		expect(m.gpu).toMatchObject({
+			detectedVramGb: 6,
+			tier: "windows-voice-6g",
+			loaderProfile: "windows_trt_6g",
 		});
 	});
 

@@ -63,6 +63,22 @@ describe("tier-slots — VRAM tier → 슬롯 로컬 추천 (FR-VRAM.4)", () => 
 		);
 	});
 
+	it("6GB Windows profile recommends only local TTS and keeps LLM/VRM external", () => {
+		const tier = VRAM_TIERS.find((x) => x.id === "windows-voice-6g") ?? null;
+		expect(tier?.id).toBe("windows-voice-6g");
+		expect(tierRecommendedSlots(tier)).toEqual([
+			expect.objectContaining({
+				slot: "tts",
+				capability: "tts",
+				localValue: "naia-local-voice",
+			}),
+		]);
+		expect(isRecommendedLocalValue(tier, "main", "ollama")).toBe(false);
+		expect(isRecommendedLocalValue(tier, "avatar", "naia-video-avatar")).toBe(
+			false,
+		);
+	});
+
 	it("12GB(local-voice-12g) → main + tts + avatar 로컬 추천", () => {
 		const tier = VRAM_TIERS.find((x) => x.id === "local-voice-12g") ?? null;
 		expect(tier?.id).toBe("local-voice-12g");

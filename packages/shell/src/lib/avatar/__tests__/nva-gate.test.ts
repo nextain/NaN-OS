@@ -18,18 +18,16 @@ describe("NVA login/local gate", () => {
 		expect(effectiveAvatarProviderFromConfig(config, 8)).toBe("vrm");
 	});
 
-	it("allows logged-out NVA only for an explicit local avatar-capable profile", () => {
+	it("keeps an explicit local avatar profile dormant after logout", () => {
 		const config = {
 			avatarProvider: "naia-video-avatar" as const,
 			localGpuTier: "laptop-4060-8g" as const,
 			naiaKey: "",
 		};
 
-		expect(hasExplicitLocalAvatarProfile(config, 8)).toBe(true);
-		expect(canUseVideoAvatarFromConfig(config, 8)).toBe(true);
-		expect(effectiveAvatarProviderFromConfig(config, 8)).toBe(
-			"naia-video-avatar",
-		);
+		expect(hasExplicitLocalAvatarProfile(config, 8)).toBe(false);
+		expect(canUseVideoAvatarFromConfig(config, 8)).toBe(false);
+		expect(effectiveAvatarProviderFromConfig(config, 8)).toBe("vrm");
 	});
 
 	it("keeps legacy auto/off profiles from unlocking logged-out NVA", () => {

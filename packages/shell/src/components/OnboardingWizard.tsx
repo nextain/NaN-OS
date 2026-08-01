@@ -516,6 +516,9 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
 		const persona = snapshot.extraPersona?.trim()
 			? `${personaBase}\n\n${snapshot.extraPersona.trim()}`
 			: personaBase;
+		const hasNaiaMembership = Boolean(
+			auth || snapshot.naiaLoginDone || base.naiaKey,
+		);
 
 		// auth(naia 로그인) 시: 6슬롯 Gemini 기본값은 applyNaiaSlotDefaults 가 아래서 일괄 적용.
 		// 따라서 auth 시에는 스냅샣 memory provider 를 주입하지 않고(비파괴 기본값 적용이 채움),
@@ -537,7 +540,9 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
 			...(auth ? { naiaKey: auth.naiaKey, naiaUserId: auth.naiaUserId } : {}),
 			workspaceRoot: getAdkPath() || base.workspaceRoot || undefined,
 			onboardingComplete: true,
-			...(recommendedVramTier ? { localGpuTier: recommendedVramTier.id } : {}),
+			...(hasNaiaMembership && recommendedVramTier
+				? { localGpuTier: recommendedVramTier.id }
+				: {}),
 			...(!auth && snapshot.memoryEmbeddingProvider !== "none"
 				? { memoryEmbeddingProvider: snapshot.memoryEmbeddingProvider }
 				: {}),

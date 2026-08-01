@@ -18,6 +18,7 @@ use std::sync::{Arc, Mutex, MutexGuard, OnceLock};
 use std::thread;
 use tauri::{AppHandle, Emitter, Manager, PhysicalPosition, PhysicalSize};
 use tauri_plugin_deep_link::DeepLinkExt;
+use tauri_plugin_store::StoreExt;
 
 /// Cross-platform home directory: HOME (Unix) or USERPROFILE (Windows).
 pub(crate) fn home_dir() -> String {
@@ -2080,16 +2081,34 @@ fn spawn_agent_core(
                                     // only: bound channels and explicitly allowed users as DMs.
                                     // It never receives a token or arbitrary WebView recipient.
                                     let mut outbound_destinations = Vec::<serde_json::Value>::new();
-                                    let mut outbound_users = std::collections::BTreeSet::<String>::new();
-                                    if let Some(bindings) = serde_json::from_str::<serde_json::Value>(&bindings_json)
-                                        .ok()
-                                        .and_then(|value| value.get("bindings").and_then(|item| item.as_array()).cloned())
+                                    let mut outbound_users =
+                                        std::collections::BTreeSet::<String>::new();
+                                    if let Some(bindings) =
+                                        serde_json::from_str::<serde_json::Value>(&bindings_json)
+                                            .ok()
+                                            .and_then(|value| {
+                                                value
+                                                    .get("bindings")
+                                                    .and_then(|item| item.as_array())
+                                                    .cloned()
+                                            })
                                     {
                                         for binding in bindings {
-                                            let binding_id = binding.get("bindingId").and_then(|item| item.as_str());
-                                            let guild_id = binding.get("guildId").and_then(|item| item.as_str());
-                                            let channel_id = binding.get("channelId").and_then(|item| item.as_str());
-                                            if let (Some(binding_id), Some(guild_id), Some(channel_id)) = (binding_id, guild_id, channel_id) {
+                                            let binding_id = binding
+                                                .get("bindingId")
+                                                .and_then(|item| item.as_str());
+                                            let guild_id = binding
+                                                .get("guildId")
+                                                .and_then(|item| item.as_str());
+                                            let channel_id = binding
+                                                .get("channelId")
+                                                .and_then(|item| item.as_str());
+                                            if let (
+                                                Some(binding_id),
+                                                Some(guild_id),
+                                                Some(channel_id),
+                                            ) = (binding_id, guild_id, channel_id)
+                                            {
                                                 outbound_destinations.push(serde_json::json!({
                                                     "id": binding_id,
                                                     "kind": "channel",
@@ -2097,8 +2116,13 @@ fn spawn_agent_core(
                                                     "channelId": channel_id,
                                                 }));
                                             }
-                                            if let Some(users) = binding.get("allowedUserIds").and_then(|item| item.as_array()) {
-                                                for user in users.iter().filter_map(|item| item.as_str()) {
+                                            if let Some(users) = binding
+                                                .get("allowedUserIds")
+                                                .and_then(|item| item.as_array())
+                                            {
+                                                for user in
+                                                    users.iter().filter_map(|item| item.as_str())
+                                                {
                                                     outbound_users.insert(user.to_string());
                                                 }
                                             }
@@ -2115,7 +2139,9 @@ fn spawn_agent_core(
                                         "version": 1,
                                         "destinations": outbound_destinations,
                                     });
-                                    if let Ok(outbound_json) = serde_json::to_string(&outbound_policy) {
+                                    if let Ok(outbound_json) =
+                                        serde_json::to_string(&outbound_policy)
+                                    {
                                         cmd.env("NAIA_DISCORD_OUTBOUND_JSON", outbound_json);
                                     }
                                     cmd.env("NAIA_DISCORD_GENERATION", &generation);
@@ -4321,14 +4347,13 @@ async fn validate_api_key(provider: String, api_key: String) -> Result<bool, Str
 }
 
 fn naia_balance_endpoint(gateway_url: &str) -> Result<url::Url, String> {
-    let base = url::Url::parse(gateway_url.trim())
-        .map_err(|_| "Invalid Naia gateway URL".to_string())?;
+    let base =
+        url::Url::parse(gateway_url.trim()).map_err(|_| "Invalid Naia gateway URL".to_string())?;
     let host = base
         .host_str()
         .ok_or_else(|| "Naia gateway URL has no host".to_string())?;
-    let is_loopback = host.eq_ignore_ascii_case("localhost")
-        || host == "127.0.0.1"
-        || host == "::1";
+    let is_loopback =
+        host.eq_ignore_ascii_case("localhost") || host == "127.0.0.1" || host == "::1";
     let is_nextain_https = base.scheme() == "https"
         && (host.eq_ignore_ascii_case("nextain.io")
             || host.to_ascii_lowercase().ends_with(".nextain.io"));
@@ -4454,17 +4479,26 @@ fn detect_vram_gb_blocking() -> Option<f64> {
 }
 
 const MIN_NVA_VRAM_GB: f64 = 8.0;
+const MIN_VOICE_ONLY_VRAM_GB: f64 = 6.0;
 
-fn validate_cascade_vram(vram_gb: Option<f64>) -> Result<f64, String> {
+fn validate_cascade_vram(
+    vram_gb: Option<f64>,
+    loader_profile: Option<&str>,
+) -> Result<f64, String> {
+    let voice_only = loader_profile == Some("windows_trt_6g");
+    let minimum = if voice_only {
+        MIN_VOICE_ONLY_VRAM_GB
+    } else {
+        MIN_NVA_VRAM_GB
+    };
     match vram_gb {
-        Some(vram) if vram >= MIN_NVA_VRAM_GB => Ok(vram),
+        Some(vram) if vram >= minimum => Ok(vram),
         Some(vram) => Err(format!(
-            "NVA local avatar requires NVIDIA RTX GPU VRAM 8GB or more (detected {vram:.0}GB)"
+            "Local hardware profile requires NVIDIA RTX GPU VRAM {minimum:.0}GB or more (detected {vram:.0}GB)"
         )),
-        None => Err(
-            "NVA local avatar requires a detected NVIDIA RTX GPU with VRAM 8GB or more"
-                .to_string(),
-        ),
+        None => Err(format!(
+            "Local hardware profile requires a detected NVIDIA RTX GPU with VRAM {minimum:.0}GB or more"
+        )),
     }
 }
 
@@ -4620,16 +4654,52 @@ fn directory_has_extension(dir: &std::path::Path, extension: &str) -> bool {
         })
 }
 
+fn cascade_manifest_has_naia_account(manifest: &std::path::Path) -> bool {
+    std::fs::read_to_string(manifest)
+        .ok()
+        .and_then(|raw| serde_json::from_str::<serde_json::Value>(&raw).ok())
+        .and_then(|parsed| {
+            parsed
+                .get("gate")
+                .and_then(|gate| gate.get("naiaAccount"))
+                .and_then(serde_json::Value::as_bool)
+        })
+        == Some(true)
+}
+
+fn stored_naia_credential_is_valid(value: Option<serde_json::Value>) -> bool {
+    value
+        .as_ref()
+        .and_then(serde_json::Value::as_str)
+        .is_some_and(is_valid_gateway_key)
+}
+
+fn cascade_has_naia_credential(app: &tauri::AppHandle) -> bool {
+    let store_path = if debug_e2e_enabled() {
+        std::env::var("NAIA_E2E_SECURE_STORE_FILE")
+            .ok()
+            .filter(|value| !value.is_empty())
+            .unwrap_or_else(|| "secure-keys.dat".to_string())
+    } else {
+        "secure-keys.dat".to_string()
+    };
+    app.store(store_path)
+        .ok()
+        .map(|store| stored_naia_credential_is_valid(store.get("naiaKey")))
+        .unwrap_or(false)
+}
+
+fn cascade_profile_requires_avatar(loader_profile: Option<&str>) -> bool {
+    loader_profile != Some("windows_trt_6g")
+}
+
 fn voxcpm2_model_is_cached_in_hubs(hubs: &[std::path::PathBuf]) -> bool {
     hubs.iter()
         .any(|hub| hub.join("models--openbmb--VoxCPM2").exists())
 }
 
 fn voxcpm2_model_is_cached(runtime_root: &std::path::Path) -> bool {
-    let mut hubs = vec![runtime_root
-        .join(".cache")
-        .join("huggingface")
-        .join("hub")];
+    let mut hubs = vec![runtime_root.join(".cache").join("huggingface").join("hub")];
 
     // Match huggingface_hub's cache resolution. On Windows, dirs::cache_dir()
     // points at LocalAppData, while the default model cache is normally under
@@ -4666,9 +4736,14 @@ fn probe_cascade_installation(
     adk_path: Option<&str>,
 ) -> CascadeInstallationProbe {
     let runtime_root = cascade_runtime_root();
-    let repos_root = adk_path
-        .and_then(infer_repos_adk_root)
+    let repos_root = std::env::var("NAIA_REPOS_ADK")
+        .ok()
         .map(std::path::PathBuf::from)
+        .or_else(|| {
+            adk_path
+                .and_then(infer_repos_adk_root)
+                .map(std::path::PathBuf::from)
+        })
         .or_else(|| {
             std::path::Path::new(loader_dir)
                 .parent()
@@ -4756,11 +4831,15 @@ fn cascade_install_step(
     }
 }
 
-fn classify_cascade_installation(probe: CascadeInstallationProbe) -> CascadeInstallationStatus {
+fn classify_cascade_installation_for_profile(
+    probe: CascadeInstallationProbe,
+    loader_profile: Option<&str>,
+) -> CascadeInstallationStatus {
+    let requires_avatar = cascade_profile_requires_avatar(loader_profile);
     let prerequisites_complete = probe.loader
         && probe.python_runtime
         && probe.cascade_service_bundle
-        && probe.ditto_engine
+        && (!requires_avatar || probe.ditto_engine)
         && probe.voxcpm2_model
         && probe.reference_voices;
     let ready = prerequisites_complete && probe.facade_healthy;
@@ -4772,7 +4851,10 @@ fn classify_cascade_installation(probe: CascadeInstallationProbe) -> CascadeInst
         "blocked"
     };
     let summary = match phase {
-        "ready" => "Local voice and avatar services are running and healthy.".to_string(),
+        "ready" if requires_avatar => {
+            "Local voice and avatar services are running and healthy.".to_string()
+        }
+        "ready" => "Local voice service is running and healthy.".to_string(),
         "ready-to-start" => "Local runtime files are ready. Services have not been started yet.".to_string(),
         _ => "Local runtime cannot start because one or more required artifacts are missing. This build will not pretend to download them.".to_string(),
     };
@@ -4781,57 +4863,68 @@ fn classify_cascade_installation(probe: CascadeInstallationProbe) -> CascadeInst
         ready,
         can_start: prerequisites_complete,
         summary,
-        steps: vec![
-            cascade_install_step(
-                "loader",
-                "Cascade loader",
-                "verify",
-                probe.loader,
-                "CASCADE_LOADER_MISSING",
-                "The cascade loader is not packaged or available.",
-            ),
-            cascade_install_step(
-                "python-runtime",
-                "Python runtime",
-                "install",
-                probe.python_runtime,
-                "CASCADE_PYTHON_RUNTIME_MISSING",
-                "Python cannot import the cascade loader.",
-            ),
-            cascade_install_step(
-                "cascade-service-bundle",
-                "Cascade service bundle",
-                "install",
-                probe.cascade_service_bundle,
-                "CASCADE_SERVICE_BUNDLE_MISSING",
-                "VoxCPM2, Ditto, or facade service files are not packaged.",
-            ),
-            cascade_install_step(
-                "ditto-engine",
-                "Ditto engine",
-                "download",
-                probe.ditto_engine,
-                "DITTO_ENGINE_MISSING",
-                "The required Ditto TensorRT engine is not installed.",
-            ),
-            cascade_install_step(
-                "voxcpm2-model",
-                "VoxCPM2 model",
-                "download",
-                probe.voxcpm2_model,
-                "VOXCPM2_MODEL_MISSING",
-                "The VoxCPM2 runtime or cached model is not installed.",
-            ),
-            cascade_install_step(
-                "reference-voices",
-                "Reference voices",
-                "download",
-                probe.reference_voices,
-                "REFERENCE_VOICES_MISSING",
-                "Bundled reference voice files are not available.",
-            ),
-        ],
+        steps: {
+            let mut steps = vec![
+                cascade_install_step(
+                    "loader",
+                    "Cascade loader",
+                    "verify",
+                    probe.loader,
+                    "CASCADE_LOADER_MISSING",
+                    "The cascade loader is not packaged or available.",
+                ),
+                cascade_install_step(
+                    "python-runtime",
+                    "Python runtime",
+                    "install",
+                    probe.python_runtime,
+                    "CASCADE_PYTHON_RUNTIME_MISSING",
+                    "Python cannot import the cascade loader.",
+                ),
+                cascade_install_step(
+                    "cascade-service-bundle",
+                    "Cascade service bundle",
+                    "install",
+                    probe.cascade_service_bundle,
+                    "CASCADE_SERVICE_BUNDLE_MISSING",
+                    "VoxCPM2, Ditto, or facade service files are not packaged.",
+                ),
+            ];
+            if requires_avatar {
+                steps.push(cascade_install_step(
+                    "ditto-engine",
+                    "Ditto engine",
+                    "download",
+                    probe.ditto_engine,
+                    "DITTO_ENGINE_MISSING",
+                    "The required Ditto TensorRT engine is not installed.",
+                ));
+            }
+            steps.extend([
+                cascade_install_step(
+                    "voxcpm2-model",
+                    "VoxCPM2 model",
+                    "download",
+                    probe.voxcpm2_model,
+                    "VOXCPM2_MODEL_MISSING",
+                    "The VoxCPM2 runtime or cached model is not installed.",
+                ),
+                cascade_install_step(
+                    "reference-voices",
+                    "Reference voices",
+                    "download",
+                    probe.reference_voices,
+                    "REFERENCE_VOICES_MISSING",
+                    "Bundled reference voice files are not available.",
+                ),
+            ]);
+            steps
+        },
     }
+}
+
+fn classify_cascade_installation(probe: CascadeInstallationProbe) -> CascadeInstallationStatus {
+    classify_cascade_installation_for_profile(probe, None)
 }
 
 #[tauri::command]
@@ -4843,6 +4936,13 @@ async fn cascade_installation_status(
         .and_then(|home| std::fs::read_to_string(home.join(".naia").join("adk-path")).ok())
         .map(|value| value.trim().to_string())
         .filter(|value| !value.is_empty());
+    let loader_profile = adk_path.as_ref().and_then(|path| {
+        read_cascade_loader_profile(
+            &std::path::PathBuf::from(path)
+                .join("naia-settings")
+                .join("slots-manifest.json"),
+        )
+    });
     let loader_dir = resolve_cascade_loader_dir(&app, adk_path.as_deref().unwrap_or_default());
     let mut probe = tokio::task::spawn_blocking(move || {
         probe_cascade_installation(&loader_dir, adk_path.as_deref())
@@ -4850,7 +4950,10 @@ async fn cascade_installation_status(
     .await
     .map_err(|error| format!("cascade installation status task failed: {error}"))?;
     probe.facade_healthy = cascade_status(state).await.unwrap_or(false);
-    Ok(classify_cascade_installation(probe))
+    Ok(classify_cascade_installation_for_profile(
+        probe,
+        loader_profile.as_deref(),
+    ))
 }
 
 /// 濡쒖뺄 cascade loader supervisor 瑜??ъ씠?쒖뭅濡?spawn. stdout `CASCADE_READY {json}`
@@ -4860,6 +4963,7 @@ fn spawn_cascade(
     loader_dir: &str,
     adk_path: &str,
     vram_gb: Option<f64>,
+    loader_profile: String,
 ) -> Result<CascadeProcess, String> {
     let python = std::env::var("NAIA_CASCADE_PYTHON").unwrap_or_else(|_| {
         if cfg!(windows) {
@@ -4871,7 +4975,6 @@ fn spawn_cascade(
     let manifest = std::path::PathBuf::from(adk_path)
         .join("naia-settings")
         .join("slots-manifest.json");
-    let loader_profile = read_cascade_loader_profile(&manifest);
     let inferred_repos_adk = infer_repos_adk_root(adk_path);
 
     let mut cmd = Command::new(&python);
@@ -4888,9 +4991,7 @@ fn spawn_cascade(
             cmd.env("NAIA_REPOS_ADK", repos_adk);
         }
     }
-    if let Some(profile) = &loader_profile {
-        cmd.arg("--profile").arg(profile);
-    }
+    cmd.arg("--profile").arg(&loader_profile);
     // 媛먯???primary GPU VRAM ??紐낆떆 ??loader ??蹂댁닔??85% ?먮룞異붿젙 ????ㅺ컪 ?ъ슜
     // (8GB ?뚯꽦 ?⑤룆 6.9G ?곹빀 蹂댁옣). 誘멸컧吏硫?loader 媛 ?먯껜 異붿젙.
     if let Some(v) = vram_gb {
@@ -4920,7 +5021,7 @@ fn spawn_cascade(
         "[Naia] Starting local cascade: {} -m loader launch (cwd={}, profile={}, repos_adk={})",
         python,
         loader_dir,
-        loader_profile.as_deref().unwrap_or("manifest"),
+        loader_profile,
         std::env::var("NAIA_REPOS_ADK")
             .ok()
             .or(inferred_repos_adk)
@@ -5048,11 +5149,31 @@ async fn cascade_facade_is_healthy(ready: &str) -> bool {
 async fn start_cascade(
     app: tauri::AppHandle,
     state: tauri::State<'_, AppState>,
+    expected_loader_profile: Option<String>,
 ) -> Result<String, String> {
     // Keep this guard until the spawned supervisor is stored below. A second
     // IPC call then returns the same ready payload instead of cleaning the
     // first launch's child services out from underneath it.
     let _start_guard = state.cascade_start.lock().await;
+    let adk_path = dirs::home_dir()
+        .and_then(|h| std::fs::read_to_string(h.join(".naia").join("adk-path")).ok())
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .ok_or_else(|| "adk path not set (naia-settings workspace missing)".to_string())?;
+    let manifest_path = std::path::PathBuf::from(&adk_path)
+        .join("naia-settings")
+        .join("slots-manifest.json");
+    if !cascade_manifest_has_naia_account(&manifest_path) || !cascade_has_naia_credential(&app) {
+        return Err("cascade_naia_member_required".to_string());
+    }
+    let loader_profile = read_cascade_loader_profile(&manifest_path);
+    let expected_loader_profile = expected_loader_profile
+        .as_deref()
+        .filter(|profile| !profile.is_empty())
+        .ok_or_else(|| "cascade_profile_expectation_required".to_string())?;
+    if loader_profile.as_deref() != Some(expected_loader_profile) {
+        return Err("cascade_profile_manifest_not_ready".to_string());
+    }
     let prior_ready = {
         let mut guard = lock_or_recover(&state.cascade, "cascade");
         if let Some(c) = guard.as_mut() {
@@ -5081,11 +5202,6 @@ async fn start_cascade(
         );
         return Ok(ready);
     }
-    let adk_path = dirs::home_dir()
-        .and_then(|h| std::fs::read_to_string(h.join(".naia").join("adk-path")).ok())
-        .map(|s| s.trim().to_string())
-        .filter(|s| !s.is_empty())
-        .ok_or_else(|| "adk path not set (naia-settings ?뚰겕?ㅽ럹?댁뒪 誘몄꽕??".to_string())?;
     // ?꾨쿋?? 踰덈뱾??loader(resource_dir) ?곗꽑 ???몃? adk 泥댄겕?꾩썐 誘몄쓽議?
     let loader_dir = resolve_cascade_loader_dir(&app, &adk_path);
 
@@ -5095,7 +5211,7 @@ async fn start_cascade(
     let vram = tokio::task::spawn_blocking(detect_vram_gb_blocking)
         .await
         .map_err(|e| format!("VRAM detection task failed: {e}"))?;
-    let vram = validate_cascade_vram(vram)?;
+    let vram = validate_cascade_vram(vram, loader_profile.as_deref())?;
 
     // The frontend normally checks this first, but IPC callers must not be
     // able to bypass the standalone-installation boundary.
@@ -5106,7 +5222,8 @@ async fn start_cascade(
     })
     .await
     .map_err(|e| format!("cascade installation check task failed: {e}"))?;
-    let installation = classify_cascade_installation(install_probe);
+    let installation =
+        classify_cascade_installation_for_profile(install_probe, loader_profile.as_deref());
     if !installation.can_start {
         return Err(installation.summary);
     }
@@ -5117,8 +5234,9 @@ async fn start_cascade(
     // loader reports ready with only a stale TTS process still bound.
     platform::kill_stale_cascade();
 
+    let loader_profile = expected_loader_profile.to_string();
     let proc = tokio::task::spawn_blocking(move || {
-        spawn_cascade(&loader_dir, &adk_path, Some(vram))
+        spawn_cascade(&loader_dir, &adk_path, Some(vram), loader_profile)
     })
     .await
     .map_err(|e| format!("task error: {e}"))??;
@@ -5513,8 +5631,8 @@ fn read_agent_secret(adk_path: &str, env_key: &str) -> Result<zeroize::Zeroizing
 fn parse_e2e_discord_bot_token(
     contents: &[u8],
 ) -> Result<Option<zeroize::Zeroizing<Vec<u8>>>, String> {
-    let contents = std::str::from_utf8(contents)
-        .map_err(|_| "e2e_discord_token_file_invalid".to_string())?;
+    let contents =
+        std::str::from_utf8(contents).map_err(|_| "e2e_discord_token_file_invalid".to_string())?;
     for raw_line in contents.lines() {
         let line = raw_line.trim();
         if line.is_empty() || line.starts_with('#') {
@@ -5551,13 +5669,13 @@ fn read_e2e_discord_bot_token() -> Result<Option<zeroize::Zeroizing<Vec<u8>>>, S
     let Some(path) = std::env::var_os("NAIA_E2E_DISCORD_TOKEN_FILE") else {
         return Ok(None);
     };
-    let metadata = std::fs::metadata(&path)
-        .map_err(|_| "e2e_discord_token_file_unavailable".to_string())?;
+    let metadata =
+        std::fs::metadata(&path).map_err(|_| "e2e_discord_token_file_unavailable".to_string())?;
     if !metadata.is_file() || metadata.len() > 8 * 1024 {
         return Err("e2e_discord_token_file_invalid".to_string());
     }
-    let contents = std::fs::read(path)
-        .map_err(|_| "e2e_discord_token_file_unavailable".to_string())?;
+    let contents =
+        std::fs::read(path).map_err(|_| "e2e_discord_token_file_unavailable".to_string())?;
     parse_e2e_discord_bot_token(&contents)
 }
 
@@ -8057,8 +8175,8 @@ fn verify_jeonju_course_target_matches_workspace(
     let target_path = control_root
         .join("naia-settings")
         .join(JEONJU_COURSE_TARGET_FILE);
-    let raw = std::fs::read_to_string(target_path)
-        .map_err(|_| "course_target_not_ready".to_string())?;
+    let raw =
+        std::fs::read_to_string(target_path).map_err(|_| "course_target_not_ready".to_string())?;
     let target = parse_jeonju_course_target_json(&raw)?;
     let saved_workspace_path = target
         .get("workspacePath")
@@ -8066,8 +8184,8 @@ fn verify_jeonju_course_target_matches_workspace(
         .ok_or_else(|| "course_target_invalid".to_string())?;
     let saved_root = std::fs::canonicalize(saved_workspace_path)
         .map_err(|_| "course_target_not_ready".to_string())?;
-    let requested_root = std::fs::canonicalize(workspace_path)
-        .map_err(|_| "course_target_not_ready".to_string())?;
+    let requested_root =
+        std::fs::canonicalize(workspace_path).map_err(|_| "course_target_not_ready".to_string())?;
 
     if !saved_root.starts_with(&control_root) || saved_root != requested_root {
         return Err("course_target_not_ready".to_string());
@@ -10158,11 +10276,65 @@ mod tests {
 
     #[test]
     fn cascade_vram_requires_detected_nvidia_8gb_or_more() {
-        assert_eq!(validate_cascade_vram(Some(8.0)).unwrap(), 8.0);
-        assert_eq!(validate_cascade_vram(Some(16.0)).unwrap(), 16.0);
-        assert!(validate_cascade_vram(Some(6.0)).is_err());
-        assert!(validate_cascade_vram(Some(7.9)).is_err());
-        assert!(validate_cascade_vram(None).is_err());
+        assert_eq!(validate_cascade_vram(Some(8.0), None).unwrap(), 8.0);
+        assert_eq!(
+            validate_cascade_vram(Some(16.0), Some("windows_trt_8g")).unwrap(),
+            16.0
+        );
+        assert!(validate_cascade_vram(Some(6.0), Some("windows_trt_8g")).is_err());
+        assert!(validate_cascade_vram(Some(7.9), None).is_err());
+        assert!(validate_cascade_vram(None, None).is_err());
+    }
+
+    #[test]
+    fn cascade_vram_allows_6gb_only_for_voice_only_profile() {
+        assert_eq!(
+            validate_cascade_vram(Some(6.0), Some("windows_trt_6g")).unwrap(),
+            6.0
+        );
+        assert!(validate_cascade_vram(Some(5.9), Some("windows_trt_6g")).is_err());
+    }
+
+    #[test]
+    fn cascade_manifest_requires_naia_member_gate() {
+        let dir = tempfile::tempdir().unwrap();
+        let manifest = dir.path().join("slots-manifest.json");
+        std::fs::write(&manifest, r#"{"gate":{"naiaAccount":false}}"#).unwrap();
+        assert!(!cascade_manifest_has_naia_account(&manifest));
+        std::fs::write(&manifest, r#"{"gate":{"naiaAccount":true}}"#).unwrap();
+        assert!(cascade_manifest_has_naia_account(&manifest));
+    }
+
+    #[test]
+    fn cascade_member_credential_requires_a_gateway_key_from_the_native_store() {
+        assert!(stored_naia_credential_is_valid(Some(serde_json::json!(
+            "gw-member-session_123"
+        ))));
+        assert!(!stored_naia_credential_is_valid(Some(serde_json::json!(
+            "e2e-member-flag-only"
+        ))));
+        assert!(!stored_naia_credential_is_valid(Some(serde_json::json!(
+            ""
+        ))));
+        assert!(!stored_naia_credential_is_valid(None));
+    }
+
+    #[test]
+    fn voice_only_installation_does_not_require_ditto_engine() {
+        let status = classify_cascade_installation_for_profile(
+            CascadeInstallationProbe {
+                loader: true,
+                python_runtime: true,
+                cascade_service_bundle: true,
+                ditto_engine: false,
+                voxcpm2_model: true,
+                reference_voices: true,
+                facade_healthy: false,
+            },
+            Some("windows_trt_6g"),
+        );
+        assert!(status.can_start);
+        assert!(!status.steps.iter().any(|step| step.id == "ditto-engine"));
     }
 
     #[test]

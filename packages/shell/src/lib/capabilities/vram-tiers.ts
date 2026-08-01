@@ -33,6 +33,7 @@ import type { ModelCapability } from "../types";
  */
 export type VramTierId =
 	| "avatar-6g"
+	| "windows-voice-6g"
 	| "local-llm-avatar-8g"
 	| "laptop-4060-8g"
 	| "local-llm-voice-16g"
@@ -133,6 +134,18 @@ export const VRAM_TIERS: readonly VramTier[] = [
 		hidden: true, // 실기 미검증(2026-07-15) — 피커 비노출, 검증 후 해제
 		realtime: "measurement-gated",
 		note: "6GB: 로컬 아바타(Ditto 2.6G)만. LLM·STT·TTS = 클라우드. 로컬 LLM은 8GB부터.",
+	},
+	{
+		id: "windows-voice-6g",
+		label: "Windows NVIDIA RTX 6GB+: external LLM + TensorRT VoxCPM2 voice + 3D avatar",
+		minVramGb: 6,
+		llm: "external",
+		localCapabilities: ["tts"],
+		approxLocalVramGb: 3.7,
+		capabilityCostGb: { tts: 3.7 },
+		loaderProfile: "windows_trt_6g",
+		realtime: "measurement-gated",
+		note: "Windows NVIDIA RTX 6GB+: keep the Naia account, remote Ollama, or external API LLM unchanged; run only TensorRT VoxCPM2 locally. Ditto/NVA and local LLM are disabled, and the Shell keeps its 3D VRM avatar. Real-time speed requires measurement on the target GPU.",
 	},
 	{
 		id: "local-llm-avatar-8g",

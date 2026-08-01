@@ -161,7 +161,7 @@ describe("App discord deep-link persistence", () => {
 		expect(screen.getByText("avatar")).toBeTruthy();
 	});
 
-	it("mounts video avatar for a logged-out explicit local avatar profile", async () => {
+	it("keeps a logged-out explicit local avatar profile dormant and renders VRM", () => {
 		localStorage.setItem("naia-adk-path", "C:\\naia");
 		localStorage.setItem(
 			"naia-config",
@@ -178,6 +178,7 @@ describe("App discord deep-link persistence", () => {
 
 		render(<App />);
 
-		expect(await screen.findByText("video-avatar")).toBeTruthy();
+		expect(screen.queryByText("video-avatar")).toBeNull();
+		expect(screen.getByText("avatar")).toBeTruthy();
 	});
 });

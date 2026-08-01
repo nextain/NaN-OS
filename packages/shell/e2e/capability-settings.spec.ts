@@ -302,7 +302,7 @@ test.describe("VRAM tier local profile (#2, FR-1/FR-3)", () => {
 		await expect(tierSelect).toBeDisabled();
 		await expect(
 			page.locator('[data-testid="local-profile-hint"]'),
-		).toContainText(/Naia/i);
+		).toContainText(/Naia.*(member|회원)|회원가입/i);
 	});
 
 	test("FR-3: logged in → local GPU profile is enabled", async ({ page }) => {
@@ -342,6 +342,14 @@ test.describe("VRAM tier local profile (#2, FR-1/FR-3)", () => {
 		await expect(
 			page.locator('#local-gpu-tier option[value="laptop-4060-8g"]'),
 		).toBeDisabled();
+		const voice6g = page.locator(
+			'#local-gpu-tier option[value="windows-voice-6g"]',
+		);
+		await expect(voice6g).toBeEnabled();
+		await page.locator("#local-gpu-tier").selectOption("windows-voice-6g");
+		await expect(
+			page.locator('[data-testid="nva-vram-requirement"]'),
+		).toContainText(/8GB/i);
 	});
 });
 
@@ -394,7 +402,7 @@ test.describe("FR-7: video avatar gated by cascade capability", () => {
 		).toBeDisabled();
 	});
 
-	test("logged out local avatar-capable tier can select local NVA while Host stays hidden", async ({
+	test("logged out local avatar-capable tier stays dormant and cannot select local NVA", async ({
 		page,
 	}) => {
 		await gotoModelSettings(page, {
@@ -406,16 +414,13 @@ test.describe("FR-7: video avatar gated by cascade capability", () => {
 		await page.locator('[data-settings-tab="avatar"]').click();
 		await expect(
 			page.locator('option[value="naia-video-avatar"]'),
-		).toBeEnabled();
-		await page.locator("#avatar-provider").selectOption("naia-video-avatar");
-		await expect(page.locator("#avatar-provider")).toHaveValue(
-			"naia-video-avatar",
-		);
+		).toBeDisabled();
+		await expect(page.locator("#avatar-provider")).toHaveValue("vrm");
 		await expect(page.locator("#cascade-runtime-url")).toHaveCount(0);
 		const config = await page.evaluate(() =>
 			JSON.parse(localStorage.getItem("naia-config") || "{}"),
 		);
-		expect(config.avatarProvider).toBe("naia-video-avatar");
+		expect(config.avatarProvider).not.toBe("naia-video-avatar");
 		expect(config.cascadeRuntimeUrl).toBeUndefined();
 	});
 

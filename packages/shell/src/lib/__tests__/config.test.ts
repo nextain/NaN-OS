@@ -86,6 +86,7 @@ describe("config", () => {
 			provider: "nextain",
 			model: "gemini-3.5-flash",
 			apiKey: "",
+			naiaKey: "nk",
 			localGpuTier: "laptop-4060-8g",
 			vllmTtsHost: "http://localhost:8901",
 		});
@@ -97,6 +98,39 @@ describe("config", () => {
 		expect(restored.vllmTtsHost).toBe("http://localhost:8910");
 		expect(restored.avatarProvider).toBe("naia-video-avatar");
 		expect(restored.nvaModel).toBe("naia");
+	});
+
+	it("restores the explicit 6GB voice profile with VRM and no NVA", () => {
+		const restored = reconcileExplicitLocalProfile({
+			provider: "nextain",
+			model: "gemini-3.5-flash",
+			apiKey: "",
+			naiaKey: "nk",
+			localGpuTier: "windows-voice-6g",
+			avatarProvider: "naia-video-avatar",
+			nvaModel: "stale.nva",
+			vllmTtsHost: "http://localhost:8901",
+		});
+		expect(restored.provider).toBe("nextain");
+		expect(restored.ttsProvider).toBe("naia-local-voice");
+		expect(restored.ttsEnabled).toBe(true);
+		expect(restored.vllmTtsHost).toBe("http://localhost:8910");
+		expect(restored.avatarProvider).toBe("vrm");
+		expect(restored.nvaModel).toBeUndefined();
+	});
+
+	it("keeps a saved hardware profile dormant without a Naia login", () => {
+		const restored = reconcileExplicitLocalProfile({
+			provider: "ollama",
+			model: "qwen3:8b",
+			apiKey: "",
+			localGpuTier: "windows-voice-6g",
+			avatarProvider: "vrm",
+		});
+
+		expect(restored.provider).toBe("ollama");
+		expect(restored.model).toBe("qwen3:8b");
+		expect(restored.ttsProvider).toBeUndefined();
 	});
 
 	it("hasApiKey returns false when not set", () => {

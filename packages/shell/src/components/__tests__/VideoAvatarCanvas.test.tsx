@@ -100,7 +100,9 @@ describe("VideoAvatarCanvas idle-first contract", () => {
 		const idle = container.querySelector("[data-video-avatar-idle]");
 		expect(idle).toHaveAttribute("src", "blob:nva-idle");
 		await vi.waitFor(() =>
-			expect(mockInvoke).toHaveBeenCalledWith("start_cascade"),
+			expect(mockInvoke).toHaveBeenCalledWith("start_cascade", {
+				expectedLoaderProfile: "windows_trt_8g",
+			}),
 		);
 		expect(container.querySelector("[data-video-avatar-idle]")).toBeTruthy();
 		expect(

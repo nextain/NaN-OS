@@ -1,6 +1,6 @@
 # 요구사항 (P03 — FR/NFR) — 2단계 산출물
 
-> **현재 Windows 8GB NVA 기준:** [`windows-8gb-nva.md`](windows-8gb-nva.md)와 FR-CASCADE.9~14가 정본이다. VRAM 8GB 이상에서 LLM은 외부(Naia 계정·원격 Ollama·외부 API)로 유지하고, 로컬에는 VoxCPM2 W8A16 + TensorRT LocDiT와 TensorRT-native Ditto만 실행한다. 8GB 미만·VRAM 미감지는 NVA disabled다. RTX 4060 Laptop/4070 실측 외 RTX 30/40은 목표 지원 범위다. 아래의 6GB NVA, 8GB 3모드, CPU/NPU Ollama 내용은 과거 연구 기록이며 이 프로파일에 적용하지 않는다.
+> **현재 Windows 로컬 표현 기준:** 6GB 이상 음성 전용은 [`windows-6gb-voice.md`](windows-6gb-voice.md)와 FR-CASCADE.20~22, 8GB 이상 NVA는 [`windows-8gb-nva.md`](windows-8gb-nva.md)와 FR-CASCADE.9~14가 정본이다. 두 프로파일 모두 LLM을 외부(Naia 계정·원격 Ollama·외부 API)로 유지한다. 6GB는 VoxCPM2 W8A16 + TensorRT LocDiT와 Shell 3D VRM만 사용하고 Ditto/NVA를 비활성화한다. 모든 하드웨어 프로파일은 Naia 회원 로그인 전에는 실행할 수 없다.
 
 `[Phase 05 (P03 요구사항)]`
 
@@ -283,6 +283,9 @@ localStorage `naia-config` 는 파일에서 하이드레이트되는 **순수 �
 | **FR-CASCADE.17** (REQ-NVA-LAT-003) | `windows_trt_8g` manager 프로파일은 Ditto의 검증 대상 최대 렌더 크기를 명시적으로 주입한다. Shell이 화면 크기에 맞춰 확대·합성하며, 렌더 크기 변경은 같은 조건의 실제 RTF·첫 프레임 측정으로 효과와 화질을 확인하기 전 전체 RTX 지원 사실로 일반화하지 않는다. | UC-WIN-NVA-LATENCY | manager `test_service_plan.py` + 실제 NVA 화면 비교 |
 | **FR-CASCADE.18** (REQ-NVA-LAT-004) | `video/mp4` 응답은 MSE가 전체 HTTP 응답 완료 전에 첫 재생 가능한 프래그먼트를 append하고 재생할 수 있을 때만 조기 재생 최적화로 인정한다. ffmpeg가 오디오 EOF까지 출력을 보류하면 기존 완결 경로를 유지하고 개선으로 기록하지 않는다. | UC-WIN-NVA-LATENCY | Shell MSE 단위/FE + 서비스 첫 `moof` 시각 계측 |
 | **FR-CASCADE.19** (REQ-NVA-LAT-005~006) | Shell의 발화 중단·새 발화·renderer 종료는 진행 중 fetch body reader를 취소하는 것에 그치지 않고 요청 AbortSignal로 연결을 닫는다. cascade/Ditto는 연결 종료를 렌더 중단으로 처리해 ffmpeg와 GPU 슬롯을 회수하며, Shell은 NVA idle과 정직한 상태 표시를 유지한다. | UC-WIN-NVA-LATENCY | `cascade-renderer` Abort 테스트, cascade adapter 취소 테스트, labs 슬롯 회수 테스트, Tauri 94 |
+| **FR-CASCADE.20** (#406) | Windows `windows-voice-6g` tier는 물리 VRAM 6GB 이상에서 canonical loader profile `windows_trt_6g`를 사용한다. 외부 LLM route를 보존하고 로컬에는 VoxCPM2 W8A16 + TensorRT LocDiT TTS와 음성 전용 façade만 둔다. Ditto/NVA/로컬 LLM/Ollama/NPU/STT는 실행하지 않고 Shell 3D VRM을 사용한다. 실시간은 지원 조건이 아니며 실제 6GB cold boot는 실측 게이트다. | UC-WIN-VOICE-6G | tier/manifest/manager plan tests, actual cold-start probe |
+| **FR-CASCADE.21** (#406) | 모든 하드웨어 프로파일은 등록된 Naia 회원 로그인 후에만 선택·복원·기동할 수 있다. 로그아웃은 cascade를 중지하고 manifest의 tier/loaderProfile을 제거한다. Rust `start_cascade`도 `gate.naiaAccount=true`가 아니면 cached-ready 상태를 포함해 fail-closed로 거부한다. | UC-WIN-VOICE-6G·UC-WIN-NVA-8G | Settings/manifest/NVA gate/Rust account tests |
+| **FR-CASCADE.22** (#406) | 6GB TTS는 CPU에서 W8A16 양자화를 완료한 뒤 CUDA로 이동하고 plain-attribute KV cache를 대상 device에 다시 만든다. 이는 full-BF16 CUDA 선적재 peak를 제거하기 위한 cold-start 계약이며, warm peak·첫 발화·반복 발화·오류 누적은 실제 Shell 통합 테스트로 기록한다. | UC-WIN-VOICE-6G | `test_voxcpm2_int8.py`, manager service env, Shell Tauri integration |
 
 > NFR: **NFR-voiceprint(불변)** — Naia가 VoxCPM2를 쓸 때 **음성지문(ref voiceprint)은 필수**이며 무지문 합성을 허용하지 않는다. 이 원칙은 Windows 8GB 로컬 VoxCPM2 W8A16 + TensorRT LocDiT에도 적용된다. · NFR-honesty(백엔드·VRAM 강등 위장 금지) · F1(measurement-gated, 측정 없이 실시간·개선 단정 금지) · NFR-no-conversation-cache(대화형 Shell/cascade의 완성 A/V 응답 캐시 금지; 반복 콘텐츠 TalkingKiosk와 분리). ⚠️ in-shell WSL cascade 부트스트랩은 구 gateway-in-WSL 아키텍처의 레거시다.
 
