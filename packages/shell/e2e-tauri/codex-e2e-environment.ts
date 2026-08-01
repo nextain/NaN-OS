@@ -123,6 +123,7 @@ export function resolveRequiredPairedAgent(): string {
  */
 export function configureCodexE2eEnvironment(): void {
 	process.env.CAFE_DEBUG_E2E = "1";
+	process.env.NAIA_E2E_MODE = "1";
 	process.env.NAIA_E2E_MOCK_CLONE = "1";
 	process.env.NAIA_E2E_ADK_PATH = E2E_WORKSPACE;
 	process.env.NAIA_E2E_RUNTIME_DIR = E2E_RUNTIME;
@@ -349,6 +350,7 @@ export async function startOwnedViteServer(): Promise<void> {
 				...process.env,
 				VITE_NAIA_SECURE_STORE_FILE:
 					process.env.NAIA_E2E_SECURE_STORE_FILE,
+				VITE_NAIA_E2E_MODE: "1",
 				BROWSER: "none",
 				VITE_NAIA_E2E_ADK_PATH: E2E_WORKSPACE,
 				VITE_NAIA_E2E_PROVIDER: "codex",

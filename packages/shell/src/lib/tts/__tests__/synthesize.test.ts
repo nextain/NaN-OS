@@ -307,7 +307,7 @@ describe("synthesizeTts — naia-local-voice (cascade /tts facade contract)", ()
 		expect(out.length).toBe(WAV_BYTES.length);
 	});
 
-	it("voice 미지정 시 naia-default (무지문 랜덤 음색 금지 — 서버가 ref 로 해석)", async () => {
+	it("voice 미지정 시 안정적인 기본 음색으로 정규화", async () => {
 		const fetchMock = vi.fn().mockResolvedValue(wavResponse());
 		vi.stubGlobal("fetch", fetchMock);
 		await synthesizeTts({
@@ -322,7 +322,7 @@ describe("synthesizeTts — naia-local-voice (cascade /tts facade contract)", ()
 		});
 	});
 
-	it("UI placeholder voice='default' 도 naia-default 로 정규화 (2026-07-15 실측: 서버는 모르는 id 를 400 없이 받아 문장마다 랜덤 음색 생성)", async () => {
+	it("UI placeholder voice='default' 도 안정적인 기본 음색으로 정규화", async () => {
 		const fetchMock = vi.fn().mockResolvedValue(wavResponse());
 		vi.stubGlobal("fetch", fetchMock);
 		await synthesizeTts({
@@ -352,6 +352,66 @@ describe("synthesizeTts — naia-local-voice (cascade /tts facade contract)", ()
 			text: "x",
 			voice: "my-cloned-voice",
 		});
+	});
+
+	it("retries the stable default once when a saved local voice left the palette", async () => {
+		const fetchMock = vi
+			.fn()
+			.mockResolvedValueOnce(
+				jsonResponse({ error: "unknown_voice" }, false, 400),
+			)
+			.mockResolvedValueOnce(wavResponse());
+		vi.stubGlobal("fetch", fetchMock);
+
+		const result = await synthesizeTts({
+			text: "안녕",
+			provider: "naia-local-voice",
+			voice: "removed-preset.wav",
+			vllmTtsHost: "http://localhost:8910",
+		});
+
+		expect(fetchMock).toHaveBeenCalledTimes(2);
+		expect(JSON.parse(fetchMock.mock.calls[0][1].body as string).voice).toBe(
+			"removed-preset.wav",
+		);
+		expect(JSON.parse(fetchMock.mock.calls[1][1].body as string).voice).toBe(
+			"ref_ko_485.wav",
+		);
+		expect(result.audioBase64).toBeTruthy();
+	});
+
+	it("does not retry a non-voice validation error", async () => {
+		const fetchMock = vi
+			.fn()
+			.mockResolvedValue(jsonResponse({ error: "invalid_text" }, false, 400));
+		vi.stubGlobal("fetch", fetchMock);
+
+		await expect(
+			synthesizeTts({
+				text: "x",
+				provider: "naia-local-voice",
+				voice: "removed-preset.wav",
+				vllmTtsHost: "http://localhost:8910",
+			}),
+		).rejects.toThrow(/invalid_text/);
+		expect(fetchMock).toHaveBeenCalledTimes(1);
+	});
+
+	it("does not retry when the stable default itself is unknown", async () => {
+		const fetchMock = vi
+			.fn()
+			.mockResolvedValue(jsonResponse({ error: "unknown_voice" }, false, 400));
+		vi.stubGlobal("fetch", fetchMock);
+
+		await expect(
+			synthesizeTts({
+				text: "x",
+				provider: "naia-local-voice",
+				voice: "default",
+				vllmTtsHost: "http://localhost:8910",
+			}),
+		).rejects.toThrow(/unknown_voice/);
+		expect(fetchMock).toHaveBeenCalledTimes(1);
 	});
 
 	it("uses vllmTtsHost, never the LLM vllmHost", async () => {

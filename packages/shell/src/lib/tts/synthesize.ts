@@ -20,8 +20,8 @@
  * and never reaches here.
  */
 
-import { DEFAULT_LOCAL_VOICE_HOST, type TtsProviderId } from "../config";
 import { BGM_SIDECAR_BASE_URL } from "../bgm-sidecar-url";
+import { DEFAULT_LOCAL_VOICE_HOST, type TtsProviderId } from "../config";
 import { resolveEdgeVoice } from "./edge-tts";
 
 // Edge neural TTS runs in the bgm/media sidecar (node msedge-tts) — the in-app
@@ -287,10 +287,14 @@ async function synthNaiaLocalVoice(
 		/\/$/,
 		"",
 	);
-	const resp = await fetch(`${base}/v1/audio/speech`, {
-		method: "POST",
-		headers: { "Content-Type": "application/json" },
-		body: JSON.stringify({
+	const defaultVoice = "ref_ko_485.wav";
+	const selectedVoice =
+		!opts.voice || opts.voice === "default" ? defaultVoice : opts.voice;
+	const request = (voice: string) =>
+		fetch(`${base}/v1/audio/speech`, {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({
 			// :8910 owns the private VoxCPM2 (:8901) implementation detail.
 			// The facade contract intentionally remains `{ text, voice }`.
 			model: "voxcpm2",
@@ -303,17 +307,34 @@ async function synthNaiaLocalVoice(
 			// The standalone facade ships this CC0 preset with the Shell bundle.
 			// `naia-default` was only a former server-side alias; it is not present
 			// in the Windows facade palette and causes a 400 after a fresh install.
-			voice:
-				!opts.voice || opts.voice === "default"
-					? "ref_ko_485.wav"
-					: opts.voice,
+			voice,
 			response_format: "wav",
-		}),
-		signal: opts.signal,
-	});
+			}),
+			signal: opts.signal,
+		});
+	let resp = await request(selectedVoice);
 	if (!resp.ok) {
+		const detail = await errorDetail(resp);
+		// A profile update can remove a formerly bundled voice while ui-config
+		// still points at it. Recover once with the facade's stable default instead
+		// of turning an otherwise healthy local engine into silence.
+		if (
+			resp.status === 400 &&
+			selectedVoice !== defaultVoice &&
+			detail.includes("unknown_voice")
+		) {
+			resp = await request(defaultVoice);
+			if (resp.ok) {
+				return {
+					audioBase64: arrayBufferToBase64(await resp.arrayBuffer()),
+				};
+			}
+			throw new Error(
+				`로컬 음성 합성 실패 (${resp.status}): ${await errorDetail(resp)}`,
+			);
+		}
 		throw new Error(
-			`로컬 음성 합성 실패 (${resp.status}): ${await errorDetail(resp)}`,
+			`로컬 음성 합성 실패 (${resp.status}): ${detail}`,
 		);
 	}
 	// audio/wav(RIFF) bytes — AudioQueue/ttsAudioToWav 가 RIFF 를 네이티브 감지.

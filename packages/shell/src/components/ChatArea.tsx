@@ -608,6 +608,7 @@ export function ChatArea({
 	const pipelineActiveRef = useRef(false);
 	const audioQueueRef = useRef<AudioQueue | null>(null);
 	const sentenceChunkerRef = useRef<SentenceChunker | null>(null);
+	const reasoningTextHiddenRef = useRef(false);
 	const activeTtsRequestsRef = useRef<Set<string>>(new Set());
 	// Ditto must receive synthesized sentences in their reserved audio order,
 	// even when later TTS requests finish first. Each sentence owns one slot in
@@ -814,6 +815,9 @@ export function ChatArea({
 			activeTtsRequestsRef.current.size > 0 ||
 			audioQueueRef.current?.isActive === true;
 		if (!store.isStreaming && !ttsActive) return;
+		// A cancelled response may never deliver its terminal `finish` chunk.
+		// Do not let an unfinished reasoning block hide the next request.
+		reasoningTextHiddenRef.current = false;
 		// Cancelling the response is also a speech barge-in. Without clearing
 		// the TTS generation here, a late avatar failure callback can replay
 		// fallback audio from the response the user just stopped.
@@ -1420,6 +1424,9 @@ export function ChatArea({
 		// Falls through to the normal sendChatMessage flow below
 
 		const requestId = generateRequestId();
+		// Request state is isolated even when the previous transport terminated
+		// without a final chunk (cancel, disconnect, provider error).
+		reasoningTextHiddenRef.current = false;
 		currentRequestId.current = requestId;
 
 		setInput("");
@@ -1812,9 +1819,37 @@ export function ChatArea({
 
 		switch (chunk.type) {
 			case "text": {
-				store.appendStreamChunk(chunk.text);
+				let visibleText = chunk.text;
+				const htmlThinkOpen = /^\s*<think>/i.test(visibleText);
+				const bracketThinkOpen = /^\s*\[THINK\]/i.test(visibleText);
+				// `[THINK]` is also the documented avatar-expression tag. Treat it as
+				// reasoning only when this chunk proves the paired `</think>` form;
+				// otherwise a normal expressive answer would disappear until finish.
+				const opensReasoning =
+					htmlThinkOpen ||
+					(bracketThinkOpen && /<\/think>/i.test(visibleText));
+				if (opensReasoning) reasoningTextHiddenRef.current = true;
+				if (reasoningTextHiddenRef.current) {
+					const close = visibleText.search(/<\/think>/i);
+					if (close < 0) {
+						store.appendThinkingChunk(
+							visibleText.replace(/^\s*(?:<think>|\[THINK\])\s*/i, ""),
+						);
+						break;
+					}
+					store.appendThinkingChunk(
+						visibleText
+							.slice(0, close)
+							.replace(/^\s*(?:<think>|\[THINK\])\s*/i, ""),
+					);
+					visibleText = visibleText.slice(close + "</think>".length);
+					reasoningTextHiddenRef.current = false;
+				}
+				visibleText = visibleText.replace(/<\/?think>/gi, "");
+				if (!visibleText) break;
+				store.appendStreamChunk(visibleText);
 				if (ttsTextSyncRef.current.active) {
-					ttsTextSyncRef.current.canonical += chunk.text;
+					ttsTextSyncRef.current.canonical += visibleText;
 				}
 				// Parse emotion from accumulated text (tag may span multiple chunks)
 				const accumulated = store.streamingContent;
@@ -1824,7 +1859,7 @@ export function ChatArea({
 				}
 				// Sentence-level TTS — same path for both pipeline and chat mode
 				if (sentenceChunkerRef.current) {
-					const sentences = sentenceChunkerRef.current.feed(chunk.text);
+					const sentences = sentenceChunkerRef.current.feed(visibleText);
 					if (sentences.length > 0) {
 						Logger.info("ChatArea", "SentenceChunker produced sentences", {
 							count: sentences.length,
@@ -1905,6 +1940,7 @@ export function ChatArea({
 				break;
 			}
 			case "finish":
+				reasoningTextHiddenRef.current = false;
 				// Flush remaining text to TTS (both pipeline and chat mode)
 				if (sentenceChunkerRef.current) {
 					const remaining = sentenceChunkerRef.current.flush();

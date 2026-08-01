@@ -1,10 +1,69 @@
 // @vitest-environment jsdom
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { setLocale } from "../../lib/i18n";
 import { ProactiveSpeechSettingsSection } from "../ProactiveSpeechSettingsSection";
 
+afterEach(cleanup);
+
 describe("PA-DJ-04 proactive settings UI", () => {
+	it("keeps an active profile owned by the other settings section", async () => {
+		setLocale("en");
+		const onSave = vi.fn(async () => true);
+		render(
+			<ProactiveSpeechSettingsSection
+				mode="exhibition"
+				value={{
+					profile: "personal_radio_dj",
+					timezone: "UTC",
+					weatherConsented: false,
+				}}
+				onSave={onSave}
+			/>,
+		);
+
+		expect(
+			(screen.getByTestId("proactive-speech-profile") as HTMLSelectElement)
+				.value,
+		).toBe("disabled");
+		expect(screen.queryByLabelText("Automatically play BGM")).toBeNull();
+		fireEvent.click(screen.getByText("Save proactive speech settings"));
+		await waitFor(() =>
+			expect(onSave).toHaveBeenCalledWith(
+				expect.objectContaining({ profile: "personal_radio_dj" }),
+			),
+		);
+	});
+
+	it("shows DJ-only and exhibition-only fields in their owning sections", () => {
+		setLocale("en");
+		const value = {
+			profile: "disabled" as const,
+			timezone: "UTC",
+			weatherConsented: false,
+		};
+		const dj = render(
+			<ProactiveSpeechSettingsSection
+				mode="dj"
+				value={value}
+				onSave={() => true}
+			/>,
+		);
+		expect(screen.getByLabelText("Automatically play BGM")).toBeDefined();
+		expect(screen.queryByLabelText("Exhibition knowledge scope")).toBeNull();
+		dj.unmount();
+
+		render(
+			<ProactiveSpeechSettingsSection
+				mode="exhibition"
+				value={value}
+				onSave={() => true}
+			/>,
+		);
+		expect(screen.queryByLabelText("Automatically play BGM")).toBeNull();
+		expect(screen.getByLabelText("Exhibition knowledge scope")).toBeDefined();
+	});
+
 	it("edits and persists proactive speech settings", async () => {
 		setLocale("en");
 		const onChange = vi.fn();

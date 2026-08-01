@@ -82,6 +82,8 @@ export interface RefAudioPreset {
 	sampleSha256?: string;
 	source: string;
 	license: string;
+	localIndex?: number;
+	isDefault?: boolean;
 }
 
 /**
@@ -138,6 +140,8 @@ export async function getLocalRefAudioPresets(
 			sampleFormat: "wav",
 			source: "local-cascade",
 			license: "bundled",
+			localIndex: voice.idx,
+			isDefault: voice.default ?? false,
 		}));
 }
 

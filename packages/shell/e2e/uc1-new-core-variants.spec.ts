@@ -36,6 +36,8 @@ const MOCK_SCRIPT = `
   }
   function scenarioFor(msg) {
     var m = (msg || "").toLowerCase();
+    if (m.indexOf("paired-reasoning") !== -1) return "paired-reasoning";
+    if (m.indexOf("think-emotion") !== -1) return "think-emotion";
     if (m.indexOf("생각") !== -1 || m.indexOf("think") !== -1) return "thinking";
     if (m.indexOf("도구") !== -1 || m.indexOf("ls") !== -1 || m.indexOf("써줘") !== -1) return "tool";
     if (m.indexOf("길게") !== -1 || m.indexOf("천천히") !== -1) return "long";
@@ -44,6 +46,8 @@ const MOCK_SCRIPT = `
   function chunksFor(rid, scenario, msg) {
     var id = "tc-" + (++tc);
     switch (scenario) {
+      case "paired-reasoning": return [ { type: "text", requestId: rid, text: "[THINK]private chain</think>public answer" }, { type: "finish", requestId: rid } ];
+      case "think-emotion": return [ { type: "text", requestId: rid, text: "[THINK] visible expressive answer" }, { type: "finish", requestId: rid } ];
       case "thinking": return [ { type: "thinking", requestId: rid, text: "깊이 생각하는 중…" }, { type: "text", requestId: rid, text: "[variant] 생각 끝, 답이야" }, { type: "finish", requestId: rid } ];
       case "tool": return [ { type: "tool_use", requestId: rid, toolCallId: id, toolName: "execute_command", args: { command: "ls" } }, { type: "tool_result", requestId: rid, toolCallId: id, toolName: "execute_command", output: "a.txt\\nb.txt", success: true }, { type: "text", requestId: rid, text: "[variant] 파일 목록입니다" }, { type: "finish", requestId: rid } ];
       case "long": { var cs = []; for (var i = 0; i < 12; i++) cs.push({ type: "text", requestId: rid, text: "조각" + i + " " }); cs.push({ type: "finish", requestId: rid }); return cs; }
@@ -144,5 +148,24 @@ test.describe("UC1 변종 — 새 core 경유", () => {
 		await expect.poll(async () => page.evaluate(() => (window as unknown as { __E2E_CANCELLED__: string[] }).__E2E_CANCELLED__.length), { timeout: 5_000 }).toBeGreaterThan(0);
 		// 스트리밍 종료(커서 사라짐).
 		await expect(page.locator(".cursor-blink")).toBeHidden({ timeout: 10_000 });
+	});
+
+	test("paired [THINK] reasoning is hidden from the answer", async ({ page }) => {
+		await send(page, "paired-reasoning");
+		const assistant = page.locator(".chat-message.assistant").last();
+		const answer = assistant.locator(".message-content");
+		await expect(answer).toContainText("public answer", { timeout: 15_000 });
+		await expect(answer).not.toContainText("private chain");
+		await expect(page.locator(".thinking-inline-content").last()).toContainText(
+			"private chain",
+		);
+	});
+
+	test("standalone [THINK] expression does not hide the answer", async ({ page }) => {
+		await send(page, "think-emotion");
+		await expect(page.locator(".chat-message.assistant").last()).toContainText(
+			"visible expressive answer",
+			{ timeout: 15_000 },
+		);
 	});
 });

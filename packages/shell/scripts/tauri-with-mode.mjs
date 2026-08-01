@@ -242,6 +242,12 @@ if (existsSync(envPath)) {
 	process.stdout.write(`[tauri-with-mode] ${mode.toUpperCase()} — .env.${mode} 없음; config 기본값 사용\n`);
 }
 
+// A developer .env file must not be able to re-introduce native E2E ownership
+// after the inherited environment was scrubbed above.
+const postFileEnv = interactiveLaunchEnv(env);
+for (const key of Object.keys(env)) delete env[key];
+Object.assign(env, postFileEnv);
+
 const pairedAgent = applyPairedAgentEnv(env);
 // The Tauri process runs the compiled agent entrypoint. Always build the exact
 // paired source before development so a clean checkout cannot start with a

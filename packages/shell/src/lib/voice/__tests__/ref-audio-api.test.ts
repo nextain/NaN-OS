@@ -71,6 +71,7 @@ describe("local cascade voice palette", () => {
 				name: "ref_ko_485.wav (default)",
 				locale: "ko",
 				gender: "female",
+				isDefault: true,
 				sampleUrl:
 					"http://127.0.0.1:8910/ref/audio/ref_ko_485.wav",
 			}),

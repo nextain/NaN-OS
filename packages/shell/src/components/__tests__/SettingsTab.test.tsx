@@ -127,7 +127,7 @@ describe("SettingsTab", () => {
 		});
 	});
 
-	it("places Connections between Skills and General and never renders a token field", async () => {
+	it("keeps unfinished Connections disabled between Skills and General", async () => {
 		mockInvoke.mockImplementation((command: string) => {
 			if (command === "discord_bot_token_available")
 				return Promise.resolve(false);
@@ -149,8 +149,11 @@ describe("SettingsTab", () => {
 			"connections",
 			"general",
 		]);
-		gotoSettingsTab("connections");
-		expect(await screen.findByTestId("discord-connections")).toBeDefined();
+		const connections = document.querySelector(
+			'[data-settings-tab="connections"]',
+		) as HTMLButtonElement;
+		expect(connections.disabled).toBe(true);
+		expect(screen.queryByTestId("discord-connections")).toBeNull();
 		expect(document.querySelector('input[type="password"]')).toBeNull();
 	});
 
@@ -751,6 +754,31 @@ describe("SettingsTab — memory tab (#298)", () => {
 		// 10 tabs: profile|brain|voice|avatar|persona|memory|knowledge|skills|connections|general
 		const tabBtns = document.querySelectorAll(".settings-tab-btn");
 		expect(tabBtns.length).toBe(10);
+	});
+
+	it("owns radio DJ parameters under skill_youtube_bgm, not General", async () => {
+		mockInvoke.mockResolvedValue([]);
+		render(<SettingsTab />);
+		gotoSettingsTab("skills");
+		expect(await screen.findByTestId("youtube-bgm-skill-settings")).toBeDefined();
+		const skillProfile = screen.getByTestId(
+			"proactive-speech-profile",
+		) as HTMLSelectElement;
+		expect(
+			Array.from(skillProfile.options).map((option) => option.value),
+		).toEqual(["disabled", "personal_radio_dj"]);
+		expect(screen.getByTestId("proactive-bgm-autoplay")).toBeDefined();
+		expect(screen.queryByTestId("proactive-knowledge-scope")).toBeNull();
+
+		gotoSettingsTab("general");
+		const generalProfile = screen.getByTestId(
+			"proactive-speech-profile",
+		) as HTMLSelectElement;
+		expect(
+			Array.from(generalProfile.options).map((option) => option.value),
+		).toEqual(["disabled", "exhibition_intro"]);
+		expect(screen.queryByTestId("proactive-bgm-autoplay")).toBeNull();
+		expect(screen.getByTestId("proactive-knowledge-scope")).toBeDefined();
 	});
 
 	it("selects the visible Windows TRT profile without replacing the external brain", async () => {

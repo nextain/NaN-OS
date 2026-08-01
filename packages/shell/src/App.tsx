@@ -169,7 +169,10 @@ export function App() {
 	// The native WebDriver binary starts with a fresh WebView2 profile. Seed
 	// only the explicitly supplied E2E workspace before first render so the
 	// real application follows its normal hydrated-config path.
-	const e2eAdkPath = import.meta.env.VITE_NAIA_E2E_ADK_PATH?.trim();
+	const e2eMode = import.meta.env.VITE_NAIA_E2E_MODE === "1";
+	const e2eAdkPath = e2eMode
+		? import.meta.env.VITE_NAIA_E2E_ADK_PATH?.trim()
+		: undefined;
 	const e2eProvider =
 		import.meta.env.VITE_NAIA_E2E_PROVIDER?.trim() || "ollama";
 	const e2eModel = import.meta.env.VITE_NAIA_E2E_MODEL?.trim() || "e2e";

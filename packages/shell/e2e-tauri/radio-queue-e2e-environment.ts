@@ -37,6 +37,7 @@ async function waitForPort(port: number, child: ChildProcess) {
 }
 export function configure() {
  process.env.CAFE_DEBUG_E2E = "1";
+ process.env.NAIA_E2E_MODE = "1";
  process.env.NAIA_E2E_MOCK_CLONE = "1";
  process.env.NAIA_E2E_ADK_PATH = workspace;
  process.env.NAIA_E2E_RUNTIME_DIR = runtime;
@@ -58,7 +59,7 @@ export function reset() {
 }
 export async function start(binary: string) {
  for (const port of [vitePort, e2ePort, bgmPort, oauthPort]) await requireFree(port);
- vite = spawn(execPath, [resolve(shellDir, "node_modules/vite/bin/vite.js"), "--host", "127.0.0.1", "--port", String(vitePort)], { cwd: shellDir, stdio: ["ignore", "pipe", "pipe"], env: { ...process.env, BROWSER: "none", VITE_NAIA_E2E_ADK_PATH: workspace, VITE_NAIA_BGM_BASE: `http://127.0.0.1:${bgmPort}`, VITE_NAIA_E2E_BGM_IFRAME_URL: "/e2e/bgm-playback-fixture.html", VITE_NAIA_E2E_NO_AVATAR: "1" } });
+ vite = spawn(execPath, [resolve(shellDir, "node_modules/vite/bin/vite.js"), "--host", "127.0.0.1", "--port", String(vitePort)], { cwd: shellDir, stdio: ["ignore", "pipe", "pipe"], env: { ...process.env, BROWSER: "none", VITE_NAIA_E2E_MODE: "1", VITE_NAIA_E2E_ADK_PATH: workspace, VITE_NAIA_BGM_BASE: `http://127.0.0.1:${bgmPort}`, VITE_NAIA_E2E_BGM_IFRAME_URL: "/e2e/bgm-playback-fixture.html", VITE_NAIA_E2E_NO_AVATAR: "1" } });
  vite.stderr?.on("data", (data: Buffer) => process.stderr.write(`[radio-queue-e2e:vite] ${data.toString()}`));
  await waitForPort(vitePort, vite);
  app = spawn(binary, [], { cwd: shellDir, stdio: ["ignore", "pipe", "pipe"], env: { ...process.env, RUST_LOG: "tauri_plugin_wdio_webdriver=debug", TAURI_WEBDRIVER_PORT: String(e2ePort) } });

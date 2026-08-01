@@ -118,7 +118,10 @@ import {
 } from "../lib/llm/roles";
 import { Logger } from "../lib/logger";
 import { DEFAULT_PERSONA, FORMALITY_LOCALES } from "../lib/persona";
-import { toSpeechProfileCommandInput } from "../lib/proactive-speech-settings";
+import {
+	type ProactiveSpeechSettings,
+	toSpeechProfileCommandInput,
+} from "../lib/proactive-speech-settings";
 import { deleteSecretKey, saveSecretKey } from "../lib/secure-store";
 import {
 	type GateMode,
@@ -138,7 +141,6 @@ import { useAvatarStore } from "../stores/avatar";
 import { useCascadeAvatarStore } from "../stores/cascade-avatar";
 import { useChatStore } from "../stores/chat";
 import { clearSavedCamera } from "./AvatarCanvas";
-import { ConnectionsSettingsTab } from "./ConnectionsSettingsTab";
 import { KnowledgeSettingsTab } from "./KnowledgeSettingsTab";
 import { ProactiveSpeechSettingsSection } from "./ProactiveSpeechSettingsSection";
 import { RefAudioSection } from "./RefAudioSection";
@@ -2871,6 +2873,65 @@ export function SettingsTab() {
 
 	// Discord integration — unverified, hidden until stabilized
 	// async function handleDiscordBotConnect() { ... }
+	const proactiveSpeechSettings: ProactiveSpeechSettings = {
+		profile: existing?.proactiveSpeechProfile ?? "disabled",
+		timezone:
+			existing?.proactiveSpeechTimezone ??
+			Intl.DateTimeFormat().resolvedOptions().timeZone ??
+			"UTC",
+		idleMs: existing?.proactiveSpeechIdleMs,
+		intervalMs: existing?.proactiveSpeechIntervalMs,
+		bgmAutoPlay: existing?.proactiveSpeechBgmAutoPlay,
+		weatherConsented: existing?.proactiveSpeechWeatherConsented,
+		weatherLatitude: existing?.proactiveSpeechWeatherLatitude,
+		weatherLongitude: existing?.proactiveSpeechWeatherLongitude,
+		knowledgeScope: existing?.proactiveSpeechKnowledgeScope,
+	};
+	const saveProactiveSpeechSettings = async (
+		settings: ProactiveSpeechSettings,
+	): Promise<boolean> => {
+		const current = loadConfig();
+		if (!current) return false;
+		const next: AppConfig = {
+			...current,
+			proactiveSpeechProfile: settings.profile,
+			proactiveSpeechPermitted:
+				settings.profile === "disabled"
+					? false
+					: (current.proactiveSpeechPermitted ?? false),
+			proactiveSpeechTimezone: settings.timezone,
+			proactiveSpeechIdleMs: settings.idleMs,
+			proactiveSpeechIntervalMs: settings.intervalMs,
+			proactiveSpeechBgmAutoPlay: settings.bgmAutoPlay,
+			proactiveSpeechWeatherConsented: settings.weatherConsented,
+			proactiveSpeechWeatherLatitude: settings.weatherLatitude,
+			proactiveSpeechWeatherLongitude: settings.weatherLongitude,
+			proactiveSpeechKnowledgeScope: settings.knowledgeScope,
+		};
+		window.dispatchEvent(new CustomEvent("naia-proactive-profile-changing"));
+		const persisted = await writeNaiaUiConfig(
+			next as unknown as Record<string, unknown>,
+		);
+		if (!persisted) {
+			await configureSpeechProfile({
+				profile: "disabled",
+				timezone: settings.timezone,
+				weatherConsented: false,
+			});
+			return false;
+		}
+		saveConfig(next);
+		const disabled = await configureSpeechProfile({
+			profile: "disabled",
+			timezone: settings.timezone,
+			weatherConsented: false,
+		});
+		if (!disabled) return false;
+		if (!next.proactiveSpeechPermitted || settings.profile === "disabled") {
+			return true;
+		}
+		return configureSpeechProfile(toSpeechProfileCommandInput(settings));
+	};
 
 	return (
 		<div className="settings-tab">
@@ -2942,10 +3003,10 @@ export function SettingsTab() {
 				<button
 					type="button"
 					data-settings-tab="connections"
-					className={`settings-tab-btn${activeSettingsTab === "connections" ? " settings-tab-btn--active" : ""}`}
-					onClick={() => setActiveSettingsTab("connections")}
+					className="settings-tab-btn"
+					disabled
 				>
-					{t("settings.tabConnections")}
+					{t("settings.tabConnections")} · {t("settings.comingSoonTag")}
 				</button>
 				<button
 					type="button"
@@ -2959,71 +3020,9 @@ export function SettingsTab() {
 			{activeSettingsTab === "general" && (
 				<>
 					<ProactiveSpeechSettingsSection
-						value={{
-							profile: existing?.proactiveSpeechProfile ?? "disabled",
-							timezone:
-								existing?.proactiveSpeechTimezone ??
-								Intl.DateTimeFormat().resolvedOptions().timeZone ??
-								"UTC",
-							idleMs: existing?.proactiveSpeechIdleMs,
-							intervalMs: existing?.proactiveSpeechIntervalMs,
-							bgmAutoPlay: existing?.proactiveSpeechBgmAutoPlay,
-							weatherConsented: existing?.proactiveSpeechWeatherConsented,
-							weatherLatitude: existing?.proactiveSpeechWeatherLatitude,
-							weatherLongitude: existing?.proactiveSpeechWeatherLongitude,
-							knowledgeScope: existing?.proactiveSpeechKnowledgeScope,
-						}}
-						onSave={async (settings) => {
-							const current = loadConfig();
-							if (!current) return false;
-							const next: AppConfig = {
-								...current,
-								proactiveSpeechProfile: settings.profile,
-								// Selecting policy must not silently spend AI/TTS. The visible
-								// control bar grants runtime permission.
-								proactiveSpeechPermitted:
-									settings.profile === "disabled"
-										? false
-										: (current.proactiveSpeechPermitted ?? false),
-								proactiveSpeechTimezone: settings.timezone,
-								proactiveSpeechIdleMs: settings.idleMs,
-								proactiveSpeechIntervalMs: settings.intervalMs,
-								proactiveSpeechBgmAutoPlay: settings.bgmAutoPlay,
-								proactiveSpeechWeatherConsented: settings.weatherConsented,
-								proactiveSpeechWeatherLatitude: settings.weatherLatitude,
-								proactiveSpeechWeatherLongitude: settings.weatherLongitude,
-								proactiveSpeechKnowledgeScope: settings.knowledgeScope,
-							};
-							window.dispatchEvent(
-								new CustomEvent("naia-proactive-profile-changing"),
-							);
-							const persisted = await writeNaiaUiConfig(
-								next as unknown as Record<string, unknown>,
-							);
-							if (!persisted) {
-								await configureSpeechProfile({
-									profile: "disabled",
-									timezone: settings.timezone,
-									weatherConsented: false,
-								});
-								return false;
-							}
-							saveConfig(next);
-							const disabled = await configureSpeechProfile({
-								profile: "disabled",
-								timezone: settings.timezone,
-								weatherConsented: false,
-							});
-							if (!disabled) return false;
-							if (
-								!next.proactiveSpeechPermitted ||
-								settings.profile === "disabled"
-							)
-								return true;
-							return configureSpeechProfile(
-								toSpeechProfileCommandInput(settings),
-							);
-						}}
+						mode="exhibition"
+						value={proactiveSpeechSettings}
+						onSave={saveProactiveSpeechSettings}
 					/>
 					<div className="settings-field">
 						<div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -5231,8 +5230,21 @@ export function SettingsTab() {
 				</>
 			)}
 			{activeSettingsTab === "knowledge" && <KnowledgeSettingsTab />}
-			{activeSettingsTab === "skills" && <SkillsTab />}
-			{activeSettingsTab === "connections" && <ConnectionsSettingsTab />}
+			{activeSettingsTab === "skills" && (
+				<>
+					<SkillsTab />
+					<div data-testid="youtube-bgm-skill-settings">
+						<div className="settings-section-divider">
+							<span>skill_youtube_bgm</span>
+						</div>
+						<ProactiveSpeechSettingsSection
+							mode="dj"
+							value={proactiveSpeechSettings}
+							onSave={saveProactiveSpeechSettings}
+						/>
+					</div>
+				</>
+			)}
 			{activeSettingsTab === "memory" && (
 				<>
 					<div>

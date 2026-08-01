@@ -5,14 +5,35 @@ import {
 	type ProactiveSpeechSettings,
 } from "../lib/proactive-speech-settings";
 
+type ProactiveSettingsMode = "all" | "dj" | "exhibition";
+
+function scopeProfile(
+	value: ProactiveSpeechSettings,
+	mode: ProactiveSettingsMode | undefined,
+): ProactiveSpeechSettings {
+	if (mode === "dj" && value.profile === "exhibition_intro") {
+		return { ...value, profile: "disabled" };
+	}
+	if (mode === "exhibition" && value.profile === "personal_radio_dj") {
+		return { ...value, profile: "disabled" };
+	}
+	return value;
+}
+
 export function ProactiveSpeechSettingsSection(props: {
 	value: ProactiveSpeechSettings;
+	mode?: ProactiveSettingsMode;
 	onChange?: (value: ProactiveSpeechSettings) => void;
 	onSave: (value: ProactiveSpeechSettings) => boolean | Promise<boolean>;
 }) {
-	const [draft, setDraft] = useState(props.value);
+	const [draft, setDraft] = useState(() =>
+		scopeProfile(props.value, props.mode),
+	);
 	const [saveFailed, setSaveFailed] = useState(false);
-	useEffect(() => setDraft(props.value), [props.value]);
+	useEffect(
+		() => setDraft(scopeProfile(props.value, props.mode)),
+		[props.value, props.mode],
+	);
 	const update = (patch: Partial<ProactiveSpeechSettings>) => {
 		const next = { ...draft, ...patch };
 		setDraft(next);
@@ -32,10 +53,16 @@ export function ProactiveSpeechSettingsSection(props: {
 					}
 				>
 					<option value="disabled">{t("settings.proactiveDisabled")}</option>
-					<option value="personal_radio_dj">{t("settings.proactiveDj")}</option>
-					<option value="exhibition_intro">
-						{t("settings.proactiveExhibition")}
-					</option>
+					{props.mode !== "exhibition" && (
+						<option value="personal_radio_dj">
+							{t("settings.proactiveDj")}
+						</option>
+					)}
+					{props.mode !== "dj" && (
+						<option value="exhibition_intro">
+							{t("settings.proactiveExhibition")}
+						</option>
+					)}
 				</select>
 			</label>
 			<label>
@@ -66,15 +93,17 @@ export function ProactiveSpeechSettingsSection(props: {
 					}
 				/>
 			</label>
-			<label>
-				<input
-					data-testid="proactive-bgm-autoplay"
-					type="checkbox"
-					checked={draft.bgmAutoPlay === true}
-					onChange={(event) => update({ bgmAutoPlay: event.target.checked })}
-				/>
-				{t("settings.proactiveBgm")}
-			</label>
+			{props.mode !== "exhibition" && (
+				<label>
+					<input
+						data-testid="proactive-bgm-autoplay"
+						type="checkbox"
+						checked={draft.bgmAutoPlay === true}
+						onChange={(event) => update({ bgmAutoPlay: event.target.checked })}
+					/>
+					{t("settings.proactiveBgm")}
+				</label>
+			)}
 			<label>
 				<input
 					data-testid="proactive-weather-consent"
@@ -116,22 +145,29 @@ export function ProactiveSpeechSettingsSection(props: {
 					}
 				/>
 			</label>
-			<label>
-				{t("settings.proactiveScope")}
-				<input
-					data-testid="proactive-knowledge-scope"
-					value={draft.knowledgeScope ?? ""}
-					onChange={(event) => update({ knowledgeScope: event.target.value })}
-				/>
-			</label>
+			{props.mode !== "dj" && (
+				<label>
+					{t("settings.proactiveScope")}
+					<input
+						data-testid="proactive-knowledge-scope"
+						value={draft.knowledgeScope ?? ""}
+						onChange={(event) => update({ knowledgeScope: event.target.value })}
+					/>
+				</label>
+			)}
 			<button
 				type="button"
 				data-testid="proactive-settings-save"
 				onClick={async () => {
 					setSaveFailed(false);
-					const saved = await props.onSave(
-						normalizeProactiveSpeechSettings(draft),
-					);
+					let normalized = normalizeProactiveSpeechSettings(draft);
+					const sourceIsOutsideThisSection =
+						props.value.profile !== "disabled" &&
+						scopeProfile(props.value, props.mode).profile === "disabled";
+					if (sourceIsOutsideThisSection && draft.profile === "disabled") {
+						normalized = { ...normalized, profile: props.value.profile };
+					}
+					const saved = await props.onSave(normalized);
 					setSaveFailed(!saved);
 				}}
 			>

@@ -1310,10 +1310,14 @@ pub(crate) fn log_verbose(msg: &str) {
     log_to_file(msg);
 }
 
+fn debug_e2e_flags_enabled(debug: Option<&str>, mode: Option<&str>) -> bool {
+    matches!(debug, Some("1" | "true" | "TRUE")) && mode == Some("1")
+}
+
 fn debug_e2e_enabled() -> bool {
-    matches!(
+    debug_e2e_flags_enabled(
         std::env::var("CAFE_DEBUG_E2E").ok().as_deref(),
-        Some("1" | "true" | "TRUE")
+        std::env::var("NAIA_E2E_MODE").ok().as_deref(),
     )
 }
 
@@ -9004,6 +9008,13 @@ async fn init_naia_settings(adk_path: String) -> Result<(), String> {
 /// directory on next startup without waiting for the shell JS to initialize.
 /// Called by setAdkPath() in adk-store.ts whenever the user sets or changes
 /// their workspace path.
+fn naia_path_cache_target(
+    home: std::path::PathBuf,
+    native_e2e: bool,
+) -> Option<std::path::PathBuf> {
+    (!native_e2e).then(|| home.join(".naia").join("adk-path"))
+}
+
 #[tauri::command]
 async fn write_naia_path_cache(
     adk_path: String,
@@ -9013,11 +9024,18 @@ async fn write_naia_path_cache(
         if adk_path.is_empty() {
             return Err("adk_path is empty".to_string());
         }
-        let naia_dir = dirs::home_dir()
-            .ok_or_else(|| "Cannot determine home directory".to_string())?
-            .join(".naia");
-        std::fs::create_dir_all(&naia_dir).map_err(|e| e.to_string())?;
-        std::fs::write(naia_dir.join("adk-path"), &adk_path).map_err(|e| e.to_string())?;
+        let home = dirs::home_dir()
+            .ok_or_else(|| "Cannot determine home directory".to_string())?;
+        // Native E2E owns its workspace through NAIA_E2E_ADK_PATH. Never let
+        // a disposable test run overwrite the real user's next-start cache.
+        let Some(cache_path) = naia_path_cache_target(home, debug_e2e_enabled()) else {
+            return Ok(());
+        };
+        let naia_dir = cache_path
+            .parent()
+            .ok_or_else(|| "Cannot determine Naia cache directory".to_string())?;
+        std::fs::create_dir_all(naia_dir).map_err(|e| e.to_string())?;
+        std::fs::write(cache_path, &adk_path).map_err(|e| e.to_string())?;
         Ok(())
     })
 }
@@ -11599,6 +11617,24 @@ mod tests {
         );
         assert_eq!(dispatcher_path, "/workspace/a");
         assert_eq!(cache.borrow().as_deref(), Some("/workspace/b"));
+    }
+
+    #[test]
+    fn native_e2e_overrides_require_an_explicit_mode_sentinel() {
+        assert!(!debug_e2e_flags_enabled(Some("1"), None));
+        assert!(!debug_e2e_flags_enabled(None, Some("1")));
+        assert!(debug_e2e_flags_enabled(Some("1"), Some("1")));
+        assert!(debug_e2e_flags_enabled(Some("true"), Some("1")));
+    }
+
+    #[test]
+    fn native_e2e_never_targets_the_users_adk_path_cache() {
+        let home = std::path::PathBuf::from("C:/Users/tester");
+        assert_eq!(naia_path_cache_target(home.clone(), true), None);
+        assert_eq!(
+            naia_path_cache_target(home, false),
+            Some(std::path::PathBuf::from("C:/Users/tester/.naia/adk-path"))
+        );
     }
 
     #[test]

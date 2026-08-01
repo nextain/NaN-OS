@@ -120,6 +120,9 @@ const STRINGS = {
 		presetApplied: "적용 중",
 		presetApplySuccess: (name: string) => `${name} 음색으로 변경되었습니다.`,
 		presetFilterAll: "전체",
+		presetFemale: "여성 음색",
+		presetMale: "남성 음색",
+		presetDefault: "기본",
 		presetNotFound: "선택한 프리셋을 찾을 수 없습니다.",
 	},
 	en: {
@@ -178,6 +181,9 @@ const STRINGS = {
 		presetApplied: "Active",
 		presetApplySuccess: (name: string) => `Voice changed to ${name}.`,
 		presetFilterAll: "All",
+		presetFemale: "Female voice",
+		presetMale: "Male voice",
+		presetDefault: "Default",
 		presetNotFound: "The selected preset was not found.",
 	},
 } as const;
@@ -204,6 +210,17 @@ function formatDate(iso: string): string {
 
 function formatBalance(balance: number): string {
 	return balance.toFixed(2);
+}
+
+function displayPresetName(
+	preset: RefAudioPreset,
+	S: ReturnType<typeof pickStrings>,
+): string {
+	if (preset.source !== "local-cascade") return preset.name;
+	const family = preset.gender === "male" ? S.presetMale : S.presetFemale;
+	const index = preset.localIndex ? ` ${preset.localIndex}` : "";
+	const suffix = preset.isDefault ? ` · ${S.presetDefault}` : "";
+	return `${family}${index}${suffix}`;
 }
 
 function describeError(
@@ -293,6 +310,9 @@ export function RefAudioSection() {
 					list.find((preset) => preset.id === selectedName) ??
 					list.find((preset) => preset.name.includes("(default)")) ??
 					list[0];
+				if (selected && selected.id !== selectedName) {
+					setConfigVoiceRefUrl(selected.sampleUrl);
+				}
 				setPresets(list);
 				setActive(
 					selected
@@ -627,6 +647,7 @@ export function RefAudioSection() {
 
 	const onApplyPreset = useCallback(
 		async (preset: RefAudioPreset) => {
+			const displayName = displayPresetName(preset, S);
 			setBusy(true);
 			setError("");
 			setNotice("");
@@ -647,9 +668,9 @@ export function RefAudioSection() {
 						sizeBytes: 0,
 						durationSeconds: preset.durationSeconds,
 						presetId: preset.id,
-						presetName: preset.name,
+						presetName: displayName,
 					});
-					setNotice(S.presetApplySuccess(preset.name));
+					setNotice(S.presetApplySuccess(displayName));
 					return;
 				}
 				const result = await applyRefAudioPreset(preset.id);
@@ -932,8 +953,8 @@ export function RefAudioSection() {
 								aria-label={S.presetFilterAll}
 							>
 								<option value="all">{S.presetFilterAll}</option>
-								<option value="female">female</option>
-								<option value="male">male</option>
+								<option value="female">{S.presetFemale}</option>
+								<option value="male">{S.presetMale}</option>
 							</select>
 						</div>
 						{presetsLoading ? (
@@ -963,7 +984,7 @@ export function RefAudioSection() {
 											}}
 										>
 											<div style={{ minWidth: 0 }}>
-												<div>{p.name}</div>
+								<div>{displayPresetName(p, S)}</div>
 												<div className="settings-hint">
 													{p.durationSeconds.toFixed(0)}s · {p.locale} ·{" "}
 													{p.source}

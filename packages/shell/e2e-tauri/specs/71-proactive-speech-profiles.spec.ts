@@ -140,6 +140,42 @@ async function openGeneralSettings(): Promise<void> {
 	);
 }
 
+async function openDjSkillSettings(): Promise<void> {
+	const tabsAlreadyVisible = await browser.execute(() =>
+		Boolean(document.querySelector('[data-settings-tab="skills"]')),
+	);
+	if (!tabsAlreadyVisible) {
+		await browser.waitUntil(
+			async () =>
+				browser.execute(() =>
+					Boolean(document.querySelector(".app-bar-settings")),
+				),
+			{ timeout: 10_000, timeoutMsg: "settings button unavailable" },
+		);
+		await browser.execute(() => {
+			const button = document.querySelector(
+				".app-bar-settings",
+			) as HTMLButtonElement | null;
+			if (!button) throw new Error("settings button unavailable");
+			button.click();
+		});
+	}
+	await browser.execute(() => {
+		const tab = document.querySelector(
+			'[data-settings-tab="skills"]',
+		) as HTMLButtonElement | null;
+		if (!tab) throw new Error("skills settings tab unavailable");
+		tab.click();
+	});
+	await browser.waitUntil(
+		async () =>
+			browser.execute(() =>
+				Boolean(document.querySelector('[data-testid="youtube-bgm-skill-settings"]')),
+			),
+		{ timeout: 10_000, timeoutMsg: "YouTube BGM skill settings unavailable" },
+	);
+}
+
 async function fillProactiveSettings(): Promise<void> {
 	await browser.execute(() => {
 		const changeValue = (selector: string, value: string) => {
@@ -348,7 +384,7 @@ describe("71 — Proactive speech profiles (#82)", () => {
 	});
 
 	it("persists validated proactive settings after cache-clear native reload", async () => {
-		await openGeneralSettings();
+		await openDjSkillSettings();
 		await fillProactiveSettings();
 		await browser.waitUntil(async () => {
 			const config = await fileBackedUiConfig();
@@ -392,7 +428,7 @@ describe("71 — Proactive speech profiles (#82)", () => {
 			},
 			{ timeout: 20_000 },
 		);
-		await openGeneralSettings();
+		await openDjSkillSettings();
 		await browser.execute(() => {
 			const consent = document.querySelector(
 				'[data-testid="proactive-weather-consent"]',
