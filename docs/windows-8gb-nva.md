@@ -150,6 +150,19 @@ python -m loader plan --gpu 7.1 --profile windows_trt_8g --json
 
 Ditto 성공·오류·클라이언트 연결 중단 경로는 모두 SDK 세션을 닫는다. 입력은 TTS 64KiB/1,000자, Ditto PCM 16MiB/60초로 제한하며, 잘린 본문과 잘못된 chunk 요청을 거부한다. 프로세스 자체 주기 재시작은 manager가 한 자식 종료를 cascade 전체 장애로 취급하므로 현재 적용하지 않는다.
 
+### 개인 라디오 결합 검증 (#405, 2026-08-01)
+
+외부 LLM과 이 노트북의 Windows TRT cascade를 함께 사용하는 실제 Tauri Shell에서 개인 라디오 흐름을 검증했다. 곡 A의 `playing` 관측, 자동 DJ의 VoxCPM2 `/v1/audio/speech`, 같은 오디오의 Ditto `/stream`, 곡 B로 즉시 교체한 뒤 새 `playing`과 두 번째 발화, 렌더 중 Enter 끼어들기와 BGM 지속을 한 테스트에서 확인했다. 자동 발화 문장은 실제 아바타 재생 전까지 숨기며, producer의 즉시 `finish`가 이미 승인된 TTS를 취소하지 않는다.
+
+- 실제 Tauri NVA E2E: 2/2 통과, 총 51초
+- VoxCPM2 순차 10회: 10/10, 평균 2.319초, 누적 증가 없음
+- Ditto 순차 10회: 10/10, 중앙값 약 2.789초; 1회 6.384초 변동 뒤 회복
+- 결합 `/stream_text` 순차 10회: 10/10, 평균 4.600초, 단조 증가 없음
+- 종료 시 GPU 메모리: 7,689/8,188MiB
+- 중복 GPU 요청은 무한 대기 대신 429 single-flight로 거절됨
+
+이 결과는 짧은 반복 검증이다. 수백 회 또는 수 시간 운용, stop/quiet/change-vibe/next 전체 조합, 설정 저장·재시작까지 한 번에 잇는 장기 soak를 완료했다는 뜻은 아니다.
+
 ## Windows 설치 파일과 Steam 배포 경계
 
 현재 NSIS 산출물은 Shell 핵심 런타임(Node, Agent, BGM, Vosk DLL, MSVC CRT, WebView2 offline)을 포함한다. 그러나 Windows 8GB NVA를 새 PC에서 바로 실행하는 데 필요한 Python 환경, VoxCPM2·Ditto 모델, TensorRT 엔진·플러그인과 NVIDIA 드라이버는 아직 설치 파일에 완전히 포함되지 않는다. `cascade-loader` 소스가 들어 있다는 사실만으로 독립 설치가 완료된 것은 아니다.

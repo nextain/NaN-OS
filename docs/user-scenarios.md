@@ -198,7 +198,7 @@ foundation UC 카탈로그와 직교하는 셸 feature(S72 선례). 각 시나�
 > - **UC-AV.8 원격 NVA 결합 발화**: 명시한 원격 NVA Host가 있으면 응답 텍스트를 `/stream_text`로 보내고 서버가 mux한 VoxCPM2 음성+아바타 영상을 그대로 재생한다. 이 경로에서는 Shell의 별도 음성 호스트를 호출하거나 음성을 중복 재생하지 않는다. 배경 투명은 원격 cascade의 VP9 알파 출력이 활성일 때만 제공한다.
 > - **UC-AV.7 voiceprint 불변(NFR)**: Naia가 VoxCPM2를 사용할 때 **음성지문(ref)은 필수**이며 무지문 합성을 허용하지 않는다. 이 원칙은 Windows 8GB 로컬 VoxCPM2 W8A16 + TensorRT LocDiT에도 적용된다. 검증: voiceprint guard와 façade `/ref/voices` 팔레트.
 
-## S-RADIO-DJ — 개인 라디오 DJ·행사 소개 (Shell 기본 스킬, #362 계획)
+## S-RADIO-DJ — 개인 라디오 DJ·행사 소개 (Shell 기본 스킬, #362·#405)
 
 | 시나리오 ID | 사용자 흐름 / 완료 조건 | 책임·검증 |
 |---|---|---|
@@ -208,6 +208,8 @@ foundation UC 카탈로그와 직교하는 셸 feature(S72 선례). 각 시나�
 | **S-RADIO-DJ-4** | 동의한 사용자에게만 유효한 IANA 시간대와 신선한 날씨 결과를 DJ/행사 맥락에 맞게 짧게 쓴다. 동의를 철회하면 원 좌표와 날씨 캐시가 폐기되고 이후 멘트에 날씨가 나오지 않는다. 잘못된 시간대는 정규화/시간 언급 비활성으로 관측 가능하게 처리하며, DST 경계도 일관되게 계산한다. | 최소 노출·TTL·정밀도·폐기·유효/무효 IANA·DST 검증: FR-RADIO-DJ.6~7. |
 | **S-RADIO-DJ-5** | DJ가 곡 제목·아티스트·길이를 언급할 때는 현재 `playbackId`의 관측된 `playing` 결과에 근거한다. 명령 접수 성공만으로는 소개하지 않는다. 5초가 지난 `playing` 스냅샷이 `ended/error`로 바뀌면 재관측 뒤 소개·TTS를 하지 않는다. | 도구 결과→activity provenance·freshness 계약: FR-RADIO-DJ.1·5. |
 | **S-RADIO-DJ-6** | CI는 외부 YouTube 의존 없이 로컬 iframe event fixture로 ready/playing/error/ended와 도구 결과·발화 조건을 검증한다. 실제 YouTube 검증은 부스/릴리스 전 선택적 smoke로 분리한다. | 결정론적 Tauri E2E + 선택적 smoke: FR-RADIO-DJ.7. |
+| **S-RADIO-DJ-7** | 외부 LLM과 Windows 로컬 TRT를 함께 쓰는 개인 라디오에서 곡 A의 `playing`을 확인한 뒤 자동 DJ 문장을 만든다. 문장은 음성 준비 전에는 채팅에 노출하지 않고, VoxCPM2가 만든 같은 오디오를 Ditto에 보내 영상 재생이 시작될 때 표시한다. activity가 곡 B를 요청하면 현재 곡과 대기열을 교체하고 B의 `playing`을 확인한 뒤 한 번만 다시 말한다. 렌더 중 사용자가 Enter로 끼어들면 250ms 안에 현재 렌더를 취소하되 BGM은 유지한다. | 실제 Tauri + TRT NVA 통합: `94-avatar-4060-facade.spec.ts`; Shell #405, agent #103. 일반 채팅의 BGM 요청은 기존 대기열 의미를 유지한다. |
+
 ## UC-CODEX-ROLES — Codex를 main으로 쓰고 역할별 모델을 분리한다
 
 사용자는 설정에서 Codex를 main provider로 선택한다. API key 입력 없이 로컬 Codex 로그인으로 대화하며,
@@ -504,6 +506,12 @@ Test Coverage Map:
   `starts and persists personal radio DJ through the real Tauri IPC path`,
   `persists validated proactive settings after cache-clear native reload`,
   `starts exhibition introduction without waiting for ordinary chat`.
+- S-RADIO-DJ-7 / Shell #405 →
+  `packages/shell/e2e-tauri/specs/94-avatar-4060-facade.spec.ts`
+  `runs radio A-to-B switching, TRT speech/lipsync, and render-time barge-in through real Tauri`.
+  이 검증은 실제 `/v1/audio/speech`와 `/stream`, A→B `playing`, 재생 시작 전 문장 숨김,
+  Enter→render 취소 250ms 기준, BGM 지속을 한 흐름에서 확인한다. 수백 회 장시간 soak와
+  stop/quiet/change-vibe/next 전체 조합은 #405의 후속 안정성 범위로 남긴다.
 
 ## UC-PROACTIVE-COST-CONTROL — AI/TTS 옆에서 능동 발화를 통제한다
 

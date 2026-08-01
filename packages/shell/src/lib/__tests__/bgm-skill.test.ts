@@ -67,6 +67,36 @@ describe("executeBgmSkill", () => {
 		expect(deps.playback.current()?.selected.videoId).toBe("first");
 	});
 
+	it("replaces the active track for an activity-owned play request", async () => {
+		const { deps, emitted } = mkDeps();
+		await executeBgmSkill(
+			{ action: "play", videoId: "first", title: "First" },
+			deps,
+		);
+		const replacement = JSON.parse(
+			await executeBgmSkill(
+				{
+					action: "play",
+					videoId: "second",
+					title: "Second",
+					replace: true,
+				},
+				deps,
+			),
+		);
+
+		expect(replacement).toMatchObject({
+			playback: { status: "requested" },
+			selected: { videoId: "second" },
+		});
+		expect(emitted.map((event) => event.type)).toEqual([
+			"bgm_youtube_play",
+			"bgm_youtube_play",
+		]);
+		expect(deps.playback.current()?.selected.videoId).toBe("second");
+		expect(deps.playback.queue()).toEqual([]);
+	});
+
 	it("play+query → 검색 후 첫 결과 재생 (bgm_youtube_play {videoId,title} — 위젯 리스너 형상)", async () => {
 		const { deps, emitted, searched } = mkDeps([
 			{ id: "v1", title: "Lofi Beats", thumbnail: "http://t/1.jpg" },

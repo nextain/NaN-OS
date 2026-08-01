@@ -45,6 +45,19 @@ describe("4060 local voice and Ditto avatar through the real Tauri Shell", () =>
 		)) as T;
 	}
 
+	async function submitText(text: string): Promise<number> {
+		const input = await $(".chat-input");
+		await input.waitForEnabled({ timeout: 30_000 });
+		await input.setValue(text);
+		const submittedAt = await browser.execute(() => performance.now());
+		// While speech is active the visible button intentionally becomes Stop.
+		// Enter follows ChatArea's real typed/STT barge-in path and performs
+		// interrupt -> yield -> send in one user action.
+		await input.click();
+		await browser.keys("Enter");
+		return submittedAt;
+	}
+
 	it("loads the copied NVA in the live facade and exposes the rendered avatar", async () => {
 		await browser.waitUntil(
 			() => browser.execute(() => document.querySelector(".app-root") !== null),
@@ -133,7 +146,14 @@ describe("4060 local voice and Ditto avatar through the real Tauri Shell", () =>
 				timeoutMsg: "4060 cascade never loaded the selected NVA",
 			},
 		);
-		expect(await avatar.getAttribute("data-video-avatar-mode")).toBe("cascade");
+		await browser.waitUntil(
+			async () =>
+				(await avatar.getAttribute("data-video-avatar-mode")) === "cascade",
+			{
+				timeout: 30_000,
+				timeoutMsg: "loaded NVA did not settle from loading into cascade mode",
+			},
+		);
 		const video = await avatar.$("video");
 		await video.waitForExist({ timeout: 30_000 });
 		await browser.waitUntil(
@@ -303,5 +323,276 @@ describe("4060 local voice and Ditto avatar through the real Tauri Shell", () =>
 		if (process.env.NAIA_E2E_SPEAKING_SCREENSHOT) {
 			await browser.saveScreenshot(process.env.NAIA_E2E_SPEAKING_SCREENSHOT);
 		}
+	});
+
+	it("runs radio BGM, automatic TRT lipsync, track change, and user barge-in together", async () => {
+		await browser.execute(() => {
+			const raw = localStorage.getItem("naia-config");
+			const config = raw ? JSON.parse(raw) : {};
+			localStorage.setItem(
+				"naia-config",
+				JSON.stringify({
+					...config,
+					ttsEnabled: true,
+					ttsProvider: "naia-local-voice",
+					vllmTtsHost: "http://127.0.0.1:8910",
+					proactiveSpeechIdleMs: 5_000,
+					proactiveSpeechIntervalMs: 30_000,
+					proactiveSpeechBgmAutoPlay: true,
+				}),
+			);
+			window.dispatchEvent(new CustomEvent("naia-config-changed"));
+			const w = window as typeof window & {
+				__naiaCascadeFetches?: Array<{ url: string; status: number }>;
+				__naiaOutputStages?: Array<{ stage: string; at: number; text: string }>;
+				__naiaAvatarPlaybackStarts?: number[];
+			};
+			w.__naiaCascadeFetches = [];
+			w.__naiaOutputStages = [];
+			w.__naiaAvatarPlaybackStarts = [];
+		});
+		await submitText("개인 라디오 시작해");
+		await browser.waitUntil(
+			() =>
+				browser.execute(() => {
+					const raw = localStorage.getItem("naia-config");
+					const config = raw ? JSON.parse(raw) : {};
+					return config.proactiveSpeechProfile === "personal_radio_dj";
+				}),
+			{
+				timeout: 30_000,
+				timeoutMsg: "personal radio profile was not activated",
+			},
+		);
+
+		const player = await $(".bgm-player");
+		await player.waitForExist({ timeout: 30_000 });
+		const iframe = await $(".app-bg-iframe");
+		await browser.waitUntil(
+			async () =>
+				(await player.getAttribute("data-bgm-playback-status")) === "loading" &&
+				Boolean(await iframe.getAttribute("src")),
+			{
+				timeout: 90_000,
+				timeoutMsg: "radio DJ did not request the first YouTube fixture track",
+			},
+		);
+		await browser.switchToFrame(iframe);
+		await $("#report-playing").click();
+		await browser.switchToParentFrame();
+
+		await browser.waitUntil(
+			() =>
+				browser.execute(() => {
+					const stage = document.querySelector<HTMLElement>(
+						".chat-output-stage[data-stage]",
+					)?.dataset.stage;
+					return stage === "tts" || stage === "render";
+				}),
+			{
+				timeout: 90_000,
+				timeoutMsg: "observed first track did not trigger automatic DJ TTS",
+			},
+		);
+		const maskedBeforePlayback = await browser.execute(() => {
+			const messages = Array.from(
+				document.querySelectorAll<HTMLElement>(
+					".chat-message.assistant .message-content",
+				),
+			);
+			return messages.at(-1)?.innerText.trim() ?? "";
+		});
+		expect(maskedBeforePlayback).toBe("");
+		await browser.waitUntil(
+			() =>
+				browser.execute(() => {
+					const w = window as typeof window & {
+						__naiaCascadeFetches?: Array<{ url: string; status: number }>;
+						__naiaAvatarPlaybackStarts?: number[];
+					};
+					const paths = (w.__naiaCascadeFetches ?? []).filter(
+						(event) => event.status === 200,
+					).map((event) => {
+						try { return new URL(event.url).pathname; } catch { return ""; }
+					});
+					return paths.includes("/v1/audio/speech") && paths.includes("/stream") &&
+						(w.__naiaAvatarPlaybackStarts?.length ?? 0) > 0;
+				}),
+			{
+				timeout: 120_000,
+				timeoutMsg: "automatic DJ speech did not traverse VoxCPM2 and Ditto",
+			},
+		);
+		await browser.waitUntil(
+			async () =>
+				(await player.getAttribute("data-bgm-playback-status")) === "playing",
+			{ timeout: 30_000, timeoutMsg: "BGM stopped during DJ speech" },
+		);
+
+		const firstSrc = await iframe.getAttribute("src");
+		const firstTitle = await player.getAttribute("data-bgm-current-title");
+		const firstCascadeCounts = await browser.execute(() => {
+			const fetches = (window as typeof window & {
+				__naiaCascadeFetches?: Array<{ url: string; status: number }>;
+			}).__naiaCascadeFetches ?? [];
+			const countPath = (path: string) =>
+				fetches.filter((event) => {
+					try {
+						return new URL(event.url).pathname === path && event.status === 200;
+					} catch {
+						return false;
+					}
+				}).length;
+			return { speech: countPath("/v1/audio/speech"), stream: countPath("/stream") };
+		});
+		await submitText("분위기 바꿔줘");
+		await browser.waitUntil(
+			async () => {
+				// React replaces the iframe node when playbackId changes. Re-query it
+				// instead of reading the detached element retained for track A.
+				const nextSrc = await (await $(".app-bg-iframe")).getAttribute("src");
+				return Boolean(
+					nextSrc &&
+					nextSrc !== firstSrc &&
+					(await player.getAttribute("data-bgm-playback-status")) === "loading",
+				);
+			},
+			{
+				timeout: 90_000,
+				timeoutMsg: "change-vibe did not replace the YouTube track",
+			},
+		);
+		const replacementIframe = await $(".app-bg-iframe");
+		await browser.switchToFrame(replacementIframe);
+		const reportReplacementPlaying = await $("#report-playing");
+		await reportReplacementPlaying.waitForClickable({ timeout: 10_000 });
+		await reportReplacementPlaying.click();
+		await browser.switchToParentFrame();
+		await browser.waitUntil(
+			async () =>
+				(await player.getAttribute("data-bgm-playback-status")) === "playing",
+			{
+				timeout: 5_000,
+				timeoutMsg: "replacement iframe did not report observed playing",
+			},
+		);
+		const replacementTitle = await player.getAttribute("data-bgm-current-title");
+		expect(replacementTitle).toBeTruthy();
+		expect(replacementTitle).not.toBe(firstTitle);
+		await browser.waitUntil(
+			() =>
+				browser.execute((baseline: { speech: number; stream: number }) => {
+					const w = window as typeof window & {
+						__naiaCascadeFetches?: Array<{ url: string; status: number }>;
+					};
+					const fetches = w.__naiaCascadeFetches ?? [];
+					const countPath = (path: string) =>
+						fetches.filter((event) => {
+							try {
+								return new URL(event.url).pathname === path && event.status === 200;
+							} catch {
+								return false;
+							}
+						}).length;
+					const stage = document.querySelector<HTMLElement>(
+						".chat-output-stage[data-stage]",
+					)?.dataset.stage;
+					return countPath("/v1/audio/speech") > baseline.speech &&
+						countPath("/stream") > baseline.stream && stage === "render";
+				}, firstCascadeCounts),
+			{
+				timeout: 120_000,
+				timeoutMsg: "replacement track did not start its DJ render",
+			},
+		);
+		const replacementSpeech = await browser.execute(() => {
+			const messages = Array.from(
+				document.querySelectorAll<HTMLElement>(
+					".chat-message.assistant .message-content",
+				),
+			);
+			return messages.at(-1)?.innerText.trim() ?? "";
+		});
+		expect(replacementSpeech).not.toContain("찾지 못했어요");
+
+		await browser.execute(() => {
+			const w = window as typeof window & {
+				__naiaBargeInTiming?: { keyAt: number; clearedAt: number };
+			};
+			w.__naiaBargeInTiming = { keyAt: 0, clearedAt: 0 };
+			const captureClear = () => {
+				const stage = document.querySelector<HTMLElement>(
+					".chat-output-stage[data-stage]",
+				)?.dataset.stage;
+				if (
+					w.__naiaBargeInTiming?.keyAt &&
+					stage !== "render" &&
+					!w.__naiaBargeInTiming.clearedAt
+				) {
+					w.__naiaBargeInTiming.clearedAt = performance.now();
+				}
+			};
+			new MutationObserver(captureClear).observe(document.body, {
+				attributes: true,
+				childList: true,
+				subtree: true,
+				attributeFilter: ["data-stage"],
+			});
+			document.querySelector(".chat-input")?.addEventListener(
+				"keydown",
+				(event) => {
+					if ((event as KeyboardEvent).key === "Enter" && w.__naiaBargeInTiming) {
+						w.__naiaBargeInTiming.keyAt = performance.now();
+					}
+				},
+				{ capture: true, once: true },
+			);
+		});
+		await submitText("한 문장으로 지금 재생 상태를 알려줘.");
+		await browser.waitUntil(
+			() =>
+				browser.execute(() =>
+					Boolean(
+						(window as typeof window & {
+							__naiaBargeInTiming?: { clearedAt: number };
+						}).__naiaBargeInTiming?.clearedAt,
+					),
+				),
+			{
+				timeout: 2_000,
+				timeoutMsg: "user barge-in did not clear active Ditto render within 250ms",
+			},
+		);
+		const bargeInTiming = await browser.execute(
+			() =>
+				(window as typeof window & {
+					__naiaBargeInTiming?: { keyAt: number; clearedAt: number };
+				}).__naiaBargeInTiming,
+		);
+		expect(bargeInTiming).toBeTruthy();
+		expect(bargeInTiming!.clearedAt - bargeInTiming!.keyAt).toBeLessThanOrEqual(250);
+		expect(await player.getAttribute("data-bgm-playback-status")).toBe("playing");
+		await browser.waitUntil(
+			() =>
+				browser.execute(() =>
+					Array.from(document.querySelectorAll<HTMLElement>(".chat-message.user"))
+						.some((node) => node.innerText.includes("지금 재생 상태")),
+				),
+			{
+				timeout: 30_000,
+				timeoutMsg: "barge-in question was not accepted as the priority turn",
+			},
+		);
+
+		await submitText("라디오 종료");
+		await browser.waitUntil(
+			() =>
+				browser.execute(() => {
+					const raw = localStorage.getItem("naia-config");
+					const config = raw ? JSON.parse(raw) : {};
+					return config.proactiveSpeechProfile === "disabled";
+				}),
+			{ timeout: 30_000, timeoutMsg: "radio profile did not stop" },
+		);
 	});
 });

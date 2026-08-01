@@ -124,6 +124,22 @@ export async function executeBgmSkill(
 	const act = action as BgmAction;
 
 	const enqueueTrack = async (track: BgmSearchResult): Promise<string> => {
+		// Speech activities such as Radio DJ own their current selection. A new
+		// activity request means "change the music now", not "play this later".
+		// Ordinary chat/tool requests keep the queue-preserving behavior below.
+		if (args.replace === true) {
+			const playback = deps.playback.request({
+				videoId: track.id,
+				title: track.title,
+			});
+			await deps.emitBgm({
+				type: "bgm_youtube_play",
+				videoId: track.id,
+				title: track.title,
+				...(track.thumbnail ? { thumbnail: track.thumbnail } : {}),
+			});
+			return JSON.stringify(toBgmPlayToolResult(playback));
+		}
 		const result = deps.playback.enqueue({
 			videoId: track.id,
 			title: track.title,

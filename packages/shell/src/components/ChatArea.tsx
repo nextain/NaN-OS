@@ -991,6 +991,35 @@ export function ChatArea({
 		setOutputStage("thinking");
 	}
 
+	/**
+	 * Proactive speech arrives as an already-complete activity message rather
+	 * than an ordinary streamed chat response.  Put it through the same visual
+	 * playback fence: keep the canonical transcript in the store, but do not
+	 * reveal it until the exact TTS/avatar media starts playing.
+	 */
+	function beginProactiveTtsTextSync(text: string): number {
+		beginTtsTextSync();
+		const sync = ttsTextSyncRef.current;
+		sync.canonical = text;
+		sync.llmFinished = true;
+		setOutputStage("tts");
+		useChatStore.getState().addMessage({ role: "assistant", content: text });
+		const message = useChatStore.getState().messages.at(-1);
+		setTtsMaskedMessageId(message?.id ?? null);
+		return sync.generation;
+	}
+
+	function revealFailedProactiveTts(text: string, generation: number): void {
+		const sync = ttsTextSyncRef.current;
+		if (!sync.active || sync.generation !== generation) return;
+		sync.active = false;
+		sync.pending = 0;
+		sync.ready.clear();
+		setTtsVisibleContent(text);
+		setTtsMaskedMessageId(null);
+		setOutputStage(null);
+	}
+
 	function reserveTtsTextReveal(sentence: string): () => void {
 		const sync = ttsTextSyncRef.current;
 		if (!sync.active) return () => {};
@@ -1229,26 +1258,53 @@ export function ChatArea({
 				// Never let proactive text reset/share the ordinary chat TTS lane.
 				if (currentRequestId.current) return;
 				const text = chunk.text.trim();
-					useChatStore.getState().addMessage({ role: "assistant", content: text });
-					void loadConfigWithSecrets().then((config) => {
-						if (!config) return;
-						if (!canSpeakProactiveText({
+				const cachedConfig = loadConfig();
+				const shouldSpeak = canSpeakProactiveText({
 						currentRequestId: currentRequestId.current,
 						activeActivityId: activeSpeechActivityRef.current?.activityId,
 						eventActivityId: activityId,
-							ttsEnabled: config.ttsEnabled === true,
-					})) return;
-					initializeSpeechTts(config);
-					const chunker = sentenceChunkerRef.current;
-					if (!chunker) return;
-					const sentences = chunker.feed(text);
-					const remaining = chunker.flush();
-					for (const sentence of sentences) sendSentenceToTts(sentence);
-					if (remaining) sendSentenceToTts(remaining);
-				});
+						ttsEnabled: cachedConfig?.ttsEnabled === true,
+					});
+				if (!shouldSpeak) {
+					useChatStore.getState().addMessage({ role: "assistant", content: text });
+					return;
+				}
+				const ttsGeneration = beginProactiveTtsTextSync(text);
+				// Capture eligibility before awaiting DPAPI/API-key hydration. A normal
+				// activity finish closes the producer but must not cancel speech that was
+				// already accepted. Barge-in/profile changes invalidate the generation.
+				void loadConfigWithSecrets().then((config) => {
+					if (
+						!config ||
+						ttsTextSyncRef.current.generation !== ttsGeneration ||
+						!ttsTextSyncRef.current.active
+					) {
+						if (!config) revealFailedProactiveTts(text, ttsGeneration);
+						return;
+					}
+						initializeSpeechTts(config);
+						const chunker = sentenceChunkerRef.current;
+						if (!chunker) {
+							revealFailedProactiveTts(text, ttsGeneration);
+							return;
+						}
+						const sentences = chunker.feed(text);
+						const remaining = chunker.flush();
+						for (const sentence of sentences) sendSentenceToTts(sentence);
+						if (remaining) sendSentenceToTts(remaining);
+						if (sentences.length === 0 && !remaining) {
+							revealFailedProactiveTts(text, ttsGeneration);
+						}
+					}).catch(() => revealFailedProactiveTts(text, ttsGeneration));
 				return;
 			}
-			if (chunk.type === "finish" || chunk.type === "error") {
+			// `finish` closes one streamed turn, not the owning long-lived speech
+			// activity. Tool results can legitimately continue the same activity
+			// (Radio DJ play -> observed status -> announcement), so retiring here
+			// drops those follow-up calls. Explicit stop/profile changes, a newer
+			// activity, or an error remain the authoritative retirement boundaries.
+			if (chunk.type === "finish") return;
+			if (chunk.type === "error") {
 				if (activeSpeechActivityRef.current?.activityId === activityId) {
 					retiredSpeechActivityIdsRef.current.add(activityId);
 					activeSpeechActivityRef.current = null;
@@ -1652,7 +1708,11 @@ export function ChatArea({
 		// 탐색으로 못 찾는다 — 전용 분기. executeBgmSkill 이 위젯이 이미 듣는
 		// bgm_youtube_* 이벤트를 발사(위젯 무변경). 음성 경로도 이 dispatch 공유.
 		if (req.toolName === SKILL_YOUTUBE_BGM.name) {
-			executeBgmSkill(req.args)
+			// Activity-owned playback (for example Radio DJ change_vibe) replaces
+			// the current track immediately. Normal chat requests still enqueue.
+			executeBgmSkill(
+				req.activityId ? { ...req.args, replace: true } : req.args,
+			)
 				.then((result) => {
 					Logger.info("ChatArea", "bgm skill result", { result });
 					return sendPanelToolResult(req.requestId, req.toolCallId, result, true, req.activityId);

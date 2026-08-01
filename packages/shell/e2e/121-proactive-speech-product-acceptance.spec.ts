@@ -35,6 +35,7 @@ const PROACTIVE_MOCK = `
 	}
 	window.__PA_DJ_E2E__ = {
 		order: [], speakTexts: [], audioPlayed: 0, commands: [], lastSubmitAt: 0,
+		speechDelayMs: 10,
 		subscriptionEpoch: 0, configuredEpoch: 0, failConfigure: false,
 		emitActivity: function(chunk) {
 			if (chunk.subscriptionEpoch == null) {
@@ -55,7 +56,7 @@ const PROACTIVE_MOCK = `
 			setTimeout(function() {
 				if (utterance.onstart) utterance.onstart();
 				if (utterance.onend) utterance.onend();
-			}, 10);
+			}, window.__PA_DJ_E2E__.speechDelayMs);
 		},
 		cancel: function() { window.__PA_DJ_E2E__.order.push("cancel"); },
 		getVoices: function() { return []; }, pause: function() {}, resume: function() {}
@@ -146,12 +147,12 @@ const PROACTIVE_MOCK = `
 `;
 
 type Activity = {
-	type: "text";
+	type: "text" | "finish";
 	requestId: string;
 	activityId: string;
 	profileGeneration: number;
 	subscriptionEpoch?: number;
-	text: string;
+	text?: string;
 };
 
 async function setup(page: Page, ttsProvider: "browser" | "edge") {
@@ -194,6 +195,12 @@ async function emitActivity(page: Page, activity: Activity) {
 	}, activity);
 }
 
+async function emitActivitySequence(page: Page, activities: Activity[]) {
+	await page.evaluate((chunks) => {
+		for (const chunk of chunks) (window as any).__PA_DJ_E2E__.emitActivity(chunk);
+	}, activities);
+}
+
 async function telemetry(page: Page) {
 	return page.evaluate(() => ({
 		order: [...(window as any).__PA_DJ_E2E__.order] as string[],
@@ -224,6 +231,37 @@ test.describe("PA-DJ-05 proactive speech product acceptance", () => {
 		await expect
 			.poll(async () => (await telemetry(page)).speakTexts)
 			.toContain("첫 번째 DJ 멘트입니다.");
+	});
+
+	test("keeps proactive text masked until playback and survives immediate finish", async ({
+		page,
+	}) => {
+		await setup(page, "browser");
+		await page.evaluate(() => {
+			(window as any).__PA_DJ_E2E__.speechDelayMs = 250;
+		});
+		const text = "재생과 함께 보여야 하는 DJ 멘트입니다.";
+		await emitActivitySequence(page, [
+			{
+				type: "text",
+				requestId: "radio-dj:finish-race",
+				activityId: "dj-finish-race",
+				profileGeneration: 2,
+				text,
+			},
+			{
+				type: "finish",
+				requestId: "radio-dj:finish-race",
+				activityId: "dj-finish-race",
+				profileGeneration: 2,
+			},
+		]);
+		const assistant = page.locator(".chat-message.assistant .message-content").last();
+		await expect(assistant).toHaveText("");
+		await expect
+			.poll(async () => (await telemetry(page)).speakTexts)
+			.toContain(text);
+		await expect(assistant).toHaveText(text);
 	});
 
 	test("plays synthesized proactive audio", async ({ page }) => {
