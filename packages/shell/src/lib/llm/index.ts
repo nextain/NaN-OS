@@ -17,6 +17,7 @@ export {
 	fetchOllamaModels,
 	fetchVllmModels,
 	formatModelLabel,
+	getModelPriceScore,
 	sortModels,
 } from "./registry";
 export type {

@@ -3,7 +3,7 @@ import type { ModelCapability } from "../types.js";
 export type LlmRoleId = "expert" | "main" | "sub" | "memory";
 
 /** Settings-only ordering for the Naia model catalog. */
-export type ModelSortMode = "default" | "price" | "performance";
+export type ModelSortMode = "price" | "performance";
 
 /** Voice option for omni/tts models. */
 export interface LlmVoiceMeta {
@@ -19,6 +19,8 @@ export interface LlmModelMeta {
 	capabilities: ModelCapability[];
 	/** Per-1M-token pricing: [input, output]. */
 	pricing?: [number, number];
+	/** Optional per-1M-token prompt-cache pricing reported by the gateway. */
+	cachePricing?: { read: number | null; write: number | null };
 	/** Whether this exact Naia route accepts tool definitions. */
 	supportsTools?: boolean;
 	/** Auditable upstream route advertised by the Naia gateway. */

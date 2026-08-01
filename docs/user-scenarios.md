@@ -641,3 +641,25 @@ When a development task is delegated, Shell hands the saved workspace configurat
 |---|---|---|
 | three tiers persist and inherit | `lib/llm/roles.test.ts`, `lib/adk-store.test.ts` | config file roundtrip |
 | Pi-only role handoff | Agent `pi-role-runner.contract.test.ts` | fake Pi session through supervisor |
+
+## UC-NAIA-MODEL-ORDER — Compare only usable Naia models
+
+A signed-in Naia user opens the AI model picker. The picker contains only
+currently usable routes; models marked `comingSoon` or otherwise unavailable
+are not offered. The default view is price order and there is no separate
+registry/default order.
+
+Price order estimates a general chat workload using three uncached input tokens
+for every one output token: `3 * input price + output price`. Prompt-cache
+prices are not included in this ordering because cache support and hit rate vary
+by model and conversation. Input and output prices remain separately visible so
+the user can interpret the estimate. Switching to performance order immediately
+reorders the same native WebView picker without changing the selected model.
+
+### Test Coverage Map
+
+| Scenario | Unit / contract | UI / integration |
+|---|---|---|
+| weighted price is the default | registry weighted-score and stable-sort tests | Settings component and Playwright option-order assertions |
+| unavailable routes are absent | registry metadata/filter contract | Settings component and Playwright absence assertions |
+| performance order is evidence-based | dated recommendation-order contract | Settings sort-change assertion |

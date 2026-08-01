@@ -54,6 +54,7 @@ interface SetupOpts {
 		input_price_per_million: number;
 		output_price_per_million: number;
 		cached_price_per_million: number | null;
+		cache_write_price_per_million?: number | null;
 	}> /** FR-3: when false, seed a logged-out (no naiaKey / BYO) config. */;
 	loggedIn?: boolean;
 	/** Override ttsEnabled (FR-6 lip-sync note). Defaults to true. */
@@ -94,7 +95,7 @@ async function gotoModelSettings(
 	);
 	await page.route("**/v1/models", (route) =>
 		route.fulfill({
-			status: 200,
+			status: opts.catalog ? 200 : 503,
 			contentType: "application/json",
 			body: JSON.stringify(opts.catalog ?? []),
 		}),
@@ -125,9 +126,31 @@ test.describe("Capability-driven settings (#365)", () => {
 		});
 
 		const modelSelect = page.locator("#model-select");
+		const sortSelect = page.locator('[data-testid="model-sort-mode"]');
+		await expect(sortSelect).toHaveValue("price");
+		await expect(sortSelect.locator('option[value="default"]')).toHaveCount(0);
+		await expect(page.locator('[data-testid="model-price-sort-basis"]')).toContainText(
+			/3\s*:\s*.*1/,
+		);
 		await expect(modelSelect.locator('option[value="grok-4.3"]')).toHaveText(
 			/Grok 4\.3 \(Pricing: \$0\.400 \/ \$1\.200\)/,
 		);
+		await expect(modelSelect.locator('option[value="claude-opus-5"]')).toHaveCount(0);
+		await expect(modelSelect.locator('option[value="naia-0.9-omni-24g"]')).toHaveCount(0);
+		const priceOrder = await modelSelect.locator("option").evaluateAll((options) =>
+			options.map((option) => (option as HTMLOptionElement).value),
+		);
+		await expect(modelSelect).toHaveValue("grok-4.3");
+		await sortSelect.selectOption("performance");
+		await expect(modelSelect.locator("option").first()).toHaveAttribute(
+			"value",
+			"gpt-5.6-sol",
+		);
+		const performanceOrder = await modelSelect.locator("option").evaluateAll((options) =>
+			options.map((option) => (option as HTMLOptionElement).value),
+		);
+		expect(performanceOrder).not.toEqual(priceOrder);
+		await expect(modelSelect).toHaveValue("grok-4.3");
 		await expect(modelSelect.locator('option[value="naia-local"]')).toHaveCount(
 			0,
 		);

@@ -561,6 +561,7 @@ export function SettingsTab() {
 	const [model, setModel] = useState(
 		modelValid ? savedModel : getDefaultLlmModel(initProvider),
 	);
+	const [configSecretsSettled, setConfigSecretsSettled] = useState(false);
 	// SettingsTab remains mounted while the Shell starts.  The workspace config
 	// hydrates asynchronously, so its initial state can otherwise keep showing
 	// the bootstrap provider even after the agent has loaded the workspace's
@@ -714,8 +715,9 @@ export function SettingsTab() {
 	const [dynamicModels, setDynamicModels] = useState<
 		Record<string, LlmModelMeta[]>
 	>(getStaticModelsRecord);
+	const [naiaModelsSettled, setNaiaModelsSettled] = useState(false);
 	const [modelSortMode, setModelSortMode] =
-		useState<ModelSortMode>("default");
+		useState<ModelSortMode>("price");
 	const [ollamaHost, setOllamaHost] = useState(
 		existing?.ollamaHost ?? DEFAULT_OLLAMA_HOST,
 	);
@@ -1489,13 +1491,19 @@ export function SettingsTab() {
 	// Runs when provider switches to "nextain" so the displayed price always
 	// matches what the gateway actually charges.
 	useEffect(() => {
-		if (provider !== "nextain") return;
+		if (provider !== "nextain") {
+			setNaiaModelsSettled(false);
+			return;
+		}
+		let active = true;
+		setNaiaModelsSettled(false);
 		// Pricing (DB SoT) + capability catalog (#365: gateway SoT for caps).
 		// If the catalog fetch fails, models keep their static capabilities.
 		Promise.all([
 			fetchNaiaPricing(LAB_GATEWAY_URL),
 			fetchNaiaModelMetadata(LAB_GATEWAY_URL),
 		]).then(([liveModels, metadata]) => {
+			if (!active) return;
 			// Apply gateway capabilities even if pricing failed (the two are
 			// independent): override the priced live models, or fall back to the
 			// existing static nextain models when pricing is unavailable.
@@ -1507,7 +1515,12 @@ export function SettingsTab() {
 					metadata,
 				),
 			}));
+		}).finally(() => {
+			if (active) setNaiaModelsSettled(true);
 		});
+		return () => {
+			active = false;
+		};
 	}, [provider]);
 
 	// Fetch ASR models from vLLM STT host (separate from LLM vllmHost)
@@ -1703,7 +1716,10 @@ export function SettingsTab() {
 					setModel(cfg.model || getDefaultLlmModel("nextain"));
 				}
 			})
-			.catch(() => {});
+			.catch(() => {})
+			.finally(() => {
+				if (!cancelled) setConfigSecretsSettled(true);
+			});
 		return () => {
 			cancelled = true;
 		};
@@ -2604,12 +2620,19 @@ export function SettingsTab() {
 	}
 
 	const providerModels = dynamicModels[provider] ?? [];
+	const availableProviderModels = useMemo(
+		() =>
+			provider === "nextain"
+				? providerModels.filter((candidate) => !candidate.comingSoon)
+				: providerModels,
+		[provider, providerModels],
+	);
 	const displayedProviderModels = useMemo(
 		() =>
 			provider === "nextain"
-				? sortModels(providerModels, modelSortMode)
-				: providerModels,
-		[provider, providerModels, modelSortMode],
+				? sortModels(availableProviderModels, modelSortMode)
+				: availableProviderModels,
+		[provider, availableProviderModels, modelSortMode],
 	);
 	const renderLlmRoleEditor = (
 		role: "expert" | "sub" | "memory",
@@ -2703,8 +2726,36 @@ export function SettingsTab() {
 			</div>
 		);
 	};
-	const selectedModelMeta = providerModels.find((m) => m.id === model);
+	const selectedModelMeta = availableProviderModels.find((m) => m.id === model);
 	const hasSelectedModel = Boolean(selectedModelMeta);
+	const shouldReplaceUnavailableSelectedModel =
+		provider === "nextain" && Boolean(model) && !hasSelectedModel;
+	useEffect(() => {
+		if (
+			provider === "nextain" &&
+			configSecretsSettled &&
+			naiaModelsSettled &&
+			shouldReplaceUnavailableSelectedModel &&
+			displayedProviderModels[0]
+		) {
+			const replacement = displayedProviderModels[0];
+			setModel(replacement.id);
+			if (naiaKey) {
+				const legacySelection = applyModelSelectionToConfig(
+					loadConfig() as Record<string, unknown> | null,
+					provider,
+					replacement.id,
+				);
+				const nextSelection = writeConfiguredLlmRole(
+					legacySelection as unknown as AppConfig,
+					"main",
+					{ provider, model: replacement.id },
+				);
+				saveConfig(nextSelection as unknown as Parameters<typeof saveConfig>[0]);
+				void writeNaiaConfig(nextSelection as unknown as Record<string, unknown>);
+			}
+		}
+	}, [provider, model, naiaKey, configSecretsSettled, naiaModelsSettled, shouldReplaceUnavailableSelectedModel, displayedProviderModels]);
 	const isSelectedOmni =
 		selectedModelMeta?.capabilities.includes("omni") ?? false;
 	const modelIdLower = model?.toLowerCase() ?? "";
@@ -4166,13 +4217,18 @@ export function SettingsTab() {
 										setModelSortMode(event.target.value as ModelSortMode)
 									}
 								>
-									<option value="default">{t("settings.modelSortDefault")}</option>
 									<option value="price">{t("settings.modelSortPrice")}</option>
 									<option value="performance">{t("settings.modelSortPerformance")}</option>
 								</select>
+								{modelSortMode === "price" ? (
+									<div className="settings-hint" data-testid="model-price-sort-basis">
+										{t("settings.modelSortPriceBasis")}
+									</div>
+								) : null}
 							</>
 						) : null}
 						<select
+							key={`model-select-${modelSortMode}-${displayedProviderModels.map((candidate) => candidate.id).join(":")}`}
 							id="model-select"
 							value={hasSelectedModel ? model : "__custom__"}
 							onChange={(e) => {
@@ -4236,6 +4292,18 @@ export function SettingsTab() {
 									{selectedModelMeta.pricing[0].toFixed(3)} ·{" "}
 									{t("settings.priceOutput")} $
 									{selectedModelMeta.pricing[1].toFixed(3)}
+									{selectedModelMeta.cachePricing ? (
+										<>
+											{" · "}
+											{t("settings.priceCacheRead")} {selectedModelMeta.cachePricing.read === null
+												? "—"
+												: `$${selectedModelMeta.cachePricing.read.toFixed(3)}`}
+											{" · "}
+											{t("settings.priceCacheWrite")} {selectedModelMeta.cachePricing.write === null
+												? "—"
+												: `$${selectedModelMeta.cachePricing.write.toFixed(3)}`}
+										</>
+									) : null}
 								</span>
 							) : provider === "nextain" ? (
 								t("settings.pricingUnavailable")

@@ -140,6 +140,7 @@ interface GatewayPricingEntry {
 	input_price_per_million: number;
 	output_price_per_million: number;
 	cached_price_per_million: number | null;
+	cache_write_price_per_million?: number | null;
 }
 
 /**
@@ -162,20 +163,33 @@ export async function fetchNaiaPricing(
 		const provider = providers.get("nextain");
 		if (!provider) return null;
 
-		const pricingMap = new Map<string, [number, number]>();
+		const pricingMap = new Map<
+			string,
+			{
+				pricing: [number, number];
+				cachePricing?: { read: number | null; write: number | null };
+			}
+		>();
 		for (const entry of entries) {
 			const isNaiaRoute = entry.model_key.startsWith("vertexai:") || entry.model_key.startsWith("azure:");
 			if (!isNaiaRoute) continue;
 			const modelId = entry.model_key.slice(entry.model_key.indexOf(":") + 1);
-			pricingMap.set(modelId, [
-				entry.input_price_per_million,
-				entry.output_price_per_million,
-			]);
+			const read = entry.cached_price_per_million;
+			const write = entry.cache_write_price_per_million ?? null;
+			pricingMap.set(modelId, {
+				pricing: [
+					entry.input_price_per_million,
+					entry.output_price_per_million,
+				],
+				...(read !== null || write !== null
+					? { cachePricing: { read, write } }
+					: {}),
+			});
 		}
 
 		return provider.models.map((model) => {
-			const pricing = pricingMap.get(model.id);
-			return pricing ? { ...model, pricing } : { ...model };
+			const livePricing = pricingMap.get(model.id);
+			return livePricing ? { ...model, ...livePricing } : { ...model };
 		});
 	} catch {
 		return null;
@@ -315,11 +329,21 @@ export function applyNaiaModelMetadata(
 	metadata: Map<string, NaiaModelCatalogMetadata> | null,
 ): LlmModelMeta[] {
 	return models.map((model) => {
-		const live = metadata?.get(model.id);
-		if (!live) {
+		if (!metadata) {
 			return model.id === "deepseek-v4-pro"
 				? { ...model, supportsTools: false, upstreamProvider: "unknown", lifecycle: "unknown" }
 				: { ...model, upstreamProvider: "unknown", lifecycle: "unknown" };
+		}
+		const live = metadata.get(model.id);
+		if (!live) {
+			return {
+				...model,
+				...(model.id === "deepseek-v4-pro" ? { supportsTools: false } : {}),
+				upstreamProvider: "unknown",
+				lifecycle: "unknown",
+				operationalStatus: "catalog_missing",
+				comingSoon: true,
+			};
 		}
 		const merged = {
 			...model,
@@ -374,27 +398,43 @@ export function formatModelLabel(model: LlmModelMeta): string {
 	return label;
 }
 
-// Product recommendation order for general chat, reviewed 2026-08-01.
-// This is a Naia recommendation, not a cross-vendor benchmark. Realtime/omni
-// routes follow general chat models, and unavailable routes remain last.
+// Product recommendation order for general chat, reviewed 2026-08-02.
+// This is a tier-based Naia recommendation, not a fabricated cross-vendor score.
+// Evidence: Microsoft Foundry benchmark methodology and model cards, plus the
+// official Google/DeepSeek model cards. The sources do not expose one directly
+// comparable score for every route, so tiers and intended workloads are used.
+// https://learn.microsoft.com/azure/ai-foundry/concepts/model-benchmarks
+// https://ai.azure.com/catalog/models/gpt-5.6-sol
+// https://ai.azure.com/catalog/models/grok-4.3
+// https://ai.azure.com/catalog/models/DeepSeek-V4-Pro
+// https://developers.openai.com/api/docs/models/gpt-5.6-luna
+// https://deepmind.google/models/gemini/flash/
+// https://deepmind.google/models/model-cards/gemini-3-1-flash-lite/
+// https://api-docs.deepseek.com/news/news260424/
 const NAIA_GENERAL_CHAT_RECOMMENDATION: Readonly<Record<string, number>> = {
 	"gpt-5.6-sol": 1,
 	"grok-4.3": 2,
-	"deepseek-v4-pro": 3,
-	"gemini-3.5-flash": 4,
-	"gpt-5.6-luna": 5,
-	"gemini-3.1-flash-lite": 6,
-	"gemini-2.5-flash-live": 7,
-	"naia-0.9-omni-24g": 8,
-	"claude-opus-5": 9,
+	"deepseek-v4-pro": 2,
+	"gemini-3.5-flash": 2,
+	"gpt-5.6-luna": 3,
+	"gemini-3.1-flash-lite": 3,
+	"gemini-2.5-flash-live": 4,
+	"naia-0.9-omni-24g": 5,
+	"claude-opus-5": 5,
 };
+
+/** General-chat cost estimate: three uncached input tokens per output token. */
+export function getModelPriceScore(model: LlmModelMeta): number {
+	return model.pricing
+		? model.pricing[0] * 3 + model.pricing[1]
+		: Number.POSITIVE_INFINITY;
+}
 
 /** Return a stable, non-mutating view of the model catalog. */
 export function sortModels(
 	models: readonly LlmModelMeta[],
 	mode: ModelSortMode,
 ): LlmModelMeta[] {
-	if (mode === "default") return [...models];
 	return models
 		.map((model, index) => ({ model, index }))
 		.sort((left, right) => {
@@ -403,13 +443,7 @@ export function sortModels(
 			}
 			let delta = 0;
 			if (mode === "price") {
-				const leftPrice = left.model.pricing
-					? left.model.pricing[0] + left.model.pricing[1]
-					: Number.POSITIVE_INFINITY;
-				const rightPrice = right.model.pricing
-					? right.model.pricing[0] + right.model.pricing[1]
-					: Number.POSITIVE_INFINITY;
-				delta = leftPrice - rightPrice;
+				delta = getModelPriceScore(left.model) - getModelPriceScore(right.model);
 			} else {
 				delta =
 					(NAIA_GENERAL_CHAT_RECOMMENDATION[left.model.id] ?? Number.POSITIVE_INFINITY) -

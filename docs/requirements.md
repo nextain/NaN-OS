@@ -592,3 +592,29 @@ Steamworks 포털 설정·SteamPipe 자격증명·스토어 심사 제출은 #31
 | **FR-LLM-ROLE.4** | Shell persists `expert`, `main`, and `sub` profile selections independently; each can explicitly select a compatible Codex or Claude model or inherit another role. | role roundtrip and role-editor tests |
 | **FR-LLM-ROLE.5** | Memory remains orthogonal to the three development tiers and may inherit one without becoming a development tier. | resolver contract |
 | **FR-LLM-ROLE.6** | Shell-to-Agent development delegation uses only Agent-managed Pi. OpenCode is not exposed, called, installed, or a fallback in this route. | Agent Pi role factory and negative OpenCode assertions |
+
+## Naia model comparison requirements (#407, 2026-08-02)
+
+| ID | Requirement | Verification |
+|---|---|---|
+| **FR-NAIA-AZURE.7** | The Naia model picker defaults to price order and does not expose a registry/default-order option. Price order uses the documented general-chat estimate `3 * uncached input price + output price`; unknown prices sort last and ties remain stable. | registry unit + Settings component + Playwright |
+| **FR-NAIA-AZURE.8** | Models marked `comingSoon`, omitted from a successfully loaded catalog, or otherwise non-live are absent from the selectable model list. A stale saved unavailable model is replaced and persisted as a usable route; later sort changes do not silently change a valid selection. | metadata/filter unit + Settings component |
+| **FR-NAIA-AZURE.9** | Performance order uses a dated, source-documented general-chat recommendation based on official Azure Foundry and model-provider evidence. It must not present incomparable vendor benchmarks as a single measured score. | recommendation-order unit + source comments |
+| **FR-NAIA-AZURE.10** | Cache prices do not affect the default sort because model support and the user's hit rate vary. The UI continues to show separate input/output customer prices; cache-aware billing claims require verified any-llm usage and charging evidence. | pricing contract + any-llm audit |
+
+### Pricing and cache evidence (2026-08-02)
+
+- Naia production routes GPT-5.6 Luna through Azure. The live customer prices
+  are input `$1.10`, output `$6.60`, cache read `$0.11`, and cache write
+  `$1.375` per million tokens. These are Azure prices plus the existing 10%
+  service margin.
+- OpenAI's direct API separately lists Luna at input `$0.20`, output `$1.20`,
+  and cached input `$0.02`. That 80% reduction must not be substituted for the
+  Azure-backed Naia route until Azure billing or the Naia upstream route changes.
+- any-llm commit `6abb91d` preserves GPT-5.6 Sol/Luna cache keys, trailing
+  streaming usage, cache-read and cache-write token partitions, DB usage, credit
+  charging, and `/v1/pricing` cache fields. Grok, DeepSeek, Gemini, and Claude do
+  not yet share that full end-to-end prompt-cache contract.
+- DeepSeek V4 Flash exists in DeepSeek and Azure Foundry catalogs, but the Naia
+  production `/v1/models` and `/v1/pricing` endpoints do not expose a live route
+  or customer price. Shell therefore does not offer a non-working option.

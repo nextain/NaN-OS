@@ -244,7 +244,7 @@ describe("registry — fetchNaiaPricing", () => {
 			{ model_key: "vertexai:gemini-3.1-flash-lite", input_price_per_million: 0.15, output_price_per_million: 0.6, cached_price_per_million: 0.04 },
 			{ model_key: "vertexai:gemini-3.5-flash", input_price_per_million: 1.25, output_price_per_million: 10.0, cached_price_per_million: null },
 			{ model_key: "openai:gpt-4o", input_price_per_million: 2.5, output_price_per_million: 10.0, cached_price_per_million: null },
-			{ model_key: "azure:grok-4.3", input_price_per_million: 0.4, output_price_per_million: 1.2, cached_price_per_million: null },
+			{ model_key: "azure:grok-4.3", input_price_per_million: 0.4, output_price_per_million: 1.2, cached_price_per_million: 0.08, cache_write_price_per_million: 0.5 },
 		];
 		vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
 			new Response(JSON.stringify(gatewayResponse), { status: 200 }),
@@ -260,7 +260,10 @@ describe("registry — fetchNaiaPricing", () => {
 
 		const gpt4o = models!.find((m) => m.id === "gpt-4o");
 		expect(gpt4o).toBeUndefined();
-		expect(models!.find((m) => m.id === "grok-4.3")?.pricing).toEqual([0.4, 1.2]);
+		expect(models!.find((m) => m.id === "grok-4.3")).toMatchObject({
+			pricing: [0.4, 1.2],
+			cachePricing: { read: 0.08, write: 0.5 },
+		});
 
 		vi.restoreAllMocks();
 	});
@@ -314,13 +317,20 @@ describe("registry — Naia Azure model metadata", () => {
 		vi.restoreAllMocks();
 	});
 
-	it("keeps provenance unknown when live metadata is unavailable or omits the model", () => {
+	it("keeps a network fallback but fails closed when a successful catalog omits a model", () => {
 		const base = getLlmProvider("nextain")!.models;
-		for (const metadata of [null, new Map()]) {
-			const models = applyNaiaModelMetadata(base, metadata);
-			expect(models.find((m) => m.id === "grok-4.3")?.upstreamProvider).toBe("unknown");
-			expect(models.find((m) => m.id === "deepseek-v4-pro")).toMatchObject({ supportsTools: false, upstreamProvider: "unknown" });
-		}
+		const fallback = applyNaiaModelMetadata(base, null);
+		expect(fallback.find((m) => m.id === "grok-4.3")?.comingSoon).toBeUndefined();
+
+		const omitted = applyNaiaModelMetadata(base, new Map());
+		expect(omitted.find((m) => m.id === "grok-4.3")).toMatchObject({
+			operationalStatus: "catalog_missing",
+			comingSoon: true,
+		});
+		expect(omitted.find((m) => m.id === "deepseek-v4-pro")).toMatchObject({
+			supportsTools: false,
+			comingSoon: true,
+		});
 	});
 });
 
@@ -341,38 +351,47 @@ describe("registry — formatModelLabel", () => {
 
 describe("registry — sortModels", () => {
 	const models = [
-		{ id: "expensive", label: "Expensive", capabilities: ["llm"], pricing: [5, 10] },
+		{ id: "input-heavy", label: "Input heavy", capabilities: ["llm"], pricing: [3, 0] },
 		{ id: "unknown", label: "Unknown", capabilities: ["llm"] },
-		{ id: "cheap", label: "Cheap", capabilities: ["llm"], pricing: [0.2, 1] },
+		{ id: "output-heavy", label: "Output heavy", capabilities: ["llm"], pricing: [0, 5] },
 		{ id: "soon", label: "Soon", capabilities: ["llm"], pricing: [0, 0], comingSoon: true },
 	] as Parameters<typeof sortModels>[0];
 
-	it("preserves registry order by default", () => {
-		expect(sortModels(models, "default").map((model) => model.id)).toEqual(
-			models.map((model) => model.id),
-		);
-	});
-
-	it("sorts by combined input and output price with unknown and unavailable last", () => {
+	it("sorts by a 3:1 uncached input/output chat estimate with unknown and unavailable last", () => {
 		expect(sortModels(models, "price").map((model) => model.id)).toEqual([
-			"cheap",
-			"expensive",
+			"output-heavy",
+			"input-heavy",
 			"unknown",
 			"soon",
+		]);
+	});
+
+	it("keeps registry order for equal weighted price scores", () => {
+		const tied = [
+			{ id: "first", label: "First", capabilities: ["llm"], pricing: [1, 3] },
+			{ id: "second", label: "Second", capabilities: ["llm"], pricing: [2, 0] },
+		] as Parameters<typeof sortModels>[0];
+		expect(sortModels(tied, "price").map((model) => model.id)).toEqual([
+			"first",
+			"second",
 		]);
 	});
 
 	it("uses the dated Naia recommendation while keeping unavailable routes last", () => {
 		const naia = getLlmProvider("nextain")!.models;
 		const sorted = sortModels(naia, "performance").map((model) => model.id);
-		expect(sorted.slice(0, 3)).toEqual([
+		expect(sorted.slice(0, 7)).toEqual([
 			"gpt-5.6-sol",
 			"grok-4.3",
 			"deepseek-v4-pro",
+			"gemini-3.5-flash",
+			"gemini-3.1-flash-lite",
+			"gpt-5.6-luna",
+			"gemini-2.5-flash-live",
 		]);
 		expect(sorted.slice(-2)).toEqual([
-			"naia-0.9-omni-24g",
 			"claude-opus-5",
+			"naia-0.9-omni-24g",
 		]);
 	});
 });

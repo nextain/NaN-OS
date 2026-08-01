@@ -227,12 +227,85 @@ describe("SettingsTab", () => {
 		expect(providerSelect.value).toBe("nextain");
 	});
 
-	it("shows Naia pricing in model names and supports price ordering", async () => {
+	it("defaults to weighted price ordering, reorders visibly, and hides unavailable models", async () => {
 		localStorage.setItem(
 			"naia-config",
 			JSON.stringify({
 				provider: "nextain",
 				model: "grok-4.3",
+				apiKey: "",
+			}),
+		);
+		mockInvoke.mockResolvedValue([]);
+		stubPricingFetch([
+			{
+				model_key: "azure:grok-4.3",
+				input_price_per_million: 0.4,
+				output_price_per_million: 1.2,
+				cached_price_per_million: 0.08,
+				cache_write_price_per_million: 0.5,
+			},
+			{
+				model_key: "vertexai:gemini-3.1-flash-lite",
+				input_price_per_million: 0.1,
+				output_price_per_million: 5,
+				cached_price_per_million: 0.01,
+			},
+		]);
+
+		render(<SettingsTab />);
+		gotoSettingsTab("brain");
+
+		await screen.findByText(
+			/Price per 1M tokens: Input \$0\.400 · Output \$1\.200 · Cache read \$0\.080 · Cache write \$0\.500/,
+		);
+		let modelSelect = document.getElementById(
+			"model-select",
+		) as HTMLSelectElement;
+		const labels = [...modelSelect.options].map((option) => option.text);
+		expect(labels).toContain("Grok 4.3 (Pricing: $0.400 / $1.200)");
+		expect(labels.some((label) => label.includes("(Naia)"))).toBe(false);
+		expect(labels.some((label) => label.includes("Analysis only"))).toBe(false);
+		expect(
+			[...modelSelect.options].map((option) => option.value),
+		).not.toContain("naia-local");
+		expect([...modelSelect.options].map((option) => option.value)).not.toContain(
+			"claude-opus-5",
+		);
+		expect([...modelSelect.options].map((option) => option.value)).not.toContain(
+			"naia-0.9-omni-24g",
+		);
+
+		const sortSelect = screen.getByTestId("model-sort-mode") as HTMLSelectElement;
+		expect(sortSelect.value).toBe("price");
+		expect([...sortSelect.options].map((option) => option.value)).toEqual([
+			"price",
+			"performance",
+		]);
+		expect(screen.getByTestId("model-price-sort-basis").textContent).toContain(
+			"3 uncached input tokens",
+		);
+		const pricedOptions = [...modelSelect.options].map((option) => option.value);
+		expect(pricedOptions[0]).toBe("grok-4.3");
+		expect(modelSelect.value).toBe("grok-4.3");
+
+		fireEvent.change(sortSelect, { target: { value: "performance" } });
+		modelSelect = document.getElementById("model-select") as HTMLSelectElement;
+		const performanceOptions = [...modelSelect.options].map(
+			(option) => option.value,
+		);
+		expect(performanceOptions[0]).toBe("gpt-5.6-sol");
+		expect(performanceOptions).not.toEqual(pricedOptions);
+		expect(modelSelect.value).toBe("grok-4.3");
+	});
+
+	it("replaces a stale unavailable Naia selection with the first usable priced model", async () => {
+		localStorage.setItem(
+			"naia-config",
+			JSON.stringify({
+				provider: "nextain",
+				model: "claude-opus-5",
+				naiaKey: "gw-member",
 				apiKey: "",
 			}),
 		);
@@ -249,25 +322,18 @@ describe("SettingsTab", () => {
 		render(<SettingsTab />);
 		gotoSettingsTab("brain");
 
-		await screen.findByText(
-			"Price per 1M tokens: Input $0.400 · Output $1.200",
-		);
-		const modelSelect = document.getElementById(
-			"model-select",
-		) as HTMLSelectElement;
-		const labels = [...modelSelect.options].map((option) => option.text);
-		expect(labels).toContain("Grok 4.3 (Pricing: $0.400 / $1.200)");
-		expect(labels.some((label) => label.includes("(Naia)"))).toBe(false);
-		expect(labels.some((label) => label.includes("Analysis only"))).toBe(false);
-		expect(
-			[...modelSelect.options].map((option) => option.value),
-		).not.toContain("naia-local");
-
-		fireEvent.change(screen.getByTestId("model-sort-mode"), {
-			target: { value: "price" },
+		await vi.waitFor(() => {
+			const modelSelect = document.getElementById(
+				"model-select",
+			) as HTMLSelectElement;
+			expect(modelSelect.value).toBe("grok-4.3");
+			expect([...modelSelect.options].map((option) => option.value)).not.toContain(
+				"claude-opus-5",
+			);
+			expect(JSON.parse(localStorage.getItem("naia-config") || "{}").model).toBe(
+				"grok-4.3",
+			);
 		});
-		const pricedOptions = [...modelSelect.options].map((option) => option.value);
-		expect(pricedOptions[0]).toBe("grok-4.3");
 	});
 
 	it("allows Codex for sub while keeping memory orthogonal", () => {
