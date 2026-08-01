@@ -1359,6 +1359,26 @@ fn e2e_emit_bgm_event(
     .map_err(|error| error.to_string())
 }
 
+#[cfg(feature = "webdriver-e2e")]
+#[tauri::command]
+fn e2e_seed_secure_naia_key(app: tauri::AppHandle, naia_key: String) -> Result<(), String> {
+    if !debug_e2e_enabled() {
+        return Err("e2e runtime is not enabled".to_string());
+    }
+    if !is_valid_gateway_key(&naia_key) {
+        return Err("invalid e2e Naia key".to_string());
+    }
+    let store_path = std::env::var("NAIA_E2E_SECURE_STORE_FILE")
+        .map_err(|_| "isolated e2e secure store is not configured".to_string())?;
+    let store = app.store(store_path).map_err(|error| error.to_string())?;
+    store.set("naiaKey", serde_json::Value::String(naia_key));
+    store.save().map_err(|error| error.to_string())?;
+    if !cascade_has_naia_credential(&app) {
+        return Err("e2e Naia key was not visible to the native member gate".to_string());
+    }
+    Ok(())
+}
+
 fn e2e_runtime_dir() -> Option<std::path::PathBuf> {
     if !debug_e2e_enabled() {
         return None;
@@ -5159,16 +5179,26 @@ async fn start_cascade(
     // IPC call then returns the same ready payload instead of cleaning the
     // first launch's child services out from underneath it.
     let _start_guard = state.cascade_start.lock().await;
-    let adk_path = dirs::home_dir()
-        .and_then(|h| std::fs::read_to_string(h.join(".naia").join("adk-path")).ok())
-        .map(|s| s.trim().to_string())
-        .filter(|s| !s.is_empty())
-        .ok_or_else(|| "adk path not set (naia-settings workspace missing)".to_string())?;
+    let adk_path = if debug_e2e_enabled() {
+        std::env::var("NAIA_E2E_ADK_PATH")
+            .ok()
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty())
+    } else {
+        dirs::home_dir()
+            .and_then(|h| std::fs::read_to_string(h.join(".naia").join("adk-path")).ok())
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty())
+    }
+    .ok_or_else(|| "adk path not set (naia-settings workspace missing)".to_string())?;
     let manifest_path = std::path::PathBuf::from(&adk_path)
         .join("naia-settings")
         .join("slots-manifest.json");
-    if !cascade_manifest_has_naia_account(&manifest_path) || !cascade_has_naia_credential(&app) {
-        return Err("cascade_naia_member_required".to_string());
+    if !cascade_manifest_has_naia_account(&manifest_path) {
+        return Err("cascade_naia_member_required:manifest".to_string());
+    }
+    if !cascade_has_naia_credential(&app) {
+        return Err("cascade_naia_member_required:credential".to_string());
     }
     let loader_profile = read_cascade_loader_profile(&manifest_path);
     let expected_loader_profile = expected_loader_profile
@@ -5283,6 +5313,29 @@ async fn cascade_status(state: tauri::State<'_, AppState>) -> Result<bool, Strin
         Some(ready) => cascade_facade_is_healthy(&ready).await,
         None => false,
     })
+}
+
+/// Report supervisor lifecycle separately from facade health so the UI can
+/// distinguish a normal VoxCPM2 cold start from a stopped/unreachable service.
+#[tauri::command]
+async fn cascade_runtime_status(state: tauri::State<'_, AppState>) -> Result<String, String> {
+    if state.cascade_start.try_lock().is_err() {
+        return Ok("starting".to_string());
+    }
+    let running = {
+        let mut guard = lock_or_recover(&state.cascade, "cascade");
+        if let Some(c) = guard.as_mut() {
+            if matches!(c.child.try_wait(), Ok(None)) {
+                true
+            } else {
+                let _ = guard.take();
+                false
+            }
+        } else {
+            false
+        }
+    };
+    Ok(if running { "running" } else { "stopped" }.to_string())
 }
 
 /// R2.2a: slots-manifest.json write(`{adk}/naia-settings/slots-manifest.json`).
@@ -9458,6 +9511,7 @@ pub fn run() {
             start_cascade,
             stop_cascade,
             cascade_status,
+			cascade_runtime_status,
             read_naia_ui_config,
             write_naia_ui_config,
             read_naia_knowledge_config,
@@ -9541,6 +9595,8 @@ pub fn run() {
             enable_webview2_ime,
             #[cfg(feature = "webdriver-e2e")]
             e2e_emit_bgm_event,
+            #[cfg(feature = "webdriver-e2e")]
+            e2e_seed_secure_naia_key,
         ])
         .setup(|app| {
             let app_handle = app.handle().clone();

@@ -37,7 +37,11 @@ import {
 	yieldSpeechActivity,
 	type SpeechActivityResume,
 } from "../lib/chat-service";
-import { SKILL_YOUTUBE_BGM, executeBgmSkill } from "../lib/bgm-skill";
+import {
+	SKILL_YOUTUBE_BGM,
+	executeBgmSkill,
+	shouldActivateRadioDj,
+} from "../lib/bgm-skill";
 import {
 	activateMicUnlessSpeechActivityOwnsVoice,
 	canSpeakProactiveText,
@@ -48,6 +52,7 @@ import {
 	shouldQueueBeforeSpeechYield,
 } from "../lib/speech-profile-commands";
 import {
+	RADIO_DJ_DEFAULT_SETTINGS,
 	normalizeProactiveSpeechSettings,
 	toSpeechProfileCommandInput,
 } from "../lib/proactive-speech-settings";
@@ -93,6 +98,7 @@ import {
 import { getTtsProviderMeta } from "../lib/tts";
 import { estimateSttCost, estimateTtsCost } from "../lib/tts/cost";
 import { streamsAvatarPcm, synthesizeTts } from "../lib/tts/synthesize";
+import { ttsTextFilter } from "../lib/tts/text-filter";
 import { decideSttBargeIn, isLikelySelfEcho, shouldPauseSttForTts } from "../lib/voice/echo-gate";
 import type {
 	AgentResponseChunk,
@@ -959,7 +965,9 @@ export function ChatArea({
 		sentenceChunkerRef.current?.clear();
 		activeTtsRequestsRef.current.clear();
 		avatarPlaybackTailRef.current = Promise.resolve();
-		localVoiceSynthesisTailRef.current = Promise.resolve();
+		// Do not reset the GPU admission fence here. Aborting the WebView fetch
+		// does not prove that VoxCPM2 has released its execution context yet.
+		// The new turn must remain behind the old local synthesis tail.
 		localVoiceBufferRef.current = {
 			generation: localVoiceBufferRef.current.generation + 1,
 			sentenceCount: 0,
@@ -1746,6 +1754,41 @@ export function ChatArea({
 		return true;
 	}
 
+	async function activateRadioDjFromSkill(): Promise<void> {
+		const config = await loadConfigWithSecrets();
+		if (!config) throw new Error("radio_dj_config_unavailable");
+		if (
+			config.proactiveSpeechProfile === "personal_radio_dj" &&
+			config.proactiveSpeechPermitted === true
+		) return;
+
+		window.dispatchEvent(new CustomEvent("naia-proactive-profile-changing"));
+		const settings = normalizeProactiveSpeechSettings({
+			profile: "personal_radio_dj",
+			idleMs: config.proactiveSpeechIdleMs ?? RADIO_DJ_DEFAULT_SETTINGS.idleMs,
+			intervalMs:
+				config.proactiveSpeechIntervalMs ?? RADIO_DJ_DEFAULT_SETTINGS.intervalMs,
+			timezone: config.proactiveSpeechTimezone ?? "UTC",
+			bgmAutoPlay: true,
+			weatherConsented: config.proactiveSpeechWeatherConsented,
+			weatherLatitude: config.proactiveSpeechWeatherLatitude,
+			weatherLongitude: config.proactiveSpeechWeatherLongitude,
+			knowledgeScope: config.proactiveSpeechKnowledgeScope,
+		});
+		const configured = await configureSpeechProfile(
+			toSpeechProfileCommandInput(settings),
+		);
+		if (!configured) throw new Error("radio_dj_profile_configure_failed");
+		saveConfig({
+			...config,
+			proactiveSpeechProfile: "personal_radio_dj",
+			proactiveSpeechPermitted: true,
+			proactiveSpeechIdleMs: settings.idleMs,
+			proactiveSpeechIntervalMs: settings.intervalMs,
+			proactiveSpeechBgmAutoPlay: true,
+		});
+	}
+
 	// Shared panel-tool dispatch — used by both the streaming-chat handleChunk
 	// path AND the voice directToolCall path (so voice can run panel tools like
 	// skill_browser_*). Auto-switches to the owning panel first (tool-level), so
@@ -1763,9 +1806,16 @@ export function ChatArea({
 		if (req.toolName === SKILL_YOUTUBE_BGM.name) {
 			// Activity-owned playback (for example Radio DJ change_vibe) replaces
 			// the current track immediately. Normal chat requests still enqueue.
-			executeBgmSkill(
-				req.activityId ? { ...req.args, replace: true } : req.args,
-			)
+			const radioDjRequested = shouldActivateRadioDj(req.args);
+			Promise.resolve()
+				.then(() =>
+					radioDjRequested ? activateRadioDjFromSkill() : undefined,
+				)
+				.then(() =>
+					executeBgmSkill(
+						req.activityId ? { ...req.args, replace: true } : req.args,
+					),
+				)
 				.then((result) => {
 					Logger.info("ChatArea", "bgm skill result", { result });
 					return sendPanelToolResult(req.requestId, req.toolCallId, result, true, req.activityId);
@@ -2186,11 +2236,9 @@ export function ChatArea({
 
 	/** Synthesize one sentence shell-side (#363) and enqueue/play the audio. */
 	function sendSentenceToTts(sentence: string): void {
-		// Strip emotion tags and emoji before TTS
-		const clean = sentence
-			.replace(/\[(?:HAPPY|SAD|ANGRY|SURPRISED|NEUTRAL|THINK)]\s*/gi, "")
-			.replace(/[\p{Emoji_Presentation}\p{Extended_Pictographic}]/gu, "")
-			.trim();
+		// Preserve the original Markdown in chat, but send only natural speech text
+		// to the selected voice engine.
+		const clean = ttsTextFilter.filter(sentence);
 		if (!clean) return;
 		const revealText = reserveTtsTextReveal(sentence);
 
@@ -2480,7 +2528,7 @@ export function ChatArea({
 					});
 				}
 			})
-			.catch((err) => {
+			.catch(async (err) => {
 				// Superseded / aborted turn (interrupt cleared the set) — don't fall
 				// back or bill; the queue was already reset.
 				if (!activeTtsRequestsRef.current.has(reqId)) return;
@@ -2511,9 +2559,16 @@ export function ChatArea({
 					);
 					if (!localVoiceUnavailableNoticedRef.current) {
 						localVoiceUnavailableNoticedRef.current = true;
+						const runtimeState = await invoke<string>(
+							"cascade_runtime_status",
+						).catch(() => "unknown");
 						useChatStore.getState().addMessage({
 							role: "assistant",
-							content: t("chat.localVoiceUnavailable"),
+							content: t(
+								runtimeState === "starting"
+									? "chat.localVoiceStarting"
+									: "chat.localVoiceUnavailable",
+							),
 						});
 					}
 					activeTtsRequestsRef.current.delete(reqId);

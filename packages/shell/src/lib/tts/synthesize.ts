@@ -22,12 +22,35 @@
 
 import { BGM_SIDECAR_BASE_URL } from "../bgm-sidecar-url";
 import { DEFAULT_LOCAL_VOICE_HOST, type TtsProviderId } from "../config";
+import { Logger } from "../logger";
 import { resolveEdgeVoice } from "./edge-tts";
 
 // Edge neural TTS runs in the bgm/media sidecar (node msedge-tts) — the in-app
 // webview can't do the MS WebSocket handshake (it can't set the required
 // headers/Origin → 400). The shell fetches the sidecar's /edge-tts (#363).
 const EDGE_TTS_SIDECAR_URL = `${BGM_SIDECAR_BASE_URL}/edge-tts`;
+const LOCAL_VOICE_BUSY_RETRY_DELAYS_MS = [
+	250, 500, 750, 1_000, 1_500, 2_000, 2_500, 3_000, 3_500,
+];
+const LOCAL_VOICE_BUSY_MAX_RETRY_DELAY_MS = 3_500;
+
+function retryAfterMs(response: Response, fallbackMs: number): number {
+	const raw = response.headers?.get?.("Retry-After")?.trim();
+	if (!raw) return fallbackMs;
+	const seconds = Number(raw);
+	if (Number.isFinite(seconds)) {
+		return Math.min(
+			LOCAL_VOICE_BUSY_MAX_RETRY_DELAY_MS,
+			Math.max(100, Math.round(seconds * 1_000)),
+		);
+	}
+	const dateMs = Date.parse(raw);
+	if (!Number.isFinite(dateMs)) return fallbackMs;
+	return Math.min(
+		LOCAL_VOICE_BUSY_MAX_RETRY_DELAY_MS,
+		Math.max(100, dateMs - Date.now()),
+	);
+}
 
 export interface SynthesizeOpts {
 	/** Text to speak (emotion tags / emoji already stripped by caller). */
@@ -312,9 +335,51 @@ async function synthNaiaLocalVoice(
 			}),
 			signal: opts.signal,
 		});
-	let resp = await request(selectedVoice);
+	const waitForRetry = (delayMs: number) =>
+		new Promise<void>((resolve, reject) => {
+			if (opts.signal?.aborted) {
+				reject(opts.signal.reason ?? new DOMException("Aborted", "AbortError"));
+				return;
+			}
+			const onAbort = () => {
+				clearTimeout(timer);
+				reject(opts.signal?.reason ?? new DOMException("Aborted", "AbortError"));
+			};
+			const timer = setTimeout(() => {
+				opts.signal?.removeEventListener("abort", onAbort);
+				resolve();
+			}, delayMs);
+			opts.signal?.addEventListener("abort", onAbort, { once: true });
+		});
+	const requestAfterBusy = async (voice: string) => {
+		for (let retry = 0; ; retry++) {
+			const response = await request(voice);
+			if (response.ok) return { response, detail: "" };
+			const detail = await errorDetail(response);
+			// 429 means the POST was not admitted and is therefore safe to retry.
+			// Keep one narrowly-scoped compatibility path for older facades that
+			// wrapped urllib's exact upstream 429 as synthesis_failed/502.
+			const busy =
+				response.status === 429 ||
+				(response.status === 502 &&
+					detail.includes("HTTP Error 429: Too Many Requests"));
+			if (!busy || retry >= LOCAL_VOICE_BUSY_RETRY_DELAYS_MS.length) {
+				return { response, detail };
+			}
+			const delayMs = retryAfterMs(
+				response,
+				LOCAL_VOICE_BUSY_RETRY_DELAYS_MS[retry],
+			);
+			Logger.info("tts-synthesize", "Local voice busy; retrying", {
+				retry: retry + 1,
+				delayMs,
+				status: response.status,
+			});
+			await waitForRetry(delayMs);
+		}
+	};
+	let { response: resp, detail } = await requestAfterBusy(selectedVoice);
 	if (!resp.ok) {
-		const detail = await errorDetail(resp);
 		// A profile update can remove a formerly bundled voice while ui-config
 		// still points at it. Recover once with the facade's stable default instead
 		// of turning an otherwise healthy local engine into silence.
@@ -323,15 +388,13 @@ async function synthNaiaLocalVoice(
 			selectedVoice !== defaultVoice &&
 			detail.includes("unknown_voice")
 		) {
-			resp = await request(defaultVoice);
+			({ response: resp, detail } = await requestAfterBusy(defaultVoice));
 			if (resp.ok) {
 				return {
 					audioBase64: arrayBufferToBase64(await resp.arrayBuffer()),
 				};
 			}
-			throw new Error(
-				`로컬 음성 합성 실패 (${resp.status}): ${await errorDetail(resp)}`,
-			);
+			throw new Error(`로컬 음성 합성 실패 (${resp.status}): ${detail}`);
 		}
 		throw new Error(
 			`로컬 음성 합성 실패 (${resp.status}): ${detail}`,

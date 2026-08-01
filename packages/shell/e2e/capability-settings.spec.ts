@@ -109,7 +109,7 @@ async function gotoModelSettings(
 }
 
 test.describe("Capability-driven settings (#365)", () => {
-	test("Naia model names stay clean and pricing states its token basis", async ({
+	test("Naia model names include pricing and pricing states its token basis", async ({
 		page,
 	}) => {
 		await gotoModelSettings(page, {
@@ -126,7 +126,7 @@ test.describe("Capability-driven settings (#365)", () => {
 
 		const modelSelect = page.locator("#model-select");
 		await expect(modelSelect.locator('option[value="grok-4.3"]')).toHaveText(
-			"Grok 4.3",
+			/Grok 4\.3 \(Pricing: \$0\.400 \/ \$1\.200\)/,
 		);
 		await expect(modelSelect.locator('option[value="naia-local"]')).toHaveCount(
 			0,

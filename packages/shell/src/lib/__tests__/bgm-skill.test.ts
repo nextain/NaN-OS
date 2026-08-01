@@ -6,6 +6,7 @@ import {
 	SKILL_YOUTUBE_BGM,
 	clampVolume,
 	executeBgmSkill,
+	shouldActivateRadioDj,
 	type BgmSearchResult,
 	type BgmSkillDeps,
 } from "../bgm-skill";
@@ -36,6 +37,21 @@ describe("SKILL_YOUTUBE_BGM descriptor (계약)", () => {
 			enum?: string[];
 		};
 		expect(actionProp.enum).toEqual([...BGM_ACTIONS]);
+		const modeProp = SKILL_YOUTUBE_BGM.parameters?.properties?.mode as {
+			enum?: string[];
+			description?: string;
+		};
+		expect(modeProp.enum).toEqual(["player", "radio_dj"]);
+		expect(modeProp.description).toContain("Semantic intent");
+	});
+});
+
+describe("Radio DJ semantic mode boundary", () => {
+	it("activates only from the LLM's structured radio_dj play choice", () => {
+		expect(shouldActivateRadioDj({ action: "play", mode: "radio_dj" })).toBe(true);
+		expect(shouldActivateRadioDj({ action: "play", mode: "player" })).toBe(false);
+		expect(shouldActivateRadioDj({ action: "status", mode: "radio_dj" })).toBe(false);
+		expect(shouldActivateRadioDj({ action: "play", query: "라디오 DJ 해줘" })).toBe(false);
 	});
 });
 

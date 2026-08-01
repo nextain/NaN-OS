@@ -2,7 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { open } from "@tauri-apps/plugin-dialog";
 import { openPath, openUrl } from "@tauri-apps/plugin-opener";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
 	agentKeyExists,
 	applyModelSelectionToConfig,
@@ -97,6 +97,7 @@ import { fetchLabBalancePayload, parseLabCredits } from "../lib/lab-balance";
 import { diffConfigs, fetchLabConfig, pushConfigToLab } from "../lib/lab-sync";
 import {
 	type LlmModelMeta,
+	type ModelSortMode,
 	applyNaiaModelMetadata,
 	fetchGatewayModelCatalog,
 	fetchNaiaModelMetadata,
@@ -110,6 +111,7 @@ import {
 	isApiKeyOptional,
 	isOmniModel,
 	listLlmProviders,
+	sortModels,
 } from "../lib/llm";
 import { providerSupportsRole } from "../lib/llm/registry";
 import {
@@ -712,6 +714,8 @@ export function SettingsTab() {
 	const [dynamicModels, setDynamicModels] = useState<
 		Record<string, LlmModelMeta[]>
 	>(getStaticModelsRecord);
+	const [modelSortMode, setModelSortMode] =
+		useState<ModelSortMode>("default");
 	const [ollamaHost, setOllamaHost] = useState(
 		existing?.ollamaHost ?? DEFAULT_OLLAMA_HOST,
 	);
@@ -2600,6 +2604,13 @@ export function SettingsTab() {
 	}
 
 	const providerModels = dynamicModels[provider] ?? [];
+	const displayedProviderModels = useMemo(
+		() =>
+			provider === "nextain"
+				? sortModels(providerModels, modelSortMode)
+				: providerModels,
+		[provider, providerModels, modelSortMode],
+	);
 	const renderLlmRoleEditor = (
 		role: "expert" | "sub" | "memory",
 		labelKey: TranslationKey,
@@ -4144,6 +4155,23 @@ export function SettingsTab() {
 
 					<div className="settings-field">
 						<label htmlFor="model-select">{t("settings.model")}</label>
+						{provider === "nextain" ? (
+							<>
+								<label htmlFor="model-sort-mode">{t("settings.modelSort")}</label>
+								<select
+									id="model-sort-mode"
+									data-testid="model-sort-mode"
+									value={modelSortMode}
+									onChange={(event) =>
+										setModelSortMode(event.target.value as ModelSortMode)
+									}
+								>
+									<option value="default">{t("settings.modelSortDefault")}</option>
+									<option value="price">{t("settings.modelSortPrice")}</option>
+									<option value="performance">{t("settings.modelSortPerformance")}</option>
+								</select>
+							</>
+						) : null}
 						<select
 							id="model-select"
 							value={hasSelectedModel ? model : "__custom__"}
@@ -4192,13 +4220,11 @@ export function SettingsTab() {
 							{!hasSelectedModel && model ? (
 								<option value="__custom__">{`${model}${isSelectedAsr ? " 🎤" : ""} (현재값)`}</option>
 							) : null}
-							{providerModels
+							{displayedProviderModels
 								.filter((m) => !m.capabilities.includes("asr"))
 								.map((m) => (
 									<option key={m.id} value={m.id}>
-										{formatModelLabel(
-											provider === "nextain" ? { ...m, pricing: undefined } : m,
-										)}
+									{formatModelLabel(m)}
 									</option>
 								))}
 						</select>

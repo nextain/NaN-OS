@@ -59,11 +59,22 @@ export const SKILL_YOUTUBE_BGM: NaiaTool = {
 			videoId: { type: "string", description: "YouTube video id (play, 선택)" },
 			title: { type: "string", description: "제목 (play+videoId, 선택)" },
 			volume: { type: "number", description: "0.0~1.0 (volume)" },
+			mode: {
+				type: "string",
+				enum: ["player", "radio_dj"],
+				description:
+					"Semantic intent chosen by the LLM in any language. Use radio_dj only when the user asks for an ongoing autonomous DJ/radio-host experience (including synonyms or similar phrasing); use player for ordinary song, playlist, or BGM playback.",
+			},
 		},
 		required: ["action"],
 	},
 	tier: 0, // App.tsx 부팅 시 addAllowedTool("skill_youtube_bgm") — 저위험 환경 조작
 };
+
+/** Shell policy boundary: only the LLM's structured semantic choice activates DJ mode. */
+export function shouldActivateRadioDj(args: Record<string, unknown>): boolean {
+	return args.action === "play" && args.mode === "radio_dj";
+}
 
 export interface BgmSearchResult {
 	id: string;

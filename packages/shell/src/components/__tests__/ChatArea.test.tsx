@@ -986,6 +986,36 @@ describe("ChatArea", () => {
 		localStorage.removeItem("naia-config");
 	});
 
+	it("reports VoxCPM2 startup instead of an unreachable engine while cascade is starting", async () => {
+		ttsSyncMocks.synthesizeTts.mockRejectedValue(new Error("voice starting"));
+		mockInvoke.mockImplementation((command: string) =>
+			Promise.resolve(command === "cascade_runtime_status" ? "starting" : undefined),
+		);
+		localStorage.setItem("naia-config", JSON.stringify({
+			apiKey: "test-key", provider: "gemini", model: "gemini-2.5-flash",
+			ttsEnabled: true, ttsProvider: "naia-local-voice",
+			vllmTtsHost: "http://localhost:8910",
+		}));
+
+		render(<ChatArea />);
+		const input = screen.getByPlaceholderText(/message/i);
+		fireEvent.change(input, { target: { value: "startup state" } });
+		fireEvent.keyDown(input, { key: "Enter" });
+		await waitFor(() => expect(capturedRequests).toHaveLength(1));
+		const request = capturedRequests[0];
+		request.onChunk({
+			type: "text",
+			requestId: request.requestId,
+			text: "This sentence waits for the model.",
+		});
+
+		await waitFor(() =>
+			expect(screen.getByText(/VoxCPM2 voice model is starting/)).toBeDefined(),
+		);
+		expect(screen.queryByText(/Can't reach the local voice engine/)).toBeNull();
+		localStorage.removeItem("naia-config");
+	});
+
 	it("does not release stale avatar fallback audio after an interrupt", async () => {
 		const playback = deferred<void>();
 		let playbackFailure = () => {};

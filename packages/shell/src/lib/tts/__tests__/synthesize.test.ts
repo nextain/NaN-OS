@@ -14,7 +14,15 @@ function jsonResponse(body: unknown, ok = true, status = 200) {
 		json: async () => body,
 		text: async () => JSON.stringify(body),
 		arrayBuffer: async () => new ArrayBuffer(0),
+		headers: new Headers(),
 	} as unknown as Response;
+}
+
+function busyResponse(retryAfter = "0.5") {
+	return new Response(JSON.stringify({ error: "tts_busy", retry_after_seconds: 0.5 }), {
+		status: 429,
+		headers: { "Content-Type": "application/json", "Retry-After": retryAfter },
+	});
 }
 
 /** Build a fetch Response-like object that returns raw audio bytes. */
@@ -30,6 +38,7 @@ function bytesResponse(bytes: Uint8Array, ok = true, status = 200) {
 }
 
 afterEach(() => {
+	vi.useRealTimers();
 	vi.restoreAllMocks();
 	vi.unstubAllGlobals();
 });
@@ -411,6 +420,57 @@ describe("synthesizeTts — naia-local-voice (cascade /tts facade contract)", ()
 				vllmTtsHost: "http://localhost:8910",
 			}),
 		).rejects.toThrow(/unknown_voice/);
+		expect(fetchMock).toHaveBeenCalledTimes(1);
+	});
+
+	it("waits for a cancelled VoxCPM2 job to release the facade busy guard", async () => {
+		vi.useFakeTimers();
+		const fetchMock = vi
+			.fn()
+			.mockResolvedValueOnce(busyResponse("0.25"))
+			.mockResolvedValueOnce(busyResponse("0.5"))
+			.mockResolvedValueOnce(wavResponse());
+		vi.stubGlobal("fetch", fetchMock);
+
+		const synthesis = synthesizeTts({
+			text: "new turn after barge-in",
+			provider: "naia-local-voice",
+		});
+		await vi.advanceTimersByTimeAsync(750);
+
+		await expect(synthesis).resolves.toEqual({
+			audioBase64: expect.any(String),
+		});
+		expect(fetchMock).toHaveBeenCalledTimes(3);
+	});
+
+	it("stops a local busy retry immediately when the user interrupts", async () => {
+		vi.useFakeTimers();
+		const fetchMock = vi.fn().mockResolvedValue(busyResponse("1"));
+		vi.stubGlobal("fetch", fetchMock);
+		const abort = new AbortController();
+		const synthesis = synthesizeTts({
+			text: "cancel retry",
+			provider: "naia-local-voice",
+			signal: abort.signal,
+		});
+		await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+		abort.abort();
+
+		await expect(synthesis).rejects.toMatchObject({ name: "AbortError" });
+		expect(fetchMock).toHaveBeenCalledTimes(1);
+	});
+
+	it("does not retry an ambiguous facade failure", async () => {
+		const fetchMock = vi.fn().mockResolvedValue(
+			jsonResponse({ error: "synthesis_failed", detail: "CUDA out of memory" }, false, 502),
+		);
+		vi.stubGlobal("fetch", fetchMock);
+
+		await expect(synthesizeTts({
+			text: "do not duplicate an accepted POST",
+			provider: "naia-local-voice",
+		})).rejects.toThrow(/502/);
 		expect(fetchMock).toHaveBeenCalledTimes(1);
 	});
 

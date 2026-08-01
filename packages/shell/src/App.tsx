@@ -28,6 +28,7 @@ import {
 	setAdkPath,
 	toLocalBlobUrl,
 	writeNaiaConfig,
+	writeSlotsManifest,
 } from "./lib/adk-store";
 import { emitAiInterferenceEvent } from "./lib/ai-interference";
 import {
@@ -37,8 +38,10 @@ import {
 import { loadInstalledApps } from "./lib/app-loader";
 import { appRegistry } from "./lib/app-registry";
 import { effectiveAvatarProviderFromConfig } from "./lib/avatar/nva-gate";
+import { localFacadeUrlFromReady } from "./lib/avatar/cascade-renderer";
 import { BGM_PANEL_ID, SKILL_YOUTUBE_BGM } from "./lib/bgm-skill";
 import { detectGpuVramGb } from "./lib/capabilities/gpu";
+import { resolveActiveTier } from "./lib/capabilities/vram-tiers";
 import { syncLinkedChannels } from "./lib/channel-sync";
 import {
 	isNewCore,
@@ -68,6 +71,7 @@ import { shouldMigrateNextainModel } from "./lib/llm/registry";
 import { Logger } from "./lib/logger";
 import { type UpdateInfo, checkForUpdate } from "./lib/updater";
 import { useAvatarStore } from "./stores/avatar";
+import { useCascadeAvatarStore } from "./stores/cascade-avatar";
 import "./apps/browser/index"; // register browser panel
 import "./apps/workspace/index"; // register workspace panel
 import "./apps/settings/index"; // register settings panel
@@ -594,7 +598,7 @@ export function App() {
 		// that send was dropped (timing / agent not yet ready), this catches it.
 		// On normal app start this runs in parallel with initAuth() — harmless duplicate.
 		void loadConfigWithSecrets()
-			.then((cfg) => {
+			.then(async (cfg) => {
 				if (!cfg?.naiaKey) return;
 				invoke("store_startup_message", {
 					message: JSON.stringify({
@@ -604,6 +608,24 @@ export function App() {
 				}).catch(() => {});
 				sendAuthUpdate(cfg.naiaKey).catch(() => {});
 				notifyNaiaAuthReady("startup");
+
+				// Restore an explicitly selected member hardware profile even when
+				// Settings and VideoAvatarCanvas are not mounted. Voice-only 6GB uses
+				// the regular VRM canvas, so component-owned startup otherwise never
+				// runs and the first chat turn reaches a stopped VoxCPM2 façade.
+				if (cfg.localGpuTier && !["off", "auto"].includes(cfg.localGpuTier)) {
+					const detectedVramGb = await detectGpuVramGb();
+					const tier = resolveActiveTier(cfg.localGpuTier, detectedVramGb);
+					if (tier?.loaderProfile) {
+						await writeSlotsManifest(cfg, detectedVramGb ?? undefined);
+						const ready = await invoke<string>("start_cascade", {
+							expectedLoaderProfile: tier.loaderProfile,
+						});
+						useCascadeAvatarStore
+							.getState()
+							.setLocalFacadeUrl(localFacadeUrlFromReady(ready));
+					}
+				}
 			})
 			.catch((err) => {
 				Logger.warn("App", "startup auth restore failed", {

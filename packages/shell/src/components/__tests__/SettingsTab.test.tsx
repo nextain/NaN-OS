@@ -227,7 +227,7 @@ describe("SettingsTab", () => {
 		expect(providerSelect.value).toBe("nextain");
 	});
 
-	it("shows clean Naia model names and a localized per-token price basis", async () => {
+	it("shows Naia pricing in model names and supports price ordering", async () => {
 		localStorage.setItem(
 			"naia-config",
 			JSON.stringify({
@@ -256,12 +256,18 @@ describe("SettingsTab", () => {
 			"model-select",
 		) as HTMLSelectElement;
 		const labels = [...modelSelect.options].map((option) => option.text);
-		expect(labels).toContain("Grok 4.3");
+		expect(labels).toContain("Grok 4.3 (Pricing: $0.400 / $1.200)");
 		expect(labels.some((label) => label.includes("(Naia)"))).toBe(false);
 		expect(labels.some((label) => label.includes("Analysis only"))).toBe(false);
 		expect(
 			[...modelSelect.options].map((option) => option.value),
 		).not.toContain("naia-local");
+
+		fireEvent.change(screen.getByTestId("model-sort-mode"), {
+			target: { value: "price" },
+		});
+		const pricedOptions = [...modelSelect.options].map((option) => option.value);
+		expect(pricedOptions[0]).toBe("grok-4.3");
 	});
 
 	it("allows Codex for sub while keeping memory orthogonal", () => {
@@ -1254,7 +1260,7 @@ describe("SettingsTab — memory tab (#298)", () => {
 		);
 	});
 
-	it("apply Gemini defaults fills unset slots non-destructively (FR-SLOT.3)", async () => {
+	it("apply Naia defaults fills unset slots non-destructively (FR-SLOT.3)", async () => {
 		localStorage.setItem("naia-adk-path", "D:\\alpha-adk");
 		localStorage.setItem(
 			"naia-config",

@@ -90,6 +90,62 @@ export const config = {
 				`Manifest-only member gate was not rejected: ${forgedManifestResult}`,
 			);
 		}
+		// Let the first keyless App hydration finish before seeding. Otherwise its
+		// already-open empty Store resource can win a race and overwrite the E2E
+		// credential between the seed command and start_cascade.
+		await browser.waitUntil(
+			() => browser.execute(() => document.querySelector(".app-root") !== null),
+			{ timeout: 30_000, timeoutMsg: "Shell app root did not render before secure seed" },
+		);
+		await browser.pause(1_500);
+		// Seed the isolated Tauri Store only after proving that a manifest cannot
+		// forge membership. Production restores the same naiaKey from its secure
+		// store; localStorage alone is intentionally insufficient for native start.
+		await browser.execute(async (naiaKey: string) => {
+			const shell = window as unknown as {
+				__TAURI_INTERNALS__?: {
+					invoke: (command: string, value: unknown) => Promise<unknown>;
+				};
+			};
+			const invoke = shell.__TAURI_INTERNALS__?.invoke;
+			if (!invoke) throw new Error("Tauri invoke unavailable");
+			await invoke("e2e_seed_secure_naia_key", { naiaKey });
+		}, "gw-e2e-registered-naia-member");
+		// Exercise the native member/profile boundary immediately after secure
+		// hydration. The refreshed production App repeats this idempotently; doing
+		// it here also keeps the acceptance independent from React reload timing.
+		await browser.execute(async (settingsRoot: string) => {
+			const shell = window as unknown as {
+				__TAURI_INTERNALS__?: {
+					invoke: (command: string, value: unknown) => Promise<unknown>;
+				};
+			};
+			const invoke = shell.__TAURI_INTERNALS__?.invoke;
+			if (!invoke) throw new Error("Tauri invoke unavailable");
+			await invoke("write_slots_manifest", {
+				adkPath: settingsRoot.replace(/[\\/]naia-settings$/, ""),
+				json: JSON.stringify({
+					version: 1,
+					gate: { naiaAccount: true, mode: "naia" },
+					slots: {
+						main: { provider: "codex", model: "gpt-5.4" },
+						sub: { provider: "none" },
+						embedding: { provider: "none" },
+						stt: {},
+						tts: { provider: "naia-local-voice" },
+						avatar: { provider: "vrm" },
+					},
+					gpu: {
+						detectedVramGb: 8,
+						tier: "windows-voice-6g",
+						loaderProfile: "windows_trt_6g",
+					},
+				}),
+			});
+			await invoke("start_cascade", {
+				expectedLoaderProfile: "windows_trt_6g",
+			});
+		}, E2E_SETTINGS);
 		// AvatarStore reads the local cache synchronously before file hydration.
 		// Seed the same isolated file-backed identity into the fresh WebView and
 		// reload once so this acceptance exercises a real VRM, not an empty model.

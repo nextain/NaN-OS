@@ -17,5 +17,11 @@ export {
 	fetchOllamaModels,
 	fetchVllmModels,
 	formatModelLabel,
+	sortModels,
 } from "./registry";
-export type { LlmProviderMeta, LlmModelMeta, LlmVoiceMeta } from "./types";
+export type {
+	LlmProviderMeta,
+	LlmModelMeta,
+	LlmVoiceMeta,
+	ModelSortMode,
+} from "./types";

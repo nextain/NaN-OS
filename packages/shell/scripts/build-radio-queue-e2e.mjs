@@ -4,7 +4,7 @@ import { resolve } from "node:path";
 
 const shellDir = resolve(import.meta.dirname, "..");
 const agent = process.env.NAIA_E2E_AGENT_DIR
- ?? "D:/alpha-adk/projects/naia-agent-worktrees/shell-pair-cef794d";
+ ?? "D:/alpha-adk/projects/naia-agent-worktrees/shell-pair-c424be6";
 const script = resolve(agent, "scripts/builds/agent-stdio-entry.mjs");
 const proto = resolve(agent, "src/main/adapters/grpc");
 const workspaceRoot = resolve(shellDir, "..", "..");

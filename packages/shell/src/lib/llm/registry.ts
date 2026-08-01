@@ -1,5 +1,11 @@
 import { MODEL_CAPABILITY_VALUES, type ModelCapability } from "../types.js";
-import type { LlmModelMeta, LlmProviderMeta, LlmRoleId, LlmVoiceMeta } from "./types";
+import type {
+	LlmModelMeta,
+	LlmProviderMeta,
+	LlmRoleId,
+	LlmVoiceMeta,
+	ModelSortMode,
+} from "./types";
 
 const providers = new Map<string, LlmProviderMeta>();
 
@@ -366,6 +372,52 @@ export function formatModelLabel(model: LlmModelMeta): string {
 		label = `${label} (${tFn ? tFn("settings.comingSoonTag") : "준비중"})`;
 	}
 	return label;
+}
+
+// Product recommendation order for general chat, reviewed 2026-08-01.
+// This is a Naia recommendation, not a cross-vendor benchmark. Realtime/omni
+// routes follow general chat models, and unavailable routes remain last.
+const NAIA_GENERAL_CHAT_RECOMMENDATION: Readonly<Record<string, number>> = {
+	"gpt-5.6-sol": 1,
+	"grok-4.3": 2,
+	"deepseek-v4-pro": 3,
+	"gemini-3.5-flash": 4,
+	"gpt-5.6-luna": 5,
+	"gemini-3.1-flash-lite": 6,
+	"gemini-2.5-flash-live": 7,
+	"naia-0.9-omni-24g": 8,
+	"claude-opus-5": 9,
+};
+
+/** Return a stable, non-mutating view of the model catalog. */
+export function sortModels(
+	models: readonly LlmModelMeta[],
+	mode: ModelSortMode,
+): LlmModelMeta[] {
+	if (mode === "default") return [...models];
+	return models
+		.map((model, index) => ({ model, index }))
+		.sort((left, right) => {
+			if (left.model.comingSoon !== right.model.comingSoon) {
+				return left.model.comingSoon ? 1 : -1;
+			}
+			let delta = 0;
+			if (mode === "price") {
+				const leftPrice = left.model.pricing
+					? left.model.pricing[0] + left.model.pricing[1]
+					: Number.POSITIVE_INFINITY;
+				const rightPrice = right.model.pricing
+					? right.model.pricing[0] + right.model.pricing[1]
+					: Number.POSITIVE_INFINITY;
+				delta = leftPrice - rightPrice;
+			} else {
+				delta =
+					(NAIA_GENERAL_CHAT_RECOMMENDATION[left.model.id] ?? Number.POSITIVE_INFINITY) -
+					(NAIA_GENERAL_CHAT_RECOMMENDATION[right.model.id] ?? Number.POSITIVE_INFINITY);
+			}
+			return Number.isNaN(delta) || delta === 0 ? left.index - right.index : delta;
+		})
+		.map(({ model }) => model);
 }
 
 // ─── Shared voice lists ──────────────────────────────────────────────────────

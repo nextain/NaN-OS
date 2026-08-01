@@ -12,6 +12,7 @@ import {
 	listLlmProviders,
 	modelHasCapability,
 	providerSupportsRole,
+	sortModels,
 } from "../registry";
 
 describe("registry — provider registration", () => {
@@ -335,5 +336,43 @@ describe("registry — formatModelLabel", () => {
 		expect(label).toContain("Test Model");
 		expect(label).toContain("$1.500");
 		expect(label).toContain("$10.000");
+	});
+});
+
+describe("registry — sortModels", () => {
+	const models = [
+		{ id: "expensive", label: "Expensive", capabilities: ["llm"], pricing: [5, 10] },
+		{ id: "unknown", label: "Unknown", capabilities: ["llm"] },
+		{ id: "cheap", label: "Cheap", capabilities: ["llm"], pricing: [0.2, 1] },
+		{ id: "soon", label: "Soon", capabilities: ["llm"], pricing: [0, 0], comingSoon: true },
+	] as Parameters<typeof sortModels>[0];
+
+	it("preserves registry order by default", () => {
+		expect(sortModels(models, "default").map((model) => model.id)).toEqual(
+			models.map((model) => model.id),
+		);
+	});
+
+	it("sorts by combined input and output price with unknown and unavailable last", () => {
+		expect(sortModels(models, "price").map((model) => model.id)).toEqual([
+			"cheap",
+			"expensive",
+			"unknown",
+			"soon",
+		]);
+	});
+
+	it("uses the dated Naia recommendation while keeping unavailable routes last", () => {
+		const naia = getLlmProvider("nextain")!.models;
+		const sorted = sortModels(naia, "performance").map((model) => model.id);
+		expect(sorted.slice(0, 3)).toEqual([
+			"gpt-5.6-sol",
+			"grok-4.3",
+			"deepseek-v4-pro",
+		]);
+		expect(sorted.slice(-2)).toEqual([
+			"naia-0.9-omni-24g",
+			"claude-opus-5",
+		]);
 	});
 });
