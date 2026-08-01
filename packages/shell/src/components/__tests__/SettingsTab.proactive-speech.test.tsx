@@ -1,5 +1,11 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+	cleanup,
+	fireEvent,
+	render,
+	screen,
+	waitFor,
+} from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { setLocale } from "../../lib/i18n";
 import { ProactiveSpeechSettingsSection } from "../ProactiveSpeechSettingsSection";
@@ -64,6 +70,41 @@ describe("PA-DJ-04 proactive settings UI", () => {
 		expect(screen.getByLabelText("Exhibition knowledge scope")).toBeDefined();
 	});
 
+	it("fills an unconfigured DJ form with the Windows runtime defaults", async () => {
+		setLocale("en");
+		const onSave = vi.fn(async () => true);
+		render(
+			<ProactiveSpeechSettingsSection
+				mode="dj"
+				value={{ profile: "disabled", timezone: "Asia/Seoul" }}
+				onSave={onSave}
+			/>,
+		);
+
+		expect(
+			(screen.getByLabelText("Idle timeout (ms)") as HTMLInputElement).value,
+		).toBe("120000");
+		expect(
+			(screen.getByLabelText("DJ remark interval (ms)") as HTMLInputElement)
+				.value,
+		).toBe("900000");
+		expect(
+			(screen.getByLabelText("Automatically play BGM") as HTMLInputElement)
+				.checked,
+		).toBe(false);
+		fireEvent.click(screen.getByText("Save proactive speech settings"));
+		await waitFor(() =>
+			expect(onSave).toHaveBeenCalledWith(
+				expect.objectContaining({
+					profile: "disabled",
+					idleMs: 120_000,
+					intervalMs: 900_000,
+					bgmAutoPlay: false,
+					weatherConsented: false,
+				}),
+			),
+		);
+	});
 	it("edits and persists proactive speech settings", async () => {
 		setLocale("en");
 		const onChange = vi.fn();

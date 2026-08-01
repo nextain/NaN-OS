@@ -80,6 +80,32 @@ async function openSlotSettings(
 }
 
 test.describe("S-SLOT settings — gate + 6 cloud slots (#gate-slots)", () => {
+	test("Radio DJ uses the two-column skill card and expands populated settings", async ({
+		page,
+	}) => {
+		await openSlotSettings(page, {
+			config: { locale: "en", proactiveSpeechProfile: "disabled" },
+		});
+		await page.locator('[data-settings-tab="skills"]').click();
+
+		const card = page.getByTestId("youtube-bgm-skill-settings");
+		await expect(card).toBeVisible();
+		await expect(card).toContainText("Radio DJ");
+		await expect(card).not.toContainText("skill_youtube_bgm");
+		await expect(page.getByTestId("proactive-speech-profile")).toHaveCount(0);
+
+		const columns = await card.locator("..").evaluate(
+			(element) => getComputedStyle(element).gridTemplateColumns.split(" ").length,
+		);
+		expect(columns).toBe(2);
+
+		await card.getByRole("button", { name: /Radio DJ/ }).click();
+		await expect(card).toContainText("skill_youtube_bgm");
+		await expect(page.getByTestId("proactive-idle-ms")).toHaveValue("120000");
+		await expect(page.getByTestId("proactive-interval-ms")).toHaveValue("900000");
+		await expect(page.getByTestId("proactive-timezone")).not.toHaveValue("");
+	});
+
 	test("FR-SLOT.1/2: naia gate + 3 groups (Brain/Voice/Avatar) render; 3-profile cards removed (R1-7)", async ({
 		page,
 	}) => {

@@ -4880,6 +4880,15 @@ body.resizing-row {
 	background: var(--espresso-light);
 }
 
+.radio-dj-skill-card-header {
+	width: 100%;
+	border: 0;
+	background: transparent;
+	color: inherit;
+	font: inherit;
+	text-align: left;
+}
+
 .skill-card-info {
 	flex: 1;
 	min-width: 0;

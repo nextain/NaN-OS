@@ -760,7 +760,13 @@ describe("SettingsTab — memory tab (#298)", () => {
 		mockInvoke.mockResolvedValue([]);
 		render(<SettingsTab />);
 		gotoSettingsTab("skills");
-		expect(await screen.findByTestId("youtube-bgm-skill-settings")).toBeDefined();
+		const radioDjCard = await screen.findByTestId("youtube-bgm-skill-settings");
+		expect(radioDjCard).toBeDefined();
+		expect(screen.getByText(/Radio DJ|라디오 DJ/)).toBeDefined();
+		expect(screen.queryByText("skill_youtube_bgm")).toBeNull();
+		expect(screen.queryByTestId("proactive-speech-profile")).toBeNull();
+		fireEvent.click(screen.getByRole("button", { name: /Radio DJ|라디오 DJ/ }));
+		expect(screen.getByText("skill_youtube_bgm")).toBeDefined();
 		const skillProfile = screen.getByTestId(
 			"proactive-speech-profile",
 		) as HTMLSelectElement;
@@ -768,6 +774,15 @@ describe("SettingsTab — memory tab (#298)", () => {
 			Array.from(skillProfile.options).map((option) => option.value),
 		).toEqual(["disabled", "personal_radio_dj"]);
 		expect(screen.getByTestId("proactive-bgm-autoplay")).toBeDefined();
+		expect(
+			(screen.getByTestId("proactive-idle-ms") as HTMLInputElement).value,
+		).toBe("120000");
+		expect(
+			(screen.getByTestId("proactive-interval-ms") as HTMLInputElement).value,
+		).toBe("900000");
+		expect(
+			(screen.getByTestId("proactive-timezone") as HTMLInputElement).value,
+		).not.toBe("");
 		expect(screen.queryByTestId("proactive-knowledge-scope")).toBeNull();
 
 		gotoSettingsTab("general");

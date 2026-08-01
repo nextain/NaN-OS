@@ -137,7 +137,7 @@ function formatStructuredAgentChunk(chunk: StructuredAgentChunk): string {
 	}
 }
 
-import { AudioQueue } from "../lib/voice/audio-queue";
+import { AudioQueue, wavDurationSeconds } from "../lib/voice/audio-queue";
 import {
 	LIVE_PROVIDER_COST_HINTS,
 	type AppContextBridge,
@@ -614,6 +614,21 @@ export function ChatArea({
 	// even when later TTS requests finish first. Each sentence owns one slot in
 	// this promise tail and releases the next only after its video completes.
 	const avatarPlaybackTailRef = useRef<Promise<void>>(Promise.resolve());
+	// VoxCPM2 owns one TensorRT execution context. Keep local sentence synthesis
+	// single-flight, but release this tail as soon as each WAV is ready so the
+	// next sentence can synthesize while AudioQueue plays the previous one.
+	// This preserves low first-sentence latency without triggering the facade's
+	// 429 busy guard for the remaining sentences in a streamed reply.
+	const localVoiceSynthesisTailRef = useRef<Promise<void>>(Promise.resolve());
+	const localVoiceBufferRef = useRef({
+		generation: 0,
+		sentenceCount: 0,
+		waitingForSecond: false,
+		streamFinished: false,
+	});
+	const localVoicePrebufferTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
+		null,
+	);
 	// Per-sentence AbortControllers so interrupt/cleanup actually cancels the
 	// in-flight TTS fetch/WS (and stops billing for superseded paid TTS) — #363
 	// cross-review HIGH.
@@ -944,6 +959,17 @@ export function ChatArea({
 		sentenceChunkerRef.current?.clear();
 		activeTtsRequestsRef.current.clear();
 		avatarPlaybackTailRef.current = Promise.resolve();
+		localVoiceSynthesisTailRef.current = Promise.resolve();
+		localVoiceBufferRef.current = {
+			generation: localVoiceBufferRef.current.generation + 1,
+			sentenceCount: 0,
+			waitingForSecond: false,
+			streamFinished: false,
+		};
+		if (localVoicePrebufferTimerRef.current) {
+			clearTimeout(localVoicePrebufferTimerRef.current);
+			localVoicePrebufferTimerRef.current = null;
+		}
 		// Cancel in-flight TTS fetch/WS so a barge-in stops paid synthesis (#363).
 		for (const ac of ttsAbortControllersRef.current.values()) ac.abort();
 		ttsAbortControllersRef.current.clear();
@@ -959,6 +985,23 @@ export function ChatArea({
 		ttsPlayingRef.current = false;
 		setTtsPlaying(false);
 		useAvatarStore.getState().setSpeaking(false);
+	}
+
+	function releaseLocalVoicePrebuffer(generation: number): void {
+		if (generation !== localVoiceBufferRef.current.generation) return;
+		if (localVoicePrebufferTimerRef.current) {
+			clearTimeout(localVoicePrebufferTimerRef.current);
+			localVoicePrebufferTimerRef.current = null;
+		}
+		localVoiceBufferRef.current.waitingForSecond = false;
+		audioQueueRef.current?.resumePlayback();
+	}
+
+	function finishLocalVoicePrebuffer(): void {
+		const buffer = localVoiceBufferRef.current;
+		buffer.streamFinished = true;
+		// A one-sentence answer has nothing useful to prebuffer behind it.
+		if (buffer.sentenceCount <= 1) releaseLocalVoicePrebuffer(buffer.generation);
 	}
 
 	function beginCascadeTtsJob(): () => void {
@@ -1296,6 +1339,7 @@ export function ChatArea({
 						const remaining = chunker.flush();
 						for (const sentence of sentences) sendSentenceToTts(sentence);
 						if (remaining) sendSentenceToTts(remaining);
+						finishLocalVoicePrebuffer();
 						if (sentences.length === 0 && !remaining) {
 							revealFailedProactiveTts(text, ttsGeneration);
 						}
@@ -1603,12 +1647,14 @@ export function ChatArea({
 			const errStr = String(err);
 			if (errStr.includes("Naia provider requires")) {
 				finishStreamingWithTtsMask();
+				finishLocalVoicePrebuffer();
 				setShowNoAuthModal(true);
 				completeCurrentRequest(requestId);
 			} else {
 				useChatStore.getState().appendStreamChunk(`
 [${t("chat.error")}] ${errStr}`);
 				finishStreamingWithTtsMask();
+				finishLocalVoicePrebuffer();
 				completeCurrentRequest(requestId);
 			}
 		}
@@ -1956,6 +2002,7 @@ export function ChatArea({
 					}
 				}
 				finishStreamingWithTtsMask();
+				finishLocalVoicePrebuffer();
 				setEmotion("neutral");
 				completeCurrentRequest(chunk.requestId);
 				break;
@@ -2037,6 +2084,7 @@ export function ChatArea({
 				}
 				store.appendStreamChunk(`\n[${t("chat.error")}] ${wireErrorMessage(chunk.code, chunk.message)}`);
 				finishStreamingWithTtsMask();
+				finishLocalVoicePrebuffer();
 				setEmotion("neutral");
 				completeCurrentRequest(chunk.requestId);
 				break;
@@ -2174,6 +2222,15 @@ export function ChatArea({
 		activeTtsRequestsRef.current.add(reqId);
 		const voiceCfg = pipelineVoiceConfigRef.current;
 		const ttsProviderForCost = voiceCfg?.ttsProvider ?? "edge";
+		const localVoiceBuffer = localVoiceBufferRef.current;
+		const localVoiceBufferGeneration = localVoiceBuffer.generation;
+		if (ttsProviderForCost === "naia-local-voice" && seq === 0) {
+			localVoiceBuffer.sentenceCount = 1;
+			localVoiceBuffer.waitingForSecond = false;
+			audioQueueRef.current?.pauseBeforePlayback();
+		} else if (ttsProviderForCost === "naia-local-voice") {
+			localVoiceBuffer.sentenceCount++;
+		}
 		// 아바타 립싱크에 합성 오디오(WAV/PCM)를 직접 흘릴 수 있는 provider 인가 (FR-VOICE.5).
 		// naia-local-voice 포함(2026-07-15 개정): 구 "추가 금지" 경고는 raw /tts 직결(음색 상태
 		// 우회 → 무지문 랜덤 음색) 전제였는데, synthesize.ts 가 OpenAI 표면 /v1/audio/speech 로
@@ -2261,11 +2318,13 @@ export function ChatArea({
 		// interrupt/cleanup cancel the in-flight fetch/WS (and stop paid TTS).
 		const abort = new AbortController();
 		ttsAbortControllersRef.current.set(reqId, abort);
+		let synthesisStartedAt = 0;
 		const synthesize = () => {
 			if (!activeTtsRequestsRef.current.has(reqId)) {
 				return Promise.reject(new DOMException("TTS request superseded", "AbortError"));
 			}
 			setOutputStage("tts");
+			synthesisStartedAt = performance.now();
 			return synthesizeTts({
 				text: clean,
 				voice: voiceCfg?.voice,
@@ -2283,10 +2342,21 @@ export function ChatArea({
 		// the next synthesis while the previous Ditto render is active produced
 		// large latency variance and occasional partial responses. Keep this path
 		// strictly half-duplex; cloud TTS providers retain parallel synthesis.
-		const synthesis =
-			avatarPcm && ttsProviderForCost === "naia-local-voice"
-				? previousAvatarPlayback.then(() => synthesize())
-				: synthesize();
+		let synthesis: ReturnType<typeof synthesize>;
+		if (ttsProviderForCost === "naia-local-voice") {
+			const previousLocalSynthesis = localVoiceSynthesisTailRef.current;
+			synthesis = previousLocalSynthesis
+				.then(() => (avatarPcm ? previousAvatarPlayback : Promise.resolve()))
+				.then(() => synthesize());
+			// A failed or interrupted sentence must not poison the queue. The request's
+			// own catch below still reports/skips it; this tail only gates the next job.
+			localVoiceSynthesisTailRef.current = synthesis.then(
+				() => undefined,
+				() => undefined,
+			);
+		} else {
+			synthesis = synthesize();
+		}
 		synthesis
 			.then(async ({ audioBase64, costUsd }) => {
 				// Drop stale audio AND skip billing for a superseded/aborted turn:
@@ -2294,6 +2364,37 @@ export function ChatArea({
 				// sequence, so a late response must NOT enqueue (would replay as the
 				// new turn's first audio) nor record cost.
 				if (!activeTtsRequestsRef.current.has(reqId)) return;
+				if (
+					ttsProviderForCost === "naia-local-voice" &&
+					!avatarPcm &&
+					localVoiceBufferGeneration === localVoiceBufferRef.current.generation
+				) {
+					if (seq === 0) {
+						const duration = wavDurationSeconds(audioBase64);
+						const elapsed = Math.max(0, performance.now() - synthesisStartedAt) / 1000;
+						const rtf = duration && duration > 0 ? elapsed / duration : 0;
+						const shouldBuffer =
+							rtf > 1 &&
+							(!localVoiceBufferRef.current.streamFinished ||
+								localVoiceBufferRef.current.sentenceCount > 1);
+						localVoiceBufferRef.current.waitingForSecond = shouldBuffer;
+						Logger.info("ChatArea", "Local voice adaptive prebuffer", {
+							rtf: Number(rtf.toFixed(2)),
+							duration: duration ? Number(duration.toFixed(2)) : null,
+							buffering: shouldBuffer,
+						});
+						if (shouldBuffer) {
+							// Use the first real synthesis time as the maximum startup buffer.
+							// A ready second sentence releases earlier; a slow/long second sentence
+							// cannot postpone the first utterance indefinitely.
+							const bufferMs = Math.min(5_000, Math.max(250, elapsed * 1_000));
+							localVoicePrebufferTimerRef.current = setTimeout(
+								() => releaseLocalVoicePrebuffer(localVoiceBufferGeneration),
+								bufferMs,
+							);
+						}
+					}
+				}
 				if (avatarPcm) {
 					await previousAvatarPlayback;
 					if (!activeTtsRequestsRef.current.has(reqId)) return;
@@ -2345,6 +2446,13 @@ export function ChatArea({
 						onPlaybackStart: revealText,
 						onPlaybackUnavailable: revealText,
 					});
+					if (
+						ttsProviderForCost === "naia-local-voice" &&
+						localVoiceBufferGeneration === localVoiceBufferRef.current.generation &&
+						(seq > 0 || !localVoiceBufferRef.current.waitingForSecond)
+					) {
+						releaseLocalVoicePrebuffer(localVoiceBufferGeneration);
+					}
 				}
 				// Track TTS cost: server cost for Naia Cloud, estimate for others.
 				// Naia account (nextain): apply 10% service markup on top of base cost.
@@ -2379,6 +2487,12 @@ export function ChatArea({
 				// Release the reserved ordered slot so later sentences don't stall
 				// behind this seq (enqueueOrdered waits for contiguous sequence nums).
 				audioQueueRef.current?.skipOrdered(seq);
+				if (
+					ttsProviderForCost === "naia-local-voice" &&
+					localVoiceBufferGeneration === localVoiceBufferRef.current.generation
+				) {
+					releaseLocalVoicePrebuffer(localVoiceBufferGeneration);
+				}
 				// LOCAL voice engines (naia-local-voice / vllm): the user explicitly
 				// chose a local engine. Do NOT substitute the browser's free TTS —
 				// that masquerade is exactly the "free voice" surprise the user

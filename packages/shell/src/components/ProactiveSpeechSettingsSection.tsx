@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
 import { t } from "../lib/i18n";
 import {
-	normalizeProactiveSpeechSettings,
 	type ProactiveSpeechSettings,
+	normalizeProactiveSpeechSettings,
+	withRadioDjDefaults,
 } from "../lib/proactive-speech-settings";
 
 type ProactiveSettingsMode = "all" | "dj" | "exhibition";
@@ -11,13 +12,60 @@ function scopeProfile(
 	value: ProactiveSpeechSettings,
 	mode: ProactiveSettingsMode | undefined,
 ): ProactiveSpeechSettings {
+	const scoped = mode === "dj" ? withRadioDjDefaults(value) : value;
 	if (mode === "dj" && value.profile === "exhibition_intro") {
-		return { ...value, profile: "disabled" };
+		return { ...scoped, profile: "disabled" };
 	}
 	if (mode === "exhibition" && value.profile === "personal_radio_dj") {
 		return { ...value, profile: "disabled" };
 	}
-	return value;
+	return scoped;
+}
+
+export function RadioDjSettingsCard(props: {
+	value: ProactiveSpeechSettings;
+	onSave: (value: ProactiveSpeechSettings) => boolean | Promise<boolean>;
+}) {
+	const [expanded, setExpanded] = useState(false);
+	const detailId = "radio-dj-skill-settings-detail";
+	const toggleExpanded = () => setExpanded((current) => !current);
+
+	return (
+		<div
+			className={`skill-card${expanded ? " expanded" : ""}`}
+			data-testid="youtube-bgm-skill-settings"
+		>
+			<button
+				type="button"
+				className="skill-card-header radio-dj-skill-card-header"
+				aria-expanded={expanded}
+				aria-controls={detailId}
+				onClick={toggleExpanded}
+			>
+				<div className="skill-card-info">
+					<div className="skill-card-name">{t("settings.proactiveDj")}</div>
+					<div className="skill-card-desc-short">
+						{t("settings.radioDjSkillDesc")}
+					</div>
+				</div>
+				<div className="skill-card-actions" aria-hidden="true">
+					<span>{expanded ? "-" : "+"}</span>
+				</div>
+			</button>
+			{expanded && (
+				<div id={detailId} className="skill-card-detail">
+					<div className="skill-card-badges">
+						<span className="skill-badge built-in">skill_youtube_bgm</span>
+					</div>
+					<ProactiveSpeechSettingsSection
+						mode="dj"
+						value={props.value}
+						onSave={props.onSave}
+					/>
+				</div>
+			)}
+		</div>
+	);
 }
 
 export function ProactiveSpeechSettingsSection(props: {

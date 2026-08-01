@@ -24,6 +24,9 @@ const ttsSyncMocks = vi.hoisted(() => ({
 	skipOrdered: vi.fn(),
 	clear: vi.fn(),
 	destroy: vi.fn(),
+	pauseBeforePlayback: vi.fn(),
+	resumePlayback: vi.fn(),
+	wavDurationSeconds: vi.fn(() => 10),
 	nextSeq: 0,
 }));
 
@@ -45,6 +48,12 @@ vi.mock("../../lib/voice/audio-queue", () => ({
 		skipOrdered(seq: number) {
 			ttsSyncMocks.skipOrdered(seq);
 		}
+		pauseBeforePlayback() {
+			ttsSyncMocks.pauseBeforePlayback();
+		}
+		resumePlayback() {
+			ttsSyncMocks.resumePlayback();
+		}
 		clear() {
 			ttsSyncMocks.nextSeq = 0;
 			ttsSyncMocks.clear();
@@ -53,6 +62,7 @@ vi.mock("../../lib/voice/audio-queue", () => ({
 			ttsSyncMocks.destroy();
 		}
 	},
+	wavDurationSeconds: ttsSyncMocks.wavDurationSeconds,
 }));
 
 function deferred<T>() {
@@ -150,6 +160,7 @@ describe("ChatArea", () => {
 		useAppStore.setState({ activeApp: null });
 		ttsSyncMocks.nextSeq = 0;
 		ttsSyncMocks.streamsAvatarPcm.mockReturnValue(false);
+		ttsSyncMocks.wavDurationSeconds.mockReturnValue(10);
 		ttsSyncMocks.synthesizeTts.mockResolvedValue({
 			audioBase64: "default-audio",
 			costUsd: 0,
@@ -740,6 +751,48 @@ describe("ChatArea", () => {
 		expect(speakAudio.mock.calls[1][0]).toBe("audio-2");
 		expect(ttsSyncMocks.enqueueOrdered).not.toHaveBeenCalled();
 		secondPlayback.resolve();
+		localStorage.removeItem("naia-config");
+	});
+
+	it("serializes 6GB local sentence synthesis while playback queues independently", async () => {
+		const firstTts = deferred<{ audioBase64: string; costUsd: number }>();
+		const secondTts = deferred<{ audioBase64: string; costUsd: number }>();
+		ttsSyncMocks.streamsAvatarPcm.mockReturnValue(false);
+		ttsSyncMocks.wavDurationSeconds.mockReturnValue(0.001);
+		ttsSyncMocks.synthesizeTts.mockImplementation(({ text }: { text: string }) =>
+			text.startsWith("First") ? firstTts.promise : secondTts.promise,
+		);
+		localStorage.setItem("naia-config", JSON.stringify({
+			apiKey: "test-key", provider: "gemini", model: "gemini-2.5-flash",
+			ttsEnabled: true, ttsProvider: "naia-local-voice",
+			vllmTtsHost: "http://localhost:8910",
+		}));
+
+		render(<ChatArea />);
+		const input = screen.getByPlaceholderText(/message/i);
+		fireEvent.change(input, { target: { value: "voice queue test" } });
+		fireEvent.keyDown(input, { key: "Enter" });
+		await waitFor(() => expect(capturedRequests).toHaveLength(1));
+		const request = capturedRequests[0];
+		request.onChunk({ type: "text", requestId: request.requestId, text: "First sentence." });
+		request.onChunk({ type: "text", requestId: request.requestId, text: "Second sentence." });
+
+		await waitFor(() => expect(ttsSyncMocks.synthesizeTts).toHaveBeenCalledTimes(1));
+		expect(ttsSyncMocks.synthesizeTts.mock.calls[0][0].text).toBe("First sentence.");
+		firstTts.resolve({ audioBase64: "audio-1", costUsd: 0 });
+
+		await waitFor(() => expect(ttsSyncMocks.enqueueOrdered).toHaveBeenCalledWith(
+			0, "audio-1", expect.any(Object),
+		));
+		expect(ttsSyncMocks.pauseBeforePlayback).toHaveBeenCalledTimes(1);
+		expect(ttsSyncMocks.resumePlayback).not.toHaveBeenCalled();
+		await waitFor(() => expect(ttsSyncMocks.synthesizeTts).toHaveBeenCalledTimes(2));
+		expect(ttsSyncMocks.synthesizeTts.mock.calls[1][0].text).toBe("Second sentence.");
+		secondTts.resolve({ audioBase64: "audio-2", costUsd: 0 });
+		await waitFor(() => expect(ttsSyncMocks.enqueueOrdered).toHaveBeenCalledWith(
+			1, "audio-2", expect.any(Object),
+		));
+		expect(ttsSyncMocks.resumePlayback).toHaveBeenCalledTimes(1);
 		localStorage.removeItem("naia-config");
 	});
 

@@ -30,6 +30,7 @@ export class AudioQueue {
 	private queue: AudioQueueItem[] = [];
 	private current: HTMLAudioElement | null = null;
 	private playing = false;
+	private playbackPaused = false;
 	private generation = 0;
 	private callbacks: AudioQueueCallbacks;
 
@@ -49,9 +50,20 @@ export class AudioQueue {
 		callbacks: AudioQueueItemCallbacks = {},
 	): void {
 		this.queue.push({ audioBase64: mp3Base64, ...callbacks });
-		if (!this.playing) {
+		if (!this.playing && !this.playbackPaused) {
 			this.playNext();
 		}
+	}
+
+	/** Hold queued audio without stopping an item that is already playing. */
+	pauseBeforePlayback(): void {
+		this.playbackPaused = true;
+	}
+
+	/** Release a prebuffered queue and start its first item. */
+	resumePlayback(): void {
+		this.playbackPaused = false;
+		if (!this.playing && this.queue.length > 0) this.playNext();
 	}
 
 	/**
@@ -108,6 +120,7 @@ export class AudioQueue {
 	clear(): void {
 		this.generation++;
 		this.queue = [];
+		this.playbackPaused = false;
 		this.pendingOrdered.clear();
 		this.flushCursor = 0;
 		this.nextExpectedSeq = 0;
@@ -206,5 +219,35 @@ export class AudioQueue {
 			signalUnavailable();
 			advance();
 		});
+	}
+}
+
+/** Return the PCM duration encoded by a RIFF/WAVE base64 payload. */
+export function wavDurationSeconds(audioBase64: string): number | null {
+	try {
+		const binary = atob(audioBase64);
+		if (binary.length < 44 || binary.slice(0, 4) !== "RIFF" || binary.slice(8, 12) !== "WAVE") {
+			return null;
+		}
+		const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0));
+		const view = new DataView(bytes.buffer);
+		let offset = 12;
+		let byteRate = 0;
+		let dataSize = 0;
+		while (offset + 8 <= bytes.length) {
+			const id = binary.slice(offset, offset + 4);
+			const size = view.getUint32(offset + 4, true);
+			const body = offset + 8;
+			if (id === "fmt " && size >= 12 && body + 12 <= bytes.length) {
+				byteRate = view.getUint32(body + 8, true);
+			} else if (id === "data") {
+				dataSize = Math.min(size, Math.max(0, bytes.length - body));
+				break;
+			}
+			offset = body + size + (size % 2);
+		}
+		return byteRate > 0 && dataSize > 0 ? dataSize / byteRate : null;
+	} catch {
+		return null;
 	}
 }

@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import { useCallback, useEffect, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useState } from "react";
 import { directToolCall } from "../lib/chat-service";
 import {
 	getDisabledSkills,
@@ -34,8 +34,10 @@ function tierLabel(tier: number): string {
 
 export function SkillsTab({
 	onAskAI,
+	children,
 }: {
 	onAskAI?: (message: string) => void;
+	children?: ReactNode;
 }) {
 	const skills = useSkillsStore((s) => s.skills);
 	const isLoading = useSkillsStore((s) => s.isLoading);
@@ -217,7 +219,7 @@ export function SkillsTab({
 		);
 	}
 
-	if (skills.length === 0) {
+	if (skills.length === 0 && !children) {
 		return (
 			<div className="skills-tab">
 				<div className="skills-empty">{t("skills.empty")}</div>
@@ -277,6 +279,8 @@ export function SkillsTab({
 						))}
 					</>
 				)}
+
+				{children}
 
 				{customSkills.length > 0 && (
 					<>

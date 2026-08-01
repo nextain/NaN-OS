@@ -10,6 +10,31 @@ export type ProactiveSpeechSettings = {
 	knowledgeScope?: string;
 };
 
+/**
+ * Matches the Windows Tauri command defaults in `src-tauri/src/lib.rs`.
+ * The profile remains opt-in; these values only make an unconfigured DJ card
+ * useful and honest instead of rendering empty numeric fields.
+ */
+export const RADIO_DJ_DEFAULT_SETTINGS = {
+	idleMs: 120_000,
+	intervalMs: 900_000,
+	bgmAutoPlay: false,
+	weatherConsented: false,
+} as const;
+
+export function withRadioDjDefaults(
+	settings: ProactiveSpeechSettings,
+): ProactiveSpeechSettings {
+	return {
+		...settings,
+		idleMs: settings.idleMs ?? RADIO_DJ_DEFAULT_SETTINGS.idleMs,
+		intervalMs: settings.intervalMs ?? RADIO_DJ_DEFAULT_SETTINGS.intervalMs,
+		bgmAutoPlay: settings.bgmAutoPlay ?? RADIO_DJ_DEFAULT_SETTINGS.bgmAutoPlay,
+		weatherConsented:
+			settings.weatherConsented ?? RADIO_DJ_DEFAULT_SETTINGS.weatherConsented,
+	};
+}
+
 export type SpeechProfileCommandInput = {
 	profile: ProactiveSpeechSettings["profile"];
 	idleMs?: number;

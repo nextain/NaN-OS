@@ -142,7 +142,10 @@ import { useCascadeAvatarStore } from "../stores/cascade-avatar";
 import { useChatStore } from "../stores/chat";
 import { clearSavedCamera } from "./AvatarCanvas";
 import { KnowledgeSettingsTab } from "./KnowledgeSettingsTab";
-import { ProactiveSpeechSettingsSection } from "./ProactiveSpeechSettingsSection";
+import {
+	ProactiveSpeechSettingsSection,
+	RadioDjSettingsCard,
+} from "./ProactiveSpeechSettingsSection";
 import { RefAudioSection } from "./RefAudioSection";
 import { SkillsTab } from "./SkillsTab";
 
@@ -5231,19 +5234,12 @@ export function SettingsTab() {
 			)}
 			{activeSettingsTab === "knowledge" && <KnowledgeSettingsTab />}
 			{activeSettingsTab === "skills" && (
-				<>
-					<SkillsTab />
-					<div data-testid="youtube-bgm-skill-settings">
-						<div className="settings-section-divider">
-							<span>skill_youtube_bgm</span>
-						</div>
-						<ProactiveSpeechSettingsSection
-							mode="dj"
-							value={proactiveSpeechSettings}
-							onSave={saveProactiveSpeechSettings}
-						/>
-					</div>
-				</>
+				<SkillsTab>
+					<RadioDjSettingsCard
+						value={proactiveSpeechSettings}
+						onSave={saveProactiveSpeechSettings}
+					/>
+				</SkillsTab>
 			)}
 			{activeSettingsTab === "memory" && (
 				<>
