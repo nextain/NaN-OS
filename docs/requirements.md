@@ -248,11 +248,13 @@ localStorage `naia-config` 는 파일에서 하이드레이트되는 **순수 �
 > `naia_agent.proto`를 compiled gRPC module 옆에 복사하고 실존을 게이트한다. 두 항목 모두 설치본
 > 핸드셰이크 실측에서 발견된 배포 계약이며 dev 상대경로 폴백으로 대체하지 않는다.
 >
-> **FR-INSTALL.2 #411 보강(2026-08-02):** `stage-agent.mjs`는 각 대상 프로젝트의
+> **FR-INSTALL.2 #411·#412 보강(2026-08-02):** `stage-agent.mjs`와 `tauri-with-mode.mjs`는
+> 공통 `package-manager.mjs`를 사용해 각 대상 프로젝트의
 > `package.json#packageManager`를 읽어 선언된 pnpm 버전을 Corepack으로 고정 실행한다.
 > 선언이 없는 기존 로컬 의존 프로젝트는 현재 pnpm을 사용하고, pnpm 외 값이나 유효하지 않은
 > 버전은 명확히 중단한다. install/build/deploy는 `CI=true` 비대화식 모드로 실행해 서로 다른
-> pnpm major의 `node_modules` 교체가 TTY 질문으로 정지하지 않아야 한다.
+> pnpm major의 `node_modules` 교체가 TTY 질문으로 정지하지 않아야 하며, dev 시작도 같은 resolver를
+> 거쳐 paired Agent의 stale/missing `dist`를 빌드한 뒤에만 Tauri를 실행한다.
 >
 > **clean-runner 보강(2026-07-18)**: `naia-agent`의 production 의존성인 공개
 > `naia-kb-compiler`·`naia-memory`도 정규 alpha-adk 레이아웃에 clone한 뒤 agent보다 먼저

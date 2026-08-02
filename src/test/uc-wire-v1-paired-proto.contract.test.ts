@@ -92,6 +92,13 @@ describe("UC-WIRE-V1 paired proto build", () => {
 	});
 	it("selects and validates one exact paired agent/proto checkout", () => {
 		expect(TAURI_WITH_MODE).toContain('from "./agent-pairing.mjs"');
+		expect(TAURI_WITH_MODE).toContain('from "./package-manager.mjs"');
+		expect(TAURI_WITH_MODE).toContain(
+			'runProjectPnpm(["run", "build"], pairedAgent, env)',
+		);
+		expect(TAURI_WITH_MODE).not.toContain(
+			'spawnSync("pnpm", ["run", "build"]',
+		);
 		expect(TAURI_WITH_MODE).toContain("naia-agent-issue-388-proto");
 		expect(TAURI_WITH_MODE).not.toContain("merge-base");
 		expect(TAURI_WITH_MODE).not.toContain("--is-ancestor");

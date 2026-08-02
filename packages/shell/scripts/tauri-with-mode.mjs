@@ -21,6 +21,7 @@ import { platform } from "node:os";
 import { dirname, resolve } from "node:path";
 import { REQUIRED_AGENT_COMMIT, REQUIRED_PROTO_SHA256 } from "./agent-pairing.mjs";
 import { interactiveLaunchEnv } from "./launch-env.mjs";
+import { runProjectPnpm } from "./package-manager.mjs";
 
 const mode = process.argv[2] === "prod" ? "prod" : "dev";
 
@@ -252,13 +253,8 @@ const pairedAgent = applyPairedAgentEnv(env);
 // The Tauri process runs the compiled agent entrypoint. Always build the exact
 // paired source before development so a clean checkout cannot start with a
 // missing or stale dist/ tree.
-const agentBuild = spawnSync("pnpm", ["run", "build"], {
-	cwd: pairedAgent,
-	env,
-	stdio: "inherit",
-	shell: process.platform === "win32",
-});
-if (agentBuild.status !== 0 || !existsSync(resolve(pairedAgent, "dist/main/composition/index.js"))) {
+runProjectPnpm(["run", "build"], pairedAgent, env);
+if (!existsSync(resolve(pairedAgent, "dist/main/composition/index.js"))) {
 	throw new Error(`Paired naia-agent build failed or did not produce dist/main/composition/index.js: ${pairedAgent}`);
 }
 process.stdout.write(`[tauri-with-mode] new core=${env.VITE_NAIA_NEW_CORE}, agent=${env.NAIA_AGENT_SCRIPT}, proto=${env.NAIA_AGENT_PROTO_DIR}\n`);

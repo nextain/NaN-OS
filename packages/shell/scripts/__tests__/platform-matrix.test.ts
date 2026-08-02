@@ -567,16 +567,13 @@ describe("agent production staging", () => {
 		const dependencyLoop = source.indexOf(
 			"for (const dependency of AGENT_LOCAL_DEPENDENCIES)",
 		);
-		const agentBuild = source.indexOf('runPnpm("run build", AGENT)');
+		const agentBuild = source.indexOf('runPnpm(["run", "build"], AGENT)');
 
 		expect(source).toContain('name: "@naia/kb-compiler"');
 		expect(source).toContain('name: "@nextain/naia-memory"');
 		expect(dependencyLoop).toBeGreaterThan(-1);
 		expect(agentBuild).toBeGreaterThan(dependencyLoop);
-		expect(source).toContain("function packageManagerCommand(projectDir)");
-		expect(source).toContain("corepack pnpm@");
-		expect(source).toContain("unsupported packageManager");
-		expect(source).toContain('env: { ...process.env, CI: "true" }');
+		expect(source).toContain('from "./package-manager.mjs"');
 		expect(source).toContain("dependency output missing");
 		expect(source).toContain('"node_modules/@naia/kb-compiler"');
 	});

@@ -23,11 +23,12 @@
  *
  * cwd = packages/shell (package.json 스크립트/ tauri beforeBuildCommand 기준).
  */
-import { execFileSync, execSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { cpSync, existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { REQUIRED_AGENT_COMMIT, REQUIRED_PROTO_SHA256 } from "./agent-pairing.mjs";
+import { runProjectPnpm } from "./package-manager.mjs";
 
 const SHELL = process.cwd(); // packages/shell
 const STAGE = resolve(SHELL, "src-tauri/agent");
@@ -130,26 +131,8 @@ if (!existsSync(AGENT)) {
 	process.exit(1);
 }
 
-const run = (cmd, cwd) => execSync(cmd, { cwd, stdio: "inherit" });
-
-function packageManagerCommand(projectDir) {
-	const manifest = JSON.parse(readFileSync(resolve(projectDir, "package.json"), "utf8"));
-	if (!manifest.packageManager) return "pnpm";
-	const match = /^pnpm@(\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?)$/.exec(manifest.packageManager);
-	if (!match) {
-		die(
-			`[stage-agent] unsupported packageManager in ${projectDir}: ${JSON.stringify(manifest.packageManager)}`,
-		);
-	}
-	return `corepack pnpm@${match[1]}`;
-}
-
 function runPnpm(args, cwd) {
-	execSync(`${packageManagerCommand(cwd)} ${args}`, {
-		cwd,
-		stdio: "inherit",
-		env: { ...process.env, CI: "true" },
-	});
+	runProjectPnpm(args, cwd);
 }
 
 console.log(`[stage-agent] agent = ${AGENT}`);
@@ -161,8 +144,8 @@ for (const dependency of AGENT_LOCAL_DEPENDENCIES) {
 		process.exit(1);
 	}
 	console.log(`[stage-agent] dependency build: ${dependency.name}`);
-	runPnpm("install --frozen-lockfile", dependency.path);
-	runPnpm("run build", dependency.path);
+	runPnpm(["install", "--frozen-lockfile"], dependency.path);
+	runPnpm(["run", "build"], dependency.path);
 	if (!existsSync(resolve(dependency.path, dependency.output))) {
 		console.error(
 			`[stage-agent] dependency output missing: ${dependency.name}/${dependency.output}`,
@@ -172,8 +155,8 @@ for (const dependency of AGENT_LOCAL_DEPENDENCIES) {
 }
 
 console.log("[stage-agent] ① agent install + build");
-runPnpm("install --frozen-lockfile", AGENT);
-runPnpm("run build", AGENT);
+runPnpm(["install", "--frozen-lockfile"], AGENT);
+runPnpm(["run", "build"], AGENT);
 assertPairedCheckoutStillClean("agent install/build");
 
 console.log(`[stage-agent] ② deploy (prod, hoisted) → ${STAGE}`);
@@ -183,7 +166,7 @@ try {
 	if (!hadWs) writeFileSync(wsFile, "packages:\n  - '.'\n");
 	if (existsSync(STAGE)) rmSync(STAGE, { recursive: true, force: true });
 	runPnpm(
-		`--filter=@nextain/naia-agent --config.node-linker=hoisted deploy --prod --legacy "${STAGE}"`,
+		["--filter=@nextain/naia-agent", "--config.node-linker=hoisted", "deploy", "--prod", "--legacy", STAGE],
 		AGENT,
 	);
 } finally {
