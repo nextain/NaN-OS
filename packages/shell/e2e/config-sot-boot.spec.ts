@@ -83,6 +83,7 @@ localStorage.setItem("naia-config", JSON.stringify({
 	agentName: "알파",
 	provider: "ollama",
 	model: "test-model",
+	workspaceRoot: "/tmp/stale-other-workspace",
 	onboardingComplete: true,
 }));
 `;
@@ -157,4 +158,23 @@ test("FR-CONFIG-SOT.2(경쟁) — 파일 읽기가 늦어도 첫 되쓰기는 �
 	for (const w of st.writes) {
 		expect(w.persona).not.toBe(STALE_PERSONA);
 	}
+});
+
+test("FR-CONFIG-SOT.1 — stale workspaceRoot cannot redirect the ADK pointer", async ({
+	page,
+}) => {
+	await bootApp(page, buildMockScript({ readDelayMs: 100 }));
+	await expect
+		.poll(async () =>
+			page.evaluate(() => ({
+				adkPath: localStorage.getItem("naia-adk-path"),
+				workspaceRoot: JSON.parse(
+					localStorage.getItem("naia-config") ?? "{}",
+				).workspaceRoot,
+			})),
+		)
+		.toEqual({
+			adkPath: "/tmp/mock-naia-adk-workspace",
+			workspaceRoot: "/tmp/mock-naia-adk-workspace",
+		});
 });

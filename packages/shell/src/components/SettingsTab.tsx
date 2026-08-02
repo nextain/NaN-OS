@@ -11,6 +11,7 @@ import {
 	getAdkPath,
 	listNaiaAssets,
 	readNaiaConfig,
+	resetNaiaPersistedSettings,
 	setAdkPath,
 	toLocalBlobUrl,
 	writeAgentKey,
@@ -77,6 +78,7 @@ import {
 	loadConfigWithSecrets,
 	normalizeCascadeUrl,
 	saveConfig,
+	saveConfigSecure,
 } from "../lib/config";
 import {
 	type AgentFact,
@@ -716,8 +718,9 @@ export function SettingsTab() {
 		Record<string, LlmModelMeta[]>
 	>(getStaticModelsRecord);
 	const [naiaModelsSettled, setNaiaModelsSettled] = useState(false);
-	const [modelSortMode, setModelSortMode] =
-		useState<ModelSortMode>("price");
+	const [modelSortMode, setModelSortMode] = useState<ModelSortMode>(
+		existing?.modelSortMode ?? "price",
+	);
 	const [ollamaHost, setOllamaHost] = useState(
 		existing?.ollamaHost ?? DEFAULT_OLLAMA_HOST,
 	);
@@ -878,9 +881,7 @@ export function SettingsTab() {
 				// start_cascade 는 CASCADE_READY 페이로드({facade_port,services}) 를 반환 —
 				// facade_port 로 로컬 cascade URL 을 유도해 VideoAvatarCanvas(아바타 립싱크)가
 				// 로컬 facade 에 붙게 한다(focus=avatar 로 avatar 서비스가 떴을 때 입 움직임).
-				const start = await startCascadeAndConfirm(
-					resolvedTier.loaderProfile,
-				);
+				const start = await startCascadeAndConfirm(resolvedTier.loaderProfile);
 				if (!start.ready) {
 					setCascadeRunning(false);
 					setCascadeMsg(start.message ?? t("settings.cascadeError"));
@@ -1036,9 +1037,7 @@ export function SettingsTab() {
 			) {
 				throw new Error("cascade_profile_manifest_not_ready");
 			}
-			const start = await startCascadeAndConfirm(
-				resolvedTier.loaderProfile,
-			);
+			const start = await startCascadeAndConfirm(resolvedTier.loaderProfile);
 			if (!start.ready) {
 				setCascadeRunning(false);
 				setCascadeMsg(start.message ?? t("settings.cascadeError"));
@@ -1229,6 +1228,7 @@ export function SettingsTab() {
 				...fileConfig,
 			});
 			setSubLlmRole(roles.sub ?? { inherit: "main" });
+			setExpertLlmRole(roles.expert ?? { inherit: "main" });
 			setMemoryLlmRole(roles.memory ?? { inherit: "sub" });
 		});
 		window.addEventListener("naia-config-changed", syncLlmRolesFromConfig);
@@ -1502,22 +1502,24 @@ export function SettingsTab() {
 		Promise.all([
 			fetchNaiaPricing(LAB_GATEWAY_URL),
 			fetchNaiaModelMetadata(LAB_GATEWAY_URL),
-		]).then(([liveModels, metadata]) => {
-			if (!active) return;
-			// Apply gateway capabilities even if pricing failed (the two are
-			// independent): override the priced live models, or fall back to the
-			// existing static nextain models when pricing is unavailable.
-			if (!liveModels && !metadata) return;
-			setDynamicModels((prev) => ({
-				...prev,
-				nextain: applyNaiaModelMetadata(
-					liveModels ?? prev.nextain ?? [],
-					metadata,
-				),
-			}));
-		}).finally(() => {
-			if (active) setNaiaModelsSettled(true);
-		});
+		])
+			.then(([liveModels, metadata]) => {
+				if (!active) return;
+				// Apply gateway capabilities even if pricing failed (the two are
+				// independent): override the priced live models, or fall back to the
+				// existing static nextain models when pricing is unavailable.
+				if (!liveModels && !metadata) return;
+				setDynamicModels((prev) => ({
+					...prev,
+					nextain: applyNaiaModelMetadata(
+						liveModels ?? prev.nextain ?? [],
+						metadata,
+					),
+				}));
+			})
+			.finally(() => {
+				if (active) setNaiaModelsSettled(true);
+			});
 		return () => {
 			active = false;
 		};
@@ -1705,9 +1707,24 @@ export function SettingsTab() {
 				if (
 					cancelled ||
 					credentialEpoch !== naiaCredentialEpochRef.current ||
-					!cfg?.naiaKey
+					!cfg
 				)
 					return;
+				setApiKey(cfg.apiKey ?? "");
+				setGoogleApiKey(cfg.googleApiKey ?? "");
+				setOpenaiRealtimeApiKey(cfg.openaiRealtimeApiKey ?? "");
+				setMemoryEmbeddingApiKey(cfg.memoryEmbeddingApiKey ?? "");
+				setQdrantApiKey(cfg.qdrantApiKey ?? "");
+				const restoredTtsKey =
+					cfg.ttsProvider === "openai"
+						? cfg.openaiTtsApiKey
+						: cfg.ttsProvider === "elevenlabs"
+							? cfg.elevenlabsApiKey
+							: cfg.ttsProvider === "google"
+								? cfg.googleApiKey
+								: undefined;
+				setGatewayTtsApiKey(restoredTtsKey ?? "");
+				if (!cfg.naiaKey) return;
 				setNaiaKeyState(cfg.naiaKey);
 				setSecureNaiaCredentialReady(true);
 				setNaiaUserIdState(cfg.naiaUserId ?? "");
@@ -2331,10 +2348,18 @@ export function SettingsTab() {
 	}
 
 	async function executeReset() {
-		localStorage.removeItem("naia-config");
+		setError("");
+		try {
+			await resetNaiaPersistedSettings();
+		} catch (resetError) {
+			setError(
+				`${t("settings.saveFailed")}: ${resetError instanceof Error ? resetError.message : String(resetError)}`,
+			);
+			setShowResetConfirm(false);
+			return;
+		}
 		clearSavedCamera();
-		clearAdkPath(); // re-triggers ADK setup screen on next launch
-		invoke("reset_window_state").catch(() => {});
+		await invoke("reset_window_state").catch(() => {});
 		if (resetClearHistory) {
 			useChatStore.getState().newConversation();
 			resetGatewaySession().catch(() => {}); // agent skill_sessions(실 도구) — gateway 아님, 유지
@@ -2418,7 +2443,7 @@ export function SettingsTab() {
 		void writeNaiaConfig(updated as unknown as Record<string, unknown>);
 	}
 
-	function handleSave() {
+	async function handleSave() {
 		// Keep previous key when input is empty (password field UX).
 		const resolvedApiKey = apiKey.trim() || existing?.apiKey || "";
 		const isNextainProvider = provider === "nextain";
@@ -2447,6 +2472,7 @@ export function SettingsTab() {
 			...existing,
 			provider,
 			model,
+			modelSortMode,
 			apiKey:
 				isNextainProvider || isApiKeyOptional(provider) ? "" : resolvedApiKey,
 			naiaKey: naiaKey || undefined,
@@ -2553,32 +2579,57 @@ export function SettingsTab() {
 		newConfig = writeConfiguredLlmRole(newConfig, "sub", subLlmRole);
 		newConfig = writeConfiguredLlmRole(newConfig, "expert", expertLlmRole);
 		newConfig = writeConfiguredLlmRole(newConfig, "memory", memoryLlmRole);
-		saveConfig(newConfig);
-		// Also persist to naia-settings/config.json so ADK reload restores the same settings
-		void writeNaiaConfig(newConfig as unknown as Record<string, unknown>);
-		if (naiaKey) void saveSecretKey("naiaKey", naiaKey);
-		// 새 core: agent 가 읽는 OS 키체인에 키 기록(write_agent_key). 설정 저장 시 누락돼 있던 배선
-		// — OnboardingWizard 만 했고 SettingsTab 은 안 해서, 설정에서 넣은 키가 agent 에 안 닿아 401 났음(라이브 e2e 가 잡음).
-		if (resolvedApiKey)
-			void writeAgentKey(newConfig.provider, "apiKey", resolvedApiKey);
-		if (naiaKey) void writeAgentKey(newConfig.provider, "naiaKey", naiaKey);
-		// #18: 메모리 비밀(embed/qdrant/llm apiKey)도 OS 키체인에 기록 — config.json 에선 strip 되므로
-		// agent loadMemoryConfig 가 키체인 account(NAIA_MEMORY_*_API_KEY)로 읽는다(provider 무관 → writeAgentSecret).
-		if (newConfig.memoryEmbeddingApiKey)
-			void writeAgentSecret(
-				"NAIA_MEMORY_EMBED_API_KEY",
-				newConfig.memoryEmbeddingApiKey,
+		try {
+			await saveConfigSecure(newConfig);
+			// Agent reload resolves credentials from its OS-backed store. Commit all
+			// selected credentials before asking it to rebuild provider or memory
+			// runtimes, otherwise a newly selected account can fail only on first save.
+			const credentialWrites: Promise<void>[] = [];
+			if (resolvedApiKey) {
+				credentialWrites.push(
+					writeAgentKey(newConfig.provider, "apiKey", resolvedApiKey),
+				);
+			}
+			if (naiaKey) {
+				credentialWrites.push(
+					writeAgentKey(newConfig.provider, "naiaKey", naiaKey),
+				);
+			}
+			if (newConfig.memoryEmbeddingApiKey) {
+				credentialWrites.push(
+					writeAgentSecret(
+						"NAIA_MEMORY_EMBED_API_KEY",
+						newConfig.memoryEmbeddingApiKey,
+					),
+				);
+			}
+			if (newConfig.qdrantApiKey) {
+				credentialWrites.push(
+					writeAgentSecret(
+						"NAIA_MEMORY_QDRANT_API_KEY",
+						newConfig.qdrantApiKey,
+					),
+				);
+			}
+			if (newConfig.memoryLlmApiKey) {
+				credentialWrites.push(
+					writeAgentSecret(
+						"NAIA_MEMORY_LLM_API_KEY",
+						newConfig.memoryLlmApiKey,
+					),
+				);
+			}
+			await Promise.all(credentialWrites);
+			// Also persist to naia-settings/config.json so ADK reload restores the same settings.
+			// The success badge below is only reachable after the native write and
+			// agent reload request have completed.
+			await writeNaiaConfig(newConfig as unknown as Record<string, unknown>);
+		} catch (saveError) {
+			setError(
+				`${t("settings.saveFailed")}: ${saveError instanceof Error ? saveError.message : String(saveError)}`,
 			);
-		if (newConfig.qdrantApiKey)
-			void writeAgentSecret(
-				"NAIA_MEMORY_QDRANT_API_KEY",
-				newConfig.qdrantApiKey,
-			);
-		if (newConfig.memoryLlmApiKey)
-			void writeAgentSecret(
-				"NAIA_MEMORY_LLM_API_KEY",
-				newConfig.memoryLlmApiKey,
-			);
+			return;
+		}
 		// Push webhook URLs + Discord defaults to the agent (#260). Replaces
 		// per-chat_request webhook field transmission with a one-shot config
 		// update so credentials don't appear in every stdio frame.
@@ -2751,11 +2802,23 @@ export function SettingsTab() {
 					"main",
 					{ provider, model: replacement.id },
 				);
-				saveConfig(nextSelection as unknown as Parameters<typeof saveConfig>[0]);
-				void writeNaiaConfig(nextSelection as unknown as Record<string, unknown>);
+				saveConfig(
+					nextSelection as unknown as Parameters<typeof saveConfig>[0],
+				);
+				void writeNaiaConfig(
+					nextSelection as unknown as Record<string, unknown>,
+				);
 			}
 		}
-	}, [provider, model, naiaKey, configSecretsSettled, naiaModelsSettled, shouldReplaceUnavailableSelectedModel, displayedProviderModels]);
+	}, [
+		provider,
+		model,
+		naiaKey,
+		configSecretsSettled,
+		naiaModelsSettled,
+		shouldReplaceUnavailableSelectedModel,
+		displayedProviderModels,
+	]);
 	const isSelectedOmni =
 		selectedModelMeta?.capabilities.includes("omni") ?? false;
 	const modelIdLower = model?.toLowerCase() ?? "";
@@ -3082,6 +3145,11 @@ export function SettingsTab() {
 					{t("settings.tabGeneral")}
 				</button>
 			</div>
+			{error && (
+				<div className="settings-error" role="alert">
+					{error}
+				</div>
+			)}
 			{activeSettingsTab === "general" && (
 				<>
 					<ProactiveSpeechSettingsSection
@@ -3748,9 +3816,9 @@ export function SettingsTab() {
 														useCascadeAvatarStore
 															.getState()
 															.setLocalFacadeUrl(null);
-												naiaCredentialEpochRef.current += 1;
-												setNaiaKeyState("");
-												setSecureNaiaCredentialReady(false);
+														naiaCredentialEpochRef.current += 1;
+														setNaiaKeyState("");
+														setSecureNaiaCredentialReady(false);
 														setNaiaUserIdState("");
 														setLabBalance(null);
 														setProvider("gemini");
@@ -3785,15 +3853,15 @@ export function SettingsTab() {
 																discordDefaultUserId: undefined,
 																discordDmChannelId: undefined,
 																discordDefaultTarget: undefined,
-													};
-													saveConfig(loggedOutConfig);
-													await writeNaiaConfig(
-														loggedOutConfig as unknown as Record<
-															string,
-															unknown
-														>,
-													);
-													await writeSlotsManifest(loggedOutConfig);
+															};
+															saveConfig(loggedOutConfig);
+															await writeNaiaConfig(
+																loggedOutConfig as unknown as Record<
+																	string,
+																	unknown
+																>,
+															);
+															await writeSlotsManifest(loggedOutConfig);
 														}
 													}}
 												>
@@ -4163,7 +4231,6 @@ export function SettingsTab() {
 									입력하세요.
 								</div>
 							)}
-							{error && <div className="settings-error">{error}</div>}
 						</div>
 					)}
 
@@ -4182,7 +4249,6 @@ export function SettingsTab() {
 									? `연결됨 — ${(dynamicModels.ollama ?? []).length}개 모델`
 									: "연결 안 됨 — Ollama 서버가 실행 중인지 확인하세요"}
 							</div>
-							{error && <div className="settings-error">{error}</div>}
 						</div>
 					)}
 					{provider === "vllm" && (
@@ -4200,7 +4266,6 @@ export function SettingsTab() {
 									? `연결됨 — ${(dynamicModels.vllm ?? []).length}개 모델`
 									: "연결 안 됨 — vLLM 서버가 실행 중인지 확인하세요"}
 							</div>
-							{error && <div className="settings-error">{error}</div>}
 						</div>
 					)}
 
@@ -4208,20 +4273,29 @@ export function SettingsTab() {
 						<label htmlFor="model-select">{t("settings.model")}</label>
 						{provider === "nextain" ? (
 							<>
-								<label htmlFor="model-sort-mode">{t("settings.modelSort")}</label>
+								<label htmlFor="model-sort-mode">
+									{t("settings.modelSort")}
+								</label>
 								<select
 									id="model-sort-mode"
 									data-testid="model-sort-mode"
 									value={modelSortMode}
-									onChange={(event) =>
-										setModelSortMode(event.target.value as ModelSortMode)
-									}
+									onChange={(event) => {
+										const nextMode = event.target.value as ModelSortMode;
+										setModelSortMode(nextMode);
+										persistConfig({ modelSortMode: nextMode });
+									}}
 								>
 									<option value="price">{t("settings.modelSortPrice")}</option>
-									<option value="performance">{t("settings.modelSortPerformance")}</option>
+									<option value="performance">
+										{t("settings.modelSortPerformance")}
+									</option>
 								</select>
 								{modelSortMode === "price" ? (
-									<div className="settings-hint" data-testid="model-price-sort-basis">
+									<div
+										className="settings-hint"
+										data-testid="model-price-sort-basis"
+									>
 										{t("settings.modelSortPriceBasis")}
 									</div>
 								) : null}
@@ -4280,7 +4354,7 @@ export function SettingsTab() {
 								.filter((m) => !m.capabilities.includes("asr"))
 								.map((m) => (
 									<option key={m.id} value={m.id}>
-									{formatModelLabel(m)}
+										{formatModelLabel(m)}
 									</option>
 								))}
 						</select>
@@ -4295,11 +4369,13 @@ export function SettingsTab() {
 									{selectedModelMeta.cachePricing ? (
 										<>
 											{" · "}
-											{t("settings.priceCacheRead")} {selectedModelMeta.cachePricing.read === null
+											{t("settings.priceCacheRead")}{" "}
+											{selectedModelMeta.cachePricing.read === null
 												? "—"
 												: `$${selectedModelMeta.cachePricing.read.toFixed(3)}`}
 											{" · "}
-											{t("settings.priceCacheWrite")} {selectedModelMeta.cachePricing.write === null
+											{t("settings.priceCacheWrite")}{" "}
+											{selectedModelMeta.cachePricing.write === null
 												? "—"
 												: `$${selectedModelMeta.cachePricing.write.toFixed(3)}`}
 										</>

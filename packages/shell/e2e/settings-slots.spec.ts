@@ -122,6 +122,27 @@ test.describe("S-SLOT settings — gate + 6 cloud slots (#gate-slots)", () => {
 		await expect(page.getByTestId("proactive-idle-ms")).toHaveValue("120000");
 		await expect(page.getByTestId("proactive-interval-ms")).toHaveValue("900000");
 		await expect(page.getByTestId("proactive-timezone")).not.toHaveValue("");
+		const consent = page.getByTestId("proactive-weather-consent");
+		await consent.check();
+		await expect(consent).toBeChecked();
+		await page.getByTestId("proactive-weather-latitude").fill("37.5665");
+		await page.getByTestId("proactive-weather-longitude").fill("126.978");
+		await card.getByRole("button", { name: "Save proactive speech settings" }).click();
+		await expect
+			.poll(() =>
+				page.evaluate(() =>
+					JSON.parse(localStorage.getItem("naia-config") ?? "{}").proactiveSpeechWeatherConsented,
+				),
+			)
+			.toBe(true);
+
+		await page.locator('[data-settings-tab="general"]').click();
+		await expect(page.getByTestId("proactive-speech-settings")).toHaveCount(1);
+		const exhibitionProfile = page.getByTestId("proactive-speech-profile");
+		await expect(exhibitionProfile.locator('option[value="exhibition_intro"]')).toHaveCount(1);
+		await expect(exhibitionProfile.locator('option[value="personal_radio_dj"]')).toHaveCount(0);
+		await expect(page.getByTestId("proactive-bgm-autoplay")).toHaveCount(0);
+		await expect(page.getByTestId("proactive-weather-consent")).toBeChecked();
 	});
 
 	test("FR-SLOT.1/2: naia gate + 3 groups (Brain/Voice/Avatar) render; 3-profile cards removed (R1-7)", async ({
@@ -202,8 +223,9 @@ test.describe("S-SLOT settings — gate + 6 cloud slots (#gate-slots)", () => {
 		});
 		expect(saved.provider).toBe("nextain"); // 보존
 		expect(saved.model).toBe("gemini-3.5-flash"); // 보존(비파괴)
-		expect(saved.memoryLlmProvider).toBe("naia");
-		expect(saved.memoryLlmModel).toBe("gemini-3.1-flash-lite");
+		expect(saved.subLlmProvider).toBe("naia");
+		expect(saved.subLlmModel).toBe("gemini-3.1-flash-lite");
+		expect(saved.memoryLlmProvider).toBeUndefined();
 		expect(saved.memoryEmbeddingProvider).toBe("offline");
 		// 한국어 우선: 기본 오프라인 임베딩 = 다국어 e5 (2026-07-15 승인)
 		expect(saved.memoryOfflineModel).toBe("multilingual-e5-large");

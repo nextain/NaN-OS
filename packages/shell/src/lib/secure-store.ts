@@ -60,11 +60,15 @@ export async function deleteSecretKey(name: string): Promise<void> {
 export const SECRET_KEYS = [
 	"apiKey",
 	"googleApiKey",
+	"openaiTtsApiKey",
+	"elevenlabsApiKey",
 	"naiaKey",
 	"gatewayToken",
 	"openaiRealtimeApiKey",
 	"subLlmApiKey",
 	"memoryLlmApiKey",
+	"memoryEmbeddingApiKey",
+	"qdrantApiKey",
 ] as const;
 
 export type SecretKeyName = (typeof SECRET_KEYS)[number];

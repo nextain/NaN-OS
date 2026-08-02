@@ -19,6 +19,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { gunzipSync } from "node:zlib";
 import { describe, expect, it } from "vitest";
+import { prepareSteamDepot } from "../prepare-steam-depot.mjs";
 // .mjs(JS) 모듈 — 타입 선언 없음. tsconfig include=["src"] 라 tsc 스코프 밖(vitest 만 수집).
 import {
 	assertBundleArchSupported,
@@ -31,7 +32,6 @@ import {
 	selectNodeArchive,
 	wrapStaticExecutableForBundle,
 } from "../stage-runtime.mjs";
-import { prepareSteamDepot } from "../prepare-steam-depot.mjs";
 
 const SHELL = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const REPO_ROOT = resolve(SHELL, "../..");
@@ -143,7 +143,9 @@ describe("platform-matrix 스키마 (FR-INSTALL.1)", () => {
 
 	it("vosk native archives are pinned by filename and SHA256 in the matrix SoT", () => {
 		for (const os of ["win32", "linux"]) {
-			expect(matrix.os[os].vosk.archive.file).toMatch(/^vosk-.+-0\.3\.45\.zip$/);
+			expect(matrix.os[os].vosk.archive.file).toMatch(
+				/^vosk-.+-0\.3\.45\.zip$/,
+			);
 			expect(matrix.os[os].vosk.archive.sha256).toMatch(/^[0-9a-f]{64}$/);
 		}
 		expect(matrix.os.win32.vosk.archive.sha256).not.toBe(
@@ -515,6 +517,12 @@ describe("conf 생성 golden (FR-INSTALL.2)", () => {
 				"cascade-loader/loader",
 			);
 			expect(without.bundle.resources["cascade-loader/loader"]).toBeUndefined();
+			expect(withIt.bundle.resources["cascade-loader/scripts"]).toBe(
+				"cascade-loader/scripts",
+			);
+			expect(
+				without.bundle.resources["cascade-loader/scripts"],
+			).toBeUndefined();
 		}
 	});
 
@@ -600,7 +608,10 @@ describe("clean-checkout build order", () => {
 					) {
 						mkdirSync(targetRelease, { recursive: true });
 						for (const file of matrix.os.win32.vosk.files) {
-							writeFileSync(resolve(targetRelease, file), "rebuilt vosk runtime");
+							writeFileSync(
+								resolve(targetRelease, file),
+								"rebuilt vosk runtime",
+							);
 						}
 					}
 				},
@@ -714,7 +725,7 @@ describe("installer workflow integration contracts", () => {
 			for (const file of matrix.os.win32.steamDepot.requiredFiles) {
 				expect(manifest).toContain(file.replaceAll("\\", "/"));
 			}
-			expect(manifest).toMatch(/^[0-9a-f]{64}  /m);
+			expect(manifest).toMatch(/^[0-9a-f]{64} {2}/m);
 		} finally {
 			rmSync(source, { recursive: true, force: true });
 			rmSync(bundle, { recursive: true, force: true });

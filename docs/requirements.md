@@ -628,3 +628,23 @@ Steamworks 포털 설정·SteamPipe 자격증명·스토어 심사 제출은 #31
 - DeepSeek V4 Flash exists in DeepSeek and Azure Foundry catalogs, but the Naia
   production `/v1/models` and `/v1/pricing` endpoints do not expose a live route
   or customer price. Shell therefore does not offer a non-working option.
+
+## Radio DJ durability and settings ownership (#414, 2026-08-02)
+
+| ID | Requirement | Status | Verification |
+|---|---|---|---|
+| **FR-BGM.8** | Shell refreshes the semantic `skill_youtube_bgm` descriptor before each chat turn. Delivery failure is observable and never logged as successful registration. | Pending | `chat-service` unit and BGM Playwright outbound ordering |
+| **FR-BGM.9** | YouTube playback in the Tauri WebView supplies an origin referrer, creates a fresh iframe attempt even for the same video ID, and exposes success only after an observed `playing` event. | Pending | component/Playwright request and playback-state tests plus native Radio E2E |
+| **FR-BGM.10** | Radio-owned search avoids the currently selected video when another result exists. An exited owned BGM sidecar restarts on demand, while auxiliary-window destruction does not stop the main runtime. | Pending | BGM unit tests, Rust lifecycle tests, native health/playback acceptance |
+| **FR-SETTINGS.12** | `Settings > Skills > Youtube Radio DJ` is the sole owner of Radio DJ proactive policy. General renders no duplicate profile, weather consent, coordinates, or DJ fields. | Pending | Settings component and Playwright ownership assertions |
+| **FR-SETTINGS.13** | Weather-location consent and coordinates survive semantically equivalent parent rerenders and persist after Save/reload. No location is transmitted unless consent is enabled. | Pending | component rerender regression and Playwright persistence test |
+
+## Settings persistence and runtime reload (#415, 2026-08-03)
+
+| ID | Requirement | Status | Verification |
+|---|---|---|---|
+| **FR-CONFIG-SOT.7** | `config.json` and `ui-config.json` are the workspace sources of truth. Derived agent environment aliases are regenerated only at the write boundary and never hydrate into AppConfig/localStorage. | Implemented | config merge/write unit plus cache-clear restart E2E |
+| **FR-LLM-ROLE.7** | `subLlm*` belongs only to the sub role and `memoryLlm*` only to the memory role. Structured `llmRoles` is authoritative; legacy mirrors are deterministic and cannot assign one provider to two roles. | Implemented | role/slot/manifest contract tests |
+| **FR-SETTINGS.14** | Every credential removed from workspace JSON is stored in the OS-backed secure store, restored after restart, and omitted from config, UI config, logs, and agent messages except the dedicated credential channel. | Implemented | secure-store unit and native restart test |
+| **FR-SETTINGS.15** | A visible successful save means config, UI config, derived manifest, and synchronous Agent reload acknowledgement have completed in order. With no running Agent, the next `SetWorkspace` applies the persisted files; a running Agent's memory reload failure is returned to the settings UI instead of being swallowed. | Implemented | ordered write unit, Rust RPC compile, Agent #106 reload integration |
+| **FR-MEMORY.5** | Changing memory role, embedding, adapter, or workspace rebuilds the effective runtime for the next turn without restarting the Shell. Failed rebuild preserves the last healthy runtime and reports the failure. | Implemented (Agent #106) | Agent reload integration, paired Shell compile, real restart log |

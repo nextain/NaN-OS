@@ -253,7 +253,7 @@ describe("SettingsTab", () => {
 			},
 		]);
 
-		render(<SettingsTab />);
+		const { unmount } = render(<SettingsTab />);
 		gotoSettingsTab("brain");
 
 		await screen.findByText(
@@ -276,7 +276,9 @@ describe("SettingsTab", () => {
 			"naia-0.9-omni-24g",
 		);
 
-		const sortSelect = screen.getByTestId("model-sort-mode") as HTMLSelectElement;
+		const sortSelect = screen.getByTestId(
+			"model-sort-mode",
+		) as HTMLSelectElement;
 		expect(sortSelect.value).toBe("price");
 		expect([...sortSelect.options].map((option) => option.value)).toEqual([
 			"price",
@@ -285,7 +287,9 @@ describe("SettingsTab", () => {
 		expect(screen.getByTestId("model-price-sort-basis").textContent).toContain(
 			"3 uncached input tokens",
 		);
-		const pricedOptions = [...modelSelect.options].map((option) => option.value);
+		const pricedOptions = [...modelSelect.options].map(
+			(option) => option.value,
+		);
 		expect(pricedOptions[0]).toBe("grok-4.3");
 		expect(modelSelect.value).toBe("grok-4.3");
 
@@ -297,6 +301,16 @@ describe("SettingsTab", () => {
 		expect(performanceOptions[0]).toBe("gpt-5.6-sol");
 		expect(performanceOptions).not.toEqual(pricedOptions);
 		expect(modelSelect.value).toBe("grok-4.3");
+		expect(
+			JSON.parse(localStorage.getItem("naia-config") ?? "{}").modelSortMode,
+		).toBe("performance");
+
+		unmount();
+		render(<SettingsTab />);
+		gotoSettingsTab("brain");
+		expect(
+			(screen.getByTestId("model-sort-mode") as HTMLSelectElement).value,
+		).toBe("performance");
 	});
 
 	it("replaces a stale unavailable Naia selection with the first usable priced model", async () => {
@@ -373,6 +387,43 @@ describe("SettingsTab", () => {
 		expect(saved.subLlmProvider).toBe("gemini");
 		expect(saved.subLlmModel).toBe("gemini-3.1-flash-lite");
 		expect(saved.memoryLlmProvider).toBeUndefined();
+	});
+
+	it("hydrates the expert role from the workspace file fallback", async () => {
+		localStorage.setItem("naia-adk-path", "D:\\alpha-adk");
+		localStorage.setItem(
+			"naia-config",
+			JSON.stringify({ provider: "gemini", model: "gemini-3.5-flash", apiKey: "" }),
+		);
+		mockInvoke.mockImplementation((command: string) => {
+			if (command === "read_naia_config") {
+				return Promise.resolve(
+					JSON.stringify({
+						provider: "gemini",
+						model: "gemini-3.5-flash",
+						llmRoles: {
+							expert: { provider: "openai", model: "gpt-5.4" },
+						},
+					}),
+				);
+			}
+			return Promise.resolve([]);
+		});
+
+		render(<SettingsTab />);
+		gotoSettingsTab("brain");
+
+		await vi.waitFor(() => {
+			expect((screen.getByTestId("expert-llm-mode") as HTMLSelectElement).value).toBe(
+				"explicit",
+			);
+			expect(
+				(screen.getByTestId("expert-llm-provider") as HTMLSelectElement).value,
+			).toBe("openai");
+			expect((screen.getByTestId("expert-llm-model") as HTMLInputElement).value).toBe(
+				"gpt-5.4",
+			);
+		});
 	});
 
 	it("persists Naia auth callback even when no config exists yet", async () => {
@@ -806,6 +857,51 @@ describe("SettingsTab", () => {
 		const saveBtn = document.querySelector(".settings-save-btn") as HTMLElement;
 		fireEvent.click(saveBtn);
 		expect(screen.getByText(/입력해주세요|enter.*api/i)).toBeDefined();
+	});
+
+	it("shows the native reload failure instead of a saved badge", async () => {
+		localStorage.setItem("naia-adk-path", "/home/user/naia-adk");
+		localStorage.setItem(
+			"naia-config",
+			JSON.stringify({ provider: "codex", model: "gpt-5.4" }),
+		);
+		mockInvoke.mockImplementation((command: string) => {
+			if (command === "reload_agent_settings") {
+				return Promise.reject(new Error("memory reload rejected"));
+			}
+			if (command === "read_naia_ui_config") return Promise.resolve("{}");
+			return Promise.resolve([]);
+		});
+
+		render(<SettingsTab />);
+		gotoSettingsTab("brain");
+		fireEvent.click(document.querySelector(".settings-save-btn")!);
+
+		expect(await screen.findByText(/memory reload rejected/)).toBeDefined();
+		expect(document.querySelector(".settings-save-btn")?.textContent).not.toMatch(
+			/Saved/i,
+		);
+	});
+
+	it("shows a reset failure on the general tab", async () => {
+		localStorage.setItem("naia-adk-path", "/home/user/naia-adk");
+		mockInvoke.mockImplementation((command: string) => {
+			if (command === "reset_naia_config_files") {
+				return Promise.reject(new Error("settings files are locked"));
+			}
+			return Promise.resolve([]);
+		});
+
+		render(<SettingsTab />);
+		gotoSettingsTab("general");
+		fireEvent.click(document.querySelector(".settings-danger-zone .settings-reset-btn")!);
+		fireEvent.click(
+			document.querySelector(".reset-confirm-panel .settings-reset-btn")!,
+		);
+
+		expect(await screen.findByRole("alert")).toHaveTextContent(
+			"settings files are locked",
+		);
 	});
 });
 
@@ -1372,8 +1468,13 @@ describe("SettingsTab — memory tab (#298)", () => {
 		expect(saved.provider).toBe("nextain");
 		expect(saved.model).toBe("gemini-3.5-flash");
 		// 미설정 슬롯 = Gemini 기본값.
-		expect(saved.memoryLlmProvider).toBe("naia");
-		expect(saved.memoryLlmModel).toBe("gemini-3.1-flash-lite");
+		expect(saved.subLlmProvider).toBe("naia");
+		expect(saved.subLlmModel).toBe("gemini-3.1-flash-lite");
+		expect(saved.llmRoles.sub).toMatchObject({
+			provider: "naia",
+			model: "gemini-3.1-flash-lite",
+		});
+		expect(saved.memoryLlmProvider).toBeUndefined();
 		expect(saved.memoryEmbeddingProvider).toBe("offline");
 		// 한국어 우선: 기본 오프라인 임베딩 = 다국어 e5 (2026-07-15 승인)
 		expect(saved.memoryOfflineModel).toBe("multilingual-e5-large");

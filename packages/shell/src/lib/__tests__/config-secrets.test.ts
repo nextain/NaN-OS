@@ -13,7 +13,11 @@ vi.mock("@tauri-apps/plugin-store", () => {
 	};
 });
 
-import { loadConfigWithSecrets, saveConfig } from "../config";
+import {
+	loadConfigWithSecrets,
+	saveConfig,
+	saveConfigSecure,
+} from "../config";
 
 describe("loadConfigWithSecrets", () => {
 	let mockStore: {
@@ -127,5 +131,42 @@ describe("loadConfigWithSecrets", () => {
 
 		const config = await loadConfigWithSecrets();
 		expect(config?.naiaKey).toBe("write-back-key");
+	});
+
+	it("round-trips every TTS and memory credential through the secure store only", async () => {
+		const values = new Map<string, string>();
+		mockStore.set.mockImplementation(async (name: string, value: string) => {
+			values.set(name, value);
+		});
+		mockStore.get.mockImplementation(async (name: string) => values.get(name));
+		mockStore.delete.mockImplementation(async (name: string) => {
+			values.delete(name);
+		});
+
+		await saveConfigSecure({
+			provider: "openai",
+			model: "gpt-4o",
+			apiKey: "main-secret",
+			openaiTtsApiKey: "openai-tts-secret",
+			elevenlabsApiKey: "eleven-secret",
+			memoryEmbeddingApiKey: "embedding-secret",
+			qdrantApiKey: "qdrant-secret",
+		});
+
+		const persisted = JSON.parse(localStorage.getItem("naia-config") ?? "{}");
+		expect(persisted.apiKey).toBeUndefined();
+		expect(persisted.openaiTtsApiKey).toBeUndefined();
+		expect(persisted.elevenlabsApiKey).toBeUndefined();
+		expect(persisted.memoryEmbeddingApiKey).toBeUndefined();
+		expect(persisted.qdrantApiKey).toBeUndefined();
+
+		const restored = await loadConfigWithSecrets();
+		expect(restored).toMatchObject({
+			apiKey: "main-secret",
+			openaiTtsApiKey: "openai-tts-secret",
+			elevenlabsApiKey: "eleven-secret",
+			memoryEmbeddingApiKey: "embedding-secret",
+			qdrantApiKey: "qdrant-secret",
+		});
 	});
 });

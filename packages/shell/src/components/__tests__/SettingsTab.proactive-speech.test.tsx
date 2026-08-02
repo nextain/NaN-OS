@@ -105,6 +105,40 @@ describe("PA-DJ-04 proactive settings UI", () => {
 			),
 		);
 	});
+
+	it("keeps weather consent through an equivalent parent rerender", () => {
+		setLocale("en");
+		const value = {
+			profile: "disabled" as const,
+			timezone: "Asia/Seoul",
+			weatherConsented: false,
+		};
+		const view = render(
+			<ProactiveSpeechSettingsSection
+				mode="dj"
+				value={value}
+				onSave={() => true}
+			/>,
+		);
+
+		const consent = screen.getByTestId(
+			"proactive-weather-consent",
+		) as HTMLInputElement;
+		fireEvent.click(consent);
+		expect(consent.checked).toBe(true);
+
+		view.rerender(
+			<ProactiveSpeechSettingsSection
+				mode="dj"
+				value={{ ...value }}
+				onSave={() => true}
+			/>,
+		);
+		expect(
+			(screen.getByTestId("proactive-weather-consent") as HTMLInputElement)
+				.checked,
+		).toBe(true);
+	});
 	it("edits and persists proactive speech settings", async () => {
 		setLocale("en");
 		const onChange = vi.fn();

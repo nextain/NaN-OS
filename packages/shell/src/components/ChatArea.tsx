@@ -33,11 +33,13 @@ import {
 	isNewCore,
 	sendApprovalResponse,
 	sendChatMessage,
+	sendPanelSkills,
 	sendPanelToolResult,
 	yieldSpeechActivity,
 	type SpeechActivityResume,
 } from "../lib/chat-service";
 import {
+	BGM_PANEL_ID,
 	SKILL_YOUTUBE_BGM,
 	executeBgmSkill,
 	shouldActivateRadioDj,
@@ -1594,6 +1596,19 @@ export function ChatArea({
 		const gatewayUrl = resolveConfiguredGatewayUrl(config);
 
 		try {
+			// Startup registration can race the agent process. Refresh the
+			// idempotent descriptor immediately before every turn so semantic
+			// requests such as Radio DJ cannot degrade into text-only claims.
+			const bgmSkillReady = await sendPanelSkills(BGM_PANEL_ID, [
+				SKILL_YOUTUBE_BGM,
+			]);
+			Logger.info("ChatArea", "turn bgm skill registration", {
+				ready: bgmSkillReady,
+				requestId,
+			});
+			if (!bgmSkillReady) {
+				throw new Error("skill_youtube_bgm_registration_failed");
+			}
 			await sendChatMessage({
 				message: text,
 				provider: {

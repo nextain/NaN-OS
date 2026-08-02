@@ -670,3 +670,44 @@ reorders the same native WebView picker without changing the selected model.
 | weighted price is the default | registry weighted-score and stable-sort tests | Settings component and Playwright option-order assertions |
 | unavailable routes are absent | registry metadata/filter contract | Settings component and Playwright absence assertions |
 | performance order is evidence-based | dated recommendation-order contract | Settings sort-change assertion |
+
+## UC-RADIO-DJ-DURABLE — Radio DJ changes music truthfully and keeps one settings owner (#414)
+
+A user asks Naia, in any supported language, to start Radio DJ playback or
+change the music. The LLM selects `skill_youtube_bgm` semantically and the
+Shell refreshes that tool registration before the chat turn so an agent restart
+cannot silently remove the capability. A play request is not described as
+successful until the player reports an observed `playing` transition.
+
+- If search returns the currently selected video first, Radio DJ chooses a
+  different result when one exists. Explicitly replaying the same video still
+  remounts the iframe and starts a new playback attempt.
+- The Tauri WebView sends an origin referrer to the YouTube embed so the player
+  is identified and does not fail with YouTube error 153.
+- If the BGM sidecar exited, the next search restarts the owned sidecar. Closing
+  an auxiliary window does not tear down the main Shell runtime.
+- `Settings > Skills > Youtube Radio DJ` is the single owner of proactive DJ
+  policy. General does not render a duplicate profile or weather-location form.
+- Weather consent and coordinates remain editable across equivalent parent
+  rerenders and persist after Save/reload.
+
+### Test Coverage Map
+
+| Scenario | Unit / contract | UI / integration |
+|---|---|---|
+| agent restart before a chat turn | `chat-service.test.ts` boolean delivery receipt | `e2e/bgm-skill.spec.ts` asserts same-turn `panel_skills` precedes `chat_request` |
+| current search result repeats | `bgm-skill.test.ts` current-video exclusion and same-video replay receipt | BGM Playwright fixture observes a fresh iframe/playback transition |
+| YouTube WebView identification | embed URL/remount component contract | Playwright request verifies referrer; native Radio queue E2E verifies observed A-to-B playback |
+| sidecar exits or auxiliary window closes | Rust lifecycle tests | native Tauri sidecar restart/health check |
+| one settings owner and durable consent | Settings component rerender test | `settings-slots.spec.ts` Skills ownership, General absence, Save/reload |
+## UC-SETTINGS-ROUNDTRIP: 설정 변경·재시작·실행 반영
+
+사용자는 두뇌 역할, 기억 엔진, 음성, Radio DJ, 날씨 동의, 로컬 GPU 프로필 같은 설정을 바꾼다. 저장 성공 뒤 앱을 닫아 다시 실행해도 화면 값, 워크스페이스 파일, 파생 매니페스트와 실제 에이전트 동작이 모두 같은 선택을 사용한다.
+
+- 메모리 LLM을 Naia 또는 상속으로 바꾸면 이전 Ollama 값이 다시 살아나지 않는다.
+- sub와 memory는 독립적으로 저장되고 슬롯 요약 및 런타임도 같은 역할을 표시한다.
+- API 키는 워크스페이스 파일과 로그에 나타나지 않지만 보안 저장소에서 복원되어 재입력 없이 동작한다.
+- 저장 중 파일 또는 에이전트 재로드가 실패하면 성공 표시를 하지 않고, 마지막 정상 실행 구성을 유지한다.
+- localStorage를 지우고 다시 열어도 파일에서 같은 값이 복원된다.
+
+검증은 설정 UI 변경 → native 파일 원문 확인 → render cache 제거 → WebView/App 재로드 → UI 복원 → agent effective config/실제 기억 호출 순으로 연결한다.

@@ -86,8 +86,10 @@ describe("S-SLOT · FR-SLOT.2 6슬롯 + 3그룹 구조 (각각 독립 설정)", 
 			model: "gemini-3.5-flash",
 			apiKey: "k",
 			naiaKey: "nk",
-			memoryLlmProvider: "naia",
-			memoryLlmModel: "gemini-3.1-flash-lite",
+			subLlmProvider: "naia",
+			subLlmModel: "gemini-3.1-flash-lite",
+			memoryLlmProvider: "ollama",
+			memoryLlmModel: "memory-model",
 			memoryEmbeddingProvider: "offline",
 			memoryOfflineModel: "all-MiniLM-L6-v2",
 			sttProvider: "vosk",
@@ -95,11 +97,16 @@ describe("S-SLOT · FR-SLOT.2 6슬롯 + 3그룹 구조 (각각 독립 설정)", 
 		} as AppConfig;
 
 		// main 만 바꿔도 sub/embed/stt/tts 불변
-		const after = writeSlot(base, "main", { provider: "ollama", model: "llama3" });
+		const after = writeSlot(base, "main", {
+			provider: "ollama",
+			model: "llama3",
+		});
 		expect(after.provider).toBe("ollama");
 		expect(after.model).toBe("llama3");
-		expect(after.memoryLlmProvider).toBe("naia"); // sub 불변
-		expect(after.memoryLlmModel).toBe("gemini-3.1-flash-lite");
+		expect(after.subLlmProvider).toBe("naia"); // sub 불변
+		expect(after.subLlmModel).toBe("gemini-3.1-flash-lite");
+		expect(after.memoryLlmProvider).toBe("ollama"); // memory 불변
+		expect(after.memoryLlmModel).toBe("memory-model");
 		expect(after.memoryEmbeddingProvider).toBe("offline"); // embed 불변
 		expect(after.sttProvider).toBe("vosk"); // stt 불변
 		expect(after.ttsProvider).toBe("nextain"); // tts 불변
@@ -115,17 +122,28 @@ describe("S-SLOT · FR-SLOT.2 6슬롯 + 3그룹 구조 (각각 독립 설정)", 
 		const cfg: AppConfig = {
 			provider: "nextain",
 			model: "gemini-3.5-flash",
-			memoryLlmProvider: "naia",
-			memoryLlmModel: "gemini-3.1-flash-lite",
+			subLlmProvider: "naia",
+			subLlmModel: "gemini-3.1-flash-lite",
+			memoryLlmProvider: "ollama",
+			memoryLlmModel: "memory-model",
 			memoryEmbeddingProvider: "offline",
 			memoryOfflineModel: "all-MiniLM-L6-v2",
 			sttProvider: "vosk",
 			ttsProvider: "nextain",
 		} as AppConfig;
 		const snap = readSlots(cfg);
-		expect(snap.main).toEqual({ provider: "nextain", model: "gemini-3.5-flash" });
-		expect(snap.sub).toEqual({ provider: "naia", model: "gemini-3.1-flash-lite" });
-		expect(snap.embedding).toEqual({ provider: "offline", model: "all-MiniLM-L6-v2" });
+		expect(snap.main).toEqual({
+			provider: "nextain",
+			model: "gemini-3.5-flash",
+		});
+		expect(snap.sub).toEqual({
+			provider: "naia",
+			model: "gemini-3.1-flash-lite",
+		});
+		expect(snap.embedding).toEqual({
+			provider: "offline",
+			model: "all-MiniLM-L6-v2",
+		});
 		expect(snap.stt).toEqual({ provider: "vosk" });
 		expect(snap.tts).toEqual({ provider: "nextain" });
 	});
@@ -151,24 +169,48 @@ describe("S-SLOT · FR-SLOT.2 6슬롯 + 3그룹 구조 (각각 독립 설정)", 
 	});
 });
 
-describe("S-SLOT · FR-SLOT.5 필드명 유지 (memoryLlmProvider, rename 아님)", () => {
-	it("sub 슬롯 config 키 = memoryLlmProvider/memoryLlmModel (R1-1, Phase 3.4 dual-write 전까지 유지)", () => {
-		expect(SLOT_FIELD_MAP.sub).toEqual([
-			"memoryLlmProvider",
-			"memoryLlmModel",
-		]);
+describe("S-SLOT · FR-SLOT.5 sub/memory SoT separation", () => {
+	it("sub 슬롯 config 키 = subLlmProvider/subLlmModel", () => {
+		expect(SLOT_FIELD_MAP.sub).toEqual(["subLlmProvider", "subLlmModel"]);
 	});
 
 	it("embedding 슬롯 config 키 = memoryEmbeddingProvider/memoryOfflineModel|memoryEmbeddingModel", () => {
 		expect(SLOT_FIELD_MAP.embedding).toContain("memoryEmbeddingProvider");
 	});
 
-	it("writeSlot(sub) 가 subLlmProvider(신규명) 가 아닌 memoryLlmProvider 에 기록", () => {
-		const cfg = {} as AppConfig;
-		const after = writeSlot(cfg, "sub", { provider: "ollama", model: "llama3" });
-		expect((after as unknown as Record<string, unknown>).memoryLlmProvider).toBe("ollama");
-		expect((after as unknown as Record<string, unknown>).memoryLlmModel).toBe("llama3");
-		expect((after as unknown as Record<string, unknown>).subLlmProvider).toBeUndefined();
+	it("writeSlot(sub) 가 structured role과 subLlm mirror만 갱신", () => {
+		const cfg = {
+			memoryLlmProvider: "vllm",
+			memoryLlmModel: "memory-model",
+		} as AppConfig;
+		const after = writeSlot(cfg, "sub", {
+			provider: "ollama",
+			model: "llama3",
+		});
+		expect(after.llmRoles?.sub).toEqual({
+			provider: "ollama",
+			model: "llama3",
+			inherit: undefined,
+		});
+		expect(after.subLlmProvider).toBe("ollama");
+		expect(after.subLlmModel).toBe("llama3");
+		expect(after.memoryLlmProvider).toBe("vllm");
+		expect(after.memoryLlmModel).toBe("memory-model");
+	});
+
+	it("readSlots 는 structured sub를 memory legacy mirror보다 우선", () => {
+		const snap = readSlots({
+			provider: "nextain",
+			model: "gemini-3.5-flash",
+			apiKey: "",
+			llmRoles: {
+				sub: { provider: "gemini", model: "sub-model" },
+				memory: { provider: "ollama", model: "memory-model" },
+			},
+			memoryLlmProvider: "ollama",
+			memoryLlmModel: "memory-model",
+		});
+		expect(snap.sub).toEqual({ provider: "gemini", model: "sub-model" });
 	});
 });
 
@@ -210,8 +252,13 @@ describe("S-SLOT · FR-SLOT.3 naia 계정 Gemini 기본값 자동 적용 (R2-1, 
 		const filled = applyNaiaSlotDefaults({} as AppConfig);
 		expect(filled.provider).toBe("nextain");
 		expect(filled.model).toBe("gemini-3.5-flash");
-		expect(filled.memoryLlmProvider).toBe("naia");
-		expect(filled.memoryLlmModel).toBe("gemini-3.1-flash-lite");
+		expect(filled.subLlmProvider).toBe("naia");
+		expect(filled.subLlmModel).toBe("gemini-3.1-flash-lite");
+		expect(filled.llmRoles?.sub).toMatchObject({
+			provider: "naia",
+			model: "gemini-3.1-flash-lite",
+		});
+		expect(filled.memoryLlmProvider).toBeUndefined();
 		expect(filled.memoryEmbeddingProvider).toBe("offline");
 		// 한국어 우선: 기본 오프라인 임베딩 = 다국어 e5 (2026-07-15 승인)
 		expect(filled.memoryOfflineModel).toBe("multilingual-e5-large");
@@ -229,7 +276,8 @@ describe("S-SLOT · FR-SLOT.3 naia 계정 Gemini 기본값 자동 적용 (R2-1, 
 		const after = applyNaiaSlotDefaults(userSet);
 		expect(after.provider).toBe("ollama"); // 보존
 		expect(after.model).toBe("llama3"); // 보존
-		expect(after.memoryLlmProvider).toBe("ollama"); // 보존
+		expect(after.memoryLlmProvider).toBe("ollama"); // memory 보존
+		expect(after.subLlmProvider).toBe("naia"); // 미설정 sub 기본값
 		expect(after.sttProvider).toBe("whisper"); // 보존
 		// 설정 안 한 슬롯은 기본값
 		expect(after.memoryEmbeddingProvider).toBe("offline");
@@ -305,7 +353,9 @@ describe("S-EMBKO · FR-SLOT.6 한글 오프라인 임베딩 모델 노출 (2026
 			model: "paraphrase-multilingual-MiniLM-L12-v2",
 		});
 		expect(after.memoryEmbeddingProvider).toBe("offline");
-		expect(after.memoryOfflineModel).toBe("paraphrase-multilingual-MiniLM-L12-v2");
+		expect(after.memoryOfflineModel).toBe(
+			"paraphrase-multilingual-MiniLM-L12-v2",
+		);
 		expect(readSlots(after).embedding).toEqual({
 			provider: "offline",
 			model: "paraphrase-multilingual-MiniLM-L12-v2",

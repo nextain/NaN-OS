@@ -750,8 +750,8 @@ export async function fetchAgentSkills(): Promise<
 export async function sendPanelSkills(
 	appId: string,
 	tools: NaiaTool[],
-): Promise<void> {
-	await safeSendToAgent(
+): Promise<boolean> {
+	return safeSendToAgent(
 		{
 			type: "panel_skills",
 			appId,

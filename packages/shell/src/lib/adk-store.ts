@@ -1,8 +1,17 @@
 import { invoke } from "@tauri-apps/api/core";
 import { convertFileSrc } from "@tauri-apps/api/core";
-import { type AppConfig, LAB_GATEWAY_URL } from "./config";
+import {
+	type AppConfig,
+	DERIVED_AGENT_ENV_KEYS,
+	LAB_GATEWAY_URL,
+	mergeBootConfig,
+} from "./config";
 import { Logger } from "./logger";
-import { getSecretKey } from "./secure-store";
+import {
+	deleteSecretKey,
+	getSecretKey,
+	SECRET_KEYS,
+} from "./secure-store";
 import {
 	buildSlotsManifest,
 	serializeSlotsManifest,
@@ -50,6 +59,23 @@ export function clearAdkPath(): void {
 	localStorage.removeItem(ADK_PATH_KEY);
 }
 
+/**
+ * Reset only persisted application configuration. Workspace assets and
+ * knowledge remain intact; credentials are removed from the secure store.
+ * The bootstrap pointer is cleared last so a failed native/secure-store reset
+ * remains retryable from the same workspace instead of silently resurrecting
+ * a partial configuration on the next launch.
+ */
+export async function resetNaiaPersistedSettings(): Promise<void> {
+	const adkPath = getAdkPath();
+	if (adkPath) {
+		await invoke("reset_naia_config_files", { adkPath });
+	}
+	await Promise.all(SECRET_KEYS.map((key) => deleteSecretKey(key)));
+	localStorage.removeItem("naia-config");
+	clearAdkPath();
+}
+
 // ── Asset listing ─────────────────────────────────────────────────────────────
 
 export type NaiaAssetSubdir =
@@ -84,9 +110,19 @@ export function toAssetUrl(filePath: string): string {
 }
 
 const LOCAL_MIME_TYPES: Record<string, string> = {
-	mp3: "audio/mpeg", ogg: "audio/ogg", wav: "audio/wav", aac: "audio/aac", flac: "audio/flac",
-	png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", webp: "image/webp", gif: "image/gif",
-	mp4: "video/mp4", webm: "video/webm", mov: "video/quicktime",
+	mp3: "audio/mpeg",
+	ogg: "audio/ogg",
+	wav: "audio/wav",
+	aac: "audio/aac",
+	flac: "audio/flac",
+	png: "image/png",
+	jpg: "image/jpeg",
+	jpeg: "image/jpeg",
+	webp: "image/webp",
+	gif: "image/gif",
+	mp4: "video/mp4",
+	webm: "video/webm",
+	mov: "video/quicktime",
 };
 const BLOB_URL_EXTS = new Set(Object.keys(LOCAL_MIME_TYPES));
 
@@ -128,46 +164,103 @@ export async function copyBundledAssets(adkPath: string): Promise<void> {
 
 // G-03: Secret keys — stripped from config.json (flow via OS keychain / IPC creds_update).
 const SECRET_CONFIG_KEYS = new Set([
-	"apiKey", "naiaKey", "googleApiKey",
-	"openaiTtsApiKey", "elevenlabsApiKey", "gatewayToken", "openaiRealtimeApiKey",
-	"memoryEmbeddingApiKey", "memoryLlmApiKey", "subLlmApiKey", "qdrantApiKey",
+	"apiKey",
+	"naiaKey",
+	"googleApiKey",
+	"openaiTtsApiKey",
+	"elevenlabsApiKey",
+	"gatewayToken",
+	"openaiRealtimeApiKey",
+	"memoryEmbeddingApiKey",
+	"memoryLlmApiKey",
+	"subLlmApiKey",
+	"qdrantApiKey",
 ]);
 
 // G-08: UI-only fields — naia-agent doesn't consume these. Stripped to prevent
 // flattenConfig() from polluting process.env with THEME, PANEL_POSITION, BGM_TRACK, etc.
 const UI_ONLY_CONFIG_KEYS = new Set([
 	// Appearance
-	"theme", "backgroundImage", "backgroundVideo", "vrmModel", "avatarProvider", "nvaModel", "cascadeRuntimeUrl", "customVrms", "customBgs",
+	"theme",
+	"backgroundImage",
+	"backgroundVideo",
+	"vrmModel",
+	"avatarProvider",
+	"nvaModel",
+	"cascadeRuntimeUrl",
+	"customVrms",
+	"customBgs",
+	// Settings presentation preferences
+	"modelSortMode",
 	// STT/TTS UI features
-	"sttProvider", "sttModel", "naiaCloudSttBackend",
-	"ttsEnabled", "ttsVoice", "ttsProvider", "naiaCloudTtsBackend", "ttsEngine",
-	"ttsOutputDeviceId", "sttInputDeviceId", "vllmSttHost", "vllmSttModel", "vllmTtsHost",
+	"sttProvider",
+	"sttModel",
+	"naiaCloudSttBackend",
+	"ttsEnabled",
+	"ttsVoice",
+	"ttsProvider",
+	"naiaCloudTtsBackend",
+	"ttsEngine",
+	"ttsOutputDeviceId",
+	"sttInputDeviceId",
+	"vllmSttHost",
+	"vllmSttModel",
+	"vllmTtsHost",
 	// Voice/Live UI
-	"liveProvider", "liveVoice", "liveModel", "openaiRealtimeVoice", "voice", "voiceConversation",
+	"liveProvider",
+	"liveVoice",
+	"liveModel",
+	"openaiRealtimeVoice",
+	"voice",
+	"voiceConversation",
 	// Panel layout
-	"panelPosition", "panelVisible", "panelSize", "deletedPanels",
+	"panelPosition",
+	"panelVisible",
+	"panelSize",
+	"deletedPanels",
 	// BGM / media player state
-	"bgmTrack", "bgmSource", "bgmYoutubeVideoId", "bgmYoutubeTitle",
-	"bgmYoutubeChannel", "bgmYoutubeThumbnail", "bgmVolume", "bgmPlaying",
+	"bgmTrack",
+	"bgmSource",
+	"bgmYoutubeVideoId",
+	"bgmYoutubeTitle",
+	"bgmYoutubeChannel",
+	"bgmYoutubeThumbnail",
+	"bgmVolume",
+	"bgmPlaying",
 	// Opt-in proactive speech profile (shell configures agent at startup)
-	"proactiveSpeechProfile", "proactiveSpeechPermitted", "proactiveSpeechIdleMs", "proactiveSpeechIntervalMs",
-	"proactiveSpeechTimezone", "proactiveSpeechBgmAutoPlay",
-	"proactiveSpeechWeatherConsented", "proactiveSpeechWeatherLatitude",
-	"proactiveSpeechWeatherLongitude", "proactiveSpeechKnowledgeScope",
+	"proactiveSpeechProfile",
+	"proactiveSpeechPermitted",
+	"proactiveSpeechIdleMs",
+	"proactiveSpeechIntervalMs",
+	"proactiveSpeechTimezone",
+	"proactiveSpeechBgmAutoPlay",
+	"proactiveSpeechWeatherConsented",
+	"proactiveSpeechWeatherLatitude",
+	"proactiveSpeechWeatherLongitude",
+	"proactiveSpeechKnowledgeScope",
 	// Gateway TTS routing (UI-side routing, not agent)
-	"gatewayTtsAuto", "gatewayTtsMode",
+	"gatewayTtsAuto",
+	"gatewayTtsMode",
 	// Per-session Discord state
-	"discordSessionMigrated", "lastProcessedDiscordMessageId",
+	"discordSessionMigrated",
+	"lastProcessedDiscordMessageId",
 	// Locale (agent receives per-request via IPC systemPrompt)
 	"locale",
 	// User display ID (not used by agent directly)
 	"naiaUserId",
 ]);
 
-function stripForAgent(config: Record<string, unknown>): Record<string, unknown> {
+function stripForAgent(
+	config: Record<string, unknown>,
+): Record<string, unknown> {
 	const out: Record<string, unknown> = {};
 	for (const [k, v] of Object.entries(config)) {
-		if (SECRET_CONFIG_KEYS.has(k) || UI_ONLY_CONFIG_KEYS.has(k)) continue;
+		if (
+			SECRET_CONFIG_KEYS.has(k) ||
+			UI_ONLY_CONFIG_KEYS.has(k) ||
+			DERIVED_AGENT_ENV_KEYS.has(k)
+		)
+			continue;
 		if (k === "llmRoles" && v && typeof v === "object" && !Array.isArray(v)) {
 			const roles: Record<string, unknown> = {};
 			for (const role of ["expert", "main", "sub", "memory"]) {
@@ -175,8 +268,15 @@ function stripForAgent(config: Record<string, unknown>): Record<string, unknown>
 				if (!raw || typeof raw !== "object" || Array.isArray(raw)) continue;
 				const source = raw as Record<string, unknown>;
 				const clean: Record<string, string> = {};
-				for (const field of ["provider", "model", "baseUrl", "credentialRef", "inherit"]) {
-					if (typeof source[field] === "string" && source[field]) clean[field] = source[field] as string;
+				for (const field of [
+					"provider",
+					"model",
+					"baseUrl",
+					"credentialRef",
+					"inherit",
+				]) {
+					if (typeof source[field] === "string" && source[field])
+						clean[field] = source[field] as string;
 				}
 				if (Object.keys(clean).length) roles[role] = clean;
 			}
@@ -227,9 +327,7 @@ export function buildNaiaConfigEnv(cfg: {
 	// NAIA_ANYLLM_API_KEY AND NAIA_ANYLLM_BASE_URL to activate the naia branch.
 	// Without this, standalone cold-start falls through to lower-priority providers.
 	if (cfg.provider === "nextain") {
-		out.NAIA_ANYLLM_BASE_URL =
-			cfg.naiaGatewayUrl?.trim() ||
-			LAB_GATEWAY_URL;
+		out.NAIA_ANYLLM_BASE_URL = cfg.naiaGatewayUrl?.trim() || LAB_GATEWAY_URL;
 	}
 
 	// OPENAI_BASE_URL — agent uses this for both ollama and vllm (no-auth OpenAI-compat).
@@ -287,13 +385,20 @@ function resolveAgentEnvKey(
 	// direct providers (anthropic / openai / glm) and has no meaning here.
 	if (provider === "nextain") return null;
 	switch (provider) {
-		case "anthropic": return "ANTHROPIC_API_KEY";
-		case "openai":    return "OPENAI_API_KEY";
-		case "glm":       return "GLM_API_KEY";
-		case "zai":       return "GLM_API_KEY"; // zai = z.ai/Zhipu GLM (config provider id) — agent 도 동일 매핑
-		case "gemini":    return "GEMINI_API_KEY"; // direct Google AI Studio key (≠ nextain/Vertex). agent keychain-secret-store 거울
-		case "xai":       return "XAI_API_KEY"; // grok. agent keychain-secret-store 거울 — 이게 빠져 키가 안 써져 401 났음
-		default:          return null; // ollama, vllm, claude-code-cli, codex — no persisted key (local / CLI 로그인)
+		case "anthropic":
+			return "ANTHROPIC_API_KEY";
+		case "openai":
+			return "OPENAI_API_KEY";
+		case "glm":
+			return "GLM_API_KEY";
+		case "zai":
+			return "GLM_API_KEY"; // zai = z.ai/Zhipu GLM (config provider id) — agent 도 동일 매핑
+		case "gemini":
+			return "GEMINI_API_KEY"; // direct Google AI Studio key (≠ nextain/Vertex). agent keychain-secret-store 거울
+		case "xai":
+			return "XAI_API_KEY"; // grok. agent keychain-secret-store 거울 — 이게 빠져 키가 안 써져 401 났음
+		default:
+			return null; // ollama, vllm, claude-code-cli, codex — no persisted key (local / CLI 로그인)
 	}
 }
 
@@ -345,7 +450,9 @@ export async function agentKeyExists(
 	if (!adkPath) return false;
 	const envKey = resolveAgentEnvKey(provider, keyField);
 	if (!envKey) return false;
-	return invoke<boolean>("agent_key_exists", { adkPath, envKey }).catch(() => false);
+	return invoke<boolean>("agent_key_exists", { adkPath, envKey }).catch(
+		() => false,
+	);
 }
 
 /**
@@ -385,13 +492,19 @@ export function applyModelSelectionToConfig(
 	model: string,
 ): Record<string, unknown> {
 	const previousRoles = current?.llmRoles;
-	const roles = previousRoles && typeof previousRoles === "object" && !Array.isArray(previousRoles)
-		? previousRoles as Record<string, unknown>
-		: {};
+	const roles =
+		previousRoles &&
+		typeof previousRoles === "object" &&
+		!Array.isArray(previousRoles)
+			? (previousRoles as Record<string, unknown>)
+			: {};
 	const previousMain = roles.main;
-	const main = previousMain && typeof previousMain === "object" && !Array.isArray(previousMain)
-		? previousMain as Record<string, unknown>
-		: {};
+	const main =
+		previousMain &&
+		typeof previousMain === "object" &&
+		!Array.isArray(previousMain)
+			? (previousMain as Record<string, unknown>)
+			: {};
 	// A provider/model switch is an immediate main-role edit too. Keeping only
 	// the legacy flat fields here was the stale-main-provider seam that made
 	// the UI and the reloaded agent disagree until a later Apply click.
@@ -401,7 +514,10 @@ export function applyModelSelectionToConfig(
 		model,
 		llmRoles: { ...roles, main: { ...main, provider, model } },
 	};
-	return { ...next, ...buildNaiaConfigEnv(next as Parameters<typeof buildNaiaConfigEnv>[0]) };
+	return {
+		...next,
+		...buildNaiaConfigEnv(next as Parameters<typeof buildNaiaConfigEnv>[0]),
+	};
 }
 
 // ── 워크스페이스별 UI 정체성(VRM/배경/BGM) — ui-config.json (agent 미소비, env 오염 방지) ──────────
@@ -503,8 +619,7 @@ export async function applyWorkspaceConfigToLocal(): Promise<void> {
 	const fileConfig = (await readNaiaConfig()) ?? {};
 	const uiConfig = (await readNaiaUiConfig()) ?? {};
 	const merged = {
-		...fileConfig,
-		...uiConfig,
+		...(mergeBootConfig(null, fileConfig, uiConfig) ?? {}),
 		onboardingComplete: true,
 		workspaceRoot: adkPath,
 	};
@@ -571,9 +686,21 @@ async function writeNaiaConfigNow(
 	if (configHydrationPending) return;
 	const adkPath = getAdkPath();
 	if (!adkPath) return;
+	const publicAgentConfig = stripForAgent(config);
+	const normalizedAgentConfig = {
+		...publicAgentConfig,
+		...buildNaiaConfigEnv(
+			publicAgentConfig as Parameters<typeof buildNaiaConfigEnv>[0],
+		),
+	};
+	const normalizedAgentConfigJson = JSON.stringify(
+		normalizedAgentConfig,
+		null,
+		2,
+	);
 	await invoke("write_naia_config", {
 		adkPath,
-		json: JSON.stringify(stripForAgent(config), null, 2),
+		json: normalizedAgentConfigJson,
 	});
 	// UI 정체성(VRM/배경/BGM)은 agent 가 안 읽으므로 별도 ui-config.json 에 — 워크스페이스 전환 복원용(FR-WS.2).
 	await writeNaiaUiConfig(config);
@@ -599,14 +726,12 @@ async function writeNaiaConfigNow(
 			error: e instanceof Error ? e.message : String(e),
 		});
 	});
-	// 설정 변경(특히 provider/model)을 에이전트에 즉시 반영 — naia-settings 재로딩 후 활성 provider swap(정본 R1-2:
-	// "라이브 변경 = OS 가 naia-settings 갱신 후 ReloadSettings 재호출"). gRPC=설정 기반(대화는 메시지만)이라
-	// 이 트리거가 없으면 에이전트는 기동 시 config 에 고정돼 UI 모델 전환이 안 먹는다(=실측 회귀). 에이전트 미가동 시 swallow.
-	try {
-		await invoke("send_to_agent_command", { message: JSON.stringify({ type: "reload_settings" }) });
-	} catch {
-		/* 에이전트 미연결(온보딩/기동 전) — 다음 기동 시 SetWorkspace 가 로딩 */
-	}
+	// 저장 성공은 실행 중 Agent가 provider와 memory 재적용을 확인한 뒤에만
+	// 확정한다. 아직 Agent가 없는 온보딩 상태는 native가 available:false로
+	// 정상 반환하며, 다음 SetWorkspace가 저장 파일을 읽는다.
+	// Do not deduplicate this acknowledgement by config text: the Agent may
+	// have restarted or retained an old memory instance since the prior write.
+	await invoke("reload_agent_settings");
 }
 
 /** Keep config, UI config, and the derived slots manifest as one ordered

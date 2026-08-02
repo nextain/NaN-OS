@@ -8,9 +8,9 @@ fn main() {
         env,
         path::{Path, PathBuf},
     };
-    const REQUIRED_AGENT_COMMIT: &str = "d6855e1c6f3b969df39fc4877961b8b612b47c98";
+    const REQUIRED_AGENT_COMMIT: &str = "9fbc76f3c12b158d792ef12be833f04ae052c21b";
     const REQUIRED_PROTO_SHA256: &str =
-        "b77761930c0991ee825b6d2827adad264fc352a9f220404912a284fc166b691b";
+        "b7df5230d6d11c2e2795bd2e9877471d18ec6500d23bd63806bf9f0358566a3c";
     const REQUIRED_PROTO_MARKERS: &[&str] = &[
         "repeated AttachmentRef attachments = 4;",
         "message AttachmentRef",
@@ -34,6 +34,8 @@ fn main() {
         "repeated string allowed_files = 5;",
         "enum WireErrorCode",
         "ATTACHMENT_INVALID_REF",
+        "bool memory_reloaded = 5;",
+        "string memory_error = 8;",
     ];
     fn git_output(dir: &Path, args: &[&str]) -> Option<String> {
         std::process::Command::new("git")

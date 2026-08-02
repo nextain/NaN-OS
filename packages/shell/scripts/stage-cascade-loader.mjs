@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * stage-cascade-loader — naia-omni-windows-manager 의 loader(Python 패키지)를
- * 데스크톱 배포 번들용으로 `src-tauri/cascade-loader/loader/` 에 스테이징(임베딩).
+ * 데스크톱 배포 번들용으로 `src-tauri/cascade-loader/` 에 스테이징(임베딩).
  *
  * 왜: naia-os 가 로컬 cascade 를 띄울 때 `python -m loader launch` 를 쓰는데, 패키지 앱엔
  *     windows-manager 소스가 없다. agent(stage-agent.mjs) 와 동형으로 loader 를 앱에 동봉해
@@ -22,13 +22,14 @@ import { resolve } from "node:path";
 const SHELL = process.cwd(); // packages/shell
 const WM = resolve(SHELL, "../../../naia-omni-windows-manager"); // 형제 repo(stage-agent 와 동일 레벨)
 const SRC = resolve(WM, "loader");
+const AVATAR_PRELOAD_SRC = resolve(WM, "scripts/avatar_preload.py");
 const DEST_DIR = resolve(SHELL, "src-tauri/cascade-loader");
 const DEST = resolve(DEST_DIR, "loader");
+const AVATAR_PRELOAD_DEST = resolve(DEST_DIR, "scripts/avatar_preload.py");
 
-if (!existsSync(SRC)) {
+if (!existsSync(SRC) || !existsSync(AVATAR_PRELOAD_SRC)) {
 	console.error(
-		`[stage-cascade-loader] ❌ loader 없음: ${SRC}\n` +
-			`  → naia-os 와 naia-omni-windows-manager 를 같은 부모 폴더 아래 형제로 clone 했는지 확인하세요.`,
+		`[stage-cascade-loader] ❌ cascade runtime source 없음: ${!existsSync(SRC) ? SRC : AVATAR_PRELOAD_SRC}\n  → naia-os 와 naia-omni-windows-manager 를 같은 부모 폴더 아래 형제로 clone 했는지 확인하세요.`,
 	);
 	process.exit(1);
 }
@@ -41,6 +42,8 @@ cpSync(SRC, DEST, {
 	recursive: true,
 	filter: (s) => !s.includes("__pycache__"),
 });
+mkdirSync(resolve(DEST_DIR, "scripts"), { recursive: true });
+cpSync(AVATAR_PRELOAD_SRC, AVATAR_PRELOAD_DEST);
 
 // 스테이징 검증 — `python -m loader` 진입(__main__) + __init__ 이 re-export 하는 전이
 // 모듈이 하나라도 빠지면 런타임 ImportError 가 나므로 빌드를 빨갛게 만든다.
@@ -59,5 +62,11 @@ for (const p of [
 		console.error(`[stage-cascade-loader] ❌ 스테이징 검증 실패 — 누락: ${p}`);
 		process.exit(1);
 	}
+}
+if (!existsSync(AVATAR_PRELOAD_DEST)) {
+	console.error(
+		"[stage-cascade-loader] ❌ 스테이징 검증 실패 — 누락: scripts/avatar_preload.py",
+	);
+	process.exit(1);
 }
 console.log(`[stage-cascade-loader] ✅ 스테이징 완료: ${DEST}`);

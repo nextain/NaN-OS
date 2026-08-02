@@ -28,7 +28,7 @@ const NEW_CORE_FLAG = `window.__NAIA_NEW_CORE__ = true; window.__E2E_OUTBOUND__ 
 // play+videoId 경로 = 사이드카(:18791) 미접촉(검색 skip) → 헤르메틱.
 const BGM_TOOL_ARGS = [
 	{ action: "play", videoId: "e2evid001", title: "E2E First Track" },
-	{ action: "play", videoId: "e2evid002", title: "E2E Queued Track" },
+	{ action: "play", videoId: "e2evid001", title: "E2E Same Track Replay" },
 ];
 
 const MOCK_SCRIPT = `
@@ -97,11 +97,17 @@ function configScript(cfg: Record<string, unknown>): string {
 }
 
 test.describe("UC8 BGM 스킬 배선 (FR-BGM.1)", () => {
+	const iframeRequests: Array<{ referer: string; url: string }> = [];
 	test.beforeEach(async ({ page }) => {
+		iframeRequests.length = 0;
 		// Deterministic local iframe: this e2e never contacts YouTube.
 		await page.route(
 			"https://www.youtube-nocookie.com/embed/**",
 			async (route) => {
+				iframeRequests.push({
+					referer: route.request().headers().referer ?? "",
+					url: route.request().url(),
+				});
 				await route.fulfill({
 					contentType: "text/html",
 					body: `<!doctype html><script>
@@ -171,6 +177,31 @@ test.describe("UC8 BGM 스킬 배선 (FR-BGM.1)", () => {
 		await input.fill("잔잔한 음악 틀어줘");
 		await input.press("Enter");
 
+		const registrationOrder = await page.evaluate(() => {
+			const out =
+				(
+					window as unknown as {
+						__E2E_OUTBOUND__?: Array<Record<string, unknown>>;
+					}
+				).__E2E_OUTBOUND__ ?? [];
+			const chatIndex = out.findIndex((message) => message.type === "chat_request");
+			const registrations = out
+				.map((message, index) => ({ message, index }))
+				.filter(
+					({ message }) =>
+						message.type === "panel_skills" && message.appId === "bgm-widget",
+				);
+			return {
+				chatIndex,
+				registrationCount: registrations.length,
+				latestRegistrationIndex: registrations.at(-1)?.index ?? -1,
+			};
+		});
+		expect(registrationOrder.registrationCount).toBeGreaterThanOrEqual(2);
+		expect(registrationOrder.latestRegistrationIndex).toBeLessThan(
+			registrationOrder.chatIndex,
+		);
+
 		await expect
 			.poll(
 				async () =>
@@ -220,7 +251,7 @@ test.describe("UC8 BGM 스킬 배선 (FR-BGM.1)", () => {
 		});
 		expect(toolResults).toHaveLength(2);
 		expect(toolResults[1]).toMatchObject({
-			queued: { position: 1, selected: { videoId: "e2evid002" } },
+			queued: { position: 1, selected: { videoId: "e2evid001" } },
 			announceTrack: false,
 		});
 
@@ -240,8 +271,23 @@ test.describe("UC8 BGM 스킬 배선 (FR-BGM.1)", () => {
 		// The fixture ends the first iframe. Only then may the queued second track
 		// replace it and become visibly playing.
 		await expect(page.locator(".bgm-track-name")).toContainText(
-			"E2E Queued Track",
+			"E2E Same Track Replay",
 			{ timeout: 15_000 },
 		);
+		const iframe = page.locator(".app-bg-iframe");
+		await expect(iframe).toHaveAttribute("referrerpolicy", "origin");
+		expect(iframeRequests.length).toBeGreaterThanOrEqual(2);
+		const shellOrigin = await page.evaluate(() => window.location.origin);
+		expect(
+			iframeRequests.every(
+				(request) =>
+					request.referer.length > 0 &&
+					new URL(request.referer).origin === shellOrigin,
+			),
+		).toBe(true);
+		const playbackAttempts = iframeRequests.map(
+			(request) => new URL(request.url).searchParams.get("naiaPlayback"),
+		);
+		expect(new Set(playbackAttempts).size).toBeGreaterThanOrEqual(2);
 	});
 });

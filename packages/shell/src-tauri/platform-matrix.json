@@ -55,7 +55,8 @@
 			"cascadeLoader": "optional"
 		},
 		"cascadeLoaderResources": {
-			"cascade-loader/loader": "cascade-loader/loader"
+			"cascade-loader/loader": "cascade-loader/loader",
+			"cascade-loader/scripts": "cascade-loader/scripts"
 		}
 	},
 	"os": {

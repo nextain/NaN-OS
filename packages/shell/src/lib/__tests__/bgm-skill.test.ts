@@ -24,6 +24,7 @@ function mkDeps(results: BgmSearchResult[] = []) {
 			emitted.push(p);
 		},
 		playback: createBgmPlaybackPort(),
+		favoriteCount: () => 1,
 	};
 	return { deps, emitted, searched };
 }
@@ -111,6 +112,30 @@ describe("executeBgmSkill", () => {
 		]);
 		expect(deps.playback.current()?.selected.videoId).toBe("second");
 		expect(deps.playback.queue()).toEqual([]);
+	});
+
+	it("skips the current first search result for an activity-owned replacement", async () => {
+		const { deps, emitted } = mkDeps([
+			{ id: "first", title: "Repeated result" },
+			{ id: "second", title: "Fresh result" },
+		]);
+		await executeBgmSkill(
+			{ action: "play", videoId: "first", title: "Current" },
+			deps,
+		);
+
+		const replacement = JSON.parse(
+			await executeBgmSkill(
+				{ action: "play", query: "next mood", replace: true },
+				deps,
+			),
+		);
+
+		expect(replacement.selected.videoId).toBe("second");
+		expect(emitted.at(-1)).toMatchObject({
+			type: "bgm_youtube_play",
+			videoId: "second",
+		});
 	});
 
 	it("play+query → 검색 후 첫 결과 재생 (bgm_youtube_play {videoId,title} — 위젯 리스너 형상)", async () => {
@@ -228,6 +253,16 @@ describe("executeBgmSkill", () => {
 			const out = await executeBgmSkill({ action }, deps);
 			expect(emitted).toEqual([{ type: `bgm_youtube_${action}` }]);
 			expect(JSON.parse(out)).toEqual({ ok: true, action });
+		}
+	});
+
+	it("reports next/prev failure without emitting when favorites are empty", async () => {
+		for (const action of ["next", "prev"] as const) {
+			const { deps, emitted } = mkDeps();
+			deps.favoriteCount = () => 0;
+			const out = JSON.parse(await executeBgmSkill({ action }, deps));
+			expect(out).toEqual({ ok: false, action, reason: "no_favorites" });
+			expect(emitted).toEqual([]);
 		}
 	});
 

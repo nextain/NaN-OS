@@ -618,7 +618,7 @@ describe("chat-service", () => {
 				sendPanelInstall,
 				sendPanelToolResult,
 			} = await import("../chat-service");
-			await expect(sendPanelSkills("p1", [])).resolves.toBeUndefined();
+			await expect(sendPanelSkills("p1", [])).resolves.toBe(false);
 			await expect(sendPanelSkillsClear("p1")).resolves.toBeUndefined();
 			await expect(
 				sendPanelInstall("https://github.com/x/y"),

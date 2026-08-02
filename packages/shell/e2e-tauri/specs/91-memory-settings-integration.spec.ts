@@ -1,5 +1,4 @@
 import { existsSync, readFileSync } from "node:fs";
-import { homedir } from "node:os";
 import { resolve } from "node:path";
 import { getLastAssistantMessage, sendMessage } from "../helpers/chat.js";
 import { S } from "../helpers/selectors.js";
@@ -37,9 +36,13 @@ const CAN_RUN_CHAT_SUITES = !!GEMINI_KEY;
 
 // ── Utilities ────────────────────────────────────────────────────────────────
 
-/** Read the actual gateway config from the filesystem (Node.js context). */
-function readGatewayConfig(): Record<string, unknown> {
-	const path = resolve(homedir(), ".naia", "gateway.json");
+/** Read the current Shell/agent config SoT from the active ADK workspace. */
+async function readCurrentConfig(): Promise<Record<string, unknown>> {
+	const adkPath =
+		process.env.NAIA_E2E_ADK_PATH ||
+		(await browser.execute(() => localStorage.getItem("naia-adk-path") ?? ""));
+	if (!adkPath) throw new Error("Active ADK path is unavailable");
+	const path = resolve(adkPath, "naia-settings", "config.json");
 	if (!existsSync(path)) throw new Error(`Config file not found: ${path}`);
 	return JSON.parse(readFileSync(path, "utf-8")) as Record<string, unknown>;
 }
@@ -52,7 +55,7 @@ async function waitForConfigCondition(
 	const deadline = Date.now() + timeoutMs;
 	while (Date.now() < deadline) {
 		try {
-			const cfg = readGatewayConfig();
+			const cfg = await readCurrentConfig();
 			if (predicate(cfg)) return cfg;
 		} catch {
 			/* file may not exist yet */
@@ -61,8 +64,14 @@ async function waitForConfigCondition(
 	}
 	let lastSnippet = "(unable to read config)";
 	try {
-		const last = readGatewayConfig();
-		lastSnippet = JSON.stringify(last.memory ?? "(no memory key)");
+		const last = await readCurrentConfig();
+		lastSnippet = JSON.stringify(
+			Object.fromEntries(
+				Object.entries(last).filter(([key]) =>
+					key.toLowerCase().includes("memory"),
+				),
+			),
+		);
 	} catch {
 		/* file corrupt or missing at timeout boundary */
 	}
@@ -398,8 +407,8 @@ describe("91 — Memory Settings Integration", () => {
 		});
 	});
 
-	// ── Suite 2: Settings → gateway.json sync ──────────────────────────────────
-	describe("2) Settings → gateway.json sync", () => {
+	// Suite 2: Settings -> naia-settings/config.json SoT
+	describe("2) Settings -> current config.json contract", () => {
 		before(async () => {
 			// Force gemini provider to avoid handleSave() early-return due to
 			// nextain provider + missing naiaKey (stored in secure store, loaded async).
@@ -407,20 +416,19 @@ describe("91 — Memory Settings Integration", () => {
 			await gotoSettingsMemory();
 		});
 
-		it("should write memory.adapter=local to gateway.json on save", async () => {
+		it("should write the flat local memory contract to config.json on save", async () => {
 			await clickRadio("memory-adapter", "local");
 			await clickRadio("memory-embedding", "none");
 			await clickSave();
 
 			const config = await waitForConfigCondition(
-				(cfg) => !!(cfg.memory as any)?.adapter,
+				(cfg) => cfg.memoryAdapter === "local",
 			);
-			const mem = config.memory as Record<string, unknown>;
-			expect(mem.adapter).toBe("local");
-			expect(mem.embeddingProvider).toBe("none");
+			expect(config.memoryAdapter).toBe("local");
+			expect(config.memoryEmbeddingProvider).toBe("none");
 		});
 
-		it("should write memory.embeddingProvider=vllm + fields to memory-config.json", async () => {
+		it("should write vllm embedding fields and derived aliases to config.json", async () => {
 			await clickRadio("memory-embedding", "vllm");
 			await browser.pause(300);
 			await setNativeValue(S.memoryEmbeddingBaseUrl, "http://localhost:11434");
@@ -428,24 +436,24 @@ describe("91 — Memory Settings Integration", () => {
 			await clickSave();
 
 			const config = await waitForConfigCondition(
-				(cfg) => (cfg.memory as any)?.embeddingProvider === "vllm",
+				(cfg) => cfg.memoryEmbeddingProvider === "vllm",
 			);
-			const mem = config.memory as Record<string, unknown>;
-			expect(mem.embeddingProvider).toBe("vllm");
-			expect(mem.embeddingBaseUrl).toBe("http://localhost:11434");
-			expect(mem.embeddingModel).toBe("nomic-embed-text");
+			expect(config.memoryEmbeddingProvider).toBe("vllm");
+			expect(config.memoryEmbeddingBaseUrl).toBe("http://localhost:11434");
+			expect(config.memoryEmbeddingModel).toBe("nomic-embed-text");
+			expect(config.NAIA_EMBED_PROVIDER).toBe("vllm");
+			expect(config.NAIA_EMBED_MODEL).toBe("nomic-embed-text");
+			expect(config.NAIA_EMBED_BASE_URL).toBe("http://localhost:11434");
 
-			// Revert — wait for gateway.json to reflect the reset (consistent with tests 1/2)
+			// Revert and wait for config.json to reflect the reset.
 			await clickRadio("memory-embedding", "none");
 			await clickSave();
 			await waitForConfigCondition(
-				(cfg) =>
-					(cfg.memory as any)?.embeddingProvider === "none" ||
-					!(cfg.memory as any)?.embeddingProvider,
+				(cfg) => cfg.memoryEmbeddingProvider === "none",
 			);
 		});
 
-		it("should write memoryLlmProvider=vllm to memory-config.json", async () => {
+		it("should write the memory LLM role to config.json", async () => {
 			await clickRadio("memory-llm", "vllm");
 			await browser.pause(300);
 			await setNativeValue(
@@ -458,12 +466,16 @@ describe("91 — Memory Settings Integration", () => {
 			);
 			await clickSave();
 
-			const config = await waitForConfigCondition(
-				(cfg) => (cfg.memory as any)?.llmProvider === "vllm",
-			);
-			const mem = config.memory as Record<string, unknown>;
-			expect(mem.llmProvider).toBe("vllm");
-			expect(mem.llmModel).toBe("test-model");
+			const config = await waitForConfigCondition((cfg) => {
+				const roles = cfg.llmRoles as Record<string, Record<string, unknown>>;
+				return roles?.memory?.provider === "vllm";
+			});
+			const roles = config.llmRoles as Record<
+				string,
+				Record<string, unknown>
+			>;
+			expect(roles.memory.provider).toBe("vllm");
+			expect(roles.memory.model).toBe("test-model");
 
 			// Revert
 			await clickRadio("memory-llm", "none");
@@ -504,9 +516,7 @@ describe("91 — Memory Settings Integration", () => {
 			await clickRadio("memory-embedding", "none");
 			await clickSave();
 			await waitForConfigCondition(
-				(cfg) =>
-					(cfg.memory as any)?.embeddingProvider === "none" ||
-					!(cfg.memory as any)?.embeddingProvider,
+				(cfg) => cfg.memoryEmbeddingProvider === "none",
 			);
 		});
 
@@ -575,9 +585,7 @@ describe("91 — Memory Settings Integration", () => {
 			await clickRadio("memory-embedding", "none");
 			await clickSave();
 			await waitForConfigCondition(
-				(cfg) =>
-					(cfg.memory as any)?.embeddingProvider === "none" ||
-					!(cfg.memory as any)?.embeddingProvider,
+				(cfg) => cfg.memoryEmbeddingProvider === "none",
 			);
 		});
 	});

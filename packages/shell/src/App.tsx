@@ -454,8 +454,15 @@ export function App() {
 				);
 				// null = files absent → keep existing cache (no wipe). Still hydrated.
 				if (merged) {
+					// `naia-adk-path` is the only authoritative bootstrap pointer.
+					// Never let a stale render-cache workspaceRoot redirect the next
+					// file read/write cycle to another workspace.
+					const adkPath = getAdkPath();
 					const reconciled = reconcileExplicitLocalProfile(
-						merged as unknown as Parameters<
+						{
+							...merged,
+							...(adkPath ? { workspaceRoot: adkPath } : {}),
+						} as unknown as Parameters<
 							typeof reconcileExplicitLocalProfile
 						>[0],
 					);
@@ -494,11 +501,6 @@ export function App() {
 
 		const config = loadConfig();
 		const adkPath = getAdkPath();
-		if (config?.workspaceRoot && config.workspaceRoot !== adkPath) {
-			setAdkPath(config.workspaceRoot);
-		} else if (config && adkPath && !config.workspaceRoot) {
-			saveConfig({ ...config, workspaceRoot: adkPath });
-		}
 		// UC-ADK-PATH contract: the agent reads the ADK root from ~/.naia/adk-path
 		// (Rust, set only by setAdkPath→write_naia_path_cache), while the shell saves
 		// config to getAdkPath() (localStorage). These are SEPARATE sources and can
@@ -508,8 +510,7 @@ export function App() {
 		// differs from adkPath (localStorage) — it never touches the agent's file.
 		// Force-resync the agent's path file to the shell's ADK on every boot so the
 		// save-path and the load-path can never silently diverge.
-		const effectiveAdk = getAdkPath();
-		if (effectiveAdk) setAdkPath(effectiveAdk);
+		if (adkPath) setAdkPath(adkPath);
 		applyTheme(config?.theme ?? "midnight");
 		// Suppress build-time panels the user has explicitly deleted
 		if (config?.deletedPanels?.length) {
@@ -956,6 +957,7 @@ export function App() {
 					className="app-bg-iframe"
 					src={backgroundVideoUrl}
 					allow="autoplay"
+					referrerPolicy="origin"
 					sandbox="allow-scripts allow-same-origin allow-presentation"
 					title="BGM"
 					style={{ zIndex: 1 }}

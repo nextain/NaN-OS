@@ -10,7 +10,10 @@ const { mockInvoke, mockConvertFileSrc } = vi.hoisted(() => ({
 		(path: string) => `asset://localhost/${path.replace(/\\/g, "/")}`,
 	),
 }));
-const secureState = vi.hoisted(() => ({ naiaKey: null as string | null }));
+const secureState = vi.hoisted(() => ({
+	naiaKey: null as string | null,
+	deleted: [] as string[],
+}));
 
 vi.mock("@tauri-apps/api/core", () => ({
 	invoke: mockInvoke,
@@ -20,6 +23,11 @@ vi.mock("@tauri-apps/api/core", () => ({
 vi.mock("../secure-store", () => ({
 	getSecretKey: (name: string) =>
 		Promise.resolve(name === "naiaKey" ? secureState.naiaKey : null),
+	deleteSecretKey: (name: string) => {
+		secureState.deleted.push(name);
+		return Promise.resolve();
+	},
+	SECRET_KEYS: ["apiKey", "naiaKey", "memoryLlmApiKey"],
 }));
 
 import {
@@ -32,6 +40,7 @@ import {
 	listNaiaAssets,
 	readNaiaConfig,
 	readNaiaUiConfig,
+	resetNaiaPersistedSettings,
 	setAdkPath,
 	toAssetUrl,
 	writeNaiaConfig,
@@ -50,7 +59,11 @@ describe("applyModelSelectionToConfig (UI selection → persisted agent config)"
 			naiaKey: "naia-x",
 			NAIA_MAIN_MODEL: "gemini-2.5-flash-live",
 		};
-		const out = applyModelSelectionToConfig(stale, "nextain", "gemini-3.1-flash-lite");
+		const out = applyModelSelectionToConfig(
+			stale,
+			"nextain",
+			"gemini-3.1-flash-lite",
+		);
 		expect(out.model).toBe("gemini-3.1-flash-lite");
 		expect(out.NAIA_MAIN_MODEL).toBe("gemini-3.1-flash-lite");
 		expect(out.NAIA_MAIN_PROVIDER).toBe("naia"); // nextain → "naia" env
@@ -70,7 +83,11 @@ describe("applyModelSelectionToConfig (UI selection → persisted agent config)"
 		expect(out.NAIA_MAIN_PROVIDER).toBe("zai");
 	});
 	it("handles a null current config", () => {
-		const out = applyModelSelectionToConfig(null, "nextain", "gemini-3.1-flash-lite");
+		const out = applyModelSelectionToConfig(
+			null,
+			"nextain",
+			"gemini-3.1-flash-lite",
+		);
 		expect(out.model).toBe("gemini-3.1-flash-lite");
 		expect(out.NAIA_MAIN_MODEL).toBe("gemini-3.1-flash-lite");
 	});
@@ -90,6 +107,7 @@ beforeEach(() => {
 	mockInvoke.mockResolvedValue(undefined);
 	mockConvertFileSrc.mockClear();
 	secureState.naiaKey = null;
+	secureState.deleted = [];
 });
 
 afterEach(() => {
@@ -136,6 +154,42 @@ describe("clearAdkPath", () => {
 		clearAdkPath();
 		expect(getAdkPath()).toBeNull();
 		expect(isAdkInitialized()).toBe(false);
+	});
+});
+
+describe("resetNaiaPersistedSettings", () => {
+	it("removes file-backed config and secure keys before clearing the bootstrap cache", async () => {
+		setAdkPath(WIN_ADK);
+		localStorage.setItem("naia-config", JSON.stringify({ provider: "ollama" }));
+
+		await resetNaiaPersistedSettings();
+
+		expect(mockInvoke).toHaveBeenCalledWith("reset_naia_config_files", {
+			adkPath: WIN_ADK,
+		});
+		expect(secureState.deleted).toEqual([
+			"apiKey",
+			"naiaKey",
+			"memoryLlmApiKey",
+		]);
+		expect(localStorage.getItem("naia-config")).toBeNull();
+		expect(getAdkPath()).toBeNull();
+	});
+
+	it("keeps the bootstrap cache retryable when native reset fails", async () => {
+		setAdkPath(WIN_ADK);
+		localStorage.setItem("naia-config", "{}");
+		mockInvoke.mockImplementation((command: string) => {
+			if (command === "reset_naia_config_files") {
+				return Promise.reject(new Error("locked"));
+			}
+			return Promise.resolve(undefined);
+		});
+
+		await expect(resetNaiaPersistedSettings()).rejects.toThrow("locked");
+		expect(getAdkPath()).toBe(WIN_ADK);
+		expect(localStorage.getItem("naia-config")).toBe("{}");
+		expect(secureState.deleted).toEqual([]);
 	});
 });
 
@@ -265,8 +319,141 @@ describe("writeNaiaConfig", () => {
 
 		expect(mockInvoke).toHaveBeenCalledWith("write_naia_config", {
 			adkPath: WIN_ADK,
-			json: JSON.stringify({ provider: "openai", model: "gpt-4o" }, null, 2),
+			json: JSON.stringify(
+				{
+					provider: "openai",
+					model: "gpt-4o",
+					NAIA_MAIN_PROVIDER: "openai",
+					NAIA_MAIN_MODEL: "gpt-4o",
+				},
+				null,
+				2,
+			),
 		});
+	});
+
+	it("persists config, UI config, slots manifest, then reloads the agent in order", async () => {
+		setAdkPath(WIN_ADK);
+		mockInvoke.mockClear();
+		mockInvoke.mockImplementation(async (command: string) => {
+			if (command === "read_naia_ui_config") return "{}";
+			if (command === "detect_gpu_vram") return null;
+			return undefined;
+		});
+
+		await writeNaiaConfig({
+			provider: "openai",
+			model: "gpt-4o",
+			theme: "ocean",
+		});
+
+		const transactionStages = mockInvoke.mock.calls
+			.map(([command]) => command)
+			.filter((command) =>
+				[
+					"write_naia_config",
+					"write_naia_ui_config",
+					"write_slots_manifest",
+					"reload_agent_settings",
+				].includes(command),
+			);
+		expect(transactionStages).toEqual([
+			"write_naia_config",
+			"write_naia_ui_config",
+			"write_slots_manifest",
+			"reload_agent_settings",
+		]);
+		expect(mockInvoke).toHaveBeenCalledWith("reload_agent_settings");
+	});
+
+	it("rejects visibly when the running agent cannot apply memory settings", async () => {
+		setAdkPath(WIN_ADK);
+		mockInvoke.mockImplementation(async (command: string) => {
+			if (command === "read_naia_ui_config") return "{}";
+			if (command === "detect_gpu_vram") return null;
+			if (command === "reload_agent_settings") {
+				throw new Error("previous memory retained: invalid memory role");
+			}
+			return undefined;
+		});
+
+		await expect(
+			writeNaiaConfig({ provider: "openai", model: "gpt-4o" }),
+		).rejects.toThrow("previous memory retained");
+	});
+
+	it("rejects visibly when the primary config write fails and stops the transaction", async () => {
+		setAdkPath(WIN_ADK);
+		mockInvoke.mockClear();
+		mockInvoke.mockImplementation(async (command: string) => {
+			if (command === "write_naia_config") {
+				throw new Error("config disk full");
+			}
+			return undefined;
+		});
+
+		await expect(
+			writeNaiaConfig({ provider: "openai", model: "gpt-4o" }),
+		).rejects.toThrow("config disk full");
+		expect(mockInvoke.mock.calls.map(([command]) => command)).toEqual([
+			"write_naia_config",
+		]);
+	});
+
+	it("writes the current flat memory contract to config.json and strips secrets", async () => {
+		setAdkPath(WIN_ADK);
+		await writeNaiaConfig({
+			provider: "openai",
+			model: "gpt-4o",
+			memoryAdapter: "qdrant",
+			memoryEmbeddingProvider: "vllm",
+			memoryEmbeddingBaseUrl: "http://127.0.0.1:8000/v1",
+			memoryEmbeddingModel: "nomic-embed-text",
+			memoryEmbeddingApiKey: "must-stay-in-keychain",
+			qdrantUrl: "http://127.0.0.1:6333",
+			qdrantApiKey: "must-stay-in-keychain",
+		});
+
+		const call = mockInvoke.mock.calls.find(
+			([command]) => command === "write_naia_config",
+		);
+		const written = JSON.parse((call?.[1] as { json: string }).json);
+		expect(written).toMatchObject({
+			memoryAdapter: "qdrant",
+			memoryEmbeddingProvider: "vllm",
+			memoryEmbeddingBaseUrl: "http://127.0.0.1:8000/v1",
+			memoryEmbeddingModel: "nomic-embed-text",
+			qdrantUrl: "http://127.0.0.1:6333",
+			NAIA_EMBED_PROVIDER: "vllm",
+			NAIA_EMBED_MODEL: "nomic-embed-text",
+			NAIA_EMBED_BASE_URL: "http://127.0.0.1:8000/v1",
+		});
+		expect(written).not.toHaveProperty("memoryEmbeddingApiKey");
+		expect(written).not.toHaveProperty("qdrantApiKey");
+		expect(JSON.stringify(written)).not.toContain("must-stay-in-keychain");
+	});
+
+	it("drops stale derived env aliases and regenerates only current values", async () => {
+		setAdkPath(WIN_ADK);
+		mockInvoke.mockResolvedValue(undefined);
+
+		await writeNaiaConfig({
+			provider: "nextain",
+			model: "gemini-3.5-flash",
+			OPENAI_BASE_URL: "http://stale-ollama.test/v1",
+			NAIA_LLM_PROVIDER: "ollama",
+			NAIA_LLM_MODEL: "stale-memory-model",
+		});
+
+		const call = mockInvoke.mock.calls.find(
+			([name]) => name === "write_naia_config",
+		);
+		const written = JSON.parse((call?.[1] as { json: string }).json);
+		expect(written).not.toHaveProperty("OPENAI_BASE_URL");
+		expect(written).not.toHaveProperty("NAIA_LLM_PROVIDER");
+		expect(written).not.toHaveProperty("NAIA_LLM_MODEL");
+		expect(written.NAIA_MAIN_PROVIDER).toBe("naia");
+		expect(written.NAIA_MAIN_MODEL).toBe("gemini-3.5-flash");
 	});
 
 	it("preserves the member slots gate when the public config omits the secure Naia key", async () => {
@@ -305,7 +492,9 @@ describe("writeNaiaConfig", () => {
 				},
 			},
 		});
-		const call = mockInvoke.mock.calls.find(([name]) => name === "write_naia_config");
+		const call = mockInvoke.mock.calls.find(
+			([name]) => name === "write_naia_config",
+		);
 		const written = JSON.parse((call?.[1] as { json: string }).json);
 		expect(written.llmRoles.main).toEqual({
 			provider: "codex",
@@ -322,6 +511,28 @@ describe("writeNaiaUiConfig (UI 정체성만 ui-config.json 으로 분리)", () 
 	it("does nothing when adk path not set", async () => {
 		await writeNaiaUiConfig({ vrmModel: "a.vrm" });
 		expect(mockInvoke).not.toHaveBeenCalled();
+	});
+
+	it("persists modelSortMode only in ui-config", async () => {
+		setAdkPath(WIN_ADK);
+		await writeNaiaConfig({
+			provider: "openai",
+			model: "gpt-4o",
+			modelSortMode: "performance",
+		});
+
+		const configCall = mockInvoke.mock.calls.find(
+			([command]) => command === "write_naia_config",
+		);
+		const uiCall = mockInvoke.mock.calls.find(
+			([command]) => command === "write_naia_ui_config",
+		);
+		expect(
+			JSON.parse((configCall?.[1] as { json: string }).json),
+		).not.toHaveProperty("modelSortMode");
+		expect(
+			JSON.parse((uiCall?.[1] as { json: string }).json).modelSortMode,
+		).toBe("performance");
 	});
 
 	// FR-CONFIG-SOT.4 — ui-config.json 은 UI_ONLY 전체를 저장한다(세션/휘발 상태만 제외).
@@ -372,6 +583,45 @@ describe("writeNaiaUiConfig (UI 정체성만 ui-config.json 으로 분리)", () 
 		expect(written).not.toHaveProperty("bgmPlaying");
 	});
 
+	it("restores durable YouTube track metadata and volume without resuming playback", async () => {
+		setAdkPath(WIN_ADK);
+		await writeNaiaUiConfig({
+			bgmSource: "youtube",
+			bgmYoutubeVideoId: "video-123",
+			bgmYoutubeTitle: "Saved track",
+			bgmYoutubeChannel: "Saved channel",
+			bgmYoutubeThumbnail: "https://i.ytimg.com/vi/video-123/default.jpg",
+			bgmVolume: 0.35,
+			bgmPlaying: true,
+		});
+		const writeCall = mockInvoke.mock.calls.find(
+			([command]) => command === "write_naia_ui_config",
+		);
+		const persistedJson = (writeCall?.[1] as { json: string }).json;
+		expect(JSON.parse(persistedJson)).not.toHaveProperty("bgmPlaying");
+
+		mockInvoke.mockReset();
+		mockInvoke.mockImplementation(async (command: string) => {
+			if (command === "read_naia_config") {
+				return JSON.stringify({ provider: "openai", model: "gpt-4o" });
+			}
+			if (command === "read_naia_ui_config") return persistedJson;
+			return undefined;
+		});
+		await applyWorkspaceConfigToLocal();
+
+		const restored = JSON.parse(localStorage.getItem("naia-config") ?? "{}");
+		expect(restored).toMatchObject({
+			bgmSource: "youtube",
+			bgmYoutubeVideoId: "video-123",
+			bgmYoutubeTitle: "Saved track",
+			bgmYoutubeChannel: "Saved channel",
+			bgmYoutubeThumbnail: "https://i.ytimg.com/vi/video-123/default.jpg",
+			bgmVolume: 0.35,
+		});
+		expect(restored).not.toHaveProperty("bgmPlaying");
+	});
+
 	it("preserves unowned persisted choices when a boot-time UI patch is partial", async () => {
 		setAdkPath(WIN_ADK);
 		mockInvoke.mockImplementation(async (command: string) => {
@@ -412,13 +662,17 @@ describe("writeNaiaUiConfig (UI 정체성만 ui-config.json 으로 분리)", () 
 		const [, arg] = mockInvoke.mock.calls.find(
 			([name]) => name === "write_naia_ui_config",
 		)!;
-		expect(JSON.parse((arg as { json: string }).json)).toEqual({ theme: "ocean" });
+		expect(JSON.parse((arg as { json: string }).json)).toEqual({
+			theme: "ocean",
+		});
 	});
 
 	// 회귀 방지 — 로컬 보이스 호스트가 write→read 왕복에서 살아남는가 (루크 발견 버그).
 	it("round-trips vllmTtsHost through ui-config (regression: local voice host reset)", async () => {
 		setAdkPath(WIN_ADK);
-		await writeNaiaUiConfig({ vllmTtsHost: "http://tts.example.invalid:22600" });
+		await writeNaiaUiConfig({
+			vllmTtsHost: "http://tts.example.invalid:22600",
+		});
 		const [, arg] = mockInvoke.mock.calls.find(
 			([name]) => name === "write_naia_ui_config",
 		)!;
@@ -456,7 +710,16 @@ describe("writeNaiaConfig also persists ui-config (FR-WS.2)", () => {
 		// config.json: UI keys stripped (vrmModel/theme/vllmTtsHost gone — stripForAgent)
 		expect(mockInvoke).toHaveBeenCalledWith("write_naia_config", {
 			adkPath: WIN_ADK,
-			json: JSON.stringify({ provider: "openai", model: "gpt-4o" }, null, 2),
+			json: JSON.stringify(
+				{
+					provider: "openai",
+					model: "gpt-4o",
+					NAIA_MAIN_PROVIDER: "openai",
+					NAIA_MAIN_MODEL: "gpt-4o",
+				},
+				null,
+				2,
+			),
 		});
 		// ui-config.json: ALL UI settings (FR-CONFIG-SOT.4 — theme·vllmTtsHost 도 저장,
 		//   이전엔 UI_IDENTITY 9개만 저장해 이들이 어느 파일에도 SoT 가 없었다).
@@ -478,9 +741,19 @@ describe("applyWorkspaceConfigToLocal (전환 복원 FR-WS.1/.3)", () => {
 		setAdkPath(WIN_ADK);
 		mockInvoke.mockImplementation(async (cmd: string) => {
 			if (cmd === "read_naia_config")
-				return JSON.stringify({ persona: "P", provider: "nextain", model: "m" });
+				return JSON.stringify({
+					persona: "P",
+					provider: "nextain",
+					model: "m",
+					OPENAI_BASE_URL: "http://stale-ollama.test/v1",
+					NAIA_LLM_PROVIDER: "ollama",
+				});
 			if (cmd === "read_naia_ui_config")
-				return JSON.stringify({ vrmModel: "ws.vrm", backgroundImage: "ws.png" });
+				return JSON.stringify({
+					vrmModel: "ws.vrm",
+					backgroundImage: "ws.png",
+					modelSortMode: "performance",
+				});
 			return undefined;
 		});
 		await applyWorkspaceConfigToLocal();
@@ -489,6 +762,9 @@ describe("applyWorkspaceConfigToLocal (전환 복원 FR-WS.1/.3)", () => {
 		expect(stored.model).toBe("m");
 		expect(stored.vrmModel).toBe("ws.vrm"); // ui-config.json 복원
 		expect(stored.backgroundImage).toBe("ws.png");
+		expect(stored.modelSortMode).toBe("performance");
+		expect(stored.OPENAI_BASE_URL).toBeUndefined();
+		expect(stored.NAIA_LLM_PROVIDER).toBeUndefined();
 		expect(stored.workspaceRoot).toBe(WIN_ADK);
 		expect(stored.onboardingComplete).toBe(true);
 	});

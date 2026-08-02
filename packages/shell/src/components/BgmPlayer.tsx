@@ -17,6 +17,8 @@ import { type BackgroundMediaType, useAvatarStore } from "../stores/avatar";
 
 // ── YouTube server ────────────────────────────────────────────────────────────
 
+import { ensureBgmSidecar } from "../lib/bgm-sidecar-url";
+
 const YT_BASE = import.meta.env.VITE_NAIA_BGM_BASE?.replace(/\/$/, "") ?? "http://localhost:18791";
 
 
@@ -29,6 +31,7 @@ interface YtVideo {
 }
 
 async function ytSearch(query: string): Promise<YtVideo[]> {
+	await ensureBgmSidecar();
 	const res = await fetch(
 		`${YT_BASE}/yt/search?q=${encodeURIComponent(query)}&max=12`,
 	);
@@ -98,17 +101,19 @@ const MARQUEE_THRESHOLD = 22;
 const PLAYBACK_TIMEOUT_MS = 12_000;
 
 /** Native E2E uses a same-origin fixture; normal Shell runs always use YouTube. */
-function youtubeEmbedUrl(videoId: string): string {
+function youtubeEmbedUrl(videoId: string, playbackId?: string): string {
 	const fixture = import.meta.env.VITE_NAIA_E2E_BGM_IFRAME_URL?.trim();
 	if (fixture) {
 		const url = new URL(fixture, window.location.origin);
 		url.searchParams.set("videoId", videoId);
+		if (playbackId) url.searchParams.set("naiaPlayback", playbackId);
 		return url.toString();
 	}
 	return (
 		`https://www.youtube-nocookie.com/embed/${videoId}` +
 		`?autoplay=1&enablejsapi=1` +
-		`&origin=${encodeURIComponent(window.location.origin)}`
+		`&origin=${encodeURIComponent(window.location.origin)}` +
+		(playbackId ? `&naiaPlayback=${encodeURIComponent(playbackId)}` : "")
 	);
 }
 
@@ -451,7 +456,10 @@ export function BgmPlayer({ naia }: Props) {
 		});
 		setPlaybackSnapshot(playback);
 		beginPlaybackTimeout(playback.playbackId);
-		const embedUrl = youtubeEmbedUrl(cfg.bgmYoutubeVideoId);
+		const embedUrl = youtubeEmbedUrl(
+			cfg.bgmYoutubeVideoId,
+			playback.playbackId,
+		);
 		setBackgroundVideoUrl(embedUrl);
 		setBackgroundMediaType("iframe");
 		setPlaying(false);
@@ -523,7 +531,9 @@ export function BgmPlayer({ naia }: Props) {
 				prevBgMediaRef.current = curType;
 			}
 		}
-		const embedUrl = youtubeEmbedUrl(video.id);
+		// The playback id makes the URL and React iframe key unique. Selecting the
+		// same video again must create a fresh player instead of a Zustand no-op.
+		const embedUrl = youtubeEmbedUrl(video.id, snapshot.playbackId);
 		setBackgroundVideoUrl(embedUrl);
 		setBackgroundMediaType("iframe");
 	}

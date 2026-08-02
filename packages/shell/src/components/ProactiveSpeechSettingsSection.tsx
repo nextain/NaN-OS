@@ -76,13 +76,18 @@ export function ProactiveSpeechSettingsSection(props: {
 	onChange?: (value: ProactiveSpeechSettings) => void;
 	onSave: (value: ProactiveSpeechSettings) => boolean | Promise<boolean>;
 }) {
+	const sourceKey = JSON.stringify(scopeProfile(props.value, props.mode));
 	const [draft, setDraft] = useState(() =>
 		scopeProfile(props.value, props.mode),
 	);
 	const [saveFailed, setSaveFailed] = useState(false);
 	useEffect(
 		() => setDraft(scopeProfile(props.value, props.mode)),
-		[props.value, props.mode],
+		// SettingsTab rebuilds its value object during ordinary polling renders.
+		// Reset only when the durable values change, otherwise a checkbox click is
+		// immediately overwritten by an equivalent parent object.
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+		[sourceKey],
 	);
 	const update = (patch: Partial<ProactiveSpeechSettings>) => {
 		const next = { ...draft, ...patch };

@@ -4,6 +4,11 @@ import { effectiveAvatarProviderFromConfig } from "../avatar/nva-gate";
 // I/O 0(DOM/localStorage 접근 금지) — SettingsTab UI·온보딩 기본값 양쪽이 동일 로직 소비(비일관 방지).
 // SoT: .agents/progress/naia-model-slots-architecture-2026-06-28.md
 import type { AppConfig, SttProviderId, TtsProviderId } from "../config";
+import {
+	readConfiguredLlmRoles,
+	resolveEffectiveLlmRoles,
+	writeConfiguredLlmRole,
+} from "../llm/roles";
 import type { ProviderId } from "../types";
 
 // ── FR-SLOT.2: 6 슬롯 (순서 권위) ──
@@ -57,11 +62,12 @@ export function deriveGateFromConfig(
 	return deriveGate(!!config?.naiaKey);
 }
 
-// ── 슬롯 ↔ AppConfig 필드 매핑 (FR-SLOT.5 필드명 유지: memoryLlmProvider) ──
+// ── 슬롯 ↔ AppConfig 필드 매핑 ──
 export const SLOT_FIELD_MAP: Record<SlotId, readonly string[]> = {
 	main: ["provider", "model"],
-	// sub: 필드명 memoryLlmProvider 유지(R1-1). rename→subLlm* 은 Phase 3.4 dual-write.
-	sub: ["memoryLlmProvider", "memoryLlmModel"],
+	// llmRoles.sub is authoritative; subLlm* is its flat compatibility mirror.
+	// memoryLlm* belongs exclusively to the orthogonal memory role.
+	sub: ["subLlmProvider", "subLlmModel"],
 	embedding: [
 		"memoryEmbeddingProvider",
 		"memoryOfflineModel",
@@ -83,7 +89,7 @@ export const SLOT_FIELD_MAP: Record<SlotId, readonly string[]> = {
 export interface SlotSnapshot {
 	main: { provider: ProviderId; model: string };
 	sub: {
-		provider: AppConfig["memoryLlmProvider"];
+		provider: ProviderId | "none" | undefined;
 		model?: string;
 	};
 	embedding: {
@@ -104,11 +110,24 @@ export function readSlots(config: AppConfig): SlotSnapshot {
 	const isNvaAvatar =
 		effectiveAvatarProviderFromConfig(config, Number.POSITIVE_INFINITY) ===
 		"naia-video-avatar";
+	const resolvedRoles = resolveEffectiveLlmRoles(config);
+	const effectiveSub = resolvedRoles.ok
+		? resolvedRoles.roles.find((role) => role.role === "sub")
+		: undefined;
+	const configuredSub = readConfiguredLlmRoles(config).sub;
+	const subProvider =
+		effectiveSub?.provider ??
+		(!configuredSub?.inherit ? configuredSub?.provider : undefined) ??
+		config.subLlmProvider;
+	const subModel =
+		effectiveSub?.model ??
+		(!configuredSub?.inherit ? configuredSub?.model : undefined) ??
+		config.subLlmModel;
 	return {
 		main: { provider: config.provider, model: config.model },
 		sub: {
-			provider: config.memoryLlmProvider,
-			model: config.memoryLlmModel,
+			provider: subProvider as ProviderId | undefined,
+			model: subModel,
 		},
 		embedding: {
 			provider: config.memoryEmbeddingProvider,
@@ -148,15 +167,32 @@ export function writeSlot<K extends SlotId>(
 	switch (slot) {
 		case "main": {
 			const v = value as Partial<SlotSnapshot["main"]>;
-			if (v.provider !== undefined) next.provider = v.provider;
-			if (v.model !== undefined) next.model = v.model;
-			break;
+			const previous = config.llmRoles?.main ?? {
+				provider: config.provider,
+				model: config.model,
+			};
+			return writeConfiguredLlmRole(config, "main", {
+				...previous,
+				...(v.provider !== undefined ? { provider: v.provider } : {}),
+				...(v.model !== undefined ? { model: v.model } : {}),
+			});
 		}
 		case "sub": {
 			const v = value as Partial<SlotSnapshot["sub"]>;
-			if (v.provider !== undefined) next.memoryLlmProvider = v.provider;
-			if (v.model !== undefined) next.memoryLlmModel = v.model;
-			break;
+			const previous = config.llmRoles?.sub ?? {
+				provider: config.subLlmProvider,
+				model: config.subLlmModel,
+				baseUrl: config.subLlmBaseUrl,
+				credentialRef: config.subLlmCredentialRef,
+			};
+			return writeConfiguredLlmRole(config, "sub", {
+				...previous,
+				inherit: undefined,
+				...(v.provider !== undefined
+					? { provider: v.provider as ProviderId }
+					: {}),
+				...(v.model !== undefined ? { model: v.model } : {}),
+			});
 		}
 		case "embedding": {
 			const v = value as Partial<SlotSnapshot["embedding"]>;
@@ -220,7 +256,7 @@ function isMainSet(c: AppConfig): boolean {
 	return !!c.provider;
 }
 function isSubSet(c: AppConfig): boolean {
-	return !!c.memoryLlmProvider && c.memoryLlmProvider !== "none";
+	return c.llmRoles?.sub !== undefined || !!c.subLlmProvider;
 }
 function isEmbeddingSet(c: AppConfig): boolean {
 	return !!c.memoryEmbeddingProvider && c.memoryEmbeddingProvider !== "none";

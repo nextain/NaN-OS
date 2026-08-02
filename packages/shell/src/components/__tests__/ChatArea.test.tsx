@@ -29,6 +29,7 @@ const ttsSyncMocks = vi.hoisted(() => ({
 	wavDurationSeconds: vi.fn(() => 10),
 	nextSeq: 0,
 }));
+const mockSendPanelSkills = vi.hoisted(() => vi.fn().mockResolvedValue(true));
 
 vi.mock("../../lib/tts/synthesize", () => ({
 	synthesizeTts: ttsSyncMocks.synthesizeTts,
@@ -106,6 +107,7 @@ vi.mock("../../lib/chat-service", () => ({
 	cancelChat: vi.fn().mockResolvedValue(undefined),
 	directToolCall: vi.fn().mockResolvedValue({ success: false }),
 	fetchAgentSkills: vi.fn().mockResolvedValue([]),
+	sendPanelSkills: mockSendPanelSkills,
 	sendApprovalResponse: vi.fn().mockResolvedValue(undefined),
 	sendPanelToolResult: vi.fn().mockResolvedValue(undefined),
 	configureSpeechProfile: vi.fn().mockResolvedValue(undefined),
@@ -172,6 +174,27 @@ describe("ChatArea", () => {
 		expect(screen.getByPlaceholderText(/메시지|message/i)).toBeDefined();
 		const buttons = screen.getAllByRole("button");
 		expect(buttons.length).toBeGreaterThanOrEqual(2);
+	});
+
+	it("does not send a turn when pre-turn BGM skill registration fails", async () => {
+		localStorage.setItem(
+			"naia-config",
+			JSON.stringify({
+				apiKey: "test-key",
+				provider: "gemini",
+				model: "gemini-2.5-flash",
+			}),
+		);
+		mockSendPanelSkills.mockResolvedValueOnce(false);
+		render(<ChatArea />);
+		const input = screen.getByPlaceholderText(/메시지|message/i);
+		fireEvent.change(input, { target: { value: "radio please" } });
+		fireEvent.keyDown(input, { key: "Enter" });
+
+		expect(
+			await screen.findByText(/skill_youtube_bgm_registration_failed/),
+		).toBeDefined();
+		expect(capturedRequests).toHaveLength(0);
 	});
 
 	it("does not overwrite hydrated avatar settings after async session migration", async () => {

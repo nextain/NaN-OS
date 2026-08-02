@@ -14,7 +14,10 @@
 
 import { emit } from "@tauri-apps/api/event";
 import type { NaiaTool } from "./app-registry";
-import { BGM_SIDECAR_BASE_URL } from "./bgm-sidecar-url";
+import {
+	BGM_SIDECAR_BASE_URL,
+	ensureBgmSidecar,
+} from "./bgm-sidecar-url";
 import {
 	bgmPlayback,
 	toBgmPlayToolResult,
@@ -43,7 +46,7 @@ export type BgmAction = (typeof BGM_ACTIONS)[number];
 export const SKILL_YOUTUBE_BGM: NaiaTool = {
 	name: "skill_youtube_bgm",
 	description:
-		"YouTube BGM(배경음악) 플레이어 제어. play(query 검색 첫 결과 재생, videoId 직접 지정 가능)/stop/pause/resume/next(즐겨찾기 다음)/prev(이전)/volume(0~1). 사용자가 배경음악·공간 분위기를 원할 때 사용.",
+		"YouTube BGM(배경음악) 플레이어 제어. 사용자가 어떤 언어로든 음악, BGM, 곡 변경, 다음 곡 또는 라디오 DJ를 요청하면 반드시 이 도구를 의미적으로 선택한다. play(query 검색 결과 재생, videoId 직접 지정 가능)/stop/pause/resume/next(즐겨찾기 다음)/prev(이전)/volume(0~1). 도구 결과가 requested이면 재생 성공이라고 말하지 말고, observed playing만 실제 재생으로 표현한다.",
 	parameters: {
 		type: "object",
 		properties: {
@@ -88,11 +91,23 @@ export interface BgmSkillDeps {
 	/** 위젯(BgmPlayer)이 listen("agent_response") 로 받는 payload 를 발사. */
 	emitBgm: (payload: Record<string, unknown>) => Promise<void>;
 	playback: BgmPlaybackPort;
+	/** Number of YouTube favorites available to next/prev navigation. */
+	favoriteCount?: () => number;
 	now?: () => number;
+}
+
+function persistedFavoriteCount(): number {
+	try {
+		const parsed = JSON.parse(localStorage.getItem("yt-bgm-favorites") ?? "[]");
+		return Array.isArray(parsed) ? parsed.length : 0;
+	} catch {
+		return 0;
+	}
 }
 
 /** 사이드카 검색 — BgmPlayer.ytSearch 동형 표면(GET /yt/search?q=&max=). */
 async function sidecarSearch(query: string): Promise<BgmSearchResult[]> {
+	await ensureBgmSidecar();
 	const res = await fetch(
 		`${YT_BASE}/yt/search?q=${encodeURIComponent(query)}&max=5`,
 	);
@@ -109,6 +124,7 @@ const defaultDeps: BgmSkillDeps = {
 	// Tauri emit 은 JS listen("agent_response") 리스너에도 브로드캐스트 — BgmPlayer 가 즉시 반응.
 	emitBgm: (payload) => emit("agent_response", JSON.stringify(payload)),
 	playback: bgmPlayback,
+	favoriteCount: persistedFavoriteCount,
 };
 
 /** 도메인: volume 0..1 clamp(순수) — agent UC8 어댑터 clampVolume 동형. 비유한=0.5. */
@@ -203,13 +219,26 @@ export async function executeBgmSkill(
 				reason: "no_search_results",
 				query,
 			});
-		return enqueueTrack(results[0]);
+		const currentVideoId = deps.playback.current()?.selected.videoId;
+		const selected =
+			args.replace === true
+				? results.find((result) => result.id !== currentVideoId) ?? results[0]
+				: results[0];
+		return enqueueTrack(selected);
 	}
 
 	if (act === "volume") {
 		const v = clampVolume(args.volume);
 		await deps.emitBgm({ type: "bgm_youtube_volume", volume: v });
 		return JSON.stringify({ ok: true, action: act, volume: v });
+	}
+
+	if ((act === "next" || act === "prev") && (deps.favoriteCount?.() ?? 0) === 0) {
+		return JSON.stringify({
+			ok: false,
+			action: act,
+			reason: "no_favorites",
+		});
 	}
 
 	// stop / pause / resume / next / prev — 위젯 리스너 타입 1:1

@@ -1044,6 +1044,15 @@ struct GatewayProcess {
 // does not contain startYoutubeServer(), so port 18791 was never bound.
 struct BgmServerProcess {
     child: Child,
+    health_nonce: String,
+    port: u16,
+}
+impl Drop for BgmServerProcess {
+    fn drop(&mut self) {
+        let _ = self.child.kill();
+        let _ = self.child.wait();
+        remove_pid_file("bgm-server");
+    }
 }
 
 // Local cascade supervisor (R2.2b) ??naia-os媛 windows-manager loader(`python -m loader
@@ -1080,6 +1089,9 @@ struct AppState {
     discord_inbox_authorized_bindings:
         tokio::sync::Mutex<Option<(u64, std::collections::BTreeSet<String>)>>,
     bgm_server: Mutex<Option<BgmServerProcess>>,
+    /// Serializes on-demand starts without holding the synchronous process slot
+    /// across the sidecar's readiness probe.
+    bgm_start: tokio::sync::Mutex<()>,
     cascade: Mutex<Option<CascadeProcess>>,
     /// Serializes asynchronous cascade starts. React dev remounts and repeated
     /// settings events can otherwise both observe an empty `cascade` slot and
@@ -3106,8 +3118,12 @@ fn spawn_youtube_bgm_server(app_handle: &AppHandle) -> Result<BgmServerProcess, 
             "[Naia] WARN BGM server did not respond on http://127.0.0.1:{}/health within 10s",
             bgm_port
         ));
-        log_both(&format!(
-            "[Naia] WARN BGM player may show connection-refused; inspect the owned BGM sidecar on port {}",
+        let mut child = child;
+        let _ = child.kill();
+        let _ = child.wait();
+        remove_pid_file("bgm-server");
+        return Err(format!(
+            "BGM server failed its owned health check on port {}",
             bgm_port
         ));
     } else {
@@ -3117,7 +3133,74 @@ fn spawn_youtube_bgm_server(app_handle: &AppHandle) -> Result<BgmServerProcess, 
         ));
     }
 
-    Ok(BgmServerProcess { child })
+    Ok(BgmServerProcess {
+        child,
+        health_nonce,
+        port: bgm_port,
+    })
+}
+
+#[tauri::command]
+async fn ensure_bgm_server(
+    app_handle: AppHandle,
+    state: tauri::State<'_, AppState>,
+) -> Result<bool, String> {
+    let _start_guard = state.bgm_start.lock().await;
+    let existing = {
+        let mut guard = lock_or_recover(&state.bgm_server, "state.bgm_server(ensure_take)");
+        guard.take()
+    };
+    if let Some(mut process) = existing {
+        let healthy = match process.child.try_wait() {
+            Ok(None) => {
+                let ready = probe_bgm_server_ready(
+                    std::time::Duration::from_millis(500),
+                    &process.health_nonce,
+                    process.port,
+                );
+                if !ready {
+                    log_both(
+                        "[Naia] BGM server process is alive but unhealthy; restarting on demand",
+                    );
+                }
+                ready
+            }
+            Ok(Some(status)) => {
+                log_both(&format!(
+                    "[Naia] BGM server exited ({status}); restarting on demand"
+                ));
+                false
+            }
+            Err(error) => {
+                log_both(&format!(
+                    "[Naia] BGM server status unavailable ({error}); restarting on demand"
+                ));
+                false
+            }
+        };
+        if healthy {
+            let mut guard = lock_or_recover(&state.bgm_server, "state.bgm_server(ensure_put)");
+            *guard = Some(process);
+            return Ok(true);
+        }
+        // Drop owns kill + wait + PID cleanup, including status/probe failures.
+        drop(process);
+    }
+
+    // The readiness probe can take up to ten seconds. Keep it off the async
+    // runtime and outside the synchronous process-slot mutex. BgmServerProcess
+    // has an owning Drop, so cancellation cannot orphan a completed spawn.
+    let process =
+        tauri::async_runtime::spawn_blocking(move || spawn_youtube_bgm_server(&app_handle))
+            .await
+            .map_err(|error| format!("BGM server start task failed: {error}"))??;
+    let mut guard = lock_or_recover(&state.bgm_server, "state.bgm_server(ensure_store)");
+    *guard = Some(process);
+    Ok(true)
+}
+
+fn should_teardown_for_window(label: &str) -> bool {
+    label == "main"
 }
 
 /// Poll the selected BGM port health endpoint every 100 ms for up to `timeout`.
@@ -8111,6 +8194,34 @@ async fn write_naia_ui_config(adk_path: String, json: String) -> Result<(), Stri
     std::fs::write(dir.join("ui-config.json"), json).map_err(|e| e.to_string())
 }
 
+fn reset_naia_config_files_at(adk: &std::path::Path) -> Result<(), String> {
+    if !adk.is_dir() {
+        return Err(format!("adk_path is not a directory: {}", adk.display()));
+    }
+    let settings = adk.join("naia-settings");
+    for name in ["config.json", "ui-config.json", "slots-manifest.json"] {
+        let path = settings.join(name);
+        match std::fs::remove_file(&path) {
+            Ok(()) => {}
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => {
+                return Err(format!("failed to reset {}: {}", path.display(), error));
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Reset Shell/Agent configuration while preserving user-owned workspace
+/// assets, reference voices, and knowledge files.
+#[tauri::command]
+async fn reset_naia_config_files(adk_path: String) -> Result<(), String> {
+    if adk_path.trim().is_empty() {
+        return Err("adk_path is empty".to_string());
+    }
+    reset_naia_config_files_at(std::path::Path::new(&adk_path))
+}
+
 /// Read `{adk_path}/naia-settings/knowledge.json` (吏???뚯뒪/?ㅼ퐫???ㅼ젙 ?????꾩슜, agent ?쎄린?꾩슜).
 /// ?ㅼ젙 遺덇?移?FR-KB-OS.9): ?щ엺??UI 濡쒕쭔 蹂寃? agent ??config-write ?꾧뎄媛 ?놁뼱 紐?諛붽씔?? ?놁쑝硫?鍮?臾몄옄??
 #[tauri::command]
@@ -8178,6 +8289,54 @@ async fn compile_knowledge(
         "entityCount": r.entity_count,
         "relationCount": r.relation_count,
         "error": r.error,
+    }))
+}
+
+/// Reload the running Agent from the just-written settings and return an
+/// honest memory reload result. During onboarding there may be no Agent yet;
+/// the next SetWorkspace call will load the persisted files.
+fn ensure_memory_reload_succeeded(memory_error: &str, memory_retained: bool) -> Result<(), String> {
+    if memory_error.is_empty() {
+        return Ok(());
+    }
+    Err(format!(
+        "agent memory settings reload failed (previous memory retained={}): {}",
+        memory_retained, memory_error
+    ))
+}
+
+#[tauri::command]
+async fn reload_agent_settings(
+    state: tauri::State<'_, AppState>,
+) -> Result<serde_json::Value, String> {
+    let addr = {
+        let guard = state.agent.lock().map_err(|_| "agent lock".to_string())?;
+        guard.as_ref().map(|agent| agent.grpc_addr.clone())
+    };
+    let Some(addr) = addr else {
+        return Ok(serde_json::json!({
+            "available": false,
+            "memoryReloaded": false,
+            "memoryRetained": false,
+            "memoryStatus": "next_start",
+        }));
+    };
+    let mut client = agent_grpc::AgentGrpc::connect(format!("http://{}", addr))
+        .await
+        .map_err(|error| format!("agent settings reload connect failed: {}", error))?;
+    let result = client
+        .reload_settings()
+        .await
+        .map_err(|error| format!("agent settings reload failed: {}", error))?;
+    ensure_memory_reload_succeeded(&result.memory_error, result.memory_retained)?;
+    Ok(serde_json::json!({
+        "available": true,
+        "loaded": result.loaded,
+        "provider": result.provider,
+        "model": result.model,
+        "memoryReloaded": result.memory_reloaded,
+        "memoryRetained": result.memory_retained,
+        "memoryStatus": result.memory_status,
     }))
 }
 
@@ -9077,8 +9236,7 @@ async fn write_naia_path_cache(
         if adk_path.is_empty() {
             return Err("adk_path is empty".to_string());
         }
-        let home = dirs::home_dir()
-            .ok_or_else(|| "Cannot determine home directory".to_string())?;
+        let home = dirs::home_dir().ok_or_else(|| "Cannot determine home directory".to_string())?;
         // Native E2E owns its workspace through NAIA_E2E_ADK_PATH. Never let
         // a disposable test run overwrite the real user's next-start cache.
         let Some(cache_path) = naia_path_cache_target(home, debug_e2e_enabled()) else {
@@ -9440,6 +9598,7 @@ pub fn run() {
             discord_inbox_authorized_bindings:
                 tokio::sync::Mutex::new(None),
             bgm_server: Mutex::new(None),
+            bgm_start: tokio::sync::Mutex::new(()),
             cascade: Mutex::new(None),
             cascade_start: tokio::sync::Mutex::new(()),
             gateway: Mutex::new(None),
@@ -9514,10 +9673,12 @@ pub fn run() {
 			cascade_runtime_status,
             read_naia_ui_config,
             write_naia_ui_config,
+            reset_naia_config_files,
             read_naia_knowledge_config,
             write_naia_knowledge_config,
             read_naia_knowledge_kb,
             compile_knowledge,
+            reload_agent_settings,
             read_jeonju_course_target,
             write_jeonju_course_target,
             start_coding_job,
@@ -9535,6 +9696,7 @@ pub fn run() {
             clone_naia_adk,
             write_naia_asset,
             copy_bundled_assets,
+			ensure_bgm_server,
             // ???transcript read-only(FR-CONV.3) ??agent write / shell read(E1 agent ?낅┰)
             list_conversations,
             read_conversation,
@@ -9920,6 +10082,13 @@ pub fn run() {
                     }
                 }
                 tauri::WindowEvent::Destroyed => {
+					if !should_teardown_for_window(window.label()) {
+						log_verbose(&format!(
+							"[Naia] Window destroyed without runtime teardown: {}",
+							window.label()
+						));
+						return;
+					}
                     // Kill Chrome on app exit (not on React component unmount)
                     crate::browser::browser_embed_kill();
 
@@ -9993,6 +10162,14 @@ pub fn run() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn only_main_window_destruction_tears_down_owned_runtime() {
+        assert!(should_teardown_for_window("main"));
+        assert!(!should_teardown_for_window("browser"));
+        assert!(!should_teardown_for_window("oauth"));
+    }
+
     #[test]
     fn naia_config_atomic_write_replaces_existing_utf8_json() {
         let dir = tempfile::tempdir().unwrap();
@@ -10027,6 +10204,35 @@ mod tests {
             "naia_config_invalid_json"
         );
         assert_eq!(std::fs::read_to_string(path).unwrap(), original);
+    }
+
+    #[test]
+    fn config_reset_removes_only_regenerable_settings_files() {
+        let adk = tempfile::tempdir().unwrap();
+        let settings = adk.path().join("naia-settings");
+        let voices = settings.join("ref-voices");
+        std::fs::create_dir_all(&voices).unwrap();
+        for name in ["config.json", "ui-config.json", "slots-manifest.json"] {
+            std::fs::write(settings.join(name), "{}").unwrap();
+        }
+        std::fs::write(settings.join("knowledge.json"), "{}").unwrap();
+        std::fs::write(voices.join("voice.wav"), b"voice").unwrap();
+
+        reset_naia_config_files_at(adk.path()).unwrap();
+
+        for name in ["config.json", "ui-config.json", "slots-manifest.json"] {
+            assert!(!settings.join(name).exists(), "{name} should be reset");
+        }
+        assert!(settings.join("knowledge.json").exists());
+        assert!(voices.join("voice.wav").exists());
+    }
+
+    #[test]
+    fn agent_reload_propagates_memory_failure_and_retention_state() {
+        assert!(ensure_memory_reload_succeeded("", false).is_ok());
+        let error = ensure_memory_reload_succeeded("invalid memory role", true).unwrap_err();
+        assert!(error.contains("previous memory retained=true"));
+        assert!(error.contains("invalid memory role"));
     }
 
     #[test]
