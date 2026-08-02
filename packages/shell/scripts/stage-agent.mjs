@@ -132,6 +132,26 @@ if (!existsSync(AGENT)) {
 
 const run = (cmd, cwd) => execSync(cmd, { cwd, stdio: "inherit" });
 
+function packageManagerCommand(projectDir) {
+	const manifest = JSON.parse(readFileSync(resolve(projectDir, "package.json"), "utf8"));
+	if (!manifest.packageManager) return "pnpm";
+	const match = /^pnpm@(\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?)$/.exec(manifest.packageManager);
+	if (!match) {
+		die(
+			`[stage-agent] unsupported packageManager in ${projectDir}: ${JSON.stringify(manifest.packageManager)}`,
+		);
+	}
+	return `corepack pnpm@${match[1]}`;
+}
+
+function runPnpm(args, cwd) {
+	execSync(`${packageManagerCommand(cwd)} ${args}`, {
+		cwd,
+		stdio: "inherit",
+		env: { ...process.env, CI: "true" },
+	});
+}
+
 console.log(`[stage-agent] agent = ${AGENT}`);
 for (const dependency of AGENT_LOCAL_DEPENDENCIES) {
 	if (!existsSync(resolve(dependency.path, "package.json"))) {
@@ -141,8 +161,8 @@ for (const dependency of AGENT_LOCAL_DEPENDENCIES) {
 		process.exit(1);
 	}
 	console.log(`[stage-agent] dependency build: ${dependency.name}`);
-	run("pnpm install --frozen-lockfile", dependency.path);
-	run("pnpm run build", dependency.path);
+	runPnpm("install --frozen-lockfile", dependency.path);
+	runPnpm("run build", dependency.path);
 	if (!existsSync(resolve(dependency.path, dependency.output))) {
 		console.error(
 			`[stage-agent] dependency output missing: ${dependency.name}/${dependency.output}`,
@@ -152,8 +172,8 @@ for (const dependency of AGENT_LOCAL_DEPENDENCIES) {
 }
 
 console.log("[stage-agent] ① agent install + build");
-run("pnpm install --frozen-lockfile", AGENT);
-run("pnpm run build", AGENT);
+runPnpm("install --frozen-lockfile", AGENT);
+runPnpm("run build", AGENT);
 assertPairedCheckoutStillClean("agent install/build");
 
 console.log(`[stage-agent] ② deploy (prod, hoisted) → ${STAGE}`);
@@ -162,8 +182,8 @@ const hadWs = existsSync(wsFile); // standalone repo 면 임시 생성 후 정�
 try {
 	if (!hadWs) writeFileSync(wsFile, "packages:\n  - '.'\n");
 	if (existsSync(STAGE)) rmSync(STAGE, { recursive: true, force: true });
-	run(
-		`pnpm --filter=@nextain/naia-agent --config.node-linker=hoisted deploy --prod --legacy "${STAGE}"`,
+	runPnpm(
+		`--filter=@nextain/naia-agent --config.node-linker=hoisted deploy --prod --legacy "${STAGE}"`,
 		AGENT,
 	);
 } finally {
