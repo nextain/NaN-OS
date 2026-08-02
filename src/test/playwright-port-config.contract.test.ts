@@ -41,7 +41,8 @@ async function loadViteServerConfig(port: string) {
 	process.env.PLAYWRIGHT_HOST = "127.0.0.1";
 	delete process.env.TAURI_DEV_HOST;
 
-	const module = await import("../../packages/shell/vite.config.ts");
+	const configPath = "../../packages/shell/vite.config.ts";
+	const module = await import(configPath);
 	const configFactory = module.default as unknown;
 	const config =
 		typeof configFactory === "function"
@@ -56,7 +57,8 @@ async function loadPlaywrightConfig(port: string) {
 	process.env.PLAYWRIGHT_HOST = "127.0.0.1";
 	process.env.PLAYWRIGHT_SERVER_COMMAND = "node -e \"setTimeout(()=>{}, 1000)\"";
 
-	const module = await import("../../packages/shell/playwright.config.ts");
+	const configPath = "../../packages/shell/playwright.config.ts";
+	const module = await import(configPath);
 	return module.default as {
 		use?: { baseURL?: string };
 		webServer?: { port?: number };
