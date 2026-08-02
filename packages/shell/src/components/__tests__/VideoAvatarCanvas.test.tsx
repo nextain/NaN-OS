@@ -35,6 +35,7 @@ vi.mock("../../lib/capabilities/gpu", () => ({
 
 vi.mock("../../lib/config", () => ({
 	loadConfig: () => testState.config,
+	loadConfigWithSecrets: () => Promise.resolve(testState.config),
 }));
 
 vi.mock("../../lib/avatar/cascade-renderer", () => ({

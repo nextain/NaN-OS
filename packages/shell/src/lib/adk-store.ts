@@ -2,6 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { type AppConfig, LAB_GATEWAY_URL } from "./config";
 import { Logger } from "./logger";
+import { getSecretKey } from "./secure-store";
 import {
 	buildSlotsManifest,
 	serializeSlotsManifest,
@@ -579,7 +580,21 @@ async function writeNaiaConfigNow(
 	// R2.2a: 로컬 cascade 구동 결정용 slots-manifest.json 동기화(windows-manager loader 가 read).
 	// 비밀 0(buildSlotsManifest 가 provider/model 만 직렬화). 항상 config 와 동기.
 	// 실패는 config 저장을 막지 않되(부가 산출물) 영구 stale 추적 위해 로깅.
-	await writeSlotsManifest(config as unknown as AppConfig).catch((e) => {
+	// The public config intentionally omits naiaKey. Restore only its presence for
+	// the derived member gate; buildSlotsManifest never serializes the credential.
+	// Without this, any ordinary UI-config sync overwrites a valid member manifest
+	// with gate.naiaAccount=false and tears down the selected local voice/avatar.
+	let manifestConfig = config as unknown as AppConfig;
+	if (!manifestConfig.naiaKey) {
+		try {
+			const naiaKey = await getSecretKey("naiaKey");
+			if (naiaKey) manifestConfig = { ...manifestConfig, naiaKey };
+		} catch {
+			// Native start_cascade independently verifies the credential. A secure
+			// store failure therefore remains fail-closed here.
+		}
+	}
+	await writeSlotsManifest(manifestConfig).catch((e) => {
 		Logger.warn("adk-store", "slots-manifest write failed", {
 			error: e instanceof Error ? e.message : String(e),
 		});

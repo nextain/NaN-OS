@@ -137,7 +137,7 @@ export const VRAM_TIERS: readonly VramTier[] = [
 	},
 	{
 		id: "windows-voice-6g",
-		label: "Windows NVIDIA RTX 6GB+: external LLM + TensorRT VoxCPM2 voice + 3D avatar",
+		label: "Windows NVIDIA GPU 6GB+: external LLM + local voice + 3D avatar",
 		minVramGb: 6,
 		llm: "external",
 		localCapabilities: ["tts"],
@@ -145,7 +145,7 @@ export const VRAM_TIERS: readonly VramTier[] = [
 		capabilityCostGb: { tts: 3.7 },
 		loaderProfile: "windows_trt_6g",
 		realtime: "measurement-gated",
-		note: "Windows NVIDIA RTX 6GB+: keep the Naia account, remote Ollama, or external API LLM unchanged; run only TensorRT VoxCPM2 locally. Ditto/NVA and local LLM are disabled, and the Shell keeps its 3D VRM avatar. Real-time speed requires measurement on the target GPU.",
+		note: "Windows NVIDIA GPU 6GB+: keep the Naia account, remote Ollama, or external API LLM unchanged; run only local voice. NVA and local LLM are disabled, and the Shell keeps its 3D VRM avatar. Real-time speed and compatibility require measurement on the target GPU.",
 	},
 	{
 		id: "local-llm-avatar-8g",
@@ -167,14 +167,14 @@ export const VRAM_TIERS: readonly VramTier[] = [
 	{
 		id: "laptop-4060-8g",
 		label:
-			"Windows NVIDIA RTX 8GB+: external LLM + TensorRT VoxCPM2 voice + Ditto video avatar",
+			"Windows NVIDIA GPU 8GB+: external LLM + local voice + NVA video avatar",
 		minVramGb: 8,
 		llm: "external",
 		localCapabilities: ["tts", "avatar"],
 		approxLocalVramGb: 6.07,
 		loaderProfile: "windows_trt_8g",
 		realtime: "measurement-gated",
-		note: "Windows NVIDIA RTX 30/40 series with at least 8GB VRAM: keep the Naia account, remote Ollama, or external API LLM unchanged; the local GPU hosts only TensorRT VoxCPM2 int8 TTS and Ditto avatar. Real-time speed is not required. RTX 50 support requires the TensorRT 10.8+ follow-up package.",
+		note: "Windows NVIDIA GPU with at least 8GB VRAM: keep the Naia account, remote Ollama, or external API LLM unchanged; the local GPU hosts voice and the NVA avatar. Compatibility and speed are measurement-gated; the current release has been verified on RTX 30/40-series hardware.",
 	},
 	{
 		id: "local-voice-12g",

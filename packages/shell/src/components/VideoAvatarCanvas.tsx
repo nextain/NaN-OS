@@ -23,7 +23,7 @@ import {
 } from "../lib/avatar/nva-gate";
 import { detectGpuVramGb } from "../lib/capabilities/gpu";
 import { resolveActiveTier } from "../lib/capabilities/vram-tiers";
-import { loadConfig } from "../lib/config";
+import { loadConfig, loadConfigWithSecrets } from "../lib/config";
 import { t } from "../lib/i18n";
 import {
 	defaultClipOf,
@@ -221,7 +221,8 @@ export function VideoAvatarCanvas({ nvaModel }: VideoAvatarCanvasProps) {
 
 			// Local cascade may start only from an explicit avatar-capable local profile.
 			// Legacy auto/off or stale remote config must not unlock local NVA after logout.
-			const cfg = loadConfig();
+			const cfg = await loadConfigWithSecrets();
+			if (disposed) return;
 			const expectedLoaderProfile = resolveActiveTier(
 				cfg?.localGpuTier,
 				detectedVramGb,

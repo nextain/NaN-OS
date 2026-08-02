@@ -1010,7 +1010,7 @@ describe("ChatArea", () => {
 		});
 
 		await waitFor(() =>
-			expect(screen.getByText(/VoxCPM2 voice model is starting/)).toBeDefined(),
+			expect(screen.getByText(/local voice model is starting/i)).toBeDefined(),
 		);
 		expect(screen.queryByText(/Can't reach the local voice engine/)).toBeNull();
 		localStorage.removeItem("naia-config");

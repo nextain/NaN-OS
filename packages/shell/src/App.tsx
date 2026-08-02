@@ -284,15 +284,21 @@ export function App() {
 	}, []);
 
 	useEffect(() => {
-		function syncAvatarConfig() {
-			const cfg = loadConfig();
+		let active = true;
+		let revision = 0;
+		async function syncAvatarConfig() {
+			const currentRevision = ++revision;
+			const cfg = await loadConfigWithSecrets();
+			if (!active || currentRevision !== revision) return;
 			setAvatarProvider(effectiveAvatarProviderFromConfig(cfg, detectedVramGb));
 			setNvaModel(cfg?.nvaModel ?? "");
 		}
-		syncAvatarConfig();
+		void syncAvatarConfig();
 		window.addEventListener("naia-config-changed", syncAvatarConfig);
-		return () =>
+		return () => {
+			active = false;
 			window.removeEventListener("naia-config-changed", syncAvatarConfig);
+		};
 	}, [detectedVramGb]);
 
 	// Window starts hidden (visible:false in tauri.conf.json) to prevent white flash.

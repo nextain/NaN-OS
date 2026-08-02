@@ -10,10 +10,16 @@ const { mockInvoke, mockConvertFileSrc } = vi.hoisted(() => ({
 		(path: string) => `asset://localhost/${path.replace(/\\/g, "/")}`,
 	),
 }));
+const secureState = vi.hoisted(() => ({ naiaKey: null as string | null }));
 
 vi.mock("@tauri-apps/api/core", () => ({
 	invoke: mockInvoke,
 	convertFileSrc: mockConvertFileSrc,
+}));
+
+vi.mock("../secure-store", () => ({
+	getSecretKey: (name: string) =>
+		Promise.resolve(name === "naiaKey" ? secureState.naiaKey : null),
 }));
 
 import {
@@ -83,6 +89,7 @@ beforeEach(() => {
 	// reset mock returns undefined and the .catch() throws (#313 Naia Local).
 	mockInvoke.mockResolvedValue(undefined);
 	mockConvertFileSrc.mockClear();
+	secureState.naiaKey = null;
 });
 
 afterEach(() => {
@@ -260,6 +267,26 @@ describe("writeNaiaConfig", () => {
 			adkPath: WIN_ADK,
 			json: JSON.stringify({ provider: "openai", model: "gpt-4o" }, null, 2),
 		});
+	});
+
+	it("preserves the member slots gate when the public config omits the secure Naia key", async () => {
+		setAdkPath(WIN_ADK);
+		secureState.naiaKey = "secure-member-key";
+		mockInvoke.mockResolvedValue(undefined);
+
+		await writeNaiaConfig({
+			provider: "nextain",
+			model: "gemini-2.5-flash-live",
+			localGpuTier: "laptop-4060-8g",
+			local8gFocus: "both",
+		});
+
+		const call = mockInvoke.mock.calls.find(
+			([name]) => name === "write_slots_manifest",
+		);
+		const manifest = JSON.parse((call?.[1] as { json: string }).json);
+		expect(manifest.gate).toEqual({ naiaAccount: true, mode: "naia" });
+		expect(JSON.stringify(manifest)).not.toContain("secure-member-key");
 	});
 
 	it("llmRoles는 opaque credentialRef만 보존하고 중첩 token/apiKey를 제거한다", async () => {

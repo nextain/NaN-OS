@@ -211,14 +211,14 @@ describe("OnboardingWizard", () => {
 		expect(screen.getByText(/Detected VRAM: 16 GB/)).toBeDefined();
 		expect(
 			// 새 계약(2026-07-15): 추천 = 검증 티어만 → 16GB LLM+음성
-			screen.getByText(/Windows NVIDIA RTX 8GB\+/),
+			screen.getByText(/Windows NVIDIA GPU 8GB\+/),
 		).toBeDefined();
 		expect(
 			screen.getByText(/does not download or launch local models/),
 		).toBeDefined();
 		expect(
 			screen.getByTestId("onboarding-nva-vram-requirement"),
-		).toHaveTextContent(/NVIDIA RTX GPU.*8GB VRAM or more/);
+		).toHaveTextContent(/supported NVIDIA GPU.*8GB VRAM/);
 		expect(
 			screen.getByTestId("onboarding-cloud-cascade-coming-soon"),
 		).toHaveTextContent(/cloud cascade service.*provided separately.*future/i);

@@ -949,6 +949,31 @@ describe("SettingsTab — memory tab (#298)", () => {
 		expect(saved.nvaModel).toBeTruthy();
 	});
 
+	it("describes local GPU profiles by capability without engine implementation names", async () => {
+		localStorage.setItem(
+			"naia-config",
+			JSON.stringify({
+				provider: "nextain",
+				model: "gemini-2.5-flash-live",
+				naiaKey: "nk",
+			}),
+		);
+		mockInvoke.mockImplementation((cmd: string) =>
+			cmd === "detect_gpu_vram" ? Promise.resolve(8) : Promise.resolve([]),
+		);
+		render(<SettingsTab />);
+		gotoSettingsTab("profile");
+
+		const select = await vi.waitFor(() => {
+			const element = document.getElementById("local-gpu-tier");
+			expect(element).toBeTruthy();
+			return element as HTMLSelectElement;
+		});
+		const labels = Array.from(select.options).map((option) => option.textContent ?? "");
+		expect(labels.some((label) => label.includes("NVIDIA GPU 8GB+"))).toBe(true);
+		expect(labels.join(" ")).not.toMatch(/VoxCPM2|Ditto|TensorRT|CUDA INT8|NVIDIA RTX/);
+	});
+
 	it("GPU profile 6GB stages VoxCPM2 with VRM while preserving the external LLM", async () => {
 		localStorage.setItem(
 			"naia-config",

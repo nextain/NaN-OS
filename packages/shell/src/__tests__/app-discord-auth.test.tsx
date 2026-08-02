@@ -6,6 +6,7 @@ const listeners: Record<
 	string,
 	((event: { payload: any }) => void) | undefined
 > = {};
+const secureState = vi.hoisted(() => ({ naiaKey: null as string | null }));
 
 vi.mock("@tauri-apps/api/event", () => ({
 	listen: vi.fn((name: string, cb: (event: { payload: any }) => void) => {
@@ -31,7 +32,9 @@ vi.mock("@tauri-apps/api/core", () => ({
 vi.mock("@tauri-apps/plugin-store", () => ({
 	load: vi.fn(() =>
 		Promise.resolve({
-			get: vi.fn(() => Promise.resolve(null)),
+			get: vi.fn((name: string) =>
+				Promise.resolve(name === "naiaKey" ? secureState.naiaKey : null),
+			),
 			set: vi.fn(() => Promise.resolve()),
 			delete: vi.fn(() => Promise.resolve()),
 			save: vi.fn(() => Promise.resolve()),
@@ -100,6 +103,7 @@ describe("App discord deep-link persistence", () => {
 		cleanup();
 		localStorage.clear();
 		Object.keys(listeners).forEach((key) => delete listeners[key]);
+		secureState.naiaKey = null;
 	});
 
 	it("persists discord defaults from global listener", () => {
@@ -180,5 +184,27 @@ describe("App discord deep-link persistence", () => {
 
 		expect(screen.queryByText("video-avatar")).toBeNull();
 		expect(screen.getByText("avatar")).toBeTruthy();
+	});
+
+	it("mounts the selected 8GB NVA after restoring the Naia key from secure storage", async () => {
+		secureState.naiaKey = "secure-member-key";
+		localStorage.setItem("naia-adk-path", "C:\\naia");
+		localStorage.setItem(
+			"naia-config",
+			JSON.stringify({
+				provider: "nextain",
+				model: "gemini-2.5-flash-live",
+				onboardingComplete: true,
+				avatarProvider: "naia-video-avatar",
+				nvaModel: "Naia",
+				localGpuTier: "laptop-4060-8g",
+				local8gFocus: "both",
+			}),
+		);
+
+		render(<App />);
+
+		expect(await screen.findByText("video-avatar")).toBeTruthy();
+		expect(screen.queryByText("avatar")).toBeNull();
 	});
 });
