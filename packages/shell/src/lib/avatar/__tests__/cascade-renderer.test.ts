@@ -354,6 +354,15 @@ describe("CascadeAvatarRenderer.speak — Content-Type 라우팅 (webm=Blob / mp
 			});
 			r.start(host);
 			await r.speak("안녕");
+			const speechCall = (
+				globalThis.fetch as ReturnType<typeof vi.fn>
+			).mock.calls.find(([input]) => String(input).includes("/stream_text"));
+			expect(speechCall?.[0]).toBe("http://127.0.0.1:8910/stream_text");
+			expect(speechCall?.[1]).toMatchObject({
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({ text: "안녕" }),
+			});
 			expect(blobSpy).toHaveBeenCalledTimes(1); // 마스크 video = 완전 파일 Blob 소비
 			expect(msSpy).not.toHaveBeenCalled(); // MSE 안 씀
 		});

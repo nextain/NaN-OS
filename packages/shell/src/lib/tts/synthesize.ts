@@ -271,14 +271,12 @@ async function synthEdge(opts: SynthesizeOpts): Promise<SynthesizeResult> {
 	return { audioBase64: arrayBufferToBase64(await resp.arrayBuffer()) };
 }
 
-// Local VoxCPM2 returns a RIFF WAV directly, so no client-side PCM conversion
-// is needed before it is queued for playback or avatar lip sync.
+// The private Runtime returns a RIFF WAV directly for voice-only playback.
 
 /**
- * naia-local-voice → the cascade façade's public `/tts` speech surface.
- * The 8GB profile exposes :8910; raw VoxCPM2 on :8901 stays private. The
- * façade resolves the selected reference voice and returns RIFF WAV without a
- * bearer token.
+ * naia-local-voice → the private Runtime's OpenAI-compatible voice-only surface.
+ * Raw engine adapters stay hidden behind :8910. The Runtime resolves the
+ * selected reference voice and returns RIFF WAV without a bearer token.
  */
 async function synthNaiaLocalVoice(
 	opts: SynthesizeOpts,
@@ -291,22 +289,11 @@ async function synthNaiaLocalVoice(
 		method: "POST",
 		headers: { "Content-Type": "application/json" },
 		body: JSON.stringify({
-			// :8910 owns the private VoxCPM2 (:8901) implementation detail.
-			// The facade contract intentionally remains `{ text, voice }`.
 			model: "voxcpm2",
 			input: opts.text,
-			// Retained as an ignored compatibility field for facades that share
-			// the same request parser with their optional `/tts` route.
-			text: opts.text,
 			// RefAudioSection stores a preset URL in voiceRefUrl. ChatArea resolves
 			// it to this facade palette id; keep it intact all the way to :8910.
-			// The standalone facade ships this CC0 preset with the Shell bundle.
-			// `naia-default` was only a former server-side alias; it is not present
-			// in the Windows facade palette and causes a 400 after a fresh install.
-			voice:
-				!opts.voice || opts.voice === "default"
-					? "cc0-ko-female-01.wav"
-					: opts.voice,
+			voice: !opts.voice || opts.voice === "default" ? "naia-default" : opts.voice,
 			response_format: "wav",
 		}),
 		signal: opts.signal,
@@ -318,20 +305,6 @@ async function synthNaiaLocalVoice(
 	}
 	// audio/wav(RIFF) bytes — AudioQueue/ttsAudioToWav 가 RIFF 를 네이티브 감지.
 	return { audioBase64: arrayBufferToBase64(await resp.arrayBuffer()) };
-}
-
-/**
- * 아바타 립싱크에 셸 합성 오디오(WAV/PCM)를 직접 흘릴 수 있는 provider 인가 (FR-VOICE.5).
- *  - nextain: 게이트웨이 LINEAR16(WAV) — 기존.
- *  - naia-local-voice: cascade public `/tts` returns WAV and **the facade
- *    resolves the selected reference voice**. The shell does not bypass that
- *    ownership, so one selected preset is used consistently for playback and Ditto.
- *    In the 8GB profile, the same WAV is queued for playback and serialized
- *    into the Ditto `/stream` request. This is deliberately half-duplex.
- * false = a provider whose result is not suitable for direct Ditto audio input.
- */
-export function streamsAvatarPcm(provider: string): boolean {
-	return provider === "nextain" || provider === "naia-local-voice";
 }
 
 /**
