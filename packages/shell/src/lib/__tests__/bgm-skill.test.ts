@@ -1,11 +1,14 @@
 // UC8 / FR-BGM.1 — skill_youtube_bgm 패널 도구 단위 테스트 (deps 주입 = 사이드카/Tauri 헤르메틱).
 // 위젯(BgmPlayer) 리스너가 소비하는 bgm_youtube_* payload 형상이 계약이다.
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
 	BGM_ACTIONS,
 	SKILL_YOUTUBE_BGM,
 	clampVolume,
 	executeBgmSkill,
+	getBgmRecentTracks,
+	normalizeBgmTitle,
+	recordBgmPlayedTrack,
 	shouldActivateRadioDj,
 	type BgmSearchResult,
 	type BgmSkillDeps,
@@ -138,6 +141,71 @@ describe("executeBgmSkill", () => {
 		});
 	});
 
+	it("skips recently played ids and normalized duplicate titles", async () => {
+		const { deps } = mkDeps([
+			{ id: "recent-id", title: "Song A" },
+			{ id: "mirror-upload", title: "Song B (Official Video)" },
+			{ id: "fresh-id", title: "Song C" },
+		]);
+		deps.recentTracks = () => [
+			{ id: "recent-id", title: "Song A", playedAt: 1 },
+			{ id: "older-upload", title: "Song B", playedAt: 2 },
+		];
+
+		const replacement = JSON.parse(
+			await executeBgmSkill(
+				{ action: "play", query: "similar", replace: true },
+				deps,
+			),
+		);
+
+		expect(replacement.selected.videoId).toBe("fresh-id");
+	});
+
+	it("adds/removes the current track and starts a non-current favorite", async () => {
+		const { deps, emitted } = mkDeps();
+		await executeBgmSkill(
+			{ action: "play", videoId: "current", title: "Current" },
+			deps,
+		);
+		await executeBgmSkill({ action: "favorite_add" }, deps);
+		await executeBgmSkill({ action: "favorite_remove" }, deps);
+		deps.favoriteTracks = () => [
+			{ id: "current", title: "Current" },
+			{ id: "favorite-2", title: "Favorite Two" },
+		];
+		const favorite = JSON.parse(
+			await executeBgmSkill({ action: "favorites_play" }, deps),
+		);
+
+		expect(emitted.slice(1, 3)).toEqual([
+			{ type: "bgm_youtube_fav_add" },
+			{ type: "bgm_youtube_fav_remove" },
+		]);
+		expect(favorite.selected.videoId).toBe("favorite-2");
+		expect(deps.playback.queue()).toEqual([]);
+	});
+
+	it("returns explicit failures for favorite actions without usable tracks", async () => {
+		const { deps, emitted } = mkDeps();
+		expect(
+			JSON.parse(await executeBgmSkill({ action: "favorite_add" }, deps)),
+		).toEqual({
+			ok: false,
+			action: "favorite_add",
+			reason: "no_current_track",
+		});
+		deps.favoriteTracks = () => [];
+		expect(
+			JSON.parse(await executeBgmSkill({ action: "favorites_play" }, deps)),
+		).toEqual({
+			ok: false,
+			action: "favorites_play",
+			reason: "no_favorites",
+		});
+		expect(emitted).toEqual([]);
+	});
+
 	it("play+query → 검색 후 첫 결과 재생 (bgm_youtube_play {videoId,title} — 위젯 리스너 형상)", async () => {
 		const { deps, emitted, searched } = mkDeps([
 			{ id: "v1", title: "Lofi Beats", thumbnail: "http://t/1.jpg" },
@@ -148,6 +216,7 @@ describe("executeBgmSkill", () => {
 		expect(emitted).toEqual([
 			{
 				type: "bgm_youtube_play",
+				playbackId: "bgm-playback-1",
 				videoId: "v1",
 				title: "Lofi Beats",
 				thumbnail: "http://t/1.jpg",
@@ -170,7 +239,12 @@ describe("executeBgmSkill", () => {
 		);
 		expect(searched).toEqual([]); // 검색 미호출
 		expect(emitted).toEqual([
-			{ type: "bgm_youtube_play", videoId: "abc123", title: "직접곡" },
+			{
+				type: "bgm_youtube_play",
+				playbackId: "bgm-playback-1",
+				videoId: "abc123",
+				title: "직접곡",
+			},
 		]);
 		expect(JSON.parse(out)).toMatchObject({
 			ok: true,
@@ -283,6 +357,40 @@ describe("executeBgmSkill", () => {
 			/unknown action/,
 		);
 		await expect(executeBgmSkill({}, deps)).rejects.toThrow(/unknown action/);
+	});
+});
+
+describe("recent BGM history", () => {
+	beforeEach(() => {
+		const values = new Map<string, string>();
+		vi.stubGlobal("localStorage", {
+			getItem: (key: string) => values.get(key) ?? null,
+			setItem: (key: string, value: string) => values.set(key, value),
+			removeItem: (key: string) => values.delete(key),
+			clear: () => values.clear(),
+		});
+	});
+
+	it("normalizes upload decorations and records only one equivalent title", () => {
+		localStorage.clear();
+		expect(normalizeBgmTitle("Song B (Official Video)")).toBe("song b");
+		recordBgmPlayedTrack({ id: "v1", title: "Song B (Official Video)" }, 10);
+		recordBgmPlayedTrack({ id: "v2", title: "Song B" }, 20);
+		expect(getBgmRecentTracks()).toEqual([
+			{ id: "v2", title: "Song B", playedAt: 20 },
+		]);
+	});
+
+	it("bounds playback history to twenty confirmed entries", () => {
+		localStorage.clear();
+		for (let index = 0; index < 25; index += 1) {
+			recordBgmPlayedTrack(
+				{ id: `v-${index}`, title: `Track ${index}` },
+				index,
+			);
+		}
+		expect(getBgmRecentTracks()).toHaveLength(20);
+		expect(getBgmRecentTracks()[0].id).toBe("v-24");
 	});
 });
 

@@ -11,6 +11,7 @@ import {
 	type BgmPlaybackSnapshot,
 	type BgmPlaybackStatus,
 } from "../lib/bgm-playback";
+import { recordBgmPlayedTrack } from "../lib/bgm-skill";
 import { Logger } from "../lib/logger";
 import type { NaiaContextBridge } from "../lib/app-registry";
 import { type BackgroundMediaType, useAvatarStore } from "../stores/avatar";
@@ -161,6 +162,10 @@ export function BgmPlayer({ naia }: Props) {
 	);
 	const [queueVersion, setQueueVersion] = useState(0);
 	const playbackTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+	const lastProgressObservationRef = useRef<{
+		playbackId?: string;
+		observedAt: number;
+	}>({ observedAt: 0 });
 
 	// ── Unified panel state ───────────────────────────────────────────────────
 	// panelExpanded: the single panel is open or closed
@@ -202,20 +207,37 @@ export function BgmPlayer({ naia }: Props) {
 		}
 	}
 
-	function observePlayback(status: Exclude<BgmPlaybackStatus, "requested">, reason?: string) {
+	function observePlayback(
+		status: Exclude<BgmPlaybackStatus, "requested">,
+		options: {
+			playbackId?: string;
+			reason?: string;
+			currentTime?: number;
+			duration?: number;
+		} = {},
+	): BgmPlaybackSnapshot | null {
 		const current = bgmPlayback.current();
-		if (!current) return;
+		if (!current || (options.playbackId && current.playbackId !== options.playbackId)) {
+			return null;
+		}
 		const next = bgmPlayback.observe({
 			playbackId: current.playbackId,
 			sequence: current.sequence + 1,
 			status,
-			...(reason ? { reason } : {}),
+			...(options.reason ? { reason: options.reason } : {}),
+			...(options.currentTime !== undefined
+				? { currentTime: options.currentTime }
+				: {}),
+			...(options.duration !== undefined
+				? { duration: options.duration }
+				: {}),
 		});
-		if (!next) return;
+		if (!next) return null;
 		setPlaybackSnapshot(next);
 		if (status === "playing" || status === "paused" || status === "ended" || status === "error" || status === "timeout") {
 			clearPlaybackTimeout();
 		}
+		return next;
 	}
 
 	function beginPlaybackTimeout(playbackId: string) {
@@ -223,7 +245,10 @@ export function BgmPlayer({ naia }: Props) {
 		playbackTimeoutRef.current = setTimeout(() => {
 			const current = bgmPlayback.current();
 			if (current?.playbackId !== playbackId || current.status === "playing") return;
-			observePlayback("timeout", "iframe_playing_not_observed");
+			observePlayback("timeout", {
+				playbackId,
+				reason: "iframe_playing_not_observed",
+			});
 			setPlaying(false);
 		}, PLAYBACK_TIMEOUT_MS);
 	}
@@ -244,17 +269,31 @@ export function BgmPlayer({ naia }: Props) {
 			}
 			try {
 				const msg = JSON.parse(e.data) as Record<string, unknown>;
+				const eventPlaybackId = activeIframe
+					? new URL(activeIframe.src, window.location.href).searchParams.get("naiaPlayback") ?? undefined
+					: undefined;
 				if (msg.event === "onStateChange") {
 					const state = Number(msg.info ?? msg.data);
 					if (state === 1) {
 						setPlaying(true);
-						observePlayback("playing");
+						const observed = observePlayback("playing", {
+							playbackId: eventPlaybackId,
+						});
+						if (observed) {
+							recordBgmPlayedTrack({
+								id: observed.selected.videoId,
+								title: observed.selected.title,
+							});
+						}
 					} else if (state === 2) {
 						setPlaying(false);
-						observePlayback("paused");
+						observePlayback("paused", { playbackId: eventPlaybackId });
 					} else if (state === 0) {
 						setPlaying(false);
-						observePlayback("ended");
+						const ended = observePlayback("ended", {
+							playbackId: eventPlaybackId,
+						});
+						if (!ended) return;
 						const next = bgmPlayback.advance();
 						if (next) {
 							setPlaybackSnapshot(next);
@@ -262,14 +301,61 @@ export function BgmPlayer({ naia }: Props) {
 							handleYtSelect({ id: next.selected.videoId, title: next.selected.title, thumbnail: "", duration: "", channel: "" }, next.playbackId);
 						}
 					} else if (state === -1 || state === 3) {
-						observePlayback("loading");
+						observePlayback("loading", { playbackId: eventPlaybackId });
+					}
+				} else if (msg.event === "infoDelivery") {
+					const info = msg.info;
+					if (info && typeof info === "object") {
+						const currentTime = Number((info as Record<string, unknown>).currentTime);
+					const duration = Number((info as Record<string, unknown>).duration);
+					const current = bgmPlayback.current();
+					if (current?.status === "playing") {
+						const now = Date.now();
+						const lastProgress = lastProgressObservationRef.current;
+						if (
+							lastProgress.playbackId === eventPlaybackId &&
+							now - lastProgress.observedAt < 1_000
+						) return;
+						lastProgressObservationRef.current = {
+							playbackId: eventPlaybackId,
+							observedAt: now,
+						};
+						observePlayback("playing", {
+								playbackId: eventPlaybackId,
+								...(Number.isFinite(currentTime) && currentTime >= 0
+									? { currentTime }
+									: {}),
+								...(Number.isFinite(duration) && duration >= 0
+									? { duration }
+									: {}),
+							});
+						}
 					}
 				} else if (msg.event === "onError") {
 					setPlaying(false);
-					observePlayback("error", String(msg.info ?? msg.data ?? "youtube_iframe_error"));
+					const errored = observePlayback("error", {
+						playbackId: eventPlaybackId,
+						reason: String(msg.info ?? msg.data ?? "youtube_iframe_error"),
+					});
+					if (!errored) return;
+					const next = bgmPlayback.advance();
+					if (next) {
+						setPlaybackSnapshot(next);
+						setQueueVersion((version) => version + 1);
+						handleYtSelect(
+							{
+								id: next.selected.videoId,
+								title: next.selected.title,
+								thumbnail: "",
+								duration: "",
+								channel: "",
+							},
+							next.playbackId,
+						);
+					}
 				}
 				if (msg.event === "initialDelivery" || msg.event === "onReady") {
-					observePlayback("loading");
+					observePlayback("loading", { playbackId: eventPlaybackId });
 					const iframe = document.querySelector(".app-bg-iframe") as HTMLIFrameElement | null;
 					if (!iframe?.contentWindow) return;
 					iframe.contentWindow.postMessage(JSON.stringify({ event: "listening" }), "*");
@@ -321,7 +407,7 @@ export function BgmPlayer({ naia }: Props) {
 	useEffect(() => { favsRef.current = favs; }, [favs]);
 
 	useEffect(() => {
-		const unlistenP = listen<string>("agent_response", (e) => {
+		const handleBgmEvent = (e: { payload: string }) => {
 			try {
 				const msg = JSON.parse(e.payload) as Record<string, unknown>;
 				if (msg.type === "bgm_youtube_play") {
@@ -332,7 +418,10 @@ export function BgmPlayer({ naia }: Props) {
 						duration: "",
 						channel: "",
 					};
-					handleYtSelect(video);
+					handleYtSelect(
+						video,
+						typeof msg.playbackId === "string" ? msg.playbackId : undefined,
+					);
 				} else if (msg.type === "bgm_youtube_enqueue") {
 					setQueueVersion((version) => version + 1);
 				} else if (msg.type === "e2e_bgm_enqueue") {
@@ -360,7 +449,14 @@ export function BgmPlayer({ naia }: Props) {
 					setQueueVersion((version) => version + 1);
 				} else if (msg.type === "bgm_youtube_fav_add") {
 					// Add currently playing YT track to favorites (or explicit videoId)
-					const cur = currentYtRef.current;
+					const selected = bgmPlayback.current()?.selected;
+					const cur = currentYtRef.current ?? (selected ? {
+						id: selected.videoId,
+						title: selected.title,
+						thumbnail: "",
+						duration: "",
+						channel: "",
+					} : null);
 					if (!cur) return;
 					setFavs((prev) => {
 						if (prev.some((f) => f.id === cur.id)) return prev; // already added
@@ -369,7 +465,14 @@ export function BgmPlayer({ naia }: Props) {
 						return next;
 					});
 				} else if (msg.type === "bgm_youtube_fav_remove") {
-					const cur = currentYtRef.current;
+					const selected = bgmPlayback.current()?.selected;
+					const cur = currentYtRef.current ?? (selected ? {
+						id: selected.videoId,
+						title: selected.title,
+						thumbnail: "",
+						duration: "",
+						channel: "",
+					} : null);
 					if (!cur) return;
 					setFavs((prev) => {
 						const next = prev.filter((f) => f.id !== cur.id);
@@ -405,10 +508,20 @@ export function BgmPlayer({ naia }: Props) {
 					if (val >= 0 && val <= 1) setVolume(val);
 				}
 			} catch (err) {
-				Logger.error("BgmPlayer", "agent_response parse error", { error: String(err) });
+				Logger.error("BgmPlayer", "BGM event parse error", { error: String(err) });
 			}
-		});
-		return () => { unlistenP.then((u) => u()); };
+		};
+		// bgm_command is the Shell-owned path. Keep agent_response for native
+		// Rust/legacy producers during the compatibility period.
+		const unlistenPs = [
+			listen<string>("bgm_command", handleBgmEvent),
+			listen<string>("agent_response", handleBgmEvent),
+		];
+		return () => {
+			Promise.all(unlistenPs).then((unlisteners) => {
+				for (const unlisten of unlisteners) unlisten();
+			});
+		};
 	// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, []);
 
@@ -448,6 +561,40 @@ export function BgmPlayer({ naia }: Props) {
 	// ── Auto-restore YouTube playback on mount ────────────────────────────────
 	// If the app was closed while YouTube was playing, resume automatically.
 	useEffect(() => {
+		// A chat turn can dispatch the panel tool after the chat surface is ready
+		// but before this widget's Tauri event listener is attached. The playback
+		// authority already holds that request, so recover it instead of leaving a
+		// title-only requested state with no iframe.
+		const pending = bgmPlayback.current();
+		if (
+			pending
+			&& !["ended", "error", "timeout"].includes(pending.status)
+		) {
+			Logger.debug("BgmPlayer", "recovering pending playback on mount", {
+				playbackId: pending.playbackId,
+				status: pending.status,
+			});
+			const video: YtVideo = {
+				id: pending.selected.videoId,
+				title: pending.selected.title,
+				thumbnail: "",
+				duration: "",
+				channel: "",
+			};
+			setPlaybackSnapshot(pending);
+			setCurrentYt(video);
+			lastYtRef.current = video;
+			setSource("youtube");
+			setPlaying(false);
+			if (pending.status === "requested" || pending.status === "loading") {
+				beginPlaybackTimeout(pending.playbackId);
+			}
+			setBackgroundVideoUrl(
+				youtubeEmbedUrl(pending.selected.videoId, pending.playbackId),
+			);
+			setBackgroundMediaType("iframe");
+			return;
+		}
 		const cfg = loadConfig();
 		if (!cfg?.bgmYoutubeVideoId || !cfg.bgmPlaying) return;
 		const playback = bgmPlayback.request({
@@ -507,9 +654,8 @@ export function BgmPlayer({ naia }: Props) {
 		audioRef.current?.pause();
 		const current = bgmPlayback.current();
 		const snapshot =
-			(requestedPlaybackId && current?.playbackId === requestedPlaybackId) ||
-			current?.selected.videoId === video.id
-				? current!
+			requestedPlaybackId && current?.playbackId === requestedPlaybackId
+				? current
 				: bgmPlayback.request({ videoId: video.id, title: video.title });
 		setPlaybackSnapshot(snapshot);
 		beginPlaybackTimeout(snapshot.playbackId);
@@ -687,6 +833,8 @@ export function BgmPlayer({ naia }: Props) {
 			data-bgm-playback-status={playbackSnapshot?.status ?? "idle"}
 			data-bgm-current-title={playbackSnapshot?.selected.title ?? ""}
 			data-bgm-queue-length={bgmPlayback.queue().length}
+			data-bgm-current-time={playbackSnapshot?.currentTime ?? ""}
+			data-bgm-duration={playbackSnapshot?.duration ?? ""}
 		>
 			<audio
 				ref={audioRef}

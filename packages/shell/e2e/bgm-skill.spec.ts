@@ -54,7 +54,9 @@ const MOCK_SCRIPT = `
     for (var i = 0; i < hs.length; i++) window.__TAURI_INTERNALS__.runCallback(hs[i], { event: event, payload: payload });
   }
   window.__TAURI_INTERNALS__.convertFileSrc = function (p, proto) { return (proto || "asset") + "://localhost/" + encodeURIComponent(p); };
-  window.__NAIA_E2E__ = { emitEvent: emitEvent };
+  window.__NAIA_E2E__ = {
+    emitEvent: emitEvent,
+  };
 
   window.__TAURI_INTERNALS__.invoke = async function (cmd, args) {
     if (cmd === "plugin:event|listen") {
@@ -72,12 +74,19 @@ const MOCK_SCRIPT = `
       // panel_tool_call(skill_youtube_bgm) → finish. requestId 일치라야 handleChunk 가 처리(실 계약).
       if (payload && payload.type === "chat_request") {
         var rid = payload.requestId;
-        var chunks = [
-          { type: "panel_tool_call", requestId: rid, toolCallId: "tc-bgm-1", toolName: "skill_youtube_bgm", args: ${JSON.stringify(BGM_TOOL_ARGS[0])} },
-          { type: "panel_tool_call", requestId: rid, toolCallId: "tc-bgm-2", toolName: "skill_youtube_bgm", args: ${JSON.stringify(BGM_TOOL_ARGS[1])} },
+        var requestedTracks = Array.isArray(window.__E2E_SOAK_TRACKS__)
+          ? window.__E2E_SOAK_TRACKS__
+          : [
+              { action: "play", videoId: "e2evid001", title: "E2E First Track" },
+              { action: "play", videoId: "e2evid001", title: "E2E Same Track Replay" }
+            ];
+        var chunks = requestedTracks.map(function (track, index) {
+          return { type: "panel_tool_call", requestId: rid, toolCallId: "tc-bgm-" + (index + 1), toolName: "skill_youtube_bgm", args: track };
+        });
+        chunks.push(
           { type: "text", requestId: rid, text: "재생을 요청했어요. 실제 재생이 확인되면 곡을 소개할게요." },
-          { type: "finish", requestId: rid },
-        ];
+          { type: "finish", requestId: rid }
+        );
         var d = 150;
         for (var i = 0; i < chunks.length; i++) {
           (function (c, ms) { setTimeout(function () { emitEvent("agent_response", JSON.stringify(c)); }, ms); })(chunks[i], d);
@@ -97,24 +106,69 @@ function configScript(cfg: Record<string, unknown>): string {
 }
 
 test.describe("UC8 BGM 스킬 배선 (FR-BGM.1)", () => {
-	const iframeRequests: Array<{ referer: string; url: string }> = [];
+	const iframeRequests: Array<{
+		referer: string;
+		url: string;
+		videoId: string;
+		requestedAt: number;
+	}> = [];
 	test.beforeEach(async ({ page }) => {
 		iframeRequests.length = 0;
 		// Deterministic local iframe: this e2e never contacts YouTube.
 		await page.route(
 			"https://www.youtube-nocookie.com/embed/**",
 			async (route) => {
+				const requestUrl = route.request().url();
+				const videoId = decodeURIComponent(new URL(requestUrl).pathname.split("/").at(-1) ?? "");
 				iframeRequests.push({
 					referer: route.request().headers().referer ?? "",
-					url: route.request().url(),
+					url: requestUrl,
+					videoId,
+					requestedAt: Date.now(),
 				});
-				await route.fulfill({
-					contentType: "text/html",
-					body: `<!doctype html><script>
+				const soakDurationMs = Number(/^soak-(\d+)-/.exec(videoId)?.[1] ?? 0);
+				const fixtureBody = videoId.startsWith("error-")
+					? `<!doctype html><script>
+					parent.postMessage(JSON.stringify({ event: "onReady" }), "*");
+					setTimeout(() => parent.postMessage(JSON.stringify({ event: "onError", info: 150 }), "*"), 700);
+				</script>`
+					: videoId.startsWith("hold-")
+						? `<!doctype html><script>
+						parent.postMessage(JSON.stringify({ event: "onReady" }), "*");
+						setTimeout(() => parent.postMessage(JSON.stringify({ event: "onStateChange", info: 1 }), "*"), 700);
+					</script>`
+					: soakDurationMs > 0
+					? `<!doctype html><script>
+					const durationMs = ${soakDurationMs};
+					const mediaDuration = durationMs >= 6000 ? 3600 : Math.max(30, Math.round(durationMs / 10));
+					const send = (event, info) => parent.postMessage(JSON.stringify({ event, info }), "*");
+					send("onReady");
+					const startedAt = Date.now();
+					setTimeout(() => {
+						send("onStateChange", 1);
+						const progress = setInterval(() => {
+							const elapsed = Math.min(durationMs, Date.now() - startedAt);
+							send("infoDelivery", {
+								currentTime: mediaDuration * elapsed / durationMs,
+								duration: mediaDuration,
+							});
+						}, 100);
+						setTimeout(() => {
+							clearInterval(progress);
+							send("infoDelivery", { currentTime: mediaDuration, duration: mediaDuration });
+							send("onStateChange", 0);
+							send("onStateChange", 0);
+						}, durationMs);
+					}, 700);
+				</script>`
+					: `<!doctype html><script>
 					parent.postMessage(JSON.stringify({ event: "onReady" }), "*");
 					setTimeout(() => parent.postMessage(JSON.stringify({ event: "onStateChange", info: 1 }), "*"), 700);
 					setTimeout(() => parent.postMessage(JSON.stringify({ event: "onStateChange", info: 0 }), "*"), 1500);
-				</script>`,
+				</script>`;
+				await route.fulfill({
+					contentType: "text/html",
+					body: fixtureBody,
 				});
 			},
 		);
@@ -289,5 +343,220 @@ test.describe("UC8 BGM 스킬 배선 (FR-BGM.1)", () => {
 			(request) => new URL(request.url).searchParams.get("naiaPlayback"),
 		);
 		expect(new Set(playbackAttempts).size).toBeGreaterThanOrEqual(2);
+	});
+
+	test("재생 불가 후보를 인지하면 준비된 다음 곡으로 자동 전환한다", async ({
+		page,
+	}) => {
+		await page.evaluate(() => {
+			(
+				window as typeof window & {
+					__E2E_SOAK_TRACKS__?: Array<Record<string, unknown>>;
+				}
+			).__E2E_SOAK_TRACKS__ = [
+				{ action: "play", videoId: "error-unavailable", title: "Unavailable Track" },
+				{ action: "play", videoId: "hold-fallback", title: "Fallback Track" },
+			];
+		});
+		const input = page.locator(".chat-input");
+		await expect(page.locator(".bgm-player")).toBeVisible({ timeout: 10_000 });
+		await expect(input).toBeEnabled({ timeout: 10_000 });
+		await input.fill("요청한 음악을 틀어줘");
+		await input.press("Enter");
+
+		const player = page.locator(".bgm-player");
+		await page.waitForTimeout(2_000);
+		const outbound = await page.evaluate(
+			() =>
+				(window as unknown as { __E2E_OUTBOUND__?: Array<Record<string, unknown>> })
+					.__E2E_OUTBOUND__ ?? [],
+		);
+		expect(outbound.map((message) => message.type)).toContain("panel_tool_result");
+		const panelResults = outbound.filter(
+			(message) => message.type === "panel_tool_result",
+		);
+		expect(panelResults).toHaveLength(2);
+		expect(panelResults.map((message) => JSON.parse(String(message.result)))).toMatchObject([
+			{ selected: { videoId: "error-unavailable" } },
+			{ queued: { selected: { videoId: "hold-fallback" } } },
+		]);
+		expect(iframeRequests.map((request) => request.videoId)).toContain(
+			"error-unavailable",
+		);
+		await expect(player).toHaveAttribute(
+			"data-bgm-current-title",
+			"Fallback Track",
+			{ timeout: 15_000 },
+		);
+		await expect(player).toHaveAttribute("data-bgm-playback-status", "playing", {
+			timeout: 15_000,
+		});
+		expect(iframeRequests.map((request) => request.videoId).slice(-2)).toEqual([
+			"error-unavailable",
+			"hold-fallback",
+		]);
+	});
+
+	test("음악 중 일반 대화가 끼어도 BGM을 교체하거나 멈추지 않는다", async ({
+		page,
+	}) => {
+		await page.evaluate(() => {
+			(
+				window as typeof window & {
+					__E2E_SOAK_TRACKS__?: Array<Record<string, unknown>>;
+				}
+			).__E2E_SOAK_TRACKS__ = [
+				{ action: "play", videoId: "hold-conversation", title: "Conversation Bed" },
+			];
+		});
+		const input = page.locator(".chat-input");
+		await expect(page.locator(".bgm-player")).toBeVisible({ timeout: 10_000 });
+		await expect(input).toBeEnabled({ timeout: 10_000 });
+		await input.fill("음악 틀어줘");
+		await input.press("Enter");
+		const player = page.locator(".bgm-player");
+		await expect(player).toHaveAttribute("data-bgm-playback-status", "playing", {
+			timeout: 15_000,
+		});
+		const attemptsBeforeConversation = iframeRequests.length;
+
+		await page.evaluate(() => {
+			(
+				window as typeof window & {
+					__E2E_SOAK_TRACKS__?: Array<Record<string, unknown>>;
+				}
+			).__E2E_SOAK_TRACKS__ = [];
+		});
+		await input.fill("그런데 오늘 일정은 어때?");
+		await input.press("Enter");
+		await page.waitForTimeout(1_000);
+		await expect(player).toHaveAttribute("data-bgm-current-title", "Conversation Bed");
+		await expect(player).toHaveAttribute("data-bgm-playback-status", "playing");
+		expect(iframeRequests).toHaveLength(attemptsBeforeConversation);
+	});
+
+	test("음성 도구 흐름으로 즐겨찾기를 등록하고 다시 재생한다", async ({ page }) => {
+		const input = page.locator(".chat-input");
+		await expect(page.locator(".bgm-player")).toBeVisible({ timeout: 10_000 });
+		await expect(input).toBeEnabled({ timeout: 10_000 });
+		await page.evaluate(() => {
+			(
+				window as typeof window & {
+					__E2E_SOAK_TRACKS__?: Array<Record<string, unknown>>;
+				}
+			).__E2E_SOAK_TRACKS__ = [
+				{ action: "play", videoId: "hold-favorite", title: "Favorite Track" },
+				{ action: "favorite_add" },
+			];
+		});
+		await input.fill("첫 번째 음악 명령을 실행해줘");
+		await input.press("Enter");
+		await expect
+			.poll(() =>
+				page.evaluate(() => {
+					const favorites = JSON.parse(
+						localStorage.getItem("yt-bgm-favorites") ?? "[]",
+					) as Array<{ id: string }>;
+					return favorites.map((item) => item.id);
+				}),
+			)
+			.toContain("hold-favorite");
+
+		await page.evaluate(() => {
+			(
+				window as typeof window & {
+					__E2E_SOAK_TRACKS__?: Array<Record<string, unknown>>;
+				}
+			).__E2E_SOAK_TRACKS__ = [
+				{ action: "play", videoId: "hold-other", title: "Other Track", replace: true },
+				{ action: "favorites_play" },
+			];
+		});
+		await input.fill("두 번째 음악 명령을 실행해줘");
+		await input.press("Enter");
+		await expect(page.locator(".bgm-player")).toHaveAttribute(
+			"data-bgm-current-title",
+			"Favorite Track",
+			{ timeout: 15_000 },
+		);
+	});
+
+	test("가변 길이 10곡을 종료 기준으로 연속 재생하고 긴 곡 관측을 5초 넘게 유지한다", async ({
+		page,
+	}) => {
+		test.setTimeout(60_000);
+		const runtimeErrors: string[] = [];
+		page.on("pageerror", (error) =>
+			runtimeErrors.push(error.stack ?? error.message),
+		);
+		page.on("console", (message) => {
+			if (message.type() === "error") runtimeErrors.push(message.text());
+		});
+		const tracks = [
+			{ videoId: "soak-6200-0", title: "Long 60 Minute Mix" },
+			{ videoId: "soak-250-1", title: "Short Track 1" },
+			{ videoId: "soak-1700-2", title: "Medium Track 2" },
+			{ videoId: "soak-400-3", title: "Short Track 3" },
+			{ videoId: "soak-2300-4", title: "Long Track 4" },
+			{ videoId: "soak-300-5", title: "Short Track 5" },
+			{ videoId: "soak-1200-6", title: "Medium Track 6" },
+			{ videoId: "soak-700-7", title: "Short Track 7" },
+			{ videoId: "soak-1900-8", title: "Medium Track 8" },
+			{ videoId: "soak-500-9", title: "Final Track 9" },
+		];
+		const player = page.locator(".bgm-player");
+		await page.evaluate((queuedTracks) => {
+			(
+				window as typeof window & {
+					__E2E_SOAK_TRACKS__?: Array<Record<string, unknown>>;
+				}
+			).__E2E_SOAK_TRACKS__ = queuedTracks.map((track) => ({
+				action: "play",
+				...track,
+			}));
+		}, tracks);
+		const input = page.locator(".chat-input");
+		await input.fill("가변 길이 라디오 장기 재생");
+		await input.press("Enter");
+
+		await expect(player).toHaveAttribute("data-bgm-current-title", tracks[0].title);
+		await expect(player).toHaveAttribute("data-bgm-queue-length", "9");
+		await page.waitForTimeout(5_300);
+		await expect(player).toHaveAttribute("data-bgm-playback-status", "playing");
+		expect(Number(await player.getAttribute("data-bgm-current-time"))).toBeGreaterThan(0);
+		expect(Number(await player.getAttribute("data-bgm-duration"))).toBe(3600);
+
+		for (const track of tracks.slice(1)) {
+			await expect(player).toHaveAttribute("data-bgm-current-title", track.title, {
+				timeout: 10_000,
+			});
+		}
+		await expect(player).toHaveAttribute("data-bgm-playback-status", "ended", {
+			timeout: 10_000,
+		});
+		await expect(player).toHaveAttribute("data-bgm-queue-length", "0");
+		expect(iframeRequests.map((request) => request.videoId)).toEqual(
+			tracks.map((track) => track.videoId),
+		);
+		const playbackAttempts = iframeRequests.map(
+			(request) => new URL(request.url).searchParams.get("naiaPlayback"),
+		);
+		expect(new Set(playbackAttempts).size).toBe(tracks.length);
+		for (let index = 0; index < iframeRequests.length - 1; index += 1) {
+			const durationMs = Number(
+				/^soak-(\d+)-/.exec(iframeRequests[index].videoId)?.[1] ?? 0,
+			);
+			expect(
+				iframeRequests[index + 1].requestedAt
+					- iframeRequests[index].requestedAt,
+			).toBeGreaterThanOrEqual(durationMs);
+		}
+		const bgmRuntimeErrors = runtimeErrors.filter(
+			(error) =>
+				!error.includes("BrowserCenterArea.tsx")
+				&& !error.includes("AvatarCanvas")
+				&& !error.includes("net::ERR_CONNECTION_REFUSED"),
+		);
+		expect(bgmRuntimeErrors).toEqual([]);
 	});
 });

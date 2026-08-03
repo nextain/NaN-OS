@@ -38,6 +38,9 @@ export const BGM_ACTIONS = [
 	"resume",
 	"next",
 	"prev",
+	"favorite_add",
+	"favorite_remove",
+	"favorites_play",
 	"status",
 	"volume",
 ] as const;
@@ -85,14 +88,77 @@ export interface BgmSearchResult {
 	thumbnail?: string;
 }
 
+export interface BgmRecentTrack extends BgmSearchResult {
+	playedAt: number;
+}
+
+export const BGM_RECENT_KEY = "yt-bgm-recent-v1";
+const RECENT_TRACK_LIMIT = 20;
+
+/** Normalize common YouTube decorations so alternate uploads count as one song. */
+export function normalizeBgmTitle(title: string): string {
+	return title
+		.normalize("NFKC")
+		.toLocaleLowerCase()
+		.replace(
+			/[\[(]\s*(?:official\s*)?(?:music\s*)?(?:video|audio|lyrics?|mv|가사|뮤직비디오|오디오)\s*[\])]/giu,
+			" ",
+		)
+		.replace(/\b(?:official|audio|lyrics?|mv)\b/giu, " ")
+		.replace(/[^\p{L}\p{N}]+/gu, " ")
+		.trim();
+}
+
+export function getBgmRecentTracks(): BgmRecentTrack[] {
+	try {
+		if (typeof localStorage === "undefined") return [];
+		const parsed = JSON.parse(localStorage.getItem(BGM_RECENT_KEY) ?? "[]");
+		if (!Array.isArray(parsed)) return [];
+		return parsed
+			.filter(
+				(item): item is BgmRecentTrack =>
+					item !== null &&
+					typeof item === "object" &&
+					typeof item.id === "string" &&
+					typeof item.title === "string" &&
+					typeof item.playedAt === "number",
+			)
+			.slice(0, RECENT_TRACK_LIMIT);
+	} catch {
+		return [];
+	}
+}
+
+/** Persist only a track that the iframe has actually reported as playing. */
+export function recordBgmPlayedTrack(
+	track: BgmSearchResult,
+	playedAt = Date.now(),
+): void {
+	try {
+		if (typeof localStorage === "undefined") return;
+		const normalized = normalizeBgmTitle(track.title);
+		const next = [
+			{ ...track, playedAt },
+			...getBgmRecentTracks().filter(
+				(item) =>
+					item.id !== track.id &&
+					(!normalized || normalizeBgmTitle(item.title) !== normalized),
+			),
+		].slice(0, RECENT_TRACK_LIMIT);
+		localStorage.setItem(BGM_RECENT_KEY, JSON.stringify(next));
+	} catch {}
+}
+
 /** 주입 가능 deps — 테스트 헤르메틱(사이드카/Tauri 불요). */
 export interface BgmSkillDeps {
 	search: (query: string) => Promise<BgmSearchResult[]>;
-	/** 위젯(BgmPlayer)이 listen("agent_response") 로 받는 payload 를 발사. */
+	/** 위젯(BgmPlayer)이 Shell 전용 bgm_command 이벤트로 받는 payload를 발사. */
 	emitBgm: (payload: Record<string, unknown>) => Promise<void>;
 	playback: BgmPlaybackPort;
 	/** Number of YouTube favorites available to next/prev navigation. */
 	favoriteCount?: () => number;
+	favoriteTracks?: () => BgmSearchResult[];
+	recentTracks?: () => BgmRecentTrack[];
 	now?: () => number;
 }
 
@@ -102,6 +168,22 @@ function persistedFavoriteCount(): number {
 		return Array.isArray(parsed) ? parsed.length : 0;
 	} catch {
 		return 0;
+	}
+}
+
+function persistedFavoriteTracks(): BgmSearchResult[] {
+	try {
+		const parsed = JSON.parse(localStorage.getItem("yt-bgm-favorites") ?? "[]");
+		if (!Array.isArray(parsed)) return [];
+		return parsed.filter(
+			(item): item is BgmSearchResult =>
+				item !== null &&
+				typeof item === "object" &&
+				typeof item.id === "string" &&
+				typeof item.title === "string",
+		);
+	} catch {
+		return [];
 	}
 }
 
@@ -121,10 +203,15 @@ async function sidecarSearch(query: string): Promise<BgmSearchResult[]> {
 
 const defaultDeps: BgmSkillDeps = {
 	search: sidecarSearch,
-	// Tauri emit 은 JS listen("agent_response") 리스너에도 브로드캐스트 — BgmPlayer 가 즉시 반응.
-	emitBgm: (payload) => emit("agent_response", JSON.stringify(payload)),
+	// Tauri emit은 JS bgm_command 리스너로 브로드캐스트되어 BgmPlayer가 즉시 반응한다.
+	// Keep Shell-owned environment commands off the Agent protocol stream.
+	// Broadcasting them as agent_response makes the core router diagnose every
+	// queue operation as an unknown Agent variant.
+	emitBgm: (payload) => emit("bgm_command", JSON.stringify(payload)),
 	playback: bgmPlayback,
 	favoriteCount: persistedFavoriteCount,
+	favoriteTracks: persistedFavoriteTracks,
+	recentTracks: getBgmRecentTracks,
 };
 
 /** 도메인: volume 0..1 clamp(순수) — agent UC8 어댑터 clampVolume 동형. 비유한=0.5. */
@@ -150,17 +237,21 @@ export async function executeBgmSkill(
 	}
 	const act = action as BgmAction;
 
-	const enqueueTrack = async (track: BgmSearchResult): Promise<string> => {
+	const enqueueTrack = async (
+		track: BgmSearchResult,
+		forceReplace = false,
+	): Promise<string> => {
 		// Speech activities such as Radio DJ own their current selection. A new
 		// activity request means "change the music now", not "play this later".
 		// Ordinary chat/tool requests keep the queue-preserving behavior below.
-		if (args.replace === true) {
+		if (forceReplace || args.replace === true) {
 			const playback = deps.playback.request({
 				videoId: track.id,
 				title: track.title,
 			});
 			await deps.emitBgm({
 				type: "bgm_youtube_play",
+				playbackId: playback.playbackId,
 				videoId: track.id,
 				title: track.title,
 				...(track.thumbnail ? { thumbnail: track.thumbnail } : {}),
@@ -174,6 +265,7 @@ export async function executeBgmSkill(
 		if (result.disposition === "play") {
 			await deps.emitBgm({
 				type: "bgm_youtube_play",
+				playbackId: result.playback.playbackId,
 				videoId: track.id,
 				title: track.title,
 				...(track.thumbnail ? { thumbnail: track.thumbnail } : {}),
@@ -220,11 +312,54 @@ export async function executeBgmSkill(
 				query,
 			});
 		const currentVideoId = deps.playback.current()?.selected.videoId;
+		const recent = deps.recentTracks?.() ?? [];
+		const recentIds = new Set(recent.map((track) => track.id));
+		const recentTitles = new Set(
+			recent.map((track) => normalizeBgmTitle(track.title)).filter(Boolean),
+		);
+		const freshResults = results.filter(
+			(result) =>
+				result.id !== currentVideoId &&
+				!recentIds.has(result.id) &&
+				!recentTitles.has(normalizeBgmTitle(result.title)),
+		);
 		const selected =
 			args.replace === true
-				? results.find((result) => result.id !== currentVideoId) ?? results[0]
+				? freshResults[0] ??
+					results.find((result) => result.id !== currentVideoId) ??
+					results[0]
 				: results[0];
 		return enqueueTrack(selected);
+	}
+
+	if (act === "favorite_add" || act === "favorite_remove") {
+		const current = deps.playback.current();
+		if (!current) {
+			return JSON.stringify({
+				ok: false,
+				action: act,
+				reason: "no_current_track",
+			});
+		}
+		await deps.emitBgm({
+			type: `bgm_youtube_${act.replace("favorite_", "fav_")}`,
+		});
+		return JSON.stringify({ ok: true, action: act, selected: current.selected });
+	}
+
+	if (act === "favorites_play") {
+		const favorites = deps.favoriteTracks?.() ?? [];
+		if (favorites.length === 0) {
+			return JSON.stringify({
+				ok: false,
+				action: act,
+				reason: "no_favorites",
+			});
+		}
+		const currentVideoId = deps.playback.current()?.selected.videoId;
+		const selected =
+			favorites.find((track) => track.id !== currentVideoId) ?? favorites[0];
+		return enqueueTrack(selected, true);
 	}
 
 	if (act === "volume") {

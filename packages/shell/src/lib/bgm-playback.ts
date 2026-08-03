@@ -31,6 +31,8 @@ export interface BgmPlaybackSnapshot {
 	updatedAt: number;
 	freshUntil: number;
 	selected: BgmSelectedTrack;
+	currentTime?: number;
+	duration?: number;
 	reason?: string;
 }
 
@@ -57,6 +59,8 @@ export interface BgmPlaybackPort {
 		playbackId: string;
 		sequence: number;
 		status: Exclude<BgmPlaybackStatus, "requested">;
+		currentTime?: number;
+		duration?: number;
 		reason?: string;
 	}): BgmPlaybackSnapshot | null;
 	current(): BgmPlaybackSnapshot | null;
@@ -137,6 +141,12 @@ export function createBgmPlaybackPort(
 				status: input.status,
 				updatedAt: at,
 				freshUntil: at + FRESH_MS,
+				...(input.currentTime !== undefined
+					? { currentTime: input.currentTime }
+					: {}),
+				...(input.duration !== undefined
+					? { duration: input.duration }
+					: {}),
 				...(input.reason ? { reason: input.reason } : {}),
 			};
 			return current;
@@ -216,6 +226,12 @@ export function toBgmObservedContext(
 			status: snapshot.status,
 			updatedAt: snapshot.updatedAt,
 			freshUntil: snapshot.freshUntil,
+			...(snapshot.currentTime !== undefined
+				? { currentTime: snapshot.currentTime }
+				: {}),
+			...(snapshot.duration !== undefined
+				? { duration: snapshot.duration }
+				: {}),
 			...(snapshot.reason ? { reason: snapshot.reason } : {}),
 		},
 		currentTrack: isFreshPlaying ? snapshot.selected : null,
