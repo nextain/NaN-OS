@@ -494,7 +494,7 @@ function makeConfig(locale: string) {
 		apiKey: MOCK_API_KEY,
 		agentName: "Naia",
 		userName: locale === "ko" ? "사용자" : "User",
-		vrmModel: "/avatars/01-Sendagaya-Shino-uniform.vrm",
+		vrmModel: "/avatars/01-OL_Woman.vrm",
 		persona: "Friendly AI companion",
 		enableTools: true,
 		locale,

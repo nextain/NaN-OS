@@ -8,7 +8,7 @@ import { TAURI_BASE_MOCK_FALLBACK } from "./helpers/tauri-base-mock";
 
 const MOCK_ADK_PATH = "/home/user/naia-adk";
 const MOCK_BG_FILES = ["anime-rainbow-landscape.jpg", "background-space.png"];
-const MOCK_VRM_FILES = ["03-OL_Woman.vrm", "04-Hood_Boy.vrm"];
+const MOCK_VRM_FILES = ["01-OL_Woman.vrm", "02-Hood_Boy.vrm"];
 // Minimal valid 1x1 PNG bytes (used as mock binary payload for read_local_binary)
 const MINI_PNG = [
 	137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68, 82, 0, 0, 0, 1,

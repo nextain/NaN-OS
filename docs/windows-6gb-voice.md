@@ -42,7 +42,7 @@ Ditto까지 결합한 관측치는 약 6.50GiB이므로 6GB 프로파일에는 �
 - 계약: tier/manifest/login fail-closed, 정확한 서비스 집합, VRAM 예산
 - 런타임: CPU 선양자화 단위 테스트, Python import/compile, 실제 cold start와 `/v1/audio/speech`
 - Shell: TypeScript/Rust 단위 테스트, 설정 Playwright, 실제 Tauri에서 프로파일 선택·cascade 시작·음성 재생·VRM 화면
-- 실제 화면 기준 자산: `naia-settings/vrm-files/03-OL_Woman.vrm`. 6GB Tauri E2E는 SHA-256으로 자산 동일성을 고정하고, 로드 경로·표정 세트·발화 후 화면 유지까지 확인한다.
+- 실제 화면 기준 자산: `naia-settings/vrm-files/01-OL_Woman.vrm`. 6GB Tauri E2E는 SHA-256으로 자산 동일성을 고정하고, 로드 경로·표정 세트·발화 후 화면 유지까지 확인한다.
 - 반복성: 연속 발화 시 VRAM 증가, 오류 누적, 무응답과 잡음 여부 확인
 
 ## 2026-08-01 통합 검증 기록
@@ -53,6 +53,6 @@ Ditto까지 결합한 관측치는 약 6.50GiB이므로 6GB 프로파일에는 �
 - 같은 문장 warm 반복 10회의 처리 시간은 2.736~2.997초였고 결과 크기는 모두 259,244 bytes였다.
 - 반복 후 시스템 전체 GPU 사용량은 5,672MiB에서 안정적으로 유지됐다. 이 수치는 데스크톱 등 다른 GPU 사용자를 포함하므로 프로세스 단독 VRAM으로 해석하지 않는다.
 - 파형 검사에서 clipping 0%, 유의미한 DC offset 없음이 확인됐다. 자동 파형 검사만으로 실제 청감 잡음 부재를 단정하지는 않는다.
-- 실제 Tauri Shell E2E 1건이 통과했다. 격리된 회원 manifest에서 `03-OL_Woman.vrm`을 표시하고, Rust IPC로 cascade를 시작한 뒤 외부 LLM 답변을 받아 `naia-local-voice` TTS를 호출했다. 로그에서 14개 VRM 표정과 idle 애니메이션을 확인했으며 `/stream`과 Ditto/NVA는 사용하지 않았고 발화 후에도 VRM 화면을 유지했다.
+- 실제 Tauri Shell E2E 1건이 통과했다. 격리된 회원 manifest에서 `01-OL_Woman.vrm`을 표시하고, Rust IPC로 cascade를 시작한 뒤 외부 LLM 답변을 받아 `naia-local-voice` TTS를 호출했다. 로그에서 14개 VRM 표정과 idle 애니메이션을 확인했으며 `/stream`과 Ditto/NVA는 사용하지 않았고 발화 후에도 VRM 화면을 유지했다.
 
 이는 6GB **예산 경로와 Shell 종단 계약**의 증거다. 물리 VRAM 6GB 카드에서의 초기화 peak와 장시간 안정성은 아직 검증하지 않았으므로 하드웨어 지원 표시는 계속 experimental/measurement-gated로 유지한다.

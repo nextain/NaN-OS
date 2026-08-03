@@ -19,7 +19,7 @@ describe("01 — App Launch", () => {
 				apiKey: key,
 				agentName: "Naia",
 				userName: "Tester",
-				vrmModel: "/avatars/01-Sendagaya-Shino-uniform.vrm",
+				vrmModel: "/avatars/01-OL_Woman.vrm",
 				persona: "Friendly AI companion",
 				enableTools: true,
 				locale: "ko",

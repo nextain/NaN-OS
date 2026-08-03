@@ -323,7 +323,7 @@ describe("89 — LLM provider switching", () => {
 			enableTools: true,
 			locale: "ko",
 			onboardingComplete: true,
-			vrmModel: "/avatars/01-Sendagaya-Shino-uniform.vrm",
+			vrmModel: "/avatars/01-OL_Woman.vrm",
 			panelVisible: true,
 		});
 

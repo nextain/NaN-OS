@@ -167,7 +167,7 @@ export const config = {
 					ttsEnabled: true,
 					vllmTtsHost: "http://127.0.0.1:8910",
 					avatarProvider: "vrm",
-					vrmModel: `${settingsRoot}\\vrm-files\\03-OL_Woman.vrm`,
+					vrmModel: `${settingsRoot}\\vrm-files\\01-OL_Woman.vrm`,
 				}),
 			);
 		}, E2E_SETTINGS);

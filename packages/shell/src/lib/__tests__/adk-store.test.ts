@@ -225,8 +225,8 @@ describe("listNaiaAssets", () => {
 	it("calls invoke with correct args and maps filenames to absolute paths (Windows)", async () => {
 		setAdkPath(WIN_ADK);
 		mockInvoke.mockResolvedValue([
-			"01-Sendagaya-Shino-uniform.vrm",
-			"02-Sakurada-Fumiriya.vrm",
+			"01-OL_Woman.vrm",
+			"02-Hood_Boy.vrm",
 		]);
 
 		const result = await listNaiaAssets("vrm-files");
@@ -238,7 +238,7 @@ describe("listNaiaAssets", () => {
 		expect(result).toHaveLength(2);
 		expect(result[0]).toContain("naia-settings");
 		expect(result[0]).toContain("vrm-files");
-		expect(result[0]).toContain("01-Sendagaya-Shino-uniform.vrm");
+		expect(result[0]).toContain("01-OL_Woman.vrm");
 	});
 
 	it("calls invoke with correct args and maps filenames to absolute paths (Unix)", async () => {

@@ -3414,18 +3414,6 @@ export function SettingsTab() {
 								{t("settings.avatarVideoCascadeHint")}
 							</div>
 						)}
-						<div
-							className="settings-hint"
-							data-testid="avatar-vram-requirement"
-						>
-							{t("settings.nvaVramRequirement")}
-						</div>
-						<div
-							className="settings-hint"
-							data-testid="avatar-cloud-cascade-coming-soon"
-						>
-							{t("settings.cloudCascadeComingSoon")}
-						</div>
 						{slotRecommendation(activeLocalTier, "avatar", local8gFocus) && (
 							<div className="settings-hint" data-testid="avatar-tier-hint">
 								{t("settings.tierRecommendSummary")}: naia-video-avatar (
@@ -3441,7 +3429,7 @@ export function SettingsTab() {
 							<div className="vrm-list">
 								{naiaVrms.length === 0 && (
 									<span className="vrm-list-empty">
-										naia-settings/vrm-files/ 에 VRM 파일을 추가하세요
+										{t("settings.vrmEmpty")}
 									</span>
 								)}
 								{naiaVrms.map((path) => {

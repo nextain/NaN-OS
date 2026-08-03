@@ -540,7 +540,7 @@ function makeConfig(locale: NarrationLang = "ko") {
 		apiKey: MOCK_API_KEY,
 		agentName: inputs.agentName,
 		userName: inputs.userName,
-		vrmModel: "/avatars/01-Sendagaya-Shino-uniform.vrm",
+		vrmModel: "/avatars/01-OL_Woman.vrm",
 		persona: "Friendly AI companion",
 		enableTools: true,
 		locale,

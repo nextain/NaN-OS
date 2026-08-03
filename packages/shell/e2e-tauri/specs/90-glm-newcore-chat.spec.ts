@@ -14,7 +14,7 @@ describe("90 — GLM new-core live chat (직결)", () => {
 					model: "glm-5.1",
 					agentName: "Naia",
 					userName: "Tester",
-					vrmModel: "/avatars/01-Sendagaya-Shino-uniform.vrm",
+					vrmModel: "/avatars/01-OL_Woman.vrm",
 					persona: "Friendly AI companion",
 					enableTools: false,
 					locale: "ko",

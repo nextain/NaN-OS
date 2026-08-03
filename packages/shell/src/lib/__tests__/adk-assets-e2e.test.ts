@@ -18,10 +18,10 @@ function findPublicAssetsDir(): string {
 }
 
 const EXPECTED_VRM_FILES = [
-	"01-Sendagaya-Shino-uniform.vrm",
-	"02-Sakurada-Fumiriya.vrm",
-	"03-OL_Woman.vrm",
-	"04-Hood_Boy.vrm",
+	"01-OL_Woman.vrm",
+	"02-Hood_Boy.vrm",
+	"03-Sendagaya-Shino-uniform.vrm",
+	"04-Sakurada-Fumiriya.vrm",
 ];
 
 const EXPECTED_BGM_FILES = [
@@ -152,7 +152,7 @@ describe.skipIf(!ADK_E2E)("ADK Assets E2E — bundled assets on disk", () => {
 
 		it("skips existing files on re-copy (idempotent)", () => {
 			// Write a sentinel file that should NOT be overwritten
-			const sentinelPath = join(tmpAdkPath, "naia-settings", "vrm-files", "01-Sendagaya-Shino-uniform.vrm");
+			const sentinelPath = join(tmpAdkPath, "naia-settings", "vrm-files", "01-OL_Woman.vrm");
 			const statBefore = existsSync(sentinelPath)
 				? require("node:fs").statSync(sentinelPath).mtimeMs
 				: null;

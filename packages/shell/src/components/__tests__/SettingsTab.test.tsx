@@ -702,7 +702,7 @@ describe("SettingsTab", () => {
 		localStorage.setItem("naia-adk-path", "/home/user/naia-adk");
 		mockInvoke.mockImplementation((cmd: string) => {
 			if (cmd === "list_naia_assets")
-				return Promise.resolve(["03-OL_Woman.vrm", "04-Hood_Boy.vrm"]);
+				return Promise.resolve(["01-OL_Woman.vrm", "02-Hood_Boy.vrm"]);
 			return Promise.resolve([]);
 		});
 		render(<SettingsTab />);
@@ -710,8 +710,8 @@ describe("SettingsTab", () => {
 
 		await vi.waitFor(() => {
 			// VRM items rendered with alt text matching filenames (minus .vrm)
-			expect(screen.getByAltText("03-OL_Woman")).toBeDefined();
-			expect(screen.getByAltText("04-Hood_Boy")).toBeDefined();
+			expect(screen.getByAltText("01-OL_Woman")).toBeDefined();
+			expect(screen.getByAltText("02-Hood_Boy")).toBeDefined();
 		});
 	});
 
@@ -770,13 +770,13 @@ describe("SettingsTab", () => {
 		localStorage.setItem("naia-adk-path", "/home/user/naia-adk");
 		mockInvoke.mockImplementation((cmd: string) => {
 			if (cmd === "list_naia_assets")
-				return Promise.resolve(["03-OL_Woman.vrm"]);
+				return Promise.resolve(["01-OL_Woman.vrm"]);
 			return Promise.resolve([]);
 		});
 		render(<SettingsTab />);
 		gotoSettingsTab("avatar");
 
-		const vrmBtn = await screen.findByAltText("03-OL_Woman");
+		const vrmBtn = await screen.findByAltText("01-OL_Woman");
 		// Click the parent button
 		fireEvent.click(vrmBtn.closest("button")!);
 		expect(vrmBtn.closest("button")!.className).toContain("active");
@@ -826,19 +826,19 @@ describe("SettingsTab", () => {
 		);
 		mockInvoke.mockImplementation((cmd: string) => {
 			if (cmd === "list_naia_assets")
-				return Promise.resolve(["03-OL_Woman.vrm"]);
+				return Promise.resolve(["01-OL_Woman.vrm"]);
 			return Promise.resolve([]);
 		});
 		render(<SettingsTab />);
 
 		// VRM picker lives on the avatar tab — select VRM (auto-applies via handleVrmSelect)
 		gotoSettingsTab("avatar");
-		const vrmImg = await screen.findByAltText("03-OL_Woman");
+		const vrmImg = await screen.findByAltText("01-OL_Woman");
 		fireEvent.click(vrmImg.closest("button")!);
 
 		// VRM auto-applied — verify immediately without Save
 		const savedVrm = JSON.parse(localStorage.getItem("naia-config") || "{}");
-		expect(savedVrm.vrmModel).toContain("03-OL_Woman.vrm");
+		expect(savedVrm.vrmModel).toContain("01-OL_Woman.vrm");
 	});
 
 	it("renders theme picker", () => {

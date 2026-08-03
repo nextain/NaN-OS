@@ -194,7 +194,7 @@ describe("24 — ADK Setup Flow (#328)", function () {
 						apiKey: key,
 						agentName: "Naia",
 						userName: "E2E",
-						vrmModel: "/avatars/01-Sendagaya-Shino-uniform.vrm",
+						vrmModel: "/avatars/01-OL_Woman.vrm",
 						persona: "Friendly companion",
 						enableTools: true,
 						locale: "ko",

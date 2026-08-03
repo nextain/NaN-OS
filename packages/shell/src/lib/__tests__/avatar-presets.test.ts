@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+	AVATAR_PRESETS,
 	DEFAULT_AVATAR_MODEL,
 	isLegacyBundledVrmModel,
 } from "../avatar-presets";
@@ -12,7 +13,16 @@ describe("installed VRM defaults", () => {
 	});
 
 	it("keeps installed ADK avatars out of the legacy migration path", () => {
-		expect(isLegacyBundledVrmModel("01-Sendagaya-Shino-uniform.vrm")).toBe(false);
-		expect(isLegacyBundledVrmModel("03-OL_Woman.vrm")).toBe(false);
+		expect(isLegacyBundledVrmModel("03-Sendagaya-Shino-uniform.vrm")).toBe(false);
+		expect(isLegacyBundledVrmModel("01-OL_Woman.vrm")).toBe(false);
+	});
+
+	it("lists the adult avatars first, with OL Woman as the fresh-install default", () => {
+		expect(AVATAR_PRESETS.map(({ filename }) => filename)).toEqual([
+			"01-OL_Woman.vrm",
+			"02-Hood_Boy.vrm",
+			"03-Sendagaya-Shino-uniform.vrm",
+			"04-Sakurada-Fumiriya.vrm",
+		]);
 	});
 });

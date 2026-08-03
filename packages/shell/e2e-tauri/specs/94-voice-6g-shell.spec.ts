@@ -53,7 +53,7 @@ describe("6GB VoxCPM2 voice profile through the real Tauri Shell", () => {
 		expect(await $("[data-video-avatar]").isExisting()).toBe(false);
 		expect(
 			await $("[data-avatar-loaded]").getAttribute("data-avatar-model-path"),
-		).toMatch(/[\\/]03-OL_Woman\.vrm$/);
+		).toMatch(/[\\/]01-OL_Woman\.vrm$/);
 
 		// The saved profile must restore after the secure credential is hydrated;
 		// a direct start below is then only an idempotent readiness read.

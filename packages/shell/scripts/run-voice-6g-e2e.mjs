@@ -9,9 +9,9 @@ const candidates = [
 	process.env.NAIA_E2E_VRM_SOURCE,
 	resolve(
 		shellDir,
-		"../../../../naia-settings/vrm-files/03-OL_Woman.vrm",
+		"../../../../naia-settings/vrm-files/01-OL_Woman.vrm",
 	),
-	resolve(homedir(), ".naia/vrm-files/03-OL_Woman.vrm"),
+	resolve(homedir(), ".naia/vrm-files/01-OL_Woman.vrm"),
 ].filter(Boolean);
 const vrmSource = candidates.find((candidate) => existsSync(candidate));
 if (!vrmSource) {
@@ -26,7 +26,7 @@ const actualVrmSha256 = createHash("sha256")
 	.digest("hex");
 if (actualVrmSha256 !== expectedVrmSha256) {
 	throw new Error(
-		`03-OL_Woman.vrm SHA-256 mismatch: expected ${expectedVrmSha256}, got ${actualVrmSha256}`,
+		`01-OL_Woman.vrm SHA-256 mismatch: expected ${expectedVrmSha256}, got ${actualVrmSha256}`,
 	);
 }
 

@@ -8,7 +8,7 @@ export interface AvatarPreset {
  * A VRM is an ADK-owned asset, so it cannot have a package-relative default.
  * The old `/avatars/Naia.vrm` value was left over from an early bundled demo
  * and is not installed by a fresh ADK. Callers select the first installed VRM
- * instead (currently the Shino character).
+ * instead (currently the OL Woman character).
  */
 export const DEFAULT_AVATAR_MODEL = "";
 
@@ -36,17 +36,17 @@ export type AvatarGender = "female" | "male";
 
 export const AVATAR_PRESETS: AvatarPreset[] = [
 	{
-		filename: "01-Sendagaya-Shino-uniform.vrm",
-		label: "Shino",
+		filename: "01-OL_Woman.vrm",
+		label: "OL Woman",
 		gender: "female",
 	},
 	{
-		filename: "02-Sakurada-Fumiriya.vrm",
-		label: "Sakurada Fumiriya",
+		filename: "02-Hood_Boy.vrm",
+		label: "Hood Boy",
 		gender: "male",
 	},
-	{ filename: "03-OL_Woman.vrm", label: "Girl", gender: "female" },
-	{ filename: "04-Hood_Boy.vrm", label: "Boy", gender: "male" },
+	{ filename: "03-Sendagaya-Shino-uniform.vrm", label: "Shino", gender: "female" },
+	{ filename: "04-Sakurada-Fumiriya.vrm", label: "Sakurada Fumiriya", gender: "male" },
 ];
 
 const VOICE_DEFAULTS: Record<AvatarGender, string> = {

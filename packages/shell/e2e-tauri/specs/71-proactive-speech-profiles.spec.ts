@@ -271,7 +271,7 @@ describe("71 — Proactive speech profiles (#82)", () => {
 					agentName: current.agentName || "Naia",
 					userName: current.userName || "Tester",
 					vrmModel:
-						current.vrmModel || "/avatars/01-Sendagaya-Shino-uniform.vrm",
+						current.vrmModel || "/avatars/01-OL_Woman.vrm",
 					persona: current.persona || "Friendly AI companion",
 					enableTools: true,
 					locale: "ko",

@@ -399,14 +399,14 @@ test.describe("FR-7: video avatar gated by cascade capability", () => {
 	test("logged-in shell still disables video avatar below 8GB", async ({
 		page,
 	}) => {
-		// Cloud cascade is future-only; current NVA requires verified local 8GB hardware.
+		// Current video avatar requires verified local 8GB hardware.
 		await gotoModelSettings(page, { vramGb: 4, model: "gemini-3.5-flash" });
 		await page.locator('[data-settings-tab="avatar"]').click();
 		await expect(
 			page.locator('option[value="naia-video-avatar"]'),
 		).toBeDisabled();
 		await expect(
-			page.locator('[data-testid="avatar-vram-requirement"]'),
+			page.locator('[data-testid="avatar-cascade-required"]'),
 		).toContainText(/8GB/i);
 	});
 

@@ -298,7 +298,7 @@ export async function ensureAppReady(): Promise<void> {
 						agentName: config.agentName || "Naia",
 						userName: config.userName || "Tester",
 						vrmModel:
-							config.vrmModel || "/avatars/01-Sendagaya-Shino-uniform.vrm",
+							config.vrmModel || "/avatars/01-OL_Woman.vrm",
 						persona: config.persona || "Friendly AI companion",
 						enableTools: true,
 						locale: config.locale || "ko",
@@ -313,7 +313,7 @@ export async function ensureAppReady(): Promise<void> {
 						agentName: config.agentName || "Naia",
 						userName: config.userName || "Tester",
 						vrmModel:
-							config.vrmModel || "/avatars/01-Sendagaya-Shino-uniform.vrm",
+							config.vrmModel || "/avatars/01-OL_Woman.vrm",
 						persona: config.persona || "Friendly AI companion",
 						enableTools: true,
 						locale: config.locale || "ko",

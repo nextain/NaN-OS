@@ -173,7 +173,7 @@ export function resetCodexE2eRoot(): void {
 	const voiceVrmPath = resolve(
 		E2E_SETTINGS,
 		"vrm-files",
-		"03-OL_Woman.vrm",
+		"01-OL_Woman.vrm",
 	);
 	if (E2E_VOICE_6G_ENABLED) {
 		if (!E2E_VRM_SOURCE || !existsSync(E2E_VRM_SOURCE)) {
