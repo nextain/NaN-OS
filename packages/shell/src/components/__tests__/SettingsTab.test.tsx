@@ -956,14 +956,10 @@ describe("SettingsTab — memory tab (#298)", () => {
 		expect(screen.queryByTestId("proactive-knowledge-scope")).toBeNull();
 
 		gotoSettingsTab("general");
-		const generalProfile = screen.getByTestId(
-			"proactive-speech-profile",
-		) as HTMLSelectElement;
-		expect(
-			Array.from(generalProfile.options).map((option) => option.value),
-		).toEqual(["disabled", "exhibition_intro"]);
+		expect(screen.queryByTestId("proactive-speech-settings")).toBeNull();
+		expect(screen.queryByTestId("proactive-speech-profile")).toBeNull();
 		expect(screen.queryByTestId("proactive-bgm-autoplay")).toBeNull();
-		expect(screen.getByTestId("proactive-knowledge-scope")).toBeDefined();
+		expect(screen.queryByTestId("proactive-knowledge-scope")).toBeNull();
 	});
 
 	it("selects the visible Windows TRT profile without replacing the external brain", async () => {

@@ -1,8 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import { writeNaiaUiConfig } from "../lib/adk-store";
-import { loadConfig, loadConfigWithSecrets, saveConfig, type AppConfig } from "../lib/config";
-import { t } from "../lib/i18n";
 import { getCameraActions } from "../lib/avatar/camera-actions";
+import {
+	type AppConfig,
+	loadConfig,
+	loadConfigWithSecrets,
+	saveConfig,
+} from "../lib/config";
+import { t } from "../lib/i18n";
 import { useAppStore } from "../stores/app";
 
 /**
@@ -38,12 +43,13 @@ export function AiControlBar() {
 					...current,
 					profile,
 					// Existing saved profiles retain their behaviour until a user changes it.
-					permitted: config.proactiveSpeechPermitted ?? (profile !== "disabled"),
+					permitted: config.proactiveSpeechPermitted ?? profile !== "disabled",
 				}));
 			});
 		};
 		const onActivity = (event: Event) => {
-			const active = (event as CustomEvent<{ active?: boolean }>).detail?.active === true;
+			const active =
+				(event as CustomEvent<{ active?: boolean }>).detail?.active === true;
 			setProactive((current) => ({ ...current, activityActive: active }));
 		};
 		refresh();
@@ -71,12 +77,16 @@ export function AiControlBar() {
 			if (!config) return;
 			const permitted = !proactive.permitted;
 			const next = { ...config, proactiveSpeechPermitted: permitted };
-			const persisted = await writeNaiaUiConfig(next as unknown as Record<string, unknown>);
+			const persisted = await writeNaiaUiConfig(
+				next as unknown as Record<string, unknown>,
+			);
 			if (!persisted) return;
 			saveConfig(next);
-			window.dispatchEvent(new CustomEvent("naia-proactive-permission-change", {
-				detail: { permitted },
-			}));
+			window.dispatchEvent(
+				new CustomEvent("naia-proactive-permission-change", {
+					detail: { permitted },
+				}),
+			);
 		})();
 	};
 
@@ -87,7 +97,11 @@ export function AiControlBar() {
 				className={`bgm-ai-toggle${aiInterferenceEnabled ? " bgm-ai-toggle--active" : ""}`}
 				onClick={toggleAiInterferenceEnabled}
 				aria-pressed={aiInterferenceEnabled}
-				title={aiInterferenceEnabled ? t("ai.interferenceOn") : t("ai.interferenceOff")}
+				title={
+					aiInterferenceEnabled
+						? t("ai.interferenceOn")
+						: t("ai.interferenceOff")
+				}
 			>
 				<span className="bgm-ai-toggle__dot" />
 				AI
@@ -115,9 +129,18 @@ export function AiControlBar() {
 				aria-pressed={proactive.permitted}
 				aria-label={proactiveTitle}
 				title={proactiveTitle}
-				data-proactive-state={proactiveBlocked ? "blocked" : proactiveActive ? "active" : proactive.permitted ? "ready" : "off"}
+				data-proactive-state={
+					proactiveBlocked
+						? "blocked"
+						: proactiveActive
+							? "active"
+							: proactive.permitted
+								? "ready"
+								: "off"
+				}
 			>
 				<span className="bgm-ai-toggle__dot" />
+				{t("ai.proactive")}
 			</button>
 
 			<div className="ai-control-bar__sep" />
@@ -126,7 +149,10 @@ export function AiControlBar() {
 				type="button"
 				className={`bgm-ai-toggle${joystickActive ? " bgm-ai-toggle--active" : ""}`}
 				title={t("ai.avatarRotate")}
-				style={{ cursor: joystickActive ? "grabbing" : "grab", touchAction: "none" }}
+				style={{
+					cursor: joystickActive ? "grabbing" : "grab",
+					touchAction: "none",
+				}}
 				onPointerDown={(e) => {
 					e.currentTarget.setPointerCapture(e.pointerId);
 					joystickActiveRef.current = true;
@@ -148,8 +174,7 @@ export function AiControlBar() {
 					setJoystickActive(false);
 				}}
 			>
-				<span className="bgm-ai-toggle__dot" />
-				⊕
+				<span className="bgm-ai-toggle__dot" />⊕
 			</button>
 
 			<button
@@ -178,8 +203,7 @@ export function AiControlBar() {
 					setPanActive(false);
 				}}
 			>
-				<span className="bgm-ai-toggle__dot" />
-				✥
+				<span className="bgm-ai-toggle__dot" />✥
 			</button>
 
 			<button
@@ -188,8 +212,7 @@ export function AiControlBar() {
 				title={t("ai.avatarReset")}
 				onClick={() => getCameraActions().reset()}
 			>
-				<span className="bgm-ai-toggle__dot" />
-				⌂
+				<span className="bgm-ai-toggle__dot" />⌂
 			</button>
 		</div>
 	);

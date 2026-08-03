@@ -74,7 +74,7 @@ const { pairedAgent, agentScript, agentProtoDir } = assertPairedAgent();
 // from that state instead of reporting unrelated TypeScript "module not found"
 // errors. The frozen lockfile keeps this preparation deterministic.
 if (!existsSync(resolve(pairedAgent, "node_modules"))) {
-	const agentInstall = spawnSync("pnpm", ["install", "--frozen-lockfile"], {
+	const agentInstall = spawnSync("pnpm", ["--ignore-workspace", "install", "--frozen-lockfile"], {
 		cwd: pairedAgent,
 		stdio: "inherit",
 		shell: process.platform === "win32",
@@ -82,7 +82,7 @@ if (!existsSync(resolve(pairedAgent, "node_modules"))) {
 	if (agentInstall.status !== 0)
 		throw new Error("The paired naia-agent dependency install failed");
 }
-const agentBuild = spawnSync("pnpm", ["run", "build"], {
+const agentBuild = spawnSync("pnpm", ["--ignore-workspace", "run", "build"], {
 	cwd: pairedAgent,
 	stdio: "inherit",
 	shell: process.platform === "win32",

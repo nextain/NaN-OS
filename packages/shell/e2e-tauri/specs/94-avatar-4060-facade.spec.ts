@@ -75,7 +75,10 @@ describe("4060 local voice and Ditto avatar through the real Tauri Shell", () =>
 		const bootConfigJson = await tauriInvoke<string>("read_naia_config", {
 			adkPath: adkPath ?? "",
 		});
-		const bootFileConfig = JSON.parse(bootConfigJson) as Record<string, unknown>;
+		const bootFileConfig = JSON.parse(bootConfigJson) as Record<
+			string,
+			unknown
+		>;
 		const detectedVramGb = await tauriInvoke<number | null>(
 			"detect_gpu_vram",
 			{},
@@ -95,23 +98,23 @@ describe("4060 local voice and Ditto avatar through the real Tauri Shell", () =>
 		try {
 			await browser.waitUntil(
 				async () => {
-				const bootConfig = await browser.execute(
-					() =>
-						JSON.parse(localStorage.getItem("naia-config") ?? "{}") as Record<
-							string,
-							unknown
-						>,
-				);
-				return (
-					bootConfig.avatarProvider === "naia-video-avatar" &&
-					bootConfig.nvaModel === "naia" &&
-					bootConfig.ttsProvider === "naia-local-voice" &&
-					typeof bootConfig.vllmTtsHost === "string" &&
-					(() => {
-						const host = new URL(bootConfig.vllmTtsHost).hostname;
-						return host === "127.0.0.1" || host === "localhost";
-					})()
-				);
+					const bootConfig = await browser.execute(
+						() =>
+							JSON.parse(localStorage.getItem("naia-config") ?? "{}") as Record<
+								string,
+								unknown
+							>,
+					);
+					return (
+						bootConfig.avatarProvider === "naia-video-avatar" &&
+						bootConfig.nvaModel === "naia" &&
+						bootConfig.ttsProvider === "naia-local-voice" &&
+						typeof bootConfig.vllmTtsHost === "string" &&
+						(() => {
+							const host = new URL(bootConfig.vllmTtsHost).hostname;
+							return host === "127.0.0.1" || host === "localhost";
+						})()
+					);
 				},
 				{
 					timeout: 20_000,
@@ -161,6 +164,59 @@ describe("4060 local voice and Ditto avatar through the real Tauri Shell", () =>
 			{
 				timeout: 30_000,
 				timeoutMsg: "cascade avatar did not receive its idle media",
+			},
+		);
+
+		// Video-avatar-only mode must keep the avatar mounted when voice output is off.
+		await browser.execute(() => {
+			const raw = window.localStorage.getItem("naia-config");
+			const config = raw ? JSON.parse(raw) : {};
+			window.localStorage.setItem(
+				"naia-config",
+				JSON.stringify({ ...config, ttsEnabled: false }),
+			);
+			window.dispatchEvent(new CustomEvent("naia-config-changed"));
+		});
+		await browser.waitUntil(
+			() =>
+				browser.execute(() => {
+					const raw = window.localStorage.getItem("naia-config");
+					const config = raw ? JSON.parse(raw) : {};
+					const avatar = document.querySelector("[data-video-avatar]");
+					const video = avatar?.querySelector("video");
+					return (
+						config.ttsEnabled === false &&
+						avatar?.getAttribute("data-video-avatar-loaded") === "true" &&
+						Boolean(video?.getAttribute("src"))
+					);
+				}),
+			{
+				timeout: 10_000,
+				interval: 250,
+				timeoutMsg: "video avatar disappeared after TTS was disabled",
+			},
+		);
+
+		// Re-enable voice and continue with the real voice + TRT lip-sync path below.
+		await browser.execute(() => {
+			const raw = window.localStorage.getItem("naia-config");
+			const config = raw ? JSON.parse(raw) : {};
+			window.localStorage.setItem(
+				"naia-config",
+				JSON.stringify({ ...config, ttsEnabled: true }),
+			);
+			window.dispatchEvent(new CustomEvent("naia-config-changed"));
+		});
+		await browser.waitUntil(
+			() =>
+				browser.execute(() => {
+					const raw = window.localStorage.getItem("naia-config");
+					return raw ? JSON.parse(raw).ttsEnabled === true : false;
+				}),
+			{
+				timeout: 5_000,
+				interval: 200,
+				timeoutMsg: "TTS was not re-enabled for combined avatar + voice test",
 			},
 		);
 		await browser.waitUntil(
@@ -214,14 +270,14 @@ describe("4060 local voice and Ditto avatar through the real Tauri Shell", () =>
 			});
 			const avatarVideos = Array.from(
 				document.querySelectorAll<HTMLVideoElement>(
-				"[data-video-avatar] video",
+					"[data-video-avatar] video",
 				),
 			);
 			const backVideo =
 				avatarVideos.find((candidate) => candidate.style.zIndex === "1") ??
 				avatarVideos.at(-1);
 			backVideo?.addEventListener("playing", () => {
-					w.__naiaAvatarPlaybackStarts?.push(performance.now());
+				w.__naiaAvatarPlaybackStarts?.push(performance.now());
 			});
 			captureOutput();
 			if (!w.__naiaOriginalFetch) {
@@ -240,19 +296,22 @@ describe("4060 local voice and Ditto avatar through the real Tauri Shell", () =>
 				};
 			}
 		});
-		await sendMessage(
-			"Respond with exactly 안녕. and nothing else.",
-		);
+		await sendMessage("Respond with exactly 안녕. and nothing else.");
 		await browser.waitUntil(
 			() =>
 				browser.execute(() => {
-					const events = (window as typeof window & {
-						__naiaCascadeFetches?: Array<{ url: string; status: number }>;
-					}).__naiaCascadeFetches ?? [];
+					const events =
+						(
+							window as typeof window & {
+								__naiaCascadeFetches?: Array<{ url: string; status: number }>;
+							}
+						).__naiaCascadeFetches ?? [];
 					const hasPath = (path: string) =>
 						events.some((event) => {
 							try {
-								return new URL(event.url).pathname === path && event.status === 200;
+								return (
+									new URL(event.url).pathname === path && event.status === 200
+								);
 							} catch {
 								return false;
 							}
@@ -261,8 +320,7 @@ describe("4060 local voice and Ditto avatar through the real Tauri Shell", () =>
 						events.some(
 							(event) =>
 								event.url.endsWith("/v1/audio/speech") && event.status === 200,
-						) &&
-						hasPath("/stream")
+						) && hasPath("/stream")
 					);
 				}),
 			{
@@ -274,9 +332,12 @@ describe("4060 local voice and Ditto avatar through the real Tauri Shell", () =>
 		await browser.waitUntil(
 			() =>
 				browser.execute(() => {
-					const events = (window as typeof window & {
-						__naiaOutputStages?: Array<{ text: string }>;
-					}).__naiaOutputStages ?? [];
+					const events =
+						(
+							window as typeof window & {
+								__naiaOutputStages?: Array<{ text: string }>;
+							}
+						).__naiaOutputStages ?? [];
 					return events.some((event) => event.text.includes("안녕."));
 				}),
 			{
@@ -410,13 +471,20 @@ describe("4060 local voice and Ditto avatar through the real Tauri Shell", () =>
 						__naiaCascadeFetches?: Array<{ url: string; status: number }>;
 						__naiaAvatarPlaybackStarts?: number[];
 					};
-					const paths = (w.__naiaCascadeFetches ?? []).filter(
-						(event) => event.status === 200,
-					).map((event) => {
-						try { return new URL(event.url).pathname; } catch { return ""; }
-					});
-					return paths.includes("/v1/audio/speech") && paths.includes("/stream") &&
-						(w.__naiaAvatarPlaybackStarts?.length ?? 0) > 0;
+					const paths = (w.__naiaCascadeFetches ?? [])
+						.filter((event) => event.status === 200)
+						.map((event) => {
+							try {
+								return new URL(event.url).pathname;
+							} catch {
+								return "";
+							}
+						});
+					return (
+						paths.includes("/v1/audio/speech") &&
+						paths.includes("/stream") &&
+						(w.__naiaAvatarPlaybackStarts?.length ?? 0) > 0
+					);
 				}),
 			{
 				timeout: 120_000,
@@ -432,9 +500,12 @@ describe("4060 local voice and Ditto avatar through the real Tauri Shell", () =>
 		const firstSrc = await iframe.getAttribute("src");
 		const firstTitle = await player.getAttribute("data-bgm-current-title");
 		const firstCascadeCounts = await browser.execute(() => {
-			const fetches = (window as typeof window & {
-				__naiaCascadeFetches?: Array<{ url: string; status: number }>;
-			}).__naiaCascadeFetches ?? [];
+			const fetches =
+				(
+					window as typeof window & {
+						__naiaCascadeFetches?: Array<{ url: string; status: number }>;
+					}
+				).__naiaCascadeFetches ?? [];
 			const countPath = (path: string) =>
 				fetches.filter((event) => {
 					try {
@@ -443,7 +514,10 @@ describe("4060 local voice and Ditto avatar through the real Tauri Shell", () =>
 						return false;
 					}
 				}).length;
-			return { speech: countPath("/v1/audio/speech"), stream: countPath("/stream") };
+			return {
+				speech: countPath("/v1/audio/speech"),
+				stream: countPath("/stream"),
+			};
 		});
 		await submitText("분위기 바꿔줘");
 		await browser.waitUntil(
@@ -453,8 +527,9 @@ describe("4060 local voice and Ditto avatar through the real Tauri Shell", () =>
 				const nextSrc = await (await $(".app-bg-iframe")).getAttribute("src");
 				return Boolean(
 					nextSrc &&
-					nextSrc !== firstSrc &&
-					(await player.getAttribute("data-bgm-playback-status")) === "loading",
+						nextSrc !== firstSrc &&
+						(await player.getAttribute("data-bgm-playback-status")) ===
+							"loading",
 				);
 			},
 			{
@@ -476,7 +551,9 @@ describe("4060 local voice and Ditto avatar through the real Tauri Shell", () =>
 				timeoutMsg: "replacement iframe did not report observed playing",
 			},
 		);
-		const replacementTitle = await player.getAttribute("data-bgm-current-title");
+		const replacementTitle = await player.getAttribute(
+			"data-bgm-current-title",
+		);
 		expect(replacementTitle).toBeTruthy();
 		expect(replacementTitle).not.toBe(firstTitle);
 		await browser.waitUntil(
@@ -489,7 +566,9 @@ describe("4060 local voice and Ditto avatar through the real Tauri Shell", () =>
 					const countPath = (path: string) =>
 						fetches.filter((event) => {
 							try {
-								return new URL(event.url).pathname === path && event.status === 200;
+								return (
+									new URL(event.url).pathname === path && event.status === 200
+								);
 							} catch {
 								return false;
 							}
@@ -497,8 +576,11 @@ describe("4060 local voice and Ditto avatar through the real Tauri Shell", () =>
 					const stage = document.querySelector<HTMLElement>(
 						".chat-output-stage[data-stage]",
 					)?.dataset.stage;
-					return countPath("/v1/audio/speech") > baseline.speech &&
-						countPath("/stream") > baseline.stream && stage === "render";
+					return (
+						countPath("/v1/audio/speech") > baseline.speech &&
+						countPath("/stream") > baseline.stream &&
+						stage === "render"
+					);
 				}, firstCascadeCounts),
 			{
 				timeout: 120_000,
@@ -541,7 +623,10 @@ describe("4060 local voice and Ditto avatar through the real Tauri Shell", () =>
 			document.querySelector(".chat-input")?.addEventListener(
 				"keydown",
 				(event) => {
-					if ((event as KeyboardEvent).key === "Enter" && w.__naiaBargeInTiming) {
+					if (
+						(event as KeyboardEvent).key === "Enter" &&
+						w.__naiaBargeInTiming
+					) {
 						w.__naiaBargeInTiming.keyAt = performance.now();
 					}
 				},
@@ -553,30 +638,40 @@ describe("4060 local voice and Ditto avatar through the real Tauri Shell", () =>
 			() =>
 				browser.execute(() =>
 					Boolean(
-						(window as typeof window & {
-							__naiaBargeInTiming?: { clearedAt: number };
-						}).__naiaBargeInTiming?.clearedAt,
+						(
+							window as typeof window & {
+								__naiaBargeInTiming?: { clearedAt: number };
+							}
+						).__naiaBargeInTiming?.clearedAt,
 					),
 				),
 			{
 				timeout: 2_000,
-				timeoutMsg: "user barge-in did not clear active Ditto render within 250ms",
+				timeoutMsg:
+					"user barge-in did not clear active Ditto render within 250ms",
 			},
 		);
 		const bargeInTiming = await browser.execute(
 			() =>
-				(window as typeof window & {
-					__naiaBargeInTiming?: { keyAt: number; clearedAt: number };
-				}).__naiaBargeInTiming,
+				(
+					window as typeof window & {
+						__naiaBargeInTiming?: { keyAt: number; clearedAt: number };
+					}
+				).__naiaBargeInTiming,
 		);
 		expect(bargeInTiming).toBeTruthy();
-		expect(bargeInTiming!.clearedAt - bargeInTiming!.keyAt).toBeLessThanOrEqual(250);
-		expect(await player.getAttribute("data-bgm-playback-status")).toBe("playing");
+		expect(bargeInTiming!.clearedAt - bargeInTiming!.keyAt).toBeLessThanOrEqual(
+			250,
+		);
+		expect(await player.getAttribute("data-bgm-playback-status")).toBe(
+			"playing",
+		);
 		await browser.waitUntil(
 			() =>
 				browser.execute(() =>
-					Array.from(document.querySelectorAll<HTMLElement>(".chat-message.user"))
-						.some((node) => node.innerText.includes("지금 재생 상태")),
+					Array.from(
+						document.querySelectorAll<HTMLElement>(".chat-message.user"),
+					).some((node) => node.innerText.includes("지금 재생 상태")),
 				),
 			{
 				timeout: 30_000,

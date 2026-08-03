@@ -98,9 +98,12 @@ test.describe("S-SLOT settings — gate + 6 cloud slots (#gate-slots)", () => {
 		await expect(card).not.toContainText("skill_youtube_bgm");
 		await expect(page.getByTestId("proactive-speech-profile")).toHaveCount(0);
 
-		const columns = await card.locator("..").evaluate(
-			(element) => getComputedStyle(element).gridTemplateColumns.split(" ").length,
-		);
+		const columns = await card
+			.locator("..")
+			.evaluate(
+				(element) =>
+					getComputedStyle(element).gridTemplateColumns.split(" ").length,
+			);
 		expect(columns).toBe(2);
 
 		const memoCard = page.locator(".skill-card", { hasText: "skill_memo" });
@@ -120,28 +123,33 @@ test.describe("S-SLOT settings — gate + 6 cloud slots (#gate-slots)", () => {
 		await card.getByRole("button", { name: /Youtube Radio DJ/ }).click();
 		await expect(card).toContainText("skill_youtube_bgm");
 		await expect(page.getByTestId("proactive-idle-ms")).toHaveValue("120000");
-		await expect(page.getByTestId("proactive-interval-ms")).toHaveValue("900000");
+		await expect(page.getByTestId("proactive-interval-ms")).toHaveValue(
+			"900000",
+		);
 		await expect(page.getByTestId("proactive-timezone")).not.toHaveValue("");
 		const consent = page.getByTestId("proactive-weather-consent");
 		await consent.check();
 		await expect(consent).toBeChecked();
 		await page.getByTestId("proactive-weather-latitude").fill("37.5665");
 		await page.getByTestId("proactive-weather-longitude").fill("126.978");
-		await card.getByRole("button", { name: "Save proactive speech settings" }).click();
+		await card
+			.getByRole("button", { name: "Save proactive speech settings" })
+			.click();
 		await expect
 			.poll(() =>
-				page.evaluate(() =>
-					JSON.parse(localStorage.getItem("naia-config") ?? "{}").proactiveSpeechWeatherConsented,
+				page.evaluate(
+					() =>
+						JSON.parse(localStorage.getItem("naia-config") ?? "{}")
+							.proactiveSpeechWeatherConsented,
 				),
 			)
 			.toBe(true);
 
 		await page.locator('[data-settings-tab="general"]').click();
+		await expect(page.getByTestId("proactive-speech-settings")).toHaveCount(0);
+		await page.locator('[data-settings-tab="skills"]').click();
+		await card.getByRole("button", { name: /Youtube Radio DJ/ }).click();
 		await expect(page.getByTestId("proactive-speech-settings")).toHaveCount(1);
-		const exhibitionProfile = page.getByTestId("proactive-speech-profile");
-		await expect(exhibitionProfile.locator('option[value="exhibition_intro"]')).toHaveCount(1);
-		await expect(exhibitionProfile.locator('option[value="personal_radio_dj"]')).toHaveCount(0);
-		await expect(page.getByTestId("proactive-bgm-autoplay")).toHaveCount(0);
 		await expect(page.getByTestId("proactive-weather-consent")).toBeChecked();
 	});
 
