@@ -1796,9 +1796,10 @@ fn normalize_paired_path(path: &std::path::Path) -> String {
 
 fn runtime_git_output(dir: &std::path::Path, args: &[&str]) -> Result<String, String> {
     let dir_string = dir.to_string_lossy().to_string();
-    let output = std::process::Command::new("git")
-        .args(["-C", dir_string.as_str()])
-        .args(args)
+    let mut command = std::process::Command::new("git");
+    command.args(["-C", dir_string.as_str()]).args(args);
+    platform::hide_console(&mut command);
+    let output = command
         .output()
         .map_err(|e| format!("git invocation failed for {}: {e}", dir.display()))?;
     if !output.status.success() {
@@ -4569,10 +4570,10 @@ async fn list_audio_output_devices() -> Result<Vec<serde_json::Value>, String> {
 /// 遺꾩궛 遺덇?, TP ??蹂꾨룄). 利?3090횞2 硫?48 ???꾨땶 24(per-GPU ?덉궛??留욎쓬).
 /// detect_gpu_vram(async, capacity-only)怨??숈씪 nvidia-smi, 釉붾줈??而⑦뀓?ㅽ듃??
 fn detect_vram_gb_blocking() -> Option<f64> {
-    let output = std::process::Command::new("nvidia-smi")
-        .args(["--query-gpu=memory.total", "--format=csv,noheader,nounits"])
-        .output()
-        .ok()?;
+    let mut command = std::process::Command::new("nvidia-smi");
+    command.args(["--query-gpu=memory.total", "--format=csv,noheader,nounits"]);
+    platform::hide_console(&mut command);
+    let output = command.output().ok()?;
     if !output.status.success() {
         return None;
     }
@@ -4828,14 +4829,15 @@ fn voxcpm2_model_is_cached(runtime_root: &std::path::Path) -> bool {
 }
 
 fn cascade_python_can_import_loader(python: &str, loader_dir: &str) -> bool {
-    Command::new(python)
+    let mut command = Command::new(python);
+    command
         .args(["-c", "import loader"])
         .current_dir(loader_dir)
         .stdin(Stdio::null())
         .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .status()
-        .is_ok_and(|status| status.success())
+        .stderr(Stdio::null());
+    platform::hide_console(&mut command);
+    command.status().is_ok_and(|status| status.success())
 }
 
 fn probe_cascade_installation(
@@ -5442,9 +5444,10 @@ async fn write_slots_manifest(adk_path: String, json: String) -> Result<(), Stri
 #[tauri::command]
 async fn detect_gpu_vram() -> Result<serde_json::Value, String> {
     let output = tokio::task::spawn_blocking(|| {
-        std::process::Command::new("nvidia-smi")
-            .args(["--query-gpu=memory.total", "--format=csv,noheader,nounits"])
-            .output()
+        let mut command = std::process::Command::new("nvidia-smi");
+        command.args(["--query-gpu=memory.total", "--format=csv,noheader,nounits"]);
+        platform::hide_console(&mut command);
+        command.output()
     })
     .await
     .map_err(|e| format!("task error: {e}"))?;
@@ -8496,10 +8499,10 @@ fn coding_job_to_shell_value(job: agent_grpc::pb::CodingJob) -> Result<serde_jso
 }
 
 fn course_git_output(workspace_path: &str, args: &[&str]) -> Result<String, String> {
-    let output = Command::new("git")
-        .arg("-C")
-        .arg(workspace_path)
-        .args(args)
+    let mut command = Command::new("git");
+    command.arg("-C").arg(workspace_path).args(args);
+    platform::hide_console(&mut command);
+    let output = command
         .output()
         .map_err(|_| "course_workspace_not_ready".to_string())?;
     if !output.status.success() {
@@ -10233,6 +10236,57 @@ mod tests {
         let error = ensure_memory_reload_succeeded("invalid memory role", true).unwrap_err();
         assert!(error.contains("previous memory retained=true"));
         assert!(error.contains("invalid memory role"));
+    }
+
+    #[test]
+    fn windows_runtime_child_processes_apply_the_hidden_console_policy() {
+        fn function_source<'a>(source: &'a str, marker: &str) -> &'a str {
+            let start = source
+                .find(marker)
+                .unwrap_or_else(|| panic!("missing {marker}"));
+            let relative_body = source[start..]
+                .find('{')
+                .unwrap_or_else(|| panic!("missing body for {marker}"));
+            let body_start = start + relative_body;
+            let mut depth = 0_i32;
+            for (offset, ch) in source[body_start..].char_indices() {
+                match ch {
+                    '{' => depth += 1,
+                    '}' => {
+                        depth -= 1;
+                        if depth == 0 {
+                            return &source[start..body_start + offset + 1];
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            panic!("unterminated body for {marker}");
+        }
+
+        let lib_source = include_str!("lib.rs");
+        for marker in [
+            "fn runtime_git_output(",
+            "fn detect_vram_gb_blocking(",
+            "fn cascade_python_can_import_loader(",
+            "async fn detect_gpu_vram(",
+            "fn course_git_output(",
+        ] {
+            assert!(
+                function_source(lib_source, marker).contains("platform::hide_console"),
+                "{marker} must hide child consoles on Windows"
+            );
+        }
+        assert!(
+            function_source(include_str!("app.rs"), "pub fn app_install(")
+                .contains("crate::platform::hide_console"),
+            "app_install must hide the git console on Windows"
+        );
+        assert!(
+            function_source(include_str!("pty.rs"), "fn pty_execute_sync_blocking(")
+                .contains("crate::platform::hide_console"),
+            "pty_execute_sync must hide cmd.exe on Windows"
+        );
     }
 
     #[test]

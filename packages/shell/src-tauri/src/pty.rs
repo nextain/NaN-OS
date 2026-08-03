@@ -275,6 +275,7 @@ fn pty_execute_sync_blocking(
     let mut cmd = if cfg!(target_os = "windows") {
         let mut cmd = std::process::Command::new("cmd");
         cmd.arg("/C").arg(&command);
+        crate::platform::hide_console(&mut cmd);
         cmd
     } else {
         let mut cmd = std::process::Command::new("bash");

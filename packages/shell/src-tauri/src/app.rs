@@ -388,8 +388,10 @@ pub fn app_install(source: String) -> Result<AppInstallResult, String> {
     }
 
     // Clone via arg vector — no shell, no shell injection. --depth 1 for speed.
-    let output = std::process::Command::new("git")
-        .args(["clone", "--depth", "1", source, &tmp.to_string_lossy()])
+    let mut command = std::process::Command::new("git");
+    command.args(["clone", "--depth", "1", source, &tmp.to_string_lossy()]);
+    crate::platform::hide_console(&mut command);
+    let output = command
         .output()
         .map_err(|e| format!("git 실행 실패 (git이 설치되어 있는지 확인): {}", e))?;
 
