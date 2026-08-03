@@ -2,7 +2,6 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
 	arrayBufferToBase64,
 	deriveLanguageCode,
-	streamsAvatarPcm,
 	synthesizeTts,
 } from "../synthesize";
 
@@ -258,8 +257,8 @@ describe("synthesizeTts — vllm", () => {
 	});
 });
 
-describe("synthesizeTts — naia-local-voice (cascade /tts facade contract)", () => {
-	// The public facade returns audio/wav (RIFF) bytes directly.
+describe("synthesizeTts — naia-local-voice (/v1/audio/speech Runtime contract)", () => {
+	// The private Runtime returns audio/wav (RIFF) bytes directly.
 	const WAV_BYTES = new Uint8Array([
 		0x52, 0x49, 0x46, 0x46, 0x24, 0x00, 0x00, 0x00, 0x57, 0x41, 0x56, 0x45,
 	]); // "RIFF....WAVE" 헤더 선두
@@ -291,7 +290,7 @@ describe("synthesizeTts — naia-local-voice (cascade /tts facade contract)", ()
 		});
 	});
 
-	it("POSTs to {host}/tts with the facade payload and passes the WAV through", async () => {
+	it("POSTs to the voice-only Runtime surface and passes the WAV through", async () => {
 		const fetchMock = vi.fn().mockResolvedValue(wavResponse());
 		vi.stubGlobal("fetch", fetchMock);
 		const res = await synthesizeTts({
@@ -306,8 +305,10 @@ describe("synthesizeTts — naia-local-voice (cascade /tts facade contract)", ()
 		const body = JSON.parse(init.body as string);
 		expect(init.headers).toEqual({ "Content-Type": "application/json" });
 		expect(body).toMatchObject({
-			text: "안녕",
-			voice: "ref_ko_485.wav",
+			model: "voxcpm2",
+			input: "안녕",
+			voice: "naia-default",
+			response_format: "wav",
 		});
 		// WAV bytes 무변환 패스스루 (AudioQueue/ttsAudioToWav 가 RIFF 네이티브 감지)
 		const out = Uint8Array.from(atob(res.audioBase64), (c) => c.charCodeAt(0));
@@ -316,7 +317,7 @@ describe("synthesizeTts — naia-local-voice (cascade /tts facade contract)", ()
 		expect(out.length).toBe(WAV_BYTES.length);
 	});
 
-	it("voice 미지정 시 안정적인 기본 음색으로 정규화", async () => {
+	it("voice 미지정 시 naia-default (Runtime이 승인 ref로 해석)", async () => {
 		const fetchMock = vi.fn().mockResolvedValue(wavResponse());
 		vi.stubGlobal("fetch", fetchMock);
 		await synthesizeTts({
@@ -326,8 +327,8 @@ describe("synthesizeTts — naia-local-voice (cascade /tts facade contract)", ()
 		});
 		const body = JSON.parse(fetchMock.mock.calls[0][1].body as string);
 		expect(body).toMatchObject({
-			text: "x",
-			voice: "ref_ko_485.wav",
+			input: "x",
+			voice: "naia-default",
 		});
 	});
 
@@ -342,8 +343,8 @@ describe("synthesizeTts — naia-local-voice (cascade /tts facade contract)", ()
 		});
 		const body = JSON.parse(fetchMock.mock.calls[0][1].body as string);
 		expect(body).toMatchObject({
-			text: "x",
-			voice: "ref_ko_485.wav",
+			input: "x",
+			voice: "naia-default",
 		});
 	});
 
@@ -358,7 +359,7 @@ describe("synthesizeTts — naia-local-voice (cascade /tts facade contract)", ()
 		});
 		const body = JSON.parse(fetchMock.mock.calls[0][1].body as string);
 		expect(body).toMatchObject({
-			text: "x",
+			input: "x",
 			voice: "my-cloned-voice",
 		});
 	});
@@ -384,7 +385,7 @@ describe("synthesizeTts — naia-local-voice (cascade /tts facade contract)", ()
 			"removed-preset.wav",
 		);
 		expect(JSON.parse(fetchMock.mock.calls[1][1].body as string).voice).toBe(
-			"ref_ko_485.wav",
+			"naia-default",
 		);
 		expect(result.audioBase64).toBeTruthy();
 	});
@@ -509,22 +510,6 @@ describe("synthesizeTts — naia-local-voice (cascade /tts facade contract)", ()
 		await expect(
 			synthesizeTts({ text: "x", provider: "naia-local-voice" }),
 		).rejects.toThrow(/로컬 음성 합성 실패/);
-	});
-});
-
-describe("streamsAvatarPcm — 아바타 립싱크 PCM 직결 게이트 (FR-VOICE.5)", () => {
-	it("nextain(게이트웨이 LINEAR16=WAV) → true", () => {
-		expect(streamsAvatarPcm("nextain")).toBe(true);
-	});
-	it("naia-local-voice(/tts WAV, 음색=서버 해석) → true", () => {
-		// 8g avatar-only 파사드는 자체 TTS 가 없어 /stream_text 는 무음 —
-		// 셸 합성 WAV 를 /stream 으로 흘리는 것이 유일한 립싱크 경로.
-		expect(streamsAvatarPcm("naia-local-voice")).toBe(true);
-	});
-	it("합성 결과가 오디오 버퍼가 아닌 provider(edge/브라우저) → false (facade 폴백)", () => {
-		expect(streamsAvatarPcm("edge")).toBe(false);
-		expect(streamsAvatarPcm("browser")).toBe(false);
-		expect(streamsAvatarPcm("google")).toBe(false);
 	});
 });
 
