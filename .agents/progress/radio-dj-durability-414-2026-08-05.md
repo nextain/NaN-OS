@@ -2,9 +2,9 @@
 
 ## Session and branch boundary
 
-- Shell worktree: `/var/home/luke/worktrees/naia-shell-radio-handoff`
+- Shell worktree: isolated Radio DJ worktree
 - Shell branch: `agent/radio-dj-long-playwright-handoff`
-- Isolated Agent worktree: `/var/home/luke/worktrees/naia-agent-radio-dj-414`
+- Agent worktree: isolated Radio DJ integration worktree
 - Agent branch: `agent/radio-dj-integration-414`
 - The other session's `issue/3090-desktop-integration` VoxCPM2 checkout was not modified. Its media-runtime integration commit `c0343d5c` was incorporated into the Radio branch and the resulting ChatArea contract was reconciled.
 
