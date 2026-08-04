@@ -25,6 +25,7 @@
 - Shell contract run: 25 files, 231 tests passed.
 - ChatArea/media runtime targeted contracts: 36 passed.
 - Paired Linux Tauri/WebKitGTK Radio run: 3 passed, including exact paired Agent boot, owned sidecar health, and observed A `ended` to B playback. The final pre-merge rerun used clean Agent `main` `e751e91f744e6c4fc8cdf13b4451c86a96f72cc2`, matched the required commit and proto hash, and again passed all 3 cases.
+- The installer smoke exposed a fresh-user Agent boot failure when the fallback workspace did not exist. Agent `main` `9b5f0d72381fe42781542f83e5cc89eb1a4016c7` now defers coding-worktree initialization until a workspace exists; the production-staged entry reached `GRPC_LISTENING` under an empty home, and the exact-pair native Linux Radio run again passed all 3 cases.
 - Agent focused contracts/integration: 10 files, 106 tests passed; Agent build passed.
 - Local wall-clock fixture: first track remained active for 60 minutes, then all nine following tracks transitioned in order; 1 passed in 1.0 hour.
 - Logical long soak: 60 unique tracks at eight logical minutes each, two-hour checkpoint at track 15, eight-hour media clock, recent-history bound 20; passed in about 13 seconds.
