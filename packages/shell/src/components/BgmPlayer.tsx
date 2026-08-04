@@ -11,7 +11,13 @@ import {
 	type BgmPlaybackSnapshot,
 	type BgmPlaybackStatus,
 } from "../lib/bgm-playback";
-import { recordBgmPlayedTrack } from "../lib/bgm-skill";
+import {
+	cancelRadioDjRecovery,
+	continueRadioDjRecoveryAfterQueueAdvance,
+	getBgmRecentTracks,
+	recordBgmPlayedTrack,
+	recoverRadioDjPlayback,
+} from "../lib/bgm-skill";
 import { Logger } from "../lib/logger";
 import type { NaiaContextBridge } from "../lib/app-registry";
 import { type BackgroundMediaType, useAvatarStore } from "../stores/avatar";
@@ -241,8 +247,15 @@ export function BgmPlayer({ naia }: Props) {
 	}
 
 	function startNextQueuedTrack(reason: "ended" | "error" | "timeout"): boolean {
+		const previousPlaybackId = bgmPlayback.current()?.playbackId;
 		const next = bgmPlayback.advance();
 		if (!next) return false;
+		if (previousPlaybackId) {
+			continueRadioDjRecoveryAfterQueueAdvance(
+				previousPlaybackId,
+				next.playbackId,
+			);
+		}
 		Logger.debug("BgmPlayer", "advancing queued playback", {
 			reason,
 			playbackId: next.playbackId,
@@ -263,6 +276,30 @@ export function BgmPlayer({ naia }: Props) {
 		return true;
 	}
 
+	function recoverAfterQueueExhausted(
+		failed: BgmPlaybackSnapshot,
+		reason: "error" | "timeout",
+	): void {
+		if (startNextQueuedTrack(reason)) return;
+		void recoverRadioDjPlayback(failed.playbackId)
+			.then((result) => {
+				if (!result.recovered) return;
+				Logger.info("BgmPlayer", "recovered Radio DJ playback by search", {
+					reason,
+					failedPlaybackId: failed.playbackId,
+					playbackId: result.playbackId,
+					videoId: result.selected.id,
+				});
+			})
+			.catch((error) => {
+				Logger.warn("BgmPlayer", "Radio DJ recovery search failed", {
+					reason,
+					failedPlaybackId: failed.playbackId,
+					error: String(error),
+				});
+			});
+	}
+
 	function beginPlaybackTimeout(playbackId: string) {
 		clearPlaybackTimeout();
 		playbackTimeoutRef.current = setTimeout(() => {
@@ -274,7 +311,7 @@ export function BgmPlayer({ naia }: Props) {
 			});
 			if (!timedOut) return;
 			setPlaying(false);
-			startNextQueuedTrack("timeout");
+			recoverAfterQueueExhausted(timedOut, "timeout");
 		}, PLAYBACK_TIMEOUT_MS);
 	}
 
@@ -358,7 +395,7 @@ export function BgmPlayer({ naia }: Props) {
 						reason: String(msg.info ?? msg.data ?? "youtube_iframe_error"),
 					});
 					if (!errored) return;
-					startNextQueuedTrack("error");
+					recoverAfterQueueExhausted(errored, "error");
 				}
 				if (msg.event === "initialDelivery" || msg.event === "onReady") {
 					observePlayback("loading", { playbackId: eventPlaybackId });
@@ -441,6 +478,7 @@ export function BgmPlayer({ naia }: Props) {
 					setPlaybackSnapshot(bgmPlayback.current());
 					setQueueVersion((version) => version + 1);
 				} else if (msg.type === "bgm_youtube_stop") {
+					cancelRadioDjRecovery();
 					audioRef.current?.pause();
 					setPlaying(false);
 					if (useAvatarStore.getState().backgroundMediaType === "iframe") {
@@ -642,6 +680,11 @@ export function BgmPlayer({ naia }: Props) {
 				isCurrentFavorited: currentYt ? favs.some((f) => f.id === currentYt.id) : false,
 				favoritesCount: favs.length,
 				favoritesList: favs.slice(0, 10).map((f) => ({ id: f.id, title: f.title })),
+				recentlyPlayedList: getBgmRecentTracks().map((track) => ({
+					id: track.id,
+					title: track.title,
+					playedAt: track.playedAt,
+				})),
 				// Local info
 				localTrackCount: localTracks.length,
 				localTrackIndex: localIndex,
@@ -657,6 +700,7 @@ export function BgmPlayer({ naia }: Props) {
 	// ── Playback helpers ──────────────────────────────────────────────────────
 
 	function handleYtSelect(video: YtVideo, requestedPlaybackId?: string) {
+		if (!requestedPlaybackId) cancelRadioDjRecovery();
 		audioRef.current?.pause();
 		const current = bgmPlayback.current();
 		const snapshot =
@@ -728,6 +772,7 @@ export function BgmPlayer({ naia }: Props) {
 
 	function playLocalAt(idx: number) {
 		if (localTracks.length === 0) return;
+		cancelRadioDjRecovery();
 		setSource("local");
 		setBgmTrackUrl(localTracks[idx]);
 		setLocalIndex(idx);

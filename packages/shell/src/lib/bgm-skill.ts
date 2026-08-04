@@ -15,16 +15,13 @@
 import { emit } from "@tauri-apps/api/event";
 import type { NaiaTool } from "./app-registry";
 import {
-	BGM_SIDECAR_BASE_URL,
-	ensureBgmSidecar,
-} from "./bgm-sidecar-url";
-import {
+	type BgmPlaybackPort,
 	bgmPlayback,
+	toBgmObservedContext,
 	toBgmPlayToolResult,
 	toBgmQueuedToolResult,
-	toBgmObservedContext,
-	type BgmPlaybackPort,
 } from "./bgm-playback";
+import { BGM_SIDECAR_BASE_URL, ensureBgmSidecar } from "./bgm-sidecar-url";
 
 /** panelExec 등록용 패널 id — 위젯 전용(앱 아님), panel_skills_clear 대상 아님(항상 유지). */
 export const BGM_PANEL_ID = "bgm-widget";
@@ -214,6 +211,185 @@ const defaultDeps: BgmSkillDeps = {
 	recentTracks: getBgmRecentTracks,
 };
 
+const RADIO_DJ_RECOVERY_SEARCH_LIMIT = 2;
+
+interface RadioDjRecoveryPlan {
+	generation: number;
+	query: string;
+	deps: BgmSkillDeps;
+	playbackId: string;
+	searches: number;
+	attemptedIds: Set<string>;
+	attemptedTitles: Set<string>;
+	inFlight?: Promise<RadioDjRecoveryResult>;
+}
+
+export type RadioDjRecoveryResult =
+	| { recovered: true; playbackId: string; selected: BgmSearchResult }
+	| {
+			recovered: false;
+			reason: "not_active" | "stale_playback" | "cancelled" | "exhausted";
+			searches: number;
+	  };
+
+let radioDjRecoveryGeneration = 0;
+let radioDjRecoveryPlan: RadioDjRecoveryPlan | null = null;
+
+/** Cancel any delayed search before a user-owned command can be overwritten. */
+export function cancelRadioDjRecovery(): void {
+	radioDjRecoveryGeneration += 1;
+	radioDjRecoveryPlan = null;
+}
+
+/** Keep the same bounded recovery session when a prepared queue item starts. */
+export function continueRadioDjRecoveryAfterQueueAdvance(
+	previousPlaybackId: string,
+	nextPlaybackId: string,
+): void {
+	if (radioDjRecoveryPlan?.playbackId === previousPlaybackId) {
+		radioDjRecoveryPlan.playbackId = nextPlaybackId;
+	}
+}
+
+function configureRadioDjRecovery(
+	query: string,
+	selected: BgmSearchResult,
+	deps: BgmSkillDeps,
+): void {
+	const current = deps.playback.current();
+	if (!current || current.selected.videoId !== selected.id) {
+		cancelRadioDjRecovery();
+		return;
+	}
+	const normalizedTitle = normalizeBgmTitle(selected.title);
+	radioDjRecoveryGeneration += 1;
+	radioDjRecoveryPlan = {
+		generation: radioDjRecoveryGeneration,
+		query,
+		deps,
+		playbackId: current.playbackId,
+		searches: 0,
+		attemptedIds: new Set([selected.id]),
+		attemptedTitles: new Set(normalizedTitle ? [normalizedTitle] : []),
+	};
+}
+
+/**
+ * Search for a fresh Radio DJ candidate only after the prepared queue is empty.
+ * Each session gets at most two recovery searches, and stale/late failures can
+ * never replace a newer user-owned playback.
+ */
+export async function recoverRadioDjPlayback(
+	failedPlaybackId: string,
+): Promise<RadioDjRecoveryResult> {
+	const plan = radioDjRecoveryPlan;
+	if (!plan) return { recovered: false, reason: "not_active", searches: 0 };
+	if (plan.playbackId !== failedPlaybackId) {
+		return {
+			recovered: false,
+			reason: "stale_playback",
+			searches: plan.searches,
+		};
+	}
+	if (plan.inFlight) return plan.inFlight;
+
+	const recovery = (async (): Promise<RadioDjRecoveryResult> => {
+		while (plan.searches < RADIO_DJ_RECOVERY_SEARCH_LIMIT) {
+			if (
+				radioDjRecoveryPlan !== plan ||
+				plan.generation !== radioDjRecoveryGeneration
+			) {
+				return {
+					recovered: false,
+					reason: "cancelled",
+					searches: plan.searches,
+				};
+			}
+			const current = plan.deps.playback.current();
+			if (
+				current?.playbackId !== failedPlaybackId ||
+				!["error", "timeout"].includes(current.status)
+			) {
+				return {
+					recovered: false,
+					reason: "stale_playback",
+					searches: plan.searches,
+				};
+			}
+
+			plan.searches += 1;
+			let results: BgmSearchResult[] = [];
+			try {
+				results = await plan.deps.search(plan.query);
+			} catch {
+				// A transient sidecar/network failure may use the one remaining bounded
+				// attempt. The caller still receives one terminal result, never a loop.
+				continue;
+			}
+			if (
+				radioDjRecoveryPlan !== plan ||
+				plan.generation !== radioDjRecoveryGeneration
+			) {
+				return {
+					recovered: false,
+					reason: "cancelled",
+					searches: plan.searches,
+				};
+			}
+
+			const recent = plan.deps.recentTracks?.() ?? [];
+			const recentIds = new Set(recent.map((track) => track.id));
+			const recentTitles = new Set(
+				recent.map((track) => normalizeBgmTitle(track.title)).filter(Boolean),
+			);
+			const selected = results.find((result) => {
+				const normalizedTitle = normalizeBgmTitle(result.title);
+				return (
+					!plan.attemptedIds.has(result.id) &&
+					!recentIds.has(result.id) &&
+					(!normalizedTitle ||
+						(!plan.attemptedTitles.has(normalizedTitle) &&
+							!recentTitles.has(normalizedTitle)))
+				);
+			});
+			if (!selected) continue;
+
+			plan.attemptedIds.add(selected.id);
+			const normalizedTitle = normalizeBgmTitle(selected.title);
+			if (normalizedTitle) plan.attemptedTitles.add(normalizedTitle);
+			const playback = plan.deps.playback.request({
+				videoId: selected.id,
+				title: selected.title,
+			});
+			plan.playbackId = playback.playbackId;
+			await plan.deps.emitBgm({
+				type: "bgm_youtube_play",
+				playbackId: playback.playbackId,
+				videoId: selected.id,
+				title: selected.title,
+				...(selected.thumbnail ? { thumbnail: selected.thumbnail } : {}),
+				recovery: "radio_dj_search",
+			});
+			return {
+				recovered: true,
+				playbackId: playback.playbackId,
+				selected,
+			};
+		}
+
+		if (radioDjRecoveryPlan === plan) radioDjRecoveryPlan = null;
+		return {
+			recovered: false,
+			reason: "exhausted",
+			searches: plan.searches,
+		};
+	})();
+	plan.inFlight = recovery;
+	const result = await recovery;
+	if (plan.inFlight === recovery) plan.inFlight = undefined;
+	return result;
+}
+
 /** 도메인: volume 0..1 clamp(순수) — agent UC8 어댑터 clampVolume 동형. 비유한=0.5. */
 export function clampVolume(v: unknown): number {
 	const n = typeof v === "number" && Number.isFinite(v) ? v : 0.5;
@@ -289,17 +465,37 @@ export async function executeBgmSkill(
 		return JSON.stringify({
 			ok: true,
 			action: act,
-			...toBgmObservedContext(deps.playback.current(), deps.now?.() ?? Date.now(), deps.playback.queue()),
+			...toBgmObservedContext(
+				deps.playback.current(),
+				deps.now?.() ?? Date.now(),
+				deps.playback.queue(),
+			),
 		});
 	}
 
 	if (act === "play") {
+		const radioDjRequested = shouldActivateRadioDj(args);
+		const activeStatus = deps.playback.current()?.status;
+		// Replacements and starts own the surface immediately. A queue-preserving
+		// request may be a prepared DJ fallback, so it keeps the current plan.
+		if (
+			radioDjRequested ||
+			args.replace === true ||
+			!activeStatus ||
+			["ended", "error", "timeout"].includes(activeStatus)
+		) {
+			cancelRadioDjRecovery();
+		}
 		const videoId = args.videoId;
-		if (typeof videoId === "string" && videoId.trim())
-			return enqueueTrack({
-				id: videoId,
-				title: typeof args.title === "string" ? args.title : "",
-			});
+		if (typeof videoId === "string" && videoId.trim()) {
+			return enqueueTrack(
+				{
+					id: videoId,
+					title: typeof args.title === "string" ? args.title : "",
+				},
+				radioDjRequested,
+			);
+		}
 		const query = args.query;
 		if (typeof query !== "string" || !query.trim())
 			throw new Error("play requires query or videoId");
@@ -323,13 +519,24 @@ export async function executeBgmSkill(
 				!recentIds.has(result.id) &&
 				!recentTitles.has(normalizeBgmTitle(result.title)),
 		);
-		const selected =
-			args.replace === true
-				? freshResults[0] ??
+		if (radioDjRequested && freshResults.length === 0) {
+			return JSON.stringify({
+				ok: false,
+				action: act,
+				reason: "no_fresh_search_results",
+				query,
+			});
+		}
+		const selected = radioDjRequested
+			? freshResults[0]
+			: args.replace === true
+				? (freshResults[0] ??
 					results.find((result) => result.id !== currentVideoId) ??
-					results[0]
+					results[0])
 				: results[0];
-		return enqueueTrack(selected);
+		const output = await enqueueTrack(selected, radioDjRequested);
+		if (radioDjRequested) configureRadioDjRecovery(query, selected, deps);
+		return output;
 	}
 
 	if (act === "favorite_add" || act === "favorite_remove") {
@@ -344,10 +551,15 @@ export async function executeBgmSkill(
 		await deps.emitBgm({
 			type: `bgm_youtube_${act.replace("favorite_", "fav_")}`,
 		});
-		return JSON.stringify({ ok: true, action: act, selected: current.selected });
+		return JSON.stringify({
+			ok: true,
+			action: act,
+			selected: current.selected,
+		});
 	}
 
 	if (act === "favorites_play") {
+		cancelRadioDjRecovery();
 		const favorites = deps.favoriteTracks?.() ?? [];
 		if (favorites.length === 0) {
 			return JSON.stringify({
@@ -368,7 +580,10 @@ export async function executeBgmSkill(
 		return JSON.stringify({ ok: true, action: act, volume: v });
 	}
 
-	if ((act === "next" || act === "prev") && (deps.favoriteCount?.() ?? 0) === 0) {
+	if (
+		(act === "next" || act === "prev") &&
+		(deps.favoriteCount?.() ?? 0) === 0
+	) {
 		return JSON.stringify({
 			ok: false,
 			action: act,
@@ -377,6 +592,9 @@ export async function executeBgmSkill(
 	}
 
 	// stop / pause / resume / next / prev — 위젯 리스너 타입 1:1
+	if (act === "stop" || act === "next" || act === "prev") {
+		cancelRadioDjRecovery();
+	}
 	const eventType = `bgm_youtube_${act}`;
 	await deps.emitBgm({ type: eventType });
 	return JSON.stringify({ ok: true, action: act });

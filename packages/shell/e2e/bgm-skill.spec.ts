@@ -23,7 +23,8 @@ import {
  *    + finish 를 agent_response 로 emit. dispatch → executeBgmSkill → bgm_youtube_play 이벤트 → 위젯 반응.
  */
 
-const NEW_CORE_FLAG = `window.__NAIA_NEW_CORE__ = true; window.__E2E_OUTBOUND__ = [];`;
+const NEW_CORE_FLAG =
+	"window.__NAIA_NEW_CORE__ = true; window.__E2E_OUTBOUND__ = [];";
 
 // play+videoId 경로 = 사이드카(:18791) 미접촉(검색 skip) → 헤르메틱.
 const BGM_TOOL_ARGS = [
@@ -92,15 +93,17 @@ const MOCK_SCRIPT = `
           { type: "text", requestId: rid, text: "재생을 요청했어요. 실제 재생이 확인되면 곡을 소개할게요." },
           { type: "finish", requestId: rid }
         );
-        var d = 150;
+		var d = 150;
+		var step = Number(window.__E2E_TOOL_DELAY_MS__ || 200);
         for (var i = 0; i < chunks.length; i++) {
           (function (c, ms) { setTimeout(function () { emitEvent("agent_response", JSON.stringify(c)); }, ms); })(chunks[i], d);
-          d += 200;
+		  d += step;
         }
       }
       return null;
     }
     if (cmd === "cancel_stream" || cmd === "send_approval_response") return null;
+	if (cmd === "ensure_bgm_server") return true;
     return undefined; // → TAURI_BASE_MOCK_FALLBACK 가 부트 기본값 처리
   };
 })();
@@ -117,8 +120,23 @@ test.describe("UC8 BGM 스킬 배선 (FR-BGM.1)", () => {
 		videoId: string;
 		requestedAt: number;
 	}> = [];
+	const sidecarSearchRequests: string[] = [];
+	let sidecarSearchResponses: Array<
+		Array<{ id: string; title: string; thumbnail?: string }>
+	> = [];
 	test.beforeEach(async ({ page }) => {
 		iframeRequests.length = 0;
+		sidecarSearchRequests.length = 0;
+		sidecarSearchResponses = [];
+		await page.route("http://localhost:18791/yt/search**", async (route) => {
+			const url = new URL(route.request().url());
+			sidecarSearchRequests.push(url.searchParams.get("q") ?? "");
+			await route.fulfill({
+				contentType: "application/json",
+				headers: { "access-control-allow-origin": "*" },
+				body: JSON.stringify({ results: sidecarSearchResponses.shift() ?? [] }),
+			});
+		});
 		// Deterministic local iframe: this e2e never contacts YouTube.
 		await page.route(
 			"https://www.youtube-nocookie.com/embed/**",
@@ -133,7 +151,16 @@ test.describe("UC8 BGM 스킬 배선 (FR-BGM.1)", () => {
 					videoId,
 					requestedAt: Date.now(),
 				});
-				const soakDurationMs = Number(/^soak-(\d+)-/.exec(videoId)?.[1] ?? 0);
+				const fastSoak = /^fastsoak-(\d+)-(\d+)-/.exec(videoId);
+				const soakDurationMs = Number(
+					fastSoak?.[1] ?? /^soak-(\d+)-/.exec(videoId)?.[1] ?? 0,
+				);
+				const readyDelayMs = fastSoak ? 10 : 700;
+				const logicalDurationSeconds = fastSoak
+					? Number(fastSoak[2])
+					: soakDurationMs >= 6000
+						? 3600
+						: Math.max(30, Math.round(soakDurationMs / 10));
 				const fixtureBody = videoId.startsWith("timeout-")
 					? "<!doctype html><title>Never becomes ready</title>"
 					: videoId.startsWith("error-")
@@ -149,7 +176,7 @@ test.describe("UC8 BGM 스킬 배선 (FR-BGM.1)", () => {
 							: soakDurationMs > 0
 								? `<!doctype html><script>
 					const durationMs = ${soakDurationMs};
-					const mediaDuration = durationMs >= 6000 ? 3600 : Math.max(30, Math.round(durationMs / 10));
+					const mediaDuration = ${logicalDurationSeconds};
 					const send = (event, info) => parent.postMessage(JSON.stringify({ event, info }), "*");
 					send("onReady");
 					const startedAt = Date.now();
@@ -168,7 +195,7 @@ test.describe("UC8 BGM 스킬 배선 (FR-BGM.1)", () => {
 							send("onStateChange", 0);
 							send("onStateChange", 0);
 						}, durationMs);
-					}, 700);
+					}, ${readyDelayMs});
 				</script>`
 								: `<!doctype html><script>
 					parent.postMessage(JSON.stringify({ event: "onReady" }), "*");
@@ -420,6 +447,101 @@ test.describe("UC8 BGM 스킬 배선 (FR-BGM.1)", () => {
 		expect(iframeRequests.map((request) => request.videoId).slice(-2)).toEqual([
 			"error-unavailable",
 			"hold-fallback",
+		]);
+	});
+
+	test("Radio DJ 준비 후보가 없으면 제한된 새 검색으로 재생을 복구한다", async ({
+		page,
+	}) => {
+		sidecarSearchResponses = [
+			[{ id: "error-dynamic-initial", title: "Unavailable Dynamic Track" }],
+			[
+				{
+					id: "duplicate-dynamic",
+					title: "Unavailable Dynamic Track (Official Video)",
+				},
+				{ id: "hold-dynamic-recovered", title: "Dynamically Recovered Track" },
+			],
+		];
+		await page.evaluate(() => {
+			const config = JSON.parse(localStorage.getItem("naia-config") ?? "{}");
+			localStorage.setItem(
+				"naia-config",
+				JSON.stringify({
+					...config,
+					proactiveSpeechProfile: "personal_radio_dj",
+					proactiveSpeechPermitted: true,
+				}),
+			);
+			(
+				window as typeof window & {
+					__E2E_SOAK_TRACKS__?: Array<Record<string, unknown>>;
+				}
+			).__E2E_SOAK_TRACKS__ = [
+				{
+					action: "play",
+					query: "dynamic recovery jazz",
+					mode: "radio_dj",
+				},
+			];
+		});
+		const input = page.locator(".chat-input");
+		await input.fill("라디오 DJ로 재생 불가 곡도 알아서 바꿔줘");
+		await input.press("Enter");
+		await expect
+			.poll(
+				() =>
+					page.evaluate(() => {
+						const messages =
+							(
+								window as unknown as {
+									__E2E_OUTBOUND__?: Array<Record<string, unknown>>;
+								}
+							).__E2E_OUTBOUND__ ?? [];
+						const result = messages.find(
+							(message) => message.type === "panel_tool_result",
+						);
+						return result
+							? { success: result.success, result: result.result }
+							: null;
+					}),
+				{ timeout: 5_000 },
+			)
+			.not.toBeNull();
+		const radioToolResult = await page.evaluate(() => {
+			const messages =
+				(
+					window as unknown as {
+						__E2E_OUTBOUND__?: Array<Record<string, unknown>>;
+					}
+				).__E2E_OUTBOUND__ ?? [];
+			return messages.find((message) => message.type === "panel_tool_result");
+		});
+		expect(
+			radioToolResult?.success,
+			String(radioToolResult?.result ?? "missing panel tool result"),
+		).toBe(true);
+
+		const player = page.locator(".bgm-player");
+		await expect(player).toHaveAttribute(
+			"data-bgm-current-title",
+			"Dynamically Recovered Track",
+			{ timeout: 15_000 },
+		);
+		await expect(player).toHaveAttribute(
+			"data-bgm-playback-status",
+			"playing",
+			{
+				timeout: 15_000,
+			},
+		);
+		expect(sidecarSearchRequests).toEqual([
+			"dynamic recovery jazz",
+			"dynamic recovery jazz",
+		]);
+		expect(iframeRequests.map((request) => request.videoId)).toEqual([
+			"error-dynamic-initial",
+			"hold-dynamic-recovered",
 		]);
 	});
 
@@ -862,6 +984,78 @@ test.describe("UC8 BGM 스킬 배선 (FR-BGM.1)", () => {
 					iframeRequests[index].requestedAt,
 			).toBeGreaterThanOrEqual(durationMs);
 		}
+		const bgmRuntimeErrors = runtimeErrors.filter(
+			(error) =>
+				!error.includes("BrowserCenterArea.tsx") &&
+				!error.includes("AvatarCanvas") &&
+				!error.includes("net::ERR_CONNECTION_REFUSED"),
+		);
+		expect(bgmRuntimeErrors).toEqual([]);
+	});
+
+	test("논리시간 2시간 체크포인트와 8시간 60곡 soak를 유한 상태로 완주한다", async ({
+		page,
+	}) => {
+		test.setTimeout(60_000);
+		const runtimeErrors: string[] = [];
+		page.on("pageerror", (error) =>
+			runtimeErrors.push(error.stack ?? error.message),
+		);
+		const logicalTrackSeconds = 480;
+		const tracks = Array.from({ length: 60 }, (_, index) => ({
+			videoId: `fastsoak-${index === 0 ? 700 : 120}-${logicalTrackSeconds}-${index}`,
+			title: `Accelerated Soak Track ${String(index + 1).padStart(2, "0")}`,
+		}));
+		await page.evaluate((queuedTracks) => {
+			(
+				window as typeof window & {
+					__E2E_SOAK_TRACKS__?: Array<Record<string, unknown>>;
+					__E2E_TOOL_DELAY_MS__?: number;
+				}
+			).__E2E_TOOL_DELAY_MS__ = 5;
+			(
+				window as typeof window & {
+					__E2E_SOAK_TRACKS__?: Array<Record<string, unknown>>;
+				}
+			).__E2E_SOAK_TRACKS__ = queuedTracks.map((track) => ({
+				action: "play",
+				...track,
+			}));
+		}, tracks);
+		const input = page.locator(".chat-input");
+		await input.fill("8시간 상당 가속 라디오 soak");
+		await input.press("Enter");
+		const player = page.locator(".bgm-player");
+
+		await expect(player).toHaveAttribute("data-bgm-queue-length", "59", {
+			timeout: 10_000,
+		});
+		await expect
+			.poll(() => iframeRequests.length, { timeout: 15_000 })
+			.toBeGreaterThanOrEqual(15);
+		expect(15 * logicalTrackSeconds).toBe(2 * 60 * 60);
+
+		await expect(player).toHaveAttribute("data-bgm-playback-status", "ended", {
+			timeout: 30_000,
+		});
+		await expect(player).toHaveAttribute("data-bgm-queue-length", "0");
+		expect(60 * logicalTrackSeconds).toBe(8 * 60 * 60);
+		expect(iframeRequests.map((request) => request.videoId)).toEqual(
+			tracks.map((track) => track.videoId),
+		);
+		const playbackIds = iframeRequests.map((request) =>
+			new URL(request.url).searchParams.get("naiaPlayback"),
+		);
+		expect(new Set(playbackIds).size).toBe(tracks.length);
+		const recentTracks = await page.evaluate(
+			() =>
+				JSON.parse(localStorage.getItem("yt-bgm-recent-v1") ?? "[]") as Array<{
+					id: string;
+				}>,
+		);
+		expect(recentTracks).toHaveLength(20);
+		expect(new Set(recentTracks.map((track) => track.id)).size).toBe(20);
+		expect(recentTracks[0].id).toBe(tracks.at(-1)?.videoId);
 		const bgmRuntimeErrors = runtimeErrors.filter(
 			(error) =>
 				!error.includes("BrowserCenterArea.tsx") &&

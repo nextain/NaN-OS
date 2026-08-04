@@ -21,11 +21,13 @@ Radio DJ의 기본 흐름은 다음과 같다.
 
 2026-08-04 현재 확인된 범위는 다음과 같다.
 
-- 구현·자동 검증됨: 요청과 실제 재생 관측 분리, `currentTime/duration`, 오래된 `playbackId` 격리, 중복 `ended` 방어, 대기열 순서, 동일 영상 재시도 시 새 iframe, 오류·15초 로딩 시간초과 뒤 준비된 후보 전환, 후보 고갈 정지, 일반 대화 중 재생 유지, 명시적 곡 교체, 정지 뒤 늦은 전환 차단, 즐겨찾기 등록·재생·삭제·빈 목록.
+- 구현·자동 검증됨: 요청과 실제 재생 관측 분리, `currentTime/duration`, 오래된 `playbackId` 격리, 중복 `ended` 방어, 대기열 순서, 동일 영상 재시도 시 새 iframe, 오류·15초 로딩 시간초과 뒤 준비된 후보 전환, 구조화된 `radio_dj`의 queue 고갈 뒤 최대 2회 동적 재검색, 최근·실패·정규화 중복 후보 제외, 일반 대화 중 재생 유지, 명시적 곡 교체, 정지 뒤 늦은 전환 차단, 즐겨찾기 등록·재생·삭제·빈 목록.
 - 부분 구현: YouTube 오류 관측, activity의 곡 교체와 사용자 끼어들기 경로, Shell localStorage 즐겨찾기와 구조화 도구 호출.
-- 아직 전체 흐름 증거 없음: 곡 종료 멘트 후 동적 검색, 종료 전 다음 곡 준비, 일반 대화 후 Agent DJ 정책 복귀, 명시 취향의 장기기억 저장·삭제, 최근곡과 취향을 결합한 추천, 실제 음성 명령으로 즐겨찾기 관리, 재생 불가 뒤 Agent의 자동 대체 검색.
+- 아직 전체 흐름 증거 없음: 곡 종료 멘트 후 Agent 주도 동적 검색, 종료 전 다음 곡 준비, 일반 대화 후 Agent DJ 정책 복귀, 명시 취향의 장기기억 recall·수정·삭제, 최근곡과 naia-memory 취향을 결합한 selector, 실제 음성 명령으로 즐겨찾기 관리, paired Agent BGM 호출의 `mode: radio_dj` 전달.
 
-10곡 Playwright의 기본 실행은 `duration=3600` 메타데이터를 사용하지만 첫 곡을 실제 60분 동안 재생하지 않는 압축 테스트다. 2026-08-04에는 `RADIO_DJ_LONG_TRACK_MS=600000`으로 첫 로컬 fixture를 실제 벽시계 10분 재생하고 나머지 9곡까지 순서대로 전환하는 실행을 통과했다. 실제 YouTube 12분 이상 영상과 2시간·8시간 운용은 아직 실행하지 않았으므로 L3/L4 실기 증거와 구분한다.
+10곡 Playwright의 기본 실행은 `duration=3600` 메타데이터를 사용하지만 첫 곡을 실제 60분 동안 재생하지 않는 압축 테스트다. 2026-08-04에는 `RADIO_DJ_LONG_TRACK_MS=600000`으로 첫 로컬 fixture를 실제 벽시계 10분 재생하고 나머지 9곡까지 순서대로 전환하는 실행을 통과했다. 같은 날 60곡·곡당 논리 8분 fixture가 15곡 시점의 2시간과 전체 8시간 media clock, 고유 playback 60개, 최근 이력 20개 상한을 약 13초에 통과했다. 이는 L4 시간 가속 증거이며 실제 벽시계 2시간·8시간 운용으로 기록하지 않는다.
+
+실제 YouTube opt-in smoke에서는 sidecar 검색으로 11:58:09 장곡 `lh4JdZTJe7k`를 선택하고 `youtube-nocookie` 실제 embed가 HTTP 200, `readyState=4`, media 오류 없음으로 재생되는지 관측했다. 30초 자동 smoke를 통과했고, 같은 영상의 실제 벽시계 10분 관측도 수행했다. 이는 RD-LONG-01의 장곡 10분 지속 관측 증거지만 실제 2시간 혼합 선곡과 8시간 운용 증거는 아니다.
 
 같은 날 paired naia-agent 정본 커밋과 proto 해시를 사용한 Linux Tauri/WebKitGTK 격리 E2E에서 소유 BGM sidecar 기동과 관측된 A `ended` 뒤 B 전환 2건을 통과했다.
 
@@ -162,6 +164,15 @@ L1 통과를 L3/L4 통과로 표현하지 않는다. 실제 YouTube의 결과 �
 - RD-VAR-01~03
 - RD-FAV-01, 03, 05
 - RD-ERR-01~04
+
+자동화된 실제 장곡 smoke는 기본 CI에서 외부 네트워크 변동을 피하기 위해 skip한다. 실행 예시는 다음과 같다.
+
+```bash
+RADIO_DJ_LIVE_YOUTUBE=1 RADIO_DJ_LIVE_WALL_MS=600000 \
+  pnpm -C packages/shell exec playwright test e2e/bgm-youtube-live-smoke.spec.ts
+```
+
+테스트가 격리 포트에 소유 sidecar를 직접 기동·종료하며, 검색 결과 중 12분 이상 장곡을 골라 실제 media clock의 단조 증가와 `readyState`, media 오류, page 오류를 확인한다.
 
 ### 야간 장시간 검증
 
