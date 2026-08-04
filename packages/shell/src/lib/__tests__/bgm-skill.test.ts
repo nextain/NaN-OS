@@ -492,6 +492,10 @@ describe("executeBgmSkill", () => {
 		const { deps, emitted } = mkDeps();
 		deps.playback = playback;
 		deps.now = () => now;
+		deps.recentTracks = () => [
+			{ id: "old-1", title: "Old Track", playedAt: 900 },
+		];
+		deps.favoriteTracks = () => [{ id: "fav-1", title: "Favorite Track" }];
 		const requested = playback.request({ videoId: "v1", title: "Track A" });
 		playback.observe({
 			playbackId: requested.playbackId,
@@ -512,6 +516,8 @@ describe("executeBgmSkill", () => {
 			},
 			currentTrack: { videoId: "v1", title: "Track A" },
 			announceTrack: true,
+			recentTracks: [{ videoId: "old-1", title: "Old Track" }],
+			favoriteTracks: [{ videoId: "fav-1", title: "Favorite Track" }],
 		});
 		expect(emitted).toEqual([]);
 

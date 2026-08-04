@@ -15,7 +15,7 @@
     "issue_doc": "docs/progress/ (F0-baseline, F0-contract, F{1,2,3}-baseline-contract, F0-graft) + 00-PHASES.md",
     "github_issue": null,
     "started": "2026-06-08T00:00:00Z",
-    "last_updated": "2026-08-01T01:45:00+09:00",
+    "last_updated": "2026-08-05T06:57:04+09:00",
     "status": "in_progress",
     "windows_trt_latency_14": {
       "issue": "https://github.com/nextain/alpha-adk/issues/14",
@@ -74,18 +74,19 @@
     "bgm_skill_wiring": "2026-07-16 FR-BGM.1 (S-BGM-SKILL, 시연 크리티컬 — 루크 freeze 해제 승인): skill_youtube_bgm 패널 도구 배선. 신규 lib/bgm-skill.ts(descriptor+executeBgmSkill, deps 주입) + App.tsx 부팅 sendPanelSkills('bgm-widget') + ChatArea dispatchPanelToolCall BGM 분기(appRegistry 앞) → 위젯이 이미 듣는 bgm_youtube_* 이벤트 발사(BgmPlayer·agent 무변경). 검증: bgm-skill.test.ts 10/10 · 전체 vitest 1182 pass/0 fail · tsc(신규분 0오류) · enforce-root+assembly PASS. 음성/립싱크(FR-VOICE.5) 경로 무접촉. 잔여=부스 리허설 수동('음악 틀어줘'). 배경: 스킬 전멸 회귀의 근본원인은 naia-agent ollama provider tools 미구현(FR-PROV-6 로 별도 수정·리뷰 PASS·dist 재빌드) — BGM 은 그 조사에서 발견된 별개 이식 갭(구 monolith 내장 스킬이 new-core 에 미이식).",
     "radio_dj_durability_414": {
       "issue": "https://github.com/nextain/naia-shell/issues/414",
-      "scope": "Truthful and durable Radio DJ playback, YouTube WebView identification, same-track remount and result exclusion, BGM sidecar recovery, single-owner settings, and weather-consent persistence",
-      "requirements": "docs/requirements.md FR-BGM.8~10 and FR-SETTINGS.12~13",
+      "scope": "Truthful and durable Radio DJ playback, bounded recovery and long-run validation, Agent-owned ended-to-comment-to-fresh-search handoff, naia-memory preference recall with recent/favorite recommendation context, multimodal panel-image provider delivery, BGM sidecar recovery, single-owner settings, and weather-consent persistence",
+      "requirements": "docs/requirements.md FR-BGM.8~11 and FR-SETTINGS.12~13",
       "scenario": "docs/user-scenarios.md UC-RADIO-DJ-DURABLE",
-      "status": "in_progress",
+      "status": "done",
       "gates": {
         "P01_user_scenario": "done",
         "P02_test_coverage_map": "done",
         "P03_requirements": "done",
-        "P04_integration_test": "pending",
-        "P05_complete": "pending"
+        "P04_integration_test": "done",
+        "P05_complete": "done"
       },
-      "last_updated": "2026-08-02T23:59:00+09:00"
+      "verification": "Shell focused Vitest 27, targeted Radio Playwright 20, baseline BGM Playwright 3, package Vitest 1500, root contracts 231, full Playwright 178 passed/44 intentional skips/0 failed, paired Linux Tauri/WebKitGTK Radio 3, Agent focused contracts 106, local 60-minute fixture plus nine transitions, logical 60-track eight-hour soak, and actual YouTube eight-hour wall-clock soak (2h media=7203.0s, final=28800.6s) passed; Shell and Agent production builds passed",
+      "last_updated": "2026-08-05T06:57:04+09:00"
     },
     "demo_checkpoint": {
       "verified_at": "2026-07-15T23:26:24+09:00",

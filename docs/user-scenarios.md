@@ -693,6 +693,13 @@ successful until the player reports an observed `playing` transition.
 - If search returns the currently selected video first, Radio DJ chooses a
   different result when one exists. Explicitly replaying the same video still
   remounts the iframe and starts a new playback attempt.
+- Every Agent-owned Radio DJ play carries `mode=radio_dj`. Status receipts
+  include bounded recent-play and favorite title lists so Agent selection can
+  combine explicit memory preferences with Shell-owned listening context;
+  Shell remains the final authority for current/recent duplicate filtering.
+- After an observed `ended`, Agent completes one short transition remark before
+  requesting the next dynamic search. It introduces the new title only after
+  the correlated playback reaches observed `playing`.
 - The Tauri WebView sends an origin referrer to the YouTube embed so the playe
   is identified and does not fail with YouTube error 153.
 - If the BGM sidecar exited, the next search restarts the owned sidecar. Closing
@@ -709,13 +716,14 @@ successful until the player reports an observed `playing` transition.
 | agent restart before a chat turn | `chat-service.test.ts` boolean delivery receipt | `e2e/bgm-skill.spec.ts` asserts same-turn `panel_skills` precedes `chat_request` |
 | current search result repeats | `bgm-skill.test.ts` current-video exclusion and same-video replay receipt | BGM Playwright fixture observes a fresh iframe/playback transition |
 | YouTube WebView identification | embed URL/remount component contract | Playwright request verifies referrer; paired native Linux Tauri/WebKitGTK Radio queue E2E verifies observed A-to-B playback |
-| variable-length compressed playback | playback snapshot carries observed `currentTime`/`duration`; stale playback IDs cannot advance the queue | `e2e/bgm-skill.spec.ts` runs 10 mixed-duration tracks, reports a 60-minute duration for the first fixture, keeps it fresh beyond 5 seconds, duplicates every ended event, and asserts no skipped track or BGM runtime error. The default is compressed; `RADIO_DJ_LONG_TRACK_MS=600000` passed a 10-minute wall-clock local-fixture run. This is not a real YouTube or 60-minute soak. |
-| autonomous next-track DJ | ended observation, prefetch, one DJ remark, new search and observed next playback | `radio-dj-practical-test-scenarios.md` RD-DJ-01~04; automation pending |
+| variable-length and wall-clock playback | playback snapshot carries observed `currentTime`/`duration`; stale playback IDs cannot advance the queue | The default 10-track run is compressed. A 60-minute wall-clock first local fixture followed by nine ordered transitions passed, and an actual 11:58:09 YouTube video passed an eight-hour wall-clock soak with a 7,203.0-second checkpoint and 28,800.6-second final media clock. The latter is one-long-video evidence, not a mixed 20-video session. |
+| autonomous next-track DJ | correlated ended observation, one completed transition remark, fresh search and observed next playback | Agent DJ-08 and the controller↔Shell handoff integration pass the full ended-to-next-playing sequence. End-before prefetch remains a separate latency improvement. |
 | user override and conversation | other-song replacement, ordinary conversation preservation, barge-in and stop boundary | Playwright covers replacement, conversation preservation and stop/no-late-transition; native TTS race coverage remains pending |
-| explicit preference memory | explicit like/dislike only, restart recall, inspect/edit/delete and account isolation | RD-MEM-01~06; memory receipt coverage pending |
-| recent-track variety | video and normalized-track exclusion, similar-but-new selection, artist cap | RD-VAR-01~05; ranking and long-soak coverage pending |
+| explicit preference memory | explicit like/dislike only, durable recall, inspect/edit/delete and isolation | Agent acceptance and preference-index contracts cover tagged user-only recall, persisted exact state, tombstone precedence, malformed/assistant exclusion and memory-failure fallback; physical multi-account UI remains operational coverage. |
+| recent-track variety | video and normalized-track exclusion, similar-but-new selection, bounded history | Shell search/queue contracts, Agent preference+recent+favorite selector and the 60-track logical eight-hour soak cover automatic duplicate avoidance and bounded state. |
+| unified Agent recommendation context | `status` bounds recent/favorite lists; Agent play includes `mode=radio_dj`; local tombstones override recalled preferences | Shell BGM unit/Playwright plus paired Agent DJ-GRPC/DJ-08 contracts |
 | voice favorites | idempotent add/remove, favorites-only playback, empty and unplayable entries | Shell structured tool Playwright covers add/play/remove/empty; actual voice intent, restart and unplayable favorite coverage remain pending |
-| unplayable YouTube recovery | no false playing/intro, bounded alternative search, network/sidecar recovery | Playwright covers iframe error, 15-second loading timeout, prepared fallback and fallback exhaustion; Agent re-search and live smoke remain pending |
+| unplayable YouTube recovery | no false playing/intro, bounded alternative search, network/sidecar recovery | Playwright covers iframe error, 15-second loading timeout, prepared fallback and exhaustion; Agent DJ-06 covers one fresh replacement after a failed play and a single terminal notice after repeated failure. Physical network-loss recovery remains operational coverage. |
 | sidecar exits or auxiliary window closes | Rust lifecycle tests | native Tauri sidecar restart/health check |
 | one settings owner and durable consent | Settings component rerender test | `settings-slots.spec.ts` Skills ownership, General absence, Save/reload |
 ## UC-SETTINGS-ROUNDTRIP: 설정 변경·재시작·실행 반영

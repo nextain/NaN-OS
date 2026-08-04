@@ -5,7 +5,11 @@ import { expect, test } from "@playwright/test";
 const LIVE_ENABLED = process.env.RADIO_DJ_LIVE_YOUTUBE === "1";
 const LIVE_WALL_MS = Number(process.env.RADIO_DJ_LIVE_WALL_MS ?? 30_000);
 const LIVE_PORT = Number(process.env.RADIO_DJ_LIVE_BGM_PORT ?? 18_801);
-const SHELL_ORIGIN = "http://localhost:1420";
+const SHELL_ORIGIN = (
+	process.env.PLAYWRIGHT_BASE_URL ??
+	`http://${process.env.PLAYWRIGHT_HOST || "localhost"}:${process.env.PLAYWRIGHT_PORT || "1420"}`
+).replace(/\/$/, "");
+const TWO_HOURS_MS = 2 * 60 * 60 * 1_000;
 
 if (!Number.isSafeInteger(LIVE_WALL_MS) || LIVE_WALL_MS < 30_000) {
 	throw new Error("RADIO_DJ_LIVE_WALL_MS must be an integer >= 30000");
@@ -100,10 +104,17 @@ test.describe("Radio DJ actual YouTube opt-in smoke", () => {
 		);
 		expect(search.ok, sidecarError).toBe(true);
 		const body = (await search.json()) as { results?: LiveSearchResult[] };
+		const minimumTrackSeconds = Math.max(
+			12 * 60,
+			Math.ceil(LIVE_WALL_MS / 1_000) + 30,
+		);
 		const selected = body.results?.find(
-			(result) => durationSeconds(result.duration) >= 12 * 60,
+			(result) => durationSeconds(result.duration) >= minimumTrackSeconds,
 		);
 		expect(selected).toBeDefined();
+		console.log(
+			`[radio-dj-live] selected ${selected?.id} (${selected?.duration}) for ${LIVE_WALL_MS}ms soak`,
+		);
 
 		const context = await browser.newContext({
 			extraHTTPHeaders: { referer: `${SHELL_ORIGIN}/` },
@@ -141,6 +152,7 @@ test.describe("Radio DJ actual YouTube opt-in smoke", () => {
 		);
 		const samples: number[] = [];
 		const startedAt = Date.now();
+		let twoHourCheckpointReported = false;
 		while (Date.now() - startedAt < LIVE_WALL_MS) {
 			await page.waitForTimeout(
 				Math.min(sampleIntervalMs, LIVE_WALL_MS - (Date.now() - startedAt)),
@@ -160,6 +172,18 @@ test.describe("Radio DJ actual YouTube opt-in smoke", () => {
 				mediaError: null,
 			});
 			samples.push(media.currentTime);
+			const elapsedMs = Date.now() - startedAt;
+			if (
+				!twoHourCheckpointReported &&
+				LIVE_WALL_MS >= TWO_HOURS_MS &&
+				elapsedMs >= TWO_HOURS_MS
+			) {
+				twoHourCheckpointReported = true;
+				expect(media.currentTime).toBeGreaterThan(TWO_HOURS_MS / 1_000 - 5);
+				console.log(
+					`[radio-dj-live] 2h checkpoint passed at media=${media.currentTime.toFixed(1)}s`,
+				);
+			}
 		}
 		expect(samples.length).toBeGreaterThanOrEqual(4);
 		expect(
@@ -168,7 +192,13 @@ test.describe("Radio DJ actual YouTube opt-in smoke", () => {
 			),
 		).toBe(true);
 		expect(samples.at(-1) ?? 0).toBeGreaterThan(LIVE_WALL_MS / 1_000 - 5);
+		if (LIVE_WALL_MS >= TWO_HOURS_MS) {
+			expect(twoHourCheckpointReported).toBe(true);
+		}
 		expect(pageErrors).toEqual([]);
+		console.log(
+			`[radio-dj-live] soak complete at media=${(samples.at(-1) ?? 0).toFixed(1)}s`,
+		);
 		await context.close();
 	});
 });

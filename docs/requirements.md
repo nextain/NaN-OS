@@ -641,11 +641,12 @@ Steamworks 포털 설정·SteamPipe 자격증명·스토어 심사 제출은 #31
 
 | ID | Requirement | Status | Verification |
 |---|---|---|---|
-| **FR-BGM.8** | Shell refreshes the semantic `skill_youtube_bgm` descriptor before each chat turn. Delivery failure is observable and never logged as successful registration. | Pending | `chat-service` unit and BGM Playwright outbound ordering |
-| **FR-BGM.9** | YouTube playback in the Tauri WebView supplies an origin referrer, creates a fresh iframe attempt even for the same video ID, and exposes success only after an observed `playing` event. | Pending | component/Playwright request and playback-state tests plus native Radio E2E |
-| **FR-BGM.10** | Radio-owned search avoids the currently selected video when another result exists. An exited owned BGM sidecar restarts on demand, while auxiliary-window destruction does not stop the main runtime. | Pending | BGM unit tests, Rust lifecycle tests, native health/playback acceptance |
-| **FR-SETTINGS.12** | `Settings > Skills > Youtube Radio DJ` is the sole owner of Radio DJ proactive policy. General renders no duplicate profile, weather consent, coordinates, or DJ fields. | Pending | Settings component and Playwright ownership assertions |
-| **FR-SETTINGS.13** | Weather-location consent and coordinates survive semantically equivalent parent rerenders and persist after Save/reload. No location is transmitted unless consent is enabled. | Pending | component rerender regression and Playwright persistence test |
+| **FR-BGM.8** | Shell refreshes the semantic `skill_youtube_bgm` descriptor before each chat turn. Delivery failure is observable and never logged as successful registration. | Done | `chat-service` unit and BGM Playwright outbound ordering |
+| **FR-BGM.9** | YouTube playback in the Tauri WebView supplies an origin referrer, creates a fresh iframe attempt even for the same video ID, and exposes success only after an observed `playing` event. | Done | component/Playwright request and playback-state tests plus native Radio E2E |
+| **FR-BGM.10** | Radio-owned search avoids the currently selected video when another result exists. An exited owned BGM sidecar restarts on demand, while auxiliary-window destruction does not stop the main runtime. | Done | BGM unit tests, Rust lifecycle tests, native health/playback acceptance |
+| **FR-BGM.11** | Radio-owned `status` returns bounded Shell-owned recent/favorite context, and every Agent activity play carries semantic `mode=radio_dj`. On observed `ended`, Agent speaks a short transition before a fresh dynamic search; Shell filters current/recent normalized duplicates and success remains gated by correlated observed `playing`. | Done | Shell BGM unit/Playwright plus paired Agent DJ-GRPC/DJ-08 contracts |
+| **FR-SETTINGS.12** | `Settings > Skills > Youtube Radio DJ` is the sole owner of Radio DJ proactive policy. General renders no duplicate profile, weather consent, coordinates, or DJ fields. | Done | Settings component and Playwright ownership assertions |
+| **FR-SETTINGS.13** | Weather-location consent and coordinates survive semantically equivalent parent rerenders and persist after Save/reload. No location is transmitted unless consent is enabled. | Done | component rerender regression and Playwright persistence test |
 
 ## Settings persistence and runtime reload (#415, 2026-08-03)
 

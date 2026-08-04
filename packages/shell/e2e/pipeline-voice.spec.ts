@@ -79,6 +79,9 @@ const PIPELINE_VOICE_MOCK = `
 			if (src && src.startsWith("data:audio")) {
 				window.__NAIA_E2E__.audioPlayed.push(src.substring(0, 60));
 			}
+			// Preserve the media lifecycle observed by AudioQueue. Playback-synced
+			// chat text is revealed from this event, not from play() resolution.
+			if (audio.onplay) audio.onplay();
 			// Simulate quick playback completion
 			setTimeout(function() {
 				audio._ended = true;

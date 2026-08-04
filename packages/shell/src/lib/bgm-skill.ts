@@ -462,6 +462,14 @@ export async function executeBgmSkill(
 	};
 
 	if (act === "status") {
+		const recentTracks = (deps.recentTracks?.() ?? []).slice(0, 20).map((track) => ({
+			videoId: track.id,
+			title: track.title,
+		}));
+		const favoriteTracks = (deps.favoriteTracks?.() ?? []).slice(0, 10).map((track) => ({
+			videoId: track.id,
+			title: track.title,
+		}));
 		return JSON.stringify({
 			ok: true,
 			action: act,
@@ -470,6 +478,8 @@ export async function executeBgmSkill(
 				deps.now?.() ?? Date.now(),
 				deps.playback.queue(),
 			),
+			recentTracks,
+			favoriteTracks,
 		});
 	}
 
