@@ -801,13 +801,9 @@ export const DEFAULT_OLLAMA_HOST = "http://localhost:11434";
 export const DEFAULT_LOCAL_LLM_MODEL = "dna3:latest";
 const LEGACY_DNA3_OLLAMA_MODEL = "hf.co/mradermacher/DNA3.0-4B-GGUF:Q4_K_M";
 export const DEFAULT_VLLM_HOST = "http://localhost:8000";
-// 로컬 음성(naia-local-voice = VoxCPM2) 기본 호스트 = **로컬 cascade façade(:8910)**.
-// 셸 소비자는 OpenAI 정본 표면 /v1/audio/speech 만 쓰는데(3자 합의 2026-07-15), raw
-// VoxCPM2 서비스(:22600)는 그 표면이 없다 — façade 가 voice→ref 해석까지 얹어 서빙한다.
-// (구 값 :22600 은 raw /tts 시대 잔재 — UI 에서 로컬 음성만 고르면 아무것도 안 나오던 원인.)
-// :8910 is the only desktop-facing endpoint. It owns `/tts` (WAV) and
-// `/stream` (Ditto rendering); the bundled VoxCPM2 service on :8901 remains
-// private behind this facade.
+// 로컬 음성 기본 호스트 = 비공개 Naia Media Runtime(:8910).
+// 음성 전용은 /v1/audio/speech, 비디오 아바타 결합 발화는 /stream_text를 사용한다.
+// 원시 VoxCPM2·Ditto 어댑터의 주소와 조합은 Runtime이 소유하며 Shell에 노출하지 않는다.
 export const DEFAULT_LOCAL_VOICE_HOST = "http://localhost:8910";
 
 /** Restore explicit Windows TRT profiles without changing the external LLM route. */
