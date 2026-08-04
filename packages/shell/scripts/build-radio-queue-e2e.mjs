@@ -1,5 +1,6 @@
 import { spawnSync } from "node:child_process";
 import { copyFileSync, existsSync, readFileSync, readdirSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 
 const shellDir = resolve(import.meta.dirname, "..");
@@ -11,7 +12,10 @@ const workspaceRoot = resolve(shellDir, "..", "..");
 const sidecar = resolve(shellDir, "..", "bgm-sidecar");
 const manifest = resolve(shellDir, "src-tauri/Cargo.toml");
 const config = resolve(shellDir, "src-tauri/tauri.e2e.conf.json");
-const target = process.env.NAIA_E2E_TARGET_DIR ?? "C:/tmp/naia-radio-queue-e2e";
+const target = process.env.NAIA_E2E_TARGET_DIR
+ ?? (process.platform === "win32"
+  ? "C:/tmp/naia-radio-queue-e2e"
+  : resolve(tmpdir(), "naia-radio-queue-e2e"));
 if (![script, resolve(proto, "naia_agent.proto"), config].every(existsSync)) throw new Error("isolated E2E inputs are unavailable");
 if (!existsSync(resolve(sidecar, "node_modules"))) {
  const install = spawnSync("pnpm", ["install", "--offline", "--frozen-lockfile", "--filter", "@naia/bgm-sidecar"], { cwd: workspaceRoot, stdio: "inherit", shell: process.platform === "win32" });

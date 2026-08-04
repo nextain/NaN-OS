@@ -708,14 +708,14 @@ successful until the player reports an observed `playing` transition.
 |---|---|---|
 | agent restart before a chat turn | `chat-service.test.ts` boolean delivery receipt | `e2e/bgm-skill.spec.ts` asserts same-turn `panel_skills` precedes `chat_request` |
 | current search result repeats | `bgm-skill.test.ts` current-video exclusion and same-video replay receipt | BGM Playwright fixture observes a fresh iframe/playback transition |
-| YouTube WebView identification | embed URL/remount component contract | Playwright request verifies referrer; native Radio queue E2E verifies observed A-to-B playback |
-| variable-length compressed playback | playback snapshot carries observed `currentTime`/`duration`; stale playback IDs cannot advance the queue | `e2e/bgm-skill.spec.ts` runs 10 time-compressed mixed-duration tracks, reports a 60-minute duration for the first fixture, keeps it fresh beyond 5 seconds, duplicates every ended event, and asserts no skipped track or BGM runtime error; this is not a 60-minute wall-clock soak |
+| YouTube WebView identification | embed URL/remount component contract | Playwright request verifies referrer; paired native Linux Tauri/WebKitGTK Radio queue E2E verifies observed A-to-B playback |
+| variable-length compressed playback | playback snapshot carries observed `currentTime`/`duration`; stale playback IDs cannot advance the queue | `e2e/bgm-skill.spec.ts` runs 10 mixed-duration tracks, reports a 60-minute duration for the first fixture, keeps it fresh beyond 5 seconds, duplicates every ended event, and asserts no skipped track or BGM runtime error. The default is compressed; `RADIO_DJ_LONG_TRACK_MS=600000` passed a 10-minute wall-clock local-fixture run. This is not a real YouTube or 60-minute soak. |
 | autonomous next-track DJ | ended observation, prefetch, one DJ remark, new search and observed next playback | `radio-dj-practical-test-scenarios.md` RD-DJ-01~04; automation pending |
-| user override and conversation | other-song replacement, ordinary conversation preservation, barge-in and stop boundary | RD-USER-01~06; combined Playwright/native coverage pending |
+| user override and conversation | other-song replacement, ordinary conversation preservation, barge-in and stop boundary | Playwright covers replacement, conversation preservation and stop/no-late-transition; native TTS race coverage remains pending |
 | explicit preference memory | explicit like/dislike only, restart recall, inspect/edit/delete and account isolation | RD-MEM-01~06; memory receipt coverage pending |
 | recent-track variety | video and normalized-track exclusion, similar-but-new selection, artist cap | RD-VAR-01~05; ranking and long-soak coverage pending |
-| voice favorites | idempotent add/remove, favorites-only playback, empty and unplayable entries | RD-FAV-01~05; tool actions and restart coverage pending |
-| unplayable YouTube recovery | no false playing/intro, bounded alternative search, network/sidecar recovery | RD-ERR-01~05; deterministic error fixture and live smoke pending |
+| voice favorites | idempotent add/remove, favorites-only playback, empty and unplayable entries | Shell structured tool Playwright covers add/play/remove/empty; actual voice intent, restart and unplayable favorite coverage remain pending |
+| unplayable YouTube recovery | no false playing/intro, bounded alternative search, network/sidecar recovery | Playwright covers iframe error, 15-second loading timeout, prepared fallback and fallback exhaustion; Agent re-search and live smoke remain pending |
 | sidecar exits or auxiliary window closes | Rust lifecycle tests | native Tauri sidecar restart/health check |
 | one settings owner and durable consent | Settings component rerender test | `settings-slots.spec.ts` Skills ownership, General absence, Save/reload |
 ## UC-SETTINGS-ROUNDTRIP: 설정 변경·재시작·실행 반영

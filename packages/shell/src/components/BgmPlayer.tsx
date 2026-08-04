@@ -240,16 +240,41 @@ export function BgmPlayer({ naia }: Props) {
 		return next;
 	}
 
+	function startNextQueuedTrack(reason: "ended" | "error" | "timeout"): boolean {
+		const next = bgmPlayback.advance();
+		if (!next) return false;
+		Logger.debug("BgmPlayer", "advancing queued playback", {
+			reason,
+			playbackId: next.playbackId,
+			videoId: next.selected.videoId,
+		});
+		setPlaybackSnapshot(next);
+		setQueueVersion((version) => version + 1);
+		handleYtSelect(
+			{
+				id: next.selected.videoId,
+				title: next.selected.title,
+				thumbnail: "",
+				duration: "",
+				channel: "",
+			},
+			next.playbackId,
+		);
+		return true;
+	}
+
 	function beginPlaybackTimeout(playbackId: string) {
 		clearPlaybackTimeout();
 		playbackTimeoutRef.current = setTimeout(() => {
 			const current = bgmPlayback.current();
 			if (current?.playbackId !== playbackId || current.status === "playing") return;
-			observePlayback("timeout", {
+			const timedOut = observePlayback("timeout", {
 				playbackId,
 				reason: "iframe_playing_not_observed",
 			});
+			if (!timedOut) return;
 			setPlaying(false);
+			startNextQueuedTrack("timeout");
 		}, PLAYBACK_TIMEOUT_MS);
 	}
 
@@ -294,12 +319,7 @@ export function BgmPlayer({ naia }: Props) {
 							playbackId: eventPlaybackId,
 						});
 						if (!ended) return;
-						const next = bgmPlayback.advance();
-						if (next) {
-							setPlaybackSnapshot(next);
-							setQueueVersion((version) => version + 1);
-							handleYtSelect({ id: next.selected.videoId, title: next.selected.title, thumbnail: "", duration: "", channel: "" }, next.playbackId);
-						}
+						startNextQueuedTrack("ended");
 					} else if (state === -1 || state === 3) {
 						observePlayback("loading", { playbackId: eventPlaybackId });
 					}
@@ -338,21 +358,7 @@ export function BgmPlayer({ naia }: Props) {
 						reason: String(msg.info ?? msg.data ?? "youtube_iframe_error"),
 					});
 					if (!errored) return;
-					const next = bgmPlayback.advance();
-					if (next) {
-						setPlaybackSnapshot(next);
-						setQueueVersion((version) => version + 1);
-						handleYtSelect(
-							{
-								id: next.selected.videoId,
-								title: next.selected.title,
-								thumbnail: "",
-								duration: "",
-								channel: "",
-							},
-							next.playbackId,
-						);
-					}
+					startNextQueuedTrack("error");
 				}
 				if (msg.event === "initialDelivery" || msg.event === "onReady") {
 					observePlayback("loading", { playbackId: eventPlaybackId });
@@ -786,9 +792,9 @@ export function BgmPlayer({ naia }: Props) {
 				lower.includes("econnrefused") ||
 				lower.includes("fetch")
 			) {
-				setSearchError("에이전트 서버에 연결할 수 없습니다 (127.0.0.1:18791). 앱을 재시작해 보세요.");
+				setSearchError(t("bgm.agentUnavailable"));
 			} else {
-				setSearchError(`검색 오류: ${msg}`);
+				setSearchError(`${t("bgm.searchError")}: ${msg}`);
 			}
 		} finally {
 			setSearching(false);

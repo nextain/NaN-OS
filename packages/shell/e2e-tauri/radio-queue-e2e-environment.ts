@@ -1,8 +1,9 @@
 import type { ChildProcess } from "node:child_process";
 import { spawn } from "node:child_process";
-import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { connect } from "node:net";
-import { resolve } from "node:path";
+import { tmpdir } from "node:os";
+import { basename, delimiter, dirname, resolve } from "node:path";
 import { execPath } from "node:process";
 import { resolveRequiredPairedAgent } from "./codex-e2e-environment.js";
 
@@ -13,18 +14,29 @@ if (configuredVitePort !== 1422) throw new Error("radio native E2E binary is fix
 export const vitePort = 1422;
 export const bgmPort = Number(process.env.NAIA_E2E_BGM_PORT ?? "18772");
 export const oauthPort = Number(process.env.NAIA_E2E_OAUTH_CALLBACK_PORT ?? "18793");
-export const root = resolve("D:/tmp", `naia-radio-queue-e2e-${e2ePort}`);
+const rootParent = process.platform === "win32" ? resolve("D:/tmp") : resolve(tmpdir());
+export const root = resolve(rootParent, `naia-radio-queue-e2e-${e2ePort}`);
 export const workspace = resolve(root, "workspace");
 export const settings = resolve(workspace, "naia-settings");
 export const runtime = resolve(root, "runtime");
 export const webview = resolve(root, "webview2");
 export const appData = resolve(root, "appdata");
-export const target = resolve(process.env.NAIA_E2E_TARGET_DIR ?? "C:/tmp/naia-radio-queue-e2e");
+export const target = resolve(
+ process.env.NAIA_E2E_TARGET_DIR
+  ?? (process.platform === "win32"
+   ? "C:/tmp/naia-radio-queue-e2e"
+   : resolve(tmpdir(), "naia-radio-queue-e2e")),
+);
 let vite: ChildProcess | undefined;
 let app: ChildProcess | undefined;
 
 function assertOwnedRoot(path: string) {
- if (resolve(path) !== root || !root.startsWith("D:\\tmp\\naia-radio-queue-e2e-")) throw new Error(`refusing non-owned E2E path: ${path}`);
+ const candidate = resolve(path);
+ if (
+  candidate !== root
+  || dirname(candidate) !== rootParent
+  || basename(candidate) !== `naia-radio-queue-e2e-${e2ePort}`
+ ) throw new Error(`refusing non-owned E2E path: ${path}`);
 }
 function portOpen(port: number): Promise<boolean> {
  return new Promise((done) => { const socket = connect(port, "127.0.0.1"); socket.once("connect", () => { socket.destroy(); done(true); }); socket.once("error", () => { socket.destroy(); done(false); }); });
@@ -34,6 +46,23 @@ async function waitForPort(port: number, child: ChildProcess) {
  const deadline = Date.now() + 45_000;
  while (Date.now() < deadline) { if (await portOpen(port)) return; if (child.exitCode !== null) throw new Error(`owned process exited before port ${port} became ready`); await new Promise((r) => setTimeout(r, 250)); }
  throw new Error(`owned process did not listen on ${port}`);
+}
+function appEnvironment(): NodeJS.ProcessEnv {
+ const environment = { ...process.env };
+ if (process.platform !== "linux") return environment;
+ const buildDir = resolve(target, "debug", "build");
+ const voskDir = existsSync(buildDir)
+  ? readdirSync(buildDir)
+    .filter((name) => name.startsWith("tauri-plugin-stt-"))
+    .map((name) => resolve(buildDir, name, "out", "vosk-lib"))
+    .find((path) => existsSync(resolve(path, "libvosk.so")))
+  : undefined;
+ if (voskDir) {
+  environment.LD_LIBRARY_PATH = [voskDir, environment.LD_LIBRARY_PATH]
+   .filter(Boolean)
+   .join(delimiter);
+ }
+ return environment;
 }
 export function configure() {
  process.env.CAFE_DEBUG_E2E = "1";
@@ -62,7 +91,7 @@ export async function start(binary: string) {
  vite = spawn(execPath, [resolve(shellDir, "node_modules/vite/bin/vite.js"), "--host", "127.0.0.1", "--port", String(vitePort)], { cwd: shellDir, stdio: ["ignore", "pipe", "pipe"], env: { ...process.env, BROWSER: "none", VITE_NAIA_E2E_MODE: "1", VITE_NAIA_E2E_ADK_PATH: workspace, VITE_NAIA_BGM_BASE: `http://127.0.0.1:${bgmPort}`, VITE_NAIA_E2E_BGM_IFRAME_URL: "/e2e/bgm-playback-fixture.html", VITE_NAIA_E2E_NO_AVATAR: "1" } });
  vite.stderr?.on("data", (data: Buffer) => process.stderr.write(`[radio-queue-e2e:vite] ${data.toString()}`));
  await waitForPort(vitePort, vite);
- app = spawn(binary, [], { cwd: shellDir, stdio: ["ignore", "pipe", "pipe"], env: { ...process.env, RUST_LOG: "tauri_plugin_wdio_webdriver=debug", TAURI_WEBDRIVER_PORT: String(e2ePort) } });
+ app = spawn(binary, [], { cwd: shellDir, stdio: ["ignore", "pipe", "pipe"], env: { ...appEnvironment(), RUST_LOG: "tauri_plugin_wdio_webdriver=debug", TAURI_WEBDRIVER_PORT: String(e2ePort) } });
  app.stderr?.on("data", (data: Buffer) => process.stderr.write(`[radio-queue-e2e:app] ${data.toString()}`));
  const appExit = new Promise<never>((_, reject) => app?.once("exit", (code, signal) => reject(new Error(`owned Tauri E2E app exited before WebDriver was ready (code=${code}, signal=${signal})`))));
  await Promise.race([waitForPort(e2ePort, app), appExit]);

@@ -189,6 +189,16 @@ async function setup(page: Page, ttsProvider: "browser" | "edge") {
 	await page.waitForTimeout(150);
 }
 
+async function openRadioDjSettings(page: Page) {
+	await page.locator(".app-bar-settings").click();
+	await page.locator('[data-settings-tab="skills"]').click();
+	const card = page.getByTestId("youtube-bgm-skill-settings");
+	await card.getByRole("button", { name: /Youtube Radio DJ/ }).click();
+	const save = page.getByTestId("proactive-settings-save");
+	await expect(save).toBeVisible();
+	return save;
+}
+
 async function emitActivity(page: Page, activity: Activity) {
 	await page.evaluate((chunk) => {
 		(window as any).__PA_DJ_E2E__.emitActivity(chunk);
@@ -358,9 +368,7 @@ test.describe("PA-DJ-05 proactive speech product acceptance", () => {
 			text: "설정 변경 전 멘트입니다.",
 		});
 		const before = (await telemetry(page)).order.length;
-		await page.locator(".app-bar-settings").click();
-		await page.locator('[data-settings-tab="general"]').click();
-		await page.getByTestId("proactive-settings-save").click();
+		await (await openRadioDjSettings(page)).click();
 		await expect
 			.poll(async () => (await telemetry(page)).order.slice(before))
 			.toContain("cancel");
@@ -385,9 +393,7 @@ test.describe("PA-DJ-05 proactive speech product acceptance", () => {
 		const oldEpoch = await page.evaluate(
 			() => (window as any).__PA_DJ_E2E__.subscriptionEpoch as number,
 		);
-		await page.locator(".app-bar-settings").click();
-		await page.locator('[data-settings-tab="general"]').click();
-		await page.getByTestId("proactive-settings-save").click();
+		await (await openRadioDjSettings(page)).click();
 		await expect
 			.poll(() => page.getByTestId("proactive-settings-save").isEnabled())
 			.toBe(true);
