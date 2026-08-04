@@ -27,7 +27,10 @@ function readPositiveIntegerEnv(
 const port = readPositiveIntegerEnv("PLAYWRIGHT_PORT", 1420, { max: 65534 });
 const host = process.env.PLAYWRIGHT_HOST || "localhost";
 const baseURL = process.env.PLAYWRIGHT_BASE_URL || `http://${host}:${port}`;
-const webServerCommand = process.env.PLAYWRIGHT_SERVER_COMMAND || "pnpm dev";
+const webServerCommand =
+	process.env.PLAYWRIGHT_SERVER_COMMAND || "pnpm -w build && pnpm dev";
+const reuseExistingServer =
+	process.env.PLAYWRIGHT_REUSE_EXISTING_SERVER === "1";
 const webServerTimeout = readPositiveIntegerEnv(
 	"PLAYWRIGHT_WEB_SERVER_TIMEOUT",
 	30_000,
@@ -56,7 +59,10 @@ export default defineConfig({
 	webServer: {
 		command: webServerCommand,
 		port,
-		reuseExistingServer: true,
+		// A server from another checkout can return a perfectly valid page while
+		// exercising the wrong revision. Reuse is therefore an explicit local
+		// optimization, never the default test contract.
+		reuseExistingServer,
 		timeout: webServerTimeout,
 	},
 });

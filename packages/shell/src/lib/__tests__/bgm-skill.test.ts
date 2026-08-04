@@ -1,16 +1,22 @@
 // UC8 / FR-BGM.1 — skill_youtube_bgm 패널 도구 단위 테스트 (deps 주입 = 사이드카/Tauri 헤르메틱).
 // 위젯(BgmPlayer) 리스너가 소비하는 bgm_youtube_* payload 형상이 계약이다.
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { createBgmPlaybackPort } from "../bgm-playback";
 import {
 	BGM_ACTIONS,
-	SKILL_YOUTUBE_BGM,
-	clampVolume,
-	executeBgmSkill,
-	shouldActivateRadioDj,
 	type BgmSearchResult,
 	type BgmSkillDeps,
+	SKILL_YOUTUBE_BGM,
+	cancelRadioDjRecovery,
+	clampVolume,
+	continueRadioDjRecoveryAfterQueueAdvance,
+	executeBgmSkill,
+	getBgmRecentTracks,
+	normalizeBgmTitle,
+	recordBgmPlayedTrack,
+	recoverRadioDjPlayback,
+	shouldActivateRadioDj,
 } from "../bgm-skill";
-import { createBgmPlaybackPort } from "../bgm-playback";
 
 function mkDeps(results: BgmSearchResult[] = []) {
 	const emitted: Record<string, unknown>[] = [];
@@ -28,6 +34,8 @@ function mkDeps(results: BgmSearchResult[] = []) {
 	};
 	return { deps, emitted, searched };
 }
+
+beforeEach(() => cancelRadioDjRecovery());
 
 describe("SKILL_YOUTUBE_BGM descriptor (계약)", () => {
 	it("name/required/tier — App.tsx auto-allow(skill_youtube_bgm)와 일치, tier 0", () => {
@@ -49,10 +57,236 @@ describe("SKILL_YOUTUBE_BGM descriptor (계약)", () => {
 
 describe("Radio DJ semantic mode boundary", () => {
 	it("activates only from the LLM's structured radio_dj play choice", () => {
-		expect(shouldActivateRadioDj({ action: "play", mode: "radio_dj" })).toBe(true);
-		expect(shouldActivateRadioDj({ action: "play", mode: "player" })).toBe(false);
-		expect(shouldActivateRadioDj({ action: "status", mode: "radio_dj" })).toBe(false);
-		expect(shouldActivateRadioDj({ action: "play", query: "라디오 DJ 해줘" })).toBe(false);
+		expect(shouldActivateRadioDj({ action: "play", mode: "radio_dj" })).toBe(
+			true,
+		);
+		expect(shouldActivateRadioDj({ action: "play", mode: "player" })).toBe(
+			false,
+		);
+		expect(shouldActivateRadioDj({ action: "status", mode: "radio_dj" })).toBe(
+			false,
+		);
+		expect(
+			shouldActivateRadioDj({ action: "play", query: "라디오 DJ 해줘" }),
+		).toBe(false);
+	});
+
+	it("replaces an active ordinary track and selects a fresh search result", async () => {
+		const { deps, emitted } = mkDeps([
+			{ id: "current", title: "Current Song" },
+			{ id: "fresh", title: "Fresh Song" },
+		]);
+		await executeBgmSkill(
+			{ action: "play", videoId: "current", title: "Current Song" },
+			deps,
+		);
+		const result = JSON.parse(
+			await executeBgmSkill(
+				{ action: "play", query: "same mood", mode: "radio_dj" },
+				deps,
+			),
+		);
+
+		expect(result.selected.videoId).toBe("fresh");
+		expect(deps.playback.current()?.selected.videoId).toBe("fresh");
+		expect(deps.playback.queue()).toEqual([]);
+		expect(emitted.at(-1)).toMatchObject({
+			type: "bgm_youtube_play",
+			videoId: "fresh",
+		});
+	});
+
+	it("does not silently repeat when every automatic candidate is recent", async () => {
+		const { deps, emitted } = mkDeps([
+			{ id: "recent-id", title: "Recent Song" },
+			{ id: "mirror", title: "Recent Song (Official Video)" },
+		]);
+		deps.recentTracks = () => [
+			{ id: "recent-id", title: "Recent Song", playedAt: 1 },
+		];
+
+		expect(
+			JSON.parse(
+				await executeBgmSkill(
+					{ action: "play", query: "same mood", mode: "radio_dj" },
+					deps,
+				),
+			),
+		).toEqual({
+			ok: false,
+			action: "play",
+			reason: "no_fresh_search_results",
+			query: "same mood",
+		});
+		expect(emitted).toEqual([]);
+	});
+});
+
+describe("Radio DJ bounded playback recovery", () => {
+	it("searches a fresh candidate after an unavailable DJ track", async () => {
+		const emitted: Record<string, unknown>[] = [];
+		let searchCall = 0;
+		const deps: BgmSkillDeps = {
+			search: async () => {
+				searchCall += 1;
+				return searchCall === 1
+					? [{ id: "failed", title: "Unavailable Song" }]
+					: [
+							{ id: "mirror", title: "Unavailable Song (Official Video)" },
+							{ id: "recovered", title: "Fresh Recovery" },
+						];
+			},
+			emitBgm: async (payload) => {
+				emitted.push(payload);
+			},
+			playback: createBgmPlaybackPort(),
+		};
+		await executeBgmSkill(
+			{ action: "play", query: "night jazz", mode: "radio_dj" },
+			deps,
+		);
+		const failed = deps.playback.current();
+		expect(failed).not.toBeNull();
+		deps.playback.observe({
+			playbackId: failed?.playbackId ?? "",
+			sequence: 2,
+			status: "error",
+		});
+
+		const recovered = await recoverRadioDjPlayback(failed?.playbackId ?? "");
+
+		expect(recovered).toMatchObject({
+			recovered: true,
+			selected: { id: "recovered" },
+		});
+		expect(searchCall).toBe(2);
+		expect(emitted.at(-1)).toMatchObject({
+			type: "bgm_youtube_play",
+			videoId: "recovered",
+			recovery: "radio_dj_search",
+		});
+		expect(deps.playback.current()?.selected.videoId).toBe("recovered");
+	});
+
+	it("continues the recovery session after a prepared queue is exhausted", async () => {
+		let searchCall = 0;
+		const deps: BgmSkillDeps = {
+			search: async () => {
+				searchCall += 1;
+				return searchCall === 1
+					? [{ id: "first", title: "First Candidate" }]
+					: [{ id: "dynamic", title: "Dynamic Candidate" }];
+			},
+			emitBgm: async () => {},
+			playback: createBgmPlaybackPort(),
+		};
+		await executeBgmSkill(
+			{ action: "play", query: "focus", mode: "radio_dj" },
+			deps,
+		);
+		await executeBgmSkill(
+			{ action: "play", videoId: "prepared", title: "Prepared Candidate" },
+			deps,
+		);
+		const first = deps.playback.current();
+		deps.playback.observe({
+			playbackId: first?.playbackId ?? "",
+			sequence: 2,
+			status: "error",
+		});
+		const prepared = deps.playback.advance();
+		expect(prepared?.selected.videoId).toBe("prepared");
+		continueRadioDjRecoveryAfterQueueAdvance(
+			first?.playbackId ?? "",
+			prepared?.playbackId ?? "",
+		);
+		deps.playback.observe({
+			playbackId: prepared?.playbackId ?? "",
+			sequence: 2,
+			status: "error",
+		});
+
+		const recovered = await recoverRadioDjPlayback(prepared?.playbackId ?? "");
+		expect(recovered).toMatchObject({
+			recovered: true,
+			selected: { id: "dynamic" },
+		});
+	});
+
+	it("stops after two searches when every result is already attempted", async () => {
+		let searchCall = 0;
+		const deps: BgmSkillDeps = {
+			search: async () => {
+				searchCall += 1;
+				return [{ id: "same", title: "Same Song" }];
+			},
+			emitBgm: async () => {},
+			playback: createBgmPlaybackPort(),
+		};
+		await executeBgmSkill(
+			{ action: "play", query: "repeat", mode: "radio_dj" },
+			deps,
+		);
+		const failed = deps.playback.current();
+		deps.playback.observe({
+			playbackId: failed?.playbackId ?? "",
+			sequence: 2,
+			status: "error",
+		});
+
+		expect(await recoverRadioDjPlayback(failed?.playbackId ?? "")).toEqual({
+			recovered: false,
+			reason: "exhausted",
+			searches: 2,
+		});
+		expect(searchCall).toBe(3);
+		expect(await recoverRadioDjPlayback(failed?.playbackId ?? "")).toEqual({
+			recovered: false,
+			reason: "not_active",
+			searches: 0,
+		});
+	});
+
+	it("does not apply a delayed recovery after stop", async () => {
+		let releaseSearch: ((results: BgmSearchResult[]) => void) | undefined;
+		let searchCall = 0;
+		const emitted: Record<string, unknown>[] = [];
+		const deps: BgmSkillDeps = {
+			search: async () => {
+				searchCall += 1;
+				if (searchCall === 1) return [{ id: "failed", title: "Failed" }];
+				return new Promise<BgmSearchResult[]>((resolve) => {
+					releaseSearch = resolve;
+				});
+			},
+			emitBgm: async (payload) => {
+				emitted.push(payload);
+			},
+			playback: createBgmPlaybackPort(),
+		};
+		await executeBgmSkill(
+			{ action: "play", query: "late", mode: "radio_dj" },
+			deps,
+		);
+		const failed = deps.playback.current();
+		deps.playback.observe({
+			playbackId: failed?.playbackId ?? "",
+			sequence: 2,
+			status: "error",
+		});
+		const recovery = recoverRadioDjPlayback(failed?.playbackId ?? "");
+		await vi.waitFor(() => expect(releaseSearch).toBeTypeOf("function"));
+		await executeBgmSkill({ action: "stop" }, deps);
+		releaseSearch?.([{ id: "must-not-play", title: "Must Not Play" }]);
+
+		expect(await recovery).toMatchObject({
+			recovered: false,
+			reason: "cancelled",
+		});
+		expect(emitted.map((event) => event.type)).toEqual([
+			"bgm_youtube_play",
+			"bgm_youtube_stop",
+		]);
 	});
 });
 
@@ -138,6 +372,71 @@ describe("executeBgmSkill", () => {
 		});
 	});
 
+	it("skips recently played ids and normalized duplicate titles", async () => {
+		const { deps } = mkDeps([
+			{ id: "recent-id", title: "Song A" },
+			{ id: "mirror-upload", title: "Song B (Official Video)" },
+			{ id: "fresh-id", title: "Song C" },
+		]);
+		deps.recentTracks = () => [
+			{ id: "recent-id", title: "Song A", playedAt: 1 },
+			{ id: "older-upload", title: "Song B", playedAt: 2 },
+		];
+
+		const replacement = JSON.parse(
+			await executeBgmSkill(
+				{ action: "play", query: "similar", replace: true },
+				deps,
+			),
+		);
+
+		expect(replacement.selected.videoId).toBe("fresh-id");
+	});
+
+	it("adds/removes the current track and starts a non-current favorite", async () => {
+		const { deps, emitted } = mkDeps();
+		await executeBgmSkill(
+			{ action: "play", videoId: "current", title: "Current" },
+			deps,
+		);
+		await executeBgmSkill({ action: "favorite_add" }, deps);
+		await executeBgmSkill({ action: "favorite_remove" }, deps);
+		deps.favoriteTracks = () => [
+			{ id: "current", title: "Current" },
+			{ id: "favorite-2", title: "Favorite Two" },
+		];
+		const favorite = JSON.parse(
+			await executeBgmSkill({ action: "favorites_play" }, deps),
+		);
+
+		expect(emitted.slice(1, 3)).toEqual([
+			{ type: "bgm_youtube_fav_add" },
+			{ type: "bgm_youtube_fav_remove" },
+		]);
+		expect(favorite.selected.videoId).toBe("favorite-2");
+		expect(deps.playback.queue()).toEqual([]);
+	});
+
+	it("returns explicit failures for favorite actions without usable tracks", async () => {
+		const { deps, emitted } = mkDeps();
+		expect(
+			JSON.parse(await executeBgmSkill({ action: "favorite_add" }, deps)),
+		).toEqual({
+			ok: false,
+			action: "favorite_add",
+			reason: "no_current_track",
+		});
+		deps.favoriteTracks = () => [];
+		expect(
+			JSON.parse(await executeBgmSkill({ action: "favorites_play" }, deps)),
+		).toEqual({
+			ok: false,
+			action: "favorites_play",
+			reason: "no_favorites",
+		});
+		expect(emitted).toEqual([]);
+	});
+
 	it("play+query → 검색 후 첫 결과 재생 (bgm_youtube_play {videoId,title} — 위젯 리스너 형상)", async () => {
 		const { deps, emitted, searched } = mkDeps([
 			{ id: "v1", title: "Lofi Beats", thumbnail: "http://t/1.jpg" },
@@ -148,6 +447,7 @@ describe("executeBgmSkill", () => {
 		expect(emitted).toEqual([
 			{
 				type: "bgm_youtube_play",
+				playbackId: "bgm-playback-1",
 				videoId: "v1",
 				title: "Lofi Beats",
 				thumbnail: "http://t/1.jpg",
@@ -170,7 +470,12 @@ describe("executeBgmSkill", () => {
 		);
 		expect(searched).toEqual([]); // 검색 미호출
 		expect(emitted).toEqual([
-			{ type: "bgm_youtube_play", videoId: "abc123", title: "직접곡" },
+			{
+				type: "bgm_youtube_play",
+				playbackId: "bgm-playback-1",
+				videoId: "abc123",
+				title: "직접곡",
+			},
 		]);
 		expect(JSON.parse(out)).toMatchObject({
 			ok: true,
@@ -187,26 +492,50 @@ describe("executeBgmSkill", () => {
 		const { deps, emitted } = mkDeps();
 		deps.playback = playback;
 		deps.now = () => now;
+		deps.recentTracks = () => [
+			{ id: "old-1", title: "Old Track", playedAt: 900 },
+		];
+		deps.favoriteTracks = () => [{ id: "fav-1", title: "Favorite Track" }];
 		const requested = playback.request({ videoId: "v1", title: "Track A" });
-		playback.observe({ playbackId: requested.playbackId, sequence: 2, status: "playing" });
+		playback.observe({
+			playbackId: requested.playbackId,
+			sequence: 2,
+			status: "playing",
+		});
 
-		const playing = JSON.parse(await executeBgmSkill({ action: "status" }, deps));
+		const playing = JSON.parse(
+			await executeBgmSkill({ action: "status" }, deps),
+		);
 		expect(playing).toMatchObject({
 			ok: true,
 			action: "status",
-			playback: { playbackId: requested.playbackId, status: "playing", sequence: 2 },
+			playback: {
+				playbackId: requested.playbackId,
+				status: "playing",
+				sequence: 2,
+			},
 			currentTrack: { videoId: "v1", title: "Track A" },
 			announceTrack: true,
+			recentTracks: [{ videoId: "old-1", title: "Old Track" }],
+			favoriteTracks: [{ videoId: "fav-1", title: "Favorite Track" }],
 		});
 		expect(emitted).toEqual([]);
 
 		now += 1;
-		playback.observe({ playbackId: requested.playbackId, sequence: 3, status: "ended" });
+		playback.observe({
+			playbackId: requested.playbackId,
+			sequence: 3,
+			status: "ended",
+		});
 		const ended = JSON.parse(await executeBgmSkill({ action: "status" }, deps));
 		expect(ended).toMatchObject({
 			ok: true,
 			action: "status",
-			playback: { playbackId: requested.playbackId, status: "ended", sequence: 3 },
+			playback: {
+				playbackId: requested.playbackId,
+				status: "ended",
+				sequence: 3,
+			},
 			currentTrack: null,
 			announceTrack: false,
 		});
@@ -283,6 +612,40 @@ describe("executeBgmSkill", () => {
 			/unknown action/,
 		);
 		await expect(executeBgmSkill({}, deps)).rejects.toThrow(/unknown action/);
+	});
+});
+
+describe("recent BGM history", () => {
+	beforeEach(() => {
+		const values = new Map<string, string>();
+		vi.stubGlobal("localStorage", {
+			getItem: (key: string) => values.get(key) ?? null,
+			setItem: (key: string, value: string) => values.set(key, value),
+			removeItem: (key: string) => values.delete(key),
+			clear: () => values.clear(),
+		});
+	});
+
+	it("normalizes upload decorations and records only one equivalent title", () => {
+		localStorage.clear();
+		expect(normalizeBgmTitle("Song B (Official Video)")).toBe("song b");
+		recordBgmPlayedTrack({ id: "v1", title: "Song B (Official Video)" }, 10);
+		recordBgmPlayedTrack({ id: "v2", title: "Song B" }, 20);
+		expect(getBgmRecentTracks()).toEqual([
+			{ id: "v2", title: "Song B", playedAt: 20 },
+		]);
+	});
+
+	it("bounds playback history to twenty confirmed entries", () => {
+		localStorage.clear();
+		for (let index = 0; index < 25; index += 1) {
+			recordBgmPlayedTrack(
+				{ id: `v-${index}`, title: `Track ${index}` },
+				index,
+			);
+		}
+		expect(getBgmRecentTracks()).toHaveLength(20);
+		expect(getBgmRecentTracks()[0].id).toBe("v-24");
 	});
 });
 

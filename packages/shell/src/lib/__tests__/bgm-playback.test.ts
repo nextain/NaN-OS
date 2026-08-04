@@ -52,6 +52,32 @@ describe("BGM playback observation contract", () => {
 		});
 	});
 
+	it("refreshes a long playback with observed position and duration", () => {
+		let clock = 1_000;
+		const playback = createBgmPlaybackPort(() => clock);
+		const requested = playback.request({
+			videoId: "long-track",
+			title: "Long Track",
+		});
+		clock += 6_000;
+		const playing = playback.observe({
+			playbackId: requested.playbackId,
+			sequence: 2,
+			status: "playing",
+			currentTime: 6,
+			duration: 3_600,
+		});
+
+		expect(toBgmObservedContext(playing, clock)).toMatchObject({
+			playback: {
+				currentTime: 6,
+				duration: 3_600,
+			},
+			currentTrack: { videoId: "long-track", title: "Long Track" },
+			announceTrack: true,
+		});
+	});
+
 	it("does not let a late event from track A overwrite track B", () => {
 		const playback = createBgmPlaybackPort(() => 1_000);
 		const a = playback.request({ videoId: "track-a", title: "Track A" });

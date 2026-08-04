@@ -119,11 +119,11 @@ test("UC-JEONJU-COURSE-READINESS: student checks Codex before selecting the cour
 		workspaceRoot: "D:\\course\\jeonju-workshop",
 	});
 
-	// The next course step is reachable from the same settings surface. The
-	// connection UI exposes discovered channels but never a raw Discord token.
-	await page.locator('[data-settings-tab="connections"]').click();
-	const connections = page.getByTestId("discord-connections");
-	await expect(connections).toBeVisible();
-	await expect(connections).toContainText("Naia");
-	await expect(connections.locator('input[type="password"]')).toHaveCount(0);
+	// Connections is intentionally not shipped yet. Course readiness keeps that
+	// unfinished surface disabled and never exposes a raw token field.
+	const connectionsTab = page.locator('[data-settings-tab="connections"]');
+	await expect(connectionsTab).toBeDisabled();
+	await expect(connectionsTab).toContainText(/Coming Soon|준비중/);
+	await expect(page.getByTestId("discord-connections")).toHaveCount(0);
+	await expect(page.locator('input[type="password"]')).toHaveCount(0);
 });

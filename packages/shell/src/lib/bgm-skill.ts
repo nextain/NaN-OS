@@ -15,16 +15,13 @@
 import { emit } from "@tauri-apps/api/event";
 import type { NaiaTool } from "./app-registry";
 import {
-	BGM_SIDECAR_BASE_URL,
-	ensureBgmSidecar,
-} from "./bgm-sidecar-url";
-import {
+	type BgmPlaybackPort,
 	bgmPlayback,
+	toBgmObservedContext,
 	toBgmPlayToolResult,
 	toBgmQueuedToolResult,
-	toBgmObservedContext,
-	type BgmPlaybackPort,
 } from "./bgm-playback";
+import { BGM_SIDECAR_BASE_URL, ensureBgmSidecar } from "./bgm-sidecar-url";
 
 /** panelExec 등록용 패널 id — 위젯 전용(앱 아님), panel_skills_clear 대상 아님(항상 유지). */
 export const BGM_PANEL_ID = "bgm-widget";
@@ -38,6 +35,9 @@ export const BGM_ACTIONS = [
 	"resume",
 	"next",
 	"prev",
+	"favorite_add",
+	"favorite_remove",
+	"favorites_play",
 	"status",
 	"volume",
 ] as const;
@@ -85,14 +85,77 @@ export interface BgmSearchResult {
 	thumbnail?: string;
 }
 
+export interface BgmRecentTrack extends BgmSearchResult {
+	playedAt: number;
+}
+
+export const BGM_RECENT_KEY = "yt-bgm-recent-v1";
+const RECENT_TRACK_LIMIT = 20;
+
+/** Normalize common YouTube decorations so alternate uploads count as one song. */
+export function normalizeBgmTitle(title: string): string {
+	return title
+		.normalize("NFKC")
+		.toLocaleLowerCase()
+		.replace(
+			/[\[(]\s*(?:official\s*)?(?:music\s*)?(?:video|audio|lyrics?|mv|가사|뮤직비디오|오디오)\s*[\])]/giu,
+			" ",
+		)
+		.replace(/\b(?:official|audio|lyrics?|mv)\b/giu, " ")
+		.replace(/[^\p{L}\p{N}]+/gu, " ")
+		.trim();
+}
+
+export function getBgmRecentTracks(): BgmRecentTrack[] {
+	try {
+		if (typeof localStorage === "undefined") return [];
+		const parsed = JSON.parse(localStorage.getItem(BGM_RECENT_KEY) ?? "[]");
+		if (!Array.isArray(parsed)) return [];
+		return parsed
+			.filter(
+				(item): item is BgmRecentTrack =>
+					item !== null &&
+					typeof item === "object" &&
+					typeof item.id === "string" &&
+					typeof item.title === "string" &&
+					typeof item.playedAt === "number",
+			)
+			.slice(0, RECENT_TRACK_LIMIT);
+	} catch {
+		return [];
+	}
+}
+
+/** Persist only a track that the iframe has actually reported as playing. */
+export function recordBgmPlayedTrack(
+	track: BgmSearchResult,
+	playedAt = Date.now(),
+): void {
+	try {
+		if (typeof localStorage === "undefined") return;
+		const normalized = normalizeBgmTitle(track.title);
+		const next = [
+			{ ...track, playedAt },
+			...getBgmRecentTracks().filter(
+				(item) =>
+					item.id !== track.id &&
+					(!normalized || normalizeBgmTitle(item.title) !== normalized),
+			),
+		].slice(0, RECENT_TRACK_LIMIT);
+		localStorage.setItem(BGM_RECENT_KEY, JSON.stringify(next));
+	} catch {}
+}
+
 /** 주입 가능 deps — 테스트 헤르메틱(사이드카/Tauri 불요). */
 export interface BgmSkillDeps {
 	search: (query: string) => Promise<BgmSearchResult[]>;
-	/** 위젯(BgmPlayer)이 listen("agent_response") 로 받는 payload 를 발사. */
+	/** 위젯(BgmPlayer)이 Shell 전용 bgm_command 이벤트로 받는 payload를 발사. */
 	emitBgm: (payload: Record<string, unknown>) => Promise<void>;
 	playback: BgmPlaybackPort;
 	/** Number of YouTube favorites available to next/prev navigation. */
 	favoriteCount?: () => number;
+	favoriteTracks?: () => BgmSearchResult[];
+	recentTracks?: () => BgmRecentTrack[];
 	now?: () => number;
 }
 
@@ -102,6 +165,22 @@ function persistedFavoriteCount(): number {
 		return Array.isArray(parsed) ? parsed.length : 0;
 	} catch {
 		return 0;
+	}
+}
+
+function persistedFavoriteTracks(): BgmSearchResult[] {
+	try {
+		const parsed = JSON.parse(localStorage.getItem("yt-bgm-favorites") ?? "[]");
+		if (!Array.isArray(parsed)) return [];
+		return parsed.filter(
+			(item): item is BgmSearchResult =>
+				item !== null &&
+				typeof item === "object" &&
+				typeof item.id === "string" &&
+				typeof item.title === "string",
+		);
+	} catch {
+		return [];
 	}
 }
 
@@ -121,11 +200,195 @@ async function sidecarSearch(query: string): Promise<BgmSearchResult[]> {
 
 const defaultDeps: BgmSkillDeps = {
 	search: sidecarSearch,
-	// Tauri emit 은 JS listen("agent_response") 리스너에도 브로드캐스트 — BgmPlayer 가 즉시 반응.
-	emitBgm: (payload) => emit("agent_response", JSON.stringify(payload)),
+	// Tauri emit은 JS bgm_command 리스너로 브로드캐스트되어 BgmPlayer가 즉시 반응한다.
+	// Keep Shell-owned environment commands off the Agent protocol stream.
+	// Broadcasting them as agent_response makes the core router diagnose every
+	// queue operation as an unknown Agent variant.
+	emitBgm: (payload) => emit("bgm_command", JSON.stringify(payload)),
 	playback: bgmPlayback,
 	favoriteCount: persistedFavoriteCount,
+	favoriteTracks: persistedFavoriteTracks,
+	recentTracks: getBgmRecentTracks,
 };
+
+const RADIO_DJ_RECOVERY_SEARCH_LIMIT = 2;
+
+interface RadioDjRecoveryPlan {
+	generation: number;
+	query: string;
+	deps: BgmSkillDeps;
+	playbackId: string;
+	searches: number;
+	attemptedIds: Set<string>;
+	attemptedTitles: Set<string>;
+	inFlight?: Promise<RadioDjRecoveryResult>;
+}
+
+export type RadioDjRecoveryResult =
+	| { recovered: true; playbackId: string; selected: BgmSearchResult }
+	| {
+			recovered: false;
+			reason: "not_active" | "stale_playback" | "cancelled" | "exhausted";
+			searches: number;
+	  };
+
+let radioDjRecoveryGeneration = 0;
+let radioDjRecoveryPlan: RadioDjRecoveryPlan | null = null;
+
+/** Cancel any delayed search before a user-owned command can be overwritten. */
+export function cancelRadioDjRecovery(): void {
+	radioDjRecoveryGeneration += 1;
+	radioDjRecoveryPlan = null;
+}
+
+/** Keep the same bounded recovery session when a prepared queue item starts. */
+export function continueRadioDjRecoveryAfterQueueAdvance(
+	previousPlaybackId: string,
+	nextPlaybackId: string,
+): void {
+	if (radioDjRecoveryPlan?.playbackId === previousPlaybackId) {
+		radioDjRecoveryPlan.playbackId = nextPlaybackId;
+	}
+}
+
+function configureRadioDjRecovery(
+	query: string,
+	selected: BgmSearchResult,
+	deps: BgmSkillDeps,
+): void {
+	const current = deps.playback.current();
+	if (!current || current.selected.videoId !== selected.id) {
+		cancelRadioDjRecovery();
+		return;
+	}
+	const normalizedTitle = normalizeBgmTitle(selected.title);
+	radioDjRecoveryGeneration += 1;
+	radioDjRecoveryPlan = {
+		generation: radioDjRecoveryGeneration,
+		query,
+		deps,
+		playbackId: current.playbackId,
+		searches: 0,
+		attemptedIds: new Set([selected.id]),
+		attemptedTitles: new Set(normalizedTitle ? [normalizedTitle] : []),
+	};
+}
+
+/**
+ * Search for a fresh Radio DJ candidate only after the prepared queue is empty.
+ * Each session gets at most two recovery searches, and stale/late failures can
+ * never replace a newer user-owned playback.
+ */
+export async function recoverRadioDjPlayback(
+	failedPlaybackId: string,
+): Promise<RadioDjRecoveryResult> {
+	const plan = radioDjRecoveryPlan;
+	if (!plan) return { recovered: false, reason: "not_active", searches: 0 };
+	if (plan.playbackId !== failedPlaybackId) {
+		return {
+			recovered: false,
+			reason: "stale_playback",
+			searches: plan.searches,
+		};
+	}
+	if (plan.inFlight) return plan.inFlight;
+
+	const recovery = (async (): Promise<RadioDjRecoveryResult> => {
+		while (plan.searches < RADIO_DJ_RECOVERY_SEARCH_LIMIT) {
+			if (
+				radioDjRecoveryPlan !== plan ||
+				plan.generation !== radioDjRecoveryGeneration
+			) {
+				return {
+					recovered: false,
+					reason: "cancelled",
+					searches: plan.searches,
+				};
+			}
+			const current = plan.deps.playback.current();
+			if (
+				current?.playbackId !== failedPlaybackId ||
+				!["error", "timeout"].includes(current.status)
+			) {
+				return {
+					recovered: false,
+					reason: "stale_playback",
+					searches: plan.searches,
+				};
+			}
+
+			plan.searches += 1;
+			let results: BgmSearchResult[] = [];
+			try {
+				results = await plan.deps.search(plan.query);
+			} catch {
+				// A transient sidecar/network failure may use the one remaining bounded
+				// attempt. The caller still receives one terminal result, never a loop.
+				continue;
+			}
+			if (
+				radioDjRecoveryPlan !== plan ||
+				plan.generation !== radioDjRecoveryGeneration
+			) {
+				return {
+					recovered: false,
+					reason: "cancelled",
+					searches: plan.searches,
+				};
+			}
+
+			const recent = plan.deps.recentTracks?.() ?? [];
+			const recentIds = new Set(recent.map((track) => track.id));
+			const recentTitles = new Set(
+				recent.map((track) => normalizeBgmTitle(track.title)).filter(Boolean),
+			);
+			const selected = results.find((result) => {
+				const normalizedTitle = normalizeBgmTitle(result.title);
+				return (
+					!plan.attemptedIds.has(result.id) &&
+					!recentIds.has(result.id) &&
+					(!normalizedTitle ||
+						(!plan.attemptedTitles.has(normalizedTitle) &&
+							!recentTitles.has(normalizedTitle)))
+				);
+			});
+			if (!selected) continue;
+
+			plan.attemptedIds.add(selected.id);
+			const normalizedTitle = normalizeBgmTitle(selected.title);
+			if (normalizedTitle) plan.attemptedTitles.add(normalizedTitle);
+			const playback = plan.deps.playback.request({
+				videoId: selected.id,
+				title: selected.title,
+			});
+			plan.playbackId = playback.playbackId;
+			await plan.deps.emitBgm({
+				type: "bgm_youtube_play",
+				playbackId: playback.playbackId,
+				videoId: selected.id,
+				title: selected.title,
+				...(selected.thumbnail ? { thumbnail: selected.thumbnail } : {}),
+				recovery: "radio_dj_search",
+			});
+			return {
+				recovered: true,
+				playbackId: playback.playbackId,
+				selected,
+			};
+		}
+
+		if (radioDjRecoveryPlan === plan) radioDjRecoveryPlan = null;
+		return {
+			recovered: false,
+			reason: "exhausted",
+			searches: plan.searches,
+		};
+	})();
+	plan.inFlight = recovery;
+	const result = await recovery;
+	if (plan.inFlight === recovery) plan.inFlight = undefined;
+	return result;
+}
 
 /** 도메인: volume 0..1 clamp(순수) — agent UC8 어댑터 clampVolume 동형. 비유한=0.5. */
 export function clampVolume(v: unknown): number {
@@ -150,17 +413,21 @@ export async function executeBgmSkill(
 	}
 	const act = action as BgmAction;
 
-	const enqueueTrack = async (track: BgmSearchResult): Promise<string> => {
+	const enqueueTrack = async (
+		track: BgmSearchResult,
+		forceReplace = false,
+	): Promise<string> => {
 		// Speech activities such as Radio DJ own their current selection. A new
 		// activity request means "change the music now", not "play this later".
 		// Ordinary chat/tool requests keep the queue-preserving behavior below.
-		if (args.replace === true) {
+		if (forceReplace || args.replace === true) {
 			const playback = deps.playback.request({
 				videoId: track.id,
 				title: track.title,
 			});
 			await deps.emitBgm({
 				type: "bgm_youtube_play",
+				playbackId: playback.playbackId,
 				videoId: track.id,
 				title: track.title,
 				...(track.thumbnail ? { thumbnail: track.thumbnail } : {}),
@@ -174,6 +441,7 @@ export async function executeBgmSkill(
 		if (result.disposition === "play") {
 			await deps.emitBgm({
 				type: "bgm_youtube_play",
+				playbackId: result.playback.playbackId,
 				videoId: track.id,
 				title: track.title,
 				...(track.thumbnail ? { thumbnail: track.thumbnail } : {}),
@@ -194,20 +462,50 @@ export async function executeBgmSkill(
 	};
 
 	if (act === "status") {
+		const recentTracks = (deps.recentTracks?.() ?? []).slice(0, 20).map((track) => ({
+			videoId: track.id,
+			title: track.title,
+		}));
+		const favoriteTracks = (deps.favoriteTracks?.() ?? []).slice(0, 10).map((track) => ({
+			videoId: track.id,
+			title: track.title,
+		}));
 		return JSON.stringify({
 			ok: true,
 			action: act,
-			...toBgmObservedContext(deps.playback.current(), deps.now?.() ?? Date.now(), deps.playback.queue()),
+			...toBgmObservedContext(
+				deps.playback.current(),
+				deps.now?.() ?? Date.now(),
+				deps.playback.queue(),
+			),
+			recentTracks,
+			favoriteTracks,
 		});
 	}
 
 	if (act === "play") {
+		const radioDjRequested = shouldActivateRadioDj(args);
+		const activeStatus = deps.playback.current()?.status;
+		// Replacements and starts own the surface immediately. A queue-preserving
+		// request may be a prepared DJ fallback, so it keeps the current plan.
+		if (
+			radioDjRequested ||
+			args.replace === true ||
+			!activeStatus ||
+			["ended", "error", "timeout"].includes(activeStatus)
+		) {
+			cancelRadioDjRecovery();
+		}
 		const videoId = args.videoId;
-		if (typeof videoId === "string" && videoId.trim())
-			return enqueueTrack({
-				id: videoId,
-				title: typeof args.title === "string" ? args.title : "",
-			});
+		if (typeof videoId === "string" && videoId.trim()) {
+			return enqueueTrack(
+				{
+					id: videoId,
+					title: typeof args.title === "string" ? args.title : "",
+				},
+				radioDjRequested,
+			);
+		}
 		const query = args.query;
 		if (typeof query !== "string" || !query.trim())
 			throw new Error("play requires query or videoId");
@@ -220,11 +518,70 @@ export async function executeBgmSkill(
 				query,
 			});
 		const currentVideoId = deps.playback.current()?.selected.videoId;
-		const selected =
-			args.replace === true
-				? results.find((result) => result.id !== currentVideoId) ?? results[0]
+		const recent = deps.recentTracks?.() ?? [];
+		const recentIds = new Set(recent.map((track) => track.id));
+		const recentTitles = new Set(
+			recent.map((track) => normalizeBgmTitle(track.title)).filter(Boolean),
+		);
+		const freshResults = results.filter(
+			(result) =>
+				result.id !== currentVideoId &&
+				!recentIds.has(result.id) &&
+				!recentTitles.has(normalizeBgmTitle(result.title)),
+		);
+		if (radioDjRequested && freshResults.length === 0) {
+			return JSON.stringify({
+				ok: false,
+				action: act,
+				reason: "no_fresh_search_results",
+				query,
+			});
+		}
+		const selected = radioDjRequested
+			? freshResults[0]
+			: args.replace === true
+				? (freshResults[0] ??
+					results.find((result) => result.id !== currentVideoId) ??
+					results[0])
 				: results[0];
-		return enqueueTrack(selected);
+		const output = await enqueueTrack(selected, radioDjRequested);
+		if (radioDjRequested) configureRadioDjRecovery(query, selected, deps);
+		return output;
+	}
+
+	if (act === "favorite_add" || act === "favorite_remove") {
+		const current = deps.playback.current();
+		if (!current) {
+			return JSON.stringify({
+				ok: false,
+				action: act,
+				reason: "no_current_track",
+			});
+		}
+		await deps.emitBgm({
+			type: `bgm_youtube_${act.replace("favorite_", "fav_")}`,
+		});
+		return JSON.stringify({
+			ok: true,
+			action: act,
+			selected: current.selected,
+		});
+	}
+
+	if (act === "favorites_play") {
+		cancelRadioDjRecovery();
+		const favorites = deps.favoriteTracks?.() ?? [];
+		if (favorites.length === 0) {
+			return JSON.stringify({
+				ok: false,
+				action: act,
+				reason: "no_favorites",
+			});
+		}
+		const currentVideoId = deps.playback.current()?.selected.videoId;
+		const selected =
+			favorites.find((track) => track.id !== currentVideoId) ?? favorites[0];
+		return enqueueTrack(selected, true);
 	}
 
 	if (act === "volume") {
@@ -233,7 +590,10 @@ export async function executeBgmSkill(
 		return JSON.stringify({ ok: true, action: act, volume: v });
 	}
 
-	if ((act === "next" || act === "prev") && (deps.favoriteCount?.() ?? 0) === 0) {
+	if (
+		(act === "next" || act === "prev") &&
+		(deps.favoriteCount?.() ?? 0) === 0
+	) {
 		return JSON.stringify({
 			ok: false,
 			action: act,
@@ -242,6 +602,9 @@ export async function executeBgmSkill(
 	}
 
 	// stop / pause / resume / next / prev — 위젯 리스너 타입 1:1
+	if (act === "stop" || act === "next" || act === "prev") {
+		cancelRadioDjRecovery();
+	}
 	const eventType = `bgm_youtube_${act}`;
 	await deps.emitBgm({ type: eventType });
 	return JSON.stringify({ ok: true, action: act });

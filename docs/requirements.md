@@ -201,7 +201,7 @@ localStorage `naia-config` 는 파일에서 하이드레이트되는 **순수 �
 | ID | 요구사항 | 수용 기준 |
 |---|---|---|
 | **FR-RADIO-DJ.1** | Shell은 YouTube 재생 요청과 관측 결과를 구분해 `playbackId`, `commandId`, 단조 증가 `sequence`, `updatedAt`, `freshUntil`을 포함한 재생 스냅샷을 제공한다. 상태는 `requested/loading/playing/paused/ended/error/timeout`으로 분류한다. DJ 소개·대체·진행 위치 판단용 관측값의 최대 경과시간은 **5초**이며, 만료 뒤에는 재관측한다. | 이전 곡 A의 지연 오류가 새 곡 B의 상태를 덮어쓰지 않는다. 같은 `playbackId`의 더 낮은 sequence 이벤트는 무시된다. `freshUntil`이 지난 스냅샷으로는 멘트를 만들지 않고, 새 `playbackId/sequence` 관측 전에는 TTS를 시작하지 않는다. |
-| **FR-RADIO-DJ.2** | `BgmPlayer`의 YouTube iframe 어댑터는 준비·상태 전이·오류·재생 위치/길이 이벤트를 수신하고, 로딩 제한시간과 오류 분류를 적용한다. | 패널 이벤트 발행이나 iframe URL 설정만으로 `playing`을 보고하지 않는다. 실제 iframe의 재생 확인 뒤에만 `playing`을 보고하며, `currentTime/duration`과 종료를 관측한다. |
+| **FR-RADIO-DJ.2** | `BgmPlayer`의 YouTube iframe 어댑터는 준비·상태 전이·오류·재생 위치/길이 이벤트를 수신하고, 로딩 제한시간과 오류 분류를 적용한다. | 패널 이벤트 발행이나 iframe URL 설정만으로 `playing`을 보고하지 않는다. 실제 iframe의 재생 확인 뒤에만 `playing`을 보고하며, `infoDelivery`의 `currentTime/duration`으로 긴 재생의 신선도를 갱신한다. 종료·오류·15초 로딩 시간초과는 해당 iframe URL의 `playbackId`에 결속하고 준비된 다음 후보를 한 번만 전환한다. 같은 곡의 중복·지연 이벤트는 다음 곡을 건너뛰지 않는다. |
 | **FR-RADIO-DJ.3** | `skill_radio_dj`와 확장된 `skill_youtube_bgm`는 패널 스킬 등록, 허용 정책, `dispatchPanelToolCall`, `panel_tool_result`, 재등록/해제 수명주기에 모두 연결된다. | 대화·연속 발화·라디오 DJ·행사 소개 경로에서 동일한 도구 결과 계약을 받고, 창 재연결 뒤 중복 등록이나 유실이 없다. |
 | **FR-RADIO-DJ.4** | 자율 발화 전 agent는 Shell 관측 컨텍스트를 요청·반영하고, 발화 문장 생성 전에 적격성을 판정한다. agent가 쿨다운, 곡 중복, 침묵, 사용자/마이크 우선순위 및 다음 재평가 시점을 소유한다. | Shell은 별도 스케줄러 없이 관측·표현 경계로서, agent의 허용 요청에 현재 `observationSequence`·`playbackId`를 묶은 **단일 사용 `speakPermit`**을 발급한다. TTS 직전 Shell은 permit·사용자 음성/채팅·현재 TTS·재생 sequence·`freshUntil`을 원자적으로 재검증한다. 하나라도 달라지면 permit을 폐기하고 TTS를 시작하지 않으며 agent는 다음 재평가를 예약한다. |
 | **FR-RADIO-DJ.5** | DJ 멘트는 해당 `playbackId`의 관측된 `playing` 뒤에만 곡명·아티스트·길이·진행 위치를 소개한다. 오류·시간초과면 사실을 숨기지 않고 한 번만 알리거나 침묵하며, opt-in 자동재생일 때만 1회 대체곡을 시도한다. | `ok: true`(명령 접수)만으로 곡 소개를 하지 않는다. 실패 곡의 제목이나 길이를 현재 재생 중인 것처럼 말하지 않는다. |
@@ -210,6 +210,13 @@ localStorage `naia-config` 는 파일에서 하이드레이트되는 **순수 �
 | **FR-RADIO-DJ.8** | activity가 실행한 BGM `play`는 현재 곡과 대기열을 교체하지만 일반 채팅 요청은 기존 대기열 의미를 유지한다. 장기 speech activity의 producer `finish`는 TTS 종료가 아니며, 음성·영상 재생 완료 전 activity를 폐기하지 않는다. Shell은 자동 발화 문장을 실제 TTS/아바타 재생 시작 전까지 숨기고, 즉시 도착한 `finish` 뒤에도 이미 승인된 TTS를 끝까지 전달한다. agent control RPC는 panel 왕복을 기다리기 전에 activity/action 유효성을 검사하고 ACK해야 한다. | 실제 Tauri에서 곡 A `playing` → 자동 `/v1/audio/speech` → 같은 오디오 `/stream` → 곡 B 교체·`playing` → 새 DJ 발화가 성공한다. 렌더 중 Enter는 250ms 안에 렌더를 취소하며 BGM은 계속된다. Shell `94-avatar-4060-facade.spec.ts`와 paired naia-agent #103 계약 테스트로 검증한다. |
 | **FR-RADIO-DJ.9** | 설정의 사용자용 스킬 이름은 다른 스킬과 같은 영어 표기 `Youtube Radio DJ`로 표시하고 내부 `skill_youtube_bgm` 식별자를 접힌 카드에서 노출하지 않는다. 카드는 시스템 스킬 순서를 유지한 채 `skill_memo` 바로 앞의 기존 2열 목록에 배치하며, 버튼을 펼쳤을 때만 상세 설정을 표시한다. 미설정 값은 Windows 런타임과 같은 대기 120초·멘트 간격 15분·BGM 자동재생 꺼짐을 사용하고 프로필 자체는 opt-in을 위해 비활성으로 유지한다. | Settings RTL 이름/순서/기본값/접힘/펼침 + Playwright 2열 카드·상세 설정 검증 |
 | **FR-RADIO-DJ.10** | 일반 곡·재생목록·BGM 요청은 `player`, 지속적인 자율 선곡과 DJ 멘트를 원하는 요청은 `radio_dj`로 LLM이 의미에 따라 선택한다. Shell은 특정 언어의 키워드나 exact-match 문구를 검사하지 않으며 구조화된 스킬 인자만 실행한다. `radio_dj` 재생이 승인되면 능동 발화 프로필과 권한을 함께 활성화한다. | 스킬 schema 다국어·유사 표현 설명 + 구조화 호출 계약 테스트 |
+| **FR-RADIO-DJ.11** | 라디오 DJ는 현재 곡의 실제 진행 위치와 길이를 근거로 종료 전에 다음 후보를 미리 검색하고, 실제 `ended` 뒤 짧은 멘트와 함께 전환한다. | 검색은 미리 할 수 있지만 재생 전환은 현재 곡 종료에 결속한다. 새 곡은 실제 `playing` 뒤에만 소개하며 종료→다음 `playing` 무음 시간을 측정한다. |
+| **FR-RADIO-DJ.12** | 사용자 대화·곡 교체·정지 명령은 자동 멘트·검색·대기열보다 우선한다. 일반 대화는 현재 음악을 보존하고 “다른 곡”은 현재 곡과 준비 후보를 교체하며 정지는 모든 자동 활동을 회수한다. | 사용자 발화와 곡 종료가 겹쳐도 TTS 중복·곡 건너뜀 없이 사용자 응답을 우선한다. 정지 뒤 추가 검색·재생·TTS는 0회다. |
+| **FR-RADIO-DJ.13** | 장기 음악 취향은 사용자가 명시한 좋아요·싫어요만 저장한다. 단순 청취 시간·완주·한 번의 건너뛰기·일반 대화로 영구 취향을 추론하지 않으며 사용자는 취향을 조회·수정·삭제할 수 있다. | 재시작 뒤 명시 취향만 재호출되고 삭제 뒤 복원되지 않는다. 메모리 장애 시 거짓 개인화 없이 세션 최근곡만 사용하며 계정 간 취향이 격리된다. |
+| **FR-RADIO-DJ.14** | 자동 선곡은 최근 `videoId`뿐 아니라 제목+아티스트로 정규화한 동일 곡의 다른 영상도 제외하고, 장르·분위기 등 요청 근거를 유지한 새 곡을 고른다. | 같은 곡은 최근 20곡 또는 현재 6시간 세션 중 더 넓은 범위에서 반복하지 않는다. 같은 아티스트는 연속 추천하지 않고 자동 10곡 중 기본 2곡 이하로 제한한다. 명시적 동일 곡 요청과 후보 고갈은 근거를 기록한 예외다. |
+| **FR-RADIO-DJ.15** | 사용자는 현재 곡을 음성·텍스트로 즐겨찾기에 중복 없이 추가·삭제하고 즐겨찾기만 재생할 수 있다. | 재시작 뒤 저장 상태가 유지되고 한 바퀴 전 동일 곡을 반복하지 않는다. 빈 목록은 꾸며내지 않으며 재생 불가 항목은 자동 삭제하지 않고 이번 순회에서 건너뛴다. |
+| **FR-RADIO-DJ.16** | YouTube의 재생 불가·삭제·임베드·지역·연령 제한·iframe 오류를 `playing`으로 보고하지 않는다. 자동 DJ는 실패 후보와 동일 음원을 이번 세션에서 제외하고 제한된 다른 후보를 찾는다. | 실패 곡을 소개하지 않고 후보별 최대 한 번만 시도한다. 연속 실패 뒤 무한 검색·TTS 없이 짧게 알리거나 사용자 선택을 기다린다. |
+| **FR-RADIO-DJ.17** | 이미지 입력 capability가 확인된 모델에만 현재 음악 표면의 캡처를 이미지 도구 결과로 전달하고, 모델은 실제 관찰한 내용과 불확실성을 짧게 언급할 수 있다. | 캡처 범위는 YouTube 배경/플레이어로 제한하며 채팅·설정·알림을 제외한다. 이미지 전송을 지원하지 않는 provider/model에서는 캡처와 시각 언급을 모두 생략한다. 문자열 data URL만 반환하는 상태를 “모델이 봄”으로 간주하지 않는다. |
 
 ### 구현 순서 및 인계 항목
 
@@ -219,6 +226,7 @@ localStorage `naia-config` 는 파일에서 하이드레이트되는 **순수 �
 4. **자율 정책:** agent의 개인 라디오/행사 소개 스케줄러에 적격성 게이트와 근거 있는 멘트 규칙을 넣는다. Shell에는 중복 스케줄러를 만들지 않는다.
 5. **환경·프라이버시:** 시간대·날씨 동의·캐시 폐기·위치 정밀도를 구현하고 노출 최소화 테스트를 추가한다.
 6. **검증:** 로컬 fixture E2E, 순서 역전·오류·침묵·사용자 인터럽트 테스트 후 선택적 외부 smoke를 수행한다.
+7. **개인화·선곡:** 명시 취향 메모리, 최근곡 정규화, 즐겨찾기 도구, bounded 대체 검색을 구현하고 [`radio-dj-practical-test-scenarios.md`](radio-dj-practical-test-scenarios.md)의 L1~L4 증거를 수집한다.
 ## 기능 요구사항 (FR) — 크로스플랫폼 설치 파일: 매트릭스 SoT + 재현 빌드 (#377, 셸 feature — 2026-07-17)
 
 > 상태: 진행 중 (2026-07-17)
@@ -633,11 +641,12 @@ Steamworks 포털 설정·SteamPipe 자격증명·스토어 심사 제출은 #31
 
 | ID | Requirement | Status | Verification |
 |---|---|---|---|
-| **FR-BGM.8** | Shell refreshes the semantic `skill_youtube_bgm` descriptor before each chat turn. Delivery failure is observable and never logged as successful registration. | Pending | `chat-service` unit and BGM Playwright outbound ordering |
-| **FR-BGM.9** | YouTube playback in the Tauri WebView supplies an origin referrer, creates a fresh iframe attempt even for the same video ID, and exposes success only after an observed `playing` event. | Pending | component/Playwright request and playback-state tests plus native Radio E2E |
-| **FR-BGM.10** | Radio-owned search avoids the currently selected video when another result exists. An exited owned BGM sidecar restarts on demand, while auxiliary-window destruction does not stop the main runtime. | Pending | BGM unit tests, Rust lifecycle tests, native health/playback acceptance |
-| **FR-SETTINGS.12** | `Settings > Skills > Youtube Radio DJ` is the sole owner of Radio DJ proactive policy. General renders no duplicate profile, weather consent, coordinates, or DJ fields. | Pending | Settings component and Playwright ownership assertions |
-| **FR-SETTINGS.13** | Weather-location consent and coordinates survive semantically equivalent parent rerenders and persist after Save/reload. No location is transmitted unless consent is enabled. | Pending | component rerender regression and Playwright persistence test |
+| **FR-BGM.8** | Shell refreshes the semantic `skill_youtube_bgm` descriptor before each chat turn. Delivery failure is observable and never logged as successful registration. | Done | `chat-service` unit and BGM Playwright outbound ordering |
+| **FR-BGM.9** | YouTube playback in the Tauri WebView supplies an origin referrer, creates a fresh iframe attempt even for the same video ID, and exposes success only after an observed `playing` event. | Done | component/Playwright request and playback-state tests plus native Radio E2E |
+| **FR-BGM.10** | Radio-owned search avoids the currently selected video when another result exists. An exited owned BGM sidecar restarts on demand, while auxiliary-window destruction does not stop the main runtime. | Done | BGM unit tests, Rust lifecycle tests, native health/playback acceptance |
+| **FR-BGM.11** | Radio-owned `status` returns bounded Shell-owned recent/favorite context, and every Agent activity play carries semantic `mode=radio_dj`. On observed `ended`, Agent speaks a short transition before a fresh dynamic search; Shell filters current/recent normalized duplicates and success remains gated by correlated observed `playing`. | Done | Shell BGM unit/Playwright plus paired Agent DJ-GRPC/DJ-08 contracts |
+| **FR-SETTINGS.12** | `Settings > Skills > Youtube Radio DJ` is the sole owner of Radio DJ proactive policy. General renders no duplicate profile, weather consent, coordinates, or DJ fields. | Done | Settings component and Playwright ownership assertions |
+| **FR-SETTINGS.13** | Weather-location consent and coordinates survive semantically equivalent parent rerenders and persist after Save/reload. No location is transmitted unless consent is enabled. | Done | component rerender regression and Playwright persistence test |
 
 ## Settings persistence and runtime reload (#415, 2026-08-03)
 

@@ -19,8 +19,29 @@ export const TAURI_BASE_MOCK_FALLBACK = `
 	var existing = window.__TAURI_INTERNALS__ && window.__TAURI_INTERNALS__.invoke;
 	if (!existing) return;
 	window.__TAURI_INTERNALS__.invoke = async function(cmd, args) {
-		var r = await existing(cmd, args);
+		var panelControl = false;
+		if (cmd === "send_to_agent_command" && args && typeof args.message === "string") {
+			try {
+				var outbound = JSON.parse(args.message);
+				panelControl = outbound &&
+					(outbound.type === "panel_skills" || outbound.type === "panel_skills_clear");
+			} catch (_) {
+				// Let the spec-specific handler report malformed chat payloads.
+			}
+		}
+		var r;
+		try {
+			r = await existing(cmd, args);
+		} catch (error) {
+			// Older scenario mocks assume every Agent command is a chat request and
+			// dereference messages[].  The Shell now refreshes its idempotent panel
+			// descriptors before each turn; acknowledge that control-plane command
+			// when a legacy mock cannot parse it, while preserving explicit handlers.
+			if (panelControl) return null;
+			throw error;
+		}
 		if (r !== undefined) return r;
+		if (panelControl) return null;
 		// Plugin store
 		if (cmd === "plugin:store|load") return 1;
 		if (cmd === "plugin:store|get") return [null, false];

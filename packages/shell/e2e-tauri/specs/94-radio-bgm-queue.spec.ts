@@ -8,6 +8,11 @@ async function invoke(command: string, args: Record<string, unknown>) {
 }
 
 describe("Radio queue through the isolated native Tauri Shell", () => {
+ it("boots the exact paired Agent and accepts a correlated control message", async () => {
+  await expect(invoke("send_to_agent_command", {
+   message: JSON.stringify({ type: "tool_request", requestId: "radio-native-agent-health", toolName: "health_probe" }),
+  })).resolves.toBeNull();
+ });
  it("starts the owned built BGM sidecar without using the user port", async () => {
   const port = Number(process.env.NAIA_E2E_BGM_PORT ?? "18772");
   const response = await fetch(`http://127.0.0.1:${port}/health`);

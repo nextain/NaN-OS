@@ -106,10 +106,17 @@ test.describe("NVA P3 — A/V 싱크 드라이버(drift 수렴)", () => {
 
 		// 표본 충분.
 		expect(result.driven.n).toBeGreaterThan(40);
-		// 드라이버가 drift 오프셋(|meanSigned|)을 baseline 대비 대폭 감소(제어 수렴).
-		expect(Math.abs(result.driven.meanSigned)).toBeLessThan(
+		// 드라이버가 유의한 drift 오프셋은 baseline 대비 절반 이하로 수렴시킨다.
+		// baseline 자체가 헤드리스 스케줄링 우연으로 이미 0에 가까우면 상대비는
+		// 공허한 sub-ms 목표가 되므로 10ms 절대 floor 안에서 안정적인지를 판정한다.
+		const meanOffsetLimitMs = Math.max(
+			10,
 			Math.abs(result.baseline.meanSigned) * 0.5,
 		);
+		expect(
+			Math.abs(result.driven.meanSigned),
+			`driven mean offset=${result.driven.meanSigned}, limit=${meanOffsetLimitMs}`,
+		).toBeLessThan(meanOffsetLimitMs);
 		// ★설계 P3 게이트: drift p95<80ms, p99<150ms (playbackRate 제어로 헤드리스 실측 달성).
 		expect(result.driven.p95, `driven p95=${result.driven.p95}`).toBeLessThan(80);
 		expect(result.driven.p99, `driven p99=${result.driven.p99}`).toBeLessThan(150);

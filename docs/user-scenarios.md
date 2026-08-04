@@ -222,6 +222,17 @@ foundation UC 카탈로그와 직교하는 셸 feature(S72 선례). 각 시나�
 
 | **S-RADIO-DJ-8** | 사용자가 설정의 스킬 탭을 열면 `Youtube Radio DJ`가 시스템 스킬 다음이자 `memo` 바로 앞에 다른 기본 스킬과 같은 2열 카드로 보인다. 접힌 상태에는 짧은 설명만 표시되고, 카드를 누르면 대기시간·멘트 간격·시간대·BGM 자동재생 상세 설정이 펼쳐진다. 처음 열어도 숫자 입력이 비어 있지 않으며 자동 발화는 사용자가 켜기 전까지 시작하지 않는다. | FR-RADIO-DJ.9. Settings RTL + `settings-slots.spec.ts` Playwright. |
 | **S-RADIO-DJ-9** | 사용자가 어느 언어로든 “계속 음악을 골라 소개해 줘”처럼 유사한 뜻을 말하면 LLM이 `radio_dj` 모드를 선택해 음악 재생과 능동 발화를 함께 켠다. 단순히 한 곡이나 BGM을 요청하면 `player`로 실행되어 능동 발화 설정을 바꾸지 않는다. | FR-RADIO-DJ.10. 키워드 매칭 없이 스킬 schema와 구조화 `mode` 호출 검증. |
+| **S-RADIO-DJ-10** | 곡이 끝나기 전에 최근곡·싫어요·실패 후보를 제외해 비슷한 다음 곡을 미리 찾고, 실제 종료 뒤 짧은 멘트와 함께 전환한다. 새 곡은 실제 `playing` 뒤에만 소개한다. | FR-RADIO-DJ.11·14·16. 결정론적 종료/검색 fixture + 실제 YouTube 실기. |
+| **S-RADIO-DJ-11** | 재생 중 일반 대화는 음악·대기열을 보존하고, “다른 곡”은 현재 자동 흐름을 취소해 새 곡으로 즉시 교체하며, “라디오 그만”은 검색·TTS·타이머까지 멈춘다. | FR-RADIO-DJ.12. 대화/종료/TTS 경합 Playwright + 네이티브 끼어들기. |
+| **S-RADIO-DJ-12** | 사용자가 명시한 좋아요·싫어요만 장기 취향으로 기억하고 조회·수정·삭제할 수 있다. 단순 청취와 한 번의 건너뛰기로 영구 취향을 추론하지 않는다. | FR-RADIO-DJ.13. 메모리 쓰기·재호출·삭제 영수증 및 계정 격리. |
+| **S-RADIO-DJ-13** | 최근에 튼 같은 곡과 동일 음원의 다른 영상을 피하고, 장르·분위기는 비슷하지만 새로운 곡을 추천한다. 명시적으로 같은 곡을 요청하면 반복 금지를 우회할 수 있다. | FR-RADIO-DJ.14. videoId+정규화 곡 키 최근 이력, 아티스트 편중, 8시간 피로도 검증. |
+| **S-RADIO-DJ-14** | “이 곡 즐겨찾기에 등록해줘/빼줘/내 즐겨찾기 틀어줘”를 실행하고 재시작 뒤에도 유지한다. 즐겨찾기 한 바퀴 전에는 같은 곡을 반복하지 않는다. | FR-RADIO-DJ.15. 음성·텍스트 도구 계약 + 저장·복원 + 빈 목록·실패 항목. |
+| **S-RADIO-DJ-15** | YouTube가 “재생할 수 없는 곡입니다”, 삭제·지역·연령 제한 또는 iframe 오류를 반환하면 성공으로 소개하지 않고 해당 후보를 제외한 다른 곡을 제한된 횟수로 찾는다. | FR-RADIO-DJ.16. 오류 fixture + 실제 YouTube 실패 후보 smoke. |
+| **S-RADIO-DJ-16** | 이미지 입력이 가능한 모델이면 음악 화면만 캡처해 실제 보이는 영상·앨범 아트·오류 화면을 짧게 언급한다. 채팅·설정·알림 등 개인 UI는 캡처하지 않으며 이미지 입력이 불가능하면 보았다고 말하지 않는다. | FR-RADIO-DJ.17. 음악 표면 전용 캡처 + model capability gate + 멀티모달 도구 결과 계약. |
+
+전체 실기 절차와 증거 형식은 [`radio-dj-practical-test-scenarios.md`](radio-dj-practical-test-scenarios.md)를 따른다.
+
+메모리·반복 회피·즐겨찾기·오류 복구·이미지 모델 화면 관찰을 한 흐름으로 묶은 단계별 계약은 [`radio-dj-integrated-use-cases.md`](radio-dj-integrated-use-cases.md)를 따른다.
 
 ## UC-CODEX-ROLES — Codex를 main으로 쓰고 역할별 모델을 분리한다
 
@@ -673,7 +684,7 @@ reorders the same native WebView picker without changing the selected model.
 
 ## UC-RADIO-DJ-DURABLE — Radio DJ changes music truthfully and keeps one settings owner (#414)
 
-A user asks Naia, in any supported language, to start Radio DJ playback or
+A user asks Naia, in any supported language, to start Radio DJ playback o
 change the music. The LLM selects `skill_youtube_bgm` semantically and the
 Shell refreshes that tool registration before the chat turn so an agent restart
 cannot silently remove the capability. A play request is not described as
@@ -682,7 +693,14 @@ successful until the player reports an observed `playing` transition.
 - If search returns the currently selected video first, Radio DJ chooses a
   different result when one exists. Explicitly replaying the same video still
   remounts the iframe and starts a new playback attempt.
-- The Tauri WebView sends an origin referrer to the YouTube embed so the player
+- Every Agent-owned Radio DJ play carries `mode=radio_dj`. Status receipts
+  include bounded recent-play and favorite title lists so Agent selection can
+  combine explicit memory preferences with Shell-owned listening context;
+  Shell remains the final authority for current/recent duplicate filtering.
+- After an observed `ended`, Agent completes one short transition remark before
+  requesting the next dynamic search. It introduces the new title only after
+  the correlated playback reaches observed `playing`.
+- The Tauri WebView sends an origin referrer to the YouTube embed so the playe
   is identified and does not fail with YouTube error 153.
 - If the BGM sidecar exited, the next search restarts the owned sidecar. Closing
   an auxiliary window does not tear down the main Shell runtime.
@@ -697,7 +715,15 @@ successful until the player reports an observed `playing` transition.
 |---|---|---|
 | agent restart before a chat turn | `chat-service.test.ts` boolean delivery receipt | `e2e/bgm-skill.spec.ts` asserts same-turn `panel_skills` precedes `chat_request` |
 | current search result repeats | `bgm-skill.test.ts` current-video exclusion and same-video replay receipt | BGM Playwright fixture observes a fresh iframe/playback transition |
-| YouTube WebView identification | embed URL/remount component contract | Playwright request verifies referrer; native Radio queue E2E verifies observed A-to-B playback |
+| YouTube WebView identification | embed URL/remount component contract | Playwright request verifies referrer; paired native Linux Tauri/WebKitGTK Radio queue E2E verifies observed A-to-B playback |
+| variable-length and wall-clock playback | playback snapshot carries observed `currentTime`/`duration`; stale playback IDs cannot advance the queue | The default 10-track run is compressed. A 60-minute wall-clock first local fixture followed by nine ordered transitions passed, and an actual 11:58:09 YouTube video passed an eight-hour wall-clock soak with a 7,203.0-second checkpoint and 28,800.6-second final media clock. The latter is one-long-video evidence, not a mixed 20-video session. |
+| autonomous next-track DJ | correlated ended observation, one completed transition remark, fresh search and observed next playback | Agent DJ-08 and the controller↔Shell handoff integration pass the full ended-to-next-playing sequence. End-before prefetch remains a separate latency improvement. |
+| user override and conversation | other-song replacement, ordinary conversation preservation, barge-in and stop boundary | Playwright covers replacement, conversation preservation and stop/no-late-transition; native TTS race coverage remains pending |
+| explicit preference memory | explicit like/dislike only, durable recall, inspect/edit/delete and isolation | Agent acceptance and preference-index contracts cover tagged user-only recall, persisted exact state, tombstone precedence, malformed/assistant exclusion and memory-failure fallback; physical multi-account UI remains operational coverage. |
+| recent-track variety | video and normalized-track exclusion, similar-but-new selection, bounded history | Shell search/queue contracts, Agent preference+recent+favorite selector and the 60-track logical eight-hour soak cover automatic duplicate avoidance and bounded state. |
+| unified Agent recommendation context | `status` bounds recent/favorite lists; Agent play includes `mode=radio_dj`; local tombstones override recalled preferences | Shell BGM unit/Playwright plus paired Agent DJ-GRPC/DJ-08 contracts |
+| voice favorites | idempotent add/remove, favorites-only playback, empty and unplayable entries | Shell structured tool Playwright covers add/play/remove/empty; actual voice intent, restart and unplayable favorite coverage remain pending |
+| unplayable YouTube recovery | no false playing/intro, bounded alternative search, network/sidecar recovery | Playwright covers iframe error, 15-second loading timeout, prepared fallback and exhaustion; Agent DJ-06 covers one fresh replacement after a failed play and a single terminal notice after repeated failure. Physical network-loss recovery remains operational coverage. |
 | sidecar exits or auxiliary window closes | Rust lifecycle tests | native Tauri sidecar restart/health check |
 | one settings owner and durable consent | Settings component rerender test | `settings-slots.spec.ts` Skills ownership, General absence, Save/reload |
 ## UC-SETTINGS-ROUNDTRIP: 설정 변경·재시작·실행 반영

@@ -5,6 +5,7 @@ const ENV_KEYS = [
 	"PLAYWRIGHT_HOST",
 	"PLAYWRIGHT_BASE_URL",
 	"PLAYWRIGHT_SERVER_COMMAND",
+	"PLAYWRIGHT_REUSE_EXISTING_SERVER",
 	"PLAYWRIGHT_WEB_SERVER_TIMEOUT",
 	"TAURI_DEV_HOST",
 ] as const;
@@ -46,22 +47,28 @@ async function loadViteServerConfig(port: string) {
 	const configFactory = module.default as unknown;
 	const config =
 		typeof configFactory === "function"
-			? await configFactory({ command: "serve", mode: "test", isSsrBuild: false, isPreview: false })
+			? await configFactory({
+					command: "serve",
+					mode: "test",
+					isSsrBuild: false,
+					isPreview: false,
+				})
 			: configFactory;
-	return (config as { server?: { port?: number; hmr?: { port?: number } } }).server;
+	return (config as { server?: { port?: number; hmr?: { port?: number } } })
+		.server;
 }
 
 async function loadPlaywrightConfig(port: string) {
 	vi.resetModules();
 	process.env.PLAYWRIGHT_PORT = port;
 	process.env.PLAYWRIGHT_HOST = "127.0.0.1";
-	process.env.PLAYWRIGHT_SERVER_COMMAND = "node -e \"setTimeout(()=>{}, 1000)\"";
+	process.env.PLAYWRIGHT_SERVER_COMMAND = 'node -e "setTimeout(()=>{}, 1000)"';
 
 	const configPath = "../../packages/shell/playwright.config.ts";
 	const module = await import(configPath);
 	return module.default as {
 		use?: { baseURL?: string };
-		webServer?: { port?: number };
+		webServer?: { port?: number; reuseExistingServer?: boolean };
 	};
 }
 
@@ -86,5 +93,15 @@ describe("shell Playwright port config", () => {
 		await expect(loadPlaywrightConfig("65535")).rejects.toThrow(
 			"PLAYWRIGHT_PORT must be a positive integer <= 65534",
 		);
+	});
+
+	it("does not reuse a server from another checkout unless explicitly enabled", async () => {
+		delete process.env.PLAYWRIGHT_REUSE_EXISTING_SERVER;
+		const isolated = await loadPlaywrightConfig("15420");
+		expect(isolated.webServer?.reuseExistingServer).toBe(false);
+
+		process.env.PLAYWRIGHT_REUSE_EXISTING_SERVER = "1";
+		const reused = await loadPlaywrightConfig("15420");
+		expect(reused.webServer?.reuseExistingServer).toBe(true);
 	});
 });

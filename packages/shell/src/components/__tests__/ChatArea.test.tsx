@@ -724,27 +724,15 @@ describe("ChatArea", () => {
 
 	// === Local conversation ownership ===
 
-	it("combines the video avatar with local voice and serializes shared-GPU playback", async () => {
-		const firstTts = deferred<{ audioBase64: string; costUsd: number }>();
-		const secondTts = deferred<{ audioBase64: string; costUsd: number }>();
-		const firstPlayback = deferred<void>();
-		const secondPlayback = deferred<void>();
-		const speakAudio = vi
-			.fn()
-			.mockImplementationOnce(() => firstPlayback.promise)
-			.mockImplementationOnce(() => secondPlayback.promise);
+	it("submits video-avatar sentences once to the serialized media runtime", async () => {
+		const speak = vi.fn().mockResolvedValue(undefined);
 		useCascadeAvatarStore.setState({
 			renderer: {
-				speakAudio,
-				speak: vi.fn().mockResolvedValue(undefined),
+				speakAudio: vi.fn(),
+				speak,
 				interrupt: vi.fn(),
 			} as never,
 		});
-		ttsSyncMocks.streamsAvatarPcm.mockReturnValue(true);
-		ttsSyncMocks.synthesizeTts.mockImplementation(
-			({ text }: { text: string }) =>
-				text.startsWith("First") ? firstTts.promise : secondTts.promise,
-		);
 		localStorage.setItem(
 			"naia-config",
 			JSON.stringify({
@@ -775,35 +763,18 @@ describe("ChatArea", () => {
 			requestId: request.requestId,
 			text: "Second sentence.",
 		});
-		await waitFor(() =>
-			expect(ttsSyncMocks.synthesizeTts).toHaveBeenCalledTimes(1),
-		);
-		expect(ttsSyncMocks.synthesizeTts.mock.calls[0][0].text).toBe(
-			"First sentence.",
-		);
-		firstTts.resolve({ audioBase64: "audio-1", costUsd: 0 });
-		await waitFor(() => expect(speakAudio).toHaveBeenCalledTimes(1));
-		expect(speakAudio.mock.calls[0][0]).toBe("audio-1");
-		expect(speakAudio.mock.calls[0][2]).toEqual(
+		await waitFor(() => expect(speak).toHaveBeenCalledTimes(2));
+		expect(speak.mock.calls[0][0]).toBe("First sentence.");
+		expect(speak.mock.calls[0][1]).toBeUndefined();
+		expect(speak.mock.calls[0][2]).toEqual(
 			expect.objectContaining({
-				muted: false,
+				onPlaybackReady: expect.any(Function),
 				onPlaybackFailure: expect.any(Function),
 			}),
 		);
+		expect(speak.mock.calls[1][0]).toBe("Second sentence.");
+		expect(ttsSyncMocks.synthesizeTts).not.toHaveBeenCalled();
 		expect(ttsSyncMocks.enqueueOrdered).not.toHaveBeenCalled();
-
-		firstPlayback.resolve();
-		await waitFor(() =>
-			expect(ttsSyncMocks.synthesizeTts).toHaveBeenCalledTimes(2),
-		);
-		expect(ttsSyncMocks.synthesizeTts.mock.calls[1][0].text).toBe(
-			"Second sentence.",
-		);
-		secondTts.resolve({ audioBase64: "audio-2", costUsd: 0 });
-		await waitFor(() => expect(speakAudio).toHaveBeenCalledTimes(2));
-		expect(speakAudio.mock.calls[1][0]).toBe("audio-2");
-		expect(ttsSyncMocks.enqueueOrdered).not.toHaveBeenCalled();
-		secondPlayback.resolve();
 		localStorage.removeItem("naia-config");
 	});
 
@@ -926,11 +897,11 @@ describe("ChatArea", () => {
 		localStorage.removeItem("naia-config");
 	});
 
-	it("falls back to AudioQueue only when avatar playback fails", async () => {
-		const speakAudio = vi.fn(
+	it("reveals text without duplicate AudioQueue playback when media runtime fails", async () => {
+		const speak = vi.fn().mockImplementation(
 			(
-				_audio: string,
-				_rate: number,
+				_text: string,
+				_audio: undefined,
 				opts: { onPlaybackFailure?: () => void },
 			) => {
 				opts.onPlaybackFailure?.();
@@ -939,15 +910,10 @@ describe("ChatArea", () => {
 		);
 		useCascadeAvatarStore.setState({
 			renderer: {
-				speakAudio,
-				speak: vi.fn().mockResolvedValue(undefined),
+				speakAudio: vi.fn(),
+				speak,
 				interrupt: vi.fn(),
 			} as never,
-		});
-		ttsSyncMocks.streamsAvatarPcm.mockReturnValue(true);
-		ttsSyncMocks.synthesizeTts.mockResolvedValue({
-			audioBase64: "fallback-audio",
-			costUsd: 0,
 		});
 		localStorage.setItem(
 			"naia-config",
@@ -973,44 +939,31 @@ describe("ChatArea", () => {
 			text: "Avatar failure sentence.",
 		});
 
+		await waitFor(() => expect(speak).toHaveBeenCalledTimes(1));
 		await waitFor(() =>
-			expect(ttsSyncMocks.enqueueOrdered).toHaveBeenCalledWith(
-				0,
-				"fallback-audio",
-				expect.objectContaining({
-					onPlaybackStart: expect.any(Function),
-					onPlaybackUnavailable: expect.any(Function),
-				}),
-			),
+			expect(screen.getByText("Avatar failure sentence.")).toBeDefined(),
 		);
-		expect(speakAudio.mock.calls[0][2]).toEqual(
-			expect.objectContaining({ muted: false }),
-		);
-		expect(ttsSyncMocks.enqueueOrdered).toHaveBeenCalledTimes(1);
+		expect(ttsSyncMocks.synthesizeTts).not.toHaveBeenCalled();
+		expect(ttsSyncMocks.enqueueOrdered).not.toHaveBeenCalled();
 		localStorage.removeItem("naia-config");
 	});
 
 	it("reveals TTS chat text only when embedded avatar playback starts", async () => {
 		const playback = deferred<void>();
 		const interrupt = vi.fn();
-		const speakAudio = vi.fn(
+		const speak = vi.fn(
 			(
-				_audio: string,
-				_rate: number,
+				_text: string,
+				_audio: undefined,
 				_options: { onPlaybackReady?: () => void },
 			) => playback.promise,
 		);
 		useCascadeAvatarStore.setState({
 			renderer: {
-				speakAudio,
-				speak: vi.fn().mockResolvedValue(undefined),
+				speakAudio: vi.fn(),
+				speak,
 				interrupt,
 			} as never,
-		});
-		ttsSyncMocks.streamsAvatarPcm.mockReturnValue(true);
-		ttsSyncMocks.synthesizeTts.mockResolvedValue({
-			audioBase64: "synced-audio",
-			costUsd: 0,
 		});
 		localStorage.setItem(
 			"naia-config",
@@ -1036,12 +989,12 @@ describe("ChatArea", () => {
 			text: "Visible with speech.",
 		});
 
-		await waitFor(() => expect(speakAudio).toHaveBeenCalledTimes(1));
+		await waitFor(() => expect(speak).toHaveBeenCalledTimes(1));
 		expect(screen.queryByText("Visible with speech.")).toBeNull();
 		expect(screen.getByRole("status").getAttribute("data-stage")).toBe(
 			"render",
 		);
-		const playbackOptions = speakAudio.mock.calls[0][2] as {
+		const playbackOptions = speak.mock.calls[0][2] as {
 			onPlaybackReady?: () => void;
 		};
 		playbackOptions.onPlaybackReady?.();
@@ -1061,23 +1014,13 @@ describe("ChatArea", () => {
 	});
 
 	it("keeps the completed message masked and preserves CJK spacing across sentences", async () => {
-		const firstPlayback = deferred<void>();
-		const secondPlayback = deferred<void>();
-		const speakAudio = vi
-			.fn()
-			.mockImplementationOnce(() => firstPlayback.promise)
-			.mockImplementationOnce(() => secondPlayback.promise);
+		const speak = vi.fn().mockResolvedValue(undefined);
 		useCascadeAvatarStore.setState({
 			renderer: {
-				speakAudio,
-				speak: vi.fn().mockResolvedValue(undefined),
+				speakAudio: vi.fn(),
+				speak,
 				interrupt: vi.fn(),
 			} as never,
-		});
-		ttsSyncMocks.streamsAvatarPcm.mockReturnValue(true);
-		ttsSyncMocks.synthesizeTts.mockResolvedValue({
-			audioBase64: "audio",
-			costUsd: 0,
 		});
 		localStorage.setItem(
 			"naia-config",
@@ -1130,20 +1073,18 @@ describe("ChatArea", () => {
 		});
 		request.onChunk({ type: "finish", requestId: request.requestId });
 
-		await waitFor(() => expect(speakAudio).toHaveBeenCalledTimes(1));
+		await waitFor(() => expect(speak).toHaveBeenCalledTimes(2));
 		expect(completedBeforePlayback).toBe(false);
 		completedObserver.disconnect();
 		expect(screen.queryByText(first + second)).toBeNull();
-		const firstOptions = speakAudio.mock.calls[0][2] as {
+		const firstOptions = speak.mock.calls[0][2] as {
 			onPlaybackReady?: () => void;
 		};
 		firstOptions.onPlaybackReady?.();
 		await waitFor(() => expect(screen.getByText(first)).toBeDefined());
 		expect(document.body.textContent).not.toContain(`${first} ${second}`);
 
-		firstPlayback.resolve();
-		await waitFor(() => expect(speakAudio).toHaveBeenCalledTimes(2));
-		const secondOptions = speakAudio.mock.calls[1][2] as {
+		const secondOptions = speak.mock.calls[1][2] as {
 			onPlaybackReady?: () => void;
 		};
 		secondOptions.onPlaybackReady?.();
@@ -1151,7 +1092,6 @@ describe("ChatArea", () => {
 			expect(document.body.textContent).toContain(first + second),
 		);
 		expect(document.body.textContent).not.toContain(`${first} ${second}`);
-		secondPlayback.resolve();
 		localStorage.removeItem("naia-config");
 	});
 
@@ -1250,14 +1190,14 @@ describe("ChatArea", () => {
 		localStorage.removeItem("naia-config");
 	});
 
-	it("does not release stale avatar fallback audio after an interrupt", async () => {
+	it("does not synthesize stale fallback audio after a media runtime interrupt", async () => {
 		const playback = deferred<void>();
 		let playbackFailure = () => {};
 		const interrupt = vi.fn();
-		const speakAudio = vi.fn(
+		const speak = vi.fn(
 			(
-				_audio: string,
-				_rate: number,
+				_text: string,
+				_audio: undefined,
 				opts: { onPlaybackFailure?: () => void },
 			) => {
 				playbackFailure = opts.onPlaybackFailure ?? (() => {});
@@ -1266,15 +1206,10 @@ describe("ChatArea", () => {
 		);
 		useCascadeAvatarStore.setState({
 			renderer: {
-				speakAudio,
-				speak: vi.fn().mockResolvedValue(undefined),
+				speakAudio: vi.fn(),
+				speak,
 				interrupt,
 			} as never,
-		});
-		ttsSyncMocks.streamsAvatarPcm.mockReturnValue(true);
-		ttsSyncMocks.synthesizeTts.mockResolvedValue({
-			audioBase64: "stale-audio",
-			costUsd: 0,
 		});
 		localStorage.setItem(
 			"naia-config",
@@ -1299,7 +1234,7 @@ describe("ChatArea", () => {
 			requestId: request.requestId,
 			text: "Interrupted sentence.",
 		});
-		await waitFor(() => expect(speakAudio).toHaveBeenCalledTimes(1));
+		await waitFor(() => expect(speak).toHaveBeenCalledTimes(1));
 		interrupt.mockClear();
 		const cancel = screen.getByTitle("ESC");
 		fireEvent.click(cancel);
@@ -1308,10 +1243,8 @@ describe("ChatArea", () => {
 		playbackFailure();
 		playback.resolve();
 		await Promise.resolve();
-		expect(ttsSyncMocks.enqueueOrdered).not.toHaveBeenCalledWith(
-			0,
-			"stale-audio",
-		);
+		expect(ttsSyncMocks.synthesizeTts).not.toHaveBeenCalled();
+		expect(ttsSyncMocks.enqueueOrdered).not.toHaveBeenCalled();
 		localStorage.removeItem("naia-config");
 	});
 

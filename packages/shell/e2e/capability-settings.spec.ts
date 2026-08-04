@@ -159,7 +159,7 @@ test.describe("Capability-driven settings (#365)", () => {
 		).toContainText("입력 $0.400 · 출력 $1.200");
 
 		const proactiveButton = page.locator("button[data-proactive-state]");
-		await expect(proactiveButton).toHaveText("");
+		await expect(proactiveButton).toHaveText("능동");
 		await expect(proactiveButton).toHaveAttribute("aria-label", /능동 발화/);
 	});
 	test("STT section always available; omni model shows an 'optional' hint", async ({

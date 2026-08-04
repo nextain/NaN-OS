@@ -74,7 +74,6 @@ import {
 	resolveConfiguredGatewayUrl,
 	saveConfig,
 } from "../lib/config";
-import { remoteCascadeUrlFromConfig } from "../lib/avatar/cascade-renderer";
 import {
 	discoverAndPersistDiscordDmChannel,
 	resetGatewaySession,
@@ -99,7 +98,7 @@ import {
 } from "../lib/stt";
 import { getTtsProviderMeta } from "../lib/tts";
 import { estimateSttCost, estimateTtsCost } from "../lib/tts/cost";
-import { streamsAvatarPcm, synthesizeTts } from "../lib/tts/synthesize";
+import { synthesizeTts } from "../lib/tts/synthesize";
 import { ttsTextFilter } from "../lib/tts/text-filter";
 import { decideSttBargeIn, isLikelySelfEcho, shouldPauseSttForTts } from "../lib/voice/echo-gate";
 import type {
@@ -618,10 +617,6 @@ export function ChatArea({
 	const sentenceChunkerRef = useRef<SentenceChunker | null>(null);
 	const reasoningTextHiddenRef = useRef(false);
 	const activeTtsRequestsRef = useRef<Set<string>>(new Set());
-	// Ditto must receive synthesized sentences in their reserved audio order,
-	// even when later TTS requests finish first. Each sentence owns one slot in
-	// this promise tail and releases the next only after its video completes.
-	const avatarPlaybackTailRef = useRef<Promise<void>>(Promise.resolve());
 	// VoxCPM2 owns one TensorRT execution context. Keep local sentence synthesis
 	// single-flight, but release this tail as soon as each WAV is ready so the
 	// next sentence can synthesize while AudioQueue plays the previous one.
@@ -966,7 +961,6 @@ export function ChatArea({
 		audioQueueRef.current?.clear();
 		sentenceChunkerRef.current?.clear();
 		activeTtsRequestsRef.current.clear();
-		avatarPlaybackTailRef.current = Promise.resolve();
 		// Do not reset the GPU admission fence here. Aborting the WebView fetch
 		// does not prove that VoxCPM2 has released its execution context yet.
 		// The new turn must remain behind the old local synthesis tail.
@@ -2249,7 +2243,7 @@ export function ChatArea({
 		});
 	}
 
-	/** Synthesize one sentence shell-side (#363) and enqueue/play the audio. */
+	/** Route one sentence to the configured voice output. */
 	function sendSentenceToTts(sentence: string): void {
 		// Preserve the original Markdown in chat, but send only natural speech text
 		// to the selected voice engine.
@@ -2257,27 +2251,29 @@ export function ChatArea({
 		if (!clean) return;
 		const revealText = reserveTtsTextReveal(sentence);
 
-		// cascade 토킹 아바타 활성 시: 셸이 합성한 TTS 오디오를 cascade /stream 으로 보내 Ditto
-		// 립싱크를 구동한다(8GB avatar-only facade 엔 TTS 가 없어 텍스트 /stream_text 는 무음).
-		// nextain = LINEAR16(PCM 24k) 로 받아 speakAudio; 브라우저/미합성 provider 는 아래에서
-		// facade 내장 TTS(/stream_text) 로 폴백. (라우팅은 합성 결과가 나온 뒤 아래에서 수행.)
 		const cascadeAvatar = useCascadeAvatarStore.getState().renderer;
-		const configuredCascadeUrl = remoteCascadeUrlFromConfig(loadConfig());
-		if (cascadeAvatar && configuredCascadeUrl) {
-			// An explicit NVA Host owns TTS and avatar rendering. This keeps the proven
-			// remote cascade independent from a failed or stale local voice facade.
-			setOutputStage("render");
-			const endCascadeJob = beginCascadeTtsJob();
-			void cascadeAvatar.speak(clean, undefined, {
-				onPlaybackReady: revealText,
-				onPlaybackFailure: revealText,
-			}).finally(endCascadeJob);
-			return;
-		}
 
 		// 자기발화 텍스트 필터용 — 이 턴에 말한 문장을 기록 (최근 6문장 링버퍼).
 		recentTtsTextsRef.current.push(clean);
 		if (recentTtsTextsRef.current.length > 6) recentTtsTextsRef.current.shift();
+
+		// NVA video-avatar speech is one private Runtime operation. The Runtime owns
+		// VoxCPM2 synthesis, Ditto/TRT rendering, and A/V synchronization; Shell sends
+		// text once and plays the muxed response. Never synthesize and resend WAV/PCM.
+		if (cascadeAvatar) {
+			Logger.info("ChatArea", "Sending speech to Naia Media Runtime", {
+				sentence: clean.slice(0, 50),
+			});
+			setOutputStage("render");
+			const endCascadeJob = beginCascadeTtsJob();
+			void cascadeAvatar
+				.speak(clean, undefined, {
+					onPlaybackReady: revealText,
+					onPlaybackFailure: revealText,
+				})
+				.finally(endCascadeJob);
+			return;
+		}
 
 		const reqId = generateRequestId();
 		// Reserve sequence number BEFORE async request to guarantee order
@@ -2293,22 +2289,6 @@ export function ChatArea({
 			audioQueueRef.current?.pauseBeforePlayback();
 		} else if (ttsProviderForCost === "naia-local-voice") {
 			localVoiceBuffer.sentenceCount++;
-		}
-		// 아바타 립싱크에 합성 오디오(WAV/PCM)를 직접 흘릴 수 있는 provider 인가 (FR-VOICE.5).
-		// naia-local-voice 포함(2026-07-15 개정): 구 "추가 금지" 경고는 raw /tts 직결(음색 상태
-		// 우회 → 무지문 랜덤 음색) 전제였는데, synthesize.ts 가 OpenAI 표면 /v1/audio/speech 로
-		// 전환되며 음색이 **합성 시점에 서버에서 해석**되어 사유가 소멸했다. 오히려 8g avatar-only
-		// 파사드(자체 TTS 없음)에선 /stream_text 폴백이 무음이라 PCM 직결이 유일한 립싱크 경로.
-		const avatarPcm = !!cascadeAvatar && streamsAvatarPcm(ttsProviderForCost);
-		const previousAvatarPlayback = avatarPcm
-			? avatarPlaybackTailRef.current
-			: Promise.resolve();
-		let releaseAvatarSlot = () => {};
-		if (avatarPcm) {
-			const slot = new Promise<void>((resolve) => {
-				releaseAvatarSlot = resolve;
-			});
-			avatarPlaybackTailRef.current = previousAvatarPlayback.then(() => slot);
 		}
 		const ttsVoiceForCost = voiceCfg?.voice;
 		Logger.info("ChatArea", "Sending TTS request", {
@@ -2363,15 +2343,7 @@ export function ChatArea({
 		// Browser provider → client-side speechSynthesis (skip shell synthesis).
 		const ttsMeta = getTtsProviderMeta(ttsProviderForCost);
 		if (ttsMeta?.isClientSide) {
-			// 브라우저 TTS 는 버퍼가 없음 → 아바타면 facade 텍스트 경로, 아니면 브라우저 발화.
-			if (cascadeAvatar) {
-				setOutputStage("render");
-				const endCascadeJob = beginCascadeTtsJob();
-				void cascadeAvatar.speak(clean, undefined, {
-					onPlaybackReady: revealText,
-					onPlaybackFailure: revealText,
-				}).finally(endCascadeJob);
-			} else speakViaBrowser();
+			speakViaBrowser();
 			return;
 		}
 
@@ -2391,7 +2363,6 @@ export function ChatArea({
 			return synthesizeTts({
 				text: clean,
 				voice: voiceCfg?.voice,
-				encoding: avatarPcm ? "LINEAR16" : undefined,
 				provider: ttsProviderForCost as TtsProviderId,
 				apiKey: voiceCfg?.ttsApiKey,
 				naiaKey: voiceCfg?.naiaKey,
@@ -2408,9 +2379,7 @@ export function ChatArea({
 		let synthesis: ReturnType<typeof synthesize>;
 		if (ttsProviderForCost === "naia-local-voice") {
 			const previousLocalSynthesis = localVoiceSynthesisTailRef.current;
-			synthesis = previousLocalSynthesis
-				.then(() => (avatarPcm ? previousAvatarPlayback : Promise.resolve()))
-				.then(() => synthesize());
+			synthesis = previousLocalSynthesis.then(() => synthesize());
 			// A failed or interrupted sentence must not poison the queue. The request's
 			// own catch below still reports/skips it; this tail only gates the next job.
 			localVoiceSynthesisTailRef.current = synthesis.then(
@@ -2429,7 +2398,6 @@ export function ChatArea({
 				if (!activeTtsRequestsRef.current.has(reqId)) return;
 				if (
 					ttsProviderForCost === "naia-local-voice" &&
-					!avatarPcm &&
 					localVoiceBufferGeneration === localVoiceBufferRef.current.generation
 				) {
 					if (seq === 0) {
@@ -2458,64 +2426,17 @@ export function ChatArea({
 						}
 					}
 				}
-				if (avatarPcm) {
-					await previousAvatarPlayback;
-					if (!activeTtsRequestsRef.current.has(reqId)) return;
-					// The cascade MP4/WebM already contains the exact input audio. Let the
-					// video element play that track so lips and voice share one media clock;
-					// a separate AudioQueue clock can lead on prebuffer and drift on stalls.
-					// Only fall back to the local queue when avatar playback never starts.
-					let fallbackReleased = false;
-					const releaseFallbackAudio = () => {
-						if (fallbackReleased) return;
-						// Barge-in clears this request set. A late failure callback must
-						// never resurrect audio from the interrupted response.
-						if (!activeTtsRequestsRef.current.delete(reqId)) return;
-						fallbackReleased = true;
-						Logger.debug(
-							"ChatArea",
-							"Avatar playback unavailable; releasing fallback TTS audio",
-							{ reqId, seq },
-						);
-						audioQueueRef.current?.enqueueOrdered(seq, audioBase64, {
-							onPlaybackStart: revealText,
-							onPlaybackUnavailable: revealText,
-						});
-					};
-					setOutputStage("render");
-					const endCascadeJob = beginCascadeTtsJob();
-					await cascadeAvatar
-						?.speakAudio(audioBase64, 24000, {
-							muted: false,
-							onPlaybackReady: revealText,
-							onPlaybackFailure: releaseFallbackAudio,
-						})
-						.finally(() => {
-							activeTtsRequestsRef.current.delete(reqId);
-							endCascadeJob();
-						});
-				} else if (cascadeAvatar) {
-					activeTtsRequestsRef.current.delete(reqId);
-					// nextain 외 아바타: facade 내장 TTS 경로(best-effort, full cascade 전제).
-					setOutputStage("render");
-					const endCascadeJob = beginCascadeTtsJob();
-					void cascadeAvatar.speak(clean, undefined, {
-						onPlaybackReady: revealText,
-						onPlaybackFailure: revealText,
-					}).finally(endCascadeJob);
-				} else {
-					activeTtsRequestsRef.current.delete(reqId);
-					audioQueueRef.current?.enqueueOrdered(seq, audioBase64, {
-						onPlaybackStart: revealText,
-						onPlaybackUnavailable: revealText,
-					});
-					if (
-						ttsProviderForCost === "naia-local-voice" &&
-						localVoiceBufferGeneration === localVoiceBufferRef.current.generation &&
-						(seq > 0 || !localVoiceBufferRef.current.waitingForSecond)
-					) {
-						releaseLocalVoicePrebuffer(localVoiceBufferGeneration);
-					}
+				activeTtsRequestsRef.current.delete(reqId);
+				audioQueueRef.current?.enqueueOrdered(seq, audioBase64, {
+					onPlaybackStart: revealText,
+					onPlaybackUnavailable: revealText,
+				});
+				if (
+					ttsProviderForCost === "naia-local-voice" &&
+					localVoiceBufferGeneration === localVoiceBufferRef.current.generation &&
+					(seq > 0 || !localVoiceBufferRef.current.waitingForSecond)
+				) {
+					releaseLocalVoicePrebuffer(localVoiceBufferGeneration);
 				}
 				// Track TTS cost: server cost for Naia Cloud, estimate for others.
 				// Naia account (nextain): apply 10% service markup on top of base cost.
@@ -2601,7 +2522,6 @@ export function ChatArea({
 			})
 			.finally(() => {
 				ttsAbortControllersRef.current.delete(reqId);
-				releaseAvatarSlot();
 			});
 	}
 

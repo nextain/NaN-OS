@@ -50,7 +50,7 @@ const DISCORD_SETTINGS_MOCK = `
 })();
 `;
 
-test("secure credential cancellation has no WebView token payload", async ({
+test("unavailable Connections keeps credentials out of the WebView", async ({
 	page,
 }) => {
 	await page.addInitScript({ content: DISCORD_SETTINGS_MOCK });
@@ -71,15 +71,11 @@ test("secure credential cancellation has no WebView token payload", async ({
 	await expect(guide).toBeVisible();
 	await guide.getByRole("button").click();
 
-	const panel = page.locator('[data-testid="discord-connections"]:visible');
-	await expect(panel).toBeVisible();
-	await expect(panel.locator('input[type="password"]')).toHaveCount(0);
-	await panel
-		.getByRole("button", { name: /토큰 교체|Rotate token/ })
-		.evaluate((button) => (button as HTMLButtonElement).click());
-	await expect(panel.getByRole("alert")).toContainText(
-		/보안 입력이 취소|Secure input was cancelled/,
-	);
+	const connectionsTab = page.locator('[data-settings-tab="connections"]');
+	await expect(connectionsTab).toBeDisabled();
+	await expect(connectionsTab).toContainText(/준비중|Coming Soon/i);
+	await expect(page.getByTestId("discord-connections")).toHaveCount(0);
+	await expect(page.locator('input[type="password"]')).toHaveCount(0);
 
 	const capture = await page.evaluate(() =>
 		(
@@ -90,7 +86,5 @@ test("secure credential cancellation has no WebView token payload", async ({
 			(call) => call.cmd === "discord_capture_bot_token",
 		),
 	);
-	// Tauri normalizes an argument-less invoke to `{}`. It must contain no token
-	// field or other secret-bearing payload.
-	expect(capture).toEqual({ cmd: "discord_capture_bot_token", args: {} });
+	expect(capture).toBeUndefined();
 });

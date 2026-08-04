@@ -176,67 +176,27 @@ test.beforeEach(async ({ page }) => {
 	await expect(page.locator(".titlebar")).toBeVisible();
 });
 
-test("Connections에서 권한 가능한 채널만 저장한다", async ({ page }) => {
+test("연결 안내는 미완성 Connections를 열거나 바인딩을 저장하지 않는다", async ({ page }) => {
 	await page.locator(".chat-input").fill("디스코드 연결 설정해줘");
 	await page.locator(".chat-send-btn").click();
 	const guide = page.getByRole("dialog");
 	await expect(guide).toContainText(/비밀|secret/i);
 	await guide.getByRole("button").click();
 
-	const panel = page.locator('[data-testid="discord-connections"]:visible');
-	await expect(panel).toBeVisible();
-	await expect(panel).toContainText("Naia");
-
-	const checkboxes = panel.locator('input[type="checkbox"]');
-	await expect(checkboxes).toHaveCount(2);
-	await expect(checkboxes.nth(1)).toBeDisabled();
-	await checkboxes.nth(0).check();
-	await panel
-		.locator('input[type="text"]')
-		.fill("300000, 301000, 300000");
-	await panel.locator("select").selectOption("all");
-	const applyButton = panel.getByRole("button", { name: /Apply|적용/ });
-	await applyButton.focus();
-	await page.keyboard.press("Enter");
-
-	const save = await expect
-		.poll(() =>
-			page.evaluate(() => {
-				const calls = (
-					window as unknown as {
-						__DISCORD_INVOKES__: Array<{ cmd: string; args: unknown }>;
-					}
-				).__DISCORD_INVOKES__;
-				return calls.find((call) => call.cmd === "discord_save_bindings");
-			}),
-		)
-		.toBeTruthy()
-		.then(() =>
-			page.evaluate(() =>
-				(
-					window as unknown as {
-						__DISCORD_INVOKES__: Array<{ cmd: string; args: unknown }>;
-					}
-				).__DISCORD_INVOKES__.find(
-					(call) => call.cmd === "discord_save_bindings",
-				),
-			),
-		);
-	expect(save?.args).toEqual({
-		expectedGeneration: 1,
-		bindings: [
-			{
-				bindingId: "discord_100_200",
-				guildId: "100",
-				guildName: "Nextain",
-				channelId: "200",
-				channelName: "general",
-				allowedUserIds: ["300000", "301000"],
-				processingProfileRef: "default",
-				participation: "all",
-			},
-		],
-	});
+	const connectionsTab = page.locator('[data-settings-tab="connections"]');
+	await expect(connectionsTab).toBeDisabled();
+	await expect(connectionsTab).toContainText(/준비중|Coming Soon/i);
+	await expect(page.getByTestId("discord-connections")).toHaveCount(0);
+	const saveCalls = await page.evaluate(() =>
+		(
+			window as unknown as {
+				__DISCORD_INVOKES__: Array<{ cmd: string; args: unknown }>;
+			}
+		).__DISCORD_INVOKES__.filter(
+			(call) => call.cmd === "discord_save_bindings",
+		),
+	);
+	expect(saveCalls).toHaveLength(0);
 });
 
 test("Channels 메시지는 개인 채팅에 복사하지 않고 읽음 상태만 저장한다", async ({
