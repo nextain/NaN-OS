@@ -194,6 +194,61 @@ describe("OnboardingWizard", () => {
 		expect(screen.getByText(/Set up later/)).toBeDefined();
 	});
 
+	it("offers installed VRM and six NVA variants and persists an NVA choice without login", async () => {
+		const { invoke } = await import("@tauri-apps/api/core");
+		(invoke as ReturnType<typeof vi.fn>).mockImplementation(
+			(command: string, args?: { subdir?: string }) => {
+				if (command === "list_naia_assets" && args?.subdir === "vrm-files") {
+					return Promise.resolve(["01-OL_Woman.vrm"]);
+				}
+				if (command === "list_naia_assets" && args?.subdir === "nva-files") {
+					return Promise.resolve([
+						"jina",
+						"jina-anime",
+						"minho",
+						"minho-anime",
+						"naia",
+						"naia-anime",
+					]);
+				}
+				if (command === "detect_gpu_vram") return Promise.resolve(null);
+				return Promise.resolve(true);
+			},
+		);
+		localStorage.setItem("naia-adk-path", "D:\\alpha-adk");
+
+		renderAtAgentName();
+		await act(async () => Promise.resolve());
+		clickNextByClass();
+		clickNextByClass();
+		clickNextByClass();
+
+		expect(screen.getByRole("button", { name: /01-OL_Woman/ })).toBeDefined();
+		for (const name of [
+			"jina",
+			"jina-anime",
+			"minho",
+			"minho-anime",
+			"naia",
+			"naia-anime",
+		]) {
+			expect(screen.getByRole("button", { name })).toBeDefined();
+		}
+		fireEvent.click(screen.getByRole("button", { name: "naia-anime" }));
+		clickNextByClass();
+		clickNextByClass();
+		fireEvent.click(screen.getByText(/Set up later/));
+		flush();
+		fireEvent.click(
+			screen.getByRole("button", { name: /시작하기|Get Started/ }),
+		);
+		await act(async () => Promise.resolve());
+
+		const config = JSON.parse(localStorage.getItem("naia-config") || "{}");
+		expect(config.avatarProvider).toBe("naia-video-avatar");
+		expect(config.nvaModel).toBe("naia-anime");
+	});
+
 	it("shows VRAM recommendation on the provider step", async () => {
 		const { invoke } = await import("@tauri-apps/api/core");
 		(invoke as ReturnType<typeof vi.fn>).mockImplementation((cmd: string) => {
@@ -218,7 +273,9 @@ describe("OnboardingWizard", () => {
 		).toBeDefined();
 		expect(
 			screen.getByTestId("onboarding-nva-vram-requirement"),
-		).toHaveTextContent(/supported NVIDIA GPU.*8GB VRAM/);
+		).toHaveTextContent(
+			/Stored NVA playback needs no GPU.*precision local lip-sync/i,
+		);
 		expect(
 			screen.getByTestId("onboarding-cloud-cascade-coming-soon"),
 		).toHaveTextContent(/cloud cascade service.*provided separately.*future/i);

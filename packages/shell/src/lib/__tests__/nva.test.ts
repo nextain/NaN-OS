@@ -4,6 +4,7 @@ import {
 	parseNvaManifest,
 	resolveDefaultAnimation,
 	resolveNvaAssetPath,
+	talkingClipOf,
 } from "../nva";
 
 const V02 = {
@@ -86,6 +87,16 @@ describe("NVA manifest contract (v0.2)", () => {
 		// scenario start → idle_node → idle 애니.
 		expect(resolveDefaultAnimation(manifest)?.clip).toBe("clips/idle.webm");
 		expect(defaultClipOf(manifest)).toEqual({ video: "clips/idle.webm" });
+	});
+
+	it("resolves the muted fallback talking clip from the speaking expression", () => {
+		const manifest = parseNvaManifest(JSON.stringify(SINGLE_STATE));
+		expect(talkingClipOf(manifest)).toEqual({ video: "clips/speak_body.webm" });
+	});
+
+	it("falls back to the first looped can_talk animation", () => {
+		const manifest = parseNvaManifest(JSON.stringify(V02));
+		expect(talkingClipOf(manifest)).toEqual({ video: "clips/idle.webm" });
 	});
 
 	it("falls back to first idle loop when scenario has no start edge", () => {

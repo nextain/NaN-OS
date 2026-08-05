@@ -17,10 +17,7 @@ import {
 	probeCascadeHealth,
 	remoteCascadeUrlFromConfig,
 } from "../lib/avatar/cascade-renderer";
-import {
-	hasExplicitLocalAvatarProfile,
-	isNvaHardwareEligible,
-} from "../lib/avatar/nva-gate";
+import { hasExplicitLocalAvatarProfile } from "../lib/avatar/nva-gate";
 import { detectGpuVramGb } from "../lib/capabilities/gpu";
 import { resolveActiveTier } from "../lib/capabilities/vram-tiers";
 import { loadConfig, loadConfigWithSecrets } from "../lib/config";
@@ -29,6 +26,7 @@ import {
 	defaultClipOf,
 	parseNvaManifest,
 	resolveNvaAssetPath,
+	talkingClipOf,
 } from "../lib/nva";
 import { useAvatarStore } from "../stores/avatar";
 import { useCascadeAvatarStore } from "../stores/cascade-avatar";
@@ -39,7 +37,13 @@ interface VideoAvatarCanvasProps {
 
 // loading=기동/연결 중, cascade=립싱크 라이브, standby=로컬 적용됐으나 백엔드 미기동(대기),
 // unavailable=로컬 프로파일 없음/원격 미도달, error=치명 오류.
-type Mode = "loading" | "cascade" | "standby" | "unavailable" | "error";
+type Mode =
+	| "loading"
+	| "cascade"
+	| "fallback"
+	| "standby"
+	| "unavailable"
+	| "error";
 
 // standby(대기중)에서 백엔드가 뜨는지 재확인하는 폴링 주기(ms). 재기동은 안 하고 상태만 본다.
 const RETRY_POLL_MS = 4000;
@@ -109,11 +113,13 @@ const VIDEO_BASE_STYLE = {
  */
 export function VideoAvatarCanvas({ nvaModel }: VideoAvatarCanvasProps) {
 	const setLoaded = useAvatarStore((s) => s.setLoaded);
+	const isSpeaking = useAvatarStore((s) => s.isSpeaking);
 	// 로컬 spawn 된 cascade facade URL. 명시한 원격 NVA Host가 있으면 그 설정이 우선한다.
 	const localFacadeUrl = useCascadeAvatarStore((s) => s.localFacadeUrl);
 	const [mode, setMode] = useState<Mode>("loading");
 	const [error, setError] = useState("");
 	const [idleUrl, setIdleUrl] = useState("");
+	const [talkingUrl, setTalkingUrl] = useState("");
 	const [idleError, setIdleError] = useState("");
 	const [retryNonce, setRetryNonce] = useState(0);
 	const [detectedVramGb, setDetectedVramGb] = useState<number | null>(null);
@@ -135,8 +141,9 @@ export function VideoAvatarCanvas({ nvaModel }: VideoAvatarCanvasProps) {
 	// Load it independently so slow TensorRT initialization never blanks NVA.
 	useEffect(() => {
 		let disposed = false;
-		let ownedUrl = "";
+		const ownedUrls: string[] = [];
 		setIdleUrl("");
+		setTalkingUrl("");
 		setIdleError("");
 		const adkPath = getAdkPath();
 		if (!adkPath || !nvaModel) return;
@@ -152,17 +159,27 @@ export function VideoAvatarCanvas({ nvaModel }: VideoAvatarCanvasProps) {
 				});
 				const raw = atob(b64);
 				const bytes = Uint8Array.from(raw, (char) => char.charCodeAt(0));
-				const clip = defaultClipOf(
-					parseNvaManifest(new TextDecoder().decode(bytes)),
+				const manifest = parseNvaManifest(new TextDecoder().decode(bytes));
+				const idleClip = defaultClipOf(manifest);
+				const talkingClip = talkingClipOf(manifest);
+				const nextIdleUrl = await toLocalBlobUrl(
+					resolveNvaAssetPath(bundleDir, idleClip.video),
 				);
-				ownedUrl = await toLocalBlobUrl(
-					resolveNvaAssetPath(bundleDir, clip.video),
-				);
+				ownedUrls.push(nextIdleUrl);
+				const nextTalkingUrl = talkingClip
+					? await toLocalBlobUrl(
+							resolveNvaAssetPath(bundleDir, talkingClip.video),
+						)
+					: "";
+				if (nextTalkingUrl) ownedUrls.push(nextTalkingUrl);
 				if (disposed) {
-					if (ownedUrl.startsWith("blob:")) URL.revokeObjectURL(ownedUrl);
+					for (const url of ownedUrls) {
+						if (url.startsWith("blob:")) URL.revokeObjectURL(url);
+					}
 					return;
 				}
-				setIdleUrl(ownedUrl);
+				setIdleUrl(nextIdleUrl);
+				setTalkingUrl(nextTalkingUrl);
 				setLoaded(true);
 			} catch (cause) {
 				if (!disposed) setIdleError(String(cause));
@@ -170,7 +187,9 @@ export function VideoAvatarCanvas({ nvaModel }: VideoAvatarCanvasProps) {
 		})();
 		return () => {
 			disposed = true;
-			if (ownedUrl.startsWith("blob:")) URL.revokeObjectURL(ownedUrl);
+			for (const url of ownedUrls) {
+				if (url.startsWith("blob:")) URL.revokeObjectURL(url);
+			}
 		};
 	}, [nvaModel, setLoaded]);
 
@@ -227,11 +246,6 @@ export function VideoAvatarCanvas({ nvaModel }: VideoAvatarCanvasProps) {
 				cfg?.localGpuTier,
 				detectedVramGb,
 			)?.loaderProfile;
-			if (!isNvaHardwareEligible(detectedVramGb)) {
-				setError("nva-vram-below-minimum");
-				setMode("unavailable");
-				return;
-			}
 			const canLocalCascade = hasExplicitLocalAvatarProfile(
 				cfg,
 				detectedVramGb,
@@ -332,7 +346,7 @@ export function VideoAvatarCanvas({ nvaModel }: VideoAvatarCanvasProps) {
 				setError("cascade-unreachable");
 			}
 			if (configuredCascadeUrl) {
-				setMode("unavailable");
+				setMode("fallback");
 				setLoaded(Boolean(idleUrl));
 				return;
 			}
@@ -358,7 +372,7 @@ export function VideoAvatarCanvas({ nvaModel }: VideoAvatarCanvasProps) {
 				} catch (e) {
 					if (disposed) return;
 					setError(`cascade-start-failed: ${String(e)}`);
-					setMode("error");
+					setMode("fallback");
 					setLoaded(Boolean(idleUrl));
 					return;
 				}
@@ -394,9 +408,9 @@ export function VideoAvatarCanvas({ nvaModel }: VideoAvatarCanvasProps) {
 				};
 				retryTimer = setTimeout(poll, RETRY_POLL_MS);
 			} else {
-				setError("cascade-profile-unavailable");
-				// 로컬 프로파일 없음/원격 미도달 → 아바타 노출 안 함.
-				setMode("unavailable");
+				// 정밀 Runtime이 없어도 번들의 idle/talking 클립은 GPU 없이 재생한다.
+				setError("");
+				setMode("fallback");
 				setLoaded(Boolean(idleUrl));
 			}
 		}
@@ -471,6 +485,40 @@ export function VideoAvatarCanvas({ nvaModel }: VideoAvatarCanvasProps) {
 					loop
 					style={{ ...VIDEO_BASE_STYLE, transform: videoTransform(pan) }}
 				/>
+			) : mode === "fallback" ? (
+				<>
+					<video
+						key={isSpeaking && talkingUrl ? "talking" : "idle"}
+						{...(isSpeaking && talkingUrl
+							? { "data-video-avatar-talking": true }
+							: { "data-video-avatar-idle": true })}
+						src={isSpeaking && talkingUrl ? talkingUrl : idleUrl}
+						autoPlay
+						playsInline
+						muted
+						loop
+						style={{ ...VIDEO_BASE_STYLE, transform: videoTransform(pan) }}
+					/>
+					{error && (
+						<output
+							data-video-avatar-status={mode}
+							aria-live="polite"
+							style={{ position: "absolute", bottom: "1rem", opacity: 0.5 }}
+						>
+							{t("avatar.videoFailed")}
+							<button
+								type="button"
+								data-testid="nva-retry"
+								onClick={() => {
+									autoStartAttemptedRef.current = false;
+									setRetryNonce((value) => value + 1);
+								}}
+							>
+								{t("avatar.videoRetry")}
+							</button>
+						</output>
+					)}
+				</>
 			) : (
 				<>
 					{idleUrl && (

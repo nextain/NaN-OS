@@ -129,26 +129,34 @@ test.describe("Capability-driven settings (#365)", () => {
 		const sortSelect = page.locator('[data-testid="model-sort-mode"]');
 		await expect(sortSelect).toHaveValue("price");
 		await expect(sortSelect.locator('option[value="default"]')).toHaveCount(0);
-		await expect(page.locator('[data-testid="model-price-sort-basis"]')).toContainText(
-			/3\s*:\s*.*1/,
-		);
+		await expect(
+			page.locator('[data-testid="model-price-sort-basis"]'),
+		).toContainText(/3\s*:\s*.*1/);
 		await expect(modelSelect.locator('option[value="grok-4.3"]')).toHaveText(
 			/Grok 4\.3 \(Pricing: \$0\.400 \/ \$1\.200\)/,
 		);
-		await expect(modelSelect.locator('option[value="claude-opus-5"]')).toHaveCount(0);
-		await expect(modelSelect.locator('option[value="naia-0.9-omni-24g"]')).toHaveCount(0);
-		const priceOrder = await modelSelect.locator("option").evaluateAll((options) =>
-			options.map((option) => (option as HTMLOptionElement).value),
-		);
+		await expect(
+			modelSelect.locator('option[value="claude-opus-5"]'),
+		).toHaveCount(0);
+		await expect(
+			modelSelect.locator('option[value="naia-0.9-omni-24g"]'),
+		).toHaveCount(0);
+		const priceOrder = await modelSelect
+			.locator("option")
+			.evaluateAll((options) =>
+				options.map((option) => (option as HTMLOptionElement).value),
+			);
 		await expect(modelSelect).toHaveValue("grok-4.3");
 		await sortSelect.selectOption("performance");
 		await expect(modelSelect.locator("option").first()).toHaveAttribute(
 			"value",
 			"gpt-5.6-sol",
 		);
-		const performanceOrder = await modelSelect.locator("option").evaluateAll((options) =>
-			options.map((option) => (option as HTMLOptionElement).value),
-		);
+		const performanceOrder = await modelSelect
+			.locator("option")
+			.evaluateAll((options) =>
+				options.map((option) => (option as HTMLOptionElement).value),
+			);
 		expect(performanceOrder).not.toEqual(priceOrder);
 		await expect(modelSelect).toHaveValue("grok-4.3");
 		await expect(modelSelect.locator('option[value="naia-local"]')).toHaveCount(
@@ -395,25 +403,23 @@ test.describe("FR-6: NVA lip-sync note (avatar tab)", () => {
 	});
 });
 
-test.describe("FR-7: video avatar gated by cascade capability", () => {
-	test("logged-in shell still disables video avatar below 8GB", async ({
+test.describe("FR-NVA: stored playback is independent from precision runtime capability", () => {
+	test("logged-in shell keeps video avatar selectable below 8GB", async ({
 		page,
 	}) => {
-		// Current video avatar requires verified local 8GB hardware.
 		await gotoModelSettings(page, { vramGb: 4, model: "gemini-3.5-flash" });
 		await page.locator('[data-settings-tab="avatar"]').click();
 		await expect(
 			page.locator('option[value="naia-video-avatar"]'),
-		).toBeDisabled();
+		).toBeEnabled();
 		await expect(
 			page.locator('[data-testid="avatar-cascade-required"]'),
-		).toContainText(/8GB/i);
+		).toContainText(/without a GPU|GPU 없이/i);
 	});
 
-	test("logged out without explicit local profile keeps video-avatar disabled", async ({
+	test("logged out without explicit local profile keeps stored NVA selectable", async ({
 		page,
 	}) => {
-		// Logged out shells need either a concrete local avatar tier or login.
 		await gotoModelSettings(page, {
 			vramGb: 24,
 			model: "gemini-3.5-flash",
@@ -422,10 +428,10 @@ test.describe("FR-7: video avatar gated by cascade capability", () => {
 		await page.locator('[data-settings-tab="avatar"]').click();
 		await expect(
 			page.locator('option[value="naia-video-avatar"]'),
-		).toBeDisabled();
+		).toBeEnabled();
 	});
 
-	test("logged out local avatar-capable tier stays dormant and cannot select local NVA", async ({
+	test("logged out local avatar-capable tier stays dormant while stored NVA remains selected", async ({
 		page,
 	}) => {
 		await gotoModelSettings(page, {
@@ -437,17 +443,20 @@ test.describe("FR-7: video avatar gated by cascade capability", () => {
 		await page.locator('[data-settings-tab="avatar"]').click();
 		await expect(
 			page.locator('option[value="naia-video-avatar"]'),
-		).toBeDisabled();
-		await expect(page.locator("#avatar-provider")).toHaveValue("vrm");
-		await expect(page.locator("#cascade-runtime-url")).toHaveCount(0);
+		).toBeEnabled();
+		await page.locator("#avatar-provider").selectOption("naia-video-avatar");
+		await expect(page.locator("#avatar-provider")).toHaveValue(
+			"naia-video-avatar",
+		);
+		await expect(page.locator("#cascade-runtime-url")).toBeVisible();
 		const config = await page.evaluate(() =>
 			JSON.parse(localStorage.getItem("naia-config") || "{}"),
 		);
-		expect(config.avatarProvider).not.toBe("naia-video-avatar");
+		expect(config.avatarProvider).toBe("naia-video-avatar");
 		expect(config.cascadeRuntimeUrl).toBeUndefined();
 	});
 
-	test("logged out legacy auto tier does not unlock local NVA", async ({
+	test("logged out legacy auto tier does not block stored NVA", async ({
 		page,
 	}) => {
 		await gotoModelSettings(page, {
@@ -459,8 +468,7 @@ test.describe("FR-7: video avatar gated by cascade capability", () => {
 		await page.locator('[data-settings-tab="avatar"]').click();
 		await expect(
 			page.locator('option[value="naia-video-avatar"]'),
-		).toBeDisabled();
-		await expect(page.locator("#cascade-runtime-url")).toHaveCount(0);
+		).toBeEnabled();
 	});
 });
 
@@ -494,17 +502,18 @@ test.describe("FR-8: NVA Host URL", () => {
 		expect(config.cascadeRuntimeUrl).toBeUndefined();
 	});
 
-	test("logged out → NVA Host 미노출 (naiaKey 게이트)", async ({ page }) => {
+	test("logged out → optional NVA Host remains available", async ({ page }) => {
 		await gotoModelSettings(page, {
 			vramGb: 8,
 			model: "gemini-3.5-flash",
 			loggedIn: false,
 		});
 		await page.locator('[data-settings-tab="avatar"]').click();
-		await expect(page.locator("#cascade-runtime-url")).toHaveCount(0);
+		await page.locator("#avatar-provider").selectOption("naia-video-avatar");
+		await expect(page.locator("#cascade-runtime-url")).toBeVisible();
 	});
 
-	test("logged out → stale NVA Host config does not unlock controls", async ({
+	test("logged out → saved NVA and Host selection are restored", async ({
 		page,
 	}) => {
 		await gotoModelSettings(page, {
@@ -518,10 +527,14 @@ test.describe("FR-8: NVA Host URL", () => {
 			},
 		});
 		await page.locator('[data-settings-tab="avatar"]').click();
-		await expect(page.locator("#avatar-provider")).toHaveValue("vrm");
+		await expect(page.locator("#avatar-provider")).toHaveValue(
+			"naia-video-avatar",
+		);
 		await expect(
 			page.locator('option[value="naia-video-avatar"]'),
-		).toBeDisabled();
-		await expect(page.locator("#cascade-runtime-url")).toHaveCount(0);
+		).toBeEnabled();
+		await expect(page.locator("#cascade-runtime-url")).toHaveValue(
+			"http://stale.example:8910",
+		);
 	});
 });

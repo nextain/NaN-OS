@@ -1,17 +1,17 @@
 import { describe, expect, it } from "vitest";
 import type { AppConfig } from "../../config";
 import {
-	applyNaiaSlotDefaults,
-	deriveGate,
-	deriveGateFromConfig,
+	type GateMode,
 	NAIA_SLOT_DEFAULTS,
-	readSlots,
 	SLOT_FIELD_MAP,
 	SLOT_GROUPS,
 	SLOT_IDS,
-	writeSlot,
-	type GateMode,
 	type SlotId,
+	applyNaiaSlotDefaults,
+	deriveGate,
+	deriveGateFromConfig,
+	readSlots,
+	writeSlot,
 } from "../model";
 
 /**
@@ -148,7 +148,7 @@ describe("S-SLOT · FR-SLOT.2 6슬롯 + 3그룹 구조 (각각 독립 설정)", 
 		expect(snap.tts).toEqual({ provider: "nextain" });
 	});
 
-	it("readSlots gates stale logged-out NVA avatar config", () => {
+	it("readSlots preserves logged-out stored NVA avatar config", () => {
 		const snap = readSlots({
 			provider: "nextain",
 			model: "gemini-3.5-flash",
@@ -162,8 +162,8 @@ describe("S-SLOT · FR-SLOT.2 6슬롯 + 3그룹 구조 (각각 독립 설정)", 
 		} as AppConfig);
 
 		expect(snap.avatar).toEqual({
-			provider: "edge-tts",
-			model: "fallback.vrm",
+			provider: "naia-video-avatar",
+			model: "remote-avatar.nva",
 			voiceRefUrl: undefined,
 		});
 	});

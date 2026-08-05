@@ -1,6 +1,13 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import {
+	act,
+	cleanup,
+	fireEvent,
+	render,
+	screen,
+} from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { useAvatarStore } from "../../stores/avatar";
 import { useCascadeAvatarStore } from "../../stores/cascade-avatar";
 import { VideoAvatarCanvas } from "../VideoAvatarCanvas";
 
@@ -60,7 +67,9 @@ const MANIFEST_BASE64 = btoa(
 		canvas: { width: 512, height: 512 },
 		animations: {
 			idle: { clip: "clips/idle.webm", loop: true, can_talk: false },
+			talking: { clip: "clips/talking.mp4", loop: true, can_talk: true },
 		},
+		expressions: { neutral: "idle", speaking: "talking" },
 	}),
 );
 
@@ -68,7 +77,11 @@ describe("VideoAvatarCanvas idle-first contract", () => {
 	beforeEach(() => {
 		testState.vramGb = 8;
 		testState.config.localGpuTier = "laptop-4060-8g";
-		mockToLocalBlobUrl.mockResolvedValue("blob:nva-idle");
+		mockToLocalBlobUrl.mockImplementation((path: string) =>
+			Promise.resolve(
+				path.endsWith("talking.mp4") ? "blob:nva-talking" : "blob:nva-idle",
+			),
+		);
 		mockWriteSlotsManifest.mockResolvedValue(undefined);
 		mockInvoke.mockImplementation((command: string) => {
 			if (command === "read_local_binary")
@@ -84,11 +97,13 @@ describe("VideoAvatarCanvas idle-first contract", () => {
 			value: vi.fn(),
 		});
 		useCascadeAvatarStore.getState().setLocalFacadeUrl(null);
+		useAvatarStore.getState().setSpeaking(false);
 	});
 
 	afterEach(() => {
 		cleanup();
 		useCascadeAvatarStore.getState().setLocalFacadeUrl(null);
+		useAvatarStore.getState().setSpeaking(false);
 		vi.clearAllMocks();
 	});
 
@@ -134,7 +149,7 @@ describe("VideoAvatarCanvas idle-first contract", () => {
 		expect(container.querySelector("[data-video-avatar-idle]")).toBeTruthy();
 	});
 
-	it("never starts the local cascade below 8GB while retaining the idle asset", async () => {
+	it("never starts the local cascade below 8GB and follows the TTS speaking state with stored clips", async () => {
 		testState.vramGb = 6;
 		const { container } = render(<VideoAvatarCanvas nvaModel="naia.nva" />);
 
@@ -143,12 +158,28 @@ describe("VideoAvatarCanvas idle-first contract", () => {
 				container
 					.querySelector("[data-video-avatar]")
 					?.getAttribute("data-video-avatar-mode"),
-			).toBe("unavailable");
+			).toBe("fallback");
 		});
 		expect(mockInvoke).not.toHaveBeenCalledWith("start_cascade");
+		expect(container.querySelector("[data-video-avatar-idle]")).toHaveAttribute(
+			"src",
+			"blob:nva-idle",
+		);
+
+		act(() => useAvatarStore.getState().setSpeaking(true));
+		await vi.waitFor(() =>
+			expect(
+				container.querySelector("[data-video-avatar-talking]"),
+			).toHaveAttribute("src", "blob:nva-talking"),
+		);
+
+		act(() => useAvatarStore.getState().setSpeaking(false));
+		await vi.waitFor(() =>
+			expect(container.querySelector("[data-video-avatar-idle]")).toBeTruthy(),
+		);
 	});
 
-	it("uses a generic connection/profile message when 8GB hardware is eligible", async () => {
+	it("uses fallback playback without a local profile", async () => {
 		testState.config.localGpuTier = "off";
 		const { container } = render(<VideoAvatarCanvas nvaModel="naia.nva" />);
 
@@ -156,14 +187,15 @@ describe("VideoAvatarCanvas idle-first contract", () => {
 			expect(
 				container
 					.querySelector("[data-video-avatar]")
-					?.getAttribute("data-video-avatar-error"),
-			).toBe("cascade-profile-unavailable");
+					?.getAttribute("data-video-avatar-mode"),
+			).toBe("fallback");
 		});
-		const status = container.querySelector("[data-video-avatar-status]");
-		expect(status).toHaveTextContent(
-			/cascade connection and local GPU profile/i,
-		);
-		expect(status).not.toHaveTextContent(/8GB VRAM/i);
+		expect(
+			container
+				.querySelector("[data-video-avatar]")
+				?.getAttribute("data-video-avatar-mode"),
+		).toBe("fallback");
+		expect(container.querySelector("[data-video-avatar-status]")).toBeNull();
 		expect(mockInvoke).not.toHaveBeenCalledWith("start_cascade");
 	});
 });

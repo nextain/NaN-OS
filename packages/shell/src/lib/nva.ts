@@ -105,6 +105,25 @@ export function defaultClipOf(m: NvaManifest): {
 	return { video: a.clip };
 }
 
+/** GPU 없는 근사 발화 재생에 사용할 looped talking 클립.
+ * expressions.speaking이 유효하면 우선하고, 아니면 첫 loop+can_talk 애니를 사용한다.
+ * 오디오는 Shell의 기존 TTS가 담당하므로 소비자는 이 클립을 muted로 재생한다. */
+export function talkingClipOf(
+	m: NvaManifest,
+): { video: string; mask?: string } | undefined {
+	const expressionKey = m.expressions?.speaking;
+	const expressionAnimation = expressionKey
+		? m.animations[expressionKey]
+		: undefined;
+	const animation =
+		expressionAnimation?.loop && expressionAnimation.can_talk
+			? expressionAnimation
+			: Object.values(m.animations).find(
+					(candidate) => candidate.loop && candidate.can_talk,
+				);
+	return animation?.clip ? { video: animation.clip } : undefined;
+}
+
 export function parseNvaManifest(raw: string): NvaManifest {
 	const parsed = JSON.parse(raw) as Partial<NvaManifest>;
 	if (parsed.nva_version !== "0.2") {

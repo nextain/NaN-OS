@@ -111,6 +111,8 @@ interface OnboardingSnapshot {
 	honorific: string;
 	extraPersona: string;
 	selectedVrm: string;
+	avatarProvider: "vrm" | "naia-video-avatar";
+	selectedNva: string;
 	backgrounds: BgOption[];
 	selectedBg: string;
 	apiKey: string;
@@ -152,6 +154,11 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
 	const [extraPersona, setExtraPersona] = useState("");
 	const [naiaVrms, setNaiaVrms] = useState<string[]>([]);
 	const [selectedVrm, setSelectedVrm] = useState("");
+	const [naiaNvas, setNaiaNvas] = useState<string[]>([]);
+	const [avatarProvider, setAvatarProvider] = useState<
+		"vrm" | "naia-video-avatar"
+	>("vrm");
+	const [selectedNva, setSelectedNva] = useState("");
 	const [backgrounds, setBackgrounds] = useState<BgOption[]>([]);
 	const [selectedBg, setSelectedBg] = useState("");
 	// Provider step state
@@ -232,7 +239,11 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
 					extraPersona: extraPersona.trim() || undefined,
 				};
 			case "character":
-				return { step: "character", vrmModel: selectedVrm || undefined };
+				return {
+					step: "character",
+					vrmModel:
+						avatarProvider === "vrm" ? selectedVrm || undefined : undefined,
+				};
 			case "background": {
 				const bgPath = backgrounds.find((b) => b.url === selectedBg)?.path;
 				return { step: "background", background: bgPath };
@@ -263,6 +274,8 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
 			honorific,
 			extraPersona,
 			selectedVrm,
+			avatarProvider,
+			selectedNva,
 			backgrounds,
 			selectedBg,
 			apiKey,
@@ -293,6 +306,20 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
 							: prev;
 					});
 				}
+			})
+			.catch(() => {});
+	}, []);
+
+	// NVA bundles are directory assets. Store only the bare directory name so
+	// config survives workspace moves and Windows/Unix path differences.
+	useEffect(() => {
+		listNaiaAssets("nva-files")
+			.then((paths) => {
+				const names = paths
+					.map((path) => path.split(/[/\\]/).filter(Boolean).pop() ?? "")
+					.filter(Boolean);
+				setNaiaNvas(names);
+				if (names.length > 0) setSelectedNva((current) => current || names[0]);
 			})
 			.catch(() => {});
 	}, []);
@@ -427,8 +454,14 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
 	}
 
 	function handleVrmSelect(path: string) {
+		setAvatarProvider("vrm");
 		setSelectedVrm(path);
 		setAvatarModelPath(path);
+	}
+
+	function handleNvaSelect(name: string) {
+		setAvatarProvider("naia-video-avatar");
+		setSelectedNva(name);
 	}
 
 	function handleBgSelect(url: string) {
@@ -484,6 +517,8 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
 			honorific,
 			extraPersona,
 			selectedVrm,
+			avatarProvider,
+			selectedNva,
 			backgrounds,
 			selectedBg,
 			apiKey,
@@ -531,7 +566,12 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
 			userName: snapshot.userName.trim() || undefined,
 			speechStyle: snapshot.speechStyle,
 			honorific: snapshot.honorific.trim() || undefined,
-			vrmModel: vrmPath,
+			vrmModel: snapshot.avatarProvider === "vrm" ? vrmPath : undefined,
+			avatarProvider: snapshot.avatarProvider,
+			nvaModel:
+				snapshot.avatarProvider === "naia-video-avatar"
+					? snapshot.selectedNva || naiaNvas[0] || undefined
+					: undefined,
 			backgroundVideo: bgFilename,
 			persona,
 			...(snapshot.apiKey.trim() && !snapshot.naiaLoginDone && !auth
@@ -556,7 +596,9 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
 			: (completedFlat as unknown as AppConfig);
 		await saveConfigSecure(finalConfig);
 
-		if (vrmPath) setAvatarModelPath(vrmPath);
+		if (snapshot.avatarProvider === "vrm" && vrmPath) {
+			setAvatarModelPath(vrmPath);
+		}
 		return finalConfig as unknown as Record<string, unknown>;
 	}
 
@@ -782,7 +824,7 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
 										<button
 											key={path}
 											type="button"
-											className={`onboarding-step__avatar-item${selectedVrm === path ? " onboarding-step__avatar-item--selected" : ""}`}
+											className={`onboarding-step__avatar-item${avatarProvider === "vrm" && selectedVrm === path ? " onboarding-step__avatar-item--selected" : ""}`}
 											onClick={() => handleVrmSelect(path)}
 										>
 											<img
@@ -799,6 +841,16 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
 									);
 								})
 							)}
+							{naiaNvas.map((name) => (
+								<button
+									key={name}
+									type="button"
+									className={`onboarding-step__avatar-item${avatarProvider === "naia-video-avatar" && selectedNva === name ? " onboarding-step__avatar-item--selected" : ""}`}
+									onClick={() => handleNvaSelect(name)}
+								>
+									<span>{name}</span>
+								</button>
+							))}
 						</div>
 						<p className="onboarding-step__hint">
 							{t("onboard.character.hint")}

@@ -10,7 +10,7 @@ const SECRET_CONFIG_KEYS = new Set<string>([
 ]);
 
 const UI_ONLY_CONFIG_KEYS = new Set<string>([
-  "theme", "backgroundImage", "backgroundVideo", "vrmModel", "customVrms", "customBgs",
+  "theme", "backgroundImage", "backgroundVideo", "vrmModel", "avatarProvider", "nvaModel", "cascadeRuntimeUrl", "customVrms", "customBgs",
   "sttProvider", "sttModel", "naiaCloudSttBackend",
   "ttsEnabled", "ttsVoice", "ttsProvider", "naiaCloudTtsBackend", "ttsEngine",
   "ttsOutputDeviceId", "sttInputDeviceId", "vllmSttHost", "vllmSttModel", "vllmTtsHost",

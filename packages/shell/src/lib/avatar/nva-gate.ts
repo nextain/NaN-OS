@@ -37,14 +37,9 @@ export function hasExplicitLocalAvatarProfile(
 
 export function canUseVideoAvatarFromConfig(
 	config: VideoAvatarGateConfig | null | undefined,
-	detectedVramGb: number | null = null,
+	_detectedVramGb: number | null = null,
 ): boolean {
-	return (
-		isNvaHardwareEligible(detectedVramGb) &&
-		!!config?.naiaKey &&
-		(config.avatarProvider === "naia-video-avatar" ||
-			hasExplicitLocalAvatarProfile(config, detectedVramGb))
-	);
+	return config?.avatarProvider === "naia-video-avatar";
 }
 
 export function isNvaHardwareEligible(detectedVramGb: number | null): boolean {

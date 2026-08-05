@@ -9,12 +9,20 @@ import { TAURI_BASE_MOCK_FALLBACK } from "./helpers/tauri-base-mock";
 const MOCK_ADK_PATH = "/home/user/naia-adk";
 const MOCK_BG_FILES = ["anime-rainbow-landscape.jpg", "background-space.png"];
 const MOCK_VRM_FILES = ["01-OL_Woman.vrm", "02-Hood_Boy.vrm"];
+const MOCK_NVA_FILES = [
+	"jina",
+	"jina-anime",
+	"minho",
+	"minho-anime",
+	"naia",
+	"naia-anime",
+];
 // Minimal valid 1x1 PNG bytes (used as mock binary payload for read_local_binary)
 const MINI_PNG = [
-	137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68, 82, 0, 0, 0, 1,
-	0, 0, 0, 1, 8, 2, 0, 0, 0, 144, 119, 83, 222, 0, 0, 0, 12, 73, 68, 65, 84,
-	8, 215, 99, 248, 207, 192, 0, 0, 0, 2, 0, 1, 226, 33, 188, 51, 0, 0, 0, 0,
-	73, 69, 78, 68, 174, 66, 96, 130,
+	137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68, 82, 0, 0, 0, 1, 0,
+	0, 0, 1, 8, 2, 0, 0, 0, 144, 119, 83, 222, 0, 0, 0, 12, 73, 68, 65, 84, 8,
+	215, 99, 248, 207, 192, 0, 0, 0, 2, 0, 1, 226, 33, 188, 51, 0, 0, 0, 0, 73,
+	69, 78, 68, 174, 66, 96, 130,
 ];
 
 function buildMockScript() {
@@ -44,6 +52,7 @@ function buildMockScript() {
 
     var BG_FILES = ${JSON.stringify(MOCK_BG_FILES)};
     var VRM_FILES = ${JSON.stringify(MOCK_VRM_FILES)};
+    var NVA_FILES = ${JSON.stringify(MOCK_NVA_FILES)};
     var MINI_PNG = new Uint8Array(${JSON.stringify(MINI_PNG)});
 
     window.__TAURI_INTERNALS__.invoke = async function(cmd, args) {
@@ -68,6 +77,7 @@ function buildMockScript() {
             var sub = args && args.subdir;
             if (sub === "background") return BG_FILES;
             if (sub === "vrm-files") return VRM_FILES;
+            if (sub === "nva-files") return NVA_FILES;
             if (sub === "bgm-musics") return ["Afternoon Whispers.mp3"];
             return [];
         }
@@ -143,23 +153,32 @@ test.describe("Fresh onboarding flow", () => {
 		// speechStyle
 		await clickNext(page);
 
-		// character (VRM) — shows items from mocked list_naia_assets
-		await expect(page.locator(".onboarding-step__avatar-item").first()).toBeVisible({
+		// character — two VRMs plus six GPU-free NVA variants.
+		await expect(
+			page.locator(".onboarding-step__avatar-item").first(),
+		).toBeVisible({
 			timeout: 8_000,
 		});
+		await expect(
+			page.getByRole("button", { name: "naia-anime" }),
+		).toBeVisible();
 		await clickNext(page);
 
 		// background — shows items from mocked list_naia_assets + read_local_binary → blob URL
-		await expect(page.locator(".onboarding-step__bg-card").first()).toBeVisible({
-			timeout: 10_000,
-		});
+		await expect(page.locator(".onboarding-step__bg-card").first()).toBeVisible(
+			{
+				timeout: 10_000,
+			},
+		);
 		// Background thumbnails should be img elements with blob: or http: src
 		const bgImg = page.locator(".onboarding-step__bg-img").first();
 		await expect(bgImg).toBeVisible({ timeout: 8_000 });
 		const imgSrc = await bgImg.getAttribute("src");
 		expect(imgSrc).toBeTruthy();
 		// blob URL if read_local_binary succeeded, asset URL as fallback
-		expect(imgSrc!.startsWith("blob:") || imgSrc!.includes("asset.localhost")).toBe(true);
+		expect(
+			imgSrc!.startsWith("blob:") || imgSrc!.includes("asset.localhost"),
+		).toBe(true);
 		await clickNext(page);
 
 		// provider step shows the setup-later action.
@@ -169,7 +188,7 @@ test.describe("Fresh onboarding flow", () => {
 	});
 	test("completes onboarding and saves config to localStorage", async ({
 		page,
-	}) => {
+	}, testInfo) => {
 		test.slow();
 		await setupFreshOnboarding(page);
 
@@ -179,16 +198,31 @@ test.describe("Fresh onboarding flow", () => {
 		await page.locator('input[placeholder="Luke"]').fill("Luke");
 		await clickNext(page);
 		await clickNext(page); // speechStyle
+		await page.getByRole("button", { name: "naia-anime" }).click();
+		await expect(page.getByRole("button", { name: "naia-anime" })).toHaveClass(
+			/onboarding-step__avatar-item--selected/,
+		);
+		await expect(
+			page.locator(".onboarding-step__avatar-item--selected"),
+		).toHaveCount(1);
+		await page.screenshot({
+			path: testInfo.outputPath("onboarding-nva-six.png"),
+			fullPage: true,
+		});
 		await clickNext(page); // character
 		// background — wait for blob URL to load before advancing
-		await expect(page.locator(".onboarding-step__bg-card").first()).toBeVisible({
-			timeout: 10_000,
-		});
+		await expect(page.locator(".onboarding-step__bg-card").first()).toBeVisible(
+			{
+				timeout: 10_000,
+			},
+		);
 		await clickNext(page);
 		// provider skip
 		await page.getByText(/Set up later/i).click();
 		await page.waitForTimeout(400);
-		const startBtn = page.getByRole("button", { name: /시작하기|Get Started/i });
+		const startBtn = page.getByRole("button", {
+			name: /시작하기|Get Started/i,
+		});
 		await expect(startBtn).toBeVisible({ timeout: 5_000 });
 		await startBtn.click();
 		// Wait for the 1200ms onComplete delay
@@ -202,6 +236,8 @@ test.describe("Fresh onboarding flow", () => {
 		expect(config.agentName).toBe("Mochi");
 		expect(config.userName).toBe("Luke");
 		expect(config.persona).toContain("Mochi");
+		expect(config.avatarProvider).toBe("naia-video-avatar");
+		expect(config.nvaModel).toBe("naia-anime");
 		// Hardware recommendation is measured at runtime. A browser mock without
 		// a VRAM probe must not persist the removed legacy `avatar-6g` tier.
 		expect(config.localGpuTier).toBeUndefined();

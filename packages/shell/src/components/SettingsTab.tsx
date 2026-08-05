@@ -2028,7 +2028,11 @@ export function SettingsTab() {
 			if (subdir === "vrm-files") {
 				setNaiaVrms(paths.filter((p) => p.toLowerCase().endsWith(".vrm")));
 			} else if (subdir === "nva-files") {
-				setNaiaNvas(paths);
+				setNaiaNvas(
+					paths.map(
+						(path) => path.split(/[/\\]/).filter(Boolean).pop() ?? path,
+					),
+				);
 			} else {
 				setNaiaBgs(paths);
 			}
@@ -2054,16 +2058,20 @@ export function SettingsTab() {
 			const paths = await listNaiaAssets(subdir);
 			if (subdir === "vrm-files") {
 				setNaiaVrms(paths.filter((p) => p.toLowerCase().endsWith(".vrm")));
-				if (vrmModel && vrmModel.endsWith(filename)) handleVrmSelect("");
+				if (vrmModel?.endsWith(filename)) handleVrmSelect("");
 			} else if (subdir === "nva-files") {
-				setNaiaNvas(paths);
-				if (nvaModel && nvaModel.endsWith(filename)) {
+				setNaiaNvas(
+					paths.map(
+						(path) => path.split(/[/\\]/).filter(Boolean).pop() ?? path,
+					),
+				);
+				if (nvaModel?.endsWith(filename)) {
 					setNvaModel("");
 					persistConfig({ nvaModel: "" });
 				}
 			} else {
 				setNaiaBgs(paths);
-				if (activeBgPath && activeBgPath.endsWith(filename))
+				if (activeBgPath?.endsWith(filename))
 					handleClearNaiaBg();
 			}
 		} catch (e) {
@@ -2113,9 +2121,7 @@ export function SettingsTab() {
 		persistConfig({
 			avatarProvider: "naia-video-avatar",
 			nvaModel: selectedNva,
-			cascadeRuntimeUrl: naiaKey
-				? cascadeRuntimeUrl.trim() || undefined
-				: undefined,
+			cascadeRuntimeUrl: cascadeRuntimeUrl.trim() || undefined,
 		});
 	}
 
@@ -2217,7 +2223,9 @@ export function SettingsTab() {
 	// Load .nva directory list from naia-settings
 	useEffect(() => {
 		listNaiaAssets("nva-files").then((paths) => {
-			setNaiaNvas(paths);
+			setNaiaNvas(
+				paths.map((path) => path.split(/[/\\]/).filter(Boolean).pop() ?? path),
+			);
 		});
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, []);
@@ -2461,10 +2469,7 @@ export function SettingsTab() {
 		// Derive ttsEngine from ttsProvider for agent compatibility
 		// Only "google" uses direct Google TTS; all others (including nextain) use Gateway
 		const derivedTtsEngine = ttsProvider === "google" ? "google" : "gateway";
-		const savedAvatarProvider: AppConfig["avatarProvider"] =
-			cascadeAvatarPossible && avatarProvider === "naia-video-avatar"
-				? "naia-video-avatar"
-				: "vrm";
+		const savedAvatarProvider: AppConfig["avatarProvider"] = avatarProvider;
 		let newConfig: AppConfig = {
 			...existing,
 			provider,
@@ -2483,7 +2488,7 @@ export function SettingsTab() {
 					? nvaModel || DEFAULT_NVA_MODEL // R6: 미지정이면 기본 번들
 					: undefined,
 			cascadeRuntimeUrl:
-				savedAvatarProvider === "naia-video-avatar" && naiaKey
+				savedAvatarProvider === "naia-video-avatar"
 					? cascadeRuntimeUrl.trim() || undefined
 					: undefined,
 			customVrms: customVrms.length > 0 ? customVrms : undefined,
@@ -2868,11 +2873,8 @@ export function SettingsTab() {
 		nvaHardwareEligible &&
 		!!naiaKey &&
 		(!hasExplicitLocalTier || localAvatarCapable);
-	const remoteCascadeConfigAllowed = !!naiaKey;
-	const effectiveAvatarProvider =
-		avatarProvider === "naia-video-avatar" && !cascadeAvatarPossible
-			? "vrm"
-			: avatarProvider;
+	const remoteCascadeConfigAllowed = true;
+	const effectiveAvatarProvider = avatarProvider;
 	// FR-VRAM.4: tier 가 VRAM 예산 내에서 로컬 추천할 슬롯(숨김 아님 — 추천만).
 	const effectiveCapabilities: ModelCapability[] = baseCapabilities;
 	const capabilitySlots = deriveSettingsSlots(effectiveCapabilities);
@@ -3357,17 +3359,16 @@ export function SettingsTab() {
 						<span>{t("settings.avatarSection")}</span>
 					</div>
 
-					{/* #6: Avatar type selector — 비디오 아바타는 cascade(Ditto) 기동 가능 시에만 선택 가능. */}
+					{/* 저장 NVA는 항상 선택 가능하고 정밀 Runtime만 capability에 따라 승격한다. */}
 					<div className="settings-field">
-						<label>{t("settings.avatarProvider")}</label>
+						<label htmlFor="avatar-provider">
+							{t("settings.avatarProvider")}
+						</label>
 						<select
 							id="avatar-provider"
 							value={effectiveAvatarProvider}
 							onChange={(e) => {
 								const next = e.target.value as "vrm" | "naia-video-avatar";
-								// cascade 기동 불가 시 비디오 아바타 선택 차단(정적 사진 폴백을 안 만들기 위함).
-								if (next === "naia-video-avatar" && !cascadeAvatarPossible)
-									return;
 								setAvatarProvider(next);
 								// R6: 비디오 아바타인데 NVA 미지정이면 기본 번들로 채운다(빈 상태 방지).
 								const nextNva =
@@ -3389,21 +3390,16 @@ export function SettingsTab() {
 							}}
 						>
 							<option value="vrm">{t("settings.avatarProviderVrm")}</option>
-							<option
-								value="naia-video-avatar"
-								disabled={!cascadeAvatarPossible}
-							>
+							<option value="naia-video-avatar">
 								{t("settings.avatarProviderVideo")}
-								{!cascadeAvatarPossible
-									? ` (${t("settings.avatarVideoNeedsCascade")})`
-									: isRecommendedLocalValue(
-												activeLocalTier,
-												"avatar",
-												"naia-video-avatar",
-												local8gFocus,
-											)
-										? ` · ${t("settings.tierRecommendBadge")}`
-										: ""}
+								{isRecommendedLocalValue(
+									activeLocalTier,
+									"avatar",
+									"naia-video-avatar",
+									local8gFocus,
+								)
+									? ` · ${t("settings.tierRecommendBadge")}`
+									: ""}
 							</option>
 						</select>
 						{!cascadeAvatarPossible && (
