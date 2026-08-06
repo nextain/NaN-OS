@@ -93,3 +93,19 @@
 - **적대적 검증 능력** = `review-pass` 스킬, **adk 레벨** (이미 구현·실증). 중복 구현 금지.
 - **계약 구체화 + 완료증거 등급 + 게이트 배선** = **template 레벨** (이 문서 + `self_trust_config.completion`).
 - 프로젝트는 자신의 `tools/verify_*` 합격기준 스크립트를 작성한다 (프로젝트 레벨).
+
+## ISSUE-WINDOWS-NVA-VOICE-MEDIA-2026-08-06 acceptance
+
+이 표가 이번 이슈의 제품 합격 기준이다. 과거 Ditto/TRT/Cascade 측정값은 이 이슈의
+NVA 합격 증거가 아니다.
+
+| Surface | Pass condition | Required evidence |
+|---|---|---|
+| NVA | GPU/login/voice 없이 실제 web-player가 idle과 발화 자산을 재생하고 Ditto/Cascade를 시작하지 않는다. | focused UI/native test + captured frame |
+| ADK asset | clean ADK 기본 NVA가 새 발화 자산을 포함하고 Shell에서 로드된다. | asset identity/manifest contract |
+| Local voice | VRAM>=6GB에서만 수동 ON이 보이고 no-login ON→:8910 ready, OFF→child reap가 성립한다. | boundary/unit/Rust/native evidence |
+| Independence | LLM, voice, VRM/NVA를 각각 변경·재시작해도 다른 설정이 바뀌지 않는다. | config migration/roundtrip tests |
+| Media | boot/restore/Proactive는 no-play, explicit user/LLM radio play만 시작, active play button은 pause한다. | unit + Playwright negative/positive |
+| Onboarding/UI | generic name, captured thumbnail, VRM+NVA, left-only layout, compact localized accessible Proactive icon/default OFF. | clean-state Playwright + screenshot |
+| Discord Windows | connect/reconnect/shutdown가 bounded하며 orphan child가 없다. | isolated Windows integration |
+| Regression | focused tests와 build가 먼저 통과한 뒤 마지막 full regression이 clean이다. | final test report |

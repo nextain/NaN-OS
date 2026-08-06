@@ -470,7 +470,7 @@ describe("71 — Proactive speech profiles (#82)", () => {
 				"loader",
 				"python-runtime",
 				"cascade-service-bundle",
-				"ditto-engine",
+
 				"voxcpm2-model",
 				"reference-voices",
 			]),

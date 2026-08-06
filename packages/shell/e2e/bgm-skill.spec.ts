@@ -381,6 +381,15 @@ test.describe("UC8 BGM 스킬 배선 (FR-BGM.1)", () => {
 			new URL(request.url).searchParams.get("naiaPlayback"),
 		);
 		expect(new Set(playbackAttempts).size).toBeGreaterThanOrEqual(2);
+
+		const playToggle = page.locator(".bgm-btn--play");
+		await expect(playToggle).toHaveText("Ⅱ");
+		await playToggle.click();
+		await expect(playToggle).toHaveText("▶");
+		await expect(page.locator(".bgm-player")).toHaveAttribute(
+			"data-bgm-playback-status",
+			"paused",
+		);
 	});
 
 	test("재생 불가 후보를 인지하면 준비된 다음 곡으로 자동 전환한다", async ({

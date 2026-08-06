@@ -33,3 +33,12 @@
 - 셸 소비자 테스트(packages/shell/src/**/__tests__)는 셸 스위트(`pnpm test` 827 pass)에서 별도 — graft seam 통합(onboarding-core.test.ts)은 03(TEST-S-012)에 등재.
 - Discord 기능은 최종 고정 스냅샷에서 Shell UI 1304 pass/13 skip, Rust 172/172, Agent 1247 pass/9 skip, paired wire 10/10으로 재검증했다(2026-07-21).
 - 유닛테스트 깊이: 마크다운은 TEST-F(통합/계약 의도)까지. 그 아래 개별 유닛은 코드(`src/test`), `@spec SPEC-###` 태그로 추적(후속: 태그 backfill).
+
+## 2026-08-06 Windows NVA/Voice/Media feature tests
+
+| ID | SPEC | Test contract | test_ref | Status |
+|---|---|---|---|---|
+| TEST-F-014 | SPEC-014 | bundle parser/state transitions/cancellation/config migration/default ADK asset identity와 실제 frame playback 계약 | NVA unit/component tests + focused Playwright/native capture | Planned |
+| TEST-F-015 | SPEC-015 | VRAM parser/gate, explicit start/ready/timeout/stop, orphan cleanup, reference voice APIs, no-login and restart roundtrip | settings/lib/Rust lifecycle tests + focused native voice E2E | Planned |
+| TEST-F-016 | SPEC-016 | authority reducer와 cold-boot negative, structured skill radio gate, ended transition scope, observed pause toggle | BGM/Radio/Proactive unit + focused Playwright | Planned |
+| TEST-F-017 | SPEC-017 | onboarding image capture/fallback, name placeholder, layout migration, icon tooltip/keyboard/ARIA, Windows Discord isolated runner and exit bounds | component/Playwright/Discord integration tests | Planned |

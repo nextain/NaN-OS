@@ -219,6 +219,7 @@ describe("ChatArea", () => {
 				provider: "codex",
 				model: "e2e",
 				avatarProvider: "naia-video-avatar",
+				nvaModel: "naia-prebaked",
 				localGpuTier: "laptop-4060-8g",
 				ttsProvider: "naia-local-voice",
 			}),
@@ -229,7 +230,9 @@ describe("ChatArea", () => {
 			const saved = JSON.parse(localStorage.getItem("naia-config") ?? "{}");
 			expect(saved.discordSessionMigrated).toBe(true);
 			expect(saved.avatarProvider).toBe("naia-video-avatar");
-			expect(saved.localGpuTier).toBe("laptop-4060-8g");
+			expect(saved.nvaModel).toBe("naia-prebaked");
+			expect(saved.localGpuTier).toBeUndefined();
+			expect(saved.localVoiceEnabled).toBe(false);
 			expect(saved.ttsProvider).toBe("naia-local-voice");
 		});
 	});

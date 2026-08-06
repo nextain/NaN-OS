@@ -42,15 +42,16 @@ export type VramTierId =
 
 /** 저장된 config 하위호환 — 구 티어 id → 신 id (2026-07-08 리네임 + 2026-07-15). */
 const LEGACY_TIER_ALIAS: Record<string, VramTierId> = {
-	"avatar-or-voice-8g": "laptop-4060-8g",
-	"local-llm-avatar-8g": "laptop-4060-8g",
-	"avatar-voice-12g": "laptop-4060-8g",
-	"local-voice-12g": "laptop-4060-8g",
-	"full-local-24g": "laptop-4060-8g",
-	"full-realtime-24g": "laptop-4060-8g",
+	"laptop-4060-8g": "windows-voice-6g",
+	"avatar-or-voice-8g": "windows-voice-6g",
+	"local-llm-avatar-8g": "windows-voice-6g",
+	"avatar-voice-12g": "windows-voice-6g",
+	"local-voice-12g": "windows-voice-6g",
+	"full-local-24g": "windows-voice-6g",
+	"full-realtime-24g": "windows-voice-6g",
 	// 2026-07-15: LLM+음성 티어를 8g → 16g 로 정직화 (fp16 음성 6.1G 기준 — int8 미검증).
-	"local-llm-voice-8g": "laptop-4060-8g",
-	"local-llm-voice-16g": "laptop-4060-8g",
+	"local-llm-voice-8g": "windows-voice-6g",
+	"local-llm-voice-16g": "windows-voice-6g",
 };
 
 /** Retired profiles must never unlock NVA on sub-8GB hardware. */
@@ -62,7 +63,7 @@ export const MIN_NVA_VRAM_GB = 8;
  * 8G 배타 티어의 로컬 선택(2026-07-08 확정). 8G 는 로컬 LLM + 아바타를 넉넉히 동시에 올리기엔
  * tight → 셋 중 택1:
  * - "llm"    → 브레인만 로컬(추론·기억 프라이버시), 아바타는 클라우드/정적.
- * - "avatar" → 아바타(Ditto)만 로컬, 브레인은 클라우드.
+ * - "avatar" → 아바타(retired server-side avatar)만 로컬, 브레인은 클라우드.
  * - "both"   → 둘 다 로컬(compact LLM 필수, DNA3.0-4B Q4 ~3.4G+아바타 2.6G≈6G). VRAM 안 맞으면
  *              프리플라이트(fitLocalCapabilitiesToVram)가 llm 을 클라우드로 강등.
  * 음성(TTS/STT)은 8G 에선 **항상 클라우드**. 비배타 티어(6/12/24G)에선 이 focus 는 무시된다.
@@ -72,7 +73,7 @@ export type Local8gFocus = "llm" | "avatar" | "both";
 /** capability → VRAM footprint(GB). windows-manager capabilities.py 실측과 동형(SoT는 wm). */
 const CAPABILITY_VRAM_COST_GB: Partial<Record<ModelCapability, number>> = {
 	tts: 3.47, // VoxCPM2 int8 weight-only(8G 로컬 음성 정본, RTX 5060 실측 2026-07-04). wm tts_voxcpm2_int8 와 동형.
-	avatar: 2.6, // Ditto TRT 립싱크(실측).
+	avatar: 2.6, // retired server-side avatar TRT 립싱크(실측).
 	llm: 4.0, // 로컬 compact LLM 4B-class Q4(DNA3.0-4B ~3.4G · gemma-e4b-q4 5.0G 중간값). 상위티어 대형모델은 더 큼(측정 게이트).
 	embedding: 0.5,
 	stt: 2.5,
@@ -133,7 +134,7 @@ export const VRAM_TIERS: readonly VramTier[] = [
 		approxLocalVramGb: 2.6,
 		hidden: true, // 실기 미검증(2026-07-15) — 피커 비노출, 검증 후 해제
 		realtime: "measurement-gated",
-		note: "6GB: 로컬 아바타(Ditto 2.6G)만. LLM·STT·TTS = 클라우드. 로컬 LLM은 8GB부터.",
+		note: "6GB: 로컬 아바타(retired server-side avatar 2.6G)만. LLM·STT·TTS = 클라우드. 로컬 LLM은 8GB부터.",
 	},
 	{
 		id: "windows-voice-6g",
@@ -165,18 +166,6 @@ export const VRAM_TIERS: readonly VramTier[] = [
 		note: "8GB 택1: 로컬 LLM(DNA3.0-4B Q4 등 compact) / 아바타 / 둘 다. 음성=클라우드. both 는 VRAM 부족 시 LLM 클라우드 폴백.",
 	},
 	{
-		id: "laptop-4060-8g",
-		label:
-			"Windows NVIDIA GPU 8GB+: external LLM + local voice + NVA video avatar",
-		minVramGb: 8,
-		llm: "external",
-		localCapabilities: ["tts", "avatar"],
-		approxLocalVramGb: 6.07,
-		loaderProfile: "windows_trt_8g",
-		realtime: "measurement-gated",
-		note: "Windows NVIDIA GPU with at least 8GB VRAM: keep the Naia account, remote Ollama, or external API LLM unchanged; the local GPU hosts voice and the NVA avatar. Compatibility and speed are measurement-gated; the current release has been verified on RTX 30/40-series hardware.",
-	},
-	{
 		id: "local-voice-12g",
 		label: "12GB (4070+) — 로컬 LLM + 아바타 + 음성",
 		minVramGb: 12,
@@ -194,7 +183,7 @@ export const VRAM_TIERS: readonly VramTier[] = [
 		label: "16GB — 로컬 LLM + 음성",
 		minVramGb: 16,
 		llm: "own",
-		// LLM+음성 로컬, Ditto 아바타 제외(아바타 = 셸 VRM 렌더 or 클라우드) — 2026-07-15 루크 지시
+		// LLM+음성 로컬, retired server-side avatar 아바타 제외(아바타 = 셸 VRM 렌더 or 클라우드) — 2026-07-15 루크 지시
 		// "VoxCPM2 + LLM 프로파일". **16GB 정직화**(루크: "8GB 프로파일인데 16GB 가 부족하다면 모순"):
 		// int8 음성(3.47G)은 Windows 미검증이라 실제 도는 건 fp16(~6.1G) → compact LLM(3.4~4)과
 		// 합쳐 ~10G + 데스크톱/버퍼 = 16GB 가 정직한 하한. int8 검증되면 8GB 변형을 다시 연다.
@@ -204,7 +193,7 @@ export const VRAM_TIERS: readonly VramTier[] = [
 		approxLocalVramGb: 10.0, // fp16 음성 6.1 + compact LLM ~3.9 (int8 검증 전 정직 산술)
 		hidden: true,
 		realtime: "measurement-gated",
-		note: "로컬 LLM(compact) + 로컬 음성(VoxCPM2 fp16). Ditto 아바타 없음 — 아바타는 VRM(셸 렌더, GPU 미미) 또는 클라우드. 음성 표면 = 로컬 cascade façade /v1/audio/speech. 실기 검증: 3080 Ti 16G (2026-07-15).",
+		note: "로컬 LLM(compact) + 로컬 음성(VoxCPM2 fp16). retired server-side avatar 아바타 없음 — 아바타는 VRM(셸 렌더, GPU 미미) 또는 클라우드. 음성 표면 = 로컬 cascade façade /v1/audio/speech. 실기 검증: 3080 Ti 16G (2026-07-15).",
 	},
 	{
 		id: "full-realtime-24g",

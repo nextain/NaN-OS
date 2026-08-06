@@ -1,10 +1,10 @@
-// nva-chromakey-gl — Layer 1(head) 크로마키를 **WebGL2 셰이더**로 처리(GPU). Ditto head 프레임(h264,
+// nva-chromakey-gl — Layer 1(head) 크로마키를 **WebGL2 셰이더**로 처리(GPU). legacy layered head video.
 //   green bg)에서 키 색을 알파 0 으로 제거해 얼굴만 남긴다. getImageData 소프트웨어 키잉은 매 프레임
 //   406×720 픽셀 순회 → GC/CPU 부담 → 금지(설계). 결과 = 알파 있는 오프스크린 canvas → 2D 캔버스에
 //   drawImage 로 합성(base 위 얼굴 오버레이). WebGL2 미지원 시 생성자에서 throw(호출부가 capability 게이트).
 
 export interface ChromakeyOpts {
-	/** 키 색(#rrggbb). Ditto green = #00ff00. */
+	/** 키 색(#rrggbb). legacy green key = #00ff00. */
 	keyColor?: string;
 	/** 키 판정 거리 임계(0~1, RGB 유클리드). 이하 = 완전 투명. */
 	threshold?: number;

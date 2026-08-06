@@ -39,3 +39,9 @@
 가변 길이 항목은 기본 실행에서 `duration=3600` 메타데이터를 사용하는 시간 압축 테스트다. 추가로 `RADIO_DJ_LONG_TRACK_MS=3600000`을 적용해 첫 로컬 fixture를 실제 벽시계 60분 동안 유지한 뒤 나머지 9곡까지 순서대로 전환하는 실행을 2026-08-05에 통과했다. 이는 실제 시간 수명과 전환 증거이지만 외부 YouTube 60분 실행으로 기록하지 않는다. 60곡 soak는 약 13초 동안 28,800초의 논리 media clock을 진행하는 결정론적 L4 가속 fixture다.
 
 실제 YouTube 경계는 `packages/shell/e2e/bgm-youtube-live-smoke.spec.ts`로 분리했다. 기본 CI에서는 skip하며, `RADIO_DJ_LIVE_YOUTUBE=1 RADIO_DJ_LIVE_WALL_MS=600000`으로 실행하면 소유 sidecar를 격리 포트에 띄워 실제 장곡을 검색하고 Shell과 같은 origin/referrer로 실제 embed의 media clock을 관측한다. 2026-08-04~05에는 검색된 11:58:09 영상 `lh4JdZTJe7k`를 대상으로 10분 관측에 이어 실제 벽시계 8시간 soak를 통과했다. 2시간 체크포인트의 media clock은 7,203.0초, 최종값은 28,800.6초였고 페이지·미디어 오류는 없었다. 이는 한 실제 장곡의 수명 증거이며 실제 길이 혼합 20곡 세션을 대신 주장하지 않는다.
+
+> **Activation contract (2026-08-06):** Radio DJ is inactive after cold boot,
+> config restore, or Proactive restore. A session starts only from an explicit
+> user play action or an LLM `skill_youtube_bgm` call with `action=play` and
+> `mode=radio_dj`. Automatic transitions described below are permitted only
+> inside that already-authorized active session. Proactive is not media consent.

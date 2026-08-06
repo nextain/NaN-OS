@@ -269,12 +269,12 @@ describe("SettingsTab", () => {
 		expect(
 			[...modelSelect.options].map((option) => option.value),
 		).not.toContain("naia-local");
-		expect([...modelSelect.options].map((option) => option.value)).not.toContain(
-			"claude-opus-5",
-		);
-		expect([...modelSelect.options].map((option) => option.value)).not.toContain(
-			"naia-0.9-omni-24g",
-		);
+		expect(
+			[...modelSelect.options].map((option) => option.value),
+		).not.toContain("claude-opus-5");
+		expect(
+			[...modelSelect.options].map((option) => option.value),
+		).not.toContain("naia-0.9-omni-24g");
 
 		const sortSelect = screen.getByTestId(
 			"model-sort-mode",
@@ -341,12 +341,12 @@ describe("SettingsTab", () => {
 				"model-select",
 			) as HTMLSelectElement;
 			expect(modelSelect.value).toBe("grok-4.3");
-			expect([...modelSelect.options].map((option) => option.value)).not.toContain(
-				"claude-opus-5",
-			);
-			expect(JSON.parse(localStorage.getItem("naia-config") || "{}").model).toBe(
-				"grok-4.3",
-			);
+			expect(
+				[...modelSelect.options].map((option) => option.value),
+			).not.toContain("claude-opus-5");
+			expect(
+				JSON.parse(localStorage.getItem("naia-config") || "{}").model,
+			).toBe("grok-4.3");
 		});
 	});
 
@@ -393,7 +393,11 @@ describe("SettingsTab", () => {
 		localStorage.setItem("naia-adk-path", "D:\\alpha-adk");
 		localStorage.setItem(
 			"naia-config",
-			JSON.stringify({ provider: "gemini", model: "gemini-3.5-flash", apiKey: "" }),
+			JSON.stringify({
+				provider: "gemini",
+				model: "gemini-3.5-flash",
+				apiKey: "",
+			}),
 		);
 		mockInvoke.mockImplementation((command: string) => {
 			if (command === "read_naia_config") {
@@ -414,15 +418,15 @@ describe("SettingsTab", () => {
 		gotoSettingsTab("brain");
 
 		await vi.waitFor(() => {
-			expect((screen.getByTestId("expert-llm-mode") as HTMLSelectElement).value).toBe(
-				"explicit",
-			);
+			expect(
+				(screen.getByTestId("expert-llm-mode") as HTMLSelectElement).value,
+			).toBe("explicit");
 			expect(
 				(screen.getByTestId("expert-llm-provider") as HTMLSelectElement).value,
 			).toBe("openai");
-			expect((screen.getByTestId("expert-llm-model") as HTMLInputElement).value).toBe(
-				"gpt-5.4",
-			);
+			expect(
+				(screen.getByTestId("expert-llm-model") as HTMLInputElement).value,
+			).toBe("gpt-5.4");
 		});
 	});
 
@@ -760,9 +764,7 @@ describe("SettingsTab", () => {
 		const saved = JSON.parse(localStorage.getItem("naia-config") || "{}");
 		expect(saved.avatarProvider).toBe("naia-video-avatar");
 		expect(saved.nvaModel).toBeTruthy();
-		expect(saved.cascadeRuntimeUrl).toBe(
-			"https://cascade.example.invalid:9449",
-		);
+		expect(saved.cascadeRuntimeUrl).toBeUndefined();
 		expect(saved.local8gFocus).toBeUndefined();
 	});
 
@@ -878,9 +880,9 @@ describe("SettingsTab", () => {
 		fireEvent.click(document.querySelector(".settings-save-btn")!);
 
 		expect(await screen.findByText(/memory reload rejected/)).toBeDefined();
-		expect(document.querySelector(".settings-save-btn")?.textContent).not.toMatch(
-			/Saved/i,
-		);
+		expect(
+			document.querySelector(".settings-save-btn")?.textContent,
+		).not.toMatch(/Saved/i);
 	});
 
 	it("shows a reset failure on the general tab", async () => {
@@ -894,7 +896,9 @@ describe("SettingsTab", () => {
 
 		render(<SettingsTab />);
 		gotoSettingsTab("general");
-		fireEvent.click(document.querySelector(".settings-danger-zone .settings-reset-btn")!);
+		fireEvent.click(
+			document.querySelector(".settings-danger-zone .settings-reset-btn")!,
+		);
 		fireEvent.click(
 			document.querySelector(".reset-confirm-panel .settings-reset-btn")!,
 		);
@@ -933,9 +937,7 @@ describe("SettingsTab — memory tab (#298)", () => {
 		expect(screen.getByText("Youtube Radio DJ")).toBeDefined();
 		expect(screen.queryByText("skill_youtube_bgm")).toBeNull();
 		expect(screen.queryByTestId("proactive-speech-profile")).toBeNull();
-		fireEvent.click(
-			screen.getByRole("button", { name: /Youtube Radio DJ/ }),
-		);
+		fireEvent.click(screen.getByRole("button", { name: /Youtube Radio DJ/ }));
 		expect(screen.getByText("skill_youtube_bgm")).toBeDefined();
 		const skillProfile = screen.getByTestId(
 			"proactive-speech-profile",
@@ -962,7 +964,39 @@ describe("SettingsTab — memory tab (#298)", () => {
 		expect(screen.queryByTestId("proactive-knowledge-scope")).toBeNull();
 	});
 
-	it("selects the visible Windows TRT profile without replacing the external brain", async () => {
+	it("does not expose a GPU profile or start local voice from detection", async () => {
+		localStorage.setItem(
+			"naia-config",
+			JSON.stringify({
+				provider: "ollama",
+				model: "qwen3:8b",
+				avatarProvider: "naia-video-avatar",
+				nvaModel: "naia",
+				localGpuTier: "windows-voice-6g",
+			}),
+		);
+		mockInvoke.mockImplementation((cmd: string) =>
+			cmd === "detect_gpu_vram" ? Promise.resolve(8) : Promise.resolve([]),
+		);
+
+		render(<SettingsTab />);
+		gotoSettingsTab("profile");
+		await vi.waitFor(() =>
+			expect(mockInvoke).toHaveBeenCalledWith("detect_gpu_vram"),
+		);
+
+		expect(document.getElementById("local-gpu-tier")).toBeNull();
+		expect(mockInvoke).not.toHaveBeenCalledWith(
+			"start_cascade",
+			expect.anything(),
+		);
+		const saved = JSON.parse(localStorage.getItem("naia-config") ?? "{}");
+		expect(saved.provider).toBe("ollama");
+		expect(saved.model).toBe("qwen3:8b");
+		expect(saved.avatarProvider).toBe("naia-video-avatar");
+	});
+
+	it.skip("retired: selects the visible Windows TRT profile without replacing the external brain", async () => {
 		localStorage.setItem(
 			"naia-config",
 			JSON.stringify({
@@ -972,7 +1006,7 @@ describe("SettingsTab — memory tab (#298)", () => {
 				ttsProvider: "nextain",
 				// localhost raw /tts 잔재 — 로컬 티어 선택이 로컬 façade 기본(:8910)으로 교정해야 한다.
 				vllmTtsHost: "http://localhost:8892",
-				// 아바타 티어를 거쳐온 잔재 — LLM+음성 티어(아바타 비포함)는 VRM 으로 복원해야 한다.
+				// 음성 전용 티어를 선택해도 독립적인 사전 생성 NVA 선택은 유지해야 한다.
 				avatarProvider: "naia-video-avatar",
 			}),
 		);
@@ -987,7 +1021,7 @@ describe("SettingsTab — memory tab (#298)", () => {
 			expect(document.getElementById("local-gpu-tier")).toBeTruthy();
 		});
 		fireEvent.change(document.getElementById("local-gpu-tier") as HTMLElement, {
-			target: { value: "laptop-4060-8g" },
+			target: { value: "windows-voice-6g" },
 		});
 
 		const saved = JSON.parse(localStorage.getItem("naia-config") || "{}");
@@ -997,11 +1031,11 @@ describe("SettingsTab — memory tab (#298)", () => {
 		expect(saved.ttsProvider).toBe("naia-local-voice");
 		expect(saved.ttsEnabled).toBe(true);
 		expect(saved.vllmTtsHost).toBe("http://localhost:8910");
-		expect(saved.localGpuTier).toBe("laptop-4060-8g");
+		expect(saved.localGpuTier).toBe("windows-voice-6g");
 		expect(saved.avatarProvider).toBe("naia-video-avatar");
 	});
 
-	it("GPU profile 8GB stages TRT voice/avatar while preserving the external LLM", async () => {
+	it.skip("retired: GPU profile 8GB stages local voice while preserving the external LLM and VRM", async () => {
 		localStorage.setItem(
 			"naia-config",
 			JSON.stringify({
@@ -1025,11 +1059,11 @@ describe("SettingsTab — memory tab (#298)", () => {
 			expect(document.getElementById("local-gpu-tier")).toBeTruthy();
 		});
 		fireEvent.change(document.getElementById("local-gpu-tier") as HTMLElement, {
-			target: { value: "laptop-4060-8g" },
+			target: { value: "windows-voice-6g" },
 		});
 
 		const saved = JSON.parse(localStorage.getItem("naia-config") || "{}");
-		expect(saved.localGpuTier).toBe("laptop-4060-8g");
+		expect(saved.localGpuTier).toBe("windows-voice-6g");
 		expect(saved.provider).toBe("ollama");
 		expect(saved.model).toBe("qwen3:8b");
 		expect(saved.ollamaHost).toBe("http://gpu-box.local:11434");
@@ -1037,11 +1071,10 @@ describe("SettingsTab — memory tab (#298)", () => {
 		expect(saved.ttsProvider).toBe("naia-local-voice");
 		expect(saved.ttsEnabled).toBe(true);
 		expect(saved.vllmTtsHost).toBe("http://localhost:8910");
-		expect(saved.avatarProvider).toBe("naia-video-avatar");
-		expect(saved.nvaModel).toBeTruthy();
+		expect(saved.avatarProvider).toBe("vrm");
 	});
 
-	it("describes local GPU profiles by capability without engine implementation names", async () => {
+	it.skip("retired: describes local GPU profiles by capability without engine implementation names", async () => {
 		localStorage.setItem(
 			"naia-config",
 			JSON.stringify({
@@ -1061,12 +1094,18 @@ describe("SettingsTab — memory tab (#298)", () => {
 			expect(element).toBeTruthy();
 			return element as HTMLSelectElement;
 		});
-		const labels = Array.from(select.options).map((option) => option.textContent ?? "");
-		expect(labels.some((label) => label.includes("NVIDIA GPU 8GB+"))).toBe(true);
-		expect(labels.join(" ")).not.toMatch(/VoxCPM2|Ditto|TensorRT|CUDA INT8|NVIDIA RTX/);
+		const labels = Array.from(select.options).map(
+			(option) => option.textContent ?? "",
+		);
+		expect(labels.some((label) => label.includes("NVIDIA GPU 6GB+"))).toBe(
+			true,
+		);
+		expect(labels.join(" ")).not.toMatch(
+			/VoxCPM2|Ditto|TensorRT|CUDA INT8|NVIDIA RTX/,
+		);
 	});
 
-	it("GPU profile 6GB stages VoxCPM2 with VRM while preserving the external LLM", async () => {
+	it.skip("retired: GPU profile 6GB stages VoxCPM2 while preserving the external LLM and pre-baked NVA", async () => {
 		localStorage.setItem(
 			"naia-config",
 			JSON.stringify({
@@ -1108,11 +1147,11 @@ describe("SettingsTab — memory tab (#298)", () => {
 		expect(saved.ttsProvider).toBe("naia-local-voice");
 		expect(saved.ttsEnabled).toBe(true);
 		expect(saved.vllmTtsHost).toBe("http://localhost:8910");
-		expect(saved.avatarProvider).toBe("vrm");
+		expect(saved.avatarProvider).toBe("naia-video-avatar");
 		expect(saved.nvaModel).toBe("stale.nva");
 	});
 
-	it("blocks a hardware profile change without a Naia login", async () => {
+	it.skip("retired: blocks a hardware profile change without a Naia login", async () => {
 		localStorage.setItem(
 			"naia-config",
 			JSON.stringify({ provider: "ollama", model: "qwen3:8b" }),
@@ -1138,14 +1177,14 @@ describe("SettingsTab — memory tab (#298)", () => {
 		);
 	});
 
-	it("shows the 4060 install plan and does not start a missing runtime", async () => {
+	it.skip("retired: shows the 4060 install plan and does not start a missing runtime", async () => {
 		localStorage.setItem(
 			"naia-config",
 			JSON.stringify({
 				provider: "nextain",
 				model: "gemini-3.5-flash",
 				naiaKey: "nk",
-				localGpuTier: "laptop-4060-8g",
+				localGpuTier: "windows-voice-6g",
 				local8gFocus: "llm",
 			}),
 		);
@@ -1170,7 +1209,7 @@ describe("SettingsTab — memory tab (#298)", () => {
 							failure: {
 								code: "CASCADE_SERVICE_BUNDLE_MISSING",
 								message:
-									"VoxCPM2, Ditto, or facade service files are not packaged.",
+									"VoxCPM2 or voice facade service files are not packaged.",
 								retryable: false,
 							},
 						},
@@ -1190,7 +1229,7 @@ describe("SettingsTab — memory tab (#298)", () => {
 		});
 	});
 
-	it("restores an explicitly saved 8GB profile without replacing the external LLM", async () => {
+	it.skip("retired: restores an explicitly saved 8GB profile without replacing the external LLM", async () => {
 		localStorage.setItem("naia-adk-path", "/home/user/naia-adk");
 		localStorage.setItem(
 			"naia-config",
@@ -1198,7 +1237,7 @@ describe("SettingsTab — memory tab (#298)", () => {
 				provider: "nextain",
 				model: "gemini-3.5-flash",
 				naiaKey: "nk",
-				localGpuTier: "laptop-4060-8g",
+				localGpuTier: "windows-voice-6g",
 				local8gFocus: "llm",
 			}),
 		);
@@ -1231,14 +1270,14 @@ describe("SettingsTab — memory tab (#298)", () => {
 			expect(saved.ollamaNumGpu).toBeUndefined();
 			expect(saved.ttsProvider).toBe("naia-local-voice");
 			expect(saved.vllmTtsHost).toBe("http://localhost:8910");
-			expect(saved.avatarProvider).toBe("naia-video-avatar");
+			expect(saved.avatarProvider).toBe("vrm");
 			expect(mockInvoke).toHaveBeenCalledWith("start_cascade", {
-				expectedLoaderProfile: "windows_trt_8g",
+				expectedLoaderProfile: "windows_trt_6g",
 			});
 		});
 	});
 
-	it("restores a secret-backed 6GB profile and writes an account-gated voice manifest", async () => {
+	it.skip("retired: restores a secret-backed 6GB profile and writes an account-gated voice manifest", async () => {
 		localStorage.setItem("naia-adk-path", "/home/user/naia-adk");
 		localStorage.setItem(
 			"naia-config",
@@ -1307,7 +1346,7 @@ describe("SettingsTab — memory tab (#298)", () => {
 		});
 	});
 
-	it("stops cascade and writes a dormant manifest when the member logs out", async () => {
+	it.skip("retired: stops cascade and writes a dormant manifest when the member logs out", async () => {
 		localStorage.setItem("naia-adk-path", "/home/user/naia-adk");
 		localStorage.setItem(
 			"naia-config",
@@ -1333,9 +1372,7 @@ describe("SettingsTab — memory tab (#298)", () => {
 		);
 		fireEvent.click(document.querySelector(".lab-disconnect-btn")!);
 		fireEvent.click(
-			document.querySelector(
-				".reset-confirm-panel .settings-reset-btn",
-			)!,
+			document.querySelector(".reset-confirm-panel .settings-reset-btn")!,
 		);
 
 		await vi.waitFor(() => {

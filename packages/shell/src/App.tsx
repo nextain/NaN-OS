@@ -28,7 +28,6 @@ import {
 	setAdkPath,
 	toLocalBlobUrl,
 	writeNaiaConfig,
-	writeSlotsManifest,
 } from "./lib/adk-store";
 import { emitAiInterferenceEvent } from "./lib/ai-interference";
 import {
@@ -38,10 +37,8 @@ import {
 import { loadInstalledApps } from "./lib/app-loader";
 import { appRegistry } from "./lib/app-registry";
 import { effectiveAvatarProviderFromConfig } from "./lib/avatar/nva-gate";
-import { localFacadeUrlFromReady } from "./lib/avatar/cascade-renderer";
 import { BGM_PANEL_ID, SKILL_YOUTUBE_BGM } from "./lib/bgm-skill";
 import { detectGpuVramGb } from "./lib/capabilities/gpu";
-import { resolveActiveTier } from "./lib/capabilities/vram-tiers";
 import { syncLinkedChannels } from "./lib/channel-sync";
 import {
 	isNewCore,
@@ -71,7 +68,6 @@ import { shouldMigrateNextainModel } from "./lib/llm/registry";
 import { Logger } from "./lib/logger";
 import { type UpdateInfo, checkForUpdate } from "./lib/updater";
 import { useAvatarStore } from "./stores/avatar";
-import { useCascadeAvatarStore } from "./stores/cascade-avatar";
 import "./apps/browser/index"; // register browser panel
 import "./apps/workspace/index"; // register workspace panel
 import "./apps/settings/index"; // register settings panel
@@ -211,19 +207,23 @@ export function App() {
 	const [chatHeight, setChatHeight] = useState(() =>
 		Math.round(window.innerHeight * 0.4),
 	);
-	// 챗 레이아웃 3-way 수동 override — 드래그 토글 옆 스위치가 설정. null = activeApp 자동 파생.
-	// "app"=좌하단 도크(기본) / "workspace"=왼쪽 레일 / "home"=가운데 VN. 영속(localStorage).
+	// 챗 레이아웃 2-way 수동 override. 이전 "home" 중앙 모드는 읽을 때
+	// 좌측 소형(app)으로 마이그레이션한다.
 	const [chatModeOverride, setChatModeOverride] = useState<
-		"home" | "workspace" | "app" | null
+		"workspace" | "app" | null
 	>(() => {
 		try {
 			const v = localStorage.getItem("naia-chat-mode-v1");
-			return v === "home" || v === "workspace" || v === "app" ? v : null;
+			if (v === "home") {
+				localStorage.setItem("naia-chat-mode-v1", "app");
+				return "app";
+			}
+			return v === "workspace" || v === "app" ? v : null;
 		} catch {
 			return null;
 		}
 	});
-	const setChatMode = (m: "home" | "workspace" | "app") => {
+	const setChatMode = (m: "workspace" | "app") => {
 		setChatModeOverride((cur) => (cur === m ? cur : m));
 		try {
 			localStorage.setItem("naia-chat-mode-v1", m);
@@ -616,23 +616,8 @@ export function App() {
 				sendAuthUpdate(cfg.naiaKey).catch(() => {});
 				notifyNaiaAuthReady("startup");
 
-				// Restore an explicitly selected member hardware profile even when
-				// Settings and VideoAvatarCanvas are not mounted. Voice-only 6GB uses
-				// the regular VRM canvas, so component-owned startup otherwise never
-				// runs and the first chat turn reaches a stopped VoxCPM2 façade.
-				if (cfg.localGpuTier && !["off", "auto"].includes(cfg.localGpuTier)) {
-					const detectedVramGb = await detectGpuVramGb();
-					const tier = resolveActiveTier(cfg.localGpuTier, detectedVramGb);
-					if (tier?.loaderProfile) {
-						await writeSlotsManifest(cfg, detectedVramGb ?? undefined);
-						const ready = await invoke<string>("start_cascade", {
-							expectedLoaderProfile: tier.loaderProfile,
-						});
-						useCascadeAvatarStore
-							.getState()
-							.setLocalFacadeUrl(localFacadeUrlFromReady(ready));
-					}
-				}
+				// GPU detection and restored configuration are not playback authority.
+				// The Voice settings control is the only local-runtime start boundary.
 			})
 			.catch((err) => {
 				Logger.warn("App", "startup auth restore failed", {
@@ -895,17 +880,17 @@ export function App() {
 	const CenterComponent = activeAppDescriptor?.center ?? null;
 
 	// ── UI mode (single signal — derived from activeApp, no separate SoT) ──
-	// home    = no panel active → immersive VN conversation over the avatar
+	// app     = no panel active → left compact conversation dock
 	// workspace = workspace panel → 4-zone mission-control (chat rail + worktree
 	//             + document viewer/terminal + sub-agent list)
 	// panel   = any other panel (browser, settings, …) → chat as floating dock
 	// The same single ChatArea instance is repositioned by CSS keyed off
 	// data-ui-mode — it is NEVER unmounted across modes (voice/STT/TTS session
 	// continuity). `variant` only changes the chat UI density, not its logic.
-	// 자동 파생(activeApp 기반). 사용자가 3-way 스위치로 override 하면 그 값을 우선.
+	// 자동 파생(activeApp 기반). 사용자가 2-way 스위치로 override 하면 그 값을 우선.
 	const derivedUiMode =
 		activeApp === null
-			? "home"
+			? "app"
 			: activeApp === "workspace"
 				? "workspace"
 				: "app";
@@ -914,8 +899,8 @@ export function App() {
 		: showAdkSetup
 			? "setup"
 			: (chatModeOverride ?? derivedUiMode);
-	const chatVariant: "vn" | "rail" | "floating" =
-		uiMode === "home" ? "vn" : uiMode === "workspace" ? "rail" : "floating";
+	const chatVariant: "rail" | "floating" =
+		uiMode === "workspace" ? "rail" : "floating";
 
 	const keepAlivePanels = useMemo(
 		() => appRegistry.list().filter((p) => p.builtIn && p.keepAlive !== false),
@@ -1098,7 +1083,7 @@ export function App() {
 									>
 										{chatVisible ? "▼" : "▲"}
 									</button>
-									{/* 3-way 레이아웃 스위치 — 드래그 토글 우측. 하단도크 / 왼쪽레일 / 가운데. */}
+									{/* 2-way 레이아웃 스위치 — 왼쪽 소형 / 왼쪽 채움. */}
 									<div
 										className="naia-chat-modes"
 										role="group"
@@ -1107,7 +1092,7 @@ export function App() {
 										<button
 											type="button"
 											className={`naia-chat-mode${uiMode === "app" ? " naia-chat-mode--active" : ""}`}
-											title="하단 도크"
+											title="왼쪽 소형"
 											aria-pressed={uiMode === "app"}
 											onClick={() => setChatMode("app")}
 										>
@@ -1121,15 +1106,6 @@ export function App() {
 											onClick={() => setChatMode("workspace")}
 										>
 											▌
-										</button>
-										<button
-											type="button"
-											className={`naia-chat-mode${uiMode === "home" ? " naia-chat-mode--active" : ""}`}
-											title="가운데"
-											aria-pressed={uiMode === "home"}
-											onClick={() => setChatMode("home")}
-										>
-											▭
 										</button>
 									</div>
 									<div

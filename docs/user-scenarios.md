@@ -1,6 +1,6 @@
 # 사용자 시나리오 (P01) + 테스트 커버리지 맵 — 2단계 산출물
 
-> **현재 Windows 로컬 표현 시나리오:** 6GB 이상 음성 전용 `UC-WIN-VOICE-6G`는 [`windows-6gb-voice.md`](windows-6gb-voice.md), 8GB 이상 NVA `UC-WIN-NVA-8G`는 [`windows-8gb-nva.md`](windows-8gb-nva.md)가 정본이다. 둘 다 외부 LLM을 유지한다. 6GB는 VoxCPM2 + Shell 3D VRM만 사용하고, 8GB NVA는 VoxCPM2 + Ditto를 사용한다. 모든 하드웨어 프로파일은 Naia 회원 로그인이 필요하다.
+> **현재 Windows 로컬 표현 시나리오:** GPU 감지는 온보딩에서 로컬 음성 사용 가능성만 안내하며 프로파일을 자동 활성화하지 않는다. 사용자는 이후 음성 설정에서 로컬 음성과 레퍼런스 음성을 선택한다. 사전 생성 NVA 외모는 GPU 프로파일과 독립적으로 선택한다. 과거 8GB 서버 렌더링 NVA 기록은 [`windows-8gb-nva.md`](windows-8gb-nva.md)에 보존한다.
 
 `[Phase 03·04 (P01 시나리오 + P02 테스트맵)]`
 
@@ -728,6 +728,30 @@ successful until the player reports an observed `playing` transition.
 | one settings owner and durable consent | Settings component rerender test | `settings-slots.spec.ts` Skills ownership, General absence, Save/reload |
 ## UC-SETTINGS-ROUNDTRIP: 설정 변경·재시작·실행 반영
 
+## UC-ONBOARDING-APPEARANCE-VOICE: 외모와 음성을 독립적으로 시작하기
+
+사용자는 온보딩에서 VRM뿐 아니라 설치된 NVA 외모도 고를 수 있다. 비디오
+배경은 재생 기호 대신 실제 영상 프레임 썸네일로 구분한다. 사용자 이름 입력은
+특정 개인 이름을 예시로 노출하지 않는다.
+
+GPU가 감지되면 온보딩은 음성 설정에서 로컬 음성과 레퍼런스 음성을 선택할 수
+있다고만 안내한다. 온보딩 완료만으로 로컬 GPU 프로파일이나 음성 서버를
+자동 시작하지 않으며, NVA 선택을 VRAM 조건과 결합하지 않는다.
+
+대화창 배치는 왼쪽 소형과 왼쪽 채움만 제공한다. 과거에 저장된 중앙 배치는
+왼쪽 소형으로 마이그레이션한다. YouTube BGM이 재생 중일 때 같은 재생 버튼을
+누르면 즉시 일시정지 상태가 되고, 재생 버튼으로 돌아온다.
+
+### Test Coverage Map
+
+| 상태 | 단위/컴포넌트 | UI/통합 |
+|---|---|---|
+| 기본·빈 목록 | 온보딩 VRM/NVA 목록 및 일반 이름 placeholder | Playwright 기본 화면 |
+| 진행·성공 | GPU 안내, NVA 저장, 비디오 프레임 캡처 | Playwright 선택/저장 및 스크린샷 |
+| 오류·복구 | 영상 캡처 실패 시 video 프레임 fallback, GPU 미감지 시 자동 프로파일 없음 | 컴포넌트 오류 fallback |
+| 좁은 폭 | 외모/배경 카드와 2-way 대화 배치 | Playwright 좁은 viewport |
+| BGM 토글 | listening handshake 뒤 pauseVideo와 즉시 paused 상태 | BGM Playwright |
+
 사용자는 두뇌 역할, 기억 엔진, 음성, Radio DJ, 날씨 동의, 로컬 GPU 프로필 같은 설정을 바꾼다. 저장 성공 뒤 앱을 닫아 다시 실행해도 화면 값, 워크스페이스 파일, 파생 매니페스트와 실제 에이전트 동작이 모두 같은 선택을 사용한다.
 
 - 메모리 LLM을 Naia 또는 상속으로 바꾸면 이전 Ollama 값이 다시 살아나지 않는다.
@@ -737,3 +761,17 @@ successful until the player reports an observed `playing` transition.
 - localStorage를 지우고 다시 열어도 파일에서 같은 값이 복원된다.
 
 검증은 설정 UI 변경 → native 파일 원문 확인 → render cache 제거 → WebView/App 재로드 → UI 복원 → agent effective config/실제 기억 호출 순으로 연결한다.
+
+## 2026-08-06 active Windows scenarios
+
+The following scenarios supersede older active references to `windows_trt_8g`,
+Ditto-rendered NVA, a login-gated hardware profile, and automatic Radio DJ.
+Those older sections are historical evidence only.
+
+| Scenario | User-observable outcome | Coverage |
+|---|---|---|
+| **UC-NVA-WEB** | 사용자는 GPU·로그인·로컬 음성 없이 NVA 외모를 선택한다. 실제 web-player가 idle/speaking/gesture/새 발화 자산을 재생하고 재시작 뒤 같은 외모를 복원한다. | clean+migration config, player states, focused UI/native capture |
+| **UC-LOCAL-VOICE** | VRAM 6GB+ 사용자는 Voice 설정에서 local voice를 켜고 :8910 ready를 확인한 뒤 레퍼런스 선택·녹음·업로드를 사용한다. OFF하면 엔진과 자식이 종료된다. 로그인과 아바타 선택은 영향을 주지 않는다. | VRAM boundary, no-login, ready/timeout/off, restart roundtrip |
+| **UC-MEDIA-CONSENT** | 앱 시작 시 음악은 정지 상태다. 사용자 재생 또는 LLM의 명시적 radio_dj play 호출만 세션을 시작한다. 재생 버튼을 다시 누르면 pause되고 Proactive 토글은 음악 권한이 아니다. | clean/migration negative, skill contract, pause toggle |
+| **UC-SHELL-PRESENTATION** | 온보딩에서 일반 이름과 실제 video-frame 썸네일을 보고 VRM/NVA를 고른다. chat은 좌측 두 레이아웃만 제공하며 Proactive는 접근 가능한 compact icon이고 기본 OFF다. | onboarding/layout/accessibility Playwright |
+| **UC-WINDOWS-DISCORD** | Windows에서 Gateway를 연결·종료·재연결해도 제한 시간 안에 끝나며 orphan agent가 남지 않는다. | isolated Windows lifecycle integration |

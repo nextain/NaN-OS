@@ -1,6 +1,6 @@
 # 요구사항 (P03 — FR/NFR) — 2단계 산출물
 
-> **현재 Windows 로컬 표현 기준:** 6GB 이상 음성 전용은 [`windows-6gb-voice.md`](windows-6gb-voice.md)와 FR-CASCADE.20~22, 8GB 이상 NVA는 [`windows-8gb-nva.md`](windows-8gb-nva.md)와 FR-CASCADE.9~14가 정본이다. 두 프로파일 모두 LLM을 외부(Naia 계정·원격 Ollama·외부 API)로 유지한다. 6GB는 VoxCPM2 W8A16 + TensorRT LocDiT와 Shell 3D VRM만 사용하고 Ditto/NVA를 비활성화한다. 모든 하드웨어 프로파일은 Naia 회원 로그인 전에는 실행할 수 없다.
+> **현재 Windows 로컬 표현 기준 (2026-08-06):** 별도 GPU 프로파일은 없다. NVA는 GPU·로그인과 무관한 사전 생성 web-player다. 감지 VRAM 6GB 이상이면 Voice 설정에서만 `voxCPM 2 local voice`를 명시적으로 켜고 끌 수 있으며 로그인은 필요하지 않다. 자세한 활성 계약은 이 문서의 `2026-08-06 active Windows NVA/Voice/Media contract`와 [`windows-6gb-voice.md`](windows-6gb-voice.md)를 따른다. [`windows-8gb-nva.md`](windows-8gb-nva.md) 및 FR-CASCADE.1~22의 Ditto/TRT/Cascade 프로파일 조항은 비규범 이력이다.
 
 `[Phase 05 (P03 요구사항)]`
 
@@ -353,8 +353,8 @@ localStorage `naia-config` 는 파일에서 하이드레이트되는 **순수 �
 
 | FR | 요구사항 | UC/시나리오 | 검증(P02) |
 |----|---------|-----------|------|
-| **FR-UI.1** | UI 모드는 **단일 신호**(`usePanelStore.activePanel` 파생 `data-ui-mode`). 새 모드 SoT 신설 금지 — `null`=home(VN)·`workspace`=4단·기타=panel(floating) | S-VN·S-WS4 | `119` T6/T7(data-ui-mode + variant) |
-| **FR-UI.2** | ChatPanel은 **단일 인스턴스를 CSS로 재배치**(variant=vn/rail/floating). 모드 전환·레일 접기에도 **언마운트 금지**(voice/STT/TTS 세션 연속성). 마운트 조건은 activePanel과 분리 | S-VN·S-WS4 | `119` T8(레일 접기 시 `.chat-panel` attached 유지) |
+| **FR-UI.1** | UI 모드는 **단일 신호**(`usePanelStore.activePanel` 파생 `data-ui-mode`). `null`과 일반 패널은 왼쪽 소형 `app`, `workspace`는 왼쪽 채움 `workspace`를 사용한다. 중앙 `home` 선택은 제공하지 않고 저장된 `home`은 `app`으로 마이그레이션한다. | UC-ONBOARDING-APPEARANCE-VOICE·S-WS4 | `119` data-ui-mode + 레이아웃 버튼 |
+| **FR-UI.2** | ChatPanel은 **단일 인스턴스를 CSS로 재배치**(variant=rail/floating). 모드 전환·레일 접기에도 **언마운트 금지**(voice/STT/TTS 세션 연속성). 마운트 조건은 activePanel과 분리 | UC-ONBOARDING-APPEARANCE-VOICE·S-WS4 | `119` 레일 접기 시 `.chat-panel` attached 유지 |
 | **FR-UI.3** | 워크스페이스 = 4단 `[대화창 레일 \| 워크트리 \| 문서뷰어(상)+터미널(하) \| 서브에이전트]`. 대화 레일 접기(persist)·중앙 상하 비율 자유 리사이즈·터미널 탭/그리드 토글 | S-WS4 | `119` T7/T8/T9 + 91 18/18 무회귀 |
 | **FR-UI.4** | 문서뷰어 **탭바**로 다수 문서 유지·전환(`openDocs`). 서브에이전트 클릭 시 최근문서 탭 surface. "editor" 가짜 탭 제거(에디터=상시 상단 zone) | S-DOC | `119` T10(세션→탭 surface) + 91 S3/S6 |
 | **FR-UI.5** | 터미널 파일경로 **기본 클릭=문서 열기(불변)** / **Alt+클릭=AI 질의**(naia:ask-ai). 문서 탭 ✦=AI 질의. 기존 `onFileSelect` 동작 회귀 0 | S-ASK | `Terminal.tsx` activate Alt 분기 + `naia:ask-ai` 수신(ChatPanel 기존) |
@@ -645,6 +645,16 @@ Steamworks 포털 설정·SteamPipe 자격증명·스토어 심사 제출은 #31
 | **FR-BGM.9** | YouTube playback in the Tauri WebView supplies an origin referrer, creates a fresh iframe attempt even for the same video ID, and exposes success only after an observed `playing` event. | Done | component/Playwright request and playback-state tests plus native Radio E2E |
 | **FR-BGM.10** | Radio-owned search avoids the currently selected video when another result exists. An exited owned BGM sidecar restarts on demand, while auxiliary-window destruction does not stop the main runtime. | Done | BGM unit tests, Rust lifecycle tests, native health/playback acceptance |
 | **FR-BGM.11** | Radio-owned `status` returns bounded Shell-owned recent/favorite context, and every Agent activity play carries semantic `mode=radio_dj`. On observed `ended`, Agent speaks a short transition before a fresh dynamic search; Shell filters current/recent normalized duplicates and success remains gated by correlated observed `playing`. | Done | Shell BGM unit/Playwright plus paired Agent DJ-GRPC/DJ-08 contracts |
+| **FR-BGM.12** | 재생 중인 YouTube BGM의 재생 버튼은 bridge listening handshake 뒤 `pauseVideo`를 보내고, iframe 상태 이벤트가 늦거나 누락돼도 UI를 즉시 paused로 전환한다. | Pending verification | BgmPlayer 컴포넌트 + Playwright |
+
+## Onboarding appearance and voice ownership (2026-08-06)
+
+| ID | 요구사항 | 검증 기준 |
+|---|---|---|
+| **FR-ONBOARD.1** | 사용자 이름 입력은 특정 개인 이름을 placeholder로 노출하지 않는다. | OnboardingWizard 컴포넌트 |
+| **FR-ONBOARD.2** | 외모 선택은 설치된 VRM과 NVA를 함께 제공하며 NVA는 GPU/VRAM 프로파일과 독립적으로 저장한다. | 컴포넌트 저장 계약 + Playwright |
+| **FR-ONBOARD.3** | 비디오 배경 카드는 실제 영상 프레임을 이미지로 캡처해 표시하고, 캡처할 수 없으면 정적인 video 프레임으로 복구한다. 재생 기호만 표시하지 않는다. | 컴포넌트 + Playwright 스크린샷 |
+| **FR-ONBOARD.4** | GPU 감지는 로컬/레퍼런스 음성을 음성 설정에서 선택할 수 있다는 안내만 제공한다. 온보딩은 로컬 프로파일을 자동 저장하거나 음성 서버를 시작하지 않는다. | GPU 감지 컴포넌트 + 저장 설정 회귀 |
 | **FR-SETTINGS.12** | `Settings > Skills > Youtube Radio DJ` is the sole owner of Radio DJ proactive policy. General renders no duplicate profile, weather consent, coordinates, or DJ fields. | Done | Settings component and Playwright ownership assertions |
 | **FR-SETTINGS.13** | Weather-location consent and coordinates survive semantically equivalent parent rerenders and persist after Save/reload. No location is transmitted unless consent is enabled. | Done | component rerender regression and Playwright persistence test |
 
@@ -657,3 +667,24 @@ Steamworks 포털 설정·SteamPipe 자격증명·스토어 심사 제출은 #31
 | **FR-SETTINGS.14** | Every credential removed from workspace JSON is stored in the OS-backed secure store, restored after restart, and omitted from config, UI config, logs, and agent messages except the dedicated credential channel. | Implemented | secure-store unit and native restart test |
 | **FR-SETTINGS.15** | A visible successful save means config, UI config, derived manifest, and synchronous Agent reload acknowledgement have completed in order. With no running Agent, the next `SetWorkspace` applies the persisted files; a running Agent's memory reload failure is returned to the settings UI instead of being swallowed. | Implemented | ordered write unit, Rust RPC compile, Agent #106 reload integration |
 | **FR-MEMORY.5** | Changing memory role, embedding, adapter, or workspace rebuilds the effective runtime for the next turn without restarting the Shell. Failed rebuild preserves the last healthy runtime and reports the failure. | Implemented (Agent #106) | Agent reload integration, paired Shell compile, real restart log |
+
+## 2026-08-06 active Windows NVA/Voice/Media contract
+
+This section supersedes the active product meaning of FR-VRAM.1~6,
+FR-VOICE.3~12 and FR-CASCADE.1~22 where they describe a selectable local GPU
+profile, a Ditto/TRT/Cascade-rendered avatar, account-gated local voice, or
+automatic media/proactive activation. Those older rows remain non-normative
+implementation history only. `windows-8gb-nva.md` is archived evidence.
+
+| ID | Normative requirement | Verification |
+|---|---|---|
+| **FR-NVA-WEB.1** | NVA is the pre-authored, GPU-free web player from `projects/naia-video-avatar`, not Ditto/TRT/Cascade. Shell plays idle, speaking, gesture and new utterance assets and persists the selected asset identity. | player state/component tests, focused Playwright, captured frame |
+| **FR-NVA-WEB.2** | `naia-adk` supplies the default NVA bundle containing the new utterance assets. Missing/stale paths fail visibly; no static thumbnail or silent fallback counts as playback. | asset contract/hash and clean-state E2E |
+| **FR-LOCAL-VOICE.1** | No local GPU profile UI exists. With detected VRAM >= 6GB, Voice settings expose one explicit `voxCPM 2 local voice` ON/OFF control. Detection never starts or enables it. | 5.9/6.0/unknown boundary tests and no-start negative |
+| **FR-LOCAL-VOICE.2** | Local voice works without Naia login and independently of LLM and VRM/NVA. ON starts the Windows child and reports ready only after `http://localhost:8910` health succeeds; OFF reaps its children. | Rust lifecycle, ready/timeout/stop, no-login native E2E |
+| **FR-LOCAL-VOICE.3** | Reference voice selection, recording and file upload belong to Voice settings and round-trip independently across restart. | component/API/config migration tests |
+| **FR-MEDIA-CONSENT.1** | Cold boot, restored song/profile and Proactive state never start BGM or Radio DJ. Radio DJ starts only from explicit user play or structured LLM `skill_youtube_bgm` with `action=play, mode=radio_dj`. Automatic next-track behavior is scoped to that active session. | authority reducer and cold/migration Playwright negatives |
+| **FR-MEDIA-CONSENT.2** | The active BGM play control toggles pause. Proactive is independent, defaults OFF and is a compact SVG icon next to AI/TTS with localized hover/focus tooltip and aria-label. | component accessibility and playback tests |
+| **FR-SHELL-UX.1** | Onboarding offers VRM and NVA, uses no personal example name, and captures an actual video frame for the NVA/background thumbnail. | clean onboarding Playwright and screenshot |
+| **FR-SHELL-UX.2** | Chat layout offers left-small and left-fill only; legacy center/home state migrates to left-small. | config migration and layout E2E |
+| **FR-WIN-DISCORD.1** | Windows Discord Gateway connect/reconnect/shutdown is bounded and leaves no orphan child. Tests stay isolated from the four live Linux agents. | isolated Windows integration tests |

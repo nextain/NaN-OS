@@ -187,7 +187,6 @@ const UI_ONLY_CONFIG_KEYS = new Set([
 	"vrmModel",
 	"avatarProvider",
 	"nvaModel",
-	"cascadeRuntimeUrl",
 	"customVrms",
 	"customBgs",
 	// Settings presentation preferences
@@ -641,7 +640,7 @@ async function writeSlotsManifestNow(
 	if (!adkPath) return null;
 	// ★tier 해석(buildSlotsManifest 가 "auto" → 해석된 id 로)에 VRAM 이 필요.
 	// 호출처가 vram 을 안 넘기면 자체 감지(detect_gpu_vram IPC) — 모든 write 경로가
-	// manifest 에 해석된 tier 를 기록하도록 보장(loader 가 avatar_ditto_trt 를 선택).
+	// Record the resolved voice-only loader tier in the manifest.
 	let vram = detectedVramGb;
 	if (vram === undefined) {
 		try {

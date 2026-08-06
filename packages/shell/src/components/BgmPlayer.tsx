@@ -602,8 +602,8 @@ export function BgmPlayer({ naia }: Props) {
 		saveConfig({ ...cfg, bgmSource: source, ...ytFields });
 	}, [source, currentYt]);
 
-	// ── Auto-restore YouTube playback on mount ────────────────────────────────
-	// If the app was closed while YouTube was playing, resume automatically.
+	// Consume only an explicit playback request issued during this app session.
+	// Persisted media metadata is never playback authority after a restart.
 	useEffect(() => {
 		// A chat turn can dispatch the panel tool after the chat surface is ready
 		// but before this widget's Tauri event listener is attached. The playback
@@ -640,20 +640,7 @@ export function BgmPlayer({ naia }: Props) {
 			return;
 		}
 		const cfg = loadConfig();
-		if (!cfg?.bgmYoutubeVideoId || !cfg.bgmPlaying) return;
-		const playback = bgmPlayback.request({
-			videoId: cfg.bgmYoutubeVideoId,
-			title: cfg.bgmYoutubeTitle ?? "",
-		});
-		setPlaybackSnapshot(playback);
-		beginPlaybackTimeout(playback.playbackId);
-		const embedUrl = youtubeEmbedUrl(
-			cfg.bgmYoutubeVideoId,
-			playback.playbackId,
-		);
-		setBackgroundVideoUrl(embedUrl);
-		setBackgroundMediaType("iframe");
-		setPlaying(false);
+		if (cfg?.bgmPlaying) saveConfig({ ...cfg, bgmPlaying: false });
 	// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, []);
 
@@ -736,16 +723,29 @@ export function BgmPlayer({ naia }: Props) {
 
 	function sendYtCmd(func: string) {
 		const iframe = document.querySelector(".app-bg-iframe") as HTMLIFrameElement | null;
-		iframe?.contentWindow?.postMessage(
+		if (!iframe?.contentWindow) return false;
+		// WebView2의 YouTube bridge는 iframe 교체 뒤 listening handshake가
+		// 유실될 수 있다. 모든 transport 명령 직전에 다시 활성화한다.
+		iframe.contentWindow.postMessage(
+			JSON.stringify({ event: "listening" }),
+			"*",
+		);
+		iframe.contentWindow.postMessage(
 			JSON.stringify({ event: "command", func, args: [] }),
 			"*",
 		);
+		return true;
 	}
 
 	function togglePlay() {
 		if (source === "youtube") {
 			if (playing) {
-				sendYtCmd("pauseVideo");
+				if (sendYtCmd("pauseVideo")) {
+					// iframe 이벤트가 늦거나 누락돼도 버튼이 다시 재생 상태로
+					// 즉시 바뀌도록 사용자 의도를 낙관적으로 반영한다.
+					setPlaying(false);
+					observePlayback("paused");
+				}
 			} else {
 				const iframe = document.querySelector(".app-bg-iframe") as HTMLIFrameElement | null;
 				if (!iframe && currentYt) {

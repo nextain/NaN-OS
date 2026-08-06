@@ -24,14 +24,14 @@ describe("selectVramTier (2026-07-08 monotonic tiers)", () => {
 	// 자동으로 고르면 프로파일 의도를 배반(실증: 16GB auto 가 숨긴 12g 를 골라 NVA 를 심음).
 	it("6GB auto selects voice-only and 8GB+ selects the validated expression profile", () => {
 		expect(selectVramTier(6)?.id).toBe("windows-voice-6g");
-		expect(selectVramTier(8)?.id).toBe("laptop-4060-8g");
-		expect(selectVramTier(12)?.id).toBe("laptop-4060-8g");
+		expect(selectVramTier(8)?.id).toBe("windows-voice-6g");
+		expect(selectVramTier(12)?.id).toBe("windows-voice-6g");
 	});
 
 	it("8GB+ auto stays on the external-LLM Windows TRT profile", () => {
-		expect(selectVramTier(16)?.id).toBe("laptop-4060-8g");
-		expect(selectVramTier(24)?.id).toBe("laptop-4060-8g");
-		expect(selectVramTier(48)?.id).toBe("laptop-4060-8g");
+		expect(selectVramTier(16)?.id).toBe("windows-voice-6g");
+		expect(selectVramTier(24)?.id).toBe("windows-voice-6g");
+		expect(selectVramTier(48)?.id).toBe("windows-voice-6g");
 	});
 
 	it("local-llm-voice-16g remains hidden legacy data and normalizes away", () => {
@@ -42,19 +42,11 @@ describe("selectVramTier (2026-07-08 monotonic tiers)", () => {
 		expect(t?.llm).toBe("own");
 		expect(t?.exclusiveLocal).toBeFalsy(); // 동시 구동 (실측 11.4G/16.4G)
 		expect(t?.hidden).toBe(true);
-		expect(normalizeTierId("local-llm-voice-16g")).toBe("laptop-4060-8g");
+		expect(normalizeTierId("local-llm-voice-16g")).toBe("windows-voice-6g");
 	});
 
-	it("laptop-4060-8g maps to the external-LLM Windows TRT loader profile", () => {
-		const t = VRAM_TIERS.find((x) => x.id === "laptop-4060-8g");
-		expect(t).toBeDefined();
-		expect(t?.llm).toBe("external");
-		expect(t?.localCapabilities).toEqual(["tts", "avatar"]);
-		expect(t?.approxLocalVramGb).toBeCloseTo(6.07, 2);
-		expect(capabilityVramCostGb("tts", t)).toBeCloseTo(3.47, 2);
-		expect(t?.loaderProfile).toBe("windows_trt_8g");
-		expect(t?.exclusiveLocal).toBeFalsy();
-		expect(t?.hidden).toBeFalsy();
+	it("migrates the retired 8GB Ditto profile to voice-only", () => {
+		expect(normalizeTierId("laptop-4060-8g")).toBe("windows-voice-6g");
 	});
 
 	it("windows-voice-6g maps to TRT voice only and keeps the 3D avatar", () => {
@@ -97,12 +89,12 @@ describe("monotonic local capabilities (avatar → +llm → +voice) — 데이�
 		expect(tierFitsBoth(t)).toBe(false); // no local voice on 8G
 	});
 
-	it("8G Windows profile: external LLM + local int8 voice + avatar", () => {
-		const t = byId("laptop-4060-8g");
+	it("retired 8G Windows profile resolves to voice-only", () => {
+		const t = byId("windows-voice-6g");
 		expect(t.llm).toBe("external");
-		expect(t.localCapabilities).toEqual(["tts", "avatar"]);
-		expect(tierFitsBoth(t)).toBe(true);
-		expect(resolveLocalCapabilities(t, "llm")).toEqual(["tts", "avatar"]);
+		expect(t.localCapabilities).toEqual(["tts"]);
+		expect(tierFitsBoth(t)).toBe(false);
+		expect(resolveLocalCapabilities(t, "llm")).toEqual(["tts"]);
 	});
 
 	it("12G (4070+): adds local voice → LLM + avatar + tts", () => {
@@ -179,11 +171,11 @@ describe("fitLocalCapabilitiesToVram (VRAM preflight → cloud LLM fallback)", (
 	});
 
 	it("Windows TRT profile budgets only TTS + avatar", () => {
-		const tier = VRAM_TIERS.find((x) => x.id === "laptop-4060-8g")!;
-		const r = fitLocalCapabilitiesToVram(["tts", "avatar"], 8, 1.5, tier);
+		const tier = VRAM_TIERS.find((x) => x.id === "windows-voice-6g")!;
+		const r = fitLocalCapabilitiesToVram(["tts"], 8, 1.5, tier);
 		expect(r.llmFallbackToCloud).toBe(false);
-		expect(r.caps).toEqual(["tts", "avatar"]);
-		expect(r.requiredGb).toBeCloseTo(6.07, 2);
+		expect(r.caps).toEqual(["tts"]);
+		expect(r.requiredGb).toBeCloseTo(3.7, 2);
 	});
 
 	it("tight VRAM → drop LLM to cloud, keep avatar", () => {
@@ -230,9 +222,9 @@ describe("resolveActiveTier (config setting × detected VRAM)", () => {
 
 	it("auto resolves only validated visible tiers", () => {
 		// UI 에서 auto 옵션은 제거됨(2026-07-15) — 저장돼 있던 auto 값의 하위호환 해석만 유지.
-		expect(resolveActiveTier("auto", 16)?.id).toBe("laptop-4060-8g");
-		expect(resolveActiveTier("auto", 12)?.id).toBe("laptop-4060-8g");
-		expect(resolveActiveTier("auto", 8)?.id).toBe("laptop-4060-8g");
+		expect(resolveActiveTier("auto", 16)?.id).toBe("windows-voice-6g");
+		expect(resolveActiveTier("auto", 12)?.id).toBe("windows-voice-6g");
+		expect(resolveActiveTier("auto", 8)?.id).toBe("windows-voice-6g");
 		expect(resolveActiveTier("auto", 6)?.id).toBe("windows-voice-6g");
 		expect(resolveActiveTier("auto", 4)).toBeNull();
 		expect(resolveActiveTier("auto", null)).toBeNull(); // VRAM unknown
@@ -240,29 +232,29 @@ describe("resolveActiveTier (config setting × detected VRAM)", () => {
 
 	it("explicit legacy tiers normalize to the TRT profile and cannot bypass 8GB", () => {
 		expect(resolveActiveTier("full-realtime-24g", null)?.id).toBe(
-			"laptop-4060-8g",
+			"windows-voice-6g",
 		);
-		expect(resolveActiveTier("local-voice-12g", 6)).toBeNull();
+		expect(resolveActiveTier("local-voice-12g", 6)?.id).toBe("windows-voice-6g");
 	});
 
 	it("legacy tier ids migrate to new ids (saved config back-compat)", () => {
 		const legacy = (id: string) =>
 			resolveActiveTier(id as VramTierId, null)?.id;
 		expect(legacy("external-llm-6g")).toBeUndefined();
-		expect(legacy("avatar-or-voice-8g")).toBe("laptop-4060-8g");
-		expect(legacy("avatar-voice-12g")).toBe("laptop-4060-8g");
-		expect(legacy("full-local-24g")).toBe("laptop-4060-8g");
+		expect(legacy("avatar-or-voice-8g")).toBe("windows-voice-6g");
+		expect(legacy("avatar-voice-12g")).toBe("windows-voice-6g");
+		expect(legacy("full-local-24g")).toBe("windows-voice-6g");
 	});
 });
 
 describe("normalizeTierId / normalizeTierSetting (id ingestion boundary)", () => {
 	it("normalizeTierId: 구 id → 신 id, 신 id 그대로, 미지/빈값 → null", () => {
 		expect(normalizeTierId("external-llm-6g")).toBeNull();
-		expect(normalizeTierId("avatar-or-voice-8g")).toBe("laptop-4060-8g");
-		expect(normalizeTierId("avatar-voice-12g")).toBe("laptop-4060-8g");
-		expect(normalizeTierId("full-local-24g")).toBe("laptop-4060-8g");
-		expect(normalizeTierId("local-llm-avatar-8g")).toBe("laptop-4060-8g");
-		expect(normalizeTierId("laptop-4060-8g")).toBe("laptop-4060-8g");
+		expect(normalizeTierId("avatar-or-voice-8g")).toBe("windows-voice-6g");
+		expect(normalizeTierId("avatar-voice-12g")).toBe("windows-voice-6g");
+		expect(normalizeTierId("full-local-24g")).toBe("windows-voice-6g");
+		expect(normalizeTierId("local-llm-avatar-8g")).toBe("windows-voice-6g");
+		expect(normalizeTierId("windows-voice-6g")).toBe("windows-voice-6g");
 		expect(normalizeTierId("windows-voice-6g")).toBe("windows-voice-6g");
 		expect(normalizeTierId("bogus")).toBeNull();
 		expect(normalizeTierId(undefined)).toBeNull();
@@ -273,8 +265,8 @@ describe("normalizeTierId / normalizeTierSetting (id ingestion boundary)", () =>
 		expect(normalizeTierSetting("auto")).toBe("auto");
 		expect(normalizeTierSetting("off")).toBe("off");
 		expect(normalizeTierSetting(undefined)).toBe("off");
-		expect(normalizeTierSetting("avatar-or-voice-8g")).toBe("laptop-4060-8g");
-		expect(normalizeTierSetting("laptop-4060-8g")).toBe("laptop-4060-8g");
+		expect(normalizeTierSetting("avatar-or-voice-8g")).toBe("windows-voice-6g");
+		expect(normalizeTierSetting("windows-voice-6g")).toBe("windows-voice-6g");
 		expect(normalizeTierSetting("windows-voice-6g")).toBe("windows-voice-6g");
 		expect(normalizeTierSetting("bogus")).toBe("off");
 	});

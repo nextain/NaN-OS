@@ -64,7 +64,7 @@ export function deriveGateFromConfig(
 
 // ── 슬롯 ↔ AppConfig 필드 매핑 ──
 export const SLOT_FIELD_MAP: Record<SlotId, readonly string[]> = {
-	main: ["provider", "model"],
+	main: ["provider", "model", "naiaLocalUrl"],
 	// llmRoles.sub is authoritative; subLlm* is its flat compatibility mirror.
 	// memoryLlm* belongs exclusively to the orthogonal memory role.
 	sub: ["subLlmProvider", "subLlmModel"],
@@ -81,7 +81,6 @@ export const SLOT_FIELD_MAP: Record<SlotId, readonly string[]> = {
 		"liveProvider",
 		"liveModel",
 		"voiceRefUrl",
-		"naiaLocalUrl",
 	],
 };
 

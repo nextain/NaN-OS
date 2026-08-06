@@ -1,4 +1,3 @@
-import { DEFAULT_NVA_MODEL } from "./avatar-presets";
 import type { VramTierId } from "./capabilities/vram-tiers";
 import type { Locale } from "./i18n";
 import {
@@ -195,6 +194,8 @@ export interface AppConfig {
 	 * manager (windows-manager) reports actual readiness (F1, measurement-gated).
 	 */
 	localGpuTier?: VramTierId | "auto" | "off";
+	/** Explicit user authority for the packaged voxCPM2 local voice runtime. */
+	localVoiceEnabled?: boolean;
 	/**
 	 * 8G 배타 티어 로컬 집중 (정본, 2026-07-08): "llm" | "avatar" | "both".
 	 * "llm" = 브레인만 로컬(추론·기억 프라이버시) / "avatar" = Ditto 립싱크 로컬 / "both" = 둘 다.
@@ -325,6 +326,29 @@ function withoutDerivedAgentEnv(
 
 // ── Sync API (localStorage only, backwards compatible) ──
 
+function normalizeLocalRuntimeConfig(config: AppConfig): AppConfig {
+	const {
+		cascadeRuntimeUrl: _retiredCascadeRuntimeUrl,
+		local8gFocus: _retiredLocal8gFocus,
+		localAvatarVoiceFocus: _retiredLocalAvatarVoiceFocus,
+		localGpuTier: retiredLocalGpuTier,
+		...current
+	} = config;
+	const migratedLegacyProfile =
+		retiredLocalGpuTier !== undefined && retiredLocalGpuTier !== "off";
+	return {
+		...current,
+		// A detected/recommended legacy profile was never explicit authority for
+		// the new voice-only control. Migrate it safely to OFF.
+		localVoiceEnabled: migratedLegacyProfile
+			? false
+			: config.localVoiceEnabled === true,
+		...(migratedLegacyProfile && config.ttsProvider === "naia-local-voice"
+			? { ttsEnabled: false }
+			: {}),
+	};
+}
+
 /**
  * 원격 cascade URL 검증·정규화 (고급 T3 경로).
  * 빈 값 → {url: undefined}(로컬 auto). http/https 만 허용, 파싱 실패/스킴 위반 → error.
@@ -352,7 +376,9 @@ export function loadConfig(): AppConfig | null {
 	try {
 		const raw = localStorage.getItem(STORAGE_KEY);
 		if (!raw) return null;
-		const config = JSON.parse(raw) as AppConfig;
+		const config = reconcileExplicitLocalProfile(
+			normalizeLocalRuntimeConfig(JSON.parse(raw) as AppConfig),
+		);
 		// Default STT provider: web-speech on Windows/macOS (Chromium WebView),
 		// vosk on Linux (WebKitGTK doesn't support Web Speech API)
 		if (!config.sttProvider) {
@@ -369,7 +395,10 @@ export function loadConfig(): AppConfig | null {
 }
 
 export function saveConfig(config: AppConfig): void {
-	localStorage.setItem(STORAGE_KEY, JSON.stringify(config));
+	localStorage.setItem(
+		STORAGE_KEY,
+		JSON.stringify(normalizeLocalRuntimeConfig(config)),
+	);
 	if (typeof window !== "undefined") {
 		window.dispatchEvent(new CustomEvent("naia-config-changed"));
 	}
@@ -411,7 +440,11 @@ export function mergeBootConfig(
 	// those outputs back into AppConfig; the write boundary regenerates them.
 	const normalizedFile = withoutDerivedAgentEnv(file);
 	const normalizedUi = withoutDerivedAgentEnv(ui);
-	return { ...bootstrap, ...(normalizedFile ?? {}), ...(normalizedUi ?? {}) };
+	return normalizeLocalRuntimeConfig({
+		...bootstrap,
+		...(normalizedFile ?? {}),
+		...(normalizedUi ?? {}),
+	} as unknown as AppConfig) as unknown as Record<string, unknown>;
 }
 
 export function hasApiKey(): boolean {
@@ -806,37 +839,9 @@ export const DEFAULT_VLLM_HOST = "http://localhost:8000";
 // 원시 VoxCPM2·Ditto 어댑터의 주소와 조합은 Runtime이 소유하며 Shell에 노출하지 않는다.
 export const DEFAULT_LOCAL_VOICE_HOST = "http://localhost:8910";
 
-/** Restore explicit Windows TRT profiles without changing the external LLM route. */
+/** Retire legacy GPU-profile authority without changing the LLM or avatar. */
 export function reconcileExplicitLocalProfile(config: AppConfig): AppConfig {
-	// Persisted tiers stay dormant until the secure Naia credential is restored.
-	// Boot hydration must not turn a logged-out profile into local GPU services.
-	if (!config.naiaKey) return config;
-	if (
-		config.localGpuTier !== "laptop-4060-8g" &&
-		config.localGpuTier !== "windows-voice-6g"
-	)
-		return config;
-	const isLocalHostUrl = /^(https?:\/\/)?(localhost|127\.0\.0\.1)([:/]|$)/i;
-	const shouldUseFacade =
-		!config.vllmTtsHost || isLocalHostUrl.test(config.vllmTtsHost);
-	const voiceConfig: AppConfig = {
-		...config,
-		ttsProvider: "naia-local-voice",
-		ttsEnabled: true,
-		...(shouldUseFacade ? { vllmTtsHost: DEFAULT_LOCAL_VOICE_HOST } : {}),
-	};
-	if (config.localGpuTier === "windows-voice-6g") {
-		return {
-			...voiceConfig,
-			avatarProvider: "vrm",
-			nvaModel: undefined,
-		};
-	}
-	return {
-		...voiceConfig,
-		avatarProvider: "naia-video-avatar",
-		nvaModel: config.nvaModel || DEFAULT_NVA_MODEL,
-	};
+	return normalizeLocalRuntimeConfig(config);
 }
 
 /**

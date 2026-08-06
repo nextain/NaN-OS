@@ -245,6 +245,11 @@ export function AvatarCanvas() {
 	useEffect(() => {
 		const container = containerRef.current;
 		if (!container) return;
+		if (!modelPath) {
+			setLoaded(false);
+			setLoadStage("idle");
+			return;
+		}
 
 		let disposed = false;
 		let frameId = 0;

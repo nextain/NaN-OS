@@ -8,7 +8,6 @@ import {
 	isToolAllowed,
 	loadConfig,
 	migrateLegacyDna3OllamaModel,
-	normalizeCascadeUrl,
 	reconcileExplicitLocalProfile,
 	resolveConfiguredGatewayUrl,
 	resolveGatewayUrl,
@@ -81,26 +80,29 @@ describe("config", () => {
 		expect(loadConfig()?.model).toBe("my-local-model");
 	});
 
-	it("restores the explicit 8GB profile without changing its external LLM", () => {
+	it("retires the 8GB profile to explicit local voice OFF without changing LLM or avatar", () => {
 		const restored = reconcileExplicitLocalProfile({
 			provider: "nextain",
 			model: "gemini-3.5-flash",
 			apiKey: "",
 			naiaKey: "nk",
 			localGpuTier: "laptop-4060-8g",
+			avatarProvider: "vrm",
 			vllmTtsHost: "http://localhost:8901",
 		});
 
 		expect(restored.provider).toBe("nextain");
 		expect(restored.model).toBe("gemini-3.5-flash");
 		expect(restored.ollamaNumGpu).toBeUndefined();
-		expect(restored.ttsProvider).toBe("naia-local-voice");
-		expect(restored.vllmTtsHost).toBe("http://localhost:8910");
-		expect(restored.avatarProvider).toBe("naia-video-avatar");
-		expect(restored.nvaModel).toBe("naia");
+		expect(restored.ttsProvider).toBeUndefined();
+		expect(restored.vllmTtsHost).toBe("http://localhost:8901");
+		expect(restored.localGpuTier).toBeUndefined();
+		expect(restored.localVoiceEnabled).toBe(false);
+		expect(restored.avatarProvider).toBe("vrm");
+		expect(restored.nvaModel).toBeUndefined();
 	});
 
-	it("restores the explicit 6GB voice profile with VRM and no NVA", () => {
+	it("retires the explicit 6GB profile without enabling voice and preserves selected NVA", () => {
 		const restored = reconcileExplicitLocalProfile({
 			provider: "nextain",
 			model: "gemini-3.5-flash",
@@ -112,14 +114,14 @@ describe("config", () => {
 			vllmTtsHost: "http://localhost:8901",
 		});
 		expect(restored.provider).toBe("nextain");
-		expect(restored.ttsProvider).toBe("naia-local-voice");
-		expect(restored.ttsEnabled).toBe(true);
-		expect(restored.vllmTtsHost).toBe("http://localhost:8910");
-		expect(restored.avatarProvider).toBe("vrm");
-		expect(restored.nvaModel).toBeUndefined();
+		expect(restored.ttsProvider).toBeUndefined();
+		expect(restored.ttsEnabled).toBeUndefined();
+		expect(restored.localVoiceEnabled).toBe(false);
+		expect(restored.avatarProvider).toBe("naia-video-avatar");
+		expect(restored.nvaModel).toBe("stale.nva");
 	});
 
-	it("keeps a saved hardware profile dormant without a Naia login", () => {
+	it("retires a saved hardware profile without requiring a Naia login", () => {
 		const restored = reconcileExplicitLocalProfile({
 			provider: "ollama",
 			model: "qwen3:8b",
@@ -131,6 +133,8 @@ describe("config", () => {
 		expect(restored.provider).toBe("ollama");
 		expect(restored.model).toBe("qwen3:8b");
 		expect(restored.ttsProvider).toBeUndefined();
+		expect(restored.localGpuTier).toBeUndefined();
+		expect(restored.localVoiceEnabled).toBe(false);
 	});
 
 	it("hasApiKey returns false when not set", () => {
@@ -255,25 +259,21 @@ describe("allowedTools", () => {
 	});
 });
 
-describe("normalizeCascadeUrl (remote cascade URL 검증·정규화)", () => {
-	it("빈 값 → url undefined(로컬 auto), error 없음", () => {
-		expect(normalizeCascadeUrl("")).toEqual({ url: undefined });
-		expect(normalizeCascadeUrl("   ")).toEqual({ url: undefined });
-	});
-	it("http/https 유효 → trailing slash 정규화", () => {
-		expect(normalizeCascadeUrl("http://100.1.2.3:8910")).toEqual({
-			url: "http://100.1.2.3:8910",
-		});
-		expect(normalizeCascadeUrl("https://x.ts.net:8910/")).toEqual({
-			url: "https://x.ts.net:8910",
-		});
-	});
-	it("스킴 위반(ws/ftp) → error scheme", () => {
-		expect(normalizeCascadeUrl("ws://x:8910").error).toBe("scheme");
-		expect(normalizeCascadeUrl("ftp://x").error).toBe("scheme");
-	});
-	it("파싱 불가 → error invalid", () => {
-		expect(normalizeCascadeUrl("not a url").error).toBe("invalid");
-		expect(normalizeCascadeUrl("100.1.2.3:8910").error).toBe("invalid");
+describe("legacy NVA runtime migration on save", () => {
+	it("never persists retired remote or avatar-focus fields", () => {
+		saveConfig({
+			provider: "codex",
+			model: "gpt-5.4",
+			cascadeRuntimeUrl: "https://stale.invalid:8910",
+			local8gFocus: "avatar",
+			localAvatarVoiceFocus: "both",
+			localGpuTier: "laptop-4060-8g",
+		} as unknown as Parameters<typeof saveConfig>[0]);
+		const saved = JSON.parse(localStorage.getItem("naia-config") ?? "{}");
+		expect(saved.cascadeRuntimeUrl).toBeUndefined();
+		expect(saved.local8gFocus).toBeUndefined();
+		expect(saved.localAvatarVoiceFocus).toBeUndefined();
+		expect(saved.localGpuTier).toBeUndefined();
+		expect(saved.localVoiceEnabled).toBe(false);
 	});
 });

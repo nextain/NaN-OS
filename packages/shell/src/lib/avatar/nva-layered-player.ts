@@ -11,7 +11,7 @@ import { NvaSyncDriver } from "./nva-sync-driver";
 export type PlayerState = "idle" | "speaking" | "gesturing";
 
 export interface HeadSource {
-	/** Ditto head 프레임(h264, green bg) 비디오. */
+	/** retired server-side avatar head 프레임(h264, green bg) 비디오. */
 	video: HTMLVideoElement;
 	/** 오디오 master clock(초) 또는 null. */
 	audioClock: () => number | null;

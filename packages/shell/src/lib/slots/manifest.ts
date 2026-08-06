@@ -1,6 +1,3 @@
-import { isNvaHardwareEligible } from "../avatar/nva-gate";
-import type { Local8gFocus } from "../capabilities/vram-tiers";
-import { normalizeTierId, resolveActiveTier } from "../capabilities/vram-tiers";
 // slots-manifest — Phase 2 계약(§5.2.1/2.2): naia-os 가 write 하고 windows-manager 가 read 하는
 // 로컬 런타임 구동 결정 매니페스트. AppConfig(평면) → 직렬화 가능 매니페스트(구조화).
 // wm 은 이 매니페스트로 어느 로컬 서비스(avatar/tts/sub-llm/embed)를 띄울지 결정(Phase 4.1).
@@ -15,14 +12,14 @@ import {
 
 export const SLOTS_MANIFEST_VERSION = 1 as const;
 
-/** 매니페스트 슬롯 뷰 — wm 이 읽는 값(비밀 없음, provider/model/localUrl 만). */
+/** 매니페스트 슬롯 뷰 — wm 이 읽는 값(비밀 없음, provider/model 만). */
 export interface ManifestSlots {
 	main: { provider: string; model: string };
 	sub: { provider: string; model?: string };
 	embedding: { provider: string; model?: string };
 	stt: { provider?: string };
 	tts: { provider?: string };
-	avatar: { provider?: string; model?: string; localUrl?: string };
+	avatar: { provider?: string; model?: string };
 }
 
 /** wm 이 을 일으키는 로컬 서비스를 결정하는 매니페스트. 직렬화 가능(JSON). 비밀 0. */
@@ -40,7 +37,6 @@ export interface SlotsManifest {
 		 * ⚠️ Phase 4 게이트: wm capabilities.py 는 아직 구 축(avatar_only/tts_only) 해석 —
 		 *   llm/avatar/both 해석은 미구현. 이 셸↔wm 계약 skew 를 **배포 전 Phase 4 에서** 닫을 것.
 		 */
-		localFocus?: Local8gFocus;
 		loaderProfile?: string;
 	};
 	/** 빌드 일시(디버그·추적). ISO 문자열. */
@@ -53,11 +49,7 @@ export function buildSlotsManifest(
 	opts: { detectedVramGb?: number; now?: () => string } = {},
 ): SlotsManifest {
 	const snap: SlotSnapshot = readSlots(config);
-	const nvaHardwareEligible = isNvaHardwareEligible(
-		opts.detectedVramGb ?? null,
-	);
-	const nvaSelected =
-		nvaHardwareEligible && config.avatarProvider === "naia-video-avatar";
+	const nvaSelected = config.avatarProvider === "naia-video-avatar";
 	const naiaAccount = !!config.naiaKey;
 	const mode = deriveGate(naiaAccount);
 	return {
@@ -76,12 +68,9 @@ export function buildSlotsManifest(
 			stt: snap.stt.provider ? { provider: snap.stt.provider } : {},
 			tts: snap.tts.provider ? { provider: snap.tts.provider } : {},
 			avatar: {
-				provider: nvaSelected ? snap.avatar.provider : "vrm",
+				provider: nvaSelected ? "prebaked-video" : "vrm",
 				...(nvaSelected && snap.avatar.model
 					? { model: snap.avatar.model }
-					: {}),
-				...(nvaSelected && config.naiaLocalUrl
-					? { localUrl: config.naiaLocalUrl }
 					: {}),
 			},
 		},
@@ -93,30 +82,13 @@ export function buildSlotsManifest(
 			// (manifest.py EXCLUSIVE_8G_TIERS 가 해석된 id 만 매칭). 검출 VRAM 으로
 			// resolveActiveTier → normalizeTierId 로 **해석된 tier id** 를 쓴다.
 			// 미검출/비활성(off) → 생략. 명시 id 는 정규화(구 id 호환) 후 기록.
-			...(() => {
-				// Hardware profiles are a Naia member benefit. A stale persisted
-				// tier must not survive logout into a startable loader manifest.
-				if (!naiaAccount) return {};
-				const resolved = resolveActiveTier(
-					config.localGpuTier,
-					opts.detectedVramGb ?? null,
-				);
-				const tierId = resolved ? normalizeTierId(resolved.id) : null;
-				return tierId
-					? {
-							tier: tierId,
-							...(resolved?.loaderProfile
-								? { loaderProfile: resolved.loaderProfile }
-								: {}),
-						}
-					: {};
-			})(),
-			// 정본 local8gFocus ?? 구 localAvatarVoiceFocus(legacy).
-			...((config.local8gFocus ?? config.localAvatarVoiceFocus)
+			...(config.localVoiceEnabled === true
 				? {
-						localFocus: config.local8gFocus ?? config.localAvatarVoiceFocus,
+						tier: "windows-voice-6g",
+						loaderProfile: "windows_trt_6g",
 					}
 				: {}),
+			// 정본 local8gFocus ?? 구 localAvatarVoiceFocus(legacy).
 		},
 		...(opts.now ? { builtAt: opts.now() } : {}),
 	};

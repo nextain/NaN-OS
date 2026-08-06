@@ -7,7 +7,7 @@ export interface NvaCapabilities {
 	rvfc: boolean;
 	/** WebGL2 컨텍스트 + 셰이더 (head chromakey GPU 합성에 필요). */
 	webgl2: boolean;
-	/** MSE 로 fragmented h264(avc1) 재생 (Ditto head 스트림). */
+	/** MSE 로 fragmented h264(avc1) 재생 (retired server-side avatar head 스트림). */
 	mseH264: boolean;
 	/** canvas 2d 알파 합성 (투명 배경 유지 → 앱 배경 위). */
 	canvasAlpha: boolean;

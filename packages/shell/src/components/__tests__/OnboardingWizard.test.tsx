@@ -121,8 +121,8 @@ describe("OnboardingWizard", () => {
 		});
 		clickNextByClass();
 
-		fireEvent.change(screen.getByPlaceholderText("Luke"), {
-			target: { value: "Luke" },
+		fireEvent.change(screen.getByPlaceholderText(/Enter a name|이름을 입력하세요/), {
+			target: { value: "Alex" },
 		});
 		clickNextByClass();
 		clickNextByClass();
@@ -156,8 +156,8 @@ describe("OnboardingWizard", () => {
 		fireEvent.click(screen.getByRole("button", { name: /다음|Next/ }));
 		flush();
 
-		// Second step: userName — input with "Luke" placeholder
-		expect(screen.getByPlaceholderText("Luke")).toBeDefined();
+		// Second step: userName — generic localized placeholder
+		expect(screen.getByPlaceholderText(/Enter a name|이름을 입력하세요/)).toBeDefined();
 	});
 
 	it("progresses through steps: agentName → userName → speechStyle → character → background → provider", () => {
@@ -171,8 +171,8 @@ describe("OnboardingWizard", () => {
 		flush();
 
 		// userName → Next
-		fireEvent.change(screen.getByPlaceholderText("Luke"), {
-			target: { value: "Luke" },
+		fireEvent.change(screen.getByPlaceholderText(/Enter a name|이름을 입력하세요/), {
+			target: { value: "Alex" },
 		});
 		fireEvent.click(screen.getByRole("button", { name: /다음|Next/ }));
 		flush();
@@ -194,7 +194,7 @@ describe("OnboardingWizard", () => {
 		expect(screen.getByText(/Set up later/)).toBeDefined();
 	});
 
-	it("shows VRAM recommendation on the provider step", async () => {
+	it("shows that detected GPU voice choices live in Voice Settings", async () => {
 		const { invoke } = await import("@tauri-apps/api/core");
 		(invoke as ReturnType<typeof vi.fn>).mockImplementation((cmd: string) => {
 			if (cmd === "detect_gpu_vram") return Promise.resolve(16);
@@ -209,19 +209,86 @@ describe("OnboardingWizard", () => {
 		advanceFromAgentNameToProvider();
 
 		expect(screen.getByText(/Detected VRAM: 16 GB/)).toBeDefined();
-		expect(
-			// 새 계약(2026-07-15): 추천 = 검증 티어만 → 16GB LLM+음성
-			screen.getByText(/Windows NVIDIA GPU 8GB\+/),
-		).toBeDefined();
+		expect(screen.getByText(/choose local and reference voices in Voice Settings/)).toBeDefined();
 		expect(
 			screen.getByText(/does not download or launch local models/),
 		).toBeDefined();
-		expect(
-			screen.getByTestId("onboarding-nva-vram-requirement"),
-		).toHaveTextContent(/supported NVIDIA GPU.*8GB VRAM/);
-		expect(
-			screen.getByTestId("onboarding-cloud-cascade-coming-soon"),
-		).toHaveTextContent(/cloud cascade service.*provided separately.*future/i);
+	});
+
+	it("offers installed NVA appearances independently of the GPU profile", async () => {
+		const { invoke } = await import("@tauri-apps/api/core");
+		localStorage.setItem("naia-adk-path", "D:\\alpha-adk");
+		(invoke as ReturnType<typeof vi.fn>).mockImplementation(
+			(cmd: string, args?: { subdir?: string }) => {
+				if (cmd === "detect_gpu_vram") return Promise.resolve(8);
+				if (cmd === "list_naia_assets") {
+					return Promise.resolve(
+						args?.subdir === "nva-files" ? ["naia-prebaked"] : [],
+					);
+				}
+				return Promise.resolve(true);
+			},
+		);
+
+		renderAtAgentName();
+		await act(async () => {
+			await Promise.resolve();
+			await Promise.resolve();
+		});
+		fireEvent.click(screen.getByRole("button", { name: /다음|Next/ }));
+		flush();
+		fireEvent.click(screen.getByRole("button", { name: /다음|Next/ }));
+		flush();
+		fireEvent.click(screen.getByRole("button", { name: /다음|Next/ }));
+		flush();
+
+		const nva = screen.getByRole("button", { name: /naia-prebaked/ });
+		fireEvent.click(nva);
+		expect(nva.className).toContain("selected");
+
+		clickNextByClass();
+		clickNextByClass();
+		fireEvent.click(screen.getByText(/Set up later/));
+		flush();
+		fireEvent.click(
+			screen.getByRole("button", { name: /시작하기|Get Started/ }),
+		);
+		await act(async () => {
+			await Promise.resolve();
+		});
+
+		const config = JSON.parse(localStorage.getItem("naia-config") || "{}");
+		expect(config.avatarProvider).toBe("naia-video-avatar");
+		expect(config.nvaModel).toMatch(/naia-prebaked$/);
+		expect(config.localGpuTier).toBeUndefined();
+	});
+
+	it("uses a video frame instead of a play glyph for video backgrounds", async () => {
+		const { invoke } = await import("@tauri-apps/api/core");
+		localStorage.setItem("naia-adk-path", "D:\\alpha-adk");
+		(invoke as ReturnType<typeof vi.fn>).mockImplementation(
+			(cmd: string, args?: { subdir?: string }) => {
+				if (cmd === "list_naia_assets") {
+					return Promise.resolve(
+						args?.subdir === "background" ? ["space.webm"] : [],
+					);
+				}
+				return Promise.resolve(true);
+			},
+		);
+
+		renderAtAgentName();
+		await act(async () => {
+			await Promise.resolve();
+			await Promise.resolve();
+		});
+		for (let index = 0; index < 4; index += 1) {
+			fireEvent.click(screen.getByRole("button", { name: /다음|Next/ }));
+			flush();
+		}
+
+		expect(screen.getByLabelText("space")).toBeDefined();
+		expect(screen.queryByText("▶")).toBeNull();
 	});
 
 	it("uses a direct provider and stores the entered BYO API key securely on clean install", async () => {
@@ -238,7 +305,7 @@ describe("OnboardingWizard", () => {
 		advanceFromAgentNameToProvider();
 
 		fireEvent.click(
-			screen.getByRole("button", { name: /직접 설정|Direct setup/ }),
+			screen.getByRole("button", { name: /Direct setup/ }),
 		);
 		fireEvent.change(screen.getByPlaceholderText("sk-... / gw-..."), {
 			target: { value: "byo-test-key" },
@@ -277,7 +344,7 @@ describe("OnboardingWizard", () => {
 		// Click Next without filling agentName → advances to userName step
 		fireEvent.click(nextBtn);
 		flush();
-		expect(screen.getByPlaceholderText("Luke")).toBeDefined();
+		expect(screen.getByPlaceholderText(/Enter a name|이름을 입력하세요/)).toBeDefined();
 	});
 
 	it("complete step calls onComplete and saves config", async () => {
@@ -291,8 +358,8 @@ describe("OnboardingWizard", () => {
 		flush();
 
 		// userName
-		fireEvent.change(screen.getByPlaceholderText("Luke"), {
-			target: { value: "Luke" },
+		fireEvent.change(screen.getByPlaceholderText(/Enter a name|이름을 입력하세요/), {
+			target: { value: "Alex" },
 		});
 		fireEvent.click(screen.getByRole("button", { name: /다음|Next/ }));
 		flush();
@@ -329,7 +396,7 @@ describe("OnboardingWizard", () => {
 		expect(onComplete).toHaveBeenCalled();
 
 		const config = JSON.parse(localStorage.getItem("naia-config") || "{}");
-		expect(config.userName).toBe("Luke");
+		expect(config.userName).toBe("Alex");
 		expect(config.agentName).toBe("Mochi");
 		expect(config.onboardingComplete).toBe(true);
 		expect(config.persona).toContain("Mochi");
@@ -362,8 +429,8 @@ describe("OnboardingWizard", () => {
 		});
 		clickNext();
 
-		fireEvent.change(screen.getByPlaceholderText("Luke"), {
-			target: { value: "Luke" },
+		fireEvent.change(screen.getByPlaceholderText(/Enter a name|이름을 입력하세요/), {
+			target: { value: "Alex" },
 		});
 		clickNext();
 		clickNext();
@@ -403,10 +470,10 @@ describe("OnboardingWizard", () => {
 		expect(config.onboardingComplete).toBe(true);
 		expect(config.naiaKey).toBeUndefined();
 		expect(config.naiaUserId).toBe("user-1");
-		expect(config.userName).toBe("Luke");
+		expect(config.userName).toBe("Alex");
 		expect(config.agentName).toBe("Mochi");
 		expect(config.workspaceRoot).toBe("D:\\alpha-adk\\projects\\naia-adk");
-		expect(config.localGpuTier).toBe("laptop-4060-8g");
+		expect(config.localGpuTier).toBeUndefined();
 		expect(secureStore.set).toHaveBeenCalledWith("naiaKey", "gw-test-key");
 	});
 

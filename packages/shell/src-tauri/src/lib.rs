@@ -4586,26 +4586,20 @@ fn detect_vram_gb_blocking() -> Option<f64> {
     }
 }
 
-const MIN_NVA_VRAM_GB: f64 = 8.0;
 const MIN_VOICE_ONLY_VRAM_GB: f64 = 6.0;
 
 fn validate_cascade_vram(
     vram_gb: Option<f64>,
-    loader_profile: Option<&str>,
+    _loader_profile: Option<&str>,
 ) -> Result<f64, String> {
-    let voice_only = loader_profile == Some("windows_trt_6g");
-    let minimum = if voice_only {
-        MIN_VOICE_ONLY_VRAM_GB
-    } else {
-        MIN_NVA_VRAM_GB
-    };
+    let minimum = MIN_VOICE_ONLY_VRAM_GB;
     match vram_gb {
         Some(vram) if vram >= minimum => Ok(vram),
         Some(vram) => Err(format!(
-            "Local hardware profile requires NVIDIA RTX GPU VRAM {minimum:.0}GB or more (detected {vram:.0}GB)"
+            "Local voice profile requires NVIDIA RTX GPU VRAM {minimum:.0}GB or more (detected {vram:.0}GB)"
         )),
         None => Err(format!(
-            "Local hardware profile requires a detected NVIDIA RTX GPU with VRAM {minimum:.0}GB or more"
+            "Local voice profile requires a detected NVIDIA RTX GPU with VRAM {minimum:.0}GB or more"
         )),
     }
 }
@@ -4690,7 +4684,8 @@ fn read_cascade_loader_profile(manifest: &std::path::Path) -> Option<String> {
     {
         return None;
     }
-    Some(profile.to_string())
+    // All persisted hardware profiles now resolve to the voice-only runtime.
+    Some("windows_trt_6g".to_string())
 }
 
 /// The Settings UI must distinguish an installed runtime that has not been
@@ -4733,7 +4728,6 @@ struct CascadeInstallationProbe {
     loader: bool,
     python_runtime: bool,
     cascade_service_bundle: bool,
-    ditto_engine: bool,
     voxcpm2_model: bool,
     reference_voices: bool,
     facade_healthy: bool,
@@ -4795,10 +4789,6 @@ fn cascade_has_naia_credential(app: &tauri::AppHandle) -> bool {
         .ok()
         .map(|store| stored_naia_credential_is_valid(store.get("naiaKey")))
         .unwrap_or(false)
-}
-
-fn cascade_profile_requires_avatar(loader_profile: Option<&str>) -> bool {
-    loader_profile != Some("windows_trt_6g")
 }
 
 fn voxcpm2_model_is_cached_in_hubs(hubs: &[std::path::PathBuf]) -> bool {
@@ -4869,29 +4859,18 @@ fn probe_cascade_installation(
             "python3".to_string()
         }
     });
+    // Voice-only TensorRT runtime. The retired Ditto environment is intentionally ignored.
     let venv_python = if cfg!(windows) {
         runtime_root
-            .join(".venv-ditto")
+            .join(".venv-voice-trt")
             .join("Scripts")
             .join("python.exe")
     } else {
-        runtime_root.join(".venv-ditto").join("bin").join("python")
+        runtime_root
+            .join(".venv-voice-trt")
+            .join("bin")
+            .join("python")
     };
-    let ditto_engine = ["ditto_trt_native", "ditto_trt_Ampere_Plus"]
-        .iter()
-        .any(|name| {
-            directory_has_extension(&runtime_root.join("checkpoints").join(name), "engine")
-        })
-        && runtime_root
-            .join("checkpoints")
-            .join("ditto_cfg")
-            .join("v0.4_hubert_cfg_trt_online.pkl")
-            .is_file()
-        && runtime_root
-            .join("bundle")
-            .join("unpacked")
-            .join("grid_sample_3d_plugin.dll")
-            .is_file();
     let voxcpm2_model = voxcpm2_model_is_cached(&runtime_root);
     let reference_voices = cascade_dir
         .as_ref()
@@ -4906,7 +4885,6 @@ fn probe_cascade_installation(
         cascade_service_bundle: cascade_dir.is_some_and(|dir| {
             dir.join("services").is_dir() && dir.join("output_cascade").is_dir()
         }),
-        ditto_engine,
         // A venv without cached VoxCPM2 weights is not a runnable TTS runtime.
         voxcpm2_model: venv_python.is_file() && voxcpm2_model,
         reference_voices,
@@ -4942,13 +4920,11 @@ fn cascade_install_step(
 
 fn classify_cascade_installation_for_profile(
     probe: CascadeInstallationProbe,
-    loader_profile: Option<&str>,
+    _loader_profile: Option<&str>,
 ) -> CascadeInstallationStatus {
-    let requires_avatar = cascade_profile_requires_avatar(loader_profile);
     let prerequisites_complete = probe.loader
         && probe.python_runtime
         && probe.cascade_service_bundle
-        && (!requires_avatar || probe.ditto_engine)
         && probe.voxcpm2_model
         && probe.reference_voices;
     let ready = prerequisites_complete && probe.facade_healthy;
@@ -4960,9 +4936,6 @@ fn classify_cascade_installation_for_profile(
         "blocked"
     };
     let summary = match phase {
-        "ready" if requires_avatar => {
-            "Local voice and avatar services are running and healthy.".to_string()
-        }
         "ready" => "Local voice service is running and healthy.".to_string(),
         "ready-to-start" => "Local runtime files are ready. Services have not been started yet.".to_string(),
         _ => "Local runtime cannot start because one or more required artifacts are missing. This build will not pretend to download them.".to_string(),
@@ -4996,19 +4969,9 @@ fn classify_cascade_installation_for_profile(
                     "install",
                     probe.cascade_service_bundle,
                     "CASCADE_SERVICE_BUNDLE_MISSING",
-                    "VoxCPM2, Ditto, or facade service files are not packaged.",
+                    "VoxCPM2 or facade service files are not packaged.",
                 ),
             ];
-            if requires_avatar {
-                steps.push(cascade_install_step(
-                    "ditto-engine",
-                    "Ditto engine",
-                    "download",
-                    probe.ditto_engine,
-                    "DITTO_ENGINE_MISSING",
-                    "The required Ditto TensorRT engine is not installed.",
-                ));
-            }
             steps.extend([
                 cascade_install_step(
                     "voxcpm2-model",
@@ -5214,7 +5177,7 @@ fn spawn_cascade(
 }
 
 /// Resolve the public facade URL only from the loader's readiness payload.
-/// The individual VoxCPM2 and Ditto ports are private implementation details;
+/// The individual local voice service ports are private implementation details;
 /// a live Shell must be able to reach the single :8910 facade before reporting
 /// that the local cascade is running.
 fn cascade_facade_url_from_ready(ready: &str) -> Option<String> {
@@ -5279,12 +5242,8 @@ async fn start_cascade(
     let manifest_path = std::path::PathBuf::from(&adk_path)
         .join("naia-settings")
         .join("slots-manifest.json");
-    if !cascade_manifest_has_naia_account(&manifest_path) {
-        return Err("cascade_naia_member_required:manifest".to_string());
-    }
-    if !cascade_has_naia_credential(&app) {
-        return Err("cascade_naia_member_required:credential".to_string());
-    }
+    // Local voice is a device capability, not a Naia account entitlement.
+    // The explicit voice-only manifest/profile is the start authority.
     let loader_profile = read_cascade_loader_profile(&manifest_path);
     let expected_loader_profile = expected_loader_profile
         .as_deref()
@@ -5310,7 +5269,7 @@ async fn start_cascade(
         if cascade_facade_is_healthy(&ready).await {
             return Ok(ready);
         }
-        // VoxCPM2/Ditto may monopolize the shared 8GB GPU long enough for the
+        // VoxCPM2 may monopolize the GPU long enough for the
         // facade health request to exceed its short UI probe timeout. A single
         // transient miss must not tear down an in-flight utterance: the loader
         // supervisor already exits and tears down the full tree when any child
@@ -5324,9 +5283,8 @@ async fn start_cascade(
     // ?꾨쿋?? 踰덈뱾??loader(resource_dir) ?곗꽑 ???몃? adk 泥댄겕?꾩썐 誘몄쓽議?
     let loader_dir = resolve_cascade_loader_dir(&app, &adk_path);
 
-    // Fail closed before probing, cleanup, or spawning any local service. The
-    // 6.07GB model footprint still needs display/WDDM/runtime headroom, so a
-    // sub-8GB device is unsupported even when a stale profile is present.
+    // Fail closed before probing, cleanup, or spawning any local service.
+    // The voice-only profile is available from the explicit 6GB boundary.
     let vram = tokio::task::spawn_blocking(detect_vram_gb_blocking)
         .await
         .map_err(|e| format!("VRAM detection task failed: {e}"))?;
@@ -10604,19 +10562,19 @@ mod tests {
 
         assert_eq!(
             read_cascade_loader_profile(&manifest).as_deref(),
-            Some("laptop_4060_8g")
+            Some("windows_trt_6g")
         );
     }
 
     #[test]
-    fn cascade_vram_requires_detected_nvidia_8gb_or_more() {
-        assert_eq!(validate_cascade_vram(Some(8.0), None).unwrap(), 8.0);
+    fn cascade_vram_requires_detected_nvidia_6gb_or_more() {
+        assert_eq!(validate_cascade_vram(Some(6.0), None).unwrap(), 6.0);
         assert_eq!(
-            validate_cascade_vram(Some(16.0), Some("windows_trt_8g")).unwrap(),
+            validate_cascade_vram(Some(16.0), Some("windows_trt_6g")).unwrap(),
             16.0
         );
-        assert!(validate_cascade_vram(Some(6.0), Some("windows_trt_8g")).is_err());
-        assert!(validate_cascade_vram(Some(7.9), None).is_err());
+        assert!(validate_cascade_vram(Some(5.9), Some("windows_trt_6g")).is_err());
+        assert!(validate_cascade_vram(Some(5.9), None).is_err());
         assert!(validate_cascade_vram(None, None).is_err());
     }
 
@@ -10627,16 +10585,6 @@ mod tests {
             6.0
         );
         assert!(validate_cascade_vram(Some(5.9), Some("windows_trt_6g")).is_err());
-    }
-
-    #[test]
-    fn cascade_manifest_requires_naia_member_gate() {
-        let dir = tempfile::tempdir().unwrap();
-        let manifest = dir.path().join("slots-manifest.json");
-        std::fs::write(&manifest, r#"{"gate":{"naiaAccount":false}}"#).unwrap();
-        assert!(!cascade_manifest_has_naia_account(&manifest));
-        std::fs::write(&manifest, r#"{"gate":{"naiaAccount":true}}"#).unwrap();
-        assert!(cascade_manifest_has_naia_account(&manifest));
     }
 
     #[test]
@@ -10654,13 +10602,12 @@ mod tests {
     }
 
     #[test]
-    fn voice_only_installation_does_not_require_ditto_engine() {
+    fn voice_installation_requires_only_voice_artifacts() {
         let status = classify_cascade_installation_for_profile(
             CascadeInstallationProbe {
                 loader: true,
                 python_runtime: true,
                 cascade_service_bundle: true,
-                ditto_engine: false,
                 voxcpm2_model: true,
                 reference_voices: true,
                 facade_healthy: false,
@@ -10668,7 +10615,6 @@ mod tests {
             Some("windows_trt_6g"),
         );
         assert!(status.can_start);
-        assert!(!status.steps.iter().any(|step| step.id == "ditto-engine"));
     }
 
     #[test]
@@ -10686,7 +10632,6 @@ mod tests {
             loader: true,
             python_runtime: true,
             cascade_service_bundle: false,
-            ditto_engine: false,
             voxcpm2_model: false,
             reference_voices: false,
             facade_healthy: false,
@@ -10716,7 +10661,6 @@ mod tests {
             loader: true,
             python_runtime: true,
             cascade_service_bundle: true,
-            ditto_engine: true,
             voxcpm2_model: true,
             reference_voices: true,
             facade_healthy: false,

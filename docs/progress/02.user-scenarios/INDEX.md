@@ -32,3 +32,12 @@
 
 > **제외(루크 2026-06-15)**: ⑧메모리(구 UC3/UC4)=off-scope(naia-memory 다른 세션 소유, canon out_of_scope). ⑨워크스페이스(UC-007)=보류(신규발명 방향 결정 후).
 > 상세 granular(S01~71 — provider/voice/skills/channels 60+)·테스트 커버리지 맵 = `docs/user-scenarios.md`.
+
+## 2026-08-06 Windows NVA/Voice/Media use cases
+
+| ID | Area | User outcome | REQ | Status | TEST-S |
+|---|---|---|---|---|---|
+| UC-020 | 사전 생성 NVA | 사용자가 GPU나 로그인 없이 NVA 외모를 고르면 Shell web-player가 idle/speaking/gesture와 새 발화 자산을 재생하고 재시작 뒤 같은 외모를 복원한다. | REQ-016 | Approved | TEST-S-019 |
+| UC-021 | Windows 로컬 음성 | VRAM 6GB+ 사용자가 Voice 설정에서 local voice를 켜고 레퍼런스 음성을 선택·녹음·업로드한다. 엔진 ready/오류/중지 상태가 실제 :8910 및 자식 프로세스와 일치한다. | REQ-017 | Approved | TEST-S-020 |
+| UC-022 | BGM·Radio DJ 동의 | 사용자가 재생하거나 LLM이 명시적 radio_dj play tool을 호출한 경우에만 음악/DJ가 시작되고, 같은 버튼으로 일시정지하며 Proactive 설정은 이를 시작하지 않는다. | REQ-018 | Approved | TEST-S-021 |
+| UC-023 | 온보딩·표시·Windows Gateway | 사용자는 일반 이름과 실제 video-frame 썸네일로 온보딩하고 좌측 chat layout과 compact Proactive icon을 사용한다. Windows Discord는 종료·재연결 후 orphan child 없이 복구된다. | REQ-019 | Approved | TEST-S-022 |

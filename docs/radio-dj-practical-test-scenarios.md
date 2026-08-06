@@ -196,3 +196,9 @@ RADIO_DJ_LIVE_YOUTUBE=1 RADIO_DJ_LIVE_WALL_MS=600000 \
 9. 남은 외부 경계와 재현 방법
 
 `duration` 메타데이터만 길게 설정한 압축 테스트는 실제 장시간 운용 시간으로 기록하지 않는다.
+
+> **Required negative precondition (2026-08-06):** Before every positive Radio
+> DJ scenario, verify that cold boot, saved-song restore and Proactive ON/OFF do
+> not emit play or start a DJ session. Positive scenarios must begin with an
+> explicit user play or structured `skill_youtube_bgm(action=play,
+> mode=radio_dj)` event. A transition without that authority fails the test.

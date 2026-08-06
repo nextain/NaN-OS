@@ -38,3 +38,12 @@
 - 유닛/계약 테스트(src/test)는 05(TEST-F). `@spec SPEC-###` 태그로 코드 추적.
 - TEST-S-014는 최종 Shell 스냅샷에서 격리 포트로 Playwright 3건을 재실행했다. 실제 Discord bot/OS 키체인 확인은 자격증명이 필요한 운영자 인수 항목이며, 자동화 Pass로 오표기하지 않는다.
 - TEST-S-016은 최종 Shell·Agent 결합 스냅샷에서 실제 Tauri IPC, Agent child process, BGM sidecar를 사용한 WDIO 3건과 Playwright 7건을 통과했다.
+
+## 2026-08-06 Windows NVA/Voice/Media scenario tests
+
+| ID | Verifies | Scenario | Type | test_ref | Status |
+|---|---|---|---|---|---|
+| TEST-S-019 | UC-020 | clean/migration 상태에서 NVA 선택·복원, idle/speaking/gesture/utterance 재생, GPU/login/voice 독립성과 Ditto/Cascade 무기동을 실제 Shell UI에서 검증 | unit + Playwright + native smoke | NVA player/component/config tests + focused NVA E2E | Planned |
+| TEST-S-020 | UC-021 | VRAM 6GB 경계, no-login ON, :8910 ready/timeout, ref select/record/upload, OFF child reap와 재시작 roundtrip을 검증 | unit + Rust + Playwright + native | voice settings/lifecycle focused tests | Planned |
+| TEST-S-021 | UC-022 | cold boot/saved state/Proactive에서 no-play, 사용자·LLM skill 명시 play, radio mode gate, play→pause toggle을 검증 | unit + Playwright | BGM/Radio/Proactive focused tests | Planned |
+| TEST-S-022 | UC-023 | generic name, captured video thumbnail, NVA+VRM onboarding, legacy center migration, icon tooltip/ARIA/default-off, Windows Gateway bounded exit/reconnect를 검증 | unit + Playwright + Windows integration | onboarding/layout/proactive/Discord focused tests | Planned |

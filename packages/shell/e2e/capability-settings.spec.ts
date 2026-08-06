@@ -251,7 +251,7 @@ test.describe("VRAM tier local profile (#2, FR-1/FR-3)", () => {
 			.locator("option")
 			.evaluateAll((els) => els.map((el) => (el as HTMLOptionElement).value));
 		expect(optionValues).toContain("off");
-		expect(optionValues).toContain("laptop-4060-8g");
+		expect(optionValues).toContain("windows-voice-6g");
 		expect(optionValues).not.toContain("local-llm-voice-16g");
 		// 2026-07-15: "auto" was removed after it selected unverified hidden tiers.
 		await expect(tierSelect.locator('option[value="auto"]')).toHaveCount(0);
@@ -336,179 +336,36 @@ test.describe("VRAM tier local profile (#2, FR-1/FR-3)", () => {
 		await expect(tierSelect).toBeEnabled();
 	});
 
-	test("8GB laptop tier is visible while the legacy exclusive tier stays hidden", async ({
-		page,
-	}) => {
+	test("voice-only GPU profile stays visible and has no avatar focus", async ({ page }) => {
 		await gotoModelSettings(page, { vramGb: 8, model: "gemini-3.5-flash" });
 		await page.locator('[data-settings-tab="profile"]').click();
 		const tierSelect = page.locator("#local-gpu-tier");
-		const optionValues = await tierSelect
-			.locator("option")
-			.evaluateAll((els) => els.map((el) => (el as HTMLOptionElement).value));
-		expect(optionValues).toContain("laptop-4060-8g");
-		expect(optionValues).not.toContain("local-llm-avatar-8g");
-		await tierSelect.selectOption("laptop-4060-8g");
-		await expect(
-			page.locator('[data-testid="local-focus-select"]'),
-		).toHaveCount(0);
-		await expect(
-			page.locator('[data-testid="nva-vram-requirement"]'),
-		).toContainText(/8GB/i);
-		await expect(
-			page.locator('[data-testid="cloud-cascade-coming-soon"]'),
-		).toContainText(/future|향후/i);
-	});
-
-	test("below 8GB keeps the Windows TRT profile disabled", async ({ page }) => {
-		await gotoModelSettings(page, { vramGb: 6, model: "gemini-3.5-flash" });
-		await page.locator('[data-settings-tab="profile"]').click();
-		await expect(
-			page.locator('#local-gpu-tier option[value="laptop-4060-8g"]'),
-		).toBeDisabled();
-		const voice6g = page.locator(
-			'#local-gpu-tier option[value="windows-voice-6g"]',
-		);
-		await expect(voice6g).toBeEnabled();
-		await page.locator("#local-gpu-tier").selectOption("windows-voice-6g");
-		await expect(
-			page.locator('[data-testid="nva-vram-requirement"]'),
-		).toContainText(/8GB/i);
+		await expect(tierSelect.locator('option[value="windows-voice-6g"]')).toBeEnabled();
+		await tierSelect.selectOption("windows-voice-6g");
+		await expect(page.locator('[data-testid="local-focus-select"]')).toHaveCount(0);
+		await expect(page.locator('[data-testid="nva-vram-requirement"]')).toHaveCount(0);
 	});
 });
 
-test.describe("FR-6: NVA lip-sync note (avatar tab)", () => {
-	test("TTS off → warning note referencing TTS", async ({ page }) => {
+test.describe("Pre-baked NVA settings", () => {
+	test("video avatar is enabled without login or GPU", async ({ page }) => {
 		await gotoModelSettings(page, {
-			vramGb: 24,
-			model: "gemini-3.5-flash",
-			ttsEnabled: false,
-		});
-		// 로그인 사용자는 NVA를 선택한 뒤 같은 아바타 설정에서 원격 Host URL을 지정할 수 있다.
-		await page.locator('[data-settings-tab="avatar"]').click();
-		// Select the video avatar so the .nva picker (and note) renders.
-		await page
-			.locator('select:has(option[value="naia-video-avatar"])')
-			.selectOption("naia-video-avatar");
-		const note = page.locator('[data-testid="nva-lipsync-note"]');
-		await expect(note).toBeVisible({ timeout: 5_000 });
-		await expect(note).toContainText(/TTS/);
-	});
-});
-
-test.describe("FR-7: video avatar gated by cascade capability", () => {
-	test("logged-in shell still disables video avatar below 8GB", async ({
-		page,
-	}) => {
-		// Current video avatar requires verified local 8GB hardware.
-		await gotoModelSettings(page, { vramGb: 4, model: "gemini-3.5-flash" });
-		await page.locator('[data-settings-tab="avatar"]').click();
-		await expect(
-			page.locator('option[value="naia-video-avatar"]'),
-		).toBeDisabled();
-		await expect(
-			page.locator('[data-testid="avatar-cascade-required"]'),
-		).toContainText(/8GB/i);
-	});
-
-	test("logged out without explicit local profile keeps video-avatar disabled", async ({
-		page,
-	}) => {
-		// Logged out shells need either a concrete local avatar tier or login.
-		await gotoModelSettings(page, {
-			vramGb: 24,
+			vramGb: null,
 			model: "gemini-3.5-flash",
 			loggedIn: false,
 		});
 		await page.locator('[data-settings-tab="avatar"]').click();
-		await expect(
-			page.locator('option[value="naia-video-avatar"]'),
-		).toBeDisabled();
-	});
-
-	test("logged out local avatar-capable tier stays dormant and cannot select local NVA", async ({
-		page,
-	}) => {
-		await gotoModelSettings(page, {
-			vramGb: 8,
-			model: "gemini-3.5-flash",
-			loggedIn: false,
-			config: { localGpuTier: "laptop-4060-8g" },
-		});
-		await page.locator('[data-settings-tab="avatar"]').click();
-		await expect(
-			page.locator('option[value="naia-video-avatar"]'),
-		).toBeDisabled();
-		await expect(page.locator("#avatar-provider")).toHaveValue("vrm");
-		await expect(page.locator("#cascade-runtime-url")).toHaveCount(0);
-		const config = await page.evaluate(() =>
-			JSON.parse(localStorage.getItem("naia-config") || "{}"),
-		);
-		expect(config.avatarProvider).not.toBe("naia-video-avatar");
-		expect(config.cascadeRuntimeUrl).toBeUndefined();
-	});
-
-	test("logged out legacy auto tier does not unlock local NVA", async ({
-		page,
-	}) => {
-		await gotoModelSettings(page, {
-			vramGb: 8,
-			model: "gemini-3.5-flash",
-			loggedIn: false,
-			config: { localGpuTier: "auto" },
-		});
-		await page.locator('[data-settings-tab="avatar"]').click();
-		await expect(
-			page.locator('option[value="naia-video-avatar"]'),
-		).toBeDisabled();
-		await expect(page.locator("#cascade-runtime-url")).toHaveCount(0);
-	});
-});
-
-test.describe("FR-8: NVA Host URL", () => {
-	test("NVA 선택 후 유효 Host URL 입력 → 저장(정규화)", async ({ page }) => {
-		await gotoModelSettings(page, { vramGb: 8, model: "gemini-3.5-flash" });
-		await page.locator('[data-settings-tab="avatar"]').click();
+		const option = page.locator('option[value="naia-video-avatar"]');
+		await expect(option).toBeEnabled();
 		await page.locator("#avatar-provider").selectOption("naia-video-avatar");
-		const input = page.locator("#cascade-runtime-url");
-		await input.fill("http://100.1.2.3:8910/");
-		await input.blur();
-		const config = await page.evaluate(() =>
-			JSON.parse(localStorage.getItem("naia-config") || "{}"),
-		);
-		expect(config.cascadeRuntimeUrl).toBe("http://100.1.2.3:8910"); // trailing slash 정규화
-	});
-
-	test("잘못된 URL → 에러 표시 + 저장 안 됨", async ({ page }) => {
-		await gotoModelSettings(page, { vramGb: 8, model: "gemini-3.5-flash" });
-		await page.locator('[data-settings-tab="avatar"]').click();
-		await page.locator("#avatar-provider").selectOption("naia-video-avatar");
-		const input = page.locator("#cascade-runtime-url");
-		await input.fill("ws://bad:8910");
-		await input.blur();
-		await expect(page.locator('[data-testid="cascade-url-error"]')).toBeVisible(
-			{ timeout: 5_000 },
-		);
-		const config = await page.evaluate(() =>
-			JSON.parse(localStorage.getItem("naia-config") || "{}"),
-		);
-		expect(config.cascadeRuntimeUrl).toBeUndefined();
-	});
-
-	test("logged out → NVA Host 미노출 (naiaKey 게이트)", async ({ page }) => {
-		await gotoModelSettings(page, {
-			vramGb: 8,
-			model: "gemini-3.5-flash",
-			loggedIn: false,
-		});
-		await page.locator('[data-settings-tab="avatar"]').click();
+		await expect(page.locator("#avatar-provider")).toHaveValue("naia-video-avatar");
+		await expect(page.locator('[data-testid="avatar-cascade-required"]')).toHaveCount(0);
 		await expect(page.locator("#cascade-runtime-url")).toHaveCount(0);
 	});
 
-	test("logged out → stale NVA Host config does not unlock controls", async ({
-		page,
-	}) => {
+	test("legacy remote Ditto host is removed from persisted settings", async ({ page }) => {
 		await gotoModelSettings(page, {
-			vramGb: 8,
+			vramGb: null,
 			model: "gemini-3.5-flash",
 			loggedIn: false,
 			config: {
@@ -518,10 +375,9 @@ test.describe("FR-8: NVA Host URL", () => {
 			},
 		});
 		await page.locator('[data-settings-tab="avatar"]').click();
-		await expect(page.locator("#avatar-provider")).toHaveValue("vrm");
-		await expect(
-			page.locator('option[value="naia-video-avatar"]'),
-		).toBeDisabled();
+		await expect(page.locator("#avatar-provider")).toHaveValue("naia-video-avatar");
 		await expect(page.locator("#cascade-runtime-url")).toHaveCount(0);
+		const config = await page.evaluate(() => JSON.parse(localStorage.getItem("naia-config") || "{}"));
+		expect(config.cascadeRuntimeUrl).toBeUndefined();
 	});
 });

@@ -59,9 +59,11 @@ export const E2E_TARGET_DIR = resolve(
 // Must match src-tauri/tauri.e2e.conf.json's devUrl. Keeping this explicit
 // avoids a rebuilt test binary silently waiting on a different Vite server.
 const E2E_VITE_PORT = 1422;
-const E2E_AVATAR_ENABLED = process.env.NAIA_E2E_AVATAR === "1";
+const E2E_PREBAKED_NVA_ENABLED = process.env.NAIA_E2E_PREBAKED_NVA === "1";
 const E2E_VOICE_6G_ENABLED = process.env.NAIA_E2E_VOICE_6G === "1";
-const E2E_NVA_SOURCE = process.env.NAIA_E2E_NVA_SOURCE;
+const E2E_NVA_SOURCE =
+	process.env.NAIA_E2E_NVA_SOURCE ??
+	resolve(SHELL_DIR, "../../../..", "naia-settings", "nva-files", "naia-prebaked");
 const E2E_VRM_SOURCE = process.env.NAIA_E2E_VRM_SOURCE;
 const PAIRED_AGENT_ROOT = "D:/alpha-adk/projects/naia-agent-worktrees";
 const REQUIRED_AGENT_COMMIT = pairing.agentCommit;
@@ -197,24 +199,22 @@ export function resetCodexE2eRoot(): void {
 					vrmModel: voiceVrmPath,
 				}
 			: {}),
-		...(E2E_AVATAR_ENABLED
+		...(E2E_PREBAKED_NVA_ENABLED
 			? {
-					naiaKey: "gw-e2e-registered-naia-member",
+					onboardingComplete: true,
+					workspaceRoot: E2E_WORKSPACE,
 					avatarProvider: "naia-video-avatar",
-					nvaModel: "naia",
-					localGpuTier: "laptop-4060-8g",
-					ttsProvider: "naia-local-voice",
-					vllmTtsHost: "http://127.0.0.1:8910",
+					nvaModel: "naia-prebaked",
 				}
 			: {}),
 	};
-	if (E2E_AVATAR_ENABLED) {
+	if (E2E_PREBAKED_NVA_ENABLED) {
 		if (!E2E_NVA_SOURCE || !existsSync(E2E_NVA_SOURCE)) {
 			throw new Error(
-				"NAIA_E2E_AVATAR=1 requires NAIA_E2E_NVA_SOURCE pointing to a real NVA bundle",
+				"NAIA_E2E_PREBAKED_NVA=1 requires NAIA_E2E_NVA_SOURCE pointing to a real pre-baked NVA bundle",
 			);
 		}
-		cpSync(E2E_NVA_SOURCE, resolve(E2E_SETTINGS, "nva-files", "naia"), {
+		cpSync(E2E_NVA_SOURCE, resolve(E2E_SETTINGS, "nva-files", "naia-prebaked"), {
 			recursive: true,
 		});
 	}
@@ -264,16 +264,13 @@ export function resetCodexE2eRoot(): void {
 			{ mode: 0o600 },
 		);
 	}
-	if (E2E_AVATAR_ENABLED) {
+	if (E2E_PREBAKED_NVA_ENABLED) {
 		writeFileSync(
 			E2E_UI_CONFIG_PATH,
 			JSON.stringify(
 				{
 					avatarProvider: "naia-video-avatar",
-					nvaModel: "naia",
-					localGpuTier: "laptop-4060-8g",
-					ttsProvider: "naia-local-voice",
-					vllmTtsHost: "http://127.0.0.1:8910",
+					nvaModel: "naia-prebaked",
 				},
 				null,
 				2,
@@ -355,7 +352,7 @@ export async function startOwnedViteServer(): Promise<void> {
 				VITE_NAIA_E2E_ADK_PATH: E2E_WORKSPACE,
 				VITE_NAIA_E2E_PROVIDER: "codex",
 				VITE_NAIA_E2E_MODEL: "gpt-5.4",
-				...(E2E_AVATAR_ENABLED || E2E_VOICE_6G_ENABLED
+				...(E2E_PREBAKED_NVA_ENABLED || E2E_VOICE_6G_ENABLED
 					? {}
 					: { VITE_NAIA_E2E_NO_AVATAR: "1" }),
 				// The BGM acceptance fixture is same-origin and never contacts YouTube.

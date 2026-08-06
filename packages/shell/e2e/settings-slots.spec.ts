@@ -245,7 +245,7 @@ test.describe("S-SLOT settings — gate + 6 cloud slots (#gate-slots)", () => {
 		);
 	});
 
-	test("8GB+ exposes one TRT expression profile and preserves the Naia external brain", async ({
+	test("voice-only GPU profile preserves the Naia external brain and selected NVA", async ({
 		page,
 	}) => {
 		await openSlotSettings(page, {
@@ -255,6 +255,7 @@ test.describe("S-SLOT settings — gate + 6 cloud slots (#gate-slots)", () => {
 				// 이전 상태 잔재 3종 — 프로파일 선택이 전부 교정해야 한다 (2026-07-15 실사고 재현):
 				ttsProvider: "nextain", // 클라우드 음성
 				vllmTtsHost: "http://localhost:8892", // ★로컬 형식이지만 틀린 포트 — 그대로 살아남던 실사고
+				avatarProvider: "naia-video-avatar",
 				avatarProvider: "naia-video-avatar", // 아바타 티어 잔재 (VRM 복원 대상)
 			},
 		});
@@ -266,7 +267,7 @@ test.describe("S-SLOT settings — gate + 6 cloud slots (#gate-slots)", () => {
 		const optionValues = await tierSelect
 			.locator("option")
 			.evaluateAll((els) => els.map((e) => (e as HTMLOptionElement).value));
-		expect(optionValues).toContain("laptop-4060-8g");
+		expect(optionValues).toContain("windows-voice-6g");
 		expect(optionValues).not.toContain("local-llm-voice-16g");
 		expect(optionValues).not.toContain("auto"); // 자동이 미검증 티어(NVA)를 고르던 사고로 제거
 		for (const hiddenId of [
@@ -278,14 +279,14 @@ test.describe("S-SLOT settings — gate + 6 cloud slots (#gate-slots)", () => {
 			expect(optionValues).not.toContain(hiddenId);
 		}
 
-		await tierSelect.selectOption("laptop-4060-8g");
+		await tierSelect.selectOption("windows-voice-6g");
 
 		// 영속 검증 — 프로파일 한 번으로 로컬 풀 구성 완성.
 		const saved = await page.evaluate(() => {
 			const raw = localStorage.getItem("naia-config") ?? "{}";
 			return JSON.parse(raw) as Record<string, unknown>;
 		});
-		expect(saved.localGpuTier).toBe("laptop-4060-8g");
+		expect(saved.localGpuTier).toBe("windows-voice-6g");
 		expect(saved.provider).toBe("nextain");
 		expect(saved.model).toBe("gemini-3.5-flash");
 		expect(saved.ttsProvider).toBe("naia-local-voice"); // 음성 → 로컬
@@ -302,7 +303,7 @@ test.describe("S-SLOT settings — gate + 6 cloud slots (#gate-slots)", () => {
 		);
 	});
 
-	test("GPU profile preserves a remote Ollama route while selecting local TRT TTS/avatar", async ({
+	test("voice-only GPU profile preserves a remote Ollama route and VRM", async ({
 		page,
 	}) => {
 		await openSlotSettings(page, {
@@ -321,31 +322,28 @@ test.describe("S-SLOT settings — gate + 6 cloud slots (#gate-slots)", () => {
 		const tierSelect = page.locator("#local-gpu-tier");
 		await expect(tierSelect).toBeVisible();
 		await expect(
-			tierSelect.locator('option[value="laptop-4060-8g"]'),
+			tierSelect.locator('option[value="windows-voice-6g"]'),
 		).toHaveCount(1);
-		await tierSelect.selectOption("laptop-4060-8g");
+		await tierSelect.selectOption("windows-voice-6g");
 
 		const saved = await page.evaluate(() => {
 			const raw = localStorage.getItem("naia-config") ?? "{}";
 			return JSON.parse(raw) as Record<string, unknown>;
 		});
-		expect(saved.localGpuTier).toBe("laptop-4060-8g");
+		expect(saved.localGpuTier).toBe("windows-voice-6g");
 		expect(saved.provider).toBe("ollama");
 		expect(saved.model).toBe("qwen3:8b");
 		expect(saved.ollamaHost).toBe("http://gpu-box.local:11434");
 		expect(saved.ttsProvider).toBe("naia-local-voice");
 		expect(saved.ttsEnabled).toBe(true);
 		expect(saved.vllmTtsHost).toBe("http://localhost:8910");
-		expect(saved.avatarProvider).toBe("naia-video-avatar");
-		expect(saved.nvaModel).toBeTruthy();
+		expect(saved.avatarProvider).toBe("vrm");
+		expect(saved.nvaModel).toBeUndefined();
 		await expect(page.locator('[data-testid="slot-main"]')).toContainText(
 			/ollama/i,
 		);
 		await expect(page.locator('[data-testid="slot-tts"]')).toContainText(
 			/naia-local-voice/i,
-		);
-		await expect(page.locator('[data-testid="slot-avatar"]')).toContainText(
-			/video avatar/i,
 		);
 	});
 });

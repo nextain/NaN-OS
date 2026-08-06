@@ -63,7 +63,21 @@ describe("AiControlBar proactive cost control", () => {
 		});
 		expect(button).toHaveAttribute("data-proactive-state", "blocked");
 		expect(button).toHaveAttribute("aria-pressed", "false");
-		expect(button).toHaveTextContent(/Auto|능동/i);
+		expect(button.querySelector("svg")).not.toBeNull();
+		expect(button).toHaveAttribute(
+			"aria-describedby",
+			"proactive-control-tooltip",
+		);
+	});
+
+	it("keeps a saved profile off unless permission was explicitly persisted", async () => {
+		mockLoadConfigWithSecrets.mockResolvedValue(baseConfig);
+		render(<AiControlBar />);
+		const button = await screen.findByRole("button", {
+			name: /Allow proactive speech/i,
+		});
+		expect(button).toHaveAttribute("aria-pressed", "false");
+		expect(button).toHaveAttribute("data-proactive-state", "off");
 	});
 
 	it("persists visible permission and requests profile start", async () => {

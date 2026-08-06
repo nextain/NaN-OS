@@ -13,11 +13,6 @@ import {
 } from "../lib/adk-store";
 import { isLegacyBundledVrmModel } from "../lib/avatar-presets";
 import { detectGpuVramGb } from "../lib/capabilities/gpu";
-import { tierRecommendedSlots } from "../lib/capabilities/tier-slots";
-import {
-	type VramTierId,
-	selectVramTier,
-} from "../lib/capabilities/vram-tiers";
 import { isNewCore, sendAuthUpdate } from "../lib/chat-service";
 import {
 	type AppConfig,
@@ -25,15 +20,19 @@ import {
 	loadConfig,
 	saveConfigSecure,
 } from "../lib/config";
-import { type TranslationKey, getLocale, t } from "../lib/i18n";
+import { getLocale, t } from "../lib/i18n";
 import { getDefaultLlmModel } from "../lib/llm";
+import {
+	defaultClipOf,
+	parseNvaManifest,
+	resolveNvaAssetPath,
+} from "../lib/nva";
 import {
 	type OnboardingSession,
 	type StepInput,
 	makeOnboardingSession,
 } from "../lib/onboarding-core";
 import { NAIA_SLOT_DEFAULTS, applyNaiaSlotDefaults } from "../lib/slots/model";
-import type { SlotId } from "../lib/slots/model";
 import { useAvatarStore } from "../stores/avatar";
 import { useChatStore } from "../stores/chat";
 
@@ -57,10 +56,6 @@ const STEPS_WITHOUT_NAIA: Step[] = [
 	"provider",
 	"complete",
 ];
-
-function vramTierLabelKey(id: VramTierId) {
-	return `settings.vramTier.${id}` as const;
-}
 
 const VIDEO_EXTS = new Set(["mp4", "webm", "mov", "ogg", "avi"]);
 function isVideo(url: string) {
@@ -111,12 +106,129 @@ interface OnboardingSnapshot {
 	honorific: string;
 	extraPersona: string;
 	selectedVrm: string;
+	avatarProvider: "vrm" | "naia-video-avatar";
+	selectedNva: string;
 	backgrounds: BgOption[];
 	selectedBg: string;
 	apiKey: string;
 	naiaLoginDone: boolean;
 	memoryEmbeddingProvider: "none" | "offline" | "vllm" | "ollama" | "naia";
 	memoryLlmProvider: "none" | "naia" | "vllm" | "ollama";
+}
+
+function BackgroundThumbnail({
+	background,
+	className = "onboarding-step__bg-img",
+}: {
+	background: BgOption;
+	className?: string;
+}) {
+	const [capturedFrame, setCapturedFrame] = useState("");
+
+	useEffect(() => {
+		if (background.type !== "video") return;
+		const video = document.createElement("video");
+		video.src = background.url;
+		video.muted = true;
+		video.preload = "auto";
+		video.playsInline = true;
+		let settled = false;
+		const cleanup = () => {
+			video.removeAttribute("src");
+			video.load();
+		};
+		const capture = () => {
+			if (settled || !video.videoWidth || !video.videoHeight) return;
+			settled = true;
+			const canvas = document.createElement("canvas");
+			canvas.width = video.videoWidth;
+			canvas.height = video.videoHeight;
+			canvas.getContext("2d")?.drawImage(video, 0, 0);
+			try {
+				setCapturedFrame(canvas.toDataURL("image/jpeg", 0.82));
+			} catch {
+				// asset:// may be canvas-tainted on some WebView2 versions.
+			}
+			cleanup();
+		};
+		video.onloadeddata = () => {
+			const seekTo = Number.isFinite(video.duration)
+				? Math.min(0.25, Math.max(0, video.duration / 20))
+				: 0;
+			if (seekTo > 0) video.currentTime = seekTo;
+			else capture();
+		};
+		video.onseeked = capture;
+		video.onerror = cleanup;
+		video.load();
+		return cleanup;
+	}, [background.type, background.url]);
+
+	if (capturedFrame) {
+		return (
+			<img
+				src={capturedFrame}
+				alt={background.label}
+				className={className}
+			/>
+		);
+	}
+	return (
+		<video
+			src={background.url}
+			className={className}
+			muted
+			preload="metadata"
+			playsInline
+			aria-label={background.label}
+		/>
+	);
+}
+
+function NvaThumbnail({ path, label }: { path: string; label: string }) {
+	const [preview, setPreview] = useState<BgOption | null>(null);
+
+	useEffect(() => {
+		let disposed = false;
+		const adkPath = getAdkPath();
+		if (!adkPath) return;
+		const sep = adkPath.includes("\\") ? "\\" : "/";
+		const bundleDir = path.includes("/") || path.includes("\\")
+			? path
+			: `${adkPath}${sep}naia-settings${sep}nva-files${sep}${path}`;
+		void invoke<string>("read_local_binary", {
+			path: `${bundleDir}${sep}manifest.json`,
+			allowedBase: adkPath,
+		})
+			.then(async (base64) => {
+				const raw = atob(base64);
+				const manifest = parseNvaManifest(
+					new TextDecoder().decode(
+						Uint8Array.from(raw, (char) => char.charCodeAt(0)),
+					),
+				);
+				const clipPath = resolveNvaAssetPath(
+					bundleDir,
+					defaultClipOf(manifest).video,
+				);
+				const url = await toLocalBlobUrl(clipPath);
+				if (!disposed) setPreview({ url, label, path: clipPath, type: "video" });
+			})
+			.catch(() => {});
+		return () => {
+			disposed = true;
+		};
+	}, [label, path]);
+
+	if (!preview) {
+		return <span className="onboarding-step__avatar-thumb" aria-hidden="true" />;
+	}
+	return (
+		<BackgroundThumbnail
+			background={preview}
+			className="onboarding-step__avatar-thumb"
+		/>
+	);
 }
 
 function getBackgroundMediaType(path: string): "image" | "video" | "" {
@@ -152,6 +264,11 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
 	const [extraPersona, setExtraPersona] = useState("");
 	const [naiaVrms, setNaiaVrms] = useState<string[]>([]);
 	const [selectedVrm, setSelectedVrm] = useState("");
+	const [naiaNvas, setNaiaNvas] = useState<string[]>([]);
+	const [avatarProvider, setAvatarProvider] = useState<
+		"vrm" | "naia-video-avatar"
+	>("vrm");
+	const [selectedNva, setSelectedNva] = useState("");
 	const [backgrounds, setBackgrounds] = useState<BgOption[]>([]);
 	const [selectedBg, setSelectedBg] = useState("");
 	// Provider step state
@@ -172,8 +289,6 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
 	>(hasNaiaKey ? "naia" : "none");
 	const naiaTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 	const latestRef = useRef<OnboardingSnapshot | null>(null);
-	const recommendedVramTier =
-		detectedVramGb != null ? selectVramTier(detectedVramGb) : null;
 	const onboardingGpuSummary =
 		detectedVramGb != null
 			? t("onboard.connect.vramDetected").replace(
@@ -181,22 +296,10 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
 					String(detectedVramGb),
 				)
 			: t("onboard.connect.vramUnknown");
-	const onboardingGpuRecommendation = recommendedVramTier
-		? t("onboard.connect.vramTier").replace(
-				"{tier}",
-				t(vramTierLabelKey(recommendedVramTier.id)),
-			)
-		: t("onboard.connect.vramCloud");
-	// FR-VRAM.4: 감지된 VRAM 예산 내 로컬 추천 슬롯(읽기 — 실제 토글은 설정 탭).
-	const onboardingTierRecs = tierRecommendedSlots(recommendedVramTier);
-	const ONBOARD_SLOT_LABEL: Record<SlotId, TranslationKey> = {
-		main: "settings.slot.slotMain",
-		sub: "settings.slot.slotSub",
-		embedding: "settings.slot.slotEmbedding",
-		stt: "settings.slot.slotStt",
-		tts: "settings.slot.slotTts",
-		avatar: "settings.slot.slotAvatar",
-	};
+	const onboardingGpuRecommendation =
+		detectedVramGb != null
+			? t("onboard.connect.localVoiceAvailable")
+			: t("onboard.connect.vramCloud");
 
 	useEffect(() => {
 		detectGpuVramGb().then(setDetectedVramGb);
@@ -232,7 +335,11 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
 					extraPersona: extraPersona.trim() || undefined,
 				};
 			case "character":
-				return { step: "character", vrmModel: selectedVrm || undefined };
+				return {
+					step: "character",
+					vrmModel:
+						avatarProvider === "vrm" ? selectedVrm || undefined : undefined,
+				};
 			case "background": {
 				const bgPath = backgrounds.find((b) => b.url === selectedBg)?.path;
 				return { step: "background", background: bgPath };
@@ -263,6 +370,8 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
 			honorific,
 			extraPersona,
 			selectedVrm,
+			avatarProvider,
+			selectedNva,
 			backgrounds,
 			selectedBg,
 			apiKey,
@@ -293,6 +402,15 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
 							: prev;
 					});
 				}
+			})
+			.catch(() => {});
+	}, []);
+
+	useEffect(() => {
+		listNaiaAssets("nva-files")
+			.then((paths) => {
+				setNaiaNvas(paths);
+				if (paths.length > 0) setSelectedNva((prev) => prev || paths[0]);
 			})
 			.catch(() => {});
 	}, []);
@@ -427,8 +545,14 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
 	}
 
 	function handleVrmSelect(path: string) {
+		setAvatarProvider("vrm");
 		setSelectedVrm(path);
 		setAvatarModelPath(path);
+	}
+
+	function handleNvaSelect(path: string) {
+		setAvatarProvider("naia-video-avatar");
+		setSelectedNva(path);
 	}
 
 	function handleBgSelect(url: string) {
@@ -484,6 +608,8 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
 			honorific,
 			extraPersona,
 			selectedVrm,
+			avatarProvider,
+			selectedNva,
 			backgrounds,
 			selectedBg,
 			apiKey,
@@ -500,7 +626,14 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
 				: NAIA_SLOT_DEFAULTS.main.model,
 			apiKey: "",
 		};
-		const vrmPath = snapshot.selectedVrm || naiaVrms[0] || undefined;
+		const vrmPath =
+			snapshot.avatarProvider === "vrm"
+				? snapshot.selectedVrm || naiaVrms[0] || undefined
+				: undefined;
+		const nvaPath =
+			snapshot.avatarProvider === "naia-video-avatar"
+				? snapshot.selectedNva || naiaNvas[0] || undefined
+				: undefined;
 		const selectedBgOption = snapshot.backgrounds.find(
 			(bg) => bg.url === snapshot.selectedBg,
 		);
@@ -516,10 +649,6 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
 		const persona = snapshot.extraPersona?.trim()
 			? `${personaBase}\n\n${snapshot.extraPersona.trim()}`
 			: personaBase;
-		const hasNaiaMembership = Boolean(
-			auth || snapshot.naiaLoginDone || base.naiaKey,
-		);
-
 		// auth(naia 로그인) 시: 6슬롯 Gemini 기본값은 applyNaiaSlotDefaults 가 아래서 일괄 적용.
 		// 따라서 auth 시에는 스냅샣 memory provider 를 주입하지 않고(비파괴 기본값 적용이 채움),
 		// BYO 시에만 사용자 선택값을 유지한다.
@@ -532,6 +661,8 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
 			speechStyle: snapshot.speechStyle,
 			honorific: snapshot.honorific.trim() || undefined,
 			vrmModel: vrmPath,
+			avatarProvider: snapshot.avatarProvider,
+			nvaModel: nvaPath,
 			backgroundVideo: bgFilename,
 			persona,
 			...(snapshot.apiKey.trim() && !snapshot.naiaLoginDone && !auth
@@ -540,9 +671,6 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
 			...(auth ? { naiaKey: auth.naiaKey, naiaUserId: auth.naiaUserId } : {}),
 			workspaceRoot: getAdkPath() || base.workspaceRoot || undefined,
 			onboardingComplete: true,
-			...(hasNaiaMembership && recommendedVramTier
-				? { localGpuTier: recommendedVramTier.id }
-				: {}),
 			...(!auth && snapshot.memoryEmbeddingProvider !== "none"
 				? { memoryEmbeddingProvider: snapshot.memoryEmbeddingProvider }
 				: {}),
@@ -704,7 +832,7 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
 							className="onboarding-step__input"
 							value={userName}
 							onChange={(e) => setUserName(e.target.value)}
-							placeholder="Luke"
+							placeholder={t("onboard.name.placeholder")}
 							maxLength={20}
 							autoFocus
 							onKeyDown={(e) => e.key === "Enter" && goNext()}
@@ -769,12 +897,13 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
 								.replace("{agent}", agentName.trim() || "나이아")}
 						</h2>
 						<div className="onboarding-step__avatar-list">
-							{naiaVrms.length === 0 ? (
+							{naiaVrms.length === 0 && naiaNvas.length === 0 ? (
 								<p className="onboarding-step__hint onboarding-step__hint--warn">
-									naia-settings/vrm-files/ 폴더에 VRM 파일이 없습니다.
+									{t("onboard.character.empty")}
 								</p>
 							) : (
-								naiaVrms.map((path) => {
+								<>
+								{naiaVrms.map((path) => {
 									const filename = path.split(/[/\\]/).pop() ?? path;
 									const label = filename.replace(/\.vrm$/i, "");
 									const thumb = `/avatars/${filename.replace(/\.vrm$/i, ".webp")}`;
@@ -797,7 +926,23 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
 											<span>{label}</span>
 										</button>
 									);
-								})
+								})}
+								{naiaNvas.map((path) => {
+									const filename = path.split(/[/\\]/).pop() ?? path;
+									const label = filename.replace(/\.nva$/i, "");
+									return (
+										<button
+											key={path}
+											type="button"
+											className={`onboarding-step__avatar-item${avatarProvider === "naia-video-avatar" && selectedNva === path ? " onboarding-step__avatar-item--selected" : ""}`}
+											onClick={() => handleNvaSelect(path)}
+										>
+											<NvaThumbnail path={path} label={label} />
+											<span>{label}</span>
+										</button>
+									);
+								})}
+								</>
 							)}
 						</div>
 						<p className="onboarding-step__hint">
@@ -820,7 +965,7 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
 									onClick={() => handleBgSelect(bg.url)}
 								>
 									{bg.type === "video" ? (
-										<div className="onboarding-step__bg-video-thumb">▶</div>
+										<BackgroundThumbnail background={bg} />
 									) : (
 										<img
 											src={bg.url}
@@ -855,32 +1000,8 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
 								<br />
 								{onboardingGpuRecommendation}
 								<br />
-								<span data-testid="onboarding-nva-vram-requirement">
-									{t("settings.nvaVramRequirement")}
-								</span>
-								<br />
-								<span data-testid="onboarding-cloud-cascade-coming-soon">
-									{t("settings.cloudCascadeComingSoon")}
-								</span>
-								<br />
 								{t("onboard.connect.runtimeBoundary")}
 							</p>
-							{onboardingTierRecs.length > 0 && (
-								<div
-									className="onboarding-step__hint"
-									data-testid="onboard-tier-recs"
-									style={{ marginTop: 8 }}
-								>
-									{t("settings.tierRecommendSummary")}:{" "}
-									{onboardingTierRecs
-										.map(
-											(rec) =>
-												`${t(ONBOARD_SLOT_LABEL[rec.slot])} → ${rec.localValue}`,
-										)
-										.join(", ")}{" "}
-									({t("settings.tierRecommendLocalTag")})
-								</div>
-							)}
 						</div>
 						{naiaLoginDone ? (
 							<>

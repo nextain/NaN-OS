@@ -1,6 +1,8 @@
-# Windows 8GB NVA 운영 가이드
+> **ARCHIVED (2026-08-05):** This document preserves measurements for the retired server-rendered 8GB avatar stack. Current Shell NVA is GPU-free pre-baked playback; see `UC-NVA-PREBAKED` and `FR-NVA-PREBAKED.1-3`.
 
-이 문서는 Windows에서 Naia 계정 또는 다른 외부 LLM과 로컬 NVA 표현 계층을 함께 사용하는 현재 지원 계약의 기준 문서다. 관련 요구사항은 `FR-CASCADE.9~14`, 사용자 시나리오는 `UC-WIN-NVA-8G`이다.
+# Archived Windows 8GB server-rendered NVA measurements
+
+This file is an archived measurement record for the former combined 8GB server-rendering stack. It is not a current support contract.
 
 ## 지원 범위
 
@@ -185,4 +187,4 @@ Steam 또는 일반 사용자 배포 전에 GPU/드라이버 확인, 서명된 T
 - 8GB 음성을 항상 클라우드로 제한하는 정책
 - CPU/NPU Ollama를 Windows 8GB 프로파일의 두뇌로 자동 설정하는 정책
 
-이 문서와 `FR-CASCADE.9~14`, `UC-WIN-NVA-8G`가 위 과거 기록보다 우선한다.
+These measurements remain historical evidence only; `FR-NVA-PREBAKED.1-3` and `UC-NVA-PREBAKED` take precedence.

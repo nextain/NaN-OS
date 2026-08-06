@@ -33,3 +33,12 @@ area = core(헥사고날 코어 @nextain/naia-os-core) / shell(packages/shell) /
 - **graft 미연결(dormant)** = SPEC 은 이식+리뷰+컴파일 완료지만 실행 셸(packages/shell)이 아직 new-core 경유 안 함(old 경로 구동). graft 완료 = SPEC-006(chat)·SPEC-003(승인, chat흐름 내)·SPEC-007 일부(completeWith).
 - 스킬/브라우저/유투브(UC-005/006/008)의 agent-side 기능 = `new-naia-agent`(별 repo, 자체 04.features). os-side 는 gRPC 도구호출(SPEC-006)로 경유.
 - UC-007(F2/F3) graft = old 소비자 부재로 방향 미해결(passthrough vs 신규 에이전트-capability) → 보류. 상세 = `99.dev-comm/uc-migration-campaign-2026-06-13.md`.
+
+## 2026-08-06 Windows NVA/Voice/Media feature design
+
+| ID | UC | Feature | Area | Status | TEST-F |
+|---|---|---|---|---|---|
+| SPEC-014 | UC-020 | NVA web-player integration: pre-authored bundle state machine, persisted identity, GPU-free rendering, naia-adk default asset handoff | shell+naia-adk | Planned | TEST-F-014 |
+| SPEC-015 | UC-021 | Local voice lifecycle: VRAM capability gate, explicit toggle, no-login start, :8910 readiness, reference voice ownership, bounded stop/error and independent roundtrip | shell+Rust | Planned | TEST-F-015 |
+| SPEC-016 | UC-022 | Media consent state machine: explicit play authority, radio_dj ownership, Proactive isolation, saved-state no-autoplay, observed play/pause toggle | shell | Planned | TEST-F-016 |
+| SPEC-017 | UC-023 | Shell UX and Windows Gateway hardening: onboarding thumbnails/naming, left-only layout migration, compact accessible Proactive control, child cleanup/recovery | shell+Rust+agent | Planned | TEST-F-017 |

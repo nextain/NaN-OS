@@ -1177,7 +1177,7 @@ export function ChatArea({
 		let unlisten: (() => void) | undefined;
 		const configurePersistedProfile = async (config: AppConfig) => {
 			const profile = config.proactiveSpeechProfile ?? "disabled";
-			const permitted = config.proactiveSpeechPermitted ?? (profile !== "disabled");
+			const permitted = config.proactiveSpeechPermitted === true;
 			const settings = normalizeProactiveSpeechSettings({
 				profile: permitted ? profile : "disabled",
 				idleMs: config.proactiveSpeechIdleMs,

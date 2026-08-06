@@ -42,8 +42,7 @@ export function AiControlBar() {
 				setProactive((current) => ({
 					...current,
 					profile,
-					// Existing saved profiles retain their behaviour until a user changes it.
-					permitted: config.proactiveSpeechPermitted ?? profile !== "disabled",
+					permitted: config.proactiveSpeechPermitted === true,
 				}));
 			});
 		};
@@ -124,10 +123,11 @@ export function AiControlBar() {
 
 			<button
 				type="button"
-				className={`bgm-ai-toggle${proactive.permitted ? " bgm-ai-toggle--active" : ""}${proactiveBlocked ? " bgm-ai-toggle--blocked" : ""}`}
+				className={`bgm-ai-toggle bgm-ai-toggle--icon${proactive.permitted ? " bgm-ai-toggle--active" : ""}${proactiveBlocked ? " bgm-ai-toggle--blocked" : ""}`}
 				onClick={toggleProactive}
 				aria-pressed={proactive.permitted}
 				aria-label={proactiveTitle}
+				aria-describedby="proactive-control-tooltip"
 				title={proactiveTitle}
 				data-proactive-state={
 					proactiveBlocked
@@ -140,7 +140,21 @@ export function AiControlBar() {
 				}
 			>
 				<span className="bgm-ai-toggle__dot" />
-				{t("ai.proactive")}
+				<svg
+					className="bgm-ai-toggle__icon"
+					viewBox="0 0 24 24"
+					aria-hidden="true"
+				>
+					<path d="M12 3v3m0 12v3M3 12h3m12 0h3M5.64 5.64l2.12 2.12m8.48 8.48 2.12 2.12m0-12.72-2.12 2.12M7.76 16.24l-2.12 2.12" />
+					<circle cx="12" cy="12" r="3.25" />
+				</svg>
+				<span
+					id="proactive-control-tooltip"
+					className="ai-control-tooltip"
+					role="tooltip"
+				>
+					{proactiveTitle}
+				</span>
 			</button>
 
 			<div className="ai-control-bar__sep" />

@@ -28,7 +28,7 @@ const naiaConfig: AppConfig = {
 	sttProvider: "vosk",
 	ttsProvider: "nextain",
 	naiaLocalUrl: "ws://127.0.0.1:8892",
-	localGpuTier: "auto",
+	localVoiceEnabled: true,
 } as AppConfig;
 
 describe("slots-manifest · 빌드(AppConfig → 매니페스트)", () => {
@@ -54,7 +54,7 @@ describe("slots-manifest · 빌드(AppConfig → 매니페스트)", () => {
 		});
 		expect(m.slots.stt).toEqual({ provider: "vosk" });
 		expect(m.slots.tts).toEqual({ provider: "nextain" });
-		expect(m.slots.avatar.localUrl).toBeUndefined();
+		expect(m.slots.avatar).toEqual({ provider: "vrm" });
 	});
 
 	it("비밀(naiaKey/apiKey) 절대 미포함 — wm 으로 새는 비밀 누수 0", () => {
@@ -76,12 +76,29 @@ describe("slots-manifest · 빌드(AppConfig → 매니페스트)", () => {
 		expect(m.gpu.loaderProfile).toBeUndefined();
 	});
 
-	it("GPU 정보 옵션(detectedVramGb/tier)", () => {
+	it("explicit local voice emits the voice-only loader profile", () => {
 		const m = buildSlotsManifest(naiaConfig, { detectedVramGb: 24 });
 		expect(m.gpu.detectedVramGb).toBe(24);
-		// ★"auto" 는 해석된 tier id 로 기록 — wm loader(EXCLUSIVE_8G_TIERS) 가 매칭해야
-		// avatar_ditto_trt 를 선택. "auto" 를 그대로 쓰면 loader 가 avatar 를 안 띄움(캐릭터 미표시).
-		expect(m.gpu.tier).toBe("laptop-4060-8g"); // 8GB+ external LLM + Windows TRT expression profile
+		expect(m.gpu.tier).toBe("windows-voice-6g");
+		expect(m.gpu.loaderProfile).toBe("windows_trt_6g");
+	});
+
+	it("allows explicit local voice without a Naia login", () => {
+		const m = buildSlotsManifest(
+			{
+				provider: "ollama",
+				model: "qwen3:8b",
+				localVoiceEnabled: true,
+				ttsProvider: "naia-local-voice",
+			} as AppConfig,
+			{ detectedVramGb: 6 },
+		);
+		expect(m.gate.naiaAccount).toBe(false);
+		expect(m.gpu).toMatchObject({
+			detectedVramGb: 6,
+			tier: "windows-voice-6g",
+			loaderProfile: "windows_trt_6g",
+		});
 	});
 
 	it("★auto tier 해석 — 8GB 는 검증 티어 없음 → tier 생략 (2026-07-15 재계약)", () => {
@@ -89,14 +106,17 @@ describe("slots-manifest · 빌드(AppConfig → 매니페스트)", () => {
 		// auto 는 검증(hidden 아님) 티어만 해석한다.
 		const m = buildSlotsManifest(naiaConfig, { detectedVramGb: 8 });
 		expect(m.gpu).toMatchObject({
-			tier: "laptop-4060-8g",
-			loaderProfile: "windows_trt_8g",
+			tier: "windows-voice-6g",
+			loaderProfile: "windows_trt_6g",
 		});
 	});
 
-	it("★auto tier — VRAM 미검출 시 tier 생략(loader 가 --gpu 로 폴백)", () => {
+	it("explicit local voice keeps the 6GB loader profile when VRAM is unavailable", () => {
 		const m = buildSlotsManifest(naiaConfig);
-		expect(m.gpu.tier).toBeUndefined();
+		expect(m.gpu).toMatchObject({
+			tier: "windows-voice-6g",
+			loaderProfile: "windows_trt_6g",
+		});
 	});
 
 	it("★명시 tier id 는 정규화(구 id 호환) 후 기록", () => {
@@ -108,14 +128,14 @@ describe("slots-manifest · 빌드(AppConfig → 매니페스트)", () => {
 			} as unknown as AppConfig,
 			{ detectedVramGb: 8 },
 		);
-		expect(m.gpu.tier).toBe("laptop-4060-8g");
+		expect(m.gpu.tier).toBe("windows-voice-6g");
 	});
 
-	it("writes 4060 8GB laptop loader profile for windows-manager", () => {
+	it("writes the voice-only loader profile while preserving pre-baked NVA", () => {
 		const m = buildSlotsManifest(
 			{
 				...naiaConfig,
-				localGpuTier: "laptop-4060-8g",
+				localGpuTier: "windows-voice-6g",
 				ttsProvider: "naia-local-voice",
 				avatarProvider: "naia-video-avatar",
 				nvaModel: "naia.nva",
@@ -123,14 +143,14 @@ describe("slots-manifest · 빌드(AppConfig → 매니페스트)", () => {
 			{ detectedVramGb: 8 },
 		);
 		expect(m.slots.tts).toEqual({ provider: "naia-local-voice" });
-		expect(m.slots.avatar).toMatchObject({
-			provider: "naia-video-avatar",
+		expect(m.slots.avatar).toEqual({
+			provider: "prebaked-video",
 			model: "naia.nva",
 		});
 		expect(m.gpu).toMatchObject({
 			detectedVramGb: 8,
-			tier: "laptop-4060-8g",
-			loaderProfile: "windows_trt_8g",
+			tier: "windows-voice-6g",
+			loaderProfile: "windows_trt_6g",
 		});
 	});
 
@@ -153,7 +173,7 @@ describe("slots-manifest · 빌드(AppConfig → 매니페스트)", () => {
 		});
 	});
 
-	it("writes NVA avatar + avatar focus so windows-manager can select Ditto TRT", () => {
+	it("migrates a legacy avatar-focus profile to voice-only while keeping NVA client-side", () => {
 		const m = buildSlotsManifest(
 			{
 				...naiaConfig,
@@ -165,28 +185,30 @@ describe("slots-manifest · 빌드(AppConfig → 매니페스트)", () => {
 			{ detectedVramGb: 8 },
 		);
 		expect(m.slots.avatar).toMatchObject({
-			provider: "naia-video-avatar",
+			provider: "prebaked-video",
 			model: "naia.nva",
 		});
 		expect(m.gpu).toMatchObject({
-			tier: "laptop-4060-8g",
-			localFocus: "avatar",
+			tier: "windows-voice-6g",
 		});
 	});
 
-	it("strips NVA and loader profile below 8GB", () => {
+	it("keeps NVA at 6GB and writes the independent voice-only loader profile", () => {
 		const m = buildSlotsManifest(
 			{
 				...naiaConfig,
-				localGpuTier: "laptop-4060-8g",
+				localGpuTier: "windows-voice-6g",
 				avatarProvider: "naia-video-avatar",
 				nvaModel: "naia.nva",
 			} as AppConfig,
 			{ detectedVramGb: 6 },
 		);
-		expect(m.slots.avatar).toEqual({ provider: "vrm" });
-		expect(m.gpu.tier).toBeUndefined();
-		expect(m.gpu.loaderProfile).toBeUndefined();
+		expect(m.slots.avatar).toMatchObject({
+			provider: "prebaked-video",
+			model: "naia.nva",
+		});
+		expect(m.gpu.tier).toBe("windows-voice-6g");
+		expect(m.gpu.loaderProfile).toBe("windows_trt_6g");
 	});
 });
 

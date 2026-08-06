@@ -64,6 +64,148 @@ export interface NvaManifest {
 	};
 	/** 표준 감정/의도 키 → animation 키 매핑(선택). VRM expression 유사 — 소비 앱 LLM 이 사용. */
 	expressions?: Record<string, string>;
+	/** GPU 런타임 없이 WebView가 직접 재생하는 VRM-style WebM 슬롯. */
+	vrm_slots?: NvaVrmSlots;
+	expression_states?: Record<string, NvaExpressionSlot>;
+	viseme_clips?: Record<string, NvaVisemeSlot>;
+	prebaked_speech?: {
+		mode?: string;
+		selection?: string;
+		utterances?: Record<string, NvaSpeechSlot>;
+	};
+	/** NVA v0.2 compatibility: authored utterance clips shipped by the ADK. */
+	speech_clips?: Record<string, NvaSpeechSlot>;
+}
+
+export interface NvaLocalizedSpeech {
+	text?: string;
+	clip?: string;
+	viseme?: string;
+}
+
+export interface NvaSpeechSlot extends NvaLocalizedSpeech {
+	intent?: string;
+	expression?: string;
+	state?: string;
+	locale?: string;
+	audio?: string;
+	by_locale?: Record<string, NvaLocalizedSpeech>;
+}
+
+export interface NvaExpressionSlot {
+	label?: string;
+	mood?: string;
+	preview_image?: string;
+	image?: string;
+	animation?: string;
+}
+
+export interface NvaVisemeSlot {
+	label?: string;
+	clip: string;
+}
+
+export interface NvaVrmSlots {
+	profile?: {
+		generation_mode?: string;
+		default_locale?: string;
+		available_locales?: string[];
+		locales?: string[];
+		default_expression?: string;
+		default_motion?: string;
+	};
+	expressions?: Record<string, NvaExpressionSlot>;
+	visemes?: Record<string, NvaVisemeSlot>;
+	motions?: Record<string, { clip: string; loop?: boolean; expression?: string }>;
+	speech?: Record<string, NvaSpeechSlot>;
+}
+
+export function isPrebakedNvaManifest(manifest: NvaManifest): boolean {
+	return (
+		manifest.vrm_slots?.profile?.generation_mode === "prebaked_webm_only" ||
+		Object.keys(manifest.vrm_slots?.speech ?? {}).length > 0 ||
+		Object.keys(manifest.prebaked_speech?.utterances ?? {}).length > 0 ||
+		Object.keys(manifest.speech_clips ?? {}).length > 0 ||
+		Object.values(manifest.animations).some(
+			(animation) => animation.can_talk || animation.loop,
+		)
+	);
+}
+
+function nvaSpeechSlots(manifest: NvaManifest): Record<string, NvaSpeechSlot> {
+	return (
+		manifest.vrm_slots?.speech ??
+		manifest.prebaked_speech?.utterances ??
+		manifest.speech_clips ??
+		{}
+	);
+}
+
+export function resolveNvaLocale(
+	manifest: NvaManifest,
+	requestedLocale?: string,
+): string {
+	const profile = manifest.vrm_slots?.profile;
+	const speech = nvaSpeechSlots(manifest);
+	const firstSpeech = Object.values(speech)[0];
+	const available =
+		profile?.available_locales ??
+		profile?.locales ??
+		Object.keys(firstSpeech?.by_locale ?? {});
+	if (firstSpeech?.locale && !available.includes(firstSpeech.locale)) {
+		available.push(firstSpeech.locale);
+	}
+	const requested = requestedLocale?.trim();
+	if (requested && available.includes(requested)) return requested;
+	if (requested) {
+		const language = requested.split("-")[0]?.toLowerCase();
+		const compatible = available.find(
+			(locale) => locale.split("-")[0]?.toLowerCase() === language,
+		);
+		if (compatible) return compatible;
+	}
+	return profile?.default_locale ?? available[0] ?? requested ?? "ko-KR";
+}
+
+export function localizedNvaSpeech(
+	manifest: NvaManifest,
+	slot: NvaSpeechSlot,
+	requestedLocale?: string,
+): NvaLocalizedSpeech {
+	const locale = resolveNvaLocale(manifest, requestedLocale);
+	const defaultLocale = manifest.vrm_slots?.profile?.default_locale;
+	return (
+		slot.by_locale?.[locale] ??
+		slot.by_locale?.[defaultLocale ?? ""] ?? {
+			text: slot.text,
+			clip: slot.clip,
+			viseme: slot.viseme,
+		}
+	);
+}
+
+function normalizeSpeechText(text: string): string {
+	return text
+		.normalize("NFKC")
+		.toLocaleLowerCase()
+		.replace(/[\s\p{P}\p{S}]+/gu, "");
+}
+
+export function findPrebakedSpeech(
+	manifest: NvaManifest,
+	text: string,
+	requestedLocale?: string,
+): { id: string; slot: NvaSpeechSlot; localized: NvaLocalizedSpeech } | null {
+	const speech = nvaSpeechSlots(manifest);
+	const wanted = normalizeSpeechText(text);
+	if (!wanted) return null;
+	for (const [id, slot] of Object.entries(speech)) {
+		const localized = localizedNvaSpeech(manifest, slot, requestedLocale);
+		if (localized.text && normalizeSpeechText(localized.text) === wanted) {
+			return { id, slot, localized };
+		}
+	}
+	return null;
 }
 
 /** default 재생 클립 = idle(안정 루프: loop && !can_talk && 전환아님).

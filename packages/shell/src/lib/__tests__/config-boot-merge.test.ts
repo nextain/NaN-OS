@@ -3,7 +3,7 @@
 // 배경(재현 100%, 2026-07-15): naia-settings/config.json 을 나이아(부스)로 바꿔도 재기동마다
 //   스테일 localStorage persona(알파)가 이겨 파일을 덮었다. 원인 = App.tsx 부팅 병합만 유일하게
 //   `{ ...local, ...file, ...ui }` 로 local 을 base 로 썼다(워크스페이스 전환은 이미 파일만 base).
-import { describe, it, expect } from "vitest";
+import { describe, expect, it } from "vitest";
 import { mergeBootConfig } from "../config.js";
 
 describe("mergeBootConfig — 파일이 SoT, localStorage 는 캐시 (FR-CONFIG-SOT.1)", () => {
@@ -131,5 +131,25 @@ describe("mergeBootConfig — 워크스페이스 전환과 동형 (비대칭 해
 				(workspaceSwitch as Record<string, unknown>)[k],
 			);
 		}
+	});
+});
+
+describe("mergeBootConfig — legacy NVA runtime migration", () => {
+	it("strips retired remote and avatar-focus fields from file SoTs", () => {
+		const merged = mergeBootConfig(
+			null,
+			{
+				cascadeRuntimeUrl: "https://stale.invalid:8910",
+				local8gFocus: "avatar",
+				localGpuTier: "laptop-4060-8g",
+			},
+			{ localAvatarVoiceFocus: "both", avatarProvider: "naia-video-avatar" },
+		);
+		expect(merged).toMatchObject({ avatarProvider: "naia-video-avatar" });
+		expect(merged?.cascadeRuntimeUrl).toBeUndefined();
+		expect(merged?.local8gFocus).toBeUndefined();
+		expect(merged?.localAvatarVoiceFocus).toBeUndefined();
+		expect(merged?.localGpuTier).toBeUndefined();
+		expect(merged?.localVoiceEnabled).toBe(false);
 	});
 });

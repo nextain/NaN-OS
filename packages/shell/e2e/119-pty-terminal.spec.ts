@@ -332,13 +332,13 @@ test.describe("PTY Terminal E2E — #119", () => {
 		await expect(page.locator(".workspace-panel__term-empty")).toBeVisible();
 	});
 
-	// ── UI reorg layout: home VN · workspace rail · center split · doc tabs ──
+	// ── UI reorg layout: compact app chat · workspace rail · center split · doc tabs ──
 
-	// T6: Home screen uses the immersive visual-novel chat variant
-	test("T6: 홈 화면은 VN 몰입 대화 variant", async ({ page }) => {
+	// T6: The app screen uses the user-selected compact left chat variant.
+	test("T6: 앱 화면은 왼쪽 소형 대화 variant", async ({ page }) => {
 		// beforeEach lands on home (no panel active)
-		await expect(page.locator('.app-root[data-ui-mode="home"]')).toBeAttached();
-		await expect(page.locator(".chat-panel--vn")).toBeVisible();
+		await expect(page.locator('.app-root[data-ui-mode="app"]')).toBeAttached();
+		await expect(page.locator(".chat-panel--floating")).toBeVisible();
 	});
 
 	// T7: Opening the workspace switches the chat to the left-rail variant
