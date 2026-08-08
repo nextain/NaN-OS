@@ -238,7 +238,7 @@ export type NaiaDefaultSlots = Pick<
 	"main" | "sub" | "embedding" | "stt" | "tts"
 >;
 export const NAIA_SLOT_DEFAULTS: NaiaDefaultSlots = {
-	main: { provider: "nextain", model: "gemini-3.5-flash" },
+	main: { provider: "nextain", model: "deepseek-v4-flash" },
 	sub: { provider: "naia", model: "gemini-3.1-flash-lite" },
 	// 기본 임베딩 = 다국어 e5 (한국어 우선 정책, 2026-07-15 루크 승인 "e5 추가 + 기본값으로").
 	// 영어 전용 MiniLM(80MB)보다 무겁지만(~1.1GB, CPU 동작) 한국어 회상 품질이 기준.

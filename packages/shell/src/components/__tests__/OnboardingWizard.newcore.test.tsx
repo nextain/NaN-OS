@@ -138,6 +138,9 @@ describe("OnboardingWizard — newCore 배선(step-flow graft step2)", () => {
 		// provider → skip "나중에 설정"
 		fireEvent.click(screen.getByText(/나중에 설정|Set up later/));
 		flush();
+		// voice → Next
+		fireEvent.click(screen.getByRole("button", { name: /다음|Next/ }));
+		flush();
 		// complete → 시작하기 (handleComplete is async after saveConfigSecure — flush promise chain)
 		fireEvent.click(screen.getByRole("button", { name: /시작하기|Get Started/ }));
 		await act(async () => {

@@ -93,8 +93,8 @@ describe("registry — Naia (nextain) provider models", () => {
 		expect(p?.requiresNaiaKey).toBe(true);
 	});
 
-	it("default model is gemini-3.1-flash-lite", () => {
-		expect(getDefaultLlmModel("nextain")).toBe("gemini-3.1-flash-lite");
+	it("default model is deepseek-v4-flash", () => {
+		expect(getDefaultLlmModel("nextain")).toBe("deepseek-v4-flash");
 	});
 });
 
@@ -380,10 +380,11 @@ describe("registry — sortModels", () => {
 	it("uses the dated Naia recommendation while keeping unavailable routes last", () => {
 		const naia = getLlmProvider("nextain")!.models;
 		const sorted = sortModels(naia, "performance").map((model) => model.id);
-		expect(sorted.slice(0, 7)).toEqual([
+		expect(sorted.slice(0, 8)).toEqual([
 			"gpt-5.6-sol",
 			"grok-4.3",
 			"deepseek-v4-pro",
+			"deepseek-v4-flash",
 			"gemini-3.5-flash",
 			"gemini-3.1-flash-lite",
 			"gpt-5.6-luna",

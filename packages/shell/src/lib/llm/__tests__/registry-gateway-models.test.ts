@@ -27,6 +27,7 @@ describe("LLM registry — gateway model exclusion (#248)", () => {
 			"gemini-3.1-flash-lite",
 			"grok-4.3",
 			"deepseek-v4-pro",
+			"deepseek-v4-flash",
 			"gpt-5.6-sol",
 			"gpt-5.6-luna",
 			"claude-opus-5",
@@ -38,6 +39,7 @@ describe("LLM registry — gateway model exclusion (#248)", () => {
 			"Gemini 3.1 Flash Lite",
 			"Grok 4.3",
 			"DeepSeek V4 Pro",
+			"DeepSeek V4 Flash",
 			"GPT-5.6 Sol",
 			"GPT-5.6 Luna",
 			"Claude Opus 5",
@@ -93,10 +95,10 @@ describe("LLM registry — gateway model exclusion (#248)", () => {
 		expect(ids).toContain("gemini-2.5-flash");
 	});
 
-	it("Naia default model is gemini-3.1-flash-lite", async () => {
+	it("Naia default model is deepseek-v4-flash", async () => {
 		const { getLlmProvider } = await import("../registry.js");
 		const naia = getLlmProvider("nextain");
-		expect(naia!.defaultModel).toBe("gemini-3.1-flash-lite");
+		expect(naia!.defaultModel).toBe("deepseek-v4-flash");
 	});
 });
 
@@ -105,7 +107,7 @@ describe("shouldMigrateNextainModel (#248 follow-up migration)", () => {
 		const { shouldMigrateNextainModel } = await import("../registry.js");
 		const d = shouldMigrateNextainModel("nextain", "some-deprecated-model");
 		expect(d.migrate).toBe(true);
-		if (d.migrate) expect(d.to).toBe("gemini-3.1-flash-lite");
+		if (d.migrate) expect(d.to).toBe("deepseek-v4-flash");
 	});
 
 	it("does NOT migrate valid models on nextain provider", async () => {

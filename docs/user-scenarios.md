@@ -775,3 +775,27 @@ Those older sections are historical evidence only.
 | **UC-MEDIA-CONSENT** | 앱 시작 시 음악은 정지 상태다. 사용자 재생 또는 LLM의 명시적 radio_dj play 호출만 세션을 시작한다. 재생 버튼을 다시 누르면 pause되고 Proactive 토글은 음악 권한이 아니다. | clean/migration negative, skill contract, pause toggle |
 | **UC-SHELL-PRESENTATION** | 온보딩에서 일반 이름과 실제 video-frame 썸네일을 보고 VRM/NVA를 고른다. chat은 좌측 두 레이아웃만 제공하며 Proactive는 접근 가능한 compact icon이고 기본 OFF다. | onboarding/layout/accessibility Playwright |
 | **UC-WINDOWS-DISCORD** | Windows에서 Gateway를 연결·종료·재연결해도 제한 시간 안에 끝나며 orphan agent가 남지 않는다. | isolated Windows lifecycle integration |
+
+### 2026-08-08 field-review addendum (B8)
+
+`docs/voice-avatar-radio-handoff-2026-08-07.md` 실측 필드리뷰가 위 표의 "완료" 표시에도 남아있던 결함 6건을 적발했다. 아래는 추가 시나리오이며 위 표를 대체하지 않는다.
+
+| Scenario | User-observable outcome | Coverage |
+|---|---|---|
+| **UC-NVA-TTS-OWNERSHIP** | NVA를 선택한 상태에서 어떤 TTS provider를 골라도(로컬/클라우드/브라우저) 실제로 그 엔진의 음성이 재생된다. NVA는 오디오를 자체 합성하지 않고 Shell의 실제 재생 시작/종료에 맞춰 입모양만 움직인다. 단, 정확히 일치하는 저작 문구(온보딩 인사말 등)는 그 클립 자체의 녹음 음성이 재생된다. | ChatArea 컴포넌트 테스트(계약 재작성 포함), media-runtime-routing contract test |
+| **UC-NVA-COMPOSITE** | NVA가 대기·발화·대기를 오갈 때 앱 배경이 항상 유지되고, 알파를 가질 수 없는 발화 클립(mp4 등)이라도 검은 배경이 노출되지 않는다. | prebaked-renderer 유닛 테스트; 실기 Windows 시각 검증은 이 세션에서 미실시 |
+| **UC-SETTINGS-AVATAR-SYNC** | 로그인·원격 설정 반영 등으로 메인 화면의 아바타가 NVA로 바뀌면, 설정 탭의 상세/미리보기도 같은 시점에 NVA로 갱신된다(재시작 불요). | SettingsTab hydration 회귀 테스트 |
+| **UC-DISCORD-TAB-LIVE** | 대화창 하단 🌐 Channels 탭을 열면 실제 연결 상태·서버·채널 목록·대화 스레드가 보인다("안정화 작업 중" 정적 문구가 아니다). | NaiaMetaArea + ChannelsTab 컴포넌트 테스트 |
+| **UC-BGM-NO-FALSE-SKIP** | YouTube 곡이 실제로 재생 중이면, iframe의 "재생 중" 신호 메시지가 유실되더라도(WebView2 핸드셰이크 이슈) 12초 워치독이 다른 곡으로 강제 전환하지 않는다. 진행률(`infoDelivery`) 신호가 독립적으로 재생을 확인한다. | `components/__tests__/BgmPlayer.test.tsx`(신규) + `e2e/bgm-skill.spec.ts` 실 브라우저 재작성(대기열 보존·상태 diagnostic 확인) |
+| **UC-BGM-ENDED-NOTIFY** | 곡이 실제로 끝나면(타이머 아님, 진짜 ended 이벤트) Shell이 트랙 시작 때와 동일한 방식으로 에이전트에게 즉시 통지한다. 에이전트가 다음 곡을 고르거나 멘트를 하는 결정은 naia-agent 소관(이 저장소 범위 밖)이라 이 시나리오는 "통지가 나가는지"까지만 다룬다. | `components/__tests__/BgmPlayer.test.tsx`(신규, music_ended 발신 검증) |
+| **UC-VOICE-ONBOARDING** | 로그인 이후 온보딩에 음성 단계가 있다: 무료 Web TTS on/off + 시스템 보이스 미리듣기, 그리고 VRAM 6GB+ 감지 시 실제로 로컬 VoxCPM2를 켜고 끌 수 있는 버튼(안내 링크가 아니라 진짜 `start_cascade`/`stop_cascade` 호출). | OnboardingWizard 컴포넌트 테스트(음성 단계 내비게이션 + 실제 invoke 호출 + 저장된 config 필드 검증) + `e2e/onboarding-fresh.spec.ts` 실 브라우저 3/3 통과 |
+
+이번 세션에 실제로 실행한 것: Playwright chromium 신규 설치 후 실 dev server로 `e2e/onboarding-fresh.spec.ts`(3/3) + `e2e/bgm-skill.spec.ts`(12/12, 1건은 옛 강제스킵 동작을 검증하던 낡은 테스트라 새 계약에 맞게 재작성 후 통과) 실행. 여전히 미완료: `e2e-tauri`(네이티브 Tauri/WebDriver) 스위트 미실행. UC-NVA-COMPOSITE의 실제 크로마키 정확도는 headless chromium이 WebView2 특유 경로를 타지 않아 여전히 Windows 실기 미검증.
+
+### 2026-08-08 Naia 기본모델 변경
+
+| Scenario | User-observable outcome | Coverage |
+|---|---|---|
+| **UC-LLM-DEFAULT-DEEPSEEK-FLASH** | Naia 계정으로 로그인하거나 온보딩을 완료하면 메인 LLM이 `DeepSeek V4 Flash`로 자동 선택된다. 설정 탭 모델 선택기에도 `DeepSeek V4 Flash`가 `DeepSeek V4 Pro` 옆에 나타나고, "Naia 기본값 적용"을 눌러도 같은 값이 채워진다. | `lib/llm/__tests__/registry*.test.ts`, `lib/slots/__tests__/settings-slots.contract.test.ts`, `components/__tests__/SettingsTab.test.tsx` |
+
+any-llm 게이트웨이 쪽(라우팅·가격)은 이미 구현·테스트돼 있어 이번 변경 대상이 아니었다(`pytest tests/gateway/test_naia_azure_models.py tests/unit/test_naia_pricing.py` 78 passed로 확인). 이 시나리오에 대한 전용 Playwright는 없음(모델 선택 자체는 기존 SettingsTab e2e 커버리지 범위 밖) — 이번 세션에서 새로 만들지 않음.

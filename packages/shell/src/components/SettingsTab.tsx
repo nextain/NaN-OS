@@ -630,6 +630,19 @@ export function SettingsTab() {
 	const [sttDownloading, setSttDownloading] = useState<string | null>(null);
 	const localGpuTier = "off" as const;
 	const [detectedVramGb, setDetectedVramGb] = useState<number | null>(null);
+	// Mirror App.tsx's syncAvatarConfig: without this, `naia-config-changed`
+	// (login/remote hydration, other tabs) leaves this tab's own avatar state
+	// stale — main switches to NVA while Settings' detail view stays on VRM.
+	useEffect(() => {
+		const syncAvatarFromConfig = () => {
+			const cfg = loadConfig();
+			setAvatarProvider(effectiveAvatarProviderFromConfig(cfg, detectedVramGb));
+			setNvaModel(cfg?.nvaModel ?? "");
+		};
+		window.addEventListener("naia-config-changed", syncAvatarFromConfig);
+		return () =>
+			window.removeEventListener("naia-config-changed", syncAvatarFromConfig);
+	}, [detectedVramGb]);
 	// Detect GPU VRAM once on mount (#2 / FR-VRAM.1); null when unavailable.
 	useEffect(() => {
 		detectGpuVramGb().then(setDetectedVramGb);
@@ -746,6 +759,10 @@ export function SettingsTab() {
 		avatar_enabled: boolean;
 	} | null>(null);
 	const localFacadeUrl = useCascadeAvatarStore((s) => s.localFacadeUrl);
+	// NVA(prebaked web player)는 백엔드/façade가 없다 — 실제 상태는 VideoAvatarCanvas가
+	// PrebakedAvatarRenderer를 등록했는지로만 판단한다(더는 cascade avatar 헬스체크 없음).
+	const nvaRendererActive = useCascadeAvatarStore((s) => !!s.renderer);
+	const nvaLoadError = useCascadeAvatarStore((s) => s.nvaLoadError);
 	const cascadeProbeUrl =
 		localFacadeUrl?.trim() ||
 		(ttsProvider === "naia-local-voice" ? vllmTtsHost?.trim() : "") ||
@@ -2784,7 +2801,7 @@ export function SettingsTab() {
 	// 로컬 서비스 슬롯(음성/아바타)의 실시간 상태 — facade health 로 판정.
 	// null = 로컬 서비스 아님(cloud/미해당) → 배지 없음. "running" = 백엔드 응답,
 	// "starting" = 로컬로 선택됐으나 facade 미가동/미응답(기동 중 또는 좀비로 안 붙음).
-	function slotLiveStatus(id: SlotId): "running" | "starting" | null {
+	function slotLiveStatus(id: SlotId): "running" | "starting" | "error" | null {
 		if (id === "tts") {
 			if (slotSnapshot.tts.provider !== "naia-local-voice") return null;
 			return cascadeHealth?.tts_enabled && cascadeHealth.tts
@@ -2793,9 +2810,8 @@ export function SettingsTab() {
 		}
 		if (id === "avatar") {
 			if (appliedEffectiveAvatarProvider !== "naia-video-avatar") return null;
-			return cascadeHealth?.avatar_enabled && cascadeHealth.avatar
-				? "running"
-				: "starting";
+			if (nvaLoadError) return "error";
+			return nvaRendererActive ? "running" : "starting";
 		}
 		return null;
 	}
@@ -3711,12 +3727,16 @@ export function SettingsTab() {
 																	color:
 																		st === "running"
 																			? "var(--success-color, #3fb950)"
-																			: "var(--warning-color, #d29922)",
+																			: st === "error"
+																				? "var(--error-color, #f85149)"
+																				: "var(--warning-color, #d29922)",
 																}}
 															>
 																{st === "running"
 																	? `● ${t("settings.slotStatusRunning")}`
-																	: `◌ ${t("settings.slotStatusStarting")}`}
+																	: st === "error"
+																		? `✕ ${t("settings.slotStatusError")}`
+																		: `◌ ${t("settings.slotStatusStarting")}`}
 															</span>
 														);
 													})()}

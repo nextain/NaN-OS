@@ -215,10 +215,10 @@ describe("S-SLOT · FR-SLOT.5 sub/memory SoT separation", () => {
 });
 
 describe("S-SLOT · FR-SLOT.3 naia 계정 Gemini 기본값 자동 적용 (R2-1, §9 #5 해결)", () => {
-	it("NAIA_SLOT_DEFAULTS main = nextain / gemini-3.5-flash (실존 모델, §9 #5)", () => {
+	it("NAIA_SLOT_DEFAULTS main = nextain / deepseek-v4-flash (2026-08-08 기본모델 변경)", () => {
 		expect(NAIA_SLOT_DEFAULTS.main).toEqual({
 			provider: "nextain",
-			model: "gemini-3.5-flash",
+			model: "deepseek-v4-flash",
 		});
 		// stale hardcode gemini-2.5-flash 회귀 금지
 		expect(NAIA_SLOT_DEFAULTS.main.model).not.toBe("gemini-2.5-flash");
@@ -251,7 +251,7 @@ describe("S-SLOT · FR-SLOT.3 naia 계정 Gemini 기본값 자동 적용 (R2-1, 
 		// 빈 config → 전 슬롯 기본값
 		const filled = applyNaiaSlotDefaults({} as AppConfig);
 		expect(filled.provider).toBe("nextain");
-		expect(filled.model).toBe("gemini-3.5-flash");
+		expect(filled.model).toBe("deepseek-v4-flash");
 		expect(filled.subLlmProvider).toBe("naia");
 		expect(filled.subLlmModel).toBe("gemini-3.1-flash-lite");
 		expect(filled.llmRoles?.sub).toMatchObject({

@@ -14,21 +14,34 @@ function sentenceRoutingSource(): string {
 	return chatArea.slice(start, end);
 }
 
-describe("Naia Media Runtime speech routing contract", () => {
-	it("routes active video-avatar speech to text once before Shell synthesis", () => {
+describe("Shell TTS single-ownership speech routing contract", () => {
+	it("only bypasses Shell synthesis for an authored NVA clip match", () => {
 		const source = sentenceRoutingSource();
-		const runtimeCall = source.indexOf(".speak(clean, undefined");
+		const authoredClipGate = source.indexOf("hasAuthoredClip(clean)");
+		const authoredClipCall = source.indexOf(".playAuthoredClip(clean");
 		const shellSynthesis = source.indexOf("synthesizeTts({");
 
-		expect(runtimeCall).toBeGreaterThanOrEqual(0);
-		expect(shellSynthesis).toBeGreaterThan(runtimeCall);
-		expect(source.slice(runtimeCall, shellSynthesis)).toContain("return;");
+		expect(authoredClipGate).toBeGreaterThanOrEqual(0);
+		expect(authoredClipCall).toBeGreaterThan(authoredClipGate);
+		expect(shellSynthesis).toBeGreaterThan(authoredClipCall);
+		expect(source.slice(authoredClipCall, shellSynthesis)).toContain(
+			"return;",
+		);
 	});
 
-	it("does not resend synthesized PCM/WAV through the supplied-audio path", () => {
+	it("never lets the NVA renderer synthesize dynamic speech itself", () => {
 		const source = sentenceRoutingSource();
 
+		// The old hijack called the renderer directly with no audio for every
+		// sentence, skipping Shell synthesis entirely. That path is gone.
+		expect(source).not.toContain(".speak(clean, undefined");
 		expect(source).not.toContain("speakAudio(");
 		expect(source).not.toContain('encoding: "LINEAR16"');
+	});
+
+	it("drives NVA visual state from Shell's own playback lifecycle, not synthesis", () => {
+		const source = sentenceRoutingSource();
+		expect(source).toContain("setSpeakingVisual(true)");
+		expect(source).toContain("setSpeakingVisual(false)");
 	});
 });

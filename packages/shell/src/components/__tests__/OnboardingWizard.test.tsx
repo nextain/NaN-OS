@@ -250,6 +250,7 @@ describe("OnboardingWizard", () => {
 		clickNextByClass();
 		fireEvent.click(screen.getByText(/Set up later/));
 		flush();
+		clickNextByClass(); // voice step
 		fireEvent.click(
 			screen.getByRole("button", { name: /시작하기|Get Started/ }),
 		);
@@ -311,6 +312,7 @@ describe("OnboardingWizard", () => {
 			target: { value: "byo-test-key" },
 		});
 		clickNextByClass();
+		clickNextByClass(); // voice step
 
 		fireEvent.click(
 			screen.getByRole("button", { name: /시작하기|Get Started/ }),
@@ -330,6 +332,73 @@ describe("OnboardingWizard", () => {
 		expect(config.onboardingComplete).toBe(true);
 		expect(config.localGpuTier).toBeUndefined(); // hardware profiles require a Naia login
 		expect(secureStore.set).toHaveBeenCalledWith("apiKey", "byo-test-key");
+	});
+
+	it("actually starts VoxCPM2 from the voice step instead of only saving a preference", async () => {
+		const { invoke } = await import("@tauri-apps/api/core");
+		let cascadeStarted = false;
+		(invoke as ReturnType<typeof vi.fn>).mockImplementation((cmd: string) => {
+			if (cmd === "detect_gpu_vram") return Promise.resolve(16);
+			if (cmd === "cascade_installation_status") {
+				return Promise.resolve({
+					phase: cascadeStarted ? "ready" : "ready-to-start",
+					ready: cascadeStarted,
+					canStart: true,
+					summary: "ok",
+					steps: [],
+				});
+			}
+			if (cmd === "start_cascade") {
+				cascadeStarted = true;
+				return Promise.resolve(
+					JSON.stringify({
+						facade_port: 8910,
+						services: [{ kind: "tts" }],
+					}),
+				);
+			}
+			return Promise.resolve(true);
+		});
+
+		renderAtAgentName();
+		await act(async () => {
+			await Promise.resolve();
+		});
+		advanceFromAgentNameToProvider();
+		fireEvent.click(screen.getByText(/Set up later/));
+		flush();
+
+		// voice step
+		expect(screen.getByText(/GPU detected/)).toBeDefined();
+		const localToggle = screen.getByRole("button", {
+			name: /Turn on local voice/,
+		});
+		fireEvent.click(localToggle);
+		await act(async () => {
+			await Promise.resolve();
+			await Promise.resolve();
+			await Promise.resolve();
+		});
+
+		expect(invoke).toHaveBeenCalledWith("start_cascade", {
+			expectedLoaderProfile: "windows_trt_6g",
+		});
+		expect(
+			screen.getByRole("button", { name: /Local voice on/ }),
+		).toBeDefined();
+
+		clickNextByClass();
+		fireEvent.click(
+			screen.getByRole("button", { name: /시작하기|Get Started/ }),
+		);
+		await act(async () => {
+			await Promise.resolve();
+		});
+
+		const config = JSON.parse(localStorage.getItem("naia-config") || "{}");
+		expect(config.ttsProvider).toBe("naia-local-voice");
+		expect(config.localVoiceEnabled).toBe(true);
+		expect(config.ttsEnabled).toBe(true);
 	});
 
 	it("Next button is always enabled (agentName is optional)", () => {
@@ -378,6 +447,10 @@ describe("OnboardingWizard", () => {
 
 		// provider → skip via "Set up later"
 		fireEvent.click(screen.getByText(/Set up later/));
+		flush();
+
+		// voice → Next
+		fireEvent.click(screen.getByRole("button", { name: /다음|Next/ }));
 		flush();
 
 		// complete → click "시작하기"

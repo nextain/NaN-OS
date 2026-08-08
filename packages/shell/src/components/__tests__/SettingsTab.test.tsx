@@ -8,6 +8,7 @@ import {
 import { StrictMode } from "react";
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { t } from "../../lib/i18n";
 
 const eventListeners = vi.hoisted(
 	() =>
@@ -583,11 +584,11 @@ describe("SettingsTab", () => {
 				main: expect.objectContaining({ provider: "codex", model: "gpt-5.4" }),
 				sub: expect.objectContaining({
 					provider: "nextain",
-					model: "gemini-3.1-flash-lite",
+					model: "deepseek-v4-flash",
 				}),
 				memory: expect.objectContaining({
 					provider: "nextain",
-					model: "gemini-3.1-flash-lite",
+					model: "deepseek-v4-flash",
 				}),
 			}),
 		);
@@ -994,6 +995,48 @@ describe("SettingsTab — memory tab (#298)", () => {
 		expect(saved.provider).toBe("ollama");
 		expect(saved.model).toBe("qwen3:8b");
 		expect(saved.avatarProvider).toBe("naia-video-avatar");
+	});
+
+	it("re-hydrates its own avatar selection on naia-config-changed, not just on mount", async () => {
+		localStorage.setItem(
+			"naia-config",
+			JSON.stringify({
+				provider: "ollama",
+				model: "qwen3:8b",
+				avatarProvider: "vrm",
+			}),
+		);
+		mockInvoke.mockImplementation((cmd: string) =>
+			cmd === "detect_gpu_vram" ? Promise.resolve(8) : Promise.resolve([]),
+		);
+
+		render(<SettingsTab />);
+		gotoSettingsTab("profile");
+		await vi.waitFor(() =>
+			expect(screen.getByTestId("slot-avatar").textContent).toContain(
+				t("settings.avatarProviderVrm"),
+			),
+		);
+
+		// Something outside this tab (login hydration, another tab) switches the
+		// live config to NVA and announces it — Settings must follow, not stay
+		// stuck showing the stale VRM detail it had at mount.
+		localStorage.setItem(
+			"naia-config",
+			JSON.stringify({
+				provider: "ollama",
+				model: "qwen3:8b",
+				avatarProvider: "naia-video-avatar",
+				nvaModel: "naia",
+			}),
+		);
+		window.dispatchEvent(new CustomEvent("naia-config-changed"));
+
+		await vi.waitFor(() =>
+			expect(screen.getByTestId("slot-avatar").textContent).toContain(
+				t("settings.avatarProviderVideo"),
+			),
+		);
 	});
 
 	it.skip("retired: selects the visible Windows TRT profile without replacing the external brain", async () => {

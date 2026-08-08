@@ -1142,11 +1142,13 @@ export function ChatArea({
 					useAvatarStore.getState().setSpeaking(true);
 					ttsPlayingRef.current = true;
 					setTtsPlaying(true);
+					useCascadeAvatarStore.getState().renderer?.setSpeakingVisual(true);
 				},
 				onPlaybackEnd: () => {
 					useAvatarStore.getState().setSpeaking(false);
 					ttsPlayingRef.current = false;
 					setTtsPlaying(false);
+					useCascadeAvatarStore.getState().renderer?.setSpeakingVisual(false);
 				},
 			});
 		}
@@ -2257,17 +2259,20 @@ export function ChatArea({
 		recentTtsTextsRef.current.push(clean);
 		if (recentTtsTextsRef.current.length > 6) recentTtsTextsRef.current.shift();
 
-		// NVA video-avatar speech is one private Runtime operation. The Runtime owns
-		// VoxCPM2 synthesis, Ditto/TRT rendering, and A/V synchronization; Shell sends
-		// text once and plays the muxed response. Never synthesize and resend WAV/PCM.
-		if (cascadeAvatar) {
-			Logger.info("ChatArea", "Sending speech to Naia Media Runtime", {
+		// Shell TTS is the single owner of audio synthesis and playback. An NVA
+		// authored clip is the one exception: it carries its own recorded voice
+		// for an exact known phrase, so playing it replaces synthesis instead of
+		// racing it. Everything else falls through to the normal TTS path below,
+		// and the NVA renderer (if any) only reacts to that real playback via
+		// setSpeakingVisual — it never synthesizes speech itself.
+		if (cascadeAvatar?.hasAuthoredClip(clean)) {
+			Logger.info("ChatArea", "Playing NVA authored clip", {
 				sentence: clean.slice(0, 50),
 			});
 			setOutputStage("render");
 			const endCascadeJob = beginCascadeTtsJob();
 			void cascadeAvatar
-				.speak(clean, undefined, {
+				.playAuthoredClip(clean, {
 					onPlaybackReady: revealText,
 					onPlaybackFailure: revealText,
 				})
@@ -2314,12 +2319,14 @@ export function ChatArea({
 					ttsPlayingRef.current = true;
 					setTtsPlaying(true);
 					useAvatarStore.getState().setSpeaking(true);
+					cascadeAvatar?.setSpeakingVisual(true);
 				};
 				utter.onend = () => {
 					if (!isCurrentBrowserTurn()) return;
 					ttsPlayingRef.current = false;
 					setTtsPlaying(false);
 					useAvatarStore.getState().setSpeaking(false);
+					cascadeAvatar?.setSpeakingVisual(false);
 					activeTtsRequestsRef.current.delete(reqId);
 				};
 				// onerror too, else a failure after onstart leaves the avatar stuck
@@ -2330,6 +2337,7 @@ export function ChatArea({
 					ttsPlayingRef.current = false;
 					setTtsPlaying(false);
 					useAvatarStore.getState().setSpeaking(false);
+					cascadeAvatar?.setSpeakingVisual(false);
 					activeTtsRequestsRef.current.delete(reqId);
 				};
 				window.speechSynthesis.speak(utter);
@@ -2647,6 +2655,7 @@ export function ChatArea({
 						useAvatarStore.getState().setSpeaking(true);
 						ttsPlayingRef.current = true;
 						setTtsPlaying(true);
+						useCascadeAvatarStore.getState().renderer?.setSpeakingVisual(true);
 						// ★재개 타이머 취소(2026-07-15 리뷰): 문장별 합성 지연으로 큐가 잠깐 비면
 						// onPlaybackEnd 가 800ms 재개 타이머를 건다. 다음 문장이 그 전에 도착해
 						// 재생을 시작해도 타이머는 살아 있어 재생 중 마이크를 재개통 → 자기발화 누수.
@@ -2669,6 +2678,7 @@ export function ChatArea({
 						useAvatarStore.getState().setSpeaking(false);
 						ttsPlayingRef.current = false;
 						setTtsPlaying(false);
+						useCascadeAvatarStore.getState().renderer?.setSpeakingVisual(false);
 						// Cooldown: suppress STT for 1.5s after TTS ends
 						// to prevent mic echo from final TTS audio
 						ttsCooldownUntilRef.current = Date.now() + 800;

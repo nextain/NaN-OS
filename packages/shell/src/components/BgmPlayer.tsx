@@ -300,18 +300,23 @@ export function BgmPlayer({ naia }: Props) {
 			});
 	}
 
+	// 12s watchdog: only a diagnostic mark, never an automatic track skip. The
+	// only hard evidence of "this track genuinely failed" is the iframe's own
+	// onError event (handled separately below) or the user's own action — a
+	// missing "playing" message within an arbitrary window is not evidence of
+	// failure, since the message itself (not the playback) can be lost (see
+	// the infoDelivery cross-check above). Blindly skipping on this timer alone
+	// used to jump to an unrelated track while the current one was still
+	// playing fine.
 	function beginPlaybackTimeout(playbackId: string) {
 		clearPlaybackTimeout();
 		playbackTimeoutRef.current = setTimeout(() => {
 			const current = bgmPlayback.current();
 			if (current?.playbackId !== playbackId || current.status === "playing") return;
-			const timedOut = observePlayback("timeout", {
+			observePlayback("timeout", {
 				playbackId,
 				reason: "iframe_playing_not_observed",
 			});
-			if (!timedOut) return;
-			setPlaying(false);
-			recoverAfterQueueExhausted(timedOut, "timeout");
 		}, PLAYBACK_TIMEOUT_MS);
 	}
 
@@ -356,7 +361,20 @@ export function BgmPlayer({ naia }: Props) {
 							playbackId: eventPlaybackId,
 						});
 						if (!ended) return;
-						startNextQueuedTrack("ended");
+						const continued = startNextQueuedTrack("ended");
+						// Notify the agent the moment a track genuinely ends (not on a
+						// timer — this is the real onStateChange ENDED event), the same
+						// way a new track start already does via "music_changed". Without
+						// this, the agent only learns a track ended by passively noticing
+						// stale bgm context on some later, unrelated turn — it never gets
+						// an active cue to comment or queue the next song right now.
+						emitAiInterferenceEvent({
+							source: "bgm",
+							action: "music_ended",
+							summary: continued
+								? `BGM: "${ended.selected.title}" ended; the next queued track is starting now.`
+								: `BGM: "${ended.selected.title}" ended; nothing is queued next.`,
+						});
 					} else if (state === -1 || state === 3) {
 						observePlayback("loading", { playbackId: eventPlaybackId });
 					}
@@ -366,7 +384,25 @@ export function BgmPlayer({ naia }: Props) {
 						const currentTime = Number((info as Record<string, unknown>).currentTime);
 					const duration = Number((info as Record<string, unknown>).duration);
 					const current = bgmPlayback.current();
-					if (current?.status === "playing") {
+					const isSamePlayback =
+						!!current?.playbackId && current.playbackId === eventPlaybackId;
+					// The iframe bridge can lose the onStateChange "playing" (state=1)
+					// message after a src swap (WebView2 handshake loss — see
+					// sendYtCmd's re-listen comment) even though audio is genuinely
+					// playing. infoDelivery's currentTime is an independent signal —
+					// real progress on the active playback id is itself proof of
+					// playback — so it can also promote out of requested/loading
+					// without waiting for the (possibly lost) onStateChange event.
+					// This is what keeps beginPlaybackTimeout's 12s watchdog from
+					// skipping a track that is actually playing fine.
+					const canObservePlaying =
+						isSamePlayback &&
+						(current.status === "playing" ||
+							((current.status === "requested" ||
+								current.status === "loading") &&
+								Number.isFinite(currentTime) &&
+								currentTime > 0));
+					if (canObservePlaying) {
 						const now = Date.now();
 						const lastProgress = lastProgressObservationRef.current;
 						if (

@@ -1,6 +1,6 @@
 /**
  * Fresh onboarding flow E2E test.
- * Covers: agentName → userName → speechStyle → character → background → provider → complete
+ * Covers: agentName → userName → speechStyle → character → background → provider → voice → complete
  * Verifies: localStorage config saved correctly, each step renders, blob URL flow.
  */
 import { expect, test } from "@playwright/test";
@@ -224,6 +224,7 @@ test.describe("Fresh onboarding flow", () => {
 		// provider skip
 		await page.getByText(/Set up later/i).click();
 		await page.waitForTimeout(400);
+		await clickNext(page); // voice step
 		const startBtn = page.getByRole("button", { name: /시작하기|Get Started/i });
 		await expect(startBtn).toBeVisible({ timeout: 5_000 });
 		await startBtn.click();

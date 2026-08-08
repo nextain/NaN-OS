@@ -53,6 +53,7 @@ export function VideoAvatarCanvas({ nvaModel }: VideoAvatarCanvasProps) {
 	const [manifest, setManifest] = useState<NvaManifest | null>(null);
 	const [bundleDir, setBundleDir] = useState("");
 	const [video, setVideo] = useState<HTMLVideoElement | null>(null);
+	const [canvas, setCanvas] = useState<HTMLCanvasElement | null>(null);
 	const [pan, setPan] = useState<NvaPan>(loadNvaPan);
 	const panRef = useRef(pan);
 	panRef.current = pan;
@@ -78,10 +79,12 @@ export function VideoAvatarCanvas({ nvaModel }: VideoAvatarCanvasProps) {
 		setError("");
 		setManifest(null);
 		setLoaded(false);
+		useCascadeAvatarStore.getState().setNvaLoadError(null);
 		const adkPath = getAdkPath();
 		if (!adkPath || !nvaModel) {
 			setError("missing-nva-model");
 			setMode("error");
+			useCascadeAvatarStore.getState().setNvaLoadError("missing-nva-model");
 			return;
 		}
 		const bundleName =
@@ -110,6 +113,7 @@ export function VideoAvatarCanvas({ nvaModel }: VideoAvatarCanvasProps) {
 				if (!disposed) {
 					setError(String(cause));
 					setMode("error");
+					useCascadeAvatarStore.getState().setNvaLoadError(String(cause));
 				}
 			});
 		return () => {
@@ -118,7 +122,9 @@ export function VideoAvatarCanvas({ nvaModel }: VideoAvatarCanvasProps) {
 	}, [nvaModel, setLoaded]);
 
 	useEffect(() => {
-		if (!video || !manifest || !bundleDir) return;
+		if (!video || !canvas || !manifest || !bundleDir) return;
+		canvas.width = manifest.canvas.width;
+		canvas.height = manifest.canvas.height;
 		const urls = new Map<string, string>();
 		const renderer = new PrebakedAvatarRenderer({
 			manifest,
@@ -134,8 +140,9 @@ export function VideoAvatarCanvas({ nvaModel }: VideoAvatarCanvasProps) {
 			},
 			onSpeaking: (speaking) => useAvatarStore.getState().setSpeaking(speaking),
 		});
-		renderer.start(video);
+		renderer.start(video, canvas);
 		useCascadeAvatarStore.getState().setRenderer(renderer);
+		useCascadeAvatarStore.getState().setNvaLoadError(null);
 		setMode("prebaked");
 		setLoaded(true);
 		return () => {
@@ -145,7 +152,7 @@ export function VideoAvatarCanvas({ nvaModel }: VideoAvatarCanvasProps) {
 			for (const url of urls.values())
 				if (url.startsWith("blob:")) URL.revokeObjectURL(url);
 		};
-	}, [video, manifest, bundleDir, setLoaded]);
+	}, [video, canvas, manifest, bundleDir, setLoaded]);
 
 	return (
 		<div
@@ -163,11 +170,17 @@ export function VideoAvatarCanvas({ nvaModel }: VideoAvatarCanvasProps) {
 				placeItems: "center",
 			}}
 		>
+			{/* Hidden decode buffer — never shown directly (mp4 talking clips have no
+			    alpha, so the visible surface is always the composited canvas below). */}
 			{/* biome-ignore lint/a11y/useMediaCaption: speech text is already rendered in the chat transcript. */}
 			<video
 				ref={setVideo}
-				data-video-avatar-prebaked
 				playsInline
+				style={{ position: "absolute", width: 1, height: 1, opacity: 0, pointerEvents: "none" }}
+			/>
+			<canvas
+				ref={setCanvas}
+				data-video-avatar-prebaked
 				style={{ ...VIDEO_STYLE, transform: videoTransform(pan) }}
 			/>
 			{mode !== "prebaked" && (

@@ -1,8 +1,9 @@
-﻿import { type NvaManifest, defaultClipOf, findPrebakedSpeech } from "../nva";
+import { type NvaManifest, defaultClipOf, findPrebakedSpeech } from "../nva";
 import type {
 	AvatarPlaybackOptions,
 	AvatarSpeechRenderer,
 } from "./avatar-renderer";
+import { NvaChromakeyGL } from "./nva-chromakey-gl";
 
 interface Config {
 	manifest: NvaManifest;
@@ -11,101 +12,96 @@ interface Config {
 	onSpeaking?: (speaking: boolean) => void;
 }
 
-function pcm16ToWav(base64: string, sampleRate: number): Uint8Array {
-	const pcm = Uint8Array.from(atob(base64), (char) => char.charCodeAt(0));
-	const wav = new Uint8Array(44 + pcm.length);
-	const view = new DataView(wav.buffer);
-	const text = (offset: number, value: string) => {
-		for (let index = 0; index < value.length; index++)
-			wav[offset + index] = value.charCodeAt(index);
-	};
-	text(0, "RIFF");
-	view.setUint32(4, 36 + pcm.length, true);
-	text(8, "WAVEfmt ");
-	view.setUint32(16, 16, true);
-	view.setUint16(20, 1, true);
-	view.setUint16(22, 1, true);
-	view.setUint32(24, sampleRate, true);
-	view.setUint32(28, sampleRate * 2, true);
-	view.setUint16(32, 2, true);
-	view.setUint16(34, 16, true);
-	text(36, "data");
-	view.setUint32(40, pcm.length, true);
-	wav.set(pcm, 44);
-	return wav;
+/** contain-fit draw rect (source aspect preserved, letterboxed within target). */
+export function containRect(cw: number, ch: number, vw: number, vh: number) {
+	if (vw <= 0 || vh <= 0 || cw <= 0 || ch <= 0)
+		return { dx: 0, dy: 0, dw: 0, dh: 0 };
+	const scale = Math.min(cw / vw, ch / vh);
+	const dw = vw * scale;
+	const dh = vh * scale;
+	return { dx: (cw - dw) / 2, dy: (ch - dh) / 2, dw, dh };
 }
 
+/** WebM alone can carry a real (VP9 yuva420p) alpha channel; other containers cannot. */
+export function canCarryAlpha(clipPath: string): boolean {
+	return /\.webm$/i.test(clipPath);
+}
+
+/**
+ * GPU 없는 pre-baked NVA 비디오 재생기. Shell TTS가 오디오 합성·재생의 단일
+ * 소유자이며, 이 렌더러는 절대 텍스트를 스스로 합성하지 않는다(브라우저
+ * speechSynthesis 자동 폴백 없음). 두 가지만 담당한다:
+ *   1) 정확히 일치하는 문구의 저작 클립(자체 녹음 음성 포함) 재생
+ *   2) Shell의 실제 재생 시작/종료에 맞춘 idle/talking 비주얼 전환
+ *
+ * 표시는 숨은 `<video>`(디코드 버퍼)를 매 프레임 `<canvas>`(alpha:true)에 합성한다.
+ * WebM 알파 클립은 그대로 drawImage, 알파를 가질 수 없는 컨테이너(mp4 등)는
+ * `manifest.chroma_key`(또는 배경색 `background.color`)로 GPU 크로마키 처리해
+ * 검은/불투명 배경이 노출되지 않게 한다.
+ */
 export class PrebakedAvatarRenderer implements AvatarSpeechRenderer {
 	private video: HTMLVideoElement | null = null;
-	private audio: HTMLAudioElement | null = null;
-	private generation = 0;
+	private canvas: HTMLCanvasElement | null = null;
+	private ctx: CanvasRenderingContext2D | null = null;
+	private keyer: NvaChromakeyGL | null = null;
+	private keyerFailed = false;
+	private currentKeyColor: string | undefined;
 	private disposed = false;
-	private nextText = "";
+	private generation = 0;
 	private tail = Promise.resolve();
+	private raf = 0;
+	private running = false;
 
 	constructor(private readonly config: Config) {}
-	start(video: HTMLVideoElement): void {
+
+	start(video: HTMLVideoElement, canvas: HTMLCanvasElement): void {
 		this.video = video;
+		this.canvas = canvas;
+		this.ctx = canvas.getContext("2d", { alpha: true });
 		void this.playIdle();
+		this.startDrawLoop();
 	}
-	setNextText(text: string): void {
-		this.nextText = text;
-	}
+
 	async setVoice(): Promise<boolean> {
 		return false;
 	}
 
-	async speak(
+	hasAuthoredClip(text: string): boolean {
+		return !!findPrebakedSpeech(this.config.manifest, text, this.config.locale)
+			?.localized.clip;
+	}
+
+	async playAuthoredClip(
 		text: string,
-		wav?: Uint8Array,
 		options?: AvatarPlaybackOptions,
 	): Promise<void> {
-		const operation = this.tail.then(() => this.speakNow(text, wav, options));
+		const operation = this.tail.then(() =>
+			this.playAuthoredClipNow(text, options),
+		);
 		this.tail = operation.catch(() => {});
 		return operation;
 	}
-	async speakAudio(
-		base64: string,
-		rate = 24000,
-		options?: AvatarPlaybackOptions,
-	): Promise<void> {
-		const text = this.nextText;
-		this.nextText = "";
-		return this.speak(text, pcm16ToWav(base64, rate), options);
-	}
 
-	private async speakNow(
+	private async playAuthoredClipNow(
 		text: string,
-		wav?: Uint8Array,
 		options?: AvatarPlaybackOptions,
 	): Promise<void> {
 		if (!this.video || this.disposed) return;
-		const generation = ++this.generation;
 		const match = findPrebakedSpeech(
 			this.config.manifest,
 			text,
 			this.config.locale,
 		);
+		if (!match?.localized.clip) return;
+		const generation = ++this.generation;
 		this.config.onSpeaking?.(true);
 		try {
-			if (match?.localized.clip) {
-				await this.playClip(
-					match.localized.clip,
-					false,
-					options?.muted ?? false,
-					options,
-				);
-				return;
-			}
-			const visual =
-				this.config.manifest.vrm_slots?.visemes?.aiueo?.clip ??
-				this.config.manifest.vrm_slots?.motions?.talking?.clip ??
-				this.config.manifest.animations.talking?.clip ??
-				this.config.manifest.animations.speak?.clip ??
-				defaultClipOf(this.config.manifest).video;
-			await this.playClip(visual, true, true);
-			if (wav) await this.playAudio(wav, generation, options);
-			else await this.browserSpeech(text, generation, options);
+			await this.playClip(
+				match.localized.clip,
+				false,
+				options?.muted ?? false,
+				options,
+			);
 		} catch {
 			options?.onPlaybackFailure?.();
 		} finally {
@@ -113,6 +109,24 @@ export class PrebakedAvatarRenderer implements AvatarSpeechRenderer {
 				this.config.onSpeaking?.(false);
 				await this.playIdle();
 			}
+		}
+	}
+
+	/** Switch idle/talking visual only. Shell owns the actual audio playback. */
+	setSpeakingVisual(active: boolean): void {
+		if (!this.video || this.disposed) return;
+		this.generation++;
+		this.config.onSpeaking?.(active);
+		if (active) {
+			const clip =
+				this.config.manifest.vrm_slots?.visemes?.aiueo?.clip ??
+				this.config.manifest.vrm_slots?.motions?.talking?.clip ??
+				this.config.manifest.animations.talking?.clip ??
+				this.config.manifest.animations.speak?.clip ??
+				defaultClipOf(this.config.manifest).video;
+			void this.playClip(clip, true, true);
+		} else {
+			void this.playIdle();
 		}
 	}
 
@@ -124,6 +138,9 @@ export class PrebakedAvatarRenderer implements AvatarSpeechRenderer {
 	): Promise<void> {
 		const video = this.video;
 		if (!video) throw new Error("NVA video is not mounted");
+		this.currentKeyColor =
+			this.config.manifest.chroma_key ??
+			(canCarryAlpha(path) ? undefined : this.config.manifest.background?.color);
 		video.src = await this.config.resolveAssetUrl(path);
 		video.loop = loop;
 		video.muted = muted;
@@ -143,57 +160,6 @@ export class PrebakedAvatarRenderer implements AvatarSpeechRenderer {
 		});
 	}
 
-	private async playAudio(
-		wav: Uint8Array,
-		generation: number,
-		options?: AvatarPlaybackOptions,
-	): Promise<void> {
-		const url = URL.createObjectURL(
-			new Blob(
-				[
-					wav.buffer.slice(
-						wav.byteOffset,
-						wav.byteOffset + wav.byteLength,
-					) as ArrayBuffer,
-				],
-				{ type: "audio/wav" },
-			),
-		);
-		try {
-			await new Promise<void>((resolve, reject) => {
-				const audio = new Audio(url);
-				this.audio = audio;
-				audio.muted = options?.muted ?? false;
-				audio.onplaying = () => options?.onPlaybackReady?.();
-				audio.onended = () => resolve();
-				audio.onerror = () => reject(new Error("NVA audio playback failed"));
-				if (generation !== this.generation) resolve();
-				else audio.play().catch(reject);
-			});
-		} finally {
-			this.audio = null;
-			URL.revokeObjectURL(url);
-		}
-	}
-
-	private async browserSpeech(
-		text: string,
-		generation: number,
-		options?: AvatarPlaybackOptions,
-	): Promise<void> {
-		if (!text || !("speechSynthesis" in window))
-			throw new Error("No NVA speech audio");
-		await new Promise<void>((resolve, reject) => {
-			const utterance = new SpeechSynthesisUtterance(text);
-			utterance.lang = this.config.locale;
-			utterance.onstart = () => options?.onPlaybackReady?.();
-			utterance.onend = () => resolve();
-			utterance.onerror = () => reject(new Error("Browser speech failed"));
-			if (generation !== this.generation) resolve();
-			else window.speechSynthesis.speak(utterance);
-		});
-	}
-
 	private async playIdle(): Promise<void> {
 		if (!this.video || this.disposed) return;
 		await this.playClip(
@@ -202,18 +168,76 @@ export class PrebakedAvatarRenderer implements AvatarSpeechRenderer {
 			true,
 		).catch(() => {});
 	}
+
+	/** 숨은 decode `<video>`를 매 프레임 표시 `<canvas>`에 합성(필요 시 크로마키). */
+	private startDrawLoop(): void {
+		if (this.running) return;
+		this.running = true;
+		const draw = () => {
+			if (!this.running) return;
+			const video = this.video;
+			const canvas = this.canvas;
+			const ctx = this.ctx;
+			if (
+				video &&
+				canvas &&
+				ctx &&
+				video.readyState >= 2 &&
+				video.videoWidth > 0 &&
+				video.videoHeight > 0
+			) {
+				const rect = containRect(
+					canvas.width,
+					canvas.height,
+					video.videoWidth,
+					video.videoHeight,
+				);
+				ctx.clearRect(0, 0, canvas.width, canvas.height);
+				if (rect.dw > 0 && rect.dh > 0) {
+					const keyColor = this.currentKeyColor;
+					let drew = false;
+					if (keyColor && !this.keyerFailed) {
+						try {
+							if (!this.keyer) this.keyer = new NvaChromakeyGL({ keyColor });
+							else this.keyer.setParams({ keyColor });
+							const keyed = this.keyer.process(
+								video,
+								video.videoWidth,
+								video.videoHeight,
+							);
+							ctx.drawImage(keyed, rect.dx, rect.dy, rect.dw, rect.dh);
+							drew = true;
+						} catch {
+							// WebGL2 unavailable or context lost — fall back to a plain
+							// (possibly opaque-backdrop) draw rather than a blank canvas.
+							this.keyerFailed = true;
+						}
+					}
+					if (!drew) ctx.drawImage(video, rect.dx, rect.dy, rect.dw, rect.dh);
+				}
+			}
+			this.raf = requestAnimationFrame(draw);
+		};
+		this.raf = requestAnimationFrame(draw);
+	}
+
 	interrupt(): void {
 		this.generation++;
-		this.audio?.pause();
-		this.audio = null;
-		if ("speechSynthesis" in window) window.speechSynthesis.cancel();
 		this.config.onSpeaking?.(false);
 		void this.playIdle();
 	}
+
 	stop(): void {
 		this.disposed = true;
+		this.running = false;
+		if (this.raf) cancelAnimationFrame(this.raf);
+		this.raf = 0;
+		this.keyer?.dispose();
+		this.keyer = null;
 		this.interrupt();
 		this.video?.pause();
 		this.video = null;
+		this.canvas = null;
+		this.ctx = null;
 	}
 }

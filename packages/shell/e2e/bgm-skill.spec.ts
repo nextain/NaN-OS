@@ -554,9 +554,16 @@ test.describe("UC8 BGM 스킬 배선 (FR-BGM.1)", () => {
 		]);
 	});
 
-	test("재생 관측 시간초과 뒤 준비된 후보를 한 번만 시작한다", async ({
+	test("재생 관측 시간초과만으로는 재생 중인 곡을 다른 곡으로 바꾸지 않는다", async ({
 		page,
 	}) => {
+		// 2026-08-08 field review: the 12s watchdog used to force-skip to the
+		// queued track on elapsed time alone. That is exactly what caused songs
+		// to change before they had actually ended — the "playing" *message* can
+		// be lost (documented WebView2 handshake risk) even though the track
+		// itself is fine. Only a real onError (see the next test) is now treated
+		// as failure evidence; a pure timeout is diagnostic-only and must leave
+		// the current track and the queue untouched.
 		test.setTimeout(45_000);
 		await page.evaluate(() => {
 			(
@@ -586,24 +593,23 @@ test.describe("UC8 BGM 스킬 배선 (FR-BGM.1)", () => {
 			"Silent Candidate",
 		);
 		await expect(player).toHaveAttribute("data-bgm-queue-length", "1");
+		// The watchdog marks a diagnostic "timeout" status once its window
+		// elapses, but must not touch the current track or the queue.
 		await expect(player).toHaveAttribute(
-			"data-bgm-current-title",
-			"Timeout Fallback",
+			"data-bgm-playback-status",
+			"timeout",
 			{
 				timeout: 25_000,
 			},
 		);
+		await page.waitForTimeout(2_000);
 		await expect(player).toHaveAttribute(
-			"data-bgm-playback-status",
-			"playing",
-			{
-				timeout: 15_000,
-			},
+			"data-bgm-current-title",
+			"Silent Candidate",
 		);
-		await expect(player).toHaveAttribute("data-bgm-queue-length", "0");
+		await expect(player).toHaveAttribute("data-bgm-queue-length", "1");
 		expect(iframeRequests.map((request) => request.videoId)).toEqual([
 			"timeout-silent",
-			"hold-timeout-fallback",
 		]);
 	});
 

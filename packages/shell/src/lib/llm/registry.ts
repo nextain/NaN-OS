@@ -398,7 +398,7 @@ export function formatModelLabel(model: LlmModelMeta): string {
 	return label;
 }
 
-// Product recommendation order for general chat, reviewed 2026-08-02.
+// Product recommendation order for general chat, reviewed 2026-08-08.
 // This is a tier-based Naia recommendation, not a fabricated cross-vendor score.
 // Evidence: Microsoft Foundry benchmark methodology and model cards, plus the
 // official Google/DeepSeek model cards. The sources do not expose one directly
@@ -411,10 +411,21 @@ export function formatModelLabel(model: LlmModelMeta): string {
 // https://deepmind.google/models/gemini/flash/
 // https://deepmind.google/models/model-cards/gemini-3-1-flash-lite/
 // https://api-docs.deepseek.com/news/news260424/
+// DeepSeek V4 Flash (tier added 2026-08-08): official GA release (0731) —
+// https://ai.azure.com/catalog/models/DeepSeek-V4-Flash (Azure model card: "Flash-Max
+// achieves comparable reasoning performance to Pro given a larger thinking budget,
+// though its smaller activated-parameter scale places it slightly behind on pure
+// knowledge tasks and the most complex agentic workflows"); DeepSeek's own release
+// notes report the GA Flash beating the V4-Pro *preview* build across nine agent
+// benchmarks; Artificial Analysis lists Flash-0731 (Reasoning, Max Effort) at
+// Intelligence Index 52, #3/101 open-weight models (median 26) —
+// https://artificialanalysis.ai/models/deepseek-v4-flash . Tiered alongside
+// deepseek-v4-pro rather than the lighter gemini-3.1-flash-lite/gpt-5.6-luna tier.
 const NAIA_GENERAL_CHAT_RECOMMENDATION: Readonly<Record<string, number>> = {
 	"gpt-5.6-sol": 1,
 	"grok-4.3": 2,
 	"deepseek-v4-pro": 2,
+	"deepseek-v4-flash": 2,
 	"gemini-3.5-flash": 2,
 	"gpt-5.6-luna": 3,
 	"gemini-3.1-flash-lite": 3,
@@ -489,7 +500,7 @@ registerLlmProvider({
 	descKey: "onboard.lab.description",
 	requiresApiKey: false,
 	requiresNaiaKey: true,
-	defaultModel: "gemini-3.1-flash-lite",
+	defaultModel: "deepseek-v4-flash",
 	// Model names stay canonical; availability and capability status belong in
 	// metadata and localized UI hints, not in the model label.
 	models: [
@@ -509,6 +520,17 @@ registerLlmProvider({
 		{
 			id: "deepseek-v4-pro",
 			label: "DeepSeek V4 Pro",
+			capabilities: ["llm"],
+			supportsTools: false,
+			upstreamProvider: "unknown",
+			lifecycle: "unknown",
+		},
+		{
+			// Gateway already routes/prices this (docker/config.naia.yml,
+			// model_catalog.py) and its own test suite is green (78 passed);
+			// this entry just makes it a selectable Naia model in the shell.
+			id: "deepseek-v4-flash",
+			label: "DeepSeek V4 Flash",
 			capabilities: ["llm"],
 			supportsTools: false,
 			upstreamProvider: "unknown",

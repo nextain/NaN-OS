@@ -16,6 +16,7 @@ import { detectGpuVramGb } from "../lib/capabilities/gpu";
 import { isNewCore, sendAuthUpdate } from "../lib/chat-service";
 import {
 	type AppConfig,
+	DEFAULT_LOCAL_VOICE_HOST,
 	NAIA_WEB_BASE_URL,
 	loadConfig,
 	saveConfigSecure,
@@ -33,7 +34,9 @@ import {
 	makeOnboardingSession,
 } from "../lib/onboarding-core";
 import { NAIA_SLOT_DEFAULTS, applyNaiaSlotDefaults } from "../lib/slots/model";
+import { localVoiceFacadeUrlFromReady } from "../lib/voice/local-runtime";
 import { useAvatarStore } from "../stores/avatar";
+import { useCascadeAvatarStore } from "../stores/cascade-avatar";
 import { useChatStore } from "../stores/chat";
 
 type Step =
@@ -44,6 +47,7 @@ type Step =
 	| "character"
 	| "background"
 	| "provider"
+	| "voice"
 	| "complete";
 
 const STEPS_WITHOUT_NAIA: Step[] = [
@@ -54,6 +58,7 @@ const STEPS_WITHOUT_NAIA: Step[] = [
 	"character",
 	"background",
 	"provider",
+	"voice",
 	"complete",
 ];
 
@@ -82,6 +87,8 @@ function stepChat(step: Step, name: string, user: string): string {
 			return "배경화면도 함께 골라볼까요? 클릭하면 바로 바뀌어요! 🌟";
 		case "provider":
 			return "거의 다 왔어요! 저의 두뇌를 연결해 주세요 🧠";
+		case "voice":
+			return "제 목소리도 골라주세요! 마음에 드는 음성을 미리 들어볼 수 있어요 🎙️";
 		case "complete":
 			return `${u ? u + ", " : ""}준비 완료! ${n}와 함께 시작해요! 🎉`;
 	}
@@ -114,6 +121,9 @@ interface OnboardingSnapshot {
 	naiaLoginDone: boolean;
 	memoryEmbeddingProvider: "none" | "offline" | "vllm" | "ollama" | "naia";
 	memoryLlmProvider: "none" | "naia" | "vllm" | "ollama";
+	ttsEnabled: boolean;
+	webVoiceLang: string;
+	localVoiceEnabled: boolean;
 }
 
 function BackgroundThumbnail({
@@ -277,6 +287,14 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
 	const [naiaLoginWaiting, setNaiaLoginWaiting] = useState(false);
 	const [naiaLoginDone, setNaiaLoginDone] = useState(hasNaiaKey);
 	const [detectedVramGb, setDetectedVramGb] = useState<number | null>(null);
+	// Voice step state — default ON with the free Web TTS engine (FR-VOICE onboarding).
+	const [ttsEnabled, setTtsEnabled] = useState(true);
+	const [webVoiceURI, setWebVoiceURI] = useState("");
+	const [webVoices, setWebVoices] = useState<SpeechSynthesisVoice[]>([]);
+	const [voicePreviewing, setVoicePreviewing] = useState(false);
+	const [localVoiceEnabled, setLocalVoiceEnabled] = useState(false);
+	const [localVoiceBusy, setLocalVoiceBusy] = useState(false);
+	const [localVoiceMsg, setLocalVoiceMsg] = useState("");
 	// Auth payload from OAuth — held until wizard completes
 	const [naiaAuthPayload, setNaiaAuthPayload] =
 		useState<NaiaAuthPayload | null>(null);
@@ -305,6 +323,124 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
 		detectGpuVramGb().then(setDetectedVramGb);
 	}, []);
 
+	// Populate the Web TTS voice list. Some platforms (WebView2 included)
+	// deliver the real list asynchronously via `onvoiceschanged` instead of
+	// synchronously from getVoices() on first call.
+	useEffect(() => {
+		if (typeof window === "undefined" || !("speechSynthesis" in window))
+			return;
+		const applyVoices = () => {
+			const voices = window.speechSynthesis.getVoices();
+			if (voices.length === 0) return;
+			setWebVoices(voices);
+			setWebVoiceURI((current) => {
+				if (current && voices.some((voice) => voice.voiceURI === current))
+					return current;
+				const locale = getLocale();
+				const matched =
+					voices.find((voice) => voice.lang?.toLowerCase().startsWith(locale)) ??
+					voices.find((voice) =>
+						voice.lang?.toLowerCase().startsWith(locale.split("-")[0]),
+					) ??
+					voices[0];
+				return matched?.voiceURI ?? "";
+			});
+		};
+		applyVoices();
+		window.speechSynthesis.onvoiceschanged = applyVoices;
+		return () => {
+			window.speechSynthesis.onvoiceschanged = null;
+		};
+	}, []);
+
+	function previewWebVoice() {
+		if (typeof window === "undefined" || !("speechSynthesis" in window))
+			return;
+		window.speechSynthesis.cancel();
+		const voice = webVoices.find((item) => item.voiceURI === webVoiceURI);
+		const utter = new SpeechSynthesisUtterance(t("onboard.voice.previewText"));
+		if (voice) utter.voice = voice;
+		utter.lang = voice?.lang || getLocale();
+		utter.onstart = () => setVoicePreviewing(true);
+		utter.onend = () => setVoicePreviewing(false);
+		utter.onerror = () => setVoicePreviewing(false);
+		window.speechSynthesis.speak(utter);
+	}
+
+	async function refreshCascadeInstallationForOnboarding(): Promise<{
+		canStart: boolean;
+		ready: boolean;
+		summary: string;
+	} | null> {
+		try {
+			const status = await invoke<unknown>("cascade_installation_status");
+			if (
+				!status ||
+				typeof status !== "object" ||
+				typeof (status as { canStart?: unknown }).canStart !== "boolean" ||
+				typeof (status as { ready?: unknown }).ready !== "boolean" ||
+				typeof (status as { summary?: unknown }).summary !== "string"
+			) {
+				return null;
+			}
+			return status as { canStart: boolean; ready: boolean; summary: string };
+		} catch {
+			return null;
+		}
+	}
+
+	/**
+	 * Actually starts/stops the local VoxCPM2 runtime (same start_cascade /
+	 * stop_cascade lifecycle SettingsTab's Voice toggle uses) instead of only
+	 * saving a preference flag — a saved-but-never-started flag would be a
+	 * false "ready" state (WNV-06).
+	 */
+	async function toggleLocalVoice() {
+		if (localVoiceBusy) return;
+		setLocalVoiceMsg("");
+		if (localVoiceEnabled) {
+			setLocalVoiceBusy(true);
+			try {
+				await invoke("stop_cascade");
+			} catch {
+				/* best-effort teardown — onboarding never blocks on this */
+			} finally {
+				useCascadeAvatarStore.getState().setLocalFacadeUrl(null);
+				setLocalVoiceEnabled(false);
+				setLocalVoiceBusy(false);
+			}
+			return;
+		}
+		if (detectedVramGb == null || detectedVramGb < 6) return;
+		setLocalVoiceBusy(true);
+		try {
+			const installation = await refreshCascadeInstallationForOnboarding();
+			if (!installation?.canStart) {
+				setLocalVoiceMsg(installation?.summary ?? t("settings.cascadeError"));
+				return;
+			}
+			// A resolved CASCADE_READY payload only proves ports were bound — Rust
+			// checks the facade too, so re-confirm readiness the same way
+			// SettingsTab's startCascadeAndConfirm does before trusting "ready".
+			const ready = await invoke<string>("start_cascade", {
+				expectedLoaderProfile: "windows_trt_6g",
+			});
+			const afterStart = await refreshCascadeInstallationForOnboarding();
+			if (!afterStart?.ready) {
+				setLocalVoiceMsg(afterStart?.summary ?? t("settings.cascadeError"));
+				return;
+			}
+			useCascadeAvatarStore
+				.getState()
+				.setLocalFacadeUrl(localVoiceFacadeUrlFromReady(ready));
+			setLocalVoiceEnabled(true);
+		} catch (error) {
+			setLocalVoiceMsg(`${t("settings.cascadeError")}: ${String(error)}`);
+		} finally {
+			setLocalVoiceBusy(false);
+		}
+	}
+
 	// UC12 step-flow graft(step2): isNewCore 일 때 assets/단계 전이/auth 를 core 컨트롤러 경유(mirror).
 	// React=nav 권위(back/skip 견고), core=forward mirror(draft 누적·순서 불변식·provider-naia 게이트).
 	// 영속은 completeWith(snapshot, step1) 유지. 미설정=old 경로 비파괴.
@@ -316,7 +452,9 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
 		return sessionRef.current;
 	}
 	// 현재 React state → core StepInput(전진 mirror용; core draft 는 persist 에 안 쓰임 = 값은 상태일관성/게이트용).
-	function buildStepInput(s: Step): StepInput {
+	// "voice"는 core-domain(@nextain/naia-os-core onboarding.ts)의 Step 에 없는 셸-전용 단계라 mirror 대상이
+	// 아니다 — null 을 반환해 goNext 가 submit 을 건너뛴다(core 상태머신은 이 단계를 모르는 채 비파괴 유지).
+	function buildStepInput(s: Step): StepInput | null {
 		switch (s) {
 			case "welcome":
 				return { step: "welcome" };
@@ -355,6 +493,8 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
 				};
 			case "complete":
 				return { step: "complete" };
+			case "voice":
+				return null;
 		}
 	}
 
@@ -378,6 +518,10 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
 			naiaLoginDone,
 			memoryEmbeddingProvider,
 			memoryLlmProvider,
+			ttsEnabled,
+			webVoiceLang:
+				webVoices.find((voice) => voice.voiceURI === webVoiceURI)?.lang ?? "",
+			localVoiceEnabled,
 		};
 	});
 
@@ -517,9 +661,13 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
 		if (!next) return;
 		// core forward mirror(비차단): 떠나는 현재 step 의 input 을 컨트롤러에 제출(draft·순서·게이트 행사).
 		// 게이트 차단/step-mismatch 시 no-op — UI nav 는 막지 않음(persist=snapshot 무영향).
-		void core()
-			?.submit(buildStepInput(step))
-			.catch(() => {});
+		// buildStepInput 이 null(core-domain 에 없는 셸-전용 단계, 예: voice)이면 제출을 건너뛴다.
+		const stepInput = buildStepInput(step);
+		if (stepInput) {
+			void core()
+				?.submit(stepInput)
+				.catch(() => {});
+		}
 		transitioning.current = true;
 		setStep(next);
 		setTimeout(() => {
@@ -616,6 +764,10 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
 			naiaLoginDone,
 			memoryEmbeddingProvider,
 			memoryLlmProvider,
+			ttsEnabled,
+			webVoiceLang: webVoices.find((voice) => voice.voiceURI === webVoiceURI)
+				?.lang ?? "",
+			localVoiceEnabled,
 		},
 	) {
 		const isByo = !!snapshot.apiKey.trim() && !snapshot.naiaLoginDone && !auth;
@@ -671,6 +823,22 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
 			...(auth ? { naiaKey: auth.naiaKey, naiaUserId: auth.naiaUserId } : {}),
 			workspaceRoot: getAdkPath() || base.workspaceRoot || undefined,
 			onboardingComplete: true,
+			...(snapshot.localVoiceEnabled
+				? {
+						ttsEnabled: true,
+						ttsProvider: "naia-local-voice" as const,
+						localVoiceEnabled: true,
+						vllmTtsHost: DEFAULT_LOCAL_VOICE_HOST,
+					}
+				: {
+						ttsEnabled: snapshot.ttsEnabled,
+						ttsProvider: snapshot.ttsEnabled
+							? ("browser" as const)
+							: base.ttsProvider,
+						...(snapshot.ttsEnabled && snapshot.webVoiceLang
+							? { voice: snapshot.webVoiceLang }
+							: {}),
+					}),
 			...(!auth && snapshot.memoryEmbeddingProvider !== "none"
 				? { memoryEmbeddingProvider: snapshot.memoryEmbeddingProvider }
 				: {}),
@@ -1076,6 +1244,90 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
 									{t("onboard.connect.setupLater")}
 								</button>
 							</>
+						)}
+					</>
+				)}
+
+				{step === "voice" && (
+					<>
+						<h2 className="onboarding-step__title">
+							{t("onboard.voice.title")}
+						</h2>
+						<p className="onboarding-step__hint">
+							{t("onboard.voice.description")}
+						</p>
+						<div className="onboarding-step__options">
+							<button
+								type="button"
+								className={`onboarding-step__option${ttsEnabled ? " onboarding-step__option--selected" : ""}`}
+								onClick={() => setTtsEnabled(true)}
+							>
+								<span className="onboarding-step__option-label">
+									{t("onboard.voice.on")}
+								</span>
+							</button>
+							<button
+								type="button"
+								className={`onboarding-step__option${!ttsEnabled ? " onboarding-step__option--selected" : ""}`}
+								onClick={() => setTtsEnabled(false)}
+							>
+								<span className="onboarding-step__option-label">
+									{t("onboard.voice.off")}
+								</span>
+							</button>
+						</div>
+						{ttsEnabled && webVoices.length > 0 && (
+							<div className="onboarding-step__voice-picker">
+								<select
+									className="onboarding-step__input"
+									value={webVoiceURI}
+									onChange={(e) => setWebVoiceURI(e.target.value)}
+								>
+									{webVoices.map((voice) => (
+										<option key={voice.voiceURI} value={voice.voiceURI}>
+											{voice.name} ({voice.lang})
+										</option>
+									))}
+								</select>
+								<button
+									type="button"
+									className="onboarding-step__link"
+									onClick={previewWebVoice}
+									disabled={voicePreviewing}
+								>
+									{voicePreviewing
+										? t("onboard.voice.previewing")
+										: t("onboard.voice.preview")}
+								</button>
+							</div>
+						)}
+						{detectedVramGb != null && detectedVramGb >= 6 && (
+							<div className="onboarding-step__provider-done">
+								<span className="onboarding-step__provider-check">
+									{t("onboard.voice.localBadge")}
+								</span>
+								<p>{t("onboard.voice.localHint")}</p>
+								<button
+									type="button"
+									className={`onboarding-step__option${localVoiceEnabled ? " onboarding-step__option--selected" : ""}`}
+									style={{ marginTop: 8 }}
+									onClick={toggleLocalVoice}
+									disabled={localVoiceBusy}
+								>
+									<span className="onboarding-step__option-label">
+										{localVoiceBusy
+											? t("onboard.voice.localBusy")
+											: localVoiceEnabled
+												? t("onboard.voice.localOn")
+												: t("onboard.voice.localOff")}
+									</span>
+								</button>
+								{localVoiceMsg && (
+									<p className="onboarding-step__hint onboarding-step__hint--warn">
+										{localVoiceMsg}
+									</p>
+								)}
+							</div>
 						)}
 					</>
 				)}

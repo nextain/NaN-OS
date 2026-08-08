@@ -727,13 +727,16 @@ describe("ChatArea", () => {
 
 	// === Local conversation ownership ===
 
-	it("submits video-avatar sentences once to the serialized media runtime", async () => {
-		const speak = vi.fn().mockResolvedValue(undefined);
+	it("plays authored NVA clips in order without Shell synthesis", async () => {
+		const playAuthoredClip = vi.fn().mockResolvedValue(undefined);
 		useCascadeAvatarStore.setState({
 			renderer: {
-				speakAudio: vi.fn(),
-				speak,
+				hasAuthoredClip: () => true,
+				playAuthoredClip,
+				setSpeakingVisual: vi.fn(),
+				setVoice: vi.fn().mockResolvedValue(false),
 				interrupt: vi.fn(),
+				stop: vi.fn(),
 			} as never,
 		});
 		localStorage.setItem(
@@ -766,28 +769,74 @@ describe("ChatArea", () => {
 			requestId: request.requestId,
 			text: "Second sentence.",
 		});
-		await waitFor(() => expect(speak).toHaveBeenCalledTimes(2));
-		expect(speak.mock.calls[0][0]).toBe("First sentence.");
-		expect(speak.mock.calls[0][1]).toBeUndefined();
-		expect(speak.mock.calls[0][2]).toEqual(
+		await waitFor(() => expect(playAuthoredClip).toHaveBeenCalledTimes(2));
+		expect(playAuthoredClip.mock.calls[0][0]).toBe("First sentence.");
+		expect(playAuthoredClip.mock.calls[0][1]).toEqual(
 			expect.objectContaining({
 				onPlaybackReady: expect.any(Function),
 				onPlaybackFailure: expect.any(Function),
 			}),
 		);
-		expect(speak.mock.calls[1][0]).toBe("Second sentence.");
+		expect(playAuthoredClip.mock.calls[1][0]).toBe("Second sentence.");
 		expect(ttsSyncMocks.synthesizeTts).not.toHaveBeenCalled();
 		expect(ttsSyncMocks.enqueueOrdered).not.toHaveBeenCalled();
 		localStorage.removeItem("naia-config");
 	});
 
-	it("keeps the video avatar visible without synthesizing speech when TTS is off", async () => {
-		const speakAudio = vi.fn();
+	it("routes dynamic NVA speech through Shell TTS instead of the renderer", async () => {
+		const playAuthoredClip = vi.fn();
+		const setSpeakingVisual = vi.fn();
 		useCascadeAvatarStore.setState({
 			renderer: {
-				speakAudio,
-				speak: vi.fn(),
+				hasAuthoredClip: () => false,
+				playAuthoredClip,
+				setSpeakingVisual,
+				setVoice: vi.fn().mockResolvedValue(false),
 				interrupt: vi.fn(),
+				stop: vi.fn(),
+			} as never,
+		});
+		localStorage.setItem(
+			"naia-config",
+			JSON.stringify({
+				apiKey: "test-key",
+				provider: "gemini",
+				model: "gemini-2.5-flash",
+				ttsEnabled: true,
+				ttsProvider: "naia-local-voice",
+				avatarProvider: "naia-video-avatar",
+				nvaModel: "naia",
+				vllmTtsHost: "http://localhost:8910",
+			}),
+		);
+
+		render(<ChatArea />);
+		const input = screen.getByPlaceholderText(/message/i);
+		fireEvent.change(input, { target: { value: "dynamic speech test" } });
+		fireEvent.keyDown(input, { key: "Enter" });
+		await waitFor(() => expect(capturedRequests).toHaveLength(1));
+		const request = capturedRequests[0];
+		request.onChunk({
+			type: "text",
+			requestId: request.requestId,
+			text: "No authored clip matches this sentence.",
+		});
+
+		await waitFor(() => expect(ttsSyncMocks.synthesizeTts).toHaveBeenCalled());
+		expect(playAuthoredClip).not.toHaveBeenCalled();
+		localStorage.removeItem("naia-config");
+	});
+
+	it("keeps the video avatar visible without synthesizing speech when TTS is off", async () => {
+		const playAuthoredClip = vi.fn();
+		useCascadeAvatarStore.setState({
+			renderer: {
+				hasAuthoredClip: () => true,
+				playAuthoredClip,
+				setSpeakingVisual: vi.fn(),
+				setVoice: vi.fn().mockResolvedValue(false),
+				interrupt: vi.fn(),
+				stop: vi.fn(),
 			} as never,
 		});
 		ttsSyncMocks.streamsAvatarPcm.mockReturnValue(true);
@@ -823,7 +872,7 @@ describe("ChatArea", () => {
 			).toBeDefined(),
 		);
 		expect(ttsSyncMocks.synthesizeTts).not.toHaveBeenCalled();
-		expect(speakAudio).not.toHaveBeenCalled();
+		expect(playAuthoredClip).not.toHaveBeenCalled();
 		localStorage.removeItem("naia-config");
 	});
 
@@ -901,21 +950,20 @@ describe("ChatArea", () => {
 	});
 
 	it("reveals text without duplicate AudioQueue playback when media runtime fails", async () => {
-		const speak = vi.fn().mockImplementation(
-			(
-				_text: string,
-				_audio: undefined,
-				opts: { onPlaybackFailure?: () => void },
-			) => {
+		const playAuthoredClip = vi.fn().mockImplementation(
+			(_text: string, opts: { onPlaybackFailure?: () => void }) => {
 				opts.onPlaybackFailure?.();
 				return Promise.resolve();
 			},
 		);
 		useCascadeAvatarStore.setState({
 			renderer: {
-				speakAudio: vi.fn(),
-				speak,
+				hasAuthoredClip: () => true,
+				playAuthoredClip,
+				setSpeakingVisual: vi.fn(),
+				setVoice: vi.fn().mockResolvedValue(false),
 				interrupt: vi.fn(),
+				stop: vi.fn(),
 			} as never,
 		});
 		localStorage.setItem(
@@ -942,7 +990,7 @@ describe("ChatArea", () => {
 			text: "Avatar failure sentence.",
 		});
 
-		await waitFor(() => expect(speak).toHaveBeenCalledTimes(1));
+		await waitFor(() => expect(playAuthoredClip).toHaveBeenCalledTimes(1));
 		await waitFor(() =>
 			expect(screen.getByText("Avatar failure sentence.")).toBeDefined(),
 		);
@@ -954,18 +1002,18 @@ describe("ChatArea", () => {
 	it("reveals TTS chat text only when embedded avatar playback starts", async () => {
 		const playback = deferred<void>();
 		const interrupt = vi.fn();
-		const speak = vi.fn(
-			(
-				_text: string,
-				_audio: undefined,
-				_options: { onPlaybackReady?: () => void },
-			) => playback.promise,
+		const playAuthoredClip = vi.fn(
+			(_text: string, _options: { onPlaybackReady?: () => void }) =>
+				playback.promise,
 		);
 		useCascadeAvatarStore.setState({
 			renderer: {
-				speakAudio: vi.fn(),
-				speak,
+				hasAuthoredClip: () => true,
+				playAuthoredClip,
+				setSpeakingVisual: vi.fn(),
+				setVoice: vi.fn().mockResolvedValue(false),
 				interrupt,
+				stop: vi.fn(),
 			} as never,
 		});
 		localStorage.setItem(
@@ -992,12 +1040,12 @@ describe("ChatArea", () => {
 			text: "Visible with speech.",
 		});
 
-		await waitFor(() => expect(speak).toHaveBeenCalledTimes(1));
+		await waitFor(() => expect(playAuthoredClip).toHaveBeenCalledTimes(1));
 		expect(screen.queryByText("Visible with speech.")).toBeNull();
 		expect(screen.getByRole("status").getAttribute("data-stage")).toBe(
 			"render",
 		);
-		const playbackOptions = speak.mock.calls[0][2] as {
+		const playbackOptions = playAuthoredClip.mock.calls[0][1] as {
 			onPlaybackReady?: () => void;
 		};
 		playbackOptions.onPlaybackReady?.();
@@ -1017,12 +1065,15 @@ describe("ChatArea", () => {
 	});
 
 	it("keeps the completed message masked and preserves CJK spacing across sentences", async () => {
-		const speak = vi.fn().mockResolvedValue(undefined);
+		const playAuthoredClip = vi.fn().mockResolvedValue(undefined);
 		useCascadeAvatarStore.setState({
 			renderer: {
-				speakAudio: vi.fn(),
-				speak,
+				hasAuthoredClip: () => true,
+				playAuthoredClip,
+				setSpeakingVisual: vi.fn(),
+				setVoice: vi.fn().mockResolvedValue(false),
 				interrupt: vi.fn(),
+				stop: vi.fn(),
 			} as never,
 		});
 		localStorage.setItem(
@@ -1076,18 +1127,18 @@ describe("ChatArea", () => {
 		});
 		request.onChunk({ type: "finish", requestId: request.requestId });
 
-		await waitFor(() => expect(speak).toHaveBeenCalledTimes(2));
+		await waitFor(() => expect(playAuthoredClip).toHaveBeenCalledTimes(2));
 		expect(completedBeforePlayback).toBe(false);
 		completedObserver.disconnect();
 		expect(screen.queryByText(first + second)).toBeNull();
-		const firstOptions = speak.mock.calls[0][2] as {
+		const firstOptions = playAuthoredClip.mock.calls[0][1] as {
 			onPlaybackReady?: () => void;
 		};
 		firstOptions.onPlaybackReady?.();
 		await waitFor(() => expect(screen.getByText(first)).toBeDefined());
 		expect(document.body.textContent).not.toContain(`${first} ${second}`);
 
-		const secondOptions = speak.mock.calls[1][2] as {
+		const secondOptions = playAuthoredClip.mock.calls[1][1] as {
 			onPlaybackReady?: () => void;
 		};
 		secondOptions.onPlaybackReady?.();
@@ -1197,21 +1248,20 @@ describe("ChatArea", () => {
 		const playback = deferred<void>();
 		let playbackFailure = () => {};
 		const interrupt = vi.fn();
-		const speak = vi.fn(
-			(
-				_text: string,
-				_audio: undefined,
-				opts: { onPlaybackFailure?: () => void },
-			) => {
+		const playAuthoredClip = vi.fn(
+			(_text: string, opts: { onPlaybackFailure?: () => void }) => {
 				playbackFailure = opts.onPlaybackFailure ?? (() => {});
 				return playback.promise;
 			},
 		);
 		useCascadeAvatarStore.setState({
 			renderer: {
-				speakAudio: vi.fn(),
-				speak,
+				hasAuthoredClip: () => true,
+				playAuthoredClip,
+				setSpeakingVisual: vi.fn(),
+				setVoice: vi.fn().mockResolvedValue(false),
 				interrupt,
+				stop: vi.fn(),
 			} as never,
 		});
 		localStorage.setItem(
@@ -1237,7 +1287,7 @@ describe("ChatArea", () => {
 			requestId: request.requestId,
 			text: "Interrupted sentence.",
 		});
-		await waitFor(() => expect(speak).toHaveBeenCalledTimes(1));
+		await waitFor(() => expect(playAuthoredClip).toHaveBeenCalledTimes(1));
 		interrupt.mockClear();
 		const cancel = screen.getByTitle("ESC");
 		fireEvent.click(cancel);
