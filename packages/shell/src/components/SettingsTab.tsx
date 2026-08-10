@@ -900,7 +900,7 @@ export function SettingsTab() {
 				setNvaModel(DEFAULT_NVA_MODEL);
 			}
 		} else if (caps.includes("llm") || caps.includes("tts")) {
-			// 로컬 프로파일인데 avatar capability 가 없으면(예: 16GB LLM+음성) 아바타 = VRM.
+			// 로컬 프로파일인데 avatar capability 가 없으면 아바타 = VRM.
 			// 버그 수정(2026-07-15 루크): 이전에 아바타 티어를 거쳐오면 naia-video-avatar 가
 			// 심긴 채 남아 — 티어를 바꿔도 안 돌아왔다. 프로파일 = 자동 설정이므로 여기서 복원.
 			nextAvatar = "vrm";

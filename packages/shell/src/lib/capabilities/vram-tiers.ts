@@ -122,6 +122,7 @@ export const VRAM_TIERS: readonly VramTier[] = [
 		// 6GB: 로컬 LLM(≥5G)+아바타(2.6G)=7.6G > 6G → 로컬 LLM 불가. 아바타만 로컬, 브레인·음성 클라우드.
 		localCapabilities: ["avatar"],
 		approxLocalVramGb: 2.6,
+		loaderProfile: "avatar_only",
 		hidden: true, // 실기 미검증(2026-07-15) — 피커 비노출, 검증 후 해제
 		realtime: "measurement-gated",
 		note: "6GB: 로컬 아바타(Ditto 2.6G)만. LLM·STT·TTS = 클라우드. 로컬 LLM은 8GB부터.",
@@ -164,26 +165,26 @@ export const VRAM_TIERS: readonly VramTier[] = [
 		// 12GB(4070+): LLM(5)+아바타(2.6)+음성 int8(3.47)=11.1G ≤ 12G → 오디오까지 로컬.
 		// 음성은 batch(VoxCPM2 RTF>1). 실시간 아님 — 실시간은 24G/ggml 게이트.
 		localCapabilities: ["llm", "avatar", "tts"],
-		approxLocalVramGb: 11.1,
+		approxLocalVramGb: 9.27,
+		loaderProfile: "local_16g_compact",
 		hidden: true, // 실기 미검증(2026-07-15) — 피커 비노출, 검증 후 해제
 		realtime: "measurement-gated",
 		note: "12GB(4070+): LLM+아바타+음성 전부 로컬. 음성 batch(composed, RTF>1). 실시간 배지는 24G/ggml 측정 후.",
 	},
 	{
 		id: "local-llm-voice-16g",
-		label: "16GB — 로컬 LLM + 음성",
+		label: "16GB — local LLM + voice + Ditto avatar",
 		minVramGb: 16,
 		llm: "own",
-		// LLM+음성 로컬, Ditto 아바타 제외(아바타 = 셸 VRM 렌더 or 클라우드) — 2026-07-15 루크 지시
-		// "VoxCPM2 + LLM 프로파일". **16GB 정직화**(루크: "8GB 프로파일인데 16GB 가 부족하다면 모순"):
-		// int8 음성(3.47G)은 Windows 미검증이라 실제 도는 건 fp16(~6.1G) → compact LLM(3.4~4)과
-		// 합쳐 ~10G + 데스크톱/버퍼 = 16GB 가 정직한 하한. int8 검증되면 8GB 변형을 다시 연다.
+		// Windows 정본 프로필(local_16g): LLM 6.3G + VoxCPM2 int8 3.47G + Ditto TRT 2.6G
+		// = 12.37G. NVA는 캐릭터 번들이고 실제 립싱크 추론은 Ditto TensorRT가 처리한다.
 		// auto: 검증된 티어는 이것뿐이므로 16GB+ auto = 이 티어 (hidden 티어는 auto 제외 —
 		// 2026-07-15 루크 실증: auto 가 숨긴 12g 를 골라 NVA 를 심었음). 3080 Ti 16G 시연 정본.
-		localCapabilities: ["llm", "tts"],
-		approxLocalVramGb: 10.0, // fp16 음성 6.1 + compact LLM ~3.9 (int8 검증 전 정직 산술)
+		localCapabilities: ["llm", "tts", "avatar"],
+		approxLocalVramGb: 12.37,
+		loaderProfile: "local_16g",
 		realtime: "measurement-gated",
-		note: "로컬 LLM(compact) + 로컬 음성(VoxCPM2 fp16). Ditto 아바타 없음 — 아바타는 VRM(셸 렌더, GPU 미미) 또는 클라우드. 음성 표면 = 로컬 cascade façade /v1/audio/speech. 실기 검증: 3080 Ti 16G (2026-07-15).",
+		note: "Windows local_16g: local LLM + VoxCPM2 int8 + Ditto TensorRT avatar. Ditto processes the NVA bundle through the local cascade facade on :8910. Device validation: 3080 Ti 16G (2026-07-15).",
 	},
 	{
 		id: "full-realtime-24g",
@@ -191,7 +192,8 @@ export const VRAM_TIERS: readonly VramTier[] = [
 		minVramGb: 24,
 		llm: "own",
 		localCapabilities: ["llm", "avatar", "tts"],
-		approxLocalVramGb: 12, // fp16 여유. + 로컬 LLM(모델 의존, 미합산).
+		approxLocalVramGb: 18.8,
+		loaderProfile: "full",
 		hidden: true, // 실기 미검증(2026-07-15) — 피커 비노출, 검증 후 해제
 		realtime: "measurement-gated",
 		note: "24G+: 완전 로컬. 실시간(RTF<1) = ggml/VoxCPM.cpp 트랙, 측정 통과 시에만 realtime 배지(F1).",

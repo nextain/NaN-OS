@@ -137,10 +137,11 @@ test.describe("S-SLOT settings — gate + 6 cloud slots (#gate-slots)", () => {
 		).toHaveCount(0);
 	});
 
-	test("FR-SLOT.3: apply Gemini defaults fills unset slots (non-destructive, §9 #5)", async ({
+	test("FR-SLOT.3: apply Gemini defaults fills unset slots after legacy model normalization (§9 #5)", async ({
 		page,
 	}) => {
-		// naia 게이트 + main 만 설정(sub/embed/stt/tts 미설정).
+		// naia 게이트 + 레거시 main 모델만 설정. main은 부팅 중 정규화되고
+		// sub/embed/stt/tts의 미설정 상태는 그대로 유지된다.
 		await openSlotSettings(page, {
 			config: {
 				naiaKey: "e2e-naia-key",
@@ -157,7 +158,7 @@ test.describe("S-SLOT settings — gate + 6 cloud slots (#gate-slots)", () => {
 			return JSON.parse(raw) as Record<string, unknown>;
 		});
 		expect(saved.provider).toBe("nextain"); // 보존
-		expect(saved.model).toBe("gemini-3.5-flash"); // 보존(비파괴)
+		expect(saved.model).toBe("gemini-3.1-flash-lite"); // 기본값 적용 전에 레거시 ID 정규화
 		expect(saved.memoryLlmProvider).toBe("naia");
 		expect(saved.memoryLlmModel).toBe("gemini-3.1-flash-lite");
 		expect(saved.memoryEmbeddingProvider).toBe("offline");
@@ -171,7 +172,7 @@ test.describe("S-SLOT settings — gate + 6 cloud slots (#gate-slots)", () => {
 		);
 	});
 
-	test("GPU 프로파일 = 자동 설정: 16GB LLM+음성 선택 → 두뇌·음성·호스트·아바타 전환 (2026-07-15, 시연 로컬 장면)", async ({
+	test("GPU 프로파일 = 자동 설정: 16GB 선택 → 두뇌·음성·Ditto NVA 전환", async ({
 		page,
 	}) => {
 		await openSlotSettings(page, {
@@ -181,7 +182,7 @@ test.describe("S-SLOT settings — gate + 6 cloud slots (#gate-slots)", () => {
 				// 이전 상태 잔재 3종 — 프로파일 선택이 전부 교정해야 한다 (2026-07-15 실사고 재현):
 				ttsProvider: "nextain", // 클라우드 음성
 				vllmTtsHost: "http://localhost:8892", // ★로컬 형식이지만 틀린 포트 — 그대로 살아남던 실사고
-				avatarProvider: "naia-video-avatar", // 아바타 티어 잔재 (VRM 복원 대상)
+				avatarProvider: "naia-video-avatar",
 			},
 		});
 
@@ -217,7 +218,8 @@ test.describe("S-SLOT settings — gate + 6 cloud slots (#gate-slots)", () => {
 		expect(saved.ttsProvider).toBe("naia-local-voice"); // 음성 → 로컬
 		expect(saved.ttsEnabled).toBe(true);
 		expect(saved.vllmTtsHost).toBe("http://localhost:8910"); // 원격 잔재 → 로컬 façade 교정
-		expect(saved.avatarProvider).toBe("vrm"); // nva 잔재 → VRM 복원
+		expect(saved.avatarProvider).toBe("naia-video-avatar");
+		expect(saved.nvaModel).toBeTruthy();
 
 		// UI 반영 — 슬롯 표시가 로컬 구성으로 갱신.
 		await expect(page.locator('[data-testid="slot-main"]')).toContainText(

@@ -121,8 +121,9 @@ pnpm install                       # 의존성 설치 (루트)
 # 2) 코어 단위·계약 테스트 (루트)
 pnpm test                          # vitest run (src/test — 순수 로직·UC 계약)
 
-# 3) 데스크톱 셸 실행 (Tauri) — agent 를 자동 빌드·spawn 한다
-pnpm -C packages/shell run tauri:dev
+# 3) 데스크톱 셸 실행 (로컬 Tauri + 운영 web/gateway) — agent 를 자동 빌드·spawn 한다
+pnpm run tauri:dev
+# 로컬 web/gateway가 꼭 필요할 때만: pnpm -C packages/shell run tauri:local
 
 # 4) 배포본(인스톨러) 빌드 — 3 OS 공통 진입점 1개 (#377)
 #    platform-matrix.json(SoT)에서 OS 를 자동 감지: node 런타임 다운로드+SHA256, (win) MSVC 재배포,

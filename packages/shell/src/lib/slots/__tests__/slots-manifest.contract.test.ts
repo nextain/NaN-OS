@@ -72,7 +72,10 @@ describe("slots-manifest · 빌드(AppConfig → 매니페스트)", () => {
 		expect(m.gpu.detectedVramGb).toBe(24);
 		// ★"auto" 는 해석된 tier id 로 기록 — wm loader(EXCLUSIVE_8G_TIERS) 가 매칭해야
 		// avatar_ditto_trt 를 선택. "auto" 를 그대로 쓰면 loader 가 avatar 를 안 띄움(캐릭터 미표시).
-		expect(m.gpu.tier).toBe("local-llm-voice-16g"); // auto = 검증 티어만(2026-07-15) — 24G 도 유일 검증 티어로
+		expect(m.gpu).toMatchObject({
+			tier: "local-llm-voice-16g",
+			loaderProfile: "local_16g",
+		}); // auto = 검증 티어만(2026-07-15) — 24G 도 유일 검증 티어로
 	});
 
 	it("★auto tier 해석 — 8GB 는 검증 티어 없음 → tier 생략 (2026-07-15 재계약)", () => {
@@ -122,6 +125,28 @@ describe("slots-manifest · 빌드(AppConfig → 매니페스트)", () => {
 			detectedVramGb: 8,
 			tier: "laptop-4060-8g",
 			loaderProfile: "laptop_4060_8g",
+		});
+	});
+
+	it("writes 16GB Ditto TRT loader profile for windows-manager", () => {
+		const m = buildSlotsManifest(
+			{
+				...naiaConfig,
+				localGpuTier: "local-llm-voice-16g",
+				ttsProvider: "naia-local-voice",
+				avatarProvider: "naia-video-avatar",
+				nvaModel: "naia.nva",
+			} as AppConfig,
+			{ detectedVramGb: 16 },
+		);
+		expect(m.slots.avatar).toMatchObject({
+			provider: "naia-video-avatar",
+			model: "naia.nva",
+		});
+		expect(m.gpu).toMatchObject({
+			detectedVramGb: 16,
+			tier: "local-llm-voice-16g",
+			loaderProfile: "local_16g",
 		});
 	});
 

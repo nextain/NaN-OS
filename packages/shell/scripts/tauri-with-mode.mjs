@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * tauri-with-mode.mjs (new-naia) — `pnpm run tauri:dev | tauri:prod` 래퍼.
+ * tauri-with-mode.mjs (new-naia) — Tauri의 운영/로컬 연결 모드 래퍼.
  *
  * 옛 old-naia-os/scripts/tauri-with-mode.mjs 의 새-구조 이식판.
  * 추가 책임(new-naia-os 는 항상 새 코어 + 분리 에이전트이므로):
@@ -107,6 +107,9 @@ const env = { ...process.env };
 // ── 새 코어 + 분리 에이전트 (new-naia-os 불변) ──
 env.VITE_NAIA_NEW_CORE = env.VITE_NAIA_NEW_CORE ?? "1";
 env.NAIA_AGENT_STANDALONE = env.NAIA_AGENT_STANDALONE ?? "1";
+// Tauri의 내부 Vite 화면은 loopback IPv4에만 바인딩한다. `localhost`가 IPv6 ::1로
+// 해석되는 환경에서 listen EPERM/연결 불일치가 나지 않게 하되, 호출자 명시값은 보존한다.
+env.TAURI_DEV_HOST = env.TAURI_DEV_HOST ?? "127.0.0.1";
 
 function gitDirForPath(path) {
 	let dir = resolve(path);
@@ -199,10 +202,14 @@ if (platform() === "linux") {
 	env.WEBKIT_DISABLE_DMABUF_RENDERER = env.WEBKIT_DISABLE_DMABUF_RENDERER ?? "1";
 }
 
-// ── prod: dev-gateway 변수 강제 제거 ──
+// ── prod: 호출 셸의 stale 로컬 URL 강제 제거 ──
+// 운영 모드의 명시적 URL override 는 아래에서 읽는 .env.prod 로만 허용한다. 이렇게 해야
+// 개발 셸에 남은 localhost web/gateway 변수가 운영 로그인·크레딧 요청을 로컬로 돌리지 않는다.
 if (mode === "prod") {
-	delete env.VITE_NAIA_USE_DEV_GATEWAY;
-	delete env.VITE_NAIA_DEV_GATEWAY_URL;
+	Reflect.deleteProperty(env, "VITE_NAIA_USE_DEV_GATEWAY");
+	Reflect.deleteProperty(env, "VITE_NAIA_DEV_GATEWAY_URL");
+	Reflect.deleteProperty(env, "VITE_NAIA_GATEWAY_URL");
+	Reflect.deleteProperty(env, "VITE_NAIA_WEB_BASE_URL");
 }
 
 /** 최소 KEY=VALUE env 파일 파서(주석·빈줄 skip, 따옴표 제거). */
@@ -245,9 +252,18 @@ const pairedAgent = applyPairedAgentEnv(env);
 // The Tauri process runs the compiled agent entrypoint. Always build the exact
 // paired source before development so a clean checkout cannot start with a
 // missing or stale dist/ tree.
+// Disable pnpm's project-local CLI auto-download for this cross-repository
+// build. A partial package-manager cache can otherwise resolve the paired
+// agent's declared pnpm version to a stale CLI even when the caller already
+// runs a compatible pnpm 10 installation.
+const agentBuildEnv = {
+	...env,
+	npm_config_manage_package_manager_versions: "false",
+	npm_config_package_manager_strict_version: "false",
+};
 const agentBuild = spawnSync("pnpm", ["run", "build"], {
 	cwd: pairedAgent,
-	env,
+	env: agentBuildEnv,
 	stdio: "inherit",
 	shell: process.platform === "win32",
 });

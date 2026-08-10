@@ -34,13 +34,14 @@ describe("selectVramTier (2026-07-08 monotonic tiers)", () => {
 		expect(selectVramTier(48)?.id).toBe("local-llm-voice-16g");
 	});
 
-	it("local-llm-voice-16g: LLM+음성 티어 데이터 계약", () => {
-		// 아바타 GPU 를 음성에 양보하는 가지(branch) 티어: VRM/클라우드 아바타 + 로컬 LLM+TTS.
+	it("local-llm-voice-16g: Windows local_16g가 Ditto TRT까지 제공", () => {
 		const t = VRAM_TIERS.find((x) => x.id === "local-llm-voice-16g");
 		expect(t).toBeDefined();
-		expect(t?.localCapabilities).toEqual(["llm", "tts"]);
+		expect(t?.localCapabilities).toEqual(["llm", "tts", "avatar"]);
 		expect(t?.llm).toBe("own");
-		expect(t?.exclusiveLocal).toBeFalsy(); // 동시 구동 (실측 11.4G/16.4G)
+		expect(t?.approxLocalVramGb).toBeCloseTo(12.37, 2);
+		expect(t?.loaderProfile).toBe("local_16g");
+		expect(t?.exclusiveLocal).toBeFalsy();
 		expect(t?.hidden).toBeFalsy(); // 유일한 노출(검증) 티어
 	});
 
@@ -90,6 +91,14 @@ describe("monotonic local capabilities (avatar → +llm → +voice) — 데이�
 		const t = byId("local-voice-12g");
 		expect(t.llm).toBe("own");
 		expect(t.localCapabilities).toEqual(["llm", "avatar", "tts"]);
+		expect(t.loaderProfile).toBe("local_16g_compact");
+		expect(tierFitsBoth(t)).toBe(true);
+	});
+
+	it("16G: Windows loader receives local LLM + int8 voice + Ditto TRT", () => {
+		const t = byId("local-llm-voice-16g");
+		expect(t.localCapabilities).toEqual(["llm", "tts", "avatar"]);
+		expect(t.loaderProfile).toBe("local_16g");
 		expect(tierFitsBoth(t)).toBe(true);
 	});
 
@@ -97,6 +106,7 @@ describe("monotonic local capabilities (avatar → +llm → +voice) — 데이�
 		const t = byId("full-realtime-24g");
 		expect(t.llm).toBe("own");
 		expect(t.localCapabilities).toEqual(["llm", "avatar", "tts"]);
+		expect(t.loaderProfile).toBe("full");
 	});
 
 	it("8G focus resolves exclusively — llm / avatar / both", () => {

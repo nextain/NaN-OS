@@ -9,6 +9,7 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
+    "tauri:dev": "pnpm -C packages/shell run tauri:dev",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:report": "vitest run --reporter=verbose"

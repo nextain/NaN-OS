@@ -611,7 +611,7 @@ describe("SettingsTab — memory tab (#298)", () => {
 		expect(tabBtns.length).toBe(10);
 	});
 
-	it("GPU 프로파일 = 자동 설정 — local-llm-voice-16g 선택 시 두뇌·음성·호스트가 로컬로 전환 (2026-07-15)", async () => {
+	it("GPU 프로파일 = 자동 설정 — local-llm-voice-16g 선택 시 두뇌·음성·Ditto NVA가 로컬로 전환", async () => {
 		localStorage.setItem(
 			"naia-config",
 			JSON.stringify({
@@ -621,7 +621,7 @@ describe("SettingsTab — memory tab (#298)", () => {
 				ttsProvider: "nextain",
 				// localhost raw /tts 잔재 — 로컬 티어 선택이 로컬 façade 기본(:8910)으로 교정해야 한다.
 				vllmTtsHost: "http://localhost:8892",
-				// 아바타 티어를 거쳐온 잔재 — LLM+음성 티어(아바타 비포함)는 VRM 으로 복원해야 한다.
+				// 기존 NVA 선택 — Ditto 포함 프로필이 기본 번들을 보존해야 한다.
 				avatarProvider: "naia-video-avatar",
 			}),
 		);
@@ -648,8 +648,9 @@ describe("SettingsTab — memory tab (#298)", () => {
 		expect(saved.ttsEnabled).toBe(true);
 		expect(saved.vllmTtsHost).toBe("http://localhost:8910");
 		expect(saved.localGpuTier).toBe("local-llm-voice-16g");
-		// 아바타: 이 티어는 Ditto 비포함 → VRM 으로 복원 (nva 잔재 버그 수정, 2026-07-15).
-		expect(saved.avatarProvider).toBe("vrm");
+		// 아바타: Windows local_16g가 Ditto TRT를 띄우므로 NVA를 유지한다.
+		expect(saved.avatarProvider).toBe("naia-video-avatar");
+		expect(saved.nvaModel).toBeTruthy();
 	});
 
 	it("GPU profile 8GB laptop stages local NPU LLM + local voice + video avatar", async () => {
