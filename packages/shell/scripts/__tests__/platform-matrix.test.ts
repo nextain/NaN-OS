@@ -567,6 +567,20 @@ describe("vosk 빌드 순서 불변식 (FR-INSTALL.2 — links 키 게이트)", 
 });
 
 describe("agent production staging", () => {
+	it("keeps the Rust build gate synchronized with the pairing manifest", () => {
+		const pairing = JSON.parse(
+			readFileSync(resolve(SHELL, "agent-pairing.json"), "utf8"),
+		) as { agentCommit: string; protoSha256: string };
+		const buildScript = readFileSync(resolve(SHELL, "src-tauri/build.rs"), "utf8");
+
+		expect(buildScript).toContain(
+			`const REQUIRED_AGENT_COMMIT: &str = "${pairing.agentCommit}";`,
+		);
+		expect(buildScript).toContain(
+			`"${pairing.protoSha256}";`,
+		);
+	});
+
 	it("builds local runtime dependencies before building the agent", () => {
 		const source = readFileSync(
 			resolve(SHELL, "scripts/stage-agent.mjs"),
