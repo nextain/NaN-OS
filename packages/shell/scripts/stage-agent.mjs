@@ -144,8 +144,8 @@ for (const dependency of AGENT_LOCAL_DEPENDENCIES) {
 		process.exit(1);
 	}
 	console.log(`[stage-agent] dependency build: ${dependency.name}`);
-	runPnpm(["install", "--frozen-lockfile"], dependency.path);
-	runPnpm(["run", "build"], dependency.path);
+	runPnpm(["--ignore-workspace", "install", "--frozen-lockfile"], dependency.path);
+	runPnpm(["--ignore-workspace", "run", "build"], dependency.path);
 	if (!existsSync(resolve(dependency.path, dependency.output))) {
 		console.error(
 			`[stage-agent] dependency output missing: ${dependency.name}/${dependency.output}`,
@@ -155,8 +155,8 @@ for (const dependency of AGENT_LOCAL_DEPENDENCIES) {
 }
 
 console.log("[stage-agent] ① agent install + build");
-runPnpm(["install", "--frozen-lockfile"], AGENT);
-runPnpm(["run", "build"], AGENT);
+runPnpm(["--ignore-workspace", "install", "--frozen-lockfile"], AGENT);
+runPnpm(["--ignore-workspace", "run", "build"], AGENT);
 assertPairedCheckoutStillClean("agent install/build");
 
 console.log(`[stage-agent] ② deploy (prod, hoisted) → ${STAGE}`);
