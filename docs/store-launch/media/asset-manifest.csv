@@ -1,0 +1,22 @@
+platform,asset,filename,width,height,required,status
+steam,Header Capsule,steam/header_capsule.png,920,430,yes,generated
+steam,Small Capsule,steam/small_capsule.png,462,174,yes,generated
+steam,Main Capsule,steam/main_capsule.png,1232,706,yes,generated
+steam,Vertical Capsule,steam/vertical_capsule.png,748,896,yes,generated
+steam,Library Capsule,steam/library_capsule.png,600,900,yes,generated
+steam,Library Header,steam/library_header.png,920,430,yes,generated
+steam,Library Hero,steam/library_hero.png,3840,1240,yes,generated
+steam,Library Logo,steam/library_logo.png,1280,720,yes,generated
+steam,Screenshot 1,steam/screenshots/01-main-nva.png,1920,1080,yes,generated-from-real-capture
+steam,Screenshot 2,steam/screenshots/02-settings.png,1920,1080,yes,generated-from-real-capture
+steam,Screenshot 3,steam/screenshots/03-account.png,1920,1080,yes,generated-from-real-capture
+steam,Screenshot 4,steam/screenshots/04-chat.png,1920,1080,yes,needs-capture
+steam,Screenshot 5,steam/screenshots/05-workspace.png,1920,1080,yes,needs-capture
+microsoft-store,1:1 Box Art,microsoft-store/box_art_1080.png,1080,1080,yes,generated
+microsoft-store,2:3 Poster Art,microsoft-store/poster_art_1440x2160.png,1440,2160,recommended,generated
+microsoft-store,App Tile,microsoft-store/app_tile_300.png,300,300,recommended,generated
+microsoft-store,Super Hero,microsoft-store/super_hero_1920x1080.png,1920,1080,recommended,generated
+microsoft-store,Screenshot 1,microsoft-store/screenshots/01-main-nva.png,1920,1080,yes,generated-from-real-capture
+microsoft-store,Screenshot 2,microsoft-store/screenshots/02-settings.png,1920,1080,recommended,generated-from-real-capture
+microsoft-store,Screenshot 3,microsoft-store/screenshots/03-account.png,1920,1080,recommended,generated-from-real-capture
+

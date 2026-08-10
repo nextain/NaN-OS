@@ -1,0 +1,14 @@
+"appbuild"
+{
+    "appid" "__STEAM_APP_ID__"
+    "desc" "Naia __VERSION__ Windows release"
+    "buildoutput" "..\\output"
+    "contentroot" "..\\content"
+    "setlive" ""
+    "preview" "1"
+    "depots"
+    {
+        "__WINDOWS_DEPOT_ID__" "depot_build_windows.vdf"
+    }
+}
+
