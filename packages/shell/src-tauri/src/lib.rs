@@ -2969,6 +2969,11 @@ fn bgm_server_port() -> u16 {
     18791
 }
 
+// A cold Windows install can spend more than ten seconds loading the bundled
+// Node tree while Defender scans it. Keep the owned nonce health check, but
+// allow enough time for that first launch instead of killing a healthy child.
+const BGM_STARTUP_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
+
 fn spawn_youtube_bgm_server(app_handle: &AppHandle) -> Result<BgmServerProcess, String> {
     // Node binary ??same resolution chain as spawn_agent_core
     let node_path = resolve_spawn_node(app_handle, "NAIA_BGM_NODE_PATH");
@@ -3109,15 +3114,16 @@ fn spawn_youtube_bgm_server(app_handle: &AppHandle) -> Result<BgmServerProcess, 
     // review finding 1). The on-exit handler calls remove_pid_file("bgm-server").
     write_pid_file("bgm-server", pid);
 
-    // Readiness probe ??poll /health for up to 10s (#335 codex review finding
+    // Readiness probe: poll /health for the bounded cold-start budget (#335).
     // 2). Catches EADDRINUSE and other startup failures that the spawn handle
     // can't see (server.on("error") in youtube-server.ts logs but doesn't exit).
     // Non-fatal: BGM is optional; we only log a warning on timeout so users
     // see a recovery hint in ~/.naia/logs/naia.log.
-    if !probe_bgm_server_ready(std::time::Duration::from_secs(10), &health_nonce, bgm_port) {
+    if !probe_bgm_server_ready(BGM_STARTUP_TIMEOUT, &health_nonce, bgm_port) {
         log_both(&format!(
-            "[Naia] WARN BGM server did not respond on http://127.0.0.1:{}/health within 10s",
-            bgm_port
+            "[Naia] WARN BGM server did not respond on http://127.0.0.1:{}/health within {}s",
+            bgm_port,
+            BGM_STARTUP_TIMEOUT.as_secs()
         ));
         let mut child = child;
         let _ = child.kill();
@@ -3188,7 +3194,7 @@ async fn ensure_bgm_server(
         drop(process);
     }
 
-    // The readiness probe can take up to ten seconds. Keep it off the async
+    // The readiness probe can consume the cold-start budget. Keep it off the async
     // runtime and outside the synchronous process-slot mutex. BgmServerProcess
     // has an owning Drop, so cancellation cannot orphan a completed spawn.
     let process =
@@ -10767,6 +10773,11 @@ mod tests {
         assert!(bgm_health_matches(&current, "current"));
         assert!(!bgm_health_matches(&stale, "current"));
         assert!(!bgm_health_matches(&legacy, "current"));
+    }
+
+    #[test]
+    fn bgm_startup_budget_covers_windows_cold_install_scanning() {
+        assert_eq!(BGM_STARTUP_TIMEOUT, std::time::Duration::from_secs(30));
     }
 
     #[test]
