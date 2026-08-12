@@ -1,0 +1,206 @@
+// @vitest-environment jsdom
+import {
+	act,
+	cleanup,
+	fireEvent,
+	render,
+	screen,
+	waitFor,
+} from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { useCascadeAvatarStore } from "../../stores/cascade-avatar";
+import { RefAudioSection } from "../RefAudioSection";
+
+describe("RefAudioSection", () => {
+	afterEach(() => {
+		cleanup();
+		localStorage.clear();
+		useCascadeAvatarStore.getState().setLocalFacadeUrl(null);
+		vi.unstubAllGlobals();
+	});
+
+	it("retries local voice presets when the cascade facade becomes ready", async () => {
+		localStorage.setItem(
+			"naia-config",
+			JSON.stringify({
+				ttsProvider: "naia-local-voice",
+				vllmTtsHost: "http://localhost:8910",
+			}),
+		);
+		const fetchMock = vi
+			.fn()
+			.mockRejectedValueOnce(new Error("runtime is still starting"))
+			.mockResolvedValue({
+				ok: true,
+				json: async () => ({ voices: [] }),
+			});
+		vi.stubGlobal("fetch", fetchMock);
+
+		render(<RefAudioSection />);
+		await waitFor(() =>
+			expect(fetchMock).toHaveBeenCalledWith(
+				"http://localhost:8910/ref/voices",
+			),
+		);
+
+		act(() => {
+			useCascadeAvatarStore
+				.getState()
+				.setLocalFacadeUrl("http://127.0.0.1:8910");
+		});
+
+		await waitFor(() =>
+			expect(fetchMock).toHaveBeenCalledWith(
+				"http://127.0.0.1:8910/ref/voices",
+			),
+		);
+	});
+
+	it("shows recording and audio-file attachment controls for Naia Local", () => {
+		localStorage.setItem(
+			"naia-config",
+			JSON.stringify({
+				ttsProvider: "naia-local-voice",
+				vllmTtsHost: "http://127.0.0.1:8910",
+			}),
+		);
+		vi.stubGlobal(
+			"fetch",
+			vi.fn().mockResolvedValue({
+				ok: true,
+				json: async () => ({ voices: [] }),
+			}),
+		);
+
+		render(<RefAudioSection />);
+
+		expect(screen.getByText("Make your voice")).toBeDefined();
+		expect(screen.getByText(/Record$/)).toBeDefined();
+		expect(screen.getByTestId("ref-audio-file-button").textContent).toContain(
+			"Upload file",
+		);
+		const input = screen.getByTestId("ref-audio-file-input");
+		expect(input.getAttribute("type")).toBe("file");
+		expect(input.getAttribute("accept")).toBe("audio/*");
+		expect(screen.getByText(/recording & upload are free/i)).toBeDefined();
+	});
+
+	it("persists a non-default local preset without calling the cloud gateway", async () => {
+		localStorage.setItem(
+			"naia-config",
+			JSON.stringify({
+				ttsProvider: "naia-local-voice",
+				vllmTtsHost: "http://127.0.0.1:8910",
+				voiceRefUrl: "http://127.0.0.1:8910/ref/audio/ref_ko_485.wav",
+			}),
+		);
+		const fetchMock = vi.fn().mockResolvedValue({
+			ok: true,
+			json: async () => ({
+				voices: [
+					{
+						name: "ref_ko_485.wav",
+						url: "http://127.0.0.1:8910/ref/audio/ref_ko_485.wav",
+						gender: "female",
+						lang: "ko",
+						idx: 1,
+						default: true,
+					},
+					{
+						name: "male-20s-01.wav",
+						url: "http://127.0.0.1:8910/ref/audio/male-20s-01.wav",
+						gender: "male",
+						lang: "ko",
+						idx: 1,
+						default: false,
+					},
+				],
+			}),
+		});
+		vi.stubGlobal("fetch", fetchMock);
+
+		render(<RefAudioSection />);
+		await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+		const details = document.querySelector("details");
+		expect(details).not.toBeNull();
+		(details as HTMLDetailsElement).open = true;
+		fireEvent(details as HTMLDetailsElement, new Event("toggle"));
+
+		await waitFor(() => expect(screen.getAllByText("Apply").length).toBe(2));
+		fireEvent.click(screen.getAllByText("Apply")[1]);
+
+		await waitFor(() => {
+			const saved = JSON.parse(localStorage.getItem("naia-config") ?? "{}");
+			expect(saved.voiceRefUrl).toBe(
+				"http://127.0.0.1:8910/ref/audio/male-20s-01.wav",
+			);
+		});
+		expect(fetchMock).toHaveBeenCalled();
+		expect(
+			fetchMock.mock.calls.every(
+				([url]) => url === "http://127.0.0.1:8910/ref/voices",
+			),
+		).toBe(true);
+	});
+
+	it("starts Naia Local and downloads the preset before preview playback", async () => {
+		localStorage.setItem(
+			"naia-config",
+			JSON.stringify({
+				ttsProvider: "naia-local-voice",
+				vllmTtsHost: "http://127.0.0.1:8910",
+			}),
+		);
+		const sampleUrl = "http://127.0.0.1:8910/ref/audio/male-20s-01.wav";
+		const fetchMock = vi.fn().mockImplementation((url: string) => {
+			if (url.endsWith("/ref/voices")) {
+				return Promise.resolve({
+					ok: true,
+					json: async () => ({
+						voices: [
+							{
+								name: "male-20s-01.wav",
+								url: sampleUrl,
+								gender: "male",
+								lang: "ko",
+								idx: 1,
+								default: true,
+							},
+						],
+					}),
+				});
+			}
+			return Promise.resolve({
+				ok: true,
+				blob: async () => new Blob(["wav"], { type: "audio/wav" }),
+			});
+		});
+		const play = vi.fn().mockResolvedValue(undefined);
+		vi.stubGlobal(
+			"Audio",
+			class {
+				preload = "";
+				onended: (() => void) | null = null;
+				onerror: (() => void) | null = null;
+				pause = vi.fn();
+				play = play;
+			},
+		);
+		vi.stubGlobal("fetch", fetchMock);
+		vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:preset-preview");
+		vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => {});
+		const ensureLocalVoiceReady = vi.fn().mockResolvedValue(true);
+
+		render(
+			<RefAudioSection ensureLocalVoiceReady={ensureLocalVoiceReady} />,
+		);
+		await waitFor(() => expect(screen.getByText("Play")).toBeDefined());
+		fireEvent.click(screen.getByText("Play"));
+
+		await waitFor(() => {
+			expect(ensureLocalVoiceReady).toHaveBeenCalledTimes(1);
+			expect(fetchMock).toHaveBeenCalledWith(sampleUrl);
+			expect(play).toHaveBeenCalledTimes(1);
+		});
+	});
+});

@@ -23,6 +23,7 @@
 import { BGM_SIDECAR_BASE_URL } from "../bgm-sidecar-url";
 import { DEFAULT_LOCAL_VOICE_HOST, type TtsProviderId } from "../config";
 import { Logger } from "../logger";
+import { applyLocalRefAudio } from "../voice/ref-audio-api";
 import { resolveEdgeVoice } from "./edge-tts";
 
 // Edge neural TTS runs in the bgm/media sidecar (node msedge-tts) — the in-app
@@ -31,6 +32,14 @@ import { resolveEdgeVoice } from "./edge-tts";
 const EDGE_TTS_SIDECAR_URL = `${BGM_SIDECAR_BASE_URL}/edge-tts`;
 const LOCAL_VOICE_BUSY_RETRY_DELAYS_MS = [
 	250, 500, 750, 1_000, 1_500, 2_000, 2_500, 3_000, 3_500,
+];
+// The TensorRT VoxCPM2 worker can need roughly a minute for its first model
+// load. The facade starts earlier, so requests made during that narrow window
+// are rejected before the upstream POST is admitted (WinError 10061). Retrying
+// that exact failure is safe and keeps the user's first reply queued until the
+// local GPU is genuinely ready.
+const LOCAL_VOICE_STARTUP_RETRY_DELAYS_MS = [
+	1_000, 1_500, 2_000, 2_500, 3_000, 3_500, 4_000, 4_500, 5_000, 5_000, 5_000,
 ];
 const LOCAL_VOICE_BUSY_MAX_RETRY_DELAY_MS = 3_500;
 
@@ -76,6 +85,8 @@ export interface SynthesizeOpts {
 	 * LLM host or a cloud voice.
 	 */
 	vllmTtsHost?: string;
+	/** Persisted browser-uploaded WAV for the naia-local-voice Runtime. */
+	localRefAudioBase64?: string;
 	/** Abort signal for cancellation / interrupt. */
 	signal?: AbortSignal;
 }
@@ -311,6 +322,12 @@ async function synthNaiaLocalVoice(
 	const defaultVoice = "naia-default";
 	const selectedVoice =
 		!opts.voice || opts.voice === "default" ? defaultVoice : opts.voice;
+	if (selectedVoice === "naia-current" && opts.localRefAudioBase64) {
+		// Reinstall on every sentence so a Runtime restart or another voice change
+		// cannot silently select the wrong clone. The Runtime keys the temp WAV by
+		// content hash, making repeated installs idempotent and local-only.
+		await applyLocalRefAudio(opts.localRefAudioBase64, base);
+	}
 	const request = (voice: string) =>
 		fetch(`${base}/v1/audio/speech`, {
 			method: "POST",
@@ -353,17 +370,22 @@ async function synthNaiaLocalVoice(
 				response.status === 429 ||
 				(response.status === 502 &&
 					detail.includes("HTTP Error 429: Too Many Requests"));
-			if (!busy || retry >= LOCAL_VOICE_BUSY_RETRY_DELAYS_MS.length) {
+			const starting =
+				response.status === 502 && detail.includes("WinError 10061");
+			const retryDelays = starting
+				? LOCAL_VOICE_STARTUP_RETRY_DELAYS_MS
+				: LOCAL_VOICE_BUSY_RETRY_DELAYS_MS;
+			if ((!busy && !starting) || retry >= retryDelays.length) {
 				return { response, detail };
 			}
-			const delayMs = retryAfterMs(
-				response,
-				LOCAL_VOICE_BUSY_RETRY_DELAYS_MS[retry],
-			);
-			Logger.info("tts-synthesize", "Local voice busy; retrying", {
+			const delayMs = starting
+				? retryDelays[retry]
+				: retryAfterMs(response, retryDelays[retry]);
+			Logger.info("tts-synthesize", "Local voice unavailable; retrying", {
 				retry: retry + 1,
 				delayMs,
 				status: response.status,
+				reason: starting ? "gpu-starting" : "busy",
 			});
 			await waitForRetry(delayMs);
 		}

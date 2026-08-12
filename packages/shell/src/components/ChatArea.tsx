@@ -319,6 +319,7 @@ function resolveTtsVoiceId(config: AppConfig): string | undefined {
 		);
 	}
 	if (config.ttsProvider === "naia-local-voice") {
+		if (getLocalRefAudioB64()) return "naia-current";
 		return naiaLocalVoiceId(config.voiceRefUrl);
 	}
 	if (config.ttsProvider === "vllm") {
@@ -899,10 +900,32 @@ export function ChatArea({
 		const onUrl = (e: Event) => {
 			const url = (e as CustomEvent<string | null>).detail ?? null;
 			voiceSessionRef.current?.setRefAudioUrl?.(url);
+			// The ordinary Shell TTS pipeline snapshots its provider settings when
+			// the speech session starts. Keep that snapshot in sync too, otherwise a
+			// preset picked while the session is active is persisted but the next
+			// sentence is still synthesized with the previous voice until restart.
+			const pipeline = pipelineVoiceConfigRef.current;
+			if (pipeline?.ttsProvider === "naia-local-voice") {
+				pipeline.voice = naiaLocalVoiceId(url ?? undefined);
+				pipeline.vllmTtsHost =
+					useCascadeAvatarStore.getState().localFacadeUrl ??
+					loadConfig()?.vllmTtsHost ??
+					pipeline.vllmTtsHost;
+				Logger.info("ChatArea", "Local voice preset updated", {
+					voice: pipeline.voice,
+				});
+			}
 		};
 		const onB64 = (e: Event) => {
 			const b64 = (e as CustomEvent<string | null>).detail ?? null;
 			voiceSessionRef.current?.setRefAudio?.(b64);
+			const pipeline = pipelineVoiceConfigRef.current;
+			if (b64 && pipeline?.ttsProvider === "naia-local-voice") {
+				pipeline.voice = "naia-current";
+				Logger.info("ChatArea", "Local uploaded voice updated", {
+					voice: pipeline.voice,
+				});
+			}
 		};
 		// Mid-session language switch: Settings dispatches "naia:locale-change" when
 		// the UI language changes. If a voice session is live, pin the new STT
@@ -2301,6 +2324,7 @@ export function ChatArea({
 			seq,
 			sentence: clean.slice(0, 50),
 			provider: ttsProviderForCost,
+			voice: ttsVoiceForCost,
 		});
 
 		// Speak via the browser's built-in speechSynthesis (free, client-side).
@@ -2377,6 +2401,10 @@ export function ChatArea({
 				gatewayUrl: voiceCfg?.gatewayUrl,
 				vllmHost: voiceCfg?.vllmHost,
 				vllmTtsHost: voiceCfg?.vllmTtsHost,
+				localRefAudioBase64:
+					ttsProviderForCost === "naia-local-voice"
+						? getLocalRefAudioB64() ?? undefined
+						: undefined,
 				signal: abort.signal,
 			});
 		};

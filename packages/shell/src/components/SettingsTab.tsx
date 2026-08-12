@@ -833,51 +833,72 @@ export function SettingsTab() {
 					message: afterStart?.summary,
 				};
 	};
-	const handleToggleCascade = async () => {
+	const ensureLocalVoiceReady = async (): Promise<boolean> => {
+		if (cascadeRunning) return true;
 		setCascadeBusy(true);
 		setCascadeMsg("");
 		try {
-			if (cascadeRunning) {
-				await invoke("stop_cascade");
-				setCascadeRunning(false);
-				useCascadeAvatarStore.getState().setLocalFacadeUrl(null);
-				const cfg = loadConfig();
-				if (cfg) persistConfig({ localVoiceEnabled: false, ttsEnabled: false });
-				setTtsEnabled(false);
-				setCascadeMsg(t("settings.cascadeStopped"));
-			} else {
-				const cfg = loadConfig();
-				if (!cfg || detectedVramGb == null || detectedVramGb < 6) {
-					setCascadeMsg(t("settings.localVoiceVramRequired"));
-					return;
-				}
-				const voiceConfig = {
-					...cfg,
-					localVoiceEnabled: true,
-					ttsProvider: "naia-local-voice" as const,
-					ttsEnabled: true,
-					vllmTtsHost: DEFAULT_LOCAL_VOICE_HOST,
-				};
-				persistConfig(voiceConfig);
-				setTtsProvider("naia-local-voice");
-				setTtsEnabled(true);
-				setVllmTtsHost(DEFAULT_LOCAL_VOICE_HOST);
-				await writeSlotsManifest(voiceConfig, detectedVramGb);
-				const start = await startCascadeAndConfirm("windows_trt_6g");
-				if (!start.ready) {
-					persistConfig({ localVoiceEnabled: false, ttsEnabled: false });
-					setTtsEnabled(false);
-					setCascadeRunning(false);
-					setCascadeMsg(start.message ?? t("settings.cascadeError"));
-					return;
-				}
-				const localUrl = localVoiceFacadeUrlFromReady(start.ready);
-				useCascadeAvatarStore.getState().setLocalFacadeUrl(localUrl);
-				setCascadeRunning(true);
-				setCascadeMsg(t("settings.cascadeStarted"));
+			const cfg = loadConfig();
+			if (!cfg || detectedVramGb == null || detectedVramGb < 6) {
+				setCascadeMsg(t("settings.localVoiceVramRequired"));
+				return false;
 			}
+			const voiceConfig = {
+				...cfg,
+				localVoiceEnabled: true,
+				ttsProvider: "naia-local-voice" as const,
+				ttsEnabled: true,
+				vllmTtsHost: DEFAULT_LOCAL_VOICE_HOST,
+			};
+			saveConfig(voiceConfig);
+			setTtsProvider("naia-local-voice");
+			setTtsEnabled(true);
+			setVllmTtsHost(DEFAULT_LOCAL_VOICE_HOST);
+			// Await the complete config -> manifest transaction before native start.
+			// A fire-and-forget persistence call can race start_cascade and leave it
+			// observing the prior dormant manifest on an upgraded profile.
+			await writeNaiaConfig({
+				...voiceConfig,
+				...(naiaKey ? { naiaKey } : {}),
+			} as unknown as Record<string, unknown>);
+			await writeSlotsManifest(voiceConfig, detectedVramGb);
+			const start = await startCascadeAndConfirm("windows_trt_6g");
+			if (!start.ready) {
+				persistConfig({ localVoiceEnabled: false, ttsEnabled: false });
+				setTtsEnabled(false);
+				setCascadeRunning(false);
+				setCascadeMsg(start.message ?? t("settings.cascadeError"));
+				return false;
+			}
+			const localUrl = localVoiceFacadeUrlFromReady(start.ready);
+			useCascadeAvatarStore.getState().setLocalFacadeUrl(localUrl);
+			setCascadeRunning(true);
+			setCascadeMsg(t("settings.cascadeStarted"));
+			return true;
 		} catch (e) {
 			persistConfig({ localVoiceEnabled: false, ttsEnabled: false });
+			setCascadeMsg(`${t("settings.cascadeError")}: ${String(e)}`);
+			return false;
+		} finally {
+			setCascadeBusy(false);
+		}
+	};
+	const handleToggleCascade = async () => {
+		if (!cascadeRunning) {
+			await ensureLocalVoiceReady();
+			return;
+		}
+		setCascadeBusy(true);
+		setCascadeMsg("");
+		try {
+			await invoke("stop_cascade");
+			setCascadeRunning(false);
+			useCascadeAvatarStore.getState().setLocalFacadeUrl(null);
+			const cfg = loadConfig();
+			if (cfg) persistConfig({ localVoiceEnabled: false, ttsEnabled: false });
+			setTtsEnabled(false);
+			setCascadeMsg(t("settings.cascadeStopped"));
+		} catch (e) {
 			setCascadeMsg(`${t("settings.cascadeError")}: ${String(e)}`);
 		} finally {
 			setCascadeBusy(false);
@@ -887,6 +908,25 @@ export function SettingsTab() {
 	// R4/R5: 로컬 프로파일(GPU 티어/포커스) 선택 → 관련 슬롯을 로컬로 스테이징 + 백엔드 warm(대기).
 	// 스테이징이라 config 는 "적용"(handleSave) 전까지 안 바뀐다(앱 그대로). warm 은 스테이징
 	// config 로 slots-manifest 를 써서 백엔드를 미리 띄운다 → 적용 시 즉시 아바타 연결.
+	const localVoiceRestoreAttemptedRef = useRef(false);
+	useEffect(() => {
+		if (
+			localVoiceRestoreAttemptedRef.current ||
+			detectedVramGb == null ||
+			detectedVramGb < 6 ||
+			cascadeRunning ||
+			ttsProvider !== "naia-local-voice"
+		) {
+			return;
+		}
+		localVoiceRestoreAttemptedRef.current = true;
+		Logger.info("Settings", "Restoring enabled local voice runtime", {
+			detectedVramGb,
+			loaderProfile: "windows_trt_6g",
+		});
+		void ensureLocalVoiceReady();
+	}, [detectedVramGb, cascadeRunning, ttsProvider]);
+
 	const warmedProfileRef = useRef<string>("");
 
 	// R5: 티어 capability 로 로컬 슬롯을 스테이징(setState). 반환 = warm manifest 에 쓸 값.
@@ -2178,6 +2218,21 @@ export function SettingsTab() {
 			saveConfig({ ...existing, ttsVoice: voice });
 		}
 		debouncedLabSync();
+	}
+	function selectProfileTtsProvider(next: TtsProviderId) {
+		setTtsProvider(next);
+		setDynamicTtsVoices([]);
+		const updates: Record<string, unknown> = { ttsProvider: next };
+		if (next === "naia-local-voice") {
+			const host = DEFAULT_LOCAL_VOICE_HOST;
+			setVllmTtsHost(host);
+			updates.vllmTtsHost = host;
+			updates.localVoiceEnabled = true;
+			updates.ttsEnabled = true;
+			setTtsEnabled(true);
+			persistTtsVoice("default");
+		}
+		persistConfig(updates);
 	}
 	function getPreviewText(_voice?: string): string {
 		const lang = locale.slice(0, 2).toLowerCase();
@@ -3692,7 +3747,9 @@ export function SettingsTab() {
 								marginTop: 8,
 							}}
 						>
-							{SLOT_GROUPS.map((group) => (
+							{SLOT_GROUPS.filter(
+								(group) => group.id !== "avatar",
+							).map((group) => (
 								<div
 									key={group.id}
 									data-testid={`slot-group-${group.id}`}
@@ -3773,14 +3830,58 @@ export function SettingsTab() {
 											</>
 										)}
 										{group.id === "voice" && (
-											<button
-												type="button"
-												className="voice-preview-btn"
-												data-testid={`slot-edit-voice`}
-												onClick={() => setActiveSettingsTab("voice")}
-											>
-												{t("settings.slot.editVoice")}
-											</button>
+											<>
+												<select
+													data-testid="profile-tts-provider"
+													aria-label={t("settings.ttsProvider")}
+													value={ttsProvider}
+													onChange={(event) =>
+														selectProfileTtsProvider(
+															event.target.value as TtsProviderId,
+														)
+													}
+												>
+													{listTtsProviderMetas().map((providerMeta) => (
+														<option
+															key={providerMeta.id}
+															value={providerMeta.id}
+															disabled={
+																providerMeta.requiresNaiaKey && !naiaKey
+															}
+														>
+															{providerMeta.name}
+														</option>
+													))}
+												</select>
+												{ttsProvider === "naia-local-voice" && (
+													<button
+														type="button"
+														className="voice-preview-btn"
+														data-testid="profile-local-voice-toggle"
+														onClick={handleToggleCascade}
+														disabled={
+															cascadeBusy ||
+															detectedVramGb == null ||
+															detectedVramGb < 6
+														}
+														aria-pressed={cascadeRunning}
+													>
+														{cascadeBusy
+															? t("settings.cascadeBusy")
+															: cascadeRunning
+																? t("settings.cascadeStop")
+																: t("settings.cascadeStart")}
+													</button>
+												)}
+												<button
+													type="button"
+													className="voice-preview-btn"
+													data-testid={`slot-edit-voice`}
+													onClick={() => setActiveSettingsTab("voice")}
+												>
+													{t("settings.slot.editVoice")}
+												</button>
+											</>
 										)}
 										{group.id === "avatar" && (
 											<button
@@ -4877,7 +4978,11 @@ export function SettingsTab() {
 					})()}
 
 					{/* Voice Reference (naia-anyllm #31, plan §7) — naia-omni only */}
-					{supportsRefAudio && <RefAudioSection />}
+					{supportsRefAudio && (
+						<RefAudioSection
+							ensureLocalVoiceReady={ensureLocalVoiceReady}
+						/>
+					)}
 
 					{/* 오디오 장치 */}
 					<div className="settings-section-divider">

@@ -191,7 +191,7 @@ export function resetCodexE2eRoot(): void {
 		model: "gpt-5.4",
 		...(E2E_VOICE_6G_ENABLED
 			? {
-					localGpuTier: "windows-voice-6g",
+					localVoiceEnabled: true,
 					ttsProvider: "naia-local-voice",
 					ttsEnabled: true,
 					vllmTtsHost: "http://127.0.0.1:8910",
@@ -253,7 +253,7 @@ export function resetCodexE2eRoot(): void {
 				{
 					avatarProvider: "vrm",
 					vrmModel: voiceVrmPath,
-					localGpuTier: "windows-voice-6g",
+					localVoiceEnabled: true,
 					ttsProvider: "naia-local-voice",
 					ttsEnabled: true,
 					vllmTtsHost: "http://127.0.0.1:8910",

@@ -462,6 +462,59 @@ describe("synthesizeTts — naia-local-voice (/v1/audio/speech Runtime contract)
 		expect(fetchMock).toHaveBeenCalledTimes(1);
 	});
 
+	it("restores a persisted uploaded voice before ordinary local synthesis", async () => {
+		const fetchMock = vi
+			.fn()
+			.mockResolvedValueOnce(jsonResponse({ ok: true, source: "upload" }, true, 200))
+			.mockResolvedValueOnce(wavResponse());
+		vi.stubGlobal("fetch", fetchMock);
+
+		await synthesizeTts({
+			text: "uploaded voice",
+			provider: "naia-local-voice",
+			voice: "naia-current",
+			localRefAudioBase64: "UklGRiQAAABXQVZF",
+			vllmTtsHost: "http://localhost:8910",
+		});
+
+		expect(fetchMock.mock.calls.map(([url]) => url)).toEqual([
+			"http://localhost:8910/voice",
+			"http://localhost:8910/v1/audio/speech",
+		]);
+		expect(fetchMock.mock.calls[0][1]).toMatchObject({ method: "PUT" });
+		const body = JSON.parse(fetchMock.mock.calls[1][1].body as string);
+		expect(body.voice).toBe("naia-current");
+	});
+
+	it("waits for the local GPU worker when the facade starts first", async () => {
+		vi.useFakeTimers();
+		const starting = jsonResponse(
+			{
+				error: "synthesis_failed",
+				detail: "<urlopen error [WinError 10061] No connection could be made>",
+			},
+			false,
+			502,
+		);
+		const fetchMock = vi
+			.fn()
+			.mockResolvedValueOnce(starting)
+			.mockResolvedValueOnce(starting)
+			.mockResolvedValueOnce(wavResponse());
+		vi.stubGlobal("fetch", fetchMock);
+
+		const synthesis = synthesizeTts({
+			text: "first reply while VoxCPM2 loads",
+			provider: "naia-local-voice",
+		});
+		await vi.advanceTimersByTimeAsync(2_500);
+
+		await expect(synthesis).resolves.toEqual({
+			audioBase64: expect.any(String),
+		});
+		expect(fetchMock).toHaveBeenCalledTimes(3);
+	});
+
 	it("does not retry an ambiguous facade failure", async () => {
 		const fetchMock = vi.fn().mockResolvedValue(
 			jsonResponse({ error: "synthesis_failed", detail: "CUDA out of memory" }, false, 502),

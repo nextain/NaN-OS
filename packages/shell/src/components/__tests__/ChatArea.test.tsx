@@ -827,6 +827,48 @@ describe("ChatArea", () => {
 		localStorage.removeItem("naia-config");
 	});
 
+	it("applies a local voice preset to the active Shell TTS pipeline", async () => {
+		localStorage.setItem(
+			"naia-config",
+			JSON.stringify({
+				apiKey: "test-key",
+				provider: "gemini",
+				model: "gemini-2.5-flash",
+				ttsEnabled: true,
+				ttsProvider: "naia-local-voice",
+				voiceRefUrl:
+					"http://127.0.0.1:8910/ref/audio/ref_ko_485.wav",
+				vllmTtsHost: "http://localhost:8910",
+			}),
+		);
+
+		render(<ChatArea />);
+		const input = screen.getByPlaceholderText(/message/i);
+		fireEvent.change(input, { target: { value: "voice switch test" } });
+		fireEvent.keyDown(input, { key: "Enter" });
+		await waitFor(() => expect(capturedRequests).toHaveLength(1));
+
+		window.dispatchEvent(
+			new CustomEvent("naia:voice-ref-url", {
+				detail: "http://127.0.0.1:8910/ref/audio/male-20s-01.wav",
+			}),
+		);
+		capturedRequests[0].onChunk({
+			type: "text",
+			requestId: capturedRequests[0].requestId,
+			text: "The selected voice is active.",
+		});
+
+		await waitFor(() => expect(ttsSyncMocks.synthesizeTts).toHaveBeenCalled());
+		expect(ttsSyncMocks.synthesizeTts).toHaveBeenCalledWith(
+			expect.objectContaining({
+				provider: "naia-local-voice",
+				voice: "male-20s-01.wav",
+			}),
+		);
+		localStorage.removeItem("naia-config");
+	});
+
 	it("keeps the video avatar visible without synthesizing speech when TTS is off", async () => {
 		const playAuthoredClip = vi.fn();
 		useCascadeAvatarStore.setState({

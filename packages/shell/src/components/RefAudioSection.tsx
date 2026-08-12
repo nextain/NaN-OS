@@ -25,6 +25,7 @@ import {
 	type RefAudioActive,
 	RefAudioApiError,
 	type RefAudioPreset,
+	applyLocalRefAudio,
 	applyRefAudioPreset,
 	deleteRefAudio,
 	getLocalRefAudioB64,
@@ -255,13 +256,26 @@ function describeError(
 	return S.err.unknown;
 }
 
-export function RefAudioSection() {
+interface RefAudioSectionProps {
+	ensureLocalVoiceReady?: () => Promise<boolean>;
+}
+
+export function RefAudioSection({
+	ensureLocalVoiceReady,
+}: RefAudioSectionProps = {}) {
 	const S = pickStrings();
 	// Naia Local runs on the user's own GPU — recording/uploading a reference
 	// voice is free and never touches the gateway, so hide the $0.01 hints.
 	const config = loadConfig();
 	const isLocal = config?.ttsProvider === "naia-local-voice";
-	const localVoiceHost = config?.vllmTtsHost;
+	// The persisted facade URL is available before the local runtime has finished
+	// starting. Subscribe to CASCADE_READY so a failed initial request is retried
+	// against the live facade as soon as it becomes available.
+	const runtimeLocalFacadeUrl = useCascadeAvatarStore(
+		(state) => state.localFacadeUrl,
+	);
+	const localVoiceHost =
+		runtimeLocalFacadeUrl?.trim() || config?.vllmTtsHost;
 	const [active, setActive] = useState<RefAudioActive | null>(null);
 	const [loading, setLoading] = useState(true);
 	const [busy, setBusy] = useState(false);
@@ -366,6 +380,10 @@ export function RefAudioSection() {
 		if (presets !== null || presetsLoading) return;
 		setPresetsLoading(true);
 		try {
+			if (isLocal && ensureLocalVoiceReady) {
+				const ready = await ensureLocalVoiceReady();
+				if (!ready) throw new Error("local voice runtime is not ready");
+			}
 			const list = isLocal
 				? await getLocalRefAudioPresets(localVoiceHost)
 				: await getRefAudioPresets();
@@ -378,7 +396,14 @@ export function RefAudioSection() {
 		} finally {
 			setPresetsLoading(false);
 		}
-	}, [presets, presetsLoading, S, isLocal, localVoiceHost]);
+	}, [
+		presets,
+		presetsLoading,
+		S,
+		isLocal,
+		localVoiceHost,
+		ensureLocalVoiceReady,
+	]);
 
 	// Stop any playback + free objectURL + abort a live recording on unmount.
 	const stopPlayback = useCallback(() => {
@@ -503,8 +528,16 @@ export function RefAudioSection() {
 				// the gateway upload+inject path can't reach it (and would charge
 				// $0.01 → the 402 the user hit). Keep the clip locally as base64 and
 				// send it straight to the container — no gateway, no credits.
-				if (loadConfig()?.model === "naia-local") {
+				if (isLocal) {
+					if (ensureLocalVoiceReady && !(await ensureLocalVoiceReady())) {
+						throw new RefAudioApiError(
+							"network",
+							0,
+							"local voice runtime is unavailable",
+						);
+					}
 					const b64 = await encodeRefAudio(input);
+					await applyLocalRefAudio(b64, localVoiceHost);
 					setLocalRefAudioB64(b64);
 					setConfigVoiceRefUrl(null); // recorded voice supersedes a preset
 					// Best-effort duration for the card (encodeRefAudio normalises to
@@ -551,7 +584,7 @@ export function RefAudioSection() {
 				setBusy(false);
 			}
 		},
-		[S],
+		[S, isLocal, ensureLocalVoiceReady, localVoiceHost],
 	);
 
 	const onFileInput = useCallback(
@@ -634,15 +667,42 @@ export function RefAudioSection() {
 
 	// ── Presets ──
 	const onPreviewPreset = useCallback(
-		(preset: RefAudioPreset) => {
+		async (preset: RefAudioPreset) => {
 			if (playingPresetId === preset.id) {
 				stopPlayback();
 				return;
 			}
-			setPlayingPresetId(preset.id);
-			playUrl(preset.sampleUrl, false, () => setPlayingPresetId(null));
+			setError("");
+			try {
+				if (isLocal && ensureLocalVoiceReady) {
+					const ready = await ensureLocalVoiceReady();
+					if (!ready) throw new Error("local voice runtime is not ready");
+				}
+				setPlayingPresetId(preset.id);
+				if (isLocal) {
+					const response = await fetch(preset.sampleUrl);
+					if (!response.ok) {
+						throw new Error(`preset preview failed (${response.status})`);
+					}
+					const url = URL.createObjectURL(await response.blob());
+					playUrl(url, true, () => setPlayingPresetId(null));
+				} else {
+					playUrl(preset.sampleUrl, false, () => setPlayingPresetId(null));
+				}
+			} catch (err) {
+				Logger.warn(TAG, "preset preview failed", { error: String(err) });
+				setPlayingPresetId(null);
+				setError(describeError(err, S));
+			}
 		},
-		[playingPresetId, playUrl, stopPlayback],
+		[
+			playingPresetId,
+			playUrl,
+			stopPlayback,
+			isLocal,
+			ensureLocalVoiceReady,
+			S,
+		],
 	);
 
 	const onApplyPreset = useCallback(
@@ -841,9 +901,10 @@ export function RefAudioSection() {
 					)}
 				</div>
 
-				{/* Local VoxCPM2 accepts only the facade's validated palette. Recording
-				    is a cloud realtime-voice feature and must not pretend to apply here. */}
-				{!isLocal && <div style={{ marginTop: 12 }}>
+				{/* Recording and file upload work for both providers. Naia Local keeps
+				    the normalized reference WAV on-device and sends it directly to the
+				    local voice runtime, so this surface must remain visible in local mode. */}
+				<div style={{ marginTop: 12 }}>
 					<div style={{ fontSize: 12, opacity: 0.7, marginBottom: 6 }}>
 						{S.myVoiceTitle}
 					</div>
@@ -915,11 +976,13 @@ export function RefAudioSection() {
 									{busy ? S.uploading : S.recordBtn}
 								</button>
 								<label
+									data-testid="ref-audio-file-button"
 									className="voice-preview-btn"
 									style={{ cursor: busy ? "not-allowed" : "pointer" }}
 								>
 									{active?.kind === "upload" ? S.replaceBtn : S.uploadBtn}
 									<input
+										data-testid="ref-audio-file-input"
 										type="file"
 										accept="audio/*"
 										style={{ display: "none" }}
@@ -933,7 +996,7 @@ export function RefAudioSection() {
 					<div className="settings-hint" style={{ marginTop: 6 }}>
 						{isLocal ? S.costLocal : S.cost}
 					</div>
-				</div>}
+				</div>
 
 				{/* ── Presets (collapsible, lazy-loaded) ── */}
 				<details
@@ -995,7 +1058,7 @@ export function RefAudioSection() {
 												<button
 													type="button"
 													className="voice-preview-btn"
-													onClick={() => onPreviewPreset(p)}
+												onClick={() => void onPreviewPreset(p)}
 												>
 													{playingPresetId === p.id
 														? S.presetStop

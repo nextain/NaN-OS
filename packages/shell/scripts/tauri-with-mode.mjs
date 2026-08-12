@@ -28,6 +28,7 @@ const mode = process.argv[2] === "prod" ? "prod" : "dev";
 const HERE = import.meta.dirname; // packages/shell/scripts
 const SHELL = resolve(HERE, ".."); // packages/shell
 const OS_ROOT = resolve(SHELL, "..", ".."); // new-naia-os
+const WORKSPACE_ROOT = resolve(OS_ROOT, "..", ".."); // alpha-adk
 const STATIC_AGENT_CANDIDATES = [
 	resolve(OS_ROOT, "..", "naia-agent"),
 	resolve(OS_ROOT, "..", "..", "naia-agent"),
@@ -105,6 +106,13 @@ function firstPairedAgentCheckout() {
 const WINDOWS_MANAGER = resolve(OS_ROOT, "..", "naia-omni-windows-manager");
 
 const env = interactiveLaunchEnv(process.env);
+
+// `~/.naia/adk-path` is the user's settings/workspace root and may point to a
+// lightweight checkout without sibling runtime repositories. Development
+// launches still need the local naia-labs / naia-omni-cascade sources from the
+// checkout that owns this Shell. Keep those two roots explicit instead of
+// making the cascade loader infer source locations from user-data placement.
+env.NAIA_REPOS_ADK = env.NAIA_REPOS_ADK ?? WORKSPACE_ROOT;
 
 // ── 새 코어 + 분리 에이전트 (new-naia-os 불변) ──
 env.VITE_NAIA_NEW_CORE = env.VITE_NAIA_NEW_CORE ?? "1";

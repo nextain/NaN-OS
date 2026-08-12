@@ -21,6 +21,7 @@ vi.mock("../../logger", () => ({
 
 import {
 	RefAudioApiError,
+	applyLocalRefAudio,
 	applyRefAudioPreset,
 	getLocalRefAudioPresets,
 	getRefAudioContent,
@@ -83,6 +84,28 @@ describe("local cascade voice palette", () => {
 		await expect(getLocalRefAudioPresets()).rejects.toMatchObject({
 			code: "network",
 			status: 0,
+		});
+	});
+
+	it("installs an uploaded WAV on the local Runtime without account auth", async () => {
+		mockFetch.mockResolvedValue(new Response(JSON.stringify({ ok: true }), { status: 200 }));
+		await applyLocalRefAudio("UklGRiQAAABXQVZF", "http://localhost:8910/");
+		expect(mockFetch).toHaveBeenCalledWith(
+			"http://localhost:8910/voice",
+			expect.objectContaining({
+				method: "PUT",
+				body: JSON.stringify({ audio_base64: "UklGRiQAAABXQVZF" }),
+			}),
+		);
+	});
+
+	it("maps invalid local uploaded audio to invalid-audio-format", async () => {
+		mockFetch.mockResolvedValue(
+			new Response(JSON.stringify({ error: "invalid_voice_ref_wav" }), { status: 422 }),
+		);
+		await expect(applyLocalRefAudio("bad")).rejects.toMatchObject({
+			code: "invalid-audio-format",
+			status: 422,
 		});
 	});
 });

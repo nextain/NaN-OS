@@ -86,6 +86,33 @@ export interface RefAudioPreset {
 	isDefault?: boolean;
 }
 
+/** Install a browser-recorded/uploaded WAV as the local Runtime's active voice. */
+export async function applyLocalRefAudio(
+	b64: string,
+	baseUrl = DEFAULT_LOCAL_VOICE_HOST,
+): Promise<void> {
+	const base = baseUrl.trim().replace(/\/+$/, "") || DEFAULT_LOCAL_VOICE_HOST;
+	let res: Response;
+	try {
+		res = await fetch(`${base}/voice`, {
+			method: "PUT",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ audio_base64: b64 }),
+		});
+	} catch (err) {
+		throw new RefAudioApiError("network", 0, String(err));
+	}
+	if (!res.ok) {
+		const body = await readErrorBody(res);
+		throw new RefAudioApiError(
+			mapErrorCode(res.status, body),
+			res.status,
+			`PUT /voice failed (${res.status})`,
+			body,
+		);
+	}
+}
+
 /**
  * Read the voice palette exposed by the local cascade facade.
  *

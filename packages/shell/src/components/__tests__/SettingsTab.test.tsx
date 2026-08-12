@@ -8,7 +8,6 @@ import {
 import { StrictMode } from "react";
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { t } from "../../lib/i18n";
 
 const eventListeners = vi.hoisted(
 	() =>
@@ -997,7 +996,7 @@ describe("SettingsTab — memory tab (#298)", () => {
 		expect(saved.avatarProvider).toBe("naia-video-avatar");
 	});
 
-	it("re-hydrates its own avatar selection on naia-config-changed, not just on mount", async () => {
+	it("keeps the avatar runtime card out of Profile across config changes", async () => {
 		localStorage.setItem(
 			"naia-config",
 			JSON.stringify({
@@ -1012,11 +1011,8 @@ describe("SettingsTab — memory tab (#298)", () => {
 
 		render(<SettingsTab />);
 		gotoSettingsTab("profile");
-		await vi.waitFor(() =>
-			expect(screen.getByTestId("slot-avatar").textContent).toContain(
-				t("settings.avatarProviderVrm"),
-			),
-		);
+		expect(screen.queryByTestId("slot-group-avatar")).toBeNull();
+		expect(screen.queryByTestId("slot-avatar")).toBeNull();
 
 		// Something outside this tab (login hydration, another tab) switches the
 		// live config to NVA and announces it — Settings must follow, not stay
@@ -1032,11 +1028,10 @@ describe("SettingsTab — memory tab (#298)", () => {
 		);
 		window.dispatchEvent(new CustomEvent("naia-config-changed"));
 
-		await vi.waitFor(() =>
-			expect(screen.getByTestId("slot-avatar").textContent).toContain(
-				t("settings.avatarProviderVideo"),
-			),
-		);
+		await vi.waitFor(() => {
+			expect(screen.queryByTestId("slot-group-avatar")).toBeNull();
+			expect(screen.queryByTestId("slot-avatar")).toBeNull();
+		});
 	});
 
 	it.skip("retired: selects the visible Windows TRT profile without replacing the external brain", async () => {
@@ -1430,7 +1425,59 @@ describe("SettingsTab — memory tab (#298)", () => {
 		});
 	});
 
-	it("renders S-SLOT gate + 3 groups (Brain/Voice/Avatar) without moving canonical controls", async () => {
+	it("restores a selected Naia Local runtime for preset playback", async () => {
+		localStorage.setItem("naia-adk-path", "D:\\alpha-adk");
+		localStorage.setItem(
+			"naia-config",
+			JSON.stringify({
+				provider: "nextain",
+				model: "gemini-3.5-flash",
+				ttsProvider: "naia-local-voice",
+				ttsEnabled: true,
+				localVoiceEnabled: false,
+				vllmTtsHost: "http://localhost:8910",
+			}),
+		);
+		let started = false;
+		mockInvoke.mockImplementation((cmd: string) => {
+			if (cmd === "detect_gpu_vram") return Promise.resolve(8);
+			if (cmd === "cascade_status") return Promise.resolve(false);
+			if (cmd === "cascade_installation_status") {
+				return Promise.resolve({
+					phase: started ? "ready" : "ready-to-start",
+					ready: started,
+					canStart: true,
+					summary: "Ready",
+					steps: [],
+				});
+			}
+			if (cmd === "start_cascade") {
+				started = true;
+				return Promise.resolve(
+					JSON.stringify({ facade_port: 8910, services: [{ id: "tts" }] }),
+				);
+			}
+			return Promise.resolve([]);
+		});
+
+		render(<SettingsTab />);
+
+		await vi.waitFor(() => {
+			expect(mockInvoke).toHaveBeenCalledWith("start_cascade", {
+				expectedLoaderProfile: "windows_trt_6g",
+			});
+			const write = mockInvoke.mock.calls.find(
+				([cmd]) => cmd === "write_slots_manifest",
+			);
+			const manifest = JSON.parse(write?.[1]?.json as string);
+			expect(manifest.gpu).toMatchObject({
+				tier: "windows-voice-6g",
+				loaderProfile: "windows_trt_6g",
+			});
+		});
+	});
+
+	it("renders S-SLOT gate + Brain/Voice groups without moving canonical controls", async () => {
 		localStorage.setItem(
 			"naia-config",
 			JSON.stringify({
@@ -1453,7 +1500,7 @@ describe("SettingsTab — memory tab (#298)", () => {
 			"Naia account",
 		);
 		expect(screen.getByTestId("slot-apply-defaults")).toBeTruthy();
-		// FR-SLOT.2: 3 groups + 6 slots.
+		// Profile shows the user-configurable Brain/Voice groups only.
 		expect(document.querySelector("[data-testid='slot-groups']")).toBeTruthy();
 		expect(
 			document.querySelector("[data-testid='slot-group-brain']"),
@@ -1463,7 +1510,7 @@ describe("SettingsTab — memory tab (#298)", () => {
 		).toBeTruthy();
 		expect(
 			document.querySelector("[data-testid='slot-group-avatar']"),
-		).toBeTruthy();
+		).toBeNull();
 		expect(document.querySelector("[data-testid='slot-main']")).toBeTruthy();
 		expect(document.querySelector("[data-testid='slot-sub']")).toBeTruthy();
 		expect(
@@ -1471,7 +1518,23 @@ describe("SettingsTab — memory tab (#298)", () => {
 		).toBeTruthy();
 		expect(document.querySelector("[data-testid='slot-stt']")).toBeTruthy();
 		expect(document.querySelector("[data-testid='slot-tts']")).toBeTruthy();
-		expect(document.querySelector("[data-testid='slot-avatar']")).toBeTruthy();
+		const profileTtsProvider = screen.getByTestId(
+			"profile-tts-provider",
+		) as HTMLSelectElement;
+		expect(
+			profileTtsProvider.querySelector('option[value="naia-local-voice"]')
+				?.textContent,
+		).toContain("Naia Local Voice");
+		fireEvent.change(profileTtsProvider, {
+			target: { value: "naia-local-voice" },
+		});
+		await vi.waitFor(() => {
+			const saved = JSON.parse(localStorage.getItem("naia-config") || "{}");
+			expect(saved.ttsProvider).toBe("naia-local-voice");
+			expect(saved.vllmTtsHost).toBe("http://localhost:8910");
+			expect(screen.getByTestId("profile-local-voice-toggle")).not.toBeDisabled();
+		});
+		expect(document.querySelector("[data-testid='slot-avatar']")).toBeNull();
 		// R1-7: 3-profile residue removed.
 		expect(
 			document.querySelector("[data-testid='engine-profile-summary']"),
