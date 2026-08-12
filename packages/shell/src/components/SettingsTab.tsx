@@ -721,6 +721,21 @@ export function SettingsTab() {
 	const [cascadeRunning, setCascadeRunning] = useState(false);
 	const [cascadeBusy, setCascadeBusy] = useState(false);
 	const [cascadeMsg, setCascadeMsg] = useState("");
+	// FR-VOICE.13 (#419): 마이그레이션이 로컬 음성을 껐다면 사유를 표기하고 복구 액션 제공.
+	const [voiceMigrationNotice, setVoiceMigrationNotice] = useState(
+		existing?.localVoiceMigrationNotice != null,
+	);
+	useEffect(() => {
+		const syncVoiceMigrationNotice = () => {
+			setVoiceMigrationNotice(loadConfig()?.localVoiceMigrationNotice != null);
+		};
+		window.addEventListener("naia-config-changed", syncVoiceMigrationNotice);
+		return () =>
+			window.removeEventListener(
+				"naia-config-changed",
+				syncVoiceMigrationNotice,
+			);
+	}, []);
 	const [cascadeInstallation, setCascadeInstallation] =
 		useState<CascadeInstallationStatus | null>(null);
 	const refreshCascadeInstallation = useCallback(async () => {
@@ -837,11 +852,22 @@ export function SettingsTab() {
 		if (cascadeRunning) return true;
 		setCascadeBusy(true);
 		setCascadeMsg("");
+		// FR-VOICE.13: enabling clears the migration notice via normalization,
+		// but only a SUCCESSFUL start is a real recovery — a failed attempt
+		// that turns voice back off must not erase the recorded reason.
+		let restoreMigrationNotice: Partial<
+			Pick<AppConfig, "localVoiceMigrationNotice">
+		> = {};
 		try {
 			const cfg = loadConfig();
 			if (!cfg || detectedVramGb == null || detectedVramGb < 6) {
 				setCascadeMsg(t("settings.localVoiceVramRequired"));
 				return false;
+			}
+			if (cfg.localVoiceMigrationNotice) {
+				restoreMigrationNotice = {
+					localVoiceMigrationNotice: cfg.localVoiceMigrationNotice,
+				};
 			}
 			const voiceConfig = {
 				...cfg,
@@ -864,7 +890,11 @@ export function SettingsTab() {
 			await writeSlotsManifest(voiceConfig, detectedVramGb);
 			const start = await startCascadeAndConfirm("windows_trt_6g");
 			if (!start.ready) {
-				persistConfig({ localVoiceEnabled: false, ttsEnabled: false });
+				persistConfig({
+					localVoiceEnabled: false,
+					ttsEnabled: false,
+					...restoreMigrationNotice,
+				});
 				setTtsEnabled(false);
 				setCascadeRunning(false);
 				setCascadeMsg(start.message ?? t("settings.cascadeError"));
@@ -876,7 +906,11 @@ export function SettingsTab() {
 			setCascadeMsg(t("settings.cascadeStarted"));
 			return true;
 		} catch (e) {
-			persistConfig({ localVoiceEnabled: false, ttsEnabled: false });
+			persistConfig({
+				localVoiceEnabled: false,
+				ttsEnabled: false,
+				...restoreMigrationNotice,
+			});
 			setCascadeMsg(`${t("settings.cascadeError")}: ${String(e)}`);
 			return false;
 		} finally {
@@ -4855,6 +4889,31 @@ export function SettingsTab() {
 							{cascadeInstallation && !cascadeInstallation.canStart && (
 								<div className="settings-hint" data-testid="local-voice-installation-status">
 									{cascadeInstallation.summary}
+								</div>
+							)}
+							{voiceMigrationNotice && (
+								<div
+									className="settings-hint"
+									data-testid="local-voice-migration-notice"
+								>
+									{t("settings.localVoiceMigrationNotice")}
+									<button
+										type="button"
+										className="voice-preview-btn"
+										data-testid="local-voice-migration-restore"
+										onClick={async () => {
+											if (await ensureLocalVoiceReady()) {
+												setVoiceMigrationNotice(false);
+											}
+										}}
+										disabled={
+											cascadeBusy ||
+											detectedVramGb == null ||
+											detectedVramGb < 6
+										}
+									>
+										{t("settings.localVoiceMigrationRestore")}
+									</button>
 								</div>
 							)}
 							<div className="settings-hint">

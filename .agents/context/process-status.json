@@ -132,6 +132,21 @@
   },
 
   "active_issue_tracks": {
+    "voice_migration_notice_419": {
+      "work_id": "VOICE-MIGRATION-NOTICE-419",
+      "issue": "https://github.com/nextain/naia-shell/issues/419",
+      "scope": "FR-VOICE.13 — 안전 마이그레이션이 로컬 음성을 끌 때 침묵 금지: config에 사유 기록(localVoiceMigrationNotice) + Voice 카드 사유·복구 버튼 + Logger 1줄(세션당). 시작 실패로 다시 끌 때 notice 보존(자동 복원이 사유를 지우던 실 UI 결함을 Playwright가 적발·수정). 부수: settings-slots e2e 기존 실패 2건 = 자동 복원(start_cascade) unmocked 실패가 ttsEnabled를 되돌리는 하니스 드리프트 → cascadeReady opt-in mock으로 수리(베이스라인 HEAD에서도 동일 실패 확인, 회귀 아님).",
+      "requirements": "docs/requirements.md FR-VOICE.13",
+      "scenario": "docs/user-scenarios.md S-VOICE-MIGRATION",
+      "status": "done",
+      "p01_user_scenarios": "done",
+      "p02_test_scenarios": "done",
+      "p03_requirements": "done",
+      "p04_integration_test": "done",
+      "p05_complete": "done",
+      "verification": "config.test.ts 3건(기록/영속/해제) + SettingsTab.test.tsx FR-VOICE.13(사유 표시+복구) + Playwright settings-slots 7/7(신규 사유 노출 실 UI 포함) + 셸 전체 vitest 1478 GREEN + tsc 0",
+      "last_updated": "2026-08-13T02:00:00+09:00"
+    },
     "windows_nva_voice_media_2026_08_06": {
       "work_id": "ISSUE-WINDOWS-NVA-VOICE-MEDIA-2026-08-06",
       "issue_doc": "docs/progress/issue-windows-nva-voice-media-hardening-2026-08-06.md",

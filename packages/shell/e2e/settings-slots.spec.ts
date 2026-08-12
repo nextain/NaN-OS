@@ -15,10 +15,16 @@ import {
  *  - R1-7: 구 3-profile 카드(engine-profile-*) 제거.
  */
 
-/** Tauri IPC mock — detect_gpu_vram 포함(GPU 있어도 게이트는 naiaKey 에만 의존 = R1-3). */
-function buildMock(vramGb: number | null): string {
+/**
+ * Tauri IPC mock — detect_gpu_vram 포함(GPU 있어도 게이트는 naiaKey 에만 의존 = R1-3).
+ * cascadeReady=true 면 start_cascade/cascade_status 성공 경로까지 mock — 로컬 음성
+ * 자동 복원(ensureLocalVoiceReady)이 unmocked 실패로 ttsEnabled 를 되돌리는 것을 막는다.
+ * (실패 경로가 필요한 시나리오 — FR-VOICE.13 사유 표기 — 는 기본값 false 를 쓴다.)
+ */
+function buildMock(vramGb: number | null, cascadeReady = false): string {
 	return `
 (function() {
+	var cascadeStarted = false;
 	window.__TAURI_INTERNALS__ = window.__TAURI_INTERNALS__ || {};
 	window.__TAURI_EVENT_PLUGIN_INTERNALS__ = window.__TAURI_EVENT_PLUGIN_INTERNALS__ || {};
 	window.__TAURI_INTERNALS__.metadata = { currentWindow: { label: "main" }, currentWebview: { windowLabel: "main", label: "main" } };
@@ -35,6 +41,13 @@ function buildMock(vramGb: number | null): string {
 		if (cmd === "plugin:event|emit" || cmd === "plugin:event|unlisten") return null;
 		if (cmd === "detect_gpu_vram") return ${vramGb === null ? "null" : vramGb};
 		if (cmd === "write_naia_config") return null;
+		${
+			cascadeReady
+				? `if (cmd === "cascade_status") return cascadeStarted;
+		if (cmd === "cascade_installation_status") return { phase: cascadeStarted ? "ready" : "ready-to-start", ready: cascadeStarted, canStart: true, summary: "Ready", steps: [] };
+		if (cmd === "start_cascade") { cascadeStarted = true; return JSON.stringify({ facade_port: 8910, services: [{ id: "tts" }] }); }`
+				: ""
+		}
 		if (cmd === "list_skills") return [
 			{ name: "skill_time", description: "Get current date and time", type: "built-in", tier: 0, source: "built-in" },
 			{ name: "skill_memo", description: "Save and retrieve memos", type: "built-in", tier: 0, source: "built-in" }
@@ -49,13 +62,17 @@ interface SetupOpts {
 	vramGb?: number | null;
 	/** naia-config override (gate/slots 시나리오). */
 	config?: Record<string, unknown>;
+	/** 로컬 음성 자동 복원(start_cascade)이 성공하는 환경을 mock. */
+	cascadeReady?: boolean;
 }
 
 async function openSlotSettings(
 	page: Page,
 	opts: SetupOpts = {},
 ): Promise<void> {
-	await page.addInitScript(buildMock(opts.vramGb ?? null));
+	await page.addInitScript(
+		buildMock(opts.vramGb ?? null, opts.cascadeReady === true),
+	);
 	await page.addInitScript({ content: TAURI_BASE_MOCK_FALLBACK });
 	await page.addInitScript({ content: SEED_ADK_PATH });
 	await page.addInitScript(
@@ -251,6 +268,7 @@ test.describe("S-SLOT settings — gate + 6 cloud slots (#gate-slots)", () => {
 	}) => {
 		await openSlotSettings(page, {
 			vramGb: 16,
+			cascadeReady: true,
 			config: {
 				naiaKey: "nk",
 				// 이전 상태 잔재 3종 — 프로파일 선택이 전부 교정해야 한다 (2026-07-15 실사고 재현):
@@ -309,6 +327,7 @@ test.describe("S-SLOT settings — gate + 6 cloud slots (#gate-slots)", () => {
 	}) => {
 		await openSlotSettings(page, {
 			vramGb: 8,
+			cascadeReady: true,
 			config: {
 				naiaKey: "nk",
 				provider: "ollama",
@@ -347,5 +366,27 @@ test.describe("S-SLOT settings — gate + 6 cloud slots (#gate-slots)", () => {
 		await expect(page.locator('[data-testid="slot-tts"]')).toContainText(
 			/naia-local-voice/i,
 		);
+	});
+
+	test("FR-VOICE.13: a migration-disabled local voice shows its reason and recovery action", async ({
+		page,
+	}) => {
+		await openSlotSettings(page, {
+			vramGb: 8,
+			config: {
+				ttsProvider: "naia-local-voice",
+				// Retired field: the safety migration turns local voice off and
+				// must surface the reason in the real Voice card instead of
+				// leaving a silent, unexplained OFF state.
+				localGpuTier: "windows-voice-6g",
+			},
+		});
+		await page.locator('[data-settings-tab="voice"]').click();
+		await expect(
+			page.getByTestId("local-voice-migration-notice"),
+		).toBeVisible();
+		await expect(
+			page.getByTestId("local-voice-migration-restore"),
+		).toBeVisible();
 	});
 });

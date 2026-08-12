@@ -137,6 +137,55 @@ describe("config", () => {
 		expect(restored.localVoiceEnabled).toBe(false);
 	});
 
+	it("FR-VOICE.13: records the migration reason when a legacy profile disables local voice", () => {
+		const restored = reconcileExplicitLocalProfile({
+			provider: "nextain",
+			model: "gemini-3.5-flash",
+			apiKey: "",
+			localGpuTier: "windows-voice-6g",
+			ttsProvider: "naia-local-voice",
+			ttsEnabled: true,
+		});
+		expect(restored.localVoiceEnabled).toBe(false);
+		expect(restored.ttsEnabled).toBe(false);
+		expect(restored.localVoiceMigrationNotice).toBe("legacy-local-profile");
+	});
+
+	it("FR-VOICE.13: keeps the recorded reason across save/load after the legacy field is dropped", () => {
+		saveConfig({
+			provider: "nextain",
+			model: "gemini-3.5-flash",
+			apiKey: "",
+			localGpuTier: "laptop-4060-8g",
+		});
+		expect(loadConfig()?.localGpuTier).toBeUndefined();
+		// Re-save without the legacy field: the reason must survive on its own.
+		const again = loadConfig();
+		expect(again).not.toBeNull();
+		if (again) saveConfig(again);
+		expect(loadConfig()?.localVoiceMigrationNotice).toBe(
+			"legacy-local-profile",
+		);
+		expect(loadConfig()?.localVoiceEnabled).toBe(false);
+	});
+
+	it("FR-VOICE.13: clears the migration notice once local voice is re-enabled", () => {
+		saveConfig({
+			provider: "nextain",
+			model: "gemini-3.5-flash",
+			apiKey: "",
+			localGpuTier: "windows-voice-6g",
+		});
+		expect(loadConfig()?.localVoiceMigrationNotice).toBe(
+			"legacy-local-profile",
+		);
+		const cfg = loadConfig();
+		expect(cfg).not.toBeNull();
+		if (cfg) saveConfig({ ...cfg, localVoiceEnabled: true });
+		expect(loadConfig()?.localVoiceMigrationNotice).toBeUndefined();
+		expect(loadConfig()?.localVoiceEnabled).toBe(true);
+	});
+
 	it("hasApiKey returns false when not set", () => {
 		expect(hasApiKey()).toBe(false);
 	});

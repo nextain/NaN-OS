@@ -1477,6 +1477,65 @@ describe("SettingsTab — memory tab (#298)", () => {
 		});
 	});
 
+	it("FR-VOICE.13: shows the migration reason and recovers local voice in place", async () => {
+		localStorage.setItem("naia-adk-path", "D:\\alpha-adk");
+		localStorage.setItem(
+			"naia-config",
+			JSON.stringify({
+				provider: "nextain",
+				model: "gemini-3.5-flash",
+				ttsProvider: "naia-local-voice",
+				ttsEnabled: true,
+				// Retired field: the safety migration disables local voice and
+				// must record the reason instead of going silent.
+				localGpuTier: "windows-voice-6g",
+				vllmTtsHost: "http://localhost:8910",
+			}),
+		);
+		let started = false;
+		mockInvoke.mockImplementation((cmd: string) => {
+			if (cmd === "detect_gpu_vram") return Promise.resolve(8);
+			if (cmd === "cascade_status") return Promise.resolve(false);
+			if (cmd === "cascade_installation_status") {
+				return Promise.resolve({
+					phase: started ? "ready" : "ready-to-start",
+					ready: started,
+					canStart: true,
+					summary: "Ready",
+					steps: [],
+				});
+			}
+			if (cmd === "start_cascade") {
+				started = true;
+				return Promise.resolve(
+					JSON.stringify({ facade_port: 8910, services: [{ id: "tts" }] }),
+				);
+			}
+			return Promise.resolve([]);
+		});
+
+		render(<SettingsTab />);
+		fireEvent.click(
+			document.querySelector('[data-settings-tab="voice"]') as HTMLElement,
+		);
+
+		await vi.waitFor(() => {
+			expect(screen.getByTestId("local-voice-migration-notice")).toBeTruthy();
+		});
+		const restore = screen.getByTestId("local-voice-migration-restore");
+		await vi.waitFor(() => expect(restore).not.toBeDisabled());
+		fireEvent.click(restore);
+
+		await vi.waitFor(() => {
+			const saved = JSON.parse(localStorage.getItem("naia-config") || "{}");
+			expect(saved.localVoiceEnabled).toBe(true);
+			expect(saved.localVoiceMigrationNotice).toBeUndefined();
+		});
+		await vi.waitFor(() => {
+			expect(screen.queryByTestId("local-voice-migration-notice")).toBeNull();
+		});
+	});
+
 	it("renders S-SLOT gate + Brain/Voice groups without moving canonical controls", async () => {
 		localStorage.setItem(
 			"naia-config",

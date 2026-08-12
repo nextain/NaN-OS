@@ -1,5 +1,6 @@
 import type { VramTierId } from "./capabilities/vram-tiers";
 import type { Locale } from "./i18n";
+import { Logger } from "./logger";
 import {
 	SECRET_KEYS,
 	deleteSecretKey,
@@ -197,6 +198,13 @@ export interface AppConfig {
 	/** Explicit user authority for the packaged voxCPM2 local voice runtime. */
 	localVoiceEnabled?: boolean;
 	/**
+	 * FR-VOICE.13 (#419): recorded when a safety migration disabled the local
+	 * voice authority (retired localGpuTier treated as stale authority). The
+	 * Voice settings card must surface this reason with a recovery action;
+	 * cleared as soon as the user re-enables local voice.
+	 */
+	localVoiceMigrationNotice?: "legacy-local-profile";
+	/**
 	 * 8G 배타 티어 로컬 집중 (정본, 2026-07-08): "llm" | "avatar" | "both".
 	 * "llm" = 브레인만 로컬(추론·기억 프라이버시) / "avatar" = Ditto 립싱크 로컬 / "both" = 둘 다.
 	 * 음성은 8G 에선 항상 클라우드. 12G+ 에서는 무시. 미지정 → 기본 "llm".
@@ -326,6 +334,9 @@ function withoutDerivedAgentEnv(
 
 // ── Sync API (localStorage only, backwards compatible) ──
 
+/** FR-VOICE.13: log the disabling migration once per session, not per load. */
+let legacyLocalVoiceMigrationLogged = false;
+
 function normalizeLocalRuntimeConfig(config: AppConfig): AppConfig {
 	const {
 		cascadeRuntimeUrl: _retiredCascadeRuntimeUrl,
@@ -336,7 +347,17 @@ function normalizeLocalRuntimeConfig(config: AppConfig): AppConfig {
 	} = config;
 	const migratedLegacyProfile =
 		retiredLocalGpuTier !== undefined && retiredLocalGpuTier !== "off";
-	return {
+	if (migratedLegacyProfile && !legacyLocalVoiceMigrationLogged) {
+		// FR-VOICE.13: a migration that disables a feature must say so once,
+		// both in the log and in the persisted config the UI reads. The guard
+		// keeps it to one line per session — loadConfig runs on every render.
+		legacyLocalVoiceMigrationLogged = true;
+		Logger.info("config", "safety migration disabled local voice", {
+			reason: "legacy-local-profile",
+			retiredLocalGpuTier,
+		});
+	}
+	const normalized: AppConfig = {
 		...current,
 		// A detected/recommended legacy profile was never explicit authority for
 		// the new voice-only control. Migrate it safely to OFF.
@@ -346,7 +367,16 @@ function normalizeLocalRuntimeConfig(config: AppConfig): AppConfig {
 		...(migratedLegacyProfile && config.ttsProvider === "naia-local-voice"
 			? { ttsEnabled: false }
 			: {}),
+		...(migratedLegacyProfile
+			? { localVoiceMigrationNotice: "legacy-local-profile" as const }
+			: {}),
 	};
+	// The notice only coexists with disabled local voice: re-enabling is the
+	// recovery action, so it retires the reason everywhere at once.
+	if (normalized.localVoiceEnabled === true) {
+		delete normalized.localVoiceMigrationNotice;
+	}
+	return normalized;
 }
 
 /**
