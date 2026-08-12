@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+# pre-push 음성 경로 증거 게이트 — 판정 로직은 scripts/ci-verify-voice-evidence.mjs 공유(재구현 금지).
+# 음성 경로(VoxCPM2 TRT TTS)는 GPU 필요로 CI e2e 가 없어, 무관 작업의 침묵 회귀가 반복됐다(2026-07~08).
+# 이 훅은 푸시 범위가 음성 크리티컬 파일을 건드리면 커밋 메시지의 음성 검증 트레일러를 요구한다.
+#
+# 활성화: git config core.hooksPath scripts/git-hooks   (clone 당 1회, scripts/setup-git-hooks.sh)
+# bypass(긴급): git push --no-verify  (가급적 금지 — 침묵 회귀 재유입)
+set -euo pipefail
+ROOT="$(git rev-parse --show-toplevel)"
+cd "$ROOT"
+
+zero="0000000000000000000000000000000000000000"
+while read -r _local_ref local_sha _remote_ref remote_sha; do
+  [ "$local_sha" = "$zero" ] && continue # 브랜치 삭제 푸시 — 검사 대상 없음
+  if [ "$remote_sha" = "$zero" ] || ! git cat-file -e "$remote_sha" 2>/dev/null; then
+    # 새 브랜치이거나 원격 SHA 미보유 — origin/main 과의 merge-base 를 기준으로 삼는다.
+    base="$(git merge-base "$local_sha" origin/main 2>/dev/null || true)"
+    [ -z "$base" ] && continue # 기준 불명 → 이 게이트는 판단 보류(원격 CI 레이어가 최종 방어)
+  else
+    base="$remote_sha"
+  fi
+  mapfile -t files < <(git diff --name-only "$base" "$local_sha")
+  [ ${#files[@]} -eq 0 ] && continue
+  if ! git log --format=%B "$base".."$local_sha" | node scripts/ci-verify-voice-evidence.mjs "${files[@]}"; then
+    echo "❌ pre-push 차단: 음성 크리티컬 변경에 음성 검증 트레일러가 없습니다(위 안내 참조)." >&2
+    exit 1
+  fi
+done
+exit 0

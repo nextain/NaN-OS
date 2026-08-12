@@ -6,5 +6,5 @@ set -euo pipefail
 ROOT="$(git rev-parse --show-toplevel)"
 cd "$ROOT"
 git config core.hooksPath scripts/git-hooks
-echo "✅ core.hooksPath = $(git config core.hooksPath) (pre-commit 무결성 게이트 활성)"
-echo "   검사: 미스테이지 source 차단 + 컴파일 무결성(scripts/check-compile-integrity.mjs)."
+echo "✅ core.hooksPath = $(git config core.hooksPath) (pre-commit/commit-msg/pre-push 게이트 활성)"
+echo "   검사: 미스테이지 source 차단 + 컴파일 무결성 + 완료증거(commit-msg) + 음성 경로 증거(pre-push)."
