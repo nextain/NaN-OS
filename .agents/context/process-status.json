@@ -132,6 +132,23 @@
   },
 
   "active_issue_tracks": {
+    "tts_pipeline_ownership_420": {
+      "work_id": "TTS-PIPELINE-OWNERSHIP-420",
+      "issue": "https://github.com/nextain/naia-shell/issues/420",
+      "scope": "FR-VOICE.16 — ChatArea TTS 오케스트레이션의 lib/tts 단계 이전. 분할 계획은 이슈 코멘트(2026-08-13) 합의 게이트. Phase 1(계약 감사) = 기존 ChatArea 계약군 11건(저작클립/동적발화 소유권·6GB 직렬화·mask/reveal 4종·중단 부활 금지·stale fallback 금지·VoxCPM2 기동중 보고)이 추출 불변 목록으로 충분 판정, 무이동. Phase 2a = 6GB half-duplex 직렬화+적응형 프리버퍼+세대 fencing 을 lib/tts/local-voice-scheduler.ts 로 추출 — ChatArea 의 buffer/tail/timer ref 3종과 release/finish 함수를 스케줄러 단일 소유로 대체, FR-VOICE.11/12 시맨틱 1:1 보존.",
+      "requirements": "docs/requirements.md FR-VOICE.16",
+      "scenario": "기존 UC-WIN-VOICE-6G·UC-WIN-VOICE-CONTINUOUS·UC-WIN-NVA-TTS-SYNC 보존이 시나리오 (신규 UC 없음 — 이슈 계획 P01 매핑)",
+      "status": "in_progress",
+      "phase": "phase_2a_done_2b_3_pending",
+      "p01_user_scenarios": "done",
+      "p02_test_scenarios": "done",
+      "p03_requirements": "done",
+      "p04_integration_test": "in_progress",
+      "p05_complete": "pending",
+      "verification": "local-voice-scheduler.test.ts 10건(직렬화·tail 비오염·프리버퍼 판정·바운드 타이머·세대 fencing·실패 해제) + ChatArea.test.tsx 기존 계약군 무수정 36건 GREEN + 셸 전체 vitest 1496 GREEN + tsc 0. 네이티브 voice-6g e2e 재실행 중.",
+      "remaining": "Phase 2b(문장 파이프라인 잔여 — sendSentenceToTts 본체·mask/reveal 콜백 경계), Phase 3(라디오DJ/NVA/프리셋의 공개 인터페이스 강제 + 내부 직접 호출 금지 계약 테스트)",
+      "last_updated": "2026-08-13T02:50:00+09:00"
+    },
     "voice_ready_contract_418": {
       "work_id": "VOICE-READY-CONTRACT-418",
       "issue": "https://github.com/nextain/naia-shell/issues/418",
