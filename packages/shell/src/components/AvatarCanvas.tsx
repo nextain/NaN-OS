@@ -512,6 +512,9 @@ export function AvatarCanvas() {
 
 				emotionCtrl = createEmotionController(vrm);
 				mouthCtrl = createMouthController(vrm);
+				const avatarState = useAvatarStore.getState();
+				emotionCtrl.setEmotion(avatarState.currentEmotion);
+				mouthCtrl.setSpeaking(avatarState.isSpeaking);
 
 				// Resolve blink expression name for VRM 0.0/1.0 compat
 				if (vrm.expressionManager) {

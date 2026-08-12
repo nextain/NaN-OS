@@ -28,6 +28,11 @@ const ttsSyncMocks = vi.hoisted(() => ({
 	resumePlayback: vi.fn(),
 	wavDurationSeconds: vi.fn(() => 10),
 	nextSeq: 0,
+	audioQueueActive: false,
+	audioQueueCallbacks: null as null | {
+		onPlaybackStart?: () => void;
+		onPlaybackEnd?: () => void;
+	},
 }));
 const mockSendPanelSkills = vi.hoisted(() => vi.fn().mockResolvedValue(true));
 
@@ -38,12 +43,22 @@ vi.mock("../../lib/tts/synthesize", () => ({
 
 vi.mock("../../lib/voice/audio-queue", () => ({
 	AudioQueue: class {
+		constructor(callbacks: {
+			onPlaybackStart?: () => void;
+			onPlaybackEnd?: () => void;
+		} = {}) {
+			ttsSyncMocks.audioQueueCallbacks = callbacks;
+		}
+		get isActive() {
+			return ttsSyncMocks.audioQueueActive;
+		}
 		reserveSeq() {
 			const seq = ttsSyncMocks.nextSeq;
 			ttsSyncMocks.nextSeq += 1;
 			return seq;
 		}
 		enqueueOrdered(seq: number, audio: string, callbacks?: unknown) {
+			ttsSyncMocks.audioQueueActive = true;
 			ttsSyncMocks.enqueueOrdered(seq, audio, callbacks);
 		}
 		skipOrdered(seq: number) {
@@ -57,6 +72,7 @@ vi.mock("../../lib/voice/audio-queue", () => ({
 		}
 		clear() {
 			ttsSyncMocks.nextSeq = 0;
+			ttsSyncMocks.audioQueueActive = false;
 			ttsSyncMocks.clear();
 		}
 		destroy() {
@@ -161,6 +177,8 @@ describe("ChatArea", () => {
 		useCascadeAvatarStore.setState(useCascadeAvatarStore.getInitialState());
 		useAppStore.setState({ activeApp: null });
 		ttsSyncMocks.nextSeq = 0;
+		ttsSyncMocks.audioQueueActive = false;
+		ttsSyncMocks.audioQueueCallbacks = null;
 		ttsSyncMocks.streamsAvatarPcm.mockReturnValue(false);
 		ttsSyncMocks.wavDurationSeconds.mockReturnValue(10);
 		ttsSyncMocks.synthesizeTts.mockResolvedValue({
@@ -174,6 +192,64 @@ describe("ChatArea", () => {
 		expect(screen.getByPlaceholderText(/메시지|message/i)).toBeDefined();
 		const buttons = screen.getAllByRole("button");
 		expect(buttons.length).toBeGreaterThanOrEqual(2);
+	});
+
+	it("shows think while waiting and returns to neutral when a silent turn finishes", async () => {
+		localStorage.setItem(
+			"naia-config",
+			JSON.stringify({
+				apiKey: "test-key",
+				provider: "gemini",
+				model: "gemini-2.5-flash",
+			}),
+		);
+		render(<ChatArea />);
+		const input = screen.getByPlaceholderText(/message/i);
+		fireEvent.change(input, { target: { value: "complex question" } });
+		fireEvent.keyDown(input, { key: "Enter" });
+
+		await waitFor(() => expect(capturedRequests).toHaveLength(1));
+		expect(useAvatarStore.getState().currentEmotion).toBe("think");
+		const request = capturedRequests[0];
+		request.onChunk({ type: "finish", requestId: request.requestId });
+		expect(useAvatarStore.getState().currentEmotion).toBe("neutral");
+		localStorage.removeItem("naia-config");
+	});
+
+	it("keeps an explicit emotion until queued speech ends", async () => {
+		localStorage.setItem(
+			"naia-config",
+			JSON.stringify({
+				apiKey: "test-key",
+				provider: "gemini",
+				model: "gemini-2.5-flash",
+				ttsEnabled: true,
+				ttsProvider: "edge",
+			}),
+		);
+		render(<ChatArea />);
+		const input = screen.getByPlaceholderText(/message/i);
+		fireEvent.change(input, { target: { value: "tell me good news" } });
+		fireEvent.keyDown(input, { key: "Enter" });
+
+		await waitFor(() => expect(capturedRequests).toHaveLength(1));
+		const request = capturedRequests[0];
+		request.onChunk({
+			type: "text",
+			requestId: request.requestId,
+			text: "[HAPPY] Great news!",
+		});
+		await waitFor(() => expect(ttsSyncMocks.synthesizeTts).toHaveBeenCalled());
+		await waitFor(() => expect(ttsSyncMocks.enqueueOrdered).toHaveBeenCalled());
+		expect(useAvatarStore.getState().currentEmotion).toBe("happy");
+
+		request.onChunk({ type: "finish", requestId: request.requestId });
+		expect(useAvatarStore.getState().currentEmotion).toBe("happy");
+
+		ttsSyncMocks.audioQueueActive = false;
+		ttsSyncMocks.audioQueueCallbacks?.onPlaybackEnd?.();
+		expect(useAvatarStore.getState().currentEmotion).toBe("neutral");
+		localStorage.removeItem("naia-config");
 	});
 
 	it("does not send a turn when pre-turn BGM skill registration fails", async () => {
@@ -1100,6 +1176,7 @@ describe("ChatArea", () => {
 		fireEvent.click(cancel);
 		await waitFor(() => expect(interrupt).toHaveBeenCalledTimes(1));
 		await waitFor(() => expect(screen.queryByTitle("ESC")).toBeNull());
+		expect(useAvatarStore.getState().currentEmotion).toBe("neutral");
 		expect(screen.getByText("Visible with speech.")).toBeDefined();
 
 		playback.resolve();

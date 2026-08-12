@@ -803,6 +803,18 @@ export function ChatArea({
 		);
 	}
 
+	function settleAvatarEmotionIfIdle(): void {
+		const speechOwnsExpression =
+			currentRequestId.current !== null ||
+			useChatStore.getState().isStreaming ||
+			activeTtsRequestsRef.current.size > 0 ||
+			audioQueueRef.current?.isActive === true ||
+			ttsPlayingRef.current ||
+			cascadeTtsJobsRef.current > 0 ||
+			audioPlayerRef.current?.isPlaying === true;
+		if (!speechOwnsExpression) setEmotion("neutral");
+	}
+
 	function scheduleNextQueuedMessage() {
 		if (queuedSendTimerRef.current || isChatRequestActive()) return;
 
@@ -825,6 +837,7 @@ export function ChatArea({
 		}
 
 		currentRequestId.current = null;
+		settleAvatarEmotionIfIdle();
 		scheduleNextQueuedMessage();
 	}
 
@@ -1012,6 +1025,7 @@ export function ChatArea({
 		ttsPlayingRef.current = false;
 		setTtsPlaying(false);
 		useAvatarStore.getState().setSpeaking(false);
+		setEmotion("neutral");
 	}
 
 	function releaseLocalVoicePrebuffer(generation: number): void {
@@ -1045,6 +1059,7 @@ export function ChatArea({
 			if (cascadeTtsJobsRef.current === 0) {
 				ttsPlayingRef.current = false;
 				setTtsPlaying(false);
+				settleAvatarEmotionIfIdle();
 			}
 		};
 	}
@@ -1172,6 +1187,7 @@ export function ChatArea({
 					ttsPlayingRef.current = false;
 					setTtsPlaying(false);
 					useCascadeAvatarStore.getState().renderer?.setSpeakingVisual(false);
+					settleAvatarEmotionIfIdle();
 				},
 			});
 		}
@@ -1490,6 +1506,7 @@ export function ChatArea({
 		) {
 			setInput("");
 			useChatStore.getState().addMessage({ role: "user", content: text });
+			setEmotion("think");
 			voiceSessionRef.current.sendText(text);
 			return;
 		}
@@ -1510,6 +1527,7 @@ export function ChatArea({
 		// audio (queue + browser speechSynthesis) instead of letting it finish.
 		// clear() also resets the ordering sequence for the new response.
 		interruptTts();
+		setEmotion("think");
 
 		const store = useChatStore.getState();
 
@@ -1543,6 +1561,7 @@ export function ChatArea({
 			useChatStore.getState().finishStreaming();
 			completeCurrentRequest(requestId);
 			await handleVoiceToggle();
+			setEmotion("think");
 			voiceSessionRef.current?.sendText(text);
 			return;
 		}
@@ -1982,7 +2001,7 @@ export function ChatArea({
 					ttsTextSyncRef.current.canonical += visibleText;
 				}
 				// Parse emotion from accumulated text (tag may span multiple chunks)
-				const accumulated = store.streamingContent;
+				const accumulated = useChatStore.getState().streamingContent;
 				if (accumulated.length <= 30 && accumulated.length >= 4) {
 					const { emotion } = extractExpression(accumulated);
 					if (emotion) setEmotion(emotion);
@@ -2059,7 +2078,6 @@ export function ChatArea({
 			}
 			case "usage": {
 				finishStreamingWithTtsMask(false);
-				setEmotion("neutral");
 				store.addCostEntry({
 					inputTokens: chunk.inputTokens,
 					outputTokens: chunk.outputTokens,
@@ -2087,7 +2105,6 @@ export function ChatArea({
 				}
 				finishStreamingWithTtsMask();
 				finishLocalVoicePrebuffer();
-				setEmotion("neutral");
 				completeCurrentRequest(chunk.requestId);
 				break;
 			case "config_update": {
@@ -2169,7 +2186,6 @@ export function ChatArea({
 				store.appendStreamChunk(`\n[${t("chat.error")}] ${wireErrorMessage(chunk.code, chunk.message)}`);
 				finishStreamingWithTtsMask();
 				finishLocalVoicePrebuffer();
-				setEmotion("neutral");
 				completeCurrentRequest(chunk.requestId);
 				break;
 		}
@@ -2352,6 +2368,7 @@ export function ChatArea({
 					useAvatarStore.getState().setSpeaking(false);
 					cascadeAvatar?.setSpeakingVisual(false);
 					activeTtsRequestsRef.current.delete(reqId);
+					settleAvatarEmotionIfIdle();
 				};
 				// onerror too, else a failure after onstart leaves the avatar stuck
 				// in the speaking state (#363 review).
@@ -2363,6 +2380,7 @@ export function ChatArea({
 					useAvatarStore.getState().setSpeaking(false);
 					cascadeAvatar?.setSpeakingVisual(false);
 					activeTtsRequestsRef.current.delete(reqId);
+					settleAvatarEmotionIfIdle();
 				};
 				window.speechSynthesis.speak(utter);
 			} else {
@@ -3178,7 +3196,10 @@ export function ChatArea({
 			const playerOpts = {
 				sampleRate: 24000,
 				onPlaybackStart: () => useAvatarStore.getState().setSpeaking(true),
-				onPlaybackEnd: () => useAvatarStore.getState().setSpeaking(false),
+				onPlaybackEnd: () => {
+					useAvatarStore.getState().setSpeaking(false);
+					settleAvatarEmotionIfIdle();
+				},
 			};
 			const player = isNewCore()
 				? makeCoreAudioPlayer(playerOpts)
@@ -3197,6 +3218,7 @@ export function ChatArea({
 			session.onAudio = (pcmBase64) => player.enqueue(pcmBase64);
 			session.onInputTranscript = (text) => {
 				const store = useChatStore.getState();
+				if (!inputTurnDirty) setEmotion("think");
 				inputAccum += text;
 				if (inputTurnDirty) {
 					store.updateLastMessage("user", inputAccum);
@@ -3248,6 +3270,7 @@ export function ChatArea({
 				inputAccum = "";
 				outputAccum = "";
 				serverEmotionSeenThisTurn = false;
+				settleAvatarEmotionIfIdle();
 			};
 			session.onToolCall = async (callId, toolName, args) => {
 				try {
