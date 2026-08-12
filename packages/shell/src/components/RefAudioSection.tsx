@@ -20,6 +20,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { DEFAULT_VOICE_REF_URL, loadConfig, saveConfig } from "../lib/config";
 import { getLocale } from "../lib/i18n";
 import { Logger } from "../lib/logger";
+import { fetchLocalVoiceHealth } from "../lib/voice/local-runtime";
 import { encodeRefAudio } from "../lib/voice/ref-audio";
 import {
 	type RefAudioActive,
@@ -95,6 +96,10 @@ const STRINGS = {
 		uploading: "업로드 중…",
 		cost: "적용·업로드 시 1회당 $0.01 차감 (녹음만으로는 차감 없음)",
 		costLocal: "로컬 모델 — 녹음·업로드 무료 (크레딧 차감 없음)",
+		localEngineOff: "로컬 음성 엔진이 실행 중이 아닙니다. 아래 버튼으로 시작하세요.",
+		localEngineStarting:
+			"로컬 음성 엔진 준비 중 — 음성 서비스가 아직 사용 가능하지 않습니다. 잠시 후 자동으로 이어집니다.",
+		localEngineStart: "로컬 음성 엔진 시작",
 		err: {
 			network: "네트워크 오류 — 재시도해주세요.",
 			auth: "naia 계정 로그인이 필요합니다.",
@@ -156,6 +161,11 @@ const STRINGS = {
 		uploading: "Uploading…",
 		cost: "$0.01 charged when you apply or upload (recording itself is free)",
 		costLocal: "Local model — recording & upload are free (no credit charge)",
+		localEngineOff:
+			"The local voice engine is not running. Start it with the button below.",
+		localEngineStarting:
+			"Local voice engine is getting ready — the speech service is not available yet. It will continue automatically.",
+		localEngineStart: "Start local voice engine",
 		err: {
 			network: "Network error — please retry.",
 			auth: "Please sign in to your naia account.",
@@ -278,6 +288,12 @@ export function RefAudioSection({
 		runtimeLocalFacadeUrl?.trim() || config?.vllmTtsHost;
 	const [active, setActive] = useState<RefAudioActive | null>(null);
 	const [loading, setLoading] = useState(true);
+	// FR-VOICE.14 (#418): readiness is the façade /health verdict, not a
+	// reachable port. "off" and "starting" render explicit states instead of a
+	// generic network error, so a not-running engine is never a silent wait.
+	const [localEngine, setLocalEngine] = useState<
+		"unknown" | "off" | "starting" | "ready"
+	>("unknown");
 	const [busy, setBusy] = useState(false);
 	const [error, setError] = useState<string>("");
 	const [notice, setNotice] = useState<string>("");
@@ -340,10 +356,26 @@ export function RefAudioSection({
 							}
 						: null,
 				);
+				setLocalEngine("ready");
 				setError("");
 			} catch (err) {
 				Logger.warn(TAG, "local status fetch failed", { error: String(err) });
-				setError(describeError(err, S));
+				// FR-VOICE.14: classify by the health verdict — engine not running
+				// and engine-up-but-TTS-unavailable get explicit states; only a
+				// failure with a ready engine is a real error.
+				const health = localVoiceHost
+					? await fetchLocalVoiceHealth(localVoiceHost)
+					: null;
+				if (health === null) {
+					setLocalEngine("off");
+					setError("");
+				} else if (!health.ttsReady) {
+					setLocalEngine("starting");
+					setError("");
+				} else {
+					setLocalEngine("ready");
+					setError(describeError(err, S));
+				}
 			} finally {
 				setLoading(false);
 			}
@@ -1090,6 +1122,34 @@ export function RefAudioSection({
 					</div>
 				)}
 				{error && <div className="settings-error">{error}</div>}
+				{isLocal && localEngine === "off" && (
+					<div className="settings-hint" data-testid="ref-audio-engine-off">
+						{S.localEngineOff}
+						{ensureLocalVoiceReady && (
+							<button
+								type="button"
+								className="voice-preview-btn"
+								data-testid="ref-audio-engine-start"
+								onClick={async () => {
+									if (await ensureLocalVoiceReady()) {
+										setLocalEngine("ready");
+										void refresh();
+									}
+								}}
+							>
+								{S.localEngineStart}
+							</button>
+						)}
+					</div>
+				)}
+				{isLocal && localEngine === "starting" && (
+					<div
+						className="settings-hint"
+						data-testid="ref-audio-engine-starting"
+					>
+						{S.localEngineStarting}
+					</div>
+				)}
 			</div>
 		</>
 	);

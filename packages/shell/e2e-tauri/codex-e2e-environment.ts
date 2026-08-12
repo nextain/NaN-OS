@@ -13,6 +13,10 @@ import { connect } from "node:net";
 import { homedir } from "node:os";
 import { basename, dirname, resolve } from "node:path";
 import { execPath } from "node:process";
+// FR-VOICE.15 (#418): harness seeds come from the product config schema — a
+// retired field seeded here silently disables local voice via the safety
+// migration (the 2026-08-11 voice-6g incident). Type + runtime guarded.
+import { buildSeedShellConfig } from "../src/lib/config-seed.js";
 
 export const SHELL_DIR = resolve(import.meta.dirname, "..");
 const pairing = JSON.parse(
@@ -186,16 +190,16 @@ export function resetCodexE2eRoot(): void {
 		mkdirSync(dirname(voiceVrmPath), { recursive: true });
 		cpSync(E2E_VRM_SOURCE, voiceVrmPath);
 	}
-	const config = {
+	const config = buildSeedShellConfig({
 		provider: "codex",
 		model: "gpt-5.4",
 		...(E2E_VOICE_6G_ENABLED
 			? {
 					localVoiceEnabled: true,
-					ttsProvider: "naia-local-voice",
+					ttsProvider: "naia-local-voice" as const,
 					ttsEnabled: true,
 					vllmTtsHost: "http://127.0.0.1:8910",
-					avatarProvider: "vrm",
+					avatarProvider: "vrm" as const,
 					vrmModel: voiceVrmPath,
 				}
 			: {}),
@@ -203,11 +207,11 @@ export function resetCodexE2eRoot(): void {
 			? {
 					onboardingComplete: true,
 					workspaceRoot: E2E_WORKSPACE,
-					avatarProvider: "naia-video-avatar",
+					avatarProvider: "naia-video-avatar" as const,
 					nvaModel: "naia-prebaked",
 				}
 			: {}),
-	};
+	});
 	if (E2E_PREBAKED_NVA_ENABLED) {
 		if (!E2E_NVA_SOURCE || !existsSync(E2E_NVA_SOURCE)) {
 			throw new Error(
@@ -250,14 +254,14 @@ export function resetCodexE2eRoot(): void {
 		writeFileSync(
 			E2E_UI_CONFIG_PATH,
 			JSON.stringify(
-				{
+				buildSeedShellConfig({
 					avatarProvider: "vrm",
 					vrmModel: voiceVrmPath,
 					localVoiceEnabled: true,
 					ttsProvider: "naia-local-voice",
 					ttsEnabled: true,
 					vllmTtsHost: "http://127.0.0.1:8910",
-				},
+				}),
 				null,
 				2,
 			),
@@ -268,10 +272,10 @@ export function resetCodexE2eRoot(): void {
 		writeFileSync(
 			E2E_UI_CONFIG_PATH,
 			JSON.stringify(
-				{
+				buildSeedShellConfig({
 					avatarProvider: "naia-video-avatar",
 					nvaModel: "naia-prebaked",
-				},
+				}),
 				null,
 				2,
 			),

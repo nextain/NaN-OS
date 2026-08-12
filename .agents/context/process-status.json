@@ -132,6 +132,21 @@
   },
 
   "active_issue_tracks": {
+    "voice_ready_contract_418": {
+      "work_id": "VOICE-READY-CONTRACT-418",
+      "issue": "https://github.com/nextain/naia-shell/issues/418",
+      "scope": "FR-VOICE.14~15 — ① 준비 판정을 façade /health 파싱 단일 헬퍼 fetchLocalVoiceHealth 로 수렴(포트 응답≠준비). RefAudioSection 이 로컬 로드 실패를 health 로 구분해 '엔진 실행 필요'(제자리 시작 버튼)/'엔진 준비 중'을 명시 — 침묵 대기·일반 네트워크 오류로 뭉개지 않음. ② e2e 시드 SoT: config-seed.ts buildSeedShellConfig(제품 스키마 타입, 폐기 키 RETIRED_CONFIG_KEYS 컴파일+런타임 거부) — codex-e2e-environment 시드 3곳 이관. 계약 테스트가 폐기 키 목록과 normalize 실제 제거를 고정. ③ 고아 자동 재기동은 기존 auto-restore effect(SettingsTab)가 담당함을 확인 — 단, 그 effect 가 localVoiceEnabled=false(사용자 정지/마이그레이션 OFF)여도 기동하는 권한 문제는 별도 결정 필요로 이슈에 표면화.",
+      "requirements": "docs/requirements.md FR-VOICE.14~15",
+      "scenario": "docs/user-scenarios.md S-VOICE-READY",
+      "status": "done",
+      "p01_user_scenarios": "done",
+      "p02_test_scenarios": "done",
+      "p03_requirements": "done",
+      "p04_integration_test": "done",
+      "p05_complete": "done",
+      "verification": "local-runtime.test.ts health 계약 + config-seed.test.ts 3건 + RefAudioSection.test.tsx 엔진 off/starting 2건 + 셸 전체 vitest 1486 GREEN + tsc 0 + 네이티브 Tauri voice-6g e2e PASS(실 cascade 기동·VRM·외부 LLM 응답 VoxCPM2 발화, RTF 1.65 — 신규 config-seed 시드 경로 실측 포함).",
+      "last_updated": "2026-08-13T02:35:00+09:00"
+    },
     "voice_migration_notice_419": {
       "work_id": "VOICE-MIGRATION-NOTICE-419",
       "issue": "https://github.com/nextain/naia-shell/issues/419",

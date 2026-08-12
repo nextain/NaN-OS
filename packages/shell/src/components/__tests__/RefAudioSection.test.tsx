@@ -56,6 +56,74 @@ describe("RefAudioSection", () => {
 		);
 	});
 
+	it("FR-VOICE.14: shows an explicit engine-off state with an in-place start action", async () => {
+		localStorage.setItem(
+			"naia-config",
+			JSON.stringify({
+				ttsProvider: "naia-local-voice",
+				vllmTtsHost: "http://127.0.0.1:8910",
+			}),
+		);
+		// Every request fails: /ref/voices (load) and /health (verdict) = engine off.
+		const fetchMock = vi.fn().mockRejectedValue(new Error("ECONNREFUSED"));
+		vi.stubGlobal("fetch", fetchMock);
+		const ensureReady = vi.fn().mockImplementation(async () => {
+			// Once started, the engine serves both /health and /ref/voices.
+			fetchMock.mockImplementation(async (url: unknown) =>
+				String(url).endsWith("/health")
+					? {
+							ok: true,
+							json: async () => ({ tts_enabled: true, avatar_enabled: false }),
+						}
+					: { ok: true, json: async () => ({ voices: [] }) },
+			);
+			return true;
+		});
+
+		render(<RefAudioSection ensureLocalVoiceReady={ensureReady} />);
+
+		await waitFor(() =>
+			expect(screen.getByTestId("ref-audio-engine-off")).toBeDefined(),
+		);
+		// An engine that is simply off must not read as a generic network error.
+		expect(document.querySelector(".settings-error")).toBeNull();
+
+		fireEvent.click(screen.getByTestId("ref-audio-engine-start"));
+		await waitFor(() => expect(ensureReady).toHaveBeenCalled());
+		await waitFor(() =>
+			expect(screen.queryByTestId("ref-audio-engine-off")).toBeNull(),
+		);
+	});
+
+	it("FR-VOICE.14: reports engine-up-but-TTS-unavailable as preparing, not an error", async () => {
+		localStorage.setItem(
+			"naia-config",
+			JSON.stringify({
+				ttsProvider: "naia-local-voice",
+				vllmTtsHost: "http://127.0.0.1:8910",
+			}),
+		);
+		vi.stubGlobal(
+			"fetch",
+			vi.fn().mockImplementation(async (url: unknown) => {
+				if (String(url).endsWith("/health")) {
+					return {
+						ok: true,
+						json: async () => ({ tts_enabled: false, avatar_enabled: true }),
+					};
+				}
+				throw new Error("voices route unavailable");
+			}),
+		);
+
+		render(<RefAudioSection />);
+
+		await waitFor(() =>
+			expect(screen.getByTestId("ref-audio-engine-starting")).toBeDefined(),
+		);
+		expect(document.querySelector(".settings-error")).toBeNull();
+	});
+
 	it("shows recording and audio-file attachment controls for Naia Local", () => {
 		localStorage.setItem(
 			"naia-config",
