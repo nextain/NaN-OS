@@ -63,6 +63,9 @@ export function buildList(kind, root = ROOT) {
 				if (!/\.(md|mjs|js|ya?ml)$/.test(name) || name === "README.md") continue;
 				file = `.agents/${kind}/${name}`; label = name.replace(/\.(md|mjs|js|ya?ml)$/, ""); txt = fs.readFileSync(full, "utf8");
 			}
+			// 개행 정규화 — Windows(autocrlf) 체크아웃의 CRLF 가 frontmatter 정규식
+			// (`/^---\n/`)을 빗나가게 해 플랫폼마다 다른 설명을 뽑던 드리프트 차단.
+			txt = txt.replace(/\r\n/g, "\n");
 			const fm = frontmatter(txt);
 			rows.push({ name: fm.name || label, file, desc: extractDesc(txt) });
 		}

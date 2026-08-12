@@ -6,4 +6,4 @@
 
 | 이름 | 파일 | 설명 |
 |------|------|------|
-| verify-visual-ux | `.agents/skills/verify-visual-ux/SKILL.md` | 기능 계약이 통과했더라도 사용자가 다음 행동을 이해하지 못하거나, 좁은 Shell 패널에서 정보가 무너지거나, 오류를 복구할 수 없으면 완료로 선언하지 않는다. |
+| verify-visual-ux | `.agents/skills/verify-visual-ux/SKILL.md` | Shell UI 변경의 정보 위계·상태·오류 복구·반응형·접근성 증거를 P04에서 검토한다. 컴포넌트, CSS, Playwright 또는 native Tauri UI를 변경했을 때 사용한다. |
