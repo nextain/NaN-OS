@@ -2,11 +2,14 @@ import { describe, expect, it } from "vitest";
 import { createMouthController } from "../mouth";
 
 /** VRM 1.0 style (lowercase vowels) */
-function createMockVrm10() {
+function createMockVrm10({ binary = false } = {}) {
 	const values = new Map<string, number>();
+	const expressions = Object.fromEntries(
+		["aa", "ee", "ih", "oh", "ou"].map((name) => [name, { isBinary: binary }]),
+	);
 	return {
 		expressionManager: {
-			expressionMap: { aa: {}, ee: {}, ih: {}, oh: {}, ou: {} },
+			expressionMap: expressions,
 			setValue: (name: string, value: number) => {
 				values.set(name, value);
 			},
@@ -66,6 +69,40 @@ describe("createMouthController", () => {
 		expect(aa).toBeGreaterThan(0);
 	});
 
+	it("cycles every binary VRM 1.0 vowel one at a time above its activation threshold", () => {
+		const vrm = createMockVrm10({ binary: true });
+		const ctrl = createMouthController(vrm as any);
+		const activated = new Set<string>();
+
+		ctrl.setSpeaking(true);
+		for (let frame = 0; frame < 10; frame++) {
+			ctrl.update(0.13);
+			const active = ["aa", "ih", "ou", "ee", "oh"].filter(
+				(name) => (vrm._values.get(name) ?? 0) > 0.5,
+			);
+			expect(active.length).toBe(1);
+			activated.add(active[0]);
+		}
+
+		expect(activated).toEqual(new Set(["aa", "ih", "ou", "ee", "oh"]));
+	});
+
+	it("cycles every continuous VRM 1.0 vowel", () => {
+		const vrm = createMockVrm10();
+		const ctrl = createMouthController(vrm as any);
+		const activated = new Set<string>();
+
+		ctrl.setSpeaking(true);
+		for (let frame = 0; frame < 20; frame++) {
+			ctrl.update(0.13);
+			for (const name of ["aa", "ih", "ou", "ee", "oh"]) {
+				if ((vrm._values.get(name) ?? 0) > 0.05) activated.add(name);
+			}
+		}
+
+		expect(activated).toEqual(new Set(["aa", "ih", "ou", "ee", "oh"]));
+	});
+
 	it("mouth opens when speaking (VRM 0.0 — PascalCase vowels)", () => {
 		const vrm = createMockVrm00();
 		const ctrl = createMouthController(vrm as any);
@@ -90,8 +127,22 @@ describe("createMouthController", () => {
 		ctrl.stop();
 		expect(ctrl.isSpeaking).toBe(false);
 
-		for (let i = 0; i < 30; i++) ctrl.update(0.016);
-		const aa = vrm._values.get("aa") ?? 0;
-		expect(aa).toBeLessThan(0.05);
+		for (const name of ["aa", "ee", "ih", "oh", "ou"]) {
+			expect(vrm._values.get(name) ?? 0).toBe(0);
+		}
+	});
+
+	it("closes a binary mouth immediately when speaking ends", () => {
+		const vrm = createMockVrm10({ binary: true });
+		const ctrl = createMouthController(vrm as any);
+
+		ctrl.setSpeaking(true);
+		ctrl.update(0.13);
+		expect([...vrm._values.values()].some((value) => value > 0.5)).toBe(true);
+
+		ctrl.setSpeaking(false);
+		for (const name of ["aa", "ee", "ih", "oh", "ou"]) {
+			expect(vrm._values.get(name) ?? 0).toBe(0);
+		}
 	});
 });

@@ -13,10 +13,12 @@ const CANONICAL_VOWELS: Record<LipKey, string> = {
 };
 
 const LIP_KEYS: LipKey[] = ["A", "E", "I", "O", "U"];
+const SPEECH_SEQUENCE: LipKey[] = ["A", "I", "U", "E", "O"];
 
 const ATTACK = 50;
 const RELEASE = 30;
 const CAP = 0.7;
+const VOWEL_DURATION_SECONDS = 0.12;
 
 /**
  * Simulated lip sync controller.
@@ -30,13 +32,22 @@ export function createMouthController(vrm: VRM) {
 		: (_: string) => null;
 
 	// Resolve canonical vowel names to actual model names
-	const resolvedVowels: Record<LipKey, string | null> = {
-		A: resolve(CANONICAL_VOWELS.A),
-		E: resolve(CANONICAL_VOWELS.E),
-		I: resolve(CANONICAL_VOWELS.I),
-		O: resolve(CANONICAL_VOWELS.O),
-		U: resolve(CANONICAL_VOWELS.U),
-	};
+	const expressionMap = vrm.expressionManager?.expressionMap ?? {};
+	const resolvedVowels = Object.fromEntries(
+		LIP_KEYS.map((key) => {
+			const name = resolve(CANONICAL_VOWELS[key]);
+			return [
+				key,
+				{
+					name,
+					isBinary: name ? Boolean(expressionMap[name]?.isBinary) : false,
+				},
+			];
+		}),
+	) as Record<LipKey, { name: string | null; isBinary: boolean }>;
+	const availableSequence = SPEECH_SEQUENCE.filter(
+		(key) => resolvedVowels[key].name !== null,
+	);
 
 	const smoothState: Record<LipKey, number> = {
 		A: 0,
@@ -48,9 +59,20 @@ export function createMouthController(vrm: VRM) {
 	let speaking = false;
 	let elapsed = 0;
 
+	function resetVowels(): void {
+		for (const key of LIP_KEYS) {
+			smoothState[key] = 0;
+			const resolved = resolvedVowels[key].name;
+			if (resolved) vrm.expressionManager?.setValue(resolved, 0);
+		}
+	}
+
 	function setSpeaking(value: boolean): void {
 		speaking = value;
-		if (!value) elapsed = 0;
+		if (!value) {
+			elapsed = 0;
+			resetVowels();
+		}
 	}
 
 	function update(delta: number): void {
@@ -66,25 +88,26 @@ export function createMouthController(vrm: VRM) {
 			U: 0,
 		};
 
-		if (speaking) {
-			// Simulated speech pattern: oscillating vowel shapes
-			const t = elapsed * 8; // speed of mouth movement
-			const wave = Math.sin(t) * 0.5 + 0.5;
-			const wave2 = Math.sin(t * 1.7 + 1.3) * 0.5 + 0.5;
-
-			target.A = Math.min(CAP, wave * 0.6 + 0.1);
-			target.O = Math.min(CAP * 0.5, wave2 * 0.3);
-			target.E = Math.min(CAP * 0.3, (1 - wave) * 0.2);
+		if (speaking && availableSequence.length > 0) {
+			const sequenceIndex =
+				Math.floor(elapsed / VOWEL_DURATION_SECONDS) % availableSequence.length;
+			target[availableSequence[sequenceIndex]] = CAP;
 		}
 
 		for (const key of LIP_KEYS) {
-			const resolved = resolvedVowels[key];
+			const { name: resolved, isBinary } = resolvedVowels[key];
 			if (!resolved) continue;
+			if (isBinary) {
+				const value = target[key] > 0 ? 1 : 0;
+				smoothState[key] = value;
+				vrm.expressionManager.setValue(resolved, value);
+				continue;
+			}
 			const from = smoothState[key];
 			const to = target[key];
 			const rate = 1 - Math.exp(-(to > from ? ATTACK : RELEASE) * delta);
 			smoothState[key] = from + (to - from) * rate;
-			const weight = (smoothState[key] <= 0.01 ? 0 : smoothState[key]) * 0.7;
+			const weight = smoothState[key] <= 0.01 ? 0 : smoothState[key];
 			vrm.expressionManager.setValue(resolved, weight);
 		}
 	}
@@ -92,6 +115,7 @@ export function createMouthController(vrm: VRM) {
 	function stop(): void {
 		speaking = false;
 		elapsed = 0;
+		resetVowels();
 	}
 
 	return {

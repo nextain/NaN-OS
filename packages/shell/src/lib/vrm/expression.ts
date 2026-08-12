@@ -9,7 +9,7 @@ export type EmotionName =
 	| "think";
 
 interface EmotionState {
-	expression: { name: string; value: number }[];
+	expression: { name: string; fallbackName?: string; value: number }[];
 	blendDuration: number;
 }
 
@@ -108,7 +108,7 @@ const EMOTION_STATES: Record<EmotionName, EmotionState> = {
 		blendDuration: 0.5,
 	},
 	think: {
-		expression: [{ name: "neutral", value: 0.6 }],
+		expression: [{ name: "think", fallbackName: "neutral", value: 1.0 }],
 		blendDuration: 0.5,
 	},
 };
@@ -330,7 +330,9 @@ export function createEmotionController(vrm: VRM) {
 		}
 
 		for (const expr of state.expression) {
-			const resolved = resolve(expr.name);
+			const resolved =
+				resolve(expr.name) ??
+				(expr.fallbackName ? resolve(expr.fallbackName) : null);
 			if (!resolved) continue;
 			const current = vrm.expressionManager?.getValue(resolved) ?? 0;
 			currentValues.set(resolved, current);

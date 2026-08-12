@@ -658,6 +658,12 @@ Steamworks 포털 설정·SteamPipe 자격증명·스토어 심사 제출은 #31
 | **FR-SETTINGS.12** | `Settings > Skills > Youtube Radio DJ` is the sole owner of Radio DJ proactive policy. General renders no duplicate profile, weather consent, coordinates, or DJ fields. | Done | Settings component and Playwright ownership assertions |
 | **FR-SETTINGS.13** | Weather-location consent and coordinates survive semantically equivalent parent rerenders and persist after Save/reload. No location is transmitted unless consent is enabled. | Done | component rerender regression and Playwright persistence test |
 
+## VRM avatar expression compatibility (2026-08-13)
+
+| ID | 요구사항 | 검증 기준 |
+|---|---|---|
+| **FR-AVATAR.1** ([#422](https://github.com/nextain/naia-shell/issues/422), REQ-002) | TTS 재생 중 3D VRM 아바타는 VRM 1.0 `aa/ih/ou/ee/oh`와 VRM 0.0 `a/i/u/e/o`를 모두 인식해 다섯 입모양을 순환한다. 연속형 표정은 부드럽게 전환하고, 텍스처 전환형 `isBinary` 표정은 한 번에 하나만 활성화하며, 발화 종료·중단 시 모든 입모양을 즉시 0으로 복귀시킨다. 이는 발화 상태 기반 시뮬레이션이며 실제 오디오 음소 분석으로 위장하지 않는다. 모델이 커스텀 `think` 표정을 제공하면 이를 우선 사용하고, 없는 모델만 neutral로 대체한다. | `mouth.test.ts` binary/continuous/VRM 0.0 5모음·one-hot·정지 회귀, `expression.test.ts` custom think·neutral fallback |
+
 ## Settings persistence and runtime reload (#415, 2026-08-03)
 
 | ID | Requirement | Status | Verification |

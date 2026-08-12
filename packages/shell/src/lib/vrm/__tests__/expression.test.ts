@@ -18,7 +18,9 @@ describe("extractExpression (robust avatar cue extraction)", () => {
 		expect(extractExpression("정말요? [laughing] 처음 들어봐요.").emotion).toBe(
 			"happy",
 		);
-		expect(extractExpression("[sigh] 오늘 피곤하셨겠어요.").emotion).toBe("sad");
+		expect(extractExpression("[sigh] 오늘 피곤하셨겠어요.").emotion).toBe(
+			"sad",
+		);
 	});
 
 	it("strips the prosody tag from cleanText", () => {
@@ -165,6 +167,7 @@ describe("createEmotionController", () => {
 					angry: {},
 					surprised: {},
 					neutral: {},
+					think: {},
 					aa: {},
 					oh: {},
 					ee: {},
@@ -257,6 +260,23 @@ describe("createEmotionController", () => {
 		const vrm = createMockVrm00();
 		const controller = createEmotionController(vrm as any);
 		controller.setEmotion("neutral");
+		controller.update(0.5);
+		expect(vrm._values.get("Neutral")).toBeGreaterThan(0);
+	});
+
+	it("setEmotion think prefers a custom VRM 1.0 think expression", () => {
+		const vrm = createMockVrm10();
+		const controller = createEmotionController(vrm as any);
+		controller.setEmotion("think");
+		controller.update(0.5);
+		expect(vrm._values.get("think")).toBeGreaterThan(0);
+		expect(vrm._values.get("neutral") ?? 0).toBe(0);
+	});
+
+	it("setEmotion think falls back to Neutral for VRM 0.0 models", () => {
+		const vrm = createMockVrm00();
+		const controller = createEmotionController(vrm as any);
+		controller.setEmotion("think");
 		controller.update(0.5);
 		expect(vrm._values.get("Neutral")).toBeGreaterThan(0);
 	});
