@@ -11,14 +11,14 @@
     "display": "active local display"
   },
   "build": {
-    "command": "NAIA_AGENT_SCRIPT=/var/home/luke/alpha-adk/projects/naia-agent-worktrees/integration-discord-codex/scripts/builds/agent-stdio-entry.mjs NAIA_AGENT_PROTO_DIR=/var/home/luke/alpha-adk/projects/naia-agent-worktrees/integration-discord-codex/src/main/adapters/grpc cargo build",
+    "command": "NAIA_AGENT_SCRIPT=<adk-root>/projects/naia-agent-worktrees/integration-discord-codex/scripts/builds/agent-stdio-entry.mjs NAIA_AGENT_PROTO_DIR=<adk-root>/projects/naia-agent-worktrees/integration-discord-codex/src/main/adapters/grpc cargo build",
     "cwd": "packages/shell/src-tauri",
     "exit_code": 0,
     "paired_commit": "1e0acab83622fe446f301811d0fe35bb10285b86",
     "paired_checkout_dirty": false
   },
   "native_e2e": {
-    "command": "NAIA_AGENT_SCRIPT=/var/home/luke/alpha-adk/projects/naia-agent-worktrees/integration-discord-codex/scripts/builds/agent-stdio-entry.mjs NAIA_AGENT_PROTO_DIR=/var/home/luke/alpha-adk/projects/naia-agent-worktrees/integration-discord-codex/src/main/adapters/grpc pnpm exec wdio run e2e-tauri/wdio.conf.ts --spec e2e-tauri/specs/71-proactive-speech-profiles.spec.ts",
+    "command": "NAIA_AGENT_SCRIPT=<adk-root>/projects/naia-agent-worktrees/integration-discord-codex/scripts/builds/agent-stdio-entry.mjs NAIA_AGENT_PROTO_DIR=<adk-root>/projects/naia-agent-worktrees/integration-discord-codex/src/main/adapters/grpc pnpm exec wdio run e2e-tauri/wdio.conf.ts --spec e2e-tauri/specs/71-proactive-speech-profiles.spec.ts",
     "cwd": "packages/shell",
     "exit_code": 0,
     "duration_seconds": 18.3,

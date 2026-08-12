@@ -10,7 +10,7 @@
     "codex_login": "ready",
     "model": "gpt-5.4"
   },
-  "command": "NAIA_AGENT_SCRIPT=/var/home/luke/alpha-adk/projects/naia-agent-worktrees/integration-discord-codex/scripts/builds/agent-stdio-entry.mjs NAIA_AGENT_PROTO_DIR=/var/home/luke/alpha-adk/projects/naia-agent-worktrees/integration-discord-codex/src/main/adapters/grpc pnpm exec wdio run e2e-tauri/wdio.conf.codex.ts",
+  "command": "NAIA_AGENT_SCRIPT=<adk-root>/projects/naia-agent-worktrees/integration-discord-codex/scripts/builds/agent-stdio-entry.mjs NAIA_AGENT_PROTO_DIR=<adk-root>/projects/naia-agent-worktrees/integration-discord-codex/src/main/adapters/grpc pnpm exec wdio run e2e-tauri/wdio.conf.codex.ts",
   "cwd": "packages/shell",
   "assertions": {
     "agent_reload": "run-scoped runtime log contains loaded=true codex/gpt-5.4",
@@ -32,7 +32,7 @@
     "exit_code": 0
   },
   "crash_recovery_run": {
-    "command": "NAIA_CODEX_E2E_SIMULATE_WORKER_CRASH=1 NAIA_AGENT_SCRIPT=/var/home/luke/alpha-adk/projects/naia-agent-worktrees/integration-discord-codex/scripts/builds/agent-stdio-entry.mjs NAIA_AGENT_PROTO_DIR=/var/home/luke/alpha-adk/projects/naia-agent-worktrees/integration-discord-codex/src/main/adapters/grpc pnpm exec wdio run e2e-tauri/wdio.conf.codex.ts",
+    "command": "NAIA_CODEX_E2E_SIMULATE_WORKER_CRASH=1 NAIA_AGENT_SCRIPT=<adk-root>/projects/naia-agent-worktrees/integration-discord-codex/scripts/builds/agent-stdio-entry.mjs NAIA_AGENT_PROTO_DIR=<adk-root>/projects/naia-agent-worktrees/integration-discord-codex/src/main/adapters/grpc pnpm exec wdio run e2e-tauri/wdio.conf.codex.ts",
     "configured_worker_exit": 86,
     "launcher_exit": 1,
     "expected_launcher_failure": true,

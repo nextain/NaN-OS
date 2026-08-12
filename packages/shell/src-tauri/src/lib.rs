@@ -11900,11 +11900,13 @@ mod tests {
 
     #[test]
     fn native_e2e_never_targets_the_users_adk_path_cache() {
-        let home = std::path::PathBuf::from("C:/Users/tester");
+        // Neutral fixture home — a Users/<name> literal trips the OSS
+        // personal-path scanner even for synthetic test data.
+        let home = std::path::PathBuf::from("C:/naia-test-home");
         assert_eq!(naia_path_cache_target(home.clone(), true), None);
         assert_eq!(
             naia_path_cache_target(home, false),
-            Some(std::path::PathBuf::from("C:/Users/tester/.naia/adk-path"))
+            Some(std::path::PathBuf::from("C:/naia-test-home/.naia/adk-path"))
         );
     }
 

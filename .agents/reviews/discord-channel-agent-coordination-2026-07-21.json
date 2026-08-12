@@ -1,6 +1,6 @@
 {
   "scope": "Discord lane coordination with radio/continuous-speech and provider-role lanes",
-  "shared_channel": "/var/home/luke/alpha-adk/.agents/progress/xsession-coordination-discord-x-continuous-speech-2026-07-20.md",
+  "shared_channel": "<adk-root>/.agents/progress/xsession-coordination-discord-x-continuous-speech-2026-07-20.md",
   "policy": {
     "user_instruction": "continue autonomously without questions and create a communication channel",
     "notice_mode": "BLOCKING notices plus shared-file lock and diff audit",
