@@ -102,6 +102,7 @@ import {
 	type SentenceTtsPipeline,
 	createSentenceTtsPipeline,
 } from "../lib/tts/sentence-pipeline";
+import { ttsTextFilter } from "../lib/tts/text-filter";
 import { decideSttBargeIn, isLikelySelfEcho, shouldPauseSttForTts } from "../lib/voice/echo-gate";
 import type {
 	AgentResponseChunk,
@@ -203,6 +204,13 @@ const TAB_ICONS: Record<TabId, string> = {
 	agents: "🤖",
 	diagnostics: "🩺",
 	settings: "⚙️",
+};
+
+// #428: the chunker's minimum-length split decision must measure what will be
+// spoken, not the raw text — otherwise "[HAPPY] 아!" (11 chars) passes the
+// minimum and a 2-char interjection reaches VoxCPM2 as its own first chunk.
+const ttsChunkerOptions = {
+	speakableLength: (sentence: string) => ttsTextFilter.filter(sentence).length,
 };
 
 // Built-in skills are always available in UI (non-toggle). Prevent hidden config drift
@@ -1187,7 +1195,7 @@ export function ChatArea({
 				},
 			});
 		}
-		sentenceChunkerRef.current = new SentenceChunker();
+		sentenceChunkerRef.current = new SentenceChunker(ttsChunkerOptions);
 		pipelineVoiceConfigRef.current = {
 			voice: resolveTtsVoiceId(config),
 			ttsProvider: config.ttsProvider || "edge",
@@ -2457,7 +2465,7 @@ export function ChatArea({
 					},
 				});
 				audioQueueRef.current = queue;
-				sentenceChunkerRef.current = new SentenceChunker();
+				sentenceChunkerRef.current = new SentenceChunker(ttsChunkerOptions);
 				pipelineActiveRef.current = true;
 				// Re-arm the local-voice-unavailable notice for this new session.
 				sentencePipelineRef.current?.rearmLocalVoiceNotice();

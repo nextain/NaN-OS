@@ -17,8 +17,21 @@ const MIN_CHARS = 10;
 /** Maximum character count — force flush even without punctuation. */
 const MAX_CHARS = 120;
 
+export interface SentenceChunkerOptions {
+	/**
+	 * Length of a candidate sentence as it will actually be spoken. The
+	 * MIN_CHARS split decision uses this measure so markup that a downstream
+	 * TTS filter strips (e.g. [HAPPY] emotion tags) cannot inflate a tiny
+	 * interjection past the minimum and release it as its own chunk (#428).
+	 * Emitted text is unchanged. Default: raw string length.
+	 */
+	speakableLength?: (sentence: string) => number;
+}
+
 export class SentenceChunker {
 	private buffer = "";
+
+	constructor(private readonly opts: SentenceChunkerOptions = {}) {}
 
 	/** Feed a text chunk. Returns any complete sentences ready for TTS. */
 	feed(text: string): string[] {
@@ -41,8 +54,10 @@ export class SentenceChunker {
 				const end = searchFrom + match.index + match[0].length;
 				if (end <= this.buffer.length) {
 					const sentence = this.buffer.slice(0, end).trim();
+					const spoken =
+						this.opts.speakableLength?.(sentence) ?? sentence.length;
 
-					if (sentence.length >= MIN_CHARS) {
+					if (spoken >= MIN_CHARS) {
 						// Restore ellipsis and decimal dots
 						sentences.push(
 							sentence.replace(/\u2026/g, "...").replace(/\u2024/g, "."),
