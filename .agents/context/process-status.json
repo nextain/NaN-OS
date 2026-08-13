@@ -132,6 +132,14 @@
   },
 
   "active_issue_tracks": {
+    "ci_gates_recovery_2026_08_13": {
+      "work_id": "CI-GATES-RECOVERY-2026-08-13",
+      "issues": ["https://github.com/nextain/naia-shell/issues/421", "https://github.com/nextain/naia-shell/issues/410"],
+      "status": "done",
+      "summary": "2026-08-10부터 전 커밋 레드였던 필수 CI 3종 복구 + 음성 증거 게이트(M5) 원격 배선. 원인·수리: ① hook self-tests = skills-list 드리프트 — 근본은 gen-lists frontmatter 정규식(/^---\\n/)이 Windows(autocrlf) CRLF를 빗나가 플랫폼별 다른 설명을 뽑던 것 → 읽기 시 개행 정규화(fe34a91b). ② file-anchors = discord-setup.ts 미등록 → UC-DISCORD 앵커 등록(6c91b815). ③ oss-readiness = 7/21 리뷰 기록 개인경로 5건 redact(<adk-root>) + Rust 픽스처 C:/Users/tester → C:/naia-test-home(6c91b815). ④ build-installers = 워크플로 naia-agent 핀(9b5f0d72)이 pairing SoT(agent-pairing.json=3eeb11c7)에 뒤처진 드리프트 → 핀 갱신(4f34424e). ⑤ M5 = self-trust-gates에 ci-verify-voice-evidence 배선(e3648e85 Luke + 공백 수정 4f34424e). 4f34424e 런: oss-readiness/build-installers 그린, self-trust는 워크플로 변경 자가보호(charter)로 의도된 1회성 레드.",
+      "follow_up": "이중 기록 제거 — build-installers가 agent-pairing.json을 직접 읽어 핀 드리프트 재발 차단(워크플로 수정=charter, Luke 결정)",
+      "last_updated": "2026-08-13T10:00:00+09:00"
+    },
     "tts_pipeline_ownership_420": {
       "work_id": "TTS-PIPELINE-OWNERSHIP-420",
       "issue": "https://github.com/nextain/naia-shell/issues/420",
