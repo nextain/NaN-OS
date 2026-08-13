@@ -4524,6 +4524,21 @@ async fn validate_api_key(provider: String, api_key: String) -> Result<bool, Str
     }
 }
 
+/// Trusted Naia gateway hosts over HTTPS. Both the incumbent `nextain.io` and
+/// the `naia.land` domain (naia-anyllm#63 migration) are ours; balance and other
+/// account calls accept either so the eventual primary flip needs no client
+/// release. Loopback (dev gateway) is handled separately by the caller.
+fn is_trusted_naia_https_host(scheme: &str, host: &str) -> bool {
+    if scheme != "https" {
+        return false;
+    }
+    let host = host.to_ascii_lowercase();
+    host == "nextain.io"
+        || host.ends_with(".nextain.io")
+        || host == "naia.land"
+        || host.ends_with(".naia.land")
+}
+
 fn naia_balance_endpoint(gateway_url: &str) -> Result<url::Url, String> {
     let base =
         url::Url::parse(gateway_url.trim()).map_err(|_| "Invalid Naia gateway URL".to_string())?;
@@ -4532,11 +4547,11 @@ fn naia_balance_endpoint(gateway_url: &str) -> Result<url::Url, String> {
         .ok_or_else(|| "Naia gateway URL has no host".to_string())?;
     let is_loopback =
         host.eq_ignore_ascii_case("localhost") || host == "127.0.0.1" || host == "::1";
-    let is_nextain_https = base.scheme() == "https"
-        && (host.eq_ignore_ascii_case("nextain.io")
-            || host.to_ascii_lowercase().ends_with(".nextain.io"));
-    if !is_nextain_https && !(is_loopback && matches!(base.scheme(), "http" | "https")) {
-        return Err("Naia balance requests require HTTPS on nextain.io".to_string());
+    let is_trusted_https = is_trusted_naia_https_host(base.scheme(), host);
+    if !is_trusted_https && !(is_loopback && matches!(base.scheme(), "http" | "https")) {
+        return Err(
+            "Naia balance requests require HTTPS on nextain.io or naia.land".to_string(),
+        );
     }
     base.join("/v1/profile/balance")
         .map_err(|_| "Invalid Naia balance endpoint".to_string())
@@ -10785,12 +10800,20 @@ mod tests {
     }
 
     #[test]
-    fn naia_balance_endpoint_accepts_nextain_https_and_loopback_only() {
+    fn naia_balance_endpoint_accepts_trusted_https_and_loopback_only() {
         assert_eq!(
             naia_balance_endpoint("https://api.nextain.io")
                 .unwrap()
                 .as_str(),
             "https://api.nextain.io/v1/profile/balance"
+        );
+        // naia-anyllm#63: naia.land is accepted alongside nextain.io so the
+        // eventual primary flip needs no client release.
+        assert_eq!(
+            naia_balance_endpoint("https://api.naia.land")
+                .unwrap()
+                .as_str(),
+            "https://api.naia.land/v1/profile/balance"
         );
         assert_eq!(
             naia_balance_endpoint("http://127.0.0.1:8080/base")
@@ -10799,7 +10822,10 @@ mod tests {
             "http://127.0.0.1:8080/v1/profile/balance"
         );
         assert!(naia_balance_endpoint("http://api.nextain.io").is_err());
+        assert!(naia_balance_endpoint("http://api.naia.land").is_err());
         assert!(naia_balance_endpoint("https://example.test").is_err());
+        // Suffix-match must not be spoofable by a look-alike parent domain.
+        assert!(naia_balance_endpoint("https://naia.land.evil.test").is_err());
     }
 
     #[test]
