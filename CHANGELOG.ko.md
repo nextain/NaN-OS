@@ -9,6 +9,34 @@ Naia OS의 주요 변경 사항을 기록합니다.
 
 ---
 
+## v0.1.7 (2026-08-14)
+
+국내 AI 모델 합류 — Upstage Solar Pro 4(에이전트 특화 플래그십)와 Solar Mini를 Naia 모델로 선택할 수 있고, 배포 전 실제 배포본에 도구 호출을 실측 검증했습니다. 이번 릴리즈는 게이트웨이 이중화(데스크톱이 `api.naia.land`를 `api.nextain.io`와 함께 신뢰), DeepSeek V4 도구 호출 복구, 음성 답변 첫 문장 정리, 끊김 없는 라디오 DJ, 개발 인스턴스의 운영 병행 실행을 더했습니다.
+
+AI 모델:
+
+- **feat(models)**: 국내 모델 — Upstage Solar Pro 4·Solar Mini를 Naia 모델로 선택 가능. 배포 전 실제 Upstage 배포본에 도구 호출 실측 검증
+- **fix(models)**: DeepSeek V4(Flash/Pro) 도구 호출 복구 — 게이트웨이가 도구 요청을 잘못 거절해 이 모델들에서 스킬이 조용히 실행되지 않던 문제 수정 ([#427](https://github.com/nextain/naia-shell/issues/427))
+- **feat(gateway)**: 게이트웨이 도메인 이중화 — 데스크톱이 `api.naia.land`를 `api.nextain.io`와 함께 신뢰해, 1차 엔드포인트 이전 시 클라이언트 갱신 불필요
+
+음성:
+
+- **fix(voice)**: 첫 문장 정리 — 답변 첫머리 짧은 감탄사에서 VoxCPM2가 째지던 문제 수정 ([#428](https://github.com/nextain/naia-shell/issues/428))
+- **fix(voice)**: 업로드 레퍼런스 음성 유지 — 직접 추가한 레퍼런스 오디오가 기본 프리셋으로 되돌아가던 문제 수정 ([#429](https://github.com/nextain/naia-shell/issues/429))
+- **fix(voice)**: 로컬 음성 준비 상태 명확화 — 엔진 꺼짐과 기동 중을 구분하고, 일반 오류 대신 그 자리에서 시작하는 동작 제공 ([#418](https://github.com/nextain/naia-shell/issues/418), [#419](https://github.com/nextain/naia-shell/issues/419))
+
+라디오 DJ & BGM:
+
+- **feat(radio)**: 끊김 없는 라디오 DJ — 곡을 이어 선곡·재생·코멘트하며 멈추지 않음 ([#414](https://github.com/nextain/naia-shell/issues/414))
+- **fix(bgm)**: Windows 사이드카 콜드 스타트를 견디고, 재생 중인 곡을 잘못 건너뛰지 않음
+
+데스크톱:
+
+- **feat(shell)**: 개발·운영 인스턴스 동시 실행 — 앱 식별자·데이터 홈·BGM·OAuth 포트 분리, 단일 GPU 음성 cascade는 안전 공유 ([#425](https://github.com/nextain/naia-shell/issues/425))
+- **fix(installer)**: Windows 설치본 견고화 — Rust 에이전트 페어링 게이트 동기화, 백그라운드 프로세스 콘솔 숨김, 새 워크스페이스에서 깔끔한 부팅
+
+---
+
 ## v0.1.5 (2026-06-05)
 
 RTX 3090 PC에서 목소리 복제와 실시간 대화, 스킬까지 가능한 똑똑한 AI — Naia-0.9-Omni-24g 출시. 음성 대화 중 도구 실행, 녹음·미리듣기를 갖춘 음성 복제 UI 재설계, 자연스러운 끼어들기, 30개국어, 네이티브 Ollama 로컬 AI, MS Store·Steam 배포.

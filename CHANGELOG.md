@@ -9,6 +9,34 @@ Source data: [`releases/v*.yaml`](releases/)
 
 ---
 
+## v0.1.7 (2026-08-14)
+
+Korean domestic AI models arrive — Upstage Solar Pro 4 (agent-first flagship) and Solar Mini are now selectable Naia models, with tool calling verified against the live deployment before shipping. This release also makes the gateway resilient (the desktop trusts `api.naia.land` alongside `api.nextain.io`), restores DeepSeek V4 tool calling, cleans up the first sentence of voice replies, ships a durable Radio DJ, and lets a development instance run side by side with production.
+
+AI models:
+
+- **feat(models)**: Korean domestic models — Upstage Solar Pro 4 and Solar Mini are now selectable Naia models; tool calling was verified against the live Upstage deployment before shipping
+- **fix(models)**: DeepSeek V4 (Flash/Pro) tool calling restored — the gateway wrongly refused tool requests, so skills silently never ran on these models ([#427](https://github.com/nextain/naia-shell/issues/427))
+- **feat(gateway)**: Gateway domain resilience — the desktop trusts `api.naia.land` alongside `api.nextain.io` so the primary endpoint can move without a client update
+
+Voice:
+
+- **fix(voice)**: Cleaner first sentence — VoxCPM2 no longer distorts a short interjection at the start of a reply ([#428](https://github.com/nextain/naia-shell/issues/428))
+- **fix(voice)**: Uploaded reference voice sticks — your own reference audio is no longer stomped back to a default preset ([#429](https://github.com/nextain/naia-shell/issues/429))
+- **fix(voice)**: Local voice readiness is explicit — engine-off vs still-starting, with an in-place start action instead of a generic error ([#418](https://github.com/nextain/naia-shell/issues/418), [#419](https://github.com/nextain/naia-shell/issues/419))
+
+Radio DJ & BGM:
+
+- **feat(radio)**: Durable continuous Radio DJ — keeps selecting, playing, and commenting across tracks without stalling ([#414](https://github.com/nextain/naia-shell/issues/414))
+- **fix(bgm)**: Tolerates a cold Windows sidecar startup and no longer false-skips a track that is still playing
+
+Desktop:
+
+- **feat(shell)**: Development and production instances run side by side — separate app identity, data home, BGM and OAuth ports, while safely sharing the single-GPU voice cascade ([#425](https://github.com/nextain/naia-shell/issues/425))
+- **fix(installer)**: Windows installer hardening — synchronized Rust agent-pairing gate, hidden background process consoles, and a clean boot on a fresh workspace
+
+---
+
 ## v0.1.5 (2026-06-05)
 
 Naia-0.9-Omni-24g is here — a smart AI that clones your voice, talks in real time, and runs skills, all on a single RTX 3090 PC. Voice tool execution, a redesigned voice-cloning UI with record & preview, natural barge-in, 30-language support, native Ollama local AI, and MS Store & Steam distribution.
