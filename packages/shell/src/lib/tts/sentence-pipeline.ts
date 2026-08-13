@@ -367,10 +367,14 @@ export function createSentenceTtsPipeline(
 			});
 	}
 
-	function interrupt(): void {
+	function clearRequests(): void {
 		activeRequests.clear();
 		for (const ac of abortControllers.values()) ac.abort();
 		abortControllers.clear();
+	}
+
+	function interrupt(): void {
+		clearRequests();
 		// The pipeline created any live browser utterance (speakViaBrowser), so
 		// cancelling it on barge-in is its lifecycle too — AudioQueue.clear()
 		// cannot stop client-side speech (FR-VOICE.16 Phase 3).
@@ -387,7 +391,11 @@ export function createSentenceTtsPipeline(
 		sendSentence,
 		interrupt,
 		dispose(): void {
-			interrupt();
+			// Session teardown drops the pipeline's own requests but deliberately
+			// does NOT cancel browser speech: only a barge-in (interrupt) cuts a
+			// live utterance. Voice-pipeline cleanup must not silence an ongoing
+			// chat-mode browser reply — original ChatArea behavior preserved.
+			clearRequests();
 			recentTexts.length = 0;
 		},
 		rearmLocalVoiceNotice(): void {

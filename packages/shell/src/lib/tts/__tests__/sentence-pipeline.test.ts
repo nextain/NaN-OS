@@ -183,6 +183,10 @@ describe("sentence TTS pipeline (FR-VOICE.16 Phase 2b)", () => {
 		pipeline.sendSentence("Speaking now.");
 		pipeline.interrupt();
 		expect(cancel).toHaveBeenCalledTimes(1);
+		// Session teardown is NOT a barge-in: dispose must never silence an
+		// ongoing chat-mode browser reply (original ChatArea behavior).
+		pipeline.dispose();
+		expect(cancel).toHaveBeenCalledTimes(1);
 	});
 
 	it("keeps the recent-utterance ring at 6 for the STT echo filter", () => {
