@@ -63,7 +63,8 @@ jobs:
             echo "── M4 검사 커밋 $sha"
             git log -1 --format=%B "$sha" | node scripts/ci-verify-completion.mjs "${FILES[@]}" || exit 1
           done
-             git log --format=%B "$BASE..HEAD" | node scripts/ci-verify-voice-evidence.mjs"${FILES[@]}"
+          # M5: 음성 경로 증거 — 음성 크리티컬 변경은 Voice-E2E/Voice-Impact 트레일러 필수
+          git log --format=%B "$BASE..HEAD" | node scripts/ci-verify-voice-evidence.mjs "${FILES[@]}"
 
   # 코드 게이트(R0) — 검출자산 전부를 CI 자동실행에 연결한다. 기존 verify 는 구조/헌장/SDLC 메타만
   # 봤고, vitest 계약·통합·tsc·로깅·assembly·file-anchor·wire probe 는 로컬 hook/cron 에만 있어 fork/웹
