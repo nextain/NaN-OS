@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
@@ -65,5 +65,29 @@ describe("Shell TTS single-ownership speech routing contract", () => {
 		expect(source).not.toContain("synthesizeTts(");
 		expect(source).not.toContain("speechSynthesis");
 		expect(source).not.toContain("playAuthoredClip");
+	});
+
+	it("Phase 3: no component speaks outside the pipeline (allowlisted previews only)", () => {
+		// Consumers (components, skills) must use the pipeline's public
+		// interface for conversational speech. The only allowed direct speech
+		// surfaces are settings/onboarding VOICE PREVIEWS — they demo a voice,
+		// they do not speak chat content:
+		//  - SettingsTab.tsx: TTS provider preview (getPreviewText)
+		//  - OnboardingWizard.tsx: system-voice preview (FR-VOICE-ONBOARD.1)
+		const componentsDir = resolve(__dirname, "../../../components");
+		const previewAllowlist = new Set(["SettingsTab.tsx", "OnboardingWizard.tsx"]);
+		const offenders: string[] = [];
+		for (const file of readdirSync(componentsDir)) {
+			if (!/\.tsx?$/.test(file) || previewAllowlist.has(file)) continue;
+			const source = readFileSync(resolve(componentsDir, file), "utf8");
+			for (const forbidden of [
+				"synthesizeTts(",
+				"speechSynthesis.speak(",
+				".playAuthoredClip(",
+			]) {
+				if (source.includes(forbidden)) offenders.push(`${file}: ${forbidden}`);
+			}
+		}
+		expect(offenders).toEqual([]);
 	});
 });

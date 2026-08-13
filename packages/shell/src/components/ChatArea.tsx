@@ -1002,16 +1002,9 @@ export function ChatArea({
 		// does not prove that VoxCPM2 has released its execution context yet.
 		// The new turn must remain behind the old local synthesis tail.
 		localVoiceSchedulerRef.current?.interrupt();
-		// Drop pending requests and cancel in-flight TTS fetch/WS so a barge-in
-		// stops paid synthesis (#363).
+		// Drop pending requests, cancel in-flight TTS fetch/WS, and stop any
+		// live browser utterance — all pipeline-owned lifecycle (#363, Phase 3).
 		sentencePipelineRef.current?.interrupt();
-		if (typeof window !== "undefined" && "speechSynthesis" in window) {
-			try {
-				window.speechSynthesis.cancel();
-			} catch {
-				// best-effort — some webviews throw if no utterance is active
-			}
-		}
 		// cascade 토킹 아바타 활성 시 발화 스트림도 중단(barge-in) — 오버레이 즉시 종료.
 		useCascadeAvatarStore.getState().renderer?.interrupt();
 		ttsPlayingRef.current = false;

@@ -166,6 +166,25 @@ describe("sentence TTS pipeline (FR-VOICE.16 Phase 2b)", () => {
 		expect(deps.addCostEntry).not.toHaveBeenCalled();
 	});
 
+	it("interrupt cancels a live browser utterance (Phase 3 lifecycle ownership)", () => {
+		const cancel = vi.fn();
+		vi.stubGlobal("speechSynthesis", { speak: vi.fn(), cancel });
+		vi.stubGlobal("SpeechSynthesisUtterance", class {
+			lang = "";
+			onstart: (() => void) | null = null;
+			onend: (() => void) | null = null;
+			onerror: (() => void) | null = null;
+			constructor(public text: string) {}
+		});
+		const { deps } = makeDeps({
+			getVoiceConfig: () => ({ ttsProvider: "browser" }),
+		});
+		const pipeline = createSentenceTtsPipeline(deps);
+		pipeline.sendSentence("Speaking now.");
+		pipeline.interrupt();
+		expect(cancel).toHaveBeenCalledTimes(1);
+	});
+
 	it("keeps the recent-utterance ring at 6 for the STT echo filter", () => {
 		synthesizeMock.mockResolvedValue({ audioBase64: "QUJD" });
 		const { deps } = makeDeps();

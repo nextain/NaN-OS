@@ -371,6 +371,16 @@ export function createSentenceTtsPipeline(
 		activeRequests.clear();
 		for (const ac of abortControllers.values()) ac.abort();
 		abortControllers.clear();
+		// The pipeline created any live browser utterance (speakViaBrowser), so
+		// cancelling it on barge-in is its lifecycle too — AudioQueue.clear()
+		// cannot stop client-side speech (FR-VOICE.16 Phase 3).
+		if (typeof window !== "undefined" && "speechSynthesis" in window) {
+			try {
+				window.speechSynthesis.cancel();
+			} catch {
+				// best-effort — some webviews throw if no utterance is active
+			}
+		}
 	}
 
 	return {
