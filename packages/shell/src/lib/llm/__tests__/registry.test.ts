@@ -385,10 +385,10 @@ describe("registry — sortModels", () => {
 			"grok-4.3",
 			"deepseek-v4-pro",
 			"deepseek-v4-flash",
+			"solar-pro4",
 			"gemini-3.5-flash",
 			"gemini-3.1-flash-lite",
-			"gpt-5.6-luna",
-			"gemini-2.5-flash-live",
+			"solar-mini",
 		]);
 		expect(sorted.slice(-2)).toEqual([
 			"claude-opus-5",
