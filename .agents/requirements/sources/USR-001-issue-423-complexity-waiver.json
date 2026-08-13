@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "id": "USR-001",
+  "source_kind": "human",
+  "origin": "native_user_message",
+  "actor": "user",
+  "platform": "openai-chat",
+  "locator": "conversation://private/issue-423-complexity-waiver",
+  "locator_access": "restricted",
+  "capture_kind": "public_safe_verbatim_excerpt",
+  "coverage": "selected_directive_not_complete_history",
+  "capture_note": "The user explicitly approved the proposed 90-day, issue-423-scoped complexity waiver after being told that remote push was blocked without it.",
+  "events": [
+    {
+      "sequence": 1,
+      "exact_text": "그렇게해",
+      "obligations": [
+        "authorize-issue-423-complexity-waiver",
+        "continue-review-and-push-after-gates"
+      ],
+      "event_id": "USR-001-E01",
+      "source_kind": "human",
+      "origin": "native_user_message",
+      "locator": "conversation://private/issue-423-complexity-waiver#approval",
+      "text_sha256": "sha256:7b552ac7c224d128bf8c0b8a5109452b1cf25ce10eba4b5b283fd359bd6bdb68"
+    }
+  ],
+  "ordering": "relative_chronological_order_of_selected_messages",
+  "digest_algorithm": "sha256-canonical-event-v1"
+}

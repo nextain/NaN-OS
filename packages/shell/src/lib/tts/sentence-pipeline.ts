@@ -188,24 +188,26 @@ export function createSentenceTtsPipeline(
 				};
 				utter.onend = () => {
 					if (!isCurrentBrowserTurn()) return;
+					// Settle hooks behind setSpeaking(false) consult hasActiveRequests —
+					// this request must not count itself as still active (#423).
+					activeRequests.delete(reqId);
 					deps.setSpeaking(false);
 					cascadeAvatar?.setSpeakingVisual(false);
-					activeRequests.delete(reqId);
 				};
 				// onerror too, else a failure after onstart leaves the avatar stuck
 				// in the speaking state (#363 review).
 				utter.onerror = () => {
 					if (!isCurrentBrowserTurn()) return;
+					activeRequests.delete(reqId);
 					revealText();
 					deps.setSpeaking(false);
 					cascadeAvatar?.setSpeakingVisual(false);
-					activeRequests.delete(reqId);
 				};
 				window.speechSynthesis.speak(utter);
 			} else {
 				Logger.warn(TAG, "Browser TTS not available");
-				revealText();
 				activeRequests.delete(reqId);
+				revealText();
 			}
 		};
 
@@ -339,6 +341,9 @@ export function createSentenceTtsPipeline(
 					ttsProviderForCost === "naia-local-voice" ||
 					ttsProviderForCost === "vllm";
 				if (isLocalVoiceProvider) {
+					// Delete before reveal: the reveal wrapper settles the held
+					// expression only when no request is still counted active (#423).
+					activeRequests.delete(reqId);
 					revealText();
 					Logger.warn(TAG, "Local voice engine unavailable — no free fallback", {
 						reqId,
@@ -349,7 +354,6 @@ export function createSentenceTtsPipeline(
 						localVoiceUnavailableNoticed = true;
 						await deps.notifyLocalVoiceUnavailable();
 					}
-					activeRequests.delete(reqId);
 					return;
 				}
 				// Cloud synthesis failed (missing key/login, network, quota). Fall

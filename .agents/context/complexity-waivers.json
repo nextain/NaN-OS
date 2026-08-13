@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "waivers": [
+    {
+      "path": "packages/shell/src/components/ChatArea.tsx",
+      "sha256": "sha256:d80f79eb8b97779e9ccadccc2919a1386eaea05e30cfb4670fbcec262f443e58",
+      "maxLines": 4210,
+      "maxBytes": 158000,
+      "reason": "Issue #423 adds a bounded avatar expression lifecycle to the existing ChatArea orchestration surface; broader decomposition is explicitly deferred and any byte change invalidates this waiver.",
+      "owner": "nextain-naia-shell-423",
+      "authorityRef": "source:USR-001#sha256:4510885117feafbca94c2c46c87e97dff7e1b834f7b2f0049fa3c893c33cbc3d",
+      "expiresOn": "2026-11-11"
+    },
+    {
+      "path": "packages/shell/src/components/__tests__/ChatArea.test.tsx",
+      "sha256": "sha256:a0ab22915fbd2294902539f11147ff9cb7bb49719f93930874cc45ed7c4b461c",
+      "maxLines": 1580,
+      "maxBytes": 50000,
+      "reason": "Issue #423 keeps lifecycle regression coverage beside the existing ChatArea harness; test-suite decomposition is deferred and any byte change invalidates this waiver.",
+      "owner": "nextain-naia-shell-423",
+      "authorityRef": "source:USR-001#sha256:4510885117feafbca94c2c46c87e97dff7e1b834f7b2f0049fa3c893c33cbc3d",
+      "expiresOn": "2026-11-11"
+    }
+  ]
+}

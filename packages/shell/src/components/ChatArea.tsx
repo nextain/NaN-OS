@@ -654,7 +654,16 @@ export function ChatArea({
 	if (!sentencePipelineRef.current) {
 		sentencePipelineRef.current = createSentenceTtsPipeline({
 			generateRequestId,
-			reserveReveal: (sentence) => reserveTtsTextReveal(sentence),
+			// #423: a reveal that fires while nothing is speaking anymore (failure
+			// paths, playback-unavailable) must also settle the held expression —
+			// settleAvatarEmotionIfIdle is internally guarded against live speech.
+			reserveReveal: (sentence) => {
+				const reveal = reserveTtsTextReveal(sentence);
+				return () => {
+					reveal();
+					settleAvatarEmotionIfIdle();
+				};
+			},
 			getRenderer: () => useCascadeAvatarStore.getState().renderer,
 			beginCascadeJob: () => beginCascadeTtsJob(),
 			setOutputStage: (stage) => setOutputStage(stage),
@@ -666,6 +675,8 @@ export function ChatArea({
 				ttsPlayingRef.current = on;
 				setTtsPlaying(on);
 				useAvatarStore.getState().setSpeaking(on);
+				// #423: browser speech end/error releases the held expression.
+				if (!on) settleAvatarEmotionIfIdle();
 			},
 			getLocalRefAudioB64: () => getLocalRefAudioB64(),
 			addCostEntry: (entry) =>
@@ -818,6 +829,18 @@ export function ChatArea({
 		);
 	}
 
+	function settleAvatarEmotionIfIdle(): void {
+		const speechOwnsExpression =
+			currentRequestId.current !== null ||
+			useChatStore.getState().isStreaming ||
+			sentencePipelineRef.current?.hasActiveRequests() === true ||
+			audioQueueRef.current?.isActive === true ||
+			ttsPlayingRef.current ||
+			cascadeTtsJobsRef.current > 0 ||
+			audioPlayerRef.current?.isPlaying === true;
+		if (!speechOwnsExpression) setEmotion("neutral");
+	}
+
 	function scheduleNextQueuedMessage() {
 		if (queuedSendTimerRef.current || isChatRequestActive()) return;
 
@@ -840,6 +863,7 @@ export function ChatArea({
 		}
 
 		currentRequestId.current = null;
+		settleAvatarEmotionIfIdle();
 		scheduleNextQueuedMessage();
 	}
 
@@ -1010,6 +1034,7 @@ export function ChatArea({
 		ttsPlayingRef.current = false;
 		setTtsPlaying(false);
 		useAvatarStore.getState().setSpeaking(false);
+		setEmotion("neutral");
 	}
 
 	function finishLocalVoicePrebuffer(): void {
@@ -1030,6 +1055,7 @@ export function ChatArea({
 			if (cascadeTtsJobsRef.current === 0) {
 				ttsPlayingRef.current = false;
 				setTtsPlaying(false);
+				settleAvatarEmotionIfIdle();
 			}
 		};
 	}
@@ -1157,6 +1183,7 @@ export function ChatArea({
 					ttsPlayingRef.current = false;
 					setTtsPlaying(false);
 					useCascadeAvatarStore.getState().renderer?.setSpeakingVisual(false);
+					settleAvatarEmotionIfIdle();
 				},
 			});
 		}
@@ -1475,6 +1502,7 @@ export function ChatArea({
 		) {
 			setInput("");
 			useChatStore.getState().addMessage({ role: "user", content: text });
+			setEmotion("think");
 			voiceSessionRef.current.sendText(text);
 			return;
 		}
@@ -1495,6 +1523,7 @@ export function ChatArea({
 		// audio (queue + browser speechSynthesis) instead of letting it finish.
 		// clear() also resets the ordering sequence for the new response.
 		interruptTts();
+		setEmotion("think");
 
 		const store = useChatStore.getState();
 
@@ -1528,6 +1557,7 @@ export function ChatArea({
 			useChatStore.getState().finishStreaming();
 			completeCurrentRequest(requestId);
 			await handleVoiceToggle();
+			setEmotion("think");
 			voiceSessionRef.current?.sendText(text);
 			return;
 		}
@@ -1967,7 +1997,7 @@ export function ChatArea({
 					ttsTextSyncRef.current.canonical += visibleText;
 				}
 				// Parse emotion from accumulated text (tag may span multiple chunks)
-				const accumulated = store.streamingContent;
+				const accumulated = useChatStore.getState().streamingContent;
 				if (accumulated.length <= 30 && accumulated.length >= 4) {
 					const { emotion } = extractExpression(accumulated);
 					if (emotion) setEmotion(emotion);
@@ -2044,7 +2074,6 @@ export function ChatArea({
 			}
 			case "usage": {
 				finishStreamingWithTtsMask(false);
-				setEmotion("neutral");
 				store.addCostEntry({
 					inputTokens: chunk.inputTokens,
 					outputTokens: chunk.outputTokens,
@@ -2072,7 +2101,6 @@ export function ChatArea({
 				}
 				finishStreamingWithTtsMask();
 				finishLocalVoicePrebuffer();
-				setEmotion("neutral");
 				completeCurrentRequest(chunk.requestId);
 				break;
 			case "config_update": {
@@ -2154,7 +2182,6 @@ export function ChatArea({
 				store.appendStreamChunk(`\n[${t("chat.error")}] ${wireErrorMessage(chunk.code, chunk.message)}`);
 				finishStreamingWithTtsMask();
 				finishLocalVoicePrebuffer();
-				setEmotion("neutral");
 				completeCurrentRequest(chunk.requestId);
 				break;
 		}
@@ -2275,6 +2302,7 @@ export function ChatArea({
 		// Pipeline-owned lifecycle: pending requests, in-flight aborts, and the
 		// recent-utterance ring used by the STT self-echo filter.
 		sentencePipelineRef.current?.dispose();
+		settleAvatarEmotionIfIdle();
 		// Stop Vosk STT
 		for (const fn of sttCleanupRef.current) fn();
 		sttCleanupRef.current = [];
@@ -2319,6 +2347,7 @@ export function ChatArea({
 				voiceSessionRef.current = null;
 				micStreamRef.current = null;
 				audioPlayerRef.current = null;
+				settleAvatarEmotionIfIdle();
 			}
 			setVoiceStatus({ phase: "idle" });
 			lastVoiceStatusRef.current = { phase: "idle" };
@@ -2877,7 +2906,10 @@ export function ChatArea({
 			const playerOpts = {
 				sampleRate: 24000,
 				onPlaybackStart: () => useAvatarStore.getState().setSpeaking(true),
-				onPlaybackEnd: () => useAvatarStore.getState().setSpeaking(false),
+				onPlaybackEnd: () => {
+					useAvatarStore.getState().setSpeaking(false);
+					settleAvatarEmotionIfIdle();
+				},
 			};
 			const player = isNewCore()
 				? makeCoreAudioPlayer(playerOpts)
@@ -2896,6 +2928,7 @@ export function ChatArea({
 			session.onAudio = (pcmBase64) => player.enqueue(pcmBase64);
 			session.onInputTranscript = (text) => {
 				const store = useChatStore.getState();
+				if (!inputTurnDirty) setEmotion("think");
 				inputAccum += text;
 				if (inputTurnDirty) {
 					store.updateLastMessage("user", inputAccum);
@@ -2947,6 +2980,7 @@ export function ChatArea({
 				inputAccum = "";
 				outputAccum = "";
 				serverEmotionSeenThisTurn = false;
+				settleAvatarEmotionIfIdle();
 			};
 			session.onToolCall = async (callId, toolName, args) => {
 				try {
@@ -2997,6 +3031,7 @@ export function ChatArea({
 				voiceSessionRef.current = null;
 				micStreamRef.current = null;
 				audioPlayerRef.current = null;
+				settleAvatarEmotionIfIdle();
 				// Surface why the call ended (superseded / credits / auth); a normal
 				// or user-initiated close stays silent.
 				const reason: VoiceCloseReason = info?.reason ?? "normal";
@@ -3233,6 +3268,7 @@ export function ChatArea({
 			voiceSessionRef.current = null;
 			micStreamRef.current = null;
 			audioPlayerRef.current = null;
+			settleAvatarEmotionIfIdle();
 			// Single terminal transition back to idle (button + banner derive off).
 			setVoiceStatus({ phase: "idle" });
 			lastVoiceStatusRef.current = { phase: "idle" };

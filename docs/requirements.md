@@ -663,6 +663,13 @@ Steamworks 포털 설정·SteamPipe 자격증명·스토어 심사 제출은 #31
 | **FR-SETTINGS.12** | `Settings > Skills > Youtube Radio DJ` is the sole owner of Radio DJ proactive policy. General renders no duplicate profile, weather consent, coordinates, or DJ fields. | Done | Settings component and Playwright ownership assertions |
 | **FR-SETTINGS.13** | Weather-location consent and coordinates survive semantically equivalent parent rerenders and persist after Save/reload. No location is transmitted unless consent is enabled. | Done | component rerender regression and Playwright persistence test |
 
+## VRM avatar expression compatibility (2026-08-13)
+
+| ID | 요구사항 | 검증 기준 |
+|---|---|---|
+| **FR-AVATAR.1** ([#422](https://github.com/nextain/naia-shell/issues/422), REQ-002) | TTS 재생 중 3D VRM 아바타는 VRM 1.0 `aa/ih/ou/ee/oh`와 VRM 0.0 `a/i/u/e/o`를 모두 인식해 다섯 입모양을 순환한다. 연속형 표정은 부드럽게 전환하고, 텍스처 전환형 `isBinary` 표정은 한 번에 하나만 활성화하며, 발화 종료·중단 시 모든 입모양을 즉시 0으로 복귀시킨다. 이는 발화 상태 기반 시뮬레이션이며 실제 오디오 음소 분석으로 위장하지 않는다. 모델이 커스텀 `think` 표정을 제공하면 이를 우선 사용하고, 없는 모델만 neutral로 대체한다. | `mouth.test.ts` binary/continuous/VRM 0.0 5모음·one-hot·정지 회귀, `expression.test.ts` custom think·neutral fallback |
+| **FR-AVATAR.2** ([#423](https://github.com/nextain/naia-shell/issues/423), REQ-002) | 일반 채팅과 실시간 음성 요청은 응답 대기 중 `think` 표정을 사용한다. 구조화된 emotion tag 또는 voice server `emotion.updated`가 도착하면 해당 감정이 우선하며, agent 응답 스트림이 먼저 끝나더라도 합성·큐·브라우저/NVA 음성 재생이 끝날 때까지 유지한다. 마지막 재생 종료, 취소, interrupt, 오류에서는 neutral로 복귀한다. 아바타가 상태 변경 뒤 로드되어도 현재 표정과 발화 상태를 즉시 동기화한다. 납품 VRM에 내장 전신 clip이 없으므로 별도 VRMA가 없는 감정 동작을 임의 참조하지 않는다. | `ChatArea.test.tsx` think→emotion→playback-end/interrupt lifecycle, `pipeline-voice.spec.ts` 실제 음성 경로, `AvatarCanvas.tsx` load-time state sync |
+
 ## Settings persistence and runtime reload (#415, 2026-08-03)
 
 | ID | Requirement | Status | Verification |
