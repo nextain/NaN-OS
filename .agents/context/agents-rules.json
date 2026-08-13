@@ -12,9 +12,9 @@
       "OPENCODE.md",
       "CODEX.md",
       ".agents/context/agents-rules.json",
-      ".agents/context/process-status.json",
       "docs/project-structure.md"
     ],
+    "_process_status_exclusion": "process-status.json은 세션마다 바뀌는 상태 파일(불변 규칙이 아님)이라 2026-08-13 Luke 승인으로 charter_files에서 제외(#424). CHARTER_APPROVED는 PR 라벨로만 세팅되는데 이 워크스페이스는 main 직접 push 컨벤션이라, 세션 종료마다 필수 커밋하는 process-status.json이 charter에 남아 있으면 self-trust gates가 구조적으로 영원히 실패했다(8/10부터 hook self-tests 실패에 가려져 있던 근본원인). process-status.json의 구조 정합은 M2/M3(ci-verify-sdlc.mjs/ci-verify-structure.mjs)가 별도 검증하므로 charter 제외가 검증 공백을 만들지 않는다.",
     "violation_action": "BLOCK — 사용자 승인 없이 헌장 파일 수정 시 작업 중단",
     "status": "ACTIVE"
   },
