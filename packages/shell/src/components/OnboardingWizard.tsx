@@ -11,6 +11,7 @@ import {
 	writeAgentKey,
 	writeNaiaConfig,
 } from "../lib/adk-store";
+import { OAUTH_CALLBACK_URL } from "../lib/oauth-callback-url";
 import { isLegacyBundledVrmModel } from "../lib/avatar-presets";
 import { detectGpuVramGb } from "../lib/capabilities/gpu";
 import { isNewCore, sendAuthUpdate } from "../lib/chat-service";
@@ -736,7 +737,7 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
 				// 받아 동일한 naia_auth_complete 이벤트 emit. 운영 웹 측이
 				// redirect_uri 받으면 그 URL 로 redirect; 받지 못해도 기존
 				// deep-link path 가 fallback.
-				redirect_uri: "http://127.0.0.1:18792/auth/callback",
+				redirect_uri: OAUTH_CALLBACK_URL,
 			});
 			if (state) params.set("state", state);
 			await openUrl(

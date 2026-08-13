@@ -41,16 +41,35 @@ fn is_valid_gateway_key(value: &str) -> bool {
 /// ?숈씪 query ?뚮씪誘명꽣 ?뗭씠??`process_deep_link_url` ??寃利?濡쒖쭅 洹몃?濡??쒖슜.
 pub(crate) const OAUTH_CALLBACK_PORT: u16 = 18792;
 
+/// FR-SHELL-ISO.1 (#425, 2026-08-06 dual-instance 설계 수확): the isolated dev
+/// instance (Naia Dev). Double-gated — a debug build AND the explicit
+/// NAIA_DEV_INSTANCE flag from tauri-with-mode — so release/production builds
+/// can never enable dev port overrides.
+fn development_instance_enabled() -> bool {
+    cfg!(debug_assertions)
+        && std::env::var("NAIA_DEV_INSTANCE").ok().as_deref() == Some("1")
+}
+
+fn valid_port_override(value: Option<String>) -> Option<u16> {
+    value
+        .and_then(|value| value.parse::<u16>().ok())
+        .filter(|port| *port != 0)
+}
+
 /// Native E2E must never claim the user's OAuth callback port. The override is
-/// honoured only by the explicit debug acceptance runtime.
+/// honoured only by the explicit debug acceptance runtime, or by the isolated
+/// dev instance (:18892 by default) so concurrent dev+production runs never
+/// fight over the callback listener.
 fn oauth_callback_port() -> u16 {
+    if development_instance_enabled() {
+        if let Some(port) = valid_port_override(std::env::var("NAIA_OAUTH_CALLBACK_PORT").ok()) {
+            return port;
+        }
+    }
     if debug_e2e_enabled() {
-        if let Ok(port) = std::env::var("NAIA_E2E_OAUTH_CALLBACK_PORT") {
-            if let Ok(port) = port.parse::<u16>() {
-                if port != 0 {
-                    return port;
-                }
-            }
+        if let Some(port) = valid_port_override(std::env::var("NAIA_E2E_OAUTH_CALLBACK_PORT").ok())
+        {
+            return port;
         }
     }
     OAUTH_CALLBACK_PORT
@@ -3004,13 +3023,11 @@ async fn agent_dispatcher(
 ///  - hide_console on Windows (no console flash in release builds)
 ///  - kill() called on Tauri WindowEvent::Destroyed (no orphan process)
 fn bgm_server_port() -> u16 {
-    if debug_e2e_enabled() {
-        if let Ok(port) = std::env::var("NAIA_BGM_PORT") {
-            if let Ok(port) = port.parse::<u16>() {
-                if port != 0 {
-                    return port;
-                }
-            }
+    // FR-SHELL-ISO.1 (#425): the isolated dev instance runs its own sidecar on
+    // :18891 so it never fights the production install's :18791.
+    if development_instance_enabled() || debug_e2e_enabled() {
+        if let Some(port) = valid_port_override(std::env::var("NAIA_BGM_PORT").ok()) {
+            return port;
         }
     }
     18791
@@ -9599,8 +9616,9 @@ pub fn run() {
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_stt::init());
 
-    // Flatpak manages its own updates; skip updater plugin in Flatpak builds
-    if !is_flatpak && !debug_e2e_enabled() {
+    // Flatpak manages its own updates; skip updater plugin in Flatpak builds.
+    // The isolated dev instance must never self-update either (#425).
+    if !is_flatpak && !debug_e2e_enabled() && !development_instance_enabled() {
         builder = builder.plugin(tauri_plugin_updater::Builder::new().build());
     }
     #[cfg(feature = "webdriver-e2e")]

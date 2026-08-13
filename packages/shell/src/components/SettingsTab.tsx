@@ -26,6 +26,7 @@ import {
 	getDefaultTtsVoiceForAvatar,
 	getDefaultVoiceForAvatar,
 } from "../lib/avatar-presets";
+import { OAUTH_CALLBACK_URL } from "../lib/oauth-callback-url";
 import { localVoiceFacadeUrlFromReady } from "../lib/voice/local-runtime";
 import { effectiveAvatarProviderFromConfig } from "../lib/avatar/nva-gate";
 import { detectGpuVramGb } from "../lib/capabilities/gpu";
@@ -1786,7 +1787,7 @@ export function SettingsTab() {
 				// #341 옵션 B — Linux dev:tauri 의 naia:// 미등록 우회.
 				// 운영 웹 측이 redirect_uri 받으면 그 URL 로 redirect;
 				// 받지 못해도 기존 deep-link path 가 fallback.
-				redirect_uri: "http://127.0.0.1:18792/auth/callback",
+				redirect_uri: OAUTH_CALLBACK_URL,
 			});
 			if (state) params.set("state", state);
 			Logger.info("SettingsTab", "[lab-login] opening system browser");

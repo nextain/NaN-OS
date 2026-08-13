@@ -144,7 +144,7 @@
       "p03_requirements": "done",
       "p04_integration_test": "in_progress",
       "p05_complete": "pending",
-      "remaining": "게이트웨이(:18789)·BGM(:18791) dev 포트 분리(BGM 오버라이드가 e2e 센티널 뒤라 계약 변경 필요), naia-agent ~/.naia/memory 직접 접근 격리(agent 레포 이슈로 분리), 실기 동시 실행 스모크(운영 발화 중 dev 기동 → 무절단, 수동 1회) — 이 3건 전까지 동시 실행은 게이트웨이/BGM 상호 킬 위험 잔존을 이슈에 명시함.",
+      "remaining": "실기 동시 실행 스모크만 남음(운영 발화 중 dev 기동 → 무절단, 수동 1회). 포트 분리=8/6 dual-instance 설계 수확으로 완료(BGM :18891/OAuth :18892, NAIA_DEV_INSTANCE debug 이중 게이트 — e2e 센티널 무접촉, updater 비활성). 게이트웨이 :18789=spawn_gateway 제거 스텁 확인, 분리 불요. agent 기억=naia-agent#108 완료(94a7b1d 페어).",
       "verification": "cargo --lib 191 passed(신규 2: 홈 오버라이드·입양 계약 형상) + local-runtime.test.ts ADOPTED 페이로드 핀 + 셸 전체 vitest 1507 GREEN + tsc 0. 네이티브 voice-6g e2e 무회귀 실행 중.",
       "last_updated": "2026-08-13T16:00:00+09:00"
     },

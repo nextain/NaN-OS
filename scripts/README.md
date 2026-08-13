@@ -19,6 +19,7 @@
 | `check-traceability.mjs` | V모델 추적성 검사기 (REQ→UC→TEST-S, UC→SPEC→TEST-F). |
 | `oss-readiness.mjs` | OSS 공개 품질 게이트(결정론) — 시크릿/개인경로/PII/내부유출 하드게이트 0 + 온보딩 체크리스트. 추적 파일만 스캔. |
 | `setup-git-hooks.sh` | 커밋 무결성 게이트 활성화(clone 당 1회 — `core.hooksPath` 로컬설정이라 미커밋). |
+| `packages/shell/scripts/dev-instance.mjs` | 격리 개발 인스턴스 포트/플래그 env(#425) — BGM :18891·OAuth :18892·NAIA_DEV_INSTANCE(debug 이중 게이트). tauri-with-mode 가 사용. 2026-08-06 dual-instance 설계 수확. |
 | `verify-watch.sh` | 주기 검증 러너 — 구조·문서·미러 이탈 백그라운드 검출(`once` 1회). |
 
 ## B. 문서·용어·링크 (docs integrity)

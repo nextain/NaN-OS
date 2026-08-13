@@ -20,6 +20,7 @@ import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { homedir, platform } from "node:os";
 import { dirname, resolve } from "node:path";
 import { REQUIRED_AGENT_COMMIT, REQUIRED_PROTO_SHA256 } from "./agent-pairing.mjs";
+import { developmentInstanceEnv } from "./dev-instance.mjs";
 import { interactiveLaunchEnv } from "./launch-env.mjs";
 import { runProjectPnpm } from "./package-manager.mjs";
 
@@ -121,6 +122,9 @@ env.NAIA_REPOS_ADK = env.NAIA_REPOS_ADK ?? WORKSPACE_ROOT;
 // production runs can never clobber each other's config. The single-GPU
 // cascade runtime stays SHARED by design (adopt-if-healthy in Rust).
 env.NAIA_HOME = env.NAIA_HOME ?? resolve(homedir(), ".naia-dev");
+// 8/6 dual-instance 설계 수확: BGM(:18891)/OAuth(:18892) dev 전용 포트 +
+// Rust dev 게이트 플래그(NAIA_DEV_INSTANCE — debug 빌드에서만 인정).
+Object.assign(env, developmentInstanceEnv(env));
 const DEV_TAURI_CONFIG = resolve(SHELL, "src-tauri", "tauri.conf.dev.json");
 
 // ── 새 코어 + 분리 에이전트 (new-naia-os 불변) ──
