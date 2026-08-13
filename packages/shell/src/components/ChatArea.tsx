@@ -2562,6 +2562,7 @@ export function ChatArea({
 						});
 					}
 					activeTtsRequestsRef.current.delete(reqId);
+					settleAvatarEmotionIfIdle();
 					return;
 				}
 				// Cloud synthesis failed (missing key/login, network, quota). Fall
@@ -2594,6 +2595,7 @@ export function ChatArea({
 		activeTtsRequestsRef.current.clear();
 		for (const ac of ttsAbortControllersRef.current.values()) ac.abort();
 		ttsAbortControllersRef.current.clear();
+		settleAvatarEmotionIfIdle();
 		// Stop Vosk STT
 		for (const fn of sttCleanupRef.current) fn();
 		sttCleanupRef.current = [];
@@ -2638,6 +2640,7 @@ export function ChatArea({
 				voiceSessionRef.current = null;
 				micStreamRef.current = null;
 				audioPlayerRef.current = null;
+				settleAvatarEmotionIfIdle();
 			}
 			setVoiceStatus({ phase: "idle" });
 			lastVoiceStatusRef.current = { phase: "idle" };
@@ -3321,6 +3324,7 @@ export function ChatArea({
 				voiceSessionRef.current = null;
 				micStreamRef.current = null;
 				audioPlayerRef.current = null;
+				settleAvatarEmotionIfIdle();
 				// Surface why the call ended (superseded / credits / auth); a normal
 				// or user-initiated close stays silent.
 				const reason: VoiceCloseReason = info?.reason ?? "normal";
@@ -3557,6 +3561,7 @@ export function ChatArea({
 			voiceSessionRef.current = null;
 			micStreamRef.current = null;
 			audioPlayerRef.current = null;
+			settleAvatarEmotionIfIdle();
 			// Single terminal transition back to idle (button + banner derive off).
 			setVoiceStatus({ phase: "idle" });
 			lastVoiceStatusRef.current = { phase: "idle" };

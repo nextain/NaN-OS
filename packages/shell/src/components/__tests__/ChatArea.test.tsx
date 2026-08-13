@@ -1309,6 +1309,9 @@ describe("ChatArea", () => {
 			cost: 0,
 			model: "test",
 		});
+		await waitFor(() => expect(ttsSyncMocks.synthesizeTts).toHaveBeenCalled());
+		request.onChunk({ type: "finish", requestId: request.requestId });
+		expect(useAvatarStore.getState().currentEmotion).toBe("think");
 		rejectSynthesis(new Error("voice offline"));
 
 		await waitFor(() => expect(screen.getByText(answer)).toBeDefined());
@@ -1317,8 +1320,10 @@ describe("ChatArea", () => {
 				screen.getByText(/Can't reach the local voice engine/),
 			).toBeDefined(),
 		);
-		request.onChunk({ type: "finish", requestId: request.requestId });
 		await waitFor(() => expect(screen.getAllByText(answer)).toHaveLength(1));
+		await waitFor(() =>
+			expect(useAvatarStore.getState().currentEmotion).toBe("neutral"),
+		);
 		expect(
 			screen.getByText(/Can't reach the local voice engine/),
 		).toBeDefined();

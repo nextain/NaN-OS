@@ -6,7 +6,7 @@
 - Requirement: `REQ-002` / `FR-AVATAR.2`
 - Type: EXPANSION
 - Scope mode: SELECTIVE_EXPANSION
-- Current phase: REVIEW_ONLY checkpoint
+- Current phase: verified implementation; ready for remote review branch
 
 ## Goal, constraints, criteria
 
@@ -92,19 +92,33 @@ Pre-mortem:
 
 ## Review gate
 
-Status: `NOT_CLEAN / REVIEW_ONLY`.
+Status: `CLEAN` after two consecutive independent re-review rounds.
 
-The mandatory deterministic review preflight stopped before reviewer voting:
-`ChatArea.tsx` (4,198 lines) and its existing test file (1,571 lines) exceed the
-critical file-size threshold. The functional change adds only 28 and 77 lines
-respectively, but the gate intentionally evaluates any changed source file's
-total size. Complexity report hash:
-`sha256:e9ab74d9eabacefd0d3a5451893ecadb93e3f1d6c8305112d750d3a8cb4ce98e`.
+The user explicitly approved a 90-day, issue-scoped complexity waiver. The
+tracked authority source and byte-bound waiver expire on 2026-11-11. The final
+deterministic preflight classified the two existing large files as
+`WAIVED_COMPLEXITY`, with no authority, expiry, size, or hash mismatch; named
+review remained required as designed. Complexity report hash:
+`sha256:1e3848af2f95b4bf53115f12b413cacd16e79347e405d5312dea766228fa669e`.
 
-No complexity waiver was created: a valid waiver requires explicit human
-authority bound to a tracked source atom, and the request to implement/test/push
-does not explicitly authorize bypassing this review control. Under
-`review-pass`, remote push is forbidden while the checkpoint is REVIEW_ONLY.
+The first independent development review found two terminal-ordering gaps:
+local TTS failure after `finish`, and realtime/pipeline teardown after player
+destruction. Both were fixed by clearing ownership before idle settlement. A
+regression test now exercises `finish` before synthesis failure and proves
+`think` remains until failure cleanup, then returns to `neutral`.
+
+Post-fix evidence:
+
+- Focused ChatArea test: 38/38 passed.
+- Full Shell Vitest: 1,481 passed, 22 skipped, zero failures.
+- Shell production build: passed.
+- Chromium Playwright voice and THINK suites: 16/16 passed.
+- Independent re-review rounds 1 and 2: `CLEAN`, no findings.
+- Complexity waiver staged-byte hashes: matched.
+- `git diff --check`, conflict markers, and changed-source hardcoded strings:
+  passed.
+- Product preservation: no route, navigation, model asset, provider selection,
+  or existing animation surface was removed or redirected.
 
 ## Skill drift
 
