@@ -64,7 +64,6 @@ import {
 	DEFAULT_VOICE_REF_URL,
 	LAB_GATEWAY_URL,
 	type AppConfig,
-	type TtsProviderId,
 	addAllowedTool,
 	getNaiaInstanceId,
 	isToolAllowed,
@@ -96,11 +95,13 @@ import {
 	createWebSpeechSttSession,
 	getSttProvider,
 } from "../lib/stt";
-import { getTtsProviderMeta } from "../lib/tts";
-import { estimateSttCost, estimateTtsCost } from "../lib/tts/cost";
+import { estimateSttCost } from "../lib/tts/cost";
 import { LocalVoiceScheduler } from "../lib/tts/local-voice-scheduler";
-import { synthesizeTts } from "../lib/tts/synthesize";
-import { ttsTextFilter } from "../lib/tts/text-filter";
+import {
+	type PipelineVoiceConfig,
+	type SentenceTtsPipeline,
+	createSentenceTtsPipeline,
+} from "../lib/tts/sentence-pipeline";
 import { decideSttBargeIn, isLikelySelfEcho, shouldPauseSttForTts } from "../lib/voice/echo-gate";
 import type {
 	AgentResponseChunk,
@@ -145,7 +146,7 @@ function formatStructuredAgentChunk(chunk: StructuredAgentChunk): string {
 	}
 }
 
-import { AudioQueue, wavDurationSeconds } from "../lib/voice/audio-queue";
+import { AudioQueue } from "../lib/voice/audio-queue";
 import {
 	LIVE_PROVIDER_COST_HINTS,
 	type AppContextBridge,
@@ -618,7 +619,6 @@ export function ChatArea({
 	const audioQueueRef = useRef<AudioQueue | null>(null);
 	const sentenceChunkerRef = useRef<SentenceChunker | null>(null);
 	const reasoningTextHiddenRef = useRef(false);
-	const activeTtsRequestsRef = useRef<Set<string>>(new Set());
 	// FR-VOICE.16 Phase 2a (#420): the 6GB half-duplex admission + adaptive
 	// prebuffer + generation fencing live in lib/tts/local-voice-scheduler so
 	// unrelated ChatArea work cannot regress FR-VOICE.11/12 semantics.
@@ -629,29 +629,7 @@ export function ChatArea({
 			resumePlayback: () => audioQueueRef.current?.resumePlayback(),
 		});
 	}
-	// Per-sentence AbortControllers so interrupt/cleanup actually cancels the
-	// in-flight TTS fetch/WS (and stops billing for superseded paid TTS) — #363
-	// cross-review HIGH.
-	const ttsAbortControllersRef = useRef<Map<string, AbortController>>(
-		new Map(),
-	);
-	// One-time "local voice unavailable" notice per pipeline session — so a local
-	// engine that isn't running surfaces a clear message once instead of either
-	// spamming per sentence or silently masquerading as the browser free voice.
-	const localVoiceUnavailableNoticedRef = useRef<boolean>(false);
-	const pipelineVoiceConfigRef = useRef<{
-		voice?: string;
-		ttsProvider?: string;
-		ttsApiKey?: string;
-		/** nextain provider: gateway credit key. */
-		naiaKey?: string;
-		/** nextain provider: gateway base URL. */
-		gatewayUrl?: string;
-		/** vllm provider: local OpenAI-compatible host. */
-		vllmHost?: string;
-		/** naia-local-voice provider: local cascade / VoxCPM2 voice host. */
-		vllmTtsHost?: string;
-	} | null>(null);
+	const pipelineVoiceConfigRef = useRef<PipelineVoiceConfig | null>(null);
 	const sttCleanupRef = useRef<(() => void)[]>([]);
 	const sttDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 	const sttBufferRef = useRef("");
@@ -661,7 +639,6 @@ export function ChatArea({
 	// ② 최근 TTS 문장과의 유사도 스킵(web-speech 지연 배달 누수 — 2차, echo-gate.ts).
 	const sttPauseRef = useRef<(() => void) | null>(null);
 	const sttResumeRef = useRef<(() => void) | null>(null);
-	const recentTtsTextsRef = useRef<string[]>([]);
 	/** Timer for focus-after-tab-switch; cleared on unmount to prevent stale focus */
 	const focusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 	/** Timer for pipeline STT cooldown transition; cleared in cleanupPipeline */
@@ -669,6 +646,48 @@ export function ChatArea({
 		null,
 	);
 	const [ttsPlaying, setTtsPlaying] = useState(false);
+	// FR-VOICE.16 Phase 2b (#420): the per-sentence TTS orchestration lives in
+	// lib/tts/sentence-pipeline; ChatArea only wires environment callbacks and
+	// calls the public interface. The pipeline owns the request lifecycle, the
+	// one-time local-voice notice, and the recent-utterance ring (echo filter).
+	const sentencePipelineRef = useRef<SentenceTtsPipeline | null>(null);
+	if (!sentencePipelineRef.current) {
+		sentencePipelineRef.current = createSentenceTtsPipeline({
+			generateRequestId,
+			reserveReveal: (sentence) => reserveTtsTextReveal(sentence),
+			getRenderer: () => useCascadeAvatarStore.getState().renderer,
+			beginCascadeJob: () => beginCascadeTtsJob(),
+			setOutputStage: (stage) => setOutputStage(stage),
+			getQueue: () => audioQueueRef.current,
+			getVoiceConfig: () => pipelineVoiceConfigRef.current,
+			getScheduler: () => localVoiceSchedulerRef.current,
+			getBrowserTurnGeneration: () => ttsTextSyncRef.current.generation,
+			setSpeaking: (on) => {
+				ttsPlayingRef.current = on;
+				setTtsPlaying(on);
+				useAvatarStore.getState().setSpeaking(on);
+			},
+			getLocalRefAudioB64: () => getLocalRefAudioB64(),
+			addCostEntry: (entry) =>
+				useChatStore.getState().addSessionCostEntry({
+					...entry,
+					provider: entry.provider as ProviderId,
+				}),
+			notifyLocalVoiceUnavailable: async () => {
+				const runtimeState = await invoke<string>(
+					"cascade_runtime_status",
+				).catch(() => "unknown");
+				useChatStore.getState().addMessage({
+					role: "assistant",
+					content: t(
+						runtimeState === "starting"
+							? "chat.localVoiceStarting"
+							: "chat.localVoiceUnavailable",
+					),
+				});
+			},
+		});
+	}
 	const [sttPartial, setSttPartial] = useState("");
 	const [sttState, setSttState] = useState<
 		"idle" | "initializing" | "listening"
@@ -827,7 +846,7 @@ export function ChatArea({
 	function handleCancelStreaming() {
 		const store = useChatStore.getState();
 		const ttsActive = ttsTextSyncRef.current.active ||
-			activeTtsRequestsRef.current.size > 0 ||
+			sentencePipelineRef.current?.hasActiveRequests() === true ||
 			audioQueueRef.current?.isActive === true;
 		if (!store.isStreaming && !ttsActive) return;
 		// A cancelled response may never deliver its terminal `finish` chunk.
@@ -979,14 +998,13 @@ export function ChatArea({
 		setOutputStage(null);
 		audioQueueRef.current?.clear();
 		sentenceChunkerRef.current?.clear();
-		activeTtsRequestsRef.current.clear();
 		// Do not reset the GPU admission fence here. Aborting the WebView fetch
 		// does not prove that VoxCPM2 has released its execution context yet.
 		// The new turn must remain behind the old local synthesis tail.
 		localVoiceSchedulerRef.current?.interrupt();
-		// Cancel in-flight TTS fetch/WS so a barge-in stops paid synthesis (#363).
-		for (const ac of ttsAbortControllersRef.current.values()) ac.abort();
-		ttsAbortControllersRef.current.clear();
+		// Drop pending requests and cancel in-flight TTS fetch/WS so a barge-in
+		// stops paid synthesis (#363).
+		sentencePipelineRef.current?.interrupt();
 		if (typeof window !== "undefined" && "speechSynthesis" in window) {
 			try {
 				window.speechSynthesis.cancel();
@@ -1390,7 +1408,7 @@ export function ChatArea({
 		// Re-arm the local-voice-unavailable notice per conversation (chat mode has
 		// no pipeline-start reset) so it surfaces once per conversation, not once
 		// per app session — parity with the pipeline path's reset.
-		localVoiceUnavailableNoticedRef.current = false;
+		sentencePipelineRef.current?.rearmLocalVoiceNotice();
 		store.newConversation();
 
 		// Reset Gateway session and set local session ID
@@ -2244,272 +2262,10 @@ export function ChatArea({
 
 	/** Route one sentence to the configured voice output. */
 	function sendSentenceToTts(sentence: string): void {
-		// Preserve the original Markdown in chat, but send only natural speech text
-		// to the selected voice engine.
-		const clean = ttsTextFilter.filter(sentence);
-		if (!clean) return;
-		const revealText = reserveTtsTextReveal(sentence);
-
-		const cascadeAvatar = useCascadeAvatarStore.getState().renderer;
-
-		// 자기발화 텍스트 필터용 — 이 턴에 말한 문장을 기록 (최근 6문장 링버퍼).
-		recentTtsTextsRef.current.push(clean);
-		if (recentTtsTextsRef.current.length > 6) recentTtsTextsRef.current.shift();
-
-		// Shell TTS is the single owner of audio synthesis and playback. An NVA
-		// authored clip is the one exception: it carries its own recorded voice
-		// for an exact known phrase, so playing it replaces synthesis instead of
-		// racing it. Everything else falls through to the normal TTS path below,
-		// and the NVA renderer (if any) only reacts to that real playback via
-		// setSpeakingVisual — it never synthesizes speech itself.
-		if (cascadeAvatar?.hasAuthoredClip(clean)) {
-			Logger.info("ChatArea", "Playing NVA authored clip", {
-				sentence: clean.slice(0, 50),
-			});
-			setOutputStage("render");
-			const endCascadeJob = beginCascadeTtsJob();
-			void cascadeAvatar
-				.playAuthoredClip(clean, {
-					onPlaybackReady: revealText,
-					onPlaybackFailure: revealText,
-				})
-				.finally(endCascadeJob);
-			return;
-		}
-
-		const reqId = generateRequestId();
-		// Reserve sequence number BEFORE async request to guarantee order
-		const seq = audioQueueRef.current?.reserveSeq() ?? 0;
-		activeTtsRequestsRef.current.add(reqId);
-		const voiceCfg = pipelineVoiceConfigRef.current;
-		const ttsProviderForCost = voiceCfg?.ttsProvider ?? "edge";
-		const localVoiceScheduler = localVoiceSchedulerRef.current;
-		const localVoiceGeneration = localVoiceScheduler?.generation ?? 0;
-		if (ttsProviderForCost === "naia-local-voice") {
-			localVoiceScheduler?.noteSentence(seq);
-		}
-		const ttsVoiceForCost = voiceCfg?.voice;
-		Logger.info("ChatArea", "Sending TTS request", {
-			reqId,
-			seq,
-			sentence: clean.slice(0, 50),
-			provider: ttsProviderForCost,
-			voice: ttsVoiceForCost,
-		});
-
-		// Speak via the browser's built-in speechSynthesis (free, client-side).
-		// Manages the avatar speaking state + clears the request on end/error.
-		const speakViaBrowser = (): void => {
-			if (typeof window !== "undefined" && "speechSynthesis" in window) {
-				const browserGeneration = ttsTextSyncRef.current.generation;
-				const isCurrentBrowserTurn = () =>
-					browserGeneration === ttsTextSyncRef.current.generation;
-				const utter = new SpeechSynthesisUtterance(clean);
-				utter.lang =
-					voiceCfg?.voice || document.documentElement.lang || "ko-KR";
-				utter.onstart = () => {
-					if (!isCurrentBrowserTurn()) return;
-					revealText();
-					ttsPlayingRef.current = true;
-					setTtsPlaying(true);
-					useAvatarStore.getState().setSpeaking(true);
-					cascadeAvatar?.setSpeakingVisual(true);
-				};
-				utter.onend = () => {
-					if (!isCurrentBrowserTurn()) return;
-					ttsPlayingRef.current = false;
-					setTtsPlaying(false);
-					useAvatarStore.getState().setSpeaking(false);
-					cascadeAvatar?.setSpeakingVisual(false);
-					activeTtsRequestsRef.current.delete(reqId);
-				};
-				// onerror too, else a failure after onstart leaves the avatar stuck
-				// in the speaking state (#363 review).
-				utter.onerror = () => {
-					if (!isCurrentBrowserTurn()) return;
-					revealText();
-					ttsPlayingRef.current = false;
-					setTtsPlaying(false);
-					useAvatarStore.getState().setSpeaking(false);
-					cascadeAvatar?.setSpeakingVisual(false);
-					activeTtsRequestsRef.current.delete(reqId);
-				};
-				window.speechSynthesis.speak(utter);
-			} else {
-				Logger.warn("ChatArea", "Browser TTS not available");
-				revealText();
-				activeTtsRequestsRef.current.delete(reqId);
-			}
-		};
-
-		// Browser provider → client-side speechSynthesis (skip shell synthesis).
-		const ttsMeta = getTtsProviderMeta(ttsProviderForCost);
-		if (ttsMeta?.isClientSide) {
-			speakViaBrowser();
-			return;
-		}
-
-		// Shell-direct synthesis (#363): the new-core agent has no TTS, so every
-		// non-browser provider is synthesized here (gateway / direct API / edge WS)
-		// instead of via the dropped `tts_request` IPC. The AbortController lets
-		// interrupt/cleanup cancel the in-flight fetch/WS (and stop paid TTS).
-		const abort = new AbortController();
-		ttsAbortControllersRef.current.set(reqId, abort);
-		let synthesisStartedAt = 0;
-		const synthesize = () => {
-			if (!activeTtsRequestsRef.current.has(reqId)) {
-				return Promise.reject(new DOMException("TTS request superseded", "AbortError"));
-			}
-			setOutputStage("tts");
-			synthesisStartedAt = performance.now();
-			return synthesizeTts({
-				text: clean,
-				voice: voiceCfg?.voice,
-				provider: ttsProviderForCost as TtsProviderId,
-				apiKey: voiceCfg?.ttsApiKey,
-				naiaKey: voiceCfg?.naiaKey,
-				gatewayUrl: voiceCfg?.gatewayUrl,
-				vllmHost: voiceCfg?.vllmHost,
-				vllmTtsHost: voiceCfg?.vllmTtsHost,
-				localRefAudioBase64:
-					ttsProviderForCost === "naia-local-voice"
-						? getLocalRefAudioB64() ?? undefined
-						: undefined,
-				signal: abort.signal,
-			});
-		};
-		// The Windows 8GB path shares one GPU between VoxCPM2 and Ditto. Starting
-		// the next synthesis while the previous Ditto render is active produced
-		// large latency variance and occasional partial responses. Keep this path
-		// strictly half-duplex; cloud TTS providers retain parallel synthesis.
-		let synthesis: ReturnType<typeof synthesize>;
-		if (ttsProviderForCost === "naia-local-voice" && localVoiceScheduler) {
-			synthesis = localVoiceScheduler.schedule(() => synthesize());
-		} else {
-			synthesis = synthesize();
-		}
-		synthesis
-			.then(async ({ audioBase64, costUsd }) => {
-				// Drop stale audio AND skip billing for a superseded/aborted turn:
-				// interruptTts() cleared activeTtsRequestsRef and reset the AudioQueue
-				// sequence, so a late response must NOT enqueue (would replay as the
-				// new turn's first audio) nor record cost.
-				if (!activeTtsRequestsRef.current.has(reqId)) return;
-				if (
-					ttsProviderForCost === "naia-local-voice" &&
-					localVoiceScheduler &&
-					seq === 0
-				) {
-					const duration = wavDurationSeconds(audioBase64);
-					const elapsed =
-						Math.max(0, performance.now() - synthesisStartedAt) / 1000;
-					const verdict = localVoiceScheduler.onFirstResult(
-						localVoiceGeneration,
-						{ elapsedSeconds: elapsed, durationSeconds: duration ?? null },
-					);
-					if (verdict) {
-						Logger.info("ChatArea", "Local voice adaptive prebuffer", {
-							rtf: Number(verdict.rtf.toFixed(2)),
-							duration: verdict.durationSeconds
-								? Number(verdict.durationSeconds.toFixed(2))
-								: null,
-							buffering: verdict.shouldBuffer,
-						});
-					}
-				}
-				activeTtsRequestsRef.current.delete(reqId);
-				audioQueueRef.current?.enqueueOrdered(seq, audioBase64, {
-					onPlaybackStart: revealText,
-					onPlaybackUnavailable: revealText,
-				});
-				if (ttsProviderForCost === "naia-local-voice") {
-					localVoiceScheduler?.maybeReleaseAfterEnqueue(
-						localVoiceGeneration,
-						seq,
-					);
-				}
-				// Track TTS cost: server cost for Naia Cloud, estimate for others.
-				// Naia account (nextain): apply 10% service markup on top of base cost.
-				const NAIA_TTS_MARKUP = 1.1;
-				const isNaiaTts = ttsProviderForCost === "nextain";
-				const baseTtsCost =
-					costUsd != null
-						? costUsd
-						: estimateTtsCost(
-								ttsProviderForCost,
-								clean.length,
-								ttsVoiceForCost,
-							);
-				const ttsCost = isNaiaTts ? baseTtsCost * NAIA_TTS_MARKUP : baseTtsCost;
-				if (ttsCost > 0) {
-					// addSessionCostEntry keeps TTS in a separate row in CostDashboard
-					useChatStore.getState().addSessionCostEntry({
-						inputTokens: 0,
-						outputTokens: 0,
-						cost: ttsCost,
-						provider: ttsProviderForCost as ProviderId,
-						model: isNaiaTts
-							? "tts:nextain (+10%)"
-							: `tts:${ttsProviderForCost}`,
-					});
-				}
-			})
-			.catch(async (err) => {
-				// Superseded / aborted turn (interrupt cleared the set) — don't fall
-				// back or bill; the queue was already reset.
-				if (!activeTtsRequestsRef.current.has(reqId)) return;
-				// Release the reserved ordered slot so later sentences don't stall
-				// behind this seq (enqueueOrdered waits for contiguous sequence nums).
-				audioQueueRef.current?.skipOrdered(seq);
-				if (ttsProviderForCost === "naia-local-voice") {
-					localVoiceScheduler?.releaseOnFailure(localVoiceGeneration);
-				}
-				// LOCAL voice engines (naia-local-voice / vllm): the user explicitly
-				// chose a local engine. Do NOT substitute the browser's free TTS —
-				// that masquerade is exactly the "free voice" surprise the user
-				// flagged. Surface a clear one-time notice and stay silent; the local
-				// voice engine must be running and reachable at vllmTtsHost (Round-2
-				// embedding). Cloud providers keep the free fallback below.
-				const isLocalVoiceProvider =
-					ttsProviderForCost === "naia-local-voice" ||
-					ttsProviderForCost === "vllm";
-				if (isLocalVoiceProvider) {
-					revealText();
-					Logger.warn(
-						"ChatArea",
-						"Local voice engine unavailable — no free fallback",
-						{ reqId, provider: ttsProviderForCost, error: String(err) },
-					);
-					if (!localVoiceUnavailableNoticedRef.current) {
-						localVoiceUnavailableNoticedRef.current = true;
-						const runtimeState = await invoke<string>(
-							"cascade_runtime_status",
-						).catch(() => "unknown");
-						useChatStore.getState().addMessage({
-							role: "assistant",
-							content: t(
-								runtimeState === "starting"
-									? "chat.localVoiceStarting"
-									: "chat.localVoiceUnavailable",
-							),
-						});
-					}
-					activeTtsRequestsRef.current.delete(reqId);
-					return;
-				}
-				// Cloud synthesis failed (missing key/login, network, quota). Fall
-				// back to the browser's built-in TTS so the voice is never silently
-				// dropped — better a basic voice than nothing.
-				Logger.warn("ChatArea", "TTS synthesis failed — browser TTS fallback", {
-					reqId,
-					provider: ttsProviderForCost,
-					error: String(err),
-				});
-				speakViaBrowser();
-			})
-			.finally(() => {
-				ttsAbortControllersRef.current.delete(reqId);
-			});
+		// FR-VOICE.16 (#420): all synthesized speech goes through the single
+		// sentence TTS pipeline (lib/tts/sentence-pipeline). Do not add speech
+		// side channels here — renderers and skills consume real playback only.
+		sentencePipelineRef.current?.sendSentence(sentence);
 	}
 
 	/** Clean up pipeline voice resources. */
@@ -2518,15 +2274,14 @@ export function ChatArea({
 		// 자기발화 방어 훅/기록 해제 (세션 밖 재개 방지 + 다음 세션 오탐 방지).
 		sttPauseRef.current = null;
 		sttResumeRef.current = null;
-		recentTtsTextsRef.current = [];
 		audioQueueRef.current?.destroy();
 		audioQueueRef.current = null;
 		sentenceChunkerRef.current?.clear();
 		sentenceChunkerRef.current = null;
 		pipelineVoiceConfigRef.current = null;
-		activeTtsRequestsRef.current.clear();
-		for (const ac of ttsAbortControllersRef.current.values()) ac.abort();
-		ttsAbortControllersRef.current.clear();
+		// Pipeline-owned lifecycle: pending requests, in-flight aborts, and the
+		// recent-utterance ring used by the STT self-echo filter.
+		sentencePipelineRef.current?.dispose();
 		// Stop Vosk STT
 		for (const fn of sttCleanupRef.current) fn();
 		sttCleanupRef.current = [];
@@ -2683,7 +2438,7 @@ export function ChatArea({
 				sentenceChunkerRef.current = new SentenceChunker();
 				pipelineActiveRef.current = true;
 				// Re-arm the local-voice-unavailable notice for this new session.
-				localVoiceUnavailableNoticedRef.current = false;
+				sentencePipelineRef.current?.rearmLocalVoiceNotice();
 				pipelineVoiceConfigRef.current = {
 					voice: resolveTtsVoiceId(config) ?? config.voice,
 					ttsProvider: config.ttsProvider || "edge",
@@ -2735,7 +2490,7 @@ export function ChatArea({
 						const ttsActive = ttsPlayingRef.current || Date.now() < ttsCooldownUntilRef.current;
 						const selfEcho = cleanResult.isFinal && isLikelySelfEcho(
 							cleanResult.transcript,
-							recentTtsTextsRef.current,
+							sentencePipelineRef.current?.recentTexts() ?? [],
 						);
 						const bargeIn = decideSttBargeIn({ isFinal: cleanResult.isFinal, ttsActive, selfEcho });
 						if (bargeIn === "suppress") {
