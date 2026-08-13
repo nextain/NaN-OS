@@ -5379,8 +5379,11 @@ async fn start_cascade(
     // the installed app and the isolated dev instance. A healthy façade on
     // :8910 may belong to the other instance — adopt it instead of killing
     // and respawning (which would cut the other instance's speech and race
-    // one GPU with two VoxCPM2 loads).
-    if local_cascade_is_healthy() {
+    // one GPU with two VoxCPM2 loads). Native E2E must NEVER adopt: its spec
+    // owns the full cascade lifecycle in an isolated runtime, and adopting a
+    // live user engine breaks that isolation (2026-08-13 실측: voice-6g spec
+    // 'did not restore' — the run adopted the developer's live cascade).
+    if !debug_e2e_enabled() && local_cascade_is_healthy() {
         log_both("[Naia] Adopting healthy shared cascade on :8910 (no respawn)");
         return Ok(ADOPTED_CASCADE_READY.to_string());
     }

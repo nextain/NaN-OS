@@ -56,6 +56,57 @@ describe("RefAudioSection", () => {
 		);
 	});
 
+	it("#429: an uploaded local reference stays the active voice — presets must not stomp it", async () => {
+		localStorage.setItem(
+			"naia-config",
+			JSON.stringify({
+				ttsProvider: "naia-local-voice",
+				vllmTtsHost: "http://127.0.0.1:8910",
+				// 프리셋 팔레트에 없는 값 — 구 코드는 이를 기본 프리셋 sampleUrl 로
+				// 되돌려 썼다(업로드 선택 스톰프).
+				voiceRefUrl: "http://127.0.0.1:8910/ref/audio/uploaded-c0ffee.wav",
+			}),
+		);
+		// 저장된 로컬 업로드(레퍼런스 WAV base64) 존재 상태 — 실제 저장 키 사용.
+		localStorage.setItem("naia.voiceRefAudioB64", btoa("RIFFfakewav"));
+		vi.stubGlobal(
+			"fetch",
+			vi.fn().mockResolvedValue({
+				ok: true,
+				json: async () => ({
+					voices: [
+						{
+							name: "ref_ko_485.wav",
+							url: "http://127.0.0.1:8910/ref/audio/ref_ko_485.wav",
+							gender: "female",
+							lang: "ko",
+							idx: 1,
+							default: true,
+						},
+					],
+				}),
+			}),
+		);
+
+		render(<RefAudioSection />);
+
+		// refresh(프리셋 fetch)가 실제로 끝난 뒤에 판정해야 구 코드의 늦은 스톰프를
+		// 놓치지 않는다 — 초기값 순간 통과(공허)를 차단.
+		const fetchMock = window.fetch as ReturnType<typeof vi.fn>;
+		await waitFor(() =>
+			expect(fetchMock).toHaveBeenCalledWith(
+				"http://127.0.0.1:8910/ref/voices",
+			),
+		);
+		await new Promise((resolve) => setTimeout(resolve, 0));
+		await new Promise((resolve) => setTimeout(resolve, 0));
+		const saved = JSON.parse(localStorage.getItem("naia-config") || "{}");
+		expect(saved.voiceRefUrl).toBe(
+			"http://127.0.0.1:8910/ref/audio/uploaded-c0ffee.wav",
+		);
+		localStorage.removeItem("naia.voiceRefAudioB64");
+	});
+
 	it("FR-VOICE.14: shows an explicit engine-off state with an in-place start action", async () => {
 		localStorage.setItem(
 			"naia-config",

@@ -330,32 +330,46 @@ export function RefAudioSection({
 		// A Naia Local recorded clip lives only in localStorage (no gateway slot) —
 		// reflect it directly so the card matches the voice actually being sent.
 		if (isLocal) {
+			// #429: 업로드/녹음된 로컬 레퍼런스가 있으면 그것이 활성 음성이다.
+			// 프리셋 매칭이 이를 덮으면 ① 미리듣기가 기본 프리셋을 재생하고
+			// ② setConfigVoiceRefUrl 이 업로드 선택을 프리셋으로 되돌려 쓴다.
+			const localUploadB64 = getLocalRefAudioB64();
+			if (localUploadB64) {
+				setActive({
+					kind: "upload",
+					uploadedAt: "",
+					sizeBytes: 0,
+					durationSeconds: 0,
+				});
+			}
 			try {
 				const list = await getLocalRefAudioPresets(localVoiceHost);
-				const selectedName = config?.voiceRefUrl
-					?.split(/[?#]/)[0]
-					.split(/[/\\]/)
-					.pop();
-				const selected =
-					list.find((preset) => preset.id === selectedName) ??
-					list.find((preset) => preset.name.includes("(default)")) ??
-					list[0];
-				if (selected && selected.id !== selectedName) {
-					setConfigVoiceRefUrl(selected.sampleUrl);
-				}
 				setPresets(list);
-				setActive(
-					selected
-						? {
-								kind: "preset",
-								uploadedAt: "",
-								sizeBytes: 0,
-								durationSeconds: selected.durationSeconds,
-								presetId: selected.id,
-								presetName: selected.name,
-							}
-						: null,
-				);
+				if (!localUploadB64) {
+					const selectedName = config?.voiceRefUrl
+						?.split(/[?#]/)[0]
+						.split(/[/\\]/)
+						.pop();
+					const selected =
+						list.find((preset) => preset.id === selectedName) ??
+						list.find((preset) => preset.name.includes("(default)")) ??
+						list[0];
+					if (selected && selected.id !== selectedName) {
+						setConfigVoiceRefUrl(selected.sampleUrl);
+					}
+					setActive(
+						selected
+							? {
+									kind: "preset",
+									uploadedAt: "",
+									sizeBytes: 0,
+									durationSeconds: selected.durationSeconds,
+									presetId: selected.id,
+									presetName: selected.name,
+								}
+							: null,
+					);
+				}
 				setLocalEngine("ready");
 				setError("");
 			} catch (err) {
