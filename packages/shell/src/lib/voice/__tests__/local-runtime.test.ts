@@ -12,6 +12,14 @@ describe("localVoiceFacadeUrlFromReady", () => {
 		}))).toBe("http://127.0.0.1:8910");
 	});
 
+	it("parses the Rust ADOPTED_CASCADE_READY payload (shared-runtime adoption, #425)", () => {
+		// Must stay byte-compatible with ADOPTED_CASCADE_READY in lib.rs — the
+		// adopted shared cascade reuses the fresh-spawn CASCADE_READY contract.
+		const adopted =
+			'{"facade_port":8910,"services":[{"kind":"tts","id":"tts"}],"adopted":true}';
+		expect(localVoiceFacadeUrlFromReady(adopted)).toBe("http://127.0.0.1:8910");
+	});
+
 	it("rejects avatar-only, malformed, and missing readiness payloads", () => {
 		expect(localVoiceFacadeUrlFromReady(JSON.stringify({ facade_port: 8910, services: [{ kind: "avatar" }] }))).toBeNull();
 		expect(localVoiceFacadeUrlFromReady(JSON.stringify({ services: [{ kind: "tts" }] }))).toBeNull();

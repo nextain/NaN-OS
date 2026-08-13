@@ -17,7 +17,7 @@
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
-import { platform } from "node:os";
+import { homedir, platform } from "node:os";
 import { dirname, resolve } from "node:path";
 import { REQUIRED_AGENT_COMMIT, REQUIRED_PROTO_SHA256 } from "./agent-pairing.mjs";
 import { interactiveLaunchEnv } from "./launch-env.mjs";
@@ -113,6 +113,15 @@ const env = interactiveLaunchEnv(process.env);
 // checkout that owns this Shell. Keep those two roots explicit instead of
 // making the cascade loader infer source locations from user-data placement.
 env.NAIA_REPOS_ADK = env.NAIA_REPOS_ADK ?? WORKSPACE_ROOT;
+
+// FR-SHELL-ISO (#425): the dev instance is fully isolated from the installed
+// production app — separate identifier/productName (tauri.conf.dev.json
+// overlay, Naia Dev / com.naia.shell.dev → own WebView2 data + localStorage)
+// and a separate data home (~/.naia-dev via NAIA_HOME) so concurrent dev and
+// production runs can never clobber each other's config. The single-GPU
+// cascade runtime stays SHARED by design (adopt-if-healthy in Rust).
+env.NAIA_HOME = env.NAIA_HOME ?? resolve(homedir(), ".naia-dev");
+const DEV_TAURI_CONFIG = resolve(SHELL, "src-tauri", "tauri.conf.dev.json");
 
 // ── 새 코어 + 분리 에이전트 (new-naia-os 불변) ──
 env.VITE_NAIA_NEW_CORE = env.VITE_NAIA_NEW_CORE ?? "1";
@@ -267,5 +276,9 @@ if (!existsSync(resolve(pairedAgent, "dist/main/composition/index.js"))) {
 }
 process.stdout.write(`[tauri-with-mode] new core=${env.VITE_NAIA_NEW_CORE}, agent=${env.NAIA_AGENT_SCRIPT}, proto=${env.NAIA_AGENT_PROTO_DIR}\n`);
 
-const r = spawnSync("pnpm", ["run", "tauri", "dev"], { env, stdio: "inherit", shell: true });
+const r = spawnSync(
+	"pnpm",
+	["run", "tauri", "dev", "--config", DEV_TAURI_CONFIG],
+	{ env, stdio: "inherit", shell: true },
+);
 process.exit(r.status ?? 1);

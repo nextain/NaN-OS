@@ -305,24 +305,71 @@ struct AgentChildLeaseLock {
     _file: std::fs::File,
 }
 
+/// FR-SHELL-ISO (#425): the Naia data home. A non-empty `NAIA_HOME` overrides
+/// `<home>/.naia` so the isolated dev instance (Naia Dev, launched by
+/// tauri-with-mode with NAIA_HOME=~/.naia-dev) keeps its adk-path cache,
+/// lease files, logs, PID files, and skills apart from the production
+/// install's data. Native E2E isolation (e2e_runtime_dir) stays senior.
+fn naia_data_home_from(home: std::path::PathBuf) -> std::path::PathBuf {
+    naia_data_home_with(home, std::env::var("NAIA_HOME").ok().as_deref())
+}
+
+/// Pure resolution half of [`naia_data_home_from`] — injectable for tests
+/// without process-global env mutation.
+fn naia_data_home_with(
+    home: std::path::PathBuf,
+    override_home: Option<&str>,
+) -> std::path::PathBuf {
+    match override_home {
+        Some(v) if !v.trim().is_empty() => std::path::PathBuf::from(v),
+        _ => home.join(".naia"),
+    }
+}
+
+/// FR-SHELL-ISO (#425): CASCADE_READY-shaped payload for an adopted (already
+/// running, healthy) shared cascade — the same contract the Shell parses from
+/// a fresh spawn (localVoiceFacadeUrlFromReady reads facade_port + a tts
+/// service entry). Carries both historical service key spellings.
+const ADOPTED_CASCADE_READY: &str =
+    r#"{"facade_port":8910,"services":[{"kind":"tts","id":"tts"}],"adopted":true}"#;
+
+/// Probe the shared local cascade façade. True only when :8910 answers the
+/// health contract with an enabled TTS service — port reachability alone is
+/// not readiness (FR-VOICE.14), and an unhealthy bind stays an orphan that
+/// kill_stale_cascade may clean.
+fn local_cascade_is_healthy() -> bool {
+    let agent = ureq::AgentBuilder::new()
+        .timeout(std::time::Duration::from_millis(700))
+        .build();
+    match agent.get("http://127.0.0.1:8910/health").call() {
+        Ok(resp) => {
+            resp.into_json::<serde_json::Value>()
+                .ok()
+                .and_then(|v| v.get("tts_enabled").and_then(|b| b.as_bool()))
+                == Some(true)
+        }
+        Err(_) => false,
+    }
+}
+
 fn agent_child_lease_path() -> Result<std::path::PathBuf, String> {
     if let Some(runtime) = e2e_runtime_dir() {
         return Ok(runtime.join("agent-child-lease.json"));
     }
-    Ok(dirs::home_dir()
-        .ok_or_else(|| "agent_lease_home_unavailable".to_string())?
-        .join(".naia")
-        .join("agent-child-lease.json"))
+    Ok(naia_data_home_from(
+        dirs::home_dir().ok_or_else(|| "agent_lease_home_unavailable".to_string())?,
+    )
+    .join("agent-child-lease.json"))
 }
 
 fn agent_child_lease_lock_path() -> Result<std::path::PathBuf, String> {
     if let Some(runtime) = e2e_runtime_dir() {
         return Ok(runtime.join("agent-child-lease.lock"));
     }
-    Ok(dirs::home_dir()
-        .ok_or_else(|| "agent_lease_home_unavailable".to_string())?
-        .join(".naia")
-        .join("agent-child-lease.lock"))
+    Ok(naia_data_home_from(
+        dirs::home_dir().ok_or_else(|| "agent_lease_home_unavailable".to_string())?,
+    )
+    .join("agent-child-lease.lock"))
 }
 
 fn acquire_agent_child_lease_lock() -> Result<AgentChildLeaseLock, String> {
@@ -1277,9 +1324,9 @@ fn log_dir() -> std::path::PathBuf {
         std::env::var_os("NAIA_E2E_RUNTIME_DIR")
             .map(std::path::PathBuf::from)
             .map(|runtime| runtime.join("logs"))
-            .unwrap_or_else(|| std::path::PathBuf::from(home_dir()).join(".naia/logs"))
+            .unwrap_or_else(|| naia_data_home_from(std::path::PathBuf::from(home_dir())).join("logs"))
     } else {
-        std::path::PathBuf::from(home_dir()).join(".naia/logs")
+        naia_data_home_from(std::path::PathBuf::from(home_dir())).join("logs")
     };
     let _ = std::fs::create_dir_all(&dir);
     dir
@@ -1403,7 +1450,7 @@ fn e2e_runtime_dir() -> Option<std::path::PathBuf> {
 /// Get the run directory (~/.naia/run/) for PID files
 fn run_dir() -> std::path::PathBuf {
     let dir =
-        e2e_runtime_dir().unwrap_or_else(|| std::path::PathBuf::from(home_dir()).join(".naia/run"));
+        e2e_runtime_dir().unwrap_or_else(|| naia_data_home_from(std::path::PathBuf::from(home_dir())).join("run"));
     let _ = std::fs::create_dir_all(&dir);
     dir
 }
@@ -1945,7 +1992,7 @@ fn spawn_adk_path_snapshot() -> Option<String> {
     }
     spawn_adk_path_snapshot_with(|| {
         dirs::home_dir()
-            .and_then(|home| std::fs::read_to_string(home.join(".naia").join("adk-path")).ok())
+            .and_then(|home| std::fs::read_to_string(naia_data_home_from(home).join("adk-path")).ok())
     })
 }
 
@@ -4055,7 +4102,7 @@ async fn list_skills() -> Result<Vec<SkillManifestInfo>, String> {
 
     // Scan ~/.naia/skills/
     let home = home_dir();
-    let skills_dir = std::path::PathBuf::from(&home).join(".naia/skills");
+    let skills_dir = naia_data_home_from(std::path::PathBuf::from(&home)).join("skills");
     if skills_dir.is_dir() {
         if let Ok(entries) = std::fs::read_dir(&skills_dir) {
             for entry in entries.flatten() {
@@ -5011,7 +5058,7 @@ async fn cascade_installation_status(
     state: tauri::State<'_, AppState>,
 ) -> Result<CascadeInstallationStatus, String> {
     let adk_path = dirs::home_dir()
-        .and_then(|home| std::fs::read_to_string(home.join(".naia").join("adk-path")).ok())
+        .and_then(|home| std::fs::read_to_string(naia_data_home_from(home).join("adk-path")).ok())
         .map(|value| value.trim().to_string())
         .filter(|value| !value.is_empty());
     let loader_profile = adk_path.as_ref().and_then(|path| {
@@ -5240,7 +5287,7 @@ async fn start_cascade(
             .filter(|s| !s.is_empty())
     } else {
         dirs::home_dir()
-            .and_then(|h| std::fs::read_to_string(h.join(".naia").join("adk-path")).ok())
+            .and_then(|h| std::fs::read_to_string(naia_data_home_from(h).join("adk-path")).ok())
             .map(|s| s.trim().to_string())
             .filter(|s| !s.is_empty())
     }
@@ -5311,6 +5358,15 @@ async fn start_cascade(
         return Err(installation.summary);
     }
 
+    // FR-SHELL-ISO (#425): the single-GPU cascade runtime is SHARED between
+    // the installed app and the isolated dev instance. A healthy façade on
+    // :8910 may belong to the other instance — adopt it instead of killing
+    // and respawning (which would cut the other instance's speech and race
+    // one GPU with two VoxCPM2 loads).
+    if local_cascade_is_healthy() {
+        log_both("[Naia] Adopting healthy shared cascade on :8910 (no respawn)");
+        return Ok(ADOPTED_CASCADE_READY.to_string());
+    }
     // A prior interrupted loader can leave its :8901/:8902/:8910 children
     // alive even when no supervisor is held in AppState. Clean those exact
     // cascade command lines before a new 4060 profile launch, otherwise the
@@ -5603,7 +5659,7 @@ fn current_adk_path() -> Result<String, String> {
         }
     }
     let path = dirs::home_dir()
-        .and_then(|home| std::fs::read_to_string(home.join(".naia").join("adk-path")).ok())
+        .and_then(|home| std::fs::read_to_string(naia_data_home_from(home).join("adk-path")).ok())
         .ok_or_else(|| "adk_path_unavailable".to_string())?;
     let path = path.trim();
     if path.is_empty() {
@@ -9191,7 +9247,7 @@ fn naia_path_cache_target(
     home: std::path::PathBuf,
     native_e2e: bool,
 ) -> Option<std::path::PathBuf> {
-    (!native_e2e).then(|| home.join(".naia").join("adk-path"))
+    (!native_e2e).then(|| naia_data_home_from(home).join("adk-path"))
 }
 
 #[tauri::command]
@@ -9936,7 +9992,12 @@ pub fn run() {
             }
             // ?꿤ascade 怨좎븘(uvicorn facade ?먯옄, PID 誘몄텛?? ?뺣━ ??8910 EADDRINUSE 諛⑹?(R2.2b).
             // dev 諛섎났 湲곕룞 ???댁쟾 ?몄뀡??cascade 媛 ??二쎄퀬 ?⑥븘 ?ㅼ쓬 start_cascade 瑜?留됰뒗??
-            if !debug_e2e_enabled() { platform::kill_stale_cascade(); }
+            // FR-SHELL-ISO (#425): a healthy cascade may be serving the OTHER
+            // Naia instance (shared single-GPU runtime) — only a bound-but-
+            // unhealthy leftover is an orphan worth cleaning at boot.
+            if !debug_e2e_enabled() && !local_cascade_is_healthy() {
+                platform::kill_stale_cascade();
+            }
 
             // Spawn Gateway first (Agent connects to it via WebSocket)
             let (gateway_running, gateway_managed) = match spawn_gateway() {
@@ -11896,6 +11957,36 @@ mod tests {
         assert!(!debug_e2e_flags_enabled(None, Some("1")));
         assert!(debug_e2e_flags_enabled(Some("1"), Some("1")));
         assert!(debug_e2e_flags_enabled(Some("true"), Some("1")));
+    }
+
+    #[test]
+    fn isolated_dev_home_overrides_the_default_naia_dir() {
+        // FR-SHELL-ISO (#425): NAIA_HOME redirects every data-home consumer;
+        // empty/blank overrides fall back to <home>/.naia.
+        let home = std::path::PathBuf::from("C:/naia-test-home");
+        assert_eq!(
+            naia_data_home_with(home.clone(), Some("C:/naia-test-home/.naia-dev")),
+            std::path::PathBuf::from("C:/naia-test-home/.naia-dev")
+        );
+        assert_eq!(
+            naia_data_home_with(home.clone(), Some("   ")),
+            std::path::PathBuf::from("C:/naia-test-home/.naia")
+        );
+        assert_eq!(
+            naia_data_home_with(home, None),
+            std::path::PathBuf::from("C:/naia-test-home/.naia")
+        );
+    }
+
+    #[test]
+    fn adopted_cascade_ready_matches_the_spawn_contract_shape() {
+        // FR-SHELL-ISO (#425): the adopted payload must parse exactly like a
+        // fresh CASCADE_READY (facade_port + a tts service entry) — the JS
+        // side pins the same literal in local-runtime.test.ts.
+        let v: serde_json::Value = serde_json::from_str(ADOPTED_CASCADE_READY).unwrap();
+        assert_eq!(v["facade_port"], 8910);
+        assert_eq!(v["services"][0]["kind"], "tts");
+        assert_eq!(v["adopted"], true);
     }
 
     #[test]
