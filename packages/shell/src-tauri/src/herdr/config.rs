@@ -4,9 +4,42 @@ use tauri::{AppHandle, Manager};
 const HERDR_MIN_VERSION: (u32, u32, u32) = (0, 8, 0);
 static HERDR_CONFIG_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
 static HERDR_CONFIG_PATH: OnceLock<std::path::PathBuf> = OnceLock::new();
+static HERDR_BIN: OnceLock<std::ffi::OsString> = OnceLock::new();
+
+/// Resolve the Herdr executable once at startup: the version bundled next to the
+/// app (`resource_dir/herdr/herdr.exe` — staged by stage-herdr.mjs) is preferred
+/// so a packaged install needs no separately-installed Herdr; otherwise fall
+/// back to `herdr` on PATH (dev, where resources are not staged). Call once from
+/// the Tauri setup hook.
+pub fn init_herdr_bin(app: &AppHandle) {
+    let resolved = app
+        .path()
+        .resource_dir()
+        .ok()
+        .map(|dir| {
+            dir.join("herdr").join(if cfg!(windows) {
+                "herdr.exe"
+            } else {
+                "herdr"
+            })
+        })
+        .filter(|path| path.is_file())
+        .map(std::ffi::OsString::from)
+        .unwrap_or_else(|| std::ffi::OsString::from("herdr"));
+    let _ = HERDR_BIN.set(resolved);
+}
+
+/// The resolved Herdr executable (bundled resource or PATH fallback). Safe before
+/// `init_herdr_bin` (returns the PATH name).
+pub(super) fn herdr_bin() -> std::ffi::OsString {
+    HERDR_BIN
+        .get()
+        .cloned()
+        .unwrap_or_else(|| std::ffi::OsString::from("herdr"))
+}
 
 pub(super) fn herdr_command() -> std::process::Command {
-    let mut command = std::process::Command::new("herdr");
+    let mut command = std::process::Command::new(herdr_bin());
     crate::platform::hide_console(&mut command);
     command
 }

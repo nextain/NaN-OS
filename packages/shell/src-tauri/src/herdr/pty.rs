@@ -5,7 +5,7 @@ use tauri::{AppHandle, Emitter};
 
 use crate::pty::{PtyCreated, PtyHandle, PtyKind, PtyRegistry};
 
-use super::config::{validate_herdr, write_embedded_herdr_config};
+use super::config::{herdr_bin, validate_herdr, write_embedded_herdr_config};
 
 static HERDR_LAUNCH_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
 
@@ -65,7 +65,7 @@ pub async fn herdr_pty_create(
                 pixel_height: 0,
             })
             .map_err(|e| format!("open Herdr PTY failed: {e}"))?;
-        let mut command = CommandBuilder::new("herdr");
+        let mut command = CommandBuilder::new(herdr_bin());
         command.cwd(&dir_path);
         command.env("HERDR_CONFIG_PATH", config_path);
         let child = pair

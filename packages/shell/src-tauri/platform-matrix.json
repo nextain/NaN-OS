@@ -52,11 +52,15 @@
 		"staging": {
 			"agent": "required",
 			"bgmSidecar": "required",
-			"cascadeLoader": "optional"
+			"cascadeLoader": "optional",
+			"herdr": "optional"
 		},
 		"cascadeLoaderResources": {
 			"cascade-loader/loader": "cascade-loader/loader",
 			"cascade-loader/scripts": "cascade-loader/scripts"
+		},
+		"herdrResources": {
+			"resources/herdr": "herdr"
 		}
 	},
 	"os": {

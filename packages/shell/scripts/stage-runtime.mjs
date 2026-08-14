@@ -37,6 +37,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { gzipSync } from "node:zlib";
 import { REQUIRED_AGENT_COMMIT, REQUIRED_PROTO_SHA256 } from "./agent-pairing.mjs";
+import { herdrReleaseDir } from "./stage-herdr.mjs";
 
 const SHELL = resolve(dirname(fileURLToPath(import.meta.url)), ".."); // packages/shell
 const REPO_ROOT = resolve(SHELL, "../..");
@@ -299,7 +300,7 @@ export function extractArchive(
 export function generateConf(
 	matrix,
 	platform,
-	{ cascadeLoaderPresent = false } = {},
+	{ cascadeLoaderPresent = false, herdrPresent = false } = {},
 ) {
 	const row = matrix.os[platform];
 	if (!row) {
@@ -313,6 +314,7 @@ export function generateConf(
 	for (const f of row.msvcRedist?.files ?? []) resources[`resources/${f}`] = f;
 	if (cascadeLoaderPresent)
 		Object.assign(resources, matrix.common.cascadeLoaderResources);
+	if (herdrPresent) Object.assign(resources, matrix.common.herdrResources);
 
 	const { $comment: _omit, ...installer } = row.installer ?? {};
 	const bundle = {
@@ -636,8 +638,14 @@ async function main() {
 			script: "scripts/stage-cascade-loader.mjs",
 			sibling: CASCADE_LOADER_SIBLING,
 		},
+		{
+			key: "herdr",
+			script: "scripts/stage-herdr.mjs",
+			sibling: resolve(herdrReleaseDir(), "herdr.exe"),
+		},
 	];
 	let cascadeLoaderPresent = false;
+	let herdrPresent = false;
 	for (const unit of stagingUnits) {
 		const policy = matrix.common.staging?.[unit.key];
 		if (policy !== "required" && policy !== "optional") {
@@ -654,6 +662,7 @@ async function main() {
 		console.log(`[stage-runtime] ③ ${unit.key} 스테이징 (${policy})`);
 		run(`node ${unit.script}`, SHELL); // required + sibling 부재 = 스크립트 자신의 명확한 에러로 중단
 		if (unit.key === "cascadeLoader") cascadeLoaderPresent = true;
+		if (unit.key === "herdr") herdrPresent = true;
 	}
 
 	for (const relativePath of matrix.os[platform].wrappedStaticExecutables) {
@@ -663,7 +672,10 @@ async function main() {
 
 	invalidateVoskBuildCache(matrix, platform);
 
-	const conf = generateConf(matrix, platform, { cascadeLoaderPresent });
+	const conf = generateConf(matrix, platform, {
+		cascadeLoaderPresent,
+		herdrPresent,
+	});
 	writeFileSync(GENERATED_CONF, `${JSON.stringify(conf, null, "\t")}\n`);
 	console.log(`[stage-runtime] ④ conf 생성 → ${GENERATED_CONF}`);
 

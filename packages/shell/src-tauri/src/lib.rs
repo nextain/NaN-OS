@@ -9836,6 +9836,9 @@ pub fn run() {
         ])
         .setup(|app| {
             let app_handle = app.handle().clone();
+            // Resolve the bundled Herdr binary (resource_dir/herdr) with a PATH
+            // fallback, once, before any Workspace spawn/API call.
+            herdr::init_herdr_bin(&app_handle);
             let state: tauri::State<'_, AppState> = app.state();
 
             // Initialize audit DB

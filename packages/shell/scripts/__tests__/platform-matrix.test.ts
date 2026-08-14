@@ -114,6 +114,7 @@ describe("platform-matrix 스키마 (FR-INSTALL.1)", () => {
 			agent: "required",
 			bgmSidecar: "required",
 			cascadeLoader: "optional",
+			herdr: "optional",
 		});
 	});
 	it("전체 번들 지원 arch = win/linux x64, darwin x64+arm64 (Vosk 네이티브 제약을 명시)", () => {
