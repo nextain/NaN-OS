@@ -12,7 +12,10 @@ import {
 	writeNaiaConfig,
 } from "../lib/adk-store";
 import { OAUTH_CALLBACK_URL } from "../lib/oauth-callback-url";
-import { isLegacyBundledVrmModel } from "../lib/avatar-presets";
+import {
+	DEFAULT_NVA_MODEL,
+	isLegacyBundledVrmModel,
+} from "../lib/avatar-presets";
 import { detectGpuVramGb } from "../lib/capabilities/gpu";
 import { isNewCore, sendAuthUpdate } from "../lib/chat-service";
 import {
@@ -276,9 +279,11 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
 	const [naiaVrms, setNaiaVrms] = useState<string[]>([]);
 	const [selectedVrm, setSelectedVrm] = useState("");
 	const [naiaNvas, setNaiaNvas] = useState<string[]>([]);
+	// 기본 아바타 = NVA(비디오). GPU 없이도 동작하므로 가장 넓은 사용자 도달을 위해
+	// 신규 온보딩 기본값으로 밀어준다. VRM 은 명시 선택 시에만.
 	const [avatarProvider, setAvatarProvider] = useState<
 		"vrm" | "naia-video-avatar"
-	>("vrm");
+	>("naia-video-avatar");
 	const [selectedNva, setSelectedNva] = useState("");
 	const [backgrounds, setBackgrounds] = useState<BgOption[]>([]);
 	const [selectedBg, setSelectedBg] = useState("");
@@ -555,7 +560,16 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
 		listNaiaAssets("nva-files")
 			.then((paths) => {
 				setNaiaNvas(paths);
-				if (paths.length > 0) setSelectedNva((prev) => prev || paths[0]);
+				if (paths.length > 0)
+					setSelectedNva((prev) => {
+						if (prev) return prev;
+						// 기본은 나이아 실사(naia) — 목록 순서상 첫 항목(alpha 등)이 아니라
+						// DEFAULT_NVA_MODEL 을 우선한다. 없으면 첫 항목으로 폴백.
+						const naia = paths.find(
+							(p) => p.split(/[/\\]/).pop() === DEFAULT_NVA_MODEL,
+						);
+						return naia ?? paths[0];
+					});
 			})
 			.catch(() => {});
 	}, []);

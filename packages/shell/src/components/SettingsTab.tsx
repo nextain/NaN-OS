@@ -644,7 +644,7 @@ export function SettingsTab() {
 	const [naiaNvas, setNaiaNvas] = useState<string[]>([]);
 	const [avatarProvider, setAvatarProvider] = useState<
 		"vrm" | "naia-video-avatar"
-	>(existing?.avatarProvider ?? "vrm");
+	>(existing?.avatarProvider ?? "naia-video-avatar");
 	const [nvaModel, setNvaModel] = useState(existing?.nvaModel ?? "");
 	const [activeBgPath, setActiveBgPath] = useState<string>("");
 	const [backgroundVideoFilename, setBackgroundVideoFilename] = useState<

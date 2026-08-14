@@ -83,6 +83,20 @@ function gotoSettingsTab(name: keyof typeof SETTINGS_TAB_INDEX) {
 	fireEvent.click(btn!);
 }
 
+/**
+ * The avatar tab now defaults to the NVA (video) picker — GPU 없이 동작하는 NVA 를
+ * 기본 아바타로 밀어주기 때문. VRM 피커는 avatarProvider 셀렉트를 "vrm" 으로 바꿔야
+ * 렌더된다. VRM 관련 테스트는 이 헬퍼로 avatar 탭 진입 + VRM 선택을 함께 한다.
+ */
+function gotoAvatarVrm() {
+	gotoSettingsTab("avatar");
+	const select = (
+		document.querySelector('option[value="vrm"]') as HTMLOptionElement | null
+	)?.parentElement as HTMLSelectElement | null;
+	expect(select).toBeTruthy();
+	fireEvent.change(select!, { target: { value: "vrm" } });
+}
+
 describe("SettingsTab", () => {
 	afterEach(() => {
 		cleanup();
@@ -749,7 +763,7 @@ describe("SettingsTab", () => {
 		mockInvoke.mockResolvedValue([]);
 		render(<SettingsTab />);
 		// Empty state message is shown in the vrm-list
-		gotoSettingsTab("avatar");
+		gotoAvatarVrm();
 		expect(screen.getByText(/vrm-files|VRM 파일을 추가/i)).toBeDefined();
 	});
 
@@ -762,7 +776,7 @@ describe("SettingsTab", () => {
 			return Promise.resolve([]);
 		});
 		render(<SettingsTab />);
-		gotoSettingsTab("avatar");
+		gotoAvatarVrm();
 
 		await vi.waitFor(() => {
 			// VRM items rendered with alt text matching filenames (minus .vrm)
@@ -782,7 +796,7 @@ describe("SettingsTab", () => {
 	it("renders VRM import file button", () => {
 		mockInvoke.mockResolvedValue([]);
 		render(<SettingsTab />);
-		gotoSettingsTab("avatar");
+		gotoAvatarVrm();
 		expect(screen.getByText(/파일 추가|Add file/i)).toBeDefined();
 	});
 
@@ -828,7 +842,7 @@ describe("SettingsTab", () => {
 			return Promise.resolve([]);
 		});
 		render(<SettingsTab />);
-		gotoSettingsTab("avatar");
+		gotoAvatarVrm();
 
 		const vrmBtn = await screen.findByAltText("01-OL_Woman");
 		// Click the parent button
@@ -886,7 +900,7 @@ describe("SettingsTab", () => {
 		render(<SettingsTab />);
 
 		// VRM picker lives on the avatar tab — select VRM (auto-applies via handleVrmSelect)
-		gotoSettingsTab("avatar");
+		gotoAvatarVrm();
 		const vrmImg = await screen.findByAltText("01-OL_Woman");
 		fireEvent.click(vrmImg.closest("button")!);
 
