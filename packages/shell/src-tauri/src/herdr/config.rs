@@ -5,24 +5,9 @@ const HERDR_MIN_VERSION: (u32, u32, u32) = (0, 8, 0);
 static HERDR_CONFIG_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
 static HERDR_CONFIG_PATH: OnceLock<std::path::PathBuf> = OnceLock::new();
 
-/// Dedicated socket for the app's embedded Herdr server, next to the embedded
-/// config. Isolates the app's session from any Herdr the user runs in their own
-/// terminal (shared default socket) so their clients do not fight over one
-/// session and the app renders its own. Derived once the embedded config path is
-/// known (always true before any client/API call).
-pub(super) fn embedded_herdr_socket() -> Option<std::path::PathBuf> {
-    HERDR_CONFIG_PATH
-        .get()
-        .and_then(|path| path.parent())
-        .map(|dir| dir.join("herdr.sock"))
-}
-
 pub(super) fn herdr_command() -> std::process::Command {
     let mut command = std::process::Command::new("herdr");
     crate::platform::hide_console(&mut command);
-    if let Some(socket) = embedded_herdr_socket() {
-        command.env("HERDR_SOCKET_PATH", socket);
-    }
     command
 }
 

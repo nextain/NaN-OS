@@ -65,18 +65,9 @@ pub async fn herdr_pty_create(
                 pixel_height: 0,
             })
             .map_err(|e| format!("open Herdr PTY failed: {e}"))?;
-        // Isolate the app's Herdr on its own socket (next to the embedded
-        // config) so a Herdr the user runs in their own terminal — which shares
-        // the default global socket — cannot end up as a second client fighting
-        // over one session, leaving the app's terminal blank. Must match the
-        // socket herdr_command() sets for the snapshot/focus API.
-        let socket_path = config_path.parent().map(|dir| dir.join("herdr.sock"));
         let mut command = CommandBuilder::new("herdr");
         command.cwd(&dir_path);
         command.env("HERDR_CONFIG_PATH", config_path);
-        if let Some(socket) = socket_path {
-            command.env("HERDR_SOCKET_PATH", socket);
-        }
         let child = pair
             .slave
             .spawn_command(command)
