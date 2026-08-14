@@ -1923,8 +1923,17 @@ fn validate_runtime_agent_script_override(agent_script: &str) -> Result<(), Stri
             "NAIA_AGENT_SCRIPT checkout commit must remain {expected_commit}; got {actual_commit}"
         ));
     }
+    // Ignore request-contract crash-recovery leases under
+    // .agents/session-contracts/.recovery/ — a pure runtime artifact (never
+    // source, cannot affect the spawned agent) that a concurrent tool call can
+    // drop into the dev checkout. Twin of the build.rs / stage-runtime.mjs /
+    // tauri-with-mode.mjs paired-clean guards.
     let dirty = runtime_git_output(root_path, &["status", "--porcelain"])?;
-    if !dirty.is_empty() {
+    let dirty = dirty.lines().filter(|line| !line.trim().is_empty()).any(|line| {
+        !line.contains(".agents/session-contracts/.recovery/")
+            && !line.contains(".agents\\session-contracts\\.recovery\\")
+    });
+    if dirty {
         return Err("NAIA_AGENT_SCRIPT checkout must remain clean at runtime".to_string());
     }
     let expected_script_hash = option_env!("NAIA_AGENT_PAIRED_SCRIPT_SHA256")

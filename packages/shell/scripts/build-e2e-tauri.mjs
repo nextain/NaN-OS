@@ -49,7 +49,22 @@ function assertPairedAgent() {
 			continue;
 		if (gitOutput(pairedAgent, ["rev-parse", "HEAD"]) !== REQUIRED_AGENT_COMMIT)
 			continue;
-		if (gitOutput(pairedAgent, ["status", "--porcelain"]) !== "") continue;
+		// Ignore request-contract crash-recovery leases under
+		// .agents/session-contracts/.recovery/ (pure runtime artifact, never
+		// source). Twin of stage-runtime's isCleanPorcelainIgnoringRecovery.
+		{
+			const porcelain = gitOutput(pairedAgent, ["status", "--porcelain"]);
+			const dirty =
+				porcelain == null ||
+				porcelain
+					.split("\n")
+					.filter((line) => line.trim() !== "")
+					.some(
+						(line) =>
+							!/\.agents[\\/]session-contracts[\\/]\.recovery[\\/]/.test(line),
+					);
+			if (dirty) continue;
+		}
 		const protoHash = createHash("sha256")
 			.update(
 				readFileSync(

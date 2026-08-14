@@ -226,8 +226,22 @@ fn main() {
     if agent_script_dirty {
         panic!("NAIA_AGENT_SCRIPT paired agent-stdio-entry.mjs must be clean");
     }
-    let checkout_dirty = git_output(&proto_root_path, &["status", "--porcelain"])
-        .map_or(true, |output| !output.is_empty());
+    // Twin of the JS isCleanCheckout guards in stage-runtime.mjs /
+    // tauri-with-mode.mjs: ignore request-contract crash-recovery leases under
+    // .agents/session-contracts/.recovery/. That directory is a pure runtime
+    // artifact — never source, cannot affect the built agent — but a concurrent
+    // tool call can drop a lease into the checkout, which would otherwise fail
+    // this gate even though the paired source is pristine.
+    let checkout_dirty =
+        git_output(&proto_root_path, &["status", "--porcelain"]).map_or(true, |output| {
+            output
+                .lines()
+                .filter(|line| !line.trim().is_empty())
+                .any(|line| {
+                    !line.contains(".agents/session-contracts/.recovery/")
+                        && !line.contains(".agents\\session-contracts\\.recovery\\")
+                })
+        });
     if checkout_dirty {
         panic!("paired naia-agent checkout must be clean");
     }

@@ -93,7 +93,23 @@ if (gitOutput(AGENT, ["status", "--porcelain", "--", "scripts/builds/agent-stdio
 if (gitOutput(AGENT, ["status", "--porcelain", "--", "src/main/adapters/grpc/naia_agent.proto"]) !== "") {
 	die(`[stage-agent] paired naia-agent proto must be clean: ${AGENT}`);
 }
-if (gitOutput(AGENT, ["status", "--porcelain"]) !== "") {
+// Twin of stage-runtime's isCleanPorcelainIgnoringRecovery: ignore
+// request-contract crash-recovery leases under
+// .agents/session-contracts/.recovery/ (pure runtime artifact, never source,
+// cannot affect the built agent) that a concurrent tool call can drop in.
+function checkoutDirtyIgnoringRecovery(dir) {
+	const porcelain = gitOutput(dir, ["status", "--porcelain"]);
+	if (porcelain == null) return true;
+	return porcelain
+		.split("\n")
+		.filter((line) => line.trim() !== "")
+		.some(
+			(line) =>
+				!/\.agents[\\/]session-contracts[\\/]\.recovery[\\/]/.test(line),
+		);
+}
+
+if (checkoutDirtyIgnoringRecovery(AGENT)) {
 	die(`[stage-agent] paired naia-agent checkout must be clean: ${AGENT}`);
 }
 if (sha256File(resolve(AGENT_PROTO_DIR, "naia_agent.proto")) !== REQUIRED_PROTO_SHA256) {
@@ -101,7 +117,7 @@ if (sha256File(resolve(AGENT_PROTO_DIR, "naia_agent.proto")) !== REQUIRED_PROTO_
 }
 
 function assertPairedCheckoutStillClean(stage) {
-	if (gitOutput(AGENT, ["status", "--porcelain"]) !== "") {
+	if (checkoutDirtyIgnoringRecovery(AGENT)) {
 		die(`[stage-agent] paired naia-agent checkout became dirty after ${stage}: ${AGENT}`);
 	}
 	if (sha256File(resolve(AGENT_PROTO_DIR, "naia_agent.proto")) !== REQUIRED_PROTO_SHA256) {
