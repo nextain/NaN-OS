@@ -1480,17 +1480,15 @@ export function SettingsTab() {
 							}
 						};
 
-						const mappedProvider =
-							m.provider.toLowerCase() === "azure" &&
-							[
-								"grok-4.3",
-								"deepseek-v4-pro",
-								"gpt-5.6-sol",
-								"gpt-5.6-luna",
-								"claude-opus-5",
-							].includes(modelId)
-								? "nextain"
-								: resolveProvider(m.provider) || resolveProviderFromId(m.id);
+						// Models the Naia gateway serves under its own route (Azure:
+						// grok/deepseek/gpt/claude, Vertex: gemini, and the Korean
+						// domestic direct providers Upstage: solar, CLOVA: HCX) all
+						// group under the single "nextain" provider — mirrors the
+						// Naia-route set in fetchNaiaPricing.
+						const NAIA_ROUTE_PREFIXES = ["azure", "vertexai", "upstage", "clova"];
+						const mappedProvider = NAIA_ROUTE_PREFIXES.includes(m.provider.toLowerCase())
+							? "nextain"
+							: resolveProvider(m.provider) || resolveProviderFromId(m.id);
 						if (mappedProvider) pushModel(mappedProvider);
 						// Claude Code CLI uses subscription — add models without pricing
 						if (mappedProvider === "anthropic") {

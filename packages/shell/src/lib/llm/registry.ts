@@ -171,7 +171,15 @@ export async function fetchNaiaPricing(
 			}
 		>();
 		for (const entry of entries) {
-			const isNaiaRoute = entry.model_key.startsWith("vertexai:") || entry.model_key.startsWith("azure:");
+			// Naia serves several upstreams under the nextain provider: Azure
+			// (grok/deepseek/gpt), Vertex (gemini), and the Korean domestic direct
+			// providers Upstage (solar) and CLOVA (HCX). All must pick up live
+			// pricing here, else domestic models show no price.
+			const isNaiaRoute =
+				entry.model_key.startsWith("vertexai:") ||
+				entry.model_key.startsWith("azure:") ||
+				entry.model_key.startsWith("upstage:") ||
+				entry.model_key.startsWith("clova:");
 			if (!isNaiaRoute) continue;
 			const modelId = entry.model_key.slice(entry.model_key.indexOf(":") + 1);
 			const read = entry.cached_price_per_million;
@@ -428,8 +436,10 @@ const NAIA_GENERAL_CHAT_RECOMMENDATION: Readonly<Record<string, number>> = {
 	"deepseek-v4-flash": 2,
 	"gemini-3.5-flash": 2,
 	"solar-pro4": 2,
+	"HCX-007": 2,
 	"gpt-5.6-luna": 3,
 	"solar-mini": 3,
+	"HCX-DASH-002": 3,
 	"gemini-3.1-flash-lite": 3,
 	"gemini-2.5-flash-live": 4,
 	"naia-0.9-omni-24g": 5,
@@ -551,6 +561,24 @@ registerLlmProvider({
 		{
 			id: "solar-mini",
 			label: "Solar Mini (국내)",
+			capabilities: ["llm"],
+			supportsTools: true,
+			upstreamProvider: "unknown",
+			lifecycle: "unknown",
+		},
+		{
+			// Korean domestic. Naver HyperCLOVA X via the gateway CLOVA route,
+			// billed in KRW with weekly FX-adjusted USD pricing (naia-anyllm#65,#66).
+			id: "HCX-007",
+			label: "HyperCLOVA X HCX-007 (국내)",
+			capabilities: ["llm"],
+			supportsTools: true,
+			upstreamProvider: "unknown",
+			lifecycle: "unknown",
+		},
+		{
+			id: "HCX-DASH-002",
+			label: "HyperCLOVA X DASH (국내)",
 			capabilities: ["llm"],
 			supportsTools: true,
 			upstreamProvider: "unknown",

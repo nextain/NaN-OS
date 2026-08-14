@@ -268,6 +268,34 @@ describe("registry — fetchNaiaPricing", () => {
 		vi.restoreAllMocks();
 	});
 
+	it("applies live pricing to Korean domestic models (upstage:/clova:)", async () => {
+		// Regression: the Naia-route filter previously accepted only azure:/vertexai:,
+		// so Solar and CLOVA prices were silently dropped and shown as no-price.
+		const gatewayResponse = [
+			{ model_key: "upstage:solar-pro4", input_price_per_million: 0.33, output_price_per_million: 1.32, cached_price_per_million: 0.066 },
+			{ model_key: "upstage:solar-mini", input_price_per_million: 0.165, output_price_per_million: 0.165, cached_price_per_million: null },
+			{ model_key: "clova:HCX-007", input_price_per_million: 0.97, output_price_per_million: 3.88, cached_price_per_million: null },
+			{ model_key: "clova:HCX-DASH-002", input_price_per_million: 0.388, output_price_per_million: 1.552, cached_price_per_million: null },
+		];
+		vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+			new Response(JSON.stringify(gatewayResponse), { status: 200 }),
+		);
+		const models = await fetchNaiaPricing("https://example.com");
+		expect(models).not.toBeNull();
+
+		expect(models!.find((m) => m.id === "solar-pro4")).toMatchObject({
+			pricing: [0.33, 1.32],
+			cachePricing: { read: 0.066, write: null },
+		});
+		// CLOVA ids are uppercase and carry no cache price.
+		const hcx = models!.find((m) => m.id === "HCX-007");
+		expect(hcx?.pricing).toEqual([0.97, 3.88]);
+		expect(hcx?.cachePricing).toBeUndefined();
+		expect(models!.find((m) => m.id === "HCX-DASH-002")?.pricing).toEqual([0.388, 1.552]);
+
+		vi.restoreAllMocks();
+	});
+
 	it("models not in gateway response have no pricing", async () => {
 		vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
 			new Response(JSON.stringify([
@@ -386,9 +414,9 @@ describe("registry — sortModels", () => {
 			"deepseek-v4-pro",
 			"deepseek-v4-flash",
 			"solar-pro4",
+			"HCX-007",
 			"gemini-3.5-flash",
 			"gemini-3.1-flash-lite",
-			"solar-mini",
 		]);
 		expect(sorted.slice(-2)).toEqual([
 			"claude-opus-5",

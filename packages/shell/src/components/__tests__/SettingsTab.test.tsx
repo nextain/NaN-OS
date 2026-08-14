@@ -337,6 +337,34 @@ describe("SettingsTab", () => {
 		).toBe("performance");
 	});
 
+	it("shows Korean domestic models (Upstage/CLOVA) under Naia with live pricing", async () => {
+		// Regression: upstage:/clova: prices were dropped, so domestic models showed
+		// no price. They must group under the nextain provider and carry pricing.
+		localStorage.setItem(
+			"naia-config",
+			JSON.stringify({ provider: "nextain", model: "grok-4.3", apiKey: "" }),
+		);
+		mockInvoke.mockResolvedValue([]);
+		stubPricingFetch([
+			{ model_key: "azure:grok-4.3", input_price_per_million: 0.4, output_price_per_million: 1.2, cached_price_per_million: null },
+			{ model_key: "upstage:solar-pro4", input_price_per_million: 0.33, output_price_per_million: 1.32, cached_price_per_million: 0.066 },
+			{ model_key: "clova:HCX-007", input_price_per_million: 0.97, output_price_per_million: 3.88, cached_price_per_million: null },
+		]);
+
+		render(<SettingsTab />);
+		gotoSettingsTab("brain");
+		await screen.findByText(/Price per 1M tokens/);
+
+		const modelSelect = document.getElementById("model-select") as HTMLSelectElement;
+		const labels = [...modelSelect.options].map((o) => o.text);
+		expect(labels.some((l) => l.includes("Solar Pro 4") && l.includes("$0.330") && l.includes("$1.320"))).toBe(true);
+		expect(labels.some((l) => l.includes("HCX-007") && l.includes("$0.970") && l.includes("$3.880"))).toBe(true);
+		// Both group under nextain — selectable by their canonical ids.
+		const values = [...modelSelect.options].map((o) => o.value);
+		expect(values).toContain("solar-pro4");
+		expect(values).toContain("HCX-007");
+	});
+
 	it("replaces a stale unavailable Naia selection with the first usable priced model", async () => {
 		localStorage.setItem(
 			"naia-config",
