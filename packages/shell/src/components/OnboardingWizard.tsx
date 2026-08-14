@@ -27,7 +27,6 @@ import {
 	saveConfigSecure,
 } from "../lib/config";
 import { getLocale, t } from "../lib/i18n";
-import { getDefaultLlmModel } from "../lib/llm";
 import {
 	defaultClipOf,
 	parseNvaManifest,
@@ -42,6 +41,7 @@ import { NAIA_SLOT_DEFAULTS, applyNaiaSlotDefaults } from "../lib/slots/model";
 import { localVoiceFacadeUrlFromReady } from "../lib/voice/local-runtime";
 import { useAvatarStore } from "../stores/avatar";
 import { useCascadeAvatarStore } from "../stores/cascade-avatar";
+import { useAppStore } from "../stores/app";
 import { useChatStore } from "../stores/chat";
 
 type Step =
@@ -122,7 +122,6 @@ interface OnboardingSnapshot {
 	selectedNva: string;
 	backgrounds: BgOption[];
 	selectedBg: string;
-	apiKey: string;
 	naiaLoginDone: boolean;
 	memoryEmbeddingProvider: "none" | "offline" | "vllm" | "ollama" | "naia";
 	memoryLlmProvider: "none" | "naia" | "vllm" | "ollama";
@@ -293,8 +292,6 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
 	const [backgrounds, setBackgrounds] = useState<BgOption[]>([]);
 	const [selectedBg, setSelectedBg] = useState("");
 	// Provider step state
-	const [apiKey, setApiKey] = useState("");
-	const [apiKeyMode, setApiKeyMode] = useState(false);
 	const [naiaLoginWaiting, setNaiaLoginWaiting] = useState(false);
 	const [naiaLoginDone, setNaiaLoginDone] = useState(hasNaiaKey);
 	const [detectedVramGb, setDetectedVramGb] = useState<number | null>(null);
@@ -500,7 +497,6 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
 					provider: naiaLoginDone
 						? "nextain"
 						: (loadConfig()?.provider ?? "nextain"),
-					...(apiKeyMode && apiKey.trim() ? { apiKey: apiKey.trim() } : {}),
 				};
 			case "complete":
 				return { step: "complete" };
@@ -525,7 +521,6 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
 			selectedNva,
 			backgrounds,
 			selectedBg,
-			apiKey,
 			naiaLoginDone,
 			memoryEmbeddingProvider,
 			memoryLlmProvider,
@@ -811,7 +806,6 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
 			selectedNva,
 			backgrounds,
 			selectedBg,
-			apiKey,
 			naiaLoginDone,
 			memoryEmbeddingProvider,
 			memoryLlmProvider,
@@ -821,13 +815,14 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
 			localVoiceEnabled,
 		},
 	) {
-		const isByo = !!snapshot.apiKey.trim() && !snapshot.naiaLoginDone && !auth;
-		const base = loadConfig() ?? {
-			provider: isByo ? "gemini" : "nextain",
-			model: isByo
-				? getDefaultLlmModel("gemini")
-				: NAIA_SLOT_DEFAULTS.main.model,
-			apiKey: "",
+		// Own-key setup is no longer collected in onboarding (#447-5) — the full
+		// Settings screen owns provider + model + key. A fresh install defaults to
+		// the Naia account provider; returning users keep their saved config.
+		// Typed as a partial so optional carry-over fields (workspaceRoot,
+		// ttsProvider) read as `string | undefined` off the fresh-install fallback.
+		const base: Partial<AppConfig> = loadConfig() ?? {
+			provider: "nextain",
+			model: NAIA_SLOT_DEFAULTS.main.model,
 		};
 		const vrmPath =
 			snapshot.avatarProvider === "vrm"
@@ -868,9 +863,6 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
 			nvaModel: nvaPath,
 			backgroundVideo: bgFilename,
 			persona,
-			...(snapshot.apiKey.trim() && !snapshot.naiaLoginDone && !auth
-				? { apiKey: snapshot.apiKey.trim() }
-				: {}),
 			...(auth ? { naiaKey: auth.naiaKey, naiaUserId: auth.naiaUserId } : {}),
 			workspaceRoot: getAdkPath() || base.workspaceRoot || undefined,
 			onboardingComplete: true,
@@ -931,14 +923,8 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
 					"naiaKey",
 					completedFlat.naiaKey,
 				);
-			if (typeof completedFlat.apiKey === "string")
-				void writeAgentKey(
-					String(completedFlat.provider || "anthropic"),
-					"apiKey",
-					completedFlat.apiKey,
-				);
 			// (gateway sync 제거됨 2026-06-12 — gateway.json 미사용 죽은 경로. config 영속=naia-settings,
-			//  naiaKey/apiKey=키체인(위 writeAgentKey). memory 설정 연결=다른 세션 재설계.)
+			//  naiaKey=키체인(위 writeAgentKey). own-key(apiKey)=설정 화면 담당. memory 설정 연결=다른 세션 재설계.)
 		}
 		addMessage({
 			role: "assistant",
@@ -949,6 +935,15 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
 			),
 		});
 		setTimeout(onComplete, 1200);
+	}
+
+	// #447-5: "직접 설정" no longer collects a provider-less key inline. It finishes
+	// onboarding with the Naia-account default and opens the full Settings screen,
+	// which owns provider + model + key selection. setActiveApp persists in the app
+	// store, so Settings is focused once the main app mounts after onboarding.
+	function handleGoToSettings() {
+		useAppStore.getState().setActiveApp("settings");
+		void handleComplete();
 	}
 
 	const isFirst = stepIndex === 0;
@@ -1250,61 +1245,46 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
 									{t("onboard.next")}
 								</button>
 							</>
-						) : apiKeyMode ? (
-							<>
-								<p className="onboarding-step__hint">
-									{t("onboard.connect.byoHint")}
-								</p>
-								<input
-									className="onboarding-step__input"
-									value={apiKey}
-									onChange={(e) => setApiKey(e.target.value)}
-									placeholder={t("onboard.connect.apiKeyPlaceholder")}
-									autoFocus
-								/>
-								<button
-									type="button"
-									className="onboarding-step__link"
-									onClick={() => setApiKeyMode(false)}
-								>
-									{t("onboard.connect.backToNaia")}
-								</button>
-							</>
 						) : (
 							<>
+								<button
+									type="button"
+									className="onboarding-step__naia-btn"
+									onClick={handleNaiaLogin}
+									disabled={naiaLoginWaiting}
+									style={{ marginTop: 16, width: "100%" }}
+								>
+									{naiaLoginWaiting
+										? t("onboard.lab.waiting")
+										: t("onboard.connect.naiaPath")}
+								</button>
+								{/* #447-5: own-key/provider setup moved out of onboarding —
+								    "직접 설정" finishes onboarding and opens the full Settings
+								    screen (provider + model + key) instead of a provider-less
+								    inline key box. "나중에 설정" keeps configuring later. */}
 								<div
 									style={{
-										display: "grid",
-										gridTemplateColumns: "1fr 1fr",
-										gap: 12,
-										marginTop: 16,
+										display: "flex",
+										flexDirection: "column",
+										gap: 8,
+										marginTop: 12,
 									}}
 								>
 									<button
 										type="button"
-										className="onboarding-step__naia-btn"
-										onClick={handleNaiaLogin}
-										disabled={naiaLoginWaiting}
-									>
-										{naiaLoginWaiting
-											? t("onboard.lab.waiting")
-											: t("onboard.connect.naiaPath")}
-									</button>
-									<button
-										type="button"
 										className="onboarding-step__link"
-										onClick={() => setApiKeyMode(true)}
+										onClick={handleGoToSettings}
 									>
 										{t("onboard.connect.byoPath")}
 									</button>
+									<button
+										type="button"
+										className="onboarding-step__link onboarding-step__link--muted"
+										onClick={goNext}
+									>
+										{t("onboard.connect.setupLater")}
+									</button>
 								</div>
-								<button
-									className="onboarding-step__link onboarding-step__link--muted"
-									type="button"
-									onClick={goNext}
-								>
-									{t("onboard.connect.setupLater")}
-								</button>
 							</>
 						)}
 					</>
@@ -1433,7 +1413,7 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
 						{isCompleteStep ? t("onboard.complete.start") : t("onboard.next")}
 					</button>
 				)}
-				{step === "provider" && (naiaLoginDone || apiKeyMode) && (
+				{step === "provider" && naiaLoginDone && (
 					<button
 						type="button"
 						className="onboarding-step__next-btn"

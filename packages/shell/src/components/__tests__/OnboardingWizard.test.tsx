@@ -71,6 +71,7 @@ vi.mock("../VrmPreview", () => ({
 	),
 }));
 
+import { useAppStore } from "../../stores/app";
 import { OnboardingWizard } from "../OnboardingWizard";
 
 // Step order (without Naia key): agentName → userName → speechStyle → character → background → provider → complete
@@ -300,12 +301,16 @@ describe("OnboardingWizard", () => {
 		expect(screen.queryByText("▶")).toBeNull();
 	});
 
-	it("uses a direct provider and stores the entered BYO API key securely on clean install", async () => {
+	// #447-5: own-key/provider setup left onboarding. "직접 설정" now finishes
+	// onboarding with the Naia-account default and opens the full Settings screen
+	// (which owns provider + model + key) — it never collects a provider-less key.
+	it("routes 'Direct setup' to Settings and completes onboarding without a BYO key", async () => {
 		const { invoke } = await import("@tauri-apps/api/core");
 		(invoke as ReturnType<typeof vi.fn>).mockImplementation((cmd: string) => {
 			if (cmd === "detect_gpu_vram") return Promise.resolve(16);
 			return Promise.resolve(true);
 		});
+		useAppStore.getState().setActiveApp(null);
 
 		renderAtAgentName();
 		await act(async () => {
@@ -313,18 +318,10 @@ describe("OnboardingWizard", () => {
 		});
 		advanceFromAgentNameToProvider();
 
-		fireEvent.click(
-			screen.getByRole("button", { name: /Direct setup/ }),
-		);
-		fireEvent.change(screen.getByPlaceholderText("sk-... / gw-..."), {
-			target: { value: "byo-test-key" },
-		});
-		clickNextByClass();
-		clickNextByClass(); // voice step
+		// The provider-less inline BYO key entry is gone.
+		expect(screen.queryByPlaceholderText("sk-... / gw-...")).toBeNull();
 
-		fireEvent.click(
-			screen.getByRole("button", { name: /시작하기|Get Started/ }),
-		);
+		fireEvent.click(screen.getByRole("button", { name: /Direct setup/ }));
 		await act(async () => {
 			await Promise.resolve();
 		});
@@ -333,13 +330,16 @@ describe("OnboardingWizard", () => {
 		});
 
 		const config = JSON.parse(localStorage.getItem("naia-config") || "{}");
-		expect(config.provider).toBe("gemini");
-		expect(config.model).toBe("gemini-3.5-flash");
+		expect(config.provider).toBe("nextain"); // Naia-account default, not a BYO provider
 		expect(config.apiKey).toBeUndefined();
 		expect(config.naiaKey).toBeUndefined();
 		expect(config.onboardingComplete).toBe(true);
-		expect(config.localGpuTier).toBeUndefined(); // hardware profiles require a Naia login
-		expect(secureStore.set).toHaveBeenCalledWith("apiKey", "byo-test-key");
+		expect(secureStore.set).not.toHaveBeenCalledWith(
+			"apiKey",
+			expect.anything(),
+		);
+		// Settings screen is focused for the user to configure a provider.
+		expect(useAppStore.getState().activeApp).toBe("settings");
 	});
 
 	it("actually starts VoxCPM2 from the voice step instead of only saving a preference", async () => {
