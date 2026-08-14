@@ -11013,10 +11013,13 @@ body.resizing-col * {
 }
 .onboarding-step__nva-crop-media {
 	position: absolute;
-	top: 0;
+	/* Shift the window down + zoom a little less so the face lands in frame for
+	   shorter characters (naia / naia-anime sit lower with more headroom) rather
+	   than cropping into the empty space above their heads. */
+	top: -20px;
 	left: 50%;
 	transform: translateX(-50%);
-	width: 190px;
+	width: 160px;
 	height: auto;
 	max-width: none;
 	border: none;

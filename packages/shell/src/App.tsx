@@ -712,6 +712,13 @@ export function App() {
 				e.preventDefault();
 				toggleAiInterferenceEnabled();
 			}
+			// Explicit full webview reload. Ctrl+R is captured by the workspace
+			// (document reload) so it never refreshes the app; Ctrl+Shift+R always
+			// reloads — useful to re-launch Herdr / recover a desynced webview.
+			if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === "r") {
+				e.preventDefault();
+				window.location.reload();
+			}
 		};
 		window.addEventListener("keydown", handler);
 		return () => window.removeEventListener("keydown", handler);
