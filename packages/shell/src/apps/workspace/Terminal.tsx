@@ -1,7 +1,13 @@
 import { listen } from "@tauri-apps/api/event";
 import { FitAddon } from "@xterm/addon-fit";
 import { type IBufferRange, Terminal as XTerminal } from "@xterm/xterm";
-import { forwardRef, useEffect, useImperativeHandle, useRef } from "react";
+import {
+	forwardRef,
+	useCallback,
+	useEffect,
+	useImperativeHandle,
+	useRef,
+} from "react";
 import { t } from "../../lib/i18n";
 import { Logger } from "../../lib/logger";
 import { resizePty, writePty } from "./pty-ipc";
@@ -144,6 +150,27 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(
 			[],
 		);
 
+		// A full-screen TUI (the embedded Herdr client) only repaints on a real
+		// SIGWINCH. Two cases leave the surface blank with a plain resize:
+		//   1. First attach — the client's opening frame can be emitted before this
+		//      component's pty:output listener is registered (Tauri events are not
+		//      buffered), so that frame is lost.
+		//   2. Reattach — the fit size can equal the client's current size, so the
+		//      resize is a no-op and the client never redraws.
+		// Nudge to a distinct size then back so the PTY always sees a real size
+		// change and the client redraws the whole screen into xterm.
+		const forceRedraw = useCallback(() => {
+			const term = termRef.current;
+			const fit = fitRef.current;
+			if (!activeRef.current || !term || !fit) return;
+			fit.fit();
+			const { rows, cols } = term;
+			if (!rows || !cols) return;
+			void resizePty(pty_id, Math.max(1, rows - 1), cols)
+				.then(() => resizePty(pty_id, rows, cols))
+				.catch(() => {});
+		}, [pty_id]);
+
 		useEffect(() => {
 			const container = containerRef.current;
 			if (!container) return;
@@ -259,7 +286,10 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(
 				};
 				observer = new ResizeObserver(fitAndResize);
 				observer.observe(container);
-				fitAndResize();
+				// Initial attach: force a redraw so a lost opening frame cannot leave
+				// the Herdr surface blank. Ongoing user-driven resizes go through
+				// fitAndResize (real size changes already trigger a repaint).
+				forceRedraw();
 			});
 
 			return () => {
@@ -271,19 +301,15 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(
 				fitRef.current = null;
 				term.dispose();
 			};
-		}, [pty_id]);
+		}, [pty_id, forceRedraw]);
 
 		useEffect(() => {
 			if (!active) return;
-			const id = setTimeout(() => {
-				if (!fitRef.current || !termRef.current) return;
-				fitRef.current.fit();
-				const { rows, cols } = termRef.current;
-				if (!rows || !cols) return;
-				resizePty(pty_id, rows, cols).catch(() => {});
-			}, 50);
+			// Switching back to the Herdr surface reattaches the same client; force a
+			// redraw so a no-op resize cannot leave the restored surface blank.
+			const id = setTimeout(forceRedraw, 50);
 			return () => clearTimeout(id);
-		}, [active, pty_id]);
+		}, [active, forceRedraw]);
 
 		return (
 			<div
