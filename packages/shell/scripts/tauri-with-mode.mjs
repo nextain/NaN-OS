@@ -64,7 +64,25 @@ function isCleanAgentEntrypoint(dir) {
 }
 
 function isCleanCheckout(dir) {
-	return gitOutput(dir, ["status", "--porcelain"]) === "";
+	// Twin of stage-runtime.mjs's isCleanPorcelainIgnoringRecovery — the dev
+	// launch resolves the paired agent here, the bundle resolves it there. Both
+	// must ignore request-contract crash-recovery leases under
+	// .agents/session-contracts/.recovery/: a pure runtime artifact (never
+	// source, cannot affect the built agent) that a concurrent tool call can
+	// drop into the checkout. Without this, the correctly-paired main checkout
+	// looks dirty and is skipped, so the dev build either selects a build-broken
+	// sibling worktree or fails with "no paired checkout".
+	const porcelain = gitOutput(dir, ["status", "--porcelain"]);
+	if (porcelain == null) return false;
+	return (
+		porcelain
+			.split("\n")
+			.filter((line) => line.trim() !== "")
+			.filter(
+				(line) =>
+					!/\.agents[\\/]session-contracts[\\/]\.recovery[\\/]/.test(line),
+			).length === 0
+	);
 }
 
 function sha256File(path) {
