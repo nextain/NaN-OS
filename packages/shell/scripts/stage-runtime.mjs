@@ -79,8 +79,33 @@ function isCleanAgentEntrypoint(dir) {
 	return gitOutput(dir, ["status", "--porcelain", "--", "scripts/builds/agent-stdio-entry.mjs"]) === "";
 }
 
+/**
+ * True when a `git status --porcelain` output represents a clean paired
+ * checkout, ignoring request-contract runtime crash-recovery leases under
+ * `.agents/session-contracts/.recovery/`. That directory is a pure runtime
+ * artifact — it never changes tracked source and cannot affect the built agent
+ * — yet an untracked lease dropped there by a concurrent tool call would make
+ * the correctly-paired main checkout look dirty, silently demoting it and
+ * selecting a build-broken sibling worktree instead. `null` (git failed) is
+ * treated as not-clean. Pure/exported for regression testing.
+ */
+export function isCleanPorcelainIgnoringRecovery(porcelain) {
+	if (porcelain == null) return false;
+	return (
+		porcelain
+			.split("\n")
+			.filter((line) => line.trim() !== "")
+			.filter(
+				(line) =>
+					!/\.agents[\\/]session-contracts[\\/]\.recovery[\\/]/.test(line),
+			).length === 0
+	);
+}
+
 function isCleanCheckout(dir) {
-	return gitOutput(dir, ["status", "--porcelain"]) === "";
+	return isCleanPorcelainIgnoringRecovery(
+		gitOutput(dir, ["status", "--porcelain"]),
+	);
 }
 
 function sha256File(path) {
