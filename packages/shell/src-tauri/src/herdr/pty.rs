@@ -15,6 +15,28 @@ fn existing_herdr_id<'a>(entries: impl IntoIterator<Item = (&'a str, PtyKind)>) 
         .find_map(|(id, kind)| (kind == PtyKind::Herdr).then_some(id))
 }
 
+/// Emit buffered PTY output as one `pty:output` event, keeping any trailing
+/// incomplete UTF-8 sequence in `pending` for the next flush (unless `force`).
+fn flush_pty_output(app: &AppHandle, id: &str, pending: &mut Vec<u8>, force: bool) {
+    if pending.is_empty() {
+        return;
+    }
+    let cut = if force {
+        pending.len()
+    } else {
+        match std::str::from_utf8(pending) {
+            Ok(_) => pending.len(),
+            Err(e) => e.valid_up_to(),
+        }
+    };
+    if cut == 0 {
+        return;
+    }
+    let data = String::from_utf8_lossy(&pending[..cut]).to_string();
+    let _ = app.emit(&format!("pty:output:{id}"), data);
+    pending.drain(..cut);
+}
+
 /// Launch the real Herdr client in a dedicated PTY. The frontend cannot choose
 /// an executable, argument, or environment variable. Repeated calls reuse the
 /// live embedded client rather than attaching a second client.
@@ -97,17 +119,46 @@ pub async fn herdr_pty_create(
         let reader_app = app.clone();
         let reader_registry = Arc::clone(&registry);
         std::thread::spawn(move || {
-            let mut reader = reader;
-            let mut buffer = [0_u8; 4096];
+            // Coalesce PTY output into ~8ms windows so a heavy TUI redraw does not
+            // flood the IPC bridge with one event per read. A dedicated read
+            // sub-thread feeds raw 64KB chunks; this thread batches and emits them.
+            use std::sync::mpsc::{self, RecvTimeoutError};
+            use std::time::{Duration, Instant};
+            const FLUSH: Duration = Duration::from_millis(8);
+            const MAX_PENDING: usize = 256 * 1024;
+            let (tx, rx) = mpsc::channel::<Vec<u8>>();
+            let read_thread = std::thread::spawn(move || {
+                let mut reader = reader;
+                let mut buffer = [0_u8; 65536];
+                while let Ok(count) = reader.read(&mut buffer) {
+                    if count == 0 || tx.send(buffer[..count].to_vec()).is_err() {
+                        break;
+                    }
+                }
+            });
+            let mut pending: Vec<u8> = Vec::new();
+            let mut deadline = Instant::now() + FLUSH;
             loop {
-                match reader.read(&mut buffer) {
-                    Ok(0) | Err(_) => break,
-                    Ok(count) => {
-                        let data = String::from_utf8_lossy(&buffer[..count]).to_string();
-                        let _ = reader_app.emit(&format!("pty:output:{reader_id}"), data);
+                let timeout = deadline.saturating_duration_since(Instant::now());
+                match rx.recv_timeout(timeout) {
+                    Ok(chunk) => {
+                        pending.extend_from_slice(&chunk);
+                        if pending.len() >= MAX_PENDING {
+                            flush_pty_output(&reader_app, &reader_id, &mut pending, false);
+                            deadline = Instant::now() + FLUSH;
+                        }
+                    }
+                    Err(RecvTimeoutError::Timeout) => {
+                        flush_pty_output(&reader_app, &reader_id, &mut pending, false);
+                        deadline = Instant::now() + FLUSH;
+                    }
+                    Err(RecvTimeoutError::Disconnected) => {
+                        flush_pty_output(&reader_app, &reader_id, &mut pending, true);
+                        break;
                     }
                 }
             }
+            let _ = read_thread.join();
             reader_registry.lock().unwrap().remove(&reader_id);
             let _ = reader_app.emit(&format!("pty:exit:{reader_id}"), ());
         });

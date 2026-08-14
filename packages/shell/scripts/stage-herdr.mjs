@@ -14,7 +14,8 @@
  * the version is pinned here to control update drift (nextain#445). Windows
  * only for now — Linux packages layer Herdr at the naia-os level.
  */
-import { cpSync, existsSync, mkdirSync, rmSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { cpSync, existsSync, mkdirSync, readFileSync, rmSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -26,6 +27,11 @@ const DEST = resolve(RESOURCES, "herdr");
 
 /** Pinned Herdr version bundled with the app. Bump deliberately (nextain#445). */
 export const HERDR_VERSION = "0.8.0-preview.2026-08-04-d78e3d3b5126";
+/** SHA256 of the pinned herdr.exe — a supply-chain gate so a tampered or
+    wrong-version local Herdr install cannot be silently bundled. Bump with the
+    version. */
+const HERDR_EXE_SHA256 =
+	"6f470da358d6713b6bebab922ffb1f5fe1d3d288cc6f374c7dca1b4a9837a542";
 const TARGET_TRIPLE = "x86_64-pc-windows-msvc";
 
 /** Absolute path to the pinned Herdr release directory to bundle. */
@@ -50,11 +56,21 @@ export function herdrReleasePresent() {
 
 function main() {
 	const src = herdrReleaseDir();
-	if (!existsSync(resolve(src, "herdr.exe"))) {
+	const srcExe = resolve(src, "herdr.exe");
+	if (!existsSync(srcExe)) {
 		console.error(
 			`[stage-herdr] pinned Herdr ${HERDR_VERSION} not found at ${src}\n` +
 				"  Install that exact Herdr version on the build machine, or set " +
 				"HERDR_RELEASE_DIR to a directory containing herdr.exe + conpty/.",
+		);
+		process.exit(1);
+	}
+	const actualSha = createHash("sha256").update(readFileSync(srcExe)).digest("hex");
+	if (actualSha !== HERDR_EXE_SHA256) {
+		console.error(
+			`[stage-herdr] herdr.exe SHA256 mismatch — refusing to bundle.\n` +
+				`  expected ${HERDR_EXE_SHA256}\n  got      ${actualSha}\n` +
+				`  (${srcExe}) — wrong version or tampered binary. Update the pin if intentional.`,
 		);
 		process.exit(1);
 	}

@@ -353,9 +353,16 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(
 		// Follow the shell's light/dark theme: recolor xterm and hot-reload the
 		// Herdr theme whenever the app's data-theme changes (and once on mount).
 		useEffect(() => {
+			let lastDark: boolean | null = null;
 			const sync = () => {
 				if (termRef.current) termRef.current.options.theme = currentXtermTheme();
-				invoke("herdr_set_theme", { dark: shellIsDark() }).catch(() => {});
+				// Only hot-reload the Herdr theme when the light/dark mode actually
+				// flips — switching between two dark themes just recolors xterm.
+				const dark = shellIsDark();
+				if (dark !== lastDark) {
+					lastDark = dark;
+					invoke("herdr_set_theme", { dark }).catch(() => {});
+				}
 			};
 			sync();
 			const observer = new MutationObserver((mutations) => {

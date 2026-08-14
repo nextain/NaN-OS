@@ -2511,7 +2511,7 @@ body.resizing-row {
 .settings-tab-bar {
 	display: flex;
 	flex-direction: row;
-	border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+	border-bottom: 1px solid var(--border-color, rgba(255, 255, 255, 0.1));
 	padding: 0 12px;
 	gap: 0;
 	flex-shrink: 0;
@@ -2523,7 +2523,7 @@ body.resizing-row {
 	border-bottom: 2px solid transparent;
 	padding: 10px 16px;
 	font-size: 13px;
-	color: rgba(255, 255, 255, 0.5);
+	color: var(--text-secondary, rgba(255, 255, 255, 0.5));
 	cursor: pointer;
 	transition: color 0.15s, border-color 0.15s, background 0.15s;
 	border-radius: 4px 4px 0 0;
@@ -2532,13 +2532,13 @@ body.resizing-row {
 }
 
 .settings-tab-btn:hover {
-	color: rgba(255, 255, 255, 0.85);
-	background: rgba(255, 255, 255, 0.05);
+	color: var(--text-primary, rgba(255, 255, 255, 0.85));
+	background: var(--hover-bg, rgba(255, 255, 255, 0.05));
 }
 
 .settings-tab-btn--active {
-	color: rgba(255, 255, 255, 0.95);
-	border-bottom-color: rgba(120, 170, 255, 0.85);
+	color: var(--text-primary, rgba(255, 255, 255, 0.95));
+	border-bottom-color: var(--accent, rgba(120, 170, 255, 0.85));
 }
 
 .settings-tab {
