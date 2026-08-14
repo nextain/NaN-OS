@@ -11,11 +11,13 @@ Source data: [`releases/v*.yaml`](releases/)
 
 ## v0.1.7 (2026-08-14)
 
-Korean domestic AI models arrive — Upstage Solar Pro 4 (agent-first flagship) and Solar Mini are now selectable Naia models, with tool calling verified against the live deployment before shipping. This release also makes the gateway resilient (the desktop trusts `api.naia.land` alongside `api.nextain.io`), restores DeepSeek V4 tool calling, cleans up the first sentence of voice replies, ships a durable Radio DJ, and lets a development instance run side by side with production.
+Korean domestic AI models arrive — Upstage Solar (Pro 4, Mini) and Naver HyperCLOVA X (HCX-007, HCX-DASH-002) are now selectable Naia models, with tool calling verified against each live deployment before shipping. This release also makes the gateway resilient (the desktop trusts `api.naia.land` alongside `api.nextain.io`), restores DeepSeek V4 tool calling, cleans up the first sentence of voice replies, ships a durable Radio DJ, and lets a development instance run side by side with production.
 
 AI models:
 
-- **feat(models)**: Korean domestic models — Upstage Solar Pro 4 and Solar Mini are now selectable Naia models; tool calling was verified against the live Upstage deployment before shipping
+- **feat(models)**: Korean domestic models — Upstage Solar Pro 4 (agent-first flagship) and Solar Mini are now selectable Naia models; tool calling was verified against the live Upstage deployment before shipping
+- **feat(models)**: Korean domestic models — Naver HyperCLOVA X HCX-007 (reasoning) and HCX-DASH-002 (lightweight) are now selectable Naia models; tool calling was verified against the live CLOVA Studio deployment before shipping
+- **fix(models)**: Korean model prices now display — domestic models (Solar, CLOVA) were silently dropped from the price list because only Azure/Vertex routes were recognized; both now show live pricing under Naia ([#436](https://github.com/nextain/naia-shell/issues/436))
 - **fix(models)**: DeepSeek V4 (Flash/Pro) tool calling restored — the gateway wrongly refused tool requests, so skills silently never ran on these models ([#427](https://github.com/nextain/naia-shell/issues/427))
 - **feat(gateway)**: Gateway domain resilience — the desktop trusts `api.naia.land` alongside `api.nextain.io` so the primary endpoint can move without a client update
 

@@ -4,15 +4,26 @@ date: "2026-08-14"
 # (ja zh fr de ru es ar hi bn pt id vi) are produced through the
 # translation cross-review pipeline before the multi-language release page.
 summary:
-  en: "Korean domestic AI models arrive — Upstage Solar Pro 4 and Solar Mini are now selectable Naia models with verified tool calling. Plus a resilient gateway (api.naia.land alongside api.nextain.io), DeepSeek V4 tool calling restored, cleaner first-sentence voice, a durable Radio DJ, and dev/prod instance isolation."
-  ko: "국내 AI 모델 합류 — Upstage Solar Pro 4·Solar Mini를 도구 호출까지 검증해 Naia 모델로 선택 가능. 게이트웨이 이중화(api.naia.land·api.nextain.io 병행), DeepSeek V4 도구 호출 복구, 첫 문장 음성 왜곡 수정, 끊김 없는 라디오 DJ, 개발/운영 인스턴스 격리."
+  en: "Korean domestic AI models arrive — Upstage Solar (Pro 4, Mini) and Naver HyperCLOVA X (HCX-007, HCX-DASH-002) are now selectable Naia models with verified tool calling and live pricing. Plus a resilient gateway (api.naia.land alongside api.nextain.io), DeepSeek V4 tool calling restored, cleaner first-sentence voice, a durable Radio DJ, and dev/prod instance isolation."
+  ko: "국내 AI 모델 합류 — Upstage Solar(Pro 4, Mini)와 Naver HyperCLOVA X(HCX-007, HCX-DASH-002)를 도구 호출·실시간 가격까지 검증해 Naia 모델로 선택 가능. 게이트웨이 이중화(api.naia.land·api.nextain.io 병행), DeepSeek V4 도구 호출 복구, 첫 문장 음성 왜곡 수정, 끊김 없는 라디오 DJ, 개발/운영 인스턴스 격리."
 changes:
   # ── AI models (headline) ──
   - type: feat
     scope: models
     description:
-      en: "Korean domestic models — Upstage Solar Pro 4 (agent-first flagship) and Solar Mini are now selectable Naia models. Tool calling was verified against the live deployment before shipping."
-      ko: "국내 모델 — Upstage Solar Pro 4(에이전트 특화 플래그십)와 Solar Mini를 Naia 모델로 선택 가능. 배포 전 실제 배포본에 도구 호출을 실측 검증했습니다."
+      en: "Korean domestic models — Upstage Solar Pro 4 (agent-first flagship) and Solar Mini are now selectable Naia models. Tool calling was verified against the live Upstage deployment before shipping."
+      ko: "국내 모델 — Upstage Solar Pro 4(에이전트 특화 플래그십)와 Solar Mini를 Naia 모델로 선택 가능. 배포 전 실제 Upstage 배포본에 도구 호출을 실측 검증했습니다."
+  - type: feat
+    scope: models
+    description:
+      en: "Korean domestic models — Naver HyperCLOVA X HCX-007 (reasoning) and HCX-DASH-002 (lightweight) are now selectable Naia models. Tool calling was verified against the live CLOVA Studio deployment before shipping."
+      ko: "국내 모델 — Naver HyperCLOVA X HCX-007(추론)와 HCX-DASH-002(경량)를 Naia 모델로 선택 가능. 배포 전 실제 CLOVA Studio 배포본에 도구 호출을 실측 검증했습니다."
+  - type: fix
+    scope: models
+    issue: 436
+    description:
+      en: "Korean model prices now display — domestic models (Solar, CLOVA) were silently dropped from the price list because only Azure/Vertex routes were recognized; both now show live pricing under Naia."
+      ko: "국내 모델 가격 표시 — Azure/Vertex 경로만 인식해 국내 모델(Solar·CLOVA) 가격이 목록에서 조용히 누락되던 문제 수정. 이제 Naia 아래 실시간 가격을 표시합니다."
   - type: fix
     scope: models
     issue: 427

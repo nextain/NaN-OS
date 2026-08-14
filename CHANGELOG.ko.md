@@ -11,11 +11,13 @@ Naia OS의 주요 변경 사항을 기록합니다.
 
 ## v0.1.7 (2026-08-14)
 
-국내 AI 모델 합류 — Upstage Solar Pro 4(에이전트 특화 플래그십)와 Solar Mini를 Naia 모델로 선택할 수 있고, 배포 전 실제 배포본에 도구 호출을 실측 검증했습니다. 이번 릴리즈는 게이트웨이 이중화(데스크톱이 `api.naia.land`를 `api.nextain.io`와 함께 신뢰), DeepSeek V4 도구 호출 복구, 음성 답변 첫 문장 정리, 끊김 없는 라디오 DJ, 개발 인스턴스의 운영 병행 실행을 더했습니다.
+국내 AI 모델 합류 — Upstage Solar(Pro 4, Mini)와 Naver HyperCLOVA X(HCX-007, HCX-DASH-002)를 Naia 모델로 선택할 수 있고, 각 실제 배포본에 도구 호출을 배포 전 실측 검증했습니다. 이번 릴리즈는 게이트웨이 이중화(데스크톱이 `api.naia.land`를 `api.nextain.io`와 함께 신뢰), DeepSeek V4 도구 호출 복구, 음성 답변 첫 문장 정리, 끊김 없는 라디오 DJ, 개발 인스턴스의 운영 병행 실행을 더했습니다.
 
 AI 모델:
 
-- **feat(models)**: 국내 모델 — Upstage Solar Pro 4·Solar Mini를 Naia 모델로 선택 가능. 배포 전 실제 Upstage 배포본에 도구 호출 실측 검증
+- **feat(models)**: 국내 모델 — Upstage Solar Pro 4(에이전트 특화 플래그십)·Solar Mini를 Naia 모델로 선택 가능. 배포 전 실제 Upstage 배포본에 도구 호출 실측 검증
+- **feat(models)**: 국내 모델 — Naver HyperCLOVA X HCX-007(추론)·HCX-DASH-002(경량)를 Naia 모델로 선택 가능. 배포 전 실제 CLOVA Studio 배포본에 도구 호출 실측 검증
+- **fix(models)**: 국내 모델 가격 표시 — Azure/Vertex 경로만 인식해 국내 모델(Solar·CLOVA) 가격이 목록에서 조용히 누락되던 문제 수정. 이제 Naia 아래 실시간 가격 표시 ([#436](https://github.com/nextain/naia-shell/issues/436))
 - **fix(models)**: DeepSeek V4(Flash/Pro) 도구 호출 복구 — 게이트웨이가 도구 요청을 잘못 거절해 이 모델들에서 스킬이 조용히 실행되지 않던 문제 수정 ([#427](https://github.com/nextain/naia-shell/issues/427))
 - **feat(gateway)**: 게이트웨이 도메인 이중화 — 데스크톱이 `api.naia.land`를 `api.nextain.io`와 함께 신뢰해, 1차 엔드포인트 이전 시 클라이언트 갱신 불필요
 
