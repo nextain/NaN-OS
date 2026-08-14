@@ -4,7 +4,9 @@ import {
 	type AppConfig,
 	DERIVED_AGENT_ENV_KEYS,
 	LAB_GATEWAY_URL,
+	loadConfig,
 	mergeBootConfig,
+	saveConfig,
 } from "./config";
 import { Logger } from "./logger";
 import {
@@ -45,6 +47,16 @@ export async function setAdkPath(path: string): Promise<void> {
 	// Normalize: remove trailing slash/backslash
 	const normalized = path.replace(/[/\\]+$/, "");
 	localStorage.setItem(ADK_PATH_KEY, normalized);
+	// config.workspaceRoot is defined as an adkPath mirror (see config.ts). The
+	// two used to drift: onboarding's AdkSetupScreen writes only the adk path,
+	// while a stale config.workspaceRoot could survive a partial reset — and
+	// WorkspaceCenterArea prefers config.workspaceRoot, so the old repo (e.g.
+	// the dev-detected alpha-adk) kept winning over the freshly selected path.
+	// Mirror the value here so no caller can leave the two SoTs inconsistent.
+	const cfg = loadConfig();
+	if (cfg && cfg.workspaceRoot !== normalized) {
+		saveConfig({ ...cfg, workspaceRoot: normalized });
+	}
 	// Persist to ~/.naia/adk-path. Native restarts/rebinds an already-running
 	// agent when this changes, so setup must await completion before continuing.
 	await invoke("write_naia_path_cache", { adkPath: normalized });

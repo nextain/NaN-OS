@@ -152,6 +152,23 @@ describe("setAdkPath native binding", () => {
 		await expect(setAdkPath(WIN_ADK)).rejects.toThrow("agent restart failed");
 		expect(getAdkPath()).toBe(WIN_ADK);
 	});
+
+	// #447-6 regression: config.workspaceRoot is an adkPath mirror. A stale
+	// workspaceRoot that survived a partial reset used to outrank the freshly
+	// selected adk path (WorkspaceCenterArea prefers config.workspaceRoot), so the
+	// old repo kept being opened. setAdkPath must re-sync the mirror.
+	it("re-syncs a stale config.workspaceRoot to the selected adk path", async () => {
+		localStorage.setItem(
+			"naia-config",
+			JSON.stringify({ workspaceRoot: "D:\\alpha-adk", provider: "nextain" }),
+		);
+
+		await setAdkPath(WIN_ADK);
+
+		const cfg = JSON.parse(localStorage.getItem("naia-config") ?? "{}");
+		expect(cfg.workspaceRoot).toBe(WIN_ADK);
+		expect(cfg.provider).toBe("nextain"); // other fields untouched
+	});
 });
 
 describe("isAdkInitialized", () => {

@@ -220,7 +220,12 @@ export function WorkspaceCenterArea({ naia }: AppCenterProps) {
 	// Resolved workspace root — separate from the naia-settings resource directory.
 	const [activeWorkspaceRoot, setActiveWorkspaceRoot] = useState(() => {
 		const cfg = loadConfig();
-		return cfg?.workspaceRoot || getAdkPath() || "";
+		// getAdkPath() is the atomic user selection (AdkSetupScreen) mirrored to
+		// the native ~/.naia/adk-path cache, so it outranks config.workspaceRoot,
+		// which can survive a partial reset stale (e.g. a dev-detected alpha-adk).
+		// setAdkPath() keeps the two in sync; this ordering only matters for
+		// installs that diverged before that fix.
+		return getAdkPath() || cfg?.workspaceRoot || "";
 	});
 
 	const detectAdkRoot = useCallback(async (): Promise<string | null> => {

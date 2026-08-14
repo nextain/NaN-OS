@@ -23,6 +23,7 @@ import {
 	DEFAULT_LOCAL_VOICE_HOST,
 	NAIA_WEB_BASE_URL,
 	loadConfig,
+	saveConfig,
 	saveConfigSecure,
 } from "../lib/config";
 import { getLocale, t } from "../lib/i18n";
@@ -184,10 +185,16 @@ function BackgroundThumbnail({
 		);
 	}
 	return (
+		// #447-2: when the single-frame capture can't produce a still (e.g. a VP9
+		// alpha .webm whose early frames are transparent, or a tainted canvas), a
+		// metadata-only <video> paints nothing and the tile looks empty. Autoplay a
+		// muted loop so the avatar/background is always visible in the grid.
 		<video
 			src={background.url}
 			className={className}
 			muted
+			loop
+			autoPlay
 			preload="metadata"
 			playsInline
 			aria-label={background.label}
@@ -558,16 +565,26 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
 		listNaiaAssets("nva-files")
 			.then((paths) => {
 				setNaiaNvas(paths);
-				if (paths.length > 0)
-					setSelectedNva((prev) => {
-						if (prev) return prev;
-						// 기본은 나이아 실사(naia) — 목록 순서상 첫 항목(alpha 등)이 아니라
-						// DEFAULT_NVA_MODEL 을 우선한다. 없으면 첫 항목으로 폴백.
-						const naia = paths.find(
-							(p) => p.split(/[/\\]/).pop() === DEFAULT_NVA_MODEL,
-						);
-						return naia ?? paths[0];
+				if (paths.length === 0) return;
+				// 기본은 나이아 실사(naia) — 목록 순서상 첫 항목(alpha 등)이 아니라
+				// DEFAULT_NVA_MODEL 을 우선한다. 없으면 첫 항목으로 폴백.
+				const naia = paths.find(
+					(p) => p.split(/[/\\]/).pop() === DEFAULT_NVA_MODEL,
+				);
+				const chosen = naia ?? paths[0];
+				let seeded = false;
+				setSelectedNva((prev) => {
+					if (prev) return prev;
+					seeded = true;
+					return chosen;
+				});
+				// #447-2: default provider is NVA — surface the default pick on the
+				// live canvas behind the wizard without waiting for a click.
+				if (seeded && avatarProvider === "naia-video-avatar") {
+					publishAvatarChoice("naia-video-avatar", {
+						nvaModel: chosen.split(/[/\\]/).pop() ?? chosen,
 					});
+				}
 			})
 			.catch(() => {});
 	}, []);
@@ -609,11 +626,12 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
 				);
 				setBackgrounds(bgs);
 				if (bgs.length > 0) {
-					// Default to the "space" background (naia 우주선) — it's the default shown in the app.
+					// #447-3: default to naia-dawn-city (matches App DEFAULT_BG_VIDEO).
 					// Fall back to the first available background if not found.
-					const spaceBg =
-						bgs.find((b) => b.path.toLowerCase().includes("space")) ?? bgs[0];
-					setSelectedBg(spaceBg.url);
+					const defaultBg =
+						bgs.find((b) => b.path.toLowerCase().includes("dawn-city")) ??
+						bgs[0];
+					setSelectedBg(defaultBg.url);
 				}
 			})
 			.catch(() => {});
@@ -705,15 +723,35 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
 		setStep(prev);
 	}
 
+	// #447-2: reflect the avatar choice on the live canvas behind the wizard.
+	// App re-syncs avatarProvider/nvaModel on the "naia-config-changed" event, so
+	// persisting the selection here makes the pick render immediately (VRM via the
+	// avatar store, NVA via the video canvas) instead of only after completion.
+	function publishAvatarChoice(
+		provider: "vrm" | "naia-video-avatar",
+		extra: Record<string, unknown>,
+	) {
+		const cfg = loadConfig();
+		if (!cfg) return;
+		saveConfig({ ...cfg, avatarProvider: provider, ...extra });
+		window.dispatchEvent(new Event("naia-config-changed"));
+	}
+
 	function handleVrmSelect(path: string) {
 		setAvatarProvider("vrm");
 		setSelectedVrm(path);
 		setAvatarModelPath(path);
+		publishAvatarChoice("vrm", {
+			vrmModel: path.split(/[/\\]/).pop() ?? path,
+		});
 	}
 
 	function handleNvaSelect(path: string) {
 		setAvatarProvider("naia-video-avatar");
 		setSelectedNva(path);
+		publishAvatarChoice("naia-video-avatar", {
+			nvaModel: path.split(/[/\\]/).pop() ?? path,
+		});
 	}
 
 	function handleBgSelect(url: string) {

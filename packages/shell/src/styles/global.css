@@ -11087,7 +11087,17 @@ body.resizing-col * {
 }
 
 .onboarding-step__provider-check {
-	font-size: 32px;
+	/* #447-4: this badge holds short text ("GPU", "GPU 감지됨"), not an icon —
+	   32px rendered as an oversized heading. Size it as a compact label. */
+	font-size: 15px;
+	font-weight: 600;
+	letter-spacing: 0.01em;
+}
+
+.onboarding-step__provider-done p {
+	font-size: 13px;
+	line-height: 1.5;
+	margin: 0;
 }
 
 .onboarding-step__provider-or {

@@ -424,9 +424,11 @@ export function App() {
 		}
 	}, []);
 
-	// Load background video from naia-settings/background/
-	// #342: fall back to morning-coffee when no saved preference
-	const DEFAULT_BG_VIDEO = "morning-coffee.3840x2160.mp4";
+	// Load background from naia-settings/background/. May be a video (.mp4) or a
+	// still image (.webp) — getBackgroundMediaType() below resolves which.
+	// #342 / #447-3: default to the naia-dawn-city still when no saved preference
+	// (this default had regressed back to morning-coffee).
+	const DEFAULT_BG_VIDEO = "naia-dawn-city-uhd.webp";
 	useEffect(() => {
 		if (showAdkSetup) return;
 		listNaiaAssets("background").then(async (paths) => {
@@ -1063,6 +1065,10 @@ export function App() {
 									)}
 								</div>
 							)}
+							{/* #447-1: the chat overlay (controls + full-width ChatArea) must
+							    not appear during onboarding — the avatar canvas below stays
+							    so the selected avatar still shows behind the wizard. */}
+							{!showOnboarding && (
 							<div className="naia-overlay">
 								{/* AI + avatar controls — top of avatar column, independent */}
 								<AiControlBar />
@@ -1140,6 +1146,7 @@ export function App() {
 									</div>
 								</div>
 							</div>
+							)}
 						</>
 					)}
 
