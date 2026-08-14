@@ -452,7 +452,14 @@ export function WorkspaceCenterArea({ naia }: AppCenterProps) {
 			if (cancelled || !detected) return;
 			const cfg = loadConfig();
 			if (cfg) saveConfig({ ...cfg, workspaceRoot: detected });
-			setAdkPath(detected);
+			try {
+				await setAdkPath(detected);
+			} catch (error) {
+				Logger.error("WorkspaceCenterArea", "workspace binding failed", {
+					error: String(error),
+				});
+				return;
+			}
 			setActiveWorkspaceRoot(detected);
 		})();
 		return () => {
@@ -486,11 +493,9 @@ export function WorkspaceCenterArea({ naia }: AppCenterProps) {
 						}),
 					)
 					.catch((e: unknown) =>
-						Logger.warn(
-							"WorkspaceCenterArea",
-							"workspace_start_watch failed",
-							{ error: String(e) },
-						),
+						Logger.warn("WorkspaceCenterArea", "workspace_start_watch failed", {
+							error: String(e),
+						}),
 					);
 			})
 			.catch((e) => {

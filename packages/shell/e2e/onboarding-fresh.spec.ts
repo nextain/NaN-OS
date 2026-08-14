@@ -12,7 +12,7 @@ const MOCK_ADK_PATH = "/home/user/naia-adk";
 const MOCK_VIDEO_FILE = "flower-shop-beachside-moewalls-com.mp4";
 const MOCK_BG_FILES = [MOCK_VIDEO_FILE, "background-space.png"];
 const MOCK_VRM_FILES = ["01-OL_Woman.vrm", "02-Hood_Boy.vrm"];
-const MOCK_NVA_FILES = ["naia-prebaked"];
+const MOCK_NVA_FILES = ["alpha", "naia", "naia-prebaked"];
 // Minimal valid 1x1 PNG bytes (used as mock binary payload for read_local_binary)
 const MINI_PNG = [
 	137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68, 82, 0, 0, 0, 1, 0,
@@ -163,11 +163,19 @@ test.describe("Fresh onboarding flow", () => {
 
 		// Character choices expose both VRM and NVA without a GPU/profile gate.
 		await expect(
-			page.locator(".onboarding-step__avatar-item").first(),
+			page.locator(".onboarding-step__avatar-card").first(),
 		).toBeVisible({
 			timeout: 8_000,
 		});
-		const nvaChoice = page.getByRole("button", { name: "naia-prebaked" });
+		await expect(page.getByText("VRM", { exact: true })).toHaveCount(2);
+		await expect(page.getByText("NVA", { exact: true })).toHaveCount(3);
+		const defaultNaia = page
+			.locator(".onboarding-step__avatar-card")
+			.filter({ has: page.getByText("naia", { exact: true }) });
+		await expect(defaultNaia).toHaveClass(/avatar-card--selected/);
+		const nvaChoice = page
+			.locator(".onboarding-step__avatar-card")
+			.filter({ has: page.getByText("naia-prebaked", { exact: true }) });
 		await expect(nvaChoice).toBeVisible();
 		await nvaChoice.click();
 		await clickNext(page);

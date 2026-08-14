@@ -5,6 +5,7 @@ import {
 	activeHerdrRoot,
 	assertHerdrSnapshot,
 	focusedHerdrAgent,
+	waitForHerdrReady,
 } from "../herdr";
 
 const snapshot: HerdrSnapshot = {
@@ -36,6 +37,21 @@ const snapshot: HerdrSnapshot = {
 };
 
 describe("Herdr workspace boundary", () => {
+	it("waits through the startup race until the shared server is ready", async () => {
+		let attempts = 0;
+		const ready = await waitForHerdrReady(
+			async () => {
+				attempts += 1;
+				if (attempts < 3) throw new Error("socket not ready");
+				return snapshot;
+			},
+			{ timeoutMs: 1_000, retryMs: 0 },
+		);
+
+		expect(ready).toBe(snapshot);
+		expect(attempts).toBe(3);
+	});
+
 	it("validates protocol and derives the focused root and agent", () => {
 		expect(assertHerdrSnapshot(snapshot)).toBe(snapshot);
 		expect(activeHerdrRoot(snapshot)).toBe("/work/naia");

@@ -44,6 +44,12 @@ export const config = {
 		},
 	],
 	logLevel: "error",
+	// Node 26's fetch rejects webdriverio's precomputed Content-Length after
+	// the request body is wrapped by the WebDriver transport.
+	transformRequest: (request) => {
+		request.headers.delete("Content-Length");
+		return request;
+	},
 	waitforTimeout: 30_000,
 	connectionRetryTimeout: 120_000,
 	connectionRetryCount: 2,
@@ -65,7 +71,9 @@ export const config = {
 		await browser.waitUntil(
 			async () => {
 				try {
-					return await browser.execute(() => document.location.href.startsWith("http"));
+					return await browser.execute(() =>
+						document.location.href.startsWith("http"),
+					);
 				} catch {
 					return false;
 				}
@@ -76,7 +84,9 @@ export const config = {
 			},
 		);
 		if (!existsSync(E2E_WEBVIEW2_DATA)) {
-			throw new Error("WebView2 test profile was not created under the owned E2E root");
+			throw new Error(
+				"WebView2 test profile was not created under the owned E2E root",
+			);
 		}
 	},
 	async onComplete() {

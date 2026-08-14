@@ -804,3 +804,14 @@ Those older sections are historical evidence only.
 | **UC-LLM-DEFAULT-DEEPSEEK-FLASH** | Naia 계정으로 로그인하거나 온보딩을 완료하면 메인 LLM이 `DeepSeek V4 Flash`로 자동 선택된다. 설정 탭 모델 선택기에도 `DeepSeek V4 Flash`가 `DeepSeek V4 Pro` 옆에 나타나고, "Naia 기본값 적용"을 눌러도 같은 값이 채워진다. | `lib/llm/__tests__/registry*.test.ts`, `lib/slots/__tests__/settings-slots.contract.test.ts`, `components/__tests__/SettingsTab.test.tsx` |
 
 any-llm 게이트웨이 쪽(라우팅·가격)은 이미 구현·테스트돼 있어 이번 변경 대상이 아니었다(`pytest tests/gateway/test_naia_azure_models.py tests/unit/test_naia_pricing.py` 78 passed로 확인). 이 시나리오에 대한 전용 Playwright는 없음(모델 선택 자체는 기존 SettingsTab e2e 커버리지 범위 밖) — 이번 세션에서 새로 만들지 않음.
+
+### 2026-08-14 v0.1.7 launch QA (#447)
+
+| Scenario | User-observable outcome | Coverage |
+|---|---|---|
+| **UC-V017-FRESH-INSTALL-LLM** | 깨끗한 Windows 신규 설치에서 ADK 경로를 처음 선택하면 실행 중 Agent가 그 경로와 번들 Node 환경으로 즉시 다시 시작되고, 온보딩 완료 뒤 인증·알림·LLM/TTS 자격증명이 다시 전달되어 앱 재시작 없이 첫 일반 대화가 응답한다. | ADK 저장/재시작 Rust 계약, startup credential React 계약, fresh-profile Playwright, Windows 설치본 실측 |
+| **UC-V017-HERDR-READY** | 깨끗한 설치에서 Workspace를 처음 열면 번들 Herdr PTY가 먼저 시작되고 API가 준비될 때까지 제한 시간 안에 기다린 뒤 snapshot을 표시한다. 준비 실패는 무한 대기나 빈 성공이 아니라 다시 시도 가능한 오류로 보인다. | Herdr runtime unit, Workspace Playwright, Windows 설치본 실측 |
+| **UC-V017-CHAT-LAYOUT** | Workspace를 열어도 대화창 형식은 사용자가 고른 `왼쪽 소형`/`왼쪽 채움`을 유지하며, 저장값이 없는 신규 프로필은 왼쪽 소형이다. 중앙 대형 채팅은 존재하지 않는다. | layout state unit + fresh/workspace Playwright |
+| **UC-V017-AVATAR-PICKER** | 신규 온보딩의 외모 선택은 VRM/NVA 통합 그리드, 얼굴 중심 썸네일, 유형 배지를 제공하고 기본 Naia NVA를 미리 선택한다. 기본 완료 시 `avatarProvider=naia-video-avatar`, `nvaModel=naia`가 저장된다. | onboarding component + fresh-profile Playwright screenshot/DOM |
+
+P02 상태 매트릭스: 신규 기본, ADK 경로 저장 중, Agent 재시작 성공/실패, Herdr 준비 중/성공/실패·재시도, Workspace의 왼쪽 소형/왼쪽 채움, 아바타 VRM/NVA 선택을 각각 확인한다. 브라우저 Playwright 전체 스위트와 Linux native Tauri가 자동 검증 범위이며, 실제 NSIS 설치·번들 Node·WebView2·Windows 프로세스 수명은 Windows 인계 후 깨끗한 VM에서 최종 확인한다.

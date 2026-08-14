@@ -223,7 +223,7 @@ describe("OnboardingWizard", () => {
 				if (cmd === "detect_gpu_vram") return Promise.resolve(8);
 				if (cmd === "list_naia_assets") {
 					return Promise.resolve(
-						args?.subdir === "nva-files" ? ["naia-prebaked"] : [],
+						args?.subdir === "nva-files" ? ["alpha", "naia", "naia-prebaked"] : [],
 					);
 				}
 				return Promise.resolve(true);
@@ -241,6 +241,14 @@ describe("OnboardingWizard", () => {
 		flush();
 		fireEvent.click(screen.getByRole("button", { name: /다음|Next/ }));
 		flush();
+
+		const cards = screen.getAllByRole("button", { name: /NVA/ });
+		expect(cards).toHaveLength(3);
+		const defaultNaia = cards.find(
+			(card) => card.textContent?.replace("NVA", "").trim() === "naia",
+		);
+		expect(defaultNaia?.className).toContain("selected");
+		expect(screen.getAllByText("NVA")).toHaveLength(3);
 
 		const nva = screen.getByRole("button", { name: /naia-prebaked/ });
 		fireEvent.click(nva);

@@ -141,7 +141,6 @@ export function AdkSetupScreen({ onComplete }: AdkSetupScreenProps) {
 			(event) => {
 				const adkPath = path || defaultPath;
 				setLoginWaiting(false);
-				setAdkPath(adkPath);
 				localStorage.setItem("naia-remote-key", event.payload.naiaKey);
 				if (event.payload.naiaUserId) {
 					localStorage.setItem("naia-remote-user-id", event.payload.naiaUserId);
@@ -171,13 +170,20 @@ export function AdkSetupScreen({ onComplete }: AdkSetupScreenProps) {
 					),
 				);
 				// Cache naiaKey for crash-restart replay before calling onComplete.
-				invoke("store_startup_message", {
-					message: JSON.stringify({
-						type: "auth_update",
-						naiaKey: event.payload.naiaKey,
-					}),
-				}).catch(() => {});
-				onComplete();
+				void (async () => {
+					try {
+						await invoke("store_startup_message", {
+							message: JSON.stringify({
+								type: "auth_update",
+								naiaKey: event.payload.naiaKey,
+							}),
+						});
+						await setAdkPath(adkPath);
+						onComplete();
+					} catch (error) {
+						setError(String(error));
+					}
+				})();
 			},
 		);
 		return () => {
@@ -218,11 +224,11 @@ export function AdkSetupScreen({ onComplete }: AdkSetupScreenProps) {
 			await copyBundledAssets(adkPath);
 			setSetupStatus(null);
 			clearAllLocalData();
-			setAdkPath(adkPath);
 			localStorage.setItem(
 				"naia-config",
 				JSON.stringify(preserveWorkspaceRoot({}, adkPath)),
 			);
+			await setAdkPath(adkPath);
 			onComplete();
 		} catch (err) {
 			setSetupStatus(null);
@@ -239,7 +245,6 @@ export function AdkSetupScreen({ onComplete }: AdkSetupScreenProps) {
 			await copyBundledAssets(adkPath);
 			setSetupStatus(null);
 			clearAllLocalData();
-			setAdkPath(adkPath);
 			const fileConfig = await readNaiaConfig();
 			if (fileConfig) {
 				localStorage.setItem(
@@ -252,6 +257,7 @@ export function AdkSetupScreen({ onComplete }: AdkSetupScreenProps) {
 					),
 				);
 			}
+			await setAdkPath(adkPath);
 			onComplete();
 		} catch (err) {
 			setSetupStatus(null);
@@ -272,11 +278,11 @@ export function AdkSetupScreen({ onComplete }: AdkSetupScreenProps) {
 			await copyBundledAssets(adkPath);
 			setSetupStatus(null);
 			clearAllLocalData();
-			setAdkPath(adkPath);
 			localStorage.setItem(
 				"naia-config",
 				JSON.stringify(preserveWorkspaceRoot({}, adkPath)),
 			);
+			await setAdkPath(adkPath);
 			onComplete();
 		} catch (err) {
 			setSetupStatus(null);
@@ -291,7 +297,6 @@ export function AdkSetupScreen({ onComplete }: AdkSetupScreenProps) {
 			return;
 		}
 		try {
-			setAdkPath(trimmed);
 			// Ensure naia-settings subfolders and bundled defaults exist.
 			setSetupStatus("initializing");
 			await invoke("init_naia_settings", { adkPath: trimmed });
@@ -307,6 +312,7 @@ export function AdkSetupScreen({ onComplete }: AdkSetupScreenProps) {
 					preserveWorkspaceRoot({ ...base, onboardingComplete: true }, trimmed),
 				),
 			);
+			await setAdkPath(trimmed);
 			onComplete();
 		} catch (err) {
 			setSetupStatus(null);

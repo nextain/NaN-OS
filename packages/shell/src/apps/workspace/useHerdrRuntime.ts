@@ -9,6 +9,7 @@ import {
 	type HerdrSnapshot,
 	activeHerdrRoot,
 	assertHerdrSnapshot,
+	waitForHerdrReady,
 	workspacePath,
 } from "./herdr";
 
@@ -73,10 +74,10 @@ export function useHerdrRuntime() {
 			});
 			if (!mountedRef.current || generation !== launchGenerationRef.current)
 				return;
+			await waitForHerdrReady(refreshSnapshot);
+			if (!mountedRef.current || generation !== launchGenerationRef.current)
+				return;
 			setPty(created);
-			try {
-				await refreshSnapshot();
-			} catch {}
 		} catch (error) {
 			if (!mountedRef.current || generation !== launchGenerationRef.current)
 				return;
@@ -99,6 +100,7 @@ export function useHerdrRuntime() {
 	}, [launchHerdr]);
 
 	useEffect(() => {
+		if (!pty || launching) return;
 		let disposed = false;
 		let inFlight = false;
 		const poll = async () => {
@@ -119,7 +121,7 @@ export function useHerdrRuntime() {
 			snapshotGenerationRef.current++;
 			window.clearInterval(interval);
 		};
-	}, [refreshSnapshot]);
+	}, [launching, pty, refreshSnapshot]);
 
 	useEffect(() => {
 		const snapshotRoot = activeHerdrRoot(snapshot);

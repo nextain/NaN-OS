@@ -3,7 +3,10 @@ import { createHash } from "node:crypto";
 import { copyFileSync, existsSync, readFileSync, readdirSync } from "node:fs";
 import { resolve } from "node:path";
 import process from "node:process";
-import { REQUIRED_AGENT_COMMIT, REQUIRED_PROTO_SHA256 } from "./agent-pairing.mjs";
+import {
+	REQUIRED_AGENT_COMMIT,
+	REQUIRED_PROTO_SHA256,
+} from "./agent-pairing.mjs";
 
 const shellDir = resolve(import.meta.dirname, "..");
 const workspaceRoot = resolve(shellDir, "..", "..");
@@ -20,7 +23,10 @@ const targetDir = resolve(
 const e2eTauriConfig = resolve(shellDir, "src-tauri", "tauri.e2e.conf.json");
 const bgmSidecar = resolve(shellDir, "..", "bgm-sidecar");
 const cargo = process.platform === "win32" ? "cargo.exe" : "cargo";
-const pairedAgentRoot = "D:/alpha-adk/projects/naia-agent-worktrees";
+const pairedAgentRoot = resolve(
+	process.env.NAIA_AGENT_WORKTREES_DIR ??
+		resolve(workspaceRoot, "..", "..", "naia-agent-worktrees"),
+);
 
 function gitOutput(directory, args) {
 	const result = spawnSync("git", ["-C", directory, ...args], {
@@ -31,11 +37,14 @@ function gitOutput(directory, args) {
 }
 
 function assertPairedAgent() {
-	const candidates = existsSync(pairedAgentRoot)
-		? readdirSync(pairedAgentRoot, { withFileTypes: true })
-				.filter((entry) => entry.isDirectory())
-				.map((entry) => resolve(pairedAgentRoot, entry.name))
-		: [];
+	const explicit = process.env.NAIA_E2E_AGENT_ROOT;
+	const candidates = explicit
+		? [resolve(explicit)]
+		: existsSync(pairedAgentRoot)
+			? readdirSync(pairedAgentRoot, { withFileTypes: true })
+					.filter((entry) => entry.isDirectory())
+					.map((entry) => resolve(pairedAgentRoot, entry.name))
+			: [];
 	for (const pairedAgent of candidates) {
 		const agentScript = resolve(
 			pairedAgent,
@@ -77,7 +86,7 @@ function assertPairedAgent() {
 		return { pairedAgent, agentScript, agentProtoDir };
 	}
 	throw new Error(
-		`No clean paired naia-agent checkout contains ${REQUIRED_AGENT_COMMIT}`,
+		`No clean paired naia-agent checkout contains ${REQUIRED_AGENT_COMMIT} under ${explicit ?? pairedAgentRoot}`,
 	);
 }
 
@@ -89,11 +98,15 @@ const { pairedAgent, agentScript, agentProtoDir } = assertPairedAgent();
 // from that state instead of reporting unrelated TypeScript "module not found"
 // errors. The frozen lockfile keeps this preparation deterministic.
 if (!existsSync(resolve(pairedAgent, "node_modules"))) {
-	const agentInstall = spawnSync("pnpm", ["--ignore-workspace", "install", "--frozen-lockfile"], {
-		cwd: pairedAgent,
-		stdio: "inherit",
-		shell: process.platform === "win32",
-	});
+	const agentInstall = spawnSync(
+		"pnpm",
+		["--ignore-workspace", "install", "--frozen-lockfile"],
+		{
+			cwd: pairedAgent,
+			stdio: "inherit",
+			shell: process.platform === "win32",
+		},
+	);
 	if (agentInstall.status !== 0)
 		throw new Error("The paired naia-agent dependency install failed");
 }

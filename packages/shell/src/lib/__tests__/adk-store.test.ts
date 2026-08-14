@@ -101,9 +101,8 @@ const UNIX_ADK = "/home/user/naia-adk";
 beforeEach(() => {
 	localStorage.clear();
 	mockInvoke.mockReset();
-	// Default: any invoke resolves. setAdkPath fires a fire-and-forget
-	// invoke("write_naia_path_cache").catch(...); without a resolved default the
-	// reset mock returns undefined and the .catch() throws (#313 Naia Local).
+	// Default: any invoke resolves. setAdkPath awaits the native workspace rebind,
+	// so callers only continue once the first-run agent sees this ADK path.
 	mockInvoke.mockResolvedValue(undefined);
 	mockConvertFileSrc.mockClear();
 	secureState.naiaKey = null;
@@ -134,6 +133,24 @@ describe("getAdkPath", () => {
 	it("strips trailing slash on Unix path", () => {
 		setAdkPath("/home/user/naia-adk/");
 		expect(getAdkPath()).toBe(UNIX_ADK);
+	});
+});
+
+describe("setAdkPath native binding", () => {
+	it("waits for the native agent workspace rebind", async () => {
+		await setAdkPath(WIN_ADK);
+
+		expect(mockInvoke).toHaveBeenCalledWith("write_naia_path_cache", {
+			adkPath: WIN_ADK,
+		});
+		expect(getAdkPath()).toBe(WIN_ADK);
+	});
+
+	it("surfaces a native rebind failure while retaining the bootstrap path", async () => {
+		mockInvoke.mockRejectedValueOnce(new Error("agent restart failed"));
+
+		await expect(setAdkPath(WIN_ADK)).rejects.toThrow("agent restart failed");
+		expect(getAdkPath()).toBe(WIN_ADK);
 	});
 });
 
@@ -223,7 +240,7 @@ describe("listNaiaAssets", () => {
 	});
 
 	it("calls invoke with correct args and maps filenames to absolute paths (Windows)", async () => {
-		setAdkPath(WIN_ADK);
+		await setAdkPath(WIN_ADK);
 		mockInvoke.mockResolvedValue([
 			"01-OL_Woman.vrm",
 			"02-Hood_Boy.vrm",

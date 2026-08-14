@@ -861,7 +861,7 @@ body,
 .app-bar-tab-remove--shortcut {
 	display: flex;
 	color: var(--cream-dim);
-	background: rgba(0,0,0,0.5);
+	background: rgba(0, 0, 0, 0.5);
 	font-size: 10px;
 }
 
@@ -1452,82 +1452,9 @@ body.resizing-col .naia-work-rail::before {
 
 /* ═══════════════════════════════════════════════════════════════════════════
    UI MODE LAYOUTS
-   The SAME single ChatPanel instance is repositioned by CSS keyed off
-   data-ui-mode on .app-root (derived from activeApp in App.tsx). It is never
-   unmounted across modes — only its container geometry + variant class change.
-     home      → immersive visual-novel dialogue box centered over the avatar
-     workspace → full-height left rail inside the 4-zone mission-control
-     panel     → legacy bottom-left floating dock (default; unchanged)
+   The single ChatPanel instance follows the persisted user preference. It is
+   either a full-height left rail or the compact lower-left floating dock.
    ═══════════════════════════════════════════════════════════════════════════ */
-
-/* ── HOME · visual-novel immersive conversation ─────────────────────────── */
-/* Overlay spans full width so the dialogue box can center wide. pointer-events
-   stays none (children re-enable auto), so empty space passes clicks through to
-   the avatar's OrbitControls. */
-.app-root[data-ui-mode="home"] .naia-overlay {
-	width: 100%;
-	right: 0;
-}
-
-/* No right-side panel in home → the work-rail resize handle is meaningless */
-.app-root[data-ui-mode="home"] .naia-work-rail {
-	display: none;
-}
-
-/* The wide centered VN box overlaps the (empty) panel area, which lives in
-   app-layout above it (z-index 5). Let clicks pass through app-layout so the VN
-   box's right half (input, send, toggle) stays interactive — but keep AppBar
-   (the only interactive chrome there in home) clickable. */
-.app-root[data-ui-mode="home"] .app-layout {
-	pointer-events: none;
-}
-.app-root[data-ui-mode="home"] .app-bar {
-	pointer-events: auto;
-}
-
-/* Centered, wide VN dialogue dock anchored at the bottom */
-.app-root[data-ui-mode="home"] .naia-chat-area {
-	left: 50%;
-	transform: translateX(-50%);
-	width: min(1100px, 78vw);
-	bottom: 16px;
-}
-
-/* VN dialogue box — fully rounded, stronger glass, deeper shadow */
-.app-root[data-ui-mode="home"] .naia-chat-wrapper {
-	border-radius: 18px;
-	border: 1px solid var(--glass-border, rgba(100, 160, 255, 0.22));
-	box-shadow: 0 8px 48px rgba(0, 0, 0, 0.6),
-		inset 0 1px 0 rgba(255, 255, 255, 0.06);
-}
-
-/* VN keeps the compact chat surface, but navigation remains available.
- * Hiding these tabs made transcript history and channel conversations impossible
- * to reach from the default Home view. */
-.chat-panel--vn .chat-tabs {
-	display: flex;
-}
-
-.chat-panel--vn .chat-header {
-	border-bottom: none;
-	padding: 8px 16px 0;
-	justify-content: flex-end;
-}
-
-.chat-panel--vn .chat-messages {
-	padding: 14px 24px;
-	gap: 12px;
-	font-size: 14.5px;
-}
-
-.chat-panel--vn .chat-message.assistant .message-content {
-	font-size: 14.5px;
-	line-height: 1.7;
-}
-
-.chat-panel--vn .chat-input-bar {
-	padding: 10px 18px 16px;
-}
 
 /* ── WORKSPACE · conversation rail (zone 1 of the 4-zone mission-control) ──── */
 /* AiControlBar (avatar camera controls) is hidden — the avatar is occluded by
@@ -1577,7 +1504,8 @@ body.resizing-col .naia-work-rail::before {
 .app-root[data-ui-mode="workspace"][data-rail-collapsed="true"] .naia-overlay {
 	width: 0;
 }
-.app-root[data-ui-mode="workspace"][data-rail-collapsed="true"] .naia-work-rail {
+.app-root[data-ui-mode="workspace"][data-rail-collapsed="true"]
+	.naia-work-rail {
 	display: none;
 }
 
@@ -5702,7 +5630,8 @@ body.resizing-row {
 	flex-shrink: 0;
 	line-height: 1;
 	padding: 0 3px;
-	text-shadow: 0 0 8px rgba(130, 180, 255, 0.6), 0 0 16px rgba(100, 160, 255, 0.3);
+	text-shadow: 0 0 8px rgba(130, 180, 255, 0.6), 0 0 16px
+		rgba(100, 160, 255, 0.3);
 	cursor: pointer;
 	transition: text-shadow 0.2s ease, transform 0.2s ease;
 	user-select: none;
@@ -5710,17 +5639,38 @@ body.resizing-row {
 }
 
 .bgm-icon:hover {
-	text-shadow: 0 0 14px rgba(160, 210, 255, 1), 0 0 28px rgba(120, 180, 255, 0.7);
+	text-shadow: 0 0 14px rgba(160, 210, 255, 1), 0 0 28px
+		rgba(120, 180, 255, 0.7);
 	transform: translateY(-2px);
 }
 
 /* Beat animation when playing — bounces without changing size */
 @keyframes bgm-icon-beat {
-	0%   { transform: translateY(0) rotate(0deg);   text-shadow: 0 0 8px rgba(130, 180, 255, 0.6), 0 0 16px rgba(100, 160, 255, 0.3); }
-	25%  { transform: translateY(-3px) rotate(-6deg); text-shadow: 0 0 16px rgba(170, 220, 255, 1), 0 0 32px rgba(130, 190, 255, 0.8); }
-	50%  { transform: translateY(0) rotate(3deg);   text-shadow: 0 0 10px rgba(140, 190, 255, 0.7), 0 0 20px rgba(110, 170, 255, 0.4); }
-	75%  { transform: translateY(-2px) rotate(-3deg); text-shadow: 0 0 14px rgba(160, 210, 255, 0.9), 0 0 28px rgba(130, 185, 255, 0.6); }
-	100% { transform: translateY(0) rotate(0deg);   text-shadow: 0 0 8px rgba(130, 180, 255, 0.6), 0 0 16px rgba(100, 160, 255, 0.3); }
+	0% {
+		transform: translateY(0) rotate(0deg);
+		text-shadow: 0 0 8px rgba(130, 180, 255, 0.6), 0 0 16px
+			rgba(100, 160, 255, 0.3);
+	}
+	25% {
+		transform: translateY(-3px) rotate(-6deg);
+		text-shadow: 0 0 16px rgba(170, 220, 255, 1), 0 0 32px
+			rgba(130, 190, 255, 0.8);
+	}
+	50% {
+		transform: translateY(0) rotate(3deg);
+		text-shadow: 0 0 10px rgba(140, 190, 255, 0.7), 0 0 20px
+			rgba(110, 170, 255, 0.4);
+	}
+	75% {
+		transform: translateY(-2px) rotate(-3deg);
+		text-shadow: 0 0 14px rgba(160, 210, 255, 0.9), 0 0 28px
+			rgba(130, 185, 255, 0.6);
+	}
+	100% {
+		transform: translateY(0) rotate(0deg);
+		text-shadow: 0 0 8px rgba(130, 180, 255, 0.6), 0 0 16px
+			rgba(100, 160, 255, 0.3);
+	}
 }
 
 .bgm-icon--playing {
@@ -5882,7 +5832,8 @@ body.resizing-row {
 	/* Base (visible) state — explicit values so transition has defined endpoints */
 	opacity: 1;
 	transform: scaleY(1);
-	transition: opacity 0.22s ease, transform 0.25s cubic-bezier(0.34, 1.2, 0.64, 1);
+	transition: opacity 0.22s ease, transform 0.25s
+		cubic-bezier(0.34, 1.2, 0.64, 1);
 }
 
 /* Enter animation — unfolds downward from top */
@@ -6082,8 +6033,12 @@ body.resizing-row {
 
 /* Marquee animation for long track names */
 @keyframes bgm-marquee {
-	0% { transform: translateX(0); }
-	100% { transform: translateX(-50%); }
+	0% {
+		transform: translateX(0);
+	}
+	100% {
+		transform: translateX(-50%);
+	}
 }
 
 .bgm-track-name {
@@ -8666,7 +8621,10 @@ body.resizing-col * {
 }
 
 /* Odd total: last cell spans both columns (only when NOT in resizable 3-col layout) */
-.workspace-panel__terminal-area--grid:not(.workspace-panel__terminal-area--resizable) .workspace-panel__terminal-cell:last-child:nth-child(odd) {
+.workspace-panel__terminal-area--grid:not(
+		.workspace-panel__terminal-area--resizable
+	)
+	.workspace-panel__terminal-cell:last-child:nth-child(odd) {
 	grid-column: 1 / -1;
 }
 
@@ -8701,7 +8659,9 @@ body.resizing-col * {
 	color: var(--text-secondary, #888);
 }
 
-.workspace-panel__terminal-area--grid .workspace-panel__terminal-cell--focused .workspace-panel__terminal-cell-dir {
+.workspace-panel__terminal-area--grid
+	.workspace-panel__terminal-cell--focused
+	.workspace-panel__terminal-cell-dir {
 	color: var(--text-primary, #e0e0e0);
 }
 
@@ -8815,7 +8775,10 @@ body.resizing-col * {
 
 .coding-workers__form-grid {
 	display: grid;
-	grid-template-columns: minmax(110px, 0.8fr) minmax(220px, 1.7fr) minmax(260px, 2.2fr);
+	grid-template-columns: minmax(110px, 0.8fr) minmax(220px, 1.7fr) minmax(
+			260px,
+			2.2fr
+		);
 	gap: 8px;
 	align-items: end;
 }
@@ -9033,9 +8996,15 @@ body.resizing-col * {
 
 .coding-workers__card--running .coding-workers__state,
 .coding-workers__card--queued .coding-workers__state,
-.coding-workers__card--cancelling .coding-workers__state { color: var(--accent, #8da4ff); }
-.coding-workers__card--completed .coding-workers__state { color: var(--success, #72d39d); }
-.coding-workers__card--failed .coding-workers__state { color: var(--danger, #ff8a8a); }
+.coding-workers__card--cancelling .coding-workers__state {
+	color: var(--accent, #8da4ff);
+}
+.coding-workers__card--completed .coding-workers__state {
+	color: var(--success, #72d39d);
+}
+.coding-workers__card--failed .coding-workers__state {
+	color: var(--danger, #ff8a8a);
+}
 
 .coding-workers__card dl {
 	display: grid;
@@ -9140,7 +9109,9 @@ body.resizing-col * {
 
 /* Tab mode: show only the focused terminal (cells are stacked absolute). */
 .workspace-panel__terminal-area:not(.workspace-panel__terminal-area--grid)
-	.workspace-panel__terminal-cell:not(.workspace-panel__terminal-cell--focused) {
+	.workspace-panel__terminal-cell:not(
+		.workspace-panel__terminal-cell--focused
+	) {
 	display: none;
 }
 
@@ -9384,7 +9355,9 @@ body.resizing-col * {
 }
 
 @keyframes spin {
-	to { transform: rotate(360deg); }
+	to {
+		transform: rotate(360deg);
+	}
 }
 
 .issues-panel__card {
@@ -10983,69 +10956,11 @@ body.resizing-col * {
 	color: rgba(200, 220, 255, 0.55);
 }
 
-/* Avatar filename list */
-.onboarding-step__avatar-list {
-	display: flex;
-	flex-direction: column;
-	gap: 6px;
-	width: 100%;
-}
-
-.onboarding-step__avatar-item {
-	display: flex;
-	align-items: center;
-	gap: 10px;
-	text-align: left;
-	padding: 8px 14px;
-	background: rgba(8, 14, 28, 0.4);
-	border: 1.5px solid rgba(100, 160, 255, 0.12);
-	border-radius: 8px;
-	cursor: pointer;
-	color: rgba(235, 245, 255, 0.85);
-	font: inherit;
-	font-size: 13px;
-	transition: border-color 0.15s, background 0.15s;
-}
-
-.onboarding-step__avatar-thumb {
-	width: 44px;
-	height: 44px;
-	border-radius: 6px;
-	object-fit: cover;
-	flex-shrink: 0;
-}
-
-.onboarding-step__avatar-type {
-	display: inline-flex;
-	align-items: center;
-	justify-content: center;
-	width: 44px;
-	height: 44px;
-	border-radius: 6px;
-	flex-shrink: 0;
-	background: linear-gradient(135deg, rgba(63, 99, 235, 0.28), rgba(139, 92, 246, 0.24));
-	color: rgba(245, 248, 255, 0.92);
-	font-size: 10px;
-	font-weight: 700;
-	letter-spacing: 0.08em;
-}
-
-.onboarding-step__avatar-item:hover {
-	border-color: rgba(100, 160, 255, 0.32);
-	background: rgba(100, 160, 255, 0.06);
-}
-
-.onboarding-step__avatar-item--selected {
-	border-color: var(--wood);
-	background: rgba(100, 160, 255, 0.1);
-	box-shadow: 0 0 0 1px rgba(37, 99, 235, 0.25);
-}
-
-/* Avatar grid (legacy, unused) */
+/* Avatar picker grid */
 .onboarding-step__avatar-grid {
 	display: grid;
-	grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
-	gap: 8px;
+	grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
+	gap: 10px;
 	width: 100%;
 }
 
@@ -11061,6 +10976,7 @@ body.resizing-col * {
 	cursor: pointer;
 	color: rgba(235, 245, 255, 0.85);
 	font: inherit;
+	position: relative;
 	transition: border-color 0.15s, background 0.15s, transform 0.15s;
 }
 
@@ -11077,11 +10993,27 @@ body.resizing-col * {
 }
 
 .onboarding-step__avatar-img {
-	width: 56px;
-	height: 56px;
+	width: 76px;
+	height: 88px;
 	object-fit: cover;
-	border-radius: 50%;
+	object-position: 50% 18%;
+	border-radius: 10px;
 	border: 1px solid rgba(100, 160, 255, 0.15);
+	background: rgba(100, 160, 255, 0.08);
+}
+
+.onboarding-step__avatar-badge {
+	position: absolute;
+	top: 5px;
+	right: 5px;
+	padding: 2px 5px;
+	border-radius: 999px;
+	background: rgba(7, 12, 24, 0.88);
+	border: 1px solid rgba(130, 180, 255, 0.32);
+	font-size: 9px;
+	font-weight: 700;
+	letter-spacing: 0.06em;
+	color: rgba(240, 247, 255, 0.92);
 }
 
 .onboarding-step__avatar-label {

@@ -103,7 +103,11 @@ import {
 	createSentenceTtsPipeline,
 } from "../lib/tts/sentence-pipeline";
 import { ttsTextFilter } from "../lib/tts/text-filter";
-import { decideSttBargeIn, isLikelySelfEcho, shouldPauseSttForTts } from "../lib/voice/echo-gate";
+import {
+	decideSttBargeIn,
+	isLikelySelfEcho,
+	shouldPauseSttForTts,
+} from "../lib/voice/echo-gate";
 import type {
 	AgentResponseChunk,
 	AuditEvent,
@@ -534,14 +538,12 @@ export function isDiscordConnectionIntent(text: string): boolean {
 }
 
 /**
- * Visual variant of the chat surface. The component is a SINGLE instance
- * repositioned across UI modes via CSS (never remounted — preserves the live
- * voice/STT/TTS session). `variant` only changes UI density/chrome:
- *   - "floating": legacy bottom-left dock over the avatar (any non-home panel)
- *   - "vn":       immersive visual-novel dialogue box (home screen)
- *   - "rail":     full-height left rail inside the workspace mission-control
+ * Visual variant of the chat surface. The component is a SINGLE instance so
+ * mode changes preserve the live voice/STT/TTS session:
+ *   - "floating": compact lower-left dock below the avatar (default)
+ *   - "rail":     full-height left rail when the user selects that preference
  */
-export type ChatVariant = "vn" | "rail" | "floating";
+export type ChatVariant = "rail" | "floating";
 
 export function ChatArea({
 	variant = "floating",
@@ -809,27 +811,11 @@ export function ChatArea({
 		}
 
 		// (startup gateway sync 제거됨 2026-06-12 — gateway.json 미사용 죽은 경로. config=naia-settings.)
-
 	}, []);
 
 	useEffect(() => {
 		messagesEndRef.current?.scrollIntoView?.({ behavior: "smooth" });
 	}, [messages, streamingContent]);
-
-	// Home/VN exposes Chat, History, and Channels in its compact tab bar. Keep
-	// those user-selectable surfaces intact, but reset unsupported workspace-only
-	// tabs when moving into VN so the compact layout cannot become blank.
-	// Pure UI guard — touches no voice/session state.
-	useEffect(() => {
-		if (
-			variant === "vn" &&
-			activeTab !== "chat" &&
-			activeTab !== "history" &&
-			activeTab !== "channels"
-		) {
-			setActiveTab("chat");
-		}
-	}, [variant, activeTab]);
 
 	function isChatRequestActive(): boolean {
 		return (
@@ -877,7 +863,8 @@ export function ChatArea({
 
 	function handleCancelStreaming() {
 		const store = useChatStore.getState();
-		const ttsActive = ttsTextSyncRef.current.active ||
+		const ttsActive =
+			ttsTextSyncRef.current.active ||
 			sentencePipelineRef.current?.hasActiveRequests() === true ||
 			audioQueueRef.current?.isActive === true;
 		if (!store.isStreaming && !ttsActive) return;
@@ -1138,7 +1125,11 @@ export function ChatArea({
 					: -1;
 				if (found >= 0) {
 					let end = found + needle.length;
-					while (end < current.canonical.length && /\s/.test(current.canonical[end])) end++;
+					while (
+						end < current.canonical.length &&
+						/\s/.test(current.canonical[end])
+					)
+						end++;
 					current.revealCursor = end;
 				} else {
 					current.revealCursor = current.canonical.length;
@@ -1246,12 +1237,16 @@ export function ChatArea({
 			const active = activeSpeechActivityRef.current;
 			if (active) retiredSpeechActivityIdsRef.current.add(active.activityId);
 			activeSpeechActivityRef.current = null;
-			window.dispatchEvent(new CustomEvent("naia-proactive-activity-state", {
-				detail: { active: false },
-			}));
+			window.dispatchEvent(
+				new CustomEvent("naia-proactive-activity-state", {
+					detail: { active: false },
+				}),
+			);
 		};
 		const handlePermissionChange = (event: Event) => {
-			const permitted = (event as CustomEvent<{ permitted?: boolean }>).detail?.permitted === true;
+			const permitted =
+				(event as CustomEvent<{ permitted?: boolean }>).detail?.permitted ===
+				true;
 			void (async () => {
 				const config = await loadConfigWithSecrets();
 				if (!config || disposed) return;
@@ -1260,19 +1255,27 @@ export function ChatArea({
 					retireActiveSpeech();
 					if (active) await controlSpeechActivity("stop", active.activityId);
 				}
-				await configurePersistedProfile({ ...config, proactiveSpeechPermitted: permitted });
+				await configurePersistedProfile({
+					...config,
+					proactiveSpeechPermitted: permitted,
+				});
 			})();
 		};
 		window.addEventListener(
 			"naia-proactive-profile-changing",
 			retireActiveSpeech,
 		);
-		window.addEventListener("naia-proactive-permission-change", handlePermissionChange);
+		window.addEventListener(
+			"naia-proactive-permission-change",
+			handlePermissionChange,
+		);
 		const acceptConfiguredProfile = (event: Event) => {
-			const detail = (event as CustomEvent<{
-				ok?: boolean;
-				subscriptionEpoch?: number;
-			}>).detail;
+			const detail = (
+				event as CustomEvent<{
+					ok?: boolean;
+					subscriptionEpoch?: number;
+				}>
+			).detail;
 			const epoch = Number(detail?.subscriptionEpoch);
 			if (detail?.ok === true && Number.isSafeInteger(epoch) && epoch >= 0) {
 				speechActivitySubscriptionEpochRef.current = epoch;
@@ -1286,13 +1289,20 @@ export function ChatArea({
 		void listen<string>("agent_response", (event) => {
 			let chunk: Record<string, unknown>;
 			try {
-				const raw = typeof event.payload === "string" ? event.payload : JSON.stringify(event.payload);
+				const raw =
+					typeof event.payload === "string"
+						? event.payload
+						: JSON.stringify(event.payload);
 				chunk = JSON.parse(raw) as Record<string, unknown>;
 			} catch {
 				return;
 			}
 			if (typeof chunk.activityId !== "string") return;
-			if (!["panel_tool_call", "text", "finish", "error"].includes(String(chunk.type))) {
+			if (
+				!["panel_tool_call", "text", "finish", "error"].includes(
+					String(chunk.type),
+				)
+			) {
 				return;
 			}
 			const activityId = chunk.activityId;
@@ -1304,26 +1314,28 @@ export function ChatArea({
 			// reaches this WebView. A newer epoch is therefore authoritative and may
 			// arrive first; accept it and advance the fence. Older activity remains
 			// rejected, so a late pre-save stream can never reclaim the voice lane.
-			if (subscriptionEpoch < speechActivitySubscriptionEpochRef.current) return;
+			if (subscriptionEpoch < speechActivitySubscriptionEpochRef.current)
+				return;
 			if (subscriptionEpoch > speechActivitySubscriptionEpochRef.current) {
 				speechActivitySubscriptionEpochRef.current = subscriptionEpoch;
 			}
 			if (retiredSpeechActivityIdsRef.current.has(activityId)) return;
-			if (
-				active
-				&& profileGeneration < active.profileGeneration
-			) return;
+			if (active && profileGeneration < active.profileGeneration) return;
 			if (active && active.activityId !== activityId) {
 				retiredSpeechActivityIdsRef.current.add(active.activityId);
 				if (retiredSpeechActivityIdsRef.current.size > 100) {
-					const oldest = retiredSpeechActivityIdsRef.current.values().next().value;
+					const oldest = retiredSpeechActivityIdsRef.current
+						.values()
+						.next().value;
 					if (oldest) retiredSpeechActivityIdsRef.current.delete(oldest);
 				}
 			}
 			activeSpeechActivityRef.current = { activityId, profileGeneration };
-			window.dispatchEvent(new CustomEvent("naia-proactive-activity-state", {
-				detail: { active: true },
-			}));
+			window.dispatchEvent(
+				new CustomEvent("naia-proactive-activity-state", {
+					detail: { active: true },
+				}),
+			);
 			// A direct Live/omni model would answer visitor audio outside the
 			// exhibition KB/privacy path. Proactive profiles therefore own the
 			// voice lane; pipeline STT remains available for grounded questions.
@@ -1335,10 +1347,10 @@ export function ChatArea({
 			}
 
 			if (
-				chunk.type === "panel_tool_call"
-				&& typeof chunk.requestId === "string"
-				&& typeof chunk.toolCallId === "string"
-				&& typeof chunk.toolName === "string"
+				chunk.type === "panel_tool_call" &&
+				typeof chunk.requestId === "string" &&
+				typeof chunk.toolCallId === "string" &&
+				typeof chunk.toolName === "string"
 			) {
 				dispatchPanelToolCall({
 					requestId: chunk.requestId,
@@ -1349,35 +1361,42 @@ export function ChatArea({
 				});
 				return;
 			}
-			if (chunk.type === "text" && typeof chunk.text === "string" && chunk.text.trim()) {
+			if (
+				chunk.type === "text" &&
+				typeof chunk.text === "string" &&
+				chunk.text.trim()
+			) {
 				// DJ keeps its activity alive when a normal chat cannot yield it.
 				// Never let proactive text reset/share the ordinary chat TTS lane.
 				if (currentRequestId.current) return;
 				const text = chunk.text.trim();
 				const cachedConfig = loadConfig();
 				const shouldSpeak = canSpeakProactiveText({
-						currentRequestId: currentRequestId.current,
-						activeActivityId: activeSpeechActivityRef.current?.activityId,
-						eventActivityId: activityId,
-						ttsEnabled: cachedConfig?.ttsEnabled === true,
-					});
+					currentRequestId: currentRequestId.current,
+					activeActivityId: activeSpeechActivityRef.current?.activityId,
+					eventActivityId: activityId,
+					ttsEnabled: cachedConfig?.ttsEnabled === true,
+				});
 				if (!shouldSpeak) {
-					useChatStore.getState().addMessage({ role: "assistant", content: text });
+					useChatStore
+						.getState()
+						.addMessage({ role: "assistant", content: text });
 					return;
 				}
 				const ttsGeneration = beginProactiveTtsTextSync(text);
 				// Capture eligibility before awaiting DPAPI/API-key hydration. A normal
 				// activity finish closes the producer but must not cancel speech that was
 				// already accepted. Barge-in/profile changes invalidate the generation.
-				void loadConfigWithSecrets().then((config) => {
-					if (
-						!config ||
-						ttsTextSyncRef.current.generation !== ttsGeneration ||
-						!ttsTextSyncRef.current.active
-					) {
-						if (!config) revealFailedProactiveTts(text, ttsGeneration);
-						return;
-					}
+				void loadConfigWithSecrets()
+					.then((config) => {
+						if (
+							!config ||
+							ttsTextSyncRef.current.generation !== ttsGeneration ||
+							!ttsTextSyncRef.current.active
+						) {
+							if (!config) revealFailedProactiveTts(text, ttsGeneration);
+							return;
+						}
 						initializeSpeechTts(config);
 						const chunker = sentenceChunkerRef.current;
 						if (!chunker) {
@@ -1392,7 +1411,8 @@ export function ChatArea({
 						if (sentences.length === 0 && !remaining) {
 							revealFailedProactiveTts(text, ttsGeneration);
 						}
-					}).catch(() => revealFailedProactiveTts(text, ttsGeneration));
+					})
+					.catch(() => revealFailedProactiveTts(text, ttsGeneration));
 				return;
 			}
 			// `finish` closes one streamed turn, not the owning long-lived speech
@@ -1405,9 +1425,11 @@ export function ChatArea({
 				if (activeSpeechActivityRef.current?.activityId === activityId) {
 					retiredSpeechActivityIdsRef.current.add(activityId);
 					activeSpeechActivityRef.current = null;
-					window.dispatchEvent(new CustomEvent("naia-proactive-activity-state", {
-						detail: { active: false },
-					}));
+					window.dispatchEvent(
+						new CustomEvent("naia-proactive-activity-state", {
+							detail: { active: false },
+						}),
+					);
 				}
 			}
 		}).then((off) => {
@@ -1425,7 +1447,10 @@ export function ChatArea({
 				"naia-proactive-profile-configured",
 				acceptConfiguredProfile,
 			);
-			window.removeEventListener("naia-proactive-permission-change", handlePermissionChange);
+			window.removeEventListener(
+				"naia-proactive-permission-change",
+				handlePermissionChange,
+			);
 		};
 	}, []);
 
@@ -1490,11 +1515,16 @@ export function ChatArea({
 			// successful exhibition binding must never be handed to the Live LLM.
 			interruptTts();
 			activityResume = await yieldSpeechActivity(speechActivity.activityId);
-			if (activeSpeechActivityRef.current?.activityId === speechActivity.activityId) {
+			if (
+				activeSpeechActivityRef.current?.activityId ===
+				speechActivity.activityId
+			) {
 				activeSpeechActivityRef.current = null;
-				window.dispatchEvent(new CustomEvent("naia-proactive-activity-state", {
-					detail: { active: false },
-				}));
+				window.dispatchEvent(
+					new CustomEvent("naia-proactive-activity-state", {
+						detail: { active: false },
+					}),
+				);
 			}
 		}
 
@@ -1732,9 +1762,7 @@ export function ChatArea({
 			const { profile } = command;
 			const config = await loadConfig();
 			interruptTts();
-			window.dispatchEvent(
-				new CustomEvent("naia-proactive-profile-changing"),
-			);
+			window.dispatchEvent(new CustomEvent("naia-proactive-profile-changing"));
 			if (activeSpeechActivityRef.current) {
 				retiredSpeechActivityIdsRef.current.add(
 					activeSpeechActivityRef.current.activityId,
@@ -1746,27 +1774,29 @@ export function ChatArea({
 				timezone: config?.proactiveSpeechTimezone ?? "UTC",
 				weatherConsented: false,
 			});
-			const configured = disabled && (
-				profile === "disabled"
-				|| await configureSpeechProfile(toSpeechProfileCommandInput(
-				normalizeProactiveSpeechSettings({
-				profile,
-				idleMs:
-					config?.proactiveSpeechIdleMs
-					?? (profile === "personal_radio_dj" ? 5_000 : 1_000),
-				intervalMs: config?.proactiveSpeechIntervalMs,
-				timezone: config?.proactiveSpeechTimezone ?? "UTC",
-				bgmAutoPlay:
-					profile === "personal_radio_dj"
-						? true
-						: config?.proactiveSpeechBgmAutoPlay,
-				weatherConsented: config?.proactiveSpeechWeatherConsented,
-				weatherLatitude: config?.proactiveSpeechWeatherLatitude,
-				weatherLongitude: config?.proactiveSpeechWeatherLongitude,
-					knowledgeScope: config?.proactiveSpeechKnowledgeScope,
-				}),
-				))
-			);
+			const configured =
+				disabled &&
+				(profile === "disabled" ||
+					(await configureSpeechProfile(
+						toSpeechProfileCommandInput(
+							normalizeProactiveSpeechSettings({
+								profile,
+								idleMs:
+									config?.proactiveSpeechIdleMs ??
+									(profile === "personal_radio_dj" ? 5_000 : 1_000),
+								intervalMs: config?.proactiveSpeechIntervalMs,
+								timezone: config?.proactiveSpeechTimezone ?? "UTC",
+								bgmAutoPlay:
+									profile === "personal_radio_dj"
+										? true
+										: config?.proactiveSpeechBgmAutoPlay,
+								weatherConsented: config?.proactiveSpeechWeatherConsented,
+								weatherLatitude: config?.proactiveSpeechWeatherLatitude,
+								weatherLongitude: config?.proactiveSpeechWeatherLongitude,
+								knowledgeScope: config?.proactiveSpeechKnowledgeScope,
+							}),
+						),
+					)));
 			if (!configured) {
 				useChatStore.getState().addMessage({
 					role: "assistant",
@@ -1782,7 +1812,10 @@ export function ChatArea({
 					// A spoken explicit start is direct user permission; settings changes are not.
 					proactiveSpeechPermitted: profile !== "disabled",
 					...(profile !== "disabled" && config.proactiveSpeechIdleMs == null
-						? { proactiveSpeechIdleMs: profile === "personal_radio_dj" ? 5_000 : 1_000 }
+						? {
+								proactiveSpeechIdleMs:
+									profile === "personal_radio_dj" ? 5_000 : 1_000,
+							}
 						: {}),
 					...(profile === "personal_radio_dj"
 						? { proactiveSpeechBgmAutoPlay: true }
@@ -1802,9 +1835,11 @@ export function ChatArea({
 		if (action === "stop") {
 			retiredSpeechActivityIdsRef.current.add(activity.activityId);
 			activeSpeechActivityRef.current = null;
-			window.dispatchEvent(new CustomEvent("naia-proactive-activity-state", {
-				detail: { active: false },
-			}));
+			window.dispatchEvent(
+				new CustomEvent("naia-proactive-activity-state", {
+					detail: { active: false },
+				}),
+			);
 		}
 		setInput("");
 		useChatStore.getState().addMessage({ role: "user", content: text });
@@ -1817,14 +1852,16 @@ export function ChatArea({
 		if (
 			config.proactiveSpeechProfile === "personal_radio_dj" &&
 			config.proactiveSpeechPermitted === true
-		) return;
+		)
+			return;
 
 		window.dispatchEvent(new CustomEvent("naia-proactive-profile-changing"));
 		const settings = normalizeProactiveSpeechSettings({
 			profile: "personal_radio_dj",
 			idleMs: config.proactiveSpeechIdleMs ?? RADIO_DJ_DEFAULT_SETTINGS.idleMs,
 			intervalMs:
-				config.proactiveSpeechIntervalMs ?? RADIO_DJ_DEFAULT_SETTINGS.intervalMs,
+				config.proactiveSpeechIntervalMs ??
+				RADIO_DJ_DEFAULT_SETTINGS.intervalMs,
 			timezone: config.proactiveSpeechTimezone ?? "UTC",
 			bgmAutoPlay: true,
 			weatherConsented: config.proactiveSpeechWeatherConsented,
@@ -1865,9 +1902,7 @@ export function ChatArea({
 			// the current track immediately. Normal chat requests still enqueue.
 			const radioDjRequested = shouldActivateRadioDj(req.args);
 			Promise.resolve()
-				.then(() =>
-					radioDjRequested ? activateRadioDjFromSkill() : undefined,
-				)
+				.then(() => (radioDjRequested ? activateRadioDjFromSkill() : undefined))
 				.then(() =>
 					executeBgmSkill(
 						req.activityId ? { ...req.args, replace: true } : req.args,
@@ -1875,7 +1910,13 @@ export function ChatArea({
 				)
 				.then((result) => {
 					Logger.info("ChatArea", "bgm skill result", { result });
-					return sendPanelToolResult(req.requestId, req.toolCallId, result, true, req.activityId);
+					return sendPanelToolResult(
+						req.requestId,
+						req.toolCallId,
+						result,
+						true,
+						req.activityId,
+					);
 				})
 				.catch((err) => {
 					Logger.warn("ChatArea", "bgm skill error", { error: String(err) });
@@ -1913,7 +1954,13 @@ export function ChatArea({
 					tool: req.toolName,
 					result: result.slice(0, 120),
 				});
-				return sendPanelToolResult(req.requestId, req.toolCallId, result, true, req.activityId);
+				return sendPanelToolResult(
+					req.requestId,
+					req.toolCallId,
+					result,
+					true,
+					req.activityId,
+				);
 			})
 			.catch((err) => {
 				Logger.warn("ChatArea", "panel_tool_call error", {
@@ -1979,8 +2026,7 @@ export function ChatArea({
 				// reasoning only when this chunk proves the paired `</think>` form;
 				// otherwise a normal expressive answer would disappear until finish.
 				const opensReasoning =
-					htmlThinkOpen ||
-					(bracketThinkOpen && /<\/think>/i.test(visibleText));
+					htmlThinkOpen || (bracketThinkOpen && /<\/think>/i.test(visibleText));
 				if (opensReasoning) reasoningTextHiddenRef.current = true;
 				if (reasoningTextHiddenRef.current) {
 					const close = visibleText.search(/<\/think>/i);
@@ -2187,7 +2233,9 @@ export function ChatArea({
 					}
 					if (!pipelineActiveRef.current) sentenceChunkerRef.current = null;
 				}
-				store.appendStreamChunk(`\n[${t("chat.error")}] ${wireErrorMessage(chunk.code, chunk.message)}`);
+				store.appendStreamChunk(
+					`\n[${t("chat.error")}] ${wireErrorMessage(chunk.code, chunk.message)}`,
+				);
 				finishStreamingWithTtsMask();
 				finishLocalVoicePrebuffer();
 				completeCurrentRequest(chunk.requestId);
@@ -2375,10 +2423,12 @@ export function ChatArea({
 			const naiaKey = config?.naiaKey;
 			const modelMeta = getLlmModel(config.provider, config.model);
 			const isOmni = isOmniModel(config.provider, config.model ?? "");
-			if (shouldBlockDirectLiveForSpeechActivity(
-				activeSpeechActivityRef.current != null,
-				isOmni,
-			)) {
+			if (
+				shouldBlockDirectLiveForSpeechActivity(
+					activeSpeechActivityRef.current != null,
+					isOmni,
+				)
+			) {
 				// Direct Live audio cannot carry the single-use exhibition
 				// activityResume binding. Do not allow an ungrounded parallel lane.
 				setVoiceStatus({ phase: "idle" });
@@ -2432,7 +2482,9 @@ export function ChatArea({
 						// 언제든 끼어들 수 있어야 하므로 STT를 유지하고 최종 transcript의 자기 에코만
 						// decideSttBargeIn에서 거른다.
 						try {
-							if (shouldPauseSttForTts(activeSpeechActivityRef.current !== null))
+							if (
+								shouldPauseSttForTts(activeSpeechActivityRef.current !== null)
+							)
 								sttPauseRef.current?.();
 						} catch {
 							/* 마이크 정지 실패 = 비치명 (2차 텍스트 필터가 방어) */
@@ -2517,16 +2569,26 @@ export function ChatArea({
 						});
 						if (!pipelineActiveRef.current) return;
 
-						const ttsActive = ttsPlayingRef.current || Date.now() < ttsCooldownUntilRef.current;
-						const selfEcho = cleanResult.isFinal && isLikelySelfEcho(
-							cleanResult.transcript,
-							sentencePipelineRef.current?.recentTexts() ?? [],
-						);
-						const bargeIn = decideSttBargeIn({ isFinal: cleanResult.isFinal, ttsActive, selfEcho });
+						const ttsActive =
+							ttsPlayingRef.current || Date.now() < ttsCooldownUntilRef.current;
+						const selfEcho =
+							cleanResult.isFinal &&
+							isLikelySelfEcho(
+								cleanResult.transcript,
+								sentencePipelineRef.current?.recentTexts() ?? [],
+							);
+						const bargeIn = decideSttBargeIn({
+							isFinal: cleanResult.isFinal,
+							ttsActive,
+							selfEcho,
+						});
 						if (bargeIn === "suppress") {
-							Logger.info("ChatArea", selfEcho
-								? "STT result skipped (self-echo)"
-								: "STT partial suppressed (TTS playing/cooldown)");
+							Logger.info(
+								"ChatArea",
+								selfEcho
+									? "STT result skipped (self-echo)"
+									: "STT partial suppressed (TTS playing/cooldown)",
+							);
 							return;
 						}
 						if (bargeIn === "interrupt") {
@@ -2534,7 +2596,6 @@ export function ChatArea({
 							interruptTts();
 							ttsCooldownUntilRef.current = 0;
 						}
-
 
 						if (!cleanResult.isFinal) {
 							setSttPartial(cleanResult.transcript);
@@ -2882,9 +2943,12 @@ export function ChatArea({
 			});
 			voiceSessionRef.current = session;
 			const abortIfSpeechActivityOwnsVoice = () => {
-				if (!shouldAbortLiveConnectForSpeechActivity(
-					activeSpeechActivityRef.current != null,
-				)) return;
+				if (
+					!shouldAbortLiveConnectForSpeechActivity(
+						activeSpeechActivityRef.current != null,
+					)
+				)
+					return;
 				voiceCancelledRef.current = true;
 				session.disconnect();
 				const error = new Error("speech activity owns the grounded voice lane");
@@ -3209,12 +3273,16 @@ export function ChatArea({
 					sampleRate: session.audioInput.sampleRate,
 					autoGainControl: session.audioInput.autoGainControl,
 				});
-				if (!activateMicUnlessSpeechActivityOwnsVoice(
-					mic,
-					activeSpeechActivityRef.current != null,
-					voiceCancelledRef.current,
-				)) {
-					const error = new Error("speech activity owns the grounded voice lane");
+				if (
+					!activateMicUnlessSpeechActivityOwnsVoice(
+						mic,
+						activeSpeechActivityRef.current != null,
+						voiceCancelledRef.current,
+					)
+				) {
+					const error = new Error(
+						"speech activity owns the grounded voice lane",
+					);
 					error.name = "AbortError";
 					throw error;
 				}
@@ -3467,10 +3535,10 @@ export function ChatArea({
 	const effectiveTtsMaskedMessageId =
 		ttsMaskedMessageId ??
 		(!isStreaming && ttsTextSyncRef.current.active
-			? messages
+			? (messages
 					.slice()
 					.reverse()
-					.find((message) => message.role === "assistant")?.id ?? null
+					.find((message) => message.role === "assistant")?.id ?? null)
 			: null);
 
 	return (
@@ -3567,9 +3635,7 @@ export function ChatArea({
 				{/* Settings tab */}
 
 				{/* Channels tab */}
-				{activeTab === "channels" && (
-					<ChannelsTab />
-				)}
+				{activeTab === "channels" && <ChannelsTab />}
 
 				{/* History tab */}
 				{activeTab === "history" && (
@@ -3607,7 +3673,7 @@ export function ChatArea({
 					className="chat-messages"
 					style={{ display: activeTab === "chat" ? "flex" : "none" }}
 				>
-				{messages
+					{messages
 						.filter((msg) => {
 							if (
 								msg.role === "user" &&
@@ -3641,11 +3707,13 @@ export function ChatArea({
 								<div className="message-content">
 									{msg.role === "assistant" ? (
 										<Markdown components={mdComponents}>
-										{extractExpression(
-											msg.id === effectiveTtsMaskedMessageId
-												? ttsVisibleContent
-												: msg.content,
-										).cleanText}
+											{
+												extractExpression(
+													msg.id === effectiveTtsMaskedMessageId
+														? ttsVisibleContent
+														: msg.content,
+												).cleanText
+											}
 										</Markdown>
 									) : (
 										msg.content
@@ -3682,11 +3750,13 @@ export function ChatArea({
 							<div className="message-content">
 								{streamingContent ? (
 									<Markdown components={mdComponents}>
-										{extractExpression(
-											ttsTextSyncRef.current.active
-												? ttsVisibleContent
-												: streamingContent,
-										).cleanText}
+										{
+											extractExpression(
+												ttsTextSyncRef.current.active
+													? ttsVisibleContent
+													: streamingContent,
+											).cleanText
+										}
 									</Markdown>
 								) : null}
 								<span className="cursor-blink">▌</span>
@@ -3811,7 +3881,10 @@ export function ChatArea({
 							{messageQueue.length} {t("chat.queued")}
 						</span>
 					)}
-					{isStreaming || ttsMaskedMessageId !== null || outputStage !== null || ttsPlaying ? (
+					{isStreaming ||
+					ttsMaskedMessageId !== null ||
+					outputStage !== null ||
+					ttsPlaying ? (
 						<button
 							type="button"
 							onClick={handleCancelStreaming}

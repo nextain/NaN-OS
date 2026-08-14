@@ -1,0 +1,38 @@
+{
+  "contract_id": "issue-447-v017-launch-qa",
+  "contract_digest": "7804b4a9efcd09795286ef33794ca4ebee35db43a1e3a60eb1a04342dca09cfe",
+  "current_phase": "windows_handoff",
+  "issue": "#447",
+  "updated_at": "2026-08-14T22:54:04+09:00",
+  "status": "linux_preparation_complete_windows_clean_install_pending",
+  "root_cause": "On a clean install Tauri spawned naia-agent before onboarding selected an ADK root. The native process captured a missing ~/.naia/adk-path once; the UI later wrote the path without awaiting it or restarting/rebinding the running agent, and credential initialization had already run with no providers. The bundled Node runtime was present and preferred, so Node installation was not the cause.",
+  "implemented": [
+    "Await ADK-path persistence and restart/rebind the native agent only when the selected root changes",
+    "Delay credential initialization until setup and onboarding finish",
+    "Return an explicit UTF-8 Korean OAuth completion page without mojibake",
+    "Wait for Herdr snapshot readiness and retry bounded startup failures",
+    "Preserve the user's two-way chat placement when Workspace opens and remove the retired center-chat mode",
+    "Use a face-centered avatar grid with NVA/VRM badges and default to the Naia NVA",
+    "Remove hard-coded D: paths from native E2E setup and support isolated portable roots"
+  ],
+  "verification": {
+    "vitest": "PASS: 151 files passed, 2 skipped; 1556 tests passed, 22 skipped",
+    "rust": "PASS: 207 passed, 0 failed, including path-rebind, UTF-8 callback, bundled-Node preference, E2E isolation, and live gRPC roundtrip",
+    "build": "PASS: TypeScript project build and Vite production build for 0.1.7",
+    "browser_playwright": "136 passed, 42 skipped, 1 pre-existing stale pricing-copy assertion failed out of 179",
+    "native_tauri_codex": "PASS: isolated real Tauri app completed two Codex turns with request, usage, finish, and rendered marker evidence",
+    "native_tauri_standard": "Launch passed; provider configuration specs require CAFE_E2E_API_KEY or GEMINI_API_KEY and were not runnable in this environment",
+    "review_preflight": "NOT_CLEAN: repository complexity gate flags legacy oversized files touched by the fix; functional validation remains green"
+  },
+  "known_baseline_test_drift": [
+    "capability-settings.spec.ts expects the retired short Grok pricing label",
+    "Codex native provider-isolation spec expects Codex to be absent from a current provider list"
+  ],
+  "windows_handoff": [
+    "Build the signed/unsigned 0.1.7 Windows installer from this branch using the normal release workflow",
+    "Install on a clean Windows profile with no system Node.js and confirm logs select the bundled node.exe",
+    "Complete onboarding, send two first-run LLM messages, and confirm non-zero usage plus llm-debug/agent diagnostics",
+    "Verify Korean OAuth completion copy, Herdr ready state, Workspace chat placement, avatar selection, and localhost microphone permission behavior",
+    "Do not publish the installer or naia.land release/download changes until this clean-install gate passes"
+  ]
+}

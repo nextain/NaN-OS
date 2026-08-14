@@ -3289,7 +3289,7 @@ export function SettingsTab() {
 										const cfg = loadConfig();
 										if (!cfg) return;
 										saveConfig({ ...cfg, workspaceRoot: selected });
-										setAdkPath(selected);
+										await setAdkPath(selected);
 										invoke("workspace_set_root", { root: selected }).catch(
 											() => {},
 										);
@@ -3317,7 +3317,7 @@ export function SettingsTab() {
 										workspaceRoot: trimmed || undefined,
 									});
 									if (trimmed) {
-										setAdkPath(trimmed);
+										await setAdkPath(trimmed);
 										invoke("workspace_set_root", {
 											root: trimmed,
 										}).catch(() => {});

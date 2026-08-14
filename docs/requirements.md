@@ -731,3 +731,13 @@ Verified this session with a real Chromium + dev server: `e2e/onboarding-fresh.s
 | **FR-LLM-DEFAULT.3** | `deepseek-v4-flash` is tiered in `NAIA_GENERAL_CHAT_RECOMMENDATION` (product model-sort priority) at the same tier as `deepseek-v4-pro`, sourced from its official Azure Foundry model card and Artificial Analysis Intelligence Index (52, #3/101 open-weight models) rather than a fabricated score — see the citation comment above the table in `registry.ts`. | `registry.test.ts` sort-order test |
 
 Verification: Shell `tsc --noEmit` clean; full Shell Vitest suite green (1463 tests, 0 failed). any-llm gateway: `pytest tests/gateway/test_naia_azure_models.py tests/unit/test_naia_pricing.py` — 78 passed (3 unrelated tests in `test_models.py` need a local Docker daemon for a Postgres testcontainer, not available this session — not specific to this model). No `e2e`/`e2e-tauri` coverage for this change (model selection has no dedicated Playwright spec); not run this session.
+
+## v0.1.7 launch QA (#447, 2026-08-14)
+
+| ID | Normative requirement | Verification |
+|---|---|---|
+| **FR-V017.1** | Writing the first ADK path on a clean install is an awaited operation. If the native cache changes, Shell restarts Agent against the new workspace before setup completion; an unchanged path does not restart it. Native E2E isolation never writes the user cache. | Rust cache/restart contract + `adk-store` unit + fresh-profile Playwright; final NSIS clean-VM smoke |
+| **FR-V017.2** | Startup auth, notification configuration, and every LLM/TTS credential are cached and sent after ADK setup and onboarding complete, including a clean install whose first mount had no config. Failure is observable and the request is not reported as successful. | App component contract + fresh-profile Playwright + Agent log inspection |
+| **FR-V017.3** | Workspace owns one bundled Herdr PTY. Snapshot polling starts only after PTY creation and retries bounded startup races until the API becomes ready; process exit and timeout remain explicit retryable errors. | Herdr hook tests + Workspace Playwright + installed Windows process inspection |
+| **FR-V017.4** | Chat layout is a persisted user preference independent of the active app. Missing/legacy center values migrate to `app` (left-small); opening Workspace never forces left-fill and no center-large chat mode is rendered. | App layout test + Playwright |
+| **FR-V017.5** | Onboarding appearance selection is one grid of installed VRM/NVA cards with face-centered thumbnails and visible type badges. The default selected appearance is bundled Naia NVA and completion persists `avatarProvider=naia-video-avatar`, `nvaModel=naia`. | Onboarding unit + fresh-profile Playwright screenshot/DOM |

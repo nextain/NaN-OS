@@ -1,0 +1,82 @@
+{
+  "schema_version": "1.0",
+  "id": "issue-447-v017-launch-qa",
+  "status": "active",
+  "project_root": ".",
+  "goal": "Implement and fully validate naia-shell issue #447 as Linux-side preparation for the v0.1.7 Windows release.",
+  "scope": [
+    "Diagnose and fix clean-install packaged LLM startup and observability failures",
+    "Make bundled Herdr startup reliable",
+    "Correct onboarding, workspace chat layout, and avatar picker regressions",
+    "Add issue scenarios, requirements, tests, and release handoff evidence",
+    "Run build, unit, Playwright browser, and Tauri E2E validation available on Linux"
+  ],
+  "non_goals": [
+    "Publish or deploy v0.1.7 artifacts",
+    "Claim a clean Windows installer validation from Linux",
+    "Modify the user's existing dirty checkout"
+  ],
+  "success_criteria": [
+    "A clean profile can start the packaged agent and produce actionable diagnostics before the first LLM request",
+    "Bundled Herdr reaches a ready state without the snapshot race",
+    "Workspace opening respects the saved chat layout and the supported layout choices match issue #447",
+    "The avatar picker is face-centered, badged, and defaults to Naia NVA",
+    "Required build, unit, Playwright, and Tauri E2E gates pass or have an evidence-backed platform limitation",
+    "A reachable branch is ready for Windows clean-install QA"
+  ],
+  "allowed_paths": [
+    ".agents/context/agents-rules.json",
+    ".agents/context/process-status.json",
+    "docs/requirements.md",
+    "docs/user-scenarios.md",
+    "package.json",
+    "pnpm-lock.yaml",
+    "node_modules/**",
+    "packages/shell/**",
+    "scripts/**"
+  ],
+  "target_ownership": [
+    ".agents/context/agents-rules.json",
+    ".agents/context/process-status.json",
+    "docs/requirements.md",
+    "docs/user-scenarios.md",
+    "package.json",
+    "pnpm-lock.yaml",
+    "node_modules/**",
+    "packages/shell/**",
+    "scripts/**"
+  ],
+  "audiences": [
+    "naia-shell users",
+    "v0.1.7 release operator",
+    "Windows QA"
+  ],
+  "source_refs": [
+    "https://github.com/nextain/naia-shell/issues/447",
+    "USR-2026-08-14:clean-windows-first-install",
+    "USR-2026-08-14:playwright-all-tests"
+  ],
+  "session_bindings": [
+    {
+      "session_id": "01a0004a-f64e-73b0-82da-c1069dece3bd",
+      "contract_digest": "7804b4a9efcd09795286ef33794ca4ebee35db43a1e3a60eb1a04342dca09cfe"
+    }
+  ],
+  "progress_file": ".agents/progress/issue-447-v017-launch-qa.json",
+  "allowed_shell_commands": [
+    "pnpm install --frozen-lockfile",
+    "bash scripts/enforce-root-structure.sh",
+    "node scripts/check-assembly-coverage.mjs",
+    "npx tsc -p tsconfig.json",
+    "pnpm test",
+    "pnpm build",
+    "pnpm -C packages/shell test",
+    "pnpm -C packages/shell build",
+    "pnpm -C packages/shell test:e2e",
+    "pnpm -C packages/shell build:e2e:tauri",
+    "xvfb-run pnpm -C packages/shell test:e2e:tauri",
+    "cargo test --manifest-path packages/shell/src-tauri/Cargo.toml",
+    "git diff --check"
+  ],
+  "contract_digest": "7804b4a9efcd09795286ef33794ca4ebee35db43a1e3a60eb1a04342dca09cfe"
+}

@@ -1,5 +1,27 @@
 export const HERDR_PROTOCOL = 19;
 export const HERDR_SNAPSHOT_INTERVAL_MS = 750;
+export const HERDR_STARTUP_TIMEOUT_MS = 8_000;
+export const HERDR_STARTUP_RETRY_MS = 250;
+
+export async function waitForHerdrReady<T>(
+	readSnapshot: () => Promise<T>,
+	options: { timeoutMs?: number; retryMs?: number } = {},
+): Promise<T> {
+	const timeoutMs = options.timeoutMs ?? HERDR_STARTUP_TIMEOUT_MS;
+	const retryMs = options.retryMs ?? HERDR_STARTUP_RETRY_MS;
+	const deadline = Date.now() + timeoutMs;
+	let lastError: unknown;
+	do {
+		try {
+			return await readSnapshot();
+		} catch (error) {
+			lastError = error;
+		}
+		if (Date.now() >= deadline) break;
+		await new Promise((resolve) => globalThis.setTimeout(resolve, retryMs));
+	} while (Date.now() < deadline);
+	throw lastError ?? new Error("Herdr did not become ready");
+}
 
 export interface HerdrWorktree {
 	checkout_path: string;

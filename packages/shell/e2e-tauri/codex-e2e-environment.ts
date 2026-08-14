@@ -67,9 +67,18 @@ const E2E_PREBAKED_NVA_ENABLED = process.env.NAIA_E2E_PREBAKED_NVA === "1";
 const E2E_VOICE_6G_ENABLED = process.env.NAIA_E2E_VOICE_6G === "1";
 const E2E_NVA_SOURCE =
 	process.env.NAIA_E2E_NVA_SOURCE ??
-	resolve(SHELL_DIR, "../../../..", "naia-settings", "nva-files", "naia-prebaked");
+	resolve(
+		SHELL_DIR,
+		"../../../..",
+		"naia-settings",
+		"nva-files",
+		"naia-prebaked",
+	);
 const E2E_VRM_SOURCE = process.env.NAIA_E2E_VRM_SOURCE;
-const PAIRED_AGENT_ROOT = "D:/alpha-adk/projects/naia-agent-worktrees";
+const PAIRED_AGENT_ROOT = resolve(
+	process.env.NAIA_AGENT_WORKTREES_DIR ??
+		resolve(SHELL_DIR, "../../../..", "naia-agent-worktrees"),
+);
 const REQUIRED_AGENT_COMMIT = pairing.agentCommit;
 
 let viteServer: ChildProcess | undefined;
@@ -90,10 +99,12 @@ function assertOwnedRoot(path: string): void {
 export function resolveRequiredPairedAgent(): string {
 	const explicit = process.env.NAIA_E2E_AGENT_ROOT;
 	const candidates = explicit
-		? [explicit]
-		: readdirSync(PAIRED_AGENT_ROOT, { withFileTypes: true })
-				.filter((entry) => entry.isDirectory())
-				.map((entry) => resolve(PAIRED_AGENT_ROOT, entry.name));
+		? [resolve(explicit)]
+		: existsSync(PAIRED_AGENT_ROOT)
+			? readdirSync(PAIRED_AGENT_ROOT, { withFileTypes: true })
+					.filter((entry) => entry.isDirectory())
+					.map((entry) => resolve(PAIRED_AGENT_ROOT, entry.name))
+			: [];
 	for (const candidate of candidates) {
 		if (!existsSync(resolve(candidate, "scripts/builds/agent-stdio-entry.mjs")))
 			continue;
@@ -117,7 +128,7 @@ export function resolveRequiredPairedAgent(): string {
 		}
 	}
 	throw new Error(
-		`No paired naia-agent checkout contains ${REQUIRED_AGENT_COMMIT}`,
+		`No paired naia-agent checkout contains ${REQUIRED_AGENT_COMMIT} under ${explicit ?? PAIRED_AGENT_ROOT}`,
 	);
 }
 
@@ -176,11 +187,7 @@ export function resetCodexE2eRoot(): void {
 	mkdirSync(E2E_APPDATA, { recursive: true });
 	mkdirSync(E2E_ARTIFACTS, { recursive: true });
 	mkdirSync(E2E_RUNTIME, { recursive: true });
-	const voiceVrmPath = resolve(
-		E2E_SETTINGS,
-		"vrm-files",
-		"01-OL_Woman.vrm",
-	);
+	const voiceVrmPath = resolve(E2E_SETTINGS, "vrm-files", "01-OL_Woman.vrm");
 	if (E2E_VOICE_6G_ENABLED) {
 		if (!E2E_VRM_SOURCE || !existsSync(E2E_VRM_SOURCE)) {
 			throw new Error(
@@ -218,9 +225,13 @@ export function resetCodexE2eRoot(): void {
 				"NAIA_E2E_PREBAKED_NVA=1 requires NAIA_E2E_NVA_SOURCE pointing to a real pre-baked NVA bundle",
 			);
 		}
-		cpSync(E2E_NVA_SOURCE, resolve(E2E_SETTINGS, "nva-files", "naia-prebaked"), {
-			recursive: true,
-		});
+		cpSync(
+			E2E_NVA_SOURCE,
+			resolve(E2E_SETTINGS, "nva-files", "naia-prebaked"),
+			{
+				recursive: true,
+			},
+		);
 	}
 	writeFileSync(E2E_CONFIG_PATH, JSON.stringify(config, null, 2), {
 		mode: 0o600,
@@ -349,8 +360,7 @@ export async function startOwnedViteServer(): Promise<void> {
 			stdio: ["ignore", "pipe", "pipe"],
 			env: {
 				...process.env,
-				VITE_NAIA_SECURE_STORE_FILE:
-					process.env.NAIA_E2E_SECURE_STORE_FILE,
+				VITE_NAIA_SECURE_STORE_FILE: process.env.NAIA_E2E_SECURE_STORE_FILE,
 				VITE_NAIA_E2E_MODE: "1",
 				BROWSER: "none",
 				VITE_NAIA_E2E_ADK_PATH: E2E_WORKSPACE,

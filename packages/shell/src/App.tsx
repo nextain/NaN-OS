@@ -185,7 +185,12 @@ export function App() {
 	// A native E2E run owns its ADK root.  WebView2 can retain a prior profile
 	// while Windows tears it down, so merely filling an absent cache lets an
 	// earlier run's workspace silently override this run's seeded config.
-	if (e2eAdkPath && getAdkPath() !== e2eAdkPath) setAdkPath(e2eAdkPath);
+	if (e2eAdkPath && getAdkPath() !== e2eAdkPath)
+		void setAdkPath(e2eAdkPath).catch((error) => {
+			Logger.error("App", "E2E workspace binding failed", {
+				error: String(error),
+			});
+		});
 	if (e2eAdkPath && !isOnboardingComplete()) {
 		localStorage.setItem(
 			"naia-config",
@@ -216,20 +221,22 @@ export function App() {
 	);
 	// 챗 레이아웃 2-way 수동 override. 이전 "home" 중앙 모드는 읽을 때
 	// 좌측 소형(app)으로 마이그레이션한다.
-	const [chatModeOverride, setChatModeOverride] = useState<
-		"workspace" | "app" | null
-	>(() => {
-		try {
-			const v = localStorage.getItem("naia-chat-mode-v1");
-			if (v === "home") {
+	const [chatModeOverride, setChatModeOverride] = useState<"workspace" | "app">(
+		() => {
+			try {
+				const v = localStorage.getItem("naia-chat-mode-v1");
+				if (v === "home") {
+					localStorage.setItem("naia-chat-mode-v1", "app");
+					return "app";
+				}
+				if (v === "workspace" || v === "app") return v;
 				localStorage.setItem("naia-chat-mode-v1", "app");
 				return "app";
+			} catch {
+				return "app";
 			}
-			return v === "workspace" || v === "app" ? v : null;
-		} catch {
-			return null;
-		}
-	});
+		},
+	);
 	const setChatMode = (m: "workspace" | "app") => {
 		setChatModeOverride((cur) => (cur === m ? cur : m));
 		try {
@@ -516,7 +523,12 @@ export function App() {
 		// differs from adkPath (localStorage) — it never touches the agent's file.
 		// Force-resync the agent's path file to the shell's ADK on every boot so the
 		// save-path and the load-path can never silently diverge.
-		if (adkPath) setAdkPath(adkPath);
+		if (adkPath)
+			void setAdkPath(adkPath).catch((error) => {
+				Logger.error("App", "workspace binding failed", {
+					error: String(error),
+				});
+			});
 		applyTheme(config?.theme ?? "midnight");
 		// Suppress build-time panels the user has explicitly deleted
 		if (config?.deletedPanels?.length) {
@@ -734,6 +746,7 @@ export function App() {
 	// send — guaranteeing the Rust cache is populated before the message
 	// reaches the agent (safe replay after any future crash/restart).
 	useEffect(() => {
+		if (showAdkSetup || showOnboarding) return;
 		// Migrate saved config that points at a removed gateway model (#248).
 		// Previously-saved gemini-3.x selections on the Naia provider now
 		// fail with "gateway returned 0 bytes" — auto-swap to the provider's
@@ -822,7 +835,7 @@ export function App() {
 		return () => {
 			active = false; // cancel any in-flight async operations on unmount
 		};
-	}, []);
+	}, [showAdkSetup, showOnboarding]);
 
 	const handleWinResize = (dir: WinResizeDir) => (e: React.PointerEvent) => {
 		e.preventDefault();
@@ -885,7 +898,7 @@ export function App() {
 	const activeAppDescriptor = activeApp ? appRegistry.get(activeApp) : null;
 	const CenterComponent = activeAppDescriptor?.center ?? null;
 
-	// ── UI mode (single signal — derived from activeApp, no separate SoT) ──
+	// ── UI mode (single persisted user preference) ──
 	// app     = no panel active → left compact conversation dock
 	// workspace = workspace panel → 4-zone mission-control (chat rail + worktree
 	//             + document viewer/terminal + sub-agent list)
@@ -893,18 +906,13 @@ export function App() {
 	// The same single ChatArea instance is repositioned by CSS keyed off
 	// data-ui-mode — it is NEVER unmounted across modes (voice/STT/TTS session
 	// continuity). `variant` only changes the chat UI density, not its logic.
-	// 자동 파생(activeApp 기반). 사용자가 2-way 스위치로 override 하면 그 값을 우선.
-	const derivedUiMode =
-		activeApp === null
-			? "app"
-			: activeApp === "workspace"
-				? "workspace"
-				: "app";
+	// Opening Workspace changes only the center surface. Chat placement follows
+	// the user's 2-way preference and defaults to the lower floating dock.
 	const uiMode = showOnboarding
 		? "onboarding"
 		: showAdkSetup
 			? "setup"
-			: (chatModeOverride ?? derivedUiMode);
+			: chatModeOverride;
 	// Chat fill (rail) follows only the user's explicit chat-mode toggle
 	// (왼쪽 채움), never the Workspace app itself — opening Workspace must not
 	// force the chat to full-width; it stays wherever the user set it.

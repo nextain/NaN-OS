@@ -267,7 +267,7 @@ pub(crate) fn spawn_oauth_callback_server(
 
             // Send a small HTML page that closes the tab and informs the user.
             // The browser stays on this page until the user closes it manually.
-            let body = r#"<!doctype html><html><head><meta charset="utf-8"><title>naia 濡쒓렇???꾨즺</title><style>body{font-family:system-ui;background:#0f1117;color:#e5e7eb;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0}.card{background:#1a1d27;border:1px solid #2c303a;padding:32px 40px;border-radius:12px;text-align:center;max-width:420px}h1{margin:0 0 12px;font-size:20px;font-weight:600}p{margin:0;color:#9ca3af;line-height:1.6}</style></head><body><div class="card"><h1>naia 濡쒓렇???꾨즺</h1><p>??李쎌? ?レ븘???⑸땲?? naia ?깆쑝濡??뚯븘媛二쇱꽭??</p></div><script>setTimeout(()=>window.close(),1500)</script></body></html>"#;
+            let body = oauth_callback_completion_html();
             let response = Response::from_string(body).with_header(
                 Header::from_bytes(&b"Content-Type"[..], &b"text/html; charset=utf-8"[..])
                     .expect("valid header"),
@@ -277,6 +277,25 @@ pub(crate) fn spawn_oauth_callback_server(
     });
 
     Ok(())
+}
+
+fn oauth_callback_completion_html() -> &'static str {
+    r#"<!doctype html><html lang="ko"><head><meta charset="utf-8"><title>naia 로그인 완료</title><style>body{font-family:system-ui;background:#0f1117;color:#e5e7eb;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0}.card{background:#1a1d27;border:1px solid #2c303a;padding:32px 40px;border-radius:12px;text-align:center;max-width:420px}h1{margin:0 0 12px;font-size:20px;font-weight:600}p{margin:0;color:#9ca3af;line-height:1.6}</style></head><body><div class="card"><h1>naia 로그인 완료</h1><p>이 창을 닫아도 됩니다. naia 앱으로 돌아가 주세요.</p></div><script>setTimeout(()=>window.close(),1500)</script></body></html>"#
+}
+
+#[cfg(test)]
+mod oauth_completion_html_tests {
+    use super::oauth_callback_completion_html;
+
+    #[test]
+    fn completion_page_is_utf8_korean_without_mojibake() {
+        let html = oauth_callback_completion_html();
+
+        assert!(html.contains(r#"<meta charset="utf-8">"#));
+        assert!(html.contains("naia 로그인 완료"));
+        assert!(html.contains("이 창을 닫아도 됩니다. naia 앱으로 돌아가 주세요."));
+        assert!(!html.contains("濡쒓렇"));
+    }
 }
 
 #[cfg(target_os = "linux")]
@@ -1929,10 +1948,13 @@ fn validate_runtime_agent_script_override(agent_script: &str) -> Result<(), Stri
     // drop into the dev checkout. Twin of the build.rs / stage-runtime.mjs /
     // tauri-with-mode.mjs paired-clean guards.
     let dirty = runtime_git_output(root_path, &["status", "--porcelain"])?;
-    let dirty = dirty.lines().filter(|line| !line.trim().is_empty()).any(|line| {
-        !line.contains(".agents/session-contracts/.recovery/")
-            && !line.contains(".agents\\session-contracts\\.recovery\\")
-    });
+    let dirty = dirty
+        .lines()
+        .filter(|line| !line.trim().is_empty())
+        .any(|line| {
+            !line.contains(".agents/session-contracts/.recovery/")
+                && !line.contains(".agents\\session-contracts\\.recovery\\")
+        });
     if dirty {
         return Err("NAIA_AGENT_SCRIPT checkout must remain clean at runtime".to_string());
     }
@@ -4557,9 +4579,7 @@ fn naia_balance_endpoint(gateway_url: &str) -> Result<url::Url, String> {
         host.eq_ignore_ascii_case("localhost") || host == "127.0.0.1" || host == "::1";
     let is_trusted_https = is_trusted_naia_https_host(base.scheme(), host);
     if !is_trusted_https && !(is_loopback && matches!(base.scheme(), "http" | "https")) {
-        return Err(
-            "Naia balance requests require HTTPS on nextain.io".to_string(),
-        );
+        return Err("Naia balance requests require HTTPS on nextain.io".to_string());
     }
     base.join("/v1/profile/balance")
         .map_err(|_| "Invalid Naia balance endpoint".to_string())
@@ -9283,7 +9303,8 @@ async fn init_naia_settings(adk_path: String) -> Result<(), String> {
 }
 
 /// Write `~/.naia/adk-path` so naia-agent can discover the naia-settings
-/// directory on next startup without waiting for the shell JS to initialize.
+/// directory. When the path changes, restart the already-running agent so a
+/// clean first install does not remain bound to the empty pre-setup workspace.
 /// Called by setAdkPath() in adk-store.ts whenever the user sets or changes
 /// their workspace path.
 fn naia_path_cache_target(
@@ -9293,12 +9314,20 @@ fn naia_path_cache_target(
     (!native_e2e).then(|| naia_data_home_from(home).join("adk-path"))
 }
 
+fn naia_path_cache_changed(cache_path: &std::path::Path, adk_path: &str) -> bool {
+    std::fs::read_to_string(cache_path)
+        .map(|cached| cached.trim_end_matches(['\r', '\n']) != adk_path)
+        .unwrap_or(true)
+}
+
 #[tauri::command]
 async fn write_naia_path_cache(
     adk_path: String,
     state: tauri::State<'_, AppState>,
+    app_handle: tauri::AppHandle,
+    audit_state: tauri::State<'_, AuditState>,
 ) -> Result<(), String> {
-    with_discord_lifecycle(&state.discord_lifecycle, || {
+    let changed = with_discord_lifecycle(&state.discord_lifecycle, || {
         if adk_path.is_empty() {
             return Err("adk_path is empty".to_string());
         }
@@ -9306,15 +9335,28 @@ async fn write_naia_path_cache(
         // Native E2E owns its workspace through NAIA_E2E_ADK_PATH. Never let
         // a disposable test run overwrite the real user's next-start cache.
         let Some(cache_path) = naia_path_cache_target(home, debug_e2e_enabled()) else {
-            return Ok(());
+            return Ok(false);
         };
+        let changed = naia_path_cache_changed(&cache_path, &adk_path);
         let naia_dir = cache_path
             .parent()
             .ok_or_else(|| "Cannot determine Naia cache directory".to_string())?;
         std::fs::create_dir_all(naia_dir).map_err(|e| e.to_string())?;
         std::fs::write(cache_path, &adk_path).map_err(|e| e.to_string())?;
-        Ok(())
-    })
+        Ok(changed)
+    })?;
+
+    // Do this after releasing discord_lifecycle: restart_agent acquires the
+    // same lifecycle lock while shutting down and respawning agent-core.
+    if changed {
+        restart_agent(
+            &state,
+            &app_handle,
+            r#"{"type":"set_workspace"}"#,
+            Some(&audit_state.db),
+        )?;
+    }
+    Ok(())
 }
 
 /// Copy bundled default assets (vrm-files, background, bgm-musics) from the app's
@@ -12060,6 +12102,16 @@ mod tests {
             naia_path_cache_target(home, false),
             Some(std::path::PathBuf::from("C:/naia-test-home/.naia/adk-path"))
         );
+    }
+
+    #[test]
+    fn adk_path_cache_restarts_only_when_the_workspace_changes() {
+        let temp = tempfile::tempdir().unwrap();
+        let cache = temp.path().join("adk-path");
+        assert!(naia_path_cache_changed(&cache, "D:/alpha-adk"));
+        std::fs::write(&cache, "D:/alpha-adk\n").unwrap();
+        assert!(!naia_path_cache_changed(&cache, "D:/alpha-adk"));
+        assert!(naia_path_cache_changed(&cache, "D:/naia-adk"));
     }
 
     #[test]

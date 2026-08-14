@@ -41,14 +41,13 @@ export function getAdkPath(): string | null {
 	return localStorage.getItem(ADK_PATH_KEY);
 }
 
-export function setAdkPath(path: string): void {
+export async function setAdkPath(path: string): Promise<void> {
 	// Normalize: remove trailing slash/backslash
 	const normalized = path.replace(/[/\\]+$/, "");
 	localStorage.setItem(ADK_PATH_KEY, normalized);
-	// Persist to ~/.naia/adk-path so naia-agent reads it at next spawn
-	invoke("write_naia_path_cache", { adkPath: normalized }).catch(() => {
-		// Non-fatal: agent falls back to ~/.naia/ paths
-	});
+	// Persist to ~/.naia/adk-path. Native restarts/rebinds an already-running
+	// agent when this changes, so setup must await completion before continuing.
+	await invoke("write_naia_path_cache", { adkPath: normalized });
 }
 
 export function isAdkInitialized(): boolean {

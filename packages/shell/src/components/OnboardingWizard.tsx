@@ -180,11 +180,7 @@ function BackgroundThumbnail({
 
 	if (capturedFrame) {
 		return (
-			<img
-				src={capturedFrame}
-				alt={background.label}
-				className={className}
-			/>
+			<img src={capturedFrame} alt={background.label} className={className} />
 		);
 	}
 	return (
@@ -207,9 +203,10 @@ function NvaThumbnail({ path, label }: { path: string; label: string }) {
 		const adkPath = getAdkPath();
 		if (!adkPath) return;
 		const sep = adkPath.includes("\\") ? "\\" : "/";
-		const bundleDir = path.includes("/") || path.includes("\\")
-			? path
-			: `${adkPath}${sep}naia-settings${sep}nva-files${sep}${path}`;
+		const bundleDir =
+			path.includes("/") || path.includes("\\")
+				? path
+				: `${adkPath}${sep}naia-settings${sep}nva-files${sep}${path}`;
 		void invoke<string>("read_local_binary", {
 			path: `${bundleDir}${sep}manifest.json`,
 			allowedBase: adkPath,
@@ -226,7 +223,8 @@ function NvaThumbnail({ path, label }: { path: string; label: string }) {
 					defaultClipOf(manifest).video,
 				);
 				const url = await toLocalBlobUrl(clipPath);
-				if (!disposed) setPreview({ url, label, path: clipPath, type: "video" });
+				if (!disposed)
+					setPreview({ url, label, path: clipPath, type: "video" });
 			})
 			.catch(() => {});
 		return () => {
@@ -235,12 +233,12 @@ function NvaThumbnail({ path, label }: { path: string; label: string }) {
 	}, [label, path]);
 
 	if (!preview) {
-		return <span className="onboarding-step__avatar-thumb" aria-hidden="true" />;
+		return <span className="onboarding-step__avatar-img" aria-hidden="true" />;
 	}
 	return (
 		<BackgroundThumbnail
 			background={preview}
-			className="onboarding-step__avatar-thumb"
+			className="onboarding-step__avatar-img"
 		/>
 	);
 }
@@ -333,8 +331,7 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
 	// deliver the real list asynchronously via `onvoiceschanged` instead of
 	// synchronously from getVoices() on first call.
 	useEffect(() => {
-		if (typeof window === "undefined" || !("speechSynthesis" in window))
-			return;
+		if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
 		const applyVoices = () => {
 			const voices = window.speechSynthesis.getVoices();
 			if (voices.length === 0) return;
@@ -344,7 +341,9 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
 					return current;
 				const locale = getLocale();
 				const matched =
-					voices.find((voice) => voice.lang?.toLowerCase().startsWith(locale)) ??
+					voices.find((voice) =>
+						voice.lang?.toLowerCase().startsWith(locale),
+					) ??
 					voices.find((voice) =>
 						voice.lang?.toLowerCase().startsWith(locale.split("-")[0]),
 					) ??
@@ -360,8 +359,7 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
 	}, []);
 
 	function previewWebVoice() {
-		if (typeof window === "undefined" || !("speechSynthesis" in window))
-			return;
+		if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
 		window.speechSynthesis.cancel();
 		const voice = webVoices.find((item) => item.voiceURI === webVoiceURI);
 		const utter = new SpeechSynthesisUtterance(t("onboard.voice.previewText"));
@@ -780,8 +778,8 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
 			memoryEmbeddingProvider,
 			memoryLlmProvider,
 			ttsEnabled,
-			webVoiceLang: webVoices.find((voice) => voice.voiceURI === webVoiceURI)
-				?.lang ?? "",
+			webVoiceLang:
+				webVoices.find((voice) => voice.voiceURI === webVoiceURI)?.lang ?? "",
 			localVoiceEnabled,
 		},
 	) {
@@ -1079,52 +1077,63 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
 								.replace("{user}", userName.trim() || "")
 								.replace("{agent}", agentName.trim() || "나이아")}
 						</h2>
-						<div className="onboarding-step__avatar-list">
+						<div className="onboarding-step__avatar-grid">
 							{naiaVrms.length === 0 && naiaNvas.length === 0 ? (
 								<p className="onboarding-step__hint onboarding-step__hint--warn">
 									{t("onboard.character.empty")}
 								</p>
 							) : (
 								<>
-								{naiaVrms.map((path) => {
-									const filename = path.split(/[/\\]/).pop() ?? path;
-									const label = filename.replace(/\.vrm$/i, "");
-									const thumb = `/avatars/${filename.replace(/\.vrm$/i, ".webp")}`;
-									return (
-										<button
-											key={path}
-											type="button"
-											className={`onboarding-step__avatar-item${selectedVrm === path ? " onboarding-step__avatar-item--selected" : ""}`}
-											onClick={() => handleVrmSelect(path)}
-										>
-											<img
-												src={thumb}
-												className="onboarding-step__avatar-thumb"
-												alt={label}
-												onError={(e) => {
-													(e.currentTarget as HTMLImageElement).style.display =
-														"none";
-												}}
-											/>
-											<span>{label}</span>
-										</button>
-									);
-								})}
-								{naiaNvas.map((path) => {
-									const filename = path.split(/[/\\]/).pop() ?? path;
-									const label = filename.replace(/\.nva$/i, "");
-									return (
-										<button
-											key={path}
-											type="button"
-											className={`onboarding-step__avatar-item${avatarProvider === "naia-video-avatar" && selectedNva === path ? " onboarding-step__avatar-item--selected" : ""}`}
-											onClick={() => handleNvaSelect(path)}
-										>
-											<NvaThumbnail path={path} label={label} />
-											<span>{label}</span>
-										</button>
-									);
-								})}
+									{naiaVrms.map((path) => {
+										const filename = path.split(/[/\\]/).pop() ?? path;
+										const label = filename.replace(/\.vrm$/i, "");
+										const thumb = `/avatars/${filename.replace(/\.vrm$/i, ".webp")}`;
+										return (
+											<button
+												key={path}
+												type="button"
+												className={`onboarding-step__avatar-card${selectedVrm === path ? " onboarding-step__avatar-card--selected" : ""}`}
+												onClick={() => handleVrmSelect(path)}
+											>
+												<img
+													src={thumb}
+													className="onboarding-step__avatar-img"
+													alt={label}
+													onError={(e) => {
+														(
+															e.currentTarget as HTMLImageElement
+														).style.display = "none";
+													}}
+												/>
+												<span className="onboarding-step__avatar-badge">
+													VRM
+												</span>
+												<span className="onboarding-step__avatar-label">
+													{label}
+												</span>
+											</button>
+										);
+									})}
+									{naiaNvas.map((path) => {
+										const filename = path.split(/[/\\]/).pop() ?? path;
+										const label = filename.replace(/\.nva$/i, "");
+										return (
+											<button
+												key={path}
+												type="button"
+												className={`onboarding-step__avatar-card${avatarProvider === "naia-video-avatar" && selectedNva === path ? " onboarding-step__avatar-card--selected" : ""}`}
+												onClick={() => handleNvaSelect(path)}
+											>
+												<NvaThumbnail path={path} label={label} />
+												<span className="onboarding-step__avatar-badge">
+													NVA
+												</span>
+												<span className="onboarding-step__avatar-label">
+													{label}
+												</span>
+											</button>
+										);
+									})}
 								</>
 							)}
 						</div>

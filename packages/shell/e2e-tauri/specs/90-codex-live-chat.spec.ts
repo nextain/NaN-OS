@@ -1,5 +1,6 @@
 import { readFileSync, statSync } from "node:fs";
 import { resolve } from "node:path";
+import { E2E_WORKSPACE } from "../codex-e2e-environment.js";
 import {
 	countCompletedAssistantMessages,
 	getNewAssistantMessages,
@@ -54,10 +55,9 @@ async function waitForRunLog(fragment: string): Promise<void> {
 
 describe("Codex live chat through the isolated real Naia Shell", () => {
 	before(async () => {
-		if (!adkPath) throw new Error("NAIA_E2E_ADK_PATH is required for Codex live E2E");
-		expect(adkPath).toContain(
-			resolve(process.env.USERPROFILE ?? "", ".naia", "run", "codex-live-e2e"),
-		);
+		if (!adkPath)
+			throw new Error("NAIA_E2E_ADK_PATH is required for Codex live E2E");
+		expect(resolve(adkPath)).toBe(E2E_WORKSPACE);
 		const appRoot = await $(S.appRoot);
 		await appRoot.waitForDisplayed({ timeout: 45_000 });
 		const seeded = JSON.parse(
@@ -65,21 +65,25 @@ describe("Codex live chat through the isolated real Naia Shell", () => {
 		);
 		expect(seeded.provider).toBe("codex");
 		expect(seeded.model).toBe("gpt-5.4");
-		await browser.execute((path: string, config: Record<string, unknown>) => {
-			localStorage.setItem("naia-adk-path", path);
-			localStorage.setItem(
-				"naia-config",
-				JSON.stringify({
-					...config,
-					enableTools: false,
-					ttsEnabled: false,
-					locale: "ko",
-					onboardingComplete: true,
-					workspaceRoot: path,
-				}),
-			);
-			window.dispatchEvent(new CustomEvent("naia-config-changed"));
-		}, adkPath, seeded);
+		await browser.execute(
+			(path: string, config: Record<string, unknown>) => {
+				localStorage.setItem("naia-adk-path", path);
+				localStorage.setItem(
+					"naia-config",
+					JSON.stringify({
+						...config,
+						enableTools: false,
+						ttsEnabled: false,
+						locale: "ko",
+						onboardingComplete: true,
+						workspaceRoot: path,
+					}),
+				);
+				window.dispatchEvent(new CustomEvent("naia-config-changed"));
+			},
+			adkPath,
+			seeded,
+		);
 		const chatInput = await $(S.chatInput);
 		await chatInput.waitForEnabled({ timeout: 90_000 });
 		logPath = await tauriInvoke<string>("get_gateway_log_path");
@@ -97,15 +101,21 @@ describe("Codex live chat through the isolated real Naia Shell", () => {
 	it("renders two consecutive real Codex turns in the embedded Windows UI", async () => {
 		const before = await countCompletedAssistantMessages();
 		logStart = statSync(logPath).size;
-		await sendMessage(`Respond with exactly ${RESPONSE_MARKER} and nothing else.`);
+		await sendMessage(
+			`Respond with exactly ${RESPONSE_MARKER} and nothing else.`,
+		);
 		await waitForRunLog("[E2E-DEBUG] chat_request requestId=");
 		const requestMatch = readCurrentRunLog().match(
 			/\[E2E-DEBUG\] chat_request requestId=([^ ]+) provider=codex\b/,
 		);
 		expect(requestMatch).not.toBeNull();
 		const requestId = requestMatch?.[1] ?? "";
-		await waitForRunLog(`[E2E-DEBUG] agent_event requestId=${requestId} type=usage`);
-		await waitForRunLog(`[E2E-DEBUG] agent_event requestId=${requestId} type=finish`);
+		await waitForRunLog(
+			`[E2E-DEBUG] agent_event requestId=${requestId} type=usage`,
+		);
+		await waitForRunLog(
+			`[E2E-DEBUG] agent_event requestId=${requestId} type=finish`,
+		);
 		const text = (await getNewAssistantMessages(before)).at(-1) ?? "";
 		expect(text).toContain(RESPONSE_MARKER);
 		expect(text).not.toMatch(
@@ -118,7 +128,9 @@ describe("Codex live chat through the isolated real Naia Shell", () => {
 		// fresh request, usage, finish, and visible answer for turn two.
 		const beforeSecondTurn = await countCompletedAssistantMessages();
 		logStart = statSync(logPath).size;
-		await sendMessage(`Respond with exactly ${SECOND_RESPONSE_MARKER} and nothing else.`);
+		await sendMessage(
+			`Respond with exactly ${SECOND_RESPONSE_MARKER} and nothing else.`,
+		);
 		await waitForRunLog("[E2E-DEBUG] chat_request requestId=");
 		const secondRequestMatch = readCurrentRunLog().match(
 			/\[E2E-DEBUG\] chat_request requestId=([^ ]+) provider=codex\b/,
@@ -126,9 +138,14 @@ describe("Codex live chat through the isolated real Naia Shell", () => {
 		expect(secondRequestMatch).not.toBeNull();
 		const secondRequestId = secondRequestMatch?.[1] ?? "";
 		expect(secondRequestId).not.toBe(requestId);
-		await waitForRunLog(`[E2E-DEBUG] agent_event requestId=${secondRequestId} type=usage`);
-		await waitForRunLog(`[E2E-DEBUG] agent_event requestId=${secondRequestId} type=finish`);
-		const secondText = (await getNewAssistantMessages(beforeSecondTurn)).at(-1) ?? "";
+		await waitForRunLog(
+			`[E2E-DEBUG] agent_event requestId=${secondRequestId} type=usage`,
+		);
+		await waitForRunLog(
+			`[E2E-DEBUG] agent_event requestId=${secondRequestId} type=finish`,
+		);
+		const secondText =
+			(await getNewAssistantMessages(beforeSecondTurn)).at(-1) ?? "";
 		expect(secondText).toContain(SECOND_RESPONSE_MARKER);
 		expect(secondText).not.toMatch(
 			/\[오류\]|login required|API key|Bad Request|provider error|failed:|\b40[0-9]\b|\b500\b/i,

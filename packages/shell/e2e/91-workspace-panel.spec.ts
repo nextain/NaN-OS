@@ -212,6 +212,32 @@ test.describe("Herdr Workspace integration", () => {
 		await expect(page.locator(".chat-panel")).toBeVisible({ timeout: 10_000 });
 	});
 
+	test("새 설치 기본값은 왼쪽 소형이고 Workspace를 열어도 사용자 배치를 유지한다", async ({
+		page,
+	}) => {
+		const root = page.locator(".app-root");
+		await expect(root).toHaveAttribute("data-ui-mode", "app");
+		await expect(page.getByTitle("왼쪽 소형")).toHaveAttribute(
+			"aria-pressed",
+			"true",
+		);
+		expect(
+			await page.evaluate(() => localStorage.getItem("naia-chat-mode-v1")),
+		).toBe("app");
+
+		await openWorkspace(page);
+		await expect(root).toHaveAttribute("data-ui-mode", "app");
+		await expect(page.getByTitle("왼쪽 소형")).toHaveAttribute(
+			"aria-pressed",
+			"true",
+		);
+
+		await page.getByTitle("왼쪽 채움").click();
+		await expect(root).toHaveAttribute("data-ui-mode", "workspace");
+		await page.locator('button[data-panel-id="browser"]').click();
+		await expect(root).toHaveAttribute("data-ui-mode", "workspace");
+	});
+
 	test("파일 트리가 Spaces와 Agents 위에 있고 Herdr가 기본 화면이다", async ({
 		page,
 	}) => {

@@ -47,12 +47,13 @@ const pairedAgent = JSON.parse(
 	readFileSync(resolve(SHELL_DIR, "agent-pairing.json"), "utf8"),
 ) as { agentCommit: string };
 const PAIRED_AGENT_DIR = resolve(
-	SHELL_DIR,
-	"..",
-	"..",
-	"..",
-	"naia-agent-worktrees",
-	`shell-pair-${pairedAgent.agentCommit.slice(0, 7)}`,
+	process.env.NAIA_E2E_AGENT_ROOT ??
+		resolve(
+			SHELL_DIR,
+			"../../../..",
+			"naia-agent-worktrees",
+			`shell-pair-${pairedAgent.agentCommit.slice(0, 7)}`,
+		),
 );
 const PAIRED_AGENT_SCRIPT = resolve(
 	PAIRED_AGENT_DIR,
@@ -62,8 +63,13 @@ const PAIRED_AGENT_PROTO_DIR = resolve(
 	PAIRED_AGENT_DIR,
 	"src/main/adapters/grpc",
 );
-if (!existsSync(PAIRED_AGENT_SCRIPT) || !existsSync(resolve(PAIRED_AGENT_PROTO_DIR, "naia_agent.proto"))) {
-	throw new Error(`paired naia-agent checkout is unavailable: ${PAIRED_AGENT_DIR}`);
+if (
+	!existsSync(PAIRED_AGENT_SCRIPT) ||
+	!existsSync(resolve(PAIRED_AGENT_PROTO_DIR, "naia_agent.proto"))
+) {
+	throw new Error(
+		`paired naia-agent checkout is unavailable: ${PAIRED_AGENT_DIR}`,
+	);
 }
 // The test launches the debug executable directly, bypassing tauri-with-mode.
 // Inject the same verified pair used by `pnpm run tauri:dev`; without this the
@@ -194,7 +200,9 @@ function waitForPortClosed(port: number, timeoutMs = 10_000): Promise<void> {
 			sock.once("connect", () => {
 				sock.destroy();
 				if (Date.now() > deadline) {
-					fail(new Error(`Port ${port} was not released within ${timeoutMs}ms`));
+					fail(
+						new Error(`Port ${port} was not released within ${timeoutMs}ms`),
+					);
 				} else {
 					setTimeout(tryConnect, 150);
 				}
@@ -308,7 +316,10 @@ export const config = {
 			["--port", "4448", "--native-driver", NATIVE_DRIVER],
 			{
 				stdio: [null, process.stdout, process.stderr],
-				env: { ...process.env, RUST_LOG: process.env.RUST_LOG ?? "tauri_driver=debug" },
+				env: {
+					...process.env,
+					RUST_LOG: process.env.RUST_LOG ?? "tauri_driver=debug",
+				},
 			},
 		);
 		await waitForPort(4448, 30_000);
