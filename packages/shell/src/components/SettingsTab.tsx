@@ -4229,7 +4229,14 @@ export function SettingsTab() {
 									>
 										{t("settings.modelSortPriceBasis")}
 									</div>
-								) : null}
+								) : (
+									<div
+										className="settings-hint"
+										data-testid="model-performance-sort-basis"
+									>
+										{t("settings.modelSortPerformanceBasis")}
+									</div>
+								)}
 							</>
 						) : null}
 						<select

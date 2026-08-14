@@ -4,8 +4,8 @@ date: "2026-08-14"
 # (ja zh fr de ru es ar hi bn pt id vi) are produced through the
 # translation cross-review pipeline before the multi-language release page.
 summary:
-  en: "Korean domestic AI models arrive — Upstage Solar (Pro 4, Mini) and Naver HyperCLOVA X (HCX-007, HCX-DASH-002) are now selectable Naia models with verified tool calling and live pricing. Plus a resilient gateway (api.naia.land alongside api.nextain.io), DeepSeek V4 tool calling restored, cleaner first-sentence voice, a durable Radio DJ, and dev/prod instance isolation."
-  ko: "국내 AI 모델 합류 — Upstage Solar(Pro 4, Mini)와 Naver HyperCLOVA X(HCX-007, HCX-DASH-002)를 도구 호출·실시간 가격까지 검증해 Naia 모델로 선택 가능. 게이트웨이 이중화(api.naia.land·api.nextain.io 병행), DeepSeek V4 도구 호출 복구, 첫 문장 음성 왜곡 수정, 끊김 없는 라디오 DJ, 개발/운영 인스턴스 격리."
+  en: "Korean domestic AI models arrive — Upstage Solar (Pro 4, Mini) and Naver HyperCLOVA X (HCX-007, HCX-DASH-002) are now selectable Naia models with verified tool calling and live pricing. Plus DeepSeek V4 tool calling restored, cleaner first-sentence voice, a durable Radio DJ, and dev/prod instance isolation."
+  ko: "국내 AI 모델 합류 — Upstage Solar(Pro 4, Mini)와 Naver HyperCLOVA X(HCX-007, HCX-DASH-002)를 도구 호출·실시간 가격까지 검증해 Naia 모델로 선택 가능. DeepSeek V4 도구 호출 복구, 첫 문장 음성 왜곡 수정, 끊김 없는 라디오 DJ, 개발/운영 인스턴스 격리."
 changes:
   # ── AI models (headline) ──
   - type: feat
@@ -30,11 +30,6 @@ changes:
     description:
       en: "DeepSeek V4 (Flash/Pro) tool calling restored — the gateway wrongly refused tool requests, so skills silently never ran on these models. Verified and fixed."
       ko: "DeepSeek V4(Flash/Pro) 도구 호출 복구 — 게이트웨이가 도구 요청을 잘못 거절해 이 모델들에서 스킬이 조용히 실행되지 않던 문제를 실측 확인 후 수정."
-  - type: feat
-    scope: gateway
-    description:
-      en: "Gateway domain resilience — the desktop now trusts api.naia.land alongside api.nextain.io so the primary endpoint can move without a client update."
-      ko: "게이트웨이 도메인 이중화 — 데스크톱이 api.naia.land를 api.nextain.io와 함께 신뢰해, 1차 엔드포인트 이전 시 클라이언트 갱신이 필요 없습니다."
   # ── Voice ──
   - type: fix
     scope: voice

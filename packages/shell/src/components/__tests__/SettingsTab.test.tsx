@@ -301,7 +301,9 @@ describe("SettingsTab", () => {
 			"model-select",
 		) as HTMLSelectElement;
 		const labels = [...modelSelect.options].map((option) => option.text);
-		expect(labels).toContain("Grok 4.3 (Pricing: $0.400 / $1.200)");
+		expect(labels).toContain(
+			"Grok 4.3 (Price per 1M tokens: Input $0.400 / Output $1.200)",
+		);
 		expect(labels.some((label) => label.includes("(Naia)"))).toBe(false);
 		expect(labels.some((label) => label.includes("Analysis only"))).toBe(false);
 		expect(
@@ -332,6 +334,9 @@ describe("SettingsTab", () => {
 		expect(modelSelect.value).toBe("grok-4.3");
 
 		fireEvent.change(sortSelect, { target: { value: "performance" } });
+		expect(
+			screen.getByTestId("model-performance-sort-basis").textContent,
+		).toContain("public benchmarks");
 		modelSelect = document.getElementById("model-select") as HTMLSelectElement;
 		const performanceOptions = [...modelSelect.options].map(
 			(option) => option.value,
@@ -367,7 +372,7 @@ describe("SettingsTab", () => {
 
 		render(<SettingsTab />);
 		gotoSettingsTab("brain");
-		await screen.findByText(/Price per 1M tokens/);
+		await screen.findByText(/Price per 1M tokens/, { selector: "span" });
 
 		const modelSelect = document.getElementById("model-select") as HTMLSelectElement;
 		const labels = [...modelSelect.options].map((o) => o.text);

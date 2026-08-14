@@ -7,12 +7,15 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 // must nudge the PTY size (distinct → final) on attach and on reactivation so a
 // lost opening frame or a no-op reattach resize cannot leave a blank surface.
 
-const resizePty = vi.fn(() => Promise.resolve());
-const writePty = vi.fn(() => Promise.resolve());
+const resizePty = vi.fn((_id: string, _rows: number, _cols: number) =>
+	Promise.resolve(),
+);
+const writePty = vi.fn((_id: string, _data: string) => Promise.resolve());
 
 vi.mock("../pty-ipc", () => ({
-	resizePty: (...args: unknown[]) => resizePty(...args),
-	writePty: (...args: unknown[]) => writePty(...args),
+	resizePty: (id: string, rows: number, cols: number) =>
+		resizePty(id, rows, cols),
+	writePty: (id: string, data: string) => writePty(id, data),
 }));
 
 vi.mock("@tauri-apps/api/event", () => ({

@@ -4536,19 +4536,15 @@ async fn validate_api_key(provider: String, api_key: String) -> Result<bool, Str
     }
 }
 
-/// Trusted Naia gateway hosts over HTTPS. Both the incumbent `nextain.io` and
-/// the `naia.land` domain (naia-anyllm#63 migration) are ours; balance and other
-/// account calls accept either so the eventual primary flip needs no client
-/// release. Loopback (dev gateway) is handled separately by the caller.
+/// Trusted Naia gateway host over HTTPS. The official gateway domain is the
+/// company domain `nextain.io`; balance and other account calls require it.
+/// Loopback (dev gateway) is handled separately by the caller.
 fn is_trusted_naia_https_host(scheme: &str, host: &str) -> bool {
     if scheme != "https" {
         return false;
     }
     let host = host.to_ascii_lowercase();
-    host == "nextain.io"
-        || host.ends_with(".nextain.io")
-        || host == "naia.land"
-        || host.ends_with(".naia.land")
+    host == "nextain.io" || host.ends_with(".nextain.io")
 }
 
 fn naia_balance_endpoint(gateway_url: &str) -> Result<url::Url, String> {
@@ -4562,7 +4558,7 @@ fn naia_balance_endpoint(gateway_url: &str) -> Result<url::Url, String> {
     let is_trusted_https = is_trusted_naia_https_host(base.scheme(), host);
     if !is_trusted_https && !(is_loopback && matches!(base.scheme(), "http" | "https")) {
         return Err(
-            "Naia balance requests require HTTPS on nextain.io or naia.land".to_string(),
+            "Naia balance requests require HTTPS on nextain.io".to_string(),
         );
     }
     base.join("/v1/profile/balance")
@@ -10826,14 +10822,9 @@ mod tests {
                 .as_str(),
             "https://api.nextain.io/v1/profile/balance"
         );
-        // naia-anyllm#63: naia.land is accepted alongside nextain.io so the
-        // eventual primary flip needs no client release.
-        assert_eq!(
-            naia_balance_endpoint("https://api.naia.land")
-                .unwrap()
-                .as_str(),
-            "https://api.naia.land/v1/profile/balance"
-        );
+        // Unified on the company domain nextain.io — naia.land is no longer a
+        // trusted gateway host for account calls.
+        assert!(naia_balance_endpoint("https://api.naia.land").is_err());
         assert_eq!(
             naia_balance_endpoint("http://127.0.0.1:8080/base")
                 .unwrap()

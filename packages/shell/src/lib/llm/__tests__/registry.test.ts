@@ -371,9 +371,9 @@ describe("registry — formatModelLabel", () => {
 
 	it("formats label with pricing when provided", () => {
 		const label = formatModelLabel({ id: "test", label: "Test Model", capabilities: ["llm"], pricing: [1.5, 10.0] });
-		expect(label).toContain("Test Model");
-		expect(label).toContain("$1.500");
-		expect(label).toContain("$10.000");
+		expect(label).toBe(
+			"Test Model (Price per 1M tokens: Input $1.500 / Output $10.000)",
+		);
 	});
 });
 

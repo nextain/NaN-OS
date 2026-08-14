@@ -905,8 +905,11 @@ export function App() {
 		: showAdkSetup
 			? "setup"
 			: (chatModeOverride ?? derivedUiMode);
+	// Chat fill (rail) follows only the user's explicit chat-mode toggle
+	// (왼쪽 채움), never the Workspace app itself — opening Workspace must not
+	// force the chat to full-width; it stays wherever the user set it.
 	const chatVariant: "rail" | "floating" =
-		uiMode === "workspace" ? "rail" : "floating";
+		chatModeOverride === "workspace" ? "rail" : "floating";
 
 	const keepAlivePanels = useMemo(
 		() => appRegistry.list().filter((p) => p.builtIn && p.keepAlive !== false),

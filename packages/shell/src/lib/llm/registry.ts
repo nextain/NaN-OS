@@ -397,8 +397,12 @@ export function formatModelLabel(model: LlmModelMeta): string {
 	let label = isAsr ? `${model.label} (ASR)` : model.label;
 	if (model.pricing) {
 		const [input, output] = model.pricing;
-		const pricingLabel = tFn ? tFn("settings.pricing") : "Pricing";
-		label = `${label} (${pricingLabel}: $${input.toFixed(3)} / $${output.toFixed(3)})`;
+		const pricingLabel = tFn
+			? tFn("settings.pricingPerMillionTokens")
+			: "Price per 1M tokens";
+		const inputLabel = tFn ? tFn("settings.priceInput") : "Input";
+		const outputLabel = tFn ? tFn("settings.priceOutput") : "Output";
+		label = `${label} (${pricingLabel}: ${inputLabel} $${input.toFixed(3)} / ${outputLabel} $${output.toFixed(3)})`;
 	}
 	if (model.comingSoon) {
 		label = `${label} (${tFn ? tFn("settings.comingSoonTag") : "준비중"})`;
@@ -552,7 +556,7 @@ registerLlmProvider({
 			// Korean domestic. Tool calling verified against the Upstage
 			// deployment and wired through the gateway (naia-anyllm#64).
 			id: "solar-pro4",
-			label: "Solar Pro 4 (국내)",
+			label: "Solar Pro 4",
 			capabilities: ["llm"],
 			supportsTools: true,
 			upstreamProvider: "unknown",
@@ -560,7 +564,7 @@ registerLlmProvider({
 		},
 		{
 			id: "solar-mini",
-			label: "Solar Mini (국내)",
+			label: "Solar Mini",
 			capabilities: ["llm"],
 			supportsTools: true,
 			upstreamProvider: "unknown",
@@ -570,7 +574,7 @@ registerLlmProvider({
 			// Korean domestic. Naver HyperCLOVA X via the gateway CLOVA route,
 			// billed in KRW with weekly FX-adjusted USD pricing (naia-anyllm#65,#66).
 			id: "HCX-007",
-			label: "HyperCLOVA X HCX-007 (국내)",
+			label: "HyperCLOVA X HCX-007",
 			capabilities: ["llm"],
 			supportsTools: true,
 			upstreamProvider: "unknown",
@@ -578,7 +582,7 @@ registerLlmProvider({
 		},
 		{
 			id: "HCX-DASH-002",
-			label: "HyperCLOVA X DASH (국내)",
+			label: "HyperCLOVA X DASH",
 			capabilities: ["llm"],
 			supportsTools: true,
 			upstreamProvider: "unknown",

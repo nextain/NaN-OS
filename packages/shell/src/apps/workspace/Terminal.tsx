@@ -176,7 +176,10 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(
 			if (!container) return;
 
 			const term = new XTerminal({
-				fontFamily: "'Fira Code', 'Noto Sans Mono', monospace",
+				// Windows-available terminal fonts first (Fira Code / Noto are not
+				// bundled and fall back to an ugly generic monospace otherwise).
+				fontFamily:
+					"'Cascadia Code', 'Cascadia Mono', Consolas, 'Fira Code', 'Noto Sans Mono', monospace",
 				fontSize: 13,
 				theme: { background: "#1a1a1a", foreground: "#d0d0d0" },
 				scrollback: 2000,
@@ -315,6 +318,10 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(
 			<div
 				ref={containerRef}
 				className="workspace-panel__terminal"
+				// Suppress the WebView's default (browser) context menu so a
+				// right-click reaches xterm's mouse reporting and Herdr shows its
+				// own right-click menu instead.
+				onContextMenu={(e) => e.preventDefault()}
 				style={active ? undefined : { opacity: 0, pointerEvents: "none" }}
 			/>
 		);
