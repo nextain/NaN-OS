@@ -315,6 +315,25 @@ export function App() {
 		};
 	}, [detectedVramGb]);
 
+	// #447-2: onboarding drives the live avatar canvas via a preview event. A
+	// fresh install has no saved config during onboarding, so we apply the choice
+	// straight to the avatar state instead of round-tripping through config.
+	useEffect(() => {
+		function onAvatarPreview(e: Event) {
+			const detail = (e as CustomEvent).detail as {
+				provider?: "vrm" | "naia-video-avatar";
+				model?: string;
+			} | null;
+			if (!detail?.provider) return;
+			setAvatarProvider(detail.provider);
+			if (detail.provider === "naia-video-avatar" && detail.model)
+				setNvaModel(detail.model);
+		}
+		window.addEventListener("naia-avatar-preview", onAvatarPreview);
+		return () =>
+			window.removeEventListener("naia-avatar-preview", onAvatarPreview);
+	}, []);
+
 	// Window starts hidden (visible:false in tauri.conf.json) to prevent white flash.
 	// Show it on first render — splash screen's dark background is already painted.
 	useEffect(() => {
@@ -937,9 +956,7 @@ export function App() {
 			}
 			style={
 				{
-					"--naia-width": showOnboarding
-						? `${window.innerWidth}px`
-						: `${naiaWidth}px`,
+					"--naia-width": `${naiaWidth}px`,
 				} as React.CSSProperties
 			}
 		>
@@ -1065,10 +1082,9 @@ export function App() {
 									)}
 								</div>
 							)}
-							{/* #447-1: the chat overlay (controls + full-width ChatArea) must
-							    not appear during onboarding — the avatar canvas below stays
-							    so the selected avatar still shows behind the wizard. */}
-							{!showOnboarding && (
+							{/* #447-1: keep the chat during onboarding, but as the left rail
+							    (naia-width column) rather than a full-width bottom bar — see the
+							    onboarding --naia-width / chatVariant handling above. */}
 							<div className="naia-overlay">
 								{/* AI + avatar controls — top of avatar column, independent */}
 								<AiControlBar />
@@ -1146,7 +1162,6 @@ export function App() {
 									</div>
 								</div>
 							</div>
-							)}
 						</>
 					)}
 

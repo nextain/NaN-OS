@@ -436,12 +436,44 @@ export function WorkspaceCenterArea({ naia }: AppCenterProps) {
 	// message shown to the user matches what the backend actually scans.
 	const [resolvedRoot, setResolvedRoot] = useState(activeWorkspaceRoot);
 
+	// ── Re-bind when the adk path changes ──────────────────────────────────
+	// The workspace panel is keepAlive, so it mounts during onboarding — before
+	// the user has selected a workspace. When onboarding/Settings persist the
+	// real path via setAdkPath(), pick it up and re-run workspace_set_root
+	// instead of staying on whatever auto-detect first bound. #447-6.
+	useEffect(() => {
+		function onPathChanged() {
+			const next = getAdkPath();
+			if (next && next !== activeWorkspaceRoot) {
+				Logger.info("WorkspaceCenterArea", "adk-path changed — rebinding", {
+					next,
+				});
+				setActiveWorkspaceRoot(next);
+			}
+		}
+		window.addEventListener("naia-adk-path-changed", onPathChanged);
+		return () =>
+			window.removeEventListener("naia-adk-path-changed", onPathChanged);
+	}, [activeWorkspaceRoot]);
+
 	// ── Auto-detect naia-adk root on mount ─────────────────────────────────
 	useEffect(() => {
 		if (activeWorkspaceRoot) {
 			Logger.info("WorkspaceCenterArea", "Mount: workspace root already set", {
 				root: activeWorkspaceRoot,
 			});
+			return;
+		}
+		// Never auto-detect before onboarding has chosen a workspace: the panel
+		// is mounted (keepAlive) during onboarding, and binding to the dev-detected
+		// cwd here would poison the user's not-yet-made selection. The
+		// naia-adk-path-changed listener above binds the real path once it exists.
+		if (!loadConfig()?.onboardingComplete) {
+			Logger.info(
+				"WorkspaceCenterArea",
+				"Mount: onboarding incomplete — deferring auto-detect",
+			);
+			setWorkspaceReady(true);
 			return;
 		}
 		Logger.info(

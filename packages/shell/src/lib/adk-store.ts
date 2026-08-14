@@ -60,6 +60,15 @@ export async function setAdkPath(path: string): Promise<void> {
 	// Persist to ~/.naia/adk-path. Native restarts/rebinds an already-running
 	// agent when this changes, so setup must await completion before continuing.
 	await invoke("write_naia_path_cache", { adkPath: normalized });
+	// The workspace panel is keepAlive and mounts during onboarding, before the
+	// user has picked a workspace. Announce the new binding so it re-reads the
+	// path and re-runs workspace_set_root instead of staying on whatever it
+	// auto-detected first (the dev cwd). #447-6.
+	if (typeof window !== "undefined") {
+		window.dispatchEvent(
+			new CustomEvent("naia-adk-path-changed", { detail: normalized }),
+		);
+	}
 }
 
 export function isAdkInitialized(): boolean {

@@ -11002,6 +11002,28 @@ body.resizing-col * {
 	background: rgba(100, 160, 255, 0.08);
 }
 
+/* #447-2: NVA clips are tall 720×1280 full-body portraits. Zoom into the head:
+   a fixed clipped frame with the media oversized and top-aligned shows the face
+   instead of the whole body a plain object-fit band would keep. */
+.onboarding-step__nva-crop {
+	position: relative;
+	overflow: hidden;
+	padding: 0;
+	display: block;
+}
+.onboarding-step__nva-crop-media {
+	position: absolute;
+	top: 0;
+	left: 50%;
+	transform: translateX(-50%);
+	width: 190px;
+	height: auto;
+	max-width: none;
+	border: none;
+	border-radius: 0;
+	background: transparent;
+}
+
 .onboarding-step__avatar-badge {
 	position: absolute;
 	top: 5px;

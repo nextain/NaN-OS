@@ -23,7 +23,6 @@ import {
 	DEFAULT_LOCAL_VOICE_HOST,
 	NAIA_WEB_BASE_URL,
 	loadConfig,
-	saveConfig,
 	saveConfigSecure,
 } from "../lib/config";
 import { getLocale, t } from "../lib/i18n";
@@ -241,11 +240,16 @@ function NvaThumbnail({ path, label }: { path: string; label: string }) {
 	if (!preview) {
 		return <span className="onboarding-step__avatar-img" aria-hidden="true" />;
 	}
+	// #447-2: NVA clips are tall full-body 720×1280 portraits. object-fit alone
+	// only picks a vertical band (still shows the whole body). Zoom into the head
+	// by oversizing the media inside a fixed, clipped, top-aligned frame.
 	return (
-		<BackgroundThumbnail
-			background={preview}
-			className="onboarding-step__avatar-img"
-		/>
+		<span className="onboarding-step__avatar-img onboarding-step__nva-crop">
+			<BackgroundThumbnail
+				background={preview}
+				className="onboarding-step__nva-crop-media"
+			/>
+		</span>
 	);
 }
 
@@ -576,9 +580,10 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
 				// #447-2: default provider is NVA — surface the default pick on the
 				// live canvas behind the wizard without waiting for a click.
 				if (seeded && avatarProvider === "naia-video-avatar") {
-					publishAvatarChoice("naia-video-avatar", {
-						nvaModel: chosen.split(/[/\\]/).pop() ?? chosen,
-					});
+					publishAvatarChoice(
+						"naia-video-avatar",
+						chosen.split(/[/\\]/).pop() ?? chosen,
+					);
 				}
 			})
 			.catch(() => {});
@@ -719,34 +724,33 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
 	}
 
 	// #447-2: reflect the avatar choice on the live canvas behind the wizard.
-	// App re-syncs avatarProvider/nvaModel on the "naia-config-changed" event, so
-	// persisting the selection here makes the pick render immediately (VRM via the
-	// avatar store, NVA via the video canvas) instead of only after completion.
+	// A fresh install has no saved config yet during onboarding, so writing to
+	// config here would no-op (loadConfig() === null). Instead announce the pick
+	// on a dedicated preview event that App applies to the live avatar canvas
+	// directly (VRM via the avatar store, NVA via the video canvas). Completion
+	// still persists avatarProvider/nvaModel through saveCompletedConfig.
 	function publishAvatarChoice(
 		provider: "vrm" | "naia-video-avatar",
-		extra: Record<string, unknown>,
+		model: string,
 	) {
-		const cfg = loadConfig();
-		if (!cfg) return;
-		saveConfig({ ...cfg, avatarProvider: provider, ...extra });
-		window.dispatchEvent(new Event("naia-config-changed"));
+		window.dispatchEvent(
+			new CustomEvent("naia-avatar-preview", {
+				detail: { provider, model },
+			}),
+		);
 	}
 
 	function handleVrmSelect(path: string) {
 		setAvatarProvider("vrm");
 		setSelectedVrm(path);
 		setAvatarModelPath(path);
-		publishAvatarChoice("vrm", {
-			vrmModel: path.split(/[/\\]/).pop() ?? path,
-		});
+		publishAvatarChoice("vrm", path.split(/[/\\]/).pop() ?? path);
 	}
 
 	function handleNvaSelect(path: string) {
 		setAvatarProvider("naia-video-avatar");
 		setSelectedNva(path);
-		publishAvatarChoice("naia-video-avatar", {
-			nvaModel: path.split(/[/\\]/).pop() ?? path,
-		});
+		publishAvatarChoice("naia-video-avatar", path.split(/[/\\]/).pop() ?? path);
 	}
 
 	function handleBgSelect(url: string) {
@@ -1125,7 +1129,7 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
 											<button
 												key={path}
 												type="button"
-												className={`onboarding-step__avatar-card${selectedVrm === path ? " onboarding-step__avatar-card--selected" : ""}`}
+												className={`onboarding-step__avatar-card${avatarProvider === "vrm" && selectedVrm === path ? " onboarding-step__avatar-card--selected" : ""}`}
 												onClick={() => handleVrmSelect(path)}
 											>
 												<img

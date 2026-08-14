@@ -124,11 +124,34 @@ export function useHerdrRuntime() {
 	}, [launching, pty, refreshSnapshot]);
 
 	useEffect(() => {
-		const snapshotRoot = activeHerdrRoot(snapshot);
+		// #447-6: the file-tree root is the user's chosen adk workspace, not the
+		// shared herdr server's focused workspace. Herdr uses a shared global
+		// socket, so its focused workspace is often an external session's cwd
+		// (e.g. the dev repo alpha-adk). Following that would hijack the file tree
+		// away from the workspace the user picked in onboarding/AdkSetup. Pin the
+		// root to getAdkPath(); only fall back to herdr's focus when no adk path
+		// is set at all.
+		// Only react once Herdr actually reports a workspace (snapshot present);
+		// launch failures leave this empty and must not trigger a bind.
+		const herdrRoot = activeHerdrRoot(snapshot);
+		if (!herdrRoot) return;
+		// #447-6: pin the file-tree root to the user's chosen adk workspace, not
+		// the Herdr snapshot's focused workspace. Herdr uses a shared global socket,
+		// so its focus is often an external session's cwd (e.g. the dev repo
+		// alpha-adk) which would hijack the tree away from the picked workspace.
+		const targetRoot = getAdkPath() || herdrRoot;
 		const generation = ++rootGenerationRef.current;
 		locationGenerationRef.current++;
-		if (!snapshotRoot || snapshotRoot === workspaceRoot) return;
-		invoke<string>("workspace_set_root", { root: snapshotRoot })
+		// Case-insensitive on Windows: getAdkPath() may be "d:\naia-adk" while the
+		// backend canonical is "D:\naia-adk". Without this the guard never matches
+		// and every Herdr snapshot poll re-issues workspace_set_root. Null-safe:
+		// workspace_set_root may resolve empty before the first bind.
+		if (
+			!targetRoot ||
+			targetRoot.toLowerCase() === (workspaceRoot ?? "").toLowerCase()
+		)
+			return;
+		invoke<string>("workspace_set_root", { root: targetRoot })
 			.then((canonical) => {
 				if (generation === rootGenerationRef.current)
 					setWorkspaceRoot(canonical);
