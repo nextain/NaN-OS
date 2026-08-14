@@ -1,3 +1,4 @@
+import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { FitAddon } from "@xterm/addon-fit";
 import { type IBufferRange, Terminal as XTerminal } from "@xterm/xterm";
@@ -113,6 +114,41 @@ export function parseFileLocation(
 	};
 }
 
+/** Resolve a CSS custom property (e.g. "--bg-base") to a concrete rgb() color,
+    following var() indirection, so xterm gets a usable color for any shell theme. */
+function readThemeColor(varRef: string, fallback: string): string {
+	const probe = document.createElement("span");
+	probe.style.color = `var(${varRef})`;
+	probe.style.display = "none";
+	document.body.appendChild(probe);
+	const value = getComputedStyle(probe).color;
+	probe.remove();
+	return value || fallback;
+}
+
+/** xterm theme mirrored from the shell's current theme (base surface + text +
+    accent cursor) so the embedded terminal follows light/dark like the rest of
+    the app. */
+function currentXtermTheme(): {
+	background: string;
+	foreground: string;
+	cursor: string;
+} {
+	return {
+		background: readThemeColor("--bg-base", "#1a1a1a"),
+		foreground: readThemeColor("--text-primary", "#d0d0d0"),
+		cursor: readThemeColor("--accent", "#8ab4f8"),
+	};
+}
+
+/** True when the shell's current base surface is dark (drives the Herdr theme). */
+function shellIsDark(): boolean {
+	const rgb = readThemeColor("--bg-base", "#1a1a1a").match(/\d+(?:\.\d+)?/g);
+	if (!rgb || rgb.length < 3) return true;
+	const [r, g, b] = rgb.map((n) => Number(n) / 255);
+	return 0.2126 * r + 0.7152 * g + 0.0722 * b < 0.5;
+}
+
 export const Terminal = forwardRef<TerminalHandle, TerminalProps>(
 	function Terminal(
 		{
@@ -181,7 +217,7 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(
 				fontFamily:
 					"'Cascadia Code', 'Cascadia Mono', Consolas, 'Fira Code', 'Noto Sans Mono', monospace",
 				fontSize: 13,
-				theme: { background: "#1a1a1a", foreground: "#d0d0d0" },
+				theme: currentXtermTheme(),
 				scrollback: 2000,
 				cursorBlink: true,
 			});
@@ -313,6 +349,24 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(
 			const id = setTimeout(forceRedraw, 50);
 			return () => clearTimeout(id);
 		}, [active, forceRedraw]);
+
+		// Follow the shell's light/dark theme: recolor xterm and hot-reload the
+		// Herdr theme whenever the app's data-theme changes (and once on mount).
+		useEffect(() => {
+			const sync = () => {
+				if (termRef.current) termRef.current.options.theme = currentXtermTheme();
+				invoke("herdr_set_theme", { dark: shellIsDark() }).catch(() => {});
+			};
+			sync();
+			const observer = new MutationObserver((mutations) => {
+				if (mutations.some((m) => m.attributeName === "data-theme")) sync();
+			});
+			observer.observe(document.documentElement, {
+				attributes: true,
+				attributeFilter: ["data-theme"],
+			});
+			return () => observer.disconnect();
+		}, []);
 
 		return (
 			<div

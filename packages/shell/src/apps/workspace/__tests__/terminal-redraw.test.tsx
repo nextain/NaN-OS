@@ -22,6 +22,10 @@ vi.mock("@tauri-apps/api/event", () => ({
 	listen: vi.fn(() => Promise.resolve(() => {})),
 }));
 
+vi.mock("@tauri-apps/api/core", () => ({
+	invoke: vi.fn(() => Promise.resolve()),
+}));
+
 vi.mock("@xterm/xterm/css/xterm.css", () => ({}));
 
 vi.mock("@xterm/addon-fit", () => ({
@@ -42,6 +46,7 @@ vi.mock("@xterm/xterm", () => ({
 		registerLinkProvider = vi.fn();
 		onData = vi.fn(() => ({ dispose: vi.fn() }));
 		buffer = { active: { getLine: () => null } };
+		options: Record<string, unknown> = {};
 	},
 }));
 

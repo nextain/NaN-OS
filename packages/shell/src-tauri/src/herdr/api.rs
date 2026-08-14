@@ -1,6 +1,8 @@
 use tauri::AppHandle;
 
-use super::config::{herdr_command, validate_herdr, write_embedded_herdr_config};
+use super::config::{
+    herdr_command, set_herdr_theme, validate_herdr, write_embedded_herdr_config,
+};
 
 pub(super) const HERDR_PROTOCOL: u64 = 19;
 // Herdr currently transports prompts as process arguments. Stay below the
@@ -54,6 +56,13 @@ pub async fn herdr_snapshot(app: AppHandle) -> Result<serde_json::Value, String>
     })
     .await
     .map_err(|e| format!("Herdr snapshot task failed: {e}"))?
+}
+
+#[tauri::command]
+pub async fn herdr_set_theme(app: AppHandle, dark: bool) -> Result<(), String> {
+    tokio::task::spawn_blocking(move || set_herdr_theme(&app, dark))
+        .await
+        .map_err(|e| format!("Herdr theme task failed: {e}"))?
 }
 
 fn valid_herdr_id(value: &str, prefix: char) -> bool {

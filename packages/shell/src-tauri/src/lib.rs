@@ -9819,6 +9819,7 @@ pub fn run() {
             workspace::workspace_get_pty_agents,
             herdr::pty::herdr_pty_create,
             herdr::api::herdr_snapshot,
+            herdr::api::herdr_set_theme,
             herdr::api::herdr_focus_workspace,
             herdr::api::herdr_focus_agent,
             herdr::api::herdr_create_workspace,

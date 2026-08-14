@@ -133,6 +133,9 @@ pub(super) fn write_embedded_herdr_config(app: &AppHandle) -> Result<std::path::
     // and the PTY exits immediately ("Herdr가 종료되었습니다"). In a packaged
     // launch there is no parent herdr, so this is a harmless no-op there.
     replace_or_insert_setting(&mut config, "[experimental]", "allow_nested", "true");
+    // Default to the shell's dark theme; herdr_set_theme() rewrites this to
+    // follow the app's light/dark selection at runtime.
+    apply_herdr_theme(&mut config, true);
 
     let path = config_dir.join("config.toml");
     let temporary = config_dir.join("config.toml.tmp");
@@ -153,6 +156,48 @@ pub(super) fn write_embedded_herdr_config(app: &AppHandle) -> Result<std::path::
         .map_err(|e| format!("herdr embedded config replace failed: {e}"))?;
     let _ = HERDR_CONFIG_PATH.set(path.clone());
     Ok(path)
+}
+
+/// Set the embedded Herdr theme to match the shell's light/dark selection, kept
+/// to Herdr's documented-safe custom tokens (name, panel_bg, accent). Dark =
+/// the shell midnight palette; light = a readable light base (catppuccin-latte)
+/// with the shell espresso palette — the light variant is deliberately a
+/// well-formed readable theme, not a washed-out default.
+fn apply_herdr_theme(config: &mut String, dark: bool) {
+    let (name, panel_bg, accent) = if dark {
+        ("\"one-dark\"", "\"#202124\"", "\"#8ab4f8\"")
+    } else {
+        ("\"catppuccin-latte\"", "\"#f8fafc\"", "\"#2563eb\"")
+    };
+    replace_or_insert_setting(config, "[theme]", "name", name);
+    replace_or_insert_setting(config, "[theme.custom]", "panel_bg", panel_bg);
+    replace_or_insert_setting(config, "[theme.custom]", "accent", accent);
+}
+
+/// Rewrite the embedded config's theme to the shell's light/dark selection and
+/// hot-reload the running Herdr server so the embedded terminal follows the app.
+pub(super) fn set_herdr_theme(app: &AppHandle, dark: bool) -> Result<(), String> {
+    let path = write_embedded_herdr_config(app)?;
+    let _guard = HERDR_CONFIG_LOCK
+        .get_or_init(|| Mutex::new(()))
+        .lock()
+        .map_err(|_| "Herdr config lock poisoned".to_string())?;
+    let mut config = std::fs::read_to_string(&path)
+        .map_err(|e| format!("herdr config read failed: {e}"))?;
+    apply_herdr_theme(&mut config, dark);
+    let temporary = path.with_extension("toml.tmp");
+    std::fs::write(&temporary, config.as_bytes())
+        .map_err(|e| format!("herdr theme write failed: {e}"))?;
+    #[cfg(windows)]
+    if path.exists() {
+        std::fs::remove_file(&path)
+            .map_err(|e| format!("herdr theme replace preparation failed: {e}"))?;
+    }
+    std::fs::rename(&temporary, &path)
+        .map_err(|e| format!("herdr theme replace failed: {e}"))?;
+    // Hot-reload the running server (no-op error if none is running yet).
+    let _ = herdr_command().args(["server", "reload-config"]).output();
+    Ok(())
 }
 
 pub(super) fn validate_herdr() -> Result<String, String> {
