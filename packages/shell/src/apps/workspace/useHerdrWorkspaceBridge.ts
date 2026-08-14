@@ -10,6 +10,7 @@ import {
 	snapshotSessions,
 	workspacePath,
 } from "./herdr";
+import { executePty } from "./pty-ipc";
 
 interface HerdrWorkspaceBridgeOptions {
 	naia: AppCenterProps["naia"];
@@ -174,14 +175,13 @@ export function useHerdrWorkspaceBridge({
 				if (!dir) return "Error: no working directory available";
 				try {
 					return JSON.stringify(
-						await invoke("pty_execute_sync", {
+						await executePty(
 							dir,
 							command,
-							timeout_secs:
-								typeof args.timeout_secs === "number"
-									? args.timeout_secs
-									: undefined,
-						}),
+							typeof args.timeout_secs === "number"
+								? args.timeout_secs
+								: undefined,
+						),
 					);
 				} catch (error) {
 					return `Error: ${String(error)}`;

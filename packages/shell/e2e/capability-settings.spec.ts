@@ -129,26 +129,34 @@ test.describe("Capability-driven settings (#365)", () => {
 		const sortSelect = page.locator('[data-testid="model-sort-mode"]');
 		await expect(sortSelect).toHaveValue("price");
 		await expect(sortSelect.locator('option[value="default"]')).toHaveCount(0);
-		await expect(page.locator('[data-testid="model-price-sort-basis"]')).toContainText(
-			/3\s*:\s*.*1/,
-		);
+		await expect(
+			page.locator('[data-testid="model-price-sort-basis"]'),
+		).toContainText(/3\s*:\s*.*1/);
 		await expect(modelSelect.locator('option[value="grok-4.3"]')).toHaveText(
 			/Grok 4\.3 \(Pricing: \$0\.400 \/ \$1\.200\)/,
 		);
-		await expect(modelSelect.locator('option[value="claude-opus-5"]')).toHaveCount(0);
-		await expect(modelSelect.locator('option[value="naia-0.9-omni-24g"]')).toHaveCount(0);
-		const priceOrder = await modelSelect.locator("option").evaluateAll((options) =>
-			options.map((option) => (option as HTMLOptionElement).value),
-		);
+		await expect(
+			modelSelect.locator('option[value="claude-opus-5"]'),
+		).toHaveCount(0);
+		await expect(
+			modelSelect.locator('option[value="naia-0.9-omni-24g"]'),
+		).toHaveCount(0);
+		const priceOrder = await modelSelect
+			.locator("option")
+			.evaluateAll((options) =>
+				options.map((option) => (option as HTMLOptionElement).value),
+			);
 		await expect(modelSelect).toHaveValue("grok-4.3");
 		await sortSelect.selectOption("performance");
 		await expect(modelSelect.locator("option").first()).toHaveAttribute(
 			"value",
 			"gpt-5.6-sol",
 		);
-		const performanceOrder = await modelSelect.locator("option").evaluateAll((options) =>
-			options.map((option) => (option as HTMLOptionElement).value),
-		);
+		const performanceOrder = await modelSelect
+			.locator("option")
+			.evaluateAll((options) =>
+				options.map((option) => (option as HTMLOptionElement).value),
+			);
 		expect(performanceOrder).not.toEqual(priceOrder);
 		await expect(modelSelect).toHaveValue("grok-4.3");
 		await expect(modelSelect.locator('option[value="naia-local"]')).toHaveCount(
@@ -159,7 +167,10 @@ test.describe("Capability-driven settings (#365)", () => {
 		).toContainText("입력 $0.400 · 출력 $1.200");
 
 		const proactiveButton = page.locator("button[data-proactive-state]");
-		await expect(proactiveButton).toHaveText("능동");
+		await expect(proactiveButton).toHaveAttribute(
+			"data-proactive-state",
+			"blocked",
+		);
 		await expect(proactiveButton).toHaveAttribute("aria-label", /능동 발화/);
 	});
 	test("STT section always available; omni model shows an 'optional' hint", async ({
@@ -237,113 +248,17 @@ test.describe("Capability-driven settings (#365)", () => {
 	});
 });
 
-test.describe("VRAM tier local profile (#2, FR-1/FR-3)", () => {
-	test("detected VRAM surfaces the local GPU tier selector on the Profile tab", async ({
+test.describe("Retired local GPU profile surface", () => {
+	test("GPU detection does not expose the retired profile selector", async ({
 		page,
 	}) => {
 		await gotoModelSettings(page, { vramGb: 24, model: "gemini-3.5-flash" });
-
-		// FR-1: the local GPU profile editor lives on the Profile tab, not Brain.
 		await page.locator('[data-settings-tab="profile"]').click();
-		const tierSelect = page.locator("#local-gpu-tier");
-		await expect(tierSelect).toBeVisible({ timeout: 5_000 });
-		const optionValues = await tierSelect
-			.locator("option")
-			.evaluateAll((els) => els.map((el) => (el as HTMLOptionElement).value));
-		expect(optionValues).toContain("off");
-		expect(optionValues).toContain("windows-voice-6g");
-		expect(optionValues).not.toContain("local-llm-voice-16g");
-		// 2026-07-15: "auto" was removed after it selected unverified hidden tiers.
-		await expect(tierSelect.locator('option[value="auto"]')).toHaveCount(0);
-		for (const hiddenTierValue of [
-			"avatar-6g",
-			"local-llm-avatar-8g",
-			"local-voice-12g",
-			"full-realtime-24g",
-		]) {
-			expect(optionValues).not.toContain(hiddenTierValue);
-		}
-	});
 
-	test("no GPU detected → default off without auto option", async ({
-		page,
-	}) => {
-		await gotoModelSettings(page, { vramGb: null, model: "gemini-3.5-flash" });
-
-		await page.locator('[data-settings-tab="profile"]').click();
-		const tierSelect = page.locator("#local-gpu-tier");
-		await expect(tierSelect).toBeVisible({ timeout: 5_000 });
-		await expect(tierSelect.locator('option[value="auto"]')).toHaveCount(0);
-		// Default = off (no behaviour change).
-		await expect(tierSelect).toHaveValue("off");
-	});
-
-	test("FR-1: Profile tab hosts the local GPU profile; canonical model controls stay on Brain", async ({
-		page,
-	}) => {
-		await gotoModelSettings(page, { vramGb: 6, model: "gemini-3.5-flash" });
-
-		await page.locator('[data-settings-tab="profile"]').click();
-		// engine-core-summary 제거(2026-06-30, slot-groups 중복) + engine-gpu-summary
-		// 제거(a8fe9517, 8G 재티어링: GPU 정보를 tier 셀렉터+local-profile-hint 로 통합) → 부재 확인.
-		await expect(
-			page.locator('[data-testid="engine-core-summary"]'),
-		).toHaveCount(0);
-		await expect(
-			page.locator('[data-testid="engine-gpu-summary"]'),
-		).toHaveCount(0);
+		await expect(page.locator("#local-gpu-tier")).toHaveCount(0);
 		await expect(
 			page.locator('[data-testid="engine-capability-summary"]'),
 		).toBeVisible();
-		// FR-1: local GPU tier editor is on the Profile tab.
-		await expect(page.locator("#local-gpu-tier")).toBeVisible();
-		// Canonical model pickers stay on the Brain tab.
-		await expect(page.locator("#provider-select")).toHaveCount(0);
-		await expect(page.locator("#model-select")).toHaveCount(0);
-
-		await page.locator('[data-settings-tab="brain"]').click();
-		await expect(page.locator("#provider-select")).toBeVisible({
-			timeout: 5_000,
-		});
-		await expect(page.locator("#model-select")).toBeVisible();
-		// FR-1: the GPU tier editor moved away from Brain.
-		await expect(page.locator("#local-gpu-tier")).toHaveCount(0);
-	});
-
-	test("FR-3: local GPU profile is gated behind Naia login", async ({
-		page,
-	}) => {
-		// Logged out → the tier selector is disabled and a login hint shows.
-		await gotoModelSettings(page, {
-			vramGb: 24,
-			model: "gemini-3.5-flash",
-			loggedIn: false,
-		});
-		await page.locator('[data-settings-tab="profile"]').click();
-		const tierSelect = page.locator("#local-gpu-tier");
-		await expect(tierSelect).toBeVisible({ timeout: 5_000 });
-		await expect(tierSelect).toBeDisabled();
-		await expect(
-			page.locator('[data-testid="local-profile-hint"]'),
-		).toContainText(/Naia.*(member|회원)|회원가입/i);
-	});
-
-	test("FR-3: logged in → local GPU profile is enabled", async ({ page }) => {
-		await gotoModelSettings(page, { vramGb: 24, model: "gemini-3.5-flash" });
-		await page.locator('[data-settings-tab="profile"]').click();
-		const tierSelect = page.locator("#local-gpu-tier");
-		await expect(tierSelect).toBeVisible({ timeout: 5_000 });
-		await expect(tierSelect).toBeEnabled();
-	});
-
-	test("voice-only GPU profile stays visible and has no avatar focus", async ({ page }) => {
-		await gotoModelSettings(page, { vramGb: 8, model: "gemini-3.5-flash" });
-		await page.locator('[data-settings-tab="profile"]').click();
-		const tierSelect = page.locator("#local-gpu-tier");
-		await expect(tierSelect.locator('option[value="windows-voice-6g"]')).toBeEnabled();
-		await tierSelect.selectOption("windows-voice-6g");
-		await expect(page.locator('[data-testid="local-focus-select"]')).toHaveCount(0);
-		await expect(page.locator('[data-testid="nva-vram-requirement"]')).toHaveCount(0);
 	});
 });
 
@@ -358,12 +273,18 @@ test.describe("Pre-baked NVA settings", () => {
 		const option = page.locator('option[value="naia-video-avatar"]');
 		await expect(option).toBeEnabled();
 		await page.locator("#avatar-provider").selectOption("naia-video-avatar");
-		await expect(page.locator("#avatar-provider")).toHaveValue("naia-video-avatar");
-		await expect(page.locator('[data-testid="avatar-cascade-required"]')).toHaveCount(0);
+		await expect(page.locator("#avatar-provider")).toHaveValue(
+			"naia-video-avatar",
+		);
+		await expect(
+			page.locator('[data-testid="avatar-cascade-required"]'),
+		).toHaveCount(0);
 		await expect(page.locator("#cascade-runtime-url")).toHaveCount(0);
 	});
 
-	test("legacy remote Ditto host is removed from persisted settings", async ({ page }) => {
+	test("legacy remote Ditto host is removed from persisted settings", async ({
+		page,
+	}) => {
 		await gotoModelSettings(page, {
 			vramGb: null,
 			model: "gemini-3.5-flash",
@@ -375,9 +296,13 @@ test.describe("Pre-baked NVA settings", () => {
 			},
 		});
 		await page.locator('[data-settings-tab="avatar"]').click();
-		await expect(page.locator("#avatar-provider")).toHaveValue("naia-video-avatar");
+		await expect(page.locator("#avatar-provider")).toHaveValue(
+			"naia-video-avatar",
+		);
 		await expect(page.locator("#cascade-runtime-url")).toHaveCount(0);
-		const config = await page.evaluate(() => JSON.parse(localStorage.getItem("naia-config") || "{}"));
+		const config = await page.evaluate(() =>
+			JSON.parse(localStorage.getItem("naia-config") || "{}"),
+		);
 		expect(config.cascadeRuntimeUrl).toBeUndefined();
 	});
 });

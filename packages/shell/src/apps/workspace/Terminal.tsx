@@ -1,10 +1,10 @@
-import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { FitAddon } from "@xterm/addon-fit";
 import { type IBufferRange, Terminal as XTerminal } from "@xterm/xterm";
 import { forwardRef, useEffect, useImperativeHandle, useRef } from "react";
 import { t } from "../../lib/i18n";
 import { Logger } from "../../lib/logger";
+import { resizePty, writePty } from "./pty-ipc";
 import "@xterm/xterm/css/xterm.css";
 
 interface TerminalProps {
@@ -236,7 +236,7 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(
 			});
 
 			const onDataDisposer = term.onData((data) => {
-				invoke("pty_write", { pty_id, data }).catch((e) => {
+				writePty(pty_id, data).catch((e) => {
 					Logger.warn("Terminal", "pty_write error", { error: String(e) });
 				});
 			});
@@ -255,7 +255,7 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(
 					fitRef.current.fit();
 					const { rows, cols } = termRef.current;
 					if (!rows || !cols) return;
-					invoke("pty_resize", { pty_id, rows, cols }).catch(() => {});
+					resizePty(pty_id, rows, cols).catch(() => {});
 				};
 				observer = new ResizeObserver(fitAndResize);
 				observer.observe(container);
@@ -280,7 +280,7 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(
 				fitRef.current.fit();
 				const { rows, cols } = termRef.current;
 				if (!rows || !cols) return;
-				invoke("pty_resize", { pty_id, rows, cols }).catch(() => {});
+				resizePty(pty_id, rows, cols).catch(() => {});
 			}, 50);
 			return () => clearTimeout(id);
 		}, [active, pty_id]);

@@ -115,6 +115,23 @@ const TAURI_MOCK_SCRIPT = `
 	var fakeSessions = ${JSON.stringify(FAKE_SESSIONS)};
 	var fakeCsv = ${JSON.stringify(FAKE_CSV)};
 	var fakeLog = ${JSON.stringify(FAKE_LOG)};
+	var herdrSnapshot = {
+		protocol: 19,
+		version: "0.8.0",
+		focused_workspace_id: "w1",
+		focused_tab_id: "w1:t1",
+		focused_pane_id: "w1:p1",
+		workspaces: [{
+			workspace_id: "w1", label: "naia-os", focused: true,
+			active_tab_id: "w1:t1", pane_count: 1, tab_count: 1,
+			worktree: { checkout_path: "${FAKE_ROOT}", repo_name: "naia-os" },
+		}],
+		agents: [{
+			workspace_id: "w1", tab_id: "w1:t1", pane_id: "w1:p1",
+			agent: "codex", agent_status: "working", cwd: "${FAKE_ROOT}",
+			foreground_cwd: "${FAKE_ROOT}", focused: true, label: "Builder",
+		}],
+	};
 
 	window.__TAURI_INTERNALS__.invoke = async function(cmd, args) {
 		if (typeof window.__recordInvoke__ === "function") window.__recordInvoke__(cmd);
@@ -155,6 +172,9 @@ const TAURI_MOCK_SCRIPT = `
 		if (cmd === "list_skills") return [];
 		if (cmd === "list_stt_models") return [];
 		if (cmd === "panel_list_installed") return [];
+		if (cmd === "herdr_pty_create") return { pty_id: "herdr-viewer-e2e", pid: 42 };
+		if (cmd === "herdr_snapshot") return JSON.parse(JSON.stringify(herdrSnapshot));
+		if (cmd === "pty_write" || cmd === "pty_resize" || cmd === "pty_close") return null;
 		if (cmd === "workspace_get_sessions") return fakeSessions;
 		if (cmd === "workspace_list_dirs") return fakeDirs;
 		if (cmd === "workspace_get_git_info") return { branch: "main" };
@@ -194,7 +214,7 @@ async function openWorkspacePanel(page: Page): Promise<void> {
 	const tab = page.locator('button[data-panel-id="workspace"]');
 	await expect(tab).toBeVisible({ timeout: 10_000 });
 	await tab.click();
-	await expect(page.locator(".workspace-panel")).toBeVisible({
+	await expect(page.getByTestId("herdr-workspace")).toBeVisible({
 		timeout: 5_000,
 	});
 }
@@ -488,7 +508,9 @@ test.describe("Chat File Deeplinks (#116)", () => {
 		// Workspace panel should NOT be the active panel yet
 		// (keepAlive panels are always mounted; check active slot instead of visibility)
 		await expect(
-			page.locator(".content-panel__slot--active .workspace-panel"),
+			page.locator(
+				'.content-panel__slot--active [data-testid="herdr-workspace"]',
+			),
 		).not.toBeVisible();
 
 		// Click the deeplink
@@ -496,7 +518,9 @@ test.describe("Chat File Deeplinks (#116)", () => {
 
 		// Workspace panel should now be in the active slot
 		await expect(
-			page.locator(".content-panel__slot--active .workspace-panel"),
+			page.locator(
+				'.content-panel__slot--active [data-testid="herdr-workspace"]',
+			),
 		).toBeVisible({ timeout: 5_000 });
 	});
 });

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { type DirEntry, getFileIcon } from "../../lib/file-search";
 import { Logger } from "../../lib/logger";
 import { WORKSPACE_ROOT } from "./constants";
+import { fileTreeText } from "./file-tree-i18n";
 import type { ClassifiedDir } from "./types";
 
 // ─── Context menu types ──────────────────────────────────────────────────────
@@ -62,6 +63,14 @@ function normPath(p: string): string {
 	return p.replace(/\/$/, "");
 }
 
+export function isUnresolvedTemplateEntry(name: string): boolean {
+	return /^\$\{[A-Za-z0-9_]+\}$/.test(name);
+}
+
+function visibleEntries(entries: DirEntry[]): DirEntry[] {
+	return entries.filter((entry) => !isUnresolvedTemplateEntry(entry.name));
+}
+
 function TreeNode({
 	entry,
 	depth,
@@ -98,7 +107,7 @@ function TreeNode({
 		if (children === null && !loading) {
 			setLoading(true);
 			invoke<DirEntry[]>("workspace_list_dirs", { parent: entry.path })
-				.then((result) => setChildren(result))
+				.then((result) => setChildren(visibleEntries(result)))
 				.catch((e) => {
 					Logger.warn("FileTree", "Failed to list dir (reveal)", {
 						path: entry.path,
@@ -134,7 +143,7 @@ function TreeNode({
 				const result = await invoke<DirEntry[]>("workspace_list_dirs", {
 					parent: entry.path,
 				});
-				setChildren(result);
+				setChildren(visibleEntries(result));
 			} catch (e) {
 				Logger.warn("FileTree", "Failed to list dir", {
 					path: entry.path,
@@ -202,7 +211,10 @@ function TreeNode({
 					);
 				})()}
 				{isActive && (
-					<span className="workspace-tree__active-dot" title="Active session" />
+					<span
+						className="workspace-tree__active-dot"
+						title={fileTreeText("activeSession")}
+					/>
 				)}
 			</button>
 			{entry.is_dir && expanded && (
@@ -322,7 +334,7 @@ export function FileTree({
 				parent: workspaceRoot,
 			});
 			if (id !== fetchIdRef.current) return; // stale response — discard
-			setEntries(result);
+			setEntries(visibleEntries(result));
 			Logger.info("FileTree", "Loaded workspace root", {
 				count: result.length,
 			});
@@ -372,14 +384,14 @@ export function FileTree({
 				className="workspace-ctx-menu__item"
 				onClick={handleCopyRelative}
 			>
-				상대경로 복사
+				{fileTreeText("copyRelative")}
 			</button>
 			<button
 				type="button"
 				className="workspace-ctx-menu__item"
 				onClick={handleCopyAbsolute}
 			>
-				절대경로 복사
+				{fileTreeText("copyAbsolute")}
 			</button>
 			{onSendToChat && (
 				<>
@@ -389,7 +401,7 @@ export function FileTree({
 						className="workspace-ctx-menu__item"
 						onClick={handleSendToChat}
 					>
-						Naia에게 보내기
+						{fileTreeText("sendToNaia")}
 					</button>
 				</>
 			)}
@@ -398,7 +410,9 @@ export function FileTree({
 
 	if (loading) {
 		return (
-			<div className="workspace-tree workspace-tree--loading">불러오는 중…</div>
+			<div className="workspace-tree workspace-tree--loading">
+				{fileTreeText("loading")}
+			</div>
 		);
 	}
 
@@ -423,11 +437,11 @@ export function FileTree({
 		}
 
 		const sectionLabels: Record<string, string> = {
-			project: "🏗 프로젝트",
-			worktree: "🌿 워크트리",
-			reference: "📚 참조",
-			docs: "📝 문서",
-			other: "📁 기타",
+			project: fileTreeText("sectionProject"),
+			worktree: fileTreeText("sectionWorktree"),
+			reference: fileTreeText("sectionReference"),
+			docs: fileTreeText("sectionDocs"),
+			other: fileTreeText("sectionOther"),
 		};
 
 		// Guard: if no classified dir matches any loaded entry (path mismatch or
@@ -442,7 +456,7 @@ export function FileTree({
 			return (
 				<div className="workspace-tree workspace-tree--empty">
 					<div className="workspace-tree__empty-hint">
-						분류된 디렉토리를 찾을 수 없습니다
+						{fileTreeText("noClassifiedDirs")}
 					</div>
 				</div>
 			);
@@ -486,7 +500,7 @@ export function FileTree({
 		return (
 			<div className="workspace-tree workspace-tree--empty">
 				<div className="workspace-tree__empty-hint">
-					표시할 파일이나 폴더가 없습니다
+					{fileTreeText("empty")}
 				</div>
 				{contextMenuEl}
 			</div>

@@ -1,11 +1,11 @@
+import { mkdirSync } from "node:fs";
+import path from "node:path";
 /**
  * Fresh onboarding flow E2E test.
  * Covers: agentName → userName → speechStyle → character → background → provider → voice → complete
  * Verifies: localStorage config saved correctly, each step renders, blob URL flow.
  */
 import { expect, test } from "@playwright/test";
-import { mkdirSync } from "node:fs";
-import path from "node:path";
 import { TAURI_BASE_MOCK_FALLBACK } from "./helpers/tauri-base-mock";
 
 const MOCK_ADK_PATH = "/home/user/naia-adk";
@@ -15,10 +15,10 @@ const MOCK_VRM_FILES = ["01-OL_Woman.vrm", "02-Hood_Boy.vrm"];
 const MOCK_NVA_FILES = ["naia-prebaked"];
 // Minimal valid 1x1 PNG bytes (used as mock binary payload for read_local_binary)
 const MINI_PNG = [
-	137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68, 82, 0, 0, 0, 1,
-	0, 0, 0, 1, 8, 2, 0, 0, 0, 144, 119, 83, 222, 0, 0, 0, 12, 73, 68, 65, 84,
-	8, 215, 99, 248, 207, 192, 0, 0, 0, 2, 0, 1, 226, 33, 188, 51, 0, 0, 0, 0,
-	73, 69, 78, 68, 174, 66, 96, 130,
+	137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68, 82, 0, 0, 0, 1, 0,
+	0, 0, 1, 8, 2, 0, 0, 0, 144, 119, 83, 222, 0, 0, 0, 12, 73, 68, 65, 84, 8,
+	215, 99, 248, 207, 192, 0, 0, 0, 2, 0, 1, 226, 33, 188, 51, 0, 0, 0, 0, 73,
+	69, 78, 68, 174, 66, 96, 130,
 ];
 
 function buildMockScript() {
@@ -96,8 +96,7 @@ function buildMockScript() {
 async function setupFreshOnboarding(page: import("@playwright/test").Page) {
 	const videoPath = path.resolve(
 		process.cwd(),
-		"../../../../naia-settings/background",
-		MOCK_VIDEO_FILE,
+		"e2e/fixtures/head-green-100.mp4",
 	);
 	await page.route("**/__e2e_asset__/background.mp4", (route) =>
 		route.fulfill({ path: videoPath, contentType: "video/mp4" }),
@@ -163,7 +162,9 @@ test.describe("Fresh onboarding flow", () => {
 		await clickNext(page);
 
 		// Character choices expose both VRM and NVA without a GPU/profile gate.
-		await expect(page.locator(".onboarding-step__avatar-item").first()).toBeVisible({
+		await expect(
+			page.locator(".onboarding-step__avatar-item").first(),
+		).toBeVisible({
 			timeout: 8_000,
 		});
 		const nvaChoice = page.getByRole("button", { name: "naia-prebaked" });
@@ -172,9 +173,11 @@ test.describe("Fresh onboarding flow", () => {
 		await clickNext(page);
 
 		// background — shows items from mocked list_naia_assets + read_local_binary → blob URL
-		await expect(page.locator(".onboarding-step__bg-card").first()).toBeVisible({
-			timeout: 10_000,
-		});
+		await expect(page.locator(".onboarding-step__bg-card").first()).toBeVisible(
+			{
+				timeout: 10_000,
+			},
+		);
 		// The video card must become a captured still image, not a play glyph.
 		const videoCard = page
 			.locator(".onboarding-step__bg-card")
@@ -217,15 +220,19 @@ test.describe("Fresh onboarding flow", () => {
 		await clickNext(page); // speechStyle
 		await clickNext(page); // character
 		// background — wait for blob URL to load before advancing
-		await expect(page.locator(".onboarding-step__bg-card").first()).toBeVisible({
-			timeout: 10_000,
-		});
+		await expect(page.locator(".onboarding-step__bg-card").first()).toBeVisible(
+			{
+				timeout: 10_000,
+			},
+		);
 		await clickNext(page);
 		// provider skip
 		await page.getByText(/Set up later/i).click();
 		await page.waitForTimeout(400);
 		await clickNext(page); // voice step
-		const startBtn = page.getByRole("button", { name: /시작하기|Get Started/i });
+		const startBtn = page.getByRole("button", {
+			name: /시작하기|Get Started/i,
+		});
 		await expect(startBtn).toBeVisible({ timeout: 5_000 });
 		await startBtn.click();
 		// Wait for the 1200ms onComplete delay

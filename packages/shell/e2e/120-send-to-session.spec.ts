@@ -7,8 +7,9 @@ import {
 /**
  * skill_workspace_send_to_session E2E — #120
  *
- * Tests that pty_write is invoked with the correct pty_id and data
- * when the agent calls skill_workspace_send_to_session.
+ * Tests that the focused Herdr agent receives the prompt when the agent calls
+ * skill_workspace_send_to_session. Legacy Workspace PTY tabs were removed by
+ * the Herdr integration and must not be recreated here.
  *
  * Out of scope:
  * - tier:2 approval_request → PermissionModal flow (mock bypasses it)
@@ -71,12 +72,27 @@ const TAURI_MOCK_SCRIPT = `
 
 	window.__NAIA_E2E__ = {
 		emitEvent: emitEvent,
-		lastPtyWriteCall: null,  // { pty_id, data } — set by pty_write mock
-		lastCreatedPtyId: null,  // pty_id from pty_create mock
+		lastHerdrPromptCall: null,
 	};
 
 	var fakeSessions = ${JSON.stringify(FAKE_SESSIONS)};
-	var nextPtyPid = 20001;
+	var herdrSnapshot = {
+		protocol: 19,
+		version: "0.8.0",
+		focused_workspace_id: "w1",
+		focused_tab_id: "w1:t1",
+		focused_pane_id: "w1:p1",
+		workspaces: [{
+			workspace_id: "w1", label: "naia-os", focused: true,
+			active_tab_id: "w1:t1", pane_count: 1, tab_count: 1,
+			worktree: { checkout_path: "${FAKE_DIR}", repo_name: "naia-os" },
+		}],
+		agents: [{
+			workspace_id: "w1", tab_id: "w1:t1", pane_id: "w1:p1",
+			agent: "codex", agent_status: "working", cwd: "${FAKE_DIR}",
+			foreground_cwd: "${FAKE_DIR}", focused: true, label: "Builder",
+		}],
+	};
 
 	function buildPanelToolCallResponse(requestId, toolName, args, followUpText) {
 		var tcId = "ptc-1";
@@ -146,6 +162,12 @@ const TAURI_MOCK_SCRIPT = `
 		if (cmd === "list_skills") return [];
 		if (cmd === "list_stt_models") return [];
 		if (cmd === "panel_list_installed") return [];
+		if (cmd === "herdr_pty_create") return { pty_id: "herdr-send-e2e", pid: 42 };
+		if (cmd === "herdr_snapshot") return JSON.parse(JSON.stringify(herdrSnapshot));
+		if (cmd === "herdr_prompt_agent") {
+			window.__NAIA_E2E__.lastHerdrPromptCall = { paneId: args.paneId, text: args.text };
+			return null;
+		}
 
 		if (cmd === "workspace_get_sessions") return fakeSessions;
 		if (cmd === "workspace_list_dirs") return [{ name: "naia-os", path: "${FAKE_DIR}", is_dir: true, children: null }];
@@ -158,18 +180,7 @@ const TAURI_MOCK_SCRIPT = `
 		if (cmd === "workspace_read_file") return "// file content";
 		if (cmd === "workspace_write_file") return;
 
-		if (cmd === "pty_create") {
-			var pid = nextPtyPid++;
-			var pty_id = "pty-" + pid;
-			window.__NAIA_E2E__.lastCreatedPtyId = pty_id;
-			return { pty_id: pty_id, pid: pid };
-		}
-		if (cmd === "pty_write") {
-			window.__NAIA_E2E__.lastPtyWriteCall = { pty_id: args.pty_id, data: args.data };
-			return;
-		}
-		if (cmd === "pty_resize") return;
-		if (cmd === "pty_kill") return;
+		if (cmd === "pty_write" || cmd === "pty_resize" || cmd === "pty_close") return null;
 		if (cmd === "send_approval_response") return;
 
 		return undefined;
@@ -181,7 +192,7 @@ async function openWorkspacePanel(page: Page): Promise<void> {
 	const tab = page.locator('button[data-panel-id="workspace"]');
 	await expect(tab).toBeVisible({ timeout: 10_000 });
 	await tab.click();
-	await expect(page.locator(".workspace-panel")).toBeVisible({
+	await expect(page.getByTestId("herdr-workspace")).toBeVisible({
 		timeout: 5_000,
 	});
 }
@@ -228,37 +239,18 @@ test.describe("skill_workspace_send_to_session E2E — #120", () => {
 		await expect(page.locator(".chat-panel")).toBeVisible({ timeout: 10_000 });
 	});
 
-	// SS1: pty_write called with correct pty_id and data
-	test("SS1: skill_workspace_send_to_session → pty_write가 올바른 pty_id와 data로 호출됨", async ({
+	test("SS1: skill_workspace_send_to_session → 포커스된 Herdr agent에 prompt 전달", async ({
 		page,
 	}) => {
 		await openWorkspacePanel(page);
-
-		// Step 1: Create a terminal session (establishes dir → pty_id mapping)
-		await sendMessage(page, "터미널 열어줘");
-		await expect(page.locator(".workspace-panel__tab-bar")).toBeVisible({
-			timeout: 5_000,
-		});
-
-		// Step 2: Trigger skill_workspace_send_to_session for the same dir
 		await sendMessage(page, "stdin 보내줘");
-
-		// Step 3: Wait for pty_write to be recorded by the mock
 		await page.waitForFunction(
-			() => (window as any).__NAIA_E2E__?.lastPtyWriteCall !== null,
+			() => (window as any).__NAIA_E2E__?.lastHerdrPromptCall !== null,
 			{ timeout: 5_000 },
 		);
-
-		// Step 4: Assert pty_write received the correct pty_id (from the created terminal)
-		const ptyWriteCall = await page.evaluate(
-			() => (window as any).__NAIA_E2E__?.lastPtyWriteCall,
+		const promptCall = await page.evaluate(
+			() => (window as any).__NAIA_E2E__?.lastHerdrPromptCall,
 		);
-		const createdPtyId = await page.evaluate(
-			() => (window as any).__NAIA_E2E__?.lastCreatedPtyId,
-		);
-
-		expect(ptyWriteCall).not.toBeNull();
-		expect(ptyWriteCall.pty_id).toBe(createdPtyId);
-		expect(ptyWriteCall.data).toBe(SEND_TEXT);
+		expect(promptCall).toEqual({ paneId: "w1:p1", text: SEND_TEXT });
 	});
 });

@@ -179,6 +179,9 @@ describe("HerdrWorkspaceCenterArea", () => {
 		render(<HerdrWorkspaceCenterArea naia={bridge} />);
 
 		const fileTree = await screen.findByLabelText("File Tree");
+		const workspaceRoot = await screen.findByTestId("herdr-workspace-root");
+		expect(workspaceRoot).toHaveTextContent("naia");
+		expect(workspaceRoot).toHaveAttribute("title", "/work/naia");
 		const spaces = screen.getByRole("tab", { name: "Spaces" });
 		const agents = screen.getByRole("tab", { name: "Agents" });
 		expect(

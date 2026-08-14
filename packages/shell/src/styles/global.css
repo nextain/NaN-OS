@@ -8133,6 +8133,10 @@ body.resizing-row {
 	position: sticky;
 	top: 0;
 	z-index: 1;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
 	padding: 8px 10px;
 	border-bottom: 1px solid var(--border-color, #333);
 	background: var(--surface, #242424);
@@ -8141,6 +8145,17 @@ body.resizing-row {
 	font-weight: 650;
 	letter-spacing: 0.05em;
 	text-transform: uppercase;
+}
+
+.herdr-workspace__root {
+	min-width: 0;
+	overflow: hidden;
+	color: var(--text-primary, #eee);
+	font-weight: 500;
+	letter-spacing: normal;
+	text-overflow: ellipsis;
+	text-transform: none;
+	white-space: nowrap;
 }
 
 .herdr-workspace__tabs {

@@ -33,6 +33,12 @@ export function HerdrWorkspaceRail(props: RailProps) {
 		setTab(next);
 		props.onShowHerdr();
 	};
+	const workspaceName = props.workspaceRoot
+		? props.workspaceRoot
+				.replace(/[\\/]+$/, "")
+				.split(/[\\/]/)
+				.pop() || props.workspaceRoot
+		: "";
 
 	return (
 		<aside
@@ -46,7 +52,16 @@ export function HerdrWorkspaceRail(props: RailProps) {
 				aria-label={t("workspace.herdrFileTree")}
 			>
 				<header className="herdr-workspace__section-title">
-					{t("workspace.herdrFileTree")}
+					<span>{t("workspace.herdrFileTree")}</span>
+					{props.workspaceRoot && (
+						<span
+							className="herdr-workspace__root"
+							title={props.workspaceRoot}
+							data-testid="herdr-workspace-root"
+						>
+							{workspaceName}
+						</span>
+					)}
 				</header>
 				{props.workspaceRoot ? (
 					<FileTree

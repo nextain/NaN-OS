@@ -1,0 +1,51 @@
+{
+  "contract_id": "herdr-workspace-repair-2026-08-14",
+  "contract_digest": "87e96951d5babf86e9293f377a1f8a8261a7fc32f7e57bd6e865f8f11404bef0",
+  "issue": "Herdr workspace integration repair for 0.1.7",
+  "current_phase": "handoff_merge",
+  "status": "in_progress",
+  "current_task": "Merge the current partial stabilization to main and hand off remaining Windows native acceptance on issue #438",
+  "gates_cleared": [
+    "origin/main parity at 93d6a99997b1337ffd082a3000c60e6a62e62cc2",
+    "TypeScript noEmit check",
+    "production build",
+    "shell Vitest: 149 passed files, 1546 passed tests, 2 files and 22 tests explicitly skipped",
+    "root contract Vitest: 25 passed files, 231 passed tests",
+    "Playwright: 136 passed, 42 explicitly skipped",
+    "final changed-spec Playwright rerun: 20 passed (resource viewer and deeplinks, Herdr agent prompt, pricing/capabilities, fresh onboarding)",
+    "paired native Rust: 205 library tests plus 1 child-process test passed against naia-agent 196fc64cc01e852bd27dc88675d53f5995f228dd",
+    "git diff --check",
+    "v0.1.8 follow-up issues #442 and #443 registered",
+    "focused Herdr repair Vitest: 3 passed files, 11 passed tests",
+    "focused shell TypeScript noEmit check after PTY IPC repair",
+    "origin/main refreshed at 8fe8b5a0"
+  ],
+  "review_blocker": {
+    "kind": "inherited_complexity_waiver_hash_mismatch",
+    "path": "packages/shell/src/components/ChatArea.tsx",
+    "cause": "origin/main pricing work changed the file after the existing issue-423 waiver was approved; this branch adds zero lines to that file",
+    "current_sha256": "sha256:7b9bc9bd1c8e6ca416d11a0c172097cb60a635774f498bbbd8f8c160cc07d02d",
+    "required_action": "Explicit owner approval before refreshing only the existing waiver hash"
+  },
+  "handoff": {
+    "delivery_state": "partial_stabilization_not_native_acceptance",
+    "known_linux_observation": "The real Linux shell previously rendered a bare blinking cursor instead of the embedded Herdr UI; earlier automated-complete wording was incorrect.",
+    "included_now": [
+      "Use camelCase JavaScript argument keys required by the Tauri PTY command contract",
+      "Localize File Tree labels and suppress unresolved template roots such as ${backup_dir}",
+      "Show the active Herdr workspace root in the rail",
+      "Remove obsolete browser tests for the superseded legacy Workspace terminal and Coding Workers surfaces"
+    ],
+    "windows_0_1_7_remaining": [
+      "Packaged clean-install and upgrade launch",
+      "Real embedded Herdr output, input, resize, exit, and relaunch",
+      "Space selection updates the active worktree file-tree root",
+      "Agent selection focuses the owning Herdr pane",
+      "Korean locale and glyph rendering",
+      "Final native UC, FE, regression, and release review"
+    ],
+    "tracking_issues": [438, 440]
+  },
+  "req_ids": ["NAIA-417"],
+  "updated_at": "2026-08-14T04:47:00Z"
+}
