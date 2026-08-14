@@ -7,11 +7,17 @@ import {
 	screen,
 	waitFor,
 } from "@testing-library/react";
+import { createRef } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 // ─── Mocks ────────────────────────────────────────────────────────────────────
 
 const mockInvoke = vi.fn();
+const editorViewSpies = vi.hoisted(() => ({
+	dispatch: vi.fn(),
+	focus: vi.fn(),
+	scrollIntoView: vi.fn((anchor: number) => ({ anchor })),
+}));
 vi.mock("@tauri-apps/api/core", () => ({
 	invoke: (...args: unknown[]) => mockInvoke(...args),
 	convertFileSrc: (path: string) => `asset://${path}`,
@@ -25,10 +31,21 @@ vi.mock("../../lib/logger", () => ({
 vi.mock("@codemirror/view", () => {
 	class EditorView {
 		destroy() {}
-		state = { doc: { toString: () => "" } };
-		dispatch = vi.fn();
+		state = {
+			doc: {
+				toString: () => "one\ntwo\nthree",
+				lines: 3,
+				line: (number: number) => ({
+					from: number === 1 ? 0 : number === 2 ? 4 : 8,
+					length: number === 3 ? 5 : 3,
+				}),
+			},
+		};
+		dispatch = editorViewSpies.dispatch;
+		focus = editorViewSpies.focus;
 		static lineWrapping = {};
 		static updateListener = { of: () => ({}) };
+		static scrollIntoView = editorViewSpies.scrollIntoView;
 	}
 	return {
 		EditorView,
@@ -108,11 +125,31 @@ vi.mock("mermaid", () => ({
 
 // ─── Subject ──────────────────────────────────────────────────────────────────
 
-import { Editor } from "../workspace/Editor";
+import { Editor, type EditorHandle } from "../workspace/Editor";
 
 afterEach(() => {
 	cleanup();
 	vi.clearAllMocks();
+});
+
+describe("Editor — imperative location reveal", () => {
+	it("moves the real editor selection to the requested one-based line and column", async () => {
+		mockInvoke.mockResolvedValue("one\ntwo\nthree");
+		const ref = createRef<EditorHandle>();
+		render(<Editor ref={ref} filePath="/work/naia/src/App.tsx" />);
+		await waitFor(() => expect(ref.current).not.toBeNull());
+
+		ref.current?.revealLocation(2, 3, "/work/naia/src/App.tsx");
+
+		expect(editorViewSpies.scrollIntoView).toHaveBeenCalledWith(6, {
+			y: "center",
+		});
+		expect(editorViewSpies.dispatch).toHaveBeenCalledWith({
+			selection: { anchor: 6 },
+			effects: { anchor: 6 },
+		});
+		expect(editorViewSpies.focus).toHaveBeenCalled();
+	});
 });
 
 // ─── Helper: file type detection ──────────────────────────────────────────────

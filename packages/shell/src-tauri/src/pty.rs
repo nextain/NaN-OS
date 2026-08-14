@@ -8,8 +8,15 @@ use tauri::{AppHandle, Emitter};
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 pub(crate) struct PtyHandle {
-    master: Box<dyn MasterPty + Send>,
-    writer: Box<dyn Write + Send>,
+    pub(crate) master: Box<dyn MasterPty + Send>,
+    pub(crate) writer: Box<dyn Write + Send>,
+    pub(crate) kind: PtyKind,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum PtyKind {
+    Shell,
+    Herdr,
 }
 
 pub type PtyRegistry = Arc<Mutex<HashMap<String, PtyHandle>>>;
@@ -115,6 +122,7 @@ pub async fn pty_create(
                 PtyHandle {
                     master: pair.master,
                     writer,
+                    kind: PtyKind::Shell,
                 },
             );
         }

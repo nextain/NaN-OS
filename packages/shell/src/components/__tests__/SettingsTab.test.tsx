@@ -56,6 +56,7 @@ vi.mock("../../lib/chat-service", () => ({
 
 // (gateway-sync mock 제거됨 2026-06-12 — 모듈 삭제)
 
+import { setLocale } from "../../lib/i18n";
 import { SettingsTab } from "../SettingsTab";
 
 // SettingsTab order:
@@ -91,6 +92,7 @@ describe("SettingsTab", () => {
 		secureStoreMock.get.mockResolvedValue(null);
 		vi.unstubAllGlobals();
 		Reflect.deleteProperty(window, "__TAURI_INTERNALS__");
+		setLocale("en");
 	});
 
 	it("loads the Naia credit balance after the StrictMode effect replay", async () => {
@@ -155,6 +157,28 @@ describe("SettingsTab", () => {
 		expect(connections.disabled).toBe(true);
 		expect(screen.queryByTestId("discord-connections")).toBeNull();
 		expect(document.querySelector('input[type="password"]')).toBeNull();
+	});
+
+	it("renders locale choices in the webview and applies Korean", () => {
+		localStorage.setItem("naia-config", JSON.stringify({ locale: "en" }));
+		mockInvoke.mockResolvedValue([]);
+		render(<SettingsTab />);
+		gotoSettingsTab("general");
+
+		const picker = screen.getByLabelText("Language");
+		expect(picker).toHaveTextContent("English");
+		fireEvent.click(picker);
+		fireEvent.click(screen.getByRole("button", { name: "한국어" }));
+
+		expect(picker).toHaveTextContent("한국어");
+		expect(screen.getByText("언어")).toBeDefined();
+		// Settings keeps the established transaction boundary: the language is
+		// previewed immediately, then persisted with the page's Save action.
+		expect(
+			JSON.parse(localStorage.getItem("naia-config") ?? "{}"),
+		).toMatchObject({
+			locale: "en",
+		});
 	});
 
 	// config(models) 정상화: 구 skill_config directToolCall → 게이트웨이 `GET /v1/pricing` 셸-직결(E1).
@@ -1591,7 +1615,9 @@ describe("SettingsTab — memory tab (#298)", () => {
 			const saved = JSON.parse(localStorage.getItem("naia-config") || "{}");
 			expect(saved.ttsProvider).toBe("naia-local-voice");
 			expect(saved.vllmTtsHost).toBe("http://localhost:8910");
-			expect(screen.getByTestId("profile-local-voice-toggle")).not.toBeDisabled();
+			expect(
+				screen.getByTestId("profile-local-voice-toggle"),
+			).not.toBeDisabled();
 		});
 		expect(document.querySelector("[data-testid='slot-avatar']")).toBeNull();
 		// R1-7: 3-profile residue removed.

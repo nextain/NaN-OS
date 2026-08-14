@@ -349,6 +349,60 @@ const LOCALES: { id: Locale; label: string }[] = [
 	{ id: "vi", label: "Tiếng Việt" },
 ];
 
+function LocalePicker({
+	value,
+	onChange,
+}: {
+	value: Locale;
+	onChange: (locale: Locale) => void;
+}) {
+	const [open, setOpen] = useState(false);
+	const selected = LOCALES.find((locale) => locale.id === value) ?? LOCALES[1];
+
+	return (
+		<div
+			className="locale-select"
+			onBlur={(event) => {
+				if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+					setOpen(false);
+				}
+			}}
+			onKeyDown={(event) => {
+				if (event.key === "Escape") setOpen(false);
+			}}
+		>
+			<button
+				type="button"
+				id="locale-select"
+				className="locale-select__trigger"
+				aria-controls="locale-select-options"
+				aria-expanded={open}
+				onClick={() => setOpen((current) => !current)}
+			>
+				<span>{selected.label}</span>
+				<span aria-hidden="true">▾</span>
+			</button>
+			{open && (
+				<div id="locale-select-options" className="locale-select__options">
+					{LOCALES.map((locale) => (
+						<button
+							type="button"
+							key={locale.id}
+							aria-pressed={locale.id === value}
+							onClick={() => {
+								onChange(locale.id);
+								setOpen(false);
+							}}
+						>
+							{locale.label}
+						</button>
+					))}
+				</div>
+			)}
+		</div>
+	);
+}
+
 function getNaiaWebBaseUrl() {
 	// dev (tauri:dev) → localhost:3001, prod (tauri:prod) → www.naia.land.
 	// Same VITE_NAIA_USE_DEV_GATEWAY flag as the gateway (see config.ts).
@@ -3144,18 +3198,7 @@ export function SettingsTab() {
 							<label htmlFor="locale-select" style={{ margin: 0 }}>
 								{t("settings.language")}
 							</label>
-							<select
-								id="locale-select"
-								value={locale}
-								onChange={(e) => handleLocaleChange(e.target.value as Locale)}
-								style={{ width: "auto", minWidth: 120 }}
-							>
-								{LOCALES.map((l) => (
-									<option key={l.id} value={l.id}>
-										{l.label}
-									</option>
-								))}
-							</select>
+							<LocalePicker value={locale} onChange={handleLocaleChange} />
 							<button
 								type="button"
 								className="voice-preview-btn"

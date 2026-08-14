@@ -63,6 +63,7 @@ import {
 	saveConfig,
 } from "./lib/config";
 import { persistDiscordDefaults } from "./lib/discord-auth";
+import { setLocale } from "./lib/i18n";
 import { startIframeBridge } from "./lib/iframe-bridge";
 import { shouldMigrateNextainModel } from "./lib/llm/registry";
 import { Logger } from "./lib/logger";
@@ -140,7 +141,11 @@ function applyTheme(theme: ThemeId) {
  * The timeout is the safety net for VRM load failure / slow GPU init —
  * without it, a single asset failure would freeze the splash indefinitely.
  */
-function useAppReady(showAdkSetup: boolean, showOnboarding: boolean): boolean {
+function useAppReady(
+	showAdkSetup: boolean,
+	showOnboarding: boolean,
+	localeHydrated: boolean,
+): boolean {
 	const avatarLoaded = useAvatarStore((s) => s.isLoaded);
 	const [timedOut, setTimedOut] = useState(false);
 	// 새 core(이식) dev = 채팅 백엔드 검증이 목적, 아바타는 이 슬라이스 밖 → 아바타 로드 대기 안 함(즉시 ready).
@@ -156,6 +161,7 @@ function useAppReady(showAdkSetup: boolean, showOnboarding: boolean): boolean {
 		return () => clearTimeout(t);
 	}, [skipAvatarWait, avatarLoaded]);
 
+	if (!localeHydrated) return false;
 	if (skipAvatarWait) return true;
 	return avatarLoaded || timedOut;
 }
@@ -196,6 +202,7 @@ export function App() {
 	}
 	const [showSplash, setShowSplash] = useState(true);
 	const [showAdkSetup, setShowAdkSetup] = useState(!isAdkInitialized());
+	const [localeHydrated, setLocaleHydrated] = useState(showAdkSetup);
 	const [showOnboarding, setShowOnboarding] = useState(false);
 	const [showPanelInstall, setShowPanelInstall] = useState(false);
 	const [naiaVisible, setNaiaVisible] = useState(true);
@@ -320,7 +327,7 @@ export function App() {
 	}, []);
 
 	// Readiness gate: splash stays until the active branch has something to show
-	const appReady = useAppReady(showAdkSetup, showOnboarding);
+	const appReady = useAppReady(showAdkSetup, showOnboarding, localeHydrated);
 	const onSplashDone = useCallback(() => setShowSplash(false), []);
 
 	const { activeApp, toggleAiInterferenceEnabled, setTtsEnabled } =
@@ -458,18 +465,16 @@ export function App() {
 					// Never let a stale render-cache workspaceRoot redirect the next
 					// file read/write cycle to another workspace.
 					const adkPath = getAdkPath();
-					const reconciled = reconcileExplicitLocalProfile(
-						{
-							...merged,
-							...(adkPath ? { workspaceRoot: adkPath } : {}),
-						} as unknown as Parameters<
-							typeof reconcileExplicitLocalProfile
-						>[0],
-					);
+					const reconciled = reconcileExplicitLocalProfile({
+						...merged,
+						...(adkPath ? { workspaceRoot: adkPath } : {}),
+					} as unknown as Parameters<typeof reconcileExplicitLocalProfile>[0]);
+					if (reconciled.locale) setLocale(reconciled.locale);
 					saveConfig(reconciled);
 				}
 				configHydratedRef.current = true;
 				completeNaiaConfigHydration();
+				setLocaleHydrated(true);
 				// Re-run the gateway-mode sync now that the file value is in cache
 				// (the immediate sync on mount was gated off until this point).
 				window.dispatchEvent(new CustomEvent("naia-config-changed"));
@@ -482,6 +487,7 @@ export function App() {
 					error: error instanceof Error ? error.message : String(error),
 				});
 				completeNaiaConfigHydration();
+				setLocaleHydrated(true);
 			});
 	}, [showAdkSetup]);
 
@@ -989,6 +995,7 @@ export function App() {
 					<AdkSetupScreen
 						onComplete={() => {
 							setShowSplash(true);
+							setLocaleHydrated(false);
 							setShowAdkSetup(false);
 							if (!isOnboardingComplete()) setShowOnboarding(true);
 						}}

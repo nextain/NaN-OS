@@ -2950,6 +2950,68 @@ body.resizing-row {
 	color: var(--cream);
 }
 
+/* WebKitGTK's native select popup can split Korean syllables into visible
+   jamo even when the page font is correct. Keep locale selection in the web
+   surface so every platform uses the same shaping and theme. */
+.locale-select {
+	position: relative;
+	width: 148px;
+	font-family: "KoreanUI", system-ui, sans-serif;
+}
+
+.locale-select__trigger,
+.locale-select__options button {
+	width: 100%;
+	border: 0;
+	font: inherit;
+	color: var(--cream);
+	text-align: left;
+	cursor: pointer;
+}
+
+.locale-select__trigger {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding: 8px 10px;
+	border: 1px solid var(--espresso-light);
+	border-radius: 6px;
+	background: var(--espresso-dark);
+}
+
+.locale-select__trigger:focus-visible {
+	outline: 1px solid var(--wood);
+	outline-offset: 1px;
+}
+
+.locale-select__options {
+	position: absolute;
+	top: calc(100% + 4px);
+	left: 0;
+	z-index: 300;
+	width: 100%;
+	max-height: 260px;
+	overflow-y: auto;
+	padding: 4px;
+	border: 1px solid var(--espresso-light);
+	border-radius: 6px;
+	background: var(--espresso-dark);
+	box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+}
+
+.locale-select__options button {
+	padding: 7px 8px;
+	border-radius: 4px;
+	background: transparent;
+}
+
+.locale-select__options button:hover,
+.locale-select__options button:focus-visible,
+.locale-select__options button[aria-pressed="true"] {
+	background: var(--espresso-medium);
+	outline: none;
+}
+
 .settings-field select:focus,
 .settings-field input:not([type="checkbox"]):focus {
 	border-color: var(--wood);
@@ -8034,6 +8096,185 @@ body.resizing-row {
 }
 
 /* ─── Workspace Panel ─────────────────────────────────────────────────────── */
+
+.herdr-workspace {
+	display: flex;
+	height: 100%;
+	min-width: 0;
+	overflow: hidden;
+	background: var(--bg-base, #1a1a1a);
+}
+
+.herdr-workspace__rail {
+	display: flex;
+	flex: 0 0 252px;
+	flex-direction: column;
+	min-width: 180px;
+	max-width: 360px;
+	border-right: 1px solid var(--border-color, #333);
+	background: var(--surface, #242424);
+	overflow: hidden;
+}
+
+.herdr-workspace__files {
+	display: flex;
+	flex: 1 1 55%;
+	min-height: 120px;
+	flex-direction: column;
+	overflow: auto;
+	outline: none;
+}
+
+.herdr-workspace__files:focus-visible {
+	box-shadow: inset 2px 0 var(--accent, #7ca0ff);
+}
+
+.herdr-workspace__section-title {
+	position: sticky;
+	top: 0;
+	z-index: 1;
+	padding: 8px 10px;
+	border-bottom: 1px solid var(--border-color, #333);
+	background: var(--surface, #242424);
+	color: var(--text-secondary, #999);
+	font-size: 11px;
+	font-weight: 650;
+	letter-spacing: 0.05em;
+	text-transform: uppercase;
+}
+
+.herdr-workspace__tabs {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	border-top: 1px solid var(--border-color, #333);
+	border-bottom: 1px solid var(--border-color, #333);
+}
+
+.herdr-workspace__tabs button,
+.herdr-workspace__items button,
+.herdr-workspace__state button,
+.herdr-workspace__viewer-bar > button {
+	border: 0;
+	background: transparent;
+	color: var(--text-secondary, #aaa);
+	cursor: pointer;
+}
+
+.herdr-workspace__tabs button {
+	padding: 8px;
+	border-bottom: 2px solid transparent;
+}
+
+.herdr-workspace__tabs button[aria-selected="true"] {
+	border-bottom-color: var(--accent, #7ca0ff);
+	color: var(--text-primary, #eee);
+}
+
+.herdr-workspace__items {
+	flex: 0 1 45%;
+	min-height: 90px;
+	overflow: auto;
+	padding: 4px;
+}
+
+.herdr-workspace__items button {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
+	width: 100%;
+	padding: 6px 8px;
+	border-radius: 4px;
+	text-align: left;
+}
+
+.herdr-workspace__items button:hover,
+.herdr-workspace__items button.is-focused {
+	background: var(--active-bg, rgba(80, 120, 255, 0.18));
+	color: var(--text-primary, #eee);
+}
+
+.herdr-workspace__items span {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.herdr-workspace__items small {
+	flex-shrink: 0;
+	color: var(--text-secondary, #888);
+}
+
+.herdr-workspace__main {
+	position: relative;
+	flex: 1;
+	min-width: 0;
+	overflow: hidden;
+}
+
+.herdr-workspace__terminal-layer,
+.herdr-workspace__viewer {
+	position: absolute;
+	inset: 0;
+}
+
+.herdr-workspace__terminal-layer[aria-hidden="true"] {
+	visibility: hidden;
+}
+
+.herdr-workspace__terminal-layer .workspace-panel__terminal {
+	height: 100%;
+}
+
+.herdr-workspace__viewer {
+	z-index: 2;
+	display: flex;
+	flex-direction: column;
+	background: var(--bg-base, #1a1a1a);
+}
+
+.herdr-workspace__viewer-bar {
+	display: flex;
+	min-width: 0;
+	border-bottom: 1px solid var(--border-color, #333);
+}
+
+.herdr-workspace__viewer-bar > button {
+	flex-shrink: 0;
+	padding: 0 10px;
+	border-right: 1px solid var(--border-color, #333);
+}
+
+.herdr-workspace__editor {
+	flex: 1;
+	min-height: 0;
+	overflow: hidden;
+}
+
+.herdr-workspace__state,
+.herdr-workspace__empty {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 10px;
+	padding: 16px;
+	color: var(--text-secondary, #888);
+	font-size: 12px;
+}
+
+.herdr-workspace__warning {
+	position: absolute;
+	right: 8px;
+	bottom: 8px;
+	z-index: 3;
+	max-width: 60%;
+	padding: 5px 8px;
+	border: 1px solid #d29922;
+	border-radius: 4px;
+	background: var(--surface, #242424);
+	color: var(--text-primary, #eee);
+	font-size: 11px;
+}
 
 .workspace-panel {
 	display: flex;

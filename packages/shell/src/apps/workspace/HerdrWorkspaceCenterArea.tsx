@@ -1,0 +1,86 @@
+import { useEffect } from "react";
+import type { AppCenterProps } from "../../lib/app-registry";
+import { HerdrWorkspaceRail } from "./HerdrWorkspaceRail";
+import { HerdrWorkspaceSurface } from "./HerdrWorkspaceSurface";
+import { QuickOpen } from "./QuickOpen";
+import { focusedHerdrAgent } from "./herdr";
+import { useHerdrDocuments } from "./useHerdrDocuments";
+import { useHerdrRuntime } from "./useHerdrRuntime";
+import { useHerdrWorkspaceBridge } from "./useHerdrWorkspaceBridge";
+
+export function HerdrWorkspaceCenterArea({ naia }: AppCenterProps) {
+	const runtime = useHerdrRuntime();
+	const documents = useHerdrDocuments({
+		naia,
+		locationGenerationRef: runtime.locationGenerationRef,
+		snapshotRef: runtime.snapshotRef,
+		setSurface: runtime.setSurface,
+		showHerdr: runtime.showHerdr,
+		terminalRef: runtime.terminalRef,
+	});
+
+	useEffect(() => {
+		if (!runtime.snapshot) return;
+		const focused = focusedHerdrAgent(runtime.snapshot);
+		naia.pushContext({
+			type: "workspace",
+			data: {
+				surface: runtime.surface,
+				workspaceRoot: runtime.workspaceRoot,
+				openFilePath: documents.openFilePath || null,
+				herdr: {
+					version: runtime.snapshot.version,
+					workspaceId: runtime.snapshot.focused_workspace_id ?? null,
+					paneId: runtime.snapshot.focused_pane_id ?? null,
+					agent: focused?.agent ?? null,
+					agentStatus: focused?.agent_status ?? null,
+					cwd: focused?.foreground_cwd ?? focused?.cwd ?? null,
+				},
+			},
+		});
+	}, [
+		documents.openFilePath,
+		naia,
+		runtime.snapshot,
+		runtime.surface,
+		runtime.workspaceRoot,
+	]);
+
+	useHerdrWorkspaceBridge({
+		naia,
+		snapshotRef: runtime.snapshotRef,
+		editorRef: documents.editorRef,
+		workspaceRoot: runtime.workspaceRoot,
+		openFilePath: documents.openFilePath,
+		findWorkspace: runtime.findWorkspace,
+		focusWorkspace: runtime.focusWorkspace,
+		openResolvedFile: documents.openResolvedFile,
+		refreshSnapshot: runtime.refreshSnapshot,
+		showHerdr: runtime.showHerdr,
+	});
+
+	return (
+		<div className="herdr-workspace" data-testid="herdr-workspace">
+			<HerdrWorkspaceRail
+				workspaceRoot={runtime.workspaceRoot}
+				openFilePath={documents.openFilePath}
+				classifiedDirs={documents.classifiedDirs}
+				fileTreeRegionRef={documents.fileTreeRegionRef}
+				snapshot={runtime.snapshot}
+				onFileSelect={documents.openFromTree}
+				onSendToNaia={documents.sendToNaia}
+				onShowHerdr={runtime.showHerdr}
+				onFocusWorkspace={runtime.focusWorkspace}
+				onFocusAgent={runtime.focusAgent}
+			/>
+			<HerdrWorkspaceSurface {...runtime} {...documents} />
+			{documents.quickOpenVisible && runtime.workspaceRoot && (
+				<QuickOpen
+					workspaceRoot={runtime.workspaceRoot}
+					onSelect={documents.openFromTree}
+					onClose={() => documents.setQuickOpenVisible(false)}
+				/>
+			)}
+		</div>
+	);
+}

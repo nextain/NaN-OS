@@ -5,6 +5,7 @@ mod browser;
 mod browser_webview;
 mod capture;
 mod gemini_live;
+mod herdr;
 mod memory;
 mod platform;
 mod pty;
@@ -46,8 +47,7 @@ pub(crate) const OAUTH_CALLBACK_PORT: u16 = 18792;
 /// NAIA_DEV_INSTANCE flag from tauri-with-mode — so release/production builds
 /// can never enable dev port overrides.
 fn development_instance_enabled() -> bool {
-    cfg!(debug_assertions)
-        && std::env::var("NAIA_DEV_INSTANCE").ok().as_deref() == Some("1")
+    cfg!(debug_assertions) && std::env::var("NAIA_DEV_INSTANCE").ok().as_deref() == Some("1")
 }
 
 fn valid_port_override(value: Option<String>) -> Option<u16> {
@@ -1343,7 +1343,9 @@ fn log_dir() -> std::path::PathBuf {
         std::env::var_os("NAIA_E2E_RUNTIME_DIR")
             .map(std::path::PathBuf::from)
             .map(|runtime| runtime.join("logs"))
-            .unwrap_or_else(|| naia_data_home_from(std::path::PathBuf::from(home_dir())).join("logs"))
+            .unwrap_or_else(|| {
+                naia_data_home_from(std::path::PathBuf::from(home_dir())).join("logs")
+            })
     } else {
         naia_data_home_from(std::path::PathBuf::from(home_dir())).join("logs")
     };
@@ -1468,8 +1470,8 @@ fn e2e_runtime_dir() -> Option<std::path::PathBuf> {
 
 /// Get the run directory (~/.naia/run/) for PID files
 fn run_dir() -> std::path::PathBuf {
-    let dir =
-        e2e_runtime_dir().unwrap_or_else(|| naia_data_home_from(std::path::PathBuf::from(home_dir())).join("run"));
+    let dir = e2e_runtime_dir()
+        .unwrap_or_else(|| naia_data_home_from(std::path::PathBuf::from(home_dir())).join("run"));
     let _ = std::fs::create_dir_all(&dir);
     dir
 }
@@ -2010,8 +2012,9 @@ fn spawn_adk_path_snapshot() -> Option<String> {
         }
     }
     spawn_adk_path_snapshot_with(|| {
-        dirs::home_dir()
-            .and_then(|home| std::fs::read_to_string(naia_data_home_from(home).join("adk-path")).ok())
+        dirs::home_dir().and_then(|home| {
+            std::fs::read_to_string(naia_data_home_from(home).join("adk-path")).ok()
+        })
     })
 }
 
@@ -9801,6 +9804,7 @@ pub fn run() {
             workspace::workspace_stop_watch,
             workspace::workspace_classify_dirs,
             workspace::workspace_set_root,
+            herdr::location::workspace_resolve_file_location,
             workspace::workspace_detect_adk_root,
             workspace::workspace_load_project_index,
             workspace::workspace_discover_skills,
@@ -9808,6 +9812,12 @@ pub fn run() {
             workspace::workspace_check_adk_server,
             workspace::workspace_discover_adk_server,
             workspace::workspace_get_pty_agents,
+            herdr::pty::herdr_pty_create,
+            herdr::api::herdr_snapshot,
+            herdr::api::herdr_focus_workspace,
+            herdr::api::herdr_focus_agent,
+            herdr::api::herdr_create_workspace,
+            herdr::api::herdr_prompt_agent,
             pty::pty_create,
             pty::pty_write,
             pty::pty_resize,

@@ -11,8 +11,8 @@ import {
 	setAdkPath,
 } from "../lib/adk-store";
 import { NAIA_WEB_BASE_URL } from "../lib/config";
-import { applyNaiaSlotDefaults, NAIA_SLOT_DEFAULTS } from "../lib/slots/model";
-import { getLocale, t, type TranslationKey } from "../lib/i18n";
+import { type TranslationKey, getLocale, t } from "../lib/i18n";
+import { NAIA_SLOT_DEFAULTS, applyNaiaSlotDefaults } from "../lib/slots/model";
 
 interface AdkSetupScreenProps {
 	onComplete: () => void;
@@ -163,10 +163,12 @@ export function AdkSetupScreen({ onComplete }: AdkSetupScreenProps) {
 				} as import("../lib/config").AppConfig);
 				localStorage.setItem(
 					"naia-config",
-					JSON.stringify(preserveWorkspaceRoot(
-						loginConfig as unknown as Record<string, unknown>,
-						adkPath,
-					)),
+					JSON.stringify(
+						preserveWorkspaceRoot(
+							loginConfig as unknown as Record<string, unknown>,
+							adkPath,
+						),
+					),
 				);
 				// Cache naiaKey for crash-restart replay before calling onComplete.
 				invoke("store_startup_message", {
@@ -302,10 +304,7 @@ export function AdkSetupScreen({ onComplete }: AdkSetupScreenProps) {
 			localStorage.setItem(
 				"naia-config",
 				JSON.stringify(
-					preserveWorkspaceRoot(
-						{ ...base, onboardingComplete: true },
-						trimmed,
-					),
+					preserveWorkspaceRoot({ ...base, onboardingComplete: true }, trimmed),
 				),
 			);
 			onComplete();
@@ -505,12 +504,14 @@ export function AdkSetupScreen({ onComplete }: AdkSetupScreenProps) {
 						📦
 					</span>
 					<h1 className="adk-setup-headline">
-						{hasSettings ? "이미 데이터가 있어요" : "폴더에 파일이 있어요"}
+						{hasSettings
+							? t("adk.setup.exists.settingsTitle")
+							: t("adk.setup.exists.filesTitle")}
 					</h1>
 					<p className="adk-setup-sub">
 						{hasSettings
-							? "이 폴더에 이미 naia-settings 데이터가 있습니다."
-							: "이 폴더에 다른 파일이 있어 naia-adk를 그대로 복제할 수 없습니다."}
+							? t("adk.setup.exists.settingsDesc")
+							: t("adk.setup.exists.filesDesc")}
 					</p>
 				</div>
 
@@ -527,9 +528,11 @@ export function AdkSetupScreen({ onComplete }: AdkSetupScreenProps) {
 								disabled={setupStatus !== null}
 							>
 								<span className="adk-setup-option-icon">✅</span>
-								<span className="adk-setup-option-title">그대로 사용</span>
+								<span className="adk-setup-option-title">
+									{t("adk.setup.exists.use")}
+								</span>
 								<span className="adk-setup-option-desc">
-									기존 VRM·배경·BGM 데이터를 유지합니다
+									{t("adk.setup.exists.useDesc")}
 								</span>
 							</button>
 						)}
@@ -540,11 +543,13 @@ export function AdkSetupScreen({ onComplete }: AdkSetupScreenProps) {
 							disabled={setupStatus !== null}
 						>
 							<span className="adk-setup-option-icon">🗑</span>
-							<span className="adk-setup-option-title">삭제하고 새로 시작</span>
+							<span className="adk-setup-option-title">
+								{t("adk.setup.exists.recreate")}
+							</span>
 							<span className="adk-setup-option-desc">
 								{hasSettings
-									? "naia-settings를 완전히 초기화합니다"
-									: "기존 파일을 삭제하고 naia-adk를 새로 받습니다"}
+									? t("adk.setup.exists.recreateSettingsDesc")
+									: t("adk.setup.exists.recreateFilesDesc")}
 							</span>
 						</button>
 					</div>

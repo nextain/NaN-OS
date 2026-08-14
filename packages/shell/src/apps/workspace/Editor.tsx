@@ -58,6 +58,7 @@ interface EditorProps {
 /** Methods exposed to parent via ref */
 export interface EditorHandle {
 	reloadFile: () => void;
+	revealLocation: (line: number, column?: number, filePath?: string) => void;
 }
 
 function getLanguageExtension(filePath: string) {
@@ -188,6 +189,12 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
 ) {
 	const editorRef = useRef<HTMLDivElement>(null);
 	const viewRef = useRef<EditorView | null>(null);
+	const pendingLocationRef = useRef<{
+		line: number;
+		column?: number;
+		filePath?: string;
+	} | null>(null);
+	const viewFilePathRef = useRef("");
 	/** Content state — used for MD preview and initial doc load */
 	const [content, setContent] = useState("");
 	const [viewMode, setViewMode] = useState<ViewMode>("editor");
@@ -465,8 +472,37 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
 		}
 	}, [filePath]);
 
-	// Expose reloadFile to parent via ref
-	useImperativeHandle(ref, () => ({ reloadFile }), [reloadFile]);
+	const revealLocation = useCallback(
+		(line: number, column?: number, targetFilePath?: string) => {
+			const view = viewRef.current;
+			if (
+				!view ||
+				(targetFilePath && viewFilePathRef.current !== targetFilePath)
+			) {
+				pendingLocationRef.current = { line, column, filePath: targetFilePath };
+				return;
+			}
+			const contentPending = line > view.state.doc.lines;
+			const safeLine = Math.max(1, Math.min(line, view.state.doc.lines));
+			const docLine = view.state.doc.line(safeLine);
+			const offset = Math.max(0, Math.min((column ?? 1) - 1, docLine.length));
+			const anchor = docLine.from + offset;
+			view.dispatch({
+				selection: { anchor },
+				effects: EditorView.scrollIntoView(anchor, { y: "center" }),
+			});
+			view.focus();
+			pendingLocationRef.current = contentPending
+				? { line, column, filePath: targetFilePath }
+				: null;
+		},
+		[],
+	);
+
+	useImperativeHandle(ref, () => ({ reloadFile, revealLocation }), [
+		reloadFile,
+		revealLocation,
+	]);
 
 	// ── Ctrl+Scroll zoom ─────────────────────────────────────────────────
 	const wrapperRef = useRef<HTMLDivElement>(null);
@@ -560,6 +596,15 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
 		});
 
 		viewRef.current = view;
+		viewFilePathRef.current = filePath;
+		if (pendingLocationRef.current) {
+			const {
+				line,
+				column,
+				filePath: targetFilePath,
+			} = pendingLocationRef.current;
+			queueMicrotask(() => revealLocation(line, column, targetFilePath));
+		}
 
 		// If a file was loaded while viewMode was "preview", the sync effect could not
 		// clear justLoadedRef (viewRef was null at that time). Clear it now so the user's
@@ -572,6 +617,7 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
 		return () => {
 			view.destroy();
 			viewRef.current = null;
+			viewFilePathRef.current = "";
 			// Clear any pending autosave when the view is torn down (viewMode change,
 			// file switch, or unmount) to prevent stale saves after the context changes.
 			if (autosaveTimerRef.current) {
@@ -581,7 +627,7 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
 		};
 		// content excluded intentionally — we update it via transaction below
 		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [filePath, readOnly, viewMode, saveFile]);
+	}, [filePath, readOnly, viewMode, saveFile, revealLocation]);
 
 	// ── Sync content into existing editor when file changes ───────────────
 	useEffect(() => {
@@ -609,7 +655,15 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
 			// mistakenly swallowed by the justLoadedRef guard in updateListener.
 			justLoadedRef.current = false;
 		}
-	}, [content]);
+		if (pendingLocationRef.current) {
+			const {
+				line,
+				column,
+				filePath: targetFilePath,
+			} = pendingLocationRef.current;
+			queueMicrotask(() => revealLocation(line, column, targetFilePath));
+		}
+	}, [content, revealLocation]);
 
 	// ── CSV: parse and sort ───────────────────────────────────────────────
 	const csvResult = useMemo(() => {

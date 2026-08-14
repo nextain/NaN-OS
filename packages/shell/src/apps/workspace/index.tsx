@@ -1,13 +1,13 @@
 import { invoke } from "@tauri-apps/api/core";
 import { appRegistry } from "../../lib/app-registry";
 import type { NaiaTool } from "../../lib/app-registry";
-import { WorkspaceCenterArea } from "./WorkspaceCenterArea";
+import { HerdrWorkspaceCenterArea } from "./HerdrWorkspaceCenterArea";
 
 export const WORKSPACE_TOOLS: NaiaTool[] = [
 	{
 		name: "skill_workspace_get_sessions",
 		description:
-			"현재 모니터링 중인 모든 Claude Code 세션의 상태를 반환한다. { sessions: SessionInfo[], summary: { total, active, idle, stopped, error, description } } 형태로 반환. summary.description은 '내가 뭐 하고 있어?' 질문에 답할 수 있는 자연어 설명을 포함한다.",
+			"현재 Herdr Spaces와 그 안의 에이전트 상태를 반환한다. { sessions: SessionInfo[], summary: { total, active, idle, stopped, error, description } } 형태로 반환한다.",
 		parameters: { type: "object", properties: {}, required: [] },
 		tier: 0, // auto (read-only)
 	},
@@ -62,7 +62,7 @@ export const WORKSPACE_TOOLS: NaiaTool[] = [
 	{
 		name: "skill_workspace_focus_session",
 		description:
-			"워크스페이스 앱을 활성화하고 지정한 세션 카드로 스크롤·하이라이트한다. 3초 후 하이라이트 자동 해제. open_recent_file: true이면 세션의 마지막 작업 파일도 에디터에 연다.",
+			"워크스페이스 앱을 활성화하고 지정한 Herdr Space와 그 터미널로 포커스를 이동한다.",
 		parameters: {
 			type: "object",
 			properties: {
@@ -71,11 +71,6 @@ export const WORKSPACE_TOOLS: NaiaTool[] = [
 					description:
 						"세션의 dir 식별자 (skill_workspace_get_sessions 반환값의 sessions[].dir 필드)",
 				},
-				open_recent_file: {
-					type: "boolean",
-					description:
-						"true이면 세션의 recent_file을 에디터에 연다. 성공 시 반환값: 'Focused: {dir}, opened: {path}'. recent_file이 없으면 파일 열기를 건너뛰고 'Focused: {dir}'만 반환된다.",
-				},
 			},
 			required: ["dir"],
 		},
@@ -83,8 +78,7 @@ export const WORKSPACE_TOOLS: NaiaTool[] = [
 	},
 	{
 		name: "skill_workspace_new_session",
-		description:
-			"지정한 디렉토리에 새 PTY 터미널 세션을 시작한다. 워크스페이스 앱이 활성화되고 새 터미널 탭이 열린다. 같은 dir의 터미널이 이미 열려 있으면 해당 탭으로 전환만 한다. 반환값: 'Started: {dir}, pid: {pid}' 또는 'Already open: {dir}, pid: {pid}'",
+		description: "지정한 디렉토리에 새 Herdr Space를 만들고 포커스한다.",
 		parameters: {
 			type: "object",
 			properties: {
@@ -101,7 +95,7 @@ export const WORKSPACE_TOOLS: NaiaTool[] = [
 	{
 		name: "skill_workspace_send_to_session",
 		description:
-			"실행 중인 PTY 세션의 stdin에 텍스트를 전송한다. skill_workspace_new_session으로 시작된 터미널 세션에만 동작한다. text에 \\n을 포함하면 Enter 입력. 반환값: 'Sent to: {dir}'",
+			"지정한 Herdr Space의 포커스된 에이전트에게 프롬프트를 전달한다.",
 		parameters: {
 			type: "object",
 			properties: {
@@ -147,14 +141,13 @@ export const WORKSPACE_TOOLS: NaiaTool[] = [
 	{
 		name: "skill_workspace_classify_dirs",
 		description:
-			"dev 디렉토리의 하위 폴더를 분류(project/worktree/reference/docs/other)한다. 인자 없이 호출하면 추천 분류 결과를 반환하고, confirmed 배열을 넘기면 해당 분류를 적용하고 저장한다.",
+			"워크스페이스 루트의 하위 폴더를 분류(project/worktree/reference/docs/other)한다. 인자 없이 호출하면 추천 결과를 반환하고, confirmed 배열을 넘기면 분류를 적용한다.",
 		parameters: {
 			type: "object",
 			properties: {
 				confirmed: {
 					type: "array",
-					description:
-						"사용자가 확인한 분류 결과 배열 (각 요소: {name, path, category}). 없으면 추천만 반환.",
+					description: "사용자가 확인한 분류 결과 배열",
 					items: {
 						type: "object",
 						properties: {
@@ -170,7 +163,7 @@ export const WORKSPACE_TOOLS: NaiaTool[] = [
 			},
 			required: [],
 		},
-		tier: 0, // auto for read, but saving triggers notify
+		tier: 0,
 	},
 ];
 
@@ -189,7 +182,7 @@ appRegistry.register({
 	icon: "💻",
 	builtIn: true,
 	source: "code",
-	center: WorkspaceCenterArea,
+	center: HerdrWorkspaceCenterArea,
 	keepAlive: true, // PTY terminals must not unmount on tab switch
 	tools: WORKSPACE_TOOLS,
 	onActivate: startWorkspaceWatcher,

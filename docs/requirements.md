@@ -360,10 +360,15 @@ localStorage `naia-config` 는 파일에서 하이드레이트되는 **순수 �
 |----|---------|-----------|------|
 | **FR-UI.1** | UI 모드는 **단일 신호**(`usePanelStore.activePanel` 파생 `data-ui-mode`). `null`과 일반 패널은 왼쪽 소형 `app`, `workspace`는 왼쪽 채움 `workspace`를 사용한다. 중앙 `home` 선택은 제공하지 않고 저장된 `home`은 `app`으로 마이그레이션한다. | UC-ONBOARDING-APPEARANCE-VOICE·S-WS4 | `119` data-ui-mode + 레이아웃 버튼 |
 | **FR-UI.2** | ChatPanel은 **단일 인스턴스를 CSS로 재배치**(variant=rail/floating). 모드 전환·레일 접기에도 **언마운트 금지**(voice/STT/TTS 세션 연속성). 마운트 조건은 activePanel과 분리 | UC-ONBOARDING-APPEARANCE-VOICE·S-WS4 | `119` 레일 접기 시 `.chat-panel` attached 유지 |
-| **FR-UI.3** | 워크스페이스 = 4단 `[대화창 레일 \| 워크트리 \| 문서뷰어(상)+터미널(하) \| 서브에이전트]`. 대화 레일 접기(persist)·중앙 상하 비율 자유 리사이즈·터미널 탭/그리드 토글 | S-WS4 | `119` T7/T8/T9 + 91 18/18 무회귀 |
-| **FR-UI.4** | 문서뷰어 **탭바**로 다수 문서 유지·전환(`openDocs`). 서브에이전트 클릭 시 최근문서 탭 surface. "editor" 가짜 탭 제거(에디터=상시 상단 zone) | S-DOC | `119` T10(세션→탭 surface) + 91 S3/S6 |
-| **FR-UI.5** | 터미널 파일경로 **기본 클릭=문서 열기(불변)** / **Alt+클릭=AI 질의**(naia:ask-ai). 문서 탭 ✦=AI 질의. 기존 `onFileSelect` 동작 회귀 0 | S-ASK | `Terminal.tsx` activate Alt 분기 + `naia:ask-ai` 수신(ChatPanel 기존) |
+| **FR-UI.3** | 워크스페이스 왼쪽 통합 레일은 `[File Tree, Spaces, Agents]` 순서이며, Space 선택 시 오른쪽 전체 영역은 실제 Herdr terminal/tab/pane 작업면이다. Herdr의 중복 sidebar 표현만 Shell 전용 설정으로 숨긴다. | S-WS4 | 통합 rail/render 단위 + native visual/Tauri |
+| **FR-UI.4** | Herdr의 파일 경로를 선택하면 File Tree가 활성화되어 경로를 펼치고 reveal/select하며 viewer가 line/column을 연다. viewer Back/닫기는 직전 Herdr pane과 terminal focus를 복원하고 File Tree root는 활성 Space worktree/CWD를 따른다. Quick Open과 문서 탭도 유지한다. | S-DOC | parser/root/FileTree/Editor 회귀 + alternate-screen native E2E |
+| **FR-UI.5** | Agent 선택은 공개 API로 소유 workspace/tab/pane/terminal을 focus하고, Herdr 내부 workspace/tab/pane focus는 단일-flight snapshot polling으로 Spaces/Agents 선택 상태에 역동기화한다. 문서 탭 ✦ AI 질의는 유지한다. | S-WS4·S-ASK | snapshot poll reducer + focus command + multi-agent native E2E |
 | **FR-UI.6** | 대화 레일 접힘 상태 **localStorage 영속**(`naia-ws-rail-collapsed`) | S-WS4 | `119` T8(토글 왕복) |
+| **FR-HERDR.1** | Shell은 검증된 Workspace root에서 Herdr를 전용 PTY로 시작하며, Shell-owned `HERDR_CONFIG_PATH`는 사용자의 전역 설정을 바꾸지 않고 embedded client의 sidebar를 hidden collapsed 상태로 시작한다. 실행 인자·환경은 구조화되어 명령 문자열로 조합하지 않는다. | S-WS4 | Rust launch/env 계약 + frontend 단일 생성 + native Tauri |
+| **FR-HERDR.2** | Herdr가 없거나 시작에 실패하거나 종료되면 성공/실행 중으로 가장하지 않고 원인을 노출하며 같은 화면에서 재시도할 수 있다. 재시도와 root 변경은 이전 PTY를 정리하고 중복 프로세스를 만들지 않는다. | S-WS4 | 준비·실패·종료·재시도·unmount/root-change 컴포넌트 테스트 |
+| **FR-HERDR.3** | 기존 PTY·viewer·worktree·session 회귀 자산은 보존한다. Shell의 중복 session/agent UI와 lifecycle tools는 Herdr 공개 API의 동등 경로와 통합 증거가 생긴 뒤에만 active render/registration에서 단계적으로 retire한다. 테스트 삭제나 축소된 suite를 완료 증거로 삼지 않는다. | S-WS4·S-DOC | baseline preservation probe + full retained suite + descriptor/render negative |
+| **FR-HERDR.4** | P1은 Herdr 0.8.0 public snapshot polling과 workspace/agent focus를 연결한다. Viewer 동안 실제 Herdr xterm을 계속 mount해 pane focus를 보존하고, P2는 path/FileTree/viewer 왕복을 제공한다. P3는 정책을 통과한 Naia observation/control/context bridge, P4는 L3→L2→L1 orchestration을 제공한다. raw PTY stdin이나 private TUI socket을 제어 API로 위장하지 않는다. | S-DOC·S-ASK | typed bridge 계약, 권한 negative, Shell↔Agent↔Herdr 통합 E2E |
+| **NFR-HERDR-SOT** | L3 Naia/naia-agent는 사용자 의도와 이슈 포트폴리오를 조율하고, Herdr는 L2 이슈 리더와 L1 작업자의 터미널/pane/session 실행 정본이다. 같은 생명주기를 Shell 또는 Coding Workers가 중복 소유하지 않는다. | #417 + naia-agent #107 | 정적 중복 surface/tool 검사 + 통합 아키텍처 리뷰 |
 
 > NFR: NFR-isolation(레이아웃 변경이 음성/세션·기존 워크스페이스 기능 안 깸 — 91+120 18/18 입증) · 토큰-only(테마 9종 호환, 하드코딩 색 금지) · 디자인 일관(`.ws-pane`/글래스 chrome). ⚠️ 미감(VN 톤·색감)=사용자 인지 몫(실 앱 확인).
 
