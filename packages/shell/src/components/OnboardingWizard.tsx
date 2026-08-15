@@ -1129,6 +1129,9 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
 											<button
 												key={path}
 												type="button"
+												aria-pressed={
+													avatarProvider === "vrm" && selectedVrm === path
+												}
 												className={`onboarding-step__avatar-card${avatarProvider === "vrm" && selectedVrm === path ? " onboarding-step__avatar-card--selected" : ""}`}
 												onClick={() => handleVrmSelect(path)}
 											>
@@ -1158,6 +1161,10 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
 											<button
 												key={path}
 												type="button"
+												aria-pressed={
+													avatarProvider === "naia-video-avatar" &&
+													selectedNva === path
+												}
 												className={`onboarding-step__avatar-card${avatarProvider === "naia-video-avatar" && selectedNva === path ? " onboarding-step__avatar-card--selected" : ""}`}
 												onClick={() => handleNvaSelect(path)}
 											>

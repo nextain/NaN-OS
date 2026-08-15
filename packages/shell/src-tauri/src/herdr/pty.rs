@@ -1,13 +1,121 @@
 use portable_pty::{CommandBuilder, NativePtySystem, PtySize, PtySystem};
+use std::fs::OpenOptions;
 use std::io::Read;
+use std::path::Path;
+use std::process::Stdio;
 use std::sync::{Arc, Mutex, OnceLock};
+use std::time::{Duration, Instant};
 use tauri::{AppHandle, Emitter};
 
 use crate::pty::{PtyCreated, PtyHandle, PtyKind, PtyRegistry};
 
-use super::config::{herdr_bin, validate_herdr, write_embedded_herdr_config};
+use super::config::{herdr_bin, herdr_command, validate_herdr, write_embedded_herdr_config};
 
 static HERDR_LAUNCH_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+const HERDR_SERVER_START_TIMEOUT: Duration = Duration::from_secs(15);
+const HERDR_SERVER_RETRY_INTERVAL: Duration = Duration::from_millis(100);
+
+fn probe_herdr_server(config_path: &Path) -> Result<(), String> {
+    let output = herdr_command()
+        .args(["api", "snapshot"])
+        .env("HERDR_CONFIG_PATH", config_path)
+        .output()
+        .map_err(|error| format!("Herdr server probe failed: {error}"))?;
+    if output.status.success() {
+        return Ok(());
+    }
+    let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+    let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    Err(if !stderr.is_empty() {
+        stderr
+    } else if !stdout.is_empty() {
+        stdout
+    } else {
+        format!("Herdr server probe exited with {}", output.status)
+    })
+}
+
+fn herdr_server_log_tail(path: &Path) -> String {
+    const LIMIT: usize = 4096;
+    let Ok(bytes) = std::fs::read(path) else {
+        return String::new();
+    };
+    let start = bytes.len().saturating_sub(LIMIT);
+    String::from_utf8_lossy(&bytes[start..]).trim().to_string()
+}
+
+fn server_start_failure(reason: &str, log_path: &Path) -> String {
+    let tail = herdr_server_log_tail(log_path);
+    if tail.is_empty() {
+        format!(
+            "Herdr server failed to start: {reason}. Server log: {}",
+            log_path.display()
+        )
+    } else {
+        format!(
+            "Herdr server failed to start: {reason}. Server log: {}\n{tail}",
+            log_path.display()
+        )
+    }
+}
+
+/// A clean Windows profile has no Herdr socket or resident server. Do not rely
+/// on the interactive client's implicit spawn: start the headless server,
+/// preserve its output, and wait for the API before attaching the PTY client.
+/// The caller holds HERDR_LAUNCH_LOCK, so concurrent Workspace opens start at
+/// most one server and reuse one that becomes ready during the initial probe.
+fn ensure_herdr_server(config_path: &Path, working_dir: &Path) -> Result<(), String> {
+    if probe_herdr_server(config_path).is_ok() {
+        return Ok(());
+    }
+
+    let log_path = crate::log_dir().join("herdr-server.log");
+    let stdout = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&log_path)
+        .map_err(|error| format!("Herdr server log unavailable: {error}"))?;
+    let stderr = stdout
+        .try_clone()
+        .map_err(|error| format!("Herdr server log clone failed: {error}"))?;
+    let mut command = herdr_command();
+    command
+        .arg("server")
+        .env("HERDR_CONFIG_PATH", config_path)
+        .current_dir(working_dir)
+        .stdin(Stdio::null())
+        .stdout(Stdio::from(stdout))
+        .stderr(Stdio::from(stderr));
+    let mut child = command
+        .spawn()
+        .map_err(|error| server_start_failure(&format!("spawn failed: {error}"), &log_path))?;
+
+    let deadline = Instant::now() + HERDR_SERVER_START_TIMEOUT;
+    loop {
+        let last_probe_error = match probe_herdr_server(config_path) {
+            Ok(()) => return Ok(()),
+            Err(error) => error,
+        };
+        if let Some(status) = child
+            .try_wait()
+            .map_err(|error| server_start_failure(&format!("status failed: {error}"), &log_path))?
+        {
+            return Err(server_start_failure(
+                &format!("process exited with {status}; last probe: {last_probe_error}"),
+                &log_path,
+            ));
+        }
+        if Instant::now() >= deadline {
+            let _ = child.kill();
+            let _ = child.wait();
+            return Err(server_start_failure(
+                &format!("timed out; last probe: {last_probe_error}"),
+                &log_path,
+            ));
+        }
+        std::thread::sleep(HERDR_SERVER_RETRY_INTERVAL);
+    }
+}
 
 fn existing_herdr_id<'a>(entries: impl IntoIterator<Item = (&'a str, PtyKind)>) -> Option<&'a str> {
     entries
@@ -72,12 +180,15 @@ pub async fn herdr_pty_create(
             .map(str::to_owned)
         };
         if let Some(pty_id) = existing_id {
+            ensure_herdr_server(&config_path, &dir_path)?;
             let pid = pty_id
                 .strip_prefix("pty-")
                 .and_then(|value| value.parse().ok())
                 .unwrap_or_default();
             return Ok(PtyCreated { pty_id, pid });
         }
+
+        ensure_herdr_server(&config_path, &dir_path)?;
 
         let pair = NativePtySystem::default()
             .openpty(PtySize {
@@ -181,8 +292,9 @@ pub async fn herdr_pty_create(
 
 #[cfg(test)]
 mod tests {
-    use super::existing_herdr_id;
+    use super::{existing_herdr_id, server_start_failure};
     use crate::pty::PtyKind;
+    use std::fs::{create_dir_all, remove_dir_all, write};
 
     #[test]
     fn reuses_only_herdr_and_never_an_ordinary_shell_pty() {
@@ -193,5 +305,23 @@ mod tests {
         ];
         assert_eq!(existing_herdr_id(entries), Some("pty-22"));
         assert_eq!(existing_herdr_id([("pty-11", PtyKind::Shell)]), None);
+    }
+
+    #[test]
+    fn server_failure_preserves_exit_probe_and_log_evidence() {
+        let root =
+            std::env::temp_dir().join(format!("naia-herdr-server-failure-{}", std::process::id()));
+        create_dir_all(&root).unwrap();
+        let log = root.join("herdr-server.log");
+        write(&log, "server stderr evidence").unwrap();
+        let message = server_start_failure(
+            "process exited with code 7; last probe: server_not_running",
+            &log,
+        );
+        assert!(message.contains("code 7"));
+        assert!(message.contains("server_not_running"));
+        assert!(message.contains("server stderr evidence"));
+        assert!(message.contains("herdr-server.log"));
+        remove_dir_all(root).unwrap();
     }
 }

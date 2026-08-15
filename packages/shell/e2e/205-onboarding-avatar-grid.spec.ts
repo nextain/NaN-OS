@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import { expect, test } from "@playwright/test";
 import { TAURI_BASE_MOCK_FALLBACK } from "./helpers/tauri-base-mock";
 
@@ -24,6 +26,32 @@ const VRM_FILES = [
 	"04-Sakurada-Fumiriya.vrm",
 ];
 const NVA_DIRS = ["naia", "naia-anime", "minho", "jina"];
+const NVA_VIDEO_BASE64 = readFileSync(
+	path.resolve(process.cwd(), "e2e/fixtures/head-green-100.mp4"),
+).toString("base64");
+const NVA_MANIFEST = {
+	nva_version: "0.2",
+	meta: { name: "QA portrait" },
+	canvas: { width: 720, height: 1280, fps: 24 },
+	background: { type: "transparent" },
+	poses: ["default"],
+	animations: {
+		idle: {
+			clip: "clips/idle.mp4",
+			entry_pose: "default",
+			exit_pose: "default",
+			loop: true,
+			can_talk: false,
+		},
+	},
+	scenario: {
+		nodes: {
+			start: { type: "start" },
+			idle: { type: "scene", animation: "idle" },
+		},
+		edges: [{ from: "start", to: "idle" }],
+	},
+};
 
 function buildInvokeMock() {
 	return `
@@ -60,10 +88,12 @@ function buildInvokeMock() {
 			if (args && args.subdir === "nva-files") return ${JSON.stringify(NVA_DIRS)};
 			return [];
 		}
-		// NVA thumbnails read the bundle manifest; reject so NvaThumbnail falls back
-		// to its empty placeholder (the card + badge still render) instead of
-		// needing a decodable video in headless Chromium.
-		if (cmd === "read_local_binary") throw new Error("mock: no binary");
+		if (cmd === "read_local_binary") {
+			if (args.path.endsWith("manifest.json")) {
+				return btoa(${JSON.stringify(JSON.stringify(NVA_MANIFEST))});
+			}
+			return ${JSON.stringify(NVA_VIDEO_BASE64)};
+		}
 		if (cmd === "write_naia_path_cache") return null;
 		if (cmd === "workspace_detect_adk_root") return ${JSON.stringify(ADK)};
 		return undefined;
@@ -135,9 +165,51 @@ test.describe("#447 onboarding avatar grid", () => {
 
 		// The selected card is an NVA card (default provider = NVA).
 		const selected = page.locator(".onboarding-step__avatar-card--selected");
+		await expect(selected.locator(".onboarding-step__avatar-badge")).toHaveText(
+			"NVA",
+		);
+		await expect(selected).toHaveAttribute("aria-pressed", "true");
 		await expect(
-			selected.locator(".onboarding-step__avatar-badge"),
-		).toHaveText("NVA");
+			page.locator('.onboarding-step__avatar-card[aria-pressed="true"]'),
+		).toHaveCount(1);
+	});
+
+	test("NVA portrait crop remains visible and usable at narrow width (#448)", async ({
+		page,
+	}, testInfo) => {
+		await page.setViewportSize({ width: 420, height: 720 });
+		await gotoCharacterStep(page);
+
+		const panel = page.locator(".onboarding-panel");
+		const grid = page.locator(".onboarding-step__avatar-grid");
+		const crop = page.locator(".onboarding-step__nva-crop").first();
+		const media = crop.locator(".onboarding-step__nva-crop-media");
+		await expect(crop).toBeVisible();
+		await expect(media).toBeAttached();
+
+		const [panelBox, gridBox, cropBox, mediaBox] = await Promise.all([
+			panel.boundingBox(),
+			grid.boundingBox(),
+			crop.boundingBox(),
+			media.boundingBox(),
+		]);
+		expect(panelBox).not.toBeNull();
+		expect(gridBox).not.toBeNull();
+		expect(cropBox).not.toBeNull();
+		expect(mediaBox).not.toBeNull();
+		expect(gridBox!.x).toBeGreaterThanOrEqual(panelBox!.x);
+		expect(gridBox!.x + gridBox!.width).toBeLessThanOrEqual(
+			panelBox!.x + panelBox!.width + 1,
+		);
+		expect(cropBox!.width).toBe(76);
+		expect(cropBox!.height).toBe(88);
+		expect(mediaBox!.width).toBeGreaterThan(cropBox!.width);
+		expect(mediaBox!.x).toBeLessThan(cropBox!.x);
+		expect(mediaBox!.y).toBeLessThan(cropBox!.y);
+
+		await panel.screenshot({
+			path: testInfo.outputPath("nva-crop-narrow.png"),
+		});
 	});
 
 	test("chat is at its default dock, not a full-window bar (#447-1)", async ({
@@ -150,7 +222,12 @@ test.describe("#447 onboarding avatar grid", () => {
 		const viewport = page.viewportSize();
 		expect(box).not.toBeNull();
 		expect(viewport).not.toBeNull();
-		// The chat dock must be a narrow column, not the full window width.
+		// The retired centered layout must not return: the compact chat is pinned
+		// to the lower-left avatar column, not merely constrained in width.
 		expect(box!.width).toBeLessThan(viewport!.width * 0.6);
+		expect(box!.x).toBeLessThan(viewport!.width * 0.05);
+		expect(
+			Math.abs(box!.y + box!.height - viewport!.height),
+		).toBeLessThanOrEqual(1);
 	});
 });

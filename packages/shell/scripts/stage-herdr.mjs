@@ -40,6 +40,11 @@ export const HERDR_VERSION = "0.8.0-preview.2026-08-04-d78e3d3b5126";
 const HERDR_EXE_SHA256 =
 	"6f470da358d6713b6bebab922ffb1f5fe1d3d288cc6f374c7dca1b4a9837a542";
 const TARGET_TRIPLE = "x86_64-pc-windows-msvc";
+export const HERDR_MSVC_DLLS = [
+	"msvcp140.dll",
+	"vcruntime140.dll",
+	"vcruntime140_1.dll",
+];
 
 /** Absolute path to the pinned Herdr release directory to bundle. */
 export function herdrReleaseDir() {
@@ -59,6 +64,34 @@ export function herdrReleaseDir() {
 /** True when the pinned release (with herdr.exe) is available to stage. */
 export function herdrReleasePresent() {
 	return existsSync(resolve(herdrReleaseDir(), "herdr.exe"));
+}
+
+/** Copy the MSVC runtime into the same directory as herdr.exe. */
+export function stageMsvcRuntimeBesideHerdr({
+	platform = process.platform,
+	resourcesDir = RESOURCES,
+	destinationDir = DEST,
+	systemRoot = process.env.SystemRoot || "C:/Windows",
+} = {}) {
+	if (platform !== "win32") return [];
+	const system32 = resolve(systemRoot, "System32");
+	return HERDR_MSVC_DLLS.map((dll) => {
+		const fromResources = resolve(resourcesDir, dll);
+		const fromSystem = resolve(system32, dll);
+		const source = existsSync(fromResources)
+			? fromResources
+			: existsSync(fromSystem)
+				? fromSystem
+				: null;
+		if (!source) {
+			throw new Error(
+				`[stage-herdr] required MSVC runtime ${dll} not found in resources/ or System32 — herdr will fail on clean machines.`,
+			);
+		}
+		const destination = resolve(destinationDir, dll);
+		copyFileSync(source, destination);
+		return destination;
+	});
 }
 
 function main() {
@@ -99,29 +132,15 @@ function main() {
 	// resources/ copies (version-matched to the STT plugin); fall back to
 	// System32 on the build machine. (#447 clean-install)
 	if (process.platform === "win32") {
-		const MSVC_DLLS = ["msvcp140.dll", "vcruntime140.dll", "vcruntime140_1.dll"];
-		const system32 = resolve(
-			process.env.SystemRoot || "C:/Windows",
-			"System32",
-		);
-		for (const dll of MSVC_DLLS) {
-			const fromResources = resolve(RESOURCES, dll);
-			const fromSystem = resolve(system32, dll);
-			const source = existsSync(fromResources)
-				? fromResources
-				: existsSync(fromSystem)
-					? fromSystem
-					: null;
-			if (!source) {
-				console.error(
-					`[stage-herdr] required MSVC runtime ${dll} not found in ` +
-						`resources/ or System32 — herdr will fail on clean machines.`,
-				);
-				process.exit(1);
-			}
-			copyFileSync(source, resolve(DEST, dll));
+		try {
+			stageMsvcRuntimeBesideHerdr();
+		} catch (error) {
+			console.error(error instanceof Error ? error.message : String(error));
+			process.exit(1);
 		}
-		console.log(`[stage-herdr] MSVC runtime (${MSVC_DLLS.length}) → ${DEST}`);
+		console.log(
+			`[stage-herdr] MSVC runtime (${HERDR_MSVC_DLLS.length}) → ${DEST}`,
+		);
 	}
 	console.log(`[stage-herdr] bundled Herdr ${HERDR_VERSION} → ${DEST}`);
 }

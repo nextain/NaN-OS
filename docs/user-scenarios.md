@@ -805,6 +805,17 @@ Those older sections are historical evidence only.
 
 any-llm 게이트웨이 쪽(라우팅·가격)은 이미 구현·테스트돼 있어 이번 변경 대상이 아니었다(`pytest tests/gateway/test_naia_azure_models.py tests/unit/test_naia_pricing.py` 78 passed로 확인). 이 시나리오에 대한 전용 Playwright는 없음(모델 선택 자체는 기존 SettingsTab e2e 커버리지 범위 밖) — 이번 세션에서 새로 만들지 않음.
 
+### 2026-08-15 v0.1.7 Windows release rebuild (#448)
+
+| Scenario | User-observable outcome | Coverage |
+|---|---|---|
+| **UC-V017-WINDOWS-HERDR-RUNTIME** | On a clean Windows profile without a system Visual C++ Redistributable, the installed bundled `herdr.exe` loads, reports its version, starts the Workspace PTY, and reaches snapshot-ready. A missing adjacent runtime is a build failure, not an instruction for the user to install a prerequisite. | `stage-herdr.mjs` adjacency contract, Windows NSIS/MSI payload inspection, installed Workspace smoke |
+| **UC-V017-WINDOWS-HERDR-COLD-SERVER** | On a clean Windows profile with no pre-existing `%APPDATA%/herdr/herdr.sock`, opening Workspace explicitly starts the bundled headless Herdr server, waits for its API socket, and only then attaches the embedded PTY. A failed server start preserves stderr and offers a retryable error instead of repeatedly surfacing `server_not_running`. | Rust server lifecycle unit tests + isolated-profile bundled-Herdr probe + clean Windows Workspace smoke |
+| **UC-V017-WINDOWS-FIRST-CHAT** | After account onboarding on a clean profile, the paired Agent reads the selected ADK `config.json`/`llm.json` even when its inherited process environment lacked the first-start path, receives the Naia credential, and the first two turns produce non-zero provider usage. Missing provider, key, or gateway access remains an explicit diagnostic error. | exact Agent pairing contract, Shell startup tests, installed first/second-turn log and usage inspection |
+| **UC-V017-WINDOWS-AVATAR-CROP** | The default and alternate Naia NVA cards show a recognizable face, an NVA badge, and a visible selected state without clipping the primary action at desktop or narrow width. Empty/loading/error are not applicable to bundled cards; a missing asset renders the existing fallback without blocking selection recovery. | onboarding component test, Playwright desktop/narrow screenshots and DOM/bounding-box assertions, clean Windows WebView2 confirmation |
+
+P02 release-state matrix: build preparation, missing required runtime, successful NSIS/MSI creation, silent install, installed launch, Herdr server already ready/cold start/start failure/timeout/retry, first-chat success/error, silent uninstall, and desktop/narrow avatar selection are checked separately. Publishing remains outside this scenario until the clean-install gate passes.
+
 ### 2026-08-14 v0.1.7 launch QA (#447)
 
 | Scenario | User-observable outcome | Coverage |

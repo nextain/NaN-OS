@@ -689,6 +689,37 @@ describe("installer workflow integration contracts", () => {
 		"utf8",
 	);
 
+	it("clones the exact Agent revision declared by the pairing manifest", () => {
+		const pairing = readJson("agent-pairing.json") as { agentCommit: string };
+		expect(workflow).toContain(
+			`git -C ../naia-agent fetch --depth 1 origin ${pairing.agentCommit}`,
+		);
+	});
+
+	it("stages the Windows MSVC runtime beside bundled Herdr", () => {
+		const source = readFileSync(
+			resolve(SHELL, "scripts/stage-herdr.mjs"),
+			"utf8",
+		);
+		expect(source).toContain("resolve(resourcesDir, dll)");
+		expect(source).toContain('process.env.SystemRoot || "C:/Windows"');
+		expect(source).toContain("resolve(system32, dll)");
+		expect(source).toContain("resolve(destinationDir, dll)");
+		expect(source).toContain("copyFileSync(source, destination)");
+	});
+
+	it("cold-starts and verifies the Herdr server before PTY attach", () => {
+		const source = readFileSync(
+			resolve(SHELL, "src-tauri/src/herdr/pty.rs"),
+			"utf8",
+		);
+		expect(source).toContain('args(["api", "snapshot"])');
+		expect(source).toContain('.arg("server")');
+		expect(source).toContain("ensure_herdr_server(&config_path, &dir_path)?");
+		expect(source).toContain('join("herdr-server.log")');
+		expect(source).toContain("HERDR_SERVER_START_TIMEOUT");
+	});
+
 	it("installs the generated deb by absolute path", () => {
 		expect(workflow).toContain('DEB="$(realpath "$DEB")"');
 		expect(workflow).toContain('test -f "$DEB"');
