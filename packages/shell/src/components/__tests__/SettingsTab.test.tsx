@@ -365,19 +365,48 @@ describe("SettingsTab", () => {
 		);
 		mockInvoke.mockResolvedValue([]);
 		stubPricingFetch([
-			{ model_key: "azure:grok-4.3", input_price_per_million: 0.4, output_price_per_million: 1.2, cached_price_per_million: null },
-			{ model_key: "upstage:solar-pro4", input_price_per_million: 0.33, output_price_per_million: 1.32, cached_price_per_million: 0.066 },
-			{ model_key: "clova:HCX-007", input_price_per_million: 0.97, output_price_per_million: 3.88, cached_price_per_million: null },
+			{
+				model_key: "azure:grok-4.3",
+				input_price_per_million: 0.4,
+				output_price_per_million: 1.2,
+				cached_price_per_million: null,
+			},
+			{
+				model_key: "upstage:solar-pro4",
+				input_price_per_million: 0.33,
+				output_price_per_million: 1.32,
+				cached_price_per_million: 0.066,
+			},
+			{
+				model_key: "clova:HCX-007",
+				input_price_per_million: 0.97,
+				output_price_per_million: 3.88,
+				cached_price_per_million: null,
+			},
 		]);
 
 		render(<SettingsTab />);
 		gotoSettingsTab("brain");
 		await screen.findByText(/Price per 1M tokens/, { selector: "span" });
 
-		const modelSelect = document.getElementById("model-select") as HTMLSelectElement;
+		const modelSelect = document.getElementById(
+			"model-select",
+		) as HTMLSelectElement;
 		const labels = [...modelSelect.options].map((o) => o.text);
-		expect(labels.some((l) => l.includes("Solar Pro 4") && l.includes("$0.330") && l.includes("$1.320"))).toBe(true);
-		expect(labels.some((l) => l.includes("HCX-007") && l.includes("$0.970") && l.includes("$3.880"))).toBe(true);
+		expect(
+			labels.some(
+				(l) =>
+					l.includes("Solar Pro 4") &&
+					l.includes("$0.330") &&
+					l.includes("$1.320"),
+			),
+		).toBe(true);
+		expect(
+			labels.some(
+				(l) =>
+					l.includes("HCX-007") && l.includes("$0.970") && l.includes("$3.880"),
+			),
+		).toBe(true);
 		// Both group under nextain — selectable by their canonical ids.
 		const values = [...modelSelect.options].map((o) => o.value);
 		expect(values).toContain("solar-pro4");
@@ -1295,20 +1324,31 @@ describe("SettingsTab — memory tab (#298)", () => {
 		);
 	});
 
-	it.skip("retired: shows the 4060 install plan and does not start a missing runtime", async () => {
+	it("shows a retryable VoxCPM2 installer instead of starting a missing runtime", async () => {
 		localStorage.setItem(
 			"naia-config",
 			JSON.stringify({
 				provider: "nextain",
 				model: "gemini-3.5-flash",
 				naiaKey: "nk",
-				localGpuTier: "windows-voice-6g",
-				local8gFocus: "llm",
+				ttsProvider: "edge",
+				ttsEnabled: false,
+				localVoiceEnabled: false,
 			}),
 		);
+		let installed = false;
 		mockInvoke.mockImplementation((cmd: string) => {
 			if (cmd === "detect_gpu_vram") return Promise.resolve(8);
 			if (cmd === "cascade_installation_status") {
+				if (installed) {
+					return Promise.resolve({
+						phase: "ready-to-start",
+						ready: false,
+						canStart: true,
+						summary: "VoxCPM2 runtime is ready.",
+						steps: [],
+					});
+				}
 				return Promise.resolve({
 					phase: "blocked",
 					ready: false,
@@ -1321,29 +1361,47 @@ describe("SettingsTab — memory tab (#298)", () => {
 							label: "Cascade service bundle",
 							state: "blocked",
 							action: "install",
-							actionAvailable: false,
+							actionAvailable: true,
 							progressPercent: 0,
-							retryable: false,
+							retryable: true,
 							failure: {
 								code: "CASCADE_SERVICE_BUNDLE_MISSING",
 								message:
 									"VoxCPM2 or voice facade service files are not packaged.",
-								retryable: false,
+								retryable: true,
 							},
 						},
 					],
 				});
 			}
 			if (cmd === "cascade_status") return Promise.resolve(false);
+			if (cmd === "install_cascade_runtime") {
+				installed = true;
+				return Promise.resolve({
+					phase: "ready-to-start",
+					ready: false,
+					canStart: true,
+					summary: "VoxCPM2 runtime is ready.",
+					steps: [],
+				});
+			}
 			return Promise.resolve([]);
 		});
 
 		render(<SettingsTab />);
+		gotoSettingsTab("voice");
 		await vi.waitFor(() => {
 			expect(
-				screen.getByTestId("cascade-installation-status").textContent,
-			).toMatch(/Cascade service bundle.*blocked.*0%/i);
+				screen.getByTestId("local-voice-installation-status").textContent,
+			).toMatch(/Cascade service bundle.*blocked/i);
 			expect(mockInvoke).not.toHaveBeenCalledWith("start_cascade");
+		});
+		fireEvent.click(screen.getByTestId("local-voice-install-runtime"));
+		await vi.waitFor(() => {
+			expect(mockInvoke).toHaveBeenCalledWith("install_cascade_runtime");
+			expect(
+				screen.queryByTestId("local-voice-installation-status"),
+			).toBeNull();
 		});
 	});
 
@@ -1625,7 +1683,7 @@ describe("SettingsTab — memory tab (#298)", () => {
 		render(<SettingsTab />);
 		await vi.waitFor(() => {
 			const saved = JSON.parse(localStorage.getItem("naia-config") || "{}");
-				expect(saved.ttsProvider).toBe("edge");
+			expect(saved.ttsProvider).toBe("edge");
 			expect(saved.ttsEnabled).toBe(false);
 			expect(saved.localVoiceEnabled).toBe(false);
 			const writes = mockInvoke.mock.calls.filter(

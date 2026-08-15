@@ -154,7 +154,7 @@ export function DiagnosticsTab() {
 				const sep = home.includes("\\") ? "\\" : "/";
 				const base = `${home}${sep}.naia${sep}logs${sep}`;
 				setLogPaths({
-					agent: `${base}llm-debug.log`,
+					agent: `${base}agent-stderr.log`,
 					gateway: `${base}gateway.log`,
 					shell: `${base}naia.log`,
 				});
@@ -527,7 +527,7 @@ export function DiagnosticsTab() {
 					<div className="diagnostics-tailing-indicator">
 						{t("diagnostics.logsTailing")} —{" "}
 						{activeLogTab === "agent"
-							? "~/.naia/logs/llm-debug.log"
+							? "~/.naia/logs/agent-stderr.log"
 							: activeLogTab === "shell"
 								? "~/.naia/logs/naia.log"
 								: "gateway"}

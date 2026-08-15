@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+  <Fragment>
+    <DirectoryRef Id="INSTALLDIR">
+      <Component Id="NaiaCleanAppDataAnchor" Guid="*">
+        <RegistryValue
+          Root="HKCU"
+          Key="Software\Naia\Shell"
+          Name="CleanAppDataContract"
+          Type="integer"
+          Value="1"
+          KeyPath="yes" />
+      </Component>
+    </DirectoryRef>
+    <CustomAction
+      Id="NaiaCleanOwnedAppData"
+      Directory="INSTALLDIR"
+      ExeCommand="cmd.exe /D /C if exist &quot;%APPDATA%\com.naia.shell&quot; rmdir /S /Q &quot;%APPDATA%\com.naia.shell&quot; &amp; if exist &quot;%LOCALAPPDATA%\com.naia.shell&quot; rmdir /S /Q &quot;%LOCALAPPDATA%\com.naia.shell&quot;"
+      Execute="deferred"
+      Impersonate="yes"
+      Return="check" />
+    <InstallExecuteSequence>
+      <Custom Action="NaiaCleanOwnedAppData" After="RemoveFiles">REMOVE="ALL" AND NOT UPGRADINGPRODUCTCODE</Custom>
+    </InstallExecuteSequence>
+  </Fragment>
+</Wix>

@@ -57,7 +57,8 @@
 		},
 		"cascadeLoaderResources": {
 			"cascade-loader/loader": "cascade-loader/loader",
-			"cascade-loader/scripts": "cascade-loader/scripts"
+			"cascade-loader/scripts": "cascade-loader/scripts",
+			"cascade-runtime": "cascade-runtime"
 		},
 		"herdrResources": {
 			"resources/herdr": "herdr"
@@ -98,7 +99,12 @@
 					"nsis": {
 						"installMode": "currentUser",
 						"displayLanguageSelector": false,
-						"languages": ["Korean", "English"]
+						"languages": ["Korean", "English"],
+						"installerHooks": "windows/installer-hooks.nsh"
+					},
+					"wix": {
+						"fragmentPaths": ["windows/clean-app-data.wxs"],
+						"componentRefs": ["NaiaCleanAppDataAnchor"]
 					}
 				}
 			},

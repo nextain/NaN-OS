@@ -67,9 +67,18 @@ describe("mergeBootConfig — 부트스트랩 키 폴백 (workspaceRoot / onboar
 		expect(merged?.persona).toBe("나이아"); // 나머지는 파일 우선
 	});
 
-	it("파일이 onboardingComplete 를 담으면 파일 우선", () => {
+	it("앱 로컬 완료 증거가 없으면 retained workspace 완료값을 가져오지 않는다", () => {
 		const merged = mergeBootConfig(
 			{ onboardingComplete: false },
+			{ onboardingComplete: true, persona: "나이아" },
+			null,
+		);
+		expect(merged?.onboardingComplete).toBe(false);
+	});
+
+	it("앱 로컬 완료 증거와 workspace 완료값이 함께 있으면 완료를 유지한다", () => {
+		const merged = mergeBootConfig(
+			{ onboardingComplete: true },
 			{ onboardingComplete: true, persona: "나이아" },
 			null,
 		);

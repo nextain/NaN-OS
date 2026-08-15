@@ -18,16 +18,25 @@
  * 번들 엔트리: production 엔트리 = `scripts/builds/agent-stdio-entry.mjs`(dev 와 동일). Rust(lib.rs)가
  *   resource_dir/agent 에서 이 파일을 node 로 spawn → 엔트리가 `../../dist/main/**` + `node_modules` 사용.
  *
- * ⚠️ better-sqlite3 / protobufjs 네이티브 build script 는 미실행(deploy --prod 기본). 기본 메모리 경로
- *    (LocalAdapter, 순수 JS)는 무영향. SqliteAdapter(opt-in)를 쓰려면 네이티브 빌드가 별도로 필요.
+ * Windows에서는 deploy 뒤 better-sqlite3를 번들 Node 버전에 맞춰 다시 빌드하고, 그 정확한 node.exe로
+ * require smoke를 통과시킨 뒤에만 패키징한다. protobufjs는 순수 JavaScript 경로다.
  *
  * cwd = packages/shell (package.json 스크립트/ tauri beforeBuildCommand 기준).
  */
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { cpSync, existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+	cpSync,
+	existsSync,
+	readFileSync,
+	rmSync,
+	writeFileSync,
+} from "node:fs";
 import { dirname, resolve } from "node:path";
-import { REQUIRED_AGENT_COMMIT, REQUIRED_PROTO_SHA256 } from "./agent-pairing.mjs";
+import {
+	REQUIRED_AGENT_COMMIT,
+	REQUIRED_PROTO_SHA256,
+} from "./agent-pairing.mjs";
 import { runProjectPnpm } from "./package-manager.mjs";
 
 const SHELL = process.cwd(); // packages/shell
@@ -71,26 +80,56 @@ function normalizePath(path) {
 const AGENT_SCRIPT = process.env.NAIA_AGENT_SCRIPT;
 const AGENT_PROTO_DIR = process.env.NAIA_AGENT_PROTO_DIR;
 if (!AGENT_SCRIPT || !AGENT_PROTO_DIR) {
-	die("[stage-agent] NAIA_AGENT_SCRIPT and NAIA_AGENT_PROTO_DIR are required; run through stage-runtime paired gate");
+	die(
+		"[stage-agent] NAIA_AGENT_SCRIPT and NAIA_AGENT_PROTO_DIR are required; run through stage-runtime paired gate",
+	);
 }
 const AGENT = gitRootForPath(AGENT_SCRIPT, true);
 const protoRoot = gitRootForPath(AGENT_PROTO_DIR, false);
 if (AGENT !== protoRoot) {
-	die(`[stage-agent] NAIA_AGENT_SCRIPT and NAIA_AGENT_PROTO_DIR must come from the same checkout: ${AGENT} !== ${protoRoot}`);
+	die(
+		`[stage-agent] NAIA_AGENT_SCRIPT and NAIA_AGENT_PROTO_DIR must come from the same checkout: ${AGENT} !== ${protoRoot}`,
+	);
 }
-if (normalizePath(AGENT_SCRIPT) !== normalizePath(resolve(AGENT, "scripts/builds/agent-stdio-entry.mjs"))) {
-	die(`[stage-agent] NAIA_AGENT_SCRIPT must be scripts/builds/agent-stdio-entry.mjs from paired checkout: ${AGENT_SCRIPT}`);
+if (
+	normalizePath(AGENT_SCRIPT) !==
+	normalizePath(resolve(AGENT, "scripts/builds/agent-stdio-entry.mjs"))
+) {
+	die(
+		`[stage-agent] NAIA_AGENT_SCRIPT must be scripts/builds/agent-stdio-entry.mjs from paired checkout: ${AGENT_SCRIPT}`,
+	);
 }
-if (normalizePath(AGENT_PROTO_DIR) !== normalizePath(resolve(AGENT, "src/main/adapters/grpc"))) {
-	die(`[stage-agent] NAIA_AGENT_PROTO_DIR must be src/main/adapters/grpc from paired checkout: ${AGENT_PROTO_DIR}`);
+if (
+	normalizePath(AGENT_PROTO_DIR) !==
+	normalizePath(resolve(AGENT, "src/main/adapters/grpc"))
+) {
+	die(
+		`[stage-agent] NAIA_AGENT_PROTO_DIR must be src/main/adapters/grpc from paired checkout: ${AGENT_PROTO_DIR}`,
+	);
 }
 if (gitOutput(AGENT, ["rev-parse", "HEAD"]) !== REQUIRED_AGENT_COMMIT) {
-	die(`[stage-agent] paired naia-agent checkout must be exactly ${REQUIRED_AGENT_COMMIT}: ${AGENT}`);
+	die(
+		`[stage-agent] paired naia-agent checkout must be exactly ${REQUIRED_AGENT_COMMIT}: ${AGENT}`,
+	);
 }
-if (gitOutput(AGENT, ["status", "--porcelain", "--", "scripts/builds/agent-stdio-entry.mjs"]) !== "") {
+if (
+	gitOutput(AGENT, [
+		"status",
+		"--porcelain",
+		"--",
+		"scripts/builds/agent-stdio-entry.mjs",
+	]) !== ""
+) {
 	die(`[stage-agent] paired naia-agent entrypoint must be clean: ${AGENT}`);
 }
-if (gitOutput(AGENT, ["status", "--porcelain", "--", "src/main/adapters/grpc/naia_agent.proto"]) !== "") {
+if (
+	gitOutput(AGENT, [
+		"status",
+		"--porcelain",
+		"--",
+		"src/main/adapters/grpc/naia_agent.proto",
+	]) !== ""
+) {
 	die(`[stage-agent] paired naia-agent proto must be clean: ${AGENT}`);
 }
 // Twin of stage-runtime's isCleanPorcelainIgnoringRecovery: ignore
@@ -112,19 +151,33 @@ function checkoutDirtyIgnoringRecovery(dir) {
 if (checkoutDirtyIgnoringRecovery(AGENT)) {
 	die(`[stage-agent] paired naia-agent checkout must be clean: ${AGENT}`);
 }
-if (sha256File(resolve(AGENT_PROTO_DIR, "naia_agent.proto")) !== REQUIRED_PROTO_SHA256) {
-	die(`[stage-agent] paired naia-agent proto SHA256 must be ${REQUIRED_PROTO_SHA256}: ${AGENT_PROTO_DIR}`);
+if (
+	sha256File(resolve(AGENT_PROTO_DIR, "naia_agent.proto")) !==
+	REQUIRED_PROTO_SHA256
+) {
+	die(
+		`[stage-agent] paired naia-agent proto SHA256 must be ${REQUIRED_PROTO_SHA256}: ${AGENT_PROTO_DIR}`,
+	);
 }
 
 function assertPairedCheckoutStillClean(stage) {
 	if (checkoutDirtyIgnoringRecovery(AGENT)) {
-		die(`[stage-agent] paired naia-agent checkout became dirty after ${stage}: ${AGENT}`);
+		die(
+			`[stage-agent] paired naia-agent checkout became dirty after ${stage}: ${AGENT}`,
+		);
 	}
-	if (sha256File(resolve(AGENT_PROTO_DIR, "naia_agent.proto")) !== REQUIRED_PROTO_SHA256) {
-		die(`[stage-agent] paired naia-agent proto changed after ${stage}: ${AGENT_PROTO_DIR}`);
+	if (
+		sha256File(resolve(AGENT_PROTO_DIR, "naia_agent.proto")) !==
+		REQUIRED_PROTO_SHA256
+	) {
+		die(
+			`[stage-agent] paired naia-agent proto changed after ${stage}: ${AGENT_PROTO_DIR}`,
+		);
 	}
 	if (gitOutput(AGENT, ["rev-parse", "HEAD"]) !== REQUIRED_AGENT_COMMIT) {
-		die(`[stage-agent] paired naia-agent commit changed after ${stage}: ${AGENT}`);
+		die(
+			`[stage-agent] paired naia-agent commit changed after ${stage}: ${AGENT}`,
+		);
 	}
 }
 const AGENT_LOCAL_DEPENDENCIES = [
@@ -160,7 +213,10 @@ for (const dependency of AGENT_LOCAL_DEPENDENCIES) {
 		process.exit(1);
 	}
 	console.log(`[stage-agent] dependency build: ${dependency.name}`);
-	runPnpm(["--ignore-workspace", "install", "--frozen-lockfile"], dependency.path);
+	runPnpm(
+		["--ignore-workspace", "install", "--frozen-lockfile"],
+		dependency.path,
+	);
 	runPnpm(["--ignore-workspace", "run", "build"], dependency.path);
 	if (!existsSync(resolve(dependency.path, dependency.output))) {
 		console.error(
@@ -182,7 +238,14 @@ try {
 	if (!hadWs) writeFileSync(wsFile, "packages:\n  - '.'\n");
 	if (existsSync(STAGE)) rmSync(STAGE, { recursive: true, force: true });
 	runPnpm(
-		["--filter=@nextain/naia-agent", "--config.node-linker=hoisted", "deploy", "--prod", "--legacy", STAGE],
+		[
+			"--filter=@nextain/naia-agent",
+			"--config.node-linker=hoisted",
+			"deploy",
+			"--prod",
+			"--legacy",
+			STAGE,
+		],
 		AGENT,
 	);
 } finally {
@@ -215,15 +278,44 @@ assertPairedCheckoutStillClean("dist/proto copy");
 const sourceEntrypoint = resolve(AGENT, "scripts/builds/agent-stdio-entry.mjs");
 const stagedEntrypoint = resolve(STAGE, "scripts/builds/agent-stdio-entry.mjs");
 if (sha256File(stagedGrpcProto) !== REQUIRED_PROTO_SHA256) {
-	die(`[stage-agent] staged proto SHA256 must be ${REQUIRED_PROTO_SHA256}: ${stagedGrpcProto}`);
+	die(
+		`[stage-agent] staged proto SHA256 must be ${REQUIRED_PROTO_SHA256}: ${stagedGrpcProto}`,
+	);
 }
 if (sha256File(stagedEntrypoint) !== sha256File(sourceEntrypoint)) {
-	die(`[stage-agent] staged agent entrypoint hash does not match paired source: ${stagedEntrypoint}`);
+	die(
+		`[stage-agent] staged agent entrypoint hash does not match paired source: ${stagedEntrypoint}`,
+	);
 }
 
 // 스테이징 검증 — 번들 resource(agent/{scripts,dist,node_modules,package.json})가 참조하는
 // 실 엔트리·deps 가 전부 실재해야. production 엔트리 = scripts/builds/agent-stdio-entry.mjs
 // (dev 와 동일; Rust 가 resource_dir 에서 이 파일을 node 로 spawn → GRPC_LISTENING 핸드셰이크).
+if (process.platform === "win32") {
+	const bundledNode = resolve(SHELL, "src-tauri/resources/node.exe");
+	const matrix = JSON.parse(
+		readFileSync(resolve(SHELL, "src-tauri/platform-matrix.json"), "utf8"),
+	);
+	if (!existsSync(bundledNode))
+		die(
+			`[stage-agent] bundled Node must exist before native ABI rebuild: ${bundledNode}`,
+		);
+		runProjectPnpm(["rebuild", "better-sqlite3"], STAGE, {
+			...process.env,
+			npm_config_runtime: "node",
+			npm_config_target: matrix.node.version,
+		});
+	const sqliteEntry = resolve(STAGE, "node_modules/better-sqlite3");
+	execFileSync(
+		bundledNode,
+		[
+			"-e",
+			`require(${JSON.stringify(sqliteEntry)}); process.stdout.write(process.versions.modules)`,
+		],
+		{ stdio: "inherit" },
+	);
+}
+
 for (const p of [
 	"scripts/builds/agent-stdio-entry.mjs",
 	"dist/main/composition/index.js",

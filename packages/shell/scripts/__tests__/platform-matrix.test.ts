@@ -174,10 +174,44 @@ describe("platform-matrix 스키마 (FR-INSTALL.1)", () => {
 		});
 		expect(inst.windows.nsis.installMode).toBe("currentUser");
 		expect(inst.windows.nsis.languages).toEqual(["Korean", "English"]);
+		expect(inst.windows.nsis.installerHooks).toBe(
+			"windows/installer-hooks.nsh",
+		);
+		expect(inst.windows.wix.fragmentPaths).toEqual([
+			"windows/clean-app-data.wxs",
+		]);
+		expect(inst.windows.wix.componentRefs).toEqual(["NaiaCleanAppDataAnchor"]);
 	});
 
 	it("createUpdaterArtifacts=false — 매트릭스 공통이 유일 소유", () => {
 		expect(matrix.common.createUpdaterArtifacts).toBe(false);
+		const nsis = readFileSync(
+			resolve(SHELL, "src-tauri/windows/installer-hooks.nsh"),
+			"utf8",
+		);
+		expect(nsis).toContain("$UpdateMode <> 1");
+		expect(nsis).toContain("$DeleteAppDataCheckboxState 1");
+		const wix = readFileSync(
+			resolve(SHELL, "src-tauri/windows/clean-app-data.wxs"),
+			"utf8",
+		);
+		expect(wix).toContain("%APPDATA%\\com.naia.shell");
+		expect(wix).toContain("%LOCALAPPDATA%\\com.naia.shell");
+		expect(wix).toContain('REMOVE="ALL" AND NOT UPGRADINGPRODUCTCODE');
+		expect(wix).toContain('Id="NaiaCleanAppDataAnchor"');
+		expect(wix).toContain('Return="check"');
+		expect(wix).not.toContain("naia-adk");
+		const manifest = JSON.parse(
+			readFileSync(
+				resolve(SHELL, "scripts/cascade-runtime-manifest.json"),
+				"utf8",
+			),
+		);
+		expect(manifest.uv.windowsX64Sha256).toMatch(/^[a-f0-9]{64}$/);
+		expect(manifest.python).toMatch(/^3\.10\./);
+		expect(manifest.model.revision).toMatch(/^[a-f0-9]{40}$/);
+		for (const value of Object.values(manifest.packages))
+			expect(String(value)).not.toMatch(/[<>=~^*]/);
 	});
 
 	it("darwin icon = 전체 배열 (base 5원소 + icns — 부분 델타 금지, RFC 7386 배열 대체)", () => {
@@ -521,6 +555,9 @@ describe("conf 생성 golden (FR-INSTALL.2)", () => {
 			expect(withIt.bundle.resources["cascade-loader/scripts"]).toBe(
 				"cascade-loader/scripts",
 			);
+			expect(withIt.bundle.resources["cascade-runtime"]).toBe(
+				"cascade-runtime",
+			);
 			expect(
 				without.bundle.resources["cascade-loader/scripts"],
 			).toBeUndefined();
@@ -572,14 +609,15 @@ describe("agent production staging", () => {
 		const pairing = JSON.parse(
 			readFileSync(resolve(SHELL, "agent-pairing.json"), "utf8"),
 		) as { agentCommit: string; protoSha256: string };
-		const buildScript = readFileSync(resolve(SHELL, "src-tauri/build.rs"), "utf8");
+		const buildScript = readFileSync(
+			resolve(SHELL, "src-tauri/build.rs"),
+			"utf8",
+		);
 
 		expect(buildScript).toContain(
 			`const REQUIRED_AGENT_COMMIT: &str = "${pairing.agentCommit}";`,
 		);
-		expect(buildScript).toContain(
-			`"${pairing.protoSha256}";`,
-		);
+		expect(buildScript).toContain(`"${pairing.protoSha256}";`);
 	});
 
 	it("builds local runtime dependencies before building the agent", () => {
@@ -600,13 +638,18 @@ describe("agent production staging", () => {
 		expect(agentBuild).toBeGreaterThan(dependencyLoop);
 		expect(source).toContain('from "./package-manager.mjs"');
 		expect(source).toContain(
-			'runPnpm(["--ignore-workspace", "install", "--frozen-lockfile"], dependency.path)',
+			'["--ignore-workspace", "install", "--frozen-lockfile"]',
 		);
-		expect(source).toContain(
-			'runPnpm(["--ignore-workspace", "install", "--frozen-lockfile"], AGENT)',
+		expect(source).toContain("dependency.path");
+		expect(source).toMatch(
+			/runPnpm\(\s*\["--ignore-workspace", "install", "--frozen-lockfile"\],\s*AGENT,?\s*\)/,
 		);
 		expect(source).toContain("dependency output missing");
 		expect(source).toContain('"node_modules/@naia/kb-compiler"');
+		expect(source).toContain('rebuild", "better-sqlite3"');
+		expect(source).toContain("npm_config_target: matrix.node.version");
+		expect(source).toContain("bundledNode,");
+		expect(source).toContain("require(${JSON.stringify(sqliteEntry)})");
 	});
 });
 

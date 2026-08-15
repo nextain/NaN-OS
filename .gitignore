@@ -64,6 +64,7 @@ packages/shell/src-tauri/agent/
 packages/shell/src-tauri/bgm-sidecar/
 # 배포 번들용 cascade loader 스테이징(stage-cascade-loader.mjs 가 windows-manager loader 동봉) — 빌드 산출물, 추적 제외
 packages/shell/src-tauri/cascade-loader/
+packages/shell/src-tauri/cascade-runtime/
 # stage-runtime.mjs 가 platform-matrix.json 에서 생성하는 conf 오버레이 (#377 FR-INSTALL.2) — 생성물, 추적 제외
 packages/shell/src-tauri/tauri.conf.generated.json
 

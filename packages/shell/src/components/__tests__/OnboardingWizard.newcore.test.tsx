@@ -32,6 +32,9 @@ const secureStore = vi.hoisted(() => ({
 const reloadAgentSettings = vi.hoisted(() =>
 	vi.fn().mockResolvedValue(undefined),
 );
+const sendAuthUpdateStrict = vi.hoisted(() =>
+	vi.fn().mockResolvedValue(undefined),
+);
 
 vi.mock("@tauri-apps/api/core", () => ({
 	invoke: vi.fn().mockResolvedValue(true),
@@ -56,6 +59,7 @@ vi.mock("@tauri-apps/plugin-store", () => ({
 // ★ newCore=true
 vi.mock("../../lib/chat-service", () => ({
 	sendAuthUpdate: vi.fn().mockResolvedValue(undefined),
+	sendAuthUpdateStrict,
 	reloadAgentSettings,
 	isNewCore: () => true,
 }));
@@ -171,11 +175,11 @@ describe("OnboardingWizard — newCore 배선(step-flow graft step2)", () => {
 		expect(arg.onboardingComplete).toBe(true);
 	});
 
-	it("waits for persistence and Agent reload before leaving onboarding", async () => {
-		let releasePersistence!: () => void;
-		session.completeWith.mockReturnValueOnce(
+	it("commits onboarding only after live Agent reload succeeds", async () => {
+		let releaseReload!: () => void;
+		reloadAgentSettings.mockReturnValueOnce(
 			new Promise<void>((resolve) => {
-				releasePersistence = resolve;
+				releaseReload = resolve;
 			}),
 		);
 		render(<OnboardingWizard onComplete={onComplete} />);
@@ -192,15 +196,17 @@ describe("OnboardingWizard — newCore 배선(step-flow graft step2)", () => {
 		);
 
 		await act(async () => Promise.resolve());
-		expect(reloadAgentSettings).not.toHaveBeenCalled();
+		expect(reloadAgentSettings).toHaveBeenCalledTimes(1);
+		expect(session.completeWith).not.toHaveBeenCalled();
 		expect(onComplete).not.toHaveBeenCalled();
 		expect(screen.getByRole("button")).toBeDisabled();
 
 		await act(async () => {
-			releasePersistence();
+			releaseReload();
 			await Promise.resolve();
 		});
-		expect(reloadAgentSettings).toHaveBeenCalledTimes(1);
+		expect(sendAuthUpdateStrict).not.toHaveBeenCalled();
+		expect(session.completeWith).toHaveBeenCalledTimes(1);
 		expect(onComplete).not.toHaveBeenCalled();
 	});
 

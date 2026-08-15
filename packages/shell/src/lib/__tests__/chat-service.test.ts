@@ -599,6 +599,14 @@ describe("chat-service", () => {
 			expect(parsed.naiaKey).toBe("naia-key-xyz");
 			expect("auth_update").not.toBe(parsed.type);
 		});
+
+		it("sendAuthUpdateStrict: onboarding credential replay failure is caller-visible", async () => {
+			mockInvoke.mockRejectedValueOnce(new Error("agent-core died"));
+			const { sendAuthUpdateStrict } = await import("../chat-service");
+			await expect(sendAuthUpdateStrict("gw-test-key")).rejects.toThrow(
+				"agent-core died",
+			);
+		});
 	});
 
 	// W2 — naia-agent 의존성 제외 (사용자 명시 2026-05-29)

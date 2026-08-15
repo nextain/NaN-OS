@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { expect, test } from "@playwright/test";
 import { TAURI_BASE_MOCK_FALLBACK } from "./helpers/tauri-base-mock";
@@ -29,6 +29,13 @@ const NVA_DIRS = ["naia", "naia-anime", "minho", "jina"];
 const NVA_VIDEO_BASE64 = readFileSync(
 	path.resolve(process.cwd(), "e2e/fixtures/head-green-100.mp4"),
 ).toString("base64");
+const LIVE_NAIA_CLIP = path.resolve(
+	process.cwd(),
+	"../../../naia-adk/naia-settings/nva-files/naia/clips/idle.webm",
+);
+const LIVE_NAIA_VIDEO_BASE64 = existsSync(LIVE_NAIA_CLIP)
+	? readFileSync(LIVE_NAIA_CLIP).toString("base64")
+	: NVA_VIDEO_BASE64;
 const NVA_MANIFEST = {
 	nva_version: "0.2",
 	meta: { name: "QA portrait" },
@@ -89,10 +96,14 @@ function buildInvokeMock() {
 			return [];
 		}
 		if (cmd === "read_local_binary") {
+			var normalizedPath = String(args.path).replaceAll("\\\\", "/");
+			var isLiveNaia = normalizedPath.includes("/nva-files/naia/");
 			if (args.path.endsWith("manifest.json")) {
-				return btoa(${JSON.stringify(JSON.stringify(NVA_MANIFEST))});
+				var manifest = ${JSON.stringify(NVA_MANIFEST)};
+				if (isLiveNaia) manifest.animations.idle.clip = "clips/idle.webm";
+				return btoa(JSON.stringify(manifest));
 			}
-			return ${JSON.stringify(NVA_VIDEO_BASE64)};
+			return isLiveNaia ? ${JSON.stringify(LIVE_NAIA_VIDEO_BASE64)} : ${JSON.stringify(NVA_VIDEO_BASE64)};
 		}
 		if (cmd === "write_naia_path_cache") return null;
 		if (cmd === "workspace_detect_adk_root") return ${JSON.stringify(ADK)};
@@ -174,38 +185,83 @@ test.describe("#447 onboarding avatar grid", () => {
 		).toHaveCount(1);
 	});
 
-	test("NVA portrait crop remains visible and usable at narrow width (#448)", async ({
+	test("live-action Naia portrait is lowered on desktop and narrow grids (#448)", async ({
 		page,
 	}, testInfo) => {
-		await page.setViewportSize({ width: 420, height: 720 });
+		await page.setViewportSize({ width: 1280, height: 800 });
 		await gotoCharacterStep(page);
 
 		const panel = page.locator(".onboarding-panel");
 		const grid = page.locator(".onboarding-step__avatar-grid");
-		const crop = page.locator(".onboarding-step__nva-crop").first();
-		const media = crop.locator(".onboarding-step__nva-crop-media");
-		await expect(crop).toBeVisible();
-		await expect(media).toBeAttached();
+		const liveCrop = page.locator(".onboarding-step__nva-crop--live-naia");
+		const genericCrop = page.locator(".onboarding-step__nva-crop").nth(1);
+		const liveMedia = liveCrop.locator(".onboarding-step__nva-crop-media");
+		const genericMedia = genericCrop.locator(
+			".onboarding-step__nva-crop-media",
+		);
+		await expect(liveCrop).toHaveCount(1);
+		await expect(liveCrop).toBeVisible();
+		await expect(liveMedia).toBeAttached();
 
-		const [panelBox, gridBox, cropBox, mediaBox] = await Promise.all([
+		const [
+			panelBox,
+			gridBox,
+			cropBox,
+			liveMediaBox,
+			genericCropBox,
+			genericMediaBox,
+		] = await Promise.all([
 			panel.boundingBox(),
 			grid.boundingBox(),
-			crop.boundingBox(),
-			media.boundingBox(),
+			liveCrop.boundingBox(),
+			liveMedia.boundingBox(),
+			genericCrop.boundingBox(),
+			genericMedia.boundingBox(),
 		]);
 		expect(panelBox).not.toBeNull();
 		expect(gridBox).not.toBeNull();
 		expect(cropBox).not.toBeNull();
-		expect(mediaBox).not.toBeNull();
+		expect(liveMediaBox).not.toBeNull();
+		expect(genericCropBox).not.toBeNull();
+		expect(genericMediaBox).not.toBeNull();
 		expect(gridBox!.x).toBeGreaterThanOrEqual(panelBox!.x);
 		expect(gridBox!.x + gridBox!.width).toBeLessThanOrEqual(
 			panelBox!.x + panelBox!.width + 1,
 		);
 		expect(cropBox!.width).toBe(76);
 		expect(cropBox!.height).toBe(88);
-		expect(mediaBox!.width).toBeGreaterThan(cropBox!.width);
-		expect(mediaBox!.x).toBeLessThan(cropBox!.x);
-		expect(mediaBox!.y).toBeLessThan(cropBox!.y);
+		expect(liveMediaBox!.width).toBeGreaterThan(cropBox!.width);
+		expect(liveMediaBox!.x).toBeLessThan(cropBox!.x);
+		// Exact Naia receives the requested lower crop while other NVA portraits
+		// keep the established top-biased framing.
+		await expect(liveMedia).toHaveCSS("top", "-80px");
+		await expect(liveMedia).toHaveCSS("width", "200px");
+		await expect(genericMedia).toHaveCSS("top", "-12px");
+		expect(liveMediaBox!.y).toBeLessThan(genericMediaBox!.y);
+
+		await panel.screenshot({
+			path: testInfo.outputPath("nva-crop-desktop.png"),
+		});
+
+		await page.setViewportSize({ width: 420, height: 720 });
+		await expect(liveCrop).toBeVisible();
+		const [narrowPanel, narrowGrid, narrowCrop, narrowMedia] =
+			await Promise.all([
+				panel.boundingBox(),
+				grid.boundingBox(),
+				liveCrop.boundingBox(),
+				liveMedia.boundingBox(),
+			]);
+		expect(narrowPanel).not.toBeNull();
+		expect(narrowGrid).not.toBeNull();
+		expect(narrowCrop).not.toBeNull();
+		expect(narrowMedia).not.toBeNull();
+		expect(narrowGrid!.x).toBeGreaterThanOrEqual(narrowPanel!.x);
+		expect(narrowGrid!.x + narrowGrid!.width).toBeLessThanOrEqual(
+			narrowPanel!.x + narrowPanel!.width + 1,
+		);
+		await expect(liveMedia).toHaveCSS("top", "-80px");
+		expect(narrowMedia!.y).toBeLessThan(narrowCrop!.y);
 
 		await panel.screenshot({
 			path: testInfo.outputPath("nva-crop-narrow.png"),

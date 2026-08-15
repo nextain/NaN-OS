@@ -30,7 +30,7 @@ naia-os 메커니즘 (이미 존재 — 새로 만들지 않음):
 | 셸 UI / IPC / Rust command | `naia.log` (frontend Logger 브리지 + Rust `log_verbose`) |
 | 헤드리스/E2E Rust 상세 | tmp 의 `naia-debug.log` (`CAFE_DEBUG_E2E=1` 시) |
 | agent 처리·대화 | `agent-stderr.log` |
-| LLM 호출 | `llm-debug.log` / 게이트웨이 `gateway.log` |
+| LLM 호출·Agent 처리 | `agent-stderr.log` (게이트웨이 제거 후 단일 실제 기록) |
 
 ## 코드 규약 (forward-only — 기존 이식분 일괄 리팩터 안 함)
 

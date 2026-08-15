@@ -44,6 +44,7 @@ vi.mock("@tauri-apps/plugin-store", () => ({
 
 vi.mock("../../lib/chat-service", () => ({
 	sendAuthUpdate: vi.fn().mockResolvedValue(undefined),
+	sendAuthUpdateStrict: vi.fn().mockResolvedValue(undefined),
 	reloadAgentSettings: vi.fn().mockResolvedValue(undefined),
 	isNewCore: () => false, // 기본 old 경로(비파괴 graft) — new-core graft 검증은 onboarding-core.test.ts
 }));
@@ -123,9 +124,12 @@ describe("OnboardingWizard", () => {
 		});
 		clickNextByClass();
 
-		fireEvent.change(screen.getByPlaceholderText(/Enter a name|이름을 입력하세요/), {
-			target: { value: "Alex" },
-		});
+		fireEvent.change(
+			screen.getByPlaceholderText(/Enter a name|이름을 입력하세요/),
+			{
+				target: { value: "Alex" },
+			},
+		);
 		clickNextByClass();
 		clickNextByClass();
 		clickNextByClass();
@@ -159,7 +163,9 @@ describe("OnboardingWizard", () => {
 		flush();
 
 		// Second step: userName — generic localized placeholder
-		expect(screen.getByPlaceholderText(/Enter a name|이름을 입력하세요/)).toBeDefined();
+		expect(
+			screen.getByPlaceholderText(/Enter a name|이름을 입력하세요/),
+		).toBeDefined();
 	});
 
 	it("progresses through steps: agentName → userName → speechStyle → character → background → provider", () => {
@@ -173,9 +179,12 @@ describe("OnboardingWizard", () => {
 		flush();
 
 		// userName → Next
-		fireEvent.change(screen.getByPlaceholderText(/Enter a name|이름을 입력하세요/), {
-			target: { value: "Alex" },
-		});
+		fireEvent.change(
+			screen.getByPlaceholderText(/Enter a name|이름을 입력하세요/),
+			{
+				target: { value: "Alex" },
+			},
+		);
 		fireEvent.click(screen.getByRole("button", { name: /다음|Next/ }));
 		flush();
 
@@ -211,7 +220,9 @@ describe("OnboardingWizard", () => {
 		advanceFromAgentNameToProvider();
 
 		expect(screen.getByText(/Detected VRAM: 16 GB/)).toBeDefined();
-		expect(screen.getByText(/choose local and reference voices in Voice Settings/)).toBeDefined();
+		expect(
+			screen.getByText(/choose local and reference voices in Voice Settings/),
+		).toBeDefined();
 		expect(
 			screen.getByText(/does not download or launch local models/),
 		).toBeDefined();
@@ -225,7 +236,9 @@ describe("OnboardingWizard", () => {
 				if (cmd === "detect_gpu_vram") return Promise.resolve(8);
 				if (cmd === "list_naia_assets") {
 					return Promise.resolve(
-						args?.subdir === "nva-files" ? ["alpha", "naia", "naia-prebaked"] : [],
+						args?.subdir === "nva-files"
+							? ["alpha", "naia", "naia-prebaked"]
+							: [],
 					);
 				}
 				return Promise.resolve(true);
@@ -422,7 +435,9 @@ describe("OnboardingWizard", () => {
 		// Click Next without filling agentName → advances to userName step
 		fireEvent.click(nextBtn);
 		flush();
-		expect(screen.getByPlaceholderText(/Enter a name|이름을 입력하세요/)).toBeDefined();
+		expect(
+			screen.getByPlaceholderText(/Enter a name|이름을 입력하세요/),
+		).toBeDefined();
 	});
 
 	it("complete step calls onComplete and saves config", async () => {
@@ -436,9 +451,12 @@ describe("OnboardingWizard", () => {
 		flush();
 
 		// userName
-		fireEvent.change(screen.getByPlaceholderText(/Enter a name|이름을 입력하세요/), {
-			target: { value: "Alex" },
-		});
+		fireEvent.change(
+			screen.getByPlaceholderText(/Enter a name|이름을 입력하세요/),
+			{
+				target: { value: "Alex" },
+			},
+		);
 		fireEvent.click(screen.getByRole("button", { name: /다음|Next/ }));
 		flush();
 
@@ -511,9 +529,12 @@ describe("OnboardingWizard", () => {
 		});
 		clickNext();
 
-		fireEvent.change(screen.getByPlaceholderText(/Enter a name|이름을 입력하세요/), {
-			target: { value: "Alex" },
-		});
+		fireEvent.change(
+			screen.getByPlaceholderText(/Enter a name|이름을 입력하세요/),
+			{
+				target: { value: "Alex" },
+			},
+		);
 		clickNext();
 		clickNext();
 		clickNext();

@@ -874,6 +874,17 @@ export async function sendAuthUpdate(naiaKey: string): Promise<void> {
 	await safeSendToAgent({ type: "auth_update", naiaKey }, "sendAuthUpdate");
 }
 
+/** Transactional onboarding cannot treat credential replay as best-effort. */
+export async function sendAuthUpdateStrict(naiaKey: string): Promise<void> {
+	if (isNewCore()) {
+		await coreChat().sendCredsUpdate({ provider: "nextain", naiaKey });
+		return;
+	}
+	await invoke("send_to_agent_command", {
+		message: JSON.stringify({ type: "auth_update", naiaKey }),
+	});
+}
+
 /** Reload persisted settings in the live Agent; failures are caller-visible. */
 export async function reloadAgentSettings(): Promise<void> {
 	await invoke("send_to_agent_command", {

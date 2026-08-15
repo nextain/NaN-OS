@@ -4839,6 +4839,7 @@ struct CascadeInstallationStatus {
 #[derive(Clone, Debug)]
 struct CascadeInstallationProbe {
     loader: bool,
+    installer_available: bool,
     python_runtime: bool,
     cascade_service_bundle: bool,
     voxcpm2_model: bool,
@@ -4852,6 +4853,28 @@ fn cascade_runtime_root() -> std::path::PathBuf {
         .map(std::path::PathBuf::from)
         .or_else(|| dirs::home_dir().map(|home| home.join("naia-omni")))
         .unwrap_or_else(|| std::path::PathBuf::from("naia-omni"))
+}
+
+fn cascade_bundle_root(app: &tauri::AppHandle) -> Option<std::path::PathBuf> {
+    let root = app.path().resource_dir().ok()?.join("cascade-runtime");
+    (root.join("manifest.json").is_file()
+        && root.join("install-voxcpm2.ps1").is_file()
+        && (!cfg!(windows) || root.join("uv.exe").is_file()))
+    .then_some(root)
+}
+
+fn cascade_managed_python(runtime_root: &std::path::Path) -> std::path::PathBuf {
+    if cfg!(windows) {
+        runtime_root
+            .join(".venv-voice-trt")
+            .join("Scripts")
+            .join("python.exe")
+    } else {
+        runtime_root
+            .join(".venv-voice-trt")
+            .join("bin")
+            .join("python")
+    }
 }
 
 fn directory_has_extension(dir: &std::path::Path, extension: &str) -> bool {
@@ -4931,6 +4954,45 @@ fn voxcpm2_model_is_cached(runtime_root: &std::path::Path) -> bool {
     voxcpm2_model_is_cached_in_hubs(&hubs)
 }
 
+fn cascade_runtime_matches_bundle(
+    runtime_root: &std::path::Path,
+    bundle_root: Option<&std::path::Path>,
+) -> bool {
+    let Some(bundle_root) = bundle_root else {
+        return false;
+    };
+    let read_json = |path: &std::path::Path| {
+        std::fs::read_to_string(path)
+            .ok()
+            .and_then(|raw| serde_json::from_str::<serde_json::Value>(&raw).ok())
+    };
+    let expected = read_json(&bundle_root.join("manifest.json")).and_then(|value| {
+        value
+            .pointer("/model/revision")
+            .and_then(serde_json::Value::as_str)
+            .map(str::to_owned)
+    });
+    let installed = read_json(&runtime_root.join("cascade-runtime-ready.json")).and_then(|value| {
+        value
+            .pointer("/model/revision")
+            .and_then(serde_json::Value::as_str)
+            .map(str::to_owned)
+    });
+    let engine = read_json(
+        &runtime_root
+            .join("checkpoints")
+            .join("voxcpm2_trt")
+            .join("manifest.json"),
+    )
+    .and_then(|value| {
+        value
+            .get("model_revision")
+            .and_then(serde_json::Value::as_str)
+            .map(str::to_owned)
+    });
+    expected.is_some() && expected == installed && expected == engine
+}
+
 fn cascade_python_can_import_loader(python: &str, loader_dir: &str) -> bool {
     let mut command = Command::new(python);
     command
@@ -4946,6 +5008,7 @@ fn cascade_python_can_import_loader(python: &str, loader_dir: &str) -> bool {
 fn probe_cascade_installation(
     loader_dir: &str,
     adk_path: Option<&str>,
+    bundle_root: Option<&std::path::Path>,
 ) -> CascadeInstallationProbe {
     let runtime_root = cascade_runtime_root();
     let repos_root = std::env::var("NAIA_REPOS_ADK")
@@ -4962,28 +5025,21 @@ fn probe_cascade_installation(
                 .and_then(|parent| parent.parent())
                 .map(std::path::Path::to_path_buf)
         });
-    let cascade_dir = repos_root
-        .as_ref()
-        .map(|root| root.join("projects").join("naia-omni-cascade"));
-    let python = std::env::var("NAIA_CASCADE_PYTHON").unwrap_or_else(|_| {
-        if cfg!(windows) {
-            "python".to_string()
-        } else {
-            "python3".to_string()
-        }
-    });
+    let cascade_dir = bundle_root
+        .map(|root| {
+            root.join("repos")
+                .join("projects")
+                .join("naia-omni-cascade")
+        })
+        .or_else(|| {
+            repos_root
+                .as_ref()
+                .map(|root| root.join("projects").join("naia-omni-cascade"))
+        });
     // Voice-only TensorRT runtime. The retired Ditto environment is intentionally ignored.
-    let venv_python = if cfg!(windows) {
-        runtime_root
-            .join(".venv-voice-trt")
-            .join("Scripts")
-            .join("python.exe")
-    } else {
-        runtime_root
-            .join(".venv-voice-trt")
-            .join("bin")
-            .join("python")
-    };
+    let venv_python = cascade_managed_python(&runtime_root);
+    let python = std::env::var("NAIA_CASCADE_PYTHON")
+        .unwrap_or_else(|_| path_to_string(venv_python.clone()));
     let voxcpm2_model = voxcpm2_model_is_cached(&runtime_root);
     let reference_voices = cascade_dir
         .as_ref()
@@ -4994,12 +5050,15 @@ fn probe_cascade_installation(
             .join("loader")
             .join("__init__.py")
             .is_file(),
+        installer_available: bundle_root.is_some(),
         python_runtime: cascade_python_can_import_loader(&python, loader_dir),
         cascade_service_bundle: cascade_dir.is_some_and(|dir| {
             dir.join("services").is_dir() && dir.join("output_cascade").is_dir()
         }),
         // A venv without cached VoxCPM2 weights is not a runnable TTS runtime.
-        voxcpm2_model: venv_python.is_file() && voxcpm2_model,
+        voxcpm2_model: venv_python.is_file()
+            && voxcpm2_model
+            && cascade_runtime_matches_bundle(&runtime_root, bundle_root),
         reference_voices,
         facade_healthy: false,
     }
@@ -5010,6 +5069,7 @@ fn cascade_install_step(
     label: &'static str,
     action: &'static str,
     complete: bool,
+    installer_available: bool,
     failure_code: &'static str,
     failure_message: &'static str,
 ) -> CascadeInstallationStep {
@@ -5018,15 +5078,13 @@ fn cascade_install_step(
         label,
         state: if complete { "complete" } else { "blocked" },
         action,
-        // The Shell has no packaged installer manifest yet. Never present a
-        // download button that cannot complete the requested artifact.
-        action_available: false,
+        action_available: !complete && installer_available,
         progress_percent: if complete { 100 } else { 0 },
-        retryable: false,
+        retryable: !complete && installer_available,
         failure: (!complete).then_some(CascadeInstallationFailure {
             code: failure_code,
             message: failure_message,
-            retryable: false,
+            retryable: installer_available,
         }),
     }
 }
@@ -5065,6 +5123,7 @@ fn classify_cascade_installation_for_profile(
                     "Cascade loader",
                     "verify",
                     probe.loader,
+                    probe.installer_available,
                     "CASCADE_LOADER_MISSING",
                     "The cascade loader is not packaged or available.",
                 ),
@@ -5073,6 +5132,7 @@ fn classify_cascade_installation_for_profile(
                     "Python runtime",
                     "install",
                     probe.python_runtime,
+                    probe.installer_available,
                     "CASCADE_PYTHON_RUNTIME_MISSING",
                     "Python cannot import the cascade loader.",
                 ),
@@ -5081,6 +5141,7 @@ fn classify_cascade_installation_for_profile(
                     "Cascade service bundle",
                     "install",
                     probe.cascade_service_bundle,
+                    probe.installer_available,
                     "CASCADE_SERVICE_BUNDLE_MISSING",
                     "VoxCPM2 or facade service files are not packaged.",
                 ),
@@ -5091,6 +5152,7 @@ fn classify_cascade_installation_for_profile(
                     "VoxCPM2 model",
                     "download",
                     probe.voxcpm2_model,
+                    probe.installer_available,
                     "VOXCPM2_MODEL_MISSING",
                     "The VoxCPM2 runtime or cached model is not installed.",
                 ),
@@ -5099,6 +5161,7 @@ fn classify_cascade_installation_for_profile(
                     "Reference voices",
                     "download",
                     probe.reference_voices,
+                    probe.installer_available,
                     "REFERENCE_VOICES_MISSING",
                     "Bundled reference voice files are not available.",
                 ),
@@ -5110,6 +5173,89 @@ fn classify_cascade_installation_for_profile(
 
 fn classify_cascade_installation(probe: CascadeInstallationProbe) -> CascadeInstallationStatus {
     classify_cascade_installation_for_profile(probe, None)
+}
+
+#[tauri::command]
+async fn install_cascade_runtime(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, AppState>,
+) -> Result<CascadeInstallationStatus, String> {
+    let _install_guard = state.cascade_start.lock().await;
+    let vram = tokio::task::spawn_blocking(detect_vram_gb_blocking)
+        .await
+        .map_err(|error| format!("VRAM detection task failed: {error}"))?;
+    validate_cascade_vram(vram, Some("windows_trt_6g"))?;
+    let bundle_root = cascade_bundle_root(&app)
+        .ok_or_else(|| "VoxCPM2 installer payload is not packaged.".to_string())?;
+    if !cfg!(windows) {
+        return Err("VoxCPM2 managed installation is available on Windows only.".to_string());
+    }
+    let runtime_root = cascade_runtime_root();
+    let installer = bundle_root.join("install-voxcpm2.ps1");
+    let log_path = runtime_root.join("cascade-install.log");
+    let install_result = tokio::task::spawn_blocking({
+        let bundle_root = bundle_root.clone();
+        let runtime_root = runtime_root.clone();
+        move || -> Result<(), String> {
+            std::fs::create_dir_all(&runtime_root)
+                .map_err(|error| format!("Could not create runtime directory: {error}"))?;
+            let stdout = std::fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(&log_path)
+                .map_err(|error| format!("Could not open install log: {error}"))?;
+            let stderr = stdout
+                .try_clone()
+                .map_err(|error| format!("Could not clone install log handle: {error}"))?;
+            let mut command = Command::new("powershell.exe");
+            command
+                .args([
+                    "-NoLogo",
+                    "-NoProfile",
+                    "-NonInteractive",
+                    "-ExecutionPolicy",
+                    "Bypass",
+                    "-File",
+                ])
+                .arg(&installer)
+                .arg("-BundleRoot")
+                .arg(&bundle_root)
+                .arg("-RuntimeRoot")
+                .arg(&runtime_root)
+                .stdin(Stdio::null())
+                .stdout(Stdio::from(stdout))
+                .stderr(Stdio::from(stderr));
+            platform::hide_console(&mut command);
+            let status = command
+                .status()
+                .map_err(|error| format!("Could not start VoxCPM2 installer: {error}"))?;
+            status.success().then_some(()).ok_or_else(|| {
+                format!(
+                    "VoxCPM2 installation failed (exit={:?}). See {}",
+                    status.code(),
+                    log_path.display()
+                )
+            })
+        }
+    })
+    .await
+    .map_err(|error| format!("VoxCPM2 install task failed: {error}"))?;
+    install_result?;
+
+    let adk_path = dirs::home_dir()
+        .and_then(|home| std::fs::read_to_string(naia_data_home_from(home).join("adk-path")).ok())
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty());
+    let loader_dir = resolve_cascade_loader_dir(&app, adk_path.as_deref().unwrap_or_default());
+    let probe = tokio::task::spawn_blocking(move || {
+        probe_cascade_installation(&loader_dir, adk_path.as_deref(), Some(&bundle_root))
+    })
+    .await
+    .map_err(|error| format!("cascade post-install verification failed: {error}"))?;
+    let status = classify_cascade_installation(probe);
+    status.can_start.then_some(status).ok_or_else(|| {
+        "VoxCPM2 installer exited successfully but runtime verification is incomplete.".to_string()
+    })
 }
 
 #[tauri::command]
@@ -5129,8 +5275,9 @@ async fn cascade_installation_status(
         )
     });
     let loader_dir = resolve_cascade_loader_dir(&app, adk_path.as_deref().unwrap_or_default());
+    let bundle_root = cascade_bundle_root(&app);
     let mut probe = tokio::task::spawn_blocking(move || {
-        probe_cascade_installation(&loader_dir, adk_path.as_deref())
+        probe_cascade_installation(&loader_dir, adk_path.as_deref(), bundle_root.as_deref())
     })
     .await
     .map_err(|error| format!("cascade installation status task failed: {error}"))?;
@@ -5147,10 +5294,16 @@ async fn cascade_installation_status(
 fn spawn_cascade(
     loader_dir: &str,
     adk_path: &str,
+    bundle_root: Option<&std::path::Path>,
     vram_gb: Option<f64>,
     loader_profile: String,
 ) -> Result<CascadeProcess, String> {
+    let runtime_root = cascade_runtime_root();
     let python = std::env::var("NAIA_CASCADE_PYTHON").unwrap_or_else(|_| {
+        let managed = cascade_managed_python(&runtime_root);
+        if managed.is_file() {
+            return path_to_string(managed);
+        }
         if cfg!(windows) {
             "python".to_string()
         } else {
@@ -5168,9 +5321,20 @@ fn spawn_cascade(
         .arg("launch")
         .arg("--manifest")
         .arg(manifest.to_string_lossy().as_ref())
-        .arg("--adk-root")
-        .arg(adk_path)
         .current_dir(loader_dir);
+    if let Some(bundle) = bundle_root {
+        let repos = bundle.join("repos");
+        cmd.arg("--adk-root")
+            .arg(&repos)
+            .arg("--root")
+            .arg(&runtime_root)
+            .arg("--cascade-path")
+            .arg(repos.join("projects").join("naia-omni-cascade"))
+            .arg("--venv")
+            .arg(cascade_managed_python(&runtime_root));
+    } else {
+        cmd.arg("--adk-root").arg(adk_path);
+    }
     if std::env::var_os("NAIA_REPOS_ADK").is_none() {
         if let Some(repos_adk) = &inferred_repos_adk {
             cmd.env("NAIA_REPOS_ADK", repos_adk);
@@ -5395,6 +5559,7 @@ async fn start_cascade(
     }
     // ?꾨쿋?? 踰덈뱾??loader(resource_dir) ?곗꽑 ???몃? adk 泥댄겕?꾩썐 誘몄쓽議?
     let loader_dir = resolve_cascade_loader_dir(&app, &adk_path);
+    let bundle_root = cascade_bundle_root(&app);
 
     // Fail closed before probing, cleanup, or spawning any local service.
     // The voice-only profile is available from the explicit 6GB boundary.
@@ -5408,7 +5573,8 @@ async fn start_cascade(
     let install_probe = tokio::task::spawn_blocking({
         let loader_dir = loader_dir.clone();
         let adk_path = adk_path.clone();
-        move || probe_cascade_installation(&loader_dir, Some(&adk_path))
+        let bundle_root = bundle_root.clone();
+        move || probe_cascade_installation(&loader_dir, Some(&adk_path), bundle_root.as_deref())
     })
     .await
     .map_err(|e| format!("cascade installation check task failed: {e}"))?;
@@ -5438,7 +5604,13 @@ async fn start_cascade(
 
     let loader_profile = expected_loader_profile.to_string();
     let proc = tokio::task::spawn_blocking(move || {
-        spawn_cascade(&loader_dir, &adk_path, Some(vram), loader_profile)
+        spawn_cascade(
+            &loader_dir,
+            &adk_path,
+            bundle_root.as_deref(),
+            Some(vram),
+            loader_profile,
+        )
     })
     .await
     .map_err(|e| format!("task error: {e}"))??;
@@ -9776,6 +9948,7 @@ pub fn run() {
             write_naia_config,
             write_slots_manifest,
             cascade_installation_status,
+            install_cascade_runtime,
             start_cascade,
             stop_cascade,
             cascade_status,
@@ -10770,6 +10943,7 @@ mod tests {
         let status = classify_cascade_installation_for_profile(
             CascadeInstallationProbe {
                 loader: true,
+                installer_available: true,
                 python_runtime: true,
                 cascade_service_bundle: true,
                 voxcpm2_model: true,
@@ -10791,9 +10965,10 @@ mod tests {
     }
 
     #[test]
-    fn cascade_installation_blocks_missing_artifacts_without_advertising_download() {
+    fn cascade_installation_exposes_retryable_install_when_payload_is_packaged() {
         let status = classify_cascade_installation(CascadeInstallationProbe {
             loader: true,
+            installer_available: true,
             python_runtime: true,
             cascade_service_bundle: false,
             voxcpm2_model: false,
@@ -10804,7 +10979,11 @@ mod tests {
         assert_eq!(status.phase, "blocked");
         assert!(!status.can_start);
         assert!(!status.ready);
-        assert!(status.steps.iter().all(|step| !step.action_available));
+        assert!(status
+            .steps
+            .iter()
+            .filter(|step| step.state == "blocked")
+            .all(|step| step.action_available && step.retryable));
         assert_eq!(
             status
                 .steps
@@ -10823,6 +11002,7 @@ mod tests {
     fn cascade_installation_requires_a_live_facade_before_reporting_ready() {
         let prerequisites = CascadeInstallationProbe {
             loader: true,
+            installer_available: true,
             python_runtime: true,
             cascade_service_bundle: true,
             voxcpm2_model: true,

@@ -793,6 +793,7 @@ export function SettingsTab() {
 	}, []);
 	const [cascadeInstallation, setCascadeInstallation] =
 		useState<CascadeInstallationStatus | null>(null);
+	const [cascadeInstallBusy, setCascadeInstallBusy] = useState(false);
 	const refreshCascadeInstallation = useCallback(async () => {
 		try {
 			const status = await invoke<unknown>("cascade_installation_status");
@@ -810,6 +811,25 @@ export function SettingsTab() {
 			return null;
 		}
 	}, []);
+	const installCascadeRuntime = useCallback(async () => {
+		if (cascadeInstallBusy) return;
+		setCascadeInstallBusy(true);
+		setCascadeMsg("");
+		try {
+			const status = await invoke<unknown>("install_cascade_runtime");
+			if (!isCascadeInstallationStatus(status))
+				throw new Error("Invalid post-install status");
+			setCascadeInstallation(status);
+			setCascadeMsg(status.summary);
+		} catch (error) {
+			setCascadeMsg(
+				`${getLocale() === "ko" ? "VoxCPM2 설치에 실패했습니다. 다시 시도할 수 있습니다." : "VoxCPM2 installation failed. You can retry."} (${String(error)})`,
+			);
+		} finally {
+			setCascadeInstallBusy(false);
+			void refreshCascadeInstallation();
+		}
+	}, [cascadeInstallBusy, refreshCascadeInstallation]);
 	useEffect(() => {
 		invoke<boolean>("cascade_status")
 			.then(setCascadeRunning)
@@ -956,9 +976,7 @@ export function SettingsTab() {
 			}
 			const installation = await refreshCascadeInstallation();
 			if (!installation?.canStart) {
-				setCascadeMsg(
-					installation?.summary ?? t("settings.cascadeError"),
-				);
+				setCascadeMsg(installation?.summary ?? t("settings.cascadeError"));
 				return false;
 			}
 			if (cfg.localVoiceMigrationNotice) {
@@ -1059,17 +1077,14 @@ export function SettingsTab() {
 			loaderProfile: "windows_trt_6g",
 		});
 		void ensureLocalVoiceReady();
-	}, [
-		detectedVramGb,
-		cascadeRunning,
-		ttsProvider,
-		cascadeInstallation,
-	]);
+	}, [detectedVramGb, cascadeRunning, ttsProvider, cascadeInstallation]);
 
 	const warmedProfileRef = useRef<string>("");
 
 	// R5: 티어 capability 로 로컬 슬롯을 스테이징(setState). 반환 = warm manifest 에 쓸 값.
-	const stageLocalSlots = (tier: typeof localGpuTier): {
+	const stageLocalSlots = (
+		tier: typeof localGpuTier,
+	): {
 		avatar: "vrm" | "naia-video-avatar";
 		nva: string;
 		tts: TtsProviderId;
@@ -1535,8 +1550,15 @@ export function SettingsTab() {
 						// domestic direct providers Upstage: solar, CLOVA: HCX) all
 						// group under the single "nextain" provider — mirrors the
 						// Naia-route set in fetchNaiaPricing.
-						const NAIA_ROUTE_PREFIXES = ["azure", "vertexai", "upstage", "clova"];
-						const mappedProvider = NAIA_ROUTE_PREFIXES.includes(m.provider.toLowerCase())
+						const NAIA_ROUTE_PREFIXES = [
+							"azure",
+							"vertexai",
+							"upstage",
+							"clova",
+						];
+						const mappedProvider = NAIA_ROUTE_PREFIXES.includes(
+							m.provider.toLowerCase(),
+						)
 							? "nextain"
 							: resolveProvider(m.provider) || resolveProviderFromId(m.id);
 						if (mappedProvider) pushModel(mappedProvider);
@@ -2357,13 +2379,8 @@ export function SettingsTab() {
 		debouncedLabSync();
 	}
 	function selectProfileTtsProvider(next: TtsProviderId) {
-		if (
-			next === "naia-local-voice" &&
-			cascadeInstallation?.canStart !== true
-		) {
-			setCascadeMsg(
-				cascadeInstallation?.summary ?? t("settings.cascadeError"),
-			);
+		if (next === "naia-local-voice" && cascadeInstallation?.canStart !== true) {
+			setCascadeMsg(cascadeInstallation?.summary ?? t("settings.cascadeError"));
 			return;
 		}
 		setTtsProvider(next);
@@ -3480,8 +3497,8 @@ export function SettingsTab() {
 						>
 							<option value="vrm">{t("settings.avatarProviderVrm")}</option>
 							<option value="naia-video-avatar">
-				{t("settings.avatarProviderVideo")}
-			</option>
+								{t("settings.avatarProviderVideo")}
+							</option>
 						</select>
 					</div>
 
@@ -3885,160 +3902,160 @@ export function SettingsTab() {
 								marginTop: 8,
 							}}
 						>
-							{SLOT_GROUPS.filter(
-								(group) => group.id !== "avatar",
-							).map((group) => (
-								<div
-									key={group.id}
-									data-testid={`slot-group-${group.id}`}
-									className="settings-card"
-								>
-									<span className="settings-card-title">
-										{t(group.labelKey as TranslationKey)}
-									</span>
-									<div className="settings-summary-grid">
-										{group.slots.map((sid) => (
-											<div
-												key={sid}
-												data-testid={`slot-${sid}`}
-												className="settings-summary-row"
-											>
-												<span className="settings-summary-key">
-													{t(SLOT_LABEL_KEYS[sid] as TranslationKey)}
-												</span>
-												{/* 슬롯 값 = 현재 상태만. 티어 추천은 아래 전용 '추천' 블록에서만
-												    표시(사용자 요구: "슬롯은 현재 상태를 보여줘야해" — 상태/추천 분리). */}
-												<span className="settings-summary-value">
-													{slotValueDisplay(sid)}
-													{(() => {
-														const st = slotLiveStatus(sid);
-														if (!st) return null;
-														return (
-															<span
-																data-testid={`slot-status-${sid}`}
-																style={{
-																	marginLeft: 6,
-																	fontSize: "0.85em",
-																	color:
-																		st === "running"
-																			? "var(--success-color, #3fb950)"
-																			: st === "error" || st === "blocked"
-																				? "var(--error-color, #f85149)"
-																				: "var(--warning-color, #d29922)",
-																}}
-															>
-																{st === "running"
-																	? `● ${t("settings.slotStatusRunning")}`
-																	: st === "error"
-																		? `✕ ${t("settings.slotStatusError")}`
-																		: st === "blocked"
-																			? `! ${t("settings.slotStatusInstallRequired")}`
-																		: `◌ ${t("settings.slotStatusStarting")}`}
-															</span>
-														);
-													})()}
-												</span>
-											</div>
-										))}
-									</div>
+							{SLOT_GROUPS.filter((group) => group.id !== "avatar").map(
+								(group) => (
 									<div
-										style={{
-											display: "flex",
-											gap: 8,
-											marginTop: 8,
-											flexWrap: "wrap",
-										}}
+										key={group.id}
+										data-testid={`slot-group-${group.id}`}
+										className="settings-card"
 									>
-										{group.id === "brain" && (
-											<>
-												<button
-													type="button"
-													className="voice-preview-btn"
-													data-testid={`slot-edit-main`}
-													onClick={() => setActiveSettingsTab("brain")}
+										<span className="settings-card-title">
+											{t(group.labelKey as TranslationKey)}
+										</span>
+										<div className="settings-summary-grid">
+											{group.slots.map((sid) => (
+												<div
+													key={sid}
+													data-testid={`slot-${sid}`}
+													className="settings-summary-row"
 												>
-													{t("settings.slot.editMain")}
-												</button>
-												<button
-													type="button"
-													className="voice-preview-btn"
-													data-testid={`slot-edit-models`}
-													onClick={() => setActiveSettingsTab("memory")}
-												>
-													{t("settings.slot.editModels")}
-												</button>
-											</>
-										)}
-										{group.id === "voice" && (
-											<>
-												<select
-													data-testid="profile-tts-provider"
-													aria-label={t("settings.ttsProvider")}
-													value={ttsProvider}
-													onChange={(event) =>
-														selectProfileTtsProvider(
-															event.target.value as TtsProviderId,
-														)
-													}
-												>
-													{listTtsProviderMetas().map((providerMeta) => (
-														<option
-															key={providerMeta.id}
-															value={providerMeta.id}
-															disabled={
-																(providerMeta.requiresNaiaKey && !naiaKey) ||
-																(providerMeta.id === "naia-local-voice" &&
-																	cascadeInstallation?.canStart !== true)
-															}
-														>
-															{providerMeta.name}
-														</option>
-													))}
-												</select>
-												{ttsProvider === "naia-local-voice" && (
+													<span className="settings-summary-key">
+														{t(SLOT_LABEL_KEYS[sid] as TranslationKey)}
+													</span>
+													{/* 슬롯 값 = 현재 상태만. 티어 추천은 아래 전용 '추천' 블록에서만
+												    표시(사용자 요구: "슬롯은 현재 상태를 보여줘야해" — 상태/추천 분리). */}
+													<span className="settings-summary-value">
+														{slotValueDisplay(sid)}
+														{(() => {
+															const st = slotLiveStatus(sid);
+															if (!st) return null;
+															return (
+																<span
+																	data-testid={`slot-status-${sid}`}
+																	style={{
+																		marginLeft: 6,
+																		fontSize: "0.85em",
+																		color:
+																			st === "running"
+																				? "var(--success-color, #3fb950)"
+																				: st === "error" || st === "blocked"
+																					? "var(--error-color, #f85149)"
+																					: "var(--warning-color, #d29922)",
+																	}}
+																>
+																	{st === "running"
+																		? `● ${t("settings.slotStatusRunning")}`
+																		: st === "error"
+																			? `✕ ${t("settings.slotStatusError")}`
+																			: st === "blocked"
+																				? `! ${t("settings.slotStatusInstallRequired")}`
+																				: `◌ ${t("settings.slotStatusStarting")}`}
+																</span>
+															);
+														})()}
+													</span>
+												</div>
+											))}
+										</div>
+										<div
+											style={{
+												display: "flex",
+												gap: 8,
+												marginTop: 8,
+												flexWrap: "wrap",
+											}}
+										>
+											{group.id === "brain" && (
+												<>
 													<button
 														type="button"
 														className="voice-preview-btn"
-														data-testid="profile-local-voice-toggle"
-														onClick={handleToggleCascade}
-														disabled={
-															cascadeBusy ||
-															detectedVramGb == null ||
-															detectedVramGb < 6 ||
-															cascadeInstallation?.canStart !== true
-														}
-														aria-pressed={cascadeRunning}
+														data-testid={`slot-edit-main`}
+														onClick={() => setActiveSettingsTab("brain")}
 													>
-														{cascadeBusy
-															? t("settings.cascadeBusy")
-															: cascadeRunning
-																? t("settings.cascadeStop")
-																: t("settings.cascadeStart")}
+														{t("settings.slot.editMain")}
 													</button>
-												)}
+													<button
+														type="button"
+														className="voice-preview-btn"
+														data-testid={`slot-edit-models`}
+														onClick={() => setActiveSettingsTab("memory")}
+													>
+														{t("settings.slot.editModels")}
+													</button>
+												</>
+											)}
+											{group.id === "voice" && (
+												<>
+													<select
+														data-testid="profile-tts-provider"
+														aria-label={t("settings.ttsProvider")}
+														value={ttsProvider}
+														onChange={(event) =>
+															selectProfileTtsProvider(
+																event.target.value as TtsProviderId,
+															)
+														}
+													>
+														{listTtsProviderMetas().map((providerMeta) => (
+															<option
+																key={providerMeta.id}
+																value={providerMeta.id}
+																disabled={
+																	(providerMeta.requiresNaiaKey && !naiaKey) ||
+																	(providerMeta.id === "naia-local-voice" &&
+																		cascadeInstallation?.canStart !== true)
+																}
+															>
+																{providerMeta.name}
+															</option>
+														))}
+													</select>
+													{ttsProvider === "naia-local-voice" && (
+														<button
+															type="button"
+															className="voice-preview-btn"
+															data-testid="profile-local-voice-toggle"
+															onClick={handleToggleCascade}
+															disabled={
+																cascadeBusy ||
+																detectedVramGb == null ||
+																detectedVramGb < 6 ||
+																cascadeInstallation?.canStart !== true
+															}
+															aria-pressed={cascadeRunning}
+														>
+															{cascadeBusy
+																? t("settings.cascadeBusy")
+																: cascadeRunning
+																	? t("settings.cascadeStop")
+																	: t("settings.cascadeStart")}
+														</button>
+													)}
+													<button
+														type="button"
+														className="voice-preview-btn"
+														data-testid={`slot-edit-voice`}
+														onClick={() => setActiveSettingsTab("voice")}
+													>
+														{t("settings.slot.editVoice")}
+													</button>
+												</>
+											)}
+											{group.id === "avatar" && (
 												<button
 													type="button"
 													className="voice-preview-btn"
-													data-testid={`slot-edit-voice`}
-													onClick={() => setActiveSettingsTab("voice")}
+													data-testid={`slot-edit-avatar`}
+													onClick={() => setActiveSettingsTab("avatar")}
 												>
-													{t("settings.slot.editVoice")}
+													{t("settings.slot.editAvatar")}
 												</button>
-											</>
-										)}
-										{group.id === "avatar" && (
-											<button
-												type="button"
-												className="voice-preview-btn"
-												data-testid={`slot-edit-avatar`}
-												onClick={() => setActiveSettingsTab("avatar")}
-											>
-												{t("settings.slot.editAvatar")}
-											</button>
-										)}
+											)}
+										</div>
 									</div>
-								</div>
-							))}
+								),
+							)}
 						</div>
 					</div>
 
@@ -4048,79 +4065,101 @@ export function SettingsTab() {
 					{/* FR-1(2026-07-01): GPU 프로파일 편집을 두뇌 → 프로파일 탭으로 이관.
 					    "이 기기가 어떻게 서빙하나(로컬 GPU / 원격 cascade)"는 프로파일 개념. */}
 					{false && (
-					<div className="settings-field">
-						<label htmlFor="local-gpu-tier">
-							{t("settings.localGpuProfile")}
-						</label>
-						<select
-							id="local-gpu-tier"
-							value={localGpuTier}
-							disabled={!naiaKey}
-							onChange={(e) => {
-								// R3/R4/R5: 선택 = 스테이징(즉시 persist 안 함) + 로컬 슬롯 스테이징 +
-								// 백엔드 warm(대기). "적용"(저장)에서 실제 앱에 커밋.
-								handleSelectLocalTier(e.target.value as typeof localGpuTier);
-							}}
-						>
-							<option value="off">{t("settings.engineLocalOff")}</option>
-							{/* "자동" 옵션 제거(2026-07-15 루크 "자동 없애던지"): auto 가 숨긴 미검증
+						<div className="settings-field">
+							<label htmlFor="local-gpu-tier">
+								{t("settings.localGpuProfile")}
+							</label>
+							<select
+								id="local-gpu-tier"
+								value={localGpuTier}
+								disabled={!naiaKey}
+								onChange={(e) => {
+									// R3/R4/R5: 선택 = 스테이징(즉시 persist 안 함) + 로컬 슬롯 스테이징 +
+									// 백엔드 warm(대기). "적용"(저장)에서 실제 앱에 커밋.
+									handleSelectLocalTier(e.target.value as typeof localGpuTier);
+								}}
+							>
+								<option value="off">{t("settings.engineLocalOff")}</option>
+								{/* "자동" 옵션 제거(2026-07-15 루크 "자동 없애던지"): auto 가 숨긴 미검증
 							    티어(NVA 아바타 포함)를 골라 프로파일 의도를 배반했다. 명시 선택만 제공.
 							    저장된 구 "auto" 값은 하위호환 해석(resolveActiveTier)만 유지. */}
-							{VRAM_TIERS.filter((tier) => !tier.hidden).map((tier) => (
-								// hidden = 실기 미검증 티어 비노출 (2026-07-15 루크 — 잘못 골라 무음/포화 방지).
-								// 저장된 hidden 티어 id 는 로직·하위호환 유지(선택지만 안 보임).
-								<option
-									key={tier.id}
-									value={tier.id}
-									disabled={
-										detectedVramGb == null || detectedVramGb < tier.minVramGb
-									}
+								{VRAM_TIERS.filter((tier) => !tier.hidden).map((tier) => (
+									// hidden = 실기 미검증 티어 비노출 (2026-07-15 루크 — 잘못 골라 무음/포화 방지).
+									// 저장된 hidden 티어 id 는 로직·하위호환 유지(선택지만 안 보임).
+									<option
+										key={tier.id}
+										value={tier.id}
+										disabled={
+											detectedVramGb == null || detectedVramGb < tier.minVramGb
+										}
+									>
+										{t(vramTierLabelKey(tier.id))}
+									</option>
+								))}
+							</select>
+							<div className="settings-hint" data-testid="local-profile-hint">
+								{!naiaKey
+									? t("settings.localProfileLoginRequired")
+									: activeLocalTier
+										? t("settings.localGpuActiveHint").replace(
+												"{capabilities}",
+												tierProvidedCapabilities(activeLocalTier!).join(", "),
+											)
+										: t("settings.localGpuHint")}
+							</div>
+							{/* R4: 로컬 프로파일 선택 시 백엔드 warm(대기) 상태. */}
+							{naiaKey &&
+								localGpuTier !== "off" &&
+								(cascadeBusy || cascadeMsg) && (
+									<div
+										className="settings-hint"
+										data-testid="local-warm-status"
+									>
+										{cascadeBusy
+											? `⏳ ${t("settings.cascadeBusy")}`
+											: cascadeRunning
+												? `✓ ${t("settings.cascadeStarted")}`
+												: cascadeMsg}
+									</div>
+								)}
+							{naiaKey && localGpuTier !== "off" && cascadeInstallation && (
+								<div
+									className="settings-hint"
+									data-testid="cascade-installation-status"
 								>
-									{t(vramTierLabelKey(tier.id))}
-								</option>
-							))}
-						</select>
-						<div className="settings-hint" data-testid="local-profile-hint">
-							{!naiaKey
-								? t("settings.localProfileLoginRequired")
-								: activeLocalTier
-									? t("settings.localGpuActiveHint").replace(
-											"{capabilities}",
-											tierProvidedCapabilities(activeLocalTier!).join(", "),
-										)
-									: t("settings.localGpuHint")}
-						</div>
-						{/* R4: 로컬 프로파일 선택 시 백엔드 warm(대기) 상태. */}
-						{naiaKey &&
-							localGpuTier !== "off" &&
-							(cascadeBusy || cascadeMsg) && (
-								<div className="settings-hint" data-testid="local-warm-status">
-									{cascadeBusy
-										? `⏳ ${t("settings.cascadeBusy")}`
-										: cascadeRunning
-											? `✓ ${t("settings.cascadeStarted")}`
-											: cascadeMsg}
+									<div data-testid="cascade-installation-summary">
+										{cascadeInstallation!.summary}
+									</div>
+									<ul data-testid="cascade-installation-steps">
+										{cascadeInstallation!.steps.map((step) => (
+											<li key={step.id} data-cascade-install-step={step.id}>
+												{step.label}: {step.state} · {step.progressPercent}%
+												{step.failure ? ` · ${step.failure.message}` : ""}
+											</li>
+										))}
+									</ul>
+									{cascadeInstallation!.steps.some(
+										(step) => step.actionAvailable,
+									) && (
+										<button
+											type="button"
+											className="voice-preview-btn"
+											data-testid="cascade-install-runtime"
+											onClick={installCascadeRuntime}
+											disabled={cascadeInstallBusy}
+										>
+											{cascadeInstallBusy
+												? getLocale() === "ko"
+													? "VoxCPM2 설치 중…"
+													: "Installing VoxCPM2…"
+												: getLocale() === "ko"
+													? "VoxCPM2 설치"
+													: "Install VoxCPM2"}
+										</button>
+									)}
 								</div>
 							)}
-						{naiaKey && localGpuTier !== "off" && cascadeInstallation && (
-							<div
-								className="settings-hint"
-								data-testid="cascade-installation-status"
-							>
-								<div data-testid="cascade-installation-summary">
-									{cascadeInstallation!.summary}
-								</div>
-								<ul data-testid="cascade-installation-steps">
-									{cascadeInstallation!.steps.map((step) => (
-										<li key={step.id} data-cascade-install-step={step.id}>
-											{step.label}: {step.state} · {step.progressPercent}%
-											{step.failure ? ` · ${step.failure.message}` : ""}
-										</li>
-									))}
-								</ul>
-							</div>
-						)}
-					</div>
+						</div>
 					)}
 
 					{/* 배타 티어(8G: 로컬 LLM · 아바타 · 둘다) 로컬 집중 택1. 음성=클라우드. FR-3: 로그인 필요. */}
@@ -4164,11 +4203,7 @@ export function SettingsTab() {
 							{LLM_PROVIDERS.map((p) => (
 								<option key={p.id} value={p.id} disabled={p.disabled}>
 									{p.name}
-									{isRecommendedLocalValue(
-										activeLocalTier,
-										"main",
-										p.id,
-									)
+									{isRecommendedLocalValue(activeLocalTier, "main", p.id)
 										? ` · ${t("settings.tierRecommendBadge")}`
 										: ""}
 								</option>
@@ -4832,8 +4867,7 @@ export function SettingsTab() {
 									cascadeInstallation?.canStart !== true
 								) {
 									setCascadeMsg(
-										cascadeInstallation?.summary ??
-											t("settings.cascadeError"),
+										cascadeInstallation?.summary ?? t("settings.cascadeError"),
 									);
 									return;
 								}
@@ -4902,11 +4936,7 @@ export function SettingsTab() {
 									{p.requiresNaiaKey && !naiaKey
 										? ` (${t("settings.ttsNaiaRequired")})`
 										: ""}
-									{isRecommendedLocalValue(
-										activeLocalTier,
-										"tts",
-										p.id,
-									)
+									{isRecommendedLocalValue(activeLocalTier, "tts", p.id)
 										? ` · ${t("settings.tierRecommendBadge")}`
 										: ""}
 								</option>
@@ -4996,66 +5026,96 @@ export function SettingsTab() {
 					})()}
 					<div className="settings-field" data-testid="local-voice-toggle">
 						<label>{t("settings.localVoiceControl")}</label>
-							<button
-								type="button"
-								className="voice-preview-btn"
-								onClick={handleToggleCascade}
-								disabled={
-									cascadeBusy ||
-									detectedVramGb == null ||
-									detectedVramGb < 6 ||
-									cascadeInstallation?.canStart !== true
-								}
-								aria-pressed={cascadeRunning}
+						<button
+							type="button"
+							className="voice-preview-btn"
+							onClick={handleToggleCascade}
+							disabled={
+								cascadeBusy ||
+								detectedVramGb == null ||
+								detectedVramGb < 6 ||
+								cascadeInstallation?.canStart !== true
+							}
+							aria-pressed={cascadeRunning}
+						>
+							{cascadeBusy
+								? t("settings.cascadeBusy")
+								: cascadeRunning
+									? t("settings.cascadeStop")
+									: t("settings.cascadeStart")}
+						</button>
+						{cascadeMsg && (
+							<div className="settings-hint" data-testid="cascade-msg">
+								{cascadeMsg}
+							</div>
+						)}
+						{cascadeInstallation && !cascadeInstallation.canStart && (
+							<div
+								className="settings-hint"
+								data-testid="local-voice-installation-status"
 							>
-								{cascadeBusy
-									? t("settings.cascadeBusy")
-									: cascadeRunning
-										? t("settings.cascadeStop")
-										: t("settings.cascadeStart")}
-							</button>
-							{cascadeMsg && (
-								<div className="settings-hint" data-testid="cascade-msg">
-									{cascadeMsg}
-								</div>
-							)}
-							{cascadeInstallation && !cascadeInstallation.canStart && (
-								<div className="settings-hint" data-testid="local-voice-installation-status">
-									{cascadeInstallation.summary}
-								</div>
-							)}
-							{voiceMigrationNotice && (
-								<div
-									className="settings-hint"
-									data-testid="local-voice-migration-notice"
-								>
-									{t("settings.localVoiceMigrationNotice")}
+								<div>{cascadeInstallation.summary}</div>
+								<ul>
+									{cascadeInstallation.steps.map((step) => (
+										<li key={step.id}>
+											{step.label}: {step.state}
+											{step.failure ? ` · ${step.failure.message}` : ""}
+										</li>
+									))}
+								</ul>
+								{cascadeInstallation.steps.some(
+									(step) => step.actionAvailable,
+								) && (
 									<button
 										type="button"
 										className="voice-preview-btn"
-										data-testid="local-voice-migration-restore"
-										onClick={async () => {
-											if (await ensureLocalVoiceReady()) {
-												setVoiceMigrationNotice(false);
-											}
-										}}
-										disabled={
-											cascadeBusy ||
-											detectedVramGb == null ||
-											detectedVramGb < 6 ||
-											cascadeInstallation?.canStart !== true
-										}
+										data-testid="local-voice-install-runtime"
+										onClick={installCascadeRuntime}
+										disabled={cascadeInstallBusy}
 									>
-										{t("settings.localVoiceMigrationRestore")}
+										{cascadeInstallBusy
+											? getLocale() === "ko"
+												? "VoxCPM2 설치 중…"
+												: "Installing VoxCPM2…"
+											: getLocale() === "ko"
+												? "VoxCPM2 설치"
+												: "Install VoxCPM2"}
 									</button>
-								</div>
-							)}
-							<div className="settings-hint">
-								{detectedVramGb != null && detectedVramGb >= 6
-									? t("settings.localVoiceEngineHint")
-									: t("settings.localVoiceVramRequired")}
+								)}
 							</div>
+						)}
+						{voiceMigrationNotice && (
+							<div
+								className="settings-hint"
+								data-testid="local-voice-migration-notice"
+							>
+								{t("settings.localVoiceMigrationNotice")}
+								<button
+									type="button"
+									className="voice-preview-btn"
+									data-testid="local-voice-migration-restore"
+									onClick={async () => {
+										if (await ensureLocalVoiceReady()) {
+											setVoiceMigrationNotice(false);
+										}
+									}}
+									disabled={
+										cascadeBusy ||
+										detectedVramGb == null ||
+										detectedVramGb < 6 ||
+										cascadeInstallation?.canStart !== true
+									}
+								>
+									{t("settings.localVoiceMigrationRestore")}
+								</button>
+							</div>
+						)}
+						<div className="settings-hint">
+							{detectedVramGb != null && detectedVramGb >= 6
+								? t("settings.localVoiceEngineHint")
+								: t("settings.localVoiceVramRequired")}
 						</div>
+					</div>
 
 					{/* vLLM TTS: host URL input */}
 					{(ttsProvider === "vllm" || ttsProvider === "naia-local-voice") && (
@@ -5172,9 +5232,7 @@ export function SettingsTab() {
 
 					{/* Voice Reference (naia-anyllm #31, plan §7) — naia-omni only */}
 					{supportsRefAudio && (
-						<RefAudioSection
-							ensureLocalVoiceReady={ensureLocalVoiceReady}
-						/>
+						<RefAudioSection ensureLocalVoiceReady={ensureLocalVoiceReady} />
 					)}
 
 					{/* 오디오 장치 */}
@@ -5774,7 +5832,7 @@ export function SettingsTab() {
 							className="lab-actions-row"
 							style={{ flexWrap: "wrap", gap: "6px" }}
 						>
-							{(["naia.log", "llm-debug.log"] as const).map((file) => (
+							{(["naia.log", "agent-stderr.log"] as const).map((file) => (
 								<button
 									key={file}
 									type="button"

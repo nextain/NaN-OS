@@ -29,6 +29,7 @@ function buildMock(
 	return `
 (function() {
 	var cascadeStarted = false;
+	var cascadeInstalled = false;
 	window.__TAURI_INTERNALS__ = window.__TAURI_INTERNALS__ || {};
 	window.__TAURI_EVENT_PLUGIN_INTERNALS__ = window.__TAURI_EVENT_PLUGIN_INTERNALS__ || {};
 	window.__TAURI_INTERNALS__.metadata = { currentWindow: { label: "main" }, currentWebview: { windowLabel: "main", label: "main" } };
@@ -48,7 +49,10 @@ function buildMock(
 		${
 			cascadeBlocked
 				? `if (cmd === "cascade_status") return false;
-		if (cmd === "cascade_installation_status") return { phase: "blocked", ready: false, canStart: false, summary: "Local voice installation required: Python runtime and VoxCPM2 model are missing.", steps: [{ id: "python-runtime", label: "Python runtime", state: "blocked", action: "install", actionAvailable: false, progressPercent: 0, retryable: false }] };`
+		if (cmd === "cascade_installation_status") return cascadeInstalled
+			? { phase: "ready-to-start", ready: false, canStart: true, summary: "VoxCPM2 runtime is ready.", steps: [] }
+			: { phase: "blocked", ready: false, canStart: false, summary: "Local voice installation required: Python runtime and VoxCPM2 model are missing.", steps: [{ id: "python-runtime", label: "Python runtime", state: "blocked", action: "install", actionAvailable: true, progressPercent: 0, retryable: true }] };
+		if (cmd === "install_cascade_runtime") { cascadeInstalled = true; window.__cascadeInstallCalled = true; return { phase: "ready-to-start", ready: false, canStart: true, summary: "VoxCPM2 runtime is ready.", steps: [] }; }`
 				: ""
 		}
 		${
@@ -211,9 +215,9 @@ test.describe("S-SLOT settings — gate + 6 cloud slots (#gate-slots)", () => {
 		await expect(
 			page.locator('[data-testid="slot-group-voice"]'),
 		).toBeVisible();
-		await expect(
-			page.locator('[data-testid="slot-group-avatar"]'),
-		).toHaveCount(0);
+		await expect(page.locator('[data-testid="slot-group-avatar"]')).toHaveCount(
+			0,
+		);
 		for (const sid of ["main", "sub", "embedding", "stt", "tts"]) {
 			await expect(page.locator(`[data-testid="slot-${sid}"]`)).toBeVisible();
 		}
@@ -279,7 +283,7 @@ test.describe("S-SLOT settings — gate + 6 cloud slots (#gate-slots)", () => {
 		);
 	});
 
-	test("blocked VoxCPM2 install is disabled, truthful, and repairs stale pending state", async ({
+	test("blocked VoxCPM2 is truthful, repairs stale state, and offers installation", async ({
 		page,
 	}) => {
 		await openSlotSettings(page, {
@@ -297,11 +301,14 @@ test.describe("S-SLOT settings — gate + 6 cloud slots (#gate-slots)", () => {
 		await expect
 			.poll(() =>
 				page.evaluate(
-					() => JSON.parse(localStorage.getItem("naia-config") ?? "{}").ttsProvider,
+					() =>
+						JSON.parse(localStorage.getItem("naia-config") ?? "{}").ttsProvider,
 				),
 			)
 			.toBe("edge");
-		await expect(page.getByTestId("slot-tts")).not.toContainText(/starting|대기 중/i);
+		await expect(page.getByTestId("slot-tts")).not.toContainText(
+			/starting|대기 중/i,
+		);
 		const localOption = page
 			.getByTestId("profile-tts-provider")
 			.locator('option[value="naia-local-voice"]');
@@ -310,8 +317,23 @@ test.describe("S-SLOT settings — gate + 6 cloud slots (#gate-slots)", () => {
 		await page.locator('[data-settings-tab="voice"]').click();
 		const status = page.getByTestId("local-voice-installation-status");
 		await expect(status).toContainText(/installation required/i);
-		const startButton = page.locator('[data-testid="local-voice-toggle"] button');
+		const startButton = page.getByRole("button", {
+			name: "Start local voice engine",
+		});
 		await expect(startButton).toBeDisabled();
+		await page.getByTestId("local-voice-install-runtime").click();
+		await expect
+			.poll(() =>
+				page.evaluate(() =>
+					Boolean(
+						(window as Window & { __cascadeInstallCalled?: boolean })
+							.__cascadeInstallCalled,
+					),
+				),
+			)
+			.toBe(true);
+		await expect(status).toBeHidden();
+		await expect(startButton).toBeEnabled();
 		expect(
 			await page.evaluate(
 				() => document.documentElement.scrollWidth <= window.innerWidth,

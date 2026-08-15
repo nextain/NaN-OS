@@ -20,6 +20,7 @@ import {
 	isNewCore,
 	reloadAgentSettings,
 	sendAuthUpdate,
+	sendAuthUpdateStrict,
 } from "../lib/chat-service";
 import {
 	type AppConfig,
@@ -206,6 +207,9 @@ function BackgroundThumbnail({
 
 function NvaThumbnail({ path, label }: { path: string; label: string }) {
 	const [preview, setPreview] = useState<BgOption | null>(null);
+	const bundleName = path.split(/[/\\]/).filter(Boolean).pop()?.toLowerCase();
+	const isLiveActionNaia =
+		bundleName === "naia" || label.trim().toLowerCase() === "naia";
 
 	useEffect(() => {
 		let disposed = false;
@@ -248,7 +252,9 @@ function NvaThumbnail({ path, label }: { path: string; label: string }) {
 	// only picks a vertical band (still shows the whole body). Zoom into the head
 	// by oversizing the media inside a fixed, clipped, top-aligned frame.
 	return (
-		<span className="onboarding-step__avatar-img onboarding-step__nva-crop">
+		<span
+			className={`onboarding-step__avatar-img onboarding-step__nva-crop${isLiveActionNaia ? " onboarding-step__nva-crop--live-naia" : ""}`}
+		>
 			<BackgroundThumbnail
 				background={preview}
 				className="onboarding-step__nva-crop-media"
@@ -315,6 +321,7 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
 		canStart: boolean;
 		ready: boolean;
 		summary: string;
+		steps: Array<{ actionAvailable: boolean }>;
 	} | null>(null);
 	// Auth payload from OAuth — held until wizard completes
 	const [naiaAuthPayload, setNaiaAuthPayload] =
@@ -394,6 +401,7 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
 		canStart: boolean;
 		ready: boolean;
 		summary: string;
+		steps: Array<{ actionAvailable: boolean }>;
 	} | null> {
 		try {
 			const status = await invoke<unknown>("cascade_installation_status");
@@ -402,7 +410,8 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
 				typeof status !== "object" ||
 				typeof (status as { canStart?: unknown }).canStart !== "boolean" ||
 				typeof (status as { ready?: unknown }).ready !== "boolean" ||
-				typeof (status as { summary?: unknown }).summary !== "string"
+				typeof (status as { summary?: unknown }).summary !== "string" ||
+				!Array.isArray((status as { steps?: unknown }).steps)
 			) {
 				return null;
 			}
@@ -410,12 +419,32 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
 				canStart: boolean;
 				ready: boolean;
 				summary: string;
+				steps: Array<{ actionAvailable: boolean }>;
 			};
 			setLocalVoiceInstallation(installation);
 			return installation;
 		} catch {
 			setLocalVoiceInstallation(null);
 			return null;
+		}
+	}
+
+	async function installLocalVoiceRuntime() {
+		if (localVoiceBusy) return;
+		setLocalVoiceBusy(true);
+		setLocalVoiceMsg("");
+		try {
+			await invoke("install_cascade_runtime");
+			const status = await refreshCascadeInstallationForOnboarding();
+			if (!status?.canStart)
+				throw new Error(status?.summary ?? "verification failed");
+			setLocalVoiceMsg(status.summary);
+		} catch (error) {
+			setLocalVoiceMsg(
+				`${getLocale() === "ko" ? "VoxCPM2 설치에 실패했습니다. 다시 시도해 주세요." : "VoxCPM2 installation failed. Please retry."} (${String(error)})`,
+			);
+		} finally {
+			setLocalVoiceBusy(false);
 		}
 	}
 
@@ -893,7 +922,7 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
 			persona,
 			...(auth ? { naiaKey: auth.naiaKey, naiaUserId: auth.naiaUserId } : {}),
 			workspaceRoot: getAdkPath() || base.workspaceRoot || undefined,
-			onboardingComplete: true,
+			onboardingComplete: false,
 			...(snapshot.localVoiceEnabled
 				? {
 						ttsEnabled: true,
@@ -938,9 +967,9 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
 			// UC12 graft (isNewCore): 새 core OnboardingController.completeWith(§D 신규계약)가
 			// categorize(secret/ui/agent) + persist(secret=키체인 전담, stale-credential fix) + markComplete.
 			// 미설정(기본)=기존 writeNaiaConfig/writeAgentKey 경로 보존(비파괴). UC1 chat-service graft 와 동일.
-			if (newCore) {
-				await core()?.completeWith(completedFlat);
-			} else {
+			// Persist the staged configuration through the explicit shell boundary for
+			// both cores. The new-core completion marker is committed only below.
+			{
 				// G-01: sync to naia-settings/config.json so standalone agent picks up the onboarding result.
 				const saved = loadConfig();
 				if (saved)
@@ -960,7 +989,20 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
 			}
 			await reloadAgentSettings();
 			if (typeof completedFlat.naiaKey === "string") {
-				await sendAuthUpdate(completedFlat.naiaKey);
+				await sendAuthUpdateStrict(completedFlat.naiaKey);
+			}
+			const committedFlat = { ...completedFlat, onboardingComplete: true };
+			if (newCore) {
+				await core()?.completeWith(committedFlat);
+			} else {
+				await saveConfigSecure(committedFlat as unknown as AppConfig);
+				const committed = loadConfig();
+				if (committed)
+					await writeNaiaConfig({
+						...(committed as unknown as Record<string, unknown>),
+						...buildNaiaConfigEnv(committed),
+						onboardingComplete: true,
+					});
 			}
 			addMessage({
 				role: "assistant",
@@ -1405,10 +1447,10 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
 									type="button"
 									className={`onboarding-step__option${localVoiceEnabled ? " onboarding-step__option--selected" : ""}`}
 									style={{ marginTop: 8 }}
-								onClick={toggleLocalVoice}
-								disabled={
-									localVoiceBusy || localVoiceInstallation?.canStart !== true
-								}
+									onClick={toggleLocalVoice}
+									disabled={
+										localVoiceBusy || localVoiceInstallation?.canStart !== true
+									}
 								>
 									<span className="onboarding-step__option-label">
 										{localVoiceBusy
@@ -1418,7 +1460,20 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
 												: t("onboard.voice.localOff")}
 									</span>
 								</button>
-							{localVoiceMsg && (
+								{localVoiceInstallation?.steps.some(
+									(step) => step.actionAvailable,
+								) && (
+									<button
+										type="button"
+										className="onboarding-step__link"
+										data-testid="onboarding-install-voxcpm2"
+										onClick={installLocalVoiceRuntime}
+										disabled={localVoiceBusy}
+									>
+										{getLocale() === "ko" ? "VoxCPM2 설치" : "Install VoxCPM2"}
+									</button>
+								)}
+								{localVoiceMsg && (
 									<p className="onboarding-step__hint onboarding-step__hint--warn">
 										{localVoiceMsg}
 									</p>
