@@ -11013,13 +11013,14 @@ body.resizing-col * {
 }
 .onboarding-step__nva-crop-media {
 	position: absolute;
-	/* Shift the window down + zoom a little less so the face lands in frame for
-	   shorter characters (naia / naia-anime sit lower with more headroom) rather
-	   than cropping into the empty space above their heads. */
-	top: -20px;
+	/* NVA characters sit at different scales inside their 720×1280 frame (naia is
+	   taller, naia-anime is smaller and sits lower). A tight fixed crop that suits
+	   one shows only ears/headroom on the other, so keep the zoom moderate and the
+	   window near the top — head + shoulders land in frame across heights. */
+	top: -12px;
 	left: 50%;
 	transform: translateX(-50%);
-	width: 160px;
+	width: 125px;
 	height: auto;
 	max-width: none;
 	border: none;

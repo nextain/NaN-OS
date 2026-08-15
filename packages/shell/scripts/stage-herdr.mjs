@@ -15,7 +15,14 @@
  * only for now — Linux packages layer Herdr at the naia-os level.
  */
 import { createHash } from "node:crypto";
-import { cpSync, existsSync, mkdirSync, readFileSync, rmSync } from "node:fs";
+import {
+	copyFileSync,
+	cpSync,
+	existsSync,
+	mkdirSync,
+	readFileSync,
+	rmSync,
+} from "node:fs";
 import { homedir } from "node:os";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -82,6 +89,39 @@ function main() {
 			`[stage-herdr] copy failed — ${resolve(DEST, "herdr.exe")} missing`,
 		);
 		process.exit(1);
+	}
+	// herdr.exe is dynamically linked to the MSVC runtime (VCRUNTIME140 + UCRT).
+	// The redist DLLs are staged into resources/ (top level), but Windows resolves
+	// a spawned exe's imports from the exe's OWN directory first — herdr.exe lives
+	// in resources/herdr/, so on a clean machine without a system VC++ redist it
+	// can't find them and every `herdr --version` fails ("Herdr version check
+	// failed"). Copy the runtime beside herdr.exe. Prefer the already-staged
+	// resources/ copies (version-matched to the STT plugin); fall back to
+	// System32 on the build machine. (#447 clean-install)
+	if (process.platform === "win32") {
+		const MSVC_DLLS = ["msvcp140.dll", "vcruntime140.dll", "vcruntime140_1.dll"];
+		const system32 = resolve(
+			process.env.SystemRoot || "C:/Windows",
+			"System32",
+		);
+		for (const dll of MSVC_DLLS) {
+			const fromResources = resolve(RESOURCES, dll);
+			const fromSystem = resolve(system32, dll);
+			const source = existsSync(fromResources)
+				? fromResources
+				: existsSync(fromSystem)
+					? fromSystem
+					: null;
+			if (!source) {
+				console.error(
+					`[stage-herdr] required MSVC runtime ${dll} not found in ` +
+						`resources/ or System32 — herdr will fail on clean machines.`,
+				);
+				process.exit(1);
+			}
+			copyFileSync(source, resolve(DEST, dll));
+		}
+		console.log(`[stage-herdr] MSVC runtime (${MSVC_DLLS.length}) → ${DEST}`);
 	}
 	console.log(`[stage-herdr] bundled Herdr ${HERDR_VERSION} → ${DEST}`);
 }
