@@ -11,13 +11,16 @@ import {
 	writeAgentKey,
 	writeNaiaConfig,
 } from "../lib/adk-store";
-import { OAUTH_CALLBACK_URL } from "../lib/oauth-callback-url";
 import {
 	DEFAULT_NVA_MODEL,
 	isLegacyBundledVrmModel,
 } from "../lib/avatar-presets";
 import { detectGpuVramGb } from "../lib/capabilities/gpu";
-import { isNewCore, sendAuthUpdate } from "../lib/chat-service";
+import {
+	isNewCore,
+	reloadAgentSettings,
+	sendAuthUpdate,
+} from "../lib/chat-service";
 import {
 	type AppConfig,
 	DEFAULT_LOCAL_VOICE_HOST,
@@ -31,6 +34,7 @@ import {
 	parseNvaManifest,
 	resolveNvaAssetPath,
 } from "../lib/nva";
+import { OAUTH_CALLBACK_URL } from "../lib/oauth-callback-url";
 import {
 	type OnboardingSession,
 	type StepInput,
@@ -38,9 +42,9 @@ import {
 } from "../lib/onboarding-core";
 import { NAIA_SLOT_DEFAULTS, applyNaiaSlotDefaults } from "../lib/slots/model";
 import { localVoiceFacadeUrlFromReady } from "../lib/voice/local-runtime";
+import { useAppStore } from "../stores/app";
 import { useAvatarStore } from "../stores/avatar";
 import { useCascadeAvatarStore } from "../stores/cascade-avatar";
-import { useAppStore } from "../stores/app";
 import { useChatStore } from "../stores/chat";
 
 type Step =
@@ -307,9 +311,16 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
 	const [localVoiceEnabled, setLocalVoiceEnabled] = useState(false);
 	const [localVoiceBusy, setLocalVoiceBusy] = useState(false);
 	const [localVoiceMsg, setLocalVoiceMsg] = useState("");
+	const [localVoiceInstallation, setLocalVoiceInstallation] = useState<{
+		canStart: boolean;
+		ready: boolean;
+		summary: string;
+	} | null>(null);
 	// Auth payload from OAuth — held until wizard completes
 	const [naiaAuthPayload, setNaiaAuthPayload] =
 		useState<NaiaAuthPayload | null>(null);
+	const [completing, setCompleting] = useState(false);
+	const [completionError, setCompletionError] = useState("");
 	// memoryAI step state — default to "naia" when Naia key already present
 	const [memoryEmbeddingProvider, setMemoryEmbeddingProvider] = useState<
 		"none" | "offline" | "vllm" | "ollama" | "naia"
@@ -395,11 +406,24 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
 			) {
 				return null;
 			}
-			return status as { canStart: boolean; ready: boolean; summary: string };
+			const installation = status as {
+				canStart: boolean;
+				ready: boolean;
+				summary: string;
+			};
+			setLocalVoiceInstallation(installation);
+			return installation;
 		} catch {
+			setLocalVoiceInstallation(null);
 			return null;
 		}
 	}
+
+	useEffect(() => {
+		if (detectedVramGb != null && detectedVramGb >= 6) {
+			void refreshCascadeInstallationForOnboarding();
+		}
+	}, [detectedVramGb]);
 
 	/**
 	 * Actually starts/stops the local VoxCPM2 runtime (same start_cascade /
@@ -904,41 +928,58 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
 	}
 
 	async function handleComplete() {
-		const completedFlat = await saveCompletedConfig(
-			naiaAuthPayload ?? undefined,
-		);
-		// UC12 graft (isNewCore): 새 core OnboardingController.completeWith(§D 신규계약)가
-		// categorize(secret/ui/agent) + persist(secret=키체인 전담, stale-credential fix) + markComplete.
-		// 미설정(기본)=기존 writeNaiaConfig/writeAgentKey 경로 보존(비파괴). UC1 chat-service graft 와 동일.
-		if (newCore) {
-			void core()?.completeWith(completedFlat);
-		} else {
-			// G-01: sync to naia-settings/config.json so standalone agent picks up the onboarding result.
-			const saved = loadConfig();
-			if (saved)
-				void writeNaiaConfig({
-					...(saved as unknown as Record<string, unknown>),
-					...buildNaiaConfigEnv(saved),
-				});
-			// Write naiaKey to OS keychain so standalone naia-agent can read it.
-			if (typeof completedFlat.naiaKey === "string")
-				void writeAgentKey(
-					String(completedFlat.provider || "nextain"),
-					"naiaKey",
-					completedFlat.naiaKey,
-				);
-			// (gateway sync 제거됨 2026-06-12 — gateway.json 미사용 죽은 경로. config 영속=naia-settings,
-			//  naiaKey=키체인(위 writeAgentKey). own-key(apiKey)=설정 화면 담당. memory 설정 연결=다른 세션 재설계.)
+		if (completing) return;
+		setCompleting(true);
+		setCompletionError("");
+		try {
+			const completedFlat = await saveCompletedConfig(
+				naiaAuthPayload ?? undefined,
+			);
+			// UC12 graft (isNewCore): 새 core OnboardingController.completeWith(§D 신규계약)가
+			// categorize(secret/ui/agent) + persist(secret=키체인 전담, stale-credential fix) + markComplete.
+			// 미설정(기본)=기존 writeNaiaConfig/writeAgentKey 경로 보존(비파괴). UC1 chat-service graft 와 동일.
+			if (newCore) {
+				await core()?.completeWith(completedFlat);
+			} else {
+				// G-01: sync to naia-settings/config.json so standalone agent picks up the onboarding result.
+				const saved = loadConfig();
+				if (saved)
+					await writeNaiaConfig({
+						...(saved as unknown as Record<string, unknown>),
+						...buildNaiaConfigEnv(saved),
+					});
+				// Write naiaKey to OS keychain so standalone naia-agent can read it.
+				if (typeof completedFlat.naiaKey === "string")
+					await writeAgentKey(
+						String(completedFlat.provider || "nextain"),
+						"naiaKey",
+						completedFlat.naiaKey,
+					);
+				// (gateway sync 제거됨 2026-06-12 — gateway.json 미사용 죽은 경로. config 영속=naia-settings,
+				//  naiaKey=키체인(위 writeAgentKey). own-key(apiKey)=설정 화면 담당. memory 설정 연결=다른 세션 재설계.)
+			}
+			await reloadAgentSettings();
+			if (typeof completedFlat.naiaKey === "string") {
+				await sendAuthUpdate(completedFlat.naiaKey);
+			}
+			addMessage({
+				role: "assistant",
+				content: stepChat(
+					"complete",
+					agentName.trim() || "나이아",
+					userName.trim(),
+				),
+			});
+			setTimeout(onComplete, 1200);
+		} catch (error) {
+			setCompletionError(
+				getLocale() === "ko"
+					? `설정을 적용하지 못했습니다. 다시 시도해 주세요. (${String(error)})`
+					: `Could not apply settings. Please try again. (${String(error)})`,
+			);
+		} finally {
+			setCompleting(false);
 		}
-		addMessage({
-			role: "assistant",
-			content: stepChat(
-				"complete",
-				agentName.trim() || "나이아",
-				userName.trim(),
-			),
-		});
-		setTimeout(onComplete, 1200);
 	}
 
 	// #447-5: "직접 설정" no longer collects a provider-less key inline. It finishes
@@ -1364,8 +1405,10 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
 									type="button"
 									className={`onboarding-step__option${localVoiceEnabled ? " onboarding-step__option--selected" : ""}`}
 									style={{ marginTop: 8 }}
-									onClick={toggleLocalVoice}
-									disabled={localVoiceBusy}
+								onClick={toggleLocalVoice}
+								disabled={
+									localVoiceBusy || localVoiceInstallation?.canStart !== true
+								}
 								>
 									<span className="onboarding-step__option-label">
 										{localVoiceBusy
@@ -1375,7 +1418,7 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
 												: t("onboard.voice.localOff")}
 									</span>
 								</button>
-								{localVoiceMsg && (
+							{localVoiceMsg && (
 									<p className="onboarding-step__hint onboarding-step__hint--warn">
 										{localVoiceMsg}
 									</p>
@@ -1392,6 +1435,11 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
 								"{name}",
 								userName.trim() || "게스트",
 							)}
+							{localVoiceInstallation?.canStart === false && !localVoiceMsg && (
+								<p className="onboarding-step__hint onboarding-step__hint--warn">
+									{localVoiceInstallation.summary}
+								</p>
+							)}
 						</h2>
 						<p className="onboarding-step__hint">
 							{t("onboard.complete.ready").replace(
@@ -1405,6 +1453,14 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
 
 			{/* Navigation */}
 			<div className="onboarding-step__actions">
+				{isCompleteStep && completionError && (
+					<p
+						role="alert"
+						className="onboarding-step__hint onboarding-step__hint--warn onboarding-step__completion-error"
+					>
+						{completionError}
+					</p>
+				)}
 				{!isFirst && !isCompleteStep && (
 					<button
 						type="button"
@@ -1420,8 +1476,15 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
 						type="button"
 						className="onboarding-step__next-btn"
 						onClick={isCompleteStep ? handleComplete : goNext}
+						disabled={isCompleteStep && completing}
 					>
-						{isCompleteStep ? t("onboard.complete.start") : t("onboard.next")}
+						{isCompleteStep && completing
+							? getLocale() === "ko"
+								? "설정 적용 중…"
+								: "Applying settings…"
+							: isCompleteStep
+								? t("onboard.complete.start")
+								: t("onboard.next")}
 					</button>
 				)}
 				{step === "provider" && naiaLoginDone && (

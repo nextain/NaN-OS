@@ -1,15 +1,19 @@
-import { invoke } from "@tauri-apps/api/core";
-import { listen } from "@tauri-apps/api/event";
-import { Logger } from "./logger";
-import type { NaiaTool } from "./app-registry";
-import type { AgentResponseChunk, EnvironmentSegment, ProviderConfig } from "./types";
 // ── new-naia 이식 코어 결선 (UC1 텍스트 대화) ──
 // VITE_NAIA_NEW_CORE=1 일 때 sendChatMessage/cancelChat 가 새 core(hexagonal os core)를 경유.
 // 미설정 시 기존 경로 그대로(voice/tts/gateway 등 보존) — 비파괴·지속가능.
 import {
-	makeShellChatService,
 	type ShellSendOptions,
+	makeShellChatService,
 } from "@nextain/naia-os-core/shell-compat";
+import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
+import type { NaiaTool } from "./app-registry";
+import { Logger } from "./logger";
+import type {
+	AgentResponseChunk,
+	EnvironmentSegment,
+	ProviderConfig,
+} from "./types";
 
 // 빌드타임 env(prod/dev) OR 런타임 window 플래그(E2E 가 addInitScript 로 주입). ⚠️ *호출 시점*에
 // 평가(함수) — 모듈-const 스냅샷은 import 후 주입된 플래그를 놓침(codex 2-clean 지적). 둘 다 없으면 기존 경로.
@@ -27,7 +31,11 @@ function coreChat() {
 			// ⚠️ @tauri listen 은 콜백에 Event 객체({event,payload})를 준다. 새 core transport(LiveTransportDeps)
 			// 는 인자를 payload 로 간주 → 여기서 .payload 를 풀어 넘긴다(안 풀면 agent_response 가 unknown 으로
 			// 드롭돼 스트리밍이 영원히 ▌ 에 멈춤 — UC1 E2E 가 잡은 실 버그). invoke 는 시그니처 동일이라 그대로.
-			live: { invoke, listen: (event, cb) => listen(event, (e) => cb((e as { payload: unknown }).payload)) },
+			live: {
+				invoke,
+				listen: (event, cb) =>
+					listen(event, (e) => cb((e as { payload: unknown }).payload)),
+			},
 			clientId: "shell",
 		});
 	return _coreChat;
@@ -173,7 +181,9 @@ export async function sendCredsUpdate(payload: CredsPayload): Promise<void> {
 		// (nextain apiKey 는 항상 "" 라 emit 안 됨 — App.tsx; naia 계정 키는 sendAuthUpdate 경유).
 		for (const [provider, apiKey] of Object.entries(payload.keys)) {
 			if (!provider) continue;
-			await coreChat().sendCredsUpdate({ provider, apiKey }).catch(() => {});
+			await coreChat()
+				.sendCredsUpdate({ provider, apiKey })
+				.catch(() => {});
 		}
 		return;
 	}
@@ -197,18 +207,26 @@ export async function sendApprovalResponse(
 	toolCallId: string,
 	uiDecision: "once" | "always" | "reject",
 ): Promise<void> {
-	const mapped: "approve" | "reject" = uiDecision === "reject" ? "reject" : "approve";
+	const mapped: "approve" | "reject" =
+		uiDecision === "reject" ? "reject" : "approve";
 	try {
 		if (isNewCore()) {
 			await coreChat().sendApprovalResponse(requestId, toolCallId, mapped);
 			return;
 		}
 		await safeSendToAgent(
-			{ type: "approval_response", requestId, toolCallId, decision: uiDecision },
+			{
+				type: "approval_response",
+				requestId,
+				toolCallId,
+				decision: uiDecision,
+			},
 			"sendApprovalResponse",
 		);
 	} catch (err) {
-		Logger.warn("ChatService", "sendApprovalResponse swallowed", { error: String(err) });
+		Logger.warn("ChatService", "sendApprovalResponse swallowed", {
+			error: String(err),
+		});
 	}
 }
 
@@ -219,23 +237,39 @@ export async function sendChatMessage(opts: SendChatOptions): Promise<void> {
 	if (isNewCore()) {
 		return coreChat().sendChatMessage({
 			message: opts.message,
-			...(opts.attachments !== undefined ? { attachments: opts.attachments } : {}),
+			...(opts.attachments !== undefined
+				? { attachments: opts.attachments }
+				: {}),
 			provider: opts.provider,
 			history: opts.history,
 			onChunk: opts.onChunk as (c: Record<string, unknown>) => void,
 			requestId: opts.requestId,
 			...(opts.sessionId !== undefined ? { sessionId: opts.sessionId } : {}),
-			...(opts.systemPrompt !== undefined ? { systemPrompt: opts.systemPrompt } : {}),
-			...(opts.environmentSegments !== undefined ? { environmentSegments: opts.environmentSegments } : {}),
-			...(opts.enableTools !== undefined ? { enableTools: opts.enableTools } : {}),
-			...(opts.enableThinking !== undefined ? { enableThinking: opts.enableThinking } : {}),
+			...(opts.systemPrompt !== undefined
+				? { systemPrompt: opts.systemPrompt }
+				: {}),
+			...(opts.environmentSegments !== undefined
+				? { environmentSegments: opts.environmentSegments }
+				: {}),
+			...(opts.enableTools !== undefined
+				? { enableTools: opts.enableTools }
+				: {}),
+			...(opts.enableThinking !== undefined
+				? { enableThinking: opts.enableThinking }
+				: {}),
 			...(opts.gatewayUrl !== undefined ? { gatewayUrl: opts.gatewayUrl } : {}),
-			...(opts.disabledSkills !== undefined ? { disabledSkills: opts.disabledSkills } : {}),
+			...(opts.disabledSkills !== undefined
+				? { disabledSkills: opts.disabledSkills }
+				: {}),
 			...(opts.channel !== undefined ? { channel: opts.channel } : {}),
 			...(opts.grounding !== undefined ? { grounding: opts.grounding } : {}),
-			...(opts.providerSession !== undefined ? { providerSession: opts.providerSession } : {}),
+			...(opts.providerSession !== undefined
+				? { providerSession: opts.providerSession }
+				: {}),
 			...(opts.processing !== undefined ? { processing: opts.processing } : {}),
-			...(opts.activityResume !== undefined ? { activityResume: opts.activityResume } : {}),
+			...(opts.activityResume !== undefined
+				? { activityResume: opts.activityResume }
+				: {}),
 		});
 	}
 	const {
@@ -271,16 +305,20 @@ export async function sendChatMessage(opts: SendChatOptions): Promise<void> {
 		requestId,
 		...(sessionId && { sessionId }),
 		provider: providerSafe,
-		messages: [...history, {
-			role: "user",
-			content: message,
-			...(attachments !== undefined ? { attachments } : {}),
-		}],
+		messages: [
+			...history,
+			{
+				role: "user",
+				content: message,
+				...(attachments !== undefined ? { attachments } : {}),
+			},
+		],
 		...(ttsVoice && { ttsVoice }),
 		...(ttsEngine && { ttsEngine }),
 		...(ttsProvider && { ttsProvider }),
 		...(systemPrompt && { systemPrompt }),
-		...(environmentSegments && environmentSegments.length > 0 && { environmentSegments }),
+		...(environmentSegments &&
+			environmentSegments.length > 0 && { environmentSegments }),
 		...(enableTools != null && { enableTools }),
 		...(enableThinking != null && { enableThinking }),
 		...(gatewayUrl && { gatewayUrl }),
@@ -332,9 +370,13 @@ export async function sendChatMessage(opts: SendChatOptions): Promise<void> {
 	} catch (err) {
 		clearTimeout(timeoutId);
 		unlisten();
-		Logger.warn("ChatService", "sendChatMessage failed — naia-agent unavailable", {
-			error: String(err),
-		});
+		Logger.warn(
+			"ChatService",
+			"sendChatMessage failed — naia-agent unavailable",
+			{
+				error: String(err),
+			},
+		);
 		throw err;
 	}
 }
@@ -369,17 +411,20 @@ export async function configureSpeechProfile(input: {
 			settled = true;
 			clearTimeout(timeout);
 			unlisten?.();
-			window.dispatchEvent(new CustomEvent("naia-proactive-profile-configured", {
-				detail: { ok, subscriptionEpoch },
-			}));
+			window.dispatchEvent(
+				new CustomEvent("naia-proactive-profile-configured", {
+					detail: { ok, subscriptionEpoch },
+				}),
+			);
 			resolve(ok);
 		};
 		const timeout = setTimeout(() => finish(false), 5_000);
 		unlisten = await listen<string>("agent_response", (event) => {
 			try {
-				const raw = typeof event.payload === "string"
-					? event.payload
-					: JSON.stringify(event.payload);
+				const raw =
+					typeof event.payload === "string"
+						? event.payload
+						: JSON.stringify(event.payload);
 				const message = JSON.parse(raw) as Record<string, unknown>;
 				if (message.requestId !== requestId) return;
 				if (message.type === "speech_profile_configured") {
@@ -422,7 +467,10 @@ export async function yieldSpeechActivity(
 		const timeout = setTimeout(() => finish(), 5_000);
 		unlisten = await listen<string>("agent_response", (event) => {
 			try {
-				const raw = typeof event.payload === "string" ? event.payload : JSON.stringify(event.payload);
+				const raw =
+					typeof event.payload === "string"
+						? event.payload
+						: JSON.stringify(event.payload);
 				const result = JSON.parse(raw) as Record<string, unknown>;
 				if (result.requestId !== requestId) return;
 				if (result.type !== "speech_activity_yielded" || result.ok !== true) {
@@ -496,14 +544,23 @@ function generateControlRequestId(): string {
 }
 
 export async function cancelChat(requestId: string): Promise<void> {
-	if (isNewCore()) { await coreChat().cancelChat(requestId).catch(() => {}); return; }
+	if (isNewCore()) {
+		await coreChat()
+			.cancelChat(requestId)
+			.catch(() => {});
+		return;
+	}
 	// cancel_stream 은 별 Tauri command — fire-and-forget swallow.
 	try {
 		await invoke("cancel_stream", { requestId });
 	} catch (err) {
-		Logger.warn("ChatService", "cancelChat swallowed — naia-agent unavailable", {
-			error: String(err),
-		});
+		Logger.warn(
+			"ChatService",
+			"cancelChat swallowed — naia-agent unavailable",
+			{
+				error: String(err),
+			},
+		);
 	}
 }
 
@@ -570,7 +627,10 @@ export async function directToolCall(opts: {
 	// 즉시인데 응답 왕복이 묶임)가 있어, 셸에서 즉시 fail-fast 한다. 호출자(gateway-sessions·SettingsTab 등)는
 	// 이 실패를 이미 우아하게 catch→warn 으로 처리. old-core 경로에선 종전대로 agent 로 전송.
 	if (isNewCore()) {
-		return { success: false, output: "new-core: standalone tool 미지원(chat 도구루프 사용)" };
+		return {
+			success: false,
+			output: "new-core: standalone tool 미지원(chat 도구루프 사용)",
+		};
 	}
 
 	const request = {
@@ -776,10 +836,7 @@ export async function sendPanelSkillsClear(appId: string): Promise<void> {
 
 /** Install a panel from a git URL or local zip file path (delegated to agent) */
 export async function sendPanelInstall(source: string): Promise<void> {
-	await safeSendToAgent(
-		{ type: "app_install", source },
-		"sendPanelInstall",
-	);
+	await safeSendToAgent({ type: "app_install", source }, "sendPanelInstall");
 }
 
 /** Send panel tool execution result back to the agent */
@@ -809,10 +866,19 @@ export async function sendAuthUpdate(naiaKey: string): Promise<void> {
 	// creds_update(structured, provider=nextain[any-llm gateway]·naiaKey secret) 채널로 routing.
 	// 새 agent protocol = {provider, apiKey, naiaKey} 라 naiaKey 가 그대로 키체인/resolver 로 적재됨(Old-Baseline 등가).
 	if (isNewCore()) {
-		await coreChat().sendCredsUpdate({ provider: "nextain", naiaKey }).catch(() => {});
+		await coreChat()
+			.sendCredsUpdate({ provider: "nextain", naiaKey })
+			.catch(() => {});
 		return;
 	}
 	await safeSendToAgent({ type: "auth_update", naiaKey }, "sendAuthUpdate");
+}
+
+/** Reload persisted settings in the live Agent; failures are caller-visible. */
+export async function reloadAgentSettings(): Promise<void> {
+	await invoke("send_to_agent_command", {
+		message: JSON.stringify({ type: "reload_settings" }),
+	});
 }
 
 /** Request the agent to pre-download an offline embedding model. */

@@ -11183,9 +11183,15 @@ body.resizing-col * {
 /* Navigation actions */
 .onboarding-step__actions {
 	display: flex;
+	flex-wrap: wrap;
 	gap: 8px;
 	flex-shrink: 0;
 	padding-top: 12px;
+}
+
+.onboarding-step__completion-error {
+	flex: 0 0 100%;
+	margin: 0;
 }
 
 .onboarding-step__back-btn {

@@ -44,6 +44,7 @@ vi.mock("@tauri-apps/plugin-store", () => ({
 
 vi.mock("../../lib/chat-service", () => ({
 	sendAuthUpdate: vi.fn().mockResolvedValue(undefined),
+	reloadAgentSettings: vi.fn().mockResolvedValue(undefined),
 	isNewCore: () => false, // 기본 old 경로(비파괴 graft) — new-core graft 검증은 onboarding-core.test.ts
 }));
 vi.mock("../../lib/onboarding-core", () => ({

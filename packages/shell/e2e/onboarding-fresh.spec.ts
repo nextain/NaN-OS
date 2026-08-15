@@ -51,8 +51,23 @@ function buildMockScript() {
     var VRM_FILES = ${JSON.stringify(MOCK_VRM_FILES)};
     var NVA_FILES = ${JSON.stringify(MOCK_NVA_FILES)};
     var MINI_PNG = new Uint8Array(${JSON.stringify(MINI_PNG)});
+	window.__onboardingCommands = [];
 
     window.__TAURI_INTERNALS__.invoke = async function(cmd, args) {
+		if (cmd === "send_to_agent_command") {
+			var message = JSON.parse((args && args.message) || "{}");
+			window.__onboardingCommands.push(message);
+			if (message.type === "reload_settings" && window.__rejectOnboardingReloadOnce) {
+				window.__rejectOnboardingReloadOnce = false;
+				throw new Error("agent unavailable");
+			}
+			if (message.type === "reload_settings" && window.__deferOnboardingReload) {
+				return new Promise(function(resolve) {
+					window.__releaseOnboardingReload = resolve;
+				});
+			}
+			return;
+		}
         if (cmd === "plugin:event|listen") {
             var evt = args.event;
             if (!window.__eventListeners.has(evt)) window.__eventListeners.set(evt, []);
@@ -214,6 +229,9 @@ test.describe("Fresh onboarding flow", () => {
 		page,
 	}) => {
 		test.slow();
+		await page.addInitScript(() => {
+			(window as any).__deferOnboardingReload = true;
+		});
 		await setupFreshOnboarding(page);
 
 		// Walk through all steps quickly
@@ -243,6 +261,16 @@ test.describe("Fresh onboarding flow", () => {
 		});
 		await expect(startBtn).toBeVisible({ timeout: 5_000 });
 		await startBtn.click();
+		await expect(
+			page.getByRole("button", { name: /설정 적용 중|Applying settings/i }),
+		).toBeDisabled();
+		const reloadCommands = await page.evaluate(() =>
+			(window as any).__onboardingCommands.filter(
+				(message: { type?: string }) => message.type === "reload_settings",
+			),
+		);
+		expect(reloadCommands).toHaveLength(1);
+		await page.evaluate(() => (window as any).__releaseOnboardingReload());
 		// Wait for the 1200ms onComplete delay
 		await page.waitForTimeout(1500);
 
@@ -257,5 +285,58 @@ test.describe("Fresh onboarding flow", () => {
 		// Hardware recommendation is measured at runtime. A browser mock without
 		// a VRAM probe must not persist the removed legacy `avatar-6g` tier.
 		expect(config.localGpuTier).toBeUndefined();
+	});
+
+	test("shows a retryable reload error without clipping at narrow width", async ({
+		page,
+	}) => {
+		test.slow();
+		await page.setViewportSize({ width: 480, height: 800 });
+		await page.addInitScript(() => {
+			(window as any).__rejectOnboardingReloadOnce = true;
+		});
+		await setupFreshOnboarding(page);
+		await page.locator('input[placeholder="Naia"]').fill("Mochi");
+		await clickNext(page);
+		await page
+			.locator(
+				'input[placeholder="Enter a name"], input[placeholder="이름을 입력하세요"]',
+			)
+			.fill("Tester");
+		await clickNext(page);
+		await clickNext(page);
+		await clickNext(page);
+		await expect(page.locator(".onboarding-step__bg-card").first()).toBeVisible({
+			timeout: 10_000,
+		});
+		await clickNext(page);
+		await page.getByText(/Set up later/i).click();
+		await page.waitForTimeout(400);
+		await clickNext(page);
+		const startBtn = page.getByRole("button", {
+			name: /시작하기|Get Started/i,
+		});
+		await startBtn.click();
+
+		const alert = page.getByRole("alert");
+		await expect(alert).toContainText(/다시 시도|try again/i);
+		await expect(startBtn).toBeEnabled();
+		const alertBox = await alert.boundingBox();
+		const buttonBox = await startBtn.boundingBox();
+		expect(alertBox).not.toBeNull();
+		expect(buttonBox).not.toBeNull();
+		expect((alertBox?.y ?? 0) + (alertBox?.height ?? 0)).toBeLessThanOrEqual(
+			buttonBox?.y ?? 0,
+		);
+
+		await startBtn.click();
+		await page.waitForTimeout(1500);
+		const reloadCount = await page.evaluate(
+			() =>
+				(window as any).__onboardingCommands.filter(
+					(message: { type?: string }) => message.type === "reload_settings",
+				).length,
+		);
+		expect(reloadCount).toBe(2);
 	});
 });

@@ -1267,6 +1267,15 @@ describe("SettingsTab — memory tab (#298)", () => {
 		);
 		mockInvoke.mockImplementation((cmd: string) => {
 			if (cmd === "detect_gpu_vram") return Promise.resolve(6);
+			if (cmd === "cascade_installation_status") {
+				return Promise.resolve({
+					phase: "ready-to-start",
+					ready: false,
+					canStart: true,
+					summary: "Ready",
+					steps: [],
+				});
+			}
 			return Promise.resolve([]);
 		});
 		render(<SettingsTab />);
@@ -1496,7 +1505,7 @@ describe("SettingsTab — memory tab (#298)", () => {
 		});
 	});
 
-	it("restores a selected Naia Local runtime for preset playback", async () => {
+	it("restores an explicitly enabled Naia Local runtime for preset playback", async () => {
 		localStorage.setItem("naia-adk-path", "D:\\alpha-adk");
 		localStorage.setItem(
 			"naia-config",
@@ -1505,7 +1514,7 @@ describe("SettingsTab — memory tab (#298)", () => {
 				model: "gemini-3.5-flash",
 				ttsProvider: "naia-local-voice",
 				ttsEnabled: true,
-				localVoiceEnabled: false,
+				localVoiceEnabled: true,
 				vllmTtsHost: "http://localhost:8910",
 			}),
 		);
@@ -1545,6 +1554,136 @@ describe("SettingsTab — memory tab (#298)", () => {
 				tier: "windows-voice-6g",
 				loaderProfile: "windows_trt_6g",
 			});
+		});
+	});
+
+	it("does not auto-restore a local provider when voice is disabled", async () => {
+		localStorage.setItem("naia-adk-path", "D:\\alpha-adk");
+		localStorage.setItem(
+			"naia-config",
+			JSON.stringify({
+				provider: "nextain",
+				model: "gemini-3.5-flash",
+				ttsProvider: "naia-local-voice",
+				ttsEnabled: false,
+				localVoiceEnabled: false,
+				vllmTtsHost: "http://localhost:8910",
+			}),
+		);
+		mockInvoke.mockImplementation((cmd: string) => {
+			if (cmd === "detect_gpu_vram") return Promise.resolve(8);
+			if (cmd === "cascade_status") return Promise.resolve(false);
+			if (cmd === "cascade_installation_status") {
+				return Promise.resolve({
+					phase: "ready-to-start",
+					ready: false,
+					canStart: true,
+					summary: "Ready",
+					steps: [],
+				});
+			}
+			return Promise.resolve([]);
+		});
+
+		render(<SettingsTab />);
+		await vi.waitFor(() =>
+			expect(mockInvoke).toHaveBeenCalledWith("cascade_installation_status"),
+		);
+		expect(mockInvoke).not.toHaveBeenCalledWith("start_cascade", {
+			expectedLoaderProfile: "windows_trt_6g",
+		});
+	});
+
+	it("normalizes a blocked local voice config and manifest to browser voice", async () => {
+		localStorage.setItem("naia-adk-path", "D:\\alpha-adk");
+		localStorage.setItem(
+			"naia-config",
+			JSON.stringify({
+				provider: "nextain",
+				model: "gemini-3.5-flash",
+				ttsProvider: "naia-local-voice",
+				ttsEnabled: false,
+				localVoiceEnabled: false,
+				vllmTtsHost: "http://localhost:8910",
+			}),
+		);
+		mockInvoke.mockImplementation((cmd: string) => {
+			if (cmd === "detect_gpu_vram") return Promise.resolve(8);
+			if (cmd === "cascade_status") return Promise.resolve(false);
+			if (cmd === "cascade_installation_status") {
+				return Promise.resolve({
+					phase: "blocked",
+					ready: false,
+					canStart: false,
+					summary: "Local voice installation required.",
+					steps: [],
+				});
+			}
+			return Promise.resolve([]);
+		});
+
+		render(<SettingsTab />);
+		await vi.waitFor(() => {
+			const saved = JSON.parse(localStorage.getItem("naia-config") || "{}");
+				expect(saved.ttsProvider).toBe("edge");
+			expect(saved.ttsEnabled).toBe(false);
+			expect(saved.localVoiceEnabled).toBe(false);
+			const writes = mockInvoke.mock.calls.filter(
+				([cmd]) => cmd === "write_slots_manifest",
+			);
+			const manifest = JSON.parse(writes.at(-1)?.[1]?.json as string);
+			expect(manifest.slots.tts.provider).toBe("edge");
+			expect(manifest.gpu.loaderProfile).toBeUndefined();
+		});
+		expect(mockInvoke).not.toHaveBeenCalledWith("start_cascade", {
+			expectedLoaderProfile: "windows_trt_6g",
+		});
+	});
+
+	it("rolls back provider and slots manifest when local voice start fails", async () => {
+		localStorage.setItem("naia-adk-path", "D:\\alpha-adk");
+		localStorage.setItem(
+			"naia-config",
+			JSON.stringify({
+				provider: "nextain",
+				model: "gemini-3.5-flash",
+				ttsProvider: "naia-local-voice",
+				ttsEnabled: true,
+				localVoiceEnabled: true,
+				vllmTtsHost: "http://localhost:8910",
+			}),
+		);
+		let started = false;
+		mockInvoke.mockImplementation((cmd: string) => {
+			if (cmd === "detect_gpu_vram") return Promise.resolve(8);
+			if (cmd === "cascade_status") return Promise.resolve(false);
+			if (cmd === "cascade_installation_status") {
+				return Promise.resolve({
+					phase: started ? "blocked" : "ready-to-start",
+					ready: false,
+					canStart: !started,
+					summary: started ? "Runtime failed verification." : "Ready",
+					steps: [],
+				});
+			}
+			if (cmd === "start_cascade") {
+				started = true;
+				return Promise.resolve(JSON.stringify({ facade_port: 8910 }));
+			}
+			return Promise.resolve([]);
+		});
+
+		render(<SettingsTab />);
+		await vi.waitFor(() => {
+			const saved = JSON.parse(localStorage.getItem("naia-config") || "{}");
+			expect(saved.ttsProvider).toBe("edge");
+			expect(saved.ttsEnabled).toBe(false);
+			expect(saved.localVoiceEnabled).toBe(false);
+			const writes = mockInvoke.mock.calls.filter(
+				([cmd]) => cmd === "write_slots_manifest",
+			);
+			const manifest = JSON.parse(writes.at(-1)?.[1]?.json as string);
+			expect(manifest.slots.tts.provider).toBe("edge");
 		});
 	});
 
@@ -1619,6 +1758,15 @@ describe("SettingsTab — memory tab (#298)", () => {
 		);
 		mockInvoke.mockImplementation((cmd: string) => {
 			if (cmd === "detect_gpu_vram") return Promise.resolve(6);
+			if (cmd === "cascade_installation_status") {
+				return Promise.resolve({
+					phase: "ready-to-start",
+					ready: false,
+					canStart: true,
+					summary: "Ready",
+					steps: [],
+				});
+			}
 			return Promise.resolve([]);
 		});
 		render(<SettingsTab />);
@@ -1655,6 +1803,11 @@ describe("SettingsTab — memory tab (#298)", () => {
 			profileTtsProvider.querySelector('option[value="naia-local-voice"]')
 				?.textContent,
 		).toContain("Naia Local Voice");
+		await vi.waitFor(() =>
+			expect(
+				profileTtsProvider.querySelector('option[value="naia-local-voice"]'),
+			).not.toBeDisabled(),
+		);
 		fireEvent.change(profileTtsProvider, {
 			target: { value: "naia-local-voice" },
 		});

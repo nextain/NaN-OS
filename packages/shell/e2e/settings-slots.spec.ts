@@ -21,7 +21,11 @@ import {
  * 자동 복원(ensureLocalVoiceReady)이 unmocked 실패로 ttsEnabled 를 되돌리는 것을 막는다.
  * (실패 경로가 필요한 시나리오 — FR-VOICE.13 사유 표기 — 는 기본값 false 를 쓴다.)
  */
-function buildMock(vramGb: number | null, cascadeReady = false): string {
+function buildMock(
+	vramGb: number | null,
+	cascadeReady = false,
+	cascadeBlocked = false,
+): string {
 	return `
 (function() {
 	var cascadeStarted = false;
@@ -41,6 +45,12 @@ function buildMock(vramGb: number | null, cascadeReady = false): string {
 		if (cmd === "plugin:event|emit" || cmd === "plugin:event|unlisten") return null;
 		if (cmd === "detect_gpu_vram") return ${vramGb === null ? "null" : vramGb};
 		if (cmd === "write_naia_config") return null;
+		${
+			cascadeBlocked
+				? `if (cmd === "cascade_status") return false;
+		if (cmd === "cascade_installation_status") return { phase: "blocked", ready: false, canStart: false, summary: "Local voice installation required: Python runtime and VoxCPM2 model are missing.", steps: [{ id: "python-runtime", label: "Python runtime", state: "blocked", action: "install", actionAvailable: false, progressPercent: 0, retryable: false }] };`
+				: ""
+		}
 		${
 			cascadeReady
 				? `if (cmd === "cascade_status") return cascadeStarted;
@@ -64,6 +74,8 @@ interface SetupOpts {
 	config?: Record<string, unknown>;
 	/** 로컬 음성 자동 복원(start_cascade)이 성공하는 환경을 mock. */
 	cascadeReady?: boolean;
+	/** 클린 설치에서 VoxCPM2 런타임이 없는 환경. */
+	cascadeBlocked?: boolean;
 }
 
 async function openSlotSettings(
@@ -71,7 +83,11 @@ async function openSlotSettings(
 	opts: SetupOpts = {},
 ): Promise<void> {
 	await page.addInitScript(
-		buildMock(opts.vramGb ?? null, opts.cascadeReady === true),
+		buildMock(
+			opts.vramGb ?? null,
+			opts.cascadeReady === true,
+			opts.cascadeBlocked === true,
+		),
 	);
 	await page.addInitScript({ content: TAURI_BASE_MOCK_FALLBACK });
 	await page.addInitScript({ content: SEED_ADK_PATH });
@@ -261,6 +277,46 @@ test.describe("S-SLOT settings — gate + 6 cloud slots (#gate-slots)", () => {
 		await expect(page.locator('[data-testid="slot-sub"]')).toContainText(
 			/naia/i,
 		);
+	});
+
+	test("blocked VoxCPM2 install is disabled, truthful, and repairs stale pending state", async ({
+		page,
+	}) => {
+		await openSlotSettings(page, {
+			vramGb: 8,
+			cascadeBlocked: true,
+			config: {
+				ttsProvider: "naia-local-voice",
+				ttsEnabled: false,
+				localVoiceEnabled: false,
+				vllmTtsHost: "http://localhost:8910",
+			},
+		});
+		await page.setViewportSize({ width: 480, height: 800 });
+
+		await expect
+			.poll(() =>
+				page.evaluate(
+					() => JSON.parse(localStorage.getItem("naia-config") ?? "{}").ttsProvider,
+				),
+			)
+			.toBe("edge");
+		await expect(page.getByTestId("slot-tts")).not.toContainText(/starting|대기 중/i);
+		const localOption = page
+			.getByTestId("profile-tts-provider")
+			.locator('option[value="naia-local-voice"]');
+		await expect(localOption).toBeDisabled();
+
+		await page.locator('[data-settings-tab="voice"]').click();
+		const status = page.getByTestId("local-voice-installation-status");
+		await expect(status).toContainText(/installation required/i);
+		const startButton = page.locator('[data-testid="local-voice-toggle"] button');
+		await expect(startButton).toBeDisabled();
+		expect(
+			await page.evaluate(
+				() => document.documentElement.scrollWidth <= window.innerWidth,
+			),
+		).toBe(true);
 	});
 
 	test("Profile selects Naia Local voice while preserving the Naia external brain and selected NVA", async ({

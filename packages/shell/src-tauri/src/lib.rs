@@ -5051,7 +5051,7 @@ fn classify_cascade_installation_for_profile(
     let summary = match phase {
         "ready" => "Local voice service is running and healthy.".to_string(),
         "ready-to-start" => "Local runtime files are ready. Services have not been started yet.".to_string(),
-        _ => "Local runtime cannot start because one or more required artifacts are missing. This build will not pretend to download them.".to_string(),
+        _ => "Local voice installation required: one or more runtime artifacts are missing. Start is disabled until every listed component is installed.".to_string(),
     };
     CascadeInstallationStatus {
         phase,

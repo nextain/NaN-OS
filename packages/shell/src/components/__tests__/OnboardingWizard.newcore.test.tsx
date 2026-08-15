@@ -2,7 +2,13 @@
 // 기존 OnboardingWizard.test.tsx 는 isNewCore=false(old 경로)만 검증 → newCore 분기
 // (core()/buildStepInput/goNext submit mirror/assets/onNaiaAuthCallback/completeWith)가 무검증이었음.
 // 여기서 isNewCore=true + spy session 으로 배선이 실제 호출되는지 앵커한다(실 core 흐름=onboarding-core.test.ts).
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import {
+	act,
+	cleanup,
+	fireEvent,
+	render,
+	screen,
+} from "@testing-library/react";
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -23,6 +29,9 @@ const secureStore = vi.hoisted(() => ({
 	set: vi.fn().mockResolvedValue(undefined),
 	delete: vi.fn().mockResolvedValue(undefined),
 }));
+const reloadAgentSettings = vi.hoisted(() =>
+	vi.fn().mockResolvedValue(undefined),
+);
 
 vi.mock("@tauri-apps/api/core", () => ({
 	invoke: vi.fn().mockResolvedValue(true),
@@ -37,7 +46,9 @@ vi.mock("@tauri-apps/api/event", () => ({
 vi.mock("@tauri-apps/plugin-opener", () => ({
 	openUrl: vi.fn().mockResolvedValue(undefined),
 }));
-vi.mock("@tauri-apps/plugin-dialog", () => ({ open: vi.fn().mockResolvedValue(null) }));
+vi.mock("@tauri-apps/plugin-dialog", () => ({
+	open: vi.fn().mockResolvedValue(null),
+}));
 vi.mock("@tauri-apps/plugin-store", () => ({
 	load: vi.fn().mockResolvedValue(secureStore),
 }));
@@ -45,6 +56,7 @@ vi.mock("@tauri-apps/plugin-store", () => ({
 // ★ newCore=true
 vi.mock("../../lib/chat-service", () => ({
 	sendAuthUpdate: vi.fn().mockResolvedValue(undefined),
+	reloadAgentSettings,
 	isNewCore: () => true,
 }));
 vi.mock("../../lib/onboarding-core", () => ({
@@ -84,6 +96,8 @@ describe("OnboardingWizard — newCore 배선(step-flow graft step2)", () => {
 		secureStore.get.mockClear();
 		secureStore.set.mockClear();
 		secureStore.delete.mockClear();
+		reloadAgentSettings.mockReset();
+		reloadAgentSettings.mockResolvedValue(undefined);
 		eventListeners.clear();
 		localStorage.clear();
 	});
@@ -142,12 +156,81 @@ describe("OnboardingWizard — newCore 배선(step-flow graft step2)", () => {
 		fireEvent.click(screen.getByRole("button", { name: /다음|Next/ }));
 		flush();
 		// complete → 시작하기 (handleComplete is async after saveConfigSecure — flush promise chain)
-		fireEvent.click(screen.getByRole("button", { name: /시작하기|Get Started/ }));
+		fireEvent.click(
+			screen.getByRole("button", { name: /시작하기|Get Started/ }),
+		);
 		await act(async () => {
 			await Promise.resolve();
 		});
 		expect(session.completeWith).toHaveBeenCalledTimes(1);
-		const arg = session.completeWith.mock.calls[0][0] as Record<string, unknown>;
+		expect(reloadAgentSettings).toHaveBeenCalledTimes(1);
+		const arg = session.completeWith.mock.calls[0][0] as Record<
+			string,
+			unknown
+		>;
 		expect(arg.onboardingComplete).toBe(true);
+	});
+
+	it("waits for persistence and Agent reload before leaving onboarding", async () => {
+		let releasePersistence!: () => void;
+		session.completeWith.mockReturnValueOnce(
+			new Promise<void>((resolve) => {
+				releasePersistence = resolve;
+			}),
+		);
+		render(<OnboardingWizard onComplete={onComplete} />);
+		for (let i = 0; i < 6; i++) {
+			fireEvent.click(screen.getByRole("button", { name: /다음|Next/ }));
+			flush();
+		}
+		fireEvent.click(screen.getByText(/나중에 설정|Set up later/));
+		flush();
+		fireEvent.click(screen.getByRole("button", { name: /다음|Next/ }));
+		flush();
+		fireEvent.click(
+			screen.getByRole("button", { name: /시작하기|Get Started/ }),
+		);
+
+		await act(async () => Promise.resolve());
+		expect(reloadAgentSettings).not.toHaveBeenCalled();
+		expect(onComplete).not.toHaveBeenCalled();
+		expect(screen.getByRole("button")).toBeDisabled();
+
+		await act(async () => {
+			releasePersistence();
+			await Promise.resolve();
+		});
+		expect(reloadAgentSettings).toHaveBeenCalledTimes(1);
+		expect(onComplete).not.toHaveBeenCalled();
+	});
+
+	it("keeps completion open and retries when Agent reload fails", async () => {
+		reloadAgentSettings.mockRejectedValueOnce(new Error("agent unavailable"));
+		render(<OnboardingWizard onComplete={onComplete} />);
+		for (let i = 0; i < 6; i++) {
+			fireEvent.click(screen.getByRole("button", { name: /다음|Next/ }));
+			flush();
+		}
+		fireEvent.click(screen.getByText(/나중에 설정|Set up later/));
+		flush();
+		fireEvent.click(screen.getByRole("button", { name: /다음|Next/ }));
+		flush();
+		fireEvent.click(
+			screen.getByRole("button", { name: /시작하기|Get Started/ }),
+		);
+
+		await act(async () => {
+			await Promise.resolve();
+			await Promise.resolve();
+		});
+		expect(screen.getByRole("alert")).toHaveTextContent(/다시 시도|try again/i);
+		expect(onComplete).not.toHaveBeenCalled();
+		const retry = screen.getByRole("button", {
+			name: /시작하기|Get Started/,
+		});
+		expect(retry).toBeEnabled();
+		fireEvent.click(retry);
+		await act(async () => Promise.resolve());
+		expect(reloadAgentSettings).toHaveBeenCalledTimes(2);
 	});
 });
