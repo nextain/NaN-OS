@@ -183,12 +183,12 @@ function assertPairedCheckoutStillClean(stage) {
 const AGENT_LOCAL_DEPENDENCIES = [
 	{
 		name: "@naia/kb-compiler",
-		path: resolve(AGENT, "../../naia-kb-compiler"),
+		path: resolve(AGENT, "../naia-kb-compiler"),
 		output: "dist/index.js",
 	},
 	{
 		name: "@nextain/naia-memory",
-		path: resolve(AGENT, "../../naia-memory"),
+		path: resolve(AGENT, "../naia-memory"),
 		output: "dist/memory/index.js",
 	},
 ];

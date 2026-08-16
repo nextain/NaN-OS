@@ -31,14 +31,18 @@ jobs:
           git -C ../naia-agent remote add origin https://github.com/nextain/naia-agent.git
           git -C ../naia-agent fetch --depth 1 origin 196fc64cc01e852bd27dc88675d53f5995f228dd
           git -C ../naia-agent checkout --detach FETCH_HEAD
-          git init ../../naia-kb-compiler
-          git -C ../../naia-kb-compiler remote add origin https://github.com/nextain/naia-kb-compiler.git
-          git -C ../../naia-kb-compiler fetch --depth 1 origin f1ceb075ed5e170d9c2eacb7e06674945d1ad53c
-          git -C ../../naia-kb-compiler checkout --detach FETCH_HEAD
-          git init ../../naia-memory
-          git -C ../../naia-memory remote add origin https://github.com/nextain/naia-memory.git
-          git -C ../../naia-memory fetch --depth 1 origin b88f3f0f8eef5cc66e61925774f03be157153efb
-          git -C ../../naia-memory checkout --detach FETCH_HEAD
+          git init ../naia-kb-compiler
+          git -C ../naia-kb-compiler remote add origin https://github.com/nextain/naia-kb-compiler.git
+          git -C ../naia-kb-compiler fetch --depth 1 origin f1ceb075ed5e170d9c2eacb7e06674945d1ad53c
+          git -C ../naia-kb-compiler checkout --detach FETCH_HEAD
+          git init ../naia-memory
+          git -C ../naia-memory remote add origin https://github.com/nextain/naia-memory.git
+          git -C ../naia-memory fetch --depth 1 origin b88f3f0f8eef5cc66e61925774f03be157153efb
+          git -C ../naia-memory checkout --detach FETCH_HEAD
+          git init ../naia-labs
+          git -C ../naia-labs remote add origin https://github.com/nextain/naia-labs.git
+          git -C ../naia-labs fetch --depth 1 origin a0e370da21370394d6c086d9c461934c45a688dc
+          git -C ../naia-labs checkout --detach FETCH_HEAD
 
       - uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
         with:
@@ -48,6 +52,28 @@ jobs:
         with:
           node-version: "22.23.1"
           cache: pnpm
+
+      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v10.0.1
+        if: matrix.platform == 'win32'
+        with:
+          version: "0.12.5"
+
+      - name: Build pinned Windows VoxCPM2 TensorRT runtime
+        if: matrix.platform == 'win32'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $voice = Join-Path $env:RUNNER_TEMP "naia-default.wav"
+          $voiceUrl = "https://raw.githubusercontent.com/nextain/naia-omni-cascade/0c41645e1f5a378aca0b0cc917372ff8014802aa/assets/ref_audio/ref_ko_485.wav"
+          Invoke-WebRequest -Uri $voiceUrl -OutFile $voice
+          $expectedVoiceSha256 = "97ed2fb007ebb11c20b222cea7b422a5471ced2ac14b26f480887da3e4cd0d1d"
+          $actualVoiceSha256 = (Get-FileHash -LiteralPath $voice -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($actualVoiceSha256 -ne $expectedVoiceSha256) {
+            throw "Default reference voice checksum mismatch: $actualVoiceSha256"
+          }
+          $runtime = Join-Path $env:RUNNER_TEMP "voxcpm2-trt-runtime"
+          ./packages/shell/scripts/build-voxcpm2-runtime.ps1 -OutputDir $runtime -VoiceSource $voice
+          "NAIA_VOXCPM2_TRT_RUNTIME_DIR=$runtime" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
       - uses: dtolnay/rust-toolchain@2c7215f132e9ebf062739d9130488b56d53c060c
         with:
