@@ -5009,6 +5009,12 @@ fn voxcpm2_model_is_cached_in_hubs(hubs: &[std::path::PathBuf]) -> bool {
 }
 
 fn voxcpm2_model_is_cached(runtime_root: &std::path::Path) -> bool {
+    let direct_model = runtime_root.join("models").join("VoxCPM2");
+    if direct_model.join("config.json").is_file()
+        && direct_model.join("model.safetensors").is_file()
+    {
+        return true;
+    }
     let mut hubs = vec![
         runtime_root.join("hf-cache").join("hub"),
         runtime_root.join(".cache").join("huggingface").join("hub"),
@@ -5094,9 +5100,7 @@ fn voxcpm2_python_runtime_is_ready(python: &str, service_dir: &str) -> bool {
     command.status().is_ok_and(|status| status.success())
 }
 
-fn probe_voxcpm2_installation(
-    bundle_root: Option<&std::path::Path>,
-) -> VoxCpm2InstallationProbe {
+fn probe_voxcpm2_installation(bundle_root: Option<&std::path::Path>) -> VoxCpm2InstallationProbe {
     let runtime_root = voxcpm2_runtime_root();
     let service_dir = bundle_root.map(|root| root.join("service"));
     let bundled_python = bundle_root.map(voxcpm2_bundled_python);
@@ -5112,9 +5116,8 @@ fn probe_voxcpm2_installation(
     VoxCpm2InstallationProbe {
         runtime_entrypoint: bundle_root
             .is_some_and(|root| root.join("voxcpm2-runtime.py").is_file()),
-        installer_available: bundle_root.is_some_and(|root| {
-            root.join("prepare-voxcpm2-model.ps1").is_file()
-        }),
+        installer_available: bundle_root
+            .is_some_and(|root| root.join("prepare-voxcpm2-model.ps1").is_file()),
         python_runtime: bundled_python.is_some_and(|path| path.is_file())
             && python.as_ref().is_some_and(|python| {
                 service_dir.as_ref().is_some_and(|dir| {
@@ -5126,8 +5129,7 @@ fn probe_voxcpm2_installation(
                 && dir.join("voxcpm2_trt.py").is_file()
                 && dir.join("render_admission.py").is_file()
         }),
-        voxcpm2_model: voxcpm2_model
-            && voxcpm2_runtime_matches_bundle(&runtime_root, bundle_root),
+        voxcpm2_model: voxcpm2_model && voxcpm2_runtime_matches_bundle(&runtime_root, bundle_root),
         reference_voices,
         facade_healthy: false,
     }
@@ -5240,9 +5242,7 @@ fn classify_voxcpm2_installation_for_profile(
     }
 }
 
-fn classify_voxcpm2_installation(
-    probe: VoxCpm2InstallationProbe,
-) -> VoxCpm2InstallationStatus {
+fn classify_voxcpm2_installation(probe: VoxCpm2InstallationProbe) -> VoxCpm2InstallationStatus {
     classify_voxcpm2_installation_for_profile(probe, None)
 }
 
@@ -5356,10 +5356,9 @@ async fn install_voxcpm2_runtime(
         .and_then(|home| std::fs::read_to_string(naia_data_home_from(home).join("adk-path")).ok())
         .map(|value| value.trim().to_string())
         .filter(|value| !value.is_empty());
-    let probe =
-        tokio::task::spawn_blocking(move || probe_voxcpm2_installation(Some(&bundle_root)))
-    .await
-    .map_err(|error| format!("VoxCPM2 post-install verification failed: {error}"))?;
+    let probe = tokio::task::spawn_blocking(move || probe_voxcpm2_installation(Some(&bundle_root)))
+        .await
+        .map_err(|error| format!("VoxCPM2 post-install verification failed: {error}"))?;
     let status = classify_voxcpm2_installation(probe);
     status.can_start.then_some(status).ok_or_else(|| {
         "VoxCPM2 installer exited successfully but runtime verification is incomplete.".to_string()
@@ -5383,11 +5382,10 @@ async fn voxcpm2_installation_status(
         )
     });
     let bundle_root = voxcpm2_bundle_root(&app);
-    let mut probe = tokio::task::spawn_blocking(move || {
-        probe_voxcpm2_installation(bundle_root.as_deref())
-    })
-    .await
-    .map_err(|error| format!("VoxCPM2 installation status task failed: {error}"))?;
+    let mut probe =
+        tokio::task::spawn_blocking(move || probe_voxcpm2_installation(bundle_root.as_deref()))
+            .await
+            .map_err(|error| format!("VoxCPM2 installation status task failed: {error}"))?;
     probe.facade_healthy = voxcpm2_status(state).await.unwrap_or(false);
     Ok(classify_voxcpm2_installation_for_profile(
         probe,
@@ -5422,6 +5420,10 @@ fn spawn_windows_voxcpm2(bundle_root: &std::path::Path) -> Result<VoxCpm2Process
         .env("HF_HOME", runtime_root.join("hf-cache"))
         .env("HF_HUB_DISABLE_XET", "1")
         .env("VOXCPM_MODEL", "openbmb/VoxCPM2")
+        .env(
+            "VOXCPM_MODEL_DIR",
+            runtime_root.join("models").join("VoxCPM2"),
+        )
         .env("VOXCPM_BACKEND", "tensorrt_locdit")
         .env("VOXCPM_TRT_ENGINE_DIR", &engine_dir)
         .env("VOXCPM_INT8", "1")
@@ -5802,8 +5804,7 @@ async fn voxcpm2_status(state: tauri::State<'_, AppState>) -> Result<bool, Strin
     let ready = {
         let mut guard = lock_or_recover(&state.voxcpm2, "voxcpm2");
         if let Some(process) = guard.as_mut() {
-            let ready = matches!(process.child.try_wait(), Ok(None))
-                .then(|| process.ready.clone());
+            let ready = matches!(process.child.try_wait(), Ok(None)).then(|| process.ready.clone());
             if ready.is_none() {
                 let _ = guard.take();
             }
@@ -11441,6 +11442,18 @@ mod tests {
             missing_hub,
             installed_hub,
         ]));
+    }
+
+    #[test]
+    fn voxcpm2_cache_probe_accepts_a_materialized_windows_model_directory() {
+        let runtime = tempfile::tempdir().unwrap();
+        let model = runtime.path().join("models").join("VoxCPM2");
+        std::fs::create_dir_all(&model).unwrap();
+        std::fs::write(model.join("config.json"), "{}").unwrap();
+        assert!(!voxcpm2_model_is_cached(runtime.path()));
+
+        std::fs::write(model.join("model.safetensors"), b"pinned-model").unwrap();
+        assert!(voxcpm2_model_is_cached(runtime.path()));
     }
 
     #[test]

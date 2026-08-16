@@ -32,6 +32,7 @@ for (const required of [
 	resolve(labsServiceSource, "tts_server.py"),
 	resolve(labsServiceSource, "render_admission.py"),
 	resolve(labsServiceSource, "voxcpm2_trt.py"),
+	resolve(labsServiceSource, "voxcpm2_int8.py"),
 	resolve(labsServiceSource, "build_voxcpm2_trt.py"),
 	resolve(shell, "src-tauri/windows/voxcpm2-runtime.py"),
 ]) {
@@ -79,6 +80,7 @@ for (const file of [
 	"tts_server.py",
 	"render_admission.py",
 	"voxcpm2_trt.py",
+	"voxcpm2_int8.py",
 	"build_voxcpm2_trt.py",
 ]) {
 	copyFileSync(resolve(labsServiceSource, file), resolve(labsDestination, file));

@@ -54,6 +54,7 @@ function fixture() {
 		"tts_server.py",
 		"render_admission.py",
 		"voxcpm2_trt.py",
+		"voxcpm2_int8.py",
 		"build_voxcpm2_trt.py",
 	])
 		writeFileSync(resolve(labsService, file), file);
@@ -74,6 +75,9 @@ describe("stageVoxCpm2Runtime", () => {
 		const destination = stageVoxCpm2Runtime(input);
 		expect(existsSync(resolve(destination, "python/python.exe"))).toBe(true);
 		expect(existsSync(resolve(destination, "service/tts_server.py"))).toBe(true);
+		expect(existsSync(resolve(destination, "service/voxcpm2_int8.py"))).toBe(
+			true,
+		);
 		expect(existsSync(resolve(destination, "voices/default.wav"))).toBe(true);
 		expect(existsSync(resolve(destination, "repos"))).toBe(false);
 		expect(

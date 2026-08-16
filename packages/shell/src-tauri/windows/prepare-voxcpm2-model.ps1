@@ -29,6 +29,8 @@ New-Item -ItemType Directory -Force -Path $RuntimeRoot | Out-Null
 $env:HF_HOME = Join-Path $RuntimeRoot "hf-cache"
 $env:HF_HUB_DISABLE_XET = "1"
 $env:PYTHONPATH = $service
+$env:PYTHONUTF8 = "1"
+$env:PYTHONIOENCODING = "utf-8"
 
 # The app release must carry these dependencies. This command is an offline
 # verification and must never install packages on the user's machine.
@@ -36,6 +38,7 @@ $env:PYTHONPATH = $service
 if ($LASTEXITCODE -ne 0) { throw "Bundled VoxCPM2 TensorRT runtime verification failed" }
 
 $checkpoints = Join-Path $RuntimeRoot "checkpoints"
+$modelDir = Join-Path $RuntimeRoot "models\VoxCPM2"
 $engine = Join-Path $checkpoints "voxcpm2_trt"
 $pending = Join-Path $checkpoints "voxcpm2_trt.pending"
 $backup = Join-Path $checkpoints "voxcpm2_trt.backup"
@@ -44,7 +47,7 @@ if (Test-Path -LiteralPath $pending) {
 }
 New-Item -ItemType Directory -Force -Path $pending | Out-Null
 $builder = Join-Path $service "build_voxcpm2_trt.py"
-& $python $builder --model $manifest.model.id --revision $manifest.model.revision --output-dir $pending --workspace-gib 1.0
+& $python $builder --model $manifest.model.id --revision $manifest.model.revision --model-dir $modelDir --output-dir $pending --workspace-gib 1.0
 if ($LASTEXITCODE -ne 0) { throw "VoxCPM2 TensorRT engine preparation failed" }
 if (-not (Test-Path -LiteralPath (Join-Path $pending "manifest.json") -PathType Leaf)) {
   throw "TensorRT engine manifest missing"

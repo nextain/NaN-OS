@@ -12,9 +12,35 @@ import json
 import os
 import pathlib
 import threading
+import traceback
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import unquote, urlparse
 
+
+def configure_windows_safetensors() -> None:
+    """Avoid intermittent torch_cpu.dll crashes from Windows mmap tensors.
+
+    VoxCPM2 loads its 4.5 GB state dict through safetensors and immediately
+    copies those tensors into the model. The default mmap backend has produced
+    repeatable 0xc0000005 faults in that copy on Windows. The pinned
+    safetensors runtime provides a pread backend that owns the tensor storage
+    instead of retaining views into a Windows file mapping.
+    """
+    if os.name != "nt":
+        return
+    from safetensors import torch as safetensors_torch
+    from voxcpm.model import voxcpm2 as voxcpm2_module
+
+    original_load_file = safetensors_torch.load_file
+
+    def load_file_pread(filename, device="cpu", **kwargs):
+        kwargs["backend"] = "pread"
+        return original_load_file(filename, device=device, **kwargs)
+
+    voxcpm2_module.load_file = load_file_pread
+
+
+configure_windows_safetensors()
 import tts_server as engine
 
 PORT = int(os.environ.get("VOXCPM2_PORT", "8910"))
@@ -177,7 +203,9 @@ class Handler(BaseHTTPRequestHandler):
         except ValueError as error:
             self.reply(400, json_bytes({"error": str(error)}), "application/json")
         except Exception as error:
-            self.reply(500, json_bytes({"error": str(error)}), "application/json")
+            traceback.print_exc()
+            detail = str(error).strip() or type(error).__name__
+            self.reply(500, json_bytes({"error": detail}), "application/json")
         finally:
             ADMISSION.release()
 

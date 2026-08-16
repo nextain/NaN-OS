@@ -214,9 +214,26 @@ describe("platform-matrix 스키마 (FR-INSTALL.1)", () => {
 		);
 		expect(manifest.profile).toBe("windows_trt_6g");
 		expect(manifest.runtime.python).toMatch(/^3\.10\./);
+		expect(manifest.runtime.installPolicy.voxcpm).toBe("no-deps");
+		expect(manifest.runtime.installPolicy.excludedPackages.torchcodec).toMatch(
+			/Windows wheel/,
+		);
 		expect(manifest.model.revision).toMatch(/^[a-f0-9]{40}$/);
 		for (const value of Object.values(manifest.runtime.packages))
 			expect(String(value)).not.toMatch(/[<>=~^*]/);
+	});
+
+	it("builds the Windows TRT payload without installing runtime dependencies on end-user PCs", () => {
+		const builder = readFileSync(
+			resolve(SHELL, "scripts/build-voxcpm2-runtime.ps1"),
+			"utf8",
+		);
+		expect(builder).toContain('"--no-deps", "voxcpm==');
+		expect(builder).toContain('"tensorrt-cu12_bindings==');
+		expect(builder).toContain('"tensorrt-cu12_libs==');
+		expect(builder).toContain("torchcodec dependency");
+		expect(builder).toContain('"Lib\\EXTERNALLY-MANAGED"');
+		expect(builder).toContain("VOXCPM2_RUNTIME_ARTIFACT");
 	});
 
 	it("keeps the direct VoxCPM2 runtime callable from the Tauri WebView only", () => {
@@ -228,7 +245,13 @@ describe("platform-matrix 스키마 (FR-INSTALL.1)", () => {
 		expect(runtime).toContain('"tauri://localhost"');
 		expect(runtime).toContain("Access-Control-Allow-Origin");
 		expect(runtime).toContain("def do_OPTIONS(self):");
+		expect(runtime).toContain("traceback.print_exc()");
+		expect(runtime).toContain("configure_windows_safetensors()");
+		expect(runtime).toContain('kwargs["backend"] = "pread"');
 		expect(runtime).not.toContain('Access-Control-Allow-Origin", "*"');
+		const rust = readFileSync(resolve(SHELL, "src-tauri/src/lib.rs"), "utf8");
+		expect(rust).toContain('.env("PYTHONUTF8", "1")');
+		expect(rust).toContain('.env("PYTHONIOENCODING", "utf-8")');
 	});
 
 	it("prepares only the model and rolls back a failed engine replacement", () => {
@@ -239,6 +262,7 @@ describe("platform-matrix 스키마 (FR-INSTALL.1)", () => {
 		expect(provisioner).not.toMatch(/\b(?:pip install|uv pip|uv python|uv venv)\b/i);
 		expect(provisioner).toContain("voxcpm2_trt.pending");
 		expect(provisioner).toContain("voxcpm2_trt.backup");
+		expect(provisioner).toContain('--model-dir $modelDir');
 		expect(provisioner).toContain("Move-Item -LiteralPath $backup -Destination $engine");
 	});
 

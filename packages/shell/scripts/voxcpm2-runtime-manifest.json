@@ -3,19 +3,32 @@
 	"profile": "windows_trt_6g",
 	"runtime": {
 		"python": "3.10.20",
+		"installPolicy": {
+			"voxcpm": "no-deps",
+			"excludedPackages": {
+				"torchcodec": "VoxCPM 2.0.3 declares torchcodec, but does not import it in the inference path and no compatible Windows wheel exists for the pinned PyTorch runtime."
+			}
+		},
 		"packages": {
 			"torch": "2.5.1+cu121",
 			"torchaudio": "2.5.1+cu121",
 			"voxcpm": "2.0.3",
 			"tensorrt-cu12": "10.3.0",
-			"fastapi": "0.138.2",
-			"uvicorn": "0.49.0",
-			"httpx": "0.28.1",
+			"tensorrt-cu12_bindings": "10.3.0",
+			"tensorrt-cu12_libs": "10.3.0",
 			"numpy": "2.2.6",
 			"soundfile": "0.12.1",
 			"huggingface-hub": "0.36.2",
 			"safetensors": "0.8.0",
-			"onnx": "1.17.0"
+			"onnx": "1.17.0",
+			"transformers": "4.57.6",
+			"einops": "0.8.2",
+			"pydantic": "2.13.4",
+			"tqdm": "4.70.0",
+			"librosa": "0.11.0",
+			"regex": "2026.7.19",
+			"inflect": "7.5.0",
+			"wetext": "0.1.6"
 		}
 	},
 	"model": {

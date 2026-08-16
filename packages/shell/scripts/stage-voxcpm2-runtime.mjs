@@ -85,6 +85,7 @@ export function stageVoxCpm2Runtime({
 		"tts_server.py",
 		"render_admission.py",
 		"voxcpm2_trt.py",
+		"voxcpm2_int8.py",
 		"build_voxcpm2_trt.py",
 	]) {
 		if (!existsSync(resolve(labsService, file)))
@@ -103,6 +104,7 @@ export function stageVoxCpm2Runtime({
 		"tts_server.py",
 		"render_admission.py",
 		"voxcpm2_trt.py",
+		"voxcpm2_int8.py",
 		"build_voxcpm2_trt.py",
 	])
 		cpSync(resolve(labsService, file), resolve(destination, "service", file));
