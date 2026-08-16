@@ -45,8 +45,26 @@ export const AVATAR_PRESETS: AvatarPreset[] = [
 		label: "Hood Boy",
 		gender: "male",
 	},
-	{ filename: "03-Sendagaya-Shino-uniform.vrm", label: "Shino", gender: "female" },
-	{ filename: "04-Sakurada-Fumiriya.vrm", label: "Sakurada Fumiriya", gender: "male" },
+	{
+		filename: "03-Sendagaya-Shino-uniform.vrm",
+		label: "Shino",
+		gender: "female",
+	},
+	{
+		filename: "04-Sakurada-Fumiriya.vrm",
+		label: "Sakurada Fumiriya",
+		gender: "male",
+	},
+	{
+		filename: "naia_char_skin_head.vrm",
+		label: "Naia Skin Head",
+		gender: "female",
+	},
+	{
+		filename: "naia_char_with_hair.vrm",
+		label: "Naia With Hair",
+		gender: "female",
+	},
 ];
 
 const VOICE_DEFAULTS: Record<AvatarGender, string> = {
