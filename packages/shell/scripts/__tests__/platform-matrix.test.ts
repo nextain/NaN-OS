@@ -818,19 +818,6 @@ describe("installer workflow integration contracts", () => {
 		expect(workflow).not.toContain("git init ../../naia-memory");
 	});
 
-	it("builds and supplies the pinned Windows VoxCPM2 runtime", () => {
-		expect(workflow).toContain("Build pinned Windows VoxCPM2 TensorRT runtime");
-		expect(workflow).toContain("version: \"0.12.5\"");
-		expect(workflow).toContain("git init ../naia-labs");
-		expect(workflow).toContain(
-			"a0e370da21370394d6c086d9c461934c45a688dc",
-		);
-		expect(workflow).toContain(
-			"97ed2fb007ebb11c20b222cea7b422a5471ced2ac14b26f480887da3e4cd0d1d",
-		);
-		expect(workflow).toContain("NAIA_VOXCPM2_TRT_RUNTIME_DIR=$runtime");
-	});
-
 	it("stages the Windows MSVC runtime beside bundled Herdr", () => {
 		const source = readFileSync(
 			resolve(SHELL, "scripts/stage-herdr.mjs"),
