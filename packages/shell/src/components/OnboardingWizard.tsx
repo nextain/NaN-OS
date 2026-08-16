@@ -8,7 +8,7 @@ import {
 	listNaiaAssets,
 	toAssetUrl,
 	toLocalBlobUrl,
-	writeAgentKey,
+	writeAgentKeyStrict,
 	writeNaiaConfig,
 } from "../lib/adk-store";
 import {
@@ -404,7 +404,7 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
 		window.speechSynthesis.speak(utter);
 	}
 
-	async function refreshCascadeInstallationForOnboarding(): Promise<{
+	async function refreshVoxCpm2InstallationForOnboarding(): Promise<{
 		canStart: boolean;
 		ready: boolean;
 		summary: string;
@@ -412,7 +412,7 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
 	} | null> {
 		const generation = ++localVoiceInstallationRequestRef.current;
 		try {
-			const status = await invoke<unknown>("cascade_installation_status");
+			const status = await invoke<unknown>("voxcpm2_installation_status");
 			if (generation !== localVoiceInstallationRequestRef.current) return null;
 			if (
 				!status ||
@@ -444,8 +444,8 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
 		setLocalVoiceBusy(true);
 		setLocalVoiceMsg("");
 		try {
-			await invoke("install_cascade_runtime");
-			const status = await refreshCascadeInstallationForOnboarding();
+			await invoke("install_voxcpm2_runtime");
+			const status = await refreshVoxCpm2InstallationForOnboarding();
 			if (!status?.canStart)
 				throw new Error(status?.summary ?? "verification failed");
 			setLocalVoiceMsg(status.summary);
@@ -460,13 +460,13 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
 
 	useEffect(() => {
 		if (detectedVramGb != null && detectedVramGb >= 6) {
-			void refreshCascadeInstallationForOnboarding();
+			void refreshVoxCpm2InstallationForOnboarding();
 		}
 	}, [detectedVramGb]);
 
 	/**
-	 * Actually starts/stops the local VoxCPM2 runtime (same start_cascade /
-	 * stop_cascade lifecycle SettingsTab's Voice toggle uses) instead of only
+	 * Actually starts/stops the local VoxCPM2 runtime (same start_voxcpm2 /
+	 * stop_voxcpm2 lifecycle SettingsTab's Voice toggle uses) instead of only
 	 * saving a preference flag — a saved-but-never-started flag would be a
 	 * false "ready" state (WNV-06).
 	 */
@@ -476,7 +476,7 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
 		if (localVoiceEnabled) {
 			setLocalVoiceBusy(true);
 			try {
-				await invoke("stop_cascade");
+				await invoke("stop_voxcpm2");
 			} catch {
 				/* best-effort teardown — onboarding never blocks on this */
 			} finally {
@@ -489,25 +489,25 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
 		if (detectedVramGb == null || detectedVramGb < 6) return;
 		setLocalVoiceBusy(true);
 		try {
-			let installation = await refreshCascadeInstallationForOnboarding();
+			let installation = await refreshVoxCpm2InstallationForOnboarding();
 			if (!installation?.canStart) {
 				setLocalVoiceMsg(
 					getLocale() === "ko"
 						? "VoxCPM2 TensorRT를 설치하고 있습니다."
 						: "Installing VoxCPM2 TensorRT...",
 				);
-				await invoke("install_cascade_runtime");
-				installation = await refreshCascadeInstallationForOnboarding();
+				await invoke("install_voxcpm2_runtime");
+				installation = await refreshVoxCpm2InstallationForOnboarding();
 				if (!installation?.canStart)
 					throw new Error(installation?.summary ?? "verification failed");
 			}
 			// A resolved CASCADE_READY payload only proves ports were bound — Rust
 			// checks the facade too, so re-confirm readiness the same way
 			// SettingsTab's startCascadeAndConfirm does before trusting "ready".
-			const ready = await invoke<string>("start_cascade", {
+			const ready = await invoke<string>("start_voxcpm2", {
 				expectedLoaderProfile: "windows_trt_6g",
 			});
-			const afterStart = await refreshCascadeInstallationForOnboarding();
+			const afterStart = await refreshVoxCpm2InstallationForOnboarding();
 			if (!afterStart?.ready) {
 				setLocalVoiceMsg(afterStart?.summary ?? t("settings.cascadeError"));
 				return;
@@ -1014,7 +1014,7 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
 					});
 				// Write naiaKey to OS keychain so standalone naia-agent can read it.
 				if (typeof completedFlat.naiaKey === "string")
-					await writeAgentKey(
+					await writeAgentKeyStrict(
 						String(completedFlat.provider || "nextain"),
 						"naiaKey",
 						completedFlat.naiaKey,

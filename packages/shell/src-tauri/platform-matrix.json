@@ -66,6 +66,12 @@
 	},
 	"os": {
 		"win32": {
+			"staging": {
+				"voxcpm2Runtime": "required"
+			},
+			"voxcpm2RuntimeResources": {
+				"voxcpm2-runtime": "voxcpm2-runtime"
+			},
 			"targets": ["nsis", "msi"],
 			"bundleArchs": ["x64"],
 			"$bundleArchComment": "Vosk 0.3.45 산출물이 win64 + /MACHINE:X64 고정 — arm64 전체 번들은 명확 차단. Node arm64 아카이브 메타데이터는 유지.",

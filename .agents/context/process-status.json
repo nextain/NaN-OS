@@ -15,15 +15,17 @@
     "issue_doc": "docs/progress/ (F0-baseline, F0-contract, F{1,2,3}-baseline-contract, F0-graft) + 00-PHASES.md",
     "github_issue": null,
     "started": "2026-06-08T00:00:00Z",
-    "last_updated": "2026-08-13T13:30:00+09:00",
+    "last_updated": "2026-08-16T19:25:00+09:00",
     "status": "in_progress",
     "v017_launch_qa_447": {
       "issue": "https://github.com/nextain/naia-shell/issues/447",
-      "scope": "v0.1.7 clean-install LLM bootstrap, Herdr readiness, chat layout, onboarding avatar picker, and paired naia.land launch guidance",
+      "scope": "v0.1.7 clean-install LLM bootstrap, VoxCPM2 Windows managed installation and customer-facing status, Herdr first-frame readiness, chat layout, onboarding avatar picker, and paired naia.land launch guidance",
       "requirements": "docs/requirements.md FR-V017.1~5",
       "scenario": "docs/user-scenarios.md UC-V017-*",
       "status": "in_progress",
-      "last_updated": "2026-08-14T00:00:00+09:00"
+      "last_updated": "2026-08-16T19:25:00+09:00",
+      "field_evidence": "Installed ebdf59ac release on RTX 2070 Laptop: Settings login publishes readiness before config/Agent activation and coerces an invalid balance to 0; PowerShell Join-Path rejects the packaged \\\\?\\C:\\ verbatim resource path; Herdr server and client are healthy but the PTY is mounted only after readiness polling, losing the initial frame.",
+      "validation_evidence": "Actual Nextain chat and numeric balance passed; remote Cascade /health and /ws passed; Playwright 14 passed and 5 skipped; targeted Vitest 171 passed and 9 skipped; Rust library 204 passed; TypeScript build and typecheck passed."
     },
     "windows_trt_latency_14": {
       "issue": "https://github.com/nextain/alpha-adk/issues/14",

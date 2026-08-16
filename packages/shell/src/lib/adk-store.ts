@@ -431,13 +431,26 @@ export async function writeAgentKey(
 	keyField: "apiKey" | "naiaKey",
 	value: string,
 ): Promise<void> {
+	await writeAgentKeyStrict(provider, keyField, value).catch(() => {
+		// Best-effort callers still have an in-process creds_update fallback.
+	});
+}
+
+/**
+ * Persist a provider credential for flows that cannot report completion until
+ * the standalone Agent can recover the same credential after a restart.
+ */
+export async function writeAgentKeyStrict(
+	provider: string,
+	keyField: "apiKey" | "naiaKey",
+	value: string,
+): Promise<void> {
 	const adkPath = getAdkPath();
-	if (!adkPath || !value) return;
+	if (!adkPath) throw new Error("ADK path is not configured");
+	if (!value) throw new Error("Agent credential is empty");
 	const envKey = resolveAgentEnvKey(provider, keyField);
 	if (!envKey) return;
-	await invoke("write_agent_key", { adkPath, envKey, value }).catch(() => {
-		// Keychain write failure is non-fatal — creds_update IPC handles current session.
-	});
+	await invoke("write_agent_key", { adkPath, envKey, value });
 }
 
 /**
@@ -736,7 +749,7 @@ async function writeNaiaConfigNow(
 			const naiaKey = await getSecretKey("naiaKey");
 			if (naiaKey) manifestConfig = { ...manifestConfig, naiaKey };
 		} catch {
-			// Native start_cascade independently verifies the credential. A secure
+			// Native start_voxcpm2 independently verifies the profile. A secure
 			// store failure therefore remains fail-closed here.
 		}
 	}

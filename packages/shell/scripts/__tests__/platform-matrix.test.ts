@@ -66,6 +66,8 @@ const STAGING_PREFIXES = [
 	"bgm-sidecar/",
 	"resources/",
 	"cascade-loader/",
+	"cascade-runtime/",
+	"voxcpm2-runtime/",
 ];
 
 describe("platform-matrix 스키마 (FR-INSTALL.1)", () => {
@@ -115,6 +117,9 @@ describe("platform-matrix 스키마 (FR-INSTALL.1)", () => {
 			bgmSidecar: "required",
 			cascadeLoader: "optional",
 			herdr: "optional",
+		});
+		expect(matrix.os.win32.staging).toEqual({
+			voxcpm2Runtime: "required",
 		});
 	});
 	it("전체 번들 지원 arch = win/linux x64, darwin x64+arm64 (Vosk 네이티브 제약을 명시)", () => {
@@ -203,14 +208,14 @@ describe("platform-matrix 스키마 (FR-INSTALL.1)", () => {
 		expect(wix).not.toContain("naia-adk");
 		const manifest = JSON.parse(
 			readFileSync(
-				resolve(SHELL, "scripts/cascade-runtime-manifest.json"),
+				resolve(SHELL, "scripts/voxcpm2-runtime-manifest.json"),
 				"utf8",
 			),
 		);
-		expect(manifest.uv.windowsX64Sha256).toMatch(/^[a-f0-9]{64}$/);
-		expect(manifest.python).toMatch(/^3\.10\./);
+		expect(manifest.profile).toBe("windows_trt_6g");
+		expect(manifest.runtime.python).toMatch(/^3\.10\./);
 		expect(manifest.model.revision).toMatch(/^[a-f0-9]{40}$/);
-		for (const value of Object.values(manifest.packages))
+		for (const value of Object.values(manifest.runtime.packages))
 			expect(String(value)).not.toMatch(/[<>=~^*]/);
 	});
 
@@ -224,6 +229,17 @@ describe("platform-matrix 스키마 (FR-INSTALL.1)", () => {
 		expect(runtime).toContain("Access-Control-Allow-Origin");
 		expect(runtime).toContain("def do_OPTIONS(self):");
 		expect(runtime).not.toContain('Access-Control-Allow-Origin", "*"');
+	});
+
+	it("prepares only the model and rolls back a failed engine replacement", () => {
+		const provisioner = readFileSync(
+			resolve(SHELL, "src-tauri/windows/prepare-voxcpm2-model.ps1"),
+			"utf8",
+		);
+		expect(provisioner).not.toMatch(/\b(?:pip install|uv pip|uv python|uv venv)\b/i);
+		expect(provisioner).toContain("voxcpm2_trt.pending");
+		expect(provisioner).toContain("voxcpm2_trt.backup");
+		expect(provisioner).toContain("Move-Item -LiteralPath $backup -Destination $engine");
 	});
 
 	it("darwin icon = 전체 배열 (base 5원소 + icns — 부분 델타 금지, RFC 7386 배열 대체)", () => {
@@ -570,9 +586,26 @@ describe("conf 생성 golden (FR-INSTALL.2)", () => {
 			expect(withIt.bundle.resources["cascade-runtime"]).toBe(
 				"cascade-runtime",
 			);
+			expect(without.bundle.resources["cascade-runtime"]).toBeUndefined();
 			expect(
 				without.bundle.resources["cascade-loader/scripts"],
 			).toBeUndefined();
+		}
+	});
+
+	it("Windows VoxCPM2 runtime is a separate required resource", () => {
+		const windows = generateConf(matrix, "win32", {
+			cascadeLoaderPresent: false,
+			voxcpm2RuntimePresent: true,
+		});
+		expect(windows.bundle.resources["voxcpm2-runtime"]).toBe(
+			"voxcpm2-runtime",
+		);
+		for (const os of ["linux", "darwin"] as const) {
+			const conf = generateConf(matrix, os, {
+				voxcpm2RuntimePresent: true,
+			});
+			expect(conf.bundle.resources["voxcpm2-runtime"]).toBeUndefined();
 		}
 	});
 

@@ -300,7 +300,11 @@ export function extractArchive(
 export function generateConf(
 	matrix,
 	platform,
-	{ cascadeLoaderPresent = false, herdrPresent = false } = {},
+	{
+		cascadeLoaderPresent = false,
+		herdrPresent = false,
+		voxcpm2RuntimePresent = false,
+	} = {},
 ) {
 	const row = matrix.os[platform];
 	if (!row) {
@@ -314,6 +318,8 @@ export function generateConf(
 	for (const f of row.msvcRedist?.files ?? []) resources[`resources/${f}`] = f;
 	if (cascadeLoaderPresent)
 		Object.assign(resources, matrix.common.cascadeLoaderResources);
+	if (voxcpm2RuntimePresent)
+		Object.assign(resources, row.voxcpm2RuntimeResources ?? {});
 	if (herdrPresent) Object.assign(resources, matrix.common.herdrResources);
 
 	const { $comment: _omit, ...installer } = row.installer ?? {};
@@ -643,11 +649,24 @@ async function main() {
 			script: "scripts/stage-herdr.mjs",
 			sibling: resolve(herdrReleaseDir(), "herdr.exe"),
 		},
+		...(platform === "win32"
+			? [
+					{
+						key: "voxcpm2Runtime",
+						script: "scripts/stage-voxcpm2-runtime.mjs",
+						sibling:
+							process.env.NAIA_VOXCPM2_TRT_RUNTIME_DIR ?? "",
+					},
+				]
+			: []),
 	];
 	let cascadeLoaderPresent = false;
 	let herdrPresent = false;
+	let voxcpm2RuntimePresent = false;
 	for (const unit of stagingUnits) {
-		const policy = matrix.common.staging?.[unit.key];
+		const policy =
+			matrix.os[platform].staging?.[unit.key] ??
+			matrix.common.staging?.[unit.key];
 		if (policy !== "required" && policy !== "optional") {
 			throw new Error(
 				`[stage-runtime] 매트릭스 staging.${unit.key} 정책 불명: ${JSON.stringify(policy)} (required|optional 만 허용)`,
@@ -663,6 +682,7 @@ async function main() {
 		run(`node ${unit.script}`, SHELL); // required + sibling 부재 = 스크립트 자신의 명확한 에러로 중단
 		if (unit.key === "cascadeLoader") cascadeLoaderPresent = true;
 		if (unit.key === "herdr") herdrPresent = true;
+		if (unit.key === "voxcpm2Runtime") voxcpm2RuntimePresent = true;
 	}
 
 	for (const relativePath of matrix.os[platform].wrappedStaticExecutables) {
@@ -675,6 +695,7 @@ async function main() {
 	const conf = generateConf(matrix, platform, {
 		cascadeLoaderPresent,
 		herdrPresent,
+		voxcpm2RuntimePresent,
 	});
 	writeFileSync(GENERATED_CONF, `${JSON.stringify(conf, null, "\t")}\n`);
 	console.log(`[stage-runtime] ④ conf 생성 → ${GENERATED_CONF}`);

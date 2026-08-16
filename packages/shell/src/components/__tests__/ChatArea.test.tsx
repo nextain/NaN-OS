@@ -1334,7 +1334,7 @@ describe("ChatArea", () => {
 		ttsSyncMocks.synthesizeTts.mockRejectedValue(new Error("voice starting"));
 		mockInvoke.mockImplementation((command: string) =>
 			Promise.resolve(
-				command === "cascade_runtime_status" ? "starting" : undefined,
+				command === "voxcpm2_runtime_status" ? "starting" : undefined,
 			),
 		);
 		localStorage.setItem(

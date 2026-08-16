@@ -370,6 +370,7 @@ fn naia_data_home_with(
 /// service entry). Carries both historical service key spellings.
 const ADOPTED_CASCADE_READY: &str =
     r#"{"facade_port":8910,"services":[{"kind":"tts","id":"tts"}],"adopted":true}"#;
+const ADOPTED_VOXCPM2_READY: &str = r#"{"facade_port":8910,"services":[{"kind":"tts","id":"tts"}],"profile":"windows_trt_6g","backend":"tensorrt_locdit","adopted":true}"#;
 
 /// Probe the shared local cascade façade. True only when :8910 answers the
 /// health contract with an enabled TTS service — port reachability alone is
@@ -1158,6 +1159,43 @@ impl Drop for CascadeProcess {
     }
 }
 
+/// A process on :8910 is adoptable as local Windows voice only when health
+/// identifies the direct VoxCPM2 TensorRT backend. A remote/generic Cascade
+/// facade must never be mistaken for the local GPU service.
+fn local_voxcpm2_is_healthy() -> bool {
+    let agent = ureq::AgentBuilder::new()
+        .timeout(std::time::Duration::from_millis(700))
+        .build();
+    match agent.get("http://127.0.0.1:8910/health").call() {
+        Ok(resp) => resp
+            .into_json::<serde_json::Value>()
+            .ok()
+            .is_some_and(|value| {
+                value.get("ok").and_then(serde_json::Value::as_bool) == Some(true)
+                    && value.get("profile").and_then(serde_json::Value::as_str)
+                        == Some("windows_trt_6g")
+                    && value.get("backend").and_then(serde_json::Value::as_str)
+                        == Some("tensorrt_locdit")
+            }),
+        Err(_) => false,
+    }
+}
+
+/// Direct Windows VoxCPM2 TensorRT voice service. Remote Cascade sessions are
+/// WebSocket providers owned by the frontend voice layer; they never share
+/// this local child-process lifecycle.
+struct VoxCpm2Process {
+    child: Child,
+    ready: String,
+}
+impl Drop for VoxCpm2Process {
+    fn drop(&mut self) {
+        let _ = self.child.kill();
+        let _ = self.child.wait();
+        remove_pid_file("voxcpm2");
+    }
+}
+
 struct AppState {
     agent: Mutex<Option<AgentProcess>>,
     /// Serializes every agent spawn/publication with Discord repair and quarantine.
@@ -1182,6 +1220,10 @@ struct AppState {
     /// settings events can otherwise both observe an empty `cascade` slot and
     /// launch competing supervisors for the same :8901/:8902/:8910 ports.
     cascade_start: tokio::sync::Mutex<()>,
+    /// Windows-only direct VoxCPM2 TensorRT service. It is intentionally
+    /// isolated from the legacy local Cascade supervisor.
+    voxcpm2: Mutex<Option<VoxCpm2Process>>,
+    voxcpm2_start: tokio::sync::Mutex<()>,
     gateway: Mutex<Option<GatewayProcess>>,
     health_monitor_shutdown: Mutex<Option<Arc<std::sync::atomic::AtomicBool>>>,
     /// Random state token for OAuth deep link CSRF protection.
@@ -4807,7 +4849,7 @@ fn read_cascade_loader_profile(manifest: &std::path::Path) -> Option<String> {
 /// download a model, create a venv, or start a GPU process.
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
-struct CascadeInstallationStep {
+struct VoxCpm2InstallationStep {
     id: &'static str,
     label: &'static str,
     state: &'static str,
@@ -4815,12 +4857,12 @@ struct CascadeInstallationStep {
     action_available: bool,
     progress_percent: u8,
     retryable: bool,
-    failure: Option<CascadeInstallationFailure>,
+    failure: Option<VoxCpm2InstallationFailure>,
 }
 
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
-struct CascadeInstallationFailure {
+struct VoxCpm2InstallationFailure {
     code: &'static str,
     message: &'static str,
     retryable: bool,
@@ -4828,23 +4870,34 @@ struct CascadeInstallationFailure {
 
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
-struct CascadeInstallationStatus {
+struct VoxCpm2InstallationStatus {
     phase: &'static str,
     ready: bool,
     can_start: bool,
     summary: String,
-    steps: Vec<CascadeInstallationStep>,
+    steps: Vec<VoxCpm2InstallationStep>,
 }
 
 #[derive(Clone, Debug)]
-struct CascadeInstallationProbe {
-    loader: bool,
+struct VoxCpm2InstallationProbe {
+    runtime_entrypoint: bool,
     installer_available: bool,
     python_runtime: bool,
-    cascade_service_bundle: bool,
+    trt_service_bundle: bool,
     voxcpm2_model: bool,
     reference_voices: bool,
     facade_healthy: bool,
+}
+
+fn voxcpm2_runtime_root() -> std::path::PathBuf {
+    std::env::var_os("NAIA_VOXCPM2_RUNTIME_ROOT")
+        .filter(|value| !value.is_empty())
+        // Preserve existing installations created before the runtime split.
+        .or_else(|| std::env::var_os("NAIA_CASCADE_RUNTIME_ROOT"))
+        .filter(|value| !value.is_empty())
+        .map(std::path::PathBuf::from)
+        .or_else(|| dirs::home_dir().map(|home| home.join("naia-omni")))
+        .unwrap_or_else(|| std::path::PathBuf::from("naia-omni"))
 }
 
 fn cascade_runtime_root() -> std::path::PathBuf {
@@ -4855,14 +4908,35 @@ fn cascade_runtime_root() -> std::path::PathBuf {
         .unwrap_or_else(|| std::path::PathBuf::from("naia-omni"))
 }
 
-fn cascade_bundle_root(app: &tauri::AppHandle) -> Option<std::path::PathBuf> {
-    let root = app.path().resource_dir().ok()?.join("cascade-runtime");
+fn voxcpm2_bundle_root(app: &tauri::AppHandle) -> Option<std::path::PathBuf> {
+    let root = app.path().resource_dir().ok()?.join("voxcpm2-runtime");
     (root.join("manifest.json").is_file()
-        && root.join("install-voxcpm2.ps1").is_file()
+        && root.join("prepare-voxcpm2-model.ps1").is_file()
         && root.join("voxcpm2-runtime.py").is_file()
         && root.join("voices").is_dir()
-        && (!cfg!(windows) || root.join("uv.exe").is_file()))
+        && root.join("service").is_dir()
+        && (!cfg!(windows) || root.join("python").join("python.exe").is_file()))
     .then_some(root)
+}
+
+fn cascade_bundle_root(app: &tauri::AppHandle) -> Option<std::path::PathBuf> {
+    let root = app.path().resource_dir().ok()?.join("cascade-runtime");
+    (root.join("repos").is_dir()).then_some(root)
+}
+
+/// PowerShell path cmdlets treat the Windows verbatim prefix (`\\?\`) as a
+/// PowerShell drive name instead of a filesystem path. Tauri's resource_dir
+/// may return that form for an installed application, so remove only the
+/// transport prefix before handing paths to powershell.exe.
+fn powershell_compatible_path(path: &std::path::Path) -> std::path::PathBuf {
+    let raw = path.as_os_str().to_string_lossy();
+    if let Some(rest) = raw.strip_prefix(r"\\?\UNC\") {
+        return std::path::PathBuf::from(format!(r"\\{rest}"));
+    }
+    if let Some(rest) = raw.strip_prefix(r"\\?\") {
+        return std::path::PathBuf::from(rest);
+    }
+    path.to_path_buf()
 }
 
 fn cascade_managed_python(runtime_root: &std::path::Path) -> std::path::PathBuf {
@@ -4959,7 +5033,7 @@ fn voxcpm2_model_is_cached(runtime_root: &std::path::Path) -> bool {
     voxcpm2_model_is_cached_in_hubs(&hubs)
 }
 
-fn cascade_runtime_matches_bundle(
+fn voxcpm2_runtime_matches_bundle(
     runtime_root: &std::path::Path,
     bundle_root: Option<&std::path::Path>,
 ) -> bool {
@@ -5020,51 +5094,46 @@ fn voxcpm2_python_runtime_is_ready(python: &str, service_dir: &str) -> bool {
     command.status().is_ok_and(|status| status.success())
 }
 
-fn probe_cascade_installation(
-    _loader_dir: &str,
-    _adk_path: Option<&str>,
+fn probe_voxcpm2_installation(
     bundle_root: Option<&std::path::Path>,
-) -> CascadeInstallationProbe {
-    let runtime_root = cascade_runtime_root();
-    let service_dir = bundle_root.map(|root| {
-        root.join("repos")
-            .join("projects")
-            .join("naia-labs")
-            .join("avatar")
-            .join("service")
+) -> VoxCpm2InstallationProbe {
+    let runtime_root = voxcpm2_runtime_root();
+    let service_dir = bundle_root.map(|root| root.join("service"));
+    let bundled_python = bundle_root.map(voxcpm2_bundled_python);
+    let python = std::env::var("NAIA_VOXCPM2_PYTHON").ok().or_else(|| {
+        bundled_python
+            .as_ref()
+            .map(|path| path_to_string(path.clone()))
     });
-    // Voice-only TensorRT runtime. The retired Ditto environment is intentionally ignored.
-    let venv_python = cascade_managed_python(&runtime_root);
-    let python = std::env::var("NAIA_CASCADE_PYTHON")
-        .unwrap_or_else(|_| path_to_string(venv_python.clone()));
     let voxcpm2_model = voxcpm2_model_is_cached(&runtime_root);
     let reference_voices =
         bundle_root.is_some_and(|root| directory_has_extension(&root.join("voices"), "wav"));
 
-    CascadeInstallationProbe {
-        // Historical field name retained for serialization/test stability. It
-        // now means the direct Windows VoxCPM2 entrypoint, not a cascade loader.
-        loader: bundle_root.is_some_and(|root| root.join("voxcpm2-runtime.py").is_file()),
-        installer_available: bundle_root.is_some(),
-        python_runtime: venv_python.is_file()
-            && service_dir.as_ref().is_some_and(|dir| {
-                voxcpm2_python_runtime_is_ready(&python, dir.to_string_lossy().as_ref())
+    VoxCpm2InstallationProbe {
+        runtime_entrypoint: bundle_root
+            .is_some_and(|root| root.join("voxcpm2-runtime.py").is_file()),
+        installer_available: bundle_root.is_some_and(|root| {
+            root.join("prepare-voxcpm2-model.ps1").is_file()
+        }),
+        python_runtime: bundled_python.is_some_and(|path| path.is_file())
+            && python.as_ref().is_some_and(|python| {
+                service_dir.as_ref().is_some_and(|dir| {
+                    voxcpm2_python_runtime_is_ready(python, dir.to_string_lossy().as_ref())
+                })
             }),
-        cascade_service_bundle: service_dir.is_some_and(|dir| {
+        trt_service_bundle: service_dir.is_some_and(|dir| {
             dir.join("tts_server.py").is_file()
                 && dir.join("voxcpm2_trt.py").is_file()
                 && dir.join("render_admission.py").is_file()
         }),
-        // A venv without cached VoxCPM2 weights is not a runnable TTS runtime.
-        voxcpm2_model: venv_python.is_file()
-            && voxcpm2_model
-            && cascade_runtime_matches_bundle(&runtime_root, bundle_root),
+        voxcpm2_model: voxcpm2_model
+            && voxcpm2_runtime_matches_bundle(&runtime_root, bundle_root),
         reference_voices,
         facade_healthy: false,
     }
 }
 
-fn cascade_install_step(
+fn voxcpm2_install_step(
     id: &'static str,
     label: &'static str,
     action: &'static str,
@@ -5072,8 +5141,8 @@ fn cascade_install_step(
     installer_available: bool,
     failure_code: &'static str,
     failure_message: &'static str,
-) -> CascadeInstallationStep {
-    CascadeInstallationStep {
+) -> VoxCpm2InstallationStep {
+    VoxCpm2InstallationStep {
         id,
         label,
         state: if complete { "complete" } else { "blocked" },
@@ -5081,7 +5150,7 @@ fn cascade_install_step(
         action_available: !complete && installer_available,
         progress_percent: if complete { 100 } else { 0 },
         retryable: !complete && installer_available,
-        failure: (!complete).then_some(CascadeInstallationFailure {
+        failure: (!complete).then_some(VoxCpm2InstallationFailure {
             code: failure_code,
             message: failure_message,
             retryable: installer_available,
@@ -5089,13 +5158,13 @@ fn cascade_install_step(
     }
 }
 
-fn classify_cascade_installation_for_profile(
-    probe: CascadeInstallationProbe,
+fn classify_voxcpm2_installation_for_profile(
+    probe: VoxCpm2InstallationProbe,
     _loader_profile: Option<&str>,
-) -> CascadeInstallationStatus {
-    let prerequisites_complete = probe.loader
+) -> VoxCpm2InstallationStatus {
+    let prerequisites_complete = probe.runtime_entrypoint
         && probe.python_runtime
-        && probe.cascade_service_bundle
+        && probe.trt_service_bundle
         && probe.voxcpm2_model
         && probe.reference_voices;
     let ready = prerequisites_complete && probe.facade_healthy;
@@ -5111,23 +5180,23 @@ fn classify_cascade_installation_for_profile(
         "ready-to-start" => "Local runtime files are ready. Services have not been started yet.".to_string(),
         _ => "VoxCPM2 TensorRT installation is required. Selecting local voice will install the missing components and start the engine.".to_string(),
     };
-    CascadeInstallationStatus {
+    VoxCpm2InstallationStatus {
         phase,
         ready,
         can_start: prerequisites_complete,
         summary,
         steps: {
             let mut steps = vec![
-                cascade_install_step(
+                voxcpm2_install_step(
                     "runtime-entrypoint",
                     "VoxCPM2 runtime",
                     "verify",
-                    probe.loader,
+                    probe.runtime_entrypoint,
                     probe.installer_available,
                     "VOXCPM2_RUNTIME_ENTRYPOINT_MISSING",
                     "The direct Windows VoxCPM2 runtime is not packaged.",
                 ),
-                cascade_install_step(
+                voxcpm2_install_step(
                     "python-runtime",
                     "Python runtime",
                     "install",
@@ -5136,18 +5205,18 @@ fn classify_cascade_installation_for_profile(
                     "CASCADE_PYTHON_RUNTIME_MISSING",
                     "The managed Python environment cannot load the pinned CUDA voice dependencies.",
                 ),
-                cascade_install_step(
+                voxcpm2_install_step(
                     "trt-voice-service",
                     "TensorRT voice service",
                     "install",
-                    probe.cascade_service_bundle,
+                    probe.trt_service_bundle,
                     probe.installer_available,
                     "VOXCPM2_TRT_SERVICE_MISSING",
                     "The direct VoxCPM2 TensorRT service files are not packaged.",
                 ),
             ];
             steps.extend([
-                cascade_install_step(
+                voxcpm2_install_step(
                     "voxcpm2-model",
                     "VoxCPM2 model",
                     "download",
@@ -5156,7 +5225,7 @@ fn classify_cascade_installation_for_profile(
                     "VOXCPM2_MODEL_MISSING",
                     "The VoxCPM2 runtime or cached model is not installed.",
                 ),
-                cascade_install_step(
+                voxcpm2_install_step(
                     "reference-voices",
                     "Reference voices",
                     "download",
@@ -5171,27 +5240,65 @@ fn classify_cascade_installation_for_profile(
     }
 }
 
-fn classify_cascade_installation(probe: CascadeInstallationProbe) -> CascadeInstallationStatus {
-    classify_cascade_installation_for_profile(probe, None)
+fn classify_voxcpm2_installation(
+    probe: VoxCpm2InstallationProbe,
+) -> VoxCpm2InstallationStatus {
+    classify_voxcpm2_installation_for_profile(probe, None)
+}
+
+/// Preserve the pre-existing local Cascade supervisor contract independently
+/// from the Windows product's direct VoxCPM2 runtime. This check has no install
+/// side effects and is used only by the legacy `start_cascade` command.
+fn legacy_cascade_prerequisites_are_ready(
+    loader_dir: &str,
+    bundle_root: Option<&std::path::Path>,
+) -> bool {
+    let Some(bundle_root) = bundle_root else {
+        return false;
+    };
+    let runtime_root = cascade_runtime_root();
+    let service_dir = bundle_root
+        .join("repos")
+        .join("projects")
+        .join("naia-labs")
+        .join("avatar")
+        .join("service");
+    let python_path = cascade_managed_python(&runtime_root);
+    let python = std::env::var("NAIA_CASCADE_PYTHON")
+        .unwrap_or_else(|_| path_to_string(python_path.clone()));
+
+    std::path::Path::new(loader_dir)
+        .join("loader")
+        .join("__main__.py")
+        .is_file()
+        && bundle_root.join("voxcpm2-runtime.py").is_file()
+        && python_path.is_file()
+        && service_dir.join("tts_server.py").is_file()
+        && service_dir.join("voxcpm2_trt.py").is_file()
+        && service_dir.join("render_admission.py").is_file()
+        && directory_has_extension(&bundle_root.join("voices"), "wav")
+        && voxcpm2_model_is_cached(&runtime_root)
+        && voxcpm2_runtime_matches_bundle(&runtime_root, Some(bundle_root))
+        && voxcpm2_python_runtime_is_ready(&python, service_dir.to_string_lossy().as_ref())
 }
 
 #[tauri::command]
-async fn install_cascade_runtime(
+async fn install_voxcpm2_runtime(
     app: tauri::AppHandle,
     state: tauri::State<'_, AppState>,
-) -> Result<CascadeInstallationStatus, String> {
-    let _install_guard = state.cascade_start.lock().await;
+) -> Result<VoxCpm2InstallationStatus, String> {
+    let _install_guard = state.voxcpm2_start.lock().await;
     let vram = tokio::task::spawn_blocking(detect_vram_gb_blocking)
         .await
         .map_err(|error| format!("VRAM detection task failed: {error}"))?;
     validate_cascade_vram(vram, Some("windows_trt_6g"))?;
-    let bundle_root = cascade_bundle_root(&app)
+    let bundle_root = voxcpm2_bundle_root(&app)
         .ok_or_else(|| "VoxCPM2 installer payload is not packaged.".to_string())?;
     if !cfg!(windows) {
         return Err("VoxCPM2 managed installation is available on Windows only.".to_string());
     }
-    let runtime_root = cascade_runtime_root();
-    let installer = bundle_root.join("install-voxcpm2.ps1");
+    let runtime_root = voxcpm2_runtime_root();
+    let installer = bundle_root.join("prepare-voxcpm2-model.ps1");
     let log_path = runtime_root.join("voxcpm2-install.log");
     let install_result = tokio::task::spawn_blocking({
         let bundle_root = bundle_root.clone();
@@ -5207,6 +5314,9 @@ async fn install_cascade_runtime(
             let stderr = stdout
                 .try_clone()
                 .map_err(|error| format!("Could not clone install log handle: {error}"))?;
+            let installer = powershell_compatible_path(&installer);
+            let bundle_root = powershell_compatible_path(&bundle_root);
+            let runtime_root = powershell_compatible_path(&runtime_root);
             let mut command = Command::new("powershell.exe");
             command
                 .args([
@@ -5246,23 +5356,21 @@ async fn install_cascade_runtime(
         .and_then(|home| std::fs::read_to_string(naia_data_home_from(home).join("adk-path")).ok())
         .map(|value| value.trim().to_string())
         .filter(|value| !value.is_empty());
-    let loader_dir = resolve_cascade_loader_dir(&app, adk_path.as_deref().unwrap_or_default());
-    let probe = tokio::task::spawn_blocking(move || {
-        probe_cascade_installation(&loader_dir, adk_path.as_deref(), Some(&bundle_root))
-    })
+    let probe =
+        tokio::task::spawn_blocking(move || probe_voxcpm2_installation(Some(&bundle_root)))
     .await
-    .map_err(|error| format!("cascade post-install verification failed: {error}"))?;
-    let status = classify_cascade_installation(probe);
+    .map_err(|error| format!("VoxCPM2 post-install verification failed: {error}"))?;
+    let status = classify_voxcpm2_installation(probe);
     status.can_start.then_some(status).ok_or_else(|| {
         "VoxCPM2 installer exited successfully but runtime verification is incomplete.".to_string()
     })
 }
 
 #[tauri::command]
-async fn cascade_installation_status(
+async fn voxcpm2_installation_status(
     app: tauri::AppHandle,
     state: tauri::State<'_, AppState>,
-) -> Result<CascadeInstallationStatus, String> {
+) -> Result<VoxCpm2InstallationStatus, String> {
     let adk_path = dirs::home_dir()
         .and_then(|home| std::fs::read_to_string(naia_data_home_from(home).join("adk-path")).ok())
         .map(|value| value.trim().to_string())
@@ -5274,15 +5382,14 @@ async fn cascade_installation_status(
                 .join("slots-manifest.json"),
         )
     });
-    let loader_dir = resolve_cascade_loader_dir(&app, adk_path.as_deref().unwrap_or_default());
-    let bundle_root = cascade_bundle_root(&app);
+    let bundle_root = voxcpm2_bundle_root(&app);
     let mut probe = tokio::task::spawn_blocking(move || {
-        probe_cascade_installation(&loader_dir, adk_path.as_deref(), bundle_root.as_deref())
+        probe_voxcpm2_installation(bundle_root.as_deref())
     })
     .await
-    .map_err(|error| format!("cascade installation status task failed: {error}"))?;
-    probe.facade_healthy = cascade_status(state).await.unwrap_or(false);
-    Ok(classify_cascade_installation_for_profile(
+    .map_err(|error| format!("VoxCPM2 installation status task failed: {error}"))?;
+    probe.facade_healthy = voxcpm2_status(state).await.unwrap_or(false);
+    Ok(classify_voxcpm2_installation_for_profile(
         probe,
         loader_profile.as_deref(),
     ))
@@ -5291,16 +5398,11 @@ async fn cascade_installation_status(
 /// 濡쒖뺄 cascade loader supervisor 瑜??ъ씠?쒖뭅濡?spawn. stdout `CASCADE_READY {json}`
 /// ?몃뱶?곗씠?щ줈 以鍮꾩셿猷??먯젙(紐⑤뜽 濡쒕뱶媛 湲몄뼱 timeout ?됰꼮??. ???꾨줈?몄뒪瑜?kill ?섎㈃
 /// loader 媛 VoxCPM2 ???먯떇 ?쒕퉬?ㅻ? teardown ?쒕떎(?먭꺽 湲덉?쨌濡쒖뺄 ?꾨쿋??.
-fn spawn_windows_voxcpm2(bundle_root: &std::path::Path) -> Result<CascadeProcess, String> {
-    let runtime_root = cascade_runtime_root();
-    let python = std::env::var("NAIA_CASCADE_PYTHON")
-        .unwrap_or_else(|_| path_to_string(cascade_managed_python(&runtime_root)));
-    let service_dir = bundle_root
-        .join("repos")
-        .join("projects")
-        .join("naia-labs")
-        .join("avatar")
-        .join("service");
+fn spawn_windows_voxcpm2(bundle_root: &std::path::Path) -> Result<VoxCpm2Process, String> {
+    let runtime_root = voxcpm2_runtime_root();
+    let python = std::env::var("NAIA_VOXCPM2_PYTHON")
+        .unwrap_or_else(|_| path_to_string(voxcpm2_bundled_python(bundle_root)));
+    let service_dir = bundle_root.join("service");
     let entrypoint = bundle_root.join("voxcpm2-runtime.py");
     let engine_dir = runtime_root.join("checkpoints").join("voxcpm2_trt");
     let log_path = log_dir().join("voxcpm2-stderr.log");
@@ -5385,9 +5487,17 @@ fn spawn_windows_voxcpm2(bundle_root: &std::path::Path) -> Result<CascadeProcess
             }
         }
     };
-    write_pid_file("cascade", child.id());
+    write_pid_file("voxcpm2", child.id());
     log_both(&format!("[Naia] Windows VoxCPM2 TensorRT ready: {ready}"));
-    Ok(CascadeProcess { child, ready })
+    Ok(VoxCpm2Process { child, ready })
+}
+
+fn voxcpm2_bundled_python(bundle_root: &std::path::Path) -> std::path::PathBuf {
+    if cfg!(windows) {
+        bundle_root.join("python").join("python.exe")
+    } else {
+        bundle_root.join("python").join("bin").join("python")
+    }
 }
 
 fn spawn_cascade(
@@ -5594,6 +5704,142 @@ async fn cascade_facade_is_healthy(ready: &str) -> bool {
 /// R2.2b: ?ㅼ젙?먯꽌 "濡쒖뺄 ?뚯꽦/cascade ?쒖옉". manifest(R2.2a 媛 write) + 媛먯? VRAM(total)?쇰줈
 /// loader supervisor 瑜??꾩슫?? ?대? 媛??以묒씠硫?湲곗〈 ready 諛섑솚(硫깅벑).
 #[tauri::command]
+async fn start_voxcpm2(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, AppState>,
+    expected_loader_profile: Option<String>,
+) -> Result<String, String> {
+    if !cfg!(windows) {
+        return Err("VoxCPM2 TensorRT local voice is available on Windows only.".to_string());
+    }
+    let _start_guard = state.voxcpm2_start.lock().await;
+    let adk_path = if debug_e2e_enabled() {
+        std::env::var("NAIA_E2E_ADK_PATH")
+            .ok()
+            .map(|value| value.trim().to_string())
+            .filter(|value| !value.is_empty())
+    } else {
+        dirs::home_dir()
+            .and_then(|home| {
+                std::fs::read_to_string(naia_data_home_from(home).join("adk-path")).ok()
+            })
+            .map(|value| value.trim().to_string())
+            .filter(|value| !value.is_empty())
+    }
+    .ok_or_else(|| "adk path not set (naia-settings workspace missing)".to_string())?;
+    let manifest_path = std::path::PathBuf::from(&adk_path)
+        .join("naia-settings")
+        .join("slots-manifest.json");
+    let profile = read_cascade_loader_profile(&manifest_path);
+    let expected = expected_loader_profile
+        .as_deref()
+        .filter(|value| !value.is_empty())
+        .ok_or_else(|| "voxcpm2_profile_expectation_required".to_string())?;
+    if expected != "windows_trt_6g" || profile.as_deref() != Some(expected) {
+        return Err("voxcpm2_profile_manifest_not_ready".to_string());
+    }
+
+    let prior_ready = {
+        let mut guard = lock_or_recover(&state.voxcpm2, "voxcpm2");
+        if let Some(process) = guard.as_mut() {
+            if matches!(process.child.try_wait(), Ok(None)) {
+                Some(process.ready.clone())
+            } else {
+                let _ = guard.take();
+                None
+            }
+        } else {
+            None
+        }
+    };
+    if let Some(ready) = prior_ready {
+        return Ok(ready);
+    }
+
+    let vram = tokio::task::spawn_blocking(detect_vram_gb_blocking)
+        .await
+        .map_err(|error| format!("VRAM detection task failed: {error}"))?;
+    validate_cascade_vram(vram, Some(expected))?;
+    let bundle_root = voxcpm2_bundle_root(&app)
+        .ok_or_else(|| "VoxCPM2 TensorRT runtime payload is not packaged".to_string())?;
+    let install_probe = tokio::task::spawn_blocking({
+        let bundle_root = bundle_root.clone();
+        move || probe_voxcpm2_installation(Some(&bundle_root))
+    })
+    .await
+    .map_err(|error| format!("VoxCPM2 installation check task failed: {error}"))?;
+    let installation = classify_voxcpm2_installation_for_profile(install_probe, Some(expected));
+    if !installation.can_start {
+        return Err(installation.summary);
+    }
+
+    if !debug_e2e_enabled() && local_voxcpm2_is_healthy() {
+        log_both("[Naia] Adopting healthy shared VoxCPM2 TensorRT service on :8910");
+        return Ok(ADOPTED_VOXCPM2_READY.to_string());
+    }
+    platform::kill_stale_voxcpm2();
+    let process = tokio::task::spawn_blocking(move || spawn_windows_voxcpm2(&bundle_root))
+        .await
+        .map_err(|error| format!("task error: {error}"))??;
+    let ready = process.ready.clone();
+    *lock_or_recover(&state.voxcpm2, "voxcpm2") = Some(process);
+    Ok(ready)
+}
+
+#[tauri::command]
+async fn stop_voxcpm2(state: tauri::State<'_, AppState>) -> Result<(), String> {
+    if let Some(mut process) = lock_or_recover(&state.voxcpm2, "voxcpm2").take() {
+        log_verbose("[Naia] Terminating local VoxCPM2 TensorRT service...");
+        let _ = process.child.kill();
+    }
+    platform::kill_stale_voxcpm2();
+    remove_pid_file("voxcpm2");
+    Ok(())
+}
+
+#[tauri::command]
+async fn voxcpm2_status(state: tauri::State<'_, AppState>) -> Result<bool, String> {
+    let ready = {
+        let mut guard = lock_or_recover(&state.voxcpm2, "voxcpm2");
+        if let Some(process) = guard.as_mut() {
+            let ready = matches!(process.child.try_wait(), Ok(None))
+                .then(|| process.ready.clone());
+            if ready.is_none() {
+                let _ = guard.take();
+            }
+            ready
+        } else {
+            None
+        }
+    };
+    Ok(match ready {
+        Some(ready) => cascade_facade_is_healthy(&ready).await,
+        None => local_voxcpm2_is_healthy(),
+    })
+}
+
+#[tauri::command]
+async fn voxcpm2_runtime_status(state: tauri::State<'_, AppState>) -> Result<String, String> {
+    if state.voxcpm2_start.try_lock().is_err() {
+        return Ok("starting".to_string());
+    }
+    let running = {
+        let mut guard = lock_or_recover(&state.voxcpm2, "voxcpm2");
+        if let Some(process) = guard.as_mut() {
+            if matches!(process.child.try_wait(), Ok(None)) {
+                true
+            } else {
+                let _ = guard.take();
+                false
+            }
+        } else {
+            local_voxcpm2_is_healthy()
+        }
+    };
+    Ok(if running { "running" } else { "stopped" }.to_string())
+}
+
+#[tauri::command]
 async fn start_cascade(
     app: tauri::AppHandle,
     state: tauri::State<'_, AppState>,
@@ -5667,20 +5913,17 @@ async fn start_cascade(
         .map_err(|e| format!("VRAM detection task failed: {e}"))?;
     let vram = validate_cascade_vram(vram, loader_profile.as_deref())?;
 
-    // The frontend normally checks this first, but IPC callers must not be
-    // able to bypass the standalone-installation boundary.
-    let install_probe = tokio::task::spawn_blocking({
+    // Keep the legacy local Cascade launch contract independent of the direct
+    // Windows VoxCPM2 installation commands.
+    let cascade_prerequisites_ready = tokio::task::spawn_blocking({
         let loader_dir = loader_dir.clone();
-        let adk_path = adk_path.clone();
         let bundle_root = bundle_root.clone();
-        move || probe_cascade_installation(&loader_dir, Some(&adk_path), bundle_root.as_deref())
+        move || legacy_cascade_prerequisites_are_ready(&loader_dir, bundle_root.as_deref())
     })
     .await
     .map_err(|e| format!("cascade installation check task failed: {e}"))?;
-    let installation =
-        classify_cascade_installation_for_profile(install_probe, loader_profile.as_deref());
-    if !installation.can_start {
-        return Err(installation.summary);
+    if !cascade_prerequisites_ready {
+        return Err("Legacy Cascade runtime prerequisites are incomplete.".to_string());
     }
 
     // FR-SHELL-ISO (#425): the single-GPU cascade runtime is SHARED between
@@ -5703,20 +5946,13 @@ async fn start_cascade(
 
     let loader_profile = expected_loader_profile.to_string();
     let proc = tokio::task::spawn_blocking(move || {
-        if cfg!(windows) && loader_profile == "windows_trt_6g" {
-            let bundle = bundle_root
-                .as_deref()
-                .ok_or_else(|| "VoxCPM2 TensorRT runtime payload is not packaged".to_string())?;
-            spawn_windows_voxcpm2(bundle)
-        } else {
-            spawn_cascade(
-                &loader_dir,
-                &adk_path,
-                bundle_root.as_deref(),
-                Some(vram),
-                loader_profile,
-            )
-        }
+        spawn_cascade(
+            &loader_dir,
+            &adk_path,
+            bundle_root.as_deref(),
+            Some(vram),
+            loader_profile,
+        )
     })
     .await
     .map_err(|e| format!("task error: {e}"))??;
@@ -9988,6 +10224,8 @@ pub fn run() {
             bgm_start: tokio::sync::Mutex::new(()),
             cascade: Mutex::new(None),
             cascade_start: tokio::sync::Mutex::new(()),
+            voxcpm2: Mutex::new(None),
+            voxcpm2_start: tokio::sync::Mutex::new(()),
             gateway: Mutex::new(None),
             health_monitor_shutdown: Mutex::new(None),
             oauth_state: Arc::new(Mutex::new(None)),
@@ -10053,8 +10291,12 @@ pub fn run() {
             read_naia_config,
             write_naia_config,
             write_slots_manifest,
-            cascade_installation_status,
-            install_cascade_runtime,
+            voxcpm2_installation_status,
+            install_voxcpm2_runtime,
+            start_voxcpm2,
+            stop_voxcpm2,
+            voxcpm2_status,
+			voxcpm2_runtime_status,
             start_cascade,
             stop_cascade,
             cascade_status,
@@ -10374,6 +10616,9 @@ pub fn run() {
             if !debug_e2e_enabled() && !local_cascade_is_healthy() {
                 platform::kill_stale_cascade();
             }
+            if !debug_e2e_enabled() && !local_voxcpm2_is_healthy() {
+                platform::kill_stale_voxcpm2();
+            }
 
             // Spawn Gateway first (Agent connects to it via WebSocket)
             let (gateway_running, gateway_managed) = match spawn_gateway() {
@@ -10534,6 +10779,14 @@ pub fn run() {
                     }
                     remove_pid_file("cascade");
 
+                    if let Ok(mut guard) = state.voxcpm2.lock() {
+                        if let Some(mut process) = guard.take() {
+                            log_verbose("[Naia] Terminating local VoxCPM2 TensorRT service...");
+                            let _ = process.child.kill();
+                        }
+                    }
+                    remove_pid_file("voxcpm2");
+
                     // Kill Node Host + Gateway (only if we spawned)
                     let gateway_lock = state.gateway.lock();
                     if let Ok(mut guard) = gateway_lock {
@@ -10566,6 +10819,22 @@ pub fn run() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn powershell_paths_drop_windows_verbatim_prefixes() {
+        assert_eq!(
+            powershell_compatible_path(std::path::Path::new(r"\\?\C:\Program Files\Naia")),
+            std::path::PathBuf::from(r"C:\Program Files\Naia")
+        );
+        assert_eq!(
+            powershell_compatible_path(std::path::Path::new(r"\\?\UNC\server\share\Naia")),
+            std::path::PathBuf::from(r"\\server\share\Naia")
+        );
+        assert_eq!(
+            powershell_compatible_path(std::path::Path::new(r"C:\Users\LukeYang\naia-omni")),
+            std::path::PathBuf::from(r"C:\Users\LukeYang\naia-omni")
+        );
+    }
 
     #[test]
     fn only_main_window_destruction_tears_down_owned_runtime() {
@@ -11046,12 +11315,12 @@ mod tests {
 
     #[test]
     fn voice_installation_requires_only_voice_artifacts() {
-        let status = classify_cascade_installation_for_profile(
-            CascadeInstallationProbe {
-                loader: true,
+        let status = classify_voxcpm2_installation_for_profile(
+            VoxCpm2InstallationProbe {
+                runtime_entrypoint: true,
                 installer_available: true,
                 python_runtime: true,
-                cascade_service_bundle: true,
+                trt_service_bundle: true,
                 voxcpm2_model: true,
                 reference_voices: true,
                 facade_healthy: false,
@@ -11071,12 +11340,12 @@ mod tests {
     }
 
     #[test]
-    fn cascade_installation_exposes_retryable_install_when_payload_is_packaged() {
-        let status = classify_cascade_installation(CascadeInstallationProbe {
-            loader: true,
+    fn voxcpm2_installation_exposes_retryable_install_when_payload_is_packaged() {
+        let status = classify_voxcpm2_installation(VoxCpm2InstallationProbe {
+            runtime_entrypoint: true,
             installer_available: true,
             python_runtime: true,
-            cascade_service_bundle: false,
+            trt_service_bundle: false,
             voxcpm2_model: false,
             reference_voices: false,
             facade_healthy: false,
@@ -11126,29 +11395,29 @@ mod tests {
         )
         .unwrap();
 
-        assert!(cascade_runtime_matches_bundle(
+        assert!(voxcpm2_runtime_matches_bundle(
             runtime.path(),
             Some(bundle.path())
         ));
     }
 
     #[test]
-    fn cascade_installation_requires_a_live_facade_before_reporting_ready() {
-        let prerequisites = CascadeInstallationProbe {
-            loader: true,
+    fn voxcpm2_installation_requires_a_live_facade_before_reporting_ready() {
+        let prerequisites = VoxCpm2InstallationProbe {
+            runtime_entrypoint: true,
             installer_available: true,
             python_runtime: true,
-            cascade_service_bundle: true,
+            trt_service_bundle: true,
             voxcpm2_model: true,
             reference_voices: true,
             facade_healthy: false,
         };
-        let not_started = classify_cascade_installation(prerequisites.clone());
+        let not_started = classify_voxcpm2_installation(prerequisites.clone());
         assert_eq!(not_started.phase, "ready-to-start");
         assert!(not_started.can_start);
         assert!(!not_started.ready);
 
-        let running = classify_cascade_installation(CascadeInstallationProbe {
+        let running = classify_voxcpm2_installation(VoxCpm2InstallationProbe {
             facade_healthy: true,
             ..prerequisites
         });

@@ -47,12 +47,16 @@ vi.mock("@tauri-apps/plugin-opener", () => ({
 	openUrl: vi.fn().mockResolvedValue(undefined),
 }));
 
-vi.mock("../../lib/chat-service", () => ({
+const chatServiceMocks = vi.hoisted(() => ({
 	directToolCall: vi.fn().mockResolvedValue({ success: false }),
+	reloadAgentSettings: vi.fn().mockResolvedValue(undefined),
 	sendAuthUpdate: vi.fn().mockResolvedValue(undefined),
+	sendAuthUpdateStrict: vi.fn().mockResolvedValue(undefined),
 	sendNotifyConfig: vi.fn().mockResolvedValue(undefined),
 	sendCredsUpdate: vi.fn().mockResolvedValue(undefined),
 }));
+
+vi.mock("../../lib/chat-service", () => chatServiceMocks);
 
 // (gateway-sync mock 제거됨 2026-06-12 — 모듈 삭제)
 
@@ -531,6 +535,7 @@ describe("SettingsTab", () => {
 	});
 
 	it("persists Naia auth callback even when no config exists yet", async () => {
+		localStorage.setItem("naia-adk-path", "C:\\Users\\tester\\naia-adk");
 		mockInvoke.mockResolvedValue([]);
 		const authReady = vi.fn();
 		window.addEventListener("naia_auth_ready", authReady);
@@ -561,6 +566,22 @@ describe("SettingsTab", () => {
 		expect(saved.apiKey).toBe("");
 		expect(saved.naiaKey).toBe("gw-test-key");
 		expect(saved.naiaUserId).toBe("user-123");
+		expect(mockInvoke).toHaveBeenCalledWith("write_agent_key", {
+			adkPath: "C:\\Users\\tester\\naia-adk",
+			envKey: "NAIA_ANYLLM_API_KEY",
+			value: "gw-test-key",
+		});
+		expect(mockInvoke).toHaveBeenCalledWith(
+			"write_naia_config",
+			expect.objectContaining({
+				adkPath: "C:\\Users\\tester\\naia-adk",
+				json: expect.any(String),
+			}),
+		);
+		expect(chatServiceMocks.reloadAgentSettings).toHaveBeenCalledTimes(1);
+		expect(chatServiceMocks.sendAuthUpdateStrict).toHaveBeenCalledWith(
+			"gw-test-key",
+		);
 		expect(authReady).toHaveBeenCalledTimes(1);
 		window.removeEventListener("naia_auth_ready", authReady);
 	});
@@ -1087,7 +1108,7 @@ describe("SettingsTab — memory tab (#298)", () => {
 
 		expect(document.getElementById("local-gpu-tier")).toBeNull();
 		expect(mockInvoke).not.toHaveBeenCalledWith(
-			"start_cascade",
+			"start_voxcpm2",
 			expect.anything(),
 		);
 		const saved = JSON.parse(localStorage.getItem("naia-config") ?? "{}");
@@ -1258,7 +1279,7 @@ describe("SettingsTab — memory tab (#298)", () => {
 		);
 		mockInvoke.mockImplementation((cmd: string) => {
 			if (cmd === "detect_gpu_vram") return Promise.resolve(6);
-			if (cmd === "start_cascade") {
+			if (cmd === "start_voxcpm2") {
 				return Promise.resolve(
 					JSON.stringify({ facade_port: 8910, services: ["tts"] }),
 				);
@@ -1297,7 +1318,7 @@ describe("SettingsTab — memory tab (#298)", () => {
 		let localVoiceStarted = false;
 		mockInvoke.mockImplementation((cmd: string) => {
 			if (cmd === "detect_gpu_vram") return Promise.resolve(6);
-			if (cmd === "cascade_installation_status") {
+			if (cmd === "voxcpm2_installation_status") {
 				return Promise.resolve({
 					phase: localVoiceStarted ? "ready" : "ready-to-start",
 					ready: localVoiceStarted,
@@ -1306,7 +1327,7 @@ describe("SettingsTab — memory tab (#298)", () => {
 					steps: [],
 				});
 			}
-			if (cmd === "start_cascade") {
+			if (cmd === "start_voxcpm2") {
 				localVoiceStarted = true;
 				return Promise.resolve(JSON.stringify({ facade_port: 8910 }));
 			}
@@ -1323,7 +1344,7 @@ describe("SettingsTab — memory tab (#298)", () => {
 
 		const saved = JSON.parse(localStorage.getItem("naia-config") || "{}");
 		expect(saved.localGpuTier).toBeUndefined();
-		expect(mockInvoke).not.toHaveBeenCalledWith("start_cascade");
+		expect(mockInvoke).not.toHaveBeenCalledWith("start_voxcpm2");
 		expect(screen.getByTestId("local-profile-hint").textContent).toMatch(
 			/registered Naia members.*log in/i,
 		);
@@ -1344,7 +1365,7 @@ describe("SettingsTab — memory tab (#298)", () => {
 		let installed = false;
 		mockInvoke.mockImplementation((cmd: string) => {
 			if (cmd === "detect_gpu_vram") return Promise.resolve(8);
-			if (cmd === "cascade_installation_status") {
+			if (cmd === "voxcpm2_installation_status") {
 				if (installed) {
 					return Promise.resolve({
 						phase: "ready-to-start",
@@ -1379,8 +1400,8 @@ describe("SettingsTab — memory tab (#298)", () => {
 					],
 				});
 			}
-			if (cmd === "cascade_status") return Promise.resolve(false);
-			if (cmd === "install_cascade_runtime") {
+			if (cmd === "voxcpm2_status") return Promise.resolve(false);
+			if (cmd === "install_voxcpm2_runtime") {
 				installed = true;
 				return Promise.resolve({
 					phase: "ready-to-start",
@@ -1394,16 +1415,22 @@ describe("SettingsTab — memory tab (#298)", () => {
 		});
 
 		render(<SettingsTab />);
+		gotoSettingsTab("profile");
+		await vi.waitFor(() => {
+			expect(screen.queryByText(/Cascade service bundle/i)).toBeNull();
+			expect(screen.queryByText(/CASCADE_SERVICE_BUNDLE_MISSING/i)).toBeNull();
+		});
 		gotoSettingsTab("voice");
 		await vi.waitFor(() => {
 			expect(
 				screen.getByTestId("local-voice-installation-status").textContent,
-			).toMatch(/Cascade service bundle.*blocked/i);
-			expect(mockInvoke).not.toHaveBeenCalledWith("start_cascade");
+			).toMatch(/VoxCPM2 components must be installed/i);
+			expect(screen.queryByText(/Cascade service bundle/i)).toBeNull();
+			expect(mockInvoke).not.toHaveBeenCalledWith("start_voxcpm2");
 		});
 		fireEvent.click(screen.getByTestId("local-voice-install-runtime"));
 		await vi.waitFor(() => {
-			expect(mockInvoke).toHaveBeenCalledWith("install_cascade_runtime");
+			expect(mockInvoke).toHaveBeenCalledWith("install_voxcpm2_runtime");
 			expect(
 				screen.queryByTestId("local-voice-installation-status"),
 			).toBeNull();
@@ -1426,8 +1453,8 @@ describe("SettingsTab — memory tab (#298)", () => {
 		let started = false;
 		mockInvoke.mockImplementation((command: string) => {
 			if (command === "detect_gpu_vram") return Promise.resolve(8);
-			if (command === "cascade_status") return Promise.resolve(false);
-			if (command === "cascade_installation_status")
+			if (command === "voxcpm2_status") return Promise.resolve(false);
+			if (command === "voxcpm2_installation_status")
 				return Promise.resolve({
 					phase: started ? "ready" : installed ? "ready-to-start" : "blocked",
 					ready: started,
@@ -1448,7 +1475,7 @@ describe("SettingsTab — memory tab (#298)", () => {
 								},
 							],
 				});
-			if (command === "install_cascade_runtime") {
+			if (command === "install_voxcpm2_runtime") {
 				installed = true;
 				return Promise.resolve({
 					phase: "ready-to-start",
@@ -1458,7 +1485,7 @@ describe("SettingsTab — memory tab (#298)", () => {
 					steps: [],
 				});
 			}
-			if (command === "start_cascade") {
+			if (command === "start_voxcpm2") {
 				started = true;
 				return Promise.resolve(JSON.stringify({ facade_port: 8910 }));
 			}
@@ -1478,8 +1505,8 @@ describe("SettingsTab — memory tab (#298)", () => {
 		fireEvent.change(selector, { target: { value: "naia-local-voice" } });
 
 		await vi.waitFor(() => {
-			expect(mockInvoke).toHaveBeenCalledWith("install_cascade_runtime");
-			expect(mockInvoke).toHaveBeenCalledWith("start_cascade", {
+			expect(mockInvoke).toHaveBeenCalledWith("install_voxcpm2_runtime");
+			expect(mockInvoke).toHaveBeenCalledWith("start_voxcpm2", {
 				expectedLoaderProfile: "windows_trt_6g",
 			});
 			const saved = JSON.parse(localStorage.getItem("naia-config") || "{}");
@@ -1505,8 +1532,8 @@ describe("SettingsTab — memory tab (#298)", () => {
 		);
 		mockInvoke.mockImplementation((command: string) => {
 			if (command === "detect_gpu_vram") return Promise.resolve(8);
-			if (command === "cascade_status") return Promise.resolve(false);
-			if (command === "cascade_installation_status")
+			if (command === "voxcpm2_status") return Promise.resolve(false);
+			if (command === "voxcpm2_installation_status")
 				return Promise.resolve({
 					phase: "ready-to-start",
 					ready: false,
@@ -1514,7 +1541,7 @@ describe("SettingsTab — memory tab (#298)", () => {
 					summary: "VoxCPM2 TensorRT ready",
 					steps: [],
 				});
-			if (command === "start_cascade")
+			if (command === "start_voxcpm2")
 				return Promise.reject(new Error("TRT service failed to start"));
 			return Promise.resolve([]);
 		});
@@ -1560,7 +1587,7 @@ describe("SettingsTab — memory tab (#298)", () => {
 		);
 		mockInvoke.mockImplementation((cmd: string) => {
 			if (cmd === "detect_gpu_vram") return Promise.resolve(8);
-			if (cmd === "cascade_installation_status") {
+			if (cmd === "voxcpm2_installation_status") {
 				return Promise.resolve({
 					phase: "ready-to-start",
 					ready: false,
@@ -1570,7 +1597,7 @@ describe("SettingsTab — memory tab (#298)", () => {
 					steps: [],
 				});
 			}
-			if (cmd === "start_cascade") {
+			if (cmd === "start_voxcpm2") {
 				return Promise.resolve(
 					JSON.stringify({ facade_port: 8910, services: [] }),
 				);
@@ -1588,7 +1615,7 @@ describe("SettingsTab — memory tab (#298)", () => {
 			expect(saved.ttsProvider).toBe("naia-local-voice");
 			expect(saved.vllmTtsHost).toBe("http://localhost:8910");
 			expect(saved.avatarProvider).toBe("vrm");
-			expect(mockInvoke).toHaveBeenCalledWith("start_cascade", {
+			expect(mockInvoke).toHaveBeenCalledWith("start_voxcpm2", {
 				expectedLoaderProfile: "windows_trt_6g",
 			});
 		});
@@ -1610,7 +1637,7 @@ describe("SettingsTab — memory tab (#298)", () => {
 		);
 		mockInvoke.mockImplementation((cmd: string) => {
 			if (cmd === "detect_gpu_vram") return Promise.resolve(8);
-			if (cmd === "cascade_installation_status") {
+			if (cmd === "voxcpm2_installation_status") {
 				return Promise.resolve({
 					phase: "ready-to-start",
 					ready: false,
@@ -1619,7 +1646,7 @@ describe("SettingsTab — memory tab (#298)", () => {
 					steps: [],
 				});
 			}
-			if (cmd === "start_cascade") {
+			if (cmd === "start_voxcpm2") {
 				return Promise.resolve(
 					JSON.stringify({ facade_port: 8910, services: [] }),
 				);
@@ -1656,7 +1683,7 @@ describe("SettingsTab — memory tab (#298)", () => {
 			});
 			expect(manifest.slots.tts.provider).toBe("naia-local-voice");
 			expect(manifest.slots.avatar.provider).toBe("vrm");
-			expect(mockInvoke).toHaveBeenCalledWith("start_cascade", {
+			expect(mockInvoke).toHaveBeenCalledWith("start_voxcpm2", {
 				expectedLoaderProfile: "windows_trt_6g",
 			});
 			expect(profileWrites.at(-1)?.gate.naiaAccount).toBe(true);
@@ -1678,7 +1705,7 @@ describe("SettingsTab — memory tab (#298)", () => {
 		);
 		mockInvoke.mockImplementation((cmd: string) => {
 			if (cmd === "detect_gpu_vram") return Promise.resolve(8);
-			if (cmd === "cascade_status") return Promise.resolve(true);
+			if (cmd === "voxcpm2_status") return Promise.resolve(true);
 			if (cmd === "fetch_naia_balance") return Promise.resolve({ balance: 1 });
 			return Promise.resolve([]);
 		});
@@ -1693,7 +1720,7 @@ describe("SettingsTab — memory tab (#298)", () => {
 		);
 
 		await vi.waitFor(() => {
-			expect(mockInvoke).toHaveBeenCalledWith("stop_cascade");
+			expect(mockInvoke).toHaveBeenCalledWith("stop_voxcpm2");
 			const writes = mockInvoke.mock.calls.filter(
 				([cmd]) => cmd === "write_slots_manifest",
 			);
@@ -1720,8 +1747,8 @@ describe("SettingsTab — memory tab (#298)", () => {
 		let started = false;
 		mockInvoke.mockImplementation((cmd: string) => {
 			if (cmd === "detect_gpu_vram") return Promise.resolve(8);
-			if (cmd === "cascade_status") return Promise.resolve(false);
-			if (cmd === "cascade_installation_status") {
+			if (cmd === "voxcpm2_status") return Promise.resolve(false);
+			if (cmd === "voxcpm2_installation_status") {
 				return Promise.resolve({
 					phase: started ? "ready" : "ready-to-start",
 					ready: started,
@@ -1730,7 +1757,7 @@ describe("SettingsTab — memory tab (#298)", () => {
 					steps: [],
 				});
 			}
-			if (cmd === "start_cascade") {
+			if (cmd === "start_voxcpm2") {
 				started = true;
 				return Promise.resolve(
 					JSON.stringify({ facade_port: 8910, services: [{ id: "tts" }] }),
@@ -1742,7 +1769,7 @@ describe("SettingsTab — memory tab (#298)", () => {
 		render(<SettingsTab />);
 
 		await vi.waitFor(() => {
-			expect(mockInvoke).toHaveBeenCalledWith("start_cascade", {
+			expect(mockInvoke).toHaveBeenCalledWith("start_voxcpm2", {
 				expectedLoaderProfile: "windows_trt_6g",
 			});
 			const write = mockInvoke.mock.calls.find(
@@ -1771,8 +1798,8 @@ describe("SettingsTab — memory tab (#298)", () => {
 		);
 		mockInvoke.mockImplementation((cmd: string) => {
 			if (cmd === "detect_gpu_vram") return Promise.resolve(8);
-			if (cmd === "cascade_status") return Promise.resolve(false);
-			if (cmd === "cascade_installation_status") {
+			if (cmd === "voxcpm2_status") return Promise.resolve(false);
+			if (cmd === "voxcpm2_installation_status") {
 				return Promise.resolve({
 					phase: "ready-to-start",
 					ready: false,
@@ -1786,9 +1813,9 @@ describe("SettingsTab — memory tab (#298)", () => {
 
 		render(<SettingsTab />);
 		await vi.waitFor(() =>
-			expect(mockInvoke).toHaveBeenCalledWith("cascade_installation_status"),
+			expect(mockInvoke).toHaveBeenCalledWith("voxcpm2_installation_status"),
 		);
-		expect(mockInvoke).not.toHaveBeenCalledWith("start_cascade", {
+		expect(mockInvoke).not.toHaveBeenCalledWith("start_voxcpm2", {
 			expectedLoaderProfile: "windows_trt_6g",
 		});
 	});
@@ -1808,8 +1835,8 @@ describe("SettingsTab — memory tab (#298)", () => {
 		);
 		mockInvoke.mockImplementation((cmd: string) => {
 			if (cmd === "detect_gpu_vram") return Promise.resolve(8);
-			if (cmd === "cascade_status") return Promise.resolve(false);
-			if (cmd === "cascade_installation_status") {
+			if (cmd === "voxcpm2_status") return Promise.resolve(false);
+			if (cmd === "voxcpm2_installation_status") {
 				return Promise.resolve({
 					phase: "blocked",
 					ready: false,
@@ -1834,7 +1861,7 @@ describe("SettingsTab — memory tab (#298)", () => {
 			expect(manifest.slots.tts.provider).toBe("edge");
 			expect(manifest.gpu.loaderProfile).toBeUndefined();
 		});
-		expect(mockInvoke).not.toHaveBeenCalledWith("start_cascade", {
+		expect(mockInvoke).not.toHaveBeenCalledWith("start_voxcpm2", {
 			expectedLoaderProfile: "windows_trt_6g",
 		});
 	});
@@ -1855,8 +1882,8 @@ describe("SettingsTab — memory tab (#298)", () => {
 		let started = false;
 		mockInvoke.mockImplementation((cmd: string) => {
 			if (cmd === "detect_gpu_vram") return Promise.resolve(8);
-			if (cmd === "cascade_status") return Promise.resolve(false);
-			if (cmd === "cascade_installation_status") {
+			if (cmd === "voxcpm2_status") return Promise.resolve(false);
+			if (cmd === "voxcpm2_installation_status") {
 				return Promise.resolve({
 					phase: started ? "blocked" : "ready-to-start",
 					ready: false,
@@ -1865,7 +1892,7 @@ describe("SettingsTab — memory tab (#298)", () => {
 					steps: [],
 				});
 			}
-			if (cmd === "start_cascade") {
+			if (cmd === "start_voxcpm2") {
 				started = true;
 				return Promise.resolve(JSON.stringify({ facade_port: 8910 }));
 			}
@@ -1904,8 +1931,8 @@ describe("SettingsTab — memory tab (#298)", () => {
 		let started = false;
 		mockInvoke.mockImplementation((cmd: string) => {
 			if (cmd === "detect_gpu_vram") return Promise.resolve(8);
-			if (cmd === "cascade_status") return Promise.resolve(false);
-			if (cmd === "cascade_installation_status") {
+			if (cmd === "voxcpm2_status") return Promise.resolve(false);
+			if (cmd === "voxcpm2_installation_status") {
 				return Promise.resolve({
 					phase: started ? "ready" : "ready-to-start",
 					ready: started,
@@ -1914,7 +1941,7 @@ describe("SettingsTab — memory tab (#298)", () => {
 					steps: [],
 				});
 			}
-			if (cmd === "start_cascade") {
+			if (cmd === "start_voxcpm2") {
 				started = true;
 				return Promise.resolve(
 					JSON.stringify({ facade_port: 8910, services: [{ id: "tts" }] }),
@@ -1958,8 +1985,8 @@ describe("SettingsTab — memory tab (#298)", () => {
 		let profileVoiceStarted = false;
 		mockInvoke.mockImplementation((cmd: string) => {
 			if (cmd === "detect_gpu_vram") return Promise.resolve(6);
-			if (cmd === "cascade_status") return Promise.resolve(false);
-			if (cmd === "cascade_installation_status") {
+			if (cmd === "voxcpm2_status") return Promise.resolve(false);
+			if (cmd === "voxcpm2_installation_status") {
 				return Promise.resolve({
 					phase: profileVoiceStarted ? "ready" : "ready-to-start",
 					ready: profileVoiceStarted,
@@ -1968,7 +1995,7 @@ describe("SettingsTab — memory tab (#298)", () => {
 					steps: [],
 				});
 			}
-			if (cmd === "start_cascade") {
+			if (cmd === "start_voxcpm2") {
 				profileVoiceStarted = true;
 				return Promise.resolve(JSON.stringify({ facade_port: 8910 }));
 			}

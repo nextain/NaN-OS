@@ -95,6 +95,7 @@ pub(crate) fn find_agent_process_by_marker(marker: &str) -> Result<bool, String>
 fn pid_matches_component(pid: u32, component: &str) -> bool {
     let command_pattern = match component {
         "cascade" => "*loader*launch*",
+        "voxcpm2" => "*voxcpm2-runtime.py*",
         "bgm-server" => "*bgm-server-bin.js*",
         "node-host" => "*node*host*",
         "gateway" => "*naia*gateway*",
@@ -158,11 +159,25 @@ pub(crate) fn kill_stale_cascade() {
     let _ = cmd.output();
 }
 
+/// Kill only the direct Windows VoxCPM2 service. Generic Cascade supervisors
+/// and remote WebSocket sessions are outside this lifecycle.
+pub(crate) fn kill_stale_voxcpm2() {
+    let mut cmd = Command::new("powershell");
+    cmd.args([
+        "-NoProfile",
+        "-NonInteractive",
+        "-Command",
+        "Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like '*voxcpm2-runtime.py*' } | ForEach-Object { Invoke-CimMethod -InputObject $_ -MethodName Terminate | Out-Null }",
+    ]);
+    hide_console(&mut cmd);
+    let _ = cmd.output();
+}
+
 /// Clean up orphan processes from a previous session (Windows: TerminateProcess).
 pub(crate) fn cleanup_orphan_processes() {
     // ★"cascade" 포함 — loader PID 를 추적. 단 uvicorn 손자(facade)는 PID 미기록이라
     // kill_stale_cascade() 가 커맨드라인 매칭으로 잡는다(R2.2b, 8910 고아 → EADDRINUSE 방지).
-    for component in &["gateway", "node-host", "bgm-server", "cascade"] {
+    for component in &["gateway", "node-host", "bgm-server", "cascade", "voxcpm2"] {
         if let Some(pid) = crate::read_pid_file(component) {
             if is_pid_alive(pid) {
                 if !pid_matches_component(pid, component) {

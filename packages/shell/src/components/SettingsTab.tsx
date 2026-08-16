@@ -7,6 +7,7 @@ import {
 	agentKeyExists,
 	applyModelSelectionToConfig,
 	applyWorkspaceConfigToLocal,
+	buildNaiaConfigEnv,
 	clearAdkPath,
 	getAdkPath,
 	listNaiaAssets,
@@ -15,6 +16,7 @@ import {
 	setAdkPath,
 	toLocalBlobUrl,
 	writeAgentKey,
+	writeAgentKeyStrict,
 	writeAgentSecret,
 	writeNaiaConfig,
 	writeNaiaUiConfig,
@@ -45,7 +47,8 @@ import {
 import { syncLinkedChannels } from "../lib/channel-sync";
 import {
 	configureSpeechProfile,
-	sendAuthUpdate,
+	reloadAgentSettings,
+	sendAuthUpdateStrict,
 	sendCredsUpdate,
 	sendNotifyConfig,
 } from "../lib/chat-service";
@@ -162,7 +165,7 @@ const CODEX_PREFLIGHT_LABELS: Record<CodexPreflightStatus, TranslationKey> = {
 	error: "settings.codexReadinessError",
 };
 
-type CascadeInstallationStatus = {
+type VoxCpm2InstallationStatus = {
 	phase: "ready" | "ready-to-start" | "requires-action" | "blocked";
 	ready: boolean;
 	canStart: boolean;
@@ -179,11 +182,11 @@ type CascadeInstallationStatus = {
 	}>;
 };
 
-function isCascadeInstallationStatus(
+function isVoxCpm2InstallationStatus(
 	value: unknown,
-): value is CascadeInstallationStatus {
+): value is VoxCpm2InstallationStatus {
 	if (!value || typeof value !== "object") return false;
-	const candidate = value as Partial<CascadeInstallationStatus>;
+	const candidate = value as Partial<VoxCpm2InstallationStatus>;
 	return (
 		typeof candidate.canStart === "boolean" &&
 		typeof candidate.ready === "boolean" &&
@@ -791,24 +794,24 @@ export function SettingsTab() {
 				syncVoiceMigrationNotice,
 			);
 	}, []);
-	const [cascadeInstallation, setCascadeInstallation] =
-		useState<CascadeInstallationStatus | null>(null);
+	const [voxcpm2Installation, setVoxCpm2Installation] =
+		useState<VoxCpm2InstallationStatus | null>(null);
 	const [cascadeInstallBusy, setCascadeInstallBusy] = useState(false);
-	const cascadeInstallationRequestRef = useRef(0);
-	const refreshCascadeInstallation = useCallback(async () => {
-		const generation = ++cascadeInstallationRequestRef.current;
+	const voxcpm2InstallationRequestRef = useRef(0);
+	const refreshVoxCpm2Installation = useCallback(async () => {
+		const generation = ++voxcpm2InstallationRequestRef.current;
 		try {
-			const status = await invoke<unknown>("cascade_installation_status");
-			if (generation !== cascadeInstallationRequestRef.current) return null;
-			if (!isCascadeInstallationStatus(status)) {
+			const status = await invoke<unknown>("voxcpm2_installation_status");
+			if (generation !== voxcpm2InstallationRequestRef.current) return null;
+			if (!isVoxCpm2InstallationStatus(status)) {
 				Logger.warn("Settings", "Malformed cascade installation status", {});
-				setCascadeInstallation(null);
+				setVoxCpm2Installation(null);
 				return null;
 			}
-			setCascadeInstallation(status);
+			setVoxCpm2Installation(status);
 			return status;
 		} catch (error) {
-			if (generation !== cascadeInstallationRequestRef.current) return null;
+			if (generation !== voxcpm2InstallationRequestRef.current) return null;
 			Logger.warn("Settings", "Cascade installation status unavailable", {
 				error: String(error),
 			});
@@ -820,28 +823,29 @@ export function SettingsTab() {
 		setCascadeInstallBusy(true);
 		setCascadeMsg("");
 		try {
-			const status = await invoke<unknown>("install_cascade_runtime");
-			if (!isCascadeInstallationStatus(status))
+			const status = await invoke<unknown>("install_voxcpm2_runtime");
+			if (!isVoxCpm2InstallationStatus(status))
 				throw new Error("Invalid post-install status");
-			setCascadeInstallation(status);
-			setCascadeMsg(status.summary);
+			setVoxCpm2Installation(status);
+			setCascadeMsg(t("settings.localVoiceInstallReady"));
 		} catch (error) {
-			setCascadeMsg(
-				`${getLocale() === "ko" ? "VoxCPM2 설치에 실패했습니다. 다시 시도할 수 있습니다." : "VoxCPM2 installation failed. You can retry."} (${String(error)})`,
-			);
+			Logger.error("Settings", "VoxCPM2 managed installation failed", {
+				error: String(error),
+			});
+			setCascadeMsg(t("settings.localVoiceInstallFailed"));
 		} finally {
 			setCascadeInstallBusy(false);
-			void refreshCascadeInstallation();
+			void refreshVoxCpm2Installation();
 		}
-	}, [cascadeInstallBusy, refreshCascadeInstallation]);
+	}, [cascadeInstallBusy, refreshVoxCpm2Installation]);
 	useEffect(() => {
-		invoke<boolean>("cascade_status")
+	invoke<boolean>("voxcpm2_status")
 			.then(setCascadeRunning)
 			.catch(() => {});
 	}, []);
 	useEffect(() => {
-		void refreshCascadeInstallation();
-	}, [refreshCascadeInstallation]);
+		void refreshVoxCpm2Installation();
+	}, [refreshVoxCpm2Installation]);
 	// 슬롯 오버뷰 실시간 상태 — facade /health({ok,tts,avatar,tts_enabled,avatar_enabled})를
 	// 폴링해 로컬 음성/아바타 슬롯이 실제로 도는지 표시. 좀비(facade 는 떴으나 tts_enabled=false 로
 	// 붙은 상태)를 가시화한다. localFacadeUrl 없으면(로컬 cascade 미가동) 상태 = null.
@@ -907,17 +911,17 @@ export function SettingsTab() {
 		ready: string | null;
 		message?: string;
 	}> => {
-		let installation = await refreshCascadeInstallation();
+		let installation = await refreshVoxCpm2Installation();
 		if (!installation?.canStart) {
 			setCascadeMsg(
 				getLocale() === "ko"
 					? "VoxCPM2 TensorRT를 설치하고 있습니다."
 					: "Installing VoxCPM2 TensorRT...",
 			);
-			const installed = await invoke<unknown>("install_cascade_runtime");
-			if (isCascadeInstallationStatus(installed))
-				setCascadeInstallation(installed);
-			installation = await refreshCascadeInstallation();
+			const installed = await invoke<unknown>("install_voxcpm2_runtime");
+			if (isVoxCpm2InstallationStatus(installed))
+				setVoxCpm2Installation(installed);
+			installation = await refreshVoxCpm2Installation();
 			if (!installation?.canStart)
 				return {
 					ready: null,
@@ -926,10 +930,10 @@ export function SettingsTab() {
 		}
 		// CASCADE_READY now exposes only the local voice facade URL.
 		// Pre-baked NVA playback remains independent from this voice runtime.
-		const ready = await invoke<string>("start_cascade", {
+		const ready = await invoke<string>("start_voxcpm2", {
 			expectedLoaderProfile,
 		});
-		const afterStart = await refreshCascadeInstallation();
+		const afterStart = await refreshVoxCpm2Installation();
 		return afterStart?.ready
 			? { ready }
 			: {
@@ -970,7 +974,7 @@ export function SettingsTab() {
 	const localVoiceTransactionRef = useRef(false);
 	useEffect(() => {
 		if (localVoiceTransactionRef.current) return;
-		if (cascadeInstallation?.canStart !== false) return;
+		if (voxcpm2Installation?.canStart !== false) return;
 		const cfg = loadConfig();
 		if (!cfg || cfg.ttsProvider !== "naia-local-voice") return;
 		void rollbackLocalVoiceSelection(cfg, {}, true).catch((error) => {
@@ -978,7 +982,7 @@ export function SettingsTab() {
 				error: String(error),
 			});
 		});
-	}, [cascadeInstallation]);
+	}, [voxcpm2Installation]);
 	const ensureLocalVoiceReady = async (
 		normalizeFailedLocal = false,
 	): Promise<boolean> => {
@@ -1020,7 +1024,7 @@ export function SettingsTab() {
 			setTtsEnabled(true);
 			setVllmTtsHost(DEFAULT_LOCAL_VOICE_HOST);
 			// Await the complete config -> manifest transaction before native start.
-			// A fire-and-forget persistence call can race start_cascade and leave it
+			// A fire-and-forget persistence call can race start_voxcpm2 and leave it
 			// observing the prior dormant manifest on an upgraded profile.
 			await writeNaiaConfig({
 				...voiceConfig,
@@ -1071,7 +1075,7 @@ export function SettingsTab() {
 		setCascadeBusy(true);
 		setCascadeMsg("");
 		try {
-			await invoke("stop_cascade");
+			await invoke("stop_voxcpm2");
 			setCascadeRunning(false);
 			useCascadeAvatarStore.getState().setLocalFacadeUrl(null);
 			const cfg = loadConfig();
@@ -1100,7 +1104,7 @@ export function SettingsTab() {
 			ttsProvider !== "naia-local-voice" ||
 			persisted?.localVoiceEnabled !== true ||
 			persisted.ttsEnabled !== true ||
-			cascadeInstallation?.canStart !== true
+			voxcpm2Installation?.canStart !== true
 		) {
 			return;
 		}
@@ -1110,7 +1114,7 @@ export function SettingsTab() {
 			loaderProfile: "windows_trt_6g",
 		});
 		void ensureLocalVoiceReady(true);
-	}, [detectedVramGb, cascadeRunning, ttsProvider, cascadeInstallation]);
+	}, [detectedVramGb, cascadeRunning, ttsProvider, voxcpm2Installation]);
 
 	const warmedProfileRef = useRef<string>("");
 
@@ -1183,7 +1187,7 @@ export function SettingsTab() {
 			// 로컬 해제 → 백엔드 정지
 			if (cascadeRunning) {
 				try {
-					await invoke("stop_cascade");
+					await invoke("stop_voxcpm2");
 				} catch {
 					/* 정지 실패 비치명 */
 				}
@@ -1202,7 +1206,7 @@ export function SettingsTab() {
 			if (cascadeRunning) {
 				// 프로파일 바뀜 → manifest 반영 위해 재기동
 				try {
-					await invoke("stop_cascade");
+					await invoke("stop_voxcpm2");
 				} catch {
 					/* 무시 */
 				}
@@ -2003,8 +2007,11 @@ export function SettingsTab() {
 	// Fetch Lab balance for a given key
 	const LAB_BALANCE_FETCH_TIMEOUT_MS = 8_000;
 
-	function fetchLabBalance(key: string) {
-		if (!mountedRef.current) return Promise.resolve();
+	async function fetchLabBalance(
+		key: string,
+		requireValid = false,
+	): Promise<number | null> {
+		if (!mountedRef.current) return null;
 		Logger.debug("SettingsTab", "fetchLabBalance called", {
 			keyPrefix: key.slice(0, 8),
 			keyLength: key.length,
@@ -2016,24 +2023,32 @@ export function SettingsTab() {
 			() => controller.abort(),
 			LAB_BALANCE_FETCH_TIMEOUT_MS,
 		);
-		return fetchLabBalancePayload(LAB_GATEWAY_URL, key, controller.signal)
-			.then((data: unknown) => {
-				if (!mountedRef.current) return;
-				const credits = parseLabCredits(data);
-				setLabBalance(credits ?? 0);
-				setLabBalanceError(false);
-			})
-			.catch((err) => {
-				if (!mountedRef.current) return;
+		try {
+			const data = await fetchLabBalancePayload(
+				LAB_GATEWAY_URL,
+				key,
+				controller.signal,
+			);
+			const credits = parseLabCredits(data);
+			if (credits == null)
+				throw new Error("Authenticated balance response is invalid");
+			if (!mountedRef.current) return null;
+			setLabBalance(credits);
+			setLabBalanceError(false);
+			return credits;
+		} catch (err) {
+			if (mountedRef.current) {
 				Logger.warn("SettingsTab", "Lab balance fetch failed", {
 					error: String(err),
 				});
 				setLabBalanceError(true);
-			})
-			.finally(() => {
-				window.clearTimeout(timeout);
-				if (mountedRef.current) setLabBalanceLoading(false);
-			});
+			}
+			if (requireValid) throw err;
+			return null;
+		} finally {
+			window.clearTimeout(timeout);
+			if (mountedRef.current) setLabBalanceLoading(false);
+		}
 	}
 
 	// Fetch Lab balance when naiaKey is available
@@ -2050,71 +2065,70 @@ export function SettingsTab() {
 				naiaCredentialEpochRef.current += 1;
 				const nextNaiaKey = event.payload.naiaKey;
 				const nextNaiaUserId = event.payload.naiaUserId ?? "";
-				sendAuthUpdate(nextNaiaKey).catch(() => {});
-
-				// Close Chrome and return to default view if we opened it for login
-				if (labBrowserVisibleRef.current) {
-					labBrowserVisibleRef.current = false;
-					useAppStore.getState().setActiveApp(null);
-				}
-
-				setNaiaKeyState(nextNaiaKey);
-				setNaiaUserIdState(nextNaiaUserId);
-				setProvider("nextain");
-				setModel((prev) => prev || getDefaultLlmModel("nextain"));
+				setLabWaiting(true);
 				setError("");
-				// In Lab mode, clear direct API key input to avoid confusion.
-				setApiKey("");
-				setLabWaiting(false);
-
-				// Fetch balance immediately with the new key
-				fetchLabBalance(nextNaiaKey);
-
-				// Persist to both secure store and localStorage
-				await saveSecretKey("naiaKey", nextNaiaKey);
-				setSecureNaiaCredentialReady(true);
-				// CostDashboard receives the Tauri callback concurrently. Notify it only
-				// after the secure store has the key, otherwise its first balance request
-				// races the login write and the balance stays hidden until a restart.
-				window.dispatchEvent(
-					new CustomEvent("naia_auth_ready", {
-						detail: { source: "auth-complete" },
-					}),
-				);
-				const current = loadConfig();
-				const nextConfig = buildNaiaLoginConfig(
-					current,
-					nextNaiaKey,
-					nextNaiaUserId,
-				);
-				const nextModel = nextConfig.model;
-				setModel(nextModel);
-				saveConfig(nextConfig);
-				void writeNaiaConfig(nextConfig as unknown as Record<string, unknown>);
-
-				// (gateway sync 제거됨 2026-06-12 — gateway.json 은 아무도 안 읽는 죽은 경로. config 영속=naia-settings, naiaKey=키체인.)
-
-				// Sync linked channels (e.g. Discord) after login
-				// Re-check Discord bot status after sync + gateway restart
-				syncLinkedChannels().then(() => {
-					// setTimeout(() => fetchDiscordBotStatus(), 3000); // Discord unverified
-				});
-
-				// Try Lab pull — show diff dialog if settings differ
-				if (nextNaiaUserId) {
-					const onlineConfig = await fetchLabConfig(
+				try {
+					const nextConfig = buildNaiaLoginConfig(
+						loadConfig(),
 						nextNaiaKey,
 						nextNaiaUserId,
 					);
-					if (onlineConfig) {
-						const diffs = diffConfigs(nextConfig, onlineConfig);
-						if (diffs.length > 0) {
-							setSyncDialogOnlineConfig(
-								onlineConfig as Record<string, unknown>,
-							);
-							setSyncDialogOpen(true);
+					await saveSecretKey("naiaKey", nextNaiaKey);
+					await writeAgentKeyStrict("nextain", "naiaKey", nextNaiaKey);
+					saveConfig(nextConfig);
+					await writeNaiaConfig({
+						...(nextConfig as unknown as Record<string, unknown>),
+						...buildNaiaConfigEnv(nextConfig),
+					});
+					await reloadAgentSettings();
+					await sendAuthUpdateStrict(nextNaiaKey);
+					await fetchLabBalance(nextNaiaKey, true);
+
+					setNaiaKeyState(nextNaiaKey);
+					setNaiaUserIdState(nextNaiaUserId);
+					setProvider("nextain");
+					setModel(nextConfig.model);
+					setApiKey("");
+					setSecureNaiaCredentialReady(true);
+					window.dispatchEvent(
+						new CustomEvent("naia_auth_ready", {
+							detail: { source: "auth-complete" },
+						}),
+					);
+
+					if (labBrowserVisibleRef.current) {
+						labBrowserVisibleRef.current = false;
+						useAppStore.getState().setActiveApp(null);
+					}
+
+					// (gateway sync 제거됨 2026-06-12 — gateway.json 은 아무도 안 읽는 죽은 경로. config 영속=naia-settings, naiaKey=키체인.)
+
+					void syncLinkedChannels();
+
+					if (nextNaiaUserId) {
+						const onlineConfig = await fetchLabConfig(
+							nextNaiaKey,
+							nextNaiaUserId,
+						);
+						if (onlineConfig) {
+							const diffs = diffConfigs(nextConfig, onlineConfig);
+							if (diffs.length > 0) {
+								setSyncDialogOnlineConfig(
+									onlineConfig as Record<string, unknown>,
+								);
+								setSyncDialogOpen(true);
+							}
 						}
 					}
+				} catch (activationError) {
+					Logger.error("SettingsTab", "Naia login activation failed", {
+						error: String(activationError),
+					});
+					setSecureNaiaCredentialReady(false);
+					setLabBalanceError(true);
+					setError(t("cost.labError"));
+				} finally {
+					setLabWaiting(false);
 				}
 			},
 		);
@@ -3048,7 +3062,7 @@ export function SettingsTab() {
 	): "running" | "starting" | "blocked" | "error" | null {
 		if (id === "tts") {
 			if (slotSnapshot.tts.provider !== "naia-local-voice") return null;
-			if (cascadeInstallation?.canStart === false) return "blocked";
+			if (voxcpm2Installation?.canStart === false) return "blocked";
 			return cascadeHealth?.tts_enabled && cascadeHealth.tts
 				? "running"
 				: "starting";
@@ -3834,7 +3848,7 @@ export function SettingsTab() {
 													className="settings-reset-btn"
 													onClick={async () => {
 														try {
-															await invoke("stop_cascade");
+													await invoke("stop_voxcpm2");
 														} catch {
 															/* already stopped */
 														}
@@ -4146,43 +4160,6 @@ export function SettingsTab() {
 												: cascadeMsg}
 									</div>
 								)}
-							{naiaKey && localGpuTier !== "off" && cascadeInstallation && (
-								<div
-									className="settings-hint"
-									data-testid="cascade-installation-status"
-								>
-									<div data-testid="cascade-installation-summary">
-										{cascadeInstallation!.summary}
-									</div>
-									<ul data-testid="cascade-installation-steps">
-										{cascadeInstallation!.steps.map((step) => (
-											<li key={step.id} data-cascade-install-step={step.id}>
-												{step.label}: {step.state} · {step.progressPercent}%
-												{step.failure ? ` · ${step.failure.message}` : ""}
-											</li>
-										))}
-									</ul>
-									{cascadeInstallation!.steps.some(
-										(step) => step.actionAvailable,
-									) && (
-										<button
-											type="button"
-											className="voice-preview-btn"
-											data-testid="cascade-install-runtime"
-											onClick={installCascadeRuntime}
-											disabled={cascadeInstallBusy}
-										>
-											{cascadeInstallBusy
-												? getLocale() === "ko"
-													? "VoxCPM2 설치 중…"
-													: "Installing VoxCPM2…"
-												: getLocale() === "ko"
-													? "VoxCPM2 설치"
-													: "Install VoxCPM2"}
-										</button>
-									)}
-								</div>
-							)}
 						</div>
 					)}
 
@@ -4888,10 +4865,10 @@ export function SettingsTab() {
 								const next = e.target.value as TtsProviderId;
 								if (
 									next === "naia-local-voice" &&
-									cascadeInstallation?.canStart !== true
+									voxcpm2Installation?.canStart !== true
 								) {
 									setCascadeMsg(
-										cascadeInstallation?.summary ?? t("settings.cascadeError"),
+										voxcpm2Installation?.summary ?? t("settings.cascadeError"),
 									);
 									return;
 								}
@@ -4952,7 +4929,7 @@ export function SettingsTab() {
 									disabled={
 										(p.requiresNaiaKey && !naiaKey) ||
 										(p.id === "naia-local-voice" &&
-											cascadeInstallation?.canStart !== true)
+											voxcpm2Installation?.canStart !== true)
 									}
 								>
 									{p.name}
@@ -5070,21 +5047,13 @@ export function SettingsTab() {
 								{cascadeMsg}
 							</div>
 						)}
-						{cascadeInstallation && !cascadeInstallation.canStart && (
+						{voxcpm2Installation && !voxcpm2Installation.canStart && (
 							<div
 								className="settings-hint"
 								data-testid="local-voice-installation-status"
 							>
-								<div>{cascadeInstallation.summary}</div>
-								<ul>
-									{cascadeInstallation.steps.map((step) => (
-										<li key={step.id}>
-											{step.label}: {step.state}
-											{step.failure ? ` · ${step.failure.message}` : ""}
-										</li>
-									))}
-								</ul>
-								{cascadeInstallation.steps.some(
+								<div>{t("settings.localVoiceInstallRequired")}</div>
+								{voxcpm2Installation.steps.some(
 									(step) => step.actionAvailable,
 								) && (
 									<button
@@ -5095,12 +5064,8 @@ export function SettingsTab() {
 										disabled={cascadeInstallBusy}
 									>
 										{cascadeInstallBusy
-											? getLocale() === "ko"
-												? "VoxCPM2 설치 중…"
-												: "Installing VoxCPM2…"
-											: getLocale() === "ko"
-												? "VoxCPM2 설치"
-												: "Install VoxCPM2"}
+											? t("settings.localVoiceInstalling")
+											: t("settings.localVoiceInstall")}
 									</button>
 								)}
 							</div>

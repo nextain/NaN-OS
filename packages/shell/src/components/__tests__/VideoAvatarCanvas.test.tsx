@@ -1,4 +1,4 @@
-﻿// @vitest-environment jsdom
+// @vitest-environment jsdom
 import { cleanup, render } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useCascadeAvatarStore } from "../../stores/cascade-avatar";
@@ -38,7 +38,7 @@ describe("VideoAvatarCanvas pre-baked contract", () => {
 		const { container } = render(<VideoAvatarCanvas nvaModel="naia" />);
 		await vi.waitFor(() => expect(container.querySelector("[data-video-avatar]")).toHaveAttribute("data-video-avatar-mode", "prebaked"));
 		expect(container.querySelector("[data-video-avatar-prebaked]")).toBeTruthy();
-		expect(mockInvoke).not.toHaveBeenCalledWith("start_cascade", expect.anything());
+		expect(mockInvoke).not.toHaveBeenCalledWith("start_voxcpm2", expect.anything());
 		expect(useCascadeAvatarStore.getState().renderer).toBeTruthy();
 	});
 

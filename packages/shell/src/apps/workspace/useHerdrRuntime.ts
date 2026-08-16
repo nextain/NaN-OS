@@ -83,16 +83,29 @@ export function useHerdrRuntime() {
 				created = null;
 				return;
 			}
+			// Attach the renderer as soon as the PTY exists. Herdr can emit its
+			// opening frame while the API readiness probe is still running and Tauri
+			// events are not buffered; delaying this state update loses that frame on
+			// clean Windows launches and leaves a healthy client behind an error card.
+			setPty(created);
 			await waitForHerdrReady(refreshSnapshot);
 			if (!mountedRef.current || generation !== launchGenerationRef.current) {
 				await killPty(created.pty_id).catch(() => {});
+				setPty((current) =>
+					current?.pty_id === created?.pty_id ? null : current,
+				);
 				created = null;
 				return;
 			}
-			setPty(created);
 			created = null;
 		} catch (error) {
-			if (created) await killPty(created.pty_id).catch(() => {});
+			if (created) {
+				const failedPtyId = created.pty_id;
+				await killPty(failedPtyId).catch(() => {});
+				setPty((current) =>
+					current?.pty_id === failedPtyId ? null : current,
+				);
+			}
 			if (!mountedRef.current || generation !== launchGenerationRef.current)
 				return;
 			setLaunchError(String(error));

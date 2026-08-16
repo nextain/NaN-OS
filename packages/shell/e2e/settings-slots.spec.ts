@@ -17,7 +17,7 @@ import {
 
 /**
  * Tauri IPC mock — detect_gpu_vram 포함(GPU 있어도 게이트는 naiaKey 에만 의존 = R1-3).
- * cascadeReady=true 면 start_cascade/cascade_status 성공 경로까지 mock — 로컬 음성
+ * cascadeReady=true 면 start_voxcpm2/voxcpm2_status 성공 경로까지 mock — 로컬 음성
  * 자동 복원(ensureLocalVoiceReady)이 unmocked 실패로 ttsEnabled 를 되돌리는 것을 막는다.
  * (실패 경로가 필요한 시나리오 — FR-VOICE.13 사유 표기 — 는 기본값 false 를 쓴다.)
  */
@@ -48,19 +48,19 @@ function buildMock(
 		if (cmd === "write_naia_config") return null;
 		${
 			cascadeBlocked
-				? `if (cmd === "cascade_status") return false;
-		if (cmd === "cascade_installation_status") return cascadeInstalled
+				? `if (cmd === "voxcpm2_status") return false;
+		if (cmd === "voxcpm2_installation_status") return cascadeInstalled
 			? { phase: cascadeStarted ? "ready" : "ready-to-start", ready: cascadeStarted, canStart: true, summary: cascadeStarted ? "VoxCPM2 is ready." : "VoxCPM2 runtime is ready.", steps: [] }
 			: { phase: "blocked", ready: false, canStart: false, summary: "Local voice installation required: Python runtime and VoxCPM2 model are missing.", steps: [{ id: "python-runtime", label: "Python runtime", state: "blocked", action: "install", actionAvailable: true, progressPercent: 0, retryable: true }] };
-		if (cmd === "install_cascade_runtime") { cascadeInstalled = true; window.__cascadeInstallCalled = true; return { phase: "ready-to-start", ready: false, canStart: true, summary: "VoxCPM2 runtime is ready.", steps: [] }; }
-		if (cmd === "start_cascade") { cascadeStarted = true; window.__cascadeStartCalled = true; return JSON.stringify({ facade_port: 8910, services: [{ id: "tts" }] }); }`
+		if (cmd === "install_voxcpm2_runtime") { cascadeInstalled = true; window.__cascadeInstallCalled = true; return { phase: "ready-to-start", ready: false, canStart: true, summary: "VoxCPM2 runtime is ready.", steps: [] }; }
+		if (cmd === "start_voxcpm2") { cascadeStarted = true; window.__cascadeStartCalled = true; return JSON.stringify({ facade_port: 8910, services: [{ id: "tts" }] }); }`
 				: ""
 		}
 		${
 			cascadeReady
-				? `if (cmd === "cascade_status") return cascadeStarted;
-		if (cmd === "cascade_installation_status") return { phase: cascadeStarted ? "ready" : "ready-to-start", ready: cascadeStarted, canStart: true, summary: "Ready", steps: [] };
-		if (cmd === "start_cascade") { cascadeStarted = true; return JSON.stringify({ facade_port: 8910, services: [{ id: "tts" }] }); }`
+				? `if (cmd === "voxcpm2_status") return cascadeStarted;
+		if (cmd === "voxcpm2_installation_status") return { phase: cascadeStarted ? "ready" : "ready-to-start", ready: cascadeStarted, canStart: true, summary: "Ready", steps: [] };
+		if (cmd === "start_voxcpm2") { cascadeStarted = true; return JSON.stringify({ facade_port: 8910, services: [{ id: "tts" }] }); }`
 				: ""
 		}
 		if (cmd === "list_skills") return [
@@ -77,7 +77,7 @@ interface SetupOpts {
 	vramGb?: number | null;
 	/** naia-config override (gate/slots 시나리오). */
 	config?: Record<string, unknown>;
-	/** 로컬 음성 자동 복원(start_cascade)이 성공하는 환경을 mock. */
+	/** 로컬 음성 자동 복원(start_voxcpm2)이 성공하는 환경을 mock. */
 	cascadeReady?: boolean;
 	/** 클린 설치에서 VoxCPM2 런타임이 없는 환경. */
 	cascadeBlocked?: boolean;

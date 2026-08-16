@@ -696,7 +696,7 @@ export function ChatArea({
 				}),
 			notifyLocalVoiceUnavailable: async () => {
 				const runtimeState = await invoke<string>(
-					"cascade_runtime_status",
+					"voxcpm2_runtime_status",
 				).catch(() => "unknown");
 				useChatStore.getState().addMessage({
 					role: "assistant",

@@ -375,7 +375,7 @@ describe("OnboardingWizard", () => {
 		let cascadeStarted = false;
 		(invoke as ReturnType<typeof vi.fn>).mockImplementation((cmd: string) => {
 			if (cmd === "detect_gpu_vram") return Promise.resolve(16);
-			if (cmd === "cascade_installation_status") {
+			if (cmd === "voxcpm2_installation_status") {
 				return Promise.resolve({
 					phase: cascadeStarted ? "ready" : "ready-to-start",
 					ready: cascadeStarted,
@@ -384,11 +384,11 @@ describe("OnboardingWizard", () => {
 					steps: installed ? [] : [{ actionAvailable: true }],
 				});
 			}
-			if (cmd === "install_cascade_runtime") {
+			if (cmd === "install_voxcpm2_runtime") {
 				installed = true;
 				return Promise.resolve(true);
 			}
-			if (cmd === "start_cascade") {
+			if (cmd === "start_voxcpm2") {
 				cascadeStarted = true;
 				return Promise.resolve(
 					JSON.stringify({
@@ -420,10 +420,10 @@ describe("OnboardingWizard", () => {
 			await Promise.resolve();
 		});
 
-		expect(invoke).toHaveBeenCalledWith("start_cascade", {
+		expect(invoke).toHaveBeenCalledWith("start_voxcpm2", {
 			expectedLoaderProfile: "windows_trt_6g",
 		});
-		expect(invoke).toHaveBeenCalledWith("install_cascade_runtime");
+		expect(invoke).toHaveBeenCalledWith("install_voxcpm2_runtime");
 		expect(
 			screen.getByRole("button", { name: /Local voice on/ }),
 		).toBeDefined();

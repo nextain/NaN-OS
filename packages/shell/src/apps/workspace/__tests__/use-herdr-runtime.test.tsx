@@ -87,6 +87,30 @@ describe("useHerdrRuntime", () => {
 		mockInvoke.mockReset();
 	});
 
+	it("attaches the PTY before API readiness so the opening frame is observable", async () => {
+		const readiness = deferred<HerdrSnapshot>();
+		mockInvoke.mockImplementation(async (command: string) => {
+			if (command === "herdr_pty_create")
+				return { pty_id: "pty-opening-frame", pid: 41 };
+			if (command === "herdr_snapshot") return readiness.promise;
+			if (command === "workspace_set_root") return "/work/initial";
+			return null;
+		});
+
+		render(<RuntimeHarness />);
+		await waitFor(() =>
+			expect(screen.getByTestId("runtime-pty")).toHaveTextContent(
+				"pty-opening-frame",
+			),
+		);
+		expect(screen.getByTestId("runtime-snapshot")).toHaveTextContent("none");
+
+		readiness.resolve(snapshot("ready"));
+		await waitFor(() =>
+			expect(screen.getByTestId("runtime-snapshot")).toHaveTextContent("ready"),
+		);
+	});
+
 	it("launches once under strict effects and discards stale snapshot results", async () => {
 		const pending: Array<ReturnType<typeof deferred<HerdrSnapshot>>> = [];
 		let controlled = false;

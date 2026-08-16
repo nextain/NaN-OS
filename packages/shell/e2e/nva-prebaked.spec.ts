@@ -103,7 +103,7 @@ test.describe("UC-NVA-PREBAKED - GPU-free Shell video avatar", () => {
 			commands: (window as any).__nvaInvokes.map((entry) => entry.cmd),
 			config: JSON.parse(localStorage.getItem("naia-config") || "{}")
 		}));
-		expect(result.commands).not.toContain("start_cascade");
+		expect(result.commands).not.toContain("start_voxcpm2");
 		expect(result.commands).not.toContain("probe_cascade_health");
 		expect(result.config.cascadeRuntimeUrl).toBeUndefined();
 		expect(result.config.local8gFocus).toBeUndefined();
