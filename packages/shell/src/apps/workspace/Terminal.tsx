@@ -11,7 +11,7 @@ import {
 } from "react";
 import { t } from "../../lib/i18n";
 import { Logger } from "../../lib/logger";
-import { resizePty, writePty } from "./pty-ipc";
+import { attachPty, resizePty, writePty } from "./pty-ipc";
 import "@xterm/xterm/css/xterm.css";
 
 interface TerminalProps {
@@ -326,6 +326,9 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(
 					return;
 				}
 				pendingUnlistens.push(...unlistens);
+				void attachPty(pty_id).catch((error) => {
+					Logger.warn("Terminal", "pty_attach error", { error: String(error) });
+				});
 				const fitAndResize = () => {
 					if (!activeRef.current || !fitRef.current || !termRef.current) return;
 					fitRef.current.fit();

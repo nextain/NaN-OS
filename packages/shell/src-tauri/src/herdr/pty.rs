@@ -7,7 +7,7 @@ use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{Duration, Instant};
 use tauri::{AppHandle, Emitter};
 
-use crate::pty::{PtyCreated, PtyHandle, PtyKind, PtyRegistry};
+use crate::pty::{emit_or_buffer_pty_output, PtyCreated, PtyHandle, PtyKind, PtyRegistry};
 
 use super::config::{herdr_bin, herdr_command, validate_herdr, write_embedded_herdr_config};
 
@@ -123,26 +123,45 @@ fn existing_herdr_id<'a>(entries: impl IntoIterator<Item = (&'a str, PtyKind)>) 
         .find_map(|(id, kind)| (kind == PtyKind::Herdr).then_some(id))
 }
 
-/// Emit buffered PTY output as one `pty:output` event, keeping any trailing
-/// incomplete UTF-8 sequence in `pending` for the next flush (unless `force`).
-fn flush_pty_output(app: &AppHandle, id: &str, pending: &mut Vec<u8>, force: bool) {
+/// Drain one renderable UTF-8 segment from buffered PTY output.
+///
+/// A trailing partial code point is retained for the next read, but a genuinely
+/// invalid byte must be consumed lossily. Leaving an invalid byte at offset zero
+/// would make every later flush return without progress and permanently wedge the
+/// embedded terminal even though Herdr and its server are both healthy.
+fn drain_pty_output(pending: &mut Vec<u8>, force: bool) -> Option<String> {
     if pending.is_empty() {
-        return;
+        return None;
     }
     let cut = if force {
         pending.len()
     } else {
         match std::str::from_utf8(pending) {
             Ok(_) => pending.len(),
-            Err(e) => e.valid_up_to(),
+            Err(error) if error.error_len().is_none() => error.valid_up_to(),
+            Err(error) => error.valid_up_to() + error.error_len().unwrap_or(1),
         }
     };
     if cut == 0 {
-        return;
+        return None;
     }
     let data = String::from_utf8_lossy(&pending[..cut]).to_string();
-    let _ = app.emit(&format!("pty:output:{id}"), data);
     pending.drain(..cut);
+    Some(data)
+}
+
+/// Emit buffered PTY output as one `pty:output` event, keeping only a trailing
+/// incomplete UTF-8 sequence in `pending` for the next flush (unless `force`).
+fn flush_pty_output(
+    app: &AppHandle,
+    registry: &PtyRegistry,
+    id: &str,
+    pending: &mut Vec<u8>,
+    force: bool,
+) {
+    if let Some(data) = drain_pty_output(pending, force) {
+        emit_or_buffer_pty_output(app, registry, id, data);
+    }
 }
 
 /// Launch the real Herdr client in a dedicated PTY. The frontend cannot choose
@@ -223,6 +242,8 @@ pub async fn herdr_pty_create(
                 master: pair.master,
                 writer,
                 kind: PtyKind::Herdr,
+                output_attached: false,
+                output_backlog: String::new(),
             },
         );
 
@@ -238,12 +259,36 @@ pub async fn herdr_pty_create(
             const FLUSH: Duration = Duration::from_millis(8);
             const MAX_PENDING: usize = 256 * 1024;
             let (tx, rx) = mpsc::channel::<Vec<u8>>();
+            let read_log_id = reader_id.clone();
             let read_thread = std::thread::spawn(move || {
                 let mut reader = reader;
                 let mut buffer = [0_u8; 65536];
-                while let Ok(count) = reader.read(&mut buffer) {
-                    if count == 0 || tx.send(buffer[..count].to_vec()).is_err() {
-                        break;
+                let mut first_chunk = true;
+                loop {
+                    match reader.read(&mut buffer) {
+                        Ok(0) => {
+                            crate::log_verbose(&format!(
+                                "[herdr_pty] reader eof pty_id={read_log_id}"
+                            ));
+                            break;
+                        }
+                        Ok(count) => {
+                            if first_chunk {
+                                crate::log_verbose(&format!(
+                                    "[herdr_pty] first output pty_id={read_log_id} bytes={count}"
+                                ));
+                                first_chunk = false;
+                            }
+                            if tx.send(buffer[..count].to_vec()).is_err() {
+                                break;
+                            }
+                        }
+                        Err(error) => {
+                            crate::log_verbose(&format!(
+                                "[herdr_pty] reader error pty_id={read_log_id} error={error}"
+                            ));
+                            break;
+                        }
                     }
                 }
             });
@@ -255,16 +300,34 @@ pub async fn herdr_pty_create(
                     Ok(chunk) => {
                         pending.extend_from_slice(&chunk);
                         if pending.len() >= MAX_PENDING {
-                            flush_pty_output(&reader_app, &reader_id, &mut pending, false);
+                            flush_pty_output(
+                                &reader_app,
+                                &reader_registry,
+                                &reader_id,
+                                &mut pending,
+                                false,
+                            );
                             deadline = Instant::now() + FLUSH;
                         }
                     }
                     Err(RecvTimeoutError::Timeout) => {
-                        flush_pty_output(&reader_app, &reader_id, &mut pending, false);
+                        flush_pty_output(
+                            &reader_app,
+                            &reader_registry,
+                            &reader_id,
+                            &mut pending,
+                            false,
+                        );
                         deadline = Instant::now() + FLUSH;
                     }
                     Err(RecvTimeoutError::Disconnected) => {
-                        flush_pty_output(&reader_app, &reader_id, &mut pending, true);
+                        flush_pty_output(
+                            &reader_app,
+                            &reader_registry,
+                            &reader_id,
+                            &mut pending,
+                            true,
+                        );
                         break;
                     }
                 }
@@ -292,7 +355,7 @@ pub async fn herdr_pty_create(
 
 #[cfg(test)]
 mod tests {
-    use super::{existing_herdr_id, server_start_failure};
+    use super::{drain_pty_output, existing_herdr_id, server_start_failure};
     use crate::pty::PtyKind;
     use std::fs::{create_dir_all, remove_dir_all, write};
 
@@ -323,5 +386,28 @@ mod tests {
         assert!(message.contains("server stderr evidence"));
         assert!(message.contains("herdr-server.log"));
         remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn invalid_leading_byte_cannot_wedge_later_terminal_frames() {
+        let mut pending = vec![0xff];
+        pending.extend_from_slice(b"\x1b[2JHerdr");
+
+        let first = drain_pty_output(&mut pending, false).expect("invalid byte is consumed");
+        assert_eq!(first, "\u{fffd}");
+        let frame = drain_pty_output(&mut pending, false).expect("later frame remains readable");
+        assert_eq!(frame, "\x1b[2JHerdr");
+        assert!(pending.is_empty());
+    }
+
+    #[test]
+    fn incomplete_utf8_tail_waits_for_the_next_read() {
+        let mut pending = vec![b'A', 0xe2, 0x82];
+        assert_eq!(drain_pty_output(&mut pending, false).as_deref(), Some("A"));
+        assert_eq!(pending, vec![0xe2, 0x82]);
+
+        pending.push(0xac);
+        assert_eq!(drain_pty_output(&mut pending, false).as_deref(), Some("€"));
+        assert!(pending.is_empty());
     }
 }

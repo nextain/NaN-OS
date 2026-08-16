@@ -11,8 +11,10 @@ const resizePty = vi.fn((_id: string, _rows: number, _cols: number) =>
 	Promise.resolve(),
 );
 const writePty = vi.fn((_id: string, _data: string) => Promise.resolve());
+const attachPty = vi.fn((_id: string) => Promise.resolve());
 
 vi.mock("../pty-ipc", () => ({
+	attachPty: (id: string) => attachPty(id),
 	resizePty: (id: string, rows: number, cols: number) =>
 		resizePty(id, rows, cols),
 	writePty: (id: string, data: string) => writePty(id, data),
@@ -71,6 +73,7 @@ describe("Terminal — Herdr redraw guard (#438)", () => {
 
 	it("nudges the PTY size distinct→final on initial attach", async () => {
 		render(<Terminal pty_id="pty-7" active onExit={() => {}} />);
+		await waitFor(() => expect(attachPty).toHaveBeenCalledWith("pty-7"));
 		// A no-op resize (same size) would not repaint; a distinct size then the
 		// real size guarantees a SIGWINCH and a full redraw.
 		await waitFor(() =>

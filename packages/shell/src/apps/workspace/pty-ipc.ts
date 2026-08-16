@@ -11,6 +11,10 @@ export function writePty(ptyId: string, data: string): Promise<void> {
 	return invoke("pty_write", { ptyId, data });
 }
 
+export function attachPty(ptyId: string): Promise<void> {
+	return invoke("pty_attach", { ptyId });
+}
+
 export function resizePty(
 	ptyId: string,
 	rows: number,
