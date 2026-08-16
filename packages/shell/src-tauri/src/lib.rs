@@ -10146,6 +10146,7 @@ pub fn run() {
             herdr::api::herdr_create_workspace,
             herdr::api::herdr_prompt_agent,
             pty::pty_create,
+            pty::pty_attach,
             pty::pty_write,
             pty::pty_resize,
             pty::pty_kill,

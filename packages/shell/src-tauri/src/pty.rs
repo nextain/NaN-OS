@@ -11,6 +11,8 @@ pub(crate) struct PtyHandle {
     pub(crate) master: Box<dyn MasterPty + Send>,
     pub(crate) writer: Box<dyn Write + Send>,
     pub(crate) kind: PtyKind,
+    pub(crate) output_attached: bool,
+    pub(crate) output_backlog: String,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -23,6 +25,26 @@ pub type PtyRegistry = Arc<Mutex<HashMap<String, PtyHandle>>>;
 
 pub fn new_registry() -> PtyRegistry {
     Arc::new(Mutex::new(HashMap::new()))
+}
+
+/// Preserve PTY output until the frontend confirms that its asynchronous
+/// Tauri event listener is installed.
+pub(crate) fn emit_or_buffer_pty_output(
+    app: &AppHandle,
+    registry: &PtyRegistry,
+    pty_id: &str,
+    data: String,
+) {
+    let mut handles = registry.lock().unwrap();
+    let Some(handle) = handles.get_mut(pty_id) else {
+        return;
+    };
+    if !handle.output_attached {
+        handle.output_backlog.push_str(&data);
+        return;
+    }
+    drop(handles);
+    let _ = app.emit(&format!("pty:output:{pty_id}"), data);
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -123,6 +145,8 @@ pub async fn pty_create(
                     master: pair.master,
                     writer,
                     kind: PtyKind::Shell,
+                    output_attached: false,
+                    output_backlog: String::new(),
                 },
             );
         }
@@ -140,7 +164,7 @@ pub async fn pty_create(
                         Ok(0) | Err(_) => break,
                         Ok(n) => {
                             let data = String::from_utf8_lossy(&buf[..n]).to_string();
-                            let _ = app_r.emit(&format!("pty:output:{}", pty_id_r), data);
+                            emit_or_buffer_pty_output(&app_r, &registry_r, &pty_id_r, data);
                         }
                     }
                 }
@@ -171,6 +195,29 @@ pub async fn pty_create(
     })
     .await
     .map_err(|e| format!("spawn_blocking join: {e}"))?
+}
+
+/// Mark the frontend listener ready and replay output produced before attach.
+#[tauri::command]
+pub fn pty_attach(
+    registry: tauri::State<'_, PtyRegistry>,
+    app: AppHandle,
+    pty_id: String,
+) -> Result<(), String> {
+    let mut handles = registry.lock().unwrap();
+    let handle = handles
+        .get_mut(&pty_id)
+        .ok_or_else(|| format!("pty not found: {pty_id}"))?;
+    if handle.output_attached {
+        return Ok(());
+    }
+    if !handle.output_backlog.is_empty() {
+        let backlog = std::mem::take(&mut handle.output_backlog);
+        app.emit(&format!("pty:output:{pty_id}"), backlog)
+            .map_err(|error| format!("PTY attach replay failed: {error}"))?;
+    }
+    handle.output_attached = true;
+    Ok(())
 }
 
 /// Write data to PTY stdin (keyboard input).
