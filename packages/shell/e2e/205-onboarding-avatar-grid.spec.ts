@@ -65,6 +65,10 @@ function buildInvokeMock() {
 (function() {
 	window.__TAURI_INTERNALS__ = window.__TAURI_INTERNALS__ || {};
 	window.__TAURI_EVENT_PLUGIN_INTERNALS__ = window.__TAURI_EVENT_PLUGIN_INTERNALS__ || {};
+	window.__avatarPreviewEvents = [];
+	window.addEventListener("naia-avatar-preview", function(event) {
+		window.__avatarPreviewEvents.push(event.detail);
+	});
 	window.__TAURI_INTERNALS__.metadata = {
 		currentWindow: { label: "main" },
 		currentWebview: { windowLabel: "main", label: "main" },
@@ -183,6 +187,25 @@ test.describe("#447 onboarding avatar grid", () => {
 		await expect(
 			page.locator('.onboarding-step__avatar-card[aria-pressed="true"]'),
 		).toHaveCount(1);
+		await expect
+			.poll(() =>
+				page.evaluate(
+					() =>
+						(
+							window as Window & {
+								__avatarPreviewEvents?: Array<{
+									provider?: string;
+									model?: string;
+								}>;
+							}
+						).__avatarPreviewEvents?.some(
+							(event) =>
+								event.provider === "naia-video-avatar" &&
+								event.model === "naia",
+						) ?? false,
+				),
+			)
+			.toBe(true);
 	});
 
 	test("live-action Naia portrait is lowered on desktop and narrow grids (#448)", async ({

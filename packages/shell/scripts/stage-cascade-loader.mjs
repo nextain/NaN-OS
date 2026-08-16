@@ -46,6 +46,10 @@ const RUNTIME_INSTALLER = resolve(
 	SHELL,
 	"src-tauri/windows/install-voxcpm2.ps1",
 );
+const WINDOWS_VOICE_RUNTIME = resolve(
+	SHELL,
+	"src-tauri/windows/voxcpm2-runtime.py",
+);
 
 if (!existsSync(SRC) || !existsSync(AVATAR_PRELOAD_SRC)) {
 	console.error(
@@ -77,6 +81,7 @@ for (const required of [
 	resolve(LABS_SERVICE, "build_voxcpm2_trt.py"),
 	RUNTIME_MANIFEST,
 	RUNTIME_INSTALLER,
+	WINDOWS_VOICE_RUNTIME,
 ]) {
 	if (!existsSync(required))
 		throw new Error(`required VoxCPM2 runtime asset missing: ${required}`);
@@ -100,6 +105,9 @@ cpSync(
 	resolve(cascadeDest, "assets/ref_audio"),
 	{ recursive: true },
 );
+cpSync(resolve(CASCADE, "assets/ref_audio"), resolve(RUNTIME_DEST, "voices"), {
+	recursive: true,
+});
 const labsDest = resolve(RUNTIME_REPOS, "naia-labs/avatar/service");
 mkdirSync(labsDest, { recursive: true });
 for (const file of [
@@ -112,6 +120,10 @@ for (const file of [
 	copyFileSync(resolve(LABS_SERVICE, file), resolve(labsDest, file));
 copyFileSync(RUNTIME_MANIFEST, resolve(RUNTIME_DEST, "manifest.json"));
 copyFileSync(RUNTIME_INSTALLER, resolve(RUNTIME_DEST, "install-voxcpm2.ps1"));
+copyFileSync(
+	WINDOWS_VOICE_RUNTIME,
+	resolve(RUNTIME_DEST, "voxcpm2-runtime.py"),
+);
 if (process.platform === "win32") {
 	const manifest = JSON.parse(readFileSync(RUNTIME_MANIFEST, "utf8"));
 	const uv = (process.env.PATH ?? "")

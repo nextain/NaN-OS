@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import "@testing-library/jest-dom/vitest";
 import {
+	act,
 	cleanup,
 	fireEvent,
 	render,
@@ -62,6 +63,13 @@ function RuntimeHarness() {
 			</div>
 			<div data-testid="runtime-error">{runtime.snapshotError}</div>
 			<div data-testid="runtime-root">{runtime.workspaceRoot}</div>
+			<div data-testid="terminal-error">{runtime.terminalError}</div>
+			<button type="button" onClick={runtime.onTerminalReady}>
+				Render terminal frame
+			</button>
+			<button type="button" onClick={() => void runtime.retryHerdr()}>
+				Retry Herdr
+			</button>
 			<button
 				type="button"
 				onClick={() => void runtime.refreshSnapshot().catch(() => {})}
@@ -74,6 +82,7 @@ function RuntimeHarness() {
 
 describe("useHerdrRuntime", () => {
 	afterEach(() => {
+		vi.useRealTimers();
 		cleanup();
 		mockInvoke.mockReset();
 	});
@@ -169,5 +178,58 @@ describe("useHerdrRuntime", () => {
 			),
 		);
 		expect(rootAttempts).toBeGreaterThanOrEqual(2);
+	});
+
+	it("reaps the owned PTY when the Herdr server never becomes ready", async () => {
+		vi.useFakeTimers();
+		mockInvoke.mockImplementation(async (command: string) => {
+			if (command === "herdr_pty_create") return { pty_id: "pty-dead", pid: 9 };
+			if (command === "herdr_snapshot") throw new Error("server not running");
+			return null;
+		});
+
+		render(<RuntimeHarness />);
+		await act(async () => {
+			await vi.advanceTimersByTimeAsync(8_100);
+		});
+		expect(mockInvoke).toHaveBeenCalledWith("pty_kill", { ptyId: "pty-dead" });
+		expect(screen.getByTestId("runtime-pty")).toHaveTextContent("none");
+		expect(screen.getByTestId("runtime-error")).toHaveTextContent(
+			/server not running/i,
+		);
+	});
+
+	it("turns a terminal black-frame timeout into a retryable phase error", async () => {
+		vi.useFakeTimers();
+		let launches = 0;
+		mockInvoke.mockImplementation(async (command: string) => {
+			if (command === "herdr_pty_create") {
+				launches += 1;
+				return { pty_id: `pty-${launches}`, pid: launches };
+			}
+			if (command === "herdr_snapshot") return snapshot("initial");
+			if (command === "workspace_set_root") return "/work/initial";
+			return null;
+		});
+		render(<RuntimeHarness />);
+		await act(async () => {
+			await Promise.resolve();
+			await Promise.resolve();
+			await Promise.resolve();
+		});
+		expect(screen.getByTestId("runtime-pty")).toHaveTextContent("pty-1");
+		act(() => vi.advanceTimersByTime(8_001));
+		expect(screen.getByTestId("terminal-error")).toHaveTextContent(
+			/did not produce a frame/i,
+		);
+		fireEvent.click(screen.getByRole("button", { name: "Retry Herdr" }));
+		await act(async () => {
+			await Promise.resolve();
+			await Promise.resolve();
+			await Promise.resolve();
+		});
+		expect(mockInvoke).toHaveBeenCalledWith("pty_kill", { ptyId: "pty-1" });
+		expect(screen.getByTestId("runtime-pty")).toHaveTextContent("pty-2");
+		vi.useRealTimers();
 	});
 });

@@ -8,8 +8,11 @@ import {
 } from "../lib/config";
 import { getLocale, t } from "../lib/i18n";
 import {
+	clearCachedLabCredits,
 	fetchLabBalancePayload,
 	parseLabCredits,
+	primeLabCredits,
+	readCachedLabCredits,
 } from "../lib/lab-balance";
 import { Logger } from "../lib/logger";
 import type { ChatMessage, CostEntry } from "../lib/types";
@@ -78,22 +81,20 @@ function formatCost(cost: number): string {
 
 const GATEWAY_URL = LAB_GATEWAY_URL;
 
-// Simple cache to avoid re-fetching balance on every mount
-let balanceCache: { value: number; timestamp: number } | null = null;
 const BALANCE_CACHE_TTL = 30_000; // 30 seconds
 const BALANCE_FETCH_TIMEOUT_MS = 8_000;
 
 function LabBalanceSection() {
 	const [balance, setBalance] = useState<number | null>(
-		balanceCache && Date.now() - balanceCache.timestamp < BALANCE_CACHE_TTL
-			? balanceCache.value
-			: null,
+		readCachedLabCredits(BALANCE_CACHE_TTL)?.value ?? null,
 	);
 	const [loading, setLoading] = useState(balance === null);
 	const [error, setError] = useState(false);
 	const activeRequest = useRef<AbortController | null>(null);
+	const requestGeneration = useRef(0);
 
 	const fetchBalance = useCallback(async () => {
+		const generation = ++requestGeneration.current;
 		activeRequest.current?.abort();
 		let naiaKey: string | undefined;
 		try {
@@ -119,11 +120,15 @@ function LabBalanceSection() {
 				naiaKey,
 				controller.signal,
 			);
-			const val = parseLabCredits(payload) ?? 0;
-			balanceCache = { value: val, timestamp: Date.now() };
+			if (generation !== requestGeneration.current) return;
+			const val = parseLabCredits(payload);
+			if (val == null)
+				throw new Error("Invalid authenticated balance response");
+			primeLabCredits(val);
 			setBalance(val);
 			setError(false);
 		} catch (err) {
+			if (generation !== requestGeneration.current) return;
 			Logger.warn("CostDashboard", "Lab balance fetch failed", {
 				error: String(err),
 			});
@@ -139,6 +144,7 @@ function LabBalanceSection() {
 
 	useEffect(
 		() => () => {
+			requestGeneration.current++;
 			activeRequest.current?.abort();
 		},
 		[],
@@ -146,11 +152,9 @@ function LabBalanceSection() {
 
 	useEffect(() => {
 		// Use cached value if fresh
-		if (
-			balanceCache &&
-			Date.now() - balanceCache.timestamp < BALANCE_CACHE_TTL
-		) {
-			setBalance(balanceCache.value);
+		const cached = readCachedLabCredits(BALANCE_CACHE_TTL);
+		if (cached) {
+			setBalance(cached.value);
 			setLoading(false);
 			return;
 		}
@@ -159,7 +163,7 @@ function LabBalanceSection() {
 
 	useEffect(() => {
 		const handleAuthReady = () => {
-			balanceCache = null;
+			clearCachedLabCredits();
 			setLoading(true);
 			fetchBalance();
 		};
@@ -219,9 +223,11 @@ export function CostDashboard({
 	const [showLabBalance, setShowLabBalance] = useState(false);
 
 	useEffect(() => {
-		hasNaiaKeySecure().then(setShowLabBalance).catch(() => {
-			setShowLabBalance(false);
-		});
+		hasNaiaKeySecure()
+			.then(setShowLabBalance)
+			.catch(() => {
+				setShowLabBalance(false);
+			});
 	}, []);
 
 	useEffect(() => {

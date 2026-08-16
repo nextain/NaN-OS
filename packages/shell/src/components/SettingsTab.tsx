@@ -794,9 +794,12 @@ export function SettingsTab() {
 	const [cascadeInstallation, setCascadeInstallation] =
 		useState<CascadeInstallationStatus | null>(null);
 	const [cascadeInstallBusy, setCascadeInstallBusy] = useState(false);
+	const cascadeInstallationRequestRef = useRef(0);
 	const refreshCascadeInstallation = useCallback(async () => {
+		const generation = ++cascadeInstallationRequestRef.current;
 		try {
 			const status = await invoke<unknown>("cascade_installation_status");
+			if (generation !== cascadeInstallationRequestRef.current) return null;
 			if (!isCascadeInstallationStatus(status)) {
 				Logger.warn("Settings", "Malformed cascade installation status", {});
 				setCascadeInstallation(null);
@@ -805,6 +808,7 @@ export function SettingsTab() {
 			setCascadeInstallation(status);
 			return status;
 		} catch (error) {
+			if (generation !== cascadeInstallationRequestRef.current) return null;
 			Logger.warn("Settings", "Cascade installation status unavailable", {
 				error: String(error),
 			});
@@ -903,12 +907,22 @@ export function SettingsTab() {
 		ready: string | null;
 		message?: string;
 	}> => {
-		const installation = await refreshCascadeInstallation();
+		let installation = await refreshCascadeInstallation();
 		if (!installation?.canStart) {
-			return {
-				ready: null,
-				message: installation?.summary ?? t("settings.cascadeError"),
-			};
+			setCascadeMsg(
+				getLocale() === "ko"
+					? "VoxCPM2 TensorRT를 설치하고 있습니다."
+					: "Installing VoxCPM2 TensorRT...",
+			);
+			const installed = await invoke<unknown>("install_cascade_runtime");
+			if (isCascadeInstallationStatus(installed))
+				setCascadeInstallation(installed);
+			installation = await refreshCascadeInstallation();
+			if (!installation?.canStart)
+				return {
+					ready: null,
+					message: installation?.summary ?? t("settings.cascadeError"),
+				};
 		}
 		// CASCADE_READY now exposes only the local voice facade URL.
 		// Pre-baked NVA playback remains independent from this voice runtime.
@@ -928,18 +942,23 @@ export function SettingsTab() {
 		restoreMigrationNotice: Partial<
 			Pick<AppConfig, "localVoiceMigrationNotice">
 		> = {},
+		normalizeBlockedLocal = false,
 	) => {
+		const shouldNormalizeBlockedLocal =
+			normalizeBlockedLocal && cfg.ttsProvider === "naia-local-voice";
 		const fallbackConfig: AppConfig = {
 			...cfg,
-			localVoiceEnabled: false,
-			ttsEnabled: false,
-			ttsProvider:
-				cfg.ttsProvider === "naia-local-voice" ? "edge" : cfg.ttsProvider,
+			localVoiceEnabled: shouldNormalizeBlockedLocal
+				? false
+				: cfg.localVoiceEnabled,
+			ttsEnabled: shouldNormalizeBlockedLocal ? false : cfg.ttsEnabled,
+			ttsProvider: shouldNormalizeBlockedLocal ? "edge" : cfg.ttsProvider,
 			...restoreMigrationNotice,
 		};
 		saveConfig(fallbackConfig);
 		setTtsProvider(fallbackConfig.ttsProvider ?? "edge");
-		setTtsEnabled(false);
+		setTtsEnabled(fallbackConfig.ttsEnabled === true);
+		setVllmTtsHost(fallbackConfig.vllmTtsHost ?? DEFAULT_LOCAL_VOICE_HOST);
 		setCascadeRunning(false);
 		useCascadeAvatarStore.getState().setLocalFacadeUrl(null);
 		await writeNaiaConfig({
@@ -948,18 +967,24 @@ export function SettingsTab() {
 		} as unknown as Record<string, unknown>);
 		await writeSlotsManifest(fallbackConfig, detectedVramGb ?? undefined);
 	};
+	const localVoiceTransactionRef = useRef(false);
 	useEffect(() => {
+		if (localVoiceTransactionRef.current) return;
 		if (cascadeInstallation?.canStart !== false) return;
 		const cfg = loadConfig();
 		if (!cfg || cfg.ttsProvider !== "naia-local-voice") return;
-		void rollbackLocalVoiceSelection(cfg).catch((error) => {
+		void rollbackLocalVoiceSelection(cfg, {}, true).catch((error) => {
 			Logger.warn("Settings", "Blocked local voice normalization failed", {
 				error: String(error),
 			});
 		});
 	}, [cascadeInstallation]);
-	const ensureLocalVoiceReady = async (): Promise<boolean> => {
+	const ensureLocalVoiceReady = async (
+		normalizeFailedLocal = false,
+	): Promise<boolean> => {
 		if (cascadeRunning) return true;
+		if (localVoiceTransactionRef.current) return false;
+		localVoiceTransactionRef.current = true;
 		setCascadeBusy(true);
 		setCascadeMsg("");
 		// FR-VOICE.13: enabling clears the migration notice via normalization,
@@ -968,17 +993,16 @@ export function SettingsTab() {
 		let restoreMigrationNotice: Partial<
 			Pick<AppConfig, "localVoiceMigrationNotice">
 		> = {};
+		let originalConfig: AppConfig | null = null;
 		try {
 			const cfg = loadConfig();
 			if (!cfg || detectedVramGb == null || detectedVramGb < 6) {
 				setCascadeMsg(t("settings.localVoiceVramRequired"));
 				return false;
 			}
-			const installation = await refreshCascadeInstallation();
-			if (!installation?.canStart) {
-				setCascadeMsg(installation?.summary ?? t("settings.cascadeError"));
-				return false;
-			}
+			originalConfig = cfg;
+			// Missing runtime is an installable state. startCascadeAndConfirm owns
+			// install -> verify -> start -> health as one selection transaction.
 			if (cfg.localVoiceMigrationNotice) {
 				restoreMigrationNotice = {
 					localVoiceMigrationNotice: cfg.localVoiceMigrationNotice,
@@ -1005,7 +1029,11 @@ export function SettingsTab() {
 			await writeSlotsManifest(voiceConfig, detectedVramGb);
 			const start = await startCascadeAndConfirm("windows_trt_6g");
 			if (!start.ready) {
-				await rollbackLocalVoiceSelection(cfg, restoreMigrationNotice);
+				await rollbackLocalVoiceSelection(
+					cfg,
+					restoreMigrationNotice,
+					normalizeFailedLocal,
+				);
 				setCascadeMsg(start.message ?? t("settings.cascadeError"));
 				return false;
 			}
@@ -1015,10 +1043,13 @@ export function SettingsTab() {
 			setCascadeMsg(t("settings.cascadeStarted"));
 			return true;
 		} catch (e) {
-			const cfg = loadConfig();
-			if (cfg) {
+			if (originalConfig) {
 				try {
-					await rollbackLocalVoiceSelection(cfg, restoreMigrationNotice);
+					await rollbackLocalVoiceSelection(
+						originalConfig,
+						restoreMigrationNotice,
+						normalizeFailedLocal,
+					);
 				} catch (rollbackError) {
 					Logger.warn("Settings", "Local voice rollback persistence failed", {
 						error: String(rollbackError),
@@ -1028,6 +1059,7 @@ export function SettingsTab() {
 			setCascadeMsg(`${t("settings.cascadeError")}: ${String(e)}`);
 			return false;
 		} finally {
+			localVoiceTransactionRef.current = false;
 			setCascadeBusy(false);
 		}
 	};
@@ -1061,6 +1093,7 @@ export function SettingsTab() {
 		const persisted = loadConfig();
 		if (
 			localVoiceRestoreAttemptedRef.current ||
+			localVoiceTransactionRef.current ||
 			detectedVramGb == null ||
 			detectedVramGb < 6 ||
 			cascadeRunning ||
@@ -1076,7 +1109,7 @@ export function SettingsTab() {
 			detectedVramGb,
 			loaderProfile: "windows_trt_6g",
 		});
-		void ensureLocalVoiceReady();
+		void ensureLocalVoiceReady(true);
 	}, [detectedVramGb, cascadeRunning, ttsProvider, cascadeInstallation]);
 
 	const warmedProfileRef = useRef<string>("");
@@ -2378,23 +2411,14 @@ export function SettingsTab() {
 		}
 		debouncedLabSync();
 	}
-	function selectProfileTtsProvider(next: TtsProviderId) {
-		if (next === "naia-local-voice" && cascadeInstallation?.canStart !== true) {
-			setCascadeMsg(cascadeInstallation?.summary ?? t("settings.cascadeError"));
+	async function selectProfileTtsProvider(next: TtsProviderId) {
+		if (next === "naia-local-voice") {
+			await ensureLocalVoiceReady();
 			return;
 		}
 		setTtsProvider(next);
 		setDynamicTtsVoices([]);
 		const updates: Record<string, unknown> = { ttsProvider: next };
-		if (next === "naia-local-voice") {
-			const host = DEFAULT_LOCAL_VOICE_HOST;
-			setVllmTtsHost(host);
-			updates.vllmTtsHost = host;
-			updates.localVoiceEnabled = true;
-			updates.ttsEnabled = true;
-			setTtsEnabled(true);
-			persistTtsVoice("default");
-		}
 		persistConfig(updates);
 	}
 	function getPreviewText(_voice?: string): string {
@@ -3992,7 +4016,7 @@ export function SettingsTab() {
 														aria-label={t("settings.ttsProvider")}
 														value={ttsProvider}
 														onChange={(event) =>
-															selectProfileTtsProvider(
+															void selectProfileTtsProvider(
 																event.target.value as TtsProviderId,
 															)
 														}
@@ -4004,7 +4028,8 @@ export function SettingsTab() {
 																disabled={
 																	(providerMeta.requiresNaiaKey && !naiaKey) ||
 																	(providerMeta.id === "naia-local-voice" &&
-																		cascadeInstallation?.canStart !== true)
+																		(detectedVramGb == null ||
+																			detectedVramGb < 6))
 																}
 															>
 																{providerMeta.name}
@@ -4020,8 +4045,7 @@ export function SettingsTab() {
 															disabled={
 																cascadeBusy ||
 																detectedVramGb == null ||
-																detectedVramGb < 6 ||
-																cascadeInstallation?.canStart !== true
+																detectedVramGb < 6
 															}
 															aria-pressed={cascadeRunning}
 														>
@@ -5031,10 +5055,7 @@ export function SettingsTab() {
 							className="voice-preview-btn"
 							onClick={handleToggleCascade}
 							disabled={
-								cascadeBusy ||
-								detectedVramGb == null ||
-								detectedVramGb < 6 ||
-								cascadeInstallation?.canStart !== true
+								cascadeBusy || detectedVramGb == null || detectedVramGb < 6
 							}
 							aria-pressed={cascadeRunning}
 						>
@@ -5100,10 +5121,7 @@ export function SettingsTab() {
 										}
 									}}
 									disabled={
-										cascadeBusy ||
-										detectedVramGb == null ||
-										detectedVramGb < 6 ||
-										cascadeInstallation?.canStart !== true
+										cascadeBusy || detectedVramGb == null || detectedVramGb < 6
 									}
 								>
 									{t("settings.localVoiceMigrationRestore")}

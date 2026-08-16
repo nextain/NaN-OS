@@ -14,7 +14,7 @@ if ($actualUv -ne $manifest.uv.windowsX64Sha256) {
 
 New-Item -ItemType Directory -Force -Path $RuntimeRoot | Out-Null
   $env:UV_CACHE_DIR = Join-Path $RuntimeRoot ".uv-cache"
-  $env:HF_HOME = Join-Path $RuntimeRoot ".cache\huggingface"
+  $env:HF_HOME = Join-Path $RuntimeRoot "hf-cache"
   $env:HF_HUB_DISABLE_XET = "1"
   $venv = Join-Path $RuntimeRoot ".venv-voice-trt"
   $python = Join-Path $venv "Scripts\python.exe"
@@ -44,14 +44,14 @@ New-Item -ItemType Directory -Force -Path $RuntimeRoot | Out-Null
   & $python $builder --model $manifest.model.id --revision $manifest.model.revision --output-dir $engine --workspace-gib 1.0
   if ($LASTEXITCODE -ne 0) { throw "VoxCPM2 TensorRT engine build failed" }
 
-  $env:PYTHONPATH = "$service;$BundleRoot\repos\projects\naia-omni-cascade;$BundleRoot\..\cascade-loader"
-  & $python -c "import loader,torch,voxcpm,soundfile,tensorrt,onnx; assert torch.cuda.is_available()"
+  $env:PYTHONPATH = "$service"
+  & $python -c "import torch,voxcpm,soundfile,tensorrt,onnx; assert torch.cuda.is_available()"
   if ($LASTEXITCODE -ne 0) { throw "Installed voice runtime verification failed" }
   if (-not (Test-Path -LiteralPath (Join-Path $engine "manifest.json"))) {
     throw "TensorRT engine manifest missing"
   }
   [IO.File]::WriteAllText(
-    (Join-Path $RuntimeRoot "cascade-runtime-ready.json"),
+    (Join-Path $RuntimeRoot "voxcpm2-runtime-ready.json"),
     ($manifest | ConvertTo-Json -Depth 8),
     [Text.UTF8Encoding]::new($false)
   )

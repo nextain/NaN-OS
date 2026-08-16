@@ -887,9 +887,11 @@ export async function sendAuthUpdateStrict(naiaKey: string): Promise<void> {
 
 /** Reload persisted settings in the live Agent; failures are caller-visible. */
 export async function reloadAgentSettings(): Promise<void> {
-	await invoke("send_to_agent_command", {
-		message: JSON.stringify({ type: "reload_settings" }),
-	});
+	// reload_settings is a gRPC lifecycle RPC, not an AgentRequest wire message.
+	// Sending it through send_to_agent_command is silently ignored by the paired
+	// agent decoder, leaving the clean-install process on its pre-login config
+	// until the whole app is restarted.
+	await invoke("reload_agent_settings");
 }
 
 /** Request the agent to pre-download an offline embedding model. */

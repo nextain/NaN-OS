@@ -1294,16 +1294,21 @@ describe("SettingsTab — memory tab (#298)", () => {
 			"naia-config",
 			JSON.stringify({ provider: "ollama", model: "qwen3:8b" }),
 		);
+		let localVoiceStarted = false;
 		mockInvoke.mockImplementation((cmd: string) => {
 			if (cmd === "detect_gpu_vram") return Promise.resolve(6);
 			if (cmd === "cascade_installation_status") {
 				return Promise.resolve({
-					phase: "ready-to-start",
-					ready: false,
+					phase: localVoiceStarted ? "ready" : "ready-to-start",
+					ready: localVoiceStarted,
 					canStart: true,
 					summary: "Ready",
 					steps: [],
 				});
+			}
+			if (cmd === "start_cascade") {
+				localVoiceStarted = true;
+				return Promise.resolve(JSON.stringify({ facade_port: 8910 }));
 			}
 			return Promise.resolve([]);
 		});
@@ -1402,6 +1407,142 @@ describe("SettingsTab — memory tab (#298)", () => {
 			expect(
 				screen.queryByTestId("local-voice-installation-status"),
 			).toBeNull();
+		});
+	});
+
+	it("selecting VoxCPM2 installs, starts, health-checks, then commits the provider", async () => {
+		localStorage.setItem(
+			"naia-config",
+			JSON.stringify({
+				provider: "nextain",
+				model: "gemini-3.5-flash",
+				naiaKey: "nk",
+				ttsProvider: "edge",
+				ttsEnabled: false,
+				localVoiceEnabled: false,
+			}),
+		);
+		let installed = false;
+		let started = false;
+		mockInvoke.mockImplementation((command: string) => {
+			if (command === "detect_gpu_vram") return Promise.resolve(8);
+			if (command === "cascade_status") return Promise.resolve(false);
+			if (command === "cascade_installation_status")
+				return Promise.resolve({
+					phase: started ? "ready" : installed ? "ready-to-start" : "blocked",
+					ready: started,
+					canStart: installed,
+					summary: installed ? "VoxCPM2 TensorRT ready" : "Install required",
+					steps: installed
+						? []
+						: [
+								{
+									id: "trt-voice-service",
+									label: "TensorRT voice service",
+									state: "blocked",
+									action: "install",
+									actionAvailable: true,
+									progressPercent: 0,
+									retryable: true,
+									failure: null,
+								},
+							],
+				});
+			if (command === "install_cascade_runtime") {
+				installed = true;
+				return Promise.resolve({
+					phase: "ready-to-start",
+					ready: false,
+					canStart: true,
+					summary: "VoxCPM2 TensorRT ready",
+					steps: [],
+				});
+			}
+			if (command === "start_cascade") {
+				started = true;
+				return Promise.resolve(JSON.stringify({ facade_port: 8910 }));
+			}
+			return Promise.resolve([]);
+		});
+
+		render(<SettingsTab />);
+		gotoSettingsTab("profile");
+		const selector = screen.getByTestId("profile-tts-provider");
+		await vi.waitFor(() =>
+			expect(
+				(selector as HTMLSelectElement).querySelector(
+					'option[value="naia-local-voice"]',
+				),
+			).not.toBeDisabled(),
+		);
+		fireEvent.change(selector, { target: { value: "naia-local-voice" } });
+
+		await vi.waitFor(() => {
+			expect(mockInvoke).toHaveBeenCalledWith("install_cascade_runtime");
+			expect(mockInvoke).toHaveBeenCalledWith("start_cascade", {
+				expectedLoaderProfile: "windows_trt_6g",
+			});
+			const saved = JSON.parse(localStorage.getItem("naia-config") || "{}");
+			expect(saved.ttsProvider).toBe("naia-local-voice");
+			expect(saved.localVoiceEnabled).toBe(true);
+			expect(saved.ttsEnabled).toBe(true);
+		});
+	});
+
+	it("restores the exact prior TTS selection when VoxCPM2 start fails", async () => {
+		localStorage.setItem("naia-adk-path", "D:\\alpha-adk");
+		localStorage.setItem(
+			"naia-config",
+			JSON.stringify({
+				provider: "nextain",
+				model: "gemini-3.5-flash",
+				naiaKey: "nk",
+				ttsProvider: "edge",
+				ttsEnabled: true,
+				localVoiceEnabled: false,
+				vllmTtsHost: "http://voice-before-selection.local",
+			}),
+		);
+		mockInvoke.mockImplementation((command: string) => {
+			if (command === "detect_gpu_vram") return Promise.resolve(8);
+			if (command === "cascade_status") return Promise.resolve(false);
+			if (command === "cascade_installation_status")
+				return Promise.resolve({
+					phase: "ready-to-start",
+					ready: false,
+					canStart: true,
+					summary: "VoxCPM2 TensorRT ready",
+					steps: [],
+				});
+			if (command === "start_cascade")
+				return Promise.reject(new Error("TRT service failed to start"));
+			return Promise.resolve([]);
+		});
+
+		render(<SettingsTab />);
+		gotoSettingsTab("profile");
+		const selector = screen.getByTestId("profile-tts-provider");
+		await vi.waitFor(() =>
+			expect(
+				(selector as HTMLSelectElement).querySelector(
+					'option[value="naia-local-voice"]',
+				),
+			).not.toBeDisabled(),
+		);
+		fireEvent.change(selector, { target: { value: "naia-local-voice" } });
+
+		await vi.waitFor(() => {
+			const saved = JSON.parse(localStorage.getItem("naia-config") || "{}");
+			expect(saved.ttsProvider).toBe("edge");
+			expect(saved.ttsEnabled).toBe(true);
+			expect(saved.localVoiceEnabled).toBe(false);
+			expect(saved.vllmTtsHost).toBe("http://voice-before-selection.local");
+			const writes = mockInvoke.mock.calls.filter(
+				([command]) => command === "write_slots_manifest",
+			);
+			expect(writes.length).toBeGreaterThan(0);
+			const manifest = JSON.parse(writes.at(-1)?.[1]?.json as string);
+			expect(manifest.slots.tts.provider).toBe("edge");
 		});
 	});
 
@@ -1814,16 +1955,22 @@ describe("SettingsTab — memory tab (#298)", () => {
 				localGpuTier: "auto",
 			}),
 		);
+		let profileVoiceStarted = false;
 		mockInvoke.mockImplementation((cmd: string) => {
 			if (cmd === "detect_gpu_vram") return Promise.resolve(6);
+			if (cmd === "cascade_status") return Promise.resolve(false);
 			if (cmd === "cascade_installation_status") {
 				return Promise.resolve({
-					phase: "ready-to-start",
-					ready: false,
+					phase: profileVoiceStarted ? "ready" : "ready-to-start",
+					ready: profileVoiceStarted,
 					canStart: true,
 					summary: "Ready",
 					steps: [],
 				});
+			}
+			if (cmd === "start_cascade") {
+				profileVoiceStarted = true;
+				return Promise.resolve(JSON.stringify({ facade_port: 8910 }));
 			}
 			return Promise.resolve([]);
 		});

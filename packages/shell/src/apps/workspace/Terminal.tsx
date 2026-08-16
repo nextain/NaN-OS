@@ -24,6 +24,8 @@ interface TerminalProps {
 	/** Alt+click on a file path in terminal output → ask the conversation rail
 	    about that file (instead of opening it in the document viewer). */
 	onAskAi?: (path: string) => void;
+	/** Fires only after xterm has parsed real PTY output. */
+	onReady?: () => void;
 }
 
 export interface FileLocation {
@@ -159,6 +161,7 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(
 			onFileSelect,
 			onFileLocation,
 			onAskAi,
+			onReady,
 		}: TerminalProps,
 		ref,
 	) {
@@ -177,6 +180,8 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(
 		onAskAiRef.current = onAskAi;
 		const workingDirRef = useRef(workingDir);
 		workingDirRef.current = workingDir;
+		const onReadyRef = useRef(onReady);
+		onReadyRef.current = onReady;
 
 		useImperativeHandle(
 			ref,
@@ -288,8 +293,13 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(
 			const pendingUnlistens: Array<() => void> = [];
 			let observer: ResizeObserver | null = null;
 
+			let reportedReady = false;
 			const outputListener = listen<string>(`pty:output:${pty_id}`, (e) => {
-				term.write(e.payload);
+				term.write(e.payload, () => {
+					if (reportedReady || e.payload.length === 0) return;
+					reportedReady = true;
+					onReadyRef.current?.();
+				});
 			});
 			const exitListener = listen<void>(`pty:exit:${pty_id}`, () => {
 				if (cancelled) return;
@@ -355,7 +365,8 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(
 		useEffect(() => {
 			let lastDark: boolean | null = null;
 			const sync = () => {
-				if (termRef.current) termRef.current.options.theme = currentXtermTheme();
+				if (termRef.current)
+					termRef.current.options.theme = currentXtermTheme();
 				// Only hot-reload the Herdr theme when the light/dark mode actually
 				// flips — switching between two dark themes just recolors xterm.
 				const dark = shellIsDark();

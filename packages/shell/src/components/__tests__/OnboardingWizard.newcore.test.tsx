@@ -37,7 +37,11 @@ const sendAuthUpdateStrict = vi.hoisted(() =>
 );
 
 vi.mock("@tauri-apps/api/core", () => ({
-	invoke: vi.fn().mockResolvedValue(true),
+	invoke: vi.fn((command: string) =>
+		command === "fetch_naia_balance"
+			? Promise.resolve({ balance: 1_000_000 })
+			: Promise.resolve(true),
+	),
 	convertFileSrc: vi.fn((path: string) => `file://${path}`),
 }));
 vi.mock("@tauri-apps/api/event", () => ({

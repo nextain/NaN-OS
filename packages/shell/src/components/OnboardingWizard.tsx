@@ -25,11 +25,17 @@ import {
 import {
 	type AppConfig,
 	DEFAULT_LOCAL_VOICE_HOST,
+	LAB_GATEWAY_URL,
 	NAIA_WEB_BASE_URL,
 	loadConfig,
 	saveConfigSecure,
 } from "../lib/config";
 import { getLocale, t } from "../lib/i18n";
+import {
+	fetchLabBalancePayload,
+	parseLabCredits,
+	primeLabCredits,
+} from "../lib/lab-balance";
 import {
 	defaultClipOf,
 	parseNvaManifest,
@@ -323,6 +329,7 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
 		summary: string;
 		steps: Array<{ actionAvailable: boolean }>;
 	} | null>(null);
+	const localVoiceInstallationRequestRef = useRef(0);
 	// Auth payload from OAuth — held until wizard completes
 	const [naiaAuthPayload, setNaiaAuthPayload] =
 		useState<NaiaAuthPayload | null>(null);
@@ -403,8 +410,10 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
 		summary: string;
 		steps: Array<{ actionAvailable: boolean }>;
 	} | null> {
+		const generation = ++localVoiceInstallationRequestRef.current;
 		try {
 			const status = await invoke<unknown>("cascade_installation_status");
+			if (generation !== localVoiceInstallationRequestRef.current) return null;
 			if (
 				!status ||
 				typeof status !== "object" ||
@@ -424,6 +433,7 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
 			setLocalVoiceInstallation(installation);
 			return installation;
 		} catch {
+			if (generation !== localVoiceInstallationRequestRef.current) return null;
 			setLocalVoiceInstallation(null);
 			return null;
 		}
@@ -479,10 +489,17 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
 		if (detectedVramGb == null || detectedVramGb < 6) return;
 		setLocalVoiceBusy(true);
 		try {
-			const installation = await refreshCascadeInstallationForOnboarding();
+			let installation = await refreshCascadeInstallationForOnboarding();
 			if (!installation?.canStart) {
-				setLocalVoiceMsg(installation?.summary ?? t("settings.cascadeError"));
-				return;
+				setLocalVoiceMsg(
+					getLocale() === "ko"
+						? "VoxCPM2 TensorRT를 설치하고 있습니다."
+						: "Installing VoxCPM2 TensorRT...",
+				);
+				await invoke("install_cascade_runtime");
+				installation = await refreshCascadeInstallationForOnboarding();
+				if (!installation?.canStart)
+					throw new Error(installation?.summary ?? "verification failed");
 			}
 			// A resolved CASCADE_READY payload only proves ports were bound — Rust
 			// checks the facade too, so re-confirm readiness the same way
@@ -641,6 +658,24 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
 			})
 			.catch(() => {});
 	}, []);
+
+	// Asset discovery can finish before App's parent effect has installed the
+	// preview listener. Re-publish the resolved selection when the user actually
+	// enters the character step; no click on the already-selected default card is
+	// required. Explicit selections update these same values and therefore cannot
+	// be overwritten by a stale default.
+	useEffect(() => {
+		if (
+			step !== "character" ||
+			avatarProvider !== "naia-video-avatar" ||
+			!selectedNva
+		)
+			return;
+		publishAvatarChoice(
+			"naia-video-avatar",
+			selectedNva.split(/[/\\]/).pop() ?? selectedNva,
+		);
+	}, [step, avatarProvider, selectedNva]);
 
 	// Reset background on mount
 	useEffect(() => {
@@ -990,6 +1025,17 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
 			await reloadAgentSettings();
 			if (typeof completedFlat.naiaKey === "string") {
 				await sendAuthUpdateStrict(completedFlat.naiaKey);
+				// Do not leave the renderer with the pre-login zero balance. Fetch with
+				// the same credential before committing onboarding, then prime the shared
+				// dashboard cache for the panel that mounts after this wizard unmounts.
+				const balancePayload = await fetchLabBalancePayload(
+					LAB_GATEWAY_URL,
+					completedFlat.naiaKey,
+				);
+				const credits = parseLabCredits(balancePayload);
+				if (credits == null)
+					throw new Error("authenticated balance response is invalid");
+				primeLabCredits(credits);
 			}
 			const committedFlat = { ...completedFlat, onboardingComplete: true };
 			if (newCore) {
@@ -1012,7 +1058,14 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
 					userName.trim(),
 				),
 			});
-			setTimeout(onComplete, 1200);
+			setTimeout(() => {
+				onComplete();
+				window.dispatchEvent(
+					new CustomEvent("naia_auth_ready", {
+						detail: { source: "auth-complete" },
+					}),
+				);
+			}, 1200);
 		} catch (error) {
 			setCompletionError(
 				getLocale() === "ko"
@@ -1448,9 +1501,7 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
 									className={`onboarding-step__option${localVoiceEnabled ? " onboarding-step__option--selected" : ""}`}
 									style={{ marginTop: 8 }}
 									onClick={toggleLocalVoice}
-									disabled={
-										localVoiceBusy || localVoiceInstallation?.canStart !== true
-									}
+									disabled={localVoiceBusy}
 								>
 									<span className="onboarding-step__option-label">
 										{localVoiceBusy

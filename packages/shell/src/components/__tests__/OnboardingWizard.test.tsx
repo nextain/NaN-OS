@@ -19,7 +19,11 @@ const secureStore = vi.hoisted(() => ({
 
 // Mock Tauri invoke
 vi.mock("@tauri-apps/api/core", () => ({
-	invoke: vi.fn().mockResolvedValue(true),
+	invoke: vi.fn((command: string) =>
+		command === "fetch_naia_balance"
+			? Promise.resolve({ balance: 1_000_000 })
+			: Promise.resolve(true),
+	),
 	convertFileSrc: vi.fn((path: string) => `file://${path}`),
 }));
 
@@ -88,6 +92,7 @@ describe("OnboardingWizard", () => {
 	});
 
 	afterEach(() => {
+		vi.unstubAllGlobals();
 		vi.runAllTimers();
 		vi.useRealTimers();
 		cleanup();
@@ -230,6 +235,8 @@ describe("OnboardingWizard", () => {
 
 	it("offers installed NVA appearances independently of the GPU profile", async () => {
 		const { invoke } = await import("@tauri-apps/api/core");
+		const preview = vi.fn();
+		window.addEventListener("naia-avatar-preview", preview);
 		localStorage.setItem("naia-adk-path", "D:\\alpha-adk");
 		(invoke as ReturnType<typeof vi.fn>).mockImplementation(
 			(cmd: string, args?: { subdir?: string }) => {
@@ -257,6 +264,11 @@ describe("OnboardingWizard", () => {
 		fireEvent.click(screen.getByRole("button", { name: /다음|Next/ }));
 		flush();
 
+		expect(preview).toHaveBeenCalledWith(
+			expect.objectContaining({
+				detail: { provider: "naia-video-avatar", model: "naia" },
+			}),
+		);
 		const cards = screen.getAllByRole("button", { name: /NVA/ });
 		expect(cards).toHaveLength(3);
 		const defaultNaia = cards.find(
@@ -285,6 +297,7 @@ describe("OnboardingWizard", () => {
 		expect(config.avatarProvider).toBe("naia-video-avatar");
 		expect(config.nvaModel).toMatch(/naia-prebaked$/);
 		expect(config.localGpuTier).toBeUndefined();
+		window.removeEventListener("naia-avatar-preview", preview);
 	});
 
 	it("uses a video frame instead of a play glyph for video backgrounds", async () => {
@@ -358,6 +371,7 @@ describe("OnboardingWizard", () => {
 
 	it("actually starts VoxCPM2 from the voice step instead of only saving a preference", async () => {
 		const { invoke } = await import("@tauri-apps/api/core");
+		let installed = false;
 		let cascadeStarted = false;
 		(invoke as ReturnType<typeof vi.fn>).mockImplementation((cmd: string) => {
 			if (cmd === "detect_gpu_vram") return Promise.resolve(16);
@@ -365,10 +379,14 @@ describe("OnboardingWizard", () => {
 				return Promise.resolve({
 					phase: cascadeStarted ? "ready" : "ready-to-start",
 					ready: cascadeStarted,
-					canStart: true,
+					canStart: installed,
 					summary: "ok",
-					steps: [],
+					steps: installed ? [] : [{ actionAvailable: true }],
 				});
+			}
+			if (cmd === "install_cascade_runtime") {
+				installed = true;
+				return Promise.resolve(true);
 			}
 			if (cmd === "start_cascade") {
 				cascadeStarted = true;
@@ -405,6 +423,7 @@ describe("OnboardingWizard", () => {
 		expect(invoke).toHaveBeenCalledWith("start_cascade", {
 			expectedLoaderProfile: "windows_trt_6g",
 		});
+		expect(invoke).toHaveBeenCalledWith("install_cascade_runtime");
 		expect(
 			screen.getByRole("button", { name: /Local voice on/ }),
 		).toBeDefined();
@@ -503,9 +522,18 @@ describe("OnboardingWizard", () => {
 	});
 
 	it("completes onboarding immediately after Naia login succeeds", async () => {
+		vi.stubGlobal(
+			"fetch",
+			vi.fn().mockResolvedValue({
+				ok: true,
+				json: () => Promise.resolve({ balance: 1_000_000 }),
+			}),
+		);
 		const { invoke } = await import("@tauri-apps/api/core");
 		(invoke as ReturnType<typeof vi.fn>).mockImplementation((cmd: string) => {
 			if (cmd === "detect_gpu_vram") return Promise.resolve(16);
+			if (cmd === "fetch_naia_balance")
+				return Promise.resolve({ balance: 1_000_000 });
 			return Promise.resolve(true);
 		});
 		localStorage.setItem("naia-adk-path", "D:\\alpha-adk\\projects\\naia-adk");

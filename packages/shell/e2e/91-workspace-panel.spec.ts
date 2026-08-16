@@ -271,6 +271,25 @@ test.describe("Herdr Workspace integration", () => {
 		await expect(page.getByText("Alpha", { exact: true })).toBeVisible();
 	});
 
+	test("a first-run black terminal becomes a visible retryable Herdr error", async ({
+		page,
+	}) => {
+		await openWorkspace(page);
+		const overlay = page.locator(".herdr-workspace__state--overlay");
+		await expect(overlay).toBeVisible();
+		await expect(overlay).toHaveAttribute("role", "status");
+		await expect(overlay).toHaveAttribute("aria-live", "polite");
+		await expect(overlay).toHaveAttribute("role", "alert", { timeout: 10_000 });
+		await expect(overlay).toContainText("Herdr");
+		await overlay.getByRole("button").click();
+		await expect.poll(() => callCount(page, "pty_kill")).toBe(1);
+		expect(await commandArgs(page, "pty_kill")).toEqual([
+			{ ptyId: "herdr-e2e" },
+		]);
+		await expect.poll(() => callCount(page, "herdr_pty_create")).toBe(2);
+		await expect(overlay).toHaveAttribute("role", "status");
+	});
+
 	test("Spaces와 Agents 선택이 Herdr 포커스와 양방향 동기화된다", async ({
 		page,
 	}) => {
@@ -304,12 +323,15 @@ test.describe("Herdr Workspace integration", () => {
 		});
 	});
 
-	test("활성 Space가 바뀌면 파일 트리 루트도 바뀐다", async ({ page }) => {
+	test("외부 Space 포커스가 바뀌어도 사용자가 고른 파일 트리 루트를 유지한다", async ({
+		page,
+	}) => {
 		await openWorkspace(page);
 		await expect(page.getByText("alpha.ts", { exact: true })).toBeVisible();
 		await page.getByText("Beta", { exact: true }).click();
-		await expect(page.getByText("beta.ts", { exact: true })).toBeVisible();
-		await expect(page.getByText("alpha.ts", { exact: true })).toBeHidden();
+		await expect.poll(() => callCount(page, "herdr_focus_workspace")).toBe(1);
+		await expect(page.getByText("alpha.ts", { exact: true })).toBeVisible();
+		await expect(page.getByText("beta.ts", { exact: true })).toHaveCount(0);
 	});
 
 	test("파일 트리에서 연 파일을 본 뒤 같은 Herdr 터미널로 돌아간다", async ({

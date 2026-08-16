@@ -12,6 +12,8 @@ interface SurfaceProps {
 	launchError: string;
 	snapshot: HerdrSnapshot | null;
 	snapshotError: string;
+	terminalReady: boolean;
+	terminalError: string;
 	surface: HerdrSurface;
 	workspaceRoot: string;
 	terminalRef: RefObject<TerminalHandle>;
@@ -19,6 +21,8 @@ interface SurfaceProps {
 	openDocs: string[];
 	openFilePath: string;
 	launchHerdr: () => Promise<void>;
+	retryHerdr: () => Promise<void>;
+	onTerminalReady: () => void;
 	showHerdr: () => void;
 	onPtyExit: () => void;
 	openLocation: (location: FileLocation) => Promise<void>;
@@ -44,6 +48,7 @@ export function HerdrWorkspaceSurface(props: SurfaceProps) {
 							focused?.foreground_cwd || focused?.cwd || props.workspaceRoot
 						}
 						onExit={props.onPtyExit}
+						onReady={props.onTerminalReady}
 						onFileLocation={(location) => void props.openLocation(location)}
 					/>
 				) : (
@@ -56,6 +61,20 @@ export function HerdrWorkspaceSurface(props: SurfaceProps) {
 						</span>
 						{!props.launching && (
 							<button type="button" onClick={props.launchHerdr}>
+								{t("workspace.herdrRetry")}
+							</button>
+						)}
+					</div>
+				)}
+				{props.pty && !props.terminalReady && (
+					<div
+						className="herdr-workspace__state herdr-workspace__state--overlay"
+						role={props.terminalError ? "alert" : "status"}
+						aria-live="polite"
+					>
+						<span>{props.terminalError || t("workspace.herdrStarting")}</span>
+						{props.terminalError && (
+							<button type="button" onClick={props.retryHerdr}>
 								{t("workspace.herdrRetry")}
 							</button>
 						)}

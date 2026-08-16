@@ -63,6 +63,10 @@ const codingWorkerUxTranslations = {
 		"Herdr가 종료되었습니다",
 		"Herdr exited",
 	),
+	"workspace.herdrNoFrame": codingWorkerText(
+		"Herdr 화면이 열리지 않았습니다. 다시 시작할 수 있습니다.",
+		"Herdr did not produce a frame. You can retry it.",
+	),
 	"workspace.herdrSync": codingWorkerText("Herdr 동기화", "Herdr sync"),
 	"settings.brainExpertSection": codingWorkerText(
 		"Expert brain",

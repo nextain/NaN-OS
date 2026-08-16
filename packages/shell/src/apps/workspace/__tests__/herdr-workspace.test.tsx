@@ -7,7 +7,7 @@ import {
 	screen,
 	waitFor,
 } from "@testing-library/react";
-import { forwardRef, useImperativeHandle } from "react";
+import { forwardRef, useEffect, useImperativeHandle } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { NaiaContextBridge, ToolHandler } from "../../../lib/app-registry";
 import type { FileLocation, TerminalHandle } from "../Terminal";
@@ -38,9 +38,11 @@ vi.mock("../Terminal", () => ({
 			pty_id: string;
 			onExit: (ptyId: string) => void;
 			onFileLocation?: (value: FileLocation) => void;
+			onReady?: () => void;
 		}
-	>(function MockTerminal({ pty_id, onExit, onFileLocation }, ref) {
+	>(function MockTerminal({ pty_id, onExit, onFileLocation, onReady }, ref) {
 		useImperativeHandle(ref, () => ({ focus: terminalFocus }));
+		useEffect(() => onReady?.(), [pty_id]);
 		return (
 			<div data-testid="embedded-herdr-terminal" data-pty-id={pty_id}>
 				<button

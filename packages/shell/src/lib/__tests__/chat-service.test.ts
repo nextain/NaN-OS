@@ -106,12 +106,10 @@ describe("chat-service", () => {
 		});
 	});
 
-	it("reloadAgentSettings sends reload_settings and propagates failure", async () => {
+	it("reloadAgentSettings uses the lifecycle RPC and propagates failure", async () => {
 		const { reloadAgentSettings } = await import("../chat-service");
 		await reloadAgentSettings();
-		expect(mockInvoke).toHaveBeenCalledWith("send_to_agent_command", {
-			message: JSON.stringify({ type: "reload_settings" }),
-		});
+		expect(mockInvoke).toHaveBeenCalledWith("reload_agent_settings");
 
 		mockInvoke.mockRejectedValueOnce(new Error("agent unavailable"));
 		await expect(reloadAgentSettings()).rejects.toThrow("agent unavailable");

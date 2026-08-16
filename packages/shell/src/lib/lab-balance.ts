@@ -1,5 +1,28 @@
 import { invoke } from "@tauri-apps/api/core";
 
+export interface CachedLabCredits {
+	value: number;
+	timestamp: number;
+}
+
+let cachedLabCredits: CachedLabCredits | null = null;
+
+export function readCachedLabCredits(
+	maxAgeMs: number,
+): CachedLabCredits | null {
+	return cachedLabCredits && Date.now() - cachedLabCredits.timestamp < maxAgeMs
+		? cachedLabCredits
+		: null;
+}
+
+export function primeLabCredits(value: number): void {
+	cachedLabCredits = { value, timestamp: Date.now() };
+}
+
+export function clearCachedLabCredits(): void {
+	cachedLabCredits = null;
+}
+
 /**
  * Gateway balance is expressed in micro-dollars (`balance`), while the
  * naia.land account endpoint returns already-normalized `credits`. Accept both
@@ -22,10 +45,12 @@ export function parseLabCredits(payload: unknown): number | null {
 	};
 
 	const record = payload as Record<string, unknown>;
-	return parse(record) ??
+	return (
+		parse(record) ??
 		(record.data && typeof record.data === "object"
 			? parse(record.data as Record<string, unknown>)
-			: null);
+			: null)
+	);
 }
 
 /** Use native HTTP inside Tauri to avoid WebView CORS/PNA balance failures. */
@@ -34,10 +59,7 @@ export async function fetchLabBalancePayload(
 	naiaKey: string,
 	signal?: AbortSignal,
 ): Promise<unknown> {
-	if (
-		typeof window !== "undefined" &&
-		"__TAURI_INTERNALS__" in window
-	) {
+	if (typeof window !== "undefined" && "__TAURI_INTERNALS__" in window) {
 		return invoke<unknown>("fetch_naia_balance", {
 			gatewayUrl,
 			naiaKey,

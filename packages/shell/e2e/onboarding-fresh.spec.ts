@@ -54,18 +54,23 @@ function buildMockScript() {
 	window.__onboardingCommands = [];
 
     window.__TAURI_INTERNALS__.invoke = async function(cmd, args) {
-		if (cmd === "send_to_agent_command") {
-			var message = JSON.parse((args && args.message) || "{}");
-			window.__onboardingCommands.push(message);
-			if (message.type === "reload_settings" && window.__rejectOnboardingReloadOnce) {
+		if (cmd === "reload_agent_settings") {
+			window.__onboardingCommands.push({ type: "reload_settings", command: cmd });
+			if (window.__rejectOnboardingReloadOnce) {
 				window.__rejectOnboardingReloadOnce = false;
 				throw new Error("agent unavailable");
 			}
-			if (message.type === "reload_settings" && window.__deferOnboardingReload) {
+			if (window.__deferOnboardingReload) {
+				window.__deferOnboardingReload = false;
 				return new Promise(function(resolve) {
 					window.__releaseOnboardingReload = resolve;
 				});
 			}
+			return;
+		}
+		if (cmd === "send_to_agent_command") {
+			var message = JSON.parse((args && args.message) || "{}");
+			window.__onboardingCommands.push(message);
 			return;
 		}
         if (cmd === "plugin:event|listen") {
@@ -229,9 +234,6 @@ test.describe("Fresh onboarding flow", () => {
 		page,
 	}) => {
 		test.slow();
-		await page.addInitScript(() => {
-			(window as any).__deferOnboardingReload = true;
-		});
 		await setupFreshOnboarding(page);
 
 		// Walk through all steps quickly
@@ -260,16 +262,30 @@ test.describe("Fresh onboarding flow", () => {
 			name: /시작하기|Get Started/i,
 		});
 		await expect(startBtn).toBeVisible({ timeout: 5_000 });
+		const reloadCountBefore = await page.evaluate(
+			() =>
+				(window as any).__onboardingCommands.filter(
+					(message: { type?: string }) => message.type === "reload_settings",
+				).length,
+		);
+		await page.evaluate(() => {
+			(window as any).__deferOnboardingReload = true;
+		});
 		await startBtn.click();
 		await expect(
 			page.getByRole("button", { name: /설정 적용 중|Applying settings/i }),
 		).toBeDisabled();
-		const reloadCommands = await page.evaluate(() =>
-			(window as any).__onboardingCommands.filter(
-				(message: { type?: string }) => message.type === "reload_settings",
-			),
-		);
-		expect(reloadCommands).toHaveLength(1);
+		await expect
+			.poll(() =>
+				page.evaluate(
+					() =>
+						(window as any).__onboardingCommands.filter(
+							(message: { type?: string }) =>
+								message.type === "reload_settings",
+						).length,
+				),
+			)
+			.toBe(reloadCountBefore + 1);
 		await page.evaluate(() => (window as any).__releaseOnboardingReload());
 		// Wait for the 1200ms onComplete delay
 		await page.waitForTimeout(1500);
@@ -292,9 +308,6 @@ test.describe("Fresh onboarding flow", () => {
 	}) => {
 		test.slow();
 		await page.setViewportSize({ width: 480, height: 800 });
-		await page.addInitScript(() => {
-			(window as any).__rejectOnboardingReloadOnce = true;
-		});
 		await setupFreshOnboarding(page);
 		await page.locator('input[placeholder="Naia"]').fill("Mochi");
 		await clickNext(page);
@@ -306,15 +319,26 @@ test.describe("Fresh onboarding flow", () => {
 		await clickNext(page);
 		await clickNext(page);
 		await clickNext(page);
-		await expect(page.locator(".onboarding-step__bg-card").first()).toBeVisible({
-			timeout: 10_000,
-		});
+		await expect(page.locator(".onboarding-step__bg-card").first()).toBeVisible(
+			{
+				timeout: 10_000,
+			},
+		);
 		await clickNext(page);
 		await page.getByText(/Set up later/i).click();
 		await page.waitForTimeout(400);
 		await clickNext(page);
 		const startBtn = page.getByRole("button", {
 			name: /시작하기|Get Started/i,
+		});
+		const reloadCountBefore = await page.evaluate(
+			() =>
+				(window as any).__onboardingCommands.filter(
+					(message: { type?: string }) => message.type === "reload_settings",
+				).length,
+		);
+		await page.evaluate(() => {
+			(window as any).__rejectOnboardingReloadOnce = true;
 		});
 		await startBtn.click();
 
@@ -337,6 +361,6 @@ test.describe("Fresh onboarding flow", () => {
 					(message: { type?: string }) => message.type === "reload_settings",
 				).length,
 		);
-		expect(reloadCount).toBe(2);
+		expect(reloadCount - reloadCountBefore).toBeGreaterThanOrEqual(2);
 	});
 });

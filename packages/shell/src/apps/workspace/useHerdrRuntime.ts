@@ -4,6 +4,7 @@ import { getAdkPath } from "../../lib/adk-store";
 import { t } from "../../lib/i18n";
 import { Logger } from "../../lib/logger";
 import type { TerminalHandle } from "./Terminal";
+import { killPty } from "./pty-ipc";
 import {
 	HERDR_SNAPSHOT_INTERVAL_MS,
 	type HerdrSnapshot,
@@ -26,6 +27,8 @@ export function useHerdrRuntime() {
 	const [launchError, setLaunchError] = useState("");
 	const [snapshot, setSnapshot] = useState<HerdrSnapshot | null>(null);
 	const [snapshotError, setSnapshotError] = useState("");
+	const [terminalReady, setTerminalReady] = useState(false);
+	const [terminalError, setTerminalError] = useState("");
 	const [surface, setSurface] = useState<HerdrSurface>("herdr");
 	// The file rail belongs to the focused Herdr Space. Do not briefly expose
 	// the configured ADK directory (or a broad auto-detected parent) while the
@@ -62,23 +65,34 @@ export function useHerdrRuntime() {
 
 	const launchHerdr = useCallback(async () => {
 		const generation = ++launchGenerationRef.current;
+		let created: PtyCreated | null = null;
 		setLaunching(true);
 		setLaunchError("");
+		setTerminalReady(false);
+		setTerminalError("");
 		try {
 			let dir = getAdkPath();
 			if (!dir) dir = await invoke<string>("workspace_detect_adk_root");
-			const created = await invoke<PtyCreated>("herdr_pty_create", {
+			created = await invoke<PtyCreated>("herdr_pty_create", {
 				dir,
 				rows: 30,
 				cols: 120,
 			});
-			if (!mountedRef.current || generation !== launchGenerationRef.current)
+			if (!mountedRef.current || generation !== launchGenerationRef.current) {
+				await killPty(created.pty_id).catch(() => {});
+				created = null;
 				return;
+			}
 			await waitForHerdrReady(refreshSnapshot);
-			if (!mountedRef.current || generation !== launchGenerationRef.current)
+			if (!mountedRef.current || generation !== launchGenerationRef.current) {
+				await killPty(created.pty_id).catch(() => {});
+				created = null;
 				return;
+			}
 			setPty(created);
+			created = null;
 		} catch (error) {
+			if (created) await killPty(created.pty_id).catch(() => {});
 			if (!mountedRef.current || generation !== launchGenerationRef.current)
 				return;
 			setLaunchError(String(error));
@@ -87,6 +101,23 @@ export function useHerdrRuntime() {
 				setLaunching(false);
 		}
 	}, [refreshSnapshot]);
+
+	useEffect(() => {
+		if (!pty || terminalReady) return;
+		const timer = window.setTimeout(() => {
+			setTerminalError(t("workspace.herdrNoFrame"));
+		}, 8_000);
+		return () => window.clearTimeout(timer);
+	}, [pty, terminalReady]);
+
+	const retryHerdr = useCallback(async () => {
+		const prior = pty;
+		setPty(null);
+		setTerminalReady(false);
+		setTerminalError("");
+		if (prior) await killPty(prior.pty_id).catch(() => {});
+		await launchHerdr();
+	}, [launchHerdr, pty]);
 
 	useEffect(() => {
 		mountedRef.current = true;
@@ -227,6 +258,13 @@ export function useHerdrRuntime() {
 		setSurface,
 		refreshSnapshot,
 		launchHerdr,
+		retryHerdr,
+		terminalReady,
+		terminalError,
+		onTerminalReady: () => {
+			setTerminalReady(true);
+			setTerminalError("");
+		},
 		showHerdr,
 		findWorkspace,
 		focusWorkspace,

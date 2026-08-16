@@ -8232,6 +8232,15 @@ body.resizing-row {
 	font-size: 12px;
 }
 
+.herdr-workspace__state--overlay {
+	position: absolute;
+	inset: 0;
+	z-index: 4;
+	flex-direction: column;
+	background: color-mix(in srgb, var(--bg-base, #1a1a1a) 92%, transparent);
+	text-align: center;
+}
+
 .herdr-workspace__warning {
 	position: absolute;
 	right: 8px;

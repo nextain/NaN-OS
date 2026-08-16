@@ -50,9 +50,10 @@ function buildMock(
 			cascadeBlocked
 				? `if (cmd === "cascade_status") return false;
 		if (cmd === "cascade_installation_status") return cascadeInstalled
-			? { phase: "ready-to-start", ready: false, canStart: true, summary: "VoxCPM2 runtime is ready.", steps: [] }
+			? { phase: cascadeStarted ? "ready" : "ready-to-start", ready: cascadeStarted, canStart: true, summary: cascadeStarted ? "VoxCPM2 is ready." : "VoxCPM2 runtime is ready.", steps: [] }
 			: { phase: "blocked", ready: false, canStart: false, summary: "Local voice installation required: Python runtime and VoxCPM2 model are missing.", steps: [{ id: "python-runtime", label: "Python runtime", state: "blocked", action: "install", actionAvailable: true, progressPercent: 0, retryable: true }] };
-		if (cmd === "install_cascade_runtime") { cascadeInstalled = true; window.__cascadeInstallCalled = true; return { phase: "ready-to-start", ready: false, canStart: true, summary: "VoxCPM2 runtime is ready.", steps: [] }; }`
+		if (cmd === "install_cascade_runtime") { cascadeInstalled = true; window.__cascadeInstallCalled = true; return { phase: "ready-to-start", ready: false, canStart: true, summary: "VoxCPM2 runtime is ready.", steps: [] }; }
+		if (cmd === "start_cascade") { cascadeStarted = true; window.__cascadeStartCalled = true; return JSON.stringify({ facade_port: 8910, services: [{ id: "tts" }] }); }`
 				: ""
 		}
 		${
@@ -283,7 +284,7 @@ test.describe("S-SLOT settings — gate + 6 cloud slots (#gate-slots)", () => {
 		);
 	});
 
-	test("blocked VoxCPM2 is truthful, repairs stale state, and offers installation", async ({
+	test("blocked VoxCPM2 repairs stale state and selection installs then starts it", async ({
 		page,
 	}) => {
 		await openSlotSettings(page, {
@@ -312,16 +313,10 @@ test.describe("S-SLOT settings — gate + 6 cloud slots (#gate-slots)", () => {
 		const localOption = page
 			.getByTestId("profile-tts-provider")
 			.locator('option[value="naia-local-voice"]');
-		await expect(localOption).toBeDisabled();
-
-		await page.locator('[data-settings-tab="voice"]').click();
-		const status = page.getByTestId("local-voice-installation-status");
-		await expect(status).toContainText(/installation required/i);
-		const startButton = page.getByRole("button", {
-			name: "Start local voice engine",
-		});
-		await expect(startButton).toBeDisabled();
-		await page.getByTestId("local-voice-install-runtime").click();
+		await expect(localOption).toBeEnabled();
+		await page
+			.getByTestId("profile-tts-provider")
+			.selectOption("naia-local-voice");
 		await expect
 			.poll(() =>
 				page.evaluate(() =>
@@ -332,8 +327,25 @@ test.describe("S-SLOT settings — gate + 6 cloud slots (#gate-slots)", () => {
 				),
 			)
 			.toBe(true);
-		await expect(status).toBeHidden();
-		await expect(startButton).toBeEnabled();
+		await expect
+			.poll(() =>
+				page.evaluate(() =>
+					Boolean(
+						(window as Window & { __cascadeStartCalled?: boolean })
+							.__cascadeStartCalled,
+					),
+				),
+			)
+			.toBe(true);
+		await expect
+			.poll(() =>
+				page.evaluate(
+					() =>
+						JSON.parse(localStorage.getItem("naia-config") ?? "{}").ttsProvider,
+				),
+			)
+			.toBe("naia-local-voice");
+		await expect(page.getByTestId("profile-local-voice-toggle")).toBeEnabled();
 		expect(
 			await page.evaluate(
 				() => document.documentElement.scrollWidth <= window.innerWidth,

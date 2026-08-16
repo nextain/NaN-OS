@@ -214,6 +214,18 @@ describe("platform-matrix 스키마 (FR-INSTALL.1)", () => {
 			expect(String(value)).not.toMatch(/[<>=~^*]/);
 	});
 
+	it("keeps the direct VoxCPM2 runtime callable from the Tauri WebView only", () => {
+		const runtime = readFileSync(
+			resolve(SHELL, "src-tauri/windows/voxcpm2-runtime.py"),
+			"utf8",
+		);
+		expect(runtime).toContain('"http://tauri.localhost"');
+		expect(runtime).toContain('"tauri://localhost"');
+		expect(runtime).toContain("Access-Control-Allow-Origin");
+		expect(runtime).toContain("def do_OPTIONS(self):");
+		expect(runtime).not.toContain('Access-Control-Allow-Origin", "*"');
+	});
+
 	it("darwin icon = 전체 배열 (base 5원소 + icns — 부분 델타 금지, RFC 7386 배열 대체)", () => {
 		expect(matrix.os.darwin.icon).toEqual([
 			...baseConf.bundle.icon,
