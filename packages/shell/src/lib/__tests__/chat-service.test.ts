@@ -115,6 +115,36 @@ describe("chat-service", () => {
 		await expect(reloadAgentSettings()).rejects.toThrow("agent unavailable");
 	});
 
+	it("activateNaiaLlm requires an acknowledged live Naia adapter", async () => {
+		mockInvoke.mockResolvedValueOnce({
+			available: true,
+			loaded: true,
+			provider: "nextain",
+			model: "deepseek-v4-flash",
+			llm: "naia",
+		});
+		const { activateNaiaLlm } = await import("../chat-service");
+		await expect(
+			activateNaiaLlm("secret-key", "nextain", "deepseek-v4-flash"),
+		).resolves.toMatchObject({ loaded: true, llm: "naia" });
+		expect(mockInvoke).toHaveBeenCalledWith("activate_naia_llm", {
+			naiaKey: "secret-key",
+			expectedProvider: "nextain",
+			expectedModel: "deepseek-v4-flash",
+		});
+
+		mockInvoke.mockResolvedValueOnce({
+			available: true,
+			loaded: false,
+			provider: "",
+			model: "",
+			llm: "none",
+		});
+		await expect(
+			activateNaiaLlm("secret-key", "nextain", "deepseek-v4-flash"),
+		).rejects.toThrow("not acknowledged");
+	});
+
 	it("cleans up listener when invoke throws", async () => {
 		const { sendChatMessage } = await import("../chat-service");
 		mockInvoke.mockRejectedValueOnce(new Error("backend crash"));

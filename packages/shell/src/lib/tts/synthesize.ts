@@ -24,6 +24,7 @@ import { BGM_SIDECAR_BASE_URL } from "../bgm-sidecar-url";
 import { DEFAULT_LOCAL_VOICE_HOST, type TtsProviderId } from "../config";
 import { Logger } from "../logger";
 import {
+	isOwnLocalVoiceUrl,
 	localVoiceAuthHeaders,
 	recoverLocalVoiceToken,
 } from "../voice/local-runtime";
@@ -39,10 +40,10 @@ const EDGE_TTS_SIDECAR_URL = `${BGM_SIDECAR_BASE_URL}/edge-tts`;
 // budget must exceed that, or every follow-up sentence dies with 429 and the
 // reply goes silent after the first utterance (2026-08-18 실측).
 const LOCAL_VOICE_BUSY_RETRY_DELAYS_MS = [
-	250, 500, 750, 1_000, 1_500, 2_000, 2_500, 3_000, 3_500, 3_500, 3_500,
-	3_500, 3_500, 3_500, 3_500, 3_500, 3_500, 3_500, 3_500, 3_500, 3_500,
-	3_500, 3_500, 3_500, 3_500, 3_500, 3_500, 3_500, 3_500, 3_500, 3_500,
-	3_500, 3_500, 3_500, 3_500, 3_500,
+	250, 500, 750, 1_000, 1_500, 2_000, 2_500, 3_000, 3_500, 3_500, 3_500, 3_500,
+	3_500, 3_500, 3_500, 3_500, 3_500, 3_500, 3_500, 3_500, 3_500, 3_500, 3_500,
+	3_500, 3_500, 3_500, 3_500, 3_500, 3_500, 3_500, 3_500, 3_500, 3_500, 3_500,
+	3_500, 3_500,
 ];
 // The TensorRT VoxCPM2 worker can need roughly a minute for its first model
 // load. The facade starts earlier, so requests made during that narrow window
@@ -441,7 +442,7 @@ async function synthNaiaLocalVoice(
 	// engine BEFORE the first authenticated call, otherwise every sentence 401s
 	// into silence. Only for the app's OWN loopback engine: a custom host (e.g.
 	// a remote cascade URL) must not trigger a local TRT spawn.
-	const isOwnLoopbackEngine = base === DEFAULT_LOCAL_VOICE_HOST;
+	const isOwnLoopbackEngine = isOwnLocalVoiceUrl(base);
 	if (isOwnLoopbackEngine && !localVoiceAuthHeaders().Authorization) {
 		await recoverLocalVoiceToken();
 	}
@@ -560,9 +561,13 @@ async function synthNaiaLocalVoice(
 				// recovery fetches a fresh one instead of declaring the dead header
 				// "already recovered".
 				if (await recoverLocalVoiceToken({ force: true })) {
-					Logger.info("tts-synthesize", "Recovered local voice token; retrying", {
-						status: response.status,
-					});
+					Logger.info(
+						"tts-synthesize",
+						"Recovered local voice token; retrying",
+						{
+							status: response.status,
+						},
+					);
 					continue;
 				}
 			}
@@ -609,9 +614,9 @@ async function synthNaiaLocalVoice(
 					audioBase64: arrayBufferToBase64(await resp.arrayBuffer()),
 				};
 			}
-			throw new Error(`로컬 음성 합성 실패 (${resp.status}): ${detail}`);
+			throw new Error(`호스트 음성 합성 실패 (${resp.status}): ${detail}`);
 		}
-		throw new Error(`로컬 음성 합성 실패 (${resp.status}): ${detail}`);
+		throw new Error(`호스트 음성 합성 실패 (${resp.status}): ${detail}`);
 	}
 	// audio/wav(RIFF) bytes — AudioQueue/ttsAudioToWav 가 RIFF 를 네이티브 감지.
 	return { audioBase64: arrayBufferToBase64(await resp.arrayBuffer()) };

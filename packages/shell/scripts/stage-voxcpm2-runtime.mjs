@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { spawnSync } from "node:child_process";
 /** Stage a digest-pinned standalone voxcpm2-tensorrt Windows artifact. */
 import {
 	closeSync,
@@ -15,12 +16,177 @@ import {
 	statSync,
 	writeFileSync,
 } from "node:fs";
-import { dirname, relative, resolve, sep } from "node:path";
+import { basename, dirname, relative, resolve, sep } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
 const DEFAULT_SHELL = resolve(SCRIPT_DIR, "..");
 const REPOSITORY = "https://github.com/nextain/voxcpm2-tensorrt";
+const ACTIVATION_CONTRACT_PATH = resolve(
+	DEFAULT_SHELL,
+	"src-tauri/voxcpm2-activation-contract.json",
+);
+
+export function readVoxCpm2ActivationContract(
+	path = ACTIVATION_CONTRACT_PATH,
+) {
+	const contract = JSON.parse(readFileSync(path, "utf8"));
+	if (
+		contract.schemaVersion !== 1 ||
+		contract.profile !== "windows_trt_6g" ||
+		!Array.isArray(contract.artifact?.requiredFiles) ||
+		!Array.isArray(contract.artifact?.requiredDirectories) ||
+		!Array.isArray(contract.artifact?.compiledModules) ||
+		!Array.isArray(contract.payload?.requiredFiles) ||
+		!Array.isArray(contract.payload?.requiredDirectories)
+	)
+		throw new Error("VoxCPM2 activation contract is invalid");
+	return contract;
+}
+
+export function voxCpm2ArtifactActivationFailures(
+	source,
+	contract = readVoxCpm2ActivationContract(),
+) {
+	const failures = [];
+	for (const path of contract.artifact.requiredFiles) {
+		const candidate = resolve(source, path);
+		if (!existsSync(candidate) || !statSync(candidate).isFile())
+			failures.push(`missing file: ${path}`);
+	}
+	for (const path of contract.artifact.requiredDirectories) {
+		const candidate = resolve(source, path);
+		if (!existsSync(candidate) || !statSync(candidate).isDirectory())
+			failures.push(`missing directory: ${path}`);
+	}
+	for (const compiled of contract.artifact.compiledModules) {
+		const directory = resolve(source, compiled.directory);
+		const prefix = `${compiled.module}.`;
+		const suffix = `.${compiled.extension}`.toLowerCase();
+		const present =
+			existsSync(directory) &&
+			statSync(directory).isDirectory() &&
+			readdirSync(directory, { withFileTypes: true }).some(
+				(entry) =>
+					entry.isFile() &&
+					entry.name.startsWith(prefix) &&
+					entry.name.toLowerCase().endsWith(suffix),
+			);
+		if (!present)
+			failures.push(
+				`missing compiled module: ${compiled.directory}/${compiled.module}.*.${compiled.extension}`,
+			);
+	}
+	return failures;
+}
+
+export function voxCpm2PayloadFileActivationFailures(
+	root,
+	contract = readVoxCpm2ActivationContract(),
+) {
+	return contract.payload.requiredFiles
+		.filter((path) => {
+			const candidate = resolve(root, path);
+			return !existsSync(candidate) || !statSync(candidate).isFile();
+		})
+		.map((path) => `missing payload file: ${path}`);
+}
+
+export function verifyVoxCpm2ArchiveActivationContract({
+	archive,
+	tar = process.env.NAIA_SYSTEM_TAR || "tar.exe",
+	contract = readVoxCpm2ActivationContract(),
+	expectedFiles,
+	expectedManifestSha256,
+	expectedUnpackedBytes,
+} = {}) {
+	const inspected = spawnSync(tar, ["-tvf", basename(archive)], {
+		encoding: "utf8",
+		windowsHide: true,
+		cwd: dirname(archive),
+		maxBuffer: 64 * 1024 * 1024,
+	});
+	if (inspected.status !== 0)
+		throw new Error(
+			`VoxCPM2 ZIP64 activation audit failed (${inspected.status}): ${inspected.stderr || inspected.stdout}`,
+		);
+	const entries = String(inspected.stdout ?? "")
+		.split(/\r?\n/u)
+		.map((line) => {
+			const match = line.match(
+				/^\S+\s+\d+\s+\S+\s+\S+\s+(\d+)\s+\d+\s+\d+\s+\S+\s+(.+)$/u,
+			);
+			if (!match) return null;
+			return {
+				size: Number(match[1]),
+				path: match[2].trim().replaceAll("\\", "/").replace(/^\.\//u, ""),
+			};
+		})
+		.filter((entry) => entry?.path);
+	const fileEntries = entries.filter((entry) => !entry.path.endsWith("/"));
+	const files = new Set(fileEntries.map((entry) => entry.path));
+	const directories = new Set(
+		entries
+			.filter((entry) => entry.path.endsWith("/"))
+			.map((entry) => entry.path.slice(0, -1)),
+	);
+	const failures = [];
+	for (const path of contract.artifact.requiredFiles)
+		if (!files.has(path)) failures.push(`missing file: ${path}`);
+	for (const path of contract.artifact.requiredDirectories)
+		if (!directories.has(path)) failures.push(`missing directory: ${path}`);
+	for (const compiled of contract.artifact.compiledModules) {
+		const prefix = `${compiled.directory}/${compiled.module}.`;
+		const suffix = `.${compiled.extension}`.toLowerCase();
+		if (
+			![...files].some(
+				(path) => path.startsWith(prefix) && path.toLowerCase().endsWith(suffix),
+			)
+		)
+			failures.push(
+				`missing compiled module: ${compiled.directory}/${compiled.module}.*.${compiled.extension}`,
+			);
+	}
+	if (expectedFiles) {
+		const expected = new Set(expectedFiles);
+		const extras = [...files].filter((path) => !expected.has(path));
+		const missing = [...expected].filter((path) => !files.has(path));
+		if (extras.length || missing.length)
+			failures.push(
+				`archive/source inventory mismatch: extras=${extras.length} missing=${missing.length}`,
+			);
+	}
+	if (
+		Number.isFinite(expectedUnpackedBytes) &&
+		fileEntries.reduce((total, entry) => total + entry.size, 0) !==
+			expectedUnpackedBytes
+	)
+		failures.push("archive/source unpacked byte count mismatch");
+	if (expectedManifestSha256) {
+		const manifest = spawnSync(
+			tar,
+			["-xOf", basename(archive), "artifact-manifest.json"],
+			{
+				windowsHide: true,
+				cwd: dirname(archive),
+				maxBuffer: 16 * 1024 * 1024,
+			},
+		);
+		const actualManifestSha256 =
+			manifest.status === 0
+				? createHash("sha256").update(manifest.stdout).digest("hex")
+				: "";
+		if (
+			actualManifestSha256.toLowerCase() !== expectedManifestSha256.toLowerCase()
+		)
+			failures.push("embedded artifact-manifest SHA-256 mismatch");
+	}
+	if (failures.length)
+		throw new Error(
+			`VoxCPM2 archive cannot pass runtime activation: ${failures.join("; ")}`,
+		);
+	return { files: files.size, directories: directories.size };
+}
 
 function sha256(path) {
 	// Chunked synchronous hashing: handles multi-GB release files without
@@ -146,6 +312,11 @@ export function verifyVoxCpm2Artifact(source, expectedManifestSha256) {
 		);
 	if (manifest.voice !== null)
 		throw new Error("VoxCPM2 release must not bundle an unapproved voice");
+	const activationFailures = voxCpm2ArtifactActivationFailures(source);
+	if (activationFailures.length)
+		throw new Error(
+			`VoxCPM2 artifact cannot pass runtime activation: ${activationFailures.join("; ")}`,
+		);
 	return manifest;
 }
 
@@ -155,6 +326,7 @@ export function stageVoxCpm2Runtime({
 	expectedManifestSha256 = process.env.NAIA_VOXCPM2_TRT_ARTIFACT_SHA256,
 	runtimeArchive = process.env.NAIA_VOXCPM2_TRT_ARCHIVE,
 	runtimeUrl = process.env.NAIA_VOXCPM2_TRT_DOWNLOAD_URL,
+	tar = process.env.NAIA_SYSTEM_TAR || "tar.exe",
 } = {}) {
 	if (!runtimeSource)
 		throw new Error(
@@ -169,6 +341,18 @@ export function stageVoxCpm2Runtime({
 	const archive = realpathSync(runtimeArchive);
 	if (!statSync(archive).isFile())
 		throw new Error("VoxCPM2 download archive is not a file");
+	const inventory = filesUnder(source);
+	const unpackedBytes = inventory.reduce(
+		(total, path) => total + statSync(resolve(source, path)).size,
+		0,
+	);
+	verifyVoxCpm2ArchiveActivationContract({
+		archive,
+		tar,
+		expectedFiles: inventory,
+		expectedManifestSha256,
+		expectedUnpackedBytes: unpackedBytes,
+	});
 	let parsedUrl;
 	try {
 		parsedUrl = new URL(runtimeUrl);
@@ -181,7 +365,6 @@ export function stageVoxCpm2Runtime({
 		parsedUrl.password
 	)
 		throw new Error("VoxCPM2 download URL must use credential-free HTTPS");
-	const inventory = filesUnder(source);
 	const downloadManifest = {
 		schemaVersion: 1,
 		profile: "windows_trt_6g",
@@ -190,10 +373,7 @@ export function stageVoxCpm2Runtime({
 			url: parsedUrl.href,
 			sha256: sha256(archive),
 			bytes: statSync(archive).size,
-			unpackedBytes: inventory.reduce(
-				(total, path) => total + statSync(resolve(source, path)).size,
-				0,
-			),
+			unpackedBytes,
 			files: inventory.length,
 		},
 	};
@@ -205,6 +385,11 @@ export function stageVoxCpm2Runtime({
 		resolve(shellDir, "src-tauri/windows/prepare-voxcpm2-model.ps1"),
 		resolve(pending, "prepare-voxcpm2-model.ps1"),
 	);
+	const payloadFailures = voxCpm2PayloadFileActivationFailures(pending);
+	if (payloadFailures.length)
+		throw new Error(
+			`VoxCPM2 staged payload cannot pass runtime activation: ${payloadFailures.join("; ")}`,
+		);
 	writeFileSync(
 		resolve(pending, "download-manifest.json"),
 		`${JSON.stringify(downloadManifest, null, 2)}\n`,

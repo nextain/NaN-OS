@@ -1,11 +1,19 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
-import { clearLocalVoiceAccessToken } from "../../voice/local-runtime";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+	clearLocalVoiceAccessToken,
+	localVoiceFacadeUrlFromReady,
+} from "../../voice/local-runtime";
 import {
 	arrayBufferToBase64,
 	deriveLanguageCode,
 	synthesizeTts,
 	warmLocalVoice,
 } from "../synthesize";
+
+const mockInvoke = vi.hoisted(() => vi.fn());
+vi.mock("@tauri-apps/api/core", () => ({ invoke: mockInvoke }));
+
+beforeEach(() => mockInvoke.mockResolvedValue(undefined));
 
 /** Build a minimal fetch Response-like object for a JSON body. */
 function jsonResponse(body: unknown, ok = true, status = 200) {
@@ -20,10 +28,16 @@ function jsonResponse(body: unknown, ok = true, status = 200) {
 }
 
 function busyResponse(retryAfter = "0.5") {
-	return new Response(JSON.stringify({ error: "tts_busy", retry_after_seconds: 0.5 }), {
-		status: 429,
-		headers: { "Content-Type": "application/json", "Retry-After": retryAfter },
-	});
+	return new Response(
+		JSON.stringify({ error: "tts_busy", retry_after_seconds: 0.5 }),
+		{
+			status: 429,
+			headers: {
+				"Content-Type": "application/json",
+				"Retry-After": retryAfter,
+			},
+		},
+	);
 }
 
 /** Build a fetch Response-like object that returns raw audio bytes. */
@@ -39,6 +53,8 @@ function bytesResponse(bytes: Uint8Array, ok = true, status = 200) {
 }
 
 afterEach(() => {
+	clearLocalVoiceAccessToken();
+	mockInvoke.mockReset();
 	vi.useRealTimers();
 	vi.restoreAllMocks();
 	vi.unstubAllGlobals();
@@ -260,6 +276,16 @@ describe("synthesizeTts — vllm", () => {
 });
 
 describe("synthesizeTts — naia-local-voice (/v1/audio/speech Runtime contract)", () => {
+	beforeEach(() => {
+		localVoiceFacadeUrlFromReady(
+			JSON.stringify({
+				service: "voxcpm2-tensorrt",
+				capabilities: ["tts"],
+				port: 8910,
+				local_access_token: "c".repeat(64),
+			}),
+		);
+	});
 	// The private Runtime returns audio/wav (RIFF) bytes directly.
 	const WAV_BYTES = new Uint8Array([
 		0x52, 0x49, 0x46, 0x46, 0x24, 0x00, 0x00, 0x00, 0x57, 0x41, 0x56, 0x45,
@@ -284,12 +310,14 @@ describe("synthesizeTts — naia-local-voice (/v1/audio/speech Runtime contract)
 		expect(fetchMock.mock.calls[0][0]).toBe(
 			"http://localhost:8910/v1/audio/speech",
 		);
-		expect(JSON.parse(fetchMock.mock.calls[0][1].body as string)).toMatchObject({
-			model: "voxcpm2",
-			input: "hello",
-			voice: "ref_ko_485.wav",
-			response_format: "wav",
-		});
+		expect(JSON.parse(fetchMock.mock.calls[0][1].body as string)).toMatchObject(
+			{
+				model: "voxcpm2",
+				input: "hello",
+				voice: "ref_ko_485.wav",
+				response_format: "wav",
+			},
+		);
 	});
 
 	it("POSTs to the voice-only Runtime surface and passes the WAV through", async () => {
@@ -305,7 +333,10 @@ describe("synthesizeTts — naia-local-voice (/v1/audio/speech Runtime contract)
 		);
 		const init = fetchMock.mock.calls[0][1];
 		const body = JSON.parse(init.body as string);
-		expect(init.headers).toEqual({ "Content-Type": "application/json" });
+		expect(init.headers).toEqual({
+			Authorization: `Bearer ${"c".repeat(64)}`,
+			"Content-Type": "application/json",
+		});
 		expect(body).toMatchObject({
 			model: "voxcpm2",
 			input: "안녕",
@@ -409,6 +440,43 @@ describe("synthesizeTts — naia-local-voice (/v1/audio/speech Runtime contract)
 		expect(fetchMock).toHaveBeenCalledTimes(1);
 	});
 
+	it("refreshes a stale loopback token once after 401 and retries synthesis", async () => {
+		vi.stubGlobal("window", { dispatchEvent: vi.fn() });
+		const refreshedReady = JSON.stringify({
+			service: "voxcpm2-tensorrt",
+			capabilities: ["tts"],
+			port: 8910,
+			local_access_token: "d".repeat(64),
+		});
+		mockInvoke.mockImplementation((command: string) =>
+			Promise.resolve(command === "start_voxcpm2" ? refreshedReady : undefined),
+		);
+		const fetchMock = vi
+			.fn()
+			.mockResolvedValueOnce(
+				jsonResponse({ error: "local_access_denied" }, false, 401),
+			)
+			.mockResolvedValueOnce(wavResponse());
+		vi.stubGlobal("fetch", fetchMock);
+
+		await expect(
+			synthesizeTts({
+				text: "authenticated retry",
+				provider: "naia-local-voice",
+				vllmTtsHost: "http://localhost:8910",
+			}),
+		).resolves.toMatchObject({ audioBase64: expect.any(String) });
+		expect(mockInvoke).toHaveBeenCalledWith("start_voxcpm2", {
+			expectedLoaderProfile: "windows_trt_6g",
+		});
+		expect(fetchMock.mock.calls[0][1].headers.Authorization).toBe(
+			`Bearer ${"c".repeat(64)}`,
+		);
+		expect(fetchMock.mock.calls[1][1].headers.Authorization).toBe(
+			`Bearer ${"d".repeat(64)}`,
+		);
+	});
+
 	it("does not retry when the stable default itself is unknown", async () => {
 		const fetchMock = vi
 			.fn()
@@ -467,7 +535,9 @@ describe("synthesizeTts — naia-local-voice (/v1/audio/speech Runtime contract)
 	it("restores a persisted uploaded voice before ordinary local synthesis", async () => {
 		const fetchMock = vi
 			.fn()
-			.mockResolvedValueOnce(jsonResponse({ ok: true, source: "upload" }, true, 200))
+			.mockResolvedValueOnce(
+				jsonResponse({ ok: true, source: "upload" }, true, 200),
+			)
 			.mockResolvedValueOnce(wavResponse());
 		vi.stubGlobal("fetch", fetchMock);
 
@@ -542,15 +612,23 @@ describe("synthesizeTts — naia-local-voice (/v1/audio/speech Runtime contract)
 	});
 
 	it("does not retry an ambiguous facade failure", async () => {
-		const fetchMock = vi.fn().mockResolvedValue(
-			jsonResponse({ error: "synthesis_failed", detail: "CUDA out of memory" }, false, 502),
-		);
+		const fetchMock = vi
+			.fn()
+			.mockResolvedValue(
+				jsonResponse(
+					{ error: "synthesis_failed", detail: "CUDA out of memory" },
+					false,
+					502,
+				),
+			);
 		vi.stubGlobal("fetch", fetchMock);
 
-		await expect(synthesizeTts({
-			text: "do not duplicate an accepted POST",
-			provider: "naia-local-voice",
-		})).rejects.toThrow(/502/);
+		await expect(
+			synthesizeTts({
+				text: "do not duplicate an accepted POST",
+				provider: "naia-local-voice",
+			}),
+		).rejects.toThrow(/502/);
 		expect(fetchMock).toHaveBeenCalledTimes(1);
 	});
 
@@ -588,7 +666,7 @@ describe("synthesizeTts — naia-local-voice (/v1/audio/speech Runtime contract)
 		);
 		await expect(
 			synthesizeTts({ text: "x", provider: "naia-local-voice" }),
-		).rejects.toThrow(/로컬 음성 합성 실패/);
+		).rejects.toThrow(/호스트 음성 합성 실패/);
 	});
 });
 
@@ -627,21 +705,18 @@ describe("synthesizeTts — edge (bgm sidecar)", () => {
 describe("warmLocalVoice — apply-time cold-cost prepayment", () => {
 	// Own loopback engine host (DEFAULT_LOCAL_VOICE_HOST).
 	const BASE = "http://127.0.0.1:8910";
-	const TOKEN_KEY = "naia.voxcpm2AccessToken";
 
 	// This suite runs in the node environment (no jsdom) — stub the Web Storage
 	// surface localVoiceAuthHeaders reads the per-launch bearer from.
-	const stubStorage = (token: string | null) => {
-		const store = new Map<string, string>(
-			token ? [[TOKEN_KEY, token]] : [],
+	const seedToken = () =>
+		localVoiceFacadeUrlFromReady(
+			JSON.stringify({
+				service: "voxcpm2-tensorrt",
+				capabilities: ["tts"],
+				port: 8910,
+				local_access_token: "e".repeat(64),
+			}),
 		);
-		vi.stubGlobal("sessionStorage", {
-			getItem: (k: string) => store.get(k) ?? null,
-			setItem: (k: string, v: string) => void store.set(k, v),
-			removeItem: (k: string) => void store.delete(k),
-		});
-	};
-	const seedToken = () => stubStorage("warm-test-token");
 
 	afterEach(() => {
 		clearLocalVoiceAccessToken();
@@ -668,7 +743,7 @@ describe("warmLocalVoice — apply-time cold-cost prepayment", () => {
 		expect(fetchMock).toHaveBeenCalledTimes(2);
 		const [url, init] = fetchMock.mock.calls[1];
 		expect(String(url)).toBe(`${BASE}/v1/audio/speech`);
-		expect(init.headers.Authorization).toBe("Bearer warm-test-token");
+		expect(init.headers.Authorization).toBe(`Bearer ${"e".repeat(64)}`);
 		const body = JSON.parse(init.body as string);
 		expect(body.voice).toBe("cc0-ko-female-02.wav");
 		// Medium-length warm text — very short inputs trigger runaway generation.

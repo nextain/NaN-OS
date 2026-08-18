@@ -71,7 +71,7 @@ describe("standalone local runtime voice palette", () => {
 		const presets = await getLocalRefAudioPresets("http://localhost:8910/");
 		expect(mockFetch).toHaveBeenCalledWith(
 			"http://localhost:8910/ref/voices",
-			{ headers: {} },
+			expect.objectContaining({ headers: expect.any(Headers) }),
 		);
 		expect(presets).toEqual([
 			expect.objectContaining({

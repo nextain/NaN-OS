@@ -18,6 +18,7 @@ import {
 } from "../lib/avatar-presets";
 import { detectGpuVramGb } from "../lib/capabilities/gpu";
 import {
+	activateNaiaLlm,
 	isNewCore,
 	reloadAgentSettings,
 	sendAuthUpdate,
@@ -44,14 +45,17 @@ import {
 	resolveNvaAssetPath,
 } from "../lib/nva";
 import { OAUTH_CALLBACK_URL } from "../lib/oauth-callback-url";
-import { saveSecretKey } from "../lib/secure-store";
 import {
 	type OnboardingSession,
 	type StepInput,
 	makeOnboardingSession,
 } from "../lib/onboarding-core";
+import { saveSecretKey } from "../lib/secure-store";
 import { NAIA_SLOT_DEFAULTS, applyNaiaSlotDefaults } from "../lib/slots/model";
-import { localVoiceFacadeUrlFromReady } from "../lib/voice/local-runtime";
+import {
+	clearLocalVoiceAccessToken,
+	localVoiceFacadeUrlFromReady,
+} from "../lib/voice/local-runtime";
 import { useAppStore } from "../stores/app";
 import { useAvatarStore } from "../stores/avatar";
 import { useCascadeAvatarStore } from "../stores/cascade-avatar";
@@ -460,6 +464,7 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
 		if (localVoiceEnabled) {
 			setLocalVoiceBusy(true);
 			try {
+				clearLocalVoiceAccessToken();
 				await invoke("stop_voxcpm2");
 			} catch {
 				/* best-effort teardown — onboarding never blocks on this */
@@ -509,7 +514,10 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
 				...(naiaKeyForVoice ? { naiaKey: naiaKeyForVoice } : {}),
 			} as unknown as Record<string, unknown>);
 			await writeSlotsManifest(
-				{ ...voiceConfig, ...(naiaKeyForVoice ? { naiaKey: naiaKeyForVoice } : {}) },
+				{
+					...voiceConfig,
+					...(naiaKeyForVoice ? { naiaKey: naiaKeyForVoice } : {}),
+				},
 				detectedVramGb ?? undefined,
 			);
 			// A resolved CASCADE_READY payload only proves ports were bound — Rust
@@ -1031,35 +1039,30 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
 			const completedFlat = await saveCompletedConfig(
 				naiaAuthPayload ?? undefined,
 			);
-			// UC12 graft (isNewCore): 새 core OnboardingController.completeWith(§D 신규계약)가
-			// categorize(secret/ui/agent) + persist(secret=키체인 전담, stale-credential fix) + markComplete.
-			// 미설정(기본)=기존 writeNaiaConfig/writeAgentKey 경로 보존(비파괴). UC1 chat-service graft 와 동일.
-			// Persist the staged configuration through the explicit shell boundary for
-			// both cores. The new-core completion marker is committed only below.
-			{
-				// G-01: sync to naia-settings/config.json so the standalone agent picks
-				// up the onboarding result. This MUST be the freshly completed config —
-				// loadConfig() here returned the PRE-LOGIN snapshot (completedFlat is
-				// only persisted below), so reloadAgentSettings() re-read a config
-				// without naiaKey/provider and the FIRST session answered with empty
-				// 0-token replies until an app restart (#449 재발, 2026-08-18 실기).
-				await writeNaiaConfig({
-					...(completedFlat as Record<string, unknown>),
-					...buildNaiaConfigEnv(completedFlat as unknown as AppConfig),
-				});
-				// Write naiaKey to OS keychain so standalone naia-agent can read it.
-				if (typeof completedFlat.naiaKey === "string")
-					await writeAgentKeyStrict(
-						String(completedFlat.provider || "nextain"),
-						"naiaKey",
-						completedFlat.naiaKey,
-					);
-				// (gateway sync 제거됨 2026-06-12 — gateway.json 미사용 죽은 경로. config 영속=naia-settings,
-				//  naiaKey=키체인(위 writeAgentKey). own-key(apiKey)=설정 화면 담당. memory 설정 연결=다른 세션 재설계.)
-			}
-			await reloadAgentSettings();
+			// G-01: sync to naia-settings/config.json so the standalone agent picks
+			// up the onboarding result. This MUST be the freshly completed config —
+			// loadConfig() here returned the PRE-LOGIN snapshot (completedFlat is
+			// only persisted below), so reloadAgentSettings() re-read a config
+			// without naiaKey/provider and the FIRST session answered with empty
+			// 0-token replies until an app restart (#449 재발, 2026-08-18 실기).
+			await writeNaiaConfig({
+				...(completedFlat as Record<string, unknown>),
+				...buildNaiaConfigEnv(completedFlat as unknown as AppConfig),
+			});
+			// Write naiaKey to OS keychain so standalone naia-agent can read it.
+			if (typeof completedFlat.naiaKey === "string")
+				await writeAgentKeyStrict(
+					String(completedFlat.provider || "nextain"),
+					"naiaKey",
+					completedFlat.naiaKey,
+				);
 			if (typeof completedFlat.naiaKey === "string") {
 				await sendAuthUpdateStrict(completedFlat.naiaKey);
+				await activateNaiaLlm(
+					completedFlat.naiaKey,
+					String(completedFlat.provider || "nextain"),
+					String(completedFlat.model || NAIA_SLOT_DEFAULTS.main.model),
+				);
 				// Do not leave the renderer with the pre-login zero balance. Fetch with
 				// the same credential before committing onboarding, then prime the shared
 				// dashboard cache for the panel that mounts after this wizard unmounts.
@@ -1071,6 +1074,8 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
 				if (credits == null)
 					throw new Error("authenticated balance response is invalid");
 				primeLabCredits(credits);
+			} else {
+				await reloadAgentSettings();
 			}
 			const committedFlat = { ...completedFlat, onboardingComplete: true };
 			if (newCore) {

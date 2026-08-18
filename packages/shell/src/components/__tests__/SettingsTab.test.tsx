@@ -48,6 +48,13 @@ vi.mock("@tauri-apps/plugin-opener", () => ({
 }));
 
 const chatServiceMocks = vi.hoisted(() => ({
+	activateNaiaLlm: vi.fn().mockResolvedValue({
+		available: true,
+		loaded: true,
+		provider: "nextain",
+		model: "deepseek-v4-flash",
+		llm: "naia",
+	}),
 	directToolCall: vi.fn().mockResolvedValue({ success: false }),
 	reloadAgentSettings: vi.fn().mockResolvedValue(undefined),
 	sendAuthUpdate: vi.fn().mockResolvedValue(undefined),
@@ -111,6 +118,13 @@ describe("SettingsTab", () => {
 		vi.unstubAllGlobals();
 		Reflect.deleteProperty(window, "__TAURI_INTERNALS__");
 		setLocale("en");
+	});
+
+	it("keeps a Naia login entry point visible in Profile after logout", () => {
+		mockInvoke.mockResolvedValue([]);
+		render(<SettingsTab />);
+		expect(screen.getByTestId("profile-naia-login")).toBeInTheDocument();
+		expect(screen.getByTestId("profile-login-naia")).toBeEnabled();
 	});
 
 	it("loads the Naia credit balance after the StrictMode effect replay", async () => {
@@ -578,9 +592,13 @@ describe("SettingsTab", () => {
 				json: expect.any(String),
 			}),
 		);
-		expect(chatServiceMocks.reloadAgentSettings).toHaveBeenCalledTimes(1);
 		expect(chatServiceMocks.sendAuthUpdateStrict).toHaveBeenCalledWith(
 			"gw-test-key",
+		);
+		expect(chatServiceMocks.activateNaiaLlm).toHaveBeenCalledWith(
+			"gw-test-key",
+			"nextain",
+			expect.any(String),
 		);
 		expect(authReady).toHaveBeenCalledTimes(1);
 		window.removeEventListener("naia_auth_ready", authReady);

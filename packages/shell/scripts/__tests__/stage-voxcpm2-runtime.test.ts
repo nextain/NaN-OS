@@ -10,7 +10,16 @@ import {
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { stageVoxCpm2Runtime } from "../stage-voxcpm2-runtime.mjs";
+import {
+	packageVoxCpm2Runtime,
+} from "../package-voxcpm2-runtime.mjs";
+import {
+	readVoxCpm2ActivationContract,
+	stageVoxCpm2Runtime,
+	verifyVoxCpm2ArchiveActivationContract,
+	voxCpm2ArtifactActivationFailures,
+	voxCpm2PayloadFileActivationFailures,
+} from "../stage-voxcpm2-runtime.mjs";
 
 const roots: string[] = [];
 afterEach(() => {
@@ -127,7 +136,12 @@ function fixture() {
 	const manifestPath = resolve(runtimeSource, "artifact-manifest.json");
 	writeFileSync(manifestPath, JSON.stringify(manifest));
 	const runtimeArchive = resolve(root, "voxcpm2-runtime.zip");
-	writeFileSync(runtimeArchive, "digest-pinned ZIP fixture");
+	packageVoxCpm2Runtime({
+		runtimeSource,
+		expectedManifestSha256: hash(manifestPath),
+		output: runtimeArchive,
+		tar: process.platform === "win32" ? "C:\\Windows\\System32\\tar.exe" : "tar",
+	});
 	return {
 		shellDir,
 		runtimeSource,
@@ -138,6 +152,99 @@ function fixture() {
 }
 
 describe("stageVoxCpm2Runtime", () => {
+	it("audits every runtime activation prerequisite before release staging", () => {
+		const source = fixture();
+		expect(voxCpm2ArtifactActivationFailures(source.runtimeSource)).toEqual([]);
+
+		rmSync(
+			resolve(
+				source.runtimeSource,
+				"python/Lib/site-packages/voxcpm2_tensorrt/http_server.cp310-win_amd64.pyd",
+			),
+			{ force: true },
+		);
+		writeFileSync(
+			resolve(
+				source.runtimeSource,
+				"python/Lib/site-packages/voxcpm2_tensorrt/unrelated.cp310-win_amd64.pyd",
+			),
+			"compiled but not the server entry point",
+		);
+		expect(voxCpm2ArtifactActivationFailures(source.runtimeSource)).toEqual([
+			"missing compiled module: python/Lib/site-packages/voxcpm2_tensorrt/http_server.*.pyd",
+		]);
+		expect(readVoxCpm2ActivationContract().payload.requiredDirectories).toEqual([
+			"artifact/voices",
+		]);
+	});
+
+	it("audits the completed ZIP64 archive before it can become a release input", () => {
+		const source = fixture();
+		const output = resolve(source.runtimeSource, "..", "release-runtime.zip");
+		const tar =
+			process.platform === "win32" ? "C:\\Windows\\System32\\tar.exe" : "tar";
+		const packaged = packageVoxCpm2Runtime({
+			runtimeSource: source.runtimeSource,
+			expectedManifestSha256: source.expectedManifestSha256,
+			output,
+			tar,
+		});
+		expect(packaged.path).toBe(output);
+		expect(
+			verifyVoxCpm2ArchiveActivationContract({ archive: output, tar }),
+		).toMatchObject({ files: 11 });
+	});
+
+	it("rejects a selected ZIP produced from a different artifact manifest", () => {
+		const selected = fixture();
+		const stale = fixture();
+		const staleManifestPath = resolve(
+			stale.runtimeSource,
+			"artifact-manifest.json",
+		);
+		const staleManifest = JSON.parse(readFileSync(staleManifestPath, "utf8"));
+		staleManifest.source.commit = "b".repeat(40);
+		writeFileSync(staleManifestPath, JSON.stringify(staleManifest));
+		stale.expectedManifestSha256 = hash(staleManifestPath);
+		packageVoxCpm2Runtime({
+			runtimeSource: stale.runtimeSource,
+			expectedManifestSha256: stale.expectedManifestSha256,
+			output: stale.runtimeArchive,
+			tar:
+				process.platform === "win32"
+					? "C:\\Windows\\System32\\tar.exe"
+					: "tar",
+		});
+
+		expect(() =>
+			stageVoxCpm2Runtime({
+				...selected,
+				runtimeArchive: stale.runtimeArchive,
+			}),
+		).toThrow(/embedded artifact-manifest SHA-256 mismatch/);
+	});
+
+	it("checks every tracked payload file and keeps installer builds on stage-runtime", () => {
+		const source = fixture();
+		const contract = readVoxCpm2ActivationContract();
+		contract.payload.requiredFiles.push("future-installer-helper.ps1");
+		expect(
+			voxCpm2PayloadFileActivationFailures(
+				resolve(source.shellDir, "src-tauri/windows"),
+				contract,
+			),
+		).toEqual(["missing payload file: future-installer-helper.ps1"]);
+		const packageJson = JSON.parse(
+			readFileSync(resolve(process.cwd(), "package.json"), "utf8"),
+		);
+		expect(packageJson.scripts["tauri:installer"]).toContain(
+			"scripts/stage-runtime.mjs",
+		);
+		expect(packageJson.scripts["tauri:installer"]).not.toContain(
+			"tauri-with-mode.mjs build",
+		);
+	});
+
 	it("stages only a verified download contract and installer script", () => {
 		const source = fixture();
 		const destination = stageVoxCpm2Runtime(source);

@@ -47,6 +47,13 @@ vi.mock("@tauri-apps/plugin-store", () => ({
 }));
 
 vi.mock("../../lib/chat-service", () => ({
+	activateNaiaLlm: vi.fn().mockResolvedValue({
+		available: true,
+		loaded: true,
+		provider: "nextain",
+		model: "deepseek-v4-flash",
+		llm: "naia",
+	}),
 	sendAuthUpdate: vi.fn().mockResolvedValue(undefined),
 	sendAuthUpdateStrict: vi.fn().mockResolvedValue(undefined),
 	reloadAgentSettings: vi.fn().mockResolvedValue(undefined),
@@ -424,7 +431,7 @@ describe("OnboardingWizard", () => {
 		// voice step
 		expect(screen.getByText(/GPU detected/)).toBeDefined();
 		const localToggle = screen.getByRole("button", {
-			name: /Turn on local voice/,
+			name: /Turn on host voice/,
 		});
 		fireEvent.click(localToggle);
 		await act(async () => {
@@ -438,7 +445,7 @@ describe("OnboardingWizard", () => {
 		});
 		expect(invoke).toHaveBeenCalledWith("install_voxcpm2_runtime");
 		expect(
-			screen.getByRole("button", { name: /Local voice on/ }),
+			screen.getByRole("button", { name: /Host voice on/ }),
 		).toBeDefined();
 
 		clickNextByClass();
@@ -603,7 +610,7 @@ describe("OnboardingWizard", () => {
 			await Promise.resolve();
 		});
 		expect(
-			screen.getByRole("button", { name: /Turn on local voice/ }),
+			screen.getByRole("button", { name: /Turn on host voice/ }),
 		).toBeDefined();
 		expect(screen.queryByTestId("onboarding-install-voxcpm2")).toBeNull();
 		clickNext();

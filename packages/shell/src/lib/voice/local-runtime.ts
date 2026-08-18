@@ -7,11 +7,8 @@ export interface LocalVoiceHealth {
 }
 
 let localVoiceAccessToken: string | null = null;
-const LOCAL_VOICE_TOKEN_KEY = "naia.voxcpm2AccessToken";
 
 export function localVoiceAuthHeaders(): Record<string, string> {
-	if (!localVoiceAccessToken && typeof sessionStorage !== "undefined")
-		localVoiceAccessToken = sessionStorage.getItem(LOCAL_VOICE_TOKEN_KEY);
 	return localVoiceAccessToken
 		? { Authorization: `Bearer ${localVoiceAccessToken}` }
 		: {};
@@ -19,8 +16,20 @@ export function localVoiceAuthHeaders(): Record<string, string> {
 
 export function clearLocalVoiceAccessToken(): void {
 	localVoiceAccessToken = null;
-	if (typeof sessionStorage !== "undefined")
-		sessionStorage.removeItem(LOCAL_VOICE_TOKEN_KEY);
+}
+
+/** True only for this app's authenticated loopback Naia Host endpoint. */
+export function isOwnLocalVoiceUrl(value: string): boolean {
+	try {
+		const url = new URL(value);
+		return (
+			url.protocol === "http:" &&
+			url.port === "8910" &&
+			["127.0.0.1", "localhost", "[::1]"].includes(url.hostname)
+		);
+	} catch {
+		return false;
+	}
 }
 
 /**
@@ -73,6 +82,34 @@ export async function recoverLocalVoiceToken(
 		})();
 	}
 	return recoverInFlight;
+}
+
+/**
+ * Authenticated request helper for every non-synthesis Naia Host endpoint.
+ * The per-launch bearer stays in process memory, is never persisted, and a
+ * stale-token 401 is refreshed and retried exactly once.
+ */
+export async function fetchLocalVoiceAuthenticated(
+	baseUrl: string,
+	path: string,
+	init: RequestInit = {},
+): Promise<Response> {
+	const base = baseUrl.trim().replace(/\/+$/, "");
+	if (!isOwnLocalVoiceUrl(base)) return fetch(`${base}${path}`, init);
+	if (!localVoiceAuthHeaders().Authorization) await recoverLocalVoiceToken();
+	const request = () => {
+		const headers = new Headers(init.headers);
+		for (const [key, value] of Object.entries(localVoiceAuthHeaders()))
+			headers.set(key, value);
+		return fetch(`${base}${path}`, { ...init, headers });
+	};
+	let response = await request();
+	if (
+		response.status === 401 &&
+		(await recoverLocalVoiceToken({ force: true }))
+	)
+		response = await request();
+	return response;
 }
 
 /**
@@ -139,8 +176,6 @@ export function localVoiceFacadeUrlFromReady(ready: string): string | null {
 			)
 				return null;
 			localVoiceAccessToken = payload.local_access_token;
-			if (typeof sessionStorage !== "undefined")
-				sessionStorage.setItem(LOCAL_VOICE_TOKEN_KEY, localVoiceAccessToken);
 			Logger.debug("LocalRuntime", "facadeFromReady:token-captured", {
 				port: payload.port,
 				branch: "direct-voxcpm2",

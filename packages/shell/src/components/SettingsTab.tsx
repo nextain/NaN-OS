@@ -28,8 +28,6 @@ import {
 	getDefaultTtsVoiceForAvatar,
 	getDefaultVoiceForAvatar,
 } from "../lib/avatar-presets";
-import { OAUTH_CALLBACK_URL } from "../lib/oauth-callback-url";
-import { localVoiceFacadeUrlFromReady } from "../lib/voice/local-runtime";
 import { effectiveAvatarProviderFromConfig } from "../lib/avatar/nva-gate";
 import { detectGpuVramGb } from "../lib/capabilities/gpu";
 import { deriveSettingsSlots } from "../lib/capabilities/slots";
@@ -46,6 +44,7 @@ import {
 } from "../lib/capabilities/vram-tiers";
 import { syncLinkedChannels } from "../lib/channel-sync";
 import {
+	activateNaiaLlm,
 	configureSpeechProfile,
 	reloadAgentSettings,
 	sendAuthUpdateStrict,
@@ -113,6 +112,7 @@ import {
 	writeConfiguredLlmRole,
 } from "../lib/llm/roles";
 import { Logger } from "../lib/logger";
+import { OAUTH_CALLBACK_URL } from "../lib/oauth-callback-url";
 import { DEFAULT_PERSONA, FORMALITY_LOCALES } from "../lib/persona";
 import {
 	type ProactiveSpeechSettings,
@@ -132,6 +132,10 @@ import { listTtsProviderMetas } from "../lib/tts/registry";
 import { synthesizeTts } from "../lib/tts/synthesize";
 import type { ModelCapability, ProviderId } from "../lib/types";
 import { type UpdateInfo, checkForUpdate } from "../lib/updater";
+import {
+	clearLocalVoiceAccessToken,
+	localVoiceFacadeUrlFromReady,
+} from "../lib/voice/local-runtime";
 import { useAppStore } from "../stores/app";
 import { useAvatarStore } from "../stores/avatar";
 import { useCascadeAvatarStore } from "../stores/cascade-avatar";
@@ -1142,6 +1146,7 @@ export function SettingsTab() {
 		setCascadeBusy(true);
 		setCascadeMsg("");
 		try {
+			clearLocalVoiceAccessToken();
 			await invoke("stop_voxcpm2");
 			setCascadeRunning(false);
 			useCascadeAvatarStore.getState().setLocalFacadeUrl(null);
@@ -1199,7 +1204,7 @@ export function SettingsTab() {
 		const resolvedTier = resolveActiveTier(tier, detectedVramGb);
 		const caps = resolveLocalCapabilities(resolvedTier, undefined);
 		const nextAvatar = avatarProvider;
-		let nextNva = nvaModel;
+		const nextNva = nvaModel;
 		let nextTts = ttsProvider;
 		let nextTtsHost = vllmTtsHost;
 		let nextMainProvider = provider;
@@ -1254,6 +1259,7 @@ export function SettingsTab() {
 			// 로컬 해제 → 백엔드 정지
 			if (cascadeRunning) {
 				try {
+					clearLocalVoiceAccessToken();
 					await invoke("stop_voxcpm2");
 				} catch {
 					/* 정지 실패 비치명 */
@@ -1273,6 +1279,7 @@ export function SettingsTab() {
 			if (cascadeRunning) {
 				// 프로파일 바뀜 → manifest 반영 위해 재기동
 				try {
+					clearLocalVoiceAccessToken();
 					await invoke("stop_voxcpm2");
 				} catch {
 					/* 무시 */
@@ -2147,8 +2154,12 @@ export function SettingsTab() {
 						...(nextConfig as unknown as Record<string, unknown>),
 						...buildNaiaConfigEnv(nextConfig),
 					});
-					await reloadAgentSettings();
 					await sendAuthUpdateStrict(nextNaiaKey);
+					await activateNaiaLlm(
+						nextNaiaKey,
+						String(nextConfig.provider || "nextain"),
+						String(nextConfig.model || getDefaultLlmModel("nextain")),
+					);
 					await fetchLabBalance(nextNaiaKey, true);
 
 					setNaiaKeyState(nextNaiaKey);
@@ -3820,48 +3831,65 @@ export function SettingsTab() {
 					    (2026-08-18 루크). DEV 빌드에서만 노출; 로그인 진입은 프로바이더
 					    선택 경로(nextain 선택 시 startLabLogin)가 담당하므로 기능 손실 없음. */}
 					{import.meta.env.DEV && (
-					<div className="settings-field" data-testid="slot-gate">
-						<label>{t("settings.slot.gate")}</label>
-						<div className="settings-hint">{t("settings.slot.gateHint")}</div>
-						<div
-							style={{
-								display: "flex",
-								gap: 8,
-								marginTop: 8,
-								flexWrap: "wrap",
-								alignItems: "center",
-							}}
-						>
-							<span data-testid="slot-gate-mode">
-								{gateMode === "naia"
-									? t("settings.slot.gateNaia")
-									: t("settings.slot.gateByo")}
-							</span>
-							{gateMode === "naia" ? (
-								<button
-									type="button"
-									data-testid="slot-apply-defaults"
-									className="voice-preview-btn"
-									onClick={handleApplyNaiaDefaults}
-								>
-									{t("settings.slot.applyDefaults")}
-								</button>
-							) : (
-								<button
-									type="button"
-									data-testid="slot-login-naia"
-									className="voice-preview-btn"
-									onClick={startLabLogin}
-								>
-									{t("settings.slot.loginNaia")}
-								</button>
-							)}
+						<div className="settings-field" data-testid="slot-gate">
+							<label>{t("settings.slot.gate")}</label>
+							<div className="settings-hint">{t("settings.slot.gateHint")}</div>
+							<div
+								style={{
+									display: "flex",
+									gap: 8,
+									marginTop: 8,
+									flexWrap: "wrap",
+									alignItems: "center",
+								}}
+							>
+								<span data-testid="slot-gate-mode">
+									{gateMode === "naia"
+										? t("settings.slot.gateNaia")
+										: t("settings.slot.gateByo")}
+								</span>
+								{gateMode === "naia" ? (
+									<button
+										type="button"
+										data-testid="slot-apply-defaults"
+										className="voice-preview-btn"
+										onClick={handleApplyNaiaDefaults}
+									>
+										{t("settings.slot.applyDefaults")}
+									</button>
+								) : (
+									<button
+										type="button"
+										data-testid="slot-login-naia"
+										className="voice-preview-btn"
+										onClick={startLabLogin}
+									>
+										{t("settings.slot.loginNaia")}
+									</button>
+								)}
+							</div>
 						</div>
-					</div>
 					)}
 
 					{/* #1 통합: NAIA 계정 관리(잔액/대시보드/연결끊기) = 게이트 바로 아래.
 					    게이트가 로그인(byo 분기)을 담당; 여기는 connected 상태 UI. */}
+					{!naiaKey && (
+						<div className="settings-field" data-testid="profile-naia-login">
+							<label>{t("settings.labSection")}</label>
+							<div className="settings-hint">
+								{t("settings.labDisconnected")}
+							</div>
+							<button
+								type="button"
+								data-testid="profile-login-naia"
+								className="voice-preview-btn"
+								onClick={startLabLogin}
+							>
+								{t("settings.labConnect")}
+							</button>
+						</div>
+					)}
+
 					{naiaKey && (
 						<div className="settings-field" data-testid="profile-naia-account">
 							<label>{t("settings.labConnected")}</label>
@@ -3920,6 +3948,7 @@ export function SettingsTab() {
 													className="settings-reset-btn"
 													onClick={async () => {
 														try {
+															clearLocalVoiceAccessToken();
 															await invoke("stop_voxcpm2");
 														} catch {
 															/* already stopped */
@@ -3942,7 +3971,7 @@ export function SettingsTab() {
 														await deleteSecretKey("naiaKey");
 														const current = loadConfig();
 														if (current) {
-															const loggedOutConfig = {
+															const loggedOutBase = {
 																...current,
 																provider:
 																	current.provider === "nextain"
@@ -3966,6 +3995,14 @@ export function SettingsTab() {
 																discordDmChannelId: undefined,
 																discordDefaultTarget: undefined,
 															};
+															const loggedOutConfig = writeConfiguredLlmRole(
+																loggedOutBase,
+																"main",
+																{
+																	provider: loggedOutBase.provider,
+																	model: loggedOutBase.model,
+																},
+															);
 															saveConfig(loggedOutConfig);
 															await writeNaiaConfig(
 																loggedOutConfig as unknown as Record<
@@ -3974,6 +4011,7 @@ export function SettingsTab() {
 																>,
 															);
 															await writeSlotsManifest(loggedOutConfig);
+															await reloadAgentSettings();
 														}
 													}}
 												>
@@ -4246,10 +4284,7 @@ export function SettingsTab() {
 														)
 													: Math.max(
 															0,
-															Math.min(
-																100,
-																Math.round(progress.percent ?? 0),
-															),
+															Math.min(100, Math.round(progress.percent ?? 0)),
 														);
 												const ko = getLocale() === "ko";
 												const label = isDownload
@@ -4280,26 +4315,26 @@ export function SettingsTab() {
 					{/* 배타 티어(8G: 로컬 LLM · 아바타 · 둘다) 로컬 집중 택1. 음성=클라우드. FR-3: 로그인 필요. */}
 					{/* 슬롯 커버리지 요약 — 개발자용 내부 정보 (2026-08-18 루크). DEV 전용. */}
 					{import.meta.env.DEV && (
-					<div
-						className="settings-field"
-						data-testid="engine-capability-summary"
-					>
-						<label>{t("settings.engineCapabilities")}</label>
-						<div className="settings-hint">
-							{t("settings.engineCapabilitiesHint")}
+						<div
+							className="settings-field"
+							data-testid="engine-capability-summary"
+						>
+							<label>{t("settings.engineCapabilities")}</label>
+							<div className="settings-hint">
+								{t("settings.engineCapabilitiesHint")}
+							</div>
+							<ul className="settings-summary-list">
+								{capabilityStatus.map((item) => (
+									<li key={item}>{item}</li>
+								))}
+								<li>
+									{t("settings.engineSupplements")}:{" "}
+									{capabilitySlots.supplements.length > 0
+										? capabilitySlots.supplements.join(", ")
+										: t("settings.engineNone")}
+								</li>
+							</ul>
 						</div>
-						<ul className="settings-summary-list">
-							{capabilityStatus.map((item) => (
-								<li key={item}>{item}</li>
-							))}
-							<li>
-								{t("settings.engineSupplements")}:{" "}
-								{capabilitySlots.supplements.length > 0
-									? capabilitySlots.supplements.join(", ")
-									: t("settings.engineNone")}
-							</li>
-						</ul>
-					</div>
 					)}
 				</>
 			)}
@@ -5139,9 +5174,7 @@ export function SettingsTab() {
 							data-testid="voxcpm2-install-error"
 							role="alert"
 						>
-							<span className="settings-hint">
-								⚠️ {voxcpm2InstallError}
-							</span>
+							<span className="settings-hint">⚠️ {voxcpm2InstallError}</span>
 						</div>
 					)}
 					{ttsProvider === "naia-local-voice" && (
@@ -5174,8 +5207,7 @@ export function SettingsTab() {
 								!cascadeRunning &&
 								((progress: NonNullable<typeof voxcpm2Progress>) => {
 									const total = progress.total ?? 0;
-									const isDownload =
-										progress.phase === "download" && total > 0;
+									const isDownload = progress.phase === "download" && total > 0;
 									const pct = isDownload
 										? Math.min(
 												100,

@@ -102,12 +102,12 @@ const STRINGS = {
 		cost: "적용·업로드 시 1회당 $0.01 차감 (녹음만으로는 차감 없음)",
 		costLocal: "로컬 모델 — 녹음·업로드 무료 (크레딧 차감 없음)",
 		localEngineOff:
-			"로컬 음성 엔진이 실행 중이 아닙니다. 아래 버튼으로 시작하세요.",
+			"호스트 음성 엔진이 실행 중이 아닙니다. 아래 버튼으로 시작하세요.",
 		localEngineStarting:
-			"로컬 음성 엔진 준비 중 — 음성 서비스가 아직 사용 가능하지 않습니다. 잠시 후 자동으로 이어집니다.",
-		localEngineStart: "로컬 음성 엔진 시작",
+			"호스트 음성 엔진 준비 중 — 음성 서비스가 아직 사용 가능하지 않습니다. 잠시 후 자동으로 이어집니다.",
+		localEngineStart: "호스트 음성 엔진 시작",
 		localEngineOffToggleHint:
-			"로컬 음성 엔진이 꺼져 있어 목소리를 고를 수 없습니다. 위의 “로컬 음성 엔진 시작” 버튼으로 켜세요.",
+			"호스트 음성 엔진이 꺼져 있어 목소리를 고를 수 없습니다. 위의 “호스트 음성 엔진 시작” 버튼으로 켜세요.",
 		err: {
 			network: "네트워크 오류 — 재시도해주세요.",
 			auth: "naia 계정 로그인이 필요합니다.",
@@ -171,12 +171,12 @@ const STRINGS = {
 		cost: "$0.01 charged when you apply or upload (recording itself is free)",
 		costLocal: "Local model — recording & upload are free (no credit charge)",
 		localEngineOff:
-			"The local voice engine is not running. Start it with the button below.",
+			"The host voice engine is not running. Start it with the button below.",
 		localEngineStarting:
-			"Local voice engine is getting ready — the speech service is not available yet. It will continue automatically.",
-		localEngineStart: "Start local voice engine",
+			"Host voice engine is getting ready — the speech service is not available yet. It will continue automatically.",
+		localEngineStart: "Start host voice engine",
 		localEngineOffToggleHint:
-			"The local voice engine is off, so no voice can be selected. Turn it on with the “Start local voice engine” button above.",
+			"The host voice engine is off, so no voice can be selected. Turn it on with the “Start host voice engine” button above.",
 		err: {
 			network: "Network error — please retry.",
 			auth: "Please sign in to your naia account.",
@@ -994,7 +994,7 @@ export function RefAudioSection({
 
 				{/* Recording and file upload work for both providers. Naia Local keeps
 				    the normalized reference WAV on-device and sends it directly to the
-				    local voice runtime, so this surface must remain visible in local mode. */}
+				    host voice runtime, so this surface must remain visible in local mode. */}
 				<div style={{ marginTop: 12 }}>
 					<div style={{ fontSize: 12, opacity: 0.7, marginBottom: 6 }}>
 						{S.myVoiceTitle}

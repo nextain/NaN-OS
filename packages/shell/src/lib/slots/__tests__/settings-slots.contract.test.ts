@@ -1,17 +1,17 @@
 import { describe, expect, it } from "vitest";
 import type { AppConfig } from "../../config";
 import {
-	applyNaiaSlotDefaults,
-	deriveGate,
-	deriveGateFromConfig,
+	type GateMode,
 	NAIA_SLOT_DEFAULTS,
-	readSlots,
 	SLOT_FIELD_MAP,
 	SLOT_GROUPS,
 	SLOT_IDS,
-	writeSlot,
-	type GateMode,
 	type SlotId,
+	applyNaiaSlotDefaults,
+	deriveGate,
+	deriveGateFromConfig,
+	readSlots,
+	writeSlot,
 } from "../model";
 
 /**
@@ -282,6 +282,35 @@ describe("S-SLOT · FR-SLOT.3 naia 계정 Gemini 기본값 자동 적용 (R2-1, 
 		// 설정 안 한 슬롯은 기본값
 		expect(after.memoryEmbeddingProvider).toBe("offline");
 		expect(after.ttsProvider).toBe("nextain");
+	});
+
+	it("repairs an inherited main role from the valid top-level login selection", () => {
+		const after = applyNaiaSlotDefaults({
+			provider: "nextain",
+			model: "deepseek-v4-flash",
+			llmRoles: { main: { inherit: "sub" } },
+		} as AppConfig);
+
+		expect(after.llmRoles?.main).toEqual({
+			provider: "nextain",
+			model: "deepseek-v4-flash",
+			inherit: undefined,
+		});
+		expect(after.provider).toBe("nextain");
+		expect(after.model).toBe("deepseek-v4-flash");
+	});
+
+	it("creates an explicit structured main mirror for legacy top-level config", () => {
+		const after = applyNaiaSlotDefaults({
+			provider: "ollama",
+			model: "llama3",
+		} as AppConfig);
+
+		expect(after.llmRoles?.main).toMatchObject({
+			provider: "ollama",
+			model: "llama3",
+		});
+		expect(after.llmRoles?.main?.inherit).toBeUndefined();
 	});
 
 	it("applyNaiaSlotDefaults 는 게이트 무관 호출 가능 — 게이트 통과 지점에서 호출(1.3)", () => {

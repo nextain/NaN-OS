@@ -21,7 +21,10 @@ import {
 	getNaiaKeySecure,
 } from "../config";
 import { Logger } from "../logger";
-import { localVoiceAuthHeaders } from "./local-runtime";
+import {
+	fetchLocalVoiceAuthenticated,
+	localVoiceAuthHeaders,
+} from "./local-runtime";
 import { encodeRefAudio } from "./ref-audio";
 
 const TAG = "RefAudioApi";
@@ -95,10 +98,9 @@ export async function applyLocalRefAudio(
 	const base = baseUrl.trim().replace(/\/+$/, "") || DEFAULT_LOCAL_VOICE_HOST;
 	let res: Response;
 	try {
-		res = await fetch(`${base}/voice`, {
+		res = await fetchLocalVoiceAuthenticated(base, "/voice", {
 			method: "PUT",
 			headers: {
-				...localVoiceAuthHeaders(),
 				"Content-Type": "application/json",
 			},
 			body: JSON.stringify({ audio_base64: b64 }),
@@ -136,7 +138,7 @@ export async function getLocalRefAudioPresets(
 	});
 	let res: Response;
 	try {
-		res = await fetch(`${base}/ref/voices`, { headers: authHeaders });
+		res = await fetchLocalVoiceAuthenticated(base, "/ref/voices");
 	} catch (err) {
 		Logger.warn(TAG, "local presets GET network error", {
 			base,

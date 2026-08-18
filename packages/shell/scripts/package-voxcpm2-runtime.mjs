@@ -13,7 +13,10 @@ import {
 } from "node:fs";
 import { basename, dirname, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
-import { verifyVoxCpm2Artifact } from "./stage-voxcpm2-runtime.mjs";
+import {
+	verifyVoxCpm2Artifact,
+	verifyVoxCpm2ArchiveActivationContract,
+} from "./stage-voxcpm2-runtime.mjs";
 
 function sha256(path) {
 	// Chunked sync hashing — same fix as stage-voxcpm2-runtime.mjs: the old
@@ -42,7 +45,7 @@ export function packageVoxCpm2Runtime({
 		throw new Error("NAIA_VOXCPM2_TRT_RUNTIME_DIR is required");
 	if (!output) throw new Error("NAIA_VOXCPM2_TRT_ARCHIVE is required");
 	const source = realpathSync(runtimeSource);
-	verifyVoxCpm2Artifact(source, expectedManifestSha256);
+	const manifest = verifyVoxCpm2Artifact(source, expectedManifestSha256);
 	const destination = resolve(output);
 	// bsdtar's -a picks the FORMAT from the -f extension. The old ".pending"
 	// suffix (no extension) silently produced an uncompressed TAR that the
@@ -69,6 +72,24 @@ export function packageVoxCpm2Runtime({
 	}
 	rmSync(destination, { force: true });
 	renameSync(pending, destination);
+	try {
+		const expectedFiles = [
+			"artifact-manifest.json",
+			...manifest.files.map((item) => item.path.replaceAll("\\", "/")),
+		];
+		verifyVoxCpm2ArchiveActivationContract({
+			archive: destination,
+			tar,
+			expectedFiles,
+			expectedManifestSha256,
+			expectedUnpackedBytes:
+				statSync(resolve(source, "artifact-manifest.json")).size +
+				manifest.files.reduce((total, item) => total + item.size, 0),
+		});
+	} catch (error) {
+		rmSync(destination, { force: true });
+		throw error;
+	}
 	return {
 		path: destination,
 		bytes: statSync(destination).size,

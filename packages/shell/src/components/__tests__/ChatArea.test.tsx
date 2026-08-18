@@ -1317,7 +1317,7 @@ describe("ChatArea", () => {
 		await waitFor(() => expect(screen.getByText(answer)).toBeDefined());
 		await waitFor(() =>
 			expect(
-				screen.getByText(/Can't reach the local voice engine/),
+				screen.getByText(/Can't reach the host voice engine/),
 			).toBeDefined(),
 		);
 		await waitFor(() => expect(screen.getAllByText(answer)).toHaveLength(1));
@@ -1325,7 +1325,7 @@ describe("ChatArea", () => {
 			expect(useAvatarStore.getState().currentEmotion).toBe("neutral"),
 		);
 		expect(
-			screen.getByText(/Can't reach the local voice engine/),
+			screen.getByText(/Can't reach the host voice engine/),
 		).toBeDefined();
 		localStorage.removeItem("naia-config");
 	});
@@ -1362,9 +1362,9 @@ describe("ChatArea", () => {
 		});
 
 		await waitFor(() =>
-			expect(screen.getByText(/local voice model is starting/i)).toBeDefined(),
+			expect(screen.getByText(/host voice model is starting/i)).toBeDefined(),
 		);
-		expect(screen.queryByText(/Can't reach the local voice engine/)).toBeNull();
+		expect(screen.queryByText(/Can't reach the host voice engine/)).toBeNull();
 		localStorage.removeItem("naia-config");
 	});
 

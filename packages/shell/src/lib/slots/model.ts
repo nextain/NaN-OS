@@ -172,6 +172,10 @@ export function writeSlot<K extends SlotId>(
 			};
 			return writeConfiguredLlmRole(config, "main", {
 				...previous,
+				// Selecting a concrete main model must clear a stale inheritance
+				// marker. Otherwise the standalone Agent rejects an otherwise valid
+				// top-level provider/model as config.incomplete after first login.
+				inherit: undefined,
 				...(v.provider !== undefined ? { provider: v.provider } : {}),
 				...(v.model !== undefined ? { model: v.model } : {}),
 			});
@@ -252,7 +256,8 @@ export const NAIA_SLOT_DEFAULTS: NaiaDefaultSlots = {
 
 /** 슬롯이 미설정(빈/none/브라우저기본) 여부 — 사용자 override 보존 판단. */
 function isMainSet(c: AppConfig): boolean {
-	return !!c.provider;
+	const main = c.llmRoles?.main;
+	return !!main && !main.inherit && !!main.provider && !!main.model;
 }
 function isSubSet(c: AppConfig): boolean {
 	return c.llmRoles?.sub !== undefined || !!c.subLlmProvider;
@@ -277,7 +282,14 @@ function isTtsSet(c: AppConfig): boolean {
 export function applyNaiaSlotDefaults(config: AppConfig): AppConfig {
 	let next = config;
 	if (!isMainSet(next)) {
-		next = writeSlot(next, "main", NAIA_SLOT_DEFAULTS.main);
+		// Preserve a valid legacy top-level selection while repairing its
+		// structured mirror. Fresh-login configs can carry llmRoles.main.inherit
+		// from the pre-login snapshot; the Agent treats that as incomplete even
+		// when provider/model are present at the top level.
+		next = writeSlot(next, "main", {
+			provider: next.provider || NAIA_SLOT_DEFAULTS.main.provider,
+			model: next.model || NAIA_SLOT_DEFAULTS.main.model,
+		});
 	}
 	if (!isSubSet(next)) {
 		next = writeSlot(next, "sub", NAIA_SLOT_DEFAULTS.sub);

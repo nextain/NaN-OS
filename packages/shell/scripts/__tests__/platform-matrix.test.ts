@@ -237,7 +237,7 @@ describe("platform-matrix 스키마 (FR-INSTALL.1)", () => {
 		);
 		expect(rust).toContain("local_access_token: local_access_token.as_str()");
 		expect(rust).toContain("validate_voxcpm2_ready(&ready");
-		expect(rust).toContain("Failed to send VoxCPM2 activation");
+		expect(rust).toContain("Failed to send Naia Host activation");
 		expect(rust).toContain("voxcpm2_allowed_origins(debug_e2e_enabled())");
 		expect(rust).toContain(
 			'"http://tauri.localhost,tauri://localhost,http://127.0.0.1:1422,http://localhost:1422"',

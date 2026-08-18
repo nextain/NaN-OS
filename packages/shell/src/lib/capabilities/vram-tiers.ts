@@ -72,7 +72,7 @@ export type Local8gFocus = "llm" | "avatar" | "both";
 
 /** capability → VRAM footprint(GB). windows-manager capabilities.py 실측과 동형(SoT는 wm). */
 const CAPABILITY_VRAM_COST_GB: Partial<Record<ModelCapability, number>> = {
-	tts: 3.47, // VoxCPM2 int8 weight-only(8G 로컬 음성 정본, RTX 5060 실측 2026-07-04). wm tts_voxcpm2_int8 와 동형.
+	tts: 3.47, // Naia Host int8 weight-only(8G 호스트 음성 정본, RTX 5060 실측 2026-07-04). wm tts_voxcpm2_int8 와 동형.
 	avatar: 2.6, // retired server-side avatar TRT 립싱크(실측).
 	llm: 4.0, // 로컬 compact LLM 4B-class Q4(DNA3.0-4B ~3.4G · gemma-e4b-q4 5.0G 중간값). 상위티어 대형모델은 더 큼(측정 게이트).
 	embedding: 0.5,
@@ -138,7 +138,7 @@ export const VRAM_TIERS: readonly VramTier[] = [
 	},
 	{
 		id: "windows-voice-6g",
-		label: "Windows NVIDIA GPU 6GB+: external LLM + local voice + 3D avatar",
+		label: "Windows NVIDIA GPU 6GB+: external LLM + host voice + 3D avatar",
 		minVramGb: 6,
 		llm: "external",
 		localCapabilities: ["tts"],
@@ -146,7 +146,7 @@ export const VRAM_TIERS: readonly VramTier[] = [
 		capabilityCostGb: { tts: 3.7 },
 		loaderProfile: "windows_trt_6g",
 		realtime: "measurement-gated",
-		note: "Windows NVIDIA GPU 6GB+: keep the Naia account, remote Ollama, or external API LLM unchanged; run only local voice. NVA and local LLM are disabled, and the Shell keeps its 3D VRM avatar. Real-time speed and compatibility require measurement on the target GPU.",
+		note: "Windows NVIDIA GPU 6GB+: keep the Naia account, remote Ollama, or external API LLM unchanged; run only host voice. NVA and local LLM are disabled, and the Shell keeps its 3D VRM avatar. Real-time speed and compatibility require measurement on the target GPU.",
 	},
 	{
 		id: "local-llm-avatar-8g",
@@ -171,7 +171,7 @@ export const VRAM_TIERS: readonly VramTier[] = [
 		minVramGb: 12,
 		llm: "own",
 		// 12GB(4070+): LLM(5)+아바타(2.6)+음성 int8(3.47)=11.1G ≤ 12G → 오디오까지 로컬.
-		// 음성은 batch(VoxCPM2 RTF>1). 실시간 아님 — 실시간은 24G/ggml 게이트.
+		// 음성은 batch(Naia Host RTF>1). 실시간 아님 — 실시간은 24G/ggml 게이트.
 		localCapabilities: ["llm", "avatar", "tts"],
 		approxLocalVramGb: 11.1,
 		hidden: true, // 실기 미검증(2026-07-15) — 피커 비노출, 검증 후 해제
@@ -184,7 +184,7 @@ export const VRAM_TIERS: readonly VramTier[] = [
 		minVramGb: 16,
 		llm: "own",
 		// LLM+음성 로컬, retired server-side avatar 아바타 제외(아바타 = 셸 VRM 렌더 or 클라우드) — 2026-07-15 루크 지시
-		// "VoxCPM2 + LLM 프로파일". **16GB 정직화**(루크: "8GB 프로파일인데 16GB 가 부족하다면 모순"):
+		// "Naia Host + LLM 프로파일". **16GB 정직화**(루크: "8GB 프로파일인데 16GB 가 부족하다면 모순"):
 		// int8 음성(3.47G)은 Windows 미검증이라 실제 도는 건 fp16(~6.1G) → compact LLM(3.4~4)과
 		// 합쳐 ~10G + 데스크톱/버퍼 = 16GB 가 정직한 하한. int8 검증되면 8GB 변형을 다시 연다.
 		// auto: 검증된 티어는 이것뿐이므로 16GB+ auto = 이 티어 (hidden 티어는 auto 제외 —
@@ -193,7 +193,7 @@ export const VRAM_TIERS: readonly VramTier[] = [
 		approxLocalVramGb: 10.0, // fp16 음성 6.1 + compact LLM ~3.9 (int8 검증 전 정직 산술)
 		hidden: true,
 		realtime: "measurement-gated",
-		note: "로컬 LLM(compact) + 로컬 음성(VoxCPM2 fp16). retired server-side avatar 아바타 없음 — 아바타는 VRM(셸 렌더, GPU 미미) 또는 클라우드. 음성 표면 = 로컬 cascade façade /v1/audio/speech. 실기 검증: 3080 Ti 16G (2026-07-15).",
+		note: "로컬 LLM(compact) + 호스트 음성(Naia Host fp16). retired server-side avatar 아바타 없음 — 아바타는 VRM(셸 렌더, GPU 미미) 또는 클라우드. 음성 표면 = 로컬 cascade façade /v1/audio/speech. 실기 검증: 3080 Ti 16G (2026-07-15).",
 	},
 	{
 		id: "full-realtime-24g",
@@ -291,7 +291,7 @@ const DEFAULT_8G_FOCUS: Local8gFocus = "llm";
 
 /**
  * 저장값을 유효 Local8gFocus 로 정규화(검증 + 구 축 마이그레이션).
- * 신 값(llm/avatar/both) 그대로, 구 축 "voice"(로컬 음성=새 축 없음) → "avatar", 그 외 → 기본.
+ * 신 값(llm/avatar/both) 그대로, 구 축 "voice"(호스트 음성=새 축 없음) → "avatar", 그 외 → 기본.
  * ★ local8gFocus(정본) ?? localAvatarVoiceFocus(legacy) 를 이걸로 통과시켜 읽는다.
  */
 export function normalizeLocal8gFocus(

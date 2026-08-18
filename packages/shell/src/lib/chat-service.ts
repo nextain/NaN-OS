@@ -894,6 +894,37 @@ export async function reloadAgentSettings(): Promise<void> {
 	await invoke("reload_agent_settings");
 }
 
+export interface NaiaLlmActivation {
+	available: boolean;
+	loaded: boolean;
+	provider: string;
+	model: string;
+	llm: "naia";
+}
+
+/** Require the live Agent to acknowledge the freshly persisted Naia login. */
+export async function activateNaiaLlm(
+	naiaKey: string,
+	expectedProvider: string,
+	expectedModel: string,
+): Promise<NaiaLlmActivation> {
+	const result = await invoke<NaiaLlmActivation>("activate_naia_llm", {
+		naiaKey,
+		expectedProvider,
+		expectedModel,
+	});
+	if (
+		!result?.available ||
+		!result.loaded ||
+		result.llm !== "naia" ||
+		result.provider !== expectedProvider ||
+		result.model !== expectedModel
+	) {
+		throw new Error("Naia LLM activation was not acknowledged by the Agent");
+	}
+	return result;
+}
+
 /** Request the agent to pre-download an offline embedding model. */
 export async function sendEmbeddingPrefetch(
 	model:

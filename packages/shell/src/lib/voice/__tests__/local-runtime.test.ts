@@ -1,9 +1,13 @@
 ﻿import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+	clearLocalVoiceAccessToken,
 	fetchLocalVoiceHealth,
+	isOwnLocalVoiceUrl,
 	localVoiceAuthHeaders,
 	localVoiceFacadeUrlFromReady,
 } from "../local-runtime";
+
+afterEach(() => clearLocalVoiceAccessToken());
 
 describe("localVoiceFacadeUrlFromReady", () => {
 	it("returns the facade for a ready TTS service", () => {
@@ -31,6 +35,14 @@ describe("localVoiceFacadeUrlFromReady", () => {
 		expect(localVoiceAuthHeaders()).toEqual({
 			Authorization: `Bearer ${"a".repeat(64)}`,
 		});
+	});
+
+	it("recognizes only the authenticated loopback aliases on port 8910", () => {
+		expect(isOwnLocalVoiceUrl("http://127.0.0.1:8910")).toBe(true);
+		expect(isOwnLocalVoiceUrl("http://localhost:8910/")).toBe(true);
+		expect(isOwnLocalVoiceUrl("http://[::1]:8910")).toBe(true);
+		expect(isOwnLocalVoiceUrl("https://localhost:8910")).toBe(false);
+		expect(isOwnLocalVoiceUrl("http://example.com:8910")).toBe(false);
 	});
 
 	it("rejects a standalone readiness payload without a valid local token", () => {

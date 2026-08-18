@@ -1141,7 +1141,7 @@ impl Drop for BgmServerProcess {
 }
 
 // Local cascade supervisor (R2.2b) ??naia-os媛 windows-manager loader(`python -m loader
-// launch`)瑜?1媛??ъ씠?쒖뭅濡?援щ룞?쒕떎. loader 媛 VoxCPM2 ???ㅼ젣 ?쒕퉬?ㅻ? spawn쨌媛먮룆?섍퀬,
+// launch`)瑜?1媛??ъ씠?쒖뭅濡?援щ룞?쒕떎. loader 媛 Naia Host ???ㅼ젣 ?쒕퉬?ㅻ? spawn쨌媛먮룆?섍퀬,
 // ???꾨줈?몄뒪瑜?kill ?섎㈃ loader 媛 ?먯떇?ㅼ쓣 teardown ?쒕떎(?먭꺽 湲덉?쨌濡쒖뺄 ?꾨쿋??.
 // Rust ??Child drop ??二쎌씠吏 ?딆쑝誘濡?Drop ?먯꽌 紐낆떆 kill(AgentProcess ?숉삎, orphan 諛⑹?).
 struct CascadeProcess {
@@ -1159,7 +1159,7 @@ impl Drop for CascadeProcess {
 }
 
 /// A process on :8910 is adoptable as local Windows voice only when health
-/// identifies the direct VoxCPM2 TensorRT backend. A remote/generic Cascade
+/// identifies the direct Naia Host TensorRT backend. A remote/generic Cascade
 /// facade must never be mistaken for the local GPU service.
 fn local_voxcpm2_is_healthy() -> bool {
     let agent = ureq::AgentBuilder::new()
@@ -1182,7 +1182,7 @@ fn local_voxcpm2_is_healthy() -> bool {
     }
 }
 
-/// Direct Windows VoxCPM2 TensorRT voice service. Remote Cascade sessions are
+/// Direct Windows Naia Host TensorRT voice service. Remote Cascade sessions are
 /// WebSocket providers owned by the frontend voice layer; they never share
 /// this local child-process lifecycle.
 struct VoxCpm2Process {
@@ -1221,7 +1221,7 @@ struct AppState {
     /// settings events can otherwise both observe an empty `cascade` slot and
     /// launch competing supervisors for the same :8901/:8902/:8910 ports.
     cascade_start: tokio::sync::Mutex<()>,
-    /// Windows-only direct VoxCPM2 TensorRT service. It is intentionally
+    /// Windows-only direct Naia Host TensorRT service. It is intentionally
     /// isolated from the legacy local Cascade supervisor.
     voxcpm2: Mutex<Option<VoxCpm2Process>>,
     voxcpm2_start: tokio::sync::Mutex<()>,
@@ -4763,10 +4763,10 @@ fn validate_cascade_vram(
     match vram_gb {
         Some(vram) if vram >= minimum => Ok(vram),
         Some(vram) => Err(format!(
-            "Local voice profile requires NVIDIA RTX GPU VRAM {minimum:.0}GB or more (detected {vram:.0}GB)"
+            "Host voice profile requires NVIDIA RTX GPU VRAM {minimum:.0}GB or more (detected {vram:.0}GB)"
         )),
         None => Err(format!(
-            "Local voice profile requires a detected NVIDIA RTX GPU with VRAM {minimum:.0}GB or more"
+            "Host voice profile requires a detected NVIDIA RTX GPU with VRAM {minimum:.0}GB or more"
         )),
     }
 }
@@ -4927,6 +4927,38 @@ struct VoxCpm2DownloadManifest {
     archive: VoxCpm2DownloadArchive,
 }
 
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct VoxCpm2CompiledModuleContract {
+    directory: String,
+    module: String,
+    extension: String,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct VoxCpm2ArtifactActivationContract {
+    required_files: Vec<String>,
+    required_directories: Vec<String>,
+    compiled_modules: Vec<VoxCpm2CompiledModuleContract>,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct VoxCpm2PayloadActivationContract {
+    required_files: Vec<String>,
+    required_directories: Vec<String>,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct VoxCpm2ActivationContract {
+    schema_version: u8,
+    profile: String,
+    artifact: VoxCpm2ArtifactActivationContract,
+    payload: VoxCpm2PayloadActivationContract,
+}
+
 fn is_sha256(value: &str) -> bool {
     value.len() == 64 && value.bytes().all(|byte| byte.is_ascii_hexdigit())
 }
@@ -4952,9 +4984,9 @@ fn read_voxcpm2_download_manifest(
     path: &std::path::Path,
 ) -> Result<VoxCpm2DownloadManifest, String> {
     let raw = std::fs::read_to_string(path)
-        .map_err(|error| format!("Could not read VoxCPM2 download manifest: {error}"))?;
+        .map_err(|error| format!("Could not read Naia Host download manifest: {error}"))?;
     let manifest: VoxCpm2DownloadManifest = serde_json::from_str(&raw)
-        .map_err(|error| format!("VoxCPM2 download manifest is invalid: {error}"))?;
+        .map_err(|error| format!("Naia Host download manifest is invalid: {error}"))?;
     if manifest.schema_version != 1
         || manifest.profile != "windows_trt_6g"
         || !is_sha256(&manifest.artifact_manifest_sha256)
@@ -4965,16 +4997,16 @@ fn read_voxcpm2_download_manifest(
         || manifest.archive.files == 0
         || manifest.archive.files > 100_000
     {
-        return Err("VoxCPM2 download manifest contract mismatch".to_string());
+        return Err("Naia Host download manifest contract mismatch".to_string());
     }
     let url = url::Url::parse(&manifest.archive.url)
-        .map_err(|error| format!("VoxCPM2 package URL is invalid: {error}"))?;
+        .map_err(|error| format!("Naia Host package URL is invalid: {error}"))?;
     let trusted_transport = url.scheme() == "https"
         || (cfg!(debug_assertions)
             && url.scheme() == "http"
             && matches!(url.host_str(), Some("127.0.0.1" | "localhost")));
     if !trusted_transport || !url.username().is_empty() || url.password().is_some() {
-        return Err("VoxCPM2 package URL must use trusted HTTPS".to_string());
+        return Err("Naia Host package URL must use trusted HTTPS".to_string());
     }
     Ok(manifest)
 }
@@ -4995,27 +5027,81 @@ fn voxcpm2_payload_is_valid(
     root: &std::path::Path,
     expected_artifact_sha256: Option<&str>,
 ) -> bool {
+    voxcpm2_payload_validation_failures(root, expected_artifact_sha256).is_empty()
+}
+
+fn read_voxcpm2_activation_contract() -> Result<VoxCpm2ActivationContract, String> {
+    let contract: VoxCpm2ActivationContract =
+        serde_json::from_str(include_str!("../voxcpm2-activation-contract.json"))
+            .map_err(|error| format!("activation contract invalid: {error}"))?;
+    if contract.schema_version != 1 || contract.profile != "windows_trt_6g" {
+        return Err("activation contract identity mismatch".to_string());
+    }
+    Ok(contract)
+}
+
+fn prepare_voxcpm2_payload_structure(root: &std::path::Path) -> Result<(), String> {
+    let contract = read_voxcpm2_activation_contract()?;
+    for path in contract.payload.required_directories {
+        std::fs::create_dir_all(root.join(&path)).map_err(|error| {
+            format!("Could not create Naia Host payload directory {path}: {error}")
+        })?;
+    }
+    Ok(())
+}
+
+fn voxcpm2_payload_validation_failures(
+    root: &std::path::Path,
+    expected_artifact_sha256: Option<&str>,
+) -> Vec<String> {
     let artifact = root.join("artifact");
-    let package = artifact
-        .join("python")
-        .join("Lib")
-        .join("site-packages")
-        .join("voxcpm2_tensorrt");
     let artifact_manifest = artifact.join("artifact-manifest.json");
-    let digest_matches = expected_artifact_sha256.is_none_or(|expected| {
-        sha256_file_hex(&artifact_manifest)
+    let mut failures = Vec::new();
+    if expected_artifact_sha256.is_some_and(|expected| {
+        !sha256_file_hex(&artifact_manifest)
             .is_ok_and(|actual| actual.eq_ignore_ascii_case(expected))
-    });
-    digest_matches
-        && artifact_manifest.is_file()
-        && artifact.join("runtime-manifest.json").is_file()
-        && artifact.join("sbom.spdx.json").is_file()
-        && artifact.join("THIRD_PARTY_NOTICES.md").is_file()
-        && artifact.join("licenses").join("Apache-2.0.txt").is_file()
-        && root.join("prepare-voxcpm2-model.ps1").is_file()
-        && artifact.join("voices").is_dir()
-        && directory_has_compiled_module(&package, "http_server")
-        && (!cfg!(windows) || artifact.join("python").join("python.exe").is_file())
+    }) {
+        failures.push("artifact-manifest SHA-256 mismatch".to_string());
+    }
+    let contract = match read_voxcpm2_activation_contract() {
+        Ok(contract) => contract,
+        Err(error) => {
+            failures.push(error);
+            return failures;
+        }
+    };
+    for path in contract.artifact.required_files {
+        if !artifact.join(&path).is_file() {
+            failures.push(format!("missing artifact file: {path}"));
+        }
+    }
+    for path in contract.artifact.required_directories {
+        if !artifact.join(&path).is_dir() {
+            failures.push(format!("missing artifact directory: {path}"));
+        }
+    }
+    for compiled in contract.artifact.compiled_modules {
+        let directory = artifact.join(&compiled.directory);
+        if compiled.extension != "pyd"
+            || !directory_has_compiled_module(&directory, &compiled.module)
+        {
+            failures.push(format!(
+                "missing compiled module: {}/{}.*.{}",
+                compiled.directory, compiled.module, compiled.extension
+            ));
+        }
+    }
+    for path in contract.payload.required_files {
+        if !root.join(&path).is_file() {
+            failures.push(format!("missing payload file: {path}"));
+        }
+    }
+    for path in contract.payload.required_directories {
+        if !root.join(&path).is_dir() {
+            failures.push(format!("missing payload directory: {path}"));
+        }
+    }
+    failures
 }
 
 fn voxcpm2_bundle_root(app: &tauri::AppHandle) -> Option<std::path::PathBuf> {
@@ -5088,24 +5174,24 @@ fn download_voxcpm2_archive(
         .connect_timeout(std::time::Duration::from_secs(30))
         .timeout(std::time::Duration::from_secs(60 * 60 * 3))
         .build()
-        .map_err(|error| format!("Could not create VoxCPM2 downloader: {error}"))?;
+        .map_err(|error| format!("Could not create Naia Host downloader: {error}"))?;
     let mut response = client
         .get(&manifest.archive.url)
         .send()
         .and_then(reqwest::blocking::Response::error_for_status)
-        .map_err(|error| format!("VoxCPM2 package download failed: {error}"))?;
+        .map_err(|error| format!("Naia Host package download failed: {error}"))?;
     if response
         .content_length()
         .is_some_and(|length| length != manifest.archive.bytes)
     {
-        return Err("VoxCPM2 package size differs from the signed release manifest".to_string());
+        return Err("Naia Host package size differs from the signed release manifest".to_string());
     }
     if let Some(parent) = destination.parent() {
         std::fs::create_dir_all(parent)
-            .map_err(|error| format!("Could not create VoxCPM2 download directory: {error}"))?;
+            .map_err(|error| format!("Could not create Naia Host download directory: {error}"))?;
     }
     let mut output = std::fs::File::create(destination)
-        .map_err(|error| format!("Could not create VoxCPM2 package file: {error}"))?;
+        .map_err(|error| format!("Could not create Naia Host package file: {error}"))?;
     let mut digest = Sha256::new();
     let mut buffer = vec![0u8; 1024 * 1024];
     let mut downloaded = 0u64;
@@ -5113,19 +5199,19 @@ fn download_voxcpm2_archive(
     loop {
         let read = response
             .read(&mut buffer)
-            .map_err(|error| format!("VoxCPM2 package download interrupted: {error}"))?;
+            .map_err(|error| format!("Naia Host package download interrupted: {error}"))?;
         if read == 0 {
             break;
         }
         downloaded = downloaded
             .checked_add(read as u64)
-            .ok_or_else(|| "VoxCPM2 package size overflow".to_string())?;
+            .ok_or_else(|| "Naia Host package size overflow".to_string())?;
         if downloaded > manifest.archive.bytes {
-            return Err("VoxCPM2 package exceeded its declared size".to_string());
+            return Err("Naia Host package exceeded its declared size".to_string());
         }
         output
             .write_all(&buffer[..read])
-            .map_err(|error| format!("Could not write VoxCPM2 package: {error}"))?;
+            .map_err(|error| format!("Could not write Naia Host package: {error}"))?;
         digest.update(&buffer[..read]);
         if last_emit.elapsed() >= std::time::Duration::from_millis(250) {
             let _ = app.emit(
@@ -5141,16 +5227,16 @@ fn download_voxcpm2_archive(
     }
     output
         .flush()
-        .map_err(|error| format!("Could not flush VoxCPM2 package: {error}"))?;
+        .map_err(|error| format!("Could not flush Naia Host package: {error}"))?;
     if downloaded != manifest.archive.bytes {
         return Err(format!(
-            "VoxCPM2 package is incomplete: expected {} bytes, received {downloaded}",
+            "Naia Host package is incomplete: expected {} bytes, received {downloaded}",
             manifest.archive.bytes
         ));
     }
     let actual = format!("{:x}", digest.finalize());
     if !actual.eq_ignore_ascii_case(&manifest.archive.sha256) {
-        return Err("VoxCPM2 package SHA-256 mismatch".to_string());
+        return Err("Naia Host package SHA-256 mismatch".to_string());
     }
     let _ = app.emit(
         "voxcpm2_install_progress",
@@ -5169,47 +5255,47 @@ fn extract_voxcpm2_archive(
     manifest: &VoxCpm2DownloadManifest,
 ) -> Result<(), String> {
     let file = std::fs::File::open(archive_path)
-        .map_err(|error| format!("Could not open VoxCPM2 package: {error}"))?;
+        .map_err(|error| format!("Could not open Naia Host package: {error}"))?;
     let mut archive = zip::ZipArchive::new(file)
-        .map_err(|error| format!("VoxCPM2 package is not a valid ZIP64 archive: {error}"))?;
+        .map_err(|error| format!("Naia Host package is not a valid ZIP64 archive: {error}"))?;
     std::fs::create_dir_all(destination)
-        .map_err(|error| format!("Could not create VoxCPM2 payload directory: {error}"))?;
+        .map_err(|error| format!("Could not create Naia Host payload directory: {error}"))?;
     let mut unpacked_bytes = 0u64;
     let mut files = 0u64;
     for index in 0..archive.len() {
         let mut entry = archive
             .by_index(index)
-            .map_err(|error| format!("Could not read VoxCPM2 package entry: {error}"))?;
+            .map_err(|error| format!("Could not read Naia Host package entry: {error}"))?;
         let relative = entry
             .enclosed_name()
-            .ok_or_else(|| "VoxCPM2 package contains an unsafe path".to_string())?;
+            .ok_or_else(|| "Naia Host package contains an unsafe path".to_string())?;
         if relative.as_os_str().is_empty() {
             continue;
         }
         let output_path = destination.join(relative);
         if entry.is_dir() {
             std::fs::create_dir_all(&output_path)
-                .map_err(|error| format!("Could not create VoxCPM2 directory: {error}"))?;
+                .map_err(|error| format!("Could not create Naia Host directory: {error}"))?;
             continue;
         }
         files += 1;
         unpacked_bytes = unpacked_bytes
             .checked_add(entry.size())
-            .ok_or_else(|| "VoxCPM2 unpacked size overflow".to_string())?;
+            .ok_or_else(|| "Naia Host unpacked size overflow".to_string())?;
         if files > manifest.archive.files || unpacked_bytes > manifest.archive.unpacked_bytes {
-            return Err("VoxCPM2 package exceeds its declared extraction limits".to_string());
+            return Err("Naia Host package exceeds its declared extraction limits".to_string());
         }
         if let Some(parent) = output_path.parent() {
             std::fs::create_dir_all(parent)
-                .map_err(|error| format!("Could not create VoxCPM2 directory: {error}"))?;
+                .map_err(|error| format!("Could not create Naia Host directory: {error}"))?;
         }
         let mut output = std::fs::File::create(&output_path)
-            .map_err(|error| format!("Could not extract VoxCPM2 file: {error}"))?;
+            .map_err(|error| format!("Could not extract Naia Host file: {error}"))?;
         std::io::copy(&mut entry, &mut output)
-            .map_err(|error| format!("Could not extract VoxCPM2 package: {error}"))?;
+            .map_err(|error| format!("Could not extract Naia Host package: {error}"))?;
     }
     if files != manifest.archive.files || unpacked_bytes != manifest.archive.unpacked_bytes {
-        return Err("VoxCPM2 package inventory differs from the release manifest".to_string());
+        return Err("Naia Host package inventory differs from the release manifest".to_string());
     }
     Ok(())
 }
@@ -5238,7 +5324,7 @@ fn install_voxcpm2_payload(
         let _ = std::fs::remove_file(&archive_pending);
         download_voxcpm2_archive(app, &manifest, &archive_pending)?;
         std::fs::rename(&archive_pending, &archive)
-            .map_err(|error| format!("Could not commit VoxCPM2 package download: {error}"))?;
+            .map_err(|error| format!("Could not commit Naia Host package download: {error}"))?;
     }
 
     let payload = voxcpm2_installed_payload_root();
@@ -5246,29 +5332,35 @@ fn install_voxcpm2_payload(
     let backup = runtime_root.join("payload.backup");
     if pending.exists() {
         std::fs::remove_dir_all(&pending)
-            .map_err(|error| format!("Could not clear incomplete VoxCPM2 payload: {error}"))?;
+            .map_err(|error| format!("Could not clear incomplete Naia Host payload: {error}"))?;
     }
     extract_voxcpm2_archive(&archive, &pending.join("artifact"), &manifest)?;
     let installer = voxcpm2_installer_script_path(app)
-        .ok_or_else(|| "VoxCPM2 installer script is not packaged".to_string())?;
+        .ok_or_else(|| "Naia Host installer script is not packaged".to_string())?;
     std::fs::copy(installer, pending.join("prepare-voxcpm2-model.ps1"))
-        .map_err(|error| format!("Could not stage VoxCPM2 installer script: {error}"))?;
-    if !voxcpm2_payload_is_valid(&pending, Some(&manifest.artifact_manifest_sha256)) {
-        return Err("Downloaded VoxCPM2 payload failed provenance verification".to_string());
+        .map_err(|error| format!("Could not stage Naia Host installer script: {error}"))?;
+    prepare_voxcpm2_payload_structure(&pending)?;
+    let validation_failures =
+        voxcpm2_payload_validation_failures(&pending, Some(&manifest.artifact_manifest_sha256));
+    if !validation_failures.is_empty() {
+        return Err(format!(
+            "Downloaded Naia Host payload failed provenance verification: {}",
+            validation_failures.join("; ")
+        ));
     }
     if backup.exists() {
         std::fs::remove_dir_all(&backup)
-            .map_err(|error| format!("Could not clear VoxCPM2 payload backup: {error}"))?;
+            .map_err(|error| format!("Could not clear Naia Host payload backup: {error}"))?;
     }
     if payload.exists() {
         std::fs::rename(&payload, &backup)
-            .map_err(|error| format!("Could not stage existing VoxCPM2 payload: {error}"))?;
+            .map_err(|error| format!("Could not stage existing Naia Host payload: {error}"))?;
     }
     if let Err(error) = std::fs::rename(&pending, &payload) {
         if !payload.exists() && backup.exists() {
             let _ = std::fs::rename(&backup, &payload);
         }
-        return Err(format!("Could not activate VoxCPM2 payload: {error}"));
+        return Err(format!("Could not activate Naia Host payload: {error}"));
     }
     if backup.exists() {
         let _ = std::fs::remove_dir_all(&backup);
@@ -5619,9 +5711,9 @@ fn classify_voxcpm2_installation_for_profile(
         "blocked"
     };
     let summary = match phase {
-        "ready" => "Local voice service is running and healthy.".to_string(),
+        "ready" => "Host voice service is running and healthy.".to_string(),
         "ready-to-start" => "Local runtime files are ready. Services have not been started yet.".to_string(),
-        _ => "VoxCPM2 TensorRT installation is required. Selecting local voice will install the missing components and start the engine.".to_string(),
+        _ => "Naia Host TensorRT installation is required. Selecting host voice will install the missing components and start the engine.".to_string(),
     };
     VoxCpm2InstallationStatus {
         phase,
@@ -5632,12 +5724,12 @@ fn classify_voxcpm2_installation_for_profile(
             let mut steps = vec![
                 voxcpm2_install_step(
                     "runtime-entrypoint",
-                    "VoxCPM2 runtime",
+                    "Naia Host runtime",
                     "verify",
                     probe.runtime_entrypoint,
                     probe.installer_available,
                     "VOXCPM2_RUNTIME_ENTRYPOINT_MISSING",
-                    "The direct Windows VoxCPM2 runtime is not packaged.",
+                    "The direct Windows Naia Host runtime is not packaged.",
                 ),
                 voxcpm2_install_step(
                     "python-runtime",
@@ -5655,17 +5747,17 @@ fn classify_voxcpm2_installation_for_profile(
                     probe.trt_service_bundle,
                     probe.installer_available,
                     "VOXCPM2_TRT_SERVICE_MISSING",
-                    "The direct VoxCPM2 TensorRT service files are not packaged.",
+                    "The direct Naia Host TensorRT service files are not packaged.",
                 ),
             ];
             steps.push(voxcpm2_install_step(
                 "voxcpm2-model",
-                "VoxCPM2 model",
+                "Naia Host model",
                 "download",
                 probe.voxcpm2_model,
                 probe.installer_available,
                 "VOXCPM2_MODEL_MISSING",
-                "The VoxCPM2 runtime or cached model is not installed.",
+                "The Naia Host runtime or cached model is not installed.",
             ));
             steps
         },
@@ -5677,7 +5769,7 @@ fn classify_voxcpm2_installation(probe: VoxCpm2InstallationProbe) -> VoxCpm2Inst
 }
 
 /// Preserve the pre-existing local Cascade supervisor contract independently
-/// from the Windows product's direct VoxCPM2 runtime. This check has no install
+/// from the Windows product's direct Naia Host runtime. This check has no install
 /// side effects and is used only by the legacy `start_cascade` command.
 fn legacy_cascade_prerequisites_are_ready(
     loader_dir: &str,
@@ -5726,19 +5818,19 @@ async fn install_voxcpm2_runtime(
         .map_err(|error| format!("VRAM detection task failed: {error}"))?;
     validate_cascade_vram(vram, Some("windows_trt_6g"))?;
     if !cfg!(windows) {
-        return Err("VoxCPM2 managed installation is available on Windows only.".to_string());
+        return Err("Naia Host managed installation is available on Windows only.".to_string());
     }
     let bundle_root = if let Some(root) = voxcpm2_bundle_root(&app) {
         root
     } else {
         let manifest_path = voxcpm2_download_manifest_path(&app)
-            .ok_or_else(|| "VoxCPM2 download manifest is not packaged.".to_string())?;
+            .ok_or_else(|| "Naia Host download manifest is not packaged.".to_string())?;
         let app_for_download = app.clone();
         tokio::task::spawn_blocking(move || {
             install_voxcpm2_payload(&app_for_download, &manifest_path)
         })
         .await
-        .map_err(|error| format!("VoxCPM2 payload task failed: {error}"))??
+        .map_err(|error| format!("Naia Host payload task failed: {error}"))??
     };
     let runtime_root = voxcpm2_runtime_root();
     let installer = bundle_root.join("prepare-voxcpm2-model.ps1");
@@ -5780,7 +5872,7 @@ async fn install_voxcpm2_runtime(
             platform::hide_console(&mut command);
             let mut child = command
                 .spawn()
-                .map_err(|error| format!("Could not start VoxCPM2 installer: {error}"))?;
+                .map_err(|error| format!("Could not start Naia Host installer: {error}"))?;
             // Drain stderr on its own thread so a full pipe buffer cannot
             // deadlock the stdout progress reader below.
             let stderr_thread = child.stderr.take().map(|err| {
@@ -5800,9 +5892,7 @@ async fn install_voxcpm2_runtime(
                 for line in BufReader::new(out).lines().map_while(Result::ok) {
                     let _ = writeln!(log, "{line}");
                     if let Some(rest) = line.strip_prefix("VOXCPM2_PROGRESS ") {
-                        if let Ok(json) =
-                            serde_json::from_str::<serde_json::Value>(rest.trim())
-                        {
+                        if let Ok(json) = serde_json::from_str::<serde_json::Value>(rest.trim()) {
                             let _ = app.emit("voxcpm2_install_progress", json);
                         }
                     }
@@ -5813,10 +5903,10 @@ async fn install_voxcpm2_runtime(
             }
             let status = child
                 .wait()
-                .map_err(|error| format!("VoxCPM2 installer wait failed: {error}"))?;
+                .map_err(|error| format!("Naia Host installer wait failed: {error}"))?;
             status.success().then_some(()).ok_or_else(|| {
                 format!(
-                    "VoxCPM2 installation failed (exit={:?}). See {}",
+                    "Naia Host installation failed (exit={:?}). See {}",
                     status.code(),
                     log_path.display()
                 )
@@ -5824,15 +5914,16 @@ async fn install_voxcpm2_runtime(
         }
     })
     .await
-    .map_err(|error| format!("VoxCPM2 install task failed: {error}"))?;
+    .map_err(|error| format!("Naia Host install task failed: {error}"))?;
     install_result?;
 
     let probe = tokio::task::spawn_blocking(move || probe_voxcpm2_installation(Some(&bundle_root)))
         .await
-        .map_err(|error| format!("VoxCPM2 post-install verification failed: {error}"))?;
+        .map_err(|error| format!("Naia Host post-install verification failed: {error}"))?;
     let status = classify_voxcpm2_installation(probe);
     status.can_start.then_some(status).ok_or_else(|| {
-        "VoxCPM2 installer exited successfully but runtime verification is incomplete.".to_string()
+        "Naia Host installer exited successfully but runtime verification is incomplete."
+            .to_string()
     })
 }
 
@@ -5860,7 +5951,7 @@ async fn voxcpm2_installation_status(
     let mut probe =
         tokio::task::spawn_blocking(move || probe_voxcpm2_installation(bundle_root.as_deref()))
             .await
-            .map_err(|error| format!("VoxCPM2 installation status task failed: {error}"))?;
+            .map_err(|error| format!("Naia Host installation status task failed: {error}"))?;
     probe.installer_available = installer_available;
     probe.facade_healthy = voxcpm2_status(state).await.unwrap_or(false);
     Ok(classify_voxcpm2_installation_for_profile(
@@ -5871,7 +5962,7 @@ async fn voxcpm2_installation_status(
 
 /// 濡쒖뺄 cascade loader supervisor 瑜??ъ씠?쒖뭅濡?spawn. stdout `CASCADE_READY {json}`
 /// ?몃뱶?곗씠?щ줈 以鍮꾩셿猷??먯젙(紐⑤뜽 濡쒕뱶媛 湲몄뼱 timeout ?됰꼮??. ???꾨줈?몄뒪瑜?kill ?섎㈃
-/// loader 媛 VoxCPM2 ???먯떇 ?쒕퉬?ㅻ? teardown ?쒕떎(?먭꺽 湲덉?쨌濡쒖뺄 ?꾨쿋??.
+/// loader 媛 Naia Host ???먯떇 ?쒕퉬?ㅻ? teardown ?쒕떎(?먭꺽 湲덉?쨌濡쒖뺄 ?꾨쿋??.
 #[derive(serde::Serialize)]
 struct VoxCpm2Activation<'a> {
     naia_key: &'a str,
@@ -5881,7 +5972,7 @@ struct VoxCpm2Activation<'a> {
 fn new_voxcpm2_local_access_token() -> Result<zeroize::Zeroizing<String>, String> {
     let mut token_bytes = zeroize::Zeroizing::new([0u8; 32]);
     getrandom::fill(&mut *token_bytes)
-        .map_err(|error| format!("Could not generate local voice access token: {error}"))?;
+        .map_err(|error| format!("Could not generate host voice access token: {error}"))?;
     Ok(zeroize::Zeroizing::new(
         token_bytes
             .iter()
@@ -5892,7 +5983,7 @@ fn new_voxcpm2_local_access_token() -> Result<zeroize::Zeroizing<String>, String
 
 fn validate_voxcpm2_ready(payload: &str, expected_token: &str) -> Result<(), String> {
     let ready: serde_json::Value = serde_json::from_str(payload)
-        .map_err(|error| format!("VoxCPM2 readiness is invalid JSON: {error}"))?;
+        .map_err(|error| format!("Naia Host readiness is invalid JSON: {error}"))?;
     let valid = ready.get("service").and_then(serde_json::Value::as_str)
         == Some("voxcpm2-tensorrt")
         && ready.get("port").and_then(serde_json::Value::as_u64) == Some(8910)
@@ -5906,7 +5997,7 @@ fn validate_voxcpm2_ready(payload: &str, expected_token: &str) -> Result<(), Str
             == Some(expected_token);
     valid
         .then_some(())
-        .ok_or_else(|| "VoxCPM2 readiness contract mismatch".to_string())
+        .ok_or_else(|| "Naia Host readiness contract mismatch".to_string())
 }
 
 fn spawn_windows_voxcpm2(
@@ -5983,12 +6074,12 @@ fn spawn_windows_voxcpm2(
     .stderr(stderr);
     platform::hide_console(&mut cmd);
     log_both(&format!(
-        "[Naia] Starting Windows VoxCPM2 TensorRT runtime: {} {}",
+        "[Naia] Starting Windows Naia Host TensorRT runtime: {} {}",
         python, "compiled voxcpm2_tensorrt.http_server"
     ));
     let mut child = cmd.spawn().map_err(|error| {
         format!(
-            "Failed to start VoxCPM2 TensorRT runtime: {error}. See {}",
+            "Failed to start Naia Host TensorRT runtime: {error}. See {}",
             log_path.display()
         )
     })?;
@@ -5999,14 +6090,14 @@ fn spawn_windows_voxcpm2(
     let bootstrap_result = child
         .stdin
         .take()
-        .ok_or_else(|| "Failed to open VoxCPM2 activation pipe".to_string())
+        .ok_or_else(|| "Failed to open Naia Host activation pipe".to_string())
         .and_then(|mut stdin| {
             serde_json::to_writer(&mut stdin, &bootstrap)
-                .map_err(|error| format!("Failed to encode VoxCPM2 activation: {error}"))?;
+                .map_err(|error| format!("Failed to encode Naia Host activation: {error}"))?;
             stdin
                 .write_all(b"\n")
                 .and_then(|_| stdin.flush())
-                .map_err(|error| format!("Failed to send VoxCPM2 activation: {error}"))
+                .map_err(|error| format!("Failed to send Naia Host activation: {error}"))
         });
     if let Err(error) = bootstrap_result {
         let _ = child.kill();
@@ -6016,7 +6107,7 @@ fn spawn_windows_voxcpm2(
         Some(stdout) => stdout,
         None => {
             let _ = child.kill();
-            return Err("Failed to capture VoxCPM2 runtime output".to_string());
+            return Err("Failed to capture Naia Host runtime output".to_string());
         }
     };
     let (ready_tx, ready_rx) = std::sync::mpsc::channel::<String>();
@@ -6036,14 +6127,14 @@ fn spawn_windows_voxcpm2(
             Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
                 let status = child.try_wait().ok().flatten();
                 return Err(format!(
-                    "VoxCPM2 TensorRT runtime exited before readiness ({status:?}). See {}",
+                    "Naia Host TensorRT runtime exited before readiness ({status:?}). See {}",
                     log_path.display()
                 ));
             }
             Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
                 if let Ok(Some(status)) = child.try_wait() {
                     return Err(format!(
-                        "VoxCPM2 TensorRT runtime exited (code={:?}). See {}",
+                        "Naia Host TensorRT runtime exited (code={:?}). See {}",
                         status.code(),
                         log_path.display()
                     ));
@@ -6051,7 +6142,7 @@ fn spawn_windows_voxcpm2(
                 if std::time::Instant::now() >= deadline {
                     let _ = child.kill();
                     return Err(format!(
-                        "VoxCPM2 TensorRT readiness timed out. See {}",
+                        "Naia Host TensorRT readiness timed out. See {}",
                         log_path.display()
                     ));
                 }
@@ -6065,7 +6156,7 @@ fn spawn_windows_voxcpm2(
     write_pid_file("voxcpm2", child.id());
     // The readiness payload contains a per-launch loopback bearer used by the
     // WebView. Never write that credential to logs.
-    log_both("[Naia] Windows VoxCPM2 TensorRT ready on loopback");
+    log_both("[Naia] Windows Naia Host TensorRT ready on loopback");
     Ok(VoxCpm2Process { child, ready })
 }
 
@@ -6247,7 +6338,7 @@ fn spawn_cascade(
 }
 
 /// Resolve the public facade URL only from the loader's readiness payload.
-/// The individual local voice service ports are private implementation details;
+/// The individual host voice service ports are private implementation details;
 /// a live Shell must be able to reach the single :8910 facade before reporting
 /// that the local cascade is running.
 fn cascade_facade_url_from_ready(ready: &str) -> Option<String> {
@@ -6294,7 +6385,7 @@ async fn start_voxcpm2(
     expected_loader_profile: Option<String>,
 ) -> Result<String, String> {
     if !cfg!(windows) {
-        return Err("VoxCPM2 TensorRT local voice is available on Windows only.".to_string());
+        return Err("Naia Host TensorRT host voice is available on Windows only.".to_string());
     }
     let _start_guard = state.voxcpm2_start.lock().await;
     let adk_path = if debug_e2e_enabled() {
@@ -6345,13 +6436,13 @@ async fn start_voxcpm2(
         .map_err(|error| format!("VRAM detection task failed: {error}"))?;
     validate_cascade_vram(vram, Some(expected))?;
     let bundle_root = voxcpm2_bundle_root(&app)
-        .ok_or_else(|| "VoxCPM2 TensorRT runtime payload is not packaged".to_string())?;
+        .ok_or_else(|| "Naia Host TensorRT runtime payload is not packaged".to_string())?;
     let install_probe = tokio::task::spawn_blocking({
         let bundle_root = bundle_root.clone();
         move || probe_voxcpm2_installation(Some(&bundle_root))
     })
     .await
-    .map_err(|error| format!("VoxCPM2 installation check task failed: {error}"))?;
+    .map_err(|error| format!("Naia Host installation check task failed: {error}"))?;
     let installation = classify_voxcpm2_installation_for_profile(install_probe, Some(expected));
     if !installation.can_start {
         return Err(installation.summary);
@@ -6376,7 +6467,7 @@ async fn start_voxcpm2(
 #[tauri::command]
 async fn stop_voxcpm2(state: tauri::State<'_, AppState>) -> Result<(), String> {
     if let Some(mut process) = lock_or_recover(&state.voxcpm2, "voxcpm2").take() {
-        log_verbose("[Naia] Terminating local VoxCPM2 TensorRT service...");
+        log_verbose("[Naia] Terminating local Naia Host TensorRT service...");
         let _ = process.child.kill();
     }
     platform::kill_stale_voxcpm2();
@@ -6404,7 +6495,7 @@ async fn voxcpm2_status(state: tauri::State<'_, AppState>) -> Result<bool, Strin
     }
     tokio::task::spawn_blocking(local_voxcpm2_is_healthy)
         .await
-        .map_err(|error| format!("VoxCPM2 health task failed: {error}"))
+        .map_err(|error| format!("Naia Host health task failed: {error}"))
 }
 
 #[tauri::command]
@@ -6453,7 +6544,7 @@ async fn start_cascade(
     let manifest_path = std::path::PathBuf::from(&adk_path)
         .join("naia-settings")
         .join("slots-manifest.json");
-    // Local voice is a device capability, not a Naia account entitlement.
+    // Host voice is a device capability, not a Naia account entitlement.
     // The explicit voice-only manifest/profile is the start authority.
     let loader_profile = read_cascade_loader_profile(&manifest_path);
     let expected_loader_profile = expected_loader_profile
@@ -6480,7 +6571,7 @@ async fn start_cascade(
         if cascade_facade_is_healthy(&ready).await {
             return Ok(ready);
         }
-        // VoxCPM2 may monopolize the GPU long enough for the
+        // Naia Host may monopolize the GPU long enough for the
         // facade health request to exceed its short UI probe timeout. A single
         // transient miss must not tear down an in-flight utterance: the loader
         // supervisor already exits and tears down the full tree when any child
@@ -6503,7 +6594,7 @@ async fn start_cascade(
     let vram = validate_cascade_vram(vram, loader_profile.as_deref())?;
 
     // Keep the legacy local Cascade launch contract independent of the direct
-    // Windows VoxCPM2 installation commands.
+    // Windows Naia Host installation commands.
     let cascade_prerequisites_ready = tokio::task::spawn_blocking({
         let loader_dir = loader_dir.clone();
         let bundle_root = bundle_root.clone();
@@ -6519,7 +6610,7 @@ async fn start_cascade(
     // the installed app and the isolated dev instance. A healthy façade on
     // :8910 may belong to the other instance — adopt it instead of killing
     // and respawning (which would cut the other instance's speech and race
-    // one GPU with two VoxCPM2 loads). Native E2E must NEVER adopt: its spec
+    // one GPU with two Naia Host loads). Native E2E must NEVER adopt: its spec
     // owns the full cascade lifecycle in an isolated runtime, and adopting a
     // live user engine breaks that isolation (2026-08-13 실측: voice-6g spec
     // 'did not restore' — the run adopted the developer's live cascade).
@@ -6587,7 +6678,7 @@ async fn cascade_status(state: tauri::State<'_, AppState>) -> Result<bool, Strin
 }
 
 /// Report supervisor lifecycle separately from facade health so the UI can
-/// distinguish a normal VoxCPM2 cold start from a stopped/unreachable service.
+/// distinguish a normal Naia Host cold start from a stopped/unreachable service.
 #[tauri::command]
 async fn cascade_runtime_status(state: tauri::State<'_, AppState>) -> Result<String, String> {
     if state.cascade_start.try_lock().is_err() {
@@ -9529,6 +9620,84 @@ async fn reload_agent_settings(
     }))
 }
 
+/// Activate a freshly persisted Naia login in the live Agent and return only
+/// after the expected main LLM is ready. The credential is never logged or
+/// written to the plain-text settings file.
+#[tauri::command]
+async fn activate_naia_llm(
+    state: tauri::State<'_, AppState>,
+    naia_key: String,
+    expected_provider: String,
+    expected_model: String,
+) -> Result<serde_json::Value, String> {
+    if naia_key.trim().is_empty()
+        || expected_provider.trim().is_empty()
+        || expected_model.trim().is_empty()
+    {
+        return Err("Naia LLM activation requires a credential, provider, and model".to_string());
+    }
+
+    let addr = {
+        let guard = state.agent.lock().map_err(|_| "agent lock".to_string())?;
+        guard.as_ref().map(|agent| agent.grpc_addr.clone())
+    }
+    .ok_or_else(|| "Naia LLM activation failed: Agent is not running".to_string())?;
+
+    let endpoint = format!("http://{}", addr);
+    let mut last_connect_error = None;
+    let mut connected = None;
+    for _ in 0..20 {
+        match agent_grpc::AgentGrpc::connect(endpoint.clone()).await {
+            Ok(client) => {
+                connected = Some(client);
+                break;
+            }
+            Err(error) => {
+                last_connect_error = Some(error.to_string());
+                tokio::time::sleep(std::time::Duration::from_millis(150)).await;
+            }
+        }
+    }
+    let mut client = connected.ok_or_else(|| {
+        format!(
+            "Naia LLM activation could not connect to Agent: {}",
+            last_connect_error.unwrap_or_else(|| "unknown connection error".to_string())
+        )
+    })?;
+
+    client
+        .update_creds(expected_provider.clone(), None, Some(naia_key.clone()))
+        .await
+        .map_err(|error| format!("Naia credential activation failed: {}", error))?;
+    let result = client
+        .reload_settings()
+        .await
+        .map_err(|error| format!("Naia LLM settings reload failed: {}", error))?;
+    ensure_memory_reload_succeeded(&result.memory_error, result.memory_retained)?;
+
+    if !result.loaded || result.provider != expected_provider || result.model != expected_model {
+        return Err(format!(
+            "Naia LLM is not ready: loaded={} provider={}/{} model={}/{}",
+            result.loaded, result.provider, expected_provider, result.model, expected_model
+        ));
+    }
+
+    // ReloadSettings may replace the adapter; replay the credential into that
+    // acknowledged snapshot before allowing onboarding/login to finish.
+    client
+        .update_creds(expected_provider, None, Some(naia_key))
+        .await
+        .map_err(|error| format!("Naia credential replay after reload failed: {}", error))?;
+
+    Ok(serde_json::json!({
+        "available": true,
+        "loaded": true,
+        "provider": result.provider,
+        "model": result.model,
+        "llm": "naia",
+    }))
+}
+
 const JEONJU_COURSE_ALLOWED_FILES: [&str; 2] = ["index.html", "hero.svg"];
 const JEONJU_COURSE_TARGET_FILE: &str = "jeonju-discord-course.json";
 
@@ -10902,6 +11071,7 @@ pub fn run() {
             read_naia_knowledge_kb,
             compile_knowledge,
             reload_agent_settings,
+            activate_naia_llm,
             read_jeonju_course_target,
             write_jeonju_course_target,
             start_coding_job,
@@ -11375,7 +11545,7 @@ pub fn run() {
 
                     if let Ok(mut guard) = state.voxcpm2.lock() {
                         if let Some(mut process) = guard.take() {
-                            log_verbose("[Naia] Terminating local VoxCPM2 TensorRT service...");
+                            log_verbose("[Naia] Terminating local Naia Host TensorRT service...");
                             let _ = process.child.kill();
                         }
                     }
@@ -11413,6 +11583,70 @@ pub fn run() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn write_test_file(path: &std::path::Path) {
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(path, b"fixture").unwrap();
+    }
+
+    #[test]
+    fn voxcpm2_payload_validation_reports_every_activation_contract_failure() {
+        let runtime = tempfile::tempdir().unwrap();
+        let root = runtime.path();
+        let artifact = root.join("artifact");
+        for path in [
+            "artifact-manifest.json",
+            "runtime-manifest.json",
+            "runtime-package-lock.json",
+            "installer-package-lock.json",
+            "sbom.spdx.json",
+            "THIRD_PARTY_NOTICES.md",
+            "licenses/Apache-2.0.txt",
+            "python/python.exe",
+        ] {
+            write_test_file(&artifact.join(path));
+        }
+        std::fs::create_dir_all(artifact.join("voices")).unwrap();
+        write_test_file(
+            &artifact
+                .join("python/Lib/site-packages/voxcpm2_tensorrt")
+                .join("http_server.cp310-win_amd64.pyd"),
+        );
+        write_test_file(&root.join("prepare-voxcpm2-model.ps1"));
+
+        assert!(voxcpm2_payload_validation_failures(root, None).is_empty());
+
+        std::fs::remove_dir(artifact.join("voices")).unwrap();
+        std::fs::remove_file(artifact.join("sbom.spdx.json")).unwrap();
+        std::fs::remove_file(
+            artifact
+                .join("python/Lib/site-packages/voxcpm2_tensorrt")
+                .join("http_server.cp310-win_amd64.pyd"),
+        )
+        .unwrap();
+        let failures = voxcpm2_payload_validation_failures(root, None);
+        assert_eq!(failures.len(), 3);
+        assert!(failures
+            .iter()
+            .any(|failure| failure == "missing artifact file: sbom.spdx.json"));
+        assert!(failures
+            .iter()
+            .any(|failure| failure == "missing payload directory: artifact/voices"));
+        assert!(failures.iter().any(|failure| failure.contains(
+            "missing compiled module: python/Lib/site-packages/voxcpm2_tensorrt/http_server.*.pyd"
+        )));
+    }
+
+    #[test]
+    fn voxcpm2_payload_structure_materializes_runtime_owned_directories() {
+        let runtime = tempfile::tempdir().unwrap();
+        let root = runtime.path();
+        assert!(!root.join("artifact/voices").exists());
+
+        prepare_voxcpm2_payload_structure(root).unwrap();
+
+        assert!(root.join("artifact/voices").is_dir());
+    }
 
     #[test]
     fn powershell_paths_drop_windows_verbatim_prefixes() {

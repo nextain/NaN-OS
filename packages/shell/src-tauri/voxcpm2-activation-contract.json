@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "profile": "windows_trt_6g",
+  "artifact": {
+    "requiredFiles": [
+      "artifact-manifest.json",
+      "runtime-manifest.json",
+      "runtime-package-lock.json",
+      "installer-package-lock.json",
+      "sbom.spdx.json",
+      "THIRD_PARTY_NOTICES.md",
+      "licenses/Apache-2.0.txt",
+      "python/python.exe"
+    ],
+    "requiredDirectories": [],
+    "compiledModules": [
+      {
+        "directory": "python/Lib/site-packages/voxcpm2_tensorrt",
+        "module": "http_server",
+        "extension": "pyd"
+      }
+    ]
+  },
+  "payload": {
+    "requiredFiles": [
+      "prepare-voxcpm2-model.ps1"
+    ],
+    "requiredDirectories": [
+      "artifact/voices"
+    ]
+  }
+}

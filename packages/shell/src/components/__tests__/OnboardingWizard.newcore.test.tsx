@@ -35,6 +35,15 @@ const reloadAgentSettings = vi.hoisted(() =>
 const sendAuthUpdateStrict = vi.hoisted(() =>
 	vi.fn().mockResolvedValue(undefined),
 );
+const activateNaiaLlm = vi.hoisted(() =>
+	vi.fn().mockResolvedValue({
+		available: true,
+		loaded: true,
+		provider: "nextain",
+		model: "deepseek-v4-flash",
+		llm: "naia",
+	}),
+);
 
 vi.mock("@tauri-apps/api/core", () => ({
 	invoke: vi.fn((command: string) =>
@@ -62,6 +71,7 @@ vi.mock("@tauri-apps/plugin-store", () => ({
 
 // ★ newCore=true
 vi.mock("../../lib/chat-service", () => ({
+	activateNaiaLlm,
 	sendAuthUpdate: vi.fn().mockResolvedValue(undefined),
 	sendAuthUpdateStrict,
 	reloadAgentSettings,
