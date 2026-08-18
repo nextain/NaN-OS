@@ -6251,14 +6251,14 @@ function AboutSection() {
 				<p className="settings-about__desc">{t("about.desc2")}</p>
 				<div className="settings-about__links">
 					<a
-						href="https://github.com/nextain/naia-os"
+						href="https://github.com/nextain/naia-shell"
 						target="_blank"
 						rel="noopener noreferrer"
 						className="settings-about__link"
 						onClick={(e) => {
 							e.preventDefault();
 							import("@tauri-apps/plugin-opener").then(({ openUrl }) =>
-								openUrl("https://github.com/nextain/naia-os"),
+								openUrl("https://github.com/nextain/naia-shell"),
 							);
 						}}
 					>

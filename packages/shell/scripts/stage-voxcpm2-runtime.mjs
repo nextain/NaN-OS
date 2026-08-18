@@ -1,11 +1,13 @@
 import { createHash } from "node:crypto";
-import { spawnSync } from "node:child_process";
 /** Stage a digest-pinned standalone voxcpm2-tensorrt Windows artifact. */
 import {
+	closeSync,
 	copyFileSync,
 	existsSync,
 	mkdirSync,
+	openSync,
 	readFileSync,
+	readSync,
 	readdirSync,
 	realpathSync,
 	renameSync,
@@ -21,25 +23,23 @@ const DEFAULT_SHELL = resolve(SCRIPT_DIR, "..");
 const REPOSITORY = "https://github.com/nextain/voxcpm2-tensorrt";
 
 function sha256(path) {
-	if (statSync(path).size > 64 * 1024 * 1024) {
-		const result = spawnSync(
-			"powershell.exe",
-			[
-				"-NoLogo",
-				"-NoProfile",
-				"-NonInteractive",
-				"-Command",
-				"(Get-FileHash -LiteralPath $args[0] -Algorithm SHA256).Hash.ToLowerInvariant()",
-				path,
-			],
-			{ encoding: "utf8", windowsHide: true },
-		);
-		const digest = result.stdout?.trim();
-		if (result.status !== 0 || !/^[a-f0-9]{64}$/i.test(digest ?? ""))
-			throw new Error(`Could not hash large release file: ${path}`);
-		return digest.toLowerCase();
+	// Chunked synchronous hashing: handles multi-GB release files without
+	// loading them whole (readFileSync caps out around 2 GiB) and without the
+	// PowerShell child the previous large-file branch used — Windows
+	// PowerShell 5.1 does not feed trailing positional arguments to a
+	// -Command script's $args, so that branch always threw
+	// "Could not hash large release file" on the release machine.
+	const hash = createHash("sha256");
+	const fd = openSync(path, "r");
+	try {
+		const buf = Buffer.alloc(8 * 1024 * 1024);
+		let read;
+		while ((read = readSync(fd, buf, 0, buf.length, null)) > 0)
+			hash.update(read === buf.length ? buf : buf.subarray(0, read));
+	} finally {
+		closeSync(fd);
 	}
-	return createHash("sha256").update(readFileSync(path)).digest("hex");
+	return hash.digest("hex");
 }
 
 function filesUnder(root, current = root) {

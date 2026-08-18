@@ -1,37 +1,35 @@
 import { createHash } from "node:crypto";
 import { spawnSync } from "node:child_process";
 import {
+	closeSync,
 	existsSync,
 	mkdirSync,
-	readFileSync,
+	openSync,
+	readSync,
 	realpathSync,
 	renameSync,
 	rmSync,
 	statSync,
 } from "node:fs";
-import { dirname, resolve } from "node:path";
+import { basename, dirname, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { verifyVoxCpm2Artifact } from "./stage-voxcpm2-runtime.mjs";
 
 function sha256(path) {
-	if (statSync(path).size <= 64 * 1024 * 1024)
-		return createHash("sha256").update(readFileSync(path)).digest("hex");
-	const result = spawnSync(
-		"powershell.exe",
-		[
-			"-NoLogo",
-			"-NoProfile",
-			"-NonInteractive",
-			"-Command",
-			"(Get-FileHash -LiteralPath $args[0] -Algorithm SHA256).Hash.ToLowerInvariant()",
-			path,
-		],
-		{ encoding: "utf8", windowsHide: true },
-	);
-	const digest = result.stdout?.trim();
-	if (result.status !== 0 || !/^[a-f0-9]{64}$/i.test(digest ?? ""))
-		throw new Error(`Could not hash VoxCPM2 archive: ${path}`);
-	return digest.toLowerCase();
+	// Chunked sync hashing — same fix as stage-voxcpm2-runtime.mjs: the old
+	// PowerShell child never received the trailing positional argument in
+	// Windows PowerShell 5.1, so hashing any file over 64 MiB always threw.
+	const hash = createHash("sha256");
+	const fd = openSync(path, "r");
+	try {
+		const buf = Buffer.alloc(8 * 1024 * 1024);
+		let read;
+		while ((read = readSync(fd, buf, 0, buf.length, null)) > 0)
+			hash.update(read === buf.length ? buf : buf.subarray(0, read));
+	} finally {
+		closeSync(fd);
+	}
+	return hash.digest("hex");
 }
 
 export function packageVoxCpm2Runtime({
@@ -46,13 +44,18 @@ export function packageVoxCpm2Runtime({
 	const source = realpathSync(runtimeSource);
 	verifyVoxCpm2Artifact(source, expectedManifestSha256);
 	const destination = resolve(output);
-	const pending = `${destination}.pending`;
+	// bsdtar's -a picks the FORMAT from the -f extension. The old ".pending"
+	// suffix (no extension) silently produced an uncompressed TAR that the
+	// Rust installer (zip::ZipArchive) can never open — keep ".zip" last.
+	const pending = `${destination}.pending.zip`;
 	mkdirSync(dirname(destination), { recursive: true });
 	rmSync(pending, { force: true });
+	// bsdtar parses a drive-letter colon in -f as a remote host ("Cannot
+	// connect to E:") — pass only the file NAME and set cwd to its directory.
 	const result = spawnSync(
 		tar,
-		["-a", "-c", "-f", pending, "-C", source, "."],
-		{ encoding: "utf8", windowsHide: true },
+		["-a", "-c", "-f", basename(pending), "-C", source, "."],
+		{ encoding: "utf8", windowsHide: true, cwd: dirname(pending) },
 	);
 	if (result.status !== 0 || !existsSync(pending)) {
 		rmSync(pending, { force: true });

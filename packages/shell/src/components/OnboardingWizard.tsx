@@ -1154,7 +1154,7 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
 								className="onboarding-welcome__github-btn"
 								onClick={() =>
 									import("@tauri-apps/plugin-opener").then(({ openUrl }) =>
-										openUrl("https://github.com/nextain/naia-os"),
+										openUrl("https://github.com/nextain/naia-shell"),
 									)
 								}
 							>
