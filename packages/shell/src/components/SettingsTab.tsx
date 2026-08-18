@@ -942,11 +942,7 @@ export function SettingsTab() {
 	}> => {
 		let installation = await refreshVoxCpm2Installation();
 		if (!installation?.canStart) {
-			setCascadeMsg(
-				getLocale() === "ko"
-					? "VoxCPM2 TensorRT를 설치하고 있습니다."
-					: "Installing VoxCPM2 TensorRT...",
-			);
+			setCascadeMsg(t("voice.hostEngineInstalling"));
 			const installed = await invoke<unknown>("install_voxcpm2_runtime");
 			if (isVoxCpm2InstallationStatus(installed))
 				setVoxCpm2Installation(installed);
@@ -3820,6 +3816,10 @@ export function SettingsTab() {
 						<span>{t("settings.engineSection")}</span>
 					</div>
 
+					{/* 내부 슬롯/게이트 설명 카드 — 일반 사용자에게 불필요한 개발자 정보
+					    (2026-08-18 루크). DEV 빌드에서만 노출; 로그인 진입은 프로바이더
+					    선택 경로(nextain 선택 시 startLabLogin)가 담당하므로 기능 손실 없음. */}
+					{import.meta.env.DEV && (
 					<div className="settings-field" data-testid="slot-gate">
 						<label>{t("settings.slot.gate")}</label>
 						<div className="settings-hint">{t("settings.slot.gateHint")}</div>
@@ -3858,6 +3858,7 @@ export function SettingsTab() {
 							)}
 						</div>
 					</div>
+					)}
 
 					{/* #1 통합: NAIA 계정 관리(잔액/대시보드/연결끊기) = 게이트 바로 아래.
 					    게이트가 로그인(byo 분기)을 담당; 여기는 connected 상태 UI. */}
@@ -4277,6 +4278,8 @@ export function SettingsTab() {
 					)}
 
 					{/* 배타 티어(8G: 로컬 LLM · 아바타 · 둘다) 로컬 집중 택1. 음성=클라우드. FR-3: 로그인 필요. */}
+					{/* 슬롯 커버리지 요약 — 개발자용 내부 정보 (2026-08-18 루크). DEV 전용. */}
+					{import.meta.env.DEV && (
 					<div
 						className="settings-field"
 						data-testid="engine-capability-summary"
@@ -4297,6 +4300,7 @@ export function SettingsTab() {
 							</li>
 						</ul>
 					</div>
+					)}
 				</>
 			)}
 			{activeSettingsTab === "brain" && (

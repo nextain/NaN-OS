@@ -477,11 +477,7 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
 		try {
 			let installation = await refreshVoxCpm2InstallationForOnboarding();
 			if (!installation?.canStart) {
-				setLocalVoiceMsg(
-					getLocale() === "ko"
-						? "VoxCPM2 TensorRT를 설치하고 있습니다."
-						: "Installing VoxCPM2 TensorRT...",
-				);
+				setLocalVoiceMsg(t("voice.hostEngineInstalling"));
 				await invoke("install_voxcpm2_runtime");
 				installation = await refreshVoxCpm2InstallationForOnboarding();
 				if (!installation?.canStart)

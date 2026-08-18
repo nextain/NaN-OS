@@ -957,12 +957,17 @@ export function ChatArea({
 			const pipeline = pipelineVoiceConfigRef.current;
 			if (pipeline?.ttsProvider === "naia-local-voice") {
 				pipeline.voice = naiaLocalVoiceId(url ?? undefined);
+				// The user's EXPLICIT Voice Host always wins — the local engine's
+				// facade URL is only a fallback. The reverse order sent synthesis to
+				// the local engine even when a remote host was configured
+				// (2026-08-18 루크: "로컬 엔진 시작과 무관하게 voice host 우선").
 				pipeline.vllmTtsHost =
-					useCascadeAvatarStore.getState().localFacadeUrl ??
 					loadConfig()?.vllmTtsHost ??
+					useCascadeAvatarStore.getState().localFacadeUrl ??
 					pipeline.vllmTtsHost;
 				Logger.info("ChatArea", "Local voice preset updated", {
 					voice: pipeline.voice,
+					host: pipeline.vllmTtsHost,
 				});
 			}
 		};
