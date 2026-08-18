@@ -1,7 +1,78 @@
-﻿export interface LocalVoiceHealth {
+﻿import { Logger } from "../logger";
+
+export interface LocalVoiceHealth {
 	ttsReady: boolean;
 	avatarReady: boolean;
 	mode?: string;
+}
+
+let localVoiceAccessToken: string | null = null;
+const LOCAL_VOICE_TOKEN_KEY = "naia.voxcpm2AccessToken";
+
+export function localVoiceAuthHeaders(): Record<string, string> {
+	if (!localVoiceAccessToken && typeof sessionStorage !== "undefined")
+		localVoiceAccessToken = sessionStorage.getItem(LOCAL_VOICE_TOKEN_KEY);
+	return localVoiceAccessToken
+		? { Authorization: `Bearer ${localVoiceAccessToken}` }
+		: {};
+}
+
+export function clearLocalVoiceAccessToken(): void {
+	localVoiceAccessToken = null;
+	if (typeof sessionStorage !== "undefined")
+		sessionStorage.removeItem(LOCAL_VOICE_TOKEN_KEY);
+}
+
+/**
+ * Recover the per-launch loopback bearer from the app's own running engine.
+ *
+ * The webview can lose (or never receive) the token while the engine keeps
+ * running — e.g. the engine was auto-started and the user never passed through
+ * the Settings start flow, or the webview reloaded (HMR, navigation) wiping
+ * sessionStorage. Every authenticated call then 401s: empty preset palette,
+ * dead preview/upload, and SILENT synthesis. `start_voxcpm2` is idempotent for
+ * the app's own engine — it returns the cached ready payload (token included)
+ * without respawning — so the synthesis path can self-heal instead of failing.
+ * Returns true when a token is (now) available.
+ */
+let recoverInFlight: Promise<boolean> | null = null;
+
+export async function recoverLocalVoiceToken(
+	options: { force?: boolean } = {},
+): Promise<boolean> {
+	// force=true: the caller just got a 401 WITH this token — it is stale, so
+	// "a header exists" is not success. Clear it and re-fetch from the engine.
+	// (Without this the 401 retry re-sent the same dead token forever —
+	// adversarial review finding.)
+	if (options.force) clearLocalVoiceAccessToken();
+	if (localVoiceAuthHeaders().Authorization) return true;
+	// Tauri-only path (invoke); under vitest/node just report "no token".
+	if (typeof window === "undefined") return false;
+	// Single-flight: concurrent sentences must not each invoke start_voxcpm2
+	// (idempotent, but N parallel IPC round-trips are wasteful spawn pressure).
+	if (!recoverInFlight) {
+		recoverInFlight = (async () => {
+			try {
+				const { invoke } = await import("@tauri-apps/api/core");
+				const ready = await invoke<string>("start_voxcpm2", {
+					expectedLoaderProfile: "windows_trt_6g",
+				});
+				const url = localVoiceFacadeUrlFromReady(ready);
+				Logger.debug("LocalRuntime", "recoverLocalVoiceToken:result", {
+					recovered: !!url,
+				});
+				return !!localVoiceAuthHeaders().Authorization;
+			} catch (error) {
+				Logger.warn("LocalRuntime", "recoverLocalVoiceToken:failed", {
+					error: String(error),
+				});
+				return false;
+			} finally {
+				recoverInFlight = null;
+			}
+		})();
+	}
+	return recoverInFlight;
 }
 
 /**
@@ -24,7 +95,17 @@ export async function fetchLocalVoiceHealth(
 			tts_enabled?: unknown;
 			avatar_enabled?: unknown;
 			mode?: unknown;
+			service?: unknown;
+			capabilities?: unknown;
+			ready?: unknown;
 		};
+		if (
+			body.service === "voxcpm2-tensorrt" &&
+			body.ready === true &&
+			Array.isArray(body.capabilities) &&
+			body.capabilities.includes("tts")
+		)
+			return { ttsReady: true, avatarReady: false, mode: "tts_only" };
 		if (typeof body?.tts_enabled !== "boolean") return null;
 		return {
 			ttsReady: body.tts_enabled === true,
@@ -39,16 +120,56 @@ export async function fetchLocalVoiceHealth(
 export function localVoiceFacadeUrlFromReady(ready: string): string | null {
 	try {
 		const payload = JSON.parse(ready) as {
+			service?: unknown;
+			capabilities?: unknown;
+			port?: unknown;
 			facade_port?: number;
 			services?: Array<{ kind?: string }>;
+			local_access_token?: unknown;
 		};
+		if (
+			payload.service === "voxcpm2-tensorrt" &&
+			Array.isArray(payload.capabilities) &&
+			payload.capabilities.includes("tts") &&
+			payload.port === 8910
+		) {
+			if (
+				typeof payload.local_access_token !== "string" ||
+				!/^[a-f0-9]{64}$/.test(payload.local_access_token)
+			)
+				return null;
+			localVoiceAccessToken = payload.local_access_token;
+			if (typeof sessionStorage !== "undefined")
+				sessionStorage.setItem(LOCAL_VOICE_TOKEN_KEY, localVoiceAccessToken);
+			Logger.debug("LocalRuntime", "facadeFromReady:token-captured", {
+				port: payload.port,
+				branch: "direct-voxcpm2",
+			});
+			return `http://127.0.0.1:${payload.port}`;
+		}
 		const port = payload.facade_port;
-		if (typeof port !== "number" || !Number.isFinite(port)) return null;
+		if (typeof port !== "number" || !Number.isFinite(port)) {
+			Logger.debug("LocalRuntime", "facadeFromReady:no-facade", {
+				service: payload.service,
+				hasToken: typeof payload.local_access_token === "string",
+			});
+			return null;
+		}
 		const hasVoice =
 			Array.isArray(payload.services) &&
 			payload.services.some((service) => service?.kind === "tts");
+		// A facade_port payload (adopted/legacy) carries NO per-launch token — the
+		// webview will be unauthenticated. Surface it so an empty palette / 401 is
+		// diagnosable from the log rather than guessed at.
+		Logger.debug("LocalRuntime", "facadeFromReady:facade-port-no-token", {
+			port,
+			hasVoice,
+		});
 		return hasVoice ? `http://127.0.0.1:${port}` : null;
-	} catch {
+	} catch (error) {
+		Logger.warn("LocalRuntime", "facadeFromReady:parse-failed", {
+			error: String(error),
+		});
 		return null;
 	}
 }

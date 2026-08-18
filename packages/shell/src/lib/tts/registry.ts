@@ -11,7 +11,17 @@ export function getTtsProviderMeta(id: string): TtsProviderMeta | undefined {
 }
 
 export function listTtsProviderMetas(): TtsProviderMeta[] {
-	return Array.from(providers.values());
+	const providerOrder = ["browser", "naia-local-voice"];
+	return Array.from(providers.values()).sort((left, right) => {
+		const leftPriority = providerOrder.indexOf(left.id);
+		const rightPriority = providerOrder.indexOf(right.id);
+		if (leftPriority >= 0 || rightPriority >= 0) {
+			if (leftPriority < 0) return 1;
+			if (rightPriority < 0) return -1;
+			return leftPriority - rightPriority;
+		}
+		return 0;
+	});
 }
 
 // ── Shared: Google TTS voice fetcher (used by both Naia Cloud and Google direct) ──
@@ -100,11 +110,23 @@ registerTtsProviderMeta({
 	voices: [
 		{ id: "ko-KR-SunHiNeural", label: "SunHi (여성)", gender: "female" },
 		{ id: "ko-KR-InJoonNeural", label: "InJoon (남성)", gender: "male" },
-		{ id: "ko-KR-HyunsuMultilingualNeural", label: "Hyunsu (남성, 다국어)", gender: "male" },
+		{
+			id: "ko-KR-HyunsuMultilingualNeural",
+			label: "Hyunsu (남성, 다국어)",
+			gender: "male",
+		},
 		{ id: "en-US-AriaNeural", label: "Aria (영어, 여성)", gender: "female" },
 		{ id: "en-US-GuyNeural", label: "Guy (영어, 남성)", gender: "male" },
-		{ id: "ja-JP-NanamiNeural", label: "Nanami (일본어, 여성)", gender: "female" },
-		{ id: "zh-CN-XiaoxiaoNeural", label: "Xiaoxiao (중국어, 여성)", gender: "female" },
+		{
+			id: "ja-JP-NanamiNeural",
+			label: "Nanami (일본어, 여성)",
+			gender: "female",
+		},
+		{
+			id: "zh-CN-XiaoxiaoNeural",
+			label: "Xiaoxiao (중국어, 여성)",
+			gender: "female",
+		},
 	],
 });
 
@@ -211,10 +233,11 @@ registerTtsProviderMeta({
 
 registerTtsProviderMeta({
 	id: "naia-local-voice",
-	name: "Naia Local Voice (GPU)",
+	name: "Naia Host Voice (GPU)",
 	description:
-		"Local GPU voice synthesis. Supports voice cloning (음성 참조 / 내 목소리 만들기).",
+		"GPU voice synthesis on a host you choose — this PC's engine or a remote Voice Host URL. Supports voice cloning (음성 참조 / 내 목소리 만들기).",
 	requiresApiKey: false,
+	requiresNaiaKey: true,
 	isFree: true,
 	pricing: "Free (local GPU)",
 	isLocal: true,

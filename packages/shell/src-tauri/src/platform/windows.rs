@@ -95,7 +95,7 @@ pub(crate) fn find_agent_process_by_marker(marker: &str) -> Result<bool, String>
 fn pid_matches_component(pid: u32, component: &str) -> bool {
     let command_pattern = match component {
         "cascade" => "*loader*launch*",
-        "voxcpm2" => "*voxcpm2-runtime.py*",
+        "voxcpm2" => "*voxcpm2_tensorrt.http_server*",
         "bgm-server" => "*bgm-server-bin.js*",
         "node-host" => "*node*host*",
         "gateway" => "*naia*gateway*",
@@ -167,7 +167,7 @@ pub(crate) fn kill_stale_voxcpm2() {
         "-NoProfile",
         "-NonInteractive",
         "-Command",
-        "Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like '*voxcpm2-runtime.py*' } | ForEach-Object { Invoke-CimMethod -InputObject $_ -MethodName Terminate | Out-Null }",
+        "Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like '*voxcpm2_tensorrt.http_server*' } | ForEach-Object { Invoke-CimMethod -InputObject $_ -MethodName Terminate | Out-Null }",
     ]);
     hide_console(&mut cmd);
     let _ = cmd.output();

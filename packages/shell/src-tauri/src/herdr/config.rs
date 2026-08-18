@@ -17,11 +17,8 @@ pub fn init_herdr_bin(app: &AppHandle) {
         .resource_dir()
         .ok()
         .map(|dir| {
-            dir.join("herdr").join(if cfg!(windows) {
-                "herdr.exe"
-            } else {
-                "herdr"
-            })
+            dir.join("herdr")
+                .join(if cfg!(windows) { "herdr.exe" } else { "herdr" })
         })
         .filter(|path| path.is_file())
         .map(std::ffi::OsString::from)
@@ -182,8 +179,8 @@ pub(super) fn set_herdr_theme(app: &AppHandle, dark: bool) -> Result<(), String>
         .get_or_init(|| Mutex::new(()))
         .lock()
         .map_err(|_| "Herdr config lock poisoned".to_string())?;
-    let mut config = std::fs::read_to_string(&path)
-        .map_err(|e| format!("herdr config read failed: {e}"))?;
+    let mut config =
+        std::fs::read_to_string(&path).map_err(|e| format!("herdr config read failed: {e}"))?;
     apply_herdr_theme(&mut config, dark);
     let temporary = path.with_extension("toml.tmp");
     std::fs::write(&temporary, config.as_bytes())
@@ -193,8 +190,7 @@ pub(super) fn set_herdr_theme(app: &AppHandle, dark: bool) -> Result<(), String>
         std::fs::remove_file(&path)
             .map_err(|e| format!("herdr theme replace preparation failed: {e}"))?;
     }
-    std::fs::rename(&temporary, &path)
-        .map_err(|e| format!("herdr theme replace failed: {e}"))?;
+    std::fs::rename(&temporary, &path).map_err(|e| format!("herdr theme replace failed: {e}"))?;
     // Hot-reload the running server (no-op error if none is running yet).
     let _ = herdr_command().args(["server", "reload-config"]).output();
     Ok(())

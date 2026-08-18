@@ -73,7 +73,7 @@ describe("config", () => {
 			vllmTtsHost: "http://localhost:8901/",
 		});
 		migrateLegacyDna3OllamaModel();
-		expect(loadConfig()?.vllmTtsHost).toBe("http://localhost:8910");
+		expect(loadConfig()?.vllmTtsHost).toBe("http://127.0.0.1:8910");
 
 		saveConfig({ provider: "ollama", model: "my-local-model", apiKey: "" });
 		migrateLegacyDna3OllamaModel();

@@ -195,7 +195,10 @@ async function setTextareaAndSend(
  * Send a message in the chat input and wait for the assistant to finish responding.
  * Uses DOM queries (not element refs) to avoid stale element issues in WebKitGTK.
  */
-export async function sendMessage(text: string): Promise<void> {
+export async function sendMessage(
+	text: string,
+	options: { completedMessageTimeoutMs?: number } = {},
+): Promise<void> {
 	const traceDelta = createDeltaTracer(`sendMessage:${text.slice(0, 80)}`);
 	const beforeCount = await countCompletedAssistantMessages();
 	const beforeToolCount = await countToolActivities();
@@ -263,7 +266,7 @@ export async function sendMessage(text: string): Promise<void> {
 				return state.hasNewMsg || state.hasNewTool;
 			},
 			{
-				timeout: 60_000,
+				timeout: options.completedMessageTimeoutMs ?? 60_000,
 				timeoutMsg: `Completed assistant message did not appear (beforeMsgs=${beforeCount}, beforeTools=${beforeToolCount})`,
 			},
 		);

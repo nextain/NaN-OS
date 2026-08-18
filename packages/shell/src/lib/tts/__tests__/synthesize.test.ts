@@ -1,8 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { clearLocalVoiceAccessToken } from "../../voice/local-runtime";
 import {
 	arrayBufferToBase64,
 	deriveLanguageCode,
 	synthesizeTts,
+	warmLocalVoice,
 } from "../synthesize";
 
 /** Build a minimal fetch Response-like object for a JSON body. */
@@ -307,7 +309,7 @@ describe("synthesizeTts — naia-local-voice (/v1/audio/speech Runtime contract)
 		expect(body).toMatchObject({
 			model: "voxcpm2",
 			input: "안녕",
-			voice: "naia-default",
+			voice: "default",
 			response_format: "wav",
 		});
 		// WAV bytes 무변환 패스스루 (AudioQueue/ttsAudioToWav 가 RIFF 네이티브 감지)
@@ -328,7 +330,7 @@ describe("synthesizeTts — naia-local-voice (/v1/audio/speech Runtime contract)
 		const body = JSON.parse(fetchMock.mock.calls[0][1].body as string);
 		expect(body).toMatchObject({
 			input: "x",
-			voice: "naia-default",
+			voice: "default",
 		});
 	});
 
@@ -344,7 +346,7 @@ describe("synthesizeTts — naia-local-voice (/v1/audio/speech Runtime contract)
 		const body = JSON.parse(fetchMock.mock.calls[0][1].body as string);
 		expect(body).toMatchObject({
 			input: "x",
-			voice: "naia-default",
+			voice: "default",
 		});
 	});
 
@@ -385,7 +387,7 @@ describe("synthesizeTts — naia-local-voice (/v1/audio/speech Runtime contract)
 			"removed-preset.wav",
 		);
 		expect(JSON.parse(fetchMock.mock.calls[1][1].body as string).voice).toBe(
-			"naia-default",
+			"default",
 		);
 		expect(result.audioBase64).toBeTruthy();
 	});
@@ -469,21 +471,45 @@ describe("synthesizeTts — naia-local-voice (/v1/audio/speech Runtime contract)
 			.mockResolvedValueOnce(wavResponse());
 		vi.stubGlobal("fetch", fetchMock);
 
+		// The app's OWN loopback engine (canonical 127.0.0.1 host) accepts the
+		// raw uploaded-clip install.
 		await synthesizeTts({
 			text: "uploaded voice",
 			provider: "naia-local-voice",
 			voice: "naia-current",
 			localRefAudioBase64: "UklGRiQAAABXQVZF",
-			vllmTtsHost: "http://localhost:8910",
+			vllmTtsHost: "http://127.0.0.1:8910",
 		});
 
 		expect(fetchMock.mock.calls.map(([url]) => url)).toEqual([
-			"http://localhost:8910/voice",
-			"http://localhost:8910/v1/audio/speech",
+			"http://127.0.0.1:8910/voice",
+			"http://127.0.0.1:8910/v1/audio/speech",
 		]);
 		expect(fetchMock.mock.calls[0][1]).toMatchObject({ method: "PUT" });
 		const body = JSON.parse(fetchMock.mock.calls[1][1].body as string);
-		expect(body.voice).toBe("naia-current");
+		expect(body.voice).toBe("current");
+	});
+
+	it("custom host: never PUT-injects the uploaded clip; falls back to the server default", async () => {
+		// Raw voice injection is a LOCAL-only contract — a remote host (cascade)
+		// rejects it (400), and the outbound design is a fingerprint API. The
+		// synthesis must go straight to /v1/audio/speech with the DEFAULT voice.
+		const fetchMock = vi.fn().mockResolvedValueOnce(wavResponse());
+		vi.stubGlobal("fetch", fetchMock);
+
+		await synthesizeTts({
+			text: "uploaded voice on remote",
+			provider: "naia-local-voice",
+			voice: "naia-current",
+			localRefAudioBase64: "UklGRiQAAABXQVZF",
+			vllmTtsHost: "https://cascade.example",
+		});
+
+		expect(fetchMock.mock.calls.map(([url]) => url)).toEqual([
+			"https://cascade.example/v1/audio/speech",
+		]);
+		const body = JSON.parse(fetchMock.mock.calls[0][1].body as string);
+		expect(body.voice).toBe("default");
 	});
 
 	it("waits for the local GPU worker when the facade starts first", async () => {
@@ -551,7 +577,7 @@ describe("synthesizeTts — naia-local-voice (/v1/audio/speech Runtime contract)
 			vllmHost: "http://localhost:9000", // LLM — 폴백 안 함
 		});
 		expect(fetchMock.mock.calls[0][0]).toBe(
-			"http://localhost:8910/v1/audio/speech",
+			"http://127.0.0.1:8910/v1/audio/speech",
 		);
 	});
 
@@ -595,6 +621,91 @@ describe("synthesizeTts — edge (bgm sidecar)", () => {
 		await expect(
 			synthesizeTts({ text: "x", provider: "edge" }),
 		).rejects.toThrow(/사이드카/);
+	});
+});
+
+describe("warmLocalVoice — apply-time cold-cost prepayment", () => {
+	// Own loopback engine host (DEFAULT_LOCAL_VOICE_HOST).
+	const BASE = "http://127.0.0.1:8910";
+	const TOKEN_KEY = "naia.voxcpm2AccessToken";
+
+	// This suite runs in the node environment (no jsdom) — stub the Web Storage
+	// surface localVoiceAuthHeaders reads the per-launch bearer from.
+	const stubStorage = (token: string | null) => {
+		const store = new Map<string, string>(
+			token ? [[TOKEN_KEY, token]] : [],
+		);
+		vi.stubGlobal("sessionStorage", {
+			getItem: (k: string) => store.get(k) ?? null,
+			setItem: (k: string, v: string) => void store.set(k, v),
+			removeItem: (k: string) => void store.delete(k),
+		});
+	};
+	const seedToken = () => stubStorage("warm-test-token");
+
+	afterEach(() => {
+		clearLocalVoiceAccessToken();
+	});
+
+	it("engine not running → skips silently (no speech POST, no spawn)", async () => {
+		const fetchMock = vi.fn().mockRejectedValue(new TypeError("refused"));
+		vi.stubGlobal("fetch", fetchMock);
+		await expect(
+			warmLocalVoice({ voice: "cc0-ko-female-02.wav" }),
+		).resolves.toBeUndefined();
+		expect(fetchMock).toHaveBeenCalledTimes(1); // health probe only
+		expect(String(fetchMock.mock.calls[0][0])).toBe(`${BASE}/health`);
+	});
+
+	it("engine ready → one authenticated speech POST for the applied voice", async () => {
+		seedToken();
+		const fetchMock = vi
+			.fn()
+			.mockResolvedValueOnce(jsonResponse({ ok: true })) // /health
+			.mockResolvedValueOnce(bytesResponse(new Uint8Array([1]))); // /v1/audio/speech
+		vi.stubGlobal("fetch", fetchMock);
+		await warmLocalVoice({ voice: "cc0-ko-female-02.wav" });
+		expect(fetchMock).toHaveBeenCalledTimes(2);
+		const [url, init] = fetchMock.mock.calls[1];
+		expect(String(url)).toBe(`${BASE}/v1/audio/speech`);
+		expect(init.headers.Authorization).toBe("Bearer warm-test-token");
+		const body = JSON.parse(init.body as string);
+		expect(body.voice).toBe("cc0-ko-female-02.wav");
+		// Medium-length warm text — very short inputs trigger runaway generation.
+		expect(body.input.length).toBeGreaterThan(10);
+	});
+
+	it("uploaded voice → installs the clip (PUT /voice) BEFORE warming 'current'", async () => {
+		seedToken();
+		const fetchMock = vi
+			.fn()
+			.mockResolvedValueOnce(jsonResponse({ ok: true })) // /health
+			.mockResolvedValueOnce(jsonResponse({ ok: true })) // PUT /voice
+			.mockResolvedValueOnce(bytesResponse(new Uint8Array([1]))); // speech
+		vi.stubGlobal("fetch", fetchMock);
+		await warmLocalVoice({ voice: "current", localRefAudioBase64: "QUJD" });
+		expect(String(fetchMock.mock.calls[1][0])).toBe(`${BASE}/voice`);
+		expect(fetchMock.mock.calls[1][1].method).toBe("PUT");
+		expect(JSON.parse(fetchMock.mock.calls[1][1].body as string)).toEqual({
+			audio_base64: "QUJD",
+		});
+		const speechBody = JSON.parse(fetchMock.mock.calls[2][1].body as string);
+		expect(speechBody.voice).toBe("current");
+	});
+
+	it("speech failure (non-busy, e.g. 500) → resolves without throwing", async () => {
+		// (429 busy is RETRIED — the startup prime holds the single slot exactly
+		// when a warm matters most; that path is covered by the real-engine e2e.)
+		seedToken();
+		const fetchMock = vi
+			.fn()
+			.mockResolvedValueOnce(jsonResponse({ ok: true })) // /health
+			.mockResolvedValueOnce(jsonResponse({ error: "boom" }, false, 500));
+		vi.stubGlobal("fetch", fetchMock);
+		await expect(
+			warmLocalVoice({ voice: "cc0-ko-male-01.wav" }),
+		).resolves.toBeUndefined();
+		expect(fetchMock).toHaveBeenCalledTimes(2); // non-429 → no retry loop
 	});
 });
 

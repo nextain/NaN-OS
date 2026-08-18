@@ -274,4 +274,12 @@ fn main() {
     println!("cargo:rustc-link-arg=-Wl,-rpath,$ORIGIN:$ORIGIN/../lib/Naia");
     #[cfg(target_os = "macos")]
     println!("cargo:rustc-link-arg=-Wl,-rpath,@executable_path");
+
+    // Windows MSVC reserves only a 1 MiB main-thread stack by default, and the
+    // synchronous Tauri startup init (setup hook, agent wiring) overflows it
+    // with STATUS_STACK_OVERFLOW (0xC00000FD). Rust's spawned worker threads
+    // already default to a larger stack; reserve a matching 16 MiB for the main
+    // thread so the GUI event loop starts on the main thread as Tauri expects.
+    #[cfg(target_os = "windows")]
+    println!("cargo:rustc-link-arg=/STACK:16777216");
 }

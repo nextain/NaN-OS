@@ -52,6 +52,12 @@ export class AudioQueue {
 		this.queue.push({ audioBase64: mp3Base64, ...callbacks });
 		if (!this.playing && !this.playbackPaused) {
 			this.playNext();
+		} else {
+			Logger.debug("AudioQueue", "enqueue:held", {
+				playing: this.playing,
+				paused: this.playbackPaused,
+				queued: this.queue.length,
+			});
 		}
 	}
 
@@ -83,6 +89,12 @@ export class AudioQueue {
 		mp3Base64: string,
 		callbacks: AudioQueueItemCallbacks = {},
 	): void {
+		Logger.debug("AudioQueue", "enqueueOrdered", {
+			seq,
+			cursor: this.flushCursor,
+			playing: this.playing,
+			paused: this.playbackPaused,
+		});
 		this.pendingOrdered.set(seq, { audioBase64: mp3Base64, ...callbacks });
 		this.flushOrdered();
 	}
@@ -147,10 +159,14 @@ export class AudioQueue {
 
 	private playNext(): void {
 		if (this.queue.length === 0) {
+			Logger.debug("AudioQueue", "playNext:empty → end", {});
 			this.playing = false;
 			this.callbacks.onPlaybackEnd?.();
 			return;
 		}
+		Logger.debug("AudioQueue", "playNext:start", {
+			queued: this.queue.length,
+		});
 
 		const item = this.queue.shift();
 		if (!item) {

@@ -19,6 +19,14 @@ const LEVEL_PRIORITY: Record<LogLevel, number> = {
 const currentLevel: LogLevel = "debug";
 
 function shouldLog(level: LogLevel): boolean {
+	// Entry/branch debug logs are DEV-ONLY (logging_principle P1): Vite defines
+	// import.meta.env.DEV=true for `pnpm dev`/tauri:dev and false for release
+	// builds, so `Logger.debug` traces are stripped from the shipped app.
+	if (
+		level === "debug" &&
+		!(typeof import.meta !== "undefined" && import.meta.env?.DEV)
+	)
+		return false;
 	return LEVEL_PRIORITY[level] >= LEVEL_PRIORITY[currentLevel];
 }
 

@@ -17,18 +17,19 @@
 import {
 	DEFAULT_LOCAL_VOICE_HOST,
 	LAB_GATEWAY_URL,
+	canonicalRefAudioUrl,
 	getNaiaKeySecure,
 } from "../config";
 import { Logger } from "../logger";
+import { localVoiceAuthHeaders } from "./local-runtime";
 import { encodeRefAudio } from "./ref-audio";
 
 const TAG = "RefAudioApi";
 
 // ── Naia Local recorded/uploaded reference voice (no gateway, no credits) ──
-// For Naia Local the voice WS goes direct to the user's own container, so the
-// gateway GCS upload+inject path can't reach it (and would charge $0.01). We
-// instead keep the recorded clip as a base64 WAV in localStorage and send it
-// straight to the container as `session.update.session.ref_audio`. Stored
+// Naia Local uses the member-gated loopback Runtime without per-request voice
+// credits. Keep the recorded clip as a base64 WAV in localStorage and send it
+// straight to the Runtime's authenticated voice endpoint. Stored
 // outside AppConfig so the (large) blob never bloats the frequently-saved
 // config JSON.
 const LOCAL_REF_AUDIO_KEY = "naia.voiceRefAudioB64";
@@ -96,7 +97,10 @@ export async function applyLocalRefAudio(
 	try {
 		res = await fetch(`${base}/voice`, {
 			method: "PUT",
-			headers: { "Content-Type": "application/json" },
+			headers: {
+				...localVoiceAuthHeaders(),
+				"Content-Type": "application/json",
+			},
 			body: JSON.stringify({ audio_base64: b64 }),
 		});
 	} catch (err) {
@@ -114,10 +118,10 @@ export async function applyLocalRefAudio(
 }
 
 /**
- * Read the voice palette exposed by the local cascade facade.
+ * Read the voice palette exposed by the standalone local voice runtime.
  *
- * This endpoint is deliberately unauthenticated and loopback-only. It is the
- * source of truth for voices that VoxCPM2 can actually resolve; using the
+ * This endpoint is loopback-only and protected by the per-launch bearer. It is
+ * the source of truth for voices that VoxCPM2 can actually resolve; using the
  * cloud preset endpoint here made preview fail whenever the LLM was external
  * but TTS used `naia-local-voice`.
  */
@@ -125,17 +129,28 @@ export async function getLocalRefAudioPresets(
 	baseUrl = DEFAULT_LOCAL_VOICE_HOST,
 ): Promise<RefAudioPreset[]> {
 	const base = baseUrl.trim().replace(/\/+$/, "") || DEFAULT_LOCAL_VOICE_HOST;
+	const authHeaders = localVoiceAuthHeaders();
+	Logger.debug(TAG, "getLocalRefAudioPresets:entry", {
+		base,
+		hasToken: !!authHeaders.Authorization,
+	});
 	let res: Response;
 	try {
-		res = await fetch(`${base}/ref/voices`);
+		res = await fetch(`${base}/ref/voices`, { headers: authHeaders });
 	} catch (err) {
 		Logger.warn(TAG, "local presets GET network error", {
+			base,
+			hasToken: !!authHeaders.Authorization,
 			error: String(err),
 		});
 		throw new RefAudioApiError("network", 0, String(err));
 	}
 	if (!res.ok) {
 		const body = await readErrorBody(res);
+		Logger.warn(TAG, "getLocalRefAudioPresets:http-error", {
+			status: res.status,
+			hasToken: !!authHeaders.Authorization,
+		});
 		throw new RefAudioApiError(
 			mapErrorCode(res.status, body),
 			res.status,
@@ -153,23 +168,43 @@ export async function getLocalRefAudioPresets(
 			default?: boolean;
 		}>;
 	};
+	Logger.debug(TAG, "getLocalRefAudioPresets:result", {
+		count: (body.voices ?? []).length,
+	});
 	return (body.voices ?? [])
 		.filter((voice) => voice.name && voice.url)
-		.map((voice) => ({
-			id: voice.name as string,
-			name: voice.default
-				? `${voice.name} (default)`
-				: (voice.name as string),
-			locale: voice.lang ?? "",
-			gender: voice.gender,
-			durationSeconds: 0,
-			sampleUrl: voice.url as string,
-			sampleFormat: "wav",
-			source: "local-cascade",
-			license: "bundled",
-			localIndex: voice.idx,
-			isDefault: voice.default ?? false,
-		}));
+		.map((voice) => {
+			const name = voice.name as string;
+			// The runtime's /ref/voices doesn't carry gender metadata, but the CC0
+			// catalog encodes it in the name (cc0-ko-female-01 / cc0-ko-male-01) —
+			// derive it so the male/female preset filter works for local voices too.
+			const gender =
+				voice.gender ??
+				(/female/i.test(name)
+					? "female"
+					: /male/i.test(name)
+						? "male"
+						: undefined);
+			// The runtime returns a loopback-relative path (/ref/audio/<name>.wav).
+			// Preview/apply fetch this URL directly, so it must be absolute against
+			// the engine host — a relative URL resolves against the webview origin
+			// (tauri://) and 404s, which is why local preview silently failed.
+			const url = voice.url as string;
+			const sampleUrl = /^https?:\/\//i.test(url) ? url : `${base}${url}`;
+			return {
+				id: name,
+				name: voice.default ? `${name} (default)` : name,
+				locale: voice.lang ?? "",
+				gender,
+				durationSeconds: 0,
+				sampleUrl,
+				sampleFormat: "wav",
+				source: "local-runtime",
+				license: "bundled",
+				localIndex: voice.idx,
+				isDefault: voice.default ?? false,
+			};
+		});
 }
 
 export interface RefAudioUploadResult {
@@ -377,7 +412,10 @@ export async function getRefAudioPresets(): Promise<RefAudioPreset[]> {
 			gender: p.gender,
 			ageRange: p.age_range,
 			durationSeconds: p.duration_seconds ?? 0,
-			sampleUrl: p.sample_url as string,
+			// The gateway still hands out legacy GCS sample URLs; normalize to the
+			// canonical Azure host here (single choke point) so browse, preview,
+			// apply and the persisted voiceRefUrl all use Azure.
+			sampleUrl: canonicalRefAudioUrl(p.sample_url as string),
 			sampleFormat: p.sample_format ?? "wav",
 			sampleSha256: p.sample_sha256,
 			source: p.source ?? "",

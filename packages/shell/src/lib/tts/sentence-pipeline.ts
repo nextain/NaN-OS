@@ -153,6 +153,11 @@ export function createSentenceTtsPipeline(
 		const reqId = deps.generateRequestId();
 		// Reserve sequence number BEFORE async request to guarantee order.
 		const seq = deps.getQueue()?.reserveSeq() ?? 0;
+		// (2026-08-18) The 2-sentence local-voice cap is GONE. It shielded the
+		// mixed-precision TRT engine whose runaway generation made one sentence
+		// take 30-100s; the pure-FP32 engine measures 2-6s/sentence (0/36
+		// runaway), so full replies stream fine and the cap only truncated
+		// speech ("첫 문장만 나와" — user report).
 		activeRequests.add(reqId);
 		const voiceCfg = deps.getVoiceConfig();
 		const ttsProviderForCost = voiceCfg?.ttsProvider ?? "edge";
@@ -162,6 +167,14 @@ export function createSentenceTtsPipeline(
 			localVoiceScheduler?.noteSentence(seq);
 		}
 		const ttsVoiceForCost = voiceCfg?.voice;
+		// Local GPU synthesis can take ~20-60s per sentence — playback-synced
+		// reveal would hide the ALREADY-STREAMED reply text that whole time and
+		// the conversation looks frozen ("생각중"). Cap the hold: after 5s the
+		// text shows even though the audio is still being synthesized; playback
+		// still starts whenever the WAV lands (reveal is idempotent).
+		if (ttsProviderForCost === "naia-local-voice") {
+			setTimeout(revealText, 5_000);
+		}
 		Logger.info(TAG, "Sending TTS request", {
 			reqId,
 			seq,

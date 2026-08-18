@@ -36,6 +36,11 @@ const VOICE_MANIFEST = {
 		loaderProfile: "windows_trt_6g",
 	},
 };
+const E2E_NAIA_KEY = process.env.NAIA_E2E_NAIA_KEY;
+if (!E2E_NAIA_KEY?.startsWith("gw-"))
+	throw new Error(
+		"NAIA_E2E_NAIA_KEY must contain a paid test member gateway key",
+	);
 if (process.env.NAIA_E2E_VOICE_6G !== "1") {
 	throw new Error("Set NAIA_E2E_VOICE_6G=1 to run the 6GB voice acceptance");
 }
@@ -58,10 +63,10 @@ export const config = {
 	],
 	logLevel: "error",
 	waitforTimeout: 30_000,
-	connectionRetryTimeout: 120_000,
+	connectionRetryTimeout: 900_000,
 	connectionRetryCount: 2,
 	framework: "mocha",
-	mochaOpts: { ui: "bdd", timeout: 420_000 },
+	mochaOpts: { ui: "bdd", timeout: 900_000 },
 	reporters: ["spec"],
 	async onPrepare() {
 		if (!existsSync(TAURI_BINARY))
@@ -72,6 +77,10 @@ export const config = {
 		await startOwnedEmbeddedApp(TAURI_BINARY);
 	},
 	async before() {
+		// The native install command verifies the complete 7 GB/43k-file artifact
+		// before it may reuse the already-built model and engine. Keep WebDriver's
+		// async script contract above that bounded integrity check.
+		await browser.setTimeout({ script: 900_000 });
 		await browser.waitUntil(
 			async () => {
 				try {
@@ -125,10 +134,10 @@ export const config = {
 			{ timeout: 30_000, timeoutMsg: "Shell app root did not restore" },
 		);
 		await browser.pause(1_500);
-		// Local voice is a device capability. The explicit voice-only manifest and
-		// loader profile are the native start authority; no Naia credential is used.
+		// The explicit TRT profile selects the native runtime. The secure Naia
+		// member credential authorizes install/start; Cascade remains uninvolved.
 		await browser.execute(
-			async (settingsRoot: string, manifestJson: string) => {
+			async (settingsRoot: string, manifestJson: string, naiaKey: string) => {
 				const shell = window as unknown as {
 					__TAURI_INTERNALS__?: {
 						invoke: (command: string, value: unknown) => Promise<unknown>;
@@ -140,12 +149,15 @@ export const config = {
 					adkPath: settingsRoot.replace(/[\\/]naia-settings$/, ""),
 					json: manifestJson,
 				});
-				await invoke("start_cascade", {
+				await invoke("e2e_seed_secure_naia_key", { naiaKey });
+				await invoke("install_voxcpm2_runtime", {});
+				await invoke("start_voxcpm2", {
 					expectedLoaderProfile: "windows_trt_6g",
 				});
 			},
 			E2E_SETTINGS,
 			JSON.stringify(VOICE_MANIFEST),
+			E2E_NAIA_KEY,
 		);
 	},
 	async onComplete() {

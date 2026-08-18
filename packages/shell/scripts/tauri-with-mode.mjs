@@ -19,12 +19,19 @@ import { createHash } from "node:crypto";
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { homedir, platform } from "node:os";
 import { dirname, resolve } from "node:path";
-import { REQUIRED_AGENT_COMMIT, REQUIRED_PROTO_SHA256 } from "./agent-pairing.mjs";
+import {
+	parseGitWorktreePaths,
+	REQUIRED_AGENT_COMMIT,
+	REQUIRED_PROTO_SHA256,
+} from "./agent-pairing.mjs";
 import { developmentInstanceEnv } from "./dev-instance.mjs";
 import { interactiveLaunchEnv } from "./launch-env.mjs";
 import { runProjectPnpm } from "./package-manager.mjs";
 
-const mode = process.argv[2] === "prod" ? "prod" : "dev";
+// `build` produces the release installer (`tauri build`, production config).
+// It shares prod env resolution but does not launch a dev window.
+const isBuild = process.argv[2] === "build";
+const mode = process.argv[2] === "prod" || isBuild ? "prod" : "dev";
 
 const HERE = import.meta.dirname; // packages/shell/scripts
 const SHELL = resolve(HERE, ".."); // packages/shell
@@ -106,6 +113,14 @@ function isPairedAgentCheckout(dir) {
 
 function agentCandidates() {
 	const candidates = [...STATIC_AGENT_CANDIDATES];
+	for (const repository of STATIC_AGENT_CANDIDATES) {
+		if (!existsSync(repository)) continue;
+		candidates.push(
+			...parseGitWorktreePaths(
+				gitOutput(repository, ["worktree", "list", "--porcelain"]),
+			),
+		);
+	}
 	for (const root of AGENT_WORKTREE_ROOTS) {
 		if (!existsSync(root)) continue;
 		for (const entry of readdirSync(root, { withFileTypes: true })) {
@@ -125,6 +140,20 @@ function firstPairedAgentCheckout() {
 const WINDOWS_MANAGER = resolve(OS_ROOT, "..", "naia-omni-windows-manager");
 
 const env = interactiveLaunchEnv(process.env);
+
+// `tauri dev` does not stage bundle resources the way the release pipeline
+// does. Point debug builds at the already verified local staging directory so
+// the normal local-voice install flow can be exercised without pretending the
+// development executable is an installed bundle. Rust ignores this override
+// in release builds.
+const devVoxCpm2Bundle = resolve(SHELL, "src-tauri", "voxcpm2-runtime");
+if (
+	mode === "dev" &&
+	existsSync(resolve(devVoxCpm2Bundle, "artifact", "artifact-manifest.json"))
+) {
+	env.NAIA_VOXCPM2_DEV_BUNDLE_ROOT =
+		env.NAIA_VOXCPM2_DEV_BUNDLE_ROOT ?? devVoxCpm2Bundle;
+}
 
 // `~/.naia/adk-path` is the user's settings/workspace root and may point to a
 // lightweight checkout without sibling runtime repositories. Development
@@ -297,6 +326,21 @@ if (!existsSync(resolve(pairedAgent, "dist/main/composition/index.js"))) {
 	throw new Error(`Paired naia-agent build failed or did not produce dist/main/composition/index.js: ${pairedAgent}`);
 }
 process.stdout.write(`[tauri-with-mode] new core=${env.VITE_NAIA_NEW_CORE}, agent=${env.NAIA_AGENT_SCRIPT}, proto=${env.NAIA_AGENT_PROTO_DIR}\n`);
+
+if (isBuild) {
+	// Release installer: production tauri.conf.json (real app identity), no dev
+	// overlay and no dev window. beforeBuildCommand builds the frontend.
+	// NSIS only — it is the primary distributed artifact (Naia-Shell-x86_64-
+	// setup.exe) and avoids the WiX/MSI (light.exe) toolchain, which is a
+	// separate packaging concern from the app build.
+	const bundles = process.argv[3] ? [process.argv[3]] : ["nsis"];
+	const rb = spawnSync(
+		"pnpm",
+		["run", "tauri", "build", "--bundles", ...bundles],
+		{ env, stdio: "inherit", shell: true },
+	);
+	process.exit(rb.status ?? 1);
+}
 
 const r = spawnSync(
 	"pnpm",

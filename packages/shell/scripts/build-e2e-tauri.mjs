@@ -4,6 +4,7 @@ import { copyFileSync, existsSync, readFileSync, readdirSync } from "node:fs";
 import { resolve } from "node:path";
 import process from "node:process";
 import {
+	parseGitWorktreePaths,
 	REQUIRED_AGENT_COMMIT,
 	REQUIRED_PROTO_SHA256,
 } from "./agent-pairing.mjs";
@@ -22,6 +23,7 @@ const targetDir = resolve(
 );
 const e2eTauriConfig = resolve(shellDir, "src-tauri", "tauri.e2e.conf.json");
 const bgmSidecar = resolve(shellDir, "..", "bgm-sidecar");
+const primaryAgentRoot = resolve(workspaceRoot, "..", "naia-agent");
 const cargo = process.platform === "win32" ? "cargo.exe" : "cargo";
 const pairedAgentRoot = resolve(
 	process.env.NAIA_AGENT_WORKTREES_DIR ??
@@ -45,7 +47,14 @@ function assertPairedAgent() {
 					.filter((entry) => entry.isDirectory())
 					.map((entry) => resolve(pairedAgentRoot, entry.name))
 			: [];
-	for (const pairedAgent of candidates) {
+	if (!explicit && existsSync(primaryAgentRoot)) {
+		candidates.push(
+			...parseGitWorktreePaths(
+				gitOutput(primaryAgentRoot, ["worktree", "list", "--porcelain"]),
+			),
+		);
+	}
+	for (const pairedAgent of new Set(candidates)) {
 		const agentScript = resolve(
 			pairedAgent,
 			"scripts/builds/agent-stdio-entry.mjs",

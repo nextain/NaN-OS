@@ -15,3 +15,13 @@ if (!/^[0-9a-f]{64}$/.test(manifest.protoSha256)) {
 
 export const REQUIRED_AGENT_COMMIT = manifest.agentCommit;
 export const REQUIRED_PROTO_SHA256 = manifest.protoSha256;
+
+/** Parse the paths emitted by `git worktree list --porcelain`. */
+export function parseGitWorktreePaths(porcelain) {
+	if (!porcelain) return [];
+	return porcelain
+		.split(/\r?\n/)
+		.filter((line) => line.startsWith("worktree "))
+		.map((line) => line.slice("worktree ".length).trim())
+		.filter(Boolean);
+}

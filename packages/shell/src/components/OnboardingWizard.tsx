@@ -42,6 +42,7 @@ import {
 	resolveNvaAssetPath,
 } from "../lib/nva";
 import { OAUTH_CALLBACK_URL } from "../lib/oauth-callback-url";
+import { saveSecretKey } from "../lib/secure-store";
 import {
 	type OnboardingSession,
 	type StepInput,
@@ -439,25 +440,6 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
 		}
 	}
 
-	async function installLocalVoiceRuntime() {
-		if (localVoiceBusy) return;
-		setLocalVoiceBusy(true);
-		setLocalVoiceMsg("");
-		try {
-			await invoke("install_voxcpm2_runtime");
-			const status = await refreshVoxCpm2InstallationForOnboarding();
-			if (!status?.canStart)
-				throw new Error(status?.summary ?? "verification failed");
-			setLocalVoiceMsg(status.summary);
-		} catch (error) {
-			setLocalVoiceMsg(
-				`${getLocale() === "ko" ? "VoxCPM2 설치에 실패했습니다. 다시 시도해 주세요." : "VoxCPM2 installation failed. Please retry."} (${String(error)})`,
-			);
-		} finally {
-			setLocalVoiceBusy(false);
-		}
-	}
-
 	useEffect(() => {
 		if (detectedVramGb != null && detectedVramGb >= 6) {
 			void refreshVoxCpm2InstallationForOnboarding();
@@ -487,6 +469,10 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
 			return;
 		}
 		if (detectedVramGb == null || detectedVramGb < 6) return;
+		if (!naiaLoginDone) {
+			setLocalVoiceMsg(t("settings.ttsNaiaRequired"));
+			return;
+		}
 		setLocalVoiceBusy(true);
 		try {
 			let installation = await refreshVoxCpm2InstallationForOnboarding();
@@ -742,32 +728,53 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
 	// Listen for Naia OAuth callback in provider step.
 	// [] dep — register once. onCompleteRef.current always points to latest prop.
 	useEffect(() => {
-		const unlisten = listen<NaiaAuthPayload>("naia_auth_complete", (event) => {
-			if (naiaTimerRef.current) clearTimeout(naiaTimerRef.current);
-			localStorage.setItem("naia-remote-key", event.payload.naiaKey);
-			if (event.payload.naiaUserId) {
-				localStorage.setItem("naia-remote-user-id", event.payload.naiaUserId);
-			}
-			setNaiaLoginWaiting(false);
-			setNaiaLoginDone(true);
-			setNaiaAuthPayload(event.payload);
-			// Cache before sending so crash-restart can replay the key.
-			invoke("store_startup_message", {
-				message: JSON.stringify({
-					type: "auth_update",
-					naiaKey: event.payload.naiaKey,
-				}),
-			})
-				.catch(() => {})
-				.then(() => sendAuthUpdate(event.payload.naiaKey).catch(() => {}));
-			// core mirror(비파괴 추가): naiaLoginDone=게이트 해제 + NAIA_ANYLLM_API_KEY 키체인
-			// (idempotent, completeWith 와 동값). 기존 sendAuthUpdate(런타임 push)·store_startup_message 유지 = 보완.
-			void core()
-				?.onNaiaAuthCallback(event.payload.naiaKey)
-				.catch(() => {});
-			// Advance to complete step after Naia login
-			setStep("complete");
-		});
+		const unlisten = listen<NaiaAuthPayload>(
+			"naia_auth_complete",
+			async (event) => {
+				if (naiaTimerRef.current) clearTimeout(naiaTimerRef.current);
+				try {
+					// Local voice activation reads the native secure store. Persist the
+					// credential before exposing the voice step so an immediate click
+					// cannot race the keychain write.
+					await saveSecretKey("naiaKey", event.payload.naiaKey);
+					// The agent checkout may not exist yet during first-run onboarding.
+					// Native secure storage is the activation gate; the agent mirror is
+					// best-effort and will be reconciled once a checkout is selected.
+					await writeAgentKeyStrict(
+						"nextain",
+						"naiaKey",
+						event.payload.naiaKey,
+					).catch(() => {});
+				} catch (error) {
+					setNaiaLoginWaiting(false);
+					setCompletionError(String(error));
+					return;
+				}
+				localStorage.setItem("naia-remote-key", event.payload.naiaKey);
+				if (event.payload.naiaUserId) {
+					localStorage.setItem("naia-remote-user-id", event.payload.naiaUserId);
+				}
+				setNaiaLoginWaiting(false);
+				setNaiaLoginDone(true);
+				setNaiaAuthPayload(event.payload);
+				// Cache before sending so crash-restart can replay the key.
+				invoke("store_startup_message", {
+					message: JSON.stringify({
+						type: "auth_update",
+						naiaKey: event.payload.naiaKey,
+					}),
+				})
+					.catch(() => {})
+					.then(() => sendAuthUpdate(event.payload.naiaKey).catch(() => {}));
+				// core mirror(비파괴 추가): naiaLoginDone=게이트 해제 + NAIA_ANYLLM_API_KEY 키체인
+				// (idempotent, completeWith 와 동값). 기존 sendAuthUpdate(런타임 push)·store_startup_message 유지 = 보완.
+				await core()
+					?.onNaiaAuthCallback(event.payload.naiaKey)
+					.catch(() => {});
+				// Voice choice is part of onboarding. Login must not skip it.
+				setStep("voice");
+			},
+		);
 		return () => {
 			unlisten.then((fn) => fn());
 			if (naiaTimerRef.current) clearTimeout(naiaTimerRef.current);
@@ -1501,7 +1508,7 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
 									className={`onboarding-step__option${localVoiceEnabled ? " onboarding-step__option--selected" : ""}`}
 									style={{ marginTop: 8 }}
 									onClick={toggleLocalVoice}
-									disabled={localVoiceBusy}
+									disabled={localVoiceBusy || !naiaLoginDone}
 								>
 									<span className="onboarding-step__option-label">
 										{localVoiceBusy
@@ -1511,18 +1518,10 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
 												: t("onboard.voice.localOff")}
 									</span>
 								</button>
-								{localVoiceInstallation?.steps.some(
-									(step) => step.actionAvailable,
-								) && (
-									<button
-										type="button"
-										className="onboarding-step__link"
-										data-testid="onboarding-install-voxcpm2"
-										onClick={installLocalVoiceRuntime}
-										disabled={localVoiceBusy}
-									>
-										{getLocale() === "ko" ? "VoxCPM2 설치" : "Install VoxCPM2"}
-									</button>
+								{!naiaLoginDone && (
+									<p className="onboarding-step__hint onboarding-step__hint--warn">
+										{t("settings.ttsNaiaRequired")}
+									</p>
 								)}
 								{localVoiceMsg && (
 									<p className="onboarding-step__hint onboarding-step__hint--warn">

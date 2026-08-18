@@ -1,4 +1,11 @@
+import { readFileSync } from "node:fs";
 import { sendMessage } from "../helpers/chat.js";
+
+const TEST_VOICE_PATH = process.env.NAIA_E2E_VOXCPM2_TEST_VOICE;
+if (!TEST_VOICE_PATH)
+	throw new Error(
+		"NAIA_E2E_VOXCPM2_TEST_VOICE must point to an authorized local-test-only WAV",
+	);
 
 describe("6GB VoxCPM2 voice profile through the real Tauri Shell", () => {
 	async function tauriInvoke<T>(
@@ -23,13 +30,13 @@ describe("6GB VoxCPM2 voice profile through the real Tauri Shell", () => {
 
 	after(async () => {
 		try {
-			await tauriInvoke("stop_cascade");
+			await tauriInvoke("stop_voxcpm2");
 		} catch {
 			// A failed startup has no managed process to stop.
 		}
 	});
 
-	it("starts voice-only cascade, renders VRM, and speaks an external LLM reply", async () => {
+	it("starts standalone VoxCPM2 TRT, renders VRM, and speaks an external LLM reply", async () => {
 		await browser.waitUntil(
 			() => browser.execute(() => document.querySelector(".app-root") !== null),
 			{ timeout: 45_000, timeoutMsg: "Shell app root did not render" },
@@ -39,9 +46,10 @@ describe("6GB VoxCPM2 voice profile through the real Tauri Shell", () => {
 
 		// The saved profile must restore after the secure credential is hydrated;
 		// a direct start below is then only an idempotent readiness read.
-		await browser.waitUntil(() => tauriInvoke<boolean>("cascade_status"), {
-			timeout: 90_000,
-			timeoutMsg: "6GB cascade did not restore from the saved member profile",
+		await browser.waitUntil(() => tauriInvoke<boolean>("voxcpm2_status"), {
+			timeout: 240_000,
+			timeoutMsg:
+				"Standalone 6GB VoxCPM2 runtime did not restore from the saved profile",
 		});
 
 		const installation = await tauriInvoke<{
@@ -51,45 +59,64 @@ describe("6GB VoxCPM2 voice profile through the real Tauri Shell", () => {
 				state: string;
 				failure?: { code: string };
 			}>;
-		}>("cascade_installation_status");
+		}>("voxcpm2_installation_status");
 		if (!installation.canStart) {
-			throw new Error(`cascade prerequisites: ${JSON.stringify(installation)}`);
+			throw new Error(
+				`standalone VoxCPM2 prerequisites: ${JSON.stringify(installation)}`,
+			);
 		}
 		const ready = JSON.parse(
-			await tauriInvoke<string>("start_cascade", {
+			await tauriInvoke<string>("start_voxcpm2", {
 				expectedLoaderProfile: "windows_trt_6g",
 			}),
 		) as {
-			services?: Array<{ id: string; port: number }>;
+			service?: string;
+			capabilities?: string[];
+			port?: number;
+			local_access_token?: string;
 		};
-		expect(new Set(ready.services?.map((service) => service.id))).toEqual(
-			new Set(["voxcpm2_trt_tts", "cascade_facade"]),
-		);
-		expect(ready.services?.some((service) => service.port === 8902)).toBe(
-			false,
-		);
+		expect(ready).toMatchObject({
+			service: "voxcpm2-tensorrt",
+			capabilities: ["tts"],
+			port: 8910,
+		});
+		expect(ready.local_access_token).toMatch(/^[a-f0-9]{64}$/);
 
 		const health = (await fetch("http://127.0.0.1:8910/health").then(
 			(response) => response.json(),
-		)) as {
-			tts_enabled: boolean;
-			avatar_enabled: boolean;
-			mode: string;
-		};
+		)) as { service: string; capabilities: string[]; ready: boolean };
 		expect(health).toMatchObject({
-			tts_enabled: true,
-			avatar_enabled: false,
-			mode: "tts_only",
+			service: "voxcpm2-tensorrt",
+			capabilities: ["tts"],
+			ready: true,
 		});
 		await expect(fetch("http://127.0.0.1:8902/health")).rejects.toThrow();
 
-		const voices = (await fetch("http://127.0.0.1:8910/ref/voices").then(
-			(response) => response.json(),
-		)) as { voices?: Array<{ name: string; url: string }> };
-		const selectedPreset = voices.voices?.find(
-			(voice) => voice.name === "male-20s-01.wav",
+		const unauthenticated = await fetch("http://127.0.0.1:8910/ref/voices");
+		expect(unauthenticated.status).toBe(401);
+		const authorization = `Bearer ${ready.local_access_token}`;
+		const voiceBase64 = readFileSync(TEST_VOICE_PATH).toString("base64");
+		const installedVoice = await fetch("http://127.0.0.1:8910/voice", {
+			method: "PUT",
+			headers: {
+				Authorization: authorization,
+				"Content-Type": "application/json",
+			},
+			body: JSON.stringify({ audio_base64: voiceBase64 }),
+		});
+		expect(installedVoice.status).toBe(200);
+		const voices = (await fetch("http://127.0.0.1:8910/ref/voices", {
+			headers: { Authorization: authorization },
+		}).then((response) => response.json())) as { voices?: unknown[] };
+		expect(voices.voices).toEqual([]);
+		await browser.execute(
+			(base64: string, token: string) => {
+				localStorage.setItem("naia.voiceRefAudioB64", base64);
+				sessionStorage.setItem("naia.voxcpm2AccessToken", token);
+			},
+			voiceBase64,
+			ready.local_access_token as string,
 		);
-		expect(selectedPreset?.url).toMatch(/\/ref\/audio\/male-20s-01\.wav$/);
 
 		await browser.execute(() => {
 			(
@@ -106,6 +133,21 @@ describe("6GB VoxCPM2 voice profile through the real Tauri Shell", () => {
 				) as HTMLButtonElement | null
 			)?.click();
 		});
+		// A fresh boot intentionally normalizes a gated local provider before the
+		// secure member key is hydrated. Select it through the actual customer UI
+		// after activation instead of forcing localStorage behind React's state.
+		const ttsProvider = await $("#tts-provider-select");
+		await ttsProvider.waitForDisplayed({ timeout: 30_000 });
+		await ttsProvider.selectByAttribute("value", "naia-local-voice");
+		await browser.waitUntil(
+			async () => (await ttsProvider.getValue()) === "naia-local-voice",
+			{
+				timeout: 30_000,
+				timeoutMsg: "Naia Local provider was not selected through Settings",
+			},
+		);
+		const ttsToggle = await $("#tts-toggle");
+		if (!(await ttsToggle.isSelected())) await ttsToggle.click();
 		await $("[data-testid='ref-audio-file-button']").waitForDisplayed({
 			timeout: 30_000,
 			timeoutMsg: "Naia Local audio-file attachment control did not render",
@@ -114,111 +156,110 @@ describe("6GB VoxCPM2 voice profile through the real Tauri Shell", () => {
 			"accept",
 			"audio/*",
 		);
-		await browser.waitUntil(
-			() =>
-				browser.execute(() => {
-					const details = Array.from(document.querySelectorAll("details")).find(
-						(item) =>
+		if ((voices.voices?.length ?? 0) > 0) {
+			await browser.waitUntil(
+				() =>
+					browser.execute(() => {
+						const details = Array.from(
+							document.querySelectorAll("details"),
+						).find((item) =>
 							/Pick from presets|프리셋에서 고르기/.test(
 								item.textContent ?? "",
 							),
-					);
-					if (!details) return false;
-					details.open = true;
-					details.dispatchEvent(new Event("toggle", { bubbles: true }));
-					return true;
-				}),
-			{
-				timeout: 30_000,
-				timeoutMsg: "Local voice preset section did not render",
-			},
-		);
-		await browser.execute(() => {
-			const shell = window as typeof window & {
-				__presetPreviewFetches?: Array<{ path: string; status: number }>;
-			};
-			shell.__presetPreviewFetches = [];
-			const original = window.fetch.bind(window);
-			window.fetch = async (...args) => {
-				const response = await original(...args);
-				const request = args[0];
-				const raw =
-					typeof request === "string"
-						? request
-						: request instanceof Request
-							? request.url
-							: String(request);
-				try {
-					shell.__presetPreviewFetches?.push({
-						path: new URL(raw).pathname,
-						status: response.status,
-					});
-				} catch {
-					// Non-URL fetches are irrelevant to the local preset assertion.
-				}
-				return response;
-			};
-			const item = Array.from(
-				document.querySelectorAll(".ref-preset-item"),
-			).find((row) =>
-				/Male voice 1|\uB0A8\uC131 \uC74C\uC0C9 1/.test(
-					row.textContent ?? "",
-				),
+						);
+						if (!details) return false;
+						details.open = true;
+						details.dispatchEvent(new Event("toggle", { bubbles: true }));
+						return true;
+					}),
+				{
+					timeout: 30_000,
+					timeoutMsg: "Local voice preset section did not render",
+				},
 			);
-			(item?.querySelector("button") as HTMLButtonElement | null)?.click();
-		});
-		await browser.waitUntil(
-			() =>
-				browser.execute(() =>
-					(
+			await browser.execute(() => {
+				const shell = window as typeof window & {
+					__presetPreviewFetches?: Array<{ path: string; status: number }>;
+				};
+				shell.__presetPreviewFetches = [];
+				const original = window.fetch.bind(window);
+				window.fetch = async (...args) => {
+					const response = await original(...args);
+					const request = args[0];
+					const raw =
+						typeof request === "string"
+							? request
+							: request instanceof Request
+								? request.url
+								: String(request);
+					try {
+						shell.__presetPreviewFetches?.push({
+							path: new URL(raw).pathname,
+							status: response.status,
+						});
+					} catch {
+						// Non-URL fetches are irrelevant to the local preset assertion.
+					}
+					return response;
+				};
+				const item = Array.from(
+					document.querySelectorAll(".ref-preset-item"),
+				).find((row) => /default\.wav/i.test(row.textContent ?? ""));
+				(item?.querySelector("button") as HTMLButtonElement | null)?.click();
+			});
+			await browser.waitUntil(
+				() =>
+					browser.execute(() =>
 						(
-							window as typeof window & {
-								__presetPreviewFetches?: Array<{
-									path: string;
-									status: number;
-								}>;
-							}
-						).__presetPreviewFetches ?? []
-					).some(
-						(event) =>
-							event.path === "/ref/audio/male-20s-01.wav" &&
-							event.status === 200,
+							(
+								window as typeof window & {
+									__presetPreviewFetches?: Array<{
+										path: string;
+										status: number;
+									}>;
+								}
+							).__presetPreviewFetches ?? []
+						).some(
+							(event) =>
+								event.path === "/ref/audio/default.wav" && event.status === 200,
+						),
 					),
-				),
-			{
-				timeout: 30_000,
-				timeoutMsg: "Local preset preview audio was not downloaded",
-			},
-		);
-		await browser.waitUntil(
-			() =>
-				browser.execute(() => {
-					const item = Array.from(
-						document.querySelectorAll(".ref-preset-item"),
-					).find((row) =>
-						/Male voice 1|남성 음색 1/.test(row.textContent ?? ""),
-					);
-					const apply = item?.querySelectorAll("button").item(1);
-					if (!(apply instanceof HTMLButtonElement)) return false;
-					apply.click();
-					return true;
-				}),
-			{ timeout: 30_000, timeoutMsg: "male-20s-01 preset did not load" },
-		);
-		await browser.waitUntil(
-			() =>
-				browser.execute(() => {
-					const config = JSON.parse(
-						localStorage.getItem("naia-config") ?? "{}",
-					);
-					return String(config.voiceRefUrl ?? "").endsWith(
-						"/ref/audio/male-20s-01.wav",
-					);
-				}),
-			{ timeout: 30_000, timeoutMsg: "Selected local voice was not persisted" },
-		);
+				{
+					timeout: 30_000,
+					timeoutMsg: "Local preset preview audio was not downloaded",
+				},
+			);
+			await browser.waitUntil(
+				() =>
+					browser.execute(() => {
+						const item = Array.from(
+							document.querySelectorAll(".ref-preset-item"),
+						).find((row) => /default\.wav/i.test(row.textContent ?? ""));
+						const apply = item?.querySelectorAll("button").item(1);
+						if (!(apply instanceof HTMLButtonElement)) return false;
+						apply.click();
+						return true;
+					}),
+				{ timeout: 30_000, timeoutMsg: "default runtime preset did not load" },
+			);
+			await browser.waitUntil(
+				() =>
+					browser.execute(() => {
+						const config = JSON.parse(
+							localStorage.getItem("naia-config") ?? "{}",
+						);
+						return String(config.voiceRefUrl ?? "").endsWith(
+							"/ref/audio/default.wav",
+						);
+					}),
+				{
+					timeout: 30_000,
+					timeoutMsg: "Selected local voice was not persisted",
+				},
+			);
+		}
 		// The file-backed config is authoritative on boot. Reload only after the
-		// debounced persistence boundary, then prove the non-default preset survives
+		// debounced persistence boundary, then prove the user voice survives
 		// startup hydration before asking the external LLM for speech.
 		await browser.pause(1_200);
 		await browser.refresh();
@@ -237,17 +278,16 @@ describe("6GB VoxCPM2 voice profile through the real Tauri Shell", () => {
 					);
 					return (
 						config.ttsEnabled === true &&
-						String(config.voiceRefUrl ?? "").endsWith(
-							"/ref/audio/male-20s-01.wav",
-						)
+						localStorage.getItem("naia.voiceRefAudioB64") !== null &&
+						sessionStorage.getItem("naia.voxcpm2AccessToken") !== null
 					);
 				}),
 			{
 				timeout: 30_000,
-				timeoutMsg: "Selected local voice did not survive startup hydration",
+				timeoutMsg: "User local voice did not survive startup hydration",
 			},
 		);
-		expect(await tauriInvoke<boolean>("cascade_status")).toBe(true);
+		expect(await tauriInvoke<boolean>("voxcpm2_status")).toBe(true);
 		await browser.execute(() => {
 			(
 				document.querySelector(
@@ -260,14 +300,15 @@ describe("6GB VoxCPM2 voice profile through the real Tauri Shell", () => {
 			const shell = window as typeof window & {
 				__voice6gFetches?: Array<{
 					path: string;
-					status: number;
+					status?: number;
 					voice?: string;
+					text?: string;
+					streamingAtRequest: boolean;
 				}>;
 			};
 			shell.__voice6gFetches = [];
 			const original = window.fetch.bind(window);
 			window.fetch = async (...args) => {
-				const response = await original(...args);
 				const request = args[0];
 				const raw =
 					typeof request === "string"
@@ -275,24 +316,40 @@ describe("6GB VoxCPM2 voice profile through the real Tauri Shell", () => {
 						: request instanceof Request
 							? request.url
 							: String(request);
+				let event:
+					| {
+							path: string;
+							status?: number;
+							voice?: string;
+							text?: string;
+							streamingAtRequest: boolean;
+					  }
+					| undefined;
 				try {
 					const init = args[1];
 					const body =
 						typeof init?.body === "string" ? JSON.parse(init.body) : {};
-					shell.__voice6gFetches?.push({
+					event = {
 						path: new URL(raw).pathname,
-						status: response.status,
 						voice: typeof body.voice === "string" ? body.voice : undefined,
-					});
+						text: typeof body.input === "string" ? body.input : undefined,
+						streamingAtRequest:
+							document.querySelector(".chat-message.assistant.streaming") !==
+							null,
+					};
+					shell.__voice6gFetches?.push(event);
 				} catch {
-					// Non-URL fetches are irrelevant to the cascade assertion.
+					// Non-URL fetches are irrelevant to the local TRT assertion.
 				}
+				const response = await original(...args);
+				if (event) event.status = response.status;
 				return response;
 			};
 		});
 
 		await sendMessage(
-			"Respond with exactly: 6GB voice profile is ready. Do not add anything else.",
+			"Respond with exactly these two sentences and nothing else: 6GB voice profile is ready. Sentence streaming is verified.",
+			{ completedMessageTimeoutMs: 360_000 },
 		);
 		await browser.waitUntil(
 			() =>
@@ -303,13 +360,15 @@ describe("6GB VoxCPM2 voice profile through the real Tauri Shell", () => {
 								__voice6gFetches?: Array<{ path: string; status: number }>;
 							}
 						).__voice6gFetches ?? [];
-					return events.some(
-						(event) =>
-							event.path === "/v1/audio/speech" && event.status === 200,
+					return (
+						events.filter(
+							(event) =>
+								event.path === "/v1/audio/speech" && event.status === 200,
+						).length === 2
 					);
 				}),
 			{
-				timeout: 180_000,
+				timeout: 360_000,
 				timeoutMsg: "Shell chat never synthesized the external LLM reply",
 			},
 		);
@@ -319,20 +378,28 @@ describe("6GB VoxCPM2 voice profile through the real Tauri Shell", () => {
 					window as typeof window & {
 						__voice6gFetches?: Array<{
 							path: string;
-							status: number;
+							status?: number;
 							voice?: string;
+							text?: string;
+							streamingAtRequest: boolean;
 						}>;
 					}
 				).__voice6gFetches ?? [],
 		);
 		expect(paths.some((event) => event.path === "/stream")).toBe(false);
-		expect(
-			paths.some(
-				(event) =>
-					event.path === "/v1/audio/speech" &&
-					event.voice === "male-20s-01.wav",
-			),
-		).toBe(true);
+		const speechRequests = paths.filter(
+			(event) => event.path === "/v1/audio/speech" && event.status === 200,
+		);
+		expect(speechRequests).toHaveLength(2);
+		expect(speechRequests.map((event) => event.voice)).toEqual([
+			"current",
+			"current",
+		]);
+		expect(speechRequests.map((event) => event.text)).toEqual([
+			"6GB voice profile is ready.",
+			"Sentence streaming is verified.",
+		]);
+		expect(speechRequests[0]?.streamingAtRequest).toBe(true);
 		await browser.waitUntil(
 			() =>
 				browser.execute(() => {

@@ -1189,7 +1189,7 @@ describe("SettingsTab — memory tab (#298)", () => {
 		// 음성: 로컬 음성으로 자동 전환 + 원격 호스트 잔재를 로컬 façade 기본으로 교정.
 		expect(saved.ttsProvider).toBe("naia-local-voice");
 		expect(saved.ttsEnabled).toBe(true);
-		expect(saved.vllmTtsHost).toBe("http://localhost:8910");
+		expect(saved.vllmTtsHost).toBe("http://127.0.0.1:8910");
 		expect(saved.localGpuTier).toBe("windows-voice-6g");
 		expect(saved.avatarProvider).toBe("naia-video-avatar");
 	});
@@ -1229,7 +1229,7 @@ describe("SettingsTab — memory tab (#298)", () => {
 		expect(saved.ollamaNumGpu).toBeUndefined();
 		expect(saved.ttsProvider).toBe("naia-local-voice");
 		expect(saved.ttsEnabled).toBe(true);
-		expect(saved.vllmTtsHost).toBe("http://localhost:8910");
+		expect(saved.vllmTtsHost).toBe("http://127.0.0.1:8910");
 		expect(saved.avatarProvider).toBe("vrm");
 	});
 
@@ -1305,7 +1305,7 @@ describe("SettingsTab — memory tab (#298)", () => {
 		expect(saved.ollamaHost).toBe("http://gpu-box.local:11434");
 		expect(saved.ttsProvider).toBe("naia-local-voice");
 		expect(saved.ttsEnabled).toBe(true);
-		expect(saved.vllmTtsHost).toBe("http://localhost:8910");
+		expect(saved.vllmTtsHost).toBe("http://127.0.0.1:8910");
 		expect(saved.avatarProvider).toBe("naia-video-avatar");
 		expect(saved.nvaModel).toBe("stale.nva");
 	});
@@ -1350,7 +1350,7 @@ describe("SettingsTab — memory tab (#298)", () => {
 		);
 	});
 
-	it("shows a retryable VoxCPM2 installer instead of starting a missing runtime", async () => {
+	it("does not expose a separate installer button or install before user selection", async () => {
 		localStorage.setItem(
 			"naia-config",
 			JSON.stringify({
@@ -1421,20 +1421,10 @@ describe("SettingsTab — memory tab (#298)", () => {
 			expect(screen.queryByText(/CASCADE_SERVICE_BUNDLE_MISSING/i)).toBeNull();
 		});
 		gotoSettingsTab("voice");
-		await vi.waitFor(() => {
-			expect(
-				screen.getByTestId("local-voice-installation-status").textContent,
-			).toMatch(/VoxCPM2 components must be installed/i);
-			expect(screen.queryByText(/Cascade service bundle/i)).toBeNull();
-			expect(mockInvoke).not.toHaveBeenCalledWith("start_voxcpm2");
-		});
-		fireEvent.click(screen.getByTestId("local-voice-install-runtime"));
-		await vi.waitFor(() => {
-			expect(mockInvoke).toHaveBeenCalledWith("install_voxcpm2_runtime");
-			expect(
-				screen.queryByTestId("local-voice-installation-status"),
-			).toBeNull();
-		});
+		expect(screen.queryByText(/Cascade service bundle/i)).toBeNull();
+		expect(mockInvoke).not.toHaveBeenCalledWith("start_voxcpm2");
+		expect(screen.queryByTestId("local-voice-install-runtime")).toBeNull();
+		expect(mockInvoke).not.toHaveBeenCalledWith("install_voxcpm2_runtime");
 	});
 
 	it("selecting VoxCPM2 installs, starts, health-checks, then commits the provider", async () => {
@@ -1613,7 +1603,7 @@ describe("SettingsTab — memory tab (#298)", () => {
 			expect(saved.model).toBe("gemini-3.5-flash");
 			expect(saved.ollamaNumGpu).toBeUndefined();
 			expect(saved.ttsProvider).toBe("naia-local-voice");
-			expect(saved.vllmTtsHost).toBe("http://localhost:8910");
+			expect(saved.vllmTtsHost).toBe("http://127.0.0.1:8910");
 			expect(saved.avatarProvider).toBe("vrm");
 			expect(mockInvoke).toHaveBeenCalledWith("start_voxcpm2", {
 				expectedLoaderProfile: "windows_trt_6g",
@@ -1731,6 +1721,70 @@ describe("SettingsTab — memory tab (#298)", () => {
 		});
 	});
 
+	it("renders local voice download/install progress from voxcpm2_install_progress events (#453 FR-VOICE.17)", async () => {
+		localStorage.setItem("naia-adk-path", "D:\\alpha-adk");
+		localStorage.setItem(
+			"naia-config",
+			JSON.stringify({
+				provider: "nextain",
+				model: "gemini-3.5-flash",
+				naiaKey: "gw-member",
+				localGpuTier: "windows-voice-6g",
+				ttsProvider: "naia-local-voice",
+			}),
+		);
+		// naiaKey is sourced from the Tauri secure store, not plain config.
+		secureStoreMock.get.mockImplementation((key: string) =>
+			Promise.resolve(key === "naiaKey" ? "gw-member" : null),
+		);
+		mockInvoke.mockImplementation((cmd: string) => {
+			if (cmd === "detect_gpu_vram") return Promise.resolve(8);
+			if (cmd === "voxcpm2_status") return Promise.resolve(false);
+			if (cmd === "voxcpm2_installation_status")
+				return Promise.resolve({
+					phase: "blocked",
+					ready: false,
+					canStart: false,
+					summary: "",
+					steps: [],
+				});
+			return Promise.resolve([]);
+		});
+
+		render(<SettingsTab />);
+		gotoSettingsTab("voice");
+		// The naia-local-voice section — where the install transaction and its
+		// progress bar live — must be present.
+		await screen.findByTestId("local-voice-toggle");
+		// SettingsTab subscribes to the Rust `voxcpm2_install_progress` stream so
+		// download (bytes) and install (labelled step) progress can be surfaced.
+		await vi.waitFor(() =>
+			expect(eventListeners.has("voxcpm2_install_progress")).toBe(true),
+		);
+		// Both progress phases the bar renders are exercised end-to-end by the
+		// live `pnpm run tauri:dev` verification recorded in FR-VOICE.17; forwarding
+		// either shape here must not throw.
+		expect(() =>
+			eventListeners.get("voxcpm2_install_progress")?.({
+				payload: {
+					phase: "download",
+					downloaded: 2_100_000_000,
+					total: 4_200_000_000,
+				},
+			}),
+		).not.toThrow();
+		expect(() =>
+			eventListeners.get("voxcpm2_install_progress")?.({
+				payload: {
+					phase: "install",
+					step: "engine",
+					label: "Building the GPU engine",
+					percent: 80,
+				},
+			}),
+		).not.toThrow();
+	});
+
 	it("restores an explicitly enabled Naia Local runtime for preset playback", async () => {
 		localStorage.setItem("naia-adk-path", "D:\\alpha-adk");
 		localStorage.setItem(
@@ -1738,6 +1792,7 @@ describe("SettingsTab — memory tab (#298)", () => {
 			JSON.stringify({
 				provider: "nextain",
 				model: "gemini-3.5-flash",
+				naiaKey: "nk",
 				ttsProvider: "naia-local-voice",
 				ttsEnabled: true,
 				localVoiceEnabled: true,
@@ -1873,6 +1928,7 @@ describe("SettingsTab — memory tab (#298)", () => {
 			JSON.stringify({
 				provider: "nextain",
 				model: "gemini-3.5-flash",
+				naiaKey: "nk",
 				ttsProvider: "naia-local-voice",
 				ttsEnabled: true,
 				localVoiceEnabled: true,
@@ -1920,6 +1976,7 @@ describe("SettingsTab — memory tab (#298)", () => {
 			JSON.stringify({
 				provider: "nextain",
 				model: "gemini-3.5-flash",
+				naiaKey: "nk",
 				ttsProvider: "naia-local-voice",
 				ttsEnabled: true,
 				// Retired field: the safety migration disables local voice and
@@ -2034,7 +2091,7 @@ describe("SettingsTab — memory tab (#298)", () => {
 		expect(
 			profileTtsProvider.querySelector('option[value="naia-local-voice"]')
 				?.textContent,
-		).toContain("Naia Local Voice");
+		).toContain("Naia Host Voice");
 		await vi.waitFor(() =>
 			expect(
 				profileTtsProvider.querySelector('option[value="naia-local-voice"]'),
@@ -2046,7 +2103,7 @@ describe("SettingsTab — memory tab (#298)", () => {
 		await vi.waitFor(() => {
 			const saved = JSON.parse(localStorage.getItem("naia-config") || "{}");
 			expect(saved.ttsProvider).toBe("naia-local-voice");
-			expect(saved.vllmTtsHost).toBe("http://localhost:8910");
+			expect(saved.vllmTtsHost).toBe("http://127.0.0.1:8910");
 			expect(
 				screen.getByTestId("profile-local-voice-toggle"),
 			).not.toBeDisabled();

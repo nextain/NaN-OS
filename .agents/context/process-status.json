@@ -15,8 +15,16 @@
     "issue_doc": "docs/progress/ (F0-baseline, F0-contract, F{1,2,3}-baseline-contract, F0-graft) + 00-PHASES.md",
     "github_issue": null,
     "started": "2026-06-08T00:00:00Z",
-    "last_updated": "2026-08-16T19:25:00+09:00",
+    "last_updated": "2026-08-18T16:05:00+09:00",
     "status": "in_progress",
+    "voxcpm2_fp32_runaway_fix_453": {
+      "issue": "https://github.com/nextain/naia-shell/issues/453",
+      "scope": "4일간의 로컬음성 폭주/잡음 사태 종결: TRT LocDiT를 순수 FP32로 확정(voxcpm2-tensorrt@27dc4b5), 문장 2개 cap 제거, 엔진부팅 중 '음성 모델 준비 중…' 표기, 음색 적용 시점 백그라운드 예열(warm-on-apply), 프라임=마지막 사용 음색 우선",
+      "status": "in_progress",
+      "last_updated": "2026-08-18T16:05:00+09:00",
+      "verification": "A/B 실측(4060, 동일조건): mixed-FP16 9/10 폭주(45-130s/문장) vs 순수 FP32 0/36 폭주(3회 독립실행, 평균 3.3s, VRAM 피크 4.6GiB). 실기: 프라임 6.4-7.7s, 문장 2-10s 연속발화, 음색전환(프리셋/업로드) 정상 — 사용자 육성 확인. warm-on-apply 실엔진 Playwright 1 passed. tsc 0, 관련 vitest 122 passed, pytest 13 passed. 타임라인/증거=#453 2026-08-18 코멘트",
+      "remaining": "e2e 합격기준 duration/chars 상한 교체(bytes>40KB는 폭주본 통과 역방향 게이트), 실엔진 e2e 회귀(voice-e2e/lipsync/warmup), tauri:installer 릴리즈 빌드+번들 호스팅, 셸 방어계층 축소(서버 READY 게이트 소유) 백로그"
+    },
     "v017_launch_qa_447": {
       "issue": "https://github.com/nextain/naia-shell/issues/447",
       "scope": "v0.1.7 clean-install LLM bootstrap, VoxCPM2 Windows managed installation and customer-facing status, Herdr first-frame readiness, chat layout, onboarding avatar picker, and paired naia.land launch guidance",

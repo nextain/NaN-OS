@@ -23,6 +23,10 @@
 import { BGM_SIDECAR_BASE_URL } from "../bgm-sidecar-url";
 import { DEFAULT_LOCAL_VOICE_HOST, type TtsProviderId } from "../config";
 import { Logger } from "../logger";
+import {
+	localVoiceAuthHeaders,
+	recoverLocalVoiceToken,
+} from "../voice/local-runtime";
 import { applyLocalRefAudio } from "../voice/ref-audio-api";
 import { resolveEdgeVoice } from "./edge-tts";
 
@@ -30,16 +34,28 @@ import { resolveEdgeVoice } from "./edge-tts";
 // webview can't do the MS WebSocket handshake (it can't set the required
 // headers/Origin → 400). The shell fetches the sidecar's /edge-tts (#363).
 const EDGE_TTS_SIDECAR_URL = `${BGM_SIDECAR_BASE_URL}/edge-tts`;
+// A sentence must be able to wait out the PREVIOUS sentence's synthesis on the
+// single GPU slot — measured up to ~60s per sentence on the 4060 — so the busy
+// budget must exceed that, or every follow-up sentence dies with 429 and the
+// reply goes silent after the first utterance (2026-08-18 실측).
 const LOCAL_VOICE_BUSY_RETRY_DELAYS_MS = [
-	250, 500, 750, 1_000, 1_500, 2_000, 2_500, 3_000, 3_500,
+	250, 500, 750, 1_000, 1_500, 2_000, 2_500, 3_000, 3_500, 3_500, 3_500,
+	3_500, 3_500, 3_500, 3_500, 3_500, 3_500, 3_500, 3_500, 3_500, 3_500,
+	3_500, 3_500, 3_500, 3_500, 3_500, 3_500, 3_500, 3_500, 3_500, 3_500,
+	3_500, 3_500, 3_500, 3_500, 3_500,
 ];
 // The TensorRT VoxCPM2 worker can need roughly a minute for its first model
 // load. The facade starts earlier, so requests made during that narrow window
 // are rejected before the upstream POST is admitted (WinError 10061). Retrying
 // that exact failure is safe and keeps the user's first reply queued until the
 // local GPU is genuinely ready.
+// Budget must exceed a COLD engine start: measured ~80-90s on the RTX 4060
+// (model load + W8A16 + TRT engine + warm-up) — the old ~37s budget gave up
+// ~25s before READY, so the turn's sentences all failed. ~120s total.
 const LOCAL_VOICE_STARTUP_RETRY_DELAYS_MS = [
 	1_000, 1_500, 2_000, 2_500, 3_000, 3_500, 4_000, 4_500, 5_000, 5_000, 5_000,
+	5_000, 5_000, 5_000, 5_000, 5_000, 5_000, 5_000, 5_000, 5_000, 5_000, 5_000,
+	5_000, 5_000, 5_000, 5_000, 5_000, 5_000, 5_000,
 ];
 const LOCAL_VOICE_BUSY_MAX_RETRY_DELAY_MS = 3_500;
 
@@ -59,6 +75,98 @@ function retryAfterMs(response: Response, fallbackMs: number): number {
 		LOCAL_VOICE_BUSY_MAX_RETRY_DELAY_MS,
 		Math.max(100, dateMs - Date.now()),
 	);
+}
+
+// ── Voice warm-up (apply-time cold-cost prepayment) ─────────────────────────
+// The FIRST synthesis with a never-used reference voice is dominated by the
+// engine's per-voice prompt-cache build and is far more prone to runaway
+// generation (2026-08-18 실측: 10-char first sentence → 136 patches / 39.8s;
+// the SECOND sentence with the same voice → 6.4s). In live chat that cold cost
+// lands on the first reply → the user assumes it broke, sends a new message,
+// and new-input priority aborts the almost-finished synthesis — an endless
+// "no sound" loop. Pay the cold cost in the background the moment the user
+// APPLIES a voice (preset click / upload) instead.
+let warmInFlight = false;
+export async function warmLocalVoice(opts: {
+	/** Facade palette id (preset basename) or "current" after an upload. */
+	voice: string;
+	/** Uploaded clip to install first (upload warm only). */
+	localRefAudioBase64?: string;
+}): Promise<void> {
+	if (warmInFlight) return;
+	warmInFlight = true;
+	const base = DEFAULT_LOCAL_VOICE_HOST; // own loopback engine ONLY — never warm a remote host
+	try {
+		// Never SPAWN the engine for a warm-up — only warm one that is already
+		// running (health is unauthenticated by design). A user who applies a
+		// voice with the engine off pays the cold cost on first use, as before.
+		const healthy = await fetch(`${base}/health`).then(
+			(r) => r.ok,
+			() => false,
+		);
+		if (!healthy) {
+			Logger.debug("tts-warm", "skip: engine not running");
+			return;
+		}
+		if (!localVoiceAuthHeaders().Authorization) {
+			// Engine is up but this webview lost the per-launch bearer (reload) —
+			// recover it; with a running engine this is idempotent, no spawn.
+			if (!(await recoverLocalVoiceToken())) {
+				Logger.debug("tts-warm", "skip: no auth token");
+				return;
+			}
+		}
+		if (opts.voice === "current" && opts.localRefAudioBase64) {
+			await applyLocalRefAudio(opts.localRefAudioBase64, base);
+		}
+		const startedAt = Date.now();
+		Logger.debug("tts-warm", "warm start", { voice: opts.voice });
+		// The single GPU slot is often held right when a warm matters most — the
+		// startup prime (~40s) or a running synthesis (which also starves the
+		// accept loop → raw fetch TypeError). Wait those out (~100s budget); a
+		// one-shot warm silently died on the prime's 429 (e2e-proven).
+		let response: Response | null = null;
+		for (let attempt = 0; attempt < 30; attempt++) {
+			try {
+				response = await fetch(`${base}/v1/audio/speech`, {
+					method: "POST",
+					headers: {
+						...localVoiceAuthHeaders(),
+						"Content-Type": "application/json",
+					},
+					body: JSON.stringify({
+						model: "voxcpm2",
+						// Medium-length text: very short inputs are the runaway trigger,
+						// and the warm-up should walk the same cache path as a real
+						// sentence.
+						input: "안녕하세요, 만나서 반가워요.",
+						voice: opts.voice,
+						response_format: "wav",
+					}),
+				});
+			} catch (err) {
+				Logger.debug("tts-warm", "warm retry (unreachable)", {
+					attempt,
+					error: String(err),
+				});
+				await new Promise((r) => setTimeout(r, 3_500));
+				continue;
+			}
+			if (response.status !== 429) break;
+			Logger.debug("tts-warm", "warm retry (busy)", { attempt });
+			await new Promise((r) => setTimeout(r, 3_500));
+		}
+		if (response?.ok) await response.arrayBuffer(); // drain so the server sees a clean finish
+		Logger.debug("tts-warm", "warm done", {
+			voice: opts.voice,
+			status: response?.status ?? 0,
+			secs: Math.round((Date.now() - startedAt) / 100) / 10,
+		});
+	} catch (err) {
+		Logger.debug("tts-warm", "warm failed (non-fatal)", { error: String(err) });
+	} finally {
+		warmInFlight = false;
+	}
 }
 
 export interface SynthesizeOpts {
@@ -310,7 +418,7 @@ async function synthEdge(opts: SynthesizeOpts): Promise<SynthesizeResult> {
 /**
  * naia-local-voice → the private Runtime's OpenAI-compatible voice-only surface.
  * Raw engine adapters stay hidden behind :8910. The Runtime resolves the
- * selected reference voice and returns RIFF WAV without a bearer token.
+ * selected reference voice and requires the per-launch loopback bearer.
  */
 async function synthNaiaLocalVoice(
 	opts: SynthesizeOpts,
@@ -322,23 +430,59 @@ async function synthNaiaLocalVoice(
 	const defaultVoice = "naia-default";
 	const selectedVoice =
 		!opts.voice || opts.voice === "default" ? defaultVoice : opts.voice;
+	const runtimeVoice = (voice: string) => {
+		if (voice === "naia-current") return "current";
+		if (voice === "naia-default") return "default";
+		return voice;
+	};
+	// The loopback runtime rejects unauthenticated calls (401). The webview can
+	// lose the per-launch bearer while the engine keeps running (auto-start
+	// without the Settings flow, webview reload) — recover it from the app's own
+	// engine BEFORE the first authenticated call, otherwise every sentence 401s
+	// into silence. Only for the app's OWN loopback engine: a custom host (e.g.
+	// a remote cascade URL) must not trigger a local TRT spawn.
+	const isOwnLoopbackEngine = base === DEFAULT_LOCAL_VOICE_HOST;
+	if (isOwnLoopbackEngine && !localVoiceAuthHeaders().Authorization) {
+		await recoverLocalVoiceToken();
+	}
+	// "내 음색"(uploaded clip) travels as a RAW wav install (PUT /voice) — a
+	// LOCAL-only contract. Remote hosts (e.g. cascade) reject raw injection
+	// (400; the outbound design is a voice FINGERPRINT API, 미구현) — so on a
+	// custom host fall back to that server's default voice instead of failing
+	// every sentence. Presets still travel fine (palette id in `voice`).
+	let effectiveVoice = selectedVoice;
 	if (selectedVoice === "naia-current" && opts.localRefAudioBase64) {
-		// Reinstall on every sentence so a Runtime restart or another voice change
-		// cannot silently select the wrong clone. The Runtime keys the temp WAV by
-		// content hash, making repeated installs idempotent and local-only.
-		await applyLocalRefAudio(opts.localRefAudioBase64, base);
+		if (isOwnLoopbackEngine) {
+			// Reinstall on every sentence so a Runtime restart or another voice
+			// change cannot silently select the wrong clone. The Runtime keys the
+			// temp WAV by content hash, making repeated installs idempotent.
+			await applyLocalRefAudio(opts.localRefAudioBase64, base);
+		} else {
+			Logger.info(
+				"tts-synthesize",
+				"Custom voice host — uploaded clip cannot travel; using server default",
+				{ base },
+			);
+			effectiveVoice = defaultVoice;
+		}
 	}
 	const request = (voice: string) =>
 		fetch(`${base}/v1/audio/speech`, {
 			method: "POST",
-			headers: { "Content-Type": "application/json" },
+			headers: {
+				// The per-launch bearer authenticates the app's OWN loopback engine
+				// ONLY — sending it to a user-configured remote host would exfiltrate
+				// the local credential to that server (adversarial review finding).
+				...(isOwnLoopbackEngine ? localVoiceAuthHeaders() : {}),
+				"Content-Type": "application/json",
+			},
 			body: JSON.stringify({
-			model: "voxcpm2",
-			input: opts.text,
-			// RefAudioSection stores a preset URL in voiceRefUrl. ChatArea resolves
-			// it to this facade palette id; keep it intact all the way to :8910.
-			voice,
-			response_format: "wav",
+				model: "voxcpm2",
+				input: opts.text,
+				// RefAudioSection stores a preset URL in voiceRefUrl. ChatArea resolves
+				// it to this facade palette id; keep it intact all the way to :8910.
+				voice: runtimeVoice(voice),
+				response_format: "wav",
 			}),
 			signal: opts.signal,
 		});
@@ -350,7 +494,9 @@ async function synthNaiaLocalVoice(
 			}
 			const onAbort = () => {
 				clearTimeout(timer);
-				reject(opts.signal?.reason ?? new DOMException("Aborted", "AbortError"));
+				reject(
+					opts.signal?.reason ?? new DOMException("Aborted", "AbortError"),
+				);
 			};
 			const timer = setTimeout(() => {
 				opts.signal?.removeEventListener("abort", onAbort);
@@ -359,10 +505,67 @@ async function synthNaiaLocalVoice(
 			opts.signal?.addEventListener("abort", onAbort, { once: true });
 		});
 	const requestAfterBusy = async (voice: string) => {
+		let recoveredAuth = false;
 		for (let retry = 0; ; retry++) {
-			const response = await request(voice);
-			if (response.ok) return { response, detail: "" };
+			let response: Response;
+			try {
+				response = await request(voice);
+			} catch (err) {
+				// Direct connection refused (fetch TypeError): the engine is still
+				// starting — the DIRECT runtime has no facade to return the 502/10061
+				// shape the legacy retry keyed on, so without this branch the FIRST
+				// utterance during the ~80s engine boot fails instantly with
+				// "로컬 음성 엔진에 연결할 수 없습니다". Wait it out like gpu-starting.
+				// A REMOTE host has no "engine boot" — an unreachable custom host must
+				// fail fast (3 tries), not hang the turn for two minutes.
+				if (opts.signal?.aborted) throw err;
+				const budget = isOwnLoopbackEngine
+					? LOCAL_VOICE_STARTUP_RETRY_DELAYS_MS.length
+					: 3;
+				if (retry >= budget) throw err;
+				const delayMs = LOCAL_VOICE_STARTUP_RETRY_DELAYS_MS[retry];
+				// Tell the chat surface the wait is the VOICE MODEL booting, not the
+				// LLM thinking — the output-stage chip switches its label on this.
+				if (isOwnLoopbackEngine && typeof window !== "undefined")
+					window.dispatchEvent(
+						new CustomEvent("naia:voice-model-preparing", { detail: true }),
+					);
+				Logger.info("tts-synthesize", "Local voice unreachable; retrying", {
+					retry: retry + 1,
+					delayMs,
+					reason: "engine-starting",
+					error: String(err),
+				});
+				await waitForRetry(delayMs);
+				continue;
+			}
+			if (response.ok) {
+				if (typeof window !== "undefined")
+					window.dispatchEvent(
+						new CustomEvent("naia:voice-model-preparing", { detail: false }),
+					);
+				Logger.debug("tts-synthesize", "local synth response ok", {
+					voice,
+					retry,
+				});
+				return { response, detail: "" };
+			}
 			const detail = await errorDetail(response);
+			// A stale/absent bearer 401s every sentence into silence even though the
+			// engine is healthy. Recover the token from the app's own engine once,
+			// then retry this same request with the fresh Authorization header.
+			if (response.status === 401 && isOwnLoopbackEngine && !recoveredAuth) {
+				recoveredAuth = true;
+				// force: the 401 proves the CURRENT token is stale — clear it so
+				// recovery fetches a fresh one instead of declaring the dead header
+				// "already recovered".
+				if (await recoverLocalVoiceToken({ force: true })) {
+					Logger.info("tts-synthesize", "Recovered local voice token; retrying", {
+						status: response.status,
+					});
+					continue;
+				}
+			}
 			// 429 means the POST was not admitted and is therefore safe to retry.
 			// Keep one narrowly-scoped compatibility path for older facades that
 			// wrapped urllib's exact upstream 429 as synthesis_failed/502.
@@ -390,14 +593,14 @@ async function synthNaiaLocalVoice(
 			await waitForRetry(delayMs);
 		}
 	};
-	let { response: resp, detail } = await requestAfterBusy(selectedVoice);
+	let { response: resp, detail } = await requestAfterBusy(effectiveVoice);
 	if (!resp.ok) {
 		// A profile update can remove a formerly bundled voice while ui-config
 		// still points at it. Recover once with the facade's stable default instead
 		// of turning an otherwise healthy local engine into silence.
 		if (
 			resp.status === 400 &&
-			selectedVoice !== defaultVoice &&
+			effectiveVoice !== defaultVoice &&
 			detail.includes("unknown_voice")
 		) {
 			({ response: resp, detail } = await requestAfterBusy(defaultVoice));
@@ -408,9 +611,7 @@ async function synthNaiaLocalVoice(
 			}
 			throw new Error(`로컬 음성 합성 실패 (${resp.status}): ${detail}`);
 		}
-		throw new Error(
-			`로컬 음성 합성 실패 (${resp.status}): ${detail}`,
-		);
+		throw new Error(`로컬 음성 합성 실패 (${resp.status}): ${detail}`);
 	}
 	// audio/wav(RIFF) bytes — AudioQueue/ttsAudioToWav 가 RIFF 를 네이티브 감지.
 	return { audioBase64: arrayBufferToBase64(await resp.arrayBuffer()) };

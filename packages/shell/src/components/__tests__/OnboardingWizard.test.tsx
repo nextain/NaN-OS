@@ -405,8 +405,21 @@ describe("OnboardingWizard", () => {
 			await Promise.resolve();
 		});
 		advanceFromAgentNameToProvider();
-		fireEvent.click(screen.getByText(/Set up later/));
-		flush();
+		const loginButton = screen
+			.getAllByRole("button")
+			.find((button) => button.textContent?.includes("Naia"));
+		expect(loginButton).toBeDefined();
+		fireEvent.click(loginButton!);
+		act(() => {
+			eventListeners.get("naia_auth_complete")?.({
+				payload: { naiaKey: "gw-member", naiaUserId: "member-1" },
+			});
+		});
+		await act(async () => {
+			await Promise.resolve();
+			await Promise.resolve();
+			await Promise.resolve();
+		});
 
 		// voice step
 		expect(screen.getByText(/GPU detected/)).toBeDefined();
@@ -521,7 +534,7 @@ describe("OnboardingWizard", () => {
 		expect(config.persona).toContain("Mochi");
 	});
 
-	it("completes onboarding immediately after Naia login succeeds", async () => {
+	it("offers the local voice choice after Naia login before completing onboarding", async () => {
 		vi.stubGlobal(
 			"fetch",
 			vi.fn().mockResolvedValue({
@@ -584,7 +597,16 @@ describe("OnboardingWizard", () => {
 		// config save + onComplete fire when the user clicks "시작하기"
 		// (handleComplete → setTimeout(onComplete, 1200)). #313 added the welcome
 		// step but the login→complete→start flow is unchanged.
-		expect(screen.queryByPlaceholderText("Naia")).toBeNull();
+		await act(async () => {
+			await Promise.resolve();
+			await Promise.resolve();
+			await Promise.resolve();
+		});
+		expect(
+			screen.getByRole("button", { name: /Turn on local voice/ }),
+		).toBeDefined();
+		expect(screen.queryByTestId("onboarding-install-voxcpm2")).toBeNull();
+		clickNext();
 		fireEvent.click(
 			screen.getByRole("button", { name: /시작하기|Get Started/ }),
 		);
@@ -683,10 +705,11 @@ describe("OnboardingWizard", () => {
 				});
 			});
 
-			await act(async () => {
-				await Promise.resolve();
-				await Promise.resolve();
-			});
+			await vi.waitFor(() =>
+				expect(localStorage.getItem("naia-remote-key")).toBe(
+					"gw-test-key-from-http-callback",
+				),
+			);
 
 			// naiaKey + naiaUserId localStorage 저장 검증 (HTTP callback path 와
 			// deep-link path 가 동일하게 처리)
@@ -694,6 +717,10 @@ describe("OnboardingWizard", () => {
 				"gw-test-key-from-http-callback",
 			);
 			expect(localStorage.getItem("naia-remote-user-id")).toBe("user-via-http");
+			expect(secureStore.set).toHaveBeenCalledWith(
+				"naiaKey",
+				"gw-test-key-from-http-callback",
+			);
 			// onComplete 자체는 "시작하기" 버튼에서 호출되므로 listener 만으로는
 			// 부르지 않음 (별 step 진행). 여기서는 localStorage 저장까지만 검증.
 		});

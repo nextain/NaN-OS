@@ -8,6 +8,12 @@ vi.mock("../../config", () => ({
 	DEFAULT_LOCAL_VOICE_HOST: "http://localhost:8910",
 	LAB_GATEWAY_URL: "https://gateway.test",
 	getNaiaKeySecure: vi.fn().mockResolvedValue("gw-test-key"),
+	// Real behavior matters here: P1 asserts the GCS→Azure sampleUrl rewrite.
+	canonicalRefAudioUrl: (url: string) =>
+		url.replace(
+			/^https:\/\/storage\.googleapis\.com\/naia-ref-audio-presets\//,
+			"https://stnaiapub83b29893.blob.core.windows.net/ref-audio/",
+		),
 }));
 
 vi.mock("../ref-audio", () => ({
@@ -16,7 +22,7 @@ vi.mock("../ref-audio", () => ({
 }));
 
 vi.mock("../../logger", () => ({
-	Logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+	Logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
 
 import {
@@ -32,7 +38,7 @@ import {
 
 const originalFetch = globalThis.fetch;
 
-describe("local cascade voice palette", () => {
+describe("standalone local runtime voice palette", () => {
 	const mockFetch = vi.fn();
 
 	beforeEach(() => {
@@ -65,6 +71,7 @@ describe("local cascade voice palette", () => {
 		const presets = await getLocalRefAudioPresets("http://localhost:8910/");
 		expect(mockFetch).toHaveBeenCalledWith(
 			"http://localhost:8910/ref/voices",
+			{ headers: {} },
 		);
 		expect(presets).toEqual([
 			expect.objectContaining({
@@ -73,8 +80,7 @@ describe("local cascade voice palette", () => {
 				locale: "ko",
 				gender: "female",
 				isDefault: true,
-				sampleUrl:
-					"http://127.0.0.1:8910/ref/audio/ref_ko_485.wav",
+				sampleUrl: "http://127.0.0.1:8910/ref/audio/ref_ko_485.wav",
 			}),
 		]);
 	});
@@ -88,7 +94,9 @@ describe("local cascade voice palette", () => {
 	});
 
 	it("installs an uploaded WAV on the local Runtime without account auth", async () => {
-		mockFetch.mockResolvedValue(new Response(JSON.stringify({ ok: true }), { status: 200 }));
+		mockFetch.mockResolvedValue(
+			new Response(JSON.stringify({ ok: true }), { status: 200 }),
+		);
 		await applyLocalRefAudio("UklGRiQAAABXQVZF", "http://localhost:8910/");
 		expect(mockFetch).toHaveBeenCalledWith(
 			"http://localhost:8910/voice",
@@ -101,7 +109,9 @@ describe("local cascade voice palette", () => {
 
 	it("maps invalid local uploaded audio to invalid-audio-format", async () => {
 		mockFetch.mockResolvedValue(
-			new Response(JSON.stringify({ error: "invalid_voice_ref_wav" }), { status: 422 }),
+			new Response(JSON.stringify({ error: "invalid_voice_ref_wav" }), {
+				status: 422,
+			}),
 		);
 		await expect(applyLocalRefAudio("bad")).rejects.toMatchObject({
 			code: "invalid-audio-format",

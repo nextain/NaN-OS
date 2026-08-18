@@ -291,10 +291,14 @@ test.describe("S-SLOT settings — gate + 6 cloud slots (#gate-slots)", () => {
 			vramGb: 8,
 			cascadeBlocked: true,
 			config: {
+				// Local voice is member-gated (requiresNaiaKey): without a signed-in
+				// key the option is correctly disabled, so this repair scenario runs
+				// as a signed-in member.
+				naiaKey: "nk",
 				ttsProvider: "naia-local-voice",
 				ttsEnabled: false,
 				localVoiceEnabled: false,
-				vllmTtsHost: "http://localhost:8910",
+				vllmTtsHost: "http://127.0.0.1:8910",
 			},
 		});
 		await page.setViewportSize({ width: 480, height: 800 });
@@ -400,7 +404,7 @@ test.describe("S-SLOT settings — gate + 6 cloud slots (#gate-slots)", () => {
 		expect(saved.model).toBe("gemini-3.5-flash");
 		expect(saved.ttsProvider).toBe("naia-local-voice"); // 음성 → 로컬
 		expect(saved.ttsEnabled).toBe(true);
-		expect(saved.vllmTtsHost).toBe("http://localhost:8910"); // 원격 잔재 → 로컬 façade 교정
+		expect(saved.vllmTtsHost).toBe("http://127.0.0.1:8910"); // 원격 잔재 → 로컬 façade 교정
 		expect(saved.avatarProvider).toBe("naia-video-avatar");
 
 		// UI 반영 — 슬롯 표시가 로컬 구성으로 갱신.
@@ -447,7 +451,7 @@ test.describe("S-SLOT settings — gate + 6 cloud slots (#gate-slots)", () => {
 		expect(saved.ollamaHost).toBe("http://gpu-box.local:11434");
 		expect(saved.ttsProvider).toBe("naia-local-voice");
 		expect(saved.ttsEnabled).toBe(true);
-		expect(saved.vllmTtsHost).toBe("http://localhost:8910");
+		expect(saved.vllmTtsHost).toBe("http://127.0.0.1:8910");
 		expect(saved.avatarProvider).toBe("vrm");
 		expect(saved.nvaModel).toBeUndefined();
 		await expect(page.locator('[data-testid="slot-main"]')).toContainText(

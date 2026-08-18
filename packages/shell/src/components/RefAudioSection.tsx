@@ -17,20 +17,24 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { DEFAULT_VOICE_REF_URL, loadConfig, saveConfig } from "../lib/config";
+import {
+	DEFAULT_VOICE_REF_URL,
+	canonicalRefAudioUrl,
+	loadConfig,
+	saveConfig,
+} from "../lib/config";
 import { getLocale } from "../lib/i18n";
 import { Logger } from "../lib/logger";
+import { warmLocalVoice } from "../lib/tts/synthesize";
 import { fetchLocalVoiceHealth } from "../lib/voice/local-runtime";
 import { encodeRefAudio } from "../lib/voice/ref-audio";
 import {
 	type RefAudioActive,
 	RefAudioApiError,
 	type RefAudioPreset,
-	applyLocalRefAudio,
 	applyRefAudioPreset,
 	deleteRefAudio,
 	getLocalRefAudioB64,
-	getLocalRefAudioPresets,
 	getRefAudioContent,
 	getRefAudioPresets,
 	getRefAudioStatus,
@@ -68,11 +72,12 @@ function setConfigVoiceRefUrl(url: string | null): void {
 const STRINGS = {
 	ko: {
 		sectionTitle: "음성 참조 (Voice Reference)",
-		hint: "Naia Omni 실시간 음성이 사용할 음색입니다. 5–30초 녹음하거나 클립을 업로드하세요.",
+		hint: "Naia 실시간 음성이 사용할 음색입니다. 5–30초 녹음하거나 클립을 업로드하세요.",
 		currentTitle: "현재 음색",
 		statusNone: "설정된 음색 없음 — 기본 음색 사용 중",
 		statusActiveUpload: (d: string, kb: string, when: string) =>
 			`내 업로드 · ${d}초 · ${kb} KB · ${when}`,
+		statusUploadRestored: "내 업로드 음색 사용 중",
 		presetActiveLabel: (name: string) => `프리셋 · ${name}`,
 		previewBtn: "▶ 듣기",
 		previewStop: "■ 정지",
@@ -96,10 +101,13 @@ const STRINGS = {
 		uploading: "업로드 중…",
 		cost: "적용·업로드 시 1회당 $0.01 차감 (녹음만으로는 차감 없음)",
 		costLocal: "로컬 모델 — 녹음·업로드 무료 (크레딧 차감 없음)",
-		localEngineOff: "로컬 음성 엔진이 실행 중이 아닙니다. 아래 버튼으로 시작하세요.",
+		localEngineOff:
+			"로컬 음성 엔진이 실행 중이 아닙니다. 아래 버튼으로 시작하세요.",
 		localEngineStarting:
 			"로컬 음성 엔진 준비 중 — 음성 서비스가 아직 사용 가능하지 않습니다. 잠시 후 자동으로 이어집니다.",
 		localEngineStart: "로컬 음성 엔진 시작",
+		localEngineOffToggleHint:
+			"로컬 음성 엔진이 꺼져 있어 목소리를 고를 수 없습니다. 위의 “로컬 음성 엔진 시작” 버튼으로 켜세요.",
 		err: {
 			network: "네트워크 오류 — 재시도해주세요.",
 			auth: "naia 계정 로그인이 필요합니다.",
@@ -133,11 +141,12 @@ const STRINGS = {
 	},
 	en: {
 		sectionTitle: "Voice Reference",
-		hint: "The voice Naia Omni clones for realtime replies. Record 5–30 s or upload a clip.",
+		hint: "The voice Naia clones for realtime replies. Record 5–30 s or upload a clip.",
 		currentTitle: "Current voice",
 		statusNone: "No voice set — using the default voice",
 		statusActiveUpload: (d: string, kb: string, when: string) =>
 			`My upload · ${d}s · ${kb} KB · ${when}`,
+		statusUploadRestored: "Using my uploaded voice",
 		presetActiveLabel: (name: string) => `Preset · ${name}`,
 		previewBtn: "▶ Play",
 		previewStop: "■ Stop",
@@ -166,6 +175,8 @@ const STRINGS = {
 		localEngineStarting:
 			"Local voice engine is getting ready — the speech service is not available yet. It will continue automatically.",
 		localEngineStart: "Start local voice engine",
+		localEngineOffToggleHint:
+			"The local voice engine is off, so no voice can be selected. Turn it on with the “Start local voice engine” button above.",
 		err: {
 			network: "Network error — please retry.",
 			auth: "Please sign in to your naia account.",
@@ -223,11 +234,26 @@ function formatBalance(balance: number): string {
 	return balance.toFixed(2);
 }
 
+/** cc0-ko-female-01 → "여성 음색 1" — human name for a catalog file id, so the
+ *  active card never shows a raw asset filename to the user. */
+function humanizeCc0Id(
+	id: string,
+	S: ReturnType<typeof pickStrings>,
+): string {
+	const m = /^cc0-ko-(female|male)-0*(\d+)$/i.exec(id);
+	if (!m) return id;
+	const family = m[1].toLowerCase() === "male" ? S.presetMale : S.presetFemale;
+	return `${family} ${m[2]}`;
+}
+
 function displayPresetName(
 	preset: RefAudioPreset,
 	S: ReturnType<typeof pickStrings>,
 ): string {
-	if (preset.source !== "local-cascade") return preset.name;
+	if (preset.source !== "local-runtime") return preset.name;
+	if (preset.gender !== "male" && preset.gender !== "female") {
+		return preset.name;
+	}
 	const family = preset.gender === "male" ? S.presetMale : S.presetFemale;
 	const index = preset.localIndex ? ` ${preset.localIndex}` : "";
 	const suffix = preset.isDefault ? ` · ${S.presetDefault}` : "";
@@ -268,10 +294,16 @@ function describeError(
 
 interface RefAudioSectionProps {
 	ensureLocalVoiceReady?: () => Promise<boolean>;
+	/** SettingsTab already renders the engine start/stop toggle directly above
+	 *  this section, so the inline engine-off start button here is a confusing
+	 *  duplicate ("왜 시작 버튼이 두 개?"). When true, the off-state becomes an
+	 *  informational hint pointing to that single toggle instead. */
+	hideEngineStartControl?: boolean;
 }
 
 export function RefAudioSection({
 	ensureLocalVoiceReady,
+	hideEngineStartControl,
 }: RefAudioSectionProps = {}) {
 	const S = pickStrings();
 	// Naia Local runs on the user's own GPU — recording/uploading a reference
@@ -284,8 +316,7 @@ export function RefAudioSection({
 	const runtimeLocalFacadeUrl = useCascadeAvatarStore(
 		(state) => state.localFacadeUrl,
 	);
-	const localVoiceHost =
-		runtimeLocalFacadeUrl?.trim() || config?.vllmTtsHost;
+	const localVoiceHost = runtimeLocalFacadeUrl?.trim() || config?.vllmTtsHost;
 	const [active, setActive] = useState<RefAudioActive | null>(null);
 	const [loading, setLoading] = useState(true);
 	// FR-VOICE.14 (#418): readiness is the façade /health verdict, not a
@@ -334,6 +365,10 @@ export function RefAudioSection({
 			// 프리셋 매칭이 이를 덮으면 ① 미리듣기가 기본 프리셋을 재생하고
 			// ② setConfigVoiceRefUrl 이 업로드 선택을 프리셋으로 되돌려 쓴다.
 			const localUploadB64 = getLocalRefAudioB64();
+			Logger.debug(TAG, "refresh:local", {
+				hasLocalUpload: !!localUploadB64,
+				voiceRefUrl: config?.voiceRefUrl ?? null,
+			});
 			if (localUploadB64) {
 				setActive({
 					kind: "upload",
@@ -341,58 +376,50 @@ export function RefAudioSection({
 					sizeBytes: 0,
 					durationSeconds: 0,
 				});
-			}
-			try {
-				const list = await getLocalRefAudioPresets(localVoiceHost);
-				setPresets(list);
-				if (!localUploadB64) {
-					const selectedName = config?.voiceRefUrl
-						?.split(/[?#]/)[0]
+			} else {
+				// The active card derives from config alone — NEVER from the engine's
+				// /ref/voices (that fetch failed whenever the engine was still loading
+				// and painted the whole section as "engine off"/network error). The
+				// stored voiceRefUrl is the cloud preset the user picked; default to
+				// "여성 음색 1" like realtime voice does.
+				// canonicalRefAudioUrl: a previously stored GCS sample URL is rewritten
+				// to the Azure host (GCP retirement) so preview keeps working.
+				const stored = config?.voiceRefUrl
+					? canonicalRefAudioUrl(config.voiceRefUrl)
+					: "";
+				const url = stored || DEFAULT_VOICE_REF_URL;
+				if (url !== config?.voiceRefUrl) setConfigVoiceRefUrl(url);
+				const name =
+					url
+						.split(/[?#]/)[0]
 						.split(/[/\\]/)
-						.pop();
-					const selected =
-						list.find((preset) => preset.id === selectedName) ??
-						list.find((preset) => preset.name.includes("(default)")) ??
-						list[0];
-					if (selected && selected.id !== selectedName) {
-						setConfigVoiceRefUrl(selected.sampleUrl);
-					}
-					setActive(
-						selected
-							? {
-									kind: "preset",
-									uploadedAt: "",
-									sizeBytes: 0,
-									durationSeconds: selected.durationSeconds,
-									presetId: selected.id,
-									presetName: selected.name,
-								}
-							: null,
-					);
-				}
-				setLocalEngine("ready");
-				setError("");
-			} catch (err) {
-				Logger.warn(TAG, "local status fetch failed", { error: String(err) });
-				// FR-VOICE.14: classify by the health verdict — engine not running
-				// and engine-up-but-TTS-unavailable get explicit states; only a
-				// failure with a ready engine is a real error.
-				const health = localVoiceHost
-					? await fetchLocalVoiceHealth(localVoiceHost)
-					: null;
-				if (health === null) {
-					setLocalEngine("off");
-					setError("");
-				} else if (!health.ttsReady) {
-					setLocalEngine("starting");
-					setError("");
-				} else {
-					setLocalEngine("ready");
-					setError(describeError(err, S));
-				}
-			} finally {
-				setLoading(false);
+						.pop()
+						?.replace(/\.wav$/i, "") ?? "";
+				setActive({
+					kind: "preset",
+					uploadedAt: "",
+					sizeBytes: 0,
+					durationSeconds: 0,
+					presetId: name,
+					// Never surface the raw asset id (cc0-ko-female-02) — show the
+					// same human name the picker uses ("여성 음색 2").
+					presetName: humanizeCc0Id(name, S),
+				});
 			}
+			// Engine state stays informational (start/stop lives in SettingsTab);
+			// browse/preview/upload no longer depend on it.
+			const health = localVoiceHost
+				? await fetchLocalVoiceHealth(localVoiceHost)
+				: null;
+			Logger.debug(TAG, "refresh:local-engine-health", {
+				reachable: health !== null,
+				ttsReady: health?.ttsReady ?? false,
+			});
+			if (health === null) setLocalEngine("off");
+			else if (!health.ttsReady) setLocalEngine("starting");
+			else setLocalEngine("ready");
+			setError("");
+			setLoading(false);
 			return;
 		}
 		if (getLocalRefAudioB64()) {
@@ -426,13 +453,18 @@ export function RefAudioSection({
 		if (presets !== null || presetsLoading) return;
 		setPresetsLoading(true);
 		try {
-			if (isLocal && ensureLocalVoiceReady) {
-				const ready = await ensureLocalVoiceReady();
-				if (!ready) throw new Error("local voice runtime is not ready");
-			}
-			const list = isLocal
-				? await getLocalRefAudioPresets(localVoiceHost)
-				: await getRefAudioPresets();
+			// The preset picker is ALWAYS the cloud catalog (public sampleUrl) — for
+			// naia-local-voice too. Binding the local picker to the engine's
+			// /ref/voices made browse/preview require a running, authenticated engine
+			// (모델로드 ~77s), so the picker was empty and preview dead until then —
+			// the regression the user hit. The engine is only needed to SPEAK: the
+			// picked preset's file basename matches the engine palette id
+			// (prepare.ps1 downloads the same CC0 catalog), see naiaLocalVoiceId.
+			const list = await getRefAudioPresets();
+			Logger.debug(TAG, "loadPresets:result", {
+				isLocal,
+				count: list.length,
+			});
 			setPresets(list);
 			setError("");
 		} catch (err) {
@@ -496,7 +528,13 @@ export function RefAudioSection({
 			};
 			audio.onended = done;
 			audio.onerror = () => {
-				Logger.warn(TAG, "playback failed");
+				// Include the URL: a CSP media-src rejection or a dead host fails
+				// here with no other signal, and without the URL the log cannot say
+				// WHICH source was blocked (logging_principle P1).
+				Logger.warn(TAG, "playback failed", {
+					url: url.slice(0, 120),
+					mediaError: audio.error?.code ?? null,
+				});
 				done();
 			};
 			audioRef.current = audio;
@@ -517,12 +555,15 @@ export function RefAudioSection({
 		try {
 			if (active.kind === "preset") {
 				// Presets store no GCS blob — the content endpoint 404s for them.
-				// Preview via the preset's public sampleUrl instead.
-				const list =
-					presets ??
-					(isLocal
-						? await getLocalRefAudioPresets(localVoiceHost)
-						: await getRefAudioPresets());
+				// Preview via the preset's public sampleUrl. For naia-local-voice the
+				// stored voiceRefUrl IS the public sampleUrl, so play it directly —
+				// no engine, no cloud round-trip.
+				if (isLocal && config?.voiceRefUrl) {
+					setPreviewState("playing");
+					playUrl(config.voiceRefUrl, false, () => setPreviewState("idle"));
+					return;
+				}
+				const list = presets ?? (await getRefAudioPresets());
 				if (presets === null) setPresets(list);
 				const p = list.find((x) => x.id === active.presetId);
 				if (!p) {
@@ -575,15 +616,16 @@ export function RefAudioSection({
 				// $0.01 → the 402 the user hit). Keep the clip locally as base64 and
 				// send it straight to the container — no gateway, no credits.
 				if (isLocal) {
-					if (ensureLocalVoiceReady && !(await ensureLocalVoiceReady())) {
-						throw new RefAudioApiError(
-							"network",
-							0,
-							"local voice runtime is unavailable",
-						);
-					}
+					// Store the clip locally ONLY — no engine round-trip. The synthesis
+					// path (synthNaiaLocalVoice) re-installs the stored base64 onto the
+					// runtime on every sentence, so the engine gets the voice exactly
+					// when it is needed. Gating the upload on a running, authenticated
+					// engine made "업로드 에러" whenever the engine was still loading.
 					const b64 = await encodeRefAudio(input);
-					await applyLocalRefAudio(b64, localVoiceHost);
+					Logger.debug(TAG, "handleUploadBlob:local-stored", {
+						sourceLabel,
+						b64SizeBytes: b64.length,
+					});
 					setLocalRefAudioB64(b64);
 					setConfigVoiceRefUrl(null); // recorded voice supersedes a preset
 					// Best-effort duration for the card (encodeRefAudio normalises to
@@ -606,6 +648,10 @@ export function RefAudioSection({
 						new CustomEvent("naia:voice-ref-audio", { detail: b64 }),
 					);
 					setNotice(S.localRefApplied);
+					// Prepay the uploaded voice's cold synthesis cost in the background
+					// (install current.wav + one short synth) so the first real reply
+					// doesn't stall ~40s and get aborted by a follow-up message.
+					void warmLocalVoice({ voice: "current", localRefAudioBase64: b64 });
 					return;
 				}
 				const result = await uploadRefAudio(input);
@@ -720,35 +766,23 @@ export function RefAudioSection({
 			}
 			setError("");
 			try {
-				if (isLocal && ensureLocalVoiceReady) {
-					const ready = await ensureLocalVoiceReady();
-					if (!ready) throw new Error("local voice runtime is not ready");
-				}
+				// Preview plays the catalog's PUBLIC sampleUrl directly — no engine, no
+				// token, no readiness gate. (Routing local preview through the engine's
+				// auth-gated /ref/audio made preview dead until the engine finished
+				// loading — the regression the user hit.)
+				Logger.debug(TAG, "onPreviewPreset:entry", {
+					presetId: preset.id,
+					isLocal,
+				});
 				setPlayingPresetId(preset.id);
-				if (isLocal) {
-					const response = await fetch(preset.sampleUrl);
-					if (!response.ok) {
-						throw new Error(`preset preview failed (${response.status})`);
-					}
-					const url = URL.createObjectURL(await response.blob());
-					playUrl(url, true, () => setPlayingPresetId(null));
-				} else {
-					playUrl(preset.sampleUrl, false, () => setPlayingPresetId(null));
-				}
+				playUrl(preset.sampleUrl, false, () => setPlayingPresetId(null));
 			} catch (err) {
 				Logger.warn(TAG, "preset preview failed", { error: String(err) });
 				setPlayingPresetId(null);
 				setError(describeError(err, S));
 			}
 		},
-		[
-			playingPresetId,
-			playUrl,
-			stopPlayback,
-			isLocal,
-			ensureLocalVoiceReady,
-			S,
-		],
+		[playingPresetId, playUrl, stopPlayback, isLocal, S],
 	);
 
 	const onApplyPreset = useCallback(
@@ -777,6 +811,12 @@ export function RefAudioSection({
 						presetName: displayName,
 					});
 					setNotice(S.presetApplySuccess(displayName));
+					// Prepay the per-voice cold cost NOW (background) so the first chat
+					// reply with this preset is seconds, not ~40s (which reads as
+					// "broken" and triggers the abort-retry loop). Fire-and-forget.
+					void warmLocalVoice({
+						voice: preset.sampleUrl.split("/").pop() ?? "default",
+					});
 					return;
 				}
 				const result = await applyRefAudioPreset(preset.id);
@@ -887,7 +927,7 @@ export function RefAudioSection({
 										active.presetName ?? active.presetId ?? "",
 									)}
 								</span>
-							) : (
+							) : active.uploadedAt && active.sizeBytes > 0 ? (
 								<span>
 									{S.statusActiveUpload(
 										active.durationSeconds.toFixed(1),
@@ -895,6 +935,11 @@ export function RefAudioSection({
 										formatDate(active.uploadedAt),
 									)}
 								</span>
+							) : (
+								// A restored local upload (page reload) has only the base64
+								// blob — no recorded size/time. Rendering the empty metadata
+								// showed "0.0초 · 0 KB · Invalid Date"; show the plain label.
+								<span>{S.statusUploadRestored}</span>
 							)}
 						</div>
 					</div>
@@ -1093,7 +1138,7 @@ export function RefAudioSection({
 											}}
 										>
 											<div style={{ minWidth: 0 }}>
-								<div>{displayPresetName(p, S)}</div>
+												<div>{displayPresetName(p, S)}</div>
 												<div className="settings-hint">
 													{p.durationSeconds.toFixed(0)}s · {p.locale} ·{" "}
 													{p.source}
@@ -1104,7 +1149,7 @@ export function RefAudioSection({
 												<button
 													type="button"
 													className="voice-preview-btn"
-												onClick={() => void onPreviewPreset(p)}
+													onClick={() => void onPreviewPreset(p)}
 												>
 													{playingPresetId === p.id
 														? S.presetStop
@@ -1138,21 +1183,27 @@ export function RefAudioSection({
 				{error && <div className="settings-error">{error}</div>}
 				{isLocal && localEngine === "off" && (
 					<div className="settings-hint" data-testid="ref-audio-engine-off">
-						{S.localEngineOff}
-						{ensureLocalVoiceReady && (
-							<button
-								type="button"
-								className="voice-preview-btn"
-								data-testid="ref-audio-engine-start"
-								onClick={async () => {
-									if (await ensureLocalVoiceReady()) {
-										setLocalEngine("ready");
-										void refresh();
-									}
-								}}
-							>
-								{S.localEngineStart}
-							</button>
+						{hideEngineStartControl ? (
+							S.localEngineOffToggleHint
+						) : (
+							<>
+								{S.localEngineOff}
+								{ensureLocalVoiceReady && (
+									<button
+										type="button"
+										className="voice-preview-btn"
+										data-testid="ref-audio-engine-start"
+										onClick={async () => {
+											if (await ensureLocalVoiceReady()) {
+												setLocalEngine("ready");
+												void refresh();
+											}
+										}}
+									>
+										{S.localEngineStart}
+									</button>
+								)}
+							</>
 						)}
 					</div>
 				)}

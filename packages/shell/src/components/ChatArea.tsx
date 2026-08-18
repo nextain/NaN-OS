@@ -311,14 +311,18 @@ const mdComponents: Components = {
  *  않아 음색이 팔레트 기본으로 고정되던 버그 — 남성 음색을 골라도 여성으로 나옴.)
  *  비팔레트 형식(녹음/업로드 data·로컬경로)은 façade 가 400 fail-closed 라 기본 음색 폴백. */
 function naiaLocalVoiceId(voiceRefUrl?: string): string {
-	if (!voiceRefUrl) return "ref_ko_485.wav";
+	// Default = "여성 음색 1" of the CC0 palette the installer provisions.
+	// (The old ref_ko_485 fallback was the CASCADE palette's name — the local
+	// engine doesn't have it, so every sentence took an unknown_voice 400
+	// round-trip before falling back.)
+	if (!voiceRefUrl) return "cc0-ko-female-01.wav";
 	// 쿼리/프래그먼트 제거 후 basename — GCS 서명 URL(...wav?X-Goog-...) 이나 프리셋
 	// sampleUrl 의 쿼리스트링 때문에 정규식이 빗나가 프리셋이 무시되던 것 방지(2026-07-15 리뷰).
 	const noQuery = voiceRefUrl.split(/[?#]/)[0];
 	const base = noQuery.split(/[/\\]/).pop()?.trim() ?? "";
 	// façade 팔레트 id = .wav 파일명. 팔레트 밖 값(녹음/업로드 data·경로)은 서버가 모르는
 	// id 를 200+랜덤음색으로 받으므로(측정), 안전한 기본 음색으로 폴백한다.
-	return /^[\w.-]+\.wav$/i.test(base) ? base : "ref_ko_485.wav";
+	return /^[\w.-]+\.wav$/i.test(base) ? base : "cc0-ko-female-01.wav";
 }
 
 /** TTS provider 별 voice id 해석 (단일 SoT — 파이프라인·Live 두 경로가 공유해 분기 드리프트
@@ -551,6 +555,18 @@ export function ChatArea({
 	const [input, setInput] = useState("");
 	type OutputStage = "thinking" | "tts" | "render" | null;
 	const [outputStage, setOutputStage] = useState<OutputStage>(null);
+	// True while the local voice ENGINE is still booting (synthesize retries
+	// with reason engine-starting). The output-stage chip then says
+	// "음성 모델 준비 중…" instead of "생각 중…"/"음성 처리 중…" — the wait is the
+	// voice model, not the LLM (user report 2026-08-18).
+	const [voiceModelPreparing, setVoiceModelPreparing] = useState(false);
+	useEffect(() => {
+		const onPreparing = (e: Event) =>
+			setVoiceModelPreparing(!!(e as CustomEvent<boolean>).detail);
+		window.addEventListener("naia:voice-model-preparing", onPreparing);
+		return () =>
+			window.removeEventListener("naia:voice-model-preparing", onPreparing);
+	}, []);
 	const [ttsVisibleContent, setTtsVisibleContent] = useState("");
 	const [ttsMaskedMessageId, setTtsMaskedMessageId] = useState<string | null>(
 		null,
@@ -3772,7 +3788,11 @@ export function ChatArea({
 							data-stage={outputStage}
 						>
 							<span className="voice-status-spinner" aria-hidden="true" />
-							<span>{t(`chat.outputStage.${outputStage}`)}</span>
+							<span>
+								{voiceModelPreparing
+									? t("chat.outputStage.voiceInit")
+									: t(`chat.outputStage.${outputStage}`)}
+							</span>
 						</output>
 					)}
 

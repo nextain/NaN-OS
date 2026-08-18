@@ -150,11 +150,10 @@ pub(crate) fn kill_stale_cascade() {
     }
 }
 
-
 pub(crate) fn kill_stale_voxcpm2() {
     let _ = Command::new("pkill")
         .arg("-f")
-        .arg("voxcpm2-runtime.py")
+        .arg("voxcpm2_tensorrt.http_server")
         .output();
 }
 

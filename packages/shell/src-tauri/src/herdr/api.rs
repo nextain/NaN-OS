@@ -1,8 +1,6 @@
 use tauri::AppHandle;
 
-use super::config::{
-    herdr_command, set_herdr_theme, validate_herdr, write_embedded_herdr_config,
-};
+use super::config::{herdr_command, set_herdr_theme, validate_herdr, write_embedded_herdr_config};
 
 pub(super) const HERDR_PROTOCOL: u64 = 19;
 // Herdr currently transports prompts as process arguments. Stay below the

@@ -206,52 +206,52 @@ describe("platform-matrix 스키마 (FR-INSTALL.1)", () => {
 		expect(wix).toContain('Id="NaiaCleanAppDataAnchor"');
 		expect(wix).toContain('Return="check"');
 		expect(wix).not.toContain("naia-adk");
-		const manifest = JSON.parse(
-			readFileSync(
-				resolve(SHELL, "scripts/voxcpm2-runtime-manifest.json"),
-				"utf8",
-			),
-		);
-		expect(manifest.profile).toBe("windows_trt_6g");
-		expect(manifest.runtime.python).toMatch(/^3\.10\./);
-		expect(manifest.runtime.installPolicy.voxcpm).toBe("no-deps");
-		expect(manifest.runtime.installPolicy.excludedPackages.torchcodec).toMatch(
-			/Windows wheel/,
-		);
-		expect(manifest.model.revision).toMatch(/^[a-f0-9]{40}$/);
-		for (const value of Object.values(manifest.runtime.packages))
-			expect(String(value)).not.toMatch(/[<>=~^*]/);
-	});
-
-	it("builds the Windows TRT payload without installing runtime dependencies on end-user PCs", () => {
-		const builder = readFileSync(
-			resolve(SHELL, "scripts/build-voxcpm2-runtime.ps1"),
+		const stageCascade = readFileSync(
+			resolve(SHELL, "scripts/stage-cascade-loader.mjs"),
 			"utf8",
 		);
-		expect(builder).toContain('"--no-deps", "voxcpm==');
-		expect(builder).toContain('"tensorrt-cu12_bindings==');
-		expect(builder).toContain('"tensorrt-cu12_libs==');
-		expect(builder).toContain("torchcodec dependency");
-		expect(builder).toContain('"Lib\\EXTERNALLY-MANAGED"');
-		expect(builder).toContain("VOXCPM2_RUNTIME_ARTIFACT");
+		expect(stageCascade).toContain(
+			"legacy generic Cascade compatibility bundle",
+		);
+		expect(stageCascade).toContain("src-tauri/cascade-runtime");
+		expect(stageCascade).not.toContain("src-tauri/voxcpm2-runtime");
 	});
 
-	it("keeps the direct VoxCPM2 runtime callable from the Tauri WebView only", () => {
-		const runtime = readFileSync(
-			resolve(SHELL, "src-tauri/windows/voxcpm2-runtime.py"),
+	it("stages a digest-pinned standalone TRT artifact without installing end-user packages", () => {
+		const stage = readFileSync(
+			resolve(SHELL, "scripts/stage-voxcpm2-runtime.mjs"),
 			"utf8",
 		);
-		expect(runtime).toContain('"http://tauri.localhost"');
-		expect(runtime).toContain('"tauri://localhost"');
-		expect(runtime).toContain("Access-Control-Allow-Origin");
-		expect(runtime).toContain("def do_OPTIONS(self):");
-		expect(runtime).toContain("traceback.print_exc()");
-		expect(runtime).toContain("configure_windows_safetensors()");
-		expect(runtime).toContain('kwargs["backend"] = "pread"');
-		expect(runtime).not.toContain('Access-Control-Allow-Origin", "*"');
+		expect(stage).toContain("NAIA_VOXCPM2_TRT_RUNTIME_DIR");
+		expect(stage).toContain("NAIA_VOXCPM2_TRT_ARTIFACT_SHA256");
+		expect(stage).toContain("https://github.com/nextain/voxcpm2-tensorrt");
+		expect(stage).not.toMatch(/\b(?:pip install|uv pip|uv python|uv venv)\b/i);
+		expect(stage).not.toContain("../../../naia-labs");
+		expect(stage).not.toContain("../../../naia-omni-cascade");
+	});
+
+	it("starts and cleans up only the standalone VoxCPM2 module", () => {
 		const rust = readFileSync(resolve(SHELL, "src-tauri/src/lib.rs"), "utf8");
+		expect(rust).toContain(
+			'"from voxcpm2_tensorrt.http_server import main; main()"',
+		);
+		expect(rust).toContain("local_access_token: local_access_token.as_str()");
+		expect(rust).toContain("validate_voxcpm2_ready(&ready");
+		expect(rust).toContain("Failed to send VoxCPM2 activation");
+		expect(rust).toContain("voxcpm2_allowed_origins(debug_e2e_enabled())");
+		expect(rust).toContain(
+			'"http://tauri.localhost,tauri://localhost,http://127.0.0.1:1422,http://localhost:1422"',
+		);
 		expect(rust).toContain('.env("PYTHONUTF8", "1")');
 		expect(rust).toContain('.env("PYTHONIOENCODING", "utf-8")');
+		expect(rust).toContain('.env("PYTHONDONTWRITEBYTECODE", "1")');
+		for (const platform of ["windows", "linux", "macos"]) {
+			const source = readFileSync(
+				resolve(SHELL, `src-tauri/src/platform/${platform}.rs`),
+				"utf8",
+			);
+			expect(source).toContain("voxcpm2_tensorrt.http_server");
+		}
 	});
 
 	it("prepares only the model and rolls back a failed engine replacement", () => {
@@ -259,11 +259,23 @@ describe("platform-matrix 스키마 (FR-INSTALL.1)", () => {
 			resolve(SHELL, "src-tauri/windows/prepare-voxcpm2-model.ps1"),
 			"utf8",
 		);
-		expect(provisioner).not.toMatch(/\b(?:pip install|uv pip|uv python|uv venv)\b/i);
+		expect(provisioner).not.toMatch(
+			/\b(?:pip install|uv pip|uv python|uv venv)\b/i,
+		);
+		expect(provisioner).toContain("voxcpm2_tensorrt.artifact");
+		expect(provisioner).toContain("voxcpm2_tensorrt.materialize_voxcpm2_model");
+		expect(provisioner).toContain("voxcpm2_tensorrt.build_voxcpm2_trt");
+		expect(provisioner).toContain("MODEL_RECEIPT_NAME");
 		expect(provisioner).toContain("voxcpm2_trt.pending");
 		expect(provisioner).toContain("voxcpm2_trt.backup");
-		expect(provisioner).toContain('--model-dir $modelDir');
-		expect(provisioner).toContain("Move-Item -LiteralPath $backup -Destination $engine");
+		expect(provisioner).toContain("PYTHONDONTWRITEBYTECODE");
+		expect(provisioner).toContain('@("-B", "-I"');
+		expect(provisioner).toContain("VOXCPM2_MODEL_PREPARE_REQUIRED");
+		expect(provisioner).toContain("VOXCPM2_ENGINE_PREPARE_REQUIRED");
+		expect(provisioner).toContain('"--model-dir", $ModelDir');
+		expect(provisioner).toContain(
+			"Move-Item -LiteralPath $Backup -Destination $Engine",
+		);
 	});
 
 	it("darwin icon = 전체 배열 (base 5원소 + icns — 부분 델타 금지, RFC 7386 배열 대체)", () => {
@@ -622,9 +634,7 @@ describe("conf 생성 golden (FR-INSTALL.2)", () => {
 			cascadeLoaderPresent: false,
 			voxcpm2RuntimePresent: true,
 		});
-		expect(windows.bundle.resources["voxcpm2-runtime"]).toBe(
-			"voxcpm2-runtime",
-		);
+		expect(windows.bundle.resources["voxcpm2-runtime"]).toBe("voxcpm2-runtime");
 		for (const os of ["linux", "darwin"] as const) {
 			const conf = generateConf(matrix, os, {
 				voxcpm2RuntimePresent: true,

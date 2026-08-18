@@ -11,6 +11,49 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { useCascadeAvatarStore } from "../../stores/cascade-avatar";
 import { RefAudioSection } from "../RefAudioSection";
 
+// The local (naia-local-voice) picker now browses the CLOUD catalog — the
+// engine is only involved when speaking. Stub just the two gateway calls so
+// picker tests need no signed-in account; everything else stays real.
+vi.mock("../../lib/voice/ref-audio-api", async (importOriginal) => {
+	const actual =
+		await importOriginal<typeof import("../../lib/voice/ref-audio-api")>();
+	return {
+		...actual,
+		getRefAudioPresets: vi.fn(),
+		applyRefAudioPreset: vi.fn(),
+	};
+});
+import {
+	applyRefAudioPreset,
+	getRefAudioPresets,
+} from "../../lib/voice/ref-audio-api";
+
+const CLOUD_PRESETS = [
+	{
+		id: "cc0-ko-female-01",
+		name: "여성 음색 1",
+		locale: "ko",
+		gender: "female",
+		durationSeconds: 8,
+		sampleUrl:
+			"https://stnaiapub.example/ref-audio/cc0/cc0-ko-female-01.wav",
+		sampleFormat: "wav",
+		source: "mozilla-common-voice",
+		license: "cc0",
+	},
+	{
+		id: "cc0-ko-male-01",
+		name: "남성 음색 1",
+		locale: "ko",
+		gender: "male",
+		durationSeconds: 8,
+		sampleUrl: "https://stnaiapub.example/ref-audio/cc0/cc0-ko-male-01.wav",
+		sampleFormat: "wav",
+		source: "mozilla-common-voice",
+		license: "cc0",
+	},
+];
+
 describe("RefAudioSection", () => {
 	afterEach(() => {
 		cleanup();
@@ -19,41 +62,39 @@ describe("RefAudioSection", () => {
 		vi.unstubAllGlobals();
 	});
 
-	it("retries local voice presets when the cascade facade becomes ready", async () => {
+	it("local preset picker browses the cloud catalog and never touches the engine", async () => {
+		// Regression guard for the empty-picker bug: binding the local picker to the
+		// engine's /ref/voices made browse dead until the engine finished loading
+		// (~77s model load) and authenticated. The picker must work engine-off.
 		localStorage.setItem(
 			"naia-config",
 			JSON.stringify({
 				ttsProvider: "naia-local-voice",
-				vllmTtsHost: "http://localhost:8910",
+				vllmTtsHost: "http://127.0.0.1:8910",
 			}),
 		);
-		const fetchMock = vi
-			.fn()
-			.mockRejectedValueOnce(new Error("runtime is still starting"))
-			.mockResolvedValue({
-				ok: true,
-				json: async () => ({ voices: [] }),
-			});
+		// The engine is DOWN: every direct fetch (health) fails.
+		const fetchMock = vi.fn().mockRejectedValue(new Error("engine down"));
 		vi.stubGlobal("fetch", fetchMock);
+		vi.mocked(getRefAudioPresets).mockResolvedValue(CLOUD_PRESETS);
 
 		render(<RefAudioSection />);
-		await waitFor(() =>
-			expect(fetchMock).toHaveBeenCalledWith(
-				"http://localhost:8910/ref/voices",
-			),
-		);
+		const details = document.querySelector("details");
+		expect(details).not.toBeNull();
+		(details as HTMLDetailsElement).open = true;
+		fireEvent(details as HTMLDetailsElement, new Event("toggle"));
 
-		act(() => {
-			useCascadeAvatarStore
-				.getState()
-				.setLocalFacadeUrl("http://127.0.0.1:8910");
-		});
-
+		// Both catalog voices render even though the engine is unreachable.
 		await waitFor(() =>
-			expect(fetchMock).toHaveBeenCalledWith(
-				"http://127.0.0.1:8910/ref/voices",
-			),
+			expect(screen.getAllByText("Apply").length).toBe(2),
 		);
+		expect(getRefAudioPresets).toHaveBeenCalledTimes(1);
+		// And the picker made NO engine palette request.
+		expect(
+			fetchMock.mock.calls.some(([url]) =>
+				String(url).includes("/ref/voices"),
+			),
+		).toBe(false);
 	});
 
 	it("#429: an uploaded local reference stays the active voice — presets must not stomp it", async () => {
@@ -69,37 +110,17 @@ describe("RefAudioSection", () => {
 		);
 		// 저장된 로컬 업로드(레퍼런스 WAV base64) 존재 상태 — 실제 저장 키 사용.
 		localStorage.setItem("naia.voiceRefAudioB64", btoa("RIFFfakewav"));
-		vi.stubGlobal(
-			"fetch",
-			vi.fn().mockResolvedValue({
-				ok: true,
-				json: async () => ({
-					voices: [
-						{
-							name: "ref_ko_485.wav",
-							url: "http://127.0.0.1:8910/ref/audio/ref_ko_485.wav",
-							gender: "female",
-							lang: "ko",
-							idx: 1,
-							default: true,
-						},
-					],
-				}),
-			}),
-		);
+		// The engine may be down — refresh must not care (health probe fails).
+		const fetchMock = vi.fn().mockRejectedValue(new Error("engine down"));
+		vi.stubGlobal("fetch", fetchMock);
 
 		render(<RefAudioSection />);
 
-		// refresh(프리셋 fetch)가 실제로 끝난 뒤에 판정해야 구 코드의 늦은 스톰프를
-		// 놓치지 않는다 — 초기값 순간 통과(공허)를 차단.
-		const fetchMock = window.fetch as ReturnType<typeof vi.fn>;
-		await waitFor(() =>
-			expect(fetchMock).toHaveBeenCalledWith(
-				"http://127.0.0.1:8910/ref/voices",
-			),
-		);
-		await new Promise((resolve) => setTimeout(resolve, 0));
-		await new Promise((resolve) => setTimeout(resolve, 0));
+		// Let refresh (async health probe + state updates) fully settle.
+		await act(async () => {
+			await new Promise((resolve) => setTimeout(resolve, 20));
+		});
+		// refresh never rewrites the stored selection over the upload.
 		const saved = JSON.parse(localStorage.getItem("naia-config") || "{}");
 		expect(saved.voiceRefUrl).toBe(
 			"http://127.0.0.1:8910/ref/audio/uploaded-c0ffee.wav",
@@ -204,42 +225,20 @@ describe("RefAudioSection", () => {
 		expect(screen.getByText(/recording & upload are free/i)).toBeDefined();
 	});
 
-	it("persists a non-default local preset without calling the cloud gateway", async () => {
+	it("applies a local preset by persisting config only — no gateway apply, no engine", async () => {
 		localStorage.setItem(
 			"naia-config",
 			JSON.stringify({
 				ttsProvider: "naia-local-voice",
 				vllmTtsHost: "http://127.0.0.1:8910",
-				voiceRefUrl: "http://127.0.0.1:8910/ref/audio/ref_ko_485.wav",
+				voiceRefUrl: CLOUD_PRESETS[0].sampleUrl,
 			}),
 		);
-		const fetchMock = vi.fn().mockResolvedValue({
-			ok: true,
-			json: async () => ({
-				voices: [
-					{
-						name: "ref_ko_485.wav",
-						url: "http://127.0.0.1:8910/ref/audio/ref_ko_485.wav",
-						gender: "female",
-						lang: "ko",
-						idx: 1,
-						default: true,
-					},
-					{
-						name: "male-20s-01.wav",
-						url: "http://127.0.0.1:8910/ref/audio/male-20s-01.wav",
-						gender: "male",
-						lang: "ko",
-						idx: 1,
-						default: false,
-					},
-				],
-			}),
-		});
+		const fetchMock = vi.fn().mockRejectedValue(new Error("engine down"));
 		vi.stubGlobal("fetch", fetchMock);
+		vi.mocked(getRefAudioPresets).mockResolvedValue(CLOUD_PRESETS);
 
 		render(<RefAudioSection />);
-		await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
 		const details = document.querySelector("details");
 		expect(details).not.toBeNull();
 		(details as HTMLDetailsElement).open = true;
@@ -250,51 +249,31 @@ describe("RefAudioSection", () => {
 
 		await waitFor(() => {
 			const saved = JSON.parse(localStorage.getItem("naia-config") ?? "{}");
-			expect(saved.voiceRefUrl).toBe(
-				"http://127.0.0.1:8910/ref/audio/male-20s-01.wav",
-			);
+			expect(saved.voiceRefUrl).toBe(CLOUD_PRESETS[1].sampleUrl);
 		});
-		expect(fetchMock).toHaveBeenCalled();
+		// Local apply is config-only: no gateway preset POST, no engine call.
+		expect(applyRefAudioPreset).not.toHaveBeenCalled();
 		expect(
-			fetchMock.mock.calls.every(
-				([url]) => url === "http://127.0.0.1:8910/ref/voices",
+			fetchMock.mock.calls.some(([url]) =>
+				String(url).includes("/ref/voices"),
 			),
-		).toBe(true);
+		).toBe(false);
 	});
 
-	it("starts Naia Local and downloads the preset before preview playback", async () => {
+	it("previews a local preset by playing its public sampleUrl directly — no engine gate", async () => {
 		localStorage.setItem(
 			"naia-config",
 			JSON.stringify({
 				ttsProvider: "naia-local-voice",
 				vllmTtsHost: "http://127.0.0.1:8910",
+				voiceRefUrl: CLOUD_PRESETS[0].sampleUrl,
 			}),
 		);
-		const sampleUrl = "http://127.0.0.1:8910/ref/audio/male-20s-01.wav";
-		const fetchMock = vi.fn().mockImplementation((url: string) => {
-			if (url.endsWith("/ref/voices")) {
-				return Promise.resolve({
-					ok: true,
-					json: async () => ({
-						voices: [
-							{
-								name: "male-20s-01.wav",
-								url: sampleUrl,
-								gender: "male",
-								lang: "ko",
-								idx: 1,
-								default: true,
-							},
-						],
-					}),
-				});
-			}
-			return Promise.resolve({
-				ok: true,
-				blob: async () => new Blob(["wav"], { type: "audio/wav" }),
-			});
-		});
+		const fetchMock = vi.fn().mockRejectedValue(new Error("engine down"));
+		vi.stubGlobal("fetch", fetchMock);
+		vi.mocked(getRefAudioPresets).mockResolvedValue(CLOUD_PRESETS);
 		const play = vi.fn().mockResolvedValue(undefined);
+		const audioSrcs: string[] = [];
 		vi.stubGlobal(
 			"Audio",
 			class {
@@ -303,23 +282,31 @@ describe("RefAudioSection", () => {
 				onerror: (() => void) | null = null;
 				pause = vi.fn();
 				play = play;
+				constructor(src?: string) {
+					if (src) audioSrcs.push(src);
+				}
 			},
 		);
-		vi.stubGlobal("fetch", fetchMock);
-		vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:preset-preview");
-		vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => {});
 		const ensureLocalVoiceReady = vi.fn().mockResolvedValue(true);
 
-		render(
-			<RefAudioSection ensureLocalVoiceReady={ensureLocalVoiceReady} />,
-		);
-		await waitFor(() => expect(screen.getByText("Play")).toBeDefined());
-		fireEvent.click(screen.getByText("Play"));
+		render(<RefAudioSection ensureLocalVoiceReady={ensureLocalVoiceReady} />);
+		const details = document.querySelector("details");
+		(details as HTMLDetailsElement).open = true;
+		fireEvent(details as HTMLDetailsElement, new Event("toggle"));
+		await waitFor(() => expect(screen.getAllByText("Play").length).toBe(2));
+		fireEvent.click(screen.getAllByText("Play")[1]);
 
 		await waitFor(() => {
-			expect(ensureLocalVoiceReady).toHaveBeenCalledTimes(1);
-			expect(fetchMock).toHaveBeenCalledWith(sampleUrl);
-			expect(play).toHaveBeenCalledTimes(1);
+			// The public catalog sample plays directly.
+			expect(play).toHaveBeenCalled();
+			expect(audioSrcs).toContain(CLOUD_PRESETS[1].sampleUrl);
 		});
+		// No engine readiness gate and no auth-gated /ref/audio download.
+		expect(ensureLocalVoiceReady).not.toHaveBeenCalled();
+		expect(
+			fetchMock.mock.calls.some(([url]) =>
+				String(url).includes("/ref/audio"),
+			),
+		).toBe(false);
 	});
 });

@@ -36,7 +36,11 @@ import {
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { gzipSync } from "node:zlib";
-import { REQUIRED_AGENT_COMMIT, REQUIRED_PROTO_SHA256 } from "./agent-pairing.mjs";
+import {
+	parseGitWorktreePaths,
+	REQUIRED_AGENT_COMMIT,
+	REQUIRED_PROTO_SHA256,
+} from "./agent-pairing.mjs";
 import { herdrReleaseDir } from "./stage-herdr.mjs";
 
 const SHELL = resolve(dirname(fileURLToPath(import.meta.url)), ".."); // packages/shell
@@ -130,6 +134,14 @@ function isPairedAgentCheckout(dir) {
 
 function agentCandidates() {
 	const candidates = [...STATIC_AGENT_CANDIDATES];
+	for (const repository of STATIC_AGENT_CANDIDATES) {
+		if (!existsSync(repository)) continue;
+		candidates.push(
+			...parseGitWorktreePaths(
+				gitOutput(repository, ["worktree", "list", "--porcelain"]),
+			),
+		);
+	}
 	for (const root of AGENT_WORKTREE_ROOTS) {
 		if (!existsSync(root)) continue;
 		for (const entry of readdirSync(root, { withFileTypes: true })) {

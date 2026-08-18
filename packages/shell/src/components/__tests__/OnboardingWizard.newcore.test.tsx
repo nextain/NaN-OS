@@ -140,10 +140,12 @@ describe("OnboardingWizard — newCore 배선(step-flow graft step2)", () => {
 		});
 	});
 
-	it("naia_auth_complete → core.onNaiaAuthCallback(naiaKey) 호출(게이트 해제 mirror)", () => {
+	it("naia_auth_complete → core.onNaiaAuthCallback(naiaKey) 호출(게이트 해제 mirror)", async () => {
 		render(<OnboardingWizard onComplete={onComplete} />);
-		act(() => {
-			eventListeners.get("naia_auth_complete")?.({
+		// The handler is async now (#449: login also activates credits before
+		// advancing to the voice step) — await its promise chain before asserting.
+		await act(async () => {
+			await eventListeners.get("naia_auth_complete")?.({
 				payload: { naiaKey: "gw-key", naiaUserId: "u1" },
 			});
 		});

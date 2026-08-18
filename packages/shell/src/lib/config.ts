@@ -26,8 +26,26 @@ export const DEFAULT_NAIA_LOCAL_URL = "ws://127.0.0.1:8892";
  * Voice) on the gateway's public bucket — sent as `ref_audio_url` so the omni
  * voice is always a stable human voice, never the unconditioned/random default.
  */
+// Azure public blob is the canonical host (GCP is being retired). Preview plays
+// this through `new Audio(url)` which the webview CSP `media-src` gates — the
+// Azure host must therefore stay on that allow-list (tauri.conf.json), or every
+// preview dies as a silent "playback failed".
 export const DEFAULT_VOICE_REF_URL =
 	"https://stnaiapub83b29893.blob.core.windows.net/ref-audio/cc0/cc0-ko-female-01.wav";
+
+/**
+ * Rewrite a legacy GCS preset URL to the canonical Azure host. The gateway
+ * catalog still serves storage.googleapis.com sample URLs, but GCP is being
+ * retired — previews against it fail (MEDIA_ERR_SRC_NOT_SUPPORTED) and any
+ * stored GCS URL would break outright once the bucket is gone. Same blob
+ * layout on both hosts, so only the prefix changes.
+ */
+export function canonicalRefAudioUrl(url: string): string {
+	return url.replace(
+		/^https:\/\/storage\.googleapis\.com\/naia-ref-audio-presets\//,
+		"https://stnaiapub83b29893.blob.core.windows.net/ref-audio/",
+	);
+}
 
 export type ThemeId =
 	| "system"
@@ -868,7 +886,11 @@ export const DEFAULT_VLLM_HOST = "http://localhost:8000";
 // 로컬 음성 기본 호스트 = 비공개 Naia Media Runtime(:8910).
 // 음성 전용은 /v1/audio/speech, 비디오 아바타 결합 발화는 /stream_text를 사용한다.
 // 원시 VoxCPM2·Ditto 어댑터의 주소와 조합은 Runtime이 소유하며 Shell에 노출하지 않는다.
-export const DEFAULT_LOCAL_VOICE_HOST = "http://localhost:8910";
+// 반드시 127.0.0.1(IPv4 loopback): 엔진은 127.0.0.1 에만 바인딩하는데, Windows 에서
+// "localhost" 는 ::1(IPv6) 로 먼저 해석돼 fetch 가 타임아웃/거부된다. 그러면 준비 판정이
+// localFacadeUrl(127.0.0.1) 이 채워지기 전 폴백 경로에서 실패해 RefAudioSection 이 잘못
+// "엔진 꺼짐"으로 뜬다. localVoiceFacadeUrlFromReady 도 127.0.0.1 을 돌려주므로 일관된다.
+export const DEFAULT_LOCAL_VOICE_HOST = "http://127.0.0.1:8910";
 
 /** Retire legacy GPU-profile authority without changing the LLM or avatar. */
 export function reconcileExplicitLocalProfile(config: AppConfig): AppConfig {

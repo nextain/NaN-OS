@@ -144,6 +144,15 @@ export function configureCodexE2eEnvironment(): void {
 	process.env.NAIA_E2E_MOCK_CLONE = "1";
 	process.env.NAIA_E2E_ADK_PATH = E2E_WORKSPACE;
 	process.env.NAIA_E2E_RUNTIME_DIR = E2E_RUNTIME;
+	process.env.NAIA_VOXCPM2_RUNTIME_ROOT = resolve(
+		process.env.NAIA_E2E_VOXCPM2_RUNTIME_ROOT ??
+			resolve(E2E_RUNTIME, "voxcpm2-runtime"),
+	);
+	process.env.NAIA_E2E_VOXCPM2_BUNDLE_ROOT ??= resolve(
+		SHELL_DIR,
+		"src-tauri",
+		"voxcpm2-runtime",
+	);
 	process.env.NAIA_E2E_ARTIFACTS_DIR = E2E_ARTIFACTS;
 	process.env.NAIA_E2E_SECURE_STORE_FILE = resolve(
 		E2E_RUNTIME,

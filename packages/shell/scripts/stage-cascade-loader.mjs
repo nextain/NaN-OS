@@ -1,9 +1,10 @@
 #!/usr/bin/env node
 /**
- * Stage only the legacy generic Cascade loader used by non-product developer
- * flows. Windows local voice is packaged independently by
- * stage-voxcpm2-runtime.mjs; adding VoxCPM2 service/runtime assets here would
- * couple the two lifecycles again.
+ * Stage the legacy generic Cascade compatibility bundle used by its existing
+ * developer and avatar flows. This path intentionally preserves the historical
+ * Cascade-owned VoxCPM2 pieces until that product is migrated separately.
+ * Windows standalone local voice is packaged independently by
+ * stage-voxcpm2-runtime.mjs and never consumes this bundle.
  */
 import { copyFileSync, cpSync, existsSync, mkdirSync, rmSync } from "node:fs";
 import { resolve } from "node:path";
@@ -14,7 +15,10 @@ const loaderSource = resolve(manager, "loader");
 const preloadSource = resolve(manager, "scripts/avatar_preload.py");
 const destinationRoot = resolve(shell, "src-tauri/cascade-loader");
 const loaderDestination = resolve(destinationRoot, "loader");
-const preloadDestination = resolve(destinationRoot, "scripts/avatar_preload.py");
+const preloadDestination = resolve(
+	destinationRoot,
+	"scripts/avatar_preload.py",
+);
 const cascadeSource = resolve(shell, "../../../naia-omni-cascade");
 const labsServiceSource = resolve(shell, "../../../naia-labs/avatar/service");
 const runtimeDestination = resolve(shell, "src-tauri/cascade-runtime");
@@ -55,10 +59,14 @@ const cascadeDestination = resolve(runtimeRepos, "naia-omni-cascade");
 mkdirSync(resolve(cascadeDestination, "assets"), { recursive: true });
 const sourceFilter = (source) =>
 	!source.includes("__pycache__") && !source.includes(".pytest_cache");
-cpSync(resolve(cascadeSource, "services"), resolve(cascadeDestination, "services"), {
-	recursive: true,
-	filter: sourceFilter,
-});
+cpSync(
+	resolve(cascadeSource, "services"),
+	resolve(cascadeDestination, "services"),
+	{
+		recursive: true,
+		filter: sourceFilter,
+	},
+);
 cpSync(
 	resolve(cascadeSource, "output_cascade"),
 	resolve(cascadeDestination, "output_cascade"),
@@ -83,7 +91,10 @@ for (const file of [
 	"voxcpm2_int8.py",
 	"build_voxcpm2_trt.py",
 ]) {
-	copyFileSync(resolve(labsServiceSource, file), resolve(labsDestination, file));
+	copyFileSync(
+		resolve(labsServiceSource, file),
+		resolve(labsDestination, file),
+	);
 }
 copyFileSync(
 	resolve(shell, "src-tauri/windows/voxcpm2-runtime.py"),

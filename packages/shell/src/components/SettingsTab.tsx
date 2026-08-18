@@ -779,6 +779,42 @@ export function SettingsTab() {
 	const [cascadeRunning, setCascadeRunning] = useState(false);
 	const [cascadeBusy, setCascadeBusy] = useState(false);
 	const [cascadeMsg, setCascadeMsg] = useState("");
+	// #453 FR-VOICE.17: live download/install progress for the local voice
+	// runtime. Rust emits `voxcpm2_install_progress` during the multi-GB archive
+	// download and each install step, so the user sees the download is actually
+	// happening (select -> download -> verify -> install -> engine build -> ready)
+	// instead of a frozen "Installing..." message.
+	const [voxcpm2Progress, setVoxcpm2Progress] = useState<{
+		phase: string;
+		downloaded?: number;
+		total?: number;
+		percent?: number;
+		label?: string;
+		step?: string;
+	} | null>(null);
+	// #453: a failed local-voice install rolls the provider back to a cloud/edge
+	// default, which unmounts the naia-local-voice section — and with it any
+	// error shown inside that section. Keep the reason in a provider-independent
+	// banner so the user can actually read why it failed (e.g. disk space) and
+	// retry, instead of the dialog "just closing".
+	const [voxcpm2InstallError, setVoxcpm2InstallError] = useState<string | null>(
+		null,
+	);
+	useEffect(() => {
+		const unlisten = listen<{
+			phase: string;
+			downloaded?: number;
+			total?: number;
+			percent?: number;
+			label?: string;
+			step?: string;
+		}>("voxcpm2_install_progress", (event) => {
+			setVoxcpm2Progress(event.payload);
+		});
+		return () => {
+			void unlisten.then((fn) => fn());
+		};
+	}, []);
 	// FR-VOICE.13 (#419): 마이그레이션이 로컬 음성을 껐다면 사유를 표기하고 복구 액션 제공.
 	const [voiceMigrationNotice, setVoiceMigrationNotice] = useState(
 		existing?.localVoiceMigrationNotice != null,
@@ -796,7 +832,6 @@ export function SettingsTab() {
 	}, []);
 	const [voxcpm2Installation, setVoxCpm2Installation] =
 		useState<VoxCpm2InstallationStatus | null>(null);
-	const [cascadeInstallBusy, setCascadeInstallBusy] = useState(false);
 	const voxcpm2InstallationRequestRef = useRef(0);
 	const refreshVoxCpm2Installation = useCallback(async () => {
 		const generation = ++voxcpm2InstallationRequestRef.current;
@@ -818,28 +853,8 @@ export function SettingsTab() {
 			return null;
 		}
 	}, []);
-	const installCascadeRuntime = useCallback(async () => {
-		if (cascadeInstallBusy) return;
-		setCascadeInstallBusy(true);
-		setCascadeMsg("");
-		try {
-			const status = await invoke<unknown>("install_voxcpm2_runtime");
-			if (!isVoxCpm2InstallationStatus(status))
-				throw new Error("Invalid post-install status");
-			setVoxCpm2Installation(status);
-			setCascadeMsg(t("settings.localVoiceInstallReady"));
-		} catch (error) {
-			Logger.error("Settings", "VoxCPM2 managed installation failed", {
-				error: String(error),
-			});
-			setCascadeMsg(t("settings.localVoiceInstallFailed"));
-		} finally {
-			setCascadeInstallBusy(false);
-			void refreshVoxCpm2Installation();
-		}
-	}, [cascadeInstallBusy, refreshVoxCpm2Installation]);
 	useEffect(() => {
-	invoke<boolean>("voxcpm2_status")
+		invoke<boolean>("voxcpm2_status")
 			.then(setCascadeRunning)
 			.catch(() => {});
 	}, []);
@@ -881,7 +896,21 @@ export function SettingsTab() {
 				);
 				clearTimeout(to);
 				const h = await res.json();
-				if (alive) setCascadeHealth(h);
+				// The direct VoxCPM2 runtime has no tts_enabled/avatar fields — its
+				// contract is {service:"voxcpm2-tensorrt", ready, capabilities}.
+				// Without this mapping the TTS slot read "◌ 대기 중" forever while
+				// the engine was fully serving (2026-08-18 실측).
+				const normalized =
+					h?.service === "voxcpm2-tensorrt"
+						? {
+								ok: h.ready === true,
+								tts: h.ready === true,
+								avatar: false,
+								tts_enabled: h.ready === true,
+								avatar_enabled: false,
+							}
+						: h;
+				if (alive) setCascadeHealth(normalized);
 			} catch {
 				if (alive) setCascadeHealth(null);
 			}
@@ -922,6 +951,7 @@ export function SettingsTab() {
 			if (isVoxCpm2InstallationStatus(installed))
 				setVoxCpm2Installation(installed);
 			installation = await refreshVoxCpm2Installation();
+			setVoxcpm2Progress(null);
 			if (!installation?.canStart)
 				return {
 					ready: null,
@@ -986,11 +1016,45 @@ export function SettingsTab() {
 	const ensureLocalVoiceReady = async (
 		normalizeFailedLocal = false,
 	): Promise<boolean> => {
-		if (cascadeRunning) return true;
+		Logger.debug("Settings", "ensureLocalVoiceReady:entry", {
+			cascadeRunning,
+			hasFacade: !!useCascadeAvatarStore.getState().localFacadeUrl,
+			transaction: localVoiceTransactionRef.current,
+		});
+		if (cascadeRunning) {
+			// The engine is already running (auto-start / a prior selection), but the
+			// webview may never have captured its facade URL + per-launch token — then
+			// RefAudioSection, preview, upload and synthesis all 401 (empty palette,
+			// no sound, upload error). Re-fetch the ready payload (start_voxcpm2
+			// returns the cached ready of the app's own running engine, incl. the
+			// token) so the webview is authenticated to the loopback runtime.
+			const store = useCascadeAvatarStore.getState();
+			if (!store.localFacadeUrl) {
+				try {
+					const start = await startCascadeAndConfirm("windows_trt_6g");
+					const url = start.ready
+						? localVoiceFacadeUrlFromReady(start.ready)
+						: null;
+					if (url) store.setLocalFacadeUrl(url);
+					Logger.debug("Settings", "ensureLocalVoiceReady:facade-recovered", {
+						gotReady: !!start.ready,
+						facade: url,
+					});
+				} catch (error) {
+					Logger.warn(
+						"Settings",
+						"ensureLocalVoiceReady:facade-recovery-failed",
+						{ error: String(error) },
+					);
+				}
+			}
+			return true;
+		}
 		if (localVoiceTransactionRef.current) return false;
 		localVoiceTransactionRef.current = true;
 		setCascadeBusy(true);
 		setCascadeMsg("");
+		setVoxcpm2InstallError(null);
 		// FR-VOICE.13: enabling clears the migration notice via normalization,
 		// but only a SUCCESSFUL start is a real recovery — a failed attempt
 		// that turns voice back off must not erase the recorded reason.
@@ -1002,6 +1066,10 @@ export function SettingsTab() {
 			const cfg = loadConfig();
 			if (!cfg || detectedVramGb == null || detectedVramGb < 6) {
 				setCascadeMsg(t("settings.localVoiceVramRequired"));
+				return false;
+			}
+			if (!naiaKey) {
+				setCascadeMsg(t("settings.ttsNaiaRequired"));
 				return false;
 			}
 			originalConfig = cfg;
@@ -1039,12 +1107,14 @@ export function SettingsTab() {
 					normalizeFailedLocal,
 				);
 				setCascadeMsg(start.message ?? t("settings.cascadeError"));
+				setVoxcpm2InstallError(start.message ?? t("settings.cascadeError"));
 				return false;
 			}
 			const localUrl = localVoiceFacadeUrlFromReady(start.ready);
 			useCascadeAvatarStore.getState().setLocalFacadeUrl(localUrl);
 			setCascadeRunning(true);
 			setCascadeMsg(t("settings.cascadeStarted"));
+			setVoxcpm2InstallError(null);
 			return true;
 		} catch (e) {
 			if (originalConfig) {
@@ -1061,6 +1131,7 @@ export function SettingsTab() {
 				}
 			}
 			setCascadeMsg(`${t("settings.cascadeError")}: ${String(e)}`);
+			setVoxcpm2InstallError(`${t("settings.cascadeError")}: ${String(e)}`);
 			return false;
 		} finally {
 			localVoiceTransactionRef.current = false;
@@ -3848,7 +3919,7 @@ export function SettingsTab() {
 													className="settings-reset-btn"
 													onClick={async () => {
 														try {
-													await invoke("stop_voxcpm2");
+															await invoke("stop_voxcpm2");
 														} catch {
 															/* already stopped */
 														}
@@ -4058,6 +4129,7 @@ export function SettingsTab() {
 															onClick={handleToggleCascade}
 															disabled={
 																cascadeBusy ||
+																!naiaKey ||
 																detectedVramGb == null ||
 																detectedVramGb < 6
 															}
@@ -4158,6 +4230,47 @@ export function SettingsTab() {
 											: cascadeRunning
 												? `✓ ${t("settings.cascadeStarted")}`
 												: cascadeMsg}
+										{voxcpm2Progress &&
+											!cascadeRunning &&
+											((progress: NonNullable<typeof voxcpm2Progress>) => {
+												const total = progress.total ?? 0;
+												const isDownload =
+													progress.phase === "download" && total > 0;
+												const pct = isDownload
+													? Math.min(
+															100,
+															Math.round(
+																((progress.downloaded ?? 0) / total) * 100,
+															),
+														)
+													: Math.max(
+															0,
+															Math.min(
+																100,
+																Math.round(progress.percent ?? 0),
+															),
+														);
+												const ko = getLocale() === "ko";
+												const label = isDownload
+													? `${ko ? "다운로드 중" : "Downloading"} ${Math.round(
+															(progress.downloaded ?? 0) / 1048576,
+														)} / ${Math.round(total / 1048576)} MiB`
+													: (progress.label ??
+														progress.step ??
+														(ko ? "설치 중" : "Installing"));
+												return (
+													<div
+														className="voxcpm2-install-progress"
+														data-testid="voxcpm2-install-progress"
+														data-percent={pct}
+													>
+														<div className="voxcpm2-install-progress-label">
+															{label} — {pct}%
+														</div>
+														<progress value={pct} max={100} />
+													</div>
+												);
+											})(voxcpm2Progress!)}
 									</div>
 								)}
 						</div>
@@ -4861,15 +4974,10 @@ export function SettingsTab() {
 							id="tts-provider-select"
 							data-testid="gateway-tts-provider"
 							value={ttsProvider}
-							onChange={(e) => {
+							onChange={async (e) => {
 								const next = e.target.value as TtsProviderId;
-								if (
-									next === "naia-local-voice" &&
-									voxcpm2Installation?.canStart !== true
-								) {
-									setCascadeMsg(
-										voxcpm2Installation?.summary ?? t("settings.cascadeError"),
-									);
+								if (next === "naia-local-voice") {
+									await selectProfileTtsProvider(next);
 									return;
 								}
 								setTtsProvider(next);
@@ -4885,10 +4993,6 @@ export function SettingsTab() {
 								else setGatewayTtsApiKey("");
 								// naia-local-voice: 로컬 cascade façade(:8910, OpenAI 표면)로 기본값
 								// 채움 → host 비어있으면 합성이 자동으로 로컬 façade 를 가리킴.
-								if (next === "naia-local-voice" && !vllmTtsHost) {
-									setVllmTtsHost(DEFAULT_LOCAL_VOICE_HOST);
-									persistConfig({ vllmTtsHost: DEFAULT_LOCAL_VOICE_HOST });
-								}
 								// Reset voice to provider default
 								const meta = listTtsProviderMetas().find((p) => p.id === next);
 								if (meta?.voices?.[0]) {
@@ -4896,7 +5000,7 @@ export function SettingsTab() {
 								} else if (next === "edge") {
 									// Edge voice will be selected from gateway/hardcoded list
 									persistTtsVoice("");
-								} else if (next === "naia-local-voice" || next === "vllm") {
+								} else if (next === "vllm") {
 									// 로컬 음성: 고정 voice 목록 없음(클로닝). stale 클라우드 voice id 방지로
 									// "default" 고정 — 음색은 RefAudioSection(ref audio)이 담당.
 									persistTtsVoice("default");
@@ -4929,7 +5033,7 @@ export function SettingsTab() {
 									disabled={
 										(p.requiresNaiaKey && !naiaKey) ||
 										(p.id === "naia-local-voice" &&
-											voxcpm2Installation?.canStart !== true)
+											(detectedVramGb == null || detectedVramGb < 6))
 									}
 								>
 									{p.name}
@@ -5025,87 +5129,126 @@ export function SettingsTab() {
 						}
 						return null;
 					})()}
-					<div className="settings-field" data-testid="local-voice-toggle">
-						<label>{t("settings.localVoiceControl")}</label>
-						<button
-							type="button"
-							className="voice-preview-btn"
-							onClick={handleToggleCascade}
-							disabled={
-								cascadeBusy || detectedVramGb == null || detectedVramGb < 6
-							}
-							aria-pressed={cascadeRunning}
+					{voxcpm2InstallError && (
+						<div
+							className="settings-field voxcpm2-install-error"
+							data-testid="voxcpm2-install-error"
+							role="alert"
 						>
-							{cascadeBusy
-								? t("settings.cascadeBusy")
-								: cascadeRunning
-									? t("settings.cascadeStop")
-									: t("settings.cascadeStart")}
-						</button>
-						{cascadeMsg && (
-							<div className="settings-hint" data-testid="cascade-msg">
-								{cascadeMsg}
-							</div>
-						)}
-						{voxcpm2Installation && !voxcpm2Installation.canStart && (
-							<div
-								className="settings-hint"
-								data-testid="local-voice-installation-status"
+							<span className="settings-hint">
+								⚠️ {voxcpm2InstallError}
+							</span>
+						</div>
+					)}
+					{ttsProvider === "naia-local-voice" && (
+						<div className="settings-field" data-testid="local-voice-toggle">
+							<label>{t("settings.localVoiceControl")}</label>
+							<button
+								type="button"
+								className="voice-preview-btn"
+								onClick={handleToggleCascade}
+								disabled={
+									cascadeBusy ||
+									!naiaKey ||
+									detectedVramGb == null ||
+									detectedVramGb < 6
+								}
+								aria-pressed={cascadeRunning}
 							>
-								<div>{t("settings.localVoiceInstallRequired")}</div>
-								{voxcpm2Installation.steps.some(
-									(step) => step.actionAvailable,
-								) && (
+								{cascadeBusy
+									? t("settings.cascadeBusy")
+									: cascadeRunning
+										? t("settings.cascadeStop")
+										: t("settings.cascadeStart")}
+							</button>
+							{cascadeMsg && (
+								<div className="settings-hint" data-testid="cascade-msg">
+									{cascadeMsg}
+								</div>
+							)}
+							{voxcpm2Progress &&
+								!cascadeRunning &&
+								((progress: NonNullable<typeof voxcpm2Progress>) => {
+									const total = progress.total ?? 0;
+									const isDownload =
+										progress.phase === "download" && total > 0;
+									const pct = isDownload
+										? Math.min(
+												100,
+												Math.round(((progress.downloaded ?? 0) / total) * 100),
+											)
+										: Math.max(
+												0,
+												Math.min(100, Math.round(progress.percent ?? 0)),
+											);
+									const ko = getLocale() === "ko";
+									const label = isDownload
+										? `${ko ? "다운로드 중" : "Downloading"} ${Math.round(
+												(progress.downloaded ?? 0) / 1048576,
+											)} / ${Math.round(total / 1048576)} MiB`
+										: (progress.label ??
+											progress.step ??
+											(ko ? "설치 중" : "Installing"));
+									return (
+										<div
+											className="voxcpm2-install-progress"
+											data-testid="voxcpm2-install-progress"
+											data-percent={pct}
+										>
+											<div className="voxcpm2-install-progress-label">
+												{label} — {pct}%
+											</div>
+											<progress value={pct} max={100} />
+										</div>
+									);
+								})(voxcpm2Progress!)}
+							{voxcpm2Installation && !voxcpm2Installation.canStart && (
+								<div
+									className="settings-hint"
+									data-testid="local-voice-installation-status"
+								>
+									{t("settings.localVoiceInstallRequired")}
+								</div>
+							)}
+							{voiceMigrationNotice && (
+								<div
+									className="settings-hint"
+									data-testid="local-voice-migration-notice"
+								>
+									{t("settings.localVoiceMigrationNotice")}
 									<button
 										type="button"
 										className="voice-preview-btn"
-										data-testid="local-voice-install-runtime"
-										onClick={installCascadeRuntime}
-										disabled={cascadeInstallBusy}
-									>
-										{cascadeInstallBusy
-											? t("settings.localVoiceInstalling")
-											: t("settings.localVoiceInstall")}
-									</button>
-								)}
-							</div>
-						)}
-						{voiceMigrationNotice && (
-							<div
-								className="settings-hint"
-								data-testid="local-voice-migration-notice"
-							>
-								{t("settings.localVoiceMigrationNotice")}
-								<button
-									type="button"
-									className="voice-preview-btn"
-									data-testid="local-voice-migration-restore"
-									onClick={async () => {
-										if (await ensureLocalVoiceReady()) {
-											setVoiceMigrationNotice(false);
+										data-testid="local-voice-migration-restore"
+										onClick={async () => {
+											if (await ensureLocalVoiceReady()) {
+												setVoiceMigrationNotice(false);
+											}
+										}}
+										disabled={
+											cascadeBusy ||
+											detectedVramGb == null ||
+											detectedVramGb < 6
 										}
-									}}
-									disabled={
-										cascadeBusy || detectedVramGb == null || detectedVramGb < 6
-									}
-								>
-									{t("settings.localVoiceMigrationRestore")}
-								</button>
+									>
+										{t("settings.localVoiceMigrationRestore")}
+									</button>
+								</div>
+							)}
+							<div className="settings-hint">
+								{detectedVramGb != null && detectedVramGb >= 6
+									? t("settings.localVoiceEngineHint")
+									: t("settings.localVoiceVramRequired")}
 							</div>
-						)}
-						<div className="settings-hint">
-							{detectedVramGb != null && detectedVramGb >= 6
-								? t("settings.localVoiceEngineHint")
-								: t("settings.localVoiceVramRequired")}
 						</div>
-					</div>
+					)}
 
 					{/* vLLM TTS: host URL input */}
 					{(ttsProvider === "vllm" || ttsProvider === "naia-local-voice") && (
 						<div className="settings-field">
 							<label>
 								{ttsProvider === "naia-local-voice"
-									? "Local Voice Host"
+									? "Voice Host"
 									: "vLLM TTS Host"}
 							</label>
 							<input
@@ -5215,7 +5358,10 @@ export function SettingsTab() {
 
 					{/* Voice Reference (naia-anyllm #31, plan §7) — naia-omni only */}
 					{supportsRefAudio && (
-						<RefAudioSection ensureLocalVoiceReady={ensureLocalVoiceReady} />
+						<RefAudioSection
+							ensureLocalVoiceReady={ensureLocalVoiceReady}
+							hideEngineStartControl
+						/>
 					)}
 
 					{/* 오디오 장치 */}
