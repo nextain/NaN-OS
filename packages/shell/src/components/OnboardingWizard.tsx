@@ -1037,13 +1037,16 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
 			// Persist the staged configuration through the explicit shell boundary for
 			// both cores. The new-core completion marker is committed only below.
 			{
-				// G-01: sync to naia-settings/config.json so standalone agent picks up the onboarding result.
-				const saved = loadConfig();
-				if (saved)
-					await writeNaiaConfig({
-						...(saved as unknown as Record<string, unknown>),
-						...buildNaiaConfigEnv(saved),
-					});
+				// G-01: sync to naia-settings/config.json so the standalone agent picks
+				// up the onboarding result. This MUST be the freshly completed config —
+				// loadConfig() here returned the PRE-LOGIN snapshot (completedFlat is
+				// only persisted below), so reloadAgentSettings() re-read a config
+				// without naiaKey/provider and the FIRST session answered with empty
+				// 0-token replies until an app restart (#449 재발, 2026-08-18 실기).
+				await writeNaiaConfig({
+					...(completedFlat as Record<string, unknown>),
+					...buildNaiaConfigEnv(completedFlat as unknown as AppConfig),
+				});
 				// Write naiaKey to OS keychain so standalone naia-agent can read it.
 				if (typeof completedFlat.naiaKey === "string")
 					await writeAgentKeyStrict(
