@@ -403,6 +403,11 @@ export function BgmPlayer({ naia }: Props) {
 								Number.isFinite(currentTime) &&
 								currentTime > 0));
 					if (canObservePlaying) {
+						// The BUTTON state must follow this independent progress signal
+						// too: with onStateChange(1) lost, audio played while the button
+						// still showed "play", so clicking re-sent playVideo and the
+						// video could never be paused (#457 — "정지되지 않음").
+						setPlaying(true);
 						const now = Date.now();
 						const lastProgress = lastProgressObservationRef.current;
 						if (

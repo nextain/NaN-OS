@@ -10,6 +10,7 @@ import {
 	toLocalBlobUrl,
 	writeAgentKeyStrict,
 	writeNaiaConfig,
+	writeSlotsManifest,
 } from "../lib/adk-store";
 import {
 	DEFAULT_NVA_MODEL,
@@ -28,6 +29,7 @@ import {
 	LAB_GATEWAY_URL,
 	NAIA_WEB_BASE_URL,
 	loadConfig,
+	saveConfig,
 	saveConfigSecure,
 } from "../lib/config";
 import { getLocale, t } from "../lib/i18n";
@@ -483,6 +485,33 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
 				if (!installation?.canStart)
 					throw new Error(installation?.summary ?? "verification failed");
 			}
+			// Mirror SettingsTab's selection transaction (config → naia config →
+			// slots manifest → start). Onboarding used to call start_voxcpm2 with
+			// NO manifest, so Rust's profile gate failed with
+			// voxcpm2_profile_manifest_not_ready, and the voice choice never
+			// reached the persisted config (TTS stayed off after onboarding) —
+			// #455. During onboarding the config file may not exist yet, so build
+			// on a minimal base; the final completeWith snapshot merges over it.
+			const naiaKeyForVoice =
+				loadConfig()?.naiaKey ??
+				localStorage.getItem("naia-remote-key") ??
+				undefined;
+			const voiceConfig = {
+				...(loadConfig() ?? ({} as AppConfig)),
+				localVoiceEnabled: true,
+				ttsProvider: "naia-local-voice" as const,
+				ttsEnabled: true,
+				vllmTtsHost: DEFAULT_LOCAL_VOICE_HOST,
+			} as AppConfig;
+			saveConfig(voiceConfig);
+			await writeNaiaConfig({
+				...voiceConfig,
+				...(naiaKeyForVoice ? { naiaKey: naiaKeyForVoice } : {}),
+			} as unknown as Record<string, unknown>);
+			await writeSlotsManifest(
+				{ ...voiceConfig, ...(naiaKeyForVoice ? { naiaKey: naiaKeyForVoice } : {}) },
+				detectedVramGb ?? undefined,
+			);
 			// A resolved CASCADE_READY payload only proves ports were bound — Rust
 			// checks the facade too, so re-confirm readiness the same way
 			// SettingsTab's startCascadeAndConfirm does before trusting "ready".

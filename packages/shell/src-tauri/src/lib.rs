@@ -10592,7 +10592,10 @@ async fn delete_naia_adk(
     std::fs::remove_dir_all(&adk).map_err(|e| format!("Failed to delete {adk_path}: {e}"))
 }
 
-/// Clone nextain/naia-adk (shallow) into adk_path.
+/// Clone nextain/naia-template-project (the ADK canonical — the old
+/// nextain/naia-adk repo is archived and misses the official Naia
+/// characters, so fresh installs seeded a stale workspace; #454) shallow
+/// into adk_path.
 /// Falls back to zip download if git is not installed.
 /// Fails if the directory already exists and is non-empty.
 ///
@@ -10637,7 +10640,7 @@ async fn clone_naia_adk(adk_path: String, app_handle: AppHandle) -> Result<(), S
         "clone",
         "--depth",
         "1",
-        "https://github.com/nextain/naia-adk",
+        "https://github.com/nextain/naia-template-project",
         &adk_path,
     ]);
     platform::hide_console(&mut cmd);
@@ -10663,7 +10666,8 @@ async fn clone_naia_adk(adk_path: String, app_handle: AppHandle) -> Result<(), S
 }
 
 async fn naia_adk_download_zip(adk_path: &str, app_handle: &AppHandle) -> Result<(), String> {
-    const ZIP_URL: &str = "https://github.com/nextain/naia-adk/archive/refs/heads/main.zip";
+    const ZIP_URL: &str =
+        "https://github.com/nextain/naia-template-project/archive/refs/heads/main.zip";
 
     // Stream the download so we can emit byte progress (~200ms throttle).
     let mut response = reqwest::get(ZIP_URL)
