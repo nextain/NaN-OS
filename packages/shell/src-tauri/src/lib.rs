@@ -5100,14 +5100,19 @@ fn voxcpm2_reference_voice_matches(
         && sha256_file_hex(&path).is_ok_and(|actual| actual.eq_ignore_ascii_case(&voice.sha256))
 }
 
+fn voxcpm2_reference_voices_match(
+    runtime_root: &std::path::Path,
+    voices: &[VoxCpm2ReferenceVoiceContract],
+) -> bool {
+    !voices.is_empty()
+        && voices
+            .iter()
+            .all(|voice| voxcpm2_reference_voice_matches(runtime_root, voice))
+}
+
 fn voxcpm2_reference_voice_is_ready(runtime_root: &std::path::Path) -> bool {
     read_voxcpm2_activation_contract().is_ok_and(|contract| {
-        contract
-            .runtime
-            .reference_voices
-            .iter()
-            .find(|voice| voice.is_default)
-            .is_some_and(|voice| voxcpm2_reference_voice_matches(runtime_root, voice))
+        voxcpm2_reference_voices_match(runtime_root, &contract.runtime.reference_voices)
     })
 }
 
@@ -5844,7 +5849,7 @@ fn classify_voxcpm2_installation_for_profile(
             ));
             steps.push(voxcpm2_install_step(
                 "reference-voice",
-                "Default host voice",
+                "Host voice palette",
                 "download",
                 probe.reference_voice,
                 probe.installer_available,
@@ -12272,6 +12277,43 @@ mod tests {
         assert!(!voxcpm2_reference_voice_matches(runtime.path(), &voice));
         std::fs::remove_file(&path).unwrap();
         assert!(!voxcpm2_reference_voice_matches(runtime.path(), &voice));
+    }
+
+    #[test]
+    fn voxcpm2_reference_voice_readiness_requires_the_complete_palette() {
+        let runtime = tempfile::tempdir().unwrap();
+        let voices_dir = runtime.path().join("voices");
+        std::fs::create_dir_all(&voices_dir).unwrap();
+        let female_wav = b"RIFFfemaleWAVE";
+        let male_wav = b"RIFFmaleWAVE";
+        let female_path = voices_dir.join("female.wav");
+        let male_path = voices_dir.join("male.wav");
+        std::fs::write(&female_path, female_wav).unwrap();
+        std::fs::write(&male_path, male_wav).unwrap();
+        let male_sha256 = sha256_file_hex(&male_path).unwrap();
+        std::fs::remove_file(&male_path).unwrap();
+        let voices = vec![
+            VoxCpm2ReferenceVoiceContract {
+                id: "female.wav".to_string(),
+                url: "https://example.invalid/female.wav".to_string(),
+                sha256: sha256_file_hex(&female_path).unwrap(),
+                bytes: female_wav.len() as u64,
+                is_default: true,
+            },
+            VoxCpm2ReferenceVoiceContract {
+                id: "male.wav".to_string(),
+                url: "https://example.invalid/male.wav".to_string(),
+                sha256: male_sha256,
+                bytes: male_wav.len() as u64,
+                is_default: false,
+            },
+        ];
+
+        assert!(!voxcpm2_reference_voices_match(runtime.path(), &voices));
+        std::fs::write(&male_path, male_wav).unwrap();
+        assert!(voxcpm2_reference_voices_match(runtime.path(), &voices));
+        std::fs::write(&male_path, b"RIFFwrongWAVE").unwrap();
+        assert!(!voxcpm2_reference_voices_match(runtime.path(), &voices));
     }
 
     #[test]

@@ -168,7 +168,7 @@ function fixture() {
 }
 
 describe("stageVoxCpm2Runtime", () => {
-	it("pins, verifies, and atomically installs the Shell default reference voice", () => {
+	it("pins, verifies, and atomically installs every approved Shell reference voice", () => {
 		const installer = readFileSync(
 			resolve(process.cwd(), "src-tauri/windows/prepare-voxcpm2-model.ps1"),
 			"utf8",
@@ -176,8 +176,10 @@ describe("stageVoxCpm2Runtime", () => {
 		expect(installer).toContain("Test-ReferenceVoice");
 		expect(installer).toContain("Invoke-WebRequest");
 		expect(installer).toContain("Get-FileHash");
+		expect(installer).toContain("$ReferenceVoices");
+		expect(installer).toContain("foreach ($Voice in $ReferenceVoices)");
 		expect(installer).toContain("$VoicePending");
-		expect(installer).toContain("referenceVoice = [ordered]@{");
+		expect(installer).toContain("referenceVoices = @(");
 		const devLauncher = readFileSync(
 			resolve(process.cwd(), "scripts/tauri-with-mode.mjs"),
 			"utf8",
@@ -214,13 +216,24 @@ describe("stageVoxCpm2Runtime", () => {
 		expect(readVoxCpm2ActivationContract().payload.requiredDirectories).toEqual([
 			"artifact/voices",
 		]);
-		expect(readVoxCpm2ActivationContract().runtime.referenceVoices).toEqual([
+		const referenceVoices =
+			readVoxCpm2ActivationContract().runtime.referenceVoices;
+		expect(referenceVoices.map((voice) => voice.id)).toEqual([
+			"cc0-ko-female-01.wav",
+			"cc0-ko-female-02.wav",
+			"cc0-ko-female-03.wav",
+			"cc0-ko-male-01.wav",
+			"cc0-ko-male-02.wav",
+			"cc0-ko-male-03.wav",
+			"cc0-ko-male-04.wav",
+			"cc0-ko-male-05.wav",
+		]);
+		expect(referenceVoices.filter((voice) => voice.default)).toEqual([
 			expect.objectContaining({
 				id: "cc0-ko-female-01.wav",
 				sha256:
 					"b90fd1a86ff8fb74c2e165894c6728d07f16cb69c501f00302d8e25c53805c09",
 				bytes: 193550,
-				default: true,
 			}),
 		]);
 	});

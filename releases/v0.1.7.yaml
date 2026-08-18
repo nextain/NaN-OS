@@ -33,6 +33,11 @@ changes:
   # ── Voice ──
   - type: fix
     scope: voice
+    description:
+      en: "Host voice presets and uploads now reach synthesis — the Windows installer provisions and verifies the complete eight-voice CC0 palette, while uploaded WAV files are installed as the authenticated current voice before synthesis."
+      ko: "호스트 음성 프리셋·업로드 합성 복구 — Windows 설치 프로그램이 CC0 음색 8개 전체를 해시 검증해 설치하고, 사용자가 올린 WAV는 인증된 현재 음색으로 먼저 반영한 뒤 합성합니다."
+  - type: fix
+    scope: voice
     issue: 428
     description:
       en: "Cleaner first sentence — VoxCPM2 no longer distorts a short interjection at the start of a reply; the chunker measures spoken length so emotion tags cannot split a tiny fragment off on its own."

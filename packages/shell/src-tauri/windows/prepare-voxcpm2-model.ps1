@@ -69,16 +69,24 @@ $ActivationContract = Get-Content -LiteralPath $ActivationContractPath -Raw | Co
 if ($Manifest.schemaVersion -ne 3 -or $Manifest.profile -ne "windows_trt_6g") { throw "Unsupported VoxCPM2 runtime manifest" }
 if ($InstallerPackageLock.schemaVersion -ne 1 -or $InstallerPackageLock.policy -ne "automatic-installer-only") { throw "Unsupported VoxCPM2 installer package lock" }
 if ($ActivationContract.schemaVersion -ne 1 -or $ActivationContract.profile -ne "windows_trt_6g") { throw "Unsupported Naia Host activation contract" }
-$DefaultVoices = @($ActivationContract.runtime.referenceVoices | Where-Object { $_.default -eq $true })
+$ReferenceVoices = @($ActivationContract.runtime.referenceVoices)
+$DefaultVoices = @($ReferenceVoices | Where-Object { $_.default -eq $true })
+if ($ReferenceVoices.Count -lt 1) { throw "Naia Host activation contract must declare reference voices" }
 if ($DefaultVoices.Count -ne 1) { throw "Naia Host activation contract must declare exactly one default reference voice" }
 $DefaultVoice = $DefaultVoices[0]
 $DefaultVoiceId = [string]$DefaultVoice.id
-$DefaultVoiceUrl = [string]$DefaultVoice.url
-$DefaultVoiceSha256 = [string]$DefaultVoice.sha256
-$DefaultVoiceBytes = [long]$DefaultVoice.bytes
-if ([IO.Path]::GetFileName($DefaultVoiceId) -ne $DefaultVoiceId -or -not $DefaultVoiceId.EndsWith(".wav", [StringComparison]::OrdinalIgnoreCase)) { throw "Naia Host default reference voice id is invalid" }
-if (-not $DefaultVoiceUrl.StartsWith("https://", [StringComparison]::OrdinalIgnoreCase)) { throw "Naia Host default reference voice URL must use HTTPS" }
-if (-not ($DefaultVoiceSha256 -match '^[a-fA-F0-9]{64}$') -or $DefaultVoiceBytes -le 0) { throw "Naia Host default reference voice digest contract is invalid" }
+$SeenVoiceIds = @{}
+foreach ($Voice in $ReferenceVoices) {
+  $VoiceId = [string]$Voice.id
+  $VoiceUrl = [string]$Voice.url
+  $VoiceSha256 = [string]$Voice.sha256
+  $VoiceBytes = [long]$Voice.bytes
+  if ([IO.Path]::GetFileName($VoiceId) -ne $VoiceId -or -not $VoiceId.EndsWith(".wav", [StringComparison]::OrdinalIgnoreCase)) { throw "Naia Host reference voice id is invalid" }
+  if ($SeenVoiceIds.ContainsKey($VoiceId.ToLowerInvariant())) { throw "Naia Host reference voice id is duplicated" }
+  $SeenVoiceIds[$VoiceId.ToLowerInvariant()] = $true
+  if (-not $VoiceUrl.StartsWith("https://", [StringComparison]::OrdinalIgnoreCase)) { throw "Naia Host reference voice URL must use HTTPS" }
+  if (-not ($VoiceSha256 -match '^[a-fA-F0-9]{64}$') -or $VoiceBytes -le 0) { throw "Naia Host reference voice digest contract is invalid" }
+}
 
 New-Item -ItemType Directory -Force -Path $RuntimeRoot | Out-Null
 $env:HF_HOME = Join-Path $RuntimeRoot "hf-cache"
@@ -92,34 +100,42 @@ $env:NAIA_VOXCPM2_ARTIFACT_ROOT = $ArtifactRoot
 
 Invoke-Runtime @("-B", "-I", "-c", "import os; from voxcpm2_tensorrt.artifact import verify_artifact; verify_artifact(os.environ['NAIA_VOXCPM2_ARTIFACT_ROOT'])") "Bundled VoxCPM2 artifact verification failed"
 
-# The Shell preview streams this approved WAV directly from Azure, while local
-# synthesis passes only its id. Materialize the same immutable voice in the
-# user-writable runtime so preview and synthesis resolve one contract.
-Write-InstallProgress "reference-voice" "Preparing the default host voice" 35
+# The Shell preview streams approved WAVs directly from Azure, while local
+# synthesis passes only the selected id. Materialize the complete immutable
+# palette in the user-writable runtime so every preview choice is resolvable by
+# synthesis. Missing non-default voices must fail the install instead of being
+# hidden by the synthesis layer's safety fallback to the default voice.
+Write-InstallProgress "reference-voice" "Preparing the host voice palette" 35
 $VoicesRoot = Join-Path $RuntimeRoot "voices"
-$VoicePath = Join-Path $VoicesRoot $DefaultVoiceId
-$VoicePending = "$VoicePath.pending"
-$VoiceBackup = "$VoicePath.backup"
 New-Item -ItemType Directory -Force -Path $VoicesRoot | Out-Null
-if (-not (Test-ReferenceVoice $VoicePath $DefaultVoice)) {
-  if (Test-Path -LiteralPath $VoicePending) { Remove-Item -LiteralPath $VoicePending -Force }
-  try {
-    Invoke-WebRequest -UseBasicParsing -Uri $DefaultVoiceUrl -OutFile $VoicePending
-    if (-not (Test-ReferenceVoice $VoicePending $DefaultVoice)) { throw "Downloaded default host voice failed SHA-256, size, or WAV verification" }
-    if (Test-Path -LiteralPath $VoiceBackup) { Remove-Item -LiteralPath $VoiceBackup -Force }
-    if (Test-Path -LiteralPath $VoicePath) { Move-Item -LiteralPath $VoicePath -Destination $VoiceBackup }
-    try { Move-Item -LiteralPath $VoicePending -Destination $VoicePath }
-    catch {
-      if ((-not (Test-Path -LiteralPath $VoicePath)) -and (Test-Path -LiteralPath $VoiceBackup)) { Move-Item -LiteralPath $VoiceBackup -Destination $VoicePath }
-      throw
-    }
-    if (Test-Path -LiteralPath $VoiceBackup) { Remove-Item -LiteralPath $VoiceBackup -Force }
-  } finally {
+for ($VoiceIndex = 0; $VoiceIndex -lt $ReferenceVoices.Count; $VoiceIndex++) {
+  $Voice = $ReferenceVoices[$VoiceIndex]
+  $VoiceId = [string]$Voice.id
+  $VoicePath = Join-Path $VoicesRoot $VoiceId
+  $VoicePending = "$VoicePath.pending"
+  $VoiceBackup = "$VoicePath.backup"
+  $VoiceProgress = 35 + [int](($VoiceIndex / $ReferenceVoices.Count) * 5)
+  Write-InstallProgress "reference-voice" "Preparing host voice $($VoiceIndex + 1)/$($ReferenceVoices.Count)" $VoiceProgress
+  if (-not (Test-ReferenceVoice $VoicePath $Voice)) {
     if (Test-Path -LiteralPath $VoicePending) { Remove-Item -LiteralPath $VoicePending -Force }
+    try {
+      Invoke-WebRequest -UseBasicParsing -Uri ([string]$Voice.url) -OutFile $VoicePending
+      if (-not (Test-ReferenceVoice $VoicePending $Voice)) { throw "Downloaded host voice failed SHA-256, size, or WAV verification: $VoiceId" }
+      if (Test-Path -LiteralPath $VoiceBackup) { Remove-Item -LiteralPath $VoiceBackup -Force }
+      if (Test-Path -LiteralPath $VoicePath) { Move-Item -LiteralPath $VoicePath -Destination $VoiceBackup }
+      try { Move-Item -LiteralPath $VoicePending -Destination $VoicePath }
+      catch {
+        if ((-not (Test-Path -LiteralPath $VoicePath)) -and (Test-Path -LiteralPath $VoiceBackup)) { Move-Item -LiteralPath $VoiceBackup -Destination $VoicePath }
+        throw
+      }
+      if (Test-Path -LiteralPath $VoiceBackup) { Remove-Item -LiteralPath $VoiceBackup -Force }
+    } finally {
+      if (Test-Path -LiteralPath $VoicePending) { Remove-Item -LiteralPath $VoicePending -Force }
+    }
   }
+  if (-not (Test-ReferenceVoice $VoicePath $Voice)) { throw "Verified host voice is not installed: $VoiceId" }
 }
-if (-not (Test-ReferenceVoice $VoicePath $DefaultVoice)) { throw "Verified default host voice is not installed" }
-Write-InstallProgress "reference-voice" "Default host voice ready" 40
+Write-InstallProgress "reference-voice" "Host voice palette ready" 40
 
 # TensorRT's Python/runtime distributions are acquired automatically from the
 # NVIDIA-controlled index during this explicit online installer transaction.
@@ -225,11 +241,14 @@ $Ready = [ordered]@{
   artifactManifestSha256 = (Get-FileHash -LiteralPath $ArtifactManifestPath -Algorithm SHA256).Hash.ToLowerInvariant()
   source = $ArtifactManifest.source
   model = $Manifest.model
-  referenceVoice = [ordered]@{
-    id = $DefaultVoiceId
-    sha256 = $DefaultVoiceSha256.ToLowerInvariant()
-    bytes = $DefaultVoiceBytes
-  }
+  referenceVoices = @($ReferenceVoices | ForEach-Object {
+    [ordered]@{
+      id = [string]$_.id
+      sha256 = ([string]$_.sha256).ToLowerInvariant()
+      bytes = [long]$_.bytes
+      default = [bool]$_.default
+    }
+  })
 }
 $ReadyPath = Join-Path $RuntimeRoot "voxcpm2-runtime-ready.json"
 $ReadyPending = "$ReadyPath.pending"
