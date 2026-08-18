@@ -4897,6 +4897,7 @@ struct VoxCpm2InstallationProbe {
     python_runtime: bool,
     trt_service_bundle: bool,
     voxcpm2_model: bool,
+    reference_voice: bool,
     facade_healthy: bool,
 }
 
@@ -4952,11 +4953,29 @@ struct VoxCpm2PayloadActivationContract {
 
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
+struct VoxCpm2ReferenceVoiceContract {
+    id: String,
+    url: String,
+    sha256: String,
+    bytes: u64,
+    #[serde(rename = "default")]
+    is_default: bool,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct VoxCpm2RuntimeActivationContract {
+    reference_voices: Vec<VoxCpm2ReferenceVoiceContract>,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct VoxCpm2ActivationContract {
     schema_version: u8,
     profile: String,
     artifact: VoxCpm2ArtifactActivationContract,
     payload: VoxCpm2PayloadActivationContract,
+    runtime: VoxCpm2RuntimeActivationContract,
 }
 
 fn is_sha256(value: &str) -> bool {
@@ -5037,7 +5056,59 @@ fn read_voxcpm2_activation_contract() -> Result<VoxCpm2ActivationContract, Strin
     if contract.schema_version != 1 || contract.profile != "windows_trt_6g" {
         return Err("activation contract identity mismatch".to_string());
     }
+    let defaults = contract
+        .runtime
+        .reference_voices
+        .iter()
+        .filter(|voice| voice.is_default)
+        .count();
+    if contract.runtime.reference_voices.is_empty() || defaults != 1 {
+        return Err(
+            "activation contract must declare exactly one default reference voice".to_string(),
+        );
+    }
+    for voice in &contract.runtime.reference_voices {
+        let path = std::path::Path::new(&voice.id);
+        let safe_name = path
+            .parent()
+            .is_some_and(|parent| parent.as_os_str().is_empty())
+            && path
+                .extension()
+                .is_some_and(|extension| extension.eq_ignore_ascii_case("wav"));
+        let url = url::Url::parse(&voice.url)
+            .map_err(|error| format!("reference voice URL is invalid: {error}"))?;
+        if !safe_name
+            || url.scheme() != "https"
+            || !url.username().is_empty()
+            || url.password().is_some()
+            || !is_sha256(&voice.sha256)
+            || voice.bytes == 0
+        {
+            return Err("activation contract reference voice is invalid".to_string());
+        }
+    }
     Ok(contract)
+}
+
+fn voxcpm2_reference_voice_matches(
+    runtime_root: &std::path::Path,
+    voice: &VoxCpm2ReferenceVoiceContract,
+) -> bool {
+    let path = runtime_root.join("voices").join(&voice.id);
+    path.is_file()
+        && std::fs::metadata(&path).is_ok_and(|metadata| metadata.len() == voice.bytes)
+        && sha256_file_hex(&path).is_ok_and(|actual| actual.eq_ignore_ascii_case(&voice.sha256))
+}
+
+fn voxcpm2_reference_voice_is_ready(runtime_root: &std::path::Path) -> bool {
+    read_voxcpm2_activation_contract().is_ok_and(|contract| {
+        contract
+            .runtime
+            .reference_voices
+            .iter()
+            .find(|voice| voice.is_default)
+            .is_some_and(|voice| voxcpm2_reference_voice_matches(runtime_root, voice))
+    })
 }
 
 fn prepare_voxcpm2_payload_structure(root: &std::path::Path) -> Result<(), String> {
@@ -5161,7 +5232,12 @@ fn voxcpm2_installer_script_path(app: &tauri::AppHandle) -> Option<std::path::Pa
             root.join("voxcpm2-runtime")
                 .join("prepare-voxcpm2-model.ps1")
         })
-        .filter(|path| path.is_file())
+        .filter(|path| {
+            path.is_file()
+                && path
+                    .with_file_name("voxcpm2-activation-contract.json")
+                    .is_file()
+        })
 }
 
 fn download_voxcpm2_archive(
@@ -5337,8 +5413,13 @@ fn install_voxcpm2_payload(
     extract_voxcpm2_archive(&archive, &pending.join("artifact"), &manifest)?;
     let installer = voxcpm2_installer_script_path(app)
         .ok_or_else(|| "Naia Host installer script is not packaged".to_string())?;
-    std::fs::copy(installer, pending.join("prepare-voxcpm2-model.ps1"))
+    std::fs::copy(&installer, pending.join("prepare-voxcpm2-model.ps1"))
         .map_err(|error| format!("Could not stage Naia Host installer script: {error}"))?;
+    std::fs::copy(
+        installer.with_file_name("voxcpm2-activation-contract.json"),
+        pending.join("voxcpm2-activation-contract.json"),
+    )
+    .map_err(|error| format!("Could not stage Naia Host activation contract: {error}"))?;
     prepare_voxcpm2_payload_structure(&pending)?;
     let validation_failures =
         voxcpm2_payload_validation_failures(&pending, Some(&manifest.artifact_manifest_sha256));
@@ -5665,6 +5746,7 @@ fn probe_voxcpm2_installation(bundle_root: Option<&std::path::Path>) -> VoxCpm2I
                 && directory_has_compiled_module(&package, "artifact")
         }),
         voxcpm2_model: voxcpm2_model && voxcpm2_runtime_matches_bundle(&runtime_root, bundle_root),
+        reference_voice: voxcpm2_reference_voice_is_ready(&runtime_root),
         facade_healthy: false,
     }
 }
@@ -5701,7 +5783,8 @@ fn classify_voxcpm2_installation_for_profile(
     let prerequisites_complete = probe.runtime_entrypoint
         && probe.python_runtime
         && probe.trt_service_bundle
-        && probe.voxcpm2_model;
+        && probe.voxcpm2_model
+        && probe.reference_voice;
     let ready = prerequisites_complete && probe.facade_healthy;
     let phase = if ready {
         "ready"
@@ -5758,6 +5841,15 @@ fn classify_voxcpm2_installation_for_profile(
                 probe.installer_available,
                 "VOXCPM2_MODEL_MISSING",
                 "The Naia Host runtime or cached model is not installed.",
+            ));
+            steps.push(voxcpm2_install_step(
+                "reference-voice",
+                "Default host voice",
+                "download",
+                probe.reference_voice,
+                probe.installer_available,
+                "VOXCPM2_REFERENCE_VOICE_MISSING",
+                "The approved default host voice is missing or failed integrity verification.",
             ));
             steps
         },
@@ -11613,6 +11705,7 @@ mod tests {
                 .join("http_server.cp310-win_amd64.pyd"),
         );
         write_test_file(&root.join("prepare-voxcpm2-model.ps1"));
+        write_test_file(&root.join("voxcpm2-activation-contract.json"));
 
         assert!(voxcpm2_payload_validation_failures(root, None).is_empty());
 
@@ -12150,11 +12243,60 @@ mod tests {
                 python_runtime: true,
                 trt_service_bundle: true,
                 voxcpm2_model: true,
+                reference_voice: true,
                 facade_healthy: false,
             },
             Some("windows_trt_6g"),
         );
         assert!(status.can_start);
+    }
+
+    #[test]
+    fn voxcpm2_reference_voice_requires_the_pinned_digest_and_size() {
+        let runtime = tempfile::tempdir().unwrap();
+        let voices = runtime.path().join("voices");
+        std::fs::create_dir_all(&voices).unwrap();
+        let path = voices.join("test-default.wav");
+        let wav = b"RIFF\x04\x00\x00\x00WAVE";
+        std::fs::write(&path, wav).unwrap();
+        let voice = VoxCpm2ReferenceVoiceContract {
+            id: "test-default.wav".to_string(),
+            url: "https://example.invalid/test-default.wav".to_string(),
+            sha256: sha256_file_hex(&path).unwrap(),
+            bytes: wav.len() as u64,
+            is_default: true,
+        };
+
+        assert!(voxcpm2_reference_voice_matches(runtime.path(), &voice));
+        std::fs::write(&path, b"RIFFcorruptWAVE").unwrap();
+        assert!(!voxcpm2_reference_voice_matches(runtime.path(), &voice));
+        std::fs::remove_file(&path).unwrap();
+        assert!(!voxcpm2_reference_voice_matches(runtime.path(), &voice));
+    }
+
+    #[test]
+    fn voxcpm2_installation_cannot_start_without_the_default_reference_voice() {
+        let status = classify_voxcpm2_installation(VoxCpm2InstallationProbe {
+            runtime_entrypoint: true,
+            installer_available: true,
+            python_runtime: true,
+            trt_service_bundle: true,
+            voxcpm2_model: true,
+            reference_voice: false,
+            facade_healthy: false,
+        });
+
+        assert_eq!(status.phase, "blocked");
+        assert!(!status.can_start);
+        let voice_step = status
+            .steps
+            .iter()
+            .find(|step| step.id == "reference-voice")
+            .unwrap();
+        assert_eq!(
+            voice_step.failure.as_ref().unwrap().code,
+            "VOXCPM2_REFERENCE_VOICE_MISSING"
+        );
     }
 
     #[test]
@@ -12174,6 +12316,7 @@ mod tests {
             python_runtime: true,
             trt_service_bundle: false,
             voxcpm2_model: false,
+            reference_voice: false,
             facade_healthy: false,
         });
 
@@ -12280,6 +12423,7 @@ mod tests {
             python_runtime: true,
             trt_service_bundle: true,
             voxcpm2_model: true,
+            reference_voice: true,
             facade_healthy: false,
         };
         let not_started = classify_voxcpm2_installation(prerequisites.clone());
@@ -13532,7 +13676,11 @@ mod tests {
     fn voxcpm2_cors_adds_only_the_fixed_loopback_vite_origin_in_e2e() {
         assert_eq!(
             voxcpm2_allowed_origins(false),
-            "http://tauri.localhost,tauri://localhost"
+            if cfg!(debug_assertions) {
+                "http://tauri.localhost,tauri://localhost,http://localhost:1420,http://127.0.0.1:1420"
+            } else {
+                "http://tauri.localhost,tauri://localhost"
+            }
         );
         assert_eq!(
             voxcpm2_allowed_origins(true),

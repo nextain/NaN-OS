@@ -38,7 +38,18 @@ export function readVoxCpm2ActivationContract(
 		!Array.isArray(contract.artifact?.requiredDirectories) ||
 		!Array.isArray(contract.artifact?.compiledModules) ||
 		!Array.isArray(contract.payload?.requiredFiles) ||
-		!Array.isArray(contract.payload?.requiredDirectories)
+		!Array.isArray(contract.payload?.requiredDirectories) ||
+		!Array.isArray(contract.runtime?.referenceVoices) ||
+		contract.runtime.referenceVoices.length < 1 ||
+		contract.runtime.referenceVoices.filter((voice) => voice.default).length !== 1 ||
+		contract.runtime.referenceVoices.some(
+			(voice) =>
+				!/^[-\w.]+\.wav$/iu.test(voice.id) ||
+				!/^https:\/\//iu.test(voice.url) ||
+				!/^[a-f\d]{64}$/iu.test(voice.sha256) ||
+				!Number.isSafeInteger(voice.bytes) ||
+				voice.bytes <= 0,
+		)
 	)
 		throw new Error("VoxCPM2 activation contract is invalid");
 	return contract;
@@ -333,6 +344,25 @@ export function stageVoxCpm2Runtime({
 			"NAIA_VOXCPM2_TRT_RUNTIME_DIR is required for a Windows release",
 		);
 	const source = realpathSync(runtimeSource);
+	const activationContract = readVoxCpm2ActivationContract(
+		resolve(shellDir, "src-tauri/voxcpm2-activation-contract.json"),
+	);
+	const defaultVoice = activationContract.runtime.referenceVoices.find(
+		(voice) => voice.default,
+	);
+	const configSource = readFileSync(resolve(shellDir, "src/lib/config.ts"), "utf8");
+	const chatSource = readFileSync(
+		resolve(shellDir, "src/components/ChatArea.tsx"),
+		"utf8",
+	);
+	if (!configSource.includes(JSON.stringify(defaultVoice.url)))
+		throw new Error(
+			"Shell preview default URL differs from the Naia Host activation contract",
+		);
+	if (!chatSource.includes(JSON.stringify(defaultVoice.id)))
+		throw new Error(
+			"Shell synthesis default voice id differs from the Naia Host activation contract",
+		);
 	verifyVoxCpm2Artifact(source, expectedManifestSha256);
 	if (!runtimeArchive)
 		throw new Error(
@@ -384,6 +414,10 @@ export function stageVoxCpm2Runtime({
 	copyFileSync(
 		resolve(shellDir, "src-tauri/windows/prepare-voxcpm2-model.ps1"),
 		resolve(pending, "prepare-voxcpm2-model.ps1"),
+	);
+	copyFileSync(
+		resolve(shellDir, "src-tauri/voxcpm2-activation-contract.json"),
+		resolve(pending, "voxcpm2-activation-contract.json"),
 	);
 	const payloadFailures = voxCpm2PayloadFileActivationFailures(pending);
 	if (payloadFailures.length)

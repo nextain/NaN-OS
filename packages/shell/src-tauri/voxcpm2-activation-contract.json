@@ -23,10 +23,22 @@
   },
   "payload": {
     "requiredFiles": [
-      "prepare-voxcpm2-model.ps1"
+      "prepare-voxcpm2-model.ps1",
+      "voxcpm2-activation-contract.json"
     ],
     "requiredDirectories": [
       "artifact/voices"
+    ]
+  },
+  "runtime": {
+    "referenceVoices": [
+      {
+        "id": "cc0-ko-female-01.wav",
+        "url": "https://stnaiapub83b29893.blob.core.windows.net/ref-audio/cc0/cc0-ko-female-01.wav",
+        "sha256": "b90fd1a86ff8fb74c2e165894c6728d07f16cb69c501f00302d8e25c53805c09",
+        "bytes": 193550,
+        "default": true
+      }
     ]
   }
 }

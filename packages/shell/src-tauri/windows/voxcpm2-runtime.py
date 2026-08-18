@@ -135,10 +135,11 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         path = urlparse(self.path).path
         if path == "/health":
+            reference_voice_ready = bool(voice_files())
             self.reply(200, json_bytes({
                 "ok": True,
-                "ready": True,
-                "tts": True,
+                "ready": reference_voice_ready,
+                "tts": reference_voice_ready,
                 "avatar": False,
                 "tts_enabled": True,
                 "avatar_enabled": False,
@@ -215,6 +216,9 @@ class Server(ThreadingHTTPServer):
 
 
 def main() -> None:
+    # Never announce readiness when synthesis would immediately fail with
+    # no_reference_voice. The installer owns acquisition and digest validation.
+    default_voice()
     ready = {"facade_port": PORT, "profile": "windows_trt_6g", "backend": "tensorrt_locdit"}
     print(f"VOXCPM2_READY {json.dumps(ready)}", flush=True)
     Server(("127.0.0.1", PORT), Handler).serve_forever()

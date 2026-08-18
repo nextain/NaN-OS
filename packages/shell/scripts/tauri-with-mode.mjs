@@ -16,7 +16,14 @@
  */
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
+import {
+	copyFileSync,
+	existsSync,
+	mkdirSync,
+	readFileSync,
+	readdirSync,
+	statSync,
+} from "node:fs";
 import { homedir, platform } from "node:os";
 import { dirname, resolve } from "node:path";
 import {
@@ -147,6 +154,21 @@ const env = interactiveLaunchEnv(process.env);
 // development executable is an installed bundle. Rust ignores this override
 // in release builds.
 const devVoxCpm2Bundle = resolve(SHELL, "src-tauri", "voxcpm2-runtime");
+if (mode === "dev") {
+	// Thin-runtime dev builds reuse the staged download manifest, but its ignored
+	// control files can predate the checkout. Refresh the small trusted installer
+	// assets before Tauri snapshots resources so RTX field debugging exercises
+	// the same activation/default-voice contract as a release build.
+	mkdirSync(devVoxCpm2Bundle, { recursive: true });
+	copyFileSync(
+		resolve(SHELL, "src-tauri/windows/prepare-voxcpm2-model.ps1"),
+		resolve(devVoxCpm2Bundle, "prepare-voxcpm2-model.ps1"),
+	);
+	copyFileSync(
+		resolve(SHELL, "src-tauri/voxcpm2-activation-contract.json"),
+		resolve(devVoxCpm2Bundle, "voxcpm2-activation-contract.json"),
+	);
+}
 if (
 	mode === "dev" &&
 	existsSync(resolve(devVoxCpm2Bundle, "artifact", "artifact-manifest.json"))

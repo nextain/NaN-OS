@@ -30,20 +30,55 @@ function Test-Runtime([string[]]$Arguments) {
   }
 }
 
+function Write-InstallProgress([string]$Step, [string]$Label, [int]$Percent) {
+  $Progress = [ordered]@{ phase = "install"; step = $Step; label = $Label; percent = $Percent }
+  Write-Output ("VOXCPM2_PROGRESS " + ($Progress | ConvertTo-Json -Compress))
+}
+
+function Test-ReferenceVoice([string]$Path, [object]$Contract) {
+  if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { return $false }
+  $Item = Get-Item -LiteralPath $Path
+  if ($Item.Length -ne [long]$Contract.bytes) { return $false }
+  $ActualSha256 = (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash.ToLowerInvariant()
+  if ($ActualSha256 -ne ([string]$Contract.sha256).ToLowerInvariant()) { return $false }
+  $Stream = [IO.File]::OpenRead($Path)
+  try {
+    $Header = New-Object byte[] 12
+    if ($Stream.Read($Header, 0, $Header.Length) -ne $Header.Length) { return $false }
+    return [Text.Encoding]::ASCII.GetString($Header, 0, 4) -eq "RIFF" -and [Text.Encoding]::ASCII.GetString($Header, 8, 4) -eq "WAVE"
+  } finally {
+    $Stream.Dispose()
+  }
+}
+
 $BundleRoot = ConvertFrom-VerbatimPath $BundleRoot
 $RuntimeRoot = ConvertFrom-VerbatimPath $RuntimeRoot
 $ArtifactRoot = Join-Path $BundleRoot "artifact"
 $ManifestPath = Join-Path $ArtifactRoot "runtime-manifest.json"
 $ArtifactManifestPath = Join-Path $ArtifactRoot "artifact-manifest.json"
 $InstallerPackageLockPath = Join-Path $ArtifactRoot "installer-package-lock.json"
+$ActivationContractPath = Join-Path $BundleRoot "voxcpm2-activation-contract.json"
 $script:Python = Join-Path $ArtifactRoot "python\python.exe"
 if (-not (Test-Path -LiteralPath $script:Python -PathType Leaf)) { throw "Bundled VoxCPM2 TensorRT Python runtime is missing" }
+if (-not (Test-Path -LiteralPath $ActivationContractPath -PathType Leaf)) { throw "Naia Host activation contract is missing" }
 
 $Manifest = Get-Content -LiteralPath $ManifestPath -Raw | ConvertFrom-Json
 $ArtifactManifest = Get-Content -LiteralPath $ArtifactManifestPath -Raw | ConvertFrom-Json
 $InstallerPackageLock = Get-Content -LiteralPath $InstallerPackageLockPath -Raw | ConvertFrom-Json
+$ActivationContract = Get-Content -LiteralPath $ActivationContractPath -Raw | ConvertFrom-Json
 if ($Manifest.schemaVersion -ne 3 -or $Manifest.profile -ne "windows_trt_6g") { throw "Unsupported VoxCPM2 runtime manifest" }
 if ($InstallerPackageLock.schemaVersion -ne 1 -or $InstallerPackageLock.policy -ne "automatic-installer-only") { throw "Unsupported VoxCPM2 installer package lock" }
+if ($ActivationContract.schemaVersion -ne 1 -or $ActivationContract.profile -ne "windows_trt_6g") { throw "Unsupported Naia Host activation contract" }
+$DefaultVoices = @($ActivationContract.runtime.referenceVoices | Where-Object { $_.default -eq $true })
+if ($DefaultVoices.Count -ne 1) { throw "Naia Host activation contract must declare exactly one default reference voice" }
+$DefaultVoice = $DefaultVoices[0]
+$DefaultVoiceId = [string]$DefaultVoice.id
+$DefaultVoiceUrl = [string]$DefaultVoice.url
+$DefaultVoiceSha256 = [string]$DefaultVoice.sha256
+$DefaultVoiceBytes = [long]$DefaultVoice.bytes
+if ([IO.Path]::GetFileName($DefaultVoiceId) -ne $DefaultVoiceId -or -not $DefaultVoiceId.EndsWith(".wav", [StringComparison]::OrdinalIgnoreCase)) { throw "Naia Host default reference voice id is invalid" }
+if (-not $DefaultVoiceUrl.StartsWith("https://", [StringComparison]::OrdinalIgnoreCase)) { throw "Naia Host default reference voice URL must use HTTPS" }
+if (-not ($DefaultVoiceSha256 -match '^[a-fA-F0-9]{64}$') -or $DefaultVoiceBytes -le 0) { throw "Naia Host default reference voice digest contract is invalid" }
 
 New-Item -ItemType Directory -Force -Path $RuntimeRoot | Out-Null
 $env:HF_HOME = Join-Path $RuntimeRoot "hf-cache"
@@ -56,6 +91,35 @@ New-Item -ItemType Directory -Force -Path $env:NUMBA_CACHE_DIR | Out-Null
 $env:NAIA_VOXCPM2_ARTIFACT_ROOT = $ArtifactRoot
 
 Invoke-Runtime @("-B", "-I", "-c", "import os; from voxcpm2_tensorrt.artifact import verify_artifact; verify_artifact(os.environ['NAIA_VOXCPM2_ARTIFACT_ROOT'])") "Bundled VoxCPM2 artifact verification failed"
+
+# The Shell preview streams this approved WAV directly from Azure, while local
+# synthesis passes only its id. Materialize the same immutable voice in the
+# user-writable runtime so preview and synthesis resolve one contract.
+Write-InstallProgress "reference-voice" "Preparing the default host voice" 35
+$VoicesRoot = Join-Path $RuntimeRoot "voices"
+$VoicePath = Join-Path $VoicesRoot $DefaultVoiceId
+$VoicePending = "$VoicePath.pending"
+$VoiceBackup = "$VoicePath.backup"
+New-Item -ItemType Directory -Force -Path $VoicesRoot | Out-Null
+if (-not (Test-ReferenceVoice $VoicePath $DefaultVoice)) {
+  if (Test-Path -LiteralPath $VoicePending) { Remove-Item -LiteralPath $VoicePending -Force }
+  try {
+    Invoke-WebRequest -UseBasicParsing -Uri $DefaultVoiceUrl -OutFile $VoicePending
+    if (-not (Test-ReferenceVoice $VoicePending $DefaultVoice)) { throw "Downloaded default host voice failed SHA-256, size, or WAV verification" }
+    if (Test-Path -LiteralPath $VoiceBackup) { Remove-Item -LiteralPath $VoiceBackup -Force }
+    if (Test-Path -LiteralPath $VoicePath) { Move-Item -LiteralPath $VoicePath -Destination $VoiceBackup }
+    try { Move-Item -LiteralPath $VoicePending -Destination $VoicePath }
+    catch {
+      if ((-not (Test-Path -LiteralPath $VoicePath)) -and (Test-Path -LiteralPath $VoiceBackup)) { Move-Item -LiteralPath $VoiceBackup -Destination $VoicePath }
+      throw
+    }
+    if (Test-Path -LiteralPath $VoiceBackup) { Remove-Item -LiteralPath $VoiceBackup -Force }
+  } finally {
+    if (Test-Path -LiteralPath $VoicePending) { Remove-Item -LiteralPath $VoicePending -Force }
+  }
+}
+if (-not (Test-ReferenceVoice $VoicePath $DefaultVoice)) { throw "Verified default host voice is not installed" }
+Write-InstallProgress "reference-voice" "Default host voice ready" 40
 
 # TensorRT's Python/runtime distributions are acquired automatically from the
 # NVIDIA-controlled index during this explicit online installer transaction.
@@ -161,6 +225,11 @@ $Ready = [ordered]@{
   artifactManifestSha256 = (Get-FileHash -LiteralPath $ArtifactManifestPath -Algorithm SHA256).Hash.ToLowerInvariant()
   source = $ArtifactManifest.source
   model = $Manifest.model
+  referenceVoice = [ordered]@{
+    id = $DefaultVoiceId
+    sha256 = $DefaultVoiceSha256.ToLowerInvariant()
+    bytes = $DefaultVoiceBytes
+  }
 }
 $ReadyPath = Join-Path $RuntimeRoot "voxcpm2-runtime-ready.json"
 $ReadyPending = "$ReadyPath.pending"

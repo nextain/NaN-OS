@@ -39,6 +39,8 @@ function fixture() {
 	for (const path of [
 		resolve(shellDir, "src-tauri"),
 		resolve(shellDir, "src-tauri/windows"),
+		resolve(shellDir, "src/lib"),
+		resolve(shellDir, "src/components"),
 		resolve(runtimeSource, "python/Lib/site-packages/voxcpm2_tensorrt"),
 		resolve(runtimeSource, "python/Lib/site-packages/onnx/backend/test/data"),
 		resolve(runtimeSource, "python/Lib/site-packages/scipy/io/tests/data"),
@@ -49,6 +51,20 @@ function fixture() {
 	writeFileSync(
 		resolve(shellDir, "src-tauri/windows/prepare-voxcpm2-model.ps1"),
 		"shell orchestration",
+	);
+	writeFileSync(
+		resolve(shellDir, "src-tauri/voxcpm2-activation-contract.json"),
+		readFileSync(
+			resolve(process.cwd(), "src-tauri/voxcpm2-activation-contract.json"),
+		),
+	);
+	writeFileSync(
+		resolve(shellDir, "src/lib/config.ts"),
+		'export const DEFAULT_VOICE_REF_URL = "https://stnaiapub83b29893.blob.core.windows.net/ref-audio/cc0/cc0-ko-female-01.wav";',
+	);
+	writeFileSync(
+		resolve(shellDir, "src/components/ChatArea.tsx"),
+		'return "cc0-ko-female-01.wav";',
 	);
 	const runtimeManifest = resolve(runtimeSource, "runtime-manifest.json");
 	writeFileSync(
@@ -152,6 +168,28 @@ function fixture() {
 }
 
 describe("stageVoxCpm2Runtime", () => {
+	it("pins, verifies, and atomically installs the Shell default reference voice", () => {
+		const installer = readFileSync(
+			resolve(process.cwd(), "src-tauri/windows/prepare-voxcpm2-model.ps1"),
+			"utf8",
+		);
+		expect(installer).toContain("Test-ReferenceVoice");
+		expect(installer).toContain("Invoke-WebRequest");
+		expect(installer).toContain("Get-FileHash");
+		expect(installer).toContain("$VoicePending");
+		expect(installer).toContain("referenceVoice = [ordered]@{");
+		const devLauncher = readFileSync(
+			resolve(process.cwd(), "scripts/tauri-with-mode.mjs"),
+			"utf8",
+		);
+		expect(devLauncher).toContain(
+			'resolve(SHELL, "src-tauri/voxcpm2-activation-contract.json")',
+		);
+		expect(devLauncher).toContain(
+			'resolve(devVoxCpm2Bundle, "voxcpm2-activation-contract.json")',
+		);
+	});
+
 	it("audits every runtime activation prerequisite before release staging", () => {
 		const source = fixture();
 		expect(voxCpm2ArtifactActivationFailures(source.runtimeSource)).toEqual([]);
@@ -175,6 +213,15 @@ describe("stageVoxCpm2Runtime", () => {
 		]);
 		expect(readVoxCpm2ActivationContract().payload.requiredDirectories).toEqual([
 			"artifact/voices",
+		]);
+		expect(readVoxCpm2ActivationContract().runtime.referenceVoices).toEqual([
+			expect.objectContaining({
+				id: "cc0-ko-female-01.wav",
+				sha256:
+					"b90fd1a86ff8fb74c2e165894c6728d07f16cb69c501f00302d8e25c53805c09",
+				bytes: 193550,
+				default: true,
+			}),
 		]);
 	});
 
@@ -233,7 +280,10 @@ describe("stageVoxCpm2Runtime", () => {
 				resolve(source.shellDir, "src-tauri/windows"),
 				contract,
 			),
-		).toEqual(["missing payload file: future-installer-helper.ps1"]);
+		).toEqual([
+			"missing payload file: voxcpm2-activation-contract.json",
+			"missing payload file: future-installer-helper.ps1",
+		]);
 		const packageJson = JSON.parse(
 			readFileSync(resolve(process.cwd(), "package.json"), "utf8"),
 		);
@@ -245,7 +295,7 @@ describe("stageVoxCpm2Runtime", () => {
 		);
 	});
 
-	it("stages only a verified download contract and installer script", () => {
+	it("stages the verified download, installer, and default voice contracts", () => {
 		const source = fixture();
 		const destination = stageVoxCpm2Runtime(source);
 		expect(existsSync(resolve(destination, "artifact"))).toBe(false);
@@ -267,6 +317,17 @@ describe("stageVoxCpm2Runtime", () => {
 		expect(
 			readFileSync(resolve(destination, "prepare-voxcpm2-model.ps1"), "utf8"),
 		).toBe("shell orchestration");
+		expect(
+			JSON.parse(
+				readFileSync(
+					resolve(destination, "voxcpm2-activation-contract.json"),
+					"utf8",
+				),
+			).runtime.referenceVoices[0],
+		).toMatchObject({
+			id: "cc0-ko-female-01.wav",
+			default: true,
+		});
 		expect(existsSync(resolve(destination, "service"))).toBe(false);
 		expect(existsSync(resolve(destination, "repos"))).toBe(false);
 	});
@@ -278,6 +339,26 @@ describe("stageVoxCpm2Runtime", () => {
 				runtimeUrl: "http://downloads.nextain.io/runtime.zip",
 			}),
 		).toThrow(/credential-free HTTPS/);
+	});
+
+	it("rejects drift between preview, synthesis, and installer voice defaults", () => {
+		const previewDrift = fixture();
+		writeFileSync(
+			resolve(previewDrift.shellDir, "src/lib/config.ts"),
+			'export const DEFAULT_VOICE_REF_URL = "https://example.invalid/other.wav";',
+		);
+		expect(() => stageVoxCpm2Runtime(previewDrift)).toThrow(
+			/preview default URL differs/,
+		);
+
+		const synthesisDrift = fixture();
+		writeFileSync(
+			resolve(synthesisDrift.shellDir, "src/components/ChatArea.tsx"),
+			'return "other.wav";',
+		);
+		expect(() => stageVoxCpm2Runtime(synthesisDrift)).toThrow(
+			/synthesis default voice id differs/,
+		);
 	});
 
 	it("rejects Nextain source and bundled voices", () => {
