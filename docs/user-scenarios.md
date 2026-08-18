@@ -313,6 +313,8 @@ Success means the visible confirmation identifies the saved target and fixed bou
 
 Naia 계정으로 로그인한 사용자는 설정의 Naia 모델 목록에서 `grok-4.3`,
 `deepseek-v4-pro`, `gpt-5.6-sol`, `gpt-5.6-luna`를 선택하고 저장할 수 있다.
+
+선택 가능한 모든 Naia 채팅 모델은 동일한 Shell 스킬 목록을 전달받아 호출할 수 있다. 도구 호출이 검증되지 않았거나 운영 catalog에서 사용할 수 없는 모델은 선택 가능한 모델로 취급하지 않는다.
 `claude-opus-5`는 Azure quota가 열리기 전까지 준비중으로 보이며 적용되지 않는다.
 재시작 후 선택이 복원되며 일반 채팅은
 기존 Shell→Agent provider pipeline과 같은 Naia 키를 통해 선택한 정확한 모델로 전달된다.

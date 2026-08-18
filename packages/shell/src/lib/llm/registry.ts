@@ -338,15 +338,12 @@ export function applyNaiaModelMetadata(
 ): LlmModelMeta[] {
 	return models.map((model) => {
 		if (!metadata) {
-			return model.id === "deepseek-v4-pro"
-				? { ...model, supportsTools: false, upstreamProvider: "unknown", lifecycle: "unknown" }
-				: { ...model, upstreamProvider: "unknown", lifecycle: "unknown" };
+			return { ...model, upstreamProvider: "unknown", lifecycle: "unknown" };
 		}
 		const live = metadata.get(model.id);
 		if (!live) {
 			return {
 				...model,
-				...(model.id === "deepseek-v4-pro" ? { supportsTools: false } : {}),
 				upstreamProvider: "unknown",
 				lifecycle: "unknown",
 				operationalStatus: "catalog_missing",
@@ -363,11 +360,7 @@ export function applyNaiaModelMetadata(
 			...(live.operationalStatus ? { operationalStatus: live.operationalStatus } : {}),
 			...(live.operationalStatus ? { comingSoon: live.operationalStatus !== "live" } : {}),
 		};
-		// Security/capability floor: a stale or malformed catalog cannot turn tool
-		// calling back on for Azure DeepSeek-V4-Pro.
-		return model.id === "deepseek-v4-pro"
-			? { ...merged, supportsTools: false }
-			: merged;
+		return merged;
 	});
 }
 
@@ -524,6 +517,7 @@ registerLlmProvider({
 			id: "gemini-3.1-flash-lite",
 			label: "Gemini 3.1 Flash Lite",
 			capabilities: ["llm"],
+			supportsTools: true,
 		},
 		{
 			id: "grok-4.3",
@@ -537,18 +531,18 @@ registerLlmProvider({
 			id: "deepseek-v4-pro",
 			label: "DeepSeek V4 Pro",
 			capabilities: ["llm"],
-			supportsTools: false,
+			supportsTools: true,
 			upstreamProvider: "unknown",
 			lifecycle: "unknown",
 		},
 		{
-			// Gateway already routes/prices this (docker/config.naia.yml,
-			// model_catalog.py) and its own test suite is green (78 passed);
-			// this entry just makes it a selectable Naia model in the shell.
+			// Gateway routes/prices this model and advertises verified tool calling.
+			// Keep the offline fallback aligned so a transient catalog outage cannot
+			// silently strip Shell skills from the default model.
 			id: "deepseek-v4-flash",
 			label: "DeepSeek V4 Flash",
 			capabilities: ["llm"],
-			supportsTools: false,
+			supportsTools: true,
 			upstreamProvider: "unknown",
 			lifecycle: "unknown",
 		},
@@ -619,11 +613,13 @@ registerLlmProvider({
 			id: "gemini-3.5-flash",
 			label: "Gemini 3.5 Flash",
 			capabilities: ["llm"],
+			supportsTools: true,
 		},
 		{
 			id: "gemini-2.5-flash-live",
 			label: "Gemini 2.5 Flash Live",
 			capabilities: ["llm", "omni"],
+			supportsTools: true,
 			voiceSelectable: true,
 			voices: [...GEMINI_LIVE_VOICES],
 			transcriptProvided: true,

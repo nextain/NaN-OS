@@ -34,12 +34,16 @@ describe("registry — provider registration", () => {
 		expect(getLlmProvider("unknown-xyz")).toBeUndefined();
 	});
 
-	it("Naia exposes Azure models without claiming unverified live provenance", () => {
+	it("Naia offline fallbacks keep every selectable model skill-capable without claiming live provenance", () => {
+		expect(getLlmModel("nextain", "gemini-3.1-flash-lite")).toMatchObject({ supportsTools: true });
 		expect(getLlmModel("nextain", "grok-4.3")).toMatchObject({ supportsTools: true, upstreamProvider: "unknown", lifecycle: "unknown" });
-		expect(getLlmModel("nextain", "deepseek-v4-pro")).toMatchObject({ supportsTools: false, upstreamProvider: "unknown", lifecycle: "unknown" });
+		expect(getLlmModel("nextain", "deepseek-v4-pro")).toMatchObject({ supportsTools: true, upstreamProvider: "unknown", lifecycle: "unknown" });
+		expect(getLlmModel("nextain", "deepseek-v4-flash")).toMatchObject({ supportsTools: true, upstreamProvider: "unknown", lifecycle: "unknown" });
 		expect(getLlmModel("nextain", "gpt-5.6-sol")).toMatchObject({ supportsTools: true, upstreamProvider: "unknown" });
 		expect(getLlmModel("nextain", "gpt-5.6-luna")).toMatchObject({ supportsTools: true, upstreamProvider: "unknown" });
 		expect(getLlmModel("nextain", "claude-opus-5")).toMatchObject({ protocol: "anthropic_messages", operationalStatus: "quota_blocked", comingSoon: true });
+		const selectable = getLlmProvider("nextain")!.models.filter((model) => !model.comingSoon);
+		expect(selectable.every((model) => model.supportsTools === true)).toBe(true);
 	});
 });
 
@@ -329,17 +333,19 @@ describe("registry — fetchNaiaPricing", () => {
 });
 
 describe("registry — Naia Azure model metadata", () => {
-	it("maps gateway provenance/tool policy and clamps stale DeepSeek tool support", async () => {
+	it("maps gateway provenance/tool policy without overriding verified DeepSeek support", async () => {
 		vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(new Response(JSON.stringify([
 			{ model_key: "grok-4.3", capabilities: ["llm"], supports_tools: true, upstream_provider: "azure", lifecycle: "preview" },
 			{ model_key: "deepseek-v4-pro", capabilities: ["llm"], supports_tools: true, upstream_provider: "wrong", lifecycle: "ga" },
+			{ model_key: "deepseek-v4-flash", capabilities: ["llm"], supports_tools: true, upstream_provider: "azure", lifecycle: "preview" },
 			{ model_key: "gpt-5.6-sol", capabilities: ["llm"], supports_tools: true, upstream_provider: "azure", lifecycle: "ga", protocol: "openai_chat_completions", operational_status: "live" },
 			{ model_key: "claude-opus-5", capabilities: ["llm"], supports_tools: true, upstream_provider: "azure", lifecycle: "ga", protocol: "anthropic_messages", operational_status: "quota_blocked" },
 		]), { status: 200 }));
 		const metadata = await fetchNaiaModelMetadata("https://example.com");
 		const models = applyNaiaModelMetadata(getLlmProvider("nextain")!.models, metadata);
 		expect(models.find((m) => m.id === "grok-4.3")).toMatchObject({ supportsTools: true, upstreamProvider: "azure" });
-		expect(models.find((m) => m.id === "deepseek-v4-pro")).toMatchObject({ supportsTools: false, upstreamProvider: "wrong" });
+		expect(models.find((m) => m.id === "deepseek-v4-pro")).toMatchObject({ supportsTools: true, upstreamProvider: "wrong" });
+		expect(models.find((m) => m.id === "deepseek-v4-flash")).toMatchObject({ supportsTools: true, upstreamProvider: "azure" });
 		expect(models.find((m) => m.id === "gpt-5.6-sol")).toMatchObject({ protocol: "openai_chat_completions", operationalStatus: "live", comingSoon: false });
 		expect(models.find((m) => m.id === "claude-opus-5")).toMatchObject({ protocol: "anthropic_messages", operationalStatus: "quota_blocked", comingSoon: true });
 		vi.restoreAllMocks();
@@ -356,7 +362,7 @@ describe("registry — Naia Azure model metadata", () => {
 			comingSoon: true,
 		});
 		expect(omitted.find((m) => m.id === "deepseek-v4-pro")).toMatchObject({
-			supportsTools: false,
+			supportsTools: true,
 			comingSoon: true,
 		});
 	});
