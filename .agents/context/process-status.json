@@ -15,7 +15,7 @@
     "issue_doc": "docs/progress/ (F0-baseline, F0-contract, F{1,2,3}-baseline-contract, F0-graft) + 00-PHASES.md",
     "github_issue": null,
     "started": "2026-06-08T00:00:00Z",
-    "last_updated": "2026-08-18T23:09:00+09:00",
+    "last_updated": "2026-08-19T23:10:00+09:00",
     "status": "in_progress",
     "voxcpm2_fp32_runaway_fix_453": {
       "issue": "https://github.com/nextain/naia-shell/issues/453",
@@ -45,6 +45,16 @@
       "field_evidence": "RTX 2070 payload had 31,950 manifest files with zero missing/size/hash drift; the 31,951st ZIP entry was artifact-manifest.json itself. The only activation-only predicate was the empty artifact/voices directory, which ZIP omitted.",
       "release_gate": "stage-runtime invokes stage-voxcpm2-runtime, which verifies the source artifact and the exact selected completed ZIP against src-tauri/voxcpm2-activation-contract.json before Tauri packaging. Rust materializes payload.requiredDirectories before validating and reports every failed predicate. Downloaded ZIP and payload.pending remain reusable after a fixed Shell upgrade.",
       "validation_evidence": "The canonical tauri:installer command now invokes stage-runtime and passed with the selected 3.7 GB archive bound to the verified source by exact file inventory, unpacked byte count, and embedded artifact-manifest SHA-256. Targeted staging/package/release-entry Vitest 10 passed; Rust payload directory-materialization and multi-failure diagnostics 2 passed; conflict-marker, JSON-contract, TypeScript/Vite, paired Agent, Rust release, NSIS, and MSI gates passed. E:/naia-release/Naia_0.1.7_x64-setup-voxcpm2-final-20260818.exe is 515,921,910 bytes with SHA-256 5dab2d064a43333f51458329fffeac5606bc1dc858f6687636851031916bcaf7, matching the canonical build output. The earlier 90,993,477-byte provenance-fix candidate bypassed stage-runtime and is superseded; do not install it."
+    },
+    "voxcpm2_payload_upgrade_465": {
+      "issue": "https://github.com/nextain/naia-shell/issues/465",
+      "scope": "Reject v0.1.7 host-voice payload control files under v0.1.9, atomically restage from the verified local ZIP cache, and require the complete current reference-voice palette before readiness.",
+      "requirements": "docs/requirements.md FR-V017.37",
+      "scenario": "docs/user-scenarios.md UC-V017-VOXCPM2-PAYLOAD-UPGRADE",
+      "status": "in_progress",
+      "last_updated": "2026-08-19T23:10:00+09:00",
+      "field_evidence": "RTX 2070 v0.1.8 upgrade reused a structurally valid v0.1.7 payload whose stale installer prepared only one voice; current verification required eight and returned VOXCPM2_REFERENCE_VOICE_MISSING.",
+      "release_gate": "Windows stage-runtime runs the stale-control upgrade regression before packaging. Installed payload reuse additionally requires SHA-256 equality for the packaged installer script and activation contract; mismatch drives cached-archive restaging instead of archive download."
     },
     "windows_trt_latency_14": {
       "issue": "https://github.com/nextain/alpha-adk/issues/14",

@@ -335,6 +335,13 @@ describe("stageVoxCpm2Runtime", () => {
 		expect(packageJson.scripts["tauri:installer"]).not.toContain(
 			"tauri-with-mode.mjs build",
 		);
+		const stageRuntime = readFileSync(
+			resolve(process.cwd(), "scripts/stage-runtime.mjs"),
+			"utf8",
+		);
+		expect(stageRuntime).toContain(
+			"voxcpm2_upgrade_rejects_default_only_payload_control_files",
+		);
 	});
 
 	it("stages the verified download, installer, and default voice contracts", () => {

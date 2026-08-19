@@ -1,0 +1,18 @@
+version: "0.1.9"
+date: "2026-08-19"
+summary:
+  en: "Windows host voice upgrade hotfix: stale v0.1.7 payload controls are refreshed from the verified local archive cache before the current voice palette is installed."
+  ko: "Windows 호스트 음성 업그레이드 긴급 수정: 이전 v0.1.7 payload 제어 파일을 검증된 로컬 압축 파일 캐시에서 갱신한 뒤 현재 음성 목록을 설치합니다."
+changes:
+  - type: fix
+    scope: voice
+    issue: 465
+    description:
+      en: "Reject structurally valid installed payloads whose installer script or activation contract differs from the running Shell, then atomically restage them without re-downloading the runtime archive."
+      ko: "설치 스크립트나 활성화 계약이 실행 중인 Shell과 다른 기존 payload는 재사용하지 않고, 런타임 압축 파일을 다시 다운로드하지 않은 채 원자적으로 재구성합니다."
+  - type: test
+    scope: release
+    issue: 465
+    description:
+      en: "Block Windows release packaging unless the v0.1.7 default-only payload to current eight-voice palette upgrade regression passes."
+      ko: "v0.1.7 기본 음성 한 개 payload에서 현재 8개 음성 목록으로 업그레이드하는 회귀 검사가 통과해야 Windows 릴리즈 패키징을 진행합니다."

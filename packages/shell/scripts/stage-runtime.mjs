@@ -637,6 +637,14 @@ async function main() {
 	const matrix = readMatrix();
 	const pairedAgentRoot = applyPairedAgentEnv(process.env);
 
+	if (platform === "win32") {
+		console.log("[stage-runtime] host voice upgrade regression gate");
+		run(
+			"cargo test --manifest-path src-tauri/Cargo.toml voxcpm2_upgrade_rejects_default_only_payload_control_files --lib",
+			SHELL,
+		);
+	}
+
 	await prepareRuntime(matrix, platform, arch);
 
 	// ③ 스테이징 — 정책은 매트릭스 staging 필드가 소유(P1-R1: 하드코딩이면 매트릭스가 장식이 됨)

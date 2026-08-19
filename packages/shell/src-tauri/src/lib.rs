@@ -5049,6 +5049,42 @@ fn voxcpm2_payload_is_valid(
     voxcpm2_payload_validation_failures(root, expected_artifact_sha256).is_empty()
 }
 
+fn voxcpm2_payload_control_files_match(
+    root: &std::path::Path,
+    current_installer: &std::path::Path,
+) -> bool {
+    [
+        (
+            root.join("prepare-voxcpm2-model.ps1"),
+            current_installer.to_path_buf(),
+        ),
+        (
+            root.join("voxcpm2-activation-contract.json"),
+            current_installer.with_file_name("voxcpm2-activation-contract.json"),
+        ),
+    ]
+    .into_iter()
+    .all(|(installed, current)| {
+        installed.is_file()
+            && current.is_file()
+            && sha256_file_hex(&installed)
+                .ok()
+                .zip(sha256_file_hex(&current).ok())
+                .is_some_and(|(installed_hash, current_hash)| {
+                    installed_hash.eq_ignore_ascii_case(&current_hash)
+                })
+    })
+}
+
+fn voxcpm2_installed_payload_is_reusable(
+    root: &std::path::Path,
+    current_installer: Option<&std::path::Path>,
+) -> bool {
+    voxcpm2_payload_is_valid(root, None)
+        && current_installer
+            .is_some_and(|installer| voxcpm2_payload_control_files_match(root, installer))
+}
+
 fn read_voxcpm2_activation_contract() -> Result<VoxCpm2ActivationContract, String> {
     let contract: VoxCpm2ActivationContract =
         serde_json::from_str(include_str!("../voxcpm2-activation-contract.json"))
@@ -5204,7 +5240,11 @@ fn voxcpm2_bundle_root(app: &tauri::AppHandle) -> Option<std::path::PathBuf> {
         )
     } else {
         let installed = voxcpm2_installed_payload_root();
-        voxcpm2_payload_is_valid(&installed, None).then_some(installed)
+        voxcpm2_installed_payload_is_reusable(
+            &installed,
+            voxcpm2_installer_script_path(app).as_deref(),
+        )
+        .then_some(installed)
     };
     root.filter(|root| voxcpm2_payload_is_valid(root, None))
 }
@@ -6018,10 +6058,19 @@ async fn install_voxcpm2_runtime(
         .await
         .map_err(|error| format!("Naia Host post-install verification failed: {error}"))?;
     let status = classify_voxcpm2_installation(probe);
-    status.can_start.then_some(status).ok_or_else(|| {
-        "Naia Host installer exited successfully but runtime verification is incomplete."
-            .to_string()
-    })
+    if status.can_start {
+        Ok(status)
+    } else {
+        let failures = status
+            .steps
+            .iter()
+            .filter_map(|step| step.failure.as_ref().map(|failure| failure.code))
+            .collect::<Vec<_>>()
+            .join(", ");
+        Err(format!(
+            "Naia Host installer exited successfully but runtime verification is incomplete: {failures}"
+        ))
+    }
 }
 
 #[tauri::command]
@@ -11744,6 +11793,63 @@ mod tests {
         prepare_voxcpm2_payload_structure(root).unwrap();
 
         assert!(root.join("artifact/voices").is_dir());
+    }
+
+    #[test]
+    fn voxcpm2_upgrade_rejects_default_only_payload_control_files() {
+        let runtime = tempfile::tempdir().unwrap();
+        let current = tempfile::tempdir().unwrap();
+        let root = runtime.path();
+        let artifact = root.join("artifact");
+        for path in [
+            "artifact-manifest.json",
+            "runtime-manifest.json",
+            "runtime-package-lock.json",
+            "installer-package-lock.json",
+            "sbom.spdx.json",
+            "THIRD_PARTY_NOTICES.md",
+            "licenses/Apache-2.0.txt",
+            "python/python.exe",
+        ] {
+            write_test_file(&artifact.join(path));
+        }
+        std::fs::create_dir_all(artifact.join("voices")).unwrap();
+        write_test_file(
+            &artifact
+                .join("python/Lib/site-packages/voxcpm2_tensorrt")
+                .join("http_server.cp310-win_amd64.pyd"),
+        );
+
+        let installed_script = root.join("prepare-voxcpm2-model.ps1");
+        let installed_contract = root.join("voxcpm2-activation-contract.json");
+        std::fs::write(&installed_script, "install default voice only").unwrap();
+        std::fs::write(
+            &installed_contract,
+            r#"{"runtime":{"referenceVoices":[{"id":"default.wav"}]}}"#,
+        )
+        .unwrap();
+
+        let current_script = current.path().join("prepare-voxcpm2-model.ps1");
+        let current_contract = current.path().join("voxcpm2-activation-contract.json");
+        std::fs::write(&current_script, "install complete eight-voice palette").unwrap();
+        std::fs::write(
+            &current_contract,
+            r#"{"runtime":{"referenceVoices":[1,2,3,4,5,6,7,8]}}"#,
+        )
+        .unwrap();
+
+        assert!(voxcpm2_payload_is_valid(root, None));
+        assert!(!voxcpm2_installed_payload_is_reusable(
+            root,
+            Some(&current_script)
+        ));
+
+        std::fs::copy(&current_script, &installed_script).unwrap();
+        std::fs::copy(&current_contract, &installed_contract).unwrap();
+        assert!(voxcpm2_installed_payload_is_reusable(
+            root,
+            Some(&current_script)
+        ));
     }
 
     #[test]
