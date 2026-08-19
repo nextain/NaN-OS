@@ -26,6 +26,13 @@ function chatAreaSendSentenceSource(): string {
 	return chatArea.slice(start, end);
 }
 
+function slidesSource(): string {
+	return readFileSync(
+		resolve(__dirname, "../../../apps/slides/SlidesCenterArea.tsx"),
+		"utf8",
+	);
+}
+
 describe("Shell TTS single-ownership speech routing contract", () => {
 	it("only bypasses Shell synthesis for an authored NVA clip match", () => {
 		const source = pipelineSource();
@@ -36,9 +43,7 @@ describe("Shell TTS single-ownership speech routing contract", () => {
 		expect(authoredClipGate).toBeGreaterThanOrEqual(0);
 		expect(authoredClipCall).toBeGreaterThan(authoredClipGate);
 		expect(shellSynthesis).toBeGreaterThan(authoredClipCall);
-		expect(source.slice(authoredClipCall, shellSynthesis)).toContain(
-			"return;",
-		);
+		expect(source.slice(authoredClipCall, shellSynthesis)).toContain("return;");
 	});
 
 	it("never lets the NVA renderer synthesize dynamic speech itself", () => {
@@ -75,7 +80,10 @@ describe("Shell TTS single-ownership speech routing contract", () => {
 		//  - SettingsTab.tsx: TTS provider preview (getPreviewText)
 		//  - OnboardingWizard.tsx: system-voice preview (FR-VOICE-ONBOARD.1)
 		const componentsDir = resolve(__dirname, "../../../components");
-		const previewAllowlist = new Set(["SettingsTab.tsx", "OnboardingWizard.tsx"]);
+		const previewAllowlist = new Set([
+			"SettingsTab.tsx",
+			"OnboardingWizard.tsx",
+		]);
 		const offenders: string[] = [];
 		for (const file of readdirSync(componentsDir)) {
 			if (!/\.tsx?$/.test(file) || previewAllowlist.has(file)) continue;
@@ -89,5 +97,24 @@ describe("Shell TTS single-ownership speech routing contract", () => {
 			}
 		}
 		expect(offenders).toEqual([]);
+	});
+
+	it("routes slide narration through ChatArea instead of a Slides audio side channel", () => {
+		const slides = slidesSource();
+		const chatArea = readFileSync(
+			resolve(__dirname, "../../../components/ChatArea.tsx"),
+			"utf8",
+		);
+		for (const forbidden of [
+			"synthesizeTts(",
+			"speechSynthesis.speak(",
+			"new Audio(",
+		]) {
+			expect(slides).not.toContain(forbidden);
+		}
+		expect(slides).toContain("requestSlidePresenterSpeech({");
+		expect(chatArea).toContain("SLIDE_PRESENTER_SPEAK_EVENT");
+		expect(chatArea).toContain("sendSentenceToTts(detail.text.trim())");
+		expect(chatArea).toContain('settleSlidePresenterSpeech("finished")');
 	});
 });

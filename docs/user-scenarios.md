@@ -861,3 +861,17 @@ P02 상태 매트릭스: 신규 기본, ADK 경로 저장 중, Agent 재시작 �
 | **UC-V020-UPDATER-FAILURE-HONESTY** | 네트워크, JSON 형식, 플랫폼 키 또는 서명 검증이 실패하면 설정 화면은 실패 상태를 표시하며 “최신 버전”으로 오표시하지 않는다. 정상적으로 업데이트 없음이 확인된 경우에만 최신 상태를 표시한다. | `src/lib/__tests__/updater.test.ts`, `SettingsTab` 업데이트 상태 계약 |
 
 P02 상태 매트릭스: 업데이트 없음, v0.2.0 발견, 다운로드·설치·재실행, endpoint 404, malformed JSON, 기본 target과 다른 플랫폼 키, 잘못된 서명, 정본/호환 feed 불일치, 릴리즈 asset hash 불일치를 각각 독립 검증한다. 기본 Tauri target은 `windows-x86_64` 하나이며 NSIS를 정본 updater 산출물로 사용한다. MSI와 그 서명도 수동 설치·무결성 산출물로 함께 배포하지만 같은 기본 target 아래 두 URL을 위조하지 않는다.
+
+## UC-SLIDE-PRESENTER — Naia가 자료를 열고 발표한다 (#467)
+
+사용자는 PDF 발표 자료와 슬라이드별 발표 스크립트를 연 뒤 “발표해 줘”라고 말한다. Naia는 현재 장의 내용을 알고, 기존 음성 파이프라인으로 설명하고, 발화가 끝나면 다음 장으로 이동한다. 발표 중 질문하면 자동 진행을 멈추고 현재 장·전체 자료·스크립트와 Naia의 지식을 바탕으로 답한 뒤 중단 지점부터 이어간다.
+
+| Scenario | User-observable outcome | Coverage |
+|---|---|---|
+| **UC-SLIDE-PRESENTER-OPEN** | 사용자는 PDF와 선택적인 Markdown 스크립트를 열고 총 장수, 현재 장, 현재 발표문을 즉시 확인한다. PDF가 없거나 깨졌으면 성공처럼 보이지 않고 다시 열 수 있다. | `slide-presenter` parser/state Vitest + component tests + `e2e/467-slide-presenter.spec.ts` |
+| **UC-SLIDE-PRESENTER-CONTROL** | 화면·키보드·Naia 도구의 시작, 일시정지, 계속, 중지, 이전, 다음, 특정 장 이동이 하나의 상태 전이를 사용한다. 마지막 장에서는 완료되고 범위를 벗어나지 않는다. | state-machine Vitest + component/tool contract + Playwright |
+| **UC-SLIDE-PRESENTER-AUTO-SPEECH** | 자동 발표는 슬라이드별 발표문을 Shell의 단일 TTS 파이프라인으로 발화한다. 같은 장을 중복 발화하거나 오래된 완료 이벤트로 다음 장을 두 번 넘기지 않으며, pause/stop/질문 끼어들기가 현재 자동 진행을 취소한다. | TTS request/completion generation unit test + ChatArea event contract + Playwright browser-TTS fixture |
+| **UC-SLIDE-PRESENTER-QA** | 질문 중 자동 진행이 멈추고, 활성 앱 context에는 현재 장의 발표문과 전체 자료의 사용 가능한 텍스트가 포함된다. 답변 후 이어가면 질문 전 위치에서 재개한다. | app context/tool tests + Playwright context snapshot |
+| **UC-SLIDE-PRESENTER-ACCESSIBLE** | 넓은 화면과 좁은 화면에서 슬라이드가 잘리지 않고, 모든 제어가 키보드와 접근 가능한 이름을 가지며, 빈 자료·로딩·준비·발표·일시정지·완료·오류 상태를 구분한다. | desktop/narrow Playwright screenshots, overflow/ARIA assertions |
+
+P02 상태 매트릭스: 빈 자료, PDF 로딩, 준비, 자동 발표, 일시정지, 질문 대기, 완료, PDF 오류를 각각 확인한다. PDF를 1차 재생 정본으로 사용하며 ODP/PPTX는 후속 변환·가져오기 범위다.
