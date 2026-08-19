@@ -848,3 +848,15 @@ fenced code는 언어·복사·접기·워크스페이스 전환을 제공하고
 ### FR-PERMISSION-SHORTCUT.1 — 권한 팝업 공통 단축키 (#477)
 
 도구 권한 팝업은 실행 `Alt+Y`, 항상 실행 `Alt+A`, 취소 `Alt+N`을 하나의 공통 정의에서 표시·해석하고, macOS에서는 같은 Alt 키를 Option 기호로 표시한다. 팝업이 열린 동안에만 수정키가 정확히 일치하는 최초 keydown을 한 번 처리한다.
+## Naia slide presenter (#467)
+
+> Status: implemented and verified. PDF playback and deterministic presentation control are the first release slice. ODP/PPTX conversion, recording, and persistent deck ingestion remain follow-up work.
+
+| ID | Normative requirement | Verification |
+|---|---|---|
+| **FR-SLIDE.1** | Shell provides a built-in Slides app that opens a user-selected PDF and an optional UTF-8 Markdown speaker script without uploading either file. It reports loading, ready, empty, and error states honestly and renders exactly one selected page at a time. | parser/state unit tests + component tests + Playwright real PDF fixture |
+| **FR-SLIDE.2** | Page navigation and presentation lifecycle use one deterministic state machine: ready, presenting, paused, answering, completed, and error. Previous, next, goto, start, pause, resume, and stop are shared by UI, keyboard, and `skill_slide_presenter`; bounds and duplicate commands are idempotent. | state-machine Vitest + app tool contract tests |
+| **FR-SLIDE.3** | Automatic narration uses the existing Shell sentence TTS pipeline. The Slides app may request speech but must not call synthesis, `speechSynthesis`, or audio playback directly. A generation-bound completion event advances at most one page; interruption or a newer generation invalidates late completion. | media ownership contract + TTS event unit tests + Playwright browser-TTS fixture |
+| **FR-SLIDE.4** | The active Slides app pushes current page, total pages, current speaker note, presentation state, and bounded deck/script context to Naia. Questions pause automatic advance; Naia may answer from that context and existing knowledge, then resume from the same page only on an explicit resume action. | app context snapshot tests + question/resume Playwright journey |
+| **FR-SLIDE.5** | The Slides surface supports keyboard navigation and accessible controls, preserves a 16:9 slide without clipping at desktop and narrow widths, and makes progress and recoverable errors visible. | ARIA, overflow, desktop/narrow Playwright screenshots |
+| **NFR-SLIDE.1** | PDF is the first canonical playback format because it fixes rendering across Tauri and browsers. ODP/PPTX support must enter through an explicit conversion receipt into the same page/narration contract rather than a second playback engine. | architecture/format contract test |

@@ -205,8 +205,68 @@ const codingWorkerUxTranslations = {
 	),
 } as const;
 
+const slidePresenterUxTranslations = {
+	"slides.title": codingWorkerText("슬라이드 발표", "Slide presentation"),
+	"slides.subtitle": codingWorkerText(
+		"PDF와 발표 스크립트를 열면 Naia가 설명하고 질문에 답합니다.",
+		"Open a PDF and speaker script so Naia can present and answer questions.",
+	),
+	"slides.openPdf": codingWorkerText("PDF 열기", "Open PDF"),
+	"slides.openScript": codingWorkerText("발표 스크립트", "Speaker script"),
+	"slides.noPdf": codingWorkerText(
+		"PDF가 선택되지 않았습니다",
+		"No PDF selected",
+	),
+	"slides.loading": codingWorkerText("PDF를 여는 중…", "Opening PDF…"),
+	"slides.loadError": codingWorkerText(
+		"PDF를 열 수 없습니다. 다른 파일을 선택하세요.",
+		"Could not open the PDF. Choose another file.",
+	),
+	"slides.emptyTitle": codingWorkerText(
+		"발표 자료를 열어 주세요",
+		"Open a presentation",
+	),
+	"slides.emptyBody": codingWorkerText(
+		"PDF를 먼저 열고, 필요하면 Markdown 발표 스크립트를 함께 선택하세요.",
+		"Open a PDF first, then optionally choose a Markdown speaker script.",
+	),
+	"slides.notes": codingWorkerText("현재 발표문", "Current speaker note"),
+	"slides.noNotes": codingWorkerText(
+		"발표 자료를 열면 현재 장의 내용이 표시됩니다.",
+		"The current slide content appears after opening a presentation.",
+	),
+	"slides.current": codingWorkerText("현재 장", "Current slide"),
+	"slides.shortcutNavigate": codingWorkerText(
+		"슬라이드 이동",
+		"Navigate slides",
+	),
+	"slides.shortcutPause": codingWorkerText("일시정지·계속", "Pause or resume"),
+	"slides.controls": codingWorkerText("발표 제어", "Presentation controls"),
+	"slides.previous": codingWorkerText("이전 슬라이드", "Previous slide"),
+	"slides.next": codingWorkerText("다음 슬라이드", "Next slide"),
+	"slides.start": codingWorkerText("발표 시작", "Start presenting"),
+	"slides.pause": codingWorkerText("일시정지", "Pause"),
+	"slides.resume": codingWorkerText("계속 발표", "Resume"),
+	"slides.stop": codingWorkerText("발표 종료", "Stop"),
+	"slides.goto": codingWorkerText("이동", "Go to"),
+	"slides.fullscreen": codingWorkerText("전체 화면", "Full screen"),
+	"slides.speechError": codingWorkerText(
+		"음성 발표가 멈췄습니다. 음성 설정을 확인하거나 계속 발표를 눌러 다시 시도하세요.",
+		"Narration stopped. Check voice settings or resume to try again.",
+	),
+	"slides.state.empty": codingWorkerText("자료 없음", "No deck"),
+	"slides.state.loading": codingWorkerText("불러오는 중", "Loading"),
+	"slides.state.ready": codingWorkerText("발표 준비", "Ready"),
+	"slides.state.presenting": codingWorkerText("발표 중", "Presenting"),
+	"slides.state.paused": codingWorkerText("일시정지", "Paused"),
+	"slides.state.answering": codingWorkerText("질문 답변", "Answering"),
+	"slides.state.completed": codingWorkerText("발표 완료", "Completed"),
+	"slides.state.error": codingWorkerText("확인 필요", "Needs attention"),
+} as const;
+
 const translations = {
 	...codingWorkerUxTranslations,
+	...slidePresenterUxTranslations,
 	// Settings
 	"settings.title": {
 		ko: "설정",
