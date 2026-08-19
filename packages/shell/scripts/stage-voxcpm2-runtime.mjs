@@ -111,9 +111,13 @@ export function verifyVoxCpm2ArchiveActivationContract({
 	contract = readVoxCpm2ActivationContract(),
 	expectedFiles,
 	expectedManifestSha256,
-	expectedUnpackedBytes,
 } = {}) {
-	const inspected = spawnSync(tar, ["-tvf", basename(archive)], {
+	// Use the names-only listing. The verbose column layout is not stable across
+	// the bsdtar versions shipped by Windows runners (notably windows-2025), so
+	// parsing `-tvf` can silently turn a valid archive into an empty inventory.
+	// File content is still covered below by the embedded manifest digest, while
+	// the extracted source is verified file-by-file before this audit runs.
+	const inspected = spawnSync(tar, ["-tf", basename(archive)], {
 		encoding: "utf8",
 		windowsHide: true,
 		cwd: dirname(archive),
@@ -125,23 +129,14 @@ export function verifyVoxCpm2ArchiveActivationContract({
 		);
 	const entries = String(inspected.stdout ?? "")
 		.split(/\r?\n/u)
-		.map((line) => {
-			const match = line.match(
-				/^\S+\s+\d+\s+\S+\s+\S+\s+(\d+)\s+\d+\s+\d+\s+\S+\s+(.+)$/u,
-			);
-			if (!match) return null;
-			return {
-				size: Number(match[1]),
-				path: match[2].trim().replaceAll("\\", "/").replace(/^\.\//u, ""),
-			};
-		})
-		.filter((entry) => entry?.path);
-	const fileEntries = entries.filter((entry) => !entry.path.endsWith("/"));
-	const files = new Set(fileEntries.map((entry) => entry.path));
+		.map((line) => line.trim().replaceAll("\\", "/").replace(/^\.\//u, ""))
+		.filter(Boolean);
+	const fileEntries = entries.filter((entry) => !entry.endsWith("/"));
+	const files = new Set(fileEntries);
 	const directories = new Set(
 		entries
-			.filter((entry) => entry.path.endsWith("/"))
-			.map((entry) => entry.path.slice(0, -1)),
+			.filter((entry) => entry.endsWith("/"))
+			.map((entry) => entry.slice(0, -1)),
 	);
 	const failures = [];
 	for (const path of contract.artifact.requiredFiles)
@@ -169,12 +164,6 @@ export function verifyVoxCpm2ArchiveActivationContract({
 				`archive/source inventory mismatch: extras=${extras.length} missing=${missing.length}`,
 			);
 	}
-	if (
-		Number.isFinite(expectedUnpackedBytes) &&
-		fileEntries.reduce((total, entry) => total + entry.size, 0) !==
-			expectedUnpackedBytes
-	)
-		failures.push("archive/source unpacked byte count mismatch");
 	if (expectedManifestSha256) {
 		const manifest = spawnSync(
 			tar,
@@ -431,7 +420,6 @@ export function stageVoxCpm2Runtime({
 		tar,
 		expectedFiles: inventory,
 		expectedManifestSha256,
-		expectedUnpackedBytes: unpackedBytes,
 	});
 	let parsedUrl;
 	try {

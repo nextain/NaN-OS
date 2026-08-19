@@ -82,9 +82,6 @@ export function packageVoxCpm2Runtime({
 			tar,
 			expectedFiles,
 			expectedManifestSha256,
-			expectedUnpackedBytes:
-				statSync(resolve(source, "artifact-manifest.json")).size +
-				manifest.files.reduce((total, item) => total + item.size, 0),
 		});
 	} catch (error) {
 		rmSync(destination, { force: true });
