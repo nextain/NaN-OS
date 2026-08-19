@@ -851,3 +851,13 @@ P02 release-state matrix: build preparation, missing required runtime, successfu
 | **UC-V017-AVATAR-PICKER** | 신규 온보딩의 외모 선택은 VRM/NVA 통합 그리드, 얼굴 중심 썸네일, 유형 배지를 제공하고 기본 Naia NVA를 미리 선택한다. 기본 완료 시 `avatarProvider=naia-video-avatar`, `nvaModel=naia`가 저장된다. | onboarding component + fresh-profile Playwright screenshot/DOM |
 
 P02 상태 매트릭스: 신규 기본, ADK 경로 저장 중, Agent 재시작 성공/실패, Herdr 준비 중/성공/실패·재시도, Workspace의 왼쪽 소형/왼쪽 채움, 아바타 VRM/NVA 선택을 각각 확인한다. 브라우저 Playwright 전체 스위트와 Linux native Tauri가 자동 검증 범위이며, 실제 NSIS 설치·번들 Node·WebView2·Windows 프로세스 수명은 Windows 인계 후 깨끗한 VM에서 최종 확인한다.
+
+### 2026-08-20 v0.2.0 signed updater recovery
+
+| Scenario | User-observable outcome | Coverage |
+|---|---|---|
+| **UC-V020-WINDOWS-SIGNED-UPDATE** | Windows v0.1.9에서 업데이트를 확인하면 v0.2.0을 발견하고, 서명된 단일 `windows-x86_64` updater 산출물을 내려받아 설치한 뒤 재실행한 앱이 v0.2.0을 보고한다. 비밀키·비밀번호는 빌드 로그와 Git 추적 파일에 나타나지 않는다. | platform matrix/config golden, signed artifact/signature existence and public-key verification, installed v0.1.9 field acceptance |
+| **UC-V020-LEGACY-FEED-COMPATIBILITY** | v0.1.9가 내장한 이전 `nextain/naia-os/releases/latest/download/latest.json` 주소와 v0.2.0의 정본 `nextain/naia-shell` 주소가 같은 검증된 v0.2.0 바이트·서명을 가리킨다. | 두 공개 endpoint의 unauthenticated HTTP/schema/URL/signature/hash probe |
+| **UC-V020-UPDATER-FAILURE-HONESTY** | 네트워크, JSON 형식, 플랫폼 키 또는 서명 검증이 실패하면 설정 화면은 실패 상태를 표시하며 “최신 버전”으로 오표시하지 않는다. 정상적으로 업데이트 없음이 확인된 경우에만 최신 상태를 표시한다. | `src/lib/__tests__/updater.test.ts`, `SettingsTab` 업데이트 상태 계약 |
+
+P02 상태 매트릭스: 업데이트 없음, v0.2.0 발견, 다운로드·설치·재실행, endpoint 404, malformed JSON, 기본 target과 다른 플랫폼 키, 잘못된 서명, 정본/호환 feed 불일치, 릴리즈 asset hash 불일치를 각각 독립 검증한다. 기본 Tauri target은 `windows-x86_64` 하나이며 NSIS를 정본 updater 산출물로 사용한다. MSI와 그 서명도 수동 설치·무결성 산출물로 함께 배포하지만 같은 기본 target 아래 두 URL을 위조하지 않는다.

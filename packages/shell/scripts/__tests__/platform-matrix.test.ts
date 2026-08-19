@@ -190,6 +190,9 @@ describe("platform-matrix 스키마 (FR-INSTALL.1)", () => {
 
 	it("createUpdaterArtifacts=false — 매트릭스 공통이 유일 소유", () => {
 		expect(matrix.common.createUpdaterArtifacts).toBe(false);
+		expect(matrix.os.win32.createUpdaterArtifacts).toBe(true);
+		expect(matrix.os.linux.createUpdaterArtifacts).toBeUndefined();
+		expect(matrix.os.darwin.createUpdaterArtifacts).toBeUndefined();
 		const nsis = readFileSync(
 			resolve(SHELL, "src-tauri/windows/installer-hooks.nsh"),
 			"utf8",
@@ -588,7 +591,7 @@ describe("conf 생성 golden (FR-INSTALL.2)", () => {
 	it("win32: targets/resources/설치자 설정 기대 형상", () => {
 		const conf = generateConf(matrix, "win32", { cascadeLoaderPresent: false });
 		expect(conf.bundle.targets).toEqual(["nsis", "msi"]);
-		expect(conf.bundle.createUpdaterArtifacts).toBe(false);
+		expect(conf.bundle.createUpdaterArtifacts).toBe(true);
 		expect(conf.bundle.publisher).toBe("Nextain Inc.");
 		expect(conf.bundle.windows.nsis.installMode).toBe("currentUser");
 		for (const r of AGENT_RESOURCES) expect(conf.bundle.resources[r]).toBe(r);
@@ -599,6 +602,13 @@ describe("conf 생성 golden (FR-INSTALL.2)", () => {
 		for (const f of MSVC_DLLS)
 			expect(conf.bundle.resources[`resources/${f}`]).toBe(f);
 		expect(conf.bundle.icon).toBeUndefined();
+	});
+
+	it("win32: local unsigned validation can disable updater artifacts explicitly", () => {
+		const conf = generateConf(matrix, "win32", {
+			createUpdaterArtifacts: false,
+		});
+		expect(conf.bundle.createUpdaterArtifacts).toBe(false);
 	});
 
 	it("linux: targets/resources/depends 기대 형상 (base 쪽 depends 채택 — pipewire-alsa 포함)", () => {

@@ -8,7 +8,9 @@ export interface UpdateInfo {
 
 /**
  * Check for app updates via Tauri updater plugin.
- * Returns null if up-to-date or updater unavailable (e.g. Flatpak).
+ * Returns null only when the updater confirms that the app is up to date.
+ * Transport, metadata, signature, and plugin errors are surfaced to the caller
+ * so the UI cannot misreport a failed check as "latest".
  */
 export async function checkForUpdate(): Promise<UpdateInfo | null> {
 	try {
@@ -26,8 +28,7 @@ export async function checkForUpdate(): Promise<UpdateInfo | null> {
 			},
 		};
 	} catch (err) {
-		// Plugin not registered (Flatpak) or network error
-		Logger.info("updater", "Update check skipped", { error: String(err) });
-		return null;
+		Logger.error("updater", "Update check failed", { error: String(err) });
+		throw err;
 	}
 }

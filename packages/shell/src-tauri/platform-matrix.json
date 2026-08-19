@@ -66,6 +66,7 @@
 	},
 	"os": {
 		"win32": {
+			"createUpdaterArtifacts": true,
 			"staging": {
 				"voxcpm2Runtime": "required"
 			},
@@ -116,7 +117,9 @@
 			},
 			"artifacts": [
 				{ "glob": "nsis/*-setup.exe", "minBytes": 237516523 },
-				{ "glob": "msi/*.msi", "minBytes": 297402764 }
+				{ "glob": "nsis/*-setup.exe.sig", "minBytes": 100 },
+				{ "glob": "msi/*.msi", "minBytes": 297402764 },
+				{ "glob": "msi/*.msi.sig", "minBytes": 100 }
 			],
 			"steamDepot": {
 				"path": "steam/windows",

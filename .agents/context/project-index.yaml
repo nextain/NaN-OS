@@ -35,6 +35,10 @@ on_demand_loading:
   active_issues:
     - file: docs/progress/
       topics: [이슈, 진행중, SDLC]
+  release_operations:
+    - file: docs/progress/windows-release-process.md
+      topics: [Windows release, updater, signing, latest.json, v0.2.0]
+      note: "Signing key location and procedure only; secret values remain outside the repository."
   quarantine:
     - file: quarantine/MANIFEST.json
       topics: [보류격리, 백업자산, 방치자산, quarantine]

@@ -604,6 +604,58 @@ describe("SettingsTab", () => {
 		window.removeEventListener("naia_auth_ready", authReady);
 	});
 
+	it("replaces a stale Gemini main role when logging in to Naia from Settings", async () => {
+		localStorage.setItem("naia-adk-path", "C:\\Users\\tester\\naia-adk");
+		localStorage.setItem(
+			"naia-config",
+			JSON.stringify({
+				provider: "gemini",
+				model: "gemini-3.5-flash",
+				apiKey: "",
+				llmRoles: {
+					main: { provider: "gemini", model: "gemini-3.5-flash" },
+					sub: { provider: "openai", model: "gpt-5.4" },
+				},
+			}),
+		);
+		mockInvoke.mockResolvedValue([]);
+		vi.stubGlobal(
+			"fetch",
+			vi.fn().mockResolvedValue({
+				ok: true,
+				status: 200,
+				json: () => Promise.resolve({ credits: 10 }),
+			}),
+		);
+
+		render(<SettingsTab />);
+		await vi.waitFor(() => {
+			expect(eventListeners.get("naia_auth_complete")).toBeDefined();
+		});
+		await act(async () => {
+			await eventListeners.get("naia_auth_complete")?.({
+				payload: { naiaKey: "gw-test-key", naiaUserId: "user-123" },
+			});
+		});
+
+		const saved = JSON.parse(localStorage.getItem("naia-config") || "{}");
+		expect(saved.provider).toBe("nextain");
+		expect(saved.model).toBe("deepseek-v4-flash");
+		expect(saved.llmRoles.main).toEqual({
+			provider: "nextain",
+			model: "deepseek-v4-flash",
+		});
+		expect(saved.llmRoles.sub).toEqual({
+			provider: "openai",
+			model: "gpt-5.4",
+		});
+		expect(chatServiceMocks.activateNaiaLlm).toHaveBeenCalledWith(
+			"gw-test-key",
+			"nextain",
+			"deepseek-v4-flash",
+		);
+	});
+
 	it("shows STT provider selector with vosk option", () => {
 		mockInvoke.mockResolvedValue([]);
 		render(<SettingsTab />);

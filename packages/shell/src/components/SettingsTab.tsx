@@ -226,7 +226,14 @@ function buildNaiaLoginConfig(
 		naiaUserId: nextNaiaUserId || undefined,
 		voice: base.voice ?? getDefaultVoiceForAvatar(base.vrmModel),
 	};
-	return applyNaiaSlotDefaults(withNaiaKey);
+	// A Settings-tab Naia login is an explicit main-brain selection. Keep the
+	// structured role mirror in lockstep with the top-level provider/model;
+	// otherwise a previous Gemini main role remains authoritative to the Agent.
+	const withNaiaMain = writeConfiguredLlmRole(withNaiaKey, "main", {
+		provider: "nextain",
+		model: nextModel,
+	});
+	return applyNaiaSlotDefaults(withNaiaMain);
 }
 const BG_VIDEO_EXTS = new Set(["mp4", "webm", "mov", "ogg", "avi"]);
 const BG_IMAGE_EXTS = new Set(["jpg", "jpeg", "png", "webp", "gif", "avif"]);

@@ -1,0 +1,27 @@
+version: "0.2.0"
+date: "2026-08-19"
+summary:
+  en: "Signed Windows auto-update recovery: installed v0.1.8 and v0.1.9 clients can discover the release, failed checks are no longer shown as latest, and Settings login keeps the live Agent on the selected Naia main model."
+  ko: "서명된 Windows 자동 업데이트 복구: 설치된 v0.1.8·v0.1.9가 새 릴리즈를 찾을 수 있고, 실패한 확인을 최신 버전으로 오표시하지 않으며, 설정 로그인 후 실행 중인 Agent가 선택된 Naia 주 모델을 사용합니다."
+changes:
+  - type: fix
+    scope: updater
+    description:
+      en: "Publish signed Windows updater artifacts and a latest.json feed, while retaining a compatibility feed for clients that still query the former naia-os endpoint."
+      ko: "서명된 Windows 업데이트 산출물과 latest.json 피드를 배포하고, 이전 naia-os 주소를 조회하는 기존 설치본을 위한 호환 피드도 유지합니다."
+  - type: fix
+    scope: updater
+    description:
+      en: "Surface updater transport, metadata, and signature failures instead of reporting them as up to date."
+      ko: "업데이트 네트워크·메타데이터·서명 오류를 최신 버전으로 표시하지 않고 명확한 실패로 안내합니다."
+  - type: fix
+    scope: auth
+    description:
+      en: "Settings login now updates both the visible provider/model and llmRoles.main before Agent activation, preventing a stale Gemini role from overriding the selected Naia DeepSeek model."
+      ko: "설정에서 로그인할 때 화면의 공급자·모델과 llmRoles.main을 Agent 활성화 전에 함께 갱신하여, 남아 있던 Gemini 역할이 선택한 Naia DeepSeek 모델을 덮어쓰지 못하게 합니다."
+  - type: fix
+    scope: voice
+    issue: 465
+    description:
+      en: "Includes the v0.1.9 Naia Host voice upgrade repair: stale payload controls are refreshed from the verified local archive cache before all reference voices are installed."
+      ko: "v0.1.9 Naia 호스트 음성 업그레이드 수정을 포함합니다. 오래된 payload 제어 파일을 검증된 로컬 압축 파일 캐시에서 갱신한 뒤 모든 참조 음성을 설치합니다."

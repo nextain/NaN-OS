@@ -316,6 +316,7 @@ export function generateConf(
 		cascadeLoaderPresent = false,
 		herdrPresent = false,
 		voxcpm2RuntimePresent = false,
+		createUpdaterArtifacts,
 	} = {},
 ) {
 	const row = matrix.os[platform];
@@ -336,7 +337,10 @@ export function generateConf(
 
 	const { $comment: _omit, ...installer } = row.installer ?? {};
 	const bundle = {
-		createUpdaterArtifacts: matrix.common.createUpdaterArtifacts,
+		createUpdaterArtifacts:
+			createUpdaterArtifacts ??
+			row.createUpdaterArtifacts ??
+			matrix.common.createUpdaterArtifacts,
 		targets: [...row.targets],
 		resources,
 		...installer,
@@ -636,6 +640,13 @@ async function main() {
 	const arch = process.arch;
 	const matrix = readMatrix();
 	const pairedAgentRoot = applyPairedAgentEnv(process.env);
+	const unsignedUpdaterValidation =
+		process.env.NAIA_UNSIGNED_UPDATER_BUILD === "1";
+	if (unsignedUpdaterValidation && process.env.CI === "true") {
+		throw new Error(
+			"NAIA_UNSIGNED_UPDATER_BUILD is local validation only and is forbidden in CI",
+		);
+	}
 
 	if (platform === "win32") {
 		console.log("[stage-runtime] host voice upgrade regression gate");
@@ -716,7 +727,13 @@ async function main() {
 		cascadeLoaderPresent,
 		herdrPresent,
 		voxcpm2RuntimePresent,
+		createUpdaterArtifacts: unsignedUpdaterValidation ? false : undefined,
 	});
+	if (unsignedUpdaterValidation) {
+		console.warn(
+			"[stage-runtime] UNSIGNED local validation: updater signatures are intentionally disabled; these artifacts are not release eligible",
+		);
+	}
 	writeFileSync(GENERATED_CONF, `${JSON.stringify(conf, null, "\t")}\n`);
 	console.log(`[stage-runtime] ④ conf 생성 → ${GENERATED_CONF}`);
 

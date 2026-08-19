@@ -14,6 +14,7 @@
     "pkg:dev": { "status": "active", "tranche": "A", "note": "vite" },
     "pkg:build": { "status": "active", "tranche": "A", "note": "tsc -b && vite build" },
     "pkg:tauri:build:bundle": { "status": "active", "tranche": "B", "note": "#377 통합 진입점: node scripts/stage-runtime.mjs — platform-matrix.json(SoT)에서 프로비저닝(node+SHA256, win MSVC)+스테이징(agent 필수·cascade-loader optional)+tauri.conf.generated.json 생성 후 tauri build 직접 spawn(--config 는 커맨드 문자열에 안 넣음 — 생성물이 gitignore 라 dangling RED 방지). Windows VoxCPM2 release staging은 src-tauri/voxcpm2-activation-contract.json을 source artifact, 선택된 완성 ZIP, Rust 설치 payload가 함께 소비하며, archive-owned file/directory와 정확한 http_server.*.pyd 누락을 Tauri packaging 전에 차단한다. ZIP이 보존하지 않는 빈 runtime-state directory는 같은 계약의 payload.requiredDirectories에 선언하고 설치기가 activation 전에 생성한다. 구 tauri:build:local·tauri:build:windows:local + tauri.conf.{local,windows,windows-local,linux}.json + nsis-hooks.nsh 대체" },
+    "pkg:tauri:installer": { "status": "active", "tranche": "B", "note": "Maintainer release entrypoint: run dev setup, then the same canonical stage-runtime bundle path." },
     "conf:tauri.conf.json:beforeDevCommand": { "status": "active", "tranche": "A", "note": "pnpm dev(vite)" },
     "conf:tauri.conf.json:beforeBuildCommand": { "status": "active", "tranche": "B", "note": "pnpm build 만 — 스테이징은 stage-runtime.mjs 가 선행(#377: base 훅에 남기면 --config 머지로 이중 실행)" },
     "conf:tauri.conf.flatpak.json:beforeDevCommand": { "status": "active", "tranche": "B", "note": "empty" },
