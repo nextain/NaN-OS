@@ -14,6 +14,7 @@ import {
 	packageVoxCpm2Runtime,
 } from "../package-voxcpm2-runtime.mjs";
 import {
+	DEFAULT_VOXCPM2_TRT_DOWNLOAD_URL,
 	readVoxCpm2ActivationContract,
 	stageVoxCpm2Runtime,
 	verifyVoxCpm2ArchiveActivationContract,
@@ -164,10 +165,38 @@ function fixture() {
 		expectedManifestSha256: hash(manifestPath),
 		runtimeArchive,
 		runtimeUrl: "https://downloads.nextain.io/voxcpm2/windows_trt_6g/test.zip",
+		verifyRemoteDownload: () => {},
 	};
 }
 
 describe("stageVoxCpm2Runtime", () => {
+	it("pins the production R2 URL and verifies its remote byte contract", () => {
+		expect(DEFAULT_VOXCPM2_TRT_DOWNLOAD_URL).toBe(
+			"https://pub-a587c16974874fc9a168d2a281801a23.r2.dev/windows_trt_6g/voxcpm2-runtime-win-trt6g.zip",
+		);
+		const source = fixture();
+		const calls: Array<[string, number]> = [];
+		stageVoxCpm2Runtime({
+			...source,
+			verifyRemoteDownload: (url: string, bytes: number) =>
+				calls.push([url, bytes]),
+		});
+		expect(calls).toEqual([
+			[source.runtimeUrl, readFileSync(source.runtimeArchive).length],
+		]);
+	});
+
+	it("fails release staging when the public download probe fails", () => {
+		expect(() =>
+			stageVoxCpm2Runtime({
+				...fixture(),
+				verifyRemoteDownload: () => {
+					throw new Error("HEAD returned HTTP 401");
+				},
+			}),
+		).toThrow(/HTTP 401/);
+	});
+
 	it("pins, verifies, and atomically installs every approved Shell reference voice", () => {
 		const installer = readFileSync(
 			resolve(process.cwd(), "src-tauri/windows/prepare-voxcpm2-model.ps1"),

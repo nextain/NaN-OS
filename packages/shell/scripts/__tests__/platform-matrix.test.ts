@@ -196,12 +196,34 @@ describe("platform-matrix 스키마 (FR-INSTALL.1)", () => {
 		);
 		expect(nsis).toContain("$UpdateMode <> 1");
 		expect(nsis).toContain("$DeleteAppDataCheckboxState 1");
+		expect(nsis).toContain("NSIS_HOOK_PREINSTALL");
+		expect(nsis).toContain('RMDir /r "$INSTDIR\\agent"');
+		expect(nsis).toContain('RMDir /r "$INSTDIR\\~"');
+		expect(nsis).toContain("NSIS_HOOK_POSTUNINSTALL");
+		expect(nsis).toContain('RMDir /r "$INSTDIR"');
 		const wix = readFileSync(
 			resolve(SHELL, "src-tauri/windows/clean-app-data.wxs"),
 			"utf8",
 		);
 		expect(wix).toContain("%APPDATA%\\com.naia.shell");
 		expect(wix).toContain("%LOCALAPPDATA%\\com.naia.shell");
+		expect(wix).toContain("%LOCALAPPDATA%\\Naia");
+		expect(wix).toContain('Id="NaiaCleanStaleInstallPayload"');
+		expect(wix).toContain('Id="NaiaCleanInstallRoot"');
+		expect(wix).toContain('Directory="TARGETDIR"');
+		expect(wix).not.toContain('Directory="SystemFolder"');
+		expect(wix).toContain("WIX_UPGRADE_DETECTED");
+		expect(wix).toContain('cd /D &quot;[INSTALLDIR]&quot;');
+		expect(wix).toContain(
+			"for %D in (agent assets bgm-sidecar cascade-loader cascade-runtime herdr voxcpm2-runtime ~)",
+		);
+		const staleCleanupTarget = wix
+			.match(
+				/Id="NaiaCleanStaleInstallPayload"[\s\S]*?ExeCommand="([^"]+)"/u,
+			)?.[1]
+			.replaceAll("&quot;", '"')
+			.replaceAll("&amp;", "&");
+		expect(staleCleanupTarget?.length).toBeLessThanOrEqual(255);
 		expect(wix).toContain('REMOVE="ALL" AND NOT UPGRADINGPRODUCTCODE');
 		expect(wix).toContain('Id="NaiaCleanAppDataAnchor"');
 		expect(wix).toContain('Return="check"');

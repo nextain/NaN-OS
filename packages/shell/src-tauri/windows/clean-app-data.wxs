@@ -13,14 +13,30 @@
       </Component>
     </DirectoryRef>
     <CustomAction
+      Id="NaiaCleanStaleInstallPayload"
+      Directory="TARGETDIR"
+      ExeCommand="cmd.exe /D /C cd /D &quot;[INSTALLDIR]&quot; &amp;&amp; for %D in (agent assets bgm-sidecar cascade-loader cascade-runtime herdr voxcpm2-runtime ~) do if exist &quot;%D&quot; rmdir /S /Q &quot;%D&quot;"
+      Execute="deferred"
+      Impersonate="no"
+      Return="check" />
+    <CustomAction
       Id="NaiaCleanOwnedAppData"
-      Directory="INSTALLDIR"
-      ExeCommand="cmd.exe /D /C if exist &quot;%APPDATA%\com.naia.shell&quot; rmdir /S /Q &quot;%APPDATA%\com.naia.shell&quot; &amp; if exist &quot;%LOCALAPPDATA%\com.naia.shell&quot; rmdir /S /Q &quot;%LOCALAPPDATA%\com.naia.shell&quot;"
+      Directory="TARGETDIR"
+      ExeCommand="cmd.exe /D /C if exist &quot;%APPDATA%\com.naia.shell&quot; rmdir /S /Q &quot;%APPDATA%\com.naia.shell&quot; &amp; if exist &quot;%LOCALAPPDATA%\com.naia.shell&quot; rmdir /S /Q &quot;%LOCALAPPDATA%\com.naia.shell&quot; &amp; if exist &quot;%LOCALAPPDATA%\Naia&quot; rmdir /S /Q &quot;%LOCALAPPDATA%\Naia&quot;"
       Execute="deferred"
       Impersonate="yes"
       Return="check" />
+    <CustomAction
+      Id="NaiaCleanInstallRoot"
+      Directory="TARGETDIR"
+      ExeCommand="cmd.exe /D /C if exist &quot;[INSTALLDIR]&quot; rmdir /S /Q &quot;[INSTALLDIR]&quot;"
+      Execute="deferred"
+      Impersonate="no"
+      Return="check" />
     <InstallExecuteSequence>
+      <Custom Action="NaiaCleanStaleInstallPayload" After="RemoveExistingProducts">WIX_UPGRADE_DETECTED</Custom>
       <Custom Action="NaiaCleanOwnedAppData" After="RemoveFiles">REMOVE="ALL" AND NOT UPGRADINGPRODUCTCODE</Custom>
+      <Custom Action="NaiaCleanInstallRoot" After="NaiaCleanOwnedAppData">REMOVE="ALL" AND NOT UPGRADINGPRODUCTCODE</Custom>
     </InstallExecuteSequence>
   </Fragment>
 </Wix>

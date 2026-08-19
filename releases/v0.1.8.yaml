@@ -1,0 +1,17 @@
+version: "0.1.8"
+date: "2026-08-19"
+summary:
+  en: "Emergency Windows release repair: Naia Host voice downloads are verified against the live public artifact before packaging, and updates cannot retain stale Agent or dependency trees."
+  ko: "Windows 긴급 수정 릴리즈: Naia 호스트 음성 공개 파일을 빌드 전에 실제 검증하고, 업데이트 뒤 오래된 Agent나 의존성 파일이 남지 않도록 정리합니다."
+changes:
+  - type: fix
+    scope: voice
+    issue: 453
+    description:
+      en: "Pin the correct public R2 runtime URL and fail release staging unless HEAD, byte-range access, and archive size all match."
+      ko: "올바른 공개 R2 런타임 URL을 고정하고 HEAD, 바이트 범위 접근, 압축 파일 크기가 모두 일치하지 않으면 릴리즈 빌드를 중단합니다."
+  - type: fix
+    scope: installer
+    description:
+      en: "Replace installer-owned Agent, sidecar, runtime, and node_modules trees on update; remove the exact Naia install root and app-owned state on full uninstall while preserving user memory and workspaces."
+      ko: "업데이트 시 설치 프로그램 소유 Agent, 사이드카, 런타임, node_modules 트리를 교체하고, 완전 삭제 시 사용자 기억과 워크스페이스는 보존하면서 Naia 설치 폴더와 앱 상태를 제거합니다."

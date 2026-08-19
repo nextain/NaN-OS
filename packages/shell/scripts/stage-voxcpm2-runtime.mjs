@@ -1,5 +1,5 @@
-import { createHash } from "node:crypto";
 import { spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
 /** Stage a digest-pinned standalone voxcpm2-tensorrt Windows artifact. */
 import {
 	closeSync,
@@ -22,6 +22,8 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
 const DEFAULT_SHELL = resolve(SCRIPT_DIR, "..");
 const REPOSITORY = "https://github.com/nextain/voxcpm2-tensorrt";
+export const DEFAULT_VOXCPM2_TRT_DOWNLOAD_URL =
+	"https://pub-a587c16974874fc9a168d2a281801a23.r2.dev/windows_trt_6g/voxcpm2-runtime-win-trt6g.zip";
 const ACTIVATION_CONTRACT_PATH = resolve(
 	DEFAULT_SHELL,
 	"src-tauri/voxcpm2-activation-contract.json",
@@ -228,6 +230,51 @@ function filesUnder(root, current = root) {
 	});
 }
 
+export function verifyVoxCpm2RemoteDownload(
+	url,
+	expectedBytes,
+	{ timeoutMs = 30_000 } = {},
+) {
+	const probe = [
+		"const [url, expectedBytes, timeoutMs] = process.argv.slice(1);",
+		"const controller = new AbortController();",
+		"const timer = setTimeout(() => controller.abort(), Number(timeoutMs));",
+		"try {",
+		'  const head = await fetch(url, { method: "HEAD", redirect: "error", signal: controller.signal });',
+		'  if (head.status !== 200) throw new Error("HEAD returned HTTP " + head.status);',
+		'  const length = Number(head.headers.get("content-length"));',
+		'  if (length !== Number(expectedBytes)) throw new Error("Content-Length " + length + " does not match " + expectedBytes);',
+		'  const range = await fetch(url, { headers: { Range: "bytes=0-0" }, redirect: "error", signal: controller.signal });',
+		'  if (range.status !== 206) throw new Error("range GET returned HTTP " + range.status);',
+		'  const contentRange = range.headers.get("content-range") ?? "";',
+		'  if (!contentRange.endsWith("/" + expectedBytes)) throw new Error("Content-Range " + contentRange + " does not match " + expectedBytes);',
+		"  await range.body?.cancel();",
+		"} finally {",
+		"  clearTimeout(timer);",
+		"}",
+	].join("\n");
+	const checked = spawnSync(
+		process.execPath,
+		[
+			"--input-type=module",
+			"--eval",
+			probe,
+			url,
+			String(expectedBytes),
+			String(timeoutMs),
+		],
+		{
+			encoding: "utf8",
+			windowsHide: true,
+			timeout: timeoutMs + 5_000,
+		},
+	);
+	if (checked.status !== 0)
+		throw new Error(
+			`VoxCPM2 public download verification failed: ${String(checked.stderr || checked.stdout || checked.error || `exit ${checked.status}`).trim()}`,
+		);
+}
+
 export function verifyVoxCpm2Artifact(source, expectedManifestSha256) {
 	if (!/^[a-f0-9]{64}$/i.test(expectedManifestSha256 ?? ""))
 		throw new Error(
@@ -336,8 +383,11 @@ export function stageVoxCpm2Runtime({
 	runtimeSource = process.env.NAIA_VOXCPM2_TRT_RUNTIME_DIR,
 	expectedManifestSha256 = process.env.NAIA_VOXCPM2_TRT_ARTIFACT_SHA256,
 	runtimeArchive = process.env.NAIA_VOXCPM2_TRT_ARCHIVE,
-	runtimeUrl = process.env.NAIA_VOXCPM2_TRT_DOWNLOAD_URL,
+	runtimeUrl =
+		process.env.NAIA_VOXCPM2_TRT_DOWNLOAD_URL ||
+		DEFAULT_VOXCPM2_TRT_DOWNLOAD_URL,
 	tar = process.env.NAIA_SYSTEM_TAR || "tar.exe",
+	verifyRemoteDownload = verifyVoxCpm2RemoteDownload,
 } = {}) {
 	if (!runtimeSource)
 		throw new Error(
@@ -395,6 +445,7 @@ export function stageVoxCpm2Runtime({
 		parsedUrl.password
 	)
 		throw new Error("VoxCPM2 download URL must use credential-free HTTPS");
+	verifyRemoteDownload(parsedUrl.href, statSync(archive).size);
 	const downloadManifest = {
 		schemaVersion: 1,
 		profile: "windows_trt_6g",
