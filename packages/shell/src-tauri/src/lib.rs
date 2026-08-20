@@ -6146,6 +6146,43 @@ fn validate_voxcpm2_ready(payload: &str, expected_token: &str) -> Result<(), Str
         .ok_or_else(|| "Naia Host readiness contract mismatch".to_string())
 }
 
+#[derive(Debug, PartialEq)]
+enum VoxCpm2StartupEvent {
+    Ready(String),
+    Error(String),
+}
+
+fn parse_voxcpm2_startup_line(line: &str) -> Option<VoxCpm2StartupEvent> {
+    if let Some(payload) = line.strip_prefix("VOXCPM2_READY ") {
+        return Some(VoxCpm2StartupEvent::Ready(payload.trim().to_string()));
+    }
+    let payload = line.strip_prefix("VOXCPM2_ERROR ")?;
+    let code = serde_json::from_str::<serde_json::Value>(payload)
+        .ok()?
+        .get("code")?
+        .as_str()?
+        .to_string();
+    matches!(
+        code.as_str(),
+        "activation_bootstrap_invalid"
+            | "entitlement_rejected"
+            | "entitlement_inactive"
+            | "entitlement_unavailable"
+    )
+    .then_some(VoxCpm2StartupEvent::Error(code))
+}
+
+fn map_voxcpm2_startup_error(code: &str) -> String {
+    match code {
+        "entitlement_rejected" => "voxcpm2_naia_member_login_required",
+        "entitlement_inactive" => "voxcpm2_naia_membership_required",
+        "entitlement_unavailable" => "voxcpm2_entitlement_unavailable",
+        "activation_bootstrap_invalid" => "voxcpm2_activation_bootstrap_invalid",
+        _ => "voxcpm2_activation_error_invalid",
+    }
+    .to_string()
+}
+
 fn spawn_windows_voxcpm2(
     bundle_root: &std::path::Path,
     naia_key: &str,
@@ -6256,11 +6293,11 @@ fn spawn_windows_voxcpm2(
             return Err("Failed to capture Naia Host runtime output".to_string());
         }
     };
-    let (ready_tx, ready_rx) = std::sync::mpsc::channel::<String>();
+    let (ready_tx, ready_rx) = std::sync::mpsc::channel::<VoxCpm2StartupEvent>();
     thread::spawn(move || {
         for line in BufReader::new(stdout).lines().map_while(Result::ok) {
-            if let Some(payload) = line.strip_prefix("VOXCPM2_READY ") {
-                let _ = ready_tx.send(payload.trim().to_string());
+            if let Some(event) = parse_voxcpm2_startup_line(&line) {
+                let _ = ready_tx.send(event);
             } else {
                 log_verbose(&format!("[voxcpm2] {line}"));
             }
@@ -6269,7 +6306,11 @@ fn spawn_windows_voxcpm2(
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs(300);
     let ready = loop {
         match ready_rx.recv_timeout(std::time::Duration::from_millis(400)) {
-            Ok(payload) => break payload,
+            Ok(VoxCpm2StartupEvent::Ready(payload)) => break payload,
+            Ok(VoxCpm2StartupEvent::Error(code)) => {
+                let _ = child.kill();
+                return Err(map_voxcpm2_startup_error(&code));
+            }
             Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
                 let status = child.try_wait().ok().flatten();
                 return Err(format!(
@@ -13850,6 +13891,36 @@ mod tests {
         .to_string();
         assert!(validate_voxcpm2_ready(&ready, token.as_str()).is_ok());
         assert!(validate_voxcpm2_ready(&ready, "wrong").is_err());
+    }
+
+    #[test]
+    fn voxcpm2_startup_parses_bounded_activation_errors_before_exit() {
+        assert_eq!(
+            parse_voxcpm2_startup_line(r#"VOXCPM2_ERROR {"code":"entitlement_rejected"}"#),
+            Some(VoxCpm2StartupEvent::Error(
+                "entitlement_rejected".to_string()
+            ))
+        );
+        assert_eq!(
+            map_voxcpm2_startup_error("entitlement_rejected"),
+            "voxcpm2_naia_member_login_required"
+        );
+        assert_eq!(
+            map_voxcpm2_startup_error("entitlement_unavailable"),
+            "voxcpm2_entitlement_unavailable"
+        );
+    }
+
+    #[test]
+    fn voxcpm2_startup_rejects_unknown_error_codes() {
+        assert_eq!(
+            parse_voxcpm2_startup_line(r#"VOXCPM2_ERROR {"code":"account-123"}"#),
+            None
+        );
+        assert_eq!(
+            map_voxcpm2_startup_error("unexpected"),
+            "voxcpm2_activation_error_invalid"
+        );
     }
 
     #[test]

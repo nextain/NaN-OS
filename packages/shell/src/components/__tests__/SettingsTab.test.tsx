@@ -1630,6 +1630,62 @@ describe("SettingsTab — memory tab (#298)", () => {
 			expect(writes.length).toBeGreaterThan(0);
 			const manifest = JSON.parse(writes.at(-1)?.[1]?.json as string);
 			expect(manifest.slots.tts.provider).toBe("edge");
+			expect(secureStoreMock.delete).not.toHaveBeenCalledWith("naiaKey");
+		});
+	});
+
+	it("clears only a rejected VoxCPM2 credential and asks the member to log in", async () => {
+		localStorage.setItem("naia-adk-path", "D:\\alpha-adk");
+		localStorage.setItem(
+			"naia-config",
+			JSON.stringify({
+				provider: "nextain",
+				model: "gemini-3.5-flash",
+				naiaKey: "gw-stale",
+				ttsProvider: "edge",
+				ttsEnabled: true,
+				localVoiceEnabled: false,
+			}),
+		);
+		secureStoreMock.get.mockImplementation((key: string) =>
+			Promise.resolve(key === "naiaKey" ? "gw-stale" : null),
+		);
+		mockInvoke.mockImplementation((command: string) => {
+			if (command === "detect_gpu_vram") return Promise.resolve(8);
+			if (command === "voxcpm2_status") return Promise.resolve(false);
+			if (command === "voxcpm2_installation_status")
+				return Promise.resolve({
+					phase: "ready-to-start",
+					ready: false,
+					canStart: true,
+					summary: "VoxCPM2 TensorRT ready",
+					steps: [],
+				});
+			if (command === "start_voxcpm2")
+				return Promise.reject(new Error("voxcpm2_naia_member_login_required"));
+			return Promise.resolve([]);
+		});
+
+		render(<SettingsTab />);
+		gotoSettingsTab("profile");
+		const selector = screen.getByTestId("profile-tts-provider");
+		await vi.waitFor(() =>
+			expect(
+				(selector as HTMLSelectElement).querySelector(
+					'option[value="naia-local-voice"]',
+				),
+			).not.toBeDisabled(),
+		);
+		fireEvent.change(selector, { target: { value: "naia-local-voice" } });
+
+		await vi.waitFor(() => {
+			expect(secureStoreMock.delete).toHaveBeenCalledWith("naiaKey");
+			const saved = JSON.parse(localStorage.getItem("naia-config") || "{}");
+			expect(saved.naiaKey).toBeUndefined();
+			expect(saved.naiaUserId).toBeUndefined();
+			expect(saved.localVoiceEnabled).toBe(false);
+			expect(saved.ttsEnabled).toBe(false);
+			expect(screen.getAllByText(/Naia account/i).length).toBeGreaterThan(0);
 		});
 	});
 

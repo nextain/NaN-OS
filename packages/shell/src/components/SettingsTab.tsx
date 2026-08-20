@@ -1008,6 +1008,37 @@ export function SettingsTab() {
 		} as unknown as Record<string, unknown>);
 		await writeSlotsManifest(fallbackConfig, detectedVramGb ?? undefined);
 	};
+	async function recoverRejectedVoxCpm2Credential(): Promise<void> {
+		clearLocalVoiceAccessToken();
+		try {
+			await invoke("stop_voxcpm2");
+		} catch {
+			// The rejected child normally exited before readiness.
+		}
+		setCascadeRunning(false);
+		useCascadeAvatarStore.getState().setLocalFacadeUrl(null);
+		naiaCredentialEpochRef.current += 1;
+		setNaiaKeyState("");
+		setSecureNaiaCredentialReady(false);
+		setLabBalance(null);
+		await deleteSecretKey("naiaKey");
+		const current = loadConfig();
+		if (current) {
+			const loginRequiredConfig: AppConfig = {
+				...current,
+				naiaKey: undefined,
+				naiaUserId: undefined,
+				localVoiceEnabled: false,
+				ttsEnabled: false,
+			};
+			saveConfig(loginRequiredConfig);
+			await writeNaiaConfig(
+				loginRequiredConfig as unknown as Record<string, unknown>,
+			);
+			await writeSlotsManifest(loginRequiredConfig);
+		}
+		await sendAuthUpdateStrict("");
+	}
 	const localVoiceTransactionRef = useRef(false);
 	useEffect(() => {
 		if (localVoiceTransactionRef.current) return;
@@ -1124,6 +1155,9 @@ export function SettingsTab() {
 			setVoxcpm2InstallError(null);
 			return true;
 		} catch (e) {
+			const loginRequired = String(e).includes(
+				"voxcpm2_naia_member_login_required",
+			);
 			if (originalConfig) {
 				try {
 					await rollbackLocalVoiceSelection(
@@ -1137,8 +1171,14 @@ export function SettingsTab() {
 					});
 				}
 			}
-			setCascadeMsg(`${t("settings.cascadeError")}: ${String(e)}`);
-			setVoxcpm2InstallError(`${t("settings.cascadeError")}: ${String(e)}`);
+			if (loginRequired) {
+				await recoverRejectedVoxCpm2Credential();
+				setCascadeMsg(t("settings.ttsNaiaRequired"));
+				setVoxcpm2InstallError(t("settings.ttsNaiaRequired"));
+			} else {
+				setCascadeMsg(`${t("settings.cascadeError")}: ${String(e)}`);
+				setVoxcpm2InstallError(`${t("settings.cascadeError")}: ${String(e)}`);
+			}
 			return false;
 		} finally {
 			localVoiceTransactionRef.current = false;
