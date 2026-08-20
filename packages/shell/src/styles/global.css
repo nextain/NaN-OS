@@ -10215,6 +10215,23 @@ body.resizing-col * {
 	background: rgba(255, 255, 255, 0.03);
 }
 
+.workspace-editor__preview:focus-visible {
+	outline: 2px solid var(--accent, #7ca0ff);
+	outline-offset: -3px;
+}
+
+.workspace-editor__preview img {
+	max-width: 100%;
+	height: auto;
+}
+
+.workspace-markdown__image-error {
+	display: inline-block;
+	padding: 8px 10px;
+	border: 1px dashed var(--border-color, #555);
+	color: var(--text-secondary, #aaa);
+}
+
 /* ── Image viewer ──────────────────────────────────────── */
 
 .workspace-editor__image-viewer {

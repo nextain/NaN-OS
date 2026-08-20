@@ -1,0 +1,13 @@
+{
+  "issue": 474,
+  "branch": "feature/issue-474-markdown-viewer",
+  "status": "validated",
+  "scope": "Workspace FileTree Markdown preview for v0.2.1",
+  "acceptance": [
+    "GFM preview and source toggle",
+    "workspace-bounded relative links and images",
+    "raw HTML and dangerous URL blocking",
+    "accessible failure states and Linux Chromium verification",
+    "existing viewer regression coverage"
+  ]
+}

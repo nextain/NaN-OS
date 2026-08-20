@@ -800,3 +800,11 @@ unrelated direct TRT service on port 8910.
 | **FR-UPDATE.4** | The canonical `nextain/naia-shell` feed and the legacy `nextain/naia-os` compatibility feed expose the same v0.2.0 metadata and canonical artifact URL while v0.1.8/v0.1.9 remain installed. Every public URL is checked unauthenticated; the downloaded bytes must match the published SHA-256 manifest. | dual-endpoint HTTP/JSON/signature/byte-hash release probe |
 | **FR-UPDATE.5** | Updater transport, malformed metadata, target mismatch, download, and signature failures remain errors in the Settings surface and are never presented as up to date. Only an explicit plugin result of no update yields the latest-version state. | updater and Settings component tests |
 | **FR-UPDATE.6** | Release completion requires the v0.2.0 NSIS/MSI installers, both signatures, `latest.json`, SHA-256 manifest, and release notes in one public release. An installed v0.1.9 client must discover, install, relaunch, and report v0.2.0 before the field acceptance is marked done. | GitHub release asset inventory/hash probe + installed v0.1.9 field acceptance |
+
+## v0.2.1 Workspace Markdown viewer (#474)
+
+| ID | Normative requirement | Verification |
+|---|---|---|
+| **FR-WORKSPACE-MARKDOWN.1** | Selecting `.md` or `.markdown` in FileTree opens a GFM preview by default and retains the existing document-tab lifecycle. The user can switch between preview and source, and an oversized or unreadable document shows a bounded, retryable error instead of blocking the shell. | viewer component tests + Linux Chromium FileTree journey |
+| **FR-WORKSPACE-MARKDOWN.2** | Relative links and images resolve from the current document or Workspace root. Canonical file reads remain enforced by the Rust Workspace boundary; traversal, raw HTML, script, protocol-relative content, and dangerous URL schemes cannot execute or read outside the Workspace. HTTP(S) links use the explicit system opener. | resolver/security/image tests + Rust boundary tests |
+| **FR-WORKSPACE-MARKDOWN.3** | The preview exposes an article landmark, keyboard focus indication, semantic GFM tables/tasks/headings, descriptive external-link text, and honest missing-image status while preserving code, image, PDF, CSV, and log viewers. | accessibility component assertions + existing viewer regression suite |
