@@ -351,7 +351,7 @@ export function buildNaiaConfigEnv(cfg: {
 
 	// OPENAI_BASE_URL — agent uses this for both ollama and vllm (no-auth OpenAI-compat).
 	if (cfg.provider === "ollama" && cfg.ollamaHost) {
-		out.OPENAI_BASE_URL = cfg.ollamaHost.replace(/\/?$/, "/v1");
+		out.OPENAI_BASE_URL = `${cfg.ollamaHost.replace(/\/+$/, "").replace(/\/v1$/, "")}/v1`;
 	} else if (cfg.provider === "vllm" && cfg.vllmHost) {
 		out.OPENAI_BASE_URL = cfg.vllmHost.replace(/\/?$/, "/v1");
 	}
@@ -416,8 +416,10 @@ function resolveAgentEnvKey(
 			return "GEMINI_API_KEY"; // direct Google AI Studio key (≠ nextain/Vertex). agent keychain-secret-store 거울
 		case "xai":
 			return "XAI_API_KEY"; // grok. agent keychain-secret-store 거울 — 이게 빠져 키가 안 써져 401 났음
+		case "ollama":
+			return "OPENAI_API_KEY"; // remote/authenticated Ollama uses the OpenAI-compatible client
 		default:
-			return null; // ollama, vllm, claude-code-cli, codex — no persisted key (local / CLI 로그인)
+			return null; // vllm, claude-code-cli, codex — no persisted key (local / CLI 로그인)
 	}
 }
 

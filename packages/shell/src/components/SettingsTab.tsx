@@ -1718,7 +1718,7 @@ export function SettingsTab() {
 			setOllamaConnected(connected);
 			if (models.length > 0) {
 				setDynamicModels((prev) => ({ ...prev, ollama: models }));
-				if (!model || !models.some((m) => m.id === model)) {
+				if (!model) {
 					setModel(models[0].id);
 				}
 			}
@@ -2747,8 +2747,7 @@ export function SettingsTab() {
 			provider,
 			model,
 			modelSortMode,
-			apiKey:
-				isNextainProvider || isApiKeyOptional(provider) ? "" : resolvedApiKey,
+			apiKey: isNextainProvider ? "" : resolvedApiKey,
 			naiaKey: naiaKey || undefined,
 			naiaUserId: naiaUserId || undefined,
 			locale,
@@ -4017,8 +4016,9 @@ export function SettingsTab() {
 																	unknown
 																>,
 															);
-															await writeSlotsManifest(loggedOutConfig);
-															await reloadAgentSettings();
+													await writeSlotsManifest(loggedOutConfig);
+													await sendAuthUpdateStrict("");
+													await reloadAgentSettings();
 														}
 													}}
 												>
@@ -4401,7 +4401,8 @@ export function SettingsTab() {
 						</div>
 					)}
 
-					{provider !== "nextain" && !isApiKeyOptional(provider) && (
+					{provider !== "nextain" &&
+						(!isApiKeyOptional(provider) || provider === "ollama") && (
 						<div className="settings-field">
 							<label htmlFor="apikey-input">{t("settings.apiKey")}</label>
 							<input
@@ -4501,6 +4502,23 @@ export function SettingsTab() {
 								)}
 							</>
 						) : null}
+						{provider === "ollama" ? (
+							<>
+								<input
+									id="model-select"
+									list="ollama-model-options"
+									value={model}
+									onChange={(event) => setModel(event.target.value)}
+								/>
+								<datalist id="ollama-model-options">
+									{displayedProviderModels
+										.filter((candidate) => !candidate.capabilities.includes("asr"))
+										.map((candidate) => (
+											<option key={candidate.id} value={candidate.id} />
+										))}
+								</datalist>
+							</>
+						) : (
 						<select
 							key={`model-select-${modelSortMode}-${displayedProviderModels.map((candidate) => candidate.id).join(":")}`}
 							id="model-select"
@@ -4558,6 +4576,7 @@ export function SettingsTab() {
 									</option>
 								))}
 						</select>
+						)}
 						<div className="settings-hint">
 							{provider === "nextain" && selectedModelMeta?.pricing ? (
 								<span style={{ color: "var(--accent-color, #64a0ff)" }}>
