@@ -144,7 +144,7 @@ describe("app-loader", () => {
 			expect(useAppStore.getState().appListVersion).toBeGreaterThan(before);
 		});
 
-		it("still unregisters even if Tauri command fails", async () => {
+		it("preserves registration and rejects if disk removal fails", async () => {
 			appRegistry.register({
 				id: "to-remove-4",
 				name: "To Remove 4",
@@ -153,9 +153,11 @@ describe("app-loader", () => {
 			});
 			mockInvoke.mockRejectedValue(new Error("file not found"));
 
-			await removeInstalledApp("to-remove-4");
+			await expect(removeInstalledApp("to-remove-4")).rejects.toThrow(
+				"file not found",
+			);
 
-			expect(appRegistry.get("to-remove-4")).toBeUndefined();
+			expect(appRegistry.get("to-remove-4")).toBeDefined();
 		});
 	});
 });

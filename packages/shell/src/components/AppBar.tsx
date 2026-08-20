@@ -1,4 +1,11 @@
-import { type MouseEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+	type MouseEvent,
+	useCallback,
+	useEffect,
+	useMemo,
+	useRef,
+	useState,
+} from "react";
 import { createPortal } from "react-dom";
 import {
 	type BrowserLink,
@@ -62,6 +69,7 @@ export function AppBar({ onAddMode }: AppBarProps) {
 	// Icon editor dialog
 	const [iconEditing, setIconEditing] = useState<BrowserLink | null>(null);
 	const [iconInput, setIconInput] = useState("");
+	const [removeError, setRemoveError] = useState("");
 
 	// Hide browser native webview while any dialog is open (webview renders above HTML z-index).
 	// Use a single boolean so transitioning between dialogs (addUrlDialog→urlInputDialog)
@@ -117,8 +125,13 @@ export function AppBar({ onAddMode }: AppBarProps) {
 		});
 
 		if (descriptor?.source === "installed") {
-			// Unregisters + deletes from disk + bumps appListVersion
-			await removeInstalledApp(appId);
+			try {
+				await removeInstalledApp(appId);
+				setRemoveError("");
+			} catch (error) {
+				setRemoveError(`앱을 제거하지 못했습니다: ${String(error)}`);
+				return;
+			}
 		} else {
 			// Build-time app: unregister in memory + persist deletion in config
 			appRegistry.unregister(appId);
@@ -163,12 +176,19 @@ export function AppBar({ onAddMode }: AppBarProps) {
 		setCtxMenu(null);
 	}
 
-	function handleCtxRemovePanel() {
+	async function handleCtxRemovePanel() {
 		if (!ctxMenu?.appId) return;
 		const appId = ctxMenu.appId;
 		const descriptor = appRegistry.get(appId);
 		if (descriptor?.source === "installed") {
-			removeInstalledApp(appId);
+			try {
+				await removeInstalledApp(appId);
+				setRemoveError("");
+			} catch (error) {
+				setRemoveError(`앱을 제거하지 못했습니다: ${String(error)}`);
+				setCtxMenu(null);
+				return;
+			}
 		} else {
 			appRegistry.unregister(appId);
 			const cfg = loadConfig();
@@ -238,7 +258,10 @@ export function AppBar({ onAddMode }: AppBarProps) {
 		const list = [...browserShortcuts];
 		const srcIdx = list.findIndex((s) => s.url === srcUrl);
 		const tgtIdx = list.findIndex((s) => s.url === targetUrl);
-		if (srcIdx === -1 || tgtIdx === -1) { setDragOverUrl(null); return; }
+		if (srcIdx === -1 || tgtIdx === -1) {
+			setDragOverUrl(null);
+			return;
+		}
 		const [moved] = list.splice(srcIdx, 1);
 		list.splice(tgtIdx, 0, moved);
 		setBrowserShortcuts(list);
@@ -258,7 +281,10 @@ export function AppBar({ onAddMode }: AppBarProps) {
 	}
 	async function handleIconSave() {
 		if (!iconEditing) return;
-		const updated = await updateBrowserShortcutIcon(iconEditing.url, iconInput.trim() || undefined);
+		const updated = await updateBrowserShortcutIcon(
+			iconEditing.url,
+			iconInput.trim() || undefined,
+		);
 		setBrowserShortcuts(updated);
 		setIconEditing(null);
 	}
@@ -289,10 +315,12 @@ export function AppBar({ onAddMode }: AppBarProps) {
 
 	return (
 		<div className="app-bar">
-			<div
-				className="app-bar-tabs"
-				onContextMenu={handleTabBarContextMenu}
-			>
+			{removeError && (
+				<div role="alert" className="app-bar__remove-error">
+					{removeError}
+				</div>
+			)}
+			<div className="app-bar-tabs" onContextMenu={handleTabBarContextMenu}>
 				{/* 바탕화면 — no panel active */}
 				<button
 					type="button"
@@ -345,17 +373,29 @@ export function AppBar({ onAddMode }: AppBarProps) {
 						className={`app-bar-tab-wrapper${dragOverUrl === shortcut.url ? " app-bar-tab-wrapper--drag-over" : ""}`}
 						data-browser-shortcut={shortcut.url}
 						draggable={editMode}
-						onDragStart={editMode ? () => handleDragStart(shortcut.url) : undefined}
-						onDragOver={editMode ? (e) => handleDragOver(e, shortcut.url) : undefined}
+						onDragStart={
+							editMode ? () => handleDragStart(shortcut.url) : undefined
+						}
+						onDragOver={
+							editMode ? (e) => handleDragOver(e, shortcut.url) : undefined
+						}
 						onDrop={editMode ? () => handleDrop(shortcut.url) : undefined}
 						onDragEnd={editMode ? handleDragEnd : undefined}
 					>
 						<button
 							type="button"
 							className={`app-bar-tab app-bar-tab--shortcut${editMode ? " app-bar-tab--edit" : ""}`}
-							title={editMode ? `아이콘 변경: ${shortcut.title || shortcut.url}` : (shortcut.title || shortcut.url)}
+							title={
+								editMode
+									? `아이콘 변경: ${shortcut.title || shortcut.url}`
+									: shortcut.title || shortcut.url
+							}
 							onClick={() => {
-								if (editMode) { openIconEditor(shortcut); } else { openBrowserShortcut(shortcut.url); }
+								if (editMode) {
+									openIconEditor(shortcut);
+								} else {
+									openBrowserShortcut(shortcut.url);
+								}
 							}}
 						>
 							{shortcut.iconUrl ? (
@@ -368,8 +408,7 @@ export function AppBar({ onAddMode }: AppBarProps) {
 										const fallback = extractInitial(shortcut);
 										img.replaceWith(
 											Object.assign(document.createElement("span"), {
-												className:
-													"app-bar-tab-icon app-bar-tab-icon--initial",
+												className: "app-bar-tab-icon app-bar-tab-icon--initial",
 												textContent: fallback,
 											}),
 										);
@@ -425,87 +464,89 @@ export function AppBar({ onAddMode }: AppBarProps) {
 					)}
 				</div>
 			)}
-			{addUrlDialog && createPortal(
-				<div
-					className="app-bar-url-dialog-overlay"
-					onClick={() => setAddUrlDialog(false)}
-				>
+			{addUrlDialog &&
+				createPortal(
 					<div
-						className="app-bar-url-dialog"
-						onClick={(e) => e.stopPropagation()}
+						className="app-bar-url-dialog-overlay"
+						onClick={() => setAddUrlDialog(false)}
 					>
-						<button
-							type="button"
-							className="app-bar-url-dialog__section"
-							onClick={() => {
-								setAddUrlDialog(false);
-								setUrlInputDialog(true);
-							}}
+						<div
+							className="app-bar-url-dialog"
+							onClick={(e) => e.stopPropagation()}
 						>
-							<span className="app-bar-url-dialog__section-icon">🌐</span>
-							<div className="app-bar-url-dialog__section-text">
-								<strong>{t("appbar.addShortcut")}</strong>
-								<span>{t("appbar.addShortcutDesc")}</span>
-							</div>
-						</button>
-						<button
-							type="button"
-							className="app-bar-url-dialog__section"
-							onClick={() => {
-								setAddUrlDialog(false);
-								onAddMode?.();
-							}}
-						>
-							<span className="app-bar-url-dialog__section-icon">📱</span>
-							<div className="app-bar-url-dialog__section-text">
-								<strong>{t("appbar.addApp")}</strong>
-								<span>{t("appbar.addAppDesc")}</span>
-							</div>
-						</button>
-					</div>
-				</div>
-			, document.body,
-			)}
-			{urlInputDialog && createPortal(
-				<div
-					className="app-bar-url-dialog-overlay"
-					onClick={() => setUrlInputDialog(false)}
-				>
-					<form
-						className="app-bar-url-dialog"
-						onClick={(e) => e.stopPropagation()}
-						onSubmit={(e) => {
-							e.preventDefault();
-							handleAddUrlSubmit();
-						}}
-					>
-						<input
-							type="text"
-							className="app-bar-url-dialog__input"
-							value={addUrlInput}
-							onChange={(e) => setAddUrlInput(e.target.value)}
-							placeholder={t("appbar.enterUrl")}
-							autoFocus
-						/>
-						<div className="app-bar-url-dialog__btns">
 							<button
 								type="button"
-								className="app-bar-url-dialog__btn"
-								onClick={() => setUrlInputDialog(false)}
+								className="app-bar-url-dialog__section"
+								onClick={() => {
+									setAddUrlDialog(false);
+									setUrlInputDialog(true);
+								}}
 							>
-								{t("settings.cancel")}
+								<span className="app-bar-url-dialog__section-icon">🌐</span>
+								<div className="app-bar-url-dialog__section-text">
+									<strong>{t("appbar.addShortcut")}</strong>
+									<span>{t("appbar.addShortcutDesc")}</span>
+								</div>
 							</button>
 							<button
-								type="submit"
-								className="app-bar-url-dialog__btn app-bar-url-dialog__btn--primary"
+								type="button"
+								className="app-bar-url-dialog__section"
+								onClick={() => {
+									setAddUrlDialog(false);
+									onAddMode?.();
+								}}
 							>
-								{t("settings.save")}
+								<span className="app-bar-url-dialog__section-icon">📱</span>
+								<div className="app-bar-url-dialog__section-text">
+									<strong>{t("appbar.addApp")}</strong>
+									<span>{t("appbar.addAppDesc")}</span>
+								</div>
 							</button>
 						</div>
-					</form>
-				</div>
-			, document.body,
-			)}
+					</div>,
+					document.body,
+				)}
+			{urlInputDialog &&
+				createPortal(
+					<div
+						className="app-bar-url-dialog-overlay"
+						onClick={() => setUrlInputDialog(false)}
+					>
+						<form
+							className="app-bar-url-dialog"
+							onClick={(e) => e.stopPropagation()}
+							onSubmit={(e) => {
+								e.preventDefault();
+								handleAddUrlSubmit();
+							}}
+						>
+							<input
+								type="text"
+								className="app-bar-url-dialog__input"
+								value={addUrlInput}
+								onChange={(e) => setAddUrlInput(e.target.value)}
+								placeholder={t("appbar.enterUrl")}
+								autoFocus
+							/>
+							<div className="app-bar-url-dialog__btns">
+								<button
+									type="button"
+									className="app-bar-url-dialog__btn"
+									onClick={() => setUrlInputDialog(false)}
+								>
+									{t("settings.cancel")}
+								</button>
+								<button
+									type="submit"
+									className="app-bar-url-dialog__btn app-bar-url-dialog__btn--primary"
+								>
+									{t("settings.save")}
+								</button>
+							</div>
+						</form>
+					</div>,
+					document.body,
+				)}
 			<button
 				type="button"
 				className="app-bar-add"
@@ -518,51 +559,62 @@ export function AppBar({ onAddMode }: AppBarProps) {
 				<button
 					type="button"
 					className={`app-bar-edit${editMode ? " app-bar-edit--active" : ""}`}
-					onClick={() => { setEditMode((v) => !v); setIconEditing(null); }}
+					onClick={() => {
+						setEditMode((v) => !v);
+						setIconEditing(null);
+					}}
 					title={editMode ? "편집 완료" : "바로가기 편집"}
 				>
 					✏
 				</button>
 			)}
-			{iconEditing && createPortal(
-				<div
-					className="app-bar-url-dialog-overlay"
-					onClick={() => setIconEditing(null)}
-				>
-					<form
-						className="app-bar-url-dialog"
-						onClick={(e) => e.stopPropagation()}
-						onSubmit={(e) => { e.preventDefault(); void handleIconSave(); }}
+			{iconEditing &&
+				createPortal(
+					<div
+						className="app-bar-url-dialog-overlay"
+						onClick={() => setIconEditing(null)}
 					>
-						<div className="app-bar-url-dialog__section-text" style={{ padding: "0 0 8px" }}>
-							<strong>{iconEditing.title || iconEditing.url}</strong>
-						</div>
-						<input
-							type="text"
-							className="app-bar-url-dialog__input"
-							value={iconInput}
-							onChange={(e) => setIconInput(e.target.value)}
-							placeholder="이모지 또는 이미지 URL (비우면 기본값)"
-							autoFocus
-						/>
-						<div className="app-bar-url-dialog__btns">
-							<button
-								type="button"
-								className="app-bar-url-dialog__btn"
-								onClick={() => setIconEditing(null)}
+						<form
+							className="app-bar-url-dialog"
+							onClick={(e) => e.stopPropagation()}
+							onSubmit={(e) => {
+								e.preventDefault();
+								void handleIconSave();
+							}}
+						>
+							<div
+								className="app-bar-url-dialog__section-text"
+								style={{ padding: "0 0 8px" }}
 							>
-								{t("settings.cancel")}
-							</button>
-							<button
-								type="submit"
-								className="app-bar-url-dialog__btn app-bar-url-dialog__btn--primary"
-							>
-								{t("settings.save")}
-							</button>
-						</div>
-					</form>
-				</div>
-			, document.body)}
+								<strong>{iconEditing.title || iconEditing.url}</strong>
+							</div>
+							<input
+								type="text"
+								className="app-bar-url-dialog__input"
+								value={iconInput}
+								onChange={(e) => setIconInput(e.target.value)}
+								placeholder="이모지 또는 이미지 URL (비우면 기본값)"
+								autoFocus
+							/>
+							<div className="app-bar-url-dialog__btns">
+								<button
+									type="button"
+									className="app-bar-url-dialog__btn"
+									onClick={() => setIconEditing(null)}
+								>
+									{t("settings.cancel")}
+								</button>
+								<button
+									type="submit"
+									className="app-bar-url-dialog__btn app-bar-url-dialog__btn--primary"
+								>
+									{t("settings.save")}
+								</button>
+							</div>
+						</form>
+					</div>,
+					document.body,
+				)}
 			{/* ── BGM (right side of app-bar) ─── */}
 			<BgmPlayer naia={bgmBridge} />
 			<button

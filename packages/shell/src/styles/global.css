@@ -509,6 +509,21 @@ body,
 	gap: 2px;
 }
 
+.app-bar__remove-error {
+	position: fixed;
+	top: 48px;
+	left: 50%;
+	z-index: 1000;
+	max-width: min(520px, calc(100vw - 32px));
+	transform: translateX(-50%);
+	padding: 8px 12px;
+	border: 1px solid #f85149;
+	border-radius: 6px;
+	background: var(--surface, #222);
+	color: #ffb4ad;
+	font-size: 12px;
+}
+
 /* Scrollable tab strip — fills all available space */
 .app-bar-tabs {
 	display: flex;

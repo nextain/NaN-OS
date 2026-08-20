@@ -1,4 +1,4 @@
-# 요구사항 (P03 — FR/NFR) — 2단계 산출물
+﻿# 요구사항 (P03 — FR/NFR) — 2단계 산출물
 
 > **현재 Windows 로컬 표현 기준 (2026-08-06):** 별도 GPU 프로파일은 없다. NVA는 GPU·로그인과 무관한 사전 생성 web-player다. 감지 VRAM 6GB 이상이면 Voice 설정에서만 `voxCPM 2 local voice`를 명시적으로 켜고 끌 수 있으며 로그인은 필요하지 않다. 자세한 활성 계약은 이 문서의 `2026-08-06 active Windows NVA/Voice/Media contract`와 [`windows-6gb-voice.md`](windows-6gb-voice.md)를 따른다. [`windows-8gb-nva.md`](windows-8gb-nva.md) 및 FR-CASCADE.1~22의 Ditto/TRT/Cascade 프로파일 조항은 비규범 이력이다.
 
@@ -805,3 +805,11 @@ unrelated direct TRT service on port 8910.
 | **FR-UPDATE.8** (#468) | An available update opens an accessible localized modal that identifies the current and new versions and exposes release notes. Download, install, and relaunch begin only after the member explicitly selects `Update now`; opening the prompt, toggling the checkbox, `Later`, or Escape never installs. | `UpdatePrompt` component tests + startup Playwright consent assertion |
 | **FR-UPDATE.9** (#468) | `Don't show again for a month` stores the selected update version and an expiry exactly 30 days after dismissal. The same version is hidden before expiry, reappears at expiry, and a different newer version bypasses the deferral immediately. Corrupt or unavailable local storage fails open to showing the prompt instead of silently suppressing updates. | deterministic clock/storage unit tests + reload/new-version Playwright acceptance |
 | **FR-UPDATE.10** (#468) | `Later` without the one-month choice closes only the startup modal and preserves the existing update banner. Deferral hides both startup prompt and banner for that version. The Settings manual update check remains independent, and install failure keeps the prompt actionable with a localized error instead of reporting success. | component and Playwright state transition tests + existing Settings update tests |
+
+## v0.2.1 installed app storage recovery (#472)
+
+| ID | Normative requirement | Verification |
+|---|---|---|
+| **FR-APP-STORAGE.1** | Install, list, restart discovery, and remove share the canonical `~/.naia/apps/{appId}` store. A valid legacy `~/.naia/panels/*` install is moved once by manifest id; canonical duplicates win without deleting legacy data. | isolated-home Rust migration/remove lifecycle tests |
+| **FR-APP-STORAGE.2** | App ids are strict single path segments. Symlinks, traversal, malformed ids, duplicate ids, and canonical-path escapes cannot delete or replace data outside the canonical app store. | Rust adversarial filesystem tests |
+| **FR-APP-STORAGE.3** | A disk removal failure preserves the registered app and is surfaced as an accessible UI error; the Shell never reports removal by hiding only its in-memory entry. | app-loader and AppBar component tests |

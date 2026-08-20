@@ -1,4 +1,4 @@
-# 사용자 시나리오 (P01) + 테스트 커버리지 맵 — 2단계 산출물
+﻿# 사용자 시나리오 (P01) + 테스트 커버리지 맵 — 2단계 산출물
 
 > **현재 Windows 로컬 표현 시나리오:** GPU 감지는 온보딩에서 로컬 음성 사용 가능성만 안내하며 프로파일을 자동 활성화하지 않는다. 사용자는 이후 음성 설정에서 로컬 음성과 레퍼런스 음성을 선택한다. 사전 생성 NVA 외모는 GPU 프로파일과 독립적으로 선택한다. 과거 8GB 서버 렌더링 NVA 기록은 [`windows-8gb-nva.md`](windows-8gb-nva.md)에 보존한다.
 
@@ -864,3 +864,13 @@ P02 상태 매트릭스: 신규 기본, ADK 경로 저장 중, Agent 재시작 �
 | **UC-UPDATE-30-DAY-DEFERRAL** (#468) | 사용자가 `한 달간 보지 않기`를 체크하고 `나중에`를 선택하면 같은 버전의 팝업과 배너가 30일 동안 나타나지 않는다. 30일이 지나거나 그 전에 더 새 버전이 배포되면 팝업이 다시 나타난다. 손상된 유예 기록은 업데이트를 영구히 숨기지 않는다. | deterministic snooze storage tests + same-version reload/new-version Playwright acceptance |
 
 P02 상태 매트릭스: 업데이트 없음, 새 버전 팝업, 동의 전 무설치, 지금 업데이트, 나중에+배너 유지, 30일 유예 중 같은 버전, 유예 중 더 새 버전, 유예 만료, 손상된 유예 기록, endpoint 404, malformed JSON, 기본 target과 다른 플랫폼 키, 잘못된 서명, 정본/호환 feed 불일치, 릴리즈 asset hash 불일치를 각각 독립 검증한다. 기본 Tauri target은 `windows-x86_64` 하나이며 NSIS를 정본 updater 산출물로 사용한다. MSI와 그 서명도 수동 설치·무결성 산출물로 함께 배포하지만 같은 기본 target 아래 두 URL을 위조하지 않는다.
+P02 상태 매트릭스: 업데이트 없음, v0.2.0 발견, 다운로드·설치·재실행, endpoint 404, malformed JSON, 기본 target과 다른 플랫폼 키, 잘못된 서명, 정본/호환 feed 불일치, 릴리즈 asset hash 불일치를 각각 독립 검증한다. 기본 Tauri target은 `windows-x86_64` 하나이며 NSIS를 정본 updater 산출물로 사용한다. MSI와 그 서명도 수동 설치·무결성 산출물로 함께 배포하지만 같은 기본 target 아래 두 URL을 위조하지 않는다.
+
+### 2026-08-20 v0.2.1 installed app lifecycle (#472)
+
+| Scenario | User-observable outcome | Coverage |
+|---|---|---|
+| **UC-V021-APP-INSTALL-LIFECYCLE** | 깨끗한 프로필에서 앱 설치 후 즉시 목록과 탭에 나타나고 재시작 뒤에도 유지되며, 제거 성공 뒤 `~/.naia/apps/{id}`와 목록에서 함께 사라진다. 예전 `~/.naia/panels` 설치는 안전한 경우 한 번만 이동한다. | isolated filesystem lifecycle + loader tests |
+| **UC-V021-APP-REMOVE-HONESTY** | 삭제 권한·파일시스템 오류가 나면 앱은 목록에 남고 실패 알림이 표시된다. symlink, 경로 탈출, 잘못된/중복 id는 외부 파일을 변경하지 않는다. | Rust boundary mutations + AppBar alert contract |
+
+P02 상태 매트릭스: clean install/list/restart/remove/list, legacy migration, canonical duplicate, malformed id, symlink escape, 중간 삭제 실패를 각각 검증한다.
