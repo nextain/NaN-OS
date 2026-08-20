@@ -77,17 +77,17 @@ jobs:
         if: matrix.platform == 'win32'
         shell: pwsh
         run: |
-          $url = "https://pub-a587c16974874fc9a168d2a281801a23.r2.dev/windows_trt_6g/voxcpm2-runtime-win-trt6g.zip"
+          $url = "https://pub-a587c16974874fc9a168d2a281801a23.r2.dev/windows_trt_6g/releases/0.2.1/voxcpm2-runtime-win-trt6g.zip"
           $archive = Join-Path $env:RUNNER_TEMP "voxcpm2-runtime-win-trt6g.zip"
           $runtime = Join-Path $env:RUNNER_TEMP "voxcpm2-runtime"
           curl.exe --location --fail --retry 4 --retry-all-errors --output $archive $url
           if ($LASTEXITCODE -ne 0) { throw "VoxCPM2 release input download failed" }
           $item = Get-Item -LiteralPath $archive
-          if ($item.Length -ne 3705920747) {
+          if ($item.Length -ne 2705919022) {
             throw "VoxCPM2 release input size mismatch: $($item.Length)"
           }
           $hash = (Get-FileHash -Algorithm SHA256 -LiteralPath $archive).Hash.ToLowerInvariant()
-          if ($hash -ne "51e547c93c8bb6e3909c9c1f1b142d6e7283399e3ba8c8d710d15bec8b0814c6") {
+          if ($hash -ne "9c87ab0775226d01ff1c9fbafffd193d53e991ad020cc9945233a35138e2b26b") {
             throw "VoxCPM2 release input SHA-256 mismatch"
           }
           New-Item -ItemType Directory -Force -Path $runtime | Out-Null
@@ -95,7 +95,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "VoxCPM2 release input extraction failed" }
           "NAIA_VOXCPM2_TRT_RUNTIME_DIR=$runtime" >> $env:GITHUB_ENV
           "NAIA_VOXCPM2_TRT_ARCHIVE=$archive" >> $env:GITHUB_ENV
-          "NAIA_VOXCPM2_TRT_ARTIFACT_SHA256=9827ac3f27cf5e014655a6d5eac0e15e7eea48a0ecd1cc0034387373047a4ab8" >> $env:GITHUB_ENV
+          "NAIA_VOXCPM2_TRT_ARTIFACT_SHA256=235e6bf894213b02a8335c632580e2ae10a03dfbecd1bf73515992853cbfc4b0" >> $env:GITHUB_ENV
 
       - name: Build installer bundle from platform matrix
         env:

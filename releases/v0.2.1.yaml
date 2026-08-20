@@ -1,0 +1,30 @@
+﻿version: " 0.2.1\
+date: \2026-08-21\
+summary:
+ en: \Windows reliability release covering startup updates entitlement recovery VoxCPM2 voice runtime app storage and Markdown viewing.\
+ ko: \시작 업데이트 이용권 복구 VoxCPM2 음성 런타임 앱 저장소와 Markdown 뷰어를 통합한 Windows 안정화 릴리스입니다.\
+changes:
+ - type: feature
+ scope: updater
+ issue: 468
+ description:
+ en: \Prompt for available updates during startup without misreporting updater failures.\
+ ko: \시작 시 새 버전을 안내하며 업데이트 확인 실패를 최신 상태로 오인하지 않습니다.\
+ - type: fix
+ scope: auth
+ issue: 470
+ description:
+ en: \Recover Shell and VoxCPM2 entitlement failures after refreshed Naia authentication.\
+ ko: \Naia 인증 갱신 뒤 Shell 및 VoxCPM2 이용권 오류를 복구합니다.\
+ - type: fix
+ scope: apps
+ issue: 472
+ description:
+ en: \Persist installed app state in the canonical application data path across restarts and removal.\
+ ko: \설치 앱 상태를 표준 앱 데이터 경로에 저장하고 재시작 및 삭제 수명주기를 보장합니다.\
+ - type: feature
+ scope: workspace
+ issue: 474
+ description:
+ en: \Add an integrated Markdown viewer with safe rendering and workspace navigation.\
+ ko: \안전한 렌더링과 워크스페이스 탐색을 제공하는 통합 Markdown 뷰어를 추가합니다.\

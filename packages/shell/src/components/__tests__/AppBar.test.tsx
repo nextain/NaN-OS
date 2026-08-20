@@ -170,7 +170,7 @@ describe("AppBar — installed app removal", () => {
 		const descriptor = {
 			id: "notes",
 			name: "Notes",
-			source: "installed",
+			source: "installed" as const,
 			center: () => null,
 		};
 		vi.mocked(appRegistry.list).mockReturnValue([descriptor]);
