@@ -1,0 +1,99 @@
+{
+  "schema_version": "1.0",
+  "id": "issue-468-startup-updater-prompt",
+  "status": "active",
+  "project_root": ".",
+  "goal": "Implement and validate naia-shell issue #468: a consent-gated startup update prompt with a version-specific 30-day reminder deferral.",
+  "scope": [
+    "Replace the lossy question-mark GitHub issue body with a UTF-8 Korean specification derived from the accepted requirements and tests",
+    "Check for an available signed update once after startup and onboarding",
+    "Show an accessible localized update prompt before any download or install",
+    "Persist a version-specific 30-day reminder deferral and bypass it for newer versions",
+    "Preserve the existing update banner and manual Settings update flow",
+    "Add requirements, user scenarios, unit tests, and Playwright acceptance coverage"
+  ],
+  "non_goals": [
+    "Change updater signing, release feeds, or update channels",
+    "Enable self-updates for store-managed distributions such as Flatpak",
+    "Install an update without explicit user confirmation",
+    "Commit, push, or open a pull request without separate authorization"
+  ],
+  "success_criteria": [
+    "GitHub issue #468 renders a readable Korean problem statement, behavior contract, acceptance checklist, and non-goals",
+    "An available update opens one startup prompt and does not download before the user selects update",
+    "Selecting Later without deferral leaves the existing banner available",
+    "Selecting one-month deferral hides the same version for 30 days while a newer version remains visible",
+    "Update check and install failures do not block application startup and are truthfully surfaced",
+    "Targeted unit, build, i18n, structure, and Playwright checks pass"
+  ],
+  "allowed_paths": [
+    ".agents/session-contracts/issue-468-startup-updater-prompt.json",
+    ".agents/session-contracts/.session-map.json",
+    ".agents/progress/issue-468-startup-updater-prompt.json",
+    ".agents/progress/review-evidence/issue-468/**",
+    ".agents/context/process-status.json",
+    ".users/context/process-status.md",
+    "docs/requirements.md",
+    "docs/user-scenarios.md",
+    "node_modules/**",
+    "packages/shell/src/App.tsx",
+    "packages/shell/src/components/UpdatePrompt.tsx",
+    "packages/shell/src/components/__tests__/UpdatePrompt.test.tsx",
+    "packages/shell/src/lib/updater.ts",
+    "packages/shell/src/lib/__tests__/updater.test.ts",
+    "packages/shell/src/lib/i18n.ts",
+    "packages/shell/src/styles/global.css",
+    "packages/shell/e2e/startup-update-prompt.spec.ts"
+  ],
+  "target_ownership": [
+    ".agents/session-contracts/issue-468-startup-updater-prompt.json",
+    ".agents/session-contracts/.session-map.json",
+    ".agents/progress/issue-468-startup-updater-prompt.json",
+    ".agents/progress/review-evidence/issue-468/**",
+    ".agents/context/process-status.json",
+    ".users/context/process-status.md",
+    "docs/requirements.md",
+    "docs/user-scenarios.md",
+    "packages/shell/src/App.tsx",
+    "packages/shell/src/components/UpdatePrompt.tsx",
+    "packages/shell/src/components/__tests__/UpdatePrompt.test.tsx",
+    "packages/shell/src/lib/updater.ts",
+    "packages/shell/src/lib/__tests__/updater.test.ts",
+    "packages/shell/src/lib/i18n.ts",
+    "packages/shell/src/styles/global.css",
+    "packages/shell/e2e/startup-update-prompt.spec.ts"
+  ],
+  "audiences": [
+    "Naia Shell desktop users",
+    "Naia Shell maintainers"
+  ],
+  "source_refs": [
+    "https://github.com/nextain/naia-shell/issues/468",
+    "conversation://private/naia-shell-startup-update-prompt-2026-08-20"
+  ],
+  "session_bindings": [
+    {
+      "session_id": "01a01d07-09a8-7723-bc68-70539203b8b6",
+      "contract_digest": "a89f0f9aa7fc0a3e65b8284c636a15dd095a8bc6f1e33e488b260b24feb9f485"
+    }
+  ],
+  "progress_file": ".agents/progress/issue-468-startup-updater-prompt.json",
+  "allowed_shell_commands": [
+    "gh issue edit 468 --repo nextain/naia-shell --body <restored-utf8-body>",
+    "pnpm install --frozen-lockfile",
+    "bash scripts/enforce-root-structure.sh",
+    "node scripts/check-assembly-coverage.mjs",
+    "npx tsc -p tsconfig.json",
+    "pnpm build",
+    "pnpm -C packages/shell test",
+    "pnpm -C packages/shell build",
+    "pnpm -C packages/shell test:e2e -- startup-update-prompt.spec.ts",
+    "node D:\\alpha-adk\\.agents\\skills\\review-pass\\scripts\\review-preflight.mjs --root D:\\alpha-adk\\projects\\naia-shell-worktrees\\issue-468-startup-updater-prompt --base 848e4c7f41da7c6dea79f0277e97e8e1ac232fc5 --json",
+    "node D:\\alpha-adk\\.agents\\skills\\review-pass\\scripts\\invoke-reviewer.mjs --tool codex --repo D:\\alpha-adk\\projects\\naia-shell-worktrees\\issue-468-startup-updater-prompt --base .agents\\progress\\review-evidence\\issue-468\\review-base.md --atoms .agents\\progress\\review-evidence\\issue-468\\review-atoms.json --delta .agents\\progress\\review-evidence\\issue-468\\development-delta.md",
+    "node D:\\alpha-adk\\.agents\\skills\\review-pass\\scripts\\invoke-reviewer.mjs --tool codex --repo D:\\alpha-adk\\projects\\naia-shell-worktrees\\issue-468-startup-updater-prompt --base .agents\\progress\\review-evidence\\issue-468\\review-base.md --atoms .agents\\progress\\review-evidence\\issue-468\\review-atoms.json --delta .agents\\progress\\review-evidence\\issue-468\\test-delta.md",
+    "pnpm -C packages/shell exec biome check src/components/UpdatePrompt.tsx src/components/__tests__/UpdatePrompt.test.tsx e2e/startup-update-prompt.spec.ts",
+    "git diff --check",
+    "git status --short --branch"
+  ],
+  "contract_digest": "a89f0f9aa7fc0a3e65b8284c636a15dd095a8bc6f1e33e488b260b24feb9f485"
+}

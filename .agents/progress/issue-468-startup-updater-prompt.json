@@ -1,0 +1,42 @@
+{
+  "schema_version": "1.0",
+  "issue": "#468",
+  "title": "Startup update prompt with 30-day reminder deferral",
+  "status": "implemented_review_only",
+  "current_phase": "post_test_review",
+  "updated_at": "2026-08-20T15:53:16+09:00",
+  "contract_id": "issue-468-startup-updater-prompt",
+  "contract_digest": "a89f0f9aa7fc0a3e65b8284c636a15dd095a8bc6f1e33e488b260b24feb9f485",
+  "requirements": "docs/requirements.md FR-UPDATE.7~10",
+  "scenario": "docs/user-scenarios.md UC-UPDATE-STARTUP-PROMPT, UC-UPDATE-30-DAY-DEFERRAL",
+  "delivery_state": "REVIEW_ONLY",
+  "implementation": [
+    "GitHub issue body repaired from lossy question marks to a UTF-8 Korean behavior contract and acceptance checklist",
+    "Startup update modal with current/new versions, release notes, localized consent actions, install failure state, and Escape/Later behavior",
+    "Strict Mode-safe single startup check that waits for onboarding completion and reuses one update-check promise",
+    "Keyboard focus wrap and aria-modal semantics for the accessible startup dialog",
+    "Version-specific 30-day localStorage deferral that expires at the exact boundary and is bypassed by a different newer version",
+    "Existing update banner preserved after ordinary Later; same-version banner suppressed only after selected deferral",
+    "Four requirements, two user scenarios, unit/component tests, and three Playwright acceptance scenarios"
+  ],
+  "verification": {
+    "shell_vitest": "PASS: 158 files passed, 2 skipped; 1,626 tests passed, 21 skipped",
+    "targeted_vitest": "PASS: 2 files, 9 tests",
+    "playwright": "PASS: 3 Chromium scenarios; updater check asserted exactly once under Strict Mode; screenshot visually inspected",
+    "i18n": "PASS: 2 output-stage tests; all new user-facing strings use localized keys",
+    "root_build": "PASS",
+    "shell_build": "PASS with existing Vite chunk/import warnings",
+    "biome_new_files": "PASS: 3 files",
+    "assembly_coverage": "PASS",
+    "diff_and_conflict_markers": "PASS",
+    "external_review": "NOT_RUN: Codex reviewer process failed for development and test stages",
+    "complexity_preflight": "NOT_CLEAN: pre-existing issue #423 complexity waiver authority digest mismatch",
+    "root_structure": "NOT_CLEAN baseline: tracked CRLF script requires stream normalization under WSL, then reports pre-existing tracked tsconfig.build.json missing from F13"
+  },
+  "remaining": [
+    "Repair the unrelated baseline issue #423 waiver authority digest so deterministic review preflight can run",
+    "Normalize scripts/enforce-root-structure.sh and reconcile the pre-existing tracked tsconfig.build.json with F13 under separate charter authority",
+    "Obtain independent review evidence before release eligibility",
+    "Commit, push, PR, issue close, and release remain separately authorized operations"
+  ]
+}
