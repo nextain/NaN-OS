@@ -1,9 +1,71 @@
 import { Logger } from "./logger";
 
 export interface UpdateInfo {
+	currentVersion: string;
 	version: string;
 	body: string;
 	installFn: () => Promise<void>;
+}
+
+interface UpdatePromptStorage {
+	getItem(key: string): string | null;
+	setItem(key: string, value: string): void;
+}
+
+interface UpdatePromptSnooze {
+	version: string;
+	until: number;
+}
+
+export const UPDATE_PROMPT_SNOOZE_KEY = "naia.updatePromptSnooze";
+export const UPDATE_PROMPT_SNOOZE_MS = 30 * 24 * 60 * 60 * 1000;
+
+function browserStorage(): UpdatePromptStorage | null {
+	return typeof window === "undefined" ? null : window.localStorage;
+}
+
+export function shouldShowStartupUpdatePrompt(
+	version: string,
+	now = Date.now(),
+	storage: UpdatePromptStorage | null = browserStorage(),
+): boolean {
+	if (!storage) return true;
+
+	try {
+		const raw = storage.getItem(UPDATE_PROMPT_SNOOZE_KEY);
+		if (!raw) return true;
+		const snooze = JSON.parse(raw) as Partial<UpdatePromptSnooze>;
+		return !(
+			snooze.version === version &&
+			typeof snooze.until === "number" &&
+			Number.isFinite(snooze.until) &&
+			snooze.until > now
+		);
+	} catch (err) {
+		Logger.warn("updater", "Ignoring invalid update prompt snooze", {
+			error: String(err),
+		});
+		return true;
+	}
+}
+
+export function snoozeStartupUpdatePrompt(
+	version: string,
+	now = Date.now(),
+	storage: UpdatePromptStorage | null = browserStorage(),
+): void {
+	if (!storage) return;
+
+	try {
+		storage.setItem(
+			UPDATE_PROMPT_SNOOZE_KEY,
+			JSON.stringify({ version, until: now + UPDATE_PROMPT_SNOOZE_MS }),
+		);
+	} catch (err) {
+		Logger.warn("updater", "Failed to persist update prompt snooze", {
+			error: String(err),
+		});
+	}
 }
 
 /**
@@ -19,6 +81,7 @@ export async function checkForUpdate(): Promise<UpdateInfo | null> {
 		if (!update) return null;
 
 		return {
+			currentVersion: update.currentVersion,
 			version: update.version,
 			body: update.body ?? "",
 			installFn: async () => {
