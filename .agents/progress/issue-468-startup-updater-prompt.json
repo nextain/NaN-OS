@@ -2,9 +2,9 @@
   "schema_version": "1.0",
   "issue": "#468",
   "title": "Startup update prompt with 30-day reminder deferral",
-  "status": "implemented_review_only",
-  "current_phase": "post_test_review",
-  "updated_at": "2026-08-20T15:53:16+09:00",
+  "status": "verified",
+  "current_phase": "handoff_ready",
+  "updated_at": "2026-08-20T12:45:00Z",
   "contract_id": "issue-468-startup-updater-prompt",
   "contract_digest": "a89f0f9aa7fc0a3e65b8284c636a15dd095a8bc6f1e33e488b260b24feb9f485",
   "requirements": "docs/requirements.md FR-UPDATE.7~10",
@@ -20,9 +20,9 @@
     "Four requirements, two user scenarios, unit/component tests, and three Playwright acceptance scenarios"
   ],
   "verification": {
-    "shell_vitest": "PASS: 158 files passed, 2 skipped; 1,626 tests passed, 21 skipped",
+    "shell_vitest": "BASELINE RED: 13 unrelated failures on main (12 VoxCPM2 fixture manifest mismatches and 1 Windows-path manifest test); 1,608 passed, 21 skipped",
     "targeted_vitest": "PASS: 2 files, 9 tests",
-    "playwright": "PASS: 3 Chromium scenarios; updater check asserted exactly once under Strict Mode; screenshot visually inspected",
+    "playwright": "PASS on Linux Chromium: 3 scenarios; updater check asserted exactly once under Strict Mode; 420px screenshot visually inspected; dialog stays within viewport",
     "i18n": "PASS: 2 output-stage tests; all new user-facing strings use localized keys",
     "root_build": "PASS",
     "shell_build": "PASS with existing Vite chunk/import warnings",
@@ -31,12 +31,12 @@
     "diff_and_conflict_markers": "PASS",
     "external_review": "NOT_RUN: Codex reviewer process failed for development and test stages",
     "complexity_preflight": "NOT_CLEAN: pre-existing issue #423 complexity waiver authority digest mismatch",
-    "root_structure": "NOT_CLEAN baseline: tracked CRLF script requires stream normalization under WSL, then reports pre-existing tracked tsconfig.build.json missing from F13"
+    "root_structure": "NOT_CLEAN baseline: pre-existing tracked tsconfig.build.json is missing from F13"
   },
   "remaining": [
     "Repair the unrelated baseline issue #423 waiver authority digest so deterministic review preflight can run",
-    "Normalize scripts/enforce-root-structure.sh and reconcile the pre-existing tracked tsconfig.build.json with F13 under separate charter authority",
+    "Reconcile the pre-existing tracked tsconfig.build.json with F13 under separate charter authority",
     "Obtain independent review evidence before release eligibility",
-    "Commit, push, PR, issue close, and release remain separately authorized operations"
+    "PR, issue close, and release remain separate operations"
   ]
 }

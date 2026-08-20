@@ -67,6 +67,7 @@ async function openReadyApp(page: import("@playwright/test").Page) {
 test("startup update requires consent and Later preserves the existing banner", async ({
 	page,
 }, testInfo) => {
+	await page.setViewportSize({ width: 420, height: 720 });
 	await openReadyApp(page);
 	await page.screenshot({
 		path: testInfo.outputPath("startup-update-prompt.png"),
@@ -75,6 +76,10 @@ test("startup update requires consent and Later preserves the existing banner", 
 
 	await expect(page.getByText("현재 버전: 0.2.0")).toBeVisible();
 	await expect(page.getByText("새 버전: 0.3.0")).toBeVisible();
+	const dialogBox = await page.getByRole("dialog").boundingBox();
+	expect(dialogBox).not.toBeNull();
+	expect(dialogBox?.x ?? -1).toBeGreaterThanOrEqual(0);
+	expect((dialogBox?.x ?? 0) + (dialogBox?.width ?? 0)).toBeLessThanOrEqual(420);
 	expect(
 		(await page.evaluate(() => window.__UPDATE_INVOKES__)).filter(
 			(command) => command === "plugin:updater|check",

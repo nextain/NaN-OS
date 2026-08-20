@@ -88,15 +88,22 @@ describe("UpdatePrompt", () => {
 	it("installs only after explicit confirmation and surfaces a failure", async () => {
 		const installFn = vi
 			.fn()
-			.mockRejectedValue(new Error("signature mismatch"));
+			.mockRejectedValueOnce(new Error("signature mismatch"))
+			.mockResolvedValueOnce(undefined);
 		render(<UpdatePrompt info={updateInfo(installFn)} onLater={() => {}} />);
 
-		fireEvent.click(screen.getByRole("button", { name: "지금 업데이트" }));
+		const installButton = screen.getByRole("button", { name: "지금 업데이트" });
+		fireEvent.click(installButton);
 		expect(installFn).toHaveBeenCalledOnce();
 		await waitFor(() =>
 			expect(screen.getByRole("alert").textContent).toContain(
 				"업데이트를 설치하지 못했습니다",
 			),
 		);
+		expect(installButton.hasAttribute("disabled")).toBe(false);
+
+		fireEvent.click(installButton);
+		await waitFor(() => expect(installFn).toHaveBeenCalledTimes(2));
+		expect(screen.queryByRole("alert")).toBeNull();
 	});
 });
