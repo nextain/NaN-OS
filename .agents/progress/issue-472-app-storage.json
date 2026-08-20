@@ -1,0 +1,12 @@
+{
+  "issue": 472,
+  "branch": "fix/issue-472-app-storage",
+  "status": "validated",
+  "scope": "v0.2.1 canonical installed-app lifecycle and safe legacy migration",
+  "acceptance": [
+    "install/list/remove use ~/.naia/apps",
+    "legacy ~/.naia/panels migration is bounded and non-destructive on duplicates",
+    "ids, traversal, symlinks, and canonical deletion boundary are enforced",
+    "disk failure remains visible and preserves the registered app"
+  ]
+}

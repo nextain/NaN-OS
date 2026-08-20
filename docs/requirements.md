@@ -800,3 +800,11 @@ unrelated direct TRT service on port 8910.
 | **FR-UPDATE.4** | The canonical `nextain/naia-shell` feed and the legacy `nextain/naia-os` compatibility feed expose the same v0.2.0 metadata and canonical artifact URL while v0.1.8/v0.1.9 remain installed. Every public URL is checked unauthenticated; the downloaded bytes must match the published SHA-256 manifest. | dual-endpoint HTTP/JSON/signature/byte-hash release probe |
 | **FR-UPDATE.5** | Updater transport, malformed metadata, target mismatch, download, and signature failures remain errors in the Settings surface and are never presented as up to date. Only an explicit plugin result of no update yields the latest-version state. | updater and Settings component tests |
 | **FR-UPDATE.6** | Release completion requires the v0.2.0 NSIS/MSI installers, both signatures, `latest.json`, SHA-256 manifest, and release notes in one public release. An installed v0.1.9 client must discover, install, relaunch, and report v0.2.0 before the field acceptance is marked done. | GitHub release asset inventory/hash probe + installed v0.1.9 field acceptance |
+
+## v0.2.1 installed app storage recovery (#472)
+
+| ID | Normative requirement | Verification |
+|---|---|---|
+| **FR-APP-STORAGE.1** | Install, list, restart discovery, and remove share the canonical `~/.naia/apps/{appId}` store. A valid legacy `~/.naia/panels/*` install is moved once by manifest id; canonical duplicates win without deleting legacy data. | isolated-home Rust migration/remove lifecycle tests |
+| **FR-APP-STORAGE.2** | App ids are strict single path segments. Symlinks, traversal, malformed ids, duplicate ids, and canonical-path escapes cannot delete or replace data outside the canonical app store. | Rust adversarial filesystem tests |
+| **FR-APP-STORAGE.3** | A disk removal failure preserves the registered app and is surfaced as an accessible UI error; the Shell never reports removal by hiding only its in-memory entry. | app-loader and AppBar component tests |
