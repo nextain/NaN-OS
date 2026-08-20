@@ -874,3 +874,11 @@ P02 상태 매트릭스: 업데이트 없음, v0.2.0 발견, 다운로드·설�
 | **UC-V021-APP-REMOVE-HONESTY** | 삭제 권한·파일시스템 오류가 나면 앱은 목록에 남고 실패 알림이 표시된다. symlink, 경로 탈출, 잘못된/중복 id는 외부 파일을 변경하지 않는다. | Rust boundary mutations + AppBar alert contract |
 
 P02 상태 매트릭스: clean install/list/restart/remove/list, legacy migration, canonical duplicate, malformed id, symlink escape, 중간 삭제 실패를 각각 검증한다.
+### 2026-08-20 v0.2.1 Workspace Markdown viewer (#474)
+
+| Scenario | User-observable outcome | Coverage |
+|---|---|---|
+| **UC-V021-WORKSPACE-MARKDOWN** | Linux Workspace의 FileTree에서 Markdown 문서를 선택하면 GFM 미리보기가 기본으로 열리고, 원문 보기와 탭 재진입이 동작한다. 문서 상대 링크는 같은 Workspace 탭 흐름으로 열리며 로컬 이미지는 안전한 Workspace 읽기 경로를 사용한다. | Markdown component + editor viewer + Linux Chromium FileTree test |
+| **UC-V021-MARKDOWN-BOUNDARY** | raw HTML/script와 `javascript:` 및 Workspace 밖 상대 경로는 실행·열기되지 않는다. 외부 HTTP(S) 링크는 외부 링크임을 알리고 시스템 opener를 명시적으로 호출하며, 누락 이미지·읽기 실패·5 MiB 초과 문서는 복구 가능한 오류로 표시된다. | resolver, opener, missing-image, load-limit and accessibility assertions |
+
+P02 상태 매트릭스: `.md`/`.markdown`, preview/source 전환, GFM 표·체크리스트·취소선·코드 펜스, 문서/루트 상대 링크, 로컬/누락 이미지, HTTP(S)/위험 URL, 경계 밖 traversal, raw HTML, 읽기 실패와 대용량 거부, 키보드 포커스를 각각 검증한다.

@@ -813,3 +813,11 @@ unrelated direct TRT service on port 8910.
 | **FR-APP-STORAGE.1** | Install, list, restart discovery, and remove share the canonical `~/.naia/apps/{appId}` store. A valid legacy `~/.naia/panels/*` install is moved once by manifest id; canonical duplicates win without deleting legacy data. | isolated-home Rust migration/remove lifecycle tests |
 | **FR-APP-STORAGE.2** | App ids are strict single path segments. Symlinks, traversal, malformed ids, duplicate ids, and canonical-path escapes cannot delete or replace data outside the canonical app store. | Rust adversarial filesystem tests |
 | **FR-APP-STORAGE.3** | A disk removal failure preserves the registered app and is surfaced as an accessible UI error; the Shell never reports removal by hiding only its in-memory entry. | app-loader and AppBar component tests |
+
+## v0.2.1 Workspace Markdown viewer (#474)
+
+| ID | Normative requirement | Verification |
+|---|---|---|
+| **FR-WORKSPACE-MARKDOWN.1** | Selecting `.md` or `.markdown` in FileTree opens a GFM preview by default and retains the existing document-tab lifecycle. The user can switch between preview and source, and an oversized or unreadable document shows a bounded, retryable error instead of blocking the shell. | viewer component tests + Linux Chromium FileTree journey |
+| **FR-WORKSPACE-MARKDOWN.2** | Relative links and images resolve from the current document or Workspace root. Canonical file reads remain enforced by the Rust Workspace boundary; traversal, raw HTML, script, protocol-relative content, and dangerous URL schemes cannot execute or read outside the Workspace. HTTP(S) links use the explicit system opener. | resolver/security/image tests + Rust boundary tests |
+| **FR-WORKSPACE-MARKDOWN.3** | The preview exposes an article landmark, keyboard focus indication, semantic GFM tables/tasks/headings, descriptive external-link text, and honest missing-image status while preserving code, image, PDF, CSV, and log viewers. | accessibility component assertions + existing viewer regression suite |

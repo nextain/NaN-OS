@@ -144,9 +144,16 @@ const TAURI_MOCK_SCRIPT = `
 			if (args.parent === "${ROOT_B}") {
 				return [{ name: "beta.ts", path: "${ROOT_B}/beta.ts", is_dir: false, children: null }];
 			}
-			return [{ name: "alpha.ts", path: "${ROOT_A}/alpha.ts", is_dir: false, children: null }];
+			return [
+				{ name: "README.md", path: "${ROOT_A}/README.md", is_dir: false, children: null },
+				{ name: "alpha.ts", path: "${ROOT_A}/alpha.ts", is_dir: false, children: null }
+			];
 		}
-		if (cmd === "workspace_read_file") return "export const alpha = true;\\n";
+		if (cmd === "workspace_file_size") return 512;
+		if (cmd === "workspace_read_file") {
+			if (args.path.endsWith("README.md")) return "# Workspace Guide\\n\\n- [x] GFM ready\\n\\n| Mode | State |\\n|---|---|\\n| Preview | Ready |\\n\\n[Source](alpha.ts)";
+			return "export const alpha = true;\\n";
+		}
 		if (cmd === "workspace_resolve_file_location") return "${ROOT_A}/src/App.tsx";
 		if (cmd === "pty_resize" || cmd === "pty_write" || cmd === "pty_close") return null;
 		if (cmd === "send_to_agent_command" || cmd === "cancel_stream") return null;
@@ -269,6 +276,22 @@ test.describe("Herdr Workspace integration", () => {
 			),
 		).toBe(true);
 		await expect(page.getByText("Alpha", { exact: true })).toBeVisible();
+	});
+
+	test("FileTree Markdown 문서를 GFM 미리보기로 열고 원문 전환한다", async ({
+		page,
+	}) => {
+		await openWorkspace(page);
+		await page.getByRole("button", { name: /README\.md/ }).click();
+		const preview = page.getByRole("article", { name: "Markdown 미리보기" });
+		await expect(preview).toBeVisible();
+		await expect(
+			preview.getByRole("heading", { name: "Workspace Guide" }),
+		).toBeVisible();
+		await expect(preview.getByRole("table")).toBeVisible();
+		await expect(preview.getByRole("checkbox")).toBeChecked();
+		await page.getByTitle("편집 모드로 전환").click();
+		await expect(page.locator(".workspace-editor__codemirror")).toBeVisible();
 	});
 
 	test("a first-run black terminal becomes a visible retryable Herdr error", async ({
