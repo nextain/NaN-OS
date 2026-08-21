@@ -21,6 +21,14 @@
 | **FR-F3.2** | mutating 결과 **reafference**(`commanded→acknowledged→observed→mismatch`) — 의도/실행/실제 분리 | UC7(reafference) | 통합 reafference 테스트 |
 | **FR-F3.3** | negative(exit-block): 승인거부·권한부족→차단; **mutation 불확정 상태 전체 처리** — timeout·interrupt/cancel·partial(side-effect unknown)·**실행 개시 후** post-approval drift·acknowledged-but-not-observed → abort + 결과 미확정 정직 보고 + disposition(↓). (실행 전 drift = FR-F1.4 block/재승인) | UC7 negative | negative + uncertain-state |
 
+## 기능 요구사항 (FR) — 설치 앱 수명주기 (#472)
+
+| ID | 요구사항 | 출처 | 검증(P02) |
+|---|---|---|---|
+| **FR-APP.1** | 설치·목록·실행·제거는 단일 정규 루트 `~/.naia/apps/{appId}`를 사용한다. 설치 결과는 재시작 뒤에도 목록과 HTML 실행 경로에서 발견되며, 제거 뒤에는 발견되지 않는다. | UC9·S28·S29·S29a | Rust clean-HOME 경로·목록·제거 회귀 테스트 |
+| **FR-APP.2** | 구 `~/.naia/panels`의 유효한 실디렉터리 설치본은 동일 ID 충돌이 없을 때 원자적으로 정규 루트로 이관한다. 중복 ID·잘못된 manifest·심볼릭 링크·경계 이탈은 삭제하거나 덮어쓰지 않고 명시적으로 실패한다. | UC9·S29a | 이관·중복·manifest ID·symlink 부정 테스트 |
+| **FR-APP.3** | 제거는 안전한 app ID와 정규 디렉터리의 `app.json` ID 일치를 모두 검증한 뒤 그 디렉터리만 삭제한다. 사용자 문서 등 앱 디렉터리 밖 데이터는 보존한다. | UC9·S29a | 제거 경계·manifest 불일치 테스트 |
+
 ## 기능 요구사항 (FR) — 대화 transcript 영속 (S05, V1-track 선행 — 2026-06-18)
 
 > 범위: foundation tranche **밖**, 사용자 우선순위로 선행(text Phase1). 음성·멀티모달 = Phase2+(DEFER). NFR = 횡단 NFR(특히 isolation·substrate-agnostic·provenance·error-model) 적용.

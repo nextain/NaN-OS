@@ -136,15 +136,31 @@ pub(crate) fn process_deep_link_url(
             }
         }
         let Some(app_id) = app_id.filter(|value| {
-            !value.is_empty() && value.len() <= 128 && value.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | '_'))
-        }) else { return; };
+            !value.is_empty()
+                && value.len() <= 128
+                && value
+                    .chars()
+                    .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | '_'))
+        }) else {
+            return;
+        };
         let Some(store_origin) = store_origin.filter(|value| {
             value == "https://naia.nextain.io"
-                || (cfg!(debug_assertions) && (value.starts_with("http://localhost:") || value.starts_with("http://127.0.0.1:")))
-        }) else { return; };
+                || (cfg!(debug_assertions)
+                    && (value.starts_with("http://localhost:")
+                        || value.starts_with("http://127.0.0.1:")))
+        }) else {
+            return;
+        };
         let Some(state) = install_state.filter(|value| {
-            !value.is_empty() && value.len() <= 128 && value.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_'))
-        }) else { return; };
+            !value.is_empty()
+                && value.len() <= 128
+                && value
+                    .chars()
+                    .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_'))
+        }) else {
+            return;
+        };
         let states = USED_APP_INSTALL_STATES.get_or_init(|| Mutex::new(HashSet::new()));
         if !lock_or_recover(states, "used_app_install_states").insert(state.clone()) {
             log_both("[Naia] App install deep link rejected: replayed state");

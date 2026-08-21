@@ -73,6 +73,154 @@ mod store_signature_tests {
     }
 }
 
+fn apps_root(home: &std::path::Path) -> std::path::PathBuf {
+    home.join(".naia").join("apps")
+}
+
+fn legacy_apps_root(home: &std::path::Path) -> std::path::PathBuf {
+    home.join(".naia").join("panels")
+}
+
+fn is_safe_app_id(id: &str) -> bool {
+    !id.is_empty()
+        && !id.contains("..")
+        && id
+            .chars()
+            .all(|c| c.is_alphanumeric() || c == '-' || c == '_')
+}
+
+#[derive(Deserialize)]
+struct ManifestIdentity {
+    id: String,
+}
+
+fn manifest_id(dir: &std::path::Path) -> Result<String, String> {
+    let path = dir.join("app.json");
+    let data = std::fs::read_to_string(&path)
+        .map_err(|e| format!("Failed to read {}: {}", path.display(), e))?;
+    let manifest: ManifestIdentity =
+        serde_json::from_str(&data).map_err(|e| format!("Invalid {}: {}", path.display(), e))?;
+    if !is_safe_app_id(&manifest.id) {
+        return Err(format!(
+            "Invalid app id in {}: {:?}",
+            path.display(),
+            manifest.id
+        ));
+    }
+    Ok(manifest.id)
+}
+
+fn ensure_directory(path: &std::path::Path, label: &str) -> Result<(), String> {
+    match std::fs::symlink_metadata(path) {
+        Ok(metadata) if metadata.file_type().is_symlink() || !metadata.is_dir() => Err(format!(
+            "{} must be a real directory: {}",
+            label,
+            path.display()
+        )),
+        Ok(_) => Ok(()),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            std::fs::create_dir_all(path).map_err(|e| format!("Failed to create {}: {}", label, e))
+        }
+        Err(error) => Err(format!("Failed to inspect {}: {}", label, error)),
+    }
+}
+
+/// Establish the canonical app root and migrate the pre-#472 `panels` root.
+/// Refuse ambiguity instead of overwriting either copy.
+fn prepare_apps_root(home: &std::path::Path) -> Result<std::path::PathBuf, String> {
+    let naia_root = home.join(".naia");
+    ensure_directory(&naia_root, "Naia data directory")?;
+    let root = apps_root(home);
+    ensure_directory(&root, "apps directory")?;
+    let canonical_home = dunce::canonicalize(home).map_err(|e| format!("Invalid home: {}", e))?;
+    let canonical_root =
+        dunce::canonicalize(&root).map_err(|e| format!("Invalid apps directory: {}", e))?;
+    if !canonical_root.starts_with(&canonical_home) {
+        return Err("Apps directory escapes the user home".to_string());
+    }
+
+    let legacy = legacy_apps_root(home);
+    match std::fs::symlink_metadata(&legacy) {
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(root),
+        Err(error) => {
+            return Err(format!(
+                "Failed to inspect legacy apps directory: {}",
+                error
+            ))
+        }
+        Ok(metadata) if metadata.file_type().is_symlink() || !metadata.is_dir() => {
+            return Err(format!(
+                "Legacy apps path must be a real directory: {}",
+                legacy.display()
+            ));
+        }
+        Ok(_) => {}
+    }
+
+    let mut migrations = Vec::new();
+    let mut ids = std::collections::HashSet::new();
+    for entry in std::fs::read_dir(&legacy)
+        .map_err(|e| format!("Failed to read legacy apps directory: {}", e))?
+    {
+        let entry = entry.map_err(|e| format!("Failed to read legacy app entry: {}", e))?;
+        let file_type = entry
+            .file_type()
+            .map_err(|e| format!("Failed to inspect legacy app entry: {}", e))?;
+        if !file_type.is_dir() {
+            return Err(format!(
+                "Refusing to migrate non-directory legacy app entry: {}",
+                entry.path().display()
+            ));
+        }
+        if entry
+            .file_name()
+            .to_string_lossy()
+            .starts_with(".~install-")
+        {
+            return Err(format!(
+                "Incomplete legacy app install requires cleanup: {}",
+                entry.path().display()
+            ));
+        }
+
+        let id = manifest_id(&entry.path())?;
+        let destination = root.join(&id);
+        if destination.exists() || !ids.insert(id.clone()) {
+            return Err(format!(
+                "Cannot migrate app {:?}: duplicate canonical destination",
+                id
+            ));
+        }
+        migrations.push((entry.path(), destination, id));
+    }
+
+    let mut moved = Vec::new();
+    for (source, destination, id) in &migrations {
+        if let Err(error) = std::fs::rename(source, destination) {
+            let mut rollback_errors = Vec::new();
+            for (moved_source, moved_destination) in moved.iter().rev() {
+                if let Err(rollback_error) = std::fs::rename(moved_destination, moved_source) {
+                    rollback_errors.push(rollback_error.to_string());
+                }
+            }
+            let rollback = if rollback_errors.is_empty() {
+                "migration rolled back".to_string()
+            } else {
+                format!("rollback also failed: {}", rollback_errors.join("; "))
+            };
+            return Err(format!(
+                "Failed to migrate app {:?}: {}; {}",
+                id, error, rollback
+            ));
+        }
+        moved.push((source, destination));
+    }
+
+    std::fs::remove_dir(&legacy)
+        .map_err(|e| format!("Failed to remove empty legacy apps directory: {}", e))?;
+    Ok(root)
+}
+
 /// Panel manifest stored in ~/.naia/apps/{id}/app.json
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct AppManifest {
@@ -126,110 +274,44 @@ fn default_tool_tier() -> u8 {
     1
 }
 
-fn apps_root(home: &std::path::Path) -> std::path::PathBuf {
-    home.join(".naia").join("apps")
-}
-
-fn legacy_panels_root(home: &std::path::Path) -> std::path::PathBuf {
-    home.join(".naia").join("panels")
-}
-
-fn valid_app_id(id: &str) -> bool {
-    !id.is_empty()
-        && !id.contains("..")
-        && !id.contains('\0')
-        && !id.chars().any(char::is_control)
-        && id
-            .chars()
-            .all(|c| c.is_alphanumeric() || c == '-' || c == '_')
-}
-
-/// Move valid legacy `~/.naia/panels/*` installs into the canonical app store.
-/// Existing canonical ids win; symlinks and malformed manifests are left untouched.
-fn migrate_legacy_apps(home: &std::path::Path) -> Result<usize, String> {
-    let legacy_root = legacy_panels_root(home);
-    if !legacy_root.is_dir() {
-        return Ok(0);
-    }
-    let canonical_legacy = dunce::canonicalize(&legacy_root)
-        .map_err(|e| format!("Failed to inspect legacy app directory: {e}"))?;
-    let canonical_root = apps_root(home);
-    std::fs::create_dir_all(&canonical_root)
-        .map_err(|e| format!("Failed to create apps directory: {e}"))?;
-    let mut migrated = 0;
-
-    for entry in std::fs::read_dir(&legacy_root)
-        .map_err(|e| format!("Failed to read legacy app directory: {e}"))?
-        .flatten()
-    {
-        let file_type = match entry.file_type() {
-            Ok(value) => value,
-            Err(_) => continue,
-        };
-        if !file_type.is_dir() || file_type.is_symlink() {
-            continue;
-        }
-        let source = entry.path();
-        let canonical_source = match dunce::canonicalize(&source) {
-            Ok(value) if value.starts_with(&canonical_legacy) => value,
-            _ => continue,
-        };
-        let id = std::fs::read_to_string(source.join("app.json"))
-            .ok()
-            .and_then(|data| serde_json::from_str::<serde_json::Value>(&data).ok())
-            .and_then(|manifest| manifest.get("id")?.as_str().map(str::to_owned));
-        let Some(id) = id.filter(|value| valid_app_id(value)) else {
-            continue;
-        };
-        let destination = canonical_root.join(id);
-        if destination.exists() {
-            continue;
-        }
-        std::fs::rename(&canonical_source, &destination)
-            .map_err(|e| format!("Failed to migrate legacy app: {e}"))?;
-        migrated += 1;
-    }
-    Ok(migrated)
-}
-
-/// List installed apps by scanning ~/.naia/apps/ after the safe legacy migration.
-#[tauri::command]
-pub fn app_list_installed() -> Result<Vec<AppManifest>, String> {
-    let home = home_dir();
-    let home_path = std::path::PathBuf::from(&home);
-    list_installed_at(&home_path)
-}
-
-fn list_installed_at(home_path: &std::path::Path) -> Result<Vec<AppManifest>, String> {
-    migrate_legacy_apps(home_path)?;
-    let apps_dir = apps_root(home_path);
-
-    if !apps_dir.is_dir() {
-        return Ok(Vec::new());
-    }
+/// List installed panels by scanning ~/.naia/apps/
+fn list_installed_from(home: &std::path::Path) -> Result<Vec<AppManifest>, String> {
+    let apps_dir = prepare_apps_root(home)?;
 
     let mut panels: Vec<AppManifest> = Vec::new();
 
     let entries = match std::fs::read_dir(&apps_dir) {
         Ok(e) => e,
-        Err(e) => return Err(format!("Failed to read apps directory: {e}")),
+        Err(e) => return Err(format!("Failed to read apps directory: {}", e)),
     };
 
-    for entry in entries.flatten() {
-        let manifest_path = entry.path().join("app.json");
-        if !manifest_path.exists() {
+    for entry in entries {
+        let entry = entry.map_err(|e| format!("Failed to read app entry: {}", e))?;
+        let file_type = entry
+            .file_type()
+            .map_err(|e| format!("Failed to inspect app entry: {}", e))?;
+        if entry
+            .file_name()
+            .to_string_lossy()
+            .starts_with(".~install-")
+        {
             continue;
         }
-
-        let data = match std::fs::read_to_string(&manifest_path) {
-            Ok(d) => d,
-            Err(_) => continue,
-        };
-
-        let mut manifest: AppManifest = match serde_json::from_str(&data) {
-            Ok(m) => m,
-            Err(_) => continue,
-        };
+        if !file_type.is_dir() || file_type.is_symlink() {
+            return Err(format!("Invalid app entry: {}", entry.path().display()));
+        }
+        let manifest_path = entry.path().join("app.json");
+        let data = std::fs::read_to_string(&manifest_path)
+            .map_err(|e| format!("Failed to read {}: {}", manifest_path.display(), e))?;
+        let mut manifest: AppManifest = serde_json::from_str(&data)
+            .map_err(|e| format!("Invalid {}: {}", manifest_path.display(), e))?;
+        let directory_id = entry.file_name().to_string_lossy().into_owned();
+        if !is_safe_app_id(&manifest.id) || manifest.id != directory_id {
+            return Err(format!(
+                "App manifest id does not match directory: {}",
+                entry.path().display()
+            ));
+        }
 
         // Load inline SVG if iconUrl is specified
         if let Some(ref icon_url) = manifest.icon_url.clone() {
@@ -249,6 +331,11 @@ fn list_installed_at(home_path: &std::path::Path) -> Result<Vec<AppManifest>, St
     }
 
     Ok(panels)
+}
+
+#[tauri::command]
+pub fn app_list_installed() -> Result<Vec<AppManifest>, String> {
+    list_installed_from(std::path::Path::new(&home_dir()))
 }
 
 /// Read a file on behalf of an iframe panel.
@@ -384,148 +471,149 @@ pub fn app_run_shell(cmd: String, args: Vec<String>) -> Result<AppShellResult, S
 
 /// Remove an installed panel by its app id.
 ///
-/// Scans `~/.naia/apps/*/app.json` and removes every directory whose
-/// manifest `id` matches — this is robust to the directory name differing from
-/// the id (e.g. a repo cloned as `naia-memo-panel` but whose app.json
-/// declares `id: "memo"`). Mirrors the legacy agent `actionRemove` logic.
+/// Removes exactly `~/.naia/apps/{id}` after validating that its manifest id
+/// matches its canonical directory name.
 #[tauri::command]
-pub fn app_remove_installed(app_id: String) -> Result<(), String> {
-    if !valid_app_id(&app_id) {
-        return Err(format!("Invalid app id: {}", app_id));
-    }
-
-    let home = home_dir();
-    let home_path = std::path::PathBuf::from(&home);
-    remove_installed_at(&home_path, &app_id)
+pub fn app_remove_installed(panel_id: String) -> Result<(), String> {
+    remove_installed_from(std::path::Path::new(&home_dir()), &panel_id)
 }
 
-fn remove_installed_at(home_path: &std::path::Path, app_id: &str) -> Result<(), String> {
-    let apps_root = apps_root(&home_path);
-
-    if !apps_root.is_dir() {
-        return Ok(()); // nothing installed
+fn remove_installed_from(home: &std::path::Path, panel_id: &str) -> Result<(), String> {
+    if !is_safe_app_id(panel_id) {
+        return Err(format!("Invalid app id: {}", panel_id));
     }
 
-    #[derive(Deserialize)]
-    struct ManifestLite {
-        id: Option<String>,
+    let root = prepare_apps_root(home)?;
+    let dir = root.join(&panel_id);
+    if !dir.exists() {
+        return Ok(());
     }
-
-    for entry in
-        std::fs::read_dir(&apps_root).map_err(|e| format!("Failed to read panels dir: {}", e))?
-    {
-        let entry = match entry {
-            Ok(e) => e,
-            Err(_) => continue,
-        };
-        if !entry.file_type().map(|t| t.is_dir()).unwrap_or(false) {
-            continue;
-        }
-        // Skip in-flight install temp dirs.
-        if entry
-            .file_name()
-            .to_string_lossy()
-            .starts_with(".~install-")
-        {
-            continue;
-        }
-
-        let dir = entry.path();
-        let manifest_path = dir.join("app.json");
-        if !manifest_path.exists() {
-            continue;
-        }
-
-        let id = std::fs::read_to_string(&manifest_path)
-            .ok()
-            .and_then(|d| serde_json::from_str::<ManifestLite>(&d).ok())
-            .and_then(|m| m.id);
-        if id.as_deref() != Some(app_id) {
-            continue;
-        }
-
-        let canonical_apps_root =
-            dunce::canonicalize(&apps_root).map_err(|_| "Access denied".to_string())?;
-        // Canonicalize to defeat symlinks — never delete outside the app store.
-        let canonical = dunce::canonicalize(&dir).map_err(|_| "Access denied".to_string())?;
-        if !canonical.starts_with(&canonical_apps_root) || canonical == canonical_apps_root {
-            return Err("Access denied".to_string());
-        }
-        std::fs::remove_dir_all(&canonical)
-            .map_err(|e| format!("Failed to remove app {}: {}", app_id, e))?;
-        // Keep scanning — removes every dir bound to this id (dedupe).
+    let file_type = std::fs::symlink_metadata(&dir)
+        .map_err(|e| format!("Failed to inspect app {}: {}", panel_id, e))?
+        .file_type();
+    if !file_type.is_dir() || file_type.is_symlink() {
+        return Err("Access denied".to_string());
     }
-
-    Ok(())
+    if manifest_id(&dir)? != panel_id {
+        return Err(format!(
+            "App manifest id does not match directory: {}",
+            panel_id
+        ));
+    }
+    let canonical_root = dunce::canonicalize(&root).map_err(|_| "Access denied".to_string())?;
+    let canonical = dunce::canonicalize(&dir).map_err(|_| "Access denied".to_string())?;
+    if canonical.parent() != Some(canonical_root.as_path()) {
+        return Err("Access denied".to_string());
+    }
+    std::fs::remove_dir_all(&canonical)
+        .map_err(|e| format!("Failed to remove app {}: {}", panel_id, e))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    fn write_app(root: &std::path::Path, directory: &str, id: &str) -> std::path::PathBuf {
-        let path = root.join(directory);
-        std::fs::create_dir_all(&path).unwrap();
+    fn write_app(root: &std::path::Path, dir: &str, id: &str) -> std::path::PathBuf {
+        let app_dir = root.join(dir);
+        std::fs::create_dir_all(&app_dir).unwrap();
         std::fs::write(
-            path.join("app.json"),
-            serde_json::json!({ "id": id, "name": id }).to_string(),
+            app_dir.join("app.json"),
+            format!(r#"{{"id":"{}","name":"Test App"}}"#, id),
         )
         .unwrap();
-        std::fs::write(path.join("index.html"), "ok").unwrap();
-        path
+        std::fs::write(app_dir.join("index.html"), "<!doctype html>").unwrap();
+        app_dir
     }
 
     #[test]
-    fn legacy_install_migrates_to_canonical_apps_store_and_can_be_removed() {
+    fn canonical_lifecycle_lists_after_restart_and_removes() {
         let home = tempfile::tempdir().unwrap();
-        let legacy = legacy_panels_root(home.path());
-        let old = write_app(&legacy, "old-repo-name", "notes");
+        write_app(&apps_root(home.path()), "slides", "slides");
 
-        assert_eq!(migrate_legacy_apps(home.path()).unwrap(), 1);
-        assert!(!old.exists());
-        let installed = apps_root(home.path()).join("notes");
-        assert!(installed.join("app.json").is_file());
-        let first_list = list_installed_at(home.path()).unwrap();
-        let restart_list = list_installed_at(home.path()).unwrap();
-        assert_eq!(first_list.len(), 1);
-        assert_eq!(restart_list[0].id, "notes");
+        let first = list_installed_from(home.path()).unwrap();
+        let restarted = list_installed_from(home.path()).unwrap();
+        assert_eq!(first.len(), 1);
+        assert_eq!(restarted[0].id, "slides");
+        let expected_entry = apps_root(home.path()).join("slides/index.html");
+        assert_eq!(
+            std::path::Path::new(restarted[0].html_entry.as_deref().unwrap()),
+            expected_entry
+        );
 
-        remove_installed_at(home.path(), "notes").unwrap();
-        assert!(!installed.exists());
-        assert!(list_installed_at(home.path()).unwrap().is_empty());
+        remove_installed_from(home.path(), "slides").unwrap();
+        assert!(list_installed_from(home.path()).unwrap().is_empty());
     }
 
     #[test]
-    fn canonical_duplicate_wins_without_deleting_legacy_data() {
+    fn migrates_legacy_panels_once() {
         let home = tempfile::tempdir().unwrap();
-        let canonical = write_app(&apps_root(home.path()), "notes", "notes");
-        let legacy = write_app(&legacy_panels_root(home.path()), "old-notes", "notes");
+        write_app(&legacy_apps_root(home.path()), "old-repo-name", "slides");
 
-        assert_eq!(migrate_legacy_apps(home.path()).unwrap(), 0);
-        assert!(canonical.exists());
-        assert!(legacy.exists());
+        let installed = list_installed_from(home.path()).unwrap();
+        assert_eq!(installed[0].id, "slides");
+        assert!(apps_root(home.path()).join("slides/app.json").is_file());
+        assert!(!legacy_apps_root(home.path()).exists());
     }
 
     #[test]
-    fn malformed_ids_and_symlinks_cannot_escape_the_app_store() {
+    fn migration_refuses_duplicate_without_moving_legacy_app() {
         let home = tempfile::tempdir().unwrap();
-        assert!(!valid_app_id("../outside"));
-        assert!(!valid_app_id("nested/app"));
-        assert!(remove_installed_at(home.path(), "../outside").is_ok());
+        let legacy = write_app(&legacy_apps_root(home.path()), "legacy", "slides");
+        write_app(&apps_root(home.path()), "slides", "slides");
 
-        #[cfg(unix)]
-        {
-            let outside = tempfile::tempdir().unwrap();
-            write_app(outside.path(), "victim", "linked");
-            std::fs::create_dir_all(apps_root(home.path())).unwrap();
-            std::os::unix::fs::symlink(
-                outside.path().join("victim"),
-                apps_root(home.path()).join("linked"),
-            )
-            .unwrap();
-            remove_installed_at(home.path(), "linked").unwrap();
-            assert!(outside.path().join("victim").exists());
-        }
+        let error = list_installed_from(home.path()).unwrap_err();
+        assert!(error.contains("duplicate canonical destination"));
+        assert!(legacy.is_dir());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn migration_refuses_symlink_without_touching_target() {
+        use std::os::unix::fs::symlink;
+
+        let home = tempfile::tempdir().unwrap();
+        let outside = tempfile::tempdir().unwrap();
+        write_app(outside.path(), "target", "slides");
+        let legacy = legacy_apps_root(home.path());
+        std::fs::create_dir_all(&legacy).unwrap();
+        symlink(outside.path().join("target"), legacy.join("slides")).unwrap();
+
+        assert!(list_installed_from(home.path()).is_err());
+        assert!(outside.path().join("target/app.json").is_file());
+    }
+
+    #[test]
+    fn removal_refuses_manifest_id_mismatch_and_traversal() {
+        let home = tempfile::tempdir().unwrap();
+        let app = write_app(&apps_root(home.path()), "slides", "different-id");
+
+        assert!(remove_installed_from(home.path(), "../slides").is_err());
+        assert!(remove_installed_from(home.path(), "slides").is_err());
+        assert!(app.is_dir());
+    }
+
+    #[test]
+    fn listing_rejects_invalid_canonical_manifest() {
+        let home = tempfile::tempdir().unwrap();
+        let app = apps_root(home.path()).join("slides");
+        std::fs::create_dir_all(&app).unwrap();
+        std::fs::write(app.join("app.json"), r#"{"name":"Missing id"}"#).unwrap();
+
+        let error = list_installed_from(home.path()).unwrap_err();
+        assert!(error.contains("Invalid"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn listing_rejects_symlinked_naia_data_root() {
+        use std::os::unix::fs::symlink;
+
+        let home = tempfile::tempdir().unwrap();
+        let outside = tempfile::tempdir().unwrap();
+        symlink(outside.path(), home.path().join(".naia")).unwrap();
+
+        assert!(list_installed_from(home.path()).is_err());
+        assert!(!outside.path().join("apps").exists());
     }
 }
 
@@ -595,9 +683,9 @@ pub fn app_install(source: String) -> Result<AppInstallResult, String> {
     }
 
     let home = home_dir();
-    let home_path = dunce::canonicalize(&home).unwrap_or_else(|_| std::path::PathBuf::from(&home));
-    let apps_root = apps_root(&std::path::PathBuf::from(&home));
-    std::fs::create_dir_all(&apps_root).map_err(|e| format!("앱 디렉토리 생성 실패: {}", e))?;
+    let apps_root = prepare_apps_root(std::path::Path::new(&home))?;
+    let canonical_apps_root =
+        dunce::canonicalize(&apps_root).map_err(|_| "Access denied".to_string())?;
 
     // Temp clone target *inside* apps_root (same volume → rename is atomic).
     // Leading-dot prefix keeps it out of the installed-panel list while cloning.
@@ -640,22 +728,23 @@ pub fn app_install(source: String) -> Result<AppInstallResult, String> {
     // Read id (the canonical app id → becomes the directory name).
     #[derive(Deserialize)]
     struct ManifestLite {
-        id: Option<String>,
+        id: String,
         name: Option<String>,
     }
-    let (id, display_name) = std::fs::read_to_string(&manifest_path)
-        .ok()
-        .and_then(|data| serde_json::from_str::<ManifestLite>(&data).ok())
-        .map(|m| {
-            (
-                m.id.unwrap_or_else(|| derived.clone()),
-                m.name.unwrap_or_else(|| derived.clone()),
-            )
-        })
-        .unwrap_or_else(|| (derived.clone(), derived.clone()));
+    let manifest_data = std::fs::read_to_string(&manifest_path).map_err(|error| {
+        let _ = std::fs::remove_dir_all(&tmp);
+        format!("app.json을 읽을 수 없습니다: {}", error)
+    })?;
+    let manifest: ManifestLite = serde_json::from_str(&manifest_data).map_err(|error| {
+        let _ = std::fs::remove_dir_all(&tmp);
+        format!("app.json 형식이 유효하지 않습니다: {}", error)
+    })?;
+    let id = manifest.id;
+    let display_name = manifest.name.unwrap_or_else(|| derived.clone());
 
     // The id becomes a path segment — sanitize strictly.
-    if !valid_app_id(&id) {
+    let id_safe = is_safe_app_id(&id);
+    if !id_safe {
         let _ = std::fs::remove_dir_all(&tmp);
         return Err(format!(
             "app.json의 id가 유효하지 않아 설치할 수 없습니다 (영문/숫자/-/_ 만 허용): {:?}",
@@ -682,7 +771,7 @@ pub fn app_install(source: String) -> Result<AppInstallResult, String> {
 
     // Home boundary sanity check (defense in depth).
     if let Ok(canonical_dest) = dunce::canonicalize(&dest) {
-        if !canonical_dest.starts_with(&home_path) {
+        if canonical_dest.parent() != Some(canonical_apps_root.as_path()) {
             let _ = std::fs::remove_dir_all(&canonical_dest);
             return Err("Access denied".to_string());
         }

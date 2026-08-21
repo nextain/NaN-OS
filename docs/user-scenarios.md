@@ -88,6 +88,7 @@ UC15 제품 수용 확장(#84):
 | S27 | browser 패널 | UC6 | EnvironmentPort.app-surface | 측정 |
 | S28 | panel 설치(panel) | UC9 | skill·EnvironmentPort.app-surface | 측정 |
 | S29 | generic-installed 패널 | UC9 | EnvironmentPort.app-surface | 측정 |
+| S29a | 앱 설치 후 재시작해도 목록·실행이 유지되고, 제거 후에는 목록과 실행 경로에서 사라짐. 구 `~/.naia/panels` 설치본은 충돌 없이 `~/.naia/apps`로 한 번 이관 | UC9 | EnvironmentPort.app-surface·로컬 fs | `app.rs` clean-HOME 설치경로·이관·제거·경계 회귀 테스트 |
 | S30 | sample-note 패널 | UC9 | EnvironmentPort.app-surface | ⚠️ App.tsx 에서 제거/미배선(완전성R12) — rejected 후보 |
 | S31 | youtube-bgm | UC8 | EnvironmentPort.space | 측정(YouTube 변동) |
 | S32 | 배경화면/scene | UC8 | EnvironmentPort.space | 측정 |

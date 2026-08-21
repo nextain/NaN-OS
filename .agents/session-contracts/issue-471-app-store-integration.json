@@ -60,7 +60,7 @@
   "session_bindings": [
     {
       "session_id": "01a03306-1ba7-7820-a9d6-89be8043639e",
-      "contract_digest": "890b5821c4706b8ca9da2354fafa946a17a115f6fdc4fd405b9c6250fdd249f7"
+      "contract_digest": "bdbb70f30e76e4ad10c91a11ad04f497710998a548d57413f1b9056df74b7699"
     }
   ],
   "progress_file": ".agents/progress/issue-471-app-store-integration.json",
@@ -69,6 +69,8 @@
     "git rebase origin/main",
     "git cherry-pick origin/feat/slide-presenter-467",
     "git cherry-pick 1305dce3197a65b261a5c82b36a2a700fee1abf0",
+    "git add packages/shell/src-tauri/src/app.rs docs/requirements.md docs/user-scenarios.md .agents/session-contracts/issue-471-app-store-integration.json .agents/session-contracts/.session-map.json .agents/progress/issue-471-app-store-integration.json",
+    "git cherry-pick --continue",
     "git add .agents/session-contracts/.session-map.json .agents/session-contracts/issue-471-app-store-integration.json .agents/progress/issue-471-app-store-integration.json docs/progress/01.requirements/INDEX.md docs/progress/02.user-scenarios/INDEX.md docs/progress/03.uc-tests/INDEX.md packages/shell/src-tauri/src/app.rs packages/shell/src-tauri/src/lib.rs packages/shell/src/App.tsx packages/shell/src/components/AppBar.tsx packages/shell/src/components/AppInstallDialog.tsx packages/shell/src/components/__tests__/AppBar.test.tsx packages/shell/src/components/__tests__/AppInstallDialog.test.tsx packages/shell/src/lib/__tests__/app-store-client.test.ts packages/shell/src/lib/app-store-client.ts",
     "git commit -m feat(shell): add secure app store deep-link install flow",
     "bash scripts/enforce-root-structure.sh",
@@ -83,5 +85,5 @@
     "git diff --check",
     "git status --short --branch"
   ],
-  "contract_digest": "890b5821c4706b8ca9da2354fafa946a17a115f6fdc4fd405b9c6250fdd249f7"
+  "contract_digest": "bdbb70f30e76e4ad10c91a11ad04f497710998a548d57413f1b9056df74b7699"
 }

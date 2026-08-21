@@ -13,7 +13,7 @@
     "01a03306-1ba7-7820-a9d6-89be8043639e": {
       "contract_id": "issue-471-app-store-integration",
       "contract_path": ".agents/session-contracts/issue-471-app-store-integration.json",
-      "contract_digest": "890b5821c4706b8ca9da2354fafa946a17a115f6fdc4fd405b9c6250fdd249f7"
+      "contract_digest": "bdbb70f30e76e4ad10c91a11ad04f497710998a548d57413f1b9056df74b7699"
     },
     "01a0004a-f64e-73b0-82da-c1069dece3bd": {
       "contract_id": "issue-447-v017-launch-qa",
