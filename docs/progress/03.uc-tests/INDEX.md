@@ -47,3 +47,4 @@
 | TEST-S-020 | UC-021 | VRAM 6GB 경계, no-login ON, :8910 ready/timeout, ref select/record/upload, OFF child reap와 재시작 roundtrip을 검증 | unit + Rust + Playwright + native | voice settings/lifecycle focused tests | Planned |
 | TEST-S-021 | UC-022 | cold boot/saved state/Proactive에서 no-play, 사용자·LLM skill 명시 play, radio mode gate, play→pause toggle을 검증 | unit + Playwright | BGM/Radio/Proactive focused tests | Planned |
 | TEST-S-022 | UC-023 | generic name, captured video thumbnail, NVA+VRM onboarding, legacy center migration, icon tooltip/ARIA/default-off, Windows Gateway bounded exit/reconnect를 검증 | unit + Playwright + Windows integration | onboarding/layout/proactive/Discord focused tests | Planned |
+| TEST-S-023 | UC-024 | 공개 목록→권리 확인→필요 시 1회 구매→native 권리 재확인·ZIP 무결성 검증·설치, 서버 오류 시 오결제 방지, 삭제 후 재설치 계약을 검증 | unit + Rust + 통합 | `AppInstallDialog.test.tsx`, `app-store-client.test.ts`, Gateway `test_app_commerce.py`, app.rs store tests | In-progress |

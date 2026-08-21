@@ -41,3 +41,4 @@
 | UC-021 | Windows 로컬 음성 | VRAM 6GB+ 사용자가 Voice 설정에서 local voice를 켜고 레퍼런스 음성을 선택·녹음·업로드한다. 엔진 ready/오류/중지 상태가 실제 :8910 및 자식 프로세스와 일치한다. | REQ-017 | Approved | TEST-S-020 |
 | UC-022 | BGM·Radio DJ 동의 | 사용자가 재생하거나 LLM이 명시적 radio_dj play tool을 호출한 경우에만 음악/DJ가 시작되고, 같은 버튼으로 일시정지하며 Proactive 설정은 이를 시작하지 않는다. | REQ-018 | Approved | TEST-S-021 |
 | UC-023 | 온보딩·표시·Windows Gateway | 사용자는 일반 이름과 실제 video-frame 썸네일로 온보딩하고 좌측 chat layout과 compact Proactive icon을 사용한다. Windows Discord는 종료·재연결 후 orphan child 없이 복구된다. | REQ-019 | Approved | TEST-S-022 |
+| UC-024 | 앱 구매·설치·삭제 | 사용자가 Apps에서 상품을 선택하면 기존 구매 권리를 먼저 확인하고, 미보유 시 한 번만 결제하여 설치한다. 앱을 삭제한 뒤 다시 설치해도 같은 권리가 적용된다. | REQ-020 | In-progress | TEST-S-023 |

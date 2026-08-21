@@ -5611,7 +5611,7 @@ fn directory_has_compiled_module(dir: &std::path::Path, module: &str) -> bool {
         })
 }
 
-fn read_secure_naia_credential(app: &tauri::AppHandle) -> Option<String> {
+pub(crate) fn read_secure_naia_credential(app: &tauri::AppHandle) -> Option<String> {
     let store_path = if debug_e2e_enabled() {
         std::env::var("NAIA_E2E_SECURE_STORE_FILE")
             .ok()
@@ -11361,6 +11361,9 @@ pub fn run() {
             app::app_read_file,
             app::app_run_shell,
             app::app_install,
+            app::app_store_has_entitlement,
+            app::app_store_purchase,
+            app::app_install_store,
             workspace::workspace_list_dirs,
             workspace::workspace_read_file,
             workspace::workspace_read_file_bytes,

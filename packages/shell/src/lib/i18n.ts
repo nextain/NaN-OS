@@ -34,6 +34,15 @@ function codingWorkerText(ko: string, en: string) {
 }
 
 const codingWorkerUxTranslations = {
+	"apps.loading": codingWorkerText("앱 목록을 불러오는 중…", "Loading apps…"),
+	"apps.empty": codingWorkerText("등록된 앱이 없습니다.", "No apps are available."),
+	"apps.loginRequired": codingWorkerText("Naia 로그인이 필요합니다.", "Sign in to Naia first."),
+	"apps.defaultDescription": codingWorkerText("Naia 앱", "Naia app"),
+	"apps.installing": codingWorkerText("권리 확인 및 설치 중…", "Checking ownership and installing…"),
+	"apps.install": codingWorkerText("{credits} 크레딧 · 설치", "{credits} credits · Install"),
+	"apps.installed": codingWorkerText("설치 완료: {name}", "Installed: {name}"),
+	"apps.purchasePersists": codingWorkerText("구매 권리는 삭제 후에도 유지됩니다.", "Your purchase remains after uninstalling."),
+	"apps.close": codingWorkerText("닫기", "Close"),
 	"workspace.terminalProcessExited": codingWorkerText(
 		"프로세스 종료",
 		"Process exited",

@@ -1,6 +1,77 @@
+use base64::Engine as _;
+use ed25519_dalek::{Signature, Verifier, VerifyingKey};
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
+use std::io::Read;
 
 use crate::home_dir;
+
+#[derive(Debug, Deserialize)]
+struct StoreArtifact {
+    sha256: String,
+    signature: String,
+    size: u64,
+    manifest: serde_json::Value,
+}
+
+#[derive(Debug, Deserialize)]
+struct StoreEntitlement {
+    app_id: String,
+    status: String,
+    download_path: String,
+    artifact: StoreArtifact,
+}
+
+const DEVELOPMENT_SIGNING_PUBLIC_KEY: &str = "Zs6yosNTo4pXUGywo6ArjncpDejTrI8FRwyEQ4N/aW4=";
+
+fn verify_artifact_signature(digest: &[u8], value: &str) -> Result<(), String> {
+    let encoded_key = option_env!("NAIA_APP_SIGNING_PUBLIC_KEY")
+        .or_else(|| cfg!(debug_assertions).then_some(DEVELOPMENT_SIGNING_PUBLIC_KEY))
+        .ok_or_else(|| "App signing public key is not configured".to_string())?;
+    let key_bytes = base64::engine::general_purpose::STANDARD
+        .decode(encoded_key)
+        .map_err(|_| "Invalid app signing public key".to_string())?;
+    let key_array: [u8; 32] = key_bytes
+        .try_into()
+        .map_err(|_| "Invalid app signing public key".to_string())?;
+    let signature_bytes = value
+        .strip_prefix("ed25519:")
+        .ok_or_else(|| "Artifact signature must use Ed25519".to_string())
+        .and_then(|encoded| {
+            base64::engine::general_purpose::STANDARD
+                .decode(encoded)
+                .map_err(|_| "Invalid artifact signature".to_string())
+        })?;
+    let signature = Signature::from_slice(&signature_bytes)
+        .map_err(|_| "Invalid artifact signature".to_string())?;
+    VerifyingKey::from_bytes(&key_array)
+        .map_err(|_| "Invalid app signing public key".to_string())?
+        .verify(digest, &signature)
+        .map_err(|_| "Artifact signature verification failed".to_string())
+}
+
+#[cfg(test)]
+mod store_signature_tests {
+    use super::*;
+
+    #[test]
+    fn verifies_reviewed_artifact_and_rejects_tampering() {
+        let digest = hex_digest("c7c5c1d70c5dec4416ab6158afd0b223ef40c29b1dc1f97ed9428b94d4cadb1c");
+        let signature = "ed25519:MAflm/6kjGbOv/DhK1uFg3qNlvftl0QB68FZ+X81cd7EJGBIdnQ804UUTaU13CaQ60pYADkv73V/0dZObK5gBw==";
+        assert!(verify_artifact_signature(&digest, signature).is_ok());
+        let mut tampered = digest;
+        tampered[0] ^= 1;
+        assert!(verify_artifact_signature(&tampered, signature).is_err());
+    }
+
+    fn hex_digest(value: &str) -> [u8; 32] {
+        let decoded = (0..value.len())
+            .step_by(2)
+            .map(|index| u8::from_str_radix(&value[index..index + 2], 16).unwrap())
+            .collect::<Vec<_>>();
+        decoded.try_into().unwrap()
+    }
+}
 
 /// Panel manifest stored in ~/.naia/apps/{id}/app.json
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -621,5 +692,253 @@ pub fn app_install(source: String) -> Result<AppInstallResult, String> {
         id,
         name: display_name,
         path: dest.to_string_lossy().into_owned(),
+    })
+}
+
+fn validated_store_gateway(raw: &str) -> Result<url::Url, String> {
+    let normalized = raw
+        .trim()
+        .replace("ws://", "http://")
+        .replace("wss://", "https://");
+    let mut url =
+        url::Url::parse(&normalized).map_err(|_| "Invalid App Store Gateway URL".to_string())?;
+    if !url.username().is_empty()
+        || url.password().is_some()
+        || url.query().is_some()
+        || url.fragment().is_some()
+    {
+        return Err("Invalid App Store Gateway URL".to_string());
+    }
+    let host = url
+        .host_str()
+        .ok_or_else(|| "Invalid App Store Gateway URL".to_string())?;
+    let production = url.scheme() == "https"
+        && host == "api.nextain.io"
+        && url.port_or_known_default() == Some(443);
+    let loopback = cfg!(debug_assertions)
+        && url.scheme() == "http"
+        && matches!(host, "localhost" | "127.0.0.1" | "::1");
+    if !production && !loopback {
+        return Err("Untrusted App Store Gateway origin".to_string());
+    }
+    url.set_path("/");
+    Ok(url)
+}
+
+fn store_client() -> Result<reqwest::blocking::Client, String> {
+    reqwest::blocking::Client::builder()
+        .redirect(reqwest::redirect::Policy::none())
+        .connect_timeout(std::time::Duration::from_secs(10))
+        .timeout(std::time::Duration::from_secs(60))
+        .build()
+        .map_err(|e| e.to_string())
+}
+
+fn store_key(app: &tauri::AppHandle) -> Result<String, String> {
+    crate::read_secure_naia_credential(app).ok_or_else(|| "Naia login required".to_string())
+}
+
+#[tauri::command]
+pub fn app_store_has_entitlement(
+    app: tauri::AppHandle,
+    app_id: String,
+    gateway_url: String,
+) -> Result<bool, String> {
+    validate_store_app_id(&app_id)?;
+    let endpoint = validated_store_gateway(&gateway_url)?
+        .join(&format!("v1/apps/entitlements/{app_id}"))
+        .map_err(|_| "Invalid entitlement endpoint".to_string())?;
+    let response = store_client()?
+        .get(endpoint)
+        .bearer_auth(store_key(&app)?)
+        .send()
+        .map_err(|e| format!("Entitlement check failed: {e}"))?;
+    if response.status() == reqwest::StatusCode::NOT_FOUND {
+        return Ok(false);
+    }
+    if !response.status().is_success() {
+        return Err(format!("Entitlement check failed ({})", response.status()));
+    }
+    let entitlement: StoreEntitlement = response
+        .json()
+        .map_err(|e| format!("Invalid entitlement: {e}"))?;
+    Ok(entitlement.app_id == app_id && entitlement.status == "GRANTED")
+}
+
+#[tauri::command]
+pub fn app_store_purchase(
+    app: tauri::AppHandle,
+    app_id: String,
+    gateway_url: String,
+    idempotency_key: String,
+) -> Result<(), String> {
+    validate_store_app_id(&app_id)?;
+    if idempotency_key.len() < 16 || idempotency_key.len() > 128 {
+        return Err("Invalid idempotency key".to_string());
+    }
+    let endpoint = validated_store_gateway(&gateway_url)?
+        .join("v1/apps/purchases")
+        .map_err(|_| "Invalid purchase endpoint".to_string())?;
+    let response = store_client()?
+        .post(endpoint)
+        .bearer_auth(store_key(&app)?)
+        .header("Idempotency-Key", idempotency_key)
+        .json(&serde_json::json!({ "app_id": app_id }))
+        .send()
+        .map_err(|e| format!("Purchase failed: {e}"))?;
+    if !response.status().is_success() {
+        return Err(format!("Purchase failed ({})", response.status()));
+    }
+    Ok(())
+}
+
+fn validate_store_app_id(app_id: &str) -> Result<(), String> {
+    let id_ok = !app_id.is_empty()
+        && app_id
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.'))
+        && !app_id.contains("..");
+    if id_ok {
+        Ok(())
+    } else {
+        Err("Invalid app id".to_string())
+    }
+}
+
+/// Install a reviewed Store ZIP only after the Gateway confirms ownership.
+#[tauri::command]
+pub fn app_install_store(
+    app: tauri::AppHandle,
+    app_id: String,
+    gateway_url: String,
+) -> Result<AppInstallResult, String> {
+    validate_store_app_id(&app_id)?;
+    let base = validated_store_gateway(&gateway_url)?;
+    let client = store_client()?;
+    let naia_key = store_key(&app)?;
+    let entitlement_url = base
+        .join(&format!("v1/apps/entitlements/{app_id}"))
+        .map_err(|_| "Invalid entitlement endpoint".to_string())?;
+    let entitlement: StoreEntitlement = client
+        .get(entitlement_url)
+        .bearer_auth(&naia_key)
+        .send()
+        .map_err(|e| format!("Entitlement check failed: {}", e))?
+        .error_for_status()
+        .map_err(|e| format!("No install entitlement: {}", e))?
+        .json()
+        .map_err(|e| format!("Invalid entitlement: {}", e))?;
+    if entitlement.app_id != app_id || entitlement.status != "GRANTED" {
+        return Err("App entitlement was not granted".to_string());
+    }
+    let expected_download_path = format!("/v1/apps/entitlements/{app_id}/artifact");
+    if entitlement.download_path != expected_download_path {
+        return Err("Invalid artifact download path".to_string());
+    }
+    let artifact = entitlement.artifact;
+    if artifact.manifest.get("id").and_then(|v| v.as_str()) != Some(app_id.as_str()) {
+        return Err("Artifact manifest mismatch".to_string());
+    }
+    const MAX_ARTIFACT_BYTES: u64 = 50 * 1024 * 1024;
+    const MAX_EXTRACTED_BYTES: u64 = 200 * 1024 * 1024;
+    const MAX_ARCHIVE_ENTRIES: usize = 4096;
+    if artifact.size == 0 || artifact.size > MAX_ARTIFACT_BYTES {
+        return Err("Artifact size is outside policy limits".to_string());
+    }
+    let artifact_url = base
+        .join(entitlement.download_path.trim_start_matches('/'))
+        .map_err(|_| "Invalid artifact download path".to_string())?;
+    let mut response = client
+        .get(artifact_url)
+        .bearer_auth(&naia_key)
+        .send()
+        .map_err(|e| format!("Artifact download failed: {}", e))?
+        .error_for_status()
+        .map_err(|e| format!("Artifact download failed: {}", e))?;
+    if response
+        .content_length()
+        .is_some_and(|length| length > MAX_ARTIFACT_BYTES || length != artifact.size)
+    {
+        return Err("Artifact size verification failed".to_string());
+    }
+    let mut bytes = Vec::with_capacity(artifact.size as usize);
+    response
+        .by_ref()
+        .take(MAX_ARTIFACT_BYTES + 1)
+        .read_to_end(&mut bytes)
+        .map_err(|e| e.to_string())?;
+    if bytes.len() as u64 != artifact.size {
+        return Err("Artifact size verification failed".to_string());
+    }
+    let digest_bytes = Sha256::digest(&bytes);
+    let digest = format!("{:x}", digest_bytes);
+    if !digest.eq_ignore_ascii_case(&artifact.sha256) {
+        return Err("Artifact SHA-256 verification failed".to_string());
+    }
+    verify_artifact_signature(digest_bytes.as_slice(), &artifact.signature)?;
+
+    let apps_root = std::path::PathBuf::from(home_dir())
+        .join(".naia")
+        .join("apps");
+    std::fs::create_dir_all(&apps_root).map_err(|e| e.to_string())?;
+    let temp = tempfile::Builder::new()
+        .prefix(".store-install-")
+        .tempdir_in(&apps_root)
+        .map_err(|e| e.to_string())?;
+    let mut archive = zip::ZipArchive::new(std::io::Cursor::new(bytes))
+        .map_err(|e| format!("Invalid app ZIP: {}", e))?;
+    if archive.len() > MAX_ARCHIVE_ENTRIES {
+        return Err("App ZIP contains too many entries".to_string());
+    }
+    let mut extracted_bytes = 0_u64;
+    for index in 0..archive.len() {
+        let mut file = archive.by_index(index).map_err(|e| e.to_string())?;
+        if file
+            .unix_mode()
+            .is_some_and(|mode| mode & 0o170000 == 0o120000)
+        {
+            return Err("Symlinks are not allowed in app ZIPs".to_string());
+        }
+        extracted_bytes = extracted_bytes
+            .checked_add(file.size())
+            .ok_or_else(|| "App ZIP size overflow".to_string())?;
+        if extracted_bytes > MAX_EXTRACTED_BYTES {
+            return Err("Expanded app exceeds policy limits".to_string());
+        }
+        let relative = file
+            .enclosed_name()
+            .ok_or_else(|| "Unsafe path in app ZIP".to_string())?;
+        let output = temp.path().join(relative);
+        if file.is_dir() {
+            std::fs::create_dir_all(&output).map_err(|e| e.to_string())?;
+            continue;
+        }
+        if let Some(parent) = output.parent() {
+            std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+        }
+        let mut target = std::fs::File::create(&output).map_err(|e| e.to_string())?;
+        std::io::copy(&mut file, &mut target).map_err(|e| e.to_string())?;
+    }
+    let manifest_path = temp.path().join("app.json");
+    let manifest: AppManifest = serde_json::from_reader(
+        std::fs::File::open(&manifest_path).map_err(|_| "app.json missing".to_string())?,
+    )
+    .map_err(|e| format!("Invalid app.json: {}", e))?;
+    if manifest.id != app_id {
+        return Err("Installed manifest id mismatch".to_string());
+    }
+    if !temp.path().join("index.html").is_file() {
+        return Err("index.html missing".to_string());
+    }
+    let destination = apps_root.join(&app_id);
+    if destination.exists() {
+        return Err("App is already installed; remove it before reinstalling".to_string());
+    }
+    let kept = temp.keep();
+    std::fs::rename(&kept, &destination).map_err(|e| format!("Install finalize failed: {}", e))?;
+    Ok(AppInstallResult {
+        id: app_id,
+        name: manifest.name,
+        path: destination.to_string_lossy().into_owned(),
     })
 }

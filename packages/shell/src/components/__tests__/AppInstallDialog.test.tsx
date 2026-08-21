@@ -1,47 +1,49 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("@tauri-apps/api/event", () => ({
-	listen: vi.fn().mockResolvedValue(() => {}),
+const mocks = vi.hoisted(() => ({
+	invoke: vi.fn(), entitlement: vi.fn(), purchase: vi.fn(), reload: vi.fn(),
 }));
-vi.mock("../../lib/chat-service", () => ({
-	sendPanelInstall: vi.fn().mockResolvedValue(undefined),
+vi.mock("@tauri-apps/api/core", () => ({ invoke: mocks.invoke }));
+vi.mock("../../lib/app-store-client", async (original) => ({
+	...(await original<typeof import("../../lib/app-store-client")>()),
+	listStoreProducts: vi.fn().mockResolvedValue([{ id: "p1", app_id: "land.naia.slides", version: "1.0.0", price_credits: "10", manifest: { name: "Naia Slides", description: "Slides" } }]),
+	hasStoreEntitlement: mocks.entitlement,
+	purchaseStoreApp: mocks.purchase,
+	getStoreGatewayUrl: vi.fn().mockReturnValue("http://localhost:8000"),
 }));
-vi.mock("../../lib/app-loader", () => ({
-	loadInstalledApps: vi.fn().mockResolvedValue(undefined),
-}));
-vi.mock("../../lib/logger", () => ({
-	Logger: { info: vi.fn(), debug: vi.fn(), warn: vi.fn(), error: vi.fn() },
-}));
-vi.mock("../../stores/app", () => ({
-	useAppStore: (selector: (s: unknown) => unknown) =>
-		selector({ pushModal: vi.fn(), popModal: vi.fn() }),
-}));
+vi.mock("../../lib/app-loader", () => ({ loadInstalledApps: mocks.reload }));
+vi.mock("../../stores/app", () => ({ useAppStore: (selector: (s: unknown) => unknown) => selector({ pushModal: vi.fn(), popModal: vi.fn() }) }));
 
 import { AppInstallDialog } from "../AppInstallDialog";
 
-const addButton = () =>
-	screen.getByRole("button", { name: "추가" }) as HTMLButtonElement;
+describe("AppInstallDialog store install", () => {
+	beforeEach(() => {
+		vi.clearAllMocks();
+		mocks.entitlement.mockReset();
+		mocks.purchase.mockReset();
+		mocks.invoke.mockReset().mockResolvedValue({ id: "land.naia.slides", name: "Naia Slides", path: "/tmp/slides" });
+	});
+	afterEach(cleanup);
 
-describe("AppInstallDialog — zip gating (#358 / #359)", () => {
-	beforeEach(() => vi.clearAllMocks());
-	afterEach(() => cleanup());
-
-	it("Git URL tab: Add is disabled until a URL is entered, then enabled", () => {
+	it("purchases only when ownership is absent, then installs through native verification", async () => {
+		mocks.entitlement.mockResolvedValueOnce(false).mockResolvedValueOnce(true);
 		render(<AppInstallDialog onClose={() => {}} />);
-		expect(addButton().disabled).toBe(true);
-		fireEvent.change(screen.getByPlaceholderText(/github\.com/), {
-			target: { value: "https://github.com/example/my-panel.git" },
-		});
-		expect(addButton().disabled).toBe(false);
+		fireEvent.click(await screen.findByRole("button", { name: /10 (?:크레딧|credits)/i }));
+		await waitFor(() => expect(mocks.invoke).toHaveBeenCalledWith("app_install_store", { appId: "land.naia.slides", gatewayUrl: "http://localhost:8000" }));
+		expect(mocks.purchase).toHaveBeenCalledWith("land.naia.slides");
+		expect(mocks.reload).toHaveBeenCalled();
 	});
 
-	it("Zip tab is gated: shows an in-development notice and keeps Add disabled", () => {
+	it("does not purchase when entitlement verification itself fails", async () => {
+		mocks.entitlement.mockRejectedValue(new Error("offline"));
 		render(<AppInstallDialog onClose={() => {}} />);
-		fireEvent.click(screen.getByRole("button", { name: /파일 \(Zip/ }));
-		expect(screen.getByText(/보안 강화 작업 중/)).toBeTruthy();
-		// Even after switching to the zip tab, install must stay disabled.
-		expect(addButton().disabled).toBe(true);
+		const install = await screen.findByRole("button", { name: /10 (?:크레딧|credits)/i });
+		fireEvent.click(install);
+		await waitFor(() => expect(install).not.toBeDisabled());
+		expect(mocks.entitlement).toHaveBeenCalledTimes(1);
+		expect(mocks.purchase).not.toHaveBeenCalled();
+		expect(mocks.invoke).not.toHaveBeenCalled();
 	});
 });

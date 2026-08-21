@@ -40,6 +40,7 @@ sha2 = "0.10"
 rustls = { version = "0.23", default-features = false, features = ["ring"] }
 futures-util = "0.3"
 base64 = "0.22"
+ed25519-dalek = "2"
 rusqlite = { version = "0.32", features = ["bundled"] }
 tauri-plugin-dialog = "2.6.0"
 tauri-plugin-deep-link = "2"
