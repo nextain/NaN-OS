@@ -837,6 +837,7 @@ describe("clean-checkout build order", () => {
 		expect(tauriBuild).toBeGreaterThan(preserveNativeRuntime);
 		expect(clearBundle).toBeGreaterThan(preserveNativeRuntime);
 		expect(tauriBuild).toBeGreaterThan(clearBundle);
+		expect(source).toContain('process.env.NAIA_TAURI_NO_BUNDLE === "1"');
 	});
 });
 
@@ -890,6 +891,28 @@ describe("installer workflow integration contracts", () => {
 		expect(workflow).toContain('sudo apt-get install -y "$DEB"');
 		expect(workflow).toContain('RESOURCE_DIR="/usr/lib/$PRODUCT_NAME"');
 		expect(workflow).not.toContain('RESOURCE_DIR="/usr/lib/naia-shell"');
+	});
+
+	it("signs every Windows PE payload before creating and signing installers", () => {
+		const noBundleBuild = workflow.indexOf("NAIA_TAURI_NO_BUNDLE");
+		const payloadSigning = workflow.indexOf(
+			"Publicly sign Windows application payload",
+		);
+		const bundleSignedPayload = workflow.indexOf(
+			"Bundle signed Windows application payload",
+		);
+		const installerSigning = workflow.indexOf(
+			"Publicly sign Windows installers",
+		);
+
+		expect(noBundleBuild).toBeGreaterThan(-1);
+		expect(payloadSigning).toBeGreaterThan(noBundleBuild);
+		expect(bundleSignedPayload).toBeGreaterThan(payloadSigning);
+		expect(installerSigning).toBeGreaterThan(bundleSignedPayload);
+		expect(workflow).toContain("files-folder-filter: exe,dll,pyd,node");
+		expect(workflow).toContain("append-signature: true");
+		expect(workflow).toContain("tauri bundle --verbose");
+		expect(workflow).toContain("--config src-tauri/tauri.conf.generated.json");
 	});
 
 	it("builds a directly launchable Steam depot without the NSIS uninstaller", () => {

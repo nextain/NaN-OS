@@ -751,10 +751,10 @@ async function main() {
 		recursive: true,
 		force: true,
 	});
-	run(
-		"pnpm exec tauri build --verbose --config src-tauri/tauri.conf.generated.json",
-		SHELL,
-	);
+	const tauriBuildCommand =
+		"pnpm exec tauri build --verbose --config src-tauri/tauri.conf.generated.json" +
+		(process.env.NAIA_TAURI_NO_BUNDLE === "1" ? " --no-bundle" : "");
+	run(tauriBuildCommand, SHELL);
 }
 
 // vitest 가 순수 함수만 import 할 수 있도록 main 은 직접 실행 시에만.
