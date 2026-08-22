@@ -1,5 +1,10 @@
 {
   "bindings": {
+    "01a01d07-09a8-7723-bc68-70539203b8b6": {
+      "contract_id": "issue-468-startup-updater-prompt",
+      "contract_path": ".agents/session-contracts/issue-468-startup-updater-prompt.json",
+      "contract_digest": "a89f0f9aa7fc0a3e65b8284c636a15dd095a8bc6f1e33e488b260b24feb9f485"
+    },
     "01a0004a-f64e-73b0-82da-c1069dece3bd": {
       "contract_id": "issue-447-v017-launch-qa",
       "contract_path": ".agents/session-contracts/issue-447-v017-launch-qa.json",

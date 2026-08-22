@@ -50,7 +50,7 @@ import {
 	type StepInput,
 	makeOnboardingSession,
 } from "../lib/onboarding-core";
-import { saveSecretKey } from "../lib/secure-store";
+import { deleteSecretKey, saveSecretKey } from "../lib/secure-store";
 import { NAIA_SLOT_DEFAULTS, applyNaiaSlotDefaults } from "../lib/slots/model";
 import {
 	clearLocalVoiceAccessToken,
@@ -536,7 +536,15 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
 				.setLocalFacadeUrl(localVoiceFacadeUrlFromReady(ready));
 			setLocalVoiceEnabled(true);
 		} catch (error) {
-			setLocalVoiceMsg(`${t("settings.cascadeError")}: ${String(error)}`);
+			if (String(error).includes("voxcpm2_naia_member_login_required")) {
+				await deleteSecretKey("naiaKey");
+				localStorage.removeItem("naia-remote-key");
+				setNaiaLoginDone(false);
+				setLocalVoiceEnabled(false);
+				setLocalVoiceMsg(t("settings.ttsNaiaRequired"));
+			} else {
+				setLocalVoiceMsg(`${t("settings.cascadeError")}: ${String(error)}`);
+			}
 		} finally {
 			setLocalVoiceBusy(false);
 		}

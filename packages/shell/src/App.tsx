@@ -14,6 +14,7 @@ import { OnboardingWizard } from "./components/OnboardingWizard";
 import { SplashScreen } from "./components/SplashScreen";
 import { TitleBar } from "./components/TitleBar";
 import { UpdateBanner } from "./components/UpdateBanner";
+import { UpdatePrompt } from "./components/UpdatePrompt";
 import { VideoAvatarCanvas } from "./components/VideoAvatarCanvas";
 import { getBridgeForPanel } from "./lib/active-bridge";
 import {
@@ -67,7 +68,12 @@ import { setLocale } from "./lib/i18n";
 import { startIframeBridge } from "./lib/iframe-bridge";
 import { shouldMigrateNextainModel } from "./lib/llm/registry";
 import { Logger } from "./lib/logger";
-import { type UpdateInfo, checkForUpdate } from "./lib/updater";
+import {
+	type UpdateInfo,
+	checkForUpdate,
+	shouldShowStartupUpdatePrompt,
+	snoozeStartupUpdatePrompt,
+} from "./lib/updater";
 import { useAvatarStore } from "./stores/avatar";
 import "./apps/browser/index"; // register browser panel
 import "./apps/workspace/index"; // register workspace panel
@@ -279,7 +285,11 @@ export function App() {
 	// until localStorage has been hydrated FROM naia-settings files, so the stale
 	// pre-hydration cache can never be written back into config.json.
 	const configHydratedRef = useRef(false);
+	const startupUpdateCheckRef = useRef<ReturnType<typeof checkForUpdate> | null>(
+		null,
+	);
 	const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
+	const [showUpdatePrompt, setShowUpdatePrompt] = useState(false);
 	const [announcements, setAnnouncements] = useState<Announcement[]>([]);
 	const backgroundVideoUrl = useAvatarStore((s) => s.backgroundVideoUrl);
 	const backgroundMediaType = useAvatarStore((s) => s.backgroundMediaType);
@@ -664,11 +674,17 @@ export function App() {
 				});
 			});
 		let active = true;
-		checkForUpdate()
-			.then((info) => {
-				if (active && info) setUpdateInfo(info);
-			})
-			.catch(() => {});
+		if (isOnboardingComplete()) {
+			startupUpdateCheckRef.current ??= checkForUpdate();
+			startupUpdateCheckRef.current
+				.then((info) => {
+					if (!active || !info) return;
+					if (!shouldShowStartupUpdatePrompt(info.version)) return;
+					setUpdateInfo(info);
+					setShowUpdatePrompt(true);
+				})
+				.catch(() => {});
+		}
 		fetchUnreadAnnouncements()
 			.then((list) => {
 				if (active && list.length > 0) setAnnouncements(list);
@@ -1049,7 +1065,19 @@ export function App() {
 						title={appTitle}
 					/>
 
-					{updateInfo && !showOnboarding && (
+					{updateInfo && showUpdatePrompt && !showOnboarding && (
+						<UpdatePrompt
+							info={updateInfo}
+							onLater={(snoozeForMonth) => {
+								setShowUpdatePrompt(false);
+								if (snoozeForMonth) {
+									snoozeStartupUpdatePrompt(updateInfo.version);
+									setUpdateInfo(null);
+								}
+							}}
+						/>
+					)}
+					{updateInfo && !showUpdatePrompt && !showOnboarding && (
 						<UpdateBanner
 							info={updateInfo}
 							onDismiss={() => setUpdateInfo(null)}
@@ -1217,6 +1245,10 @@ export function App() {
 								{showOnboarding ? (
 									<OnboardingWizard
 										onComplete={() => {
+											const completedConfig = loadConfig();
+											if (completedConfig?.ttsEnabled !== undefined) {
+												setTtsEnabled(completedConfig.ttsEnabled);
+											}
 											Logger.info(
 												"App",
 												"Onboarding complete — mounting main app panels",

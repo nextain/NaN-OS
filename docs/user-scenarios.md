@@ -1,4 +1,4 @@
-# 사용자 시나리오 (P01) + 테스트 커버리지 맵 — 2단계 산출물
+﻿# 사용자 시나리오 (P01) + 테스트 커버리지 맵 — 2단계 산출물
 
 > **현재 Windows 로컬 표현 시나리오:** GPU 감지는 온보딩에서 로컬 음성 사용 가능성만 안내하며 프로파일을 자동 활성화하지 않는다. 사용자는 이후 음성 설정에서 로컬 음성과 레퍼런스 음성을 선택한다. 사전 생성 NVA 외모는 GPU 프로파일과 독립적으로 선택한다. 과거 8GB 서버 렌더링 NVA 기록은 [`windows-8gb-nva.md`](windows-8gb-nva.md)에 보존한다.
 
@@ -840,6 +840,7 @@ P02 release-state matrix: build preparation, missing required runtime, successfu
 | **UC-V017-VOXCPM2-PUBLIC-DOWNLOAD** | A release operator can build only when the tracked public runtime URL answers without credentials, advertises the exact selected ZIP length, and serves byte ranges. A wrong R2 host or disabled public endpoint fails staging before either installer is created, so a download page cannot publish an installer that deterministically receives HTTP 401. | URL/probe unit tests + live HEAD/range preflight + packaged manifest inspection |
 | **UC-V017-WINDOWS-UPDATE-CLEANUP** | Updating Naia preserves user memory and workspaces but replaces installer-owned Agent, sidecar, runtime, and dependency trees, including stale files absent from the new release. A full uninstall leaves neither the Naia install directory nor app-owned WebView/bootstrap state; reinstall therefore cannot execute an old Agent or old `node_modules`. | NSIS/WiX contract tests + stale-file update mutation + uninstall/reinstall residue smoke |
 | **UC-V017-VOXCPM2-PAYLOAD-UPGRADE** (#465) | A member upgrading from a release whose cached payload installs only the default voice does not see a false success followed by `VOXCPM2_REFERENCE_VOICE_MISSING`. Shell compares the installed control files with its packaged installer and activation contract, reuses the verified local runtime ZIP to atomically refresh a stale payload, installs the complete current voice palette, and reaches ready without another runtime archive download. | default-only stale-payload mutation + control-file digest regression + cached-ZIP upgrade/install smoke |
+| **UC-V017-VOXCPM2-ENTITLEMENT-RECOVERY** (#470) | A signed-in member whose stored Naia credential is rejected with HTTP 401/403 starts local VoxCPM2 and sees a localized login-required recovery instead of an installed-but-not-ready generic failure. Shell clears only the rejected credential and keeps the local runtime installed. FREE/inactive membership and unavailable gateway failures remain distinct, fail closed, and preserve the credential for retry. No credential, account identifier, response body, or endpoint appears in stdout, logs, or IPC errors. | runtime BASIC/PRO/FREE/401/403/5xx/transport pytest + bounded startup envelope tests + Rust pre-readiness parser/mapping + Settings rejected/unavailable component tests |
 
 ### 2026-08-14 v0.1.7 launch QA (#447)
 
@@ -859,5 +860,25 @@ P02 상태 매트릭스: 신규 기본, ADK 경로 저장 중, Agent 재시작 �
 | **UC-V020-WINDOWS-SIGNED-UPDATE** | Windows v0.1.9에서 업데이트를 확인하면 v0.2.0을 발견하고, 서명된 단일 `windows-x86_64` updater 산출물을 내려받아 설치한 뒤 재실행한 앱이 v0.2.0을 보고한다. 비밀키·비밀번호는 빌드 로그와 Git 추적 파일에 나타나지 않는다. | platform matrix/config golden, signed artifact/signature existence and public-key verification, installed v0.1.9 field acceptance |
 | **UC-V020-LEGACY-FEED-COMPATIBILITY** | v0.1.9가 내장한 이전 `nextain/naia-os/releases/latest/download/latest.json` 주소와 v0.2.0의 정본 `nextain/naia-shell` 주소가 같은 검증된 v0.2.0 바이트·서명을 가리킨다. | 두 공개 endpoint의 unauthenticated HTTP/schema/URL/signature/hash probe |
 | **UC-V020-UPDATER-FAILURE-HONESTY** | 네트워크, JSON 형식, 플랫폼 키 또는 서명 검증이 실패하면 설정 화면은 실패 상태를 표시하며 “최신 버전”으로 오표시하지 않는다. 정상적으로 업데이트 없음이 확인된 경우에만 최신 상태를 표시한다. | `src/lib/__tests__/updater.test.ts`, `SettingsTab` 업데이트 상태 계약 |
+| **UC-UPDATE-STARTUP-PROMPT** (#468) | 온보딩을 마친 사용자가 Naia를 실행했을 때 새 버전이 있으면 현재/새 버전과 업데이트 내용을 담은 팝업을 본다. 다운로드와 설치는 `지금 업데이트`를 직접 누른 뒤에만 시작한다. `나중에`를 선택하면 팝업은 닫히고 기존 업데이트 배너에서 다시 선택할 수 있으며, 확인 실패는 앱 시작을 막지 않는다. | `UpdatePrompt` component tests + `startup-update-prompt.spec.ts` consent/banner acceptance |
+| **UC-UPDATE-30-DAY-DEFERRAL** (#468) | 사용자가 `한 달간 보지 않기`를 체크하고 `나중에`를 선택하면 같은 버전의 팝업과 배너가 30일 동안 나타나지 않는다. 30일이 지나거나 그 전에 더 새 버전이 배포되면 팝업이 다시 나타난다. 손상된 유예 기록은 업데이트를 영구히 숨기지 않는다. | deterministic snooze storage tests + same-version reload/new-version Playwright acceptance |
 
+P02 상태 매트릭스: 업데이트 없음, 새 버전 팝업, 동의 전 무설치, 지금 업데이트, 나중에+배너 유지, 30일 유예 중 같은 버전, 유예 중 더 새 버전, 유예 만료, 손상된 유예 기록, endpoint 404, malformed JSON, 기본 target과 다른 플랫폼 키, 잘못된 서명, 정본/호환 feed 불일치, 릴리즈 asset hash 불일치를 각각 독립 검증한다. 기본 Tauri target은 `windows-x86_64` 하나이며 NSIS를 정본 updater 산출물로 사용한다. MSI와 그 서명도 수동 설치·무결성 산출물로 함께 배포하지만 같은 기본 target 아래 두 URL을 위조하지 않는다.
 P02 상태 매트릭스: 업데이트 없음, v0.2.0 발견, 다운로드·설치·재실행, endpoint 404, malformed JSON, 기본 target과 다른 플랫폼 키, 잘못된 서명, 정본/호환 feed 불일치, 릴리즈 asset hash 불일치를 각각 독립 검증한다. 기본 Tauri target은 `windows-x86_64` 하나이며 NSIS를 정본 updater 산출물로 사용한다. MSI와 그 서명도 수동 설치·무결성 산출물로 함께 배포하지만 같은 기본 target 아래 두 URL을 위조하지 않는다.
+
+### 2026-08-20 v0.2.1 installed app lifecycle (#472)
+
+| Scenario | User-observable outcome | Coverage |
+|---|---|---|
+| **UC-V021-APP-INSTALL-LIFECYCLE** | 깨끗한 프로필에서 앱 설치 후 즉시 목록과 탭에 나타나고 재시작 뒤에도 유지되며, 제거 성공 뒤 `~/.naia/apps/{id}`와 목록에서 함께 사라진다. 예전 `~/.naia/panels` 설치는 안전한 경우 한 번만 이동한다. | isolated filesystem lifecycle + loader tests |
+| **UC-V021-APP-REMOVE-HONESTY** | 삭제 권한·파일시스템 오류가 나면 앱은 목록에 남고 실패 알림이 표시된다. symlink, 경로 탈출, 잘못된/중복 id는 외부 파일을 변경하지 않는다. | Rust boundary mutations + AppBar alert contract |
+
+P02 상태 매트릭스: clean install/list/restart/remove/list, legacy migration, canonical duplicate, malformed id, symlink escape, 중간 삭제 실패를 각각 검증한다.
+### 2026-08-20 v0.2.1 Workspace Markdown viewer (#474)
+
+| Scenario | User-observable outcome | Coverage |
+|---|---|---|
+| **UC-V021-WORKSPACE-MARKDOWN** | Linux Workspace의 FileTree에서 Markdown 문서를 선택하면 GFM 미리보기가 기본으로 열리고, 원문 보기와 탭 재진입이 동작한다. 문서 상대 링크는 같은 Workspace 탭 흐름으로 열리며 로컬 이미지는 안전한 Workspace 읽기 경로를 사용한다. | Markdown component + editor viewer + Linux Chromium FileTree test |
+| **UC-V021-MARKDOWN-BOUNDARY** | raw HTML/script와 `javascript:` 및 Workspace 밖 상대 경로는 실행·열기되지 않는다. 외부 HTTP(S) 링크는 외부 링크임을 알리고 시스템 opener를 명시적으로 호출하며, 누락 이미지·읽기 실패·5 MiB 초과 문서는 복구 가능한 오류로 표시된다. | resolver, opener, missing-image, load-limit and accessibility assertions |
+
+P02 상태 매트릭스: `.md`/`.markdown`, preview/source 전환, GFM 표·체크리스트·취소선·코드 펜스, 문서/루트 상대 링크, 로컬/누락 이미지, HTTP(S)/위험 URL, 경계 밖 traversal, raw HTML, 읽기 실패와 대용량 거부, 키보드 포커스를 각각 검증한다.

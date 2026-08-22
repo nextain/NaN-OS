@@ -3,7 +3,7 @@ import { listen } from "@tauri-apps/api/event";
 import { homeDir, join } from "@tauri-apps/api/path";
 import { open } from "@tauri-apps/plugin-dialog";
 import { openUrl } from "@tauri-apps/plugin-opener";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
 	copyBundledAssets,
 	getAdkPath,
@@ -77,6 +77,7 @@ export function AdkSetupScreen({ onComplete }: AdkSetupScreenProps) {
 	const [newDefaultPath, setNewDefaultPath] = useState("~/naia-adk");
 	const [error, setError] = useState<string | null>(null);
 	const [setupStatus, setSetupStatus] = useState<SetupStatus>(null);
+	const setupOperationRef = useRef(false);
 	const [downloadProgress, setDownloadProgress] = useState<string | null>(null);
 	// State of the chosen ADK directory when entering new_exists mode.
 	// "has_settings" → existing naia ADK (both "use as-is" and "delete" make sense)
@@ -86,6 +87,19 @@ export function AdkSetupScreen({ onComplete }: AdkSetupScreenProps) {
 	>(null);
 	const [loginWaiting, setLoginWaiting] = useState(false);
 	const [loginTimeout, setLoginTimeout] = useState(false);
+
+	function beginSetupOperation(initialStatus: Exclude<SetupStatus, null>) {
+		if (setupOperationRef.current) return false;
+		setupOperationRef.current = true;
+		setError(null);
+		setSetupStatus(initialStatus);
+		return true;
+	}
+
+	function releaseSetupOperation() {
+		setupOperationRef.current = false;
+		setSetupStatus(null);
+	}
 
 	useEffect(() => {
 		getDefaultAdkPath().then(setDefaultPath);
@@ -203,6 +217,7 @@ export function AdkSetupScreen({ onComplete }: AdkSetupScreenProps) {
 	}
 
 	async function handleNewStart() {
+		if (!beginSetupOperation("initializing")) return;
 		try {
 			const adkPath = path.trim() || newDefaultPath;
 			// inspect_adk_dir → "empty" | "has_settings" | "has_other_files" | "missing"
@@ -211,6 +226,7 @@ export function AdkSetupScreen({ onComplete }: AdkSetupScreenProps) {
 			// "Directory is not empty" error from clone_naia_adk (#325).
 			const state = await invoke<string>("inspect_adk_dir", { adkPath });
 			if (state === "has_settings" || state === "has_other_files") {
+				releaseSetupOperation();
 				setDirState(state);
 				setPath(adkPath);
 				setMode("new_exists");
@@ -222,7 +238,6 @@ export function AdkSetupScreen({ onComplete }: AdkSetupScreenProps) {
 			await invoke("init_naia_settings", { adkPath });
 			setSetupStatus("copyingAssets");
 			await copyBundledAssets(adkPath);
-			setSetupStatus(null);
 			clearAllLocalData();
 			localStorage.setItem(
 				"naia-config",
@@ -231,19 +246,18 @@ export function AdkSetupScreen({ onComplete }: AdkSetupScreenProps) {
 			await setAdkPath(adkPath);
 			onComplete();
 		} catch (err) {
-			setSetupStatus(null);
+			releaseSetupOperation();
 			setError(String(err));
 		}
 	}
 
 	async function handleNewUseExisting() {
+		if (!beginSetupOperation("initializing")) return;
 		try {
 			const adkPath = path.trim() || newDefaultPath;
-			setSetupStatus("initializing");
 			await invoke("init_naia_settings", { adkPath });
 			setSetupStatus("copyingAssets");
 			await copyBundledAssets(adkPath);
-			setSetupStatus(null);
 			clearAllLocalData();
 			const fileConfig = await readNaiaConfig();
 			if (fileConfig) {
@@ -260,15 +274,15 @@ export function AdkSetupScreen({ onComplete }: AdkSetupScreenProps) {
 			await setAdkPath(adkPath);
 			onComplete();
 		} catch (err) {
-			setSetupStatus(null);
+			releaseSetupOperation();
 			setError(String(err));
 		}
 	}
 
 	async function handleNewRecreate() {
+		if (!beginSetupOperation("deleting")) return;
 		try {
 			const adkPath = path.trim() || newDefaultPath;
-			setSetupStatus("deleting");
 			await invoke("delete_naia_adk", { adkPath });
 			setSetupStatus("cloning");
 			await invoke("clone_naia_adk", { adkPath });
@@ -276,7 +290,6 @@ export function AdkSetupScreen({ onComplete }: AdkSetupScreenProps) {
 			await invoke("init_naia_settings", { adkPath });
 			setSetupStatus("copyingAssets");
 			await copyBundledAssets(adkPath);
-			setSetupStatus(null);
 			clearAllLocalData();
 			localStorage.setItem(
 				"naia-config",
@@ -285,7 +298,7 @@ export function AdkSetupScreen({ onComplete }: AdkSetupScreenProps) {
 			await setAdkPath(adkPath);
 			onComplete();
 		} catch (err) {
-			setSetupStatus(null);
+			releaseSetupOperation();
 			setError(String(err));
 		}
 	}
@@ -296,13 +309,12 @@ export function AdkSetupScreen({ onComplete }: AdkSetupScreenProps) {
 			setError(t("adk.setup.load.error"));
 			return;
 		}
+		if (!beginSetupOperation("initializing")) return;
 		try {
 			// Ensure naia-settings subfolders and bundled defaults exist.
-			setSetupStatus("initializing");
 			await invoke("init_naia_settings", { adkPath: trimmed });
 			setSetupStatus("copyingAssets");
 			await copyBundledAssets(trimmed);
-			setSetupStatus(null);
 			// Restore config from the selected ADK folder, then mark onboarding done
 			const fileConfig = await readNaiaConfig();
 			const base = fileConfig ?? {};
@@ -315,7 +327,7 @@ export function AdkSetupScreen({ onComplete }: AdkSetupScreenProps) {
 			await setAdkPath(trimmed);
 			onComplete();
 		} catch (err) {
-			setSetupStatus(null);
+			releaseSetupOperation();
 			setError(String(err));
 		}
 	}
@@ -433,6 +445,8 @@ export function AdkSetupScreen({ onComplete }: AdkSetupScreenProps) {
 				<button
 					type="button"
 					className="adk-setup-back"
+					disabled={setupStatus !== null}
+					aria-busy={setupStatus !== null}
 					onClick={() => {
 						setMode("select");
 						setError(null);
@@ -454,6 +468,7 @@ export function AdkSetupScreen({ onComplete }: AdkSetupScreenProps) {
 						<input
 							type="text"
 							className="adk-setup-input"
+							disabled={setupStatus !== null}
 							value={path || newDefaultPath}
 							onChange={(e) => setPath(e.target.value)}
 							placeholder={newDefaultPath}
@@ -461,6 +476,7 @@ export function AdkSetupScreen({ onComplete }: AdkSetupScreenProps) {
 						<button
 							type="button"
 							className="adk-setup-browse-btn"
+							disabled={setupStatus !== null}
 							onClick={async () => {
 								const selected = await open({
 									directory: true,
@@ -496,6 +512,7 @@ export function AdkSetupScreen({ onComplete }: AdkSetupScreenProps) {
 				<button
 					type="button"
 					className="adk-setup-back"
+					disabled={setupStatus !== null}
 					onClick={() => {
 						setMode("new");
 						setError(null);
@@ -571,6 +588,7 @@ export function AdkSetupScreen({ onComplete }: AdkSetupScreenProps) {
 				<button
 					type="button"
 					className="adk-setup-back"
+					disabled={setupStatus !== null}
 					onClick={() => {
 						setMode("select");
 						setError(null);
@@ -592,6 +610,7 @@ export function AdkSetupScreen({ onComplete }: AdkSetupScreenProps) {
 						<input
 							type="text"
 							className="adk-setup-input"
+							disabled={setupStatus !== null}
 							value={path}
 							onChange={(e) => {
 								setPath(e.target.value);
@@ -604,6 +623,7 @@ export function AdkSetupScreen({ onComplete }: AdkSetupScreenProps) {
 						<button
 							type="button"
 							className="adk-setup-browse-btn"
+							disabled={setupStatus !== null}
 							onClick={handleBrowse}
 						>
 							{t("adk.setup.browse")}

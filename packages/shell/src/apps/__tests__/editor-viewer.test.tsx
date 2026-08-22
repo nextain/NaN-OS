@@ -361,7 +361,11 @@ describe("Editor — file type helpers (via render behaviour)", () => {
 
 	it("renders Mermaid diagram in Markdown preview", async () => {
 		const mdContent = "# Test\n\n```mermaid\ngraph TD;\n  A-->B;\n```\n";
-		mockInvoke.mockResolvedValueOnce(mdContent);
+		mockInvoke.mockImplementation((cmd: string) =>
+			Promise.resolve(
+				cmd === "workspace_file_size" ? mdContent.length : mdContent,
+			),
+		);
 		render(<Editor filePath="/docs/readme.md" />);
 		// Markdown preview mode — mermaid.render should be called
 		await waitFor(() => {
@@ -378,7 +382,11 @@ describe("Editor — file type helpers (via render behaviour)", () => {
 	it("shows error for invalid Mermaid syntax", async () => {
 		mockRender.mockRejectedValueOnce(new Error("Parse error"));
 		const mdContent = "```mermaid\ninvalid syntax\n```\n";
-		mockInvoke.mockResolvedValueOnce(mdContent);
+		mockInvoke.mockImplementation((cmd: string) =>
+			Promise.resolve(
+				cmd === "workspace_file_size" ? mdContent.length : mdContent,
+			),
+		);
 		render(<Editor filePath="/docs/bad.md" />);
 		await waitFor(() =>
 			expect(screen.getByText(/Mermaid 오류/)).toBeInTheDocument(),
@@ -391,6 +399,9 @@ describe("Editor — file type helpers (via render behaviour)", () => {
 		await waitFor(() =>
 			expect(screen.getByText(/파일을 열 수 없습니다/)).toBeInTheDocument(),
 		);
+		expect(
+			screen.getByRole("button", { name: "다시 시도" }),
+		).toBeInTheDocument();
 	});
 
 	it("shows reload button in editor header", async () => {
@@ -419,7 +430,9 @@ describe("Editor — file type helpers (via render behaviour)", () => {
 	});
 
 	it("markdown files open in preview mode by default", async () => {
-		mockInvoke.mockResolvedValueOnce("# Hello");
+		mockInvoke.mockImplementation((cmd: string) =>
+			Promise.resolve(cmd === "workspace_file_size" ? 7 : "# Hello"),
+		);
 		render(<Editor filePath="/docs/readme.md" />);
 		await waitFor(() =>
 			// Preview mode shows "편집" button to switch to edit mode
@@ -428,5 +441,21 @@ describe("Editor — file type helpers (via render behaviour)", () => {
 		// The preview div should be rendered
 		const preview = document.querySelector(".workspace-editor__preview");
 		expect(preview).toBeInTheDocument();
+	});
+
+	it("rejects oversized Markdown before reading its contents", async () => {
+		mockInvoke.mockImplementation((cmd: string) => {
+			if (cmd === "workspace_file_size")
+				return Promise.resolve(6 * 1024 * 1024);
+			return Promise.resolve("must not be read");
+		});
+		render(<Editor filePath="/docs/huge.markdown" />);
+		await waitFor(() =>
+			expect(screen.getByText(/5 MiB 미리보기 한도/)).toBeInTheDocument(),
+		);
+		expect(mockInvoke).not.toHaveBeenCalledWith(
+			"workspace_read_file",
+			expect.anything(),
+		);
 	});
 });

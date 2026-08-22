@@ -68,8 +68,7 @@ export async function loadInstalledApps(): Promise<void> {
 }
 
 /**
- * Delete an installed panel from disk (Tauri command) and unregister it.
- * If disk deletion fails, still unregisters from memory so AppBar updates.
+ * Delete an installed app from disk and unregister it only after deletion succeeds.
  * Bumps appListVersion so AppBar re-renders.
  */
 export async function removeInstalledApp(appId: string): Promise<void> {
@@ -82,7 +81,7 @@ export async function removeInstalledApp(appId: string): Promise<void> {
 		Logger.error("AppLoader", `Disk removal failed: ${appId}`, {
 			err: String(err),
 		});
-		// Fall through — unregister from memory regardless
+		throw err;
 	}
 
 	appRegistry.unregister(appId);

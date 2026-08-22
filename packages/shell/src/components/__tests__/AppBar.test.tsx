@@ -158,6 +158,37 @@ describe("AppBar — add dialog", () => {
 	});
 });
 
+describe("AppBar — installed app removal", () => {
+	afterEach(() => {
+		cleanup();
+		vi.clearAllMocks();
+	});
+
+	it("keeps the app visible and announces a disk removal failure", async () => {
+		const { appRegistry } = await import("../../lib/app-registry");
+		const { removeInstalledApp } = await import("../../lib/app-loader");
+		const descriptor = {
+			id: "notes",
+			name: "Notes",
+			source: "installed" as const,
+			center: () => null,
+		};
+		vi.mocked(appRegistry.list).mockReturnValue([descriptor]);
+		vi.mocked(appRegistry.get).mockReturnValue(descriptor);
+		vi.mocked(removeInstalledApp).mockRejectedValueOnce(
+			new Error("permission denied"),
+		);
+
+		render(<AppBar />);
+		fireEvent.click(screen.getByTitle("Remove Notes"));
+
+		expect(await screen.findByRole("alert")).toHaveTextContent(
+			"앱을 제거하지 못했습니다",
+		);
+		expect(screen.getByTitle("Notes")).toBeInTheDocument();
+	});
+});
+
 // ── Edit mode (#295) ─────────────────────────────────────────────────────────
 
 describe("AppBar — edit mode (#295)", () => {

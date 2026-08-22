@@ -6,6 +6,7 @@ on:
 
 permissions:
   contents: read
+  id-token: write
 
 jobs:
   build:
@@ -77,17 +78,17 @@ jobs:
         if: matrix.platform == 'win32'
         shell: pwsh
         run: |
-          $url = "https://pub-a587c16974874fc9a168d2a281801a23.r2.dev/windows_trt_6g/voxcpm2-runtime-win-trt6g.zip"
+          $url = "https://pub-a587c16974874fc9a168d2a281801a23.r2.dev/windows_trt_6g/releases/0.2.1/voxcpm2-runtime-win-trt6g.zip"
           $archive = Join-Path $env:RUNNER_TEMP "voxcpm2-runtime-win-trt6g.zip"
           $runtime = Join-Path $env:RUNNER_TEMP "voxcpm2-runtime"
           curl.exe --location --fail --retry 4 --retry-all-errors --output $archive $url
           if ($LASTEXITCODE -ne 0) { throw "VoxCPM2 release input download failed" }
           $item = Get-Item -LiteralPath $archive
-          if ($item.Length -ne 3705920747) {
+          if ($item.Length -ne 2705919022) {
             throw "VoxCPM2 release input size mismatch: $($item.Length)"
           }
           $hash = (Get-FileHash -Algorithm SHA256 -LiteralPath $archive).Hash.ToLowerInvariant()
-          if ($hash -ne "51e547c93c8bb6e3909c9c1f1b142d6e7283399e3ba8c8d710d15bec8b0814c6") {
+          if ($hash -ne "9c87ab0775226d01ff1c9fbafffd193d53e991ad020cc9945233a35138e2b26b") {
             throw "VoxCPM2 release input SHA-256 mismatch"
           }
           New-Item -ItemType Directory -Force -Path $runtime | Out-Null
@@ -95,13 +96,71 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "VoxCPM2 release input extraction failed" }
           "NAIA_VOXCPM2_TRT_RUNTIME_DIR=$runtime" >> $env:GITHUB_ENV
           "NAIA_VOXCPM2_TRT_ARCHIVE=$archive" >> $env:GITHUB_ENV
-          "NAIA_VOXCPM2_TRT_ARTIFACT_SHA256=9827ac3f27cf5e014655a6d5eac0e15e7eea48a0ecd1cc0034387373047a4ab8" >> $env:GITHUB_ENV
+          "NAIA_VOXCPM2_TRT_ARTIFACT_SHA256=235e6bf894213b02a8335c632580e2ae10a03dfbecd1bf73515992853cbfc4b0" >> $env:GITHUB_ENV
 
       - name: Build installer bundle from platform matrix
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ matrix.platform == 'win32' && secrets.TAURI_SIGNING_PRIVATE_KEY || '' }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ matrix.platform == 'win32' && secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD || '' }}
         run: pnpm -C packages/shell run tauri:build:bundle
+
+      - name: Authenticate to Azure for Artifact Signing
+        if: matrix.platform == 'win32'
+        uses: azure/login@f5d393ae46f8fde4be8b75f32e3fc50e654ad0ca # v3.0.1
+        with:
+          client-id: ${{ vars.AZURE_ARTIFACT_SIGNING_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_ARTIFACT_SIGNING_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_ARTIFACT_SIGNING_SUBSCRIPTION_ID }}
+
+      - name: Publicly sign Windows installers
+        if: matrix.platform == 'win32'
+        uses: azure/artifact-signing-action@c7ab2a863ab5f9a846ddb8265964877ef296ee82 # v2
+        with:
+          endpoint: https://krc.codesigning.azure.net/
+          signing-account-name: nextain-public-signing
+          certificate-profile-name: naia-public-trust
+          files-folder: ${{ github.workspace }}\packages\shell\src-tauri\target\release\bundle
+          files-folder-filter: exe,msi
+          files-folder-recurse: true
+          file-digest: SHA256
+          timestamp-rfc3161: http://timestamp.acs.microsoft.com
+          timestamp-digest: SHA256
+
+      - name: Verify Authenticode and refresh updater signatures
+        if: matrix.platform == 'win32'
+        shell: pwsh
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: |
+          $bundleDir = Resolve-Path "packages/shell/src-tauri/target/release/bundle"
+          $installers = @(
+            Get-ChildItem "$bundleDir/nsis/*-setup.exe"
+            Get-ChildItem "$bundleDir/msi/*.msi"
+          )
+          if ($installers.Count -ne 2) {
+            throw "Expected one NSIS and one MSI installer, found $($installers.Count)"
+          }
+
+          foreach ($installer in $installers) {
+            $authenticode = Get-AuthenticodeSignature -LiteralPath $installer.FullName
+            if ($authenticode.Status -ne "Valid") {
+              throw "Invalid Authenticode signature: $($installer.Name) = $($authenticode.Status)"
+            }
+            if ($authenticode.SignerCertificate.Subject -notmatch "O=Nextain INC") {
+              throw "Unexpected signer subject: $($authenticode.SignerCertificate.Subject)"
+            }
+
+            $updaterSignature = "$($installer.FullName).sig"
+            Remove-Item -LiteralPath $updaterSignature -Force -ErrorAction SilentlyContinue
+            pnpm -C packages/shell exec tauri signer sign $installer.FullName
+            if ($LASTEXITCODE -ne 0) {
+              throw "Updater signing failed: $($installer.Name)"
+            }
+            if (-not (Test-Path -LiteralPath $updaterSignature -PathType Leaf)) {
+              throw "Updater signature was not created: $updaterSignature"
+            }
+          }
 
       - name: Archive complete macOS app bundle
         if: matrix.platform == 'darwin'

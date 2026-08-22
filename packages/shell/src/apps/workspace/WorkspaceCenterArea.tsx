@@ -1710,6 +1710,8 @@ export function WorkspaceCenterArea({ naia }: AppCenterProps) {
 								filePath={openFilePath}
 								badge={editorBadge}
 								readOnly={editorReadOnly}
+								workspaceRoot={resolvedRoot}
+								onOpenFile={handleFileSelect}
 							/>
 						</div>
 					</div>

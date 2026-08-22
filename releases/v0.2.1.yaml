@@ -1,0 +1,40 @@
+version: "0.2.1"
+date: "2026-08-22"
+summary:
+  en: "Windows reliability release covering startup updates, entitlement recovery, VoxCPM2 voice runtime, app storage, Markdown viewing, setup stability, and public code signing."
+  ko: "시작 업데이트, 이용권 복구, VoxCPM2 음성 런타임, 앱 저장소, Markdown 뷰어, 설정 안정화와 공개 코드 서명을 통합한 Windows 안정화 릴리스입니다."
+changes:
+  - type: feature
+    scope: updater
+    issue: 468
+    description:
+      en: "Prompt for available updates during startup without misreporting updater failures."
+      ko: "시작 시 새 버전을 안내하며 업데이트 확인 실패를 최신 상태로 오인하지 않습니다."
+  - type: fix
+    scope: auth
+    issue: 470
+    description:
+      en: "Recover active entitlements after session refresh and transient authentication failures."
+      ko: "세션 갱신과 일시적인 인증 실패 뒤에도 활성 이용권을 복구합니다."
+  - type: fix
+    scope: apps
+    issue: 472
+    description:
+      en: "Preserve installed app data and improve the VoxCPM2 voice runtime experience."
+      ko: "설치된 앱 데이터를 보존하고 VoxCPM2 음성 런타임 사용성을 개선합니다."
+  - type: feature
+    scope: workspace
+    issue: 474
+    description:
+      en: "Open and preview Markdown documents from the workspace."
+      ko: "워크스페이스에서 Markdown 문서를 열고 미리 볼 수 있습니다."
+  - type: fix
+    scope: setup
+    description:
+      en: "Keep ADK install, reuse, load, and recreate controls locked until the complete transaction finishes."
+      ko: "ADK 설치, 기존 폴더 사용, 불러오기와 재생성 작업이 완전히 끝날 때까지 설정 조작을 잠급니다."
+  - type: fix
+    scope: windows
+    description:
+      en: "Publish Azure Artifact Signing-authenticated Windows installers and refresh updater signatures after Authenticode signing."
+      ko: "Azure Artifact Signing으로 인증된 Windows 설치 파일을 배포하고 공개 코드 서명 후 업데이트 서명을 다시 생성합니다."

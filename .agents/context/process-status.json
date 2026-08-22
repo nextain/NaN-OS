@@ -15,8 +15,20 @@
     "issue_doc": "docs/progress/ (F0-baseline, F0-contract, F{1,2,3}-baseline-contract, F0-graft) + 00-PHASES.md",
     "github_issue": null,
     "started": "2026-06-08T00:00:00Z",
-    "last_updated": "2026-08-20T00:05:46+09:00",
+    "last_updated": "2026-08-20T15:53:16+09:00",
     "status": "in_progress",
+    "startup_update_prompt_468": {
+      "issue": "https://github.com/nextain/naia-shell/issues/468",
+      "scope": "앱 시작 시 명시적 동의가 필요한 업데이트 팝업과 버전별 30일 알림 유예, 기존 배너 및 설정 수동 확인 보존",
+      "requirements": "docs/requirements.md FR-UPDATE.7~10",
+      "scenario": "docs/user-scenarios.md UC-UPDATE-STARTUP-PROMPT, UC-UPDATE-30-DAY-DEFERRAL",
+      "status": "implemented_review_only",
+      "last_updated": "2026-08-20T15:53:16+09:00",
+      "verification": "GitHub issue body repaired and API-verified as UTF-8 Korean. Shell Vitest 1,626 passed/21 skipped; targeted updater and prompt Vitest 9 passed; startup Playwright 3 passed with an exact one-check assertion under React Strict Mode and visual screenshot inspection; i18n output-stage 2 passed; root TypeScript and Shell production builds passed; Biome changed-new-files 3 passed; git diff --check, conflict-marker scan, hardcoded-string scan, assembly coverage passed.",
+      "review_state": "REVIEW_ONLY: deterministic complexity preflight remains blocked by the pre-existing issue #423 waiver authority digest mismatch, so independent model review was not claimed. The root structure script has tracked CRLF and, when stream-normalized under WSL, reports the pre-existing tracked tsconfig.build.json as absent from F13. No unrelated baseline governance files were modified.",
+      "worktree": "projects/naia-shell-worktrees/issue-468-startup-updater-prompt",
+      "branch": "feature/issue-468-startup-updater-prompt"
+    },
     "voxcpm2_fp32_runaway_fix_453": {
       "issue": "https://github.com/nextain/naia-shell/issues/453",
       "scope": "4일간의 로컬음성 폭주/잡음 사태 종결: TRT LocDiT를 순수 FP32로 확정(voxcpm2-tensorrt@27dc4b5), 문장 2개 cap 제거, 엔진부팅 중 '음성 모델 준비 중…' 표기, 음색 적용 시점 백그라운드 예열(warm-on-apply), 프라임=마지막 사용 음색 우선",

@@ -29,10 +29,9 @@ import "react-pdf/dist/Page/AnnotationLayer.css";
 import "react-pdf/dist/Page/TextLayer.css";
 import mermaid from "mermaid";
 import pdfWorkerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
-import Markdown from "react-markdown";
-import remarkGfm from "remark-gfm";
 import { Logger } from "../../lib/logger";
 import { AUTOSAVE_DEBOUNCE_MS } from "./constants";
+import { MarkdownPreview } from "./MarkdownPreview";
 
 pdfjs.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 
@@ -53,6 +52,8 @@ interface EditorProps {
 	badge?: string;
 	/** If true, editing is disabled (reference repos) */
 	readOnly?: boolean;
+	workspaceRoot?: string;
+	onOpenFile?: (path: string) => void;
 }
 
 /** Methods exposed to parent via ref */
@@ -82,7 +83,7 @@ function getLanguageExtension(filePath: string) {
 
 function isMarkdownFile(filePath: string): boolean {
 	const ext = filePath.split(".").pop()?.toLowerCase() ?? "";
-	return ext === "md" || ext === "mdx";
+	return ext === "md" || ext === "markdown" || ext === "mdx";
 }
 
 function isImageFile(filePath: string): boolean {
@@ -184,7 +185,7 @@ function CodeBlock({
 }
 
 export const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
-	{ filePath, badge, readOnly = false },
+	{ filePath, badge, readOnly = false, workspaceRoot = "", onOpenFile },
 	ref,
 ) {
 	const editorRef = useRef<HTMLDivElement>(null);
@@ -394,7 +395,19 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
 		// Reset error state at load start (ref first — read synchronously by updateListener)
 		loadErrorRef.current = false;
 		setLoadError(null);
-		invoke<string>("workspace_read_file", { path: thisPath })
+		const load = async () => {
+			if (isMarkdownFile(thisPath)) {
+				const size = await invoke<number>("workspace_file_size", {
+					path: thisPath,
+				});
+				if (typeof size === "number" && size > 5 * 1024 * 1024) {
+					throw new Error("Markdown 파일이 5 MiB 미리보기 한도를 초과했습니다");
+				}
+				return invoke<string>("workspace_read_file", { path: thisPath });
+			}
+			return invoke<string>("workspace_read_file", { path: thisPath });
+		};
+		load()
 			.then((text) => {
 				// Guard against stale response when user switches files quickly
 				if (filePathRef.current !== thisPath) return;
@@ -718,7 +731,14 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
 					</button>
 				</div>
 				<div className="workspace-editor__load-error">
-					파일을 열 수 없습니다: {loadError}
+					<p>파일을 열 수 없습니다: {loadError}</p>
+					<button
+						type="button"
+						onClick={() => void reloadFile()}
+						disabled={reloading}
+					>
+						{reloading ? "다시 읽는 중…" : "다시 시도"}
+					</button>
 				</div>
 			</div>
 		);
@@ -1046,27 +1066,27 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
 					/>
 				</div>
 			) : viewMode === "preview" ? (
-				<div className="workspace-editor__preview">
-					<Markdown
-						remarkPlugins={[remarkGfm]}
-						components={{ code: CodeBlock }}
-					>
-						{content}
-					</Markdown>
-				</div>
+				<MarkdownPreview
+					content={content}
+					filePath={filePath}
+					workspaceRoot={workspaceRoot}
+					onOpenFile={onOpenFile}
+					codeComponent={CodeBlock}
+				/>
 			) : viewMode === "split" ? (
 				<div className="workspace-editor__body--split">
 					<div
 						ref={editorRef}
 						className="workspace-editor__codemirror workspace-editor__codemirror--half"
 					/>
-					<div className="workspace-editor__preview workspace-editor__preview--half">
-						<Markdown
-							remarkPlugins={[remarkGfm]}
-							components={{ code: CodeBlock }}
-						>
-							{content}
-						</Markdown>
+					<div className="workspace-editor__preview--half">
+						<MarkdownPreview
+							content={content}
+							filePath={filePath}
+							workspaceRoot={workspaceRoot}
+							onOpenFile={onOpenFile}
+							codeComponent={CodeBlock}
+						/>
 					</div>
 				</div>
 			) : (

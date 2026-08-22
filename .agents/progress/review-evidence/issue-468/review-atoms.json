@@ -1,0 +1,50 @@
+[
+  {
+    "id": "USR-468-A1",
+    "source_id": "USR-468",
+    "text": "naia-shell 에 이슈 추가해서 작업 좀.",
+    "directive_ids": ["DIR-468-ISSUE", "DIR-468-IMPLEMENT"],
+    "subject": "agent_workflow",
+    "effect": "outcome",
+    "render_policy": "deny",
+    "target_ids": ["TGT-GITHUB-ISSUE", "TGT-NAIA-SHELL"],
+    "criterion_ids": ["CRIT-ISSUE-CREATED", "CRIT-FEATURE-IMPLEMENTED"],
+    "evidence_ids": ["EVID-ISSUE-468", "EVID-WORKTREE-DIFF"]
+  },
+  {
+    "id": "USR-468-A2",
+    "source_id": "USR-468",
+    "text": "첫 실행시 업데이트 버전 있는 경우 팝업 띄우고,",
+    "directive_ids": ["DIR-468-STARTUP-PROMPT"],
+    "subject": "end_user_flow",
+    "effect": "outcome",
+    "render_policy": "derive",
+    "target_ids": ["TGT-STARTUP-UPDATER"],
+    "criterion_ids": ["CRIT-AVAILABLE-UPDATE-PROMPTS"],
+    "evidence_ids": ["EVID-UNIT-PROMPT", "EVID-E2E-PROMPT"]
+  },
+  {
+    "id": "USR-468-A3",
+    "source_id": "USR-468",
+    "text": "사용자의 확인하에 업데이트 실행.",
+    "directive_ids": ["DIR-468-CONSENT"],
+    "subject": "end_user_flow",
+    "effect": "constraint",
+    "render_policy": "derive",
+    "target_ids": ["TGT-INSTALL-ACTION"],
+    "criterion_ids": ["CRIT-NO-AUTO-INSTALL", "CRIT-CONFIRMED-INSTALL"],
+    "evidence_ids": ["EVID-UNIT-CONSENT", "EVID-E2E-CONSENT"]
+  },
+  {
+    "id": "USR-468-A4",
+    "source_id": "USR-468",
+    "text": "한달간 보지 않기 체크 박스 추가",
+    "directive_ids": ["DIR-468-SNOOZE"],
+    "subject": "end_user_flow",
+    "effect": "outcome",
+    "render_policy": "derive",
+    "target_ids": ["TGT-PROMPT-SNOOZE"],
+    "criterion_ids": ["CRIT-30-DAY-SNOOZE", "CRIT-NEWER-VERSION-BYPASS"],
+    "evidence_ids": ["EVID-UNIT-SNOOZE", "EVID-E2E-SNOOZE"]
+  }
+]
