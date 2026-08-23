@@ -202,6 +202,11 @@ describe("platform-matrix 스키마 (FR-INSTALL.1)", () => {
 		expect(nsis).toContain("NSIS_HOOK_PREINSTALL");
 		expect(nsis).toContain('RMDir /r "$INSTDIR\\agent"');
 		expect(nsis).toContain('RMDir /r "$INSTDIR\\~"');
+		expect(nsis).toContain("NSIS_HOOK_POSTINSTALL");
+		expect(nsis).toContain("$LOCALAPPDATA\\Microsoft\\WindowsApps");
+		expect(nsis).toContain("REM managed by Naia Shell installer");
+		expect(nsis).toContain('"$INSTDIR\\naia-shell.exe" %*');
+		expect(nsis).toContain("REM managed by naia-adk manage-discord-sessions");
 		expect(nsis).toContain("NSIS_HOOK_POSTUNINSTALL");
 		expect(nsis).toContain('RMDir /r "$INSTDIR"');
 		const wix = readFileSync(
@@ -216,7 +221,7 @@ describe("platform-matrix 스키마 (FR-INSTALL.1)", () => {
 		expect(wix).toContain('Directory="TARGETDIR"');
 		expect(wix).not.toContain('Directory="SystemFolder"');
 		expect(wix).toContain("WIX_UPGRADE_DETECTED");
-		expect(wix).toContain('cd /D &quot;[INSTALLDIR]&quot;');
+		expect(wix).toContain("cd /D &quot;[INSTALLDIR]&quot;");
 		expect(wix).toContain(
 			"for %D in (agent assets bgm-sidecar cascade-loader cascade-runtime herdr voxcpm2-runtime ~)",
 		);

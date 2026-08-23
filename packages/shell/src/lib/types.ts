@@ -60,6 +60,7 @@ export interface ProviderConfig {
 	ollamaHost?: string;
 	ollamaNumGpu?: number;
 	vllmHost?: string;
+	openaiBaseUrl?: string;
 	/** Override URL for lab-proxy (Naia gateway). Used to route to dev vs prod gateway. */
 	labGatewayUrl?: string;
 	/** Enable thinking/reasoning output from models that support it. */
@@ -243,7 +244,14 @@ export type AgentResponseChunk =
 	| {
 			type: "artifact";
 			requestId: string;
-			artifact: { id: string; kind: "image"; mimeType: string; sizeBytes: number; localRef: string; name?: string };
+			artifact: {
+				id: string;
+				kind: "image";
+				mimeType: string;
+				sizeBytes: number;
+				localRef: string;
+				name?: string;
+			};
 	  }
 	| {
 			type: "provider_session";
@@ -255,14 +263,24 @@ export type AgentResponseChunk =
 	| {
 			type: "processing_disclosure";
 			requestId: string;
-			workload: "main_llm" | "sub_llm" | "memory_llm" | "embedding" | "network_tool";
+			workload:
+				| "main_llm"
+				| "sub_llm"
+				| "memory_llm"
+				| "embedding"
+				| "network_tool";
 			destination: "local_device" | "private_managed" | "external_cloud";
 			decision: "allowed" | "blocked" | "confirmation_required";
 			processingProfileRef: string;
 			provider?: string;
 			model?: string;
 	  }
-	| { type: "error"; requestId: string; message: string; code?: import("./wire-errors").WireErrorCode };
+	| {
+			type: "error";
+			requestId: string;
+			message: string;
+			code?: import("./wire-errors").WireErrorCode;
+	  };
 
 // === Skill Manifest (from ~/.naia/skills/{name}/skill.json) ===
 

@@ -97,6 +97,7 @@ function useFileNavHistory() {
  * Access via `appRegistry.getApi<WorkspaceAppApi>("workspace")`.
  */
 export interface WorkspaceAppApi {
+	[key: string]: (...args: any[]) => unknown;
 	/** Open a file in the Editor. */
 	openFile: (path: string) => void;
 	/**

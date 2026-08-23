@@ -193,6 +193,7 @@ foundation UC 카탈로그와 직교하는 셸 feature(S72 선례). 각 시나�
 | **S-DOC** (#ui-reorg) | 대량 작업문서를 **탭으로 유지·전환**(문서 탭바)해 "터미널에서 문서 찾기 어려움" 해소. 서브에이전트 클릭 시 그 에이전트 최근문서가 탭으로 surface. Ctrl+P QuickOpen 유지 | 표현(셸 UI) — `openDocs` 상태 + DocTabBar | T10(세션 클릭→문서 탭 surface) + 91 S3/S6(에디터 무회귀) |
 | **S-ASK** (#ui-reorg) | 터미널 출력의 파일경로 **클릭=문서뷰어에서 열기 / Alt+클릭=대화창에 AI 질의**. 문서 탭에도 AI 질의(✦) 버튼 | 표현(셸 UI) — Terminal link provider Alt 분기 + 기존 `naia:ask-ai` 재사용 | `Terminal.tsx` activate Alt 분기. ⚠️ xterm 링크 클릭=실 앱 |
 | **S-INSTALL** (#377, FR-INSTALL — 2026-07-17) | 사용자가 **설치 파일을 받아 자기 OS(Windows/Linux/macOS)에 설치하고 첫 실행**한다 — Windows 는 NSIS(사용자 권한, 관리자 불요, **WSL 불요**) + MSI(관리자 설치 — WiX 표준), Linux 는 deb/rpm/AppImage, macOS 는 app/dmg(**arm64(Apple Silicon) 전용** · 미서명 — 우클릭 열기). Node 런타임이 3 OS 모두 동봉되어 **Node 미설치 머신에서도 에이전트가 뜬다**. 개발자는 clean checkout 에서 **명령 1개**로 자기 OS 의 설치 파일을 재현 빌드한다(수동 파일 배치 0). 플랫폼 차이(타깃·동봉 리소스·설치자 설정·기대 산출물)는 **매트릭스 데이터 1곳**이 정의하고, 스크립트는 OS 별 분리 없이 1개 | 배포(설치·첫 부팅) — 매트릭스→생성 conf, OS 분기=데이터 | `scripts/__tests__/platform-matrix.test.ts`(매트릭스 스키마 + conf 생성 golden, 3 OS) [단위] · `check-build-contract.mjs` PASS [계약] · **Windows 실측: 실 NSIS 무인 설치(/S) → 설치본 기동 — 핸드셰이크 AND `[Naia] node = ` 포함 줄이 최소 2줄 AND 전부 `$INSTDIR` 하위**(2조건, FR-INSTALL.4 — 빌드 머신엔 시스템 node 가 있어 기동만으론 번들 분기가 증명 안 됨. 개수 단언은 공허참 차단)(e2e-tauri `TAURI_BINARY` 설치 경로 지정) · **Linux: CI ubuntu job 이 deb 설치 → xvfb 기동 스모크 — 마커 `[Naia] agent-core gRPC @` **AND** node 줄 최소 2줄 **AND** 그 경로가 전부 설치본 resource_dir 하위**(R5: "PATH 에서 node 제거" 는 폐기 — 폴백이 PATH 무관하게 nvm 디렉토리를 직접 스캔하므로 번들 node 를 증명하지 못함. mutation probe 로 red 도 확인) — **Windows·Linux 양쪽 모두 판정 범위 = 마지막 `=== Session started ===` 포함 줄 이후**(`naia.log` 는 누적 파일) · macOS 실빌드 = CI(`build-installers.yml`) · **산출물 검증 스크립트 `scripts/verify-artifacts.mjs` 실행(빌드 머신 + CI 3 OS) + 부정(negative) 케이스 단위 테스트**(FR-INSTALL.6). ⚠️ mac = **arm64 전용**(CI `macos-latest` = arm64 러너, Intel 산출물 미제공 — 후속) + 실기기 설치 실측 미보유(정직 표기: 이번 완료선 = arm64 CI 빌드 성공) |
+| **UC-CLI-OPEN** ([#484](https://github.com/nextain/naia-shell/issues/484), FR-CLI.1~3) | 설치 사용자가 새 터미널에서 `naia`를 실행하면 Naia Shell이 열리거나 기존 창이 포커스된다. `naia <file>`은 상대 경로를 호출 터미널 기준으로 해석해, 셸이 꺼져 있든 실행 중이든 같은 워크스페이스 에디터에 해당 파일을 연다. 존재하지 않는 경로와 디렉터리는 열지 않는다. | 설치 alias/PATH 스모크 · Rust 인자/경로 계약 테스트 · 실행 중/콜드 스타트 네이티브 인수 테스트 |
 
 > **S-INSTALL #411·#412 보강(2026-08-02):** paired Agent와 로컬 의존 프로젝트의 pnpm 버전이
 > 서로 달라도 스테이징은 각 `package.json#packageManager` 선언을 Corepack으로 실행한다.
@@ -882,3 +883,34 @@ P02 상태 매트릭스: clean install/list/restart/remove/list, legacy migratio
 | **UC-V021-MARKDOWN-BOUNDARY** | raw HTML/script와 `javascript:` 및 Workspace 밖 상대 경로는 실행·열기되지 않는다. 외부 HTTP(S) 링크는 외부 링크임을 알리고 시스템 opener를 명시적으로 호출하며, 누락 이미지·읽기 실패·5 MiB 초과 문서는 복구 가능한 오류로 표시된다. | resolver, opener, missing-image, load-limit and accessibility assertions |
 
 P02 상태 매트릭스: `.md`/`.markdown`, preview/source 전환, GFM 표·체크리스트·취소선·코드 펜스, 문서/루트 상대 링크, 로컬/누락 이미지, HTTP(S)/위험 URL, 경계 밖 traversal, raw HTML, 읽기 실패와 대용량 거부, 키보드 포커스를 각각 검증한다.
+
+### 2026-08-23 thinking/final 응답 분리 (#479)
+
+| Scenario | User-observable outcome | Coverage |
+|---|---|---|
+| **UC-V022-THINKING-SEPARATION** | 모델이 구조화된 thinking 청크 또는 스트림 경계에서 나뉜 `<think>…</think>` 태그를 보내도, 사용자는 thinking을 기본으로 닫힌 별도 영역에서만 보고 일반 답변에는 최종 응답만 본다. thinking 표시 여부와 무관하게 음성은 최종 응답만 발화한다. | `thinking-stream-filter.test.ts`의 구조화/태그/모든 청크 경계 계약 + `ChatArea.test.tsx`의 저장·스트리밍 닫힘 UI 및 TTS 제외 통합 계약 |
+
+P02 상태 매트릭스: thinking 없음, 구조화된 thinking 진행, 한 청크 태그, 여는·닫는 태그의 모든 청크 경계, thinking 뒤 최종 응답, 닫히지 않은 thinking, 완료 후 저장 메시지, 기본 닫힘과 키보드로 펼침을 검증한다. 오류·빈 목록·좁은 폭은 새 화면이나 레이아웃을 만들지 않는 인라인 `<details>`의 기존 채팅 동작을 보존하는 것으로 확인한다.
+## 2026-08-23 LLM→TTS 발화 텍스트 정규화 단일화 (#480)
+
+### UC-V022-TTS-TEXT-NORMALIZATION
+
+- 사용자가 어떤 언어와 음성 provider를 선택해도 동일한 공통 정규화 경계를 거친다.
+- Markdown 본문과 자연스러운 다국어 문장·숫자·구두점은 보존한다.
+- 코드 블록, Mermaid, URL, 이모지·이모티콘, 장식 문자와 제어 태그는 음성 요청에서 제외한다.
+- inline code는 선택 언어의 레지스트리 규칙을 적용하며 backtick은 발화하지 않는다.
+- 정규화 결과가 비면 브라우저·로컬·원격 어느 provider에도 발화 요청을 만들지 않는다.
+
+Test Coverage Map: `lib/tts/__tests__/text-filter.test.ts`가 공통/언어/fallback 규칙을 검증하고, `lib/tts/__tests__/sentence-pipeline.test.ts`가 실제 provider payload의 단일 정규화 경계를 검증한다.
+## UC-V022-CHAT-RICH-MARKDOWN — 채팅 Markdown·코드·Mermaid
+
+- assistant 응답의 안전한 GFM을 읽기 좋은 형태로 표시한다.
+- fenced code는 언어, 복사, 접기/펼치기, 워크스페이스 전환 기능을 제공한다.
+- Mermaid는 strict 보안 모드로 렌더링하고 실패 시 원문으로 복구한다.
+- 스트리밍 중 미완성 fence와 긴 코드가 대화 레이아웃을 깨뜨리지 않는다.
+
+## UC-V022-PERMISSION-SHORTCUTS — 권한 결정을 키보드로 선택 (#477)
+
+- 도구 권한 팝업이 열렸을 때 `Alt+Y`는 이번만 허용, `Alt+A`는 항상 허용, `Alt+N`은 거부를 정확히 한 번 실행한다.
+- 버튼의 플랫폼별 단축키 표기와 실제 키 해석은 같은 정의를 사용한다.
+- 팝업이 닫히면 리스너가 제거되며, 일반 입력과 추가 수정키 조합은 가로채지 않는다.

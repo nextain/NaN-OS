@@ -342,6 +342,36 @@ describe("Editor — file type helpers (via render behaviour)", () => {
 		});
 	});
 
+	it.each([
+		["track.mp3", "audio", "audio player"],
+		["recording.wav", "audio", "audio player"],
+		["clip.mp4", "video", "video player"],
+	])(
+		"streams %s through an accessible local media element",
+		(name, tag, label) => {
+			render(<Editor filePath={`/media/${name}`} />);
+			const media = screen.getByLabelText(new RegExp(label, "i"));
+			expect(media.tagName.toLowerCase()).toBe(tag);
+			expect(media).toHaveAttribute("src", `asset:///media/${name}`);
+			expect(media).toHaveAttribute("preload", "metadata");
+			expect(mockInvoke).not.toHaveBeenCalledWith(
+				"workspace_read_file",
+				expect.anything(),
+			);
+		},
+	);
+
+	it("reports codec errors and changes playback speed", () => {
+		render(<Editor filePath="/media/clip.mp4" />);
+		const video = screen.getByLabelText(/video player/i) as HTMLVideoElement;
+		fireEvent.change(screen.getByLabelText("재생 속도"), {
+			target: { value: "1.5" },
+		});
+		expect(video.playbackRate).toBe(1.5);
+		fireEvent.error(video);
+		expect(screen.getByRole("alert")).toHaveTextContent("지원하지 않는 코덱");
+	});
+
 	it("does NOT call workspace_read_file for PDF files", () => {
 		render(<Editor filePath="/docs/spec.pdf" />);
 		expect(mockInvoke).not.toHaveBeenCalledWith(

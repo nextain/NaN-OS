@@ -80,4 +80,28 @@ describe("PermissionModal", () => {
 			screen.getByText(/도구 실행 승인|Tool Execution Approval/),
 		).toBeDefined();
 	});
+
+	it.each([
+		["y", "once"],
+		["a", "always"],
+		["n", "reject"],
+	] as const)("maps Alt+%s to %s exactly once", (key, decision) => {
+		const onDecision = vi.fn();
+		render(<PermissionModal pending={basePending} onDecision={onDecision} />);
+		fireEvent.keyDown(window, { key, altKey: true });
+		fireEvent.keyDown(window, { key, altKey: true, repeat: true });
+		expect(onDecision).toHaveBeenCalledTimes(1);
+		expect(onDecision).toHaveBeenCalledWith(decision);
+	});
+
+	it("does not consume bare or modified input shortcuts", () => {
+		const onDecision = vi.fn();
+		render(<PermissionModal pending={basePending} onDecision={onDecision} />);
+		const input = document.createElement("input");
+		document.body.append(input);
+		fireEvent.keyDown(input, { key: "y" });
+		fireEvent.keyDown(input, { key: "y", altKey: true, ctrlKey: true });
+		expect(onDecision).not.toHaveBeenCalled();
+		input.remove();
+	});
 });

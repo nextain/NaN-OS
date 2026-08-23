@@ -71,22 +71,60 @@ describe("sentence TTS pipeline (FR-VOICE.16 Phase 2b)", () => {
 	it("routes a client-side provider through browser speechSynthesis", () => {
 		const speak = vi.fn();
 		vi.stubGlobal("speechSynthesis", { speak, cancel: vi.fn() });
-		vi.stubGlobal("SpeechSynthesisUtterance", class {
-			text: string;
-			lang = "";
-			onstart: (() => void) | null = null;
-			onend: (() => void) | null = null;
-			onerror: (() => void) | null = null;
-			constructor(text: string) {
-				this.text = text;
-			}
-		});
+		vi.stubGlobal(
+			"SpeechSynthesisUtterance",
+			class {
+				text: string;
+				lang = "";
+				onstart: (() => void) | null = null;
+				onend: (() => void) | null = null;
+				onerror: (() => void) | null = null;
+				constructor(text: string) {
+					this.text = text;
+				}
+			},
+		);
 		const { deps } = makeDeps({
 			getVoiceConfig: () => ({ ttsProvider: "browser" }),
 		});
 		createSentenceTtsPipeline(deps).sendSentence("Hello there.");
 		expect(speak).toHaveBeenCalledTimes(1);
 		expect(synthesizeMock).not.toHaveBeenCalled();
+	});
+
+	it("sends the same normalized text to browser and remote providers", async () => {
+		const utterances: Array<{ text: string }> = [];
+		vi.stubGlobal("speechSynthesis", {
+			speak: vi.fn((utterance: { text: string }) => utterances.push(utterance)),
+			cancel: vi.fn(),
+		});
+		vi.stubGlobal(
+			"SpeechSynthesisUtterance",
+			class {
+				lang = "";
+				onstart: (() => void) | null = null;
+				onend: (() => void) | null = null;
+				onerror: (() => void) | null = null;
+				constructor(public text: string) {}
+			},
+		);
+		const source = "**안내** https://example.com 😊";
+		const { deps: browserDeps } = makeDeps({
+			getVoiceConfig: () => ({ ttsProvider: "browser", voice: "ko-KR" }),
+		});
+		createSentenceTtsPipeline(browserDeps).sendSentence(source);
+
+		synthesizeMock.mockResolvedValue({ audioBase64: "QUJD" });
+		const { deps: remoteDeps } = makeDeps({
+			getVoiceConfig: () => ({ ttsProvider: "nextain", voice: "ko-KR" }),
+		});
+		createSentenceTtsPipeline(remoteDeps).sendSentence(source);
+		await flush();
+
+		expect(utterances[0]?.text).toBe("안내");
+		expect(synthesizeMock).toHaveBeenCalledWith(
+			expect.objectContaining({ text: "안내" }),
+		);
 	});
 
 	it("enqueues shell synthesis in reserved order and records the cost", async () => {
@@ -135,13 +173,16 @@ describe("sentence TTS pipeline (FR-VOICE.16 Phase 2b)", () => {
 		synthesizeMock.mockRejectedValue(new Error("quota"));
 		const speak = vi.fn();
 		vi.stubGlobal("speechSynthesis", { speak, cancel: vi.fn() });
-		vi.stubGlobal("SpeechSynthesisUtterance", class {
-			lang = "";
-			onstart: (() => void) | null = null;
-			onend: (() => void) | null = null;
-			onerror: (() => void) | null = null;
-			constructor(public text: string) {}
-		});
+		vi.stubGlobal(
+			"SpeechSynthesisUtterance",
+			class {
+				lang = "";
+				onstart: (() => void) | null = null;
+				onend: (() => void) | null = null;
+				onerror: (() => void) | null = null;
+				constructor(public text: string) {}
+			},
+		);
 		const { deps } = makeDeps();
 		createSentenceTtsPipeline(deps).sendSentence("Cloudy sentence.");
 		await flush();
@@ -150,7 +191,10 @@ describe("sentence TTS pipeline (FR-VOICE.16 Phase 2b)", () => {
 	});
 
 	it("interrupt drops a late synthesis result: no enqueue, no billing", async () => {
-		let resolveSynthesis!: (v: { audioBase64: string; costUsd?: number }) => void;
+		let resolveSynthesis!: (v: {
+			audioBase64: string;
+			costUsd?: number;
+		}) => void;
 		synthesizeMock.mockReturnValue(
 			new Promise((resolve) => {
 				resolveSynthesis = resolve;
@@ -169,13 +213,16 @@ describe("sentence TTS pipeline (FR-VOICE.16 Phase 2b)", () => {
 	it("interrupt cancels a live browser utterance (Phase 3 lifecycle ownership)", () => {
 		const cancel = vi.fn();
 		vi.stubGlobal("speechSynthesis", { speak: vi.fn(), cancel });
-		vi.stubGlobal("SpeechSynthesisUtterance", class {
-			lang = "";
-			onstart: (() => void) | null = null;
-			onend: (() => void) | null = null;
-			onerror: (() => void) | null = null;
-			constructor(public text: string) {}
-		});
+		vi.stubGlobal(
+			"SpeechSynthesisUtterance",
+			class {
+				lang = "";
+				onstart: (() => void) | null = null;
+				onend: (() => void) | null = null;
+				onerror: (() => void) | null = null;
+				constructor(public text: string) {}
+			},
+		);
 		const { deps } = makeDeps({
 			getVoiceConfig: () => ({ ttsProvider: "browser" }),
 		});
