@@ -9,15 +9,11 @@ import {
 	saveConfig,
 } from "./config";
 import { Logger } from "./logger";
+import { SECRET_KEYS, deleteSecretKey, getSecretKey } from "./secure-store";
 import {
-	deleteSecretKey,
-	getSecretKey,
-	SECRET_KEYS,
-} from "./secure-store";
-import {
+	type SlotsManifest,
 	buildSlotsManifest,
 	serializeSlotsManifest,
-	type SlotsManifest,
 } from "./slots/manifest";
 
 const ADK_PATH_KEY = "naia-adk-path";
@@ -321,6 +317,7 @@ export function buildNaiaConfigEnv(cfg: {
 	model?: string;
 	ollamaHost?: string;
 	vllmHost?: string;
+	openaiBaseUrl?: string;
 	naiaGatewayUrl?: string;
 	memoryEmbeddingProvider?: string;
 	memoryEmbeddingModel?: string;
@@ -349,8 +346,10 @@ export function buildNaiaConfigEnv(cfg: {
 		out.NAIA_ANYLLM_BASE_URL = cfg.naiaGatewayUrl?.trim() || LAB_GATEWAY_URL;
 	}
 
-	// OPENAI_BASE_URL — agent uses this for both ollama and vllm (no-auth OpenAI-compat).
-	if (cfg.provider === "ollama" && cfg.ollamaHost) {
+	// OPENAI_BASE_URL is scoped to the active provider so a saved host can never leak.
+	if (cfg.provider === "openai" && cfg.openaiBaseUrl?.trim()) {
+		out.OPENAI_BASE_URL = `${cfg.openaiBaseUrl.trim().replace(/\/+$/, "").replace(/\/v1$/i, "")}/v1`;
+	} else if (cfg.provider === "ollama" && cfg.ollamaHost) {
 		out.OPENAI_BASE_URL = `${cfg.ollamaHost.replace(/\/+$/, "").replace(/\/v1$/, "")}/v1`;
 	} else if (cfg.provider === "vllm" && cfg.vllmHost) {
 		out.OPENAI_BASE_URL = cfg.vllmHost.replace(/\/?$/, "/v1");

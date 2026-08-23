@@ -203,6 +203,8 @@ export interface AppConfig {
 	 * laptop 4060 profile reserves VRAM for Ditto and VoxCPM2. */
 	ollamaNumGpu?: number;
 	vllmHost?: string;
+	/** Optional OpenAI-compatible API root. Empty uses api.openai.com/v1. */
+	openaiBaseUrl?: string;
 	/** vLLM endpoint for STT/ASR (e.g. Qwen3-ASR). */
 	vllmSttHost?: string;
 	/**

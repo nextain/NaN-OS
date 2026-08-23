@@ -11,6 +11,10 @@ import {
 } from "react";
 import { t } from "../../lib/i18n";
 import { Logger } from "../../lib/logger";
+import {
+	hasPrimaryModifier,
+	type ShortcutPlatform,
+} from "../../lib/platform-shortcuts";
 import { attachPty, resizePty, writePty } from "./pty-ipc";
 import "@xterm/xterm/css/xterm.css";
 
@@ -36,6 +40,13 @@ export interface FileLocation {
 
 export interface TerminalHandle {
 	focus: () => void;
+}
+
+export function shouldOpenTerminalFileLink(
+	event: Pick<MouseEvent, "ctrlKey" | "metaKey">,
+	platform?: ShortcutPlatform,
+): boolean {
+	return hasPrimaryModifier(event, platform);
 }
 
 const FILE_PATH_RE =
@@ -264,13 +275,16 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(
 								},
 								text: match[0],
 								activate(e, linkText) {
+									// Preserve xterm's normal click/drag selection. File links
+									// activate only with the platform primary modifier.
+									if (!shouldOpenTerminalFileLink(e)) return;
 									const location = parseFileLocation(
 										linkText,
 										workingDirRef.current,
 									);
 									if (!location) return;
-									// Alt+click → ask the conversation rail about this file;
-									// plain click → open it in the document viewer.
+									// Alt+primary-click asks the conversation rail; primary-click
+									// opens the document viewer.
 									if (e.altKey && onAskAiRef.current) {
 										onAskAiRef.current(location.path);
 									} else {

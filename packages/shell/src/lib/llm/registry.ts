@@ -1,4 +1,5 @@
 import { MODEL_CAPABILITY_VALUES, type ModelCapability } from "../types.js";
+import { effectiveOpenAIBaseUrl } from "./openai-base-url.js";
 import type {
 	LlmModelMeta,
 	LlmProviderMeta,
@@ -22,7 +23,15 @@ export function getLlmProvider(id: string): LlmProviderMeta | undefined {
 // UI display order (user-defined 2026-06-18): local/own-stack first, then by usage.
 // Providers not listed here fall to the end (stable, in registration order).
 const PROVIDER_DISPLAY_ORDER = [
-	"nextain", "ollama", "vllm", "codex", "claude-code-cli", "zai", "openai", "gemini", "xai",
+	"nextain",
+	"ollama",
+	"vllm",
+	"codex",
+	"claude-code-cli",
+	"zai",
+	"openai",
+	"gemini",
+	"xai",
 ];
 
 /** List all registered LLM providers in the user-defined display order. */
@@ -99,7 +108,10 @@ export function isApiKeyOptional(providerId: string): boolean {
 }
 
 /** 역할별 별도 provider 배열을 만들지 않고 공통 registry capability로 판정한다. */
-export function providerSupportsRole(providerId: string, role: LlmRoleId): boolean {
+export function providerSupportsRole(
+	providerId: string,
+	role: LlmRoleId,
+): boolean {
 	const provider = providers.get(providerId);
 	if (!provider || provider.disabled) return false;
 	return provider.supportedRoles?.includes(role) ?? true;
@@ -132,6 +144,39 @@ export async function fetchVllmModels(
 	if (!provider?.fetchModels) return { models: [], connected: false };
 	const models = await provider.fetchModels(host);
 	return { models: models ?? [], connected: models !== null };
+}
+
+/** Fetch an OpenAI-compatible model catalogue from the same base URL used by chat. */
+export async function fetchOpenAIModels(
+	baseUrl?: string,
+	apiKey?: string,
+): Promise<{ models: LlmModelMeta[]; connected: boolean }> {
+	try {
+		const headers: Record<string, string> = {};
+		if (apiKey?.trim() && apiKey !== "*****") {
+			headers.Authorization = `Bearer ${apiKey.trim()}`;
+		}
+		const response = await fetch(`${effectiveOpenAIBaseUrl(baseUrl)}/models`, {
+			headers,
+			signal: AbortSignal.timeout(5000),
+		});
+		if (!response.ok) return { models: [], connected: false };
+		const payload = (await response.json()) as {
+			data?: Array<{ id?: unknown }>;
+		};
+		const models = (payload.data ?? [])
+			.filter((entry): entry is { id: string } => typeof entry.id === "string")
+			.map(
+				(entry): LlmModelMeta => ({
+					id: entry.id,
+					label: entry.id,
+					capabilities: ["llm"],
+				}),
+			);
+		return { models, connected: true };
+	} catch {
+		return { models: [], connected: false };
+	}
 }
 
 /** Pricing entry shape returned by GET /v1/pricing on the Naia gateway. */
@@ -303,7 +348,9 @@ export async function fetchNaiaModelMetadata(
 	gatewayHttpUrl: string,
 ): Promise<Map<string, NaiaModelCatalogMetadata> | null> {
 	try {
-		const resp = await fetch(`${gatewayHttpUrl}/v1/models`, { signal: AbortSignal.timeout(5000) });
+		const resp = await fetch(`${gatewayHttpUrl}/v1/models`, {
+			signal: AbortSignal.timeout(5000),
+		});
 		if (!resp.ok) return null;
 		const entries = (await resp.json()) as Array<{
 			model_key: string;
@@ -316,14 +363,26 @@ export async function fetchNaiaModelMetadata(
 		}>;
 		const map = new Map<string, NaiaModelCatalogMetadata>();
 		for (const entry of entries) {
-			const id = entry.model_key.includes(":") ? (entry.model_key.split(":").pop() ?? entry.model_key) : entry.model_key;
+			const id = entry.model_key.includes(":")
+				? (entry.model_key.split(":").pop() ?? entry.model_key)
+				: entry.model_key;
 			map.set(id, {
 				capabilities: (entry.capabilities ?? []).filter(_isModelCapability),
-				...(typeof entry.supports_tools === "boolean" ? { supportsTools: entry.supports_tools } : {}),
-				...(typeof entry.upstream_provider === "string" ? { upstreamProvider: entry.upstream_provider } : {}),
-				...(typeof entry.lifecycle === "string" ? { lifecycle: entry.lifecycle } : {}),
-				...(typeof entry.protocol === "string" ? { protocol: entry.protocol } : {}),
-				...(typeof entry.operational_status === "string" ? { operationalStatus: entry.operational_status } : {}),
+				...(typeof entry.supports_tools === "boolean"
+					? { supportsTools: entry.supports_tools }
+					: {}),
+				...(typeof entry.upstream_provider === "string"
+					? { upstreamProvider: entry.upstream_provider }
+					: {}),
+				...(typeof entry.lifecycle === "string"
+					? { lifecycle: entry.lifecycle }
+					: {}),
+				...(typeof entry.protocol === "string"
+					? { protocol: entry.protocol }
+					: {}),
+				...(typeof entry.operational_status === "string"
+					? { operationalStatus: entry.operational_status }
+					: {}),
 			});
 		}
 		return map;
@@ -352,13 +411,23 @@ export function applyNaiaModelMetadata(
 		}
 		const merged = {
 			...model,
-			...(live.capabilities.length > 0 ? { capabilities: live.capabilities } : {}),
-			...(live.supportsTools !== undefined ? { supportsTools: live.supportsTools } : {}),
-			...(live.upstreamProvider ? { upstreamProvider: live.upstreamProvider } : {}),
+			...(live.capabilities.length > 0
+				? { capabilities: live.capabilities }
+				: {}),
+			...(live.supportsTools !== undefined
+				? { supportsTools: live.supportsTools }
+				: {}),
+			...(live.upstreamProvider
+				? { upstreamProvider: live.upstreamProvider }
+				: {}),
 			...(live.lifecycle ? { lifecycle: live.lifecycle } : {}),
 			...(live.protocol ? { protocol: live.protocol } : {}),
-			...(live.operationalStatus ? { operationalStatus: live.operationalStatus } : {}),
-			...(live.operationalStatus ? { comingSoon: live.operationalStatus !== "live" } : {}),
+			...(live.operationalStatus
+				? { operationalStatus: live.operationalStatus }
+				: {}),
+			...(live.operationalStatus
+				? { comingSoon: live.operationalStatus !== "live" }
+				: {}),
 		};
 		return merged;
 	});
@@ -463,13 +532,18 @@ export function sortModels(
 			}
 			let delta = 0;
 			if (mode === "price") {
-				delta = getModelPriceScore(left.model) - getModelPriceScore(right.model);
+				delta =
+					getModelPriceScore(left.model) - getModelPriceScore(right.model);
 			} else {
 				delta =
-					(NAIA_GENERAL_CHAT_RECOMMENDATION[left.model.id] ?? Number.POSITIVE_INFINITY) -
-					(NAIA_GENERAL_CHAT_RECOMMENDATION[right.model.id] ?? Number.POSITIVE_INFINITY);
+					(NAIA_GENERAL_CHAT_RECOMMENDATION[left.model.id] ??
+						Number.POSITIVE_INFINITY) -
+					(NAIA_GENERAL_CHAT_RECOMMENDATION[right.model.id] ??
+						Number.POSITIVE_INFINITY);
 			}
-			return Number.isNaN(delta) || delta === 0 ? left.index - right.index : delta;
+			return Number.isNaN(delta) || delta === 0
+				? left.index - right.index
+				: delta;
 		})
 		.map(({ model }) => model);
 }
@@ -668,9 +742,7 @@ registerLlmProvider({
 	requiresApiKey: false,
 	supportedRoles: ["expert", "main", "sub"],
 	defaultModel: "gpt-5.4",
-	models: [
-		{ id: "gpt-5.4", label: "GPT-5.4 (Codex)", capabilities: ["llm"] },
-	],
+	models: [{ id: "gpt-5.4", label: "GPT-5.4 (Codex)", capabilities: ["llm"] }],
 });
 
 registerLlmProvider({

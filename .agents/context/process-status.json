@@ -15,8 +15,29 @@
     "issue_doc": "docs/progress/ (F0-baseline, F0-contract, F{1,2,3}-baseline-contract, F0-graft) + 00-PHASES.md",
     "github_issue": null,
     "started": "2026-06-08T00:00:00Z",
-    "last_updated": "2026-08-20T15:53:16+09:00",
+    "last_updated": "2026-08-23T00:00:00+09:00",
     "status": "in_progress",
+		"v022_thinking_separation_479": {
+      "issue": "https://github.com/nextain/naia-shell/issues/479",
+      "scope": "thinking을 최종 응답과 분리하고 모든 청크 경계에서 TTS 유입을 차단",
+      "requirements": "docs/requirements.md FR-CHAT-THINKING.1~2",
+      "scenario": "docs/user-scenarios.md UC-V022-THINKING-SEPARATION",
+      "status": "in_progress",
+      "p01_user_scenarios": "done",
+      "p02_test_scenarios": "done",
+      "p03_requirements": "done",
+      "p04_integration_test": "pending",
+      "p05_complete": "pending",
+      "last_updated": "2026-08-23T00:00:00+09:00"
+		},
+		"v022_tts_text_normalization_480": {
+			"issue": 480,
+			"P01_user_scenario": "done",
+			"P02_test_coverage_map": "done",
+			"P03_requirements": "done",
+			"P04_implementation_tests": "pending",
+			"P05_done_handoff": "pending"
+		},
     "startup_update_prompt_468": {
       "issue": "https://github.com/nextain/naia-shell/issues/468",
       "scope": "앱 시작 시 명시적 동의가 필요한 업데이트 팝업과 버전별 30일 알림 유예, 기존 배너 및 설정 수동 확인 보존",
@@ -172,7 +193,12 @@
   "sdlc_gates": {
     "_note": "각 게이트의 최상위 status/deliverable/ref = 기본 트랙(current_work.issue = naia-shell-transplant, F0~F3) 소유. 병행 트랙은 같은 게이트의 tracks 에만 기재한다(한 사실 두 곳 금지 — 기본 트랙 상태를 tracks 에 복사하지 않는다).",
     "P01": { "status": "done", "name": "user_scenarios", "deliverable": "docs/user-scenarios.md (UC1-14, S01~S71)", "ref": "완전성 13R 3연속 NONE",
-      "tracks": {
+	"tracks": {
+		"v022_chat_rich_markdown_483": {
+			"issue": 483,
+			"status": "implementation_validating",
+			"phases": { "P01": "done", "P02": "done", "P03": "done", "P04": "in_progress", "P05": "pending" }
+		},
         "installer_crossplatform_377": { "status": "done", "deliverable": "docs/user-scenarios.md — 셸 feature 시나리오 표의 S-INSTALL 행 (#377, 2026-07-17)", "ref": "DONE 2026-07-17 — 적대 리뷰 R1~R8 (8라운드, 실측 근거 결함 전부 반영). P0 종료 조건이 '리뷰 2연속 클린' 에서 **'구현이 검증'** 으로 조정됨(루크 승인 2026-07-17, AI 임의 변경 아님): R5~R8 이 각각 직전 라운드의 개정에서 MAJOR 를 찾는 진자운동에 들어갔고 잔여 결함 계열(로그 정규식·줄 개수·glob 형태)은 P1 구현 + vitest golden + 실제 CI 가 더 싸고 확실하게 잡는다는 판단. 상세 = current_work.installer_crossplatform_377" },
         "v020_signed_updater_recovery": { "status": "done", "deliverable": "docs/user-scenarios.md UC-V020-*", "ref": "Signed update, legacy feed, and failure-honesty journeys" }
       }

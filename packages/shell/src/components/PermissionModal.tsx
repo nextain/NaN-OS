@@ -1,8 +1,13 @@
-import { useEffect } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { t } from "../lib/i18n";
 import type { PendingApproval } from "../stores/chat";
 import { useAppStore } from "../stores/app";
+import {
+	permissionDecisionFromKeyboardEvent,
+	permissionShortcutLabel,
+	type PermissionDecision,
+} from "../lib/permission-shortcuts";
 
 interface Props {
 	pending: PendingApproval;
@@ -15,12 +20,33 @@ export function PermissionModal({ pending, onDecision }: Props) {
 	const tierClass = pending.tier >= 2 ? "tier-2" : "tier-1";
 	const pushModal = useAppStore((s) => s.pushModal);
 	const popModal = useAppStore((s) => s.popModal);
+	const settledRef = useRef(false);
+	const decide = useCallback(
+		(decision: PermissionDecision) => {
+			if (settledRef.current) return;
+			settledRef.current = true;
+			onDecision(decision);
+		},
+		[onDecision],
+	);
 
 	// Hide Chrome X11 embed while permission modal is visible
 	useEffect(() => {
 		pushModal();
 		return () => popModal();
 	}, [pushModal, popModal]);
+
+	useEffect(() => {
+		const handleKeyDown = (event: KeyboardEvent) => {
+			const decision = permissionDecisionFromKeyboardEvent(event);
+			if (!decision) return;
+			event.preventDefault();
+			event.stopPropagation();
+			decide(decision);
+		};
+		window.addEventListener("keydown", handleKeyDown, true);
+		return () => window.removeEventListener("keydown", handleKeyDown, true);
+	}, [decide]);
 
 	return createPortal(
 		<div className="permission-overlay">
@@ -42,23 +68,23 @@ export function PermissionModal({ pending, onDecision }: Props) {
 					<button
 						type="button"
 						className="permission-btn-once"
-						onClick={() => onDecision("once")}
+						onClick={() => decide("once")}
 					>
-						{t("permission.allowOnce")}
+						{t("permission.allowOnce")} ({permissionShortcutLabel("once")})
 					</button>
 					<button
 						type="button"
 						className="permission-btn-always"
-						onClick={() => onDecision("always")}
+						onClick={() => decide("always")}
 					>
-						{t("permission.allowAlways")}
+						{t("permission.allowAlways")} ({permissionShortcutLabel("always")})
 					</button>
 					<button
 						type="button"
 						className="permission-btn-reject"
-						onClick={() => onDecision("reject")}
+						onClick={() => decide("reject")}
 					>
-						{t("permission.reject")}
+						{t("permission.reject")} ({permissionShortcutLabel("reject")})
 					</button>
 				</div>
 			</div>

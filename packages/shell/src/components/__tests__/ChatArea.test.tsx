@@ -43,10 +43,12 @@ vi.mock("../../lib/tts/synthesize", () => ({
 
 vi.mock("../../lib/voice/audio-queue", () => ({
 	AudioQueue: class {
-		constructor(callbacks: {
-			onPlaybackStart?: () => void;
-			onPlaybackEnd?: () => void;
-		} = {}) {
+		constructor(
+			callbacks: {
+				onPlaybackStart?: () => void;
+				onPlaybackEnd?: () => void;
+			} = {},
+		) {
 			ttsSyncMocks.audioQueueCallbacks = callbacks;
 		}
 		get isActive() {
@@ -453,6 +455,79 @@ describe("ChatArea", () => {
 		});
 		render(<ChatArea />);
 		expect(screen.getByText(/응답 중/)).toBeDefined();
+	});
+
+	it("separates split think-tag text and keeps streaming reasoning collapsed", async () => {
+		localStorage.setItem(
+			"naia-config",
+			JSON.stringify({
+				apiKey: "test-key",
+				provider: "gemini",
+				model: "gemini-2.5-flash",
+			}),
+		);
+		render(<ChatArea />);
+		const input = screen.getByPlaceholderText(/message/i);
+		fireEvent.change(input, { target: { value: "reason carefully" } });
+		fireEvent.keyDown(input, { key: "Enter" });
+
+		await waitFor(() => expect(capturedRequests).toHaveLength(1));
+		const request = capturedRequests[0];
+		for (const text of [
+			"<thi",
+			"nk>private chain",
+			"</thi",
+			"nk>Final answer.",
+		]) {
+			request.onChunk({ type: "text", requestId: request.requestId, text });
+		}
+
+		expect(useChatStore.getState().streamingThinking).toBe("private chain");
+		expect(useChatStore.getState().streamingContent).toBe("Final answer.");
+		const reasoning = await screen.findByText("private chain");
+		expect(reasoning.closest("details")?.hasAttribute("open")).toBe(false);
+
+		request.onChunk({ type: "finish", requestId: request.requestId });
+		const assistant = useChatStore
+			.getState()
+			.messages.find((message) => message.role === "assistant");
+		expect(assistant?.thinking).toBe("private chain");
+		expect(assistant?.content).toBe("Final answer.");
+		localStorage.removeItem("naia-config");
+	});
+
+	it("never sends textual reasoning to sentence TTS", async () => {
+		localStorage.setItem(
+			"naia-config",
+			JSON.stringify({
+				apiKey: "test-key",
+				provider: "gemini",
+				model: "gemini-2.5-flash",
+				ttsEnabled: true,
+				ttsProvider: "edge",
+			}),
+		);
+		render(<ChatArea />);
+		const input = screen.getByPlaceholderText(/message/i);
+		fireEvent.change(input, { target: { value: "speak final only" } });
+		fireEvent.keyDown(input, { key: "Enter" });
+
+		await waitFor(() => expect(capturedRequests).toHaveLength(1));
+		const request = capturedRequests[0];
+		for (const text of [
+			"<think>Secret sentence.",
+			" Still secret.</think>",
+			"Public sentence.",
+		]) {
+			request.onChunk({ type: "text", requestId: request.requestId, text });
+		}
+		request.onChunk({ type: "finish", requestId: request.requestId });
+
+		await waitFor(() => expect(ttsSyncMocks.synthesizeTts).toHaveBeenCalled());
+		expect(
+			ttsSyncMocks.synthesizeTts.mock.calls.map(([input]) => input.text),
+		).toEqual(["Public sentence."]);
+		localStorage.removeItem("naia-config");
 	});
 
 	it("renders ToolActivity for tool_use chunk during streaming", async () => {
@@ -912,8 +987,7 @@ describe("ChatArea", () => {
 				model: "gemini-2.5-flash",
 				ttsEnabled: true,
 				ttsProvider: "naia-local-voice",
-				voiceRefUrl:
-					"http://127.0.0.1:8910/ref/audio/ref_ko_485.wav",
+				voiceRefUrl: "http://127.0.0.1:8910/ref/audio/ref_ko_485.wav",
 				vllmTtsHost: "http://localhost:8910",
 			}),
 		);
@@ -1068,12 +1142,14 @@ describe("ChatArea", () => {
 	});
 
 	it("reveals text without duplicate AudioQueue playback when media runtime fails", async () => {
-		const playAuthoredClip = vi.fn().mockImplementation(
-			(_text: string, opts: { onPlaybackFailure?: () => void }) => {
-				opts.onPlaybackFailure?.();
-				return Promise.resolve();
-			},
-		);
+		const playAuthoredClip = vi
+			.fn()
+			.mockImplementation(
+				(_text: string, opts: { onPlaybackFailure?: () => void }) => {
+					opts.onPlaybackFailure?.();
+					return Promise.resolve();
+				},
+			);
 		useCascadeAvatarStore.setState({
 			renderer: {
 				hasAuthoredClip: () => true,
@@ -1324,9 +1400,7 @@ describe("ChatArea", () => {
 		await waitFor(() =>
 			expect(useAvatarStore.getState().currentEmotion).toBe("neutral"),
 		);
-		expect(
-			screen.getByText(/Can't reach the host voice engine/),
-		).toBeDefined();
+		expect(screen.getByText(/Can't reach the host voice engine/)).toBeDefined();
 		localStorage.removeItem("naia-config");
 	});
 

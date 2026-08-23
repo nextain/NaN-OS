@@ -96,6 +96,7 @@ import {
 	fetchNaiaModelMetadata,
 	fetchNaiaPricing,
 	fetchOllamaModels,
+	fetchOpenAIModels,
 	fetchVllmModels,
 	formatModelLabel,
 	getDefaultLlmModel,
@@ -778,6 +779,10 @@ export function SettingsTab() {
 	const [vllmHost, setVllmHost] = useState(
 		existing?.vllmHost ?? DEFAULT_VLLM_HOST,
 	);
+	const [openaiBaseUrl, setOpenaiBaseUrl] = useState(
+		existing?.openaiBaseUrl ?? "",
+	);
+	const [openaiConnected, setOpenaiConnected] = useState(false);
 	// Naia Local: ws:// address of the user's own omni-24g container (shown when
 	// the `naia-local` model is selected). Reuses the logged-in key — no key input.
 	const [naiaLocalUrl, setNaiaLocalUrl] = useState(
@@ -1782,6 +1787,25 @@ export function SettingsTab() {
 			}
 		});
 	}, [provider, vllmHost]);
+
+	useEffect(() => {
+		if (provider !== "openai") return;
+		let cancelled = false;
+		fetchOpenAIModels(openaiBaseUrl, apiKey).then(({ models, connected }) => {
+			if (cancelled) return;
+			setOpenaiConnected(connected);
+			if (models.length === 0) return;
+			setDynamicModels((previous) => ({ ...previous, openai: models }));
+			setModel((current) =>
+				models.some((candidate) => candidate.id === current)
+					? current
+					: models[0].id,
+			);
+		});
+		return () => {
+			cancelled = true;
+		};
+	}, [provider, openaiBaseUrl, apiKey]);
 
 	// Fetch live Naia pricing from gateway (DB = SoT).
 	// Runs when provider switches to "nextain" so the displayed price always
@@ -2845,6 +2869,10 @@ export function SettingsTab() {
 					: existing?.ollamaHost,
 			vllmHost:
 				provider === "vllm" ? vllmHost.trim() || undefined : existing?.vllmHost,
+			openaiBaseUrl:
+				provider === "openai"
+					? openaiBaseUrl.trim() || undefined
+					: existing?.openaiBaseUrl,
 			naiaLocalUrl: naiaLocalUrl.trim() || undefined,
 			voice: isOmniModel(provider, model) ? voice : existing?.voice,
 			openaiRealtimeApiKey: openaiRealtimeApiKey.trim() || undefined,
@@ -4056,9 +4084,9 @@ export function SettingsTab() {
 																	unknown
 																>,
 															);
-													await writeSlotsManifest(loggedOutConfig);
-													await sendAuthUpdateStrict("");
-													await reloadAgentSettings();
+															await writeSlotsManifest(loggedOutConfig);
+															await sendAuthUpdateStrict("");
+															await reloadAgentSettings();
 														}
 													}}
 												>
@@ -4443,30 +4471,30 @@ export function SettingsTab() {
 
 					{provider !== "nextain" &&
 						(!isApiKeyOptional(provider) || provider === "ollama") && (
-						<div className="settings-field">
-							<label htmlFor="apikey-input">{t("settings.apiKey")}</label>
-							<input
-								id="apikey-input"
-								type="password"
-								value={apiKey}
-								onChange={(e) => {
-									setApiKey(e.target.value);
-									setError("");
-								}}
-								placeholder={
-									hasStoredApiKey
-										? "•••••••• (저장됨 — 변경하려면 입력)"
-										: "sk-..."
-								}
-							/>
-							{provider === "zai" && (
-								<div className="settings-hint">
-									Z.AI <strong>Coding Plan</strong> 구독 후 발급된 API Key를
-									입력하세요.
-								</div>
-							)}
-						</div>
-					)}
+							<div className="settings-field">
+								<label htmlFor="apikey-input">{t("settings.apiKey")}</label>
+								<input
+									id="apikey-input"
+									type="password"
+									value={apiKey}
+									onChange={(e) => {
+										setApiKey(e.target.value);
+										setError("");
+									}}
+									placeholder={
+										hasStoredApiKey
+											? "•••••••• (저장됨 — 변경하려면 입력)"
+											: "sk-..."
+									}
+								/>
+								{provider === "zai" && (
+									<div className="settings-hint">
+										Z.AI <strong>Coding Plan</strong> 구독 후 발급된 API Key를
+										입력하세요.
+									</div>
+								)}
+							</div>
+						)}
 
 					{provider === "ollama" && (
 						<div className="settings-field">
@@ -4499,6 +4527,28 @@ export function SettingsTab() {
 								{vllmConnected
 									? `연결됨 — ${(dynamicModels.vllm ?? []).length}개 모델`
 									: "연결 안 됨 — vLLM 서버가 실행 중인지 확인하세요"}
+							</div>
+						</div>
+					)}
+					{provider === "openai" && (
+						<div className="settings-field">
+							<label htmlFor="openai-base-url">OpenAI Host / Base URL</label>
+							<input
+								id="openai-base-url"
+								type="url"
+								value={openaiBaseUrl}
+								onChange={(event) => setOpenaiBaseUrl(event.target.value)}
+								onBlur={(event) =>
+									persistConfig({
+										openaiBaseUrl: event.target.value.trim() || undefined,
+									})
+								}
+								placeholder="https://api.openai.com/v1"
+							/>
+							<div className="settings-hint">
+								{openaiConnected ? "연결됨" : "연결을 확인하세요"} — 비워 두면
+								OpenAI 공식 endpoint를 사용합니다. OpenAI 호환 서버는
+								http://host:port/v1 형식으로 입력하세요.
 							</div>
 						</div>
 					)}
@@ -4552,70 +4602,72 @@ export function SettingsTab() {
 								/>
 								<datalist id="ollama-model-options">
 									{displayedProviderModels
-										.filter((candidate) => !candidate.capabilities.includes("asr"))
+										.filter(
+											(candidate) => !candidate.capabilities.includes("asr"),
+										)
 										.map((candidate) => (
 											<option key={candidate.id} value={candidate.id} />
 										))}
 								</datalist>
 							</>
 						) : (
-						<select
-							key={`model-select-${modelSortMode}-${displayedProviderModels.map((candidate) => candidate.id).join(":")}`}
-							id="model-select"
-							value={hasSelectedModel ? model : "__custom__"}
-							onChange={(e) => {
-								if (e.target.value === "__custom__") return;
-								setModel(e.target.value);
-								// UC-MODEL-SELECT contract: persist the selection immediately so the gRPC
-								// agent loads THIS model. Previously only Save persisted → a stale model
-								// (e.g. an omni gemini-2.5-flash-live from a prior voice session) survived.
-								// Skip while a nextain login is pending (naia_auth_complete persists then).
-								if (!(provider === "nextain" && !naiaKey)) {
-									const legacySelection = applyModelSelectionToConfig(
-										loadConfig() as Record<string, unknown> | null,
-										provider,
-										e.target.value,
-									);
-									const nextSel = writeConfiguredLlmRole(
-										legacySelection as unknown as AppConfig,
-										"main",
-										{ provider, model: e.target.value },
-									);
-									saveConfig(
-										nextSel as unknown as Parameters<typeof saveConfig>[0],
-									);
-									void writeNaiaConfig(
-										nextSel as unknown as Record<string, unknown>,
-									);
-								}
-								// When switching to an omni model, set default voice if not already set
-								const newMeta = providerModels.find(
-									(m) => m.id === e.target.value,
-								);
-								if (
-									newMeta?.capabilities.includes("omni") &&
-									newMeta.voices?.length
-								) {
-									const currentVoiceValid = newMeta.voices.some(
-										(v) => v.id === voice,
-									);
-									if (!currentVoiceValid) {
-										setVoice(newMeta.voices[0].id);
+							<select
+								key={`model-select-${modelSortMode}-${displayedProviderModels.map((candidate) => candidate.id).join(":")}`}
+								id="model-select"
+								value={hasSelectedModel ? model : "__custom__"}
+								onChange={(e) => {
+									if (e.target.value === "__custom__") return;
+									setModel(e.target.value);
+									// UC-MODEL-SELECT contract: persist the selection immediately so the gRPC
+									// agent loads THIS model. Previously only Save persisted → a stale model
+									// (e.g. an omni gemini-2.5-flash-live from a prior voice session) survived.
+									// Skip while a nextain login is pending (naia_auth_complete persists then).
+									if (!(provider === "nextain" && !naiaKey)) {
+										const legacySelection = applyModelSelectionToConfig(
+											loadConfig() as Record<string, unknown> | null,
+											provider,
+											e.target.value,
+										);
+										const nextSel = writeConfiguredLlmRole(
+											legacySelection as unknown as AppConfig,
+											"main",
+											{ provider, model: e.target.value },
+										);
+										saveConfig(
+											nextSel as unknown as Parameters<typeof saveConfig>[0],
+										);
+										void writeNaiaConfig(
+											nextSel as unknown as Record<string, unknown>,
+										);
 									}
-								}
-							}}
-						>
-							{!hasSelectedModel && model ? (
-								<option value="__custom__">{`${model}${isSelectedAsr ? " 🎤" : ""} (현재값)`}</option>
-							) : null}
-							{displayedProviderModels
-								.filter((m) => !m.capabilities.includes("asr"))
-								.map((m) => (
-									<option key={m.id} value={m.id}>
-										{formatModelLabel(m)}
-									</option>
-								))}
-						</select>
+									// When switching to an omni model, set default voice if not already set
+									const newMeta = providerModels.find(
+										(m) => m.id === e.target.value,
+									);
+									if (
+										newMeta?.capabilities.includes("omni") &&
+										newMeta.voices?.length
+									) {
+										const currentVoiceValid = newMeta.voices.some(
+											(v) => v.id === voice,
+										);
+										if (!currentVoiceValid) {
+											setVoice(newMeta.voices[0].id);
+										}
+									}
+								}}
+							>
+								{!hasSelectedModel && model ? (
+									<option value="__custom__">{`${model}${isSelectedAsr ? " 🎤" : ""} (현재값)`}</option>
+								) : null}
+								{displayedProviderModels
+									.filter((m) => !m.capabilities.includes("asr"))
+									.map((m) => (
+										<option key={m.id} value={m.id}>
+											{formatModelLabel(m)}
+										</option>
+									))}
+							</select>
 						)}
 						<div className="settings-hint">
 							{provider === "nextain" && selectedModelMeta?.pricing ? (

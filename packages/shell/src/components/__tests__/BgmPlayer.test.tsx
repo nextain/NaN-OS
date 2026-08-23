@@ -98,7 +98,9 @@ describe("BgmPlayer YouTube playback state machine", () => {
 		await enqueueTrack("v2", "Song Two (should not play)");
 
 		const events: string[] = [];
-		const unlisten = onAiInterferenceEvent((event) => events.push(event.action));
+		const unlisten = onAiInterferenceEvent((event) =>
+			events.push(event.action),
+		);
 
 		// No onStateChange/infoDelivery ever arrives — simulates a lost status
 		// message on a track that may actually be playing fine.
@@ -107,18 +109,50 @@ describe("BgmPlayer YouTube playback state machine", () => {
 			await Promise.resolve();
 		});
 
-		expect(container.querySelector(".bgm-player")?.getAttribute(
-			"data-bgm-current-title",
-		)).toBe("Song One (watchdog)");
 		expect(
-			container.querySelector(".bgm-player")?.getAttribute(
-				"data-bgm-playback-status",
-			),
+			container
+				.querySelector(".bgm-player")
+				?.getAttribute("data-bgm-current-title"),
+		).toBe("Song One (watchdog)");
+		expect(
+			container
+				.querySelector(".bgm-player")
+				?.getAttribute("data-bgm-playback-status"),
 		).toBe("timeout");
 		// The old behavior called recoverAfterQueueExhausted here, which would
 		// have promoted "Song Two" from the queue. It must not have.
 		expect(bgmPlayback.queue().length).toBe(1);
+		expect(events).toContain("music_timeout");
 		expect(events).not.toContain("music_ended");
+		unlisten();
+	});
+
+	it("notifies the agent when late progress recovers a diagnostic timeout", async () => {
+		vi.useFakeTimers();
+		const { container } = render(<BgmPlayer />);
+		await startTrack("v1", "Late Song");
+		attachIframeForCurrentPlayback();
+		const events: string[] = [];
+		const unlisten = onAiInterferenceEvent((event) =>
+			events.push(event.action),
+		);
+
+		await act(async () => {
+			vi.advanceTimersByTime(13_000);
+			await Promise.resolve();
+		});
+		postYtMessage({
+			event: "infoDelivery",
+			info: { currentTime: 2, duration: 180 },
+		});
+
+		expect(container.querySelector(".bgm-player")).toHaveAttribute(
+			"data-bgm-playback-status",
+			"playing",
+		);
+		expect(events).toEqual(
+			expect.arrayContaining(["music_timeout", "music_recovered"]),
+		);
 		unlisten();
 	});
 
@@ -130,12 +164,15 @@ describe("BgmPlayer YouTube playback state machine", () => {
 
 		// No onStateChange "playing" (state=1) ever arrives — only infoDelivery,
 		// simulating the documented WebView2 handshake-loss case.
-		postYtMessage({ event: "infoDelivery", info: { currentTime: 5, duration: 200 } });
+		postYtMessage({
+			event: "infoDelivery",
+			info: { currentTime: 5, duration: 200 },
+		});
 
 		expect(
-			container.querySelector(".bgm-player")?.getAttribute(
-				"data-bgm-playback-status",
-			),
+			container
+				.querySelector(".bgm-player")
+				?.getAttribute("data-bgm-playback-status"),
 		).toBe("playing");
 
 		// The 12s watchdog must not override a status it already knows is playing.
@@ -144,9 +181,9 @@ describe("BgmPlayer YouTube playback state machine", () => {
 			await Promise.resolve();
 		});
 		expect(
-			container.querySelector(".bgm-player")?.getAttribute(
-				"data-bgm-playback-status",
-			),
+			container
+				.querySelector(".bgm-player")
+				?.getAttribute("data-bgm-playback-status"),
 		).toBe("playing");
 	});
 

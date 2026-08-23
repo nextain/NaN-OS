@@ -11,7 +11,7 @@ import { shell } from "@codemirror/legacy-modes/mode/shell";
 import { EditorState, Transaction } from "@codemirror/state";
 import { oneDark } from "@codemirror/theme-one-dark";
 import { EditorView, keymap, lineNumbers } from "@codemirror/view";
-import { invoke } from "@tauri-apps/api/core";
+import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import AnsiToHtml from "ansi-to-html";
 import DOMPurify from "dompurify";
 import Papa from "papaparse";
@@ -27,11 +27,16 @@ import {
 import { Document, Page as PdfPage, pdfjs } from "react-pdf";
 import "react-pdf/dist/Page/AnnotationLayer.css";
 import "react-pdf/dist/Page/TextLayer.css";
-import mermaid from "mermaid";
 import pdfWorkerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
+import { MermaidBlock } from "../../components/MarkdownCodeBlock";
 import { Logger } from "../../lib/logger";
-import { AUTOSAVE_DEBOUNCE_MS } from "./constants";
 import { MarkdownPreview } from "./MarkdownPreview";
+import { AUTOSAVE_DEBOUNCE_MS } from "./constants";
+import {
+	isWorkspaceMediaFile,
+	resolveWorkspaceViewer,
+	workspaceMediaMime,
+} from "./viewer-registry";
 
 pdfjs.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 
@@ -43,7 +48,9 @@ type ViewMode =
 	| "csv"
 	| "log"
 	| "pdf"
-	| "hwp";
+	| "hwp"
+	| "audio"
+	| "video";
 
 interface EditorProps {
 	/** Absolute path of the file being edited. Empty = no file open. */
@@ -113,63 +120,10 @@ function isHwpFile(filePath: string): boolean {
 }
 
 function detectViewMode(filePath: string): ViewMode {
-	if (isImageFile(filePath)) return "image";
-	if (isPdfFile(filePath)) return "pdf";
-	if (isCsvFile(filePath)) return "csv";
-	if (isLogFile(filePath)) return "log";
-	if (isHwpFile(filePath)) return "hwp";
-	if (isMarkdownFile(filePath)) return "preview";
-	return "editor";
+	return resolveWorkspaceViewer(filePath);
 }
 
 const ansiConverter = new AnsiToHtml({ escapeXML: true });
-
-mermaid.initialize({
-	startOnLoad: false,
-	theme: "dark",
-	// WebKitGTK does not reliably render <foreignObject> in SVG.
-	// Force pure SVG <text> elements for all labels.
-	htmlLabels: false,
-	flowchart: { htmlLabels: false },
-	sequence: { useHtmlLabels: false } as Record<string, unknown>,
-});
-
-let mermaidIdCounter = 0;
-
-function MermaidBlock({ code }: { code: string }) {
-	const containerRef = useRef<HTMLDivElement>(null);
-	const [error, setError] = useState<string | null>(null);
-
-	useEffect(() => {
-		if (!containerRef.current || !code.trim()) return;
-		const id = `mermaid-${++mermaidIdCounter}`;
-		let cancelled = false;
-		mermaid
-			.render(id, code.trim())
-			.then(({ svg }) => {
-				if (!cancelled && containerRef.current) {
-					containerRef.current.innerHTML = DOMPurify.sanitize(svg);
-					setError(null);
-				}
-			})
-			.catch((err) => {
-				if (!cancelled) setError(String(err?.message ?? err));
-			});
-		return () => {
-			cancelled = true;
-		};
-	}, [code]);
-
-	if (error) {
-		return (
-			<div className="workspace-editor__mermaid-error">
-				Mermaid 오류: {error}
-			</div>
-		);
-	}
-
-	return <div ref={containerRef} className="workspace-editor__mermaid" />;
-}
 
 /** Custom code block renderer — intercepts ```mermaid blocks */
 function CodeBlock({
@@ -243,6 +197,9 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
 	} | null>(null);
 	const [imageBlobUrl, setImageBlobUrl] = useState<string | null>(null);
 	const [pdfBlobUrl, setPdfBlobUrl] = useState<string | null>(null);
+	const [mediaError, setMediaError] = useState("");
+	const [playbackRate, setPlaybackRate] = useState(1);
+	const mediaRef = useRef<HTMLMediaElement | null>(null);
 
 	const isMd = filePath ? isMarkdownFile(filePath) : false;
 
@@ -254,6 +211,8 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
 		setPdfNumPages(0);
 		setImageZoom("fit");
 		setImageInfo(null);
+		setMediaError("");
+		setPlaybackRate(1);
 		// Revoke previous blob URLs to free memory
 		setImageBlobUrl((prev) => {
 			if (prev) URL.revokeObjectURL(prev);
@@ -385,7 +344,12 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
 			return;
 		}
 		// Images and PDFs are rendered via blob URL — no text read needed
-		if (isImageFile(filePath) || isPdfFile(filePath) || isHwpFile(filePath)) {
+		if (
+			isImageFile(filePath) ||
+			isPdfFile(filePath) ||
+			isHwpFile(filePath) ||
+			isWorkspaceMediaFile(filePath)
+		) {
 			setContent("");
 			setLoadError(null);
 			loadErrorRef.current = false;
@@ -459,7 +423,12 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
 	const reloadFile = useCallback(async () => {
 		if (!filePath) return;
 		// Images and PDFs use blob URLs — no text reload needed
-		if (isImageFile(filePath) || isPdfFile(filePath)) return;
+		if (
+			isImageFile(filePath) ||
+			isPdfFile(filePath) ||
+			isWorkspaceMediaFile(filePath)
+		)
+			return;
 		setReloading(true);
 		try {
 			const text = await invoke<string>("workspace_read_file", {
@@ -847,7 +816,70 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
 			</div>
 
 			{/* Viewer / Editor area */}
-			{viewMode === "image" ? (
+			{viewMode === "audio" || viewMode === "video" ? (
+				<div className="workspace-editor__media-viewer">
+					{viewMode === "audio" ? (
+						// biome-ignore lint/a11y/useMediaCaption: arbitrary local audio has no companion caption track
+						<audio
+							key={filePath}
+							ref={(element) => {
+								mediaRef.current = element;
+							}}
+							controls
+							preload="metadata"
+							src={convertFileSrc(filePath)}
+							onError={() =>
+								setMediaError(
+									"이 오디오 파일을 재생할 수 없습니다. 파일이 손상되었거나 지원하지 않는 코덱일 수 있습니다.",
+								)
+							}
+							aria-label={`${shortName} audio player`}
+						/>
+					) : (
+						// biome-ignore lint/a11y/useMediaCaption: arbitrary local video has no discoverable companion caption track
+						<video
+							key={filePath}
+							ref={(element) => {
+								mediaRef.current = element;
+							}}
+							controls
+							preload="metadata"
+							src={convertFileSrc(filePath)}
+							onError={() =>
+								setMediaError(
+									"이 동영상 파일을 재생할 수 없습니다. 파일이 손상되었거나 지원하지 않는 코덱일 수 있습니다.",
+								)
+							}
+							aria-label={`${shortName} video player`}
+						/>
+					)}
+					<label className="workspace-editor__media-rate">
+						재생 속도
+						<select
+							value={playbackRate}
+							onChange={(event) => {
+								const rate = Number(event.target.value);
+								setPlaybackRate(rate);
+								if (mediaRef.current) mediaRef.current.playbackRate = rate;
+							}}
+						>
+							{[0.5, 0.75, 1, 1.25, 1.5, 2].map((rate) => (
+								<option key={rate} value={rate}>
+									{rate}×
+								</option>
+							))}
+						</select>
+					</label>
+					<span className="workspace-editor__media-format">
+						{workspaceMediaMime(filePath)}
+					</span>
+					{mediaError && (
+						<div className="workspace-editor__media-error" role="alert">
+							{mediaError}
+						</div>
+					)}
+				</div>
+			) : viewMode === "image" ? (
 				<div className="workspace-editor__image-viewer">
 					<div className="workspace-editor__image-toolbar">
 						<button

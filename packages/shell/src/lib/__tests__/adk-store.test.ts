@@ -33,6 +33,7 @@ vi.mock("../secure-store", () => ({
 import {
 	applyModelSelectionToConfig,
 	applyWorkspaceConfigToLocal,
+	buildNaiaConfigEnv,
 	clearAdkPath,
 	copyBundledAssets,
 	getAdkPath,
@@ -258,10 +259,7 @@ describe("listNaiaAssets", () => {
 
 	it("calls invoke with correct args and maps filenames to absolute paths (Windows)", async () => {
 		await setAdkPath(WIN_ADK);
-		mockInvoke.mockResolvedValue([
-			"01-OL_Woman.vrm",
-			"02-Hood_Boy.vrm",
-		]);
+		mockInvoke.mockResolvedValue(["01-OL_Woman.vrm", "02-Hood_Boy.vrm"]);
 
 		const result = await listNaiaAssets("vrm-files");
 
@@ -340,6 +338,20 @@ describe("readNaiaConfig", () => {
 });
 
 describe("writeNaiaConfig", () => {
+	it("scopes and normalizes an OpenAI-compatible base URL", () => {
+		expect(
+			buildNaiaConfigEnv({
+				provider: "openai",
+				openaiBaseUrl: "http://gpu:11435/v1/",
+			}),
+		).toMatchObject({ OPENAI_BASE_URL: "http://gpu:11435/v1" });
+		expect(
+			buildNaiaConfigEnv({
+				provider: "gemini",
+				openaiBaseUrl: "http://stale/v1",
+			}),
+		).not.toHaveProperty("OPENAI_BASE_URL");
+	});
 	it("does nothing when adk path not set", async () => {
 		await writeNaiaConfig({ provider: "gemini" });
 		expect(mockInvoke).not.toHaveBeenCalled();

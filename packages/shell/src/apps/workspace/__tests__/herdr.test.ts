@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseFileLocation } from "../Terminal";
+import { parseFileLocation, shouldOpenTerminalFileLink } from "../Terminal";
 import {
 	type HerdrSnapshot,
 	activeHerdrRoot,
@@ -120,5 +120,20 @@ describe("Herdr workspace boundary", () => {
 			"~/notes.md",
 		);
 		expect(parseFileLocation("../../secrets.pem:2", "/work/naia")).toBeNull();
+	});
+
+	it("requires the platform primary modifier to activate terminal file links", () => {
+		expect(
+			shouldOpenTerminalFileLink({ ctrlKey: true, metaKey: false }, "other"),
+		).toBe(true);
+		expect(
+			shouldOpenTerminalFileLink({ ctrlKey: false, metaKey: true }, "macos"),
+		).toBe(true);
+		expect(
+			shouldOpenTerminalFileLink({ ctrlKey: false, metaKey: false }, "other"),
+		).toBe(false);
+		expect(
+			shouldOpenTerminalFileLink({ ctrlKey: true, metaKey: false }, "macos"),
+		).toBe(false);
 	});
 });

@@ -15,6 +15,7 @@ export {
 	applyCapabilityOverrides,
 	applyNaiaModelMetadata,
 	fetchOllamaModels,
+	fetchOpenAIModels,
 	fetchVllmModels,
 	formatModelLabel,
 	getModelPriceScore,

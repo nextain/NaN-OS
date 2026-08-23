@@ -1,0 +1,72 @@
+version: "0.2.2"
+date: "2026-08-23"
+summary:
+  en: "Chat, local-provider, workspace, permission, BGM, localization, and CLI reliability improvements. VoxCPM2 audio distortion remains tracked separately and is not part of this release note."
+  ko: "채팅, 로컬 프로바이더, 워크스페이스, 권한, BGM, 번역과 CLI 안정성을 개선합니다. VoxCPM2 음성 갈라짐은 별도 추적 중이며 이 업데이트 내역에 포함하지 않습니다."
+changes:
+  - type: feature
+    scope: providers
+    issue: 475
+    description:
+      en: "Configure a custom OpenAI-compatible Base URL for local and self-hosted servers."
+      ko: "로컬·자체 호스팅 서버를 위해 OpenAI 호환 Base URL을 설정할 수 있습니다."
+  - type: feature
+    scope: permissions
+    issue: 477
+    description:
+      en: "Use consistent keyboard shortcuts to approve or reject tool permission requests exactly once."
+      ko: "공통 키보드 단축키로 도구 권한 요청을 정확히 한 번 승인하거나 거절할 수 있습니다."
+  - type: fix
+    scope: chat
+    issue: 479
+    description:
+      en: "Separate reasoning from final answers and prevent hidden reasoning from reaching speech output."
+      ko: "추론 과정을 최종 답변과 분리하고 숨은 추론이 음성으로 재생되지 않게 합니다."
+  - type: refactor
+    scope: voice
+    issue: 480
+    description:
+      en: "Apply one shared text-normalization pipeline before LLM replies reach TTS."
+      ko: "LLM 답변이 TTS에 전달되기 전에 하나의 공통 텍스트 정규화 파이프라인을 적용합니다."
+  - type: feature
+    scope: workspace
+    issue: 482
+    description:
+      en: "Preview MP3, WAV, and MP4 files with native audio and video controls."
+      ko: "MP3, WAV, MP4 파일을 기본 오디오·비디오 컨트롤로 미리 봅니다."
+  - type: feature
+    scope: chat
+    issue: 483
+    description:
+      en: "Render GFM, syntax-highlighted code blocks, Mermaid diagrams, and workspace file output in chat."
+      ko: "채팅에서 GFM, 구문 강조 코드 블록, Mermaid 다이어그램과 워크스페이스 파일 출력을 표시합니다."
+  - type: feature
+    scope: cli
+    issue: 484
+    description:
+      en: "Register the naia Shell command and open a supplied file while renaming the managed Discord launcher to naia-gateway."
+      ko: "naia 셸 명령으로 전달한 파일을 열고 관리형 디스코드 런처 이름은 naia-gateway로 변경합니다."
+  - type: fix
+    scope: bgm
+    issue: 430
+    description:
+      en: "Accept delayed playback acknowledgements and report blocked embeds without false failure or silence."
+      ko: "늦게 도착한 재생 확인을 수용하고 임베드 차단을 거짓 실패나 침묵 없이 알립니다."
+  - type: fix
+    scope: workspace
+    issue: 432
+    description:
+      en: "Use the platform primary modifier when opening terminal file paths and preserve ordinary selection behavior."
+      ko: "터미널 파일 경로를 열 때 플랫폼별 기본 보조키를 사용하고 일반 선택 동작은 보존합니다."
+  - type: fix
+    scope: i18n
+    issue: 437
+    description:
+      en: "Apply the saved or OS locale before first render and keep recovery UI localized."
+      ko: "첫 화면 전에 저장 언어 또는 OS 언어를 적용하고 복구 UI의 번역을 일관되게 유지합니다."
+  - type: fix
+    scope: apps
+    issue: 472
+    description:
+      en: "Use one canonical app directory for install, listing, removal, and safe legacy migration."
+      ko: "설치, 목록, 삭제와 안전한 기존 데이터 이전에 하나의 표준 앱 디렉터리를 사용합니다."
