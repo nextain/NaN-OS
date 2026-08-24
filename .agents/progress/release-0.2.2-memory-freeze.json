@@ -1,0 +1,25 @@
+{
+  "schema_version": "1.0",
+  "contract_id": "release-0.2.2-memory-freeze",
+  "contract_digest": "f4aa663697b0fab947b30ee7b2e9cd916cd81f3ca7bc2d5dafb439535616d7be",
+  "current_phase": "in-progress",
+  "current_task": "Synchronize final evidence and publish the release freeze branch.",
+  "gates_cleared": [
+    "naia-memory: 23 files / 385 tests, typecheck, build",
+    "naia-agent memory boundary: 5 files / 98 tests, build",
+    "naia-shell pairing/platform: 2 files / 53 tests, production build",
+    "naia-shell root: 25 files / 231 tests, build"
+  ],
+  "key_decisions": [
+    "Freeze product code independently from the naia-memory research branch.",
+    "Use CPU only; GPU 1 belongs to another session.",
+    "Do not claim global memory-engine superiority without eligible same-contract competitor receipts."
+  ],
+  "evidence": [
+    "Found that b88f3f0 ignored the Agent auth option and failed 2 gateway-header contract tests.",
+    "Cherry-picked the isolated gateway auth change as naia-memory 46c300825a22478e062772ec7cab234be956328f and pushed release/0.2.2-memory-freeze.",
+    "The complete Shell suite retains 12 VoxCPM2 artifact-dependent failures unrelated to memory; release-specific pairing tests pass.",
+    "Self-adversarial review found and corrected the gateway-auth pin and release-note issue mapping. OpenCode and Claude headless attempts did not return a bounded verdict, so formal cross-model review is NOT_RUN."
+  ],
+  "updated_at": "2026-08-24T20:05:00+09:00"
+}

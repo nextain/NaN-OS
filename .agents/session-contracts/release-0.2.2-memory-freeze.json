@@ -1,0 +1,66 @@
+{
+  "schema_version": "1.0",
+  "id": "release-0.2.2-memory-freeze",
+  "status": "active",
+  "project_root": ".",
+  "goal": "Naia Shell 0.2.2에 검증된 Naia Memory 제품 경로를 동결하고 릴리스 노트와 경쟁력 보고서에 정확히 명시한다.",
+  "scope": [
+    "origin/main의 Shell-Agent-Memory 고정 커밋 조합을 재현하고 제품 배선을 검증한다.",
+    "0.2.2 릴리스 노트에 Naia Memory 포함 사실과 사용자 가치를 추가한다.",
+    "제품 동결선, 검증 결과, 성능 위치, 한계를 공개 가능한 보고서로 기록한다.",
+    "검증된 변경만 release/0.2.2-memory-freeze 브랜치에 커밋하고 푸시한다."
+  ],
+  "non_goals": [
+    "naia-memory 연구 브랜치의 미승격 실험 코드를 0.2.2에 포함",
+    "검증되지 않은 글로벌 경쟁 엔진 우위 주장",
+    "GPU 1 사용",
+    "사용자 작업이 존재하는 기존 naia-shell 작업트리 변경"
+  ],
+  "success_criteria": [
+    "Shell 0.2.2 빌드가 고정한 Agent와 Memory 커밋을 보고서에 기록한다.",
+    "기억 저장 경로, 프로젝트 격리, 저장-재시작-회상 경로의 테스트 근거를 확인한다.",
+    "릴리스 노트와 동결 보고서가 과장 없이 제품 성능과 연구 성능을 구분한다.",
+    "관련 검증과 적대 리뷰 결과를 기록하고 변경을 원격 브랜치에 푸시한다."
+  ],
+  "allowed_paths": [
+    ".github/workflows/build-installers.yml",
+    "releases/v0.2.2.yaml",
+    "docs/reports/naia-memory-v0.2.2-release-freeze.ko.md",
+    ".agents/progress/release-0.2.2-memory-freeze.json",
+    ".agents/session-contracts/release-0.2.2-memory-freeze.json",
+    ".agents/session-contracts/.session-map.json"
+  ],
+  "target_ownership": [
+    ".github/workflows/build-installers.yml",
+    "releases/v0.2.2.yaml",
+    "docs/reports/naia-memory-v0.2.2-release-freeze.ko.md",
+    ".agents/progress/release-0.2.2-memory-freeze.json",
+    ".agents/session-contracts/release-0.2.2-memory-freeze.json",
+    ".agents/session-contracts/.session-map.json"
+  ],
+  "audiences": ["operator", "release", "public"],
+  "source_refs": ["conversation://019fefbd-32a1-79a1-a74e-e6a5f659d478"],
+  "allowed_shell_commands": [
+    "git status --short --branch",
+    "git diff --check",
+    "pnpm install --frozen-lockfile",
+    "pnpm test",
+    "pnpm build",
+    "pnpm -C packages/shell test",
+    "pnpm -C packages/shell build",
+    "node packages/shell/scripts/stage-runtime.mjs",
+    "opencode run --pure -m opencode/big-pickle",
+    "claude --print --permission-mode plan",
+    "git add",
+    "git commit",
+    "git push origin release/0.2.2-memory-freeze"
+  ],
+  "session_bindings": [
+    {
+      "session_id": "019fefbd-32a1-79a1-a74e-e6a5f659d478",
+      "contract_digest": "f4aa663697b0fab947b30ee7b2e9cd916cd81f3ca7bc2d5dafb439535616d7be"
+    }
+  ],
+  "progress_file": ".agents/progress/release-0.2.2-memory-freeze.json",
+  "contract_digest": "f4aa663697b0fab947b30ee7b2e9cd916cd81f3ca7bc2d5dafb439535616d7be"
+}

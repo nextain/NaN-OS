@@ -5,6 +5,12 @@ summary:
   ko: "채팅, 로컬 프로바이더, 워크스페이스, 권한, BGM, 번역과 CLI 안정성을 개선합니다. VoxCPM2 음성 갈라짐은 별도 추적 중이며 이 업데이트 내역에 포함하지 않습니다."
 changes:
   - type: feature
+    scope: memory
+    issue: 174
+    description:
+      en: "Ship persistent, workspace-isolated Naia Memory through the pinned Shell-Agent runtime, with Korean-capable offline semantic retrieval and safe keyword-only fallback."
+      ko: "고정된 Shell-Agent 런타임을 통해 워크스페이스별로 격리된 영속 Naia Memory를 제공하며, 한국어 지원 오프라인 시맨틱 검색과 안전한 키워드 전용 폴백을 지원합니다."
+  - type: feature
     scope: providers
     issue: 475
     description:
