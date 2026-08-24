@@ -11,7 +11,7 @@ Naia Shell 0.2.2 설치 빌드는 다음 소스를 커밋 단위로 고정한다
 | 구성요소 | 동결 커밋 | 역할 |
 |---|---|---|
 | naia-shell | `7aa90a8e` 기반 + 본 동결 변경 | 제품 UI, 설정, 설치 산출물과 런타임 스테이징 |
-| naia-agent | `f7b25de8a6d108e7c89e54aedf53156640249ded` | 메모리 설정 해석, 저장·회상 UC, 격리와 프롬프트 연결 |
+| naia-agent | `bd70c44c39d32f693eab99994374194c21e37f7f` | 메모리 설정 해석, 저장·회상 UC, 격리와 프롬프트 연결 |
 | naia-memory | `46c300825a22478e062772ec7cab234be956328f` | 영속 저장, 사실/에피소드, 검색, 압축, 오프라인 임베딩, Naia 게이트웨이 인증 |
 
 Shell의 설치 워크플로가 Agent와 Memory를 각각 위 커밋으로 checkout한 뒤 `pnpm install --frozen-lockfile`을 실행한다. 따라서 Agent의 로컬 파일 의존성(`file:../naia-memory`)도 설치 빌드에서는 재현 가능한 단일 조합으로 닫힌다.
