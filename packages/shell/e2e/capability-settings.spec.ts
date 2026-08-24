@@ -133,7 +133,7 @@ test.describe("Capability-driven settings (#365)", () => {
 			page.locator('[data-testid="model-price-sort-basis"]'),
 		).toContainText(/3\s*:\s*.*1/);
 		await expect(modelSelect.locator('option[value="grok-4.3"]')).toHaveText(
-			/Grok 4\.3 \(Pricing: \$0\.400 \/ \$1\.200\)/,
+			/Grok 4\.3 \((?:Pricing:|Price per 1M tokens: Input) \$0\.400 \/ (?:Output )?\$1\.200\)/,
 		);
 		await expect(
 			modelSelect.locator('option[value="claude-opus-5"]'),

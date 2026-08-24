@@ -116,7 +116,9 @@ test("UC-JEONJU-COURSE-READINESS: student checks Codex before selecting the cour
 		provider: "codex",
 		model: "gpt-5.4",
 		apiKey: "",
-		workspaceRoot: "D:\\course\\jeonju-workshop",
+		// The native ADK-path cache is the workspace SoT and deliberately repairs
+		// the stale workspaceRoot seeded above during boot.
+		workspaceRoot: "/tmp/mock-naia-adk-workspace",
 	});
 
 	// Connections is intentionally not shipped yet. Course readiness keeps that

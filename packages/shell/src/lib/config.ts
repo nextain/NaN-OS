@@ -203,6 +203,8 @@ export interface AppConfig {
 	 * laptop 4060 profile reserves VRAM for Ditto and VoxCPM2. */
 	ollamaNumGpu?: number;
 	vllmHost?: string;
+	/** Optional OpenAI-compatible API root. Empty uses api.openai.com/v1. */
+	openaiBaseUrl?: string;
 	/** vLLM endpoint for STT/ASR (e.g. Qwen3-ASR). */
 	vllmSttHost?: string;
 	/**
@@ -267,6 +269,8 @@ export interface AppConfig {
 	bgmYoutubeChannel?: string;
 	/** Last playing YouTube thumbnail URL. */
 	bgmYoutubeThumbnail?: string;
+	/** Whether the YouTube BGM iframe is visible as the app background. */
+	bgmYoutubeBackgroundVideo?: boolean;
 	/** Last BGM volume (0–1). */
 	bgmVolume?: number;
 	/** Whether BGM was playing when the app was closed. */

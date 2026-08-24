@@ -161,6 +161,11 @@ test.describe("UC8 BGM 스킬 배선 (FR-BGM.1)", () => {
 					: soakDurationMs >= 6000
 						? 3600
 						: Math.max(30, Math.round(soakDurationMs / 10));
+				const holdPlayback =
+					videoId.startsWith("hold-") ||
+					(videoId === "e2evid001" &&
+						iframeRequests.filter((request) => request.videoId === videoId)
+							.length >= 2);
 				const fixtureBody = videoId.startsWith("timeout-")
 					? "<!doctype html><title>Never becomes ready</title>"
 					: videoId.startsWith("error-")
@@ -168,7 +173,7 @@ test.describe("UC8 BGM 스킬 배선 (FR-BGM.1)", () => {
 					parent.postMessage(JSON.stringify({ event: "onReady" }), "*");
 					setTimeout(() => parent.postMessage(JSON.stringify({ event: "onError", info: 150 }), "*"), 700);
 				</script>`
-						: videoId.startsWith("hold-")
+						: holdPlayback
 							? `<!doctype html><script>
 						parent.postMessage(JSON.stringify({ event: "onReady" }), "*");
 						setTimeout(() => parent.postMessage(JSON.stringify({ event: "onStateChange", info: 1 }), "*"), 700);
@@ -383,9 +388,22 @@ test.describe("UC8 BGM 스킬 배선 (FR-BGM.1)", () => {
 		expect(new Set(playbackAttempts).size).toBeGreaterThanOrEqual(2);
 
 		const playToggle = page.locator(".bgm-btn--play");
-		await expect(playToggle).toHaveText("Ⅱ");
+		await expect(playToggle).toHaveText("■");
+		await expect(playToggle).toHaveAttribute("aria-label", "정지");
+		await page.locator(".bgm-icon").click({ force: true });
+		const backgroundVideo = page.locator(
+			".bgm-yt-background-option input[type=checkbox]",
+		);
+		await expect(backgroundVideo).toBeChecked();
+		await backgroundVideo.uncheck();
+		await expect(page.locator("html")).toHaveAttribute(
+			"data-bgm-youtube-background",
+			"hidden",
+		);
+		await expect(page.locator(".app-bg-iframe")).toBeAttached();
 		await playToggle.click();
 		await expect(playToggle).toHaveText("▶");
+		await expect(playToggle).toHaveAttribute("aria-label", "재생");
 		await expect(page.locator(".bgm-player")).toHaveAttribute(
 			"data-bgm-playback-status",
 			"paused",

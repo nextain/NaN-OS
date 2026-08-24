@@ -16,6 +16,7 @@ import { TitleBar } from "./components/TitleBar";
 import { UpdateBanner } from "./components/UpdateBanner";
 import { UpdatePrompt } from "./components/UpdatePrompt";
 import { VideoAvatarCanvas } from "./components/VideoAvatarCanvas";
+import type { WorkspaceAppApi } from "./apps/workspace/WorkspaceCenterArea";
 import { getBridgeForPanel } from "./lib/active-bridge";
 import {
 	beginNaiaConfigHydration,
@@ -212,6 +213,10 @@ export function App() {
 		);
 	}
 	const [showSplash, setShowSplash] = useState(true);
+	const [pendingCliFile, setPendingCliFile] = useState<{
+		path: string;
+		requestId: number;
+	} | null>(null);
 	const [showAdkSetup, setShowAdkSetup] = useState(!isAdkInitialized());
 	const [localeHydrated, setLocaleHydrated] = useState(showAdkSetup);
 	const [showOnboarding, setShowOnboarding] = useState(false);
@@ -285,9 +290,9 @@ export function App() {
 	// until localStorage has been hydrated FROM naia-settings files, so the stale
 	// pre-hydration cache can never be written back into config.json.
 	const configHydratedRef = useRef(false);
-	const startupUpdateCheckRef = useRef<ReturnType<typeof checkForUpdate> | null>(
-		null,
-	);
+	const startupUpdateCheckRef = useRef<ReturnType<
+		typeof checkForUpdate
+	> | null>(null);
 	const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
 	const [showUpdatePrompt, setShowUpdatePrompt] = useState(false);
 	const [announcements, setAnnouncements] = useState<Announcement[]>([]);
@@ -731,7 +736,11 @@ export function App() {
 			// Explicit full webview reload. Ctrl+R is captured by the workspace
 			// (document reload) so it never refreshes the app; Ctrl+Shift+R always
 			// reloads — useful to re-launch Herdr / recover a desynced webview.
-			if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === "r") {
+			if (
+				(e.ctrlKey || e.metaKey) &&
+				e.shiftKey &&
+				e.key.toLowerCase() === "r"
+			) {
 				e.preventDefault();
 				window.location.reload();
 			}
@@ -762,6 +771,45 @@ export function App() {
 			unlisten.then((fn) => fn());
 		};
 	}, []);
+
+	// #484: accept both cold-start argv and subsequent single-instance argv.
+	// Keep the path in memory until the keep-alive Workspace API has mounted;
+	// never copy it into a URL, storage, or diagnostic log.
+	useEffect(() => {
+		let requestId = 0;
+		const queueFile = (path: string | null | undefined) => {
+			if (path) setPendingCliFile({ path, requestId: ++requestId });
+		};
+		const unlisten = listen<string>("workspace-open-file-request", (event) => {
+			queueFile(event.payload);
+		});
+		void invoke<string | null>("get_startup_open_file")
+			.then(queueFile)
+			.catch(() => {});
+		return () => {
+			unlisten.then((fn) => fn());
+		};
+	}, []);
+
+	useEffect(() => {
+		if (!pendingCliFile || showSplash || showAdkSetup || showOnboarding) return;
+		let attempts = 0;
+		let retryTimer: number | undefined;
+		const openWhenReady = () => {
+			const workspace = appRegistry.getApi<WorkspaceAppApi>("workspace");
+			if (!workspace) {
+				if (++attempts < 40) retryTimer = window.setTimeout(openWhenReady, 50);
+				return;
+			}
+			useAppStore.getState().setActiveApp("workspace");
+			workspace.openFile(pendingCliFile.path);
+			setPendingCliFile((current) =>
+				current?.requestId === pendingCliFile.requestId ? null : current,
+			);
+		};
+		openWhenReady();
+		return () => window.clearTimeout(retryTimer);
+	}, [pendingCliFile, showAdkSetup, showOnboarding, showSplash]);
 
 	useEffect(() => {
 		const unlisten = listen<{ naiaKey?: string }>(

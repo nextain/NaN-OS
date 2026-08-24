@@ -62,6 +62,16 @@ const MOCK_SCRIPT = `
     if (cmd === "plugin:event|emit") { emitEvent(args.event, args.payload); return null; }
     if (cmd === "plugin:event|unlisten") return;
 
+    // config.json is the startup source of truth. Returning the scenario's
+    // config here prevents the base mock's empty file from replacing it with
+    // defaults during hydration.
+    if (cmd === "read_naia_config") {
+      window.__E2E_CONFIG_READ__ = true;
+      return window.__E2E_CONFIG__
+        ? JSON.stringify(window.__E2E_CONFIG__)
+        : null;
+    }
+
     if (cmd === "send_to_agent_command") {
       var payload = JSON.parse(args.message);
       window.__E2E_OUTBOUND__.push(payload);
@@ -89,7 +99,7 @@ const MOCK_SCRIPT = `
 `;
 
 function configScript(cfg: Record<string, unknown>): string {
-	return `localStorage.setItem("naia-config", ${JSON.stringify(JSON.stringify(cfg))});`;
+	return `window.__E2E_CONFIG__ = ${JSON.stringify(cfg)}; localStorage.setItem("naia-config", ${JSON.stringify(JSON.stringify(cfg))});`;
 }
 
 async function boot(page: import("@playwright/test").Page, cfg: Record<string, unknown>) {
@@ -150,6 +160,9 @@ test.describe("UC1 라우팅 가드 — omni 모델 → realtime 우회", () => 
 		await boot(page, {
 			provider: "nextain",
 			model: "naia-0.9-omni-24g",
+			llmRoles: {
+				main: { provider: "nextain", model: "naia-0.9-omni-24g" },
+			},
 			naiaKey: "e2e-naia-key",
 			locale: "ko",
 			onboardingComplete: true,
@@ -157,10 +170,49 @@ test.describe("UC1 라우팅 가드 — omni 모델 → realtime 우회", () => 
 	});
 
 	test("omni 모델 입력 → 새 core chat_request 미전송(=realtime 직행)", async ({ page }) => {
+		await expect
+			.poll(() =>
+				page.evaluate(
+					() =>
+						(window as unknown as { __E2E_CONFIG_READ__?: boolean })
+							.__E2E_CONFIG_READ__,
+				),
+			)
+			.toBe(true);
+		// Finish the startup hydration, then establish this test's routing
+		// precondition at the same local config boundary that handleSend reads.
+		// The boot merger is allowed to fill role defaults, so the initial seed is
+		// not itself a stable synchronization point.
+		await page.evaluate(
+			() =>
+				new Promise<void>((resolve) =>
+					requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+				),
+		);
 		const input = page.locator(".chat-input");
 		await expect(input).toBeEnabled({ timeout: 5_000 });
 		await input.fill("안녕");
-		await input.press("Enter");
+		// Set the precondition and dispatch Enter in one browser task. This makes
+		// handleSend capture the omni config before any unrelated startup task can
+		// persist defaults between two separate Playwright commands.
+		await input.evaluate((element) => {
+			const raw = localStorage.getItem("naia-config");
+			const config = raw ? JSON.parse(raw) : {};
+			config.provider = "nextain";
+			config.model = "naia-0.9-omni-24g";
+			config.llmRoles = {
+				...(config.llmRoles ?? {}),
+				main: { provider: "nextain", model: "naia-0.9-omni-24g" },
+			};
+			localStorage.setItem("naia-config", JSON.stringify(config));
+			element.dispatchEvent(
+				new KeyboardEvent("keydown", {
+					key: "Enter",
+					code: "Enter",
+					bubbles: true,
+				}),
+			);
+		});
 
 		// realtime 경로로 갈라지므로 새 core 텍스트 chat_request 는 나오면 안 됨(이 라우팅이 우리를 매번 헷갈리게 한 지점).
 		await page.waitForTimeout(2_500);

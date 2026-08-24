@@ -111,6 +111,28 @@ describe("useHerdrRuntime", () => {
 		);
 	});
 
+	it("binds the file tree before a stalled Herdr snapshot resolves", async () => {
+		const readiness = deferred<HerdrSnapshot>();
+		mockInvoke.mockImplementation(async (command: string) => {
+			if (command === "herdr_pty_create")
+				return { pty_id: "pty-stalled", pid: 42 };
+			if (command === "herdr_snapshot") return readiness.promise;
+			if (command === "workspace_set_root") return "/work/naia";
+			return null;
+		});
+
+		render(<RuntimeHarness />);
+		await waitFor(() =>
+			expect(screen.getByTestId("runtime-root")).toHaveTextContent(
+				"/work/naia",
+			),
+		);
+		expect(mockInvoke).toHaveBeenCalledWith("workspace_set_root", {
+			root: "/work/naia",
+		});
+		expect(screen.getByTestId("runtime-snapshot")).toHaveTextContent("none");
+	});
+
 	it("launches once under strict effects and discards stale snapshot results", async () => {
 		const pending: Array<ReturnType<typeof deferred<HerdrSnapshot>>> = [];
 		let controlled = false;

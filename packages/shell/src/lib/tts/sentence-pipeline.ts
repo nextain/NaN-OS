@@ -124,7 +124,14 @@ export function createSentenceTtsPipeline(
 	function sendSentence(sentence: string): void {
 		// Preserve the original Markdown in chat, but send only natural speech
 		// text to the selected voice engine.
-		const clean = ttsTextFilter.filter(sentence);
+		const voiceCfg = deps.getVoiceConfig();
+		const clean = ttsTextFilter.filter(
+			sentence,
+			voiceCfg?.voice ||
+				(typeof document !== "undefined"
+					? document.documentElement.lang
+					: undefined),
+		);
 		if (!clean) return;
 		const revealText = deps.reserveReveal(sentence);
 
@@ -159,7 +166,6 @@ export function createSentenceTtsPipeline(
 		// runaway), so full replies stream fine and the cap only truncated
 		// speech ("첫 문장만 나와" — user report).
 		activeRequests.add(reqId);
-		const voiceCfg = deps.getVoiceConfig();
 		const ttsProviderForCost = voiceCfg?.ttsProvider ?? "edge";
 		const localVoiceScheduler = deps.getScheduler();
 		const localVoiceGeneration = localVoiceScheduler?.generation ?? 0;
@@ -257,7 +263,7 @@ export function createSentenceTtsPipeline(
 				vllmTtsHost: voiceCfg?.vllmTtsHost,
 				localRefAudioBase64:
 					ttsProviderForCost === "naia-local-voice"
-						? deps.getLocalRefAudioB64() ?? undefined
+						? (deps.getLocalRefAudioB64() ?? undefined)
 						: undefined,
 				signal: abort.signal,
 			});
@@ -358,11 +364,15 @@ export function createSentenceTtsPipeline(
 					// expression only when no request is still counted active (#423).
 					activeRequests.delete(reqId);
 					revealText();
-					Logger.warn(TAG, "Local voice engine unavailable — no free fallback", {
-						reqId,
-						provider: ttsProviderForCost,
-						error: String(err),
-					});
+					Logger.warn(
+						TAG,
+						"Local voice engine unavailable — no free fallback",
+						{
+							reqId,
+							provider: ttsProviderForCost,
+							error: String(err),
+						},
+					);
 					if (!localVoiceUnavailableNoticed) {
 						localVoiceUnavailableNoticed = true;
 						await deps.notifyLocalVoiceUnavailable();

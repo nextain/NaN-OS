@@ -21,6 +21,33 @@ use tauri::{AppHandle, Emitter, Manager, PhysicalPosition, PhysicalSize};
 use tauri_plugin_deep_link::DeepLinkExt;
 use tauri_plugin_store::StoreExt;
 
+const WORKSPACE_OPEN_FILE_EVENT: &str = "workspace-open-file-request";
+
+fn resolve_cli_file(args: &[String], cwd: &std::path::Path) -> Option<String> {
+    args.iter()
+        .skip(1)
+        .filter(|arg| !arg.starts_with('-') && !arg.starts_with("naia://"))
+        .find_map(|arg| {
+            let candidate = std::path::PathBuf::from(arg);
+            let candidate = if candidate.is_absolute() {
+                candidate
+            } else {
+                cwd.join(candidate)
+            };
+            let canonical = dunce::canonicalize(candidate).ok()?;
+            canonical
+                .is_file()
+                .then(|| canonical.to_string_lossy().to_string())
+        })
+}
+
+#[tauri::command]
+fn get_startup_open_file() -> Option<String> {
+    let args: Vec<String> = std::env::args().collect();
+    let cwd = std::env::current_dir().ok()?;
+    resolve_cli_file(&args, &cwd)
+}
+
 /// Cross-platform home directory: HOME (Unix) or USERPROFILE (Windows).
 pub(crate) fn home_dir() -> String {
     std::env::var("HOME")
@@ -11134,10 +11161,13 @@ pub fn run() {
             let oauth_state = app
                 .try_state::<AppState>()
                 .map(|state| state.oauth_state.clone());
-            for arg in args {
+            for arg in &args {
                 if arg.starts_with("naia://") {
                     process_deep_link_url(&arg, app, oauth_state.as_ref(), "single-instance");
                 }
+            }
+            if let Some(path) = resolve_cli_file(&args, std::path::Path::new(&_cwd)) {
+                let _ = app.emit(WORKSPACE_OPEN_FILE_EVENT, path);
             }
         }))
         .plugin(tauri_plugin_opener::init())
@@ -11212,6 +11242,7 @@ pub fn run() {
             generate_oauth_state,
             read_local_binary,
             write_temp_text,
+            get_startup_open_file,
             discord_bot_token_available,
             discord_connection_status,
             discord_capture_bot_token,
@@ -11774,6 +11805,61 @@ mod tests {
     fn write_test_file(path: &std::path::Path) {
         std::fs::create_dir_all(path.parent().unwrap()).unwrap();
         std::fs::write(path, b"fixture").unwrap();
+    }
+
+    #[test]
+    fn cli_file_resolves_relative_to_invocation_cwd() {
+        let cwd = tempfile::tempdir().unwrap();
+        let file = cwd.path().join("notes").join("hello.md");
+        write_test_file(&file);
+        let args = vec!["naia-shell".to_string(), "notes/hello.md".to_string()];
+
+        assert_eq!(
+            resolve_cli_file(&args, cwd.path()),
+            Some(
+                dunce::canonicalize(file)
+                    .unwrap()
+                    .to_string_lossy()
+                    .to_string()
+            )
+        );
+    }
+
+    #[test]
+    fn cli_file_skips_flags_deep_links_missing_paths_and_directories() {
+        let cwd = tempfile::tempdir().unwrap();
+        let file = cwd.path().join("actual file.txt");
+        write_test_file(&file);
+        let args = vec![
+            "naia-shell".to_string(),
+            "--verbose".to_string(),
+            "naia://auth/callback".to_string(),
+            "missing.txt".to_string(),
+            ".".to_string(),
+            "actual file.txt".to_string(),
+        ];
+
+        assert_eq!(
+            resolve_cli_file(&args, cwd.path()),
+            Some(
+                dunce::canonicalize(file)
+                    .unwrap()
+                    .to_string_lossy()
+                    .to_string()
+            )
+        );
+    }
+
+    #[test]
+    fn cli_file_returns_none_when_no_regular_file_exists() {
+        let cwd = tempfile::tempdir().unwrap();
+        let args = vec![
+            "naia-shell".to_string(),
+            cwd.path().to_string_lossy().to_string(),
+            "not-there.md".to_string(),
+        ];
+
+        assert_eq!(resolve_cli_file(&args, cwd.path()), None);
     }
 
     #[test]

@@ -1,5 +1,5 @@
 import { readFileSync, writeFileSync } from "node:fs";
-import { basename, resolve } from "node:path";
+import { basename, win32, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
 function required(value, label) {
@@ -25,8 +25,16 @@ export function createWindowsUpdaterManifest({
 	}
 	const normalizedBaseUrl = required(baseUrl, "baseUrl").replace(/\/+$/u, "");
 	const normalizedPubDate = new Date(required(pubDate, "pubDate")).toISOString();
-	const urlFor = (path) =>
-		`${normalizedBaseUrl}/${encodeURIComponent(basename(required(path, "artifact path")))}`;
+	const urlFor = (path) => {
+		const artifactPath = required(path, "artifact path");
+		// Release manifests can be assembled on Linux from Windows CI artifact
+		// paths. POSIX basename treats backslashes as ordinary characters, so
+		// select the Windows parser whenever the input uses Windows separators.
+		const artifactName = artifactPath.includes("\\")
+			? win32.basename(artifactPath)
+			: basename(artifactPath);
+		return `${normalizedBaseUrl}/${encodeURIComponent(artifactName)}`;
+	};
 
 	return {
 		version: normalizedVersion,

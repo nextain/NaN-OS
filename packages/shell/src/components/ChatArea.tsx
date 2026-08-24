@@ -8,6 +8,7 @@ import {
 	useState,
 } from "react";
 import Markdown, { type Components } from "react-markdown";
+import remarkGfm from "remark-gfm";
 import {
 	type RecognitionResult,
 	onError as sttOnError,
@@ -17,6 +18,7 @@ import {
 	stopListening as sttStop,
 } from "tauri-plugin-stt-api";
 import { activeBridge, getBridgeForPanel } from "../lib/active-bridge";
+import { MarkdownCodeBlock } from "./MarkdownCodeBlock";
 import {
 	formatAiInterferencePrompt,
 	onAiInterferenceEvent,
@@ -86,6 +88,7 @@ import {
 	isApiKeyOptional,
 	isOmniModel,
 } from "../lib/llm";
+import { ThinkingStreamFilter } from "../lib/llm/thinking-stream-filter";
 import { Logger } from "../lib/logger";
 import { type MicStream, createMicStream } from "../lib/mic-stream";
 import { appRegistry } from "../lib/app-registry";
@@ -271,6 +274,40 @@ function openFileInWorkspace(path: string): void {
 	useAppStore.getState().setActiveApp("workspace");
 }
 
+const CODE_FILE_EXTENSIONS: Record<string, string> = {
+	bash: "sh",
+	css: "css",
+	html: "html",
+	javascript: "js",
+	js: "js",
+	json: "json",
+	jsx: "jsx",
+	markdown: "md",
+	md: "md",
+	python: "py",
+	py: "py",
+	rust: "rs",
+	rs: "rs",
+	sh: "sh",
+	tsx: "tsx",
+	typescript: "ts",
+	ts: "ts",
+	yaml: "yaml",
+	yml: "yml",
+};
+
+async function openCodeInWorkspace(
+	code: string,
+	language: string,
+): Promise<void> {
+	const extension = CODE_FILE_EXTENSIONS[language.toLowerCase()] ?? "txt";
+	const path = await invoke<string>("write_temp_text", {
+		filename: `naia-code-${Date.now()}.${extension}`,
+		content: code,
+	});
+	openFileInWorkspace(path);
+}
+
 /** Split a text string on file paths and return an array of strings / buttons. */
 function processFilePaths(text: string): ReactNode[] {
 	const parts = text.split(FILE_PATH_RE);
@@ -293,6 +330,16 @@ function processFilePaths(text: string): ReactNode[] {
 
 /** React-Markdown components override — detects file paths in <p> text nodes. */
 const mdComponents: Components = {
+	code: ({ className, children }) => (
+		<MarkdownCodeBlock
+			className={className}
+			onOpenWorkspace={(code, language) =>
+				void openCodeInWorkspace(code, language)
+			}
+		>
+			{children}
+		</MarkdownCodeBlock>
+	),
 	p({ children, ...props }) {
 		const processed = Array.isArray(children)
 			? children.flatMap((child) =>
@@ -644,7 +691,7 @@ export function ChatArea({
 	const pipelineActiveRef = useRef(false);
 	const audioQueueRef = useRef<AudioQueue | null>(null);
 	const sentenceChunkerRef = useRef<SentenceChunker | null>(null);
-	const reasoningTextHiddenRef = useRef(false);
+	const thinkingStreamFilterRef = useRef(new ThinkingStreamFilter());
 	// FR-VOICE.16 Phase 2a (#420): the 6GB half-duplex admission + adaptive
 	// prebuffer + generation fencing live in lib/tts/local-voice-scheduler so
 	// unrelated ChatArea work cannot regress FR-VOICE.11/12 semantics.
@@ -886,7 +933,7 @@ export function ChatArea({
 		if (!store.isStreaming && !ttsActive) return;
 		// A cancelled response may never deliver its terminal `finish` chunk.
 		// Do not let an unfinished reasoning block hide the next request.
-		reasoningTextHiddenRef.current = false;
+		thinkingStreamFilterRef.current.reset();
 		// Cancelling the response is also a speech barge-in. Without clearing
 		// the TTS generation here, a late avatar failure callback can replay
 		// fallback audio from the response the user just stopped.
@@ -1571,7 +1618,7 @@ export function ChatArea({
 		const requestId = generateRequestId();
 		// Request state is isolated even when the previous transport terminated
 		// without a final chunk (cancel, disconnect, provider error).
-		reasoningTextHiddenRef.current = false;
+		thinkingStreamFilterRef.current.reset();
 		currentRequestId.current = requestId;
 
 		setInput("");
@@ -1715,6 +1762,8 @@ export function ChatArea({
 					ollamaNumGpu:
 						activeProvider === "ollama" ? config.ollamaNumGpu : undefined,
 					vllmHost: activeProvider === "vllm" ? config.vllmHost : undefined,
+					openaiBaseUrl:
+						activeProvider === "openai" ? config.openaiBaseUrl : undefined,
 				},
 				history: history.slice(0, -1),
 				onChunk: (chunk) => handleChunk(chunk, activeProvider),
@@ -2009,6 +2058,41 @@ export function ChatArea({
 		}
 	}
 
+	function appendVisibleResponseText(visibleText: string): void {
+		if (!visibleText) return;
+		useChatStore.getState().appendStreamChunk(visibleText);
+		if (ttsTextSyncRef.current.active) {
+			ttsTextSyncRef.current.canonical += visibleText;
+		}
+		// Parse emotion from accumulated text (tag may span multiple chunks)
+		const accumulated = useChatStore.getState().streamingContent;
+		if (accumulated.length <= 30 && accumulated.length >= 4) {
+			const { emotion } = extractExpression(accumulated);
+			if (emotion) setEmotion(emotion);
+		}
+		// Sentence-level TTS — same path for both pipeline and chat mode
+		if (sentenceChunkerRef.current) {
+			const sentences = sentenceChunkerRef.current.feed(visibleText);
+			if (sentences.length > 0) {
+				Logger.info("ChatArea", "SentenceChunker produced sentences", {
+					count: sentences.length,
+					sentences,
+				});
+			}
+			for (const sentence of sentences) {
+				sendSentenceToTts(sentence);
+			}
+		}
+	}
+
+	function flushThinkingStream(): void {
+		const tail = thinkingStreamFilterRef.current.flush();
+		if (tail.thinking) {
+			useChatStore.getState().appendThinkingChunk(tail.thinking);
+		}
+		appendVisibleResponseText(tail.visible);
+	}
+
 	function handleChunk(chunk: AgentResponseChunk, activeProvider: ProviderId) {
 		const store = useChatStore.getState();
 
@@ -2040,56 +2124,11 @@ export function ChatArea({
 
 		switch (chunk.type) {
 			case "text": {
-				let visibleText = chunk.text;
-				const htmlThinkOpen = /^\s*<think>/i.test(visibleText);
-				const bracketThinkOpen = /^\s*\[THINK\]/i.test(visibleText);
-				// `[THINK]` is also the documented avatar-expression tag. Treat it as
-				// reasoning only when this chunk proves the paired `</think>` form;
-				// otherwise a normal expressive answer would disappear until finish.
-				const opensReasoning =
-					htmlThinkOpen || (bracketThinkOpen && /<\/think>/i.test(visibleText));
-				if (opensReasoning) reasoningTextHiddenRef.current = true;
-				if (reasoningTextHiddenRef.current) {
-					const close = visibleText.search(/<\/think>/i);
-					if (close < 0) {
-						store.appendThinkingChunk(
-							visibleText.replace(/^\s*(?:<think>|\[THINK\])\s*/i, ""),
-						);
-						break;
-					}
-					store.appendThinkingChunk(
-						visibleText
-							.slice(0, close)
-							.replace(/^\s*(?:<think>|\[THINK\])\s*/i, ""),
-					);
-					visibleText = visibleText.slice(close + "</think>".length);
-					reasoningTextHiddenRef.current = false;
+				const separated = thinkingStreamFilterRef.current.push(chunk.text);
+				if (separated.thinking) {
+					store.appendThinkingChunk(separated.thinking);
 				}
-				visibleText = visibleText.replace(/<\/?think>/gi, "");
-				if (!visibleText) break;
-				store.appendStreamChunk(visibleText);
-				if (ttsTextSyncRef.current.active) {
-					ttsTextSyncRef.current.canonical += visibleText;
-				}
-				// Parse emotion from accumulated text (tag may span multiple chunks)
-				const accumulated = useChatStore.getState().streamingContent;
-				if (accumulated.length <= 30 && accumulated.length >= 4) {
-					const { emotion } = extractExpression(accumulated);
-					if (emotion) setEmotion(emotion);
-				}
-				// Sentence-level TTS — same path for both pipeline and chat mode
-				if (sentenceChunkerRef.current) {
-					const sentences = sentenceChunkerRef.current.feed(visibleText);
-					if (sentences.length > 0) {
-						Logger.info("ChatArea", "SentenceChunker produced sentences", {
-							count: sentences.length,
-							sentences,
-						});
-					}
-					for (const sentence of sentences) {
-						sendSentenceToTts(sentence);
-					}
-				}
+				appendVisibleResponseText(separated.visible);
 				break;
 			}
 			case "thinking":
@@ -2159,7 +2198,7 @@ export function ChatArea({
 				break;
 			}
 			case "finish":
-				reasoningTextHiddenRef.current = false;
+				flushThinkingStream();
 				// Flush remaining text to TTS (both pipeline and chat mode)
 				if (sentenceChunkerRef.current) {
 					const remaining = sentenceChunkerRef.current.flush();
@@ -2242,6 +2281,7 @@ export function ChatArea({
 				Logger.warn("ChatArea", "Agent error chunk", {
 					message: chunk.message,
 				});
+				flushThinkingStream();
 				// Flush any partial sentence before finishing. Chat TTS needs the same
 				// terminal behavior as pipeline voice or its mask can remain pending.
 				if (sentenceChunkerRef.current) {
@@ -3727,7 +3767,11 @@ export function ChatArea({
 								))}
 								<div className="message-content">
 									{msg.role === "assistant" ? (
-										<Markdown components={mdComponents}>
+										<Markdown
+											remarkPlugins={[remarkGfm]}
+											skipHtml
+											components={mdComponents}
+										>
 											{
 												extractExpression(
 													msg.id === effectiveTtsMaskedMessageId
@@ -3754,7 +3798,7 @@ export function ChatArea({
 					{isStreaming && (
 						<div className="chat-message assistant streaming">
 							{streamingThinking && (
-								<details className="thinking-inline" open>
+								<details className="thinking-inline">
 									<summary className="thinking-inline-summary">
 										<span className="thinking-inline-label">
 											💭 {t("chat.thinking") || "Thinking..."}
@@ -3770,7 +3814,11 @@ export function ChatArea({
 							))}
 							<div className="message-content">
 								{streamingContent ? (
-									<Markdown components={mdComponents}>
+									<Markdown
+										remarkPlugins={[remarkGfm]}
+										skipHtml
+										components={mdComponents}
+									>
 										{
 											extractExpression(
 												ttsTextSyncRef.current.active

@@ -4,7 +4,6 @@ import { getAdkPath } from "../../lib/adk-store";
 import { t } from "../../lib/i18n";
 import { Logger } from "../../lib/logger";
 import type { TerminalHandle } from "./Terminal";
-import { killPty } from "./pty-ipc";
 import {
 	HERDR_SNAPSHOT_INTERVAL_MS,
 	type HerdrSnapshot,
@@ -13,6 +12,7 @@ import {
 	waitForHerdrReady,
 	workspacePath,
 } from "./herdr";
+import { killPty } from "./pty-ipc";
 
 export interface PtyCreated {
 	pty_id: string;
@@ -30,9 +30,6 @@ export function useHerdrRuntime() {
 	const [terminalReady, setTerminalReady] = useState(false);
 	const [terminalError, setTerminalError] = useState("");
 	const [surface, setSurface] = useState<HerdrSurface>("herdr");
-	// The file rail belongs to the focused Herdr Space. Do not briefly expose
-	// the configured ADK directory (or a broad auto-detected parent) while the
-	// authoritative Herdr snapshot is still loading.
 	const [workspaceRoot, setWorkspaceRoot] = useState("");
 	const terminalRef = useRef<TerminalHandle>(null);
 	const mountedRef = useRef(false);
@@ -102,9 +99,7 @@ export function useHerdrRuntime() {
 			if (created) {
 				const failedPtyId = created.pty_id;
 				await killPty(failedPtyId).catch(() => {});
-				setPty((current) =>
-					current?.pty_id === failedPtyId ? null : current,
-				);
+				setPty((current) => (current?.pty_id === failedPtyId ? null : current));
 			}
 			if (!mountedRef.current || generation !== launchGenerationRef.current)
 				return;
@@ -168,22 +163,39 @@ export function useHerdrRuntime() {
 	}, [launching, pty, refreshSnapshot]);
 
 	useEffect(() => {
-		// #447-6: the file-tree root is the user's chosen adk workspace, not the
-		// shared herdr server's focused workspace. Herdr uses a shared global
-		// socket, so its focused workspace is often an external session's cwd
-		// (e.g. the dev repo alpha-adk). Following that would hijack the file tree
-		// away from the workspace the user picked in onboarding/AdkSetup. Pin the
-		// root to getAdkPath(); only fall back to herdr's focus when no adk path
-		// is set at all.
-		// Only react once Herdr actually reports a workspace (snapshot present);
-		// launch failures leave this empty and must not trigger a bind.
+		// #492: the configured file tree is independent from Herdr readiness.
+		// Bind it immediately so a stopped or hung Herdr server cannot block files.
+		// A refreshed snapshot deliberately retries a previously failed root bind.
+		void snapshot;
+		const configuredRoot = getAdkPath();
+		if (!configuredRoot) return;
+		if (configuredRoot.toLowerCase() === (workspaceRoot ?? "").toLowerCase())
+			return;
+		const generation = ++rootGenerationRef.current;
+		locationGenerationRef.current++;
+		invoke<string>("workspace_set_root", { root: configuredRoot })
+			.then((canonical) => {
+				if (generation === rootGenerationRef.current)
+					setWorkspaceRoot(canonical);
+			})
+			.catch((error) => {
+				if (generation !== rootGenerationRef.current) return;
+				Logger.warn(
+					"HerdrWorkspace",
+					"Failed to bind configured workspace root",
+					{
+						error: String(error),
+					},
+				);
+			});
+	}, [snapshot, workspaceRoot]);
+
+	useEffect(() => {
+		// Without a configured ADK path, retain the legacy Herdr-focus fallback.
+		if (getAdkPath()) return;
 		const herdrRoot = activeHerdrRoot(snapshot);
 		if (!herdrRoot) return;
-		// #447-6: pin the file-tree root to the user's chosen adk workspace, not
-		// the Herdr snapshot's focused workspace. Herdr uses a shared global socket,
-		// so its focus is often an external session's cwd (e.g. the dev repo
-		// alpha-adk) which would hijack the tree away from the picked workspace.
-		const targetRoot = getAdkPath() || herdrRoot;
+		const targetRoot = herdrRoot;
 		const generation = ++rootGenerationRef.current;
 		locationGenerationRef.current++;
 		// Case-insensitive on Windows: getAdkPath() may be "d:\naia-adk" while the

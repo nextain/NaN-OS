@@ -397,6 +397,10 @@ body,
 	border: none;
 }
 
+html[data-bgm-youtube-background="hidden"] .app-bg-iframe {
+	opacity: 0;
+}
+
 .app-bg-video {
 	/* GPU compositor layer for hardware-accelerated video decoding */
 	will-change: transform;
@@ -1913,6 +1917,71 @@ body.resizing-row {
 	background: none;
 	padding: 0;
 	color: var(--cream);
+}
+
+.chat-code-block {
+	max-width: 100%;
+	overflow: hidden;
+	background: var(--espresso-dark);
+	border-radius: 4px;
+}
+
+.chat-code-block > summary {
+	cursor: pointer;
+	padding: 5px 8px;
+	color: var(--amber);
+	font-size: 0.78em;
+}
+
+.chat-code-actions {
+	display: flex;
+	gap: 6px;
+	padding: 0 8px 4px;
+}
+
+.chat-code-actions button {
+	font-size: 0.72em;
+}
+
+.chat-code-block pre {
+	max-width: 100%;
+	max-height: 24rem;
+	overflow: auto;
+}
+
+.chat-code-block .hljs-keyword,
+.chat-code-block .hljs-selector-tag,
+.chat-code-block .hljs-literal {
+	color: #d8a0df;
+}
+
+.chat-code-block .hljs-string,
+.chat-code-block .hljs-attr,
+.chat-code-block .hljs-template-variable {
+	color: #a8d5a2;
+}
+
+.chat-code-block .hljs-number,
+.chat-code-block .hljs-built_in,
+.chat-code-block .hljs-type {
+	color: #e5b97a;
+}
+
+.chat-code-block .hljs-comment,
+.chat-code-block .hljs-quote {
+	color: #8f949b;
+	font-style: italic;
+}
+
+.chat-code-block .hljs-title,
+.chat-code-block .hljs-function,
+.chat-code-block .hljs-section {
+	color: #8fc7ef;
+}
+
+.markdown-mermaid-error {
+	color: var(--cream);
+	font-size: 0.85em;
 }
 
 .chat-message.assistant .message-content h1,
@@ -5892,6 +5961,15 @@ body.resizing-row {
 	gap: 4px;
 	padding: 8px;
 	border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.bgm-yt-background-option {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	padding: 8px 10px 0;
+	color: rgba(255, 255, 255, 0.8);
+	font-size: 0.78rem;
 }
 
 .bgm-yt-search-input {
@@ -10459,6 +10537,35 @@ body.resizing-col * {
 }
 
 /* ── Image viewer ──────────────────────────────────────── */
+.workspace-editor__media-viewer {
+	display: flex;
+	flex: 1;
+	min-height: 0;
+	align-items: center;
+	justify-content: center;
+	flex-direction: column;
+	gap: 14px;
+	padding: 20px;
+	background: #111318;
+}
+.workspace-editor__media-viewer audio,
+.workspace-editor__media-viewer video {
+	width: min(100%, 960px);
+	max-height: calc(100% - 64px);
+}
+.workspace-editor__media-rate {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+.workspace-editor__media-error {
+	color: #ff9d9d;
+	text-align: center;
+}
+.workspace-editor__media-format {
+	font-size: 0.75rem;
+	opacity: 0.65;
+}
 
 .workspace-editor__image-viewer {
 	flex: 1;

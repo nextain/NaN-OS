@@ -127,6 +127,9 @@ const TAURI_MOCK_SCRIPT = `
 		if (cmd === "plugin:event|emit") { emitEvent(args.event, args.payload); return null; }
 		if (cmd === "plugin:event|unlisten") return null;
 		if (cmd === "herdr_pty_create") return { pty_id: "herdr-e2e", pid: 42 };
+		if (cmd === "herdr_snapshot" && localStorage.getItem("naia-e2e-stall-herdr") === "1") {
+			return new Promise(function() {});
+		}
 		if (cmd === "herdr_snapshot") return JSON.parse(JSON.stringify(state));
 		if (cmd === "herdr_focus_workspace") {
 			var workspace = state.workspaces.find(function(item) { return item.workspace_id === args.workspaceId; });
@@ -276,6 +279,24 @@ test.describe("Herdr Workspace integration", () => {
 			),
 		).toBe(true);
 		await expect(page.getByText("Alpha", { exact: true })).toBeVisible();
+	});
+
+	test("Herdr snapshot이 멈춰도 설정된 Workspace 파일 트리는 대기하지 않는다", async ({
+		page,
+	}) => {
+		await page.evaluate(() =>
+			localStorage.setItem("naia-e2e-stall-herdr", "1"),
+		);
+		await page.reload();
+		await expect(page.locator(".chat-panel")).toBeVisible({ timeout: 10_000 });
+		await openWorkspace(page);
+		await expect(page.locator(".herdr-workspace__files")).toBeVisible();
+		await expect(
+			page.getByRole("button", { name: /README\.md/ }),
+		).toBeVisible();
+		await expect
+			.poll(() => callCount(page, "workspace_list_dirs"))
+			.toBeGreaterThan(0);
 	});
 
 	test("FileTree Markdown 문서를 GFM 미리보기로 열고 원문 전환한다", async ({
