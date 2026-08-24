@@ -1,7 +1,7 @@
 {
   "schema_version": "1.0",
   "contract_id": "release-0.2.2-memory-freeze",
-  "contract_digest": "f4aa663697b0fab947b30ee7b2e9cd916cd81f3ca7bc2d5dafb439535616d7be",
+  "contract_digest": "422acca8950073580fc9b5e391854841a9b9ebf0459c6520cb1f6499ca9c3bfe",
   "current_phase": "in-progress",
   "current_task": "Synchronize final evidence and publish the release freeze branch.",
   "gates_cleared": [
