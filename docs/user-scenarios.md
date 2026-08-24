@@ -479,7 +479,7 @@ default-skills 60+ "각 1회 측정"=존재확인≠동작보장(공통 runtime/
 사용자가 설정>지식 탭에서 **자기 워크스페이스의 지식 소스(자료 폴더)를 직접 관리**한다. "준비 중" 자리를 실제 관리면이 대체한다: ①여러 자료 폴더를 추가/제거(폴더 선택 다이얼로그)하고, ②현재 **지식 스코프(프로젝트)** 와 **컴파일 상태**(카드·엔티티·관계 수, 또는 "미컴파일")를 보고, ③"지금 컴파일"로 등록 폴더 → 구조화 지식(kb.json)을 빌드한다. 빌드된 지식은 채팅에서 근거 답변(UC-KNOWLEDGE)으로 소비된다.
 
 - **소유 경계(핵심)**: 이 설정(소스·스코프)은 **사람이 셸 UI 로만** 바꾼다 → `naia-settings/knowledge.json`(셸 전용 write). **AI 에이전트는 읽기만** 하고 설정을 못 바꾼다(config-write 도구 부재 = 신뢰경계 자가확장 차단). 사람=설정, 엔진=컴파일 산출(kb.json) 분리.
-- **인지흐름/역할**: (관리)셸 UI 폴더 등록·스코프 → (지능)에이전트가 `CompileKnowledge`(naia-agent, 별 레포)로 폴더 → kb-compiler `compile()` → `knowledge/<scope>/kb.json` 저장 → (소비)채팅 근거 답변. 셸 = 관리 UI·상태 표시·트리거(직접 `invoke`, AI 미경유). 컴파일/답변 지능 = 에이전트.
+- **인지흐름/역할**: (관리)셸 UI 폴더 등록·스코프 → (지능)에이전트가 `CompileKnowledge`(naia-agent, 별 레포)로 폴더 → kb-compiler `compile()` → `naia-settings/knowledge/<scope>/kb.json` 저장 → (소비)채팅 근거 답변. 셸 = 관리 UI·상태 표시·트리거(직접 `invoke`, AI 미경유)이며 저장 위치를 주입하지 않는다. 컴파일/답변 지능과 저장 경계 = 에이전트.
 - **검증(P02)**: requirements.md **FR-KB-OS.5~9** 매핑 — `knowledge-config.test.ts`(config CRUD·dedup·kb 통계 파싱 단위)·`KnowledgeSettingsTab.test.tsx`(RTL 폴더 add/remove·스코프·상태 렌더)·`e2e/settings-knowledge.spec.ts`(Playwright 실 UI: 설정 지식 탭 폴더 추가/제거/상태 표시). 컴파일 트리거(FR-KB-OS.8)는 에이전트 `CompileKnowledge` 배선에 의존(미배선 시 정직 표기).
 - 통합 설계 SoT = alpha-adk `.agents/progress/naia-kb-compiler-agent-os-integration-2026-06-29.md`(K4).
 

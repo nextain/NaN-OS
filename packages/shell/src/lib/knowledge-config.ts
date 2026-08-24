@@ -1,7 +1,7 @@
 /** 지식 소스 관리 — 순수 로직(영속화·폴더 다이얼로그·invoke 는 KnowledgeSettingsTab).
  *
  *  설정 정본 = `naia-settings/knowledge.json`(셸 전용 write, 에이전트 읽기전용 — FR-KB-OS.9).
- *  kb 정본 = `knowledge/<scope>/kb.json`(naia-adk, kb-compiler `{version:1,kb}` envelope).
+ *  kb 정본 = `naia-settings/knowledge/<scope>/kb.json`(naia-adk, kb-compiler `{version:1,kb}` envelope).
  *  본 모듈은 Tauri 비의존(순수) → vitest 단위 검증 대상. FR-KB-OS.5~7.
  */
 
@@ -14,7 +14,7 @@ export interface KnowledgeSource {
 
 export interface KnowledgeConfig {
 	version: number;
-	/** 지식 스코프(프로젝트). kb 정본 = `knowledge/<scope>/kb.json`. */
+	/** 지식 스코프(프로젝트). kb 정본 = `naia-settings/knowledge/<scope>/kb.json`. */
 	scope: string;
 	sources: KnowledgeSource[];
 }
