@@ -9737,17 +9737,37 @@ async fn write_naia_knowledge_config(adk_path: String, json: String) -> Result<(
     std::fs::write(dir.join("knowledge.json"), json).map_err(|e| e.to_string())
 }
 
-/// Read compiled KB at `{adk_path}/knowledge/{scope}/kb.json` (而댄뙆???곗텧 ???듦퀎 ?쒖떆?? FR-KB-OS.7).
+fn naia_knowledge_kb_path(adk_path: &str, scope: &str) -> std::path::PathBuf {
+    use unicode_normalization::UnicodeNormalization;
+
+    let normalized_scope = scope.nfc().collect::<String>();
+    std::path::PathBuf::from(adk_path)
+        .join("naia-settings")
+        .join("knowledge")
+        .join(normalized_scope)
+        .join("kb.json")
+}
+
+fn is_valid_knowledge_scope(scope: &str) -> bool {
+    use unicode_normalization::UnicodeNormalization;
+
+    let normalized = scope.nfc().collect::<String>();
+    !normalized.is_empty()
+        && normalized.chars().count() <= 128
+        && !normalized.starts_with('.')
+        && !normalized.contains("..")
+        && !normalized.contains(['\0', '/', '\\', '<', '>', ':', '"', '|', '?', '*'])
+        && !normalized.ends_with(['.', ' '])
+}
+
+/// Read compiled KB at `{adk_path}/naia-settings/knowledge/{scope}/kb.json` (FR-KB-OS.7).
 /// scope ??path-traversal 李⑤떒(援щ텇?먃?..` 湲덉?). ?놁쑝硫?鍮?臾몄옄??= 誘몄뺨?뚯씪).
 #[tauri::command]
 async fn read_naia_knowledge_kb(adk_path: String, scope: String) -> Result<String, String> {
-    if scope.is_empty() || scope.contains('/') || scope.contains('\\') || scope.contains("..") {
+    if !is_valid_knowledge_scope(&scope) {
         return Err("invalid scope".to_string());
     }
-    let path = std::path::PathBuf::from(&adk_path)
-        .join("knowledge")
-        .join(&scope)
-        .join("kb.json");
+    let path = naia_knowledge_kb_path(&adk_path, &scope);
     if !path.exists() {
         return Ok(String::new());
     }
@@ -9756,7 +9776,7 @@ async fn read_naia_knowledge_kb(adk_path: String, scope: String) -> Result<Strin
 
 /// UC-KNOWLEDGE-COMPILE(FR-KB-OS.8): ?ㅼ젙 吏????"吏湲?而댄뙆?? ??agent `CompileKnowledge` RPC.
 /// spawn ??蹂닿???agent gRPC addr 濡?蹂꾨룄 unary ?대씪 connect ???먯씠?꾪듃媛 naia-settings/knowledge.json
-/// ???깅줉 ?대뜑 ??kb-compiler compile ??knowledge/<scope>/kb.json. agent 誘멸???= Err(UI 媛 ?뺤쭅 ?쒓린).
+/// ???깅줉 ?대뜑 ??kb-compiler compile ??naia-settings/knowledge/<scope>/kb.json. agent 誘멸???= Err(UI 媛 ?뺤쭅 ?쒓린).
 #[tauri::command]
 async fn compile_knowledge(
     adk_path: String,
@@ -12057,6 +12077,43 @@ mod tests {
         }
         assert!(settings.join("knowledge.json").exists());
         assert!(voices.join("voice.wav").exists());
+    }
+
+    #[test]
+    fn compiled_knowledge_is_read_only_from_agent_owned_settings_boundary() {
+        let adk = tempfile::tempdir().unwrap();
+        assert_eq!(
+            naia_knowledge_kb_path(adk.path().to_str().unwrap(), "default"),
+            adk.path()
+                .join("naia-settings")
+                .join("knowledge")
+                .join("default")
+                .join("kb.json")
+        );
+        assert!(is_valid_knowledge_scope("default"));
+        assert!(is_valid_knowledge_scope("고객1"));
+        assert_eq!(
+            naia_knowledge_kb_path(adk.path().to_str().unwrap(), "고객1"),
+            naia_knowledge_kb_path(adk.path().to_str().unwrap(), "고객1")
+        );
+        for invalid in [
+            "",
+            ".hidden",
+            "a..b",
+            "../escape",
+            "a/b",
+            "a\\b",
+            "C:drive",
+            "scope?",
+            "scope*",
+            "scope.",
+            "scope ",
+        ] {
+            assert!(
+                !is_valid_knowledge_scope(invalid),
+                "accepted invalid scope: {invalid}"
+            );
+        }
     }
 
     #[test]
