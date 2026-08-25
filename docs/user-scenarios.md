@@ -965,3 +965,233 @@ Test Coverage Map (P02):
 
 상태 매트릭스: 기본(진입점 정상), 빈 목록(선언된 인덱스 0개), 진행(대용량 워크스페이스 스캔 중),
 성공(컨텍스트 확정), 오류(진입점 깨짐), 좁은 폭(컨텍스트 근거 패널 축소)을 모두 매핑한다.
+
+## 2026-08-26 Herdr 제어면 (#502, 에픽 #497, #434 승계)
+
+> 계약: `docs/progress/issue-497-universal-agent.md`. #434의 인수 기준을 승계한다. 여기의 UC는
+> Naia가 Herdr를 관측하고 정책을 통과한 변경을 요청하는 부분만 다룬다. 워크스페이스 규칙 해석은 #501,
+> 작업자 배치는 #500이 소유한다.
+
+### UC-HERDR-CONTROL-OBSERVE — TUI를 긁지 않고 관측한다
+
+- Naia는 Herdr의 space, 이슈, 세션, 작업자, pane, 터미널, 진행 중 작업을 타입이 선언된 자원으로 읽는다.
+- 화면 문자열을 파싱하거나 private socket을 엿보지 않는다.
+- 스냅샷에는 단조 증가하는 개정 번호가 실려 있고, 이후 변화는 구독으로 받는다. 놓친 구간이 있으면 그 사실을 알 수 있다.
+- 사용자가 "지금 뭐 돌고 있어?"라고 물으면 Naia는 관측한 것만 말하고 추측을 섞지 않는다.
+
+### UC-HERDR-CONTROL-MUTATE — 정책을 통과한 변경만 요청한다
+
+- Naia는 space 생성·포커스, 이슈 결속, 리더·작업자 시작과 종료, 터미널 생성·실행·입력·크기변경·종료를 구조화된 요청으로 보낸다.
+- 명령은 인자 배열과 작업 디렉터리와 환경으로 전달한다. 문자열로 조립해 셸에 넘기지 않는다.
+- 모든 요청은 요청 식별자와 멱등 키를 갖는다. 같은 키를 다시 보내도 프로세스나 명령이 두 번 생기지 않는다.
+- 모든 변경은 영향을 받은 자원 식별자와 증거 참조를 돌려준다. "했습니다"만 남기지 않는다.
+- 자격증명 사용, 외부 발신, 파괴적 명령, 운영 변경은 일반 편집 권한을 상속하지 않는다.
+
+### UC-HERDR-CONTROL-STALE-REVISION — 늦게 도착한 요청은 조용히 덮어쓰지 않는다
+
+- 요청에는 사용자가 본 시점의 기대 개정 번호가 실린다.
+- 그 사이 상태가 바뀌었으면 요청은 타입이 선언된 충돌로 거절된다. 조용히 최신 상태를 덮어쓰지 않는다.
+- 충돌을 받은 Naia는 현재 상태를 다시 관측하고 사용자에게 무엇이 달라졌는지 말한 뒤 다시 판단한다.
+
+### UC-HERDR-CONTROL-RECONNECT — 끊겨도 완료를 지어내지 않는다
+
+- 연결이 끊기거나 Herdr가 재시작되면 Naia는 다시 붙어 현재 상태를 재확인한다.
+- 연결 끊김, 타임아웃, 프로세스 종료, 사용자 취소, 부분 완료는 서로 다른 결과로 구별되어 남는다.
+- 재접속 직후 Naia는 작업이 멈췄다거나 끝났다고 증거 없이 말하지 않는다. 모르면 모른다고 한다.
+- 재접속 시도에는 상한이 있고, 상한에 닿으면 실패를 정직하게 보고한다.
+
+Test Coverage Map (P02):
+
+| UC | 검증 수단 | 대상 |
+|---|---|---|
+| UC-HERDR-CONTROL-OBSERVE | vitest `herdr-control/__tests__/resource-schema.test.ts` | 자원 스키마·버전, 개정 단조 증가, 구독 누락 감지 |
+| UC-HERDR-CONTROL-OBSERVE | vitest `herdr-control/__tests__/no-screen-scrape.test.ts` | 화면 파싱·private socket 경로 부재 negative |
+| UC-HERDR-CONTROL-MUTATE | vitest `herdr-control/__tests__/mutation-contract.test.ts` | 구조화 argv·cwd·env, 증거 참조 반환, 문자열 조립 negative |
+| UC-HERDR-CONTROL-MUTATE | vitest `herdr-control/__tests__/idempotency.test.ts` | 같은 멱등 키 재전송 시 중복 생성 0 |
+| UC-HERDR-CONTROL-MUTATE | vitest `herdr-control/__tests__/capability-tier.test.ts` | 자격증명·외부 발신·파괴적 명령의 권한 비상속 negative |
+| UC-HERDR-CONTROL-STALE-REVISION | vitest `herdr-control/__tests__/stale-revision.test.ts` | 기대 개정 불일치 시 타입 있는 충돌, 무음 덮어쓰기 0 |
+| UC-HERDR-CONTROL-RECONNECT | vitest `herdr-control/__tests__/outcome-taxonomy.test.ts` | 끊김·타임아웃·종료·취소·부분완료 구별 |
+| UC-HERDR-CONTROL-RECONNECT | vitest `herdr-control/__tests__/reconnect-bounds.test.ts` | 재접속 상한, 상한 도달 시 정직 실패 |
+| 전체 | e2e-tauri `e2e-tauri/herdr-control.e2e.ts` | 실제 Herdr 상대 관측·변경·충돌·재시작 복구 왕복 |
+
+상태 매트릭스: 기본(Herdr 정상), 빈 목록(space 0개), 진행(작업자 실행 중), 성공(변경 반영),
+오류(충돌·타임아웃·연결 끊김), 좁은 폭(제어 패널 축소)을 모두 매핑한다.
+
+## 2026-08-26 브라우저·터미널 환경 도구 (#499, 에픽 #497)
+
+> 계약: `docs/progress/issue-497-universal-agent.md`. 기존 UC6(브라우저 조작), UC7·UC7a(시스템 관측·조작),
+> UC13a(실행 중 중단)를 확장한다. 터미널의 생명주기 소유는 #502가 Herdr에 위임한 것을 그대로 따른다.
+
+### UC-ENV-TOOL-BROWSE — 보고 나서 누른다
+
+- Naia는 페이지를 열고, 구조 스냅샷을 얻고, 그 스냅샷의 안정된 요소 참조로 클릭하고 입력한다.
+- 좌표로 찍지 않는다. 좌표만 가능한 경우에는 그 사실을 밝힌다.
+- 행동 전과 후의 관측을 남겨, 무엇이 달라졌는지 사용자에게 설명할 수 있다.
+- 페이지에 담긴 문장은 자료이지 지시가 아니다. 페이지가 시키는 대로 권한을 넓히지 않는다.
+
+### UC-ENV-TOOL-TERMINAL-EXEC — 명령을 조립하지 않고 실행한다
+
+- Naia는 실행 파일과 인자 배열, 작업 디렉터리, 환경을 구조화해 넘긴다. 셸 문자열을 조립하지 않는다.
+- 터미널의 생성과 종료는 Herdr가 소유하고 Naia는 요청자로만 참여한다.
+- 종료 코드, 출력 참조, 산출물 참조가 결과에 함께 돌아온다.
+- 워크스페이스 경계 밖을 건드리는 명령은 명시적 권한 없이는 거부된다.
+
+### UC-ENV-TOOL-CANCEL — 돌아가는 것을 끊을 수 있다
+
+- 사용자가 멈추라고 하면 진행 중인 브라우저 작업과 터미널 작업이 실제로 멈춘다.
+- 취소된 작업은 실패와 구별되어 기록되고, 부분적으로 일어난 일이 있으면 그것도 남는다.
+- 타임아웃에 걸린 작업은 결과 불명으로 남기고 성공으로 승격하지 않는다.
+- 같은 요청을 다시 보내도 이미 실행된 작업이 두 번 일어나지 않는다.
+
+### UC-ENV-TOOL-BOUNDARY-DENY — 권한은 상속되지 않는다
+
+- 파일을 고칠 수 있다는 것이 메시지를 보내거나 게시하거나 결제할 수 있다는 뜻이 되지 않는다.
+- 저장된 자격증명을 쓰는 호출은 별도 승인을 받는다.
+- 삭제와 운영 환경 변경은 사람 결정으로 올린다.
+- 거부는 조용한 무시가 아니라 사용자가 이유를 아는 명시적 응답이다.
+
+Test Coverage Map (P02):
+
+| UC | 검증 수단 | 대상 |
+|---|---|---|
+| UC-ENV-TOOL-BROWSE | vitest `env-tool/__tests__/browser-contract.test.ts` | 작업 생명주기 5상태, 스냅샷 자원, 안정 요소 참조 |
+| UC-ENV-TOOL-BROWSE | Playwright `e2e/env-tool-browser.spec.ts` | 실제 페이지 열기·스냅샷·클릭·입력·전후 관측 |
+| UC-ENV-TOOL-BROWSE | Playwright `e2e/env-tool-injection.spec.ts` | 악성 페이지 지시 주입 무시 negative |
+| UC-ENV-TOOL-TERMINAL-EXEC | vitest `env-tool/__tests__/terminal-contract.test.ts` | 구조화 argv·cwd·env, Herdr 위임, 종료 코드·출력 참조 |
+| UC-ENV-TOOL-TERMINAL-EXEC | vitest `env-tool/__tests__/workspace-escape.test.ts` | 경계 밖 명령 거부 negative |
+| UC-ENV-TOOL-CANCEL | vitest `env-tool/__tests__/cancel-timeout.test.ts` | 취소·타임아웃·부분 실행 구별, 재전송 멱등 |
+| UC-ENV-TOOL-BOUNDARY-DENY | vitest `env-tool/__tests__/approval-matrix.test.ts` | 등급별 승인 요구, 비상속, 명시적 거부 |
+| 전체 | e2e-tauri `e2e-tauri/env-tool.e2e.ts` | 실 브라우저와 실 Herdr 터미널의 풀스택 왕복 |
+
+상태 매트릭스: 기본, 빈 목록(열린 컨텍스트 0개), 진행(작업 실행 중), 성공, 오류(거부·타임아웃·취소),
+좁은 폭(도구 결과 패널 축소)을 모두 매핑한다.
+
+## 2026-08-26 이슈 리더와 코딩 작업자 오케스트레이션 (#500, 에픽 #497)
+
+> 계약: `docs/progress/issue-497-universal-agent.md`. 선행: #501의 컨텍스트 해석과 #502의 제어면.
+> 위임 위험도 등급은 워크스페이스 terminology 정의를 따르며 high는 위임하지 않는다.
+
+### UC-ORCHESTRATION-CLASSIFY — 대화로 끝낼 일과 이슈로 만들 일을 가른다
+
+- 사용자가 무언가를 요청하면 Naia는 그 자리에서 답할 일인지, 이슈로 만들어 위임할 일인지 먼저 판단한다.
+- 이슈로 만들 일이면 GitHub 이슈를 새로 만들거나 기존 이슈에 붙이고, 그것을 Herdr space에 결속한다.
+- 판단 근거를 사용자가 물으면 답할 수 있고, 사용자가 뒤집으면 그대로 따른다.
+- 사소한 질문에 이슈와 작업자를 만들지 않는다.
+
+### UC-ORCHESTRATION-ISSUE-LEAD — 리더 하나가 이슈를 책임진다
+
+- 이슈마다 L2 리더가 하나 선다. 리더는 계획, 소유 경로 배정, 작업자 배치, 증거 통합, 완료 판정을 맡는다.
+- 구현자와 독립 검증자가 최소한으로 붙는다. 구현한 작업자가 자기 결과를 검증하지 않는다.
+- 작업자의 소유 경로는 겹치지 않는다. 겹칠 수밖에 없으면 순서를 정해 직렬화한다.
+- 작업자는 자기 권한을 넓히거나 이슈 완료를 선언하지 못한다. 리더가 증거를 모아 L3에 올린다.
+
+### UC-ORCHESTRATION-WORKER-REPLACE — 멈춘 작업자를 갈아 끼운다
+
+- 작업자가 죽거나 멈추면 이슈 상태를 잃지 않고 다른 작업자로 교체한다.
+- Codex, Claude, OpenCode는 명령줄 도구가 서로 달라도 같은 생명주기 의미를 노출한다.
+- 교체 시 이미 만들어진 산출물과 증거는 보존한다.
+- 사용자는 언제든 중단하고 다시 시작할 수 있다.
+
+### UC-ORCHESTRATION-RESTART-RESUME — 앱을 껐다 켜도 이어진다
+
+- 앱이나 Herdr가 재시작해도 이슈, 리더, 작업자 상태를 다시 찾아 이어간다.
+- 재시작 직후 완료나 실패를 증거 없이 단정하지 않는다.
+- 이어받을 수 없는 부분은 이어받을 수 없다고 보고한다.
+
+Test Coverage Map (P02):
+
+| UC | 검증 수단 | 대상 |
+|---|---|---|
+| UC-ORCHESTRATION-CLASSIFY | vitest `orchestration/__tests__/classify.test.ts` | 대화형·이슈형 분류, 사용자 뒤집기 반영 |
+| UC-ORCHESTRATION-ISSUE-LEAD | vitest `orchestration/__tests__/issue-lead.test.ts` | 리더 단일성, 역할 분리, 증거 통합 |
+| UC-ORCHESTRATION-ISSUE-LEAD | vitest `orchestration/__tests__/ownership-conflict.test.ts` | 소유 경로 중첩 거부·직렬화 negative |
+| UC-ORCHESTRATION-ISSUE-LEAD | vitest `orchestration/__tests__/no-self-completion.test.ts` | 작업자 자가 완료 선언·권한 확장 negative |
+| UC-ORCHESTRATION-WORKER-REPLACE | vitest `orchestration/__tests__/worker-adapter.test.ts` | Codex·Claude·OpenCode 어댑터 생명주기 동등성 |
+| UC-ORCHESTRATION-WORKER-REPLACE | vitest `orchestration/__tests__/replace-preserve.test.ts` | 교체 시 이슈 상태·산출물 보존 |
+| UC-ORCHESTRATION-RESTART-RESUME | e2e-tauri `e2e-tauri/orchestration-restart.e2e.ts` | 앱·Herdr 재시작 후 이어받기, 증거 없는 단정 0 |
+| 전체 | e2e-tauri `e2e-tauri/orchestration-reference.e2e.ts` | 참조 이슈를 구현자와 독립 검증자로 완주 |
+
+상태 매트릭스: 기본, 빈 목록(작업자 0), 진행(작업자 실행 중), 성공(검증 완료), 오류(작업자 사망·소유 충돌),
+좁은 폭(작업자 목록 축소)을 모두 매핑한다.
+
+## 2026-08-26 채널 중립 세션 (#503, 에픽 #497)
+
+> 계약: `docs/progress/issue-497-universal-agent.md`. 기존 UC10(멀티 채널)과 UC10a(다중 클라이언트 점유
+> 충돌)를 확장한다. 채널은 L3 어댑터이며 실행 소유자가 아니다.
+
+### UC-CHANNEL-SESSION-HANDOFF — 어디서 시작하든 하나의 일이다
+
+- Discord에서 시작한 일을 데스크톱 Naia에서 들여다보고, Herdr에서 이어가고, 다시 허가된 채널에서 마무리한다.
+- 같은 이슈에는 L3 대화 정체성 하나와 Herdr 실행 소유자 하나만 존재한다.
+- 채널이 달라도 대화가 갈라지지 않는다.
+- 음성으로 시작한 일도 같은 세션으로 이어진다.
+
+### UC-CHANNEL-SESSION-DUPLICATE-DELIVERY — 같은 메시지가 두 번 와도 한 번만 한다
+
+- 채널이 같은 메시지를 중복 전달해도 이슈나 작업자가 두 개 생기지 않는다.
+- 이벤트가 순서를 바꿔 도착해도 상태가 뒤집히지 않는다.
+- 이미 처리한 요청의 재전달은 처리 결과를 다시 알려 주는 것으로 끝난다.
+
+### UC-CHANNEL-SESSION-RECONNECT — 끊겼다 붙어도 지어내지 않는다
+
+- 채널이 끊겼다 다시 붙어도 Naia는 일이 멈췄다거나 끝났다고 증거 없이 말하지 않는다.
+- 재부팅 뒤에도 이어받을 수 있는 참조를 보관한다. 작업자 실행 상태를 다시 복사해 두지 않는다.
+- 대화 응답과 오래 걸리는 작업의 진행 알림은 구분해서 보낸다.
+
+### UC-CHANNEL-SESSION-DISCLOSURE-DENY — 좁은 곳의 이야기가 넓은 곳으로 새지 않는다
+
+- 워크스페이스의 기밀 컨텍스트가 더 넓은 채널로 그대로 나가지 않는다.
+- 채널마다 신원, 참여 자격, 공개 범위, 응답 경로 정책이 다르며 그것을 지킨다.
+- 정책상 답할 수 없는 곳에서는 답하지 않고 그 사실을 알린다.
+
+Test Coverage Map (P02):
+
+| UC | 검증 수단 | 대상 |
+|---|---|---|
+| UC-CHANNEL-SESSION-HANDOFF | vitest `channel-session/__tests__/identity.test.ts` | 대화·작업·이슈·space 식별자 채널 중립성, 단일 소유 |
+| UC-CHANNEL-SESSION-DUPLICATE-DELIVERY | vitest `channel-session/__tests__/dedupe.test.ts` | 중복 전달 시 이슈·작업자 중복 생성 0 |
+| UC-CHANNEL-SESSION-DUPLICATE-DELIVERY | vitest `channel-session/__tests__/out-of-order.test.ts` | 순서 뒤바뀐 이벤트에서 상태 역전 0 |
+| UC-CHANNEL-SESSION-RECONNECT | vitest `channel-session/__tests__/resume-refs.test.ts` | 재개 참조 보관, 작업자 상태 복사 금지 |
+| UC-CHANNEL-SESSION-RECONNECT | e2e-tauri `e2e-tauri/channel-reboot.e2e.ts` | 재부팅 후 이어받기, 증거 없는 완료·중단 단정 0 |
+| UC-CHANNEL-SESSION-DISCLOSURE-DENY | vitest `channel-session/__tests__/disclosure-policy.test.ts` | 채널별 공개 범위, 기밀 컨텍스트 유출 negative |
+| 전체 | e2e-tauri `e2e-tauri/channel-continuity.e2e.ts` | 데스크톱과 Discord 사이 연속성 종단 시나리오 |
+
+상태 매트릭스: 기본, 빈 목록(활성 작업 0), 진행(작업 실행 중 알림), 성공, 오류(연결 끊김·정책 거부),
+좁은 폭(채널 목록 축소)을 모두 매핑한다.
+
+## 2026-08-26 검증·벤치마크 하네스 (#498, 에픽 #497)
+
+> 계약: `docs/progress/issue-497-universal-agent.md`. 이 하네스가 형제 이슈의 UC를 실제로 밟아
+> 완료를 판정한다. 형제 이슈는 자기 주장으로 완료되지 않는다.
+
+### UC-AGENT-BENCH-RUN — 시나리오를 실제로 밟아 판정한다
+
+- 형제 이슈의 UC 시나리오를 하네스가 직접 실행하고 기대 결과를 확인한다.
+- 목 데이터만으로 얻은 통과는 native Herdr, 실제 브라우저, 실제 코딩 작업자 게이트를 대신하지 못한다.
+- 판정 결과에는 의도, 컨텍스트 개정, 수행한 작업, 산출물, 테스트, 완료 증거가 추적 가능하게 남는다.
+
+### UC-AGENT-BENCH-FALSE-COMPLETION — 가짜 완료를 잡아낸다
+
+- 실제로는 하지 않은 일을 했다고 보고하면 하네스가 그것을 실패로 판정한다.
+- 테스트를 지우거나 범위를 줄여 얻은 통과는 완료 증거가 아니다.
+- 다른 프로젝트의 컨텍스트가 답에 섞이면 실패로 판정한다.
+- 허가 없는 외부 발신이 일어나면 실패로 판정한다.
+
+### UC-AGENT-BENCH-REPORT — 통과 여부만이 아니라 비용과 지연을 보고한다
+
+- 벤치마크는 성공률과 함께 중앙값 지연과 꼬리 지연, 토큰 비용, 사람 개입 횟수를 보고한다.
+- 결과는 같은 입력에서 재현 가능하다.
+- 회귀 임계값을 넘으면 그것을 드러낸다.
+
+Test Coverage Map (P02):
+
+| UC | 검증 수단 | 대상 |
+|---|---|---|
+| UC-AGENT-BENCH-RUN | vitest `agent-bench/__tests__/runner-contract.test.ts` | 시나리오 실행·판정 계약, 결정론 픽스처 |
+| UC-AGENT-BENCH-RUN | vitest `agent-bench/__tests__/fixtures.test.ts` | 중첩 진입점·다중 프로젝트 임시 워크스페이스 픽스처 |
+| UC-AGENT-BENCH-FALSE-COMPLETION | vitest `agent-bench/__tests__/false-completion.test.ts` | 미수행 보고·축소 suite·교차 누출·무단 발신 탐지 |
+| UC-AGENT-BENCH-REPORT | vitest `agent-bench/__tests__/report-shape.test.ts` | 지연 중앙값·꼬리, 비용, 개입 횟수, 재현성 |
+| 전체 | e2e-tauri `e2e-tauri/agent-bench.e2e.ts` | 실제 Herdr·브라우저·코딩 작업자 게이트에서의 수용 실행 |
+
+상태 매트릭스: 기본, 빈 목록(시나리오 0), 진행(벤치 실행 중), 성공(수용), 오류(가짜 완료 탐지·임계 초과),
+좁은 폭(리포트 표 축소)을 모두 매핑한다.

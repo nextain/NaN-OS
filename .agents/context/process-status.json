@@ -33,11 +33,56 @@
           "P04_integration_test": "pending",
           "P05_complete": "pending"
         },
-        "502": { "scope": "Herdr 제어면 (#434 승계)", "P01_user_scenarios": "pending", "P02_test_coverage_map": "pending", "P03_requirements": "pending", "P04_integration_test": "pending", "P05_complete": "pending" },
-        "499": { "scope": "브라우저·터미널 환경 도구", "P01_user_scenarios": "pending", "P02_test_coverage_map": "pending", "P03_requirements": "pending", "P04_integration_test": "pending", "P05_complete": "pending" },
-        "500": { "scope": "이슈 리더와 코딩 작업자 오케스트레이션", "P01_user_scenarios": "pending", "P02_test_coverage_map": "pending", "P03_requirements": "pending", "P04_integration_test": "pending", "P05_complete": "pending" },
-        "503": { "scope": "채널 중립 세션", "P01_user_scenarios": "pending", "P02_test_coverage_map": "pending", "P03_requirements": "pending", "P04_integration_test": "pending", "P05_complete": "pending" },
-        "498": { "scope": "검증·벤치마크 하네스", "P01_user_scenarios": "pending", "P02_test_coverage_map": "pending", "P03_requirements": "pending", "P04_integration_test": "pending", "P05_complete": "pending" }
+        "502": {
+          "scope": "Herdr 제어면 (#434 승계)",
+          "scenario": "docs/user-scenarios.md UC-HERDR-CONTROL-*",
+          "requirements": "docs/requirements.md FR-HERDR-CONTROL.1~10",
+          "P01_user_scenarios": "done",
+          "P02_test_coverage_map": "done",
+          "P03_requirements": "done",
+          "P04_integration_test": "pending",
+          "P05_complete": "pending"
+        },
+        "499": {
+          "scope": "브라우저·터미널 환경 도구",
+          "scenario": "docs/user-scenarios.md UC-ENV-TOOL-*",
+          "requirements": "docs/requirements.md FR-ENV-TOOL.1~9",
+          "P01_user_scenarios": "done",
+          "P02_test_coverage_map": "done",
+          "P03_requirements": "done",
+          "P04_integration_test": "pending",
+          "P05_complete": "pending"
+        },
+        "500": {
+          "scope": "이슈 리더와 코딩 작업자 오케스트레이션",
+          "scenario": "docs/user-scenarios.md UC-ORCHESTRATION-*",
+          "requirements": "docs/requirements.md FR-ORCHESTRATION.1~10",
+          "P01_user_scenarios": "done",
+          "P02_test_coverage_map": "done",
+          "P03_requirements": "done",
+          "P04_integration_test": "pending",
+          "P05_complete": "pending"
+        },
+        "503": {
+          "scope": "채널 중립 세션",
+          "scenario": "docs/user-scenarios.md UC-CHANNEL-SESSION-*",
+          "requirements": "docs/requirements.md FR-CHANNEL-SESSION.1~7",
+          "P01_user_scenarios": "done",
+          "P02_test_coverage_map": "done",
+          "P03_requirements": "done",
+          "P04_integration_test": "pending",
+          "P05_complete": "pending"
+        },
+        "498": {
+          "scope": "검증·벤치마크 하네스",
+          "scenario": "docs/user-scenarios.md UC-AGENT-BENCH-*",
+          "requirements": "docs/requirements.md NFR-AGENT-BENCH.1~7",
+          "P01_user_scenarios": "done",
+          "P02_test_coverage_map": "done",
+          "P03_requirements": "done",
+          "P04_integration_test": "pending",
+          "P05_complete": "pending"
+        }
       },
       "status": "in_progress",
       "last_updated": "2026-08-26T00:00:00+09:00"
