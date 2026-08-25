@@ -2,7 +2,7 @@
 // 하네스가 판정할 목록이 실제 UC 문서에서 나오는가, 계열이 빠지면 잡히는가.
 import { describe, it, expect } from "vitest";
 import { resolve } from "node:path";
-import { DocumentBenchScenarioSource, declaredFamilies, familyOf, parseScenarios } from "../main/adapters/agent-bench-scenarios.js";
+import { DocumentBenchScenarioSource, declaredFamilies, familyOf, parseScenarios } from "./harness/agent-bench-scenarios.js";
 
 const DOC = resolve(__dirname, "..", "..", "docs", "user-scenarios.md");
 

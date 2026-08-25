@@ -4,7 +4,7 @@ import { describe, it, expect, afterEach } from "vitest";
 import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { FileSystemWorkspaceContextAdapter, parseDeclaration, sectionLines } from "../main/adapters/workspace-context-fs.js";
+import { FileSystemWorkspaceContextAdapter, parseDeclaration, sectionLines } from "./harness/workspace-context-fs.js";
 import { WorkspaceContextService } from "../main/app/control/workspace-context.js";
 import { canonicalRoot } from "../main/domain/workspace.js";
 

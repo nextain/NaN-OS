@@ -4,7 +4,7 @@ import { describe, it, expect, afterEach } from "vitest";
 import { mkdtemp, readFile, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { TempWorkspaceFixtureAdapter } from "../main/adapters/workspace-fixture.js";
+import { TempWorkspaceFixtureAdapter } from "./harness/workspace-fixture.js";
 import type { WorkspaceFixtureSpec } from "../main/ports/agent-bench.js";
 
 const SPEC: WorkspaceFixtureSpec = {

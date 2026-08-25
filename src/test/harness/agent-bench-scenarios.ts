@@ -2,8 +2,8 @@
 // 하네스가 판정해야 할 목록을 코드에 손으로 적으면, UC 를 추가하고 시나리오를 빠뜨려도 아무도 모른다.
 // 그래서 docs/user-scenarios.md 를 직접 읽는다 — 문서와 하네스가 어긋나면 테스트가 깨진다.
 import { readFile } from "node:fs/promises";
-import type { BenchScenario, EvidenceKind, GateKind } from "../domain/agent-bench.js";
-import type { BenchScenarioSourcePort } from "../ports/agent-bench.js";
+import type { BenchScenario, EvidenceKind, GateKind } from "../../main/domain/agent-bench.js";
+import type { BenchScenarioSourcePort } from "../../main/ports/agent-bench.js";
 
 /** 에픽 #497 자식들이 쓰는 UC 접두사와 각 계열이 요구하는 증거. */
 const FAMILIES: readonly {

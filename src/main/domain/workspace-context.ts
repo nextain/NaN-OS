@@ -22,6 +22,8 @@ export interface DeclaredDocument {
   /** 이 문서가 어떤 주제에 필요한지. 빈 배열 = 항상 필요(필수 인덱스). */
   readonly topics: readonly string[];
   readonly bytes: number;
+  /** 이 문서를 선언한 진입점. 병합을 거쳐도 근거가 바뀌지 않도록 문서에 붙여 둔다. */
+  readonly declaredBy?: string;
 }
 
 export interface ProjectDeclaration {
@@ -98,7 +100,7 @@ export function selectDocuments(
         continue;
       }
       bytes += doc.bytes;
-      loaded.push({ ref: doc, reason, declaredBy: declaration.entrypoint, scope });
+      loaded.push({ ref: doc, reason, declaredBy: doc.declaredBy ?? declaration.entrypoint, scope });
     }
   }
   return { loaded, dropped, totalBytes: bytes };
@@ -131,12 +133,18 @@ export function nextRevision(prev: ContextRevision): ContextRevision {
  */
 export function mergeProjectDeclaration(root: ContextDeclaration, project: ProjectDeclaration): ContextDeclaration {
   const projectTopics = new Set(project.documents.flatMap((d) => d.topics));
-  const survivingRootDocs = root.documents.filter(
-    (d) => d.topics.length === 0 || !d.topics.some((t) => projectTopics.has(t)),
-  );
+  const projectPaths = new Set(project.documents.map((d) => d.path));
+  const survivingRootDocs = root.documents
+    // 같은 경로를 양쪽이 선언하면 프로젝트 것 하나만 남긴다. 두 번 실으면 예산도 두 번 쓰고
+    // 근거 목록에도 같은 파일이 두 줄로 나온다(2026-08-26 실 UI 에서 드러났다).
+    .filter((d) => !projectPaths.has(d.path))
+    .filter((d) => d.topics.length === 0 || !d.topics.some((t) => projectTopics.has(t)))
+    // 루트가 선언한 문서의 근거는 루트 진입점이다. 병합했다고 프로젝트가 선언한 것처럼 보이면 안 된다.
+    .map((d) => ({ ...d, declaredBy: d.declaredBy ?? root.entrypoint }));
+  const projectDocs = project.documents.map((d) => ({ ...d, declaredBy: d.declaredBy ?? project.entrypoint }));
   return {
     entrypoint: project.entrypoint,
-    documents: [...survivingRootDocs, ...project.documents],
+    documents: [...survivingRootDocs, ...projectDocs],
     projects: root.projects,
     skills: root.skills,
     governance: root.governance,

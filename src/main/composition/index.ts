@@ -156,3 +156,28 @@ export function wireOnboardingLive(f0: LiveDeps, uc12: UC12LiveDeps): Onboarding
     },
   });
 }
+
+// ── #501 슬라이스 (워크스페이스 컨텍스트 해석) ──
+import { WorkspaceContextService } from "../app/control/workspace-context.js";
+import { ObservePortWorkspaceContextAdapter } from "../adapters/workspace-context-observe.js";
+import type { EnvironmentObservePort } from "../ports/f2.js";
+import type { LoadLimits } from "../domain/workspace-context.js";
+
+/** 기본 로드 상한. 대화 한 번에 워크스페이스 전체를 밀어 넣지 않기 위한 값이다. */
+export const DEFAULT_CONTEXT_LIMITS: LoadLimits = { maxDocuments: 20, maxBytes: 512 * 1024 };
+
+/** 셸에서 쓰는 실배선 — 파일 접근은 이미 있는 F2 관측 포트를 재사용한다. */
+export function wireWorkspaceContext(env: EnvironmentObservePort, limits: LoadLimits = DEFAULT_CONTEXT_LIMITS): WorkspaceContextService {
+  return new WorkspaceContextService(new ObservePortWorkspaceContextAdapter(env), limits);
+}
+
+/** Tauri 실배선 — F2 관측 어댑터를 그대로 재사용한다. 파일 접근 경로를 두 벌 만들지 않는다. */
+export function wireWorkspaceContextLive(deps: F2LiveDeps, limits: LoadLimits = DEFAULT_CONTEXT_LIMITS): WorkspaceContextService {
+  return new WorkspaceContextService(new ObservePortWorkspaceContextAdapter(makeF2EnvObserve(deps)), limits);
+}
+
+export { WorkspaceContextService, StaleRevisionError } from "../app/control/workspace-context.js";
+export { canonicalRoot } from "../domain/workspace.js";
+export type { CanonicalRoot } from "../domain/workspace.js";
+export type { ContextManifest, ContextRevision, ContextScope, Diagnostic, LoadIntent, LoadedDocument, Selection } from "../domain/workspace-context.js";
+export type { ResolveOutcome } from "../app/control/workspace-context.js";

@@ -961,7 +961,9 @@ Test Coverage Map (P02):
 | UC-WORKSPACE-CONTEXT-BROKEN-ENTRYPOINT | vitest `src/test/workspace-context-failure-honesty.contract.test.ts` | 부재·형식 오류·인덱스 부재 진단 메시지 |
 | UC-WORKSPACE-CONTEXT-BROKEN-ENTRYPOINT | vitest `src/test/workspace-context-path-boundary.contract.test.ts` | 심볼릭 링크·상위 경로 탈출 negative |
 | 전체 | vitest `src/test/workspace-context-fs-adapter.contract.test.ts` | 실제 진입점 파싱, 이 저장소 AGENTS.md 실측, 임시 워크스페이스 중첩 진입, 경계 거부, 지문 변화 |
-| 전체 | Playwright `packages/shell/e2e/workspace-context.spec.ts` | 실 UI에서 컨텍스트 근거 표시, 프로젝트 전환 표시, 실패 진단 표시 |
+| 전체 | vitest `src/test/workspace-context-observe-adapter.contract.test.ts` | Tauri 웹뷰 경로(F2 관측 포트) 재사용, 크기 기반 지문의 한계 고정 |
+| 전체 | vitest `packages/shell/src/apps/workspace/__tests__/workspace-context-panel.test.tsx` | 패널 상태 매트릭스(루트 없음·성공·빈 목록·오류·프로젝트 전환·다시 읽기) |
+| 전체 | Playwright `packages/shell/e2e/workspace-context.spec.ts` | 실 UI에서 근거 표시, 선언 밖 문서 미표시, 프로젝트 전환 시 범위·개정 변화, 경로 중복 없음, 근거 출처 정확성, 실패 진단, 좁은 폭 미넘침 |
 | 전체 | e2e-tauri `packages/shell/e2e-tauri/specs/workspace-context.spec.ts` | 실제 파일 시스템 픽스처에서 발견·진입·전환·실패의 풀스택 왕복 |
 
 상태 매트릭스: 기본(진입점 정상), 빈 목록(선언된 인덱스 0개), 진행(대용량 워크스페이스 스캔 중),

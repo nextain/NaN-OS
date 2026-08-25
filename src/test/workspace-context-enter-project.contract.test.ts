@@ -51,6 +51,25 @@ describe("프로젝트 선언 병합 (FR-WORKSPACE-CONTEXT.3)", () => {
     expect(merged.documents.map((d) => d.id)).toEqual(["rules", "terms", "reqs", "alpha-rules"]);
   });
 
+  it("양쪽이 같은 경로를 선언하면 하나만 남는다 — 같은 파일이 예산을 두 번 쓰지 않는다", () => {
+    const project = { name: "gamma", entrypoint: "projects/gamma/AGENTS.md", documents: [doc("rules-dup", "agents-rules.json")] };
+    const merged = mergeProjectDeclaration(DECL, project);
+    expect(merged.documents.filter((d) => d.path === "agents-rules.json")).toHaveLength(1);
+  });
+
+  it("같은 경로가 겹치면 프로젝트가 선언한 쪽이 남는다", () => {
+    const project = { name: "gamma", entrypoint: "projects/gamma/AGENTS.md", documents: [doc("rules-dup", "agents-rules.json")] };
+    const merged = mergeProjectDeclaration(DECL, project);
+    expect(merged.documents.find((d) => d.path === "agents-rules.json")?.id).toBe("rules-dup");
+  });
+
+  it("루트가 선언한 문서의 근거는 병합 뒤에도 루트 진입점이다", () => {
+    const project = DECL.projects.find((p) => p.name === "alpha");
+    const merged = mergeProjectDeclaration(DECL, project!);
+    expect(merged.documents.find((d) => d.path === "agents-rules.json")?.declaredBy).toBe("AGENTS.md");
+    expect(merged.documents.find((d) => d.path === "projects/alpha/rules.json")?.declaredBy).toBe("projects/alpha/AGENTS.md");
+  });
+
   it("병합 결과의 진입점은 프로젝트 진입점이다", () => {
     const project = DECL.projects.find((p) => p.name === "alpha");
     expect(mergeProjectDeclaration(DECL, project!).entrypoint).toBe("projects/alpha/AGENTS.md");
@@ -75,6 +94,50 @@ describe("진입은 컨텍스트 전환이다 (FR-WORKSPACE-CONTEXT.3)", () => {
     expect(out.ok).toBe(true);
     if (!out.ok) return;
     expect(out.manifest.selection.loaded.map((d) => d.ref.id)).toContain("alpha-rules");
+  });
+
+  it("진입 후 근거 목록이 어느 진입점의 선언인지 정확히 가리킨다", async () => {
+    // 루트만 선언한 문서와 프로젝트만 선언한 문서를 함께 둔다.
+    const src = fakeSource({
+      root: { ok: true, declaration: rootDeclaration({ documents: [doc("root-only", "root-only.json")] }) },
+      projects: {
+        alpha: {
+          ok: true,
+          declaration: rootDeclaration({
+            entrypoint: "projects/alpha/AGENTS.md",
+            documents: [doc("alpha-rules", "projects/alpha/rules.json")],
+          }),
+        },
+      },
+    });
+    const svc = new WorkspaceContextService(src, LIMITS);
+    await svc.discover(ROOT, { topics: [] });
+    const out = await svc.enterProject("alpha", { topics: [] });
+    expect(out.ok).toBe(true);
+    if (!out.ok) return;
+    const byPath = new Map(out.manifest.selection.loaded.map((d) => [d.ref.path, d.declaredBy]));
+    expect(byPath.get("root-only.json")).toBe("AGENTS.md");
+    expect(byPath.get("projects/alpha/rules.json")).toBe("projects/alpha/AGENTS.md");
+  });
+
+  it("프로젝트가 루트와 같은 경로를 다시 선언하면 근거는 프로젝트가 된다 — 실제로 그쪽이 선언했다", async () => {
+    const svc = new WorkspaceContextService(withProjects(), LIMITS);
+    await svc.discover(ROOT, { topics: [] });
+    const out = await svc.enterProject("alpha", { topics: [] });
+    expect(out.ok).toBe(true);
+    if (!out.ok) return;
+    const entry = out.manifest.selection.loaded.find((d) => d.ref.path === "agents-rules.json");
+    expect(entry?.declaredBy).toBe("projects/alpha/AGENTS.md");
+  });
+
+  it("진입 후 같은 경로가 두 번 실리지 않는다", async () => {
+    const svc = new WorkspaceContextService(withProjects(), LIMITS);
+    await svc.discover(ROOT, { topics: [] });
+    const out = await svc.enterProject("alpha", { topics: [] });
+    expect(out.ok).toBe(true);
+    if (!out.ok) return;
+    const paths = out.manifest.selection.loaded.map((d) => d.ref.path);
+    expect(paths).toEqual([...new Set(paths)]);
   });
 
   it("존재하지 않는 프로젝트는 진단으로 실패한다", async () => {

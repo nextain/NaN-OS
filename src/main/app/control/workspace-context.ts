@@ -18,6 +18,7 @@ import {
   type Diagnostic,
   type LoadIntent,
   type LoadLimits,
+  type ProjectDeclaration,
   type Selection,
 } from "../../domain/workspace-context.js";
 
@@ -101,6 +102,21 @@ export class WorkspaceContextService {
 
   current(): ContextManifest | null {
     return this.manifest;
+  }
+
+  /** workspace://projects (FR-WORKSPACE-CONTEXT.9). 루트 진입점이 선언한 것만 돌려준다. */
+  projects(): readonly ProjectDeclaration[] {
+    return this.rootDeclaration?.projects ?? [];
+  }
+
+  /** workspace://skills (FR-WORKSPACE-CONTEXT.9). */
+  skills(): readonly string[] {
+    return this.rootDeclaration?.skills ?? [];
+  }
+
+  /** workspace://governance (FR-WORKSPACE-CONTEXT.9). */
+  governance(): readonly string[] {
+    return this.rootDeclaration?.governance ?? [];
   }
 
   private requireManifest(): ContextManifest {

@@ -73,5 +73,16 @@ describe("자원 표면 (FR-WORKSPACE-CONTEXT.9)", () => {
   it("discover 전에는 현재 컨텍스트가 없다 — 없는 것을 있는 척하지 않는다", () => {
     const svc = new WorkspaceContextService(fakeSource(), LIMITS);
     expect(svc.current()).toBeNull();
+    expect(svc.projects()).toEqual([]);
+    expect(svc.skills()).toEqual([]);
+    expect(svc.governance()).toEqual([]);
+  });
+
+  it("발견 뒤에는 선언된 프로젝트·스킬·거버넌스를 조회할 수 있다", async () => {
+    const svc = new WorkspaceContextService(fakeSource(), LIMITS);
+    await svc.discover(ROOT, { topics: [] });
+    expect(svc.projects().map((p) => p.name)).toEqual(["alpha", "beta"]);
+    expect(svc.skills()).toEqual(["skill-a"]);
+    expect(svc.governance()).toEqual(["governance.yaml"]);
   });
 });

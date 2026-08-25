@@ -4,7 +4,7 @@
 import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve, sep } from "node:path";
-import type { WorkspaceFixture, WorkspaceFixturePort, WorkspaceFixtureSpec } from "../ports/agent-bench.js";
+import type { WorkspaceFixture, WorkspaceFixturePort, WorkspaceFixtureSpec } from "../../main/ports/agent-bench.js";
 
 /** 픽스처 루트 밖을 지우지 못하게 하는 안전장치. 경로가 접두사로 갇혀 있어야 한다. */
 function isContained(root: string, candidate: string): boolean {

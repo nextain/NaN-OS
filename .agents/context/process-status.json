@@ -31,7 +31,7 @@
           "P02_test_coverage_map": "done",
           "P03_requirements": "done",
           "P04_integration_test": "in_progress",
-          "P04_note": "코어와 어댑터 완료 — domain·ports·app/control 과 src/main/adapters/workspace-context-fs.ts, 계약 테스트 8건(82 tests) 통과. 어댑터는 이 저장소의 실제 AGENTS.md 로 실측한다. 미완: 주제 태그가 붙은 선택 문서를 선언하는 진입점 절 형식이 아직 없어 어댑터의 선택 문서는 항상 비어 있다(선택 로딩은 대역 선언으로만 검증). UI 표면과 packages/shell/e2e/workspace-context.spec.ts, packages/shell/e2e-tauri/specs/workspace-context.spec.ts 미작성.",
+          "P04_note": "코어·어댑터·UI·E2E 완료 — domain·ports·app/control, src/main/adapters/node/workspace-context-fs.ts(node 하네스용), src/main/adapters/workspace-context-observe.ts(셸용, F2 관측 포트 재사용), packages/shell/src/apps/workspace/WorkspaceContextPanel.tsx, 레일 세 번째 탭. 계약 테스트 10건 + 셸 단위 12건 + Playwright 4건 통과. 실 UI E2E 가 계약 테스트가 못 잡은 결함 둘을 잡았다(같은 경로 중복 적재, 병합 시 근거 출처 덮어쓰기) — 둘 다 수정하고 회귀 테스트 추가. 남은 것: 주제 태그 선택 문서를 선언하는 진입점 절 형식 미정(어댑터의 선택 문서는 항상 비어 있음), 관측 포트 지문은 크기 기반이라 같은 크기 편집을 자동 감지하지 못함(사용자 다시 읽기로 보완), core 진단 조치 문구가 한국어 고정이라 공개 저장소 i18n 미적용, e2e-tauri 스펙 미작성",
           "P05_complete": "pending"
         },
         "502": {

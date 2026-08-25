@@ -39,6 +39,38 @@ const codingWorkerUxTranslations = {
 		"Process exited",
 	),
 	"workspace.herdrFileTree": codingWorkerText("파일 트리", "File Tree"),
+	"workspace.contextTitle": codingWorkerText(
+		"워크스페이스 컨텍스트",
+		"Workspace context",
+	),
+	"workspace.contextRefresh": codingWorkerText("다시 읽기", "Reload"),
+	"workspace.contextLoading": codingWorkerText(
+		"진입점을 읽는 중",
+		"Reading entrypoint",
+	),
+	"workspace.contextScopeRoot": codingWorkerText("루트", "Root"),
+	"workspace.contextRevision": codingWorkerText("개정", "Revision"),
+	"workspace.contextReasonMandatory": codingWorkerText("필수", "Mandatory"),
+	"workspace.contextReasonIntent": codingWorkerText("의도", "Intent"),
+	"workspace.contextDeclaredBy": codingWorkerText("선언", "Declared by"),
+	"workspace.contextEmpty": codingWorkerText(
+		"진입점이 선언한 문서가 없습니다.",
+		"The entrypoint declares no documents.",
+	),
+	"workspace.contextDropped": codingWorkerText(
+		"상한을 넘어 싣지 못한 문서",
+		"Documents left out over the limit",
+	),
+	"workspace.contextProjects": codingWorkerText("프로젝트", "Projects"),
+	"workspace.contextBackToRoot": codingWorkerText("루트로", "Back to root"),
+	"workspace.contextFailed": codingWorkerText(
+		"컨텍스트를 확정하지 못했습니다.",
+		"The context could not be resolved.",
+	),
+	"workspace.contextNoRoot": codingWorkerText(
+		"워크스페이스 루트가 아직 정해지지 않았습니다.",
+		"No workspace root has been chosen yet.",
+	),
 	"workspace.herdrNavigation": codingWorkerText(
 		"워크스페이스 탐색",
 		"Workspace navigation",
