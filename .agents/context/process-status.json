@@ -22,6 +22,7 @@
       "title": "워크스페이스를 아는 3계층 범용 에이전트 (Naia L3 → Herdr L2 → 코딩 작업자 L1)",
       "contract": "docs/progress/issue-497-universal-agent.md",
       "boundary": "#417은 Workspace 통합 P1·P2를 소유하고 이 에픽은 P3·P4 실행을 소유한다. #434는 #502가 승계한다.",
+      "layer_boundary_2026_08_26": "뇌·몸·환경(docs/brain-body-environment.md) 기준 재검토 결과 — 환경이라 naia-shell 이 맞는 것: #499·#501·#502. 이미 naia-agent origin/main 에 있어 중복인 것: #500(orchestration.ts·issue-orchestration.ts·issue-team.ts·durable-supervisor.ts·fs-sandbox.ts)·#503(multi-issue-session.ts SessionSourceKind 에 shell 이 출처로 이미 모델링됨). 두 자식은 naia-shell 에서 진행 중단, 코드는 이식 대상으로 보존. 미해결 충돌: NFR-HERDR-SOT 는 Herdr 를 L2 이슈 리더 정본이라 하지만 naia-agent origin/main 에는 herdr 문자열이 0건이다 — 소유자 결정은 사람 몫.",
       "children": {
         "501": {
           "scope": "워크스페이스 컨텍스트 해석",
@@ -65,6 +66,7 @@
           "P03_requirements": "done",
           "P04_integration_test": "in_progress",
           "P04_note": "결정론 부분 완료 — src/main/domain/orchestration.ts, src/main/ports/orchestration.ts, src/main/app/control/orchestration.ts 와 계약 테스트 6건(64 tests) 통과. 미완: Codex·Claude·OpenCode 실제 어댑터가 없다. 지금 검증된 동등성은 대역 어댑터 수준이며 실제 명령줄 도구의 차이는 확인하지 않았다. packages/shell/e2e-tauri/specs/orchestration-restart.spec.ts, orchestration-reference.spec.ts 미작성.",
+          "P04_blocked_note": "이 에픽에서 진행 중단 — naia-agent origin/main 에 orchestration.ts·issue-orchestration.ts·issue-team.ts·durable-supervisor.ts·fs-sandbox.ts 로 이미 존재하는 것의 재구현이었다. 셸 코드는 이식 대상으로 보존한다. 재개 조건: NFR-HERDR-SOT 대 naia-agent#107 의 이슈 오케스트레이션 소유자 충돌이 사람 결정으로 풀릴 것.",
           "P05_complete": "pending"
         },
         "503": {
@@ -76,6 +78,7 @@
           "P03_requirements": "done",
           "P04_integration_test": "in_progress",
           "P04_note": "결정론 부분 완료 — src/main/domain/channel-session.ts, src/main/ports/channel-session.ts, src/main/app/control/channel-session.ts 와 계약 테스트 5건(43 tests) 통과. 미완: Discord·음성 어댑터 없음. 채널별 공개 범위 표는 현재 도메인 상수이며 운영에서 정할 값이므로 사람 확인이 필요하다. packages/shell/e2e-tauri/specs/channel-reboot.spec.ts, channel-continuity.spec.ts 미작성.",
+          "P04_blocked_note": "이 에픽에서 진행 중단 — naia-agent origin/main 의 multi-issue-session.ts(SessionSourceKind 가 shell 을 출처로 모델링)·discord-ingress-policy.ts 와 겹친다. 채널 중립 정체성은 뇌 쪽 관할이다. 셸 코드는 이식 대상으로 보존한다.",
           "P05_complete": "pending"
         },
         "498": {
