@@ -1,14 +1,11 @@
-import { appRegistry } from "../../lib/app-registry";
 import { TAB_SKILL_DESCRIPTORS } from "../../lib/tab-skills";
-import { SlidesCenterArea } from "./SlidesCenterArea";
 
-appRegistry.register({
-	id: "slides",
+/** Store-package metadata. The app is registered only after signed installation. */
+export const NAIA_SLIDES_DESCRIPTOR = {
+	id: "land.naia.slides",
 	name: "슬라이드",
 	names: { ko: "슬라이드", en: "Slides" },
 	icon: "▣",
-	builtIn: true,
-	center: SlidesCenterArea,
 	tools: [
 		{
 			name: "skill_slide_presenter",
@@ -43,4 +40,4 @@ appRegistry.register({
 		},
 		...TAB_SKILL_DESCRIPTORS,
 	],
-});
+};

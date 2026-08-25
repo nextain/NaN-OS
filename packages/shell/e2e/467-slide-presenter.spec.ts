@@ -34,11 +34,13 @@ const SPEECH_MOCK = `
 			window.__TAURI_INTERNALS__.runCallback(handler, { event: event, payload: payload });
 		});
 	}
+	window.__NAIA_E2E_EMIT__ = emit;
 	window.__TAURI_EVENT_PLUGIN_INTERNALS__.unregisterListener = function(event, id) {
 		listeners.set(event, (listeners.get(event) || []).filter(function(handler) { return handler !== id; }));
 		callbacks.delete(id);
 	};
 	window.__TAURI_INTERNALS__.convertFileSrc = function(path, protocol) {
+		if (String(path).includes("land.naia.slides")) return "/slides.html";
 		return (protocol || "asset") + "://localhost/" + encodeURIComponent(path);
 	};
 	window.__TAURI_INTERNALS__.invoke = async function(command, args) {
@@ -50,6 +52,15 @@ const SPEECH_MOCK = `
 		if (command === "plugin:event|emit") { emit(args.event, args.payload); return null; }
 		if (command === "plugin:event|unlisten") return null;
 		if (command === "send_to_agent_command" || command === "cancel_stream") return null;
+		if (command === "app_list_installed") return [{
+			id: "land.naia.slides",
+			name: "Naia Slides",
+			description: "Present PDF and PPTX decks with Naia voice and avatar.",
+			version: "0.1.0",
+			icon: "📽️",
+			htmlEntry: "/tmp/naia-e2e/apps/land.naia.slides/index.html",
+			tools: [{ name: "slides_presenter", description: "Control the slide presentation" }]
+		}];
 		if (command === "browser_wv_page_info") return ["about:blank", ""];
 		if (command.startsWith("browser_wv_")) return null;
 		return undefined;
@@ -79,6 +90,16 @@ const SPEECH_MOCK = `
 			this.onerror = null;
 		}
 	});
+	window.addEventListener("naia:slide-presenter-speak", function(event) {
+		var utterance = new window.SpeechSynthesisUtterance(event.detail.text);
+		utterance.onend = function() {
+			window.dispatchEvent(new CustomEvent("naia:slide-presenter-speech-result", { detail: { requestId: event.detail.requestId, generation: event.detail.generation, page: event.detail.page, status: "finished" } }));
+		};
+		window.speechSynthesis.speak(utterance);
+	});
+	window.addEventListener("naia:slide-presenter-cancel", function() {
+		window.speechSynthesis.cancel();
+	});
 })();
 `;
 
@@ -89,8 +110,8 @@ function makeTwoPagePdf(): Buffer {
 		"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 960 540] /Resources << /Font << /F1 5 0 R >> >> /Contents 6 0 R >>",
 		"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 960 540] /Resources << /Font << /F1 5 0 R >> >> /Contents 7 0 R >>",
 		"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
-		"<< /Length 45 >>\nstream\nBT /F1 36 Tf 96 270 Td (Slide One) Tj ET\nendstream",
-		"<< /Length 45 >>\nstream\nBT /F1 36 Tf 96 270 Td (Slide Two) Tj ET\nendstream",
+		"<< /Length 212 >>\nstream\n0.025 0.055 0.12 rg 0 0 960 540 re f 0.1 0.8 0.95 rg 64 414 118 8 re f 1 1 1 rg BT /F1 52 Tf 64 330 Td (NAIA SLIDES) Tj ET 0.62 0.72 0.84 rg BT /F1 24 Tf 64 278 Td (Present with your AI partner) Tj ET\nendstream",
+		"<< /Length 221 >>\nstream\n0.04 0.075 0.16 rg 0 0 960 540 re f 0.48 0.35 0.96 rg 64 414 118 8 re f 1 1 1 rg BT /F1 48 Tf 64 330 Td (STORY IN MOTION) Tj ET 0.65 0.75 0.9 rg BT /F1 22 Tf 64 278 Td (Voice, avatar, and slides in sync) Tj ET\nendstream",
 	];
 	let pdf = "%PDF-1.4\n";
 	const offsets = [0];
@@ -132,9 +153,7 @@ async function setup(page: Page) {
 			}),
 		);
 	});
-	await page.goto("/");
-	await expect(page.locator(".chat-panel")).toBeVisible({ timeout: 10_000 });
-	await page.locator('button[data-panel-id="slides"]').click();
+	await page.goto("/slides.html");
 	await expect(page.locator(".slides-app")).toBeVisible();
 }
 
@@ -220,6 +239,71 @@ test.describe("#467 slide presenter", () => {
 		await expect(page.locator(".slides-app__progress strong")).toHaveText(
 			"2 / 2",
 		);
+	});
+
+	test("loads the packaged app in Shell and shows one deep-link install confirmation", async ({ page }) => {
+		await page.route("**/assets/background/background-space.png", async (route) => {
+			await route.fulfill({
+				path: "/var/home/luke/alpha-adk/naia-settings/background/naia-dawn-city-uhd.webp",
+				contentType: "image/webp",
+			});
+		});
+		await page.addInitScript(SPEECH_MOCK);
+		await page.addInitScript({ content: TAURI_BASE_MOCK_FALLBACK });
+		await page.addInitScript({ content: SEED_ADK_PATH });
+		await page.addInitScript(() => {
+			localStorage.setItem("naia-config", JSON.stringify({
+				provider: "ollama",
+				model: "qwen3.6:27b",
+				ttsEnabled: true,
+				ttsProvider: "browser",
+				locale: "ko",
+				onboardingComplete: true,
+				agentName: "Naia",
+				vrmModel: "/avatars/03-OL_Woman.vrm",
+			}));
+		});
+		await page.setViewportSize({ width: 1440, height: 900 });
+		await page.goto("/");
+		await expect(page.locator(".chat-panel")).toBeVisible({ timeout: 15_000 });
+		const slidesButton = page.locator('button[data-panel-id="land.naia.slides"]');
+		await expect(slidesButton).toBeVisible({ timeout: 10_000 });
+		await slidesButton.click();
+
+		const installed = page.frameLocator('.generic-installed-panel__iframe');
+		await expect(installed.locator(".slides-app")).toBeVisible({ timeout: 15_000 });
+		await installed.getByLabel("PDF 열기").setInputFiles({
+			name: "naia-slides-showcase.pdf",
+			mimeType: "application/pdf",
+			buffer: makeTwoPagePdf(),
+		});
+		await installed.getByLabel("발표 스크립트").setInputFiles({
+			name: "naia-slides-showcase.md",
+			mimeType: "text/markdown",
+			buffer: Buffer.from("## 1. Naia Slides\n\n나이아와 함께 이야기를 시작합니다.\n\n## 2. Story\n\n음성과 아바타, 슬라이드가 하나로 이어집니다."),
+		});
+		await expect(installed.locator('.slides-app[data-state="ready"]')).toBeVisible({ timeout: 30_000 });
+		await expect(installed.locator(".slides-app__page canvas")).toBeVisible({ timeout: 30_000 });
+		await expect(page.locator(".avatar-canvas-layer canvas")).toBeVisible({ timeout: 30_000 });
+		await page.waitForTimeout(5_000);
+		await page.screenshot({ path: "test-results/issue-471-installed-naia-slides.png", fullPage: true });
+		await page.screenshot({
+			path: "/var/home/luke/alpha-adk/projects/naia-land-worktrees/issue-471-apps/public/assets/apps/naia-slides-thumbnail.png",
+			fullPage: true,
+		});
+
+		await page.evaluate(() => {
+			(window as any).__NAIA_E2E_EMIT__("app_install_requested", {
+				appId: "land.naia.slides",
+				name: "Naia Slides",
+				storeOrigin: "http://localhost:3000",
+				state: "ir-capture-once",
+			});
+		});
+		await expect(page.locator(".panel-install-dialog")).toBeVisible();
+		await expect(page.locator(".panel-install-result strong")).toHaveText("Naia Slides");
+		await expect(page.locator(".panel-install-result")).toHaveCount(1);
+		await page.screenshot({ path: "test-results/issue-471-single-install-confirmation.png", fullPage: true });
 	});
 
 	test("loads and presents the current 21-slide IR deck", async ({ page }) => {

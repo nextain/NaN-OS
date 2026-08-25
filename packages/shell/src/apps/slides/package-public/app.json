@@ -1,0 +1,36 @@
+{
+  "id": "land.naia.slides",
+  "name": "Naia Slides",
+  "names": {
+    "ko": "나이아 슬라이드",
+    "en": "Naia Slides"
+  },
+  "iconUrl": "icon.svg",
+  "version": "0.1.0",
+  "description": "PDF·PPTX를 열고 나이아와 함께 발표하는 슬라이드 앱",
+  "descriptions": {
+    "ko": "PDF·PPTX를 열고 나이아와 함께 발표하는 슬라이드 앱",
+    "en": "Present PDF and PPTX decks together with Naia"
+  },
+  "tools": [
+    {
+      "name": "skill_slide_presenter",
+      "description": "Control the active Slides app. Actions: start, pause, resume, stop, next, previous, goto, question, status, get_context.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "action": {
+            "type": "string",
+            "enum": ["start", "pause", "resume", "stop", "next", "previous", "goto", "question", "status", "get_context"]
+          },
+          "page": {
+            "type": "number",
+            "description": "1-based slide number for goto"
+          }
+        },
+        "required": ["action"]
+      },
+      "tier": 0
+    }
+  ]
+}

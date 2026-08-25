@@ -54,6 +54,7 @@ scripts/builds/f0-graft-snippet.js
 scripts/builds/uc1-graft-snippet.js
 packages/*/node_modules
 packages/*/dist
+packages/shell/dist-slides/
 packages/shell/src-tauri/target
 packages/shell/src-tauri/gen
 # 번들 바이너리 리소스(vosk dll, node.exe 등 ~140MB) — 빌드 시 복사, 추적 제외

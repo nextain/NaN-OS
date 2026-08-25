@@ -1,6 +1,12 @@
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { useEffect, useRef } from "react";
 import type { NaiaTool, AppCenterProps } from "../../lib/app-registry";
+import {
+	SLIDE_PRESENTER_CANCEL_EVENT,
+	SLIDE_PRESENTER_SPEAK_EVENT,
+	SLIDE_PRESENTER_SPEECH_RESULT_EVENT,
+} from "../../lib/slide-presenter-events";
+import { t } from "../../lib/i18n";
 
 /**
  * Tool-call protocol between the Shell and an installed iframe panel.
@@ -32,6 +38,30 @@ export function createGenericInstalledApp(
 ) {
 	return function GenericInstalledApp({ naia }: AppCenterProps) {
 		const iframeRef = useRef<HTMLIFrameElement>(null);
+
+		useEffect(() => {
+			const iframeWindow = iframeRef.current?.contentWindow;
+			if (!iframeWindow) return;
+			const forwardSpeechResult = (event: Event) => {
+				iframeWindow.postMessage({ type: "naia-slides:speech-result", detail: (event as CustomEvent).detail }, "*");
+			};
+			const onMessage = (event: MessageEvent) => {
+				if (event.source !== iframeWindow || !event.data || typeof event.data !== "object") return;
+				if (event.data.type === "naia-app:context") {
+					naia.pushContext(event.data.context);
+				} else if (event.data.type === "naia-slides:speak") {
+					window.dispatchEvent(new CustomEvent(SLIDE_PRESENTER_SPEAK_EVENT, { detail: event.data.detail }));
+				} else if (event.data.type === "naia-slides:cancel") {
+					window.dispatchEvent(new CustomEvent(SLIDE_PRESENTER_CANCEL_EVENT, { detail: event.data.detail }));
+				}
+			};
+			window.addEventListener("message", onMessage);
+			window.addEventListener(SLIDE_PRESENTER_SPEECH_RESULT_EVENT, forwardSpeechResult);
+			return () => {
+				window.removeEventListener("message", onMessage);
+				window.removeEventListener(SLIDE_PRESENTER_SPEECH_RESULT_EVENT, forwardSpeechResult);
+			};
+		}, [naia]);
 
 		// Register a postMessage bridge for each declared tool.
 		useEffect(() => {
@@ -111,10 +141,10 @@ export function createGenericInstalledApp(
 			<div className="generic-installed-panel">
 				<div className="generic-installed-panel__icon">📦</div>
 				<p className="generic-installed-panel__msg">
-					이 앱은 설치됐지만 아직 로드되지 않았습니다.
+					{t("apps.missingEntry")}
 				</p>
 				<p className="generic-installed-panel__hint">
-					앱 디렉터리에 index.html을 추가하면 즉시 표시됩니다.
+					{t("apps.missingEntryHint")}
 				</p>
 			</div>
 		);

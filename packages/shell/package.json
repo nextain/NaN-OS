@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "build:slides": "vite build --config vite.slides.config.ts",
     "preview": "vite preview",
     "tauri": "tauri",
     "tauri:dev": "node scripts/dev-setup.mjs && node scripts/tauri-with-mode.mjs dev",

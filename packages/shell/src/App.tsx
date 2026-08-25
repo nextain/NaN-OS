@@ -79,7 +79,6 @@ import {
 import { useAvatarStore } from "./stores/avatar";
 import "./apps/browser/index"; // register browser panel
 import "./apps/workspace/index"; // register workspace panel
-import "./apps/slides/index"; // register slide presenter panel
 import "./apps/settings/index"; // register settings panel
 // sample-note panel removed — will be replaced by a proper memo app later
 import { useAppStore } from "./stores/app";

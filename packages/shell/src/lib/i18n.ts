@@ -40,9 +40,12 @@ const codingWorkerUxTranslations = {
 	"apps.defaultDescription": codingWorkerText("Naia 앱", "Naia app"),
 	"apps.installing": codingWorkerText("권리 확인 및 설치 중…", "Checking ownership and installing…"),
 	"apps.install": codingWorkerText("{credits} 크레딧 · 설치", "{credits} credits · Install"),
+	"apps.installPurchased": codingWorkerText("설치 확인", "Confirm installation"),
 	"apps.installed": codingWorkerText("설치 완료: {name}", "Installed: {name}"),
 	"apps.purchasePersists": codingWorkerText("구매 권리는 삭제 후에도 유지됩니다.", "Your purchase remains after uninstalling."),
 	"apps.close": codingWorkerText("닫기", "Close"),
+	"apps.missingEntry": codingWorkerText("이 앱은 설치됐지만 아직 로드되지 않았습니다.", "This app is installed but could not be loaded yet."),
+	"apps.missingEntryHint": codingWorkerText("앱 디렉터리에 index.html을 추가하면 즉시 표시됩니다.", "Add index.html to the app directory to display it."),
 	"workspace.terminalProcessExited": codingWorkerText(
 		"프로세스 종료",
 		"Process exited",

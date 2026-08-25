@@ -41,7 +41,7 @@ export function AppInstallDialog({ request, onClose }: AppInstallDialogProps) {
 				<div className="panel-install-result">
 					<strong>{request.name || request.appId}</strong>
 					<p>{t("apps.defaultDescription")}</p>
-					<button type="button" className="panel-install-confirm-btn" disabled={busy} onClick={() => void install()}>{busy ? t("apps.installing") : t("apps.install").replace("{credits}", "")}</button>
+					<button type="button" className="panel-install-confirm-btn" disabled={busy} onClick={() => void install()}>{busy ? t("apps.installing") : t("apps.installPurchased")}</button>
 				</div>
 				{message && <div className="panel-install-result">{message}</div>}
 			</div>

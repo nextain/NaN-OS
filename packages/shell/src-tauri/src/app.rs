@@ -86,7 +86,7 @@ fn is_safe_app_id(id: &str) -> bool {
         && !id.contains("..")
         && id
             .chars()
-            .all(|c| c.is_alphanumeric() || c == '-' || c == '_')
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.'))
 }
 
 #[derive(Deserialize)]

@@ -193,8 +193,18 @@ export function SlidesCenterArea({ naia }: AppCenterProps) {
 	}, []);
 
 	useEffect(() => {
+		if (window.parent === window) return;
+		const onMessage = (event: MessageEvent) => {
+			if (event.source !== window.parent || event.data?.type !== "naia-slides:speech-result") return;
+			window.dispatchEvent(new CustomEvent(SLIDE_PRESENTER_SPEECH_RESULT_EVENT, { detail: event.data.detail }));
+		};
+		window.addEventListener("message", onMessage);
+		return () => window.removeEventListener("message", onMessage);
+	}, []);
+
+	useEffect(() => {
 		const onKeyDown = (event: KeyboardEvent) => {
-			if (useAppStore.getState().activeApp !== "slides") return;
+			if (window.parent === window && useAppStore.getState().activeApp !== "slides") return;
 			if (
 				(event.target as HTMLElement | null)?.matches("input, textarea, select")
 			)
@@ -303,6 +313,7 @@ export function SlidesCenterArea({ naia }: AppCenterProps) {
 	}, [gotoPage, naia, runAction]);
 
 	useEffect(() => {
+		if (window.parent !== window) return;
 		appRegistry.updateApi("slides", {
 			start: () => runAction("start"),
 			pause: () => runAction("pause"),

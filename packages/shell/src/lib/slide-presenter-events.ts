@@ -21,6 +21,10 @@ export interface SlidePresenterSpeechResult {
 export function requestSlidePresenterSpeech(
 	detail: SlidePresenterSpeechRequest,
 ): void {
+	if (window.parent !== window) {
+		window.parent.postMessage({ type: "naia-slides:speak", detail }, "*");
+		return;
+	}
 	window.dispatchEvent(
 		new CustomEvent<SlidePresenterSpeechRequest>(SLIDE_PRESENTER_SPEAK_EVENT, {
 			detail,
@@ -34,6 +38,10 @@ export function cancelSlidePresenterSpeech(
 		generation?: number;
 	} = {},
 ): void {
+	if (window.parent !== window) {
+		window.parent.postMessage({ type: "naia-slides:cancel", detail }, "*");
+		return;
+	}
 	window.dispatchEvent(
 		new CustomEvent(SLIDE_PRESENTER_CANCEL_EVENT, { detail }),
 	);
