@@ -42,7 +42,7 @@
           "P02_test_coverage_map": "done",
           "P03_requirements": "done",
           "P04_integration_test": "in_progress",
-          "P04_note": "결정론 부분 완료 — src/main/domain/herdr-control.ts, src/main/ports/herdr-control.ts, src/main/app/control/herdr-control.ts 와 계약 테스트 8건(86 tests) 통과. 미완: 실제 Herdr 를 붙이는 어댑터가 없다. 지금 검증된 것은 계약과 상태기계뿐이고, Herdr 0.8.0 이 실제로 어떤 스냅샷·이벤트 표면을 내주는지는 확인하지 않았다. packages/shell/e2e-tauri/specs/herdr-control.spec.ts 미작성.",
+          "P04_note": "결정론 코어 + 프로토콜 실측 대조 완료 — domain·ports·app/control 과 계약 테스트 8건(86 tests), 그리고 src/main/domain/herdr-protocol.ts + src/test/herdr-protocol-conformance.contract.test.ts(26 tests). 설치된 herdr 0.8.0 의 api schema 를 축약해 src/test/fixtures/herdr-protocol-19.json 으로 고정하고 살아 있는 바이너리와도 대조한다. 실측 결과 계약 일부가 실현 불가능해 요구사항을 정정했다 — .3(argv 실행 경로 없음, pane.send_text 뿐) 은 제어면 한정으로 축소, .4(멱등 키 없음)·.6(권한 없음)·.9(재접속)는 셸이 메우며 셸 재시작으로 사라지는 보장임을 명시. 미완: Herdr 90개 메서드를 노출하는 Rust 명령이 셸에 없다(현재 snapshot·focus·create_workspace 등 소수만). 실제 제어면 어댑터와 packages/shell/e2e-tauri/specs/herdr-control.spec.ts 미작성.",
           "P05_complete": "pending"
         },
         "499": {

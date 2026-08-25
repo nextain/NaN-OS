@@ -876,14 +876,23 @@ fenced code는 언어·복사·접기·워크스페이스 전환을 제공하고
 |---|---|---|---|---|
 | **FR-HERDR-CONTROL.1** | space, 이슈, 세션, 작업자, pane, 터미널, 진행 중 작업, 이벤트를 타입이 선언된 자원으로 노출한다. 각 자원은 스키마 버전과 안정된 식별자를 갖는다. 화면 문자열 파싱과 private TUI socket 접근은 제어 경로에 존재하지 않는다. | UC-HERDR-CONTROL-OBSERVE | `src/test/herdr-control-resource-schema.contract.test.ts`·`src/test/herdr-control-no-screen-scrape.contract.test.ts` | Pending |
 | **FR-HERDR-CONTROL.2** | 버전이 붙은 스냅샷과 이벤트 구독을 함께 제공한다. 개정 번호는 단조 증가하고, 구독이 구간을 놓치면 그 사실을 소비자가 알 수 있어야 한다. 놓친 구간을 정상으로 가장하지 않는다. | UC-HERDR-CONTROL-OBSERVE | `src/test/herdr-control-resource-schema.contract.test.ts` 개정·누락 감지 | Pending |
-| **FR-HERDR-CONTROL.3** | 변경 도구는 space 생성·포커스, 이슈 결속, 리더·작업자 생명주기, 터미널 생성·실행·입력·크기변경·종료, 중단·재개, 결과 수집을 구조화된 인자로 받는다. 명령은 인자 배열과 작업 디렉터리와 환경으로 전달하며 셸 문자열로 조립하지 않는다. | UC-HERDR-CONTROL-MUTATE | `src/test/herdr-control-mutation.contract.test.ts` 구조화 인자·조립 negative | Pending |
-| **FR-HERDR-CONTROL.4** | 모든 변경 요청은 요청 식별자와 멱등 키를 받는다. 같은 멱등 키의 재전송은 프로세스나 명령을 중복 생성하지 않고 최초 결과를 반환한다. | UC-HERDR-CONTROL-MUTATE | `src/test/herdr-control-idempotency.contract.test.ts` 중복 생성 0 | Pending |
+| **FR-HERDR-CONTROL.3** | 제어 조작(space·tab·pane 생성·포커스·종료, 작업자 생명주기, 중단·재개, 결과 수집)은 타입이 선언된 메서드와 구조화된 인자로 한다. ⚠️ 2026-08-26 실측 정정: pane 안에서 임의 명령을 실행하는 argv 경로가 Herdr 프로토콜 19 에 없다(`pane.run` 부재, `pane.send_text` 계열 텍스트 입력만 존재). 따라서 이 요구사항은 *제어면*에만 적용하고 명령 실행은 분리해 인용 책임을 호출자에게 명시한다. raw PTY stdin 과 private socket 을 제어 프로토콜로 쓰지 않는다는 조항은 그대로 유지한다. | UC-HERDR-CONTROL-MUTATE | `src/test/herdr-control-mutation.contract.test.ts` 구조화 인자·조립 negative | Pending |
+| **FR-HERDR-CONTROL.4** | 모든 변경 요청은 요청 식별자와 멱등 키를 받는다. 같은 멱등 키의 재전송은 프로세스나 명령을 중복 생성하지 않고 최초 결과를 반환한다. ⚠️ 실측: Herdr 프로토콜 19 에 멱등 키가 없고 요청 `id` 는 상관용이다. 중복 제거는 셸이 메우며 셸이 재시작하면 그 보장은 사라진다 — 이 한계를 감춘 채 "멱등하다"고 말하지 않는다. | UC-HERDR-CONTROL-MUTATE | `src/test/herdr-control-idempotency.contract.test.ts` 중복 생성 0 | Pending |
 | **FR-HERDR-CONTROL.5** | 모든 변경은 영향을 받은 자원 식별자와 증거 참조(출력·로그·산출물)를 반환한다. 증거 없는 성공 응답을 만들지 않는다. | UC-HERDR-CONTROL-MUTATE | `src/test/herdr-control-mutation.contract.test.ts` 증거 반환 | Pending |
 | **FR-HERDR-CONTROL.6** | 권한은 등급으로 분리한다. 관측, 워크스페이스 내부 변경, 자격증명 사용, 외부 발신, 파괴적·운영 변경은 각각 별도 권한을 요구하며 낮은 등급이 높은 등급을 상속하지 않는다. 승인 참조와 만료를 요청에 싣는다. | UC-HERDR-CONTROL-MUTATE | `src/test/herdr-control-capability-tier.contract.test.ts` 비상속 negative | Pending |
 | **FR-HERDR-CONTROL.7** | 변경 요청은 기대 개정 번호를 받는다. 현재 개정과 어긋나면 타입이 선언된 충돌을 반환하고 상태를 바꾸지 않는다. 무음 덮어쓰기는 발생하지 않는다. | UC-HERDR-CONTROL-STALE-REVISION | `src/test/herdr-control-stale-revision.contract.test.ts` 충돌·무음 덮어쓰기 0 | Pending |
 | **FR-HERDR-CONTROL.8** | 연결 끊김, 타임아웃, 프로세스 종료, 취소, 부분 완료를 서로 구별되는 결과 종류로 표현한다. 하나의 실패로 뭉뚱그리지 않으며, 결과 불명은 불명으로 보고한다. | UC-HERDR-CONTROL-RECONNECT | `src/test/herdr-control-outcome-taxonomy.contract.test.ts` 5종 구별 | Pending |
 | **FR-HERDR-CONTROL.9** | 재접속과 서버 재시작 복구에 상한을 둔다. 재접속 후에는 상태를 재확인한 뒤에만 판단하며, 상한에 닿으면 실패를 정직하게 보고한다. 재접속 자체가 완료·중단 판정의 근거가 되지 않는다. | UC-HERDR-CONTROL-RECONNECT | `src/test/herdr-control-reconnect-bounds.contract.test.ts` 상한·정직 실패 | Pending |
 | **FR-HERDR-CONTROL.10** | Herdr가 space, tab, pane, 터미널, 작업자 생명주기의 유일한 실행 정본으로 남는다. Shell은 경쟁하는 생명주기 소유자를 유지하지 않으며, 컨텍스트 전달에서 비밀값과 범위 밖 데이터를 제외한다. | UC-HERDR-CONTROL-OBSERVE·MUTATE (#434 승계) | 중복 surface/tool 정적 검사 + `packages/shell/e2e-tauri/specs/herdr-control.spec.ts` | Pending |
+
+> **프로토콜 19 실측 대조 (2026-08-26).** 위 요구사항은 우리가 원하는 것이고 Herdr 가 내주는 것은 별개다.
+> 설치된 `herdr 0.8.0` 의 `api schema --json` 축약본이 `src/test/fixtures/herdr-protocol-19.json` 이고,
+> 판정은 `src/main/domain/herdr-protocol.ts` 가 그 사실에서 계산한다(표를 손으로 적지 않는다).
+> 판정 — 지원 `.1 .5 .10` / 부분 `.2 .3 .7 .8` / 미지원 `.4 .6 .9`.
+> 셸이 메우는 것 `.2 .4 .6 .7 .8 .9` — 전부 셸 재시작으로 사라지는 보장이다.
+> 요구사항 자체를 고쳐야 했던 것 `.3`(위 정정). Herdr 가 메서드·이벤트·필드를 바꾸면
+> `src/test/herdr-protocol-conformance.contract.test.ts` 가 실패한다. 그 테스트는 이 머신에
+> herdr 가 설치돼 있으면 살아 있는 바이너리와도 대조한다.
 
 ## 기능 요구사항 (FR) — 브라우저·터미널 환경 도구 (#499, 에픽 #497)
 
