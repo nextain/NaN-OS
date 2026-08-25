@@ -74,7 +74,8 @@
           "P01_user_scenarios": "done",
           "P02_test_coverage_map": "done",
           "P03_requirements": "done",
-          "P04_integration_test": "pending",
+          "P04_integration_test": "in_progress",
+          "P04_note": "결정론 부분 완료 — src/main/domain/channel-session.ts, src/main/ports/channel-session.ts, src/main/app/control/channel-session.ts 와 계약 테스트 5건(43 tests) 통과. 미완: Discord·음성 어댑터 없음. 채널별 공개 범위 표는 현재 도메인 상수이며 운영에서 정할 값이므로 사람 확인이 필요하다. packages/shell/e2e-tauri/specs/channel-reboot.spec.ts, channel-continuity.spec.ts 미작성.",
           "P05_complete": "pending"
         },
         "498": {
