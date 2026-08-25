@@ -856,15 +856,15 @@ fenced code는 언어·복사·접기·워크스페이스 전환을 제공하고
 
 | ID | 요구사항 | 출처 시나리오 | 검증(P02) | 상태 |
 |---|---|---|---|---|
-| **FR-WORKSPACE-CONTEXT.1** | 워크스페이스 루트를 정규화된 절대 경로 하나로 확정하고, 그 루트의 진입점 문서와 진입점이 필수로 선언한 인덱스만 발견 대상으로 삼는다. 워크스페이스 이름·경로를 코드에 상수로 두지 않으며, 진입점이 선언하지 않은 문서는 발견 목록에 넣지 않는다. | UC-WORKSPACE-CONTEXT-DISCOVER | `discover.test.ts` 진입점 발견·선언 밖 미로드 | Pending |
-| **FR-WORKSPACE-CONTEXT.2** | 발견과 로딩을 분리한다. 발견은 항상 수행하고, 실제 문서 로딩은 현재 사용자 의도가 요구하는 것만 수행한다. 로드한 문서 집합과 로드 사유(어느 선언이 그것을 요구했는지)를 컨텍스트와 함께 보관하고 조회할 수 있게 한다. 한 요청에서 로드하는 총량에 상한을 둔다. | UC-WORKSPACE-CONTEXT-DISCOVER | `selective-load.test.ts` 의도별 선택·상한 | Pending |
-| **FR-WORKSPACE-CONTEXT.3** | 프로젝트 진입은 작업 디렉터리 변경이 아니라 컨텍스트 전환으로 처리한다. 진입 시 그 프로젝트의 진입점과 프로젝트 전용 필수 컨텍스트를 추가 로드하고, 같은 주제에서 프로젝트 선언이 루트 선언보다 우선한다. 진입 사실과 결과 컨텍스트는 관측 가능하다. | UC-WORKSPACE-CONTEXT-ENTER-PROJECT | `enter-project.test.ts` 중첩 로드·우선순위 | Pending |
-| **FR-WORKSPACE-CONTEXT.4** | 컨텍스트는 권한을 만들지 않는다. 어떤 문서를 읽었다는 사실이 그 경로에 대한 변경 권한이 되지 않으며, 부모 워크스페이스·형제 프로젝트·직전 프로젝트의 선언에서 현재 작업의 권한을 유추하지 않는다. | UC-WORKSPACE-CONTEXT-ENTER-PROJECT | `enter-project.test.ts` 권한 비확장 negative | Pending |
-| **FR-WORKSPACE-CONTEXT.5** | 프로젝트를 전환하면 이전 프로젝트의 지역 컨텍스트를 폐기하고 사용자가 명시한 의도만 유지한다. 전환 후 응답의 근거 목록에 이전 프로젝트 문서가 남지 않는다(교차 누출 0). | UC-WORKSPACE-CONTEXT-SWITCH-PROJECT | `switch-project.test.ts` 폐기·의도 보존·누출 0 | Pending |
-| **FR-WORKSPACE-CONTEXT.6** | 컨텍스트에 단조 증가하는 개정 번호를 부여한다. 진입·전환·디스크상 문서 변경은 개정을 무효화하고, 무효화된 개정을 근거로 한 응답은 만들지 않는다. 현재 개정과 그 구성 문서는 조회 가능하다. | UC-WORKSPACE-CONTEXT-SWITCH-PROJECT | `revision.test.ts` 단조 증가·갱신 반영 | Pending |
-| **FR-WORKSPACE-CONTEXT.7** | 진입점 부재, 형식 오류, 선언된 인덱스 부재는 추측으로 메우지 않고 실패로 처리한다. 실패 보고는 무엇을 어디서 찾았고 왜 실패했는지와 사용자가 취할 조치를 포함한다. 부분 로드 상태를 정상 컨텍스트로 승격하지 않는다. | UC-WORKSPACE-CONTEXT-BROKEN-ENTRYPOINT | `failure-honesty.test.ts` 세 가지 실패 진단 | Pending |
-| **FR-WORKSPACE-CONTEXT.8** | 심볼릭 링크, 상위 경로 표기, 마운트 경계를 거쳐 확정 루트 밖을 가리키는 경로는 발견·로딩 모두에서 거부한다. 거부는 조용한 무시가 아니라 명시적 진단이다. | UC-WORKSPACE-CONTEXT-BROKEN-ENTRYPOINT | `path-boundary.test.ts` 탈출 negative | Pending |
-| **FR-WORKSPACE-CONTEXT.9** | 워크스페이스를 노출하는 표면은 타입이 선언된 자원과 도구로 제공한다. 자원은 현재 워크스페이스, 컨텍스트 목록, 개별 문서, 프로젝트 목록, 스킬 목록, 거버넌스 선언을 포함하고, 도구는 발견·프로젝트 진입·컨텍스트 해석·문서 읽기·갱신·작업 결속을 포함한다. 각 표면은 스키마 버전과 현재 개정을 함께 싣는다. | UC-WORKSPACE-CONTEXT-DISCOVER·ENTER-PROJECT | `discover.test.ts`·`enter-project.test.ts` 스키마 계약 | Pending |
+| **FR-WORKSPACE-CONTEXT.1** | 워크스페이스 루트를 정규화된 절대 경로 하나로 확정하고, 그 루트의 진입점 문서와 진입점이 필수로 선언한 인덱스만 발견 대상으로 삼는다. 워크스페이스 이름·경로를 코드에 상수로 두지 않으며, 진입점이 선언하지 않은 문서는 발견 목록에 넣지 않는다. | UC-WORKSPACE-CONTEXT-DISCOVER | `src/test/workspace-context-discover.contract.test.ts` 진입점 발견·선언 밖 미로드 | Pending |
+| **FR-WORKSPACE-CONTEXT.2** | 발견과 로딩을 분리한다. 발견은 항상 수행하고, 실제 문서 로딩은 현재 사용자 의도가 요구하는 것만 수행한다. 로드한 문서 집합과 로드 사유(어느 선언이 그것을 요구했는지)를 컨텍스트와 함께 보관하고 조회할 수 있게 한다. 한 요청에서 로드하는 총량에 상한을 둔다. | UC-WORKSPACE-CONTEXT-DISCOVER | `src/test/workspace-context-selective-load.contract.test.ts` 의도별 선택·상한 | Pending |
+| **FR-WORKSPACE-CONTEXT.3** | 프로젝트 진입은 작업 디렉터리 변경이 아니라 컨텍스트 전환으로 처리한다. 진입 시 그 프로젝트의 진입점과 프로젝트 전용 필수 컨텍스트를 추가 로드하고, 같은 주제에서 프로젝트 선언이 루트 선언보다 우선한다. 진입 사실과 결과 컨텍스트는 관측 가능하다. | UC-WORKSPACE-CONTEXT-ENTER-PROJECT | `src/test/workspace-context-enter-project.contract.test.ts` 중첩 로드·우선순위 | Pending |
+| **FR-WORKSPACE-CONTEXT.4** | 컨텍스트는 권한을 만들지 않는다. 어떤 문서를 읽었다는 사실이 그 경로에 대한 변경 권한이 되지 않으며, 부모 워크스페이스·형제 프로젝트·직전 프로젝트의 선언에서 현재 작업의 권한을 유추하지 않는다. | UC-WORKSPACE-CONTEXT-ENTER-PROJECT | `src/test/workspace-context-enter-project.contract.test.ts` 권한 비확장 negative | Pending |
+| **FR-WORKSPACE-CONTEXT.5** | 프로젝트를 전환하면 이전 프로젝트의 지역 컨텍스트를 폐기하고 사용자가 명시한 의도만 유지한다. 전환 후 응답의 근거 목록에 이전 프로젝트 문서가 남지 않는다(교차 누출 0). | UC-WORKSPACE-CONTEXT-SWITCH-PROJECT | `src/test/workspace-context-switch-project.contract.test.ts` 폐기·의도 보존·누출 0 | Pending |
+| **FR-WORKSPACE-CONTEXT.6** | 컨텍스트에 단조 증가하는 개정 번호를 부여한다. 진입·전환·디스크상 문서 변경은 개정을 무효화하고, 무효화된 개정을 근거로 한 응답은 만들지 않는다. 현재 개정과 그 구성 문서는 조회 가능하다. | UC-WORKSPACE-CONTEXT-SWITCH-PROJECT | `src/test/workspace-context-revision.contract.test.ts` 단조 증가·갱신 반영 | Pending |
+| **FR-WORKSPACE-CONTEXT.7** | 진입점 부재, 형식 오류, 선언된 인덱스 부재는 추측으로 메우지 않고 실패로 처리한다. 실패 보고는 무엇을 어디서 찾았고 왜 실패했는지와 사용자가 취할 조치를 포함한다. 부분 로드 상태를 정상 컨텍스트로 승격하지 않는다. | UC-WORKSPACE-CONTEXT-BROKEN-ENTRYPOINT | `src/test/workspace-context-failure-honesty.contract.test.ts` 세 가지 실패 진단 | Pending |
+| **FR-WORKSPACE-CONTEXT.8** | 심볼릭 링크, 상위 경로 표기, 마운트 경계를 거쳐 확정 루트 밖을 가리키는 경로는 발견·로딩 모두에서 거부한다. 거부는 조용한 무시가 아니라 명시적 진단이다. | UC-WORKSPACE-CONTEXT-BROKEN-ENTRYPOINT | `src/test/workspace-context-path-boundary.contract.test.ts` 탈출 negative | Pending |
+| **FR-WORKSPACE-CONTEXT.9** | 워크스페이스를 노출하는 표면은 타입이 선언된 자원과 도구로 제공한다. 자원은 현재 워크스페이스, 컨텍스트 목록, 개별 문서, 프로젝트 목록, 스킬 목록, 거버넌스 선언을 포함하고, 도구는 발견·프로젝트 진입·컨텍스트 해석·문서 읽기·갱신·작업 결속을 포함한다. 각 표면은 스키마 버전과 현재 개정을 함께 싣는다. | UC-WORKSPACE-CONTEXT-DISCOVER·ENTER-PROJECT | `src/test/workspace-context-discover.contract.test.ts`·`src/test/workspace-context-enter-project.contract.test.ts` 스키마 계약 | Pending |
 
 ## 기능 요구사항 (FR) — Herdr 제어면 (#502, 에픽 #497, #434 승계)
 
@@ -874,16 +874,16 @@ fenced code는 언어·복사·접기·워크스페이스 전환을 제공하고
 
 | ID | 요구사항 | 출처 시나리오 | 검증(P02) | 상태 |
 |---|---|---|---|---|
-| **FR-HERDR-CONTROL.1** | space, 이슈, 세션, 작업자, pane, 터미널, 진행 중 작업, 이벤트를 타입이 선언된 자원으로 노출한다. 각 자원은 스키마 버전과 안정된 식별자를 갖는다. 화면 문자열 파싱과 private TUI socket 접근은 제어 경로에 존재하지 않는다. | UC-HERDR-CONTROL-OBSERVE | `resource-schema.test.ts`·`no-screen-scrape.test.ts` | Pending |
-| **FR-HERDR-CONTROL.2** | 버전이 붙은 스냅샷과 이벤트 구독을 함께 제공한다. 개정 번호는 단조 증가하고, 구독이 구간을 놓치면 그 사실을 소비자가 알 수 있어야 한다. 놓친 구간을 정상으로 가장하지 않는다. | UC-HERDR-CONTROL-OBSERVE | `resource-schema.test.ts` 개정·누락 감지 | Pending |
-| **FR-HERDR-CONTROL.3** | 변경 도구는 space 생성·포커스, 이슈 결속, 리더·작업자 생명주기, 터미널 생성·실행·입력·크기변경·종료, 중단·재개, 결과 수집을 구조화된 인자로 받는다. 명령은 인자 배열과 작업 디렉터리와 환경으로 전달하며 셸 문자열로 조립하지 않는다. | UC-HERDR-CONTROL-MUTATE | `mutation-contract.test.ts` 구조화 인자·조립 negative | Pending |
-| **FR-HERDR-CONTROL.4** | 모든 변경 요청은 요청 식별자와 멱등 키를 받는다. 같은 멱등 키의 재전송은 프로세스나 명령을 중복 생성하지 않고 최초 결과를 반환한다. | UC-HERDR-CONTROL-MUTATE | `idempotency.test.ts` 중복 생성 0 | Pending |
-| **FR-HERDR-CONTROL.5** | 모든 변경은 영향을 받은 자원 식별자와 증거 참조(출력·로그·산출물)를 반환한다. 증거 없는 성공 응답을 만들지 않는다. | UC-HERDR-CONTROL-MUTATE | `mutation-contract.test.ts` 증거 반환 | Pending |
-| **FR-HERDR-CONTROL.6** | 권한은 등급으로 분리한다. 관측, 워크스페이스 내부 변경, 자격증명 사용, 외부 발신, 파괴적·운영 변경은 각각 별도 권한을 요구하며 낮은 등급이 높은 등급을 상속하지 않는다. 승인 참조와 만료를 요청에 싣는다. | UC-HERDR-CONTROL-MUTATE | `capability-tier.test.ts` 비상속 negative | Pending |
-| **FR-HERDR-CONTROL.7** | 변경 요청은 기대 개정 번호를 받는다. 현재 개정과 어긋나면 타입이 선언된 충돌을 반환하고 상태를 바꾸지 않는다. 무음 덮어쓰기는 발생하지 않는다. | UC-HERDR-CONTROL-STALE-REVISION | `stale-revision.test.ts` 충돌·무음 덮어쓰기 0 | Pending |
-| **FR-HERDR-CONTROL.8** | 연결 끊김, 타임아웃, 프로세스 종료, 취소, 부분 완료를 서로 구별되는 결과 종류로 표현한다. 하나의 실패로 뭉뚱그리지 않으며, 결과 불명은 불명으로 보고한다. | UC-HERDR-CONTROL-RECONNECT | `outcome-taxonomy.test.ts` 5종 구별 | Pending |
-| **FR-HERDR-CONTROL.9** | 재접속과 서버 재시작 복구에 상한을 둔다. 재접속 후에는 상태를 재확인한 뒤에만 판단하며, 상한에 닿으면 실패를 정직하게 보고한다. 재접속 자체가 완료·중단 판정의 근거가 되지 않는다. | UC-HERDR-CONTROL-RECONNECT | `reconnect-bounds.test.ts` 상한·정직 실패 | Pending |
-| **FR-HERDR-CONTROL.10** | Herdr가 space, tab, pane, 터미널, 작업자 생명주기의 유일한 실행 정본으로 남는다. Shell은 경쟁하는 생명주기 소유자를 유지하지 않으며, 컨텍스트 전달에서 비밀값과 범위 밖 데이터를 제외한다. | UC-HERDR-CONTROL-OBSERVE·MUTATE (#434 승계) | 중복 surface/tool 정적 검사 + `e2e-tauri/herdr-control.e2e.ts` | Pending |
+| **FR-HERDR-CONTROL.1** | space, 이슈, 세션, 작업자, pane, 터미널, 진행 중 작업, 이벤트를 타입이 선언된 자원으로 노출한다. 각 자원은 스키마 버전과 안정된 식별자를 갖는다. 화면 문자열 파싱과 private TUI socket 접근은 제어 경로에 존재하지 않는다. | UC-HERDR-CONTROL-OBSERVE | `src/test/herdr-control-resource-schema.contract.test.ts`·`src/test/herdr-control-no-screen-scrape.contract.test.ts` | Pending |
+| **FR-HERDR-CONTROL.2** | 버전이 붙은 스냅샷과 이벤트 구독을 함께 제공한다. 개정 번호는 단조 증가하고, 구독이 구간을 놓치면 그 사실을 소비자가 알 수 있어야 한다. 놓친 구간을 정상으로 가장하지 않는다. | UC-HERDR-CONTROL-OBSERVE | `src/test/herdr-control-resource-schema.contract.test.ts` 개정·누락 감지 | Pending |
+| **FR-HERDR-CONTROL.3** | 변경 도구는 space 생성·포커스, 이슈 결속, 리더·작업자 생명주기, 터미널 생성·실행·입력·크기변경·종료, 중단·재개, 결과 수집을 구조화된 인자로 받는다. 명령은 인자 배열과 작업 디렉터리와 환경으로 전달하며 셸 문자열로 조립하지 않는다. | UC-HERDR-CONTROL-MUTATE | `src/test/herdr-control-mutation.contract.test.ts` 구조화 인자·조립 negative | Pending |
+| **FR-HERDR-CONTROL.4** | 모든 변경 요청은 요청 식별자와 멱등 키를 받는다. 같은 멱등 키의 재전송은 프로세스나 명령을 중복 생성하지 않고 최초 결과를 반환한다. | UC-HERDR-CONTROL-MUTATE | `src/test/herdr-control-idempotency.contract.test.ts` 중복 생성 0 | Pending |
+| **FR-HERDR-CONTROL.5** | 모든 변경은 영향을 받은 자원 식별자와 증거 참조(출력·로그·산출물)를 반환한다. 증거 없는 성공 응답을 만들지 않는다. | UC-HERDR-CONTROL-MUTATE | `src/test/herdr-control-mutation.contract.test.ts` 증거 반환 | Pending |
+| **FR-HERDR-CONTROL.6** | 권한은 등급으로 분리한다. 관측, 워크스페이스 내부 변경, 자격증명 사용, 외부 발신, 파괴적·운영 변경은 각각 별도 권한을 요구하며 낮은 등급이 높은 등급을 상속하지 않는다. 승인 참조와 만료를 요청에 싣는다. | UC-HERDR-CONTROL-MUTATE | `src/test/herdr-control-capability-tier.contract.test.ts` 비상속 negative | Pending |
+| **FR-HERDR-CONTROL.7** | 변경 요청은 기대 개정 번호를 받는다. 현재 개정과 어긋나면 타입이 선언된 충돌을 반환하고 상태를 바꾸지 않는다. 무음 덮어쓰기는 발생하지 않는다. | UC-HERDR-CONTROL-STALE-REVISION | `src/test/herdr-control-stale-revision.contract.test.ts` 충돌·무음 덮어쓰기 0 | Pending |
+| **FR-HERDR-CONTROL.8** | 연결 끊김, 타임아웃, 프로세스 종료, 취소, 부분 완료를 서로 구별되는 결과 종류로 표현한다. 하나의 실패로 뭉뚱그리지 않으며, 결과 불명은 불명으로 보고한다. | UC-HERDR-CONTROL-RECONNECT | `src/test/herdr-control-outcome-taxonomy.contract.test.ts` 5종 구별 | Pending |
+| **FR-HERDR-CONTROL.9** | 재접속과 서버 재시작 복구에 상한을 둔다. 재접속 후에는 상태를 재확인한 뒤에만 판단하며, 상한에 닿으면 실패를 정직하게 보고한다. 재접속 자체가 완료·중단 판정의 근거가 되지 않는다. | UC-HERDR-CONTROL-RECONNECT | `src/test/herdr-control-reconnect-bounds.contract.test.ts` 상한·정직 실패 | Pending |
+| **FR-HERDR-CONTROL.10** | Herdr가 space, tab, pane, 터미널, 작업자 생명주기의 유일한 실행 정본으로 남는다. Shell은 경쟁하는 생명주기 소유자를 유지하지 않으며, 컨텍스트 전달에서 비밀값과 범위 밖 데이터를 제외한다. | UC-HERDR-CONTROL-OBSERVE·MUTATE (#434 승계) | 중복 surface/tool 정적 검사 + `packages/shell/e2e-tauri/specs/herdr-control.spec.ts` | Pending |
 
 ## 기능 요구사항 (FR) — 브라우저·터미널 환경 도구 (#499, 에픽 #497)
 
@@ -892,15 +892,15 @@ fenced code는 언어·복사·접기·워크스페이스 전환을 제공하고
 
 | ID | 요구사항 | 출처 시나리오 | 검증(P02) | 상태 |
 |---|---|---|---|---|
-| **FR-ENV-TOOL.1** | 브라우저와 터미널 작업이 하나의 공통 생명주기(접수·실행중·완료·실패·취소)를 공유한다. 각 상태 전이는 관측 가능하며 중간 상태를 완료로 승격하지 않는다. | UC-ENV-TOOL-BROWSE·CANCEL | `browser-contract.test.ts`·`cancel-timeout.test.ts` | Pending |
-| **FR-ENV-TOOL.2** | 브라우저 자원으로 컨텍스트, 페이지, 스냅샷, 다운로드, 이벤트, 안정된 요소 참조를 노출한다. 도구는 생성·열기·이동·스냅샷·클릭·입력·평가·다운로드·닫기를 제공한다. | UC-ENV-TOOL-BROWSE | `browser-contract.test.ts` 자원·도구 계약 | Pending |
-| **FR-ENV-TOOL.3** | 브라우저 조작은 스냅샷의 안정된 요소 참조를 우선 사용한다. 좌표 조작은 참조가 불가능한 경우로 제한하고 그 사실을 결과에 남긴다. | UC-ENV-TOOL-BROWSE | `e2e/env-tool-browser.spec.ts` 참조 기반 조작 | Pending |
-| **FR-ENV-TOOL.4** | 페이지 내용은 자료로만 취급한다. 페이지에 담긴 문장이 권한 확장, 승인 우회, 외부 발신의 근거가 되지 않는다. | UC-ENV-TOOL-BROWSE | `e2e/env-tool-injection.spec.ts` 주입 negative | Pending |
-| **FR-ENV-TOOL.5** | 터미널 자원은 Herdr의 터미널·세션·프로세스·출력 스트림을 참조하며, 생명주기 소유는 Herdr에 위임한다. 실행은 실행 파일과 인자 배열, 작업 디렉터리, 환경을 구조화해 전달하고 셸 문자열로 조립하지 않는다. | UC-ENV-TOOL-TERMINAL-EXEC | `terminal-contract.test.ts` 위임·구조화 인자 | Pending |
-| **FR-ENV-TOOL.6** | 모든 작업은 증거를 반환한다. 브라우저는 구조 또는 접근성 스냅샷, 화면 캡처, 최종 주소와 개정을, 터미널은 종료 코드와 출력·로그·산출물 참조를 반환한다. | UC-ENV-TOOL-BROWSE·TERMINAL-EXEC | `browser-contract.test.ts`·`terminal-contract.test.ts` | Pending |
-| **FR-ENV-TOOL.7** | 명령은 확정된 워크스페이스 경계를 명시적 권한 없이 벗어나지 못한다. 경계 이탈 시도는 조용히 무시하지 않고 명시적으로 거부한다. | UC-ENV-TOOL-TERMINAL-EXEC·BOUNDARY-DENY | `workspace-escape.test.ts` 이탈 negative | Pending |
-| **FR-ENV-TOOL.8** | 관측, 워크스페이스 내부 변경, 자격증명 사용, 외부 발신, 게시, 구매, 파괴적 명령, 운영 변경을 별도 권한으로 분리한다. 일반 편집 권한은 이들 중 어느 것도 상속하지 않는다. | UC-ENV-TOOL-BOUNDARY-DENY | `approval-matrix.test.ts` 비상속 negative | Pending |
-| **FR-ENV-TOOL.9** | 모든 작업은 취소 가능하고 타임아웃을 가지며 재연결과 멱등 재전송을 정의한다. 취소, 타임아웃, 부분 실행은 성공으로 승격되지 않고 각각 구별되어 기록된다. | UC-ENV-TOOL-CANCEL | `cancel-timeout.test.ts` 구별·멱등 | Pending |
+| **FR-ENV-TOOL.1** | 브라우저와 터미널 작업이 하나의 공통 생명주기(접수·실행중·완료·실패·취소)를 공유한다. 각 상태 전이는 관측 가능하며 중간 상태를 완료로 승격하지 않는다. | UC-ENV-TOOL-BROWSE·CANCEL | `src/test/env-tool-browser.contract.test.ts`·`src/test/env-tool-cancel-timeout.contract.test.ts` | Pending |
+| **FR-ENV-TOOL.2** | 브라우저 자원으로 컨텍스트, 페이지, 스냅샷, 다운로드, 이벤트, 안정된 요소 참조를 노출한다. 도구는 생성·열기·이동·스냅샷·클릭·입력·평가·다운로드·닫기를 제공한다. | UC-ENV-TOOL-BROWSE | `src/test/env-tool-browser.contract.test.ts` 자원·도구 계약 | Pending |
+| **FR-ENV-TOOL.3** | 브라우저 조작은 스냅샷의 안정된 요소 참조를 우선 사용한다. 좌표 조작은 참조가 불가능한 경우로 제한하고 그 사실을 결과에 남긴다. | UC-ENV-TOOL-BROWSE | `packages/shell/e2e/env-tool-browser.spec.ts` 참조 기반 조작 | Pending |
+| **FR-ENV-TOOL.4** | 페이지 내용은 자료로만 취급한다. 페이지에 담긴 문장이 권한 확장, 승인 우회, 외부 발신의 근거가 되지 않는다. | UC-ENV-TOOL-BROWSE | `packages/shell/e2e/env-tool-injection.spec.ts` 주입 negative | Pending |
+| **FR-ENV-TOOL.5** | 터미널 자원은 Herdr의 터미널·세션·프로세스·출력 스트림을 참조하며, 생명주기 소유는 Herdr에 위임한다. 실행은 실행 파일과 인자 배열, 작업 디렉터리, 환경을 구조화해 전달하고 셸 문자열로 조립하지 않는다. | UC-ENV-TOOL-TERMINAL-EXEC | `src/test/env-tool-terminal.contract.test.ts` 위임·구조화 인자 | Pending |
+| **FR-ENV-TOOL.6** | 모든 작업은 증거를 반환한다. 브라우저는 구조 또는 접근성 스냅샷, 화면 캡처, 최종 주소와 개정을, 터미널은 종료 코드와 출력·로그·산출물 참조를 반환한다. | UC-ENV-TOOL-BROWSE·TERMINAL-EXEC | `src/test/env-tool-browser.contract.test.ts`·`src/test/env-tool-terminal.contract.test.ts` | Pending |
+| **FR-ENV-TOOL.7** | 명령은 확정된 워크스페이스 경계를 명시적 권한 없이 벗어나지 못한다. 경계 이탈 시도는 조용히 무시하지 않고 명시적으로 거부한다. | UC-ENV-TOOL-TERMINAL-EXEC·BOUNDARY-DENY | `src/test/env-tool-workspace-escape.contract.test.ts` 이탈 negative | Pending |
+| **FR-ENV-TOOL.8** | 관측, 워크스페이스 내부 변경, 자격증명 사용, 외부 발신, 게시, 구매, 파괴적 명령, 운영 변경을 별도 권한으로 분리한다. 일반 편집 권한은 이들 중 어느 것도 상속하지 않는다. | UC-ENV-TOOL-BOUNDARY-DENY | `src/test/env-tool-approval-matrix.contract.test.ts` 비상속 negative | Pending |
+| **FR-ENV-TOOL.9** | 모든 작업은 취소 가능하고 타임아웃을 가지며 재연결과 멱등 재전송을 정의한다. 취소, 타임아웃, 부분 실행은 성공으로 승격되지 않고 각각 구별되어 기록된다. | UC-ENV-TOOL-CANCEL | `src/test/env-tool-cancel-timeout.contract.test.ts` 구별·멱등 | Pending |
 
 ## 기능 요구사항 (FR) — 이슈 리더와 코딩 작업자 오케스트레이션 (#500, 에픽 #497)
 
@@ -909,16 +909,16 @@ fenced code는 언어·복사·접기·워크스페이스 전환을 제공하고
 
 | ID | 요구사항 | 출처 시나리오 | 검증(P02) | 상태 |
 |---|---|---|---|---|
-| **FR-ORCHESTRATION.1** | 요청을 대화로 끝낼 일과 이슈로 만들 일로 분류하고 근거를 남긴다. 사용자가 분류를 뒤집으면 그대로 따른다. 사소한 질문에 이슈와 작업자를 만들지 않는다. | UC-ORCHESTRATION-CLASSIFY | `classify.test.ts` 분류·뒤집기 | Pending |
-| **FR-ORCHESTRATION.2** | 이슈로 만들 일은 GitHub 이슈를 생성하거나 기존 이슈에 결속하고, 그 이슈를 Herdr space 하나에 묶는다. 같은 이슈에 space가 둘 생기지 않는다. | UC-ORCHESTRATION-CLASSIFY | `issue-lead.test.ts` 결속 단일성 | Pending |
-| **FR-ORCHESTRATION.3** | 이슈마다 L2 리더가 하나 선다. 리더는 계획, 소유 경로 배정, 작업자 배치, 증거 통합, 완료 판정을 맡는다. 리더가 둘 이상 존재할 수 없다. | UC-ORCHESTRATION-ISSUE-LEAD | `issue-lead.test.ts` 리더 단일성 | Pending |
-| **FR-ORCHESTRATION.4** | 구현자, 검증자, 리뷰어, 조사자 역할을 지원하고, 구현한 작업자가 자기 결과의 독립 검증자가 되지 않는다. 참조 이슈는 최소한 구현자와 독립 검증자로 완주한다. | UC-ORCHESTRATION-ISSUE-LEAD | `issue-lead.test.ts` 역할 분리 | Pending |
-| **FR-ORCHESTRATION.5** | 작업자의 소유 경로는 겹치지 않는다. 겹치는 배치는 거부하거나 명시적으로 직렬화한다. | UC-ORCHESTRATION-ISSUE-LEAD | `ownership-conflict.test.ts` 중첩 negative | Pending |
-| **FR-ORCHESTRATION.6** | 작업자는 자기 권한을 넓히지 못하고 이슈 완료를 선언하지 못한다. 증거는 L2가 통합하고 사용자에게 무엇을 보고할지는 L3가 정한다. | UC-ORCHESTRATION-ISSUE-LEAD | `no-self-completion.test.ts` negative | Pending |
-| **FR-ORCHESTRATION.7** | 워크스페이스·프로젝트 컨텍스트, 사용자 의도, 권한, 소유 경로, 예산, 성공 기준을 구조화해 작업자에게 전달한다. 대화 전문을 그대로 복사해 넘기지 않으며 비밀값을 제외한다. 위임 위험도는 워크스페이스 terminology 정의를 따르고 high는 위임하지 않는다. | UC-ORCHESTRATION-ISSUE-LEAD | `issue-lead.test.ts` 전달 계약 | Pending |
-| **FR-ORCHESTRATION.8** | Codex, Claude, OpenCode, 비에이전트 셸 작업 어댑터가 명령줄 도구의 차이에도 동등한 생명주기 의미(시작·관측·중단·재개·결과 수집)를 노출한다. | UC-ORCHESTRATION-WORKER-REPLACE | `worker-adapter.test.ts` 동등성 | Pending |
-| **FR-ORCHESTRATION.9** | 실패하거나 멈춘 작업자를 이슈 상태와 기존 산출물·증거를 잃지 않고 교체한다. 중단, 재개, 인계, 앱 재시작을 지원한다. | UC-ORCHESTRATION-WORKER-REPLACE·RESTART-RESUME | `replace-preserve.test.ts`·`e2e-tauri/orchestration-restart.e2e.ts` | Pending |
-| **FR-ORCHESTRATION.10** | 재시작 이후 완료·실패·중단을 증거 없이 단정하지 않는다. 이어받을 수 없는 부분은 이어받을 수 없다고 보고한다. | UC-ORCHESTRATION-RESTART-RESUME | `e2e-tauri/orchestration-restart.e2e.ts` | Pending |
+| **FR-ORCHESTRATION.1** | 요청을 대화로 끝낼 일과 이슈로 만들 일로 분류하고 근거를 남긴다. 사용자가 분류를 뒤집으면 그대로 따른다. 사소한 질문에 이슈와 작업자를 만들지 않는다. | UC-ORCHESTRATION-CLASSIFY | `src/test/orchestration-classify.contract.test.ts` 분류·뒤집기 | Pending |
+| **FR-ORCHESTRATION.2** | 이슈로 만들 일은 GitHub 이슈를 생성하거나 기존 이슈에 결속하고, 그 이슈를 Herdr space 하나에 묶는다. 같은 이슈에 space가 둘 생기지 않는다. | UC-ORCHESTRATION-CLASSIFY | `src/test/orchestration-issue-lead.contract.test.ts` 결속 단일성 | Pending |
+| **FR-ORCHESTRATION.3** | 이슈마다 L2 리더가 하나 선다. 리더는 계획, 소유 경로 배정, 작업자 배치, 증거 통합, 완료 판정을 맡는다. 리더가 둘 이상 존재할 수 없다. | UC-ORCHESTRATION-ISSUE-LEAD | `src/test/orchestration-issue-lead.contract.test.ts` 리더 단일성 | Pending |
+| **FR-ORCHESTRATION.4** | 구현자, 검증자, 리뷰어, 조사자 역할을 지원하고, 구현한 작업자가 자기 결과의 독립 검증자가 되지 않는다. 참조 이슈는 최소한 구현자와 독립 검증자로 완주한다. | UC-ORCHESTRATION-ISSUE-LEAD | `src/test/orchestration-issue-lead.contract.test.ts` 역할 분리 | Pending |
+| **FR-ORCHESTRATION.5** | 작업자의 소유 경로는 겹치지 않는다. 겹치는 배치는 거부하거나 명시적으로 직렬화한다. | UC-ORCHESTRATION-ISSUE-LEAD | `src/test/orchestration-ownership-conflict.contract.test.ts` 중첩 negative | Pending |
+| **FR-ORCHESTRATION.6** | 작업자는 자기 권한을 넓히지 못하고 이슈 완료를 선언하지 못한다. 증거는 L2가 통합하고 사용자에게 무엇을 보고할지는 L3가 정한다. | UC-ORCHESTRATION-ISSUE-LEAD | `src/test/orchestration-no-self-completion.contract.test.ts` negative | Pending |
+| **FR-ORCHESTRATION.7** | 워크스페이스·프로젝트 컨텍스트, 사용자 의도, 권한, 소유 경로, 예산, 성공 기준을 구조화해 작업자에게 전달한다. 대화 전문을 그대로 복사해 넘기지 않으며 비밀값을 제외한다. 위임 위험도는 워크스페이스 terminology 정의를 따르고 high는 위임하지 않는다. | UC-ORCHESTRATION-ISSUE-LEAD | `src/test/orchestration-issue-lead.contract.test.ts` 전달 계약 | Pending |
+| **FR-ORCHESTRATION.8** | Codex, Claude, OpenCode, 비에이전트 셸 작업 어댑터가 명령줄 도구의 차이에도 동등한 생명주기 의미(시작·관측·중단·재개·결과 수집)를 노출한다. | UC-ORCHESTRATION-WORKER-REPLACE | `src/test/orchestration-worker-adapter.contract.test.ts` 동등성 | Pending |
+| **FR-ORCHESTRATION.9** | 실패하거나 멈춘 작업자를 이슈 상태와 기존 산출물·증거를 잃지 않고 교체한다. 중단, 재개, 인계, 앱 재시작을 지원한다. | UC-ORCHESTRATION-WORKER-REPLACE·RESTART-RESUME | `src/test/orchestration-replace-preserve.contract.test.ts`·`packages/shell/e2e-tauri/specs/orchestration-restart.spec.ts` | Pending |
+| **FR-ORCHESTRATION.10** | 재시작 이후 완료·실패·중단을 증거 없이 단정하지 않는다. 이어받을 수 없는 부분은 이어받을 수 없다고 보고한다. | UC-ORCHESTRATION-RESTART-RESUME | `packages/shell/e2e-tauri/specs/orchestration-restart.spec.ts` | Pending |
 
 ## 기능 요구사항 (FR) — 채널 중립 세션 (#503, 에픽 #497)
 
@@ -927,13 +927,13 @@ fenced code는 언어·복사·접기·워크스페이스 전환을 제공하고
 
 | ID | 요구사항 | 출처 시나리오 | 검증(P02) | 상태 |
 |---|---|---|---|---|
-| **FR-CHANNEL-SESSION.1** | 대화, 작업, 이슈, Herdr space 식별자를 채널과 무관하게 정의한다. 같은 이슈에는 L3 대화 정체성 하나와 Herdr 실행 소유자 하나만 존재한다. | UC-CHANNEL-SESSION-HANDOFF | `identity.test.ts` 단일 소유 | Pending |
-| **FR-CHANNEL-SESSION.2** | 데스크톱 대화, 음성, Discord 입력이 권한이 있을 때 같은 L3 오케스트레이션 세션으로 들어간다. 채널이 달라도 대화가 갈라지지 않는다. | UC-CHANNEL-SESSION-HANDOFF | `identity.test.ts`·`e2e-tauri/channel-continuity.e2e.ts` | Pending |
-| **FR-CHANNEL-SESSION.3** | 대화 응답과 오래 걸리는 작업의 진행 알림을 구분해 전달한다. 진행 알림이 대화 응답을 밀어내지 않는다. | UC-CHANNEL-SESSION-RECONNECT | `resume-refs.test.ts` 경로 분리 | Pending |
-| **FR-CHANNEL-SESSION.4** | 재개에 필요한 참조만 보관하고 작업자 실행 상태를 복사해 두지 않는다. 실행 정본은 Herdr에 남는다. | UC-CHANNEL-SESSION-RECONNECT | `resume-refs.test.ts` 복사 negative | Pending |
-| **FR-CHANNEL-SESSION.5** | 채널마다 신원, 참여 자격, 공개 범위, 응답 경로 정책을 정의하고 강제한다. 워크스페이스의 기밀 컨텍스트가 더 넓은 채널로 나가지 않는다. | UC-CHANNEL-SESSION-DISCLOSURE-DENY | `disclosure-policy.test.ts` 유출 negative | Pending |
-| **FR-CHANNEL-SESSION.6** | 중복 전달은 이슈나 작업자를 중복 생성하지 않고 기존 처리 결과를 반환한다. 순서가 뒤바뀐 이벤트는 상태를 역전시키지 않는다. | UC-CHANNEL-SESSION-DUPLICATE-DELIVERY | `dedupe.test.ts`·`out-of-order.test.ts` | Pending |
-| **FR-CHANNEL-SESSION.7** | 채널 재연결과 재부팅 이후 작업이 멈췄거나 끝났다고 증거 없이 말하지 않는다. 사용자 취소는 모든 채널에서 동일하게 작동한다. | UC-CHANNEL-SESSION-RECONNECT | `e2e-tauri/channel-reboot.e2e.ts` | Pending |
+| **FR-CHANNEL-SESSION.1** | 대화, 작업, 이슈, Herdr space 식별자를 채널과 무관하게 정의한다. 같은 이슈에는 L3 대화 정체성 하나와 Herdr 실행 소유자 하나만 존재한다. | UC-CHANNEL-SESSION-HANDOFF | `src/test/channel-session-identity.contract.test.ts` 단일 소유 | Pending |
+| **FR-CHANNEL-SESSION.2** | 데스크톱 대화, 음성, Discord 입력이 권한이 있을 때 같은 L3 오케스트레이션 세션으로 들어간다. 채널이 달라도 대화가 갈라지지 않는다. | UC-CHANNEL-SESSION-HANDOFF | `src/test/channel-session-identity.contract.test.ts`·`packages/shell/e2e-tauri/specs/channel-continuity.spec.ts` | Pending |
+| **FR-CHANNEL-SESSION.3** | 대화 응답과 오래 걸리는 작업의 진행 알림을 구분해 전달한다. 진행 알림이 대화 응답을 밀어내지 않는다. | UC-CHANNEL-SESSION-RECONNECT | `src/test/channel-session-resume-refs.contract.test.ts` 경로 분리 | Pending |
+| **FR-CHANNEL-SESSION.4** | 재개에 필요한 참조만 보관하고 작업자 실행 상태를 복사해 두지 않는다. 실행 정본은 Herdr에 남는다. | UC-CHANNEL-SESSION-RECONNECT | `src/test/channel-session-resume-refs.contract.test.ts` 복사 negative | Pending |
+| **FR-CHANNEL-SESSION.5** | 채널마다 신원, 참여 자격, 공개 범위, 응답 경로 정책을 정의하고 강제한다. 워크스페이스의 기밀 컨텍스트가 더 넓은 채널로 나가지 않는다. | UC-CHANNEL-SESSION-DISCLOSURE-DENY | `src/test/channel-session-disclosure-policy.contract.test.ts` 유출 negative | Pending |
+| **FR-CHANNEL-SESSION.6** | 중복 전달은 이슈나 작업자를 중복 생성하지 않고 기존 처리 결과를 반환한다. 순서가 뒤바뀐 이벤트는 상태를 역전시키지 않는다. | UC-CHANNEL-SESSION-DUPLICATE-DELIVERY | `src/test/channel-session-dedupe.contract.test.ts`·`src/test/channel-session-out-of-order.contract.test.ts` | Pending |
+| **FR-CHANNEL-SESSION.7** | 채널 재연결과 재부팅 이후 작업이 멈췄거나 끝났다고 증거 없이 말하지 않는다. 사용자 취소는 모든 채널에서 동일하게 작동한다. | UC-CHANNEL-SESSION-RECONNECT | `packages/shell/e2e-tauri/specs/channel-reboot.spec.ts` | Pending |
 
 ## 비기능 요구사항 (NFR) — 검증·벤치마크 하네스 (#498, 에픽 #497)
 
@@ -942,10 +942,10 @@ fenced code는 언어·복사·접기·워크스페이스 전환을 제공하고
 
 | ID | 요구사항 | 출처 시나리오 | 검증(P02) | 상태 |
 |---|---|---|---|---|
-| **NFR-AGENT-BENCH.1** | 네 개의 게이트를 제공한다. 프로토콜 계약, 구성요소 통합, 실제 에이전트 종단, 안전·결함 주입. 앞 게이트의 통과가 뒤 게이트를 대신하지 않는다. | UC-AGENT-BENCH-RUN | `runner-contract.test.ts` 게이트 분리 | Pending |
-| **NFR-AGENT-BENCH.2** | 중첩 진입점과 여러 프로젝트를 가진 임시 워크스페이스 픽스처, 결정론적 상태기계 검증을 위한 대역 Herdr와 대역 작업자, 그리고 실제 Herdr·명령줄 도구 프로파일을 함께 제공한다. | UC-AGENT-BENCH-RUN | `fixtures.test.ts` 픽스처·대역 | Pending |
-| **NFR-AGENT-BENCH.3** | 목 데이터만으로 얻은 통과는 native Herdr, 실제 브라우저, 실제 코딩 작업자 게이트를 만족시키지 못한다. 테스트 삭제나 축소된 suite는 완료 증거가 아니다. | UC-AGENT-BENCH-FALSE-COMPLETION | `false-completion.test.ts` 축소 suite 탐지 | Pending |
-| **NFR-AGENT-BENCH.4** | 수용 대상에서 교차 프로젝트 컨텍스트 누출 0건, 무단 외부 효과 0건, 거짓 완료 선언 0건을 요구한다. 하나라도 발생하면 수용하지 않는다. | UC-AGENT-BENCH-FALSE-COMPLETION | `false-completion.test.ts` 세 지표 | Pending |
-| **NFR-AGENT-BENCH.5** | 수용된 모든 작업은 의도, 컨텍스트 개정, 수행한 작업, 산출물, 테스트, 완료 증거가 추적 가능하다. 증거 영수증을 보관하고 재현 가능하게 한다. | UC-AGENT-BENCH-RUN | `runner-contract.test.ts` 추적성 | Pending |
-| **NFR-AGENT-BENCH.6** | 컨텍스트 발견, 프로젝트 라우팅, 이슈 분류, 도구 선택, 검증된 완료, 거짓 완료, 복구, 개입 횟수, 토큰 비용, 지연, 병렬 효율, 권한 위반을 측정한다. 보고는 성공 여부만이 아니라 중앙값과 꼬리 지연, 비용을 포함한다. | UC-AGENT-BENCH-REPORT | `report-shape.test.ts` 지표·분포 | Pending |
-| **NFR-AGENT-BENCH.7** | 결정론 suite는 자격증명 없이 지속 통합에서 돌고, 실제 런타임과 자격증명이 필요한 suite는 선택 실행으로 분리한다. 기준선 보고와 회귀 임계값을 유지한다. | UC-AGENT-BENCH-REPORT | `report-shape.test.ts` 재현·임계 | Pending |
+| **NFR-AGENT-BENCH.1** | 네 개의 게이트를 제공한다. 프로토콜 계약, 구성요소 통합, 실제 에이전트 종단, 안전·결함 주입. 앞 게이트의 통과가 뒤 게이트를 대신하지 않는다. | UC-AGENT-BENCH-RUN | `src/test/agent-bench-runner.contract.test.ts` 게이트 분리 | Pending |
+| **NFR-AGENT-BENCH.2** | 중첩 진입점과 여러 프로젝트를 가진 임시 워크스페이스 픽스처, 결정론적 상태기계 검증을 위한 대역 Herdr와 대역 작업자, 그리고 실제 Herdr·명령줄 도구 프로파일을 함께 제공한다. | UC-AGENT-BENCH-RUN | `src/test/agent-bench-fixtures.contract.test.ts` 픽스처·대역 | Pending |
+| **NFR-AGENT-BENCH.3** | 목 데이터만으로 얻은 통과는 native Herdr, 실제 브라우저, 실제 코딩 작업자 게이트를 만족시키지 못한다. 테스트 삭제나 축소된 suite는 완료 증거가 아니다. | UC-AGENT-BENCH-FALSE-COMPLETION | `src/test/agent-bench-false-completion.contract.test.ts` 축소 suite 탐지 | Pending |
+| **NFR-AGENT-BENCH.4** | 수용 대상에서 교차 프로젝트 컨텍스트 누출 0건, 무단 외부 효과 0건, 거짓 완료 선언 0건을 요구한다. 하나라도 발생하면 수용하지 않는다. | UC-AGENT-BENCH-FALSE-COMPLETION | `src/test/agent-bench-false-completion.contract.test.ts` 세 지표 | Pending |
+| **NFR-AGENT-BENCH.5** | 수용된 모든 작업은 의도, 컨텍스트 개정, 수행한 작업, 산출물, 테스트, 완료 증거가 추적 가능하다. 증거 영수증을 보관하고 재현 가능하게 한다. | UC-AGENT-BENCH-RUN | `src/test/agent-bench-runner.contract.test.ts` 추적성 | Pending |
+| **NFR-AGENT-BENCH.6** | 컨텍스트 발견, 프로젝트 라우팅, 이슈 분류, 도구 선택, 검증된 완료, 거짓 완료, 복구, 개입 횟수, 토큰 비용, 지연, 병렬 효율, 권한 위반을 측정한다. 보고는 성공 여부만이 아니라 중앙값과 꼬리 지연, 비용을 포함한다. | UC-AGENT-BENCH-REPORT | `src/test/agent-bench-report.contract.test.ts` 지표·분포 | Pending |
+| **NFR-AGENT-BENCH.7** | 결정론 suite는 자격증명 없이 지속 통합에서 돌고, 실제 런타임과 자격증명이 필요한 suite는 선택 실행으로 분리한다. 기준선 보고와 회귀 임계값을 유지한다. | UC-AGENT-BENCH-REPORT | `src/test/agent-bench-report.contract.test.ts` 재현·임계 | Pending |

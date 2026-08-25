@@ -953,15 +953,15 @@ Test Coverage Map (P02):
 
 | UC | 검증 수단 | 대상 |
 |---|---|---|
-| UC-WORKSPACE-CONTEXT-DISCOVER | vitest `workspace-context/__tests__/discover.test.ts` | 진입점 발견, 선언된 인덱스만 로드, 선언 밖 문서 미로드, 근거 기록 |
-| UC-WORKSPACE-CONTEXT-DISCOVER | vitest `workspace-context/__tests__/selective-load.test.ts` | 의도별 선택 로딩, 로드 토큰 상한, 전체 주입 금지 |
-| UC-WORKSPACE-CONTEXT-ENTER-PROJECT | vitest `workspace-context/__tests__/enter-project.test.ts` | 중첩 진입점 로드, 프로젝트 규칙 우선, 권한 비확장 negative |
-| UC-WORKSPACE-CONTEXT-SWITCH-PROJECT | vitest `workspace-context/__tests__/switch-project.test.ts` | 지역 컨텍스트 폐기, 의도 보존, 교차 누출 0 |
-| UC-WORKSPACE-CONTEXT-SWITCH-PROJECT | vitest `workspace-context/__tests__/revision.test.ts` | 개정 번호 단조 증가, 디스크 변경 반영, 오래된 사본 거부 |
-| UC-WORKSPACE-CONTEXT-BROKEN-ENTRYPOINT | vitest `workspace-context/__tests__/failure-honesty.test.ts` | 부재·형식 오류·인덱스 부재 진단 메시지 |
-| UC-WORKSPACE-CONTEXT-BROKEN-ENTRYPOINT | vitest `workspace-context/__tests__/path-boundary.test.ts` | 심볼릭 링크·상위 경로 탈출 negative |
-| 전체 | Playwright `e2e/workspace-context.spec.ts` | 실 UI에서 컨텍스트 근거 표시, 프로젝트 전환 표시, 실패 진단 표시 |
-| 전체 | e2e-tauri `e2e-tauri/workspace-context.e2e.ts` | 실제 파일 시스템 픽스처에서 발견·진입·전환·실패의 풀스택 왕복 |
+| UC-WORKSPACE-CONTEXT-DISCOVER | vitest `src/test/workspace-context-discover.contract.test.ts` | 진입점 발견, 선언된 인덱스만 로드, 선언 밖 문서 미로드, 근거 기록 |
+| UC-WORKSPACE-CONTEXT-DISCOVER | vitest `src/test/workspace-context-selective-load.contract.test.ts` | 의도별 선택 로딩, 로드 토큰 상한, 전체 주입 금지 |
+| UC-WORKSPACE-CONTEXT-ENTER-PROJECT | vitest `src/test/workspace-context-enter-project.contract.test.ts` | 중첩 진입점 로드, 프로젝트 규칙 우선, 권한 비확장 negative |
+| UC-WORKSPACE-CONTEXT-SWITCH-PROJECT | vitest `src/test/workspace-context-switch-project.contract.test.ts` | 지역 컨텍스트 폐기, 의도 보존, 교차 누출 0 |
+| UC-WORKSPACE-CONTEXT-SWITCH-PROJECT | vitest `src/test/workspace-context-revision.contract.test.ts` | 개정 번호 단조 증가, 디스크 변경 반영, 오래된 사본 거부 |
+| UC-WORKSPACE-CONTEXT-BROKEN-ENTRYPOINT | vitest `src/test/workspace-context-failure-honesty.contract.test.ts` | 부재·형식 오류·인덱스 부재 진단 메시지 |
+| UC-WORKSPACE-CONTEXT-BROKEN-ENTRYPOINT | vitest `src/test/workspace-context-path-boundary.contract.test.ts` | 심볼릭 링크·상위 경로 탈출 negative |
+| 전체 | Playwright `packages/shell/e2e/workspace-context.spec.ts` | 실 UI에서 컨텍스트 근거 표시, 프로젝트 전환 표시, 실패 진단 표시 |
+| 전체 | e2e-tauri `packages/shell/e2e-tauri/specs/workspace-context.spec.ts` | 실제 파일 시스템 픽스처에서 발견·진입·전환·실패의 풀스택 왕복 |
 
 상태 매트릭스: 기본(진입점 정상), 빈 목록(선언된 인덱스 0개), 진행(대용량 워크스페이스 스캔 중),
 성공(컨텍스트 확정), 오류(진입점 깨짐), 좁은 폭(컨텍스트 근거 패널 축소)을 모두 매핑한다.
@@ -1004,15 +1004,15 @@ Test Coverage Map (P02):
 
 | UC | 검증 수단 | 대상 |
 |---|---|---|
-| UC-HERDR-CONTROL-OBSERVE | vitest `herdr-control/__tests__/resource-schema.test.ts` | 자원 스키마·버전, 개정 단조 증가, 구독 누락 감지 |
-| UC-HERDR-CONTROL-OBSERVE | vitest `herdr-control/__tests__/no-screen-scrape.test.ts` | 화면 파싱·private socket 경로 부재 negative |
-| UC-HERDR-CONTROL-MUTATE | vitest `herdr-control/__tests__/mutation-contract.test.ts` | 구조화 argv·cwd·env, 증거 참조 반환, 문자열 조립 negative |
-| UC-HERDR-CONTROL-MUTATE | vitest `herdr-control/__tests__/idempotency.test.ts` | 같은 멱등 키 재전송 시 중복 생성 0 |
-| UC-HERDR-CONTROL-MUTATE | vitest `herdr-control/__tests__/capability-tier.test.ts` | 자격증명·외부 발신·파괴적 명령의 권한 비상속 negative |
-| UC-HERDR-CONTROL-STALE-REVISION | vitest `herdr-control/__tests__/stale-revision.test.ts` | 기대 개정 불일치 시 타입 있는 충돌, 무음 덮어쓰기 0 |
-| UC-HERDR-CONTROL-RECONNECT | vitest `herdr-control/__tests__/outcome-taxonomy.test.ts` | 끊김·타임아웃·종료·취소·부분완료 구별 |
-| UC-HERDR-CONTROL-RECONNECT | vitest `herdr-control/__tests__/reconnect-bounds.test.ts` | 재접속 상한, 상한 도달 시 정직 실패 |
-| 전체 | e2e-tauri `e2e-tauri/herdr-control.e2e.ts` | 실제 Herdr 상대 관측·변경·충돌·재시작 복구 왕복 |
+| UC-HERDR-CONTROL-OBSERVE | vitest `src/test/herdr-control-resource-schema.contract.test.ts` | 자원 스키마·버전, 개정 단조 증가, 구독 누락 감지 |
+| UC-HERDR-CONTROL-OBSERVE | vitest `src/test/herdr-control-no-screen-scrape.contract.test.ts` | 화면 파싱·private socket 경로 부재 negative |
+| UC-HERDR-CONTROL-MUTATE | vitest `src/test/herdr-control-mutation.contract.test.ts` | 구조화 argv·cwd·env, 증거 참조 반환, 문자열 조립 negative |
+| UC-HERDR-CONTROL-MUTATE | vitest `src/test/herdr-control-idempotency.contract.test.ts` | 같은 멱등 키 재전송 시 중복 생성 0 |
+| UC-HERDR-CONTROL-MUTATE | vitest `src/test/herdr-control-capability-tier.contract.test.ts` | 자격증명·외부 발신·파괴적 명령의 권한 비상속 negative |
+| UC-HERDR-CONTROL-STALE-REVISION | vitest `src/test/herdr-control-stale-revision.contract.test.ts` | 기대 개정 불일치 시 타입 있는 충돌, 무음 덮어쓰기 0 |
+| UC-HERDR-CONTROL-RECONNECT | vitest `src/test/herdr-control-outcome-taxonomy.contract.test.ts` | 끊김·타임아웃·종료·취소·부분완료 구별 |
+| UC-HERDR-CONTROL-RECONNECT | vitest `src/test/herdr-control-reconnect-bounds.contract.test.ts` | 재접속 상한, 상한 도달 시 정직 실패 |
+| 전체 | e2e-tauri `packages/shell/e2e-tauri/specs/herdr-control.spec.ts` | 실제 Herdr 상대 관측·변경·충돌·재시작 복구 왕복 |
 
 상태 매트릭스: 기본(Herdr 정상), 빈 목록(space 0개), 진행(작업자 실행 중), 성공(변경 반영),
 오류(충돌·타임아웃·연결 끊김), 좁은 폭(제어 패널 축소)을 모두 매핑한다.
@@ -1054,14 +1054,14 @@ Test Coverage Map (P02):
 
 | UC | 검증 수단 | 대상 |
 |---|---|---|
-| UC-ENV-TOOL-BROWSE | vitest `env-tool/__tests__/browser-contract.test.ts` | 작업 생명주기 5상태, 스냅샷 자원, 안정 요소 참조 |
-| UC-ENV-TOOL-BROWSE | Playwright `e2e/env-tool-browser.spec.ts` | 실제 페이지 열기·스냅샷·클릭·입력·전후 관측 |
-| UC-ENV-TOOL-BROWSE | Playwright `e2e/env-tool-injection.spec.ts` | 악성 페이지 지시 주입 무시 negative |
-| UC-ENV-TOOL-TERMINAL-EXEC | vitest `env-tool/__tests__/terminal-contract.test.ts` | 구조화 argv·cwd·env, Herdr 위임, 종료 코드·출력 참조 |
-| UC-ENV-TOOL-TERMINAL-EXEC | vitest `env-tool/__tests__/workspace-escape.test.ts` | 경계 밖 명령 거부 negative |
-| UC-ENV-TOOL-CANCEL | vitest `env-tool/__tests__/cancel-timeout.test.ts` | 취소·타임아웃·부분 실행 구별, 재전송 멱등 |
-| UC-ENV-TOOL-BOUNDARY-DENY | vitest `env-tool/__tests__/approval-matrix.test.ts` | 등급별 승인 요구, 비상속, 명시적 거부 |
-| 전체 | e2e-tauri `e2e-tauri/env-tool.e2e.ts` | 실 브라우저와 실 Herdr 터미널의 풀스택 왕복 |
+| UC-ENV-TOOL-BROWSE | vitest `src/test/env-tool-browser.contract.test.ts` | 작업 생명주기 5상태, 스냅샷 자원, 안정 요소 참조 |
+| UC-ENV-TOOL-BROWSE | Playwright `packages/shell/e2e/env-tool-browser.spec.ts` | 실제 페이지 열기·스냅샷·클릭·입력·전후 관측 |
+| UC-ENV-TOOL-BROWSE | Playwright `packages/shell/e2e/env-tool-injection.spec.ts` | 악성 페이지 지시 주입 무시 negative |
+| UC-ENV-TOOL-TERMINAL-EXEC | vitest `src/test/env-tool-terminal.contract.test.ts` | 구조화 argv·cwd·env, Herdr 위임, 종료 코드·출력 참조 |
+| UC-ENV-TOOL-TERMINAL-EXEC | vitest `src/test/env-tool-workspace-escape.contract.test.ts` | 경계 밖 명령 거부 negative |
+| UC-ENV-TOOL-CANCEL | vitest `src/test/env-tool-cancel-timeout.contract.test.ts` | 취소·타임아웃·부분 실행 구별, 재전송 멱등 |
+| UC-ENV-TOOL-BOUNDARY-DENY | vitest `src/test/env-tool-approval-matrix.contract.test.ts` | 등급별 승인 요구, 비상속, 명시적 거부 |
+| 전체 | e2e-tauri `packages/shell/e2e-tauri/specs/env-tool.spec.ts` | 실 브라우저와 실 Herdr 터미널의 풀스택 왕복 |
 
 상태 매트릭스: 기본, 빈 목록(열린 컨텍스트 0개), 진행(작업 실행 중), 성공, 오류(거부·타임아웃·취소),
 좁은 폭(도구 결과 패널 축소)을 모두 매핑한다.
@@ -1102,14 +1102,14 @@ Test Coverage Map (P02):
 
 | UC | 검증 수단 | 대상 |
 |---|---|---|
-| UC-ORCHESTRATION-CLASSIFY | vitest `orchestration/__tests__/classify.test.ts` | 대화형·이슈형 분류, 사용자 뒤집기 반영 |
-| UC-ORCHESTRATION-ISSUE-LEAD | vitest `orchestration/__tests__/issue-lead.test.ts` | 리더 단일성, 역할 분리, 증거 통합 |
-| UC-ORCHESTRATION-ISSUE-LEAD | vitest `orchestration/__tests__/ownership-conflict.test.ts` | 소유 경로 중첩 거부·직렬화 negative |
-| UC-ORCHESTRATION-ISSUE-LEAD | vitest `orchestration/__tests__/no-self-completion.test.ts` | 작업자 자가 완료 선언·권한 확장 negative |
-| UC-ORCHESTRATION-WORKER-REPLACE | vitest `orchestration/__tests__/worker-adapter.test.ts` | Codex·Claude·OpenCode 어댑터 생명주기 동등성 |
-| UC-ORCHESTRATION-WORKER-REPLACE | vitest `orchestration/__tests__/replace-preserve.test.ts` | 교체 시 이슈 상태·산출물 보존 |
-| UC-ORCHESTRATION-RESTART-RESUME | e2e-tauri `e2e-tauri/orchestration-restart.e2e.ts` | 앱·Herdr 재시작 후 이어받기, 증거 없는 단정 0 |
-| 전체 | e2e-tauri `e2e-tauri/orchestration-reference.e2e.ts` | 참조 이슈를 구현자와 독립 검증자로 완주 |
+| UC-ORCHESTRATION-CLASSIFY | vitest `src/test/orchestration-classify.contract.test.ts` | 대화형·이슈형 분류, 사용자 뒤집기 반영 |
+| UC-ORCHESTRATION-ISSUE-LEAD | vitest `src/test/orchestration-issue-lead.contract.test.ts` | 리더 단일성, 역할 분리, 증거 통합 |
+| UC-ORCHESTRATION-ISSUE-LEAD | vitest `src/test/orchestration-ownership-conflict.contract.test.ts` | 소유 경로 중첩 거부·직렬화 negative |
+| UC-ORCHESTRATION-ISSUE-LEAD | vitest `src/test/orchestration-no-self-completion.contract.test.ts` | 작업자 자가 완료 선언·권한 확장 negative |
+| UC-ORCHESTRATION-WORKER-REPLACE | vitest `src/test/orchestration-worker-adapter.contract.test.ts` | Codex·Claude·OpenCode 어댑터 생명주기 동등성 |
+| UC-ORCHESTRATION-WORKER-REPLACE | vitest `src/test/orchestration-replace-preserve.contract.test.ts` | 교체 시 이슈 상태·산출물 보존 |
+| UC-ORCHESTRATION-RESTART-RESUME | e2e-tauri `packages/shell/e2e-tauri/specs/orchestration-restart.spec.ts` | 앱·Herdr 재시작 후 이어받기, 증거 없는 단정 0 |
+| 전체 | e2e-tauri `packages/shell/e2e-tauri/specs/orchestration-reference.spec.ts` | 참조 이슈를 구현자와 독립 검증자로 완주 |
 
 상태 매트릭스: 기본, 빈 목록(작업자 0), 진행(작업자 실행 중), 성공(검증 완료), 오류(작업자 사망·소유 충돌),
 좁은 폭(작업자 목록 축소)을 모두 매핑한다.
@@ -1148,13 +1148,13 @@ Test Coverage Map (P02):
 
 | UC | 검증 수단 | 대상 |
 |---|---|---|
-| UC-CHANNEL-SESSION-HANDOFF | vitest `channel-session/__tests__/identity.test.ts` | 대화·작업·이슈·space 식별자 채널 중립성, 단일 소유 |
-| UC-CHANNEL-SESSION-DUPLICATE-DELIVERY | vitest `channel-session/__tests__/dedupe.test.ts` | 중복 전달 시 이슈·작업자 중복 생성 0 |
-| UC-CHANNEL-SESSION-DUPLICATE-DELIVERY | vitest `channel-session/__tests__/out-of-order.test.ts` | 순서 뒤바뀐 이벤트에서 상태 역전 0 |
-| UC-CHANNEL-SESSION-RECONNECT | vitest `channel-session/__tests__/resume-refs.test.ts` | 재개 참조 보관, 작업자 상태 복사 금지 |
-| UC-CHANNEL-SESSION-RECONNECT | e2e-tauri `e2e-tauri/channel-reboot.e2e.ts` | 재부팅 후 이어받기, 증거 없는 완료·중단 단정 0 |
-| UC-CHANNEL-SESSION-DISCLOSURE-DENY | vitest `channel-session/__tests__/disclosure-policy.test.ts` | 채널별 공개 범위, 기밀 컨텍스트 유출 negative |
-| 전체 | e2e-tauri `e2e-tauri/channel-continuity.e2e.ts` | 데스크톱과 Discord 사이 연속성 종단 시나리오 |
+| UC-CHANNEL-SESSION-HANDOFF | vitest `src/test/channel-session-identity.contract.test.ts` | 대화·작업·이슈·space 식별자 채널 중립성, 단일 소유 |
+| UC-CHANNEL-SESSION-DUPLICATE-DELIVERY | vitest `src/test/channel-session-dedupe.contract.test.ts` | 중복 전달 시 이슈·작업자 중복 생성 0 |
+| UC-CHANNEL-SESSION-DUPLICATE-DELIVERY | vitest `src/test/channel-session-out-of-order.contract.test.ts` | 순서 뒤바뀐 이벤트에서 상태 역전 0 |
+| UC-CHANNEL-SESSION-RECONNECT | vitest `src/test/channel-session-resume-refs.contract.test.ts` | 재개 참조 보관, 작업자 상태 복사 금지 |
+| UC-CHANNEL-SESSION-RECONNECT | e2e-tauri `packages/shell/e2e-tauri/specs/channel-reboot.spec.ts` | 재부팅 후 이어받기, 증거 없는 완료·중단 단정 0 |
+| UC-CHANNEL-SESSION-DISCLOSURE-DENY | vitest `src/test/channel-session-disclosure-policy.contract.test.ts` | 채널별 공개 범위, 기밀 컨텍스트 유출 negative |
+| 전체 | e2e-tauri `packages/shell/e2e-tauri/specs/channel-continuity.spec.ts` | 데스크톱과 Discord 사이 연속성 종단 시나리오 |
 
 상태 매트릭스: 기본, 빈 목록(활성 작업 0), 진행(작업 실행 중 알림), 성공, 오류(연결 끊김·정책 거부),
 좁은 폭(채널 목록 축소)을 모두 매핑한다.
@@ -1187,11 +1187,11 @@ Test Coverage Map (P02):
 
 | UC | 검증 수단 | 대상 |
 |---|---|---|
-| UC-AGENT-BENCH-RUN | vitest `agent-bench/__tests__/runner-contract.test.ts` | 시나리오 실행·판정 계약, 결정론 픽스처 |
-| UC-AGENT-BENCH-RUN | vitest `agent-bench/__tests__/fixtures.test.ts` | 중첩 진입점·다중 프로젝트 임시 워크스페이스 픽스처 |
-| UC-AGENT-BENCH-FALSE-COMPLETION | vitest `agent-bench/__tests__/false-completion.test.ts` | 미수행 보고·축소 suite·교차 누출·무단 발신 탐지 |
-| UC-AGENT-BENCH-REPORT | vitest `agent-bench/__tests__/report-shape.test.ts` | 지연 중앙값·꼬리, 비용, 개입 횟수, 재현성 |
-| 전체 | e2e-tauri `e2e-tauri/agent-bench.e2e.ts` | 실제 Herdr·브라우저·코딩 작업자 게이트에서의 수용 실행 |
+| UC-AGENT-BENCH-RUN | vitest `src/test/agent-bench-runner.contract.test.ts` | 시나리오 실행·판정 계약, 결정론 픽스처 |
+| UC-AGENT-BENCH-RUN | vitest `src/test/agent-bench-fixtures.contract.test.ts` | 중첩 진입점·다중 프로젝트 임시 워크스페이스 픽스처 |
+| UC-AGENT-BENCH-FALSE-COMPLETION | vitest `src/test/agent-bench-false-completion.contract.test.ts` | 미수행 보고·축소 suite·교차 누출·무단 발신 탐지 |
+| UC-AGENT-BENCH-REPORT | vitest `src/test/agent-bench-report.contract.test.ts` | 지연 중앙값·꼬리, 비용, 개입 횟수, 재현성 |
+| 전체 | e2e-tauri `packages/shell/e2e-tauri/specs/agent-bench.spec.ts` | 실제 Herdr·브라우저·코딩 작업자 게이트에서의 수용 실행 |
 
 상태 매트릭스: 기본, 빈 목록(시나리오 0), 진행(벤치 실행 중), 성공(수용), 오류(가짜 완료 탐지·임계 초과),
 좁은 폭(리포트 표 축소)을 모두 매핑한다.
