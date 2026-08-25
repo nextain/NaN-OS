@@ -41,7 +41,8 @@
           "P01_user_scenarios": "done",
           "P02_test_coverage_map": "done",
           "P03_requirements": "done",
-          "P04_integration_test": "pending",
+          "P04_integration_test": "in_progress",
+          "P04_note": "결정론 부분 완료 — src/main/domain/herdr-control.ts, src/main/ports/herdr-control.ts, src/main/app/control/herdr-control.ts 와 계약 테스트 8건(86 tests) 통과. 미완: 실제 Herdr 를 붙이는 어댑터가 없다. 지금 검증된 것은 계약과 상태기계뿐이고, Herdr 0.8.0 이 실제로 어떤 스냅샷·이벤트 표면을 내주는지는 확인하지 않았다. packages/shell/e2e-tauri/specs/herdr-control.spec.ts 미작성.",
           "P05_complete": "pending"
         },
         "499": {
