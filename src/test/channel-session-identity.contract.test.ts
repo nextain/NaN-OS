@@ -27,7 +27,7 @@ describe("정체성 단일성 (FR-CHANNEL-SESSION.1)", () => {
   });
 
   it("둘 다 다르면 둘 다 남긴다", () => {
-    expect(checkIdentity([identity()], identity({ conversationId: "c2", spaceId: "s2" })).sort()).toEqual([
+    expect([...checkIdentity([identity()], identity({ conversationId: "c2", spaceId: "s2" }))].sort()).toEqual([
       "issue-has-other-conversation",
       "issue-has-other-space",
     ]);

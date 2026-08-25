@@ -86,7 +86,7 @@
           "P02_test_coverage_map": "done",
           "P03_requirements": "done",
           "P04_integration_test": "in_progress",
-          "P04_note": "결정론 부분 완료 — src/main/domain/agent-bench.ts, src/main/ports/agent-bench.ts, src/main/app/control/agent-bench.ts, src/main/adapters/workspace-fixture.ts 와 계약 테스트 4건(52 tests) 통과. 미완: packages/shell/e2e-tauri/specs/agent-bench.spec.ts native 게이트. NFR-AGENT-BENCH.1 의 네 게이트 중 protocol/integration 만 실행 가능하다.",
+          "P04_note": "결정론 부분 완료 — domain·ports·app/control 과 src/main/adapters/workspace-fixture.ts, src/main/adapters/agent-bench-scenarios.ts, 계약 테스트 5건(60 tests) 통과. 시나리오 목록은 docs/user-scenarios.md 를 직접 읽으므로 UC 를 추가하고 시나리오를 빠뜨리면 테스트가 깨진다(현재 23건). 미완: 시나리오를 실제로 밟는 실행 포트 구현이 없다 — 지금은 판정 규칙과 목록만 서 있다. packages/shell/e2e-tauri/specs/agent-bench.spec.ts 미작성이라 네 게이트 중 native 계열은 실행 불가.",
           "P05_complete": "pending"
         }
       },

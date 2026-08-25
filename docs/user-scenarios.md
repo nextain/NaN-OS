@@ -1190,6 +1190,7 @@ Test Coverage Map (P02):
 |---|---|---|
 | UC-AGENT-BENCH-RUN | vitest `src/test/agent-bench-runner.contract.test.ts` | 시나리오 실행·판정 계약, 결정론 픽스처 |
 | UC-AGENT-BENCH-RUN | vitest `src/test/agent-bench-fixtures.contract.test.ts` | 중첩 진입점·다중 프로젝트 임시 워크스페이스 픽스처 |
+| UC-AGENT-BENCH-RUN | vitest `src/test/agent-bench-scenario-source.contract.test.ts` | 이 문서에서 형제 UC 를 읽어 판정 목록을 만든다. 계열이 비면 실패 |
 | UC-AGENT-BENCH-FALSE-COMPLETION | vitest `src/test/agent-bench-false-completion.contract.test.ts` | 미수행 보고·축소 suite·교차 누출·무단 발신 탐지 |
 | UC-AGENT-BENCH-REPORT | vitest `src/test/agent-bench-report.contract.test.ts` | 지연 중앙값·꼬리, 비용, 개입 횟수, 재현성 |
 | 전체 | e2e-tauri `packages/shell/e2e-tauri/specs/agent-bench.spec.ts` | 실제 Herdr·브라우저·코딩 작업자 게이트에서의 수용 실행 |
