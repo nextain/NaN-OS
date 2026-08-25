@@ -12,14 +12,16 @@ describe("등급 비상속 (FR-HERDR-CONTROL.6)", () => {
 
   it("워크스페이스 편집 권한이 자격증명·외부 발신·파괴적 변경을 상속하지 않는다", () => {
     const granted: CapabilityTier[] = ["observe", "workspace-write"];
-    for (const tier of ["credential", "external", "destructive"] as const) {
+    for (const tier of ["credential", "external-message", "publication", "purchase", "destructive", "production"] as const) {
       expect(permits(granted, tier)).toBe(false);
     }
   });
 
   it("높은 등급을 가졌다고 낮은 등급이 따라오지 않는다 — 순서가 아니라 집합이다", () => {
     expect(permits(["destructive"], "observe")).toBe(false);
-    expect(permits(["external"], "workspace-write")).toBe(false);
+    expect(permits(["external-message"], "workspace-write")).toBe(false);
+    expect(permits(["publication"], "external-message")).toBe(false);
+    expect(permits(["production"], "destructive")).toBe(false);
   });
 
   it("모든 등급을 부여하면 전부 통과한다", () => {
@@ -28,23 +30,26 @@ describe("등급 비상속 (FR-HERDR-CONTROL.6)", () => {
 });
 
 describe("건별 승인 (FR-HERDR-CONTROL.6)", () => {
-  it.each(["credential", "external", "destructive"] as const)("%s 는 건별 승인이 필요하다", (tier) => {
-    expect(requiresApproval(tier)).toBe(true);
-  });
+  it.each(["credential", "external-message", "publication", "purchase", "destructive", "production"] as const)(
+    "%s 는 건별 승인이 필요하다",
+    (tier) => {
+      expect(requiresApproval(tier)).toBe(true);
+    },
+  );
 
   it.each(["observe", "workspace-write"] as const)("%s 는 건별 승인이 필요하지 않다", (tier) => {
     expect(requiresApproval(tier)).toBe(false);
   });
 
   it("승인 참조가 없으면 approval-missing 으로 거절한다", () => {
-    const r = admit(request({ capability: "external" }), { currentRevision: { value: 1 }, grantedTiers: ["external"] });
+    const r = admit(request({ capability: "external-message" }), { currentRevision: { value: 1 }, grantedTiers: ["external-message"] });
     expect(r.map((x) => x.code)).toEqual(["approval-missing"]);
   });
 
   it("승인 참조가 있으면 통과한다", () => {
-    const r = admit(request({ capability: "external", approvalRef: "approval-1" }), {
+    const r = admit(request({ capability: "external-message", approvalRef: "approval-1" }), {
       currentRevision: { value: 1 },
-      grantedTiers: ["external"],
+      grantedTiers: ["external-message"],
     });
     expect(r).toEqual([]);
   });

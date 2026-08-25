@@ -2,6 +2,7 @@
 // 계약: docs/progress/issue-497-universal-agent.md.
 // 순수. 전송도 프로세스도 여기 없다 — 전부 ports/herdr-control.ts 뒤.
 // 핵심 불변식: 실행 정본은 Herdr 하나다. raw PTY stdin 과 private socket 은 제어 프로토콜이 아니다.
+import { permits as permitsTier, requiresApproval as tierRequiresApproval, type CapabilityTier as Tier } from "./capability.js";
 
 export type ResourceKind = "space" | "issue" | "session" | "agent" | "pane" | "terminal" | "operation";
 
@@ -50,20 +51,8 @@ export function checkContinuity(lastSeen: Revision, incoming: Revision): Subscri
   return { ok: true };
 }
 
-/** 권한 등급 (FR-HERDR-CONTROL.6). 낮은 등급이 높은 등급을 상속하지 않는다 — 순서가 아니라 집합이다. */
-export type CapabilityTier = "observe" | "workspace-write" | "credential" | "external" | "destructive";
-
-export const ALL_TIERS: readonly CapabilityTier[] = ["observe", "workspace-write", "credential", "external", "destructive"];
-
-/** 부여된 등급 집합이 요구 등급을 덮는가. 정확히 포함해야 한다. */
-export function permits(granted: readonly CapabilityTier[], required: CapabilityTier): boolean {
-  return granted.includes(required);
-}
-
-/** 건별 승인이 필요한 등급. 세션 범위 허가로 대신할 수 없다. */
-export function requiresApproval(tier: CapabilityTier): boolean {
-  return tier === "credential" || tier === "external" || tier === "destructive";
-}
+// 권한 등급 (FR-HERDR-CONTROL.6)은 에픽 공용 정의를 쓴다 — 여기서 따로 정의하지 않는다.
+export { ALL_TIERS, permits, requiresApproval, type CapabilityTier } from "./capability.js";
 
 /** 구조화된 명령 (FR-HERDR-CONTROL.3). 셸 문자열로 조립하지 않는다. */
 export interface StructuredCommand {
@@ -90,7 +79,7 @@ export interface MutationRequest {
   readonly requestId: string;
   readonly idempotencyKey: string;
   readonly expectedRevision: Revision;
-  readonly capability: CapabilityTier;
+  readonly capability: Tier;
   readonly approvalRef?: string;
   readonly command?: StructuredCommand;
   readonly timeoutMs: number;
@@ -116,7 +105,7 @@ export interface MutationRejection {
 
 export interface AdmissionContext {
   readonly currentRevision: Revision;
-  readonly grantedTiers: readonly CapabilityTier[];
+  readonly grantedTiers: readonly Tier[];
 }
 
 /**
@@ -131,10 +120,10 @@ export function admit(request: MutationRequest, context: AdmissionContext): read
       detail: `기대 개정 ${request.expectedRevision.value}, 현재 ${context.currentRevision.value}`,
     });
   }
-  if (!permits(context.grantedTiers, request.capability)) {
+  if (!permitsTier(context.grantedTiers, request.capability)) {
     rejections.push({ code: "capability-denied", detail: `요구 등급 ${request.capability} 미부여` });
   }
-  if (requiresApproval(request.capability) && !request.approvalRef) {
+  if (tierRequiresApproval(request.capability) && !request.approvalRef) {
     rejections.push({ code: "approval-missing", detail: `등급 ${request.capability} 는 건별 승인이 필요하다` });
   }
   if (request.command && !isStructuredCommand(request.command)) {

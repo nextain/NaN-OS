@@ -52,7 +52,8 @@
           "P01_user_scenarios": "done",
           "P02_test_coverage_map": "done",
           "P03_requirements": "done",
-          "P04_integration_test": "pending",
+          "P04_integration_test": "in_progress",
+          "P04_note": "결정론 부분 완료 — src/main/domain/env-tool.ts, src/main/ports/env-tool.ts, src/main/app/control/env-tool.ts 와 계약 테스트 5건(60 tests) 통과. 권한 등급은 src/main/domain/capability.ts 하나에서만 정의하고 #502 도 그것을 쓴다. 미완: 실제 브라우저·Herdr 어댑터 없음. packages/shell/e2e/env-tool-browser.spec.ts, env-tool-injection.spec.ts, packages/shell/e2e-tauri/specs/env-tool.spec.ts 미작성 — 프롬프트 주입 방어는 지금 순수 함수 수준에서만 확인되었고 실제 악성 페이지로는 확인하지 않았다.",
           "P05_complete": "pending"
         },
         "500": {
