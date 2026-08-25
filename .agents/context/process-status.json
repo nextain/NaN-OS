@@ -15,8 +15,33 @@
     "issue_doc": "docs/progress/ (F0-baseline, F0-contract, F{1,2,3}-baseline-contract, F0-graft) + 00-PHASES.md",
     "github_issue": null,
     "started": "2026-06-08T00:00:00Z",
-    "last_updated": "2026-08-23T00:00:00+09:00",
+    "last_updated": "2026-08-26T00:00:00+09:00",
     "status": "in_progress",
+    "epic_497_universal_agent": {
+      "issue": 497,
+      "title": "워크스페이스를 아는 3계층 범용 에이전트 (Naia L3 → Herdr L2 → 코딩 작업자 L1)",
+      "contract": "docs/progress/issue-497-universal-agent.md",
+      "boundary": "#417은 Workspace 통합 P1·P2를 소유하고 이 에픽은 P3·P4 실행을 소유한다. #434는 #502가 승계한다.",
+      "children": {
+        "501": {
+          "scope": "워크스페이스 컨텍스트 해석",
+          "scenario": "docs/user-scenarios.md UC-WORKSPACE-CONTEXT-*",
+          "requirements": "docs/requirements.md FR-WORKSPACE-CONTEXT.1~9",
+          "P01_user_scenarios": "done",
+          "P02_test_coverage_map": "done",
+          "P03_requirements": "done",
+          "P04_integration_test": "pending",
+          "P05_complete": "pending"
+        },
+        "502": { "scope": "Herdr 제어면 (#434 승계)", "P01_user_scenarios": "pending", "P02_test_coverage_map": "pending", "P03_requirements": "pending", "P04_integration_test": "pending", "P05_complete": "pending" },
+        "499": { "scope": "브라우저·터미널 환경 도구", "P01_user_scenarios": "pending", "P02_test_coverage_map": "pending", "P03_requirements": "pending", "P04_integration_test": "pending", "P05_complete": "pending" },
+        "500": { "scope": "이슈 리더와 코딩 작업자 오케스트레이션", "P01_user_scenarios": "pending", "P02_test_coverage_map": "pending", "P03_requirements": "pending", "P04_integration_test": "pending", "P05_complete": "pending" },
+        "503": { "scope": "채널 중립 세션", "P01_user_scenarios": "pending", "P02_test_coverage_map": "pending", "P03_requirements": "pending", "P04_integration_test": "pending", "P05_complete": "pending" },
+        "498": { "scope": "검증·벤치마크 하네스", "P01_user_scenarios": "pending", "P02_test_coverage_map": "pending", "P03_requirements": "pending", "P04_integration_test": "pending", "P05_complete": "pending" }
+      },
+      "status": "in_progress",
+      "last_updated": "2026-08-26T00:00:00+09:00"
+    },
 		"v022_thinking_separation_479": {
       "issue": "https://github.com/nextain/naia-shell/issues/479",
       "scope": "thinking을 최종 응답과 분리하고 모든 청크 경계에서 TTS 유입을 차단",

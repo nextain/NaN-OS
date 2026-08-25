@@ -848,3 +848,20 @@ fenced code는 언어·복사·접기·워크스페이스 전환을 제공하고
 ### FR-PERMISSION-SHORTCUT.1 — 권한 팝업 공통 단축키 (#477)
 
 도구 권한 팝업은 실행 `Alt+Y`, 항상 실행 `Alt+A`, 취소 `Alt+N`을 하나의 공통 정의에서 표시·해석하고, macOS에서는 같은 Alt 키를 Option 기호로 표시한다. 팝업이 열린 동안에만 수정키가 정확히 일치하는 최초 keydown을 한 번 처리한다.
+
+## 기능 요구사항 (FR) — 워크스페이스 컨텍스트 해석 (#501, 에픽 #497)
+
+> 계약: `docs/progress/issue-497-universal-agent.md`. 출처 시나리오: `user-scenarios.md`의
+> `UC-WORKSPACE-CONTEXT-*` 네 항목. 상태: 전부 Pending.
+
+| ID | 요구사항 | 출처 시나리오 | 검증(P02) | 상태 |
+|---|---|---|---|---|
+| **FR-WORKSPACE-CONTEXT.1** | 워크스페이스 루트를 정규화된 절대 경로 하나로 확정하고, 그 루트의 진입점 문서와 진입점이 필수로 선언한 인덱스만 발견 대상으로 삼는다. 워크스페이스 이름·경로를 코드에 상수로 두지 않으며, 진입점이 선언하지 않은 문서는 발견 목록에 넣지 않는다. | UC-WORKSPACE-CONTEXT-DISCOVER | `discover.test.ts` 진입점 발견·선언 밖 미로드 | Pending |
+| **FR-WORKSPACE-CONTEXT.2** | 발견과 로딩을 분리한다. 발견은 항상 수행하고, 실제 문서 로딩은 현재 사용자 의도가 요구하는 것만 수행한다. 로드한 문서 집합과 로드 사유(어느 선언이 그것을 요구했는지)를 컨텍스트와 함께 보관하고 조회할 수 있게 한다. 한 요청에서 로드하는 총량에 상한을 둔다. | UC-WORKSPACE-CONTEXT-DISCOVER | `selective-load.test.ts` 의도별 선택·상한 | Pending |
+| **FR-WORKSPACE-CONTEXT.3** | 프로젝트 진입은 작업 디렉터리 변경이 아니라 컨텍스트 전환으로 처리한다. 진입 시 그 프로젝트의 진입점과 프로젝트 전용 필수 컨텍스트를 추가 로드하고, 같은 주제에서 프로젝트 선언이 루트 선언보다 우선한다. 진입 사실과 결과 컨텍스트는 관측 가능하다. | UC-WORKSPACE-CONTEXT-ENTER-PROJECT | `enter-project.test.ts` 중첩 로드·우선순위 | Pending |
+| **FR-WORKSPACE-CONTEXT.4** | 컨텍스트는 권한을 만들지 않는다. 어떤 문서를 읽었다는 사실이 그 경로에 대한 변경 권한이 되지 않으며, 부모 워크스페이스·형제 프로젝트·직전 프로젝트의 선언에서 현재 작업의 권한을 유추하지 않는다. | UC-WORKSPACE-CONTEXT-ENTER-PROJECT | `enter-project.test.ts` 권한 비확장 negative | Pending |
+| **FR-WORKSPACE-CONTEXT.5** | 프로젝트를 전환하면 이전 프로젝트의 지역 컨텍스트를 폐기하고 사용자가 명시한 의도만 유지한다. 전환 후 응답의 근거 목록에 이전 프로젝트 문서가 남지 않는다(교차 누출 0). | UC-WORKSPACE-CONTEXT-SWITCH-PROJECT | `switch-project.test.ts` 폐기·의도 보존·누출 0 | Pending |
+| **FR-WORKSPACE-CONTEXT.6** | 컨텍스트에 단조 증가하는 개정 번호를 부여한다. 진입·전환·디스크상 문서 변경은 개정을 무효화하고, 무효화된 개정을 근거로 한 응답은 만들지 않는다. 현재 개정과 그 구성 문서는 조회 가능하다. | UC-WORKSPACE-CONTEXT-SWITCH-PROJECT | `revision.test.ts` 단조 증가·갱신 반영 | Pending |
+| **FR-WORKSPACE-CONTEXT.7** | 진입점 부재, 형식 오류, 선언된 인덱스 부재는 추측으로 메우지 않고 실패로 처리한다. 실패 보고는 무엇을 어디서 찾았고 왜 실패했는지와 사용자가 취할 조치를 포함한다. 부분 로드 상태를 정상 컨텍스트로 승격하지 않는다. | UC-WORKSPACE-CONTEXT-BROKEN-ENTRYPOINT | `failure-honesty.test.ts` 세 가지 실패 진단 | Pending |
+| **FR-WORKSPACE-CONTEXT.8** | 심볼릭 링크, 상위 경로 표기, 마운트 경계를 거쳐 확정 루트 밖을 가리키는 경로는 발견·로딩 모두에서 거부한다. 거부는 조용한 무시가 아니라 명시적 진단이다. | UC-WORKSPACE-CONTEXT-BROKEN-ENTRYPOINT | `path-boundary.test.ts` 탈출 negative | Pending |
+| **FR-WORKSPACE-CONTEXT.9** | 워크스페이스를 노출하는 표면은 타입이 선언된 자원과 도구로 제공한다. 자원은 현재 워크스페이스, 컨텍스트 목록, 개별 문서, 프로젝트 목록, 스킬 목록, 거버넌스 선언을 포함하고, 도구는 발견·프로젝트 진입·컨텍스트 해석·문서 읽기·갱신·작업 결속을 포함한다. 각 표면은 스키마 버전과 현재 개정을 함께 싣는다. | UC-WORKSPACE-CONTEXT-DISCOVER·ENTER-PROJECT | `discover.test.ts`·`enter-project.test.ts` 스키마 계약 | Pending |

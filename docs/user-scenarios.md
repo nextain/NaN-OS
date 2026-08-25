@@ -914,3 +914,54 @@ Test Coverage Map: `lib/tts/__tests__/text-filter.test.ts`가 공통/언어/fall
 - 도구 권한 팝업이 열렸을 때 `Alt+Y`는 이번만 허용, `Alt+A`는 항상 허용, `Alt+N`은 거부를 정확히 한 번 실행한다.
 - 버튼의 플랫폼별 단축키 표기와 실제 키 해석은 같은 정의를 사용한다.
 - 팝업이 닫히면 리스너가 제거되며, 일반 입력과 추가 수정키 조합은 가로채지 않는다.
+
+## 2026-08-26 워크스페이스 컨텍스트 해석 (#501, 에픽 #497)
+
+> 계약: `docs/progress/issue-497-universal-agent.md`. 여기의 UC는 Naia가 ADK 워크스페이스 루트에서
+> 실행한 코딩 에이전트처럼 자기 규칙을 스스로 찾아 읽는 부분만 다룬다. 실행 위임은 #500,
+> 제어면은 #502가 소유한다.
+
+### UC-WORKSPACE-CONTEXT-DISCOVER — 워크스페이스 규칙을 스스로 찾는다
+
+- 사용자가 워크스페이스 루트를 지정하고 첫 요청을 하면, Naia는 그 루트의 진입점 문서와 그것이 가리키는 필수 인덱스를 스스로 찾아 읽는다.
+- 어떤 문서를 읽었고 왜 읽었는지를 사용자가 물으면 근거와 함께 답한다. "설정된 폴더라서"가 아니라 "루트 진입점이 이 인덱스를 필수로 지정해서"라고 답할 수 있다.
+- 워크스페이스 이름을 코드에 박아 두지 않는다. 진입점이 선언한 것만 읽고, 선언되지 않은 문서는 읽지 않는다.
+- 요청과 무관한 문서는 발견은 하되 읽지 않는다. 매 대화마다 워크스페이스 전체를 대화에 밀어 넣지 않는다.
+
+### UC-WORKSPACE-CONTEXT-ENTER-PROJECT — 프로젝트 안으로 들어간다
+
+- 사용자가 특정 프로젝트의 일을 요청하면, Naia는 그 프로젝트 디렉터리의 진입점과 프로젝트 전용 필수 컨텍스트를 추가로 읽는다.
+- 루트 컨텍스트가 프로젝트 컨텍스트를 대신하지 않는다. 프로젝트에 자기 규칙이 있으면 그것이 우선한다.
+- 프로젝트 진입은 작업 디렉터리를 바꾸는 것으로 끝나지 않는다. 컨텍스트 전환으로 다루며 전환 사실이 관측 가능하다.
+- 프로젝트에 들어갔다는 사실만으로 부모나 형제 프로젝트에 대한 작업 권한이 생기지 않는다.
+
+### UC-WORKSPACE-CONTEXT-SWITCH-PROJECT — 프로젝트를 갈아탄다
+
+- 다른 프로젝트로 옮기면 이전 프로젝트의 지역 컨텍스트는 버린다. 사용자가 명시한 의도는 유지한다.
+- 이전 프로젝트의 규칙이 새 프로젝트의 판단 근거로 남지 않는다.
+- 컨텍스트가 바뀌면 개정 번호가 바뀌고 사용자가 그것을 확인할 수 있다.
+- 워크스페이스 문서가 디스크에서 바뀌면 다음 요청에서 갱신본을 쓴다. 오래된 사본으로 답하지 않는다.
+
+### UC-WORKSPACE-CONTEXT-BROKEN-ENTRYPOINT — 규칙을 못 읽으면 정직하게 실패한다
+
+- 진입점이 없거나, 형식이 깨졌거나, 가리키는 인덱스가 없으면 추측해서 진행하지 않는다.
+- 무엇을 어디서 찾다가 왜 실패했는지 사용자가 고칠 수 있는 형태로 보고한다.
+- 심볼릭 링크나 상위 경로 표기로 워크스페이스 경계 밖을 가리키면 거부한다.
+- 정의되지 않은 약어나 용어를 만나면 뜻을 추측하지 않고 되묻는다.
+
+Test Coverage Map (P02):
+
+| UC | 검증 수단 | 대상 |
+|---|---|---|
+| UC-WORKSPACE-CONTEXT-DISCOVER | vitest `workspace-context/__tests__/discover.test.ts` | 진입점 발견, 선언된 인덱스만 로드, 선언 밖 문서 미로드, 근거 기록 |
+| UC-WORKSPACE-CONTEXT-DISCOVER | vitest `workspace-context/__tests__/selective-load.test.ts` | 의도별 선택 로딩, 로드 토큰 상한, 전체 주입 금지 |
+| UC-WORKSPACE-CONTEXT-ENTER-PROJECT | vitest `workspace-context/__tests__/enter-project.test.ts` | 중첩 진입점 로드, 프로젝트 규칙 우선, 권한 비확장 negative |
+| UC-WORKSPACE-CONTEXT-SWITCH-PROJECT | vitest `workspace-context/__tests__/switch-project.test.ts` | 지역 컨텍스트 폐기, 의도 보존, 교차 누출 0 |
+| UC-WORKSPACE-CONTEXT-SWITCH-PROJECT | vitest `workspace-context/__tests__/revision.test.ts` | 개정 번호 단조 증가, 디스크 변경 반영, 오래된 사본 거부 |
+| UC-WORKSPACE-CONTEXT-BROKEN-ENTRYPOINT | vitest `workspace-context/__tests__/failure-honesty.test.ts` | 부재·형식 오류·인덱스 부재 진단 메시지 |
+| UC-WORKSPACE-CONTEXT-BROKEN-ENTRYPOINT | vitest `workspace-context/__tests__/path-boundary.test.ts` | 심볼릭 링크·상위 경로 탈출 negative |
+| 전체 | Playwright `e2e/workspace-context.spec.ts` | 실 UI에서 컨텍스트 근거 표시, 프로젝트 전환 표시, 실패 진단 표시 |
+| 전체 | e2e-tauri `e2e-tauri/workspace-context.e2e.ts` | 실제 파일 시스템 픽스처에서 발견·진입·전환·실패의 풀스택 왕복 |
+
+상태 매트릭스: 기본(진입점 정상), 빈 목록(선언된 인덱스 0개), 진행(대용량 워크스페이스 스캔 중),
+성공(컨텍스트 확정), 오류(진입점 깨짐), 좁은 폭(컨텍스트 근거 패널 축소)을 모두 매핑한다.
