@@ -37,6 +37,7 @@ import {
 	fetchUnreadAnnouncements,
 } from "./lib/announcements";
 import { loadInstalledApps } from "./lib/app-loader";
+import type { AppInstallRequest } from "./lib/app-store-client";
 import { appRegistry } from "./lib/app-registry";
 import { effectiveAvatarProviderFromConfig } from "./lib/avatar/nva-gate";
 import { BGM_PANEL_ID, SKILL_YOUTUBE_BGM } from "./lib/bgm-skill";
@@ -221,7 +222,7 @@ export function App() {
 	const [showAdkSetup, setShowAdkSetup] = useState(!isAdkInitialized());
 	const [localeHydrated, setLocaleHydrated] = useState(showAdkSetup);
 	const [showOnboarding, setShowOnboarding] = useState(false);
-	const [showPanelInstall, setShowPanelInstall] = useState(false);
+	const [appInstallRequest, setAppInstallRequest] = useState<AppInstallRequest | null>(null);
 	const [naiaVisible, setNaiaVisible] = useState(true);
 	const [naiaWidth, setNaiaWidth] = useState(NAIA_WIDTH_DEFAULT);
 	const [appTitle, setAppTitle] = useState(
@@ -761,6 +762,13 @@ export function App() {
 	}, [showOnboarding]);
 
 	useEffect(() => {
+		const unlisten = listen<AppInstallRequest>("app_install_requested", (event) => {
+			setAppInstallRequest(event.payload);
+		});
+		return () => { unlisten.then((fn) => fn()); };
+	}, []);
+
+	useEffect(() => {
 		const unlisten = listen<{
 			discordUserId?: string | null;
 			discordChannelId?: string | null;
@@ -1280,10 +1288,11 @@ export function App() {
 						<div className="right-area">
 							{!showSplash && !showOnboarding && (
 								<>
-									<AppBar onAddMode={() => setShowPanelInstall(true)} />
-									{showPanelInstall && (
+									<AppBar />
+									{appInstallRequest && (
 										<AppInstallDialog
-											onClose={() => setShowPanelInstall(false)}
+											request={appInstallRequest}
+											onClose={() => setAppInstallRequest(null)}
 										/>
 									)}
 								</>

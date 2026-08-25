@@ -1,0 +1,87 @@
+{
+  "schema_version": "1.0",
+  "id": "issue-471-app-store-integration",
+  "status": "active",
+  "project_root": ".",
+  "goal": "Reconcile the existing Naia Slides, secure app installation, and app-store entry work according to issues #467, #471, #472, and #473 without duplicating the product.",
+  "scope": [
+    "Reuse and integrate the existing Naia Slides implementation",
+    "Keep secure entitlement, digest, signature, and archive validation",
+    "Replace the native multi-product store with a single-app deep-link install confirmation",
+    "Expose the preloaded App Store entry in the required AppBar order",
+    "Update issue-driven requirements, scenarios, tests, and progress evidence",
+    "Run unit, build, browser Playwright, and native Tauri validation available on Linux"
+  ],
+  "non_goals": [
+    "Publish releases or push branches",
+    "Fake purchases, entitlements, avatars, backgrounds, or screenshots",
+    "Create a second Slides implementation",
+    "Modify unrelated user work in the dirty main checkout"
+  ],
+  "success_criteria": [
+    "The existing Naia Slides is the first store product and remains one implementation",
+    "The App Store AppBar entry opens the web store and preserves the required order",
+    "A trusted deep link opens exactly one app install confirmation in Shell",
+    "Installation re-authenticates entitlement and verifies artifact integrity before activation",
+    "Issue-mapped tests and actual UI evidence pass"
+  ],
+  "allowed_paths": [
+    ".agents/context/process-status.json",
+    ".agents/progress/**",
+    ".agents/session-contracts/**",
+    "docs/progress/**",
+    "docs/requirements.md",
+    "docs/user-scenarios.md",
+    "packages/shell/**"
+  ],
+  "target_ownership": [
+    ".agents/context/process-status.json",
+    ".agents/progress/issue-471-app-store-integration.json",
+    ".agents/session-contracts/issue-471-app-store-integration.json",
+    ".agents/session-contracts/.session-map.json",
+    "docs/progress/issue-467-slide-presenter.md",
+    "docs/progress/issue-471-app-store.md",
+    "docs/requirements.md",
+    "docs/user-scenarios.md",
+    "packages/shell/**"
+  ],
+  "audiences": [
+    "Naia Shell users",
+    "Naia Store customers",
+    "release and IR reviewers"
+  ],
+  "source_refs": [
+    "https://github.com/nextain/naia-shell/issues/467",
+    "https://github.com/nextain/naia-shell/issues/471",
+    "https://github.com/nextain/naia-shell/issues/472",
+    "https://github.com/nextain/naia-shell/issues/473",
+    "USR-2026-08-26:clean-wrong-work-follow-issues"
+  ],
+  "session_bindings": [
+    {
+      "session_id": "01a03306-1ba7-7820-a9d6-89be8043639e",
+      "contract_digest": "890b5821c4706b8ca9da2354fafa946a17a115f6fdc4fd405b9c6250fdd249f7"
+    }
+  ],
+  "progress_file": ".agents/progress/issue-471-app-store-integration.json",
+  "allowed_shell_commands": [
+    "git switch -c issue/471-app-store-integration",
+    "git rebase origin/main",
+    "git cherry-pick origin/feat/slide-presenter-467",
+    "git cherry-pick 1305dce3197a65b261a5c82b36a2a700fee1abf0",
+    "git add .agents/session-contracts/.session-map.json .agents/session-contracts/issue-471-app-store-integration.json .agents/progress/issue-471-app-store-integration.json docs/progress/01.requirements/INDEX.md docs/progress/02.user-scenarios/INDEX.md docs/progress/03.uc-tests/INDEX.md packages/shell/src-tauri/src/app.rs packages/shell/src-tauri/src/lib.rs packages/shell/src/App.tsx packages/shell/src/components/AppBar.tsx packages/shell/src/components/AppInstallDialog.tsx packages/shell/src/components/__tests__/AppBar.test.tsx packages/shell/src/components/__tests__/AppInstallDialog.test.tsx packages/shell/src/lib/__tests__/app-store-client.test.ts packages/shell/src/lib/app-store-client.ts",
+    "git commit -m feat(shell): add secure app store deep-link install flow",
+    "bash scripts/enforce-root-structure.sh",
+    "node scripts/check-assembly-coverage.mjs",
+    "npx tsc -p tsconfig.json",
+    "pnpm test",
+    "pnpm -C packages/shell test",
+    "pnpm -C packages/shell build",
+    "pnpm -C packages/shell test:e2e",
+    "xvfb-run pnpm -C packages/shell test:e2e:tauri",
+    "cargo test --manifest-path packages/shell/src-tauri/Cargo.toml",
+    "git diff --check",
+    "git status --short --branch"
+  ],
+  "contract_digest": "890b5821c4706b8ca9da2354fafa946a17a115f6fdc4fd405b9c6250fdd249f7"
+}

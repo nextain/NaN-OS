@@ -50,4 +50,4 @@ scripts/check-traceability.mjs 가 이 표를 파싱한다. (ID 형식 = REQ-###
 | REQ-017 | Windows local voice | 감지 VRAM 6GB 이상이면 Voice 설정에서 voxCPM2 local voice를 명시적으로 ON/OFF한다. 로그인 없이 동작하며 ON은 :8910 ready까지, OFF는 자식 종료까지 확인한다. | Approved | UC-021 | SPEC-015 | TEST-S-020 |
 | REQ-018 | Media consent | BGM/Radio DJ/Proactive는 서로 독립이며 부팅 복원으로 재생하지 않는다. Radio DJ는 명시적 사용자 재생 또는 구조화된 LLM skill play로만 시작하고 재생 버튼은 pause toggle이다. | Approved | UC-022 | SPEC-016 | TEST-S-021 |
 | REQ-019 | Shell presentation and Windows lifecycle | 온보딩 NVA/일반 이름/실제 프레임 썸네일, 좌측 chat layout, compact Proactive icon tooltip을 제공하고 Windows Discord child lifecycle을 bounded하게 검증한다. | Approved | UC-023 | SPEC-017 | TEST-S-022 |
-| REQ-020 | 앱 스토어 | Shell은 공개 앱 목록을 표시하고 구매 권리를 Gateway에서 확인한 뒤에만 검수된 ZIP을 해시 검증하여 설치한다. 삭제 후에도 구매 권리는 유지되어 재결제 없이 재설치할 수 있다. | In-progress | UC-024 | — | TEST-S-023 |
+| REQ-020 | 앱 스토어 | AppBar는 바탕화면→브라우저→앱스토어→작업공간 순서를 고정하고 앱스토어를 내장 브라우저로 연다. 목록·상세·구매는 웹이 담당하며, Shell은 신뢰한 웹의 딥링크에서 단일 앱 ID만 받아 권리를 재확인하고 검수된 앱을 설치한다. 딥링크에 artifact URL이나 결제 기능을 두지 않는다. | In-progress | UC-024 | — | TEST-S-023 |

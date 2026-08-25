@@ -765,33 +765,6 @@ pub fn app_store_has_entitlement(
     Ok(entitlement.app_id == app_id && entitlement.status == "GRANTED")
 }
 
-#[tauri::command]
-pub fn app_store_purchase(
-    app: tauri::AppHandle,
-    app_id: String,
-    gateway_url: String,
-    idempotency_key: String,
-) -> Result<(), String> {
-    validate_store_app_id(&app_id)?;
-    if idempotency_key.len() < 16 || idempotency_key.len() > 128 {
-        return Err("Invalid idempotency key".to_string());
-    }
-    let endpoint = validated_store_gateway(&gateway_url)?
-        .join("v1/apps/purchases")
-        .map_err(|_| "Invalid purchase endpoint".to_string())?;
-    let response = store_client()?
-        .post(endpoint)
-        .bearer_auth(store_key(&app)?)
-        .header("Idempotency-Key", idempotency_key)
-        .json(&serde_json::json!({ "app_id": app_id }))
-        .send()
-        .map_err(|e| format!("Purchase failed: {e}"))?;
-    if !response.status().is_success() {
-        return Err(format!("Purchase failed ({})", response.status()));
-    }
-    Ok(())
-}
-
 fn validate_store_app_id(app_id: &str) -> Result<(), String> {
     let id_ok = !app_id.is_empty()
         && app_id

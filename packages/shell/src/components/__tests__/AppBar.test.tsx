@@ -116,6 +116,14 @@ describe("AppBar — add dialog", () => {
 		expect(screen.getByTitle("appbar.addItem")).toBeDefined();
 	});
 
+	it("keeps desktop, browser, app store, workspace as the first four tabs", () => {
+		render(<AppBar />);
+		const titles = Array.from(document.querySelectorAll(".app-bar-tabs > button"))
+			.slice(0, 4)
+			.map((node) => node.getAttribute("title"));
+		expect(titles).toEqual(["바탕화면", "브라우저", "앱스토어", "작업공간"]);
+	});
+
 	it("opens add-url dialog when + clicked", () => {
 		render(<AppBar />);
 		fireEvent.click(screen.getByTitle("appbar.addItem"));

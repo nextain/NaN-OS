@@ -1,0 +1,9 @@
+{
+  "schema_version": "1.0",
+  "session_id": "01a03306-1ba7-7820-a9d6-89be8043639e",
+  "contract_id": "issue-471-app-store-integration",
+  "contract_digest": "890b5821c4706b8ca9da2354fafa946a17a115f6fdc4fd405b9c6250fdd249f7",
+  "status": "in_progress",
+  "current_phase": "audit-and-reconcile",
+  "updated_at": "2026-08-26T00:00:00+09:00"
+}

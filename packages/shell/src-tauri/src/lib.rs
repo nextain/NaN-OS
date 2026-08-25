@@ -13,6 +13,7 @@ mod stt_models;
 mod workspace;
 
 use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
 use std::io::{BufRead, BufReader, Read, Write};
 use std::process::{Child, Command, Stdio};
 use std::sync::{Arc, Mutex, MutexGuard, OnceLock};
@@ -47,6 +48,7 @@ fn get_startup_open_file() -> Option<String> {
     let cwd = std::env::current_dir().ok()?;
     resolve_cli_file(&args, &cwd)
 }
+static USED_APP_INSTALL_STATES: OnceLock<Mutex<HashSet<String>>> = OnceLock::new();
 
 /// Cross-platform home directory: HOME (Unix) or USERPROFILE (Windows).
 pub(crate) fn home_dir() -> String {
@@ -121,6 +123,41 @@ pub(crate) fn process_deep_link_url(
         Ok(u) => u,
         Err(_) => return,
     };
+    if parsed.scheme() == "naia" && parsed.host_str() == Some("app-install") {
+        let mut app_id = None;
+        let mut store_origin = None;
+        let mut install_state = None;
+        for (key, value) in parsed.query_pairs() {
+            match key.as_ref() {
+                "app_id" => app_id = Some(value.to_string()),
+                "store_origin" => store_origin = Some(value.to_string()),
+                "state" => install_state = Some(value.to_string()),
+                _ => return,
+            }
+        }
+        let Some(app_id) = app_id.filter(|value| {
+            !value.is_empty() && value.len() <= 128 && value.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | '_'))
+        }) else { return; };
+        let Some(store_origin) = store_origin.filter(|value| {
+            value == "https://naia.nextain.io"
+                || (cfg!(debug_assertions) && (value.starts_with("http://localhost:") || value.starts_with("http://127.0.0.1:")))
+        }) else { return; };
+        let Some(state) = install_state.filter(|value| {
+            !value.is_empty() && value.len() <= 128 && value.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_'))
+        }) else { return; };
+        let states = USED_APP_INSTALL_STATES.get_or_init(|| Mutex::new(HashSet::new()));
+        if !lock_or_recover(states, "used_app_install_states").insert(state.clone()) {
+            log_both("[Naia] App install deep link rejected: replayed state");
+            return;
+        }
+        let payload = serde_json::json!({
+            "appId": app_id,
+            "storeOrigin": store_origin,
+            "state": state,
+        });
+        let _ = app_handle.emit("app_install_requested", payload);
+        return;
+    }
     // Accept both shapes:
     //   1) Deep link: `naia://auth?...`  ?? host_str() == "auth", path() == ""
     //   2) HTTP callback: `http://127.0.0.1:18792/auth/callback?...`
@@ -11362,7 +11399,6 @@ pub fn run() {
             app::app_run_shell,
             app::app_install,
             app::app_store_has_entitlement,
-            app::app_store_purchase,
             app::app_install_store,
             workspace::workspace_list_dirs,
             workspace::workspace_read_file,

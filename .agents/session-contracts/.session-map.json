@@ -10,6 +10,11 @@
       "contract_path": ".agents/session-contracts/issue-468-startup-updater-prompt.json",
       "contract_digest": "a89f0f9aa7fc0a3e65b8284c636a15dd095a8bc6f1e33e488b260b24feb9f485"
     },
+    "01a03306-1ba7-7820-a9d6-89be8043639e": {
+      "contract_id": "issue-471-app-store-integration",
+      "contract_path": ".agents/session-contracts/issue-471-app-store-integration.json",
+      "contract_digest": "890b5821c4706b8ca9da2354fafa946a17a115f6fdc4fd405b9c6250fdd249f7"
+    },
     "01a0004a-f64e-73b0-82da-c1069dece3bd": {
       "contract_id": "issue-447-v017-launch-qa",
       "contract_path": ".agents/session-contracts/issue-447-v017-launch-qa.json",

@@ -31,17 +31,13 @@ import { BgmPlayer } from "./BgmPlayer";
 // (`if (!naia) return` in BgmPlayer) and the AI never sees favoritesList.
 const bgmBridge = getBridgeForPanel("bgm");
 
-interface AppBarProps {
-	onAddMode?: () => void;
-}
-
 function extractInitial(shortcut: BrowserLink): string {
 	const source = shortcut.title || shortcut.url;
 	const m = source.match(/([a-zA-Z0-9\uAC00-\uD7AF])/);
 	return m ? m[1].toUpperCase() : "?";
 }
 
-export function AppBar({ onAddMode }: AppBarProps) {
+export function AppBar() {
 	const {
 		activeApp,
 		setActiveApp,
@@ -88,7 +84,7 @@ export function AppBar({ onAddMode }: AppBarProps) {
 		() =>
 			appRegistry
 				.list()
-				.filter((p) => p.id !== "avatar" && p.id !== "settings"),
+				.filter((p) => !["avatar", "settings", "browser", "workspace"].includes(p.id)),
 		// appListVersion is the reactive dependency — registry is not observable directly
 		[appListVersion],
 	);
@@ -162,6 +158,8 @@ export function AppBar({ onAddMode }: AppBarProps) {
 		navigate();
 		window.setTimeout(navigate, 50);
 	}
+
+	const storeUrl = `https://naia.nextain.io/${getLocale()}/apps`;
 
 	function handleCtxRemoveShortcut() {
 		if (!ctxMenu?.shortcutUrl) return;
@@ -330,6 +328,15 @@ export function AppBar({ onAddMode }: AppBarProps) {
 				>
 					<span className="app-bar-tab-icon">🖥️</span>
 				</button>
+				<button type="button" className={`app-bar-tab${activeApp === "browser" ? " app-bar-tab--active" : ""}`} title={getLocale() === "ko" ? "브라우저" : "Browser"} onClick={() => setActiveApp("browser")}>
+					<span className="app-bar-tab-icon">🌐</span>
+				</button>
+				<button type="button" className="app-bar-tab" title={getLocale() === "ko" ? "앱스토어" : "App Store"} onClick={() => openBrowserShortcut(storeUrl)}>
+					<span className="app-bar-tab-icon">🛍️</span>
+				</button>
+				<button type="button" className={`app-bar-tab${activeApp === "workspace" ? " app-bar-tab--active" : ""}`} title={getLocale() === "ko" ? "작업공간" : "Workspace"} onClick={() => setActiveApp("workspace")}>
+					<span className="app-bar-tab-icon">📁</span>
+				</button>
 				{modes.map((mode) => (
 					<div
 						key={mode.id}
@@ -493,7 +500,7 @@ export function AppBar({ onAddMode }: AppBarProps) {
 								className="app-bar-url-dialog__section"
 								onClick={() => {
 									setAddUrlDialog(false);
-									onAddMode?.();
+									openBrowserShortcut(storeUrl);
 								}}
 							>
 								<span className="app-bar-url-dialog__section-icon">📱</span>
