@@ -31,7 +31,7 @@
           "P02_test_coverage_map": "done",
           "P03_requirements": "done",
           "P04_integration_test": "in_progress",
-          "P04_note": "결정론 부분 완료 — src/main/domain/workspace-context.ts, src/main/ports/workspace-context.ts, src/main/app/control/workspace-context.ts 와 계약 테스트 7건(66 tests) 통과. 미완: 실제 진입점을 읽는 파일 시스템 어댑터, packages/shell/e2e/workspace-context.spec.ts, packages/shell/e2e-tauri/specs/workspace-context.spec.ts.",
+          "P04_note": "코어와 어댑터 완료 — domain·ports·app/control 과 src/main/adapters/workspace-context-fs.ts, 계약 테스트 8건(82 tests) 통과. 어댑터는 이 저장소의 실제 AGENTS.md 로 실측한다. 미완: 주제 태그가 붙은 선택 문서를 선언하는 진입점 절 형식이 아직 없어 어댑터의 선택 문서는 항상 비어 있다(선택 로딩은 대역 선언으로만 검증). UI 표면과 packages/shell/e2e/workspace-context.spec.ts, packages/shell/e2e-tauri/specs/workspace-context.spec.ts 미작성.",
           "P05_complete": "pending"
         },
         "502": {

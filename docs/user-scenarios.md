@@ -960,6 +960,7 @@ Test Coverage Map (P02):
 | UC-WORKSPACE-CONTEXT-SWITCH-PROJECT | vitest `src/test/workspace-context-revision.contract.test.ts` | 개정 번호 단조 증가, 디스크 변경 반영, 오래된 사본 거부 |
 | UC-WORKSPACE-CONTEXT-BROKEN-ENTRYPOINT | vitest `src/test/workspace-context-failure-honesty.contract.test.ts` | 부재·형식 오류·인덱스 부재 진단 메시지 |
 | UC-WORKSPACE-CONTEXT-BROKEN-ENTRYPOINT | vitest `src/test/workspace-context-path-boundary.contract.test.ts` | 심볼릭 링크·상위 경로 탈출 negative |
+| 전체 | vitest `src/test/workspace-context-fs-adapter.contract.test.ts` | 실제 진입점 파싱, 이 저장소 AGENTS.md 실측, 임시 워크스페이스 중첩 진입, 경계 거부, 지문 변화 |
 | 전체 | Playwright `packages/shell/e2e/workspace-context.spec.ts` | 실 UI에서 컨텍스트 근거 표시, 프로젝트 전환 표시, 실패 진단 표시 |
 | 전체 | e2e-tauri `packages/shell/e2e-tauri/specs/workspace-context.spec.ts` | 실제 파일 시스템 픽스처에서 발견·진입·전환·실패의 풀스택 왕복 |
 
