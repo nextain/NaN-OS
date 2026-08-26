@@ -394,4 +394,31 @@ kind 이름이 갈라지면 양쪽이 깨지고, 한쪽만의 결함은 그쪽�
 검증: 코어 828/828 GREEN(exit 0), tsc 0, 빌드 성공, 셸 앱 1697 통과,
 실 UI Playwright `environment-skill.spec.ts` 5/5 GREEN(등록·상승·전달·권한 게이트 양방향).
 
-남은 것: e2e-tauri 실 Rust 경계는 여전히 끝까지 못 돌렸다(환경 문제). 아래 절 참조.
+### e2e-tauri 가 왜 안 돌았나 — IPv4/IPv6 불일치
+
+실 Rust 경계 검증은 여러 세션에 걸쳐 막혀 있었다. 증상은 매번 달라 보였다 —
+"webview never reached an http origin", "#root still not displayed",
+"Origin header is not a valid URL". 전부 같은 뿌리였다.
+
+앱이 실제로 무엇을 보고 있는지 실패 메시지에 실어 보니 `about:blank`, origin=null 이었다.
+Tauri IPC 는 origin 을 보므로 그 상태에서는 모든 호출이 거절된다. 앱이 프런트를 아예
+불러오지 못한 것이다.
+
+두 가지가 어긋나 있었다. 첫째, wdio 설정은 Vite 를 1420 에 띄우는데 e2e 바이너리의
+devUrl 은 `tauri.e2e.conf.json` 의 **1422** 였다. 둘째 — 그리고 이게 진짜 원인인데 —
+Vite 는 기본으로 `[::1]`(IPv6) 에만 바인드하고 devUrl 은 `127.0.0.1`(IPv4) 이다.
+포트를 맞춰도 앱은 붙지 못한다.
+
+`ss -lntp` 로 실제 바인드 주소를 보고 확정했다. 포트 열림 확인(`waitForPort`)은 localhost 로
+붙어 통과하고, 앱만 IPv4 로 붙어 실패하는 구조라 하네스는 자기가 정상인 줄 알았다.
+
+고친 방식: 주소를 상수로 적지 않고 `tauri.e2e.conf.json` 의 devUrl 에서 호스트와 포트를
+읽어 Vite 를 그 주소에 띄운다. 정본이 하나라 다시 갈라지지 않는다.
+
+이 슬라이스와 무관한 `01-app-launch.spec.ts` 도 같은 이유로 실패하고 있었고, 같은 수정으로
+함께 살아났다 — 즉 막고 있던 것은 #502 가 아니라 하네스였다.
+
+검증: `environment-dispatch.spec.ts` 16/16 GREEN(exit 0), `01-app-launch.spec.ts` 2/2 GREEN(exit 0).
+스펙 쪽도 두 곳 고쳤다. `#root` 표시를 기다리던 것을 http origin 도달로 바꾸고(이 스펙이
+보는 것은 UI 가 아니라 Rust 경계다), 웹뷰 위치를 결과에 실어 다음에 막힐 때 다시 파헤치지
+않게 했다.

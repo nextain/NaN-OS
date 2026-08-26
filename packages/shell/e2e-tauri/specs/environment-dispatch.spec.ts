@@ -49,8 +49,31 @@ let results: Record<string, InvokeResult> = {};
 
 describe("환경 호출 전달 — Rust 명령 경계 (#502)", () => {
 	before(async () => {
-		const appRoot = await $("#root");
-		await appRoot.waitForDisplayed({ timeout: 30_000 });
+		// 앱이 창을 여럿 열면 wdio 컨텍스트가 빈 쪽에 붙어 있을 수 있다.
+		// 그 상태에서는 origin 이 null 이라 Tauri IPC 가 전부 거절한다(2026-08-26 실측).
+		// http origin 에 있는 창으로 옮겨 붙는다.
+		const handles = await browser.getWindowHandles();
+		for (const handle of handles) {
+			await browser.switchToWindow(handle);
+			const href = (await browser.execute(() => document.location.href)) as string;
+			if (typeof href === "string" && href.startsWith("http")) break;
+		}
+
+		// UI 가 그려질 때까지 기다리지 않는다. 이 스펙이 보는 것은 Rust 명령 경계이고,
+		// 필요한 것은 Tauri invoke 다리뿐이다. #root 표시를 기다리면 온보딩 화면 등
+		// 이 스펙과 무관한 이유로 막힌다(2026-08-26 실측).
+		// Tauri 는 about:blank 에도 invoke 다리를 심는다 — 다리 존재만으로는 부족하다.
+		// IPC 는 origin 을 보므로 http origin 에 실제로 도달할 때까지 기다린다.
+		await browser.waitUntil(
+			async () => {
+				try {
+					return (await browser.execute(() => document.location.href.startsWith("http"))) === true;
+				} catch {
+					return false;
+				}
+			},
+			{ timeout: 60_000, timeoutMsg: "웹뷰가 60초 안에 http origin 에 도달하지 못했다" },
+		);
 		results = (await browser.execute((probes: Probe[]) => {
 			const w = window as unknown as {
 				__TAURI_INTERNALS__?: { invoke: (c: string, a: unknown) => Promise<unknown> };
@@ -73,12 +96,31 @@ describe("환경 호출 전달 — Rust 명령 경계 (#502)", () => {
 							],
 					),
 				),
-			).then((entries) => Object.fromEntries(entries));
+			).then((entries) =>
+				Object.fromEntries([
+					...entries,
+					// 웹뷰가 어디에 떠 있는지. IPC 가 origin 때문에 거절할 때
+					// "어디서 거절됐나"를 다음 사람이 다시 파헤치지 않도록 결과에 싣는다.
+					["__where", { ok: true, error: `${location.href} | origin=${location.origin}` }],
+				]),
+			);
 		}, PROBES)) as Record<string, InvokeResult>;
 	});
 
+	it("웹뷰가 유효한 origin 에 떠 있다 — IPC 가 origin 때문에 막히면 나머지 단언은 무의미하다", () => {
+		const where = results["__where"]?.error ?? "(모름)";
+		const sample = results[PROBES[0]?.name ?? ""]?.error ?? "";
+		// 이 러너의 expect 는 메시지 인자를 받지 않는다 — 위치를 알려면 던져야 한다.
+		if (sample.includes("Origin header is not a valid URL")) {
+			throw new Error(
+				`Tauri IPC 가 origin 을 거절했다. 웹뷰 위치: ${where} — 앱이 dev 서버(http://localhost:1420)에 못 붙었다는 뜻이다.`,
+			);
+		}
+		expect(sample).not.toContain("Origin header is not a valid URL");
+	});
+
 	it("모든 탐침이 응답했다 — 빈 결과로 공허하게 통과하지 않는다", () => {
-		expect(Object.keys(results).length).toBe(PROBES.length);
+		expect(Object.keys(results).length).toBe(PROBES.length + 1); // + __where
 		for (const probe of PROBES) {
 			expect(results[probe.name]).toBeDefined();
 			expect(results[probe.name]?.error).not.toBe("TAURI_INVOKE_MISSING");
