@@ -1954,6 +1954,25 @@ body.resizing-row {
 	display: none;
 }
 
+.thinking-inline-preview-live > span {
+	display: inline-block;
+	min-width: 100%;
+	padding-left: 100%;
+	animation: thinking-preview-flow 10s linear infinite;
+}
+
+@keyframes thinking-preview-flow {
+	from { transform: translateX(0); }
+	to { transform: translateX(-100%); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.thinking-inline-preview-live > span {
+		animation: none;
+		padding-left: 0;
+	}
+}
+
 .chat-code-language {
 	font-family: var(--font-mono, monospace);
 	text-transform: lowercase;

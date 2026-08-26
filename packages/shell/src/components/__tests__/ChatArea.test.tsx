@@ -510,6 +510,9 @@ describe("ChatArea", () => {
 		).find((node) => node.classList.contains("thinking-inline-content"));
 		expect(reasoning).toBeDefined();
 		expect(reasoning?.closest("details")?.hasAttribute("open")).toBe(false);
+		expect(
+			reasoning?.closest("details")?.querySelector(".thinking-inline-preview-live > span")?.textContent,
+		).toBe("private chain");
 
 		request.onChunk({ type: "finish", requestId: request.requestId });
 		const assistant = useChatStore

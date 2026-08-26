@@ -3840,9 +3840,9 @@ export function ChatArea({
 										<span className="thinking-inline-label">
 											💭 {t("chat.thinking") || "Thinking..."}
 										</span>
-										<span className="thinking-inline-preview">
-											{streamingThinking.trim()}
-										</span>
+									<span className="thinking-inline-preview thinking-inline-preview-live">
+										<span>{streamingThinking.trim()}</span>
+									</span>
 									</summary>
 									<div className="thinking-inline-content">
 										{streamingThinking}
