@@ -954,6 +954,13 @@ fenced code는 언어·복사·접기·워크스페이스 전환을 제공하고
 | **NFR-AGENT-BENCH.1** | 네 개의 게이트를 제공한다. 프로토콜 계약, 구성요소 통합, 실제 에이전트 종단, 안전·결함 주입. 앞 게이트의 통과가 뒤 게이트를 대신하지 않는다. | UC-AGENT-BENCH-RUN | `src/test/agent-bench-runner.contract.test.ts` 게이트 분리 | Done |
 | **NFR-AGENT-BENCH.2** | 중첩 진입점과 여러 프로젝트를 가진 임시 워크스페이스 픽스처, 결정론적 상태기계 검증을 위한 대역 Herdr와 대역 작업자, 그리고 실제 Herdr·명령줄 도구 프로파일을 함께 제공한다. | UC-AGENT-BENCH-RUN | `src/test/agent-bench-fixtures.contract.test.ts` 픽스처·대역 | Done |
 | **NFR-AGENT-BENCH.3** | 목 데이터만으로 얻은 통과는 native Herdr, 실제 브라우저, 실제 코딩 작업자 게이트를 만족시키지 못한다. 테스트 삭제나 축소된 suite는 완료 증거가 아니다. | UC-AGENT-BENCH-FALSE-COMPLETION | `src/test/agent-bench-false-completion.contract.test.ts` 축소 suite 탐지 | Done |
+
+
+> NFR-AGENT-BENCH.3 은 "목만으로 얻은 통과가 실제 게이트를 대신하지 못한다"는 *규칙*이다.
+> 하네스가 그 규칙을 실제로 강제한다(mock-only 는 거절된다). 실제 코딩 모델 작업자를
+> 띄운 적이 없다는 사실은 이 규칙의 위반이 아니라 그 규칙이 작동한 결과이며,
+> `UC-ORCHESTRATION-CODING-PROVIDER` 로 이름을 걸어 미검증으로 남겨 두었다.
+> 2026-08-27 적대리뷰가 이 둘을 혼동할 수 있다고 지적해 여기 적어 둔다.
 | **NFR-AGENT-BENCH.4** | 수용 대상에서 교차 프로젝트 컨텍스트 누출 0건, 무단 외부 효과 0건, 거짓 완료 선언 0건을 요구한다. 하나라도 발생하면 수용하지 않는다. | UC-AGENT-BENCH-FALSE-COMPLETION | `src/test/agent-bench-false-completion.contract.test.ts` 세 지표 | Done |
 | **NFR-AGENT-BENCH.5** | 수용된 모든 작업은 의도, 컨텍스트 개정, 수행한 작업, 산출물, 테스트, 완료 증거가 추적 가능하다. 증거 영수증을 보관하고 재현 가능하게 한다. | UC-AGENT-BENCH-RUN | `src/test/agent-bench-runner.contract.test.ts` 추적성 | Done |
 | **NFR-AGENT-BENCH.6** | 컨텍스트 발견, 프로젝트 라우팅, 이슈 분류, 도구 선택, 검증된 완료, 거짓 완료, 복구, 개입 횟수, 토큰 비용, 지연, 병렬 효율, 권한 위반을 측정한다. 보고는 성공 여부만이 아니라 중앙값과 꼬리 지연, 비용을 포함한다. | UC-AGENT-BENCH-REPORT | `src/test/agent-bench-report.contract.test.ts` 지표·분포 | Done |

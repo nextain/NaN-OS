@@ -40,7 +40,7 @@ function looksUnregistered(error: string): boolean {
 
 let results: Record<string, InvokeResult> = {};
 
-describe("브라우저 명령 경계 (#499)", () => {
+describe("브라우저 명령 경계 (#499 UC-ENV-TOOL-BROWSE)", () => {
 	before(async () => {
 		await browser.waitUntil(
 			async () => {

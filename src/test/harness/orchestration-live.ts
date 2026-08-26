@@ -88,12 +88,18 @@ export class LiveShellWorkerAdapter implements WorkerAdapterPort {
     }
     mkdirSync(dirname(target), { recursive: true });
 
-    // 실제로 일을 하는 프로세스. 자기 소유 경로에 산출물을 남긴다.
-    const child = spawn(
-      "sh",
-      ["-c", `printf '%s\\n' "${assignment.workerId} worked on ${brief.issue}" > "${target}"; sleep 0.3`],
-      { cwd: this.root, stdio: "ignore" },
-    );
+    // 실제로 일을 하는 프로세스.
+    //
+    // ⚠️ 셸을 거치지 않는다. 앞서 `sh -c` 에 작업자 식별자를 문자열로 끼워 넣었는데,
+    //    식별자에 셸 메타문자가 들어오면 소유 경로 검사를 통과하고도 그 밖에서 명령이
+    //    돌 수 있었다(2026-08-27 적대리뷰가 지적한 실제 결함). 고정 실행 파일에 인자
+    //    배열로만 넘긴다 — 이 슬라이스가 코어에 요구하는 규칙과 같은 규칙이다.
+    if (/[^A-Za-z0-9._-]/.test(assignment.workerId)) {
+      throw new Error(`작업자 식별자에 쓸 수 없는 문자가 있다: ${assignment.workerId}`);
+    }
+    const child = spawn("sleep", ["0.3"], { cwd: this.root, stdio: "ignore" });
+    // 산출물은 파일 시스템 API 로 직접 쓴다. 셸 인용에 기대지 않는다.
+    writeFileSync(target, `${assignment.workerId} worked on ${brief.issue}\n`, "utf8");
     const running: RunningWorker = {
       assignment,
       brief,

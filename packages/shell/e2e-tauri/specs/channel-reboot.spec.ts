@@ -107,7 +107,7 @@ describe("채널 재연결 이후 태도 — 영속 경계 (#503)", () => {
 		}
 	});
 
-	it("재부팅 뒤에도 이어받을 참조가 실제 디스크에 남는다", () => {
+	it("재부팅 뒤에도 이어받을 참조가 실제 디스크에 남는다 (UC-CHANNEL-SESSION-RECONNECT)", () => {
 		// 이 러너의 expect 는 메시지 인자를 받지 않는다 — 사유를 남기려면 던져야 한다.
 		if (!results.write?.ok) throw new Error(`쓰기 실패: ${results.write?.error}`);
 		if (!results.read?.ok) throw new Error(`읽기 실패: ${results.read?.error}`);
@@ -126,7 +126,7 @@ describe("채널 재연결 이후 태도 — 영속 경계 (#503)", () => {
 		expect(Object.keys(ref)).not.toContain("workerAlive");
 	});
 
-	it("다시 붙었다고 해서 멈췄다거나 끝났다고 말할 수 있는 것은 아니다", () => {
+	it("다시 붙었다고 해서 멈췄다거나 끝났다고 말할 수 있는 것은 아니다 (UC-CHANNEL-SESSION-RECONNECT)", () => {
 		// 재동기화 전 태도는 unknown-until-resynced 다. 규칙 자체는 계약 테스트가 보고,
 		// 여기서는 그 규칙이 볼 입력(참조는 있으나 재동기화 증거는 없음)이 실 백엔드에서
 		// 실제로 만들어진다는 것을 고정한다.

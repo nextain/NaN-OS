@@ -25,7 +25,7 @@ const REQ = resolve(__dirname, "..", "..", "docs", "requirements.md");
 const markdown = readFileSync(DOC, "utf8");
 const requirements = readFileSync(REQ, "utf8");
 
-function runner(codes: readonly number[], stdout = "Tests  7 passed (7)"): CommandRunnerPort & { calls: string[] } {
+function runner(codes: readonly number[], stdout = "  ✓ 샘플 케이스 (1ms)"): CommandRunnerPort & { calls: string[] } {
   const calls: string[] = [];
   let i = 0;
   return {
@@ -67,6 +67,8 @@ const STEP: VerificationStep = {
   args: ["wdio", "run", "x.conf.ts"],
   cwd: "packages/shell",
   why: "실 백엔드 확인",
+  // 케이스 선택자가 없는 단계는 증거를 만들지 않는다 — 대역 단계도 예외가 아니다.
+  cases: ["샘플 케이스"],
 };
 
 describe("실패는 증거가 되지 않는다", () => {
@@ -88,7 +90,7 @@ describe("실패는 증거가 되지 않는다", () => {
     const r = runner([0, 1]);
     const out = await exec({
       runner: r,
-      verification: { S: [STEP, { ...STEP, kind: "browser", args: ["playwright", "test", "y"] }] },
+      verification: { S: [STEP, { ...STEP, kind: "browser", args: ["playwright", "test", "y"], cases: ["샘플 케이스"] }] },
     }).run(scenario("S"));
     expect(out.receipts.map((x) => x.kind)).toEqual(["native"]);
   });
@@ -176,7 +178,7 @@ describe("등급을 실제보다 높여 적지 않는다", () => {
     const s = scenario("S", { requiredEvidence: ["native"] });
     const out = await exec({
       runner: runner([0]),
-      verification: { S: [{ ...STEP, kind: "browser", args: ["playwright", "test", "y"] }] },
+      verification: { S: [{ ...STEP, kind: "browser", args: ["playwright", "test", "y"], cases: ["샘플 케이스"] }] },
       requirementsMarkdown: "| FR-X | 뭐 | S | t | Done |",
     }).run(s);
     const verdict = judge({
@@ -220,7 +222,8 @@ describe("실행 파일 허용 목록", () => {
       verification: { S: [{ ...STEP, cmd: "rm" }] },
     }).run(scenario("S"));
     expect(r.calls, "허용 목록 밖인데 실행됐다").toEqual([]);
-    expect(out.safety.unauthorizedEffects).toHaveLength(1);
+    // 안전 관측에는 잔재 감사 결과도 함께 실린다 — 개수가 아니라 이 사건이 실렸는지를 본다.
+    expect(out.safety.unauthorizedEffects.join(" ")).toContain("rm");
   });
 
   it("목록이 비어 있지 않다 — 공허하게 통과하지 않게", () => {
@@ -330,5 +333,20 @@ describe("문서와 하네스가 어긋나면 드러난다", () => {
       .flat()
       .filter((step) => step.why.includes("Test Coverage Map"));
     expect(fromDoc.length).toBeGreaterThan(15);
+  });
+});
+
+describe("모든 단계가 시나리오 케이스를 지목한다", () => {
+  it("케이스 선택자가 없는 단계가 없다", () => {
+    // 선택자가 없으면 파일 안의 무관한 테스트로 시나리오가 증명된다.
+    const naked: string[] = [];
+    for (const [id, steps] of Object.entries(VERIFICATION)) {
+      for (const step of steps) {
+        if ((!step.cases || step.cases.length === 0) && (!step.anyCases || step.anyCases.length === 0)) {
+          naked.push(`${id} → ${step.cwd}/${step.args[step.args.length - 1]}`);
+        }
+      }
+    }
+    expect(naked, `케이스 선택자 없는 단계: ${naked.join(" | ")}`).toEqual([]);
   });
 });

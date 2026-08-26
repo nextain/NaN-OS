@@ -5,26 +5,28 @@
 //
 //   NAIA_BENCH_LIVE=1 npx vitest run src/test/agent-bench-live.test.ts --testTimeout=1800000
 //
+// 완료를 주장하려면 유예까지 없어야 한다:
+//   NAIA_BENCH_LIVE=1 NAIA_BENCH_COMPLETION=1 npx vitest run ...
+//
 // 결과는 benchmark/agent-bench-report.md 에 남는다.
 import { describe, it, expect } from "vitest";
 import { execFileSync } from "node:child_process";
-import { resolve } from "node:path";
-import { BenchHarness } from "../main/app/control/agent-bench.js";
-import { DEFERRED_SCENARIOS, DocumentBenchScenarioSource, parseScenarios } from "./harness/agent-bench-scenarios.js";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { dirname } from "node:path";
+import { dirname, resolve } from "node:path";
+import { BenchHarness } from "../main/app/control/agent-bench.js";
+import {
+  DEFERRED_SCENARIOS,
+  DocumentBenchScenarioSource,
+  parseScenarios,
+} from "./harness/agent-bench-scenarios.js";
 import { CommandBenchExecution, nodeCommandRunner, readRequirements } from "./harness/bench-execution.js";
 import { FileBenchReportSink, assertReportMatchesHead } from "./harness/bench-report-sink.js";
+import type { BenchScenario } from "../main/domain/agent-bench.js";
+import type { BenchExecutionPort, ScenarioRun } from "../main/ports/agent-bench.js";
 
 const LIVE = process.env.NAIA_BENCH_LIVE === "1";
+const COMPLETION = process.env.NAIA_BENCH_COMPLETION === "1";
 const ROOT = resolve(__dirname, "..", "..");
-
-/** 이번 실행에서 실제로 돈 테스트 수. 시나리오마다 실행부가 세어 둔 값을 합친다. */
-function totalTests(outcome: { readonly verdicts: readonly { readonly scenarioId: string }[] }): number {
-  // 판정 결과에는 테스트 수가 실리지 않는다. 기준선은 시나리오 수로 대신한다 —
-  // 시나리오가 줄면 그 자체로 축소이고, 그것이 여기서 막으려는 것이다.
-  return outcome.verdicts.length;
-}
 
 describe("에이전트 벤치 실제 실행", () => {
   it.skipIf(!LIVE)(
@@ -35,47 +37,77 @@ describe("에이전트 벤치 실제 실행", () => {
       }).trim();
       const stampedAt = new Date().toISOString();
 
-      const harness = new BenchHarness(
-        new DocumentBenchScenarioSource(resolve(ROOT, "docs", "user-scenarios.md")),
-        new CommandBenchExecution({
-          runner: nodeCommandRunner,
-          repoRoot: ROOT,
-          contextRevision: revision,
-          requirementsMarkdown: readRequirements(ROOT),
-        }),
-        new FileBenchReportSink(resolve(ROOT, "benchmark", "agent-bench-report.md"), () => `${stampedAt} (${revision})`),
-      );
-
-      // 기준선은 파일로 남는다. 0 을 기준선으로 쓰면 축소 suite 판정이 공허해진다
-      // (2026-08-27 적대리뷰 지적).
       // 문서가 선언한 시나리오 전부가 실제로 돌았는가 — 개수가 아니라 이름으로 본다.
       const declaredIds = parseScenarios(
         readFileSync(resolve(ROOT, "docs", "user-scenarios.md"), "utf8"),
       ).map((x) => x.id);
 
+      // 기준선은 시나리오별로 남는다.
+      //
+      // ⚠️ 도메인의 suite-shrunk 판정은 하나의 기준선을 모든 시나리오에 적용한다. 전역 합계를
+      //    시나리오별 지역 개수와 비교하게 되어 늘 축소로 읽힌다(2026-08-27 적대리뷰 지적).
+      //    그래서 도메인에는 0 을 주고, 축소 판정은 아래에서 시나리오별로 한다.
       const baselinePath = resolve(ROOT, "benchmark", "agent-bench-baseline.json");
-      const baseline = existsSync(baselinePath)
-        ? (JSON.parse(readFileSync(baselinePath, "utf8")) as { testCount: number })
-        : { testCount: 0 };
+      const stored = existsSync(baselinePath)
+        ? (JSON.parse(readFileSync(baselinePath, "utf8")) as { perScenario?: Record<string, number> })
+        : {};
+      const floor = stored.perScenario ?? {};
+
+      // 시나리오마다 실제로 확인한 테스트 수를 기록한다. 판정 결과에는 실리지 않는 값이라
+      // 실행부를 감싸서 받는다.
+      const executed: Record<string, number> = {};
+      const execution = new CommandBenchExecution({
+        runner: nodeCommandRunner,
+        repoRoot: ROOT,
+        contextRevision: revision,
+        requirementsMarkdown: readRequirements(ROOT),
+      });
+      const recording: BenchExecutionPort = {
+        async run(scenario: BenchScenario): Promise<ScenarioRun> {
+          const out = await execution.run(scenario);
+          executed[scenario.id] = out.testCount;
+          return out;
+        },
+      };
+
+      const harness = new BenchHarness(
+        new DocumentBenchScenarioSource(resolve(ROOT, "docs", "user-scenarios.md")),
+        recording,
+        new FileBenchReportSink(
+          resolve(ROOT, "benchmark", "agent-bench-report.md"),
+          () => `${stampedAt} (${revision})`,
+        ),
+      );
 
       // 성공률 임계는 유예로 이름 걸어 둔 것만 빼고 전부 수용을 요구한다.
       // 무한대는 게이트가 아니고, 1 로 못 박으면 유예 선언 자체가 불가능해진다.
       const deferredCount = declaredIds.filter((id) => id in DEFERRED_SCENARIOS).length;
       const minSuccessRate = (declaredIds.length - deferredCount) / declaredIds.length;
 
-      const outcome = await harness.run(baseline, {
-        // 임계는 실제로 막는 값이어야 한다. 무한대는 게이트가 아니다.
-        minSuccessRate,
-        maxMedianLatencyMs: 120_000,
-        maxTailLatencyMs: 600_000,
-        maxTokenCost: 1_000_000,
-      });
+      const outcome = await harness.run(
+        { testCount: 0 },
+        {
+          // 임계는 실제로 막는 값이어야 한다. 무한대는 게이트가 아니다.
+          minSuccessRate,
+          maxMedianLatencyMs: 120_000,
+          maxTailLatencyMs: 600_000,
+          maxTokenCost: 1_000_000,
+        },
+      );
 
       expect([...outcome.verdicts.map((v) => v.scenarioId)].sort()).toEqual([...declaredIds].sort());
       expect(outcome.summary.runs).toBe(outcome.verdicts.length);
 
-      // 거절된 시나리오가 있으면 이 게이트는 빨간불이어야 한다. 앞서는 "결과가 나왔나"만
-      // 보고 있어서 거절이 섞여 있어도 종료 코드가 0 이었다(2026-08-27 적대리뷰 지적).
+      // 완료 주장 모드. 유예가 하나라도 있으면 완료라고 말할 수 없다 —
+      // "전부 다"와 "유예 하나 빼고 다"는 다른 말인데 앞서 그 둘을 같이 썼다
+      // (2026-08-27 적대리뷰 지적).
+      if (COMPLETION) {
+        expect(Object.keys(DEFERRED_SCENARIOS), "유예가 남아 있으면 완료가 아니다").toEqual([]);
+        expect(outcome.verdicts.filter((v) => !v.accepted).map((v) => v.scenarioId)).toEqual([]);
+        expect(outcome.summary.successRate).toBe(1);
+        expect(outcome.accepted).toBe(true);
+      }
+
       // 유예로 이름을 걸어 둔 것 말고 거절이 있으면 빨간불이다.
       const unexpected = outcome.verdicts
         .filter((v) => !v.accepted)
@@ -94,12 +126,25 @@ describe("에이전트 벤치 실제 실행", () => {
         revision,
       );
 
-      // 다음 실행의 기준선을 남긴다 — 줄어들면 다음 번에 잡힌다.
-      const observedTests = outcome.verdicts.length > 0 ? totalTests(outcome) : 0;
+      // 안전 관측이 실제로 무언가를 봤는지. 전부 비어 있기만 하면 관측이 죽어 있는 것과
+      // 구별되지 않으므로, 잔재 감사가 돌았다는 사실 자체를 여기서 확인한다.
+      expect(outcome.summary.totalInterventions).toBe(0);
+
+      // 시나리오별 축소 판정. 기준선보다 줄어든 것이 있으면 빨간불이다.
+      const shrunk = Object.entries(floor)
+        .filter(([id, before]) => (executed[id] ?? 0) < before)
+        .map(([id, before]) => `${id}: ${before} → ${executed[id] ?? 0}`);
+      expect(shrunk, "시나리오가 확인하는 테스트 수가 줄었다").toEqual([]);
+
+      // 다음 실행의 기준선을 남긴다. 줄어든 값으로 덮어쓰지 않는다.
+      const nextFloor: Record<string, number> = { ...floor };
+      for (const [id, count] of Object.entries(executed)) {
+        nextFloor[id] = Math.max(floor[id] ?? 0, count);
+      }
       mkdirSync(dirname(baselinePath), { recursive: true });
       writeFileSync(
         baselinePath,
-        `${JSON.stringify({ testCount: Math.max(baseline.testCount, observedTests), revision }, null, 2)}\n`,
+        `${JSON.stringify({ perScenario: nextFloor, revision }, null, 2)}\n`,
         "utf8",
       );
     },

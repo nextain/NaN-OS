@@ -54,11 +54,19 @@ beforeAll(() => {
 
 afterAll(() => {
   if (workspaceId) {
+    let closeError = "";
     try {
       herdr(["workspace", "close", workspaceId]);
-    } catch {
-      // 이미 닫혔으면 그만이다.
+    } catch (e) {
+      closeError = e instanceof Error ? e.message : String(e);
     }
+    let stillThere = false;
+    try {
+      stillThere = herdr(["workspace", "list"]).includes(NONCE);
+    } catch {
+      stillThere = false;
+    }
+    if (stillThere) throw new Error(`테스트 워크스페이스가 남았다: ${NONCE} ${closeError}`);
   }
 }, 60_000);
 

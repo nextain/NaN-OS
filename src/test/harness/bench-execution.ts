@@ -10,8 +10,9 @@
 //   3) 완료 주장은 실행부가 만들지 않는다. `docs/requirements.md` 가 Done 이라고 적은 것을
 //      주장으로 읽는다 — 문서가 완료를 말하고 벤치가 증거를 요구하는 구조라야
 //      거짓 완료 탐지가 의미를 갖는다.
-import { spawn } from "node:child_process";
+import { execFileSync, spawn } from "node:child_process";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 import type {
   BenchScenario,
@@ -58,6 +59,15 @@ export interface VerificationStep {
    * 여기 적힌 이름이 통과 목록에 없으면 영수증을 만들지 않는다.
    */
   readonly cases?: readonly string[];
+  /**
+   * 이 중 *하나라도* 통과 목록에 있으면 이 단계가 시나리오를 밟은 것으로 본다.
+   *
+   * 문서가 선언한 확인 수단에는 손으로 케이스 이름을 붙이지 않는다 — 그러면 작성자가
+   * 관리하는 매핑이 하나 더 늘 뿐이다(2026-08-27 적대리뷰 지적). 대신 요구사항 문서가
+   * 그 시나리오에 걸어 둔 FR 식별자를 쓴다. 테스트가 자기 이름에 FR 을 달고 있으므로
+   * 그 FR 을 확인하는 테스트가 실제로 돌았는지 기계적으로 확인할 수 있다.
+   */
+  readonly anyCases?: readonly string[];
 }
 
 /**
@@ -187,6 +197,7 @@ function stepForPath(spec: string, why: string, cwd: string): VerificationStep |
  */
 export function deriveVerification(
   markdown: string,
+  requirementIds: Readonly<Record<string, readonly string[]>>,
   /** 이 에픽이 소유한 시나리오만 받는다. 문서는 여러 슬라이스가 공유한다. */
   ownedScenarios: ReadonlySet<string>,
   /** 저장소 루트 기준으로 파일이 실제 있는지. 없는 경로는 문서 부패이므로 따로 모은다. */
@@ -207,8 +218,11 @@ export function deriveVerification(
           missing.push(`${uc} → ${spec}`);
           continue;
         }
-        const step = stepForPath(located.spec, `문서 Test Coverage Map 이 ${uc} 의 확인 수단으로 선언한 것`, located.cwd);
-        if (!step) continue;
+        const base = stepForPath(located.spec, `문서 Test Coverage Map 이 ${uc} 의 확인 수단으로 선언한 것`, located.cwd);
+        if (!base) continue;
+        // e2e 스펙 제목은 FR 이 아니라 UC 를 다는 관행이라 둘 다 선택자로 둔다.
+        const ids = [...(requirementIds[uc] ?? []), uc];
+        const step: VerificationStep = { ...base, anyCases: ids };
         const bucket = (steps[uc] ??= []);
         // 같은 파일이 서로 다른 등급의 증거를 낼 수 있다(실제 작업자 + 실제 디스크).
         // 경로만으로 묶으면 둘 중 하나가 조용히 사라진다.
@@ -218,6 +232,24 @@ export function deriveVerification(
     }
   }
   return { steps, missing };
+}
+
+/**
+ * 요구사항 문서에서 시나리오별 FR 식별자를 뽑는다.
+ * 행의 어딘가에 UC 가 적혀 있으면 그 행의 FR/NFR 식별자가 그 시나리오의 것이다.
+ */
+export function requirementIdsByScenario(requirementsMarkdown: string): Record<string, string[]> {
+  const out: Record<string, string[]> = {};
+  for (const line of requirementsMarkdown.split("\n")) {
+    if (!line.startsWith("|")) continue;
+    const ids = [...line.matchAll(/\b((?:FR|NFR)-[A-Z0-9-]+\.[0-9]+)\b/g)].map((m) => m[1] as string);
+    if (ids.length === 0) continue;
+    for (const uc of [...new Set([...line.matchAll(/\b(UC-[A-Z0-9-]+)\b/g)].map((m) => m[1] as string))]) {
+      const bucket = (out[uc] ??= []);
+      for (const id of ids) if (!bucket.includes(id)) bucket.push(id);
+    }
+  }
+  return out;
 }
 
 /** 저장소 루트와 packages/shell 두 곳을 훑어 실제 파일을 찾는다. */
@@ -275,7 +307,11 @@ export const EXTRA_VERIFICATION: Readonly<Record<string, readonly VerificationSt
     ),
   ],
   "UC-ENV-TOOL-CANCEL": [
-    LIVE_HERDR("src/test/env-tool-live.contract.test.ts", "터미널 쪽: 진행 중인 작업이 실제로 멈추고 취소가 실패와 구별되는지"),
+    LIVE_HERDR(
+      "src/test/env-tool-live.contract.test.ts",
+      "터미널 쪽: 진행 중인 작업이 실제로 멈추고 취소가 실패와 구별되는지",
+      ["취소하면 진행 중인 작업이 실제로 멈춘다"],
+    ),
     PLAYWRIGHT("e2e/env-tool-browser.spec.ts", "브라우저 쪽: 중단 신호가 실제로 나가는지",
       ["멈추라고 하면 중단 요청이 실제로 나간다"],
     ),
@@ -396,8 +432,9 @@ export function buildVerification(
   markdown: string,
   ownedScenarios: ReadonlySet<string>,
   repoRoot: string,
+  requirementIds: Readonly<Record<string, readonly string[]>> = {},
 ): Readonly<Record<string, readonly VerificationStep[]>> {
-  const merged = deriveVerification(markdown, ownedScenarios, specResolver(repoRoot)).steps;
+  const merged = deriveVerification(markdown, requirementIds, ownedScenarios, specResolver(repoRoot)).steps;
   for (const [uc, steps] of Object.entries(EXTRA_VERIFICATION)) {
     const bucket = (merged[uc] ??= []);
     for (const step of steps) {
@@ -413,15 +450,21 @@ const DOC_PATH = resolve(REPO_ROOT, "docs", "user-scenarios.md");
 const DOC_MARKDOWN = readFileSync(DOC_PATH, "utf8");
 
 /** 이 저장소의 실제 문서로 만든 목록. */
+const REQUIREMENT_IDS = requirementIdsByScenario(
+  readFileSync(resolve(REPO_ROOT, "docs", "requirements.md"), "utf8"),
+);
+
 export const VERIFICATION: Readonly<Record<string, readonly VerificationStep[]>> = buildVerification(
   DOC_MARKDOWN,
   new Set(parseScenarios(DOC_MARKDOWN).map((x) => x.id)),
   REPO_ROOT,
+  REQUIREMENT_IDS,
 );
 
 /** 문서가 선언했는데 실제로 없는 파일. 문서 부패를 조용히 넘기지 않기 위해 노출한다. */
 export const MISSING_SPECS: readonly string[] = deriveVerification(
   DOC_MARKDOWN,
+  REQUIREMENT_IDS,
   new Set(parseScenarios(DOC_MARKDOWN).map((x) => x.id)),
   specResolver(REPO_ROOT),
 ).missing;
@@ -538,7 +581,23 @@ export class CommandBenchExecution implements BenchExecutionPort {
         artifacts.push(`${label} → 통과한 테스트를 읽지 못해 증거로 세지 않음`);
         continue;
       }
-      if (step.cases && step.cases.length > 0) {
+      if (step.anyCases && step.anyCases.length > 0) {
+        const hit = step.anyCases.some((c) => [...passed].some((n) => n.includes(c)));
+        if (!hit) {
+          artifacts.push(`${label} → 이 시나리오의 요구사항을 확인하는 케이스가 돌지 않음: ${step.anyCases.join(" / ")}`);
+          continue;
+        }
+        receipts.push({ scenarioId: scenario.id, kind: step.kind, ref: label });
+        completionEvidence.push(`${label} — ${step.why}`);
+        continue;
+      }
+      if (!step.cases || step.cases.length === 0) {
+        // 케이스 선택자가 없으면 그 파일의 무관한 테스트가 통과해도 시나리오가 증명된 것으로
+        // 셈된다 — 조건부로 두면 대부분의 단계가 그 구멍으로 빠진다(2026-08-27 적대리뷰 지적).
+        artifacts.push(`${label} → 케이스 선택자가 없어 증거로 세지 않음`);
+        continue;
+      }
+      {
         const missing = step.cases.filter((c) => ![...passed].some((n) => n.includes(c)));
         if (missing.length > 0) {
           // 파일은 통과했지만 이 시나리오를 증명하는 케이스가 돌지 않았다.
@@ -550,7 +609,13 @@ export class CommandBenchExecution implements BenchExecutionPort {
       completionEvidence.push(`${label} — ${step.why}`);
     }
 
-    const safety: SafetyObservation = { leakedProjects: [], unauthorizedEffects };
+    // 안전 관측을 상수로 두면 자기충족이다 — 아무것도 안 보고 "깨끗하다"고 말하게 된다
+    // (2026-08-27 적대리뷰 지적). 실행 뒤 실제 잔재를 훑어 채운다.
+    const residue = auditResidue(this.deps.repoRoot);
+    const safety: SafetyObservation = {
+      leakedProjects: residue.leakedProjects,
+      unauthorizedEffects: [...unauthorizedEffects, ...residue.unauthorizedEffects],
+    };
     const trace: TraceRecord = {
       intent: scenario.uc,
       contextRevision: this.deps.contextRevision,
@@ -594,6 +659,47 @@ export const nodeCommandRunner: CommandRunnerPort = {
     });
   },
 };
+
+/**
+ * 실행이 남긴 잔재를 실제로 훑는다.
+ *
+ * 여기서 보는 것은 이 벤치가 만들 수 있는 흔적이다 — 테스트가 만든 Herdr 워크스페이스와
+ * 임시 디렉터리. 하나라도 남아 있으면 "아무 일 없었다"가 아니다.
+ */
+export function auditResidue(repoRoot: string): {
+  readonly leakedProjects: readonly string[];
+  readonly unauthorizedEffects: readonly string[];
+} {
+  const PREFIXES = ["naia-act-", "naia-ctl-", "naia-envtool-", "naia-bench-", "naia-orch-", "naia-timing"];
+  const effects: string[] = [];
+  // 살아 있는 Herdr 에 테스트 워크스페이스가 남았는가.
+  try {
+    const listed = execFileSync("herdr", ["workspace", "list"], { encoding: "utf8", timeout: 20_000 });
+    for (const p of PREFIXES) {
+      if (listed.includes(p)) effects.push(`herdr 워크스페이스 잔재: ${p}`);
+    }
+  } catch {
+    // Herdr 이 없으면 이 축은 관측할 수 없다 — 없는 것을 깨끗하다고 하지 않고 그냥 안 적는다.
+  }
+  // 임시 디렉터리 잔재.
+  try {
+    for (const entry of readdirSync(tmpdir())) {
+      if (PREFIXES.some((p) => entry.startsWith(p))) effects.push(`임시 디렉터리 잔재: ${entry}`);
+    }
+  } catch {
+    // 훑을 수 없으면 적지 않는다.
+  }
+  // 저장소 밖 프로젝트 정보가 벤치 산출물에 섞였는가.
+  const leaked: string[] = [];
+  const reportPath = resolve(repoRoot, "benchmark", "agent-bench-report.md");
+  if (existsSync(reportPath)) {
+    const body = readFileSync(reportPath, "utf8");
+    for (const other of ["onmam", "naia-memory", "data-private"]) {
+      if (body.includes(other)) leaked.push(other);
+    }
+  }
+  return { leakedProjects: leaked, unauthorizedEffects: effects };
+}
 
 export function readRequirements(repoRoot: string): string {
   return readFileSync(resolve(repoRoot, "docs", "requirements.md"), "utf8");
