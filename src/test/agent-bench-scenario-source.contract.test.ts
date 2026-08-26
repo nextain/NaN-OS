@@ -7,7 +7,7 @@ import { readFileSync } from "node:fs";
 
 const DOC = resolve(__dirname, "..", "..", "docs", "user-scenarios.md");
 
-describe("문서 파싱 (NFR-AGENT-BENCH.2)", () => {
+describe("문서 파싱 (NFR-AGENT-BENCH.2) [UC-AGENT-BENCH-RUN]", () => {
   it("에픽 UC 제목만 시나리오가 된다", () => {
     const md = ["### UC-WORKSPACE-CONTEXT-DISCOVER — 설명", "### UC-V022-THINKING-SEPARATION", "### 그냥 제목"].join("\n");
     expect(parseScenarios(md).map((s) => s.id)).toEqual(["UC-WORKSPACE-CONTEXT-DISCOVER"]);

@@ -9,7 +9,7 @@ import { assignment, brief, fakeWorkers } from "./helpers/orchestration-fixture.
 const PORT_SOURCE = readFileSync(resolve(__dirname, "..", "main", "ports", "orchestration.ts"), "utf8");
 const PROVIDERS: readonly WorkerProvider[] = ["codex", "claude", "opencode", "shell"];
 
-describe("어댑터 표면 (FR-ORCHESTRATION.8)", () => {
+describe("어댑터 표면 (FR-ORCHESTRATION.8) [UC-ORCHESTRATION-WORKER-REPLACE]", () => {
   it("어댑터는 시작·관측·중단·수집만 노출한다 — 제공자별 특수 진입점이 없다", () => {
     const methods = [...PORT_SOURCE.matchAll(/^\s{2}(\w+)\(/gm)].map((m) => m[1]);
     expect(new Set(methods)).toEqual(new Set(["ensureIssue", "bind", "list", "start", "observe", "interrupt", "collect"]));

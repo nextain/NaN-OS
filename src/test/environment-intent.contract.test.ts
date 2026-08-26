@@ -23,7 +23,7 @@ function raw(token: string, over: Partial<RawSurface> = {}): RawSurface {
   return { token, label: `표면 ${token}`, status: "idle", focused: false, ...over };
 }
 
-describe("뇌는 환경 어휘를 보지 않는다", () => {
+describe("뇌는 환경 어휘를 보지 않는다 [UC-ENV-SURFACE-DATA UC-ENV-SURFACE-DENY UC-ENV-SURFACE-OBSERVE]", () => {
   // 주석에는 설명을 위해 나올 수 있으므로 블록·줄 주석을 걷어낸 선언만 본다.
   const declarations = SOURCE.replace(/\/\*[\s\S]*?\*\//g, "")
     .split("\n")

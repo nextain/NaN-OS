@@ -10,7 +10,7 @@ function service() {
   return { svc: new EnvironmentToolService(browser, fakeTerminal(), fakeCancellation(), ["observe", "workspace-write"]), browser };
 }
 
-describe("종료 사유 구별 (FR-ENV-TOOL.9)", () => {
+describe("종료 사유 구별 (FR-ENV-TOOL.9) [UC-ENV-TOOL-CANCEL]", () => {
   it("정상 종료만 완료다", () => {
     expect(terminate("finished", []).state).toBe("completed");
   });

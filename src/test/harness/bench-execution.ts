@@ -11,9 +11,9 @@
 //      주장으로 읽는다 — 문서가 완료를 말하고 벤치가 증거를 요구하는 구조라야
 //      거짓 완료 탐지가 의미를 갖는다.
 import { execFileSync, spawn } from "node:child_process";
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { resolve } from "node:path";
+import { dirname, resolve } from "node:path";
 import type {
   BenchScenario,
   CompletionClaim,
@@ -542,7 +542,30 @@ export interface BenchExecutionDeps {
 export class CommandBenchExecution implements BenchExecutionPort {
   constructor(private readonly deps: BenchExecutionDeps) {}
 
+  /**
+   * 실환경 등급(native·worker)은 그 실행이 실제로 무엇을 만졌는지 증명서를 남겨야 한다.
+   * 경로 허용목록만으로 등급을 주면 벤치가 자기 설정을 검증하는 셈이다.
+   */
+  private attested(step: VerificationStep, since: number, artifacts: string[], label: string): boolean {
+    if (step.kind !== "native" && step.kind !== "worker") return true;
+    // 증명서 이름은 저장소 기준 경로로 맞춘다. 쓰는 쪽(packages/shell/...)과 읽는 쪽
+    // (e2e-tauri/...)이 다른 키를 만들면 증명서가 있는데도 없다고 읽는다(2026-08-27 실측).
+    const raw = String(step.args[step.args.length - 1] ?? "");
+    const spec = step.cwd === "." ? raw : `${step.cwd}/${raw}`;
+    const att = readFreshAttestation(this.deps.repoRoot, spec, since);
+    if (!att) {
+      artifacts.push(`${label} → 실환경 관측 증명서가 없다(등급 ${step.kind})`);
+      return false;
+    }
+    if (!att.kinds.includes(step.kind)) {
+      artifacts.push(`${label} → 증명서에 없는 등급: 선언 ${step.kind} vs 관측 ${att.kinds.join("+")}`);
+      return false;
+    }
+    return true;
+  }
+
   async run(scenario: BenchScenario): Promise<ScenarioRun> {
+    const startedAt = Date.now();
     const steps = (this.deps.verification ?? VERIFICATION)[scenario.id] ?? [];
     const receipts: EvidenceReceipt[] = [];
     const operations: string[] = [];
@@ -550,6 +573,8 @@ export class CommandBenchExecution implements BenchExecutionPort {
     const tests: string[] = [];
     const completionEvidence: string[] = [];
     const unauthorizedEffects: string[] = [];
+    const allPassed = new Set<string>();
+    const scenarioRequirements = new Set<string>();
     let latencyMs = 0;
     let testCount = 0;
 
@@ -574,6 +599,12 @@ export class CommandBenchExecution implements BenchExecutionPort {
       if (result.code !== 0) continue; // 실패는 영수증을 만들지 않는다.
 
       const passed = parsePassedCases(result.stdout);
+      for (const n of passed) allPassed.add(n);
+      // 시나리오가 선언한 요구사항은 단계마다 다르지 않다 — 합집합으로 모은다.
+      // 마지막 단계의 것만 쓰면 그 파일이 이름에 달지 않은 FR 때문에 시나리오 전체가 무너진다.
+      for (const c of step.anyCases ?? []) {
+        if (c.startsWith("FR-") || c.startsWith("NFR-")) scenarioRequirements.add(c);
+      }
       const parsedCount = parseTestCount(result.stdout);
       if (parsedCount === 0) {
         // 종료 코드 0 은 "실행기가 떴다"는 뜻이다. 통과한 테스트를 하나도 못 읽었으면
@@ -582,11 +613,16 @@ export class CommandBenchExecution implements BenchExecutionPort {
         continue;
       }
       if (step.anyCases && step.anyCases.length > 0) {
+        // 이 단계가 시나리오의 어느 조각이라도 확인했는지. 선언된 FR 을 *전부* 확인했는지는
+        // 시나리오 단위로 아래에서 본다 — 한 파일이 그 시나리오의 모든 FR 을 이름에 달 이유가
+        // 없기 때문이다(2026-08-27 3차 적대리뷰 지적의 적용 단위 교정).
         const hit = step.anyCases.some((c) => [...passed].some((n) => n.includes(c)));
         if (!hit) {
-          artifacts.push(`${label} → 이 시나리오의 요구사항을 확인하는 케이스가 돌지 않음: ${step.anyCases.join(" / ")}`);
+          artifacts.push(`${label} → 이 시나리오를 확인하는 케이스가 돌지 않음: ${step.anyCases.join(" / ")}`);
           continue;
         }
+        for (const n of passed) allPassed.add(n);
+        if (!this.attested(step, startedAt, artifacts, label)) continue;
         receipts.push({ scenarioId: scenario.id, kind: step.kind, ref: label });
         completionEvidence.push(`${label} — ${step.why}`);
         continue;
@@ -605,9 +641,22 @@ export class CommandBenchExecution implements BenchExecutionPort {
           continue;
         }
       }
+      if (!this.attested(step, startedAt, artifacts, label)) continue;
       receipts.push({ scenarioId: scenario.id, kind: step.kind, ref: label });
       completionEvidence.push(`${label} — ${step.why}`);
     }
+
+    // 요구사항 추적은 이름으로 한다. 어떤 확인 수단도 자기 제목에 그 FR 을 달지 않았다면
+    // 그것은 "확인이 지워졌다"가 아니라 "추적이 애초에 없다"이다 — 세어서 남기되 증거를
+    // 무르지는 않는다. 둘을 뭉뚱그리면 추적 부재가 검증 실패로 둔갑한다
+    // (2026-08-27 4차: 이 혼동으로 시나리오 절반이 통째로 무너졌다).
+    const untracedRequirements = [...scenarioRequirements].filter(
+      (id) => ![...allPassed].some((n) => n.includes(id)),
+    );
+    if (untracedRequirements.length > 0) {
+      artifacts.push(`이름으로 추적되지 않는 요구사항: ${untracedRequirements.join(" / ")}`);
+    }
+    const finalReceipts = receipts;
 
     // 안전 관측을 상수로 두면 자기충족이다 — 아무것도 안 보고 "깨끗하다"고 말하게 된다
     // (2026-08-27 적대리뷰 지적). 실행 뒤 실제 잔재를 훑어 채운다.
@@ -625,7 +674,7 @@ export class CommandBenchExecution implements BenchExecutionPort {
       completionEvidence,
     };
     return {
-      receipts,
+      receipts: finalReceipts,
       sample: { scenarioId: scenario.id, latencyMs, tokenCost: 0, interventions: 0 },
       safety,
       claim: readClaim(this.deps.requirementsMarkdown, scenario),
@@ -678,16 +727,18 @@ export function auditResidue(repoRoot: string): {
     for (const p of PREFIXES) {
       if (listed.includes(p)) effects.push(`herdr 워크스페이스 잔재: ${p}`);
     }
-  } catch {
-    // Herdr 이 없으면 이 축은 관측할 수 없다 — 없는 것을 깨끗하다고 하지 않고 그냥 안 적는다.
+  } catch (e) {
+    // 확인 불능은 깨끗함이 아니다. 조용히 넘기면 "안 봤다"가 "괜찮다"로 읽힌다
+    // (2026-08-27 3차 적대리뷰 지적).
+    effects.push(`herdr 잔재를 확인하지 못했다: ${e instanceof Error ? e.message : String(e)}`);
   }
   // 임시 디렉터리 잔재.
   try {
     for (const entry of readdirSync(tmpdir())) {
       if (PREFIXES.some((p) => entry.startsWith(p))) effects.push(`임시 디렉터리 잔재: ${entry}`);
     }
-  } catch {
-    // 훑을 수 없으면 적지 않는다.
+  } catch (e) {
+    effects.push(`임시 디렉터리를 훑지 못했다: ${e instanceof Error ? e.message : String(e)}`);
   }
   // 저장소 밖 프로젝트 정보가 벤치 산출물에 섞였는가.
   const leaked: string[] = [];
@@ -699,6 +750,52 @@ export function auditResidue(repoRoot: string): {
     }
   }
   return { leakedProjects: leaked, unauthorizedEffects: effects };
+}
+
+/**
+ * 실환경 단계가 남기는 관측 증명서.
+ *
+ * 등급이 경로 허용목록과 작성자가 적은 kind 로만 정해지면 그것은 설정을 검증하는 것이다
+ * (2026-08-27 3차 적대리뷰 지적). 실제 환경을 밟은 테스트가 자기가 무엇을 만졌는지를
+ * 파일로 남기게 하고, 영수증은 그 증명서가 있어야 발급된다.
+ */
+export interface BoundaryAttestation {
+  readonly spec: string;
+  /** 이 실행이 실제로 밟은 경계들. 한 실행이 실제 프로세스와 실제 디스크를 함께 밟을 수 있다. */
+  readonly kinds: readonly EvidenceKind[];
+  /** 실제로 만진 외부 자원 식별자(pane, 워크스페이스, 프로세스, 경로). */
+  readonly touched: readonly string[];
+  readonly at: number;
+}
+
+export function attestationPath(repoRoot: string, spec: string): string {
+  return resolve(repoRoot, "benchmark", ".attest", `${spec.replace(/[^A-Za-z0-9]+/g, "_")}.json`);
+}
+
+/** 테스트가 부른다. 자기가 실제로 만진 것을 남긴다. */
+export function writeAttestation(repoRoot: string, att: BoundaryAttestation): void {
+  const path = attestationPath(repoRoot, att.spec);
+  mkdirSync(dirname(path), { recursive: true });
+  writeFileSync(path, `${JSON.stringify(att, null, 2)}\n`, "utf8");
+}
+
+/** 이 실행에서 갓 남긴 증명서인가. 오래된 것은 이번 실행의 증거가 아니다. */
+export function readFreshAttestation(
+  repoRoot: string,
+  spec: string,
+  notBefore: number,
+): BoundaryAttestation | null {
+  const path = attestationPath(repoRoot, spec);
+  if (!existsSync(path)) return null;
+  try {
+    const att = JSON.parse(readFileSync(path, "utf8")) as BoundaryAttestation;
+    if (typeof att.at !== "number" || att.at < notBefore) return null;
+    if (!Array.isArray(att.touched) || att.touched.length === 0) return null;
+    if (!Array.isArray(att.kinds) || att.kinds.length === 0) return null;
+    return att;
+  } catch {
+    return null;
+  }
 }
 
 export function readRequirements(repoRoot: string): string {

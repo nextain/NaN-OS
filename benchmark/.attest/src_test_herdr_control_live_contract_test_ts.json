@@ -1,0 +1,11 @@
+{
+  "spec": "src/test/herdr-control-live.contract.test.ts",
+  "kinds": [
+    "native"
+  ],
+  "touched": [
+    "w94",
+    "w94:p1"
+  ],
+  "at": 1787775452310
+}

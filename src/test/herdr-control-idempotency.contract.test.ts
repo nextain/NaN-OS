@@ -13,7 +13,7 @@ function plane(mutate = fakeMutate()) {
   };
 }
 
-describe("멱등 재전송 (FR-HERDR-CONTROL.4)", () => {
+describe("멱등 재전송 (FR-HERDR-CONTROL.4) [UC-HERDR-CONTROL-MUTATE]", () => {
   it("같은 키를 두 번 보내면 한 번만 실행하고 최초 결과를 돌려준다", async () => {
     const { plane: p, mutate } = plane();
     await p.observeNow();

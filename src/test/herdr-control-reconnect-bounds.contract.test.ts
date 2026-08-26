@@ -7,7 +7,7 @@ import { fakeConnection, fakeMutate, fakeObserve, snapshot } from "./helpers/her
 
 const POLICY = { maxAttempts: 3, baseDelayMs: 10, maxDelayMs: 40 };
 
-describe("재접속 상한 (FR-HERDR-CONTROL.9)", () => {
+describe("재접속 상한 (FR-HERDR-CONTROL.9) [UC-HERDR-CONTROL-RECONNECT]", () => {
   it("상한 안에서만 다시 시도한다", () => {
     expect(shouldRetry(0, POLICY)).toBe(true);
     expect(shouldRetry(2, POLICY)).toBe(true);

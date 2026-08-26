@@ -8,7 +8,7 @@ import { fakeSource, rootDeclaration, doc, ROOT } from "./helpers/workspace-cont
 
 const LIMITS = { maxDocuments: 10, maxBytes: 10_000 };
 
-describe("루트 발견 (FR-WORKSPACE-CONTEXT.1)", () => {
+describe("루트 발견 (FR-WORKSPACE-CONTEXT.1) [UC-WORKSPACE-CONTEXT-DISCOVER]", () => {
   it("진입점이 필수로 선언한 문서를 싣는다", async () => {
     const svc = new WorkspaceContextService(fakeSource(), LIMITS);
     const out = await svc.discover(ROOT, { topics: [] });

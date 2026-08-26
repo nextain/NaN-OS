@@ -8,7 +8,7 @@ import { event, fakeConnection, fakeMutate, fakeObserve, request, snapshot } fro
 const POLICY = { maxAttempts: 3, baseDelayMs: 10, maxDelayMs: 100 };
 const GRANTED = ["observe", "workspace-write"] as const;
 
-describe("기대 개정 (FR-HERDR-CONTROL.7)", () => {
+describe("기대 개정 (FR-HERDR-CONTROL.7) [UC-HERDR-CONTROL-STALE-REVISION]", () => {
   it("일치하면 통과한다", () => {
     expect(admit(request({ expectedRevision: { value: 4 } }), { currentRevision: { value: 4 }, grantedTiers: [...GRANTED] })).toEqual([]);
   });

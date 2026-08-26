@@ -1,3 +1,6 @@
+import { mkdirSync, writeFileSync as writeFileSyncNode } from "node:fs";
+import { dirname as dirnameOf, resolve as resolvePath } from "node:path";
+
 // #503 UC-CHANNEL-SESSION-RECONNECT — 재부팅 이후 채널 태도 (P04, native).
 //
 // 문서 Test Coverage Map 이 이 파일을 확인 수단으로 선언해 두었으나 실제로는 없었다
@@ -55,7 +58,31 @@ const PROBES: Probe[] = [
 
 let results: Record<string, InvokeResult> = {};
 
-describe("채널 재연결 이후 태도 — 영속 경계 (#503)", () => {
+
+/**
+ * 실환경 관측 증명서. 벤치는 이 파일이 있어야 native 영수증을 준다 —
+ * 등급이 경로 허용목록으로만 정해지면 그것은 설정을 검증하는 것이다(2026-08-27 적대리뷰).
+ * wdio 스펙은 코어를 import 하지 않으므로 같은 형식을 여기서 직접 쓴다.
+ */
+function writeAttestationSync(touched: readonly string[]): void {
+	const root = resolvePath(import.meta.dirname, "..", "..", "..", "..");
+	const file = resolvePath(
+		root,
+		"benchmark",
+		".attest",
+		`${SPEC_ID.replace(/[^A-Za-z0-9]+/g, "_")}.json`,
+	);
+	mkdirSync(dirnameOf(file), { recursive: true });
+	writeFileSyncNode(
+		file,
+		`${JSON.stringify({ spec: SPEC_ID, kinds: ["native"], touched, at: Date.now() }, null, 2)}\n`,
+		"utf8",
+	);
+}
+
+const SPEC_ID = "packages/shell/e2e-tauri/specs/channel-reboot.spec.ts";
+
+describe("채널 재연결 이후 태도 — 영속 경계 (#503) [UC-CHANNEL-SESSION-RECONNECT]", () => {
 	before(async () => {
 		await browser.waitUntil(
 			async () => {
@@ -191,5 +218,10 @@ describe("채널 재연결 이후 태도 — 영속 경계 (#503)", () => {
 		}
 		// 대화 응답과 진행 알림이 종류로 구분된다.
 		expect([...new Set(outbox.map((m) => m.kind))].every((k) => k === "reply" || k === "progress")).toBe(true);
+	});
+
+	after(() => {
+		// 이 실행이 실제 Rust 백엔드를 밟았다는 증명서를 남긴다.
+		writeAttestationSync([SPEC_ID, `pid:${process.pid}`]);
 	});
 });

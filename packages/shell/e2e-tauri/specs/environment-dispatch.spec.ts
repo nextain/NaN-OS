@@ -1,3 +1,6 @@
+import { mkdirSync, writeFileSync as writeFileSyncNode } from "node:fs";
+import { dirname as dirnameOf, resolve as resolvePath } from "node:path";
+
 // #502 슬라이스 1 전달 — 실 Tauri 백엔드 검증 (P04, FR-ENV-DISPATCH.1·4·5·7).
 //
 // 여기서 확인하는 것은 UI 가 아니라 **Rust 명령 경계**다. 새로 연 두 명령이 실제로 등록됐는지,
@@ -47,7 +50,31 @@ function looksUnregistered(error: string): boolean {
 
 let results: Record<string, InvokeResult> = {};
 
-describe("환경 호출 전달 — Rust 명령 경계 (#502)", () => {
+
+/**
+ * 실환경 관측 증명서. 벤치는 이 파일이 있어야 native 영수증을 준다 —
+ * 등급이 경로 허용목록으로만 정해지면 그것은 설정을 검증하는 것이다(2026-08-27 적대리뷰).
+ * wdio 스펙은 코어를 import 하지 않으므로 같은 형식을 여기서 직접 쓴다.
+ */
+function writeAttestationSync(touched: readonly string[]): void {
+	const root = resolvePath(import.meta.dirname, "..", "..", "..", "..");
+	const file = resolvePath(
+		root,
+		"benchmark",
+		".attest",
+		`${SPEC_ID.replace(/[^A-Za-z0-9]+/g, "_")}.json`,
+	);
+	mkdirSync(dirnameOf(file), { recursive: true });
+	writeFileSyncNode(
+		file,
+		`${JSON.stringify({ spec: SPEC_ID, kinds: ["native"], touched, at: Date.now() }, null, 2)}\n`,
+		"utf8",
+	);
+}
+
+const SPEC_ID = "packages/shell/e2e-tauri/specs/environment-dispatch.spec.ts";
+
+describe("환경 호출 전달 — Rust 명령 경계 (#502) [UC-ENV-LIVE-ACT]", () => {
 	before(async () => {
 		// 앱이 창을 여럿 열면 wdio 컨텍스트가 빈 쪽에 붙어 있을 수 있다.
 		// 그 상태에서는 origin 이 null 이라 Tauri IPC 가 전부 거절한다(2026-08-26 실측).
@@ -184,5 +211,10 @@ describe("환경 호출 전달 — Rust 명령 경계 (#502)", () => {
 			expect(r?.ok).toBe(false);
 			expect(looksUnregistered(r?.error ?? "")).toBe(true);
 		});
+	});
+
+	after(() => {
+		// 이 실행이 실제 Rust 백엔드를 밟았다는 증명서를 남긴다.
+		writeAttestationSync([SPEC_ID, `pid:${process.pid}`]);
 	});
 });

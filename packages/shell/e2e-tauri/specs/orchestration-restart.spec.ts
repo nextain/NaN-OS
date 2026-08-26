@@ -1,3 +1,6 @@
+import { mkdirSync, writeFileSync as writeFileSyncNode } from "node:fs";
+import { dirname as dirnameOf, resolve as resolvePath } from "node:path";
+
 // #500 UC-ORCHESTRATION-RESTART-RESUME — 재시작 이후 태도 (P04, native).
 //
 // 문서 Test Coverage Map 이 이 파일을 확인 수단으로 선언해 두었으나 실제로는 없었다
@@ -45,7 +48,31 @@ const PROBES: Probe[] = [
 
 let results: Record<string, InvokeResult> = {};
 
-describe("재시작 이후 이어가기 — 영속 경계 (#500)", () => {
+
+/**
+ * 실환경 관측 증명서. 벤치는 이 파일이 있어야 native 영수증을 준다 —
+ * 등급이 경로 허용목록으로만 정해지면 그것은 설정을 검증하는 것이다(2026-08-27 적대리뷰).
+ * wdio 스펙은 코어를 import 하지 않으므로 같은 형식을 여기서 직접 쓴다.
+ */
+function writeAttestationSync(touched: readonly string[]): void {
+	const root = resolvePath(import.meta.dirname, "..", "..", "..", "..");
+	const file = resolvePath(
+		root,
+		"benchmark",
+		".attest",
+		`${SPEC_ID.replace(/[^A-Za-z0-9]+/g, "_")}.json`,
+	);
+	mkdirSync(dirnameOf(file), { recursive: true });
+	writeFileSyncNode(
+		file,
+		`${JSON.stringify({ spec: SPEC_ID, kinds: ["native"], touched, at: Date.now() }, null, 2)}\n`,
+		"utf8",
+	);
+}
+
+const SPEC_ID = "packages/shell/e2e-tauri/specs/orchestration-restart.spec.ts";
+
+describe("재시작 이후 이어가기 — 영속 경계 (#500) [UC-ORCHESTRATION-RESTART-RESUME]", () => {
 	before(async () => {
 		await browser.waitUntil(
 			async () => {
@@ -124,5 +151,10 @@ describe("재시작 이후 이어가기 — 영속 경계 (#500)", () => {
 		if (parsed.orchestrationResume === undefined) throw new Error("참조가 없다 — unresumable 이어야 한다");
 		if (parsed.resyncedAt !== undefined) throw new Error("재동기화 증거가 없는데 남아 있다");
 		expect(parsed.resyncedAt).toBeUndefined();
+	});
+
+	after(() => {
+		// 이 실행이 실제 Rust 백엔드를 밟았다는 증명서를 남긴다.
+		writeAttestationSync([SPEC_ID, `pid:${process.pid}`]);
 	});
 });

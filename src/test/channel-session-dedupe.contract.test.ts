@@ -5,7 +5,7 @@ import { ChannelSessionService } from "../main/app/control/channel-session.js";
 import { emptyLedger, judgeDelivery, recordDelivery } from "../main/domain/channel-session.js";
 import { fakeMembership, fakeRegistry, fakeTransport, identity, inbound } from "./helpers/channel-session-fixture.js";
 
-describe("중복 판정 (FR-CHANNEL-SESSION.6)", () => {
+describe("중복 판정 (FR-CHANNEL-SESSION.6) [UC-CHANNEL-SESSION-DUPLICATE-DELIVERY]", () => {
   it("처음 보는 전달은 받는다", () => {
     expect(judgeDelivery(emptyLedger(), inbound())).toEqual({ kind: "accept" });
   });

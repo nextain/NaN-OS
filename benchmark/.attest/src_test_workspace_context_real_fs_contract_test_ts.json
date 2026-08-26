@@ -1,0 +1,10 @@
+{
+  "spec": "src/test/workspace-context-real-fs.contract.test.ts",
+  "kinds": [
+    "native"
+  ],
+  "touched": [
+    "/tmp/naia-bench-gzIA9Z"
+  ],
+  "at": 1787775451781
+}

@@ -36,7 +36,7 @@ async function exists(p: string): Promise<boolean> {
   }
 }
 
-describe("임시 워크스페이스 픽스처 (NFR-AGENT-BENCH.2)", () => {
+describe("임시 워크스페이스 픽스처 (NFR-AGENT-BENCH.2) [UC-AGENT-BENCH-RUN]", () => {
   it("루트 진입점과 필수 인덱스, 중첩 프로젝트 진입점을 모두 만든다", async () => {
     const fx = await new TempWorkspaceFixtureAdapter(await base()).create(SPEC);
     try {

@@ -3,7 +3,7 @@
 import { describe, it, expect } from "vitest";
 import { bindIssue, classify, overrideClassification } from "../main/domain/orchestration.js";
 
-describe("작업 분류 (FR-ORCHESTRATION.1)", () => {
+describe("작업 분류 (FR-ORCHESTRATION.1) [UC-ORCHESTRATION-CLASSIFY]", () => {
   it("아무 신호도 없으면 대화로 끝낸다 — 사소한 질문에 이슈를 만들지 않는다", () => {
     const c = classify({ mutatesRepository: false, multiStep: false, needsVerification: false });
     expect(c.taskClass).toBe("conversational");

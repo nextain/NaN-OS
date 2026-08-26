@@ -18,7 +18,7 @@ const registry: SurfaceRegistry = mintRegistry([
   { surfaceId: "w1:p2" },
 ]);
 
-describe("관측 의도", () => {
+describe("관측 의도 [UC-ENV-SURFACE-ACT]", () => {
   it("표면 손잡이 없이도 번역된다", () => {
     const out = translate({ kind: "observe" }, new Map());
     expect(out.ok).toBe(true);

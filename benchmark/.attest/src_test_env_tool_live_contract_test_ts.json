@@ -1,0 +1,11 @@
+{
+  "spec": "src/test/env-tool-live.contract.test.ts",
+  "kinds": [
+    "native"
+  ],
+  "touched": [
+    "w95",
+    "w95:p1"
+  ],
+  "at": 1787775483770
+}

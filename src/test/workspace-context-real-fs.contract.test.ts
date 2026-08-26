@@ -6,6 +6,8 @@
 //
 // ⚠️ 임시 디렉터리만 만들고 끝나면 지운다. 픽스처는 자기 루트 밖을 지우지 못한다.
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { writeAttestation } from "./harness/bench-execution.js";
+import { resolve as resolvePath } from "node:path";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { WorkspaceContextService } from "../main/app/control/workspace-context.js";
@@ -43,7 +45,14 @@ describe("실제 디스크 위의 컨텍스트 해석 (native)", () => {
   it("픽스처가 실제로 만들어졌다 — 없으면 이 증거는 성립하지 않는다", () => {
     expect(root.length).toBeGreaterThan(0);
     expect(readFileSync(resolve(root, "AGENTS.md"), "utf8").length).toBeGreaterThan(0);
+    // 이 실행이 실제로 무엇을 만졌는지 남긴다.
+  writeAttestation(resolvePath(__dirname, "..", ".."), {
+    spec: "src/test/workspace-context-real-fs.contract.test.ts",
+    kinds: ["native"],
+    touched: [root].filter(Boolean),
+    at: Date.now(),
   });
+});
 
   it("진입점이 선언한 문서를 실제 파일에서 읽는다 (UC-WORKSPACE-CONTEXT-DISCOVER)", async () => {
     const out = await service().discover(canonicalRoot(root), { topics: [] });

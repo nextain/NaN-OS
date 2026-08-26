@@ -29,7 +29,7 @@ function withProjects() {
   });
 }
 
-describe("프로젝트 선언 병합 (FR-WORKSPACE-CONTEXT.3)", () => {
+describe("프로젝트 선언 병합 (FR-WORKSPACE-CONTEXT.3) [UC-WORKSPACE-CONTEXT-ENTER-PROJECT]", () => {
   it("같은 주제를 다루면 프로젝트 문서가 루트 문서를 대신한다", () => {
     const project = DECL.projects.find((p) => p.name === "beta");
     expect(project).toBeDefined();

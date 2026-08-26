@@ -1,0 +1,11 @@
+{
+  "spec": "src/test/environment-live-act.contract.test.ts",
+  "kinds": [
+    "native"
+  ],
+  "touched": [
+    "w93",
+    "w93:p1"
+  ],
+  "at": 1787775453360
+}

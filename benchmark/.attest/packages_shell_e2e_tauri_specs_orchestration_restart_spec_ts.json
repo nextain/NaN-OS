@@ -1,0 +1,11 @@
+{
+  "spec": "packages/shell/e2e-tauri/specs/orchestration-restart.spec.ts",
+  "kinds": [
+    "native"
+  ],
+  "touched": [
+    "packages/shell/e2e-tauri/specs/orchestration-restart.spec.ts",
+    "pid:1718974"
+  ],
+  "at": 1787775090889
+}

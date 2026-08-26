@@ -5,7 +5,7 @@ import { IssueOrchestrator } from "../main/app/control/orchestration.js";
 import { ownershipConflicts, pathsOverlap } from "../main/domain/orchestration.js";
 import { assignment, brief, fakeSpaces, fakeTracker, fakeWorkers } from "./helpers/orchestration-fixture.js";
 
-describe("경로 겹침 판정 (FR-ORCHESTRATION.5)", () => {
+describe("경로 겹침 판정 (FR-ORCHESTRATION.5) [UC-ORCHESTRATION-ISSUE-LEAD]", () => {
   it("같은 경로는 겹친다", () => {
     expect(pathsOverlap("src/main", "src/main")).toBe(true);
   });

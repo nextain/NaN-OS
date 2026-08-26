@@ -8,6 +8,10 @@
 // ⚠️ 읽기는 읽기 전용 명령만 쓴다. 변경은 이 테스트가 만든 워크스페이스 안으로만 하고
 //    끝나면 닫는다. 어댑터가 소유 밖 대상을 거부하므로 판정이 틀려도 남의 터미널로 못 간다.
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { writeAttestation } from "./harness/bench-execution.js";
+import { resolve as resolvePath } from "node:path";
+
+const REPO_ROOT_FOR_ATTEST = resolvePath(__dirname, "..", "..");
 import { execFileSync } from "node:child_process";
 import { HerdrControlPlane } from "../main/app/control/herdr-control.js";
 import { ALL_TIERS } from "../main/domain/capability.js";
@@ -50,16 +54,26 @@ afterAll(() => {
     }
     // 정리 실패를 삼키면 사용자 화면에 잔재가 남는데도 벤치는 아무 일 없었다고 본다
     // (2026-08-27 적대리뷰 지적). 실제로 사라졌는지 확인하고, 안 사라졌으면 알린다.
-    let stillThere = false;
+    // 확인 자체가 실패하면 "없다"가 아니라 "모른다"이다. 모르는 것을 깨끗함으로 읽지 않는다
+    // (2026-08-27 3차 적대리뷰 지적).
+    let stillThere: boolean;
     try {
       stillThere = herdr(["workspace", "list"]).includes(NONCE);
-    } catch {
-      stillThere = false;
+    } catch (e) {
+      throw new Error(`정리 확인에 실패했다 — 잔재 여부를 모른다: ${e instanceof Error ? e.message : String(e)}`);
     }
     if (stillThere) {
       throw new Error(`테스트 워크스페이스가 남았다: ${NONCE} ${closeError}`);
     }
   }
+
+  // 이 실행이 실제로 무엇을 만졌는지 남긴다. 벤치는 이 증명서가 있어야 native 영수증을 준다.
+  writeAttestation(REPO_ROOT_FOR_ATTEST, {
+    spec: "src/test/herdr-control-live.contract.test.ts",
+    kinds: ["native"],
+    touched: [workspaceId, paneId].filter(Boolean),
+    at: Date.now(),
+  });
 }, 60_000);
 
 function plane(): HerdrControlPlane {

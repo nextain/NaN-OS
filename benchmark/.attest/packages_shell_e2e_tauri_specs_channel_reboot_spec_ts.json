@@ -1,0 +1,11 @@
+{
+  "spec": "packages/shell/e2e-tauri/specs/channel-reboot.spec.ts",
+  "kinds": [
+    "native"
+  ],
+  "touched": [
+    "packages/shell/e2e-tauri/specs/channel-reboot.spec.ts",
+    "pid:1727409"
+  ],
+  "at": 1787775255073
+}

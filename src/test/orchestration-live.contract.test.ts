@@ -8,6 +8,8 @@
 //    안에서 산출물을 남긴다. 사용자의 자격증명과 비용이 걸리는 일은 이 검증의 목적이 아니다.
 // ⚠️ 모든 작업은 임시 디렉터리 안에서만 하고 끝나면 지운다.
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { writeAttestation } from "./harness/bench-execution.js";
+import { resolve as resolvePath } from "node:path";
 import { mkdtempSync, rmSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -29,7 +31,16 @@ beforeAll(() => {
 });
 
 afterAll(() => {
+  // 이 실행이 실제로 무엇을 만졌는지 남긴다. 벤치는 이 증명서가 있어야 worker 영수증을 준다.
+  writeAttestation(resolvePath(__dirname, "..", ".."), {
+    spec: "src/test/orchestration-live.contract.test.ts",
+    kinds: ["worker", "native"],
+    touched: [root].filter(Boolean),
+    at: Date.now(),
+  });
   if (root && root.startsWith(tmpdir())) rmSync(root, { recursive: true, force: true });
+  // 지웠는지 실제로 확인한다 — 확인 불능을 깨끗함으로 읽지 않는다.
+  if (root && existsSync(root)) throw new Error(`임시 작업 공간이 남았다: ${root}`);
 });
 
 function orchestrator(): IssueOrchestrator {

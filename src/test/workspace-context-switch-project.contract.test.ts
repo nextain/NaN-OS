@@ -28,7 +28,7 @@ function twoProjects() {
   });
 }
 
-describe("지역 컨텍스트 폐기 (FR-WORKSPACE-CONTEXT.5)", () => {
+describe("지역 컨텍스트 폐기 (FR-WORKSPACE-CONTEXT.5) [UC-WORKSPACE-CONTEXT-SWITCH-PROJECT]", () => {
   it("프로젝트 범위 문서만 버리고 루트 범위 문서는 남긴다", () => {
     const decl = rootDeclaration({ documents: [doc("r", "r.json")] });
     const root = selectDocuments(decl, { topics: [] }, LIMITS, rootScope());

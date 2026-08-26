@@ -10,7 +10,7 @@ function plane(observe = fakeObserve()) {
   return new HerdrControlPlane(observe, fakeMutate(), fakeConnection([snapshot(9)]), ["observe", "workspace-write"], POLICY);
 }
 
-describe("자원 표면 (FR-HERDR-CONTROL.1)", () => {
+describe("자원 표면 (FR-HERDR-CONTROL.1) [UC-HERDR-CONTROL-OBSERVE]", () => {
   it("스냅샷은 스키마 버전과 개정을 함께 싣는다", async () => {
     const snap = await plane().observeNow();
     expect(snap.schemaVersion).toBe(1);

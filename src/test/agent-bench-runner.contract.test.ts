@@ -18,7 +18,7 @@ function scenario(over: Partial<BenchScenario> = {}): BenchScenario {
   return { id: "s1", uc: "UC-WORKSPACE-CONTEXT-DISCOVER", gate: "protocol", requiredEvidence: ["mock"], ...over };
 }
 
-describe("게이트 분리 (NFR-AGENT-BENCH.1)", () => {
+describe("게이트 분리 (NFR-AGENT-BENCH.1) [UC-AGENT-BENCH-RUN]", () => {
   it("요구한 증거가 전부 있으면 사유가 없다", () => {
     const r: EvidenceReceipt[] = [{ scenarioId: "s1", kind: "mock", ref: "log:1" }];
     expect(evaluateGate(scenario(), r)).toEqual([]);

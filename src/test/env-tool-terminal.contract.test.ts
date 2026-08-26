@@ -14,7 +14,7 @@ function service(terminal = fakeTerminal()) {
   return { svc: new EnvironmentToolService(fakeBrowser(), terminal, fakeCancellation(), ["observe", "workspace-write"]), terminal };
 }
 
-describe("생명주기 위임 (FR-ENV-TOOL.5)", () => {
+describe("생명주기 위임 (FR-ENV-TOOL.5) [UC-ENV-TOOL-TERMINAL-EXEC]", () => {
   it("터미널 포트에는 생성도 종료도 없다 — 소유는 Herdr 에 있다", () => {
     expect(PORT_SOURCE).not.toMatch(/createTerminal|closeTerminal|killTerminal/);
     const methods = [...PORT_SOURCE.matchAll(/^\s{2}(\w+)\(/gm)].map((m) => m[1]);

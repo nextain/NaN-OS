@@ -14,7 +14,7 @@ async function started(workers = fakeWorkers()) {
   return { o, workers };
 }
 
-describe("교체 (FR-ORCHESTRATION.9)", () => {
+describe("교체 (FR-ORCHESTRATION.9) [UC-ORCHESTRATION-WORKER-REPLACE]", () => {
   it("교체해도 증거는 남는다", () => {
     const state = { issue: "#1", evidence: ["log:1"], assignments: [IMPL, TEST] };
     const next = replaceWorker(state, "w1", assignment("w9", "implementer", ["무시됨"]));

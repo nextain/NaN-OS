@@ -11,7 +11,7 @@ function verdicts(accepted: readonly boolean[]): Verdict[] {
   return accepted.map((a, i) => ({ scenarioId: `s${i}`, accepted: a, reasons: a ? [] : ["no-evidence"] }));
 }
 
-describe("요약 보고 (NFR-AGENT-BENCH.6)", () => {
+describe("요약 보고 (NFR-AGENT-BENCH.6) [UC-AGENT-BENCH-REPORT]", () => {
   it("중앙값과 꼬리 지연을 함께 낸다 — 통과 여부만 내지 않는다", () => {
     const s = summarize(samples([10, 20, 30, 40, 1_000]), verdicts([true, true, true, true, true]));
     expect(s.medianLatencyMs).toBe(30);

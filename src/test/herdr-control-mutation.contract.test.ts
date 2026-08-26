@@ -8,7 +8,7 @@ import { COMMAND, fakeConnection, fakeMutate, fakeObserve, request, snapshot } f
 const POLICY = { maxAttempts: 3, baseDelayMs: 10, maxDelayMs: 100 };
 const CONTEXT = { currentRevision: { value: 1 }, grantedTiers: ["observe", "workspace-write"] as const };
 
-describe("구조화 전달 (FR-HERDR-CONTROL.3)", () => {
+describe("구조화 전달 (FR-HERDR-CONTROL.3) [UC-HERDR-CONTROL-MUTATE]", () => {
   it("실행 파일·인자·작업 디렉터리·환경이 분리되어 전달된다", async () => {
     const mutate = fakeMutate();
     const p = new HerdrControlPlane(fakeObserve(), mutate, fakeConnection([snapshot(9)]), ["observe", "workspace-write"], POLICY);

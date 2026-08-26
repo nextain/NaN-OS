@@ -9,7 +9,7 @@ function service(browser = fakeBrowser()) {
   return new EnvironmentToolService(browser, fakeTerminal(), fakeCancellation(), ["observe", "workspace-write"]);
 }
 
-describe("공통 생명주기 (FR-ENV-TOOL.1)", () => {
+describe("공통 생명주기 (FR-ENV-TOOL.1) [UC-ENV-TOOL-BROWSE]", () => {
   it("접수에서 실행으로, 실행에서 완료로 간다", () => {
     expect(canTransition("accepted", "running")).toBe(true);
     expect(canTransition("running", "completed")).toBe(true);

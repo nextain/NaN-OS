@@ -8,7 +8,7 @@ import { assignment, brief, fakeSpaces, fakeTracker, fakeWorkers } from "./helpe
 const IMPL = assignment("w1", "implementer", ["src/main/domain"]);
 const TEST = assignment("w2", "tester", ["src/test"]);
 
-describe("리더 단일성 (FR-ORCHESTRATION.3)", () => {
+describe("리더 단일성 (FR-ORCHESTRATION.3) [UC-ORCHESTRATION-ISSUE-LEAD]", () => {
   it("같은 리더를 다시 세우는 것은 충돌이 아니다", () => {
     expect(leaderConflict([{ issue: "#1", leaderId: "L1" }], { issue: "#1", leaderId: "L1" })).toBe(false);
   });

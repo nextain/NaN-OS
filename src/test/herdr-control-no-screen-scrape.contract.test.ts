@@ -7,7 +7,7 @@ import { duplicateOwnership, HERDR_OWNED, isStructuredCommand } from "../main/do
 
 const PORT_SOURCE = readFileSync(resolve(__dirname, "..", "main", "ports", "herdr-control.ts"), "utf8");
 
-describe("제어 표면에 없는 것 (FR-HERDR-CONTROL.1)", () => {
+describe("제어 표면에 없는 것 (FR-HERDR-CONTROL.1) [UC-HERDR-CONTROL-OBSERVE]", () => {
   it.each(["stdin", "writeRaw", "sendKeys", "socketPath", "screen", "scrape", "pty"])(
     "포트에 %s 계열 진입점이 없다",
     (forbidden) => {

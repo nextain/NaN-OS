@@ -7,7 +7,7 @@ import { doc, fakeSource, rootDeclaration, ROOT } from "./helpers/workspace-cont
 
 const LIMITS = { maxDocuments: 10, maxBytes: 10_000 };
 
-describe("경로 경계 판정 (FR-WORKSPACE-CONTEXT.8)", () => {
+describe("경로 경계 판정 (FR-WORKSPACE-CONTEXT.8) [UC-WORKSPACE-CONTEXT-BROKEN-ENTRYPOINT]", () => {
   it.each(["a.json", "dir/a.json", "./dir/a.json", "dir/sub/../a.json", "dir/./a.json"])("%s 는 경계 안이다", (p) => {
     expect(isWithinBoundary(p)).toBe(true);
   });

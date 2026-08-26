@@ -9,8 +9,10 @@
 //
 // ⚠️ Herdr 이 없으면 건너뛰지 않고 실패한다. 이 파일은 native 증거를 만드는 자리이고,
 //    건너뛴 게이트는 게이트가 아니다.
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, afterAll } from "vitest";
+import { writeAttestation } from "./harness/bench-execution.js";
 import { EnvironmentSession } from "../main/app/control/environment-session.js";
+import { resolve } from "node:path";
 import { liveHerdrSnapshot } from "./harness/herdr-live.js";
 
 const live = liveHerdrSnapshot();
@@ -82,5 +84,16 @@ describe("살아 있는 Herdr 관측 (native)", () => {
       // 이름이 겹치는 상황을 실제로 밟았다는 것 자체가 이 단언의 근거다.
       expect(new Set(tokens).size).toBeGreaterThan(new Set(labels).size);
     }
+  });
+});
+
+afterAll(() => {
+  // 이 실행이 실제로 무엇을 만졌는지 남긴다. 벤치는 이 증명서가 있어야 native 영수증을 준다.
+  const panes = ((live as { panes?: unknown[] } | null)?.panes ?? []) as unknown[];
+  writeAttestation(resolve(__dirname, "..", ".."), {
+    spec: "src/test/environment-live-herdr.contract.test.ts",
+    kinds: ["native"],
+    touched: panes.map((p) => String((p as { pane_id?: unknown }).pane_id ?? "")).filter(Boolean),
+    at: Date.now(),
   });
 });

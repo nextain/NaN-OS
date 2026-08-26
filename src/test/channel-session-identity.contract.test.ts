@@ -9,7 +9,7 @@ import { fakeMembership, fakeRegistry, fakeTransport, identity } from "./helpers
 
 const PORT_SOURCE = readFileSync(resolve(__dirname, "..", "main", "ports", "channel-session.ts"), "utf8");
 
-describe("정체성 단일성 (FR-CHANNEL-SESSION.1)", () => {
+describe("정체성 단일성 (FR-CHANNEL-SESSION.1) [UC-CHANNEL-SESSION-HANDOFF]", () => {
   it("새 이슈는 그냥 받는다", () => {
     expect(checkIdentity([], identity())).toEqual([]);
   });

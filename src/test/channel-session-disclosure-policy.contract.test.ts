@@ -8,7 +8,7 @@ import { fakeMembership, fakeRegistry, fakeTransport } from "./helpers/channel-s
 const CHANNELS: readonly ChannelKind[] = ["desktop", "voice", "discord"];
 const LEVELS: readonly Confidentiality[] = ["public", "team", "workspace-internal"];
 
-describe("공개 범위 (FR-CHANNEL-SESSION.5)", () => {
+describe("공개 범위 (FR-CHANNEL-SESSION.5) [UC-CHANNEL-SESSION-DISCLOSURE-DENY]", () => {
   it("공개 내용은 어느 채널로도 나간다", () => {
     for (const c of CHANNELS) expect(mayDisclose(c, "public")).toBe(true);
   });

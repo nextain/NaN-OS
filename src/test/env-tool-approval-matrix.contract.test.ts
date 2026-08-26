@@ -7,7 +7,7 @@ import { envRequest } from "./helpers/env-tool-fixture.js";
 
 const ORDINARY: CapabilityTier[] = ["observe", "workspace-write"];
 
-describe("등급 분리 (FR-ENV-TOOL.8)", () => {
+describe("등급 분리 (FR-ENV-TOOL.8) [UC-ENV-TOOL-BOUNDARY-DENY]", () => {
   it("여덟 등급이 각각 따로 있다", () => {
     expect([...ALL_TIERS].sort()).toEqual([
       "credential",

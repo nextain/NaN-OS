@@ -12,7 +12,7 @@ function result(outcome: OutcomeKind): MutationResult {
   return { requestId: "r", outcome, affected: [{ kind: "terminal", id: "t" }], evidence: ["log"] };
 }
 
-describe("결과 종류 (FR-HERDR-CONTROL.8)", () => {
+describe("결과 종류 (FR-HERDR-CONTROL.8) [UC-HERDR-CONTROL-RECONNECT]", () => {
   it("여섯 종류가 서로 다르다 — 하나의 실패로 뭉뚱그리지 않는다", () => {
     expect(new Set(ALL).size).toBe(6);
   });

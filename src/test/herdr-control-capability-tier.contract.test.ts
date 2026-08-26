@@ -4,7 +4,7 @@ import { describe, it, expect } from "vitest";
 import { admit, ALL_TIERS, permits, requiresApproval, type CapabilityTier } from "../main/domain/herdr-control.js";
 import { request } from "./helpers/herdr-control-fixture.js";
 
-describe("등급 비상속 (FR-HERDR-CONTROL.6)", () => {
+describe("등급 비상속 (FR-HERDR-CONTROL.6) [UC-HERDR-CONTROL-MUTATE]", () => {
   it("부여된 등급만 통과한다", () => {
     expect(permits(["observe"], "observe")).toBe(true);
     expect(permits(["observe"], "workspace-write")).toBe(false);

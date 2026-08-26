@@ -7,7 +7,7 @@ import { fakeSource, rootDeclaration, ROOT } from "./helpers/workspace-context-f
 
 const LIMITS = { maxDocuments: 10, maxBytes: 10_000 };
 
-describe("개정 단조 증가 (FR-WORKSPACE-CONTEXT.6)", () => {
+describe("개정 단조 증가 (FR-WORKSPACE-CONTEXT.6) [UC-WORKSPACE-CONTEXT-SWITCH-PROJECT]", () => {
   it("첫 개정은 1 이고 다음은 항상 커진다", () => {
     let r = firstRevision();
     expect(r.value).toBe(1);

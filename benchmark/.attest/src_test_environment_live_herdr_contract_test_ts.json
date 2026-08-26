@@ -1,0 +1,25 @@
+{
+  "spec": "src/test/environment-live-herdr.contract.test.ts",
+  "kinds": [
+    "native"
+  ],
+  "touched": [
+    "w9:p1",
+    "w9:p6",
+    "w9:p15",
+    "w9:p1A",
+    "w9:p2",
+    "w9:p8",
+    "w9:p1M",
+    "w9:p4",
+    "w9:p1E",
+    "w9:p9",
+    "w9:p1F",
+    "w9:pM",
+    "w9:pR",
+    "w9:pQ",
+    "w9:pS",
+    "w9:p12"
+  ],
+  "at": 1787775451755
+}

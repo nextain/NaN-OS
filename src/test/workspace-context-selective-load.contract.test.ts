@@ -7,7 +7,7 @@ import { doc, rootDeclaration } from "./helpers/workspace-context-fixture.js";
 const DECL: ContextDeclaration = rootDeclaration();
 const WIDE = { maxDocuments: 10, maxBytes: 10_000 };
 
-describe("의도 기반 선택 (FR-WORKSPACE-CONTEXT.2)", () => {
+describe("의도 기반 선택 (FR-WORKSPACE-CONTEXT.2) [UC-WORKSPACE-CONTEXT-DISCOVER]", () => {
   it("의도가 비면 필수 문서만 싣는다", () => {
     const s = selectDocuments(DECL, { topics: [] }, WIDE);
     expect(s.loaded.map((d) => d.ref.id)).toEqual(["rules"]);

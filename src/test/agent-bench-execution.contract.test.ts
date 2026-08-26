@@ -62,7 +62,9 @@ function exec(deps: {
 }
 
 const STEP: VerificationStep = {
-  kind: "native",
+  // 대역 단계는 mock 이다 — native/worker 는 실환경 관측 증명서를 요구하므로
+  // 증명서 없는 대역으로는 영수증이 나오지 않는다(그 성질은 아래에서 따로 확인한다).
+  kind: "mock",
   cmd: "npx",
   args: ["wdio", "run", "x.conf.ts"],
   cwd: "packages/shell",
@@ -76,7 +78,7 @@ describe("실패는 증거가 되지 않는다", () => {
     const r = runner([0]);
     const out = await exec({ runner: r, verification: { S: [STEP] } }).run(scenario("S"));
     expect(out.receipts).toHaveLength(1);
-    expect(out.receipts[0]?.kind).toBe("native");
+    expect(out.receipts[0]?.kind).toBe("mock");
   });
 
   it("명령이 실패하면 영수증이 없다 — 돌렸다는 사실이 증거가 아니다", async () => {
@@ -92,7 +94,7 @@ describe("실패는 증거가 되지 않는다", () => {
       runner: r,
       verification: { S: [STEP, { ...STEP, kind: "browser", args: ["playwright", "test", "y"], cases: ["샘플 케이스"] }] },
     }).run(scenario("S"));
-    expect(out.receipts.map((x) => x.kind)).toEqual(["native"]);
+    expect(out.receipts.map((x) => x.kind)).toEqual(["mock"]);
   });
 });
 
@@ -348,5 +350,25 @@ describe("모든 단계가 시나리오 케이스를 지목한다", () => {
       }
     }
     expect(naked, `케이스 선택자 없는 단계: ${naked.join(" | ")}`).toEqual([]);
+  });
+});
+
+describe("실환경 등급은 관측 증명서를 요구한다", () => {
+  it("증명서 없이 native 를 자처하면 증거가 되지 않는다", async () => {
+    const r = runner([0]);
+    const out = await exec({
+      runner: r,
+      verification: { S: [{ ...STEP, kind: "native", cases: ["샘플 케이스"] }] },
+    }).run(scenario("S"));
+    expect(r.calls, "명령은 실제로 돌았다").toHaveLength(1);
+    expect(out.receipts, "증명서가 없는데 native 증거가 생겼다").toEqual([]);
+  });
+
+  it("증명서 없이 worker 를 자처해도 마찬가지다", async () => {
+    const out = await exec({
+      runner: runner([0]),
+      verification: { S: [{ ...STEP, kind: "worker", cases: ["샘플 케이스"] }] },
+    }).run(scenario("S", { requiredEvidence: ["worker"] }));
+    expect(out.receipts).toEqual([]);
   });
 });

@@ -32,7 +32,7 @@ const TRACE: TraceRecord = {
 const nativeReceipt: EvidenceReceipt[] = [{ scenarioId: "s1", kind: "native", ref: "log:native" }];
 const mockReceipt: EvidenceReceipt[] = [{ scenarioId: "s1", kind: "mock", ref: "log:mock" }];
 
-describe("거짓 완료 탐지 (NFR-AGENT-BENCH.3)", () => {
+describe("거짓 완료 탐지 (NFR-AGENT-BENCH.3) [UC-AGENT-BENCH-FALSE-COMPLETION]", () => {
   it("완료를 주장하고 실제 증거가 있으면 사유가 없다", () => {
     expect(detectFalseCompletion(NATIVE, nativeReceipt, { scenarioId: "s1", claimedComplete: true }, BASELINE, 40)).toEqual([]);
   });

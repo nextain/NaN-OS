@@ -7,7 +7,7 @@ import { assignment, brief, fakeSpaces, fakeTracker, fakeWorkers } from "./helpe
 
 const B = brief("w1");
 
-describe("완료 선언 무시 (FR-ORCHESTRATION.6)", () => {
+describe("완료 선언 무시 (FR-ORCHESTRATION.6) [UC-ORCHESTRATION-ISSUE-LEAD]", () => {
   it("작업자가 완료라 해도 이슈는 완료되지 않는다", () => {
     const accepted = acceptReport(B, { workerId: "w1", evidence: ["log"], claimsIssueComplete: true, requestedTiers: [] });
     expect(accepted.issueComplete).toBe(false);

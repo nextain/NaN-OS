@@ -8,7 +8,7 @@ import { envRequest, fakeBrowser, fakeCancellation, fakeTerminal } from "./helpe
 const GRANTED = ["observe", "workspace-write"] as const;
 const CONTEXT = { grantedTiers: [...GRANTED] };
 
-describe("작업 디렉터리 경계 (FR-ENV-TOOL.7)", () => {
+describe("작업 디렉터리 경계 (FR-ENV-TOOL.7) [UC-ENV-TOOL-TERMINAL-EXEC]", () => {
   it.each(["packages/shell", "src", "./docs", "a/b/../c"])("경계 안 %s 는 통과한다", (cwd) => {
     expect(admitEnvOperation(envRequest({ capability: "workspace-write", cwd }), CONTEXT)).toEqual([]);
   });

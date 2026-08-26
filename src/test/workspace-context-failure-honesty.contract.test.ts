@@ -7,7 +7,7 @@ import { fakeSource, ROOT } from "./helpers/workspace-context-fixture.js";
 
 const LIMITS = { maxDocuments: 10, maxBytes: 10_000 };
 
-describe("진단 형태 (FR-WORKSPACE-CONTEXT.7)", () => {
+describe("진단 형태 (FR-WORKSPACE-CONTEXT.7) [UC-WORKSPACE-CONTEXT-BROKEN-ENTRYPOINT]", () => {
   it.each(["entrypoint-missing", "entrypoint-malformed", "declared-index-missing", "outside-boundary"] as const)(
     "%s 진단은 대상·탐색 위치·조치를 모두 담는다",
     (code) => {

@@ -39,7 +39,7 @@ function deps(
 	};
 }
 
-describe("도구 선언", () => {
+describe("도구 선언 [UC-ENV-LIVE-ACT UC-ENV-LIVE-OBSERVE]", () => {
 	it("이름과 동작 목록이 실제 구현과 같다", () => {
 		expect(SKILL_ENVIRONMENT.name).toBe("skill_environment");
 		expect(SKILL_ENVIRONMENT.parameters?.properties?.action).toMatchObject({

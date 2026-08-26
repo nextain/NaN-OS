@@ -11,7 +11,7 @@ function service() {
   return { svc: new ChannelSessionService(registry, fakeMembership(), transport), registry, transport };
 }
 
-describe("응답과 진행 알림 분리 (FR-CHANNEL-SESSION.3)", () => {
+describe("응답과 진행 알림 분리 (FR-CHANNEL-SESSION.3) [UC-CHANNEL-SESSION-RECONNECT]", () => {
   it("두 종류가 각각 보내진다", async () => {
     const { svc, transport } = service();
     await svc.emit("reply", "desktop", "다 됐습니다", "workspace-internal");

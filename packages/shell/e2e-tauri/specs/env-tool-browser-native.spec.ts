@@ -1,3 +1,6 @@
+import { mkdirSync, writeFileSync as writeFileSyncNode } from "node:fs";
+import { dirname as dirnameOf, resolve as resolvePath } from "node:path";
+
 // #499 UC-ENV-TOOL-BROWSE — 브라우저 명령 경계 (P04, native).
 //
 // Playwright 로 도는 `e2e/env-tool-browser.spec.ts` 는 실제 DOM 을 그리지만 Tauri IPC 가
@@ -39,6 +42,30 @@ function looksUnregistered(error: string): boolean {
 }
 
 let results: Record<string, InvokeResult> = {};
+
+
+/**
+ * 실환경 관측 증명서. 벤치는 이 파일이 있어야 native 영수증을 준다 —
+ * 등급이 경로 허용목록으로만 정해지면 그것은 설정을 검증하는 것이다(2026-08-27 적대리뷰).
+ * wdio 스펙은 코어를 import 하지 않으므로 같은 형식을 여기서 직접 쓴다.
+ */
+function writeAttestationSync(touched: readonly string[]): void {
+	const root = resolvePath(import.meta.dirname, "..", "..", "..", "..");
+	const file = resolvePath(
+		root,
+		"benchmark",
+		".attest",
+		`${SPEC_ID.replace(/[^A-Za-z0-9]+/g, "_")}.json`,
+	);
+	mkdirSync(dirnameOf(file), { recursive: true });
+	writeFileSyncNode(
+		file,
+		`${JSON.stringify({ spec: SPEC_ID, kinds: ["native"], touched, at: Date.now() }, null, 2)}\n`,
+		"utf8",
+	);
+}
+
+const SPEC_ID = "packages/shell/e2e-tauri/specs/env-tool-browser-native.spec.ts";
 
 describe("브라우저 명령 경계 (#499 UC-ENV-TOOL-BROWSE)", () => {
 	before(async () => {
@@ -114,5 +141,10 @@ describe("브라우저 명령 경계 (#499 UC-ENV-TOOL-BROWSE)", () => {
 				}
 			});
 		}
+	});
+
+	after(() => {
+		// 이 실행이 실제 Rust 백엔드를 밟았다는 증명서를 남긴다.
+		writeAttestationSync([SPEC_ID, `pid:${process.pid}`]);
 	});
 });

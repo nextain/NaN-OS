@@ -1,0 +1,11 @@
+{
+  "spec": "src/test/orchestration-live.contract.test.ts",
+  "kinds": [
+    "worker",
+    "native"
+  ],
+  "touched": [
+    "/tmp/naia-orch-4PYgG2"
+  ],
+  "at": 1787775453133
+}
