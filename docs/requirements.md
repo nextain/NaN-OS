@@ -992,13 +992,13 @@ fenced code는 언어·복사·접기·워크스페이스 전환을 제공하고
 
 | ID | 요구사항 | 출처 시나리오 | 검증(P02) | 상태 |
 |---|---|---|---|---|
-| **FR-ENV-DISPATCH.1** | 전달 계층은 번역기가 실제로 내는 호출만 받는다. 그 목록 밖의 메서드는 환경에 도달할 수 없으며, 프로토콜의 나머지 메서드를 근거 없이 열지 않는다. | UC-ENV-DISPATCH-REFUSE | `environment-dispatch.contract.test.ts` 허용 메서드 목록·목록 밖 거절 | Pending |
-| **FR-ENV-DISPATCH.2** | 구조화 전달(`session.snapshot`·`agent.focus`·`agent.prompt`·`pane.focus`)은 워크스페이스 관측·조작 권한으로 수행한다. 요청 문자열이 명령줄로 재해석되지 않는다. | UC-ENV-DISPATCH-STRUCTURED | `environment-dispatch.contract.test.ts` 구조화 라우팅 | Pending |
-| **FR-ENV-DISPATCH.3** | 터미널 입력 전달(`pane.send_text`·`pane.send_keys`)은 구조화 전달과 같은 권한으로 열리지 않는다. 사용자의 터미널에 직접 타이핑하는 것과 동등하므로 별도 권한을 요구하며, 없으면 환경에 도달하지 않는다. | UC-ENV-DISPATCH-TERMINAL | `environment-dispatch.contract.test.ts` 권한 분리 negative | Pending |
-| **FR-ENV-DISPATCH.4** | 표면 식별자는 환경에 닿기 전에 형식을 검증한다. 형식이 어긋나면 호출을 만들지 않는다. 검증은 Rust 명령 경계에서도 중복 수행한다. | UC-ENV-DISPATCH-REFUSE | Rust 단위 테스트 + `e2e-tauri/specs/environment-dispatch.spec.ts` | Pending |
-| **FR-ENV-DISPATCH.5** | 요청 본문에 길이 상한을 둔다. 빈 요청은 전달하지 않는다. 상한과 공백 판정은 Rust 경계에서도 수행한다. | UC-ENV-DISPATCH-REFUSE | Rust 단위 테스트 + `environment-dispatch.contract.test.ts` | Pending |
-| **FR-ENV-DISPATCH.6** | 환경이 거절하면 그 사유를 그대로 올린다. 실패를 성공으로 바꾸지 않으며, 결과 불명은 불명으로 남긴다. | UC-ENV-DISPATCH-STRUCTURED | `environment-dispatch.contract.test.ts` 오류 전파 | Pending |
-| **FR-ENV-DISPATCH.7** | Rust 명령 계층은 식별자 형식과 길이만 검증하고 능력 게이팅은 core 의도 계층이 수행한다. 이 구조에서 웹뷰 코드가 Tauri 명령을 직접 부르면 게이팅을 건너뛴다는 사실을 문서와 요구사항에 남긴다(기존 `herdr_prompt_agent` 와 동일한 관행). Rust 계층 자체의 능력 게이팅은 후속 과제다. | UC-ENV-DISPATCH-TERMINAL | 문서 기재 + `e2e-tauri/specs/environment-dispatch.spec.ts` 명령 등록 확인 | Pending |
+| **FR-ENV-DISPATCH.1** | 전달 계층은 번역기가 실제로 내는 호출만 받는다. 그 목록 밖의 메서드는 환경에 도달할 수 없으며, 프로토콜의 나머지 메서드를 근거 없이 열지 않는다. | UC-ENV-DISPATCH-REFUSE | `environment-dispatch.contract.test.ts` 허용 메서드 목록·목록 밖 거절 | Done |
+| **FR-ENV-DISPATCH.2** | 구조화 전달(`session.snapshot`·`agent.focus`·`agent.prompt`·`pane.focus`)은 워크스페이스 관측·조작 권한으로 수행한다. 요청 문자열이 명령줄로 재해석되지 않는다. | UC-ENV-DISPATCH-STRUCTURED | `environment-dispatch.contract.test.ts` 구조화 라우팅 | Done |
+| **FR-ENV-DISPATCH.3** | 터미널 입력 전달(`pane.send_text`·`pane.send_keys`)은 구조화 전달과 같은 권한으로 열리지 않는다. 사용자의 터미널에 직접 타이핑하는 것과 동등하므로 별도 권한을 요구하며, 없으면 환경에 도달하지 않는다. | UC-ENV-DISPATCH-TERMINAL | `environment-dispatch.contract.test.ts` 권한 분리 negative | Done |
+| **FR-ENV-DISPATCH.4** | 표면 식별자는 환경에 닿기 전에 형식을 검증한다. 형식이 어긋나면 호출을 만들지 않는다. 검증은 Rust 명령 경계에서도 중복 수행한다. | UC-ENV-DISPATCH-REFUSE | Rust 단위 테스트 + `e2e-tauri/specs/environment-dispatch.spec.ts` | Done |
+| **FR-ENV-DISPATCH.5** | 요청 본문에 길이 상한을 둔다. 빈 요청은 전달하지 않는다. 상한과 공백 판정은 Rust 경계에서도 수행한다. | UC-ENV-DISPATCH-REFUSE | Rust 단위 테스트 + `environment-dispatch.contract.test.ts` | Done |
+| **FR-ENV-DISPATCH.6** | 환경이 거절하면 그 사유를 그대로 올린다. 실패를 성공으로 바꾸지 않으며, 결과 불명은 불명으로 남긴다. | UC-ENV-DISPATCH-STRUCTURED | `environment-dispatch.contract.test.ts` 오류 전파 | Done |
+| **FR-ENV-DISPATCH.7** | Rust 명령 계층은 식별자 형식과 길이만 검증하고 능력 게이팅은 core 의도 계층이 수행한다. 이 구조에서 웹뷰 코드가 Tauri 명령을 직접 부르면 게이팅을 건너뛴다는 사실을 문서와 요구사항에 남긴다(기존 `herdr_prompt_agent` 와 동일한 관행). Rust 계층 자체의 능력 게이팅은 후속 과제다. | UC-ENV-DISPATCH-TERMINAL | 문서 기재 + `e2e-tauri/specs/environment-dispatch.spec.ts` 명령 등록 확인 | Done |
 
 ## 기능 요구사항 (FR) — 두 저장소 wire 어휘 동기 (#497 후속)
 
