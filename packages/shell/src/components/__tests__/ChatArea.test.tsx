@@ -196,6 +196,26 @@ describe("ChatArea", () => {
 		expect(buttons.length).toBeGreaterThanOrEqual(2);
 	});
 
+	it("interrupts the active speech pipeline when the global TTS toggle turns off", async () => {
+		localStorage.setItem(
+			"naia-config",
+			JSON.stringify({ ttsEnabled: true, ttsProvider: "edge" }),
+		);
+		useAvatarStore.getState().setSpeaking(true);
+		render(<ChatArea />);
+
+		window.dispatchEvent(
+			new CustomEvent("naia:tts-enabled-change", {
+				detail: { enabled: false },
+			}),
+		);
+
+		await waitFor(() =>
+			expect(useAvatarStore.getState().isSpeaking).toBe(false),
+		);
+		localStorage.removeItem("naia-config");
+	});
+
 	it("shows think while waiting and returns to neutral when a silent turn finishes", async () => {
 		localStorage.setItem(
 			"naia-config",
@@ -484,8 +504,11 @@ describe("ChatArea", () => {
 
 		expect(useChatStore.getState().streamingThinking).toBe("private chain");
 		expect(useChatStore.getState().streamingContent).toBe("Final answer.");
-		const reasoning = await screen.findByText("private chain");
-		expect(reasoning.closest("details")?.hasAttribute("open")).toBe(false);
+		const reasoning = (
+			await screen.findAllByText("private chain")
+		).find((node) => node.classList.contains("thinking-inline-content"));
+		expect(reasoning).toBeDefined();
+		expect(reasoning?.closest("details")?.hasAttribute("open")).toBe(false);
 
 		request.onChunk({ type: "finish", requestId: request.requestId });
 		const assistant = useChatStore

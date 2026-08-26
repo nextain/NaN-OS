@@ -377,6 +377,9 @@ export function stageVoxCpm2Runtime({
 		DEFAULT_VOXCPM2_TRT_DOWNLOAD_URL,
 	tar = process.env.NAIA_SYSTEM_TAR || "tar.exe",
 	verifyRemoteDownload = verifyVoxCpm2RemoteDownload,
+	allowUnpublishedDownload =
+		process.env.NAIA_UNSIGNED_UPDATER_BUILD === "1" &&
+		process.env.CI !== "true",
 } = {}) {
 	if (!runtimeSource)
 		throw new Error(
@@ -433,7 +436,13 @@ export function stageVoxCpm2Runtime({
 		parsedUrl.password
 	)
 		throw new Error("VoxCPM2 download URL must use credential-free HTTPS");
-	verifyRemoteDownload(parsedUrl.href, statSync(archive).size);
+	if (allowUnpublishedDownload) {
+		console.warn(
+			"[stage-voxcpm2-runtime] unsigned local validation: public download probe skipped",
+		);
+	} else {
+		verifyRemoteDownload(parsedUrl.href, statSync(archive).size);
+	}
 	const downloadManifest = {
 		schemaVersion: 1,
 		profile: "windows_trt_6g",

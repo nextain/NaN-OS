@@ -197,6 +197,19 @@ describe("stageVoxCpm2Runtime", () => {
 		).toThrow(/HTTP 401/);
 	});
 
+	it("allows an unpublished download only for an explicit local unsigned build", () => {
+		const source = fixture();
+		let probes = 0;
+		stageVoxCpm2Runtime({
+			...source,
+			allowUnpublishedDownload: true,
+			verifyRemoteDownload: () => {
+				probes += 1;
+			},
+		});
+		expect(probes).toBe(0);
+	});
+
 	it("pins, verifies, and atomically installs every approved Shell reference voice", () => {
 		const installer = readFileSync(
 			resolve(process.cwd(), "src-tauri/windows/prepare-voxcpm2-model.ps1"),
@@ -219,6 +232,15 @@ describe("stageVoxCpm2Runtime", () => {
 		expect(devLauncher).toContain(
 			'resolve(devVoxCpm2Bundle, "voxcpm2-activation-contract.json")',
 		);
+		expect(devLauncher).toContain("NAIA_VOXCPM2_DOWNLOAD_MANIFEST");
+		const devManifest = JSON.parse(
+			readFileSync(
+				resolve(process.cwd(), "scripts/voxcpm2-download-manifest.json"),
+				"utf8",
+			),
+		);
+		expect(devManifest.profile).toBe("windows_trt_6g");
+		expect(devManifest.archive.url).toContain("/releases/0.2.2/");
 	});
 
 	it("audits every runtime activation prerequisite before release staging", () => {

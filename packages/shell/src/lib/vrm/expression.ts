@@ -243,9 +243,20 @@ export function extractExpression(text: string): {
 	const take = (e: EmotionName | null) => {
 		if (!emotion && e) emotion = e;
 	};
+	// Markdown code is executable/document content, never avatar stage direction.
+	// Protect complete and currently-streaming fences before stripping `(smiles)`
+	// or `*sigh*`, otherwise valid calls such as `print('naia')` are corrupted.
+	const fencedCode: string[] = [];
+	const protectedText = text.replace(
+		/```[\s\S]*?(?:```|$)|~~~[\s\S]*?(?:~~~|$)/g,
+		(block) => {
+			const index = fencedCode.push(block) - 1;
+			return `\u0000NAIA_CODE_${index}\u0000`;
+		},
+	);
 
 	// 1) uppercase emotion tag (highest-intent, persona-style)
-	let clean = text.replace(EMOTION_TAG_RE, (_m, tag: string) => {
+	let clean = protectedText.replace(EMOTION_TAG_RE, (_m, tag: string) => {
 		take(tag.toLowerCase() as EmotionName);
 		return "";
 	});
@@ -273,6 +284,10 @@ export function extractExpression(text: string): {
 		.replace(/[ \t]{2,}/g, " ")
 		.replace(/\s+([.,!?。、！？])/g, "$1")
 		.trim();
+	clean = clean.replace(
+		/\u0000NAIA_CODE_(\d+)\u0000/g,
+		(_match, index: string) => fencedCode[Number(index)] ?? "",
+	);
 	return { emotion, cleanText: clean };
 }
 

@@ -1933,6 +1933,32 @@ body.resizing-row {
 	font-size: 0.78em;
 }
 
+.thinking-inline-summary {
+	display: flex;
+	align-items: center;
+	gap: 0.6rem;
+	min-width: 0;
+}
+
+.thinking-inline-preview {
+	min-width: 0;
+	flex: 1;
+	overflow: hidden;
+	white-space: nowrap;
+	text-overflow: ellipsis;
+	font-style: italic;
+	opacity: 0.72;
+}
+
+.thinking-inline[open] .thinking-inline-preview {
+	display: none;
+}
+
+.chat-code-language {
+	font-family: var(--font-mono, monospace);
+	text-transform: lowercase;
+}
+
 .chat-code-actions {
 	display: flex;
 	gap: 6px;

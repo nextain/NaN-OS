@@ -1100,6 +1100,17 @@ export function ChatArea({
 		setEmotion("neutral");
 	}
 
+	useEffect(() => {
+		const onTtsEnabledChange = (event: Event) => {
+			const enabled =
+				(event as CustomEvent<{ enabled?: boolean }>).detail?.enabled === true;
+			if (!enabled) interruptTts();
+		};
+		window.addEventListener("naia:tts-enabled-change", onTtsEnabledChange);
+		return () =>
+			window.removeEventListener("naia:tts-enabled-change", onTtsEnabledChange);
+	}, []);
+
 	function finishLocalVoicePrebuffer(): void {
 		localVoiceSchedulerRef.current?.finishStream();
 	}
@@ -3756,6 +3767,9 @@ export function ChatArea({
 											<span className="thinking-inline-label">
 												💭 {t("chat.thinking") || "Thinking..."}
 											</span>
+											<span className="thinking-inline-preview">
+												{msg.thinking.trim()}
+											</span>
 										</summary>
 										<div className="thinking-inline-content">
 											{msg.thinking}
@@ -3802,6 +3816,9 @@ export function ChatArea({
 									<summary className="thinking-inline-summary">
 										<span className="thinking-inline-label">
 											💭 {t("chat.thinking") || "Thinking..."}
+										</span>
+										<span className="thinking-inline-preview">
+											{streamingThinking.trim()}
 										</span>
 									</summary>
 									<div className="thinking-inline-content">

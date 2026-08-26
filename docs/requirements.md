@@ -847,3 +847,20 @@ fenced code는 언어·복사·접기·워크스페이스 전환을 제공하고
 ### FR-PERMISSION-SHORTCUT.1 — 권한 팝업 공통 단축키 (#477)
 
 도구 권한 팝업은 실행 `Alt+Y`, 항상 실행 `Alt+A`, 취소 `Alt+N`을 하나의 공통 정의에서 표시·해석하고, macOS에서는 같은 Alt 키를 Option 기호로 표시한다. 팝업이 열린 동안에만 수정키가 정확히 일치하는 최초 keydown을 한 번 처리한다.
+
+## v0.2.2 local release acceptance
+
+| ID | Issue | Normative requirement | Verification |
+|---|---:|---|---|
+| **FR-BGM-PLAYBACK.1** | #430 | 늦은 YouTube 재생 확인은 실제 실패로 오인하지 않고, 임베드 차단은 침묵이나 거짓 재생 상태가 아닌 복구 가능한 오류로 표시한다. | BGM 상태 단위 테스트 + 브라우저 패널 도구 E2E |
+| **FR-WORKSPACE-PATH.1** | #432 | 터미널 파일 경로는 플랫폼 기본 보조키로만 열리고 일반 클릭·드래그 선택을 보존한다. | 플랫폼 단축키 단위 테스트 + Workspace 브라우저 E2E |
+| **FR-LOCALE-BOOT.1** | #437 | 저장 언어 또는 OS 언어를 첫 화면 전에 적용하며 온보딩·복구·Host 설치 상태에 백엔드 영문 원문을 노출하지 않는다. | locale hydration/온보딩 컴포넌트 + 한국어 브라우저 E2E |
+| **FR-PROVIDER-BASE-URL.1** | #475 | 로컬 OpenAI 호환 provider의 Base URL을 검증·저장하고 실제 요청에 동일하게 적용한다. | URL 정규화 단위 테스트 + 설정 브라우저 E2E |
+| **FR-WORKSPACE-MEDIA.1** | #482 | MP3/WAV/MP4는 텍스트로 읽지 않고 바이너리로 읽어 로컬 Blob URL을 사용하는 오디오·비디오 컨트롤로 연다. | viewer registry/component + FileTree 브라우저 E2E |
+| **FR-CHAT-MARKDOWN.3** | #483 | 코드 블록은 안전한 구문 강조, 정확한 복사와 성공 피드백을 제공한다. Mermaid는 strict 렌더링하며 실패 시 원문을 보존한다. | MarkdownCodeBlock 단위 테스트 + 실제 채팅 브라우저 E2E |
+| **FR-WORKSPACE-HERDR.2** | #492 | Herdr snapshot이 멈추거나 실패해도 설정된 Workspace 파일 트리는 독립적으로 표시된다. | runtime hook 단위 테스트 + stalled snapshot 브라우저 E2E |
+| **FR-BGM-VIDEO.1** | #493 | YouTube iframe을 유지한 채 배경 영상만 숨겨 오디오 재생을 지속하고 선택을 저장한다. | BGM 컴포넌트 + 브라우저 패널 E2E |
+| **FR-BGM-STATE.1** | #494 | 음표 애니메이션은 YouTube의 authoritative playing 이벤트에서만 활성화한다. | player event 단위 테스트 + 브라우저 패널 E2E |
+| **FR-BGM-CONTROL.1** | #495 | 실제 재생 중에는 정지, 정지 후에는 재생 동작과 라벨을 표시한다. | player control 단위 테스트 + 브라우저 패널 E2E |
+| **FR-TTS-GLOBAL-OFF.1** | local QA | 상단 TTS를 끄면 현재 재생, 대기 문장, 진행 중 합성 및 브라우저 발화를 즉시 중단하며 이후 응답을 합성하지 않는다. | AiControlBar→ChatArea 통합 테스트 + 브라우저 E2E |
+| **FR-VOICE-DEV-MANIFEST.1** | local QA | Windows 개발 실행도 검증된 v0.2.2 Host 다운로드 manifest를 명시적으로 전달하며 누락된 패키지로 위장하지 않는다. | dev launcher 계약 테스트 + 동일 debug 바이너리 설치 상태 확인 |

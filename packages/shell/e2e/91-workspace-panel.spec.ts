@@ -149,7 +149,8 @@ const TAURI_MOCK_SCRIPT = `
 			}
 			return [
 				{ name: "README.md", path: "${ROOT_A}/README.md", is_dir: false, children: null },
-				{ name: "alpha.ts", path: "${ROOT_A}/alpha.ts", is_dir: false, children: null }
+				{ name: "alpha.ts", path: "${ROOT_A}/alpha.ts", is_dir: false, children: null },
+				{ name: "track.mp3", path: "${ROOT_A}/track.mp3", is_dir: false, children: null }
 			];
 		}
 		if (cmd === "workspace_file_size") return 512;
@@ -313,6 +314,24 @@ test.describe("Herdr Workspace integration", () => {
 		await expect(preview.getByRole("checkbox")).toBeChecked();
 		await page.getByTitle("편집 모드로 전환").click();
 		await expect(page.locator(".workspace-editor__codemirror")).toBeVisible();
+	});
+
+	test("MP3 files open in the audio player without a UTF-8 text read", async ({ page }) => {
+		await openWorkspace(page);
+		await page
+			.locator(".herdr-workspace__files")
+			.getByRole("button", { name: /track\.mp3/ })
+			.click();
+
+		await expect(page.getByTestId("workspace-viewer")).toBeVisible();
+		await expect(
+			page.locator('.workspace-editor__media-viewer audio[controls]'),
+		).toBeVisible();
+		await expect(page.getByText("audio/mpeg", { exact: true })).toBeVisible();
+		const textReadPaths = (await commandArgs(page, "workspace_read_file"))
+			.map((args) => args?.path)
+			.filter(Boolean);
+		expect(textReadPaths).not.toContain(`${ROOT_A}/track.mp3`);
 	});
 
 	test("a first-run black terminal becomes a visible retryable Herdr error", async ({
