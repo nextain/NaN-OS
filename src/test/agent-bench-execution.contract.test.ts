@@ -16,7 +16,7 @@ import {
   type CommandRunnerPort,
   type VerificationStep,
 } from "./harness/bench-execution.js";
-import { parseScenarios, ownedByEpic, allHeadings } from "./harness/agent-bench-scenarios.js";
+import { DEFERRED_SCENARIOS, parseScenarios, ownedByEpic, allHeadings } from "./harness/agent-bench-scenarios.js";
 import { judge } from "../main/domain/agent-bench.js";
 import type { BenchScenario } from "../main/domain/agent-bench.js";
 
@@ -312,9 +312,17 @@ describe("문서와 하네스가 어긋나면 드러난다", () => {
   it("확인 수단이 하나도 없는 시나리오를 이름으로 안다", () => {
     // 없는 것 자체는 사실일 수 있다. 다만 몇 개인지가 아니라 무엇인지 알아야 한다.
     const orphans = scenarios.filter((sc) => (VERIFICATION[sc.id] ?? []).length === 0).map((sc) => sc.id);
-    // 2026-08-26 부로 0 이다. 하나라도 생기면 여기서 이름이 드러난다 —
-    // "몇 개 없다"가 아니라 "무엇이 없다"를 알아야 손댈 수 있다.
-    expect(orphans, `확인 수단 없는 시나리오: ${orphans.join(", ")}`).toEqual([]);
+    // 확인 수단 없는 시나리오는 유예로 *이름을 걸어* 선언한 것만 허용한다.
+    // 조용히 비어 있는 것과 "왜 아직 안 됐는지 적어 둔 것"은 다르다.
+    expect(orphans.sort(), `확인 수단 없는 시나리오: ${orphans.join(", ")}`).toEqual(
+      Object.keys(DEFERRED_SCENARIOS).sort(),
+    );
+  });
+
+  it("유예 선언에 사유가 적혀 있다 — 이름만 걸어 두고 넘어가지 않는다", () => {
+    for (const [id, reason] of Object.entries(DEFERRED_SCENARIOS)) {
+      expect(reason.length, `${id} 에 사유가 없다`).toBeGreaterThan(20);
+    }
   });
 
   it("문서에서 실제로 수단을 읽어 왔다 — 손으로 적은 것만 있는 게 아니다", () => {

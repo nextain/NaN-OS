@@ -72,6 +72,16 @@ export function renderReport(summary: BenchSummary, verdicts: readonly Verdict[]
   return lines.join("\n");
 }
 
+/**
+ * 보고서에 찍힌 판본이 지금 저장소의 HEAD 와 다르면, 그 보고서는 지금 상태의 증거가 아니다.
+ * 앞서 34/34 보고서가 한 커밋 이전 판본으로 찍혀 있었다(2026-08-27 적대리뷰 지적).
+ */
+export function assertReportMatchesHead(report: string, head: string): void {
+  if (!report.includes(head)) {
+    throw new Error(`보고서가 현재 HEAD(${head}) 의 것이 아니다 — 다시 돌려야 한다`);
+  }
+}
+
 export class FileBenchReportSink implements BenchReportSinkPort {
   constructor(
     private readonly path: string,

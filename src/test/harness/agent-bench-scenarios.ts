@@ -17,7 +17,13 @@ const FAMILIES: readonly {
   { prefix: "UC-HERDR-CONTROL-", gate: "native", requiredEvidence: ["native"] },
   // 환경 도구는 실제 브라우저와 실제 터미널을 모두 거쳐야 한다.
   { prefix: "UC-ENV-TOOL-", gate: "native", requiredEvidence: ["browser", "native"] },
-  // 오케스트레이션은 실제 코딩 작업자가 돌아야 한다.
+  // 오케스트레이션은 실제로 도는 작업자 프로세스와 실제 디스크를 거쳐야 한다.
+  //
+  // ⚠️ 여기서 말하는 worker 는 "실제로 도는 작업자 프로세스"다. 코딩 모델 제공자
+  //    (codex·claude·opencode)를 띄우는 것은 이 계열이 확인하는 성질이 아니고, 이 저장소는
+  //    아직 그것을 확인하지 않는다 — 그 자리는 `UC-ORCHESTRATION-CODING-PROVIDER` 로
+  //    따로 선언해 두고 미검증으로 남긴다. 등급 이름 하나로 두 가지를 뭉뚱그리면
+  //    "실제 코딩 작업자를 확인했다"는 잘못된 인상을 준다(2026-08-27 적대리뷰 지적).
   { prefix: "UC-ORCHESTRATION-", gate: "integration", requiredEvidence: ["worker", "native"] },
   // 채널 연속성은 실제 런타임 재시작을 거쳐야 한다.
   { prefix: "UC-CHANNEL-SESSION-", gate: "integration", requiredEvidence: ["native"] },
@@ -48,6 +54,18 @@ const SCENARIO_OVERRIDES: Readonly<Record<string, readonly EvidenceKind[]>> = {
   // 권한 등급 판정이라 특정 기질을 요구하지 않는다 — 실제 실행 앞에서 막히는지만 본다.
   "UC-ENV-TOOL-BOUNDARY-DENY": ["native"],
   // 취소는 UC 가 브라우저와 터미널을 함께 말한다 — 계열 기본값이 맞다.
+};
+
+/**
+ * 아직 확인 수단이 없다고 *이름을 걸고* 선언한 시나리오.
+ *
+ * 비어 있는 것과 다르다. 여기 없는데 증거가 없으면 게이트가 빨간불이 된다.
+ * 여기 있는 것은 "무엇이 왜 아직 안 됐는지"를 벤치가 계속 말하게 하는 자리다 —
+ * 조용히 목록에서 빼는 것을 막기 위해 이 목록 자체를 테스트가 감시한다.
+ */
+export const DEFERRED_SCENARIOS: Readonly<Record<string, string>> = {
+  "UC-ORCHESTRATION-CODING-PROVIDER":
+    "실제 코딩 모델 제공자를 띄우는 확인 수단이 없다. 자격증명과 비용이 실제로 소모되는 경로라 사람이 켜야 한다.",
 };
 
 const HEADING = /^###\s+(UC-[A-Z0-9-]+)/gm;

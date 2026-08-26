@@ -49,6 +49,15 @@ export interface VerificationStep {
    * 주변 환경에 기대면 "내 셸에서는 되는데" 가 되어 벤치를 아무도 재현하지 못한다.
    */
   readonly env?: (repoRoot: string) => Readonly<Record<string, string>>;
+  /**
+   * 이 시나리오를 실제로 증명하는 테스트 케이스 이름(부분 문자열).
+   *
+   * 왜 필요한가: 파일 단위로만 묶으면 그 파일의 *무관한* 테스트가 통과해도 시나리오가
+   * 증명된 것으로 셈된다. 종료 코드 0 은 "실행기가 떴다"는 뜻이지 "이 시나리오가
+   * 확인됐다"는 뜻이 아니다(2026-08-27 적대리뷰 지적).
+   * 여기 적힌 이름이 통과 목록에 없으면 영수증을 만들지 않는다.
+   */
+  readonly cases?: readonly string[];
 }
 
 /**
@@ -81,48 +90,53 @@ export function e2eTauriEnv(repoRoot: string): Readonly<Record<string, string>> 
 /** 실행부가 부를 수 있는 실행 파일. 목록 밖은 무단 외부 효과로 남는다. */
 export const ALLOWED_EXECUTABLES: readonly string[] = ["npx", "node"];
 
-const VITEST = (spec: string, why: string, cwd = "."): VerificationStep => ({
+const VITEST = (spec: string, why: string, cwd = ".", cases?: readonly string[]): VerificationStep => ({
   kind: "mock",
   cmd: "npx",
-  args: ["vitest", "run", spec],
+  // 사람이 읽는 출력만으로는 어떤 케이스가 통과했는지 확실히 알 수 없다.
+  args: ["vitest", "run", "--reporter=json", spec],
   cwd,
   why,
+  ...(cases ? { cases } : {}),
 });
 
-const PLAYWRIGHT = (spec: string, why: string): VerificationStep => ({
+const PLAYWRIGHT = (spec: string, why: string, cases?: readonly string[]): VerificationStep => ({
   // 실제 DOM 을 그리지만 Tauri IPC 는 대역이다 — native 가 아니라 browser 등급이다.
   kind: "browser",
   cmd: "npx",
   args: ["playwright", "test", spec],
   cwd: "packages/shell",
   why,
+  ...(cases ? { cases } : {}),
 });
 
 /**
  * 실제 프로세스로 도는 작업자를 띄운다 — 대역 작업자가 아니므로 worker 등급이다.
  * 같은 파일이 실제 디스크도 쓰므로 native 단계와 짝으로 등록한다.
  */
-const LIVE_WORKER = (spec: string, why: string): VerificationStep => ({
+const LIVE_WORKER = (spec: string, why: string, cases?: readonly string[]): VerificationStep => ({
   kind: "worker",
   cmd: "npx",
-  args: ["vitest", "run", spec],
+  args: ["vitest", "run", "--reporter=json", spec],
   cwd: ".",
   why,
   env: () => ({}),
+  ...(cases ? { cases } : {}),
 });
 
 /** 살아 있는 Herdr 을 실제로 조회한다 — 대역이 아니므로 native 등급이다. */
-const LIVE_HERDR = (spec: string, why: string): VerificationStep => ({
+const LIVE_HERDR = (spec: string, why: string, cases?: readonly string[]): VerificationStep => ({
   kind: "native",
   cmd: "npx",
-  args: ["vitest", "run", spec],
+  args: ["vitest", "run", "--reporter=json", spec],
   cwd: ".",
   why,
   // 이 단계는 herdr 실행 파일만 있으면 된다 — 따로 갖출 환경이 없다.
   env: () => ({}),
+  ...(cases ? { cases } : {}),
 });
 
-const E2E_TAURI = (spec: string, why: string): VerificationStep => ({
+const E2E_TAURI = (spec: string, why: string, cases?: readonly string[]): VerificationStep => ({
   // 실 Rust 백엔드까지 간다.
   kind: "native",
   cmd: "npx",
@@ -130,6 +144,7 @@ const E2E_TAURI = (spec: string, why: string): VerificationStep => ({
   cwd: "packages/shell",
   why,
   env: e2eTauriEnv,
+  ...(cases ? { cases } : {}),
 });
 
 /**
@@ -216,102 +231,163 @@ export function specResolver(repoRoot: string) {
 
 export const EXTRA_VERIFICATION: Readonly<Record<string, readonly VerificationStep[]>> = {
   "UC-ORCHESTRATION-CLASSIFY": [
-    LIVE_WORKER("src/test/orchestration-live.contract.test.ts", "분류가 실제 작업 흐름 위에서 성립하는지"),
-    LIVE_HERDR("src/test/orchestration-live.contract.test.ts", "결속과 산출물이 실제 디스크에 남는지"),
+    LIVE_WORKER("src/test/orchestration-live.contract.test.ts", "분류가 실제 작업 흐름 위에서 성립하는지",
+      ["저장소를 바꾸는 일은 이슈로 분류된다"],
+    ),
+    LIVE_HERDR("src/test/orchestration-live.contract.test.ts", "결속과 산출물이 실제 디스크에 남는지",
+      ["저장소를 바꾸는 일은 이슈로 분류된다"],
+    ),
   ],
   "UC-ORCHESTRATION-ISSUE-LEAD": [
-    LIVE_WORKER("src/test/orchestration-live.contract.test.ts", "실제 작업자가 돌고 완료 선언이 판정에 쓰이지 않는지"),
-    LIVE_HERDR("src/test/orchestration-live.contract.test.ts", "결속과 산출물이 실제 디스크에 남는지"),
+    LIVE_WORKER("src/test/orchestration-live.contract.test.ts", "실제 작업자가 돌고 완료 선언이 판정에 쓰이지 않는지",
+      ["이슈를 열고 리더를 세우고 실제 작업자가 돈다", "작업자의 완료 선언과 권한 요구는 반영되지 않는다"],
+    ),
+    LIVE_HERDR("src/test/orchestration-live.contract.test.ts", "결속과 산출물이 실제 디스크에 남는지",
+      ["이슈를 열고 리더를 세우고 실제 작업자가 돈다", "작업자의 완료 선언과 권한 요구는 반영되지 않는다"],
+    ),
   ],
   "UC-ORCHESTRATION-WORKER-REPLACE": [
-    LIVE_WORKER("src/test/orchestration-live.contract.test.ts", "실제로 도는 작업자를 멈추고 교체해도 증거가 남는지"),
-    LIVE_HERDR("src/test/orchestration-live.contract.test.ts", "결속과 산출물이 실제 디스크에 남는지"),
+    LIVE_WORKER("src/test/orchestration-live.contract.test.ts", "실제로 도는 작업자를 멈추고 교체해도 증거가 남는지",
+      ["작업자를 교체해도 이슈 증거가 유지된다"],
+    ),
+    LIVE_HERDR("src/test/orchestration-live.contract.test.ts", "결속과 산출물이 실제 디스크에 남는지",
+      ["작업자를 교체해도 이슈 증거가 유지된다"],
+    ),
   ],
   "UC-ORCHESTRATION-RESTART-RESUME": [
-    LIVE_WORKER("src/test/orchestration-live.contract.test.ts", "실제 작업자 상태를 관측해 재개 태도를 정하는지"),
-    LIVE_HERDR("src/test/orchestration-live.contract.test.ts", "결속과 산출물이 실제 디스크에 남는지"),
+    LIVE_WORKER("src/test/orchestration-live.contract.test.ts", "실제 작업자 상태를 관측해 재개 태도를 정하는지",
+      ["재시작 뒤 찾으면 실제 작업자 상태로 태도를 정한다"],
+    ),
+    LIVE_HERDR("src/test/orchestration-live.contract.test.ts", "결속과 산출물이 실제 디스크에 남는지",
+      ["재시작 뒤 찾으면 실제 작업자 상태로 태도를 정한다"],
+    ),
   ],
   "UC-ENV-TOOL-BROWSE": [
     E2E_TAURI(
       "e2e-tauri/specs/env-tool-browser-native.spec.ts",
       "참조 기반 조작 명령이 실 Rust 에 등록돼 있고 좌표 명령은 열려 있지 않은지",
+      ["등록돼 있지 않다"],
     ),
   ],
   "UC-ENV-TOOL-TERMINAL-EXEC": [
-    LIVE_HERDR("src/test/env-tool-live.contract.test.ts", "구조화된 명령이 실제 터미널에서 실행되고 결과가 함께 돌아오는지"),
+    LIVE_HERDR("src/test/env-tool-live.contract.test.ts", "구조화된 명령이 실제 터미널에서 실행되고 결과가 함께 돌아오는지",
+      ["구조화된 명령이 실제로 실행되고 결과가 함께 돌아온다"],
+    ),
   ],
   "UC-ENV-TOOL-CANCEL": [
     LIVE_HERDR("src/test/env-tool-live.contract.test.ts", "터미널 쪽: 진행 중인 작업이 실제로 멈추고 취소가 실패와 구별되는지"),
-    PLAYWRIGHT("e2e/env-tool-browser.spec.ts", "브라우저 쪽: 중단 신호가 실제로 나가는지"),
+    PLAYWRIGHT("e2e/env-tool-browser.spec.ts", "브라우저 쪽: 중단 신호가 실제로 나가는지",
+      ["멈추라고 하면 중단 요청이 실제로 나간다"],
+    ),
   ],
   "UC-ENV-TOOL-BOUNDARY-DENY": [
-    LIVE_HERDR("src/test/env-tool-live.contract.test.ts", "등급과 승인이 실제 실행 앞에서 지켜지는지"),
+    LIVE_HERDR("src/test/env-tool-live.contract.test.ts", "등급과 승인이 실제 실행 앞에서 지켜지는지",
+      ["파일을 고칠 수 있다고 메시지를 보낼 수 있는 것은 아니다", "자격증명을 쓰는 호출은 별도 승인이 필요하다"],
+    ),
   ],
   "UC-CHANNEL-SESSION-HANDOFF": [
-    E2E_TAURI("e2e-tauri/specs/channel-reboot.spec.ts", "한 이슈에 대화 정체성 하나만 실 디스크에 남는지"),
+    E2E_TAURI("e2e-tauri/specs/channel-reboot.spec.ts", "한 이슈에 대화 정체성 하나만 실 디스크에 남는지",
+      ["한 이슈에 대화 정체성이 하나만 남는다"],
+    ),
   ],
   "UC-CHANNEL-SESSION-DUPLICATE-DELIVERY": [
-    E2E_TAURI("e2e-tauri/specs/channel-reboot.spec.ts", "처리 이력이 재부팅을 넘어 실제로 남는지"),
+    E2E_TAURI("e2e-tauri/specs/channel-reboot.spec.ts", "처리 이력이 재부팅을 넘어 실제로 남는지",
+      ["처리 이력이 재부팅을 넘어 남는다"],
+    ),
   ],
   "UC-CHANNEL-SESSION-DISCLOSURE-DENY": [
-    E2E_TAURI("e2e-tauri/specs/channel-reboot.spec.ts", "채널 발신함에 기밀이 실리지 않는지"),
+    E2E_TAURI("e2e-tauri/specs/channel-reboot.spec.ts", "채널 발신함에 기밀이 실리지 않는지",
+      ["워크스페이스 기밀이 채널로 나가는 자리에 적히지 않는다"],
+    ),
   ],
   "UC-HERDR-CONTROL-OBSERVE": [
-    LIVE_HERDR("src/test/herdr-control-live.contract.test.ts", "살아 있는 Herdr 의 자원과 개정을 실제로 읽는다"),
+    LIVE_HERDR("src/test/herdr-control-live.contract.test.ts", "살아 있는 Herdr 의 자원과 개정을 실제로 읽는다",
+      ["자원을 타입이 선언된 값으로 읽는다", "스냅샷에 개정이 실려 있고 단조 증가한다"],
+    ),
   ],
   "UC-HERDR-CONTROL-MUTATE": [
-    LIVE_HERDR("src/test/herdr-control-live.contract.test.ts", "구조화된 요청이 실제 환경에서 실행되고 멱등이 지켜진다"),
+    LIVE_HERDR("src/test/herdr-control-live.contract.test.ts", "구조화된 요청이 실제 환경에서 실행되고 멱등이 지켜진다",
+      ["구조화된 요청이 실제로 실행된다", "같은 멱등 키를 다시 보내도 두 번 실행하지 않는다"],
+    ),
   ],
   "UC-HERDR-CONTROL-STALE-REVISION": [
-    LIVE_HERDR("src/test/herdr-control-live.contract.test.ts", "낡은 개정이 실제 환경에서도 충돌로 거절된다"),
+    LIVE_HERDR("src/test/herdr-control-live.contract.test.ts", "낡은 개정이 실제 환경에서도 충돌로 거절된다",
+      ["낡은 개정으로 온 요청은 충돌로 거절된다"],
+    ),
   ],
   "UC-HERDR-CONTROL-RECONNECT": [
-    LIVE_HERDR("src/test/herdr-control-live.contract.test.ts", "실제 재접속 뒤 태도가 증거에 따라 정해진다"),
+    LIVE_HERDR("src/test/herdr-control-live.contract.test.ts", "실제 재접속 뒤 태도가 증거에 따라 정해진다",
+      ["재접속하면 현재 상태를 다시 확인한다"],
+    ),
   ],
   "UC-WORKSPACE-CONTEXT-DISCOVER": [
-    LIVE_HERDR("src/test/workspace-context-real-fs.contract.test.ts", "실제 디스크의 진입점을 읽는다"),
+    LIVE_HERDR("src/test/workspace-context-real-fs.contract.test.ts", "실제 디스크의 진입점을 읽는다",
+      ["진입점이 선언한 문서를 실제 파일에서 읽는다"],
+    ),
   ],
   "UC-WORKSPACE-CONTEXT-ENTER-PROJECT": [
-    LIVE_HERDR("src/test/workspace-context-real-fs.contract.test.ts", "실제 디렉터리로 프로젝트에 진입한다"),
+    LIVE_HERDR("src/test/workspace-context-real-fs.contract.test.ts", "실제 디렉터리로 프로젝트에 진입한다",
+      ["프로젝트에 들어가면 범위와 개정이 함께 바뀐다"],
+    ),
   ],
   "UC-WORKSPACE-CONTEXT-SWITCH-PROJECT": [
-    LIVE_HERDR("src/test/workspace-context-real-fs.contract.test.ts", "실제 디렉터리 사이를 전환한다"),
+    LIVE_HERDR("src/test/workspace-context-real-fs.contract.test.ts", "실제 디렉터리 사이를 전환한다",
+      ["프로젝트를 바꾸면 이전 지역 컨텍스트가 남지 않는다"],
+    ),
   ],
   "UC-WORKSPACE-CONTEXT-BROKEN-ENTRYPOINT": [
-    LIVE_HERDR("src/test/workspace-context-real-fs.contract.test.ts", "없는 진입점을 실제 디스크에서 확인한다"),
+    LIVE_HERDR("src/test/workspace-context-real-fs.contract.test.ts", "없는 진입점을 실제 디스크에서 확인한다",
+      ["없는 진입점을 성공으로 말하지 않는다"],
+    ),
   ],
   "UC-ENV-LIVE-OBSERVE": [
     LIVE_HERDR(
       "src/test/environment-live-herdr.contract.test.ts",
       "살아 있는 Herdr 이 실제로 내는 모양으로 관측 경로를 끝까지 밟는다 — 읽기 전용",
+      ["실제 관측이 대화에 실을 세그먼트가 된다", "실제 pane 식별자가 뇌에 올라가지 않는다"],
     ),
   ],
   "UC-ENV-LIVE-ACT": [
     LIVE_HERDR(
       "src/test/environment-live-act.contract.test.ts",
       "전용 워크스페이스를 만들어 실제 터미널에 명령을 넣고 멈춘다 — 사용자 터미널은 건드리지 않는다",
+      ["run 의도가 실제 터미널에서 실행된다", "interrupt 의도가 돌고 있는 것을 실제로 멈춘다"],
     ),
   ],
   "UC-ENV-SURFACE-OBSERVE": [
-    LIVE_HERDR("src/test/environment-live-herdr.contract.test.ts", "살아 있는 Herdr 이 내는 실제 모양으로 관측"),
+    LIVE_HERDR("src/test/environment-live-herdr.contract.test.ts", "살아 있는 Herdr 이 내는 실제 모양으로 관측",
+      ["실제 스냅샷이 보고로 바뀐다"],
+    ),
   ],
   "UC-ENV-SURFACE-ACT": [
-    LIVE_HERDR("src/test/environment-live-act.contract.test.ts", "번역된 호출이 실제 터미널에서 효과를 낸다"),
+    LIVE_HERDR("src/test/environment-live-act.contract.test.ts", "번역된 호출이 실제 터미널에서 효과를 낸다",
+      ["run 의도가 실제 터미널에서 실행된다"],
+    ),
   ],
   "UC-ENV-SURFACE-DENY": [
-    LIVE_HERDR("src/test/environment-live-act.contract.test.ts", "도달 경로가 없는 의도가 실제 환경에서도 거절되는지"),
+    LIVE_HERDR("src/test/environment-live-act.contract.test.ts", "도달 경로가 없는 의도가 실제 환경에서도 거절되는지",
+      ["허용되지 않은 의도는 실제 환경에 닿지 못한다"],
+    ),
   ],
   "UC-ENV-SURFACE-DATA": [
-    LIVE_HERDR("src/test/environment-live-act.contract.test.ts", "실제 터미널이 만든 지시문 같은 이름이 자료로만 올라오는지"),
+    LIVE_HERDR("src/test/environment-live-act.contract.test.ts", "실제 터미널이 만든 지시문 같은 이름이 자료로만 올라오는지",
+      ["환경이 만든 이름이 지시문이 아니라 자료로 올라간다"],
+    ),
   ],
   "UC-ENV-DISPATCH-STRUCTURED": [
-    E2E_TAURI("e2e-tauri/specs/environment-dispatch.spec.ts", "구조화 전달이 실 Rust 경계를 통과하는지"),
+    E2E_TAURI("e2e-tauri/specs/environment-dispatch.spec.ts", "구조화 전달이 실 Rust 경계를 통과하는지",
+      ["herdr_run_pane 이 등록돼 있다"],
+    ),
   ],
   "UC-ENV-DISPATCH-TERMINAL": [
-    E2E_TAURI("e2e-tauri/specs/environment-dispatch.spec.ts", "터미널 입력 인자를 Rust 가 실제로 검증하는지"),
+    E2E_TAURI("e2e-tauri/specs/environment-dispatch.spec.ts", "터미널 입력 인자를 Rust 가 실제로 검증하는지",
+      ["플래그로 해석될 수 있는 키", "키 개수 상한"],
+    ),
   ],
   "UC-ENV-DISPATCH-REFUSE": [
-    E2E_TAURI("e2e-tauri/specs/environment-dispatch.spec.ts", "열지 않은 명령이 등록돼 있지 않은지"),
+    E2E_TAURI("e2e-tauri/specs/environment-dispatch.spec.ts", "열지 않은 명령이 등록돼 있지 않은지",
+      ["이 슬라이스가 열지 않은 herdr 명령은 등록돼 있지 않다"],
+    ),
   ],
 };
 
@@ -350,8 +426,44 @@ export const MISSING_SPECS: readonly string[] = deriveVerification(
   specResolver(REPO_ROOT),
 ).missing;
 
+/**
+ * 통과한 테스트 케이스 이름을 읽는다.
+ * 기계가 읽는 출력이 있으면 그것을 쓰고, 없으면 사람이 읽는 출력의 통과 표시를 읽는다.
+ * 아무것도 못 읽으면 빈 집합이다 — 지어내지 않는다.
+ */
+export function parsePassedCases(stdout: string): ReadonlySet<string> {
+  const names = new Set<string>();
+  // vitest --reporter=json / playwright --reporter=json
+  const jsonStart = stdout.indexOf("{");
+  if (jsonStart >= 0) {
+    try {
+      const parsed = JSON.parse(stdout.slice(jsonStart)) as {
+        testResults?: { assertionResults?: { status?: string; fullName?: string; title?: string }[] }[];
+        suites?: unknown;
+      };
+      for (const file of parsed.testResults ?? []) {
+        for (const a of file.assertionResults ?? []) {
+          if (a.status === "passed") names.add(String(a.fullName ?? a.title ?? ""));
+        }
+      }
+    } catch {
+      // JSON 이 아니면 아래 텍스트 경로로 내려간다.
+    }
+  }
+  // 사람이 읽는 출력의 통과 표시(playwright, wdio/mocha).
+  for (const m of stdout.matchAll(/[✓✔]\s+(?:\d+\s+)?(?:\[[^\]]*\]\s+›\s+)?(.+?)(?:\s+\(\d+(?:\.\d+)?m?s\))?\s*$/gm)) {
+    const name = (m[1] ?? "").trim();
+    if (name) names.add(name);
+  }
+  return names;
+}
+
 /** vitest·playwright·wdio 출력에서 통과한 테스트 수를 읽는다. 못 읽으면 0. */
 export function parseTestCount(stdout: string): number {
+  // 기계 판독 출력이면 통과 케이스를 직접 센다. 사람이 읽는 요약줄이 없기 때문이다 —
+  // 이걸 빠뜨려서 JSON 으로 바꾼 순간 모든 영수증이 사라졌다(2026-08-27).
+  const machine = parsePassedCases(stdout);
+  if (machine.size > 0) return machine.size;
   const vitest = /Tests\s+(?:\d+\s+failed\s+\|\s+)?(\d+)\s+passed/.exec(stdout);
   if (vitest) return Number(vitest[1]);
   const playwright = /(\d+)\s+passed/.exec(stdout);
@@ -416,11 +528,26 @@ export class CommandBenchExecution implements BenchExecutionPort {
       latencyMs += result.ms;
       testCount += parseTestCount(result.stdout);
       artifacts.push(`${label} → exit ${result.code}`);
-      if (result.code === 0) {
-        // 통과한 것만 증거가 된다. 실패는 영수증을 만들지 않는다.
-        receipts.push({ scenarioId: scenario.id, kind: step.kind, ref: label });
-        completionEvidence.push(`${label} — ${step.why}`);
+      if (result.code !== 0) continue; // 실패는 영수증을 만들지 않는다.
+
+      const passed = parsePassedCases(result.stdout);
+      const parsedCount = parseTestCount(result.stdout);
+      if (parsedCount === 0) {
+        // 종료 코드 0 은 "실행기가 떴다"는 뜻이다. 통과한 테스트를 하나도 못 읽었으면
+        // 이 실행은 증거가 아니다 — 실행기 기동만으로 증거를 만들지 않는다.
+        artifacts.push(`${label} → 통과한 테스트를 읽지 못해 증거로 세지 않음`);
+        continue;
       }
+      if (step.cases && step.cases.length > 0) {
+        const missing = step.cases.filter((c) => ![...passed].some((n) => n.includes(c)));
+        if (missing.length > 0) {
+          // 파일은 통과했지만 이 시나리오를 증명하는 케이스가 돌지 않았다.
+          artifacts.push(`${label} → 시나리오 케이스 미확인: ${missing.join(" / ")}`);
+          continue;
+        }
+      }
+      receipts.push({ scenarioId: scenario.id, kind: step.kind, ref: label });
+      completionEvidence.push(`${label} — ${step.why}`);
     }
 
     const safety: SafetyObservation = { leakedProjects: [], unauthorizedEffects };

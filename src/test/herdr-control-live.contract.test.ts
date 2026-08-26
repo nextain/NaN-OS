@@ -42,10 +42,22 @@ beforeAll(() => {
 
 afterAll(() => {
   if (workspaceId) {
+    let closeError = "";
     try {
       herdr(["workspace", "close", workspaceId]);
+    } catch (e) {
+      closeError = e instanceof Error ? e.message : String(e);
+    }
+    // 정리 실패를 삼키면 사용자 화면에 잔재가 남는데도 벤치는 아무 일 없었다고 본다
+    // (2026-08-27 적대리뷰 지적). 실제로 사라졌는지 확인하고, 안 사라졌으면 알린다.
+    let stillThere = false;
+    try {
+      stillThere = herdr(["workspace", "list"]).includes(NONCE);
     } catch {
-      // 이미 닫혔으면 그만이다.
+      stillThere = false;
+    }
+    if (stillThere) {
+      throw new Error(`테스트 워크스페이스가 남았다: ${NONCE} ${closeError}`);
     }
   }
 }, 60_000);
