@@ -165,6 +165,41 @@ describe("조작이 실제 명령까지 간다 (FR-ENV-LIVE.3·5)", () => {
     expect(calls, "권한이 없는데 환경에 명령이 나갔다").toHaveLength(0);
   });
 
+  it("interrupt 가 실제 키 전송까지 간다", async () => {
+    // 이 경로는 배선 감사 전까지 어디에서도 검증되지 않았다(2026-08-26). 하필 키 표기법이
+    // 실제 환경에서 확인되지 않은(verified:false) 경로라, 안 밟아 보면 형태조차 모른다.
+    const session = new EnvironmentSession();
+    session.observeSnapshot({ panes: [pane("t1", { label: "zsh" })] });
+    const token = session.latestReport()?.surfaces[0]?.ref.token as string;
+    const { port, calls } = recorder();
+    const outcome = await session.act({ kind: "interrupt", surface: surfaceRef(token) }, port, ALL_GRANTS);
+    expect(outcome.ok).toBe(true);
+    expect(calls[0]?.command).toBe("herdr_send_keys");
+    expect(calls[0]?.args).toEqual({ paneId: "t1", keys: ["C-c"] });
+  });
+
+  it("interrupt 도 터미널 입력 권한을 요구한다 — 멈추는 것도 타이핑이다", async () => {
+    const session = new EnvironmentSession();
+    session.observeSnapshot({ panes: [pane("t1", { label: "zsh" })] });
+    const token = session.latestReport()?.surfaces[0]?.ref.token as string;
+    const { port, calls } = recorder();
+    const outcome = await session.act({ kind: "interrupt", surface: surfaceRef(token) }, port, {
+      workspaceObserve: true,
+      terminalInput: false,
+    });
+    expect(outcome.ok).toBe(false);
+    expect(calls).toHaveLength(0);
+  });
+
+  it("에이전트가 붙은 표면도 interrupt 는 키로 간다 — 구조화 경로가 없다", async () => {
+    const session = new EnvironmentSession();
+    session.observeSnapshot({ panes: [pane("p1", { agent: "codex" })] });
+    const token = session.latestReport()?.surfaces[0]?.ref.token as string;
+    const { port, calls } = recorder();
+    await session.act({ kind: "interrupt", surface: surfaceRef(token) }, port, ALL_GRANTS);
+    expect(calls[0]?.command).toBe("herdr_send_keys");
+  });
+
   it("환경이 던진 오류를 성공으로 바꾸지 않는다 (FR-ENV-LIVE.5)", async () => {
     const session = new EnvironmentSession();
     session.observeSnapshot({ panes: [pane("p1", { agent: "codex" })] });

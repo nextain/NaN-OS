@@ -121,6 +121,26 @@ describe("조작 (FR-ENV-LIVE.3~5)", () => {
 		expect(out).toContain("herdr socket closed");
 	});
 
+	it("interrupt 가 도구 경로로도 실제 전송까지 간다", async () => {
+		const d = deps([pane("t1", { label: "zsh" })], { terminalInput: true });
+		await executeEnvironmentSkill({ action: "observe" }, d);
+		const token = d.session.latestReport()?.surfaces[0]?.ref.token as string;
+		expect(await executeEnvironmentSkill({ action: "interrupt", surface: token }, d)).toBe(
+			"전달됨: interrupt",
+		);
+		expect(d.calls[0]?.command).toBe("herdr_send_keys");
+	});
+
+	it("권한이 꺼져 있으면 interrupt 도 거절된다", async () => {
+		const d = deps([pane("t1", { label: "zsh" })], { terminalInput: false });
+		await executeEnvironmentSkill({ action: "observe" }, d);
+		const token = d.session.latestReport()?.surfaces[0]?.ref.token as string;
+		expect(await executeEnvironmentSkill({ action: "interrupt", surface: token }, d)).toContain(
+			"거절:",
+		);
+		expect(d.calls).toHaveLength(0);
+	});
+
 	it("지어낸 손잡이는 환경에 닿지 못한다", async () => {
 		const d = deps([pane("p1", { agent: "codex" })]);
 		const out = await executeEnvironmentSkill({ action: "focus", surface: "s-999" }, d);

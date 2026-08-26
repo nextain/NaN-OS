@@ -150,6 +150,64 @@ test.describe("#502 환경 스킬 배선 (FR-ENV-LIVE)", () => {
 			.toBe(true);
 	});
 
+	test("(A2) 앱을 전환해도 환경 도구가 해제되지 않는다", async ({ page }) => {
+		// 화면 앱은 전환 시 app_skills_clear 대상이다. 환경은 화면 앱이 아니라 상시 표면이라
+		// 대상이 아니어야 하는데, 그동안 주석으로만 단언돼 있었다. 지워지면 나이아가
+		// 첫 앱 전환 이후로 작업 표면을 조용히 못 보게 된다.
+		await boot(page, BASE_CONFIG);
+		await expect
+			.poll(
+				async () =>
+					page.evaluate(() => {
+						const out =
+							(window as unknown as { __E2E_OUTBOUND__?: Record<string, unknown>[] })
+								.__E2E_OUTBOUND__ ?? [];
+						return out.some((m) => m?.type === "app_skills" && m?.appId === "environment");
+					}),
+				{ timeout: 10_000 },
+			)
+			.toBe(true);
+
+		const before = await page.evaluate(
+			() =>
+				(
+					(window as unknown as { __E2E_OUTBOUND__?: Record<string, unknown>[] })
+						.__E2E_OUTBOUND__ ?? []
+				).length,
+		);
+
+		// 앱 전환을 실제로 일으킨다. 레일 버튼을 차례로 눌러 활성 앱이 바뀌게 한다.
+		const rails = page.locator("[data-app-id]");
+		const count = await rails.count();
+		for (let i = 0; i < Math.min(count, 4); i += 1) {
+			await rails.nth(i).click({ timeout: 2_000 }).catch(() => {});
+			await page.waitForTimeout(400);
+		}
+		await page.waitForTimeout(1_000);
+
+		const after = await page.evaluate(() => {
+			const out =
+				(window as unknown as { __E2E_OUTBOUND__?: Record<string, unknown>[] })
+					.__E2E_OUTBOUND__ ?? [];
+			return {
+				total: out.length,
+				clearedEnv: out.filter(
+					(m) => m?.type === "app_skills_clear" && m?.appId === "environment",
+				).length,
+				anySwitchTraffic: out.filter(
+					(m) => m?.type === "app_skills_clear" || m?.type === "app_skills",
+				).length,
+			};
+		});
+
+		// 전환이 실제로 일어나지 않았으면 아래 단언은 아무것도 증명하지 못한다.
+		expect(
+			after.total > before || after.anySwitchTraffic > 1,
+			`앱 전환이 실제로 일어나지 않았다 — 이 단언은 공허하다. 레일 버튼 ${count}개`,
+		).toBe(true);
+		expect(after.clearedEnv, "환경 도구가 앱 전환에서 해제됐다").toBe(0);
+	});
+
 	test("(B) 관측이 대화 요청에 environmentSurfaces 로 실린다", async ({ page }) => {
 		await boot(page, BASE_CONFIG);
 		const input = page.locator(".chat-input");

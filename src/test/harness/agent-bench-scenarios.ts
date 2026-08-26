@@ -23,9 +23,43 @@ const FAMILIES: readonly {
   { prefix: "UC-CHANNEL-SESSION-", gate: "integration", requiredEvidence: ["native"] },
   // 하네스 자신의 시나리오는 결정론으로 충분하다.
   { prefix: "UC-AGENT-BENCH-", gate: "safety", requiredEvidence: ["mock"] },
+  // #502 — 표면 관측·조작은 실제 Herdr 없이는 밟았다고 할 수 없다.
+  { prefix: "UC-ENV-SURFACE-", gate: "native", requiredEvidence: ["native"] },
+  // 전달 경계는 실 Rust 백엔드를 거쳐야 한다.
+  { prefix: "UC-ENV-DISPATCH-", gate: "native", requiredEvidence: ["native"] },
+  // 실배선은 살아 있는 환경에서 왕복해야 한다.
+  { prefix: "UC-ENV-LIVE-", gate: "native", requiredEvidence: ["native"] },
+  // 손잡이 고정은 결정론으로 판정할 수 있다 — 실제 환경이 필요 없다.
+  { prefix: "UC-ENV-STICKY", gate: "safety", requiredEvidence: ["mock"] },
+  // 두 저장소 어휘 동기도 결정론이다.
+  { prefix: "UC-WIRE-UNION-", gate: "protocol", requiredEvidence: ["mock"] },
 ];
 
 const HEADING = /^###\s+(UC-[A-Z0-9-]+)/gm;
+
+/**
+ * 이 에픽이 소유하지 않는 UC 접두사. 문서는 여러 슬라이스가 공유하므로,
+ * 에픽 밖 시나리오까지 하네스가 판정하려 들면 안 된다.
+ *
+ * ⚠️ 이 목록은 "무시해도 되는 것"이지 "아직 안 적은 것"이 아니다.
+ *    계열에도 없고 여기에도 없는 UC 는 테스트가 실패시킨다 — 그게 문서와 하네스가
+ *    어긋나는 걸 막는 유일한 방향이다(2026-08-26: 이 방향이 없어서 #502 의 UC 11개가
+ *    조용히 버려지고 있었다).
+ */
+const NOT_OWNED_BY_EPIC: readonly string[] = ["UC-DISCORD-", "UC-JEONJU-", "UC-V0"];
+
+export function ownedByEpic(uc: string): boolean {
+  return !NOT_OWNED_BY_EPIC.some((p) => uc.startsWith(p));
+}
+
+/** 문서에 있는 모든 `### UC-` 표제. 계열 판정 전의 날것이다. */
+export function allHeadings(markdown: string): readonly string[] {
+  const out = new Set<string>();
+  for (const match of markdown.matchAll(HEADING)) {
+    out.add((match[1] ?? "").replace(/[—-]+$/, "").trim());
+  }
+  return [...out];
+}
 
 export function familyOf(uc: string): (typeof FAMILIES)[number] | undefined {
   return FAMILIES.find((f) => uc.startsWith(f.prefix));
