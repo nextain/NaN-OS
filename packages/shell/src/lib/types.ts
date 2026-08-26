@@ -109,7 +109,23 @@ export interface ChatMessage {
 export type EnvironmentSegment =
 	| { kind: "avatarEmotion" }
 	| { kind: "app"; entries: { type: string; data: unknown }[] }
-	| { kind: "responseStyle"; style: "brief" | "normal" };
+	| { kind: "responseStyle"; style: "brief" | "normal" }
+	/**
+	 * #502 — 사용자의 작업 표면 관측. 손잡이는 불투명하고 pane 어휘는 올라가지 않는다.
+	 * ⚠️ 이 union 은 코어 `src/main/domain/chat.ts` 의 세 번째 사본이다.
+	 *    갈라지면 `src/test/wire-union-drift.contract.test.ts` 가 깨진다 (FR-ENV-LIVE.6).
+	 */
+	| {
+			kind: "environmentSurfaces";
+			// readonly — 코어가 내는 값을 그대로 실어 보낸다(복사하지 않는다).
+			surfaces: readonly {
+				readonly ref: string;
+				readonly label: string;
+				readonly activity: string;
+				readonly focused: boolean;
+			}[];
+			omitted: number;
+	  };
 
 export interface AgentRequest {
 	type: "chat_request";

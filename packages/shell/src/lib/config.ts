@@ -141,6 +141,12 @@ export interface AppConfig {
 	 * SoT: .agents/progress/naia-os-cascade-talking-avatar-2026-07-01.md
 	 */
 	cascadeRuntimeUrl?: string;
+	/**
+	 * #502 (FR-ENV-LIVE.4) — 나이아가 사용자의 터미널에 직접 입력하는 것을 허용하는가.
+	 * 사용자가 직접 타이핑하는 것과 같은 일이라 구조화 전달과 같은 권한으로 나가지 않는다.
+	 * 기본값은 꺼짐이며, 꺼져 있으면 거절 사유가 그대로 나이아에게 올라간다.
+	 */
+	environmentTerminalInput?: boolean;
 	customVrms?: string[];
 	customBgs?: string[];
 	sttProvider?: SttProviderId;

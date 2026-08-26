@@ -8,7 +8,7 @@
 // pane 13개 중 7개가 에이전트를 달고 있었다. workspace 나 tab 은 묶음이라 "무엇이 돌고 있나"에
 // 답하지 못한다.
 import { toReport, type EnvironmentReport, type RawSurface } from "../domain/environment-intent.js";
-import { mintRegistry, type SurfaceBinding, type SurfaceRegistry } from "../domain/environment-translation.js";
+import { mintRegistry, SurfaceRegistrar, type SurfaceBinding, type SurfaceRegistry } from "../domain/environment-translation.js";
 
 /** Herdr 스냅샷에서 이 슬라이스가 실제로 쓰는 필드만. 나머지는 보지 않는다. */
 export interface HerdrPaneLike {
@@ -77,7 +77,16 @@ export interface EnvironmentObservation {
  * 보고에 실린 표면만 대응표에 오른다. 상한 때문에 잘린 표면의 손잡이는 발행되지 않는다 —
  * 뇌가 보지 못한 표면을 가리킬 수 있으면 안 된다.
  */
-export function observe(snapshot: HerdrSnapshotLike | null | undefined, cap?: number): EnvironmentObservation {
+export function observe(
+  snapshot: HerdrSnapshotLike | null | undefined,
+  cap?: number,
+  /**
+   * 손잡이 발행기. 주면 손잡이가 표면에 고정된다 (FR-ENV-STICKY.1~3) —
+   * 뇌가 나중에 그 손잡이로 돌아오는 경로에는 반드시 준다.
+   * 안 주면 이 스냅샷 한정 순서 발행이다(관측만 하고 끝나는 호출).
+   */
+  registrar?: SurfaceRegistrar,
+): EnvironmentObservation {
   const panes = Array.isArray(snapshot?.panes) ? (snapshot?.panes as readonly HerdrPaneLike[]) : [];
   const bindings: PaneBinding[] = [];
   for (const pane of panes) {
@@ -86,12 +95,16 @@ export function observe(snapshot: HerdrSnapshotLike | null | undefined, cap?: nu
   }
   // 사용자가 보고 있는 표면이 먼저 오도록 domain 과 같은 순서로 맞춘 뒤 손잡이를 발행한다.
   const ordered = [...bindings].sort((a, b) => Number(b.focused) - Number(a.focused));
-  const registry = mintRegistry(ordered);
+  const registry = registrar ? registrar.registryFor(ordered) : mintRegistry(ordered);
+  // 표시 순서는 위 정렬이 정하고, 손잡이는 대응표가 정한다 —
+  // 고정 발행기에서는 손잡이가 순서와 무관하기 때문이다 (FR-ENV-STICKY.3).
+  const tokenOf = new Map<string, string>();
+  for (const [token, binding] of registry) tokenOf.set(binding.surfaceId, token);
   const raws: RawSurface[] = [];
-  let index = 0;
   for (const binding of ordered) {
-    index += 1;
-    raws.push({ token: `s-${index}`, label: binding.label, status: binding.status, focused: binding.focused });
+    const token = tokenOf.get(binding.surfaceId);
+    if (token === undefined) continue;
+    raws.push({ token, label: binding.label, status: binding.status, focused: binding.focused });
   }
   const report = toReport(raws, cap);
   const visible = new Set(report.surfaces.map((s) => s.ref.token));

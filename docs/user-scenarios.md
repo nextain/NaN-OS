@@ -1316,3 +1316,43 @@ Test Coverage Map (P02):
 
 상태 매트릭스: 기본(양쪽 일치), 빈 목록(추출 결과 0 — 공허 통과 방지로 실패), 오류(불일치),
 성공(대조 통과), 진행·좁은 폭(해당 없음 — UI 아님)을 매핑한다.
+
+## 2026-08-26 #502 실배선 — 관측과 조작이 실제로 오간다
+
+> 계약: `docs/progress/issue-497-universal-agent.md`.
+> 배경: 계약·UC·FE·테스트와 Rust 명령 경계까지 있었으나 프로덕션 호출자가 0이었다.
+> `observe`·`toEnvironmentSegment`·`EnvironmentDispatcher` 모두 테스트만 붙은 섬이었다.
+> 배선하면서 손잡이 재사용 위험이 드러났다(아래 UC-ENV-STICKY).
+
+### UC-ENV-LIVE-OBSERVE — 나이아가 지금 무엇이 돌고 있는지 스스로 안다
+
+- 사용자가 "지금 뭐 돌고 있어?"라고 물으면, 나이아는 되묻지 않고 자기가 이미 받은 표면 목록으로 답한다.
+- 표면 정보는 대화 요청에 실려 올라간다. 사용자가 도구를 부르라고 말하지 않아도 된다.
+- Herdr 이 안 돌고 있으면 아무것도 올리지 않는다. 없는 것을 있는 척하지 않는다.
+- 뇌가 보는 것은 불투명 손잡이와 네 가지 활동 상태뿐이다. pane 어휘는 올라가지 않는다.
+
+### UC-ENV-LIVE-ACT — 나이아가 표면 하나를 실제로 건드린다
+
+- 나이아가 "저 터미널을 앞으로 가져와" 또는 "저기서 이 명령을 실행해"를 스스로 결정해 실행한다.
+- 실행은 셸이 판정한다. 뇌는 손잡이로만 말하고, 그것이 어느 pane 인지는 셸만 안다.
+- 터미널 입력은 구조화 전달과 같은 권한으로 나가지 않는다. 사용자가 켜 두지 않았으면 거절된다.
+- 환경이 거절하면 그대로 올라간다. 실패를 성공으로 바꾸지 않는다.
+
+### UC-ENV-STICKY — 손잡이가 다른 표면을 가리키지 않는다
+
+- 나이아가 표면 목록을 본 뒤 그중 하나에 명령을 넣기까지 시간이 흐른다. 그 사이 터미널이 닫힐 수 있다.
+- 닫힌 표면의 손잡이는 **무효**가 되어야 한다. 다른 표면에 재배정되면 나이아가 엉뚱한 터미널에 명령을 넣는다.
+- 손잡이는 표면이 살아 있는 동안 같은 값을 유지한다. 목록에서의 순서가 바뀌어도 바뀌지 않는다.
+
+Test Coverage Map (P02):
+
+| UC | 검증 수단 | 대상 |
+|---|---|---|
+| UC-ENV-LIVE-OBSERVE | vitest `src/test/environment-live-wiring.contract.test.ts` | 스냅샷→세그먼트 조립, Herdr 부재 시 미전송, 손잡이만 상승 |
+| UC-ENV-LIVE-OBSERVE | vitest `packages/shell/src/lib/__tests__/environment-skill.test.ts` | 도구 호출이 실제 스냅샷 경로를 탄다, 빈 결과 공허 통과 차단 |
+| UC-ENV-LIVE-ACT | vitest `packages/shell/src/lib/__tests__/environment-skill.test.ts` | focus/run/interrupt 전달, 권한 없을 때 거절, 환경 오류 그대로 상승 |
+| UC-ENV-LIVE-ACT | e2e-tauri `packages/shell/e2e-tauri/specs/environment-dispatch.spec.ts` | 실 Rust 명령 경계 |
+| UC-ENV-STICKY | vitest `src/test/environment-live-wiring.contract.test.ts` | 표면 사라져도 재배정 없음, 순서 바뀌어도 손잡이 불변, 죽은 손잡이는 거절 |
+
+상태 매트릭스: 기본(표면 여럿), 빈 목록(Herdr 무응답), 오류(환경 거절), 성공(전달됨),
+진행(스냅샷 대기), 좁은 폭(해당 없음 — 이 슬라이스는 UI 표면을 새로 만들지 않는다).

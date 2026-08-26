@@ -84,9 +84,29 @@ describe("뇌가 보내는 것을 셸이 전부 안다 (FR-WIRE-UNION.3)", () =>
   });
 });
 
+/** 셸 UI 의 세 번째 사본. 코어와 갈라지면 조립이 조용히 타입만 맞고 값이 안 실린다. */
+function uiUnionKinds(): string[] {
+  const src = readFileSync(
+    resolve(__dirname, "..", "..", "packages", "shell", "src", "lib", "types.ts"),
+    "utf8",
+  );
+  const at = src.indexOf("export type EnvironmentSegment =");
+  expect(at, "UI types.ts 에서 EnvironmentSegment 선언을 못 찾았다").toBeGreaterThan(-1);
+  const rest = src.slice(at + "export type EnvironmentSegment =".length);
+  const stop = rest.search(/\n(?:export |function |const )/);
+  const body = stop === -1 ? rest : rest.slice(0, stop);
+  return [...new Set([...body.matchAll(/kind: "([A-Za-z]+)"/g)].map((m) => m[1] as string))].sort();
+}
+
 describe("환경 세그먼트 kind 가 두 저장소에서 같다 (FR-WIRE-UNION.4)", () => {
   it("셸 코어 union 의 kind 가 표본과 같다", () => {
     expect(unionKindsFromSource()).toEqual(sorted(fixture.environmentSegmentKinds));
+  });
+
+  it("셸 UI 의 세 번째 사본도 같은 kind 를 갖는다 (FR-ENV-LIVE.6)", () => {
+    // 코어 union 만 맞추면 조립부(ChatArea)가 타입에서 막히거나, 더 나쁘게는
+    // 다른 kind 를 실어도 조용히 통과한다.
+    expect(uiUnionKinds()).toEqual(sorted(fixture.environmentSegmentKinds));
   });
 
   it("셸이 실제로 만드는 kind 가 union 안에 있다", () => {

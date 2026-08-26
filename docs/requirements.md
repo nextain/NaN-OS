@@ -1012,3 +1012,19 @@ fenced code는 언어·복사·접기·워크스페이스 전환을 제공하고
 | **FR-WIRE-UNION.4** | 환경 세그먼트 kind 목록이 두 저장소에서 같아야 한다. | UC-WIRE-UNION-DRIFT | kind 집합 대조 | Done |
 | **FR-WIRE-UNION.5** | 추출 결과가 비면 통과하지 않는다. 빈 집합으로 부분집합 단언이 공허하게 참이 되는 경로를 막는다. | UC-WIRE-UNION-DRIFT | 비어있지 않음 단언 | Done |
 | **FR-WIRE-UNION.6** | 상대 저장소 체크아웃을 찾지 못하면 건너뛰지 않고 실패한다. | UC-WIRE-UNION-DRIFT | 상대 표본 탐색 실패 단언 | Done |
+
+## 기능 요구사항 (FR) — #502 실배선
+
+> 출처 시나리오: `user-scenarios.md` 의 `UC-ENV-LIVE-OBSERVE`·`UC-ENV-LIVE-ACT`·`UC-ENV-STICKY`.
+
+| ID | 요구사항 | 출처 시나리오 | 검증(P02) | 상태 |
+|---|---|---|---|---|
+| **FR-ENV-LIVE.1** | 살아 있는 Herdr 스냅샷이 있으면 셸이 `environmentSurfaces` 세그먼트를 대화 요청에 실어 올린다. 사용자가 도구를 요청할 필요가 없다. | UC-ENV-LIVE-OBSERVE | `environment-live-wiring.contract.test.ts` | Done |
+| **FR-ENV-LIVE.2** | 스냅샷이 없거나 표면이 하나도 없으면 세그먼트를 만들지 않는다. 빈 목록을 올려 "아무것도 없다"고 단언하지 않는다. | UC-ENV-LIVE-OBSERVE | 같음 | Done |
+| **FR-ENV-LIVE.3** | 뇌가 표면을 조작하는 경로는 앱 도구(`skill_environment`)다. 셸이 도구를 등록하고, 호출을 받아 의도로 받아들이고, 번역해 전달한다. | UC-ENV-LIVE-ACT | `environment-skill.test.ts` | Done |
+| **FR-ENV-LIVE.4** | 터미널 입력 전달은 사용자가 명시로 켠 경우에만 나간다. 기본값은 꺼짐이며, 꺼져 있으면 거절 사유가 그대로 뇌에 올라간다. | UC-ENV-LIVE-ACT | 같음 | Done |
+| **FR-ENV-LIVE.5** | 환경이 거절하거나 오류를 던지면 그대로 올린다. 성공으로 바꾸거나 삼키지 않는다. | UC-ENV-LIVE-ACT | 같음 | Done |
+| **FR-ENV-STICKY.1** | 손잡이는 표면 하나에 고정된다. 한 번 발행한 손잡이를 다른 표면에 재배정하지 않는다. | UC-ENV-STICKY | `environment-live-wiring.contract.test.ts` | Done |
+| **FR-ENV-STICKY.2** | 표면이 사라지면 그 손잡이는 무효가 된다. 이후 그 손잡이로 온 의도는 `unknown-surface` 로 거절한다. | UC-ENV-STICKY | 같음 | Done |
+| **FR-ENV-STICKY.3** | 목록 순서가 바뀌어도 손잡이는 바뀌지 않는다. 순서는 손잡이의 근거가 아니다. | UC-ENV-STICKY | 같음 | Done |
+| **FR-ENV-LIVE.6** | 셸 UI 의 `EnvironmentSegment` 사본도 코어 union 과 같은 kind 를 갖는다. 세 번째 사본이 조용히 갈라지지 않는다. | UC-WIRE-UNION-DRIFT | `wire-union-drift.contract.test.ts` | Done |

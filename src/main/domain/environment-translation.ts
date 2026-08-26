@@ -149,7 +149,14 @@ export function translate(
   }
 }
 
-/** 손잡이 발행 (FR-ENV-SURFACE.9). 환경 식별자를 손잡이로 쓰지 않는다 — 어휘가 새기 때문이다. */
+/**
+ * 손잡이 발행 (FR-ENV-SURFACE.9). 환경 식별자를 손잡이로 쓰지 않는다 — 어휘가 새기 때문이다.
+ *
+ * ⚠️ 순서로 발행한다. 한 스냅샷 안에서만 쓰는 일회성 대응표다.
+ *    뇌가 손잡이를 본 뒤 나중에 그 손잡이로 돌아오는 경로에는 쓰면 안 된다 —
+ *    그 사이 표면이 하나 사라지면 같은 손잡이가 다른 표면을 가리킨다.
+ *    그 경로에는 `SurfaceRegistrar` 를 쓴다 (FR-ENV-STICKY.1~3).
+ */
 export function mintRegistry(
   surfaces: readonly { readonly surfaceId: string; readonly agentTarget?: string }[],
   prefix = "s",
@@ -160,4 +167,56 @@ export function mintRegistry(
     map.set(token, s.agentTarget ? { token, surfaceId: s.surfaceId, agentTarget: s.agentTarget } : { token, surfaceId: s.surfaceId });
   });
   return map;
+}
+
+/**
+ * 표면에 고정되는 손잡이 발행기 (FR-ENV-STICKY.1~3).
+ *
+ * 왜 필요한가: 뇌가 표면 목록을 본 시점과 그중 하나에 명령을 넣는 시점 사이에 시간이 흐른다.
+ * 그 사이 터미널이 닫히면, 순서로 발행하는 대응표에서는 같은 손잡이가 *다른* 표면으로
+ * 옮겨 간다. 뇌는 자기가 본 그 표면이라고 믿고 명령을 넣는다 — 엉뚱한 터미널에 들어간다.
+ *
+ * 그래서 손잡이를 표면에 못 박는다. 표면이 살아 있는 동안 같은 값이고, 사라지면 그 손잡이는
+ * 되살아나지 않는다. 재사용하지 않으므로 나중에 온 죽은 손잡이는 조용히 다른 곳을 가리키는
+ * 대신 `unknown-surface` 로 거절된다.
+ */
+export class SurfaceRegistrar {
+  /** 표면 식별자 → 손잡이. 한 번 박히면 이 발행기가 사는 동안 안 바뀐다. */
+  private readonly assigned = new Map<string, string>();
+  /** 발행한 손잡이 전부. 표면이 사라져도 남겨 재사용을 막는다. */
+  private readonly issued = new Set<string>();
+  private next = 1;
+
+  constructor(private readonly prefix = "s") {}
+
+  /** 이 표면의 손잡이. 처음 보는 표면이면 새로 박는다. */
+  tokenFor(surfaceId: string): string {
+    const existing = this.assigned.get(surfaceId);
+    if (existing !== undefined) return existing;
+    let token = `${this.prefix}-${this.next}`;
+    // 발행기를 여러 개 쓰거나 접두어가 겹쳐도 재사용이 생기지 않게.
+    while (this.issued.has(token)) {
+      this.next += 1;
+      token = `${this.prefix}-${this.next}`;
+    }
+    this.next += 1;
+    this.assigned.set(surfaceId, token);
+    this.issued.add(token);
+    return token;
+  }
+
+  /**
+   * 지금 살아 있는 표면들로 대응표를 만든다.
+   * 목록에 없는 표면의 손잡이는 여기 담기지 않는다 — 그래서 무효가 된다 (FR-ENV-STICKY.2).
+   */
+  registryFor(
+    surfaces: readonly { readonly surfaceId: string; readonly agentTarget?: string }[],
+  ): SurfaceRegistry {
+    const map = new Map<string, SurfaceBinding>();
+    for (const s of surfaces) {
+      const token = this.tokenFor(s.surfaceId);
+      map.set(token, s.agentTarget ? { token, surfaceId: s.surfaceId, agentTarget: s.agentTarget } : { token, surfaceId: s.surfaceId });
+    }
+    return map;
+  }
 }

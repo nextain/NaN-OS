@@ -47,6 +47,12 @@ import {
 	shouldActivateRadioDj,
 } from "../lib/bgm-skill";
 import {
+	SKILL_ENVIRONMENT,
+	executeEnvironmentSkill,
+	liveEnvironmentDeps,
+	environmentSession,
+} from "../lib/environment-skill";
+import {
 	activateMicUnlessSpeechActivityOwnsVoice,
 	canSpeakProactiveText,
 	parseSpeechProfileCommand,
@@ -460,6 +466,13 @@ function buildEnvironmentSegments(
 				data: pc.data,
 			})),
 		});
+	}
+	// #502 실배선 (FR-ENV-LIVE.1·2): 지금 무엇이 돌고 있는지 나이아가 스스로 알게 한다.
+	// 도구를 부르라고 사용자가 말할 필요가 없다. 표면이 없으면 세그먼트를 만들지 않는다 —
+	// 빈 목록을 올려 "아무것도 없다"고 단언하지 않는다.
+	const surfaces = environmentSession.segment();
+	if (surfaces) {
+		segs.push(surfaces);
 	}
 	// 음성 파이프라인(STT→채팅→TTS)은 brief — 코어가 간결성 지시를 persona 뒤에 append(persona 안 덮음).
 	// normal(텍스트 채팅)은 무영향(코어가 블록 미생성).
@@ -1967,6 +1980,39 @@ export function ChatArea({
 		// UC8 BGM (FR-BGM.1): BgmPlayer 는 위젯(앱 아님)이라 appRegistry 소유자
 		// 탐색으로 못 찾는다 — 전용 분기. executeBgmSkill 이 위젯이 이미 듣는
 		// bgm_youtube_* 이벤트를 발사(위젯 무변경). 음성 경로도 이 dispatch 공유.
+		// #502 실배선 (FR-ENV-LIVE.3~5): 작업 표면은 화면 앱이 아니라 상시 환경이라
+		// appRegistry 소유자 탐색으로 못 찾는다 — 전용 분기.
+		// 터미널 입력 권한은 사용자가 켠 경우에만 참이다(기본 꺼짐, FR-ENV-LIVE.4).
+		if (req.toolName === SKILL_ENVIRONMENT.name) {
+			executeEnvironmentSkill(
+				req.args,
+				liveEnvironmentDeps(loadConfig()?.environmentTerminalInput === true),
+			)
+				.then((result) => {
+					Logger.info("ChatArea", "environment skill result", { result });
+					return sendAppToolResult(
+						req.requestId,
+						req.toolCallId,
+						result,
+						// 거절·오류는 성공으로 바꾸지 않는다 — 뇌가 실패를 성공으로 말하는 경로를 막는다.
+						!result.startsWith("거절:") && !result.startsWith("환경 오류:"),
+						req.activityId,
+					);
+				})
+				.catch((err) => {
+					Logger.warn("ChatArea", "environment skill error", {
+						error: String(err),
+					});
+					return sendAppToolResult(
+						req.requestId,
+						req.toolCallId,
+						String(err),
+						false,
+						req.activityId,
+					);
+				});
+			return;
+		}
 		if (req.toolName === SKILL_YOUTUBE_BGM.name) {
 			// Activity-owned playback (for example Radio DJ change_vibe) replaces
 			// the current track immediately. Normal chat requests still enqueue.

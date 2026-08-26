@@ -40,6 +40,11 @@ import { loadInstalledApps } from "./lib/app-loader";
 import { appRegistry } from "./lib/app-registry";
 import { effectiveAvatarProviderFromConfig } from "./lib/avatar/nva-gate";
 import { BGM_APP_ID, SKILL_YOUTUBE_BGM } from "./lib/bgm-skill";
+import {
+	ENVIRONMENT_APP_ID,
+	SKILL_ENVIRONMENT,
+	refreshEnvironment,
+} from "./lib/environment-skill";
 import { detectGpuVramGb } from "./lib/capabilities/gpu";
 import { syncLinkedChannels } from "./lib/channel-sync";
 import {
@@ -434,6 +439,23 @@ export function App() {
 			.catch((err) =>
 				Logger.warn("App", "startup bgm skill failed", { error: String(err) }),
 			);
+		// #502 실배선 (FR-ENV-LIVE.3): 작업 표면은 화면 앱이 아니라 상시 환경이라
+		// descriptor.tools 경로가 없다 — BGM 과 같은 전용 등록.
+		// 실행은 ChatArea dispatchAppToolCall 의 환경 분기.
+		sendAppSkills(ENVIRONMENT_APP_ID, [SKILL_ENVIRONMENT])
+			.then(() =>
+				Logger.info("App", "startup environment skill registered", {
+					tool: SKILL_ENVIRONMENT.name,
+				}),
+			)
+			.catch((err) =>
+				Logger.warn("App", "startup environment skill failed", {
+					error: String(err),
+				}),
+			);
+		// 첫 관측을 미리 받아 둔다 — 사용자의 첫 물음에 되묻지 않기 위해서다 (FR-ENV-LIVE.1).
+		// Herdr 이 안 돌고 있으면 조용히 아무것도 모르는 상태로 남는다.
+		refreshEnvironment().catch(() => {});
 		const all = appRegistry.list();
 		for (const descriptor of all) {
 			if (
