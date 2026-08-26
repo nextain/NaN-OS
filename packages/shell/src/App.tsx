@@ -17,7 +17,7 @@ import { UpdateBanner } from "./components/UpdateBanner";
 import { UpdatePrompt } from "./components/UpdatePrompt";
 import { VideoAvatarCanvas } from "./components/VideoAvatarCanvas";
 import type { WorkspaceAppApi } from "./apps/workspace/WorkspaceCenterArea";
-import { getBridgeForPanel } from "./lib/active-bridge";
+import { getBridgeForApp } from "./lib/active-bridge";
 import {
 	beginNaiaConfigHydration,
 	buildNaiaConfigEnv,
@@ -39,7 +39,7 @@ import {
 import { loadInstalledApps } from "./lib/app-loader";
 import { appRegistry } from "./lib/app-registry";
 import { effectiveAvatarProviderFromConfig } from "./lib/avatar/nva-gate";
-import { BGM_PANEL_ID, SKILL_YOUTUBE_BGM } from "./lib/bgm-skill";
+import { BGM_APP_ID, SKILL_YOUTUBE_BGM } from "./lib/bgm-skill";
 import { detectGpuVramGb } from "./lib/capabilities/gpu";
 import { syncLinkedChannels } from "./lib/channel-sync";
 import {
@@ -76,10 +76,10 @@ import {
 	snoozeStartupUpdatePrompt,
 } from "./lib/updater";
 import { useAvatarStore } from "./stores/avatar";
-import "./apps/browser/index"; // register browser panel
-import "./apps/workspace/index"; // register workspace panel
-import "./apps/settings/index"; // register settings panel
-// sample-note panel removed — will be replaced by a proper memo app later
+import "./apps/browser/index"; // register browser app
+import "./apps/workspace/index"; // register workspace app
+import "./apps/settings/index"; // register settings app
+// sample-note app removed — will be replaced by a proper memo app later
 import { useAppStore } from "./stores/app";
 
 const NAIA_WIDTH_DEFAULT = 320;
@@ -220,7 +220,7 @@ export function App() {
 	const [showAdkSetup, setShowAdkSetup] = useState(!isAdkInitialized());
 	const [localeHydrated, setLocaleHydrated] = useState(showAdkSetup);
 	const [showOnboarding, setShowOnboarding] = useState(false);
-	const [showPanelInstall, setShowPanelInstall] = useState(false);
+	const [showAppInstall, setShowAppInstall] = useState(false);
 	const [naiaVisible, setNaiaVisible] = useState(true);
 	const [naiaWidth, setNaiaWidth] = useState(NAIA_WIDTH_DEFAULT);
 	const [appTitle, setAppTitle] = useState(
@@ -380,14 +380,14 @@ export function App() {
 		if (cfg?.ttsEnabled !== undefined) setTtsEnabled(cfg.ttsEnabled);
 	}, [setTtsEnabled]);
 
-	// Sync app tools with agent on panel switch, and call lifecycle hooks
+	// Sync app tools with agent on app switch, and call lifecycle hooks
 	const prevAppRef = useRef<string | null>(null);
 	useEffect(() => {
 		const prev = prevAppRef.current;
 		prevAppRef.current = activeApp;
 
 		if (prev && prev !== activeApp) {
-			// keepAlive panels stay mounted — don't clear their skills so the
+			// keepAlive apps stay mounted — don't clear their skills so the
 			// LLM can still call them (e.g. skill_browser_navigate from Chat).
 			const prevDescriptor = appRegistry.get(prev);
 			if (!prevDescriptor?.keepAlive) {
@@ -410,7 +410,7 @@ export function App() {
 			source: "app",
 			action: "activated",
 			appId: activeApp,
-			summary: `${activeApp} panel activated`,
+			summary: `${activeApp} app activated`,
 		});
 	}, [activeApp]);
 
@@ -420,12 +420,12 @@ export function App() {
 	}, []);
 
 	// Register keepAlive app tools with the agent at startup so the LLM can
-	// call them regardless of which panel is currently active (e.g. asking Naia
-	// to open a website while on the Chat panel).
+	// call them regardless of which app is currently active (e.g. asking Naia
+	// to open a website while on the Chat app).
 	useEffect(() => {
 		// UC8 BGM (FR-BGM.1): BgmPlayer 는 위젯(앱 아님)이라 descriptor.tools 경로가
 		// 없다 — 전용 등록. 실행은 ChatArea dispatchAppToolCall 의 BGM 분기.
-		sendAppSkills(BGM_PANEL_ID, [SKILL_YOUTUBE_BGM])
+		sendAppSkills(BGM_APP_ID, [SKILL_YOUTUBE_BGM])
 			.then(() =>
 				Logger.info("App", "startup bgm skill registered", {
 					tool: SKILL_YOUTUBE_BGM.name,
@@ -443,13 +443,13 @@ export function App() {
 			) {
 				sendAppSkills(descriptor.id, descriptor.tools)
 					.then(() => {
-						Logger.info("App", "startup panel skills registered", {
+						Logger.info("App", "startup app skills registered", {
 							app: descriptor.id,
 							tools: descriptor.tools?.map((t) => t.name),
 						});
 					})
 					.catch((err) => {
-						Logger.warn("App", "startup panel skills failed", {
+						Logger.warn("App", "startup app skills failed", {
 							app: descriptor.id,
 							error: String(err),
 						});
@@ -537,7 +537,7 @@ export function App() {
 	// Auto-allow built-in skills that are always available (no per-session approval needed).
 	// Same pattern as BrowserCenterArea auto-allowing browser tools on mount.
 	useEffect(() => {
-		addAllowedTool("skill_panel");
+		addAllowedTool("skill_app");
 		addAllowedTool("skill_youtube_bgm");
 	}, []);
 
@@ -566,16 +566,16 @@ export function App() {
 				});
 			});
 		applyTheme(config?.theme ?? "midnight");
-		// Suppress build-time panels the user has explicitly deleted
-		if (config?.deletedPanels?.length) {
-			for (const id of config.deletedPanels) {
+		// Suppress build-time apps the user has explicitly deleted
+		if (config?.deletedApps?.length) {
+			for (const id of config.deletedApps) {
 				appRegistry.unregister(id);
 			}
 		}
-		if (config?.panelVisible === false) setNaiaVisible(false);
-		if (config?.panelSize) {
-			// panelSize was 15-80 (%) — convert to px for fixed naia panel
-			const px = Math.round((config.panelSize / 100) * 1200);
+		if (config?.appVisible === false) setNaiaVisible(false);
+		if (config?.appSize) {
+			// appSize was 15-80 (%) — convert to px for fixed naia app
+			const px = Math.round((config.appSize / 100) * 1200);
 			setNaiaWidth(Math.max(NAIA_WIDTH_MIN, Math.min(NAIA_WIDTH_MAX, px)));
 		}
 
@@ -713,12 +713,12 @@ export function App() {
 		return () => mq.removeEventListener("change", onChange);
 	}, []);
 
-	// Ctrl+B — toggle Naia panel
+	// Ctrl+B — toggle Naia app
 	const toggleNaia = useCallback(() => {
 		setNaiaVisible((prev) => {
 			const next = !prev;
 			const config = loadConfig();
-			if (config) saveConfig({ ...config, panelVisible: next });
+			if (config) saveConfig({ ...config, appVisible: next });
 			return next;
 		});
 	}, []);
@@ -969,7 +969,7 @@ export function App() {
 		if (config) {
 			saveConfig({
 				...config,
-				panelSize: Math.round((ref.currentW / 1200) * 100),
+				appSize: Math.round((ref.currentW / 1200) * 100),
 			});
 		}
 	};
@@ -991,10 +991,10 @@ export function App() {
 	const CenterComponent = activeAppDescriptor?.center ?? null;
 
 	// ── UI mode (single persisted user preference) ──
-	// app     = no panel active → left compact conversation dock
-	// workspace = workspace panel → 4-zone mission-control (chat rail + worktree
+	// app     = no app active → left compact conversation dock
+	// workspace = workspace app → 4-zone mission-control (chat rail + worktree
 	//             + document viewer/terminal + sub-agent list)
-	// panel   = any other panel (browser, settings, …) → chat as floating dock
+	// app   = any other app (browser, settings, …) → chat as floating dock
 	// The same single ChatArea instance is repositioned by CSS keyed off
 	// data-ui-mode — it is NEVER unmounted across modes (voice/STT/TTS session
 	// continuity). `variant` only changes the chat UI density, not its logic.
@@ -1011,7 +1011,7 @@ export function App() {
 	const chatVariant: "rail" | "floating" =
 		chatModeOverride === "workspace" ? "rail" : "floating";
 
-	const keepAlivePanels = useMemo(
+	const keepAliveApps = useMemo(
 		() => appRegistry.list().filter((p) => p.builtIn && p.keepAlive !== false),
 		[],
 	);
@@ -1089,8 +1089,8 @@ export function App() {
 			{showAdkSetup && (
 				<>
 					<TitleBar
-						panelVisible={naiaVisible}
-						onTogglePanel={toggleNaia}
+						appVisible={naiaVisible}
+						onToggleApp={toggleNaia}
 						title={appTitle}
 					/>
 					<AdkSetupScreen
@@ -1108,8 +1108,8 @@ export function App() {
 			{!showAdkSetup && (
 				<>
 					<TitleBar
-						panelVisible={naiaVisible}
-						onTogglePanel={toggleNaia}
+						appVisible={naiaVisible}
+						onToggleApp={toggleNaia}
 						title={appTitle}
 					/>
 
@@ -1152,7 +1152,7 @@ export function App() {
 					)}
 					{naiaVisible && (
 						<>
-							{/* Full-screen avatar canvas — renders behind all UI panels.
+							{/* Full-screen avatar canvas — renders behind all UI apps.
 							    e2e 헤드리스(cage)서 연속 WebGL 렌더 루프가 webview JS 스레드를 기아시켜 IPC/WebDriver
 							    가 90초 stall/drop 되는 문제 → VITE_NAIA_E2E_NO_AVATAR=1 일 때 렌더 생략(아바타는 chat
 							    UC 와 무관, 실 디스플레이 검증서만 필요). 일반 빌드/런타임엔 영향 없음. */}
@@ -1279,10 +1279,10 @@ export function App() {
 						<div className="right-area">
 							{!showSplash && !showOnboarding && (
 								<>
-									<AppBar onAddMode={() => setShowPanelInstall(true)} />
-									{showPanelInstall && (
+									<AppBar onAddMode={() => setShowAppInstall(true)} />
+									{showAppInstall && (
 										<AppInstallDialog
-											onClose={() => setShowPanelInstall(false)}
+											onClose={() => setShowAppInstall(false)}
 										/>
 									)}
 								</>
@@ -1299,38 +1299,38 @@ export function App() {
 											}
 											Logger.info(
 												"App",
-												"Onboarding complete — mounting main app panels",
+												"Onboarding complete — mounting main app apps",
 											);
 											setShowOnboarding(false);
 										}}
 									/>
 								) : (
 									<div
-										className={`content-panel${!activeApp ? " content-panel--hidden" : ""}`}
+										className={`content-app${!activeApp ? " content-app--hidden" : ""}`}
 									>
-										{keepAlivePanels.map((panel) => {
-											const PanelCenter = panel.center;
+										{keepAliveApps.map((app) => {
+											const AppCenter = app.center;
 											return (
 												<div
-													key={panel.id}
-													className={`content-panel__slot${activeApp === panel.id ? " content-panel__slot--active" : ""}`}
+													key={app.id}
+													className={`content-app__slot${activeApp === app.id ? " content-app__slot--active" : ""}`}
 												>
-													<ErrorBoundary scope={`Panel(${panel.id})`}>
-														<PanelCenter naia={getBridgeForPanel(panel.id)} />
+													<ErrorBoundary scope={`App(${app.id})`}>
+														<AppCenter naia={getBridgeForApp(app.id)} />
 													</ErrorBoundary>
 												</div>
 											);
 										})}
 										{activeApp &&
-											!keepAlivePanels.some((p) => p.id === activeApp) && (
-												<div className="content-panel__slot content-panel__slot--active">
-													<ErrorBoundary scope={`Panel(${activeApp})`}>
+											!keepAliveApps.some((p) => p.id === activeApp) && (
+												<div className="content-app__slot content-app__slot--active">
+													<ErrorBoundary scope={`App(${activeApp})`}>
 														{CenterComponent ? (
 															<CenterComponent
-																naia={getBridgeForPanel(activeApp)}
+																naia={getBridgeForApp(activeApp)}
 															/>
 														) : (
-															<div className="content-panel__home" />
+															<div className="content-app__home" />
 														)}
 													</ErrorBoundary>
 												</div>

@@ -14,8 +14,8 @@ describe("59 — skills interactions", () => {
 	before(async () => {
 		await ensureAppReady();
 		await clickBySelector(S.skillsTab);
-		const skillsPanel = await $(S.skillsTabPanel);
-		await skillsPanel.waitForDisplayed({ timeout: 10_000 });
+		const skillsApp = await $(S.skillsTabApp);
+		await skillsApp.waitForDisplayed({ timeout: 10_000 });
 	});
 
 	it("should show initial skills count", async () => {

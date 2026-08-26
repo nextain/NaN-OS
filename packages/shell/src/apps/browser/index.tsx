@@ -8,7 +8,7 @@ appRegistry.register({
 	names: { ko: "인터넷", en: "Internet" },
 	icon: "🌐",
 	builtIn: true,
-	keepAlive: true, // visibility controlled by browser_wv_hide/show on panel switch
+	keepAlive: true, // visibility controlled by browser_wv_hide/show on app switch
 	center: BrowserCenterArea,
 	tools: [
 		// ── Navigation ──────────────────────────────────────────────────────
@@ -146,7 +146,7 @@ appRegistry.register({
 			},
 			tier: 0,
 		},
-		// ── Tab skills (common to all panels) ───────────────────────────────
+		// ── Tab skills (common to all apps) ───────────────────────────────
 		...TAB_SKILL_DESCRIPTORS,
 		// ── Advanced ────────────────────────────────────────────────────────
 		{

@@ -2,7 +2,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const navigate = vi.fn();
-const activatePanel = vi.fn();
+const activateApp = vi.fn();
 const openFile = vi.fn();
 const setActiveApp = vi.fn();
 
@@ -10,7 +10,7 @@ vi.mock("../lib/app-registry", () => ({
 	appRegistry: {
 		getApi: (id: string) =>
 			id === "browser"
-				? { navigate, activatePanel }
+				? { navigate, activateApp }
 				: id === "workspace"
 					? { openFile }
 					: undefined,

@@ -527,7 +527,7 @@ async function captureOnboarding(page: Page, dir: string, locale: string) {
 	}, locale);
 
 	await page.goto("/");
-	const overlay = page.locator(".onboarding-panel");
+	const overlay = page.locator(".onboarding-app");
 	await expect(overlay).toBeVisible({ timeout: 15_000 });
 
 	await ensureIconsLoaded(page);
@@ -620,7 +620,7 @@ async function captureMainApp(page: Page, dir: string, locale: string) {
 	);
 
 	await page.goto("/");
-	await expect(page.locator(".chat-panel")).toBeVisible({ timeout: 15_000 });
+	await expect(page.locator(".chat-app")).toBeVisible({ timeout: 15_000 });
 
 	// Wait VERY explicitly for Material Icons / Web Fonts to load
 	await ensureIconsLoaded(page);
@@ -669,7 +669,7 @@ async function captureMainApp(page: Page, dir: string, locale: string) {
 	// [Approval capture removed due to flakiness]
 
 	await page.goto("/");
-	await expect(page.locator(".chat-panel")).toBeVisible({ timeout: 15_000 });
+	await expect(page.locator(".chat-app")).toBeVisible({ timeout: 15_000 });
 	await ensureIconsLoaded(page);
 
 	// 4. History tab
@@ -679,7 +679,7 @@ async function captureMainApp(page: Page, dir: string, locale: string) {
 
 	// 5. Progress tab
 	await clickTab(page, locale, "progress");
-	await expect(page.locator(".work-progress-panel")).toBeVisible({
+	await expect(page.locator(".work-progress-app")).toBeVisible({
 		timeout: 10_000,
 	});
 	await page.waitForFunction(
@@ -696,7 +696,7 @@ async function captureMainApp(page: Page, dir: string, locale: string) {
 
 	// Progress 탭 전환 후 간헐적으로 헤더 탭 DOM이 사라져 이후 클릭이 실패한다.
 	await page.goto("/");
-	await expect(page.locator(".chat-panel")).toBeVisible({ timeout: 15_000 });
+	await expect(page.locator(".chat-app")).toBeVisible({ timeout: 15_000 });
 	await ensureIconsLoaded(page);
 
 	// 6. Skills tab
@@ -848,7 +848,7 @@ async function captureMainApp(page: Page, dir: string, locale: string) {
 	// await capture(page, dir, "tabs-layout");
 }
 
-// ---- Workspace / Browser Panel mock data ----
+// ---- Workspace / Browser App mock data ----
 
 const FAKE_ROOT = "/home/user/dev";
 
@@ -982,8 +982,8 @@ const FAKE_WS_DIRS: Record<
 			children: null,
 		},
 		{
-			name: "panels",
-			path: `${FAKE_ROOT}/naia-os/shell/src/panels`,
+			name: "apps",
+			path: `${FAKE_ROOT}/naia-os/shell/src/apps`,
 			is_dir: true,
 			children: null,
 		},
@@ -993,7 +993,7 @@ const FAKE_WS_DIRS: Record<
 const FAKE_FILE_CONTENTS: Record<string, string> = {
 	"App.tsx": `import { useState, useEffect } from "react";
 import { TitleBar } from "./components/TitleBar";
-import { ChatPanel } from "./components/ChatPanel";
+import { ChatApp } from "./components/ChatApp";
 import { AvatarCanvas } from "./components/AvatarCanvas";
 import { AppBar } from "./components/AppBar";
 
@@ -1008,9 +1008,9 @@ export default function App() {
 
   return (
     <div className="app-layout">
-      <div className="naia-panel">
+      <div className="naia-app">
         <AvatarCanvas />
-        <ChatPanel />
+        <ChatApp />
       </div>
       <AppBar />
       <div className="right-content" />
@@ -1037,9 +1037,9 @@ cd agent && pnpm test           # Agent tests
 
 ## v0.1.3 (2026-03-23)
 
-- Workspace panel with session dashboard
-- Browser panel (Chrome embed)
-- Panel install via git/zip
+- Workspace app with session dashboard
+- Browser app (Chrome embed)
+- App install via git/zip
 - Gemini 3.1 Flash Live omni support
 - vllm-omni MiniCPM-o 4.5 integration
 - STT/TTS provider registry`,
@@ -1073,7 +1073,7 @@ cd naia-os/agent && pnpm test       # Agent tests
 | manage-skills | Analyze changes, create verify-* |`,
 };
 
-function buildPanelMockOverrides(): string {
+function buildAppMockOverrides(): string {
 	return `
 	var fakeSessions = ${JSON.stringify(FAKE_WS_SESSIONS)};
 	var fakeDirMap = ${JSON.stringify(FAKE_WS_DIRS)};
@@ -1116,14 +1116,14 @@ function buildPanelMockOverrides(): string {
 `;
 }
 
-// ---- Panel Screenshots (workspace + browser) ----
-async function capturePanelScreenshots(
+// ---- App Screenshots (workspace + browser) ----
+async function captureAppScreenshots(
 	page: Page,
 	dir: string,
 	locale: string,
 ) {
 	await page.addInitScript(getTauriMock(locale));
-	await page.addInitScript(buildPanelMockOverrides());
+	await page.addInitScript(buildAppMockOverrides());
 	await page.addInitScript({ content: TAURI_BASE_MOCK_FALLBACK });
 	await page.addInitScript({ content: SEED_ADK_PATH });
 	await page.addInitScript(
@@ -1135,14 +1135,14 @@ async function capturePanelScreenshots(
 	);
 
 	await page.goto("/");
-	await expect(page.locator(".chat-panel")).toBeVisible({ timeout: 15_000 });
+	await expect(page.locator(".chat-app")).toBeVisible({ timeout: 15_000 });
 	await ensureIconsLoaded(page);
 
-	// ---- Workspace Panel ----
-	const workspaceTab = page.locator('button[data-panel-id="workspace"]');
+	// ---- Workspace App ----
+	const workspaceTab = page.locator('button[data-app-id="workspace"]');
 	if (await workspaceTab.isVisible({ timeout: 5_000 }).catch(() => false)) {
 		await workspaceTab.click();
-		await expect(page.locator(".workspace-panel")).toBeVisible({
+		await expect(page.locator(".workspace-app")).toBeVisible({
 			timeout: 5_000,
 		});
 		await page.waitForTimeout(2000);
@@ -1161,12 +1161,12 @@ async function capturePanelScreenshots(
 		}
 	}
 
-	// ---- Browser Panel ----
-	const browserTab = page.locator('button[data-panel-id="browser"]');
+	// ---- Browser App ----
+	const browserTab = page.locator('button[data-app-id="browser"]');
 	if (await browserTab.isVisible({ timeout: 3_000 }).catch(() => false)) {
 		await browserTab.click();
 		await page.waitForTimeout(2000);
-		await capture(page, dir, "browser-panel");
+		await capture(page, dir, "browser-app");
 	}
 }
 
@@ -1187,8 +1187,8 @@ for (const locale of ["ko", "en"] as const) {
 			await captureMainApp(page, dir, locale);
 		});
 
-		test(`panel screens (${locale})`, async ({ page }) => {
-			await capturePanelScreenshots(page, dir, locale);
+		test(`app screens (${locale})`, async ({ page }) => {
+			await captureAppScreenshots(page, dir, locale);
 		});
 	});
 }

@@ -92,7 +92,7 @@ async function boot(page: import("@playwright/test").Page) {
 	await page.addInitScript({ content: SEED_ADK_PATH });
 	await page.addInitScript((c: string) => localStorage.setItem("naia-config", c), JSON.stringify(TEXT_CONFIG));
 	await page.goto("/");
-	await expect(page.locator(".chat-panel")).toBeVisible({ timeout: 10_000 });
+	await expect(page.locator(".chat-app")).toBeVisible({ timeout: 10_000 });
 }
 
 async function send(page: import("@playwright/test").Page, text: string) {

@@ -1,7 +1,7 @@
 /**
  * Iframe Bridge — Shell-side postMessage server.
  *
- * Listens for messages from installed iframe panels (asset.localhost origin)
+ * Listens for messages from installed iframe apps (asset.localhost origin)
  * and routes them to the appropriate Shell service:
  *   - logBehavior / queryBehavior → behavior-log.ts (IndexedDB)
  *   - getSecret / setSecret       → secure-store.ts (Tauri Store plugin)
@@ -39,8 +39,8 @@ interface ShellResult {
 
 /**
  * Derive a stable appId from the iframe's src URL.
- * e.g. "http://asset.localhost/home/user/.naia/apps/my-panel/index.html"
- *      → "my-panel"
+ * e.g. "http://asset.localhost/home/user/.naia/apps/my-app/index.html"
+ *      → "my-app"
  */
 function appIdFromSource(source: MessageEventSource | null): string {
 	// We derive appId from the frame's location via the referrer in the message.
@@ -73,10 +73,10 @@ async function handleMessage(event: MessageEvent): Promise<void> {
 	const appId = appIdFromSource(event.source);
 
 	// Reject all privileged operations when app identity is unresolvable.
-	// Prevents namespace collision, cross-panel data leakage, and unattributed
+	// Prevents namespace collision, cross-app data leakage, and unattributed
 	// file/shell access.
 	if (appId === "__unknown__") {
-		respond(undefined, "Panel identity could not be resolved — access denied");
+		respond(undefined, "App identity could not be resolved — access denied");
 		return;
 	}
 
@@ -92,7 +92,7 @@ async function handleMessage(event: MessageEvent): Promise<void> {
 				break;
 			}
 			case "naia-bridge:queryBehavior": {
-				// Scope queries to the requesting panel's own logs
+				// Scope queries to the requesting app's own logs
 				const filter = (msg.filter as BehaviorFilter | undefined) ?? {};
 				filter.appId = appId;
 				const entries = await queryBehavior(filter);

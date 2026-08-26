@@ -17,7 +17,7 @@ import {
 	startListening as sttStart,
 	stopListening as sttStop,
 } from "tauri-plugin-stt-api";
-import { activeBridge, getBridgeForPanel } from "../lib/active-bridge";
+import { activeBridge, getBridgeForApp } from "../lib/active-bridge";
 import { MarkdownCodeBlock } from "./MarkdownCodeBlock";
 import {
 	formatAiInterferencePrompt,
@@ -41,7 +41,7 @@ import {
 	type SpeechActivityResume,
 } from "../lib/chat-service";
 import {
-	BGM_PANEL_ID,
+	BGM_APP_ID,
 	SKILL_YOUTUBE_BGM,
 	executeBgmSkill,
 	shouldActivateRadioDj,
@@ -395,7 +395,7 @@ function resolveTtsVoiceId(config: AppConfig): string | undefined {
 
 /** Build MemoryContext for system prompt injection.
  *  Note: User facts are now handled by Agent MemorySystem (sessionRecall).
- *  Shell only provides persona/locale/panel context.
+ *  Shell only provides persona/locale/app context.
  *
  *  S4: this is now used ONLY by the **voice (Live) and Discord** paths, which do
  *  NOT route through the naia-agent core (Gemini Live / OpenAI Realtime / naia-omni
@@ -415,10 +415,10 @@ async function buildMemoryContext(): Promise<MemoryContext> {
 		ctx.discordDefaultUserId = cfg?.discordDefaultUserId;
 		ctx.discordDmChannelId = cfg?.discordDmChannelId;
 
-		// Active panel context + persistent contexts (bgm favorites/current track).
-		// Persistent contexts survive panel switches so background music state is
+		// Active app context + persistent contexts (bgm favorites/current track).
+		// Persistent contexts survive app switches so background music state is
 		// always available — fixes the AI hallucinating favorites when another
-		// panel was active.
+		// app was active.
 		const appCtxList = selectPromptAppContexts(useAppStore.getState());
 		if (appCtxList.length > 0) {
 			ctx.appContexts = appCtxList;
@@ -439,7 +439,7 @@ async function buildMemoryContext(): Promise<MemoryContext> {
  *   - `avatarEmotion`: the desktop shell always renders an avatar, so the core
  *     should emit its standard emotion-tag instructions (the wording lives in the
  *     core now; the shell only signals the capability).
- *   - `panel`: live UI panel context (bgm favorites, browser url, …) as isolated
+ *   - `app`: live UI app context (bgm favorites, browser url, …) as isolated
  *     reference data.
  *   - `responseStyle`: voice-pipeline turns ask for brief spoken answers. The core
  *     owns the brevity wording and appends it AFTER persona, so voice replies stay
@@ -662,7 +662,7 @@ export function ChatArea({
 	const acceptSpeechActivitiesRef = useRef(true);
 	const queuedSendTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 	const voiceSessionRef = useRef<VoiceSession | null>(null);
-	// #313 L3 — mid-session panel context bridge handle (detached in every
+	// #313 L3 — mid-session app context bridge handle (detached in every
 	// voice cleanup path).
 	const appContextBridgeRef = useRef<AppContextBridge | null>(null);
 	const micStreamRef = useRef<MicStream | null>(null);
@@ -1739,7 +1739,7 @@ export function ChatArea({
 			// Startup registration can race the agent process. Refresh the
 			// idempotent descriptor immediately before every turn so semantic
 			// requests such as Radio DJ cannot degrade into text-only claims.
-			const bgmSkillReady = await sendAppSkills(BGM_PANEL_ID, [
+			const bgmSkillReady = await sendAppSkills(BGM_APP_ID, [
 				SKILL_YOUTUBE_BGM,
 			]);
 			Logger.info("ChatArea", "turn bgm skill registration", {
@@ -1953,10 +1953,10 @@ export function ChatArea({
 		});
 	}
 
-	// Shared panel-tool dispatch — used by both the streaming-chat handleChunk
+	// Shared app-tool dispatch — used by both the streaming-chat handleChunk
 	// path AND the voice directToolCall path (so voice can run app tools like
-	// skill_browser_*). Auto-switches to the owning panel first (tool-level), so
-	// a tool targeting a non-active panel brings that panel forward.
+	// skill_browser_*). Auto-switches to the owning app first (tool-level), so
+	// a tool targeting a non-active app brings that app forward.
 	function dispatchAppToolCall(req: {
 		requestId: string;
 		toolCallId: string;
@@ -2000,22 +2000,22 @@ export function ChatArea({
 				});
 			return;
 		}
-		const ownerPanel = appRegistry
+		const ownerApp = appRegistry
 			.list()
 			.find((p) => p.tools?.some((t) => t.name === req.toolName));
-		// Tool-level auto panel switch (user request): if the tool belongs to a
-		// panel that isn't currently active, bring it forward before running.
-		if (ownerPanel && useAppStore.getState().activeApp !== ownerPanel.id) {
-			useAppStore.getState().setActiveApp(ownerPanel.id);
-			Logger.info("ChatArea", "panel auto-switch for tool", {
+		// Tool-level auto app switch (user request): if the tool belongs to a
+		// app that isn't currently active, bring it forward before running.
+		if (ownerApp && useAppStore.getState().activeApp !== ownerApp.id) {
+			useAppStore.getState().setActiveApp(ownerApp.id);
+			Logger.info("ChatArea", "app auto-switch for tool", {
 				tool: req.toolName,
-				app: ownerPanel.id,
+				app: ownerApp.id,
 			});
 		}
-		const bridge = ownerPanel ? getBridgeForPanel(ownerPanel.id) : activeBridge;
+		const bridge = ownerApp ? getBridgeForApp(ownerApp.id) : activeBridge;
 		Logger.info("ChatArea", "app_tool_call dispatch", {
 			tool: req.toolName,
-			owner: ownerPanel?.id ?? "(none→activeBridge)",
+			owner: ownerApp?.id ?? "(none→activeBridge)",
 		});
 		bridge
 			.callTool(req.toolName, req.args)
@@ -2047,7 +2047,7 @@ export function ChatArea({
 			});
 	}
 
-	function dispatchPanelControl(req: { action: string; appId?: string }) {
+	function dispatchAppControl(req: { action: string; appId?: string }) {
 		const { setActiveApp } = useAppStore.getState();
 		if (req.action === "switch" && req.appId) {
 			setActiveApp(req.appId);
@@ -2176,7 +2176,7 @@ export function ChatArea({
 				break;
 			}
 			case "app_control": {
-				dispatchPanelControl({
+				dispatchAppControl({
 					action: chunk.action,
 					appId: chunk.appId,
 				});
@@ -2948,10 +2948,10 @@ export function ChatArea({
 
 			// Collect active app tools to pass to the voice session
 			const activeAppId = useAppStore.getState().activeApp;
-			const panelTools = activeAppId
+			const appTools = activeAppId
 				? (appRegistry.get(activeAppId)?.tools ?? [])
 				: [];
-			const panelToolDefs = panelTools.map((tool) => ({
+			const appToolDefs = appTools.map((tool) => ({
 				name: tool.name,
 				description: tool.description,
 				parameters: tool.parameters ?? {
@@ -2971,9 +2971,9 @@ export function ChatArea({
 			}[] = [];
 			try {
 				const allSkills = await fetchAgentSkills();
-				// Filter: remove disabled, skip skill_panel (panel management, not useful in voice)
+				// Filter: remove disabled, skip skill_app (app management, not useful in voice)
 				agentSkills = allSkills.filter(
-					(s) => !disabledSkills.has(s.name) && s.name !== "skill_panel",
+					(s) => !disabledSkills.has(s.name) && s.name !== "skill_app",
 				);
 			} catch (err) {
 				Logger.warn("ChatArea", "Failed to fetch agent skills for voice", {
@@ -2982,10 +2982,10 @@ export function ChatArea({
 			}
 
 			// Merge app tools + agent skills (app tools take priority on name collision)
-			const panelNames = new Set(panelToolDefs.map((t) => t.name));
+			const appNames = new Set(appToolDefs.map((t) => t.name));
 			const voiceTools = [
-				...panelToolDefs,
-				...agentSkills.filter((s) => !panelNames.has(s.name)),
+				...appToolDefs,
+				...agentSkills.filter((s) => !appNames.has(s.name)),
 			];
 
 			// Append tool usage instructions to system prompt so the model
@@ -3024,8 +3024,8 @@ export function ChatArea({
 				setVoiceStatus(status);
 			};
 
-			// #313 L3 — bridge mid-session panel context changes into the open
-			// Live WS. Subscribes to the panel store, debounces 500ms (rapid
+			// #313 L3 — bridge mid-session app context changes into the open
+			// Live WS. Subscribes to the app store, debounces 500ms (rapid
 			// URL hops), and forwards to `session.sendContextUpdate()` — a silent
 			// no-op for providers without a mid-session inject surface
 			// (vllm-omni, naia-omni). Detached in every cleanup path below.
@@ -3130,11 +3130,11 @@ export function ChatArea({
 						onApprovalRequest: (req) => {
 							sendApprovalResponse(req.requestId, req.toolCallId, "once");
 						},
-						// Panel-owned tools (skill_browser_*, skill_panel switch)
+						// App-owned tools (skill_browser_*, skill_app switch)
 						// only ran in streaming chat before; route them here too so
-						// voice can drive panels. Auto-switches to the owner panel.
+						// voice can drive apps. Auto-switches to the owner app.
 						onAppToolCall: (req) => dispatchAppToolCall(req),
-						onPanelControl: (req) => dispatchPanelControl(req),
+						onAppControl: (req) => dispatchAppControl(req),
 					});
 					session.sendToolResponse(callId, result.output);
 				} catch (err) {
@@ -3604,7 +3604,7 @@ export function ChatArea({
 
 	return (
 		<>
-			<div className={`chat-panel chat-panel--${variant}`}>
+			<div className={`chat-app chat-app--${variant}`}>
 				{/* Header with tabs */}
 				<div className="chat-header">
 					<div className="chat-tabs">

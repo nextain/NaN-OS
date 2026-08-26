@@ -123,7 +123,7 @@ const TAURI_MOCK_SCRIPT = `
 
 		if (cmd === "send_to_agent_command") {
 			var msg = JSON.parse(args.message);
-			if (msg.type === "panel_tool_result") return;
+			if (msg.type === "app_tool_result") return;
 			var requestId = msg.requestId;
 			var lastMsg = msg.messages && msg.messages[msg.messages.length - 1];
 			var rawContent = lastMsg && lastMsg.content ? lastMsg.content : "";
@@ -161,7 +161,7 @@ const TAURI_MOCK_SCRIPT = `
 		if (cmd === "frontend_log") return;
 		if (cmd === "list_skills") return [];
 		if (cmd === "list_stt_models") return [];
-		if (cmd === "panel_list_installed") return [];
+		if (cmd === "app_list_installed") return [];
 		if (cmd === "herdr_pty_create") return { pty_id: "herdr-send-e2e", pid: 42 };
 		if (cmd === "herdr_snapshot") return JSON.parse(JSON.stringify(herdrSnapshot));
 		if (cmd === "herdr_prompt_agent") {
@@ -188,8 +188,8 @@ const TAURI_MOCK_SCRIPT = `
 })();
 `;
 
-async function openWorkspacePanel(page: Page): Promise<void> {
-	const tab = page.locator('button[data-panel-id="workspace"]');
+async function openWorkspaceApp(page: Page): Promise<void> {
+	const tab = page.locator('button[data-app-id="workspace"]');
 	await expect(tab).toBeVisible({ timeout: 10_000 });
 	await tab.click();
 	await expect(page.getByTestId("herdr-workspace")).toBeVisible({
@@ -236,13 +236,13 @@ test.describe("skill_workspace_send_to_session E2E — #120", () => {
 			);
 		});
 		await page.goto("/");
-		await expect(page.locator(".chat-panel")).toBeVisible({ timeout: 10_000 });
+		await expect(page.locator(".chat-app")).toBeVisible({ timeout: 10_000 });
 	});
 
 	test("SS1: skill_workspace_send_to_session → 포커스된 Herdr agent에 prompt 전달", async ({
 		page,
 	}) => {
-		await openWorkspacePanel(page);
+		await openWorkspaceApp(page);
 		await sendMessage(page, "stdin 보내줘");
 		await page.waitForFunction(
 			() => (window as any).__NAIA_E2E__?.lastHerdrPromptCall !== null,

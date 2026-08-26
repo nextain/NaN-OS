@@ -375,7 +375,7 @@ test.describe("Pipeline Voice E2E", () => {
 
 		await routeTtsSynth(page);
 		await page.goto("/");
-		await expect(page.locator(".chat-panel")).toBeVisible({ timeout: 10_000 });
+		await expect(page.locator(".chat-app")).toBeVisible({ timeout: 10_000 });
 	});
 
 	test("음성 버튼 — pipeline voice 모드 시작", async ({ page }) => {
@@ -601,7 +601,7 @@ test.describe("Whisper Engine E2E", () => {
 
 		await routeTtsSynth(page);
 		await page.goto("/");
-		await expect(page.locator(".chat-panel")).toBeVisible({ timeout: 10_000 });
+		await expect(page.locator(".chat-app")).toBeVisible({ timeout: 10_000 });
 	});
 
 	test("Whisper — pipeline voice 모드 시작/종료", async ({ page }) => {

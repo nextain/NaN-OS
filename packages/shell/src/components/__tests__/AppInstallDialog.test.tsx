@@ -32,7 +32,7 @@ describe("AppInstallDialog — zip gating (#358 / #359)", () => {
 		render(<AppInstallDialog onClose={() => {}} />);
 		expect(addButton().disabled).toBe(true);
 		fireEvent.change(screen.getByPlaceholderText(/github\.com/), {
-			target: { value: "https://github.com/example/my-panel.git" },
+			target: { value: "https://github.com/example/my-app.git" },
 		});
 		expect(addButton().disabled).toBe(false);
 	});

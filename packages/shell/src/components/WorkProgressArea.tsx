@@ -70,7 +70,7 @@ export function WorkProgressArea() {
 
 	if (isLoading) {
 		return (
-			<div className="work-progress-panel">
+			<div className="work-progress-app">
 				<div className="work-progress-header">
 					<span className="work-progress-title">{t("progress.title")}</span>
 				</div>
@@ -87,7 +87,7 @@ export function WorkProgressArea() {
 		stats?.by_event_type.find(([type]) => type === "error")?.[1] ?? 0;
 
 	return (
-		<div className="work-progress-panel">
+		<div className="work-progress-app">
 			<div className="work-progress-header">
 				<span className="work-progress-title">{t("progress.title")}</span>
 				<button

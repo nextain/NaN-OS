@@ -265,10 +265,10 @@ test.describe("Chat + Tool E2E", () => {
 		);
 
 		await page.goto("/");
-		await expect(page.locator(".chat-panel")).toBeVisible({ timeout: 10_000 });
+		await expect(page.locator(".chat-app")).toBeVisible({ timeout: 10_000 });
 	});
 
-	test("앱 로드 — chat panel visible", async ({ page }) => {
+	test("앱 로드 — chat app visible", async ({ page }) => {
 		await expect(page.locator(".chat-input")).toBeVisible();
 		await expect(page.locator(".chat-messages")).toBeVisible();
 	});
@@ -339,7 +339,7 @@ test.describe("Chat + Tool E2E", () => {
 
 		// 근거→원문: URL 칩 클릭 → 브라우저 패널로 전환
 		await chip.click();
-		await expect(page.locator(".browser-panel")).toBeVisible({ timeout: 5_000 });
+		await expect(page.locator(".browser-app")).toBeVisible({ timeout: 5_000 });
 	});
 
 	test("지식 그래프(K3): skill_knowledge_graph — 2D/3D 캔버스 뷰어 렌더 + 모드 토글", async ({ page }) => {
@@ -379,7 +379,7 @@ test.describe("Claude Code CLI provider E2E", () => {
 		);
 
 		await page.goto("/");
-		await expect(page.locator(".chat-panel")).toBeVisible({ timeout: 10_000 });
+		await expect(page.locator(".chat-app")).toBeVisible({ timeout: 10_000 });
 	});
 
 	test("claude-code-cli — 채팅 응답 수신", async ({ page }) => {

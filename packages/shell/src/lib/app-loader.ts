@@ -14,7 +14,7 @@ interface InstalledAppManifest {
 	iconSvg?: string;
 	names?: Record<string, string>;
 	version?: string;
-	/** Tools the panel exposes to Naia (declared in app.json). */
+	/** Tools the app exposes to Naia (declared in app.json). */
 	tools?: NaiaTool[];
 	/** Absolute path to index.html if present */
 	htmlEntry?: string;
@@ -24,7 +24,7 @@ interface InstalledAppManifest {
  * Read manifests from ~/.naia/apps/ via Tauri command and register each
  * as a GenericInstalledApp. Bumps appListVersion so AppBar re-renders.
  *
- * Skips panels already registered (e.g. built-ins or re-loaded after restart).
+ * Skips apps already registered (e.g. built-ins or re-loaded after restart).
  */
 export async function loadInstalledApps(): Promise<void> {
 	let manifests: InstalledAppManifest[];
@@ -32,19 +32,19 @@ export async function loadInstalledApps(): Promise<void> {
 		Logger.debug("AppLoader", "Invoking app_list_installed");
 		manifests = await invoke<InstalledAppManifest[]>("app_list_installed");
 	} catch (err) {
-		Logger.warn("AppLoader", "Failed to load installed panels", {
+		Logger.warn("AppLoader", "Failed to load installed apps", {
 			err: String(err),
 		});
 		return;
 	}
 
-	Logger.info("AppLoader", `Found ${manifests.length} installed panel(s)`);
+	Logger.info("AppLoader", `Found ${manifests.length} installed app(s)`);
 
 	for (const manifest of manifests) {
 		if (appRegistry.get(manifest.id)) {
 			Logger.debug(
 				"AppLoader",
-				`Panel already registered, skipping: ${manifest.id}`,
+				`App already registered, skipping: ${manifest.id}`,
 			);
 			continue;
 		}
@@ -86,5 +86,5 @@ export async function removeInstalledApp(appId: string): Promise<void> {
 
 	appRegistry.unregister(appId);
 	useAppStore.getState().bumpAppListVersion();
-	Logger.debug("AppLoader", `Panel unregistered: ${appId}`);
+	Logger.debug("AppLoader", `App unregistered: ${appId}`);
 }

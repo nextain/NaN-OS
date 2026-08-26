@@ -15,6 +15,6 @@ appRegistry.register({
 	names: { ko: "설정", en: "Settings" },
 	icon: "⚙️",
 	builtIn: true,
-	keepAlive: true, // SettingsTab must stay mounted during browser-panel login to keep naia_auth_complete listener alive
+	keepAlive: true, // SettingsTab must stay mounted during browser-app login to keep naia_auth_complete listener alive
 	center: SettingsCenterArea,
 });

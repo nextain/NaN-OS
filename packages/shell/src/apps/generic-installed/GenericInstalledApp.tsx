@@ -3,7 +3,7 @@ import { useEffect, useRef } from "react";
 import type { NaiaTool, AppCenterProps } from "../../lib/app-registry";
 
 /**
- * Tool-call protocol between the Shell and an installed iframe panel.
+ * Tool-call protocol between the Shell and an installed iframe app.
  *
  * Shell → iframe:  { type: "naia-tool-call", id, tool, args }
  * iframe → Shell:  { type: "naia-tool-result", id, result? , error? }
@@ -11,20 +11,20 @@ import type { NaiaTool, AppCenterProps } from "../../lib/app-registry";
  * This is distinct from iframe-bridge.ts (`naia-bridge:*`), which carries
  * iframe → Shell service requests (readFile, secrets, …). Tool calls flow
  * host → app: the Agent invokes a app tool, the Shell routes it to the
- * panel that owns it, the panel computes the result in its own JS.
+ * app that owns it, the app computes the result in its own JS.
  */
 const TOOL_CALL = "naia-tool-call";
 const TOOL_RESULT = "naia-tool-result";
 const TOOL_TIMEOUT_MS = 15_000;
 
 /**
- * Factory: creates a center component for an installed panel.
+ * Factory: creates a center component for an installed app.
  *
- * If the panel directory contains index.html, the component renders it via the
+ * If the app directory contains index.html, the component renders it via the
  * Tauri asset protocol (`convertFileSrc` — manual URL building breaks on
  * Windows drive letters). Any `tools` declared in app.json are registered
- * with the panel's Naia bridge and routed to the iframe via postMessage, so an
- * installed panel can expose AI tools the same way a built-in panel does.
+ * with the app's Naia bridge and routed to the iframe via postMessage, so an
+ * installed app can expose AI tools the same way a built-in app does.
  */
 export function createGenericInstalledApp(
 	htmlEntry?: string,
@@ -42,13 +42,13 @@ export function createGenericInstalledApp(
 					const iframe = iframeRef.current;
 					const contentWindow = iframe?.contentWindow;
 					if (!iframe || !contentWindow) {
-						return "(panel not loaded yet)";
+						return "(app not loaded yet)";
 					}
 					let targetOrigin = "*";
 					try {
 						targetOrigin = new URL(iframe.src).origin;
 					} catch {
-						// fall back to "*" — the panel replies to its own loader origin
+						// fall back to "*" — the app replies to its own loader origin
 					}
 					const id = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 					const target = contentWindow;
@@ -99,21 +99,21 @@ export function createGenericInstalledApp(
 			return (
 				<iframe
 					ref={iframeRef}
-					className="generic-installed-panel__iframe"
+					className="generic-installed-app__iframe"
 					src={convertFileSrc(htmlEntry)}
-					title="Panel"
+					title="App"
 					sandbox="allow-scripts allow-same-origin"
 				/>
 			);
 		}
 
 		return (
-			<div className="generic-installed-panel">
-				<div className="generic-installed-panel__icon">📦</div>
-				<p className="generic-installed-panel__msg">
+			<div className="generic-installed-app">
+				<div className="generic-installed-app__icon">📦</div>
+				<p className="generic-installed-app__msg">
 					이 앱은 설치됐지만 아직 로드되지 않았습니다.
 				</p>
-				<p className="generic-installed-panel__hint">
+				<p className="generic-installed-app__hint">
 					앱 디렉터리에 index.html을 추가하면 즉시 표시됩니다.
 				</p>
 			</div>

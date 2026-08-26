@@ -4010,7 +4010,7 @@ export function SettingsTab() {
 									</button>
 									{showLabDisconnect ? (
 										<div
-											className="reset-confirm-panel"
+											className="reset-confirm-app"
 											style={{ marginTop: 8 }}
 										>
 											<p className="reset-confirm-msg">
@@ -6158,7 +6158,7 @@ export function SettingsTab() {
 
 					<div className="settings-danger-zone">
 						{showResetConfirm ? (
-							<div className="reset-confirm-panel">
+							<div className="reset-confirm-app">
 								<p className="reset-confirm-msg">
 									{t("settings.resetConfirm")}
 								</p>
@@ -6209,7 +6209,7 @@ export function SettingsTab() {
 			{/* STT Model Manager Modal — root-level (triggered from brain tab) */}
 			{sttModelModalOpen && (
 				<div
-					className="panel-modal-overlay"
+					className="app-modal-overlay"
 					onClick={() => setSttModelModalOpen(false)}
 				>
 					<div

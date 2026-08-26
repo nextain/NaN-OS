@@ -48,7 +48,7 @@ function coreChat() {
  * Returns `true` on successful invoke, `false` on caught error (naia-agent
  * down / not spawned / IPC dropped). Callers that depend on the request
  * actually landing should check the return value; fire-and-forget callers
- * (auth_update, notify_config, creds_update, panel_*) can ignore it.
+ * (auth_update, notify_config, creds_update, app_*) can ignore it.
  *
  * Logged with `Logger.warn` so the operator sees it in dev console without
  * the main flow throwing. Main flow degrades gracefully:
@@ -597,10 +597,10 @@ export async function directToolCall(opts: {
 		description?: string;
 	}) => void;
 	/**
-	 * Called when the agent emits `app_tool_call` (a panel-owned tool like
+	 * Called when the agent emits `app_tool_call` (a app-owned tool like
 	 * skill_browser_*). The voice path has no chat UI loop, so without this the
 	 * app tool never runs and the agent hangs. The caller routes it to the
-	 * owning panel's bridge and replies via `sendAppToolResult`.
+	 * owning app's bridge and replies via `sendAppToolResult`.
 	 */
 	onAppToolCall?: (req: {
 		requestId: string;
@@ -609,11 +609,11 @@ export async function directToolCall(opts: {
 		args: Record<string, unknown>;
 	}) => void;
 	/**
-	 * Called when the agent emits `app_control` (e.g. skill_panel switch).
-	 * The caller performs the panel switch/reload. Without this, voice mode
-	 * reports "switched" but the panel never actually changes.
+	 * Called when the agent emits `app_control` (e.g. skill_app switch).
+	 * The caller performs the app switch/reload. Without this, voice mode
+	 * reports "switched" but the app never actually changes.
 	 */
-	onPanelControl?: (req: {
+	onAppControl?: (req: {
 		requestId: string;
 		action: string;
 		appId?: string;
@@ -687,7 +687,7 @@ export async function directToolCall(opts: {
 					description: ar.description,
 				});
 			} else if (chunk.type === "app_tool_call") {
-				// Panel-owned tool (skill_browser_* etc.). Route to the panel
+				// App-owned tool (skill_browser_* etc.). Route to the app
 				// bridge via the caller; the bridge replies with sendAppToolResult,
 				// after which the agent emits tool_result/finish.
 				const pc = chunk as unknown as {
@@ -708,7 +708,7 @@ export async function directToolCall(opts: {
 					action: string;
 					appId?: string;
 				};
-				opts.onPanelControl?.({
+				opts.onAppControl?.({
 					requestId: pc.requestId,
 					action: pc.action,
 					appId: pc.appId,
@@ -806,7 +806,7 @@ export async function fetchAgentSkills(): Promise<
 	return promise;
 }
 
-/** Send panel skill descriptors to the agent (on panel activate) */
+/** Send app skill descriptors to the agent (on app activate) */
 export async function sendAppSkills(
 	appId: string,
 	tools: NaiaTool[],
@@ -826,7 +826,7 @@ export async function sendAppSkills(
 	);
 }
 
-/** Tell the agent to remove panel's proxy skills (on panel deactivate) */
+/** Tell the agent to remove app's proxy skills (on app deactivate) */
 export async function sendAppSkillsClear(appId: string): Promise<void> {
 	await safeSendToAgent(
 		{ type: "app_skills_clear", appId },
@@ -834,7 +834,7 @@ export async function sendAppSkillsClear(appId: string): Promise<void> {
 	);
 }
 
-/** Install a panel from a git URL or local zip file path (delegated to agent) */
+/** Install a app from a git URL or local zip file path (delegated to agent) */
 export async function sendAppInstall(source: string): Promise<void> {
 	await safeSendToAgent({ type: "app_install", source }, "sendAppInstall");
 }

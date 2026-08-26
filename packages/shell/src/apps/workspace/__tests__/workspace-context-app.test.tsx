@@ -13,7 +13,7 @@ import {
 	type CanonicalRoot,
 } from "@nextain/naia-os-core/composition";
 import { t } from "../../../lib/i18n";
-import { WorkspaceContextPanel } from "../WorkspaceContextPanel";
+import { WorkspaceContextApp } from "../WorkspaceContextApp";
 
 const LIMITS = { maxDocuments: 10, maxBytes: 10_000 };
 
@@ -87,7 +87,7 @@ afterEach(cleanup);
 
 describe("성공 상태 (UC-WORKSPACE-CONTEXT-DISCOVER)", () => {
 	it("선언된 문서를 근거와 함께 보여 준다", async () => {
-		render(<WorkspaceContextPanel workspaceRoot="/ws" service={service()} />);
+		render(<WorkspaceContextApp workspaceRoot="/ws" service={service()} />);
 		await waitFor(() => expect(screen.getByTestId("workspace-context-documents")).toBeInTheDocument());
 		const items = screen.getAllByTestId("workspace-context-document");
 		expect(items).toHaveLength(2);
@@ -96,7 +96,7 @@ describe("성공 상태 (UC-WORKSPACE-CONTEXT-DISCOVER)", () => {
 	});
 
 	it("각 문서에 왜 실렸는지가 붙는다", async () => {
-		render(<WorkspaceContextPanel workspaceRoot="/ws" service={service()} />);
+		render(<WorkspaceContextApp workspaceRoot="/ws" service={service()} />);
 		await waitFor(() => expect(screen.getAllByTestId("workspace-context-reason")).toHaveLength(2));
 		for (const reason of screen.getAllByTestId("workspace-context-reason")) {
 			expect(reason).toHaveTextContent(t("workspace.contextReasonMandatory"));
@@ -104,7 +104,7 @@ describe("성공 상태 (UC-WORKSPACE-CONTEXT-DISCOVER)", () => {
 	});
 
 	it("범위와 개정을 함께 보여 준다", async () => {
-		render(<WorkspaceContextPanel workspaceRoot="/ws" service={service()} />);
+		render(<WorkspaceContextApp workspaceRoot="/ws" service={service()} />);
 		await waitFor(() => expect(screen.getByTestId("workspace-context-scope")).toHaveTextContent(t("workspace.contextScopeRoot")));
 		expect(screen.getByTestId("workspace-context-scope")).toHaveTextContent("1");
 	});
@@ -112,7 +112,7 @@ describe("성공 상태 (UC-WORKSPACE-CONTEXT-DISCOVER)", () => {
 
 describe("빈 목록과 루트 없음", () => {
 	it("루트가 없으면 그렇게 말한다 — 빈 목록으로 위장하지 않는다", () => {
-		render(<WorkspaceContextPanel workspaceRoot="" service={service()} />);
+		render(<WorkspaceContextApp workspaceRoot="" service={service()} />);
 		expect(screen.getByTestId("workspace-context-no-root")).toBeInTheDocument();
 		expect(screen.getByTestId("workspace-context-refresh")).toBeDisabled();
 	});
@@ -126,14 +126,14 @@ describe("빈 목록과 루트 없음", () => {
 				],
 			},
 		});
-		render(<WorkspaceContextPanel workspaceRoot="/ws" service={empty} />);
+		render(<WorkspaceContextApp workspaceRoot="/ws" service={empty} />);
 		await waitFor(() => expect(screen.getByTestId("workspace-context-error")).toBeInTheDocument());
 	});
 });
 
 describe("오류 상태 (UC-WORKSPACE-CONTEXT-BROKEN-ENTRYPOINT)", () => {
 	it("무엇을 어디서 찾다 실패했고 무엇을 하면 되는지 보여 준다", async () => {
-		render(<WorkspaceContextPanel workspaceRoot="/ws" service={service({ missing: ["project-index.yaml"] })} />);
+		render(<WorkspaceContextApp workspaceRoot="/ws" service={service({ missing: ["project-index.yaml"] })} />);
 		await waitFor(() => expect(screen.getByTestId("workspace-context-error")).toBeInTheDocument());
 		const diagnostic = screen.getByTestId("workspace-context-diagnostic");
 		expect(diagnostic).toHaveTextContent("project-index.yaml");
@@ -144,7 +144,7 @@ describe("오류 상태 (UC-WORKSPACE-CONTEXT-BROKEN-ENTRYPOINT)", () => {
 	});
 
 	it("실패했을 때 문서 목록을 보여 주지 않는다", async () => {
-		render(<WorkspaceContextPanel workspaceRoot="/ws" service={service({ missing: ["agents-rules.json"] })} />);
+		render(<WorkspaceContextApp workspaceRoot="/ws" service={service({ missing: ["agents-rules.json"] })} />);
 		await waitFor(() => expect(screen.getByTestId("workspace-context-error")).toBeInTheDocument());
 		expect(screen.queryByTestId("workspace-context-documents")).not.toBeInTheDocument();
 	});
@@ -167,14 +167,14 @@ describe("프로젝트 전환 (UC-WORKSPACE-CONTEXT-ENTER-PROJECT·SWITCH-PROJEC
 	};
 
 	it("선언된 프로젝트를 고를 수 있다", async () => {
-		render(<WorkspaceContextPanel workspaceRoot="/ws" service={service(withAlpha)} />);
+		render(<WorkspaceContextApp workspaceRoot="/ws" service={service(withAlpha)} />);
 		await waitFor(() => expect(screen.getByTestId("workspace-context-projects")).toBeInTheDocument());
 		expect(screen.getByTestId("workspace-context-project-alpha")).toBeInTheDocument();
 		expect(screen.getByTestId("workspace-context-project-beta")).toBeInTheDocument();
 	});
 
 	it("들어가면 범위와 개정이 바뀌고 프로젝트 문서가 실린다", async () => {
-		render(<WorkspaceContextPanel workspaceRoot="/ws" service={service(withAlpha)} />);
+		render(<WorkspaceContextApp workspaceRoot="/ws" service={service(withAlpha)} />);
 		await waitFor(() => expect(screen.getByTestId("workspace-context-project-alpha")).toBeInTheDocument());
 		fireEvent.click(screen.getByTestId("workspace-context-project-alpha"));
 		await waitFor(() => expect(screen.getByTestId("workspace-context-scope")).toHaveTextContent("alpha"));
@@ -187,7 +187,7 @@ describe("프로젝트 전환 (UC-WORKSPACE-CONTEXT-ENTER-PROJECT·SWITCH-PROJEC
 	});
 
 	it("들어간 뒤에는 루트로 돌아가는 길이 생긴다", async () => {
-		render(<WorkspaceContextPanel workspaceRoot="/ws" service={service(withAlpha)} />);
+		render(<WorkspaceContextApp workspaceRoot="/ws" service={service(withAlpha)} />);
 		await waitFor(() => expect(screen.getByTestId("workspace-context-project-alpha")).toBeInTheDocument());
 		expect(screen.queryByTestId("workspace-context-back-to-root")).not.toBeInTheDocument();
 		fireEvent.click(screen.getByTestId("workspace-context-project-alpha"));
@@ -195,7 +195,7 @@ describe("프로젝트 전환 (UC-WORKSPACE-CONTEXT-ENTER-PROJECT·SWITCH-PROJEC
 	});
 
 	it("없는 프로젝트를 고르면 진단을 보여 주고 이전 목록을 남기지 않는다", async () => {
-		render(<WorkspaceContextPanel workspaceRoot="/ws" service={service()} />);
+		render(<WorkspaceContextApp workspaceRoot="/ws" service={service()} />);
 		await waitFor(() => expect(screen.getByTestId("workspace-context-project-beta")).toBeInTheDocument());
 		fireEvent.click(screen.getByTestId("workspace-context-project-beta"));
 		await waitFor(() => expect(screen.getByTestId("workspace-context-error")).toBeInTheDocument());
@@ -219,7 +219,7 @@ describe("다시 읽기", () => {
 				},
 			},
 		};
-		render(<WorkspaceContextPanel workspaceRoot="/ws" service={service(withAlpha)} />);
+		render(<WorkspaceContextApp workspaceRoot="/ws" service={service(withAlpha)} />);
 		await waitFor(() => expect(screen.getByTestId("workspace-context-project-alpha")).toBeInTheDocument());
 		fireEvent.click(screen.getByTestId("workspace-context-project-alpha"));
 		await waitFor(() => expect(screen.getByTestId("workspace-context-scope")).toHaveTextContent("alpha"));

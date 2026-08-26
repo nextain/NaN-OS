@@ -50,7 +50,7 @@ export function shouldOpenTerminalFileLink(
 }
 
 const FILE_PATH_RE =
-	/(?:(?:[A-Za-z]:[\\/]|~\/|\.?\.?\/)[\w./\\-]*[\w-]+\.[\w]{1,10}|(?:src|lib|test|tests|dist|build|projects|packages|modules|node_modules|components|panels|scripts|agent|gateway|shell)[\\/][\w./\\-]*[\w-]+\.[\w]{1,10})(?::\d+){0,2}/g;
+	/(?:(?:[A-Za-z]:[\\/]|~\/|\.?\.?\/)[\w./\\-]*[\w-]+\.[\w]{1,10}|(?:src|lib|test|tests|dist|build|projects|packages|modules|node_modules|components|apps|scripts|agent|gateway|shell)[\\/][\w./\\-]*[\w-]+\.[\w]{1,10})(?::\d+){0,2}/g;
 
 const FILE_EXTENSIONS = new Set([
 	"ts",
@@ -406,7 +406,7 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(
 		return (
 			<div
 				ref={containerRef}
-				className="workspace-panel__terminal"
+				className="workspace-app__terminal"
 				// Suppress the WebView's default (browser) context menu so a
 				// right-click reaches xterm's mouse reporting and Herdr shows its
 				// own right-click menu instead.

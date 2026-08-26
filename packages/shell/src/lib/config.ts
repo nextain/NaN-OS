@@ -100,7 +100,7 @@ export type TtsProviderId =
 	| "vllm"
 	| "naia-local-voice";
 
-export type PanelPosition = "left" | "right" | "bottom";
+export type AppPosition = "left" | "right" | "bottom";
 
 /** Development tiers are expert/main/sub; memory remains orthogonal. */
 export type LlmRoleId = "expert" | "main" | "sub" | "memory";
@@ -192,9 +192,9 @@ export interface AppConfig {
 	elevenlabsApiKey?: string;
 	gatewayTtsAuto?: string;
 	gatewayTtsMode?: string;
-	panelPosition?: PanelPosition;
-	panelVisible?: boolean;
-	panelSize?: number;
+	appPosition?: AppPosition;
+	appVisible?: boolean;
+	appSize?: number;
 	discordSessionMigrated?: boolean;
 	discordRelayUrl?: string;
 	lastProcessedDiscordMessageId?: string;
@@ -251,8 +251,8 @@ export interface AppConfig {
 	openaiRealtimeVoice?: string;
 	/** Unified voice selection (replaces liveVoice/openaiRealtimeVoice after migration) */
 	voice?: string;
-	/** Panel IDs that the user has explicitly deleted (build-time panels only). */
-	deletedPanels?: string[];
+	/** App IDs that the user has explicitly deleted (build-time apps only). */
+	deletedApps?: string[];
 	/** Workspace root directory override. Defaults to the compile-time WORKSPACE_ROOT constant if not set. */
 	workspaceRoot?: string;
 	/** Filename of the selected background video inside naia-settings/background/ */

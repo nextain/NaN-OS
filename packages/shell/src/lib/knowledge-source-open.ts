@@ -30,7 +30,7 @@ export function openKnowledgeSource(uri: string): void {
 	if (classifySourceUri(uri) === "url") {
 		const api = appRegistry.getApi("browser");
 		api?.navigate(uri);
-		api?.activatePanel?.();
+		api?.activateApp?.();
 		useAppStore.getState().setActiveApp("browser");
 		return;
 	}

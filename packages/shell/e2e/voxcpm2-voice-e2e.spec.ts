@@ -197,7 +197,7 @@ test.describe("local voice — full real-engine journey (adversarial-hardened)",
 		);
 
 		await page.goto("/");
-		await expect(page.locator(".chat-panel")).toBeVisible({ timeout: 20_000 });
+		await expect(page.locator(".chat-app")).toBeVisible({ timeout: 20_000 });
 
 		// 1) TRT DLL attested by the live engine.
 		const health = await page.evaluate(async () => {
@@ -325,7 +325,7 @@ test.describe("local voice — full real-engine journey (adversarial-hardened)",
 		);
 
 		await page.goto("/");
-		await expect(page.locator(".chat-panel")).toBeVisible({ timeout: 20_000 });
+		await expect(page.locator(".chat-app")).toBeVisible({ timeout: 20_000 });
 
 		const voiceBtn = page.locator(".chat-voice-btn");
 		await voiceBtn.click();

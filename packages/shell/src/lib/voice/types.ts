@@ -279,9 +279,9 @@ export interface VoiceSession {
 	sendText: (text: string) => void;
 	sendToolResponse: (callId: string, result: unknown) => void;
 	/**
-	 * Inject a mid-session panel-context delta (#313 L3). Optional ??providers
+	 * Inject a mid-session app-context delta (#313 L3). Optional ??providers
 	 * without a mid-session inject surface (vllm-omni, naia-omni) simply omit
-	 * it, and the panel-context bridge degrades to the next-turn system prompt.
+	 * it, and the app-context bridge degrades to the next-turn system prompt.
 	 */
 	sendContextUpdate?: (ctx: AppContextUpdate) => void;
 	/**

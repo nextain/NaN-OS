@@ -117,7 +117,7 @@ Emotion tags (for Shell avatar only):
 
 /** Memory context injected into system prompt.
  *  Note: User facts are now handled by Agent MemorySystem (sessionRecall),
- *  not by Shell. Shell only provides persona/locale/panel context here. */
+ *  not by Shell. Shell only provides persona/locale/app context here. */
 export interface MemoryContext {
 	userName?: string;
 	agentName?: string;
@@ -127,8 +127,8 @@ export interface MemoryContext {
 	discordDefaultUserId?: string;
 	discordDmChannelId?: string;
 	/**
-	 * Panel contexts pushed via NaiaContextBridge — the active (switchable)
-	 * panel plus any persistent contexts (e.g. bgm favorites). One block is
+	 * App contexts pushed via NaiaContextBridge — the active (switchable)
+	 * app plus any persistent contexts (e.g. bgm favorites). One block is
 	 * rendered per entry. Assembled by `selectPromptAppContexts`.
 	 */
 	appContexts?: { type: string; data: Record<string, unknown> }[];
@@ -199,7 +199,7 @@ export function buildSystemPrompt(
 		if (context.appContexts?.length) {
 			for (const pc of context.appContexts) {
 				contextLines.push(
-					`Panel [${pc.type}] context: ${JSON.stringify(pc.data)}`,
+					`App [${pc.type}] context: ${JSON.stringify(pc.data)}`,
 				);
 			}
 		}

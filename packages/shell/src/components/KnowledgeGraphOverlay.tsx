@@ -83,7 +83,7 @@ export function KnowledgeGraphOverlay({
 		>
 			{/* biome-ignore lint/a11y/useKeyWithClickEvents: 패널 본체는 backdrop 클릭 전파만 차단(Esc 로 닫기 제공) */}
 			<div
-				className="knowledge-graph-overlay-panel"
+				className="knowledge-graph-overlay-app"
 				onClick={(e) => e.stopPropagation()}
 				style={{
 					width: "92vw",

@@ -84,7 +84,7 @@ async function setup(page: Page, ttsProvider: string, naiaKey?: string) {
 		return route.fulfill({ status: 401, contentType: "application/json", body: "{}" });
 	});
 	await page.goto("/");
-	await expect(page.locator(".chat-panel")).toBeVisible({ timeout: 10_000 });
+	await expect(page.locator(".chat-app")).toBeVisible({ timeout: 10_000 });
 	return () => speechFetches;
 }
 

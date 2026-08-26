@@ -1,7 +1,7 @@
 import { type RefObject, useMemo, useState } from "react";
 import { t } from "../../lib/i18n";
 import { FileTree } from "./FileTree";
-import { WorkspaceContextPanel } from "./WorkspaceContextPanel";
+import { WorkspaceContextApp } from "./WorkspaceContextApp";
 import type { HerdrSnapshot } from "./herdr";
 import type { ClassifiedDir } from "./types";
 
@@ -109,7 +109,7 @@ export function HerdrWorkspaceRail(props: RailProps) {
 			</div>
 			<div className="herdr-workspace__items">
 				{tab === "context" ? (
-					<WorkspaceContextPanel workspaceRoot={props.workspaceRoot} />
+					<WorkspaceContextApp workspaceRoot={props.workspaceRoot} />
 				) : tab === "spaces"
 					? props.snapshot?.workspaces.map((space) => (
 							<button

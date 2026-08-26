@@ -92,7 +92,7 @@ const TAURI_MOCK = `
 		if (cmd === "pty_resize" || cmd === "pty_write" || cmd === "pty_close") return null;
 		if (cmd === "send_to_agent_command" || cmd === "cancel_stream") return null;
 		if (cmd === "frontend_log") return null;
-		if (cmd === "panel_list_installed") return [];
+		if (cmd === "app_list_installed") return [];
 		if (cmd === "list_skills" || cmd === "list_stt_models") return [];
 		if (cmd === "read_naia_config") return null;
 		return undefined;
@@ -101,12 +101,12 @@ const TAURI_MOCK = `
 `;
 
 async function openContextTab(page: Page): Promise<void> {
-	const tab = page.locator('button[data-panel-id="workspace"]');
+	const tab = page.locator('button[data-app-id="workspace"]');
 	await expect(tab).toBeVisible({ timeout: 10_000 });
 	await tab.click();
 	await expect(page.getByTestId("herdr-workspace")).toBeVisible();
 	await page.getByTestId("workspace-context-tab").click();
-	await expect(page.getByTestId("workspace-context-panel")).toBeVisible();
+	await expect(page.getByTestId("workspace-context-app")).toBeVisible();
 }
 
 test.describe("워크스페이스 컨텍스트 해석 (#501)", () => {
@@ -197,11 +197,11 @@ test.describe("워크스페이스 컨텍스트 해석 (#501)", () => {
 		await page.goto("/");
 		await openContextTab(page);
 
-		await expect(page.getByTestId("workspace-context-panel")).toBeVisible();
+		await expect(page.getByTestId("workspace-context-app")).toBeVisible();
 		const overflow = await page.evaluate(() => {
-			const panel = document.querySelector('[data-testid="workspace-context-panel"]');
-			if (!panel) return null;
-			const rail = panel.closest(".herdr-workspace__rail") ?? panel.parentElement;
+			const app = document.querySelector('[data-testid="workspace-context-app"]');
+			if (!app) return null;
+			const rail = app.closest(".herdr-workspace__rail") ?? app.parentElement;
 			return rail ? rail.scrollWidth - rail.clientWidth : null;
 		});
 		expect(overflow).not.toBeNull();

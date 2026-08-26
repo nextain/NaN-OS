@@ -147,7 +147,7 @@ test.describe("local voice — real sound drives lip-sync", () => {
 		// The /v1/audio/speech fetch is deliberately NOT routed — it hits the real
 		// engine, proving the selected local voice actually produces audio.
 		await page.goto("/");
-		await expect(page.locator(".chat-panel")).toBeVisible({ timeout: 20_000 });
+		await expect(page.locator(".chat-app")).toBeVisible({ timeout: 20_000 });
 
 		// Enter voice mode (the proven pipeline-voice path that synthesizes replies).
 		const voiceBtn = page.locator(".chat-voice-btn");

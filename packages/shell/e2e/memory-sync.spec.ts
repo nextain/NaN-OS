@@ -157,7 +157,7 @@ test.describe.skip("Memory Sync E2E", () => {
 		);
 
 		await page.goto("/");
-		await expect(page.locator(".chat-panel")).toBeVisible({ timeout: 10_000 });
+		await expect(page.locator(".chat-app")).toBeVisible({ timeout: 10_000 });
 	});
 
 	test("startup sync: syncToOpenClaw fires on app mount with facts", async ({

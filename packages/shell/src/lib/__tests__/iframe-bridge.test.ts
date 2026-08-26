@@ -116,7 +116,7 @@ describe("iframe-bridge origin guard", () => {
 
 // ─── Tests: __unknown__ blocking ─────────────────────────────────────────────
 
-describe("iframe-bridge __unknown__ panel blocking", () => {
+describe("iframe-bridge __unknown__ app blocking", () => {
 	let stopBridge: () => void;
 
 	beforeEach(async () => {
@@ -139,7 +139,7 @@ describe("iframe-bridge __unknown__ panel blocking", () => {
 			key: "myKey",
 		});
 		expect(getSecretKey).not.toHaveBeenCalled();
-		expect(res.error).toContain("Panel identity could not be resolved");
+		expect(res.error).toContain("App identity could not be resolved");
 	});
 
 	it("blocks setSecret when appId is __unknown__", async () => {
@@ -151,7 +151,7 @@ describe("iframe-bridge __unknown__ panel blocking", () => {
 			value: "v",
 		});
 		expect(saveSecretKey).not.toHaveBeenCalled();
-		expect(res.error).toContain("Panel identity could not be resolved");
+		expect(res.error).toContain("App identity could not be resolved");
 	});
 
 	it("blocks queryBehavior when appId is __unknown__", async () => {
@@ -161,7 +161,7 @@ describe("iframe-bridge __unknown__ panel blocking", () => {
 			id: "t5",
 		});
 		expect(queryBehavior).not.toHaveBeenCalled();
-		expect(res.error).toContain("Panel identity could not be resolved");
+		expect(res.error).toContain("App identity could not be resolved");
 	});
 
 	it("blocks logBehavior when appId is __unknown__", async () => {
@@ -172,7 +172,7 @@ describe("iframe-bridge __unknown__ panel blocking", () => {
 			event: "click",
 		});
 		expect(logBehavior).not.toHaveBeenCalled();
-		expect(res.error).toContain("Panel identity could not be resolved");
+		expect(res.error).toContain("App identity could not be resolved");
 	});
 
 	it("blocks readFile when appId is __unknown__", async () => {
@@ -183,7 +183,7 @@ describe("iframe-bridge __unknown__ panel blocking", () => {
 			path: "/home/user/file.txt",
 		});
 		expect(invoke).not.toHaveBeenCalled();
-		expect(res.error).toContain("Panel identity could not be resolved");
+		expect(res.error).toContain("App identity could not be resolved");
 	});
 
 	it("blocks runShell when appId is __unknown__", async () => {
@@ -195,7 +195,7 @@ describe("iframe-bridge __unknown__ panel blocking", () => {
 			args: [],
 		});
 		expect(invoke).not.toHaveBeenCalled();
-		expect(res.error).toContain("Panel identity could not be resolved");
+		expect(res.error).toContain("App identity could not be resolved");
 	});
 });
 
@@ -210,7 +210,7 @@ describe("iframe-bridge input validation", () => {
 		// Register a fake iframe so appIdFromSource resolves a appId
 		iframe = document.createElement("iframe");
 		iframe.src =
-			"http://asset.localhost/home/user/.naia/apps/my-panel/index.html";
+			"http://asset.localhost/home/user/.naia/apps/my-app/index.html";
 		document.body.appendChild(iframe);
 
 		const { startIframeBridge } = await import("../iframe-bridge");
@@ -267,29 +267,29 @@ describe("appIdFromSource regex", () => {
 
 	it("extracts appId from clean path", () => {
 		expect(
-			"http://asset.localhost/.naia/apps/my-panel/index.html".match(re)?.[1],
-		).toBe("my-panel");
+			"http://asset.localhost/.naia/apps/my-app/index.html".match(re)?.[1],
+		).toBe("my-app");
 	});
 
 	it("extracts appId with query string", () => {
 		expect(
-			"http://asset.localhost/.naia/apps/my-panel/index.html?v=2".match(
+			"http://asset.localhost/.naia/apps/my-app/index.html?v=2".match(
 				re,
 			)?.[1],
-		).toBe("my-panel");
+		).toBe("my-app");
 	});
 
 	it("extracts appId with hash", () => {
 		expect(
-			"http://asset.localhost/.naia/apps/my-panel/index.html#section".match(
+			"http://asset.localhost/.naia/apps/my-app/index.html#section".match(
 				re,
 			)?.[1],
-		).toBe("my-panel");
+		).toBe("my-app");
 	});
 
 	it("returns null for path without index.html", () => {
 		expect(
-			"http://asset.localhost/.naia/apps/my-panel/".match(re),
+			"http://asset.localhost/.naia/apps/my-app/".match(re),
 		).toBeNull();
 	});
 });

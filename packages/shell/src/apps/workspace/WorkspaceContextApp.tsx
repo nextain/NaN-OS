@@ -14,13 +14,13 @@ import { t } from "../../lib/i18n";
 // 이 패널이 답해야 하는 질문은 "무엇을 읽었는가"가 아니라 "왜 그것을 읽었는가"다.
 // 근거 없이 목록만 보여 주면 사용자는 나이아가 무엇을 근거로 답했는지 알 수 없다.
 
-type PanelState =
+type AppState =
 	| { kind: "no-root" }
 	| { kind: "loading" }
 	| { kind: "ok"; manifest: ContextManifest }
 	| { kind: "failed"; diagnostics: readonly Diagnostic[] };
 
-export interface WorkspaceContextPanelProps {
+export interface WorkspaceContextAppProps {
 	workspaceRoot: string;
 	/** 테스트가 대역 서비스를 넣는다. 없으면 Tauri 실배선. */
 	service?: WorkspaceContextService;
@@ -32,12 +32,12 @@ function scopeLabel(manifest: ContextManifest): string {
 		: manifest.scope.name;
 }
 
-export function WorkspaceContextPanel(props: WorkspaceContextPanelProps) {
+export function WorkspaceContextApp(props: WorkspaceContextAppProps) {
 	const service = useMemo(
 		() => props.service ?? wireWorkspaceContextLive({ invoke, listen }),
 		[props.service],
 	);
-	const [state, setState] = useState<PanelState>({ kind: "no-root" });
+	const [state, setState] = useState<AppState>({ kind: "no-root" });
 
 	const apply = useCallback(
 		(outcome: Awaited<ReturnType<WorkspaceContextService["discover"]>>) => {
@@ -78,7 +78,7 @@ export function WorkspaceContextPanel(props: WorkspaceContextPanelProps) {
 		<section
 			className="herdr-workspace__context"
 			aria-label={t("workspace.contextTitle")}
-			data-testid="workspace-context-panel"
+			data-testid="workspace-context-app"
 		>
 			<header className="herdr-workspace__section-title">
 				<span>{t("workspace.contextTitle")}</span>

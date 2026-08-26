@@ -3,14 +3,14 @@ import { render, screen, fireEvent, cleanup } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const navigate = vi.fn();
-const activatePanel = vi.fn();
+const activateApp = vi.fn();
 const openFile = vi.fn();
 const setActiveApp = vi.fn();
 
 vi.mock("../lib/app-registry", () => ({
 	appRegistry: {
 		getApi: (id: string) =>
-			id === "browser" ? { navigate, activatePanel } : id === "workspace" ? { openFile } : undefined,
+			id === "browser" ? { navigate, activateApp } : id === "workspace" ? { openFile } : undefined,
 	},
 }));
 vi.mock("../stores/app", () => ({
@@ -30,7 +30,7 @@ describe("KnowledgeToolResult (K2 — 답변 + 출처 칩 + 근거→원문 disp
 		expect(screen.getByText("신분증입니다")).toBeTruthy();
 		fireEvent.click(screen.getByText("전입신고"));
 		expect(navigate).toHaveBeenCalledWith("https://gov.kr/x");
-		expect(activatePanel).toHaveBeenCalled();
+		expect(activateApp).toHaveBeenCalled();
 		expect(setActiveApp).toHaveBeenCalledWith("browser");
 		expect(openFile).not.toHaveBeenCalled();
 	});

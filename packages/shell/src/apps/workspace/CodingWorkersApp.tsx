@@ -17,7 +17,7 @@ import {
 	saveJeonjuCourseTarget,
 } from "./jeonju-course-target";
 
-interface CodingWorkersPanelProps {
+interface CodingWorkersAppProps {
 	adapter: CodingWorkersAdapter;
 	initialWorkers?: CodingWorker[];
 	/** ADK control plane: settings and skills live here; Codex writes at the target. */
@@ -97,12 +97,12 @@ function courseReport(worker: CodingWorker): string {
 	}
 }
 
-export function CodingWorkersPanel({
+export function CodingWorkersApp({
 	adapter,
 	initialWorkers = [],
 	controlRoot,
 	onOpenCourseFiles,
-}: CodingWorkersPanelProps) {
+}: CodingWorkersAppProps) {
 	const [workers, setWorkers] = useState<CodingWorker[]>(initialWorkers);
 	const [worktree, setWorktree] = useState("");
 	const [task, setTask] = useState("");
