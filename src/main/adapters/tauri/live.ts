@@ -50,7 +50,7 @@ export function makeF0LiveAdapters(d: LiveDeps): ControlPlanePorts {
       async store(msg) { await d.invoke("store_startup_message", { message: JSON.stringify(msg) }); },
       async send(msg) { await d.invoke("send_to_agent_command", { message: JSON.stringify(msg) }); },
     },
-    panels: {
+    apps: {
       async listInstalled() { return (await d.invoke("app_list_installed")) as readonly unknown[]; },
     },
     setup: {

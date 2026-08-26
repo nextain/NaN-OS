@@ -131,7 +131,7 @@ export interface MemoryContext {
 	 * panel plus any persistent contexts (e.g. bgm favorites). One block is
 	 * rendered per entry. Assembled by `selectPromptAppContexts`.
 	 */
-	panelContexts?: { type: string; data: Record<string, unknown> }[];
+	appContexts?: { type: string; data: Record<string, unknown> }[];
 }
 
 /** Build full system prompt from persona text + optional memory context */
@@ -196,8 +196,8 @@ export function buildSystemPrompt(
 			}
 		}
 
-		if (context.panelContexts?.length) {
-			for (const pc of context.panelContexts) {
+		if (context.appContexts?.length) {
+			for (const pc of context.appContexts) {
 				contextLines.push(
 					`Panel [${pc.type}] context: ${JSON.stringify(pc.data)}`,
 				);

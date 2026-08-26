@@ -866,7 +866,7 @@ export function BgmPlayer({ naia }: Props) {
 	// Consume only an explicit playback request issued during this app session.
 	// Persisted media metadata is never playback authority after a restart.
 	useEffect(() => {
-		// A chat turn can dispatch the panel tool after the chat surface is ready
+		// A chat turn can dispatch the app tool after the chat surface is ready
 		// but before this widget's Tauri event listener is attached. The playback
 		// authority already holds that request, so recover it instead of leaving a
 		// title-only requested state with no iframe.

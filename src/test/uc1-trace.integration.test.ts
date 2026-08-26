@@ -99,7 +99,7 @@ describe("UC1 통합 trace — 입력→송신→스트리밍→finish (풀 스�
     expect(ids.size).toBe(100); // 두 인스턴스 100턴 전부 고유(모듈전역 카운터라 인스턴스마다 초기화 X)
   });
 
-  it("비-chat variant(panel_control) = PendingRouteSink 보류, chat 턴 오염 없음", async () => {
+  it("비-chat variant(app_control) = PendingRouteSink 보류, chat 턴 오염 없음", async () => {
     const { deps, emit } = mockTauri();
     const pending: string[] = [];
     const { chat, router } = wireChatUC1({ live: deps, pending: { pending: (m) => pending.push(m.type) } });
@@ -107,10 +107,10 @@ describe("UC1 통합 trace — 입력→송신→스트리밍→finish (풀 스�
     const rendered: ChatChunk[] = [];
     const { sent } = chat.startTurn(req, (c) => rendered.push(c));
     await sent; await Promise.resolve();
-    emit(JSON.stringify({ type: "panel_control", requestId: "trace-1", action: "x" })); // 비-chat
+    emit(JSON.stringify({ type: "app_control", requestId: "trace-1", action: "x" })); // 비-chat
     emit(JSON.stringify({ type: "text", requestId: "trace-1", text: "ok" }));
-    expect(pending).toEqual(["panel_control"]); // 보류
-    expect(rendered.map((c) => c.kind)).toEqual(["text"]); // chat 턴엔 panel 안 섞임
+    expect(pending).toEqual(["app_control"]); // 보류
+    expect(rendered.map((c) => c.kind)).toEqual(["text"]); // chat 턴엔 app 안 섞임
   });
 
   it("UC-WIRE-V1 구조화 이벤트를 순서와 필드 손실 없이 전달한다", async () => {

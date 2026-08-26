@@ -3,7 +3,7 @@
 import { ControlPlaneBoot, type ControlPlanePorts } from "../app/control/boot.js";
 import {
   tauriConfig, tauriBootState, tauriAdkPath, tauriWorkspace,
-  tauriStartup, tauriPanels, tauriSetup,
+  tauriStartup, tauriApps, tauriSetup,
 } from "../adapters/tauri/index.js";
 
 /** Tauri 어댑터 주입한 control-plane (라이브). */
@@ -14,7 +14,7 @@ export function wireControlPlaneTauri(): ControlPlaneBoot {
     adkPath: tauriAdkPath,
     workspace: tauriWorkspace,
     startup: tauriStartup,
-    panels: tauriPanels,
+    apps: tauriApps,
     setup: tauriSetup,
   };
   return new ControlPlaneBoot(ports);

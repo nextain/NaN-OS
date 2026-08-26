@@ -1,5 +1,5 @@
 // adapters — TauriChatBridge (contract §B.4). **outbound 전용 driving adapter**.
-// shell ChatPanel 의 UI 이벤트 → ChatPort.startTurn/cancel 호출 + onChunk→렌더 전달.
+// shell ChatApp 의 UI 이벤트 → ChatPort.startTurn/cancel 호출 + onChunk→렌더 전달.
 // ⚠️ agent stdout(agent_response) 수신은 Bridge 아님 = StdioTransportAdapter+MessageRouter 단일 경로(R15).
 // ⚠️ requestId 고유성(§B.4.1 불변식)은 주입된 newRequestId 가 책임(shell=crypto.randomUUID/baseline req-ts-rand).
 import type { ChatRequest, ChatChunk, ChatMessage, ProviderSelect } from "../domain/chat.js";
@@ -13,7 +13,7 @@ export interface ChatBridgeDeps {
   readonly newRequestId: () => string;
 }
 
-/** ChatPanel 이 넘기는 입력(요청 본문 — requestId/clientId 는 bridge 가 채움). */
+/** ChatApp 이 넘기는 입력(요청 본문 — requestId/clientId 는 bridge 가 채움). */
 export interface ChatSubmitInput {
   readonly provider: ProviderSelect;
   readonly messages: readonly ChatMessage[];
@@ -32,7 +32,7 @@ export interface ChatSubmitInput {
 export class ChatBridge {
   constructor(private readonly deps: ChatBridgeDeps) {}
 
-  /** ChatPanel 송신 → ChatRequest 조립(고유 requestId + clientId 주입) → ChatPort.startTurn. render=onChunk. */
+  /** ChatApp 송신 → ChatRequest 조립(고유 requestId + clientId 주입) → ChatPort.startTurn. render=onChunk. */
   submit(input: ChatSubmitInput, render: (c: ChatChunk) => void): { handle: TurnHandle; sent: Promise<void> } {
     const req: ChatRequest = {
       kind: "chat",

@@ -355,7 +355,7 @@ export function BrowserCenterArea({ naia }: AppCenterProps) {
 	// ── Activate panel when login flow requests it ────────────────────────────
 
 	useEffect(() => {
-		const unlistenPromise = listen("browser_panel_activate", () => {
+		const unlistenPromise = listen("browser_app_activate", () => {
 			useAppStore.getState().setActiveApp("browser");
 		});
 		return () => {

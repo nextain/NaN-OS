@@ -6,7 +6,7 @@ vi.mock("@tauri-apps/api/event", () => ({
 	listen: vi.fn().mockResolvedValue(() => {}),
 }));
 vi.mock("../../lib/chat-service", () => ({
-	sendPanelInstall: vi.fn().mockResolvedValue(undefined),
+	sendAppInstall: vi.fn().mockResolvedValue(undefined),
 }));
 vi.mock("../../lib/app-loader", () => ({
 	loadInstalledApps: vi.fn().mockResolvedValue(undefined),

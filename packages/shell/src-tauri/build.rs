@@ -8,9 +8,9 @@ fn main() {
         env,
         path::{Path, PathBuf},
     };
-    const REQUIRED_AGENT_COMMIT: &str = "bd70c44c39d32f693eab99994374194c21e37f7f";
+    const REQUIRED_AGENT_COMMIT: &str = "2589e4fc85e13173890e5c9109a744ee4e575854";
     const REQUIRED_PROTO_SHA256: &str =
-        "b7df5230d6d11c2e2795bd2e9877471d18ec6500d23bd63806bf9f0358566a3c";
+        "4b078d9ebd11335ae5963a842b0dbbb2250bd03a48e880559b82ce7a110e52fd";
     const REQUIRED_PROTO_MARKERS: &[&str] = &[
         "repeated AttachmentRef attachments = 4;",
         "message AttachmentRef",

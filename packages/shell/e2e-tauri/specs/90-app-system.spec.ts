@@ -9,7 +9,7 @@ import { assertSemantic } from "../helpers/semantic.js";
 const SHOT = "/tmp/panel-system-screenshots";
 
 /** Click a panel tab by its panel id (data-panel-id attribute) */
-async function clickPanelTab(panelId: string): Promise<boolean> {
+async function clickPanelTab(appId: string): Promise<boolean> {
 	return browser.execute((id: string) => {
 		const btn = document.querySelector(
 			`.app-bar-tab[data-panel-id="${id}"]`,
@@ -19,11 +19,11 @@ async function clickPanelTab(panelId: string): Promise<boolean> {
 			return true;
 		}
 		return false;
-	}, panelId);
+	}, appId);
 }
 
 /** Click the remove button of a panel by its panel id */
-async function clickPanelRemove(panelId: string): Promise<boolean> {
+async function clickPanelRemove(appId: string): Promise<boolean> {
 	return browser.execute((id: string) => {
 		const wrapper = document.querySelector(
 			`.app-bar-tab-wrapper[data-panel-id="${id}"]`,
@@ -36,7 +36,7 @@ async function clickPanelRemove(panelId: string): Promise<boolean> {
 			return true;
 		}
 		return false;
-	}, panelId);
+	}, appId);
 }
 
 describe("90 — Panel System (AppBar + sample-note AI interaction)", () => {
@@ -54,22 +54,22 @@ describe("90 — Panel System (AppBar + sample-note AI interaction)", () => {
 	});
 
 	it("02 — built-in panels appear in AppBar (browser, workspace)", async () => {
-		const panelIds = await browser.execute(() => {
+		const appIds = await browser.execute(() => {
 			return Array.from(
 				document.querySelectorAll(".app-bar-tab[data-panel-id]"),
 			).map((el) => el.getAttribute("data-panel-id") ?? "");
 		});
-		expect(panelIds).toContain("browser");
-		expect(panelIds).toContain("workspace");
+		expect(appIds).toContain("browser");
+		expect(appIds).toContain("workspace");
 	});
 
 	it("03 — sample-note panel appears in AppBar", async () => {
-		const panelIds = await browser.execute(() => {
+		const appIds = await browser.execute(() => {
 			return Array.from(
 				document.querySelectorAll(".app-bar-tab[data-panel-id]"),
 			).map((el) => el.getAttribute("data-panel-id") ?? "");
 		});
-		expect(panelIds).toContain("sample-note");
+		expect(appIds).toContain("sample-note");
 		await browser.saveScreenshot(`${SHOT}/03-sample-note-in-appbar.png`);
 	});
 
@@ -127,9 +127,9 @@ describe("90 — Panel System (AppBar + sample-note AI interaction)", () => {
 
 	it("08 — built-in panels have no remove button", async () => {
 		const builtInHasRemove = await browser.execute(() => {
-			for (const panelId of ["browser", "workspace"]) {
+			for (const appId of ["browser", "workspace"]) {
 				const wrapper = document.querySelector(
-					`.app-bar-tab-wrapper[data-panel-id="${panelId}"]`,
+					`.app-bar-tab-wrapper[data-panel-id="${appId}"]`,
 				);
 				if (wrapper?.querySelector(".app-bar-tab-remove")) return true;
 			}

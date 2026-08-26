@@ -194,9 +194,9 @@ test("scenario 4: panel_skills frames carry skill registrations from agent (brow
 	console.log("panel_skills frames captured:", JSON.stringify(frames));
 
 	// Expect both browser + workspace panels to register their skills via the agent IPC
-	const panelIds = frames.map((f) => f.appId);
-	expect(panelIds, "browser panel registered skills").toContain("browser");
-	expect(panelIds, "workspace panel registered skills").toContain("workspace");
+	const appIds = frames.map((f) => f.appId);
+	expect(appIds, "browser panel registered skills").toContain("browser");
+	expect(appIds, "workspace panel registered skills").toContain("workspace");
 
 	// Each panel should have at least one tool
 	for (const f of frames) {

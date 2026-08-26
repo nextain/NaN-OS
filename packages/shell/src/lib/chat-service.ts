@@ -597,19 +597,19 @@ export async function directToolCall(opts: {
 		description?: string;
 	}) => void;
 	/**
-	 * Called when the agent emits `panel_tool_call` (a panel-owned tool like
+	 * Called when the agent emits `app_tool_call` (a panel-owned tool like
 	 * skill_browser_*). The voice path has no chat UI loop, so without this the
-	 * panel tool never runs and the agent hangs. The caller routes it to the
-	 * owning panel's bridge and replies via `sendPanelToolResult`.
+	 * app tool never runs and the agent hangs. The caller routes it to the
+	 * owning panel's bridge and replies via `sendAppToolResult`.
 	 */
-	onPanelToolCall?: (req: {
+	onAppToolCall?: (req: {
 		requestId: string;
 		toolCallId: string;
 		toolName: string;
 		args: Record<string, unknown>;
 	}) => void;
 	/**
-	 * Called when the agent emits `panel_control` (e.g. skill_panel switch).
+	 * Called when the agent emits `app_control` (e.g. skill_panel switch).
 	 * The caller performs the panel switch/reload. Without this, voice mode
 	 * reports "switched" but the panel never actually changes.
 	 */
@@ -686,9 +686,9 @@ export async function directToolCall(opts: {
 					tier: ar.tier,
 					description: ar.description,
 				});
-			} else if (chunk.type === "panel_tool_call") {
+			} else if (chunk.type === "app_tool_call") {
 				// Panel-owned tool (skill_browser_* etc.). Route to the panel
-				// bridge via the caller; the bridge replies with sendPanelToolResult,
+				// bridge via the caller; the bridge replies with sendAppToolResult,
 				// after which the agent emits tool_result/finish.
 				const pc = chunk as unknown as {
 					requestId: string;
@@ -696,13 +696,13 @@ export async function directToolCall(opts: {
 					toolName: string;
 					args: Record<string, unknown>;
 				};
-				opts.onPanelToolCall?.({
+				opts.onAppToolCall?.({
 					requestId: pc.requestId,
 					toolCallId: pc.toolCallId,
 					toolName: pc.toolName,
 					args: pc.args,
 				});
-			} else if (chunk.type === "panel_control") {
+			} else if (chunk.type === "app_control") {
 				const pc = chunk as unknown as {
 					requestId: string;
 					action: string;
@@ -807,13 +807,13 @@ export async function fetchAgentSkills(): Promise<
 }
 
 /** Send panel skill descriptors to the agent (on panel activate) */
-export async function sendPanelSkills(
+export async function sendAppSkills(
 	appId: string,
 	tools: NaiaTool[],
 ): Promise<boolean> {
 	return safeSendToAgent(
 		{
-			type: "panel_skills",
+			type: "app_skills",
 			appId,
 			tools: tools.map((t) => ({
 				name: t.name,
@@ -822,25 +822,25 @@ export async function sendPanelSkills(
 				...(t.tier != null && { tier: t.tier }),
 			})),
 		},
-		"sendPanelSkills",
+		"sendAppSkills",
 	);
 }
 
 /** Tell the agent to remove panel's proxy skills (on panel deactivate) */
-export async function sendPanelSkillsClear(appId: string): Promise<void> {
+export async function sendAppSkillsClear(appId: string): Promise<void> {
 	await safeSendToAgent(
-		{ type: "panel_skills_clear", appId },
-		"sendPanelSkillsClear",
+		{ type: "app_skills_clear", appId },
+		"sendAppSkillsClear",
 	);
 }
 
 /** Install a panel from a git URL or local zip file path (delegated to agent) */
-export async function sendPanelInstall(source: string): Promise<void> {
-	await safeSendToAgent({ type: "app_install", source }, "sendPanelInstall");
+export async function sendAppInstall(source: string): Promise<void> {
+	await safeSendToAgent({ type: "app_install", source }, "sendAppInstall");
 }
 
-/** Send panel tool execution result back to the agent */
-export async function sendPanelToolResult(
+/** Send app tool execution result back to the agent */
+export async function sendAppToolResult(
 	requestId: string,
 	toolCallId: string,
 	result: string,
@@ -849,14 +849,14 @@ export async function sendPanelToolResult(
 ): Promise<void> {
 	await safeSendToAgent(
 		{
-			type: "panel_tool_result",
+			type: "app_tool_result",
 			requestId,
 			toolCallId,
 			result,
 			success,
 			...(activityId ? { activityId } : {}),
 		},
-		"sendPanelToolResult",
+		"sendAppToolResult",
 	);
 }
 

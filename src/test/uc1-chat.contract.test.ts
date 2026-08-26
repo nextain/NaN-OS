@@ -88,8 +88,8 @@ describe("wire variant 분류 SoT (router·관측 스니펫 공유)", () => {
     expect(classifyVariant("bgm_youtube_play")).toBe("nonchat-known");
   });
   it("variant 집합 = 17 chat-turn + 18 nonchat-known(=35), 중복 없음", () => {
-    expect(CHAT_TURN_VARIANTS.length).toBe(17); // +compacted +panel_tool_call + UC-WIRE-V1 4종
-    expect(NONCHAT_KNOWN_VARIANTS.length).toBe(18); // panel_tool_call 을 chat-turn 으로 이동(no-op pending drop 제거)
+    expect(CHAT_TURN_VARIANTS.length).toBe(17); // +compacted +app_tool_call + UC-WIRE-V1 4종
+    expect(NONCHAT_KNOWN_VARIANTS.length).toBe(18); // app_tool_call 을 chat-turn 으로 이동(no-op pending drop 제거)
     const all = new Set([...CHAT_TURN_VARIANTS, ...NONCHAT_KNOWN_VARIANTS]);
     expect(all.size).toBe(35); // 겹침 없음(17 chat + 18 nonchat)
   });
@@ -317,10 +317,10 @@ describe("ChatService + MessageRouter 계약", () => {
 describe("exhaustive demux (router)", () => {
   it("비-chat known(미배선) → PendingRouteSink", () => {
     const { transport, pending } = wire();
-    transport.emit({ type: "panel_control", requestId: "x" });
+    transport.emit({ type: "app_control", requestId: "x" });
     transport.emit({ type: "skill_list_response" });
     transport.emit({ type: "audio", requestId: "x" });
-    expect(pending.map((m) => m.type)).toEqual(["panel_control", "skill_list_response", "audio"]);
+    expect(pending.map((m) => m.type)).toEqual(["app_control", "skill_list_response", "audio"]);
   });
   it("Unknown variant → DiagnosticSink(silent drop 금지)", () => {
     const { transport, diag } = wire();

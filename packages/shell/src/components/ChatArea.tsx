@@ -35,8 +35,8 @@ import {
 	isNewCore,
 	sendApprovalResponse,
 	sendChatMessage,
-	sendPanelSkills,
-	sendPanelToolResult,
+	sendAppSkills,
+	sendAppToolResult,
 	yieldSpeechActivity,
 	type SpeechActivityResume,
 } from "../lib/chat-service";
@@ -419,9 +419,9 @@ async function buildMemoryContext(): Promise<MemoryContext> {
 		// Persistent contexts survive panel switches so background music state is
 		// always available — fixes the AI hallucinating favorites when another
 		// panel was active.
-		const panelCtxList = selectPromptAppContexts(useAppStore.getState());
-		if (panelCtxList.length > 0) {
-			ctx.panelContexts = panelCtxList;
+		const appCtxList = selectPromptAppContexts(useAppStore.getState());
+		if (appCtxList.length > 0) {
+			ctx.appContexts = appCtxList;
 		}
 	} catch (err) {
 		Logger.warn("ChatArea", "Failed to build memory context", {
@@ -452,10 +452,10 @@ function buildEnvironmentSegments(
 	responseStyle: "brief" | "normal" = "normal",
 ): EnvironmentSegment[] {
 	const segs: EnvironmentSegment[] = [{ kind: "avatarEmotion" }];
-	if (memoryCtx.panelContexts?.length) {
+	if (memoryCtx.appContexts?.length) {
 		segs.push({
 			kind: "app",
-			entries: memoryCtx.panelContexts.map((pc) => ({
+			entries: memoryCtx.appContexts.map((pc) => ({
 				type: pc.type,
 				data: pc.data,
 			})),
@@ -664,7 +664,7 @@ export function ChatArea({
 	const voiceSessionRef = useRef<VoiceSession | null>(null);
 	// #313 L3 — mid-session panel context bridge handle (detached in every
 	// voice cleanup path).
-	const panelContextBridgeRef = useRef<AppContextBridge | null>(null);
+	const appContextBridgeRef = useRef<AppContextBridge | null>(null);
 	const micStreamRef = useRef<MicStream | null>(null);
 	const audioPlayerRef = useRef<AudioPlayer | null>(null);
 	const voiceStartRef = useRef<{
@@ -1367,7 +1367,7 @@ export function ChatArea({
 			}
 			if (typeof chunk.activityId !== "string") return;
 			if (
-				!["panel_tool_call", "text", "finish", "error"].includes(
+				!["app_tool_call", "text", "finish", "error"].includes(
 					String(chunk.type),
 				)
 			) {
@@ -1415,12 +1415,12 @@ export function ChatArea({
 			}
 
 			if (
-				chunk.type === "panel_tool_call" &&
+				chunk.type === "app_tool_call" &&
 				typeof chunk.requestId === "string" &&
 				typeof chunk.toolCallId === "string" &&
 				typeof chunk.toolName === "string"
 			) {
-				dispatchPanelToolCall({
+				dispatchAppToolCall({
 					requestId: chunk.requestId,
 					toolCallId: chunk.toolCallId,
 					toolName: chunk.toolName,
@@ -1739,7 +1739,7 @@ export function ChatArea({
 			// Startup registration can race the agent process. Refresh the
 			// idempotent descriptor immediately before every turn so semantic
 			// requests such as Radio DJ cannot degrade into text-only claims.
-			const bgmSkillReady = await sendPanelSkills(BGM_PANEL_ID, [
+			const bgmSkillReady = await sendAppSkills(BGM_PANEL_ID, [
 				SKILL_YOUTUBE_BGM,
 			]);
 			Logger.info("ChatArea", "turn bgm skill registration", {
@@ -1954,10 +1954,10 @@ export function ChatArea({
 	}
 
 	// Shared panel-tool dispatch — used by both the streaming-chat handleChunk
-	// path AND the voice directToolCall path (so voice can run panel tools like
+	// path AND the voice directToolCall path (so voice can run app tools like
 	// skill_browser_*). Auto-switches to the owning panel first (tool-level), so
 	// a tool targeting a non-active panel brings that panel forward.
-	function dispatchPanelToolCall(req: {
+	function dispatchAppToolCall(req: {
 		requestId: string;
 		toolCallId: string;
 		toolName: string;
@@ -1980,7 +1980,7 @@ export function ChatArea({
 				)
 				.then((result) => {
 					Logger.info("ChatArea", "bgm skill result", { result });
-					return sendPanelToolResult(
+					return sendAppToolResult(
 						req.requestId,
 						req.toolCallId,
 						result,
@@ -1990,7 +1990,7 @@ export function ChatArea({
 				})
 				.catch((err) => {
 					Logger.warn("ChatArea", "bgm skill error", { error: String(err) });
-					return sendPanelToolResult(
+					return sendAppToolResult(
 						req.requestId,
 						req.toolCallId,
 						String(err),
@@ -2013,18 +2013,18 @@ export function ChatArea({
 			});
 		}
 		const bridge = ownerPanel ? getBridgeForPanel(ownerPanel.id) : activeBridge;
-		Logger.info("ChatArea", "panel_tool_call dispatch", {
+		Logger.info("ChatArea", "app_tool_call dispatch", {
 			tool: req.toolName,
 			owner: ownerPanel?.id ?? "(none→activeBridge)",
 		});
 		bridge
 			.callTool(req.toolName, req.args)
 			.then((result) => {
-				Logger.info("ChatArea", "panel_tool_call result", {
+				Logger.info("ChatArea", "app_tool_call result", {
 					tool: req.toolName,
 					result: result.slice(0, 120),
 				});
-				return sendPanelToolResult(
+				return sendAppToolResult(
 					req.requestId,
 					req.toolCallId,
 					result,
@@ -2033,11 +2033,11 @@ export function ChatArea({
 				);
 			})
 			.catch((err) => {
-				Logger.warn("ChatArea", "panel_tool_call error", {
+				Logger.warn("ChatArea", "app_tool_call error", {
 					tool: req.toolName,
 					error: String(err),
 				});
-				return sendPanelToolResult(
+				return sendAppToolResult(
 					req.requestId,
 					req.toolCallId,
 					String(err),
@@ -2165,8 +2165,8 @@ export function ChatArea({
 					});
 				}
 				break;
-			case "panel_tool_call": {
-				dispatchPanelToolCall({
+			case "app_tool_call": {
+				dispatchAppToolCall({
 					requestId: chunk.requestId,
 					toolCallId: chunk.toolCallId,
 					toolName: chunk.toolName,
@@ -2175,7 +2175,7 @@ export function ChatArea({
 				});
 				break;
 			}
-			case "panel_control": {
+			case "app_control": {
 				dispatchPanelControl({
 					action: chunk.action,
 					appId: chunk.appId,
@@ -2323,8 +2323,8 @@ export function ChatArea({
 				clearTimeout(queuedSendTimerRef.current);
 				queuedSendTimerRef.current = null;
 			}
-			panelContextBridgeRef.current?.detach();
-			panelContextBridgeRef.current = null;
+			appContextBridgeRef.current?.detach();
+			appContextBridgeRef.current = null;
 			voiceSessionRef.current?.disconnect();
 			micStreamRef.current?.stop();
 			audioPlayerRef.current?.destroy();
@@ -2456,8 +2456,8 @@ export function ChatArea({
 				cleanupPipeline();
 			} else {
 				showVoiceCostSummary();
-				panelContextBridgeRef.current?.detach();
-				panelContextBridgeRef.current = null;
+				appContextBridgeRef.current?.detach();
+				appContextBridgeRef.current = null;
 				voiceSessionRef.current?.disconnect();
 				micStreamRef.current?.stop();
 				audioPlayerRef.current?.destroy();
@@ -2946,7 +2946,7 @@ export function ChatArea({
 			const memoryCtx = await buildMemoryContext();
 			const systemPrompt = buildSystemPrompt(config.persona, memoryCtx);
 
-			// Collect active panel tools to pass to the voice session
+			// Collect active app tools to pass to the voice session
 			const activeAppId = useAppStore.getState().activeApp;
 			const panelTools = activeAppId
 				? (appRegistry.get(activeAppId)?.tools ?? [])
@@ -2981,7 +2981,7 @@ export function ChatArea({
 				});
 			}
 
-			// Merge panel tools + agent skills (panel tools take priority on name collision)
+			// Merge app tools + agent skills (app tools take priority on name collision)
 			const panelNames = new Set(panelToolDefs.map((t) => t.name));
 			const voiceTools = [
 				...panelToolDefs,
@@ -3029,7 +3029,7 @@ export function ChatArea({
 			// URL hops), and forwards to `session.sendContextUpdate()` — a silent
 			// no-op for providers without a mid-session inject surface
 			// (vllm-omni, naia-omni). Detached in every cleanup path below.
-			panelContextBridgeRef.current = attachAppContextBridge(session, {
+			appContextBridgeRef.current = attachAppContextBridge(session, {
 				subscribe: (listener) => useAppStore.subscribe(listener),
 				getContext: () => useAppStore.getState().activeAppContext,
 			});
@@ -3133,7 +3133,7 @@ export function ChatArea({
 						// Panel-owned tools (skill_browser_*, skill_panel switch)
 						// only ran in streaming chat before; route them here too so
 						// voice can drive panels. Auto-switches to the owner panel.
-						onPanelToolCall: (req) => dispatchPanelToolCall(req),
+						onAppToolCall: (req) => dispatchAppToolCall(req),
 						onPanelControl: (req) => dispatchPanelControl(req),
 					});
 					session.sendToolResponse(callId, result.output);
@@ -3157,8 +3157,8 @@ export function ChatArea({
 				// a state thrash. showVoiceCostSummary is idempotent, so a
 				// user-initiated stop that also runs the toggle path stays safe.
 				showVoiceCostSummary();
-				panelContextBridgeRef.current?.detach();
-				panelContextBridgeRef.current = null;
+				appContextBridgeRef.current?.detach();
+				appContextBridgeRef.current = null;
 				micStreamRef.current?.stop();
 				audioPlayerRef.current?.destroy();
 				voiceSessionRef.current = null;
@@ -3397,8 +3397,8 @@ export function ChatArea({
 			voiceCancelledRef.current = false;
 			// Detach onDisconnect before cleanup to prevent double-cleanup
 			if (voiceSessionRef.current) voiceSessionRef.current.onDisconnect = null;
-			panelContextBridgeRef.current?.detach();
-			panelContextBridgeRef.current = null;
+			appContextBridgeRef.current?.detach();
+			appContextBridgeRef.current = null;
 			voiceSessionRef.current?.disconnect();
 			micStreamRef.current?.stop();
 			audioPlayerRef.current?.destroy();

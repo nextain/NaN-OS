@@ -1,6 +1,6 @@
 //! Cross-platform screen region capture.
 //!
-//! Used by `skill_tab_screenshot` to capture a panel's native viewport area
+//! Used by `skill_tab_screenshot` to capture a app's native viewport area
 //! from the OS screen buffer — no WebView2 / WebKitGTK API required.
 //!
 //! Platform implementations:
@@ -22,7 +22,7 @@ use tauri::{AppHandle, Manager};
 /// Capture a screen region and return it as a base64 PNG data URI.
 ///
 /// `x`, `y`, `width`, `height` — CSS logical pixels from the shell WebView's
-/// `getBoundingClientRect()` call on the panel viewport element.
+/// `getBoundingClientRect()` call on the app viewport element.
 ///
 /// Returns `data:image/png;base64,<base64>` — suitable for LLM vision input.
 #[tauri::command]

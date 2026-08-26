@@ -3012,10 +3012,10 @@ async fn agent_dispatcher(
                     }
                 });
             }
-            // ?? UC-PANEL FR-PANEL: ?섍꼍 panel skill(BGM쨌釉뚮씪?곗?쨌workspace) ?멤넂agent 諛곗꽑(??`_=>{}` drop ?쒓굅) ??
-            "panel_skills" => {
-                // FR-PANEL-1 ?깅줉: wire tools ??pb::ToolSpec(parameters?묳SON 臾몄옄?? tier?뭀ption<i32>).
-                let panel_id = v
+            // ?? UC-APP FR-APP: ?섍꼍 app skill(BGM쨌釉뚮씪?곗?쨌workspace) ?멤넂agent 諛곗꽑(??`_=>{}` drop ?쒓굅) ??
+            "app_skills" => {
+                // FR-APP-1 ?깅줉: wire tools ??pb::ToolSpec(parameters?묳SON 臾몄옄?? tier?뭀ption<i32>).
+                let app_id = v
                     .get("appId")
                     .and_then(|x| x.as_str())
                     .unwrap_or("")
@@ -3047,18 +3047,18 @@ async fn agent_dispatcher(
                     .unwrap_or_default();
                 let mut c = client.clone();
                 tauri::async_runtime::spawn(async move {
-                    let _ = c.register_panel_skills(panel_id, tools).await;
+                    let _ = c.register_app_skills(app_id, tools).await;
                 });
             }
-            "panel_skills_clear" => {
-                let panel_id = v
+            "app_skills_clear" => {
+                let app_id = v
                     .get("appId")
                     .and_then(|x| x.as_str())
                     .unwrap_or("")
                     .to_string();
                 let mut c = client.clone();
                 tauri::async_runtime::spawn(async move {
-                    let _ = c.clear_panel_skills(panel_id).await;
+                    let _ = c.clear_app_skills(app_id).await;
                 });
             }
             "skill_list" => {
@@ -3085,8 +3085,8 @@ async fn agent_dispatcher(
                     }
                 });
             }
-            "panel_tool_result" => {
-                // FR-PANEL-3 寃곌낵 二쇱엯: ??panel ?ㅽ뻾 寃곌낵 ??agent chat 猷⑦봽 pending resolve.
+            "app_tool_result" => {
+                // FR-APP-3 寃곌낵 二쇱엯: ??app ?ㅽ뻾 寃곌낵 ??agent chat 猷⑦봽 pending resolve.
                 let rid = v
                     .get("requestId")
                     .and_then(|x| x.as_str())
@@ -3110,12 +3110,12 @@ async fn agent_dispatcher(
                 let mut c = client.clone();
                 tauri::async_runtime::spawn(async move {
                     let _ = c
-                        .panel_tool_result(rid, tcid, output, success, activity_id)
+                        .app_tool_result(rid, tcid, output, success, activity_id)
                         .await;
                 });
             }
             "app_install" => {
-                // M1: ?⑤꼸 ?ㅼ튂???대쾲 UC-PANEL ?ㅼ퐫??諛?proto RPC 誘몄젙?? ??AppInstallDialog 臾댄븳 濡쒕뵫 諛⑹? ?꾪빐
+                // M1: ?⑤꼸 ?ㅼ튂???대쾲 UC-APP ?ㅼ퐫??諛?proto RPC 誘몄젙?? ??AppInstallDialog 臾댄븳 濡쒕뵫 諛⑹? ?꾪빐
                 //   利됱떆 誘몄????묐떟(??dialog ???낅┰ raw listener ??router ?고쉶 吏곸젒 ?섏떊). 湲곕뒫?붾뒗 蹂꾨룄 ?댁뒋.
                 let _ = app.emit("agent_response", &serde_json::json!({"type":"app_install_result","success":false,"error":"???ㅼ튂???꾩옱 誘몄???new-core ?ㅼ퐫??諛?"}).to_string());
             }
@@ -11335,7 +11335,7 @@ pub fn run() {
             // Login Chrome (standalone auth window, not embedded)
             browser::browser_open_login,
             browser::browser_chrome_testing_ready,
-            // Multi-webview browser panel (replaces Chrome embedding)
+            // Multi-webview browser app (replaces Chrome embedding)
             browser_webview::browser_wv_check,
             browser_webview::browser_wv_create,
             browser_webview::browser_wv_resize,
@@ -11490,13 +11490,13 @@ pub fn run() {
             // Restore saved window state, otherwise leave the tauri.conf.json
             // default size (1366x768) and center on the current monitor.
             //
-            // Migration: the legacy side-panel layout saved widths around 380px.
-            // Treat any saved width below LEGACY_PANEL_WIDTH_CAP as stale and
+            // Migration: the legacy side-app layout saved widths around 380px.
+            // Treat any saved width below LEGACY_APP_WIDTH_CAP as stale and
             // discard it so the new desktop-window default takes effect.
-            const LEGACY_PANEL_WIDTH_CAP: u32 = 600;
+            const LEGACY_APP_WIDTH_CAP: u32 = 600;
             if let Some(window) = app.get_webview_window("main") {
                 let restored = load_window_state(&app_handle)
-                    .filter(|s| s.width >= LEGACY_PANEL_WIDTH_CAP);
+                    .filter(|s| s.width >= LEGACY_APP_WIDTH_CAP);
 
                 if let Some(saved) = restored {
                     let fitted = monitor_for_window_state(&app_handle, &window, &saved)
@@ -11523,12 +11523,12 @@ pub fn run() {
                         fitted.width, fitted.height, fitted.x, fitted.y
                     ));
                 } else {
-                    // Discard any legacy side-panel state so the desktop default
+                    // Discard any legacy side-app state so the desktop default
                     // is not overwritten on next start.
                     if let Some(path) = window_state_path(&app_handle) {
                         if path.exists() {
                             let _ = std::fs::remove_file(&path);
-                            log_verbose("[Naia] Discarded legacy side-panel window state");
+                            log_verbose("[Naia] Discarded legacy side-app window state");
                         }
                     }
                     if let Some(monitor) = window

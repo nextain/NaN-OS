@@ -202,8 +202,8 @@ export type AgentResponseChunk =
 			timestamp?: string;
 	  }
 	| {
-			/** Agent → Shell: LLM called a panel tool. Shell must execute and reply with panel_tool_result. */
-			type: "panel_tool_call";
+			/** Agent → Shell: LLM called a app tool. Shell must execute and reply with app_tool_result. */
+			type: "app_tool_call";
 			requestId: string;
 			toolCallId: string;
 			toolName: string;
@@ -212,7 +212,7 @@ export type AgentResponseChunk =
 	  }
 	| {
 			/** Agent → Shell: panel management action (switch, reload). */
-			type: "panel_control";
+			type: "app_control";
 			requestId: string;
 			action: "switch" | "reload";
 			appId?: string;

@@ -94,10 +94,10 @@ const TAURI_MOCK_SCRIPT = `
 		}],
 	};
 
-	function buildPanelToolCallResponse(requestId, toolName, args, followUpText) {
+	function buildAppToolCallResponse(requestId, toolName, args, followUpText) {
 		var tcId = "ptc-1";
 		return [
-			{ type: "panel_tool_call", requestId: requestId, toolCallId: tcId, toolName: toolName, args: args },
+			{ type: "app_tool_call", requestId: requestId, toolCallId: tcId, toolName: toolName, args: args },
 			{ type: "text", requestId: requestId, text: followUpText },
 			{ type: "finish", requestId: requestId, cost: { cost: 0.001, inputTokens: 10, outputTokens: 20 } },
 		];
@@ -135,11 +135,11 @@ const TAURI_MOCK_SCRIPT = `
 			var content = contentStr.toLowerCase();
 			var chunks;
 			if (content.indexOf("터미널") !== -1 || content.indexOf("terminal") !== -1) {
-				chunks = buildPanelToolCallResponse(requestId, "skill_workspace_new_session",
+				chunks = buildAppToolCallResponse(requestId, "skill_workspace_new_session",
 					{ dir: "${FAKE_DIR}" },
 					"터미널을 열었어요!");
 			} else if (content.indexOf("stdin") !== -1 || content.indexOf("send") !== -1) {
-				chunks = buildPanelToolCallResponse(requestId, "skill_workspace_send_to_session",
+				chunks = buildAppToolCallResponse(requestId, "skill_workspace_send_to_session",
 					{ dir: "${FAKE_DIR}", text: ${JSON.stringify(SEND_TEXT)} },
 					"터미널에 입력을 전송했어요!");
 			} else {

@@ -47,8 +47,8 @@ import {
 	sendAuthUpdate,
 	sendCredsUpdate,
 	sendNotifyConfig,
-	sendPanelSkills,
-	sendPanelSkillsClear,
+	sendAppSkills,
+	sendAppSkillsClear,
 } from "./lib/chat-service";
 import {
 	type ThemeId,
@@ -380,7 +380,7 @@ export function App() {
 		if (cfg?.ttsEnabled !== undefined) setTtsEnabled(cfg.ttsEnabled);
 	}, [setTtsEnabled]);
 
-	// Sync panel tools with agent on panel switch, and call lifecycle hooks
+	// Sync app tools with agent on panel switch, and call lifecycle hooks
 	const prevAppRef = useRef<string | null>(null);
 	useEffect(() => {
 		const prev = prevAppRef.current;
@@ -391,7 +391,7 @@ export function App() {
 			// LLM can still call them (e.g. skill_browser_navigate from Chat).
 			const prevDescriptor = appRegistry.get(prev);
 			if (!prevDescriptor?.keepAlive) {
-				sendPanelSkillsClear(prev).catch(() => {});
+				sendAppSkillsClear(prev).catch(() => {});
 			}
 			prevDescriptor?.onDeactivate?.();
 		}
@@ -399,7 +399,7 @@ export function App() {
 			const descriptor = appRegistry.get(activeApp);
 			descriptor?.onActivate?.();
 			if (descriptor?.tools && descriptor.tools.length > 0) {
-				sendPanelSkills(activeApp, descriptor.tools).catch(() => {});
+				sendAppSkills(activeApp, descriptor.tools).catch(() => {});
 			}
 		}
 	}, [activeApp]);
@@ -419,13 +419,13 @@ export function App() {
 		return stopIframeBridge;
 	}, []);
 
-	// Register keepAlive panel tools with the agent at startup so the LLM can
+	// Register keepAlive app tools with the agent at startup so the LLM can
 	// call them regardless of which panel is currently active (e.g. asking Naia
 	// to open a website while on the Chat panel).
 	useEffect(() => {
 		// UC8 BGM (FR-BGM.1): BgmPlayer 는 위젯(앱 아님)이라 descriptor.tools 경로가
-		// 없다 — 전용 등록. 실행은 ChatArea dispatchPanelToolCall 의 BGM 분기.
-		sendPanelSkills(BGM_PANEL_ID, [SKILL_YOUTUBE_BGM])
+		// 없다 — 전용 등록. 실행은 ChatArea dispatchAppToolCall 의 BGM 분기.
+		sendAppSkills(BGM_PANEL_ID, [SKILL_YOUTUBE_BGM])
 			.then(() =>
 				Logger.info("App", "startup bgm skill registered", {
 					tool: SKILL_YOUTUBE_BGM.name,
@@ -441,7 +441,7 @@ export function App() {
 				descriptor.tools &&
 				descriptor.tools.length > 0
 			) {
-				sendPanelSkills(descriptor.id, descriptor.tools)
+				sendAppSkills(descriptor.id, descriptor.tools)
 					.then(() => {
 						Logger.info("App", "startup panel skills registered", {
 							app: descriptor.id,

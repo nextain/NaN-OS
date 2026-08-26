@@ -10,7 +10,7 @@ import type { NaiaTool, AppCenterProps } from "../../lib/app-registry";
  *
  * This is distinct from iframe-bridge.ts (`naia-bridge:*`), which carries
  * iframe → Shell service requests (readFile, secrets, …). Tool calls flow
- * host → app: the Agent invokes a panel tool, the Shell routes it to the
+ * host → app: the Agent invokes a app tool, the Shell routes it to the
  * panel that owns it, the panel computes the result in its own JS.
  */
 const TOOL_CALL = "naia-tool-call";
@@ -81,7 +81,7 @@ export function createGenericInstalledApp(
 						};
 						const timer = setTimeout(() => {
 							window.removeEventListener("message", onResult);
-							resolve("(panel tool timeout)");
+							resolve("(app tool timeout)");
 						}, TOOL_TIMEOUT_MS);
 						window.addEventListener("message", onResult);
 						contentWindow.postMessage(

@@ -63,9 +63,9 @@ export interface ProcessingRequest {
 /**
  * S4 — 환경고유 컨텍스트 세그먼트(naia-os 클라가 코어에 전달). 코어(naia-agent)가 persona+workspace 뒤에 머지.
  * raw systemPrompt 를 굽는 두벌을 제거: persona/locale/honorific/speechStyle/userName 은 코어가 config.json 에서
- * 스스로 조립하므로 셸이 안 보낸다. 셸 고유 = 아바타 감정 태그(avatarEmotion) + 패널 컨텍스트(panel) +
+ * 스스로 조립하므로 셸이 안 보낸다. 셸 고유 = 아바타 감정 태그(avatarEmotion) + 패널 컨텍스트(app) +
  * 응답 스타일 힌트(responseStyle, 음성 파이프라인=brief)뿐.
- * 폐쇄 union — 코어가 화이트리스트(avatarEmotion|panel|responseStyle) 외 드롭. 자유 system-prompt 텍스트 금지(권한 모델 C2).
+ * 폐쇄 union — 코어가 화이트리스트(avatarEmotion|app|responseStyle) 외 드롭. 자유 system-prompt 텍스트 금지(권한 모델 C2).
  * ⚠️ responseStyle: 음성 STT→채팅 경로가 raw systemPrompt(brevity)로 persona 를 덮던 회귀를 닫는다 — 간결성만
  *    구조화로 보내고 persona 조립은 코어가 보존(어디서든 알파). 문구는 코어 소유(클라는 style enum 만).
  */
@@ -118,7 +118,7 @@ export type ChatChunk =
   | { readonly kind: "logEntry"; readonly level: string; readonly message: string }
   | { readonly kind: "tokenWarning"; readonly raw: unknown }
   | { readonly kind: "compacted"; readonly droppedCount: number } // UC-compaction: agent 가 예산 압박 시 head 요약 발생 알림(UI 표시용)
-  | { readonly kind: "panelToolCall"; readonly toolCallId: string; readonly toolName: string; readonly args: unknown } // UC-PANEL FR-PANEL-2: 환경 도구 위임(requestId 보유, 비-terminal chat-turn 이벤트 — ChatPanel 이 실행 후 panel_tool_result 회신)
+  | { readonly kind: "appToolCall"; readonly toolCallId: string; readonly toolName: string; readonly args: unknown } // UC-APP FR-APP-2: 환경 도구 위임(requestId 보유, 비-terminal chat-turn 이벤트 — ChatApp 이 실행 후 app_tool_result 회신)
   | {
       readonly kind: "grounding";
       readonly status: "grounded" | "no_evidence" | "uncompiled" | "unavailable";
@@ -233,18 +233,18 @@ export type DomainOutbound = ChatRequest | CancelTurn | ApprovalResponseIntent |
 export const CHAT_TURN_VARIANTS = [
   "text", "thinking", "tool_use", "tool_result", "approval_request",
   "finish", "error", "usage", "log_entry", "token_warning",
-  // turn-bound 승인(requestId 보유, turn 이 응답 대기 — approval_request 와 동급, ChatPanel chunk 처리). codex S1.
+  // turn-bound 승인(requestId 보유, turn 이 응답 대기 — approval_request 와 동급, ChatApp chunk 처리). codex S1.
   "gateway_approval_request",
-  // UC-compaction(FR-COMPACT): 예산 압박 요약 발생 알림(requestId 보유, 비-terminal chat-turn 이벤트 — ChatPanel 배너).
+  // UC-compaction(FR-COMPACT): 예산 압박 요약 발생 알림(requestId 보유, 비-terminal chat-turn 이벤트 — ChatApp 배너).
   "compacted",
-  // UC-PANEL FR-PANEL-2: 환경 도구 위임(requestId 보유, 비-terminal — chat onChunk 로 흘러 ChatPanel 이 실행→panel_tool_result 회신).
-  "panel_tool_call",
+  // UC-APP FR-APP-2: 환경 도구 위임(requestId 보유, 비-terminal — chat onChunk 로 흘러 ChatApp 이 실행→app_tool_result 회신).
+  "app_tool_call",
   // UC-WIRE-V1: turn-bound evidence, generated artifact, provider-session handle.
   "grounding", "artifact", "provider_session",
   "processing_disclosure",
 ] as const;
 export const NONCHAT_KNOWN_VARIANTS = [
-  "audio", "object", "panel_control", "app_install_result",
+  "audio", "object", "app_control", "app_install_result",
   "ready", "skill_list_response", "embedding_progress",
   // shell agent_response 소비자 surface 전체에서 발견(uc1-variant-probe drift) — 비-chat, 해당 UC 에서 배선:
   "config_update",            // 설정 동기화

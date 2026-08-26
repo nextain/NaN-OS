@@ -84,7 +84,7 @@ function toChatChunk(type: string, m: AgentMessage): ChatChunk | null {
     }
     case "tool_result": {
       const toolCallId = reqStr(r["toolCallId"]); const output = reqStr(r["output"]);
-      // UC1 리뷰 fix: toolName/success 보존(live ChatPanel 이 chunk.success 읽음 — 유실 시 undefined).
+      // UC1 리뷰 fix: toolName/success 보존(live ChatApp 이 chunk.success 읽음 — 유실 시 undefined).
       return toolCallId === null || output === null ? null
         : { kind: "toolResult", toolCallId, toolName: reqStr(r["toolName"]) ?? "", output, success: r["success"] === true };
     }
@@ -106,9 +106,9 @@ function toChatChunk(type: string, m: AgentMessage): ChatChunk | null {
     }
     case "token_warning": return { kind: "tokenWarning", raw: m };
     case "compacted": { const dc = r["droppedCount"]; return { kind: "compacted", droppedCount: typeof dc === "number" ? dc : 0 }; }
-    case "panel_tool_call": { // UC-PANEL FR-PANEL-2: 환경 도구 위임 → chat onChunk → ChatPanel 실행
+    case "app_tool_call": { // UC-APP FR-APP-2: 환경 도구 위임 → chat onChunk → ChatApp 실행
       const toolCallId = reqStr(r["toolCallId"]); const toolName = reqStr(r["toolName"]);
-      return toolCallId === null || toolName === null ? null : { kind: "panelToolCall", toolCallId, toolName, args: r["args"] };
+      return toolCallId === null || toolName === null ? null : { kind: "appToolCall", toolCallId, toolName, args: r["args"] };
     }
     case "grounding": {
       const status = r["status"];
