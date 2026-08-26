@@ -166,23 +166,40 @@ export const VERIFICATION: Readonly<Record<string, readonly VerificationStep[]>>
       "살아 있는 Herdr 이 실제로 내는 모양으로 관측 경로를 끝까지 밟는다 — 읽기 전용",
     ),
   ],
-  // ⚠️ 조작에는 native 증거가 없다. 실제로 밟으려면 사용자의 살아 있는 터미널에 명령을
-  //    넣어야 해서, 전용 Herdr 세션 없이는 할 일이 아니다. 벤치가 이 자리를 계속
-  //    "요구 등급의 확인을 더해야 한다"로 보고하는 것이 사실이다 — 덮지 않는다.
   "UC-ENV-LIVE-ACT": [
     PLAYWRIGHT("e2e/environment-skill.spec.ts", "실 UI 에서 도구 호출이 명령까지 가는지"),
+    LIVE_HERDR(
+      "src/test/environment-live-act.contract.test.ts",
+      "전용 워크스페이스를 만들어 실제 터미널에 명령을 넣고 멈춘다 — 사용자 터미널은 건드리지 않는다",
+    ),
   ],
   "UC-ENV-SURFACE-OBSERVE": [
     VITEST("src/test/herdr-environment.contract.test.ts", "스냅샷이 보고로 바뀌는지"),
+    LIVE_HERDR(
+      "src/test/environment-live-herdr.contract.test.ts",
+      "살아 있는 Herdr 이 실제로 내는 모양으로 관측한다",
+    ),
   ],
   "UC-ENV-SURFACE-DATA": [
     VITEST("src/test/environment-intent.contract.test.ts", "환경 문자열이 자료로만 다뤄지는지"),
+    LIVE_HERDR(
+      "src/test/environment-live-act.contract.test.ts",
+      "실제 터미널이 만든 지시문 같은 이름이 자료로만 올라오는지",
+    ),
   ],
   "UC-ENV-SURFACE-ACT": [
     VITEST("src/test/environment-intent-translation.contract.test.ts", "의도가 환경 호출로 번역되는지"),
+    LIVE_HERDR(
+      "src/test/environment-live-act.contract.test.ts",
+      "번역된 호출이 실제 터미널에서 효과를 낸다",
+    ),
   ],
   "UC-ENV-SURFACE-DENY": [
     VITEST("src/test/environment-dispatch.contract.test.ts", "허용되지 않은 호출이 막히는지"),
+    LIVE_HERDR(
+      "src/test/environment-live-act.contract.test.ts",
+      "도달 경로가 없는 의도가 실제 환경에서도 거절되는지",
+    ),
   ],
   "UC-WORKSPACE-CONTEXT-DISCOVER": [
     VITEST("src/test/workspace-context-discover.contract.test.ts", "진입점 탐색"),

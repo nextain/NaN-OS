@@ -1,17 +1,25 @@
 # 에이전트 벤치 결과
 
-생성 시각: 2026-08-26T11:16:30.723Z (45b76cb8)
+생성 시각: 2026-08-26T11:44:05.205Z (abe7be01)
 
-시나리오 34개 중 6개 수용 (18%).
-중앙 지연 495ms · 꼬리 지연(95분위) 35589ms · 사람 개입 0회.
+시나리오 34개 중 14개 수용 (41%).
+중앙 지연 494ms · 꼬리 지연(95분위) 35356ms · 사람 개입 0회.
 
 ## 수용된 시나리오
 
+- UC-AGENT-BENCH-RUN
+- UC-AGENT-BENCH-FALSE-COMPLETION
+- UC-AGENT-BENCH-REPORT
+- UC-ENV-SURFACE-OBSERVE
+- UC-ENV-SURFACE-ACT
+- UC-ENV-SURFACE-DENY
+- UC-ENV-SURFACE-DATA
 - UC-ENV-DISPATCH-STRUCTURED
 - UC-ENV-DISPATCH-TERMINAL
 - UC-ENV-DISPATCH-REFUSE
 - UC-WIRE-UNION-DRIFT
 - UC-ENV-LIVE-OBSERVE
+- UC-ENV-LIVE-ACT
 - UC-ENV-STICKY
 
 ## 아직 증명되지 않은 시나리오
@@ -38,11 +46,3 @@
 | UC-CHANNEL-SESSION-DUPLICATE-DELIVERY | 추적 기록의 여섯 축 중 빈 것이 있다 / 요구사항 문서가 아직 완료라고 말하지 않는다 | 확인 수단이 실패했거나 아직 없다 |
 | UC-CHANNEL-SESSION-RECONNECT | 추적 기록의 여섯 축 중 빈 것이 있다 / 요구사항 문서가 아직 완료라고 말하지 않는다 | 확인 수단이 실패했거나 아직 없다 |
 | UC-CHANNEL-SESSION-DISCLOSURE-DENY | 추적 기록의 여섯 축 중 빈 것이 있다 / 요구사항 문서가 아직 완료라고 말하지 않는다 | 확인 수단이 실패했거나 아직 없다 |
-| UC-AGENT-BENCH-RUN | 요구사항 문서가 아직 완료라고 말하지 않는다 | 요구사항 상태를 Done 으로 올려야 증거 충분 여부가 판정된다 |
-| UC-AGENT-BENCH-FALSE-COMPLETION | 요구사항 문서가 아직 완료라고 말하지 않는다 | 요구사항 상태를 Done 으로 올려야 증거 충분 여부가 판정된다 |
-| UC-AGENT-BENCH-REPORT | 요구사항 문서가 아직 완료라고 말하지 않는다 | 요구사항 상태를 Done 으로 올려야 증거 충분 여부가 판정된다 |
-| UC-ENV-SURFACE-OBSERVE | 요구사항 문서가 아직 완료라고 말하지 않는다 | 요구사항 상태를 Done 으로 올려야 증거 충분 여부가 판정된다 |
-| UC-ENV-SURFACE-ACT | 요구사항 문서가 아직 완료라고 말하지 않는다 | 요구사항 상태를 Done 으로 올려야 증거 충분 여부가 판정된다 |
-| UC-ENV-SURFACE-DENY | 요구사항 문서가 아직 완료라고 말하지 않는다 | 요구사항 상태를 Done 으로 올려야 증거 충분 여부가 판정된다 |
-| UC-ENV-SURFACE-DATA | 요구사항 문서가 아직 완료라고 말하지 않는다 | 요구사항 상태를 Done 으로 올려야 증거 충분 여부가 판정된다 |
-| UC-ENV-LIVE-ACT | 완료라고 적혀 있는데 요구된 증거가 없다 / 요구된 등급의 증거가 빠졌다 | 요구 등급의 확인을 더해야 한다 |
