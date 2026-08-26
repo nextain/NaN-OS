@@ -1,9 +1,9 @@
 # 에이전트 벤치 결과
 
-생성 시각: 2026-08-26T13:26:35.259Z (ff84bd28)
+생성 시각: 2026-08-26T16:44:40.939Z (e9b7b5c1)
 
-시나리오 34개 중 30개 수용 (88%).
-중앙 지연 1891ms · 꼬리 지연(95분위) 42823ms · 사람 개입 0회.
+시나리오 34개 중 34개 수용 (100%).
+중앙 지연 3006ms · 꼬리 지연(95분위) 44110ms · 사람 개입 0회.
 
 ## 수용된 시나리오
 
@@ -19,6 +19,10 @@
 - UC-ENV-TOOL-TERMINAL-EXEC
 - UC-ENV-TOOL-CANCEL
 - UC-ENV-TOOL-BOUNDARY-DENY
+- UC-ORCHESTRATION-CLASSIFY
+- UC-ORCHESTRATION-ISSUE-LEAD
+- UC-ORCHESTRATION-WORKER-REPLACE
+- UC-ORCHESTRATION-RESTART-RESUME
 - UC-CHANNEL-SESSION-HANDOFF
 - UC-CHANNEL-SESSION-DUPLICATE-DELIVERY
 - UC-CHANNEL-SESSION-RECONNECT
@@ -40,9 +44,4 @@
 
 ## 아직 증명되지 않은 시나리오
 
-| 시나리오 | 왜 | 다음 할 일 |
-|---|---|---|
-| UC-ORCHESTRATION-CLASSIFY | 요구사항 문서가 아직 완료라고 말하지 않는다 | 요구사항 상태를 Done 으로 올려야 증거 충분 여부가 판정된다 |
-| UC-ORCHESTRATION-ISSUE-LEAD | 요구사항 문서가 아직 완료라고 말하지 않는다 | 요구사항 상태를 Done 으로 올려야 증거 충분 여부가 판정된다 |
-| UC-ORCHESTRATION-WORKER-REPLACE | 요구사항 문서가 아직 완료라고 말하지 않는다 | 요구사항 상태를 Done 으로 올려야 증거 충분 여부가 판정된다 |
-| UC-ORCHESTRATION-RESTART-RESUME | 요구사항 문서가 아직 완료라고 말하지 않는다 | 요구사항 상태를 Done 으로 올려야 증거 충분 여부가 판정된다 |
+없다.

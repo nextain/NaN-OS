@@ -918,16 +918,16 @@ fenced code는 언어·복사·접기·워크스페이스 전환을 제공하고
 
 | ID | 요구사항 | 출처 시나리오 | 검증(P02) | 상태 |
 |---|---|---|---|---|
-| **FR-ORCHESTRATION.1** | 요청을 대화로 끝낼 일과 이슈로 만들 일로 분류하고 근거를 남긴다. 사용자가 분류를 뒤집으면 그대로 따른다. 사소한 질문에 이슈와 작업자를 만들지 않는다. | UC-ORCHESTRATION-CLASSIFY | `src/test/orchestration-classify.contract.test.ts` 분류·뒤집기 | Pending |
-| **FR-ORCHESTRATION.2** | 이슈로 만들 일은 GitHub 이슈를 생성하거나 기존 이슈에 결속하고, 그 이슈를 Herdr space 하나에 묶는다. 같은 이슈에 space가 둘 생기지 않는다. | UC-ORCHESTRATION-CLASSIFY | `src/test/orchestration-issue-lead.contract.test.ts` 결속 단일성 | Pending |
-| **FR-ORCHESTRATION.3** | 이슈마다 L2 리더가 하나 선다. 리더는 계획, 소유 경로 배정, 작업자 배치, 증거 통합, 완료 판정을 맡는다. 리더가 둘 이상 존재할 수 없다. | UC-ORCHESTRATION-ISSUE-LEAD | `src/test/orchestration-issue-lead.contract.test.ts` 리더 단일성 | Pending |
-| **FR-ORCHESTRATION.4** | 구현자, 검증자, 리뷰어, 조사자 역할을 지원하고, 구현한 작업자가 자기 결과의 독립 검증자가 되지 않는다. 참조 이슈는 최소한 구현자와 독립 검증자로 완주한다. | UC-ORCHESTRATION-ISSUE-LEAD | `src/test/orchestration-issue-lead.contract.test.ts` 역할 분리 | Pending |
-| **FR-ORCHESTRATION.5** | 작업자의 소유 경로는 겹치지 않는다. 겹치는 배치는 거부하거나 명시적으로 직렬화한다. | UC-ORCHESTRATION-ISSUE-LEAD | `src/test/orchestration-ownership-conflict.contract.test.ts` 중첩 negative | Pending |
-| **FR-ORCHESTRATION.6** | 작업자는 자기 권한을 넓히지 못하고 이슈 완료를 선언하지 못한다. 증거는 L2가 통합하고 사용자에게 무엇을 보고할지는 L3가 정한다. | UC-ORCHESTRATION-ISSUE-LEAD | `src/test/orchestration-no-self-completion.contract.test.ts` negative | Pending |
-| **FR-ORCHESTRATION.7** | 워크스페이스·프로젝트 컨텍스트, 사용자 의도, 권한, 소유 경로, 예산, 성공 기준을 구조화해 작업자에게 전달한다. 대화 전문을 그대로 복사해 넘기지 않으며 비밀값을 제외한다. 위임 위험도는 워크스페이스 terminology 정의를 따르고 high는 위임하지 않는다. | UC-ORCHESTRATION-ISSUE-LEAD | `src/test/orchestration-issue-lead.contract.test.ts` 전달 계약 | Pending |
-| **FR-ORCHESTRATION.8** | Codex, Claude, OpenCode, 비에이전트 셸 작업 어댑터가 명령줄 도구의 차이에도 동등한 생명주기 의미(시작·관측·중단·재개·결과 수집)를 노출한다. | UC-ORCHESTRATION-WORKER-REPLACE | `src/test/orchestration-worker-adapter.contract.test.ts` 동등성 | Pending |
-| **FR-ORCHESTRATION.9** | 실패하거나 멈춘 작업자를 이슈 상태와 기존 산출물·증거를 잃지 않고 교체한다. 중단, 재개, 인계, 앱 재시작을 지원한다. | UC-ORCHESTRATION-WORKER-REPLACE·RESTART-RESUME | `src/test/orchestration-replace-preserve.contract.test.ts`·`packages/shell/e2e-tauri/specs/orchestration-restart.spec.ts` | Pending |
-| **FR-ORCHESTRATION.10** | 재시작 이후 완료·실패·중단을 증거 없이 단정하지 않는다. 이어받을 수 없는 부분은 이어받을 수 없다고 보고한다. | UC-ORCHESTRATION-RESTART-RESUME | `packages/shell/e2e-tauri/specs/orchestration-restart.spec.ts` | Pending |
+| **FR-ORCHESTRATION.1** | 요청을 대화로 끝낼 일과 이슈로 만들 일로 분류하고 근거를 남긴다. 사용자가 분류를 뒤집으면 그대로 따른다. 사소한 질문에 이슈와 작업자를 만들지 않는다. | UC-ORCHESTRATION-CLASSIFY | `src/test/orchestration-classify.contract.test.ts` 분류·뒤집기 | Done |
+| **FR-ORCHESTRATION.2** | 이슈로 만들 일은 GitHub 이슈를 생성하거나 기존 이슈에 결속하고, 그 이슈를 Herdr space 하나에 묶는다. 같은 이슈에 space가 둘 생기지 않는다. | UC-ORCHESTRATION-CLASSIFY | `src/test/orchestration-issue-lead.contract.test.ts` 결속 단일성 | Done |
+| **FR-ORCHESTRATION.3** | 이슈마다 L2 리더가 하나 선다. 리더는 계획, 소유 경로 배정, 작업자 배치, 증거 통합, 완료 판정을 맡는다. 리더가 둘 이상 존재할 수 없다. | UC-ORCHESTRATION-ISSUE-LEAD | `src/test/orchestration-issue-lead.contract.test.ts` 리더 단일성 | Done |
+| **FR-ORCHESTRATION.4** | 구현자, 검증자, 리뷰어, 조사자 역할을 지원하고, 구현한 작업자가 자기 결과의 독립 검증자가 되지 않는다. 참조 이슈는 최소한 구현자와 독립 검증자로 완주한다. | UC-ORCHESTRATION-ISSUE-LEAD | `src/test/orchestration-issue-lead.contract.test.ts` 역할 분리 | Done |
+| **FR-ORCHESTRATION.5** | 작업자의 소유 경로는 겹치지 않는다. 겹치는 배치는 거부하거나 명시적으로 직렬화한다. | UC-ORCHESTRATION-ISSUE-LEAD | `src/test/orchestration-ownership-conflict.contract.test.ts` 중첩 negative | Done |
+| **FR-ORCHESTRATION.6** | 작업자는 자기 권한을 넓히지 못하고 이슈 완료를 선언하지 못한다. 증거는 L2가 통합하고 사용자에게 무엇을 보고할지는 L3가 정한다. | UC-ORCHESTRATION-ISSUE-LEAD | `src/test/orchestration-no-self-completion.contract.test.ts` negative | Done |
+| **FR-ORCHESTRATION.7** | 워크스페이스·프로젝트 컨텍스트, 사용자 의도, 권한, 소유 경로, 예산, 성공 기준을 구조화해 작업자에게 전달한다. 대화 전문을 그대로 복사해 넘기지 않으며 비밀값을 제외한다. 위임 위험도는 워크스페이스 terminology 정의를 따르고 high는 위임하지 않는다. | UC-ORCHESTRATION-ISSUE-LEAD | `src/test/orchestration-issue-lead.contract.test.ts` 전달 계약 | Done |
+| **FR-ORCHESTRATION.8** | Codex, Claude, OpenCode, 비에이전트 셸 작업 어댑터가 명령줄 도구의 차이에도 동등한 생명주기 의미(시작·관측·중단·재개·결과 수집)를 노출한다. | UC-ORCHESTRATION-WORKER-REPLACE | `src/test/orchestration-worker-adapter.contract.test.ts` 동등성 | Done |
+| **FR-ORCHESTRATION.9** | 실패하거나 멈춘 작업자를 이슈 상태와 기존 산출물·증거를 잃지 않고 교체한다. 중단, 재개, 인계, 앱 재시작을 지원한다. | UC-ORCHESTRATION-WORKER-REPLACE·RESTART-RESUME | `src/test/orchestration-replace-preserve.contract.test.ts`·`packages/shell/e2e-tauri/specs/orchestration-restart.spec.ts` | Done |
+| **FR-ORCHESTRATION.10** | 재시작 이후 완료·실패·중단을 증거 없이 단정하지 않는다. 이어받을 수 없는 부분은 이어받을 수 없다고 보고한다. | UC-ORCHESTRATION-RESTART-RESUME | `packages/shell/e2e-tauri/specs/orchestration-restart.spec.ts` | Done |
 
 ## 기능 요구사항 (FR) — 채널 중립 세션 (#503, 에픽 #497)
 

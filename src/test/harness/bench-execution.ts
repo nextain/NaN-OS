@@ -98,6 +98,19 @@ const PLAYWRIGHT = (spec: string, why: string): VerificationStep => ({
   why,
 });
 
+/**
+ * 실제 프로세스로 도는 작업자를 띄운다 — 대역 작업자가 아니므로 worker 등급이다.
+ * 같은 파일이 실제 디스크도 쓰므로 native 단계와 짝으로 등록한다.
+ */
+const LIVE_WORKER = (spec: string, why: string): VerificationStep => ({
+  kind: "worker",
+  cmd: "npx",
+  args: ["vitest", "run", spec],
+  cwd: ".",
+  why,
+  env: () => ({}),
+});
+
 /** 살아 있는 Herdr 을 실제로 조회한다 — 대역이 아니므로 native 등급이다. */
 const LIVE_HERDR = (spec: string, why: string): VerificationStep => ({
   kind: "native",
@@ -132,6 +145,8 @@ export const NATIVE_VITEST_SPECS: readonly string[] = [
   "src/test/herdr-control-live.contract.test.ts",
   // 살아 있는 터미널에 실제로 명령을 넣는다.
   "src/test/env-tool-live.contract.test.ts",
+  // 실제 프로세스가 임시 디렉터리에서 산출물을 남긴다.
+  "src/test/orchestration-live.contract.test.ts",
 ];
 
 /** 경로만 보고 등급과 실행 방식을 정한다. */
@@ -180,8 +195,10 @@ export function deriveVerification(
         const step = stepForPath(located.spec, `문서 Test Coverage Map 이 ${uc} 의 확인 수단으로 선언한 것`, located.cwd);
         if (!step) continue;
         const bucket = (steps[uc] ??= []);
-        const key = `${step.cwd}/${step.args[step.args.length - 1]}`;
-        if (!bucket.some((x) => `${x.cwd}/${x.args[x.args.length - 1]}` === key)) bucket.push(step);
+        // 같은 파일이 서로 다른 등급의 증거를 낼 수 있다(실제 작업자 + 실제 디스크).
+        // 경로만으로 묶으면 둘 중 하나가 조용히 사라진다.
+        const key = `${step.kind}:${step.cwd}/${step.args[step.args.length - 1]}`;
+        if (!bucket.some((x) => `${x.kind}:${x.cwd}/${x.args[x.args.length - 1]}` === key)) bucket.push(step);
       }
     }
   }
@@ -198,6 +215,22 @@ export function specResolver(repoRoot: string) {
 }
 
 export const EXTRA_VERIFICATION: Readonly<Record<string, readonly VerificationStep[]>> = {
+  "UC-ORCHESTRATION-CLASSIFY": [
+    LIVE_WORKER("src/test/orchestration-live.contract.test.ts", "분류가 실제 작업 흐름 위에서 성립하는지"),
+    LIVE_HERDR("src/test/orchestration-live.contract.test.ts", "결속과 산출물이 실제 디스크에 남는지"),
+  ],
+  "UC-ORCHESTRATION-ISSUE-LEAD": [
+    LIVE_WORKER("src/test/orchestration-live.contract.test.ts", "실제 작업자가 돌고 완료 선언이 판정에 쓰이지 않는지"),
+    LIVE_HERDR("src/test/orchestration-live.contract.test.ts", "결속과 산출물이 실제 디스크에 남는지"),
+  ],
+  "UC-ORCHESTRATION-WORKER-REPLACE": [
+    LIVE_WORKER("src/test/orchestration-live.contract.test.ts", "실제로 도는 작업자를 멈추고 교체해도 증거가 남는지"),
+    LIVE_HERDR("src/test/orchestration-live.contract.test.ts", "결속과 산출물이 실제 디스크에 남는지"),
+  ],
+  "UC-ORCHESTRATION-RESTART-RESUME": [
+    LIVE_WORKER("src/test/orchestration-live.contract.test.ts", "실제 작업자 상태를 관측해 재개 태도를 정하는지"),
+    LIVE_HERDR("src/test/orchestration-live.contract.test.ts", "결속과 산출물이 실제 디스크에 남는지"),
+  ],
   "UC-ENV-TOOL-BROWSE": [
     E2E_TAURI(
       "e2e-tauri/specs/env-tool-browser-native.spec.ts",
@@ -292,8 +325,8 @@ export function buildVerification(
   for (const [uc, steps] of Object.entries(EXTRA_VERIFICATION)) {
     const bucket = (merged[uc] ??= []);
     for (const step of steps) {
-      const key = `${step.cwd}/${step.args[step.args.length - 1]}`;
-      if (!bucket.some((x) => `${x.cwd}/${x.args[x.args.length - 1]}` === key)) bucket.push(step);
+      const key = `${step.kind}:${step.cwd}/${step.args[step.args.length - 1]}`;
+      if (!bucket.some((x) => `${x.kind}:${x.cwd}/${x.args[x.args.length - 1]}` === key)) bucket.push(step);
     }
   }
   return merged;
