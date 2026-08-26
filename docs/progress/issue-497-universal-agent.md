@@ -277,3 +277,37 @@ Rust 를 건드리면 P04 가 실 백엔드 검증을 요구한다. 이 머신�
 즉 검증 자체는 살아 있고, 그것을 **실 백엔드에서** 반복 확인하는 경로가 이 환경에서 불안정하다.
 
 따라서 #502 P04 는 in_progress 로 남긴다. 완료로 표시하지 않는다.
+
+## 2026-08-26 분리 이력과 wire 게이트 갭
+
+루크 질문("왜 분리됐지")을 계기로 두 저장소의 이력을 확인했다.
+
+**분리 시점은 2026-06-08이다.** 두 저장소가 같은 날 같은 템플릿에서 각각 스캐폴드됐다
+(`chore: scaffold new-naia-os from naia-template-project (main fdbd3f2)` /
+`chore: scaffold new-naia-agent from ...`). 그 전에는 뇌가 `old-naia-os/agent/` 하위
+디렉터리로 살았고, 헥사고날 재작성 때 자기 저장소로 뽑혀 나왔다. 6월 10일 커밋이 셸의
+`tauri.conf.json` 에서 구 레이아웃 번들(`../../agent/{dist,package.json,node_modules}`)을 지우고
+`NAIA_AGENT_SCRIPT` 런타임 spawn 으로 바꾼 것이 그 흔적이다.
+
+**분리 근거는 두 가지로 기록돼 있다.** 하나는 루크의 교차개발 앵커 원칙
+(`naia-agent/docs/progress/99.dev-comm/agent-vertical-anchor-2026-06-10.md`) — "os 와 agent 는 같은
+UC 시나리오의 두 반쪽이고 둘을 잇는 H-agent 경계 = wire 계약"이며, 그 wire 를 양방향 probe 로
+게이트해 "agent 가 자유롭게 재설계해도 경계 계약은 불변"이게 한다. 다른 하나는
+substrate-agnostic(`docs/brain-body-environment.md` §5) — 뇌가 특정 몸에 오염되면 포팅이 깨진다.
+
+### 발견한 갭
+
+그 근거였던 `scripts/builds/uc1-outbound-probe.mjs` 와 `uc1-variant-probe.mjs` 는 **옛 baseline
+(old-naia-os) 대조용**이다. 이 머신에서 실행하면 SKIP 된다(2026-08-26 확인 — "Old-Baseline 부재").
+즉 **오늘의 셸↔뇌 형태를 막아 주는 게이트가 없다.** 분리의 정당성이 wire 게이트였는데 그 게이트가
+이식 시점에 멈춰 있었다.
+
+### 닫은 방법
+
+두 저장소가 같은 표본(`src/test/fixtures/environment-surfaces-wire.json`)을 들고 각자 자기 쪽을
+검증한다. 셸은 그 표본을 실제로 산출하는지(`toEnvironmentSegment`), 뇌는 그 표본을 유실 없이
+받아 렌더하는지 확인한다. 그리고 상대 저장소가 옆에 있으면 표본이 같은지도 대조하며, **찾지 못하면
+건너뛰지 않고 실패한다** — 건너뛴 게이트는 게이트가 아니다.
+
+이것은 uc1 probe 를 대체하지 않는다. 그 probe 들이 지키던 것(전체 union 동기)은 여전히 멈춰 있고,
+여기서 닫은 것은 이번 슬라이스가 쓰는 한 kind 의 형태뿐이다. 나머지는 후속 과제다.

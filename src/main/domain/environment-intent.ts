@@ -152,3 +152,38 @@ export function admitIntent(
   }
   return rejections;
 }
+
+// ── wire 경계 (naia-agent EnvironmentSegment) ──
+// 분리된 두 저장소를 잇는 것은 wire 계약이다(2026-06-10 교차개발 앵커 원칙).
+// 여기가 그 계약의 셸 측 산출 지점이다. 형태가 어긋나면 뇌가 조용히 표면을 못 본다.
+// ⚠️ 기존 uc1 probe 들은 *옛 baseline* 대조용이라 이 경계를 지키지 않는다(2026-08-26 확인, SKIP).
+//    그래서 양쪽 저장소가 같은 표본(fixture)을 들고 각자 자기 쪽을 검증한다.
+
+/** naia-agent 의 `environmentSurfaces` 세그먼트 payload. 손잡이는 문자열 하나로 눕는다. */
+export interface EnvironmentSurfacesSegment {
+  readonly kind: "environmentSurfaces";
+  readonly surfaces: readonly {
+    readonly ref: string;
+    readonly label: string;
+    readonly activity: SurfaceReport["activity"];
+    readonly focused: boolean;
+  }[];
+  readonly omitted: number;
+}
+
+/**
+ * 보고 → wire 세그먼트. 셸이 뇌에 올리는 유일한 형태다.
+ * 여기서 값을 더하지 않는다 — 보고에 없는 것은 뇌도 보지 못한다.
+ */
+export function toEnvironmentSegment(report: EnvironmentReport): EnvironmentSurfacesSegment {
+  return {
+    kind: "environmentSurfaces",
+    surfaces: report.surfaces.map((s) => ({
+      ref: s.ref.token,
+      label: s.label,
+      activity: s.activity,
+      focused: s.focused,
+    })),
+    omitted: report.omitted,
+  };
+}
