@@ -8,6 +8,7 @@
 // pane 13개 중 7개가 에이전트를 달고 있었다. workspace 나 tab 은 묶음이라 "무엇이 돌고 있나"에
 // 답하지 못한다.
 import { toReport, type EnvironmentReport, type RawSurface } from "../domain/environment-intent.js";
+import { mintRegistry, type SurfaceBinding, type SurfaceRegistry } from "../domain/environment-translation.js";
 
 /** Herdr 스냅샷에서 이 슬라이스가 실제로 쓰는 필드만. 나머지는 보지 않는다. */
 export interface HerdrPaneLike {
@@ -36,28 +37,65 @@ export function surfaceLabel(pane: HerdrPaneLike, fallback: string): string {
   return str(pane.label) ?? str(pane.terminal_title_stripped) ?? str(pane.terminal_title) ?? str(pane.agent) ?? fallback;
 }
 
-/** pane 하나를 원시 표면으로. 여기서 나온 값은 domain 이 새니타이즈·정규화한다. */
-export function toRawSurface(pane: HerdrPaneLike): RawSurface | null {
-  const token = str(pane.pane_id);
-  if (!token) return null; // 식별할 수 없는 pane 은 뇌에 올리지 않는다.
-  return {
-    token,
-    label: surfaceLabel(pane, token),
-    status: str(pane.agent_status),
-    focused: pane.focused === true,
-  };
+/** 셸만 보는 중간값 — 환경 식별자와 뇌에 보일 표시를 함께 든다. */
+export interface PaneBinding {
+  readonly surfaceId: string;
+  readonly agentTarget?: string;
+  readonly label: string;
+  readonly status?: string;
+  readonly focused: boolean;
 }
 
 /**
- * 스냅샷 → 보고. 형태가 어긋나면 빈 보고를 내고 터지지 않는다 —
- * Herdr 가 바뀌었을 때 셸이 죽는 것보다 "지금은 아무것도 모른다"가 정직하다.
+ * pane 하나를 셸 내부 결속으로. 손잡이는 여기서 만들지 않는다 —
+ * 환경 식별자를 손잡이로 쓰면 뇌에 pane 어휘가 그대로 샌다(FR-ENV-SURFACE.1·9).
  */
-export function snapshotToReport(snapshot: HerdrSnapshotLike | null | undefined, cap?: number): EnvironmentReport {
+export function toBinding(pane: HerdrPaneLike): PaneBinding | null {
+  const surfaceId = str(pane.pane_id);
+  if (!surfaceId) return null; // 식별할 수 없는 pane 은 뇌에 올리지 않는다.
+  const agent = str(pane.agent);
+  const base = {
+    surfaceId,
+    label: surfaceLabel(pane, surfaceId),
+    status: str(pane.agent_status),
+    focused: pane.focused === true,
+  };
+  // Herdr 의 agent.focus·agent.prompt 는 pane 식별자를 대상으로 받는다(셸의 herdr_focus_agent 와 동형).
+  return agent ? { ...base, agentTarget: surfaceId } : base;
+}
+
+export interface EnvironmentObservation {
+  readonly report: EnvironmentReport;
+  /** 손잡이 → 환경 식별자. 셸이 보관하고 뇌에 노출하지 않는다. */
+  readonly registry: SurfaceRegistry;
+}
+
+/**
+ * 스냅샷 → 보고 + 대응표. 형태가 어긋나면 빈 관측을 내고 터지지 않는다 —
+ * Herdr 가 바뀌었을 때 셸이 죽는 것보다 "지금은 아무것도 모른다"가 정직하다.
+ *
+ * 보고에 실린 표면만 대응표에 오른다. 상한 때문에 잘린 표면의 손잡이는 발행되지 않는다 —
+ * 뇌가 보지 못한 표면을 가리킬 수 있으면 안 된다.
+ */
+export function observe(snapshot: HerdrSnapshotLike | null | undefined, cap?: number): EnvironmentObservation {
   const panes = Array.isArray(snapshot?.panes) ? (snapshot?.panes as readonly HerdrPaneLike[]) : [];
-  const raws: RawSurface[] = [];
+  const bindings: PaneBinding[] = [];
   for (const pane of panes) {
-    const raw = toRawSurface(pane);
-    if (raw) raws.push(raw);
+    const binding = toBinding(pane);
+    if (binding) bindings.push(binding);
   }
-  return toReport(raws, cap);
+  // 사용자가 보고 있는 표면이 먼저 오도록 domain 과 같은 순서로 맞춘 뒤 손잡이를 발행한다.
+  const ordered = [...bindings].sort((a, b) => Number(b.focused) - Number(a.focused));
+  const registry = mintRegistry(ordered);
+  const raws: RawSurface[] = [];
+  let index = 0;
+  for (const binding of ordered) {
+    index += 1;
+    raws.push({ token: `s-${index}`, label: binding.label, status: binding.status, focused: binding.focused });
+  }
+  const report = toReport(raws, cap);
+  const visible = new Set(report.surfaces.map((s) => s.ref.token));
+  const trimmed = new Map<string, SurfaceBinding>();
+  for (const [token, binding] of registry) if (visible.has(token)) trimmed.set(token, binding);
+  return { report, registry: trimmed };
 }

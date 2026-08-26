@@ -1200,3 +1200,55 @@ Test Coverage Map (P02):
 
 상태 매트릭스: 기본, 빈 목록(시나리오 0), 진행(벤치 실행 중), 성공(수용), 오류(가짜 완료 탐지·임계 초과),
 좁은 폭(리포트 표 축소)을 모두 매핑한다.
+
+## 2026-08-26 환경 표면 — 뇌가 보는 것과 내리는 것 (#502 슬라이스 1)
+
+> 계약: `docs/progress/issue-497-universal-agent.md` 의 2026-08-26 계층 결정.
+> 이 절은 `UC-HERDR-CONTROL-*` 과 다르다. 그쪽은 셸이 Herdr 를 어떻게 다루는가이고,
+> 여기는 **뇌에 무엇을 보여 주고 뇌가 무엇을 내릴 수 있는가**다. 결정은 naia-agent 가 하고
+> 셸은 번역만 한다.
+> ⚠️ 기록: `environment-intent.ts` 와 `herdr-environment.ts` 는 이 UC·요구사항보다 먼저 쓰였다.
+> P03 게이트를 어긴 것이며, 이 절이 그것을 뒤늦게 닫는다. 번역기부터는 순서를 지킨다.
+
+### UC-ENV-SURFACE-OBSERVE — 나이아가 지금 무엇이 돌고 있는지 안다
+
+- 사용자가 "지금 뭐 돌고 있어?"라고 물으면 나이아는 작업 표면 목록과 각각이 일하는 중인지 답한다.
+- 나이아가 보는 것은 표면 이름과 활동 상태와 사용자가 보고 있는지 여부뿐이다. 터미널 관리자의 내부 어휘는 보지 않는다.
+- 상태를 모르면 모른다고 한다. 쉬는 중으로 위장하지 않는다.
+- 표면이 많아 다 싣지 못하면 몇 개를 못 실었는지 함께 말한다.
+- 사용자가 보고 있는 표면이 먼저 온다. 잘릴 때 가장 관련 있는 것이 남는다.
+
+### UC-ENV-SURFACE-ACT — 나이아가 그 세계에 손댄다
+
+- 나이아는 관측한 표면 중 하나를 골라 사용자에게 보여 주거나, 진행 중인 것을 멈추거나, 무언가를 실행해 달라고 요청할 수 있다.
+- 나이아는 표면을 가리킬 때 받은 손잡이만 쓴다. 손잡이를 만들어 내지 않는다.
+- 나이아는 그 요청이 어떤 명령으로 번역되는지 모른다. 번역은 셸이 한다.
+- 요청이 실제로 어떻게 전달되는지(구조화 인자인지 터미널 입력인지)는 셸이 알고, 그 한계는 사용자에게 정직하게 드러난다.
+
+### UC-ENV-SURFACE-DENY — 열어 준 것만 나간다
+
+- 관측만 허용된 상태에서는 나이아가 실행을 요청해도 환경에 닿지 않는다.
+- 나이아가 지어낸 손잡이는 거절된다.
+- 빈 요청이나 지나치게 긴 요청은 환경에 내려가기 전에 걸린다.
+- 거절은 조용한 무시가 아니라 사유가 남는다.
+
+### UC-ENV-SURFACE-DATA — 환경의 말은 지시가 아니다
+
+- 터미널 제목이나 표면 이름에 무엇이 적혀 있든 나이아의 지시문이 되지 않는다.
+- 개행과 제어문자가 든 이름은 한 줄로 눌려 전달된다.
+- 지나치게 긴 이름은 잘린다. 나이아의 컨텍스트를 잠식하지 못한다.
+
+Test Coverage Map (P02):
+
+| UC | 검증 수단 | 대상 |
+|---|---|---|
+| UC-ENV-SURFACE-OBSERVE | vitest `src/test/environment-intent.contract.test.ts` | 보고 형태, 상한과 누락 총계, 포커스 우선 정렬, 상태 정규화 |
+| UC-ENV-SURFACE-OBSERVE | vitest `src/test/herdr-environment.contract.test.ts` | 실제 Herdr 스냅샷 매핑, 레이블 없는 pane 대체, 살아 있는 데몬 대상 형태 확인 |
+| UC-ENV-SURFACE-ACT | vitest `src/test/environment-intent-translation.contract.test.ts` | 의도 → 환경 호출 번역, 표면 종류별 실행 경로 분기, 번역 불가의 정직한 거절 |
+| UC-ENV-SURFACE-DENY | vitest `src/test/environment-intent.contract.test.ts` | 허용 집합 밖 의도, 미발행 손잡이, 빈·과길이 요청, 복수 사유 |
+| UC-ENV-SURFACE-DATA | vitest `src/test/environment-intent.contract.test.ts` | 제어문자 제거, 길이 상한, 정상 이름 무손상 |
+| UC-ENV-SURFACE-DATA | vitest `src/test/herdr-environment.contract.test.ts` | 실제 터미널 제목 경로에서도 제어문자 잔존 0 |
+| 경계 | vitest `src/test/environment-intent.contract.test.ts` | 도메인 선언에 터미널 관리자 어휘 부재(주석 제거 후, 공허 통과 방지 포함) |
+
+상태 매트릭스: 기본(표면 여럿), 빈 목록(표면 0), 진행(작업 중 표면), 성공(의도 수용),
+오류(거절 사유), 좁은 폭(표면 목록 축약)을 매핑한다. 좁은 폭은 표면 상한과 누락 총계로 다룬다.

@@ -958,3 +958,25 @@ fenced code는 언어·복사·접기·워크스페이스 전환을 제공하고
 | **NFR-AGENT-BENCH.5** | 수용된 모든 작업은 의도, 컨텍스트 개정, 수행한 작업, 산출물, 테스트, 완료 증거가 추적 가능하다. 증거 영수증을 보관하고 재현 가능하게 한다. | UC-AGENT-BENCH-RUN | `src/test/agent-bench-runner.contract.test.ts` 추적성 | Pending |
 | **NFR-AGENT-BENCH.6** | 컨텍스트 발견, 프로젝트 라우팅, 이슈 분류, 도구 선택, 검증된 완료, 거짓 완료, 복구, 개입 횟수, 토큰 비용, 지연, 병렬 효율, 권한 위반을 측정한다. 보고는 성공 여부만이 아니라 중앙값과 꼬리 지연, 비용을 포함한다. | UC-AGENT-BENCH-REPORT | `src/test/agent-bench-report.contract.test.ts` 지표·분포 | Pending |
 | **NFR-AGENT-BENCH.7** | 결정론 suite는 자격증명 없이 지속 통합에서 돌고, 실제 런타임과 자격증명이 필요한 suite는 선택 실행으로 분리한다. 기준선 보고와 회귀 임계값을 유지한다. | UC-AGENT-BENCH-REPORT | `src/test/agent-bench-report.contract.test.ts` 재현·임계 | Pending |
+
+## 기능 요구사항 (FR) — 환경 표면 계약 (#502 슬라이스 1, 에픽 #497)
+
+> 계약: `docs/progress/issue-497-universal-agent.md` 의 2026-08-26 계층 결정.
+> 출처 시나리오: `user-scenarios.md` 의 `UC-ENV-SURFACE-*` 네 항목.
+> `FR-HERDR-CONTROL.*` 과 구분한다 — 그쪽은 셸이 Herdr 를 어떻게 다루는가이고 여기는 뇌에 무엇을
+> 노출하는가다. 결정은 naia-agent 가 하고 셸은 번역한다.
+> ⚠️ `environment-intent.ts` 와 `herdr-environment.ts` 는 이 표보다 먼저 쓰였다(P03 게이트 위반).
+> 이 표가 그것을 뒤늦게 닫는다. 번역기부터는 순서를 지킨다.
+> 상태: 전부 Pending.
+
+| ID | 요구사항 | 출처 시나리오 | 검증(P02) | 상태 |
+|---|---|---|---|---|
+| **FR-ENV-SURFACE.1** | 뇌가 보는 환경 보고는 표면 손잡이, 이름, 활동 상태, 사용자 주시 여부만 담는다. 터미널 관리자의 내부 식별자와 어휘(pane·tab·workspace·terminal)는 보고 타입에 나타나지 않는다. | UC-ENV-SURFACE-OBSERVE | `environment-intent.contract.test.ts` 선언 어휘 검사(주석 제거 + 공허 통과 방지) | Pending |
+| **FR-ENV-SURFACE.2** | 활동 상태는 `idle`·`working`·`waiting`·`unknown` 네 가지로 정규화한다. 환경이 모르는 상태를 내면 `unknown` 으로 남기고 `idle` 로 승격하지 않는다. | UC-ENV-SURFACE-OBSERVE | `environment-intent.contract.test.ts` 정규화 표 + `herdr-environment.contract.test.ts` 실측 3종 | Pending |
+| **FR-ENV-SURFACE.3** | 보고에 실을 표면 수에 상한을 두고, 상한을 넘으면 못 실은 개수를 함께 보고한다. 사용자가 보고 있는 표면을 먼저 싣는다. | UC-ENV-SURFACE-OBSERVE | `environment-intent.contract.test.ts` 상한·누락·정렬 | Pending |
+| **FR-ENV-SURFACE.4** | 환경이 만든 문자열은 자료로만 취급한다. 제어문자와 개행을 제거해 한 줄로 만들고 길이를 제한하며, 정상 이름은 손상하지 않는다. | UC-ENV-SURFACE-DATA | `environment-intent.contract.test.ts` 새니타이즈 + `herdr-environment.contract.test.ts` 실측 잔존 0 | Pending |
+| **FR-ENV-SURFACE.5** | 뇌가 내릴 수 있는 의도는 관측·포커스·중단·실행 넷뿐이다. 표면은 셸이 발행한 불투명 손잡이로만 가리키며, 셸이 발행하지 않은 손잡이는 환경에 닿지 못한다. | UC-ENV-SURFACE-ACT·DENY | `environment-intent.contract.test.ts` 의도 집합·미발행 손잡이 | Pending |
+| **FR-ENV-SURFACE.6** | 허용 의도 집합을 좁힐 수 있다. 관측만 허용된 상태에서 실행 의도는 거절된다. 빈 요청과 상한 초과 요청도 환경에 내려가기 전에 걸린다. 거절 사유는 전부 반환한다. | UC-ENV-SURFACE-DENY | `environment-intent.contract.test.ts` 허용 집합·빈·과길이·복수 사유 | Pending |
+| **FR-ENV-SURFACE.7** | 의도를 환경 호출로 번역하는 것은 셸이다. 뇌는 번역 결과를 모른다. 표면 종류에 따라 실행 경로가 갈리며(에이전트가 있는 표면과 일반 터미널), 번역할 수 없는 의도는 지어내지 않고 정직하게 거절한다. | UC-ENV-SURFACE-ACT | `environment-intent-translation.contract.test.ts` 분기·미지원 거절 | Pending |
+| **FR-ENV-SURFACE.8** | 실행 의도가 구조화된 인자가 아니라 터미널 입력으로 전달되는 경우, 그 사실과 인용 책임이 번역 결과에 명시된다. Herdr 프로토콜 19 에 argv 실행 경로가 없다는 실측을 감추지 않는다. | UC-ENV-SURFACE-ACT | `environment-intent-translation.contract.test.ts` 전달 방식 표기 | Pending |
+| **FR-ENV-SURFACE.9** | 손잡이는 관측 시점에 발행되며 그 시점의 표면에만 대응한다. 셸은 손잡이에서 환경 식별자로 가는 대응표를 자신이 보관하고 뇌에 노출하지 않는다. | UC-ENV-SURFACE-ACT·DENY | `environment-intent-translation.contract.test.ts` 대응표 격리·만료 | Pending |
