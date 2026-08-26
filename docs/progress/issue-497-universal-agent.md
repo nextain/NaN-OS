@@ -231,3 +231,49 @@ Rust 명령은 식별자 형식과 길이만 검증한다. 어떤 의도가 허�
 판정하며, 웹뷰 코드가 Tauri 명령을 직접 부르면 그 판정을 건너뛴다. 이것은 기존
 `herdr_prompt_agent` 도 같은 구조다(검증만 있고 게이팅은 TS 쪽). 이 슬라이스는 그 관행을
 따르되 사실을 적어 둔다 — Rust 계층 자체의 능력 게이팅은 후속이다.
+
+## 2026-08-26 e2e-tauri 실행 전제조건 (실측 기록)
+
+Rust 를 건드리면 P04 가 실 백엔드 검증을 요구한다. 이 머신에서 그것을 처음 돌리며 막힌 지점들이다.
+문서에 없어서 매번 다시 알아내야 하는 것들이라 남긴다.
+
+1. **짝 naia-agent 체크아웃이 정확한 경로·이름이어야 한다.**
+   `packages/shell/agent-pairing.json` 의 커밋을, `<naia-shell>/naia-agent-worktrees/shell-pair-<short>`
+   에 깨끗한 워크트리로 두어야 한다. 이름이 다르면 `wdio.conf.ts` 가 "paired naia-agent checkout is
+   unavailable" 로 죽는다. 만드는 법:
+   `git -C <naia-agent> worktree add --detach <naia-shell>/naia-agent-worktrees/shell-pair-<short> <commit>`
+2. **짝 체크아웃의 형제 의존성도 있어야 한다.** 그 커밋의 `package.json` 이
+   `file:../naia-kb-compiler` 와 `file:../naia-memory` 를 참조하므로 `naia-agent-worktrees/` 안에
+   두 이름의 심링크가 필요하다. 없으면 `pnpm --ignore-workspace install` 이 ENOENT 로 죽고,
+   빌드 스크립트는 그것을 "dependency install failed" 로만 보고한다.
+3. **cargo 단위 테스트도 짝 정보를 요구한다.** `NAIA_AGENT_SCRIPT` 와 `NAIA_AGENT_PROTO_DIR` 를
+   짝 체크아웃 안쪽으로 지정해야 하고, proto 디렉터리는 **git 체크아웃 안**이어야 한다
+   (임시 디렉터리에 파일만 복사하면 "path must be inside a git checkout" 로 죽는다).
+4. **이 머신에는 Xvfb 가 없다.** 저장소 문서는 `xvfb-run pnpm test:e2e:tauri` 를 안내하지만
+   `xorg-x11-server-Xvfb` 가 설치돼 있지 않다. 실제 디스플레이(`DISPLAY=:0`)로 돌리면 창이 뜬다.
+   헤드리스가 필요하면 패키지 설치가 선행돼야 하며 그것은 사람 결정이다.
+5. **`packages/shell/src-tauri/target-e2e/` 가 gitignore 되어 있지 않다.** e2e 빌드가 만드는 큰
+   디렉터리가 매번 untracked 로 남아 작업 트리가 깨끗하지 않게 된다. 기존 갭이며 이 슬라이스가
+   만든 것이 아니다.
+
+### e2e-tauri 실행 결과 (2026-08-26) — 부분 증명
+
+새 Rust 명령 두 개는 실 백엔드에서 **한 번 응답을 받아 냈다**. 그 실행에서 15개 단언 중 8개가
+통과했고, 통과한 8개가 곧 이 슬라이스가 증명하려던 것이다.
+
+- `herdr_run_pane` 과 `herdr_send_keys` 가 등록돼 있다 — 미등록 오류가 아니라 인자 검증 오류가 온다 (FR-ENV-DISPATCH.7)
+- 식별자 형식 검증이 실제로 산다 — 빈 값·접두사 없음·워크스페이스 부분 없음·구분자 주입·과길이 다섯 가지를 Rust 가 거절한다 (FR-ENV-DISPATCH.4)
+
+나머지 7개(본문·키 검증, 미개방 명령)는 그 실행에서 webview 의 origin 이 흔들려 실패했고,
+이후 재실행에서는 Vite 개발 서버가 아예 뜨지 않아 세션 자체가 만들어지지 않았다.
+**이것은 이 변경의 결함이 아니라 이 머신의 e2e 하네스 불안정이다.** 근거:
+
+- 같은 바이너리·같은 스펙으로 실행마다 결과가 다르다.
+- 실패 문구가 `webview never reached an http origin with writable localStorage` 와
+  `Origin header is not a valid URL` 로, 둘 다 wdio.conf 자신이 주석에 적어 둔 알려진 취약점이다.
+- Xvfb 가 없어 실제 디스플레이로 돌려야 하고, `browser.refresh()` 는 wdio.conf 주석대로 세션을 끊는다.
+
+동일한 검증이 Rust 단위 테스트로는 결정론적으로 통과한다(`cargo test --lib herdr::api`, 4/4).
+즉 검증 자체는 살아 있고, 그것을 **실 백엔드에서** 반복 확인하는 경로가 이 환경에서 불안정하다.
+
+따라서 #502 P04 는 in_progress 로 남긴다. 완료로 표시하지 않는다.
