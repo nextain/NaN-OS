@@ -495,7 +495,7 @@ test.describe("Chat File Deeplinks (#116)", () => {
 		await expect(btn).toContainText("App.tsx");
 	});
 
-	test("D2: deeplink 클릭 시 워크스페이스 패널 활성화", async ({ page }) => {
+	test("D2: deeplink 클릭 시 워크스페이스 앱 활성화", async ({ page }) => {
 		const input = page.locator(".chat-input");
 		await expect(input).toBeEnabled({ timeout: 5_000 });
 		await input.fill("deeplink 테스트");

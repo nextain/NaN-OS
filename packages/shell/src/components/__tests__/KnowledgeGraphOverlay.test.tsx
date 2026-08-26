@@ -97,7 +97,7 @@ describe("KnowledgeGraphOverlay (작업영역 오버레이 + 노드→출처→�
 		expect(onClose).toHaveBeenCalled();
 	});
 
-	it("노드 클릭 → 출처 패널 + 파일 출처 클릭 → workspace openFile + 오버레이 닫힘", () => {
+	it("노드 클릭 → 출처 영역 + 파일 출처 클릭 → workspace openFile + 오버레이 닫힘", () => {
 		const onClose = vi.fn();
 		render(
 			<KnowledgeGraphOverlay

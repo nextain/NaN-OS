@@ -1,8 +1,8 @@
 /**
- * UC8 공간분위기 — skill_youtube_bgm 패널(환경) 도구 (FR-BGM.1, 2026-07-16).
+ * UC8 공간분위기 — skill_youtube_bgm 앱(환경) 도구 (FR-BGM.1, 2026-07-16).
  *
  * BgmPlayer 위젯은 앱이 아니라 descriptor.tools 등록 경로가 없어 new-core 에서
- * 나이아가 BGM 존재를 몰랐다(이식 갭). 배선 = 패널 도구 경로(E1 — naia-agent 무변경):
+ * 나이아가 BGM 존재를 몰랐다(이식 갭). 배선 = 앱 도구 경로(E1 — naia-agent 무변경):
  *   부팅 시 App.tsx 가 sendAppSkills(BGM_APP_ID, [SKILL_YOUTUBE_BGM]) 등록
  *   → agent appExec 가 LLM 에 노출 → app_tool_call
  *   → ChatArea dispatchAppToolCall 의 BGM 분기가 executeBgmSkill 실행
@@ -23,7 +23,7 @@ import {
 } from "./bgm-playback";
 import { BGM_SIDECAR_BASE_URL, ensureBgmSidecar } from "./bgm-sidecar-url";
 
-/** appExec 등록용 패널 id — 위젯 전용(앱 아님), app_skills_clear 대상 아님(항상 유지). */
+/** appExec 등록용 앱 id — 위젯 전용(앱 아님), app_skills_clear 대상 아님(항상 유지). */
 export const BGM_APP_ID = "bgm-widget";
 
 const YT_BASE = BGM_SIDECAR_BASE_URL;

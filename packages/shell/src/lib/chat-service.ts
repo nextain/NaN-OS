@@ -90,7 +90,7 @@ interface SendChatOptions {
 	 * 코어가 persona+workspace+environmentSegments 를 스스로 조립한다(naia-os buildSystemPrompt 두벌 제거).
 	 */
 	systemPrompt?: string;
-	/** S4 — 셸 환경고유 세그먼트(아바타 감정·패널). 코어가 머지. persona/locale 등은 코어가 config.json 에서 조립(안 보냄). */
+	/** S4 — 셸 환경고유 세그먼트(아바타 감정·앱). 코어가 머지. persona/locale 등은 코어가 config.json 에서 조립(안 보냄). */
 	environmentSegments?: EnvironmentSegment[];
 	enableTools?: boolean;
 	/** Enable thinking/reasoning output from models that support it. */

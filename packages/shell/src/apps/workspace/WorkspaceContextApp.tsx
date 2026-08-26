@@ -11,7 +11,7 @@ import { listen } from "@tauri-apps/api/event";
 import { t } from "../../lib/i18n";
 
 // #501 워크스페이스 컨텍스트 표면 (UC-WORKSPACE-CONTEXT-*).
-// 이 패널이 답해야 하는 질문은 "무엇을 읽었는가"가 아니라 "왜 그것을 읽었는가"다.
+// 이 앱이 답해야 하는 질문은 "무엇을 읽었는가"가 아니라 "왜 그것을 읽었는가"다.
 // 근거 없이 목록만 보여 주면 사용자는 나이아가 무엇을 근거로 답했는지 알 수 없다.
 
 type AppState =

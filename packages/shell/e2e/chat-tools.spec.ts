@@ -326,7 +326,7 @@ test.describe("Chat + Tool E2E", () => {
 		await expect(toolActivity.first()).toBeVisible({ timeout: 5_000 });
 	});
 
-	test("지식 도구(K2): skill_knowledge_ask — 답변+출처 칩 렌더 + 칩 클릭→브라우저 패널(근거→원문)", async ({ page }) => {
+	test("지식 도구(K2): skill_knowledge_ask — 답변+출처 칩 렌더 + 칩 클릭→브라우저 앱(근거→원문)", async ({ page }) => {
 		await sendMessage(page, "지식에서 전입신고 필요서류 알려줘");
 
 		// K2 렌더: 답변 + 출처 칩(sourceUris 보존)
@@ -337,7 +337,7 @@ test.describe("Chat + Tool E2E", () => {
 		await expect(chip).toHaveAttribute("data-source-kind", "url");
 		await expect(chip).toContainText("전입신고 안내");
 
-		// 근거→원문: URL 칩 클릭 → 브라우저 패널로 전환
+		// 근거→원문: URL 칩 클릭 → 브라우저 앱로 전환
 		await chip.click();
 		await expect(page.locator(".browser-app")).toBeVisible({ timeout: 5_000 });
 	});

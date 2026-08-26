@@ -3,7 +3,7 @@ import { type Page, expect, test } from "@playwright/test";
 /**
  * #501 워크스페이스 컨텍스트 해석 E2E (UC-WORKSPACE-CONTEXT-*).
  *
- * 실제 Workspace 레일과 컨텍스트 패널을 브라우저에서 그대로 렌더한다.
+ * 실제 Workspace 레일과 컨텍스트 앱을 브라우저에서 그대로 렌더한다.
  * 대체되는 것은 Tauri 명령 경계뿐이고, 진입점 파싱·선택·경계·개정 규칙은 실제 core 가 돈다.
  */
 

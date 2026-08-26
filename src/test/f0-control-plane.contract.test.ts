@@ -128,7 +128,7 @@ describe("initAuth() — 게이트 독립, config 조건부", () => {
   });
 });
 
-describe("workspace 패널 — boot 공통 아님, contain+fallback", () => {
+describe("workspace 앱 — boot 공통 아님, contain+fallback", () => {
   it("setRoot Err → clearWorkspaceRoot + startWatch (block 아님)", async () => {
     const { ports, calls } = mkPorts({ setRootOk: false });
     await new ControlPlaneBoot(ports).onWorkspaceAppMount("/bad");

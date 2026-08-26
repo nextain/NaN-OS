@@ -55,7 +55,7 @@ describe("knowledge-source-open — 출처 열기 + 민감경로 가드(적대�
 		});
 	});
 
-	it("URL 출처 → 브라우저 navigate + 패널 전환", () => {
+	it("URL 출처 → 브라우저 navigate + 앱 전환", () => {
 		openKnowledgeSource("https://gov.kr/x");
 		expect(navigate).toHaveBeenCalledWith("https://gov.kr/x");
 		expect(setActiveApp).toHaveBeenCalledWith("browser");

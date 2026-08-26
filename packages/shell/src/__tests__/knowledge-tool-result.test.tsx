@@ -24,7 +24,7 @@ beforeEach(() => vi.clearAllMocks());
 afterEach(() => cleanup());
 
 describe("KnowledgeToolResult (K2 — 답변 + 출처 칩 + 근거→원문 dispatch)", () => {
-	it("ask: 답변 렌더 + URL 칩 클릭 → 브라우저 navigate(+패널 전환)", () => {
+	it("ask: 답변 렌더 + URL 칩 클릭 → 브라우저 navigate(+앱 전환)", () => {
 		const data: ParsedKnowledge = { kind: "ask", abstained: false, answer: "신분증입니다", sources: [{ title: "전입신고", sourceUris: ["https://gov.kr/x"] }] };
 		render(<KnowledgeToolResult data={data} />);
 		expect(screen.getByText("신분증입니다")).toBeTruthy();
@@ -35,7 +35,7 @@ describe("KnowledgeToolResult (K2 — 답변 + 출처 칩 + 근거→원문 disp
 		expect(openFile).not.toHaveBeenCalled();
 	});
 
-	it("ask: 파일 출처 칩 클릭 → workspace openFile(file:// 제거) + 패널 전환", () => {
+	it("ask: 파일 출처 칩 클릭 → workspace openFile(file:// 제거) + 앱 전환", () => {
 		const data: ParsedKnowledge = { kind: "ask", abstained: false, answer: "내용", sources: [{ title: "문서", sourceUris: ["file:///ws/doc.md"] }] };
 		render(<KnowledgeToolResult data={data} />);
 		fireEvent.click(screen.getByText("문서"));

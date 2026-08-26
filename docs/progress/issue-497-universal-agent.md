@@ -174,7 +174,7 @@ tab 7, server 5, worktree 4, layout 3 이고 나머지는 소수다. `issue`·`t
   노출하면 의도가 아니라 원격 조종이고, 기질이 바뀔 때 뇌가 터미널 멀티플렉서 어휘에 오염된다.
 - naia-agent `domain/chat.ts` 가 이미 강제한다 — "persona/profile/workspaceContext 는 클라 주입
   **금지**(코어 SoT) — environmentSegments **만** 클라 제공". 화이트리스트는
-  `avatarEmotion | panel | responseStyle` 뿐이고 그 밖의 kind 는 코어가 버린다. 자유 텍스트로
+  `avatarEmotion | app | responseStyle` 뿐이고 그 밖의 kind 는 코어가 버린다. 자유 텍스트로
   workspace 를 위조 주입하는 경로를 API 차원에서 막은 것이다.
 - naia-agent `domain/chat.ts` 의 출처 union 에 `{ kind: "shell" }` 과 `{ kind: "discord" }` 가 있다.
   백엔드가 이미 셸을 채널 하나로 모델링하고 있다.
@@ -186,7 +186,7 @@ tab 7, server 5, worktree 4, layout 3 이고 나머지는 소수다. `issue`·`t
 | 파일 읽기·경계·권한 거부 (F2 관측 포트, `workspace-context-observe`) | naia-shell | 원시 환경 능력 |
 | Herdr 관측·조작 어댑터와 프로토콜 대조 (#502) | naia-shell | 환경 서비스 접점, 90개 메서드를 여기서 흡수 |
 | 브라우저·터미널 원시 도구 (#499) | naia-shell | 정본 기능 매핑 표가 환경·셸 소유로 명시 |
-| 컨텍스트 패널 UI | naia-shell | 사용자가 보는 표현 |
+| 컨텍스트 앱 UI | naia-shell | 사용자가 보는 표현 |
 | 진입점 해석·필수 인덱스 판정·의도 기반 선택·근거 추적·개정 무효화 (#501 도메인) | **naia-agent** | 취합과 결정. 코어가 클라 주입을 금지한 대상 |
 | 이슈 분류·리더·작업자 배치·검증·완료 판정 (#500) | **naia-agent** | 이미 `issue-orchestration.ts`·`issue-team.ts` 등으로 존재 |
 | 채널 중립 세션 정체성 (#503) | **naia-agent** | 이미 `multi-issue-session.ts` 의 `SessionSourceKind` 가 셸을 출처로 모델링 |
