@@ -106,8 +106,21 @@ export function liveMutatePort(ownedWorkspaceId: string, onApply?: (request: Mut
           evidence: [`소유하지 않은 대상 거부: ${target}`],
         };
       }
+      // 실행 파일을 무시하고 args 만 돌리면, 대상 코드가 엉뚱한 실행 파일을 넘겨도 통과한다
+      // (2026-08-27 4차 적대리뷰 지적). 실행 파일도 그대로 쓴다.
+      if (command.executable !== "herdr") {
+        return {
+          requestId: request.requestId,
+          outcome: "failed",
+          affected: [],
+          evidence: [`이 어댑터가 허용하지 않는 실행 파일: ${command.executable}`],
+        };
+      }
       try {
-        const output = herdr([...command.args]);
+        const output = execFileSync(command.executable, [...command.args], {
+          encoding: "utf8",
+          timeout: 30_000,
+        });
         return {
           requestId: request.requestId,
           outcome: "completed",

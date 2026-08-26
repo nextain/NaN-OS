@@ -255,6 +255,13 @@ export function requirementIdsByScenario(requirementsMarkdown: string): Record<s
 /** 저장소 루트와 packages/shell 두 곳을 훑어 실제 파일을 찾는다. */
 export function specResolver(repoRoot: string) {
   return (spec: string): { cwd: string; spec: string } | null => {
+    // ⚠️ 파일이 루트에서 보인다고 루트에서 돌릴 수 있는 것은 아니다. packages/shell 의
+    //    테스트는 그 워크스페이스의 vitest 설정으로 돌아야 한다 — 루트에서 부르면
+    //    설정이 그 파일을 모르고 종료 코드 1 이 난다(2026-08-27 실측).
+    if (spec.startsWith("packages/shell/")) {
+      const local = spec.slice("packages/shell/".length);
+      if (existsSync(resolve(repoRoot, spec))) return { cwd: "packages/shell", spec: local };
+    }
     if (existsSync(resolve(repoRoot, spec))) return { cwd: ".", spec };
     if (existsSync(resolve(repoRoot, "packages", "shell", spec))) return { cwd: "packages/shell", spec };
     return null;
@@ -646,17 +653,19 @@ export class CommandBenchExecution implements BenchExecutionPort {
       completionEvidence.push(`${label} — ${step.why}`);
     }
 
-    // 요구사항 추적은 이름으로 한다. 어떤 확인 수단도 자기 제목에 그 FR 을 달지 않았다면
-    // 그것은 "확인이 지워졌다"가 아니라 "추적이 애초에 없다"이다 — 세어서 남기되 증거를
-    // 무르지는 않는다. 둘을 뭉뚱그리면 추적 부재가 검증 실패로 둔갑한다
-    // (2026-08-27 4차: 이 혼동으로 시나리오 절반이 통째로 무너졌다).
-    const untracedRequirements = [...scenarioRequirements].filter(
+    // 시나리오가 선언한 요구사항은 전부 이름으로 추적되고 실제로 돌아야 한다.
+    //
+    // 앞서는 이것을 조건으로 걸 수 없었다 — 확인 수단들이 자기 FR 을 제목에 달지 않아
+    // "추적이 없는 것"과 "확인이 지워진 것"이 구별되지 않았기 때문이다. 그래서 먼저
+    // 추적을 만들었고(매핑된 파일 제목에 UC·FR 부착, 2026-08-27 실측 미추적 17 → 0),
+    // 이제 조건으로 건다. 테스트를 지우거나 이름을 바꾸면 여기서 잡힌다.
+    const uncheckedRequirements = [...scenarioRequirements].filter(
       (id) => ![...allPassed].some((n) => n.includes(id)),
     );
-    if (untracedRequirements.length > 0) {
-      artifacts.push(`이름으로 추적되지 않는 요구사항: ${untracedRequirements.join(" / ")}`);
-    }
-    const finalReceipts = receipts;
+    const finalReceipts =
+      uncheckedRequirements.length > 0 && receipts.length > 0
+        ? (artifacts.push(`선언한 요구사항이 확인되지 않았다: ${uncheckedRequirements.join(" / ")}`), [])
+        : receipts;
 
     // 안전 관측을 상수로 두면 자기충족이다 — 아무것도 안 보고 "깨끗하다"고 말하게 된다
     // (2026-08-27 적대리뷰 지적). 실행 뒤 실제 잔재를 훑어 채운다.

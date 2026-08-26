@@ -18,7 +18,11 @@ export class TempWorkspaceFixtureAdapter implements WorkspaceFixturePort {
 
   async create(spec: WorkspaceFixtureSpec): Promise<WorkspaceFixture> {
     const root = await mkdtemp(join(this.baseDir, "naia-bench-"));
-    await writeFile(join(root, spec.rootEntrypoint), rootEntrypointBody(spec), "utf8");
+    // 진입점 이름도 경계 안이어야 한다. 검사 없이 join 하면 손상된 spec 이 루트 밖 파일을
+    // 덮어쓸 수 있다(2026-08-27 4차 적대리뷰 지적).
+    const rootEntry = join(root, spec.rootEntrypoint);
+    if (!isContained(root, rootEntry)) throw new Error(`픽스처 경계 밖 진입점: ${spec.rootEntrypoint}`);
+    await writeFile(rootEntry, rootEntrypointBody(spec), "utf8");
     for (const index of spec.mandatoryIndexes) {
       const target = join(root, index);
       if (!isContained(root, target)) throw new Error(`픽스처 경계 밖 인덱스: ${index}`);
@@ -31,6 +35,8 @@ export class TempWorkspaceFixtureAdapter implements WorkspaceFixturePort {
       // 루트 기준이 아니라 projects/ 기준으로 가둔다. `../x` 는 루트 안으로 정규화되지만
       // 의도한 하위 트리를 벗어나므로 픽스처 형상을 깨뜨린다.
       if (!isContained(projectsRoot, dir) || dir === projectsRoot) throw new Error(`픽스처 경계 밖 프로젝트: ${project.name}`);
+      const projectEntry = join(dir, project.entrypoint);
+      if (!isContained(dir, projectEntry)) throw new Error(`픽스처 경계 밖 진입점: ${project.entrypoint}`);
       await mkdir(dir, { recursive: true });
       // 프로젝트 진입점도 자기 문서를 스스로 선언해야 한다. 제목만 있으면 실제 파서가
       // 선언 없음으로 보고 진입이 실패한다.

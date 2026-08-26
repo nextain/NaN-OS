@@ -10,7 +10,7 @@ function pane(over: Partial<HerdrPaneLike> = {}): HerdrPaneLike {
   return { pane_id: "w1:p1", label: "빌더", agent_status: "working", focused: false, ...over };
 }
 
-describe("표면 이름 정하기 [UC-ENV-SURFACE-DATA UC-ENV-SURFACE-OBSERVE]", () => {
+describe("표면 이름 정하기 [UC-ENV-SURFACE-DATA UC-ENV-SURFACE-OBSERVE FR-ENV-SURFACE.1 FR-ENV-SURFACE.2 FR-ENV-SURFACE.3 FR-ENV-SURFACE.4]", () => {
   it("레이블이 있으면 레이블을 쓴다", () => {
     expect(surfaceLabel(pane({ label: "빌더" }), "fb")).toBe("빌더");
   });

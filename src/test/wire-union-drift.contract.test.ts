@@ -49,7 +49,7 @@ function unionKindsFromSource(): string[] {
 
 const sorted = (xs: readonly string[]): string[] => [...xs].sort();
 
-describe("표본이 공허하지 않다 (FR-WIRE-UNION.5) [UC-WIRE-UNION-DRIFT]", () => {
+describe("표본이 공허하지 않다 (FR-WIRE-UNION.5) [UC-WIRE-UNION-DRIFT FR-WIRE-UNION.2]", () => {
   // 빈 집합이면 아래 부분집합 단언이 공허하게 참이 된다. 그 경로부터 막는다.
   it("네 목록 모두 비어 있지 않다", () => {
     expect(fixture.agentEmitsChatTurn.length).toBeGreaterThan(0);

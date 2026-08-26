@@ -72,7 +72,7 @@ function writeAttestationSync(touched: readonly string[]): void {
 
 const SPEC_ID = "packages/shell/e2e-tauri/specs/orchestration-restart.spec.ts";
 
-describe("재시작 이후 이어가기 — 영속 경계 (#500) [UC-ORCHESTRATION-RESTART-RESUME]", () => {
+describe("재시작 이후 이어가기 — 영속 경계 (#500) [UC-ORCHESTRATION-RESTART-RESUME FR-ORCHESTRATION.10]", () => {
 	before(async () => {
 		await browser.waitUntil(
 			async () => {
@@ -124,7 +124,7 @@ describe("재시작 이후 이어가기 — 영속 경계 (#500) [UC-ORCHESTRATI
 		}
 	});
 
-	it("이어받을 참조가 실제 디스크에 남는다", () => {
+	it("이어받을 참조가 실제 디스크에 남는다 (FR-ORCHESTRATION.10)", () => {
 		// 이 러너의 expect 는 메시지 인자를 받지 않는다 — 사유를 남기려면 던져야 한다.
 		if (!results.write?.ok) throw new Error(`쓰기 실패: ${results.write?.error}`);
 		if (!results.read?.ok) throw new Error(`읽기 실패: ${results.read?.error}`);

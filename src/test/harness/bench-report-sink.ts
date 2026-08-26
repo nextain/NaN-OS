@@ -100,11 +100,21 @@ export class FileBenchReportSink implements BenchReportSinkPort {
   constructor(
     private readonly path: string,
     private readonly now: () => string,
+    /** 원시 실행 영수증. 사람이 읽는 보고서만으로는 독립 확인이 안 된다. */
+    private readonly rawPath?: string,
+    private readonly raw?: () => unknown,
   ) {}
 
   async publish(summary: BenchSummary, verdicts: readonly Verdict[]): Promise<void> {
     const target = resolve(this.path);
     mkdirSync(dirname(target), { recursive: true });
     writeFileSync(target, renderReport(summary, verdicts, this.now()), "utf8");
+    if (this.rawPath && this.raw) {
+      // 보고서가 요약만 남기면 저장소만 보고는 실제로 무엇이 돌았는지 알 수 없다
+      // (2026-08-27 4차 적대리뷰 지적). 시나리오별 영수증·흔적을 그대로 남긴다.
+      const rawTarget = resolve(this.rawPath);
+      mkdirSync(dirname(rawTarget), { recursive: true });
+      writeFileSync(rawTarget, `${JSON.stringify(this.raw(), null, 2)}\n`, "utf8");
+    }
   }
 }

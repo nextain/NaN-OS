@@ -56,6 +56,8 @@ describe("에이전트 벤치 실제 실행", () => {
       // 시나리오마다 실제로 확인한 테스트 수를 기록한다. 판정 결과에는 실리지 않는 값이라
       // 실행부를 감싸서 받는다.
       const executed: Record<string, number> = {};
+      // 원시 영수증. 저장소만 보고도 무엇이 실제로 돌았는지 확인할 수 있어야 한다.
+      const raw: Record<string, unknown> = {};
       const execution = new CommandBenchExecution({
         runner: nodeCommandRunner,
         repoRoot: ROOT,
@@ -66,6 +68,12 @@ describe("에이전트 벤치 실제 실행", () => {
         async run(scenario: BenchScenario): Promise<ScenarioRun> {
           const out = await execution.run(scenario);
           executed[scenario.id] = out.testCount;
+          raw[scenario.id] = {
+            receipts: out.receipts,
+            testCount: out.testCount,
+            artifacts: out.trace?.artifacts ?? [],
+            safety: out.safety,
+          };
           return out;
         },
       };
@@ -76,6 +84,8 @@ describe("에이전트 벤치 실제 실행", () => {
         new FileBenchReportSink(
           resolve(ROOT, "benchmark", "agent-bench-report.md"),
           () => `${stampedAt} (${revision})`,
+          resolve(ROOT, "benchmark", "agent-bench-receipts.json"),
+          () => ({ revision, stampedAt, scenarios: raw }),
         ),
       );
 

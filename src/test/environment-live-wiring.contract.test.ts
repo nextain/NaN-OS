@@ -34,7 +34,7 @@ function recorder(): { port: EnvironmentCommandPort; calls: { command: string; a
 
 const ALL_GRANTS = { workspaceObserve: true, terminalInput: true };
 
-describe("관측이 대화에 실린다 (FR-ENV-LIVE.1·2) [UC-ENV-LIVE-OBSERVE UC-ENV-STICKY]", () => {
+describe("관측이 대화에 실린다 (FR-ENV-LIVE.1·2) [UC-ENV-LIVE-OBSERVE UC-ENV-STICKY FR-ENV-LIVE.2 FR-ENV-STICKY.2 FR-ENV-STICKY.3]", () => {
   it("표면이 있으면 세그먼트를 만든다", () => {
     const session = new EnvironmentSession();
     session.observeSnapshot({ panes: [pane("p1", { label: "빌더", agent: "codex", status: "working" })] });

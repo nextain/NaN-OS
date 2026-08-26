@@ -43,7 +43,7 @@ const AGENT_PROMPT = callFor({ kind: "run", surface: surfaceRef("s-1"), request:
 const PANE_RUN = callFor({ kind: "run", surface: surfaceRef("s-2"), request: "pnpm test" });
 const PANE_KEYS = callFor({ kind: "interrupt", surface: surfaceRef("s-2") });
 
-describe("열린 것과 열리지 않은 것 (FR-ENV-DISPATCH.1) [UC-ENV-DISPATCH-REFUSE UC-ENV-DISPATCH-STRUCTURED UC-ENV-DISPATCH-TERMINAL]", () => {
+describe("열린 것과 열리지 않은 것 (FR-ENV-DISPATCH.1) [UC-ENV-DISPATCH-REFUSE UC-ENV-DISPATCH-STRUCTURED UC-ENV-DISPATCH-TERMINAL FR-ENV-DISPATCH.5 FR-ENV-DISPATCH.7]", () => {
   it("이 슬라이스가 여는 호출은 다섯 가지뿐이다", () => {
     expect([...ALLOWED_METHODS]).toEqual([
       "session.snapshot",

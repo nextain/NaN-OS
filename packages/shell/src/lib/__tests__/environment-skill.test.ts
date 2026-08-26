@@ -92,7 +92,7 @@ describe("조작 (FR-ENV-LIVE.3~5)", () => {
 		expect(d.calls[0]?.command).toBe("herdr_focus_agent");
 	});
 
-	it("터미널 입력 권한이 없으면 거절이고 명령이 안 나간다", async () => {
+	it("터미널 입력 권한이 없으면 거절이고 명령이 안 나간다 (FR-ENV-LIVE.4)", async () => {
 		const d = deps([pane("t1", { label: "zsh" })], { terminalInput: false });
 		await executeEnvironmentSkill({ action: "observe" }, d);
 		const token = d.session.latestReport()?.surfaces[0]?.ref.token as string;
@@ -112,7 +112,7 @@ describe("조작 (FR-ENV-LIVE.3~5)", () => {
 		expect(d.calls[0]?.command).toBe("herdr_run_pane");
 	});
 
-	it("환경 오류를 성공처럼 말하지 않는다", async () => {
+	it("환경 오류를 성공처럼 말하지 않는다 (FR-ENV-LIVE.5)", async () => {
 		const d = deps([pane("p1", { agent: "codex" })], { fail: "herdr socket closed" });
 		await executeEnvironmentSkill({ action: "observe" }, d);
 		const token = d.session.latestReport()?.surfaces[0]?.ref.token as string;

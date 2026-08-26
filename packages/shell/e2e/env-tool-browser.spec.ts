@@ -138,7 +138,7 @@ async function say(page: import("@playwright/test").Page, text: string) {
 	await input.press("Enter");
 }
 
-test.describe("#499 브라우저 환경 도구 (UC-ENV-TOOL-BROWSE)", () => {
+test.describe("#499 브라우저 환경 도구 (UC-ENV-TOOL-BROWSE) (FR-ENV-TOOL.2)", () => {
 	test("(A) 브라우저 앱이 자기 도구를 agent 에 등록한다", async ({ page }) => {
 		await boot(page);
 		await expect

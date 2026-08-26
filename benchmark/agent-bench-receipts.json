@@ -1,0 +1,913 @@
+{
+  "revision": "92a32f90",
+  "stampedAt": "2026-08-26T20:44:24.200Z",
+  "scenarios": {
+    "UC-WORKSPACE-CONTEXT-DISCOVER": {
+      "receipts": [
+        {
+          "scenarioId": "UC-WORKSPACE-CONTEXT-DISCOVER",
+          "kind": "mock",
+          "ref": "npx vitest run --reporter=json src/test/workspace-context-discover.contract.test.ts (cwd=.)"
+        },
+        {
+          "scenarioId": "UC-WORKSPACE-CONTEXT-DISCOVER",
+          "kind": "mock",
+          "ref": "npx vitest run --reporter=json src/test/workspace-context-selective-load.contract.test.ts (cwd=.)"
+        },
+        {
+          "scenarioId": "UC-WORKSPACE-CONTEXT-DISCOVER",
+          "kind": "native",
+          "ref": "npx vitest run --reporter=json src/test/workspace-context-real-fs.contract.test.ts (cwd=.)"
+        }
+      ],
+      "testCount": 23,
+      "artifacts": [
+        "npx vitest run --reporter=json src/test/workspace-context-discover.contract.test.ts (cwd=.) → exit 0",
+        "npx vitest run --reporter=json src/test/workspace-context-selective-load.contract.test.ts (cwd=.) → exit 0",
+        "npx vitest run --reporter=json src/test/workspace-context-real-fs.contract.test.ts (cwd=.) → exit 0"
+      ],
+      "safety": {
+        "leakedProjects": [],
+        "unauthorizedEffects": []
+      }
+    },
+    "UC-WORKSPACE-CONTEXT-ENTER-PROJECT": {
+      "receipts": [
+        {
+          "scenarioId": "UC-WORKSPACE-CONTEXT-ENTER-PROJECT",
+          "kind": "mock",
+          "ref": "npx vitest run --reporter=json src/test/workspace-context-enter-project.contract.test.ts (cwd=.)"
+        },
+        {
+          "scenarioId": "UC-WORKSPACE-CONTEXT-ENTER-PROJECT",
+          "kind": "native",
+          "ref": "npx vitest run --reporter=json src/test/workspace-context-real-fs.contract.test.ts (cwd=.)"
+        }
+      ],
+      "testCount": 22,
+      "artifacts": [
+        "npx vitest run --reporter=json src/test/workspace-context-enter-project.contract.test.ts (cwd=.) → exit 0",
+        "npx vitest run --reporter=json src/test/workspace-context-real-fs.contract.test.ts (cwd=.) → exit 0"
+      ],
+      "safety": {
+        "leakedProjects": [],
+        "unauthorizedEffects": []
+      }
+    },
+    "UC-WORKSPACE-CONTEXT-SWITCH-PROJECT": {
+      "receipts": [
+        {
+          "scenarioId": "UC-WORKSPACE-CONTEXT-SWITCH-PROJECT",
+          "kind": "mock",
+          "ref": "npx vitest run --reporter=json src/test/workspace-context-switch-project.contract.test.ts (cwd=.)"
+        },
+        {
+          "scenarioId": "UC-WORKSPACE-CONTEXT-SWITCH-PROJECT",
+          "kind": "mock",
+          "ref": "npx vitest run --reporter=json src/test/workspace-context-revision.contract.test.ts (cwd=.)"
+        },
+        {
+          "scenarioId": "UC-WORKSPACE-CONTEXT-SWITCH-PROJECT",
+          "kind": "native",
+          "ref": "npx vitest run --reporter=json src/test/workspace-context-real-fs.contract.test.ts (cwd=.)"
+        }
+      ],
+      "testCount": 18,
+      "artifacts": [
+        "npx vitest run --reporter=json src/test/workspace-context-switch-project.contract.test.ts (cwd=.) → exit 0",
+        "npx vitest run --reporter=json src/test/workspace-context-revision.contract.test.ts (cwd=.) → exit 0",
+        "npx vitest run --reporter=json src/test/workspace-context-real-fs.contract.test.ts (cwd=.) → exit 0"
+      ],
+      "safety": {
+        "leakedProjects": [],
+        "unauthorizedEffects": []
+      }
+    },
+    "UC-WORKSPACE-CONTEXT-BROKEN-ENTRYPOINT": {
+      "receipts": [
+        {
+          "scenarioId": "UC-WORKSPACE-CONTEXT-BROKEN-ENTRYPOINT",
+          "kind": "mock",
+          "ref": "npx vitest run --reporter=json src/test/workspace-context-failure-honesty.contract.test.ts (cwd=.)"
+        },
+        {
+          "scenarioId": "UC-WORKSPACE-CONTEXT-BROKEN-ENTRYPOINT",
+          "kind": "mock",
+          "ref": "npx vitest run --reporter=json src/test/workspace-context-path-boundary.contract.test.ts (cwd=.)"
+        },
+        {
+          "scenarioId": "UC-WORKSPACE-CONTEXT-BROKEN-ENTRYPOINT",
+          "kind": "native",
+          "ref": "npx vitest run --reporter=json src/test/workspace-context-real-fs.contract.test.ts (cwd=.)"
+        }
+      ],
+      "testCount": 34,
+      "artifacts": [
+        "npx vitest run --reporter=json src/test/workspace-context-failure-honesty.contract.test.ts (cwd=.) → exit 0",
+        "npx vitest run --reporter=json src/test/workspace-context-path-boundary.contract.test.ts (cwd=.) → exit 0",
+        "npx vitest run --reporter=json src/test/workspace-context-real-fs.contract.test.ts (cwd=.) → exit 0"
+      ],
+      "safety": {
+        "leakedProjects": [],
+        "unauthorizedEffects": []
+      }
+    },
+    "UC-HERDR-CONTROL-OBSERVE": {
+      "receipts": [
+        {
+          "scenarioId": "UC-HERDR-CONTROL-OBSERVE",
+          "kind": "mock",
+          "ref": "npx vitest run --reporter=json src/test/herdr-control-resource-schema.contract.test.ts (cwd=.)"
+        },
+        {
+          "scenarioId": "UC-HERDR-CONTROL-OBSERVE",
+          "kind": "mock",
+          "ref": "npx vitest run --reporter=json src/test/herdr-control-no-screen-scrape.contract.test.ts (cwd=.)"
+        },
+        {
+          "scenarioId": "UC-HERDR-CONTROL-OBSERVE",
+          "kind": "native",
+          "ref": "npx vitest run --reporter=json src/test/herdr-control-live.contract.test.ts (cwd=.)"
+        }
+      ],
+      "testCount": 50,
+      "artifacts": [
+        "npx vitest run --reporter=json src/test/herdr-control-resource-schema.contract.test.ts (cwd=.) → exit 0",
+        "npx vitest run --reporter=json src/test/herdr-control-no-screen-scrape.contract.test.ts (cwd=.) → exit 0",
+        "npx vitest run --reporter=json src/test/herdr-control-live.contract.test.ts (cwd=.) → exit 0"
+      ],
+      "safety": {
+        "leakedProjects": [],
+        "unauthorizedEffects": []
+      }
+    },
+    "UC-HERDR-CONTROL-MUTATE": {
+      "receipts": [
+        {
+          "scenarioId": "UC-HERDR-CONTROL-MUTATE",
+          "kind": "mock",
+          "ref": "npx vitest run --reporter=json src/test/herdr-control-mutation.contract.test.ts (cwd=.)"
+        },
+        {
+          "scenarioId": "UC-HERDR-CONTROL-MUTATE",
+          "kind": "mock",
+          "ref": "npx vitest run --reporter=json src/test/herdr-control-idempotency.contract.test.ts (cwd=.)"
+        },
+        {
+          "scenarioId": "UC-HERDR-CONTROL-MUTATE",
+          "kind": "mock",
+          "ref": "npx vitest run --reporter=json src/test/herdr-control-capability-tier.contract.test.ts (cwd=.)"
+        },
+        {
+          "scenarioId": "UC-HERDR-CONTROL-MUTATE",
+          "kind": "native",
+          "ref": "npx vitest run --reporter=json src/test/herdr-control-live.contract.test.ts (cwd=.)"
+        }
+      ],
+      "testCount": 43,
+      "artifacts": [
+        "npx vitest run --reporter=json src/test/herdr-control-mutation.contract.test.ts (cwd=.) → exit 0",
+        "npx vitest run --reporter=json src/test/herdr-control-idempotency.contract.test.ts (cwd=.) → exit 0",
+        "npx vitest run --reporter=json src/test/herdr-control-capability-tier.contract.test.ts (cwd=.) → exit 0",
+        "npx vitest run --reporter=json src/test/herdr-control-live.contract.test.ts (cwd=.) → exit 0"
+      ],
+      "safety": {
+        "leakedProjects": [],
+        "unauthorizedEffects": []
+      }
+    },
+    "UC-HERDR-CONTROL-STALE-REVISION": {
+      "receipts": [
+        {
+          "scenarioId": "UC-HERDR-CONTROL-STALE-REVISION",
+          "kind": "mock",
+          "ref": "npx vitest run --reporter=json src/test/herdr-control-stale-revision.contract.test.ts (cwd=.)"
+        },
+        {
+          "scenarioId": "UC-HERDR-CONTROL-STALE-REVISION",
+          "kind": "native",
+          "ref": "npx vitest run --reporter=json src/test/herdr-control-live.contract.test.ts (cwd=.)"
+        }
+      ],
+      "testCount": 17,
+      "artifacts": [
+        "npx vitest run --reporter=json src/test/herdr-control-stale-revision.contract.test.ts (cwd=.) → exit 0",
+        "npx vitest run --reporter=json src/test/herdr-control-live.contract.test.ts (cwd=.) → exit 0"
+      ],
+      "safety": {
+        "leakedProjects": [],
+        "unauthorizedEffects": []
+      }
+    },
+    "UC-HERDR-CONTROL-RECONNECT": {
+      "receipts": [
+        {
+          "scenarioId": "UC-HERDR-CONTROL-RECONNECT",
+          "kind": "mock",
+          "ref": "npx vitest run --reporter=json src/test/herdr-control-outcome-taxonomy.contract.test.ts (cwd=.)"
+        },
+        {
+          "scenarioId": "UC-HERDR-CONTROL-RECONNECT",
+          "kind": "mock",
+          "ref": "npx vitest run --reporter=json src/test/herdr-control-reconnect-bounds.contract.test.ts (cwd=.)"
+        },
+        {
+          "scenarioId": "UC-HERDR-CONTROL-RECONNECT",
+          "kind": "native",
+          "ref": "npx vitest run --reporter=json src/test/herdr-control-live.contract.test.ts (cwd=.)"
+        }
+      ],
+      "testCount": 27,
+      "artifacts": [
+        "npx vitest run --reporter=json src/test/herdr-control-outcome-taxonomy.contract.test.ts (cwd=.) → exit 0",
+        "npx vitest run --reporter=json src/test/herdr-control-reconnect-bounds.contract.test.ts (cwd=.) → exit 0",
+        "npx vitest run --reporter=json src/test/herdr-control-live.contract.test.ts (cwd=.) → exit 0"
+      ],
+      "safety": {
+        "leakedProjects": [],
+        "unauthorizedEffects": []
+      }
+    },
+    "UC-ENV-TOOL-BROWSE": {
+      "receipts": [
+        {
+          "scenarioId": "UC-ENV-TOOL-BROWSE",
+          "kind": "mock",
+          "ref": "npx vitest run --reporter=json src/test/env-tool-browser.contract.test.ts (cwd=.)"
+        },
+        {
+          "scenarioId": "UC-ENV-TOOL-BROWSE",
+          "kind": "browser",
+          "ref": "npx playwright test e2e/env-tool-browser.spec.ts (cwd=packages/shell)"
+        },
+        {
+          "scenarioId": "UC-ENV-TOOL-BROWSE",
+          "kind": "browser",
+          "ref": "npx playwright test e2e/env-tool-injection.spec.ts (cwd=packages/shell)"
+        },
+        {
+          "scenarioId": "UC-ENV-TOOL-BROWSE",
+          "kind": "native",
+          "ref": "npx wdio run e2e-tauri/wdio.conf.ts --spec e2e-tauri/specs/env-tool-browser-native.spec.ts (cwd=packages/shell)"
+        }
+      ],
+      "testCount": 29,
+      "artifacts": [
+        "npx vitest run --reporter=json src/test/env-tool-browser.contract.test.ts (cwd=.) → exit 0",
+        "npx playwright test e2e/env-tool-browser.spec.ts (cwd=packages/shell) → exit 0",
+        "npx playwright test e2e/env-tool-injection.spec.ts (cwd=packages/shell) → exit 0",
+        "npx wdio run e2e-tauri/wdio.conf.ts --spec e2e-tauri/specs/env-tool-browser-native.spec.ts (cwd=packages/shell) → exit 0"
+      ],
+      "safety": {
+        "leakedProjects": [],
+        "unauthorizedEffects": []
+      }
+    },
+    "UC-ENV-TOOL-TERMINAL-EXEC": {
+      "receipts": [
+        {
+          "scenarioId": "UC-ENV-TOOL-TERMINAL-EXEC",
+          "kind": "mock",
+          "ref": "npx vitest run --reporter=json src/test/env-tool-terminal.contract.test.ts (cwd=.)"
+        },
+        {
+          "scenarioId": "UC-ENV-TOOL-TERMINAL-EXEC",
+          "kind": "mock",
+          "ref": "npx vitest run --reporter=json src/test/env-tool-workspace-escape.contract.test.ts (cwd=.)"
+        },
+        {
+          "scenarioId": "UC-ENV-TOOL-TERMINAL-EXEC",
+          "kind": "native",
+          "ref": "npx vitest run --reporter=json src/test/env-tool-live.contract.test.ts (cwd=.)"
+        }
+      ],
+      "testCount": 35,
+      "artifacts": [
+        "npx vitest run --reporter=json src/test/env-tool-terminal.contract.test.ts (cwd=.) → exit 0",
+        "npx vitest run --reporter=json src/test/env-tool-workspace-escape.contract.test.ts (cwd=.) → exit 0",
+        "npx vitest run --reporter=json src/test/env-tool-live.contract.test.ts (cwd=.) → exit 0"
+      ],
+      "safety": {
+        "leakedProjects": [],
+        "unauthorizedEffects": []
+      }
+    },
+    "UC-ENV-TOOL-CANCEL": {
+      "receipts": [
+        {
+          "scenarioId": "UC-ENV-TOOL-CANCEL",
+          "kind": "mock",
+          "ref": "npx vitest run --reporter=json src/test/env-tool-cancel-timeout.contract.test.ts (cwd=.)"
+        },
+        {
+          "scenarioId": "UC-ENV-TOOL-CANCEL",
+          "kind": "native",
+          "ref": "npx vitest run --reporter=json src/test/env-tool-live.contract.test.ts (cwd=.)"
+        },
+        {
+          "scenarioId": "UC-ENV-TOOL-CANCEL",
+          "kind": "browser",
+          "ref": "npx playwright test e2e/env-tool-browser.spec.ts (cwd=packages/shell)"
+        }
+      ],
+      "testCount": 24,
+      "artifacts": [
+        "npx vitest run --reporter=json src/test/env-tool-cancel-timeout.contract.test.ts (cwd=.) → exit 0",
+        "npx vitest run --reporter=json src/test/env-tool-live.contract.test.ts (cwd=.) → exit 0",
+        "npx playwright test e2e/env-tool-browser.spec.ts (cwd=packages/shell) → exit 0"
+      ],
+      "safety": {
+        "leakedProjects": [],
+        "unauthorizedEffects": []
+      }
+    },
+    "UC-ENV-TOOL-BOUNDARY-DENY": {
+      "receipts": [
+        {
+          "scenarioId": "UC-ENV-TOOL-BOUNDARY-DENY",
+          "kind": "mock",
+          "ref": "npx vitest run --reporter=json src/test/env-tool-approval-matrix.contract.test.ts (cwd=.)"
+        },
+        {
+          "scenarioId": "UC-ENV-TOOL-BOUNDARY-DENY",
+          "kind": "native",
+          "ref": "npx vitest run --reporter=json src/test/env-tool-live.contract.test.ts (cwd=.)"
+        }
+      ],
+      "testCount": 24,
+      "artifacts": [
+        "npx vitest run --reporter=json src/test/env-tool-approval-matrix.contract.test.ts (cwd=.) → exit 0",
+        "npx vitest run --reporter=json src/test/env-tool-live.contract.test.ts (cwd=.) → exit 0"
+      ],
+      "safety": {
+        "leakedProjects": [],
+        "unauthorizedEffects": []
+      }
+    },
+    "UC-ORCHESTRATION-CLASSIFY": {
+      "receipts": [
+        {
+          "scenarioId": "UC-ORCHESTRATION-CLASSIFY",
+          "kind": "mock",
+          "ref": "npx vitest run --reporter=json src/test/orchestration-classify.contract.test.ts (cwd=.)"
+        },
+        {
+          "scenarioId": "UC-ORCHESTRATION-CLASSIFY",
+          "kind": "worker",
+          "ref": "npx vitest run --reporter=json src/test/orchestration-live.contract.test.ts (cwd=.)"
+        },
+        {
+          "scenarioId": "UC-ORCHESTRATION-CLASSIFY",
+          "kind": "native",
+          "ref": "npx vitest run --reporter=json src/test/orchestration-live.contract.test.ts (cwd=.)"
+        }
+      ],
+      "testCount": 35,
+      "artifacts": [
+        "npx vitest run --reporter=json src/test/orchestration-classify.contract.test.ts (cwd=.) → exit 0",
+        "npx vitest run --reporter=json src/test/orchestration-live.contract.test.ts (cwd=.) → exit 0",
+        "npx vitest run --reporter=json src/test/orchestration-live.contract.test.ts (cwd=.) → exit 0"
+      ],
+      "safety": {
+        "leakedProjects": [],
+        "unauthorizedEffects": []
+      }
+    },
+    "UC-ORCHESTRATION-ISSUE-LEAD": {
+      "receipts": [
+        {
+          "scenarioId": "UC-ORCHESTRATION-ISSUE-LEAD",
+          "kind": "mock",
+          "ref": "npx vitest run --reporter=json src/test/orchestration-issue-lead.contract.test.ts (cwd=.)"
+        },
+        {
+          "scenarioId": "UC-ORCHESTRATION-ISSUE-LEAD",
+          "kind": "mock",
+          "ref": "npx vitest run --reporter=json src/test/orchestration-ownership-conflict.contract.test.ts (cwd=.)"
+        },
+        {
+          "scenarioId": "UC-ORCHESTRATION-ISSUE-LEAD",
+          "kind": "mock",
+          "ref": "npx vitest run --reporter=json src/test/orchestration-no-self-completion.contract.test.ts (cwd=.)"
+        },
+        {
+          "scenarioId": "UC-ORCHESTRATION-ISSUE-LEAD",
+          "kind": "worker",
+          "ref": "npx vitest run --reporter=json src/test/orchestration-live.contract.test.ts (cwd=.)"
+        },
+        {
+          "scenarioId": "UC-ORCHESTRATION-ISSUE-LEAD",
+          "kind": "native",
+          "ref": "npx vitest run --reporter=json src/test/orchestration-live.contract.test.ts (cwd=.)"
+        }
+      ],
+      "testCount": 56,
+      "artifacts": [
+        "npx vitest run --reporter=json src/test/orchestration-issue-lead.contract.test.ts (cwd=.) → exit 0",
+        "npx vitest run --reporter=json src/test/orchestration-ownership-conflict.contract.test.ts (cwd=.) → exit 0",
+        "npx vitest run --reporter=json src/test/orchestration-no-self-completion.contract.test.ts (cwd=.) → exit 0",
+        "npx vitest run --reporter=json src/test/orchestration-live.contract.test.ts (cwd=.) → exit 0",
+        "npx vitest run --reporter=json src/test/orchestration-live.contract.test.ts (cwd=.) → exit 0"
+      ],
+      "safety": {
+        "leakedProjects": [],
+        "unauthorizedEffects": []
+      }
+    },
+    "UC-ORCHESTRATION-WORKER-REPLACE": {
+      "receipts": [
+        {
+          "scenarioId": "UC-ORCHESTRATION-WORKER-REPLACE",
+          "kind": "mock",
+          "ref": "npx vitest run --reporter=json src/test/orchestration-worker-adapter.contract.test.ts (cwd=.)"
+        },
+        {
+          "scenarioId": "UC-ORCHESTRATION-WORKER-REPLACE",
+          "kind": "mock",
+          "ref": "npx vitest run --reporter=json src/test/orchestration-replace-preserve.contract.test.ts (cwd=.)"
+        },
+        {
+          "scenarioId": "UC-ORCHESTRATION-WORKER-REPLACE",
+          "kind": "worker",
+          "ref": "npx vitest run --reporter=json src/test/orchestration-live.contract.test.ts (cwd=.)"
+        },
+        {
+          "scenarioId": "UC-ORCHESTRATION-WORKER-REPLACE",
+          "kind": "native",
+          "ref": "npx vitest run --reporter=json src/test/orchestration-live.contract.test.ts (cwd=.)"
+        }
+      ],
+      "testCount": 45,
+      "artifacts": [
+        "npx vitest run --reporter=json src/test/orchestration-worker-adapter.contract.test.ts (cwd=.) → exit 0",
+        "npx vitest run --reporter=json src/test/orchestration-replace-preserve.contract.test.ts (cwd=.) → exit 0",
+        "npx vitest run --reporter=json src/test/orchestration-live.contract.test.ts (cwd=.) → exit 0",
+        "npx vitest run --reporter=json src/test/orchestration-live.contract.test.ts (cwd=.) → exit 0"
+      ],
+      "safety": {
+        "leakedProjects": [],
+        "unauthorizedEffects": []
+      }
+    },
+    "UC-ORCHESTRATION-RESTART-RESUME": {
+      "receipts": [
+        {
+          "scenarioId": "UC-ORCHESTRATION-RESTART-RESUME",
+          "kind": "native",
+          "ref": "npx wdio run e2e-tauri/wdio.conf.ts --spec e2e-tauri/specs/orchestration-restart.spec.ts (cwd=packages/shell)"
+        },
+        {
+          "scenarioId": "UC-ORCHESTRATION-RESTART-RESUME",
+          "kind": "worker",
+          "ref": "npx vitest run --reporter=json src/test/orchestration-live.contract.test.ts (cwd=.)"
+        },
+        {
+          "scenarioId": "UC-ORCHESTRATION-RESTART-RESUME",
+          "kind": "native",
+          "ref": "npx vitest run --reporter=json src/test/orchestration-live.contract.test.ts (cwd=.)"
+        }
+      ],
+      "testCount": 28,
+      "artifacts": [
+        "npx wdio run e2e-tauri/wdio.conf.ts --spec e2e-tauri/specs/orchestration-restart.spec.ts (cwd=packages/shell) → exit 0",
+        "npx vitest run --reporter=json src/test/orchestration-live.contract.test.ts (cwd=.) → exit 0",
+        "npx vitest run --reporter=json src/test/orchestration-live.contract.test.ts (cwd=.) → exit 0"
+      ],
+      "safety": {
+        "leakedProjects": [],
+        "unauthorizedEffects": []
+      }
+    },
+    "UC-CHANNEL-SESSION-HANDOFF": {
+      "receipts": [
+        {
+          "scenarioId": "UC-CHANNEL-SESSION-HANDOFF",
+          "kind": "mock",
+          "ref": "npx vitest run --reporter=json src/test/channel-session-identity.contract.test.ts (cwd=.)"
+        },
+        {
+          "scenarioId": "UC-CHANNEL-SESSION-HANDOFF",
+          "kind": "native",
+          "ref": "npx wdio run e2e-tauri/wdio.conf.ts --spec e2e-tauri/specs/channel-reboot.spec.ts (cwd=packages/shell)"
+        }
+      ],
+      "testCount": 19,
+      "artifacts": [
+        "npx vitest run --reporter=json src/test/channel-session-identity.contract.test.ts (cwd=.) → exit 0",
+        "npx wdio run e2e-tauri/wdio.conf.ts --spec e2e-tauri/specs/channel-reboot.spec.ts (cwd=packages/shell) → exit 0"
+      ],
+      "safety": {
+        "leakedProjects": [],
+        "unauthorizedEffects": []
+      }
+    },
+    "UC-CHANNEL-SESSION-DUPLICATE-DELIVERY": {
+      "receipts": [
+        {
+          "scenarioId": "UC-CHANNEL-SESSION-DUPLICATE-DELIVERY",
+          "kind": "mock",
+          "ref": "npx vitest run --reporter=json src/test/channel-session-dedupe.contract.test.ts (cwd=.)"
+        },
+        {
+          "scenarioId": "UC-CHANNEL-SESSION-DUPLICATE-DELIVERY",
+          "kind": "mock",
+          "ref": "npx vitest run --reporter=json src/test/channel-session-out-of-order.contract.test.ts (cwd=.)"
+        },
+        {
+          "scenarioId": "UC-CHANNEL-SESSION-DUPLICATE-DELIVERY",
+          "kind": "native",
+          "ref": "npx wdio run e2e-tauri/wdio.conf.ts --spec e2e-tauri/specs/channel-reboot.spec.ts (cwd=packages/shell)"
+        }
+      ],
+      "testCount": 22,
+      "artifacts": [
+        "npx vitest run --reporter=json src/test/channel-session-dedupe.contract.test.ts (cwd=.) → exit 0",
+        "npx vitest run --reporter=json src/test/channel-session-out-of-order.contract.test.ts (cwd=.) → exit 0",
+        "npx wdio run e2e-tauri/wdio.conf.ts --spec e2e-tauri/specs/channel-reboot.spec.ts (cwd=packages/shell) → exit 0"
+      ],
+      "safety": {
+        "leakedProjects": [],
+        "unauthorizedEffects": []
+      }
+    },
+    "UC-CHANNEL-SESSION-RECONNECT": {
+      "receipts": [
+        {
+          "scenarioId": "UC-CHANNEL-SESSION-RECONNECT",
+          "kind": "mock",
+          "ref": "npx vitest run --reporter=json src/test/channel-session-resume-refs.contract.test.ts (cwd=.)"
+        },
+        {
+          "scenarioId": "UC-CHANNEL-SESSION-RECONNECT",
+          "kind": "native",
+          "ref": "npx wdio run e2e-tauri/wdio.conf.ts --spec e2e-tauri/specs/channel-reboot.spec.ts (cwd=packages/shell)"
+        }
+      ],
+      "testCount": 17,
+      "artifacts": [
+        "npx vitest run --reporter=json src/test/channel-session-resume-refs.contract.test.ts (cwd=.) → exit 0",
+        "npx wdio run e2e-tauri/wdio.conf.ts --spec e2e-tauri/specs/channel-reboot.spec.ts (cwd=packages/shell) → exit 0"
+      ],
+      "safety": {
+        "leakedProjects": [],
+        "unauthorizedEffects": []
+      }
+    },
+    "UC-CHANNEL-SESSION-DISCLOSURE-DENY": {
+      "receipts": [
+        {
+          "scenarioId": "UC-CHANNEL-SESSION-DISCLOSURE-DENY",
+          "kind": "mock",
+          "ref": "npx vitest run --reporter=json src/test/channel-session-disclosure-policy.contract.test.ts (cwd=.)"
+        },
+        {
+          "scenarioId": "UC-CHANNEL-SESSION-DISCLOSURE-DENY",
+          "kind": "native",
+          "ref": "npx wdio run e2e-tauri/wdio.conf.ts --spec e2e-tauri/specs/channel-reboot.spec.ts (cwd=packages/shell)"
+        }
+      ],
+      "testCount": 17,
+      "artifacts": [
+        "npx vitest run --reporter=json src/test/channel-session-disclosure-policy.contract.test.ts (cwd=.) → exit 0",
+        "npx wdio run e2e-tauri/wdio.conf.ts --spec e2e-tauri/specs/channel-reboot.spec.ts (cwd=packages/shell) → exit 0"
+      ],
+      "safety": {
+        "leakedProjects": [],
+        "unauthorizedEffects": []
+      }
+    },
+    "UC-AGENT-BENCH-RUN": {
+      "receipts": [
+        {
+          "scenarioId": "UC-AGENT-BENCH-RUN",
+          "kind": "mock",
+          "ref": "npx vitest run --reporter=json src/test/agent-bench-runner.contract.test.ts (cwd=.)"
+        },
+        {
+          "scenarioId": "UC-AGENT-BENCH-RUN",
+          "kind": "mock",
+          "ref": "npx vitest run --reporter=json src/test/agent-bench-fixtures.contract.test.ts (cwd=.)"
+        },
+        {
+          "scenarioId": "UC-AGENT-BENCH-RUN",
+          "kind": "mock",
+          "ref": "npx vitest run --reporter=json src/test/agent-bench-scenario-source.contract.test.ts (cwd=.)"
+        }
+      ],
+      "testCount": 36,
+      "artifacts": [
+        "npx vitest run --reporter=json src/test/agent-bench-runner.contract.test.ts (cwd=.) → exit 0",
+        "npx vitest run --reporter=json src/test/agent-bench-fixtures.contract.test.ts (cwd=.) → exit 0",
+        "npx vitest run --reporter=json src/test/agent-bench-scenario-source.contract.test.ts (cwd=.) → exit 0"
+      ],
+      "safety": {
+        "leakedProjects": [],
+        "unauthorizedEffects": []
+      }
+    },
+    "UC-AGENT-BENCH-FALSE-COMPLETION": {
+      "receipts": [
+        {
+          "scenarioId": "UC-AGENT-BENCH-FALSE-COMPLETION",
+          "kind": "mock",
+          "ref": "npx vitest run --reporter=json src/test/agent-bench-false-completion.contract.test.ts (cwd=.)"
+        }
+      ],
+      "testCount": 14,
+      "artifacts": [
+        "npx vitest run --reporter=json src/test/agent-bench-false-completion.contract.test.ts (cwd=.) → exit 0"
+      ],
+      "safety": {
+        "leakedProjects": [],
+        "unauthorizedEffects": []
+      }
+    },
+    "UC-AGENT-BENCH-REPORT": {
+      "receipts": [
+        {
+          "scenarioId": "UC-AGENT-BENCH-REPORT",
+          "kind": "mock",
+          "ref": "npx vitest run --reporter=json src/test/agent-bench-report.contract.test.ts (cwd=.)"
+        }
+      ],
+      "testCount": 14,
+      "artifacts": [
+        "npx vitest run --reporter=json src/test/agent-bench-report.contract.test.ts (cwd=.) → exit 0"
+      ],
+      "safety": {
+        "leakedProjects": [],
+        "unauthorizedEffects": []
+      }
+    },
+    "UC-ENV-SURFACE-OBSERVE": {
+      "receipts": [
+        {
+          "scenarioId": "UC-ENV-SURFACE-OBSERVE",
+          "kind": "mock",
+          "ref": "npx vitest run --reporter=json src/test/environment-intent.contract.test.ts (cwd=.)"
+        },
+        {
+          "scenarioId": "UC-ENV-SURFACE-OBSERVE",
+          "kind": "mock",
+          "ref": "npx vitest run --reporter=json src/test/herdr-environment.contract.test.ts (cwd=.)"
+        },
+        {
+          "scenarioId": "UC-ENV-SURFACE-OBSERVE",
+          "kind": "native",
+          "ref": "npx vitest run --reporter=json src/test/environment-live-herdr.contract.test.ts (cwd=.)"
+        }
+      ],
+      "testCount": 68,
+      "artifacts": [
+        "npx vitest run --reporter=json src/test/environment-intent.contract.test.ts (cwd=.) → exit 0",
+        "npx vitest run --reporter=json src/test/herdr-environment.contract.test.ts (cwd=.) → exit 0",
+        "npx vitest run --reporter=json src/test/environment-live-herdr.contract.test.ts (cwd=.) → exit 0"
+      ],
+      "safety": {
+        "leakedProjects": [],
+        "unauthorizedEffects": []
+      }
+    },
+    "UC-ENV-SURFACE-ACT": {
+      "receipts": [
+        {
+          "scenarioId": "UC-ENV-SURFACE-ACT",
+          "kind": "mock",
+          "ref": "npx vitest run --reporter=json src/test/environment-intent-translation.contract.test.ts (cwd=.)"
+        },
+        {
+          "scenarioId": "UC-ENV-SURFACE-ACT",
+          "kind": "native",
+          "ref": "npx vitest run --reporter=json src/test/environment-live-act.contract.test.ts (cwd=.)"
+        }
+      ],
+      "testCount": 30,
+      "artifacts": [
+        "npx vitest run --reporter=json src/test/environment-intent-translation.contract.test.ts (cwd=.) → exit 0",
+        "npx vitest run --reporter=json src/test/environment-live-act.contract.test.ts (cwd=.) → exit 0"
+      ],
+      "safety": {
+        "leakedProjects": [],
+        "unauthorizedEffects": []
+      }
+    },
+    "UC-ENV-SURFACE-DENY": {
+      "receipts": [
+        {
+          "scenarioId": "UC-ENV-SURFACE-DENY",
+          "kind": "mock",
+          "ref": "npx vitest run --reporter=json src/test/environment-intent.contract.test.ts (cwd=.)"
+        },
+        {
+          "scenarioId": "UC-ENV-SURFACE-DENY",
+          "kind": "native",
+          "ref": "npx vitest run --reporter=json src/test/environment-live-act.contract.test.ts (cwd=.)"
+        }
+      ],
+      "testCount": 46,
+      "artifacts": [
+        "npx vitest run --reporter=json src/test/environment-intent.contract.test.ts (cwd=.) → exit 0",
+        "npx vitest run --reporter=json src/test/environment-live-act.contract.test.ts (cwd=.) → exit 0"
+      ],
+      "safety": {
+        "leakedProjects": [],
+        "unauthorizedEffects": []
+      }
+    },
+    "UC-ENV-SURFACE-DATA": {
+      "receipts": [
+        {
+          "scenarioId": "UC-ENV-SURFACE-DATA",
+          "kind": "mock",
+          "ref": "npx vitest run --reporter=json src/test/environment-intent.contract.test.ts (cwd=.)"
+        },
+        {
+          "scenarioId": "UC-ENV-SURFACE-DATA",
+          "kind": "mock",
+          "ref": "npx vitest run --reporter=json src/test/herdr-environment.contract.test.ts (cwd=.)"
+        },
+        {
+          "scenarioId": "UC-ENV-SURFACE-DATA",
+          "kind": "native",
+          "ref": "npx vitest run --reporter=json src/test/environment-live-act.contract.test.ts (cwd=.)"
+        }
+      ],
+      "testCount": 68,
+      "artifacts": [
+        "npx vitest run --reporter=json src/test/environment-intent.contract.test.ts (cwd=.) → exit 0",
+        "npx vitest run --reporter=json src/test/herdr-environment.contract.test.ts (cwd=.) → exit 0",
+        "npx vitest run --reporter=json src/test/environment-live-act.contract.test.ts (cwd=.) → exit 0"
+      ],
+      "safety": {
+        "leakedProjects": [],
+        "unauthorizedEffects": []
+      }
+    },
+    "UC-ENV-DISPATCH-STRUCTURED": {
+      "receipts": [
+        {
+          "scenarioId": "UC-ENV-DISPATCH-STRUCTURED",
+          "kind": "mock",
+          "ref": "npx vitest run --reporter=json src/test/environment-dispatch.contract.test.ts (cwd=.)"
+        },
+        {
+          "scenarioId": "UC-ENV-DISPATCH-STRUCTURED",
+          "kind": "native",
+          "ref": "npx wdio run e2e-tauri/wdio.conf.ts --spec e2e-tauri/specs/environment-dispatch.spec.ts (cwd=packages/shell)"
+        }
+      ],
+      "testCount": 42,
+      "artifacts": [
+        "npx vitest run --reporter=json src/test/environment-dispatch.contract.test.ts (cwd=.) → exit 0",
+        "npx wdio run e2e-tauri/wdio.conf.ts --spec e2e-tauri/specs/environment-dispatch.spec.ts (cwd=packages/shell) → exit 0"
+      ],
+      "safety": {
+        "leakedProjects": [],
+        "unauthorizedEffects": []
+      }
+    },
+    "UC-ENV-DISPATCH-TERMINAL": {
+      "receipts": [
+        {
+          "scenarioId": "UC-ENV-DISPATCH-TERMINAL",
+          "kind": "mock",
+          "ref": "npx vitest run --reporter=json src/test/environment-dispatch.contract.test.ts (cwd=.)"
+        },
+        {
+          "scenarioId": "UC-ENV-DISPATCH-TERMINAL",
+          "kind": "native",
+          "ref": "npx wdio run e2e-tauri/wdio.conf.ts --spec e2e-tauri/specs/environment-dispatch.spec.ts (cwd=packages/shell)"
+        }
+      ],
+      "testCount": 42,
+      "artifacts": [
+        "npx vitest run --reporter=json src/test/environment-dispatch.contract.test.ts (cwd=.) → exit 0",
+        "npx wdio run e2e-tauri/wdio.conf.ts --spec e2e-tauri/specs/environment-dispatch.spec.ts (cwd=packages/shell) → exit 0"
+      ],
+      "safety": {
+        "leakedProjects": [],
+        "unauthorizedEffects": []
+      }
+    },
+    "UC-ENV-DISPATCH-REFUSE": {
+      "receipts": [
+        {
+          "scenarioId": "UC-ENV-DISPATCH-REFUSE",
+          "kind": "mock",
+          "ref": "npx vitest run --reporter=json src/test/environment-dispatch.contract.test.ts (cwd=.)"
+        },
+        {
+          "scenarioId": "UC-ENV-DISPATCH-REFUSE",
+          "kind": "native",
+          "ref": "npx wdio run e2e-tauri/wdio.conf.ts --spec e2e-tauri/specs/environment-dispatch.spec.ts (cwd=packages/shell)"
+        }
+      ],
+      "testCount": 42,
+      "artifacts": [
+        "npx vitest run --reporter=json src/test/environment-dispatch.contract.test.ts (cwd=.) → exit 0",
+        "npx wdio run e2e-tauri/wdio.conf.ts --spec e2e-tauri/specs/environment-dispatch.spec.ts (cwd=packages/shell) → exit 0"
+      ],
+      "safety": {
+        "leakedProjects": [],
+        "unauthorizedEffects": []
+      }
+    },
+    "UC-WIRE-UNION-DRIFT": {
+      "receipts": [
+        {
+          "scenarioId": "UC-WIRE-UNION-DRIFT",
+          "kind": "mock",
+          "ref": "npx vitest run --reporter=json src/test/wire-union-drift.contract.test.ts (cwd=.)"
+        }
+      ],
+      "testCount": 10,
+      "artifacts": [
+        "npx vitest run --reporter=json src/test/wire-union-drift.contract.test.ts (cwd=.) → exit 0"
+      ],
+      "safety": {
+        "leakedProjects": [],
+        "unauthorizedEffects": []
+      }
+    },
+    "UC-ENV-LIVE-OBSERVE": {
+      "receipts": [
+        {
+          "scenarioId": "UC-ENV-LIVE-OBSERVE",
+          "kind": "mock",
+          "ref": "npx vitest run --reporter=json src/test/environment-live-wiring.contract.test.ts (cwd=.)"
+        },
+        {
+          "scenarioId": "UC-ENV-LIVE-OBSERVE",
+          "kind": "mock",
+          "ref": "npx vitest run --reporter=json src/lib/__tests__/environment-skill.test.ts (cwd=packages/shell)"
+        },
+        {
+          "scenarioId": "UC-ENV-LIVE-OBSERVE",
+          "kind": "native",
+          "ref": "npx vitest run --reporter=json src/test/environment-live-herdr.contract.test.ts (cwd=.)"
+        }
+      ],
+      "testCount": 41,
+      "artifacts": [
+        "npx vitest run --reporter=json src/test/environment-live-wiring.contract.test.ts (cwd=.) → exit 0",
+        "npx vitest run --reporter=json src/lib/__tests__/environment-skill.test.ts (cwd=packages/shell) → exit 0",
+        "npx vitest run --reporter=json src/test/environment-live-herdr.contract.test.ts (cwd=.) → exit 0"
+      ],
+      "safety": {
+        "leakedProjects": [],
+        "unauthorizedEffects": []
+      }
+    },
+    "UC-ENV-LIVE-ACT": {
+      "receipts": [
+        {
+          "scenarioId": "UC-ENV-LIVE-ACT",
+          "kind": "mock",
+          "ref": "npx vitest run --reporter=json src/lib/__tests__/environment-skill.test.ts (cwd=packages/shell)"
+        },
+        {
+          "scenarioId": "UC-ENV-LIVE-ACT",
+          "kind": "native",
+          "ref": "npx vitest run --reporter=json src/test/environment-live-act.contract.test.ts (cwd=.)"
+        }
+      ],
+      "testCount": 39,
+      "artifacts": [
+        "npx vitest run --reporter=json src/lib/__tests__/environment-skill.test.ts (cwd=packages/shell) → exit 0",
+        "npx wdio run e2e-tauri/wdio.conf.ts --spec e2e-tauri/specs/environment-dispatch.spec.ts (cwd=packages/shell) → exit 0",
+        "npx wdio run e2e-tauri/wdio.conf.ts --spec e2e-tauri/specs/environment-dispatch.spec.ts (cwd=packages/shell) → 이 시나리오를 확인하는 케이스가 돌지 않음: FR-ENV-LIVE.3 / FR-ENV-LIVE.4 / FR-ENV-LIVE.5 / UC-ENV-LIVE-ACT",
+        "npx vitest run --reporter=json src/test/environment-live-act.contract.test.ts (cwd=.) → exit 0"
+      ],
+      "safety": {
+        "leakedProjects": [],
+        "unauthorizedEffects": []
+      }
+    },
+    "UC-ENV-STICKY": {
+      "receipts": [
+        {
+          "scenarioId": "UC-ENV-STICKY",
+          "kind": "mock",
+          "ref": "npx vitest run --reporter=json src/test/environment-live-wiring.contract.test.ts (cwd=.)"
+        }
+      ],
+      "testCount": 18,
+      "artifacts": [
+        "npx vitest run --reporter=json src/test/environment-live-wiring.contract.test.ts (cwd=.) → exit 0"
+      ],
+      "safety": {
+        "leakedProjects": [],
+        "unauthorizedEffects": []
+      }
+    },
+    "UC-ORCHESTRATION-CODING-PROVIDER": {
+      "receipts": [],
+      "testCount": 0,
+      "artifacts": [],
+      "safety": {
+        "leakedProjects": [],
+        "unauthorizedEffects": []
+      }
+    }
+  }
+}

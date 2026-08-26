@@ -74,7 +74,7 @@ function writeAttestationSync(touched: readonly string[]): void {
 
 const SPEC_ID = "packages/shell/e2e-tauri/specs/environment-dispatch.spec.ts";
 
-describe("환경 호출 전달 — Rust 명령 경계 (#502) [UC-ENV-LIVE-ACT]", () => {
+describe("환경 호출 전달 — Rust 명령 경계 (#502) [UC-ENV-LIVE-ACT FR-ENV-LIVE.4 FR-ENV-LIVE.5] (FR-ENV-LIVE.3 FR-ENV-LIVE.4 FR-ENV-LIVE.5)", () => {
 	before(async () => {
 		// 앱이 창을 여럿 열면 wdio 컨텍스트가 빈 쪽에 붙어 있을 수 있다.
 		// 그 상태에서는 origin 이 null 이라 Tauri IPC 가 전부 거절한다(2026-08-26 실측).

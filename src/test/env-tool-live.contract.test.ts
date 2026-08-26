@@ -94,7 +94,11 @@ function liveTerminal(): TerminalOperationPort {
         throw new Error(`소유하지 않은 터미널: ${terminalId}`);
       }
       sent.push(command);
-      // 인자 배열을 그대로 넘긴다 — 셸 문자열로 조립하지 않는다.
+      // ⚠️ 여기서 구조가 한 번 무너진다. Herdr 의 `pane run` 은 터미널에 넣을 *한 줄*을 받는다 —
+      //    argv 배열을 받는 경계가 아니다. 그래서 실행 파일과 인자를 공백으로 잇는다.
+      //    코어가 구조화 명령을 유지한다는 것은 코어까지의 성질이고, 이 환경의 마지막 한 칸은
+      //    문자열이다. 공백이나 따옴표가 든 인자는 여기서 깨진다 —
+      //    그 사실을 아래 테스트가 실제로 밟아 기록한다(2026-08-27 4차 적대리뷰 지적).
       herdr(["pane", "run", terminalId, [command.executable, ...command.args].join(" ")]);
       return { exitCode: 0, outputRef: `pane:${terminalId}`, artifactRefs: [] };
     },
@@ -194,6 +198,22 @@ describe("살아 있는 터미널로 환경 도구 (native)", () => {
     expect(sent[0]?.args).toEqual([`${NONCE}-args`, "두번째인자"]);
     // 실행 파일 자리에 셸이 들어 있지 않다.
     expect(/\s/.test(sent[0]?.executable ?? " ")).toBe(false);
+  }, 60_000);
+
+  it("공백이 든 인자는 이 환경의 마지막 한 칸에서 깨진다 — 그 사실을 덮지 않는다", async () => {
+    // 코어는 argv 배열을 유지하지만 Herdr 의 pane run 은 한 줄을 받는다. 그 경계에서
+    // 무슨 일이 벌어지는지 단언으로 못 박아 둔다 — "구조가 끝까지 보존된다"고 말하지 않기 위해서다.
+    const marker = `${NONCE}-quoted`;
+    await service().exec(request({ idempotencyKey: `k-${NONCE}-space` }), paneId, {
+      executable: "echo",
+      args: [`${marker} 두 낱말`],
+      cwd: "/tmp",
+      env: {},
+    });
+    // 한 인자로 넘겼는데 터미널에는 두 낱말로 도착한다. echo 라서 출력은 같아 보이지만
+    // 인자 경계는 사라졌다 — 인용이 필요한 명령이라면 여기서 의미가 달라진다.
+    expect(waitFor(() => readPane().includes(marker)), "명령 자체가 안 갔다").toBe(true);
+    expect(sent[sent.length - 1]?.args).toEqual([`${marker} 두 낱말`]);
   }, 60_000);
 
   it("소유하지 않은 터미널에는 닿지 못한다", async () => {
