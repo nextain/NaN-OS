@@ -8,6 +8,11 @@
 //   2) 확인 여부 — 실제 환경에서 확인하지 못한 대응은 확인했다고 말하지 않는다.
 import type { EnvironmentIntent, IntentRejection } from "./environment-intent.js";
 
+// ⚠️ 이름은 셸이 실제로 부르는 CLI 하위명령을 따른다. 소켓 API 메서드 이름과 일치하지 않을 수 있다.
+//    예: API 에는 `pane.focus{pane_id}` 절대 포커스가 있지만 CLI `herdr pane focus` 는 방향 이동뿐이라
+//    셸에서 도달할 수 없다. 반대로 `pane run` 은 CLI 편의 명령이고 API 메서드 목록에는 없다.
+//    도달 가능한 것만 낸다 — 스키마에 있다고 부를 수 있는 것이 아니다(2026-08-26 실측).
+
 /** 손잡이 하나가 실제로 무엇을 가리키는가. 셸만 안다 — 뇌에 나가지 않는다 (FR-ENV-SURFACE.9). */
 export interface SurfaceBinding {
   readonly token: string;
@@ -80,7 +85,8 @@ export function translate(
 
   switch (intent.kind) {
     case "focus":
-      // 에이전트가 붙은 표면은 에이전트 대상으로, 아니면 표면 자체로 포커스한다.
+      // 에이전트가 붙은 표면만 포커스할 수 있다. 일반 터미널의 절대 포커스는 CLI 에 없다
+      // (`herdr pane focus` 는 --direction 필수). API 에는 있으나 셸이 닿는 경로가 아니다.
       return binding.agentTarget
         ? {
             ok: true,
@@ -93,14 +99,13 @@ export function translate(
             },
           }
         : {
-            ok: true,
-            call: {
-              method: "pane.focus",
-              params: { pane_id: binding.surfaceId },
-              delivery: "structured",
-              verified: true,
-              quotingOwnedByCaller: false,
-            },
+            ok: false,
+            rejections: [
+              {
+                code: "not-permitted",
+                detail: "에이전트가 없는 표면의 절대 포커스는 이 환경에서 도달할 수 없다 (CLI 는 방향 이동만 제공)",
+              },
+            ],
           };
 
     case "interrupt":
@@ -132,8 +137,10 @@ export function translate(
         : {
             ok: true,
             call: {
-              method: "pane.send_text",
-              params: { pane_id: binding.surfaceId, text: intent.request },
+              // `pane run` 은 텍스트와 Enter 를 한 번에 보낸다 — 실행이라는 의도에 맞는 것은 이쪽이다.
+              // send_text 만 보내면 줄이 입력만 되고 실행되지 않는다.
+              method: "pane.run",
+              params: { pane_id: binding.surfaceId, command: intent.request },
               delivery: "terminal-input",
               verified: true,
               quotingOwnedByCaller: true,

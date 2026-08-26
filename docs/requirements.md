@@ -980,3 +980,22 @@ fenced code는 언어·복사·접기·워크스페이스 전환을 제공하고
 | **FR-ENV-SURFACE.7** | 의도를 환경 호출로 번역하는 것은 셸이다. 뇌는 번역 결과를 모른다. 표면 종류에 따라 실행 경로가 갈리며(에이전트가 있는 표면과 일반 터미널), 번역할 수 없는 의도는 지어내지 않고 정직하게 거절한다. | UC-ENV-SURFACE-ACT | `environment-intent-translation.contract.test.ts` 분기·미지원 거절 | Pending |
 | **FR-ENV-SURFACE.8** | 실행 의도가 구조화된 인자가 아니라 터미널 입력으로 전달되는 경우, 그 사실과 인용 책임이 번역 결과에 명시된다. Herdr 프로토콜 19 에 argv 실행 경로가 없다는 실측을 감추지 않는다. | UC-ENV-SURFACE-ACT | `environment-intent-translation.contract.test.ts` 전달 방식 표기 | Pending |
 | **FR-ENV-SURFACE.9** | 손잡이는 관측 시점에 발행되며 그 시점의 표면에만 대응한다. 셸은 손잡이에서 환경 식별자로 가는 대응표를 자신이 보관하고 뇌에 노출하지 않는다. | UC-ENV-SURFACE-ACT·DENY | `environment-intent-translation.contract.test.ts` 대응표 격리·만료 | Pending |
+
+## 기능 요구사항 (FR) — 환경 호출 전달 (#502 슬라이스 1, 에픽 #497)
+
+> 계약: `docs/progress/issue-497-universal-agent.md` 의 슬라이스 1 전달 경계.
+> 출처 시나리오: `user-scenarios.md` 의 `UC-ENV-DISPATCH-*` 세 항목.
+> 실측(2026-08-26): 번역기가 내는 환경 호출 6종 중 `session.snapshot`·`agent.focus`·`agent.prompt`
+> 는 Rust 에 이미 있고, `pane.focus`·`pane.send_text`·`pane.send_keys` 가 없다. 이미 열린 셋은
+> 전부 구조화 전달, 없는 셋은 전부 터미널 입력이다.
+> 상태: 전부 Pending.
+
+| ID | 요구사항 | 출처 시나리오 | 검증(P02) | 상태 |
+|---|---|---|---|---|
+| **FR-ENV-DISPATCH.1** | 전달 계층은 번역기가 실제로 내는 호출만 받는다. 그 목록 밖의 메서드는 환경에 도달할 수 없으며, 프로토콜의 나머지 메서드를 근거 없이 열지 않는다. | UC-ENV-DISPATCH-REFUSE | `environment-dispatch.contract.test.ts` 허용 메서드 목록·목록 밖 거절 | Pending |
+| **FR-ENV-DISPATCH.2** | 구조화 전달(`session.snapshot`·`agent.focus`·`agent.prompt`·`pane.focus`)은 워크스페이스 관측·조작 권한으로 수행한다. 요청 문자열이 명령줄로 재해석되지 않는다. | UC-ENV-DISPATCH-STRUCTURED | `environment-dispatch.contract.test.ts` 구조화 라우팅 | Pending |
+| **FR-ENV-DISPATCH.3** | 터미널 입력 전달(`pane.send_text`·`pane.send_keys`)은 구조화 전달과 같은 권한으로 열리지 않는다. 사용자의 터미널에 직접 타이핑하는 것과 동등하므로 별도 권한을 요구하며, 없으면 환경에 도달하지 않는다. | UC-ENV-DISPATCH-TERMINAL | `environment-dispatch.contract.test.ts` 권한 분리 negative | Pending |
+| **FR-ENV-DISPATCH.4** | 표면 식별자는 환경에 닿기 전에 형식을 검증한다. 형식이 어긋나면 호출을 만들지 않는다. 검증은 Rust 명령 경계에서도 중복 수행한다. | UC-ENV-DISPATCH-REFUSE | Rust 단위 테스트 + `e2e-tauri/specs/environment-dispatch.spec.ts` | Pending |
+| **FR-ENV-DISPATCH.5** | 요청 본문에 길이 상한을 둔다. 빈 요청은 전달하지 않는다. 상한과 공백 판정은 Rust 경계에서도 수행한다. | UC-ENV-DISPATCH-REFUSE | Rust 단위 테스트 + `environment-dispatch.contract.test.ts` | Pending |
+| **FR-ENV-DISPATCH.6** | 환경이 거절하면 그 사유를 그대로 올린다. 실패를 성공으로 바꾸지 않으며, 결과 불명은 불명으로 남긴다. | UC-ENV-DISPATCH-STRUCTURED | `environment-dispatch.contract.test.ts` 오류 전파 | Pending |
+| **FR-ENV-DISPATCH.7** | Rust 명령 계층은 식별자 형식과 길이만 검증하고 능력 게이팅은 core 의도 계층이 수행한다. 이 구조에서 웹뷰 코드가 Tauri 명령을 직접 부르면 게이팅을 건너뛴다는 사실을 문서와 요구사항에 남긴다(기존 `herdr_prompt_agent` 와 동일한 관행). Rust 계층 자체의 능력 게이팅은 후속 과제다. | UC-ENV-DISPATCH-TERMINAL | 문서 기재 + `e2e-tauri/specs/environment-dispatch.spec.ts` 명령 등록 확인 | Pending |

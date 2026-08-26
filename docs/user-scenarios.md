@@ -1252,3 +1252,42 @@ Test Coverage Map (P02):
 
 상태 매트릭스: 기본(표면 여럿), 빈 목록(표면 0), 진행(작업 중 표면), 성공(의도 수용),
 오류(거절 사유), 좁은 폭(표면 목록 축약)을 매핑한다. 좁은 폭은 표면 상한과 누락 총계로 다룬다.
+
+## 2026-08-26 환경 호출 전달 (#502 슬라이스 1 — 전달)
+
+> 계약: `docs/progress/issue-497-universal-agent.md` 의 슬라이스 1 전달 경계.
+> 번역까지는 순수 계산이고, 여기는 그 결과가 실제 환경에 닿는 지점이다.
+
+### UC-ENV-DISPATCH-STRUCTURED — 구조화된 요청이 환경에 닿는다
+
+- 나이아가 에이전트가 붙은 표면에 무언가를 요청하면 그 표면의 에이전트가 요청을 받는다.
+- 나이아가 표면을 보여 달라고 하면 사용자 화면에서 그 표면이 앞으로 나온다.
+- 이 경로에는 인용 문제가 없다. 요청 문자열이 명령줄로 재해석되지 않는다.
+- 환경이 거절하면 그 사유가 그대로 올라온다. 성공으로 위장하지 않는다.
+
+### UC-ENV-DISPATCH-TERMINAL — 터미널 입력은 다른 등급이다
+
+- 에이전트가 없는 일반 터미널에 무언가를 실행해 달라고 하면, 그것은 사용자가 그 터미널에 직접 타이핑한 것과 같은 일이 된다.
+- 그래서 이 경로는 구조화 요청과 같은 권한으로 열리지 않는다. 별도로 허용돼야 한다.
+- 진행 중인 것을 멈추는 것도 같은 등급이다.
+- 사용자는 나이아가 자기 터미널에 무엇을 넣었는지 나중에 확인할 수 있다.
+
+### UC-ENV-DISPATCH-REFUSE — 열지 않은 것은 나가지 않는다
+
+- 이 슬라이스가 열기로 한 호출 외에는 환경에 도달할 수 없다.
+- 형식이 어긋난 표면 식별자는 환경에 닿기 전에 걸린다.
+- 지나치게 긴 요청은 거절된다.
+- 빈 요청은 전달되지 않는다.
+
+Test Coverage Map (P02):
+
+| UC | 검증 수단 | 대상 |
+|---|---|---|
+| UC-ENV-DISPATCH-STRUCTURED | vitest `src/test/environment-dispatch.contract.test.ts` | 구조화 호출 3종 라우팅, 환경 오류 전파 |
+| UC-ENV-DISPATCH-TERMINAL | vitest `src/test/environment-dispatch.contract.test.ts` | 터미널 입력 2종이 별도 권한 없이는 나가지 않음 |
+| UC-ENV-DISPATCH-REFUSE | vitest `src/test/environment-dispatch.contract.test.ts` | 미허용 메서드, 형식 오류 식별자, 빈·과길이 요청 |
+| 전체 | Rust `packages/shell/src-tauri/src/herdr/api.rs` 단위 테스트 | 식별자 형식·길이 상한 검증 |
+| 전체 | e2e-tauri `packages/shell/e2e-tauri/specs/environment-dispatch.spec.ts` | 실 Tauri 백엔드에서 명령 등록·인자 검증·거절 경로 |
+
+상태 매트릭스: 기본(구조화 전달 성공), 빈 목록(표면 0에서 전달 시도), 진행(전달 중),
+성공(환경 수용), 오류(환경 거절·형식 오류), 좁은 폭(해당 없음 — 표면 UI 아님)을 매핑한다.

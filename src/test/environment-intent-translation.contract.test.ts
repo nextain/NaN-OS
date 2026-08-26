@@ -57,12 +57,14 @@ describe("포커스 (FR-ENV-SURFACE.7)", () => {
     expect(out.call.params).toEqual({ target: "w1:p1" });
   });
 
-  it("일반 터미널은 표면 자체를 포커스한다", () => {
+  it("일반 터미널의 절대 포커스는 이 환경에서 도달할 수 없어 거절한다 — 되는 척하지 않는다", () => {
+    // API 에는 pane.focus{pane_id} 가 있으나 CLI `herdr pane focus` 는 --direction 필수라
+    // 셸이 닿는 경로가 없다(2026-08-26 실측).
     const out = translate({ kind: "focus", surface: surfaceRef("s-2") }, registry);
-    expect(out.ok).toBe(true);
-    if (!out.ok) return;
-    expect(out.call.method).toBe("pane.focus");
-    expect(out.call.params).toEqual({ pane_id: "w1:p2" });
+    expect(out.ok).toBe(false);
+    if (out.ok) return;
+    expect(out.rejections[0]?.code).toBe("not-permitted");
+    expect(out.rejections[0]?.detail).toContain("방향 이동");
   });
 
   it("포커스는 구조화 전달이라 인용 책임이 없다", () => {
@@ -82,12 +84,13 @@ describe("실행 (FR-ENV-SURFACE.7·8)", () => {
     expect(out.call.quotingOwnedByCaller).toBe(false);
   });
 
-  it("일반 터미널은 텍스트 입력뿐이고 인용 책임이 호출자에게 남는다", () => {
+  it("일반 터미널은 터미널 입력으로 가고 인용 책임이 호출자에게 남는다", () => {
     const out = translate({ kind: "run", surface: surfaceRef("s-2"), request: "pnpm test" }, registry);
     expect(out.ok).toBe(true);
     if (!out.ok) return;
-    expect(out.call.method).toBe("pane.send_text");
-    expect(out.call.params).toEqual({ pane_id: "w1:p2", text: "pnpm test" });
+    // send_text 만 보내면 입력만 되고 실행되지 않는다. 실행 의도에 맞는 것은 pane run 이다.
+    expect(out.call.method).toBe("pane.run");
+    expect(out.call.params).toEqual({ pane_id: "w1:p2", command: "pnpm test" });
     expect(out.call.delivery).toBe("terminal-input");
     expect(out.call.quotingOwnedByCaller).toBe(true);
   });
@@ -103,7 +106,7 @@ describe("실행 (FR-ENV-SURFACE.7·8)", () => {
   it("요청 문자열을 셸이 고쳐 쓰지 않는다 — 그대로 넘긴다", () => {
     const request = "echo '따옴표 든 것' && ls";
     const out = translate({ kind: "run", surface: surfaceRef("s-2"), request }, registry);
-    expect(out.ok && out.call.params["text"]).toBe(request);
+    expect(out.ok && out.call.params["command"]).toBe(request);
   });
 });
 
@@ -152,12 +155,25 @@ describe("손잡이 발행 (FR-ENV-SURFACE.9)", () => {
 describe("살아 있는 Herdr 로 왕복", () => {
   const live = liveHerdrSnapshot();
 
-  it.skipIf(live === null)("실제 관측이 낸 손잡이가 전부 번역된다", () => {
+  it.skipIf(live === null)("실제 관측이 낸 손잡이가 전부 실행 의도로 번역된다", () => {
     const { report, registry: liveRegistry } = observe(live as never);
     for (const surface of report.surfaces) {
-      const out = translate({ kind: "focus", surface: surface.ref }, liveRegistry);
+      const out = translate({ kind: "run", surface: surface.ref, request: "x" }, liveRegistry);
       expect(out.ok, `${surface.ref.token} 번역 실패`).toBe(true);
     }
+  });
+
+  it.skipIf(live === null)("포커스는 에이전트가 붙은 표면에서만 번역된다", () => {
+    const { report, registry: liveRegistry } = observe(live as never);
+    let agentSurfaces = 0;
+    for (const surface of report.surfaces) {
+      const binding = liveRegistry.get(surface.ref.token);
+      const out = translate({ kind: "focus", surface: surface.ref }, liveRegistry);
+      expect(out.ok).toBe(binding?.agentTarget !== undefined);
+      if (binding?.agentTarget) agentSurfaces += 1;
+    }
+    // 실측(2026-08-26)에서 에이전트가 붙은 pane 이 실제로 있었다 — 전부 거절되는 공허한 통과가 아니다.
+    expect(agentSurfaces).toBeGreaterThan(0);
   });
 
   it.skipIf(live === null)("실제 환경에도 두 전달 방식이 모두 나타난다", () => {
