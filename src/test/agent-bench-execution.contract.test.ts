@@ -12,6 +12,7 @@ import {
   VERIFICATION,
   parseTestCount,
   readClaim,
+  MISSING_SPECS,
   type CommandRunnerPort,
   type VerificationStep,
 } from "./harness/bench-execution.js";
@@ -296,5 +297,30 @@ describe("확인 수단 목록이 시나리오와 어긋나지 않는다", () =>
     for (const steps of Object.values(VERIFICATION)) {
       for (const step of steps) expect(step.why.length).toBeGreaterThan(5);
     }
+  });
+});
+
+describe("문서와 하네스가 어긋나면 드러난다", () => {
+  const scenarios = parseScenarios(markdown);
+
+  it("문서가 선언한 확인 수단 파일이 전부 실제로 있다", () => {
+    // 문서 표가 썩어도 벤치는 "확인 수단이 없다"로만 보고한다 — 구현이 없는 것과
+    // 표가 낡은 것은 완전히 다른 상태인데 구분이 안 된다. 여기서 표 쪽을 잡는다.
+    expect(MISSING_SPECS, "문서가 없는 파일을 확인 수단으로 선언한다").toEqual([]);
+  });
+
+  it("확인 수단이 하나도 없는 시나리오를 이름으로 안다", () => {
+    // 없는 것 자체는 사실일 수 있다. 다만 몇 개인지가 아니라 무엇인지 알아야 한다.
+    const orphans = scenarios.filter((sc) => (VERIFICATION[sc.id] ?? []).length === 0).map((sc) => sc.id);
+    // 2026-08-26 부로 0 이다. 하나라도 생기면 여기서 이름이 드러난다 —
+    // "몇 개 없다"가 아니라 "무엇이 없다"를 알아야 손댈 수 있다.
+    expect(orphans, `확인 수단 없는 시나리오: ${orphans.join(", ")}`).toEqual([]);
+  });
+
+  it("문서에서 실제로 수단을 읽어 왔다 — 손으로 적은 것만 있는 게 아니다", () => {
+    const fromDoc = Object.values(VERIFICATION)
+      .flat()
+      .filter((step) => step.why.includes("Test Coverage Map"));
+    expect(fromDoc.length).toBeGreaterThan(15);
   });
 });

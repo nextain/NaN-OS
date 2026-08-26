@@ -35,6 +35,21 @@ const FAMILIES: readonly {
   { prefix: "UC-WIRE-UNION-", gate: "protocol", requiredEvidence: ["mock"] },
 ];
 
+/**
+ * 계열 규칙보다 우선하는 시나리오별 요구.
+ *
+ * 계열로 묶으면 편하지만 거칠다 — 예컨대 환경 도구 계열에 일괄로 브라우저 증거를 요구하면
+ * 터미널 실행 시나리오까지 브라우저를 요구하게 된다(2026-08-26 실측). 시나리오가 실제로
+ * 무엇을 거쳐야 하는지에 맞춘다.
+ */
+const SCENARIO_OVERRIDES: Readonly<Record<string, readonly EvidenceKind[]>> = {
+  // 터미널만 거친다.
+  "UC-ENV-TOOL-TERMINAL-EXEC": ["native"],
+  // 권한 등급 판정이라 특정 기질을 요구하지 않는다 — 실제 실행 앞에서 막히는지만 본다.
+  "UC-ENV-TOOL-BOUNDARY-DENY": ["native"],
+  // 취소는 UC 가 브라우저와 터미널을 함께 말한다 — 계열 기본값이 맞다.
+};
+
 const HEADING = /^###\s+(UC-[A-Z0-9-]+)/gm;
 
 /**
@@ -73,7 +88,12 @@ export function parseScenarios(markdown: string): readonly BenchScenario[] {
     const family = familyOf(uc);
     if (!family || seen.has(uc)) continue;
     seen.add(uc);
-    out.push({ id: uc, uc, gate: family.gate, requiredEvidence: family.requiredEvidence });
+    out.push({
+      id: uc,
+      uc,
+      gate: family.gate,
+      requiredEvidence: SCENARIO_OVERRIDES[uc] ?? family.requiredEvidence,
+    });
   }
   return out;
 }

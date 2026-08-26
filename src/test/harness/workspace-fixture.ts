@@ -32,7 +32,17 @@ export class TempWorkspaceFixtureAdapter implements WorkspaceFixturePort {
       // 의도한 하위 트리를 벗어나므로 픽스처 형상을 깨뜨린다.
       if (!isContained(projectsRoot, dir) || dir === projectsRoot) throw new Error(`픽스처 경계 밖 프로젝트: ${project.name}`);
       await mkdir(dir, { recursive: true });
-      await writeFile(join(dir, project.entrypoint), `# ${project.name}\n`, "utf8");
+      // 프로젝트 진입점도 자기 문서를 스스로 선언해야 한다. 제목만 있으면 실제 파서가
+      // 선언 없음으로 보고 진입이 실패한다.
+      await mkdir(join(dir, ".agents", "context"), { recursive: true });
+      await writeFile(join(dir, ".agents", "context", "project-rules.yaml"), "{}\n", "utf8");
+      await writeFile(
+        join(dir, project.entrypoint),
+        // 선언 경로는 루트 기준으로 해석된다(어댑터가 root.path 에서 찾는다).
+        // 프로젝트 안에서 상대 경로로 적으면 declared-index-missing 이 된다.
+        `# ${project.name}\n\n## Mandatory Reads\n\n- \`projects/${project.name}/.agents/context/project-rules.yaml\`\n`,
+        "utf8",
+      );
     }
     let disposed = false;
     return {
@@ -47,8 +57,13 @@ export class TempWorkspaceFixtureAdapter implements WorkspaceFixturePort {
   }
 }
 
+/**
+ * ⚠️ 경로는 백틱으로 감싸야 한다. 실제 파서(`listedPaths`)가 백틱 안의 경로만 읽는다 —
+ *    맨 경로로 적으면 선언이 비어 `entrypoint-malformed` 가 된다. 대역 소스만 이 픽스처를
+ *    소비하던 동안에는 이 사실이 드러나지 않았다(2026-08-26 실측).
+ */
 function rootEntrypointBody(spec: WorkspaceFixtureSpec): string {
-  const indexes = spec.mandatoryIndexes.map((i) => `- ${i}`).join("\n");
-  const projects = spec.projects.map((p) => `- projects/${p.name}/${p.entrypoint}`).join("\n");
+  const indexes = spec.mandatoryIndexes.map((i) => `- \`${i}\``).join("\n");
+  const projects = spec.projects.map((p) => `- \`projects/${p.name}/${p.entrypoint}\``).join("\n");
   return `# 픽스처 워크스페이스\n\n## Mandatory Reads\n\n${indexes}\n\n## Projects\n\n${projects}\n`;
 }

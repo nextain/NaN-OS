@@ -29,9 +29,16 @@ function str(v: unknown): string | undefined {
   return typeof v === "string" && v.trim().length > 0 ? v : undefined;
 }
 
+/** 이름을 하나도 못 찾았을 때 뇌에 보일 말. 환경 식별자를 쓰지 않는다. */
+export const UNNAMED_SURFACE_LABEL = "이름없는 표면";
+
 /**
  * 표면 이름. 레이블이 없는 pane 이 흔하다(실측 13개 중 6개) — 그럴 때 터미널 제목으로 내려간다.
- * 전부 없으면 손잡이로 대신한다. 이름 없는 표면을 만들지 않는다.
+ * 전부 없으면 이름 없는 표면이라고 말한다.
+ *
+ * ⚠️ 여기에 pane 식별자를 넘기면 안 된다. 예전에는 `surfaceLabel(pane, surfaceId)` 로 불렀고,
+ *    이름이 하나도 없는 pane 이 자기 pane 식별자를 그대로 뇌에 올렸다 — 손잡이를 불투명하게
+ *    만들어 둔 이유가 이름 자리로 새어 나가 무너졌다(2026-08-26 살아 있는 Herdr 에서 발견).
  */
 export function surfaceLabel(pane: HerdrPaneLike, fallback: string): string {
   return str(pane.label) ?? str(pane.terminal_title_stripped) ?? str(pane.terminal_title) ?? str(pane.agent) ?? fallback;
@@ -56,7 +63,7 @@ export function toBinding(pane: HerdrPaneLike): PaneBinding | null {
   const agent = str(pane.agent);
   const base = {
     surfaceId,
-    label: surfaceLabel(pane, surfaceId),
+    label: surfaceLabel(pane, UNNAMED_SURFACE_LABEL),
     status: str(pane.agent_status),
     focused: pane.focused === true,
   };

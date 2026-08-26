@@ -22,6 +22,7 @@ import type {
   TraceRecord,
 } from "../../main/domain/agent-bench.js";
 import type { BenchExecutionPort, ScenarioRun } from "../../main/ports/agent-bench.js";
+import { parseScenarios } from "./agent-bench-scenarios.js";
 
 /** 명령 하나를 돌리는 경계. 테스트에서 대역으로 바꿔 끼운다. */
 export interface CommandRunnerPort {
@@ -119,35 +120,156 @@ const E2E_TAURI = (spec: string, why: string): VerificationStep => ({
 });
 
 /**
- * 시나리오 → 확인 수단. 여기 없는 시나리오는 증거 없음으로 판정된다.
- *
- * ⚠️ 등급을 실제보다 높여 적지 않는다. Playwright 는 IPC 가 대역이므로 browser 이고,
- *    native 를 요구하는 시나리오를 그것으로 대신하면 벤치가 거짓말을 하게 된다.
+ * 실행기는 vitest 지만 실제 환경을 건드리는 파일. 등급은 실행기가 아니라 무엇을
+ * 건드리느냐로 정해지므로, 이 목록에 있는 것만 native 로 올린다.
  */
-export const VERIFICATION: Readonly<Record<string, readonly VerificationStep[]>> = {
-  "UC-ENV-STICKY": [
-    VITEST(
-      "src/test/environment-live-wiring.contract.test.ts",
-      "손잡이 고정은 결정론으로 판정할 수 있다 — 표면이 사라져도 재배정되지 않는지 본다",
+export const NATIVE_VITEST_SPECS: readonly string[] = [
+  "src/test/environment-live-herdr.contract.test.ts",
+  "src/test/environment-live-act.contract.test.ts",
+  // 실제 디스크에 워크스페이스를 만들어 해석한다 — 대역 소스가 아니다.
+  "src/test/workspace-context-real-fs.contract.test.ts",
+  // 살아 있는 Herdr 에 실제로 붙어 제어면을 밟는다.
+  "src/test/herdr-control-live.contract.test.ts",
+  // 살아 있는 터미널에 실제로 명령을 넣는다.
+  "src/test/env-tool-live.contract.test.ts",
+];
+
+/** 경로만 보고 등급과 실행 방식을 정한다. */
+function stepForPath(spec: string, why: string, cwd: string): VerificationStep | null {
+  // e2e 계열은 packages/shell 에서 돈다. 문서가 저장소 루트 기준으로 적었으면 접두사를 떼야
+  // cwd 와 겹치지 않는다.
+  const local = spec.startsWith("packages/shell/") ? spec.slice("packages/shell/".length) : spec;
+  if (local.includes("e2e-tauri/")) return E2E_TAURI(local, why);
+  if (local.startsWith("e2e/")) return PLAYWRIGHT(local, why);
+  if (spec.endsWith(".test.ts") || spec.endsWith(".spec.ts")) {
+    return NATIVE_VITEST_SPECS.includes(spec) ? LIVE_HERDR(spec, why) : VITEST(spec, why, cwd);
+  }
+  return null;
+}
+
+/**
+ * 확인 수단을 `docs/user-scenarios.md` 의 Test Coverage Map 에서 읽는다.
+ *
+ * 왜 문서에서 읽는가: 손으로 옮겨 적으면 빠뜨린다. 실제로 그랬다 — 문서에는 네 계열의
+ * 매핑이 다 있었는데 손으로 적은 목록에서 16개가 통째로 빠져 있었고, 벤치는 그것을
+ * "확인 수단이 아예 없다"로 보고했다(2026-08-26). 구현이 없는 것과 매핑을 빠뜨린 것은
+ * 완전히 다른 상태인데 보고서가 둘을 구분하지 못했다.
+ */
+export function deriveVerification(
+  markdown: string,
+  /** 이 에픽이 소유한 시나리오만 받는다. 문서는 여러 슬라이스가 공유한다. */
+  ownedScenarios: ReadonlySet<string>,
+  /** 저장소 루트 기준으로 파일이 실제 있는지. 없는 경로는 문서 부패이므로 따로 모은다. */
+  resolveSpec: (spec: string) => { readonly cwd: string; readonly spec: string } | null,
+): { readonly steps: Record<string, VerificationStep[]>; readonly missing: readonly string[] } {
+  const steps: Record<string, VerificationStep[]> = {};
+  const missing: string[] = [];
+  for (const line of markdown.split("\n")) {
+    const ucs = [...new Set([...line.matchAll(/\b(UC-[A-Z0-9-]+)\b/g)].map((m) => m[1] as string))].filter((uc) =>
+      ownedScenarios.has(uc),
+    );
+    if (ucs.length === 0) continue;
+    const specs = [...line.matchAll(/`([A-Za-z0-9_./-]+\.(?:test|spec)\.ts)`/g)].map((m) => m[1] as string);
+    for (const uc of ucs) {
+      for (const spec of specs) {
+        const located = resolveSpec(spec);
+        if (!located) {
+          missing.push(`${uc} → ${spec}`);
+          continue;
+        }
+        const step = stepForPath(located.spec, `문서 Test Coverage Map 이 ${uc} 의 확인 수단으로 선언한 것`, located.cwd);
+        if (!step) continue;
+        const bucket = (steps[uc] ??= []);
+        const key = `${step.cwd}/${step.args[step.args.length - 1]}`;
+        if (!bucket.some((x) => `${x.cwd}/${x.args[x.args.length - 1]}` === key)) bucket.push(step);
+      }
+    }
+  }
+  return { steps, missing };
+}
+
+/** 저장소 루트와 packages/shell 두 곳을 훑어 실제 파일을 찾는다. */
+export function specResolver(repoRoot: string) {
+  return (spec: string): { cwd: string; spec: string } | null => {
+    if (existsSync(resolve(repoRoot, spec))) return { cwd: ".", spec };
+    if (existsSync(resolve(repoRoot, "packages", "shell", spec))) return { cwd: "packages/shell", spec };
+    return null;
+  };
+}
+
+export const EXTRA_VERIFICATION: Readonly<Record<string, readonly VerificationStep[]>> = {
+  "UC-ENV-TOOL-BROWSE": [
+    E2E_TAURI(
+      "e2e-tauri/specs/env-tool-browser-native.spec.ts",
+      "참조 기반 조작 명령이 실 Rust 에 등록돼 있고 좌표 명령은 열려 있지 않은지",
     ),
   ],
-  "UC-WIRE-UNION-DRIFT": [
-    VITEST(
-      "src/test/wire-union-drift.contract.test.ts",
-      "두 저장소 어휘를 각자 코드에서 뽑아 표본과 대조한다",
+  "UC-ENV-TOOL-TERMINAL-EXEC": [
+    LIVE_HERDR("src/test/env-tool-live.contract.test.ts", "구조화된 명령이 실제 터미널에서 실행되고 결과가 함께 돌아오는지"),
+  ],
+  "UC-ENV-TOOL-CANCEL": [
+    LIVE_HERDR("src/test/env-tool-live.contract.test.ts", "터미널 쪽: 진행 중인 작업이 실제로 멈추고 취소가 실패와 구별되는지"),
+    PLAYWRIGHT("e2e/env-tool-browser.spec.ts", "브라우저 쪽: 중단 신호가 실제로 나가는지"),
+  ],
+  "UC-ENV-TOOL-BOUNDARY-DENY": [
+    LIVE_HERDR("src/test/env-tool-live.contract.test.ts", "등급과 승인이 실제 실행 앞에서 지켜지는지"),
+  ],
+  "UC-CHANNEL-SESSION-HANDOFF": [
+    E2E_TAURI("e2e-tauri/specs/channel-reboot.spec.ts", "한 이슈에 대화 정체성 하나만 실 디스크에 남는지"),
+  ],
+  "UC-CHANNEL-SESSION-DUPLICATE-DELIVERY": [
+    E2E_TAURI("e2e-tauri/specs/channel-reboot.spec.ts", "처리 이력이 재부팅을 넘어 실제로 남는지"),
+  ],
+  "UC-CHANNEL-SESSION-DISCLOSURE-DENY": [
+    E2E_TAURI("e2e-tauri/specs/channel-reboot.spec.ts", "채널 발신함에 기밀이 실리지 않는지"),
+  ],
+  "UC-HERDR-CONTROL-OBSERVE": [
+    LIVE_HERDR("src/test/herdr-control-live.contract.test.ts", "살아 있는 Herdr 의 자원과 개정을 실제로 읽는다"),
+  ],
+  "UC-HERDR-CONTROL-MUTATE": [
+    LIVE_HERDR("src/test/herdr-control-live.contract.test.ts", "구조화된 요청이 실제 환경에서 실행되고 멱등이 지켜진다"),
+  ],
+  "UC-HERDR-CONTROL-STALE-REVISION": [
+    LIVE_HERDR("src/test/herdr-control-live.contract.test.ts", "낡은 개정이 실제 환경에서도 충돌로 거절된다"),
+  ],
+  "UC-HERDR-CONTROL-RECONNECT": [
+    LIVE_HERDR("src/test/herdr-control-live.contract.test.ts", "실제 재접속 뒤 태도가 증거에 따라 정해진다"),
+  ],
+  "UC-WORKSPACE-CONTEXT-DISCOVER": [
+    LIVE_HERDR("src/test/workspace-context-real-fs.contract.test.ts", "실제 디스크의 진입점을 읽는다"),
+  ],
+  "UC-WORKSPACE-CONTEXT-ENTER-PROJECT": [
+    LIVE_HERDR("src/test/workspace-context-real-fs.contract.test.ts", "실제 디렉터리로 프로젝트에 진입한다"),
+  ],
+  "UC-WORKSPACE-CONTEXT-SWITCH-PROJECT": [
+    LIVE_HERDR("src/test/workspace-context-real-fs.contract.test.ts", "실제 디렉터리 사이를 전환한다"),
+  ],
+  "UC-WORKSPACE-CONTEXT-BROKEN-ENTRYPOINT": [
+    LIVE_HERDR("src/test/workspace-context-real-fs.contract.test.ts", "없는 진입점을 실제 디스크에서 확인한다"),
+  ],
+  "UC-ENV-LIVE-OBSERVE": [
+    LIVE_HERDR(
+      "src/test/environment-live-herdr.contract.test.ts",
+      "살아 있는 Herdr 이 실제로 내는 모양으로 관측 경로를 끝까지 밟는다 — 읽기 전용",
     ),
   ],
-  "UC-AGENT-BENCH-RUN": [
-    VITEST("src/test/agent-bench-runner.contract.test.ts", "하네스가 순서대로 돌고 수집하는지"),
-  ],
-  "UC-AGENT-BENCH-REPORT": [
-    VITEST("src/test/agent-bench-report.contract.test.ts", "요약과 임계 판정이 재현되는지"),
-  ],
-  "UC-AGENT-BENCH-FALSE-COMPLETION": [
-    VITEST(
-      "src/test/agent-bench-false-completion.contract.test.ts",
-      "완료를 주장했는데 증거가 없으면 거절하는지",
+  "UC-ENV-LIVE-ACT": [
+    LIVE_HERDR(
+      "src/test/environment-live-act.contract.test.ts",
+      "전용 워크스페이스를 만들어 실제 터미널에 명령을 넣고 멈춘다 — 사용자 터미널은 건드리지 않는다",
     ),
+  ],
+  "UC-ENV-SURFACE-OBSERVE": [
+    LIVE_HERDR("src/test/environment-live-herdr.contract.test.ts", "살아 있는 Herdr 이 내는 실제 모양으로 관측"),
+  ],
+  "UC-ENV-SURFACE-ACT": [
+    LIVE_HERDR("src/test/environment-live-act.contract.test.ts", "번역된 호출이 실제 터미널에서 효과를 낸다"),
+  ],
+  "UC-ENV-SURFACE-DENY": [
+    LIVE_HERDR("src/test/environment-live-act.contract.test.ts", "도달 경로가 없는 의도가 실제 환경에서도 거절되는지"),
+  ],
+  "UC-ENV-SURFACE-DATA": [
+    LIVE_HERDR("src/test/environment-live-act.contract.test.ts", "실제 터미널이 만든 지시문 같은 이름이 자료로만 올라오는지"),
   ],
   "UC-ENV-DISPATCH-STRUCTURED": [
     E2E_TAURI("e2e-tauri/specs/environment-dispatch.spec.ts", "구조화 전달이 실 Rust 경계를 통과하는지"),
@@ -158,66 +280,42 @@ export const VERIFICATION: Readonly<Record<string, readonly VerificationStep[]>>
   "UC-ENV-DISPATCH-REFUSE": [
     E2E_TAURI("e2e-tauri/specs/environment-dispatch.spec.ts", "열지 않은 명령이 등록돼 있지 않은지"),
   ],
-  "UC-ENV-LIVE-OBSERVE": [
-    VITEST("src/test/environment-live-wiring.contract.test.ts", "관측이 세그먼트로 조립되는지"),
-    PLAYWRIGHT("e2e/environment-skill.spec.ts", "실 UI 에서 대화 요청에 실려 나가는지"),
-    LIVE_HERDR(
-      "src/test/environment-live-herdr.contract.test.ts",
-      "살아 있는 Herdr 이 실제로 내는 모양으로 관측 경로를 끝까지 밟는다 — 읽기 전용",
-    ),
-  ],
-  "UC-ENV-LIVE-ACT": [
-    PLAYWRIGHT("e2e/environment-skill.spec.ts", "실 UI 에서 도구 호출이 명령까지 가는지"),
-    LIVE_HERDR(
-      "src/test/environment-live-act.contract.test.ts",
-      "전용 워크스페이스를 만들어 실제 터미널에 명령을 넣고 멈춘다 — 사용자 터미널은 건드리지 않는다",
-    ),
-  ],
-  "UC-ENV-SURFACE-OBSERVE": [
-    VITEST("src/test/herdr-environment.contract.test.ts", "스냅샷이 보고로 바뀌는지"),
-    LIVE_HERDR(
-      "src/test/environment-live-herdr.contract.test.ts",
-      "살아 있는 Herdr 이 실제로 내는 모양으로 관측한다",
-    ),
-  ],
-  "UC-ENV-SURFACE-DATA": [
-    VITEST("src/test/environment-intent.contract.test.ts", "환경 문자열이 자료로만 다뤄지는지"),
-    LIVE_HERDR(
-      "src/test/environment-live-act.contract.test.ts",
-      "실제 터미널이 만든 지시문 같은 이름이 자료로만 올라오는지",
-    ),
-  ],
-  "UC-ENV-SURFACE-ACT": [
-    VITEST("src/test/environment-intent-translation.contract.test.ts", "의도가 환경 호출로 번역되는지"),
-    LIVE_HERDR(
-      "src/test/environment-live-act.contract.test.ts",
-      "번역된 호출이 실제 터미널에서 효과를 낸다",
-    ),
-  ],
-  "UC-ENV-SURFACE-DENY": [
-    VITEST("src/test/environment-dispatch.contract.test.ts", "허용되지 않은 호출이 막히는지"),
-    LIVE_HERDR(
-      "src/test/environment-live-act.contract.test.ts",
-      "도달 경로가 없는 의도가 실제 환경에서도 거절되는지",
-    ),
-  ],
-  "UC-WORKSPACE-CONTEXT-DISCOVER": [
-    VITEST("src/test/workspace-context-discover.contract.test.ts", "진입점 탐색"),
-    PLAYWRIGHT("e2e/workspace-context.spec.ts", "실 UI 렌더"),
-  ],
-  "UC-WORKSPACE-CONTEXT-ENTER-PROJECT": [
-    VITEST("src/test/workspace-context-enter-project.contract.test.ts", "프로젝트 진입 시 범위 전환"),
-    PLAYWRIGHT("e2e/workspace-context.spec.ts", "실 UI 에서 진입"),
-  ],
-  "UC-WORKSPACE-CONTEXT-SWITCH-PROJECT": [
-    VITEST("src/test/workspace-context-switch-project.contract.test.ts", "프로젝트 전환"),
-    PLAYWRIGHT("e2e/workspace-context.spec.ts", "실 UI 에서 전환"),
-  ],
-  "UC-WORKSPACE-CONTEXT-BROKEN-ENTRYPOINT": [
-    VITEST("src/test/workspace-context-failure-honesty.contract.test.ts", "깨진 진입점을 성공으로 말하지 않는지"),
-    PLAYWRIGHT("e2e/workspace-context.spec.ts", "실 UI 진단 표시"),
-  ],
 };
+
+/** 문서에서 읽은 것과 손으로 더한 것을 합친다. 같은 파일은 한 번만 돈다. */
+export function buildVerification(
+  markdown: string,
+  ownedScenarios: ReadonlySet<string>,
+  repoRoot: string,
+): Readonly<Record<string, readonly VerificationStep[]>> {
+  const merged = deriveVerification(markdown, ownedScenarios, specResolver(repoRoot)).steps;
+  for (const [uc, steps] of Object.entries(EXTRA_VERIFICATION)) {
+    const bucket = (merged[uc] ??= []);
+    for (const step of steps) {
+      const key = `${step.cwd}/${step.args[step.args.length - 1]}`;
+      if (!bucket.some((x) => `${x.cwd}/${x.args[x.args.length - 1]}` === key)) bucket.push(step);
+    }
+  }
+  return merged;
+}
+
+const REPO_ROOT = resolve(import.meta.dirname, "..", "..", "..");
+const DOC_PATH = resolve(REPO_ROOT, "docs", "user-scenarios.md");
+const DOC_MARKDOWN = readFileSync(DOC_PATH, "utf8");
+
+/** 이 저장소의 실제 문서로 만든 목록. */
+export const VERIFICATION: Readonly<Record<string, readonly VerificationStep[]>> = buildVerification(
+  DOC_MARKDOWN,
+  new Set(parseScenarios(DOC_MARKDOWN).map((x) => x.id)),
+  REPO_ROOT,
+);
+
+/** 문서가 선언했는데 실제로 없는 파일. 문서 부패를 조용히 넘기지 않기 위해 노출한다. */
+export const MISSING_SPECS: readonly string[] = deriveVerification(
+  DOC_MARKDOWN,
+  new Set(parseScenarios(DOC_MARKDOWN).map((x) => x.id)),
+  specResolver(REPO_ROOT),
+).missing;
 
 /** vitest·playwright·wdio 출력에서 통과한 테스트 수를 읽는다. 못 읽으면 0. */
 export function parseTestCount(stdout: string): number {

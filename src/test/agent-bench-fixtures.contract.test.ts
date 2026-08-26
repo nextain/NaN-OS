@@ -54,10 +54,12 @@ describe("임시 워크스페이스 픽스처 (NFR-AGENT-BENCH.2)", () => {
     const fx = await new TempWorkspaceFixtureAdapter(await base()).create(SPEC);
     try {
       const body = await readFile(join(fx.root, "AGENTS.md"), "utf8");
-      expect(body).toContain("- agents-rules.json");
-      expect(body).toContain("- project-index.json");
-      expect(body).toContain("- projects/alpha/AGENTS.md");
-      expect(body).toContain("- projects/beta/AGENTS.md");
+      // 경로는 백틱으로 감싸야 실제 파서가 읽는다 — 맨 경로면 선언이 비어 진입점이
+      // malformed 로 거절된다(2026-08-26 실측). 픽스처는 실제로 쓸 수 있는 모양이어야 한다.
+      expect(body).toContain("- `agents-rules.json`");
+      expect(body).toContain("- `project-index.json`");
+      expect(body).toContain("- `projects/alpha/AGENTS.md`");
+      expect(body).toContain("- `projects/beta/AGENTS.md`");
     } finally {
       await fx.dispose();
     }
