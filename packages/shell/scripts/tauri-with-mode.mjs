@@ -56,9 +56,10 @@ const AGENT_WORKTREE_ROOTS = [
 ];
 
 function gitOutput(dir, args) {
+	const safeDir = resolve(dir).replaceAll("\\", "/");
 	const r = spawnSync(
 		"git",
-		["-C", dir, ...args],
+		["-c", `safe.directory=${safeDir}`, "-C", dir, ...args],
 		{ encoding: "utf8", shell: false },
 	);
 	if (r.status !== 0) return null;
@@ -211,6 +212,11 @@ env.NAIA_AGENT_STANDALONE = env.NAIA_AGENT_STANDALONE ?? "1";
 function gitDirForPath(path) {
 	let dir = resolve(path);
 	if (existsSync(dir) && statSync(dir).isFile()) dir = dirname(dir);
+	while (!existsSync(resolve(dir, ".git"))) {
+		const parent = dirname(dir);
+		if (parent === dir) throw new Error(`Path is not inside a git checkout: ${path}`);
+		dir = parent;
+	}
 	const root = gitOutput(dir, ["rev-parse", "--show-toplevel"]);
 	if (!root) throw new Error(`Path is not inside a git checkout: ${path}`);
 	return root.replaceAll("\\", "/");

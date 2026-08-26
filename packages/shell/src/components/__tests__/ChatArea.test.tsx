@@ -1,4 +1,5 @@
 import {
+	act,
 	cleanup,
 	fireEvent,
 	render,
@@ -1364,6 +1365,42 @@ describe("ChatArea", () => {
 			expect(document.body.textContent).toContain(first + second),
 		);
 		expect(document.body.textContent).not.toContain(`${first} ${second}`);
+		localStorage.removeItem("naia-config");
+	});
+
+	it("releases a completed answer when a playback-ready callback is lost", async () => {
+		const playAuthoredClip = vi.fn().mockReturnValue(new Promise(() => {}));
+		useCascadeAvatarStore.setState({
+			renderer: {
+				hasAuthoredClip: () => true,
+				playAuthoredClip,
+				setSpeakingVisual: vi.fn(),
+				setVoice: vi.fn().mockResolvedValue(false),
+				interrupt: vi.fn(),
+				stop: vi.fn(),
+			} as never,
+		});
+		localStorage.setItem("naia-config", JSON.stringify({
+			apiKey: "test-key", provider: "gemini", model: "gemini-2.5-flash",
+			ttsEnabled: true, ttsProvider: "naia-local-voice", vllmTtsHost: "http://localhost:8910",
+		}));
+
+		render(<ChatArea />);
+		const input = screen.getByPlaceholderText(/message/i);
+		fireEvent.change(input, { target: { value: "lost callback" } });
+		fireEvent.keyDown(input, { key: "Enter" });
+		await waitFor(() => expect(capturedRequests).toHaveLength(1));
+		const request = capturedRequests[0];
+		const answer = "The complete answer must remain readable.";
+		request.onChunk({ type: "text", requestId: request.requestId, text: answer });
+		await waitFor(() => expect(playAuthoredClip).toHaveBeenCalledTimes(1));
+		expect(screen.queryByText(answer)).toBeNull();
+
+		vi.useFakeTimers();
+		request.onChunk({ type: "finish", requestId: request.requestId });
+		await act(async () => { await vi.advanceTimersByTimeAsync(8_000); });
+		expect(screen.getByText(answer)).toBeDefined();
+		vi.useRealTimers();
 		localStorage.removeItem("naia-config");
 	});
 
