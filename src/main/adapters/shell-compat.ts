@@ -19,7 +19,7 @@ export interface ShellSendOptions {
   requestId: string;
   sessionId?: string;
   systemPrompt?: string;
-  /** S4 — 셸 환경고유 세그먼트(아바타 감정·패널). 코어가 persona+workspace 뒤 머지. */
+  /** S4 — 셸 환경고유 세그먼트(아바타 감정·앱·표면). 코어가 persona+workspace 뒤 머지. */
   environmentSegments?: readonly EnvironmentSegment[];
   enableTools?: boolean;
   enableThinking?: boolean;

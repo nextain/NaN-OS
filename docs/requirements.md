@@ -999,3 +999,16 @@ fenced code는 언어·복사·접기·워크스페이스 전환을 제공하고
 | **FR-ENV-DISPATCH.5** | 요청 본문에 길이 상한을 둔다. 빈 요청은 전달하지 않는다. 상한과 공백 판정은 Rust 경계에서도 수행한다. | UC-ENV-DISPATCH-REFUSE | Rust 단위 테스트 + `environment-dispatch.contract.test.ts` | Pending |
 | **FR-ENV-DISPATCH.6** | 환경이 거절하면 그 사유를 그대로 올린다. 실패를 성공으로 바꾸지 않으며, 결과 불명은 불명으로 남긴다. | UC-ENV-DISPATCH-STRUCTURED | `environment-dispatch.contract.test.ts` 오류 전파 | Pending |
 | **FR-ENV-DISPATCH.7** | Rust 명령 계층은 식별자 형식과 길이만 검증하고 능력 게이팅은 core 의도 계층이 수행한다. 이 구조에서 웹뷰 코드가 Tauri 명령을 직접 부르면 게이팅을 건너뛴다는 사실을 문서와 요구사항에 남긴다(기존 `herdr_prompt_agent` 와 동일한 관행). Rust 계층 자체의 능력 게이팅은 후속 과제다. | UC-ENV-DISPATCH-TERMINAL | 문서 기재 + `e2e-tauri/specs/environment-dispatch.spec.ts` 명령 등록 확인 | Pending |
+
+## 기능 요구사항 (FR) — 두 저장소 wire 어휘 동기 (#497 후속)
+
+> 출처 시나리오: `user-scenarios.md` 의 `UC-WIRE-UNION-DRIFT`. 상태: 전부 Pending.
+
+| ID | 요구사항 | 출처 시나리오 | 검증(P02) | 상태 |
+|---|---|---|---|---|
+| **FR-WIRE-UNION.1** | 두 저장소가 같은 표본 `src/test/fixtures/wire-union.json` 을 들고, 각자 자기 쪽 어휘가 그 표본과 일치하는지 검증한다. 표본이 두 파일로 갈라지면 양쪽 테스트가 깨진다. | UC-WIRE-UNION-DRIFT | `wire-union-drift.contract.test.ts` 표본 대조 | Done |
+| **FR-WIRE-UNION.2** | 어휘 목록은 각 저장소의 실행되는 코드에서 나온다. 셸은 자기 수용 상수에서, 뇌는 자기 송신 경로의 소스에서 뽑는다. 손으로 적은 표와 코드가 어긋나면 실패한다. | UC-WIRE-UNION-DRIFT | 소스 추출과 상수 대조 | Done |
+| **FR-WIRE-UNION.3** | 뇌가 내보내는 chat-turn 메시지 종류는 셸이 수용하는 종류의 부분집합이어야 한다. 아니면 실패한다. | UC-WIRE-UNION-DRIFT | 부분집합 단언 | Done |
+| **FR-WIRE-UNION.4** | 환경 세그먼트 kind 목록이 두 저장소에서 같아야 한다. | UC-WIRE-UNION-DRIFT | kind 집합 대조 | Done |
+| **FR-WIRE-UNION.5** | 추출 결과가 비면 통과하지 않는다. 빈 집합으로 부분집합 단언이 공허하게 참이 되는 경로를 막는다. | UC-WIRE-UNION-DRIFT | 비어있지 않음 단언 | Done |
+| **FR-WIRE-UNION.6** | 상대 저장소 체크아웃을 찾지 못하면 건너뛰지 않고 실패한다. | UC-WIRE-UNION-DRIFT | 상대 표본 탐색 실패 단언 | Done |
