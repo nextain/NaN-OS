@@ -401,6 +401,15 @@ html[data-bgm-youtube-background="hidden"] .app-bg-iframe {
 	opacity: 0;
 }
 
+.app-bg-fallback {
+	position: fixed;
+	inset: 0;
+	z-index: 0;
+	background:
+		radial-gradient(circle at 50% 35%, rgba(76, 92, 138, 0.42), transparent 55%),
+		linear-gradient(160deg, #171b2d 0%, #29213a 52%, #17131f 100%);
+}
+
 .app-bg-video {
 	/* GPU compositor layer for hardware-accelerated video decoding */
 	will-change: transform;
