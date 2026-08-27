@@ -67,6 +67,28 @@ const tauriCommands: EnvironmentCommandPort = {
  */
 export const environmentSession = new EnvironmentSession();
 
+/**
+ * 환경 도구가 뇌에 실제로 등록되어 있다고 마지막으로 확인된 상태 (FR-ENV-ATTENTION.16).
+ *
+ * 왜 상태로 두는가: 매 턴 확인 응답을 기다리면, 응답이 오지 않을 때 사용자의 모든 대화가
+ * 시간초과만큼 멈춘다. 사용자의 말은 즉시 나가야 한다 — 환경은 대화의 조건이 아니다.
+ * 그래서 등록은 기다리지 않고 쏘고, 확인이 돌아오면 이 상태가 바뀐다.
+ *
+ * 한계도 분명하다: 뇌가 방금 죽었다면 확인 실패가 돌아올 때까지 한두 턴은 등록되어 있다고
+ * 믿는다. 그 사이 표면이 실릴 수 있다. 이것을 감수하는 대신 대화를 막지 않는다.
+ */
+let environmentToolAcked = false;
+
+/** 마지막으로 확인된 등록 상태. 판정에 쓴다. */
+export function environmentToolRegistered(): boolean {
+	return environmentToolAcked;
+}
+
+/** 확인 응답이 돌아왔을 때 상태를 갱신한다. */
+export function noteEnvironmentToolAck(ok: boolean): void {
+	environmentToolAcked = ok;
+}
+
 /** 스냅샷을 실제로 가져와 관측을 갱신한다. 실패하면 null — 없는 것을 있는 척하지 않는다. */
 export async function refreshEnvironment(): Promise<ReturnType<EnvironmentSession["latestReport"]>> {
 	try {

@@ -4873,13 +4873,13 @@ export function SettingsTab() {
 								// 등록하므로 실패해도 다음 턴에 복구된다.
 								if (next === "off") {
 									environmentSession.unwatch();
-									sendAppSkillsClear(ENVIRONMENT_APP_ID)
+									sendAppSkillsClear(ENVIRONMENT_APP_ID, { awaitAck: true })
 										.then((ok) => {
 											if (!ok) Logger.warn("SettingsTab", "environment skill clear not delivered", {});
 										})
 										.catch(() => {});
 								} else {
-									sendAppSkills(ENVIRONMENT_APP_ID, [SKILL_ENVIRONMENT])
+									sendAppSkills(ENVIRONMENT_APP_ID, [SKILL_ENVIRONMENT], { awaitAck: true })
 										.then((ok) => {
 											if (!ok) Logger.warn("SettingsTab", "environment skill register not delivered", {});
 										})

@@ -52,6 +52,8 @@ import {
 	executeEnvironmentSkill,
 	liveEnvironmentDeps,
 	environmentSession,
+	environmentToolRegistered,
+	noteEnvironmentToolAck,
 	refreshEnvironment,
 } from "../lib/environment-skill";
 import {
@@ -1796,9 +1798,15 @@ export function ChatArea({
 			// 다만 여기서는 실패해도 대화를 막지 않는다. 환경은 대화의 조건이 아니다.
 			let environmentToolReady = false;
 			if ((loadConfig()?.environmentAwareness ?? "auto") !== "off") {
-				environmentToolReady = await sendAppSkills(ENVIRONMENT_APP_ID, [SKILL_ENVIRONMENT]);
+				// 등록을 쏘되 기다리지 않는다. 기다리면 확인이 오지 않을 때 사용자의 모든
+				// 대화가 시간초과만큼 멈춘다 — 실제로 그렇게 만들어 12건이 깨졌다(2026-08-28).
+				// 확인이 돌아오면 상태가 바뀌고, 이 턴은 마지막으로 확인된 상태를 쓴다.
+				void sendAppSkills(ENVIRONMENT_APP_ID, [SKILL_ENVIRONMENT], { awaitAck: true })
+					.then((ok) => noteEnvironmentToolAck(ok))
+					.catch(() => noteEnvironmentToolAck(false));
+				environmentToolReady = environmentToolRegistered();
 				if (!environmentToolReady) {
-					Logger.warn("ChatArea", "environment skill not delivered — skipping surfaces", {
+					Logger.warn("ChatArea", "environment skill not confirmed — skipping surfaces", {
 						requestId,
 					});
 				}

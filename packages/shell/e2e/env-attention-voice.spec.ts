@@ -129,6 +129,14 @@ const VOICE_ATTENTION_MOCK = `
 				}, 20);
 				return;
 			}
+			if ((req.type === "app_skills" || req.type === "app_skills_clear") && req.requestId) {
+				// Rust 가 gRPC 결과를 app_skills_result 로 돌려주는 흐름 (FR-ENV-ATTENTION.16).
+				// 이것이 없으면 셸은 등록이 확인되지 않았다고 보고 표면을 싣지 않는다.
+				var srid = req.requestId;
+				setTimeout(function () {
+					emitEvent("agent_response", JSON.stringify({ type: "app_skills_result", requestId: srid, ok: true }));
+				}, 10);
+			}
 			if (req.type === "chat_request" && window.__E2E_ENV_CALL__) {
 				// 텍스트 경로에서 뇌가 환경 도구를 부르는 흐름. 다음 요청에는 다시 부르지
 				// 않도록 한 번 쓰고 지운다 — 매 턴 켜지면 예산 시험이 무의미해진다.

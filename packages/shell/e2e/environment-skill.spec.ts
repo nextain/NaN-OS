@@ -77,6 +77,14 @@ const MOCK_SCRIPT = `
     if (cmd === "send_to_agent_command") {
       var payload = JSON.parse(args.message);
       window.__E2E_OUTBOUND__.push(payload);
+      if (payload && (payload.type === "app_skills" || payload.type === "app_skills_clear") && payload.requestId) {
+        // Rust 가 gRPC 결과를 app_skills_result 로 돌려주는 흐름 (FR-ENV-ATTENTION.16).
+        var arid = payload.requestId;
+        var deny = window.__E2E_SKILLS_DENY__ === true;
+        setTimeout(function () {
+          emitEvent("agent_response", JSON.stringify({ type: "app_skills_result", requestId: arid, ok: !deny }));
+        }, 10);
+      }
       if (payload && payload.type === "chat_request") {
         var rid = payload.requestId;
         var call = window.__E2E_ENV_CALL__ || { action: "focus", surface: "s-1" };
@@ -736,24 +744,19 @@ test.describe("#502 환경 스킬 배선 (FR-ENV-LIVE)", () => {
 
 		// 이제 등록 전달이 실패한다(agent 재시작·연결 단절과 같은 상황).
 		//
-		// ⚠️ 실패를 스펙 모의 안에서 던지면 공용 헬퍼(tauri-base-mock)가 app_skills 예외를
-		//    삼켜 성공으로 바꾼다 — 실제로 그렇게 무력화됐다(2026-08-28 실측). 그래서 가장
-		//    바깥에서 invoke 를 감싼다.
+		// 뇌가 등록을 거절한다 — 큐잉은 되지만 gRPC 가 실패하는 상황이다.
+		// 이것이 실제 실패 양식이다. 큐잉만 막는 것으로는 17차 적대리뷰가 짚은
+		// "예약됨을 전달됨으로 읽는" 문제를 재지 못한다.
+		//
+		// ⚠️ 셸은 확인을 기다리지 않는다(기다리면 확인이 없을 때 모든 대화가 시간초과만큼
+		//    멈춘다 — 실제로 그렇게 만들어 12건이 깨졌다). 그래서 거절이 반영되기까지 한
+		//    턴이 걸린다. 알고 감수한 한계이고 요구사항에도 적어 두었다. 그 턴을 흘려보낸다.
 		await page.evaluate(() => {
-			const internals = (window as unknown as { __TAURI_INTERNALS__: { invoke: (c: string, a: unknown) => Promise<unknown> } })
-				.__TAURI_INTERNALS__;
-			const inner = internals.invoke;
-			internals.invoke = async (cmd: string, args: unknown) => {
-				if (cmd === "send_to_agent_command") {
-					const msg = (args as { message?: string } | undefined)?.message;
-					const payload = msg ? (JSON.parse(msg) as { type?: string; appId?: string }) : undefined;
-					if (payload?.type === "app_skills" && payload.appId === "environment") {
-						throw new Error("naia-agent unavailable");
-					}
-				}
-				return inner(cmd, args);
-			};
+			(window as unknown as { __E2E_SKILLS_DENY__?: boolean }).__E2E_SKILLS_DENY__ = true;
 		});
+		await input.fill("거절이 반영되는 턴");
+		await input.press("Enter");
+		await page.waitForTimeout(1_200);
 		const before = await page.evaluate(
 			() =>
 				((window as unknown as { __E2E_OUTBOUND__?: Record<string, unknown>[] }).__E2E_OUTBOUND__ ?? [])
