@@ -1,7 +1,7 @@
 {
-  "revision": "6111eb10",
-  "stampedAt": "2026-08-27T13:16:42.667Z",
-  "fingerprint": "0e91ae996fcb9350",
+  "revision": "245066e9",
+  "stampedAt": "2026-08-27T13:58:50.385Z",
+  "fingerprint": "2f93a0efd090ce71",
   "scenarios": {
     "UC-WORKSPACE-CONTEXT-DISCOVER": {
       "receipts": [
@@ -912,7 +912,7 @@
           "ref": "npx playwright test e2e/env-attention-voice.spec.ts (cwd=packages/shell)"
         }
       ],
-      "testCount": 117,
+      "testCount": 118,
       "artifacts": [
         "npx vitest run --reporter=json src/test/environment-live-wiring.contract.test.ts (cwd=.) → exit 0",
         "npx vitest run --reporter=json src/lib/__tests__/environment-skill.test.ts (cwd=packages/shell) → exit 0",

@@ -433,13 +433,27 @@ describe("비용이 실제로 줄었는가 (FR-ENV-ATTENTION.15)", () => {
     return new TextEncoder().encode(JSON.stringify(seg)).length;
   }
 
-  it("지켜보지 않는 동안의 세그먼트가 목록보다 훨씬 작다", () => {
+  // ⚠️ 임계는 실측치에 바짝 붙인다. "20% 미만" 같은 느슨한 조건은 3배 부풀어도 통과하므로
+  //    요구사항이 적어 둔 93.5% 감소를 지키지 못한다(2026-08-27 14차 적대리뷰 지적).
+  //    아래 상수는 이 고정 표본에서 실제로 측정된 값이다. 바뀌면 왜 바뀌었는지 적어야 한다.
+  const MEASURED_FULL = 1187;
+  const MEASURED_WITHHELD = 77;
+  const TOLERANCE = 0.08; // 라벨 문구 같은 사소한 변화를 위한 폭. 회귀를 숨길 만큼 넓지 않다.
+
+  it("지켜보지 않는 동안의 세그먼트 크기가 실측치에 머문다", () => {
     const session = new EnvironmentSession();
     session.observeSnapshot({ panes: MANY } as never);
     const withheld = bytesOf(session.segment("auto"));
     const full = bytesOf(session.segment("always"));
-    expect(full, "표면이 실제로 실리지 않았다면 이 비교는 공허하다").toBeGreaterThan(200);
-    expect(withheld).toBeLessThan(full * 0.2);
+    // 목록 쪽이 실제로 커야 비교가 공허하지 않다.
+    expect(full).toBeGreaterThan(MEASURED_FULL * (1 - TOLERANCE));
+    // 숨김 쪽은 위아래로 묶는다. 위는 부풀기를, 아래는 "세그먼트를 아예 없애 버림"을 막는다.
+    expect(withheld, `숨김 세그먼트가 부풀었다: ${withheld}바이트`).toBeLessThanOrEqual(
+      Math.ceil(MEASURED_WITHHELD * (1 + TOLERANCE)),
+    );
+    expect(withheld, `숨김 세그먼트가 사라졌다: ${withheld}바이트`).toBeGreaterThanOrEqual(
+      Math.floor(MEASURED_WITHHELD * (1 - TOLERANCE)),
+    );
   });
 
   it("한 대화에서 실제로 오가는 총량을 잰다 — 지켜보기는 예산만큼만 비싸다", () => {
@@ -457,9 +471,12 @@ describe("비용이 실제로 줄었는가 (FR-ENV-ATTENTION.15)", () => {
       always.noteTurn();
       auto.noteTurn();
     }
-    expect(alwaysBytes).toBeGreaterThan(0);
-    // 켜 둔 채 잊어도 예산이 풀어 주므로, 40턴 총량이 절반 아래여야 한다.
-    expect(autoBytes).toBeLessThan(alwaysBytes / 2);
+    // 실측치: always 47480 / auto 13070 (72.5% 감소). "절반 미만"으로는 82% 부풀어도
+    // 통과하므로 요구사항이 적어 둔 수치를 지키지 못한다.
+    expect(alwaysBytes).toBeGreaterThan(47_480 * (1 - TOLERANCE));
+    expect(autoBytes, `40턴 총량이 부풀었다: ${autoBytes}바이트`).toBeLessThanOrEqual(
+      Math.ceil(13_070 * (1 + TOLERANCE)),
+    );
   });
 
   it("지켜보지 않는 동안에는 터미널 이름이 한 글자도 나가지 않는다", () => {

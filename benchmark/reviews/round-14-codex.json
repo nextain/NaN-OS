@@ -1,0 +1,31 @@
+{
+  "verdict": "NOT_CLEAN",
+  "frame_assessment": {
+    "scope_is_sufficient": false,
+    "missing_concerns": [
+      "비용 검증이 실제 채팅 요청의 wire 직렬화나 과금 토큰을 측정하지 않고 코어 세그먼트 객체의 JSON 크기만 측정한다.",
+      "문서에 고정한 정확한 감소량보다 훨씬 큰 회귀가 발생해도 현재 임계값은 통과한다."
+    ]
+  },
+  "findings": [
+    {
+      "id": "R14-COST-THRESHOLD-DOES-NOT-GUARD-CLAIM",
+      "file_location": "src/test/environment-live-wiring.contract.test.ts:436",
+      "impact": "요청당 숨김 세그먼트가 현재 77바이트에서 최대 약 237바이트로 3배 이상 커져도 `full * 0.2`를 만족할 수 있다. 40턴 auto 총량도 현재 13070바이트에서 23739바이트 근처까지 약 82% 증가해도 `alwaysBytes / 2`를 만족한다. 그런데 requirements와 사용자 시나리오는 각각 1187→77바이트와 47480→13070바이트가 회귀하면 테스트가 깨진다고 명시한다.",
+      "why_it_matters": "테스트가 보호하는 계약은 '20% 미만'과 '절반 미만'뿐이며, 문서와 작성자가 주장하는 93.5%·72.5% 감소를 보호하지 않는다. 비용 증가가 이번 요청의 출발점이므로 허용 폭이 이처럼 큰 테스트로는 완료를 주장할 수 없다.",
+      "severity": "high"
+    },
+    {
+      "id": "R14-COST-PROBE-BYPASSES-PRODUCTION-WIRE",
+      "file_location": "src/test/environment-live-wiring.contract.test.ts:432",
+      "impact": "`bytesOf(session.segment(...))`는 코어 객체 하나를 `JSON.stringify`한 크기만 잰다. 실제 프로덕션 경로인 `ChatArea`의 `buildEnvironmentSegments`와 `sendChatMessage`, chat request 직렬화 경계를 통과하지 않으므로 중복 삽입, 래퍼 오버헤드, 경로별 변환 또는 실제 전송 형상의 회귀를 감지하지 못한다.",
+      "why_it_matters": "사용자가 문제 삼은 것은 대화 요청마다 뇌로 가는 비용이다. 현재 측정은 실제 요청이 아니라 그 재료의 로컬 표현을 재므로, 반복해서 나타난 '테스트가 다른 것을 재는' 실패 양식이 남아 있다. Playwright 테스트도 실제 outbound 세그먼트 내용은 확인하지만 바이트 총량이나 40턴 비용 계약은 측정하지 않는다.",
+      "severity": "medium"
+    }
+  ],
+  "what_would_make_it_clean": [
+    "비용 계약 테스트에서 문서에 명시한 77바이트와 13070바이트 또는 좁고 명시적인 허용 오차를 직접 상한으로 고정해, 현재 수치의 의미 있는 증가가 실패하도록 만든다.",
+    "ChatArea가 실제 생성한 outbound chat_request를 캡처하여 프로덕션 직렬화 형식의 환경 관련 바이트를 측정하고, 12개 표면의 auto·always 및 watch 후 40턴 총량을 비교한다.",
+    "requirements의 '회귀하면 계약 테스트가 깨진다'를 실제 보장 수준과 일치시키고, mutation probe로 세그먼트 중복 삽입과 숨김 payload 팽창이 실패하는지 확인한다."
+  ]
+}

@@ -662,6 +662,63 @@ test.describe("#502 환경 스킬 배선 (FR-ENV-LIVE)", () => {
 			.toBeGreaterThan(0);
 	});
 
+	test("(B13) 실제 대화 요청의 바이트로 절감을 잰다 (FR-ENV-ATTENTION.15)", async ({ page }) => {
+		// 코어 세그먼트 객체의 JSON 크기를 재는 것은 재료를 재는 것이다. 사용자가 문제 삼은
+		// 것은 요청마다 뇌로 가는 비용이므로, 실제로 나간 chat_request 에서 재야 한다
+		// (2026-08-27 14차 적대리뷰 지적).
+		await boot(page, { ...BASE_CONFIG, environmentAwareness: "always" });
+		const input = page.locator(".chat-input");
+		await expect(input).toBeEnabled({ timeout: 5_000 });
+
+		// 표면을 12개로 늘려 의미 있는 크기를 만든다.
+		await page.evaluate(() => {
+			(window as unknown as { __E2E_SNAPSHOT__: { panes: unknown[] } }).__E2E_SNAPSHOT__ = {
+				panes: Array.from({ length: 12 }, (_, i) => ({
+					pane_id: `p${i}`,
+					label: `사내-저장소-${i}-빌드-감시`,
+					...(i % 2 === 0 ? { agent: "codex" } : {}),
+					focused: i === 0,
+				})),
+			};
+		});
+
+		/** 마지막 chat_request 안에서 표면 세그먼트가 실제로 차지한 바이트. */
+		const surfaceBytes = async () =>
+			page.evaluate(() => {
+				const out =
+					(window as unknown as { __E2E_OUTBOUND__?: Record<string, unknown>[] }).__E2E_OUTBOUND__ ?? [];
+				const chats = out.filter((m) => m?.type === "chat_request");
+				const segs = (chats[chats.length - 1]?.environmentSegments ?? []) as Record<string, unknown>[];
+				const seg = segs.find((x) => x?.kind === "environmentSurfaces");
+				return seg ? new TextEncoder().encode(JSON.stringify(seg)).length : 0;
+			});
+
+		await setEnvCall(page, { action: "unknown_action" }); // 환경을 안 건드리는 호출
+		await input.fill("늘 켬에서 한 턴");
+		await input.press("Enter");
+		await expect.poll(async () => await surfaceBytes(), { timeout: 10_000 }).toBeGreaterThan(1_000);
+		const alwaysBytes = await surfaceBytes();
+
+		// 같은 세션에서 auto 로 바꾼다. 지켜보기는 꺼져 있다.
+		await page.evaluate(() => {
+			const raw = localStorage.getItem("naia-config");
+			const cfg = raw ? JSON.parse(raw) : {};
+			cfg.environmentAwareness = "auto";
+			localStorage.setItem("naia-config", JSON.stringify(cfg));
+		});
+		await input.fill("자동에서 한 턴");
+		await input.press("Enter");
+		await expect
+			.poll(async () => await surfaceBytes(), { timeout: 10_000 })
+			.toBeLessThan(alwaysBytes / 2);
+		const autoBytes = await surfaceBytes();
+
+		// 실측 근거: 표면 12개 기준 1187 → 77 바이트. 실제 wire 에서도 그 자리에 있어야 한다.
+		expect(alwaysBytes, `목록 전송이 예상보다 작다: ${alwaysBytes}`).toBeGreaterThan(1_000);
+		expect(autoBytes, `숨김 전송이 부풀었다: ${autoBytes}`).toBeLessThanOrEqual(100);
+		expect(autoBytes, `숨김 세그먼트가 사라졌다: ${autoBytes}`).toBeGreaterThan(0);
+	});
+
 	test("(C) app_tool_call(focus) 이 실제 herdr 명령까지 간다", async ({ page }) => {
 		await boot(page, BASE_CONFIG);
 		// 나이아가 실제로 하는 순서대로 손잡이를 얻는다 — 지켜보기 전에는 손잡이가 안 나간다.
