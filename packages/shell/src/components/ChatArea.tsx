@@ -2012,7 +2012,7 @@ export function ChatArea({
 		 * 음성은 연결 시점의 지시문 하나로 이야기하므로 요청마다 표면 세그먼트를 싣지 않는다.
 		 * 그 사실을 나이아에게 그대로 알려야 "지켜본다"가 거짓말이 되지 않는다.
 		 */
-		origin: { readonly viaVoice?: boolean } = {},
+		origin: { readonly assemblesChatRequests?: boolean } = {},
 	) {
 		// UC8 BGM (FR-BGM.1): BgmPlayer 는 위젯(앱 아님)이라 appRegistry 소유자
 		// 탐색으로 못 찾는다 — 전용 분기. executeBgmSkill 이 위젯이 이미 듣는
@@ -2026,17 +2026,19 @@ export function ChatArea({
 				liveEnvironmentDeps(
 					loadConfig()?.environmentTerminalInput === true,
 					loadConfig()?.environmentAwareness ?? "auto",
-					origin.viaVoice !== true,
+					origin.assemblesChatRequests === true,
 				),
 			)
 				.then((result) => {
-					Logger.info("ChatArea", "environment skill result", { result });
+					Logger.info("ChatArea", "environment skill result", { result: result.text });
 					return sendAppToolResult(
 						req.requestId,
 						req.toolCallId,
-						result,
+						result.text,
 						// 거절·오류는 성공으로 바꾸지 않는다 — 뇌가 실패를 성공으로 말하는 경로를 막는다.
-						!result.startsWith("거절:") && !result.startsWith("환경 오류:"),
+						// 판정은 실행기가 낸다. 문자열 접두사로 되짚으면 새 사유가 생길 때마다
+						// 조용히 성공으로 새어 나간다 (2026-08-27 11차 적대리뷰에서 실제로 그랬다).
+						result.ok,
 						req.activityId,
 					);
 				})
@@ -2253,13 +2255,18 @@ export function ChatArea({
 				}
 				break;
 			case "app_tool_call": {
-				dispatchAppToolCall({
-					requestId: chunk.requestId,
-					toolCallId: chunk.toolCallId,
-					toolName: chunk.toolName,
-					args: chunk.args,
-					activityId: chunk.activityId,
-				});
+				// 이 경로만 셸이 대화 요청을 조립한다(buildEnvironmentSegments 가 붙는 곳).
+				// 능동 발화와 실시간 음성은 아니다 — 그쪽은 기본값 false 를 그대로 쓴다.
+				dispatchAppToolCall(
+					{
+						requestId: chunk.requestId,
+						toolCallId: chunk.toolCallId,
+						toolName: chunk.toolName,
+						args: chunk.args,
+						activityId: chunk.activityId,
+					},
+					{ assemblesChatRequests: true },
+				);
 				break;
 			}
 			case "app_control": {
@@ -3086,6 +3093,8 @@ export function ChatArea({
 			// Gemini Direct uses Rust proxy (WebKitGTK can't connect to Google's WS)
 			const useDirectMode =
 				liveProvider === "gemini-live" && !!config.googleApiKey;
+			// 통화가 시작될 때 이미 지켜보고 있었는가. 통화가 끝날 때 무엇을 끌지 정하는 근거다.
+			const watchingBeforeVoice = environmentSession.watching();
 			const session = createVoiceSession(liveProvider, {
 				useProxy: useDirectMode,
 			});
@@ -3231,7 +3240,8 @@ export function ChatArea({
 						// App-owned tools (skill_browser_*, skill_app switch)
 						// only ran in streaming chat before; route them here too so
 						// voice can drive apps. Auto-switches to the owner app.
-						onAppToolCall: (req) => dispatchAppToolCall(req, { viaVoice: true }),
+						// 실시간 음성은 셸이 요청을 조립하지 않는다 — 기본값(false)이 사실이다.
+						onAppToolCall: (req) => dispatchAppToolCall(req),
 						onAppControl: (req) => dispatchAppControl(req),
 					});
 					session.sendToolResponse(callId, result.output);
@@ -3248,9 +3258,12 @@ export function ChatArea({
 				session.disconnect();
 			};
 			session.onDisconnect = (info) => {
-				// 통화가 끝나면 지켜보기도 끝난다. 통화 중에 켠 주의가 통화 밖으로
-				// 새어 나가면 사용자가 켠 적 없는 노출이 남는다 (FR-ENV-ATTENTION.7).
-				environmentSession.unwatch();
+				// 통화가 켠 주의만 통화가 끈다 (FR-ENV-ATTENTION.7).
+				//
+				// ⚠️ 무조건 끄면 텍스트 대화에서 켜 둔 지켜보기까지 지운다. EnvironmentSession 은
+				//    모듈 전역 하나라 출처를 스스로 알지 못하므로, 통화 시작 시점의 상태를
+				//    여기서 기억해 두고 그것과 비교한다 (2026-08-27 11차 적대리뷰 지적).
+				if (!watchingBeforeVoice) environmentSession.unwatch();
 				// Atomic terminal transition for a mid-call drop. Tear down (cost
 				// summary, bridge, mic, player) SYNCHRONOUSLY first, THEN set the
 				// terminal status once — so the derived voice button can't re-enable

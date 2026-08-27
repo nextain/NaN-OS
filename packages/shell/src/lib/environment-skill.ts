@@ -112,13 +112,26 @@ export interface EnvironmentSkillDeps {
 	/**
 	 * 이 호출이 온 경로가 요청마다 표면 세그먼트를 싣는가 (FR-ENV-ATTENTION.10).
 	 *
-	 * gRPC 대화는 싣는다. 실시간 음성은 연결 시점의 지시문 하나로 이야기하므로 싣지 않는다.
-	 * 그런데 watch 는 "다음 요청부터 목록이 실린다"고 말한다 — 음성에서 그렇게 답하면
-	 * 거짓말이다. 이 슬라이스가 거절을 성공으로 바꾸지 않는 것과 같은 이유로, 못 하는 것을
-	 * 한다고 말하지 않는다. 경로가 안 싣는다면 그 사실을 그대로 알리고 observe 를 권한다.
+	 * 셸이 대화 요청을 조립하는 경로만 싣는다. 실시간 음성은 연결 시점의 지시문 하나로
+	 * 이야기하고, 능동 발화는 뇌가 밀어 주는 것이라 셸이 요청을 만들지 않는다.
+	 * 그런데 watch 는 "다음 요청부터 목록이 실린다"고 말한다 — 안 싣는 경로에서 그렇게
+	 * 답하면 거짓말이다. 이 슬라이스가 거절을 성공으로 바꾸지 않는 것과 같은 이유로,
+	 * 못 하는 것을 한다고 말하지 않는다.
+	 *
+	 * ⚠️ 기본값은 false 다. 모르는 경로가 생기면 겸손한 쪽으로 틀려야 한다 — 참으로 두면
+	 *    새 경로마다 조용히 거짓 약속이 나간다(2026-08-27 11차 적대리뷰에서 실제로 그랬다).
 	 */
 	readonly segmentsRideRequests: boolean;
 }
+
+/** 도구 호출 하나의 결과. 성공 여부를 문자열에서 되짚지 않는다. */
+export interface EnvironmentSkillResult {
+	readonly text: string;
+	readonly ok: boolean;
+}
+
+const fail = (text: string): EnvironmentSkillResult => ({ text, ok: false });
+const done = (text: string): EnvironmentSkillResult => ({ text, ok: true });
 
 /** 관측 결과를 뇌가 읽을 줄로 편다. observe 와 watch 가 같은 형태를 쓴다. */
 function renderReport(report: ReturnType<EnvironmentSession["latestReport"]>): string | null {
@@ -138,25 +151,26 @@ function renderReport(report: ReturnType<EnvironmentSession["latestReport"]>): s
 export async function executeEnvironmentSkill(
 	args: Record<string, unknown>,
 	deps: EnvironmentSkillDeps,
-): Promise<string> {
+): Promise<EnvironmentSkillResult> {
 	const action = typeof args.action === "string" ? args.action : "";
 
 	// 사용자가 꺼 두었으면 도구가 아예 등록되지 않는다. 여기 도달했다는 것은 등록 뒤에
 	// 껐다는 뜻이다 — 관측도 조작도 하지 않는다 (FR-ENV-ATTENTION.4).
-	if (deps.awareness === "off") return "거절: 사용자가 작업 표면 인지를 꺼 두었다";
+	if (deps.awareness === "off") return fail("거절: 사용자가 작업 표면 인지를 꺼 두었다");
 
 	// 주의 제어 (FR-ENV-ATTENTION.1·2). 환경에 아무 명령도 내리지 않으므로 의도 판정 전에 갈라진다.
 	// 사용자가 always 나 off 를 정해 두었으면 나이아의 선택은 그것을 이기지 못한다 — 그 사실을
 	// 성공처럼 말하지 않고 그대로 알린다 (FR-ENV-ATTENTION.4).
 	if (action === "watch" || action === "unwatch") {
 		if (deps.awareness === "always") {
-			return "무시됨: 사용자가 작업 표면을 늘 싣도록 정해 두었다 — 지켜보기를 켜고 끌 수 없다";
+			// 상태가 안 바뀌었으므로 성공이 아니다. 뇌가 껐다고 믿으면 안 된다.
+			return fail("무시됨: 사용자가 작업 표면을 늘 싣도록 정해 두었다 — 지켜보기를 켜고 끌 수 없다");
 		}
 		if (action === "unwatch") {
 			deps.session.unwatch();
-			return deps.segmentsRideRequests
-				? "그만 본다: 다음 요청부터 표면 개수만 실린다"
-				: "그만 본다";
+			return done(
+				deps.segmentsRideRequests ? "그만 본다: 다음 요청부터 표면 개수만 실린다" : "그만 본다",
+			);
 		}
 		deps.session.watch();
 		await deps.refresh();
@@ -164,33 +178,34 @@ export async function executeEnvironmentSkill(
 		const promise = deps.segmentsRideRequests
 			? "지켜본다: 다음 요청부터 목록이 실린다"
 			: "지켜본다고 표시했다. 다만 지금 이야기하는 이 경로(실시간 음성)는 요청마다 목록을 싣지 않는다 — 변화가 궁금하면 그때그때 observe 를 불러라";
-		if (rendered === null) return `${promise}\n다만 작업 표면 환경이 지금 응답하지 않는다`;
-		return `${promise}\n${rendered}`;
+		// 지켜보기는 켜졌지만 볼 것을 못 받았다 — 절반만 된 것을 성공이라 말하지 않는다.
+		if (rendered === null) return fail(`${promise}\n다만 작업 표면 환경이 지금 응답하지 않는다`);
+		return done(`${promise}\n${rendered}`);
 	}
 
 	const intent = toIntent(args);
-	if (typeof intent === "string") return `거절: ${intent}`;
+	if (typeof intent === "string") return fail(`거절: ${intent}`);
 
 	// 조작도 관측을 먼저 갱신한다. 사라진 표면의 손잡이가 무효가 되는 지점이다.
 	await deps.refresh();
 
 	if (intent.kind === "observe") {
 		const rendered = renderReport(deps.session.latestReport());
-		if (rendered === null) return "관측 불가: 작업 표면 환경이 지금 응답하지 않는다";
-		return rendered;
+		if (rendered === null) return fail("관측 불가: 작업 표면 환경이 지금 응답하지 않는다");
+		return done(rendered);
 	}
 
 	const outcome = await deps.session.act(intent, deps.commands, deps.grants);
-	if (outcome.ok) return `전달됨: ${intent.kind}`;
-	if ("environmentError" in outcome) return `환경 오류: ${outcome.environmentError}`;
-	return `거절: ${outcome.rejections.map((r) => `${r.code} — ${r.detail}`).join(" / ")}`;
+	if (outcome.ok) return done(`전달됨: ${intent.kind}`);
+	if ("environmentError" in outcome) return fail(`환경 오류: ${outcome.environmentError}`);
+	return fail(`거절: ${outcome.rejections.map((r) => `${r.code} — ${r.detail}`).join(" / ")}`);
 }
 
 /** 라이브 배선용 기본 의존. 터미널 입력 권한과 인지 수준을 호출자가 정한다. */
 export function liveEnvironmentDeps(
 	terminalInput: boolean,
 	awareness: EnvironmentAwareness = "auto",
-	segmentsRideRequests = true,
+	segmentsRideRequests = false,
 ): EnvironmentSkillDeps {
 	const grants: DispatchGrants = { workspaceObserve: true, terminalInput };
 	return {

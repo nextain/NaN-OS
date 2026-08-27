@@ -113,3 +113,22 @@ describe("에픽의 UC 가 하네스에서 조용히 사라지지 않는다", ()
     expect(parsed.filter((uc) => !ownedByEpic(uc))).toEqual([]);
   });
 });
+
+describe("계열 배정은 순서가 아니라 구체성으로 정해진다", () => {
+  // 배열 순서로 먼저 걸린 것을 쓰면, 다른 계열의 접두사를 확장한 시나리오가 조용히
+  // 엉뚱한 요구를 상속한다. 그러면 이미 확보한 증거로 새 시나리오가 통과해 버린다
+  // (2026-08-27 11차 적대리뷰 반영 중 실측).
+  it("더 긴 접두사가 이긴다", () => {
+    const broad = familyOf("UC-ENV-ATTENTION");
+    const specific = familyOf("UC-ENV-ATTENTION-POLICY");
+    expect(broad?.prefix).toBe("UC-ENV-ATTENTION");
+    expect(specific?.prefix).toBe("UC-ENV-ATTENTION-POLICY");
+    expect(specific?.requiredEvidence, "구체적 선언이 넓은 것의 요구를 물려받았다").not.toEqual(
+      broad?.requiredEvidence,
+    );
+  });
+
+  it("확장 접두사가 없는 시나리오는 그대로 자기 계열에 붙는다", () => {
+    expect(familyOf("UC-ENV-STICKY")?.prefix).toBe("UC-ENV-STICKY");
+  });
+});

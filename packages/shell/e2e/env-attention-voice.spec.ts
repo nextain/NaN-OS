@@ -67,6 +67,10 @@ const VOICE_ATTENTION_MOCK = `
 	window.WebSocket.prototype = OrigWS.prototype;
 	window.WebSocket.OPEN = OrigWS.OPEN; window.WebSocket.CLOSED = OrigWS.CLOSED;
 	window.WebSocket.CONNECTING = OrigWS.CONNECTING; window.WebSocket.CLOSING = OrigWS.CLOSING;
+	window.__NAIA_E2E__.dropConnection = function(code) {
+		var ws = window.__NAIA_E2E__.lastWs;
+		if (ws) { ws.readyState = 3; if (ws.onclose) ws.onclose({ code: code || 1006, reason: "dropped", wasClean: false }); }
+	};
 	window.__NAIA_E2E__.emitRealtime = function(msg) {
 		var ws = window.__NAIA_E2E__.lastWs;
 		if (ws && ws.onmessage) ws.onmessage({ data: typeof msg === "string" ? msg : JSON.stringify(msg) });
@@ -123,6 +127,23 @@ const VOICE_ATTENTION_MOCK = `
 						emitEvent("agent_response", JSON.stringify({ type: "finish", requestId: arid }));
 					}, 10);
 				}, 20);
+				return;
+			}
+			if (req.type === "chat_request" && window.__E2E_ENV_CALL__) {
+				// 텍스트 경로에서 뇌가 환경 도구를 부르는 흐름. 다음 요청에는 다시 부르지
+				// 않도록 한 번 쓰고 지운다 — 매 턴 켜지면 예산 시험이 무의미해진다.
+				var crid = req.requestId;
+				var call = window.__E2E_ENV_CALL__;
+				window.__E2E_ENV_CALL__ = null;
+				setTimeout(function() {
+					emitEvent("agent_response", JSON.stringify({
+						type: "app_tool_call", requestId: crid, toolCallId: "tc-chat-env",
+						toolName: "skill_environment", args: call,
+					}));
+					setTimeout(function() {
+						emitEvent("agent_response", JSON.stringify({ type: "finish", requestId: crid }));
+					}, 120);
+				}, 30);
 				return;
 			}
 			if (req.type === "skill_list") {
@@ -327,7 +348,7 @@ test.describe("#502 음성 경로도 주의 예산을 쓴다 (FR-ENV-ATTENTION.7
 		).toBe(0);
 	});
 
-	test("음성에서는 '다음 요청부터 목록이 실린다'고 말하지 않는다 (FR-ENV-ATTENTION.10)", async ({
+	test("음성에서는 '다음 요청부터 목록이 실린다'고 말하지 않는다 (FR-ENV-ATTENTION.10 FR-ENV-ATTENTION.12)", async ({
 		page,
 	}) => {
 		// 음성 요청에는 표면 세그먼트가 실리지 않는다. 그런데 watch 가 실린다고 답하면
@@ -338,6 +359,38 @@ test.describe("#502 음성 경로도 주의 예산을 쓴다 (FR-ENV-ATTENTION.7
 		expect(result, "도구 결과가 비었다 — 호출이 안 닿았다면 이 단언은 공허하다").not.toBe("");
 		expect(result).toContain("요청마다 목록을 싣지 않는다");
 		expect(result, "음성인데 실린다고 약속했다").not.toContain("다음 요청부터 목록이 실린다");
+	});
+
+	test("통화가 끝나도 통화 전부터 켜져 있던 지켜보기는 살아남는다 (FR-ENV-ATTENTION.13)", async ({
+		page,
+	}) => {
+		// 전역 상태를 통화가 소유한 것처럼 다루면, 텍스트 대화에서 켠 관찰을 통화 종료가
+		// 지운다 (2026-08-27 11차 적대리뷰 지적).
+		const input = page.locator(".chat-input");
+		await expect(input).toBeEnabled({ timeout: 10_000 });
+
+		// 텍스트 경로에서 먼저 켠다.
+		await page.evaluate(() => {
+			(window as unknown as { __E2E_ENV_CALL__?: unknown }).__E2E_ENV_CALL__ = { action: "watch" };
+		});
+		await textTurn(page, "따라와줘");
+
+		// 통화를 걸었다가 **서버 쪽에서 끊긴다**.
+		// ⚠️ 버튼으로 끄는 것은 onDisconnect 를 부르지 않는다 — 그것으로는 이 경로를 못 탄다
+		//    (2026-08-27 변이 탐침에서 실제로 통과해 버렸다).
+		await startVoice(page);
+		await voiceTurnEnd(page);
+		await page.evaluate(() =>
+			(window as unknown as { __NAIA_E2E__: { dropConnection: (c?: number) => void } }).__NAIA_E2E__.dropConnection(1006),
+		);
+		await page.waitForTimeout(800);
+
+		await textTurn(page, "계속 봐줘");
+		const seg = await surfacesSegment(page);
+		expect(
+			(seg?.surfaces as unknown[] | undefined)?.length ?? 0,
+			"통화가 소유하지 않은 지켜보기를 통화 종료가 지웠다",
+		).toBeGreaterThan(0);
 	});
 
 	test("음성 턴이 예산을 다 쓰면 텍스트로 돌아와도 목록이 빠진다", async ({ page }) => {
