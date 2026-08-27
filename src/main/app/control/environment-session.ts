@@ -33,6 +33,14 @@ export type ActOutcome =
   | DispatchOutcome;
 
 /**
+ * 사용자가 정하는 환경 인지 수준 (FR-ENV-ATTENTION.4).
+ *   off    — 아무것도 싣지 않는다. 도구도 등록하지 않는다.
+ *   auto   — 기본값. 평소에는 개수만 알리고, 나이아가 지켜보기로 하면 그때 목록을 싣는다.
+ *   always — 늘 목록을 싣는다.
+ */
+export type EnvironmentAwareness = "off" | "auto" | "always";
+
+/**
  * 한 셸 세션의 환경 접점. 손잡이 발행기와 마지막 관측을 든다.
  * 셸이 I/O(스냅샷 가져오기·명령 보내기)를 소유하고, 이 객체는 판정만 한다.
  */
@@ -41,8 +49,28 @@ export class EnvironmentSession {
   private report: EnvironmentReport | null = null;
   private known: ReadonlySet<string> = new Set();
   private registry: SurfaceRegistry = new Map();
+  /**
+   * 나이아가 지금 표면을 지켜보고 있는가 (FR-ENV-ATTENTION.1).
+   * 세션 안에서만 산다 — 손잡이와 같다. 앱을 다시 켜면 안 지켜보는 상태로 시작한다.
+   */
+  private watched = false;
 
   constructor(private readonly cap?: number) {}
+
+  /** 나이아가 표면을 계속 보겠다고 정한다. 다음 요청부터 목록이 실린다 (FR-ENV-ATTENTION.1). */
+  watch(): void {
+    this.watched = true;
+  }
+
+  /** 나이아가 그만 보겠다고 정한다. 다음 요청부터 개수만 실린다 (FR-ENV-ATTENTION.2). */
+  unwatch(): void {
+    this.watched = false;
+  }
+
+  /** 지금 지켜보고 있는지. */
+  watching(): boolean {
+    return this.watched;
+  }
 
   /**
    * 스냅샷을 받아 관측을 갱신한다. 형태가 어긋나면 빈 관측이 되고 터지지 않는다.
@@ -62,12 +90,23 @@ export class EnvironmentSession {
   }
 
   /**
-   * 대화 요청에 실을 세그먼트 (FR-ENV-LIVE.1·2).
+   * 대화 요청에 실을 세그먼트 (FR-ENV-LIVE.1·2, FR-ENV-ATTENTION.1~4).
+   *
    * 표면이 하나도 없으면 만들지 않는다 — 빈 목록을 올려 "아무것도 없다"고 단언하지 않는다.
+   *
+   * 지켜보지 않는 동안에는 개수만 싣는다. 목록 전체를 늘 싣는 것은 두 가지 값을 치른다:
+   * 요청마다 토큰이 붙고, 터미널 이름이 늘 뇌로 간다. 개수만으로도 나이아는 볼 것이
+   * 있다는 사실을 알고 스스로 지켜보기로 정할 수 있다 (FR-ENV-ATTENTION.3).
+   *
+   * 개수만 싣는 형태는 wire 를 바꾸지 않는다 — `omitted` 는 이미 "실지 못한 개수"를 뜻하고,
+   * 뇌 쪽 렌더러가 그 값만으로 "…and N more not shown" 을 만든다. 표면이 없다고
+   * 단언하는 것이 아니라 "있는데 안 실었다"고 말하는 것이라 거짓이 되지 않는다.
    */
-  segment(): EnvironmentSurfacesSegment | null {
+  segment(awareness: EnvironmentAwareness = "auto"): EnvironmentSurfacesSegment | null {
+    if (awareness === "off") return null;
     if (this.report === null || this.report.surfaces.length === 0) return null;
-    return toEnvironmentSegment(this.report);
+    if (awareness === "always" || this.watched) return toEnvironmentSegment(this.report);
+    return { kind: "environmentSurfaces", surfaces: [], omitted: this.report.surfaces.length + this.report.omitted };
   }
 
   /**

@@ -11,7 +11,7 @@
 //      주장으로 읽는다 — 문서가 완료를 말하고 벤치가 증거를 요구하는 구조라야
 //      거짓 완료 탐지가 의미를 갖는다.
 import { execFileSync, spawn } from "node:child_process";
-import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, resolve } from "node:path";
 import type {
@@ -74,6 +74,42 @@ export interface VerificationStep {
  * e2e-tauri 가 필요로 하는 환경. 실행 파일과 음성 라이브러리 경로를 저장소에서 직접 찾는다.
  * 둘 다 target-e2e 안에 있고, 없으면 앱이 뜨다가 죽거나 엉뚱한 바이너리를 띄운다.
  */
+/**
+ * e2e 바이너리가 지금 Rust 소스로 빌드된 것인가.
+ *
+ * ⚠️ 실측(2026-08-27): 바이너리는 11:00 에 빌드됐는데 Rust 소스의 마지막 커밋은 13:17 이었다.
+ *    "실 Rust 백엔드로 검증했다"는 말이 실제로는 옛 바이너리를 상대로 한 것이었다.
+ *    벤치가 이 어긋남을 못 봤기 때문에 통과가 그대로 증거로 셈됐다.
+ */
+export function e2eBinaryIsCurrent(repoRoot: string): { readonly ok: boolean; readonly why: string } {
+  const binary = resolve(repoRoot, "packages", "shell", "src-tauri", "target-e2e", "debug", "naia-shell");
+  if (!existsSync(binary)) return { ok: false, why: "e2e 바이너리가 없다" };
+  const built = statSync(binary).mtimeMs;
+  let newest = 0;
+  let newestFile = "";
+  const walk = (dir: string): void => {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const full = resolve(dir, entry.name);
+      if (entry.isDirectory()) walk(full);
+      else if (entry.name.endsWith(".rs") || entry.name === "Cargo.toml") {
+        const m = statSync(full).mtimeMs;
+        if (m > newest) {
+          newest = m;
+          newestFile = full;
+        }
+      }
+    }
+  };
+  try {
+    walk(resolve(repoRoot, "packages", "shell", "src-tauri", "src"));
+  } catch {
+    return { ok: false, why: "Rust 소스를 훑지 못했다" };
+  }
+  return newest > built
+    ? { ok: false, why: `바이너리가 소스보다 오래됐다 — 다시 빌드해야 한다 (${newestFile})` }
+    : { ok: true, why: "" };
+}
+
 export function e2eTauriEnv(repoRoot: string): Readonly<Record<string, string>> {
   const shell = resolve(repoRoot, "packages", "shell");
   const binary = resolve(shell, "src-tauri", "target-e2e", "debug", "naia-shell");
@@ -622,6 +658,15 @@ export class CommandBenchExecution implements BenchExecutionPort {
       const label = `${step.cmd} ${step.args.join(" ")} (cwd=${step.cwd})`;
       operations.push(label);
       tests.push(step.args[step.args.length - 1] ?? label);
+      if (step.args.includes("wdio")) {
+        // 실 Rust 백엔드 증거는 지금 소스로 빌드된 바이너리여야 한다.
+        const fresh = e2eBinaryIsCurrent(this.deps.repoRoot);
+        if (!fresh.ok) {
+          artifacts.push(`${label} → ${fresh.why}`);
+          unauthorizedEffects.push(`옛 바이너리로 실 백엔드 증거를 만들 뻔했다: ${fresh.why}`);
+          continue;
+        }
+      }
       if (!ALLOWED_EXECUTABLES.includes(step.cmd)) {
         // 목록 밖 실행 파일은 돌리지 않는다. 돌린 척도 하지 않는다.
         unauthorizedEffects.push(label);

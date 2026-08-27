@@ -6,6 +6,7 @@
 // 그 갭을 표본으로 닫는다 — 두 저장소가 같은 표본을 들고 각자 자기 쪽을 검증하고,
 // 상대 저장소가 옆에 있으면 표본이 같은지도 확인한다.
 import { describe, it, expect } from "vitest";
+import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { surfaceRef, toEnvironmentSegment, type EnvironmentReport } from "../main/domain/environment-intent.js";
@@ -96,17 +97,35 @@ describe("짝 저장소와의 표본 드리프트", () => {
   // naia-agent 체크아웃이 옆에 있으면 표본이 같은지 본다. 없으면 건너뛴다 —
   // 없는 것을 있는 척하지 않고, 있는데 안 보는 일도 없게.
   // 이 저장소가 워크트리일 수도, 본 체크아웃일 수도 있어 위로 여러 단계를 훑는다.
+  // ⚠️ 아무 체크아웃이나 먼저 찾은 것을 쓰면 다른 브랜치와 비교하게 된다
+  //    (2026-08-27 8차 실측: 옆에 issue/3090 브랜치의 naia-agent 가 있었다).
+  //    이 저장소가 박아 둔 페어링 커밋을 담은 체크아웃만 짝이다.
   const REL = ["src", "test", "fixtures", "environment-surfaces-wire.json"];
+  const pinned = (
+    JSON.parse(
+      readFileSync(resolve(__dirname, "..", "..", "packages", "shell", "agent-pairing.json"), "utf8"),
+    ) as { agentCommit?: string }
+  ).agentCommit;
   const roots: string[] = [];
   for (let up = 2; up <= 6; up += 1) {
     const base = resolve(__dirname, ...Array.from({ length: up }, () => ".."));
-    roots.push(resolve(base, "naia-agent", ...REL));
-    // 짝 저장소도 워크트리로 열려 있을 수 있다.
-    for (const wt of ["env-surfaces-112"]) {
-      roots.push(resolve(base, "naia-agent-worktrees", wt, ...REL));
-    }
+    roots.push(resolve(base, "naia-agent"));
+    roots.push(resolve(base, "naia-agent-worktrees", "env-surfaces-112"));
   }
-  const peer = roots.find((p) => existsSync(p));
+  const peer = roots
+    .filter((root) => existsSync(resolve(root, ...REL)))
+    .find((root) => {
+      if (!pinned) return false;
+      try {
+        execFileSync("git", ["-C", root, "merge-base", "--is-ancestor", pinned, "HEAD"], {
+          stdio: "ignore",
+        });
+        return true;
+      } catch {
+        return false;
+      }
+    })
+    ?.concat("/", REL.join("/"));
 
   it("짝 저장소 표본을 실제로 찾았다 — 건너뛴 게이트는 게이트가 아니다", () => {
     expect(peer, `찾은 곳 없음. 훑은 경로: ${roots.join(", ")}`).toBeDefined();

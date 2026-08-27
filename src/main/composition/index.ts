@@ -184,7 +184,7 @@ export type { ResolveOutcome } from "../app/control/workspace-context.js";
 
 // ── #502 환경 접점 (실배선) ──
 // 셸 UI 가 세션 하나를 들고 관측·조작을 이 경계로만 한다. Herdr 어휘는 여기서 멈춘다.
-export { EnvironmentSession, PERMITTED_INTENTS, type ActOutcome } from "../app/control/environment-session.js";
+export { EnvironmentSession, PERMITTED_INTENTS, type ActOutcome, type EnvironmentAwareness } from "../app/control/environment-session.js";
 export { ALLOWED_METHODS, type DispatchGrants, type DispatchOutcome } from "../app/control/environment-dispatch.js";
 export { surfaceRef, type EnvironmentIntent, type EnvironmentReport, type SurfaceReport } from "../domain/environment-intent.js";
 export type { EnvironmentCommandPort } from "../ports/environment-dispatch.js";

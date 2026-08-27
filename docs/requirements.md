@@ -1009,7 +1009,7 @@ fenced code는 언어·복사·접기·워크스페이스 전환을 제공하고
 
 ## 기능 요구사항 (FR) — 두 저장소 wire 어휘 동기 (#497 후속)
 
-> 출처 시나리오: `user-scenarios.md` 의 `UC-WIRE-UNION-DRIFT`. 상태: 전부 Pending.
+> 출처 시나리오: `user-scenarios.md` 의 `UC-WIRE-UNION-DRIFT`.
 
 | ID | 요구사항 | 출처 시나리오 | 검증(P02) | 상태 |
 |---|---|---|---|---|
@@ -1035,3 +1035,7 @@ fenced code는 언어·복사·접기·워크스페이스 전환을 제공하고
 | **FR-ENV-STICKY.2** | 표면이 사라지면 그 손잡이는 무효가 된다. 이후 그 손잡이로 온 의도는 `unknown-surface` 로 거절한다. | UC-ENV-STICKY | 같음 | Done |
 | **FR-ENV-STICKY.3** | 목록 순서가 바뀌어도 손잡이는 바뀌지 않는다. 순서는 손잡이의 근거가 아니다. | UC-ENV-STICKY | 같음 | Done |
 | **FR-ENV-LIVE.6** | 셸 UI 의 `EnvironmentSegment` 사본도 코어 union 과 같은 kind 를 갖는다. 세 번째 사본이 조용히 갈라지지 않는다. | UC-WIRE-UNION-DRIFT | `wire-union-drift.contract.test.ts` | Done |
+| **FR-ENV-ATTENTION.1** | 나이아가 `watch` 로 지켜보기를 켜면, 그다음 대화 요청부터 표면 목록이 세그먼트에 실린다. 켜는 판단은 나이아가 한다 — 사용자가 시킬 필요가 없다. | UC-ENV-ATTENTION | `environment-live-wiring.contract.test.ts`, `environment-skill.test.ts`, `environment-skill.spec.ts` | Done |
+| **FR-ENV-ATTENTION.2** | 나이아가 `unwatch` 로 끄면 그다음 요청부터 목록이 빠진다. 기본 상태는 꺼짐이며, 앱을 다시 켜면 꺼진 상태로 시작한다. | UC-ENV-ATTENTION | 같음 | Done |
+| **FR-ENV-ATTENTION.3** | 지켜보지 않는 동안에는 표면 개수만 올린다. 이름도 손잡이도 올리지 않는다. 개수는 상한 때문에 못 실은 것까지 더한 값이다. | UC-ENV-ATTENTION | 같음 | Done |
+| **FR-ENV-ATTENTION.4** | 사용자의 `environmentAwareness` 설정이 나이아의 선택을 이긴다. `off` 면 도구를 등록하지 않고 세그먼트도 만들지 않으며 도구 호출도 거절한다. `always` 면 나이아가 끌 수 없다. 기본값은 `auto`. | UC-ENV-ATTENTION | 같음 | Done |

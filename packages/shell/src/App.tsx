@@ -442,20 +442,26 @@ export function App() {
 		// #502 실배선 (FR-ENV-LIVE.3): 작업 표면은 화면 앱이 아니라 상시 환경이라
 		// descriptor.tools 경로가 없다 — BGM 과 같은 전용 등록.
 		// 실행은 ChatArea dispatchAppToolCall 의 환경 분기.
-		sendAppSkills(ENVIRONMENT_APP_ID, [SKILL_ENVIRONMENT])
-			.then(() =>
-				Logger.info("App", "startup environment skill registered", {
-					tool: SKILL_ENVIRONMENT.name,
-				}),
-			)
-			.catch((err) =>
-				Logger.warn("App", "startup environment skill failed", {
-					error: String(err),
-				}),
-			);
-		// 첫 관측을 미리 받아 둔다 — 사용자의 첫 물음에 되묻지 않기 위해서다 (FR-ENV-LIVE.1).
-		// Herdr 이 안 돌고 있으면 조용히 아무것도 모르는 상태로 남는다.
-		refreshEnvironment().catch(() => {});
+		//
+		// 사용자가 인지를 꺼 두었으면 도구를 등록하지 않는다 (FR-ENV-ATTENTION.4). 등록만 하고
+		// 안에서 거절하면 도구 목록이 매 요청 토큰을 먹으면서 아무 일도 못 한다 — 껐다는 말은
+		// 값도 안 든다는 뜻이어야 한다.
+		if ((loadConfig()?.environmentAwareness ?? "auto") !== "off") {
+			sendAppSkills(ENVIRONMENT_APP_ID, [SKILL_ENVIRONMENT])
+				.then(() =>
+					Logger.info("App", "startup environment skill registered", {
+						tool: SKILL_ENVIRONMENT.name,
+					}),
+				)
+				.catch((err) =>
+					Logger.warn("App", "startup environment skill failed", {
+						error: String(err),
+					}),
+				);
+			// 첫 관측을 미리 받아 둔다 — 사용자의 첫 물음에 되묻지 않기 위해서다 (FR-ENV-LIVE.1).
+			// Herdr 이 안 돌고 있으면 조용히 아무것도 모르는 상태로 남는다.
+			refreshEnvironment().catch(() => {});
+		}
 		const all = appRegistry.list();
 		for (const descriptor of all) {
 			if (

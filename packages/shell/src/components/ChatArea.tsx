@@ -467,10 +467,13 @@ function buildEnvironmentSegments(
 			})),
 		});
 	}
-	// #502 실배선 (FR-ENV-LIVE.1·2): 지금 무엇이 돌고 있는지 나이아가 스스로 알게 한다.
-	// 도구를 부르라고 사용자가 말할 필요가 없다. 표면이 없으면 세그먼트를 만들지 않는다 —
-	// 빈 목록을 올려 "아무것도 없다"고 단언하지 않는다.
-	const surfaces = environmentSession.segment();
+	// #502 실배선 (FR-ENV-LIVE.1·2, FR-ENV-ATTENTION.1~4): 지금 무엇이 돌고 있는지 나이아가
+	// 스스로 알게 한다. 도구를 부르라고 사용자가 말할 필요가 없다. 표면이 없으면 세그먼트를
+	// 만들지 않는다 — 빈 목록을 올려 "아무것도 없다"고 단언하지 않는다.
+	//
+	// 다만 목록 전체를 늘 싣지는 않는다. 기본(auto)에서는 개수만 실리고, 나이아가 watch 로
+	// 지켜보기로 정한 동안에만 목록이 붙는다. 사용자가 config 로 off/always 를 정하면 그것이 이긴다.
+	const surfaces = environmentSession.segment(loadConfig()?.environmentAwareness ?? "auto");
 	if (surfaces) {
 		segs.push(surfaces);
 	}
@@ -1986,7 +1989,10 @@ export function ChatArea({
 		if (req.toolName === SKILL_ENVIRONMENT.name) {
 			executeEnvironmentSkill(
 				req.args,
-				liveEnvironmentDeps(loadConfig()?.environmentTerminalInput === true),
+				liveEnvironmentDeps(
+					loadConfig()?.environmentTerminalInput === true,
+					loadConfig()?.environmentAwareness ?? "auto",
+				),
 			)
 				.then((result) => {
 					Logger.info("ChatArea", "environment skill result", { result });

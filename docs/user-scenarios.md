@@ -1338,6 +1338,19 @@ Test Coverage Map (P02):
 - 터미널 입력은 구조화 전달과 같은 권한으로 나가지 않는다. 사용자가 켜 두지 않았으면 거절된다.
 - 환경이 거절하면 그대로 올라간다. 실패를 성공으로 바꾸지 않는다.
 
+### UC-ENV-ATTENTION — 나이아가 환경을 볼지 말지 스스로 정한다
+
+> 왜 이 UC 가 생겼는가: 배선하고 나서 값이 드러났다. 표면 목록을 요청마다 실으면 대화
+> 한 번마다 토큰이 붙고, 사용자의 터미널 이름이 늘 뇌로 올라간다. 그런데 사용자의 작업
+> 표면이 늘 필요한 정보는 아니다 — 대부분의 대화는 환경과 무관하다.
+
+- 평소 나이아에게 가는 것은 "볼 것이 몇 개 있다"는 사실뿐이다. 이름도 손잡이도 가지 않는다.
+- 자세히 알아야겠다고 판단하면 나이아가 스스로 지켜보기를 켠다. 그때부터 목록이 실린다.
+- 사용자의 작업을 따라갈 일이 끝나면 나이아가 스스로 끈다. 사용자가 말해 줄 필요가 없다.
+- 지켜본다고 조작 권한이 열리지는 않는다. 보는 것과 건드리는 것은 다른 문제다.
+- 사용자가 원하면 아예 끄거나(도구도 등록되지 않는다) 늘 켜 둘 수 있다. 그 선택이 나이아를 이긴다.
+- 볼 것이 하나도 없으면 개수도 보내지 않는다. "0개 있다"와 "모른다"를 뭉뚱그리지 않는다.
+
 ### UC-ENV-STICKY — 손잡이가 다른 표면을 가리키지 않는다
 
 - 나이아가 표면 목록을 본 뒤 그중 하나에 명령을 넣기까지 시간이 흐른다. 그 사이 터미널이 닫힐 수 있다.
@@ -1353,9 +1366,15 @@ Test Coverage Map (P02):
 | UC-ENV-LIVE-ACT | vitest `packages/shell/src/lib/__tests__/environment-skill.test.ts` | focus/run/interrupt 전달, 권한 없을 때 거절, 환경 오류 그대로 상승 |
 | UC-ENV-LIVE-ACT | e2e-tauri `packages/shell/e2e-tauri/specs/environment-dispatch.spec.ts` | 실 Rust 명령 경계 |
 | UC-ENV-STICKY | vitest `src/test/environment-live-wiring.contract.test.ts` | 표면 사라져도 재배정 없음, 순서 바뀌어도 손잡이 불변, 죽은 손잡이는 거절 |
+| UC-ENV-ATTENTION | vitest `src/test/environment-live-wiring.contract.test.ts` | 기본 미관찰, 미관찰 중 이름·손잡이 미전송, 개수는 상한 포함, off/always 우선 |
+| UC-ENV-ATTENTION | vitest `packages/shell/src/lib/__tests__/environment-skill.test.ts` | watch/unwatch 실행, watch 가 목록 동반, off 전면 거절, always 에서 나이아 무력 |
+| UC-ENV-ATTENTION | Playwright `packages/shell/e2e/environment-skill.spec.ts` | 실 UI 에서 기본 개수만 전송, watch 후 목록 전송, unwatch 복귀, off 시 도구 미등록 |
+| UC-ENV-ATTENTION | vitest `src/test/environment-live-herdr.contract.test.ts` | 살아 있는 Herdr 의 실제 터미널 이름·손잡이가 미관찰 중 전송되지 않음 |
 
 상태 매트릭스: 기본(표면 여럿), 빈 목록(Herdr 무응답), 오류(환경 거절), 성공(전달됨),
 진행(스냅샷 대기), 좁은 폭(해당 없음 — 이 슬라이스는 UI 표면을 새로 만들지 않는다).
+주의 상태는 별도 축이다: 미관찰(개수만) / 관찰(목록) / 사용자 off(아무것도 없음) /
+사용자 always(나이아 무력) / 볼 것 없음(세그먼트 자체 없음).
 
 ### UC-ORCHESTRATION-CODING-PROVIDER — 실제 코딩 모델 작업자가 돈다
 

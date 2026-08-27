@@ -1,7 +1,7 @@
 // #502 실배선 — skill_environment 실행기 단위 테스트 (FR-ENV-LIVE.3~5).
 // deps 주입 = Tauri 없이 헤르메틱. 뇌가 읽는 결과 문자열이 실패를 성공처럼 말하지 않는지 본다.
 import { describe, expect, it, vi } from "vitest";
-import { EnvironmentSession } from "@nextain/naia-os-core/composition";
+import { EnvironmentSession, type EnvironmentAwareness } from "@nextain/naia-os-core/composition";
 import {
 	ENVIRONMENT_ACTIONS,
 	SKILL_ENVIRONMENT,
@@ -20,13 +20,14 @@ function pane(id: string, opts: { label?: string; agent?: string; focused?: bool
 
 function deps(
 	panes: unknown[],
-	opts: { terminalInput?: boolean; fail?: string } = {},
+	opts: { terminalInput?: boolean; fail?: string; awareness?: EnvironmentAwareness } = {},
 ): EnvironmentSkillDeps & { calls: { command: string; args: unknown }[] } {
 	const session = new EnvironmentSession();
 	const calls: { command: string; args: unknown }[] = [];
 	return {
 		calls,
 		session,
+		awareness: opts.awareness ?? "auto",
 		refresh: async () => session.observeSnapshot({ panes } as never),
 		commands: {
 			invoke: async (command, args) => {
@@ -73,6 +74,7 @@ describe("observe (FR-ENV-LIVE.1)", () => {
 			{ action: "observe" },
 			{
 				session,
+				awareness: "auto",
 				refresh: async () => null, // 스냅샷 실패 = 관측 갱신 없음
 				commands: { invoke: async () => ({}) },
 				grants: { workspaceObserve: true, terminalInput: false },
@@ -168,6 +170,7 @@ describe("조작 전 관측 갱신 (FR-ENV-STICKY.2)", () => {
 		let panes: unknown[] = [pane("p1", { agent: "codex" }), pane("p2", { agent: "claude" })];
 		const d: EnvironmentSkillDeps = {
 			session,
+			awareness: "auto",
 			refresh: async () => session.observeSnapshot({ panes } as never),
 			commands: {
 				invoke: async (command) => {
@@ -184,5 +187,104 @@ describe("조작 전 관측 갱신 (FR-ENV-STICKY.2)", () => {
 		const out = await executeEnvironmentSkill({ action: "focus", surface: gone }, d);
 		expect(out).toContain("거절:");
 		expect(calls, "죽은 손잡이인데 명령이 나갔다").toHaveLength(0);
+	});
+});
+
+describe("나이아가 스스로 켜고 끈다 (FR-ENV-ATTENTION.1~3)", () => {
+	it("기본은 안 지켜보는 상태다 — 아무도 시키지 않았는데 목록이 실리지 않는다", () => {
+		const d = deps([pane("p1", { label: "빌더", agent: "codex" })]);
+		expect(d.session.watching()).toBe(false);
+	});
+
+	it("watch 가 다음 요청부터 목록을 싣게 만든다", async () => {
+		const d = deps([pane("p1", { label: "빌더", agent: "codex" })]);
+		await executeEnvironmentSkill({ action: "observe" }, d);
+		expect(d.session.segment("auto")?.surfaces, "지켜보기 전인데 목록이 실렸다").toEqual([]);
+
+		const out = await executeEnvironmentSkill({ action: "watch" }, d);
+		expect(out).toContain("지켜본다");
+		expect(d.session.watching()).toBe(true);
+		expect(d.session.segment("auto")?.surfaces).toHaveLength(1);
+	});
+
+	it("watch 가 목록을 같이 준다 — 지켜보려고 두 번 부르지 않게", async () => {
+		const d = deps([pane("p1", { label: "빌더", agent: "codex" })]);
+		const out = await executeEnvironmentSkill({ action: "watch" }, d);
+		expect(out).toContain("빌더");
+		expect(out).toContain("작업 표면 1개");
+	});
+
+	it("unwatch 가 다시 개수만 싣는 상태로 되돌린다", async () => {
+		const d = deps([pane("p1", { label: "빌더", agent: "codex" })]);
+		await executeEnvironmentSkill({ action: "watch" }, d);
+		const out = await executeEnvironmentSkill({ action: "unwatch" }, d);
+		expect(out).toContain("개수만");
+		expect(d.session.watching()).toBe(false);
+		expect(d.session.segment("auto")?.surfaces).toEqual([]);
+	});
+
+	it("지켜보지 않는 동안에도 개수는 알려 준다 — 볼 것이 있다는 사실은 알아야 부를 수 있다", async () => {
+		const d = deps([pane("p1", { label: "빌더", agent: "codex" }), pane("p2", { label: "zsh" })]);
+		await executeEnvironmentSkill({ action: "observe" }, d);
+		const seg = d.session.segment("auto");
+		expect(seg?.omitted).toBe(2);
+		expect(seg?.surfaces).toEqual([]);
+	});
+
+	it("지켜보지 않는 동안에는 이름도 손잡이도 나가지 않는다", async () => {
+		const d = deps([pane("p1", { label: "비밀사내프로젝트", agent: "codex" })]);
+		await executeEnvironmentSkill({ action: "observe" }, d);
+		expect(JSON.stringify(d.session.segment("auto"))).not.toContain("비밀사내프로젝트");
+	});
+
+	it("표면이 아예 없으면 지켜보든 말든 세그먼트를 만들지 않는다", async () => {
+		const d = deps([]);
+		await executeEnvironmentSkill({ action: "watch" }, d);
+		expect(d.session.segment("auto")).toBeNull();
+	});
+
+	it("지켜보기는 조작을 열지 않는다 — 권한은 그대로다", async () => {
+		const d = deps([pane("t1", { label: "zsh" })], { terminalInput: false });
+		await executeEnvironmentSkill({ action: "watch" }, d);
+		const token = d.session.latestReport()?.surfaces[0]?.ref.token as string;
+		const out = await executeEnvironmentSkill({ action: "run", surface: token, request: "ls" }, d);
+		expect(out).toContain("거절:");
+		expect(d.calls, "지켜본다고 터미널 입력이 열렸다").toHaveLength(0);
+	});
+
+	it("도구 설명이 계속 켜 두는 값을 알려 준다 — 모르면 끄지 않는다", () => {
+		expect(SKILL_ENVIRONMENT.description).toContain("unwatch");
+		expect(SKILL_ENVIRONMENT.description).toContain("터미널 이름이 실린다");
+	});
+});
+
+describe("사용자 설정이 나이아를 이긴다 (FR-ENV-ATTENTION.4)", () => {
+	it("off 면 관측도 조작도 거절이다", async () => {
+		const d = deps([pane("p1", { label: "빌더", agent: "codex" })], { awareness: "off" });
+		expect(await executeEnvironmentSkill({ action: "observe" }, d)).toContain("꺼 두었다");
+		expect(await executeEnvironmentSkill({ action: "watch" }, d)).toContain("꺼 두었다");
+		expect(d.session.watching(), "꺼 두었는데 지켜보기가 켜졌다").toBe(false);
+	});
+
+	it("off 면 표면이 있어도 세그먼트를 만들지 않는다", async () => {
+		const d = deps([pane("p1", { label: "빌더", agent: "codex" })]);
+		await executeEnvironmentSkill({ action: "observe" }, d);
+		d.session.watch();
+		expect(d.session.segment("off")).toBeNull();
+	});
+
+	it("always 면 나이아가 끄지 못한다", async () => {
+		const d = deps([pane("p1", { label: "빌더", agent: "codex" })], { awareness: "always" });
+		const out = await executeEnvironmentSkill({ action: "unwatch" }, d);
+		expect(out).toContain("무시됨");
+		await executeEnvironmentSkill({ action: "observe" }, d);
+		expect(d.session.segment("always")?.surfaces).toHaveLength(1);
+	});
+
+	it("always 는 지켜보기 상태와 무관하게 목록을 싣는다", async () => {
+		const d = deps([pane("p1", { label: "빌더", agent: "codex" })], { awareness: "always" });
+		await executeEnvironmentSkill({ action: "observe" }, d);
+		expect(d.session.watching()).toBe(false);
+		expect(d.session.segment("always")?.surfaces).toHaveLength(1);
 	});
 });

@@ -1,3 +1,4 @@
+import type { EnvironmentAwareness } from "@nextain/naia-os-core/composition";
 import type { VramTierId } from "./capabilities/vram-tiers";
 import type { Locale } from "./i18n";
 import { Logger } from "./logger";
@@ -147,6 +148,14 @@ export interface AppConfig {
 	 * 기본값은 꺼짐이며, 꺼져 있으면 거절 사유가 그대로 나이아에게 올라간다.
 	 */
 	environmentTerminalInput?: boolean;
+	/**
+	 * #502 (FR-ENV-ATTENTION.4) — 작업 표면을 나이아가 얼마나 인지하게 둘 것인가.
+	 *   "off"    작업 표면을 아예 알리지 않는다. 도구도 등록하지 않는다.
+	 *   "auto"   (기본값) 평소에는 표면 개수만 알리고, 목록이 필요하면 나이아가 스스로 지켜본다.
+	 *   "always" 요청마다 표면 목록을 싣는다. 나이아가 끌 수 없다.
+	 * 기본이 "auto" 인 이유: 목록을 늘 실으면 요청마다 토큰이 붙고 터미널 이름이 늘 뇌로 간다.
+	 */
+	environmentAwareness?: EnvironmentAwareness;
 	customVrms?: string[];
 	customBgs?: string[];
 	sttProvider?: SttProviderId;

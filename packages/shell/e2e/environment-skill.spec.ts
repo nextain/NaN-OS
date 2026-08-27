@@ -12,7 +12,9 @@ import {
  * Rust 명령 경계까지 다 있는데 프로덕션 호출자가 0이었다(2026-08-26 실측).
  * 그래서 세 배선을 실 UI 로 고정한다:
  *   (A) 부팅 시 App 이 skill_environment 를 agent 에 등록(app_skills 발신)
- *   (B) 부팅 관측이 대화 요청에 environmentSurfaces 세그먼트로 실린다
+ *   (B) 부팅 관측이 대화 요청에 environmentSurfaces 세그먼트로 실린다 — 다만 기본값에서는
+ *       개수만 실리고, 나이아가 watch 로 지켜보기로 정한 뒤에야 목록이 붙는다
+ *       (FR-ENV-ATTENTION.1~3). 목록을 늘 싣는 것은 요청마다 토큰과 터미널 이름을 치른다.
  *   (C) app_tool_call(skill_environment, focus) → ChatArea dispatch → 실제 herdr_* 명령 호출
  *       + 터미널 입력은 설정이 꺼져 있으면 명령이 나가지 않는다
  *
@@ -61,7 +63,7 @@ const MOCK_SCRIPT = `
     if (cmd === "plugin:event|emit") { emitEvent(args.event, args.payload); return null; }
     if (cmd === "plugin:event|unlisten") return;
 
-    if (cmd === "herdr_snapshot") return SNAPSHOT;
+    if (cmd === "herdr_snapshot") { window.__E2E_HERDR__.push({ cmd: cmd, args: args }); return SNAPSHOT; }
     if (cmd && cmd.indexOf("herdr_") === 0) {
       window.__E2E_HERDR__.push({ cmd: cmd, args: args });
       return { ok: true };
@@ -119,6 +121,52 @@ async function setEnvCall(page: import("@playwright/test").Page, call: Record<st
 	await page.evaluate((c) => {
 		(window as unknown as { __E2E_ENV_CALL__?: unknown }).__E2E_ENV_CALL__ = c;
 	}, call);
+}
+
+/** 마지막 chat_request 에 실린 environmentSurfaces 세그먼트. 없으면 null. */
+async function surfacesSegment(page: import("@playwright/test").Page) {
+	return page.evaluate(() => {
+		const out =
+			(window as unknown as { __E2E_OUTBOUND__?: Record<string, unknown>[] }).__E2E_OUTBOUND__ ?? [];
+		const chats = out.filter((m) => m?.type === "chat_request");
+		const chat = chats[chats.length - 1];
+		const segs = (chat?.environmentSegments ?? []) as Record<string, unknown>[];
+		return (segs.find((x) => x?.kind === "environmentSurfaces") as Record<string, unknown>) ?? null;
+	});
+}
+
+/**
+ * 나이아가 실제로 하는 순서 그대로 손잡이를 얻는다: watch 를 부르고, 다음 요청에 실린
+ * 목록에서 읽는다. 지켜보지 않는 동안에는 손잡이가 아예 나가지 않으므로 (FR-ENV-ATTENTION.3)
+ * 이 경로 말고 손잡이를 얻을 방법이 없다 — 지어내면 거절된다.
+ */
+async function watchThenToken(
+	page: import("@playwright/test").Page,
+	input: ReturnType<import("@playwright/test").Page["locator"]>,
+	pick: (label: string) => boolean,
+): Promise<string> {
+	await setEnvCall(page, { action: "watch" });
+	await input.fill("지금 뭐 하고 있는지 좀 봐줘");
+	await input.press("Enter");
+	// watch 도구 호출이 실제로 처리될 때까지 기다린 뒤 두 번째 요청을 보낸다.
+	await page.waitForTimeout(1_500);
+	await input.fill("계속 봐줘");
+	await input.press("Enter");
+
+	await expect
+		.poll(
+			async () => {
+				const seg = await surfacesSegment(page);
+				const surfaces = (seg?.surfaces ?? []) as { ref: string; label: string }[];
+				return surfaces.find((x) => pick(x.label))?.ref ?? null;
+			},
+			{ timeout: 10_000 },
+		)
+		.not.toBeNull();
+
+	const seg = await surfacesSegment(page);
+	const surfaces = (seg?.surfaces ?? []) as { ref: string; label: string }[];
+	return surfaces.find((x) => pick(x.label))?.ref as string;
 }
 
 async function herdrCalls(page: import("@playwright/test").Page) {
@@ -208,80 +256,151 @@ test.describe("#502 환경 스킬 배선 (FR-ENV-LIVE)", () => {
 		expect(after.clearedEnv, "환경 도구가 앱 전환에서 해제됐다").toBe(0);
 	});
 
-	test("(B) 관측이 대화 요청에 environmentSurfaces 로 실린다", async ({ page }) => {
+	test("(B) 지켜보지 않는 동안에는 개수만 실린다 (FR-ENV-ATTENTION.3)", async ({ page }) => {
 		await boot(page, BASE_CONFIG);
 		const input = page.locator(".chat-input");
 		await expect(input).toBeEnabled({ timeout: 5_000 });
 		await input.fill("지금 뭐 돌고 있어?");
 		await input.press("Enter");
 
-		const segment = await expect
+		await expect.poll(async () => await surfacesSegment(page), { timeout: 10_000 }).not.toBeNull();
+		const segment = (await surfacesSegment(page)) as Record<string, unknown>;
+
+		// 볼 것이 있다는 사실은 나이아에게 간다 — 그래야 스스로 부를 수 있다.
+		expect(segment.omitted).toBe(2);
+		// 그러나 이름도 손잡이도 가지 않는다. 이것이 늘 싣지 않는 이유다.
+		expect(segment.surfaces).toEqual([]);
+		expect(JSON.stringify(segment)).not.toContain("빌더");
+		expect(JSON.stringify(segment)).not.toContain("alpha-adk");
+		expect(JSON.stringify(segment)).not.toContain("pane-agent-1");
+	});
+
+	test("(B2) 나이아가 watch 를 부르면 다음 요청부터 목록이 실린다 (FR-ENV-ATTENTION.1)", async ({
+		page,
+	}) => {
+		await boot(page, BASE_CONFIG);
+		const input = page.locator(".chat-input");
+		await expect(input).toBeEnabled({ timeout: 5_000 });
+
+		await setEnvCall(page, { action: "watch" });
+		await input.fill("내 작업 좀 따라와줘");
+		await input.press("Enter");
+		await page.waitForTimeout(1_500);
+		await input.fill("어떻게 돼가?");
+		await input.press("Enter");
+
+		await expect
 			.poll(
-				async () =>
-					page.evaluate(() => {
-						const out =
-							(window as unknown as { __E2E_OUTBOUND__?: Record<string, unknown>[] })
-								.__E2E_OUTBOUND__ ?? [];
-						const chat = out.find((m) => m?.type === "chat_request");
-						const segs = (chat?.environmentSegments ?? []) as { kind?: string }[];
-						return segs.find((s) => s?.kind === "environmentSurfaces") ?? null;
-					}),
+				async () => ((await surfacesSegment(page))?.surfaces as unknown[] | undefined)?.length ?? 0,
 				{ timeout: 10_000 },
 			)
-			.not.toBeNull()
-			.then(() =>
-				page.evaluate(() => {
-					const out =
-						(window as unknown as { __E2E_OUTBOUND__?: Record<string, unknown>[] })
-							.__E2E_OUTBOUND__ ?? [];
-					const chat = out.find((m) => m?.type === "chat_request");
-					const segs = (chat?.environmentSegments ?? []) as Record<string, unknown>[];
-					return segs.find((s) => s?.kind === "environmentSurfaces") as Record<string, unknown>;
-				}),
-			);
-
+			.toBe(2);
+		const segment = (await surfacesSegment(page)) as Record<string, unknown>;
 		const surfaces = segment.surfaces as { ref: string; label: string }[];
-		expect(surfaces.length).toBe(2);
-		expect(surfaces.map((s) => s.label)).toContain("빌더");
-		// pane 어휘는 뇌에 올라가지 않는다.
+		expect(surfaces.map((x) => x.label)).toContain("빌더");
+		// pane 어휘는 지켜보는 동안에도 뇌에 올라가지 않는다.
 		expect(JSON.stringify(segment)).not.toContain("pane-agent-1");
+	});
+
+	test("(B3) unwatch 를 부르면 다시 개수만 실린다 (FR-ENV-ATTENTION.2)", async ({ page }) => {
+		await boot(page, BASE_CONFIG);
+		const input = page.locator(".chat-input");
+		await expect(input).toBeEnabled({ timeout: 5_000 });
+
+		await setEnvCall(page, { action: "watch" });
+		await input.fill("따라와줘");
+		await input.press("Enter");
+		await page.waitForTimeout(1_500);
+
+		await setEnvCall(page, { action: "unwatch" });
+		await input.fill("이제 됐어");
+		await input.press("Enter");
+		await page.waitForTimeout(1_500);
+
+		await input.fill("다른 얘기 하자");
+		await input.press("Enter");
+		await expect
+			.poll(
+				async () => ((await surfacesSegment(page))?.surfaces as unknown[] | undefined)?.length ?? -1,
+				{ timeout: 10_000 },
+			)
+			.toBe(0);
+		const segment = (await surfacesSegment(page)) as Record<string, unknown>;
+		expect(segment.omitted, "그만 보라고 했는데 개수까지 사라졌다").toBe(2);
+		expect(JSON.stringify(segment)).not.toContain("빌더");
+	});
+
+	test("(B4) 사용자가 always 로 두면 지켜보기 없이도 목록이 실린다 (FR-ENV-ATTENTION.4)", async ({
+		page,
+	}) => {
+		await boot(page, { ...BASE_CONFIG, environmentAwareness: "always" });
+		const input = page.locator(".chat-input");
+		await expect(input).toBeEnabled({ timeout: 5_000 });
+		await input.fill("지금 뭐 돌고 있어?");
+		await input.press("Enter");
+
+		await expect
+			.poll(
+				async () => ((await surfacesSegment(page))?.surfaces as unknown[] | undefined)?.length ?? 0,
+				{ timeout: 10_000 },
+			)
+			.toBe(2);
+	});
+
+	test("(B5) 사용자가 off 로 두면 도구도 세그먼트도 없다 (FR-ENV-ATTENTION.4)", async ({ page }) => {
+		await boot(page, { ...BASE_CONFIG, environmentAwareness: "off" });
+		const input = page.locator(".chat-input");
+		await expect(input).toBeEnabled({ timeout: 5_000 });
+		await input.fill("지금 뭐 돌고 있어?");
+		await input.press("Enter");
+
+		// 요청은 실제로 나갔는데(단언이 공허하지 않다) 그 안에 표면 세그먼트가 없다.
+		await expect
+			.poll(
+				async () =>
+					page.evaluate(
+						() =>
+							(
+								(window as unknown as { __E2E_OUTBOUND__?: Record<string, unknown>[] })
+									.__E2E_OUTBOUND__ ?? []
+							).filter((m) => m?.type === "chat_request").length,
+					),
+				{ timeout: 10_000 },
+			)
+			.toBeGreaterThan(0);
+		expect(await surfacesSegment(page)).toBeNull();
+
+		// 도구 자체가 등록되지 않는다 — 껐다는 말은 값도 안 든다는 뜻이어야 한다.
+		const registered = await page.evaluate(
+			() =>
+				(
+					(window as unknown as { __E2E_OUTBOUND__?: Record<string, unknown>[] }).__E2E_OUTBOUND__ ??
+					[]
+				).filter((m) => m?.type === "app_skills" && m?.appId === "environment").length,
+		);
+		expect(registered, "꺼 두었는데 환경 도구가 등록됐다").toBe(0);
+
+		// 도구 호출이 억지로 들어와도 환경 명령은 나가지 않는다.
+		// ⚠️ herdr_snapshot 개수로는 이것을 볼 수 없다 — 워크스페이스 앱이 사용자 자기 터미널을
+		//    그리려고 같은 명령을 부른다. 끄는 것은 "나이아의 환경 인지"이지 사용자의 터미널이
+		//    아니므로, 그 호출이 남아 있는 것이 정상이다.
+		await setEnvCall(page, { action: "focus", surface: "s-1" });
+		await input.fill("빌더 앞으로 가져와");
+		await input.press("Enter");
+		await page.waitForTimeout(2_000);
+		const calls = (await herdrCalls(page)) as { cmd: string }[];
+		expect(
+			calls.filter((c) => c.cmd.startsWith("herdr_focus") || c.cmd === "herdr_run_pane"),
+			`꺼 두었는데 환경 명령이 나갔다: ${JSON.stringify(calls)}`,
+		).toHaveLength(0);
 	});
 
 	test("(C) app_tool_call(focus) 이 실제 herdr 명령까지 간다", async ({ page }) => {
 		await boot(page, BASE_CONFIG);
-		// 부팅 관측이 발행한 손잡이를 실제 요청에서 읽어 쓴다 — 손잡이를 지어내지 않는다.
+		// 나이아가 실제로 하는 순서대로 손잡이를 얻는다 — 지켜보기 전에는 손잡이가 안 나간다.
 		const input = page.locator(".chat-input");
 		await expect(input).toBeEnabled({ timeout: 5_000 });
-		await input.fill("첫 관측");
-		await input.press("Enter");
-		const token = await expect
-			.poll(
-				async () =>
-					page.evaluate(() => {
-						const out =
-							(window as unknown as { __E2E_OUTBOUND__?: Record<string, unknown>[] })
-								.__E2E_OUTBOUND__ ?? [];
-						const chat = out.find((m) => m?.type === "chat_request");
-						const segs = (chat?.environmentSegments ?? []) as Record<string, unknown>[];
-						const seg = segs.find((s) => s?.kind === "environmentSurfaces");
-						const surfaces = (seg?.surfaces ?? []) as { ref: string; label: string }[];
-						return surfaces.find((s) => s.label === "빌더")?.ref ?? null;
-					}),
-				{ timeout: 10_000 },
-			)
-			.not.toBeNull()
-			.then(() =>
-				page.evaluate(() => {
-					const out =
-						(window as unknown as { __E2E_OUTBOUND__?: Record<string, unknown>[] })
-							.__E2E_OUTBOUND__ ?? [];
-					const chat = out.find((m) => m?.type === "chat_request");
-					const segs = (chat?.environmentSegments ?? []) as Record<string, unknown>[];
-					const seg = segs.find((s) => s?.kind === "environmentSurfaces");
-					const surfaces = (seg?.surfaces ?? []) as { ref: string; label: string }[];
-					return surfaces.find((s) => s.label === "빌더")?.ref as string;
-				}),
-			);
+		const token = await watchThenToken(page, input, (label) => label === "빌더");
 
 		await setEnvCall(page, { action: "focus", surface: token });
 		await input.fill("저 빌더 앞으로 가져와");
@@ -308,36 +427,7 @@ test.describe("#502 환경 스킬 배선 (FR-ENV-LIVE)", () => {
 		await boot(page, BASE_CONFIG); // environmentTerminalInput 미설정 = 꺼짐
 		const input = page.locator(".chat-input");
 		await expect(input).toBeEnabled({ timeout: 5_000 });
-		await input.fill("첫 관측");
-		await input.press("Enter");
-		const token = await expect
-			.poll(
-				async () =>
-					page.evaluate(() => {
-						const out =
-							(window as unknown as { __E2E_OUTBOUND__?: Record<string, unknown>[] })
-								.__E2E_OUTBOUND__ ?? [];
-						const chat = out.find((m) => m?.type === "chat_request");
-						const segs = (chat?.environmentSegments ?? []) as Record<string, unknown>[];
-						const seg = segs.find((s) => s?.kind === "environmentSurfaces");
-						const surfaces = (seg?.surfaces ?? []) as { ref: string; label: string }[];
-						return surfaces.find((s) => s.label !== "빌더")?.ref ?? null;
-					}),
-				{ timeout: 10_000 },
-			)
-			.not.toBeNull()
-			.then(() =>
-				page.evaluate(() => {
-					const out =
-						(window as unknown as { __E2E_OUTBOUND__?: Record<string, unknown>[] })
-							.__E2E_OUTBOUND__ ?? [];
-					const chat = out.find((m) => m?.type === "chat_request");
-					const segs = (chat?.environmentSegments ?? []) as Record<string, unknown>[];
-					const seg = segs.find((s) => s?.kind === "environmentSurfaces");
-					const surfaces = (seg?.surfaces ?? []) as { ref: string; label: string }[];
-					return surfaces.find((s) => s.label !== "빌더")?.ref as string;
-				}),
-			);
+		const token = await watchThenToken(page, input, (label) => label !== "빌더");
 
 		await setEnvCall(page, { action: "run", surface: token, request: "ls" });
 		await input.fill("저기서 ls 실행해");
@@ -357,36 +447,7 @@ test.describe("#502 환경 스킬 배선 (FR-ENV-LIVE)", () => {
 		await boot(page, { ...BASE_CONFIG, environmentTerminalInput: true });
 		const input = page.locator(".chat-input");
 		await expect(input).toBeEnabled({ timeout: 5_000 });
-		await input.fill("첫 관측");
-		await input.press("Enter");
-		const token = await expect
-			.poll(
-				async () =>
-					page.evaluate(() => {
-						const out =
-							(window as unknown as { __E2E_OUTBOUND__?: Record<string, unknown>[] })
-								.__E2E_OUTBOUND__ ?? [];
-						const chat = out.find((m) => m?.type === "chat_request");
-						const segs = (chat?.environmentSegments ?? []) as Record<string, unknown>[];
-						const seg = segs.find((s) => s?.kind === "environmentSurfaces");
-						const surfaces = (seg?.surfaces ?? []) as { ref: string; label: string }[];
-						return surfaces.find((s) => s.label !== "빌더")?.ref ?? null;
-					}),
-				{ timeout: 10_000 },
-			)
-			.not.toBeNull()
-			.then(() =>
-				page.evaluate(() => {
-					const out =
-						(window as unknown as { __E2E_OUTBOUND__?: Record<string, unknown>[] })
-							.__E2E_OUTBOUND__ ?? [];
-					const chat = out.find((m) => m?.type === "chat_request");
-					const segs = (chat?.environmentSegments ?? []) as Record<string, unknown>[];
-					const seg = segs.find((s) => s?.kind === "environmentSurfaces");
-					const surfaces = (seg?.surfaces ?? []) as { ref: string; label: string }[];
-					return surfaces.find((s) => s.label !== "빌더")?.ref as string;
-				}),
-			);
+		const token = await watchThenToken(page, input, (label) => label !== "빌더");
 
 		await setEnvCall(page, { action: "run", surface: token, request: "ls" });
 		await input.fill("저기서 ls 실행해");

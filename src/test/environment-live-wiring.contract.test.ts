@@ -35,9 +35,10 @@ function recorder(): { port: EnvironmentCommandPort; calls: { command: string; a
 const ALL_GRANTS = { workspaceObserve: true, terminalInput: true };
 
 describe("관측이 대화에 실린다 (FR-ENV-LIVE.1·2) [UC-ENV-LIVE-OBSERVE UC-ENV-STICKY FR-ENV-LIVE.2 FR-ENV-STICKY.2 FR-ENV-STICKY.3]", () => {
-  it("표면이 있으면 세그먼트를 만든다", () => {
+  it("지켜보는 동안에는 표면 목록이 세그먼트에 실린다", () => {
     const session = new EnvironmentSession();
     session.observeSnapshot({ panes: [pane("p1", { label: "빌더", agent: "codex", status: "working" })] });
+    session.watch();
     const seg = session.segment();
     expect(seg?.kind).toBe("environmentSurfaces");
     expect(seg?.surfaces).toHaveLength(1);
@@ -63,7 +64,76 @@ describe("관측이 대화에 실린다 (FR-ENV-LIVE.1·2) [UC-ENV-LIVE-OBSERVE 
   it("세그먼트에 pane 어휘가 실리지 않는다 — 손잡이만 올라간다", () => {
     const session = new EnvironmentSession();
     session.observeSnapshot({ panes: [pane("pane-abc-123", { label: "zsh" })] });
+    session.watch();
     expect(JSON.stringify(session.segment())).not.toContain("pane-abc-123");
+  });
+});
+
+// 왜 이 블록이 있는가: 표면 목록을 요청마다 싣는 것은 두 가지 값을 치른다 — 토큰이 붙고,
+// 사용자의 터미널 이름이 늘 뇌로 간다. 늘 필요한 정보가 아니므로 나이아가 스스로 켜고 끈다.
+// 여기서 보는 것은 "켜고 끌 수 있다"가 아니라 "꺼져 있는 동안 실제로 아무것도 안 나간다"이다.
+describe("주의를 나이아가 쥔다 (FR-ENV-ATTENTION.1~4) [UC-ENV-ATTENTION FR-ENV-ATTENTION.1 FR-ENV-ATTENTION.2 FR-ENV-ATTENTION.3 FR-ENV-ATTENTION.4]", () => {
+  function watching(panes: unknown[]): EnvironmentSession {
+    const session = new EnvironmentSession();
+    session.observeSnapshot({ panes } as never);
+    return session;
+  }
+
+  it("아무도 시키지 않았으면 지켜보지 않는다", () => {
+    expect(new EnvironmentSession().watching()).toBe(false);
+  });
+
+  it("지켜보지 않는 동안 이름도 손잡이도 나가지 않는다 — 개수만 나간다", () => {
+    const session = watching([pane("p1", { label: "사내-비밀-저장소" }), pane("p2", { label: "zsh" })]);
+    const seg = session.segment();
+    expect(seg?.surfaces).toEqual([]);
+    expect(seg?.omitted).toBe(2);
+    expect(JSON.stringify(seg)).not.toContain("사내-비밀-저장소");
+  });
+
+  it("개수는 상한에 걸려 못 실은 것까지 더한다 — 조용히 줄이지 않는다", () => {
+    const session = new EnvironmentSession(2);
+    session.observeSnapshot({ panes: [pane("p1"), pane("p2"), pane("p3"), pane("p4")] } as never);
+    expect(session.segment()?.omitted).toBe(4);
+  });
+
+  it("watch 뒤에는 목록이 실리고 unwatch 뒤에는 다시 개수만 실린다", () => {
+    const session = watching([pane("p1", { label: "빌더", agent: "codex" })]);
+    session.watch();
+    expect(session.segment()?.surfaces).toHaveLength(1);
+    session.unwatch();
+    expect(session.segment()?.surfaces).toEqual([]);
+  });
+
+  it("표면이 없으면 지켜보든 말든 세그먼트가 없다 — 개수 0 을 올려 단언하지 않는다", () => {
+    const session = watching([]);
+    session.watch();
+    expect(session.segment()).toBeNull();
+  });
+
+  it("사용자가 off 로 두면 지켜보고 있어도 아무것도 실리지 않는다", () => {
+    const session = watching([pane("p1", { label: "빌더" })]);
+    session.watch();
+    expect(session.segment("off")).toBeNull();
+  });
+
+  it("사용자가 always 로 두면 지켜보지 않아도 목록이 실린다", () => {
+    const session = watching([pane("p1", { label: "빌더" })]);
+    expect(session.watching()).toBe(false);
+    expect(session.segment("always")?.surfaces).toHaveLength(1);
+  });
+
+  it("지켜보기는 조작 권한과 무관하다 — 주의는 권한이 아니다", async () => {
+    const session = watching([pane("t1", { label: "zsh" })]);
+    session.watch();
+    const token = session.latestReport()?.surfaces[0]?.ref.token as string;
+    const rec = recorder();
+    const out = await session.act({ kind: "run", surface: surfaceRef(token), request: "ls" }, rec.port, {
+      workspaceObserve: true,
+      terminalInput: false,
+    });
+    expect(out.ok).toBe(false);
+    expect(rec.calls, "지켜본다고 터미널 입력이 열렸다").toHaveLength(0);
   });
 });
 

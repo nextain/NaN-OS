@@ -37,6 +37,10 @@ const FAMILIES: readonly {
   { prefix: "UC-ENV-LIVE-", gate: "native", requiredEvidence: ["native"] },
   // 손잡이 고정은 결정론으로 판정할 수 있다 — 실제 환경이 필요 없다.
   { prefix: "UC-ENV-STICKY", gate: "safety", requiredEvidence: ["mock"] },
+  // 주의 전환은 두 곳에서 확인해야 한다. 켜고 끄는 것 자체는 실 UI 에서 실제 대화 요청에
+  // 무엇이 실리는지로 보고(browser), "안 샌다"는 이 기계에서 실제로 열려 있는 터미널
+  // 이름으로 봐야 한다(native) — 우리가 고른 문자열로는 유출 부재를 증명할 수 없다.
+  { prefix: "UC-ENV-ATTENTION", gate: "native", requiredEvidence: ["browser", "native"] },
   // 두 저장소 어휘 동기도 결정론이다.
   { prefix: "UC-WIRE-UNION-", gate: "protocol", requiredEvidence: ["mock"] },
 ];
@@ -55,9 +59,10 @@ const SCENARIO_OVERRIDES: Readonly<Record<string, readonly EvidenceKind[]>> = {
   "UC-ENV-TOOL-BOUNDARY-DENY": ["native"],
   // 취소는 UC 가 브라우저와 터미널을 함께 말한다 — 계열 기본값이 맞다.
   //
-  // 분류는 순수한 판단이다. 실제 작업자를 띄워야 확인되는 성질이 아니므로 worker 를
-  // 요구하면 등급과 확인 내용이 인과적으로 어긋난다(2026-08-27 6차 적대리뷰 지적).
-  "UC-ORCHESTRATION-CLASSIFY": ["mock"],
+  // 분류 자체는 순수한 판단이지만, 이 시나리오에는 이슈·space 결속(FR-ORCHESTRATION.2)이
+  // 함께 걸려 있다. 결속은 실제 디스크에 남아야 확인되는 성질이므로 mock 만으로는 부족하다
+  // (2026-08-27 8차 적대리뷰 지적 — 6차에 mock 으로 낮춘 것이 과했다).
+  "UC-ORCHESTRATION-CLASSIFY": ["mock", "native"],
 };
 
 /**

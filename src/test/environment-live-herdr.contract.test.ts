@@ -57,9 +57,24 @@ describe("살아 있는 Herdr 관측 (native)", () => {
   it("실제 관측이 대화에 실을 세그먼트가 된다", () => {
     const session = new EnvironmentSession();
     session.observeSnapshot(live as never);
+    session.watch();
     const segment = session.segment();
     expect(segment?.kind).toBe("environmentSurfaces");
     expect(segment?.surfaces.length).toBeGreaterThan(0);
+  });
+
+  it("지켜보지 않는 동안에는 실제 터미널 이름이 뇌로 가지 않는다 (FR-ENV-ATTENTION.3)", () => {
+    // 대역이 아니라 이 기계에서 실제로 열려 있는 표면의 이름으로 확인한다 —
+    // 우리가 고른 문자열로는 "안 샌다"를 증명할 수 없다.
+    const session = new EnvironmentSession();
+    const report = session.observeSnapshot(live as never);
+    const wire = JSON.stringify(session.segment());
+    expect(session.segment()?.surfaces).toEqual([]);
+    expect(session.segment()?.omitted).toBe(report.surfaces.length + report.omitted);
+    for (const s of report.surfaces) {
+      expect(wire, `지켜보지도 않는데 이름이 나갔다: ${s.label}`).not.toContain(s.label);
+      expect(wire, `지켜보지도 않는데 손잡이가 나갔다: ${s.ref.token}`).not.toContain(s.ref.token);
+    }
   });
 
   it("실제 pane 식별자가 뇌에 올라가지 않는다", () => {

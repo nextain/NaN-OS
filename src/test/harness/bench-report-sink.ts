@@ -50,6 +50,10 @@ export function renderReport(summary: BenchSummary, verdicts: readonly Verdict[]
     `생성 시각: ${generatedAt}`,
     "",
     `시나리오 ${summary.runs}개 중 ${summary.accepted}개 수용 (${Math.round(summary.successRate * 100)}%).`,
+    "",
+    rejected.length === 0
+      ? "**게이트: 통과.** 선언한 시나리오가 전부 요구 등급의 증거를 모았다."
+      : `**게이트: 실패.** ${rejected.length}개 시나리오가 증명되지 않았다 — 이 보고서는 성공 산출물이 아니다.`,
     `중앙 지연 ${summary.medianLatencyMs}ms · 꼬리 지연(95분위) ${summary.tailLatencyMs}ms · 사람 개입 ${summary.totalInterventions}회.`,
     "",
     "## 수용된 시나리오",

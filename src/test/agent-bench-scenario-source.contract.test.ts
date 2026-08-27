@@ -60,7 +60,6 @@ describe("실제 문서와의 결속 (NFR-AGENT-BENCH.1)", () => {
       "UC-AGENT-BENCH-",
       "UC-ENV-STICKY",
       "UC-WIRE-UNION-",
-      "UC-ORCHESTRATION-CLASSIFY",
     ];
     const scenarios = await new DocumentBenchScenarioSource(DOC).list();
     const mockOnly = scenarios.filter((s) => s.requiredEvidence.every((e) => e === "mock"));

@@ -257,6 +257,7 @@ describe("살아 있는 Herdr 조작 (native)", () => {
       expect(label.length).toBeLessThanOrEqual(LABEL_MAX);
 
       // 자료 자리에만 실린다 — 세그먼트에 지시문 자리가 따로 없다.
+      session.watch();
       const segment = session.segment();
       const surface = segment?.surfaces.find((x) => x.label.startsWith(NONCE));
       expect(surface, "세그먼트에 안 실렸다").toBeDefined();

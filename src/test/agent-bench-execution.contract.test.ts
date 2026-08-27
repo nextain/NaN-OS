@@ -4,7 +4,7 @@
 // 실패한 명령은 증거가 되지 않고, 확인 수단이 없으면 없다고 말하고,
 // 등급을 실제보다 높여 적지 않는다.
 import { describe, it, expect } from "vitest";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, statSync, utimesSync } from "node:fs";
 import { resolve } from "node:path";
 import {
   ALLOWED_EXECUTABLES,
@@ -13,6 +13,7 @@ import {
   parseTestCount,
   readClaim,
   MISSING_SPECS,
+  e2eBinaryIsCurrent,
   plausibleResource,
   readFreshAttestation,
   writeAttestation,
@@ -453,5 +454,31 @@ describe("증명서가 막는 것과 막지 못하는 것", () => {
     expect(plausibleResource("wZ:p1")).toBe(true);
     // 남은 위험: 케이스 신고 없이 파일 단위로만 쓰면 케이스 대조가 적용되지 않는다.
     expect(att?.cases, "케이스 신고가 없으면 케이스 대조가 걸리지 않는다").toBeUndefined();
+  });
+});
+
+describe("옛 바이너리로 실 백엔드 증거를 만들지 않는다", () => {
+  // 실측(2026-08-27): 바이너리는 11:00, Rust 소스 마지막 커밋은 13:17 이었다.
+  // "실 Rust 백엔드로 검증했다"가 실제로는 옛 바이너리를 상대로 한 것이었고,
+  // 벤치는 그 어긋남을 보지 못해 통과를 그대로 증거로 셌다.
+  const ROOT = resolve(__dirname, "..", "..");
+
+  it("지금 소스로 빌드된 바이너리는 통과한다", () => {
+    const out = e2eBinaryIsCurrent(ROOT);
+    expect(out.ok, out.why).toBe(true);
+  });
+
+  it("소스가 바이너리보다 새로우면 거절한다", () => {
+    const src = resolve(ROOT, "packages", "shell", "src-tauri", "src", "lib.rs");
+    const before = statSync(src);
+    try {
+      const future = new Date(Date.now() + 60_000);
+      utimesSync(src, future, future);
+      const out = e2eBinaryIsCurrent(ROOT);
+      expect(out.ok, "소스가 더 새로운데 통과했다").toBe(false);
+      expect(out.why).toContain("오래됐다");
+    } finally {
+      utimesSync(src, before.atime, before.mtime);
+    }
   });
 });
