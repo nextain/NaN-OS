@@ -21,6 +21,8 @@ function fixture() {
 	return { x64, arm64 };
 }
 
+const portablePath = (path: string) => path.replaceAll("\\", "/");
+
 describe("macOS Universal Binary assembly", () => {
 	it("keeps both architecture builds and runs the Universal app on both runner types", () => {
 		const workflow = readFileSync(
@@ -29,7 +31,7 @@ describe("macOS Universal Binary assembly", () => {
 				"../../../../.github/workflows/build-installers.yml",
 			),
 			"utf8",
-		);
+		).replaceAll("\r\n", "\n");
 		expect(workflow).toContain("os: macos-15-intel");
 		expect(workflow).toContain("uname_arch: x86_64");
 		expect(workflow).toContain(
@@ -140,7 +142,7 @@ describe("macOS Universal Binary assembly", () => {
 		const exec = (command: string, args: string[]) => {
 			if (command === "file")
 				return Buffer.from(
-					args[1]?.endsWith("Contents/MacOS/naia-shell")
+					portablePath(args[1] ?? "").endsWith("Contents/MacOS/naia-shell")
 						? "Mach-O 64-bit executable"
 						: "data",
 				);
@@ -169,7 +171,9 @@ describe("macOS Universal Binary assembly", () => {
 		const exec = (command: string, args: string[]) => {
 			if (command === "file")
 				return Buffer.from(
-					args[1]?.endsWith("Contents/MacOS/naia-shell") ? "Mach-O" : "data",
+					portablePath(args[1] ?? "").endsWith("Contents/MacOS/naia-shell")
+						? "Mach-O"
+						: "data",
 				);
 			if (command === "lipo" && args[0] === "-archs")
 				return Buffer.from(readFileSync(args[1], "utf8"));
@@ -190,7 +194,9 @@ describe("macOS Universal Binary assembly", () => {
 		const exec = (command: string, args: string[]) => {
 			if (command === "file")
 				return Buffer.from(
-					args[1]?.endsWith("Contents/MacOS/naia-shell") ? "Mach-O" : "data",
+					portablePath(args[1] ?? "").endsWith("Contents/MacOS/naia-shell")
+						? "Mach-O"
+						: "data",
 				);
 			if (command === "lipo" && args[0] === "-archs")
 				return Buffer.from("x86_64 arm64");

@@ -11421,8 +11421,8 @@ pub fn run() {
             app.manage(AuditState { db: audit_db.clone() });
             log_verbose(&format!("[Naia] Audit DB initialized at: {}", audit_db_path.display()));
 
-            // Memory: Agent MemorySystem reads/writes ~/.naia/memory/alpha-memory.json directly.
-            // Shell reads that file via memory::get_all_agent_facts() ??no SQLite DB needed.
+            // Memory: Agent MemorySystem owns <ADK>/naia-settings/memory/store.json.
+            // Shell reads that store via memory::get_all_agent_facts(); no separate SQLite DB is needed.
 
             // Migrate legacy vosk-models ??stt-models
             stt_models::migrate_legacy_vosk_models(&app_handle);
@@ -12010,8 +12010,8 @@ mod tests {
             std::path::PathBuf::from(r"\\server\share\Naia")
         );
         assert_eq!(
-            powershell_compatible_path(std::path::Path::new(r"C:\Users\LukeYang\naia-omni")),
-            std::path::PathBuf::from(r"C:\Users\LukeYang\naia-omni")
+            powershell_compatible_path(std::path::Path::new(r"C:\Users\Public\naia-omni")),
+            std::path::PathBuf::from(r"C:\Users\Public\naia-omni")
         );
     }
 

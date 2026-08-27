@@ -4,6 +4,7 @@ import {
 	fireEvent,
 	render,
 	screen,
+	waitFor,
 } from "@testing-library/react";
 import { StrictMode } from "react";
 // @vitest-environment jsdom
@@ -267,6 +268,40 @@ describe("SettingsTab", () => {
 		const providerSelect = document.getElementById("provider-select");
 		expect(providerSelect).toBeDefined();
 		expect(screen.getByLabelText(/^API/i)).toBeDefined();
+	});
+
+	it("applies the Google API key to the Agent credential store before reload", async () => {
+		localStorage.setItem("naia-adk-path", "/home/user/naia-adk");
+		localStorage.setItem(
+			"naia-config",
+			JSON.stringify({
+				provider: "gemini",
+				model: "gemini-2.5-flash",
+				apiKey: "",
+			}),
+		);
+		mockInvoke.mockImplementation((command: string) => {
+			if (command === "read_naia_ui_config") return Promise.resolve("{}");
+			return Promise.resolve([]);
+		});
+
+		render(<SettingsTab />);
+		gotoSettingsTab("brain");
+		fireEvent.change(screen.getByLabelText(/^API/i), {
+			target: { value: "store-review-key" },
+		});
+		fireEvent.click(screen.getByRole("button", { name: "Apply" }));
+
+		await waitFor(() =>
+			expect(mockInvoke).toHaveBeenCalledWith("write_agent_key", {
+				adkPath: "/home/user/naia-adk",
+				envKey: "GEMINI_API_KEY",
+				value: "store-review-key",
+			}),
+		);
+		await waitFor(() =>
+			expect(mockInvoke).toHaveBeenCalledWith("reload_agent_settings"),
+		);
 	});
 
 	it("hides API key input for Naia (nextain) provider", () => {
@@ -549,7 +584,7 @@ describe("SettingsTab", () => {
 	});
 
 	it("persists Naia auth callback even when no config exists yet", async () => {
-		localStorage.setItem("naia-adk-path", "C:\\Users\\tester\\naia-adk");
+		localStorage.setItem("naia-adk-path", "C:\\Users\\Public\\naia-adk");
 		mockInvoke.mockResolvedValue([]);
 		const authReady = vi.fn();
 		window.addEventListener("naia_auth_ready", authReady);
@@ -581,14 +616,14 @@ describe("SettingsTab", () => {
 		expect(saved.naiaKey).toBe("gw-test-key");
 		expect(saved.naiaUserId).toBe("user-123");
 		expect(mockInvoke).toHaveBeenCalledWith("write_agent_key", {
-			adkPath: "C:\\Users\\tester\\naia-adk",
+			adkPath: "C:\\Users\\Public\\naia-adk",
 			envKey: "NAIA_ANYLLM_API_KEY",
 			value: "gw-test-key",
 		});
 		expect(mockInvoke).toHaveBeenCalledWith(
 			"write_naia_config",
 			expect.objectContaining({
-				adkPath: "C:\\Users\\tester\\naia-adk",
+				adkPath: "C:\\Users\\Public\\naia-adk",
 				json: expect.any(String),
 			}),
 		);
@@ -605,7 +640,7 @@ describe("SettingsTab", () => {
 	});
 
 	it("replaces a stale Gemini main role when logging in to Naia from Settings", async () => {
-		localStorage.setItem("naia-adk-path", "C:\\Users\\tester\\naia-adk");
+		localStorage.setItem("naia-adk-path", "C:\\Users\\Public\\naia-adk");
 		localStorage.setItem(
 			"naia-config",
 			JSON.stringify({
