@@ -514,3 +514,42 @@ describe("실패한 watch 는 노출 상태를 바꾸지 않는다 (FR-ENV-ATTEN
 		expect(d.session.watching()).toBe(true);
 	});
 });
+
+describe("이 기능이 요청마다 붙이는 고정 비용 (FR-ENV-ATTENTION.18)", () => {
+	// 표면 세그먼트만 재고 "93.5% 줄였다"고 말하면, 이 기능이 새로 얹은 가장 큰 고정
+	// 문자열 — 도구 선언 — 을 분모와 분자 양쪽에서 빼는 셈이다. 작성자에게 유리한
+	// 경계였다 (2026-08-28 19차 적대리뷰 지적). 그것도 재고 함께 말한다.
+	function wireBytes(x: unknown): number {
+		return new TextEncoder().encode(JSON.stringify(x)).length;
+	}
+
+	/** sendAppSkills 가 실제로 보내는 형태 그대로. */
+	const declaration = {
+		name: SKILL_ENVIRONMENT.name,
+		description: SKILL_ENVIRONMENT.description,
+		parameters: SKILL_ENVIRONMENT.parameters ?? { type: "object", properties: {} },
+		...(SKILL_ENVIRONMENT.tier != null ? { tier: SKILL_ENVIRONMENT.tier } : {}),
+	};
+
+	it("도구 선언 크기가 실측치에 머문다 — 설명이 조용히 부풀지 않게", () => {
+		const bytes = wireBytes(declaration);
+		// 2026-08-28 실측 1509바이트. 위아래로 묶는다 — 위는 부풀기를, 아래는 설명을
+		// 깎아 비용만 좋게 만드는 것을 막는다(설명이 짧아지면 나이아가 언제 쓸지 모른다).
+		expect(bytes, `도구 선언이 부풀었다: ${bytes}바이트`).toBeLessThanOrEqual(1_630);
+		expect(bytes, `도구 선언이 깎였다: ${bytes}바이트`).toBeGreaterThanOrEqual(1_390);
+	});
+
+	it("도구 선언을 포함한 절감률을 함께 안다 — 유리한 경계를 감추지 않는다", () => {
+		const tool = wireBytes(declaration);
+		// 표면 12개 기준 실측: 목록 1187, 개수만 77 (계약 테스트가 이 값을 고정한다).
+		const alwaysTotal = tool + 1_187;
+		const autoTotal = tool + 77;
+		const netReduction = 1 - autoTotal / alwaysTotal;
+		// 세그먼트만 보면 93.5% 지만, 도구 선언까지 넣으면 40%대다. 둘 다 사실이고
+		// 요구사항에 둘 다 적혀 있다.
+		expect(netReduction).toBeGreaterThan(0.35);
+		expect(netReduction).toBeLessThan(0.5);
+		// 그리고 이 기능은 순증 비용을 가진다 — 켜기 전과 비교하면 늘어난다.
+		expect(autoTotal).toBeGreaterThan(0);
+	});
+});

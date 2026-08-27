@@ -845,6 +845,36 @@ test.describe("#502 환경 스킬 배선 (FR-ENV-LIVE)", () => {
 		).toBeNull();
 	});
 
+	test("(B16) 도구 사용이 꺼져 있으면 표면을 싣지 않는다 (FR-ENV-ATTENTION.19)", async ({
+		page,
+	}) => {
+		// 개수만 보내는 안내는 "필요하면 도구를 불러라"라고 말한다. 그런데 전역 도구가
+		// 꺼져 있으면 나이아는 부를 수 없다 — 닫힌 길을 가리키는 셈이다
+		// (2026-08-28 19차 적대리뷰 지적).
+		await boot(page, { ...BASE_CONFIG, enableTools: false });
+		const input = page.locator(".chat-input");
+		await expect(input).toBeEnabled({ timeout: 5_000 });
+		await input.fill("도구 꺼진 턴");
+		await input.press("Enter");
+
+		// 요청은 실제로 나간다 — 단언이 공허하지 않다.
+		await expect
+			.poll(
+				async () =>
+					page.evaluate(
+						() =>
+							((window as unknown as { __E2E_OUTBOUND__?: Record<string, unknown>[] }).__E2E_OUTBOUND__ ?? [])
+								.filter((m) => m?.type === "chat_request").length,
+					),
+				{ timeout: 10_000 },
+			)
+			.toBeGreaterThan(0);
+		expect(
+			await surfacesSegment(page),
+			"도구를 부를 수 없는데 표면을 실어 부르라고 안내했다",
+		).toBeNull();
+	});
+
 	test("(C) app_tool_call(focus) 이 실제 herdr 명령까지 간다", async ({ page }) => {
 		await boot(page, BASE_CONFIG);
 		// 나이아가 실제로 하는 순서대로 손잡이를 얻는다 — 지켜보기 전에는 손잡이가 안 나간다.

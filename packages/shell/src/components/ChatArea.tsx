@@ -1816,7 +1816,10 @@ export function ChatArea({
 				void sendAppSkills(ENVIRONMENT_APP_ID, [SKILL_ENVIRONMENT], { awaitAck: true })
 					.then((ok) => noteEnvironmentToolAck(ok))
 					.catch(() => noteEnvironmentToolAck(false));
-				environmentToolReady = environmentToolRegistered();
+				// 도구가 꺼져 있으면 나이아는 observe/watch 를 부를 수 없다. 그런데도 개수를
+				// 실으면 안내가 "필요하면 도구를 불러라"라고 말한다 — 닫힌 길을 가리키는 셈이다
+				// (2026-08-28 19차 적대리뷰 지적). 등록 확인과 도구 활성화를 함께 본다.
+				environmentToolReady = environmentToolRegistered() && config.enableTools === true;
 				if (!environmentToolReady) {
 					Logger.warn("ChatArea", "environment skill not confirmed — skipping surfaces", {
 						requestId,
