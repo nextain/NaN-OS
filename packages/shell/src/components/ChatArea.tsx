@@ -47,6 +47,7 @@ import {
 	shouldActivateRadioDj,
 } from "../lib/bgm-skill";
 import {
+	ENVIRONMENT_APP_ID,
 	SKILL_ENVIRONMENT,
 	executeEnvironmentSkill,
 	liveEnvironmentDeps,
@@ -457,6 +458,14 @@ async function buildMemoryContext(): Promise<MemoryContext> {
 function buildEnvironmentSegments(
 	memoryCtx: MemoryContext,
 	responseStyle: "brief" | "normal" = "normal",
+	/**
+	 * 이번 턴에 환경 도구가 뇌에 실제로 등록되어 있는가 (FR-ENV-ATTENTION.16).
+	 *
+	 * 등록이 전달되지 않았는데 표면을 실으면, 개수만 싣는 안내가 "environment 도구를
+	 * 불러라"라고 말한다 — 나이아에게 없는 도구다. 못 하는 것을 하라고 시키는 셈이라
+	 * 그 턴에는 아예 싣지 않는다.
+	 */
+	toolReady = true,
 ): EnvironmentSegment[] {
 	const segs: EnvironmentSegment[] = [{ kind: "avatarEmotion" }];
 	if (memoryCtx.appContexts?.length) {
@@ -474,7 +483,9 @@ function buildEnvironmentSegments(
 	//
 	// 다만 목록 전체를 늘 싣지는 않는다. 기본(auto)에서는 개수만 실리고, 나이아가 watch 로
 	// 지켜보기로 정한 동안에만 목록이 붙는다. 사용자가 config 로 off/always 를 정하면 그것이 이긴다.
-	const surfaces = environmentSession.segment(loadConfig()?.environmentAwareness ?? "auto");
+	const surfaces = toolReady
+		? environmentSession.segment(loadConfig()?.environmentAwareness ?? "auto")
+		: null;
 	if (surfaces) {
 		segs.push(surfaces);
 	}
@@ -1780,7 +1791,17 @@ export function ChatArea({
 			// 관측 갱신 비용은 실측했다: herdr 스냅샷 한 번이 10ms 다(2026-08-27). 그 뒤에
 			// 오는 LLM 호출 앞에서는 무시할 수준이고, Herdr 이 없으면 즉시 실패해 넘어간다.
 			// 꺼 두었으면 부르지 않는다 — 껐다는 말은 값도 안 든다는 뜻이어야 한다.
+			// 환경 도구도 턴마다 다시 등록한다. 부팅 등록은 agent 기동과 경쟁하고, agent 가
+			// 재시작하면 조용히 사라진다 — BGM 이 같은 이유로 매 턴 재등록한다.
+			// 다만 여기서는 실패해도 대화를 막지 않는다. 환경은 대화의 조건이 아니다.
+			let environmentToolReady = false;
 			if ((loadConfig()?.environmentAwareness ?? "auto") !== "off") {
+				environmentToolReady = await sendAppSkills(ENVIRONMENT_APP_ID, [SKILL_ENVIRONMENT]);
+				if (!environmentToolReady) {
+					Logger.warn("ChatArea", "environment skill not delivered — skipping surfaces", {
+						requestId,
+					});
+				}
 				await refreshEnvironment().catch(() => null);
 			}
 			// 지켜보기 예산을 한 턴 쓴다 (FR-ENV-ATTENTION.7). 음성 경로와 같은 헬퍼를 쓴다 —
@@ -1828,6 +1849,7 @@ export function ChatArea({
 				environmentSegments: buildEnvironmentSegments(
 					memoryCtx,
 					pipelineActiveRef.current ? "brief" : "normal",
+					environmentToolReady,
 				),
 				enableTools: config.enableTools,
 				enableThinking: config.enableThinking,

@@ -448,10 +448,16 @@ export function App() {
 		// 값도 안 든다는 뜻이어야 한다.
 		if ((loadConfig()?.environmentAwareness ?? "auto") !== "off") {
 			sendAppSkills(ENVIRONMENT_APP_ID, [SKILL_ENVIRONMENT])
-				.then(() =>
-					Logger.info("App", "startup environment skill registered", {
-						tool: SKILL_ENVIRONMENT.name,
-					}),
+				.then((ok) =>
+					// 반환값을 확인한다. 보내지 못했는데 "등록됨"이라고 적으면 로그가 거짓이 된다.
+					// 실제 복구는 대화 턴마다 다시 등록하는 쪽이 한다 (FR-ENV-ATTENTION.16).
+					ok
+						? Logger.info("App", "startup environment skill registered", {
+								tool: SKILL_ENVIRONMENT.name,
+							})
+						: Logger.warn("App", "startup environment skill not delivered", {
+								tool: SKILL_ENVIRONMENT.name,
+							}),
 				)
 				.catch((err) =>
 					Logger.warn("App", "startup environment skill failed", {

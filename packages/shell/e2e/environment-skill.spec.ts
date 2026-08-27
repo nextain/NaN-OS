@@ -719,6 +719,68 @@ test.describe("#502 환경 스킬 배선 (FR-ENV-LIVE)", () => {
 		expect(autoBytes, `숨김 세그먼트가 사라졌다: ${autoBytes}`).toBeGreaterThan(0);
 	});
 
+	test("(B14) 도구 등록이 전달되지 않으면 환경을 싣지 않는다 (FR-ENV-ATTENTION.16)", async ({
+		page,
+	}) => {
+		// 등록이 안 갔는데 개수를 실으면, 안내가 "environment 도구를 불러라"라고 말한다 —
+		// 나이아에게 없는 도구다. 못 하는 것을 하라고 시키는 셈이다
+		// (2026-08-28 16차 적대리뷰 지적).
+		await boot(page, BASE_CONFIG);
+		const input = page.locator(".chat-input");
+		await expect(input).toBeEnabled({ timeout: 5_000 });
+
+		// 먼저 정상 상태를 확인한다 — 아래 단언이 공허하지 않게.
+		await input.fill("정상 턴");
+		await input.press("Enter");
+		await expect.poll(async () => await surfacesSegment(page), { timeout: 10_000 }).not.toBeNull();
+
+		// 이제 등록 전달이 실패한다(agent 재시작·연결 단절과 같은 상황).
+		//
+		// ⚠️ 실패를 스펙 모의 안에서 던지면 공용 헬퍼(tauri-base-mock)가 app_skills 예외를
+		//    삼켜 성공으로 바꾼다 — 실제로 그렇게 무력화됐다(2026-08-28 실측). 그래서 가장
+		//    바깥에서 invoke 를 감싼다.
+		await page.evaluate(() => {
+			const internals = (window as unknown as { __TAURI_INTERNALS__: { invoke: (c: string, a: unknown) => Promise<unknown> } })
+				.__TAURI_INTERNALS__;
+			const inner = internals.invoke;
+			internals.invoke = async (cmd: string, args: unknown) => {
+				if (cmd === "send_to_agent_command") {
+					const msg = (args as { message?: string } | undefined)?.message;
+					const payload = msg ? (JSON.parse(msg) as { type?: string; appId?: string }) : undefined;
+					if (payload?.type === "app_skills" && payload.appId === "environment") {
+						throw new Error("naia-agent unavailable");
+					}
+				}
+				return inner(cmd, args);
+			};
+		});
+		const before = await page.evaluate(
+			() =>
+				((window as unknown as { __E2E_OUTBOUND__?: Record<string, unknown>[] }).__E2E_OUTBOUND__ ?? [])
+					.filter((m) => m?.type === "chat_request").length,
+		);
+		await input.fill("등록 실패 턴");
+		await input.press("Enter");
+
+		// 대화는 그대로 나간다 — 환경 실패가 대화를 막지 않는다.
+		await expect
+			.poll(
+				async () =>
+					page.evaluate(
+						() =>
+							((window as unknown as { __E2E_OUTBOUND__?: Record<string, unknown>[] }).__E2E_OUTBOUND__ ?? [])
+								.filter((m) => m?.type === "chat_request").length,
+					),
+				{ timeout: 10_000 },
+			)
+			.toBeGreaterThan(before);
+		// 그런데 표면은 실리지 않는다.
+		expect(
+			await surfacesSegment(page),
+			"도구가 없는데 표면을 실어 없는 도구를 부르라고 안내했다",
+		).toBeNull();
+	});
+
 	test("(C) app_tool_call(focus) 이 실제 herdr 명령까지 간다", async ({ page }) => {
 		await boot(page, BASE_CONFIG);
 		// 나이아가 실제로 하는 순서대로 손잡이를 얻는다 — 지켜보기 전에는 손잡이가 안 나간다.

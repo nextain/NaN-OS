@@ -826,12 +826,14 @@ export async function sendAppSkills(
 	);
 }
 
-/** Tell the agent to remove app's proxy skills (on app deactivate) */
-export async function sendAppSkillsClear(appId: string): Promise<void> {
-	await safeSendToAgent(
-		{ type: "app_skills_clear", appId },
-		"sendAppSkillsClear",
-	);
+/**
+ * Tell the agent to remove app's proxy skills (on app deactivate).
+ *
+ * 결과를 돌려준다. 버리면 해제가 실패해도 호출자가 알 수 없고, 사용자가 껐는데
+ * 도구 선언이 뇌에 남는다 (2026-08-28 16차 적대리뷰 지적).
+ */
+export async function sendAppSkillsClear(appId: string): Promise<boolean> {
+	return safeSendToAgent({ type: "app_skills_clear", appId }, "sendAppSkillsClear");
 }
 
 /** Install a app from a git URL or local zip file path (delegated to agent) */

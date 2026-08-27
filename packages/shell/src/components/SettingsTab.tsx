@@ -4867,11 +4867,23 @@ export function SettingsTab() {
 								setEnvironmentAwareness(next);
 								persistConfig({ environmentAwareness: next });
 								// 즉시 반영한다 — 다시 켤 때까지 기다리게 하지 않는다.
+								// 전달 여부를 확인한다. 버리면 사용자가 껐는데 도구 선언이 뇌에
+								// 남거나, 켰는데 나이아에게 도구가 없는 상태를 아무도 모른다
+								// (2026-08-28 16차 적대리뷰 지적). 켜는 쪽은 대화 턴마다 다시
+								// 등록하므로 실패해도 다음 턴에 복구된다.
 								if (next === "off") {
 									environmentSession.unwatch();
-									sendAppSkillsClear(ENVIRONMENT_APP_ID).catch(() => {});
+									sendAppSkillsClear(ENVIRONMENT_APP_ID)
+										.then((ok) => {
+											if (!ok) Logger.warn("SettingsTab", "environment skill clear not delivered", {});
+										})
+										.catch(() => {});
 								} else {
-									sendAppSkills(ENVIRONMENT_APP_ID, [SKILL_ENVIRONMENT]).catch(() => {});
+									sendAppSkills(ENVIRONMENT_APP_ID, [SKILL_ENVIRONMENT])
+										.then((ok) => {
+											if (!ok) Logger.warn("SettingsTab", "environment skill register not delivered", {});
+										})
+										.catch(() => {});
 								}
 							}}
 						>
