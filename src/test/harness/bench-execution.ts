@@ -796,7 +796,9 @@ export interface BoundaryAttestation {
  * 완전한 방어는 아니다. 무엇을 막고 무엇을 못 막는지 여기 적어 둔다.
  */
 export function plausibleResource(token: string): boolean {
-  if (/^w[A-Za-z0-9]+(:[pt][0-9]+)?$/.test(token)) return true; // Herdr 워크스페이스·pane·tab
+  // 실측(2026-08-27): pane 은 `p1`·`p12` 뿐 아니라 `p1A`·`pM` 처럼 영숫자다.
+  // 숫자만 허용하던 첫 판본이 실제 자원을 형태 불일치로 거절했다 — 규칙을 환경에서 재고 맞춘다.
+  if (/^w[A-Za-z0-9]+(:[pt][A-Za-z0-9]+)?$/.test(token)) return true; // Herdr 워크스페이스·pane·tab
   if (/^pid:[0-9]+$/.test(token)) return true;
   if (token.startsWith("/") && token.length > 1) return true; // 절대 경로
   if (/\.(test|spec)\.ts$/.test(token)) return true; // 자기 스펙 경로

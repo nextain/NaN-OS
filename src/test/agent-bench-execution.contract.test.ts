@@ -382,6 +382,10 @@ describe("증명서가 막는 것과 막지 못하는 것", () => {
   // 그 자체가 거짓 봉인이다(2026-08-27 5차 적대리뷰가 이 자기충족성을 지적했다).
   it("형태에 맞지 않는 자원 신고는 증거로 세지 않는다", () => {
     expect(plausibleResource("wA:p1")).toBe(true);
+    // 실제 Herdr 이 내는 모양(2026-08-27 실측). 숫자만 허용하던 첫 판본이 이것들을 거절했다.
+    for (const real of ["w9", "w9:p1A", "w9:p1M", "w9:pM", "w9:t1"]) {
+      expect(plausibleResource(real), `실제 자원인데 거절한다: ${real}`).toBe(true);
+    }
     expect(plausibleResource("/tmp/naia-orch-x")).toBe(true);
     expect(plausibleResource("pid:1234")).toBe(true);
     expect(plausibleResource("그냥 아무 말")).toBe(false);

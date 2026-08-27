@@ -1,6 +1,6 @@
 {
-  "revision": "92a32f90",
-  "stampedAt": "2026-08-26T20:44:24.200Z",
+  "revision": "cb85fdc8",
+  "stampedAt": "2026-08-27T04:39:27.403Z",
   "scenarios": {
     "UC-WORKSPACE-CONTEXT-DISCOVER": {
       "receipts": [
