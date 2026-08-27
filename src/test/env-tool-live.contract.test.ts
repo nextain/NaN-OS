@@ -6,7 +6,7 @@
 //
 // ⚠️ 이 테스트가 만든 워크스페이스 안에서만 실행한다. 터미널 포트가 소유 밖 대상을
 //    거부하므로 판정이 틀려도 사용자의 터미널로 가지 않는다. 끝나면 워크스페이스를 닫는다.
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { describe, it, expect, beforeAll, afterAll, afterEach } from "vitest";
 import { writeAttestation } from "./harness/bench-execution.js";
 import { resolve as resolvePath } from "node:path";
 
@@ -16,6 +16,15 @@ import { EnvironmentToolService } from "../main/app/control/env-tool.js";
 import { ALL_TIERS } from "../main/domain/capability.js";
 import type { StructuredCommand } from "../main/domain/herdr-control.js";
 import type { EnvOperationRequest } from "../main/domain/env-tool.js";
+
+/**
+ * 실제로 돈 케이스를 러너에서 모은다. 손으로 적은 목록은 테스트를 고칠 때 따라오지 않아
+ * 작성자가 관리하는 매핑이 하나 더 느는 것뿐이다(2026-08-27 적대리뷰).
+ */
+const passedCases: string[] = [];
+afterEach((ctx) => {
+  if (ctx.task.result?.state === "pass") passedCases.push(ctx.task.name);
+});
 import type {
   BrowserOperationPort,
   CancellationPort,
@@ -79,17 +88,7 @@ afterAll(() => {
   writeAttestation(REPO_ROOT_FOR_ATTEST, {
     spec: "src/test/env-tool-live.contract.test.ts",
     kinds: ["native"],
-    cases: [
-      "전용 워크스페이스를 실제로 만들었다",
-      "구조화된 명령이 실제로 실행되고",
-      "셸 문자열을 조립하지 않는다",
-      "공백이 든 인자는 이 환경의",
-      "소유하지 않은 터미널에는",
-      "취소하면 진행 중인 작업이 실제로 멈춘다",
-      "파일을 고칠 수 있다고",
-      "자격증명을 쓰는 호출은",
-      "워크스페이스 밖으로 나가는",
-    ],
+    cases: passedCases,
     touched: [workspaceId, paneId].filter(Boolean),
     at: Date.now(),
   });

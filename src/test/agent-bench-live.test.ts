@@ -43,12 +43,17 @@ describe("에이전트 벤치 실제 실행", () => {
 
       // 판정에 쓰는 입력의 지문. 커밋 해시로 판본을 적으면 벤치를 커밋 뒤에 돌려야 하는
       // 순서 때문에 늘 한 칸 어긋난다 — 내용으로 판정하면 그 어긋남이 없다.
-      const fingerprintFiles = [
-        "docs/user-scenarios.md",
-        "docs/requirements.md",
-        "src/test/harness/bench-execution.ts",
-        "src/test/harness/agent-bench-scenarios.ts",
-      ].map((rel) => ({ path: rel, body: readFileSync(resolve(ROOT, rel), "utf8") }));
+      // 지문은 판정에 영향을 주는 것 전부를 덮어야 한다. 네 파일만 넣으면 그 뒤에 바뀐
+      // 확인 수단과 하네스 코드를 못 잡는다(2026-08-27 7차 적대리뷰 지적).
+      const fingerprintFiles = execFileSync(
+        "git",
+        ["-C", ROOT, "ls-files", "docs/user-scenarios.md", "docs/requirements.md", "src/test", "src/main", "packages/shell/e2e", "packages/shell/e2e-tauri", "packages/shell/src/lib"],
+        { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 },
+      )
+        .split("\n")
+        .map((x) => x.trim())
+        .filter((x) => x && /\.(ts|tsx|md)$/.test(x))
+        .map((rel) => ({ path: rel, body: readFileSync(resolve(ROOT, rel), "utf8") }));
       const fingerprint = benchInputFingerprint(fingerprintFiles);
 
       // 문서가 선언한 시나리오 전부가 실제로 돌았는가 — 개수가 아니라 이름으로 본다.
@@ -103,10 +108,9 @@ describe("에이전트 벤치 실제 실행", () => {
         ),
       );
 
-      // 성공률 임계는 유예로 이름 걸어 둔 것만 빼고 전부 수용을 요구한다.
-      // 무한대는 게이트가 아니고, 1 로 못 박으면 유예 선언 자체가 불가능해진다.
-      const deferredCount = declaredIds.filter((id) => id in DEFERRED_SCENARIOS).length;
-      const minSuccessRate = (declaredIds.length - deferredCount) / declaredIds.length;
+      // 유예가 없으므로 임계는 1 이다. 확인 수단이 없는 시나리오가 있으면 게이트는
+      // 빨간불로 남는다 — 그것이 사실이고, 초록불로 만드는 것은 작성자 몫이 아니다.
+      const minSuccessRate = 1;
 
       const outcome = await harness.run(
         { testCount: 0 },
@@ -132,33 +136,13 @@ describe("에이전트 벤치 실제 실행", () => {
         expect(outcome.accepted).toBe(true);
       }
 
-      // 유예로 이름을 걸어 둔 것 말고 거절이 있으면 빨간불이다.
-      const unexpected = outcome.verdicts
-        .filter((v) => !v.accepted)
-        .filter((v) => !(v.scenarioId in DEFERRED_SCENARIOS));
+      // 거절이 하나라도 있으면 빨간불이다. 예외 목록은 없다.
       expect(
-        unexpected.map((v) => `${v.scenarioId}: ${v.reasons.join(",")}`),
-        "유예로 선언하지 않은 시나리오가 증명되지 않았다",
+        outcome.verdicts.filter((v) => !v.accepted).map((v) => `${v.scenarioId}: ${v.reasons.join(",")}`),
+        "증명되지 않은 시나리오가 있다",
       ).toEqual([]);
-      // 유예 목록이 조용히 자라지 않게 한다.
-      expect(Object.keys(DEFERRED_SCENARIOS).length).toBeLessThanOrEqual(1);
+      expect(Object.keys(DEFERRED_SCENARIOS), "유예 장치가 되살아났다").toEqual([]);
 
-      // 유예는 내 상수 하나로 성립하면 안 된다 — 그러면 아무 시나리오나 넣어 게이트를
-      // 초록불로 만들 수 있다(2026-08-27 5차 적대리뷰 지적). 요구사항 문서가 그 시나리오를
-      // 아직 완료로 적지 않았다는 사실과 맞물려야 유예가 성립한다.
-      const requirements = readFileSync(resolve(ROOT, "docs", "requirements.md"), "utf8");
-      for (const [id, d] of Object.entries(DEFERRED_SCENARIOS)) {
-        const rows = requirements.split("\n").filter((l) => l.startsWith("|") && l.includes(id));
-        const anyDone = rows.some((l) => /\|\s*Done\s*\|?\s*$/.test(l.trimEnd()));
-        expect(anyDone, `${id} 를 유예로 두면서 요구사항은 Done 이라고 적혀 있다`).toBe(false);
-        // 무엇이 있어야 풀리는지 적혀 있어야 한다. "언젠가"는 유예가 아니라 방치다.
-        expect(d.liftedBy.length, `${id} 에 해제 조건이 없다`).toBeGreaterThan(20);
-        // 만료가 지나면 더는 유예가 아니다.
-        expect(
-          new Date(`${d.expiresOn}T23:59:59Z`).getTime() > Date.now(),
-          `${id} 의 유예가 ${d.expiresOn} 로 만료됐다 — 확인 수단을 만들거나 사람이 연장해야 한다`,
-        ).toBe(true);
-      }
       expect(outcome.breaches, "임계를 넘었다").toEqual([]);
 
       // 보고서가 지금 입력의 것인지 확인한다. 커밋이 아니라 내용으로 본다.

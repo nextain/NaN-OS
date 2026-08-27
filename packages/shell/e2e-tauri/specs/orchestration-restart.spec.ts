@@ -65,10 +65,26 @@ function writeAttestationSync(touched: readonly string[]): void {
 	mkdirSync(dirnameOf(file), { recursive: true });
 	writeFileSyncNode(
 		file,
-		`${JSON.stringify({ spec: SPEC_ID, kinds: ["native"], touched, at: Date.now() }, null, 2)}\n`,
+		`${JSON.stringify({ spec: SPEC_ID, kinds: ["native"], cases: passedCases, touched, at: Date.now() }, null, 2)}\n`,
 		"utf8",
 	);
 }
+
+/**
+ * 실제로 돈 케이스를 러너에서 모은다.
+ *
+ * ⚠️ 손으로 적은 배열은 테스트를 고칠 때 따라오지 않는다. 실제로 세 번 어긋났다 —
+ *    템플릿으로 만들어지는 제목이 빠졌고, 새로 넣은 케이스가 빠졌다. 작성자가 관리하는
+ *    매핑을 하나 더 만드는 셈이라(2026-08-27 적대리뷰가 1차부터 지적한 것) 러너가
+ *    직접 기록하게 한다.
+ */
+const passedCases: string[] = [];
+
+afterEach(function (this: Mocha.Context) {
+	const t = this.currentTest;
+	if (t && t.state === "passed" && t.title) passedCases.push(t.title);
+});
+
 
 const SPEC_ID = "packages/shell/e2e-tauri/specs/orchestration-restart.spec.ts";
 

@@ -7,7 +7,7 @@
 //
 // ⚠️ 읽기는 읽기 전용 명령만 쓴다. 변경은 이 테스트가 만든 워크스페이스 안으로만 하고
 //    끝나면 닫는다. 어댑터가 소유 밖 대상을 거부하므로 판정이 틀려도 남의 터미널로 못 간다.
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { describe, it, expect, beforeAll, afterAll, afterEach } from "vitest";
 import { writeAttestation } from "./harness/bench-execution.js";
 import { resolve as resolvePath } from "node:path";
 
@@ -17,6 +17,15 @@ import { HerdrControlPlane } from "../main/app/control/herdr-control.js";
 import { ALL_TIERS } from "../main/domain/capability.js";
 import { liveConnectionPort, liveMutatePort, liveObservePort, toSnapshot } from "./harness/herdr-control-live.js";
 import type { MutationRequest } from "../main/domain/herdr-control.js";
+
+/**
+ * 실제로 돈 케이스를 러너에서 모은다. 손으로 적은 목록은 테스트를 고칠 때 따라오지 않아
+ * 작성자가 관리하는 매핑이 하나 더 느는 것뿐이다(2026-08-27 적대리뷰).
+ */
+const passedCases: string[] = [];
+afterEach((ctx) => {
+  if (ctx.task.result?.state === "pass") passedCases.push(ctx.task.name);
+});
 
 function herdr(args: readonly string[]): string {
   return execFileSync("herdr", [...args], { encoding: "utf8", timeout: 30_000 });
@@ -71,18 +80,7 @@ afterAll(() => {
   writeAttestation(REPO_ROOT_FOR_ATTEST, {
     spec: "src/test/herdr-control-live.contract.test.ts",
     kinds: ["native"],
-    cases: [
-      "전용 워크스페이스를 실제로 만들었다",
-      "자원을 타입이 선언된 값으로 읽는다",
-      "화면 문자열을 긁지 않는다",
-      "스냅샷에 개정이 실려 있고",
-      "구조화된 요청이 실제로 실행된다",
-      "같은 멱등 키를 다시 보내도",
-      "소유하지 않은 대상은 실제 환경에",
-      "낡은 개정으로 온 요청은",
-      "셸 한 줄을 실행 파일 자리에",
-      "재접속하면 현재 상태를",
-    ],
+    cases: passedCases,
     touched: [workspaceId, paneId].filter(Boolean),
     at: Date.now(),
   });

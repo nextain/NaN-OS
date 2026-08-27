@@ -5,7 +5,7 @@
 // 벤치가 이 계열에 native 증거를 요구하는 이유이기도 하다.
 //
 // ⚠️ 임시 디렉터리만 만들고 끝나면 지운다. 픽스처는 자기 루트 밖을 지우지 못한다.
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { describe, it, expect, beforeAll, afterAll, afterEach } from "vitest";
 import { writeAttestation } from "./harness/bench-execution.js";
 import { resolve as resolvePath } from "node:path";
 import { readFileSync } from "node:fs";
@@ -15,6 +15,15 @@ import { canonicalRoot } from "../main/domain/workspace.js";
 import { TempWorkspaceFixtureAdapter } from "./harness/workspace-fixture.js";
 import { FileSystemWorkspaceContextAdapter } from "./harness/workspace-context-fs.js";
 import type { WorkspaceFixture } from "../main/ports/agent-bench.js";
+
+/**
+ * 실제로 돈 케이스를 러너에서 모은다. 손으로 적은 목록은 테스트를 고칠 때 따라오지 않아
+ * 작성자가 관리하는 매핑이 하나 더 느는 것뿐이다(2026-08-27 적대리뷰).
+ */
+const passedCases: string[] = [];
+afterEach((ctx) => {
+  if (ctx.task.result?.state === "pass") passedCases.push(ctx.task.name);
+});
 
 const LIMITS = { maxDocuments: 20, maxBytes: 200_000 };
 
@@ -34,6 +43,14 @@ beforeAll(async () => {
 }, 60_000);
 
 afterAll(async () => {
+  // 이 실행이 실제로 무엇을 만졌는지 남긴다. 정리 전에 써야 root 가 유효하다.
+  writeAttestation(resolvePath(__dirname, "..", ".."), {
+    spec: "src/test/workspace-context-real-fs.contract.test.ts",
+    kinds: ["native"],
+    cases: passedCases,
+    touched: [root].filter(Boolean),
+    at: Date.now(),
+  });
   await fixture?.dispose();
 }, 60_000);
 
@@ -45,22 +62,7 @@ describe("실제 디스크 위의 컨텍스트 해석 (native)", () => {
   it("픽스처가 실제로 만들어졌다 — 없으면 이 증거는 성립하지 않는다", () => {
     expect(root.length).toBeGreaterThan(0);
     expect(readFileSync(resolve(root, "AGENTS.md"), "utf8").length).toBeGreaterThan(0);
-    // 이 실행이 실제로 무엇을 만졌는지 남긴다.
-  writeAttestation(resolvePath(__dirname, "..", ".."), {
-    spec: "src/test/workspace-context-real-fs.contract.test.ts",
-    kinds: ["native"],
-    cases: [
-      "픽스처가 실제로 만들어졌다",
-      "진입점이 선언한 문서를 실제 파일에서 읽는다",
-      "프로젝트에 들어가면 범위와 개정이",
-      "프로젝트를 바꾸면 이전 지역",
-      "없는 진입점을 성공으로",
-      "루트 밖으로 나가는 이름은",
-    ],
-    touched: [root].filter(Boolean),
-    at: Date.now(),
   });
-});
 
   it("진입점이 선언한 문서를 실제 파일에서 읽는다 (UC-WORKSPACE-CONTEXT-DISCOVER)", async () => {
     const out = await service().discover(canonicalRoot(root), { topics: [] });

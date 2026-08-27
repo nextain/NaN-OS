@@ -97,9 +97,20 @@ export class LiveShellWorkerAdapter implements WorkerAdapterPort {
     if (/[^A-Za-z0-9._-]/.test(assignment.workerId)) {
       throw new Error(`작업자 식별자에 쓸 수 없는 문자가 있다: ${assignment.workerId}`);
     }
-    const child = spawn("sleep", ["0.3"], { cwd: this.root, stdio: "ignore" });
-    // 산출물은 파일 시스템 API 로 직접 쓴다. 셸 인용에 기대지 않는다.
-    writeFileSync(target, `${assignment.workerId} worked on ${brief.issue}\n`, "utf8");
+    // ⚠️ 산출물은 *작업자 프로세스가* 써야 한다. 앞서는 부모 테스트가 파일을 쓰고 자식은
+    //    sleep 만 했다 — 작업자 구현을 지워도 프로세스와 파일이 각각 존재해서 "작업자가
+    //    일을 했다"는 주장이 반증 불가능했다(2026-08-27 7차 적대리뷰 지적).
+    //    셸을 거치지 않고, 경로와 내용을 argv 로만 넘긴다.
+    const child = spawn(
+      process.execPath,
+      [
+        "-e",
+        "require('node:fs').writeFileSync(process.argv[1], process.argv[2]);",
+        target,
+        `${assignment.workerId} worked on ${brief.issue}\n`,
+      ],
+      { cwd: this.root, stdio: "ignore" },
+    );
     const running: RunningWorker = {
       assignment,
       brief,

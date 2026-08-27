@@ -9,7 +9,7 @@
 //    거부하므로, 손잡이 해석이 틀려도 남의 터미널로 나갈 수 없다.
 //
 // ⚠️ Herdr 이 없으면 건너뛰지 않고 실패한다 — native 증거를 만드는 자리다.
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { describe, it, expect, beforeAll, afterAll, afterEach } from "vitest";
 import { writeAttestation } from "./harness/bench-execution.js";
 import { resolve as resolvePath } from "node:path";
 
@@ -19,6 +19,15 @@ import { EnvironmentSession } from "../main/app/control/environment-session.js";
 import { surfaceRef, LABEL_MAX } from "../main/domain/environment-intent.js";
 import type { EnvironmentCommandPort } from "../main/ports/environment-dispatch.js";
 import { liveHerdrSnapshot } from "./harness/herdr-live.js";
+
+/**
+ * 실제로 돈 케이스를 러너에서 모은다. 손으로 적은 목록은 테스트를 고칠 때 따라오지 않아
+ * 작성자가 관리하는 매핑이 하나 더 느는 것뿐이다(2026-08-27 적대리뷰).
+ */
+const passedCases: string[] = [];
+afterEach((ctx) => {
+  if (ctx.task.result?.state === "pass") passedCases.push(ctx.task.name);
+});
 
 function herdr(args: readonly string[]): string {
   return execFileSync("herdr", [...args], { encoding: "utf8", timeout: 30_000 });
@@ -90,16 +99,7 @@ afterAll(() => {
   writeAttestation(REPO_ROOT_FOR_ATTEST, {
     spec: "src/test/environment-live-act.contract.test.ts",
     kinds: ["native"],
-    cases: [
-      "run 의도가 실제 터미널에서 실행된다",
-      "interrupt 의도가 돌고 있는 것을 실제로 멈춘다",
-      "전용 워크스페이스를 실제로 만들었다",
-      "그 표면이 뇌가 보는 목록에",
-      "터미널 입력 권한이 없으면 실제 터미널에",
-      "모르는 손잡이는 실제 환경에",
-      "허용되지 않은 의도는 실제 환경에",
-      "환경이 만든 이름이 지시문이 아니라",
-    ],
+    cases: passedCases,
     touched: [workspaceId, paneId].filter(Boolean),
     at: Date.now(),
   });

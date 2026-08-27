@@ -322,19 +322,14 @@ describe("문서와 하네스가 어긋나면 드러난다", () => {
     const orphans = scenarios.filter((sc) => (VERIFICATION[sc.id] ?? []).length === 0).map((sc) => sc.id);
     // 확인 수단 없는 시나리오는 유예로 *이름을 걸어* 선언한 것만 허용한다.
     // 조용히 비어 있는 것과 "왜 아직 안 됐는지 적어 둔 것"은 다르다.
-    expect(orphans.sort(), `확인 수단 없는 시나리오: ${orphans.join(", ")}`).toEqual(
-      Object.keys(DEFERRED_SCENARIOS).sort(),
-    );
+    // 확인 수단이 없는 시나리오는 이름이 드러난다. 예외 목록으로 감추지 않는다.
+    expect(orphans.sort(), `확인 수단 없는 시나리오: ${orphans.join(", ")}`).toEqual([
+      "UC-ORCHESTRATION-CODING-PROVIDER",
+    ]);
   });
 
-  it("유예 선언에 사유가 적혀 있다 — 이름만 걸어 두고 넘어가지 않는다", () => {
-    for (const [id, d] of Object.entries(DEFERRED_SCENARIOS)) {
-      expect(d.reason.length, `${id} 에 사유가 없다`).toBeGreaterThan(20);
-      expect(d.liftedBy.length, `${id} 에 해제 조건이 없다`).toBeGreaterThan(20);
-      expect(d.expiresOn, `${id} 에 만료일이 없다`).toMatch(/^\d{4}-\d{2}-\d{2}$/);
-      // approvedBy 는 사람이 채우는 자리다. 작성자가 스스로 채워 두면 그 자체가 신호다.
-      expect(["string", "object"]).toContain(typeof d.approvedBy);
-    }
+  it("유예 장치가 없다 — 작성자가 혼자 게이트를 초록불로 만들 수 없다", () => {
+    expect(Object.keys(DEFERRED_SCENARIOS)).toEqual([]);
   });
 
   it("문서에서 실제로 수단을 읽어 왔다 — 손으로 적은 것만 있는 게 아니다", () => {

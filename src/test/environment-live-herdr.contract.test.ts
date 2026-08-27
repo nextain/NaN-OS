@@ -9,11 +9,20 @@
 //
 // ⚠️ Herdr 이 없으면 건너뛰지 않고 실패한다. 이 파일은 native 증거를 만드는 자리이고,
 //    건너뛴 게이트는 게이트가 아니다.
-import { describe, it, expect, afterAll } from "vitest";
+import { describe, it, expect, afterAll, afterEach } from "vitest";
 import { writeAttestation } from "./harness/bench-execution.js";
 import { EnvironmentSession } from "../main/app/control/environment-session.js";
 import { resolve } from "node:path";
 import { liveHerdrSnapshot } from "./harness/herdr-live.js";
+
+/**
+ * 실제로 돈 케이스를 러너에서 모은다. 손으로 적은 목록은 테스트를 고칠 때 따라오지 않아
+ * 작성자가 관리하는 매핑이 하나 더 느는 것뿐이다(2026-08-27 적대리뷰).
+ */
+const passedCases: string[] = [];
+afterEach((ctx) => {
+  if (ctx.task.result?.state === "pass") passedCases.push(ctx.task.name);
+});
 
 const live = liveHerdrSnapshot();
 
@@ -93,16 +102,7 @@ afterAll(() => {
   writeAttestation(resolve(__dirname, "..", ".."), {
     spec: "src/test/environment-live-herdr.contract.test.ts",
     kinds: ["native"],
-    cases: [
-      "실제 스냅샷이 보고로 바뀐다",
-      "실제 관측이 대화에 실을 세그먼트가 된다",
-      "실제 pane 식별자가 뇌에 올라가지 않는다",
-      "Herdr 이 실제로 응답한다",
-      "실제 표면이 전부 네 가지 활동 상태",
-      "실제 표면에 이름이 있다",
-      "같은 스냅샷을 두 번 관측",
-      "이름이 겹쳐도 손잡이는",
-    ],
+    cases: passedCases,
     touched: panes.map((p) => String((p as { pane_id?: unknown }).pane_id ?? "")).filter(Boolean),
     at: Date.now(),
   });

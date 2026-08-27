@@ -577,10 +577,19 @@ export class CommandBenchExecution implements BenchExecutionPort {
     }
     // 등급은 파일이 아니라 케이스에 붙는다. 이 단계가 지목한 케이스가 실제로 환경을 밟은
     // 케이스 목록에 없으면, 그 케이스는 실환경 증거가 아니다.
-    if (att.cases && step.cases && step.cases.length > 0) {
-      const notEnv = step.cases.filter((c) => !att.cases?.some((a) => a.includes(c) || c.includes(a)));
-      if (notEnv.length > 0) {
-        artifacts.push(`${label} → 환경을 밟지 않은 케이스로 ${step.kind} 등급을 주장한다: ${notEnv.join(" / ")}`);
+    // 케이스 신고가 없으면 대조 자체가 우회된다 — 그러면 파일 하나 쓰는 것만으로 등급이
+    // 생긴다(2026-08-27 7차 적대리뷰 지적). 실환경 등급은 케이스 신고를 반드시 요구한다.
+    if (!att.cases || att.cases.length === 0) {
+      artifacts.push(`${label} → 증명서에 환경을 밟은 케이스 신고가 없다(등급 ${step.kind})`);
+      return false;
+    }
+    const declared = step.cases && step.cases.length > 0 ? step.cases : (step.anyCases ?? []);
+    if (declared.length > 0) {
+      const anyEnv = declared.some((c) => att.cases?.some((a) => a.includes(c) || c.includes(a)));
+      if (!anyEnv) {
+        artifacts.push(
+          `${label} → 환경을 밟지 않은 케이스로 ${step.kind} 등급을 주장한다: ${declared.join(" / ")}`,
+        );
         return false;
       }
     }
@@ -600,12 +609,12 @@ export class CommandBenchExecution implements BenchExecutionPort {
     // ⚠️ 선언된 요구사항은 단계가 성공했든 실패했든 그대로다. 성공한 단계에서만 모으면,
     //    어떤 FR 을 담당한 명령이 실패했을 때 그 FR 이 확인 목록에서 조용히 사라지고
     //    다른 단계의 영수증만으로 시나리오가 수용된다(2026-08-27 5차 적대리뷰 지적).
-    const scenarioRequirements = new Set<string>();
-    for (const step of steps) {
-      for (const c of step.anyCases ?? []) {
-        if (c.startsWith("FR-") || c.startsWith("NFR-")) scenarioRequirements.add(c);
-      }
-    }
+    // 요구사항은 단계가 아니라 문서에서 직접 모은다. 단계의 anyCases 에서 모으면
+    // 손으로 더한 단계(EXTRA)만 있는 시나리오는 요구사항이 통째로 빠진다
+    // (2026-08-27 7차 적대리뷰 지적).
+    const scenarioRequirements = new Set<string>(
+      requirementIdsByScenario(this.deps.requirementsMarkdown)[scenario.id] ?? [],
+    );
     let latencyMs = 0;
     let testCount = 0;
 

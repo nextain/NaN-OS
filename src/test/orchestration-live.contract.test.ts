@@ -7,10 +7,10 @@
 // ⚠️ 코딩 모델을 띄우지 않는다. provider 는 `shell` 이고, 실제 프로세스가 임시 디렉터리
 //    안에서 산출물을 남긴다. 사용자의 자격증명과 비용이 걸리는 일은 이 검증의 목적이 아니다.
 // ⚠️ 모든 작업은 임시 디렉터리 안에서만 하고 끝나면 지운다.
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { describe, it, expect, beforeAll, afterAll, afterEach } from "vitest";
 import { writeAttestation } from "./harness/bench-execution.js";
 import { resolve as resolvePath } from "node:path";
-import { mkdtempSync, rmSync, existsSync } from "node:fs";
+import { mkdtempSync, rmSync, existsSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { IssueOrchestrator } from "../main/app/control/orchestration.js";
@@ -21,6 +21,15 @@ import {
   fileSpaceBindings,
 } from "./harness/orchestration-live.js";
 import type { DelegationBrief, WorkerAssignment } from "../main/domain/orchestration.js";
+
+/**
+ * 실제로 돈 케이스를 러너에서 모은다. 손으로 적은 목록은 테스트를 고칠 때 따라오지 않아
+ * 작성자가 관리하는 매핑이 하나 더 느는 것뿐이다(2026-08-27 적대리뷰).
+ */
+const passedCases: string[] = [];
+afterEach((ctx) => {
+  if (ctx.task.result?.state === "pass") passedCases.push(ctx.task.name);
+});
 
 let root = "";
 let workers: LiveShellWorkerAdapter;
@@ -35,17 +44,7 @@ afterAll(() => {
   writeAttestation(resolvePath(__dirname, "..", ".."), {
     spec: "src/test/orchestration-live.contract.test.ts",
     kinds: ["worker", "native"],
-    cases: [
-      "임시 작업 공간이 실제로 만들어졌다",
-      "이슈를 열고 리더를 세우고 실제 작업자가 돈다",
-      "같은 이슈에 다른 리더를",
-      "작업자의 완료 선언과 권한 요구는",
-      "소유 경로가 겹치면",
-      "작업자를 교체해도 이슈 증거가",
-      "재시작 뒤 찾으면 실제 작업자 상태로",
-      "결속이 파일로 남아",
-      "코딩 모델 작업자는 이 어댑터가",
-    ],
+    cases: passedCases,
     touched: [root].filter(Boolean),
     at: Date.now(),
   });
@@ -236,6 +235,20 @@ describe("실제 작업자로 오케스트레이션 (worker+native)", () => {
     expect(existsSync(resolve(root, "bindings.json")), "결속이 디스크에 남지 않았다").toBe(true);
     expect(existsSync(resolve(root, "issues.json")), "이슈가 디스크에 남지 않았다").toBe(true);
   });
+
+  it("산출물은 작업자 프로세스가 쓴다 — 부모가 대신 써 주지 않는다", async () => {
+    // 부모가 쓰면 작업자 구현을 지워도 파일이 생겨 "일을 했다"가 반증 불가능해진다.
+    // 프로세스가 끝나기 전에는 산출물이 없어야 한다는 것으로 그 인과를 확인한다.
+    const adapter = new LiveShellWorkerAdapter(root);
+    const only: WorkerAssignment = { ...IMPLEMENTER, workerId: "impl-cause", ownedPaths: ["cause"] };
+    const state = await adapter.start(only, brief("impl-cause", "issue-cause"));
+    expect(state).toBe("running");
+    const out = resolve(root, "cause", "impl-cause.out");
+    expect(await adapter.settle("impl-cause")).toBe("finished");
+    // 프로세스가 끝난 뒤에야 산출물이 있다.
+    expect(existsSync(out), "작업자가 산출물을 남기지 않았다").toBe(true);
+    expect(readFileSync(out, "utf8")).toContain("impl-cause");
+  }, 60_000);
 
   it("코딩 모델 작업자는 이 어댑터가 띄우지 않는다 — 띄운 척도 하지 않는다", async () => {
     const state = await workers.start(
