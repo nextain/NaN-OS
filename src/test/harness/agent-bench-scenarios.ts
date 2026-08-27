@@ -54,6 +54,10 @@ const SCENARIO_OVERRIDES: Readonly<Record<string, readonly EvidenceKind[]>> = {
   // 권한 등급 판정이라 특정 기질을 요구하지 않는다 — 실제 실행 앞에서 막히는지만 본다.
   "UC-ENV-TOOL-BOUNDARY-DENY": ["native"],
   // 취소는 UC 가 브라우저와 터미널을 함께 말한다 — 계열 기본값이 맞다.
+  //
+  // 분류는 순수한 판단이다. 실제 작업자를 띄워야 확인되는 성질이 아니므로 worker 를
+  // 요구하면 등급과 확인 내용이 인과적으로 어긋난다(2026-08-27 6차 적대리뷰 지적).
+  "UC-ORCHESTRATION-CLASSIFY": ["mock"],
 };
 
 /**
@@ -63,9 +67,34 @@ const SCENARIO_OVERRIDES: Readonly<Record<string, readonly EvidenceKind[]>> = {
  * 여기 있는 것은 "무엇이 왜 아직 안 됐는지"를 벤치가 계속 말하게 하는 자리다 —
  * 조용히 목록에서 빼는 것을 막기 위해 이 목록 자체를 테스트가 감시한다.
  */
-export const DEFERRED_SCENARIOS: Readonly<Record<string, string>> = {
-  "UC-ORCHESTRATION-CODING-PROVIDER":
-    "실제 코딩 모델 제공자를 띄우는 확인 수단이 없다. 자격증명과 비용이 실제로 소모되는 경로라 사람이 켜야 한다.",
+export interface Deferral {
+  readonly reason: string;
+  /** 무엇이 있어야 이 유예가 풀리는가. "언젠가"는 유예가 아니라 방치다. */
+  readonly liftedBy: string;
+  /** 이 날짜가 지나면 유예가 만료되고 게이트가 빨간불이 된다. 무기한 유예를 막는다. */
+  readonly expiresOn: string;
+  /** 사람이 승인했는가. 작성자가 스스로 켤 수 없다. */
+  readonly approvedBy: string | null;
+}
+
+/**
+ * 아직 확인 수단이 없다고 *이름을 걸고* 선언한 시나리오.
+ *
+ * ⚠️ 유예는 작성자가 혼자 만들 수 있으면 안 된다. 상수 하나로 성립하면 아무 시나리오나
+ *    그리로 옮겨 게이트를 초록불로 만들 수 있다(2026-08-27 5·6차 적대리뷰 지적).
+ *    그래서 세 겹으로 묶는다 — 요구사항 문서가 그것을 아직 Done 으로 적지 않았을 것,
+ *    만료일이 지나지 않았을 것, 그리고 무엇이 있어야 풀리는지가 적혀 있을 것.
+ *    `approvedBy` 는 사람이 채우는 자리다. 작성자는 비워 둔다.
+ */
+export const DEFERRED_SCENARIOS: Readonly<Record<string, Deferral>> = {
+  "UC-ORCHESTRATION-CODING-PROVIDER": {
+    reason:
+      "실제 코딩 모델 제공자를 띄우는 확인 수단이 없다. 자격증명과 비용이 실제로 소모되는 경로다.",
+    liftedBy:
+      "격리된 워크트리에서 codex·claude·opencode 중 하나를 실제로 띄워 산출물과 종료 상태를 받는 확인 수단",
+    expiresOn: "2026-09-30",
+    approvedBy: null,
+  },
 };
 
 const HEADING = /^###\s+(UC-[A-Z0-9-]+)/gm;

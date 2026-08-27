@@ -79,6 +79,17 @@ afterAll(() => {
   writeAttestation(REPO_ROOT_FOR_ATTEST, {
     spec: "src/test/env-tool-live.contract.test.ts",
     kinds: ["native"],
+    cases: [
+      "전용 워크스페이스를 실제로 만들었다",
+      "구조화된 명령이 실제로 실행되고",
+      "셸 문자열을 조립하지 않는다",
+      "공백이 든 인자는 이 환경의",
+      "소유하지 않은 터미널에는",
+      "취소하면 진행 중인 작업이 실제로 멈춘다",
+      "파일을 고칠 수 있다고",
+      "자격증명을 쓰는 호출은",
+      "워크스페이스 밖으로 나가는",
+    ],
     touched: [workspaceId, paneId].filter(Boolean),
     at: Date.now(),
   });

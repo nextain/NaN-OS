@@ -71,6 +71,18 @@ afterAll(() => {
   writeAttestation(REPO_ROOT_FOR_ATTEST, {
     spec: "src/test/herdr-control-live.contract.test.ts",
     kinds: ["native"],
+    cases: [
+      "전용 워크스페이스를 실제로 만들었다",
+      "자원을 타입이 선언된 값으로 읽는다",
+      "화면 문자열을 긁지 않는다",
+      "스냅샷에 개정이 실려 있고",
+      "구조화된 요청이 실제로 실행된다",
+      "같은 멱등 키를 다시 보내도",
+      "소유하지 않은 대상은 실제 환경에",
+      "낡은 개정으로 온 요청은",
+      "셸 한 줄을 실행 파일 자리에",
+      "재접속하면 현재 상태를",
+    ],
     touched: [workspaceId, paneId].filter(Boolean),
     at: Date.now(),
   });

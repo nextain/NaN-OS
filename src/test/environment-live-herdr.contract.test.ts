@@ -93,6 +93,16 @@ afterAll(() => {
   writeAttestation(resolve(__dirname, "..", ".."), {
     spec: "src/test/environment-live-herdr.contract.test.ts",
     kinds: ["native"],
+    cases: [
+      "실제 스냅샷이 보고로 바뀐다",
+      "실제 관측이 대화에 실을 세그먼트가 된다",
+      "실제 pane 식별자가 뇌에 올라가지 않는다",
+      "Herdr 이 실제로 응답한다",
+      "실제 표면이 전부 네 가지 활동 상태",
+      "실제 표면에 이름이 있다",
+      "같은 스냅샷을 두 번 관측",
+      "이름이 겹쳐도 손잡이는",
+    ],
     touched: panes.map((p) => String((p as { pane_id?: unknown }).pane_id ?? "")).filter(Boolean),
     at: Date.now(),
   });

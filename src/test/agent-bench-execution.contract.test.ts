@@ -328,8 +328,12 @@ describe("문서와 하네스가 어긋나면 드러난다", () => {
   });
 
   it("유예 선언에 사유가 적혀 있다 — 이름만 걸어 두고 넘어가지 않는다", () => {
-    for (const [id, reason] of Object.entries(DEFERRED_SCENARIOS)) {
-      expect(reason.length, `${id} 에 사유가 없다`).toBeGreaterThan(20);
+    for (const [id, d] of Object.entries(DEFERRED_SCENARIOS)) {
+      expect(d.reason.length, `${id} 에 사유가 없다`).toBeGreaterThan(20);
+      expect(d.liftedBy.length, `${id} 에 해제 조건이 없다`).toBeGreaterThan(20);
+      expect(d.expiresOn, `${id} 에 만료일이 없다`).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+      // approvedBy 는 사람이 채우는 자리다. 작성자가 스스로 채워 두면 그 자체가 신호다.
+      expect(["string", "object"]).toContain(typeof d.approvedBy);
     }
   });
 
@@ -409,17 +413,50 @@ describe("증명서가 막는 것과 막지 못하는 것", () => {
     expect(readFreshAttestation(root, "위조-옛날.test.ts", Date.now() - 10_000)).toBeNull();
   });
 
-  it("⚠️ 형태만 맞으면 통과한다 — 이것이 이 기제의 한계다", () => {
-    // 대역 테스트가 그럴듯한 값을 신고하면 벤치는 구별하지 못한다. 등급을 완전히
-    // 독립 검증하려면 벤치가 환경을 직접 관측해야 하고, 그것은 이 슬라이스의 범위 밖이다.
-    // 한계를 테스트로 남겨, 다음 사람이 이 기제를 실제보다 강하다고 믿지 않게 한다.
+  it("환경을 밟지 않은 케이스로 실환경 등급을 주장하면 거절된다", async () => {
+    // 파일 단위 증명서만으로 등급을 주면 같은 파일의 순수 함수 테스트가 native 를 받는다.
+    // 증명서가 신고한 "환경을 밟은 케이스"에 없는 케이스는 실환경 증거가 아니다.
     const root = resolve(__dirname, "..", "..");
     writeAttestation(root, {
-      spec: "위조-그럴듯.test.ts",
+      spec: "등급-케이스.test.ts",
+      kinds: ["native"],
+      cases: ["실제 터미널을 만졌다"],
+      touched: ["wZ:p1"],
+      at: Date.now(),
+    });
+    const out = await exec({
+      runner: runner([0], "  ✓ 순수 계산만 한다 (1ms)"),
+      verification: {
+        S: [
+          {
+            ...STEP,
+            kind: "native",
+            cwd: ".",
+            args: ["vitest", "run", "등급-케이스.test.ts"],
+            cases: ["순수 계산만 한다"],
+          },
+        ],
+      },
+    }).run(scenario("S"));
+    expect(out.receipts, "환경을 안 밟은 케이스가 native 증거가 됐다").toEqual([]);
+  });
+
+  it("⚠️ 알려진 한계 — 그럴듯한 값을 신고하면 형태 검사는 통과한다", () => {
+    // 이것은 통과해야 할 성질이 아니라 *아직 못 막는 것*의 기록이다. 성공으로 적어 두면
+    // 위조가 승인된 동작처럼 읽히므로(2026-08-27 6차 적대리뷰 지적), 무엇이 남았는지를
+    // 이름과 주석으로 남기고 통과 여부가 아니라 사실만 확인한다.
+    const root = resolve(__dirname, "..", "..");
+    writeAttestation(root, {
+      spec: "한계-그럴듯.test.ts",
       kinds: ["native"],
       touched: ["wZ:p1"],
       at: Date.now(),
     });
-    expect(readFreshAttestation(root, "위조-그럴듯.test.ts", Date.now() - 10_000)).not.toBeNull();
+    const att = readFreshAttestation(root, "한계-그럴듯.test.ts", Date.now() - 10_000);
+    // 형태 검사는 값의 모양만 본다. 그 값이 실제로 존재했는지는 벤치가 모른다.
+    expect(att?.touched).toEqual(["wZ:p1"]);
+    expect(plausibleResource("wZ:p1")).toBe(true);
+    // 남은 위험: 케이스 신고 없이 파일 단위로만 쓰면 케이스 대조가 적용되지 않는다.
+    expect(att?.cases, "케이스 신고가 없으면 케이스 대조가 걸리지 않는다").toBeUndefined();
   });
 });

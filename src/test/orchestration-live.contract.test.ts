@@ -35,6 +35,17 @@ afterAll(() => {
   writeAttestation(resolvePath(__dirname, "..", ".."), {
     spec: "src/test/orchestration-live.contract.test.ts",
     kinds: ["worker", "native"],
+    cases: [
+      "임시 작업 공간이 실제로 만들어졌다",
+      "이슈를 열고 리더를 세우고 실제 작업자가 돈다",
+      "같은 이슈에 다른 리더를",
+      "작업자의 완료 선언과 권한 요구는",
+      "소유 경로가 겹치면",
+      "작업자를 교체해도 이슈 증거가",
+      "재시작 뒤 찾으면 실제 작업자 상태로",
+      "결속이 파일로 남아",
+      "코딩 모델 작업자는 이 어댑터가",
+    ],
     touched: [root].filter(Boolean),
     at: Date.now(),
   });

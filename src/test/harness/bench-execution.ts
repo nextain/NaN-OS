@@ -575,6 +575,15 @@ export class CommandBenchExecution implements BenchExecutionPort {
       artifacts.push(`${label} → 증명서가 신고한 자원이 형태에 맞지 않는다: ${bad.join(" / ")}`);
       return false;
     }
+    // 등급은 파일이 아니라 케이스에 붙는다. 이 단계가 지목한 케이스가 실제로 환경을 밟은
+    // 케이스 목록에 없으면, 그 케이스는 실환경 증거가 아니다.
+    if (att.cases && step.cases && step.cases.length > 0) {
+      const notEnv = step.cases.filter((c) => !att.cases?.some((a) => a.includes(c) || c.includes(a)));
+      if (notEnv.length > 0) {
+        artifacts.push(`${label} → 환경을 밟지 않은 케이스로 ${step.kind} 등급을 주장한다: ${notEnv.join(" / ")}`);
+        return false;
+      }
+    }
     return true;
   }
 
@@ -621,7 +630,6 @@ export class CommandBenchExecution implements BenchExecutionPort {
       if (result.code !== 0) continue; // 실패는 영수증을 만들지 않는다.
 
       const passed = parsePassedCases(result.stdout);
-      for (const n of passed) allPassed.add(n);
       const parsedCount = parseTestCount(result.stdout);
       if (parsedCount === 0) {
         // 종료 코드 0 은 "실행기가 떴다"는 뜻이다. 통과한 테스트를 하나도 못 읽었으면
@@ -638,8 +646,11 @@ export class CommandBenchExecution implements BenchExecutionPort {
           artifacts.push(`${label} → 이 시나리오를 확인하는 케이스가 돌지 않음: ${step.anyCases.join(" / ")}`);
           continue;
         }
-        for (const n of passed) allPassed.add(n);
         if (!this.attested(step, startedAt, artifacts, label)) continue;
+        // 증명서 검증을 통과한 뒤에만 확인으로 센다. 앞서는 검증 실패한 단계의 케이스가
+        // 그대로 확인 목록에 남아, 그 FR 을 담당한 단계가 거절됐는데도 확인된 것으로
+        // 읽혔다(2026-08-27 6차 적대리뷰 지적).
+        for (const n of passed) allPassed.add(n);
         receipts.push({ scenarioId: scenario.id, kind: step.kind, ref: label });
         completionEvidence.push(`${label} — ${step.why}`);
         continue;
@@ -659,6 +670,7 @@ export class CommandBenchExecution implements BenchExecutionPort {
         }
       }
       if (!this.attested(step, startedAt, artifacts, label)) continue;
+      for (const n of passed) allPassed.add(n);
       receipts.push({ scenarioId: scenario.id, kind: step.kind, ref: label });
       completionEvidence.push(`${label} — ${step.why}`);
     }
@@ -784,6 +796,14 @@ export interface BoundaryAttestation {
   readonly kinds: readonly EvidenceKind[];
   /** 실제로 만진 외부 자원 식별자(pane, 워크스페이스, 프로세스, 경로). */
   readonly touched: readonly string[];
+  /**
+   * 실제로 환경을 밟은 케이스 이름.
+   *
+   * 파일 단위 증명서만으로 등급을 주면, 같은 파일의 *순수 함수* 테스트가 그 파일의 다른
+   * 테스트가 만든 증명서로 native 등급을 받는다(2026-08-27 6차 적대리뷰 지적).
+   * 단계가 지목한 케이스가 여기 없으면 그 단계는 실환경 증거가 아니다.
+   */
+  readonly cases?: readonly string[];
   readonly at: number;
 }
 

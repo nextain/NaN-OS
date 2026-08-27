@@ -53,7 +53,15 @@ describe("실제 문서와의 결속 (NFR-AGENT-BENCH.1)", () => {
     // 원래 단언은 "결정론 계열은 하나뿐"이었다. 손잡이 고정·어휘 동기처럼 실제 환경이
     // 필요 없는 계열이 생기면서 그 형태로는 못 쓴다. 지켜야 하는 성질은 개수가 아니라
     // *무엇이* 결정론으로 통과할 수 있느냐다.
-    const DETERMINISTIC_OK = ["UC-AGENT-BENCH-", "UC-ENV-STICKY", "UC-WIRE-UNION-"];
+    // 결정론으로 통과해도 되는 것은 "실제 환경이 있어야만 성립하는 성질이 아닌 것"이다.
+    // 분류(CLASSIFY)는 순수한 판단이라 작업자를 띄워야 확인되는 성질이 아니다 —
+    // worker 를 요구하면 등급과 확인 내용이 인과적으로 어긋난다(2026-08-27 6차 적대리뷰).
+    const DETERMINISTIC_OK = [
+      "UC-AGENT-BENCH-",
+      "UC-ENV-STICKY",
+      "UC-WIRE-UNION-",
+      "UC-ORCHESTRATION-CLASSIFY",
+    ];
     const scenarios = await new DocumentBenchScenarioSource(DOC).list();
     const mockOnly = scenarios.filter((s) => s.requiredEvidence.every((e) => e === "mock"));
     expect(mockOnly.length).toBeGreaterThan(0);

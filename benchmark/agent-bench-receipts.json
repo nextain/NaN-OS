@@ -1,6 +1,7 @@
 {
-  "revision": "cb85fdc8",
-  "stampedAt": "2026-08-27T04:39:27.403Z",
+  "revision": "a5819a28",
+  "stampedAt": "2026-08-27T05:01:25.008Z",
+  "fingerprint": "8279974b2bed3bc4",
   "scenarios": {
     "UC-WORKSPACE-CONTEXT-DISCOVER": {
       "receipts": [
@@ -350,23 +351,15 @@
           "scenarioId": "UC-ORCHESTRATION-CLASSIFY",
           "kind": "mock",
           "ref": "npx vitest run --reporter=json src/test/orchestration-classify.contract.test.ts (cwd=.)"
-        },
-        {
-          "scenarioId": "UC-ORCHESTRATION-CLASSIFY",
-          "kind": "worker",
-          "ref": "npx vitest run --reporter=json src/test/orchestration-live.contract.test.ts (cwd=.)"
-        },
-        {
-          "scenarioId": "UC-ORCHESTRATION-CLASSIFY",
-          "kind": "native",
-          "ref": "npx vitest run --reporter=json src/test/orchestration-live.contract.test.ts (cwd=.)"
         }
       ],
       "testCount": 35,
       "artifacts": [
         "npx vitest run --reporter=json src/test/orchestration-classify.contract.test.ts (cwd=.) → exit 0",
         "npx vitest run --reporter=json src/test/orchestration-live.contract.test.ts (cwd=.) → exit 0",
-        "npx vitest run --reporter=json src/test/orchestration-live.contract.test.ts (cwd=.) → exit 0"
+        "npx vitest run --reporter=json src/test/orchestration-live.contract.test.ts (cwd=.) → 환경을 밟지 않은 케이스로 worker 등급을 주장한다: 저장소를 바꾸는 일은 이슈로 분류된다",
+        "npx vitest run --reporter=json src/test/orchestration-live.contract.test.ts (cwd=.) → exit 0",
+        "npx vitest run --reporter=json src/test/orchestration-live.contract.test.ts (cwd=.) → 환경을 밟지 않은 케이스로 native 등급을 주장한다: 저장소를 바꾸는 일은 이슈로 분류된다"
       ],
       "safety": {
         "leakedProjects": [],

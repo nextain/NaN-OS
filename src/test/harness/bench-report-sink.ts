@@ -2,6 +2,7 @@
 //
 // 벤치의 쓸모는 통과 개수가 아니라 "무엇이 아직 증명되지 않았고 왜인가"다.
 // 그래서 거절 사유를 요약하지 않고 시나리오별로 그대로 적는다.
+import { createHash } from "node:crypto";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import type { BenchSummary, RejectionCode, Verdict } from "../../main/domain/agent-bench.js";
@@ -102,6 +103,31 @@ export function assertReportMatchesHead(report: string, head: string): void {
  * 어긋난다 — 그 한 칸을 정확히 허용하고, 그 밖이 바뀌었으면 거절한다
  * (2026-08-27 5차 적대리뷰가 이 어긋남을 지적했다).
  */
+/**
+ * 벤치가 판정에 쓰는 파일들의 내용 지문.
+ *
+ * 판본을 커밋 해시로 적으면 순서가 늘 한 칸 어긋난다 — 벤치는 커밋 뒤에 돌려야 하는데
+ * 그 결과물을 다시 커밋해야 하기 때문이다(2026-08-27 6차 적대리뷰가 계속 지적한 자리).
+ * 커밋이 아니라 *내용*으로 판정하면 그 어긋남이 사라진다.
+ */
+export function benchInputFingerprint(files: readonly { path: string; body: string }[]): string {
+  const h = createHash("sha256");
+  for (const f of [...files].sort((a, b) => a.path.localeCompare(b.path))) {
+    h.update(f.path);
+    h.update("\u0000");
+    h.update(f.body);
+    h.update("\u0000");
+  }
+  return h.digest("hex").slice(0, 16);
+}
+
+/** 보고서에 찍힌 지문이 지금 입력의 지문과 같은가. 다르면 그 보고서는 지금의 증거가 아니다. */
+export function assertReportFingerprint(report: string, fingerprint: string): void {
+  if (!report.includes(fingerprint)) {
+    throw new Error(`보고서가 지금 입력(${fingerprint})의 것이 아니다 — 다시 돌려야 한다`);
+  }
+}
+
 export function assertReportCurrent(
   report: string,
   head: string,

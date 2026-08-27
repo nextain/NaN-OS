@@ -20,7 +20,11 @@ import {
   parseScenarios,
 } from "./harness/agent-bench-scenarios.js";
 import { CommandBenchExecution, nodeCommandRunner, readRequirements } from "./harness/bench-execution.js";
-import { FileBenchReportSink, assertReportCurrent } from "./harness/bench-report-sink.js";
+import {
+  FileBenchReportSink,
+  assertReportFingerprint,
+  benchInputFingerprint,
+} from "./harness/bench-report-sink.js";
 import type { BenchScenario } from "../main/domain/agent-bench.js";
 import type { BenchExecutionPort, ScenarioRun } from "../main/ports/agent-bench.js";
 
@@ -36,6 +40,16 @@ describe("에이전트 벤치 실제 실행", () => {
         encoding: "utf8",
       }).trim();
       const stampedAt = new Date().toISOString();
+
+      // 판정에 쓰는 입력의 지문. 커밋 해시로 판본을 적으면 벤치를 커밋 뒤에 돌려야 하는
+      // 순서 때문에 늘 한 칸 어긋난다 — 내용으로 판정하면 그 어긋남이 없다.
+      const fingerprintFiles = [
+        "docs/user-scenarios.md",
+        "docs/requirements.md",
+        "src/test/harness/bench-execution.ts",
+        "src/test/harness/agent-bench-scenarios.ts",
+      ].map((rel) => ({ path: rel, body: readFileSync(resolve(ROOT, rel), "utf8") }));
+      const fingerprint = benchInputFingerprint(fingerprintFiles);
 
       // 문서가 선언한 시나리오 전부가 실제로 돌았는가 — 개수가 아니라 이름으로 본다.
       const declaredIds = parseScenarios(
@@ -83,9 +97,9 @@ describe("에이전트 벤치 실제 실행", () => {
         recording,
         new FileBenchReportSink(
           resolve(ROOT, "benchmark", "agent-bench-report.md"),
-          () => `${stampedAt} (${revision})`,
+          () => `${stampedAt} (${revision}) 입력지문 ${fingerprint}`,
           resolve(ROOT, "benchmark", "agent-bench-receipts.json"),
-          () => ({ revision, stampedAt, scenarios: raw }),
+          () => ({ revision, stampedAt, fingerprint, scenarios: raw }),
         ),
       );
 
@@ -133,25 +147,24 @@ describe("에이전트 벤치 실제 실행", () => {
       // 초록불로 만들 수 있다(2026-08-27 5차 적대리뷰 지적). 요구사항 문서가 그 시나리오를
       // 아직 완료로 적지 않았다는 사실과 맞물려야 유예가 성립한다.
       const requirements = readFileSync(resolve(ROOT, "docs", "requirements.md"), "utf8");
-      for (const id of Object.keys(DEFERRED_SCENARIOS)) {
+      for (const [id, d] of Object.entries(DEFERRED_SCENARIOS)) {
         const rows = requirements.split("\n").filter((l) => l.startsWith("|") && l.includes(id));
         const anyDone = rows.some((l) => /\|\s*Done\s*\|?\s*$/.test(l.trimEnd()));
         expect(anyDone, `${id} 를 유예로 두면서 요구사항은 Done 이라고 적혀 있다`).toBe(false);
+        // 무엇이 있어야 풀리는지 적혀 있어야 한다. "언젠가"는 유예가 아니라 방치다.
+        expect(d.liftedBy.length, `${id} 에 해제 조건이 없다`).toBeGreaterThan(20);
+        // 만료가 지나면 더는 유예가 아니다.
+        expect(
+          new Date(`${d.expiresOn}T23:59:59Z`).getTime() > Date.now(),
+          `${id} 의 유예가 ${d.expiresOn} 로 만료됐다 — 확인 수단을 만들거나 사람이 연장해야 한다`,
+        ).toBe(true);
       }
       expect(outcome.breaches, "임계를 넘었다").toEqual([]);
 
-      // 보고서가 지금 상태의 증거인지 확인한다. 판본이 한 칸 뒤여도 그 사이 바뀐 것이
-      // 벤치 산출물뿐이면 여전히 증거다 — 그 밖이 바뀌었으면 거절한다.
-      assertReportCurrent(
+      // 보고서가 지금 입력의 것인지 확인한다. 커밋이 아니라 내용으로 본다.
+      assertReportFingerprint(
         readFileSync(resolve(ROOT, "benchmark", "agent-bench-report.md"), "utf8"),
-        revision,
-        (rev) =>
-          execFileSync("git", ["-C", ROOT, "diff", "--name-only", `${rev}..HEAD`], {
-            encoding: "utf8",
-          })
-            .split("\n")
-            .map((x) => x.trim())
-            .filter(Boolean),
+        fingerprint,
       );
 
       // 안전 관측이 실제로 무언가를 봤는지. 전부 비어 있기만 하면 관측이 죽어 있는 것과

@@ -49,6 +49,14 @@ describe("실제 디스크 위의 컨텍스트 해석 (native)", () => {
   writeAttestation(resolvePath(__dirname, "..", ".."), {
     spec: "src/test/workspace-context-real-fs.contract.test.ts",
     kinds: ["native"],
+    cases: [
+      "픽스처가 실제로 만들어졌다",
+      "진입점이 선언한 문서를 실제 파일에서 읽는다",
+      "프로젝트에 들어가면 범위와 개정이",
+      "프로젝트를 바꾸면 이전 지역",
+      "없는 진입점을 성공으로",
+      "루트 밖으로 나가는 이름은",
+    ],
     touched: [root].filter(Boolean),
     at: Date.now(),
   });
