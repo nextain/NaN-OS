@@ -1,7 +1,7 @@
 {
-  "revision": "a241a1ee",
-  "stampedAt": "2026-08-27T06:58:58.839Z",
-  "fingerprint": "edb6db23c6c6c937",
+  "revision": "02d42f67",
+  "stampedAt": "2026-08-27T09:34:46.776Z",
+  "fingerprint": "d57dac99f0c7ed69",
   "scenarios": {
     "UC-WORKSPACE-CONTEXT-DISCOVER": {
       "receipts": [
@@ -848,7 +848,7 @@
           "ref": "npx vitest run --reporter=json src/test/environment-live-herdr.contract.test.ts (cwd=.)"
         }
       ],
-      "testCount": 63,
+      "testCount": 72,
       "artifacts": [
         "npx vitest run --reporter=json src/test/environment-live-wiring.contract.test.ts (cwd=.) → exit 0",
         "npx vitest run --reporter=json src/lib/__tests__/environment-skill.test.ts (cwd=packages/shell) → exit 0",
@@ -872,7 +872,7 @@
           "ref": "npx vitest run --reporter=json src/test/environment-live-act.contract.test.ts (cwd=.)"
         }
       ],
-      "testCount": 52,
+      "testCount": 55,
       "artifacts": [
         "npx vitest run --reporter=json src/lib/__tests__/environment-skill.test.ts (cwd=packages/shell) → exit 0",
         "npx wdio run e2e-tauri/wdio.conf.ts --spec e2e-tauri/specs/environment-dispatch.spec.ts (cwd=packages/shell) → exit 0",
@@ -905,14 +905,20 @@
           "scenarioId": "UC-ENV-ATTENTION",
           "kind": "native",
           "ref": "npx vitest run --reporter=json src/test/environment-live-herdr.contract.test.ts (cwd=.)"
+        },
+        {
+          "scenarioId": "UC-ENV-ATTENTION",
+          "kind": "browser",
+          "ref": "npx playwright test e2e/env-attention-voice.spec.ts (cwd=packages/shell)"
         }
       ],
-      "testCount": 73,
+      "testCount": 91,
       "artifacts": [
         "npx vitest run --reporter=json src/test/environment-live-wiring.contract.test.ts (cwd=.) → exit 0",
         "npx vitest run --reporter=json src/lib/__tests__/environment-skill.test.ts (cwd=packages/shell) → exit 0",
         "npx playwright test e2e/environment-skill.spec.ts (cwd=packages/shell) → exit 0",
-        "npx vitest run --reporter=json src/test/environment-live-herdr.contract.test.ts (cwd=.) → exit 0"
+        "npx vitest run --reporter=json src/test/environment-live-herdr.contract.test.ts (cwd=.) → exit 0",
+        "npx playwright test e2e/env-attention-voice.spec.ts (cwd=packages/shell) → exit 0"
       ],
       "safety": {
         "leakedProjects": [],
@@ -927,7 +933,7 @@
           "ref": "npx vitest run --reporter=json src/test/environment-live-wiring.contract.test.ts (cwd=.)"
         }
       ],
-      "testCount": 26,
+      "testCount": 32,
       "artifacts": [
         "npx vitest run --reporter=json src/test/environment-live-wiring.contract.test.ts (cwd=.) → exit 0"
       ],

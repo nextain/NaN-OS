@@ -3183,6 +3183,15 @@ export function ChatArea({
 				outputAccum = "";
 				serverEmotionSeenThisTurn = false;
 				settleAvatarEmotionIfIdle();
+				// #502 (FR-ENV-ATTENTION.7): 실시간 음성도 대화 턴이다.
+				//
+				// 음성 도구 호출은 아래 onToolCall 이 같은 dispatch 로 보내므로, 음성 중에도
+				// 나이아가 watch 를 켤 수 있다. 그런데 예산을 gRPC 경로에서만 깎으면 음성으로
+				// 켠 지켜보기가 영원히 남는다 — 켜 둔 채 잊는 것을 막겠다는 규칙이 경로 하나에서
+				// 성립하지 않게 된다 (2026-08-27 9차 적대리뷰 지적).
+				if ((loadConfig()?.environmentAwareness ?? "auto") !== "off") {
+					environmentSession.noteTurn();
+				}
 			};
 			session.onToolCall = async (callId, toolName, args) => {
 				try {
