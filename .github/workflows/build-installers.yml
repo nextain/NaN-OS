@@ -16,10 +16,22 @@ jobs:
         include:
           - os: windows-2025
             platform: win32
+            arch: x64
+            artifact: win32
           - os: ubuntu-24.04
             platform: linux
+            arch: x64
+            artifact: linux
           - os: macos-15
             platform: darwin
+            arch: arm64
+            uname_arch: arm64
+            artifact: darwin
+          - os: macos-15-intel
+            platform: darwin
+            arch: x64
+            uname_arch: x86_64
+            artifact: darwin-x64
     runs-on: ${{ matrix.os }}
     timeout-minutes: 150
 
@@ -67,8 +79,8 @@ jobs:
         if: matrix.platform == 'darwin'
         shell: bash
         run: |
-          test "$(uname -m)" = "arm64" || {
-            echo "::error::macOS installer contract currently supports the CI arm64 completion line only"
+          test "$(uname -m)" = "${{ matrix.uname_arch }}" || {
+            echo "::error::Expected macOS ${{ matrix.uname_arch }} runner, got $(uname -m)"
             exit 1
           }
 
@@ -485,7 +497,7 @@ jobs:
       - name: Upload installer outputs
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: naia-shell-${{ matrix.platform }}-${{ github.sha }}
+          name: naia-shell-${{ matrix.artifact }}-${{ github.sha }}
           path: |
             packages/shell/src-tauri/target/release/bundle/nsis/*-setup.exe
             packages/shell/src-tauri/target/release/bundle/nsis/*-setup.exe.sig
@@ -509,3 +521,72 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
           retention-days: 14
+
+  macos-universal:
+    needs: build
+    runs-on: macos-15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: naia-shell-darwin-x64-${{ github.sha }}
+          path: universal-input/x64
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: naia-shell-darwin-${{ github.sha }}
+          path: universal-input/arm64
+      - name: Extract architecture app bundles
+        shell: bash
+        run: |
+          mkdir -p universal-input/x64-app universal-input/arm64-app universal-output
+          tar -xzf universal-input/x64/macos/*.app.tar.gz -C universal-input/x64-app
+          tar -xzf universal-input/arm64/macos/*.app.tar.gz -C universal-input/arm64-app
+      - name: Assemble and verify every Universal Mach-O
+        run: >-
+          node packages/shell/scripts/assemble-macos-universal.mjs
+          --x64-app universal-input/x64-app/Naia.app
+          --arm64-app universal-input/arm64-app/Naia.app
+          --output-app universal-output/Naia.app
+      - name: Archive Universal app bundle
+        shell: bash
+        run: tar -C universal-output -czf universal-output/Naia_universal.app.tar.gz Naia.app
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: naia-shell-darwin-universal-${{ github.sha }}
+          path: universal-output/Naia_universal.app.tar.gz
+          if-no-files-found: error
+          retention-days: 14
+
+  macos-universal-smoke:
+    needs: macos-universal
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-15
+            arch: arm64
+            uname_arch: arm64
+          - os: macos-15-intel
+            arch: x64
+            uname_arch: x86_64
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: naia-shell-darwin-universal-${{ github.sha }}
+          path: universal-smoke
+      - name: Extract and launch Universal app
+        shell: bash
+        run: |
+          test "$(uname -m)" = "${{ matrix.uname_arch }}"
+          tar -xzf universal-smoke/Naia_universal.app.tar.gz -C universal-smoke
+          APP="$PWD/universal-smoke/Naia.app"
+          node packages/shell/scripts/verify-installed-smoke.mjs \
+            --binary "$APP/Contents/MacOS/naia-shell" \
+            --resource-dir "$APP/Contents/Resources" \
+            --timeout-ms 120000
