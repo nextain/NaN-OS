@@ -5,9 +5,11 @@
 
 | 회차 | 판정 | 지적 수 |
 |---|---|---|
-| round-1-codex.json | NOT_CLEAN | 8 |
-| round-2-codex.json | NOT_CLEAN | 10 |
-| round-3-codex.json | NOT_CLEAN | 9 |
+| 1회차 | NOT_CLEAN | 8 |
+| 2회차 | NOT_CLEAN | 10 |
+| 3회차 | NOT_CLEAN | 9 |
+| 4회차 | NOT_CLEAN | 7 |
+| 5회차 | NOT_CLEAN | 4 |
 
 연속 두 번 CLEAN 이 목표다. 아직 도달하지 않았으면 이 표가 그 사실을 말한다 —
 통과했다고 적어 두고 넘어가지 않기 위해 판정을 그대로 남긴다.

@@ -13,6 +13,9 @@ import {
   parseTestCount,
   readClaim,
   MISSING_SPECS,
+  plausibleResource,
+  readFreshAttestation,
+  writeAttestation,
   type CommandRunnerPort,
   type VerificationStep,
 } from "./harness/bench-execution.js";
@@ -370,5 +373,49 @@ describe("실환경 등급은 관측 증명서를 요구한다", () => {
       verification: { S: [{ ...STEP, kind: "worker", cases: ["샘플 케이스"] }] },
     }).run(scenario("S", { requiredEvidence: ["worker"] }));
     expect(out.receipts).toEqual([]);
+  });
+});
+
+describe("증명서가 막는 것과 막지 못하는 것", () => {
+  // 증명서는 테스트가 자기 손으로 쓴다. 그러므로 "위조 불가"가 아니다.
+  // 무엇을 막고 무엇을 못 막는지 여기서 밟아 둔다 — 못 막는 것을 막는다고 적어 두면
+  // 그 자체가 거짓 봉인이다(2026-08-27 5차 적대리뷰가 이 자기충족성을 지적했다).
+  it("형태에 맞지 않는 자원 신고는 증거로 세지 않는다", () => {
+    expect(plausibleResource("wA:p1")).toBe(true);
+    expect(plausibleResource("/tmp/naia-orch-x")).toBe(true);
+    expect(plausibleResource("pid:1234")).toBe(true);
+    expect(plausibleResource("그냥 아무 말")).toBe(false);
+    expect(plausibleResource("")).toBe(false);
+  });
+
+  it("빈 신고는 증명서로 받지 않는다", () => {
+    const root = resolve(__dirname, "..", "..");
+    writeAttestation(root, { spec: "위조-빈신고.test.ts", kinds: ["native"], touched: [], at: Date.now() });
+    expect(readFreshAttestation(root, "위조-빈신고.test.ts", Date.now() - 10_000)).toBeNull();
+  });
+
+  it("오래된 증명서는 이번 실행의 증거가 아니다", () => {
+    const root = resolve(__dirname, "..", "..");
+    writeAttestation(root, {
+      spec: "위조-옛날.test.ts",
+      kinds: ["native"],
+      touched: ["/tmp/x"],
+      at: Date.now() - 3_600_000,
+    });
+    expect(readFreshAttestation(root, "위조-옛날.test.ts", Date.now() - 10_000)).toBeNull();
+  });
+
+  it("⚠️ 형태만 맞으면 통과한다 — 이것이 이 기제의 한계다", () => {
+    // 대역 테스트가 그럴듯한 값을 신고하면 벤치는 구별하지 못한다. 등급을 완전히
+    // 독립 검증하려면 벤치가 환경을 직접 관측해야 하고, 그것은 이 슬라이스의 범위 밖이다.
+    // 한계를 테스트로 남겨, 다음 사람이 이 기제를 실제보다 강하다고 믿지 않게 한다.
+    const root = resolve(__dirname, "..", "..");
+    writeAttestation(root, {
+      spec: "위조-그럴듯.test.ts",
+      kinds: ["native"],
+      touched: ["wZ:p1"],
+      at: Date.now(),
+    });
+    expect(readFreshAttestation(root, "위조-그럴듯.test.ts", Date.now() - 10_000)).not.toBeNull();
   });
 });

@@ -20,7 +20,7 @@ import {
   parseScenarios,
 } from "./harness/agent-bench-scenarios.js";
 import { CommandBenchExecution, nodeCommandRunner, readRequirements } from "./harness/bench-execution.js";
-import { FileBenchReportSink, assertReportMatchesHead } from "./harness/bench-report-sink.js";
+import { FileBenchReportSink, assertReportCurrent } from "./harness/bench-report-sink.js";
 import type { BenchScenario } from "../main/domain/agent-bench.js";
 import type { BenchExecutionPort, ScenarioRun } from "../main/ports/agent-bench.js";
 
@@ -128,12 +128,30 @@ describe("에이전트 벤치 실제 실행", () => {
       ).toEqual([]);
       // 유예 목록이 조용히 자라지 않게 한다.
       expect(Object.keys(DEFERRED_SCENARIOS).length).toBeLessThanOrEqual(1);
+
+      // 유예는 내 상수 하나로 성립하면 안 된다 — 그러면 아무 시나리오나 넣어 게이트를
+      // 초록불로 만들 수 있다(2026-08-27 5차 적대리뷰 지적). 요구사항 문서가 그 시나리오를
+      // 아직 완료로 적지 않았다는 사실과 맞물려야 유예가 성립한다.
+      const requirements = readFileSync(resolve(ROOT, "docs", "requirements.md"), "utf8");
+      for (const id of Object.keys(DEFERRED_SCENARIOS)) {
+        const rows = requirements.split("\n").filter((l) => l.startsWith("|") && l.includes(id));
+        const anyDone = rows.some((l) => /\|\s*Done\s*\|?\s*$/.test(l.trimEnd()));
+        expect(anyDone, `${id} 를 유예로 두면서 요구사항은 Done 이라고 적혀 있다`).toBe(false);
+      }
       expect(outcome.breaches, "임계를 넘었다").toEqual([]);
 
-      // 보고서가 지금 HEAD 의 것인지 확인한다 — 옛 판본 보고서는 증거가 아니다.
-      assertReportMatchesHead(
+      // 보고서가 지금 상태의 증거인지 확인한다. 판본이 한 칸 뒤여도 그 사이 바뀐 것이
+      // 벤치 산출물뿐이면 여전히 증거다 — 그 밖이 바뀌었으면 거절한다.
+      assertReportCurrent(
         readFileSync(resolve(ROOT, "benchmark", "agent-bench-report.md"), "utf8"),
         revision,
+        (rev) =>
+          execFileSync("git", ["-C", ROOT, "diff", "--name-only", `${rev}..HEAD`], {
+            encoding: "utf8",
+          })
+            .split("\n")
+            .map((x) => x.trim())
+            .filter(Boolean),
       );
 
       // 안전 관측이 실제로 무언가를 봤는지. 전부 비어 있기만 하면 관측이 죽어 있는 것과

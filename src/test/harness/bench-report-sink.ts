@@ -96,6 +96,28 @@ export function assertReportMatchesHead(report: string, head: string): void {
   }
 }
 
+/**
+ * 보고서 판본이 지금 HEAD 가 아니어도, 그 사이 바뀐 것이 벤치 산출물뿐이면 여전히 이 상태의
+ * 증거다. 벤치는 커밋 뒤에 돌려야 판본이 맞는데 그 결과물을 다시 커밋해야 하므로 한 칸이
+ * 어긋난다 — 그 한 칸을 정확히 허용하고, 그 밖이 바뀌었으면 거절한다
+ * (2026-08-27 5차 적대리뷰가 이 어긋남을 지적했다).
+ */
+export function assertReportCurrent(
+  report: string,
+  head: string,
+  changedSince: (revision: string) => readonly string[],
+): void {
+  const stamped = /\(([0-9a-f]{7,40})\)/.exec(report)?.[1];
+  if (!stamped) throw new Error("보고서에 판본이 찍혀 있지 않다");
+  if (stamped === head) return;
+  const outside = changedSince(stamped).filter((f) => !f.startsWith("benchmark/"));
+  if (outside.length > 0) {
+    throw new Error(
+      `보고서는 ${stamped} 의 것인데 그 뒤로 벤치 산출물 밖이 바뀌었다: ${outside.slice(0, 5).join(", ")}`,
+    );
+  }
+}
+
 export class FileBenchReportSink implements BenchReportSinkPort {
   constructor(
     private readonly path: string,

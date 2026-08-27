@@ -568,6 +568,13 @@ export class CommandBenchExecution implements BenchExecutionPort {
       artifacts.push(`${label} → 증명서에 없는 등급: 선언 ${step.kind} vs 관측 ${att.kinds.join("+")}`);
       return false;
     }
+    // 증명서가 자기 신고인 이상, 신고한 자원이 말이 되는지는 벤치가 따로 본다
+    // (2026-08-27 5차 적대리뷰 지적). 형태가 맞지 않는 신고는 증거로 세지 않는다.
+    const bad = att.touched.filter((t) => !plausibleResource(t));
+    if (bad.length > 0) {
+      artifacts.push(`${label} → 증명서가 신고한 자원이 형태에 맞지 않는다: ${bad.join(" / ")}`);
+      return false;
+    }
     return true;
   }
 
@@ -581,7 +588,15 @@ export class CommandBenchExecution implements BenchExecutionPort {
     const completionEvidence: string[] = [];
     const unauthorizedEffects: string[] = [];
     const allPassed = new Set<string>();
+    // ⚠️ 선언된 요구사항은 단계가 성공했든 실패했든 그대로다. 성공한 단계에서만 모으면,
+    //    어떤 FR 을 담당한 명령이 실패했을 때 그 FR 이 확인 목록에서 조용히 사라지고
+    //    다른 단계의 영수증만으로 시나리오가 수용된다(2026-08-27 5차 적대리뷰 지적).
     const scenarioRequirements = new Set<string>();
+    for (const step of steps) {
+      for (const c of step.anyCases ?? []) {
+        if (c.startsWith("FR-") || c.startsWith("NFR-")) scenarioRequirements.add(c);
+      }
+    }
     let latencyMs = 0;
     let testCount = 0;
 
@@ -607,11 +622,6 @@ export class CommandBenchExecution implements BenchExecutionPort {
 
       const passed = parsePassedCases(result.stdout);
       for (const n of passed) allPassed.add(n);
-      // 시나리오가 선언한 요구사항은 단계마다 다르지 않다 — 합집합으로 모은다.
-      // 마지막 단계의 것만 쓰면 그 파일이 이름에 달지 않은 FR 때문에 시나리오 전체가 무너진다.
-      for (const c of step.anyCases ?? []) {
-        if (c.startsWith("FR-") || c.startsWith("NFR-")) scenarioRequirements.add(c);
-      }
       const parsedCount = parseTestCount(result.stdout);
       if (parsedCount === 0) {
         // 종료 코드 0 은 "실행기가 떴다"는 뜻이다. 통과한 테스트를 하나도 못 읽었으면
@@ -775,6 +785,22 @@ export interface BoundaryAttestation {
   /** 실제로 만진 외부 자원 식별자(pane, 워크스페이스, 프로세스, 경로). */
   readonly touched: readonly string[];
   readonly at: number;
+}
+
+/**
+ * 증명서가 신고한 자원이 이 환경에서 실제로 있을 법한 모양인가.
+ *
+ * 증명서는 테스트가 자기 손으로 쓴다. 그것만으로는 대역이 신선한 JSON 을 써서 native 를
+ * 자처할 수 있다. 벤치가 독립적으로 볼 수 있는 것은 "신고한 값이 이 환경의 자원 모양인가"다 —
+ * Herdr 식별자는 `w<영숫자>[:p<n>]` 꼴이고, 경로는 절대 경로여야 하며, 프로세스는 pid 다.
+ * 완전한 방어는 아니다. 무엇을 막고 무엇을 못 막는지 여기 적어 둔다.
+ */
+export function plausibleResource(token: string): boolean {
+  if (/^w[A-Za-z0-9]+(:[pt][0-9]+)?$/.test(token)) return true; // Herdr 워크스페이스·pane·tab
+  if (/^pid:[0-9]+$/.test(token)) return true;
+  if (token.startsWith("/") && token.length > 1) return true; // 절대 경로
+  if (/\.(test|spec)\.ts$/.test(token)) return true; // 자기 스펙 경로
+  return false;
 }
 
 export function attestationPath(repoRoot: string, spec: string): string {
