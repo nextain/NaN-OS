@@ -56,7 +56,7 @@ export async function setAdkPath(path: string): Promise<void> {
 	// Persist to ~/.naia/adk-path. Native restarts/rebinds an already-running
 	// agent when this changes, so setup must await completion before continuing.
 	await invoke("write_naia_path_cache", { adkPath: normalized });
-	// The workspace panel is keepAlive and mounts during onboarding, before the
+	// The workspace app is keepAlive and mounts during onboarding, before the
 	// user has picked a workspace. Announce the new binding so it re-reads the
 	// path and re-runs workspace_set_root instead of staying on whatever it
 	// auto-detected first (the dev cwd). #447-6.
@@ -194,7 +194,7 @@ const SECRET_CONFIG_KEYS = new Set([
 ]);
 
 // G-08: UI-only fields — naia-agent doesn't consume these. Stripped to prevent
-// flattenConfig() from polluting process.env with THEME, PANEL_POSITION, BGM_TRACK, etc.
+// flattenConfig() from polluting process.env with THEME, APP_POSITION, BGM_TRACK, etc.
 const UI_ONLY_CONFIG_KEYS = new Set([
 	// Appearance
 	"theme",
@@ -228,11 +228,11 @@ const UI_ONLY_CONFIG_KEYS = new Set([
 	"openaiRealtimeVoice",
 	"voice",
 	"voiceConversation",
-	// Panel layout
-	"panelPosition",
-	"panelVisible",
-	"panelSize",
-	"deletedPanels",
+	// App layout
+	"appPosition",
+	"appVisible",
+	"appSize",
+	"deletedApps",
 	// BGM / media player state
 	"bgmTrack",
 	"bgmSource",
@@ -558,7 +558,7 @@ export function applyModelSelectionToConfig(
 // config.json 은 agent 가 읽어 stripForAgent 로 UI키가 제거됨 → UI 설정이 전역 localStorage 에만 살았다.
 // "localStorage = adkPath 뿐" (UC-CONFIG-SOT / FR-CONFIG-SOT.4) 를 지키려면 **config.json 에서 strip 하는
 // UI 키 = ui-config.json 에 저장하는 키** 가 일치해야 한다 — 안 그러면 어느 파일에도 SoT 가 없는 키
-// (vllmTtsHost·theme·panelPosition 등)가 부팅 시 기본값으로 리셋된다(로컬 보이스 호스트 저장 안 됨 회귀).
+// (vllmTtsHost·theme·appPosition 등)가 부팅 시 기본값으로 리셋된다(로컬 보이스 호스트 저장 안 됨 회귀).
 // 따라서 ui-config.json 에는 `UI_ONLY_CONFIG_KEYS` 전체를 저장하되, **영속 부적절한 세션/휘발 상태만 제외**한다.
 const UI_SESSION_ONLY_KEYS = new Set<string>([
 	// Per-session Discord state — 워크스페이스 정체성 아님, 세션마다 갱신.

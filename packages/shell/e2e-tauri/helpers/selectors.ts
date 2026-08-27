@@ -26,7 +26,7 @@ export const S = {
 	gatewayTokenInput: "#gateway-token-input",
 	settingsSaveBtn: ".settings-save-btn",
 
-	// ChatPanel
+	// ChatApp
 	chatInput: ".chat-input",
 	chatSendBtn: ".chat-send-btn",
 	cursorBlink: ".cursor-blink",
@@ -85,7 +85,7 @@ export const S = {
 
 	// Skills tab (4th tab)
 	skillsTab: ".chat-tab:nth-child(4)",
-	skillsTabPanel: ".skills-tab",
+	skillsTabApp: ".skills-tab",
 	skillsSearch: ".skills-search",
 	skillsCard: ".skill-card",
 	skillsCardName: ".skill-card-name",
@@ -101,7 +101,7 @@ export const S = {
 
 	// Channels tab (5th tab)
 	channelsTabBtn: ".chat-tab:nth-child(5)",
-	channelsTabPanel: '[data-testid="channels-tab"]',
+	channelsTabApp: '[data-testid="channels-tab"]',
 	channelCard: '[data-testid="channel-card"]',
 	channelAccount: '[data-testid="channel-account"]',
 	channelStatus: '[data-testid="channel-status"]',
@@ -112,7 +112,7 @@ export const S = {
 
 	// Agents tab (6th tab)
 	agentsTabBtn: ".chat-tab:nth-child(6)",
-	agentsTabPanel: '[data-testid="agents-tab"]',
+	agentsTabApp: '[data-testid="agents-tab"]',
 	agentCard: '[data-testid="agent-card"]',
 	sessionCard: '[data-testid="session-card"]',
 	agentsRefreshBtn: ".agents-refresh-btn",
@@ -127,7 +127,7 @@ export const S = {
 
 	// Diagnostics tab (7th tab)
 	diagnosticsTabBtn: ".chat-tab:nth-child(7)",
-	diagnosticsTabPanel: '[data-testid="diagnostics-tab"]',
+	diagnosticsTabApp: '[data-testid="diagnostics-tab"]',
 	diagnosticsStatusGrid: ".diagnostics-status-grid",
 	diagnosticsStatusItem: ".diagnostics-status-item",
 	diagnosticsStatusOk: ".diagnostics-value.status-ok",
@@ -142,7 +142,7 @@ export const S = {
 	agentFileTextarea: ".agent-file-textarea",
 	agentFileSaveBtn: ".agent-file-save-btn",
 
-	// AppBar (panel tabs)
+	// AppBar (app tabs)
 	modeBar: ".app-bar",
 	modeBarTab: ".app-bar-tab",
 	modeBarTabActive: ".app-bar-tab--active",
@@ -150,9 +150,9 @@ export const S = {
 	modeBarTabRemove: ".app-bar-tab-remove",
 	modeBarAdd: ".app-bar-add",
 
-	// SampleNotePanel
-	sampleNotePanel: ".sample-note-panel",
-	sampleNoteEditor: ".sample-note-panel__editor",
+	// SampleNoteApp
+	sampleNoteApp: ".sample-note-app",
+	sampleNoteEditor: ".sample-note-app__editor",
 
 	// Session actions (AgentsTab)
 	sessionCompactBtn: ".session-action-btn.compact",

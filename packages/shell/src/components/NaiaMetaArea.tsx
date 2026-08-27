@@ -32,13 +32,13 @@ export function NaiaMetaArea() {
 	const [activeTab, setActiveTab] = useState<MetaTabId>("progress");
 
 	return (
-		<div className="naia-meta-panel">
-			<div className="naia-meta-panel__tabs">
+		<div className="naia-meta-app">
+			<div className="naia-meta-app__tabs">
 				{TABS.map((tab) => (
 					<button
 						key={tab.id}
 						type="button"
-						className={`naia-meta-panel__tab${activeTab === tab.id ? " naia-meta-panel__tab--active" : ""}`}
+						className={`naia-meta-app__tab${activeTab === tab.id ? " naia-meta-app__tab--active" : ""}`}
 						onClick={() => setActiveTab(tab.id)}
 						title={tab.label}
 					>
@@ -46,7 +46,7 @@ export function NaiaMetaArea() {
 					</button>
 				))}
 			</div>
-			<div className="naia-meta-panel__body">
+			<div className="naia-meta-app__body">
 				{activeTab === "progress" && <WorkProgressArea />}
 				{activeTab === "skills" && <SkillsTab onAskAI={askAI} />}
 		{activeTab === "channels" && <ChannelsTab />}

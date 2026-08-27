@@ -122,7 +122,7 @@ describe("ChatArea — file deep-links", () => {
 		expect(mockOpenFile).toHaveBeenCalledWith("/dev/project/data.csv");
 	});
 
-	it("clicking deeplink activates the workspace panel", () => {
+	it("clicking deeplink activates the workspace app", () => {
 		vi.spyOn(appRegistry, "getApi").mockReturnValue({
 			openFile: vi.fn(),
 			focusSession: vi.fn(),

@@ -1,6 +1,6 @@
 //! Chrome subprocess embedding (legacy) + standalone login Chrome.
 //!
-//! The embedded browser panel was replaced by Tauri 2 multi-webview
+//! The embedded browser app was replaced by Tauri 2 multi-webview
 //! (see browser_webview.rs). This file is kept for:
 //!   - browser_open_login / browser_chrome_testing_ready (auth flow)
 //!   - browser_embed_kill (kills login Chrome on app exit)
@@ -8,7 +8,7 @@
 //! The old embed commands (browser_embed_*) are no longer registered in
 //! invoke_handler and will be removed in a future cleanup pass.
 #![allow(dead_code)]
-//! Chrome subprocess embedding for the Naia browser panel.
+//! Chrome subprocess embedding for the Naia browser app.
 //!
 //! Architecture:
 //!   Chrome (--remote-debugging-port=<port>)
@@ -38,7 +38,7 @@ struct ChromeState {
     tmpdir: String,
     pid: u32,
     overlay_mode: bool, // true on platforms where supports_native_embed() == false
-    last_client_rect: WindowRect, // panel rect in Tauri client coords — for overlay watchdog
+    last_client_rect: WindowRect, // app rect in Tauri client coords — for overlay watchdog
     chrome_visible: bool, // false while browser_embed_hide is active — watchdog skips repositioning
 }
 
@@ -558,8 +558,8 @@ pub fn browser_agent_check() -> bool {
 
 /// Spawn Chrome, wait for CDP, embed window into Tauri via platform abstraction.
 ///
-/// `x`, `y` — browser panel origin relative to Tauri window (from React getBoundingClientRect)
-/// `width`, `height` — panel content area dimensions
+/// `x`, `y` — browser app origin relative to Tauri window (from React getBoundingClientRect)
+/// `width`, `height` — app content area dimensions
 ///
 /// NOTE: This is a synchronous (blocking) Tauri command intentionally.
 /// It runs on Tauri's blocking thread pool (not the async executor) so it can
@@ -764,7 +764,7 @@ pub fn browser_embed_init(
     Ok(port)
 }
 
-/// Update Chrome window position/size when the panel resizes.
+/// Update Chrome window position/size when the app resizes.
 #[tauri::command]
 pub fn browser_embed_resize(x: f64, y: f64, width: f64, height: f64) -> Result<(), String> {
     let rect = WindowRect::from_f64(x, y, width, height);
@@ -787,7 +787,7 @@ pub fn browser_embed_resize(x: f64, y: f64, width: f64, height: f64) -> Result<(
 
 /// Give keyboard focus to Chrome's native window.
 ///
-/// Called from the viewport onClick and a 1500 ms timer in BrowserCenterPanel.
+/// Called from the viewport onClick and a 1500 ms timer in BrowserCenterApp.
 /// On Windows (embed/SetParent mode), Win32 routes click→focus automatically
 /// and the 1500ms timer must NOT call SetFocus — doing so every 1.5s causes
 /// continuous WM_KILLFOCUS/WM_SETFOCUS on WebView2, producing visible flicker.
@@ -957,9 +957,9 @@ fn run_cdp_nav_cmd(cmd: &str) -> Result<(), String> {
     Ok(())
 }
 
-/// Detach the browser panel (called on React component unmount / panel switch).
+/// Detach the browser app (called on React component unmount / app switch).
 ///
-/// Hides Chrome so it is visually hidden while another panel is active.
+/// Hides Chrome so it is visually hidden while another app is active.
 /// Does NOT reset chrome_handle — browser_embed_init re-shows using the cached handle.
 /// Does NOT kill Chrome — Chrome is a long-lived process managed by the
 /// monitor thread. Chrome is killed by `browser_embed_kill` on actual app exit.
@@ -975,7 +975,7 @@ pub fn browser_embed_close() -> Result<(), String> {
     platform::window_manager().hide(handle)
 }
 
-/// Hide Chrome window when switching away from the browser panel.
+/// Hide Chrome window when switching away from the browser app.
 #[tauri::command]
 pub fn browser_embed_hide() -> Result<(), String> {
     let mut state = CHROME.lock().unwrap();
@@ -1177,7 +1177,7 @@ fn spawn_login_chrome_monitor(app: AppHandle, pid: u32, port: u16) {
     });
 }
 
-/// Navigate to login URL — inside the embedded browser panel if it is running,
+/// Navigate to login URL — inside the embedded browser app if it is running,
 /// otherwise launch a standalone Chrome for Testing window.
 ///
 /// When the embedded Chrome handles login, `spawn_chrome_monitor` already
@@ -1188,13 +1188,13 @@ fn spawn_login_chrome_monitor(app: AppHandle, pid: u32, port: u16) {
 /// monitors via `spawn_login_chrome_monitor`, auto-closes on auth-complete.
 #[tauri::command]
 pub async fn browser_open_login(app: AppHandle, url: String) -> Result<(), String> {
-    // Fast path 1: multi-webview panel (new default).
+    // Fast path 1: multi-webview app (new default).
     if let Some(wv) = app.get_webview(crate::browser_webview::BROWSER_LABEL) {
-        crate::log_verbose("[browser_login] multi-webview active — navigating in-panel");
+        crate::log_verbose("[browser_login] multi-webview active — navigating in-app");
         tauri::Webview::eval(&wv, &format!("window.location.href = {:?};", url))
             .map_err(|e| format!("navigate: {e}"))?;
-        // Tell frontend to switch to the browser panel so user can see the login page.
-        let _ = app.emit("browser_panel_activate", ());
+        // Tell frontend to switch to the browser app so user can see the login page.
+        let _ = app.emit("browser_app_activate", ());
         // Watch CURRENT_URL for /desktop/auth-complete and emit naia_auth_complete.
         let app2 = app.clone();
         std::thread::spawn(move || {
@@ -1239,11 +1239,11 @@ pub async fn browser_open_login(app: AppHandle, url: String) -> Result<(), Strin
         return Ok(());
     }
 
-    // Fast path 2: embedded Chrome already running → navigate in-panel.
+    // Fast path 2: embedded Chrome already running → navigate in-app.
     let port = CHROME.lock().unwrap().port;
     if port != 0 {
         crate::log_verbose(&format!(
-            "[browser_login] embedded Chrome active (port={port}) — navigating in-panel"
+            "[browser_login] embedded Chrome active (port={port}) — navigating in-app"
         ));
         return navigate_cdp_direct(port, &url).await;
     }

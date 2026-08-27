@@ -703,21 +703,21 @@ describe("chat-service", () => {
 			).resolves.toBeUndefined();
 		});
 
-		it("sendPanelSkills / sendPanelSkillsClear / sendPanelInstall / sendPanelToolResult naia-agent 없어도 throw 안 함", async () => {
+		it("sendAppSkills / sendAppSkillsClear / sendAppInstall / sendAppToolResult naia-agent 없어도 throw 안 함", async () => {
 			mockInvoke.mockRejectedValue(new Error("agent-core died"));
 			const {
-				sendPanelSkills,
-				sendPanelSkillsClear,
-				sendPanelInstall,
-				sendPanelToolResult,
+				sendAppSkills,
+				sendAppSkillsClear,
+				sendAppInstall,
+				sendAppToolResult,
 			} = await import("../chat-service");
-			await expect(sendPanelSkills("p1", [])).resolves.toBe(false);
-			await expect(sendPanelSkillsClear("p1")).resolves.toBeUndefined();
+			await expect(sendAppSkills("p1", [])).resolves.toBe(false);
+			await expect(sendAppSkillsClear("p1")).resolves.toBeUndefined();
 			await expect(
-				sendPanelInstall("https://github.com/x/y"),
+				sendAppInstall("https://github.com/x/y"),
 			).resolves.toBeUndefined();
 			await expect(
-				sendPanelToolResult("r1", "c1", "ok", true),
+				sendAppToolResult("r1", "c1", "ok", true),
 			).resolves.toBeUndefined();
 		});
 

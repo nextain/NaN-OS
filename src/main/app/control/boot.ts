@@ -2,7 +2,7 @@
 // 인지 0. 순서 결속은 baseline 이 실제 결속한 것만. ⚠️ async — 포트가 async(런타임 정정).
 import type {
   ConfigPort, BootStatePort, AdkPathPort, WorkspacePort,
-  StartupMessagePort, PanelInventoryPort, AdkSetupPort,
+  StartupMessagePort, AppInventoryPort, AdkSetupPort,
 } from "../../ports/index.js";
 import { decideBoot, adkPrepAction, AdkDirNeedsDecisionError, type BootDecision, type SetupMode } from "../../domain/boot.js";
 import { hasNaiaKey, baseConfig } from "../../domain/config.js";
@@ -14,7 +14,7 @@ export interface ControlPlanePorts {
   adkPath: AdkPathPort;
   workspace: WorkspacePort;
   startup: StartupMessagePort;
-  panels: PanelInventoryPort;
+  apps: AppInventoryPort;
   setup: AdkSetupPort;
 }
 
@@ -23,8 +23,8 @@ export class ControlPlaneBoot {
 
   /** §3-A boot() — 전역 부팅. 반환 = 게이트 결정. */
   async boot(): Promise<BootDecision> {
-    // 1. panel list — 게이트 이전, 항상, non-fatal contain
-    try { await this.p.panels.listInstalled(); } catch { /* non-fatal */ }
+    // 1. app list — 게이트 이전, 항상, non-fatal contain
+    try { await this.p.apps.listInstalled(); } catch { /* non-fatal */ }
 
     // 2. adk path
     const adk = await this.p.adkPath.get();
@@ -65,7 +65,7 @@ export class ControlPlaneBoot {
   }
 
   /** §3-B 마운트 — setRoot(+성공시 startWatch). 활성화와 분리. */
-  async onWorkspacePanelMount(rawRoot: string): Promise<void> {
+  async onWorkspaceAppMount(rawRoot: string): Promise<void> {
     const result = await this.p.workspace.setRoot(rawRoot);
     if (!result.ok) {
       // F0-4: 실패를 침묵 강등하지 않고 표면화(디버깅 용이성) — contain+fallback 은 유지(block 아님)
@@ -76,11 +76,11 @@ export class ControlPlaneBoot {
   }
 
   /** §3-B 활성화 — 인자 없는 startWatch 재호출만. */
-  async onWorkspacePanelActivate(): Promise<void> {
+  async onWorkspaceAppActivate(): Promise<void> {
     await this.p.workspace.startWatch();
   }
 
-  async onWorkspacePanelDeactivate(): Promise<void> {
+  async onWorkspaceAppDeactivate(): Promise<void> {
     await this.p.workspace.stopWatch();
   }
 

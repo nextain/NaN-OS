@@ -19,7 +19,7 @@ export interface ShellSendOptions {
   requestId: string;
   sessionId?: string;
   systemPrompt?: string;
-  /** S4 — 셸 환경고유 세그먼트(아바타 감정·패널). 코어가 persona+workspace 뒤 머지. */
+  /** S4 — 셸 환경고유 세그먼트(아바타 감정·앱·표면). 코어가 persona+workspace 뒤 머지. */
   environmentSegments?: readonly EnvironmentSegment[];
   enableTools?: boolean;
   enableThinking?: boolean;
@@ -46,7 +46,7 @@ export function chatChunkToWire(requestId: string, c: ChatChunk): Record<string,
     case "logEntry": return { type: "log_entry", requestId, level: c.level, message: c.message };
     case "tokenWarning": return { ...(c.raw && typeof c.raw === "object" ? c.raw as object : {}), type: "token_warning", requestId };
     case "compacted": return { type: "compacted", requestId, droppedCount: c.droppedCount };
-    case "panelToolCall": return { type: "panel_tool_call", requestId, toolCallId: c.toolCallId, toolName: c.toolName, args: c.args }; // UC-PANEL FR-PANEL-2 → ChatPanel handleChunk
+    case "appToolCall": return { type: "app_tool_call", requestId, toolCallId: c.toolCallId, toolName: c.toolName, args: c.args }; // UC-APP FR-APP-2 → ChatApp handleChunk
     case "grounding": return { type: "grounding", requestId, status: c.status, sources: c.sources };
     case "artifact": return { type: "artifact", requestId, artifact: c.artifact };
     case "providerSession": return {

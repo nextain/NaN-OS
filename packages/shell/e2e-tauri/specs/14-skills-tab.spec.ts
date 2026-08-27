@@ -17,8 +17,8 @@ describe("14 — skills tab", () => {
 		await skillsTabBtn.waitForDisplayed({ timeout: 10_000 });
 		await clickBySelector(S.skillsTab);
 
-		const skillsPanel = await $(S.skillsTabPanel);
-		await skillsPanel.waitForDisplayed({ timeout: 5_000 });
+		const skillsApp = await $(S.skillsTabApp);
+		await skillsApp.waitForDisplayed({ timeout: 5_000 });
 	});
 
 	it("should display at least 20 built-in skills", async () => {

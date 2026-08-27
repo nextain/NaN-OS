@@ -19,10 +19,10 @@ describe("31 — diagnostics tab", () => {
 			if (el) el.click();
 		}, S.diagnosticsTabBtn);
 
-		// Wait for diagnostics panel to appear
-		const diagPanel = await $(S.diagnosticsTabPanel);
+		// Wait for diagnostics app to appear
+		const diagApp = await $(S.diagnosticsTabApp);
 		try {
-			await diagPanel.waitForDisplayed({ timeout: 10_000 });
+			await diagApp.waitForDisplayed({ timeout: 10_000 });
 		} catch {
 			// DiagnosticsTab may not render if Gateway not connected — skip gracefully
 			const chatTabBtn = await $(S.chatTab);
@@ -33,8 +33,8 @@ describe("31 — diagnostics tab", () => {
 
 	it("should show status grid with connection status", async () => {
 		// Check if we're on diagnostics tab
-		const diagPanel = await $(S.diagnosticsTabPanel);
-		if (!(await diagPanel.isExisting())) {
+		const diagApp = await $(S.diagnosticsTabApp);
+		if (!(await diagApp.isExisting())) {
 			// Not on diagnostics tab — skip
 			return;
 		}
@@ -80,8 +80,8 @@ describe("31 — diagnostics tab", () => {
 	});
 
 	it("should have refresh button that reloads status", async () => {
-		const diagPanel = await $(S.diagnosticsTabPanel);
-		if (!(await diagPanel.isExisting())) return;
+		const diagApp = await $(S.diagnosticsTabApp);
+		if (!(await diagApp.isExisting())) return;
 
 		const refreshExists = await browser.execute(
 			(sel: string) => !!document.querySelector(sel),
@@ -98,8 +98,8 @@ describe("31 — diagnostics tab", () => {
 	});
 
 	it("should have log streaming buttons", async () => {
-		const diagPanel = await $(S.diagnosticsTabPanel);
-		if (!(await diagPanel.isExisting())) return;
+		const diagApp = await $(S.diagnosticsTabApp);
+		if (!(await diagApp.isExisting())) return;
 
 		const logBtnExists = await browser.execute(
 			(sel: string) => !!document.querySelector(sel),

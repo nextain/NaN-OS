@@ -26,7 +26,7 @@ import { IssuesArea } from "./IssuesArea";
 import type { SessionInfo } from "./SessionCard";
 import { SkillLauncher } from "./SkillLauncher";
 import { Terminal } from "./Terminal";
-import { CodingWorkersPanel } from "./CodingWorkersPanel";
+import { CodingWorkersApp } from "./CodingWorkersApp";
 import { ACTIVE_THRESHOLD_SECONDS, WORKSPACE_ROOT } from "./constants";
 
 // ─── File navigation history ─────────────────────────────────────────────────
@@ -90,10 +90,10 @@ function useFileNavHistory() {
 	return { openFilePath, openFile, goBack, goForward };
 }
 
-// ─── Panel API ───────────────────────────────────────────────────────────────
+// ─── App API ───────────────────────────────────────────────────────────────
 
 /**
- * Programmatic API exposed by the Workspace panel.
+ * Programmatic API exposed by the Workspace app.
  * Access via `appRegistry.getApi<WorkspaceAppApi>("workspace")`.
  */
 export interface WorkspaceAppApi {
@@ -103,15 +103,15 @@ export interface WorkspaceAppApi {
 	/**
 	 * Highlight (visually focus) a session card by its `dir` identifier
 	 * and scroll it into view.
-	 * Caller should invoke `activatePanel()` first if the Workspace panel
+	 * Caller should invoke `activateApp()` first if the Workspace app
 	 * is not currently visible — focusSession only highlights/scrolls, it
-	 * does not switch panels.
+	 * does not switch apps.
 	 */
 	focusSession: (dir: string) => void;
 	/** Return the current live session list. */
 	getActiveSessions: () => SessionInfo[];
-	/** Switch the center panel to Workspace. */
-	activatePanel: () => void;
+	/** Switch the center app to Workspace. */
+	activateApp: () => void;
 }
 
 // ─── Terminal tab ─────────────────────────────────────────────────────────────
@@ -289,7 +289,7 @@ export function WorkspaceCenterArea({ naia }: AppCenterProps) {
 	const initializedRef = useRef(false);
 	const [initialized, setInitialized] = useState(false);
 
-	// ── Drag-resize panel widths ───────────────────────────────────────────
+	// ── Drag-resize app widths ───────────────────────────────────────────
 	const [treeWidth, setTreeWidth] = useState(220);
 	const treeWidthRef = useRef(220);
 	treeWidthRef.current = treeWidth;
@@ -337,7 +337,7 @@ export function WorkspaceCenterArea({ naia }: AppCenterProps) {
 		const startH = skillsHeightRef.current;
 		document.body.classList.add("resizing-row");
 		const onMove = (ev: PointerEvent) => {
-			// Handle is on top edge of skills panel — dragging up increases height
+			// Handle is on top edge of skills app — dragging up increases height
 			setSkillsHeight(
 				Math.max(60, Math.min(400, startH - (ev.clientY - startY))),
 			);
@@ -438,7 +438,7 @@ export function WorkspaceCenterArea({ naia }: AppCenterProps) {
 	const [resolvedRoot, setResolvedRoot] = useState(activeWorkspaceRoot);
 
 	// ── Re-bind when the adk path changes ──────────────────────────────────
-	// The workspace panel is keepAlive, so it mounts during onboarding — before
+	// The workspace app is keepAlive, so it mounts during onboarding — before
 	// the user has selected a workspace. When onboarding/Settings persist the
 	// real path via setAdkPath(), pick it up and re-run workspace_set_root
 	// instead of staying on whatever auto-detect first bound. #447-6.
@@ -465,7 +465,7 @@ export function WorkspaceCenterArea({ naia }: AppCenterProps) {
 			});
 			return;
 		}
-		// Never auto-detect before onboarding has chosen a workspace: the panel
+		// Never auto-detect before onboarding has chosen a workspace: the app
 		// is mounted (keepAlive) during onboarding, and binding to the dev-detected
 		// cwd here would poison the user's not-yet-made selection. The
 		// naia-adk-path-changed listener above binds the real path once it exists.
@@ -861,7 +861,7 @@ export function WorkspaceCenterArea({ naia }: AppCenterProps) {
 						idleNotifiedRef.current.add(session.path);
 						const idleMin = Math.max(1, Math.floor(idleSec / 60));
 						const alertMsg = `${session.dir} 세션이 ${idleMin}분째 입력을 기다리고 있어요`;
-						// Visible toast in panel
+						// Visible toast in app
 						if (idleToastTimerRef.current)
 							clearTimeout(idleToastTimerRef.current);
 						setIdleToast(alertMsg);
@@ -1015,7 +1015,7 @@ export function WorkspaceCenterArea({ naia }: AppCenterProps) {
 		}
 	}, [terminals, activeTab]);
 
-	// ── Ctrl+P — Quick Open (only when workspace panel is active) ───────
+	// ── Ctrl+P — Quick Open (only when workspace app is active) ───────
 	useEffect(() => {
 		const handler = (e: KeyboardEvent) => {
 			if ((e.ctrlKey || e.metaKey) && e.key === "p") {
@@ -1087,8 +1087,8 @@ export function WorkspaceCenterArea({ naia }: AppCenterProps) {
 		}
 	}, [quickOpenVisible]);
 
-	// ── Panel API (WorkspaceAppApi) ─────────────────────────────────────
-	// Register a live API so other panels (e.g. Issue Desk) can call
+	// ── App API (WorkspaceAppApi) ─────────────────────────────────────
+	// Register a live API so other apps (e.g. Issue Desk) can call
 	// openFile / focusSession without importing internal component modules.
 	useEffect(() => {
 		appRegistry.updateApi("workspace", {
@@ -1106,7 +1106,7 @@ export function WorkspaceCenterArea({ naia }: AppCenterProps) {
 				startHighlight(dir);
 			},
 			getActiveSessions: () => sessionsRef.current,
-			activatePanel: () => useAppStore.getState().setActiveApp("workspace"),
+			activateApp: () => useAppStore.getState().setActiveApp("workspace"),
 		} satisfies WorkspaceAppApi);
 		return () => {
 			appRegistry.updateApi("workspace", undefined);
@@ -1487,7 +1487,7 @@ export function WorkspaceCenterArea({ naia }: AppCenterProps) {
 			const session = sessionsRef.current.find((s) => s.dir === dir);
 			if (!session) return `Error: session not found: ${dir}`;
 
-			// Activate workspace panel
+			// Activate workspace app
 			useAppStore.getState().setActiveApp("workspace");
 			startHighlight(dir);
 
@@ -1596,7 +1596,7 @@ export function WorkspaceCenterArea({ naia }: AppCenterProps) {
 	if (!activeWorkspaceRoot) {
 		return (
 			<div
-				className="workspace-panel"
+				className="workspace-app"
 				style={{
 					display: "flex",
 					alignItems: "center",
@@ -1625,18 +1625,18 @@ export function WorkspaceCenterArea({ naia }: AppCenterProps) {
 	);
 
 	return (
-		<div className="workspace-panel">
+		<div className="workspace-app">
 			{/* Initial loading overlay — hides blank flash before first session fetch */}
 			{!initialized && (
-				<div className="workspace-panel__loading">
-					<span className="workspace-panel__loading-spinner" />
+				<div className="workspace-app__loading">
+					<span className="workspace-app__loading-spinner" />
 					<span>워크스페이스 로딩 중…</span>
 				</div>
 			)}
 			{/* Idle session toast (F8) */}
 			{idleToast && (
 				<div
-					className="workspace-panel__idle-toast"
+					className="workspace-app__idle-toast"
 					onClick={() => setIdleToast(null)}
 					role="alert"
 				>
@@ -1646,13 +1646,13 @@ export function WorkspaceCenterArea({ naia }: AppCenterProps) {
 
 			{/* Left: FileTree */}
 			<div
-				className="workspace-panel__tree"
+				className="workspace-app__tree"
 				style={{ width: `${treeWidth}px` }}
 			>
-				<div className="workspace-panel__tree-header">
-					<span className="workspace-panel__tree-title">탐색기</span>
+				<div className="workspace-app__tree-header">
+					<span className="workspace-app__tree-title">탐색기</span>
 				</div>
-				<div className="workspace-panel__tree-body">
+				<div className="workspace-app__tree-body">
 					{workspaceReady ? (
 						<FileTree
 							onFileSelect={handleFileSelect}
@@ -1664,15 +1664,15 @@ export function WorkspaceCenterArea({ naia }: AppCenterProps) {
 							onSendToChat={handleSendToChat}
 						/>
 					) : (
-						<div className="workspace-panel__tree-loading">
-							<span className="workspace-panel__tree-loading-text">
+						<div className="workspace-app__tree-loading">
+							<span className="workspace-app__tree-loading-text">
 								워크스페이스 준비 중…
 							</span>
 						</div>
 					)}
 				</div>
 				<div
-					className="workspace-panel__row-resize-handle"
+					className="workspace-app__row-resize-handle"
 					onPointerDown={onSkillsResizeStart}
 				/>
 				<div
@@ -1686,15 +1686,15 @@ export function WorkspaceCenterArea({ naia }: AppCenterProps) {
 				</div>
 			</div>
 			<div
-				className="workspace-panel__resize-handle"
+				className="workspace-app__resize-handle"
 				onPointerDown={onTreeResizeStart}
 			/>
 
 			{/* Center: document viewer (top) + terminal(s) (bottom), free-ratio split */}
-			<div className="workspace-panel__center" ref={centerRef}>
+			<div className="workspace-app__center" ref={centerRef}>
 				{/* Zone 3a — document viewer (open-document tabs + editor) */}
 				<div
-					className="workspace-panel__doc-zone"
+					className="workspace-app__doc-zone"
 					style={{ flexGrow: docSplit, flexBasis: 0, minHeight: 0 }}
 				>
 					<DocTabBar
@@ -1704,8 +1704,8 @@ export function WorkspaceCenterArea({ naia }: AppCenterProps) {
 						onClose={handleCloseDoc}
 						onAskAi={handleSendToChat}
 					/>
-					<div className="workspace-panel__doc-body">
-						<div className="workspace-panel__editor-slot">
+					<div className="workspace-app__doc-body">
+						<div className="workspace-app__editor-slot">
 							<Editor
 								ref={editorRef}
 								filePath={openFilePath}
@@ -1720,16 +1720,16 @@ export function WorkspaceCenterArea({ naia }: AppCenterProps) {
 
 				{/* Vertical resize between document viewer and terminal */}
 				<div
-					className="workspace-panel__row-resize-handle"
+					className="workspace-app__row-resize-handle"
 					onPointerDown={onDocTerminalResizeStart}
 				/>
 
 				{/* Zone 3b — terminal(s) */}
 				<div
-					className="workspace-panel__term-zone"
+					className="workspace-app__term-zone"
 					style={{ flexGrow: 1 - docSplit, flexBasis: 0, minHeight: 0 }}
 				>
-					<div className="workspace-panel__coding-workers-toolbar">
+					<div className="workspace-app__coding-workers-toolbar">
 						<button
 							type="button"
 							data-testid="coding-workers-toggle"
@@ -1740,7 +1740,7 @@ export function WorkspaceCenterArea({ naia }: AppCenterProps) {
 						</button>
 					</div>
 					{codingWorkersOpen && (
-						<CodingWorkersPanel
+						<CodingWorkersApp
 							adapter={codingWorkersAdapter}
 							controlRoot={resolvedRoot}
 							onOpenCourseFiles={(worker) => {
@@ -1753,10 +1753,10 @@ export function WorkspaceCenterArea({ naia }: AppCenterProps) {
 					)}
 					{terminals.length > 0 ? (
 						<>
-							<div className="workspace-panel__tab-bar" role="tablist">
+							<div className="workspace-app__tab-bar" role="tablist">
 								<button
 									type="button"
-									className="workspace-panel__term-viewtoggle"
+									className="workspace-app__term-viewtoggle"
 									onClick={() =>
 										setTerminalView((v) => (v === "grid" ? "tabs" : "grid"))
 									}
@@ -1777,27 +1777,27 @@ export function WorkspaceCenterArea({ naia }: AppCenterProps) {
 											role="tab"
 											tabIndex={0}
 											aria-selected={activeTab === t.pty_id}
-											className={`workspace-panel__tab${activeTab === t.pty_id ? " workspace-panel__tab--active" : ""}${t.exited ? " workspace-panel__tab--exited" : ""}`}
+											className={`workspace-app__tab${activeTab === t.pty_id ? " workspace-app__tab--active" : ""}${t.exited ? " workspace-app__tab--exited" : ""}`}
 											onClick={() => setActiveTab(t.pty_id)}
 											onKeyDown={(e) => {
 												if (e.key === "Enter" || e.key === " ")
 													setActiveTab(t.pty_id);
 											}}
 										>
-											<span className="workspace-panel__tab-label">
+											<span className="workspace-app__tab-label">
 												{t.issueId !== undefined && (
-													<span className="workspace-panel__tab-issue">
+													<span className="workspace-app__tab-issue">
 														#{t.issueId}
 													</span>
 												)}
 												{t.dir.split(/[/\\]/).pop() ?? t.dir}
 												{t.agent !== undefined && (
-													<span className="workspace-panel__tab-agent">
+													<span className="workspace-app__tab-agent">
 														{t.agent}
 													</span>
 												)}
 												{t.exited && (
-													<span className="workspace-panel__tab-exited">
+													<span className="workspace-app__tab-exited">
 														멈춤
 													</span>
 												)}
@@ -1805,7 +1805,7 @@ export function WorkspaceCenterArea({ naia }: AppCenterProps) {
 											{t.exited && (
 												<button
 													type="button"
-													className="workspace-panel__tab-restart"
+													className="workspace-app__tab-restart"
 													aria-label={`터미널 재시작: ${t.dir}`}
 													onClick={(e) => {
 														e.stopPropagation();
@@ -1818,7 +1818,7 @@ export function WorkspaceCenterArea({ naia }: AppCenterProps) {
 											<button
 												type="button"
 												aria-label={`터미널 닫기: ${t.dir}`}
-												className="workspace-panel__tab-close"
+												className="workspace-app__tab-close"
 												onClick={(e) => {
 													e.stopPropagation();
 													handleCloseTerminal(t.pty_id);
@@ -1829,13 +1829,13 @@ export function WorkspaceCenterArea({ naia }: AppCenterProps) {
 										</div>
 									))}
 							</div>
-							<div className="workspace-panel__term-body">
+							<div className="workspace-app__term-body">
 								{/* Terminal area: cell wrappers keep PTY mounted across grid↔tab transitions */}
 								<div
 									ref={terminalAreaRef}
-									className={`workspace-panel__terminal-area${
-										isGridMode ? " workspace-panel__terminal-area--grid" : ""
-									}${canGridResize ? " workspace-panel__terminal-area--resizable" : ""}`}
+									className={`workspace-app__terminal-area${
+										isGridMode ? " workspace-app__terminal-area--grid" : ""
+									}${canGridResize ? " workspace-app__terminal-area--resizable" : ""}`}
 									style={
 										canGridResize
 											? {
@@ -1848,45 +1848,45 @@ export function WorkspaceCenterArea({ naia }: AppCenterProps) {
 										<Fragment key={t.pty_id}>
 											{canGridResize && i === 1 && (
 												<div
-													className="workspace-panel__grid-resize-handle"
+													className="workspace-app__grid-resize-handle"
 													onPointerDown={onGridResizeStart}
 												/>
 											)}
 											<div
 												// key is on Fragment above
-												className={`workspace-panel__terminal-cell${
+												className={`workspace-app__terminal-cell${
 													activeTab === t.pty_id
-														? " workspace-panel__terminal-cell--focused"
+														? " workspace-app__terminal-cell--focused"
 														: ""
 												}`}
 											>
 												{/* Cell header — hidden in tab mode, visible in grid mode via CSS */}
 												<div
-													className="workspace-panel__terminal-cell-header"
+													className="workspace-app__terminal-cell-header"
 													onClick={() => setActiveTab(t.pty_id)}
 												>
 													{t.issueId !== undefined && (
-														<span className="workspace-panel__tab-issue">
+														<span className="workspace-app__tab-issue">
 															#{t.issueId}
 														</span>
 													)}
-													<span className="workspace-panel__terminal-cell-dir">
+													<span className="workspace-app__terminal-cell-dir">
 														{t.dir.split(/[/\\]/).pop() ?? t.dir}
 													</span>
 													{t.agent !== undefined && (
-														<span className="workspace-panel__tab-agent">
+														<span className="workspace-app__tab-agent">
 															{t.agent}
 														</span>
 													)}
 													{t.exited && (
-														<span className="workspace-panel__tab-exited">
+														<span className="workspace-app__tab-exited">
 															멈춤
 														</span>
 													)}
 													{t.exited && (
 														<button
 															type="button"
-															className="workspace-panel__tab-restart"
+															className="workspace-app__tab-restart"
 															aria-label={`터미널 재시작: ${t.dir}`}
 															onClick={(e) => {
 																e.stopPropagation();
@@ -1898,7 +1898,7 @@ export function WorkspaceCenterArea({ naia }: AppCenterProps) {
 													)}
 													<button
 														type="button"
-														className="workspace-panel__tab-close"
+														className="workspace-app__tab-close"
 														aria-label={`터미널 닫기: ${t.dir}`}
 														onClick={(e) => {
 															e.stopPropagation();
@@ -1909,15 +1909,15 @@ export function WorkspaceCenterArea({ naia }: AppCenterProps) {
 													</button>
 												</div>
 												{/* Terminal body — relative so Terminal's absolute inset fills the cell */}
-												<div className="workspace-panel__terminal-cell-body">
+												<div className="workspace-app__terminal-cell-body">
 													{t.exited ? (
-														<div className="workspace-panel__terminal-dead">
-															<span className="workspace-panel__terminal-dead-msg">
+														<div className="workspace-app__terminal-dead">
+															<span className="workspace-app__terminal-dead-msg">
 																프로세스 종료
 															</span>
 															<button
 																type="button"
-																className="workspace-panel__terminal-dead-restart"
+																className="workspace-app__terminal-dead-restart"
 																onClick={() =>
 																	void handleRestartTerminal(t.pty_id)
 																}
@@ -1943,7 +1943,7 @@ export function WorkspaceCenterArea({ naia }: AppCenterProps) {
 							</div>
 						</>
 					) : (
-						<div className="workspace-panel__term-empty">
+						<div className="workspace-app__term-empty">
 							실행 중인 터미널이 없습니다.
 							<br />
 							서브에이전트 목록에서 세션을 시작하거나 나이아에게 요청하세요.
@@ -1952,13 +1952,13 @@ export function WorkspaceCenterArea({ naia }: AppCenterProps) {
 				</div>
 			</div>
 			<div
-				className="workspace-panel__resize-handle"
+				className="workspace-app__resize-handle"
 				onPointerDown={onSessionsResizeStart}
 			/>
 
 			{/* Right: Session sidebar (vertical card list) */}
 			<div
-				className="workspace-panel__sessions"
+				className="workspace-app__sessions"
 				style={{ width: `${sessionsWidth}px` }}
 			>
 				{workspaceReady && (

@@ -161,7 +161,7 @@ const TAURI_MOCK_SCRIPT = `
 		if (cmd === "pty_resize" || cmd === "pty_write" || cmd === "pty_close") return null;
 		if (cmd === "send_to_agent_command" || cmd === "cancel_stream") return null;
 		if (cmd === "frontend_log") return null;
-		if (cmd === "panel_list_installed") return [];
+		if (cmd === "app_list_installed") return [];
 		if (cmd === "list_skills" || cmd === "list_stt_models") return [];
 		if (cmd === "read_naia_config") return null;
 		return undefined;
@@ -170,11 +170,11 @@ const TAURI_MOCK_SCRIPT = `
 `;
 
 async function openWorkspace(page: Page): Promise<void> {
-	const tab = page.locator('button[data-panel-id="workspace"]');
+	const tab = page.locator('button[data-app-id="workspace"]');
 	await expect(tab).toBeVisible({ timeout: 10_000 });
 	await tab.click();
 	await expect(page.getByTestId("herdr-workspace")).toBeVisible();
-	await expect(page.locator(".workspace-panel__terminal .xterm")).toBeVisible();
+	await expect(page.locator(".workspace-app__terminal .xterm")).toBeVisible();
 }
 
 function callCount(page: Page, command: string): Promise<number> {
@@ -219,7 +219,7 @@ test.describe("Herdr Workspace integration", () => {
 			localStorage.setItem("naia-adk-path", "${ROOT_A}");
 		});
 		await page.goto("/");
-		await expect(page.locator(".chat-panel")).toBeVisible({ timeout: 10_000 });
+		await expect(page.locator(".chat-app")).toBeVisible({ timeout: 10_000 });
 	});
 
 	test("새 설치 기본값은 왼쪽 소형이고 Workspace를 열어도 사용자 배치를 유지한다", async ({
@@ -244,7 +244,7 @@ test.describe("Herdr Workspace integration", () => {
 
 		await page.getByTitle("왼쪽 채움").click();
 		await expect(root).toHaveAttribute("data-ui-mode", "workspace");
-		await page.locator('button[data-panel-id="browser"]').click();
+		await page.locator('button[data-app-id="browser"]').click();
 		await expect(root).toHaveAttribute("data-ui-mode", "workspace");
 	});
 
@@ -288,7 +288,7 @@ test.describe("Herdr Workspace integration", () => {
 			localStorage.setItem("naia-e2e-stall-herdr", "1"),
 		);
 		await page.reload();
-		await expect(page.locator(".chat-panel")).toBeVisible({ timeout: 10_000 });
+		await expect(page.locator(".chat-app")).toBeVisible({ timeout: 10_000 });
 		await openWorkspace(page);
 		await expect(page.locator(".herdr-workspace__files")).toBeVisible();
 		await expect(
@@ -382,7 +382,7 @@ test.describe("Herdr Workspace integration", () => {
 		page,
 	}) => {
 		await openWorkspace(page);
-		const terminal = page.locator(".workspace-panel__terminal");
+		const terminal = page.locator(".workspace-app__terminal");
 		const terminalNode = await terminal.elementHandle();
 		expect(terminalNode).not.toBeNull();
 		expect(await callCount(page, "herdr_pty_create")).toBe(1);
@@ -398,7 +398,7 @@ test.describe("Herdr Workspace integration", () => {
 		).toBe(true);
 		expect(await callCount(page, "herdr_pty_create")).toBe(1);
 		await expect(
-			page.locator(".workspace-panel__terminal .xterm-helper-textarea"),
+			page.locator(".workspace-app__terminal .xterm-helper-textarea"),
 		).toBeFocused();
 	});
 });

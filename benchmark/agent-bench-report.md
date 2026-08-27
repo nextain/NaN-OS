@@ -1,0 +1,60 @@
+# 에이전트 벤치 결과
+
+생성 시각: 2026-08-27T05:59:12.593Z (53a2eff2) 입력지문 ef9b52a34b8f7194
+
+시나리오 35개 중 34개 수용 (97%).
+중앙 지연 2774ms · 꼬리 지연(95분위) 42686ms · 사람 개입 0회.
+
+## 수용된 시나리오
+
+- UC-WORKSPACE-CONTEXT-DISCOVER
+- UC-WORKSPACE-CONTEXT-ENTER-PROJECT
+- UC-WORKSPACE-CONTEXT-SWITCH-PROJECT
+- UC-WORKSPACE-CONTEXT-BROKEN-ENTRYPOINT
+- UC-HERDR-CONTROL-OBSERVE
+- UC-HERDR-CONTROL-MUTATE
+- UC-HERDR-CONTROL-STALE-REVISION
+- UC-HERDR-CONTROL-RECONNECT
+- UC-ENV-TOOL-BROWSE
+- UC-ENV-TOOL-TERMINAL-EXEC
+- UC-ENV-TOOL-CANCEL
+- UC-ENV-TOOL-BOUNDARY-DENY
+- UC-ORCHESTRATION-CLASSIFY
+- UC-ORCHESTRATION-ISSUE-LEAD
+- UC-ORCHESTRATION-WORKER-REPLACE
+- UC-ORCHESTRATION-RESTART-RESUME
+- UC-CHANNEL-SESSION-HANDOFF
+- UC-CHANNEL-SESSION-DUPLICATE-DELIVERY
+- UC-CHANNEL-SESSION-RECONNECT
+- UC-CHANNEL-SESSION-DISCLOSURE-DENY
+- UC-AGENT-BENCH-RUN
+- UC-AGENT-BENCH-FALSE-COMPLETION
+- UC-AGENT-BENCH-REPORT
+- UC-ENV-SURFACE-OBSERVE
+- UC-ENV-SURFACE-ACT
+- UC-ENV-SURFACE-DENY
+- UC-ENV-SURFACE-DATA
+- UC-ENV-DISPATCH-STRUCTURED
+- UC-ENV-DISPATCH-TERMINAL
+- UC-ENV-DISPATCH-REFUSE
+- UC-WIRE-UNION-DRIFT
+- UC-ENV-LIVE-OBSERVE
+- UC-ENV-LIVE-ACT
+- UC-ENV-STICKY
+
+## 이 보고서가 말하지 않는 것
+
+수용(accepted)은 "선언한 시나리오가 요구한 등급의 증거를 실제로 모았다"는 뜻이다.
+다음은 이 수치가 보장하지 않는다.
+
+- 요구사항 문서의 모든 FR 이 어떤 테스트 이름에도 달려 있지는 않다. 이름이 달린 것은
+  실제로 돌았는지 확인하지만, 아예 이름이 없는 FR 은 추적 자체가 없다.
+- 시나리오와 요구 등급을 정한 것은 작성자다. 등급이 적절한지는 이 수치가 답하지 않는다.
+- 실환경 증거는 그 실행이 무엇을 만졌는지 남긴 증명서로 판정한다. 증명서가 사실인지는
+  그 테스트가 정직한지에 달려 있다.
+
+## 아직 증명되지 않은 시나리오
+
+| 시나리오 | 왜 | 다음 할 일 |
+|---|---|---|
+| UC-ORCHESTRATION-CODING-PROVIDER | 추적 기록의 여섯 축 중 빈 것이 있다 / 요구사항 문서가 아직 완료라고 말하지 않는다 | 확인 수단이 실패했거나 아직 없다 |

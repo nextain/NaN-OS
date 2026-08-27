@@ -83,127 +83,127 @@ class MockBridge implements NaiaContextBridge {
 	}
 }
 
-// ─── Tests: Panel Registry CRUD ──────────────────────────────────────────────
+// ─── Tests: App Registry CRUD ──────────────────────────────────────────────
 
-describe("Panel Registry", () => {
-	let originalPanels: ReturnType<typeof appRegistry.list>;
+describe("App Registry", () => {
+	let originalApps: ReturnType<typeof appRegistry.list>;
 
 	beforeEach(() => {
-		// Snapshot current panels to restore later
-		originalPanels = appRegistry.list();
+		// Snapshot current apps to restore later
+		originalApps = appRegistry.list();
 	});
 
 	afterEach(() => {
 		// Restore registry state
 		for (const p of appRegistry.list()) {
-			if (!originalPanels.find((o) => o.id === p.id)) {
+			if (!originalApps.find((o) => o.id === p.id)) {
 				appRegistry.unregister(p.id);
 			}
 		}
 	});
 
-	it("registers a panel and lists it", () => {
+	it("registers a app and lists it", () => {
 		const FakeCenterArea = () => <div />;
 		appRegistry.register({
-			id: "test-panel",
-			name: "Test Panel",
+			id: "test-app",
+			name: "Test App",
 			center: FakeCenterArea,
 		});
 
-		const found = appRegistry.list().find((p) => p.id === "test-panel");
+		const found = appRegistry.list().find((p) => p.id === "test-app");
 		expect(found).toBeDefined();
-		expect(found?.name).toBe("Test Panel");
+		expect(found?.name).toBe("Test App");
 	});
 
-	it("unregisters a panel and removes it from list", () => {
+	it("unregisters a app and removes it from list", () => {
 		const FakeCenterArea = () => <div />;
 		appRegistry.register({
-			id: "test-panel-2",
-			name: "Test Panel 2",
+			id: "test-app-2",
+			name: "Test App 2",
 			center: FakeCenterArea,
 		});
 
-		appRegistry.unregister("test-panel-2");
-		const found = appRegistry.list().find((p) => p.id === "test-panel-2");
+		appRegistry.unregister("test-app-2");
+		const found = appRegistry.list().find((p) => p.id === "test-app-2");
 		expect(found).toBeUndefined();
 	});
 
-	it("builtIn flag is preserved on registered panel", () => {
+	it("builtIn flag is preserved on registered app", () => {
 		const FakeCenterArea = () => <div />;
 		appRegistry.register({
-			id: "builtin-panel",
+			id: "builtin-app",
 			name: "Built-in",
 			builtIn: true,
 			center: FakeCenterArea,
 		});
 
-		const found = appRegistry.list().find((p) => p.id === "builtin-panel");
+		const found = appRegistry.list().find((p) => p.id === "builtin-app");
 		expect(found?.builtIn).toBe(true);
-		appRegistry.unregister("builtin-panel");
+		appRegistry.unregister("builtin-app");
 	});
 
-	it("non-builtIn panel has no builtIn flag", () => {
+	it("non-builtIn app has no builtIn flag", () => {
 		const FakeCenterArea = () => <div />;
 		appRegistry.register({
-			id: "installed-panel",
+			id: "installed-app",
 			name: "Installed",
 			center: FakeCenterArea,
 		});
 
-		const found = appRegistry.list().find((p) => p.id === "installed-panel");
+		const found = appRegistry.list().find((p) => p.id === "installed-app");
 		expect(found?.builtIn).toBeFalsy();
-		appRegistry.unregister("installed-panel");
+		appRegistry.unregister("installed-app");
 	});
 });
 
-// ─── Tests: Panel Registry API (updateApi / getApi) ──────────────────────────
+// ─── Tests: App Registry API (updateApi / getApi) ──────────────────────────
 
-describe("Panel Registry — API", () => {
+describe("App Registry — API", () => {
 	const FakeCenterArea = () => <div />;
 
 	beforeEach(() => {
 		appRegistry.register({
-			id: "api-test-panel",
+			id: "api-test-app",
 			name: "API Test",
 			center: FakeCenterArea,
 		});
 	});
 
 	afterEach(() => {
-		appRegistry.unregister("api-test-panel");
+		appRegistry.unregister("api-test-app");
 	});
 
 	it("getApi returns undefined before updateApi is called", () => {
-		expect(appRegistry.getApi("api-test-panel")).toBeUndefined();
+		expect(appRegistry.getApi("api-test-app")).toBeUndefined();
 	});
 
 	it("updateApi + getApi round-trip returns the registered api object", () => {
 		const api = { doSomething: () => "result" };
-		appRegistry.updateApi("api-test-panel", api);
-		expect(appRegistry.getApi("api-test-panel")).toBe(api);
+		appRegistry.updateApi("api-test-app", api);
+		expect(appRegistry.getApi("api-test-app")).toBe(api);
 	});
 
 	it("updateApi(id, undefined) clears the api — getApi returns undefined", () => {
-		appRegistry.updateApi("api-test-panel", { fn: () => {} });
-		appRegistry.updateApi("api-test-panel", undefined);
-		expect(appRegistry.getApi("api-test-panel")).toBeUndefined();
+		appRegistry.updateApi("api-test-app", { fn: () => {} });
+		appRegistry.updateApi("api-test-app", undefined);
+		expect(appRegistry.getApi("api-test-app")).toBeUndefined();
 	});
 
-	it("getApi for unregistered panel returns undefined gracefully", () => {
-		expect(appRegistry.getApi("nonexistent-panel")).toBeUndefined();
+	it("getApi for unregistered app returns undefined gracefully", () => {
+		expect(appRegistry.getApi("nonexistent-app")).toBeUndefined();
 	});
 
-	it("updateApi for unregistered panel is a silent no-op", () => {
+	it("updateApi for unregistered app is a silent no-op", () => {
 		// Should not throw
 		expect(() =>
-			appRegistry.updateApi("nonexistent-panel", { fn: () => {} }),
+			appRegistry.updateApi("nonexistent-app", { fn: () => {} }),
 		).not.toThrow();
 	});
 });
 
-// ─── Tests: SampleNote Panel Tools ───────────────────────────────────────────
+// ─── Tests: SampleNote App Tools ───────────────────────────────────────────
 
-describe("SampleNote Panel — tool interaction", () => {
+describe("SampleNote App — tool interaction", () => {
 	afterEach(() => {
 		cleanup();
 		vi.clearAllMocks();

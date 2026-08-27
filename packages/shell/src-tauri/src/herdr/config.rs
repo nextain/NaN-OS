@@ -156,18 +156,18 @@ pub(super) fn write_embedded_herdr_config(app: &AppHandle) -> Result<std::path::
 }
 
 /// Set the embedded Herdr theme to match the shell's light/dark selection, kept
-/// to Herdr's documented-safe custom tokens (name, panel_bg, accent). Dark =
+/// to Herdr's documented-safe custom tokens (name, app_bg, accent). Dark =
 /// the shell midnight palette; light = a readable light base (catppuccin-latte)
 /// with the shell espresso palette — the light variant is deliberately a
 /// well-formed readable theme, not a washed-out default.
 fn apply_herdr_theme(config: &mut String, dark: bool) {
-    let (name, panel_bg, accent) = if dark {
+    let (name, app_bg, accent) = if dark {
         ("\"one-dark\"", "\"#202124\"", "\"#8ab4f8\"")
     } else {
         ("\"catppuccin-latte\"", "\"#f8fafc\"", "\"#2563eb\"")
     };
     replace_or_insert_setting(config, "[theme]", "name", name);
-    replace_or_insert_setting(config, "[theme.custom]", "panel_bg", panel_bg);
+    replace_or_insert_setting(config, "[theme.custom]", "app_bg", app_bg);
     replace_or_insert_setting(config, "[theme.custom]", "accent", accent);
 }
 

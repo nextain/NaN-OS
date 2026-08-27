@@ -100,7 +100,7 @@ export interface ChatMessage {
 /**
  * S4 — 환경고유 컨텍스트 세그먼트(셸 → 코어). 코어(naia-agent)가 persona+workspace 뒤에 머지.
  * 두벌 제거: persona/locale/honorific/speechStyle/userName 은 코어가 config.json 에서 스스로 조립하므로 셸이 안 보낸다.
- * 셸 고유 = 아바타 감정 태그(avatarEmotion, 아바타 전용) + 패널 컨텍스트(panel, 런타임 UI) +
+ * 셸 고유 = 아바타 감정 태그(avatarEmotion, 아바타 전용) + 앱 컨텍스트(app, 런타임 UI) +
  * 응답 스타일 힌트(responseStyle, 음성 파이프라인=brief)뿐. 폐쇄 union(코어가 화이트리스트).
  * ⚠️ 음성(Live)·discord 경로는 코어를 안 거치므로 buildSystemPrompt 를 그대로 쓴다 — 이 세그먼트는 gRPC 채팅 경로 전용.
  * ⚠️ responseStyle: 음성 STT→채팅 파이프라인(코어 경유)이 raw systemPrompt(brevity)로 persona 를 덮던 회귀를 닫는다.
@@ -109,7 +109,23 @@ export interface ChatMessage {
 export type EnvironmentSegment =
 	| { kind: "avatarEmotion" }
 	| { kind: "app"; entries: { type: string; data: unknown }[] }
-	| { kind: "responseStyle"; style: "brief" | "normal" };
+	| { kind: "responseStyle"; style: "brief" | "normal" }
+	/**
+	 * #502 — 사용자의 작업 표면 관측. 손잡이는 불투명하고 pane 어휘는 올라가지 않는다.
+	 * ⚠️ 이 union 은 코어 `src/main/domain/chat.ts` 의 세 번째 사본이다.
+	 *    갈라지면 `src/test/wire-union-drift.contract.test.ts` 가 깨진다 (FR-ENV-LIVE.6).
+	 */
+	| {
+			kind: "environmentSurfaces";
+			// readonly — 코어가 내는 값을 그대로 실어 보낸다(복사하지 않는다).
+			surfaces: readonly {
+				readonly ref: string;
+				readonly label: string;
+				readonly activity: string;
+				readonly focused: boolean;
+			}[];
+			omitted: number;
+	  };
 
 export interface AgentRequest {
 	type: "chat_request";
@@ -202,8 +218,8 @@ export type AgentResponseChunk =
 			timestamp?: string;
 	  }
 	| {
-			/** Agent → Shell: LLM called a panel tool. Shell must execute and reply with panel_tool_result. */
-			type: "panel_tool_call";
+			/** Agent → Shell: LLM called a app tool. Shell must execute and reply with app_tool_result. */
+			type: "app_tool_call";
 			requestId: string;
 			toolCallId: string;
 			toolName: string;
@@ -211,8 +227,8 @@ export type AgentResponseChunk =
 			activityId?: string;
 	  }
 	| {
-			/** Agent → Shell: panel management action (switch, reload). */
-			type: "panel_control";
+			/** Agent → Shell: app management action (switch, reload). */
+			type: "app_control";
 			requestId: string;
 			action: "switch" | "reload";
 			appId?: string;

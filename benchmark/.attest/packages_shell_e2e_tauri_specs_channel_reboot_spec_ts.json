@@ -1,0 +1,21 @@
+{
+  "spec": "packages/shell/e2e-tauri/specs/channel-reboot.spec.ts",
+  "kinds": [
+    "native"
+  ],
+  "cases": [
+    "모든 탐침이 응답했다 — 빈 결과로 공허하게 통과하지 않는다",
+    "재부팅 뒤에도 이어받을 참조가 실제 디스크에 남는다 (UC-CHANNEL-SESSION-RECONNECT)",
+    "참조는 가리키는 것만 담는다 — 작업자 실행 상태를 복사하지 않는다",
+    "다시 붙었다고 해서 멈췄다거나 끝났다고 말할 수 있는 것은 아니다 (UC-CHANNEL-SESSION-RECONNECT)",
+    "전달 이력은 참조와 별개로 남는다 — 같은 메시지를 두 번 처리하지 않기 위해",
+    "한 이슈에 대화 정체성이 하나만 남는다 (UC-CHANNEL-SESSION-HANDOFF)",
+    "처리 이력이 재부팅을 넘어 남는다 — 중복 전달을 알아보기 위해 (UC-CHANNEL-SESSION-DUPLICATE-DELIVERY)",
+    "워크스페이스 기밀이 채널로 나가는 자리에 적히지 않는다 (UC-CHANNEL-SESSION-DISCLOSURE-DENY)"
+  ],
+  "touched": [
+    "packages/shell/e2e-tauri/specs/channel-reboot.spec.ts",
+    "pid:3302425"
+  ],
+  "at": 1787810737791
+}

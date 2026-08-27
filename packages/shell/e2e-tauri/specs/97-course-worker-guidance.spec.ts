@@ -12,15 +12,15 @@ async function workspaceLabel(): Promise<string> {
 
 describe("Jeonju course worker guidance through the real Tauri Shell", () => {
 	it("shows an actionable course target state instead of implementation-oriented worker controls", async () => {
-		const workspace = await $("button[data-panel-id='workspace']");
+		const workspace = await $("button[data-app-id='workspace']");
 		await workspace.waitForClickable({ timeout: 30_000 });
 		await workspace.click();
 
 		const toggle = await $("[data-testid='coding-workers-toggle']");
 		await toggle.waitForClickable({ timeout: 30_000 });
 		await toggle.click();
-		const panel = await $("[data-testid='coding-workers']");
-		await panel.waitForDisplayed({ timeout: 30_000 });
+		const app = await $("[data-testid='coding-workers']");
+		await app.waitForDisplayed({ timeout: 30_000 });
 		const controlRoot = await $("[data-testid='coding-worker-control-root']");
 		expect(await controlRoot.getText()).toMatch(/ADK control root|제어 루트/);
 		expect(await controlRoot.getText()).not.toMatch(

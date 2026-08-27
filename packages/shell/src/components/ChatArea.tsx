@@ -17,7 +17,7 @@ import {
 	startListening as sttStart,
 	stopListening as sttStop,
 } from "tauri-plugin-stt-api";
-import { activeBridge, getBridgeForPanel } from "../lib/active-bridge";
+import { activeBridge, getBridgeForApp } from "../lib/active-bridge";
 import { MarkdownCodeBlock } from "./MarkdownCodeBlock";
 import {
 	formatAiInterferencePrompt,
@@ -35,17 +35,23 @@ import {
 	isNewCore,
 	sendApprovalResponse,
 	sendChatMessage,
-	sendPanelSkills,
-	sendPanelToolResult,
+	sendAppSkills,
+	sendAppToolResult,
 	yieldSpeechActivity,
 	type SpeechActivityResume,
 } from "../lib/chat-service";
 import {
-	BGM_PANEL_ID,
+	BGM_APP_ID,
 	SKILL_YOUTUBE_BGM,
 	executeBgmSkill,
 	shouldActivateRadioDj,
 } from "../lib/bgm-skill";
+import {
+	SKILL_ENVIRONMENT,
+	executeEnvironmentSkill,
+	liveEnvironmentDeps,
+	environmentSession,
+} from "../lib/environment-skill";
 import {
 	activateMicUnlessSpeechActivityOwnsVoice,
 	canSpeakProactiveText,
@@ -395,7 +401,7 @@ function resolveTtsVoiceId(config: AppConfig): string | undefined {
 
 /** Build MemoryContext for system prompt injection.
  *  Note: User facts are now handled by Agent MemorySystem (sessionRecall).
- *  Shell only provides persona/locale/panel context.
+ *  Shell only provides persona/locale/app context.
  *
  *  S4: this is now used ONLY by the **voice (Live) and Discord** paths, which do
  *  NOT route through the naia-agent core (Gemini Live / OpenAI Realtime / naia-omni
@@ -415,13 +421,13 @@ async function buildMemoryContext(): Promise<MemoryContext> {
 		ctx.discordDefaultUserId = cfg?.discordDefaultUserId;
 		ctx.discordDmChannelId = cfg?.discordDmChannelId;
 
-		// Active panel context + persistent contexts (bgm favorites/current track).
-		// Persistent contexts survive panel switches so background music state is
+		// Active app context + persistent contexts (bgm favorites/current track).
+		// Persistent contexts survive app switches so background music state is
 		// always available — fixes the AI hallucinating favorites when another
-		// panel was active.
-		const panelCtxList = selectPromptAppContexts(useAppStore.getState());
-		if (panelCtxList.length > 0) {
-			ctx.panelContexts = panelCtxList;
+		// app was active.
+		const appCtxList = selectPromptAppContexts(useAppStore.getState());
+		if (appCtxList.length > 0) {
+			ctx.appContexts = appCtxList;
 		}
 	} catch (err) {
 		Logger.warn("ChatArea", "Failed to build memory context", {
@@ -439,7 +445,7 @@ async function buildMemoryContext(): Promise<MemoryContext> {
  *   - `avatarEmotion`: the desktop shell always renders an avatar, so the core
  *     should emit its standard emotion-tag instructions (the wording lives in the
  *     core now; the shell only signals the capability).
- *   - `panel`: live UI panel context (bgm favorites, browser url, …) as isolated
+ *   - `app`: live UI app context (bgm favorites, browser url, …) as isolated
  *     reference data.
  *   - `responseStyle`: voice-pipeline turns ask for brief spoken answers. The core
  *     owns the brevity wording and appends it AFTER persona, so voice replies stay
@@ -452,14 +458,24 @@ function buildEnvironmentSegments(
 	responseStyle: "brief" | "normal" = "normal",
 ): EnvironmentSegment[] {
 	const segs: EnvironmentSegment[] = [{ kind: "avatarEmotion" }];
-	if (memoryCtx.panelContexts?.length) {
+	if (memoryCtx.appContexts?.length) {
 		segs.push({
 			kind: "app",
-			entries: memoryCtx.panelContexts.map((pc) => ({
+			entries: memoryCtx.appContexts.map((pc) => ({
 				type: pc.type,
 				data: pc.data,
 			})),
 		});
+	}
+	// #502 실배선 (FR-ENV-LIVE.1·2, FR-ENV-ATTENTION.1~4): 지금 무엇이 돌고 있는지 나이아가
+	// 스스로 알게 한다. 도구를 부르라고 사용자가 말할 필요가 없다. 표면이 없으면 세그먼트를
+	// 만들지 않는다 — 빈 목록을 올려 "아무것도 없다"고 단언하지 않는다.
+	//
+	// 다만 목록 전체를 늘 싣지는 않는다. 기본(auto)에서는 개수만 실리고, 나이아가 watch 로
+	// 지켜보기로 정한 동안에만 목록이 붙는다. 사용자가 config 로 off/always 를 정하면 그것이 이긴다.
+	const surfaces = environmentSession.segment(loadConfig()?.environmentAwareness ?? "auto");
+	if (surfaces) {
+		segs.push(surfaces);
 	}
 	// 음성 파이프라인(STT→채팅→TTS)은 brief — 코어가 간결성 지시를 persona 뒤에 append(persona 안 덮음).
 	// normal(텍스트 채팅)은 무영향(코어가 블록 미생성).
@@ -662,9 +678,9 @@ export function ChatArea({
 	const acceptSpeechActivitiesRef = useRef(true);
 	const queuedSendTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 	const voiceSessionRef = useRef<VoiceSession | null>(null);
-	// #313 L3 — mid-session panel context bridge handle (detached in every
+	// #313 L3 — mid-session app context bridge handle (detached in every
 	// voice cleanup path).
-	const panelContextBridgeRef = useRef<AppContextBridge | null>(null);
+	const appContextBridgeRef = useRef<AppContextBridge | null>(null);
 	const micStreamRef = useRef<MicStream | null>(null);
 	const audioPlayerRef = useRef<AudioPlayer | null>(null);
 	const voiceStartRef = useRef<{
@@ -1367,7 +1383,7 @@ export function ChatArea({
 			}
 			if (typeof chunk.activityId !== "string") return;
 			if (
-				!["panel_tool_call", "text", "finish", "error"].includes(
+				!["app_tool_call", "text", "finish", "error"].includes(
 					String(chunk.type),
 				)
 			) {
@@ -1415,12 +1431,12 @@ export function ChatArea({
 			}
 
 			if (
-				chunk.type === "panel_tool_call" &&
+				chunk.type === "app_tool_call" &&
 				typeof chunk.requestId === "string" &&
 				typeof chunk.toolCallId === "string" &&
 				typeof chunk.toolName === "string"
 			) {
-				dispatchPanelToolCall({
+				dispatchAppToolCall({
 					requestId: chunk.requestId,
 					toolCallId: chunk.toolCallId,
 					toolName: chunk.toolName,
@@ -1739,7 +1755,7 @@ export function ChatArea({
 			// Startup registration can race the agent process. Refresh the
 			// idempotent descriptor immediately before every turn so semantic
 			// requests such as Radio DJ cannot degrade into text-only claims.
-			const bgmSkillReady = await sendPanelSkills(BGM_PANEL_ID, [
+			const bgmSkillReady = await sendAppSkills(BGM_APP_ID, [
 				SKILL_YOUTUBE_BGM,
 			]);
 			Logger.info("ChatArea", "turn bgm skill registration", {
@@ -1953,11 +1969,11 @@ export function ChatArea({
 		});
 	}
 
-	// Shared panel-tool dispatch — used by both the streaming-chat handleChunk
-	// path AND the voice directToolCall path (so voice can run panel tools like
-	// skill_browser_*). Auto-switches to the owning panel first (tool-level), so
-	// a tool targeting a non-active panel brings that panel forward.
-	function dispatchPanelToolCall(req: {
+	// Shared app-tool dispatch — used by both the streaming-chat handleChunk
+	// path AND the voice directToolCall path (so voice can run app tools like
+	// skill_browser_*). Auto-switches to the owning app first (tool-level), so
+	// a tool targeting a non-active app brings that app forward.
+	function dispatchAppToolCall(req: {
 		requestId: string;
 		toolCallId: string;
 		toolName: string;
@@ -1967,6 +1983,42 @@ export function ChatArea({
 		// UC8 BGM (FR-BGM.1): BgmPlayer 는 위젯(앱 아님)이라 appRegistry 소유자
 		// 탐색으로 못 찾는다 — 전용 분기. executeBgmSkill 이 위젯이 이미 듣는
 		// bgm_youtube_* 이벤트를 발사(위젯 무변경). 음성 경로도 이 dispatch 공유.
+		// #502 실배선 (FR-ENV-LIVE.3~5): 작업 표면은 화면 앱이 아니라 상시 환경이라
+		// appRegistry 소유자 탐색으로 못 찾는다 — 전용 분기.
+		// 터미널 입력 권한은 사용자가 켠 경우에만 참이다(기본 꺼짐, FR-ENV-LIVE.4).
+		if (req.toolName === SKILL_ENVIRONMENT.name) {
+			executeEnvironmentSkill(
+				req.args,
+				liveEnvironmentDeps(
+					loadConfig()?.environmentTerminalInput === true,
+					loadConfig()?.environmentAwareness ?? "auto",
+				),
+			)
+				.then((result) => {
+					Logger.info("ChatArea", "environment skill result", { result });
+					return sendAppToolResult(
+						req.requestId,
+						req.toolCallId,
+						result,
+						// 거절·오류는 성공으로 바꾸지 않는다 — 뇌가 실패를 성공으로 말하는 경로를 막는다.
+						!result.startsWith("거절:") && !result.startsWith("환경 오류:"),
+						req.activityId,
+					);
+				})
+				.catch((err) => {
+					Logger.warn("ChatArea", "environment skill error", {
+						error: String(err),
+					});
+					return sendAppToolResult(
+						req.requestId,
+						req.toolCallId,
+						String(err),
+						false,
+						req.activityId,
+					);
+				});
+			return;
+		}
 		if (req.toolName === SKILL_YOUTUBE_BGM.name) {
 			// Activity-owned playback (for example Radio DJ change_vibe) replaces
 			// the current track immediately. Normal chat requests still enqueue.
@@ -1980,7 +2032,7 @@ export function ChatArea({
 				)
 				.then((result) => {
 					Logger.info("ChatArea", "bgm skill result", { result });
-					return sendPanelToolResult(
+					return sendAppToolResult(
 						req.requestId,
 						req.toolCallId,
 						result,
@@ -1990,7 +2042,7 @@ export function ChatArea({
 				})
 				.catch((err) => {
 					Logger.warn("ChatArea", "bgm skill error", { error: String(err) });
-					return sendPanelToolResult(
+					return sendAppToolResult(
 						req.requestId,
 						req.toolCallId,
 						String(err),
@@ -2000,31 +2052,31 @@ export function ChatArea({
 				});
 			return;
 		}
-		const ownerPanel = appRegistry
+		const ownerApp = appRegistry
 			.list()
 			.find((p) => p.tools?.some((t) => t.name === req.toolName));
-		// Tool-level auto panel switch (user request): if the tool belongs to a
-		// panel that isn't currently active, bring it forward before running.
-		if (ownerPanel && useAppStore.getState().activeApp !== ownerPanel.id) {
-			useAppStore.getState().setActiveApp(ownerPanel.id);
-			Logger.info("ChatArea", "panel auto-switch for tool", {
+		// Tool-level auto app switch (user request): if the tool belongs to a
+		// app that isn't currently active, bring it forward before running.
+		if (ownerApp && useAppStore.getState().activeApp !== ownerApp.id) {
+			useAppStore.getState().setActiveApp(ownerApp.id);
+			Logger.info("ChatArea", "app auto-switch for tool", {
 				tool: req.toolName,
-				app: ownerPanel.id,
+				app: ownerApp.id,
 			});
 		}
-		const bridge = ownerPanel ? getBridgeForPanel(ownerPanel.id) : activeBridge;
-		Logger.info("ChatArea", "panel_tool_call dispatch", {
+		const bridge = ownerApp ? getBridgeForApp(ownerApp.id) : activeBridge;
+		Logger.info("ChatArea", "app_tool_call dispatch", {
 			tool: req.toolName,
-			owner: ownerPanel?.id ?? "(none→activeBridge)",
+			owner: ownerApp?.id ?? "(none→activeBridge)",
 		});
 		bridge
 			.callTool(req.toolName, req.args)
 			.then((result) => {
-				Logger.info("ChatArea", "panel_tool_call result", {
+				Logger.info("ChatArea", "app_tool_call result", {
 					tool: req.toolName,
 					result: result.slice(0, 120),
 				});
-				return sendPanelToolResult(
+				return sendAppToolResult(
 					req.requestId,
 					req.toolCallId,
 					result,
@@ -2033,11 +2085,11 @@ export function ChatArea({
 				);
 			})
 			.catch((err) => {
-				Logger.warn("ChatArea", "panel_tool_call error", {
+				Logger.warn("ChatArea", "app_tool_call error", {
 					tool: req.toolName,
 					error: String(err),
 				});
-				return sendPanelToolResult(
+				return sendAppToolResult(
 					req.requestId,
 					req.toolCallId,
 					String(err),
@@ -2047,7 +2099,7 @@ export function ChatArea({
 			});
 	}
 
-	function dispatchPanelControl(req: { action: string; appId?: string }) {
+	function dispatchAppControl(req: { action: string; appId?: string }) {
 		const { setActiveApp } = useAppStore.getState();
 		if (req.action === "switch" && req.appId) {
 			setActiveApp(req.appId);
@@ -2165,8 +2217,8 @@ export function ChatArea({
 					});
 				}
 				break;
-			case "panel_tool_call": {
-				dispatchPanelToolCall({
+			case "app_tool_call": {
+				dispatchAppToolCall({
 					requestId: chunk.requestId,
 					toolCallId: chunk.toolCallId,
 					toolName: chunk.toolName,
@@ -2175,8 +2227,8 @@ export function ChatArea({
 				});
 				break;
 			}
-			case "panel_control": {
-				dispatchPanelControl({
+			case "app_control": {
+				dispatchAppControl({
 					action: chunk.action,
 					appId: chunk.appId,
 				});
@@ -2323,8 +2375,8 @@ export function ChatArea({
 				clearTimeout(queuedSendTimerRef.current);
 				queuedSendTimerRef.current = null;
 			}
-			panelContextBridgeRef.current?.detach();
-			panelContextBridgeRef.current = null;
+			appContextBridgeRef.current?.detach();
+			appContextBridgeRef.current = null;
 			voiceSessionRef.current?.disconnect();
 			micStreamRef.current?.stop();
 			audioPlayerRef.current?.destroy();
@@ -2456,8 +2508,8 @@ export function ChatArea({
 				cleanupPipeline();
 			} else {
 				showVoiceCostSummary();
-				panelContextBridgeRef.current?.detach();
-				panelContextBridgeRef.current = null;
+				appContextBridgeRef.current?.detach();
+				appContextBridgeRef.current = null;
 				voiceSessionRef.current?.disconnect();
 				micStreamRef.current?.stop();
 				audioPlayerRef.current?.destroy();
@@ -2946,12 +2998,12 @@ export function ChatArea({
 			const memoryCtx = await buildMemoryContext();
 			const systemPrompt = buildSystemPrompt(config.persona, memoryCtx);
 
-			// Collect active panel tools to pass to the voice session
+			// Collect active app tools to pass to the voice session
 			const activeAppId = useAppStore.getState().activeApp;
-			const panelTools = activeAppId
+			const appTools = activeAppId
 				? (appRegistry.get(activeAppId)?.tools ?? [])
 				: [];
-			const panelToolDefs = panelTools.map((tool) => ({
+			const appToolDefs = appTools.map((tool) => ({
 				name: tool.name,
 				description: tool.description,
 				parameters: tool.parameters ?? {
@@ -2971,9 +3023,9 @@ export function ChatArea({
 			}[] = [];
 			try {
 				const allSkills = await fetchAgentSkills();
-				// Filter: remove disabled, skip skill_panel (panel management, not useful in voice)
+				// Filter: remove disabled, skip skill_app (app management, not useful in voice)
 				agentSkills = allSkills.filter(
-					(s) => !disabledSkills.has(s.name) && s.name !== "skill_panel",
+					(s) => !disabledSkills.has(s.name) && s.name !== "skill_app",
 				);
 			} catch (err) {
 				Logger.warn("ChatArea", "Failed to fetch agent skills for voice", {
@@ -2981,11 +3033,11 @@ export function ChatArea({
 				});
 			}
 
-			// Merge panel tools + agent skills (panel tools take priority on name collision)
-			const panelNames = new Set(panelToolDefs.map((t) => t.name));
+			// Merge app tools + agent skills (app tools take priority on name collision)
+			const appNames = new Set(appToolDefs.map((t) => t.name));
 			const voiceTools = [
-				...panelToolDefs,
-				...agentSkills.filter((s) => !panelNames.has(s.name)),
+				...appToolDefs,
+				...agentSkills.filter((s) => !appNames.has(s.name)),
 			];
 
 			// Append tool usage instructions to system prompt so the model
@@ -3024,12 +3076,12 @@ export function ChatArea({
 				setVoiceStatus(status);
 			};
 
-			// #313 L3 — bridge mid-session panel context changes into the open
-			// Live WS. Subscribes to the panel store, debounces 500ms (rapid
+			// #313 L3 — bridge mid-session app context changes into the open
+			// Live WS. Subscribes to the app store, debounces 500ms (rapid
 			// URL hops), and forwards to `session.sendContextUpdate()` — a silent
 			// no-op for providers without a mid-session inject surface
 			// (vllm-omni, naia-omni). Detached in every cleanup path below.
-			panelContextBridgeRef.current = attachAppContextBridge(session, {
+			appContextBridgeRef.current = attachAppContextBridge(session, {
 				subscribe: (listener) => useAppStore.subscribe(listener),
 				getContext: () => useAppStore.getState().activeAppContext,
 			});
@@ -3130,11 +3182,11 @@ export function ChatArea({
 						onApprovalRequest: (req) => {
 							sendApprovalResponse(req.requestId, req.toolCallId, "once");
 						},
-						// Panel-owned tools (skill_browser_*, skill_panel switch)
+						// App-owned tools (skill_browser_*, skill_app switch)
 						// only ran in streaming chat before; route them here too so
-						// voice can drive panels. Auto-switches to the owner panel.
-						onPanelToolCall: (req) => dispatchPanelToolCall(req),
-						onPanelControl: (req) => dispatchPanelControl(req),
+						// voice can drive apps. Auto-switches to the owner app.
+						onAppToolCall: (req) => dispatchAppToolCall(req),
+						onAppControl: (req) => dispatchAppControl(req),
 					});
 					session.sendToolResponse(callId, result.output);
 				} catch (err) {
@@ -3157,8 +3209,8 @@ export function ChatArea({
 				// a state thrash. showVoiceCostSummary is idempotent, so a
 				// user-initiated stop that also runs the toggle path stays safe.
 				showVoiceCostSummary();
-				panelContextBridgeRef.current?.detach();
-				panelContextBridgeRef.current = null;
+				appContextBridgeRef.current?.detach();
+				appContextBridgeRef.current = null;
 				micStreamRef.current?.stop();
 				audioPlayerRef.current?.destroy();
 				voiceSessionRef.current = null;
@@ -3397,8 +3449,8 @@ export function ChatArea({
 			voiceCancelledRef.current = false;
 			// Detach onDisconnect before cleanup to prevent double-cleanup
 			if (voiceSessionRef.current) voiceSessionRef.current.onDisconnect = null;
-			panelContextBridgeRef.current?.detach();
-			panelContextBridgeRef.current = null;
+			appContextBridgeRef.current?.detach();
+			appContextBridgeRef.current = null;
 			voiceSessionRef.current?.disconnect();
 			micStreamRef.current?.stop();
 			audioPlayerRef.current?.destroy();
@@ -3604,7 +3656,7 @@ export function ChatArea({
 
 	return (
 		<>
-			<div className={`chat-panel chat-panel--${variant}`}>
+			<div className={`chat-app chat-app--${variant}`}>
 				{/* Header with tabs */}
 				<div className="chat-header">
 					<div className="chat-tabs">

@@ -7,7 +7,7 @@ import { clickBySelector, ensureAppReady } from "../helpers/settings.js";
  * Verifies channels UI interactions:
  * - Channel cards render (or empty/error state)
  * - Channel name, status badge
- * - Refresh click → panel stays
+ * - Refresh click → app stays
  * (Gateway dependent — graceful)
  */
 describe("61 — channels interactions", () => {
@@ -17,19 +17,19 @@ describe("61 — channels interactions", () => {
 		await ensureAppReady();
 		await clickBySelector(S.channelsTabBtn);
 		try {
-			const panel = await $(S.channelsTabPanel);
-			await panel.waitForDisplayed({ timeout: 10_000 });
+			const app = await $(S.channelsTabApp);
+			await app.waitForDisplayed({ timeout: 10_000 });
 			tabAvailable = true;
 		} catch {
 			tabAvailable = false;
 		}
 	});
 
-	it("should show channels tab panel", async () => {
+	it("should show channels tab app", async () => {
 		if (!tabAvailable) return;
 		const exists = await browser.execute(
 			(sel: string) => !!document.querySelector(sel),
-			S.channelsTabPanel,
+			S.channelsTabApp,
 		);
 		expect(exists).toBe(true);
 	});
@@ -81,7 +81,7 @@ describe("61 — channels interactions", () => {
 		expect(typeof badges).toBe("number");
 	});
 
-	it("should have refresh button that keeps panel", async () => {
+	it("should have refresh button that keeps app", async () => {
 		if (!tabAvailable) return;
 
 		const refreshExists = await browser.execute(
@@ -95,7 +95,7 @@ describe("61 — channels interactions", () => {
 
 			const stillExists = await browser.execute(
 				(sel: string) => !!document.querySelector(sel),
-				S.channelsTabPanel,
+				S.channelsTabApp,
 			);
 			expect(stillExists).toBe(true);
 		}

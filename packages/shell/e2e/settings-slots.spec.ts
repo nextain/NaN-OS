@@ -115,7 +115,7 @@ async function openSlotSettings(
 		route.fulfill({ status: 200, contentType: "application/json", body: "[]" }),
 	);
 	await page.goto("/");
-	await expect(page.locator(".chat-panel")).toBeVisible({ timeout: 15_000 });
+	await expect(page.locator(".chat-app")).toBeVisible({ timeout: 15_000 });
 	await page.getByRole("button", { name: /^(Settings|설정)$/ }).click();
 	// S-SLOT 게이트+그룹 = profile 탭(프로파일 엔트리포인트).
 	await page.locator('[data-settings-tab="profile"]').click();

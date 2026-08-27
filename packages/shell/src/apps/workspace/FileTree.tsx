@@ -445,7 +445,7 @@ export function FileTree({
 		};
 
 		// Guard: if no classified dir matches any loaded entry (path mismatch or
-		// entries not yet loaded), show a fallback instead of a blank panel.
+		// entries not yet loaded), show a fallback instead of a blank app.
 		const hasAnyMatch = Object.values(sections).some((dirs) =>
 			dirs.some((d) =>
 				entries.some((e) => normPath(d.path) === normPath(e.path)),

@@ -69,7 +69,7 @@ export interface BgmPlaybackPort {
 
 const FRESH_MS = 5_000;
 
-/** A small in-process authority shared by the panel command and iframe owner. */
+/** A small in-process authority shared by the app command and iframe owner. */
 export function createBgmPlaybackPort(
 	now: () => number = Date.now,
 ): BgmPlaybackPort {

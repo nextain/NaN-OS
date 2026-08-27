@@ -1,0 +1,25 @@
+{
+  "spec": "src/test/herdr-control-live.contract.test.ts",
+  "kinds": [
+    "native"
+  ],
+  "cases": [
+    "전용 워크스페이스를 실제로 만들었다 — 없으면 이 증거는 성립하지 않는다",
+    "자원을 타입이 선언된 값으로 읽는다 (UC-HERDR-CONTROL-OBSERVE)",
+    "화면 문자열을 긁지 않는다 — 자원은 선언된 속성만 갖는다",
+    "스냅샷에 개정이 실려 있고 단조 증가한다 (UC-HERDR-CONTROL-OBSERVE)",
+    "구조화된 요청이 실제로 실행된다 (UC-HERDR-CONTROL-MUTATE)",
+    "같은 멱등 키를 다시 보내도 두 번 실행하지 않는다 (UC-HERDR-CONTROL-MUTATE)",
+    "소유하지 않은 대상은 실제 환경에 닿지 못한다",
+    "낡은 개정으로 온 요청은 충돌로 거절된다 (UC-HERDR-CONTROL-STALE-REVISION)",
+    "셸 한 줄을 실행 파일 자리에 밀어 넣을 수 없다",
+    "재접속하면 현재 상태를 다시 확인한다 (UC-HERDR-CONTROL-RECONNECT)",
+    "이벤트 스트림을 열지 않았으므로 누락을 봤다고 말하지 않는다",
+    "합성한 전역 개정이 자원 수에 반응한다 — 죽은 상수가 아니다"
+  ],
+  "touched": [
+    "wE7",
+    "wE7:p1"
+  ],
+  "at": 1787812618400
+}

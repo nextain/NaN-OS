@@ -72,7 +72,7 @@ test("failed local-voice install surfaces a persistent, readable error (#453)", 
 	);
 
 	await page.goto("/");
-	await expect(page.locator(".chat-panel")).toBeVisible({ timeout: 15_000 });
+	await expect(page.locator(".chat-app")).toBeVisible({ timeout: 15_000 });
 	await page.getByRole("button", { name: /^(설정|Settings)$/ }).click();
 	await page.locator('[data-settings-tab="voice"]').click();
 

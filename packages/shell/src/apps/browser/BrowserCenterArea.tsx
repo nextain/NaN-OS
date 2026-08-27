@@ -14,24 +14,24 @@ import { useTabSkills } from "../../lib/tab-skills";
 import { useAppStore } from "../../stores/app";
 import { BrowserMetaArea } from "./BrowserMetaArea";
 
-// ─── Panel API ───────────────────────────────────────────────────────────────
+// ─── App API ───────────────────────────────────────────────────────────────
 
 /**
- * Programmatic API exposed by the Browser panel.
+ * Programmatic API exposed by the Browser app.
  * Access via `appRegistry.getApi<BrowserAppApi>("browser")`.
  */
 export interface BrowserAppApi {
 	/** Navigate the browser webview to a URL. */
 	navigate: (url: string) => void;
-	/** Switch the center panel to Browser. */
-	activatePanel: () => void;
+	/** Switch the center app to Browser. */
+	activateApp: () => void;
 	/** Hide the browser webview. */
 	hide: () => void;
 	/** Show the browser webview. */
 	show: () => void;
 }
 
-type PanelStatus =
+type AppStatus =
 	| "launching" // creating child webview
 	| "ready" // webview visible and running
 	| "error"; // fatal error
@@ -182,7 +182,7 @@ let _browserWvCreating = false;
 let _browserWvCreated = false;
 
 export function BrowserCenterArea({ naia }: AppCenterProps) {
-	const [status, setStatus] = useState<PanelStatus>("launching");
+	const [status, setStatus] = useState<AppStatus>("launching");
 	const [error, setError] = useState("");
 	// viewport div is always rendered so getBoundingClientRect is available
 	const viewportRef = useRef<HTMLDivElement>(null);
@@ -286,7 +286,7 @@ export function BrowserCenterArea({ naia }: AppCenterProps) {
 				return;
 			}
 
-			// Wait for layout to complete — keepAlive panels mount while hidden
+			// Wait for layout to complete — keepAlive apps mount while hidden
 			// (opacity:0), so getBoundingClientRect() may return zeros on the first
 			// paint. Two rAF calls ensure the layout pass has fully settled.
 			await new Promise<void>((resolve) =>
@@ -307,7 +307,7 @@ export function BrowserCenterArea({ naia }: AppCenterProps) {
 			});
 			_browserWvCreated = true;
 			_browserWvCreating = false;
-			// Immediately hide if browser is not the active panel on startup.
+			// Immediately hide if browser is not the active app on startup.
 			if (useAppStore.getState().activeApp !== "browser") {
 				invoke("browser_wv_hide").catch(() => {});
 			}
@@ -352,10 +352,10 @@ export function BrowserCenterArea({ naia }: AppCenterProps) {
 		return () => clearInterval(id);
 	}, [status, inputFocused]);
 
-	// ── Activate panel when login flow requests it ────────────────────────────
+	// ── Activate app when login flow requests it ────────────────────────────
 
 	useEffect(() => {
-		const unlistenPromise = listen("browser_panel_activate", () => {
+		const unlistenPromise = listen("browser_app_activate", () => {
 			useAppStore.getState().setActiveApp("browser");
 		});
 		return () => {
@@ -407,8 +407,8 @@ export function BrowserCenterArea({ naia }: AppCenterProps) {
 		};
 	}, [status, syncBrowserBounds]);
 
-	// ── Re-sync bounds on panel activation ───────────────────────────────────
-	// When the browser panel becomes active (opacity:0→1 via CSS), no resize
+	// ── Re-sync bounds on app activation ───────────────────────────────────
+	// When the browser app becomes active (opacity:0→1 via CSS), no resize
 	// event fires. Explicitly re-sync so the child WebView2 gets the correct
 	// bounds and YouTube/other sites render at the right viewport width.
 
@@ -440,7 +440,7 @@ export function BrowserCenterArea({ naia }: AppCenterProps) {
 		};
 	}, [status, syncBrowserBounds]);
 
-	// ── Visibility sync event (from panel/chat store) ─────────────────────────
+	// ── Visibility sync event (from app/chat store) ─────────────────────────
 
 	useEffect(() => {
 		if (status !== "ready") return;
@@ -461,21 +461,21 @@ export function BrowserCenterArea({ naia }: AppCenterProps) {
 			window.removeEventListener("naia-browser-visibility-sync", sync);
 	}, [initWebview, showBrowserWebview, status]);
 
-	// ── Panel API (BrowserAppApi) ───────────────────────────────────────────
+	// ── App API (BrowserAppApi) ───────────────────────────────────────────
 
 	useEffect(() => {
 		appRegistry.updateApi("browser", {
 			navigate: (url: string) => {
 				invoke("browser_wv_navigate", { url }).catch(() => {});
 			},
-			activatePanel: () => useAppStore.getState().setActiveApp("browser"),
+			activateApp: () => useAppStore.getState().setActiveApp("browser"),
 			hide: () => invoke("browser_wv_hide").catch(() => {}),
 			show: () => invoke("browser_wv_show").catch(() => {}),
 		} satisfies BrowserAppApi);
 		return () => appRegistry.updateApi("browser", undefined);
 	}, []);
 
-	// ── Tab skills (screenshot, common across all panels) ────────────────────
+	// ── Tab skills (screenshot, common across all apps) ────────────────────
 	// viewportRef covers the native WebView2 area — captures that screen region.
 	useTabSkills(viewportRef, naia);
 
@@ -817,12 +817,12 @@ return {
 	}, [bookmarksOpen, status, syncBrowserBounds]);
 
 	return (
-		<div className="browser-panel">
+		<div className="browser-app">
 			{/* Address bar — always in HTML layer, native webview sits below */}
-			<div className="browser-panel__toolbar">
+			<div className="browser-app__toolbar">
 				<button
 					type="button"
-					className="browser-panel__nav-btn"
+					className="browser-app__nav-btn"
 					title="뒤로"
 					onClick={() => invoke("browser_wv_back").catch(() => {})}
 				>
@@ -830,7 +830,7 @@ return {
 				</button>
 				<button
 					type="button"
-					className="browser-panel__nav-btn"
+					className="browser-app__nav-btn"
 					title="앞으로"
 					onClick={() => invoke("browser_wv_forward").catch(() => {})}
 				>
@@ -838,14 +838,14 @@ return {
 				</button>
 				<button
 					type="button"
-					className="browser-panel__nav-btn"
+					className="browser-app__nav-btn"
 					title="새로고침"
 					onClick={() => invoke("browser_wv_reload").catch(() => {})}
 				>
 					↻
 				</button>
 				<form
-					className="browser-panel__url-form"
+					className="browser-app__url-form"
 					onSubmit={(e) => {
 						e.preventDefault();
 						handleNavigate(inputUrl);
@@ -856,7 +856,7 @@ return {
 				>
 					<input
 						type="text"
-						className="browser-panel__url-input"
+						className="browser-app__url-input"
 						value={inputFocused ? inputUrl : currentUrl}
 						placeholder="주소 입력…"
 						onFocus={() => {
@@ -869,7 +869,7 @@ return {
 				</form>
 				<button
 					type="button"
-					className="browser-panel__nav-btn"
+					className="browser-app__nav-btn"
 					title="바로가기 추가"
 					onClick={handleAddShortcut}
 				>
@@ -877,7 +877,7 @@ return {
 				</button>
 				<button
 					type="button"
-					className="browser-panel__nav-btn"
+					className="browser-app__nav-btn"
 					title="북마크 추가"
 					onClick={handleAddBookmark}
 				>
@@ -885,7 +885,7 @@ return {
 				</button>
 				<button
 					type="button"
-					className={`browser-panel__nav-btn${bookmarksOpen ? " browser-panel__nav-btn--active" : ""}`}
+					className={`browser-app__nav-btn${bookmarksOpen ? " browser-app__nav-btn--active" : ""}`}
 					title="북마크 리스트"
 					onClick={toggleBookmarkList}
 				>
@@ -895,18 +895,18 @@ return {
 
 			{/* Overlays for non-ready states */}
 			{status === "launching" && (
-				<div className="browser-panel__overlay">
-					<span className="browser-panel__overlay-text">브라우저 시작 중…</span>
+				<div className="browser-app__overlay">
+					<span className="browser-app__overlay-text">브라우저 시작 중…</span>
 				</div>
 			)}
 			{status === "error" && (
-				<div className="browser-panel__overlay browser-panel__overlay--error">
-					<p className="browser-panel__overlay-text browser-panel__overlay-text--error">
+				<div className="browser-app__overlay browser-app__overlay--error">
+					<p className="browser-app__overlay-text browser-app__overlay-text--error">
 						{error}
 					</p>
 					<button
 						type="button"
-						className="browser-panel__install-btn"
+						className="browser-app__install-btn"
 						onClick={initWebview}
 					>
 						다시 시도
@@ -914,7 +914,7 @@ return {
 				</div>
 			)}
 
-			<div className="browser-panel__body">
+			<div className="browser-app__body">
 				{/*
 				 * Transparent placeholder div — the native child webview is
 				 * positioned over this area by Rust. Always rendered so that
@@ -922,11 +922,11 @@ return {
 				 */}
 				<div
 					ref={viewportRef}
-					className="browser-panel__viewport browser-panel__viewport--embedded"
+					className="browser-app__viewport browser-app__viewport--embedded"
 				/>
 
 				{bookmarksOpen && (
-					<div className="browser-panel__bookmark-drawer">
+					<div className="browser-app__bookmark-drawer">
 						<BrowserMetaArea
 							onNavigate={(url) => {
 								handleNavigate(url);
@@ -940,12 +940,12 @@ return {
 			{/* AI tool permission toolbar — stays in HTML layer below the webview */}
 			{status === "ready" && (
 				<div
-					className={`browser-panel__ai-toolbar${toolbarCollapsed ? " browser-panel__ai-toolbar--collapsed" : ""}`}
+					className={`browser-app__ai-toolbar${toolbarCollapsed ? " browser-app__ai-toolbar--collapsed" : ""}`}
 				>
 					{toolbarCollapsed ? (
 						<button
 							type="button"
-							className="browser-panel__ai-collapse"
+							className="browser-app__ai-collapse"
 							title="AI 도구 설정 펼치기"
 							onClick={toggleToolbar}
 						>
@@ -953,39 +953,39 @@ return {
 						</button>
 					) : (
 						<>
-							<span className="browser-panel__ai-label">AI</span>
+							<span className="browser-app__ai-label">AI</span>
 
 							<label
-								className="browser-panel__ai-toggle"
+								className="browser-app__ai-toggle"
 								title="모두 허용 / 차단"
 							>
 								<input
 									type="checkbox"
-									className="browser-panel__ai-switch"
+									className="browser-app__ai-switch"
 									checked={allEnabled}
 									ref={(el) => {
 										if (el) el.indeterminate = !allEnabled && someEnabled;
 									}}
 									onChange={(e) => toggleAll(e.target.checked)}
 								/>
-								<span className="browser-panel__ai-toggle-label">전체</span>
+								<span className="browser-app__ai-toggle-label">전체</span>
 							</label>
 
-							<span className="browser-panel__ai-sep" />
+							<span className="browser-app__ai-sep" />
 
 							{PERM_KEYS.map((key) => (
 								<label
 									key={key}
-									className="browser-panel__ai-toggle"
+									className="browser-app__ai-toggle"
 									title={PERM_TITLES[key]}
 								>
 									<input
 										type="checkbox"
-										className="browser-panel__ai-switch"
+										className="browser-app__ai-switch"
 										checked={toolPerms[key]}
 										onChange={(e) => setOne(key, e.target.checked)}
 									/>
-									<span className="browser-panel__ai-toggle-label">
+									<span className="browser-app__ai-toggle-label">
 										{PERM_LABELS[key]}
 									</span>
 								</label>
@@ -993,7 +993,7 @@ return {
 
 							<button
 								type="button"
-								className="browser-panel__ai-collapse"
+								className="browser-app__ai-collapse"
 								title="AI 도구 설정 접기"
 								onClick={toggleToolbar}
 							>

@@ -45,7 +45,7 @@ export function useHerdrWorkspaceBridge({
 				if (space) void focusWorkspace(space.workspace_id);
 			},
 			getActiveSessions: () => snapshotSessions(snapshotRef.current),
-			activatePanel: () => useAppStore.getState().setActiveApp("workspace"),
+			activateApp: () => useAppStore.getState().setActiveApp("workspace"),
 		} satisfies WorkspaceAppApi);
 		return () => appRegistry.updateApi("workspace", undefined);
 	}, [findWorkspace, focusWorkspace, openResolvedFile, snapshotRef]);

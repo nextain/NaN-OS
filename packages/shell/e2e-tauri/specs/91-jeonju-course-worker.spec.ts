@@ -34,7 +34,7 @@ function changedFiles(): string[] {
 }
 
 async function waitForCourseTerminal(cardIndex: number) {
-	// The panel polls gRPC and React replaces the card on each snapshot. Do not
+	// The app polls gRPC and React replaces the card on each snapshot. Do not
 	// retain a WebDriver element from the initial `running` render: doing so can
 	// make a completed Agent job look permanently running to this native test.
 	await browser.waitUntil(async () => {
@@ -66,9 +66,9 @@ describe("Jeonju course worker through the isolated real Tauri Shell", () => {
 	before(() => createCleanCourseRepository());
 
 	it("completes the initial build and a revision in one student Git root without escaping the two-file boundary", async () => {
-		const workspacePanel = await $("button[data-panel-id='workspace']");
-		await workspacePanel.waitForClickable({ timeout: 45_000 });
-		await workspacePanel.click();
+		const workspaceApp = await $("button[data-app-id='workspace']");
+		await workspaceApp.waitForClickable({ timeout: 45_000 });
+		await workspaceApp.click();
 		const workersToggle = await $("[data-testid='coding-workers-toggle']");
 		await workersToggle.waitForClickable({ timeout: 45_000 });
 		await workersToggle.click();

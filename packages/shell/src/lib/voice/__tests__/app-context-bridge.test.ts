@@ -1,5 +1,5 @@
 /**
- * #313 L3 — panel-context → Live-session bridge specs.
+ * #313 L3 — app-context → Live-session bridge specs.
  *
  * The bridge has 5 invariants:
  *   1. attach + change → debounced dispatch (single send within window).
@@ -155,7 +155,7 @@ describe("attachAppContextBridge (#313 L3)", () => {
 		bridge.detach();
 	});
 
-	it("does not dispatch when context becomes null (no active panel)", () => {
+	it("does not dispatch when context becomes null (no active app)", () => {
 		const session = makeSession({ withSendContextUpdate: true });
 		const { source, set } = makeSource({
 			type: "browser",

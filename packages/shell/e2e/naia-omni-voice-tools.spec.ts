@@ -16,7 +16,7 @@ import {
  *     audio_transcript.delta, response.done).
  *   - getUserMedia / AudioContext → no-op (mic-stream + audio-player mount).
  *   - invoke send_to_agent_command{tool_request} → emits an agent_response
- *     tool_result so directToolCall (ChatPanel.onToolCall) resolves.
+ *     tool_result so directToolCall (ChatApp.onToolCall) resolves.
  *
  * Flow per turn: inject function_call_arguments.done → onToolCall →
  * directToolCall → sendToolResponse (client sends function_call_output, which
@@ -196,7 +196,7 @@ test.describe("naia-omni Voice Tool E2E", () => {
 			}),
 		);
 		await page.goto("/");
-		await expect(page.locator(".chat-panel")).toBeVisible({ timeout: 10_000 });
+		await expect(page.locator(".chat-app")).toBeVisible({ timeout: 10_000 });
 	});
 
 	test("tool call runs (function_call_output sent) and reply shows in chat", async ({

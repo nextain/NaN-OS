@@ -39,6 +39,38 @@ const codingWorkerUxTranslations = {
 		"Process exited",
 	),
 	"workspace.herdrFileTree": codingWorkerText("파일 트리", "File Tree"),
+	"workspace.contextTitle": codingWorkerText(
+		"워크스페이스 컨텍스트",
+		"Workspace context",
+	),
+	"workspace.contextRefresh": codingWorkerText("다시 읽기", "Reload"),
+	"workspace.contextLoading": codingWorkerText(
+		"진입점을 읽는 중",
+		"Reading entrypoint",
+	),
+	"workspace.contextScopeRoot": codingWorkerText("루트", "Root"),
+	"workspace.contextRevision": codingWorkerText("개정", "Revision"),
+	"workspace.contextReasonMandatory": codingWorkerText("필수", "Mandatory"),
+	"workspace.contextReasonIntent": codingWorkerText("의도", "Intent"),
+	"workspace.contextDeclaredBy": codingWorkerText("선언", "Declared by"),
+	"workspace.contextEmpty": codingWorkerText(
+		"진입점이 선언한 문서가 없습니다.",
+		"The entrypoint declares no documents.",
+	),
+	"workspace.contextDropped": codingWorkerText(
+		"상한을 넘어 싣지 못한 문서",
+		"Documents left out over the limit",
+	),
+	"workspace.contextProjects": codingWorkerText("프로젝트", "Projects"),
+	"workspace.contextBackToRoot": codingWorkerText("루트로", "Back to root"),
+	"workspace.contextFailed": codingWorkerText(
+		"컨텍스트를 확정하지 못했습니다.",
+		"The context could not be resolved.",
+	),
+	"workspace.contextNoRoot": codingWorkerText(
+		"워크스페이스 루트가 아직 정해지지 않았습니다.",
+		"No workspace root has been chosen yet.",
+	),
 	"workspace.herdrNavigation": codingWorkerText(
 		"워크스페이스 탐색",
 		"Workspace navigation",
@@ -839,20 +871,20 @@ const translations = {
 		id: "Tema",
 		vi: "chủ đề",
 	},
-	"settings.panelPosition": {
+	"settings.appPosition": {
 		ko: "앱 위치",
-		en: "Panel Position",
+		en: "App Position",
 		ja: "パネル位置",
 		zh: "面板位置",
 		fr: "Position du panneau",
-		de: "Panel-Position",
+		de: "App-Position",
 		ru: "Позиция панели",
-		es: "Posición del panel",
+		es: "Posición del app",
 		ar: "موقع اللوحة",
 		hi: "पैनल स्थिति",
 		bn: "প্যানেল অবস্থান",
 		pt: "Posição do painel",
-		id: "Posisi Panel",
+		id: "Posisi App",
 		vi: "Vị trí bảng",
 	},
 	"settings.pricing": {
@@ -1047,7 +1079,7 @@ const translations = {
 		id: "Informasi harga tidak tersedia.",
 		vi: "Không có thông tin giá.",
 	},
-	"settings.panelLeft": {
+	"settings.appLeft": {
 		ko: "좌측",
 		en: "Left",
 		ja: "左",
@@ -1063,7 +1095,7 @@ const translations = {
 		id: "Kiri",
 		vi: "Trái",
 	},
-	"settings.panelRight": {
+	"settings.appRight": {
 		ko: "우측",
 		en: "Right",
 		ja: "右",
@@ -1079,7 +1111,7 @@ const translations = {
 		id: "Kanan",
 		vi: "Phải",
 	},
-	"settings.panelBottom": {
+	"settings.appBottom": {
 		ko: "하단",
 		en: "Bottom",
 		ja: "下",
@@ -10478,18 +10510,18 @@ const translations = {
 	},
 	"onboard.lab.browser.hint": {
 		ko: "오른쪽 브라우저 앱에서 Naia 로그인을 완료해주세요.",
-		en: "Please complete your Naia login in the browser panel on the right.",
+		en: "Please complete your Naia login in the browser app on the right.",
 		ja: "右側のブラウザパネルでNaiaログインを完了してください。",
 		zh: "请在右侧浏览器面板中完成 Naia 登录。",
 		fr: "Veuillez compléter la connexion Naia dans le panneau du navigateur à droite.",
-		de: "Bitte schließen Sie die Naia-Anmeldung im Browser-Panel rechts ab.",
+		de: "Bitte schließen Sie die Naia-Anmeldung im Browser-App rechts ab.",
 		ru: "Пожалуйста, завершите вход в Naia в панели браузера справа.",
-		es: "Por favor, completa el inicio de sesión de Naia en el panel del navegador a la derecha.",
+		es: "Por favor, completa el inicio de sesión de Naia en el app del navegador a la derecha.",
 		ar: "يرجى إكمال تسجيل الدخول إلى Naia في لوحة المتصفح على اليمين.",
 		hi: "कृपया दाईं ओर ब्राउज़र पैनल में Naia लॉगिन पूरा करें।",
 		bn: "ডানদিকে ব্রাউজার প্যানেলে Naia লগইন সম্পন্ন করুন।",
 		pt: "Por favor, conclua o login na Naia no painel do navegador à direita.",
-		id: "Silakan selesaikan login Naia di panel browser di sebelah kanan.",
+		id: "Silakan selesaikan login Naia di app browser di sebelah kanan.",
 		vi: "Vui lòng hoàn tất đăng nhập Naia trong bảng trình duyệt bên phải.",
 	},
 	"onboard.lab.timeout": {
@@ -10708,7 +10740,7 @@ const translations = {
 		fr: "Tableau de bord",
 		de: "Armaturenbrett",
 		ru: "Панель управления",
-		es: "Panel de control",
+		es: "App de control",
 		ar: "لوحة القيادة",
 		hi: "डैशबोर्ड",
 		bn: "ড্যাশবোর্ড",
@@ -13930,7 +13962,7 @@ const translations = {
 		id: "Hapus pintasan",
 		vi: "Xóa lối tắt",
 	},
-	"appbar.removePanel": {
+	"appbar.removeApp": {
 		ko: "앱 제거",
 		en: "Remove App",
 		ja: "アプリを削除",
@@ -13995,20 +14027,20 @@ const translations = {
 		id: "BGM Lokal",
 		vi: "BGM cục bộ",
 	},
-	"bgm.panelToggleTitle": {
+	"bgm.appToggleTitle": {
 		ko: "BGM 앱 열기/닫기",
-		en: "Open/Close BGM panel",
+		en: "Open/Close BGM app",
 		ja: "BGMパネルを開く/閉じる",
 		zh: "打开/关闭BGM面板",
 		fr: "Ouvrir/Fermer panneau BGM",
-		de: "BGM-Panel öffnen/schließen",
+		de: "BGM-App öffnen/schließen",
 		ru: "Открыть/закрыть панель BGM",
-		es: "Abrir/Cerrar panel BGM",
+		es: "Abrir/Cerrar app BGM",
 		ar: "فتح/إغلاق لوحة BGM",
 		hi: "BGM पैनल खोलें/बंद करें",
 		bn: "BGM প্যানেল খুলুন/বন্ধ করুন",
 		pt: "Abrir/Fechar painel BGM",
-		id: "Buka/Tutup panel BGM",
+		id: "Buka/Tutup app BGM",
 		vi: "Mở/Đóng bảng BGM",
 	},
 	"bgm.prev": {

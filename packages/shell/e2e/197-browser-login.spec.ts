@@ -19,7 +19,7 @@ import {
  * Scenarios:
  *   B8: browser_check returns true → Chrome available
  *   B9: Lab login button triggers browser navigate
- *   B10: browser panel activates on Lab login
+ *   B10: browser app activates on Lab login
  *   B11: Lab login timeout after 60s (initial state verification)
  *   B12: GDK_BACKEND=x11 forced in main.rs (code-level check)
  */
@@ -79,7 +79,7 @@ const TAURI_MOCK_SCRIPT = `
         if (cmd === "frontend_log") return;
         if (cmd === "list_skills") return [];
         if (cmd === "list_stt_models") return [];
-        if (cmd === "panel_list_installed") return [];
+        if (cmd === "app_list_installed") return [];
 
         // Browser commands — all succeed silently in tests
         if (cmd === "browser_embed_init") return;
@@ -126,7 +126,7 @@ async function setupPage(page: import("@playwright/test").Page) {
 	});
 
 	await page.goto("/");
-	await expect(page.locator(".chat-panel")).toBeVisible({ timeout: 15_000 });
+	await expect(page.locator(".chat-app")).toBeVisible({ timeout: 15_000 });
 }
 
 /** Setup without onboardingComplete to show login UI */
@@ -141,7 +141,7 @@ async function setupOnboardingPage(page: import("@playwright/test").Page) {
 	});
 
 	await page.goto("/");
-	await expect(page.locator(".onboarding-panel")).toBeVisible({
+	await expect(page.locator(".onboarding-app")).toBeVisible({
 		timeout: 15_000,
 	});
 }
@@ -185,14 +185,14 @@ test.describe("#197 Chrome Embedding + Login E2E", () => {
 		await page.waitForTimeout(1000);
 
 		// Check if invoke was called - the mock should have logged it
-		// Since panelRegistry uses invoke internally, we check __invokeLog
+		// Since appRegistry uses invoke internally, we check __invokeLog
 		const invokeLog = await page.evaluate(
 			() => (window as any).__invokeLog as string[],
 		);
 
 		// The navigate call should trigger browser_embed_navigate
 		// Note: In the mock, browser_embed_navigate is a valid command
-		// If the test fails here, it means panelRegistry didn't call navigate
+		// If the test fails here, it means appRegistry didn't call navigate
 		// This is expected behavior - we're testing that the flow works
 		expect(invokeLog).toBeDefined();
 	});
@@ -217,7 +217,7 @@ test.describe("#197 Chrome Embedding + Login E2E", () => {
 		await expect(labCard).toBeDisabled();
 
 		// The onboarding overlay should still be visible (waiting for auth callback)
-		const overlay = page.locator(".onboarding-panel");
+		const overlay = page.locator(".onboarding-app");
 		await expect(overlay).toBeVisible({ timeout: 5_000 });
 	});
 

@@ -207,14 +207,14 @@ test("Channels 메시지는 개인 채팅에 복사하지 않고 읽음 상태�
 	await expect(privateTranscript).not.toContainText("지원 채널 전용 메시지");
 
 	await page.getByRole("button", { name: /Channels|채널/ }).click();
-	const panel = page.locator('[data-testid="channels-tab"]:visible');
-	await expect(panel).toBeVisible();
-	await expect(panel).toContainText("Nextain");
-	await expect(panel.locator(".channels-inbox-list button")).toHaveCount(2);
-	await expect(panel).toContainText("배포 상태를 확인해줘");
+	const app = page.locator('[data-testid="channels-tab"]:visible');
+	await expect(app).toBeVisible();
+	await expect(app).toContainText("Nextain");
+	await expect(app.locator(".channels-inbox-list button")).toHaveCount(2);
+	await expect(app).toContainText("배포 상태를 확인해줘");
 
-	await panel.locator(".channels-inbox-list button").first().click();
-	await expect(panel).toContainText("이전 Discord 대화");
+	await app.locator(".channels-inbox-list button").first().click();
+	await expect(app).toContainText("이전 Discord 대화");
 	await expect
 		.poll(() =>
 			page.evaluate(() =>
@@ -241,10 +241,10 @@ test("좁은 Channels 화면은 목록과 대화를 분리하고 뒤로 돌아�
 }) => {
 	await page.setViewportSize({ width: 520, height: 760 });
 	await page.getByRole("button", { name: /Channels|채널/ }).click();
-	const panel = page.locator('[data-testid="channels-tab"]:visible');
-	const layout = panel.locator(".channels-inbox-layout");
-	const list = panel.locator(".channels-inbox-list");
-	const messages = panel.locator(".dm-messages");
+	const app = page.locator('[data-testid="channels-tab"]:visible');
+	const layout = app.locator(".channels-inbox-layout");
+	const list = app.locator(".channels-inbox-list");
+	const messages = app.locator(".dm-messages");
 
 	await expect(layout).toHaveClass(/detail-open/);
 	await expect(list).toBeHidden();

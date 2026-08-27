@@ -17,8 +17,8 @@ describe("26 — sessions management", () => {
 		await agentsBtn.waitForDisplayed({ timeout: 10_000 });
 		await agentsBtn.click();
 
-		const agentsPanel = await $(S.agentsTabPanel);
-		await agentsPanel.waitForDisplayed({ timeout: 5_000 });
+		const agentsApp = await $(S.agentsTabApp);
+		await agentsApp.waitForDisplayed({ timeout: 5_000 });
 	});
 
 	it("should load sessions data", async () => {
@@ -38,9 +38,9 @@ describe("26 — sessions management", () => {
 			expect(cardText.length).toBeGreaterThan(0);
 		} else {
 			// Empty state — should show some message
-			const panel = await $(S.agentsTabPanel);
-			const panelText = await panel.getText();
-			expect(panelText.length).toBeGreaterThan(0);
+			const app = await $(S.agentsTabApp);
+			const appText = await app.getText();
+			expect(appText.length).toBeGreaterThan(0);
 		}
 	});
 
@@ -74,8 +74,8 @@ describe("26 — sessions management", () => {
 			await refreshBtn.click();
 			await browser.pause(2_000);
 
-			const agentsPanel = await $(S.agentsTabPanel);
-			expect(await agentsPanel.isDisplayed()).toBe(true);
+			const agentsApp = await $(S.agentsTabApp);
+			expect(await agentsApp.isDisplayed()).toBe(true);
 		}
 	});
 

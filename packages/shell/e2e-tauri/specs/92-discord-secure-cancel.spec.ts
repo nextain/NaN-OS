@@ -28,9 +28,9 @@ describe("Discord secure credential cancellation through the real Tauri Shell", 
 		await connectionsTab.waitForClickable({ timeout: 30_000 });
 		await connectionsTab.click();
 
-		const panel = await $("[data-testid='discord-connections']");
-		await panel.waitForDisplayed({ timeout: 30_000 });
-		expect(await panel.$$("input[type='password']")).toHaveLength(0);
+		const app = await $("[data-testid='discord-connections']");
+		await app.waitForDisplayed({ timeout: 30_000 });
+		expect(await app.$$("input[type='password']")).toHaveLength(0);
 		expect(
 			await browser.execute(() =>
 				document
@@ -75,10 +75,10 @@ describe("Discord secure credential cancellation through the real Tauri Shell", 
 			button.click();
 		});
 
-		const cancellation = await panel.$(
+		const cancellation = await app.$(
 			"[role='alert'][data-error-code='capture_cancelled']",
 		);
 		await cancellation.waitForDisplayed({ timeout: 30_000 });
-		expect(await panel.$$("input[type='password']")).toHaveLength(0);
+		expect(await app.$$("input[type='password']")).toHaveLength(0);
 	});
 });

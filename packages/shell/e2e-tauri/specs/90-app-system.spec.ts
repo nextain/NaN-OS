@@ -6,27 +6,27 @@ import {
 import { S } from "../helpers/selectors.js";
 import { assertSemantic } from "../helpers/semantic.js";
 
-const SHOT = "/tmp/panel-system-screenshots";
+const SHOT = "/tmp/app-system-screenshots";
 
-/** Click a panel tab by its panel id (data-panel-id attribute) */
-async function clickPanelTab(panelId: string): Promise<boolean> {
+/** Click a app tab by its app id (data-app-id attribute) */
+async function clickAppTab(appId: string): Promise<boolean> {
 	return browser.execute((id: string) => {
 		const btn = document.querySelector(
-			`.app-bar-tab[data-panel-id="${id}"]`,
+			`.app-bar-tab[data-app-id="${id}"]`,
 		) as HTMLButtonElement | null;
 		if (btn) {
 			btn.click();
 			return true;
 		}
 		return false;
-	}, panelId);
+	}, appId);
 }
 
-/** Click the remove button of a panel by its panel id */
-async function clickPanelRemove(panelId: string): Promise<boolean> {
+/** Click the remove button of a app by its app id */
+async function clickAppRemove(appId: string): Promise<boolean> {
 	return browser.execute((id: string) => {
 		const wrapper = document.querySelector(
-			`.app-bar-tab-wrapper[data-panel-id="${id}"]`,
+			`.app-bar-tab-wrapper[data-app-id="${id}"]`,
 		);
 		const btn = wrapper?.querySelector(
 			".app-bar-tab-remove",
@@ -36,10 +36,10 @@ async function clickPanelRemove(panelId: string): Promise<boolean> {
 			return true;
 		}
 		return false;
-	}, panelId);
+	}, appId);
 }
 
-describe("90 — Panel System (AppBar + sample-note AI interaction)", () => {
+describe("90 — App System (AppBar + sample-note AI interaction)", () => {
 	before(async () => {
 		const chatInput = await $(S.chatInput);
 		await chatInput.waitForEnabled({ timeout: 15_000 });
@@ -53,37 +53,37 @@ describe("90 — Panel System (AppBar + sample-note AI interaction)", () => {
 		await browser.saveScreenshot(`${SHOT}/01-appbar.png`);
 	});
 
-	it("02 — built-in panels appear in AppBar (browser, workspace)", async () => {
-		const panelIds = await browser.execute(() => {
+	it("02 — built-in apps appear in AppBar (browser, workspace)", async () => {
+		const appIds = await browser.execute(() => {
 			return Array.from(
-				document.querySelectorAll(".app-bar-tab[data-panel-id]"),
-			).map((el) => el.getAttribute("data-panel-id") ?? "");
+				document.querySelectorAll(".app-bar-tab[data-app-id]"),
+			).map((el) => el.getAttribute("data-app-id") ?? "");
 		});
-		expect(panelIds).toContain("browser");
-		expect(panelIds).toContain("workspace");
+		expect(appIds).toContain("browser");
+		expect(appIds).toContain("workspace");
 	});
 
-	it("03 — sample-note panel appears in AppBar", async () => {
-		const panelIds = await browser.execute(() => {
+	it("03 — sample-note app appears in AppBar", async () => {
+		const appIds = await browser.execute(() => {
 			return Array.from(
-				document.querySelectorAll(".app-bar-tab[data-panel-id]"),
-			).map((el) => el.getAttribute("data-panel-id") ?? "");
+				document.querySelectorAll(".app-bar-tab[data-app-id]"),
+			).map((el) => el.getAttribute("data-app-id") ?? "");
 		});
-		expect(panelIds).toContain("sample-note");
+		expect(appIds).toContain("sample-note");
 		await browser.saveScreenshot(`${SHOT}/03-sample-note-in-appbar.png`);
 	});
 
-	it("04 — clicking sample-note tab opens SampleNotePanel", async () => {
-		const clicked = await clickPanelTab("sample-note");
+	it("04 — clicking sample-note tab opens SampleNoteApp", async () => {
+		const clicked = await clickAppTab("sample-note");
 		expect(clicked).toBe(true);
 		await browser.pause(500);
 
-		const panel = await $(S.sampleNotePanel);
-		await panel.waitForDisplayed({ timeout: 5_000 });
-		await browser.saveScreenshot(`${SHOT}/04-sample-note-panel-open.png`);
+		const app = await $(S.sampleNoteApp);
+		await app.waitForDisplayed({ timeout: 5_000 });
+		await browser.saveScreenshot(`${SHOT}/04-sample-note-app-open.png`);
 	});
 
-	it("05 — AI can write to sample-note panel", async () => {
+	it("05 — AI can write to sample-note app", async () => {
 		await sendMessage(
 			"지금 열려있는 sample-note 메모장에 'E2E test note content' 라고 적어줘.",
 		);
@@ -105,14 +105,14 @@ describe("90 — Panel System (AppBar + sample-note AI interaction)", () => {
 	it("06 — note textarea reflects the written content", async () => {
 		const value = await browser.execute(() => {
 			const ta = document.querySelector(
-				".sample-note-panel__editor",
+				".sample-note-app__editor",
 			) as HTMLTextAreaElement | null;
 			return ta?.value ?? ta?.textContent ?? "";
 		});
 		expect(value).toMatch(/E2E test note content/i);
 	});
 
-	it("07 — AI can read note from sample-note panel", async () => {
+	it("07 — AI can read note from sample-note app", async () => {
 		await sendMessage("방금 sample-note 메모장에 뭐가 적혀있어?");
 		await waitForToolSuccess();
 
@@ -125,11 +125,11 @@ describe("90 — Panel System (AppBar + sample-note AI interaction)", () => {
 		await browser.saveScreenshot(`${SHOT}/07-note-read.png`);
 	});
 
-	it("08 — built-in panels have no remove button", async () => {
+	it("08 — built-in apps have no remove button", async () => {
 		const builtInHasRemove = await browser.execute(() => {
-			for (const panelId of ["browser", "workspace"]) {
+			for (const appId of ["browser", "workspace"]) {
 				const wrapper = document.querySelector(
-					`.app-bar-tab-wrapper[data-panel-id="${panelId}"]`,
+					`.app-bar-tab-wrapper[data-app-id="${appId}"]`,
 				);
 				if (wrapper?.querySelector(".app-bar-tab-remove")) return true;
 			}
@@ -141,7 +141,7 @@ describe("90 — Panel System (AppBar + sample-note AI interaction)", () => {
 	it("09 — sample-note has a remove button", async () => {
 		const hasRemove = await browser.execute(() => {
 			const wrapper = document.querySelector(
-				`.app-bar-tab-wrapper[data-panel-id="sample-note"]`,
+				`.app-bar-tab-wrapper[data-app-id="sample-note"]`,
 			);
 			return !!wrapper?.querySelector(".app-bar-tab-remove");
 		});
@@ -150,22 +150,22 @@ describe("90 — Panel System (AppBar + sample-note AI interaction)", () => {
 
 	it("10 — removing sample-note tab removes it from AppBar", async () => {
 		const tabsBefore = await browser.execute(() => {
-			return document.querySelectorAll(".app-bar-tab[data-panel-id]").length;
+			return document.querySelectorAll(".app-bar-tab[data-app-id]").length;
 		});
 
-		const removed = await clickPanelRemove("sample-note");
+		const removed = await clickAppRemove("sample-note");
 		expect(removed).toBe(true);
 
 		await browser.pause(500);
 
 		const tabsAfter = await browser.execute(() => {
-			return document.querySelectorAll(".app-bar-tab[data-panel-id]").length;
+			return document.querySelectorAll(".app-bar-tab[data-app-id]").length;
 		});
 		expect(tabsAfter).toBe(tabsBefore - 1);
 
 		const stillPresent = await browser.execute(() => {
 			return !!document.querySelector(
-				`.app-bar-tab[data-panel-id="sample-note"]`,
+				`.app-bar-tab[data-app-id="sample-note"]`,
 			);
 		});
 		expect(stillPresent).toBe(false);

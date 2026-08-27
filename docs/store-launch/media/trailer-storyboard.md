@@ -14,7 +14,7 @@
 | 0~4초 | Naia 앱 실행과 캐릭터 등장 | Meet Naia / 나이아를 만나보세요 |
 | 4~12초 | 질문 입력, 스트리밍 텍스트 응답 | Your AI, in one desktop experience |
 | 12~20초 | 모델/연결 설정 전환 | Choose how you connect |
-| 20~29초 | 작업 공간과 도구 패널 | Conversation that can lead to action |
+| 20~29초 | 작업 공간과 도구 앱 | Conversation that can lead to action |
 | 29~36초 | 지원되는 실제 아바타·음성 표현 장면 | A visual presence, configured your way |
 | 36~40초 | 제품명과 앱 아이콘 | NAIA — Visual AI Companion |
 

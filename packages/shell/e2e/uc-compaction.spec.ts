@@ -4,7 +4,7 @@ import { SEED_ADK_PATH, TAURI_BASE_MOCK_FALLBACK } from "./helpers/tauri-base-mo
 /**
  * UC-compaction 통합 E2E — agent 가 예산 압박으로 이전 대화를 요약(compact)했을 때 방출하는
  * wire AgentMessage({type:"compacted", droppedCount}) 가 **새 core 경유**(transport→message-router→
- * shell-compat→ChatPanel)로 사용자 알림 배너(data-testid="compaction-notice")로 표현되는지 기계 판정.
+ * shell-compat→ChatApp)로 사용자 알림 배너(data-testid="compaction-notice")로 표현되는지 기계 판정.
  *
  * 회귀 방지 앵커: 어제까지 compaction host-loop(agent)은 wire 이벤트를 안 내보내 UI 에 *완전 비가시* 였음.
  * 이 spec 은 compacted 이벤트 → 배너 표현 + 응답이 깨지지 않음(비-terminal)을 결정론적으로 고정한다.
@@ -79,7 +79,7 @@ async function boot(page: import("@playwright/test").Page, cfg: Record<string, u
 	await page.addInitScript({ content: SEED_ADK_PATH });
 	await page.addInitScript({ content: configScript(cfg) });
 	await page.goto("/");
-	await expect(page.locator(".chat-panel")).toBeVisible({ timeout: 10_000 });
+	await expect(page.locator(".chat-app")).toBeVisible({ timeout: 10_000 });
 }
 
 test.describe("UC-compaction — compacted wire → UI 알림 배너", () => {
@@ -100,7 +100,7 @@ test.describe("UC-compaction — compacted wire → UI 알림 배너", () => {
 		await input.fill("긴 대화 이어가기");
 		await input.press("Enter");
 
-		// 1) compacted 청크 → ChatPanel 이 compaction-notice 배너 렌더(어제까지 비가시였던 갭 해소).
+		// 1) compacted 청크 → ChatApp 이 compaction-notice 배너 렌더(어제까지 비가시였던 갭 해소).
 		const notice = page.getByTestId("compaction-notice");
 		await expect(notice).toBeVisible({ timeout: 15_000 });
 		await expect(notice).toContainText("3"); // droppedCount

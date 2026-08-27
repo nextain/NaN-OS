@@ -93,10 +93,10 @@ pub trait PlatformWindowManager: Send + Sync {
         false
     }
 
-    /// Position `chrome` as a floating overlay over the Tauri panel area — no reparenting.
+    /// Position `chrome` as a floating overlay over the Tauri app area — no reparenting.
     ///
     /// `tauri` is the Tauri main window handle.
-    /// `rect` is the panel rect in Tauri client-area coordinates (from getBoundingClientRect).
+    /// `rect` is the app rect in Tauri client-area coordinates (from getBoundingClientRect).
     /// Translates to screen coordinates internally, then positions Chrome via native z-order.
     fn overlay_position(
         &self,
@@ -138,7 +138,7 @@ pub trait PlatformWindowManager: Send + Sync {
         Ok(())
     }
 
-    /// Watchdog for SetParent embed mode — re-asserts WS_CHILD style and panel rect.
+    /// Watchdog for SetParent embed mode — re-asserts WS_CHILD style and app rect.
     /// Chrome can revert its own window style (WS_POPUP, WS_CAPTION) from saved
     /// WINDOWPLACEMENT or via its own SC_MINIMIZE/SC_MAXIMIZE handling.
     /// Called every ~500 ms. `visible` = whether Chrome should be visible right now

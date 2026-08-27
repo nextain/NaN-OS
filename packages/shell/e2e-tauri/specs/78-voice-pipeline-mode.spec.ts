@@ -151,7 +151,7 @@ describe("78 — voice pipeline mode", () => {
 
 	// ── Voice Button ──
 
-	it("should have voice button in chat panel", async () => {
+	it("should have voice button in chat app", async () => {
 		await browser.execute((sel: string) => {
 			const el = document.querySelector(sel) as HTMLElement | null;
 			if (el) el.click();
