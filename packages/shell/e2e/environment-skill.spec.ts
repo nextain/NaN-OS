@@ -875,6 +875,29 @@ test.describe("#502 환경 스킬 배선 (FR-ENV-LIVE)", () => {
 		).toBeNull();
 	});
 
+	test("(B17) 도구가 꺼져 있어도 always 는 목록을 보낸다 — 사용자 정책이 이긴다 (FR-ENV-ATTENTION.20)", async ({
+		page,
+	}) => {
+		// 막아야 하는 것은 "개수만 보내고 도구를 부르라고 안내하는 것"이다. 목록 자체는
+		// 도구 없이도 쓸모가 있다 — 나이아가 무엇이 돌고 있는지 말해 줄 수는 있다.
+		// 두 규칙(사용자 정책 우선 / 도구 꺼짐)이 충돌하는 조합을 여기서 정한다
+		// (2026-08-28 21차 적대리뷰 지적).
+		await boot(page, { ...BASE_CONFIG, enableTools: false, environmentAwareness: "always" });
+		const input = page.locator(".chat-input");
+		await expect(input).toBeEnabled({ timeout: 5_000 });
+		await input.fill("도구는 껐지만 늘 보내기");
+		await input.press("Enter");
+
+		await expect
+			.poll(
+				async () => ((await surfacesSegment(page))?.surfaces as unknown[] | undefined)?.length ?? 0,
+				{ timeout: 10_000 },
+			)
+			.toBe(2);
+		// 그리고 이때는 "숨겼다"는 표시가 붙지 않는다 — 실제로 다 보냈으니까.
+		expect((await surfacesSegment(page))?.listWithheld).not.toBe(true);
+	});
+
 	test("(C) app_tool_call(focus) 이 실제 herdr 명령까지 간다", async ({ page }) => {
 		await boot(page, BASE_CONFIG);
 		// 나이아가 실제로 하는 순서대로 손잡이를 얻는다 — 지켜보기 전에는 손잡이가 안 나간다.

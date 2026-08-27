@@ -488,9 +488,15 @@ function buildEnvironmentSegments(
 	//
 	// 다만 목록 전체를 늘 싣지는 않는다. 기본(auto)에서는 개수만 실리고, 나이아가 watch 로
 	// 지켜보기로 정한 동안에만 목록이 붙는다. 사용자가 config 로 off/always 를 정하면 그것이 이긴다.
-	const surfaces = toolReady
-		? environmentSession.segment(loadConfig()?.environmentAwareness ?? "auto")
-		: null;
+	// 도구를 부를 수 없을 때 무엇을 막아야 하는가 (FR-ENV-ATTENTION.19·20).
+	//
+	// 막아야 하는 것은 "개수만 보내고 도구를 부르라고 안내하는 것"이다. 그 안내가 닫힌 길을
+	// 가리키기 때문이다. 목록 자체는 도구 없이도 쓸모가 있다 — 나이아가 무엇이 돌고 있는지
+	// 말해 줄 수는 있다. 그래서 사용자가 "늘 보내기"를 고른 경우에는 도구가 꺼져 있어도
+	// 목록을 보낸다. 사용자 정책이 이긴다는 FR-ENV-ATTENTION.4 와 어긋나지 않게
+	// (2026-08-28 21차 적대리뷰 지적 — 구현이 조용히 반대로 정하고 있었다).
+	const awareness = loadConfig()?.environmentAwareness ?? "auto";
+	const surfaces = awareness === "always" || toolReady ? environmentSession.segment(awareness) : null;
 	if (surfaces) {
 		segs.push(surfaces);
 	}
