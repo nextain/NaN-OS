@@ -203,6 +203,12 @@ describe("주의를 나이아가 쥔다 (FR-ENV-ATTENTION.1~4) [UC-ENV-ATTENTION
     expect(session.segment()?.omitted).toBe(1);
   });
 
+  it("목록을 싣는 요청에는 숨김 키가 아예 없다 — 쓸모없는 바이트를 더하지 않는다", () => {
+    const session = watching([pane("p1", { label: "빌더" })]);
+    session.watch();
+    expect(Object.keys(session.segment() as object).sort()).toEqual(["kind", "omitted", "surfaces"]);
+  });
+
   it("지켜보기는 조작 권한과 무관하다 — 주의는 권한이 아니다", async () => {
     const session = watching([pane("t1", { label: "zsh" })]);
     session.watch();

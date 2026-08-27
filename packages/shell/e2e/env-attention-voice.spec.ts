@@ -219,6 +219,21 @@ async function voiceTurnEnd(page: Page) {
 	await page.waitForTimeout(120);
 }
 
+/** 음성 턴이 중단으로 끝난다 — 사용자가 끼어들거나 응답이 취소된 경우. */
+async function voiceTurnCancelled(page: Page) {
+	await emitRealtime(page, { type: "response.cancelled" });
+	await page.waitForTimeout(120);
+}
+
+/** 도구 결과 문자열 — 뇌가 실제로 읽는 것. */
+async function lastToolResult(page: Page): Promise<string> {
+	return page.evaluate(() => {
+		const out = (window as unknown as { __NAIA_E2E__: { outbound: Record<string, unknown>[] } }).__NAIA_E2E__.outbound;
+		const results = out.filter((m) => m?.type === "app_tool_result");
+		return String((results[results.length - 1] as { result?: string } | undefined)?.result ?? "");
+	});
+}
+
 async function textTurn(page: Page, text: string) {
 	const input = page.locator(".chat-input");
 	await expect(input).toBeEnabled({ timeout: 10_000 });
@@ -292,6 +307,37 @@ test.describe("#502 음성 경로도 주의 예산을 쓴다 (FR-ENV-ATTENTION.7
 		const last = herdr[herdr.length - 1] as { result?: string; success?: boolean };
 		expect(String(last.result), "껐는데 관측 결과가 돌아왔다").toContain("꺼 두었다");
 		expect(last.success, "거절인데 성공으로 보고했다").toBe(false);
+	});
+
+	test("중단으로 끝난 턴도 예산을 쓴다 (FR-ENV-ATTENTION.7)", async ({ page }) => {
+		// response.cancelled 와 barge-in 은 onTurnEnd 를 부르지 않는다. 여기서 안 깎으면
+		// 사용자가 계속 끼어드는 동안 지켜보기가 예산을 넘겨 살아남는다
+		// (2026-08-27 10차 적대리뷰 지적).
+		const btn = await startVoice(page);
+		await voiceToolCall(page, { action: "watch" });
+		for (let i = 0; i < WATCH_TURN_BUDGET; i += 1) await voiceTurnCancelled(page);
+		await btn.click();
+
+		await textTurn(page, "이제 텍스트로");
+		const seg = await surfacesSegment(page);
+		expect(seg, "표면 세그먼트가 없다 — 관측이 안 됐다면 이 단언은 공허하다").not.toBeNull();
+		expect(
+			(seg?.surfaces as unknown[] | undefined)?.length ?? -1,
+			"중단된 턴이 예산을 쓰지 않아 지켜보기가 남았다",
+		).toBe(0);
+	});
+
+	test("음성에서는 '다음 요청부터 목록이 실린다'고 말하지 않는다 (FR-ENV-ATTENTION.10)", async ({
+		page,
+	}) => {
+		// 음성 요청에는 표면 세그먼트가 실리지 않는다. 그런데 watch 가 실린다고 답하면
+		// 거짓말이다 — 이 슬라이스는 못 하는 것을 한다고 말하지 않는다.
+		await startVoice(page);
+		await voiceToolCall(page, { action: "watch" });
+		const result = await lastToolResult(page);
+		expect(result, "도구 결과가 비었다 — 호출이 안 닿았다면 이 단언은 공허하다").not.toBe("");
+		expect(result).toContain("요청마다 목록을 싣지 않는다");
+		expect(result, "음성인데 실린다고 약속했다").not.toContain("다음 요청부터 목록이 실린다");
 	});
 
 	test("음성 턴이 예산을 다 쓰면 텍스트로 돌아와도 목록이 빠진다", async ({ page }) => {

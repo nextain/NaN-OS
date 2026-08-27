@@ -1040,7 +1040,8 @@ fenced code는 언어·복사·접기·워크스페이스 전환을 제공하고
 | **FR-ENV-ATTENTION.3** | 지켜보지 않는 동안에는 표면 개수만 올린다. 이름도 손잡이도 올리지 않는다. 개수는 상한 때문에 못 실은 것까지 더한 값이다. | UC-ENV-ATTENTION | 같음 | Done |
 | **FR-ENV-ATTENTION.5** | 대화 요청에 싣기 직전에 관측을 갱신한다. 부팅 시점 스냅샷을 계속 싣지 않는다. 꺼져 있으면 갱신하지 않는다. | UC-ENV-ATTENTION | `environment-skill.spec.ts` | Done |
 | **FR-ENV-ATTENTION.6** | 관측이 실패하면 마지막 보고를 폐기하고 아무것도 모르는 상태로 되돌린다. 그때까지 발행한 손잡이도 무효가 된다. 마지막으로 본 목록을 계속 싣지 않는다. | UC-ENV-ATTENTION | `environment-live-wiring.contract.test.ts`, `environment-skill.test.ts`, `environment-skill.spec.ts` | Done |
-| **FR-ENV-ATTENTION.7** | 지켜보기는 `WATCH_TURN_BUDGET` 턴이 지나면 저절로 풀린다. 나이아가 `unwatch` 를 부르지 않아도 목록이 무한히 실리지 않는다. 사용자가 정한 `always` 는 예산과 무관하다. | UC-ENV-ATTENTION | 같음 | Done |
+| **FR-ENV-ATTENTION.7** | 지켜보기는 `WATCH_TURN_BUDGET` 턴이 지나면 저절로 풀린다. 나이아가 `unwatch` 를 부르지 않아도 목록이 무한히 실리지 않는다. 턴은 정상 종료·중단 어느 쪽으로 끝나든 턴이며, 실시간 음성 턴도 센다. 통화가 끊기면 지켜보기도 끝난다. 사용자가 정한 `always` 는 예산과 무관하다. | UC-ENV-ATTENTION | 같음 | Done |
+| **FR-ENV-ATTENTION.10** | 요청마다 표면 세그먼트를 싣지 않는 경로(실시간 음성)에서는 `watch` 가 "다음 요청부터 목록이 실린다"고 답하지 않는다. 그 경로가 목록을 싣지 않는다는 사실과 `observe` 를 그때그때 부르라는 안내를 대신 올린다. 못 하는 것을 한다고 말하지 않는다. | UC-ENV-ATTENTION | `environment-skill.test.ts`, `env-attention-voice.spec.ts` | Done |
 | **FR-ENV-ATTENTION.9** | 실시간 음성 턴도 지켜보기 예산을 소비한다. 다만 음성 세션은 연결 시점의 도구 목록을 쓰므로, 통화 중 `off` 로 바꾸면 선언은 그 세션에 남고 실행만 거절된다 — 선언을 걷으려면 재연결이 필요하다. 이 한계는 알고 남긴 것이다. | UC-ENV-ATTENTION | `env-attention-voice.spec.ts` | Done |
-| **FR-ENV-ATTENTION.8** | 일부러 싣지 않은 목록과 상한 때문에 잘린 목록을 `listWithheld` 로 구별해 보내고, 뇌 쪽이 서로 다른 문구로 읽는다. 숨긴 경우에는 걷는 방법을 함께 알린다. | UC-ENV-ATTENTION | 같음 (받는 쪽은 naia-agent 저장소가 소유) | Done |
+| **FR-ENV-ATTENTION.8** | 일부러 싣지 않은 목록과 상한 때문에 잘린 목록을 `listWithheld` 로 구별해 보내되 숨김일 때만 그 키를 싣고(목록을 싣는 요청에 쓸모없는 바이트를 더하지 않는다), 뇌 쪽이 서로 다른 문구로 읽는다. 숨긴 경우에는 걷는 방법을 함께 알린다. | UC-ENV-ATTENTION | 같음 (받는 쪽은 naia-agent 저장소가 소유) | Done |
 | **FR-ENV-ATTENTION.4** | 사용자의 `environmentAwareness` 설정이 나이아의 선택을 이긴다. `off` 면 도구를 등록하지 않고 세그먼트도 만들지 않으며 도구 호출도 거절한다. `always` 면 나이아가 끌 수 없다. 기본값은 `auto`. | UC-ENV-ATTENTION | 같음 | Done |

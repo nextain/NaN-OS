@@ -45,7 +45,8 @@ describe("셸이 내는 wire 형태", () => {
 
   it("보고에 없는 값을 더하지 않는다 — 뇌가 보는 것은 보고가 전부다", () => {
     const segment = toEnvironmentSegment(REPORT);
-    expect(Object.keys(segment).sort()).toEqual(["kind", "listWithheld", "omitted", "surfaces"]);
+    // 숨김이 아닐 때는 키 자체가 없다 — 목록을 싣는 요청에 쓸모없는 바이트를 더하지 않는다.
+    expect(Object.keys(segment).sort()).toEqual(["kind", "omitted", "surfaces"]);
     for (const s of segment.surfaces) {
       expect(Object.keys(s).sort()).toEqual(["activity", "focused", "label", "ref"]);
     }
@@ -56,7 +57,6 @@ describe("셸이 내는 wire 형태", () => {
       kind: "environmentSurfaces",
       surfaces: [],
       omitted: 0,
-      listWithheld: false,
     });
   });
 

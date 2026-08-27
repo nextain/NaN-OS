@@ -196,8 +196,8 @@ export function toEnvironmentSegment(report: EnvironmentReport): EnvironmentSurf
       focused: s.focused,
     })),
     omitted: report.omitted,
-    // 목록을 실제로 실었으므로 숨김이 아니다. 늘 적어 두어 wire 형태가 흔들리지 않게 한다
-    // — 있을 때만 붙이면 받는 쪽이 "없음"과 "false"를 구분하려 애쓰게 된다.
-    listWithheld: false,
+    // 숨김일 때만 붙인다. 늘 붙이면 목록을 싣는 모든 요청에 쓸모없는 키가 하나씩 더 간다 —
+    // 이 슬라이스가 줄이려던 바로 그 비용이다. 받는 쪽 디코더가 부재를 false 로 읽으므로
+    // 명시적 false 는 아무 뜻도 더하지 않는다 (2026-08-27 10차 적대리뷰 지적).
   };
 }

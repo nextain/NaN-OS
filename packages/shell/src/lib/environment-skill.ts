@@ -109,6 +109,15 @@ export interface EnvironmentSkillDeps {
 	readonly session: EnvironmentSession;
 	/** 사용자가 정한 인지 수준. always 면 나이아의 watch/unwatch 는 아무것도 바꾸지 못한다. */
 	readonly awareness: EnvironmentAwareness;
+	/**
+	 * 이 호출이 온 경로가 요청마다 표면 세그먼트를 싣는가 (FR-ENV-ATTENTION.10).
+	 *
+	 * gRPC 대화는 싣는다. 실시간 음성은 연결 시점의 지시문 하나로 이야기하므로 싣지 않는다.
+	 * 그런데 watch 는 "다음 요청부터 목록이 실린다"고 말한다 — 음성에서 그렇게 답하면
+	 * 거짓말이다. 이 슬라이스가 거절을 성공으로 바꾸지 않는 것과 같은 이유로, 못 하는 것을
+	 * 한다고 말하지 않는다. 경로가 안 싣는다면 그 사실을 그대로 알리고 observe 를 권한다.
+	 */
+	readonly segmentsRideRequests: boolean;
 }
 
 /** 관측 결과를 뇌가 읽을 줄로 편다. observe 와 watch 가 같은 형태를 쓴다. */
@@ -145,13 +154,18 @@ export async function executeEnvironmentSkill(
 		}
 		if (action === "unwatch") {
 			deps.session.unwatch();
-			return "그만 본다: 다음 요청부터 표면 개수만 실린다";
+			return deps.segmentsRideRequests
+				? "그만 본다: 다음 요청부터 표면 개수만 실린다"
+				: "그만 본다";
 		}
 		deps.session.watch();
 		await deps.refresh();
 		const rendered = renderReport(deps.session.latestReport());
-		if (rendered === null) return "지켜본다: 다만 작업 표면 환경이 지금 응답하지 않는다";
-		return `지켜본다: 다음 요청부터 목록이 실린다\n${rendered}`;
+		const promise = deps.segmentsRideRequests
+			? "지켜본다: 다음 요청부터 목록이 실린다"
+			: "지켜본다고 표시했다. 다만 지금 이야기하는 이 경로(실시간 음성)는 요청마다 목록을 싣지 않는다 — 변화가 궁금하면 그때그때 observe 를 불러라";
+		if (rendered === null) return `${promise}\n다만 작업 표면 환경이 지금 응답하지 않는다`;
+		return `${promise}\n${rendered}`;
 	}
 
 	const intent = toIntent(args);
@@ -176,7 +190,15 @@ export async function executeEnvironmentSkill(
 export function liveEnvironmentDeps(
 	terminalInput: boolean,
 	awareness: EnvironmentAwareness = "auto",
+	segmentsRideRequests = true,
 ): EnvironmentSkillDeps {
 	const grants: DispatchGrants = { workspaceObserve: true, terminalInput };
-	return { refresh: refreshEnvironment, commands: tauriCommands, grants, session: environmentSession, awareness };
+	return {
+		refresh: refreshEnvironment,
+		commands: tauriCommands,
+		grants,
+		session: environmentSession,
+		awareness,
+		segmentsRideRequests,
+	};
 }

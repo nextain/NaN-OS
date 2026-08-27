@@ -20,7 +20,12 @@ function pane(id: string, opts: { label?: string; agent?: string; focused?: bool
 
 function deps(
 	panes: unknown[],
-	opts: { terminalInput?: boolean; fail?: string; awareness?: EnvironmentAwareness } = {},
+	opts: {
+		terminalInput?: boolean;
+		fail?: string;
+		awareness?: EnvironmentAwareness;
+		segmentsRideRequests?: boolean;
+	} = {},
 ): EnvironmentSkillDeps & { calls: { command: string; args: unknown }[] } {
 	const session = new EnvironmentSession();
 	const calls: { command: string; args: unknown }[] = [];
@@ -28,6 +33,7 @@ function deps(
 		calls,
 		session,
 		awareness: opts.awareness ?? "auto",
+		segmentsRideRequests: opts.segmentsRideRequests !== false,
 		refresh: async () => session.observeSnapshot({ panes } as never),
 		commands: {
 			invoke: async (command, args) => {
@@ -75,6 +81,7 @@ describe("observe (FR-ENV-LIVE.1)", () => {
 			{
 				session,
 				awareness: "auto",
+				segmentsRideRequests: true,
 				refresh: async () => null, // 스냅샷 실패 = 관측 갱신 없음
 				commands: { invoke: async () => ({}) },
 				grants: { workspaceObserve: true, terminalInput: false },
@@ -171,6 +178,7 @@ describe("조작 전 관측 갱신 (FR-ENV-STICKY.2)", () => {
 		const d: EnvironmentSkillDeps = {
 			session,
 			awareness: "auto",
+			segmentsRideRequests: true,
 			refresh: async () => session.observeSnapshot({ panes } as never),
 			commands: {
 				invoke: async (command) => {
@@ -296,6 +304,7 @@ describe("환경이 끊기면 옛것을 계속 보여 주지 않는다 (FR-ENV-A
 		const d: EnvironmentSkillDeps = {
 			session,
 			awareness: "auto",
+			segmentsRideRequests: true,
 			refresh: async () => {
 				if (!ok) {
 					// 라이브 refreshEnvironment 가 하는 것과 같다 — 실패하면 모르는 상태로 되돌린다.
@@ -332,5 +341,42 @@ describe("지켜보기가 저절로 풀린다 (FR-ENV-ATTENTION.7)", () => {
 		await executeEnvironmentSkill({ action: "observe" }, d);
 		for (let i = 0; i < WATCH_TURN_BUDGET + 5; i += 1) d.session.noteTurn();
 		expect(d.session.segment("always")?.surfaces).toHaveLength(1);
+	});
+});
+
+describe("경로가 못 하는 것을 한다고 말하지 않는다 (FR-ENV-ATTENTION.10)", () => {
+	it("요청마다 목록을 싣지 않는 경로에서는 watch 가 그 사실을 알린다", async () => {
+		const d = deps([pane("p1", { label: "빌더", agent: "codex" })], {
+			segmentsRideRequests: false,
+		});
+		const out = await executeEnvironmentSkill({ action: "watch" }, d);
+		expect(out).toContain("요청마다 목록을 싣지 않는다");
+		expect(out, "못 하는 것을 한다고 말했다").not.toContain("다음 요청부터 목록이 실린다");
+		// 그래도 지금 목록은 준다 — 알려 줄 수 있는 것까지 막지 않는다.
+		expect(out).toContain("빌더");
+		expect(d.session.watching()).toBe(true);
+	});
+
+	it("목록을 싣는 경로에서는 그대로 약속한다", async () => {
+		const d = deps([pane("p1", { label: "빌더", agent: "codex" })]);
+		const out = await executeEnvironmentSkill({ action: "watch" }, d);
+		expect(out).toContain("다음 요청부터 목록이 실린다");
+	});
+
+	it("환경이 응답하지 않아도 경로 사실은 그대로 말한다", async () => {
+		const session = new EnvironmentSession();
+		const out = await executeEnvironmentSkill(
+			{ action: "watch" },
+			{
+				session,
+				awareness: "auto",
+				segmentsRideRequests: false,
+				refresh: async () => null,
+				commands: { invoke: async () => ({}) },
+				grants: { workspaceObserve: true, terminalInput: false },
+			},
+		);
+		expect(out).toContain("요청마다 목록을 싣지 않는다");
+		expect(out).toContain("응답하지 않는다");
 	});
 });

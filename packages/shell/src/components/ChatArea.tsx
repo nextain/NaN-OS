@@ -1990,13 +1990,30 @@ export function ChatArea({
 	// path AND the voice directToolCall path (so voice can run app tools like
 	// skill_browser_*). Auto-switches to the owning app first (tool-level), so
 	// a tool targeting a non-active app brings that app forward.
-	function dispatchAppToolCall(req: {
-		requestId: string;
-		toolCallId: string;
-		toolName: string;
-		args: Record<string, unknown>;
-		activityId?: string;
-	}) {
+	/**
+	 * 대화 턴 하나가 지나갔다고 환경 세션에 알린다 (FR-ENV-ATTENTION.7).
+	 * 정상 종료·중단 어느 쪽으로 끝나든 턴은 턴이다. 꺼져 있으면 아무것도 하지 않는다.
+	 */
+	function noteEnvironmentTurn() {
+		if ((loadConfig()?.environmentAwareness ?? "auto") === "off") return;
+		environmentSession.noteTurn();
+	}
+
+	function dispatchAppToolCall(
+		req: {
+			requestId: string;
+			toolCallId: string;
+			toolName: string;
+			args: Record<string, unknown>;
+			activityId?: string;
+		},
+		/**
+		 * 이 호출이 실시간 음성 세션에서 왔는가 (FR-ENV-ATTENTION.10).
+		 * 음성은 연결 시점의 지시문 하나로 이야기하므로 요청마다 표면 세그먼트를 싣지 않는다.
+		 * 그 사실을 나이아에게 그대로 알려야 "지켜본다"가 거짓말이 되지 않는다.
+		 */
+		origin: { readonly viaVoice?: boolean } = {},
+	) {
 		// UC8 BGM (FR-BGM.1): BgmPlayer 는 위젯(앱 아님)이라 appRegistry 소유자
 		// 탐색으로 못 찾는다 — 전용 분기. executeBgmSkill 이 위젯이 이미 듣는
 		// bgm_youtube_* 이벤트를 발사(위젯 무변경). 음성 경로도 이 dispatch 공유.
@@ -2009,6 +2026,7 @@ export function ChatArea({
 				liveEnvironmentDeps(
 					loadConfig()?.environmentTerminalInput === true,
 					loadConfig()?.environmentAwareness ?? "auto",
+					origin.viaVoice !== true,
 				),
 			)
 				.then((result) => {
@@ -3175,6 +3193,10 @@ export function ChatArea({
 				inputAccum = "";
 				outputAccum = "";
 				serverEmotionSeenThisTurn = false;
+				// 중단된 턴도 턴이다 (FR-ENV-ATTENTION.7). response.cancelled 와 barge-in 은
+				// onTurnEnd 를 부르지 않으므로, 여기서 안 깎으면 사용자가 계속 끼어드는 동안
+				// 지켜보기가 예산을 넘겨 살아남는다 (2026-08-27 10차 적대리뷰 지적).
+				noteEnvironmentTurn();
 			};
 			session.onTurnEnd = () => {
 				inputTurnDirty = false;
@@ -3189,9 +3211,7 @@ export function ChatArea({
 				// 나이아가 watch 를 켤 수 있다. 그런데 예산을 gRPC 경로에서만 깎으면 음성으로
 				// 켠 지켜보기가 영원히 남는다 — 켜 둔 채 잊는 것을 막겠다는 규칙이 경로 하나에서
 				// 성립하지 않게 된다 (2026-08-27 9차 적대리뷰 지적).
-				if ((loadConfig()?.environmentAwareness ?? "auto") !== "off") {
-					environmentSession.noteTurn();
-				}
+				noteEnvironmentTurn();
 			};
 			session.onToolCall = async (callId, toolName, args) => {
 				try {
@@ -3211,7 +3231,7 @@ export function ChatArea({
 						// App-owned tools (skill_browser_*, skill_app switch)
 						// only ran in streaming chat before; route them here too so
 						// voice can drive apps. Auto-switches to the owner app.
-						onAppToolCall: (req) => dispatchAppToolCall(req),
+						onAppToolCall: (req) => dispatchAppToolCall(req, { viaVoice: true }),
 						onAppControl: (req) => dispatchAppControl(req),
 					});
 					session.sendToolResponse(callId, result.output);
@@ -3228,6 +3248,9 @@ export function ChatArea({
 				session.disconnect();
 			};
 			session.onDisconnect = (info) => {
+				// 통화가 끝나면 지켜보기도 끝난다. 통화 중에 켠 주의가 통화 밖으로
+				// 새어 나가면 사용자가 켠 적 없는 노출이 남는다 (FR-ENV-ATTENTION.7).
+				environmentSession.unwatch();
 				// Atomic terminal transition for a mid-call drop. Tear down (cost
 				// summary, bridge, mic, player) SYNCHRONOUSLY first, THEN set the
 				// terminal status once — so the derived voice button can't re-enable
