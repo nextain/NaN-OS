@@ -1,7 +1,7 @@
 {
-  "revision": "53a2eff2",
-  "stampedAt": "2026-08-27T05:59:12.593Z",
-  "fingerprint": "ef9b52a34b8f7194",
+  "revision": "a241a1ee",
+  "stampedAt": "2026-08-27T06:58:58.839Z",
+  "fingerprint": "edb6db23c6c6c937",
   "scenarios": {
     "UC-WORKSPACE-CONTEXT-DISCOVER": {
       "receipts": [
@@ -658,7 +658,7 @@
           "ref": "npx vitest run --reporter=json src/test/environment-live-herdr.contract.test.ts (cwd=.)"
         }
       ],
-      "testCount": 68,
+      "testCount": 69,
       "artifacts": [
         "npx vitest run --reporter=json src/test/environment-intent.contract.test.ts (cwd=.) → exit 0",
         "npx vitest run --reporter=json src/test/herdr-environment.contract.test.ts (cwd=.) → exit 0",
@@ -821,7 +821,7 @@
           "ref": "npx vitest run --reporter=json src/test/wire-union-drift.contract.test.ts (cwd=.)"
         }
       ],
-      "testCount": 10,
+      "testCount": 11,
       "artifacts": [
         "npx vitest run --reporter=json src/test/wire-union-drift.contract.test.ts (cwd=.) → exit 0"
       ],
@@ -848,7 +848,7 @@
           "ref": "npx vitest run --reporter=json src/test/environment-live-herdr.contract.test.ts (cwd=.)"
         }
       ],
-      "testCount": 41,
+      "testCount": 63,
       "artifacts": [
         "npx vitest run --reporter=json src/test/environment-live-wiring.contract.test.ts (cwd=.) → exit 0",
         "npx vitest run --reporter=json src/lib/__tests__/environment-skill.test.ts (cwd=packages/shell) → exit 0",
@@ -872,12 +872,47 @@
           "ref": "npx vitest run --reporter=json src/test/environment-live-act.contract.test.ts (cwd=.)"
         }
       ],
-      "testCount": 39,
+      "testCount": 52,
       "artifacts": [
         "npx vitest run --reporter=json src/lib/__tests__/environment-skill.test.ts (cwd=packages/shell) → exit 0",
         "npx wdio run e2e-tauri/wdio.conf.ts --spec e2e-tauri/specs/environment-dispatch.spec.ts (cwd=packages/shell) → exit 0",
         "npx wdio run e2e-tauri/wdio.conf.ts --spec e2e-tauri/specs/environment-dispatch.spec.ts (cwd=packages/shell) → 이 시나리오를 확인하는 케이스가 돌지 않음: FR-ENV-LIVE.3 / FR-ENV-LIVE.4 / FR-ENV-LIVE.5 / UC-ENV-LIVE-ACT",
         "npx vitest run --reporter=json src/test/environment-live-act.contract.test.ts (cwd=.) → exit 0"
+      ],
+      "safety": {
+        "leakedProjects": [],
+        "unauthorizedEffects": []
+      }
+    },
+    "UC-ENV-ATTENTION": {
+      "receipts": [
+        {
+          "scenarioId": "UC-ENV-ATTENTION",
+          "kind": "mock",
+          "ref": "npx vitest run --reporter=json src/test/environment-live-wiring.contract.test.ts (cwd=.)"
+        },
+        {
+          "scenarioId": "UC-ENV-ATTENTION",
+          "kind": "mock",
+          "ref": "npx vitest run --reporter=json src/lib/__tests__/environment-skill.test.ts (cwd=packages/shell)"
+        },
+        {
+          "scenarioId": "UC-ENV-ATTENTION",
+          "kind": "browser",
+          "ref": "npx playwright test e2e/environment-skill.spec.ts (cwd=packages/shell)"
+        },
+        {
+          "scenarioId": "UC-ENV-ATTENTION",
+          "kind": "native",
+          "ref": "npx vitest run --reporter=json src/test/environment-live-herdr.contract.test.ts (cwd=.)"
+        }
+      ],
+      "testCount": 73,
+      "artifacts": [
+        "npx vitest run --reporter=json src/test/environment-live-wiring.contract.test.ts (cwd=.) → exit 0",
+        "npx vitest run --reporter=json src/lib/__tests__/environment-skill.test.ts (cwd=packages/shell) → exit 0",
+        "npx playwright test e2e/environment-skill.spec.ts (cwd=packages/shell) → exit 0",
+        "npx vitest run --reporter=json src/test/environment-live-herdr.contract.test.ts (cwd=.) → exit 0"
       ],
       "safety": {
         "leakedProjects": [],
@@ -892,7 +927,7 @@
           "ref": "npx vitest run --reporter=json src/test/environment-live-wiring.contract.test.ts (cwd=.)"
         }
       ],
-      "testCount": 18,
+      "testCount": 26,
       "artifacts": [
         "npx vitest run --reporter=json src/test/environment-live-wiring.contract.test.ts (cwd=.) → exit 0"
       ],
