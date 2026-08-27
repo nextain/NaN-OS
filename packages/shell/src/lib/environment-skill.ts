@@ -73,8 +73,11 @@ export async function refreshEnvironment(): Promise<ReturnType<EnvironmentSessio
 		const snapshot = await invoke<unknown>("herdr_snapshot");
 		return environmentSession.observeSnapshot(snapshot as never);
 	} catch (e) {
-		// Herdr 이 안 돌고 있는 것은 정상 상태다. 조용히 아무것도 모르는 상태로 둔다.
+		// Herdr 이 안 돌고 있는 것은 정상 상태다. 아무것도 모르는 상태로 되돌린다 —
+		// 마지막으로 본 목록을 계속 싣지 않는다 (FR-ENV-ATTENTION.6). 그렇게 두면 이미
+		// 닫힌 터미널 이름이 계속 뇌로 가고, 죽은 손잡이가 살아 있는 것처럼 보인다.
 		Logger.info("environment", "herdr snapshot unavailable", { error: String(e) });
+		environmentSession.markUnavailable();
 		return null;
 	}
 }

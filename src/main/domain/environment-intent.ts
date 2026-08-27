@@ -169,6 +169,17 @@ export interface EnvironmentSurfacesSegment {
     readonly focused: boolean;
   }[];
   readonly omitted: number;
+  /**
+   * 목록을 일부러 싣지 않았는가 (FR-ENV-ATTENTION.8).
+   *
+   * 왜 별도 필드인가: 상한 때문에 잘린 것과 정책상 안 보낸 것은 다른 사실이다.
+   * 둘을 `omitted` 하나로 뭉치면 뇌는 "더 있는데 못 실었다"와 "지금은 안 보여 준다"를
+   * 구별할 수 없다. 앞의 것은 어쩔 수 없는 절단이고, 뒤의 것은 나이아가 원하면
+   * 걷을 수 있는 가림막이다 — 무엇을 할 수 있는지가 달라진다.
+   *
+   * 없으면 false 로 읽는다. 옛 셸이 보낸 형태도 그대로 해석된다.
+   */
+  readonly listWithheld?: boolean;
 }
 
 /**
@@ -185,5 +196,8 @@ export function toEnvironmentSegment(report: EnvironmentReport): EnvironmentSurf
       focused: s.focused,
     })),
     omitted: report.omitted,
+    // 목록을 실제로 실었으므로 숨김이 아니다. 늘 적어 두어 wire 형태가 흔들리지 않게 한다
+    // — 있을 때만 붙이면 받는 쪽이 "없음"과 "false"를 구분하려 애쓰게 된다.
+    listWithheld: false,
   };
 }

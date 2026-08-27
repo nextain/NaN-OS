@@ -125,6 +125,8 @@ export type EnvironmentSegment =
 				readonly focused: boolean;
 			}[];
 			omitted: number;
+			/** 목록을 일부러 싣지 않았는가 (FR-ENV-ATTENTION.8). 없으면 false. */
+			listWithheld?: boolean;
 	  };
 
 export interface AgentRequest {

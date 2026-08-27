@@ -1350,6 +1350,11 @@ Test Coverage Map (P02):
 - 지켜본다고 조작 권한이 열리지는 않는다. 보는 것과 건드리는 것은 다른 문제다.
 - 사용자가 원하면 아예 끄거나(도구도 등록되지 않는다) 늘 켜 둘 수 있다. 그 선택이 나이아를 이긴다.
 - 볼 것이 하나도 없으면 개수도 보내지 않는다. "0개 있다"와 "모른다"를 뭉뚱그리지 않는다.
+- 나이아가 보는 것은 지금 상태다. 앱을 켠 시점의 목록으로 "지금 뭐 돌고 있어"에 답하지 않는다.
+- 작업 표면 환경이 응답하지 않게 되면 나이아는 모르는 상태로 돌아간다. 마지막으로 본 목록을
+  계속 들고 있지 않는다 — 이미 닫힌 터미널 이름을 계속 말하거나, 죽은 손잡이에 명령을 넣지 않는다.
+- 지켜보기는 켜 둔 채 잊히지 않는다. 일정 턴이 지나면 저절로 풀리고, 더 봐야 하면 나이아가 다시 켠다.
+- 나이아는 "지금은 안 보여 주는 것"과 "상한 때문에 못 본 것"을 구별해서 안다. 앞의 것은 스스로 걷을 수 있다.
 
 ### UC-ENV-STICKY — 손잡이가 다른 표면을 가리키지 않는다
 
@@ -1368,13 +1373,15 @@ Test Coverage Map (P02):
 | UC-ENV-STICKY | vitest `src/test/environment-live-wiring.contract.test.ts` | 표면 사라져도 재배정 없음, 순서 바뀌어도 손잡이 불변, 죽은 손잡이는 거절 |
 | UC-ENV-ATTENTION | vitest `src/test/environment-live-wiring.contract.test.ts` | 기본 미관찰, 미관찰 중 이름·손잡이 미전송, 개수는 상한 포함, off/always 우선 |
 | UC-ENV-ATTENTION | vitest `packages/shell/src/lib/__tests__/environment-skill.test.ts` | watch/unwatch 실행, watch 가 목록 동반, off 전면 거절, always 에서 나이아 무력 |
-| UC-ENV-ATTENTION | Playwright `packages/shell/e2e/environment-skill.spec.ts` | 실 UI 에서 기본 개수만 전송, watch 후 목록 전송, unwatch 복귀, off 시 도구 미등록 |
+| UC-ENV-ATTENTION | Playwright `packages/shell/e2e/environment-skill.spec.ts` | 실 UI 에서 기본 개수만 전송, watch 후 목록 전송, unwatch 복귀, off 시 도구 미등록, 매 턴 관측 갱신 |
 | UC-ENV-ATTENTION | vitest `src/test/environment-live-herdr.contract.test.ts` | 살아 있는 Herdr 의 실제 터미널 이름·손잡이가 미관찰 중 전송되지 않음 |
+| UC-ENV-ATTENTION | vitest (naia-agent) `src/test/uc-environment-segments.contract.test.ts` | 받는 쪽이 숨김과 절단을 다른 문구로 읽고, 숨김일 때 걷는 방법을 알림 |
 
 상태 매트릭스: 기본(표면 여럿), 빈 목록(Herdr 무응답), 오류(환경 거절), 성공(전달됨),
 진행(스냅샷 대기), 좁은 폭(해당 없음 — 이 슬라이스는 UI 표면을 새로 만들지 않는다).
 주의 상태는 별도 축이다: 미관찰(개수만) / 관찰(목록) / 사용자 off(아무것도 없음) /
-사용자 always(나이아 무력) / 볼 것 없음(세그먼트 자체 없음).
+사용자 always(나이아 무력) / 볼 것 없음(세그먼트 자체 없음) / 관측 끊김(모르는 상태로 복귀) /
+예산 소진(저절로 풀림).
 
 ### UC-ORCHESTRATION-CODING-PROVIDER — 실제 코딩 모델 작업자가 돈다
 

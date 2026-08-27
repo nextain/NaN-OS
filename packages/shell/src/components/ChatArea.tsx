@@ -51,6 +51,7 @@ import {
 	executeEnvironmentSkill,
 	liveEnvironmentDeps,
 	environmentSession,
+	refreshEnvironment,
 } from "../lib/environment-skill";
 import {
 	activateMicUnlessSpeechActivityOwnsVoice,
@@ -1764,6 +1765,22 @@ export function ChatArea({
 			});
 			if (!bgmSkillReady) {
 				throw new Error("skill_youtube_bgm_registration_failed");
+			}
+			// #502 (FR-ENV-ATTENTION.5): 싣기 직전에 관측을 갱신한다.
+			//
+			// 갱신 없이 부팅 스냅샷을 계속 실으면 "지금 뭐 돌고 있어"에 몇 시간 전 목록으로
+			// 답하게 된다. 지켜보는 동안에는 그것이 더 나쁘다 — 계속 보고 있다고 말해 놓고
+			// 옛것을 보여 주는 셈이다. 개수만 싣는 동안에도 개수가 틀리면 나이아가 부를
+			// 이유를 잘못 판단한다.
+			//
+			// 비용은 실측했다: herdr 스냅샷 한 번이 10ms 다(2026-08-27). 그 뒤에 오는 LLM
+			// 호출 앞에서는 무시할 수준이고, Herdr 이 없으면 즉시 실패해 조용히 넘어간다.
+			// 꺼 두었으면 부르지 않는다 — 껐다는 말은 값도 안 든다는 뜻이어야 한다.
+			if ((loadConfig()?.environmentAwareness ?? "auto") !== "off") {
+				await refreshEnvironment().catch(() => null);
+				// 지켜보기 예산을 한 턴 쓴다 (FR-ENV-ATTENTION.7). 다 쓰면 저절로 풀린다 —
+				// 나이아가 unwatch 를 부르는 것에만 기대면 켜 둔 채 잊는 경우를 못 막는다.
+				environmentSession.noteTurn();
 			}
 			await sendChatMessage({
 				message: text,

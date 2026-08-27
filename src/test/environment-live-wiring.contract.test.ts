@@ -4,7 +4,7 @@
 // 호출자가 0이었다. 이 파일은 그 이음매(EnvironmentSession)가 실제로 이어 주는지,
 // 그리고 이어 보고서야 드러난 손잡이 재사용 위험이 닫혔는지를 본다.
 import { describe, it, expect } from "vitest";
-import { EnvironmentSession } from "../main/app/control/environment-session.js";
+import { EnvironmentSession, WATCH_TURN_BUDGET } from "../main/app/control/environment-session.js";
 import { surfaceRef } from "../main/domain/environment-intent.js";
 import type { EnvironmentCommandPort } from "../main/ports/environment-dispatch.js";
 
@@ -79,6 +79,40 @@ describe("주의를 나이아가 쥔다 (FR-ENV-ATTENTION.1~4) [UC-ENV-ATTENTION
     return session;
   }
 
+  it("관측이 끊기면 마지막 목록을 계속 싣지 않는다 (FR-ENV-ATTENTION.6)", () => {
+    // 한 번 성공한 뒤 Herdr 이 죽으면 갱신은 실패만 하고 옛 보고서가 남는다.
+    // 그러면 이미 닫힌 터미널 이름이 계속 뇌로 가고, 죽은 손잡이가 살아 있어 보인다.
+    const session = watching([pane("p1", { label: "사내-비밀-저장소" })]);
+    session.watch();
+    expect(session.segment()?.surfaces).toHaveLength(1);
+
+    session.markUnavailable();
+    expect(session.segment(), "환경이 끊겼는데 세그먼트가 남아 있다").toBeNull();
+    expect(session.segment("always")).toBeNull();
+    expect(session.latestReport()).toBeNull();
+  });
+
+  it("관측이 끊기면 그때까지 준 손잡이도 죽는다 (FR-ENV-ATTENTION.6)", async () => {
+    // ⚠️ 대상은 반드시 focus 가 실제로 닿을 수 있는 표면이어야 한다. 에이전트 없는
+    //    터미널을 쓰면 번역 단계에서 어차피 거절되어, 끊김과 무관하게 통과한다
+    //    (2026-08-27 변이 탐침에서 실제로 그랬다).
+    const session = watching([pane("p1", { label: "빌더", agent: "codex" })]);
+    const token = session.latestReport()?.surfaces[0]?.ref.token as string;
+
+    const before = recorder();
+    expect(
+      (await session.act({ kind: "focus", surface: surfaceRef(token) }, before.port, ALL_GRANTS)).ok,
+      "끊기기 전에도 안 닿는 손잡이라면 이 테스트는 공허하다",
+    ).toBe(true);
+    expect(before.calls).toHaveLength(1);
+
+    const after = recorder();
+    session.markUnavailable();
+    const out = await session.act({ kind: "focus", surface: surfaceRef(token) }, after.port, ALL_GRANTS);
+    expect(out.ok).toBe(false);
+    expect(after.calls, "환경이 끊겼는데 명령이 나갔다").toHaveLength(0);
+  });
+
   it("아무도 시키지 않았으면 지켜보지 않는다", () => {
     expect(new EnvironmentSession().watching()).toBe(false);
   });
@@ -121,6 +155,52 @@ describe("주의를 나이아가 쥔다 (FR-ENV-ATTENTION.1~4) [UC-ENV-ATTENTION
     const session = watching([pane("p1", { label: "빌더" })]);
     expect(session.watching()).toBe(false);
     expect(session.segment("always")?.surfaces).toHaveLength(1);
+  });
+
+  it("숨긴 개수와 잘린 개수를 구별한다 (FR-ENV-ATTENTION.8)", () => {
+    // 뇌 입장에서 둘은 할 수 있는 일이 다르다. 잘린 것은 어쩔 수 없고,
+    // 숨긴 것은 나이아가 직접 걷을 수 있다.
+    const hidden = watching([pane("p1"), pane("p2")]);
+    expect(hidden.segment()?.listWithheld, "숨긴 것인데 표시가 없다").toBe(true);
+
+    const capped = new EnvironmentSession(1);
+    capped.observeSnapshot({ panes: [pane("p1"), pane("p2"), pane("p3")] } as never);
+    capped.watch();
+    const seg = capped.segment();
+    expect(seg?.surfaces).toHaveLength(1);
+    expect(seg?.omitted).toBe(2);
+    expect(seg?.listWithheld, "상한 절단인데 숨김으로 표시됐다").not.toBe(true);
+  });
+
+  it("지켜보기가 예산을 다 쓰면 저절로 풀린다 (FR-ENV-ATTENTION.7)", () => {
+    // 나이아가 unwatch 를 부르리라고 기대하는 것으로는 비용도 노출도 보장되지 않는다.
+    const session = watching([pane("p1", { label: "빌더" })]);
+    session.watch();
+    for (let i = 0; i < WATCH_TURN_BUDGET; i += 1) {
+      session.noteTurn();
+      expect(session.watching(), `${i + 1}번째 턴에서 벌써 풀렸다`).toBe(true);
+      expect(session.segment()?.surfaces).toHaveLength(1);
+    }
+    session.noteTurn();
+    expect(session.watching(), "예산을 다 썼는데 계속 지켜본다").toBe(false);
+    expect(session.segment()?.surfaces).toEqual([]);
+  });
+
+  it("다시 watch 하면 예산이 새로 찬다 — 더 봐야 하면 다시 부르면 된다", () => {
+    const session = watching([pane("p1")]);
+    session.watch();
+    for (let i = 0; i <= WATCH_TURN_BUDGET; i += 1) session.noteTurn();
+    expect(session.watching()).toBe(false);
+    session.watch();
+    expect(session.watchTurnsRemaining()).toBe(WATCH_TURN_BUDGET);
+    expect(session.segment()?.surfaces).toHaveLength(1);
+  });
+
+  it("지켜보지 않는 동안에는 턴이 흘러도 아무 일도 없다", () => {
+    const session = watching([pane("p1")]);
+    for (let i = 0; i < 100; i += 1) session.noteTurn();
+    expect(session.watching()).toBe(false);
+    expect(session.segment()?.omitted).toBe(1);
   });
 
   it("지켜보기는 조작 권한과 무관하다 — 주의는 권한이 아니다", async () => {

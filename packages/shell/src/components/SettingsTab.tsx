@@ -47,10 +47,18 @@ import {
 	activateNaiaLlm,
 	configureSpeechProfile,
 	reloadAgentSettings,
+	sendAppSkills,
+	sendAppSkillsClear,
 	sendAuthUpdateStrict,
 	sendCredsUpdate,
 	sendNotifyConfig,
 } from "../lib/chat-service";
+import type { EnvironmentAwareness } from "@nextain/naia-os-core/composition";
+import {
+	ENVIRONMENT_APP_ID,
+	SKILL_ENVIRONMENT,
+	environmentSession,
+} from "../lib/environment-skill";
 import {
 	type AppConfig,
 	DEFAULT_GATEWAY_URL,
@@ -753,6 +761,13 @@ export function SettingsTab() {
 		existing?.speechStyle ?? "casual",
 	);
 	const [enableTools, setEnableTools] = useState(existing?.enableTools ?? true);
+	// #502 (FR-ENV-ATTENTION.4): 작업 표면 인지는 사용자가 직접 고른다.
+	// 설정 파일에만 있고 화면에 없으면 "사용자에게 옵셔널하게"가 아니다.
+	const [environmentAwareness, setEnvironmentAwareness] =
+		useState<EnvironmentAwareness>(existing?.environmentAwareness ?? "auto");
+	const [environmentTerminalInput, setEnvironmentTerminalInput] = useState(
+		existing?.environmentTerminalInput === true,
+	);
 	const [enableThinking, setEnableThinking] = useState(
 		existing?.enableThinking ?? false,
 	);
@@ -4834,6 +4849,52 @@ export function SettingsTab() {
 							onChange={(e) => {
 								setEnableThinking(e.target.checked);
 								persistConfig({ enableThinking: e.target.checked });
+							}}
+						/>
+					</div>
+
+					{/* #502 (FR-ENV-ATTENTION.4): 표면 목록에는 사용자의 터미널 이름이 들어간다.
+					    무엇이 나이아에게 가는지 사용자가 보고 고를 수 있어야 한다. */}
+					<div className="settings-field">
+						<label htmlFor="environment-awareness">
+							{t("settings.environmentAwareness")}
+						</label>
+						<select
+							id="environment-awareness"
+							value={environmentAwareness}
+							onChange={(e) => {
+								const next = e.target.value as EnvironmentAwareness;
+								setEnvironmentAwareness(next);
+								persistConfig({ environmentAwareness: next });
+								// 즉시 반영한다 — 다시 켤 때까지 기다리게 하지 않는다.
+								if (next === "off") {
+									environmentSession.unwatch();
+									sendAppSkillsClear(ENVIRONMENT_APP_ID).catch(() => {});
+								} else {
+									sendAppSkills(ENVIRONMENT_APP_ID, [SKILL_ENVIRONMENT]).catch(() => {});
+								}
+							}}
+						>
+							<option value="off">{t("settings.environmentAwarenessOff")}</option>
+							<option value="auto">{t("settings.environmentAwarenessAuto")}</option>
+							<option value="always">{t("settings.environmentAwarenessAlways")}</option>
+						</select>
+						<span className="settings-hint">
+							{t("settings.environmentAwarenessHint")}
+						</span>
+					</div>
+					<div className="settings-field settings-toggle-row">
+						<label htmlFor="environment-terminal-input">
+							{t("settings.environmentTerminalInput")}
+						</label>
+						<input
+							id="environment-terminal-input"
+							type="checkbox"
+							checked={environmentTerminalInput}
+							disabled={environmentAwareness === "off"}
+							onChange={(e) => {
+								setEnvironmentTerminalInput(e.target.checked);
+								persistConfig({ environmentTerminalInput: e.target.checked });
 							}}
 						/>
 					</div>

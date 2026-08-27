@@ -1,7 +1,7 @@
 // #502 실배선 — skill_environment 실행기 단위 테스트 (FR-ENV-LIVE.3~5).
 // deps 주입 = Tauri 없이 헤르메틱. 뇌가 읽는 결과 문자열이 실패를 성공처럼 말하지 않는지 본다.
 import { describe, expect, it, vi } from "vitest";
-import { EnvironmentSession, type EnvironmentAwareness } from "@nextain/naia-os-core/composition";
+import { EnvironmentSession, WATCH_TURN_BUDGET, type EnvironmentAwareness } from "@nextain/naia-os-core/composition";
 import {
 	ENVIRONMENT_ACTIONS,
 	SKILL_ENVIRONMENT,
@@ -285,6 +285,52 @@ describe("사용자 설정이 나이아를 이긴다 (FR-ENV-ATTENTION.4)", () =
 		const d = deps([pane("p1", { label: "빌더", agent: "codex" })], { awareness: "always" });
 		await executeEnvironmentSkill({ action: "observe" }, d);
 		expect(d.session.watching()).toBe(false);
+		expect(d.session.segment("always")?.surfaces).toHaveLength(1);
+	});
+});
+
+describe("환경이 끊기면 옛것을 계속 보여 주지 않는다 (FR-ENV-ATTENTION.6)", () => {
+	it("스냅샷 실패가 마지막 관측을 지운다", async () => {
+		const session = new EnvironmentSession();
+		let ok = true;
+		const d: EnvironmentSkillDeps = {
+			session,
+			awareness: "auto",
+			refresh: async () => {
+				if (!ok) {
+					// 라이브 refreshEnvironment 가 하는 것과 같다 — 실패하면 모르는 상태로 되돌린다.
+					session.markUnavailable();
+					return null;
+				}
+				return session.observeSnapshot({ panes: [pane("p1", { label: "빌더", agent: "codex" })] } as never);
+			},
+			commands: { invoke: async () => ({}) },
+			grants: { workspaceObserve: true, terminalInput: false },
+		};
+		await executeEnvironmentSkill({ action: "watch" }, d);
+		expect(session.segment("auto")?.surfaces).toHaveLength(1);
+
+		ok = false;
+		const out = await executeEnvironmentSkill({ action: "observe" }, d);
+		expect(out).toContain("관측 불가");
+		expect(session.segment("auto"), "환경이 끊겼는데 세그먼트가 남았다").toBeNull();
+	});
+});
+
+describe("지켜보기가 저절로 풀린다 (FR-ENV-ATTENTION.7)", () => {
+	it("나이아가 끄지 않아도 예산을 다 쓰면 목록이 빠진다", async () => {
+		const d = deps([pane("p1", { label: "빌더", agent: "codex" })]);
+		await executeEnvironmentSkill({ action: "watch" }, d);
+		for (let i = 0; i < WATCH_TURN_BUDGET; i += 1) d.session.noteTurn();
+		expect(d.session.segment("auto")?.surfaces).toHaveLength(1);
+		d.session.noteTurn();
+		expect(d.session.segment("auto")?.surfaces, "켜 둔 채 잊었는데 목록이 계속 실린다").toEqual([]);
+	});
+
+	it("always 는 예산과 무관하다 — 사용자가 정한 것은 저절로 풀리지 않는다", async () => {
+		const d = deps([pane("p1", { label: "빌더", agent: "codex" })], { awareness: "always" });
+		await executeEnvironmentSkill({ action: "observe" }, d);
+		for (let i = 0; i < WATCH_TURN_BUDGET + 5; i += 1) d.session.noteTurn();
 		expect(d.session.segment("always")?.surfaces).toHaveLength(1);
 	});
 });
