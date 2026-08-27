@@ -486,6 +486,10 @@ function buildEnvironmentSegments(
 	return segs;
 }
 
+// 통화마다 하나씩 늘어나는 번호. 지켜보기의 주인 표에 쓴다 (FR-ENV-ATTENTION.13).
+// 모듈 수준인 이유는 재연결이 같은 컴포넌트 안에서 여러 세션을 만들기 때문이다.
+let voiceSessionSeq = 0;
+
 // Keep reference to prevent garbage collection during playback
 let currentAudio: HTMLAudioElement | null = null;
 
@@ -2012,7 +2016,11 @@ export function ChatArea({
 		 * 음성은 연결 시점의 지시문 하나로 이야기하므로 요청마다 표면 세그먼트를 싣지 않는다.
 		 * 그 사실을 나이아에게 그대로 알려야 "지켜본다"가 거짓말이 되지 않는다.
 		 */
-		origin: { readonly assemblesChatRequests?: boolean } = {},
+		origin: {
+			readonly assemblesChatRequests?: boolean;
+			/** 이 호출이 켜는 지켜보기의 주인. 통화만 준다 — 자기가 켠 것만 끄기 위해서다. */
+			readonly watchOwner?: string;
+		} = {},
 	) {
 		// UC8 BGM (FR-BGM.1): BgmPlayer 는 위젯(앱 아님)이라 appRegistry 소유자
 		// 탐색으로 못 찾는다 — 전용 분기. executeBgmSkill 이 위젯이 이미 듣는
@@ -2027,6 +2035,7 @@ export function ChatArea({
 					loadConfig()?.environmentTerminalInput === true,
 					loadConfig()?.environmentAwareness ?? "auto",
 					origin.assemblesChatRequests === true,
+					origin.watchOwner,
 				),
 			)
 				.then((result) => {
@@ -3093,8 +3102,12 @@ export function ChatArea({
 			// Gemini Direct uses Rust proxy (WebKitGTK can't connect to Google's WS)
 			const useDirectMode =
 				liveProvider === "gemini-live" && !!config.googleApiKey;
-			// 통화가 시작될 때 이미 지켜보고 있었는가. 통화가 끝날 때 무엇을 끌지 정하는 근거다.
-			const watchingBeforeVoice = environmentSession.watching();
+			// 이 통화의 식별자. 통화가 켠 지켜보기에만 이 표가 붙고, 통화가 끝날 때 그 표가
+			// 붙은 것만 끈다. 시작 시점의 참/거짓으로는 통화 중에 다른 경로가 켠 것과
+			// 구별할 수 없고, 늦게 도착한 옛 세션의 종료가 새 세션의 것을 지운다
+			// (2026-08-27 12차 적대리뷰 지적).
+			voiceSessionSeq += 1;
+			const voiceSessionKey = `voice-${voiceSessionSeq}`;
 			const session = createVoiceSession(liveProvider, {
 				useProxy: useDirectMode,
 			});
@@ -3241,7 +3254,8 @@ export function ChatArea({
 						// only ran in streaming chat before; route them here too so
 						// voice can drive apps. Auto-switches to the owner app.
 						// 실시간 음성은 셸이 요청을 조립하지 않는다 — 기본값(false)이 사실이다.
-						onAppToolCall: (req) => dispatchAppToolCall(req),
+						// 이 통화가 켠 지켜보기에는 통화 식별자를 남긴다(FR-ENV-ATTENTION.13).
+						onAppToolCall: (req) => dispatchAppToolCall(req, { watchOwner: voiceSessionKey }),
 						onAppControl: (req) => dispatchAppControl(req),
 					});
 					session.sendToolResponse(callId, result.output);
@@ -3263,7 +3277,7 @@ export function ChatArea({
 				// ⚠️ 무조건 끄면 텍스트 대화에서 켜 둔 지켜보기까지 지운다. EnvironmentSession 은
 				//    모듈 전역 하나라 출처를 스스로 알지 못하므로, 통화 시작 시점의 상태를
 				//    여기서 기억해 두고 그것과 비교한다 (2026-08-27 11차 적대리뷰 지적).
-				if (!watchingBeforeVoice) environmentSession.unwatch();
+				environmentSession.unwatchIfOwner(voiceSessionKey);
 				// Atomic terminal transition for a mid-call drop. Tear down (cost
 				// summary, bridge, mic, player) SYNCHRONOUSLY first, THEN set the
 				// terminal status once — so the derived voice button can't re-enable

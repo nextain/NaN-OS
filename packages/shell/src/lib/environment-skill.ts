@@ -122,6 +122,12 @@ export interface EnvironmentSkillDeps {
 	 *    새 경로마다 조용히 거짓 약속이 나간다(2026-08-27 11차 적대리뷰에서 실제로 그랬다).
 	 */
 	readonly segmentsRideRequests: boolean;
+	/**
+	 * 이 호출로 켜지는 지켜보기의 주인 (FR-ENV-ATTENTION.13).
+	 * 실시간 음성은 그 통화의 식별자를 준다 — 통화가 끝날 때 자기가 켠 것만 끄기 위해서다.
+	 * 다른 경로는 주지 않는다(주인 없음 = 통화가 끄지 않는다).
+	 */
+	readonly watchOwner?: string;
 }
 
 /** 도구 호출 하나의 결과. 성공 여부를 문자열에서 되짚지 않는다. */
@@ -172,14 +178,18 @@ export async function executeEnvironmentSkill(
 				deps.segmentsRideRequests ? "그만 본다: 다음 요청부터 표면 개수만 실린다" : "그만 본다",
 			);
 		}
-		deps.session.watch();
+		// 관측이 먼저다. 켜 놓고 실패를 보고하면, 뒤에 환경이 살아났을 때 성공한 watch 없이
+		// 표면 이름이 실린다 — 실패라고 말해 놓고 노출 상태만 바꿔 두는 셈이다
+		// (2026-08-27 12차 적대리뷰 지적).
 		await deps.refresh();
 		const rendered = renderReport(deps.session.latestReport());
+		if (rendered === null) {
+			return fail("지켜보지 못한다: 작업 표면 환경이 지금 응답하지 않는다");
+		}
+		deps.session.watch(deps.watchOwner);
 		const promise = deps.segmentsRideRequests
 			? "지켜본다: 다음 요청부터 목록이 실린다"
 			: "지켜본다고 표시했다. 다만 지금 이야기하는 이 경로(실시간 음성)는 요청마다 목록을 싣지 않는다 — 변화가 궁금하면 그때그때 observe 를 불러라";
-		// 지켜보기는 켜졌지만 볼 것을 못 받았다 — 절반만 된 것을 성공이라 말하지 않는다.
-		if (rendered === null) return fail(`${promise}\n다만 작업 표면 환경이 지금 응답하지 않는다`);
 		return done(`${promise}\n${rendered}`);
 	}
 
@@ -206,6 +216,7 @@ export function liveEnvironmentDeps(
 	terminalInput: boolean,
 	awareness: EnvironmentAwareness = "auto",
 	segmentsRideRequests = false,
+	watchOwner?: string,
 ): EnvironmentSkillDeps {
 	const grants: DispatchGrants = { workspaceObserve: true, terminalInput };
 	return {
@@ -215,5 +226,6 @@ export function liveEnvironmentDeps(
 		session: environmentSession,
 		awareness,
 		segmentsRideRequests,
+		watchOwner,
 	};
 }

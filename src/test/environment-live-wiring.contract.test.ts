@@ -209,6 +209,48 @@ describe("주의를 나이아가 쥔다 (FR-ENV-ATTENTION.1~4) [UC-ENV-ATTENTION
     expect(Object.keys(session.segment() as object).sort()).toEqual(["kind", "omitted", "surfaces"]);
   });
 
+  it("주인이 붙은 지켜보기는 그 주인만 끈다 (FR-ENV-ATTENTION.13)", () => {
+    const session = watching([pane("p1", { label: "빌더" })]);
+    session.watch("voice-1");
+    session.unwatchIfOwner("voice-2");
+    expect(session.watching(), "남의 표를 보고 껐다").toBe(true);
+    session.unwatchIfOwner("voice-1");
+    expect(session.watching()).toBe(false);
+  });
+
+  it("주인 없이 켠 지켜보기는 통화가 끄지 못한다", () => {
+    const session = watching([pane("p1", { label: "빌더" })]);
+    session.watch(); // 텍스트 경로 — 주인 없음
+    session.unwatchIfOwner("voice-1");
+    expect(session.watching(), "텍스트가 켠 것을 통화가 껐다").toBe(true);
+  });
+
+  it("통화 중에 다른 경로가 다시 켜면 주인이 바뀐다 — 옛 통화가 지우지 못한다", () => {
+    const session = watching([pane("p1", { label: "빌더" })]);
+    session.watch("voice-1");
+    session.watch(); // 통화 도중 텍스트가 새로 켰다
+    session.unwatchIfOwner("voice-1");
+    expect(session.watching(), "통화가 자기 것이 아닌 지켜보기를 지웠다").toBe(true);
+    expect(session.watchedBy()).toBeUndefined();
+  });
+
+  it("옛 통화의 늦은 종료가 새 통화의 지켜보기를 지우지 못한다", () => {
+    const session = watching([pane("p1", { label: "빌더" })]);
+    session.watch("voice-1");
+    session.watch("voice-2"); // 재연결
+    session.unwatchIfOwner("voice-1"); // 옛 세션의 종료가 뒤늦게 도착
+    expect(session.watching(), "옛 세션이 새 세션의 것을 지웠다").toBe(true);
+    expect(session.watchedBy()).toBe("voice-2");
+  });
+
+  it("예산으로 저절로 풀리면 주인 표도 사라진다", () => {
+    const session = watching([pane("p1", { label: "빌더" })]);
+    session.watch("voice-1");
+    for (let i = 0; i <= WATCH_TURN_BUDGET; i += 1) session.noteTurn();
+    expect(session.watching()).toBe(false);
+    expect(session.watchedBy(), "꺼졌는데 주인 표가 남았다").toBeUndefined();
+  });
+
   it("지켜보기는 조작 권한과 무관하다 — 주의는 권한이 아니다", async () => {
     const session = watching([pane("t1", { label: "zsh" })]);
     session.watch();

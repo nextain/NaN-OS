@@ -373,7 +373,7 @@ describe("경로가 못 하는 것을 한다고 말하지 않는다 (FR-ENV-ATTE
 		expect(out).toContain("다음 요청부터 목록이 실린다");
 	});
 
-	it("환경이 응답하지 않아도 경로 사실은 그대로 말한다", async () => {
+	it("환경이 응답하지 않으면 경로 약속 자체를 하지 않는다 — 켜지지도 않았다", async () => {
 		const session = new EnvironmentSession();
 		const out = await runSkill(
 			{ action: "watch" },
@@ -386,8 +386,10 @@ describe("경로가 못 하는 것을 한다고 말하지 않는다 (FR-ENV-ATTE
 				grants: { workspaceObserve: true, terminalInput: false },
 			},
 		);
-		expect(out).toContain("요청마다 목록을 싣지 않는다");
+		// 켜지지 않았으므로 "이 경로는 …" 같은 약속을 붙일 자리가 없다.
+		expect(out).toContain("지켜보지 못한다");
 		expect(out).toContain("응답하지 않는다");
+		expect(session.watching(), "실패인데 켜졌다").toBe(false);
 	});
 });
 
@@ -449,5 +451,66 @@ describe("성공 여부를 문자열에서 되짚지 않는다 (FR-ENV-LIVE.5 FR
 		const d = deps([pane("p1", { label: "빌더", agent: "codex" })]); // 경로 미지정
 		const out = await runSkill({ action: "watch" }, d);
 		expect(out, "모르는 경로인데 실린다고 약속했다").not.toContain("다음 요청부터 목록이 실린다");
+	});
+});
+
+describe("실패한 watch 는 노출 상태를 바꾸지 않는다 (FR-ENV-ATTENTION.14)", () => {
+	// 켜 놓고 실패를 보고하면, 뒤에 환경이 살아났을 때 성공한 watch 없이 표면 이름이
+	// 실린다 — 실패라고 말해 놓고 노출만 바꿔 두는 셈이다(12차 적대리뷰 지적).
+	it("환경이 응답하지 않으면 지켜보기가 켜지지 않는다", async () => {
+		const session = new EnvironmentSession();
+		const r = await executeEnvironmentSkill(
+			{ action: "watch" },
+			{
+				session,
+				awareness: "auto",
+				segmentsRideRequests: true,
+				refresh: async () => null,
+				commands: { invoke: async () => ({}) },
+				grants: { workspaceObserve: true, terminalInput: false },
+			},
+		);
+		expect(r.ok).toBe(false);
+		expect(session.watching(), "실패라고 해 놓고 지켜보기를 켜 두었다").toBe(false);
+	});
+
+	it("환경이 살아난 뒤에도 성공한 watch 없이는 목록이 실리지 않는다", async () => {
+		const session = new EnvironmentSession();
+		let alive = false;
+		const d: EnvironmentSkillDeps = {
+			session,
+			awareness: "auto",
+			segmentsRideRequests: true,
+			refresh: async () => {
+				if (!alive) {
+					session.markUnavailable();
+					return null;
+				}
+				return session.observeSnapshot({
+					panes: [pane("p1", { label: "빌더", agent: "codex" })],
+				} as never);
+			},
+			commands: { invoke: async () => ({}) },
+			grants: { workspaceObserve: true, terminalInput: false },
+		};
+		expect((await executeEnvironmentSkill({ action: "watch" }, d)).ok).toBe(false);
+
+		alive = true;
+		await executeEnvironmentSkill({ action: "observe" }, d); // 환경이 살아났다
+		expect(
+			session.segment("auto")?.surfaces,
+			"실패한 watch 뒤에 환경이 살아나자 목록이 실렸다",
+		).toEqual([]);
+
+		// 다시 제대로 켜면 그때는 실린다 — 전부 막아서 통과하는 것이 아니다.
+		expect((await executeEnvironmentSkill({ action: "watch" }, d)).ok).toBe(true);
+		expect(session.segment("auto")?.surfaces).toHaveLength(1);
+	});
+
+	it("표면이 하나도 없어도 환경이 응답하면 지켜보기는 켜진다", async () => {
+		const d = deps([], { segmentsRideRequests: true });
+		const r = await executeEnvironmentSkill({ action: "watch" }, d);
+		expect(r.ok).toBe(true);
+		expect(d.session.watching()).toBe(true);
 	});
 });

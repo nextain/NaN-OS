@@ -255,12 +255,31 @@ async function lastToolResult(page: Page): Promise<string> {
 	});
 }
 
+/** 보낸 chat_request 개수. 새 턴이 실제로 나갔는지 확인하는 데 쓴다. */
+async function chatRequestCount(page: Page): Promise<number> {
+	return page.evaluate(
+		() =>
+			(window as unknown as { __NAIA_E2E__: { outbound: Record<string, unknown>[] } }).__NAIA_E2E__
+				.outbound.filter((m) => m?.type === "chat_request").length,
+	);
+}
+
+/**
+ * 텍스트로 한 턴 보낸다.
+ *
+ * ⚠️ 요청이 실제로 나갔는지 확인한다. 안 나가면 뒤의 단언이 **옛 요청**을 읽고 통과해
+ *    버린다 — 실제로 그렇게 통과한 적이 있다(2026-08-27 실측).
+ */
 async function textTurn(page: Page, text: string) {
+	const before = await chatRequestCount(page);
 	const input = page.locator(".chat-input");
 	await expect(input).toBeEnabled({ timeout: 10_000 });
 	await input.fill(text);
 	await input.press("Enter");
-	await page.waitForTimeout(900);
+	await expect
+		.poll(async () => await chatRequestCount(page), { timeout: 10_000 })
+		.toBeGreaterThan(before);
+	await page.waitForTimeout(400);
 }
 
 test.describe("#502 음성 경로도 주의 예산을 쓴다 (FR-ENV-ATTENTION.7)", () => {
@@ -392,6 +411,14 @@ test.describe("#502 음성 경로도 주의 예산을 쓴다 (FR-ENV-ATTENTION.7
 			"통화가 소유하지 않은 지켜보기를 통화 종료가 지웠다",
 		).toBeGreaterThan(0);
 	});
+
+	// 통화 도중 **다른 경로**가 켠 지켜보기를 통화 종료가 지우지 않는지는 여기서 재지 못한다.
+	// 실측(2026-08-27): 통화가 살아 있는 동안 텍스트 입력은 chat_request 를 만들지 않는다 —
+	// 그 순서는 텍스트 경로로는 일어날 수 없다. 남는 것은 뇌가 미는 능동 발화 레인인데,
+	// 이 대역으로는 그 레인을 통화 중에 구동할 수단이 없다.
+	// 그래서 소유권 판정 자체는 계약 테스트가 든다
+	// (src/test/environment-live-wiring.contract.test.ts — 주인 불일치·재연결·예산 해제 4건).
+	// 여기서는 실제로 일어날 수 있는 순서(통화 전에 켠 것이 통화 종료를 견딘다)만 잰다.
 
 	test("음성 턴이 예산을 다 쓰면 텍스트로 돌아와도 목록이 빠진다", async ({ page }) => {
 		const btn = await startVoice(page);

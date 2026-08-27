@@ -66,19 +66,44 @@ export class EnvironmentSession {
   private watched = false;
   /** 지켜보기가 남은 턴 수. 0 이면 다음 턴에 저절로 풀린다 (FR-ENV-ATTENTION.7). */
   private watchTurnsLeft = 0;
+  /**
+   * 지금 켜져 있는 지켜보기를 누가 켰는가 (FR-ENV-ATTENTION.13).
+   *
+   * 왜 필요한가: 통화가 끝날 때 "통화가 켠 것만" 끄려면 누가 켰는지 알아야 한다.
+   * 통화 시작 시점의 참/거짓만으로는 알 수 없다 — 통화 중에 텍스트나 능동 발화가 켠 것도
+   * 그 통화가 끄게 되고, 늦게 도착한 옛 세션의 종료가 새 세션이 켠 것을 지운다
+   * (2026-08-27 12차 적대리뷰 지적).
+   */
+  private watchOwner: string | undefined;
 
   constructor(private readonly cap?: number) {}
 
   /** 나이아가 표면을 계속 보겠다고 정한다. 다음 요청부터 목록이 실린다 (FR-ENV-ATTENTION.1). */
-  watch(): void {
+  watch(owner?: string): void {
     this.watched = true;
     this.watchTurnsLeft = WATCH_TURN_BUDGET;
+    this.watchOwner = owner;
   }
 
   /** 나이아가 그만 보겠다고 정한다. 다음 요청부터 개수만 실린다 (FR-ENV-ATTENTION.2). */
   unwatch(): void {
     this.watched = false;
     this.watchTurnsLeft = 0;
+    this.watchOwner = undefined;
+  }
+
+  /**
+   * 이 주인이 켠 지켜보기만 끈다 (FR-ENV-ATTENTION.13).
+   * 다른 주인이 켠 것이거나 이미 꺼져 있으면 아무것도 하지 않는다.
+   */
+  unwatchIfOwner(owner: string): void {
+    if (!this.watched || this.watchOwner !== owner) return;
+    this.unwatch();
+  }
+
+  /** 지금 지켜보기를 켠 주인. 아무도 안 켰으면 undefined. 관측용이다. */
+  watchedBy(): string | undefined {
+    return this.watched ? this.watchOwner : undefined;
   }
 
   /**
@@ -88,7 +113,7 @@ export class EnvironmentSession {
   noteTurn(): void {
     if (!this.watched) return;
     if (this.watchTurnsLeft <= 0) {
-      this.watched = false;
+      this.unwatch();
       return;
     }
     this.watchTurnsLeft -= 1;
