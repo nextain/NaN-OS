@@ -421,3 +421,79 @@ describe("조작이 실제 명령까지 간다 (FR-ENV-LIVE.3·5)", () => {
     expect(calls).toHaveLength(0);
   });
 });
+
+describe("비용이 실제로 줄었는가 (FR-ENV-ATTENTION.15)", () => {
+  // 지금까지의 테스트는 "스위치가 젖혀지는가"만 잰다. 사용자가 지적한 것은 비용이므로,
+  // 줄어든 양을 직접 재는 것이 하나는 있어야 한다. 재지 않으면 "줄였다"는 말은 주장일 뿐이다.
+  const MANY = Array.from({ length: 12 }, (_, i) =>
+    pane(`p${i}`, { label: `사내-저장소-${i}-빌드-감시`, agent: i % 2 === 0 ? "codex" : undefined }),
+  );
+
+  function bytesOf(seg: unknown): number {
+    return new TextEncoder().encode(JSON.stringify(seg)).length;
+  }
+
+  it("지켜보지 않는 동안의 세그먼트가 목록보다 훨씬 작다", () => {
+    const session = new EnvironmentSession();
+    session.observeSnapshot({ panes: MANY } as never);
+    const withheld = bytesOf(session.segment("auto"));
+    const full = bytesOf(session.segment("always"));
+    expect(full, "표면이 실제로 실리지 않았다면 이 비교는 공허하다").toBeGreaterThan(200);
+    expect(withheld).toBeLessThan(full * 0.2);
+  });
+
+  it("한 대화에서 실제로 오가는 총량을 잰다 — 지켜보기는 예산만큼만 비싸다", () => {
+    const TURNS = 40;
+    const always = new EnvironmentSession();
+    const auto = new EnvironmentSession();
+    let alwaysBytes = 0;
+    let autoBytes = 0;
+    always.observeSnapshot({ panes: MANY } as never);
+    auto.observeSnapshot({ panes: MANY } as never);
+    auto.watch(); // 나이아가 한 번 켠 뒤 잊었다 — 최악의 경우
+    for (let t = 0; t < TURNS; t += 1) {
+      alwaysBytes += bytesOf(always.segment("always"));
+      autoBytes += bytesOf(auto.segment("auto"));
+      always.noteTurn();
+      auto.noteTurn();
+    }
+    expect(alwaysBytes).toBeGreaterThan(0);
+    // 켜 둔 채 잊어도 예산이 풀어 주므로, 40턴 총량이 절반 아래여야 한다.
+    expect(autoBytes).toBeLessThan(alwaysBytes / 2);
+  });
+
+  it("지켜보지 않는 동안에는 터미널 이름이 한 글자도 나가지 않는다", () => {
+    const session = new EnvironmentSession();
+    const report = session.observeSnapshot({ panes: MANY } as never);
+    const wire = JSON.stringify(session.segment("auto"));
+    for (const s of report.surfaces) {
+      expect(wire).not.toContain(s.label);
+    }
+  });
+});
+
+describe("always 는 예산과 무관하다 — 출력만이 아니라 상태도 (FR-ENV-ATTENTION.7)", () => {
+  // always 를 쓰는 동안 잠복한 지켜보기가 소진되면, 사용자가 auto 로 되돌릴 때
+  // 나이아가 끈 적 없는데 목록이 사라진다 (2026-08-27 13차 적대리뷰 지적).
+  // 셸은 always 에서 noteTurn 을 부르지 않는다. 그 규칙이 실제로 상태를 지키는지 본다.
+  it("always 동안 턴을 세지 않으면 auto 로 돌아왔을 때 지켜보기가 남아 있다", () => {
+    const session = new EnvironmentSession();
+    session.observeSnapshot({ panes: [pane("p1", { label: "빌더", agent: "codex" })] } as never);
+    session.watch();
+    // always 구간 — 셸이 noteTurn 을 부르지 않는다.
+    for (let t = 0; t < WATCH_TURN_BUDGET * 3; t += 1) {
+      expect(session.segment("always")?.surfaces).toHaveLength(1);
+    }
+    // auto 로 되돌아왔다.
+    expect(session.watching(), "always 를 쓰는 동안 잠복한 지켜보기가 사라졌다").toBe(true);
+    expect(session.segment("auto")?.surfaces).toHaveLength(1);
+  });
+
+  it("auto 로 돌아온 뒤에는 예산이 정상으로 흐른다", () => {
+    const session = new EnvironmentSession();
+    session.observeSnapshot({ panes: [pane("p1", { label: "빌더", agent: "codex" })] } as never);
+    session.watch();
+    for (let t = 0; t <= WATCH_TURN_BUDGET; t += 1) session.noteTurn();
+    expect(session.watching(), "auto 에서는 예산이 흘러야 한다").toBe(false);
+  });
+});

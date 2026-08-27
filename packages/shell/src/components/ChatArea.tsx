@@ -1777,15 +1777,15 @@ export function ChatArea({
 			// 옛것을 보여 주는 셈이다. 개수만 싣는 동안에도 개수가 틀리면 나이아가 부를
 			// 이유를 잘못 판단한다.
 			//
-			// 비용은 실측했다: herdr 스냅샷 한 번이 10ms 다(2026-08-27). 그 뒤에 오는 LLM
-			// 호출 앞에서는 무시할 수준이고, Herdr 이 없으면 즉시 실패해 조용히 넘어간다.
+			// 관측 갱신 비용은 실측했다: herdr 스냅샷 한 번이 10ms 다(2026-08-27). 그 뒤에
+			// 오는 LLM 호출 앞에서는 무시할 수준이고, Herdr 이 없으면 즉시 실패해 넘어간다.
 			// 꺼 두었으면 부르지 않는다 — 껐다는 말은 값도 안 든다는 뜻이어야 한다.
 			if ((loadConfig()?.environmentAwareness ?? "auto") !== "off") {
 				await refreshEnvironment().catch(() => null);
-				// 지켜보기 예산을 한 턴 쓴다 (FR-ENV-ATTENTION.7). 다 쓰면 저절로 풀린다 —
-				// 나이아가 unwatch 를 부르는 것에만 기대면 켜 둔 채 잊는 경우를 못 막는다.
-				environmentSession.noteTurn();
 			}
+			// 지켜보기 예산을 한 턴 쓴다 (FR-ENV-ATTENTION.7). 음성 경로와 같은 헬퍼를 쓴다 —
+			// 여기만 따로 쓰다가 always 규칙이 이 경로에만 빠졌다(13차 적대리뷰 지적).
+			noteEnvironmentTurn();
 			await sendChatMessage({
 				message: text,
 				provider: {
@@ -1999,7 +1999,14 @@ export function ChatArea({
 	 * 정상 종료·중단 어느 쪽으로 끝나든 턴은 턴이다. 꺼져 있으면 아무것도 하지 않는다.
 	 */
 	function noteEnvironmentTurn() {
-		if ((loadConfig()?.environmentAwareness ?? "auto") === "off") return;
+		const awareness = loadConfig()?.environmentAwareness ?? "auto";
+		// 꺼져 있으면 셀 것이 없다.
+		if (awareness === "off") return;
+		// always 는 예산과 무관하다 (FR-ENV-ATTENTION.7). 출력만 그런 것이 아니라 상태도
+		// 그래야 한다 — 여기서 예산을 깎으면 always 를 쓰는 동안 잠복한 지켜보기가 소진되고,
+		// 사용자가 auto 로 되돌릴 때 나이아가 끈 적 없는데 목록이 사라진다
+		// (2026-08-27 13차 적대리뷰 지적).
+		if (awareness === "always") return;
 		environmentSession.noteTurn();
 	}
 

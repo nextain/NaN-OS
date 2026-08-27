@@ -616,6 +616,52 @@ test.describe("#502 환경 스킬 배선 (FR-ENV-LIVE)", () => {
 		expect(await surfacesSegment(page), "껐는데 표면이 계속 실린다").toBeNull();
 	});
 
+	test("(B12) always 를 쓰는 동안 잠복한 지켜보기가 소진되지 않는다 (FR-ENV-ATTENTION.7)", async ({
+		page,
+	}) => {
+		// always 에서도 턴을 세면, 사용자가 auto 로 되돌릴 때 나이아가 끈 적 없는데
+		// 목록이 사라진다 (2026-08-27 13차 적대리뷰 지적).
+		await boot(page, BASE_CONFIG);
+		const input = page.locator(".chat-input");
+		await expect(input).toBeEnabled({ timeout: 5_000 });
+
+		// auto 에서 나이아가 켠다.
+		await setEnvCall(page, { action: "watch" });
+		await input.fill("따라와줘");
+		await input.press("Enter");
+		await page.waitForTimeout(1_500);
+
+		// 사용자가 always 로 바꾼 뒤 예산을 넘길 만큼 대화한다.
+		await page.evaluate(() => {
+			const raw = localStorage.getItem("naia-config");
+			const cfg = raw ? JSON.parse(raw) : {};
+			cfg.environmentAwareness = "always";
+			localStorage.setItem("naia-config", JSON.stringify(cfg));
+		});
+		await setEnvCall(page, { action: "unknown_action" }); // 환경을 안 건드리는 호출
+		for (let i = 0; i < WATCH_TURN_BUDGET + 3; i += 1) {
+			await input.fill(`턴 ${i}`);
+			await input.press("Enter");
+			await page.waitForTimeout(500);
+		}
+
+		// 다시 auto 로 되돌린다.
+		await page.evaluate(() => {
+			const raw = localStorage.getItem("naia-config");
+			const cfg = raw ? JSON.parse(raw) : {};
+			cfg.environmentAwareness = "auto";
+			localStorage.setItem("naia-config", JSON.stringify(cfg));
+		});
+		await input.fill("이제 어때?");
+		await input.press("Enter");
+		await expect
+			.poll(
+				async () => ((await surfacesSegment(page))?.surfaces as unknown[] | undefined)?.length ?? -1,
+				{ timeout: 10_000 },
+			)
+			.toBeGreaterThan(0);
+	});
+
 	test("(C) app_tool_call(focus) 이 실제 herdr 명령까지 간다", async ({ page }) => {
 		await boot(page, BASE_CONFIG);
 		// 나이아가 실제로 하는 순서대로 손잡이를 얻는다 — 지켜보기 전에는 손잡이가 안 나간다.
