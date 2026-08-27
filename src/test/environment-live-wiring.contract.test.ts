@@ -440,7 +440,10 @@ describe("비용이 실제로 줄었는가 (FR-ENV-ATTENTION.15)", () => {
   const MEASURED_WITHHELD = 77;
   const MEASURED_ALWAYS_40 = 47_480;
   const MEASURED_AUTO_40 = 13_070;
-  const TOLERANCE = 0.08; // 라벨 문구 같은 사소한 변화를 위한 폭. 회귀를 숨길 만큼 넓지 않다.
+  // 표본(라벨 포함)이 이 파일 안에서 고정되므로 폭이 넓을 이유가 없다. 8% 는 수십~수백
+  // 바이트를 조용히 통과시킨다(2026-08-28 실측). 표본이나 형태를 바꾸면 이 상수도 함께
+  // 고쳐야 한다 — 그것이 이 게이트의 뜻이다.
+  const TOLERANCE = 0.02;
 
   /**
    * 실측치 주변으로 **위아래 모두** 묶는다.

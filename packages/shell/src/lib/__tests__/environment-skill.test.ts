@@ -519,6 +519,9 @@ describe("이 기능이 요청마다 붙이는 고정 비용 (FR-ENV-ATTENTION.1
 	// 표면 세그먼트만 재고 "93.5% 줄였다"고 말하면, 이 기능이 새로 얹은 가장 큰 고정
 	// 문자열 — 도구 선언 — 을 분모와 분자 양쪽에서 빼는 셈이다. 작성자에게 유리한
 	// 경계였다 (2026-08-28 19차 적대리뷰 지적). 그것도 재고 함께 말한다.
+	//
+	// ⚠️ 세그먼트 크기를 하드코딩하지 않는다. 실제 객체에서 잰다 — 구현이 바뀌었는데
+	//    옛 상수로 계산하면 문서의 수치를 지키지 못한다(2026-08-28 20차 적대리뷰 지적).
 	function wireBytes(x: unknown): number {
 		return new TextEncoder().encode(JSON.stringify(x)).length;
 	}
@@ -531,25 +534,61 @@ describe("이 기능이 요청마다 붙이는 고정 비용 (FR-ENV-ATTENTION.1
 		...(SKILL_ENVIRONMENT.tier != null ? { tier: SKILL_ENVIRONMENT.tier } : {}),
 	};
 
-	it("도구 선언 크기가 실측치에 머문다 — 설명이 조용히 부풀지 않게", () => {
-		const bytes = wireBytes(declaration);
-		// 2026-08-28 실측 1509바이트. 위아래로 묶는다 — 위는 부풀기를, 아래는 설명을
-		// 깎아 비용만 좋게 만드는 것을 막는다(설명이 짧아지면 나이아가 언제 쓸지 모른다).
-		expect(bytes, `도구 선언이 부풀었다: ${bytes}바이트`).toBeLessThanOrEqual(1_630);
-		expect(bytes, `도구 선언이 깎였다: ${bytes}바이트`).toBeGreaterThanOrEqual(1_390);
+	/** 실제 코어가 내는 세그먼트. 고정 표본(표면 12개). */
+	function segments(): { withheld: number; full: number } {
+		const session = new EnvironmentSession();
+		session.observeSnapshot({
+			panes: Array.from({ length: 12 }, (_, i) =>
+				pane(`p${i}`, {
+					label: `사내-저장소-${i}-빌드-감시`,
+					...(i % 2 === 0 ? { agent: "codex" } : {}),
+				}),
+			),
+		} as never);
+		return { withheld: wireBytes(session.segment("auto")), full: wireBytes(session.segment("always")) };
+	}
+
+	// 2026-08-28 실측. 바뀌면 왜 바뀌었는지 적고 문서도 함께 고쳐야 한다.
+	const MEASURED_TOOL = 1_420;
+	const MEASURED_ALWAYS_TOTAL = 2_607;
+	const MEASURED_AUTO_TOTAL = 1_497;
+	// 표본이 완전히 결정적이므로 폭이 넓을 이유가 없다. 넓으면 수십 바이트가 조용히
+	// 스며든다 — 실제로 30바이트짜리 변이가 5% 폭을 통과했다(2026-08-28 실측).
+	// 문구를 바꾸면 이 상수도 함께 고쳐야 한다. 그것이 이 게이트의 뜻이다.
+	const TOL = 0.01;
+
+	function pinned(actual: number, measured: number, what: string): void {
+		expect(actual, `${what}가 부풀었다: ${actual} (실측 ${measured})`).toBeLessThanOrEqual(
+			Math.ceil(measured * (1 + TOL)),
+		);
+		expect(actual, `${what}가 줄었다: ${actual} (실측 ${measured})`).toBeGreaterThanOrEqual(
+			Math.floor(measured * (1 - TOL)),
+		);
+	}
+
+	it("도구 선언 크기가 실측치에 머문다 — 설명이 부풀지도 깎이지도 않게", () => {
+		// 아래는 부풀기를, 위는 "설명을 깎아 비용만 좋게 만들기"를 막는다.
+		// 설명이 짧아지면 나이아가 이 도구를 언제 쓸지 모르게 된다.
+		pinned(wireBytes(declaration), MEASURED_TOOL, "도구 선언");
 	});
 
-	it("도구 선언을 포함한 절감률을 함께 안다 — 유리한 경계를 감추지 않는다", () => {
+	it("도구 선언을 포함한 총비용과 절감률이 문서에 적힌 값과 같다", () => {
+		const { withheld, full } = segments();
 		const tool = wireBytes(declaration);
-		// 표면 12개 기준 실측: 목록 1187, 개수만 77 (계약 테스트가 이 값을 고정한다).
-		const alwaysTotal = tool + 1_187;
-		const autoTotal = tool + 77;
-		const netReduction = 1 - autoTotal / alwaysTotal;
-		// 세그먼트만 보면 93.5% 지만, 도구 선언까지 넣으면 40%대다. 둘 다 사실이고
-		// 요구사항에 둘 다 적혀 있다.
-		expect(netReduction).toBeGreaterThan(0.35);
-		expect(netReduction).toBeLessThan(0.5);
-		// 그리고 이 기능은 순증 비용을 가진다 — 켜기 전과 비교하면 늘어난다.
-		expect(autoTotal).toBeGreaterThan(0);
+		const alwaysTotal = tool + full;
+		const autoTotal = tool + withheld;
+		pinned(alwaysTotal, MEASURED_ALWAYS_TOTAL, "목록 전송 총비용");
+		pinned(autoTotal, MEASURED_AUTO_TOTAL, "개수만 전송 총비용");
+		// 문서가 적은 42.6% 를 좁게 묶는다. 넓은 범위는 잘못된 정확 수치를 통과시킨다.
+		const net = (1 - autoTotal / alwaysTotal) * 100;
+		expect(net, `포함 절감률이 문서(42.6%)와 다르다: ${net.toFixed(1)}%`).toBeGreaterThan(41.5);
+		expect(net, `포함 절감률이 문서(42.6%)와 다르다: ${net.toFixed(1)}%`).toBeLessThan(43.7);
+	});
+
+	it("세그먼트만 본 절감률도 문서(93.5%)와 같다 — 두 수치가 따로 놀지 않게", () => {
+		const { withheld, full } = segments();
+		const net = (1 - withheld / full) * 100;
+		expect(net, `세그먼트 절감률이 문서와 다르다: ${net.toFixed(1)}%`).toBeGreaterThan(92.5);
+		expect(net, `세그먼트 절감률이 문서와 다르다: ${net.toFixed(1)}%`).toBeLessThan(94.5);
 	});
 });
