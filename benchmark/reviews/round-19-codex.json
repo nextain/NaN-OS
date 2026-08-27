@@ -1,0 +1,30 @@
+{
+  "verdict": "NOT_CLEAN",
+  "frame_assessment": {
+    "scope_is_sufficient": false,
+    "missing_concerns": [
+      "비용 검증이 environmentSurfaces 세그먼트와 chat_request 바이트만 재고, 새로 매 턴 등록되어 LLM 도구 목록에 포함되는 skill_environment 스키마 비용을 제외한다.",
+      "전역 enableTools=false와 environmentAwareness=auto의 조합에서 능동적으로 watch할 수 없는 상태를 다루지 않는다."
+    ]
+  },
+  "findings": [
+    {
+      "id": "R19-COST-OMITS-TOOL-SCHEMA",
+      "file_location": "packages/shell/src/components/ChatArea.tsx:1816; packages/shell/src/lib/environment-skill.ts:33; src/test/environment-live-wiring.contract.test.ts:462; docs/requirements.md:1049",
+      "impact": "기본 auto에서도 긴 skill_environment 설명과 파라미터 스키마가 등록되어 LLM 도구 선언 비용을 매 대화에 만들지만, 93.5%·72.5% 절감 주장은 이 비용을 분모와 분자 모두에서 제외한다. 따라서 사용자가 문제 삼은 실제 반복 입력 비용이 줄었는지는 현재 증거로 판정할 수 없다.",
+      "why_it_matters": "테스트는 세그먼트 JSON과 셸의 chat_request만 측정한다. app_skills로 등록된 도구가 agent에서 모델 요청의 tools에 합성되는 실제 경계를 측정하지 않아, 새 기능이 추가한 가장 큰 고정 문자열을 보지 않은 채 비용 개선을 Done으로 선언했다. 이는 작성자에게 유리하게 기울어진 측정 경계다.",
+      "severity": "medium"
+    },
+    {
+      "id": "R19-AUTO-WITH-TOOLS-DISABLED",
+      "file_location": "packages/shell/src/components/ChatArea.tsx:1812; packages/shell/src/components/ChatArea.tsx:1869; packages/shell/src/components/ChatArea.tsx:1874",
+      "impact": "environmentAwareness=auto이면서 전역 enableTools=false이면 환경 도구 등록 확인만으로 개수와 listWithheld 세그먼트를 보내지만, 같은 요청은 enableTools=false라 나이아가 observe/watch를 호출할 수 없다. 기본 정책의 '개수를 보고 필요할 때 스스로 켠다'는 복구 불가능한 안내가 된다.",
+      "why_it_matters": "environmentToolReady 판정은 도구 등록 확인만 보고 실제 요청의 도구 활성화 여부를 보지 않는다. 관련 E2E fixture들은 enableTools=true로 고정되어 이 조합을 측정하지 않는다. 새 기본값이 뇌에 행동 가능성을 암시하지만 실제 행동 경로는 닫혀 있는 실패 양식이다.",
+      "severity": "medium"
+    }
+  ],
+  "what_would_make_it_clean": [
+    "agent가 provider로 보내는 최종 모델 요청에서 environmentSurfaces 렌더링과 skill_environment 도구 스키마를 모두 포함한 입력 바이트 또는 토큰 대리치를 측정하고, 기존 방식 대비 총 반복 비용 절감을 고정한다.",
+    "enableTools=false일 때 auto 세그먼트를 생략하거나, 행동 불가능한 단순 정보로 명시적으로 렌더링하도록 정책을 정한 뒤 해당 설정 조합을 실 UI 테스트에 추가한다."
+  ]
+}

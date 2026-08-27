@@ -68,6 +68,9 @@ function pairedAgentSource(): string | undefined {
   for (let up = 2; up <= 6; up += 1) {
     const base = resolve(__dirname, ...Array.from({ length: up }, () => ".."));
     candidates.push(resolve(base, "naia-agent"));
+    // Rust 빌드·e2e-tauri 가 쓰는 정본 경로를 함께 본다. 여기만 다르면 같은 짝을
+    // 두 곳이 다르게 고른다 (2026-08-28 실측 — 핀을 올리자 이 테스트만 짝을 못 찾았다).
+    candidates.push(resolve(base, "naia-agent-worktrees", `shell-pair-${pinned.slice(0, 7)}`));
     candidates.push(resolve(base, "naia-agent-worktrees", "env-surfaces-112"));
   }
   for (const root of candidates) {

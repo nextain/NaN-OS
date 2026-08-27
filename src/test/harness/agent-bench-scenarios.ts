@@ -41,6 +41,10 @@ const FAMILIES: readonly {
   // 무엇이 실리는지로 보고(browser), "안 샌다"는 이 기계에서 실제로 열려 있는 터미널
   // 이름으로 봐야 한다(native) — 우리가 고른 문자열로는 유출 부재를 증명할 수 없다.
   { prefix: "UC-ENV-ATTENTION", gate: "native", requiredEvidence: ["browser", "native"] },
+  // 판단은 배선과 다른 성질이다. 실제 모델을 여러 대화 상황에 놓고 선택을 재야 하고,
+  // 그것은 자격증명과 비용이 드는 사람 결정이다. 등급을 요구해 두고 미검증으로 남긴다 —
+  // 요구를 낮춰 초록불을 만드는 것이 작성자 몫이 아니라는 것이 이 게이트의 뜻이다.
+  { prefix: "UC-ENV-ATTENTION-POLICY", gate: "integration", requiredEvidence: ["native"] },
   // 두 저장소 어휘 동기도 결정론이다.
   { prefix: "UC-WIRE-UNION-", gate: "protocol", requiredEvidence: ["mock"] },
 ];
@@ -112,8 +116,20 @@ export function allHeadings(markdown: string): readonly string[] {
   return [...out];
 }
 
+/**
+ * 시나리오가 속한 계열. 접두사가 여러 개 걸리면 **가장 긴 것**이 이긴다.
+ *
+ * 배열 순서로 먼저 걸린 것을 쓰면, 다른 계열의 접두사를 확장한 시나리오가 조용히 엉뚱한
+ * 요구를 상속한다 — `UC-ENV-ATTENTION-POLICY` 가 `UC-ENV-ATTENTION` 의 등급을 물려받아
+ * 이미 확보한 증거로 통과해 버리는 식이다. 더 구체적인 선언이 덜 구체적인 것을 이겨야 한다.
+ */
 export function familyOf(uc: string): (typeof FAMILIES)[number] | undefined {
-  return FAMILIES.find((f) => uc.startsWith(f.prefix));
+  let best: (typeof FAMILIES)[number] | undefined;
+  for (const f of FAMILIES) {
+    if (!uc.startsWith(f.prefix)) continue;
+    if (best === undefined || f.prefix.length > best.prefix.length) best = f;
+  }
+  return best;
 }
 
 export function parseScenarios(markdown: string): readonly BenchScenario[] {

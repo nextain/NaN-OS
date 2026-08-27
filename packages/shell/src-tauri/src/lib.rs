@@ -3046,9 +3046,32 @@ async fn agent_dispatcher(
                     })
                     .unwrap_or_default();
                 let mut c = client.clone();
-                tauri::async_runtime::spawn(async move {
-                    let _ = c.register_app_skills(app_id, tools).await;
-                });
+                // 여기서 기다린다. spawn 후 버리면 등록이 뒤이은 chat_request 보다 늦게
+                // 도착할 수 있고, 실패는 아무 데도 남지 않는다 (2026-08-28 17차 적대리뷰 지적).
+                // 디스패처는 채널을 순서대로 처리하므로, 여기서 await 하면 등록이 끝난 뒤에야
+                // 다음 메시지(대화 요청)가 처리된다.
+                //
+                // requestId 가 있으면 결과를 프런트에 돌려준다. 그래야 "전달됐다"가 추측이
+                // 아니라 사실이 된다 — skill_list/skill_list_response 와 같은 방식이다.
+                let rid = v
+                    .get("requestId")
+                    .and_then(|x| x.as_str())
+                    .unwrap_or("")
+                    .to_string();
+                let outcome = c.register_app_skills(app_id, tools).await;
+                if let Err(e) = &outcome {
+                    log_both(&format!("[Naia] register_app_skills failed: {}", e));
+                }
+                if !rid.is_empty() {
+                    let payload = serde_json::json!({
+                        "type": "app_skills_result",
+                        "requestId": rid,
+                        "ok": outcome.is_ok(),
+                        "error": outcome.as_ref().err().map(|e| e.to_string()),
+                    })
+                    .to_string();
+                    let _ = app.emit("agent_response", &payload);
+                }
             }
             "app_skills_clear" => {
                 let app_id = v
@@ -3057,9 +3080,26 @@ async fn agent_dispatcher(
                     .unwrap_or("")
                     .to_string();
                 let mut c = client.clone();
-                tauri::async_runtime::spawn(async move {
-                    let _ = c.clear_app_skills(app_id).await;
-                });
+                // 해제도 같다. 실패를 삼키면 사용자가 껐는데 도구 선언이 뇌에 남는다.
+                let rid = v
+                    .get("requestId")
+                    .and_then(|x| x.as_str())
+                    .unwrap_or("")
+                    .to_string();
+                let outcome = c.clear_app_skills(app_id).await;
+                if let Err(e) = &outcome {
+                    log_both(&format!("[Naia] clear_app_skills failed: {}", e));
+                }
+                if !rid.is_empty() {
+                    let payload = serde_json::json!({
+                        "type": "app_skills_result",
+                        "requestId": rid,
+                        "ok": outcome.is_ok(),
+                        "error": outcome.as_ref().err().map(|e| e.to_string()),
+                    })
+                    .to_string();
+                    let _ = app.emit("agent_response", &payload);
+                }
             }
             "skill_list" => {
                 // ListSkills ??skill_list_response(??fetchAgentSkills 湲곕? ?뺥깭). parameters_json ??parameters ?뚯떛.

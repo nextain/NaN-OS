@@ -1,0 +1,49 @@
+{
+  "verdict": "NOT_CLEAN",
+  "frame_assessment": {
+    "scope_is_sufficient": false,
+    "missing_concerns": [
+      "관측 성공 후 Herdr가 응답 불능이 되는 상태 전이에서 이전 보고서가 폐기되는지 검증하지 않았다.",
+      "실제 LLM이 문맥에 따라 watch를 선택하고 작업 종료 후 unwatch하는 능동 정책은 검증하지 않았다. 테스트가 도구 호출을 직접 주입한다.",
+      "environmentAwareness는 설정 스키마에만 있고 사용자가 조작할 UI와 런타임 등록·해제 배선이 없다.",
+      "개수 전용 세그먼트가 수신측에서 의도적 비공개 상태로 해석되는지 검증하지 않았다."
+    ]
+  },
+  "findings": [
+    {
+      "id": "ENV-ATTN-STALE-AFTER-REFRESH-FAILURE",
+      "file_location": "packages/shell/src/lib/environment-skill.ts:70; packages/shell/src/components/ChatArea.tsx:1779",
+      "impact": "한 번 성공적으로 관측한 뒤 Herdr 스냅샷 호출이 실패하면, 직전 턴의 표면 이름·손잡이 또는 개수가 계속 뇌로 전송된다. watch/always 상태에서는 닫혔거나 더 이상 관측할 수 없는 터미널 이름까지 재전송될 수 있다.",
+      "why_it_matters": "refreshEnvironment는 실패 시 null만 반환하고 environmentSession의 report·known·registry를 지우지 않는다. ChatArea는 그 실패를 무시한 뒤 buildEnvironmentSegments에서 기존 report를 사용한다. 따라서 FR-ENV-LIVE.2의 '스냅샷이 없으면 미전송'과 FR-ENV-ATTENTION.5의 '지금 상태'가 모두 깨진다. Playwright B6/B7은 성공 스냅샷에서 성공 스냅샷으로 바뀌는 경우만 재므로 이 실패 양식을 잡지 못한다.",
+      "severity": "high"
+    },
+    {
+      "id": "ENV-ATTN-AUTONOMY-NOT-TESTED",
+      "file_location": "packages/shell/e2e/environment-skill.spec.ts:278; packages/shell/e2e/environment-skill.spec.ts:305",
+      "impact": "구현은 watch/unwatch 명령을 수행할 수 있다는 것만 증명하며, 나이아가 필요한 때 스스로 켜고 일이 끝난 뒤 스스로 끈다는 원 요청의 핵심 동작은 증명하지 않는다. 실제 운용에서는 한 번 watch한 뒤 세션 내내 목록을 보내 비용과 이름 노출이 지속될 수 있다.",
+      "why_it_matters": "E2E는 setEnvCall로 watch와 unwatch를 강제로 주입한다. 도구 설명에 '끝나면 unwatch'라고 적은 것 외에는 자동 해제 조건, 정책, 실제 모델 평가가 없다. 이는 능동 결정을 재는 테스트가 아니라 작성자가 원하는 호출을 넣었을 때 상태기가 전환되는지만 재는 테스트다.",
+      "severity": "high"
+    },
+    {
+      "id": "ENV-ATTN-SETTING-NOT-USER-OPERABLE",
+      "file_location": "packages/shell/src/lib/config.ts:151; packages/shell/src/App.tsx:449",
+      "impact": "off/auto/always는 config 필드로는 존재하지만 셸 소스에 이를 표시하거나 저장하는 설정 UI가 없다. 사용자는 앱 안에서 옵셔널 선택을 할 수 없으며, 실행 중 off로 바꿔도 이미 등록된 도구가 agent에서 해제되지 않는다.",
+      "why_it_matters": "environmentAwareness의 사용처는 설정 타입, 시작 시 조건부 등록, 요청/도구 실행 시 판정뿐이다. App의 등록 effect도 시작 시 한 번뿐이고 환경 app_skills_clear 경로가 없다. B4/B5는 서로 다른 초기 localStorage로 앱을 새로 부팅해 이 결함을 가린다. 요구사항의 '사용자가 원하면'과 'off면 도구도 등록하지 않는다'가 실제 사용자 흐름에서는 충족되지 않는다.",
+      "severity": "medium"
+    },
+    {
+      "id": "ENV-ATTN-COUNT-SEMANTICS-COLLAPSED",
+      "file_location": "src/main/app/control/environment-session.ts:88; /var/home/luke/alpha-adk/projects/naia-agent-worktrees/env-surfaces-112/src/main/domain/environment-segments.ts:249",
+      "impact": "auto 미관찰 상태의 의도적 비공개 개수와 상한 때문에 잘린 개수가 동일한 omitted 필드로 합쳐지고, 수신측은 둘 다 'N more not shown'으로 렌더링한다. 뇌는 목록이 개인정보 정책상 비공개인지, 단순 상한 절단인지 구분할 수 없다.",
+      "why_it_matters": "새 기본값은 omitted의 기존 의미를 재사용하지만 wire 형태가 같다는 것이 의미 보존을 뜻하지 않는다. 특히 surfaces가 0개인데 'more'라고 표현되어 무엇에 더한 개수인지 불명확하고, 도구가 비활성화된 턴에도 확인 가능한 목록이 있는 듯한 인상을 준다. 현재 테스트는 숫자와 문자열 비유출만 확인하며 수신측의 의미와 모델 판단 품질을 검증하지 않는다.",
+      "severity": "medium"
+    }
+  ],
+  "what_would_make_it_clean": [
+    "스냅샷 실패 시 이전 report·known·registry를 폐기하거나 명시적인 unavailable 상태로 전환하고, 성공 관측→watch/always→Herdr 실패 전이를 단위 테스트와 Playwright에서 검증한다.",
+    "실제 naia-agent 모델 경로에서 환경 관련 요청에는 watch를 선택하고 무관한 요청 또는 작업 종료 후 unwatch하는 평가를 추가한다. 최소한 지속 watch의 종료 정책과 실패 시 자동 해제를 명시하고 검증한다.",
+    "설정 UI에 off/auto/always 선택을 제공하고, 실행 중 변경 시 environment 도구를 등록 또는 app_skills_clear하며 세그먼트와 도구 호출 거절까지 같은 세션에서 검증한다.",
+    "개수 전용 상태를 별도 wire 의미로 표현하거나 수신측 문구를 '목록은 현재 비공개이며 N개가 관측됨'처럼 명확히 구분하고, auto·상한 절단·관측 불가·도구 비활성 상태별 수신측 렌더링 테스트를 추가한다.",
+    "환경 도구의 시작 등록 실패 후 재등록 경로를 추가하고, agent 시작 경쟁을 재현하는 E2E를 추가한다."
+  ]
+}

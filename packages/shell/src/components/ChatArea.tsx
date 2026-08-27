@@ -36,6 +36,7 @@ import {
 	sendApprovalResponse,
 	sendChatMessage,
 	sendAppSkills,
+	sendAppSkillsClear,
 	sendAppToolResult,
 	yieldSpeechActivity,
 	type SpeechActivityResume,
@@ -47,10 +48,16 @@ import {
 	shouldActivateRadioDj,
 } from "../lib/bgm-skill";
 import {
+	ENVIRONMENT_APP_ID,
 	SKILL_ENVIRONMENT,
 	executeEnvironmentSkill,
 	liveEnvironmentDeps,
+	environmentClearNeeded,
 	environmentSession,
+	environmentToolRegistered,
+	noteEnvironmentClear,
+	noteEnvironmentToolAck,
+	refreshEnvironment,
 } from "../lib/environment-skill";
 import {
 	activateMicUnlessSpeechActivityOwnsVoice,
@@ -456,6 +463,14 @@ async function buildMemoryContext(): Promise<MemoryContext> {
 function buildEnvironmentSegments(
 	memoryCtx: MemoryContext,
 	responseStyle: "brief" | "normal" = "normal",
+	/**
+	 * 이번 턴에 환경 도구가 뇌에 실제로 등록되어 있는가 (FR-ENV-ATTENTION.16).
+	 *
+	 * 등록이 전달되지 않았는데 표면을 실으면, 개수만 싣는 안내가 "environment 도구를
+	 * 불러라"라고 말한다 — 나이아에게 없는 도구다. 못 하는 것을 하라고 시키는 셈이라
+	 * 그 턴에는 아예 싣지 않는다.
+	 */
+	toolReady = true,
 ): EnvironmentSegment[] {
 	const segs: EnvironmentSegment[] = [{ kind: "avatarEmotion" }];
 	if (memoryCtx.appContexts?.length) {
@@ -473,7 +488,15 @@ function buildEnvironmentSegments(
 	//
 	// 다만 목록 전체를 늘 싣지는 않는다. 기본(auto)에서는 개수만 실리고, 나이아가 watch 로
 	// 지켜보기로 정한 동안에만 목록이 붙는다. 사용자가 config 로 off/always 를 정하면 그것이 이긴다.
-	const surfaces = environmentSession.segment(loadConfig()?.environmentAwareness ?? "auto");
+	// 도구를 부를 수 없을 때 무엇을 막아야 하는가 (FR-ENV-ATTENTION.19·20).
+	//
+	// 막아야 하는 것은 "개수만 보내고 도구를 부르라고 안내하는 것"이다. 그 안내가 닫힌 길을
+	// 가리키기 때문이다. 목록 자체는 도구 없이도 쓸모가 있다 — 나이아가 무엇이 돌고 있는지
+	// 말해 줄 수는 있다. 그래서 사용자가 "늘 보내기"를 고른 경우에는 도구가 꺼져 있어도
+	// 목록을 보낸다. 사용자 정책이 이긴다는 FR-ENV-ATTENTION.4 와 어긋나지 않게
+	// (2026-08-28 21차 적대리뷰 지적 — 구현이 조용히 반대로 정하고 있었다).
+	const awareness = loadConfig()?.environmentAwareness ?? "auto";
+	const surfaces = awareness === "always" || toolReady ? environmentSession.segment(awareness) : null;
 	if (surfaces) {
 		segs.push(surfaces);
 	}
@@ -484,6 +507,10 @@ function buildEnvironmentSegments(
 	}
 	return segs;
 }
+
+// 통화마다 하나씩 늘어나는 번호. 지켜보기의 주인 표에 쓴다 (FR-ENV-ATTENTION.13).
+// 모듈 수준인 이유는 재연결이 같은 컴포넌트 안에서 여러 세션을 만들기 때문이다.
+let voiceSessionSeq = 0;
 
 // Keep reference to prevent garbage collection during playback
 let currentAudio: HTMLAudioElement | null = null;
@@ -1765,6 +1792,50 @@ export function ChatArea({
 			if (!bgmSkillReady) {
 				throw new Error("skill_youtube_bgm_registration_failed");
 			}
+			// #502 (FR-ENV-ATTENTION.5): 싣기 직전에 관측을 갱신한다.
+			//
+			// 갱신 없이 부팅 스냅샷을 계속 실으면 "지금 뭐 돌고 있어"에 몇 시간 전 목록으로
+			// 답하게 된다. 지켜보는 동안에는 그것이 더 나쁘다 — 계속 보고 있다고 말해 놓고
+			// 옛것을 보여 주는 셈이다. 개수만 싣는 동안에도 개수가 틀리면 나이아가 부를
+			// 이유를 잘못 판단한다.
+			//
+			// 관측 갱신 비용은 실측했다: herdr 스냅샷 한 번이 10ms 다(2026-08-27). 그 뒤에
+			// 오는 LLM 호출 앞에서는 무시할 수준이고, Herdr 이 없으면 즉시 실패해 넘어간다.
+			// 꺼 두었으면 부르지 않는다 — 껐다는 말은 값도 안 든다는 뜻이어야 한다.
+			// 환경 도구도 턴마다 다시 등록한다. 부팅 등록은 agent 기동과 경쟁하고, agent 가
+			// 재시작하면 조용히 사라진다 — BGM 이 같은 이유로 매 턴 재등록한다.
+			// 다만 여기서는 실패해도 대화를 막지 않는다. 환경은 대화의 조건이 아니다.
+			let environmentToolReady = false;
+			if ((loadConfig()?.environmentAwareness ?? "auto") === "off") {
+				// 꺼져 있으면 등록 경로를 타지 않으므로, 실패한 해제는 스스로 낫지 않는다.
+				// 도구 선언이 뇌에 남아 요청 비용이 계속 붙는다 — 다음 턴에 한 번 더 시도한다
+				// (FR-ENV-ATTENTION.17). 기다리지 않으므로 대화는 지연되지 않는다.
+				if (environmentClearNeeded()) {
+					void sendAppSkillsClear(ENVIRONMENT_APP_ID, { awaitAck: true })
+						.then((ok) => noteEnvironmentClear(ok))
+						.catch(() => noteEnvironmentClear(false));
+				}
+			} else {
+				// 등록을 쏘되 기다리지 않는다. 기다리면 확인이 오지 않을 때 사용자의 모든
+				// 대화가 시간초과만큼 멈춘다 — 실제로 그렇게 만들어 12건이 깨졌다(2026-08-28).
+				// 확인이 돌아오면 상태가 바뀌고, 이 턴은 마지막으로 확인된 상태를 쓴다.
+				void sendAppSkills(ENVIRONMENT_APP_ID, [SKILL_ENVIRONMENT], { awaitAck: true })
+					.then((ok) => noteEnvironmentToolAck(ok))
+					.catch(() => noteEnvironmentToolAck(false));
+				// 도구가 꺼져 있으면 나이아는 observe/watch 를 부를 수 없다. 그런데도 개수를
+				// 실으면 안내가 "필요하면 도구를 불러라"라고 말한다 — 닫힌 길을 가리키는 셈이다
+				// (2026-08-28 19차 적대리뷰 지적). 등록 확인과 도구 활성화를 함께 본다.
+				environmentToolReady = environmentToolRegistered() && config.enableTools === true;
+				if (!environmentToolReady) {
+					Logger.warn("ChatArea", "environment skill not confirmed — skipping surfaces", {
+						requestId,
+					});
+				}
+				await refreshEnvironment().catch(() => null);
+			}
+			// 지켜보기 예산을 한 턴 쓴다 (FR-ENV-ATTENTION.7). 음성 경로와 같은 헬퍼를 쓴다 —
+			// 여기만 따로 쓰다가 always 규칙이 이 경로에만 빠졌다(13차 적대리뷰 지적).
+			noteEnvironmentTurn();
 			await sendChatMessage({
 				message: text,
 				provider: {
@@ -1807,6 +1878,7 @@ export function ChatArea({
 				environmentSegments: buildEnvironmentSegments(
 					memoryCtx,
 					pipelineActiveRef.current ? "brief" : "normal",
+					environmentToolReady,
 				),
 				enableTools: config.enableTools,
 				enableThinking: config.enableThinking,
@@ -1973,13 +2045,41 @@ export function ChatArea({
 	// path AND the voice directToolCall path (so voice can run app tools like
 	// skill_browser_*). Auto-switches to the owning app first (tool-level), so
 	// a tool targeting a non-active app brings that app forward.
-	function dispatchAppToolCall(req: {
-		requestId: string;
-		toolCallId: string;
-		toolName: string;
-		args: Record<string, unknown>;
-		activityId?: string;
-	}) {
+	/**
+	 * 대화 턴 하나가 지나갔다고 환경 세션에 알린다 (FR-ENV-ATTENTION.7).
+	 * 정상 종료·중단 어느 쪽으로 끝나든 턴은 턴이다. 꺼져 있으면 아무것도 하지 않는다.
+	 */
+	function noteEnvironmentTurn() {
+		const awareness = loadConfig()?.environmentAwareness ?? "auto";
+		// 꺼져 있으면 셀 것이 없다.
+		if (awareness === "off") return;
+		// always 는 예산과 무관하다 (FR-ENV-ATTENTION.7). 출력만 그런 것이 아니라 상태도
+		// 그래야 한다 — 여기서 예산을 깎으면 always 를 쓰는 동안 잠복한 지켜보기가 소진되고,
+		// 사용자가 auto 로 되돌릴 때 나이아가 끈 적 없는데 목록이 사라진다
+		// (2026-08-27 13차 적대리뷰 지적).
+		if (awareness === "always") return;
+		environmentSession.noteTurn();
+	}
+
+	function dispatchAppToolCall(
+		req: {
+			requestId: string;
+			toolCallId: string;
+			toolName: string;
+			args: Record<string, unknown>;
+			activityId?: string;
+		},
+		/**
+		 * 이 호출이 실시간 음성 세션에서 왔는가 (FR-ENV-ATTENTION.10).
+		 * 음성은 연결 시점의 지시문 하나로 이야기하므로 요청마다 표면 세그먼트를 싣지 않는다.
+		 * 그 사실을 나이아에게 그대로 알려야 "지켜본다"가 거짓말이 되지 않는다.
+		 */
+		origin: {
+			readonly assemblesChatRequests?: boolean;
+			/** 이 호출이 켜는 지켜보기의 주인. 통화만 준다 — 자기가 켠 것만 끄기 위해서다. */
+			readonly watchOwner?: string;
+		} = {},
+	) {
 		// UC8 BGM (FR-BGM.1): BgmPlayer 는 위젯(앱 아님)이라 appRegistry 소유자
 		// 탐색으로 못 찾는다 — 전용 분기. executeBgmSkill 이 위젯이 이미 듣는
 		// bgm_youtube_* 이벤트를 발사(위젯 무변경). 음성 경로도 이 dispatch 공유.
@@ -1992,16 +2092,20 @@ export function ChatArea({
 				liveEnvironmentDeps(
 					loadConfig()?.environmentTerminalInput === true,
 					loadConfig()?.environmentAwareness ?? "auto",
+					origin.assemblesChatRequests === true,
+					origin.watchOwner,
 				),
 			)
 				.then((result) => {
-					Logger.info("ChatArea", "environment skill result", { result });
+					Logger.info("ChatArea", "environment skill result", { result: result.text });
 					return sendAppToolResult(
 						req.requestId,
 						req.toolCallId,
-						result,
+						result.text,
 						// 거절·오류는 성공으로 바꾸지 않는다 — 뇌가 실패를 성공으로 말하는 경로를 막는다.
-						!result.startsWith("거절:") && !result.startsWith("환경 오류:"),
+						// 판정은 실행기가 낸다. 문자열 접두사로 되짚으면 새 사유가 생길 때마다
+						// 조용히 성공으로 새어 나간다 (2026-08-27 11차 적대리뷰에서 실제로 그랬다).
+						result.ok,
 						req.activityId,
 					);
 				})
@@ -2218,13 +2322,18 @@ export function ChatArea({
 				}
 				break;
 			case "app_tool_call": {
-				dispatchAppToolCall({
-					requestId: chunk.requestId,
-					toolCallId: chunk.toolCallId,
-					toolName: chunk.toolName,
-					args: chunk.args,
-					activityId: chunk.activityId,
-				});
+				// 이 경로만 셸이 대화 요청을 조립한다(buildEnvironmentSegments 가 붙는 곳).
+				// 능동 발화와 실시간 음성은 아니다 — 그쪽은 기본값 false 를 그대로 쓴다.
+				dispatchAppToolCall(
+					{
+						requestId: chunk.requestId,
+						toolCallId: chunk.toolCallId,
+						toolName: chunk.toolName,
+						args: chunk.args,
+						activityId: chunk.activityId,
+					},
+					{ assemblesChatRequests: true },
+				);
 				break;
 			}
 			case "app_control": {
@@ -3051,6 +3160,12 @@ export function ChatArea({
 			// Gemini Direct uses Rust proxy (WebKitGTK can't connect to Google's WS)
 			const useDirectMode =
 				liveProvider === "gemini-live" && !!config.googleApiKey;
+			// 이 통화의 식별자. 통화가 켠 지켜보기에만 이 표가 붙고, 통화가 끝날 때 그 표가
+			// 붙은 것만 끈다. 시작 시점의 참/거짓으로는 통화 중에 다른 경로가 켠 것과
+			// 구별할 수 없고, 늦게 도착한 옛 세션의 종료가 새 세션의 것을 지운다
+			// (2026-08-27 12차 적대리뷰 지적).
+			voiceSessionSeq += 1;
+			const voiceSessionKey = `voice-${voiceSessionSeq}`;
 			const session = createVoiceSession(liveProvider, {
 				useProxy: useDirectMode,
 			});
@@ -3158,6 +3273,10 @@ export function ChatArea({
 				inputAccum = "";
 				outputAccum = "";
 				serverEmotionSeenThisTurn = false;
+				// 중단된 턴도 턴이다 (FR-ENV-ATTENTION.7). response.cancelled 와 barge-in 은
+				// onTurnEnd 를 부르지 않으므로, 여기서 안 깎으면 사용자가 계속 끼어드는 동안
+				// 지켜보기가 예산을 넘겨 살아남는다 (2026-08-27 10차 적대리뷰 지적).
+				noteEnvironmentTurn();
 			};
 			session.onTurnEnd = () => {
 				inputTurnDirty = false;
@@ -3166,6 +3285,13 @@ export function ChatArea({
 				outputAccum = "";
 				serverEmotionSeenThisTurn = false;
 				settleAvatarEmotionIfIdle();
+				// #502 (FR-ENV-ATTENTION.7): 실시간 음성도 대화 턴이다.
+				//
+				// 음성 도구 호출은 아래 onToolCall 이 같은 dispatch 로 보내므로, 음성 중에도
+				// 나이아가 watch 를 켤 수 있다. 그런데 예산을 gRPC 경로에서만 깎으면 음성으로
+				// 켠 지켜보기가 영원히 남는다 — 켜 둔 채 잊는 것을 막겠다는 규칙이 경로 하나에서
+				// 성립하지 않게 된다 (2026-08-27 9차 적대리뷰 지적).
+				noteEnvironmentTurn();
 			};
 			session.onToolCall = async (callId, toolName, args) => {
 				try {
@@ -3185,7 +3311,9 @@ export function ChatArea({
 						// App-owned tools (skill_browser_*, skill_app switch)
 						// only ran in streaming chat before; route them here too so
 						// voice can drive apps. Auto-switches to the owner app.
-						onAppToolCall: (req) => dispatchAppToolCall(req),
+						// 실시간 음성은 셸이 요청을 조립하지 않는다 — 기본값(false)이 사실이다.
+						// 이 통화가 켠 지켜보기에는 통화 식별자를 남긴다(FR-ENV-ATTENTION.13).
+						onAppToolCall: (req) => dispatchAppToolCall(req, { watchOwner: voiceSessionKey }),
 						onAppControl: (req) => dispatchAppControl(req),
 					});
 					session.sendToolResponse(callId, result.output);
@@ -3202,6 +3330,12 @@ export function ChatArea({
 				session.disconnect();
 			};
 			session.onDisconnect = (info) => {
+				// 통화가 켠 주의만 통화가 끈다 (FR-ENV-ATTENTION.7).
+				//
+				// ⚠️ 무조건 끄면 텍스트 대화에서 켜 둔 지켜보기까지 지운다. EnvironmentSession 은
+				//    모듈 전역 하나라 출처를 스스로 알지 못하므로, 통화 시작 시점의 상태를
+				//    여기서 기억해 두고 그것과 비교한다 (2026-08-27 11차 적대리뷰 지적).
+				environmentSession.unwatchIfOwner(voiceSessionKey);
 				// Atomic terminal transition for a mid-call drop. Tear down (cost
 				// summary, bridge, mic, player) SYNCHRONOUSLY first, THEN set the
 				// terminal status once — so the derived voice button can't re-enable

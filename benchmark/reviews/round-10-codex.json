@@ -1,0 +1,41 @@
+{
+  "verdict": "NOT_CLEAN",
+  "frame_assessment": {
+    "scope_is_sufficient": false,
+    "missing_concerns": [
+      "실시간 음성 경로에서 watch가 실제로 지속 관측을 제공하는지 검증하지 않았다. 현재 음성 요청에는 환경 세그먼트가 실리지 않으므로 watch는 최초 도구 결과만 반환하고 이후 음성 턴에는 갱신된 목록을 제공하지 않는다.",
+      "완료 이벤트 없이 끝나는 음성 턴(중단·연결 끊김·오류)이 주의 예산을 소비하거나 지켜보기를 종료하는 정책과 테스트가 없다.",
+      "선택 필드인 listWithheld를 false일 때도 항상 직렬화하여 비용 절감 목표와 반대로 불필요한 매턴 wire·토큰 비용을 추가한다."
+    ]
+  },
+  "findings": [
+    {
+      "id": "R10-VOICE-WATCH-NOT-CONTINUOUS",
+      "file_location": "packages/shell/src/components/ChatArea.tsx:3179",
+      "impact": "음성에서 watch를 켜도 이후 음성 턴에는 최신 표면 목록이 제공되지 않으면서 예산만 감소한다. 나이아는 '지켜본다'는 도구 결과를 받지만 실제로는 최초 관측 이후 환경 변화를 볼 수 없다.",
+      "why_it_matters": "env-attention-voice.spec.ts 자체가 '음성 경로 자체는 표면 목록을 싣지 않는다'고 전제하고, 음성 종료 후 텍스트 요청의 세그먼트만 검사한다. 따라서 이 테스트는 음성 watch의 실효성을 재지 않고 세션 객체의 카운터 공유만 잰다. 사용자의 핵심 요청인 나이아의 능동적 켜기·끄기가 지원되는 모든 대화 경로에서 실제 관측으로 이어진다는 보장이 없으며, 요구사항도 이 누락을 FR-ENV-ATTENTION.9의 한계로 명시하지 않았다.",
+      "severity": "high"
+    },
+    {
+      "id": "R10-VOICE-ABORT-BUDGET-BYPASS",
+      "file_location": "packages/shell/src/components/ChatArea.tsx:3171",
+      "impact": "응답이 중단되거나 연결이 끊기거나 오류로 종료된 음성 상호작용은 noteTurn()을 호출하지 않는다. 사용자가 반복해서 끼어들거나 불안정한 연결을 겪으면 watch가 WATCH_TURN_BUDGET을 넘어 무기한 살아남아 이후 텍스트 요청에서 표면 이름이 계속 전송될 수 있다.",
+      "why_it_matters": "예산 차감은 onTurnEnd에만 있고 onInterrupted, onDisconnect, onError에는 없다. 실제 어댑터도 response.cancelled와 speech_started를 onInterrupted로 보내며, 이 경로는 정상 response.done을 보장하지 않는다. 새 Playwright 스펙은 정상 response.done만 반복하므로 이 실패 양식을 전혀 통과하지 않는다. 대조군 역시 정상 완료 경로만 검증하므로 중단 경로의 대조군 역할을 하지 못한다.",
+      "severity": "medium"
+    },
+    {
+      "id": "R10-LISTWITHHELD-FALSE-WIRE-COST",
+      "file_location": "src/main/domain/environment-intent.ts:169",
+      "impact": "목록을 실제로 보내는 모든 watched/always 요청에도 listWithheld:false가 추가되어 지속적인 wire 크기와 LLM 입력 토큰을 불필요하게 늘린다.",
+      "why_it_matters": "필드는 optional이고 수신 측 디코더도 부재를 false로 처리하므로 명시적 false는 의미를 추가하지 않는다. 'wire 형태가 흔들리지 않게 한다'는 작성자 편의가 사용자가 문제 삼은 반복 비용보다 우선되었고, 비용 회귀를 측정하는 테스트도 없다.",
+      "severity": "low"
+    }
+  ],
+  "what_would_make_it_clean": [
+    "음성 watch의 의미를 결정한다. 이후 음성 턴마다 최신 환경 정보를 실제 모델 컨텍스트에 공급하도록 지원하거나, 불가능하면 음성 세션에서는 watch를 거절하고 observe만 지원한다고 요구사항·도구 설명·UI에 명시한다.",
+    "음성에서 표면 변경 후 다음 음성 턴의 모델 입력 또는 서버 갱신 메시지에 새 목록이 실제 포함되는지를 검증하는 통합 테스트를 추가한다. 텍스트 전환 후 세그먼트 검사로 대체하지 않는다.",
+    "onInterrupted, onDisconnect, onError 및 사용자 수동 종료의 턴 정산 정책을 명시하고, 정상 완료 없이 반복 중단해도 watch가 무기한 유지되지 않는 Playwright 대조·본시험을 추가한다.",
+    "listWithheld는 true일 때만 직렬화하고, 부재가 수신 측에서 false로 해석되는 교차 저장소 계약 테스트를 유지한다.",
+    "환경 세그먼트별 실제 직렬화 크기 또는 토큰 비용 회귀 테스트를 추가해 기본·watch·always 모드의 반복 비용 상한을 고정한다."
+  ]
+}

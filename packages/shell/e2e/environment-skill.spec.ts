@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { WATCH_TURN_BUDGET } from "@nextain/naia-os-core/composition";
 import {
 	SEED_ADK_PATH,
 	TAURI_BASE_MOCK_FALLBACK,
@@ -49,7 +50,7 @@ const MOCK_SCRIPT = `
   window.__TAURI_INTERNALS__.convertFileSrc = function (p, proto) { return (proto || "asset") + "://localhost/" + encodeURIComponent(p); };
 
   // 살아 있는 Herdr 대역. 에이전트가 붙은 pane 하나 + 일반 터미널 하나.
-  var SNAPSHOT = { panes: [
+  window.__E2E_SNAPSHOT__ = { panes: [
     { pane_id: "pane-agent-1", label: "빌더", agent: "codex", agent_status: "working", focused: true },
     { pane_id: "pane-term-1", terminal_title_stripped: "zsh — alpha-adk", focused: false }
   ] };
@@ -63,7 +64,11 @@ const MOCK_SCRIPT = `
     if (cmd === "plugin:event|emit") { emitEvent(args.event, args.payload); return null; }
     if (cmd === "plugin:event|unlisten") return;
 
-    if (cmd === "herdr_snapshot") { window.__E2E_HERDR__.push({ cmd: cmd, args: args }); return SNAPSHOT; }
+    if (cmd === "herdr_snapshot") {
+      window.__E2E_HERDR__.push({ cmd: cmd, args: args });
+      if (window.__E2E_SNAPSHOT_FAIL__) throw new Error("herdr is not running");
+      return window.__E2E_SNAPSHOT__;
+    }
     if (cmd && cmd.indexOf("herdr_") === 0) {
       window.__E2E_HERDR__.push({ cmd: cmd, args: args });
       return { ok: true };
@@ -72,6 +77,16 @@ const MOCK_SCRIPT = `
     if (cmd === "send_to_agent_command") {
       var payload = JSON.parse(args.message);
       window.__E2E_OUTBOUND__.push(payload);
+      if (payload && (payload.type === "app_skills" || payload.type === "app_skills_clear") && payload.requestId) {
+        // Rust 가 gRPC 결과를 app_skills_result 로 돌려주는 흐름 (FR-ENV-ATTENTION.16).
+        var arid = payload.requestId;
+        var deny = window.__E2E_SKILLS_DENY__ === true;
+        // 확인이 늦게 오는 상황을 만들 수 있어야, "해제 결과를 반영했는가"만 격리해 잴 수 있다.
+        var delay = window.__E2E_SKILLS_ACK_DELAY__ || 10;
+        setTimeout(function () {
+          emitEvent("agent_response", JSON.stringify({ type: "app_skills_result", requestId: arid, ok: !deny }));
+        }, delay);
+      }
       if (payload && payload.type === "chat_request") {
         var rid = payload.requestId;
         var call = window.__E2E_ENV_CALL__ || { action: "focus", surface: "s-1" };
@@ -393,6 +408,494 @@ test.describe("#502 환경 스킬 배선 (FR-ENV-LIVE)", () => {
 			calls.filter((c) => c.cmd.startsWith("herdr_focus") || c.cmd === "herdr_run_pane"),
 			`꺼 두었는데 환경 명령이 나갔다: ${JSON.stringify(calls)}`,
 		).toHaveLength(0);
+	});
+
+	test("(B6) 매 턴 관측을 갱신한다 — 부팅 스냅샷으로 답하지 않는다 (FR-ENV-ATTENTION.5)", async ({
+		page,
+	}) => {
+		// 이것이 없으면 나이아는 "지금 뭐 돌고 있어"에 앱을 켠 시점의 목록으로 답한다.
+		// 지켜보는 동안에는 더 나쁘다 — 계속 보고 있다고 말해 놓고 옛것을 보여 주는 셈이다.
+		await boot(page, BASE_CONFIG);
+		const input = page.locator(".chat-input");
+		await expect(input).toBeEnabled({ timeout: 5_000 });
+
+		await setEnvCall(page, { action: "watch" });
+		await input.fill("따라와줘");
+		await input.press("Enter");
+		await page.waitForTimeout(1_500);
+
+		// 부팅 뒤에 터미널 하나가 새로 열렸다.
+		await page.evaluate(() => {
+			(window as unknown as { __E2E_SNAPSHOT__: { panes: unknown[] } }).__E2E_SNAPSHOT__ = {
+				panes: [
+					{ pane_id: "pane-agent-1", label: "빌더", agent: "codex", agent_status: "working", focused: true },
+					{ pane_id: "pane-term-1", terminal_title_stripped: "zsh — alpha-adk", focused: false },
+					{ pane_id: "pane-term-2", terminal_title_stripped: "방금 연 터미널", focused: false },
+				],
+			};
+		});
+
+		await input.fill("지금은 어때?");
+		await input.press("Enter");
+		await expect
+			.poll(
+				async () => ((await surfacesSegment(page))?.surfaces as unknown[] | undefined)?.length ?? 0,
+				{ timeout: 10_000 },
+			)
+			.toBe(3);
+		const seg = (await surfacesSegment(page)) as Record<string, unknown>;
+		const labels = (seg.surfaces as { label: string }[]).map((x) => x.label);
+		expect(labels, "새로 연 터미널이 안 실렸다 — 옛 관측을 그대로 쓰고 있다").toContain(
+			"방금 연 터미널",
+		);
+	});
+
+	test("(B7) 지켜보지 않는 동안에도 개수가 최신이다 (FR-ENV-ATTENTION.5)", async ({ page }) => {
+		// 개수가 틀리면 나이아가 부를 이유 자체를 잘못 판단한다.
+		//
+		// ⚠️ 뇌 대역이 내는 도구 호출을 unwatch 로 둔다. observe·focus·run·watch 는 실행기
+		//    안에서 관측을 갱신하므로, 그것들을 쓰면 이 테스트가 "매 턴 갱신"이 아니라
+		//    "도구 호출 갱신"을 재게 된다(2026-08-27 변이 탐침에서 실제로 그랬다).
+		//    unwatch 만이 환경을 건드리지 않는다.
+		await boot(page, BASE_CONFIG);
+		const input = page.locator(".chat-input");
+		await expect(input).toBeEnabled({ timeout: 5_000 });
+		await setEnvCall(page, { action: "unwatch" });
+		await input.fill("첫 턴");
+		await input.press("Enter");
+		await expect.poll(async () => (await surfacesSegment(page))?.omitted ?? 0, { timeout: 10_000 }).toBe(2);
+
+		await page.evaluate(() => {
+			(window as unknown as { __E2E_SNAPSHOT__: { panes: unknown[] } }).__E2E_SNAPSHOT__ = {
+				panes: [{ pane_id: "pane-agent-1", label: "빌더", agent: "codex", focused: true }],
+			};
+		});
+		await input.fill("둘째 턴");
+		await input.press("Enter");
+		await expect
+			.poll(async () => (await surfacesSegment(page))?.omitted ?? -1, { timeout: 10_000 })
+			.toBe(1);
+	});
+
+	test("(B8) Herdr 이 죽으면 옛 목록을 계속 싣지 않는다 (FR-ENV-ATTENTION.6)", async ({ page }) => {
+		// 성공→성공 전이만 재면 이 실패 양식을 못 잡는다(8차 적대리뷰 지적).
+		await boot(page, BASE_CONFIG);
+		const input = page.locator(".chat-input");
+		await expect(input).toBeEnabled({ timeout: 5_000 });
+
+		await setEnvCall(page, { action: "watch" });
+		await input.fill("따라와줘");
+		await input.press("Enter");
+		await page.waitForTimeout(1_500);
+		await input.fill("계속 봐줘");
+		await input.press("Enter");
+		await expect
+			.poll(
+				async () => ((await surfacesSegment(page))?.surfaces as unknown[] | undefined)?.length ?? 0,
+				{ timeout: 10_000 },
+			)
+			.toBe(2);
+
+		// Herdr 이 죽었다.
+		await page.evaluate(() => {
+			(window as unknown as { __E2E_SNAPSHOT_FAIL__?: boolean }).__E2E_SNAPSHOT_FAIL__ = true;
+		});
+		await setEnvCall(page, { action: "unwatch" }); // 관측을 부르지 않는 동작으로 둔다
+		await input.fill("지금은?");
+		await input.press("Enter");
+		await expect.poll(async () => await surfacesSegment(page), { timeout: 10_000 }).toBeNull();
+
+		// 마지막으로 본 이름이 어디에도 남지 않는다.
+		const last = await page.evaluate(() => {
+			const out = (window as unknown as { __E2E_OUTBOUND__?: Record<string, unknown>[] }).__E2E_OUTBOUND__ ?? [];
+			const chats = out.filter((m) => m?.type === "chat_request");
+			return JSON.stringify(chats[chats.length - 1]?.environmentSegments ?? []);
+		});
+		expect(last, "환경이 끊겼는데 옛 터미널 이름이 실렸다").not.toContain("빌더");
+	});
+
+	test("(B9) 나이아가 끄지 않아도 지켜보기가 저절로 풀린다 (FR-ENV-ATTENTION.7)", async ({
+		page,
+	}) => {
+		// 모델이 unwatch 를 부르리라고 기대하는 것으로는 비용도 노출도 보장되지 않는다.
+		await boot(page, BASE_CONFIG);
+		const input = page.locator(".chat-input");
+		await expect(input).toBeEnabled({ timeout: 5_000 });
+
+		await setEnvCall(page, { action: "watch" });
+		await input.fill("따라와줘");
+		await input.press("Enter");
+		await page.waitForTimeout(1_500);
+
+		// 이후로는 환경을 건드리지 않는 동작만 낸다 — 예산만 흘러간다.
+		await setEnvCall(page, { action: "unwatch2" }); // 모르는 동작 = 거절, 관측 미갱신
+		let sawList = 0;
+		for (let i = 0; i < WATCH_TURN_BUDGET + 2; i += 1) {
+			await input.fill(`턴 ${i}`);
+			await input.press("Enter");
+			await page.waitForTimeout(700);
+			const seg = await surfacesSegment(page);
+			if (((seg?.surfaces as unknown[] | undefined)?.length ?? 0) > 0) sawList += 1;
+		}
+		expect(sawList, "목록이 한 번도 안 실렸다면 이 단언은 공허하다").toBeGreaterThan(0);
+		const finalSeg = await surfacesSegment(page);
+		expect(
+			(finalSeg?.surfaces as unknown[] | undefined)?.length ?? -1,
+			"예산을 다 썼는데 목록이 계속 실린다",
+		).toBe(0);
+	});
+
+	test("(B10) 숨긴 것과 잘린 것을 구별해 보낸다 (FR-ENV-ATTENTION.8)", async ({ page }) => {
+		await boot(page, BASE_CONFIG);
+		const input = page.locator(".chat-input");
+		await expect(input).toBeEnabled({ timeout: 5_000 });
+		await input.fill("첫 턴");
+		await input.press("Enter");
+		await expect.poll(async () => await surfacesSegment(page), { timeout: 10_000 }).not.toBeNull();
+		expect((await surfacesSegment(page))?.listWithheld, "숨긴 것인데 표시가 없다").toBe(true);
+
+		await setEnvCall(page, { action: "watch" });
+		await input.fill("보여줘");
+		await input.press("Enter");
+		await page.waitForTimeout(1_500);
+		await input.fill("어때?");
+		await input.press("Enter");
+		await expect
+			.poll(
+				async () => ((await surfacesSegment(page))?.surfaces as unknown[] | undefined)?.length ?? 0,
+				{ timeout: 10_000 },
+			)
+			.toBe(2);
+		expect(
+			(await surfacesSegment(page))?.listWithheld,
+			"다 보여 주면서 숨겼다고 표시했다",
+		).not.toBe(true);
+	});
+
+	test("(B11) 설정에서 끄면 같은 세션에서 바로 멈춘다 (FR-ENV-ATTENTION.4)", async ({ page }) => {
+		// 서로 다른 초기 설정으로 앱을 새로 부팅해 비교하면, 실행 중 변경이 안 먹는 결함을
+		// 가린다(8차 적대리뷰 지적). 한 세션 안에서 사용자가 실제로 바꾸는 흐름을 잰다.
+		await boot(page, BASE_CONFIG);
+		const input = page.locator(".chat-input");
+		await expect(input).toBeEnabled({ timeout: 5_000 });
+		await input.fill("첫 턴");
+		await input.press("Enter");
+		await expect.poll(async () => await surfacesSegment(page), { timeout: 10_000 }).not.toBeNull();
+
+		// 사용자가 설정 화면에서 직접 끈다.
+		await page.getByRole("button", { name: /^(Settings|설정)$/ }).click();
+		await page.locator('[data-settings-tab="brain"]').click();
+		const selector = page.locator("#environment-awareness");
+		await expect(selector, "설정 화면에 작업 표면 인지 항목이 없다").toBeVisible({ timeout: 5_000 });
+		await selector.selectOption("off");
+
+		// 도구가 해제된다 — 재부팅을 기다리지 않는다.
+		await expect
+			.poll(
+				async () =>
+					page.evaluate(
+						() =>
+							((window as unknown as { __E2E_OUTBOUND__?: Record<string, unknown>[] }).__E2E_OUTBOUND__ ?? [])
+								.filter((m) => m?.type === "app_skills_clear" && m?.appId === "environment").length,
+					),
+				{ timeout: 10_000 },
+			)
+			.toBeGreaterThan(0);
+
+		// 그리고 다음 요청부터 표면이 실리지 않는다.
+		const before = await page.evaluate(
+			() =>
+				((window as unknown as { __E2E_OUTBOUND__?: Record<string, unknown>[] }).__E2E_OUTBOUND__ ?? [])
+					.filter((m) => m?.type === "chat_request").length,
+		);
+		await page.getByRole("button", { name: /^(Settings|설정)$/ }).click();
+		await expect(input).toBeEnabled({ timeout: 5_000 });
+		await input.fill("끈 뒤 턴");
+		await input.press("Enter");
+		await expect
+			.poll(
+				async () =>
+					page.evaluate(
+						() =>
+							((window as unknown as { __E2E_OUTBOUND__?: Record<string, unknown>[] }).__E2E_OUTBOUND__ ?? [])
+								.filter((m) => m?.type === "chat_request").length,
+					),
+				{ timeout: 10_000 },
+			)
+			.toBeGreaterThan(before);
+		expect(await surfacesSegment(page), "껐는데 표면이 계속 실린다").toBeNull();
+	});
+
+	test("(B12) always 를 쓰는 동안 잠복한 지켜보기가 소진되지 않는다 (FR-ENV-ATTENTION.7)", async ({
+		page,
+	}) => {
+		// always 에서도 턴을 세면, 사용자가 auto 로 되돌릴 때 나이아가 끈 적 없는데
+		// 목록이 사라진다 (2026-08-27 13차 적대리뷰 지적).
+		await boot(page, BASE_CONFIG);
+		const input = page.locator(".chat-input");
+		await expect(input).toBeEnabled({ timeout: 5_000 });
+
+		// auto 에서 나이아가 켠다.
+		await setEnvCall(page, { action: "watch" });
+		await input.fill("따라와줘");
+		await input.press("Enter");
+		await page.waitForTimeout(1_500);
+
+		// 사용자가 always 로 바꾼 뒤 예산을 넘길 만큼 대화한다.
+		await page.evaluate(() => {
+			const raw = localStorage.getItem("naia-config");
+			const cfg = raw ? JSON.parse(raw) : {};
+			cfg.environmentAwareness = "always";
+			localStorage.setItem("naia-config", JSON.stringify(cfg));
+		});
+		await setEnvCall(page, { action: "unknown_action" }); // 환경을 안 건드리는 호출
+		for (let i = 0; i < WATCH_TURN_BUDGET + 3; i += 1) {
+			await input.fill(`턴 ${i}`);
+			await input.press("Enter");
+			await page.waitForTimeout(500);
+		}
+
+		// 다시 auto 로 되돌린다.
+		await page.evaluate(() => {
+			const raw = localStorage.getItem("naia-config");
+			const cfg = raw ? JSON.parse(raw) : {};
+			cfg.environmentAwareness = "auto";
+			localStorage.setItem("naia-config", JSON.stringify(cfg));
+		});
+		await input.fill("이제 어때?");
+		await input.press("Enter");
+		await expect
+			.poll(
+				async () => ((await surfacesSegment(page))?.surfaces as unknown[] | undefined)?.length ?? -1,
+				{ timeout: 10_000 },
+			)
+			.toBeGreaterThan(0);
+	});
+
+	test("(B13) 실제 대화 요청의 바이트로 절감을 잰다 (FR-ENV-ATTENTION.15)", async ({ page }) => {
+		// 코어 세그먼트 객체의 JSON 크기를 재는 것은 재료를 재는 것이다. 사용자가 문제 삼은
+		// 것은 요청마다 뇌로 가는 비용이므로, 실제로 나간 chat_request 에서 재야 한다
+		// (2026-08-27 14차 적대리뷰 지적).
+		await boot(page, { ...BASE_CONFIG, environmentAwareness: "always" });
+		const input = page.locator(".chat-input");
+		await expect(input).toBeEnabled({ timeout: 5_000 });
+
+		// 표면을 12개로 늘려 의미 있는 크기를 만든다.
+		await page.evaluate(() => {
+			(window as unknown as { __E2E_SNAPSHOT__: { panes: unknown[] } }).__E2E_SNAPSHOT__ = {
+				panes: Array.from({ length: 12 }, (_, i) => ({
+					pane_id: `p${i}`,
+					label: `사내-저장소-${i}-빌드-감시`,
+					...(i % 2 === 0 ? { agent: "codex" } : {}),
+					focused: i === 0,
+				})),
+			};
+		});
+
+		/** 마지막 chat_request 안에서 표면 세그먼트가 실제로 차지한 바이트. */
+		const surfaceBytes = async () =>
+			page.evaluate(() => {
+				const out =
+					(window as unknown as { __E2E_OUTBOUND__?: Record<string, unknown>[] }).__E2E_OUTBOUND__ ?? [];
+				const chats = out.filter((m) => m?.type === "chat_request");
+				const segs = (chats[chats.length - 1]?.environmentSegments ?? []) as Record<string, unknown>[];
+				const seg = segs.find((x) => x?.kind === "environmentSurfaces");
+				return seg ? new TextEncoder().encode(JSON.stringify(seg)).length : 0;
+			});
+
+		await setEnvCall(page, { action: "unknown_action" }); // 환경을 안 건드리는 호출
+		await input.fill("늘 켬에서 한 턴");
+		await input.press("Enter");
+		await expect.poll(async () => await surfaceBytes(), { timeout: 10_000 }).toBeGreaterThan(1_000);
+		const alwaysBytes = await surfaceBytes();
+
+		// 같은 세션에서 auto 로 바꾼다. 지켜보기는 꺼져 있다.
+		await page.evaluate(() => {
+			const raw = localStorage.getItem("naia-config");
+			const cfg = raw ? JSON.parse(raw) : {};
+			cfg.environmentAwareness = "auto";
+			localStorage.setItem("naia-config", JSON.stringify(cfg));
+		});
+		await input.fill("자동에서 한 턴");
+		await input.press("Enter");
+		await expect
+			.poll(async () => await surfaceBytes(), { timeout: 10_000 })
+			.toBeLessThan(alwaysBytes / 2);
+		const autoBytes = await surfaceBytes();
+
+		// 실측 근거: 표면 12개 기준 1187 → 77 바이트. 실제 wire 에서도 그 자리에 있어야 한다.
+		expect(alwaysBytes, `목록 전송이 예상보다 작다: ${alwaysBytes}`).toBeGreaterThan(1_000);
+		expect(autoBytes, `숨김 전송이 부풀었다: ${autoBytes}`).toBeLessThanOrEqual(100);
+		expect(autoBytes, `숨김 세그먼트가 사라졌다: ${autoBytes}`).toBeGreaterThan(0);
+	});
+
+	test("(B14) 도구 등록이 전달되지 않으면 환경을 싣지 않는다 (FR-ENV-ATTENTION.16)", async ({
+		page,
+	}) => {
+		// 등록이 안 갔는데 개수를 실으면, 안내가 "environment 도구를 불러라"라고 말한다 —
+		// 나이아에게 없는 도구다. 못 하는 것을 하라고 시키는 셈이다
+		// (2026-08-28 16차 적대리뷰 지적).
+		await boot(page, BASE_CONFIG);
+		const input = page.locator(".chat-input");
+		await expect(input).toBeEnabled({ timeout: 5_000 });
+
+		// 먼저 정상 상태를 확인한다 — 아래 단언이 공허하지 않게.
+		await input.fill("정상 턴");
+		await input.press("Enter");
+		await expect.poll(async () => await surfacesSegment(page), { timeout: 10_000 }).not.toBeNull();
+
+		// 이제 등록 전달이 실패한다(agent 재시작·연결 단절과 같은 상황).
+		//
+		// 뇌가 등록을 거절한다 — 큐잉은 되지만 gRPC 가 실패하는 상황이다.
+		// 이것이 실제 실패 양식이다. 큐잉만 막는 것으로는 17차 적대리뷰가 짚은
+		// "예약됨을 전달됨으로 읽는" 문제를 재지 못한다.
+		//
+		// ⚠️ 셸은 확인을 기다리지 않는다(기다리면 확인이 없을 때 모든 대화가 시간초과만큼
+		//    멈춘다 — 실제로 그렇게 만들어 12건이 깨졌다). 그래서 거절이 반영되기까지 한
+		//    턴이 걸린다. 알고 감수한 한계이고 요구사항에도 적어 두었다. 그 턴을 흘려보낸다.
+		await page.evaluate(() => {
+			(window as unknown as { __E2E_SKILLS_DENY__?: boolean }).__E2E_SKILLS_DENY__ = true;
+		});
+		await input.fill("거절이 반영되는 턴");
+		await input.press("Enter");
+		await page.waitForTimeout(1_200);
+		const before = await page.evaluate(
+			() =>
+				((window as unknown as { __E2E_OUTBOUND__?: Record<string, unknown>[] }).__E2E_OUTBOUND__ ?? [])
+					.filter((m) => m?.type === "chat_request").length,
+		);
+		await input.fill("등록 실패 턴");
+		await input.press("Enter");
+
+		// 대화는 그대로 나간다 — 환경 실패가 대화를 막지 않는다.
+		await expect
+			.poll(
+				async () =>
+					page.evaluate(
+						() =>
+							((window as unknown as { __E2E_OUTBOUND__?: Record<string, unknown>[] }).__E2E_OUTBOUND__ ?? [])
+								.filter((m) => m?.type === "chat_request").length,
+					),
+				{ timeout: 10_000 },
+			)
+			.toBeGreaterThan(before);
+		// 그런데 표면은 실리지 않는다.
+		expect(
+			await surfacesSegment(page),
+			"도구가 없는데 표면을 실어 없는 도구를 부르라고 안내했다",
+		).toBeNull();
+	});
+
+	test("(B15) 껐다 다시 켠 뒤 등록이 실패하면 첫 턴부터 표면이 안 실린다 (FR-ENV-ATTENTION.17)", async ({
+		page,
+	}) => {
+		// 해제 결과를 상태에 반영하지 않으면, 다시 켰을 때 낡은 참으로 첫 턴에 표면을
+		// 실어 보낸다 (2026-08-28 18차 적대리뷰 지적).
+		await boot(page, BASE_CONFIG);
+		const input = page.locator(".chat-input");
+		await expect(input).toBeEnabled({ timeout: 5_000 });
+		await input.fill("정상 턴");
+		await input.press("Enter");
+		await expect.poll(async () => await surfacesSegment(page), { timeout: 10_000 }).not.toBeNull();
+
+		// 사용자가 끈다 (해제는 성공한다).
+		await page.getByRole("button", { name: /^(Settings|설정)$/ }).click();
+		await page.locator('[data-settings-tab="brain"]').click();
+		const selector = page.locator("#environment-awareness");
+		await expect(selector).toBeVisible({ timeout: 5_000 });
+		await selector.selectOption("off");
+		await page.waitForTimeout(600);
+
+		// 다시 켜는데, 이번에는 뇌가 등록을 거절하고 그 확인이 늦게 온다.
+		//
+		// ⚠️ 확인이 빨리 오면 다시 켜는 경로가 스스로 false 로 만들어, 해제 결과를 버렸는지
+		//    아닌지를 구별할 수 없다 — 실제로 그렇게 공허했다(2026-08-28 변이 탐침).
+		//    확인을 늦추면 첫 턴은 오직 "해제 결과가 반영됐는가"에만 달린다.
+		await page.evaluate(() => {
+			const w = window as unknown as { __E2E_SKILLS_DENY__?: boolean; __E2E_SKILLS_ACK_DELAY__?: number };
+			w.__E2E_SKILLS_DENY__ = true;
+			w.__E2E_SKILLS_ACK_DELAY__ = 5_000;
+		});
+		await selector.selectOption("auto");
+		await page.waitForTimeout(600);
+		await page.getByRole("button", { name: /^(Settings|설정)$/ }).click();
+
+		const before = await page.evaluate(
+			() =>
+				((window as unknown as { __E2E_OUTBOUND__?: Record<string, unknown>[] }).__E2E_OUTBOUND__ ?? [])
+					.filter((m) => m?.type === "chat_request").length,
+		);
+		await expect(input).toBeEnabled({ timeout: 5_000 });
+		await input.fill("다시 켠 뒤 첫 턴");
+		await input.press("Enter");
+		await expect
+			.poll(
+				async () =>
+					page.evaluate(
+						() =>
+							((window as unknown as { __E2E_OUTBOUND__?: Record<string, unknown>[] }).__E2E_OUTBOUND__ ?? [])
+								.filter((m) => m?.type === "chat_request").length,
+					),
+				{ timeout: 10_000 },
+			)
+			.toBeGreaterThan(before);
+		expect(
+			await surfacesSegment(page),
+			"해제 결과를 버려 낡은 참으로 첫 턴에 표면을 실었다",
+		).toBeNull();
+	});
+
+	test("(B16) 도구 사용이 꺼져 있으면 표면을 싣지 않는다 (FR-ENV-ATTENTION.19)", async ({
+		page,
+	}) => {
+		// 개수만 보내는 안내는 "필요하면 도구를 불러라"라고 말한다. 그런데 전역 도구가
+		// 꺼져 있으면 나이아는 부를 수 없다 — 닫힌 길을 가리키는 셈이다
+		// (2026-08-28 19차 적대리뷰 지적).
+		await boot(page, { ...BASE_CONFIG, enableTools: false });
+		const input = page.locator(".chat-input");
+		await expect(input).toBeEnabled({ timeout: 5_000 });
+		await input.fill("도구 꺼진 턴");
+		await input.press("Enter");
+
+		// 요청은 실제로 나간다 — 단언이 공허하지 않다.
+		await expect
+			.poll(
+				async () =>
+					page.evaluate(
+						() =>
+							((window as unknown as { __E2E_OUTBOUND__?: Record<string, unknown>[] }).__E2E_OUTBOUND__ ?? [])
+								.filter((m) => m?.type === "chat_request").length,
+					),
+				{ timeout: 10_000 },
+			)
+			.toBeGreaterThan(0);
+		expect(
+			await surfacesSegment(page),
+			"도구를 부를 수 없는데 표면을 실어 부르라고 안내했다",
+		).toBeNull();
+	});
+
+	test("(B17) 도구가 꺼져 있어도 always 는 목록을 보낸다 — 사용자 정책이 이긴다 (FR-ENV-ATTENTION.20)", async ({
+		page,
+	}) => {
+		// 막아야 하는 것은 "개수만 보내고 도구를 부르라고 안내하는 것"이다. 목록 자체는
+		// 도구 없이도 쓸모가 있다 — 나이아가 무엇이 돌고 있는지 말해 줄 수는 있다.
+		// 두 규칙(사용자 정책 우선 / 도구 꺼짐)이 충돌하는 조합을 여기서 정한다
+		// (2026-08-28 21차 적대리뷰 지적).
+		await boot(page, { ...BASE_CONFIG, enableTools: false, environmentAwareness: "always" });
+		const input = page.locator(".chat-input");
+		await expect(input).toBeEnabled({ timeout: 5_000 });
+		await input.fill("도구는 껐지만 늘 보내기");
+		await input.press("Enter");
+
+		await expect
+			.poll(
+				async () => ((await surfacesSegment(page))?.surfaces as unknown[] | undefined)?.length ?? 0,
+				{ timeout: 10_000 },
+			)
+			.toBe(2);
+		// 그리고 이때는 "숨겼다"는 표시가 붙지 않는다 — 실제로 다 보냈으니까.
+		expect((await surfacesSegment(page))?.listWithheld).not.toBe(true);
 	});
 
 	test("(C) app_tool_call(focus) 이 실제 herdr 명령까지 간다", async ({ page }) => {

@@ -712,7 +712,9 @@ describe("chat-service", () => {
 				sendAppToolResult,
 			} = await import("../chat-service");
 			await expect(sendAppSkills("p1", [])).resolves.toBe(false);
-			await expect(sendAppSkillsClear("p1")).resolves.toBeUndefined();
+			// 해제도 전달 여부를 돌려준다. 버리면 사용자가 껐는데 도구 선언이 뇌에 남아도
+			// 호출자가 알 수 없다 (2026-08-28 16차 적대리뷰 지적).
+			await expect(sendAppSkillsClear("p1")).resolves.toBe(false);
 			await expect(
 				sendAppInstall("https://github.com/x/y"),
 			).resolves.toBeUndefined();

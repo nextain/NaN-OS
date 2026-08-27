@@ -806,12 +806,65 @@ export async function fetchAgentSkills(): Promise<
 	return promise;
 }
 
-/** Send app skill descriptors to the agent (on app activate) */
+/**
+ * 등록·해제가 뇌에 실제로 닿았는지 기다린다 (FR-ENV-ATTENTION.16).
+ *
+ * 왜 필요한가: 프런트가 받는 boolean 은 "Tauri 명령이 메시지를 큐에 넣었다"는 뜻이다.
+ * 실제 gRPC 는 디스패처가 나중에 수행한다. 그래서 큐잉 성공을 전달 성공으로 읽으면,
+ * 도구가 없는데 있다고 판단하게 된다 (2026-08-28 17차 적대리뷰 지적).
+ *
+ * Rust 는 requestId 가 실린 app_skills / app_skills_clear 에 대해 gRPC 결과를
+ * `app_skills_result` 로 돌려준다. 여기서 그것을 기다린다.
+ * 시간 안에 오지 않으면 실패로 본다 — 모르는 것을 성공으로 세지 않는다.
+ */
+async function sendAppSkillsMessage(
+	message: Record<string, unknown>,
+	opName: string,
+	awaitAck: boolean,
+	timeoutMs: number,
+): Promise<boolean> {
+	if (!awaitAck) return safeSendToAgent(message, opName);
+
+	const requestId = `${opName}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+	let settle!: (ok: boolean) => void;
+	const promise = new Promise<boolean>((resolve) => {
+		settle = resolve;
+	});
+	const unlisten = await listen<string>("agent_response", (event) => {
+		try {
+			const raw =
+				typeof event.payload === "string" ? event.payload : JSON.stringify(event.payload);
+			const chunk = JSON.parse(raw) as { type?: string; requestId?: string; ok?: boolean };
+			if (chunk?.type !== "app_skills_result" || chunk.requestId !== requestId) return;
+			settle(chunk.ok === true);
+		} catch {
+			// 형태가 어긋난 응답은 이 대기의 것이 아니다.
+		}
+	});
+	const timer = setTimeout(() => settle(false), timeoutMs);
+
+	try {
+		const queued = await safeSendToAgent({ ...message, requestId }, opName);
+		if (!queued) return false;
+		return await promise;
+	} finally {
+		clearTimeout(timer);
+		unlisten();
+	}
+}
+
+/**
+ * Send app skill descriptors to the agent (on app activate).
+ *
+ * `awaitAck` 를 켜면 뇌가 실제로 등록했는지까지 기다린다. 기본값은 끔 — 기존 호출자들의
+ * 지연과 실패 양식을 바꾸지 않기 위해서다.
+ */
 export async function sendAppSkills(
 	appId: string,
 	tools: NaiaTool[],
+	opts: { awaitAck?: boolean; timeoutMs?: number } = {},
 ): Promise<boolean> {
-	return safeSendToAgent(
+	return sendAppSkillsMessage(
 		{
 			type: "app_skills",
 			appId,
@@ -823,14 +876,26 @@ export async function sendAppSkills(
 			})),
 		},
 		"sendAppSkills",
+		opts.awaitAck === true,
+		opts.timeoutMs ?? 5_000,
 	);
 }
 
-/** Tell the agent to remove app's proxy skills (on app deactivate) */
-export async function sendAppSkillsClear(appId: string): Promise<void> {
-	await safeSendToAgent(
+/**
+ * Tell the agent to remove app's proxy skills (on app deactivate).
+ *
+ * 결과를 돌려준다. 버리면 해제가 실패해도 호출자가 알 수 없고, 사용자가 껐는데
+ * 도구 선언이 뇌에 남는다 (2026-08-28 16차 적대리뷰 지적).
+ */
+export async function sendAppSkillsClear(
+	appId: string,
+	opts: { awaitAck?: boolean; timeoutMs?: number } = {},
+): Promise<boolean> {
+	return sendAppSkillsMessage(
 		{ type: "app_skills_clear", appId },
 		"sendAppSkillsClear",
+		opts.awaitAck === true,
+		opts.timeoutMs ?? 5_000,
 	);
 }
 

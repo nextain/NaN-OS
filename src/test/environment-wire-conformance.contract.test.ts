@@ -45,6 +45,7 @@ describe("셸이 내는 wire 형태", () => {
 
   it("보고에 없는 값을 더하지 않는다 — 뇌가 보는 것은 보고가 전부다", () => {
     const segment = toEnvironmentSegment(REPORT);
+    // 숨김이 아닐 때는 키 자체가 없다 — 목록을 싣는 요청에 쓸모없는 바이트를 더하지 않는다.
     expect(Object.keys(segment).sort()).toEqual(["kind", "omitted", "surfaces"]);
     for (const s of segment.surfaces) {
       expect(Object.keys(s).sort()).toEqual(["activity", "focused", "label", "ref"]);
@@ -110,6 +111,9 @@ describe("짝 저장소와의 표본 드리프트", () => {
   for (let up = 2; up <= 6; up += 1) {
     const base = resolve(__dirname, ...Array.from({ length: up }, () => ".."));
     roots.push(resolve(base, "naia-agent"));
+    // Rust 빌드와 e2e-tauri 가 쓰는 정본 경로. 여기만 다르면 같은 짝을 두 곳이 다르게
+    // 고르게 된다 (2026-08-28 실측 — 이 테스트만 이 경로를 안 봤다).
+    if (pinned) roots.push(resolve(base, "naia-agent-worktrees", `shell-pair-${pinned.slice(0, 7)}`));
     roots.push(resolve(base, "naia-agent-worktrees", "env-surfaces-112"));
   }
   const peer = roots
@@ -134,5 +138,20 @@ describe("짝 저장소와의 표본 드리프트", () => {
   it.skipIf(peer === undefined)("두 저장소의 표본 세그먼트가 같다", () => {
     const theirs = JSON.parse(readFileSync(peer as string, "utf8")) as { readonly segment: unknown };
     expect(theirs.segment).toEqual(fixture.segment);
+  });
+
+  // 표본이 같다고 짝이 이 형태를 **이해한다**는 뜻은 아니다. 셸은 기본 상태에서
+  // listWithheld 를 보내는데, 그것을 모르는 에이전트는 surfaces=[] + omitted=N 을
+  // "상한 때문에 잘렸다"로 읽는다 — 이 슬라이스가 막으려던 바로 그 오독이다.
+  // 실측(2026-08-28): 핀이 가리키던 커밋도, 그때의 에이전트 main 도 이 필드를 몰랐다.
+  // 짝을 고를 때 형태만 보고 해석을 안 보면 조용히 어긋난다 (22차 적대리뷰 지적).
+  it.skipIf(peer === undefined)("짝 저장소가 listWithheld 를 실제로 읽는다", () => {
+    const root = (peer as string).slice(0, (peer as string).indexOf("/src/test/fixtures/"));
+    const decode = readFileSync(resolve(root, "src/main/adapters/protocol.ts"), "utf8");
+    expect(decode, "짝이 listWithheld 를 디코드하지 않는다 — 숨김을 절단으로 읽는다").toContain(
+      "listWithheld",
+    );
+    const render = readFileSync(resolve(root, "src/main/domain/environment-segments.ts"), "utf8");
+    expect(render, "짝이 숨김과 절단을 같은 문구로 렌더링한다").toContain("listWithheld");
   });
 });

@@ -5,9 +5,24 @@
   "segment": {
     "kind": "environmentSurfaces",
     "surfaces": [
-      { "ref": "s-1", "label": "빌더", "activity": "working", "focused": true },
-      { "ref": "s-2", "label": "zsh — alpha-adk", "activity": "idle", "focused": false },
-      { "ref": "s-3", "label": "이름없는 표면", "activity": "unknown", "focused": false }
+      {
+        "ref": "s-1",
+        "label": "빌더",
+        "activity": "working",
+        "focused": true
+      },
+      {
+        "ref": "s-2",
+        "label": "zsh — alpha-adk",
+        "activity": "idle",
+        "focused": false
+      },
+      {
+        "ref": "s-3",
+        "label": "이름없는 표면",
+        "activity": "unknown",
+        "focused": false
+      }
     ],
     "omitted": 4
   }
