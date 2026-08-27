@@ -36,6 +36,7 @@ import {
 	sendApprovalResponse,
 	sendChatMessage,
 	sendAppSkills,
+	sendAppSkillsClear,
 	sendAppToolResult,
 	yieldSpeechActivity,
 	type SpeechActivityResume,
@@ -51,8 +52,10 @@ import {
 	SKILL_ENVIRONMENT,
 	executeEnvironmentSkill,
 	liveEnvironmentDeps,
+	environmentClearNeeded,
 	environmentSession,
 	environmentToolRegistered,
+	noteEnvironmentClear,
 	noteEnvironmentToolAck,
 	refreshEnvironment,
 } from "../lib/environment-skill";
@@ -1797,7 +1800,16 @@ export function ChatArea({
 			// 재시작하면 조용히 사라진다 — BGM 이 같은 이유로 매 턴 재등록한다.
 			// 다만 여기서는 실패해도 대화를 막지 않는다. 환경은 대화의 조건이 아니다.
 			let environmentToolReady = false;
-			if ((loadConfig()?.environmentAwareness ?? "auto") !== "off") {
+			if ((loadConfig()?.environmentAwareness ?? "auto") === "off") {
+				// 꺼져 있으면 등록 경로를 타지 않으므로, 실패한 해제는 스스로 낫지 않는다.
+				// 도구 선언이 뇌에 남아 요청 비용이 계속 붙는다 — 다음 턴에 한 번 더 시도한다
+				// (FR-ENV-ATTENTION.17). 기다리지 않으므로 대화는 지연되지 않는다.
+				if (environmentClearNeeded()) {
+					void sendAppSkillsClear(ENVIRONMENT_APP_ID, { awaitAck: true })
+						.then((ok) => noteEnvironmentClear(ok))
+						.catch(() => noteEnvironmentClear(false));
+				}
+			} else {
 				// 등록을 쏘되 기다리지 않는다. 기다리면 확인이 오지 않을 때 사용자의 모든
 				// 대화가 시간초과만큼 멈춘다 — 실제로 그렇게 만들어 12건이 깨졌다(2026-08-28).
 				// 확인이 돌아오면 상태가 바뀌고, 이 턴은 마지막으로 확인된 상태를 쓴다.

@@ -89,6 +89,28 @@ export function noteEnvironmentToolAck(ok: boolean): void {
 	environmentToolAcked = ok;
 }
 
+/**
+ * 해제가 실패해 뇌에 도구 선언이 남아 있을 수 있는 상태 (FR-ENV-ATTENTION.17).
+ *
+ * 꺼 두면 대화 턴에서 등록 경로를 타지 않으므로, 실패한 해제는 스스로 낫지 않는다.
+ * 그래서 사실을 들고 있다가 다음 턴에 한 번 더 시도한다.
+ */
+let environmentClearPending = false;
+
+/** 해제가 아직 확인되지 않았는가. */
+export function environmentClearNeeded(): boolean {
+	return environmentClearPending;
+}
+
+/** 해제 시도 결과를 기록한다. 성공하면 더 시도하지 않는다. */
+export function noteEnvironmentClear(ok: boolean): void {
+	environmentClearPending = !ok;
+	// 껐다면 등록되어 있다고 주장하지 않는다. 해제가 실패했더라도 셸이 "등록됨"으로
+	// 판정해서는 안 된다 — 다시 켤 때 낡은 참으로 첫 턴에 표면을 실어 버린다
+	// (2026-08-28 18차 적대리뷰 지적).
+	environmentToolAcked = false;
+}
+
 /** 스냅샷을 실제로 가져와 관측을 갱신한다. 실패하면 null — 없는 것을 있는 척하지 않는다. */
 export async function refreshEnvironment(): Promise<ReturnType<EnvironmentSession["latestReport"]>> {
 	try {

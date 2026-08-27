@@ -58,6 +58,8 @@ import {
 	ENVIRONMENT_APP_ID,
 	SKILL_ENVIRONMENT,
 	environmentSession,
+	noteEnvironmentClear,
+	noteEnvironmentToolAck,
 } from "../lib/environment-skill";
 import {
 	type AppConfig,
@@ -4875,15 +4877,19 @@ export function SettingsTab() {
 									environmentSession.unwatch();
 									sendAppSkillsClear(ENVIRONMENT_APP_ID, { awaitAck: true })
 										.then((ok) => {
+											// 확인값을 상태에 반영한다. 로그로만 쓰면 셸이 낡은 참을
+											// 들고 있게 된다 (2026-08-28 18차 적대리뷰 지적).
+											noteEnvironmentClear(ok);
 											if (!ok) Logger.warn("SettingsTab", "environment skill clear not delivered", {});
 										})
-										.catch(() => {});
+										.catch(() => noteEnvironmentClear(false));
 								} else {
 									sendAppSkills(ENVIRONMENT_APP_ID, [SKILL_ENVIRONMENT], { awaitAck: true })
 										.then((ok) => {
+											noteEnvironmentToolAck(ok);
 											if (!ok) Logger.warn("SettingsTab", "environment skill register not delivered", {});
 										})
-										.catch(() => {});
+										.catch(() => noteEnvironmentToolAck(false));
 								}
 							}}
 						>

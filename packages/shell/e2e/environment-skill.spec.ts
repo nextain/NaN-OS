@@ -81,9 +81,11 @@ const MOCK_SCRIPT = `
         // Rust 가 gRPC 결과를 app_skills_result 로 돌려주는 흐름 (FR-ENV-ATTENTION.16).
         var arid = payload.requestId;
         var deny = window.__E2E_SKILLS_DENY__ === true;
+        // 확인이 늦게 오는 상황을 만들 수 있어야, "해제 결과를 반영했는가"만 격리해 잴 수 있다.
+        var delay = window.__E2E_SKILLS_ACK_DELAY__ || 10;
         setTimeout(function () {
           emitEvent("agent_response", JSON.stringify({ type: "app_skills_result", requestId: arid, ok: !deny }));
-        }, 10);
+        }, delay);
       }
       if (payload && payload.type === "chat_request") {
         var rid = payload.requestId;
@@ -781,6 +783,65 @@ test.describe("#502 환경 스킬 배선 (FR-ENV-LIVE)", () => {
 		expect(
 			await surfacesSegment(page),
 			"도구가 없는데 표면을 실어 없는 도구를 부르라고 안내했다",
+		).toBeNull();
+	});
+
+	test("(B15) 껐다 다시 켠 뒤 등록이 실패하면 첫 턴부터 표면이 안 실린다 (FR-ENV-ATTENTION.17)", async ({
+		page,
+	}) => {
+		// 해제 결과를 상태에 반영하지 않으면, 다시 켰을 때 낡은 참으로 첫 턴에 표면을
+		// 실어 보낸다 (2026-08-28 18차 적대리뷰 지적).
+		await boot(page, BASE_CONFIG);
+		const input = page.locator(".chat-input");
+		await expect(input).toBeEnabled({ timeout: 5_000 });
+		await input.fill("정상 턴");
+		await input.press("Enter");
+		await expect.poll(async () => await surfacesSegment(page), { timeout: 10_000 }).not.toBeNull();
+
+		// 사용자가 끈다 (해제는 성공한다).
+		await page.getByRole("button", { name: /^(Settings|설정)$/ }).click();
+		await page.locator('[data-settings-tab="brain"]').click();
+		const selector = page.locator("#environment-awareness");
+		await expect(selector).toBeVisible({ timeout: 5_000 });
+		await selector.selectOption("off");
+		await page.waitForTimeout(600);
+
+		// 다시 켜는데, 이번에는 뇌가 등록을 거절하고 그 확인이 늦게 온다.
+		//
+		// ⚠️ 확인이 빨리 오면 다시 켜는 경로가 스스로 false 로 만들어, 해제 결과를 버렸는지
+		//    아닌지를 구별할 수 없다 — 실제로 그렇게 공허했다(2026-08-28 변이 탐침).
+		//    확인을 늦추면 첫 턴은 오직 "해제 결과가 반영됐는가"에만 달린다.
+		await page.evaluate(() => {
+			const w = window as unknown as { __E2E_SKILLS_DENY__?: boolean; __E2E_SKILLS_ACK_DELAY__?: number };
+			w.__E2E_SKILLS_DENY__ = true;
+			w.__E2E_SKILLS_ACK_DELAY__ = 5_000;
+		});
+		await selector.selectOption("auto");
+		await page.waitForTimeout(600);
+		await page.getByRole("button", { name: /^(Settings|설정)$/ }).click();
+
+		const before = await page.evaluate(
+			() =>
+				((window as unknown as { __E2E_OUTBOUND__?: Record<string, unknown>[] }).__E2E_OUTBOUND__ ?? [])
+					.filter((m) => m?.type === "chat_request").length,
+		);
+		await expect(input).toBeEnabled({ timeout: 5_000 });
+		await input.fill("다시 켠 뒤 첫 턴");
+		await input.press("Enter");
+		await expect
+			.poll(
+				async () =>
+					page.evaluate(
+						() =>
+							((window as unknown as { __E2E_OUTBOUND__?: Record<string, unknown>[] }).__E2E_OUTBOUND__ ?? [])
+								.filter((m) => m?.type === "chat_request").length,
+					),
+				{ timeout: 10_000 },
+			)
+			.toBeGreaterThan(before);
+		expect(
+			await surfacesSegment(page),
+			"해제 결과를 버려 낡은 참으로 첫 턴에 표면을 실었다",
 		).toBeNull();
 	});
 
