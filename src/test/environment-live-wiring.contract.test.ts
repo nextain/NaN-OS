@@ -438,22 +438,32 @@ describe("비용이 실제로 줄었는가 (FR-ENV-ATTENTION.15)", () => {
   //    아래 상수는 이 고정 표본에서 실제로 측정된 값이다. 바뀌면 왜 바뀌었는지 적어야 한다.
   const MEASURED_FULL = 1187;
   const MEASURED_WITHHELD = 77;
+  const MEASURED_ALWAYS_40 = 47_480;
+  const MEASURED_AUTO_40 = 13_070;
   const TOLERANCE = 0.08; // 라벨 문구 같은 사소한 변화를 위한 폭. 회귀를 숨길 만큼 넓지 않다.
+
+  /**
+   * 실측치 주변으로 **위아래 모두** 묶는다.
+   *
+   * 한쪽만 묶으면 반대 방향의 회귀가 그대로 통과한다 — 목록 쪽에 상한이 없으면 부가 필드를
+   * 얼마든지 더할 수 있고, 총량 쪽에 하한이 없으면 예산을 줄여 수치만 좋게 만들 수 있다.
+   * 두 경우 다 "줄였다"는 주장과 무관한 변화이고, 그것이 조용히 지나가면 이 측정은
+   * 지키는 것이 없다 (2026-08-27 15차 적대리뷰 지적).
+   */
+  function pinned(actual: number, measured: number, what: string): void {
+    expect(actual, `${what}가 부풀었다: ${actual} (실측 ${measured})`).toBeLessThanOrEqual(
+      Math.ceil(measured * (1 + TOLERANCE)),
+    );
+    expect(actual, `${what}가 줄었다: ${actual} (실측 ${measured})`).toBeGreaterThanOrEqual(
+      Math.floor(measured * (1 - TOLERANCE)),
+    );
+  }
 
   it("지켜보지 않는 동안의 세그먼트 크기가 실측치에 머문다", () => {
     const session = new EnvironmentSession();
     session.observeSnapshot({ panes: MANY } as never);
-    const withheld = bytesOf(session.segment("auto"));
-    const full = bytesOf(session.segment("always"));
-    // 목록 쪽이 실제로 커야 비교가 공허하지 않다.
-    expect(full).toBeGreaterThan(MEASURED_FULL * (1 - TOLERANCE));
-    // 숨김 쪽은 위아래로 묶는다. 위는 부풀기를, 아래는 "세그먼트를 아예 없애 버림"을 막는다.
-    expect(withheld, `숨김 세그먼트가 부풀었다: ${withheld}바이트`).toBeLessThanOrEqual(
-      Math.ceil(MEASURED_WITHHELD * (1 + TOLERANCE)),
-    );
-    expect(withheld, `숨김 세그먼트가 사라졌다: ${withheld}바이트`).toBeGreaterThanOrEqual(
-      Math.floor(MEASURED_WITHHELD * (1 - TOLERANCE)),
-    );
+    pinned(bytesOf(session.segment("auto")), MEASURED_WITHHELD, "숨김 세그먼트");
+    pinned(bytesOf(session.segment("always")), MEASURED_FULL, "목록 세그먼트");
   });
 
   it("한 대화에서 실제로 오가는 총량을 잰다 — 지켜보기는 예산만큼만 비싸다", () => {
@@ -471,12 +481,11 @@ describe("비용이 실제로 줄었는가 (FR-ENV-ATTENTION.15)", () => {
       always.noteTurn();
       auto.noteTurn();
     }
-    // 실측치: always 47480 / auto 13070 (72.5% 감소). "절반 미만"으로는 82% 부풀어도
-    // 통과하므로 요구사항이 적어 둔 수치를 지키지 못한다.
-    expect(alwaysBytes).toBeGreaterThan(47_480 * (1 - TOLERANCE));
-    expect(autoBytes, `40턴 총량이 부풀었다: ${autoBytes}바이트`).toBeLessThanOrEqual(
-      Math.ceil(13_070 * (1 + TOLERANCE)),
-    );
+    // 실측치: always 47480 / auto 13070 (72.5% 감소). 둘 다 위아래로 묶는다.
+    pinned(alwaysBytes, MEASURED_ALWAYS_40, "40턴 always 총량");
+    pinned(autoBytes, MEASURED_AUTO_40, "40턴 auto 총량");
+    // 감소율 자체도 확인한다 — 두 값이 같이 움직여 비율만 유지되는 경우를 막는다.
+    expect(1 - autoBytes / alwaysBytes).toBeGreaterThan(0.7);
   });
 
   it("지켜보지 않는 동안에는 터미널 이름이 한 글자도 나가지 않는다", () => {
