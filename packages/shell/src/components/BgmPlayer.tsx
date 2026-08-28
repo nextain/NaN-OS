@@ -248,6 +248,15 @@ export function BgmPlayer({ naia }: Props) {
 	const [showYoutubeBackground, setShowYoutubeBackground] = useState(
 		() => loadConfig()?.bgmYoutubeBackgroundVideo ?? true,
 	);
+	// FR-BGM-VIDEO.2 (#476 검은 화면): the YouTube iframe may never render a
+	// picture in the packaged WebView2 (embed refusal, CSP, load failure) while
+	// the user's background has already been swapped out underneath it. The
+	// iframe is therefore only allowed to COVER the fallback background after
+	// this playback has been genuinely observed playing (onStateChange playing
+	// or real infoDelivery progress). Until then — and again on error/timeout/
+	// ended — the previous background stays visible through the transparent
+	// iframe instead of a black screen.
+	const [videoLive, setVideoLive] = useState(false);
 	const [playbackSnapshot, setPlaybackSnapshot] =
 		useState<BgmPlaybackSnapshot | null>(() => bgmPlayback.current());
 	const [queueVersion, setQueueVersion] = useState(0);
@@ -328,6 +337,15 @@ export function BgmPlayer({ naia }: Props) {
 		});
 		if (!next) return null;
 		setPlaybackSnapshot(next);
+		if (status === "playing") {
+			setVideoLive(true);
+		} else if (
+			status === "error" ||
+			status === "timeout" ||
+			status === "ended"
+		) {
+			setVideoLive(false);
+		}
 		if (status === "error" || status === "timeout") {
 			emitAiInterferenceEvent({
 				source: "bgm",
@@ -834,6 +852,18 @@ export function BgmPlayer({ naia }: Props) {
 		saveConfig({ ...cfg, bgmPlaying: playing });
 	}, [playing]);
 
+	// FR-BGM-VIDEO.2 — CSS gate: .app-bg-iframe stays transparent until the
+	// active playback is confirmed, so an unconfirmed/failed embed never
+	// replaces the user's background with a black frame.
+	useEffect(() => {
+		document.documentElement.dataset.bgmYoutubeLive = videoLive
+			? "true"
+			: "false";
+		return () => {
+			delete document.documentElement.dataset.bgmYoutubeLive;
+		};
+	}, [videoLive]);
+
 	useEffect(() => {
 		document.documentElement.dataset.bgmYoutubeBackground =
 			showYoutubeBackground ? "visible" : "hidden";
@@ -895,6 +925,7 @@ export function BgmPlayer({ naia }: Props) {
 				youtubeEmbedUrl(pending.selected.videoId, pending.playbackId),
 			);
 			setBackgroundMediaType("iframe");
+			setVideoLive(pending.status === "playing");
 			return;
 		}
 		const cfg = loadConfig();
@@ -983,6 +1014,8 @@ export function BgmPlayer({ naia }: Props) {
 		setSource("youtube");
 		// Iframe replacement is a request, not observed audio playback.
 		setPlaying(false);
+		// A fresh iframe is unconfirmed until this playback is observed playing.
+		setVideoLive(false);
 		emitAiInterferenceEvent({
 			source: "bgm",
 			action: "music_changed",

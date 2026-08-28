@@ -395,8 +395,18 @@ body,
 	z-index: 0;
 	pointer-events: none;
 	border: none;
+	/* FR-BGM-VIDEO.2 — 미확인 임베드는 배경을 덮지 못한다. 재생이 실제로
+	   관측되기 전(그리고 error/timeout/ended 후)에는 투명을 유지해, 패키지드
+	   WebView2 에서 임베드가 검게 실패해도 기존 배경이 계속 보인다. */
+	opacity: 0;
+	transition: opacity 0.4s ease;
 }
 
+html[data-bgm-youtube-live="true"] .app-bg-iframe {
+	opacity: 1;
+}
+
+/* 사용자의 명시적 숨김은 재생 확인보다 항상 우선한다. */
 html[data-bgm-youtube-background="hidden"] .app-bg-iframe {
 	opacity: 0;
 }

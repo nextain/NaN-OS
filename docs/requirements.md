@@ -860,6 +860,7 @@ fenced code는 언어·복사·접기·워크스페이스 전환을 제공하고
 | **FR-CHAT-MARKDOWN.3** | #483 | 코드 블록은 안전한 구문 강조, 정확한 복사와 성공 피드백을 제공한다. Mermaid는 strict 렌더링하며 실패 시 원문을 보존한다. | MarkdownCodeBlock 단위 테스트 + 실제 채팅 브라우저 E2E |
 | **FR-WORKSPACE-HERDR.2** | #492 | Herdr snapshot이 멈추거나 실패해도 설정된 Workspace 파일 트리는 독립적으로 표시된다. | runtime hook 단위 테스트 + stalled snapshot 브라우저 E2E |
 | **FR-BGM-VIDEO.1** | #493 | YouTube iframe을 유지한 채 배경 영상만 숨겨 오디오 재생을 지속하고 선택을 저장한다. | BGM 컴포넌트 + 브라우저 패널 E2E |
+| **FR-BGM-VIDEO.2** | #476 | YouTube iframe은 해당 재생이 실제로 관측(playing/진행)되기 전에는 기존 배경을 덮지 않으며, error·timeout·ended 시 기존 배경을 다시 보인다. 임베드 실패가 검은 화면으로 나타나서는 안 된다. | BgmPlayer 단위 테스트(`data-bgm-youtube-live` 게이트) + 패키지드 Windows 실기 확인 |
 | **FR-BGM-STATE.1** | #494 | 음표 애니메이션은 YouTube의 authoritative playing 이벤트에서만 활성화한다. | player event 단위 테스트 + 브라우저 패널 E2E |
 | **FR-BGM-CONTROL.1** | #495 | 실제 재생 중에는 정지, 정지 후에는 재생 동작과 라벨을 표시한다. | player control 단위 테스트 + 브라우저 패널 E2E |
 | **FR-TTS-GLOBAL-OFF.1** | local QA | 상단 TTS를 끄면 현재 재생, 대기 문장, 진행 중 합성 및 브라우저 발화를 즉시 중단하며 이후 응답을 합성하지 않는다. | AiControlBar→ChatArea 통합 테스트 + 브라우저 E2E |

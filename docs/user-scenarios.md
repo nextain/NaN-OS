@@ -923,6 +923,7 @@ Test Coverage Map: `lib/tts/__tests__/text-filter.test.ts`가 공통/언어/fall
 - Python 등 fenced code는 구문 강조와 정확한 복사·복사 완료 피드백을 제공한다. Mermaid fence는 다이어그램으로 렌더링되고 실패하면 원문이 남는다.
 - Workspace에서 MP3/WAV/MP4를 클릭하면 UTF-8 텍스트 오류 없이 미디어 컨트롤이 열린다.
 - YouTube 패널 상단에서 배경 영상 표시를 끌 수 있고 오디오는 유지된다. 음표와 재생/정지 버튼은 실제 player 이벤트와 일치한다.
+- YouTube BGM을 재생해도 재생이 실제 확인되기 전에는 기존 배경이 그대로 보이고, 임베드가 실패하면 검은 화면 대신 기존 배경으로 돌아온다.
 - Herdr가 준비되지 않아도 파일 트리는 열리며, 로컬 OpenAI 호환 Base URL과 `naia <file>` 흐름도 같은 후보 빌드에서 동작한다.
 
 Test Coverage Map: 관련 단위·컴포넌트 테스트만으로 완료하지 않는다. `v0.2.2` 버전과 리소스를 가진 동일 debug/release 후보를 시작해 Playwright UI 여정과 Windows Tauri smoke를 모두 통과해야 한다.
