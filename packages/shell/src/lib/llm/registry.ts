@@ -161,7 +161,8 @@ export async function fetchOpenAIModels(
 		if (apiKey?.trim() && apiKey !== "*****") {
 			headers.Authorization = `Bearer ${apiKey.trim()}`;
 		}
-		const response = await fetch(`${effectiveOpenAIBaseUrl(baseUrl)}/models`, {
+		const effectiveBaseUrl = effectiveOpenAIBaseUrl(baseUrl);
+		const response = await fetch(`${effectiveBaseUrl}/models`, {
 			headers,
 			signal: AbortSignal.timeout(5000),
 		});
@@ -181,11 +182,15 @@ export async function fetchOpenAIModels(
 			);
 		// 동적 목록이 정적 registry 목록을 대체하므로, 필터에 걸리는 음성(omni) 모델은
 		// 정적 정의에서 되살려 유지한다(realtime 계열이 LLM 필터로 소실되는 회귀 방지).
-		const staticOmni = (providers.get("openai")?.models ?? []).filter(
-			(m) =>
-				m.capabilities.includes("omni") &&
-				!models.some((fetched) => fetched.id === m.id),
-		);
+		// 공식 OpenAI 엔드포인트일 때만 — 커스텀 호환 서버에는 OpenAI 전용 모델이 없다.
+		const staticOmni =
+			effectiveBaseUrl === "https://api.openai.com/v1"
+				? (providers.get("openai")?.models ?? []).filter(
+						(m) =>
+							m.capabilities.includes("omni") &&
+							!models.some((fetched) => fetched.id === m.id),
+					)
+				: [];
 		return { models: [...models, ...staticOmni], connected: true };
 	} catch {
 		return { models: [], connected: false };

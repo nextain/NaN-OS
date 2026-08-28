@@ -51,7 +51,7 @@ describe("registry — Codex app-server provider", () => {
 	it("API key가 필요 없고 expert/main/sub 역할을 지원한다", () => {
 		const provider = getLlmProvider("codex");
 		expect(provider?.requiresApiKey).toBe(false);
-		expect(getDefaultLlmModel("codex")).toBe("gpt-5.4");
+		expect(getDefaultLlmModel("codex")).toBe("gpt-5.6-sol");
 		expect(providerSupportsRole("codex", "main")).toBe(true);
 		expect(providerSupportsRole("codex", "sub")).toBe(true);
 		expect(providerSupportsRole("codex", "memory")).toBe(false);
@@ -238,8 +238,23 @@ describe("registry — 모델 카탈로그 정합 + 최신화 (2026-06-18)", () 
 				.map((m) => m.id);
 		}
 		expect(snapshot).toEqual({
-			anthropic: ["claude-opus-4-8", "claude-sonnet-4-6", "claude-haiku-4-5-20251001"],
-			openai: ["gpt-5.5", "gpt-5.4", "gpt-4.1", "gpt-4.1-mini", "o4-mini", "gpt-4o"],
+			anthropic: [
+				"claude-fable-5",
+				"claude-opus-4-8",
+				"claude-sonnet-5",
+				"claude-sonnet-4-6",
+				"claude-haiku-4-5-20251001",
+			],
+			openai: [
+				"gpt-5.6-sol",
+				"gpt-5.6-terra",
+				"gpt-5.6-luna",
+				"gpt-5.5",
+				"gpt-5.4",
+				"gpt-4.1",
+				"gpt-4.1-mini",
+				"gpt-4o",
+			],
 			gemini: [
 				"gemini-3.7-flash",
 				"gemini-3.6-flash",
@@ -247,12 +262,11 @@ describe("registry — 모델 카탈로그 정합 + 최신화 (2026-06-18)", () 
 				"gemini-3.5-flash-lite",
 				"gemini-3.1-flash-lite",
 				"gemini-3.1-pro-preview",
-				"gemini-3-flash-preview",
 				"gemini-2.5-pro",
 				"gemini-2.5-flash",
 			],
-			xai: ["grok-4.3", "grok-4", "grok-4.1-fast", "grok-code-fast-1", "grok-3-mini"],
-			zai: ["glm-5.2", "glm-5.1", "glm-5-turbo", "glm-4.7", "glm-4.5-air"],
+			xai: ["grok-4.6", "grok-4.5", "grok-4.3", "grok-build-0.1"],
+			zai: ["glm-5.3", "glm-5.3-flash", "glm-5.2", "glm-5.1", "glm-5-turbo"],
 		});
 	});
 });
