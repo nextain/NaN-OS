@@ -1,12 +1,12 @@
 {
   "schemaVersion": 1,
   "profile": "windows_trt_6g",
-  "artifactManifestSha256": "2b691eb64a72f95a63531849b5f7c98bd151df5502cd6096b7a986b01106ace0",
+  "artifactManifestSha256": "7b0ef654f405b9f05c633eb9a53f7258c7fdc99b93f13ee235ce495637781e41",
   "archive": {
-    "url": "https://pub-a587c16974874fc9a168d2a281801a23.r2.dev/windows_trt_6g/releases/0.2.2/voxcpm2-runtime-win-trt6g.zip",
-    "sha256": "71d67052799942e60b0ca832376e04e84011dda1043b56c65337df1fcedeaccb",
-    "bytes": 3867249490,
-    "unpackedBytes": 6797816571,
-    "files": 31951
+    "url": "https://stnaiapub83b29893.blob.core.windows.net/releases/windows_trt_6g/releases/0.2.2/voxcpm2-runtime-win-trt6g.zip",
+    "sha256": "8112a9f0962f39e3b9015798dabbb42c18545e5b57c3a03156b1091fe004fadc",
+    "bytes": 2494187310,
+    "unpackedBytes": 4226703629,
+    "files": 13239
   }
 }
