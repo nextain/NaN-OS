@@ -14,6 +14,8 @@
  * durations, and status codes go through `Logger`.
  */
 
+import { invoke } from "@tauri-apps/api/core";
+import { getAdkPath } from "../adk-store";
 import {
 	DEFAULT_LOCAL_VOICE_HOST,
 	LAB_GATEWAY_URL,
@@ -31,10 +33,9 @@ const TAG = "RefAudioApi";
 
 // ── Naia Local recorded/uploaded reference voice (no gateway, no credits) ──
 // Naia Local uses the member-gated loopback Runtime without per-request voice
-// credits. Keep the recorded clip as a base64 WAV in localStorage and send it
-// straight to the Runtime's authenticated voice endpoint. Stored
-// outside AppConfig so the (large) blob never bloats the frequently-saved
-// config JSON.
+// credits. The selected ADK owns the WAV at naia-settings/voice/ref-audio.wav.
+// localStorage is only a hot runtime cache because the synchronous synthesis
+// path must be able to read the clip without an IPC round-trip.
 const LOCAL_REF_AUDIO_KEY = "naia.voiceRefAudioB64";
 
 /** Persist (or clear) the local recorded reference voice as a base64 WAV. */
@@ -54,6 +55,52 @@ export function getLocalRefAudioB64(): string | null {
 	} catch {
 		return null;
 	}
+}
+
+function base64ToBytes(b64: string): number[] {
+	const binary = atob(b64);
+	return Array.from(binary, (character) => character.charCodeAt(0));
+}
+
+function bytesToBase64(bytes: number[]): string {
+	const chunkSize = 0x8000;
+	let binary = "";
+	for (let offset = 0; offset < bytes.length; offset += chunkSize) {
+		binary += String.fromCharCode(...bytes.slice(offset, offset + chunkSize));
+	}
+	return btoa(binary);
+}
+
+/** Persist the local reference voice in the selected ADK and refresh the cache. */
+export async function persistLocalRefAudioB64(
+	b64: string | null,
+): Promise<void> {
+	const adkPath = getAdkPath();
+	if (!adkPath) throw new Error("ADK path is not configured");
+	if (b64) {
+		await invoke("write_naia_ref_audio", {
+			adkPath,
+			bytes: base64ToBytes(b64),
+		});
+	} else {
+		await invoke("delete_naia_ref_audio", { adkPath });
+	}
+	setLocalRefAudioB64(b64);
+}
+
+/** Hydrate the synchronous runtime cache from the selected ADK source of truth. */
+export async function hydrateLocalRefAudioB64(): Promise<string | null> {
+	const adkPath = getAdkPath();
+	setLocalRefAudioB64(null);
+	if (!adkPath) {
+		return null;
+	}
+	const bytes = await invoke<number[] | null>("read_naia_ref_audio", {
+		adkPath,
+	});
+	const b64 = bytes && bytes.length > 0 ? bytesToBase64(bytes) : null;
+	setLocalRefAudioB64(b64);
+	return b64;
 }
 
 export interface RefAudioActive {

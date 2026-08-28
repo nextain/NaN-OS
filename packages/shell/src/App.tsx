@@ -75,6 +75,7 @@ import {
 	shouldShowStartupUpdatePrompt,
 	snoozeStartupUpdatePrompt,
 } from "./lib/updater";
+import { hydrateLocalRefAudioB64 } from "./lib/voice/ref-audio-api";
 import { useAvatarStore } from "./stores/avatar";
 import "./apps/browser/index"; // register browser panel
 import "./apps/workspace/index"; // register workspace panel
@@ -506,6 +507,15 @@ export function App() {
 			// 되면 이 effect 가 재실행돼 파일→캐시 하이드레이션 후 게이트를 연다.
 			return;
 		}
+		// The selected ADK owns the reference voice clip (naia-settings/voice/
+		// ref-audio.wav). Hydrate the synchronous synthesis cache here at boot so
+		// the restored voice applies even if the settings screen is never opened.
+		// Fire-and-forget — restoring the voice must never block boot.
+		hydrateLocalRefAudioB64().catch((error: unknown) => {
+			Logger.warn("App", "reference audio hydration failed", {
+				error: error instanceof Error ? error.message : String(error),
+			});
+		});
 		Promise.all([readNaiaConfig(), readNaiaUiConfig()])
 			.then(([fileConfig, uiConfig]) => {
 				const merged = mergeBootConfig(

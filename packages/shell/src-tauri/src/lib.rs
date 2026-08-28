@@ -10884,6 +10884,49 @@ async fn clear_naia_path_cache() -> Result<(), String> {
     clear_naia_path_cache_file(naia_path_cache_target(home, debug_e2e_enabled()))
 }
 
+fn naia_ref_audio_path(adk_path: &str) -> Result<std::path::PathBuf, String> {
+    if adk_path.trim().is_empty() {
+        return Err("adk_path is empty".to_string());
+    }
+    Ok(std::path::PathBuf::from(adk_path)
+        .join("naia-settings")
+        .join("voice")
+        .join("ref-audio.wav"))
+}
+
+/// Persist the user's local reference voice inside the selected ADK workspace.
+#[tauri::command]
+async fn write_naia_ref_audio(adk_path: String, bytes: Vec<u8>) -> Result<(), String> {
+    let path = naia_ref_audio_path(&adk_path)?;
+    let parent = path
+        .parent()
+        .ok_or_else(|| "Cannot determine reference audio directory".to_string())?;
+    std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+    std::fs::write(path, bytes).map_err(|e| e.to_string())
+}
+
+/// Read the selected workspace's local reference voice, if present.
+#[tauri::command]
+async fn read_naia_ref_audio(adk_path: String) -> Result<Option<Vec<u8>>, String> {
+    let path = naia_ref_audio_path(&adk_path)?;
+    match std::fs::read(path) {
+        Ok(bytes) => Ok(Some(bytes)),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(error) => Err(error.to_string()),
+    }
+}
+
+/// Remove only the selected workspace's local reference voice.
+#[tauri::command]
+async fn delete_naia_ref_audio(adk_path: String) -> Result<(), String> {
+    let path = naia_ref_audio_path(&adk_path)?;
+    match std::fs::remove_file(path) {
+        Ok(()) => Ok(()),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(error) => Err(error.to_string()),
+    }
+}
+
 /// Copy bundled default assets (vrm-files, background, bgm-musics) from the app's
 /// resource directory into `{adk_path}/naia-settings/`. Skips files that already exist.
 #[tauri::command]
@@ -11342,6 +11385,9 @@ pub fn run() {
             init_naia_settings,
             write_naia_path_cache,
             clear_naia_path_cache,
+            write_naia_ref_audio,
+            read_naia_ref_audio,
+            delete_naia_ref_audio,
             delete_naia_settings,
             delete_naia_adk,
             clone_naia_adk,
