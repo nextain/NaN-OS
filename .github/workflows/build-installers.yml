@@ -50,7 +50,7 @@ jobs:
           git -C ../naia-kb-compiler checkout --detach FETCH_HEAD
           git init ../naia-memory
           git -C ../naia-memory remote add origin https://github.com/nextain/naia-memory.git
-          git -C ../naia-memory fetch --depth 1 origin 46c300825a22478e062772ec7cab234be956328f
+          git -C ../naia-memory fetch --depth 1 origin 630a0d2f19b559e3f0101bb141048485167fb959
           git -C ../naia-memory checkout --detach FETCH_HEAD
 
       - uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
