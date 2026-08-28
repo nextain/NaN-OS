@@ -172,7 +172,7 @@ function fixture() {
 describe("stageVoxCpm2Runtime", () => {
 	it("pins the production download URL and verifies its remote byte contract", () => {
 		expect(DEFAULT_VOXCPM2_TRT_DOWNLOAD_URL).toBe(
-			"https://stnaiapub83b29893.blob.core.windows.net/releases/windows_trt_6g/releases/0.2.2/voxcpm2-runtime-win-trt6g.zip",
+			"https://stnaiapub83b29893.blob.core.windows.net/releases/windows_trt_6g/releases/0.2.2/voxcpm2-runtime-win-trt6g-r2.zip",
 		);
 		const source = fixture();
 		const calls: Array<[string, number]> = [];
