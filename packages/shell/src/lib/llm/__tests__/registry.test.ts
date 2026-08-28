@@ -171,14 +171,28 @@ describe("registry — 모델 카탈로그 정합 + 최신화 (2026-06-18)", () 
 		expect(getLlmModel("anthropic", "claude-opus-4-8")).toBeDefined();
 		expect(getLlmModel("claude-code-cli", "claude-opus-4-8")).toBeDefined();
 		expect(getLlmModel("openai", "gpt-5.5")).toBeDefined();
-		expect(getLlmModel("gemini", "gemini-3.5-flash")).toBeDefined();
+		expect(getLlmModel("gemini", "gemini-3.7-flash")).toMatchObject({
+			pricing: [0.75, 3.75],
+		});
+		expect(getLlmModel("gemini", "gemini-3.6-flash")).toMatchObject({
+			pricing: [0.75, 3.75],
+		});
+		expect(getLlmModel("gemini", "gemini-3.5-flash-lite")).toMatchObject({
+			pricing: [0.3, 2.5],
+		});
+		expect(getLlmModel("gemini", "gemini-3.1-flash-lite")).toMatchObject({
+			pricing: [0.25, 1.5],
+		});
+		expect(getLlmModel("gemini", "gemini-3.1-pro-preview")).toMatchObject({
+			pricing: [2.0, 12.0],
+		});
 		expect(getLlmModel("xai", "grok-4.3")).toBeDefined();
 		expect(getLlmModel("zai", "glm-5.2")).toBeDefined();
 	});
 
-	it("default 최신 승격(openai=gpt-5.5, gemini=gemini-3.5-flash)", () => {
+	it("default 최신 승격(openai=gpt-5.5, gemini=gemini-3.7-flash)", () => {
 		expect(getDefaultLlmModel("openai")).toBe("gpt-5.5");
-		expect(getDefaultLlmModel("gemini")).toBe("gemini-3.5-flash");
+		expect(getDefaultLlmModel("gemini")).toBe("gemini-3.7-flash");
 	});
 
 	it("구 모델 ID 제거(anthropic/claude-code-cli 의 claude-opus-4-6)", () => {
@@ -201,7 +215,17 @@ describe("registry — 모델 카탈로그 정합 + 최신화 (2026-06-18)", () 
 		expect(snapshot).toEqual({
 			anthropic: ["claude-opus-4-8", "claude-sonnet-4-6", "claude-haiku-4-5-20251001"],
 			openai: ["gpt-5.5", "gpt-5.4", "gpt-4.1", "gpt-4.1-mini", "o4-mini", "gpt-4o"],
-			gemini: ["gemini-3.5-flash", "gemini-3.1-flash-lite", "gemini-3.1-pro-preview", "gemini-3-flash-preview", "gemini-2.5-pro", "gemini-2.5-flash"],
+			gemini: [
+				"gemini-3.7-flash",
+				"gemini-3.6-flash",
+				"gemini-3.5-flash",
+				"gemini-3.5-flash-lite",
+				"gemini-3.1-flash-lite",
+				"gemini-3.1-pro-preview",
+				"gemini-3-flash-preview",
+				"gemini-2.5-pro",
+				"gemini-2.5-flash",
+			],
 			xai: ["grok-4.3", "grok-4", "grok-4.1-fast", "grok-code-fast-1", "grok-3-mini"],
 			zai: ["glm-5.2", "glm-5.1", "glm-5-turbo", "glm-4.7", "glm-4.5-air"],
 		});
