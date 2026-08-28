@@ -10,11 +10,16 @@ import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
+	HERDR_VERSION,
 	HERDR_MSVC_DLLS,
 	stageMsvcRuntimeBesideHerdr,
 } from "../stage-herdr.mjs";
 
 describe("stage-herdr MSVC runtime placement (#447)", () => {
+	it("pins the current stable Herdr release", () => {
+		expect(HERDR_VERSION).toBe("0.8.2");
+	});
+
 	it("stages vcruntime140.dll and its companions beside herdr.exe", () => {
 		const root = mkdtempSync(resolve(tmpdir(), "naia-stage-herdr-"));
 		const resources = resolve(root, "resources");

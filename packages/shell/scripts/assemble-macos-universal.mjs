@@ -1,4 +1,3 @@
-#!/usr/bin/env node
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import {
@@ -23,7 +22,7 @@ function walk(root, current = root, files = []) {
 		const path = resolve(current, entry.name);
 		if (entry.isDirectory()) walk(root, path, files);
 		else if (entry.isFile() || entry.isSymbolicLink())
-			files.push(relative(root, path));
+			files.push(relative(root, path).replaceAll("\\", "/"));
 	}
 	return files.sort();
 }

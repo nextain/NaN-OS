@@ -235,7 +235,11 @@ console.log(`[stage-agent] ② deploy (prod, hoisted) → ${STAGE}`);
 const wsFile = resolve(AGENT, "pnpm-workspace.yaml");
 const hadWs = existsSync(wsFile); // standalone repo 면 임시 생성 후 정리
 try {
-	if (!hadWs) writeFileSync(wsFile, "packages:\n  - '.'\n");
+	if (!hadWs)
+		writeFileSync(
+			wsFile,
+			"packages:\n  - '.'\n\ninjectWorkspacePackages: true\n",
+		);
 	if (existsSync(STAGE)) rmSync(STAGE, { recursive: true, force: true });
 	runPnpm(
 		[
@@ -243,7 +247,6 @@ try {
 			"--config.node-linker=hoisted",
 			"deploy",
 			"--prod",
-			"--legacy",
 			STAGE,
 		],
 		AGENT,

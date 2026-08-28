@@ -1,0 +1,209 @@
+id: naia-shell:feature-test-coverage
+title: Naia Shell feature and regression coverage
+tags: [naia-shell, quality, regression, microsoft-store, dual-context]
+related:
+  - docs/requirements.md
+  - docs/user-scenarios.md
+  - packages/shell/e2e/store-certification.spec.ts
+updated_at: 2026-08-27
+source: user-directive-2026-08-27
+version: 2
+
+coverage_tiers:
+  deterministic_ci: "Runs without credentials and must pass on every pull request."
+  browser_mock: "Playwright user journey with controlled Tauri and provider boundaries."
+  native_local: "Packaged or tauri-driver journey against the real desktop boundary."
+  credentialed_live: "Opt-in provider or service test requiring a secret/account/device."
+  manual_package: "Release artifact inspection that cannot be proven by browser mocks."
+
+commands:
+  quick_store: "pnpm -C packages/shell test:regression:store"
+  shell_unit: "pnpm -C packages/shell test"
+  browser_full: "pnpm -C packages/shell test:e2e"
+  native_full: "pnpm -C packages/shell test:e2e:tauri"
+  native_store: "pnpm -C packages/shell test:regression:store:native"
+  build: "pnpm -C packages/shell build"
+
+entries:
+  - id: naia-shell:feature:req-001
+    requirement: REQ-001
+    feature: Multi-provider LLM chat and model selection
+    status: partial
+    tests:
+      - { tier: deterministic_ci, path: packages/shell/src/components/__tests__/ChatArea.test.tsx }
+      - { tier: deterministic_ci, path: packages/shell/src/components/__tests__/SettingsTab.test.tsx }
+      - { tier: browser_mock, path: packages/shell/e2e/chat-tools.spec.ts }
+      - { tier: browser_mock, path: packages/shell/e2e/store-certification.spec.ts }
+      - { tier: native_local, path: packages/shell/e2e-tauri/specs/99-store-certification.spec.ts }
+    gap: "Valid live-provider success depends on credentials; the Store failure path is deterministic."
+  - id: naia-shell:feature:req-002
+    requirement: REQ-002
+    feature: VRM and NVA avatar rendering, motion, and gestures
+    status: protected
+    tests:
+      - { tier: deterministic_ci, path: packages/shell/src/lib/avatar/__tests__/ }
+      - { tier: browser_mock, path: packages/shell/e2e/205-onboarding-avatar-grid.spec.ts }
+      - { tier: browser_mock, path: packages/shell/e2e/nva-p0-sync-capability.spec.ts }
+  - id: naia-shell:feature:req-003
+    requirement: REQ-003
+    feature: Cloud, edge, and local TTS providers
+    status: partial
+    tests:
+      - { tier: deterministic_ci, path: packages/shell/src/lib/tts/__tests__/ }
+      - { tier: browser_mock, path: packages/shell/e2e/tts-fallback.spec.ts }
+      - { tier: credentialed_live, path: packages/shell/e2e/voxcpm2-real-voice.spec.ts }
+    gap: "Real audio output, cloud credentials, and GPU runtimes are opt-in."
+  - id: naia-shell:feature:req-004
+    requirement: REQ-004
+    feature: Permission prompts and shortcuts
+    status: protected
+    tests:
+      - { tier: deterministic_ci, path: packages/shell/src/lib/__tests__/permission-shortcuts.test.ts }
+      - { tier: browser_mock, path: packages/shell/e2e/uc13-approval.spec.ts }
+  - id: naia-shell:feature:req-005
+    requirement: REQ-005
+    feature: Audit logging and progress events
+    status: protected
+    tests:
+      - { tier: deterministic_ci, path: packages/shell/src/stores/__tests__/progress.test.ts }
+      - { tier: deterministic_ci, path: packages/shell/scripts/check-logging.mjs }
+  - id: naia-shell:feature:req-006
+    requirement: REQ-006
+    feature: Gateway health, restart, and session integration
+    status: protected
+    tests:
+      - { tier: deterministic_ci, path: packages/shell/src/lib/__tests__/gateway-sessions.test.ts }
+      - { tier: browser_mock, path: packages/shell/e2e/capability-settings.spec.ts }
+  - id: naia-shell:feature:req-007
+    requirement: REQ-007
+    feature: Local and synchronized memory
+    status: protected
+    tests:
+      - { tier: browser_mock, path: packages/shell/e2e/memory-settings.spec.ts }
+      - { tier: browser_mock, path: packages/shell/e2e/memory-sync.spec.ts }
+    gap: "The external naia-memory service suite is maintained in its paired repository."
+  - id: naia-shell:feature:req-008
+    requirement: REQ-008
+    feature: Skill discovery, settings, and invocation
+    status: protected
+    tests:
+      - { tier: deterministic_ci, path: packages/shell/src/stores/__tests__/skills.test.ts }
+      - { tier: deterministic_ci, path: packages/shell/src/lib/__tests__/config-skills.test.ts }
+      - { tier: browser_mock, path: packages/shell/e2e/bgm-skill.spec.ts }
+  - id: naia-shell:feature:req-009
+    requirement: REQ-009
+    feature: Shell-agent command and streaming protocol
+    status: protected
+    tests:
+      - { tier: deterministic_ci, path: packages/shell/src/lib/__tests__/chat-service.test.ts }
+      - { tier: browser_mock, path: packages/shell/e2e/uc1-new-core.spec.ts }
+      - { tier: native_local, path: packages/shell/e2e-tauri/ }
+  - id: naia-shell:feature:req-010
+    requirement: REQ-010
+    feature: Discord authentication, channel settings, and agent relay
+    status: partial
+    tests:
+      - { tier: deterministic_ci, path: packages/shell/src/lib/__tests__/discord-auth.test.ts }
+      - { tier: browser_mock, path: packages/shell/e2e/discord-settings-secure.spec.ts }
+      - { tier: browser_mock, path: packages/shell/e2e/discord-channel-agent.spec.ts }
+    gap: "A real Discord account and channel relay remain credentialed opt-in tests."
+  - id: naia-shell:feature:req-011
+    requirement: REQ-011
+    feature: First-run onboarding and secure credential application
+    status: protected
+    tests:
+      - { tier: deterministic_ci, path: packages/shell/src/lib/__tests__/onboarding-core.test.ts }
+      - { tier: browser_mock, path: packages/shell/e2e/onboarding-fresh.spec.ts }
+      - { tier: browser_mock, path: packages/shell/e2e/store-certification.spec.ts }
+  - id: naia-shell:feature:req-012
+    requirement: REQ-012
+    feature: Realtime voice, STT, interruption, and lip sync
+    status: partial
+    tests:
+      - { tier: deterministic_ci, path: packages/shell/src/lib/voice/__tests__/ }
+      - { tier: browser_mock, path: packages/shell/e2e/pipeline-voice.spec.ts }
+      - { tier: credentialed_live, path: packages/shell/e2e/qwen3-asr-voice.spec.ts }
+    gap: "Microphone, speaker, GPU, and live WebSocket behavior require device-tier runs."
+  - id: naia-shell:feature:req-013
+    requirement: REQ-013
+    feature: Workspace navigation, files, terminal, sessions, and Herdr
+    status: protected
+    tests:
+      - { tier: deterministic_ci, path: packages/shell/src/apps/workspace/__tests__/ }
+      - { tier: browser_mock, path: packages/shell/e2e/91-workspace-panel.spec.ts }
+  - id: naia-shell:feature:req-014
+    requirement: REQ-014
+    feature: Secret stripping, privacy, and local configuration
+    status: protected
+    tests:
+      - { tier: deterministic_ci, path: packages/shell/src/lib/__tests__/config-secrets.test.ts }
+      - { tier: browser_mock, path: packages/shell/e2e/config-sot-boot.spec.ts }
+      - { tier: browser_mock, path: packages/shell/e2e/discord-settings-secure.spec.ts }
+  - id: naia-shell:feature:req-015
+    requirement: REQ-015
+    feature: Desktop distribution, bundled runtimes, and updates
+    status: partial
+    tests:
+      - { tier: deterministic_ci, path: packages/shell/scripts/__tests__/ }
+      - { tier: browser_mock, path: packages/shell/e2e/startup-update-prompt.spec.ts }
+      - { tier: manual_package, path: packages/shell/src-tauri/target/release/bundle/ }
+    gap: "Signed installer installation and Microsoft Store certification remain release-stage checks."
+  - id: naia-shell:feature:req-016
+    requirement: REQ-016
+    feature: Panels and tool-result presentation
+    status: protected
+    tests:
+      - { tier: deterministic_ci, path: packages/shell/src/lib/voice/__tests__/panel-context-bridge.test.ts }
+      - { tier: browser_mock, path: packages/shell/e2e/chat-tools.spec.ts }
+  - id: naia-shell:feature:req-017
+    requirement: REQ-017
+    feature: Internationalized interface and output
+    status: protected
+    tests:
+      - { tier: deterministic_ci, path: packages/shell/src/lib/__tests__/i18n-output-stage.test.ts }
+      - { tier: browser_mock, path: packages/shell/e2e/screenshots.spec.ts }
+  - id: naia-shell:feature:req-018
+    requirement: REQ-018
+    feature: Token and cost accounting dashboard
+    status: protected
+    tests:
+      - { tier: deterministic_ci, path: packages/shell/src/lib/tts/__tests__/cost.test.ts }
+      - { tier: deterministic_ci, path: packages/shell/src/stores/__tests__/progress.test.ts }
+      - { tier: browser_mock, path: packages/shell/e2e/store-certification.spec.ts }
+  - id: naia-shell:feature:req-019
+    requirement: REQ-019
+    feature: MCP and external tool connectivity
+    status: partial
+    tests:
+      - { tier: browser_mock, path: packages/shell/e2e/chat-tools.spec.ts }
+      - { tier: native_local, path: packages/shell/e2e-tauri/ }
+    gap: "Third-party MCP server availability and authentication are external integration checks."
+  - id: naia-shell:feature:req-020
+    requirement: REQ-020
+    feature: Operating-system image update integration
+    status: partial
+    tests:
+      - { tier: browser_mock, path: packages/shell/e2e/startup-update-prompt.spec.ts }
+    gap: "Atomic OS image update belongs to the image/release pipeline, outside Shell-only CI."
+
+critical_regressions:
+  - id: naia-shell:regression:host-voice-download-manifest
+    protects: [REQ-003, REQ-011, REQ-015]
+    behavior: "A GPU-qualified onboarding user can enable Naia Host from a development or packaged build using a validated download manifest."
+    tests:
+      - { tier: deterministic_ci, path: packages/shell/scripts/__tests__/stage-voxcpm2-runtime.test.ts }
+      - { tier: deterministic_ci, path: packages/shell/scripts/__tests__/platform-matrix.test.ts }
+      - { tier: credentialed_live, evidence: "The 0.2.2 public archive returns HTTP 200 with the manifest-pinned byte length." }
+    residual: "A clean-machine GPU installation and audible synthesis remain native release checks."
+  - id: naia-shell:regression:nextain-azure-stream-options
+    protects: [REQ-001, REQ-009, REQ-018]
+    behavior: "Nextain Azure models accept the OpenAI-compatible streaming request without terminating the response, and return text plus token usage."
+    tests:
+      - { tier: deterministic_ci, path: ../project-any-llm/tests/unit/providers/test_azure_provider.py }
+      - { tier: deterministic_ci, path: ../project-any-llm/tests/gateway/test_naia_azure_models.py }
+      - { tier: credentialed_live, evidence: "Development and production gateway probes use deepseek-v4-flash and require a non-empty streamed reply and usage." }
+    residual: "The live probe is an opt-in deployment gate because it consumes provider tokens."
+
+notes:
+  - "Detailed user journeys S01-S72 remain in docs/user-scenarios.md; this file is the current coverage index."
+  - "A passing mocked journey does not replace credentialed native or release-artifact validation."

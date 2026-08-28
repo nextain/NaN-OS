@@ -44,6 +44,7 @@ import {
 	resetNaiaPersistedSettings,
 	setAdkPath,
 	toAssetUrl,
+	writeAgentKeyStrict,
 	writeNaiaConfig,
 	writeNaiaUiConfig,
 } from "../adk-store";
@@ -225,6 +226,20 @@ describe("resetNaiaPersistedSettings", () => {
 		expect(getAdkPath()).toBe(WIN_ADK);
 		expect(localStorage.getItem("naia-config")).toBe("{}");
 		expect(secureState.deleted).toEqual([]);
+	});
+});
+
+describe("writeAgentKeyStrict", () => {
+	it("persists a Google Gemini credential under GEMINI_API_KEY", async () => {
+		await setAdkPath(WIN_ADK);
+
+		await writeAgentKeyStrict("gemini", "apiKey", "google-test-key");
+
+		expect(mockInvoke).toHaveBeenCalledWith("write_agent_key", {
+			adkPath: WIN_ADK,
+			envKey: "GEMINI_API_KEY",
+			value: "google-test-key",
+		});
 	});
 });
 

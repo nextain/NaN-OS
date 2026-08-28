@@ -2348,6 +2348,20 @@ export function ChatArea({
 				break;
 			}
 			case "usage": {
+				const isEmptyZeroUsage =
+					chunk.inputTokens === 0 &&
+					chunk.outputTokens === 0 &&
+					chunk.cost === 0 &&
+					store.streamingContent.length === 0 &&
+					store.streamingThinking.length === 0 &&
+					store.streamingToolCalls.length === 0;
+				// Provider failures emit usage(0) before their terminal error. Finalizing
+				// the empty stream here would commit a blank assistant message, so the
+				// following actionable error could no longer be attached to the turn.
+				if (isEmptyZeroUsage) {
+					Logger.info("ChatArea", "Deferring empty zero-token usage");
+					break;
+				}
 				finishStreamingWithTtsMask(false);
 				store.addCostEntry({
 					inputTokens: chunk.inputTokens,

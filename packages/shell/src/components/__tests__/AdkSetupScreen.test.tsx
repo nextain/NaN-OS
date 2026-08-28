@@ -21,7 +21,7 @@ vi.mock("@tauri-apps/api/event", () => ({
 	listen: vi.fn().mockResolvedValue(() => {}),
 }));
 vi.mock("@tauri-apps/api/path", () => ({
-	homeDir: vi.fn().mockResolvedValue("C:\\Users\\tester"),
+	homeDir: vi.fn().mockResolvedValue("C:\\Users\\Public"),
 	join: vi.fn(async (...parts: string[]) => parts.join("\\")),
 }));
 vi.mock("@tauri-apps/plugin-dialog", () => ({

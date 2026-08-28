@@ -497,15 +497,19 @@ export function formatModelLabel(model: LlmModelMeta): string {
 // deepseek-v4-pro rather than the lighter gemini-3.1-flash-lite/gpt-5.6-luna tier.
 const NAIA_GENERAL_CHAT_RECOMMENDATION: Readonly<Record<string, number>> = {
 	"gpt-5.6-sol": 1,
+	"gemini-3.7-flash": 1,
+	"gemini-3.1-pro-preview": 1,
 	"grok-4.3": 2,
 	"deepseek-v4-pro": 2,
 	"deepseek-v4-flash": 2,
+	"gemini-3.6-flash": 2,
 	"gemini-3.5-flash": 2,
 	"solar-pro4": 2,
 	"HCX-007": 2,
 	"gpt-5.6-luna": 3,
 	"solar-mini": 3,
 	"HCX-DASH-002": 3,
+	"gemini-3.5-flash-lite": 3,
 	"gemini-3.1-flash-lite": 3,
 	"gemini-2.5-flash-live": 4,
 	"naia-0.9-omni-24g": 5,
@@ -751,17 +755,37 @@ registerLlmProvider({
 	description: "Google Gemini API — requires Google API key.",
 	descKey: "provider.apiKeyRequired",
 	requiresApiKey: true,
-	defaultModel: "gemini-3.5-flash",
+	defaultModel: "gemini-3.7-flash",
 	models: [
+		{
+			id: "gemini-3.7-flash",
+			label: "Gemini 3.7 Flash",
+			capabilities: ["llm"],
+			pricing: [0.75, 3.75],
+		},
+		{
+			id: "gemini-3.6-flash",
+			label: "Gemini 3.6 Flash",
+			capabilities: ["llm"],
+			pricing: [0.75, 3.75],
+		},
 		{
 			id: "gemini-3.5-flash",
 			label: "Gemini 3.5 Flash",
 			capabilities: ["llm"],
+			pricing: [1.5, 9.0],
+		},
+		{
+			id: "gemini-3.5-flash-lite",
+			label: "Gemini 3.5 Flash Lite",
+			capabilities: ["llm"],
+			pricing: [0.3, 2.5],
 		},
 		{
 			id: "gemini-3.1-flash-lite",
 			label: "Gemini 3.1 Flash Lite",
 			capabilities: ["llm"],
+			pricing: [0.25, 1.5],
 		},
 		{
 			id: "gemini-3.1-pro-preview",
@@ -773,6 +797,7 @@ registerLlmProvider({
 			id: "gemini-3-flash-preview",
 			label: "Gemini 3 Flash Preview",
 			capabilities: ["llm"],
+			pricing: [0.5, 3.0],
 		},
 		{
 			id: "gemini-2.5-pro",
