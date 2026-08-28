@@ -331,9 +331,11 @@ export function BrowserCenterArea({ naia }: AppCenterProps) {
 	useEffect(() => {
 		if (status !== "ready") return;
 		const id = setInterval(async () => {
-			const [u, t] = await invoke<[string, string]>(
+			const info = await invoke<[string, string]>(
 				"browser_wv_page_info",
 			).catch(() => ["", ""] as [string, string]);
+			// #509 — non-tuple resolve(IPC mock 등)도 폴백: 구조분해가 catch 밖에서 터지지 않게
+			const [u, t] = Array.isArray(info) ? info : ["", ""];
 			if (u) {
 				setCurrentUrl(u);
 				setCurrentTitle(t);
