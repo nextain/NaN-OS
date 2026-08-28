@@ -1,0 +1,9 @@
+{
+  "verdict": "CLEAN",
+  "frame_assessment": {
+    "scope_is_sufficient": true,
+    "missing_concerns": []
+  },
+  "findings": [],
+  "what_would_make_it_clean": []
+}
