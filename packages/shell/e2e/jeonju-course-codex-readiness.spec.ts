@@ -78,7 +78,7 @@ test.beforeEach(async ({ page }) => {
 			}));`,
 	});
 	await page.goto("/");
-	await expect(page.locator(".chat-panel")).toBeVisible({ timeout: 15_000 });
+	await expect(page.locator(".chat-app")).toBeVisible({ timeout: 15_000 });
 });
 
 test("UC-JEONJU-COURSE-READINESS: student checks Codex before selecting the course workspace", async ({

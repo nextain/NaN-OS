@@ -1,6 +1,6 @@
 // KnowledgeGraphOverlay — 작업영역을 거의 채우는 지식 그래프 오버레이(닫으면 복귀).
 // lazy: 호출부가 열릴 때만 마운트 → 닫히면 unmount = 시뮬 정지(평소 부하 0).
-// 노드 클릭 → 그 엔티티의 출처 문서 → "원문 열기"(URL=브라우저 / 파일=워크스페이스, 기존 패널 api 재사용).
+// 노드 클릭 → 그 엔티티의 출처 문서 → "원문 열기"(URL=브라우저 / 파일=워크스페이스, 기존 앱 api 재사용).
 import { type ReactElement, useEffect, useMemo, useRef, useState } from "react";
 import { classifySourceUri, type KnowledgeGraph, type KnowledgeGraphNode, entitySourcesFromKbJson } from "../lib/knowledge-result";
 import { openKnowledgeSource } from "../lib/knowledge-source-open";
@@ -81,9 +81,9 @@ export function KnowledgeGraphOverlay({
 				justifyContent: "center",
 			}}
 		>
-			{/* biome-ignore lint/a11y/useKeyWithClickEvents: 패널 본체는 backdrop 클릭 전파만 차단(Esc 로 닫기 제공) */}
+			{/* biome-ignore lint/a11y/useKeyWithClickEvents: 오버레이 본체는 backdrop 클릭 전파만 차단(Esc 로 닫기 제공) */}
 			<div
-				className="knowledge-graph-overlay-panel"
+				className="knowledge-graph-overlay-app"
 				onClick={(e) => e.stopPropagation()}
 				style={{
 					width: "92vw",
@@ -135,7 +135,7 @@ export function KnowledgeGraphOverlay({
 					</button>
 				</div>
 
-				{/* 본체: 그래프 + 선택 출처 패널 */}
+				{/* 본체: 그래프 + 선택 출처 영역 */}
 				<div style={{ display: "flex", flex: 1, minHeight: 0 }}>
 					<div
 						ref={graphAreaRef}
@@ -152,7 +152,7 @@ export function KnowledgeGraphOverlay({
 						</div>
 					</div>
 
-					{/* 선택 노드 출처 패널 */}
+					{/* 선택 노드 출처 영역 */}
 					{selected && (
 						<div
 							className="knowledge-graph-detail"

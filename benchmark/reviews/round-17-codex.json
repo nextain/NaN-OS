@@ -1,0 +1,23 @@
+{
+  "verdict": "NOT_CLEAN",
+  "frame_assessment": {
+    "scope_is_sufficient": false,
+    "missing_concerns": [
+      "환경 도구 등록·해제의 실제 gRPC 완료 여부와 대화 요청 사이의 순서 보장"
+    ]
+  },
+  "findings": [
+    {
+      "id": "R17-ENV-REGISTRATION-FALSE-ACK",
+      "file_location": "packages/shell/src-tauri/src/lib.rs:3016, packages/shell/src/lib/chat-service.ts:59, packages/shell/e2e/environment-skill.spec.ts:722",
+      "impact": "실제 register_app_skills RPC가 실패하거나 아직 완료되지 않았는데도 sendAppSkills가 true를 반환한다. 그러면 ChatArea는 도구가 준비됐다고 판단해 표면 개수 또는 이름·손잡이를 chat_request에 싣는다. app_skills_clear도 같은 방식이라 off 전환의 실제 해제 실패를 성공으로 오인한다.",
+      "why_it_matters": "Rust의 send_to_agent는 app_skills와 app_skills_clear를 별도 비동기 태스크로 spawn하고, 그 안의 gRPC 결과를 `let _ = ...`로 버린 뒤 즉시 성공한다. 따라서 프런트의 boolean은 'agent에 전달됨'이 아니라 'Tauri 명령이 비동기 작업을 예약함'만 뜻한다. 등록과 뒤이은 chat_request도 독립 태스크이므로 순서조차 보장되지 않는다. B14는 바깥 invoke 자체가 throw하는 경우만 모의하여 내부 gRPC 실패와 등록-채팅 경합을 측정하지 않으므로, 16회차 조치의 핵심 보장은 현재 성립하지 않는다.",
+      "severity": "high"
+    }
+  ],
+  "what_would_make_it_clean": [
+    "app_skills와 app_skills_clear가 실제 gRPC 완료 결과를 Tauri 호출자에게 반환하도록 만들고 내부 오류를 버리지 않는다.",
+    "등록 성공이 확인된 뒤에만 해당 턴의 environmentSurfaces를 조립·전송하도록 등록과 chat_request의 순서를 보장한다.",
+    "실제 등록 RPC 실패 및 등록 지연 경합을 재현하여 표면 미전송, 대화 지속, off 해제 실패 인지를 검증하는 Rust 경계 또는 통합 테스트를 추가한다."
+  ]
+}

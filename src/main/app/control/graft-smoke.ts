@@ -18,7 +18,7 @@ export interface GraftSmokeResult {
  * 새 decideBoot 와 비교. **어떤 set/save 도 호출 안 함** — 안전.
  */
 export async function graftBootDecisionSmoke(d: LiveDeps): Promise<GraftSmokeResult> {
-  // panel list 는 게이트 이전 호출이지만 비파괴 read 라 스모크에 포함(non-fatal)
+  // app list 는 게이트 이전 호출이지만 비파괴 read 라 스모크에 포함(non-fatal)
   try { await d.invoke("app_list_installed"); } catch { /* non-fatal */ }
 
   const adkPath = d.getAdkPath();

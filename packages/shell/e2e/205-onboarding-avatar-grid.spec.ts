@@ -127,7 +127,7 @@ async function gotoCharacterStep(page: import("@playwright/test").Page) {
 		localStorage.removeItem("naia-config");
 	}, ADK);
 	await page.goto("/");
-	await expect(page.locator(".onboarding-panel")).toBeVisible({
+	await expect(page.locator(".onboarding-app")).toBeVisible({
 		timeout: 20_000,
 	});
 
@@ -246,7 +246,7 @@ test.describe("#447 onboarding avatar grid", () => {
 		await page.setViewportSize({ width: 1280, height: 800 });
 		await gotoCharacterStep(page);
 
-		const panel = page.locator(".onboarding-panel");
+		const app = page.locator(".onboarding-app");
 		const grid = page.locator(".onboarding-step__avatar-grid");
 		const liveCrop = page.locator(".onboarding-step__nva-crop--live-naia");
 		const genericCrop = page.locator(".onboarding-step__nva-crop").nth(1);
@@ -259,29 +259,29 @@ test.describe("#447 onboarding avatar grid", () => {
 		await expect(liveMedia).toBeAttached();
 
 		const [
-			panelBox,
+			appBox,
 			gridBox,
 			cropBox,
 			liveMediaBox,
 			genericCropBox,
 			genericMediaBox,
 		] = await Promise.all([
-			panel.boundingBox(),
+			app.boundingBox(),
 			grid.boundingBox(),
 			liveCrop.boundingBox(),
 			liveMedia.boundingBox(),
 			genericCrop.boundingBox(),
 			genericMedia.boundingBox(),
 		]);
-		expect(panelBox).not.toBeNull();
+		expect(appBox).not.toBeNull();
 		expect(gridBox).not.toBeNull();
 		expect(cropBox).not.toBeNull();
 		expect(liveMediaBox).not.toBeNull();
 		expect(genericCropBox).not.toBeNull();
 		expect(genericMediaBox).not.toBeNull();
-		expect(gridBox!.x).toBeGreaterThanOrEqual(panelBox!.x);
+		expect(gridBox!.x).toBeGreaterThanOrEqual(appBox!.x);
 		expect(gridBox!.x + gridBox!.width).toBeLessThanOrEqual(
-			panelBox!.x + panelBox!.width + 1,
+			appBox!.x + appBox!.width + 1,
 		);
 		expect(cropBox!.width).toBe(76);
 		expect(cropBox!.height).toBe(88);
@@ -294,31 +294,31 @@ test.describe("#447 onboarding avatar grid", () => {
 		await expect(genericMedia).toHaveCSS("top", "-12px");
 		expect(liveMediaBox!.y).toBeLessThan(genericMediaBox!.y);
 
-		await panel.screenshot({
+		await app.screenshot({
 			path: testInfo.outputPath("nva-crop-desktop.png"),
 		});
 
 		await page.setViewportSize({ width: 420, height: 720 });
 		await expect(liveCrop).toBeVisible();
-		const [narrowPanel, narrowGrid, narrowCrop, narrowMedia] =
+		const [narrowApp, narrowGrid, narrowCrop, narrowMedia] =
 			await Promise.all([
-				panel.boundingBox(),
+				app.boundingBox(),
 				grid.boundingBox(),
 				liveCrop.boundingBox(),
 				liveMedia.boundingBox(),
 			]);
-		expect(narrowPanel).not.toBeNull();
+		expect(narrowApp).not.toBeNull();
 		expect(narrowGrid).not.toBeNull();
 		expect(narrowCrop).not.toBeNull();
 		expect(narrowMedia).not.toBeNull();
-		expect(narrowGrid!.x).toBeGreaterThanOrEqual(narrowPanel!.x);
+		expect(narrowGrid!.x).toBeGreaterThanOrEqual(narrowApp!.x);
 		expect(narrowGrid!.x + narrowGrid!.width).toBeLessThanOrEqual(
-			narrowPanel!.x + narrowPanel!.width + 1,
+			narrowApp!.x + narrowApp!.width + 1,
 		);
 		await expect(liveMedia).toHaveCSS("top", "-80px");
 		expect(narrowMedia!.y).toBeLessThan(narrowCrop!.y);
 
-		await panel.screenshot({
+		await app.screenshot({
 			path: testInfo.outputPath("nva-crop-narrow.png"),
 		});
 	});

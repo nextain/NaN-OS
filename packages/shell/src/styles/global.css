@@ -23,7 +23,7 @@
 	--error: #ef4444;
 	--mono: "JetBrains Mono", "Fira Code", "Cascadia Code", monospace;
 	--browser-bg: #f8f9fa; /* Chrome light new-tab */
-	/* Panel semantic tokens */
+	/* App semantic tokens */
 	--bg-base: var(--espresso-dark);
 	--bg-surface: var(--espresso);
 	--bg-surface-2: var(--espresso-medium);
@@ -42,7 +42,7 @@
 
 [data-theme="midnight"] {
 	--espresso: #202124; /* Chrome dark bg */
-	--espresso-light: #2d2e30; /* Chrome panel border */
+	--espresso-light: #2d2e30; /* Chrome app border */
 	--espresso-dark: #17181a; /* Chrome darkest */
 	--espresso-medium: #26272a; /* Chrome mid surface */
 	--latte: #c9cdd0;
@@ -54,7 +54,7 @@
 	--amber: #fdd663;
 	--error: #f28b82;
 	--browser-bg: #202124; /* Chrome dark new-tab */
-	/* Panel semantic tokens */
+	/* App semantic tokens */
 	--bg-base: var(--espresso-dark);
 	--bg-surface: var(--espresso);
 	--bg-surface-2: var(--espresso-medium);
@@ -85,7 +85,7 @@
 	--amber: #fdcb6e;
 	--error: #e74c3c;
 	--browser-bg: #202124;
-	/* Panel semantic tokens */
+	/* App semantic tokens */
 	--bg-base: var(--espresso-dark);
 	--bg-surface: var(--espresso);
 	--bg-surface-2: var(--espresso-medium);
@@ -116,7 +116,7 @@
 	--amber: #f6e58d;
 	--error: #e74c3c;
 	--browser-bg: #1e2420;
-	/* Panel semantic tokens */
+	/* App semantic tokens */
 	--bg-base: var(--espresso-dark);
 	--bg-surface: var(--espresso);
 	--bg-surface-2: var(--espresso-medium);
@@ -147,7 +147,7 @@
 	--amber: #ffeaa7;
 	--error: #ff6b6b;
 	--browser-bg: #202124;
-	/* Panel semantic tokens */
+	/* App semantic tokens */
 	--bg-base: var(--espresso-dark);
 	--bg-surface: var(--espresso);
 	--bg-surface-2: var(--espresso-medium);
@@ -179,7 +179,7 @@
 	--amber: #f59e0b;
 	--error: #ef4444;
 	--browser-bg: #f8f9fa;
-	/* Panel semantic tokens */
+	/* App semantic tokens */
 	--bg-base: var(--espresso-dark);
 	--bg-surface: var(--espresso);
 	--bg-surface-2: var(--espresso-medium);
@@ -210,7 +210,7 @@
 	--amber: #c27b00;
 	--error: #dc2626;
 	--browser-bg: #f8f9fa;
-	/* Panel semantic tokens */
+	/* App semantic tokens */
 	--bg-base: var(--espresso-dark);
 	--bg-surface: var(--espresso);
 	--bg-surface-2: var(--espresso-medium);
@@ -241,7 +241,7 @@
 	--amber: #f59e0b;
 	--error: #ef4444;
 	--browser-bg: #f8f9fa;
-	/* Panel semantic tokens */
+	/* App semantic tokens */
 	--bg-base: var(--espresso-dark);
 	--bg-surface: var(--espresso);
 	--bg-surface-2: var(--espresso-medium);
@@ -259,13 +259,13 @@
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
-   PANEL CSS STANDARD — 패널 CSS 작성 가이드
-   모든 패널은 아래 시맨틱 토큰만 사용해야 합니다. 색상값 하드코딩 금지.
+   APP CSS STANDARD — 앱 CSS 작성 가이드
+   모든 앱은 아래 시맨틱 토큰만 사용해야 합니다. 색상값 하드코딩 금지.
    These tokens are defined in every theme above.
    ─────────────────────────────────────────────────────────────────────────
    Layout/Surface (배경):
-     --bg-base        페이지/패널 기본 배경 (dark → 가장 어두움, light → 가장 밝음)
-     --bg-surface     주요 표면 (카드, 패널 내부)
+     --bg-base        페이지·앱 기본 배경 (dark → 가장 어두움, light → 가장 밝음)
+     --bg-surface     주요 표면 (카드, 앱 내부)
      --bg-surface-2   상위 표면 (드롭다운, 모달)
 
    Text (텍스트):
@@ -517,7 +517,7 @@ html[data-bgm-youtube-background="hidden"] .app-bg-iframe {
 
 /* ─── Mode Bar ───────────────────────────────────────────────────────────────
    Top-level mode switcher: Browsing / Issues / Coding / Gaming
-   Controls what appears in content-panel + meta-panel.
+   Controls what appears in content-app + meta-app.
 ────────────────────────────────────────────────────────────────────────────── */
 .app-bar {
 	display: flex;
@@ -914,9 +914,9 @@ html[data-bgm-youtube-background="hidden"] .app-bg-iframe {
 	outline: 1px dashed rgba(124, 160, 255, 0.5);
 }
 
-/* ─── Panel Install Dialog ───────────────────────────────────────────────── */
+/* ─── App Install Dialog ───────────────────────────────────────────────── */
 
-.panel-install-overlay {
+.app-install-overlay {
 	position: fixed;
 	inset: 0;
 	background: rgba(0, 0, 0, 0.7);
@@ -926,7 +926,7 @@ html[data-bgm-youtube-background="hidden"] .app-bg-iframe {
 	justify-content: center;
 }
 
-.panel-install-dialog {
+.app-install-dialog {
 	background: var(--espresso);
 	border: 1px solid var(--espresso-light);
 	border-radius: 12px;
@@ -939,7 +939,7 @@ html[data-bgm-youtube-background="hidden"] .app-bg-iframe {
 	font-family: var(--mono);
 }
 
-.panel-install-header {
+.app-install-header {
 	display: flex;
 	align-items: center;
 	justify-content: space-between;
@@ -947,13 +947,13 @@ html[data-bgm-youtube-background="hidden"] .app-bg-iframe {
 	border-bottom: 1px solid var(--espresso-light);
 }
 
-.panel-install-title {
+.app-install-title {
 	font-size: 0.9rem;
 	font-weight: 600;
 	color: var(--cream);
 }
 
-.panel-install-close {
+.app-install-close {
 	background: none;
 	border: none;
 	color: var(--cream-dim);
@@ -962,15 +962,15 @@ html[data-bgm-youtube-background="hidden"] .app-bg-iframe {
 	padding: 2px 6px;
 }
 
-.panel-install-close:hover {
+.app-install-close:hover {
 	color: var(--cream);
 }
 
-.panel-install-tabs {
+.app-install-tabs {
 	display: flex;
 }
 
-.panel-install-tab {
+.app-install-tab {
 	padding: 6px 14px;
 	background: none;
 	border: 1px solid var(--espresso-light);
@@ -983,30 +983,30 @@ html[data-bgm-youtube-background="hidden"] .app-bg-iframe {
 	transition: color 0.15s, border-color 0.15s, background 0.15s;
 }
 
-.panel-install-tab:hover {
+.app-install-tab:hover {
 	color: var(--cream);
 	background: var(--espresso-medium);
 }
 
-.panel-install-tab.active {
+.app-install-tab.active {
 	color: var(--wood);
 	border-color: var(--wood);
 	background: color-mix(in srgb, var(--wood) 12%, transparent);
 }
 
-.panel-install-body {
+.app-install-body {
 	padding: 14px 16px;
 	display: flex;
 	flex-direction: column;
 	gap: 8px;
 }
 
-.panel-install-label {
+.app-install-label {
 	font-size: 0.78rem;
 	color: var(--cream-dim);
 }
 
-.panel-install-input {
+.app-install-input {
 	width: 100%;
 	padding: 8px 10px;
 	background: var(--espresso-dark);
@@ -1019,24 +1019,24 @@ html[data-bgm-youtube-background="hidden"] .app-bg-iframe {
 	box-sizing: border-box;
 }
 
-.panel-install-input:focus {
+.app-install-input:focus {
 	border-color: var(--wood);
 }
 
-.panel-install-input:disabled {
+.app-install-input:disabled {
 	opacity: 0.5;
 }
 
-.panel-install-file-row {
+.app-install-file-row {
 	display: flex;
 	gap: 8px;
 }
 
-.panel-install-file-row .panel-install-input {
+.app-install-file-row .app-install-input {
 	flex: 1;
 }
 
-.panel-install-pick-btn {
+.app-install-pick-btn {
 	padding: 8px 12px;
 	background: var(--espresso-medium);
 	border: 1px solid var(--espresso-light);
@@ -1048,18 +1048,18 @@ html[data-bgm-youtube-background="hidden"] .app-bg-iframe {
 	white-space: nowrap;
 }
 
-.panel-install-pick-btn:hover {
+.app-install-pick-btn:hover {
 	background: var(--espresso-light);
 }
 
-.panel-install-hint {
+.app-install-hint {
 	font-size: 0.74rem;
 	color: var(--cream-dim);
 	margin: 0;
 	line-height: 1.4;
 }
 
-.panel-install-result {
+.app-install-result {
 	margin: 0 16px;
 	padding: 8px 12px;
 	border-radius: 6px;
@@ -1069,19 +1069,19 @@ html[data-bgm-youtube-background="hidden"] .app-bg-iframe {
 	font-family: var(--mono);
 }
 
-.panel-install-result.success {
+.app-install-result.success {
 	background: color-mix(in srgb, var(--sage) 15%, transparent);
 	color: var(--sage);
 	border: 1px solid color-mix(in srgb, var(--sage) 40%, transparent);
 }
 
-.panel-install-result.error {
+.app-install-result.error {
 	background: color-mix(in srgb, var(--error) 15%, transparent);
 	color: var(--error);
 	border: 1px solid color-mix(in srgb, var(--error) 40%, transparent);
 }
 
-.panel-install-footer {
+.app-install-footer {
 	display: flex;
 	align-items: center;
 	justify-content: space-between;
@@ -1090,7 +1090,7 @@ html[data-bgm-youtube-background="hidden"] .app-bg-iframe {
 	border-top: 1px solid var(--espresso-light);
 }
 
-.panel-install-cancel-btn {
+.app-install-cancel-btn {
 	padding: 6px 16px;
 	background: none;
 	border: 1px solid var(--espresso-light);
@@ -1101,11 +1101,11 @@ html[data-bgm-youtube-background="hidden"] .app-bg-iframe {
 	font-family: var(--mono);
 }
 
-.panel-install-cancel-btn:hover {
+.app-install-cancel-btn:hover {
 	color: var(--cream);
 }
 
-.panel-install-confirm-btn {
+.app-install-confirm-btn {
 	padding: 6px 16px;
 	background: var(--wood);
 	border: none;
@@ -1118,11 +1118,11 @@ html[data-bgm-youtube-background="hidden"] .app-bg-iframe {
 	transition: opacity 0.15s;
 }
 
-.panel-install-confirm-btn:hover:not(:disabled) {
+.app-install-confirm-btn:hover:not(:disabled) {
 	opacity: 0.85;
 }
 
-.panel-install-confirm-btn:disabled {
+.app-install-confirm-btn:disabled {
 	opacity: 0.4;
 	cursor: not-allowed;
 }
@@ -1130,11 +1130,11 @@ html[data-bgm-youtube-background="hidden"] .app-bg-iframe {
 /* ─── Main Layout: Fixed Overlay Architecture ────────────────────────────────
    app-bg-video       (fixed z:0) — always behind everything
    naia-overlay       (fixed left column) — avatar + chat on top of video
-   naia-resize-handle (fixed, between overlay and right panel)
+   naia-resize-handle (fixed, between overlay and right app)
    app-layout         (margin-left = naia-overlay width, contains right-area)
 ────────────────────────────────────────────────────────────────────────────── */
 
-/* Naia overlay — left panel only (width = --naia-width) */
+/* Naia overlay — left app only (width = --naia-width) */
 .naia-overlay {
 	position: fixed;
 	left: 0;
@@ -1157,7 +1157,7 @@ html[data-bgm-youtube-background="hidden"] .app-bg-iframe {
 	pointer-events: auto;
 }
 
-/* Resize handle removed — content panel now floats over avatar */
+/* Resize handle removed — content app now floats over avatar */
 
 .naia-work-rail {
 	position: fixed;
@@ -1307,7 +1307,7 @@ body.resizing-col .naia-work-rail::before {
 	padding: 4px 4px 4px 0;
 }
 
-/* Full-screen avatar canvas layer — sits above background, below all UI panels */
+/* Full-screen avatar canvas layer — sits above background, below all UI apps */
 .avatar-canvas-layer {
 	position: fixed;
 	left: 0;
@@ -1441,8 +1441,8 @@ body.resizing-col .naia-work-rail::before {
 	box-shadow: none;
 }
 
-/* Right content panel — glassmorphism game-window style */
-.content-panel {
+/* Right content app — glassmorphism game-window style */
+.content-app {
 	flex: 1;
 	min-width: 0;
 	min-height: 0;
@@ -1459,7 +1459,7 @@ body.resizing-col .naia-work-rail::before {
 		rgba(255, 255, 255, 0.05);
 }
 
-.content-panel--hidden {
+.content-app--hidden {
 	background: transparent !important;
 	backdrop-filter: none !important;
 	-webkit-backdrop-filter: none !important;
@@ -1467,8 +1467,8 @@ body.resizing-col .naia-work-rail::before {
 	box-shadow: none !important;
 }
 
-/* Panel slot — keep-alive overlay with opacity transition */
-.content-panel__slot {
+/* App slot — keep-alive overlay with opacity transition */
+.content-app__slot {
 	position: absolute;
 	inset: 0;
 	opacity: 0;
@@ -1477,26 +1477,26 @@ body.resizing-col .naia-work-rail::before {
 	overflow: hidden;
 }
 
-.content-panel__slot--active {
+.content-app__slot--active {
 	opacity: 1;
 	pointer-events: auto;
 }
 
 /* Home screen when no mode selected */
-.content-panel__home {
+.content-app__home {
 	flex: 1;
 	background: transparent;
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
    UI MODE LAYOUTS
-   The single ChatPanel instance follows the persisted user preference. It is
+   The single ChatApp instance follows the persisted user preference. It is
    either a full-height left rail or the compact lower-left floating dock.
    ═══════════════════════════════════════════════════════════════════════════ */
 
 /* ── WORKSPACE · conversation rail (zone 1 of the 4-zone mission-control) ──── */
 /* AiControlBar (avatar camera controls) is hidden — the avatar is occluded by
-   the work panel in this mode. */
+   the work app in this mode. */
 .app-root[data-ui-mode="workspace"] .ai-control-bar {
 	display: none;
 }
@@ -1517,7 +1517,7 @@ body.resizing-col .naia-work-rail::before {
 }
 
 /* Wrapper fills the rail (inline height is not applied for the rail variant);
-   square corners + right divider to read as a panel column */
+   square corners + right divider to read as a app column */
 .app-root[data-ui-mode="workspace"] .naia-chat-wrapper {
 	flex: 1;
 	height: auto;
@@ -1528,7 +1528,7 @@ body.resizing-col .naia-work-rail::before {
 
 /* In workspace the rail's visibility = railCollapsed (width), NOT the legacy
    height toggle. Neutralize .naia-chat-wrapper--hidden so a chat that was hidden
-   in home/panel mode doesn't leave the rail collapsed to 0 height with no
+   in home/app mode doesn't leave the rail collapsed to 0 height with no
    in-workspace control to restore it (the height toggle is display:none here). */
 .app-root[data-ui-mode="workspace"] .naia-chat-wrapper--hidden {
 	height: auto !important;
@@ -1538,7 +1538,7 @@ body.resizing-col .naia-work-rail::before {
 	box-shadow: none;
 }
 
-/* Collapsed rail: hide the column (ChatPanel stays mounted) + drop the drag rail */
+/* Collapsed rail: hide the column (ChatApp stays mounted) + drop the drag rail */
 .app-root[data-ui-mode="workspace"][data-rail-collapsed="true"] .naia-overlay {
 	width: 0;
 }
@@ -1578,8 +1578,8 @@ body.resizing-col .naia-work-rail::before {
 	left: 4px;
 }
 
-/* Panel Switcher (legacy — kept for reference) */
-.panel-switcher {
+/* App Switcher (legacy — kept for reference) */
+.app-switcher {
 	display: flex;
 	align-items: center;
 	gap: 2px;
@@ -1589,7 +1589,7 @@ body.resizing-col .naia-work-rail::before {
 	flex-shrink: 0;
 }
 
-.panel-switcher-tab {
+.app-switcher-tab {
 	display: flex;
 	align-items: center;
 	gap: 4px;
@@ -1603,22 +1603,22 @@ body.resizing-col .naia-work-rail::before {
 	transition: background 0.1s, color 0.1s;
 }
 
-.panel-switcher-tab:hover {
+.app-switcher-tab:hover {
 	background: var(--espresso-light);
 	color: var(--cream);
 }
 
-.panel-switcher-tab--active {
+.app-switcher-tab--active {
 	background: var(--espresso-light);
 	color: var(--cream);
 }
 
-.panel-switcher-icon {
+.app-switcher-icon {
 	font-size: 13px;
 }
 
-/* Meta Panel (right of main-area) */
-.meta-panel {
+/* Meta App (right of main-area) */
+.meta-app {
 	flex: none;
 	width: 280px;
 	min-height: 0;
@@ -1645,20 +1645,20 @@ body.resizing-col .naia-work-rail::before {
 	overflow: hidden;
 }
 
-/* Panel position: right */
-.app-layout[data-panel-position="right"] {
+/* App position: right */
+.app-layout[data-app-position="right"] {
 	flex-direction: row-reverse;
 }
 
-/* Panel position: bottom — side-panel comes first in DOM, reverse to put it at bottom */
-.app-layout[data-panel-position="bottom"] {
+/* App position: bottom — side-app comes first in DOM, reverse to put it at bottom */
+.app-layout[data-app-position="bottom"] {
 	flex-direction: column-reverse;
 }
 
-/* Side Panel (chat/tabs only — avatar is in main-area) */
-.side-panel {
+/* Side App (chat/tabs only — avatar is in main-area) */
+.side-app {
 	flex: none;
-	width: var(--panel-size, 70%);
+	width: var(--app-size, 70%);
 	min-width: 280px;
 	max-width: 80%;
 	height: 100%;
@@ -1667,12 +1667,12 @@ body.resizing-col .naia-work-rail::before {
 	background: var(--espresso);
 }
 
-/* Bottom layout: panel spans full width, limited height */
-.app-layout[data-panel-position="bottom"] .side-panel {
+/* Bottom layout: app spans full width, limited height */
+.app-layout[data-app-position="bottom"] .side-app {
 	width: 100%;
 	max-width: none;
 	min-width: 0;
-	height: var(--panel-size, 70%);
+	height: var(--app-size, 70%);
 	min-height: 200px;
 	max-height: 80%;
 }
@@ -1693,7 +1693,7 @@ body.resizing-row .resize-handle {
 	background: var(--wood);
 }
 
-.app-layout[data-panel-position="bottom"] .resize-handle {
+.app-layout[data-app-position="bottom"] .resize-handle {
 	width: 100%;
 	height: 6px;
 	cursor: row-resize;
@@ -1711,7 +1711,7 @@ body.resizing-row {
 	cursor: row-resize;
 }
 
-.side-panel-chat {
+.side-app-chat {
 	flex: 1;
 	min-height: 0;
 	overflow: hidden;
@@ -1719,8 +1719,8 @@ body.resizing-row {
 	flex-direction: column;
 }
 
-/* Chat Panel */
-.chat-panel {
+/* Chat App */
+.chat-app {
 	display: flex;
 	flex-direction: column;
 	flex: 1;
@@ -3187,7 +3187,7 @@ body.resizing-row {
 	opacity: 1;
 }
 
-.reset-confirm-panel {
+.reset-confirm-app {
 	padding: 12px;
 	border: 1px solid var(--error);
 	border-radius: 8px;
@@ -3261,13 +3261,13 @@ body.resizing-row {
 	border-color: var(--cream);
 }
 
-/* Panel Position Picker */
-.panel-position-picker {
+/* App Position Picker */
+.app-position-picker {
 	display: flex;
 	gap: 4px;
 }
 
-.panel-position-btn {
+.app-position-btn {
 	flex: 1;
 	padding: 6px 0;
 	border: 1px solid rgba(255, 255, 255, 0.12);
@@ -3279,11 +3279,11 @@ body.resizing-row {
 	transition: background 0.15s, border-color 0.15s;
 }
 
-.panel-position-btn:hover {
+.app-position-btn:hover {
 	background: rgba(255, 255, 255, 0.12);
 }
 
-.panel-position-btn.active {
+.app-position-btn.active {
 	background: rgba(255, 255, 255, 0.18);
 	border-color: var(--wood);
 }
@@ -3825,8 +3825,8 @@ body.resizing-row {
 	opacity: 0.7;
 }
 
-/* Work Progress Panel */
-.work-progress-panel {
+/* Work Progress App */
+.work-progress-app {
 	display: flex;
 	flex-direction: column;
 	flex: 1;
@@ -5893,8 +5893,8 @@ body.resizing-row {
 	padding: 0;
 }
 
-/* ── Unified BGM panel header ─────────────────────────────────────────────── */
-.bgm-panel-header {
+/* ── Unified BGM app header ─────────────────────────────────────────────── */
+.bgm-app-header {
 	display: flex;
 	align-items: center;
 	gap: 4px;
@@ -5903,13 +5903,13 @@ body.resizing-row {
 	flex-shrink: 0;
 }
 
-.bgm-panel-tabs {
+.bgm-app-tabs {
 	display: flex;
 	gap: 2px;
 	flex: 1;
 }
 
-.bgm-panel-tab {
+.bgm-app-tab {
 	background: transparent;
 	border: none;
 	border-bottom: 2px solid transparent;
@@ -5923,16 +5923,16 @@ body.resizing-row {
 	letter-spacing: 0.02em;
 }
 
-.bgm-panel-tab:hover {
+.bgm-app-tab:hover {
 	color: rgba(255, 255, 255, 0.8);
 }
 
-.bgm-panel-tab--active {
+.bgm-app-tab--active {
 	color: rgba(255, 255, 255, 0.95);
 	border-bottom-color: rgba(130, 180, 255, 0.8);
 }
 
-.bgm-panel-close {
+.bgm-app-close {
 	background: transparent;
 	border: none;
 	color: rgba(255, 255, 255, 0.3);
@@ -5945,7 +5945,7 @@ body.resizing-row {
 	margin-bottom: 2px;
 }
 
-.bgm-panel-close:hover {
+.bgm-app-close:hover {
 	color: rgba(255, 255, 255, 0.7);
 }
 
@@ -5974,8 +5974,8 @@ body.resizing-row {
 	background: rgba(130, 180, 255, 0.1);
 }
 
-/* ── BGM unified panel ───────────────────────────────────────────────────── */
-@keyframes bgm-panel-enter {
+/* ── BGM unified app ───────────────────────────────────────────────────── */
+@keyframes bgm-app-enter {
 	from {
 		opacity: 0.2;
 		transform: scaleY(0);
@@ -5986,7 +5986,7 @@ body.resizing-row {
 	}
 }
 
-.bgm-yt-panel {
+.bgm-yt-app {
 	width: min(320px, calc(100vw - 16px));
 	/* height is controlled by inline style (drag-to-resize); max-height is a fallback */
 	max-height: min(700px, calc(100vh - 120px));
@@ -6008,12 +6008,12 @@ body.resizing-row {
 }
 
 /* Enter animation — unfolds downward from top */
-.bgm-yt-app:not(.bgm-yt-panel--hidden) {
-	animation: bgm-panel-enter 0.28s cubic-bezier(0.34, 1.2, 0.64, 1);
+.bgm-yt-app:not(.bgm-yt-app--hidden) {
+	animation: bgm-app-enter 0.28s cubic-bezier(0.34, 1.2, 0.64, 1);
 }
 
 /* Hidden state — collapses upward to top edge */
-.bgm-yt-panel--hidden {
+.bgm-yt-app--hidden {
 	opacity: 0;
 	transform: scaleY(0);
 	pointer-events: none;
@@ -6230,7 +6230,7 @@ body.resizing-row {
 	white-space: nowrap;
 }
 
-/* Slightly brighter when panel is open */
+/* Slightly brighter when app is open */
 .bgm-track-name--open {
 	color: rgba(255, 255, 255, 0.85);
 }
@@ -6254,7 +6254,7 @@ body.resizing-row {
 }
 
 /* YouTube drawer pull handle (portal-rendered, fixed position)
-   Drag up/down to resize panel height; click to toggle open/closed */
+   Drag up/down to resize app height; click to toggle open/closed */
 .bgm-yt-drawer-handle {
 	flex-shrink: 0;
 	width: 100%;
@@ -7305,8 +7305,8 @@ body.resizing-row {
 	z-index: 1000;
 }
 
-/* Panel-confined modal overlay — stays within naia-overlay, not over Chrome area */
-.panel-modal-overlay {
+/* App-confined modal overlay — stays within naia-overlay, not over Chrome area */
+.app-modal-overlay {
 	position: fixed;
 	top: 0;
 	left: 0;
@@ -7850,9 +7850,9 @@ body.resizing-row {
 	background: color-mix(in srgb, var(--accent-cyan, #4fc3f7) 15%, transparent);
 }
 
-/* ─── Browser Panel ─────────────────────────────────────────────────────── */
+/* ─── Browser App ─────────────────────────────────────────────────────── */
 
-.browser-panel {
+.browser-app {
 	display: flex;
 	flex-direction: column;
 	width: 100%;
@@ -7861,7 +7861,7 @@ body.resizing-row {
 	background: var(--bg-base);
 }
 
-.browser-panel__toolbar {
+.browser-app__toolbar {
 	display: flex;
 	align-items: center;
 	gap: 4px;
@@ -7872,7 +7872,7 @@ body.resizing-row {
 	z-index: 30;
 }
 
-.browser-panel__nav-btn {
+.browser-app__nav-btn {
 	width: 28px;
 	height: 26px;
 	border: none;
@@ -7887,26 +7887,26 @@ body.resizing-row {
 	flex-shrink: 0;
 }
 
-.browser-panel__nav-btn:hover:not(:disabled) {
+.browser-app__nav-btn:hover:not(:disabled) {
 	background: var(--espresso-light);
 	color: var(--cream);
 }
 
-.browser-panel__nav-btn--active {
+.browser-app__nav-btn--active {
 	background: var(--accent-bg);
 	color: var(--accent);
 }
 
-.browser-panel__nav-btn:disabled {
+.browser-app__nav-btn:disabled {
 	opacity: 0.4;
 	cursor: default;
 }
 
-.browser-panel__url-form {
+.browser-app__url-form {
 	flex: 1;
 }
 
-.browser-panel__url-input {
+.browser-app__url-input {
 	width: 100%;
 	padding: 4px 8px;
 	border: 1px solid var(--espresso-medium);
@@ -7917,11 +7917,11 @@ body.resizing-row {
 	outline: none;
 }
 
-.browser-panel__url-input:focus {
+.browser-app__url-input:focus {
 	border-color: var(--accent);
 }
 
-.browser-panel__body {
+.browser-app__body {
 	flex: 1;
 	min-height: 0;
 	min-width: 0;
@@ -7929,7 +7929,7 @@ body.resizing-row {
 	position: relative;
 }
 
-.browser-panel__bookmark-drawer {
+.browser-app__bookmark-drawer {
 	flex: 0 0 min(320px, 34%);
 	min-width: 240px;
 	max-width: 420px;
@@ -7951,7 +7951,7 @@ body.resizing-row {
 	}
 }
 
-.browser-panel__viewport {
+.browser-app__viewport {
 	flex: 1;
 	overflow: hidden;
 	position: relative;
@@ -7959,7 +7959,7 @@ body.resizing-row {
 	min-width: 0;
 }
 
-.browser-panel__screenshot {
+.browser-app__screenshot {
 	position: absolute;
 	inset: 0;
 	width: 100%;
@@ -7969,7 +7969,7 @@ body.resizing-row {
 }
 
 /* X11-embedded viewport — Chrome is reparented here; no visual background needed */
-.browser-panel__viewport--embedded {
+.browser-app__viewport--embedded {
 	background: transparent;
 	cursor: default;
 }
@@ -7978,7 +7978,7 @@ body.resizing-row {
    Sits in HTML layer BELOW the X11 Chrome viewport — always clickable.
    The toolbar can be collapsed to a thin strip via the chevron button. */
 
-.browser-panel__ai-toolbar {
+.browser-app__ai-toolbar {
 	display: flex;
 	align-items: center;
 	flex-wrap: wrap;
@@ -7991,7 +7991,7 @@ body.resizing-row {
 	border-top: 1px solid var(--espresso-light);
 }
 
-.browser-panel__ai-toolbar--collapsed {
+.browser-app__ai-toolbar--collapsed {
 	min-height: 18px;
 	max-height: 18px;
 	overflow: hidden;
@@ -8000,7 +8000,7 @@ body.resizing-row {
 	padding: 0 8px;
 }
 
-.browser-panel__ai-label {
+.browser-app__ai-label {
 	font-size: 10px;
 	font-weight: 600;
 	color: var(--cream-dim);
@@ -8010,7 +8010,7 @@ body.resizing-row {
 	text-transform: uppercase;
 }
 
-.browser-panel__ai-sep {
+.browser-app__ai-sep {
 	width: 1px;
 	height: 16px;
 	background: var(--espresso-light);
@@ -8018,7 +8018,7 @@ body.resizing-row {
 }
 
 /* Individual toggle label */
-.browser-panel__ai-toggle {
+.browser-app__ai-toggle {
 	display: flex;
 	align-items: center;
 	gap: 5px;
@@ -8029,7 +8029,7 @@ body.resizing-row {
 	flex-shrink: 0;
 }
 
-.browser-panel__ai-toggle-label {
+.browser-app__ai-toggle-label {
 	font-size: 9px;
 	color: var(--cream-dim);
 	opacity: 0.75;
@@ -8037,7 +8037,7 @@ body.resizing-row {
 }
 
 /* ── CSS pill toggle switch ────────────────────────────────────────────────── */
-.browser-panel__ai-switch {
+.browser-app__ai-switch {
 	appearance: none;
 	-webkit-appearance: none;
 	position: relative;
@@ -8051,7 +8051,7 @@ body.resizing-row {
 	outline: none;
 }
 
-.browser-panel__ai-switch::after {
+.browser-app__ai-switch::after {
 	content: "";
 	position: absolute;
 	top: 2px;
@@ -8063,27 +8063,27 @@ body.resizing-row {
 	transition: transform 0.18s, background 0.18s;
 }
 
-.browser-panel__ai-switch:checked {
+.browser-app__ai-switch:checked {
 	background: var(--wood);
 }
 
-.browser-panel__ai-switch:checked::after {
+.browser-app__ai-switch:checked::after {
 	transform: translateX(14px);
 	background: #fff;
 }
 
 /* indeterminate (partial) state for master toggle */
-.browser-panel__ai-switch:indeterminate {
+.browser-app__ai-switch:indeterminate {
 	background: var(--latte);
 }
 
-.browser-panel__ai-switch:indeterminate::after {
+.browser-app__ai-switch:indeterminate::after {
 	transform: translateX(7px);
 	background: rgba(255, 255, 255, 0.8);
 }
 
 /* Collapse/expand chevron button */
-.browser-panel__ai-collapse {
+.browser-app__ai-collapse {
 	margin-left: auto;
 	background: none;
 	border: none;
@@ -8096,12 +8096,12 @@ body.resizing-row {
 	flex-shrink: 0;
 }
 
-.browser-panel__ai-collapse:hover {
+.browser-app__ai-collapse:hover {
 	opacity: 0.8;
 }
 
 /* Overlay shown while Chrome is not yet ready (checking / launching / error) */
-.browser-panel__overlay {
+.browser-app__overlay {
 	position: absolute;
 	inset: 0;
 	display: flex;
@@ -8114,29 +8114,29 @@ body.resizing-row {
 	pointer-events: none;
 }
 
-.browser-panel__overlay--error {
+.browser-app__overlay--error {
 	pointer-events: none;
 }
 
-.content-panel__slot--active .browser-panel__overlay--error {
+.content-app__slot--active .browser-app__overlay--error {
 	pointer-events: auto;
 }
 
 /* Text inside overlay (inline — no absolute positioning) */
-.browser-panel__overlay-text {
+.browser-app__overlay-text {
 	color: var(--cream-dim);
 	font-size: 13px;
 	text-align: center;
 	padding: 0 24px;
 }
 
-.browser-panel__overlay-text--error {
+.browser-app__overlay-text--error {
 	color: var(--error);
 }
 
-.browser-panel__loading,
-.browser-panel__error,
-.browser-panel__empty {
+.browser-app__loading,
+.browser-app__error,
+.browser-app__empty {
 	position: absolute;
 	inset: 0;
 	display: flex;
@@ -8148,17 +8148,17 @@ body.resizing-row {
 	padding: 24px;
 }
 
-.browser-panel__error {
+.browser-app__error {
 	color: var(--error);
 }
 
-.browser-panel--not-installed,
-.browser-panel--install {
+.browser-app--not-installed,
+.browser-app--install {
 	align-items: center;
 	justify-content: center;
 }
 
-.browser-panel__install-box {
+.browser-app__install-box {
 	display: flex;
 	flex-direction: column;
 	align-items: center;
@@ -8167,24 +8167,24 @@ body.resizing-row {
 	max-width: 320px;
 }
 
-.browser-panel__install-title {
+.browser-app__install-title {
 	color: var(--cream);
 	font-size: 15px;
 	font-weight: 600;
 }
 
-.browser-panel__install-desc {
+.browser-app__install-desc {
 	color: var(--cream-dim);
 	font-size: 13px;
 }
 
-.browser-panel__title {
+.browser-app__title {
 	color: var(--cream);
 	font-size: 14px;
 	font-weight: 600;
 }
 
-.browser-panel__cmd {
+.browser-app__cmd {
 	background: var(--espresso-base);
 	border: 1px solid var(--espresso-medium);
 	border-radius: 4px;
@@ -8194,12 +8194,12 @@ body.resizing-row {
 	font-family: monospace;
 }
 
-.browser-panel__hint {
+.browser-app__hint {
 	color: var(--cream-dim);
 	font-size: 12px;
 }
 
-/* Browser meta panel */
+/* Browser meta app */
 .browser-meta {
 	display: flex;
 	flex-direction: column;
@@ -8300,7 +8300,7 @@ body.resizing-row {
 	color: var(--error);
 }
 
-.browser-panel__install-btn {
+.browser-app__install-btn {
 	background: var(--accent);
 	color: var(--espresso-deep);
 	border: none;
@@ -8312,11 +8312,11 @@ body.resizing-row {
 	margin-top: 8px;
 }
 
-.browser-panel__install-btn:hover {
+.browser-app__install-btn:hover {
 	opacity: 0.9;
 }
 
-.browser-panel__install-progress {
+.browser-app__install-progress {
 	display: flex;
 	flex-direction: column;
 	align-items: center;
@@ -8324,14 +8324,14 @@ body.resizing-row {
 	margin-top: 8px;
 }
 
-.browser-panel__install-msg {
+.browser-app__install-msg {
 	color: var(--cream);
 	font-size: 13px;
 	text-align: center;
 	max-width: 280px;
 }
 
-.browser-panel__install-spinner {
+.browser-app__install-spinner {
 	width: 20px;
 	height: 20px;
 	border: 2px solid var(--espresso-medium);
@@ -8346,12 +8346,12 @@ body.resizing-row {
 	}
 }
 
-/* ─── Sample Note Panel ──────────────────────────────────────────────────────
-   Minimal installable panel demonstrating AI tool interaction.
-   Developer guide: panels that interact with Naia follow this pattern.
+/* ─── Sample Note App ──────────────────────────────────────────────────────
+   Minimal installable app demonstrating AI tool interaction.
+   Developer guide: apps that interact with Naia follow this pattern.
 ────────────────────────────────────────────────────────────────────────────── */
 
-.sample-note-panel {
+.sample-note-app {
 	display: flex;
 	flex-direction: column;
 	height: 100%;
@@ -8359,24 +8359,24 @@ body.resizing-row {
 	gap: 12px;
 }
 
-.sample-note-panel__header {
+.sample-note-app__header {
 	display: flex;
 	flex-direction: column;
 	gap: 4px;
 }
 
-.sample-note-panel__title {
+.sample-note-app__title {
 	font-size: 15px;
 	font-weight: 600;
 	color: var(--cream);
 }
 
-.sample-note-panel__hint {
+.sample-note-app__hint {
 	font-size: 12px;
 	color: var(--cream-dim);
 }
 
-.sample-note-panel__editor {
+.sample-note-app__editor {
 	flex: 1;
 	resize: none;
 	border: 1px solid var(--espresso-medium);
@@ -8390,18 +8390,18 @@ body.resizing-row {
 	line-height: 1.6;
 }
 
-.sample-note-panel__editor:focus {
+.sample-note-app__editor:focus {
 	border-color: var(--accent);
 }
 
-.sample-note-panel__editor::placeholder {
+.sample-note-app__editor::placeholder {
 	color: var(--cream-dim);
 	opacity: 0.6;
 }
 
-/* ─── Generic Installed Panel ─────────────────────────────────────────────── */
+/* ─── Generic Installed App ─────────────────────────────────────────────── */
 
-.generic-installed-panel {
+.generic-installed-app {
 	display: flex;
 	flex-direction: column;
 	align-items: center;
@@ -8412,23 +8412,23 @@ body.resizing-row {
 	text-align: center;
 }
 
-.generic-installed-panel__icon {
+.generic-installed-app__icon {
 	font-size: 40px;
 }
 
-.generic-installed-panel__msg {
+.generic-installed-app__msg {
 	font-size: 14px;
 	color: var(--cream);
 	margin: 0;
 }
 
-.generic-installed-panel__hint {
+.generic-installed-app__hint {
 	font-size: 12px;
 	color: var(--cream-dim);
 	margin: 0;
 }
 
-.generic-installed-panel__iframe {
+.generic-installed-app__iframe {
 	width: 100%;
 	height: 100%;
 	border: none;
@@ -8436,7 +8436,7 @@ body.resizing-row {
 	display: block;
 }
 
-/* ─── Workspace Panel ─────────────────────────────────────────────────────── */
+/* ─── Workspace App ─────────────────────────────────────────────────────── */
 
 .herdr-workspace {
 	display: flex;
@@ -8578,7 +8578,7 @@ body.resizing-row {
 	visibility: hidden;
 }
 
-.herdr-workspace__terminal-layer .workspace-panel__terminal {
+.herdr-workspace__terminal-layer .workspace-app__terminal {
 	height: 100%;
 }
 
@@ -8641,7 +8641,7 @@ body.resizing-row {
 	font-size: 11px;
 }
 
-.workspace-panel {
+.workspace-app {
 	display: flex;
 	height: 100%;
 	overflow: hidden;
@@ -8649,7 +8649,7 @@ body.resizing-row {
 	position: relative;
 }
 
-.workspace-panel__idle-toast {
+.workspace-app__idle-toast {
 	position: absolute;
 	top: 8px;
 	left: 50%;
@@ -8667,7 +8667,7 @@ body.resizing-row {
 }
 
 /* Initial loading overlay */
-.workspace-panel__loading {
+.workspace-app__loading {
 	position: absolute;
 	inset: 0;
 	z-index: 10;
@@ -8680,7 +8680,7 @@ body.resizing-row {
 	font-size: 13px;
 }
 
-.workspace-panel__loading-spinner {
+.workspace-app__loading-spinner {
 	width: 16px;
 	height: 16px;
 	border: 2px solid var(--border-color, #333);
@@ -8695,8 +8695,8 @@ body.resizing-row {
 	}
 }
 
-/* Panel drag-resize handle */
-.workspace-panel__resize-handle {
+/* App drag-resize handle */
+.workspace-app__resize-handle {
 	width: 4px;
 	flex-shrink: 0;
 	cursor: col-resize;
@@ -8704,13 +8704,13 @@ body.resizing-row {
 	transition: background 0.15s;
 }
 
-.workspace-panel__resize-handle:hover,
-.workspace-panel__resize-handle:active {
+.workspace-app__resize-handle:hover,
+.workspace-app__resize-handle:active {
 	background: var(--accent, #7ca0ff);
 }
 
 /* Horizontal drag handle (row resize) — inside left/right sidebars */
-.workspace-panel__row-resize-handle {
+.workspace-app__row-resize-handle {
 	height: 4px;
 	flex-shrink: 0;
 	cursor: row-resize;
@@ -8718,8 +8718,8 @@ body.resizing-row {
 	transition: background 0.15s;
 }
 
-.workspace-panel__row-resize-handle:hover,
-.workspace-panel__row-resize-handle:active {
+.workspace-app__row-resize-handle:hover,
+.workspace-app__row-resize-handle:active {
 	background: var(--accent, #7ca0ff);
 }
 
@@ -8730,7 +8730,7 @@ body.resizing-row * {
 }
 
 /* Left: FileTree */
-.workspace-panel__tree {
+.workspace-app__tree {
 	min-width: 120px;
 	max-width: 400px;
 	display: flex;
@@ -8739,7 +8739,7 @@ body.resizing-row * {
 	flex-shrink: 0;
 }
 
-.workspace-panel__tree-header {
+.workspace-app__tree-header {
 	padding: 8px 10px;
 	border-bottom: 1px solid var(--border-color, #333);
 	font-size: 11px;
@@ -8750,30 +8750,30 @@ body.resizing-row * {
 	flex-shrink: 0;
 }
 
-.workspace-panel__tree-title {
+.workspace-app__tree-title {
 	user-select: none;
 }
 
-.workspace-panel__tree-body {
+.workspace-app__tree-body {
 	overflow-y: auto;
 	overflow-x: hidden;
 	flex: 1;
 }
 
-.workspace-panel__tree-loading {
+.workspace-app__tree-loading {
 	display: flex;
 	align-items: center;
 	justify-content: center;
 	height: 60px;
 }
 
-.workspace-panel__tree-loading-text {
+.workspace-app__tree-loading-text {
 	font-size: 12px;
 	color: var(--color-text-muted, #888);
 }
 
 /* Center: Editor / Terminal tabs */
-.workspace-panel__center {
+.workspace-app__center {
 	flex: 1;
 	overflow: hidden;
 	display: flex;
@@ -8781,7 +8781,7 @@ body.resizing-row * {
 }
 
 /* Tab bar (only visible when terminals are open) */
-.workspace-panel__tab-bar {
+.workspace-app__tab-bar {
 	display: flex;
 	flex-direction: row;
 	align-items: stretch;
@@ -8792,7 +8792,7 @@ body.resizing-row * {
 	overflow-y: hidden;
 }
 
-.workspace-panel__tab {
+.workspace-app__tab {
 	display: flex;
 	align-items: center;
 	gap: 6px;
@@ -8806,18 +8806,18 @@ body.resizing-row * {
 	user-select: none;
 }
 
-.workspace-panel__tab:hover {
+.workspace-app__tab:hover {
 	background: var(--surface-hover, #2e2e2e);
 	color: var(--text-primary, #e0e0e0);
 }
 
-.workspace-panel__tab--active {
+.workspace-app__tab--active {
 	color: var(--text-primary, #e0e0e0);
 	background: var(--bg-base, #1a1a1a);
 	border-bottom: 2px solid var(--accent, #7ca0ff);
 }
 
-.workspace-panel__tab-label {
+.workspace-app__tab-label {
 	display: inline-flex;
 	align-items: center;
 	gap: 4px;
@@ -8826,7 +8826,7 @@ body.resizing-row * {
 	text-overflow: ellipsis;
 }
 
-.workspace-panel__tab-issue {
+.workspace-app__tab-issue {
 	font-size: 10px;
 	font-weight: 600;
 	color: var(--accent, #7ca0ff);
@@ -8836,13 +8836,13 @@ body.resizing-row * {
 	flex-shrink: 0;
 }
 
-.workspace-panel__tab-agent {
+.workspace-app__tab-agent {
 	font-size: 10px;
 	color: var(--text-secondary, #888);
 	flex-shrink: 0;
 }
 
-.workspace-panel__tab-close {
+.workspace-app__tab-close {
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
@@ -8855,21 +8855,21 @@ body.resizing-row * {
 	flex-shrink: 0;
 }
 
-.workspace-panel__tab-close:hover {
+.workspace-app__tab-close:hover {
 	background: rgba(255, 255, 255, 0.15);
 	color: var(--text-primary, #e0e0e0);
 }
 
 /* Exited terminal tab */
-.workspace-panel__tab--exited {
+.workspace-app__tab--exited {
 	opacity: 0.55;
 }
-.workspace-panel__tab-exited {
+.workspace-app__tab-exited {
 	font-size: 0.65rem;
 	color: var(--text-muted, #888);
 	margin-left: 4px;
 }
-.workspace-panel__tab-restart {
+.workspace-app__tab-restart {
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
@@ -8885,12 +8885,12 @@ body.resizing-row * {
 	margin-left: 2px;
 	flex-shrink: 0;
 }
-.workspace-panel__tab-restart:hover {
+.workspace-app__tab-restart:hover {
 	background: rgba(124, 156, 255, 0.2);
 }
 
 /* Dead terminal overlay */
-.workspace-panel__terminal-dead {
+.workspace-app__terminal-dead {
 	position: absolute;
 	inset: 0;
 	display: flex;
@@ -8900,11 +8900,11 @@ body.resizing-row * {
 	gap: 12px;
 	background: var(--bg-primary, #1e1e1e);
 }
-.workspace-panel__terminal-dead-msg {
+.workspace-app__terminal-dead-msg {
 	font-size: 0.8rem;
 	color: var(--text-muted, #888);
 }
-.workspace-panel__terminal-dead-restart {
+.workspace-app__terminal-dead-restart {
 	display: inline-flex;
 	align-items: center;
 	gap: 6px;
@@ -8916,12 +8916,12 @@ body.resizing-row * {
 	cursor: pointer;
 	font-size: 0.85rem;
 }
-.workspace-panel__terminal-dead-restart:hover {
+.workspace-app__terminal-dead-restart:hover {
 	background: rgba(124, 156, 255, 0.15);
 }
 
 /* Phase 6: Grid resize handle (between 2 cells) */
-.workspace-panel__grid-resize-handle {
+.workspace-app__grid-resize-handle {
 	width: 6px;
 	cursor: col-resize;
 	background: var(--border-color, #333);
@@ -8929,8 +8929,8 @@ body.resizing-row * {
 	transition: background 0.15s;
 	z-index: 1;
 }
-.workspace-panel__grid-resize-handle:hover,
-.workspace-panel__grid-resize-handle:active {
+.workspace-app__grid-resize-handle:hover,
+.workspace-app__grid-resize-handle:active {
 	background: var(--accent, #7ca0ff);
 }
 body.resizing-col * {
@@ -8938,18 +8938,18 @@ body.resizing-col * {
 	user-select: none !important;
 }
 /* Resizable 3-col layout overrides grid-template-columns via inline style */
-.workspace-panel__terminal-area--grid.workspace-panel__terminal-area--resizable {
+.workspace-app__terminal-area--grid.workspace-app__terminal-area--resizable {
 	display: grid;
 }
 
 /* Content area: editor + terminals stacked (keepAlive) */
-.workspace-panel__center-content {
+.workspace-app__center-content {
 	position: relative;
 	flex: 1;
 	overflow: hidden;
 }
 
-.workspace-panel__editor-slot {
+.workspace-app__editor-slot {
 	position: absolute;
 	inset: 0;
 	display: flex;
@@ -8958,30 +8958,30 @@ body.resizing-col * {
 }
 
 /* Terminal container — always absolute so keepAlive works */
-.workspace-panel__terminal {
+.workspace-app__terminal {
 	position: absolute;
 	inset: 0;
 	overflow: hidden;
 }
 
-.workspace-panel__terminal .xterm-viewport .terminal xterm-link {
+.workspace-app__terminal .xterm-viewport .terminal xterm-link {
 	cursor: pointer;
 }
 
-.workspace-panel__terminal .xterm-link {
+.workspace-app__terminal .xterm-link {
 	cursor: pointer !important;
 	text-decoration: underline;
 	text-underline-offset: 2px;
 }
 
 /* Terminal grid - activated when 2+ terminals are open */
-.workspace-panel__terminal-area {
+.workspace-app__terminal-area {
 	position: absolute;
 	inset: 0;
 	overflow: hidden;
 }
 
-.workspace-panel__terminal-area--grid {
+.workspace-app__terminal-area--grid {
 	position: absolute;
 	inset: 0;
 	display: grid;
@@ -8993,7 +8993,7 @@ body.resizing-col * {
 }
 
 /* Tab mode cell: stacked absolute, covers full area */
-.workspace-panel__terminal-cell {
+.workspace-app__terminal-cell {
 	position: absolute;
 	inset: 0;
 	display: flex;
@@ -9003,28 +9003,28 @@ body.resizing-col * {
 }
 
 /* Grid mode cell: flow as grid item */
-.workspace-panel__terminal-area--grid .workspace-panel__terminal-cell {
+.workspace-app__terminal-area--grid .workspace-app__terminal-cell {
 	position: relative;
 	inset: auto;
 	min-height: 0;
 }
 
 /* Focused cell border in grid mode */
-.workspace-panel__terminal-area--grid .workspace-panel__terminal-cell--focused {
+.workspace-app__terminal-area--grid .workspace-app__terminal-cell--focused {
 	outline: 2px solid var(--accent, #7ca0ff);
 	outline-offset: -2px;
 }
 
 /* Odd total: last cell spans both columns (only when NOT in resizable 3-col layout) */
-.workspace-panel__terminal-area--grid:not(
-		.workspace-panel__terminal-area--resizable
+.workspace-app__terminal-area--grid:not(
+		.workspace-app__terminal-area--resizable
 	)
-	.workspace-panel__terminal-cell:last-child:nth-child(odd) {
+	.workspace-app__terminal-cell:last-child:nth-child(odd) {
 	grid-column: 1 / -1;
 }
 
 /* Cell header: hidden in tab mode, flex in grid mode */
-.workspace-panel__terminal-cell-header {
+.workspace-app__terminal-cell-header {
 	display: none;
 	flex-shrink: 0;
 	align-items: center;
@@ -9039,29 +9039,29 @@ body.resizing-col * {
 	overflow: hidden;
 }
 
-.workspace-panel__terminal-area--grid .workspace-panel__terminal-cell-header {
+.workspace-app__terminal-area--grid .workspace-app__terminal-cell-header {
 	display: flex;
 }
 
-.workspace-panel__terminal-cell-header:hover {
+.workspace-app__terminal-cell-header:hover {
 	background: var(--surface-hover, #2e2e2e);
 }
 
-.workspace-panel__terminal-cell-dir {
+.workspace-app__terminal-cell-dir {
 	flex: 1;
 	overflow: hidden;
 	text-overflow: ellipsis;
 	color: var(--text-secondary, #888);
 }
 
-.workspace-panel__terminal-area--grid
-	.workspace-panel__terminal-cell--focused
-	.workspace-panel__terminal-cell-dir {
+.workspace-app__terminal-area--grid
+	.workspace-app__terminal-cell--focused
+	.workspace-app__terminal-cell-dir {
 	color: var(--text-primary, #e0e0e0);
 }
 
 /* Cell body: relative container so Terminal inset:0 fills it */
-.workspace-panel__terminal-cell-body {
+.workspace-app__terminal-cell-body {
 	position: relative;
 	flex: 1;
 	overflow: hidden;
@@ -9069,23 +9069,23 @@ body.resizing-col * {
 }
 
 /* ── Center vertical split: document viewer (top) + terminal (bottom) ─────── */
-.workspace-panel__doc-zone,
-.workspace-panel__term-zone {
+.workspace-app__doc-zone,
+.workspace-app__term-zone {
 	display: flex;
 	flex-direction: column;
 	overflow: hidden;
 	min-height: 0;
 }
 
-.workspace-panel__doc-body,
-.workspace-panel__term-body {
+.workspace-app__doc-body,
+.workspace-app__term-body {
 	position: relative;
 	flex: 1;
 	min-height: 0;
 	overflow: hidden;
 }
 
-.workspace-panel__coding-workers-toolbar {
+.workspace-app__coding-workers-toolbar {
 	display: flex;
 	justify-content: space-between;
 	align-items: center;
@@ -9094,7 +9094,7 @@ body.resizing-col * {
 	border-bottom: 1px solid var(--border-color, #333);
 }
 
-.workspace-panel__coding-workers-toolbar button {
+.workspace-app__coding-workers-toolbar button {
 	padding: 4px 8px;
 	border: 1px solid transparent;
 	border-radius: 5px;
@@ -9105,8 +9105,8 @@ body.resizing-col * {
 	cursor: pointer;
 }
 
-.workspace-panel__coding-workers-toolbar button:hover,
-.workspace-panel__coding-workers-toolbar button[aria-expanded="true"] {
+.workspace-app__coding-workers-toolbar button:hover,
+.workspace-app__coding-workers-toolbar button[aria-expanded="true"] {
 	border-color: var(--border-color, #444);
 	background: var(--surface-hover, #2e2e2e);
 	color: var(--text-primary, #eee);
@@ -9491,7 +9491,7 @@ body.resizing-col * {
 	}
 }
 
-/* Legacy narrow-window fallback for external panel embeds. */
+/* Legacy narrow-window fallback for external app embeds. */
 @media (max-width: 800px) {
 	.coding-workers__list article {
 		grid-template-columns: 1fr;
@@ -9503,15 +9503,15 @@ body.resizing-col * {
 }
 
 /* Tab mode: show only the focused terminal (cells are stacked absolute). */
-.workspace-panel__terminal-area:not(.workspace-panel__terminal-area--grid)
-	.workspace-panel__terminal-cell:not(
-		.workspace-panel__terminal-cell--focused
+.workspace-app__terminal-area:not(.workspace-app__terminal-area--grid)
+	.workspace-app__terminal-cell:not(
+		.workspace-app__terminal-cell--focused
 	) {
 	display: none;
 }
 
 /* Terminal view toggle (tabs ⇄ grid) — lives in the terminal tab bar */
-.workspace-panel__term-viewtoggle {
+.workspace-app__term-viewtoggle {
 	display: flex;
 	align-items: center;
 	justify-content: center;
@@ -9524,17 +9524,17 @@ body.resizing-col * {
 	font-size: 12px;
 	cursor: pointer;
 }
-.workspace-panel__term-viewtoggle:hover:not(:disabled) {
+.workspace-app__term-viewtoggle:hover:not(:disabled) {
 	background: var(--surface-hover, #2e2e2e);
 	color: var(--text-primary, #e0e0e0);
 }
-.workspace-panel__term-viewtoggle:disabled {
+.workspace-app__term-viewtoggle:disabled {
 	opacity: 0.4;
 	cursor: default;
 }
 
 /* Empty terminal zone (no sessions running) */
-.workspace-panel__term-empty {
+.workspace-app__term-empty {
 	flex: 1;
 	display: flex;
 	flex-direction: column;
@@ -9622,7 +9622,7 @@ body.resizing-col * {
 }
 
 /* Right: Session sidebar (vertical card list) */
-.workspace-panel__sessions {
+.workspace-app__sessions {
 	min-width: 120px;
 	max-width: 400px;
 	flex-shrink: 0;
@@ -9631,9 +9631,9 @@ body.resizing-col * {
 	overflow: hidden;
 }
 
-/* ─── IssuesPanel ──────────────────────────────────────────────────────────── */
+/* ─── IssuesApp ──────────────────────────────────────────────────────────── */
 
-.issues-panel {
+.issues-app {
 	display: flex;
 	flex-direction: column;
 	height: 100%;
@@ -9641,7 +9641,7 @@ body.resizing-col * {
 	font-size: 12px;
 }
 
-.issues-panel__section-header {
+.issues-app__section-header {
 	display: flex;
 	align-items: center;
 	justify-content: space-between;
@@ -9654,17 +9654,17 @@ body.resizing-col * {
 	cursor: default;
 }
 
-.issues-panel__section-header--toggle {
+.issues-app__section-header--toggle {
 	cursor: pointer;
 	border-top: 1px solid var(--border-color, #333);
 	margin-top: 4px;
 }
 
-.issues-panel__section-header--toggle:hover {
+.issues-app__section-header--toggle:hover {
 	background: rgba(255, 255, 255, 0.04);
 }
 
-.issues-panel__section-title {
+.issues-app__section-title {
 	font-size: 11px;
 	font-weight: 600;
 	color: var(--text-secondary, #888);
@@ -9673,7 +9673,7 @@ body.resizing-col * {
 	user-select: none;
 }
 
-.issues-panel__refresh {
+.issues-app__refresh {
 	font-size: 14px;
 	color: var(--text-secondary, #888);
 	line-height: 1;
@@ -9681,19 +9681,19 @@ body.resizing-col * {
 	border-radius: 3px;
 }
 
-.issues-panel__refresh:hover {
+.issues-app__refresh:hover {
 	color: var(--text-primary, #e0e0e0);
 	background: rgba(255, 255, 255, 0.08);
 }
 
-.issues-panel__list {
+.issues-app__list {
 	flex: 1;
 	overflow-y: auto;
 	overflow-x: hidden;
 	min-height: 0;
 }
 
-.issues-panel__empty {
+.issues-app__empty {
 	display: flex;
 	flex-direction: column;
 	align-items: center;
@@ -9705,29 +9705,29 @@ body.resizing-col * {
 	text-align: center;
 }
 
-.issues-panel__empty--warn {
+.issues-app__empty--warn {
 	color: var(--color-warning, #f0a500);
 }
 
-.issues-panel__empty-title {
+.issues-app__empty-title {
 	font-weight: 600;
 	font-size: 12px;
 }
 
-.issues-panel__empty-desc {
+.issues-app__empty-desc {
 	font-size: 11px;
 	opacity: 0.8;
 	line-height: 1.5;
 }
 
-.issues-panel__empty-desc code {
+.issues-app__empty-desc code {
 	font-family: monospace;
 	background: rgba(255, 255, 255, 0.1);
 	padding: 1px 4px;
 	border-radius: 3px;
 }
 
-.issues-panel__retry {
+.issues-app__retry {
 	font-size: 11px;
 	padding: 4px 10px;
 	border-radius: 4px;
@@ -9735,11 +9735,11 @@ body.resizing-col * {
 	color: var(--text-primary, #e0e0e0);
 }
 
-.issues-panel__retry:hover {
+.issues-app__retry:hover {
 	background: rgba(255, 255, 255, 0.14);
 }
 
-.issues-panel__spinner {
+.issues-app__spinner {
 	display: inline-block;
 	width: 14px;
 	height: 14px;
@@ -9755,7 +9755,7 @@ body.resizing-col * {
 	}
 }
 
-.issues-panel__card {
+.issues-app__card {
 	display: block;
 	width: 100%;
 	text-align: left;
@@ -9765,29 +9765,29 @@ body.resizing-col * {
 	transition: background 0.1s;
 }
 
-.issues-panel__card:hover {
+.issues-app__card:hover {
 	background: rgba(255, 255, 255, 0.05);
 }
 
-.issues-panel__card-top {
+.issues-app__card-top {
 	display: flex;
 	align-items: center;
 	justify-content: space-between;
 	margin-bottom: 3px;
 }
 
-.issues-panel__card-number {
+.issues-app__card-number {
 	font-size: 11px;
 	font-weight: 600;
 	color: var(--accent, #7ca0ff);
 }
 
-.issues-panel__card-age {
+.issues-app__card-age {
 	font-size: 10px;
 	color: var(--text-secondary, #888);
 }
 
-.issues-panel__card-title {
+.issues-app__card-title {
 	font-size: 12px;
 	color: var(--text-primary, #e0e0e0);
 	overflow: hidden;
@@ -9797,13 +9797,13 @@ body.resizing-col * {
 	margin-bottom: 4px;
 }
 
-.issues-panel__card-labels {
+.issues-app__card-labels {
 	display: flex;
 	flex-wrap: wrap;
 	gap: 3px;
 }
 
-.issues-panel__card-label {
+.issues-app__card-label {
 	font-size: 10px;
 	padding: 1px 5px;
 	border-radius: 10px;
@@ -9811,14 +9811,14 @@ body.resizing-col * {
 	opacity: 0.8;
 }
 
-.issues-panel__sessions {
+.issues-app__sessions {
 	overflow-y: auto;
 	flex: 1;
 	min-height: 60px;
 }
 
-.issues-panel__sessions-loading,
-.issues-panel__sessions-empty {
+.issues-app__sessions-loading,
+.issues-app__sessions-empty {
 	padding: 10px 12px;
 	font-size: 11px;
 	color: var(--text-secondary, #888);
@@ -10096,7 +10096,7 @@ body.resizing-col * {
 	text-align: center;
 }
 
-.workspace-panel__tree-divider {
+.workspace-app__tree-divider {
 	border-top: 1px solid rgba(255, 255, 255, 0.06);
 	margin: 4px 0;
 }
@@ -10960,30 +10960,30 @@ body.resizing-col * {
 	body > *:not(#root),
 	.titlebar,
 	.app-bar,
-	.chat-panel,
+	.chat-app,
 	.sidebar,
 	.naia-overlay,
 	.naia-resize-handle,
 	.naia-chat-wrapper,
 	.naia-chat-toggle,
 	.avatar-canvas-layer,
-	.workspace-panel__tree,
-	.workspace-panel__sessions,
-	.workspace-panel__resize-handle,
-	.workspace-panel__row-resize-handle,
-	.workspace-panel__tab-bar,
-	.workspace-panel__term-zone,
+	.workspace-app__tree,
+	.workspace-app__sessions,
+	.workspace-app__resize-handle,
+	.workspace-app__row-resize-handle,
+	.workspace-app__tab-bar,
+	.workspace-app__term-zone,
 	.doc-tab-bar,
 	.workspace-editor__header,
 	.quick-open-overlay {
 		display: none !important;
 	}
 
-	/* Hide non-active panel slots (browser tab, etc.) */
-	.content-panel__slot {
+	/* Hide non-active app slots (browser tab, etc.) */
+	.content-app__slot {
 		display: none !important;
 	}
-	.content-panel__slot--active {
+	.content-app__slot--active {
 		display: block !important;
 	}
 
@@ -10993,13 +10993,13 @@ body.resizing-col * {
 	.app-layout,
 	.right-area,
 	.right-content,
-	.content-panel,
-	.content-panel__slot--active,
-	.workspace-panel,
-	.workspace-panel__center,
-	.workspace-panel__doc-zone,
-	.workspace-panel__doc-body,
-	.workspace-panel__editor-slot,
+	.content-app,
+	.content-app__slot--active,
+	.workspace-app,
+	.workspace-app__center,
+	.workspace-app__doc-zone,
+	.workspace-app__doc-body,
+	.workspace-app__editor-slot,
 	.workspace-editor,
 	.workspace-editor__body--split {
 		position: static !important;
@@ -11234,7 +11234,7 @@ body.resizing-col * {
 
 /* ── Onboarding Wizard card ──────────────────────────────────────────────── */
 
-.onboarding-panel {
+.onboarding-app {
 	display: flex;
 	flex-direction: column;
 	width: min(480px, 100%);

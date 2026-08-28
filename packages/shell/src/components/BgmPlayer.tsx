@@ -189,20 +189,20 @@ function saveFavs(favs: YtVideo[]) {
 	} catch {}
 }
 
-// ── Panel height ──────────────────────────────────────────────────────────────
+// ── App height ──────────────────────────────────────────────────────────────
 
 interface Props {
 	naia?: NaiaContextBridge;
 }
 
 type Source = "local" | "youtube";
-type PanelTab = "youtube" | "local";
+type AppTab = "youtube" | "local";
 type YtView = "categories" | "search" | "favorites";
 
-const YT_PANEL_H_KEY = "yt-panel-height";
-const YT_PANEL_H_DEFAULT = 360;
-const YT_PANEL_H_MIN = 200;
-const YT_PANEL_H_MAX = 700;
+const YT_APP_H_KEY = "yt-app-height";
+const YT_APP_H_DEFAULT = 360;
+const YT_APP_H_MIN = 200;
+const YT_APP_H_MAX = 700;
 // Marquee kicks in when track label exceeds this character count
 const MARQUEE_THRESHOLD = 22;
 const PLAYBACK_TIMEOUT_MS = 12_000;
@@ -224,21 +224,21 @@ function youtubeEmbedUrl(videoId: string, playbackId?: string): string {
 	);
 }
 
-function loadPanelHeight(): number {
-	const v = parseInt(localStorage.getItem(YT_PANEL_H_KEY) ?? "", 10);
+function loadAppHeight(): number {
+	const v = parseInt(localStorage.getItem(YT_APP_H_KEY) ?? "", 10);
 	return Number.isFinite(v)
-		? Math.max(YT_PANEL_H_MIN, Math.min(YT_PANEL_H_MAX, v))
-		: YT_PANEL_H_DEFAULT;
+		? Math.max(YT_APP_H_MIN, Math.min(YT_APP_H_MAX, v))
+		: YT_APP_H_DEFAULT;
 }
 
 export function BgmPlayer({ naia }: Props) {
 	const audioRef = useRef<HTMLAudioElement>(null);
 	const playerRef = useRef<HTMLDivElement>(null);
-	const [panelPos, setPanelPos] = useState<{
+	const [appPos, setAppPos] = useState<{
 		top: number;
 		left: number;
 	} | null>(null);
-	const [ytPanelHeight, setYtPanelHeight] = useState(loadPanelHeight);
+	const [ytAppHeight, setYtAppHeight] = useState(loadAppHeight);
 	const handleDragRef = useRef<{
 		startY: number;
 		startH: number;
@@ -302,11 +302,11 @@ export function BgmPlayer({ naia }: Props) {
 		observedAt: number;
 	}>({ observedAt: 0 });
 
-	// ── Unified panel state ───────────────────────────────────────────────────
-	// panelExpanded: the single panel is open or closed
-	// panelTab: which tab is currently shown in the panel (independent of what's playing)
-	const [panelExpanded, setPanelExpanded] = useState(false);
-	const [panelTab, setPanelTab] = useState<PanelTab>("youtube");
+	// ── Unified app state ───────────────────────────────────────────────────
+	// appExpanded: the single app is open or closed
+	// appTab: which tab is currently shown in the app (independent of what's playing)
+	const [appExpanded, setAppExpanded] = useState(false);
+	const [appTab, setAppTab] = useState<AppTab>("youtube");
 
 	// ── YouTube state ─────────────────────────────────────────────────────────
 	const [ytView, setYtView] = useState<YtView>("categories");
@@ -857,22 +857,22 @@ export function BgmPlayer({ naia }: Props) {
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, []);
 
-	// ── Panel anchor position ─────────────────────────────────────────────────
-	// panelPos is always calculated so the portal stays in DOM for CSS animation.
+	// ── App anchor position ─────────────────────────────────────────────────
+	// appPos is always calculated so the portal stays in DOM for CSS animation.
 	useEffect(() => {
 		if (!playerRef.current) {
-			setPanelPos(null);
+			setAppPos(null);
 			return;
 		}
 		const rect = playerRef.current.getBoundingClientRect();
-		const PANEL_W = Math.min(320, window.innerWidth - 16);
-		// Right-align panel to player's right edge, clamp so it doesn't overflow screen
+		const APP_W = Math.min(320, window.innerWidth - 16);
+		// Right-align app to player's right edge, clamp so it doesn't overflow screen
 		const safeLeft = Math.max(
 			8,
-			Math.min(rect.right - PANEL_W, window.innerWidth - PANEL_W - 8),
+			Math.min(rect.right - APP_W, window.innerWidth - APP_W - 8),
 		);
-		setPanelPos({ top: rect.bottom + 4, left: safeLeft });
-	}, [panelExpanded, ytPanelHeight]);
+		setAppPos({ top: rect.bottom + 4, left: safeLeft });
+	}, [appExpanded, ytAppHeight]);
 
 	// ── BGM state persistence ─────────────────────────────────────────────────
 	// #476 — one-time favorites migration: webview localStorage → workspace SoT.
@@ -955,7 +955,7 @@ export function BgmPlayer({ naia }: Props) {
 	// Consume only an explicit playback request issued during this app session.
 	// Persisted media metadata is never playback authority after a restart.
 	useEffect(() => {
-		// A chat turn can dispatch the panel tool after the chat surface is ready
+		// A chat turn can dispatch the app tool after the chat surface is ready
 		// but before this widget's Tauri event listener is attached. The playback
 		// authority already holds that request, so recover it instead of leaving a
 		// title-only requested state with no iframe.
@@ -1298,8 +1298,8 @@ export function BgmPlayer({ naia }: Props) {
 				{/* Fixed BGM icon — pulses when playing */}
 				<span
 					className={`bgm-icon${playing ? " bgm-icon--playing" : ""}`}
-					title={t("bgm.panelToggleTitle")}
-					onClick={() => setPanelExpanded((v) => !v)}
+					title={t("bgm.appToggleTitle")}
+					onClick={() => setAppExpanded((v) => !v)}
 				>
 					♫
 				</span>
@@ -1332,12 +1332,12 @@ export function BgmPlayer({ naia }: Props) {
 					›
 				</button>
 
-				{/* Track name — fixed width, marquee when long, click to toggle panel */}
+				{/* Track name — fixed width, marquee when long, click to toggle app */}
 				<button
 					type="button"
-					className={`bgm-track-name bgm-track-toggle${panelExpanded ? " bgm-track-name--open" : ""}`}
-					title={panelExpanded ? t("bgm.close") : t("bgm.panelToggleTitle")}
-					onClick={() => setPanelExpanded((v) => !v)}
+					className={`bgm-track-name bgm-track-toggle${appExpanded ? " bgm-track-name--open" : ""}`}
+					title={appExpanded ? t("bgm.close") : t("bgm.appToggleTitle")}
+					onClick={() => setAppExpanded((v) => !v)}
 				>
 					{isScrolling ? (
 						<span className="bgm-track-name__scroll">
@@ -1361,41 +1361,41 @@ export function BgmPlayer({ naia }: Props) {
 				/>
 			</div>
 
-			{/* ── Unified BGM panel — always in DOM when anchor ready, hidden via CSS ── */}
-			{panelPos &&
+			{/* ── Unified BGM app — always in DOM when anchor ready, hidden via CSS ── */}
+			{appPos &&
 				createPortal(
 					<div
-						className={`bgm-yt-panel${panelExpanded ? "" : " bgm-yt-panel--hidden"}`}
+						className={`bgm-yt-app${appExpanded ? "" : " bgm-yt-app--hidden"}`}
 						style={{
 							position: "fixed",
-							top: panelPos.top,
-							left: panelPos.left,
+							top: appPos.top,
+							left: appPos.left,
 							zIndex: 10001,
-							height: ytPanelHeight,
+							height: ytAppHeight,
 						}}
 					>
 						{/* Mode tab header */}
-						<div className="bgm-panel-header">
-							<div className="bgm-panel-tabs">
+						<div className="bgm-app-header">
+							<div className="bgm-app-tabs">
 								<button
 									type="button"
-									className={`bgm-panel-tab${panelTab === "youtube" ? " bgm-panel-tab--active" : ""}`}
-									onClick={() => setPanelTab("youtube")}
+									className={`bgm-app-tab${appTab === "youtube" ? " bgm-app-tab--active" : ""}`}
+									onClick={() => setAppTab("youtube")}
 								>
 									▶ YouTube
 								</button>
 								<button
 									type="button"
-									className={`bgm-panel-tab${panelTab === "local" ? " bgm-panel-tab--active" : ""}`}
-									onClick={() => setPanelTab("local")}
+									className={`bgm-app-tab${appTab === "local" ? " bgm-app-tab--active" : ""}`}
+									onClick={() => setAppTab("local")}
 								>
 									{t("bgm.tabLocal")}
 								</button>
 							</div>
 							<button
 								type="button"
-								className="bgm-panel-close"
-								onClick={() => setPanelExpanded(false)}
+								className="bgm-app-close"
+								onClick={() => setAppExpanded(false)}
 								title={t("bgm.close")}
 							>
 								✕
@@ -1403,7 +1403,7 @@ export function BgmPlayer({ naia }: Props) {
 						</div>
 
 						{/* ── YouTube tab ── */}
-						{panelTab === "youtube" && (
+						{appTab === "youtube" && (
 							<>
 								<label className="bgm-yt-background-option">
 									<input
@@ -1531,7 +1531,7 @@ export function BgmPlayer({ naia }: Props) {
 						)}
 
 						{/* ── Local tab ── */}
-						{panelTab === "local" && (
+						{appTab === "local" && (
 							<div className="bgm-yt-list">
 								{localTracks.length === 0 && (
 									<div className="bgm-yt-status">{t("bgm.noTracks")}</div>
@@ -1561,7 +1561,7 @@ export function BgmPlayer({ naia }: Props) {
 								})}
 							</div>
 						)}
-						{/* ── Drawer handle — inside panel so it moves as one unit, no desync ── */}
+						{/* ── Drawer handle — inside app so it moves as one unit, no desync ── */}
 						<button
 							type="button"
 							className="bgm-yt-drawer-handle"
@@ -1570,7 +1570,7 @@ export function BgmPlayer({ naia }: Props) {
 								e.currentTarget.setPointerCapture(e.pointerId);
 								handleDragRef.current = {
 									startY: e.clientY,
-									startH: ytPanelHeight,
+									startH: ytAppHeight,
 									moved: false,
 								};
 							}}
@@ -1581,17 +1581,17 @@ export function BgmPlayer({ naia }: Props) {
 								if (!ref.moved && Math.abs(delta) > 4) ref.moved = true;
 								if (ref.moved) {
 									const next = Math.max(
-										YT_PANEL_H_MIN,
-										Math.min(YT_PANEL_H_MAX, ref.startH + delta),
+										YT_APP_H_MIN,
+										Math.min(YT_APP_H_MAX, ref.startH + delta),
 									);
-									setYtPanelHeight(next);
-									localStorage.setItem(YT_PANEL_H_KEY, String(next));
+									setYtAppHeight(next);
+									localStorage.setItem(YT_APP_H_KEY, String(next));
 								}
 							}}
 							onPointerUp={() => {
 								const ref = handleDragRef.current;
 								handleDragRef.current = null;
-								if (!ref?.moved) setPanelExpanded(false);
+								if (!ref?.moved) setAppExpanded(false);
 							}}
 							onPointerCancel={() => {
 								handleDragRef.current = null;

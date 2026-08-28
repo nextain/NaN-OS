@@ -6,7 +6,7 @@ vi.mock("@tauri-apps/api/event", () => ({
 	listen: vi.fn().mockResolvedValue(() => {}),
 }));
 vi.mock("../../lib/chat-service", () => ({
-	sendPanelInstall: vi.fn().mockResolvedValue(undefined),
+	sendAppInstall: vi.fn().mockResolvedValue(undefined),
 }));
 vi.mock("../../lib/app-loader", () => ({
 	loadInstalledApps: vi.fn().mockResolvedValue(undefined),
@@ -32,7 +32,7 @@ describe("AppInstallDialog — zip gating (#358 / #359)", () => {
 		render(<AppInstallDialog onClose={() => {}} />);
 		expect(addButton().disabled).toBe(true);
 		fireEvent.change(screen.getByPlaceholderText(/github\.com/), {
-			target: { value: "https://github.com/example/my-panel.git" },
+			target: { value: "https://github.com/example/my-app.git" },
 		});
 		expect(addButton().disabled).toBe(false);
 	});

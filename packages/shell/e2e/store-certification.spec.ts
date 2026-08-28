@@ -55,7 +55,10 @@ test("Store reviewer journey keeps a zero-token provider failure actionable", as
 	});
 
 	await page.goto("/");
-	await expect(page.locator(".chat-panel")).toBeVisible({ timeout: 15_000 });
+	// panel → app 리네임(#502 wire 계약) 이후 이 클래스는 chat-app 이다. 이 스펙은 리네임
+	// 전 브랜치에서 작성돼 옛 선택자를 들고 왔고, git 은 충돌 없이 병합했지만 의미가
+	// 어긋나 있었다(2026-08-28 병합 후 실 UI 에서 드러남).
+	await expect(page.locator(".chat-app")).toBeVisible({ timeout: 15_000 });
 	await page.locator(".app-bar-settings").click();
 	await page.locator('[data-settings-tab="brain"]').click();
 	await page.locator("#provider-select").selectOption("gemini");

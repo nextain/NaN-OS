@@ -43,7 +43,7 @@ export interface AtMentionHandle {
 	handleKeyDown: (e: React.KeyboardEvent) => boolean;
 }
 
-/** Check whether the workspace panel is registered (files are available). */
+/** Check whether the workspace app is registered (files are available). */
 export function isWorkspaceAvailable(): boolean {
 	return appRegistry.get("workspace") !== undefined;
 }

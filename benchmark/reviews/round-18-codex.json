@@ -1,0 +1,24 @@
+{
+  "verdict": "NOT_CLEAN",
+  "frame_assessment": {
+    "scope_is_sufficient": false,
+    "missing_concerns": [
+      "실행 중 설정 전환에서 등록·해제 실패가 발생했을 때 상태 복구와 사용자 고지가 검증 범위에서 빠졌다.",
+      "app_skills_result를 수신하는 것뿐 아니라 그 결과가 프런트의 등록 상태에 정확히 반영되는지도 검증해야 한다."
+    ]
+  },
+  "findings": [
+    {
+      "id": "R18-ENV-ACK-STATE-DIVERGENCE",
+      "file_location": "packages/shell/src/components/SettingsTab.tsx:4865; packages/shell/src/lib/environment-skill.ts:80; packages/shell/src/components/ChatArea.tsx:1804; packages/shell/e2e/environment-skill.spec.ts:581",
+      "impact": "설정에서 off로 바꾼 뒤 해제가 실패하면 도구가 뇌에 계속 등록되어 모델 요청 비용이 남을 수 있지만 UI는 off로 표시하고 재시도하지 않는다. 또한 성공한 해제조차 environmentToolAcked에 반영하지 않아, 이후 auto/always로 다시 켜고 등록이 실패한 첫 턴에는 낡은 true를 사용해 개수 또는 전체 표면 이름을 보낼 수 있다.",
+      "why_it_matters": "SettingsTab은 app_skills_clear/app_skills의 확인값을 로그에만 쓰고 noteEnvironmentToolAck를 호출하지 않는다. 반면 ChatArea는 이 전역 boolean을 '마지막으로 확인된 실제 등록 상태'로 신뢰한다. 이는 이미 인정된 '뇌가 방금 죽은 한 턴'이 아니라 정상적인 설정 전환 경로가 확인된 clear 결과를 버려 스스로 만드는 상태 불일치다. B11 테스트도 clear 명령이 outbound에 나타났는지만 확인하며 성공 응답, 실제 해제 상태, 실패 복구, off→auto/always 재활성화를 측정하지 않는다.",
+      "severity": "medium"
+    }
+  ],
+  "what_would_make_it_clean": [
+    "설정 전환의 확인 결과를 단일 상태 전이 함수로 반영한다. 성공한 clear는 등록 상태를 false로, 성공한 register는 true로 만들고 실패·시간초과는 정책에 맞는 보수적 상태로 처리해야 한다.",
+    "off 해제 실패 시 제한적 재시도 또는 사용자에게 명확한 실패·복구 상태를 제공해, UI가 off인데 뇌에는 도구가 남는 상태를 방치하지 않는다.",
+    "한 세션에서 registered→off(clear 성공/실패)→auto 및 always(register 성공/실패)를 실행하고, 실제 agent-side 도구 상태와 다음 chat_request의 환경 세그먼트를 함께 단언하는 Playwright 및 실 Rust 회귀 테스트를 추가한다."
+  ]
+}

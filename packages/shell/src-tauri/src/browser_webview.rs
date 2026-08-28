@@ -1,4 +1,4 @@
-//! Tauri 2 multi-webview browser panel.
+//! Tauri 2 multi-webview browser app.
 //!
 //! Replaces Chrome subprocess + Win32 SetParent embedding with a native Tauri
 //! child WebView2. Eliminates all IME / focus / flickering issues caused by
@@ -7,7 +7,7 @@
 //! Architecture:
 //!   Tauri Window
 //!     ├── Webview "main"          — Shell UI (React app)
-//!     └── Webview "browser-panel" — Browser (native WebView2 / WebKitGTK)
+//!     └── Webview "browser-app" — Browser (native WebView2 / WebKitGTK)
 //!
 //! AI interaction: JavaScript injected via an initialization script.
 //! Results are returned via a custom URI scheme protocol (naia-bridge://)
@@ -23,7 +23,7 @@ use tokio::sync::oneshot;
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-pub const BROWSER_LABEL: &str = "browser-panel";
+pub const BROWSER_LABEL: &str = "browser-app";
 const DEFAULT_URL: &str = "https://www.google.com";
 
 // ─── State ────────────────────────────────────────────────────────────────────
@@ -267,10 +267,10 @@ pub fn browser_wv_check() -> bool {
     true
 }
 
-/// Create (or re-show and reposition) the browser panel child webview.
+/// Create (or re-show and reposition) the browser app child webview.
 ///
-/// `x`, `y` — panel origin in logical pixels (from getBoundingClientRect)
-/// `width`, `height` — panel content area in logical pixels
+/// `x`, `y` — app origin in logical pixels (from getBoundingClientRect)
+/// `width`, `height` — app content area in logical pixels
 ///
 /// MUST be `async` so it runs on a tokio worker thread, not the WebView2
 /// message-callback thread (main thread). `add_child` uses
@@ -313,7 +313,7 @@ pub async fn browser_wv_create(
             .map_err(|e| format!("URL parse: {e}"))?,
     );
 
-    // Clone for on_navigation closure (emits auth events from the browser panel).
+    // Clone for on_navigation closure (emits auth events from the browser app).
     let app_nav = app.clone();
 
     // `add_child` blocks (std::sync::mpsc recv) until the main thread processes
@@ -342,8 +342,8 @@ pub async fn browser_wv_create(
                             crate::process_deep_link_url(
                                 &url_str,
                                 &app_nav,
-                                None, // no CSRF state for in-panel login
-                                "browser-panel",
+                                None, // no CSRF state for in-app login
+                                "browser-app",
                             );
                             return false; // block: WebView can't navigate to naia://
                         }
@@ -362,7 +362,7 @@ pub async fn browser_wv_create(
     Ok(())
 }
 
-/// Resize / reposition the browser webview (called on panel resize).
+/// Resize / reposition the browser webview (called on app resize).
 #[tauri::command]
 pub async fn browser_wv_resize(
     app: AppHandle,
@@ -379,13 +379,13 @@ pub async fn browser_wv_resize(
     Ok(())
 }
 
-/// Show the browser webview (panel activated).
+/// Show the browser webview (app activated).
 #[tauri::command]
 pub async fn browser_wv_show(app: AppHandle) -> Result<(), String> {
     get_wv(&app)?.show().map_err(|e| format!("show: {e}"))
 }
 
-/// Hide the browser webview (panel deactivated or unmounted).
+/// Hide the browser webview (app deactivated or unmounted).
 #[tauri::command]
 pub async fn browser_wv_hide(app: AppHandle) -> Result<(), String> {
     if let Some(wv) = app.get_webview(BROWSER_LABEL) {

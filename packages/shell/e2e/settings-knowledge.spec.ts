@@ -106,7 +106,7 @@ function buildMockScript() {
 
 async function gotoKnowledge(page: import("@playwright/test").Page) {
 	await page.goto("/");
-	await expect(page.locator(".chat-panel")).toBeVisible({ timeout: 10_000 });
+	await expect(page.locator(".chat-app")).toBeVisible({ timeout: 10_000 });
 	await page.getByRole("button", { name: /^(설정|Settings)$/ }).click();
 	// 지식 탭 — data 속성으로 정확 매칭(텍스트 "지식" 오매칭 회피).
 	await page.locator('[data-settings-tab="knowledge"]').click();

@@ -606,7 +606,7 @@ describe("writeNaiaUiConfig (UI 정체성만 ui-config.json 으로 분리)", () 
 			vrmModel: "a.vrm", // UI 정체성 → 저장
 			theme: "ocean", // UI 설정 → 이제 저장됨(이전엔 제외됐다)
 			vllmTtsHost: "http://localhost:22600", // 로컬 보이스 호스트 → 저장(회귀 대상)
-			panelPosition: "left", // 패널 레이아웃 → 저장
+			appPosition: "left", // 앱 레이아웃 → 저장
 			bgmVolume: 0.5, // BGM 볼륨 → 저장
 			locale: "ko", // 로케일 → 저장
 		});
@@ -618,7 +618,7 @@ describe("writeNaiaUiConfig (UI 정체성만 ui-config.json 으로 분리)", () 
 		expect(written.vrmModel).toBe("a.vrm");
 		expect(written.theme).toBe("ocean");
 		expect(written.vllmTtsHost).toBe("http://localhost:22600");
-		expect(written.panelPosition).toBe("left");
+		expect(written.appPosition).toBe("left");
 		expect(written.bgmVolume).toBe(0.5);
 		expect(written.locale).toBe("ko");
 		// agent 키·시크릿은 ui-config 에 안 들어간다

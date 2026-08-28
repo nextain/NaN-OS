@@ -101,7 +101,7 @@ test("cascade is reported operational from its live /health via the given URL (#
 	);
 
 	await page.goto("/");
-	await expect(page.locator(".chat-panel")).toBeVisible({ timeout: 20_000 });
+	await expect(page.locator(".chat-app")).toBeVisible({ timeout: 20_000 });
 	await page.getByRole("button", { name: /^(설정|Settings)$/ }).click();
 	await page.locator('[data-settings-tab="profile"]').click();
 

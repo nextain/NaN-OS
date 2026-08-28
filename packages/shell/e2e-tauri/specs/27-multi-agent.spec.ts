@@ -16,8 +16,8 @@ describe("27 — multi-agent", () => {
 		await agentsBtn.waitForDisplayed({ timeout: 10_000 });
 		await agentsBtn.click();
 
-		const agentsPanel = await $(S.agentsTabPanel);
-		await agentsPanel.waitForDisplayed({ timeout: 5_000 });
+		const agentsApp = await $(S.agentsTabApp);
+		await agentsApp.waitForDisplayed({ timeout: 5_000 });
 	});
 
 	it("should show agent cards or empty state", async () => {
@@ -37,9 +37,9 @@ describe("27 — multi-agent", () => {
 			expect(cardText.length).toBeGreaterThan(0);
 		} else {
 			// Empty state — valid
-			const panel = await $(S.agentsTabPanel);
-			const panelText = await panel.getText();
-			expect(panelText.length).toBeGreaterThan(0);
+			const app = await $(S.agentsTabApp);
+			const appText = await app.getText();
+			expect(appText.length).toBeGreaterThan(0);
 		}
 	});
 

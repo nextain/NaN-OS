@@ -6,7 +6,7 @@ import { type Page, expect, test } from "@playwright/test";
  *
  * Tests the full pipeline through Naia app:
  *   getUserMedia (WAV injection) → AudioContext (ScriptProcessor, SW gain 0.3)
- *   → PCM → WAV → vLLM /v1/audio/transcriptions → ChatPanel user message
+ *   → PCM → WAV → vLLM /v1/audio/transcriptions → ChatApp user message
  *
  * Prerequisites:
  *   - pnpm dev running (localhost:1420)
@@ -124,7 +124,7 @@ const TAURI_MOCK = `
 		if (cmd === "workspace_get_sessions") return [];
 		if (cmd === "workspace_classify_dirs") return [];
 		if (cmd === "workspace_read_file") return "";
-		if (cmd === "panel_list_installed") return [];
+		if (cmd === "app_list_installed") return [];
 		if (cmd === "list_audio_output_devices") return [];
 		if (cmd === "list_audio_input_devices") return [];
 		return undefined;
@@ -152,7 +152,7 @@ async function setupPage(page: Page) {
 		}),
 	);
 	await page.goto("/");
-	await expect(page.locator(".chat-panel")).toBeVisible({ timeout: 10_000 });
+	await expect(page.locator(".chat-app")).toBeVisible({ timeout: 10_000 });
 }
 
 test.describe("vLLM STT E2E (Qwen3-ASR-1.7B)", () => {

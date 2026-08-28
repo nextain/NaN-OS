@@ -13,7 +13,7 @@ function mkPorts(over: {
   localConfigWithSecrets?: NaiaConfig | null;
   fileConfig?: NaiaConfig | null;
   setRootOk?: boolean;
-  panelThrows?: boolean;
+  appThrows?: boolean;
   adkDirStatus?: AdkDirStatus;
 } = {}) {
   const calls: string[] = [];
@@ -49,8 +49,8 @@ function mkPorts(over: {
       store: async (m) => { rec(`store:${m.kind}`); },
       send: async (m) => { rec(`send:${m.kind}`); },
     },
-    panels: {
-      listInstalled: async () => { rec("listInstalled"); if (over.panelThrows) throw new Error("boom"); return []; },
+    apps: {
+      listInstalled: async () => { rec("listInstalled"); if (over.appThrows) throw new Error("boom"); return []; },
     },
     setup: {
       initSettings: async (a) => { rec(`initSettings:${a}`); },
@@ -84,7 +84,7 @@ describe("domain 순수 규칙", () => {
 });
 
 describe("boot() 게이트", () => {
-  it("ADK-path 부재 → SetupRequired + detectRoot, panel list 는 게이트 이전", async () => {
+  it("ADK-path 부재 → SetupRequired + detectRoot, app list 는 게이트 이전", async () => {
     const { ports, calls } = mkPorts({ adk: { present: false } });
     expect(await new ControlPlaneBoot(ports).boot()).toBe("SetupRequired");
     expect(calls[0]).toBe("listInstalled");
@@ -98,8 +98,8 @@ describe("boot() 게이트", () => {
     const { ports } = mkPorts({ adk: { present: true, path: "/w" }, onboardingComplete: false });
     expect(await new ControlPlaneBoot(ports).boot()).toBe("OnboardingOverlay");
   });
-  it("panel list 실패 = non-fatal (boot 계속)", async () => {
-    const { ports } = mkPorts({ adk: { present: true, path: "/w" }, onboardingComplete: true, panelThrows: true });
+  it("app list 실패 = non-fatal (boot 계속)", async () => {
+    const { ports } = mkPorts({ adk: { present: true, path: "/w" }, onboardingComplete: true, appThrows: true });
     await expect(new ControlPlaneBoot(ports).boot()).resolves.toBe("Main");
   });
   it("2b: config.workspaceRoot 권위 — adk 부재 시 adkPath.set(cfgRoot)", async () => {
@@ -128,10 +128,10 @@ describe("initAuth() — 게이트 독립, config 조건부", () => {
   });
 });
 
-describe("workspace 패널 — boot 공통 아님, contain+fallback", () => {
+describe("workspace 앱 — boot 공통 아님, contain+fallback", () => {
   it("setRoot Err → clearWorkspaceRoot + startWatch (block 아님)", async () => {
     const { ports, calls } = mkPorts({ setRootOk: false });
-    await new ControlPlaneBoot(ports).onWorkspacePanelMount("/bad");
+    await new ControlPlaneBoot(ports).onWorkspaceAppMount("/bad");
     expect(calls).toEqual(["setRoot:/bad", "clearWorkspaceRoot", "startWatch"]);
   });
 });
@@ -193,9 +193,9 @@ describe("setup clone/delete + workspace mount/activate (codex HIGH/MED)", () =>
     expect(calls).toContain("replaceLocalConfig");
     expect(calls).toContain("markOnboardingComplete");
   });
-  it("onWorkspacePanelActivate() = startWatch 만 (setRoot 안 함)", async () => {
+  it("onWorkspaceAppActivate() = startWatch 만 (setRoot 안 함)", async () => {
     const { ports, calls } = mkPorts();
-    await new ControlPlaneBoot(ports).onWorkspacePanelActivate();
+    await new ControlPlaneBoot(ports).onWorkspaceAppActivate();
     expect(calls).toEqual(["startWatch"]);
   });
 });

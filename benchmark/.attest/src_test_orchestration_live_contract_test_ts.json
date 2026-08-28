@@ -1,0 +1,26 @@
+{
+  "spec": "src/test/orchestration-live.contract.test.ts",
+  "kinds": [
+    "worker",
+    "native"
+  ],
+  "cases": [
+    "임시 작업 공간이 실제로 만들어졌다",
+    "저장소를 바꾸는 일은 이슈로 분류된다 (UC-ORCHESTRATION-CLASSIFY)",
+    "사용자가 분류를 뒤집으면 따르되 근거가 남는다 (UC-ORCHESTRATION-CLASSIFY)",
+    "이슈를 열고 리더를 세우고 실제 작업자가 돈다 (UC-ORCHESTRATION-ISSUE-LEAD)",
+    "같은 이슈에 다른 리더를 세울 수 없다 (UC-ORCHESTRATION-ISSUE-LEAD)",
+    "작업자의 완료 선언과 권한 요구는 반영되지 않는다 (UC-ORCHESTRATION-ISSUE-LEAD)",
+    "소유 경로가 겹치면 아무도 시작하지 않는다 (UC-ORCHESTRATION-ISSUE-LEAD)",
+    "작업자를 교체해도 이슈 증거가 유지된다 (UC-ORCHESTRATION-WORKER-REPLACE)",
+    "재시작 뒤 찾지 못하면 이어받을 수 없다고 말한다 (UC-ORCHESTRATION-RESTART-RESUME)",
+    "재시작 뒤 찾으면 실제 작업자 상태로 태도를 정한다 (UC-ORCHESTRATION-RESTART-RESUME)",
+    "결속이 파일로 남아 재시작을 넘어간다 (UC-ORCHESTRATION-RESTART-RESUME)",
+    "산출물은 작업자 프로세스가 쓴다 — 부모가 대신 써 주지 않는다",
+    "코딩 모델 작업자는 이 어댑터가 띄우지 않는다 — 띄운 척도 하지 않는다"
+  ],
+  "touched": [
+    "/tmp/naia-orch-TBiTZo"
+  ],
+  "at": 1787907171155
+}

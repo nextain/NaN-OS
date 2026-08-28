@@ -15,7 +15,7 @@ const UI_ONLY_CONFIG_KEYS = new Set<string>([
   "ttsEnabled", "ttsVoice", "ttsProvider", "naiaCloudTtsBackend", "ttsEngine",
   "ttsOutputDeviceId", "sttInputDeviceId", "vllmSttHost", "vllmSttModel", "vllmTtsHost",
   "liveProvider", "liveVoice", "liveModel", "openaiRealtimeVoice", "voice", "voiceConversation",
-  "panelPosition", "panelVisible", "panelSize", "deletedPanels",
+  "appPosition", "appVisible", "appSize", "deletedApps",
   "bgmTrack", "bgmSource", "bgmYoutubeVideoId", "bgmYoutubeTitle",
   "bgmYoutubeChannel", "bgmYoutubeThumbnail", "bgmVolume", "bgmPlaying",
   // F0-2 (2026-06-13 리뷰): old stripForAgent 누락 6키 — agent 버킷 유출(naiaUserId=식별정보) 방지.

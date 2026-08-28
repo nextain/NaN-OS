@@ -1,10 +1,10 @@
 /**
- * Naia Bridge Client — runs inside an iframe panel.
+ * Naia Bridge Client — runs inside an iframe app.
  *
- * Copy this file into your panel project. It does NOT import any Tauri or
+ * Copy this file into your app project. It does NOT import any Tauri or
  * Shell internals — pure postMessage communication only.
  *
- * Usage (inside your panel's index.html / JS):
+ * Usage (inside your app's index.html / JS):
  *   import { NaiaBridgeClient } from "./naia-bridge-client";
  *   const naia = new NaiaBridgeClient();
  *   await naia.logBehavior("file-opened", { path: "/etc/hosts" });
@@ -87,7 +87,7 @@ export class NaiaBridgeClient {
 
 	/**
 	 * Remove the message listener and reject all in-flight requests.
-	 * Call this when the panel is unmounted.
+	 * Call this when the app is unmounted.
 	 */
 	destroy(): void {
 		this.cleanup?.();

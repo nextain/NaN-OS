@@ -87,6 +87,25 @@ const NATIVE_DRIVER = IS_WINDOWS
 // refuses to spawn without a shell, producing `spawn EINVAL`) and also avoids
 // the `shell:true + args[]` DEP0190 warning introduced in Node 22.
 const VITE_ENTRY = resolve(SHELL_DIR, "node_modules/vite/bin/vite.js");
+/**
+ * dev 서버는 e2e 바이너리가 실제로 찾아가는 주소에 떠야 한다.
+ * 그 주소의 정본은 `tauri.e2e.conf.json` 의 devUrl 이므로 거기서 읽는다 — 여기 상수로
+ * 적어 두면 둘이 갈라진다(2026-08-26: conf 는 1420 에 띄우는데 바이너리는 1422 를 봤다).
+ *
+ * ⚠️ 호스트도 맞춰야 한다. Vite 는 기본으로 `[::1]`(IPv6) 에만 바인드하는데 devUrl 이
+ *    `127.0.0.1`(IPv4) 이면 앱이 붙지 못하고 about:blank 에 머문다. 그러면 origin 이 null 이라
+ *    Tauri IPC 가 모든 호출을 "Origin header is not a valid URL" 로 거절한다 —
+ *    실패가 스펙이 아니라 하네스에서 나므로 원인을 찾기 어렵다.
+ */
+const E2E_DEV_URL = new URL(
+	(
+		JSON.parse(
+			readFileSync(resolve(SHELL_DIR, "src-tauri", "tauri.e2e.conf.json"), "utf8"),
+		) as { build?: { devUrl?: string } }
+	).build?.devUrl ?? "http://127.0.0.1:1420",
+);
+const VITE_PORT = Number(E2E_DEV_URL.port || "1420");
+const VITE_HOST = E2E_DEV_URL.hostname;
 
 let tauriDriver: ChildProcess;
 let viteServer: ChildProcess;
@@ -266,6 +285,7 @@ export const config = {
 	async onPrepare() {
 		// Kill orphaned processes from previous runs
 		killByPort(1420);
+		killByPort(VITE_PORT);
 		killByPort(4448);
 		killByPort(4449);
 		killByName("tauri-driver");
@@ -276,14 +296,15 @@ export const config = {
 		}
 		killByName("naia-shell");
 		await waitForPortClosed(1420);
+		await waitForPortClosed(VITE_PORT);
 		await waitForPortClosed(4448);
 		await waitForPortClosed(4449);
 
 		// Start Vite dev server (debug binary loads from devUrl localhost:1420).
-		viteServer = spawn(execPath, [VITE_ENTRY], {
+		viteServer = spawn(execPath, [VITE_ENTRY, "--host", VITE_HOST], {
 			cwd: SHELL_DIR,
 			stdio: ["ignore", "pipe", "pipe"],
-			env: { ...process.env, BROWSER: "none" },
+			env: { ...process.env, BROWSER: "none", PLAYWRIGHT_PORT: String(VITE_PORT) },
 		});
 		viteServer.stdout?.on("data", (d: Buffer) => {
 			const line = d.toString();
@@ -294,8 +315,8 @@ export const config = {
 		viteServer.stderr?.on("data", (d: Buffer) =>
 			process.stderr.write(`[vite:err] ${d.toString()}`),
 		);
-		await waitForPort(1420, 30_000);
-		console.log("[e2e] Vite dev server started on :1420");
+		await waitForPort(VITE_PORT, 30_000);
+		console.log(`[e2e] Vite dev server started on ${VITE_HOST}:${VITE_PORT} (devUrl=${E2E_DEV_URL.href})`);
 	},
 
 	async beforeSession() {

@@ -1,3 +1,4 @@
+import type { EnvironmentAwareness } from "@nextain/naia-os-core/composition";
 import type { VramTierId } from "./capabilities/vram-tiers";
 import type { Locale } from "./i18n";
 import { Logger } from "./logger";
@@ -100,7 +101,7 @@ export type TtsProviderId =
 	| "vllm"
 	| "naia-local-voice";
 
-export type PanelPosition = "left" | "right" | "bottom";
+export type AppPosition = "left" | "right" | "bottom";
 
 /** Development tiers are expert/main/sub; memory remains orthogonal. */
 export type LlmRoleId = "expert" | "main" | "sub" | "memory";
@@ -141,6 +142,20 @@ export interface AppConfig {
 	 * SoT: .agents/progress/naia-os-cascade-talking-avatar-2026-07-01.md
 	 */
 	cascadeRuntimeUrl?: string;
+	/**
+	 * #502 (FR-ENV-LIVE.4) — 나이아가 사용자의 터미널에 직접 입력하는 것을 허용하는가.
+	 * 사용자가 직접 타이핑하는 것과 같은 일이라 구조화 전달과 같은 권한으로 나가지 않는다.
+	 * 기본값은 꺼짐이며, 꺼져 있으면 거절 사유가 그대로 나이아에게 올라간다.
+	 */
+	environmentTerminalInput?: boolean;
+	/**
+	 * #502 (FR-ENV-ATTENTION.4) — 작업 표면을 나이아가 얼마나 인지하게 둘 것인가.
+	 *   "off"    작업 표면을 아예 알리지 않는다. 도구도 등록하지 않는다.
+	 *   "auto"   (기본값) 평소에는 표면 개수만 알리고, 목록이 필요하면 나이아가 스스로 지켜본다.
+	 *   "always" 요청마다 표면 목록을 싣는다. 나이아가 끌 수 없다.
+	 * 기본이 "auto" 인 이유: 목록을 늘 실으면 요청마다 토큰이 붙고 터미널 이름이 늘 뇌로 간다.
+	 */
+	environmentAwareness?: EnvironmentAwareness;
 	customVrms?: string[];
 	customBgs?: string[];
 	sttProvider?: SttProviderId;
@@ -192,9 +207,9 @@ export interface AppConfig {
 	elevenlabsApiKey?: string;
 	gatewayTtsAuto?: string;
 	gatewayTtsMode?: string;
-	panelPosition?: PanelPosition;
-	panelVisible?: boolean;
-	panelSize?: number;
+	appPosition?: AppPosition;
+	appVisible?: boolean;
+	appSize?: number;
 	discordSessionMigrated?: boolean;
 	discordRelayUrl?: string;
 	lastProcessedDiscordMessageId?: string;
@@ -251,8 +266,8 @@ export interface AppConfig {
 	openaiRealtimeVoice?: string;
 	/** Unified voice selection (replaces liveVoice/openaiRealtimeVoice after migration) */
 	voice?: string;
-	/** Panel IDs that the user has explicitly deleted (build-time panels only). */
-	deletedPanels?: string[];
+	/** App IDs that the user has explicitly deleted (build-time apps only). */
+	deletedApps?: string[];
 	/** Workspace root directory override. Defaults to the compile-time WORKSPACE_ROOT constant if not set. */
 	workspaceRoot?: string;
 	/** Filename of the selected background video inside naia-settings/background/ */

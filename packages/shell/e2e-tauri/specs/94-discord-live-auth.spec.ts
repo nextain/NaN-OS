@@ -16,10 +16,10 @@ describe("Discord live authentication through the isolated real Tauri Shell", ()
 		await connectionsTab.waitForClickable({ timeout: 30_000 });
 		await connectionsTab.click();
 
-		const panel = await $("[data-testid='discord-connections']");
-		await panel.waitForDisplayed({ timeout: 30_000 });
+		const app = await $("[data-testid='discord-connections']");
+		await app.waitForDisplayed({ timeout: 30_000 });
 		await browser.waitUntil(
-			async () => (await panel.$$("code")).length === 1,
+			async () => (await app.$$("code")).length === 1,
 			{
 				timeout: 45_000,
 				timeoutMsg:
@@ -29,7 +29,7 @@ describe("Discord live authentication through the isolated real Tauri Shell", ()
 
 		// The token is consumed by native code only. The isolated workspace must
 		// neither acquire a persisted DPAPI key nor expose a password field.
-		expect(await panel.$$("input[type='password']")).toHaveLength(0);
+		expect(await app.$$("input[type='password']")).toHaveLength(0);
 		expect(
 			existsSync(resolve(E2E_SETTINGS, ".keys", "NAIA_DISCORD_BOT_TOKEN.dpapi")),
 		).toBe(false);

@@ -1,0 +1,32 @@
+{
+  "verdict": "NOT_CLEAN",
+  "frame_assessment": {
+    "scope_is_sufficient": false,
+    "missing_concerns": [
+      "환경 인지 계약과 자동 해제 검증이 gRPC 채팅·STT→채팅 파이프라인에만 집중되어 있고, 별도 Realtime WebSocket 음성 경로를 포함하지 않는다.",
+      "실행 중 설정 변경 검증도 열린 Realtime 음성 세션의 도구 선언과 환경 컨텍스트가 어떻게 바뀌는지는 측정하지 않는다."
+    ]
+  },
+  "findings": [
+    {
+      "id": "R9-VOICE-BYPASSES-ATTENTION-LIFECYCLE",
+      "file_location": "packages/shell/src/components/ChatArea.tsx:1779, packages/shell/src/components/ChatArea.tsx:3062, packages/shell/src/components/ChatArea.tsx:3179",
+      "impact": "Gemini Live/OpenAI Realtime/omni 직접 음성 세션에서는 environmentSurfaces가 턴마다 전달되지 않고 refreshEnvironment()와 environmentSession.noteTurn()도 호출되지 않는다. 따라서 always는 목록을 전혀 지속 제공하지 못하고, auto에서 음성 도구가 watch를 켜면 8개의 음성 턴이 지나도 자동 해제되지 않는다. 이후 일반 채팅으로 돌아갈 때까지 watched 상태가 무기한 남을 수 있다.",
+      "why_it_matters": "FR-ENV-ATTENTION.5와 .7은 '대화 요청' 및 '대화 턴'을 경로 한정 없이 규정하지만, 구현은 sendChatMessage 경로에만 수명주기를 연결했다. Realtime 음성은 별도로 한 번 만든 systemPrompt와 도구 목록을 계속 사용한다. 현재 단위 테스트와 Playwright B9/B11은 모두 chat_request만 세므로 이 결함을 발견할 수 없다. 이는 이번 변경의 핵심인 비용·노출 자동 제한이 실제 지원 대화 경로 중 하나에서 성립하지 않는 새 실패 양식이다.",
+      "severity": "high"
+    },
+    {
+      "id": "R9-LIVE-VOICE-SETTING-NOT-FULLY-IMMEDIATE",
+      "file_location": "packages/shell/src/components/SettingsTab.tsx:4865, packages/shell/src/components/ChatArea.tsx:3018, packages/shell/src/components/ChatArea.tsx:3062, packages/shell/src/components/ChatArea.tsx:3187",
+      "impact": "열려 있는 Realtime 음성 세션은 연결 시 voiceTools와 voiceSystemPrompt를 스냅샷으로 만든다. 설정에서 off로 바꿔 agent registry를 비워도 이미 연결된 음성 모델에는 skill_environment 선언이 남는다. 호출 실행은 최신 설정을 읽어 거절하므로 실제 관측·조작은 막히지만, UI가 주장하는 즉시 도구 미등록 상태와 모델이 보는 상태가 불일치하고 불필요한 도구 스키마 토큰도 세션에 남는다.",
+      "why_it_matters": "B11은 같은 세션에서 app_skills_clear 발신과 다음 gRPC chat_request의 세그먼트 부재만 확인한다. 열린 음성 연결의 도구 목록 갱신 또는 재연결은 검증하지 않는다. 따라서 '실행 중 변경 시 즉시 반영'이라는 검증 주장은 다른 프로덕션 경로에 일반화될 수 없다.",
+      "severity": "medium"
+    }
+  ],
+  "what_would_make_it_clean": [
+    "Realtime 음성 턴에도 하나의 명시적 환경 주의 수명주기를 적용하라. 최소한 매 사용자 턴에서 refreshEnvironment와 noteTurn을 정확히 한 번 실행하고, watch 예산 만료가 음성-only 대화에서도 관찰 가능해야 한다.",
+    "Realtime 공급자가 환경 세그먼트의 턴별 갱신을 지원하지 않는다면 always/watch의 지원 범위를 UI와 요구사항에서 명확히 제한하거나, 컨텍스트 업데이트·세션 재구성 등 실제 전달 수단을 구현하라.",
+    "이미 열린 Realtime 음성 세션에서 auto→off, off→auto, auto→always 변경을 검증하라. off 전환 후 모델 측 도구 선언 제거와 환경 컨텍스트 부재, 도구 호출 거절을 각각 측정해야 한다.",
+    "음성-only로 watch를 호출한 뒤 WATCH_TURN_BUDGET보다 많은 실제 음성 턴을 보내 목록 노출 상태가 종료되는 통합 테스트와, always가 같은 경로에서 예산과 무관하게 동작하는 대조 테스트를 추가하라."
+  ]
+}

@@ -69,7 +69,7 @@ describe("73 — Edge TTS preview", () => {
 
 		// Check for error — the settings tab shows errors in .settings-error or similar
 		const errorText = await browser.execute(() => {
-			// Look for any error message in the settings panel
+			// Look for any error message in the settings app
 			const errorEls = document.querySelectorAll(
 				".settings-tab .error-message, .settings-tab [class*='error'], .settings-tab .text-red",
 			);

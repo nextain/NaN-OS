@@ -14,7 +14,7 @@ import type { AgentType, TerminalTab } from "../workspace/WorkspaceCenterArea";
 
 afterEach(cleanup);
 
-// ─── Mocks (same as workspace-panel.test.tsx) ─────────────────────────────────
+// ─── Mocks (same as workspace-app.test.tsx) ─────────────────────────────────
 
 vi.mock("@tauri-apps/api/core", () => ({
 	invoke: vi.fn().mockResolvedValue([]),
@@ -39,13 +39,13 @@ vi.mock("../../lib/config", () => ({
 
 function TabLabel({ tab }: { tab: TerminalTab }) {
 	return (
-		<span className="workspace-panel__tab-label">
+		<span className="workspace-app__tab-label">
 			{tab.issueId !== undefined && (
-				<span className="workspace-panel__tab-issue">#{tab.issueId}</span>
+				<span className="workspace-app__tab-issue">#{tab.issueId}</span>
 			)}
 			{tab.dir.split(/[/\\]/).pop() ?? tab.dir}
 			{tab.agent !== undefined && (
-				<span className="workspace-panel__tab-agent">{tab.agent}</span>
+				<span className="workspace-app__tab-agent">{tab.agent}</span>
 			)}
 		</span>
 	);
@@ -73,7 +73,7 @@ describe("TerminalTab badge rendering", () => {
 
 		const badge = screen.getByText("#278");
 		expect(badge).toBeInTheDocument();
-		expect(badge).toHaveClass("workspace-panel__tab-issue");
+		expect(badge).toHaveClass("workspace-app__tab-issue");
 	});
 
 	it("shows agent badge when agent is set", () => {
@@ -87,7 +87,7 @@ describe("TerminalTab badge rendering", () => {
 
 		const badge = screen.getByText("claude");
 		expect(badge).toBeInTheDocument();
-		expect(badge).toHaveClass("workspace-panel__tab-agent");
+		expect(badge).toHaveClass("workspace-app__tab-agent");
 	});
 
 	it("shows both badges when issueId and agent are set", () => {

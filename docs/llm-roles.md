@@ -13,7 +13,7 @@
 | **0. 결정론 (LLM 무)** | 구조·스키마·기계검증 합격기준 (F12/F13, doc-graph, mirror 해시, `brightness==popcount`) | 없음 (스크립트) | — |
 | **1. 라이트 (하위)** | **형식 검증** + 번역(.agents→.users 미러) + 생성(초안) + **문제점 지적**(검출·리포트) + 자동동기화 | haiku / gemini-flash-lite / glm-flash | `sub` (형식·보조) |
 | **2-a. 플래그십 — main (상위)** | **머리쓰기·설계·판단·수정** (대화하는 주 모델) | Opus / GPT-5.x / GLM-5.x | `main` (대화 Agent) |
-| **2-b. 플래그십 — 리뷰어 패널 (상위)** | **실질 적대 검증** (placeholder인가·미묘한 버그·설계 타당성) — main 과 *독립*(안티앵커링) | **claude · codex · glm-5.1** (다중 독립) | `sub` 의 reviewer 변형, but 플래그십 tier |
+| **2-b. 플래그십 — 리뷰어 그룹 (상위)** | **실질 적대 검증** (placeholder인가·미묘한 버그·설계 타당성) — main 과 *독립*(안티앵커링) | **claude · codex · glm-5.1** (다중 독립) | `sub` 의 reviewer 변형, but 플래그십 tier |
 
 **핵심**:
 - **형식 검증(레벨 0·1)과 실질 검증(레벨 2-b)을 가른다.** 기계로 판정 가능한 건 결정론/라이트로 싸게, 판단이 필요한 건 플래그십 적대 리뷰로. (→ `acceptance-criteria.md` 두 층.)
@@ -23,7 +23,7 @@
 
 ### Config SoT — `naia-settings/review.json`
 
-리뷰어 패널 + tier 정책의 **정본 config** = `naia-adk/naia-settings/review.json` (cross-repo SoT, `llm.json`(main/sub/embedded)의 형제). `tier_policy` + `reviewers[]`(플래그십 패널) + `stages`. `review-pass` 스킬과 naia-agent 가 소비. naia-settings 가 naia-agent·naia-os 설정 파일을 담는 구조 정합 — 프로젝트는 project-local `review-pass.yaml` 대신 이 정본을 가리킨다(또는 override). secret 은 `apiKeyRef`(이름)만.
+리뷰어 그룹 + tier 정책의 **정본 config** = `naia-adk/naia-settings/review.json` (cross-repo SoT, `llm.json`(main/sub/embedded)의 형제). `tier_policy` + `reviewers[]`(플래그십 앱) + `stages`. `review-pass` 스킬과 naia-agent 가 소비. naia-settings 가 naia-agent·naia-os 설정 파일을 담는 구조 정합 — 프로젝트는 project-local `review-pass.yaml` 대신 이 정본을 가리킨다(또는 override). secret 은 `apiKeyRef`(이름)만.
 
 ## 실행 환경 가정 (단계별)
 

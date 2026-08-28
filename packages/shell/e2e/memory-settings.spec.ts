@@ -156,7 +156,7 @@ function buildMockScript(overrides = "") {
 /** Navigate to SettingsTab → Memory sub-tab, wait for memory content. */
 async function gotoSettings(page: import("@playwright/test").Page) {
 	await page.goto("/");
-	await expect(page.locator(".chat-panel")).toBeVisible({ timeout: 10_000 });
+	await expect(page.locator(".chat-app")).toBeVisible({ timeout: 10_000 });
 
 	// 설정 버튼(로케일 ko="설정" / en="Settings"). ⚠️ /설정/i 부분매칭은 "재설정 (앱 재시작)"(RefAudioSection)
 	// 도 매칭하므로 ^앵커 정확매칭으로 그 오매칭을 회피한다.
@@ -177,7 +177,7 @@ async function gotoSettings(page: import("@playwright/test").Page) {
  *  사라진 "모델" 탭을 클릭해 스테일 실패했음 → 기억 탭 네비게이션으로 정정(gotoSettings 와 동일 탭). */
 async function gotoModels(page: import("@playwright/test").Page) {
 	await page.goto("/");
-	await expect(page.locator(".chat-panel")).toBeVisible({ timeout: 10_000 });
+	await expect(page.locator(".chat-app")).toBeVisible({ timeout: 10_000 });
 	await page.getByRole("button", { name: /^(설정|Settings)$/ }).click();
 	await page.locator(".settings-tab-btn", { hasText: /기억|Memory/i }).click();
 	await expect(
@@ -562,7 +562,7 @@ test.describe("Memory Settings UI", () => {
 		// small-LLM(memory-llm)=브레인 탭, embedding(memory-embedding)=기억 탭. 이 테스트는
 		// 기억 탭의 embedding+device 저장 계약을 검증한다(small-LLM 은 브레인 탭 테스트 담당).
 		await page.goto("/");
-		await expect(page.locator(".chat-panel")).toBeVisible({ timeout: 10_000 });
+		await expect(page.locator(".chat-app")).toBeVisible({ timeout: 10_000 });
 		await page.getByRole("button", { name: /^(설정|Settings)$/ }).click();
 		await page.locator(".settings-tab-btn", { hasText: /기억|Memory/i }).click();
 

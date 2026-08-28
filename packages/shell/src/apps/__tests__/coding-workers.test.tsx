@@ -23,7 +23,7 @@ vi.mock("../workspace/jeonju-course-target", () => ({
 	saveJeonjuCourseTarget,
 }));
 
-import { CodingWorkersPanel } from "../workspace/CodingWorkersPanel";
+import { CodingWorkersApp } from "../workspace/CodingWorkersApp";
 import {
 	type CodingWorker,
 	type CodingWorkersAdapter,
@@ -69,7 +69,7 @@ function fillCreateForm(worktree: string, task: string): void {
 	});
 }
 
-describe("CodingWorkersPanel", () => {
+describe("CodingWorkersApp", () => {
 	afterEach(() => {
 		cleanup();
 		setCodingWorkersAdapterFactory(() => unavailableCodingWorkersAdapter);
@@ -86,7 +86,7 @@ describe("CodingWorkersPanel", () => {
 	});
 
 	it("does not fabricate a queued worker when the Agent worker API is unavailable", async () => {
-		render(<CodingWorkersPanel adapter={unavailableCodingWorkersAdapter} />);
+		render(<CodingWorkersApp adapter={unavailableCodingWorkersAdapter} />);
 
 		await waitFor(() =>
 			expect(
@@ -115,7 +115,7 @@ describe("CodingWorkersPanel", () => {
 		const workerAdapter = adapter({
 			create: vi.fn().mockResolvedValue(queuedWorker),
 		});
-		render(<CodingWorkersPanel adapter={workerAdapter} />);
+		render(<CodingWorkersApp adapter={workerAdapter} />);
 
 		fillCreateForm(queuedWorker.worktree, queuedWorker.task);
 		fireEvent.click(screen.getByTestId("coding-worker-start"));
@@ -158,7 +158,7 @@ describe("CodingWorkersPanel", () => {
 			allowedFiles: ["index.html", "hero.svg"],
 		});
 		render(
-			<CodingWorkersPanel
+			<CodingWorkersApp
 				adapter={workerAdapter}
 				controlRoot="D:\\alpha-adk"
 			/>,
@@ -200,7 +200,7 @@ describe("CodingWorkersPanel", () => {
 		);
 		try {
 			render(
-				<CodingWorkersPanel
+				<CodingWorkersApp
 					adapter={adapter({ list })}
 					initialWorkers={[runningWorker]}
 				/>,
@@ -239,7 +239,7 @@ describe("CodingWorkersPanel", () => {
 		};
 		saveJeonjuCourseTarget.mockResolvedValue(target);
 		render(
-			<CodingWorkersPanel adapter={adapter()} controlRoot={"D:\\alpha-adk"} />,
+			<CodingWorkersApp adapter={adapter()} controlRoot={"D:\\alpha-adk"} />,
 		);
 
 		fillCreateForm(target.workspacePath, "Prepare the course page");
@@ -264,7 +264,7 @@ describe("CodingWorkersPanel", () => {
 	it("blocks a course start until the visible saved target matches the entered Git root", async () => {
 		const workerAdapter = adapter({ create: vi.fn() });
 		render(
-			<CodingWorkersPanel
+			<CodingWorkersApp
 				adapter={workerAdapter}
 				controlRoot="D:\\alpha-adk"
 			/>,
@@ -316,7 +316,7 @@ describe("CodingWorkersPanel", () => {
 		};
 		const openCourseFiles = vi.fn();
 		render(
-			<CodingWorkersPanel
+			<CodingWorkersApp
 				adapter={adapter()}
 				initialWorkers={[completedCourseWorker]}
 				onOpenCourseFiles={openCourseFiles}
@@ -358,7 +358,7 @@ describe("CodingWorkersPanel", () => {
 			allowedFiles: ["index.html", "hero.svg"],
 		});
 		render(
-			<CodingWorkersPanel
+			<CodingWorkersApp
 				adapter={workerAdapter}
 				controlRoot="D:\\alpha-adk"
 			/>,
@@ -383,7 +383,7 @@ describe("CodingWorkersPanel", () => {
 
 	it("shows the ADK control root separately and switches execution-target guidance for course mode", () => {
 		render(
-			<CodingWorkersPanel
+			<CodingWorkersApp
 				adapter={adapter()}
 				controlRoot="D:\\alpha-adk\\projects\\naia-adk"
 			/>,
@@ -419,7 +419,7 @@ describe("CodingWorkersPanel", () => {
 		const previousLocale = getLocale();
 		try {
 			setLocale("ko");
-			render(<CodingWorkersPanel adapter={adapter()} />);
+			render(<CodingWorkersApp adapter={adapter()} />);
 			fireEvent.click(screen.getByTestId("coding-worker-jeonju-course-preset"));
 
 			expect(screen.getByText("코딩 작업")).toBeInTheDocument();
@@ -449,7 +449,7 @@ describe("CodingWorkersPanel", () => {
 				}),
 		);
 		render(
-			<CodingWorkersPanel adapter={adapter()} controlRoot="D:\\alpha-adk" />,
+			<CodingWorkersApp adapter={adapter()} controlRoot="D:\\alpha-adk" />,
 		);
 
 		expect(screen.getByTestId("coding-workers-empty")).toBeInTheDocument();
@@ -492,7 +492,7 @@ describe("CodingWorkersPanel", () => {
 			allowedFiles: ["index.html", "hero.svg"],
 		});
 		render(
-			<CodingWorkersPanel
+			<CodingWorkersApp
 				adapter={workerAdapter}
 				controlRoot="D:\\alpha-adk"
 			/>,
@@ -517,7 +517,7 @@ describe("CodingWorkersPanel", () => {
 			list: vi.fn().mockResolvedValue([runningWorker]),
 		});
 		render(
-			<CodingWorkersPanel
+			<CodingWorkersApp
 				adapter={workerAdapter}
 				initialWorkers={[runningWorker]}
 			/>,
@@ -556,7 +556,7 @@ describe("CodingWorkersPanel", () => {
 				.mockResolvedValue({ ...resumableWorker, state: "running" }),
 		});
 		render(
-			<CodingWorkersPanel
+			<CodingWorkersApp
 				adapter={workerAdapter}
 				initialWorkers={[runningWorker, resumableWorker, completedWorker]}
 			/>,

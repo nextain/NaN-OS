@@ -1,7 +1,7 @@
 /**
- * Panel behavior log — Shell WebView IndexedDB.
+ * App behavior log — Shell WebView IndexedDB.
  *
- * Stores structured behavior events from iframe panels.
+ * Stores structured behavior events from iframe apps.
  * Intentionally separate from Rust SQLite to avoid new Rust state.
  *
  * Auto-purges entries older than PURGE_DAYS on open.

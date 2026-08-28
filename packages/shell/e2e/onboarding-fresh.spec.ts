@@ -84,7 +84,7 @@ function buildMockScript() {
         if (cmd === "detect_gpu_vram") return 6;
         if (cmd === "list_skills") return [];
         if (cmd === "list_stt_models") return [];
-        if (cmd === "panel_list_installed") return [];
+        if (cmd === "app_list_installed") return [];
         if (cmd === "plugin:window|get_cursor_position" || cmd === "plugin:window|start_resize_dragging") return null;
         if (cmd === "plugin:window|is_maximized") return false;
         if (cmd === "plugin:window|show") return;
@@ -129,8 +129,8 @@ async function setupFreshOnboarding(page: import("@playwright/test").Page) {
 	});
 	await page.goto("/");
 	// Splash screen dismisses after 5s timeout (avatar won't load in test env).
-	// Then onboarding-panel renders inside right-content--onboarding.
-	await expect(page.locator(".onboarding-panel")).toBeVisible({
+	// Then onboarding-app renders inside right-content--onboarding.
+	await expect(page.locator(".onboarding-app")).toBeVisible({
 		timeout: 15_000,
 	});
 	if ((await page.locator('input[placeholder="Naia"]').count()) === 0) {
@@ -220,7 +220,7 @@ test.describe("Fresh onboarding flow", () => {
 			"../../tmp/naia-shell-windows-hardening",
 		);
 		mkdirSync(screenshotDir, { recursive: true });
-		await page.locator(".onboarding-panel").screenshot({
+		await page.locator(".onboarding-app").screenshot({
 			path: path.join(screenshotDir, "onboarding-video-thumbnail.png"),
 		});
 		await clickNext(page);

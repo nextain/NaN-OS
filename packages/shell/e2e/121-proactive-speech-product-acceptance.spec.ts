@@ -185,7 +185,7 @@ async function setup(page: Page, ttsProvider: "browser" | "edge") {
 		);
 	}
 	await page.goto("/");
-	await expect(page.locator(".chat-panel")).toBeVisible({ timeout: 10_000 });
+	await expect(page.locator(".chat-app")).toBeVisible({ timeout: 10_000 });
 	await page.waitForTimeout(150);
 }
 

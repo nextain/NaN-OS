@@ -21,8 +21,8 @@ describe("63 — sessions actions", () => {
 		await ensureAppReady();
 		await clickBySelector(S.agentsTabBtn);
 		try {
-			const panel = await $(S.agentsTabPanel);
-			await panel.waitForDisplayed({ timeout: 10_000 });
+			const app = await $(S.agentsTabApp);
+			await app.waitForDisplayed({ timeout: 10_000 });
 			tabAvailable = true;
 		} catch {
 			tabAvailable = false;

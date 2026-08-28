@@ -303,7 +303,7 @@ export async function ensureAppReady(): Promise<void> {
 						enableTools: true,
 						locale: config.locale || "ko",
 						onboardingComplete: true,
-						panelVisible: true,
+						appVisible: true,
 					});
 				} else {
 					Object.assign(config, {
@@ -318,7 +318,7 @@ export async function ensureAppReady(): Promise<void> {
 						enableTools: true,
 						locale: config.locale || "ko",
 						onboardingComplete: true,
-						panelVisible: true,
+						appVisible: true,
 					});
 				}
 				localStorage.setItem("naia-config", JSON.stringify(config));
@@ -340,21 +340,21 @@ export async function ensureAppReady(): Promise<void> {
 			}
 		}
 	} else {
-		// Even if already configured, ensure the panel is visible so tabs render.
-		// A stored config with panelVisible:false would block all tab-based waits.
-		const panelWasHidden = await browser.execute(() => {
+		// Even if already configured, ensure the app is visible so tabs render.
+		// A stored config with appVisible:false would block all tab-based waits.
+		const appWasHidden = await browser.execute(() => {
 			const raw = localStorage.getItem("naia-config");
 			if (!raw) return false;
 			const config = JSON.parse(raw);
-			if (config.panelVisible === false) {
-				config.panelVisible = true;
+			if (config.appVisible === false) {
+				config.appVisible = true;
 				localStorage.setItem("naia-config", JSON.stringify(config));
 				return true;
 			}
 			return false;
 		});
-		// If we changed panelVisible, refresh so React picks up the new state.
-		if (panelWasHidden) {
+		// If we changed appVisible, refresh so React picks up the new state.
+		if (appWasHidden) {
 			for (let attempt = 0; attempt < 3; attempt++) {
 				try {
 					await browser.refresh();
@@ -362,7 +362,7 @@ export async function ensureAppReady(): Promise<void> {
 				} catch {
 					if (attempt === 2)
 						throw new Error(
-							"browser.refresh() failed after 3 attempts in ensureAppReady (panelVisible fix)",
+							"browser.refresh() failed after 3 attempts in ensureAppReady (appVisible fix)",
 						);
 					await browser.pause(2_000);
 				}
@@ -385,7 +385,7 @@ export async function ensureAppReady(): Promise<void> {
 			),
 		{ timeout: 60_000 },
 	);
-	// jikime c0d967e9 baseline 의 ChatPanel.tsx 는 chat-tabs 안에 button.chat-tab
+	// jikime c0d967e9 baseline 의 ChatApp.tsx 는 chat-tabs 안에 button.chat-tab
 	// 3개 (chat / history / channels). origin/main 의 #337 시리즈에서 8 tab 으로
 	// 확장됐던 helper 가 cherry-pick 으로 baseline 위에 그대로 들어옴 = mismatch.
 	// 3 tab 이 baseline 의 정확한 contract. (debug log 에서 무한 false 확인.)

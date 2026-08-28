@@ -2,14 +2,14 @@ use serde::{Deserialize, Serialize};
 
 use crate::home_dir;
 
-/// Panel manifest stored in ~/.naia/apps/{id}/app.json
+/// App manifest stored in ~/.naia/apps/{id}/app.json
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct AppManifest {
     pub id: String,
     pub name: String,
     pub description: Option<String>,
     pub icon: Option<String>,
-    /// Path to SVG icon file, relative to panel directory (e.g. "icon.svg")
+    /// Path to SVG icon file, relative to app directory (e.g. "icon.svg")
     #[serde(rename = "iconUrl", skip_serializing_if = "Option::is_none")]
     pub icon_url: Option<String>,
     /// Inline SVG content — populated at load time from iconUrl, not stored in app.json
@@ -21,9 +21,9 @@ pub struct AppManifest {
     pub icon_svg: Option<String>,
     pub names: Option<std::collections::HashMap<String, String>>,
     pub version: Option<String>,
-    /// Tools the panel exposes to Naia. Declared statically in app.json so the
+    /// Tools the app exposes to Naia. Declared statically in app.json so the
     /// Shell can register proxy stubs with the Agent; actual execution is routed
-    /// to the panel iframe via postMessage (GenericInstalledApp).
+    /// to the app iframe via postMessage (GenericInstalledApp).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tools: Option<Vec<AppToolSpec>>,
     /// Absolute path to index.html if present — used for iframe rendering
@@ -35,7 +35,7 @@ pub struct AppManifest {
     pub html_entry: Option<String>,
 }
 
-/// A tool an installed panel exposes to Naia.
+/// A tool an installed app exposes to Naia.
 /// Mirrors the shell `NaiaTool` shape — forwarded verbatim to the Agent.
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct AppToolSpec {
@@ -59,8 +59,8 @@ fn apps_root(home: &std::path::Path) -> std::path::PathBuf {
     home.join(".naia").join("apps")
 }
 
-fn legacy_panels_root(home: &std::path::Path) -> std::path::PathBuf {
-    home.join(".naia").join("panels")
+fn legacy_apps_root(home: &std::path::Path) -> std::path::PathBuf {
+    home.join(".naia").join("apps")
 }
 
 fn valid_app_id(id: &str) -> bool {
@@ -73,10 +73,10 @@ fn valid_app_id(id: &str) -> bool {
             .all(|c| c.is_alphanumeric() || c == '-' || c == '_')
 }
 
-/// Move valid legacy `~/.naia/panels/*` installs into the canonical app store.
+/// Move valid legacy `~/.naia/apps/*` installs into the canonical app store.
 /// Existing canonical ids win; symlinks and malformed manifests are left untouched.
 fn migrate_legacy_apps(home: &std::path::Path) -> Result<usize, String> {
-    let legacy_root = legacy_panels_root(home);
+    let legacy_root = legacy_apps_root(home);
     if !legacy_root.is_dir() {
         return Ok(0);
     }
@@ -137,7 +137,7 @@ fn list_installed_at(home_path: &std::path::Path) -> Result<Vec<AppManifest>, St
         return Ok(Vec::new());
     }
 
-    let mut panels: Vec<AppManifest> = Vec::new();
+    let mut apps: Vec<AppManifest> = Vec::new();
 
     let entries = match std::fs::read_dir(&apps_dir) {
         Ok(e) => e,
@@ -174,13 +174,13 @@ fn list_installed_at(home_path: &std::path::Path) -> Result<Vec<AppManifest>, St
             manifest.html_entry = html_path.to_string_lossy().into_owned().into();
         }
 
-        panels.push(manifest);
+        apps.push(manifest);
     }
 
-    Ok(panels)
+    Ok(apps)
 }
 
-/// Read a file on behalf of an iframe panel.
+/// Read a file on behalf of an iframe app.
 /// Restricted to files inside the user's HOME directory (max 1 MB).
 /// Called from iframe-bridge.ts → Tauri invoke("app_read_file").
 #[tauri::command]
@@ -207,7 +207,7 @@ pub fn app_read_file(path: String) -> Result<String, String> {
     std::fs::read_to_string(&canonical).map_err(|e| format!("Failed to read file: {}", e))
 }
 
-/// Shell result returned to the iframe panel.
+/// Shell result returned to the iframe app.
 #[derive(Debug, Serialize)]
 pub struct AppShellResult {
     pub stdout: String,
@@ -259,7 +259,7 @@ fn windows_cmd_args(cmd: &str, args: &[String]) -> Vec<String> {
     }
 }
 
-/// Run an allowlisted shell command on behalf of an iframe panel.
+/// Run an allowlisted shell command on behalf of an iframe app.
 /// Uses absolute command paths (no PATH lookup). cwd is always HOME.
 /// Called from iframe-bridge.ts → Tauri invoke("app_run_shell").
 #[tauri::command]
@@ -311,11 +311,11 @@ pub fn app_run_shell(cmd: String, args: Vec<String>) -> Result<AppShellResult, S
     })
 }
 
-/// Remove an installed panel by its app id.
+/// Remove an installed app by its app id.
 ///
 /// Scans `~/.naia/apps/*/app.json` and removes every directory whose
 /// manifest `id` matches — this is robust to the directory name differing from
-/// the id (e.g. a repo cloned as `naia-memo-panel` but whose app.json
+/// the id (e.g. a repo cloned as `naia-memo-app` but whose app.json
 /// declares `id: "memo"`). Mirrors the legacy agent `actionRemove` logic.
 #[tauri::command]
 pub fn app_remove_installed(app_id: String) -> Result<(), String> {
@@ -341,7 +341,7 @@ fn remove_installed_at(home_path: &std::path::Path, app_id: &str) -> Result<(), 
     }
 
     for entry in
-        std::fs::read_dir(&apps_root).map_err(|e| format!("Failed to read panels dir: {}", e))?
+        std::fs::read_dir(&apps_root).map_err(|e| format!("Failed to read apps dir: {}", e))?
     {
         let entry = match entry {
             Ok(e) => e,
@@ -407,7 +407,7 @@ mod tests {
     #[test]
     fn legacy_install_migrates_to_canonical_apps_store_and_can_be_removed() {
         let home = tempfile::tempdir().unwrap();
-        let legacy = legacy_panels_root(home.path());
+        let legacy = legacy_apps_root(home.path());
         let old = write_app(&legacy, "old-repo-name", "notes");
 
         assert_eq!(migrate_legacy_apps(home.path()).unwrap(), 1);
@@ -428,7 +428,7 @@ mod tests {
     fn canonical_duplicate_wins_without_deleting_legacy_data() {
         let home = tempfile::tempdir().unwrap();
         let canonical = write_app(&apps_root(home.path()), "notes", "notes");
-        let legacy = write_app(&legacy_panels_root(home.path()), "old-notes", "notes");
+        let legacy = write_app(&legacy_apps_root(home.path()), "old-notes", "notes");
 
         assert_eq!(migrate_legacy_apps(home.path()).unwrap(), 0);
         assert!(canonical.exists());
@@ -458,7 +458,7 @@ mod tests {
     }
 }
 
-/// Result of a successful panel install.
+/// Result of a successful app install.
 #[derive(Debug, Serialize)]
 pub struct AppInstallResult {
     pub id: String,
@@ -466,7 +466,7 @@ pub struct AppInstallResult {
     pub path: String,
 }
 
-/// Derive a panel directory name from a Git URL.
+/// Derive a app directory name from a Git URL.
 /// Strips query/hash, trailing slash and ".git", then takes the last path segment.
 fn derive_app_name(source: &str) -> String {
     let s = source.trim();
@@ -481,14 +481,14 @@ fn derive_app_name(source: &str) -> String {
     seg.to_string()
 }
 
-/// Install a panel from a Git URL into `~/.naia/apps/{panel-id}/`.
+/// Install a app from a Git URL into `~/.naia/apps/{app-id}/`.
 ///
-/// Ported from the legacy agent skill `agent/src/skills/built-in/panel.ts`
+/// Ported from the legacy agent skill `agent/src/skills/built-in/app.ts`
 /// (#89, with #257 HTTPS-only hardening) into a shell-side Tauri command —
-/// panel install is a filesystem operation, not an AI task, so it belongs in
+/// app install is a filesystem operation, not an AI task, so it belongs in
 /// the shell rather than being routed through the agent.
 ///
-/// The directory name is the panel **id** (read from the cloned `app.json`),
+/// The directory name is the app **id** (read from the cloned `app.json`),
 /// NOT the repo name. This keeps `app_remove_installed` (which matches by id)
 /// consistent: dir name == id == canonical identifier.
 ///
@@ -505,7 +505,7 @@ pub fn app_install(source: String) -> Result<AppInstallResult, String> {
     // #257: HTTPS-only.
     if !source.starts_with("https://") {
         return Err(format!(
-            "지원하지 않는 소스입니다. HTTPS Git URL만 설치할 수 있습니다\n(예: https://github.com/org/panel.git).\n받은 소스: {}",
+            "지원하지 않는 소스입니다. HTTPS Git URL만 설치할 수 있습니다\n(예: https://github.com/org/app.git).\n받은 소스: {}",
             source
         ));
     }
@@ -529,7 +529,7 @@ pub fn app_install(source: String) -> Result<AppInstallResult, String> {
     std::fs::create_dir_all(&apps_root).map_err(|e| format!("앱 디렉토리 생성 실패: {}", e))?;
 
     // Temp clone target *inside* apps_root (same volume → rename is atomic).
-    // Leading-dot prefix keeps it out of the installed-panel list while cloning.
+    // Leading-dot prefix keeps it out of the installed-app list while cloning.
     let tmp = apps_root.join(format!(".~install-{}", derived));
     if tmp.exists() {
         let _ = std::fs::remove_dir_all(&tmp); // clear stale partial clone

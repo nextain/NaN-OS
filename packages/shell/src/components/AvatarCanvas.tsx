@@ -40,17 +40,17 @@ const _cameraActions = getCameraActions();
 
 const LOOK_AT_TARGET = { x: 0, y: 0, z: -1 };
 
-// Compute camera filmOffset so world x=0 projects to the chat panel center.
+// Compute camera filmOffset so world x=0 projects to the chat app center.
 // filmOffset > 0 shifts the frustum right → scene objects appear to the left on screen.
 //
-// Chat panel (.naia-chat-area): left=8px, width=naiaWidth-16px → center = naiaWidth/2 px.
+// Chat app (.naia-chat-area): left=8px, width=naiaWidth-16px → center = naiaWidth/2 px.
 //   targetNDC = 2 * (naiaWidth/2) / canvasWidth - 1 = naiaWidth/canvasWidth - 1
 //   filmOffset = -targetNDC * tan(fov/2) * aspect * filmGauge
 function computeFilmOffset(camera: PerspectiveCamera, canvasWidth: number): number {
 	const naiaWidth = parseFloat(
 		getComputedStyle(document.documentElement).getPropertyValue("--naia-width"),
 	) || 320;
-	// NDC of the chat panel center = naiaWidth/2 pixels from left
+	// NDC of the chat app center = naiaWidth/2 pixels from left
 	const targetNDC = naiaWidth / canvasWidth - 1;
 	const halfFovTan = Math.tan((camera.fov * Math.PI) / 360);
 	const aspect = camera.aspect > 0 ? camera.aspect : canvasWidth / 1;
@@ -59,7 +59,7 @@ function computeFilmOffset(camera: PerspectiveCamera, canvasWidth: number): numb
 const MAX_DELTA = 0.05;
 const CAMERA_STORAGE_KEY = "naia-camera-v20";
 const DEFAULT_CAMERA = {
-	// X=0: filmOffset already centers world-origin on the naia column → auto-aligns with chat panel.
+	// X=0: filmOffset already centers world-origin on the naia column → auto-aligns with chat app.
 	position: { x: 0, y: 1.27, z: -1.83 },
 	target: { x: 0, y: 1.09, z: -0.02 },
 };
@@ -331,7 +331,7 @@ export function AvatarCanvas() {
 			controls.update();
 		};
 		_cameraActions.reset = () => {
-			// X: use VRM model center X for auto-alignment with chat panel (filmOffset centers x=0).
+			// X: use VRM model center X for auto-alignment with chat app (filmOffset centers x=0).
 			const centerX = lastModelCenter ? lastModelCenter.x : DEFAULT_CAMERA.target.x;
 			camera.position.set(centerX, DEFAULT_CAMERA.position.y, DEFAULT_CAMERA.position.z);
 			controls.target.set(centerX, DEFAULT_CAMERA.target.y, DEFAULT_CAMERA.target.z);

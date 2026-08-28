@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 import { SEED_ADK_PATH, TAURI_BASE_MOCK_FALLBACK } from "./helpers/tauri-base-mock";
 
 /**
- * UC1 통합 E2E — *실제 셸 UI*(ChatPanel + chat-service + 새 hexagonal core)를 자동 구동해
+ * UC1 통합 E2E — *실제 셸 UI*(ChatApp + chat-service + 새 hexagonal core)를 자동 구동해
  * "사용자 한 줄 입력 → 스트리밍 응답"이 **새 core 경유**로 끝까지 manifest 되는지 기계가 판정.
  *
  * 왜 이 테스트가 필요한가(회귀 방지 앵커):
@@ -109,12 +109,12 @@ async function boot(page: import("@playwright/test").Page, cfg: Record<string, u
 	await page.addInitScript({ content: SEED_ADK_PATH });
 	await page.addInitScript({ content: configScript(cfg) });
 	await page.goto("/");
-	await expect(page.locator(".chat-panel")).toBeVisible({ timeout: 10_000 });
+	await expect(page.locator(".chat-app")).toBeVisible({ timeout: 10_000 });
 }
 
 test.describe("UC1 — 텍스트 모델 → 새 core 경유", () => {
 	test.beforeEach(async ({ page }) => {
-		// gemini = 비-omni → ChatPanel 이 sendChatMessage 경로 사용(omni early-return 미해당).
+		// gemini = 비-omni → ChatApp 이 sendChatMessage 경로 사용(omni early-return 미해당).
 		await boot(page, {
 			provider: "gemini",
 			model: "gemini-2.5-flash",
@@ -156,7 +156,7 @@ test.describe("UC1 — 텍스트 모델 → 새 core 경유", () => {
 test.describe("UC1 라우팅 가드 — omni 모델 → realtime 우회", () => {
 	test.beforeEach(async ({ page, context }) => {
 		await context.grantPermissions(["microphone"]).catch(() => {});
-		// naia omni 모델 = isOmniModel true → ChatPanel 784: sendChatMessage 전에 realtime WS 로 early-return.
+		// naia omni 모델 = isOmniModel true → ChatApp 784: sendChatMessage 전에 realtime WS 로 early-return.
 		await boot(page, {
 			provider: "nextain",
 			model: "naia-0.9-omni-24g",

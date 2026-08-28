@@ -1,0 +1,24 @@
+{
+  "verdict": "NOT_CLEAN",
+  "frame_assessment": {
+    "scope_is_sufficient": false,
+    "missing_concerns": [
+      "FR-ENV-ATTENTION.15가 명시한 네 실측값의 양방향 ±8% 회귀 검증이 실제 테스트에 구현되지 않았다."
+    ]
+  },
+  "findings": [
+    {
+      "id": "ENV-COST-BOUNDS-ASYMMETRIC",
+      "file_location": "src/test/environment-live-wiring.contract.test.ts:449,476-479; docs/requirements.md:1047",
+      "impact": "전체 세그먼트 크기가 상한 없이 증가하거나, 40턴 auto 총량이 하한 없이 크게 감소해도 계약 테스트가 통과한다. 예를 들어 always 경로에 큰 부가 필드를 추가하거나 watch 예산을 축소해 13070바이트보다 훨씬 작게 만들 수 있다.",
+      "why_it_matters": "요구사항과 이번 회차 설명은 1187, 77, 47480, 13070 네 값을 모두 ±8% 범위의 위·아래 경계로 고정했다고 주장한다. 실제로는 withheld 77만 양방향이고, full 1187과 always 총량 47480에는 하한만, auto 총량 13070에는 상한만 있다. 따라서 새 임계가 주장하는 회귀 방지 능력을 갖추지 못했으며 테스트가 다른 것을 재는 문제가 남아 있다.",
+      "severity": "medium"
+    }
+  ],
+  "what_would_make_it_clean": [
+    "1187바이트 full 값에 ±8% 상한을 추가한다.",
+    "47480바이트 always 40턴 총량에 ±8% 상한을 추가한다.",
+    "13070바이트 auto 40턴 총량에 ±8% 하한을 추가한다.",
+    "각 누락 경계를 벗어나는 변이를 적용했을 때 해당 테스트가 실제로 실패하는지 확인한다."
+  ]
+}

@@ -138,7 +138,7 @@ test.describe("voice warm-up on apply — real engine", () => {
 		);
 
 		await page.goto("/");
-		await expect(page.locator(".chat-panel")).toBeVisible({ timeout: 20_000 });
+		await expect(page.locator(".chat-app")).toBeVisible({ timeout: 20_000 });
 
 		// Settings → voice → open the preset picker (live cloud catalog).
 		await page.getByRole("button", { name: /^(설정|Settings)$/ }).click();

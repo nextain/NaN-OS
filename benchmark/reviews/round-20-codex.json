@@ -1,0 +1,23 @@
+{
+  "verdict": "NOT_CLEAN",
+  "frame_assessment": {
+    "scope_is_sufficient": true,
+    "missing_concerns": [
+      "도구 선언을 포함한 비용 수치가 현재 구현에서 실제로 직렬화되는 값과 일치하는지 검증하지 않았다."
+    ]
+  },
+  "findings": [
+    {
+      "id": "R20-COST-TOTALS-USE-STALE-HARDCODED-SEGMENT-SIZES",
+      "file_location": "packages/shell/src/lib/__tests__/environment-skill.test.ts:542; docs/requirements.md:1050; docs/user-scenarios.md:1357",
+      "impact": "요구사항은 도구 선언 포함 비용을 2607→1497바이트, 42.6% 절감이라고 확정하지만, 같은 테스트가 현재 선언을 약 1509바이트라고 측정한다. 여기에 명시된 세그먼트 크기 1187/77을 더하면 실제 계산은 2696→1586바이트, 약 41.2%다. 테스트는 세그먼트 크기를 실제 객체에서 재지 않고 1187과 77로 하드코딩하며, 절감률도 35~50%라는 넓은 범위만 확인하므로 문서의 잘못된 정확 수치가 그대로 통과한다.",
+      "why_it_matters": "19회차 조치는 작성자에게 유리한 비용 경계를 바로잡기 위한 것이었지만, 현재 게이트는 문서에 제시한 총비용과 절감률을 검증하지 않는다. 구현이 바뀌어도 하드코딩된 과거 세그먼트 크기와 넓은 비율 범위로 통과할 수 있어, '도구 선언까지 포함한 실제 수치를 함께 적고 고정했다'는 커버리지 주장이 성립하지 않는다.",
+      "severity": "medium"
+    }
+  ],
+  "what_would_make_it_clean": [
+    "테스트에서 현재 SKILL_ENVIRONMENT 선언과 현재 12개 표면의 always/auto 세그먼트를 직접 직렬화해 총비용과 절감률을 계산한다.",
+    "그 실측값을 위아래 경계로 고정하고, docs/requirements.md와 docs/user-scenarios.md의 2607→1497 및 42.6%를 현재 값으로 정정한다.",
+    "문서에 적힌 정확 총비용과 절감률이 테스트 계산 결과와 일치한다는 단언을 추가한다."
+  ]
+}

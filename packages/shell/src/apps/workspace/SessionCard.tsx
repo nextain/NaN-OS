@@ -19,7 +19,7 @@ export interface SessionInfo {
 interface SessionCardProps {
 	session: SessionInfo;
 	onClick: (session: SessionInfo) => void;
-	/** Highlight this card (triggered by Panel API focusSession) */
+	/** Highlight this card (triggered by App API focusSession) */
 	highlighted?: boolean;
 }
 

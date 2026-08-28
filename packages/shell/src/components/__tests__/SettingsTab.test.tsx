@@ -1140,7 +1140,7 @@ describe("SettingsTab", () => {
 			document.querySelector(".settings-danger-zone .settings-reset-btn")!,
 		);
 		fireEvent.click(
-			document.querySelector(".reset-confirm-panel .settings-reset-btn")!,
+			document.querySelector(".reset-confirm-app .settings-reset-btn")!,
 		);
 
 		expect(await screen.findByRole("alert")).toHaveTextContent(
@@ -1881,7 +1881,7 @@ describe("SettingsTab — memory tab (#298)", () => {
 		);
 		fireEvent.click(document.querySelector(".lab-disconnect-btn")!);
 		fireEvent.click(
-			document.querySelector(".reset-confirm-panel .settings-reset-btn")!,
+			document.querySelector(".reset-confirm-app .settings-reset-btn")!,
 		);
 
 		await vi.waitFor(() => {
@@ -2442,7 +2442,7 @@ describe("SettingsTab — memory tab (#298)", () => {
 	});
 });
 
-// ── #296: Agent health check panel ───────────────────────────────────────────
+// ── #296: Agent health check app ───────────────────────────────────────────
 
 describe("SettingsTab — agent health check (#296)", () => {
 	afterEach(() => {

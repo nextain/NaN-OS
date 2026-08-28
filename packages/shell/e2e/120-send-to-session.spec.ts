@@ -94,10 +94,10 @@ const TAURI_MOCK_SCRIPT = `
 		}],
 	};
 
-	function buildPanelToolCallResponse(requestId, toolName, args, followUpText) {
+	function buildAppToolCallResponse(requestId, toolName, args, followUpText) {
 		var tcId = "ptc-1";
 		return [
-			{ type: "panel_tool_call", requestId: requestId, toolCallId: tcId, toolName: toolName, args: args },
+			{ type: "app_tool_call", requestId: requestId, toolCallId: tcId, toolName: toolName, args: args },
 			{ type: "text", requestId: requestId, text: followUpText },
 			{ type: "finish", requestId: requestId, cost: { cost: 0.001, inputTokens: 10, outputTokens: 20 } },
 		];
@@ -123,7 +123,7 @@ const TAURI_MOCK_SCRIPT = `
 
 		if (cmd === "send_to_agent_command") {
 			var msg = JSON.parse(args.message);
-			if (msg.type === "panel_tool_result") return;
+			if (msg.type === "app_tool_result") return;
 			var requestId = msg.requestId;
 			var lastMsg = msg.messages && msg.messages[msg.messages.length - 1];
 			var rawContent = lastMsg && lastMsg.content ? lastMsg.content : "";
@@ -135,11 +135,11 @@ const TAURI_MOCK_SCRIPT = `
 			var content = contentStr.toLowerCase();
 			var chunks;
 			if (content.indexOf("터미널") !== -1 || content.indexOf("terminal") !== -1) {
-				chunks = buildPanelToolCallResponse(requestId, "skill_workspace_new_session",
+				chunks = buildAppToolCallResponse(requestId, "skill_workspace_new_session",
 					{ dir: "${FAKE_DIR}" },
 					"터미널을 열었어요!");
 			} else if (content.indexOf("stdin") !== -1 || content.indexOf("send") !== -1) {
-				chunks = buildPanelToolCallResponse(requestId, "skill_workspace_send_to_session",
+				chunks = buildAppToolCallResponse(requestId, "skill_workspace_send_to_session",
 					{ dir: "${FAKE_DIR}", text: ${JSON.stringify(SEND_TEXT)} },
 					"터미널에 입력을 전송했어요!");
 			} else {
@@ -161,7 +161,7 @@ const TAURI_MOCK_SCRIPT = `
 		if (cmd === "frontend_log") return;
 		if (cmd === "list_skills") return [];
 		if (cmd === "list_stt_models") return [];
-		if (cmd === "panel_list_installed") return [];
+		if (cmd === "app_list_installed") return [];
 		if (cmd === "herdr_pty_create") return { pty_id: "herdr-send-e2e", pid: 42 };
 		if (cmd === "herdr_snapshot") return JSON.parse(JSON.stringify(herdrSnapshot));
 		if (cmd === "herdr_prompt_agent") {
@@ -188,8 +188,8 @@ const TAURI_MOCK_SCRIPT = `
 })();
 `;
 
-async function openWorkspacePanel(page: Page): Promise<void> {
-	const tab = page.locator('button[data-panel-id="workspace"]');
+async function openWorkspaceApp(page: Page): Promise<void> {
+	const tab = page.locator('button[data-app-id="workspace"]');
 	await expect(tab).toBeVisible({ timeout: 10_000 });
 	await tab.click();
 	await expect(page.getByTestId("herdr-workspace")).toBeVisible({
@@ -236,13 +236,13 @@ test.describe("skill_workspace_send_to_session E2E — #120", () => {
 			);
 		});
 		await page.goto("/");
-		await expect(page.locator(".chat-panel")).toBeVisible({ timeout: 10_000 });
+		await expect(page.locator(".chat-app")).toBeVisible({ timeout: 10_000 });
 	});
 
 	test("SS1: skill_workspace_send_to_session → 포커스된 Herdr agent에 prompt 전달", async ({
 		page,
 	}) => {
-		await openWorkspacePanel(page);
+		await openWorkspaceApp(page);
 		await sendMessage(page, "stdin 보내줘");
 		await page.waitForFunction(
 			() => (window as any).__NAIA_E2E__?.lastHerdrPromptCall !== null,
