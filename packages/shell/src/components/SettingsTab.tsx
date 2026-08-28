@@ -1026,6 +1026,14 @@ export function SettingsTab() {
 		} as unknown as Record<string, unknown>);
 		await writeSlotsManifest(fallbackConfig, detectedVramGb ?? undefined);
 	};
+	// #507: a local-voice revert must never be silent. Publish the reason on
+	// BOTH surfaces — voxcpm2InstallError renders in the voice tab even after
+	// the provider rolled back, and the profile voice slot group shows the same
+	// message right next to the selector that triggered the attempt.
+	const surfaceLocalVoiceRevert = (message: string) => {
+		setCascadeMsg(message);
+		setVoxcpm2InstallError(message);
+	};
 	async function recoverRejectedVoxCpm2Credential(): Promise<void> {
 		clearLocalVoiceAccessToken();
 		try {
@@ -1063,11 +1071,23 @@ export function SettingsTab() {
 		if (voxcpm2Installation?.canStart !== false) return;
 		const cfg = loadConfig();
 		if (!cfg || cfg.ttsProvider !== "naia-local-voice") return;
-		void rollbackLocalVoiceSelection(cfg, {}, true).catch((error) => {
-			Logger.warn("Settings", "Blocked local voice normalization failed", {
-				error: String(error),
+		const blockedSummary = voxcpm2Installation?.summary?.trim() ?? "";
+		void rollbackLocalVoiceSelection(cfg, {}, true)
+			.then(() => {
+				// #507: this normalization used to be silent — the saved host-voice
+				// selection just disappeared into browser voice. Say what happened
+				// and why, so the revert is observable instead of mysterious.
+				surfaceLocalVoiceRevert(
+					`${t("settings.localVoiceBlockedReverted")}${
+						blockedSummary ? ` (${blockedSummary})` : ""
+					}`,
+				);
+			})
+			.catch((error) => {
+				Logger.warn("Settings", "Blocked local voice normalization failed", {
+					error: String(error),
+				});
 			});
-		});
 	}, [voxcpm2Installation]);
 	const ensureLocalVoiceReady = async (
 		normalizeFailedLocal = false,
@@ -1162,8 +1182,11 @@ export function SettingsTab() {
 					restoreMigrationNotice,
 					normalizeFailedLocal,
 				);
-				setCascadeMsg(start.message ?? t("settings.cascadeError"));
-				setVoxcpm2InstallError(start.message ?? t("settings.cascadeError"));
+				surfaceLocalVoiceRevert(
+					`${start.message ?? t("settings.cascadeError")} — ${t(
+						"settings.localVoiceSelectionReverted",
+					)}`,
+				);
 				return false;
 			}
 			const localUrl = localVoiceFacadeUrlFromReady(start.ready);
@@ -1194,8 +1217,11 @@ export function SettingsTab() {
 				setCascadeMsg(t("settings.ttsNaiaRequired"));
 				setVoxcpm2InstallError(t("settings.ttsNaiaRequired"));
 			} else {
-				setCascadeMsg(`${t("settings.cascadeError")}: ${String(e)}`);
-				setVoxcpm2InstallError(`${t("settings.cascadeError")}: ${String(e)}`);
+				surfaceLocalVoiceRevert(
+					`${t("settings.cascadeError")}: ${String(e)} — ${t(
+						"settings.localVoiceSelectionReverted",
+					)}`,
+				);
 			}
 			return false;
 		} finally {
@@ -4209,6 +4235,19 @@ export function SettingsTab() {
 													>
 														{t("settings.slot.editVoice")}
 													</button>
+													{/* #507: 프로필 탭엔 실패/진행 표면이 없어 revert 가 무언이었다.
+													    선택 트랜잭션의 진행·실패·되돌림 사유를 셀렉터 옆에서 보여준다. */}
+													{(cascadeBusy || voxcpm2InstallError || cascadeMsg) && (
+														<div
+															className="settings-hint"
+															data-testid="profile-voice-status"
+															style={{ flexBasis: "100%", overflowWrap: "anywhere" }}
+														>
+															{cascadeBusy
+																? t("settings.cascadeBusy")
+																: voxcpm2InstallError || cascadeMsg}
+														</div>
+													)}
 												</>
 											)}
 											{group.id === "avatar" && (

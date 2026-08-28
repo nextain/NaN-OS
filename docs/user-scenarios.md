@@ -930,6 +930,7 @@ Test Coverage Map: `lib/tts/__tests__/text-filter.test.ts`가 공통/언어/fall
 - YouTube BGM을 재생해도 재생이 실제 확인되기 전에는 기존 배경이 그대로 보이고, 임베드가 실패하면 검은 화면 대신 기존 배경으로 돌아온다.
 - 유튜브 즐겨찾기는 앱을 재설치·업데이트하거나 개발빌드↔설치본을 오가도 워크스페이스(naia-settings)를 따라 유지되며, 기존 localStorage 즐겨찾기는 첫 실행에서 자동 이전된다.
 - Herdr가 준비되지 않아도 파일 트리는 열리며, 로컬 OpenAI 호환 Base URL과 `naia <file>` 흐름도 같은 후보 빌드에서 동작한다.
+- 설치를 마친 Host 음성은 설정에서 선택하는 즉시 자동 시작되고, 시작 실패나 차단 시 사유와 되돌림 안내가 프로필·음성 화면에 보인다. 무언 revert 는 없다. (#507)
 
 Test Coverage Map: 관련 단위·컴포넌트 테스트만으로 완료하지 않는다. `v0.2.2` 버전과 리소스를 가진 동일 debug/release 후보를 시작해 Playwright UI 여정과 Windows Tauri smoke를 모두 통과해야 한다.
 ## 2026-08-26 워크스페이스 컨텍스트 해석 (#501, 에픽 #497)

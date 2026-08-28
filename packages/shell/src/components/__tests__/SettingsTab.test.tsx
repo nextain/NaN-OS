@@ -1625,6 +1625,115 @@ describe("SettingsTab — memory tab (#298)", () => {
 		});
 	});
 
+	it("#507: selecting Local voice on an installed engine auto-starts without reverting", async () => {
+		localStorage.setItem("naia-adk-path", "D:\\alpha-adk");
+		localStorage.setItem(
+			"naia-config",
+			JSON.stringify({
+				provider: "nextain",
+				model: "gemini-3.5-flash",
+				naiaKey: "nk",
+				ttsProvider: "edge",
+				ttsEnabled: false,
+				localVoiceEnabled: false,
+			}),
+		);
+		let started = false;
+		mockInvoke.mockImplementation((command: string) => {
+			if (command === "detect_gpu_vram") return Promise.resolve(8);
+			if (command === "voxcpm2_status") return Promise.resolve(false);
+			if (command === "voxcpm2_installation_status")
+				return Promise.resolve({
+					phase: started ? "ready" : "ready-to-start",
+					ready: started,
+					canStart: true,
+					summary: "Local runtime files are ready.",
+					steps: [],
+				});
+			if (command === "start_voxcpm2") {
+				started = true;
+				return Promise.resolve(JSON.stringify({ facade_port: 8910 }));
+			}
+			return Promise.resolve([]);
+		});
+
+		render(<SettingsTab />);
+		gotoSettingsTab("profile");
+		const selector = screen.getByTestId("profile-tts-provider");
+		await vi.waitFor(() =>
+			expect(
+				(selector as HTMLSelectElement).querySelector(
+					'option[value="naia-local-voice"]',
+				),
+			).not.toBeDisabled(),
+		);
+		fireEvent.change(selector, { target: { value: "naia-local-voice" } });
+
+		await vi.waitFor(() => {
+			expect(mockInvoke).toHaveBeenCalledWith("start_voxcpm2", {
+				expectedLoaderProfile: "windows_trt_6g",
+			});
+			const saved = JSON.parse(localStorage.getItem("naia-config") || "{}");
+			expect(saved.ttsProvider).toBe("naia-local-voice");
+			expect(saved.ttsEnabled).toBe(true);
+			expect(saved.localVoiceEnabled).toBe(true);
+		});
+		// Already installed: the selection must start it, never reinstall.
+		expect(mockInvoke).not.toHaveBeenCalledWith("install_voxcpm2_runtime");
+	});
+
+	it("#507: a failed Local voice start surfaces the reason and the explicit revert", async () => {
+		localStorage.setItem("naia-adk-path", "D:\\alpha-adk");
+		localStorage.setItem(
+			"naia-config",
+			JSON.stringify({
+				provider: "nextain",
+				model: "gemini-3.5-flash",
+				naiaKey: "nk",
+				ttsProvider: "edge",
+				ttsEnabled: true,
+				localVoiceEnabled: false,
+			}),
+		);
+		mockInvoke.mockImplementation((command: string) => {
+			if (command === "detect_gpu_vram") return Promise.resolve(8);
+			if (command === "voxcpm2_status") return Promise.resolve(false);
+			if (command === "voxcpm2_installation_status")
+				return Promise.resolve({
+					phase: "ready-to-start",
+					ready: false,
+					canStart: true,
+					summary: "Local runtime files are ready.",
+					steps: [],
+				});
+			if (command === "start_voxcpm2")
+				return Promise.reject(new Error("TRT service failed to start"));
+			return Promise.resolve([]);
+		});
+
+		render(<SettingsTab />);
+		gotoSettingsTab("profile");
+		const selector = screen.getByTestId("profile-tts-provider");
+		await vi.waitFor(() =>
+			expect(
+				(selector as HTMLSelectElement).querySelector(
+					'option[value="naia-local-voice"]',
+				),
+			).not.toBeDisabled(),
+		);
+		fireEvent.change(selector, { target: { value: "naia-local-voice" } });
+
+		await vi.waitFor(() => {
+			const saved = JSON.parse(localStorage.getItem("naia-config") || "{}");
+			expect(saved.ttsProvider).toBe("edge");
+			// The revert is explicit: reason + restored notice, visible on the
+			// profile surface that hosted the selection (no silent snap-back).
+			const status = screen.getByTestId("profile-voice-status");
+			expect(status.textContent).toContain("TRT service failed to start");
+			expect(status.textContent).toMatch(/restored/i);
+		});
+	});
+
 	it("restores the exact prior TTS selection when VoxCPM2 start fails", async () => {
 		localStorage.setItem("naia-adk-path", "D:\\alpha-adk");
 		localStorage.setItem(
