@@ -6,14 +6,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
 	agentKeyExists,
 	applyModelSelectionToConfig,
-	applyWorkspaceConfigToLocal,
 	buildNaiaConfigEnv,
-	clearAdkPath,
 	getAdkPath,
 	listNaiaAssets,
 	readNaiaConfig,
+	resetAdkPathBinding,
 	resetNaiaPersistedSettings,
-	setAdkPath,
 	toLocalBlobUrl,
 	writeAgentKey,
 	writeAgentKeyStrict,
@@ -47,10 +45,20 @@ import {
 	activateNaiaLlm,
 	configureSpeechProfile,
 	reloadAgentSettings,
+	sendAppSkills,
+	sendAppSkillsClear,
 	sendAuthUpdateStrict,
 	sendCredsUpdate,
 	sendNotifyConfig,
 } from "../lib/chat-service";
+import type { EnvironmentAwareness } from "@nextain/naia-os-core/composition";
+import {
+	ENVIRONMENT_APP_ID,
+	SKILL_ENVIRONMENT,
+	environmentSession,
+	noteEnvironmentClear,
+	noteEnvironmentToolAck,
+} from "../lib/environment-skill";
 import {
 	type AppConfig,
 	DEFAULT_GATEWAY_URL,
@@ -594,7 +602,7 @@ export function SettingsTab() {
 	);
 	const pushModal = useAppStore((s) => s.pushModal);
 	const popModal = useAppStore((s) => s.popModal);
-	// 설정 패널이 실제로 열렸는지 — 오디오 장치 enumerate(navigator.mediaDevices)를 *기동 시*(SettingsTab 은
+	// 설정 화면이 실제로 열렸는지 — 오디오 장치 enumerate(navigator.mediaDevices)를 *기동 시*(SettingsTab 은
 	// keepAlive 로 항상 마운트)가 아니라 사용자가 설정을 열 때만 실행하기 위함. getUserMedia/enumerateDevices 는
 	// WebKitGTK + 일부 오디오 장치(USB Audio IEC958)에서 GstIntRange 버그로 web process 를 ~90초 동기 stall
 	// 시켜 *전체 기동을 90초 막는다*(2026-06-13 실측·격리 확정). 설정 미개방 시 미디어 미접촉 = 기동 즉시.
@@ -753,12 +761,17 @@ export function SettingsTab() {
 		existing?.speechStyle ?? "casual",
 	);
 	const [enableTools, setEnableTools] = useState(existing?.enableTools ?? true);
+	// #502 (FR-ENV-ATTENTION.4): 작업 표면 인지는 사용자가 직접 고른다.
+	// 설정 파일에만 있고 화면에 없으면 "사용자에게 옵셔널하게"가 아니다.
+	const [environmentAwareness, setEnvironmentAwareness] =
+		useState<EnvironmentAwareness>(existing?.environmentAwareness ?? "auto");
+	const [environmentTerminalInput, setEnvironmentTerminalInput] = useState(
+		existing?.environmentTerminalInput === true,
+	);
 	const [enableThinking, setEnableThinking] = useState(
 		existing?.enableThinking ?? false,
 	);
-	const [workspaceRoot, setWorkspaceRoot] = useState(() => {
-		return existing?.workspaceRoot || getAdkPath() || "";
-	});
+	const workspaceRoot = existing?.workspaceRoot || getAdkPath() || "";
 	const [voice, setVoice] = useState(
 		existing?.voice ?? getDefaultVoiceForAvatar(existing?.vrmModel),
 	);
@@ -1855,7 +1868,7 @@ export function SettingsTab() {
 		});
 	}, [sttProvider, vllmSttHost]);
 
-	// Enumerate audio input/output devices — ⚠️ 설정 패널이 열렸을 때만(기동 90초 stall 회피, 위 isSettingsActive 주석).
+	// Enumerate audio input/output devices — ⚠️ 설정 화면이 열렸을 때만(기동 90초 stall 회피, 위 isSettingsActive 주석).
 	useEffect(() => {
 		if (!isSettingsActive) return;
 		if (!navigator.mediaDevices?.enumerateDevices) return;
@@ -3543,92 +3556,24 @@ export function SettingsTab() {
 					</div>
 
 					<div className="settings-field">
-						<label>워크스페이스</label>
+						<label>{t("settings.workspace")}</label>
 						<div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+							<code style={{ flex: 1, overflowWrap: "anywhere" }}>
+								{workspaceRoot}
+							</code>
 							<button
 								type="button"
 								className="voice-preview-btn"
 								onClick={async () => {
-									const selected = await open({
-										directory: true,
-										title: t("settings.workspaceDialogTitle"),
-									});
-									if (selected && typeof selected === "string") {
-										setWorkspaceRoot(selected);
-										const cfg = loadConfig();
-										if (!cfg) return;
-										saveConfig({ ...cfg, workspaceRoot: selected });
-										await setAdkPath(selected);
-										invoke("workspace_set_root", { root: selected }).catch(
-											() => {},
-										);
-										// 전환 = 새 워크스페이스의 config.json + ui-config.json 복원(FR-WS.1) — AdkSetupScreen 과 동형.
-										await applyWorkspaceConfigToLocal();
-										window.location.reload();
-									}
+									await resetAdkPathBinding();
+									const { relaunch } = await import("@tauri-apps/plugin-process");
+									await relaunch();
 								}}
 							>
-								{t("settings.workspaceBrowse")}
-							</button>
-							<button
-								type="button"
-								className="voice-preview-btn"
-								style={{
-									background: "var(--accent-color, #5b8cf5)",
-									color: "#fff",
-								}}
-								onClick={async () => {
-									const trimmed = workspaceRoot.trim();
-									const cfg = loadConfig();
-									if (!cfg) return;
-									saveConfig({
-										...cfg,
-										workspaceRoot: trimmed || undefined,
-									});
-									if (trimmed) {
-										await setAdkPath(trimmed);
-										invoke("workspace_set_root", {
-											root: trimmed,
-										}).catch(() => {});
-										// 전환 = 새 워크스페이스 설정 복원(FR-WS.1).
-										await applyWorkspaceConfigToLocal();
-									} else {
-										clearAdkPath();
-									}
-									window.location.reload();
-								}}
-							>
-								{t("settings.workspaceApply")}
-							</button>
-							<input
-								type="text"
-								className="settings-input"
-								value={workspaceRoot}
-								onChange={(e) => setWorkspaceRoot(e.target.value)}
-								placeholder={t("settings.workspacePlaceholder")}
-								style={{ flex: 1 }}
-							/>
-						</div>
-						<div className="settings-hint">{t("settings.workspaceHint")}</div>
-					</div>
-
-					<div className="settings-field">
-						<label>naia-adk 경로 재설정</label>
-						<div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-							<button
-								type="button"
-								className="voice-preview-btn"
-								onClick={() => {
-									clearAdkPath();
-									window.location.reload();
-								}}
-							>
-								재설정 (앱 재시작)
+								{t("settings.adkResetBtn")}
 							</button>
 						</div>
-						<div className="settings-hint">
-							naia-adk 폴더를 변경하거나 초기 설정을 다시 진행할 때 사용하세요
-						</div>
+						<div className="settings-hint">{t("settings.adkResetHint")}</div>
 					</div>
 
 					<div className="settings-field">
@@ -4010,7 +3955,7 @@ export function SettingsTab() {
 									</button>
 									{showLabDisconnect ? (
 										<div
-											className="reset-confirm-panel"
+											className="reset-confirm-app"
 											style={{ marginTop: 8 }}
 										>
 											<p className="reset-confirm-msg">
@@ -4834,6 +4779,68 @@ export function SettingsTab() {
 							onChange={(e) => {
 								setEnableThinking(e.target.checked);
 								persistConfig({ enableThinking: e.target.checked });
+							}}
+						/>
+					</div>
+
+					{/* #502 (FR-ENV-ATTENTION.4): 표면 목록에는 사용자의 터미널 이름이 들어간다.
+					    무엇이 나이아에게 가는지 사용자가 보고 고를 수 있어야 한다. */}
+					<div className="settings-field">
+						<label htmlFor="environment-awareness">
+							{t("settings.environmentAwareness")}
+						</label>
+						<select
+							id="environment-awareness"
+							value={environmentAwareness}
+							onChange={(e) => {
+								const next = e.target.value as EnvironmentAwareness;
+								setEnvironmentAwareness(next);
+								persistConfig({ environmentAwareness: next });
+								// 즉시 반영한다 — 다시 켤 때까지 기다리게 하지 않는다.
+								// 전달 여부를 확인한다. 버리면 사용자가 껐는데 도구 선언이 뇌에
+								// 남거나, 켰는데 나이아에게 도구가 없는 상태를 아무도 모른다
+								// (2026-08-28 16차 적대리뷰 지적). 켜는 쪽은 대화 턴마다 다시
+								// 등록하므로 실패해도 다음 턴에 복구된다.
+								if (next === "off") {
+									environmentSession.unwatch();
+									sendAppSkillsClear(ENVIRONMENT_APP_ID, { awaitAck: true })
+										.then((ok) => {
+											// 확인값을 상태에 반영한다. 로그로만 쓰면 셸이 낡은 참을
+											// 들고 있게 된다 (2026-08-28 18차 적대리뷰 지적).
+											noteEnvironmentClear(ok);
+											if (!ok) Logger.warn("SettingsTab", "environment skill clear not delivered", {});
+										})
+										.catch(() => noteEnvironmentClear(false));
+								} else {
+									sendAppSkills(ENVIRONMENT_APP_ID, [SKILL_ENVIRONMENT], { awaitAck: true })
+										.then((ok) => {
+											noteEnvironmentToolAck(ok);
+											if (!ok) Logger.warn("SettingsTab", "environment skill register not delivered", {});
+										})
+										.catch(() => noteEnvironmentToolAck(false));
+								}
+							}}
+						>
+							<option value="off">{t("settings.environmentAwarenessOff")}</option>
+							<option value="auto">{t("settings.environmentAwarenessAuto")}</option>
+							<option value="always">{t("settings.environmentAwarenessAlways")}</option>
+						</select>
+						<span className="settings-hint">
+							{t("settings.environmentAwarenessHint")}
+						</span>
+					</div>
+					<div className="settings-field settings-toggle-row">
+						<label htmlFor="environment-terminal-input">
+							{t("settings.environmentTerminalInput")}
+						</label>
+						<input
+							id="environment-terminal-input"
+							type="checkbox"
+							checked={environmentTerminalInput}
+							disabled={environmentAwareness === "off"}
+							onChange={(e) => {
+								setEnvironmentTerminalInput(e.target.checked);
+								persistConfig({ environmentTerminalInput: e.target.checked });
 							}}
 						/>
 					</div>
@@ -6158,7 +6165,7 @@ export function SettingsTab() {
 
 					<div className="settings-danger-zone">
 						{showResetConfirm ? (
-							<div className="reset-confirm-panel">
+							<div className="reset-confirm-app">
 								<p className="reset-confirm-msg">
 									{t("settings.resetConfirm")}
 								</p>
@@ -6209,7 +6216,7 @@ export function SettingsTab() {
 			{/* STT Model Manager Modal — root-level (triggered from brain tab) */}
 			{sttModelModalOpen && (
 				<div
-					className="panel-modal-overlay"
+					className="app-modal-overlay"
 					onClick={() => setSttModelModalOpen(false)}
 				>
 					<div

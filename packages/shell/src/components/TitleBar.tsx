@@ -1,14 +1,14 @@
 import { getCurrentWindow } from "@tauri-apps/api/window";
 
 interface TitleBarProps {
-	panelVisible: boolean;
-	onTogglePanel: () => void;
+	appVisible: boolean;
+	onToggleApp: () => void;
 	title?: string;
 }
 
 export function TitleBar({
-	panelVisible,
-	onTogglePanel,
+	appVisible,
+	onToggleApp,
 	title = "Naia",
 }: TitleBarProps) {
 	const appWindow = getCurrentWindow();
@@ -39,8 +39,8 @@ export function TitleBar({
 				<button
 					type="button"
 					className="titlebar-btn"
-					onClick={onTogglePanel}
-					title={panelVisible ? "채팅 숨기기 (Ctrl+B)" : "채팅 보이기 (Ctrl+B)"}
+					onClick={onToggleApp}
+					title={appVisible ? "채팅 숨기기 (Ctrl+B)" : "채팅 보이기 (Ctrl+B)"}
 				>
 					<svg
 						width="14"
@@ -51,7 +51,7 @@ export function TitleBar({
 						strokeWidth="1.5"
 					>
 						<rect x="1" y="1" width="12" height="12" rx="1.5" />
-						{panelVisible ? (
+						{appVisible ? (
 							<line x1="6" y1="1" x2="6" y2="13" />
 						) : (
 							<line x1="6" y1="1" x2="6" y2="13" strokeDasharray="2 2" />

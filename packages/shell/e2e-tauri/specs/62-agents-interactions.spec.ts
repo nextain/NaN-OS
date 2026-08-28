@@ -17,19 +17,19 @@ describe("62 — agents interactions", () => {
 		await ensureAppReady();
 		await clickBySelector(S.agentsTabBtn);
 		try {
-			const panel = await $(S.agentsTabPanel);
-			await panel.waitForDisplayed({ timeout: 10_000 });
+			const app = await $(S.agentsTabApp);
+			await app.waitForDisplayed({ timeout: 10_000 });
 			tabAvailable = true;
 		} catch {
 			tabAvailable = false;
 		}
 	});
 
-	it("should show agents tab panel", async () => {
+	it("should show agents tab app", async () => {
 		if (!tabAvailable) return;
 		const exists = await browser.execute(
 			(sel: string) => !!document.querySelector(sel),
-			S.agentsTabPanel,
+			S.agentsTabApp,
 		);
 		expect(exists).toBe(true);
 	});

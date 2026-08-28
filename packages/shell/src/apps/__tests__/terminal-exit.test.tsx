@@ -200,7 +200,7 @@ describe("Terminal exit notification — Phase 5", () => {
 		// Terminal component replaced by dead overlay
 		await waitFor(() => {
 			expect(screen.queryByTestId(`terminal-${ptyId}`)).toBeNull();
-			expect(document.querySelector(".workspace-panel__terminal-dead")).toBeTruthy();
+			expect(document.querySelector(".workspace-app__terminal-dead")).toBeTruthy();
 		});
 	});
 
@@ -215,7 +215,7 @@ describe("Terminal exit notification — Phase 5", () => {
 		fireExit(ptyId);
 
 		await waitFor(() =>
-			expect(document.querySelector(".workspace-panel__terminal-dead-restart")).toBeTruthy(),
+			expect(document.querySelector(".workspace-app__terminal-dead-restart")).toBeTruthy(),
 		);
 	});
 
@@ -243,12 +243,12 @@ describe("Terminal exit notification — Phase 5", () => {
 
 		fireExit(ptyId);
 		await waitFor(() =>
-			expect(document.querySelector(".workspace-panel__terminal-dead-restart")).toBeTruthy(),
+			expect(document.querySelector(".workspace-app__terminal-dead-restart")).toBeTruthy(),
 		);
 
 		// Click restart
 		await act(async () => {
-			(document.querySelector(".workspace-panel__terminal-dead-restart") as HTMLButtonElement)?.click();
+			(document.querySelector(".workspace-app__terminal-dead-restart") as HTMLButtonElement)?.click();
 		});
 
 		// New terminal appears (counter incremented to 2)
@@ -267,16 +267,16 @@ describe("Terminal exit notification — Phase 5", () => {
 
 		fireExit(ptyId);
 		await waitFor(() =>
-			expect(document.querySelector(".workspace-panel__terminal-dead-restart")).toBeTruthy(),
+			expect(document.querySelector(".workspace-app__terminal-dead-restart")).toBeTruthy(),
 		);
 
 		await act(async () => {
-			(document.querySelector(".workspace-panel__terminal-dead-restart") as HTMLButtonElement)?.click();
+			(document.querySelector(".workspace-app__terminal-dead-restart") as HTMLButtonElement)?.click();
 		});
 
 		await waitFor(() => {
 			// Dead overlay gone
-			expect(document.querySelector(".workspace-panel__terminal-dead")).toBeNull();
+			expect(document.querySelector(".workspace-app__terminal-dead")).toBeNull();
 			// New terminal present
 			expect(screen.getByTestId("terminal-pty-alpha-2")).toBeInTheDocument();
 		});
@@ -292,7 +292,7 @@ describe("Terminal exit notification — Phase 5", () => {
 
 		fireExit(ptyId);
 		await waitFor(() =>
-			expect(document.querySelector(".workspace-panel__terminal-dead")).toBeTruthy(),
+			expect(document.querySelector(".workspace-app__terminal-dead")).toBeTruthy(),
 		);
 
 		// Close the exited tab
@@ -305,7 +305,7 @@ describe("Terminal exit notification — Phase 5", () => {
 
 		// Tab and dead overlay both gone
 		await waitFor(() => {
-			expect(document.querySelector(".workspace-panel__terminal-dead")).toBeNull();
+			expect(document.querySelector(".workspace-app__terminal-dead")).toBeNull();
 			expect(screen.queryAllByText("alpha")).toHaveLength(0);
 		});
 	});
@@ -320,7 +320,7 @@ describe("Terminal exit notification — Phase 5", () => {
 
 		fireExit(ptyId);
 		await waitFor(() =>
-			expect(document.querySelector(".workspace-panel__terminal-dead")).toBeTruthy(),
+			expect(document.querySelector(".workspace-app__terminal-dead")).toBeTruthy(),
 		);
 
 		// Try to open the same dir via Naia

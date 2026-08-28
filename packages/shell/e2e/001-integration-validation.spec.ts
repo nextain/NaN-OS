@@ -8,9 +8,9 @@ import { expect, test } from "@playwright/test";
  *
  *   1. ADK setup wizard renders correctly when no ADK path is set
  *   2. Setting ADK path in localStorage bypasses the wizard and the main shell
- *      mounts (tab strip + panels)
+ *      mounts (tab strip + apps)
  *   3. The agent IPC bridge (send_to_agent_command) fires when chat is sent,
- *      and panel skill registration (panel_skills frames) is invoked during
+ *      and app skill registration (app_skills frames) is invoked during
  *      app startup — proving the skill registry wire is alive
  */
 
@@ -58,7 +58,7 @@ const TAURI_MOCK = `
 		if (cmd === "plugin:path|resolve_directory") return "/tmp/naia-mock-home";
 		if (cmd === "plugin:path|join") return (args.paths || []).filter(Boolean).join("/");
 		if (cmd === "workspace_detect_adk_root") return null;
-		if (cmd === "panel_list_installed") return [];
+		if (cmd === "app_list_installed") return [];
 		if (cmd === "send_to_agent_command") return undefined;
 		if (cmd === "frontend_log") return undefined;
 		if (cmd === "read_text_file") return "";
@@ -128,7 +128,7 @@ test("scenario 3: skill registry + Rust IPC wires fire (main shell mounted)", as
 	const log = await page.evaluate(INVOKE_LOG_QUERY);
 	const cmds = JSON.parse(log) as { cmd: string }[];
 
-	// Skill registry wire: panel_skills frames sent during startup
+	// Skill registry wire: app_skills frames sent during startup
 	const sendCommands = cmds.filter((e) => e.cmd === "send_to_agent_command");
 	expect(sendCommands.length, "send_to_agent_command fired at least once").toBeGreaterThanOrEqual(1);
 
@@ -140,8 +140,8 @@ test("scenario 3: skill registry + Rust IPC wires fire (main shell mounted)", as
 	const feLog = cmds.filter((e) => e.cmd === "frontend_log");
 	expect(feLog.length, "frontend_log proxied to Rust backend").toBeGreaterThanOrEqual(1);
 
-	// Built-in panel skills are registered directly from the static registry.
-	// `panel_list_installed` is only for optional installed panels and must not be
+	// Built-in app skills are registered directly from the static registry.
+	// `app_list_installed` is only for optional installed apps and must not be
 	// required for the built-in skill wire to be alive.
 });
 
@@ -163,14 +163,14 @@ test("scenario 5: ADK detection probe fires when wizard is shown (no ADK path)",
 	).toBeGreaterThanOrEqual(1);
 });
 
-test("scenario 4: panel_skills frames carry skill registrations from agent (browser/workspace panels)", async ({ page }) => {
+test("scenario 4: app_skills frames carry skill registrations from agent (browser/workspace apps)", async ({ page }) => {
 	await page.addInitScript({ content: TAURI_MOCK });
 	await page.addInitScript({ content: SET_ADK_PATH });
 
 	await page.goto("/");
 	await page.waitForTimeout(3_000);
 
-	// Inspect panel_skills frames captured in the invoke log
+	// Inspect app_skills frames captured in the invoke log
 	const frames = await page.evaluate(() => {
 		const log: { cmd: string; args: { message?: string } | null }[] =
 			(window as unknown as { __INVOKE_LOG__: { cmd: string; args: { message?: string } | null }[] }).__INVOKE_LOG__ ?? [];
@@ -181,7 +181,7 @@ test("scenario 4: panel_skills frames carry skill registrations from agent (brow
 			if (!m) continue;
 			try {
 				const obj = JSON.parse(m);
-				if (obj?.type === "panel_skills") {
+				if (obj?.type === "app_skills") {
 					out.push({ appId: obj.appId, toolCount: (obj.tools || []).length });
 				}
 			} catch {
@@ -191,14 +191,14 @@ test("scenario 4: panel_skills frames carry skill registrations from agent (brow
 		return out;
 	});
 
-	console.log("panel_skills frames captured:", JSON.stringify(frames));
+	console.log("app_skills frames captured:", JSON.stringify(frames));
 
-	// Expect both browser + workspace panels to register their skills via the agent IPC
-	const panelIds = frames.map((f) => f.appId);
-	expect(panelIds, "browser panel registered skills").toContain("browser");
-	expect(panelIds, "workspace panel registered skills").toContain("workspace");
+	// Expect both browser + workspace apps to register their skills via the agent IPC
+	const appIds = frames.map((f) => f.appId);
+	expect(appIds, "browser app registered skills").toContain("browser");
+	expect(appIds, "workspace app registered skills").toContain("workspace");
 
-	// Each panel should have at least one tool
+	// Each app should have at least one tool
 	for (const f of frames) {
 		expect(f.toolCount, `${f.appId} has tools`).toBeGreaterThanOrEqual(1);
 	}

@@ -26,14 +26,14 @@
 - **shell = 육체(body)**: 감각기(입력) + 효과기(표현/구동) **뿐, 인지 0**. 데스크톱 아바타든 로봇이든 *교체 가능한 말단*.
 - **경계 = 신경계(semantic ports)**: 구심성(afferent: 감각→뇌) + 원심성(efferent: 뇌→효과기). transport-shaped·기능결합 금지.
 
-**하드 불변조건 (gate 강제 대상)**: **shell 에서 인지/로직 "쿵짝" 금지.** shell 이 스스로 판단·가공하면 뇌/육체 분리가 깨져 body-swap(→로봇) 불가. shell 코드 = 캡처·렌더·라우팅(어댑터)만. → 그래서 voice/avatar/panel 의 *처리·결정*은 전부 뇌(agent)로, shell 은 감각·표현 말단만(↓ 입력·표현·환경 레이어). 슬라이스(llm·memory·skill···)는 **뇌의 모듈(faculties)** 이지 데스크톱 기능이 아니다.
+**하드 불변조건 (gate 강제 대상)**: **shell 에서 인지/로직 "쿵짝" 금지.** shell 이 스스로 판단·가공하면 뇌/육체 분리가 깨져 body-swap(→로봇) 불가. shell 코드 = 캡처·렌더·라우팅(어댑터)만. → 그래서 voice/avatar/app 의 *처리·결정*은 전부 뇌(agent)로, shell 은 감각·표현 말단만(↓ 입력·표현·환경 레이어). 슬라이스(llm·memory·skill···)는 **뇌의 모듈(faculties)** 이지 데스크톱 기능이 아니다.
 
 ### naia = OS, agent = 커널/데몬 (gRPC = 시스템 인터페이스, 다중 클라이언트)
 
 agent 의 gRPC 가 *인터페이스*라면 agent 는 "shell 의 백엔드"가 아니다 — **여러 body·app·peripheral 이 붙는 다중 클라이언트 시스템 인터페이스**(OS 의 syscall/bus). 그래서 naia 는 *앱*이 아니라 **OS**다(이름 literal).
 - **agent = 커널/데몬**: always-on 뇌(naia-os "AI is always on, daemon architecture").
 - **gRPC = 시스템 인터페이스**: 1:1 shell↔agent 파이프 ❌ → **다중 클라이언트**(body N + 제3환경 app N + peripheral). 클라이언트 신원 + capability negotiation(이 body=아바타+음성 / 저 body=로봇 액추에이터) + 표현 이벤트 pub/sub.
-- **body·app = 클라이언트**: desktop shell·robot(body), panel/browser(app) 가 동시 다중 접속.
+- **body·app = 클라이언트**: desktop shell·robot(body), app/browser(app) 가 동시 다중 접속.
 - **함의**: `AppPort`/`protocol` = *shell 전용 파이프*가 아니라 **OS 레벨 다중 클라이언트 계약**으로 설계. (포트 EventPort/pub-sub 가 필수인 진짜 이유 = 다중 구독자.) **step 4(gRPC) = "두 repo 사이 wire" ❌ → OS 시스템 인터페이스 설계 ✅로 격상.**
 
 ### 감각·표현·환경 → 경험 (afferent 의 목적 = 경험→기억, 반응 아님)
@@ -53,7 +53,7 @@ shell 표면을 brain/body 로 분류하고, 그것이 뇌에서 **경험**이 �
 감각(raw) → 지각(멀티모달 해석) → 경험(지각+자기행동+맥락+시간 융합, episodic) → 기억(naia-memory)·삶
 ```
 
-- 입력 = chat 트리거 ❌ → **감각**(듣고·보고·읽음). 환경 = 도구 ❌ → naia 가 *사는 세계*(관측+행위 양방향, 패널 화면 = 시야). 표현 = 명령실행 ❌ → *존재의 발현*(같은 의도가 3D/로봇으로).
+- 입력 = chat 트리거 ❌ → **감각**(듣고·보고·읽음). 환경 = 도구 ❌ → naia 가 *사는 세계*(관측+행위 양방향, 앱 화면 = 시야). 표현 = 명령실행 ❌ → *존재의 발현*(같은 의도가 3D/로봇으로).
 - **누락 faculty (이식 시 first-class)**: 반응형 turn(input→LLM→output)과 별개의 **지각/경험 모듈** — 감각 융합 → episodic → naia-memory. 현재 conversation(작업맥락)+memory(저장)만 있고 경험 통합 부재. 화면캡처도 tool 일 뿐 *지속적 시각 경험* 아님.
 - → 뇌 모듈에 **perception/experience** 슬라이스 후보 추가(2단계 시나리오에서 구체화). 이것이 naia 를 "응답 앱"이 아니라 "경험하고 사는 존재"로 만드는 축.
 
@@ -75,7 +75,7 @@ shell 표면을 brain/body 로 분류하고, 그것이 뇌에서 **경험**이 �
 | 동기·욕구 | (motivation/drive·homeostasis·value) | **갭 — 신설**(always-on 자율성 근거; tasks=무엇을, 동기=왜 지속 우선) |
 | 자기·신체 모델 | (self/body-affordance) | **갭 — 신설**(body-swap 전제: "이 몸이 뭘 할 수 있나") |
 | 학습·적응 | (learning/policy-update) | **갭 — 신설**(memory=저장·skill=현재능력 사이 습관·선호·개인화 갱신) |
-| 공간 | (world/body frame: pose·coordinate) | **갭 — 이름만이라도 先占**(panel·3D·robot 공간언어 통일) |
+| 공간 | (world/body frame: pose·coordinate) | **갭 — 이름만이라도 先占**(app·3D·robot 공간언어 통일) |
 | 사회인지 | (other-agent model) | 갭 — 선택(화자/클라이언트 의도·권한·관계) |
 | 작업기억 | conversation | 있음 |
 | 장기기억(episodic·semantic) | memory(naia-memory) | 있음 |
@@ -101,7 +101,7 @@ shell 표면을 brain/body 로 분류하고, 그것이 뇌에서 **경험**이 �
  └──────┬───────────────────────▲───────────────────────┬───────────────┘
    afferent(구심)          efferent(원심)          bidirectional(관측+행위)
   ┌──────▼─── 신경계 = gRPC OS 시스템 인터페이스 (다중 클라이언트) ───▲──┬┘
-  │  SensoryPort           ExpressionPort        EnvironmentPort/PanelPort │
+  │  SensoryPort           ExpressionPort        EnvironmentPort/AppPort │
   │  protocol(transport-neutral) · AppPort(semantic facade)               │
   └──────┬────────────────────────────────────────────────────▲──────────┘
  ┌───────▼──── 뇌(agent/core) ── 인지 코어(faculty) ─────────────┴────────┐
@@ -139,14 +139,14 @@ shell 표면을 brain/body 로 분류하고, 그것이 뇌에서 **경험**이 �
 ```
 gateway/   → types(ports) · tool-tiers(domain) · client(adapter) · tool-bridge(app)
 providers/ → types·registry·factory(ports) · cost(domain) · 구현체(adapters)
-index.ts   → transport(driving adapter) · chat-orch·tool-exec·approval·panel(app) · config(helpers)
+index.ts   → transport(driving adapter) · chat-orch·tool-exec·approval·app(app) · config(helpers)
 ```
 
 ## core / agent / shell 관계
 
 - **경계 = shell ↔ agent *transport* ↔ core(use case).** "shell↔core 경계"라 부르지 않는다.
 - **core(=이 프로젝트 src) 는 stdio JSON 을 직접 먹지 않는다** — `AppPort` 추상화 뒤에. ***transport-shaped(writeLine/parseRequest) 금지***. 그래야 4단계 gRPC 가 *adapter 교체만으로* 됨(core 상호작용 모델 불변).
-- **AppPort = god-port 아님 (R1·R4 codex HIGH 수정)**: AppPort facade = **`ChatPort`(텍스트+voice-realtime turn-taking) + `ToolPort` 두 개의 조립 진입점일 뿐**. ⚠️ **재흡수 금지 canon**: `SensoryPort`·`ExpressionPort`(I/O), `EnvironmentPort/PanelPort`(환경), `ApprovalPort`·`ClientSessionPort`(control-plane)는 **AppPort 밑이 아니라 독립 canon 포트** — AppPort 가 이들을 빨아들이면 god-facade 복귀. 각 서브포트 독립 계약(2단계 책임선 강고정).
+- **AppPort = god-port 아님 (R1·R4 codex HIGH 수정)**: AppPort facade = **`ChatPort`(텍스트+voice-realtime turn-taking) + `ToolPort` 두 개의 조립 진입점일 뿐**. ⚠️ **재흡수 금지 canon**: `SensoryPort`·`ExpressionPort`(I/O), `EnvironmentPort/AppPort`(환경), `ApprovalPort`·`ClientSessionPort`(control-plane)는 **AppPort 밑이 아니라 독립 canon 포트** — AppPort 가 이들을 빨아들이면 god-facade 복귀. 각 서브포트 독립 계약(2단계 책임선 강고정).
 - **이식판에서 "agent" 의 지위 변경**: v3 에선 agent 가 in-place 로 비워지며 transport host 로 잔존했다. 이식판에선 **출처 agent = frozen 읽기 전용**이고, transport/composition host 역할은 이 프로젝트의 `app` + driving adapter 가 처음부터 담당한다(좀비 thin re-export 불필요).
 - **shell**: 외관 유지(75K, 리팩터 안 함). 이식 후반에 **verbatim 편입**(레이어 분해 대상 아님). 편입 형태 = `packages/shell`(R1 수렴).
 - 범위: 출처 agent ~38K(218 ts) 대상, shell 외관 유지.
@@ -162,13 +162,13 @@ index.ts   → transport(driving adapter) · chat-orch·tool-exec·approval·pan
    - **공간/주변**: 배경·BGM·3D scene (사는 공간의 분위기)
    - **앱 surface**: browser·note·workspace 등 (surface 위 앱)
    - **시스템(호스트)**: 파일시스템·프로세스/터미널(pty)·설정·디바이스·네트워크 — naia 가 *운용하는 머신*(코드 실측: workspace.rs·pty.rs·memo/notify-config fs). naia=OS 의 운용 대상.
-   **차원/substrate 무관(body-swap 과 동형)**: 2D 패널·배경(now) → **3D 환경 UX** → 로봇=물리 공간+온보드 시스템. `EnvironmentPort` 는 차원·호스트 무관 관측+행위(2D 패널 가정 하드코딩 금지). 각 환경은 tools/skills 를 agent 에 등록 → agent 가 LLM 에 노출 + 호출 라우팅(`PanelPort`: `panel_tool_call` ↔ `PanelToolResult`). **agent 가 매개자** — 환경이 LLM 에 직접 붙지 않음(코드 실측: `panelSkillsByPanel`·`pendingPanelToolCalls`).
+   **차원/substrate 무관(body-swap 과 동형)**: 2D 앱·배경(now) → **3D 환경 UX** → 로봇=물리 공간+온보드 시스템. `EnvironmentPort` 는 차원·호스트 무관 관측+행위(2D 앱 가정 하드코딩 금지). 각 환경은 tools/skills 를 agent 에 등록 → agent 가 LLM 에 노출 + 호출 라우팅(`AppPort`: `app_tool_call` ↔ `AppToolResult`). **agent 가 매개자** — 환경이 LLM 에 직접 붙지 않음(코드 실측: `앱별 스킬 맵`·`app-tool-executor.ts`).
 
 레이어별 귀속:
 - **voice**: 입력(마이크)=입력레이어 · 출력(합성음)=표현레이어 · **모델 처리=agent provider**(omni/gemini-live/openai-realtime = LLM 동격 ws, providers registry 통일). 현재 shell/lib/voice 16파일에 갇힘 → 처리부 agent 이전. (voice-server py 브리지 = rejected.)
-- **avatar**: 표현레이어(`shell/panels/avatar` VRM render adapter) ← `ExpressionPort`. 3D→로봇 swap.
-- **panel/browser/background**: 제3환경, `PanelPort` 로 agent 매개.
-- **설정 계층**: agent **기본설정**(ProviderConfig 등) + shell **확장설정**(디바이스·아바타·패널).
+- **avatar**: 표현레이어(`shell/apps/avatar` VRM render adapter) ← `ExpressionPort`. 3D→로봇 swap.
+- **app/browser/background**: 제3환경, `AppPort` 로 agent 매개.
+- **설정 계층**: agent **기본설정**(ProviderConfig 등) + shell **확장설정**(디바이스·아바타·앱).
 
 ## 헥사고날 레이어 (canon = `src/main/`, R2 codex MED 확정)
 
@@ -207,11 +207,11 @@ app/       use case orchestration — ports만 (※ shell 경계 자체가 아�
 
 | 슬라이스 | 뇌(agent) 측 | 육체(shell) 측 | 포트 |
 |---|---|---|---|
-| panel (제3환경) | panel.ts(install)·`panelSkillsByPanel`·tool 라우팅(`pending…ToolCalls`)·protocol panel 타입 | panels/ UI·browser/pty(rust) 렌더 | **EnvironmentPort.app-surface**(구 PanelPort: panel_tool_call↔result) |
-| avatar (표현) | embodiment-neutral 의도 *emit*(speak/emote(valence)/attend…); affect 서비스가 valence 제공 | panels/avatar VRM(AvatarCanvas/VrmPreview)가 의도→표정·gesture 매핑 | **ExpressionPort** (3D↔robot swap) |
+| app (제3환경) | app-tool-executor.ts(install)·`앱별 스킬 맵`·tool 라우팅(`pending…ToolCalls`)·protocol app 타입 | apps/ UI·browser/pty(rust) 렌더 | **EnvironmentPort.app-surface**(구 AppPort: app_tool_call↔result) |
+| avatar (표현) | embodiment-neutral 의도 *emit*(speak/emote(valence)/attend…); affect 서비스가 valence 제공 | apps/avatar VRM(AvatarCanvas/VrmPreview)가 의도→표정·gesture 매핑 | **ExpressionPort** (3D↔robot swap) |
 | **body action (행위, 예약 C8)** | action use case(C3 소유)가 비표현 행위 의도 emit | (현 desktop=없음) → robot=액추에이터 어댑터 | **ActionPort** (표현중심 편향 방지 placeholder) |
 
-**이식 제외 (rejected)**: `voice-server/`(py minicpm-o 브리지) = 죽음 확정(증거 = 미해결 Q3). 커버리지 manifest `rejected`. · 음성 *인터페이스*(마이크 캡처·재생·ref녹음)·아바타 렌더·패널 UI = shell body 잔류(core 슬라이스 아님).
+**이식 제외 (rejected)**: `voice-server/`(py minicpm-o 브리지) = 죽음 확정(증거 = 미해결 Q3). 커버리지 manifest `rejected`. · 음성 *인터페이스*(마이크 캡처·재생·ref녹음)·아바타 렌더·앱 UI = shell body 잔류(core 슬라이스 아님).
 
 ## 경계 계약 (boundary contract — 1단계에 못 박음, 미정 아님)
 
@@ -238,13 +238,13 @@ app/       use case orchestration — ports만 (※ shell 경계 자체가 아�
 | `ProprioceptivePort`(신설, C2 정정) | afferent(in) | ports | **고유수용/자세감각**(pose·관절·균형) → self/body model·world frame. *내수용과 별개* | 2단계 |
 | `ExpressionPort` | efferent(out) | ports | embodiment-neutral **표현** 의도(speak/emote-valence/attend) | 2단계 |
 | `ActionPort`(신설, C1; canon 명 1개 — C4: EmbodimentPort 별칭 폐기) | efferent(out) | ports | **비표현 행위**(이동·조작·파지) — *express ≠ act* 대칭축. avatar=express, robot=act 같은 자리 | 2단계 |
-| `EnvironmentPort`(상위) — capability family: **`space` / `app-surface` / `host-system`** | bi | ports | **환경 관측(상태)** + 행위. ⚠️ **`PanelPort` = `app-surface` sub-capability (1급 포트 아님, C6 lock)** — 문서 내 "PanelPort" 표기는 전부 이 sub-port | 1단계 골격 |
+| `EnvironmentPort`(상위) — capability family: **`space` / `app-surface` / `host-system`** | bi | ports | **환경 관측(상태)** + 행위. ⚠️ **`AppPort` = `app-surface` sub-capability (1급 포트 아님, C6 lock)** — 문서 내 "AppPort" 표기는 전부 이 sub-port | 1단계 골격 |
 | `ClientSessionPort`(multi-client) | control bi (not domain-facing) | **control-plane** | client 신원·capability negotiation·subscription lifecycle + **body/env lease 취득·양도·충돌 중재 owner**(C5: arbitration 정식 소유, 산발 방지) | 2~4단계 |
 | `SafetyPort`(신설, C1) | control | **control-plane** | safety envelope·e-stop·lease revoke·강등 모드 (approval 로 안 닫히는 물리 행동 중지) | 2~4단계 |
 
-**출력 3축 고정(C2 P3)**: `ExpressionPort`=의미를 *드러냄* / `ActionPort`=*body를 움직임* / `EnvironmentPort`=*body 밖 세계를 바꿈*. (panel/tool/robot 경계 단순화.)
+**출력 3축 고정(C2 P3)**: `ExpressionPort`=의미를 *드러냄* / `ActionPort`=*body를 움직임* / `EnvironmentPort`=*body 밖 세계를 바꿈*. (app/tool/robot 경계 단순화.)
 
-**관측 ingress 소유(C4 HIGH)**: `SensoryPort`=**raw 외수용 신호**(오디오 파형·카메라/화면=*이미지(vision)*). `EnvironmentPort`=**구조화된 환경 상태**(panel/browser/system 의 *자기보고* — BGM context·파일목록·프로세스 상태 등)의 관측+행위. → 화면 픽셀=Sensory(시각), 앱/시스템 보고 상태=Environment. (PanelPort 관측 half = EnvironmentPort observe.)
+**관측 ingress 소유(C4 HIGH)**: `SensoryPort`=**raw 외수용 신호**(오디오 파형·카메라/화면=*이미지(vision)*). `EnvironmentPort`=**구조화된 환경 상태**(app/browser/system 의 *자기보고* — BGM context·파일목록·프로세스 상태 등)의 관측+행위. → 화면 픽셀=Sensory(시각), 앱/시스템 보고 상태=Environment. (AppPort 관측 half = EnvironmentPort observe.)
 
 **provenance 불변식(C4 MED)**: 모든 afferent/efferent/episode/tool event 에 **actor/client id + 귀속 body·env** 전파. + **execution correlation id(C8)**: efferent 3축 공통, `commanded→acknowledged→observed→mismatch` 를 다중클라이언트·중단·재시도에서 1:1 상관. **reafferent backlink(C9)**: Sensory/Environment 관측 이벤트도 "어느 execution 을 관측한 것인지" id 를 실어 mismatch 계산이 포트별 ad-hoc 로 새지 않게. multi-client arbitration·사회인지·episodic attribution("누가 했나/누구에게")의 공통 근거 — 없으면 후반 재분기.
 

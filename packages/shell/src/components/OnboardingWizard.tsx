@@ -904,8 +904,8 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
 		);
 		try {
 			const lang = getLocale();
-			// Onboarding runs before the browser panel is mounted, so
-			// browser_open_login would succeed but the panel can't show.
+			// Onboarding runs before the browser app is mounted, so
+			// browser_open_login would succeed but the app can't show.
 			// Use the system browser directly instead.
 			const state = await invoke<string>("generate_oauth_state").catch(
 				() => "",
@@ -1073,7 +1073,7 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
 				);
 				// Do not leave the renderer with the pre-login zero balance. Fetch with
 				// the same credential before committing onboarding, then prime the shared
-				// dashboard cache for the panel that mounts after this wizard unmounts.
+				// dashboard cache for the app that mounts after this wizard unmounts.
 				const balancePayload = await fetchLabBalancePayload(
 					LAB_GATEWAY_URL,
 					completedFlat.naiaKey,
@@ -1139,7 +1139,7 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
 	const progressSteps = STEPS.slice(0, -1); // exclude "complete" from dot indicators
 
 	return (
-		<div className="onboarding-panel">
+		<div className="onboarding-app">
 			{/* Progress dots */}
 			<div className="onboarding-progress">
 				{progressSteps.map((s, i) => (

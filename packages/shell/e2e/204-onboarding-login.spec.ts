@@ -65,7 +65,7 @@ function buildMockScript(opts: { chromeAvailable: boolean }) {
         if (cmd === "frontend_log") return;
         if (cmd === "list_skills") return [];
         if (cmd === "list_stt_models") return [];
-        if (cmd === "panel_list_installed") return [];
+        if (cmd === "app_list_installed") return [];
 
         if (cmd === "browser_embed_init") return;
         if (cmd === "browser_embed_hide") return;
@@ -107,7 +107,7 @@ async function setupOnboarding(
 		localStorage.removeItem("naia-config");
 	});
 	await page.goto("/");
-	await expect(page.locator(".onboarding-panel")).toBeVisible({
+	await expect(page.locator(".onboarding-app")).toBeVisible({
 		timeout: 15_000,
 	});
 	// Click the Nextain Lab card to reach the login step

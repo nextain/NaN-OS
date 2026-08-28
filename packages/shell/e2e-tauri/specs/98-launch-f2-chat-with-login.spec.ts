@@ -3,12 +3,12 @@
  *
  * 사용자 시나리오:
  *   1. naiaKey 저장된 상태 (= 로그인 완료)
- *   2. App 진입 → chat panel 표시
+ *   2. App 진입 → chat app 표시
  *   3. chat input 에 "안녕" 입력 + Enter
  *   4. agent 응답 수신 (= naia 계정 chat 경유 또는 Gemini Live direct)
  *   5. assistant message 표시
  *
- * naia-agent 없을 때 = sendChatMessage throw → ChatPanel 측 UI 안내
+ * naia-agent 없을 때 = sendChatMessage throw → ChatApp 측 UI 안내
  * (W2 swallow + caller surface).
  */
 

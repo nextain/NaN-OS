@@ -8,6 +8,10 @@ pub(super) const HERDR_PROTOCOL: u64 = 19;
 const HERDR_PROMPT_MAX_BYTES: usize = 12 * 1024;
 const HERDR_ID_PART_MAX_BYTES: usize = 64;
 const HERDR_LABEL_MAX_BYTES: usize = 256;
+// 터미널 입력 경로(#502 FR-ENV-DISPATCH.3/.5). 사용자의 터미널에 직접 타이핑하는 것과 같으므로
+// 구조화 경로보다 좁게 잡는다.
+const HERDR_KEYS_MAX: usize = 8;
+const HERDR_KEY_MAX_BYTES: usize = 32;
 
 pub(super) fn herdr_api_output(
     config_path: &std::path::Path,
@@ -169,9 +173,93 @@ pub async fn herdr_prompt_agent(
     .map_err(|e| format!("Herdr agent prompt task failed: {e}"))?
 }
 
+/// 터미널에 넣을 본문 검증 (#502 FR-ENV-DISPATCH.5). 빈 값 금지, 길이 상한.
+fn validated_terminal_body(value: &str, what: &str) -> Result<(), String> {
+    if value.trim().is_empty() {
+        return Err(format!("Herdr {what} is required"));
+    }
+    if value.len() > HERDR_PROMPT_MAX_BYTES {
+        return Err(format!(
+            "Herdr {what} exceeds {HERDR_PROMPT_MAX_BYTES} byte limit"
+        ));
+    }
+    Ok(())
+}
+
+/// 키 이름 검증 (#502 FR-ENV-DISPATCH.4/.5).
+/// Herdr 는 키를 개별 인자로 받으므로 셸 주입은 없지만, `-` 로 시작하는 값은 플래그로 해석될 수 있다.
+fn validated_keys(keys: &[String]) -> Result<(), String> {
+    if keys.is_empty() {
+        return Err("Herdr keys are required".to_string());
+    }
+    if keys.len() > HERDR_KEYS_MAX {
+        return Err(format!("Herdr keys exceed {HERDR_KEYS_MAX} entries"));
+    }
+    for key in keys {
+        if key.is_empty() || key.len() > HERDR_KEY_MAX_BYTES {
+            return Err(format!("Invalid Herdr key length: {key}"));
+        }
+        if key.starts_with('-') {
+            return Err("Herdr key must not start with '-'".to_string());
+        }
+        if !key
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '+' | ':'))
+        {
+            return Err(format!("Invalid Herdr key: {key}"));
+        }
+    }
+    Ok(())
+}
+
+/// #502 FR-ENV-DISPATCH.3 — 일반 터미널에서 명령을 실행한다.
+/// `pane run` 은 텍스트와 Enter 를 함께 보낸다. 사용자가 직접 타이핑한 것과 동등한 권한이며,
+/// 능력 게이팅은 core 의 의도 계층이 수행한다(FR-ENV-DISPATCH.7).
+#[tauri::command]
+pub async fn herdr_run_pane(app: AppHandle, pane_id: String, command: String) -> Result<(), String> {
+    if !valid_herdr_id(&pane_id, 'p') {
+        return Err("Invalid Herdr pane id".to_string());
+    }
+    validated_terminal_body(&command, "command")?;
+    let config_path = write_embedded_herdr_config(&app)?;
+    tokio::task::spawn_blocking(move || {
+        validate_herdr()?;
+        herdr_api_output(&config_path, &["pane", "run", &pane_id, &command]).map(|_| ())
+    })
+    .await
+    .map_err(|e| format!("Herdr pane run task failed: {e}"))?
+}
+
+/// #502 FR-ENV-DISPATCH.3 — 진행 중인 것을 중단한다(키 입력).
+#[tauri::command]
+pub async fn herdr_send_keys(
+    app: AppHandle,
+    pane_id: String,
+    keys: Vec<String>,
+) -> Result<(), String> {
+    if !valid_herdr_id(&pane_id, 'p') {
+        return Err("Invalid Herdr pane id".to_string());
+    }
+    validated_keys(&keys)?;
+    let config_path = write_embedded_herdr_config(&app)?;
+    tokio::task::spawn_blocking(move || {
+        validate_herdr()?;
+        let mut args: Vec<&str> = vec!["pane", "send-keys", &pane_id];
+        for key in &keys {
+            args.push(key);
+        }
+        herdr_api_output(&config_path, &args).map(|_| ())
+    })
+    .await
+    .map_err(|e| format!("Herdr pane send-keys task failed: {e}"))?
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{normalized_label, valid_herdr_id};
+    use super::{
+        normalized_label, valid_herdr_id, validated_keys, validated_terminal_body, HERDR_KEYS_MAX,
+        HERDR_KEY_MAX_BYTES, HERDR_PROMPT_MAX_BYTES,
+    };
 
     #[test]
     fn validates_public_ids() {
@@ -191,5 +279,27 @@ mod tests {
             Some("project alpha".to_string())
         );
         assert!(normalized_label(Some("a".repeat(257))).is_err());
+    }
+
+    #[test]
+    fn rejects_empty_and_oversized_terminal_bodies() {
+        assert!(validated_terminal_body("pnpm test", "command").is_ok());
+        assert!(validated_terminal_body("   ", "command").is_err());
+        assert!(validated_terminal_body("", "command").is_err());
+        assert!(validated_terminal_body(&"a".repeat(HERDR_PROMPT_MAX_BYTES + 1), "command").is_err());
+    }
+
+    #[test]
+    fn validates_keys_against_flag_injection_and_limits() {
+        assert!(validated_keys(&["C-c".to_string()]).is_ok());
+        assert!(validated_keys(&["esc".to_string(), "Enter".to_string()]).is_ok());
+        assert!(validated_keys(&[]).is_err());
+        assert!(validated_keys(&["--help".to_string()]).is_err());
+        assert!(validated_keys(&["".to_string()]).is_err());
+        assert!(validated_keys(&["a b".to_string()]).is_err());
+        assert!(validated_keys(&["k;rm".to_string()]).is_err());
+        assert!(validated_keys(&["a".repeat(HERDR_KEY_MAX_BYTES + 1)]).is_err());
+        let too_many: Vec<String> = (0..HERDR_KEYS_MAX + 1).map(|_| "esc".to_string()).collect();
+        assert!(validated_keys(&too_many).is_err());
     }
 }

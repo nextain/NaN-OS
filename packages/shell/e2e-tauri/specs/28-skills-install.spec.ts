@@ -17,8 +17,8 @@ describe("28 — skills install", () => {
 		await skillsBtn.waitForDisplayed({ timeout: 10_000 });
 		await clickBySelector(S.skillsTab);
 
-		const skillsPanel = await $(S.skillsTabPanel);
-		await skillsPanel.waitForDisplayed({ timeout: 5_000 });
+		const skillsApp = await $(S.skillsTabApp);
+		await skillsApp.waitForDisplayed({ timeout: 5_000 });
 	});
 
 	it("should show gateway skill cards with status info", async () => {

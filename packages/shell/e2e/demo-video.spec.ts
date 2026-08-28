@@ -704,7 +704,7 @@ test.describe.skip("Demo Video Recording", () => {
 
 		await page.goto("/");
 		tl.mark("page loaded");
-		const overlay = page.locator(".onboarding-panel");
+		const overlay = page.locator(".onboarding-app");
 		await expect(overlay).toBeVisible({ timeout: 15_000 });
 		tl.mark("onboarding overlay visible");
 		await ensureIconsLoaded(page);
@@ -818,8 +818,8 @@ test.describe.skip("Demo Video Recording", () => {
 		);
 		await page.goto("/");
 		tl.mark("page reloaded");
-		await expect(page.locator(".chat-panel")).toBeVisible({ timeout: 15_000 });
-		tl.mark("chat panel visible");
+		await expect(page.locator(".chat-app")).toBeVisible({ timeout: 15_000 });
+		tl.mark("chat app visible");
 		await ensureIconsLoaded(page);
 		tl.mark("icons loaded (phase 2)");
 

@@ -34,7 +34,7 @@ const ttsSyncMocks = vi.hoisted(() => ({
 		onPlaybackEnd?: () => void;
 	},
 }));
-const mockSendPanelSkills = vi.hoisted(() => vi.fn().mockResolvedValue(true));
+const mockSendAppSkills = vi.hoisted(() => vi.fn().mockResolvedValue(true));
 
 vi.mock("../../lib/tts/synthesize", () => ({
 	synthesizeTts: ttsSyncMocks.synthesizeTts,
@@ -125,9 +125,9 @@ vi.mock("../../lib/chat-service", () => ({
 	cancelChat: vi.fn().mockResolvedValue(undefined),
 	directToolCall: vi.fn().mockResolvedValue({ success: false }),
 	fetchAgentSkills: vi.fn().mockResolvedValue([]),
-	sendPanelSkills: mockSendPanelSkills,
+	sendAppSkills: mockSendAppSkills,
 	sendApprovalResponse: vi.fn().mockResolvedValue(undefined),
-	sendPanelToolResult: vi.fn().mockResolvedValue(undefined),
+	sendAppToolResult: vi.fn().mockResolvedValue(undefined),
 	configureSpeechProfile: vi.fn().mockResolvedValue(undefined),
 	yieldSpeechActivity: vi.fn().mockResolvedValue(undefined),
 	controlSpeechActivity: vi.fn().mockResolvedValue(undefined),
@@ -218,6 +218,45 @@ describe("ChatArea", () => {
 		localStorage.removeItem("naia-config");
 	});
 
+	it("shows the provider error when a zero-token usage event precedes failure", async () => {
+		localStorage.setItem(
+			"naia-config",
+			JSON.stringify({
+				apiKey: "invalid-test-key",
+				provider: "gemini",
+				model: "gemini-2.5-flash",
+			}),
+		);
+		render(<ChatArea />);
+		const input = screen.getByPlaceholderText(/message/i);
+		fireEvent.change(input, { target: { value: "certification probe" } });
+		fireEvent.keyDown(input, { key: "Enter" });
+
+		await waitFor(() => expect(capturedRequests).toHaveLength(1));
+		const request = capturedRequests[0];
+		request.onChunk({
+			type: "usage",
+			requestId: request.requestId,
+			inputTokens: 0,
+			outputTokens: 0,
+			cost: 0,
+			model: "gemini-2.5-flash",
+		});
+		request.onChunk({
+			type: "error",
+			requestId: request.requestId,
+			message: "provider rejected the API key",
+		});
+
+		await waitFor(() =>
+			expect(
+				useChatStore.getState().messages.at(-1)?.content,
+			).toContain("provider rejected the API key"),
+		);
+		expect(useChatStore.getState().isStreaming).toBe(false);
+		localStorage.removeItem("naia-config");
+	});
+
 	it("keeps an explicit emotion until queued speech ends", async () => {
 		localStorage.setItem(
 			"naia-config",
@@ -263,7 +302,7 @@ describe("ChatArea", () => {
 				model: "gemini-2.5-flash",
 			}),
 		);
-		mockSendPanelSkills.mockResolvedValueOnce(false);
+		mockSendAppSkills.mockResolvedValueOnce(false);
 		render(<ChatArea />);
 		const input = screen.getByPlaceholderText(/메시지|message/i);
 		fireEvent.change(input, { target: { value: "radio please" } });

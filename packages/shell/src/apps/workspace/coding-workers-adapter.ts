@@ -6,7 +6,7 @@ import {
 export type CodingWorkersAdapterFactory = () => CodingWorkersAdapter;
 
 // The Rust/Tauri bridge replaces this factory after the paired Agent proto is
-// available. Keeping the unavailable adapter here, outside the panel, makes
+// available. Keeping the unavailable adapter here, outside the app, makes
 // the boundary explicit and prevents UI-only success states.
 let adapterFactory: CodingWorkersAdapterFactory = () =>
 	unavailableCodingWorkersAdapter;

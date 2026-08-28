@@ -190,7 +190,7 @@ async function forceProviderConfig(): Promise<void> {
 						naiaKey: undefined,
 						naiaUserId: undefined,
 						onboardingComplete: true,
-						panelVisible: true,
+						appVisible: true,
 						discordSessionMigrated: true,
 					}
 				: {
@@ -200,7 +200,7 @@ async function forceProviderConfig(): Promise<void> {
 						apiKey: "",
 						naiaKey: naiaKey,
 						onboardingComplete: true,
-						panelVisible: true,
+						appVisible: true,
 						discordSessionMigrated: true,
 					};
 			localStorage.setItem("naia-config", JSON.stringify(config));

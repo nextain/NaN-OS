@@ -43,7 +43,7 @@ export function AppInstallDialog({ onClose }: AppInstallDialogProps) {
 
 		setLoading(true);
 		setResult(null);
-		Logger.info("AppInstallDialog", `Installing panel from ${mode}: ${source}`);
+		Logger.info("AppInstallDialog", `Installing app from ${mode}: ${source}`);
 		try {
 			// Direct shell-side install (HTTPS-only git clone). Ported from the
 			// legacy agent skill (#89 / #257) into a Tauri command — install is a
@@ -53,7 +53,7 @@ export function AppInstallDialog({ onClose }: AppInstallDialogProps) {
 				success: true,
 				message: `설치 완료: ${res.name} (${res.id}) → ${res.path}`,
 			});
-			// Refresh the installed-panel list so the new tab appears, then close.
+			// Refresh the installed-app list so the new tab appears, then close.
 			await loadInstalledApps().catch(() => {});
 			await new Promise((r) => setTimeout(r, 650));
 			onClose();
@@ -66,20 +66,20 @@ export function AppInstallDialog({ onClose }: AppInstallDialogProps) {
 
 	return (
 		<div
-			className="panel-install-overlay"
+			className="app-install-overlay"
 			onClick={onClose}
 			onKeyDown={() => {}}
 		>
 			<div
-				className="panel-install-dialog"
+				className="app-install-dialog"
 				onClick={(e) => e.stopPropagation()}
 				onKeyDown={() => {}}
 			>
-				<div className="panel-install-header">
-					<span className="panel-install-title">앱 추가</span>
+				<div className="app-install-header">
+					<span className="app-install-title">앱 추가</span>
 					<button
 						type="button"
-						className="panel-install-close"
+						className="app-install-close"
 						onClick={onClose}
 					>
 						✕
@@ -87,27 +87,27 @@ export function AppInstallDialog({ onClose }: AppInstallDialogProps) {
 				</div>
 
 				{mode === "git" ? (
-					<div className="panel-install-body">
-						<label className="panel-install-label" htmlFor="git-url-input">
+					<div className="app-install-body">
+						<label className="app-install-label" htmlFor="git-url-input">
 							Git URL
 						</label>
 						<input
 							id="git-url-input"
 							type="text"
-							className="panel-install-input"
-							placeholder="https://github.com/user/my-panel.git"
+							className="app-install-input"
+							placeholder="https://github.com/user/my-app.git"
 							value={gitUrl}
 							onChange={(e) => setGitUrl(e.target.value)}
 							onKeyDown={(e) => e.key === "Enter" && handleInstall()}
 							disabled={loading}
 						/>
-						<p className="panel-install-hint">
+						<p className="app-install-hint">
 							비공개 저장소: URL에 토큰 포함 (https://TOKEN@github.com/...)
 						</p>
 					</div>
 				) : (
-					<div className="panel-install-body">
-						<div className="panel-install-notice">
+					<div className="app-install-body">
+						<div className="app-install-notice">
 							🚧 Zip 파일 설치는 보안 강화 작업 중입니다 (#359). 현재는 Git URL
 							설치만 지원합니다.
 						</div>
@@ -116,24 +116,24 @@ export function AppInstallDialog({ onClose }: AppInstallDialogProps) {
 
 				{result && (
 					<div
-						className={`panel-install-result ${result.success ? "success" : "error"}`}
+						className={`app-install-result ${result.success ? "success" : "error"}`}
 					>
 						{result.message}
 					</div>
 				)}
 
-				<div className="panel-install-footer">
-					<div className="panel-install-tabs">
+				<div className="app-install-footer">
+					<div className="app-install-tabs">
 						<button
 							type="button"
-							className={`panel-install-tab${mode === "git" ? " active" : ""}`}
+							className={`app-install-tab${mode === "git" ? " active" : ""}`}
 							onClick={() => setMode("git")}
 						>
 							Git URL
 						</button>
 						<button
 							type="button"
-							className={`panel-install-tab${mode === "file" ? " active" : ""}`}
+							className={`app-install-tab${mode === "file" ? " active" : ""}`}
 							onClick={() => setMode("file")}
 						>
 							파일 (Zip · 준비 중)
@@ -141,7 +141,7 @@ export function AppInstallDialog({ onClose }: AppInstallDialogProps) {
 					</div>
 					<button
 						type="button"
-						className="panel-install-cancel-btn"
+						className="app-install-cancel-btn"
 						onClick={onClose}
 						disabled={loading}
 					>
@@ -149,7 +149,7 @@ export function AppInstallDialog({ onClose }: AppInstallDialogProps) {
 					</button>
 					<button
 						type="button"
-						className="panel-install-confirm-btn"
+						className="app-install-confirm-btn"
 						onClick={handleInstall}
 						disabled={loading || mode !== "git" || !gitUrl.trim()}
 					>

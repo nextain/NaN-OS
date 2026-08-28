@@ -154,6 +154,10 @@ const env = interactiveLaunchEnv(process.env);
 // development executable is an installed bundle. Rust ignores this override
 // in release builds.
 const devVoxCpm2Bundle = resolve(SHELL, "src-tauri", "voxcpm2-runtime");
+const devVoxCpm2DownloadManifest = resolve(
+	devVoxCpm2Bundle,
+	"download-manifest.json",
+);
 if (mode === "dev") {
 	// Thin-runtime dev builds reuse the staged download manifest, but its ignored
 	// control files can predate the checkout. Refresh the small trusted installer
@@ -168,6 +172,10 @@ if (mode === "dev") {
 		resolve(SHELL, "src-tauri/voxcpm2-activation-contract.json"),
 		resolve(devVoxCpm2Bundle, "voxcpm2-activation-contract.json"),
 	);
+	if (existsSync(devVoxCpm2DownloadManifest)) {
+		env.NAIA_VOXCPM2_DOWNLOAD_MANIFEST =
+			env.NAIA_VOXCPM2_DOWNLOAD_MANIFEST ?? devVoxCpm2DownloadManifest;
+	}
 }
 if (
 	mode === "dev" &&

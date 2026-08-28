@@ -1,7 +1,7 @@
 {
   "name": "naia-shell",
   "private": true,
-  "version": "0.2.1",
+  "version": "0.2.2",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -19,6 +19,8 @@
     "test:watch": "vitest",
     "test:ui": "vitest --ui",
     "test:e2e": "playwright test",
+    "test:regression:store": "vitest run src/components/__tests__/ChatArea.test.tsx src/components/__tests__/SettingsTab.test.tsx src/lib/__tests__/adk-store.test.ts && playwright test e2e/store-certification.spec.ts",
+    "test:regression:store:native": "pnpm run build:e2e:tauri && wdio run e2e-tauri/wdio.conf.codex.ts --spec e2e-tauri/specs/99-store-certification.spec.ts",
     "test:e2e:uc1": "playwright test e2e/uc1-new-core.spec.ts",
     "test:e2e:newcore": "playwright test e2e/uc1-new-core.spec.ts e2e/uc1-new-core-variants.spec.ts e2e/uc-backlog-pending.spec.ts",
     "test:e2e:nva-p0": "playwright test e2e/nva-p0-sync-capability.spec.ts",

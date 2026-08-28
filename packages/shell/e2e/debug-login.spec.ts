@@ -26,7 +26,7 @@ const MOCK = `
     if(cmd==="frontend_log") return;
     if(cmd==="list_skills") return [];
     if(cmd==="list_stt_models") return [];
-    if(cmd==="panel_list_installed") return [];
+    if(cmd==="app_list_installed") return [];
     if(cmd==="browser_check") return true;
     if(cmd==="browser_embed_port") return 19222;
     if(cmd==="browser_embed_navigate") return;
@@ -58,7 +58,7 @@ test("debug: settings lab login IPC trace", async ({ page }) => {
 	});
 
 	await page.goto("/");
-	await expect(page.locator(".chat-panel")).toBeVisible({ timeout: 15000 });
+	await expect(page.locator(".chat-app")).toBeVisible({ timeout: 15000 });
 
 	// Open settings via the AppBar settings button (.app-bar-settings)
 	const gearBtn = page.locator(".app-bar-settings");
@@ -67,11 +67,11 @@ test("debug: settings lab login IPC trace", async ({ page }) => {
 	await page.screenshot({ path: "_results_/s1-settings-open.png" });
 
 	// Scroll down to find Naia Lab section
-	const settingsPanel = page
-		.locator(".settings-panel, [class*='settings'], [class*='Settings']")
+	const settingsApp = page
+		.locator(".settings-app, [class*='settings'], [class*='Settings']")
 		.first();
-	if ((await settingsPanel.count()) > 0) {
-		await settingsPanel.evaluate((el) => (el.scrollTop = 0));
+	if ((await settingsApp.count()) > 0) {
+		await settingsApp.evaluate((el) => (el.scrollTop = 0));
 	}
 
 	// Find all buttons visible now

@@ -233,17 +233,17 @@ export function createGeminiLiveSession(): VoiceSession {
 			);
 		},
 
-		// #313 L3 — mid-session panel context bridge.
+		// #313 L3 — mid-session app context bridge.
 		//
 		// Gemini Live's `clientContent` event with `turnComplete: false` appends
 		// the parts to the running session context WITHOUT triggering a model
 		// response (per Live API docs: turn boundaries are user-controlled; an
 		// incomplete turn is treated as additional grounding for the next model
-		// turn). We use this surface to inject panel-state deltas (e.g. browser
+		// turn). We use this surface to inject app-state deltas (e.g. browser
 		// URL change) so the model's NEXT spoken turn is grounded in current
 		// world state instead of the snapshot frozen at session open.
 		//
-		// Payload is a compact text serialization of the panel context — kept
+		// Payload is a compact text serialization of the app context — kept
 		// minimal so rapid URL hops (debounced upstream at 500ms) do not fill
 		// the WS with bloated JSON. Drops silently when WS is not connected so
 		// the bridge can fire-and-forget without paused/closed checks.
@@ -260,7 +260,7 @@ export function createGeminiLiveSession(): VoiceSession {
 				});
 				return;
 			}
-			const text = `[panel-context:${ctx.type}] ${serialized}`;
+			const text = `[app-context:${ctx.type}] ${serialized}`;
 			ws.send(
 				JSON.stringify({
 					clientContent: {

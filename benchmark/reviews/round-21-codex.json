@@ -1,0 +1,23 @@
+{
+  "verdict": "NOT_CLEAN",
+  "frame_assessment": {
+    "scope_is_sufficient": false,
+    "missing_concerns": [
+      "`environmentAwareness=\"always\"`와 전역 `enableTools=false`를 함께 설정했을 때 어느 사용자 설정이 우선하는지 계약이 모순되고, 해당 조합의 테스트가 없다."
+    ]
+  },
+  "findings": [
+    {
+      "id": "ENV-ATTENTION-ALWAYS-GLOBALLY-DISABLED",
+      "file_location": "packages/shell/src/components/ChatArea.tsx:491, packages/shell/src/components/ChatArea.tsx:1822, packages/shell/e2e/environment-skill.spec.ts:848, docs/requirements.md:1047",
+      "impact": "사용자가 작업 표면을 항상 보내도록 `always`를 선택해도 전역 도구 사용을 끄면 `environmentToolReady`가 false가 되어 표면 목록이 전혀 전송되지 않는다. `always` E2E는 항상 `enableTools:true`로만 실행되고, `enableTools:false` E2E는 기본 `auto`만 검사하므로 이 동작을 드러내지 못한다.",
+      "why_it_matters": "`always`는 사용자가 선택하는 환경 인지 정책이고 전체 목록 자체는 도구 호출 없이도 유용하다. 그런데 현재 구현은 도구 가용성과 환경 컨텍스트 전송을 하나의 `toolReady` 조건으로 묶는다. FR-ENV-ATTENTION.4의 사용자 정책 우선 및 UI의 'always' 의미와 FR-ENV-ATTENTION.19의 전역 도구 비활성화 규칙 사이 우선순위가 정의되지 않은 채, 구현은 후자를 조용히 우선한다. 테스트도 작성자에게 유리한 두 개의 비충돌 조합만 재므로 충분한 커버리지라고 할 수 없다.",
+      "severity": "medium"
+    }
+  ],
+  "what_would_make_it_clean": [
+    "`always + enableTools=false`의 기대 동작을 사용자 관점에서 명시적으로 정하고 FR-ENV-ATTENTION.4와 .19의 우선순위를 일관되게 문서화한다.",
+    "`always`가 우선이라면 전체 표면 세그먼트는 보내되 환경 도구만 비활성화하도록 `buildEnvironmentSegments`의 목록 전송 조건과 도구 등록 조건을 분리한다.",
+    "전역 도구를 끄는 것이 `always`보다 우선하도록 의도했다면 설정 UI에서 그 효과를 명확히 알리고, `always + enableTools=false` 실제 chat_request를 검증하는 Playwright 회귀 테스트를 추가한다."
+  ]
+}

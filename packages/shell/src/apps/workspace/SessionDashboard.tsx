@@ -11,7 +11,7 @@ interface SessionDashboardProps {
 	onSessionClick: (session: SessionInfo) => void;
 	/** Callback to expose current session list to parent */
 	onSessionsUpdate?: (sessions: SessionInfo[]) => void;
-	/** Dir identifier of the session to visually highlight (from Panel API focusSession) */
+	/** Dir identifier of the session to visually highlight (from App API focusSession) */
 	highlightedDir?: string;
 	/** Actual workspace root (runtime override or compile-time fallback). Used in empty state display. */
 	workspaceRoot?: string;

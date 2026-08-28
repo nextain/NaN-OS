@@ -102,7 +102,7 @@ async function gotoModelSettings(
 	);
 
 	await page.goto("/");
-	await expect(page.locator(".chat-panel")).toBeVisible({ timeout: 10_000 });
+	await expect(page.locator(".chat-app")).toBeVisible({ timeout: 10_000 });
 	await page.getByRole("button", { name: /^(설정|Settings)$/ }).click();
 	// model-select lives in the brain tab; use stable tab ids instead of copy.
 	await page.locator('[data-settings-tab="brain"]').click();

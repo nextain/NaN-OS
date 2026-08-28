@@ -71,9 +71,9 @@ pub fn agent_event_to_ui_json(ev: &pb::AgentEvent) -> Value {
         Some(Event::Compacted(c)) => {
             json!({"type":"compacted","requestId":rid,"droppedCount":c.dropped_count})
         } // UC-compaction(FR-COMPACT)
-        Some(Event::PanelToolCall(t)) => {
-            json!({"type":"panel_tool_call","requestId":rid,"toolCallId":t.tool_call_id,"toolName":t.tool_name,"args":parse(&t.args_json)})
-        } // UC-PANEL FR-PANEL-2: 환경 도구 위임 → 셸 실행
+        Some(Event::AppToolCall(t)) => {
+            json!({"type":"app_tool_call","requestId":rid,"toolCallId":t.tool_call_id,"toolName":t.tool_name,"args":parse(&t.args_json)})
+        } // UC-APP FR-APP-2: 환경 도구 위임 → 셸 실행
         Some(Event::Grounding(g)) => match pb::GroundingStatus::try_from(g.status) {
             Ok(status) if status != pb::GroundingStatus::Unspecified => {
                 let sources: Vec<Value> = g
@@ -420,7 +420,7 @@ pub fn try_json_to_chat_request(v: &Value) -> Result<ChatRequest, WireInputError
         messages,
         system_prompt: s("systemPrompt"),
         // S4 — 셸이 보낸 구조화 environmentSegments(array) → proto JSON 문자열(args_json 동형, 무손실).
-        // 코어가 화이트리스트 디코드(avatarEmotion|panel). 부재/비배열 = None(필드 omit, 무회귀).
+        // 코어가 화이트리스트 디코드(avatarEmotion|app). 부재/비배열 = None(필드 omit, 무회귀).
         environment_segments_json: v
             .get("environmentSegments")
             .filter(|x| x.is_array())
@@ -678,21 +678,21 @@ impl AgentGrpc {
         Ok(())
     }
 
-    // UC-PANEL FR-PANEL: 환경 panel skill RPC 클라이언트(셸→agent). agent_dispatcher 가 wire JSON 을 이리로 라우팅.
-    pub async fn register_panel_skills(
+    // UC-APP FR-APP: 환경 app skill RPC 클라이언트(셸→agent). agent_dispatcher 가 wire JSON 을 이리로 라우팅.
+    pub async fn register_app_skills(
         &mut self,
-        panel_id: String,
+        app_id: String,
         tools: Vec<pb::ToolSpec>,
     ) -> Result<(), tonic::Status> {
         self.client
-            .register_panel_skills(pb::PanelSkills { panel_id, tools })
+            .register_app_skills(pb::AppSkills { app_id, tools })
             .await?;
         Ok(())
     }
 
-    pub async fn clear_panel_skills(&mut self, panel_id: String) -> Result<(), tonic::Status> {
+    pub async fn clear_app_skills(&mut self, app_id: String) -> Result<(), tonic::Status> {
         self.client
-            .clear_panel_skills(pb::PanelId { panel_id })
+            .clear_app_skills(pb::AppId { app_id })
             .await?;
         Ok(())
     }
@@ -705,7 +705,7 @@ impl AgentGrpc {
             .into_inner())
     }
 
-    pub async fn panel_tool_result(
+    pub async fn app_tool_result(
         &mut self,
         request_id: String,
         tool_call_id: String,
@@ -714,7 +714,7 @@ impl AgentGrpc {
         activity_id: Option<String>,
     ) -> Result<(), tonic::Status> {
         self.client
-            .panel_tool_result(pb::PanelToolResultMsg {
+            .app_tool_result(pb::AppToolResultMsg {
                 request_id,
                 tool_call_id,
                 output,

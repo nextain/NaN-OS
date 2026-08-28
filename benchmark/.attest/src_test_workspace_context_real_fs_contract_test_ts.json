@@ -1,0 +1,18 @@
+{
+  "spec": "src/test/workspace-context-real-fs.contract.test.ts",
+  "kinds": [
+    "native"
+  ],
+  "cases": [
+    "픽스처가 실제로 만들어졌다 — 없으면 이 증거는 성립하지 않는다",
+    "진입점이 선언한 문서를 실제 파일에서 읽는다 (UC-WORKSPACE-CONTEXT-DISCOVER)",
+    "프로젝트에 들어가면 범위와 개정이 함께 바뀐다 (UC-WORKSPACE-CONTEXT-ENTER-PROJECT)",
+    "프로젝트를 바꾸면 이전 지역 컨텍스트가 남지 않는다 (UC-WORKSPACE-CONTEXT-SWITCH-PROJECT)",
+    "없는 진입점을 성공으로 말하지 않는다 (UC-WORKSPACE-CONTEXT-BROKEN-ENTRYPOINT)",
+    "루트 밖으로 나가는 이름은 거절한다"
+  ],
+  "touched": [
+    "/tmp/naia-bench-tFtWWS"
+  ],
+  "at": 1787906954189
+}

@@ -17,7 +17,7 @@ import {
 	startListening as sttStart,
 	stopListening as sttStop,
 } from "tauri-plugin-stt-api";
-import { activeBridge, getBridgeForPanel } from "../lib/active-bridge";
+import { activeBridge, getBridgeForApp } from "../lib/active-bridge";
 import { MarkdownCodeBlock } from "./MarkdownCodeBlock";
 import {
 	formatAiInterferencePrompt,
@@ -35,17 +35,30 @@ import {
 	isNewCore,
 	sendApprovalResponse,
 	sendChatMessage,
-	sendPanelSkills,
-	sendPanelToolResult,
+	sendAppSkills,
+	sendAppSkillsClear,
+	sendAppToolResult,
 	yieldSpeechActivity,
 	type SpeechActivityResume,
 } from "../lib/chat-service";
 import {
-	BGM_PANEL_ID,
+	BGM_APP_ID,
 	SKILL_YOUTUBE_BGM,
 	executeBgmSkill,
 	shouldActivateRadioDj,
 } from "../lib/bgm-skill";
+import {
+	ENVIRONMENT_APP_ID,
+	SKILL_ENVIRONMENT,
+	executeEnvironmentSkill,
+	liveEnvironmentDeps,
+	environmentClearNeeded,
+	environmentSession,
+	environmentToolRegistered,
+	noteEnvironmentClear,
+	noteEnvironmentToolAck,
+	refreshEnvironment,
+} from "../lib/environment-skill";
 import {
 	activateMicUnlessSpeechActivityOwnsVoice,
 	canSpeakProactiveText,
@@ -395,7 +408,7 @@ function resolveTtsVoiceId(config: AppConfig): string | undefined {
 
 /** Build MemoryContext for system prompt injection.
  *  Note: User facts are now handled by Agent MemorySystem (sessionRecall).
- *  Shell only provides persona/locale/panel context.
+ *  Shell only provides persona/locale/app context.
  *
  *  S4: this is now used ONLY by the **voice (Live) and Discord** paths, which do
  *  NOT route through the naia-agent core (Gemini Live / OpenAI Realtime / naia-omni
@@ -415,13 +428,13 @@ async function buildMemoryContext(): Promise<MemoryContext> {
 		ctx.discordDefaultUserId = cfg?.discordDefaultUserId;
 		ctx.discordDmChannelId = cfg?.discordDmChannelId;
 
-		// Active panel context + persistent contexts (bgm favorites/current track).
-		// Persistent contexts survive panel switches so background music state is
+		// Active app context + persistent contexts (bgm favorites/current track).
+		// Persistent contexts survive app switches so background music state is
 		// always available — fixes the AI hallucinating favorites when another
-		// panel was active.
-		const panelCtxList = selectPromptAppContexts(useAppStore.getState());
-		if (panelCtxList.length > 0) {
-			ctx.panelContexts = panelCtxList;
+		// app was active.
+		const appCtxList = selectPromptAppContexts(useAppStore.getState());
+		if (appCtxList.length > 0) {
+			ctx.appContexts = appCtxList;
 		}
 	} catch (err) {
 		Logger.warn("ChatArea", "Failed to build memory context", {
@@ -439,7 +452,7 @@ async function buildMemoryContext(): Promise<MemoryContext> {
  *   - `avatarEmotion`: the desktop shell always renders an avatar, so the core
  *     should emit its standard emotion-tag instructions (the wording lives in the
  *     core now; the shell only signals the capability).
- *   - `panel`: live UI panel context (bgm favorites, browser url, …) as isolated
+ *   - `app`: live UI app context (bgm favorites, browser url, …) as isolated
  *     reference data.
  *   - `responseStyle`: voice-pipeline turns ask for brief spoken answers. The core
  *     owns the brevity wording and appends it AFTER persona, so voice replies stay
@@ -450,16 +463,42 @@ async function buildMemoryContext(): Promise<MemoryContext> {
 function buildEnvironmentSegments(
 	memoryCtx: MemoryContext,
 	responseStyle: "brief" | "normal" = "normal",
+	/**
+	 * 이번 턴에 환경 도구가 뇌에 실제로 등록되어 있는가 (FR-ENV-ATTENTION.16).
+	 *
+	 * 등록이 전달되지 않았는데 표면을 실으면, 개수만 싣는 안내가 "environment 도구를
+	 * 불러라"라고 말한다 — 나이아에게 없는 도구다. 못 하는 것을 하라고 시키는 셈이라
+	 * 그 턴에는 아예 싣지 않는다.
+	 */
+	toolReady = true,
 ): EnvironmentSegment[] {
 	const segs: EnvironmentSegment[] = [{ kind: "avatarEmotion" }];
-	if (memoryCtx.panelContexts?.length) {
+	if (memoryCtx.appContexts?.length) {
 		segs.push({
 			kind: "app",
-			entries: memoryCtx.panelContexts.map((pc) => ({
+			entries: memoryCtx.appContexts.map((pc) => ({
 				type: pc.type,
 				data: pc.data,
 			})),
 		});
+	}
+	// #502 실배선 (FR-ENV-LIVE.1·2, FR-ENV-ATTENTION.1~4): 지금 무엇이 돌고 있는지 나이아가
+	// 스스로 알게 한다. 도구를 부르라고 사용자가 말할 필요가 없다. 표면이 없으면 세그먼트를
+	// 만들지 않는다 — 빈 목록을 올려 "아무것도 없다"고 단언하지 않는다.
+	//
+	// 다만 목록 전체를 늘 싣지는 않는다. 기본(auto)에서는 개수만 실리고, 나이아가 watch 로
+	// 지켜보기로 정한 동안에만 목록이 붙는다. 사용자가 config 로 off/always 를 정하면 그것이 이긴다.
+	// 도구를 부를 수 없을 때 무엇을 막아야 하는가 (FR-ENV-ATTENTION.19·20).
+	//
+	// 막아야 하는 것은 "개수만 보내고 도구를 부르라고 안내하는 것"이다. 그 안내가 닫힌 길을
+	// 가리키기 때문이다. 목록 자체는 도구 없이도 쓸모가 있다 — 나이아가 무엇이 돌고 있는지
+	// 말해 줄 수는 있다. 그래서 사용자가 "늘 보내기"를 고른 경우에는 도구가 꺼져 있어도
+	// 목록을 보낸다. 사용자 정책이 이긴다는 FR-ENV-ATTENTION.4 와 어긋나지 않게
+	// (2026-08-28 21차 적대리뷰 지적 — 구현이 조용히 반대로 정하고 있었다).
+	const awareness = loadConfig()?.environmentAwareness ?? "auto";
+	const surfaces = awareness === "always" || toolReady ? environmentSession.segment(awareness) : null;
+	if (surfaces) {
+		segs.push(surfaces);
 	}
 	// 음성 파이프라인(STT→채팅→TTS)은 brief — 코어가 간결성 지시를 persona 뒤에 append(persona 안 덮음).
 	// normal(텍스트 채팅)은 무영향(코어가 블록 미생성).
@@ -468,6 +507,10 @@ function buildEnvironmentSegments(
 	}
 	return segs;
 }
+
+// 통화마다 하나씩 늘어나는 번호. 지켜보기의 주인 표에 쓴다 (FR-ENV-ATTENTION.13).
+// 모듈 수준인 이유는 재연결이 같은 컴포넌트 안에서 여러 세션을 만들기 때문이다.
+let voiceSessionSeq = 0;
 
 // Keep reference to prevent garbage collection during playback
 let currentAudio: HTMLAudioElement | null = null;
@@ -662,9 +705,9 @@ export function ChatArea({
 	const acceptSpeechActivitiesRef = useRef(true);
 	const queuedSendTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 	const voiceSessionRef = useRef<VoiceSession | null>(null);
-	// #313 L3 — mid-session panel context bridge handle (detached in every
+	// #313 L3 — mid-session app context bridge handle (detached in every
 	// voice cleanup path).
-	const panelContextBridgeRef = useRef<AppContextBridge | null>(null);
+	const appContextBridgeRef = useRef<AppContextBridge | null>(null);
 	const micStreamRef = useRef<MicStream | null>(null);
 	const audioPlayerRef = useRef<AudioPlayer | null>(null);
 	const voiceStartRef = useRef<{
@@ -1367,7 +1410,7 @@ export function ChatArea({
 			}
 			if (typeof chunk.activityId !== "string") return;
 			if (
-				!["panel_tool_call", "text", "finish", "error"].includes(
+				!["app_tool_call", "text", "finish", "error"].includes(
 					String(chunk.type),
 				)
 			) {
@@ -1415,12 +1458,12 @@ export function ChatArea({
 			}
 
 			if (
-				chunk.type === "panel_tool_call" &&
+				chunk.type === "app_tool_call" &&
 				typeof chunk.requestId === "string" &&
 				typeof chunk.toolCallId === "string" &&
 				typeof chunk.toolName === "string"
 			) {
-				dispatchPanelToolCall({
+				dispatchAppToolCall({
 					requestId: chunk.requestId,
 					toolCallId: chunk.toolCallId,
 					toolName: chunk.toolName,
@@ -1739,7 +1782,7 @@ export function ChatArea({
 			// Startup registration can race the agent process. Refresh the
 			// idempotent descriptor immediately before every turn so semantic
 			// requests such as Radio DJ cannot degrade into text-only claims.
-			const bgmSkillReady = await sendPanelSkills(BGM_PANEL_ID, [
+			const bgmSkillReady = await sendAppSkills(BGM_APP_ID, [
 				SKILL_YOUTUBE_BGM,
 			]);
 			Logger.info("ChatArea", "turn bgm skill registration", {
@@ -1749,6 +1792,50 @@ export function ChatArea({
 			if (!bgmSkillReady) {
 				throw new Error("skill_youtube_bgm_registration_failed");
 			}
+			// #502 (FR-ENV-ATTENTION.5): 싣기 직전에 관측을 갱신한다.
+			//
+			// 갱신 없이 부팅 스냅샷을 계속 실으면 "지금 뭐 돌고 있어"에 몇 시간 전 목록으로
+			// 답하게 된다. 지켜보는 동안에는 그것이 더 나쁘다 — 계속 보고 있다고 말해 놓고
+			// 옛것을 보여 주는 셈이다. 개수만 싣는 동안에도 개수가 틀리면 나이아가 부를
+			// 이유를 잘못 판단한다.
+			//
+			// 관측 갱신 비용은 실측했다: herdr 스냅샷 한 번이 10ms 다(2026-08-27). 그 뒤에
+			// 오는 LLM 호출 앞에서는 무시할 수준이고, Herdr 이 없으면 즉시 실패해 넘어간다.
+			// 꺼 두었으면 부르지 않는다 — 껐다는 말은 값도 안 든다는 뜻이어야 한다.
+			// 환경 도구도 턴마다 다시 등록한다. 부팅 등록은 agent 기동과 경쟁하고, agent 가
+			// 재시작하면 조용히 사라진다 — BGM 이 같은 이유로 매 턴 재등록한다.
+			// 다만 여기서는 실패해도 대화를 막지 않는다. 환경은 대화의 조건이 아니다.
+			let environmentToolReady = false;
+			if ((loadConfig()?.environmentAwareness ?? "auto") === "off") {
+				// 꺼져 있으면 등록 경로를 타지 않으므로, 실패한 해제는 스스로 낫지 않는다.
+				// 도구 선언이 뇌에 남아 요청 비용이 계속 붙는다 — 다음 턴에 한 번 더 시도한다
+				// (FR-ENV-ATTENTION.17). 기다리지 않으므로 대화는 지연되지 않는다.
+				if (environmentClearNeeded()) {
+					void sendAppSkillsClear(ENVIRONMENT_APP_ID, { awaitAck: true })
+						.then((ok) => noteEnvironmentClear(ok))
+						.catch(() => noteEnvironmentClear(false));
+				}
+			} else {
+				// 등록을 쏘되 기다리지 않는다. 기다리면 확인이 오지 않을 때 사용자의 모든
+				// 대화가 시간초과만큼 멈춘다 — 실제로 그렇게 만들어 12건이 깨졌다(2026-08-28).
+				// 확인이 돌아오면 상태가 바뀌고, 이 턴은 마지막으로 확인된 상태를 쓴다.
+				void sendAppSkills(ENVIRONMENT_APP_ID, [SKILL_ENVIRONMENT], { awaitAck: true })
+					.then((ok) => noteEnvironmentToolAck(ok))
+					.catch(() => noteEnvironmentToolAck(false));
+				// 도구가 꺼져 있으면 나이아는 observe/watch 를 부를 수 없다. 그런데도 개수를
+				// 실으면 안내가 "필요하면 도구를 불러라"라고 말한다 — 닫힌 길을 가리키는 셈이다
+				// (2026-08-28 19차 적대리뷰 지적). 등록 확인과 도구 활성화를 함께 본다.
+				environmentToolReady = environmentToolRegistered() && config.enableTools === true;
+				if (!environmentToolReady) {
+					Logger.warn("ChatArea", "environment skill not confirmed — skipping surfaces", {
+						requestId,
+					});
+				}
+				await refreshEnvironment().catch(() => null);
+			}
+			// 지켜보기 예산을 한 턴 쓴다 (FR-ENV-ATTENTION.7). 음성 경로와 같은 헬퍼를 쓴다 —
+			// 여기만 따로 쓰다가 always 규칙이 이 경로에만 빠졌다(13차 적대리뷰 지적).
+			noteEnvironmentTurn();
 			await sendChatMessage({
 				message: text,
 				provider: {
@@ -1791,6 +1878,7 @@ export function ChatArea({
 				environmentSegments: buildEnvironmentSegments(
 					memoryCtx,
 					pipelineActiveRef.current ? "brief" : "normal",
+					environmentToolReady,
 				),
 				enableTools: config.enableTools,
 				enableThinking: config.enableThinking,
@@ -1953,20 +2041,88 @@ export function ChatArea({
 		});
 	}
 
-	// Shared panel-tool dispatch — used by both the streaming-chat handleChunk
-	// path AND the voice directToolCall path (so voice can run panel tools like
-	// skill_browser_*). Auto-switches to the owning panel first (tool-level), so
-	// a tool targeting a non-active panel brings that panel forward.
-	function dispatchPanelToolCall(req: {
-		requestId: string;
-		toolCallId: string;
-		toolName: string;
-		args: Record<string, unknown>;
-		activityId?: string;
-	}) {
+	// Shared app-tool dispatch — used by both the streaming-chat handleChunk
+	// path AND the voice directToolCall path (so voice can run app tools like
+	// skill_browser_*). Auto-switches to the owning app first (tool-level), so
+	// a tool targeting a non-active app brings that app forward.
+	/**
+	 * 대화 턴 하나가 지나갔다고 환경 세션에 알린다 (FR-ENV-ATTENTION.7).
+	 * 정상 종료·중단 어느 쪽으로 끝나든 턴은 턴이다. 꺼져 있으면 아무것도 하지 않는다.
+	 */
+	function noteEnvironmentTurn() {
+		const awareness = loadConfig()?.environmentAwareness ?? "auto";
+		// 꺼져 있으면 셀 것이 없다.
+		if (awareness === "off") return;
+		// always 는 예산과 무관하다 (FR-ENV-ATTENTION.7). 출력만 그런 것이 아니라 상태도
+		// 그래야 한다 — 여기서 예산을 깎으면 always 를 쓰는 동안 잠복한 지켜보기가 소진되고,
+		// 사용자가 auto 로 되돌릴 때 나이아가 끈 적 없는데 목록이 사라진다
+		// (2026-08-27 13차 적대리뷰 지적).
+		if (awareness === "always") return;
+		environmentSession.noteTurn();
+	}
+
+	function dispatchAppToolCall(
+		req: {
+			requestId: string;
+			toolCallId: string;
+			toolName: string;
+			args: Record<string, unknown>;
+			activityId?: string;
+		},
+		/**
+		 * 이 호출이 실시간 음성 세션에서 왔는가 (FR-ENV-ATTENTION.10).
+		 * 음성은 연결 시점의 지시문 하나로 이야기하므로 요청마다 표면 세그먼트를 싣지 않는다.
+		 * 그 사실을 나이아에게 그대로 알려야 "지켜본다"가 거짓말이 되지 않는다.
+		 */
+		origin: {
+			readonly assemblesChatRequests?: boolean;
+			/** 이 호출이 켜는 지켜보기의 주인. 통화만 준다 — 자기가 켠 것만 끄기 위해서다. */
+			readonly watchOwner?: string;
+		} = {},
+	) {
 		// UC8 BGM (FR-BGM.1): BgmPlayer 는 위젯(앱 아님)이라 appRegistry 소유자
 		// 탐색으로 못 찾는다 — 전용 분기. executeBgmSkill 이 위젯이 이미 듣는
 		// bgm_youtube_* 이벤트를 발사(위젯 무변경). 음성 경로도 이 dispatch 공유.
+		// #502 실배선 (FR-ENV-LIVE.3~5): 작업 표면은 화면 앱이 아니라 상시 환경이라
+		// appRegistry 소유자 탐색으로 못 찾는다 — 전용 분기.
+		// 터미널 입력 권한은 사용자가 켠 경우에만 참이다(기본 꺼짐, FR-ENV-LIVE.4).
+		if (req.toolName === SKILL_ENVIRONMENT.name) {
+			executeEnvironmentSkill(
+				req.args,
+				liveEnvironmentDeps(
+					loadConfig()?.environmentTerminalInput === true,
+					loadConfig()?.environmentAwareness ?? "auto",
+					origin.assemblesChatRequests === true,
+					origin.watchOwner,
+				),
+			)
+				.then((result) => {
+					Logger.info("ChatArea", "environment skill result", { result: result.text });
+					return sendAppToolResult(
+						req.requestId,
+						req.toolCallId,
+						result.text,
+						// 거절·오류는 성공으로 바꾸지 않는다 — 뇌가 실패를 성공으로 말하는 경로를 막는다.
+						// 판정은 실행기가 낸다. 문자열 접두사로 되짚으면 새 사유가 생길 때마다
+						// 조용히 성공으로 새어 나간다 (2026-08-27 11차 적대리뷰에서 실제로 그랬다).
+						result.ok,
+						req.activityId,
+					);
+				})
+				.catch((err) => {
+					Logger.warn("ChatArea", "environment skill error", {
+						error: String(err),
+					});
+					return sendAppToolResult(
+						req.requestId,
+						req.toolCallId,
+						String(err),
+						false,
+						req.activityId,
+					);
+				});
+			return;
+		}
 		if (req.toolName === SKILL_YOUTUBE_BGM.name) {
 			// Activity-owned playback (for example Radio DJ change_vibe) replaces
 			// the current track immediately. Normal chat requests still enqueue.
@@ -1980,7 +2136,7 @@ export function ChatArea({
 				)
 				.then((result) => {
 					Logger.info("ChatArea", "bgm skill result", { result });
-					return sendPanelToolResult(
+					return sendAppToolResult(
 						req.requestId,
 						req.toolCallId,
 						result,
@@ -1990,7 +2146,7 @@ export function ChatArea({
 				})
 				.catch((err) => {
 					Logger.warn("ChatArea", "bgm skill error", { error: String(err) });
-					return sendPanelToolResult(
+					return sendAppToolResult(
 						req.requestId,
 						req.toolCallId,
 						String(err),
@@ -2000,31 +2156,31 @@ export function ChatArea({
 				});
 			return;
 		}
-		const ownerPanel = appRegistry
+		const ownerApp = appRegistry
 			.list()
 			.find((p) => p.tools?.some((t) => t.name === req.toolName));
-		// Tool-level auto panel switch (user request): if the tool belongs to a
-		// panel that isn't currently active, bring it forward before running.
-		if (ownerPanel && useAppStore.getState().activeApp !== ownerPanel.id) {
-			useAppStore.getState().setActiveApp(ownerPanel.id);
-			Logger.info("ChatArea", "panel auto-switch for tool", {
+		// Tool-level auto app switch (user request): if the tool belongs to a
+		// app that isn't currently active, bring it forward before running.
+		if (ownerApp && useAppStore.getState().activeApp !== ownerApp.id) {
+			useAppStore.getState().setActiveApp(ownerApp.id);
+			Logger.info("ChatArea", "app auto-switch for tool", {
 				tool: req.toolName,
-				app: ownerPanel.id,
+				app: ownerApp.id,
 			});
 		}
-		const bridge = ownerPanel ? getBridgeForPanel(ownerPanel.id) : activeBridge;
-		Logger.info("ChatArea", "panel_tool_call dispatch", {
+		const bridge = ownerApp ? getBridgeForApp(ownerApp.id) : activeBridge;
+		Logger.info("ChatArea", "app_tool_call dispatch", {
 			tool: req.toolName,
-			owner: ownerPanel?.id ?? "(none→activeBridge)",
+			owner: ownerApp?.id ?? "(none→activeBridge)",
 		});
 		bridge
 			.callTool(req.toolName, req.args)
 			.then((result) => {
-				Logger.info("ChatArea", "panel_tool_call result", {
+				Logger.info("ChatArea", "app_tool_call result", {
 					tool: req.toolName,
 					result: result.slice(0, 120),
 				});
-				return sendPanelToolResult(
+				return sendAppToolResult(
 					req.requestId,
 					req.toolCallId,
 					result,
@@ -2033,11 +2189,11 @@ export function ChatArea({
 				);
 			})
 			.catch((err) => {
-				Logger.warn("ChatArea", "panel_tool_call error", {
+				Logger.warn("ChatArea", "app_tool_call error", {
 					tool: req.toolName,
 					error: String(err),
 				});
-				return sendPanelToolResult(
+				return sendAppToolResult(
 					req.requestId,
 					req.toolCallId,
 					String(err),
@@ -2047,7 +2203,7 @@ export function ChatArea({
 			});
 	}
 
-	function dispatchPanelControl(req: { action: string; appId?: string }) {
+	function dispatchAppControl(req: { action: string; appId?: string }) {
 		const { setActiveApp } = useAppStore.getState();
 		if (req.action === "switch" && req.appId) {
 			setActiveApp(req.appId);
@@ -2165,18 +2321,23 @@ export function ChatArea({
 					});
 				}
 				break;
-			case "panel_tool_call": {
-				dispatchPanelToolCall({
-					requestId: chunk.requestId,
-					toolCallId: chunk.toolCallId,
-					toolName: chunk.toolName,
-					args: chunk.args,
-					activityId: chunk.activityId,
-				});
+			case "app_tool_call": {
+				// 이 경로만 셸이 대화 요청을 조립한다(buildEnvironmentSegments 가 붙는 곳).
+				// 능동 발화와 실시간 음성은 아니다 — 그쪽은 기본값 false 를 그대로 쓴다.
+				dispatchAppToolCall(
+					{
+						requestId: chunk.requestId,
+						toolCallId: chunk.toolCallId,
+						toolName: chunk.toolName,
+						args: chunk.args,
+						activityId: chunk.activityId,
+					},
+					{ assemblesChatRequests: true },
+				);
 				break;
 			}
-			case "panel_control": {
-				dispatchPanelControl({
+			case "app_control": {
+				dispatchAppControl({
 					action: chunk.action,
 					appId: chunk.appId,
 				});
@@ -2187,6 +2348,20 @@ export function ChatArea({
 				break;
 			}
 			case "usage": {
+				const isEmptyZeroUsage =
+					chunk.inputTokens === 0 &&
+					chunk.outputTokens === 0 &&
+					chunk.cost === 0 &&
+					store.streamingContent.length === 0 &&
+					store.streamingThinking.length === 0 &&
+					store.streamingToolCalls.length === 0;
+				// Provider failures emit usage(0) before their terminal error. Finalizing
+				// the empty stream here would commit a blank assistant message, so the
+				// following actionable error could no longer be attached to the turn.
+				if (isEmptyZeroUsage) {
+					Logger.info("ChatArea", "Deferring empty zero-token usage");
+					break;
+				}
 				finishStreamingWithTtsMask(false);
 				store.addCostEntry({
 					inputTokens: chunk.inputTokens,
@@ -2323,8 +2498,8 @@ export function ChatArea({
 				clearTimeout(queuedSendTimerRef.current);
 				queuedSendTimerRef.current = null;
 			}
-			panelContextBridgeRef.current?.detach();
-			panelContextBridgeRef.current = null;
+			appContextBridgeRef.current?.detach();
+			appContextBridgeRef.current = null;
 			voiceSessionRef.current?.disconnect();
 			micStreamRef.current?.stop();
 			audioPlayerRef.current?.destroy();
@@ -2456,8 +2631,8 @@ export function ChatArea({
 				cleanupPipeline();
 			} else {
 				showVoiceCostSummary();
-				panelContextBridgeRef.current?.detach();
-				panelContextBridgeRef.current = null;
+				appContextBridgeRef.current?.detach();
+				appContextBridgeRef.current = null;
 				voiceSessionRef.current?.disconnect();
 				micStreamRef.current?.stop();
 				audioPlayerRef.current?.destroy();
@@ -2946,12 +3121,12 @@ export function ChatArea({
 			const memoryCtx = await buildMemoryContext();
 			const systemPrompt = buildSystemPrompt(config.persona, memoryCtx);
 
-			// Collect active panel tools to pass to the voice session
+			// Collect active app tools to pass to the voice session
 			const activeAppId = useAppStore.getState().activeApp;
-			const panelTools = activeAppId
+			const appTools = activeAppId
 				? (appRegistry.get(activeAppId)?.tools ?? [])
 				: [];
-			const panelToolDefs = panelTools.map((tool) => ({
+			const appToolDefs = appTools.map((tool) => ({
 				name: tool.name,
 				description: tool.description,
 				parameters: tool.parameters ?? {
@@ -2971,9 +3146,9 @@ export function ChatArea({
 			}[] = [];
 			try {
 				const allSkills = await fetchAgentSkills();
-				// Filter: remove disabled, skip skill_panel (panel management, not useful in voice)
+				// Filter: remove disabled, skip skill_app (app management, not useful in voice)
 				agentSkills = allSkills.filter(
-					(s) => !disabledSkills.has(s.name) && s.name !== "skill_panel",
+					(s) => !disabledSkills.has(s.name) && s.name !== "skill_app",
 				);
 			} catch (err) {
 				Logger.warn("ChatArea", "Failed to fetch agent skills for voice", {
@@ -2981,11 +3156,11 @@ export function ChatArea({
 				});
 			}
 
-			// Merge panel tools + agent skills (panel tools take priority on name collision)
-			const panelNames = new Set(panelToolDefs.map((t) => t.name));
+			// Merge app tools + agent skills (app tools take priority on name collision)
+			const appNames = new Set(appToolDefs.map((t) => t.name));
 			const voiceTools = [
-				...panelToolDefs,
-				...agentSkills.filter((s) => !panelNames.has(s.name)),
+				...appToolDefs,
+				...agentSkills.filter((s) => !appNames.has(s.name)),
 			];
 
 			// Append tool usage instructions to system prompt so the model
@@ -2999,6 +3174,12 @@ export function ChatArea({
 			// Gemini Direct uses Rust proxy (WebKitGTK can't connect to Google's WS)
 			const useDirectMode =
 				liveProvider === "gemini-live" && !!config.googleApiKey;
+			// 이 통화의 식별자. 통화가 켠 지켜보기에만 이 표가 붙고, 통화가 끝날 때 그 표가
+			// 붙은 것만 끈다. 시작 시점의 참/거짓으로는 통화 중에 다른 경로가 켠 것과
+			// 구별할 수 없고, 늦게 도착한 옛 세션의 종료가 새 세션의 것을 지운다
+			// (2026-08-27 12차 적대리뷰 지적).
+			voiceSessionSeq += 1;
+			const voiceSessionKey = `voice-${voiceSessionSeq}`;
 			const session = createVoiceSession(liveProvider, {
 				useProxy: useDirectMode,
 			});
@@ -3024,12 +3205,12 @@ export function ChatArea({
 				setVoiceStatus(status);
 			};
 
-			// #313 L3 — bridge mid-session panel context changes into the open
-			// Live WS. Subscribes to the panel store, debounces 500ms (rapid
+			// #313 L3 — bridge mid-session app context changes into the open
+			// Live WS. Subscribes to the app store, debounces 500ms (rapid
 			// URL hops), and forwards to `session.sendContextUpdate()` — a silent
 			// no-op for providers without a mid-session inject surface
 			// (vllm-omni, naia-omni). Detached in every cleanup path below.
-			panelContextBridgeRef.current = attachAppContextBridge(session, {
+			appContextBridgeRef.current = attachAppContextBridge(session, {
 				subscribe: (listener) => useAppStore.subscribe(listener),
 				getContext: () => useAppStore.getState().activeAppContext,
 			});
@@ -3106,6 +3287,10 @@ export function ChatArea({
 				inputAccum = "";
 				outputAccum = "";
 				serverEmotionSeenThisTurn = false;
+				// 중단된 턴도 턴이다 (FR-ENV-ATTENTION.7). response.cancelled 와 barge-in 은
+				// onTurnEnd 를 부르지 않으므로, 여기서 안 깎으면 사용자가 계속 끼어드는 동안
+				// 지켜보기가 예산을 넘겨 살아남는다 (2026-08-27 10차 적대리뷰 지적).
+				noteEnvironmentTurn();
 			};
 			session.onTurnEnd = () => {
 				inputTurnDirty = false;
@@ -3114,6 +3299,13 @@ export function ChatArea({
 				outputAccum = "";
 				serverEmotionSeenThisTurn = false;
 				settleAvatarEmotionIfIdle();
+				// #502 (FR-ENV-ATTENTION.7): 실시간 음성도 대화 턴이다.
+				//
+				// 음성 도구 호출은 아래 onToolCall 이 같은 dispatch 로 보내므로, 음성 중에도
+				// 나이아가 watch 를 켤 수 있다. 그런데 예산을 gRPC 경로에서만 깎으면 음성으로
+				// 켠 지켜보기가 영원히 남는다 — 켜 둔 채 잊는 것을 막겠다는 규칙이 경로 하나에서
+				// 성립하지 않게 된다 (2026-08-27 9차 적대리뷰 지적).
+				noteEnvironmentTurn();
 			};
 			session.onToolCall = async (callId, toolName, args) => {
 				try {
@@ -3130,11 +3322,13 @@ export function ChatArea({
 						onApprovalRequest: (req) => {
 							sendApprovalResponse(req.requestId, req.toolCallId, "once");
 						},
-						// Panel-owned tools (skill_browser_*, skill_panel switch)
+						// App-owned tools (skill_browser_*, skill_app switch)
 						// only ran in streaming chat before; route them here too so
-						// voice can drive panels. Auto-switches to the owner panel.
-						onPanelToolCall: (req) => dispatchPanelToolCall(req),
-						onPanelControl: (req) => dispatchPanelControl(req),
+						// voice can drive apps. Auto-switches to the owner app.
+						// 실시간 음성은 셸이 요청을 조립하지 않는다 — 기본값(false)이 사실이다.
+						// 이 통화가 켠 지켜보기에는 통화 식별자를 남긴다(FR-ENV-ATTENTION.13).
+						onAppToolCall: (req) => dispatchAppToolCall(req, { watchOwner: voiceSessionKey }),
+						onAppControl: (req) => dispatchAppControl(req),
 					});
 					session.sendToolResponse(callId, result.output);
 				} catch (err) {
@@ -3150,6 +3344,12 @@ export function ChatArea({
 				session.disconnect();
 			};
 			session.onDisconnect = (info) => {
+				// 통화가 켠 주의만 통화가 끈다 (FR-ENV-ATTENTION.7).
+				//
+				// ⚠️ 무조건 끄면 텍스트 대화에서 켜 둔 지켜보기까지 지운다. EnvironmentSession 은
+				//    모듈 전역 하나라 출처를 스스로 알지 못하므로, 통화 시작 시점의 상태를
+				//    여기서 기억해 두고 그것과 비교한다 (2026-08-27 11차 적대리뷰 지적).
+				environmentSession.unwatchIfOwner(voiceSessionKey);
 				// Atomic terminal transition for a mid-call drop. Tear down (cost
 				// summary, bridge, mic, player) SYNCHRONOUSLY first, THEN set the
 				// terminal status once — so the derived voice button can't re-enable
@@ -3157,8 +3357,8 @@ export function ChatArea({
 				// a state thrash. showVoiceCostSummary is idempotent, so a
 				// user-initiated stop that also runs the toggle path stays safe.
 				showVoiceCostSummary();
-				panelContextBridgeRef.current?.detach();
-				panelContextBridgeRef.current = null;
+				appContextBridgeRef.current?.detach();
+				appContextBridgeRef.current = null;
 				micStreamRef.current?.stop();
 				audioPlayerRef.current?.destroy();
 				voiceSessionRef.current = null;
@@ -3397,8 +3597,8 @@ export function ChatArea({
 			voiceCancelledRef.current = false;
 			// Detach onDisconnect before cleanup to prevent double-cleanup
 			if (voiceSessionRef.current) voiceSessionRef.current.onDisconnect = null;
-			panelContextBridgeRef.current?.detach();
-			panelContextBridgeRef.current = null;
+			appContextBridgeRef.current?.detach();
+			appContextBridgeRef.current = null;
 			voiceSessionRef.current?.disconnect();
 			micStreamRef.current?.stop();
 			audioPlayerRef.current?.destroy();
@@ -3604,7 +3804,7 @@ export function ChatArea({
 
 	return (
 		<>
-			<div className={`chat-panel chat-panel--${variant}`}>
+			<div className={`chat-app chat-app--${variant}`}>
 				{/* Header with tabs */}
 				<div className="chat-header">
 					<div className="chat-tabs">

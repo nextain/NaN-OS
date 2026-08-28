@@ -171,7 +171,7 @@ const TAURI_MOCK_SCRIPT = `
 		if (cmd === "frontend_log") return;
 		if (cmd === "list_skills") return [];
 		if (cmd === "list_stt_models") return [];
-		if (cmd === "panel_list_installed") return [];
+		if (cmd === "app_list_installed") return [];
 		if (cmd === "herdr_pty_create") return { pty_id: "herdr-viewer-e2e", pid: 42 };
 		if (cmd === "herdr_snapshot") return JSON.parse(JSON.stringify(herdrSnapshot));
 		if (cmd === "pty_write" || cmd === "pty_resize" || cmd === "pty_close") return null;
@@ -210,8 +210,8 @@ const TAURI_MOCK_SCRIPT = `
 })();
 `;
 
-async function openWorkspacePanel(page: Page): Promise<void> {
-	const tab = page.locator('button[data-panel-id="workspace"]');
+async function openWorkspaceApp(page: Page): Promise<void> {
+	const tab = page.locator('button[data-app-id="workspace"]');
 	await expect(tab).toBeVisible({ timeout: 10_000 });
 	await tab.click();
 	await expect(page.getByTestId("herdr-workspace")).toBeVisible({
@@ -250,13 +250,13 @@ test.describe("Resource Viewer — Editor (#116)", () => {
 			localStorage.removeItem("workspace-classified-dirs");
 		});
 		await page.goto("/");
-		await expect(page.locator(".chat-panel")).toBeVisible({ timeout: 10_000 });
+		await expect(page.locator(".chat-app")).toBeVisible({ timeout: 10_000 });
 	});
 
 	// ── V1: CSV 뷰어 ──────────────────────────────────────────────────────
 
 	test("V1: .csv 파일 선택 시 테이블 뷰어 표시", async ({ page }) => {
-		await openWorkspacePanel(page);
+		await openWorkspaceApp(page);
 		await clickFileInTree(page, "data.csv");
 
 		// File header visible
@@ -290,7 +290,7 @@ test.describe("Resource Viewer — Editor (#116)", () => {
 	});
 
 	test("V1-b: CSV 헤더 클릭 시 정렬 표시자 나타남", async ({ page }) => {
-		await openWorkspacePanel(page);
+		await openWorkspaceApp(page);
 		await clickFileInTree(page, "data.csv");
 		await expect(page.locator(".workspace-editor__csv-table")).toBeVisible({
 			timeout: 5_000,
@@ -318,7 +318,7 @@ test.describe("Resource Viewer — Editor (#116)", () => {
 	test("V1-c: CSV 파일에 편집/미리보기 버튼 없음 (CodeMirror 미사용)", async ({
 		page,
 	}) => {
-		await openWorkspacePanel(page);
+		await openWorkspaceApp(page);
 		await clickFileInTree(page, "data.csv");
 		await expect(page.locator(".workspace-editor__csv-table")).toBeVisible({
 			timeout: 5_000,
@@ -338,7 +338,7 @@ test.describe("Resource Viewer — Editor (#116)", () => {
 	// ── V2: Log 뷰어 ──────────────────────────────────────────────────────
 
 	test("V2: .log 파일 선택 시 로그 뷰어 표시", async ({ page }) => {
-		await openWorkspacePanel(page);
+		await openWorkspaceApp(page);
 		await clickFileInTree(page, "app.log");
 
 		await expect(page.locator(".workspace-editor__filename")).toContainText(
@@ -369,7 +369,7 @@ test.describe("Resource Viewer — Editor (#116)", () => {
 			invokeCalls.push(cmd);
 		});
 
-		await openWorkspacePanel(page);
+		await openWorkspaceApp(page);
 		await clickFileInTree(page, "screenshot.png");
 
 		await expect(page.locator(".workspace-editor__filename")).toContainText(
@@ -393,7 +393,7 @@ test.describe("Resource Viewer — Editor (#116)", () => {
 	});
 
 	test("V3-b: 이미지 파일에 편집/미리보기 버튼 없음", async ({ page }) => {
-		await openWorkspacePanel(page);
+		await openWorkspaceApp(page);
 		await clickFileInTree(page, "screenshot.png");
 		await expect(page.locator(".workspace-editor__image")).toBeVisible({
 			timeout: 5_000,
@@ -414,7 +414,7 @@ test.describe("Resource Viewer — Editor (#116)", () => {
 			invokeCalls.push(cmd);
 		});
 
-		await openWorkspacePanel(page);
+		await openWorkspaceApp(page);
 		await clickFileInTree(page, "report.pdf");
 
 		await expect(page.locator(".workspace-editor__filename")).toContainText(
@@ -432,7 +432,7 @@ test.describe("Resource Viewer — Editor (#116)", () => {
 	});
 
 	test("V4-b: PDF 파일에 편집/미리보기 버튼 없음", async ({ page }) => {
-		await openWorkspacePanel(page);
+		await openWorkspaceApp(page);
 		await clickFileInTree(page, "report.pdf");
 		await expect(page.locator(".workspace-editor__filename")).toContainText(
 			"report.pdf",
@@ -474,7 +474,7 @@ test.describe("Chat File Deeplinks (#116)", () => {
 			localStorage.removeItem("workspace-classified-dirs");
 		});
 		await page.goto("/");
-		await expect(page.locator(".chat-panel")).toBeVisible({ timeout: 10_000 });
+		await expect(page.locator(".chat-app")).toBeVisible({ timeout: 10_000 });
 	});
 
 	test("D1: 어시스턴트 응답에 절대경로 포함 시 deeplink 버튼 렌더링", async ({
@@ -495,7 +495,7 @@ test.describe("Chat File Deeplinks (#116)", () => {
 		await expect(btn).toContainText("App.tsx");
 	});
 
-	test("D2: deeplink 클릭 시 워크스페이스 패널 활성화", async ({ page }) => {
+	test("D2: deeplink 클릭 시 워크스페이스 앱 활성화", async ({ page }) => {
 		const input = page.locator(".chat-input");
 		await expect(input).toBeEnabled({ timeout: 5_000 });
 		await input.fill("deeplink 테스트");
@@ -505,21 +505,21 @@ test.describe("Chat File Deeplinks (#116)", () => {
 			timeout: 8_000,
 		});
 
-		// Workspace panel should NOT be the active panel yet
-		// (keepAlive panels are always mounted; check active slot instead of visibility)
+		// Workspace app should NOT be the active app yet
+		// (keepAlive apps are always mounted; check active slot instead of visibility)
 		await expect(
 			page.locator(
-				'.content-panel__slot--active [data-testid="herdr-workspace"]',
+				'.content-app__slot--active [data-testid="herdr-workspace"]',
 			),
 		).not.toBeVisible();
 
 		// Click the deeplink
 		await page.locator(".chat-file-deeplink").first().click();
 
-		// Workspace panel should now be in the active slot
+		// Workspace app should now be in the active slot
 		await expect(
 			page.locator(
-				'.content-panel__slot--active [data-testid="herdr-workspace"]',
+				'.content-app__slot--active [data-testid="herdr-workspace"]',
 			),
 		).toBeVisible({ timeout: 5_000 });
 	});

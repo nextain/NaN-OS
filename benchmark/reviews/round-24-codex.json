@@ -1,0 +1,23 @@
+{
+  "verdict": "NOT_CLEAN",
+  "frame_assessment": {
+    "scope_is_sufficient": false,
+    "missing_concerns": [
+      "실 Rust 경계에서 잘못된 긍정 app_skills_result가 발생하지 않는지를 실제로 관측하는 검증이 없다."
+    ]
+  },
+  "findings": [
+    {
+      "id": "R24-ENV-NATIVE-ACK-ORACLE",
+      "file_location": "packages/shell/e2e-tauri/specs/environment-dispatch.spec.ts:155; docs/requirements.md:1050; docs/user-scenarios.md:1420",
+      "impact": "뇌가 없는 상태에서 Rust가 잘못된 성공 app_skills_result를 발생시켜도 테스트는 4초 뒤 무조건 NO_ACK로 판정되어 통과한다. 따라서 실 Rust 17/17은 문서가 주장하는 등록 확인 fail-closed 동작의 증거가 아니다.",
+      "why_it_matters": "테스트는 agent_response 또는 app_skills_result 이벤트를 구독하지 않으며, invoke 성공 콜백에서도 아무것도 검사하지 않는다. 실제 긍정 확인을 관측할 통로가 없으므로 '확인이 오지 않았다'는 주장 자체를 측정하지 않는다. 이는 이미 인정된 성공 경로 미검증과 별개로, 이번 조치가 검증했다고 명시한 실패 경로도 검증하지 못한다는 현재의 커버리지 결함이다.",
+      "severity": "medium"
+    }
+  ],
+  "what_would_make_it_clean": [
+    "네이티브 테스트가 실제 Tauri agent_response 이벤트를 구독하고 requestId를 연계하여, 관측 기간 중 일치하는 성공 app_skills_result가 하나라도 오면 즉시 실패하도록 수정한다.",
+    "의도적으로 일치하는 성공 app_skills_result를 발생시키는 변이에서 해당 테스트가 실패하는지 확인해 오라클의 유효성을 입증한다.",
+    "그 검증이 완료될 때까지 requirements.md와 user-scenarios.md의 네이티브 fail-closed 검증 완료 주장을 제거하거나 미검증으로 표시한다."
+  ]
+}

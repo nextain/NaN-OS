@@ -1,9 +1,9 @@
-// UC1 리뷰 fix lock: chatChunkToWire 가 live ChatPanel 이 읽는 필드를 보존하는지(유실=undefined 버그).
+// UC1 리뷰 fix lock: chatChunkToWire 가 live ChatApp 이 읽는 필드를 보존하는지(유실=undefined 버그).
 import { describe, it, expect } from "vitest";
 import { chatChunkToWire } from "../main/adapters/shell-compat.js";
 
 describe("UC1 chunk 필드 보존 (2-AI 리뷰 HIGH fix)", () => {
-  it("★ toolResult: toolName+success 보존 (live ChatPanel chunk.success 읽음 — 유실 시 undefined)", () => {
+  it("★ toolResult: toolName+success 보존 (live ChatApp chunk.success 읽음 — 유실 시 undefined)", () => {
     const w = chatChunkToWire("r1", { kind: "toolResult", toolCallId: "t", toolName: "write_file", output: "ok", success: false });
     expect(w).toMatchObject({ type: "tool_result", requestId: "r1", toolCallId: "t", toolName: "write_file", output: "ok", success: false });
   });

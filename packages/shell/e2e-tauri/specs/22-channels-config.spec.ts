@@ -44,8 +44,8 @@ describe("22 — channels config", () => {
 		await channelsBtn.waitForDisplayed({ timeout: 5_000 });
 		await channelsBtn.click();
 
-		const channelsPanel = await $(S.channelsTabPanel);
-		await channelsPanel.waitForDisplayed({ timeout: 5_000 });
+		const channelsApp = await $(S.channelsTabApp);
+		await channelsApp.waitForDisplayed({ timeout: 5_000 });
 	});
 
 	it("should navigate back to chat tab", async () => {

@@ -6,7 +6,7 @@
 
 > 추적: 1단계 `STRUCTURE.md` v5 → 2단계 P01. **상태: 완전성 수렴(13R, 3연속 NONE). foundation tranche 순서 = 아이디어 수준 잠정안(F0→…→V2, 실행 시 재검토). G1 게이트 아님.**
 > 완전성 추이: 초안 46 → 누락 발견·추가 R1~R10(ADK부트스트랩·비용·업데이트·공지·비전캡처·@멘션·Issues·AppBar·botmadang·ref오디오·Lab동기화·deeplink·**default-skills 60+ 컬렉션**·메모리백업) → R11~R13 3연속 NONE. 앱 표면 ≈ S01~S71(+S52b) + 브라우저/워크스페이스/default-skills 그룹. 분포/OS(S68/69)=범위 밖.
-> 원칙: 시나리오는 *발명*이 아니라 old-naia-os **실제 기능**에서 도출(built-in skills 25·패널 6·멀티채널). 각 UC = 인지흐름 경로 + 관통 슬라이스/포트.
+> 원칙: 시나리오는 *발명*이 아니라 old-naia-os **실제 기능**에서 도출(built-in skills 25·앱 6개·멀티채널). 각 UC = 인지흐름 경로 + 관통 슬라이스/포트.
 > 용어 = `glossary.md`.
 
 ## 분류축 — 인지흐름 관통 (감각→지각→경험→사고→표현/행위)
@@ -15,7 +15,7 @@ UC 를 인지흐름이 *어디까지 도는가*로 묶는다(기능 나열 ❌).
 
 | UC | 시나리오 (실제 기능) | 인지흐름 경로 | 관통 슬라이스/포트 |
 |---|---|---|---|
-| **UC1 텍스트 대화** | ChatPanel 에 입력→응답 | Chat(ingress) → 사고(llm) → 표현(speech-intent) | ChatPort·llm·ExpressionPort |
+| **UC1 텍스트 대화** | ChatApp 에 입력→응답 | Chat(ingress) → 사고(llm) → 표현(speech-intent) | ChatPort·llm·ExpressionPort |
 | **UC2 음성 대화** | wake→말하기→음성응답+아바타 | 감각(audio→STT) → 지각 → 사고 → 표현(음성+emote) | SensoryPort·voice(provider)·affect·ExpressionPort(avatar) |
 | **UC3 기억하는 대화** ★ | "지난번 그거 기억해?" | 감각/Chat → 지각 → **장기기억 recall** → 사고 → 표현 | memory(naia-memory)·conversation·llm |
 | **UC4 경험→능동 회상** ★ | 기념일·시간 앵커에 naia가 *먼저* 말 검 | (시간 trigger) → 장기기억 → 동기 → 표현 | temporal(cron)·memory·motivation·ExpressionPort |
@@ -24,7 +24,7 @@ UC 를 인지흐름이 *어디까지 도는가*로 묶는다(기능 나열 ❌).
 | **UC7a 시스템 관측(read-only)** | 파일/프로세스 *상태 조회*(변경 X) | Chat → 사고 → 환경 관측 | EnvironmentPort(host-system) observe |
 | **UC7 시스템 조작(mutating)** | 파일 편집·명령 실행 + **결과 관측**(reafference) | Chat → 사고 → 환경 행위 → observed→mismatch | EnvironmentPort(host-system) + reafference |
 | **UC8 공간 분위기** | "음악 틀어줘"(BGM) | Chat → 사고 → 환경 변경(space) + 관측(BGM context) | EnvironmentPort(space)·youtube-bgm skill |
-| **UC9 앱** | 앱 설치→그 앱 스킬 사용 | Chat → 능력(panel install) → 환경(app-surface tool) | skill(panel)·EnvironmentPort.app-surface |
+| **UC9 앱** | 앱 설치→그 앱 스킬 사용 | Chat → 능력(app install) → 환경(app-surface tool) | skill(app)·EnvironmentPort.app-surface |
 | **UC10 멀티 채널(기본)** | discord/slack 에서 naia 응답 — **단일 active owner(동시 점유 없음)**. 동시성·충돌 중재 = UC10a | (채널 ingress) → 사고 → 표현(채널) | gateway·channels |
 | **UC11 자기상태 인지** | "너 지금 상태 어때?"(system-status/진단) | **내수용**(시스템 상태) → 지각 → 표현 | InteroceptivePort·system-status·ExpressionPort |
 | **UC12-min 최소 부팅 설정** | naia-adk workspace init(**외부 키 없이** 부팅 가능분) | (control-plane init) | control-plane·config |
@@ -55,12 +55,12 @@ UC15 제품 수용 확장(#84):
 ## Granular 시나리오 카탈로그 (전수 — 검증 여부 무관, 누락 금지)
 
 > 원칙(루크 2026-06-08): **개발된 기능은 검증 여부와 무관하게 전부 시나리오로 enumerate.** 동작 여부(검증)는 *진행 중 Old-Baseline 측정* 또는 *루크 확인*으로 확정 — 내 추측으로 빼거나 deferred 안 함. "검증" 열 = **미측정**(측정/확인 예정)이 기본, 알려진 플래그만 표기(제외 아님).
-> 13 UC = 인지흐름 분류 맵 / 아래 = 그 아래 실제 기능 단위(소스: 25 built-in skill + 6 패널 + provider/voice/채널). 각 행 = Old-Baseline 측정·이식·검증 단위.
+> 13 UC = 인지흐름 분류 맵 / 아래 = 그 아래 실제 기능 단위(소스: 25 built-in skill + 앱 6개 + provider/voice/채널). 각 행 = Old-Baseline 측정·이식·검증 단위.
 
 | # | granular 시나리오 (소스) | UC 분류 | 슬라이스/포트 | 검증(측정/확인 예정) |
 |---|---|---|---|---|
 | S01 | 온보딩/welcome | UC12 | control-plane·config | 측정 |
-| S02 | 설정 config / settings 패널 | UC12 | control-plane·config | 측정 |
+| S02 | 설정 config / settings 앱 | UC12 | control-plane·config | 측정 |
 | S03 | provider 설정(anthropic·openai·gemini·ollama·xai·zai·claude-code-cli·lab-proxy 각각) — **계정+비용 얽힘(복잡)** | UC12·UC1 | providers·control-plane | 측정(복잡) |
 | S04 | naia 계정 / api key 설정 | UC12 | control-plane(entitlement·naia-token) | 측정 |
 | S05 | sessions 관리 — **대화 transcript 영속/로드**(S05a write·S05b read, ↓note) | UC12·UC1 | session(control-plane)·ConversationLogPort·EnvironmentPort(storage) | ⚠️ **현 게이트웨이 directToolCall = new-core 死 → 재구현**(2026-06-18 transcript 트랙) |
@@ -71,7 +71,7 @@ UC15 제품 수용 확장(#84):
 | S10 | diagnostics(진단) | UC11 | InteroceptivePort | 측정 |
 | S11 | device(디바이스 상태/제어) | UC11·UC7 | 로컬 | 측정 |
 | S12 | approvals(승인 게이트) | UC13 | ApprovalPort | 측정 |
-| S13 | 텍스트 대화(ChatPanel) | UC1 | ChatPort·llm·ExpressionPort | 측정 |
+| S13 | 텍스트 대화(ChatApp) | UC1 | ChatPort·llm·ExpressionPort | 측정 |
 | S14 | omni 음성(naia-omni realtime) | UC2 | voice provider·ws | 측정(키/서버) |
 | S15 | gemini-live 음성 | UC2 | voice provider·ws | 측정 |
 | S16 | openai-realtime 음성 | UC2 | voice provider·ws | 측정 |
@@ -85,10 +85,10 @@ UC15 제품 수용 확장(#84):
 | S24 | obsidian(skill_obsidian) | UC5 | skill(로컬/외부) | 측정 |
 | S25 | mcp 연결 | UC5 | mcp | 측정 |
 | S26 | agent-browser(브라우저 조작) | UC6 | EnvironmentPort.app-surface | 측정 |
-| S27 | browser 패널 | UC6 | EnvironmentPort.app-surface | 측정 |
-| S28 | panel 설치(panel) | UC9 | skill·EnvironmentPort.app-surface | 측정 |
-| S29 | generic-installed 패널 | UC9 | EnvironmentPort.app-surface | 측정 |
-| S30 | sample-note 패널 | UC9 | EnvironmentPort.app-surface | ⚠️ App.tsx 에서 제거/미배선(완전성R12) — rejected 후보 |
+| S27 | browser 앱 | UC6 | EnvironmentPort.app-surface | 측정 |
+| S28 | app 설치(app) | UC9 | skill·EnvironmentPort.app-surface | 측정 |
+| S29 | generic-installed 앱 | UC9 | EnvironmentPort.app-surface | 측정 |
+| S30 | sample-note 앱 | UC9 | EnvironmentPort.app-surface | ⚠️ App.tsx 에서 제거/미배선(완전성R12) — rejected 후보 |
 | S31 | youtube-bgm | UC8 | EnvironmentPort.space | 측정(YouTube 변동) |
 | S32 | 배경화면/scene | UC8 | EnvironmentPort.space | 측정 |
 | S33 | workspace(fs·editor·filetree) | UC7 | EnvironmentPort.host-system | 측정 |
@@ -116,17 +116,17 @@ UC15 제품 수용 확장(#84):
 | S55 | gateway 스킬: **web_search · x(트위터) · discord**(gateway-tier, gateway LLM agent 실행) | UC5·UC10 | gateway·tool-tiers | 측정 |
 | S56 | (external 광고 tool: github·obsidian·notion·slack·spotify·trello·canvas·code_review 등 — gateway/mcp 경유) | UC5 | gateway·mcp | ⚠️ **실재 vs 광고-only 구분 = 측정** |
 | S57 | **ADK 부트스트랩**(AdkSetupScreen: 기존 ADK 로드/clone·init/재생성/로그인 — inspect_adk_dir·clone_naia_adk·init_naia_settings·delete_naia_adk) | UC12 | control-plane·config | 측정 (완전성R1) |
-| S58 | **비용 대시보드 + Naia Lab 잔액·충전**(CostDashboard `/v1/profile/balance`·billing 링크, ChatPanel 비용 배지) | UC12 | control-plane(billing/cost) | 측정 (완전성R1, 루크 "비용 관련") |
+| S58 | **비용 대시보드 + Naia Lab 잔액·충전**(CostDashboard `/v1/profile/balance`·billing 링크, ChatApp 비용 배지) | UC12 | control-plane(billing/cost) | 측정 (완전성R1, 루크 "비용 관련") |
 | S59 | **앱 업데이트 알림·설치**(UpdateBanner: checkForUpdate·install·다운로드) | (control-plane) | control-plane(updater) | 측정 (완전성R1) |
 | S60 | **원격 공지 배너**(AnnouncementBanner: fetchUnreadAnnouncements·read/dismiss/details) | (control-plane/notify) | control-plane·gateway | 측정 (완전성R1) |
-| S61 | **화면/패널 비전 캡처**(skill_tab_screenshot·capture.rs — 패널 viewport→PNG) = naia 시각 | UC11/UC6 | **SensoryPort(vision)** | 측정 (완전성R2) |
+| S61 | **화면·앱 비전 캡처**(skill_tab_screenshot·capture.rs — 앱 viewport→PNG) = naia 시각 | UC11/UC6 | **SensoryPort(vision)** | 측정 (완전성R2) |
 | S62 | 채팅 **@ 멘션** 파일/폴더 선택기(AtMentionPopover, workspace fuzzy 검색→삽입) | UC1 | ChatPort·workspace | 측정 (완전성R2) |
-| S63 | 워크스페이스 **GitHub Issues 패널**(IssuesPanel, `gh issue list`) | UC5/UC7 | workspace group·skill(github) | 측정 (완전성R2) |
+| S63 | 워크스페이스 **GitHub Issues 앱**(IssuesArea, `gh issue list`) | UC5/UC7 | workspace group·skill(github) | 측정 (완전성R2) |
 | S64 | **AppBar 브라우저 바로가기 관리**(URL shortcut 추가/삭제/재정렬/아이콘) | UC6 | browser group·UI | 측정 (완전성R2) |
 | S65 | **botmadang 커뮤니티 연동**(botmadang.org: register·post_article·comment) — 기본 스킬·skill.json 매니페스트 | UC10/UC5 | skill·channels | **rejected(루크 결정 2026-06-09: 이식 제외)** — voice-server류, 카탈로그엔 rejected로 명시 |
 | S66 | **참조 오디오 / voice clone**(RefAudioSection: 미리듣기·녹음/업로드·preset·삭제, `/v1/ref-audio`, mid-session 반영) = naia 음색 | UC2 | voice·ExpressionPort(timbre) | 측정 (완전성R4) |
 | S67 | **Naia Lab 설정 동기화**(lab-sync: pull/push + 충돌 선택 다이얼로그, 로컬변경 자동 push) — 계정/비용과 별개 | UC12 | control-plane(settings sync) | 측정 (완전성R5) |
-| S70 | 채팅 **절대경로 파일 deeplink**(chat-file-deeplink 버튼 → workspace 패널 openFile + 전환) | UC1/UC7 | ChatPort·workspace | 측정 (완전성R9) |
+| S70 | 채팅 **절대경로 파일 deeplink**(chat-file-deeplink 버튼 → workspace 앱 openFile + 전환) | UC1/UC7 | ChatPort·workspace | 측정 (완전성R9) |
 | **S71 번들 default-skills 컬렉션 (~60+, OpenClaw 출처)** = command-group (preload + SkillsTab 노출 + tool-bridge) | UC5 | skill·gateway | 측정 (완전성R10, **개별 스킬 per-skill 검증**) |
 
 > **브라우저(S26/27) = command-group(~50)**: embed lifecycle·webview·navigate/click/fill/get_text/snapshot/screenshot/eval/press/scroll/forward-back/resize/show-hide/login/permission. **워크스페이스(S33) = command-group(~25)**: adk-server discover·skills discover·sessions·git·progress·file read/write·watch·classify·set-root·project-index. (이식 시 sub-capability 별 분해.)
@@ -140,7 +140,7 @@ UC15 제품 수용 확장(#84):
 > - **S05c 관계(비구현)**: transcript = UC3/S41 memory recall 원재료 + 멀티모달 잠재기억 substrate(`audioRef` 예약).
 > - **검증(P02)**: agent write 계약(`conversation-log.contract.test.ts`: jsonl append·sessionId 격리·no-throw·CRLF) / shell read 계약(`conversation-store.test.ts`: 경계 가드·agent-down 빈목록) / 통합(`conversation-persistence.integration.test.ts`: 대화→재시작→복원 golden) + Playwright e2e(HistoryTab 복원)·e2e-tauri(Rust IPC adkPath 경계).
 
-> **S72 워크스페이스 전환 설정 복원 (2026-06-24, 셸 feature)**: 워크스페이스(ADK path) 전환 시 그 워크스페이스의 정체성 설정(페르소나·이름·말투·locale·VRM·배경·BGM)이 복원돼야 한다. 현 버그 = 전환 핸들러(SettingsTab/WorkspaceCenterPanel)가 ADK 포인터(localStorage `naia-adk-path`)만 바꾸고 기존 localStorage `naia-config` 를 유지 → 페르소나/VRM 안 바뀜. 초기 설정(AdkSetupScreen)은 `readNaiaConfig` 로 복원하나 전환 경로만 누락(비대칭).
+> **S72 워크스페이스 전환 설정 복원 (2026-06-24, 셸 feature)**: 워크스페이스(ADK path) 전환 시 그 워크스페이스의 정체성 설정(페르소나·이름·말투·locale·VRM·배경·BGM)이 복원돼야 한다. 현 버그 = 전환 핸들러(SettingsTab/WorkspaceCenterArea)가 ADK 포인터(localStorage `naia-adk-path`)만 바꾸고 기존 localStorage `naia-config` 를 유지 → 페르소나/VRM 안 바뀜. 초기 설정(AdkSetupScreen)은 `readNaiaConfig` 로 복원하나 전환 경로만 누락(비대칭).
 > - **S72a 복원(전환 핸들러)**: `setAdkPath` 후 config.json(persona/이름/말투/locale via `readNaiaConfig`) + ui-config.json(VRM/배경/BGM via `readNaiaUiConfig`) → localStorage `naia-config` 로 병합 복원 → reload. AdkSetupScreen 과 동형(비대칭 해소).
 > - **S72b 저장 분리**: UI 정체성(vrmModel·backgroundImage·backgroundVideo·bgmTrack·customVrms·customBgs)을 워크스페이스별 `{adkPath}/naia-settings/ui-config.json` 에 저장. agent config.json 은 `stripForAgent` 유지(env 오염 방지) — UI키는 ui-config.json 으로만. persona/이름/말투/locale 은 기존 config.json(agent 도 소비).
 > - **검증(P02)**: adk-store 계약(`writeNaiaUiConfig`/`readNaiaUiConfig` 분리·경계) + 복원 병합 계약(`applyWorkspaceConfigToLocal`: config.json+ui-config.json → naia-config) + e2e(워크스페이스 A→B 전환 시 VRM·persona 변경).
@@ -150,7 +150,7 @@ UC15 제품 수용 확장(#84):
 > - **S-CONFIG-SOT-1 부팅 병합 = 파일 우선**: 부팅 병합에서 `...local` 제거 → `merged = { ...(fileConfig ?? {}), ...(uiConfig ?? {}) }`. 부트스트랩 키(`workspaceRoot`/adkPath·`onboardingComplete`)만 명시 보존. `if(!fileConfig && !uiConfig) return`(read 실패 시 캐시 wipe 방지). `applyWorkspaceConfigToLocal`(전환)과 **동형**(부팅↔전환 비대칭 해소).
 > - **S-CONFIG-SOT-2 되쓰기 순서(레이스 차단)**: `syncConfigToFile()` 은 파일→localStorage 하이드레이션 **완료 후에만** 실행(hydrated 플래그 게이트). 하이드레이션 전 스테일 되쓰기 금지. stale-URL 대비 sync 는 하이드레이트 **후** 재실행으로 충족. **AdkSetup 화면 분기에서도 게이트 선개방 금지**(FR-CONFIG-SOT.5, 2026-07-16 실측 클로버). 실 UI 검증 = `e2e/config-sot-boot.spec.ts`(하이드레이션·무클로버·읽기지연 경쟁 3계약).
 > - **S-CONFIG-SOT-3 무회귀**: `stripForAgent`·키체인 **무변경**. 107곳 동기 `loadConfig()` 리더 **무변경**(캐시는 유지, 권위만 박탈).
-> - **S-CONFIG-SOT-4 UI 설정 SoT 완성 (2026-07-15 회귀 대응)**: 부팅 병합이 파일 우선(`...local` 제거)이 되면, **파일에 SoT 가 없는 키는 매 부팅 기본값으로 리셋된다.** 실제 회귀: 로컬 보이스 호스트(`vllmTtsHost`)가 저장 안 됨 — `UI_ONLY_CONFIG_KEYS`(config.json 에서 strip)이면서 `UI_IDENTITY_KEYS`(ui-config.json 저장 대상, 9개뿐)에 없어 **어느 파일에도 SoT 가 없었다**(localStorage 가 유일 저장소였는데 S-CONFIG-SOT-1 이 그걸 무력화). 따라서 **config.json 에서 빼는 UI 키 = ui-config.json 에 넣는 키**가 정확히 일치해야 한다. `extractUiConfig` 가 `UI_IDENTITY_KEYS`(9개) 대신 `UI_ONLY_CONFIG_KEYS`(전체: theme·panelPosition·vllmTtsHost·ttsProvider·liveProvider·bgmVolume 등)를 뽑도록 확장 → 모든 UI 설정이 ui-config.json 에 저장/로딩. read(`readNaiaUiConfig`)·병합(`mergeBootConfig`/`applyWorkspaceConfigToLocal` 의 `{...file, ...ui}`)은 이미 통짜라 대칭 자동 완성.
+> - **S-CONFIG-SOT-4 UI 설정 SoT 완성 (2026-07-15 회귀 대응)**: 부팅 병합이 파일 우선(`...local` 제거)이 되면, **파일에 SoT 가 없는 키는 매 부팅 기본값으로 리셋된다.** 실제 회귀: 로컬 보이스 호스트(`vllmTtsHost`)가 저장 안 됨 — `UI_ONLY_CONFIG_KEYS`(config.json 에서 strip)이면서 `UI_IDENTITY_KEYS`(ui-config.json 저장 대상, 9개뿐)에 없어 **어느 파일에도 SoT 가 없었다**(localStorage 가 유일 저장소였는데 S-CONFIG-SOT-1 이 그걸 무력화). 따라서 **config.json 에서 빼는 UI 키 = ui-config.json 에 넣는 키**가 정확히 일치해야 한다. `extractUiConfig` 가 `UI_IDENTITY_KEYS`(9개) 대신 `UI_ONLY_CONFIG_KEYS`(전체: theme·appPosition·vllmTtsHost·ttsProvider·liveProvider·bgmVolume 등)를 뽑도록 확장 → 모든 UI 설정이 ui-config.json 에 저장/로딩. read(`readNaiaUiConfig`)·병합(`mergeBootConfig`/`applyWorkspaceConfigToLocal` 의 `{...file, ...ui}`)은 이미 통짜라 대칭 자동 완성.
 > - **S-CONFIG-SOT-5 중단 안전 저장 (2026-07-31 재부팅 조사)**: Shell이 `config.json`을 저장하는 도중 프로세스 종료·재부팅·동시 저장이 발생해도 독자는 이전 JSON 또는 새 JSON 중 하나만 읽어야 한다. 저장 전 JSON 객체를 검증하고, 같은 디렉터리의 임시 파일에 UTF-8 전체를 기록·동기화한 뒤 원자적으로 교체한다. 잘못된 JSON이나 기록 실패는 기존 파일을 보존한다.
 > - **검증(P02)**: 부팅 병합 계약(스테일 localStorage persona 를 config.json 이 덮는가) + 되쓰기 게이트 계약(하이드레이션 전 `writeNaiaConfig` 호출 없음) + Rust 원자 저장 계약(UTF-8 한국어 왕복·기존 파일 교체·잘못된 JSON 입력 시 기존 파일 보존) + e2e-tauri(config.json=나이아 / localStorage=알파 → 부팅 → 나이아 유지, config.json 미오염).
 
@@ -184,16 +184,20 @@ foundation UC 카탈로그와 직교하는 셸 feature(S72 선례). 각 시나�
 | **UC-VRM-EXPRESSION** ([#361](https://github.com/nextain/naia-shell/issues/361)·[#422](https://github.com/nextain/naia-shell/issues/422), FR-AVATAR.1) | Naia 전용 VRM 1.0을 선택한 사용자가 TTS 응답을 들으면 텍스처 전환형 `aa/ih/ou/ee/oh` 입모양이 한 번에 하나씩 모두 나타나고, 발화 종료·중단 시 입이 즉시 닫힌다. 생각 신호에는 외주 모델의 custom `think` 표정을 사용한다. 이 경로는 실제 음소 동기화가 아닌 발화 상태 기반 5모음 시뮬레이션이며, 전신 동작은 별도 VRMA 클립이 제공된 경우에만 가능하다. | UC2/S19 ExpressionPort(VRM) | `mouth.test.ts` 5모음·binary/continuous·VRM 0.0·정지, `expression.test.ts` think 우선·fallback, 외주 VRM 메타데이터 실측 |
 | **UC-VRM-ACTIVE-EXPRESSION** ([#423](https://github.com/nextain/naia-shell/issues/423), FR-AVATAR.2) | 사용자가 질문하면 Naia가 대기 중 custom `think` 표정을 보이고, 응답의 명시적 감정 표정과 실제 음성 발화 5모음 입모양을 함께 사용한다. 감정은 마지막 음성이 끝날 때까지 유지되고 취소·중단·오류 시 neutral로 안전하게 돌아온다. 외주 파일의 blink·lookAt·hair springBone과 외부 idle VRMA는 계속 동작하되, 파일에 없는 전신 감정 모션은 실행하지 않는다. | UC2/S19 ExpressionPort(VRM) + audio playback lifecycle | `ChatArea.test.tsx` request/emotion/TTS/interrupt, `pipeline-voice.spec.ts`, `mouth.test.ts`, `expression.test.ts`, `AvatarCanvas.tsx` load-time sync |
 | **UC-WIN-NVA-8G evidence correction** | #397 supersedes the CPU/NPU Ollama brain clauses in S-VOICE-AVATAR and S-8G: the LLM remains external and only VoxCPM2 W8A16 + TensorRT LocDiT and TensorRT-native Ditto run locally. | Same surfaces as UC-WIN-NVA-8G. | Implemented automation: `VideoAvatarCanvas.test.tsx` (idle/start failure/retry/<8GB no-start), `capability-settings.spec.ts`, `settings-slots.spec.ts`, Rust `cascade_vram_requires_detected_nvidia_8gb_or_more`, windows-manager profile/manifest tests, and Tauri 94 real 4060 output path. Model-wide VoxCPM2 TensorRT and model-wide RTX compatibility gates remain follow-up work. |
-| **S-BGM-SKILL** (UC8/FR-BGM.1 — 2026-07-16, 시연 크리티컬) | 사용자가 나이아에게 **"잔잔한 음악 틀어줘"** 라고 하면 나이아가 `skill_youtube_bgm` 도구로 BGM 위젯을 제어한다 — 검색(사이드카 :18791) 첫 결과 재생·정지·일시정지·재개·다음/이전(즐겨찾기)·볼륨. 구 monolith 의 내장 BGM 스킬이 new-core 이식에서 누락돼(위젯·사이드카·에이전트 UC8 어댑터는 있으나 **도구 등록 배선 0**) 나이아가 BGM 존재 자체를 몰랐던 갭 해소. 배선 = **패널(환경) 도구 경로**(E1 — agent 무변경): 부팅 등록 → `panel_tool_call` → 셸 실행 → 위젯이 이미 듣는 `bgm_youtube_*` 이벤트 | 환경(ambiance) — 위젯 도구화, 뇌 무변경 | `bgm-skill.test.ts`(액션 라우팅·검색→첫결과·볼륨 clamp·인자검증·이벤트 payload 형상) [단위] + **`e2e/bgm-skill.spec.ts`(실 UI 배선 회귀 가드: (A) 부팅 panel_skills 에 skill_youtube_bgm 등록 (B) 채팅 턴 panel_tool_call → BgmPlayer 실제 재생 `.bgm-icon--playing`)** — 단위테스트로 못 잡는 *배선 누락*(이번 회귀 유형)을 실 UI 로 고정. 실 음악 재생=부스 리허설(수동, 2026-07-16) |
+| **S-BGM-SKILL** (UC8/FR-BGM.1 — 2026-07-16, 시연 크리티컬) | 사용자가 나이아에게 **"잔잔한 음악 틀어줘"** 라고 하면 나이아가 `skill_youtube_bgm` 도구로 BGM 위젯을 제어한다 — 검색(사이드카 :18791) 첫 결과 재생·정지·일시정지·재개·다음/이전(즐겨찾기)·볼륨. 구 monolith 의 내장 BGM 스킬이 new-core 이식에서 누락돼(위젯·사이드카·에이전트 UC8 어댑터는 있으나 **도구 등록 배선 0**) 나이아가 BGM 존재 자체를 몰랐던 갭 해소. 배선 = **앱(환경) 도구 경로**(E1 — agent 무변경): 부팅 등록 → `app_tool_call` → 셸 실행 → 위젯이 이미 듣는 `bgm_youtube_*` 이벤트 | 환경(ambiance) — 위젯 도구화, 뇌 무변경 | `bgm-skill.test.ts`(액션 라우팅·검색→첫결과·볼륨 clamp·인자검증·이벤트 payload 형상) [단위] + **`e2e/bgm-skill.spec.ts`(실 UI 배선 회귀 가드: (A) 부팅 app_skills 에 skill_youtube_bgm 등록 (B) 채팅 턴 app_tool_call → BgmPlayer 실제 재생 `.bgm-icon--playing`)** — 단위테스트로 못 잡는 *배선 누락*(이번 회귀 유형)을 실 UI 로 고정. 실 음악 재생=부스 리허설(수동, 2026-07-16) |
 | **S-CASCADE-HISTORICAL** (Round 2, 2026-06-30) | 과거 8GB 음성 단독/fp16 가정 기록. **현재 Windows 8GB 실행 계약이 아니다.** 현재는 `windows_trt_8g`가 VoxCPM2 W8A16 + TensorRT LocDiT와 Ditto를 함께 계획한다. | 이력 | 현재 시나리오는 UC-WIN-NVA-8G 참조 |
 | **S-8G-HISTORICAL** (2026-07-08) | 과거 로컬 LLM/아바타/both 3모드와 8GB 음성 클라우드 전용 가정. **Windows `windows_trt_8g`에는 적용하지 않는다.** | 이력 | 현재 시나리오는 UC-WIN-NVA-8G 참조 |
 | **S-CASCADE-T3** (BYO 원격 cascade, 2026-07-15) | 로그인 사용자가 직접 운영하거나 별도로 제공받은 Host URL을 입력한다. 이는 향후 Nextain cloud cascade와 별개이며 현재 cloud endpoint·entitlement·자동 폴백을 뜻하지 않는다. 명시한 Host가 로컬 façade보다 우선한다. | 제어면(설정) + 표시계면(NVA idle/발화) | `config.test.ts`·`capability-settings.spec.ts`·`nva-remote-idle.live.spec.ts` |
-| **S-VN** (#ui-reorg, 신규 — 2026-06-29) | 홈(기본) 화면에서 naia와 **몰입형 VN 대화** — 전체화면 VRM 아바타 + 하단 넓은 대화박스(탭 없는 집중형). 좁게 떠 있던 채팅 패널 제거("대화 집중 안 됨" 해소) | 표현(셸 UI) — 단일 ChatPanel을 CSS로 재배치(variant=vn), 무리마운트 | `119-pty-terminal.spec.ts` T6(VN variant 노출). ⚠️ 미감=실 앱 |
-| **S-WS4** (#ui-reorg) | 워크스페이스 진입 시 **4단 관제탑**: 대화창(좌 레일)·워크트리·문서뷰어(상)+터미널(하)·서브에이전트 리스트. 레일 접기·상하 비율 자유 리사이즈·터미널 탭/그리드 | 표현(셸 UI) — App.tsx `data-ui-mode` 파생 + WorkspaceCenterPanel center 상하분할 | T7(레일 variant)·T8(레일 접기 시 ChatPanel 무리마운트)·T9(문서뷰어/터미널 분할) + 91 18/18(무회귀) |
+| **S-VN** (#ui-reorg, 신규 — 2026-06-29) | 홈(기본) 화면에서 naia와 **몰입형 VN 대화** — 전체화면 VRM 아바타 + 하단 넓은 대화박스(탭 없는 집중형). 좁게 떠 있던 채팅 앱 제거("대화 집중 안 됨" 해소) | 표현(셸 UI) — 단일 ChatApp을 CSS로 재배치(variant=vn), 무리마운트 | `119-pty-terminal.spec.ts` T6(VN variant 노출). ⚠️ 미감=실 앱 |
+| **S-WS4** (#ui-reorg) | 워크스페이스 진입 시 **4단 관제탑**: 대화창(좌 레일)·워크트리·문서뷰어(상)+터미널(하)·서브에이전트 리스트. 레일 접기·상하 비율 자유 리사이즈·터미널 탭/그리드 | 표현(셸 UI) — App.tsx `data-ui-mode` 파생 + WorkspaceCenterArea center 상하분할 | T7(레일 variant)·T8(레일 접기 시 ChatApp 무리마운트)·T9(문서뷰어/터미널 분할) + 91 18/18(무회귀) |
 | **S-DOC** (#ui-reorg) | 대량 작업문서를 **탭으로 유지·전환**(문서 탭바)해 "터미널에서 문서 찾기 어려움" 해소. 서브에이전트 클릭 시 그 에이전트 최근문서가 탭으로 surface. Ctrl+P QuickOpen 유지 | 표현(셸 UI) — `openDocs` 상태 + DocTabBar | T10(세션 클릭→문서 탭 surface) + 91 S3/S6(에디터 무회귀) |
 | **S-ASK** (#ui-reorg) | 터미널 출력의 파일경로 **클릭=문서뷰어에서 열기 / Alt+클릭=대화창에 AI 질의**. 문서 탭에도 AI 질의(✦) 버튼 | 표현(셸 UI) — Terminal link provider Alt 분기 + 기존 `naia:ask-ai` 재사용 | `Terminal.tsx` activate Alt 분기. ⚠️ xterm 링크 클릭=실 앱 |
 | **S-INSTALL** (#377, FR-INSTALL — 2026-07-17) | 사용자가 **설치 파일을 받아 자기 OS(Windows/Linux/macOS)에 설치하고 첫 실행**한다 — Windows 는 NSIS(사용자 권한, 관리자 불요, **WSL 불요**) + MSI(관리자 설치 — WiX 표준), Linux 는 deb/rpm/AppImage, macOS 는 app/dmg(**arm64(Apple Silicon) 전용** · 미서명 — 우클릭 열기). Node 런타임이 3 OS 모두 동봉되어 **Node 미설치 머신에서도 에이전트가 뜬다**. 개발자는 clean checkout 에서 **명령 1개**로 자기 OS 의 설치 파일을 재현 빌드한다(수동 파일 배치 0). 플랫폼 차이(타깃·동봉 리소스·설치자 설정·기대 산출물)는 **매트릭스 데이터 1곳**이 정의하고, 스크립트는 OS 별 분리 없이 1개 | 배포(설치·첫 부팅) — 매트릭스→생성 conf, OS 분기=데이터 | `scripts/__tests__/platform-matrix.test.ts`(매트릭스 스키마 + conf 생성 golden, 3 OS) [단위] · `check-build-contract.mjs` PASS [계약] · **Windows 실측: 실 NSIS 무인 설치(/S) → 설치본 기동 — 핸드셰이크 AND `[Naia] node = ` 포함 줄이 최소 2줄 AND 전부 `$INSTDIR` 하위**(2조건, FR-INSTALL.4 — 빌드 머신엔 시스템 node 가 있어 기동만으론 번들 분기가 증명 안 됨. 개수 단언은 공허참 차단)(e2e-tauri `TAURI_BINARY` 설치 경로 지정) · **Linux: CI ubuntu job 이 deb 설치 → xvfb 기동 스모크 — 마커 `[Naia] agent-core gRPC @` **AND** node 줄 최소 2줄 **AND** 그 경로가 전부 설치본 resource_dir 하위**(R5: "PATH 에서 node 제거" 는 폐기 — 폴백이 PATH 무관하게 nvm 디렉토리를 직접 스캔하므로 번들 node 를 증명하지 못함. mutation probe 로 red 도 확인) — **Windows·Linux 양쪽 모두 판정 범위 = 마지막 `=== Session started ===` 포함 줄 이후**(`naia.log` 는 누적 파일) · macOS 실빌드 = CI(`build-installers.yml`) · **산출물 검증 스크립트 `scripts/verify-artifacts.mjs` 실행(빌드 머신 + CI 3 OS) + 부정(negative) 케이스 단위 테스트**(FR-INSTALL.6). ⚠️ mac = **arm64 전용**(CI `macos-latest` = arm64 러너, Intel 산출물 미제공 — 후속) + 실기기 설치 실측 미보유(정직 표기: 이번 완료선 = arm64 CI 빌드 성공) |
 | **UC-CLI-OPEN** ([#484](https://github.com/nextain/naia-shell/issues/484), FR-CLI.1~3) | 설치 사용자가 새 터미널에서 `naia`를 실행하면 Naia Shell이 열리거나 기존 창이 포커스된다. `naia <file>`은 상대 경로를 호출 터미널 기준으로 해석해, 셸이 꺼져 있든 실행 중이든 같은 워크스페이스 에디터에 해당 파일을 연다. 존재하지 않는 경로와 디렉터리는 열지 않는다. | 설치 alias/PATH 스모크 · Rust 인자/경로 계약 테스트 · 실행 중/콜드 스타트 네이티브 인수 테스트 |
+
+| **S-MAC-UNIVERSAL** (#505, FR-INSTALL.7 — 2026-08-27) | macOS 사용자는 Intel 또는 Apple Silicon Mac에서 동일한 Universal `Naia.app`을 실행한다. 릴리스 운영자는 동일 커밋을 `macos-15-intel`과 `macos-15`에서 각각 빌드하고, 공통 경로의 Mach-O(셸·Node·네이티브 Node 모듈)를 재귀 병합한다. `darwin-x64`/`darwin-arm64`처럼 런타임 선택용 경로에 든 네이티브 payload는 두 slice를 함께 보존하되, 경로와 slice가 다르거나 그 밖의 한쪽 파일 누락·일반 파일 불일치·thin Mach-O가 있으면 Universal 산출물을 만들지 않는다. 기존 단일 아키텍처 app/dmg는 유지한다. | 배포 — 두 독립 빌드 → 재귀 `lipo` → 전체 Mach-O 검증 | `assemble-macos-universal.test.ts`(파일 집합·분류·thin 바이너리 부정 계약), Intel 실기기 설치본 스모크(agent/BGM/번들 Node), CI arm64+x64 빌드 및 Universal 전체 Mach-O 검사. Apple Silicon 실기기 실행은 별도 출시 증거로 남긴다. |
+
+> S-INSTALL의 arm64-only 표기는 #377 완료 당시의 역사적 기준이다. #505 이후 macOS 릴리스 경로는 S-MAC-UNIVERSAL/FR-INSTALL.7을 따른다.
 
 > **S-INSTALL #411·#412 보강(2026-08-02):** paired Agent와 로컬 의존 프로젝트의 pnpm 버전이
 > 서로 달라도 스테이징은 각 `package.json#packageManager` 선언을 Corepack으로 실행한다.
@@ -267,7 +271,7 @@ Shell은 빌드 때 고정된 정확한 Agent 런타임만 실행한다.
 
 ## UC-CODEX-WORKER-LIFECYCLE — 격리된 Codex 코딩 작업자를 관리한다
 
-사용자는 워크스페이스의 **Coding Workers** 패널에서 provider `codex`, 작업할 worktree, 작업 설명을 명시해 코딩 작업자를 요청한다. Shell은 준비되지 않은 adapter를 성공으로 표시하지 않으며, API가 연결되기 전에는 “작업자 서비스에 연결할 수 없음”을 표시하고 목록 상태를 만들지 않는다.
+사용자는 워크스페이스의 **Coding Workers** 앱에서 provider `codex`, 작업할 worktree, 작업 설명을 명시해 코딩 작업자를 요청한다. Shell은 준비되지 않은 adapter를 성공으로 표시하지 않으며, API가 연결되기 전에는 “작업자 서비스에 연결할 수 없음”을 표시하고 목록 상태를 만들지 않는다.
 
 작업자가 생성된 뒤에는 각 항목의 worktree·작업 설명·마지막 갱신 시각·`queued`/`running`/`cancelling`/`cancelled`/`completed`/`failed` 상태를 독립적으로 본다. 실행 중인 작업자가 같은 worktree를 이미 점유하면 두 번째 요청은 충돌 이유를 표시하고 전송하지 않는다. 동시에 실행할 작업자는 서로 다른 격리 worktree를 사용한다.
 
@@ -279,7 +283,7 @@ Shell은 빌드 때 고정된 정확한 Agent 런타임만 실행한다.
 
 ### 시각·사용성 수용 기준
 
-사용자는 작업자 패널을 열었을 때 제어 루트, 실행 대상, 현재 수업 대상의 저장 상태, 다음 행동을 한 화면에서 구분한다. 선택할 수 없는 provider를 선택 상자처럼 보이지 않게 하며, 상태는 원시 enum이나 원문 시간만으로 전달하지 않는다. 패널은 1,100px 이하의 Shell 분할 폭에서도 입력·수업 경계·실행 버튼이 한 열의 의도된 순서로 유지된다.
+사용자는 작업자 앱을 열었을 때 제어 루트, 실행 대상, 현재 수업 대상의 저장 상태, 다음 행동을 한 화면에서 구분한다. 선택할 수 없는 provider를 선택 상자처럼 보이지 않게 하며, 상태는 원시 enum이나 원문 시간만으로 전달하지 않는다. 앱은 1,100px 이하의 Shell 분할 폭에서도 입력·수업 경계·실행 버튼이 한 열의 의도된 순서로 유지된다.
 
 - 빈 목록: 작업자가 없다는 사실과 첫 작업을 시작할 수 있는 입력 흐름을 표시한다.
 - 진행 중: 저장·시작·취소·재개 요청 중에는 해당 행동을 중복 전송하지 않고 진행 상태를 표시한다.
@@ -415,7 +419,7 @@ default-skills 60+ "각 1회 측정"=존재확인≠동작보장(공통 runtime/
 | UC6 브라우저 | agent-browser | 로컬(webview) | 로컬 의존 낮음 — 실측 필요 |
 | UC7 시스템 | workspace·pty·memo | 로컬(fs/proc) | 로컬 — 비교적 견고 추정, 실측 |
 | UC8 BGM | youtube-bgm | 외부(YouTube/InnerTube) | YouTube 변동 취약 — 실측 |
-| UC9 패널 | panel install | 로컬 | 실측 |
+| UC9 앱 | app install | 로컬 | 실측 |
 | UC10 멀티채널 | discord·slack·google-chat | **외부 앱 인증** | ⚠️ **Discord 깨진 듯(앱 인증 만료?)** — 인증 의존 전반 의심 |
 | UC11 자기상태 | system-status+InteroceptivePort(신설) | 로컬 | 부분(신설 포함) |
 
@@ -447,7 +451,7 @@ default-skills 60+ "각 1회 측정"=존재확인≠동작보장(공통 runtime/
 | **F3** | **UC13 승인 게이트 → UC7**(F3 내부 순서: 승인 경로 먼저, 그 위에 mutating) | 첫 efferent+reafference |
 | **V1** | UC1 (+ UC12 전체 = provider/계정/키 설정 완료, V1 직전) | provider 검증 후 |
 | **V2** | UC2 | voice |
-| **도구·환경 tranche**(V 이후, *기능별 Old-Baseline 게이트*) | UC5 도구 · UC6 브라우저 · UC8 BGM · UC9 패널 · UC10 멀티채널(기본) | 외부 의존 개별 실측 후 |
+| **도구·환경 tranche**(V 이후, *기능별 Old-Baseline 게이트*) | UC5 도구 · UC6 브라우저 · UC8 BGM · UC9 앱 · UC10 멀티채널(기본) | 외부 의존 개별 실측 후 |
 | **OS-core**(F3 후) | UC10a 다중클라이언트 lease · UC13a stop/e-stop | 구현 DEFER |
 | **deferred**(naia-memory 트랙) | UC3 기억 · UC4 능동 | old 미배선 |
 
@@ -468,11 +472,11 @@ default-skills 60+ "각 1회 측정"=존재확인≠동작보장(공통 runtime/
 
 ## 셸 feature 시나리오 — 지식 근거→원문 + 그래프 (K2·K3, kb-compiler 통합 — 2026-06-30)
 
-도구·환경 tranche(UC5 도구·UC6 브라우저·UC7 워크스페이스)의 셸측 슬라이스. 사용자가 워크스페이스 지식을 물으면, 에이전트가 `skill_knowledge_ask`/`search`(naia-agent **UC-KNOWLEDGE**, kb-compiler backend — 별 레포 live)로 **근거 있는 답변**을 내고, 셸이 그 tool-result(JSON)를 **답변 + 출처 칩**으로 렌더한다(K2). 출처 칩 클릭 시 **근거→원문**: URL=브라우저 패널(UC6), 워크스페이스 파일=파일뷰어(UC7)로 원문이 열린다. 근거 없으면 **기권**(칩 없음). 또한 `skill_knowledge_graph` 결과는 셸이 **2D/3D 캔버스 그래프**(엔티티·관계·군집색·degree 크기, 2D↔3D 토글)로 시각화한다(K3).
+도구·환경 tranche(UC5 도구·UC6 브라우저·UC7 워크스페이스)의 셸측 슬라이스. 사용자가 워크스페이스 지식을 물으면, 에이전트가 `skill_knowledge_ask`/`search`(naia-agent **UC-KNOWLEDGE**, kb-compiler backend — 별 레포 live)로 **근거 있는 답변**을 내고, 셸이 그 tool-result(JSON)를 **답변 + 출처 칩**으로 렌더한다(K2). 출처 칩 클릭 시 **근거→원문**: URL=브라우저 앱(UC6), 워크스페이스 파일=파일뷰어(UC7)로 원문이 열린다. 근거 없으면 **기권**(칩 없음). 또한 `skill_knowledge_graph` 결과는 셸이 **2D/3D 캔버스 그래프**(엔티티·관계·군집색·degree 크기, 2D↔3D 토글)로 시각화한다(K3).
 
-- **인지흐름**: (사고)지식 질의 → (표현)근거 답변+출처·지식 그래프 → (행위)칩 클릭→원문 패널 전환. 백엔드 배선·계약 = naia-agent(별 레포), 셸 렌더·dispatch·뷰어 = 본 feature(기존 브라우저/워크스페이스 패널 api 재사용·그래프 의존성 0 캔버스, 신규 사이드카 0).
-- **검증(P02)**: requirements.md **FR-KB-OS.1~4** 매핑 — `knowledge-result.test.ts`(파싱·분류·그래프 파싱 단위)·`knowledge-tool-result.test.tsx`(RTL 렌더+칩 dispatch)·`e2e/chat-tools.spec.ts` "지식 도구(K2)"·"지식 그래프(K3)"(Playwright 실 UI: 답변+칩+칩클릭→브라우저 패널 / 그래프 캔버스 렌더+2D/3D 토글). tsc0.
-- 통합 설계 SoT = alpha-adk `.agents/progress/naia-kb-compiler-agent-os-integration-2026-06-29.md`. 전용 그래프 패널(on-demand fetch) = post-MVP. 설정 지식 탭(관리 compile/소스) = 아래 UC-KB-MANAGE.
+- **인지흐름**: (사고)지식 질의 → (표현)근거 답변+출처·지식 그래프 → (행위)칩 클릭→원문 앱 전환. 백엔드 배선·계약 = naia-agent(별 레포), 셸 렌더·dispatch·뷰어 = 본 feature(기존 브라우저/워크스페이스 앱 api 재사용·그래프 의존성 0 캔버스, 신규 사이드카 0).
+- **검증(P02)**: requirements.md **FR-KB-OS.1~4** 매핑 — `knowledge-result.test.ts`(파싱·분류·그래프 파싱 단위)·`knowledge-tool-result.test.tsx`(RTL 렌더+칩 dispatch)·`e2e/chat-tools.spec.ts` "지식 도구(K2)"·"지식 그래프(K3)"(Playwright 실 UI: 답변+칩+칩클릭→브라우저 앱 / 그래프 캔버스 렌더+2D/3D 토글). tsc0.
+- 통합 설계 SoT = alpha-adk `.agents/progress/naia-kb-compiler-agent-os-integration-2026-06-29.md`. 전용 그래프 앱(on-demand fetch) = post-MVP. 설정 지식 탭(관리 compile/소스) = 아래 UC-KB-MANAGE.
 
 ## UC-KB-MANAGE — 지식 소스 관리 설정 탭 (K4, kb-compiler 통합 — 2026-06-30)
 
@@ -721,7 +725,7 @@ successful until the player reports an observed `playing` transition.
 
 | Scenario | Unit / contract | UI / integration |
 |---|---|---|
-| agent restart before a chat turn | `chat-service.test.ts` boolean delivery receipt | `e2e/bgm-skill.spec.ts` asserts same-turn `panel_skills` precedes `chat_request` |
+| agent restart before a chat turn | `chat-service.test.ts` boolean delivery receipt | `e2e/bgm-skill.spec.ts` asserts same-turn `app_skills` precedes `chat_request` |
 | current search result repeats | `bgm-skill.test.ts` current-video exclusion and same-video replay receipt | BGM Playwright fixture observes a fresh iframe/playback transition |
 | YouTube WebView identification | embed URL/remount component contract | Playwright request verifies referrer; paired native Linux Tauri/WebKitGTK Radio queue E2E verifies observed A-to-B playback |
 | variable-length and wall-clock playback | playback snapshot carries observed `currentTime`/`duration`; stale playback IDs cannot advance the queue | The default 10-track run is compressed. A 60-minute wall-clock first local fixture followed by nine ordered transitions passed, and an actual 11:58:09 YouTube video passed an eight-hour wall-clock soak with a 7,203.0-second checkpoint and 28,800.6-second final media clock. The latter is one-long-video evidence, not a mixed 20-video session. |
@@ -871,7 +875,7 @@ P02 상태 매트릭스: 업데이트 없음, v0.2.0 발견, 다운로드·설�
 
 | Scenario | User-observable outcome | Coverage |
 |---|---|---|
-| **UC-V021-APP-INSTALL-LIFECYCLE** | 깨끗한 프로필에서 앱 설치 후 즉시 목록과 탭에 나타나고 재시작 뒤에도 유지되며, 제거 성공 뒤 `~/.naia/apps/{id}`와 목록에서 함께 사라진다. 예전 `~/.naia/panels` 설치는 안전한 경우 한 번만 이동한다. | isolated filesystem lifecycle + loader tests |
+| **UC-V021-APP-INSTALL-LIFECYCLE** | 깨끗한 프로필에서 앱 설치 후 즉시 목록과 탭에 나타나고 재시작 뒤에도 유지되며, 제거 성공 뒤 `~/.naia/apps/{id}`와 목록에서 함께 사라진다. 예전 `~/.naia/apps` 설치는 안전한 경우 한 번만 이동한다. | isolated filesystem lifecycle + loader tests |
 | **UC-V021-APP-REMOVE-HONESTY** | 삭제 권한·파일시스템 오류가 나면 앱은 목록에 남고 실패 알림이 표시된다. symlink, 경로 탈출, 잘못된/중복 id는 외부 파일을 변경하지 않는다. | Rust boundary mutations + AppBar alert contract |
 
 P02 상태 매트릭스: clean install/list/restart/remove/list, legacy migration, canonical duplicate, malformed id, symlink escape, 중간 삭제 실패를 각각 검증한다.
@@ -914,3 +918,535 @@ Test Coverage Map: `lib/tts/__tests__/text-filter.test.ts`가 공통/언어/fall
 - 도구 권한 팝업이 열렸을 때 `Alt+Y`는 이번만 허용, `Alt+A`는 항상 허용, `Alt+N`은 거부를 정확히 한 번 실행한다.
 - 버튼의 플랫폼별 단축키 표기와 실제 키 해석은 같은 정의를 사용한다.
 - 팝업이 닫히면 리스너가 제거되며, 일반 입력과 추가 수정키 조합은 가로채지 않는다.
+
+## 2026-08-26 워크스페이스 컨텍스트 해석 (#501, 에픽 #497)
+
+> 계약: `docs/progress/issue-497-universal-agent.md`. 여기의 UC는 Naia가 ADK 워크스페이스 루트에서
+> 실행한 코딩 에이전트처럼 자기 규칙을 스스로 찾아 읽는 부분만 다룬다. 실행 위임은 #500,
+> 제어면은 #502가 소유한다.
+
+### UC-WORKSPACE-CONTEXT-DISCOVER — 워크스페이스 규칙을 스스로 찾는다
+
+- 사용자가 워크스페이스 루트를 지정하고 첫 요청을 하면, Naia는 그 루트의 진입점 문서와 그것이 가리키는 필수 인덱스를 스스로 찾아 읽는다.
+- 어떤 문서를 읽었고 왜 읽었는지를 사용자가 물으면 근거와 함께 답한다. "설정된 폴더라서"가 아니라 "루트 진입점이 이 인덱스를 필수로 지정해서"라고 답할 수 있다.
+- 워크스페이스 이름을 코드에 박아 두지 않는다. 진입점이 선언한 것만 읽고, 선언되지 않은 문서는 읽지 않는다.
+- 요청과 무관한 문서는 발견은 하되 읽지 않는다. 매 대화마다 워크스페이스 전체를 대화에 밀어 넣지 않는다.
+
+### UC-WORKSPACE-CONTEXT-ENTER-PROJECT — 프로젝트 안으로 들어간다
+
+- 사용자가 특정 프로젝트의 일을 요청하면, Naia는 그 프로젝트 디렉터리의 진입점과 프로젝트 전용 필수 컨텍스트를 추가로 읽는다.
+- 루트 컨텍스트가 프로젝트 컨텍스트를 대신하지 않는다. 프로젝트에 자기 규칙이 있으면 그것이 우선한다.
+- 프로젝트 진입은 작업 디렉터리를 바꾸는 것으로 끝나지 않는다. 컨텍스트 전환으로 다루며 전환 사실이 관측 가능하다.
+- 프로젝트에 들어갔다는 사실만으로 부모나 형제 프로젝트에 대한 작업 권한이 생기지 않는다.
+
+### UC-WORKSPACE-CONTEXT-SWITCH-PROJECT — 프로젝트를 갈아탄다
+
+- 다른 프로젝트로 옮기면 이전 프로젝트의 지역 컨텍스트는 버린다. 사용자가 명시한 의도는 유지한다.
+- 이전 프로젝트의 규칙이 새 프로젝트의 판단 근거로 남지 않는다.
+- 컨텍스트가 바뀌면 개정 번호가 바뀌고 사용자가 그것을 확인할 수 있다.
+- 워크스페이스 문서가 디스크에서 바뀌면 다음 요청에서 갱신본을 쓴다. 오래된 사본으로 답하지 않는다.
+
+### UC-WORKSPACE-CONTEXT-BROKEN-ENTRYPOINT — 규칙을 못 읽으면 정직하게 실패한다
+
+- 진입점이 없거나, 형식이 깨졌거나, 가리키는 인덱스가 없으면 추측해서 진행하지 않는다.
+- 무엇을 어디서 찾다가 왜 실패했는지 사용자가 고칠 수 있는 형태로 보고한다.
+- 심볼릭 링크나 상위 경로 표기로 워크스페이스 경계 밖을 가리키면 거부한다.
+- 정의되지 않은 약어나 용어를 만나면 뜻을 추측하지 않고 되묻는다.
+
+Test Coverage Map (P02):
+
+| UC | 검증 수단 | 대상 |
+|---|---|---|
+| UC-WORKSPACE-CONTEXT-DISCOVER | vitest `src/test/workspace-context-discover.contract.test.ts` | 진입점 발견, 선언된 인덱스만 로드, 선언 밖 문서 미로드, 근거 기록 |
+| UC-WORKSPACE-CONTEXT-DISCOVER | vitest `src/test/workspace-context-selective-load.contract.test.ts` | 의도별 선택 로딩, 로드 토큰 상한, 전체 주입 금지 |
+| UC-WORKSPACE-CONTEXT-ENTER-PROJECT | vitest `src/test/workspace-context-enter-project.contract.test.ts` | 중첩 진입점 로드, 프로젝트 규칙 우선, 권한 비확장 negative |
+| UC-WORKSPACE-CONTEXT-SWITCH-PROJECT | vitest `src/test/workspace-context-switch-project.contract.test.ts` | 지역 컨텍스트 폐기, 의도 보존, 교차 누출 0 |
+| UC-WORKSPACE-CONTEXT-SWITCH-PROJECT | vitest `src/test/workspace-context-revision.contract.test.ts` | 개정 번호 단조 증가, 디스크 변경 반영, 오래된 사본 거부 |
+| UC-WORKSPACE-CONTEXT-BROKEN-ENTRYPOINT | vitest `src/test/workspace-context-failure-honesty.contract.test.ts` | 부재·형식 오류·인덱스 부재 진단 메시지 |
+| UC-WORKSPACE-CONTEXT-BROKEN-ENTRYPOINT | vitest `src/test/workspace-context-path-boundary.contract.test.ts` | 심볼릭 링크·상위 경로 탈출 negative |
+| 전체 | vitest `src/test/workspace-context-fs-adapter.contract.test.ts` | 실제 진입점 파싱, 이 저장소 AGENTS.md 실측, 임시 워크스페이스 중첩 진입, 경계 거부, 지문 변화 |
+| 전체 | vitest `src/test/workspace-context-observe-adapter.contract.test.ts` | Tauri 웹뷰 경로(F2 관측 포트) 재사용, 크기 기반 지문의 한계 고정 |
+| 전체 | vitest `packages/shell/src/apps/workspace/__tests__/workspace-context-app.test.tsx` | 앱 상태 매트릭스(루트 없음·성공·빈 목록·오류·프로젝트 전환·다시 읽기) |
+| 전체 | Playwright `packages/shell/e2e/workspace-context.spec.ts` | 실 UI에서 근거 표시, 선언 밖 문서 미표시, 프로젝트 전환 시 범위·개정 변화, 경로 중복 없음, 근거 출처 정확성, 실패 진단, 좁은 폭 미넘침 |
+| 전체 | e2e-tauri `packages/shell/e2e-tauri/specs/workspace-context.spec.ts` | 실제 파일 시스템 픽스처에서 발견·진입·전환·실패의 풀스택 왕복 |
+
+상태 매트릭스: 기본(진입점 정상), 빈 목록(선언된 인덱스 0개), 진행(대용량 워크스페이스 스캔 중),
+성공(컨텍스트 확정), 오류(진입점 깨짐), 좁은 폭(컨텍스트 근거 앱 축소)을 모두 매핑한다.
+
+## 2026-08-26 Herdr 제어면 (#502, 에픽 #497, #434 승계)
+
+> 계약: `docs/progress/issue-497-universal-agent.md`. #434의 인수 기준을 승계한다. 여기의 UC는
+> Naia가 Herdr를 관측하고 정책을 통과한 변경을 요청하는 부분만 다룬다. 워크스페이스 규칙 해석은 #501,
+> 작업자 배치는 #500이 소유한다.
+
+### UC-HERDR-CONTROL-OBSERVE — TUI를 긁지 않고 관측한다
+
+- Naia는 Herdr의 space, 이슈, 세션, 작업자, pane, 터미널, 진행 중 작업을 타입이 선언된 자원으로 읽는다.
+- 화면 문자열을 파싱하거나 private socket을 엿보지 않는다.
+- 스냅샷에는 단조 증가하는 개정 번호가 실려 있고, 이후 변화는 구독으로 받는다. 놓친 구간이 있으면 그 사실을 알 수 있다.
+- 사용자가 "지금 뭐 돌고 있어?"라고 물으면 Naia는 관측한 것만 말하고 추측을 섞지 않는다.
+
+### UC-HERDR-CONTROL-MUTATE — 정책을 통과한 변경만 요청한다
+
+- Naia는 space 생성·포커스, 이슈 결속, 리더·작업자 시작과 종료, 터미널 생성·실행·입력·크기변경·종료를 구조화된 요청으로 보낸다.
+- 명령은 인자 배열과 작업 디렉터리와 환경으로 전달한다. 문자열로 조립해 셸에 넘기지 않는다.
+- 모든 요청은 요청 식별자와 멱등 키를 갖는다. 같은 키를 다시 보내도 프로세스나 명령이 두 번 생기지 않는다.
+- 모든 변경은 영향을 받은 자원 식별자와 증거 참조를 돌려준다. "했습니다"만 남기지 않는다.
+- 자격증명 사용, 외부 발신, 파괴적 명령, 운영 변경은 일반 편집 권한을 상속하지 않는다.
+
+### UC-HERDR-CONTROL-STALE-REVISION — 늦게 도착한 요청은 조용히 덮어쓰지 않는다
+
+- 요청에는 사용자가 본 시점의 기대 개정 번호가 실린다.
+- 그 사이 상태가 바뀌었으면 요청은 타입이 선언된 충돌로 거절된다. 조용히 최신 상태를 덮어쓰지 않는다.
+- 충돌을 받은 Naia는 현재 상태를 다시 관측하고 사용자에게 무엇이 달라졌는지 말한 뒤 다시 판단한다.
+
+### UC-HERDR-CONTROL-RECONNECT — 끊겨도 완료를 지어내지 않는다
+
+- 연결이 끊기거나 Herdr가 재시작되면 Naia는 다시 붙어 현재 상태를 재확인한다.
+- 연결 끊김, 타임아웃, 프로세스 종료, 사용자 취소, 부분 완료는 서로 다른 결과로 구별되어 남는다.
+- 재접속 직후 Naia는 작업이 멈췄다거나 끝났다고 증거 없이 말하지 않는다. 모르면 모른다고 한다.
+- 재접속 시도에는 상한이 있고, 상한에 닿으면 실패를 정직하게 보고한다.
+
+Test Coverage Map (P02):
+
+| UC | 검증 수단 | 대상 |
+|---|---|---|
+| UC-HERDR-CONTROL-OBSERVE | vitest `src/test/herdr-control-resource-schema.contract.test.ts` | 자원 스키마·버전, 개정 단조 증가, 구독 누락 감지 |
+| UC-HERDR-CONTROL-OBSERVE | vitest `src/test/herdr-control-no-screen-scrape.contract.test.ts` | 화면 파싱·private socket 경로 부재 negative |
+| UC-HERDR-CONTROL-MUTATE | vitest `src/test/herdr-control-mutation.contract.test.ts` | 구조화 argv·cwd·env, 증거 참조 반환, 문자열 조립 negative |
+| UC-HERDR-CONTROL-MUTATE | vitest `src/test/herdr-control-idempotency.contract.test.ts` | 같은 멱등 키 재전송 시 중복 생성 0 |
+| UC-HERDR-CONTROL-MUTATE | vitest `src/test/herdr-control-capability-tier.contract.test.ts` | 자격증명·외부 발신·파괴적 명령의 권한 비상속 negative |
+| UC-HERDR-CONTROL-STALE-REVISION | vitest `src/test/herdr-control-stale-revision.contract.test.ts` | 기대 개정 불일치 시 타입 있는 충돌, 무음 덮어쓰기 0 |
+| UC-HERDR-CONTROL-RECONNECT | vitest `src/test/herdr-control-outcome-taxonomy.contract.test.ts` | 끊김·타임아웃·종료·취소·부분완료 구별 |
+| UC-HERDR-CONTROL-RECONNECT | vitest `src/test/herdr-control-reconnect-bounds.contract.test.ts` | 재접속 상한, 상한 도달 시 정직 실패 |
+| 전체 | vitest `src/test/herdr-protocol-conformance.contract.test.ts` | 설치된 herdr 의 `api schema` 와 우리 계약을 대조하고 요구사항별 실현 가능성을 사실에서 계산 |
+| 전체 | e2e-tauri `packages/shell/e2e-tauri/specs/herdr-control.spec.ts` | 실제 Herdr 상대 관측·변경·충돌·재시작 복구 왕복 |
+
+상태 매트릭스: 기본(Herdr 정상), 빈 목록(space 0개), 진행(작업자 실행 중), 성공(변경 반영),
+오류(충돌·타임아웃·연결 끊김), 좁은 폭(제어 앱 축소)을 모두 매핑한다.
+
+## 2026-08-26 브라우저·터미널 환경 도구 (#499, 에픽 #497)
+
+> 계약: `docs/progress/issue-497-universal-agent.md`. 기존 UC6(브라우저 조작), UC7·UC7a(시스템 관측·조작),
+> UC13a(실행 중 중단)를 확장한다. 터미널의 생명주기 소유는 #502가 Herdr에 위임한 것을 그대로 따른다.
+
+### UC-ENV-TOOL-BROWSE — 보고 나서 누른다
+
+- Naia는 페이지를 열고, 구조 스냅샷을 얻고, 그 스냅샷의 안정된 요소 참조로 클릭하고 입력한다.
+- 좌표로 찍지 않는다. 좌표만 가능한 경우에는 그 사실을 밝힌다.
+- 행동 전과 후의 관측을 남겨, 무엇이 달라졌는지 사용자에게 설명할 수 있다.
+- 페이지에 담긴 문장은 자료이지 지시가 아니다. 페이지가 시키는 대로 권한을 넓히지 않는다.
+
+### UC-ENV-TOOL-TERMINAL-EXEC — 명령을 조립하지 않고 실행한다
+
+- Naia는 실행 파일과 인자 배열, 작업 디렉터리, 환경을 구조화해 넘긴다. 셸 문자열을 조립하지 않는다.
+- 터미널의 생성과 종료는 Herdr가 소유하고 Naia는 요청자로만 참여한다.
+- 종료 코드, 출력 참조, 산출물 참조가 결과에 함께 돌아온다.
+- 워크스페이스 경계 밖을 건드리는 명령은 명시적 권한 없이는 거부된다.
+
+### UC-ENV-TOOL-CANCEL — 돌아가는 것을 끊을 수 있다
+
+- 사용자가 멈추라고 하면 진행 중인 브라우저 작업과 터미널 작업이 실제로 멈춘다.
+- 취소된 작업은 실패와 구별되어 기록되고, 부분적으로 일어난 일이 있으면 그것도 남는다.
+- 타임아웃에 걸린 작업은 결과 불명으로 남기고 성공으로 승격하지 않는다.
+- 같은 요청을 다시 보내도 이미 실행된 작업이 두 번 일어나지 않는다.
+
+### UC-ENV-TOOL-BOUNDARY-DENY — 권한은 상속되지 않는다
+
+- 파일을 고칠 수 있다는 것이 메시지를 보내거나 게시하거나 결제할 수 있다는 뜻이 되지 않는다.
+- 저장된 자격증명을 쓰는 호출은 별도 승인을 받는다.
+- 삭제와 운영 환경 변경은 사람 결정으로 올린다.
+- 거부는 조용한 무시가 아니라 사용자가 이유를 아는 명시적 응답이다.
+
+Test Coverage Map (P02):
+
+| UC | 검증 수단 | 대상 |
+|---|---|---|
+| UC-ENV-TOOL-BROWSE | vitest `src/test/env-tool-browser.contract.test.ts` | 작업 생명주기 5상태, 스냅샷 자원, 안정 요소 참조 |
+| UC-ENV-TOOL-BROWSE | Playwright `packages/shell/e2e/env-tool-browser.spec.ts` | 실제 페이지 열기·스냅샷·클릭·입력·전후 관측 |
+| UC-ENV-TOOL-BROWSE | Playwright `packages/shell/e2e/env-tool-injection.spec.ts` | 악성 페이지 지시 주입 무시 negative |
+| UC-ENV-TOOL-TERMINAL-EXEC | vitest `src/test/env-tool-terminal.contract.test.ts` | 구조화 argv·cwd·env, Herdr 위임, 종료 코드·출력 참조 |
+| UC-ENV-TOOL-TERMINAL-EXEC | vitest `src/test/env-tool-workspace-escape.contract.test.ts` | 경계 밖 명령 거부 negative |
+| UC-ENV-TOOL-CANCEL | vitest `src/test/env-tool-cancel-timeout.contract.test.ts` | 취소·타임아웃·부분 실행 구별, 재전송 멱등 |
+| UC-ENV-TOOL-BOUNDARY-DENY | vitest `src/test/env-tool-approval-matrix.contract.test.ts` | 등급별 승인 요구, 비상속, 명시적 거부 |
+| 전체 | e2e-tauri `packages/shell/e2e-tauri/specs/env-tool.spec.ts` | 실 브라우저와 실 Herdr 터미널의 풀스택 왕복 |
+
+상태 매트릭스: 기본, 빈 목록(열린 컨텍스트 0개), 진행(작업 실행 중), 성공, 오류(거부·타임아웃·취소),
+좁은 폭(도구 결과 앱 축소)을 모두 매핑한다.
+
+## 2026-08-26 이슈 리더와 코딩 작업자 오케스트레이션 (#500, 에픽 #497)
+
+> 계약: `docs/progress/issue-497-universal-agent.md`. 선행: #501의 컨텍스트 해석과 #502의 제어면.
+> 위임 위험도 등급은 워크스페이스 terminology 정의를 따르며 high는 위임하지 않는다.
+
+### UC-ORCHESTRATION-CLASSIFY — 대화로 끝낼 일과 이슈로 만들 일을 가른다
+
+- 사용자가 무언가를 요청하면 Naia는 그 자리에서 답할 일인지, 이슈로 만들어 위임할 일인지 먼저 판단한다.
+- 이슈로 만들 일이면 GitHub 이슈를 새로 만들거나 기존 이슈에 붙이고, 그것을 Herdr space에 결속한다.
+- 판단 근거를 사용자가 물으면 답할 수 있고, 사용자가 뒤집으면 그대로 따른다.
+- 사소한 질문에 이슈와 작업자를 만들지 않는다.
+
+### UC-ORCHESTRATION-ISSUE-LEAD — 리더 하나가 이슈를 책임진다
+
+- 이슈마다 L2 리더가 하나 선다. 리더는 계획, 소유 경로 배정, 작업자 배치, 증거 통합, 완료 판정을 맡는다.
+- 구현자와 독립 검증자가 최소한으로 붙는다. 구현한 작업자가 자기 결과를 검증하지 않는다.
+- 작업자의 소유 경로는 겹치지 않는다. 겹칠 수밖에 없으면 순서를 정해 직렬화한다.
+- 작업자는 자기 권한을 넓히거나 이슈 완료를 선언하지 못한다. 리더가 증거를 모아 L3에 올린다.
+
+### UC-ORCHESTRATION-WORKER-REPLACE — 멈춘 작업자를 갈아 끼운다
+
+- 작업자가 죽거나 멈추면 이슈 상태를 잃지 않고 다른 작업자로 교체한다.
+- Codex, Claude, OpenCode는 명령줄 도구가 서로 달라도 같은 생명주기 의미를 노출한다.
+- 교체 시 이미 만들어진 산출물과 증거는 보존한다.
+- 사용자는 언제든 중단하고 다시 시작할 수 있다.
+
+### UC-ORCHESTRATION-RESTART-RESUME — 앱을 껐다 켜도 이어진다
+
+- 앱이나 Herdr가 재시작해도 이슈, 리더, 작업자 상태를 다시 찾아 이어간다.
+- 재시작 직후 완료나 실패를 증거 없이 단정하지 않는다.
+- 이어받을 수 없는 부분은 이어받을 수 없다고 보고한다.
+
+Test Coverage Map (P02):
+
+| UC | 검증 수단 | 대상 |
+|---|---|---|
+| UC-ORCHESTRATION-CLASSIFY | vitest `src/test/orchestration-classify.contract.test.ts` | 대화형·이슈형 분류, 사용자 뒤집기 반영 |
+| UC-ORCHESTRATION-ISSUE-LEAD | vitest `src/test/orchestration-issue-lead.contract.test.ts` | 리더 단일성, 역할 분리, 증거 통합 |
+| UC-ORCHESTRATION-ISSUE-LEAD | vitest `src/test/orchestration-ownership-conflict.contract.test.ts` | 소유 경로 중첩 거부·직렬화 negative |
+| UC-ORCHESTRATION-ISSUE-LEAD | vitest `src/test/orchestration-no-self-completion.contract.test.ts` | 작업자 자가 완료 선언·권한 확장 negative |
+| UC-ORCHESTRATION-WORKER-REPLACE | vitest `src/test/orchestration-worker-adapter.contract.test.ts` | Codex·Claude·OpenCode 어댑터 생명주기 동등성 |
+| UC-ORCHESTRATION-WORKER-REPLACE | vitest `src/test/orchestration-replace-preserve.contract.test.ts` | 교체 시 이슈 상태·산출물 보존 |
+| UC-ORCHESTRATION-RESTART-RESUME | e2e-tauri `packages/shell/e2e-tauri/specs/orchestration-restart.spec.ts` | 앱·Herdr 재시작 후 이어받기, 증거 없는 단정 0 |
+| 전체 | e2e-tauri `packages/shell/e2e-tauri/specs/orchestration-reference.spec.ts` | 참조 이슈를 구현자와 독립 검증자로 완주 |
+
+상태 매트릭스: 기본, 빈 목록(작업자 0), 진행(작업자 실행 중), 성공(검증 완료), 오류(작업자 사망·소유 충돌),
+좁은 폭(작업자 목록 축소)을 모두 매핑한다.
+
+## 2026-08-26 채널 중립 세션 (#503, 에픽 #497)
+
+> 계약: `docs/progress/issue-497-universal-agent.md`. 기존 UC10(멀티 채널)과 UC10a(다중 클라이언트 점유
+> 충돌)를 확장한다. 채널은 L3 어댑터이며 실행 소유자가 아니다.
+
+### UC-CHANNEL-SESSION-HANDOFF — 어디서 시작하든 하나의 일이다
+
+- Discord에서 시작한 일을 데스크톱 Naia에서 들여다보고, Herdr에서 이어가고, 다시 허가된 채널에서 마무리한다.
+- 같은 이슈에는 L3 대화 정체성 하나와 Herdr 실행 소유자 하나만 존재한다.
+- 채널이 달라도 대화가 갈라지지 않는다.
+- 음성으로 시작한 일도 같은 세션으로 이어진다.
+
+### UC-CHANNEL-SESSION-DUPLICATE-DELIVERY — 같은 메시지가 두 번 와도 한 번만 한다
+
+- 채널이 같은 메시지를 중복 전달해도 이슈나 작업자가 두 개 생기지 않는다.
+- 이벤트가 순서를 바꿔 도착해도 상태가 뒤집히지 않는다.
+- 이미 처리한 요청의 재전달은 처리 결과를 다시 알려 주는 것으로 끝난다.
+
+### UC-CHANNEL-SESSION-RECONNECT — 끊겼다 붙어도 지어내지 않는다
+
+- 채널이 끊겼다 다시 붙어도 Naia는 일이 멈췄다거나 끝났다고 증거 없이 말하지 않는다.
+- 재부팅 뒤에도 이어받을 수 있는 참조를 보관한다. 작업자 실행 상태를 다시 복사해 두지 않는다.
+- 대화 응답과 오래 걸리는 작업의 진행 알림은 구분해서 보낸다.
+
+### UC-CHANNEL-SESSION-DISCLOSURE-DENY — 좁은 곳의 이야기가 넓은 곳으로 새지 않는다
+
+- 워크스페이스의 기밀 컨텍스트가 더 넓은 채널로 그대로 나가지 않는다.
+- 채널마다 신원, 참여 자격, 공개 범위, 응답 경로 정책이 다르며 그것을 지킨다.
+- 정책상 답할 수 없는 곳에서는 답하지 않고 그 사실을 알린다.
+
+Test Coverage Map (P02):
+
+| UC | 검증 수단 | 대상 |
+|---|---|---|
+| UC-CHANNEL-SESSION-HANDOFF | vitest `src/test/channel-session-identity.contract.test.ts` | 대화·작업·이슈·space 식별자 채널 중립성, 단일 소유 |
+| UC-CHANNEL-SESSION-DUPLICATE-DELIVERY | vitest `src/test/channel-session-dedupe.contract.test.ts` | 중복 전달 시 이슈·작업자 중복 생성 0 |
+| UC-CHANNEL-SESSION-DUPLICATE-DELIVERY | vitest `src/test/channel-session-out-of-order.contract.test.ts` | 순서 뒤바뀐 이벤트에서 상태 역전 0 |
+| UC-CHANNEL-SESSION-RECONNECT | vitest `src/test/channel-session-resume-refs.contract.test.ts` | 재개 참조 보관, 작업자 상태 복사 금지 |
+| UC-CHANNEL-SESSION-RECONNECT | e2e-tauri `packages/shell/e2e-tauri/specs/channel-reboot.spec.ts` | 재부팅 후 이어받기, 증거 없는 완료·중단 단정 0 |
+| UC-CHANNEL-SESSION-DISCLOSURE-DENY | vitest `src/test/channel-session-disclosure-policy.contract.test.ts` | 채널별 공개 범위, 기밀 컨텍스트 유출 negative |
+| 전체 | e2e-tauri `packages/shell/e2e-tauri/specs/channel-continuity.spec.ts` | 데스크톱과 Discord 사이 연속성 종단 시나리오 |
+
+상태 매트릭스: 기본, 빈 목록(활성 작업 0), 진행(작업 실행 중 알림), 성공, 오류(연결 끊김·정책 거부),
+좁은 폭(채널 목록 축소)을 모두 매핑한다.
+
+## 2026-08-26 검증·벤치마크 하네스 (#498, 에픽 #497)
+
+> 계약: `docs/progress/issue-497-universal-agent.md`. 이 하네스가 형제 이슈의 UC를 실제로 밟아
+> 완료를 판정한다. 형제 이슈는 자기 주장으로 완료되지 않는다.
+
+### UC-AGENT-BENCH-RUN — 시나리오를 실제로 밟아 판정한다
+
+- 형제 이슈의 UC 시나리오를 하네스가 직접 실행하고 기대 결과를 확인한다.
+- 목 데이터만으로 얻은 통과는 native Herdr, 실제 브라우저, 실제 코딩 작업자 게이트를 대신하지 못한다.
+- 판정 결과에는 의도, 컨텍스트 개정, 수행한 작업, 산출물, 테스트, 완료 증거가 추적 가능하게 남는다.
+
+### UC-AGENT-BENCH-FALSE-COMPLETION — 가짜 완료를 잡아낸다
+
+- 실제로는 하지 않은 일을 했다고 보고하면 하네스가 그것을 실패로 판정한다.
+- 테스트를 지우거나 범위를 줄여 얻은 통과는 완료 증거가 아니다.
+- 다른 프로젝트의 컨텍스트가 답에 섞이면 실패로 판정한다.
+- 허가 없는 외부 발신이 일어나면 실패로 판정한다.
+
+### UC-AGENT-BENCH-REPORT — 통과 여부만이 아니라 비용과 지연을 보고한다
+
+- 벤치마크는 성공률과 함께 중앙값 지연과 꼬리 지연, 토큰 비용, 사람 개입 횟수를 보고한다.
+- 결과는 같은 입력에서 재현 가능하다.
+- 회귀 임계값을 넘으면 그것을 드러낸다.
+
+Test Coverage Map (P02):
+
+| UC | 검증 수단 | 대상 |
+|---|---|---|
+| UC-AGENT-BENCH-RUN | vitest `src/test/agent-bench-runner.contract.test.ts` | 시나리오 실행·판정 계약, 결정론 픽스처 |
+| UC-AGENT-BENCH-RUN | vitest `src/test/agent-bench-fixtures.contract.test.ts` | 중첩 진입점·다중 프로젝트 임시 워크스페이스 픽스처 |
+| UC-AGENT-BENCH-RUN | vitest `src/test/agent-bench-scenario-source.contract.test.ts` | 이 문서에서 형제 UC 를 읽어 판정 목록을 만든다. 계열이 비면 실패 |
+| UC-AGENT-BENCH-FALSE-COMPLETION | vitest `src/test/agent-bench-false-completion.contract.test.ts` | 미수행 보고·축소 suite·교차 누출·무단 발신 탐지 |
+| UC-AGENT-BENCH-REPORT | vitest `src/test/agent-bench-report.contract.test.ts` | 지연 중앙값·꼬리, 비용, 개입 횟수, 재현성 |
+| 전체 | e2e-tauri `packages/shell/e2e-tauri/specs/agent-bench.spec.ts` | 실제 Herdr·브라우저·코딩 작업자 게이트에서의 수용 실행 |
+
+상태 매트릭스: 기본, 빈 목록(시나리오 0), 진행(벤치 실행 중), 성공(수용), 오류(가짜 완료 탐지·임계 초과),
+좁은 폭(리포트 표 축소)을 모두 매핑한다.
+
+## 2026-08-26 환경 표면 — 뇌가 보는 것과 내리는 것 (#502 슬라이스 1)
+
+> 계약: `docs/progress/issue-497-universal-agent.md` 의 2026-08-26 계층 결정.
+> 이 절은 `UC-HERDR-CONTROL-*` 과 다르다. 그쪽은 셸이 Herdr 를 어떻게 다루는가이고,
+> 여기는 **뇌에 무엇을 보여 주고 뇌가 무엇을 내릴 수 있는가**다. 결정은 naia-agent 가 하고
+> 셸은 번역만 한다.
+> ⚠️ 기록: `environment-intent.ts` 와 `herdr-environment.ts` 는 이 UC·요구사항보다 먼저 쓰였다.
+> P03 게이트를 어긴 것이며, 이 절이 그것을 뒤늦게 닫는다. 번역기부터는 순서를 지킨다.
+
+### UC-ENV-SURFACE-OBSERVE — 나이아가 지금 무엇이 돌고 있는지 안다
+
+- 사용자가 "지금 뭐 돌고 있어?"라고 물으면 나이아는 작업 표면 목록과 각각이 일하는 중인지 답한다.
+- 나이아가 보는 것은 표면 이름과 활동 상태와 사용자가 보고 있는지 여부뿐이다. 터미널 관리자의 내부 어휘는 보지 않는다.
+- 상태를 모르면 모른다고 한다. 쉬는 중으로 위장하지 않는다.
+- 표면이 많아 다 싣지 못하면 몇 개를 못 실었는지 함께 말한다.
+- 사용자가 보고 있는 표면이 먼저 온다. 잘릴 때 가장 관련 있는 것이 남는다.
+
+### UC-ENV-SURFACE-ACT — 나이아가 그 세계에 손댄다
+
+- 나이아는 관측한 표면 중 하나를 골라 사용자에게 보여 주거나, 진행 중인 것을 멈추거나, 무언가를 실행해 달라고 요청할 수 있다.
+- 나이아는 표면을 가리킬 때 받은 손잡이만 쓴다. 손잡이를 만들어 내지 않는다.
+- 나이아는 그 요청이 어떤 명령으로 번역되는지 모른다. 번역은 셸이 한다.
+- 요청이 실제로 어떻게 전달되는지(구조화 인자인지 터미널 입력인지)는 셸이 알고, 그 한계는 사용자에게 정직하게 드러난다.
+
+### UC-ENV-SURFACE-DENY — 열어 준 것만 나간다
+
+- 관측만 허용된 상태에서는 나이아가 실행을 요청해도 환경에 닿지 않는다.
+- 나이아가 지어낸 손잡이는 거절된다.
+- 빈 요청이나 지나치게 긴 요청은 환경에 내려가기 전에 걸린다.
+- 거절은 조용한 무시가 아니라 사유가 남는다.
+
+### UC-ENV-SURFACE-DATA — 환경의 말은 지시가 아니다
+
+- 터미널 제목이나 표면 이름에 무엇이 적혀 있든 나이아의 지시문이 되지 않는다.
+- 개행과 제어문자가 든 이름은 한 줄로 눌려 전달된다.
+- 지나치게 긴 이름은 잘린다. 나이아의 컨텍스트를 잠식하지 못한다.
+
+Test Coverage Map (P02):
+
+| UC | 검증 수단 | 대상 |
+|---|---|---|
+| UC-ENV-SURFACE-OBSERVE | vitest `src/test/environment-intent.contract.test.ts` | 보고 형태, 상한과 누락 총계, 포커스 우선 정렬, 상태 정규화 |
+| UC-ENV-SURFACE-OBSERVE | vitest `src/test/herdr-environment.contract.test.ts` | 실제 Herdr 스냅샷 매핑, 레이블 없는 pane 대체, 살아 있는 데몬 대상 형태 확인 |
+| UC-ENV-SURFACE-ACT | vitest `src/test/environment-intent-translation.contract.test.ts` | 의도 → 환경 호출 번역, 표면 종류별 실행 경로 분기, 번역 불가의 정직한 거절 |
+| UC-ENV-SURFACE-DENY | vitest `src/test/environment-intent.contract.test.ts` | 허용 집합 밖 의도, 미발행 손잡이, 빈·과길이 요청, 복수 사유 |
+| UC-ENV-SURFACE-DATA | vitest `src/test/environment-intent.contract.test.ts` | 제어문자 제거, 길이 상한, 정상 이름 무손상 |
+| UC-ENV-SURFACE-DATA | vitest `src/test/herdr-environment.contract.test.ts` | 실제 터미널 제목 경로에서도 제어문자 잔존 0 |
+| 경계 | vitest `src/test/environment-intent.contract.test.ts` | 도메인 선언에 터미널 관리자 어휘 부재(주석 제거 후, 공허 통과 방지 포함) |
+
+상태 매트릭스: 기본(표면 여럿), 빈 목록(표면 0), 진행(작업 중 표면), 성공(의도 수용),
+오류(거절 사유), 좁은 폭(표면 목록 축약)을 매핑한다. 좁은 폭은 표면 상한과 누락 총계로 다룬다.
+
+## 2026-08-26 환경 호출 전달 (#502 슬라이스 1 — 전달)
+
+> 계약: `docs/progress/issue-497-universal-agent.md` 의 슬라이스 1 전달 경계.
+> 번역까지는 순수 계산이고, 여기는 그 결과가 실제 환경에 닿는 지점이다.
+
+### UC-ENV-DISPATCH-STRUCTURED — 구조화된 요청이 환경에 닿는다
+
+- 나이아가 에이전트가 붙은 표면에 무언가를 요청하면 그 표면의 에이전트가 요청을 받는다.
+- 나이아가 표면을 보여 달라고 하면 사용자 화면에서 그 표면이 앞으로 나온다.
+- 이 경로에는 인용 문제가 없다. 요청 문자열이 명령줄로 재해석되지 않는다.
+- 환경이 거절하면 그 사유가 그대로 올라온다. 성공으로 위장하지 않는다.
+
+### UC-ENV-DISPATCH-TERMINAL — 터미널 입력은 다른 등급이다
+
+- 에이전트가 없는 일반 터미널에 무언가를 실행해 달라고 하면, 그것은 사용자가 그 터미널에 직접 타이핑한 것과 같은 일이 된다.
+- 그래서 이 경로는 구조화 요청과 같은 권한으로 열리지 않는다. 별도로 허용돼야 한다.
+- 진행 중인 것을 멈추는 것도 같은 등급이다.
+- 사용자는 나이아가 자기 터미널에 무엇을 넣었는지 나중에 확인할 수 있다.
+
+### UC-ENV-DISPATCH-REFUSE — 열지 않은 것은 나가지 않는다
+
+- 이 슬라이스가 열기로 한 호출 외에는 환경에 도달할 수 없다.
+- 형식이 어긋난 표면 식별자는 환경에 닿기 전에 걸린다.
+- 지나치게 긴 요청은 거절된다.
+- 빈 요청은 전달되지 않는다.
+
+Test Coverage Map (P02):
+
+| UC | 검증 수단 | 대상 |
+|---|---|---|
+| UC-ENV-DISPATCH-STRUCTURED | vitest `src/test/environment-dispatch.contract.test.ts` | 구조화 호출 3종 라우팅, 환경 오류 전파 |
+| UC-ENV-DISPATCH-TERMINAL | vitest `src/test/environment-dispatch.contract.test.ts` | 터미널 입력 2종이 별도 권한 없이는 나가지 않음 |
+| UC-ENV-DISPATCH-REFUSE | vitest `src/test/environment-dispatch.contract.test.ts` | 미허용 메서드, 형식 오류 식별자, 빈·과길이 요청 |
+| 전체 | Rust `packages/shell/src-tauri/src/herdr/api.rs` 단위 테스트 | 식별자 형식·길이 상한 검증 |
+| 전체 | e2e-tauri `packages/shell/e2e-tauri/specs/environment-dispatch.spec.ts` | 실 Tauri 백엔드에서 명령 등록·인자 검증·거절 경로 |
+
+상태 매트릭스: 기본(구조화 전달 성공), 빈 목록(표면 0에서 전달 시도), 진행(전달 중),
+성공(환경 수용), 오류(환경 거절·형식 오류), 좁은 폭(해당 없음 — 표면 UI 아님)을 매핑한다.
+
+## 2026-08-26 두 저장소 wire 어휘 동기 (#497 후속)
+
+> 계약: `docs/progress/issue-497-universal-agent.md` 의 "분리 이력과 wire 게이트 갭".
+> 배경: 2026-06-10 교차개발 앵커 원칙이 경계를 `uc1-outbound-probe`·`uc1-variant-probe` 로
+> 지키기로 했으나 두 probe 모두 옛 baseline(old-naia-os) 대조라 오늘 SKIP 된다. 그 사이
+> 실제로 하나가 깨졌다(앱 컨텍스트 8주 유실, nextain/naia-agent#113).
+
+### UC-WIRE-UNION-DRIFT — 한쪽이 wire 어휘를 바꾸면 즉시 드러난다
+
+- 뇌가 새 메시지 종류를 내보내기 시작했는데 셸이 그것을 모르면, 사람이 눈으로 찾기 전에 테스트가 깨진다.
+- 셸이 받아들이는 목록에서 종류를 빼거나 이름을 바꿔도 마찬가지다.
+- 환경 세그먼트 종류도 같다. 한쪽이 kind 를 더하거나 이름을 바꾸면 양쪽이 깨진다.
+- 상대 저장소가 옆에 없으면 건너뛰지 않고 실패한다. 건너뛴 게이트는 게이트가 아니다.
+- 어휘 목록은 손으로 적은 표가 아니라 각 저장소의 실제 코드에서 나온다. 표와 코드가 어긋나도 깨진다.
+
+Test Coverage Map (P02):
+
+| UC | 검증 수단 | 대상 |
+|---|---|---|
+| UC-WIRE-UNION-DRIFT | vitest `src/test/wire-union-drift.contract.test.ts` | 셸 수용 목록이 표본과 일치, 뇌 송신이 셸 수용에 포함, 세그먼트 kind 일치, 상대 표본 대조 |
+| UC-WIRE-UNION-DRIFT | vitest (naia-agent) `src/test/wire-union-drift.contract.test.ts` | 뇌 송신 목록이 소스에서 추출한 것과 일치, 표본과 일치, 상대 표본 대조 |
+
+상태 매트릭스: 기본(양쪽 일치), 빈 목록(추출 결과 0 — 공허 통과 방지로 실패), 오류(불일치),
+성공(대조 통과), 진행·좁은 폭(해당 없음 — UI 아님)을 매핑한다.
+
+## 2026-08-26 #502 실배선 — 관측과 조작이 실제로 오간다
+
+> 계약: `docs/progress/issue-497-universal-agent.md`.
+> 배경: 계약·UC·FE·테스트와 Rust 명령 경계까지 있었으나 프로덕션 호출자가 0이었다.
+> `observe`·`toEnvironmentSegment`·`EnvironmentDispatcher` 모두 테스트만 붙은 섬이었다.
+> 배선하면서 손잡이 재사용 위험이 드러났다(아래 UC-ENV-STICKY).
+
+### UC-ENV-LIVE-OBSERVE — 나이아가 지금 무엇이 돌고 있는지 스스로 안다
+
+- 사용자가 "지금 뭐 돌고 있어?"라고 물으면, 나이아는 되묻지 않고 자기가 이미 받은 표면 목록으로 답한다.
+- 표면 정보는 대화 요청에 실려 올라간다. 사용자가 도구를 부르라고 말하지 않아도 된다.
+- Herdr 이 안 돌고 있으면 아무것도 올리지 않는다. 없는 것을 있는 척하지 않는다.
+- 뇌가 보는 것은 불투명 손잡이와 네 가지 활동 상태뿐이다. pane 어휘는 올라가지 않는다.
+
+### UC-ENV-LIVE-ACT — 나이아가 표면 하나를 실제로 건드린다
+
+- 나이아가 "저 터미널을 앞으로 가져와" 또는 "저기서 이 명령을 실행해"를 스스로 결정해 실행한다.
+- 실행은 셸이 판정한다. 뇌는 손잡이로만 말하고, 그것이 어느 pane 인지는 셸만 안다.
+- 터미널 입력은 구조화 전달과 같은 권한으로 나가지 않는다. 사용자가 켜 두지 않았으면 거절된다.
+- 환경이 거절하면 그대로 올라간다. 실패를 성공으로 바꾸지 않는다.
+
+### UC-ENV-ATTENTION — 나이아가 환경을 볼지 말지 스스로 정한다
+
+> 왜 이 UC 가 생겼는가: 배선하고 나서 값이 드러났다. 표면 목록을 요청마다 실으면 대화
+> 한 번마다 토큰이 붙고, 사용자의 터미널 이름이 늘 뇌로 올라간다. 그런데 사용자의 작업
+> 표면이 늘 필요한 정보는 아니다 — 대부분의 대화는 환경과 무관하다.
+
+- 평소 나이아에게 가는 것은 "볼 것이 몇 개 있다"는 사실뿐이다. 이름도 손잡이도 가지 않는다.
+- 자세히 알아야겠다고 판단하면 나이아가 스스로 지켜보기를 켠다. 그때부터 목록이 실린다.
+- 사용자의 작업을 따라갈 일이 끝나면 나이아가 스스로 끈다. 사용자가 말해 줄 필요가 없다.
+- 지켜본다고 조작 권한이 열리지는 않는다. 보는 것과 건드리는 것은 다른 문제다.
+- 사용자가 원하면 아예 끄거나(도구도 등록되지 않는다) 늘 켜 둘 수 있다. 그 선택이 나이아를 이긴다.
+- 볼 것이 하나도 없으면 개수도 보내지 않는다. "0개 있다"와 "모른다"를 뭉뚱그리지 않는다.
+- 지켜보기를 켠 주체가 끄는 주체와 같아야 한다. 통화가 끝났다고 텍스트 대화에서 켠 것까지 지우지 않는다.
+- 환경이 응답하지 않으면 지켜보기는 켜지지 않는다. 못 봤는데 볼 준비만 해 두는 상태를 만들지 않는다.
+- 줄어든 양은 짐작이 아니라 측정으로 안다. 표면 12개 기준 표면 목록이 요청당 93.5%,
+  40턴 총량 72.5%가 줄었다. 코어 세그먼트만이 아니라 실제로 나간 대화 요청에서도 잰다.
+- 다만 이 기능은 도구 선언이라는 고정 비용(약 1420바이트)을 요청마다 새로 얹는다.
+  그것까지 넣으면 절감은 42.6%다. 유리한 쪽 숫자만 말하지 않는다.
+- 사용자가 도구 사용 자체를 꺼 두면 개수만 보내는 안내를 하지 않는다. 부를 수 없는 도구를
+  가리키며 "필요하면 불러라"라고 말하지 않기 위해서다.
+- 다만 사용자가 "늘 보내기"를 골라 두었으면 도구가 꺼져 있어도 목록은 그대로 간다.
+  막아야 하는 것은 닫힌 길을 가리키는 안내이지 목록 자체가 아니다 — 목록만으로도
+  나이아는 무엇이 돌고 있는지 말해 줄 수 있다. 사용자가 고른 것이 이긴다.
+- 사용자가 "늘 켬"을 골라 둔 동안에는 지켜보기 예산이 흐르지 않는다. 되돌렸을 때 나이아가
+  끈 적 없는 관찰이 사라져 있으면 안 된다.
+- 뇌가 다시 켜져 도구 등록이 사라져도 다음 턴에 되돌아온다. 등록이 **실제로 닿았는지**까지
+  확인하고, 닿지 않은 턴에는 표면을 아예 싣지 않는다 — 나이아에게 없는 도구를 부르라고
+  안내하지 않는다. 확인이 안 와도 대화 자체는 막지 않는다 — 사용자의 말이 환경 때문에
+  멈추지는 않는다. 그 대가로, 뇌가 방금 죽은 경우 한 턴 정도는 등록되어 있다고 믿는다.
+- 사용자가 껐다가 다시 켜도 첫 턴부터 사실대로 움직인다. 껐을 때의 결과를 버리고 옛 상태를
+  들고 있지 않는다. 끄는 데 실패했으면 조용히 두지 않고 다음 대화 때 한 번 더 끈다.
+- 나이아가 필요를 스스로 판단하는지는 이 시나리오가 증명하지 않는다 — UC-ENV-ATTENTION-POLICY 가 그 자리를 따로 든다.
+- 나이아가 보는 것은 지금 상태다. 앱을 켠 시점의 목록으로 "지금 뭐 돌고 있어"에 답하지 않는다.
+- 작업 표면 환경이 응답하지 않게 되면 나이아는 모르는 상태로 돌아간다. 마지막으로 본 목록을
+  계속 들고 있지 않는다 — 이미 닫힌 터미널 이름을 계속 말하거나, 죽은 손잡이에 명령을 넣지 않는다.
+- 지켜보기는 켜 둔 채 잊히지 않는다. 일정 턴이 지나면 저절로 풀리고, 더 봐야 하면 나이아가 다시 켠다.
+- 나이아는 "지금은 안 보여 주는 것"과 "상한 때문에 못 본 것"을 구별해서 안다. 앞의 것은 스스로 걷을 수 있다.
+- 실시간 음성으로 이야기하는 동안에도 같은 규칙이 흐른다. 음성 턴도 지켜보기 예산을 쓰고,
+  사용자가 끼어들어 중단된 턴도 마찬가지다. 통화가 끊기면 지켜보기도 끝난다.
+- 다만 음성 요청에는 표면 목록이 실리지 않는다. 그래서 음성에서 지켜보기를 켜면 나이아는
+  "이 경로는 요청마다 목록을 싣지 않는다"는 사실을 함께 듣는다 — 못 하는 것을 한다고 말하지 않는다.
+- 다만 실시간 음성 세션은 연결 시점의 도구 목록을 쓴다. 통화 중에 사용자가 인지를 끄면
+  선언은 그 세션에 남고 실행만 거절된다. 선언까지 걷으려면 통화를 다시 걸어야 한다.
+
+### UC-ENV-ATTENTION-POLICY — 나이아가 필요를 스스로 판단한다
+
+> 2026-08-27 11차 적대리뷰가 짚은 자리다. UC-ENV-ATTENTION 이 증명하는 것은 "도구를
+> 부르면 켜지고 꺼진다"이지 "나이아가 부를 때를 스스로 안다"가 아니다. 지금까지의 테스트는
+> 전부 watch·unwatch 인자를 미리 정해 넣는다 — 배선을 재는 것이지 판단을 재는 것이 아니다.
+> 등급 이름 하나로 두 가지를 뭉뚱그리지 않기 위해 따로 선언한다.
+
+- 환경과 무관한 대화에서는 표면을 들여다보지 않는다.
+- 사용자의 작업을 따라가야 하는 대화에서는 스스로 `observe` 나 `watch` 를 부른다.
+- 따라갈 일이 끝나면 스스로 `unwatch` 한다. 예산이 저절로 풀어 주기를 기다리지 않는다.
+
+증명하려면 실제 모델을 여러 대화 상황에 놓고 선택을 재야 한다. 그것은 자격증명과 비용이
+드는 일이라 사람 결정이다. 그때까지 이 시나리오는 미검증으로 남고, 벤치 게이트도
+빨간불로 남는다 — 초록불로 만드는 것은 작성자 몫이 아니다.
+
+### UC-ENV-STICKY — 손잡이가 다른 표면을 가리키지 않는다
+
+- 나이아가 표면 목록을 본 뒤 그중 하나에 명령을 넣기까지 시간이 흐른다. 그 사이 터미널이 닫힐 수 있다.
+- 닫힌 표면의 손잡이는 **무효**가 되어야 한다. 다른 표면에 재배정되면 나이아가 엉뚱한 터미널에 명령을 넣는다.
+- 손잡이는 표면이 살아 있는 동안 같은 값을 유지한다. 목록에서의 순서가 바뀌어도 바뀌지 않는다.
+
+Test Coverage Map (P02):
+
+| UC | 검증 수단 | 대상 |
+|---|---|---|
+| UC-ENV-LIVE-OBSERVE | vitest `src/test/environment-live-wiring.contract.test.ts` | 스냅샷→세그먼트 조립, Herdr 부재 시 미전송, 손잡이만 상승 |
+| UC-ENV-LIVE-OBSERVE | vitest `packages/shell/src/lib/__tests__/environment-skill.test.ts` | 도구 호출이 실제 스냅샷 경로를 탄다, 빈 결과 공허 통과 차단 |
+| UC-ENV-LIVE-ACT | vitest `packages/shell/src/lib/__tests__/environment-skill.test.ts` | focus/run/interrupt 전달, 권한 없을 때 거절, 환경 오류 그대로 상승 |
+| UC-ENV-LIVE-ACT | e2e-tauri `packages/shell/e2e-tauri/specs/environment-dispatch.spec.ts` | 실 Rust 명령 경계 |
+| UC-ENV-STICKY | vitest `src/test/environment-live-wiring.contract.test.ts` | 표면 사라져도 재배정 없음, 순서 바뀌어도 손잡이 불변, 죽은 손잡이는 거절 |
+| UC-ENV-ATTENTION | vitest `src/test/environment-live-wiring.contract.test.ts` | 기본 미관찰, 미관찰 중 이름·손잡이 미전송, 개수는 상한 포함, off/always 우선 |
+| UC-ENV-ATTENTION | vitest `packages/shell/src/lib/__tests__/environment-skill.test.ts` | watch/unwatch 실행, watch 가 목록 동반, off 전면 거절, always 에서 나이아 무력 |
+| UC-ENV-ATTENTION | Playwright `packages/shell/e2e/environment-skill.spec.ts` | 실 UI 에서 기본 개수만 전송, watch 후 목록 전송, unwatch 복귀, off 시 도구 미등록, 매 턴 관측 갱신 |
+| UC-ENV-ATTENTION | vitest `src/test/environment-live-herdr.contract.test.ts` | 살아 있는 Herdr 의 실제 터미널 이름·손잡이가 미관찰 중 전송되지 않음 |
+| UC-ENV-ATTENTION | Playwright `packages/shell/e2e/env-attention-voice.spec.ts` | 실시간 음성 턴도 예산을 소비, 음성 중 off 전환 시 거절 |
+| UC-ENV-ATTENTION | e2e-tauri `packages/shell/e2e-tauri/specs/environment-dispatch.spec.ts` | 실 Rust — 뇌가 없을 때 등록이 "확인됨"으로 새지 않음(fail-closed 방향만) |
+
+> 받는 쪽(naia-agent) 검증은 그 저장소의 `src/test/uc-environment-segments.contract.test.ts`
+> 가 소유한다. 이 저장소에서 실행할 수 없으므로 위 표에 넣지 않는다 — 넣으면 벤치가
+> 실행하지 못하는 경로를 문서 부패로 읽는다. 두 저장소의 표본 동기는
+> `environment-wire-conformance.contract.test.ts` 가 짝 저장소 대조로 지킨다.
+
+상태 매트릭스: 기본(표면 여럿), 빈 목록(Herdr 무응답), 오류(환경 거절), 성공(전달됨),
+진행(스냅샷 대기), 좁은 폭(해당 없음 — 이 슬라이스는 UI 표면을 새로 만들지 않는다).
+주의 상태는 별도 축이다: 미관찰(개수만) / 관찰(목록) / 사용자 off(아무것도 없음) /
+사용자 always(나이아 무력) / 볼 것 없음(세그먼트 자체 없음) / 관측 끊김(모르는 상태로 복귀) /
+예산 소진(저절로 풀림).
+
+### UC-ORCHESTRATION-CODING-PROVIDER — 실제 코딩 모델 작업자가 돈다
+
+> 2026-08-27 적대리뷰가 짚은 자리다. 다른 오케스트레이션 시나리오는 `shell` 제공자로
+> 도는 실제 프로세스로 확인했다. 코딩 모델 제공자(codex·claude·opencode)를 실제로 띄워
+> 확인한 적은 없다. 등급 이름 하나로 두 가지를 뭉뚱그리지 않기 위해 따로 선언한다.
+
+- 나이아가 `codex`·`claude`·`opencode` 제공자로 작업자를 실제로 띄우고, 그 작업자가 격리된
+  워크트리에서 일하고, 산출물과 종료 상태가 돌아온다.
+- 자격증명과 비용이 실제로 소모되는 경로이므로 사람이 켜야 한다.
+- 확인 수단이 생기기 전까지 이 시나리오는 증명되지 않은 것으로 남는다.
+
+Test Coverage Map (P02):
+
+| UC | 검증 수단 | 대상 |
+|---|---|---|
+| UC-ORCHESTRATION-CODING-PROVIDER | (아직 없음 — 실제 코딩 모델 제공자를 띄우는 확인 수단이 필요하다) | — |

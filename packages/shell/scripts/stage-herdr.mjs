@@ -33,12 +33,12 @@ const RESOURCES = resolve(SHELL, "src-tauri", "resources");
 const DEST = resolve(RESOURCES, "herdr");
 
 /** Pinned Herdr version bundled with the app. Bump deliberately (nextain#445). */
-export const HERDR_VERSION = "0.8.0-preview.2026-08-04-d78e3d3b5126";
+export const HERDR_VERSION = "0.8.2";
 /** SHA256 of the pinned herdr.exe — a supply-chain gate so a tampered or
     wrong-version local Herdr install cannot be silently bundled. Bump with the
     version. */
 const HERDR_EXE_SHA256 =
-	"6f470da358d6713b6bebab922ffb1f5fe1d3d288cc6f374c7dca1b4a9837a542";
+	"467682cdb5fa482c54897c6b9c96a5300a3516a72ef70ec3d009e16fadb131b3";
 const TARGET_TRIPLE = "x86_64-pc-windows-msvc";
 export const HERDR_MSVC_DLLS = [
 	"msvcp140.dll",

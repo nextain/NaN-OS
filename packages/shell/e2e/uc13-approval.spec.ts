@@ -3,7 +3,7 @@ import { SEED_ADK_PATH, TAURI_BASE_MOCK_FALLBACK } from "./helpers/tauri-base-mo
 
 /**
  * UC13 통합 E2E — 실 셸 UI 로 승인 게이트 outbound 검증: agent 가 approval_request 를 보내면
- * ChatPanel(PermissionModal) 이 렌더 → 사용자 approve/reject → **새 core 경유 approval_response 송신**.
+ * ChatApp(PermissionModal) 이 렌더 → 사용자 approve/reject → **새 core 경유 approval_response 송신**.
  * 점검서 발견한 vocab 버그(once/always→reject 둔갑) 회귀 가드: approve(once) → wire decision "approve" 단언.
  * window.__NAIA_NEW_CORE__=true 로 새 경로 강제. mock agent 가 approval_request emit + outbound 캡처. 헤르메틱.
  */
@@ -57,7 +57,7 @@ async function boot(page: import("@playwright/test").Page) {
   await page.addInitScript({ content: SEED_ADK_PATH });
   await page.addInitScript((c: string) => localStorage.setItem("naia-config", c), JSON.stringify(CONFIG));
   await page.goto("/");
-  await expect(page.locator(".chat-panel")).toBeVisible({ timeout: 10_000 });
+  await expect(page.locator(".chat-app")).toBeVisible({ timeout: 10_000 });
 }
 async function triggerApproval(page: import("@playwright/test").Page) {
   const input = page.locator(".chat-input");

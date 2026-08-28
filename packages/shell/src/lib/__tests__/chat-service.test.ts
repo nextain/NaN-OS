@@ -703,21 +703,23 @@ describe("chat-service", () => {
 			).resolves.toBeUndefined();
 		});
 
-		it("sendPanelSkills / sendPanelSkillsClear / sendPanelInstall / sendPanelToolResult naia-agent 없어도 throw 안 함", async () => {
+		it("sendAppSkills / sendAppSkillsClear / sendAppInstall / sendAppToolResult naia-agent 없어도 throw 안 함", async () => {
 			mockInvoke.mockRejectedValue(new Error("agent-core died"));
 			const {
-				sendPanelSkills,
-				sendPanelSkillsClear,
-				sendPanelInstall,
-				sendPanelToolResult,
+				sendAppSkills,
+				sendAppSkillsClear,
+				sendAppInstall,
+				sendAppToolResult,
 			} = await import("../chat-service");
-			await expect(sendPanelSkills("p1", [])).resolves.toBe(false);
-			await expect(sendPanelSkillsClear("p1")).resolves.toBeUndefined();
+			await expect(sendAppSkills("p1", [])).resolves.toBe(false);
+			// 해제도 전달 여부를 돌려준다. 버리면 사용자가 껐는데 도구 선언이 뇌에 남아도
+			// 호출자가 알 수 없다 (2026-08-28 16차 적대리뷰 지적).
+			await expect(sendAppSkillsClear("p1")).resolves.toBe(false);
 			await expect(
-				sendPanelInstall("https://github.com/x/y"),
+				sendAppInstall("https://github.com/x/y"),
 			).resolves.toBeUndefined();
 			await expect(
-				sendPanelToolResult("r1", "c1", "ok", true),
+				sendAppToolResult("r1", "c1", "ok", true),
 			).resolves.toBeUndefined();
 		});
 

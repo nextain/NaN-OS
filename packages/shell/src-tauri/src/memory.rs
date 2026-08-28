@@ -94,33 +94,26 @@ struct MemoryStore {
     facts: Vec<AgentFact>,
 }
 
-/// Get the Agent memory JSON file path.
-/// Prefers the workspace-scoped path from ~/.naia/adk-path (NAIA_SETTINGS_DIR).
-/// Falls back to the legacy ~/.naia/memory/alpha-memory.json if not configured.
-fn agent_memory_path() -> PathBuf {
-    let home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("/tmp"));
-    // Try to resolve the current workspace's settings dir from ~/.naia/adk-path
-    let adk_path_file = home.join(".naia").join("adk-path");
-    if let Ok(adk_path_str) = std::fs::read_to_string(&adk_path_file) {
-        let adk_path_str = adk_path_str.trim();
-        if !adk_path_str.is_empty() {
-            // Always use workspace path when adk-path is configured,
-            // even if the file doesn't exist yet (new workspace).
-            // If missing, get_all_agent_facts() returns empty vec.
-            return std::path::PathBuf::from(adk_path_str)
-                .join("naia-settings")
-                .join(".memory")
-                .join("alpha-memory.json");
-        }
-    }
-    // Legacy fallback (no workspace configured)
-    home.join(".naia").join("memory").join("alpha-memory.json")
+/// Resolve the exact LocalAdapter store owned by naia-agent.
+fn agent_memory_path_from_adk(adk_path: &str) -> PathBuf {
+    PathBuf::from(adk_path)
+        .join("naia-settings")
+        .join("memory")
+        .join("store.json")
+}
+
+/// Use the same ADK resolver as Shell's Agent launcher, including native E2E
+/// isolation. This prevents the memory UI from drifting to a legacy home path.
+fn agent_memory_path() -> Result<PathBuf, String> {
+    super::current_adk_path().map(|path| agent_memory_path_from_adk(&path))
 }
 
 /// Read all facts from Agent's memory JSON file.
 /// Returns empty vec if file doesn't exist or is invalid.
 pub fn get_all_agent_facts() -> Vec<AgentFact> {
-    let path = agent_memory_path();
+    let Ok(path) = agent_memory_path() else {
+        return Vec::new();
+    };
     match std::fs::read_to_string(&path) {
         Ok(content) => match serde_json::from_str::<MemoryStore>(&content) {
             Ok(store) => store.facts,
@@ -140,7 +133,7 @@ pub fn get_all_agent_facts() -> Vec<AgentFact> {
 /// because user-initiated deletes are infrequent and consolidation runs every 30 min.
 /// Future: route deletes through Agent IPC to eliminate this race entirely.
 pub fn delete_agent_fact(fact_id: &str) -> Result<bool, String> {
-    let path = agent_memory_path();
+    let path = agent_memory_path()?;
     let content =
         std::fs::read_to_string(&path).map_err(|e| format!("Failed to read memory file: {}", e))?;
 
@@ -312,5 +305,14 @@ mod tests {
         let content = r#"{"version": 1, "episodes": [], "skills": [], "reflections": [], "associations": {}}"#;
         let store: MemoryStore = serde_json::from_str(content).unwrap();
         assert!(store.facts.is_empty());
+    }
+
+    #[test]
+    fn agent_memory_path_uses_adk_settings_store_boundary() {
+        let adk = PathBuf::from("workspace-root");
+        assert_eq!(
+            agent_memory_path_from_adk(adk.to_str().unwrap()),
+            adk.join("naia-settings").join("memory").join("store.json")
+        );
     }
 }

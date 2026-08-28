@@ -96,7 +96,7 @@ async function bootApp(
 	await page.addInitScript(TAURI_BASE_MOCK_FALLBACK);
 	await page.addInitScript(SEED_STALE_CACHE);
 	await page.goto("/");
-	await expect(page.locator(".chat-panel")).toBeVisible({ timeout: 15_000 });
+	await expect(page.locator(".chat-app")).toBeVisible({ timeout: 15_000 });
 }
 
 test("FR-CONFIG-SOT.1 — 부팅 하이드레이션: 파일 persona 가 스테일 캐시를 덮는다", async ({

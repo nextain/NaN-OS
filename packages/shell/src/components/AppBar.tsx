@@ -19,17 +19,17 @@ import {
 import { loadConfig, saveConfig } from "../lib/config";
 import { getLocale, t } from "../lib/i18n";
 import { Logger } from "../lib/logger";
-import { getBridgeForPanel } from "../lib/active-bridge";
+import { getBridgeForApp } from "../lib/active-bridge";
 import { removeInstalledApp } from "../lib/app-loader";
 import { appRegistry } from "../lib/app-registry";
 import { useAppStore } from "../stores/app";
 import { BgmPlayer } from "./BgmPlayer";
 
-// BGM player lives in the always-on app-bar (not a switchable panel), so it
+// BGM player lives in the always-on app-bar (not a switchable app), so it
 // needs its own persistent bridge to push BGM context (favorites, current
 // track) into Naia's system prompt. Without a bridge the push is dead code
 // (`if (!naia) return` in BgmPlayer) and the AI never sees favoritesList.
-const bgmBridge = getBridgeForPanel("bgm");
+const bgmBridge = getBridgeForApp("bgm");
 
 interface AppBarProps {
 	onAddMode?: () => void;
@@ -82,8 +82,8 @@ export function AppBar({ onAddMode }: AppBarProps) {
 		return () => popModal();
 	}, [isAnyDialogOpen, pushModal, popModal]);
 
-	// Rebuild panel list whenever appListVersion changes (runtime install/remove)
-	// Exclude avatar panel (shown as fixed "바탕화면" tab separately)
+	// Rebuild app list whenever appListVersion changes (runtime install/remove)
+	// Exclude avatar app (shown as fixed "바탕화면" tab separately)
 	const modes = useMemo(
 		() =>
 			appRegistry
@@ -114,7 +114,7 @@ export function AppBar({ onAddMode }: AppBarProps) {
 		};
 	}, []);
 
-	async function handleRemovePanel(
+	async function handleRemoveApp(
 		e: MouseEvent<HTMLButtonElement>,
 		appId: string,
 	) {
@@ -137,9 +137,9 @@ export function AppBar({ onAddMode }: AppBarProps) {
 			appRegistry.unregister(appId);
 			const cfg = loadConfig();
 			if (cfg) {
-				const prev = cfg.deletedPanels ?? [];
+				const prev = cfg.deletedApps ?? [];
 				if (!prev.includes(appId)) {
-					saveConfig({ ...cfg, deletedPanels: [...prev, appId] });
+					saveConfig({ ...cfg, deletedApps: [...prev, appId] });
 				}
 			}
 			bumpAppListVersion();
@@ -149,7 +149,7 @@ export function AppBar({ onAddMode }: AppBarProps) {
 			setActiveApp(null);
 		}
 
-		Logger.debug("AppBar", `Panel removed: ${appId}`);
+		Logger.debug("AppBar", `App removed: ${appId}`);
 	}
 
 	function openBrowserShortcut(url: string) {
@@ -176,7 +176,7 @@ export function AppBar({ onAddMode }: AppBarProps) {
 		setCtxMenu(null);
 	}
 
-	async function handleCtxRemovePanel() {
+	async function handleCtxRemoveApp() {
 		if (!ctxMenu?.appId) return;
 		const appId = ctxMenu.appId;
 		const descriptor = appRegistry.get(appId);
@@ -193,9 +193,9 @@ export function AppBar({ onAddMode }: AppBarProps) {
 			appRegistry.unregister(appId);
 			const cfg = loadConfig();
 			if (cfg) {
-				const prev = cfg.deletedPanels ?? [];
+				const prev = cfg.deletedApps ?? [];
 				if (!prev.includes(appId)) {
-					saveConfig({ ...cfg, deletedPanels: [...prev, appId] });
+					saveConfig({ ...cfg, deletedApps: [...prev, appId] });
 				}
 			}
 			bumpAppListVersion();
@@ -214,9 +214,9 @@ export function AppBar({ onAddMode }: AppBarProps) {
 				setCtxMenu({ x: e.clientX, y: e.clientY, shortcutUrl: url });
 				return;
 			}
-			const panelEl = target.closest("[data-panel-id]");
-			if (panelEl) {
-				const id = panelEl.getAttribute("data-panel-id") ?? "";
+			const appEl = target.closest("[data-app-id]");
+			if (appEl) {
+				const id = appEl.getAttribute("data-app-id") ?? "";
 				const descriptor = appRegistry.get(id);
 				if (descriptor && !descriptor.builtIn) {
 					setCtxMenu({ x: e.clientX, y: e.clientY, appId: id });
@@ -321,7 +321,7 @@ export function AppBar({ onAddMode }: AppBarProps) {
 				</div>
 			)}
 			<div className="app-bar-tabs" onContextMenu={handleTabBarContextMenu}>
-				{/* 바탕화면 — no panel active */}
+				{/* 바탕화면 — no app active */}
 				<button
 					type="button"
 					className={`app-bar-tab${activeApp === null ? " app-bar-tab--active" : ""}`}
@@ -334,12 +334,12 @@ export function AppBar({ onAddMode }: AppBarProps) {
 					<div
 						key={mode.id}
 						className="app-bar-tab-wrapper"
-						data-panel-id={mode.id}
+						data-app-id={mode.id}
 					>
 						<button
 							type="button"
 							className={`app-bar-tab${activeApp === mode.id ? " app-bar-tab--active" : ""}`}
-							data-panel-id={mode.id}
+							data-app-id={mode.id}
 							title={mode.names?.[getLocale()] ?? mode.name}
 							onClick={() =>
 								setActiveApp(activeApp === mode.id ? null : mode.id)
@@ -348,7 +348,7 @@ export function AppBar({ onAddMode }: AppBarProps) {
 							{mode.iconSvg ? (
 								<span
 									className="app-bar-tab-icon app-bar-tab-icon--svg"
-									// biome-ignore lint/security/noDangerouslySetInnerHtml: trusted panel SVG
+									// biome-ignore lint/security/noDangerouslySetInnerHtml: trusted app SVG
 									dangerouslySetInnerHTML={{ __html: mode.iconSvg }}
 								/>
 							) : mode.icon ? (
@@ -360,7 +360,7 @@ export function AppBar({ onAddMode }: AppBarProps) {
 								type="button"
 								className="app-bar-tab-remove"
 								title={`Remove ${mode.name}`}
-								onClick={(e) => handleRemovePanel(e, mode.id)}
+								onClick={(e) => handleRemoveApp(e, mode.id)}
 							>
 								🗑
 							</button>
@@ -457,9 +457,9 @@ export function AppBar({ onAddMode }: AppBarProps) {
 						<button
 							type="button"
 							className="app-bar-ctx-menu__item app-bar-ctx-menu__item--danger"
-							onClick={handleCtxRemovePanel}
+							onClick={handleCtxRemoveApp}
 						>
-							{t("appbar.removePanel")}
+							{t("appbar.removeApp")}
 						</button>
 					)}
 				</div>

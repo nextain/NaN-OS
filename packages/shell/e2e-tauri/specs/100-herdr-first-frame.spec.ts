@@ -2,9 +2,9 @@ describe("100 — Herdr first frame", () => {
 	it("renders the native PTY surface without falling into the no-frame retry loop", async () => {
 		await browser.execute(() => {
 			const workspace = document.querySelector(
-				'button[data-panel-id="workspace"]',
+				'button[data-app-id="workspace"]',
 			) as HTMLButtonElement | null;
-			if (!workspace) throw new Error("Workspace panel button is missing");
+			if (!workspace) throw new Error("Workspace app button is missing");
 			workspace.click();
 		});
 

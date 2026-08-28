@@ -10,7 +10,7 @@ Naia is a Windows desktop visual AI agent. The baseline certification path is te
 2. Complete the first-run setup using the provided certification test account or test provider credentials.
 3. Open Settings and confirm the selected provider/model.
 4. Return to Chat, submit a short prompt, and verify a streamed text response.
-5. Open the workspace panel and confirm that no file or tool action occurs without the relevant user configuration/authorization.
+5. Open the workspace app and confirm that no file or tool action occurs without the relevant user configuration/authorization.
 6. Use the support/report link to verify that inappropriate AI output can be reported.
 
 ## Live generative AI declaration

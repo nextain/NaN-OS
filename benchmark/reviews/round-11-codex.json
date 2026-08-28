@@ -1,0 +1,48 @@
+{
+  "verdict": "NOT_CLEAN",
+  "frame_assessment": {
+    "scope_is_sufficient": false,
+    "missing_concerns": [
+      "도구 실행 문자열뿐 아니라 뇌로 반환되는 success 값까지 실패 의미와 일치하는지 검증하지 않았다.",
+      "segmentsRideRequests를 호출자가 추정하는 구조인데도 직접 실시간 음성 외의 app_tool_call 경로를 전수 검증하지 않았다.",
+      "전역 EnvironmentSession의 watch를 음성 연결 수명주기가 소유한다고 가정했지만, watch를 켠 경로의 소유권을 추적하지 않는다.",
+      "현재 테스트는 나이아가 내린 watch/unwatch를 실행할 수 있음만 증명하며, 필요성에 따라 나이아가 스스로 선택한다는 원 요청은 증명하지 않는다."
+    ]
+  },
+  "findings": [
+    {
+      "id": "R11-RESULT-STATUS-MISCLASSIFIED",
+      "file_location": "packages/shell/src/components/ChatArea.tsx:2032",
+      "impact": "always 설정에서 거부된 unwatch와 실패한 observe가 뇌에는 success=true인 도구 결과로 반환된다.",
+      "why_it_matters": "성공 판정은 '거절:'과 '환경 오류:' 두 접두사만 실패로 취급한다. 그러나 실행기는 always의 변경 거부를 '무시됨:'으로, 관측 실패를 '관측 불가:'로 반환한다. 따라서 사용자가 always를 선택했는데 나이아가 unwatch를 호출하면 실제 상태는 바뀌지 않아도 프로토콜 성공으로 기록된다. 관측할 수 없을 때도 동일하다. 단위 테스트는 결과 문자열과 세션 상태만 검사하고, Playwright는 off의 '거절:'만 success=false인지 검사하므로 이 모순을 측정하지 않는다. 이는 코드 주석과 FR-ENV-LIVE.5의 '거절·오류를 성공으로 바꾸지 않는다'는 주장에 정면으로 어긋난다.",
+      "severity": "high"
+    },
+    {
+      "id": "R11-PROACTIVE-VOICE-ORIGIN-DEFAULT",
+      "file_location": "packages/shell/src/components/ChatArea.tsx:1440",
+      "impact": "능동 발화의 app_tool_call에서 watch가 호출되면, 요청마다 환경 세그먼트를 싣지 않는 경로인데도 '다음 요청부터 목록이 실린다'는 결과가 반환될 수 있다.",
+      "why_it_matters": "dispatchAppToolCall의 origin 기본값은 viaVoice가 아니므로 segmentsRideRequests=true가 된다. 직접 실시간 음성의 onToolCall만 viaVoice=true를 전달한다. 반면 능동 발화 agent_response의 app_tool_call은 origin 없이 호출한다. 이 경로는 코드상 일반 채팅 요청 경로가 아니라 별도의 능동 음성 lane인데도 일반 gRPC 채팅으로 분류된다. 10회차 테스트는 직접 실시간 음성만 검사하므로, 새로 주입한 플래그가 만든 다른 음성 경로의 오분류를 잡지 못한다.",
+      "severity": "medium"
+    },
+    {
+      "id": "R11-DISCONNECT-CLEARS-FOREIGN-WATCH",
+      "file_location": "packages/shell/src/components/ChatArea.tsx:3250",
+      "impact": "텍스트나 다른 경로에서 활성화한 watch도 이후 음성 세션이 끊어지기만 하면 해제된다.",
+      "why_it_matters": "EnvironmentSession은 모듈 전역 단일 상태이고 watch의 출처를 기록하지 않는다. 그런데 onDisconnect는 주석의 '통화 중에 켠 주의'인지 확인하지 않고 무조건 unwatch한다. 따라서 나이아가 텍스트 대화에서 능동적으로 켠 관찰을 유지한 채 음성 통화를 시작했다가 종료하면, 통화가 소유하지 않은 상태까지 지워진다. 현재 음성 E2E에는 기존 watch를 둔 채 연결·해제하는 소유권 시나리오가 없다.",
+      "severity": "medium"
+    },
+    {
+      "id": "R11-AUTONOMOUS-DECISION-UNPROVEN",
+      "file_location": "docs/user-scenarios.md:1380",
+      "impact": "사용자의 핵심 요청인 '나이아가 필요할 때 능동적으로 켰다 끈다'가 제품 수준에서 검증됐다고 볼 수 없다.",
+      "why_it_matters": "매핑된 테스트는 모두 watch/unwatch 인자를 미리 정해 실행기와 배선을 검사한다. 필요하지 않은 대화에서는 watch를 선택하지 않고, 환경 정보가 필요한 대화에서는 스스로 watch 또는 observe를 선택하며, 이후 불필요해지면 unwatch를 선택한다는 의미 수준의 정책 검증은 없다. 현재 증거는 '도구를 호출하면 동작한다'이지 '나이아가 능동적으로 판단한다'가 아니다.",
+      "severity": "medium"
+    }
+  ],
+  "what_would_make_it_clean": [
+    "문자열 접두사 추론을 제거하고 실행 결과를 구조화된 success/output 또는 명시적 상태로 반환하라. 최소한 '무시됨:'과 '관측 불가:'가 success=false로 전송되는 통합 테스트를 추가하라.",
+    "모든 dispatchAppToolCall 호출부의 경로 능력을 명시적으로 전달하게 하고 기본값을 없애라. 능동 발화 app_tool_call에서 watch가 실시간 음성 안내를 반환하는 E2E를 추가하라.",
+    "watch에 소유 경로 또는 세대 토큰을 기록해 음성 onDisconnect가 해당 통화에서 획득한 watch만 해제하게 하거나, 모든 출처를 끄는 정책이라면 사용자 시나리오와 요구사항에 그 부작용을 명시하고 교차 경로 테스트를 추가하라.",
+    "대표적인 '환경 정보가 필요함 → watch', '일회성 확인 → observe', '더 이상 필요 없음 → unwatch', '무관한 요청 → 호출하지 않음' 시나리오에서 실제 나이아의 도구 선택을 검사하는 결정 수준의 수용 테스트를 추가하라."
+  ]
+}

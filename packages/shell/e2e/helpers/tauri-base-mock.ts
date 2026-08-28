@@ -19,12 +19,12 @@ export const TAURI_BASE_MOCK_FALLBACK = `
 	var existing = window.__TAURI_INTERNALS__ && window.__TAURI_INTERNALS__.invoke;
 	if (!existing) return;
 	window.__TAURI_INTERNALS__.invoke = async function(cmd, args) {
-		var panelControl = false;
+		var appControl = false;
 		if (cmd === "send_to_agent_command" && args && typeof args.message === "string") {
 			try {
 				var outbound = JSON.parse(args.message);
-				panelControl = outbound &&
-					(outbound.type === "panel_skills" || outbound.type === "panel_skills_clear");
+				appControl = outbound &&
+					(outbound.type === "app_skills" || outbound.type === "app_skills_clear");
 			} catch (_) {
 				// Let the spec-specific handler report malformed chat payloads.
 			}
@@ -34,14 +34,14 @@ export const TAURI_BASE_MOCK_FALLBACK = `
 			r = await existing(cmd, args);
 		} catch (error) {
 			// Older scenario mocks assume every Agent command is a chat request and
-			// dereference messages[].  The Shell now refreshes its idempotent panel
+			// dereference messages[].  The Shell now refreshes its idempotent app
 			// descriptors before each turn; acknowledge that control-plane command
 			// when a legacy mock cannot parse it, while preserving explicit handlers.
-			if (panelControl) return null;
+			if (appControl) return null;
 			throw error;
 		}
 		if (r !== undefined) return r;
-		if (panelControl) return null;
+		if (appControl) return null;
 		// Plugin store
 		if (cmd === "plugin:store|load") return 1;
 		if (cmd === "plugin:store|get") return [null, false];
@@ -70,8 +70,8 @@ export const TAURI_BASE_MOCK_FALLBACK = `
 		if (cmd === "list_skills" || cmd === "list_stt_models" || cmd === "list_audio_output_devices" || cmd === "list_audio_input_devices" || cmd === "list_naia_assets") return [];
 		// Naia/ADK
 		if (cmd === "read_naia_config") return null;
-		// Panels
-		if (cmd === "panel_list_installed") return [];
+		// Apps
+		if (cmd === "app_list_installed") return [];
 		// Memory
 		if (cmd === "memory_get_all_facts" || cmd === "read_openclaw_memory_files") return [];
 		// Workspace

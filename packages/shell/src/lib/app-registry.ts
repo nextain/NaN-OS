@@ -58,10 +58,10 @@ export interface ShellResult {
 
 /**
  * Narrow bridge between an app and Naia.
- * Panels interact with Naia only through this interface ??never via direct imports.
+ * Apps interact with Naia only through this interface ??never via direct imports.
  *
  * Built-in TypeScript apps receive this bridge directly as a prop.
- * Installed (iframe) panels communicate via postMessage through iframe-bridge.ts.
+ * Installed (iframe) apps communicate via postMessage through iframe-bridge.ts.
  */
 export interface NaiaContextBridge {
 	/** Push updated context to Naia's next message system prompt. */
@@ -84,7 +84,7 @@ export interface NaiaContextBridge {
 
 	/**
 	 * Get a secret value stored by this app.
-	 * Keys are namespaced per panel ??panels cannot access each other's secrets.
+	 * Keys are namespaced per app ??apps cannot access each other's secrets.
 	 */
 	getSecret(key: string): Promise<string | null>;
 
@@ -131,7 +131,7 @@ export class NoopContextBridge implements NaiaContextBridge {
 }
 
 /**
- * Real bridge: forwards pushContext ??panel store (so Naia's system prompt
+ * Real bridge: forwards pushContext ??app store (so Naia's system prompt
  * picks it up), and routes onToolCall registrations for app tool execution.
  *
  * App tools execute in the Shell (WebView). When the Agent receives a
@@ -145,7 +145,7 @@ export class ActiveAppBridge implements NaiaContextBridge {
 	constructor(private readonly appId: string = "__builtin__") {}
 
 	pushContext(ctx: AppContext): void {
-		// Dynamic import avoids circular dep (stores/panel ??panel-registry ??stores/panel)
+		// Dynamic import avoids circular dep (stores/app ??app-registry ??stores/app)
 		import("../stores/app").then(({ useAppStore }) => {
 			useAppStore.getState().setActiveAppContext(ctx);
 		});
@@ -224,45 +224,45 @@ export interface AppDescriptor {
 	names?: Record<string, string>;
 	/** Optional icon ??emoji string (e.g. "?뱷") */
 	icon?: string;
-	/** Inline SVG content loaded from the panel's icon file. Takes priority over `icon`. */
+	/** Inline SVG content loaded from the app's icon file. Takes priority over `icon`. */
 	iconSvg?: string;
-	/** Absolute path to index.html ??if set, panel renders via iframe (asset protocol). */
+	/** Absolute path to index.html ??if set, app renders via iframe (asset protocol). */
 	htmlEntry?: string;
 	/**
-	 * Built-in panels (browser, workspace) cannot be deleted by the user.
-	 * Installed panels (~/.naia/apps/) should omit this or set false.
+	 * Built-in apps (browser, workspace) cannot be deleted by the user.
+	 * Installed apps (~/.naia/apps/) should omit this or set false.
 	 */
 	builtIn?: boolean;
 	/**
-	 * Keep-alive: panel is always mounted, shown/hidden via CSS opacity.
-	 * Native-embed panels (e.g. browser via X11 XReparentWindow) can also use
+	 * Keep-alive: app is always mounted, shown/hidden via CSS opacity.
+	 * Native-embed apps (e.g. browser via X11 XReparentWindow) can also use
 	 * keepAlive:true when paired with explicit IPC hide/show commands ??CSS
 	 * opacity alone cannot hide native windows, but IPC commands can.
-	 * Defaults to true for builtIn panels.
+	 * Defaults to true for builtIn apps.
 	 */
 	keepAlive?: boolean;
 	/**
 	 * "installed" ??loaded from ~/.naia/apps/ at runtime.
-	 * Omit or "code" for panels bundled in the shell's source.
+	 * Omit or "code" for apps bundled in the shell's source.
 	 * AppBar uses this to decide whether to also delete from disk on remove.
 	 */
 	source?: "installed" | "code";
 	/** Center component ??owns the entire right area layout. */
 	center: React.ComponentType<AppCenterProps>;
 	/**
-	 * Tools Naia can call while this panel is active.
+	 * Tools Naia can call while this app is active.
 	 * Sent to the Agent as proxy stubs; handlers registered via NaiaContextBridge.onToolCall.
 	 */
 	tools?: NaiaTool[];
-	/** Current panel context snapshot for Naia */
+	/** Current app context snapshot for Naia */
 	getContext?: () => AppContext;
-	/** Called when this panel becomes active */
+	/** Called when this app becomes active */
 	onActivate?: () => void;
-	/** Called when this panel is deactivated */
+	/** Called when this app is deactivated */
 	onDeactivate?: () => void;
 	/**
-	 * Programmatic API exposed to other panels.
-	 * Set/cleared by the panel component via `appRegistry.updateApi()`.
+	 * Programmatic API exposed to other apps.
+	 * Set/cleared by the app component via `appRegistry.updateApi()`.
 	 * Typed via `appRegistry.getApi<MyAppApi>(id)`.
 	 */
 	api?: AppApi;
@@ -290,8 +290,8 @@ class AppRegistryImpl {
 	}
 
 	/**
-	 * Get the live API exposed by a panel.
-	 * Returns undefined if the panel is not registered or has no API mounted.
+	 * Get the live API exposed by a app.
+	 * Returns undefined if the app is not registered or has no API mounted.
 	 *
 	 * @example
 	 * const api = appRegistry.getApi<WorkspaceAppApi>("workspace");
@@ -302,8 +302,8 @@ class AppRegistryImpl {
 	}
 
 	/**
-	 * Set (or clear) the live API for a panel.
-	 * Called by the panel component on mount/unmount.
+	 * Set (or clear) the live API for a app.
+	 * Called by the app component on mount/unmount.
 	 */
 	updateApi(id: string, api: AppApi | undefined): void {
 		const app = this.apps.get(id);
@@ -311,5 +311,5 @@ class AppRegistryImpl {
 	}
 }
 
-/** Module-level singleton. Import and call `.register()` from each panel module. */
+/** Module-level singleton. Import and call `.register()` from each app module. */
 export const appRegistry = new AppRegistryImpl();
