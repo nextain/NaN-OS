@@ -76,6 +76,19 @@ export function clearAdkPath(): void {
 }
 
 /**
+ * Forget only the selected workspace binding. The workspace and its settings
+ * remain untouched; the next launch returns to the ADK setup screen.
+ */
+export async function resetAdkPathBinding(): Promise<void> {
+	await invoke("clear_naia_path_cache");
+	clearAdkPath();
+	const cfg = loadConfig();
+	if (cfg?.workspaceRoot !== undefined) {
+		saveConfig({ ...cfg, workspaceRoot: undefined });
+	}
+}
+
+/**
  * Reset only persisted application configuration. Workspace assets and
  * knowledge remain intact; credentials are removed from the secure store.
  * The bootstrap pointer is cleared last so a failed native/secure-store reset
