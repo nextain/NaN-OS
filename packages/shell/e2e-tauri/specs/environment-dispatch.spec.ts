@@ -152,6 +152,61 @@ describe("환경 호출 전달 — Rust 명령 경계 (#502) [UC-ENV-LIVE-ACT FR
 		}, PROBES)) as Record<string, InvokeResult>;
 	});
 
+	// 뇌가 없을 때 등록이 "확인됨"으로 새지 않는가 (FR-ENV-ATTENTION.16).
+	//
+	// ⚠️ 성공 경로(gRPC 왕복 후 ok:true)는 이 픽스처에서 잴 수 없다. e2e 환경은 에이전트를
+	//    의도적으로 막는다(로그: agent-core not available: agent_lease_live_blocked).
+	//    그래서 여기서 재는 것은 **fail-closed 방향**이다 — 뇌가 없으면 확인이 오지 않고,
+	//    셸은 등록됐다고 주장하면 안 된다. 안전에 중요한 쪽은 이 방향이다.
+	//    성공 경로는 브라우저 하네스가 Tauri 를 모의해 덮는다(그쪽은 Rust 를 증명하지 못한다).
+	//    이 한계는 요구사항에 적혀 있다.
+	it("뇌가 없으면 등록 확인이 오지 않는다 — 큐잉을 전달로 읽지 않는다", async () => {
+		const acked = (await browser.execute(() => {
+			const w = window as unknown as {
+				__TAURI_INTERNALS__?: { invoke: (c: string, a: unknown) => Promise<unknown> };
+				__TAURI__?: { core?: { invoke: (c: string, a: unknown) => Promise<unknown> } };
+			};
+			const invoke = w.__TAURI_INTERNALS__?.invoke ?? w.__TAURI__?.core?.invoke;
+			if (!invoke) return Promise.resolve("TAURI_INVOKE_MISSING");
+			const requestId = `native-ack-probe-${Date.now()}`;
+			const message = JSON.stringify({
+				type: "app_skills",
+				appId: "environment",
+				requestId,
+				tools: [{ name: "skill_environment", description: "probe", parameters: { type: "object", properties: {} } }],
+			});
+			return new Promise<string>((resolve) => {
+				let settled = false;
+				const done = (v: string) => {
+					if (!settled) {
+						settled = true;
+						resolve(v);
+					}
+				};
+				setTimeout(() => done("NO_ACK"), 4_000);
+				// Tauri 이벤트 구독 없이도, 명령 자체가 성공(큐잉)하는지는 볼 수 있다.
+				invoke("send_to_agent_command", { message }).then(
+					() => {
+						// 큐잉은 성공한다. 그러나 그것이 "뇌가 등록했다"는 뜻은 아니다.
+						// 확인 응답이 없으면 4초 뒤 NO_ACK 로 떨어진다.
+					},
+					(e: unknown) => done(`QUEUE_FAILED:${String(e)}`),
+				);
+			});
+		})) as string;
+
+		// 뇌가 없으면 두 가지 중 하나로 끝난다. 둘 다 fail-closed 다:
+		//   QUEUE_FAILED — Tauri 명령 자체가 거절(실측: agent-core restart debounced)
+		//   NO_ACK       — 큐잉은 됐지만 확인이 오지 않음
+		// 절대 일어나면 안 되는 것은 "확인이 왔다"이다. 그것이 오면 뇌가 없는데
+		// 셸이 등록됐다고 믿는 상태가 된다.
+		// ⚠️ 이 러너의 expect 는 두 번째 인자(메시지)를 받지 않는다. 값이 실패 출력에
+		//    드러나도록 정규식으로 단언한다.
+		expect(acked).toMatch(/^(NO_ACK$|QUEUE_FAILED:)/);
+		// 단언이 공허하지 않게: IPC 자체가 없었던 경우를 통과로 세지 않는다.
+		expect(acked).not.toBe("TAURI_INVOKE_MISSING");
+	});
+
 	it("웹뷰가 유효한 origin 에 떠 있다 — IPC 가 origin 때문에 막히면 나머지 단언은 무의미하다", () => {
 		const where = results["__where"]?.error ?? "(모름)";
 		const sample = results[PROBES[0]?.name ?? ""]?.error ?? "";

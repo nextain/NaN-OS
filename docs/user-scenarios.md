@@ -1417,6 +1417,7 @@ Test Coverage Map (P02):
 | UC-ENV-ATTENTION | Playwright `packages/shell/e2e/environment-skill.spec.ts` | 실 UI 에서 기본 개수만 전송, watch 후 목록 전송, unwatch 복귀, off 시 도구 미등록, 매 턴 관측 갱신 |
 | UC-ENV-ATTENTION | vitest `src/test/environment-live-herdr.contract.test.ts` | 살아 있는 Herdr 의 실제 터미널 이름·손잡이가 미관찰 중 전송되지 않음 |
 | UC-ENV-ATTENTION | Playwright `packages/shell/e2e/env-attention-voice.spec.ts` | 실시간 음성 턴도 예산을 소비, 음성 중 off 전환 시 거절 |
+| UC-ENV-ATTENTION | e2e-tauri `packages/shell/e2e-tauri/specs/environment-dispatch.spec.ts` | 실 Rust — 뇌가 없을 때 등록이 "확인됨"으로 새지 않음(fail-closed 방향만) |
 
 > 받는 쪽(naia-agent) 검증은 그 저장소의 `src/test/uc-environment-segments.contract.test.ts`
 > 가 소유한다. 이 저장소에서 실행할 수 없으므로 위 표에 넣지 않는다 — 넣으면 벤치가

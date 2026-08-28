@@ -1,7 +1,7 @@
 {
-  "revision": "46d3d7ff",
-  "stampedAt": "2026-08-27T20:27:41.322Z",
-  "fingerprint": "e12ad043317e7b28",
+  "revision": "94dd0fe7",
+  "stampedAt": "2026-08-28T00:48:32.585Z",
+  "fingerprint": "b30d4b36a77865b0",
   "scenarios": {
     "UC-WORKSPACE-CONTEXT-DISCOVER": {
       "receipts": [
@@ -757,7 +757,7 @@
           "ref": "npx wdio run e2e-tauri/wdio.conf.ts --spec e2e-tauri/specs/environment-dispatch.spec.ts (cwd=packages/shell)"
         }
       ],
-      "testCount": 42,
+      "testCount": 43,
       "artifacts": [
         "npx vitest run --reporter=json src/test/environment-dispatch.contract.test.ts (cwd=.) → exit 0",
         "npx wdio run e2e-tauri/wdio.conf.ts --spec e2e-tauri/specs/environment-dispatch.spec.ts (cwd=packages/shell) → exit 0"
@@ -780,7 +780,7 @@
           "ref": "npx wdio run e2e-tauri/wdio.conf.ts --spec e2e-tauri/specs/environment-dispatch.spec.ts (cwd=packages/shell)"
         }
       ],
-      "testCount": 42,
+      "testCount": 43,
       "artifacts": [
         "npx vitest run --reporter=json src/test/environment-dispatch.contract.test.ts (cwd=.) → exit 0",
         "npx wdio run e2e-tauri/wdio.conf.ts --spec e2e-tauri/specs/environment-dispatch.spec.ts (cwd=packages/shell) → exit 0"
@@ -803,7 +803,7 @@
           "ref": "npx wdio run e2e-tauri/wdio.conf.ts --spec e2e-tauri/specs/environment-dispatch.spec.ts (cwd=packages/shell)"
         }
       ],
-      "testCount": 42,
+      "testCount": 43,
       "artifacts": [
         "npx vitest run --reporter=json src/test/environment-dispatch.contract.test.ts (cwd=.) → exit 0",
         "npx wdio run e2e-tauri/wdio.conf.ts --spec e2e-tauri/specs/environment-dispatch.spec.ts (cwd=packages/shell) → exit 0"
@@ -872,7 +872,7 @@
           "ref": "npx vitest run --reporter=json src/test/environment-live-act.contract.test.ts (cwd=.)"
         }
       ],
-      "testCount": 69,
+      "testCount": 70,
       "artifacts": [
         "npx vitest run --reporter=json src/lib/__tests__/environment-skill.test.ts (cwd=packages/shell) → exit 0",
         "npx wdio run e2e-tauri/wdio.conf.ts --spec e2e-tauri/specs/environment-dispatch.spec.ts (cwd=packages/shell) → exit 0",
@@ -912,13 +912,15 @@
           "ref": "npx playwright test e2e/env-attention-voice.spec.ts (cwd=packages/shell)"
         }
       ],
-      "testCount": 125,
+      "testCount": 142,
       "artifacts": [
         "npx vitest run --reporter=json src/test/environment-live-wiring.contract.test.ts (cwd=.) → exit 0",
         "npx vitest run --reporter=json src/lib/__tests__/environment-skill.test.ts (cwd=packages/shell) → exit 0",
         "npx playwright test e2e/environment-skill.spec.ts (cwd=packages/shell) → exit 0",
         "npx vitest run --reporter=json src/test/environment-live-herdr.contract.test.ts (cwd=.) → exit 0",
-        "npx playwright test e2e/env-attention-voice.spec.ts (cwd=packages/shell) → exit 0"
+        "npx playwright test e2e/env-attention-voice.spec.ts (cwd=packages/shell) → exit 0",
+        "npx wdio run e2e-tauri/wdio.conf.ts --spec e2e-tauri/specs/environment-dispatch.spec.ts (cwd=packages/shell) → exit 0",
+        "npx wdio run e2e-tauri/wdio.conf.ts --spec e2e-tauri/specs/environment-dispatch.spec.ts (cwd=packages/shell) → 이 시나리오를 확인하는 케이스가 돌지 않음: FR-ENV-ATTENTION.1 / FR-ENV-ATTENTION.2 / FR-ENV-ATTENTION.3 / FR-ENV-ATTENTION.5 / FR-ENV-ATTENTION.6 / FR-ENV-ATTENTION.7 / FR-ENV-ATTENTION.11 / FR-ENV-ATTENTION.12 / FR-ENV-ATTENTION.13 / FR-ENV-ATTENTION.19 / FR-ENV-ATTENTION.20 / FR-ENV-ATTENTION.4 / FR-ENV-ATTENTION.17 / FR-ENV-ATTENTION.16 / FR-ENV-ATTENTION.18 / FR-ENV-ATTENTION.15 / FR-ENV-ATTENTION.14 / FR-ENV-ATTENTION.10 / FR-ENV-ATTENTION.9 / FR-ENV-ATTENTION.8 / UC-ENV-ATTENTION"
       ],
       "safety": {
         "leakedProjects": [],
