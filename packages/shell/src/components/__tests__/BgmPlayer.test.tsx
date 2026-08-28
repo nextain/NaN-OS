@@ -236,6 +236,113 @@ describe("BgmPlayer YouTube playback state machine", () => {
 		);
 	});
 
+	it("keeps the iframe transparent (previous background visible) until playback is actually observed", async () => {
+		render(<BgmPlayer />);
+		await startTrack("v1", "Unconfirmed Song");
+		attachIframeForCurrentPlayback();
+
+		// FR-BGM-VIDEO.2: a freshly requested embed must not cover the user's
+		// background — a packaged WebView2 can render it as a black frame.
+		expect(document.documentElement).toHaveAttribute(
+			"data-bgm-youtube-live",
+			"false",
+		);
+
+		postYtMessage({ event: "onStateChange", info: 1 });
+		expect(document.documentElement).toHaveAttribute(
+			"data-bgm-youtube-live",
+			"true",
+		);
+	});
+
+	it("restores the previous background when the embed reports a genuine error", async () => {
+		render(<BgmPlayer />);
+		await startTrack("v1", "Failing Song");
+		attachIframeForCurrentPlayback();
+		postYtMessage({ event: "onStateChange", info: 1 });
+		expect(document.documentElement).toHaveAttribute(
+			"data-bgm-youtube-live",
+			"true",
+		);
+
+		postYtMessage({ event: "onError", info: 150 });
+		expect(document.documentElement).toHaveAttribute(
+			"data-bgm-youtube-live",
+			"false",
+		);
+	});
+
+	it("uncovers the background on a diagnostic timeout and re-covers it when late progress confirms playback", async () => {
+		vi.useFakeTimers();
+		render(<BgmPlayer />);
+		await startTrack("v1", "Late Confirmed Song");
+		attachIframeForCurrentPlayback();
+
+		await act(async () => {
+			vi.advanceTimersByTime(13_000);
+			await Promise.resolve();
+		});
+		expect(document.documentElement).toHaveAttribute(
+			"data-bgm-youtube-live",
+			"false",
+		);
+
+		postYtMessage({
+			event: "infoDelivery",
+			info: { currentTime: 2, duration: 180 },
+		});
+		expect(document.documentElement).toHaveAttribute(
+			"data-bgm-youtube-live",
+			"true",
+		);
+	});
+
+	it("migrates legacy localStorage favorites into the workspace config once and clears the legacy key", async () => {
+		localStorage.setItem("naia-config", JSON.stringify({ locale: "en" }));
+		localStorage.setItem(
+			"yt-bgm-favorites",
+			JSON.stringify([
+				{
+					id: "old-1",
+					title: "Legacy Fav",
+					thumbnail: "",
+					duration: "",
+					channel: "",
+				},
+			]),
+		);
+		render(<BgmPlayer />);
+		await act(async () => {
+			await Promise.resolve();
+		});
+
+		const cfg = JSON.parse(localStorage.getItem("naia-config") ?? "{}");
+		expect(cfg.bgmYoutubeFavorites).toEqual([
+			expect.objectContaining({ id: "old-1", title: "Legacy Fav" }),
+		]);
+		expect(localStorage.getItem("yt-bgm-favorites")).toBeNull();
+	});
+
+	it("persists a newly added favorite into the workspace config, not the webview localStorage", async () => {
+		localStorage.setItem("naia-config", JSON.stringify({ locale: "en" }));
+		render(<BgmPlayer />);
+		await startTrack("v-fav", "Favorite Candidate");
+		attachIframeForCurrentPlayback();
+
+		bgmCommandHandler()({
+			payload: JSON.stringify({ type: "bgm_youtube_fav_add" }),
+		});
+		await act(async () => {
+			await Promise.resolve();
+		});
+
+		const cfg = JSON.parse(localStorage.getItem("naia-config") ?? "{}");
+		expect(cfg.bgmYoutubeFavorites).toEqual([
+			expect.objectContaining({ id: "v-fav", title: "Favorite Candidate" }),
+		]);
+		expect(localStorage.getItem("yt-bgm-favorites")).toBeNull();
+	});
+
 	it("hides only the YouTube picture while keeping its iframe mounted", async () => {
 		localStorage.setItem("naia-config", JSON.stringify({ locale: "en" }));
 		const { container } = render(<BgmPlayer />);

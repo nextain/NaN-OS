@@ -331,6 +331,7 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
 	const [localVoiceBusy, setLocalVoiceBusy] = useState(false);
 	const [localVoiceMsg, setLocalVoiceMsg] = useState("");
 	const [localVoiceInstallation, setLocalVoiceInstallation] = useState<{
+		phase: string;
 		canStart: boolean;
 		ready: boolean;
 		summary: string;
@@ -412,6 +413,7 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
 	}
 
 	async function refreshVoxCpm2InstallationForOnboarding(): Promise<{
+		phase: string;
 		canStart: boolean;
 		ready: boolean;
 		summary: string;
@@ -424,6 +426,7 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
 			if (
 				!status ||
 				typeof status !== "object" ||
+				typeof (status as { phase?: unknown }).phase !== "string" ||
 				typeof (status as { canStart?: unknown }).canStart !== "boolean" ||
 				typeof (status as { ready?: unknown }).ready !== "boolean" ||
 				typeof (status as { summary?: unknown }).summary !== "string" ||
@@ -432,6 +435,7 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
 				return null;
 			}
 			const installation = status as {
+				phase: string;
 				canStart: boolean;
 				ready: boolean;
 				summary: string;
@@ -488,7 +492,7 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
 				await invoke("install_voxcpm2_runtime");
 				installation = await refreshVoxCpm2InstallationForOnboarding();
 				if (!installation?.canStart)
-					throw new Error(installation?.summary ?? "verification failed");
+					throw new Error("voxcpm2_installation_verification_failed");
 			}
 			// Mirror SettingsTab's selection transaction (config → naia config →
 			// slots manifest → start). Onboarding used to call start_voxcpm2 with
@@ -528,7 +532,7 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
 			});
 			const afterStart = await refreshVoxCpm2InstallationForOnboarding();
 			if (!afterStart?.ready) {
-				setLocalVoiceMsg(afterStart?.summary ?? t("settings.cascadeError"));
+				setLocalVoiceMsg(t("settings.localVoiceInstallFailed"));
 				return;
 			}
 			useCascadeAvatarStore
@@ -543,7 +547,7 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
 				setLocalVoiceEnabled(false);
 				setLocalVoiceMsg(t("settings.ttsNaiaRequired"));
 			} else {
-				setLocalVoiceMsg(`${t("settings.cascadeError")}: ${String(error)}`);
+				setLocalVoiceMsg(t("settings.localVoiceInstallFailed"));
 			}
 		} finally {
 			setLocalVoiceBusy(false);
@@ -1583,7 +1587,7 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
 							)}
 							{localVoiceInstallation?.canStart === false && !localVoiceMsg && (
 								<p className="onboarding-step__hint onboarding-step__hint--warn">
-									{localVoiceInstallation.summary}
+									{t("settings.localVoiceInstallRequired")}
 								</p>
 							)}
 						</h2>

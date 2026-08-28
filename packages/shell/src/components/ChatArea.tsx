@@ -629,6 +629,7 @@ export function ChatArea({
 		nextReveal: 0,
 		ready: new Map<number, string>(),
 	});
+	const ttsMaskReleaseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 	const cascadeTtsJobsRef = useRef(0);
 	// UC-compaction: agent 가 예산 압박으로 이전 대화를 요약했을 때 표시할 알림(흡수된 메시지 수). null=숨김.
 	const [compactionNotice, setCompactionNotice] = useState<number | null>(null);
@@ -1080,6 +1081,8 @@ export function ChatArea({
 		ttsTextSyncRef.current.pending = 0;
 		ttsTextSyncRef.current.llmFinished = false;
 		ttsTextSyncRef.current.ready.clear();
+		if (ttsMaskReleaseTimerRef.current) clearTimeout(ttsMaskReleaseTimerRef.current);
+		ttsMaskReleaseTimerRef.current = null;
 		cascadeTtsJobsRef.current = 0;
 		setTtsMaskedMessageId(null);
 		setOutputStage(null);
@@ -1099,6 +1102,17 @@ export function ChatArea({
 		useAvatarStore.getState().setSpeaking(false);
 		setEmotion("neutral");
 	}
+
+	useEffect(() => {
+		const onTtsEnabledChange = (event: Event) => {
+			const enabled =
+				(event as CustomEvent<{ enabled?: boolean }>).detail?.enabled === true;
+			if (!enabled) interruptTts();
+		};
+		window.addEventListener("naia:tts-enabled-change", onTtsEnabledChange);
+		return () =>
+			window.removeEventListener("naia:tts-enabled-change", onTtsEnabledChange);
+	}, []);
 
 	function finishLocalVoicePrebuffer(): void {
 		localVoiceSchedulerRef.current?.finishStream();
@@ -1124,6 +1138,8 @@ export function ChatArea({
 	}
 
 	function beginTtsTextSync(): void {
+		if (ttsMaskReleaseTimerRef.current) clearTimeout(ttsMaskReleaseTimerRef.current);
+		ttsMaskReleaseTimerRef.current = null;
 		const sync = ttsTextSyncRef.current;
 		sync.generation++;
 		sync.active = true;
@@ -1206,6 +1222,8 @@ export function ChatArea({
 			setTtsVisibleContent(current.canonical.slice(0, current.revealCursor));
 			if (current.pending === 0) setOutputStage(null);
 			if (current.llmFinished && current.pending === 0) {
+				if (ttsMaskReleaseTimerRef.current) clearTimeout(ttsMaskReleaseTimerRef.current);
+				ttsMaskReleaseTimerRef.current = null;
 				current.active = false;
 				setTtsMaskedMessageId(null);
 				setOutputStage(null);
@@ -1232,6 +1250,22 @@ export function ChatArea({
 			sync.active = false;
 			setTtsMaskedMessageId(null);
 			setOutputStage(null);
+			return;
+		}
+		if (terminal && sync.pending > 0) {
+			if (ttsMaskReleaseTimerRef.current) clearTimeout(ttsMaskReleaseTimerRef.current);
+			const generation = sync.generation;
+			ttsMaskReleaseTimerRef.current = setTimeout(() => {
+				const current = ttsTextSyncRef.current;
+				if (!current.active || current.generation !== generation || !current.llmFinished) return;
+				current.active = false;
+				current.pending = 0;
+				current.ready.clear();
+				setTtsVisibleContent(current.canonical);
+				setTtsMaskedMessageId(null);
+				setOutputStage(null);
+				ttsMaskReleaseTimerRef.current = null;
+			}, 8_000);
 		}
 	}
 
@@ -3770,6 +3804,9 @@ export function ChatArea({
 											<span className="thinking-inline-label">
 												💭 {t("chat.thinking") || "Thinking..."}
 											</span>
+											<span className="thinking-inline-preview">
+												{msg.thinking.trim()}
+											</span>
 										</summary>
 										<div className="thinking-inline-content">
 											{msg.thinking}
@@ -3817,6 +3854,9 @@ export function ChatArea({
 										<span className="thinking-inline-label">
 											💭 {t("chat.thinking") || "Thinking..."}
 										</span>
+									<span className="thinking-inline-preview thinking-inline-preview-live">
+										<span>{streamingThinking.trim()}</span>
+									</span>
 									</summary>
 									<div className="thinking-inline-content">
 										{streamingThinking}

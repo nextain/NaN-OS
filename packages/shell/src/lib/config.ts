@@ -271,6 +271,19 @@ export interface AppConfig {
 	bgmYoutubeThumbnail?: string;
 	/** Whether the YouTube BGM iframe is visible as the app background. */
 	bgmYoutubeBackgroundVideo?: boolean;
+	/**
+	 * YouTube BGM favorites — user data, so it lives in the workspace SoT
+	 * (naia-settings config) and survives reinstall/update/profile switches.
+	 * `undefined` = not yet migrated from the legacy webview localStorage key
+	 * "yt-bgm-favorites"; an array (even empty) = workspace copy is authoritative.
+	 */
+	bgmYoutubeFavorites?: {
+		id: string;
+		title: string;
+		thumbnail?: string;
+		duration?: string;
+		channel?: string;
+	}[];
 	/** Last BGM volume (0–1). */
 	bgmVolume?: number;
 	/** Whether BGM was playing when the app was closed. */

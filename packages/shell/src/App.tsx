@@ -298,10 +298,21 @@ export function App() {
 	const [announcements, setAnnouncements] = useState<Announcement[]>([]);
 	const backgroundVideoUrl = useAvatarStore((s) => s.backgroundVideoUrl);
 	const backgroundMediaType = useAvatarStore((s) => s.backgroundMediaType);
+	const [backgroundFallback, setBackgroundFallback] = useState<{
+		url: string;
+		type: "image" | "video";
+	} | null>(null);
 	const setBackgroundVideoUrl = useAvatarStore((s) => s.setBackgroundVideoUrl);
 	const setBackgroundMediaType = useAvatarStore(
 		(s) => s.setBackgroundMediaType,
 	);
+	useEffect(() => {
+		if (!backgroundVideoUrl || backgroundMediaType === "iframe") return;
+		const type = backgroundMediaType === "video" || isVideoFile(backgroundVideoUrl)
+			? "video"
+			: "image";
+		setBackgroundFallback({ url: backgroundVideoUrl, type });
+	}, [backgroundVideoUrl, backgroundMediaType]);
 	const [avatarProvider, setAvatarProvider] = useState<
 		"vrm" | "naia-video-avatar"
 	>("vrm");
@@ -1036,12 +1047,13 @@ export function App() {
 			    대신 default 가 보이도록 강제 표시. iframe/video/image 가 정상
 			    로드되면 그것이 위로 덮음. 사용자 명시 2026-05-29 "그냥 로컬
 			    배경화면/영상을 기본 보여주던가". */}
-			<img
-				className="app-bg-image"
-				src="/assets/background/background-space.png"
-				alt=""
-				style={{ zIndex: 0 }}
-			/>
+			{backgroundFallback?.type === "video" ? (
+				<video className="app-bg-video" src={backgroundFallback.url} autoPlay loop muted playsInline style={{ zIndex: 0 }} />
+			) : backgroundFallback ? (
+				<img className="app-bg-image" src={backgroundFallback.url} alt="" style={{ zIndex: 0 }} />
+			) : (
+				<div className="app-bg-fallback" aria-hidden="true" />
+			)}
 			{/* ①-b Foreground BGM — overlay on top (z-index:1) when configured */}
 			{backgroundMediaType === "iframe" && backgroundVideoUrl ? (
 				<iframe
