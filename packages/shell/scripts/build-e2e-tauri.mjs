@@ -1,6 +1,12 @@
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { copyFileSync, existsSync, readFileSync, readdirSync } from "node:fs";
+import {
+	copyFileSync,
+	existsSync,
+	mkdirSync,
+	readFileSync,
+	readdirSync,
+} from "node:fs";
 import { resolve } from "node:path";
 import process from "node:process";
 import {
@@ -196,4 +202,30 @@ if (process.platform === "win32") {
 	)) {
 		copyFileSync(resolve(defaultDebug, name), resolve(e2eDebug, name));
 	}
+}
+
+// #508: the E2E debug binary resolves its resource_dir to CARGO_TARGET_DIR/
+// debug. Stage the three trusted installer resources there so
+// voxcpm2_installation_status / install_voxcpm2_runtime see the same contract
+// files as an installed bundle instead of a phantom "not packaged" state.
+const e2eVoxCpm2Bundle = resolve(targetDir, "debug", "voxcpm2-runtime");
+mkdirSync(e2eVoxCpm2Bundle, { recursive: true });
+copyFileSync(
+	resolve(shellDir, "src-tauri", "windows", "prepare-voxcpm2-model.ps1"),
+	resolve(e2eVoxCpm2Bundle, "prepare-voxcpm2-model.ps1"),
+);
+copyFileSync(
+	resolve(shellDir, "src-tauri", "voxcpm2-activation-contract.json"),
+	resolve(e2eVoxCpm2Bundle, "voxcpm2-activation-contract.json"),
+);
+const e2eVoxCpm2DownloadManifest = resolve(
+	shellDir,
+	"scripts",
+	"voxcpm2-download-manifest.json",
+);
+if (existsSync(e2eVoxCpm2DownloadManifest)) {
+	copyFileSync(
+		e2eVoxCpm2DownloadManifest,
+		resolve(e2eVoxCpm2Bundle, "download-manifest.json"),
+	);
 }
