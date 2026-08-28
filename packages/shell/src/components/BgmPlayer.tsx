@@ -138,17 +138,52 @@ const CATEGORIES = [
 
 // ── Favorites ─────────────────────────────────────────────────────────────────
 
+// Legacy webview-profile storage. Favorites are USER DATA: the workspace SoT
+// (naia-settings config, #476) is authoritative; this key is only read once
+// for migration and then cleared.
 const FAV_KEY = "yt-bgm-favorites";
 
-function loadFavs(): YtVideo[] {
+function readLegacyLocalFavs(): YtVideo[] {
 	try {
-		return JSON.parse(localStorage.getItem(FAV_KEY) ?? "[]") as YtVideo[];
+		const parsed = JSON.parse(
+			localStorage.getItem(FAV_KEY) ?? "[]",
+		) as unknown;
+		if (!Array.isArray(parsed)) return [];
+		return parsed.filter(
+			(item): item is YtVideo =>
+				item !== null &&
+				typeof item === "object" &&
+				typeof (item as YtVideo).id === "string" &&
+				typeof (item as YtVideo).title === "string",
+		);
 	} catch {
 		return [];
 	}
 }
 
+function loadFavs(): YtVideo[] {
+	const stored = loadConfig()?.bgmYoutubeFavorites;
+	if (Array.isArray(stored)) {
+		return stored.map((f) => ({
+			id: f.id,
+			title: f.title,
+			thumbnail: f.thumbnail ?? "",
+			duration: f.duration ?? "",
+			channel: f.channel ?? "",
+		}));
+	}
+	// Not yet migrated — fall back to the legacy webview copy.
+	return readLegacyLocalFavs();
+}
+
 function saveFavs(favs: YtVideo[]) {
+	const cfg = loadConfig();
+	if (cfg) {
+		saveConfig({ ...cfg, bgmYoutubeFavorites: favs });
+		return;
+	}
+	// Config not hydrated yet — keep the legacy copy so the edit is not lost;
+	// the one-time migration picks it up on the next boot.
 	try {
 		localStorage.setItem(FAV_KEY, JSON.stringify(favs));
 	} catch {}
@@ -840,6 +875,30 @@ export function BgmPlayer({ naia }: Props) {
 	}, [panelExpanded, ytPanelHeight]);
 
 	// ── BGM state persistence ─────────────────────────────────────────────────
+	// #476 — one-time favorites migration: webview localStorage → workspace SoT.
+	// Favorites are user data; the webview profile dies on reinstall/update and
+	// differs between dev and installed builds, so the naia-settings config copy
+	// is authoritative once it exists.
+	useEffect(() => {
+		const cfg = loadConfig();
+		if (!cfg) return; // not hydrated — retry on a later boot
+		if (Array.isArray(cfg.bgmYoutubeFavorites)) {
+			// Workspace copy is authoritative — drop any stale legacy copy.
+			try {
+				localStorage.removeItem(FAV_KEY);
+			} catch {}
+			return;
+		}
+		const legacy = readLegacyLocalFavs();
+		if (legacy.length === 0) return;
+		saveConfig({ ...cfg, bgmYoutubeFavorites: legacy });
+		setFavs(legacy);
+		try {
+			localStorage.removeItem(FAV_KEY);
+		} catch {}
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, []);
+
 	useEffect(() => {
 		const cfg = loadConfig();
 		if (!cfg) return;

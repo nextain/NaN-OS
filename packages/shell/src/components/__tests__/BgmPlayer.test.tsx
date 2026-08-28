@@ -297,6 +297,52 @@ describe("BgmPlayer YouTube playback state machine", () => {
 		);
 	});
 
+	it("migrates legacy localStorage favorites into the workspace config once and clears the legacy key", async () => {
+		localStorage.setItem("naia-config", JSON.stringify({ locale: "en" }));
+		localStorage.setItem(
+			"yt-bgm-favorites",
+			JSON.stringify([
+				{
+					id: "old-1",
+					title: "Legacy Fav",
+					thumbnail: "",
+					duration: "",
+					channel: "",
+				},
+			]),
+		);
+		render(<BgmPlayer />);
+		await act(async () => {
+			await Promise.resolve();
+		});
+
+		const cfg = JSON.parse(localStorage.getItem("naia-config") ?? "{}");
+		expect(cfg.bgmYoutubeFavorites).toEqual([
+			expect.objectContaining({ id: "old-1", title: "Legacy Fav" }),
+		]);
+		expect(localStorage.getItem("yt-bgm-favorites")).toBeNull();
+	});
+
+	it("persists a newly added favorite into the workspace config, not the webview localStorage", async () => {
+		localStorage.setItem("naia-config", JSON.stringify({ locale: "en" }));
+		render(<BgmPlayer />);
+		await startTrack("v-fav", "Favorite Candidate");
+		attachIframeForCurrentPlayback();
+
+		bgmCommandHandler()({
+			payload: JSON.stringify({ type: "bgm_youtube_fav_add" }),
+		});
+		await act(async () => {
+			await Promise.resolve();
+		});
+
+		const cfg = JSON.parse(localStorage.getItem("naia-config") ?? "{}");
+		expect(cfg.bgmYoutubeFavorites).toEqual([
+			expect.objectContaining({ id: "v-fav", title: "Favorite Candidate" }),
+		]);
+		expect(localStorage.getItem("yt-bgm-favorites")).toBeNull();
+	});
+
 	it("hides only the YouTube picture while keeping its iframe mounted", async () => {
 		localStorage.setItem("naia-config", JSON.stringify({ locale: "en" }));
 		const { container } = render(<BgmPlayer />);
