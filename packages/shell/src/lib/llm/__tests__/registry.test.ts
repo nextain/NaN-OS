@@ -110,17 +110,19 @@ describe("registry — Z.AI (zai) provider", () => {
 		expect(p?.name).toBe("Z.AI");
 	});
 
-	it("zai default model is glm-5.1", () => {
-		expect(getDefaultLlmModel("zai")).toBe("glm-5.1");
+	it("zai default model is glm-5.3", () => {
+		expect(getDefaultLlmModel("zai")).toBe("glm-5.3");
 	});
 
-	it("zai has GLM models registered", () => {
+	it("zai has GLM models registered (구 4.x 계열 제거)", () => {
 		const models = getLlmProvider("zai")?.models ?? [];
 		const ids = models.map((m) => m.id);
+		expect(ids).toContain("glm-5.3");
+		expect(ids).toContain("glm-5.3-flash");
 		expect(ids).toContain("glm-5.1");
 		expect(ids).toContain("glm-5-turbo");
-		expect(ids).toContain("glm-4.7");
-		expect(ids).toContain("glm-4.5-air");
+		expect(ids).not.toContain("glm-4.7");
+		expect(ids).not.toContain("glm-4.5-air");
 	});
 
 	it("zai models have llm capability", () => {
@@ -134,14 +136,16 @@ describe("registry — Claude Code CLI provider", () => {
 		expect(p?.requiresApiKey).toBe(false);
 	});
 
-	it("claude-code-cli default model is claude-sonnet-4-6", () => {
-		expect(getDefaultLlmModel("claude-code-cli")).toBe("claude-sonnet-4-6");
+	it("claude-code-cli default model is claude-sonnet-5", () => {
+		expect(getDefaultLlmModel("claude-code-cli")).toBe("claude-sonnet-5");
 	});
 
-	it("claude-code-cli has Opus, Sonnet, Haiku models", () => {
+	it("claude-code-cli has Fable, Opus, Sonnet, Haiku models", () => {
 		const models = getLlmProvider("claude-code-cli")?.models ?? [];
 		const ids = models.map((m) => m.id);
+		expect(ids).toContain("claude-fable-5");
 		expect(ids).toContain("claude-opus-4-8");
+		expect(ids).toContain("claude-sonnet-5");
 		expect(ids).toContain("claude-sonnet-4-6");
 		expect(ids).toContain("claude-haiku-4-5-20251001");
 	});
@@ -167,10 +171,28 @@ describe("registry — 모델 카탈로그 정합 + 최신화 (2026-06-18)", () 
 		}
 	});
 
-	it("최신 모델 등록(opus-4-8 / gpt-5.5 / gemini-3.5-flash / grok-4.3 / glm-5.2)", () => {
-		expect(getLlmModel("anthropic", "claude-opus-4-8")).toBeDefined();
+	it("최신 모델 등록(fable-5 / sonnet-5 / gpt-5.6 / gemini-3.7 / grok-4.6 / glm-5.3)", () => {
+		expect(getLlmModel("anthropic", "claude-fable-5")).toMatchObject({
+			pricing: [10.0, 50.0],
+		});
+		expect(getLlmModel("anthropic", "claude-sonnet-5")).toMatchObject({
+			pricing: [3.0, 15.0],
+		});
+		expect(getLlmModel("anthropic", "claude-opus-4-8")).toMatchObject({
+			pricing: [5.0, 25.0],
+		});
 		expect(getLlmModel("claude-code-cli", "claude-opus-4-8")).toBeDefined();
+		expect(getLlmModel("openai", "gpt-5.6-sol")).toMatchObject({
+			pricing: [4.0, 20.0],
+		});
 		expect(getLlmModel("openai", "gpt-5.5")).toBeDefined();
+		expect(getLlmModel("codex", "gpt-5.6-sol")).toBeDefined();
+		expect(getLlmModel("xai", "grok-4.6")).toMatchObject({
+			pricing: [2.0, 6.0],
+		});
+		expect(getLlmModel("zai", "glm-5.3")).toMatchObject({
+			pricing: [1.4, 4.4],
+		});
 		expect(getLlmModel("gemini", "gemini-3.7-flash")).toMatchObject({
 			pricing: [0.75, 3.75],
 		});
@@ -190,9 +212,12 @@ describe("registry — 모델 카탈로그 정합 + 최신화 (2026-06-18)", () 
 		expect(getLlmModel("zai", "glm-5.2")).toBeDefined();
 	});
 
-	it("default 최신 승격(openai=gpt-5.5, gemini=gemini-3.7-flash)", () => {
-		expect(getDefaultLlmModel("openai")).toBe("gpt-5.5");
+	it("default 최신 승격(openai/gemini/anthropic/codex/xai)", () => {
+		expect(getDefaultLlmModel("openai")).toBe("gpt-5.6-terra");
 		expect(getDefaultLlmModel("gemini")).toBe("gemini-3.7-flash");
+		expect(getDefaultLlmModel("anthropic")).toBe("claude-sonnet-5");
+		expect(getDefaultLlmModel("codex")).toBe("gpt-5.6-sol");
+		expect(getDefaultLlmModel("xai")).toBe("grok-4.3");
 	});
 
 	it("구 모델 ID 제거(anthropic/claude-code-cli 의 claude-opus-4-6)", () => {

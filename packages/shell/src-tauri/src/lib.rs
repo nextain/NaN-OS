@@ -10865,6 +10865,25 @@ async fn write_naia_path_cache(
     Ok(())
 }
 
+fn clear_naia_path_cache_file(cache_path: Option<std::path::PathBuf>) -> Result<(), String> {
+    let Some(cache_path) = cache_path else {
+        return Ok(());
+    };
+    match std::fs::remove_file(cache_path) {
+        Ok(()) => Ok(()),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(error) => Err(error.to_string()),
+    }
+}
+
+/// Forget the selected workspace without deleting the workspace itself.
+/// The UI relaunches immediately afterward and returns to ADK setup.
+#[tauri::command]
+async fn clear_naia_path_cache() -> Result<(), String> {
+    let home = dirs::home_dir().ok_or_else(|| "Cannot determine home directory".to_string())?;
+    clear_naia_path_cache_file(naia_path_cache_target(home, debug_e2e_enabled()))
+}
+
 /// Copy bundled default assets (vrm-files, background, bgm-musics) from the app's
 /// resource directory into `{adk_path}/naia-settings/`. Skips files that already exist.
 #[tauri::command]
@@ -11322,6 +11341,7 @@ pub fn run() {
             inspect_adk_dir,
             init_naia_settings,
             write_naia_path_cache,
+            clear_naia_path_cache,
             delete_naia_settings,
             delete_naia_adk,
             clone_naia_adk,

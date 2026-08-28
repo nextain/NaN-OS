@@ -299,6 +299,7 @@ test.describe("Herdr Workspace integration", () => {
 			.toBeGreaterThan(0);
 	});
 
+
 	test("FileTree Markdown 문서를 GFM 미리보기로 열고 원문 전환한다", async ({
 		page,
 	}) => {
