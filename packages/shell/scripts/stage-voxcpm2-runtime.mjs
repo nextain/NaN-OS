@@ -23,7 +23,7 @@ const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
 const DEFAULT_SHELL = resolve(SCRIPT_DIR, "..");
 const REPOSITORY = "https://github.com/nextain/voxcpm2-tensorrt";
 export const DEFAULT_VOXCPM2_TRT_DOWNLOAD_URL =
-	"https://pub-a587c16974874fc9a168d2a281801a23.r2.dev/windows_trt_6g/releases/0.2.2/voxcpm2-runtime-win-trt6g.zip";
+	"https://stnaiapub83b29893.blob.core.windows.net/releases/windows_trt_6g/releases/0.2.2/voxcpm2-runtime-win-trt6g.zip";
 const ACTIVATION_CONTRACT_PATH = resolve(
 	DEFAULT_SHELL,
 	"src-tauri/voxcpm2-activation-contract.json",

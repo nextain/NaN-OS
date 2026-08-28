@@ -170,9 +170,9 @@ function fixture() {
 }
 
 describe("stageVoxCpm2Runtime", () => {
-	it("pins the production R2 URL and verifies its remote byte contract", () => {
+	it("pins the production download URL and verifies its remote byte contract", () => {
 		expect(DEFAULT_VOXCPM2_TRT_DOWNLOAD_URL).toBe(
-			"https://pub-a587c16974874fc9a168d2a281801a23.r2.dev/windows_trt_6g/releases/0.2.2/voxcpm2-runtime-win-trt6g.zip",
+			"https://stnaiapub83b29893.blob.core.windows.net/releases/windows_trt_6g/releases/0.2.2/voxcpm2-runtime-win-trt6g.zip",
 		);
 		const source = fixture();
 		const calls: Array<[string, number]> = [];
@@ -230,6 +230,9 @@ describe("stageVoxCpm2Runtime", () => {
 		);
 		expect(devLauncher).toContain(
 			'resolve(devVoxCpm2Bundle, "voxcpm2-activation-contract.json")',
+		);
+		expect(devLauncher).toContain(
+			"env.NAIA_VOXCPM2_DOWNLOAD_MANIFEST ?? devVoxCpm2DownloadManifest",
 		);
 	});
 

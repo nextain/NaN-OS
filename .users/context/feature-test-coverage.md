@@ -46,6 +46,11 @@ pnpm -C packages/shell build
 | REQ-019 | MCP·외부 도구 연결 | 부분 | chat-tools, native suites | 제3자 서버·인증 |
 | REQ-020 | OS 이미지 업데이트 | 부분 | startup update prompt E2E | 이미지 릴리스 파이프라인 |
 
+## 0.2.2 크리티컬 회귀 보장
+
+- `host-voice-download-manifest`: GPU 조건을 만족한 사용자가 온보딩에서 Naia Host를 켤 때 개발 실행과 설치 패키지 모두 검증된 다운로드 매니페스트를 찾을 수 있어야 합니다. 스테이징·플랫폼 매트릭스 테스트와 공개 아카이브의 HTTP 200/바이트 길이 검증으로 보호합니다. 깨끗한 PC의 실제 설치와 음성 출력은 네이티브 릴리스 검사로 남습니다.
+- `nextain-azure-stream-options`: Nextain의 `deepseek-v4-flash` 등 Azure 모델이 OpenAI 호환 스트리밍 요청을 받아 연결을 중간 종료하지 않고, 답변과 토큰 사용량을 반환해야 합니다. 공급자 단위 테스트, 게이트웨이 라우팅 테스트, 개발·운영 게이트웨이 실응답 검사로 보호합니다.
+
 ## Microsoft Store 핵심 회귀
 
 `store-certification.spec.ts`는 심사자가 수행한 경로를 자동화합니다. Google Gemini 선택, API 키 적용, `GEMINI_API_KEY` 저장, Agent 설정 reload, 메시지 전송을 거친 뒤 `usage(0)` 다음 오류가 사용자에게 표시되고 `$0.000000 · 0 tokens`가 성공처럼 남지 않으며 HTTP 500이 없음을 검증합니다.
