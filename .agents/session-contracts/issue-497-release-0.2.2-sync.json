@@ -1,0 +1,60 @@
+{
+  "schema_version": "1.0",
+  "id": "issue-497-release-0.2.2-sync",
+  "status": "active",
+  "project_root": ".",
+  "goal": "검증을 마친 universal-agent 작업이 담긴 naia-shell main 을 release/0.2.2-memory-freeze 에 통합해, 릴리스 가지가 main 과 같은 내용을 담고 원격에 올라간 상태로 만든다.",
+  "scope": [
+    "origin/main 을 release/0.2.2-memory-freeze 에 병합한다. 병합은 상류 내용을 통째로 들여오는 작업이며, 소스 파일을 손으로 새로 쓰지 않는다.",
+    "병합 결과 트리가 origin/main 의 트리와 같은지 대조해 릴리스 고유 내용이 조용히 빠지지 않았음을 확인한다.",
+    "짝 저장소 naia-agent 페어링 핀 세 곳(agent-pairing.json, build.rs, build-installers.yml)이 서로 어긋나지 않는지 확인한다.",
+    "병합본을 커밋하고 origin 의 release/0.2.2-memory-freeze 에 올린다."
+  ],
+  "non_goals": [
+    "다른 세션이 소유한 가지(issue/471-app-store-integration 등)의 이력을 다시 쓰거나 대신 푸시",
+    "release-0.2.2-memory-freeze 계약이 소유한 릴리스 노트·동결 보고서 문안 수정",
+    "원격에 이미 붉은 상태로 존재하는 테스트를 이 작업에서 고치기",
+    "naia-agent 원격 가지에 새 커밋 추가"
+  ],
+  "success_criteria": [
+    "release/0.2.2-memory-freeze 의 트리가 origin/main 의 트리와 바이트 단위로 같다.",
+    "그 가지에서 코어 vitest 와 네이티브 e2e 가 종료코드 0 으로 끝난다.",
+    "로컬 release/0.2.2-memory-freeze 와 origin/release/0.2.2-memory-freeze 가 같은 커밋을 가리킨다.",
+    "작업 뒤 추적 파일에 미커밋 변경이 남지 않는다."
+  ],
+  "allowed_paths": [
+    ".agents/session-contracts/issue-497-release-0.2.2-sync.json",
+    ".agents/progress/issue-497-release-0.2.2-sync.json",
+    ".agents/session-contracts/.session-map.json"
+  ],
+  "target_ownership": [
+    ".agents/session-contracts/issue-497-release-0.2.2-sync.json",
+    ".agents/progress/issue-497-release-0.2.2-sync.json"
+  ],
+  "audiences": [
+    "operator",
+    "release"
+  ],
+  "source_refs": [
+    "conversation://ef466cee-895d-4eed-80d5-497741da5bc8"
+  ],
+  "allowed_shell_commands": [
+    "git fetch origin",
+    "git status --short --branch",
+    "git merge origin/main",
+    "git add",
+    "git commit",
+    "git push origin release/0.2.2-memory-freeze",
+    "pnpm vitest run",
+    "pnpm exec wdio run e2e-tauri/wdio.conf.ts",
+    "pnpm run build:e2e:tauri"
+  ],
+  "session_bindings": [
+    {
+      "session_id": "ef466cee-895d-4eed-80d5-497741da5bc8",
+      "contract_digest": "fc078680846c7e5511ff6e0e9d5368a416a5e6268cd0f44cdde447c8f19d2e10"
+    }
+  ],
+  "progress_file": ".agents/progress/issue-497-release-0.2.2-sync.json",
+  "contract_digest": "fc078680846c7e5511ff6e0e9d5368a416a5e6268cd0f44cdde447c8f19d2e10"
+}

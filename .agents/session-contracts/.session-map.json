@@ -14,6 +14,11 @@
       "contract_id": "issue-447-v017-launch-qa",
       "contract_path": ".agents/session-contracts/issue-447-v017-launch-qa.json",
       "contract_digest": "7804b4a9efcd09795286ef33794ca4ebee35db43a1e3a60eb1a04342dca09cfe"
+    },
+    "ef466cee-895d-4eed-80d5-497741da5bc8": {
+      "contract_id": "issue-497-release-0.2.2-sync",
+      "contract_path": ".agents/session-contracts/issue-497-release-0.2.2-sync.json",
+      "contract_digest": "fc078680846c7e5511ff6e0e9d5368a416a5e6268cd0f44cdde447c8f19d2e10"
     }
   }
 }
