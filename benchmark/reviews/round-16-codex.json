@@ -1,0 +1,23 @@
+{
+  "verdict": "NOT_CLEAN",
+  "frame_assessment": {
+    "scope_is_sufficient": false,
+    "missing_concerns": [
+      "에이전트 재시작·연결 단절 시 환경 도구 등록 및 해제가 실제로 전달됐는지 검증하지 않는다."
+    ]
+  },
+  "findings": [
+    {
+      "id": "ENV-REGISTRATION-DELIVERY-UNVERIFIED",
+      "file_location": "packages/shell/src/App.tsx:449, packages/shell/src/components/SettingsTab.tsx:4865, packages/shell/src/lib/chat-service.ts:810",
+      "impact": "시작 시 또는 off→auto/always 전환 시 등록 전송이 실패하면 환경 세그먼트는 계속 생성되지만 나이아에게 skill_environment가 없어 스스로 watch할 수 없다. 반대로 auto/always→off 전환의 clear 전송이 실패하면 실행은 거절되더라도 에이전트의 도구 선언이 남아 사용자가 끈 뒤에도 요청 비용이 계속 발생할 수 있다.",
+      "why_it_matters": "sendAppSkills는 전송 실패를 throw하지 않고 false로 반환하지만 App.tsx는 반환값을 확인하지 않은 채 등록 성공으로 기록하고, SettingsTab은 등록 결과를 무시한다. sendAppSkillsClear는 내부 boolean 결과를 버려 해제 실패를 호출자가 알 수도 없다. BGM은 바로 이 시작 경쟁 문제 때문에 매 채팅 턴 재등록과 false 검사를 수행하지만 환경 도구에는 같은 복구가 없다. 현재 Playwright 테스트도 연결된 mock에서 app_skills/app_skills_clear 패킷이 발신됐는지만 측정하므로 전송 실패나 에이전트 재시작 뒤의 실제 도구 유무를 검증하지 못한다.",
+      "severity": "medium"
+    }
+  ],
+  "what_would_make_it_clean": [
+    "auto/always에서는 채팅 요청 전에 skill_environment 등록을 멱등 재시도하고 sendAppSkills의 false를 성공으로 기록하지 않도록 한다.",
+    "off 전환의 해제 결과를 관측 가능하게 만들고, 실패 시 재연결 후 해제를 재시도해 도구 선언 비용이 남지 않게 한다.",
+    "초기 등록 실패, 실행 중 에이전트 재시작, off→auto 재등록 실패, auto→off 해제 실패를 주입한 테스트에서 최종 에이전트 도구 목록과 chat_request 순서를 검증한다."
+  ]
+}

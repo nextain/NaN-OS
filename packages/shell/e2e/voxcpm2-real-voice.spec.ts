@@ -99,7 +99,7 @@ test.describe("local voice picker — engine-independent (cloud catalog)", () =>
 		);
 
 		await page.goto("/");
-		await expect(page.locator(".chat-panel")).toBeVisible({ timeout: 20_000 });
+		await expect(page.locator(".chat-app")).toBeVisible({ timeout: 20_000 });
 		await page.getByRole("button", { name: /^(설정|Settings)$/ }).click();
 		await page.locator('[data-settings-tab="voice"]').click();
 

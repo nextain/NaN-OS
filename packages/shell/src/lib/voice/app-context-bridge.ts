@@ -1,8 +1,8 @@
 /**
- * Panel-context → Live-session bridge (#313 L3).
+ * App-context → Live-session bridge (#313 L3).
  *
  * Live audio sessions hold a persistent WebSocket and freeze their
- * `systemInstruction` at connect time. When a panel pushes new context
+ * `systemInstruction` at connect time. When a app pushes new context
  * mid-session (e.g. the browser navigates, the workspace selects a different
  * issue), `buildSystemPrompt()` is only re-invoked for request-response
  * models — Live sessions miss the update entirely.
@@ -27,7 +27,7 @@
  *
  * Out of scope (#313 L4+):
  *   - Replay-on-resume after a Live reconnect.
- *   - Diffing — every update is sent in full. Panel data payloads are
+ *   - Diffing — every update is sent in full. App data payloads are
  *     already minimal (browser: {url,title}, workspace: {selectedIssue}).
  */
 
@@ -37,17 +37,17 @@ import type { AppContextUpdate, VoiceSession } from "./types";
 /** Default debounce window — see codex cross-review for rationale. */
 export const DEFAULT_DEBOUNCE_MS = 500;
 
-/** Source of panel-context updates. Modeled on `Zustand.subscribe`. */
+/** Source of app-context updates. Modeled on `Zustand.subscribe`. */
 export interface AppContextSource {
 	/**
 	 * Subscribe to context changes. The listener fires each time the source's
 	 * active context changes. Returns an unsubscribe function.
 	 *
 	 * NOTE: the listener fires for ANY change in the source state — we filter
-	 * to only the panel-context field internally.
+	 * to only the app-context field internally.
 	 */
 	subscribe(listener: () => void): () => void;
-	/** Current panel context snapshot. `null` when no panel is active. */
+	/** Current app context snapshot. `null` when no app is active. */
 	getContext(): AppContextUpdate | null;
 }
 

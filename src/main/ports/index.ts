@@ -40,7 +40,7 @@ export interface StartupMessagePort {
   send(msg: StartupMessage): Promise<void>; // send_to_agent_command
 }
 
-export interface PanelInventoryPort {
+export interface AppInventoryPort {
   listInstalled(): Promise<readonly unknown[]>; // app_list_installed
 }
 

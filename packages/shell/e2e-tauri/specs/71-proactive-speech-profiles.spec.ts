@@ -276,7 +276,7 @@ describe("71 — Proactive speech profiles (#82)", () => {
 					enableTools: true,
 					locale: "ko",
 					onboardingComplete: true,
-					panelVisible: true,
+					appVisible: true,
 					proactiveSpeechProfile: "disabled",
 					proactiveSpeechPermitted: false,
 					proactiveSpeechIdleMs: 5_000,

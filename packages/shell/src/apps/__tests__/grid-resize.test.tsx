@@ -149,11 +149,11 @@ async function openTerminal(bridge: MockBridge, dir: string): Promise<string> {
 }
 
 function getTerminalArea(): HTMLElement | null {
-	return document.querySelector(".workspace-panel__terminal-area");
+	return document.querySelector(".workspace-app__terminal-area");
 }
 
 function getResizeHandle(): Element | null {
-	return document.querySelector(".workspace-panel__grid-resize-handle");
+	return document.querySelector(".workspace-app__grid-resize-handle");
 }
 
 // ─── Tests ────────────────────────────────────────────────────────────────────
@@ -214,7 +214,7 @@ describe("Grid cell resize — Phase 6", () => {
 		await waitFor(() => expect(screen.getByTestId(`terminal-${pty2}`)).toBeInTheDocument());
 
 		await waitFor(() =>
-			expect(getTerminalArea()?.classList.contains("workspace-panel__terminal-area--resizable")).toBe(true),
+			expect(getTerminalArea()?.classList.contains("workspace-app__terminal-area--resizable")).toBe(true),
 		);
 	});
 
@@ -230,7 +230,7 @@ describe("Grid cell resize — Phase 6", () => {
 
 		// grid mode but canGridResize is false (3 terminals)
 		expect(getResizeHandle()).toBeNull();
-		expect(getTerminalArea()?.classList.contains("workspace-panel__terminal-area--resizable")).toBe(false);
+		expect(getTerminalArea()?.classList.contains("workspace-app__terminal-area--resizable")).toBe(false);
 	});
 
 	it("terminal area has inline gridTemplateColumns with 2 terminals", async () => {

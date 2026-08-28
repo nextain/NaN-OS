@@ -263,7 +263,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
 	setProvider: (provider) => set({ provider }),
 
 	setPendingApproval: (approval) => {
-		// browser panel ?쒖꽦 以묒씠硫?WebView2瑜?React render ?댁쟾??hide ??紐⑤떖??WebView2??媛?ㅼ???寃?諛⑹?
+		// browser app ?쒖꽦 以묒씠硫?WebView2瑜?React render ?댁쟾??hide ??紐⑤떖??WebView2??媛?ㅼ???寃?諛⑹?
 		if (useAppStore.getState().activeApp === "browser") {
 			invoke("browser_wv_hide").catch(() => {});
 		}
@@ -271,7 +271,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
 	},
 
 	clearPendingApproval: () => {
-		// browser panel ?쒖꽦 以묒씠怨??ㅼ젣 approval???덉뿀???뚮쭔 show ??setPendingApproval??hide? ?移?
+		// browser app ?쒖꽦 以묒씠怨??ㅼ젣 approval???덉뿀???뚮쭔 show ??setPendingApproval??hide? ?移?
 		if (
 			get().pendingApproval &&
 			useAppStore.getState().activeApp === "browser"

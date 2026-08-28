@@ -1,0 +1,32 @@
+{
+  "verdict": "NOT_CLEAN",
+  "frame_assessment": {
+    "scope_is_sufficient": false,
+    "missing_concerns": [
+      "통화 시작 당시의 boolean만으로는 통화 중 다른 경로가 획득한 watch의 소유권을 구별할 수 없다.",
+      "watch가 실패로 보고된 뒤에도 활성 상태로 남는 부분 성공 상태와 이후 목록 전송을 검증하지 않았다."
+    ]
+  },
+  "findings": [
+    {
+      "id": "R12-VOICE-WATCH-OWNERSHIP-RACE",
+      "file_location": "packages/shell/src/components/ChatArea.tsx:3097, packages/shell/src/components/ChatArea.tsx:3260",
+      "impact": "통화가 시작될 때 watch가 꺼져 있었다면, 통화 도중 텍스트 또는 proactive app_tool_call 경로가 새로 켠 watch도 해당 통화의 종료 콜백이 무조건 해제한다. 지연된 이전 세션의 onDisconnect가 재연결 후 새 세션이 획득한 watch를 지울 수도 있다.",
+      "why_it_matters": "watchingBeforeVoice는 시작 시점 스냅샷일 뿐 소유권이나 세션 세대를 나타내지 않는다. 기존 음성 E2E는 통화 시작 전에 텍스트가 watch를 켠 경우만 검사하므로 이 반대 순서와 재연결 경쟁을 측정하지 않는다. 따라서 FR-ENV-ATTENTION.13의 '통화가 켠 것만 통화가 끈다'는 구현과 테스트 양쪽에서 성립하지 않는다.",
+      "severity": "high"
+    },
+    {
+      "id": "R12-FAILED-WATCH-REMAINS-ACTIVE",
+      "file_location": "packages/shell/src/lib/environment-skill.ts:175, packages/shell/src/lib/environment-skill.ts:182, packages/shell/src/lib/__tests__/environment-skill.test.ts:421",
+      "impact": "watch는 먼저 세션을 활성화한 뒤 관측 결과가 없으면 ok:false를 반환하지만 활성 상태를 되돌리지 않는다. 이후 관측이 복구되면 별도의 성공한 watch 호출 없이도 전체 표면 이름이 요청에 실린다.",
+      "why_it_matters": "테스트는 반환값이 false인지만 확인하고 session.watching() 상태나 다음 요청의 세그먼트를 확인하지 않는다. 호출자는 실패로 판정한 반면 개인정보 전송 상태는 이미 바뀐 부분 성공이며, 재시도·오류 복구 시 결과 의미와 실제 동작이 어긋난다.",
+      "severity": "medium"
+    }
+  ],
+  "what_would_make_it_clean": [
+    "watch 소유권을 시작 시점 boolean이 아니라 세션별 토큰·세대 또는 획득 주체로 추적하고, 종료 시 현재 세션이 실제로 획득한 watch만 해제한다.",
+    "통화 시작 후 텍스트/proactive 경로가 watch를 켠 뒤 서버 연결이 끊기는 경우와, 이전 세션의 지연된 disconnect가 재연결 후 도착하는 경우를 실 UI 테스트로 추가한다.",
+    "watch의 관측 실패를 원자적 실패로 만들려면 상태를 롤백하고, 부분 성공을 의도한다면 ok:true 또는 별도의 명시적 상태로 계약을 바꿔 호출자가 활성화를 정확히 알게 한다.",
+    "관측 불가 watch 테스트에서 반환값뿐 아니라 watching 상태와 관측 복구 후 다음 chat_request에 전체 표면 목록이 실리는지까지 단언한다."
+  ]
+}

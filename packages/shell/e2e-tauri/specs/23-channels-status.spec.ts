@@ -16,8 +16,8 @@ describe("23 — channels status", () => {
 		await channelsBtn.waitForDisplayed({ timeout: 10_000 });
 		await channelsBtn.click();
 
-		const channelsPanel = await $(S.channelsTabPanel);
-		await channelsPanel.waitForDisplayed({ timeout: 5_000 });
+		const channelsApp = await $(S.channelsTabApp);
+		await channelsApp.waitForDisplayed({ timeout: 5_000 });
 	});
 
 	it("should load channel data (cards or empty state)", async () => {
@@ -45,9 +45,9 @@ describe("23 — channels status", () => {
 			expect(statusCount).toBeGreaterThan(0);
 		} else {
 			// Empty or error state — should have meaningful text
-			const panel = await $(S.channelsTabPanel);
-			const panelText = await panel.getText();
-			expect(panelText.length).toBeGreaterThan(0);
+			const app = await $(S.channelsTabApp);
+			const appText = await app.getText();
+			expect(appText.length).toBeGreaterThan(0);
 		}
 	});
 
@@ -60,9 +60,9 @@ describe("23 — channels status", () => {
 			await refreshBtn.click();
 			await browser.pause(2_000);
 
-			// Panel should still be displayed after refresh
-			const panel = await $(S.channelsTabPanel);
-			expect(await panel.isDisplayed()).toBe(true);
+			// App should still be displayed after refresh
+			const app = await $(S.channelsTabApp);
+			expect(await app.isDisplayed()).toBe(true);
 		}
 	});
 

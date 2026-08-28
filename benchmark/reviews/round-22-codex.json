@@ -1,0 +1,23 @@
+{
+  "verdict": "NOT_CLEAN",
+  "frame_assessment": {
+    "scope_is_sufficient": false,
+    "missing_concerns": [
+      "셸이 보낸 listWithheld가 실제 naia-agent의 모델 입력에서 '의도적으로 숨긴 목록'으로 해석되는지에 대한 수신측 호환성·회귀 검증"
+    ]
+  },
+  "findings": [
+    {
+      "id": "R22-F1",
+      "file_location": "docs/requirements.md:1056; src/test/environment-live-wiring.contract.test.ts:164; packages/shell/e2e/environment-skill.spec.ts:555",
+      "impact": "FR-ENV-ATTENTION.8을 Done으로 표시했지만 현재 증거는 셸이 listWithheld=true를 직렬화했다는 것까지만 잰다. 실제 뇌가 이를 읽어 상한 절단과 구별하고, 목록을 얻는 방법을 안내하는지는 검증하지 않는다.",
+      "why_it_matters": "기본 세그먼트는 surfaces=[]와 omitted=N이라는 기존에도 유효할 수 있는 형태다. 수신측이 listWithheld를 무시하거나 구버전이면 이를 '목록이 상한 때문에 잘렸다'고 해석할 수 있다. 그러면 새 기본값이 뇌를 오도하는 바로 그 실패 양식이 테스트를 모두 통과한다. 저장소 전체 검색에서도 listWithheld의 수신·렌더링 검증은 없고, 요구사항은 단지 '받는 쪽은 naia-agent 저장소가 소유'라고만 적어 완료 근거를 외부로 넘겼다.",
+      "severity": "medium"
+    }
+  ],
+  "what_would_make_it_clean": [
+    "호환되는 naia-agent 버전을 고정하고, 실제 수신 렌더러에 surfaces=[], omitted=N, listWithheld=true를 넣어 의도적 숨김 문구와 watch/observe 안내가 생성되며 상한 절단 문구와 구별됨을 검증한다.",
+    "그 수신측 테스트나 실행 영수증을 FR-ENV-ATTENTION.8의 커버리지 맵에 구체적인 저장소·리비전·테스트 이름으로 연결한다.",
+    "listWithheld를 제거하거나 무시하는 변이가 해당 수신측 검증을 실패시키는지 확인한다."
+  ]
+}

@@ -2,7 +2,7 @@
 // 계약 테스트는 in-memory mock 포트 사용(src/test).
 import type {
   ConfigPort, BootStatePort, AdkPathPort, WorkspacePort,
-  StartupMessagePort, PanelInventoryPort, AdkSetupPort, CredentialStorePort,
+  StartupMessagePort, AppInventoryPort, AdkSetupPort, CredentialStorePort,
   NaiaConfig, AgentView, AdkPath, SetRootResult, StartupMessage, AdkDirState,
 } from "../../ports/index.js";
 
@@ -44,7 +44,7 @@ export const tauriStartup: StartupMessagePort = {
   async send(_m: StartupMessage): Promise<void> { throw new NotWired("send_to_agent_command"); },
 };
 
-export const tauriPanels: PanelInventoryPort = {
+export const tauriApps: AppInventoryPort = {
   async listInstalled(): Promise<readonly unknown[]> { throw new NotWired("app_list_installed"); },
 };
 

@@ -34,7 +34,7 @@ const ttsSyncMocks = vi.hoisted(() => ({
 		onPlaybackEnd?: () => void;
 	},
 }));
-const mockSendPanelSkills = vi.hoisted(() => vi.fn().mockResolvedValue(true));
+const mockSendAppSkills = vi.hoisted(() => vi.fn().mockResolvedValue(true));
 
 vi.mock("../../lib/tts/synthesize", () => ({
 	synthesizeTts: ttsSyncMocks.synthesizeTts,
@@ -125,9 +125,9 @@ vi.mock("../../lib/chat-service", () => ({
 	cancelChat: vi.fn().mockResolvedValue(undefined),
 	directToolCall: vi.fn().mockResolvedValue({ success: false }),
 	fetchAgentSkills: vi.fn().mockResolvedValue([]),
-	sendPanelSkills: mockSendPanelSkills,
+	sendAppSkills: mockSendAppSkills,
 	sendApprovalResponse: vi.fn().mockResolvedValue(undefined),
-	sendPanelToolResult: vi.fn().mockResolvedValue(undefined),
+	sendAppToolResult: vi.fn().mockResolvedValue(undefined),
 	configureSpeechProfile: vi.fn().mockResolvedValue(undefined),
 	yieldSpeechActivity: vi.fn().mockResolvedValue(undefined),
 	controlSpeechActivity: vi.fn().mockResolvedValue(undefined),
@@ -263,7 +263,7 @@ describe("ChatArea", () => {
 				model: "gemini-2.5-flash",
 			}),
 		);
-		mockSendPanelSkills.mockResolvedValueOnce(false);
+		mockSendAppSkills.mockResolvedValueOnce(false);
 		render(<ChatArea />);
 		const input = screen.getByPlaceholderText(/메시지|message/i);
 		fireEvent.change(input, { target: { value: "radio please" } });

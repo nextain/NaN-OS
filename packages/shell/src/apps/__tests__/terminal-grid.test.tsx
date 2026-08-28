@@ -191,7 +191,7 @@ describe("Terminal Grid — Phase 2", () => {
 
 		// Grid area class must NOT be present
 		const gridArea = document
-			.querySelector(".workspace-panel__terminal-area--grid");
+			.querySelector(".workspace-app__terminal-area--grid");
 		expect(gridArea).toBeNull();
 
 		// Terminal is active
@@ -221,7 +221,7 @@ describe("Terminal Grid — Phase 2", () => {
 		// Grid area must now be present
 		await waitFor(() =>
 			expect(
-				document.querySelector(".workspace-panel__terminal-area--grid"),
+				document.querySelector(".workspace-app__terminal-area--grid"),
 			).toBeTruthy(),
 		);
 
@@ -248,13 +248,13 @@ describe("Terminal Grid — Phase 2", () => {
 
 		await waitFor(() =>
 			expect(
-				document.querySelector(".workspace-panel__terminal-area--grid"),
+				document.querySelector(".workspace-app__terminal-area--grid"),
 			).toBeTruthy(),
 		);
 
 		// Both dir names should appear in cell headers
 		const headers = document.querySelectorAll(
-			".workspace-panel__terminal-cell-header",
+			".workspace-app__terminal-cell-header",
 		);
 		expect(headers.length).toBe(2);
 
@@ -275,7 +275,7 @@ describe("Terminal Grid — Phase 2", () => {
 
 		await waitFor(() =>
 			expect(
-				document.querySelector(".workspace-panel__terminal-area--grid"),
+				document.querySelector(".workspace-app__terminal-area--grid"),
 			).toBeTruthy(),
 		);
 
@@ -284,7 +284,7 @@ describe("Terminal Grid — Phase 2", () => {
 		// Or simulate via the close button in the cell header
 		await act(async () => {
 			const closeBtn = document.querySelector<HTMLButtonElement>(
-				`.workspace-panel__terminal-cell [aria-label*="beta"] button, [aria-label*="beta"]`,
+				`.workspace-app__terminal-cell [aria-label*="beta"] button, [aria-label*="beta"]`,
 			);
 			if (closeBtn) closeBtn.click();
 		});
@@ -292,7 +292,7 @@ describe("Terminal Grid — Phase 2", () => {
 		// Grid should disappear (1 terminal left)
 		await waitFor(() =>
 			expect(
-				document.querySelector(".workspace-panel__terminal-area--grid"),
+				document.querySelector(".workspace-app__terminal-area--grid"),
 			).toBeNull(),
 		);
 	});
@@ -309,7 +309,7 @@ describe("Terminal Grid — Phase 2", () => {
 
 		await waitFor(() =>
 			expect(
-				document.querySelector(".workspace-panel__terminal-area--grid"),
+				document.querySelector(".workspace-app__terminal-area--grid"),
 			).toBeTruthy(),
 		);
 

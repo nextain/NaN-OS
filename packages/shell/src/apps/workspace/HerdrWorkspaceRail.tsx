@@ -1,6 +1,7 @@
 import { type RefObject, useMemo, useState } from "react";
 import { t } from "../../lib/i18n";
 import { FileTree } from "./FileTree";
+import { WorkspaceContextApp } from "./WorkspaceContextApp";
 import type { HerdrSnapshot } from "./herdr";
 import type { ClassifiedDir } from "./types";
 
@@ -18,7 +19,7 @@ interface RailProps {
 }
 
 export function HerdrWorkspaceRail(props: RailProps) {
-	const [tab, setTab] = useState<"spaces" | "agents">("spaces");
+	const [tab, setTab] = useState<"spaces" | "agents" | "context">("spaces");
 	const agents = useMemo(
 		() =>
 			[...(props.snapshot?.agents ?? [])].sort((a, b) => {
@@ -29,9 +30,10 @@ export function HerdrWorkspaceRail(props: RailProps) {
 			}),
 		[props.snapshot],
 	);
-	const selectTab = (next: "spaces" | "agents") => {
+	const selectTab = (next: "spaces" | "agents" | "context") => {
 		setTab(next);
-		props.onShowHerdr();
+		// 컨텍스트 탭은 Herdr 작업면을 요구하지 않는다 — Herdr 가 없어도 워크스페이스 규칙은 읽을 수 있어야 한다.
+		if (next !== "context") props.onShowHerdr();
 	};
 	const workspaceName = props.workspaceRoot
 		? props.workspaceRoot
@@ -95,9 +97,20 @@ export function HerdrWorkspaceRail(props: RailProps) {
 				>
 					{t("workspace.herdrAgents")}
 				</button>
+				<button
+					type="button"
+					role="tab"
+					aria-selected={tab === "context"}
+					onClick={() => selectTab("context")}
+					data-testid="workspace-context-tab"
+				>
+					{t("workspace.contextTitle")}
+				</button>
 			</div>
 			<div className="herdr-workspace__items">
-				{tab === "spaces"
+				{tab === "context" ? (
+					<WorkspaceContextApp workspaceRoot={props.workspaceRoot} />
+				) : tab === "spaces"
 					? props.snapshot?.workspaces.map((space) => (
 							<button
 								type="button"

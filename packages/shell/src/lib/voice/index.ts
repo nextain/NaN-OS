@@ -22,10 +22,10 @@ import { createOpenAIRealtimeSession } from "./openai-realtime";
 import type { LiveProviderId, VoiceSession } from "./types";
 import { createVllmOmniSession } from "./vllm-omni";
 
-// #313 L3 — mid-session panel context bridge.
+// #313 L3 — mid-session app context bridge.
 export {
 	attachAppContextBridge,
-	DEFAULT_DEBOUNCE_MS as PANEL_CONTEXT_BRIDGE_DEBOUNCE_MS,
+	DEFAULT_DEBOUNCE_MS as APP_CONTEXT_BRIDGE_DEBOUNCE_MS,
 	type AppContextBridge,
 	type AppContextBridgeOptions,
 	type AppContextSource,

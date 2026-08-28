@@ -1,4 +1,4 @@
-// UC8 / FR-BGM.1 — skill_youtube_bgm 패널 도구 단위 테스트 (deps 주입 = 사이드카/Tauri 헤르메틱).
+// UC8 / FR-BGM.1 — skill_youtube_bgm 앱 도구 단위 테스트 (deps 주입 = 사이드카/Tauri 헤르메틱).
 // 위젯(BgmPlayer) 리스너가 소비하는 bgm_youtube_* payload 형상이 계약이다.
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createBgmPlaybackPort } from "../bgm-playback";

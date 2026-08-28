@@ -48,7 +48,7 @@ function coreChat() {
  * Returns `true` on successful invoke, `false` on caught error (naia-agent
  * down / not spawned / IPC dropped). Callers that depend on the request
  * actually landing should check the return value; fire-and-forget callers
- * (auth_update, notify_config, creds_update, panel_*) can ignore it.
+ * (auth_update, notify_config, creds_update, app_*) can ignore it.
  *
  * Logged with `Logger.warn` so the operator sees it in dev console without
  * the main flow throwing. Main flow degrades gracefully:
@@ -90,7 +90,7 @@ interface SendChatOptions {
 	 * 코어가 persona+workspace+environmentSegments 를 스스로 조립한다(naia-os buildSystemPrompt 두벌 제거).
 	 */
 	systemPrompt?: string;
-	/** S4 — 셸 환경고유 세그먼트(아바타 감정·패널). 코어가 머지. persona/locale 등은 코어가 config.json 에서 조립(안 보냄). */
+	/** S4 — 셸 환경고유 세그먼트(아바타 감정·앱). 코어가 머지. persona/locale 등은 코어가 config.json 에서 조립(안 보냄). */
 	environmentSegments?: EnvironmentSegment[];
 	enableTools?: boolean;
 	/** Enable thinking/reasoning output from models that support it. */
@@ -597,23 +597,23 @@ export async function directToolCall(opts: {
 		description?: string;
 	}) => void;
 	/**
-	 * Called when the agent emits `panel_tool_call` (a panel-owned tool like
+	 * Called when the agent emits `app_tool_call` (a app-owned tool like
 	 * skill_browser_*). The voice path has no chat UI loop, so without this the
-	 * panel tool never runs and the agent hangs. The caller routes it to the
-	 * owning panel's bridge and replies via `sendPanelToolResult`.
+	 * app tool never runs and the agent hangs. The caller routes it to the
+	 * owning app's bridge and replies via `sendAppToolResult`.
 	 */
-	onPanelToolCall?: (req: {
+	onAppToolCall?: (req: {
 		requestId: string;
 		toolCallId: string;
 		toolName: string;
 		args: Record<string, unknown>;
 	}) => void;
 	/**
-	 * Called when the agent emits `panel_control` (e.g. skill_panel switch).
-	 * The caller performs the panel switch/reload. Without this, voice mode
-	 * reports "switched" but the panel never actually changes.
+	 * Called when the agent emits `app_control` (e.g. skill_app switch).
+	 * The caller performs the app switch/reload. Without this, voice mode
+	 * reports "switched" but the app never actually changes.
 	 */
-	onPanelControl?: (req: {
+	onAppControl?: (req: {
 		requestId: string;
 		action: string;
 		appId?: string;
@@ -686,9 +686,9 @@ export async function directToolCall(opts: {
 					tier: ar.tier,
 					description: ar.description,
 				});
-			} else if (chunk.type === "panel_tool_call") {
-				// Panel-owned tool (skill_browser_* etc.). Route to the panel
-				// bridge via the caller; the bridge replies with sendPanelToolResult,
+			} else if (chunk.type === "app_tool_call") {
+				// App-owned tool (skill_browser_* etc.). Route to the app
+				// bridge via the caller; the bridge replies with sendAppToolResult,
 				// after which the agent emits tool_result/finish.
 				const pc = chunk as unknown as {
 					requestId: string;
@@ -696,19 +696,19 @@ export async function directToolCall(opts: {
 					toolName: string;
 					args: Record<string, unknown>;
 				};
-				opts.onPanelToolCall?.({
+				opts.onAppToolCall?.({
 					requestId: pc.requestId,
 					toolCallId: pc.toolCallId,
 					toolName: pc.toolName,
 					args: pc.args,
 				});
-			} else if (chunk.type === "panel_control") {
+			} else if (chunk.type === "app_control") {
 				const pc = chunk as unknown as {
 					requestId: string;
 					action: string;
 					appId?: string;
 				};
-				opts.onPanelControl?.({
+				opts.onAppControl?.({
 					requestId: pc.requestId,
 					action: pc.action,
 					appId: pc.appId,
@@ -806,14 +806,67 @@ export async function fetchAgentSkills(): Promise<
 	return promise;
 }
 
-/** Send panel skill descriptors to the agent (on panel activate) */
-export async function sendPanelSkills(
+/**
+ * 등록·해제가 뇌에 실제로 닿았는지 기다린다 (FR-ENV-ATTENTION.16).
+ *
+ * 왜 필요한가: 프런트가 받는 boolean 은 "Tauri 명령이 메시지를 큐에 넣었다"는 뜻이다.
+ * 실제 gRPC 는 디스패처가 나중에 수행한다. 그래서 큐잉 성공을 전달 성공으로 읽으면,
+ * 도구가 없는데 있다고 판단하게 된다 (2026-08-28 17차 적대리뷰 지적).
+ *
+ * Rust 는 requestId 가 실린 app_skills / app_skills_clear 에 대해 gRPC 결과를
+ * `app_skills_result` 로 돌려준다. 여기서 그것을 기다린다.
+ * 시간 안에 오지 않으면 실패로 본다 — 모르는 것을 성공으로 세지 않는다.
+ */
+async function sendAppSkillsMessage(
+	message: Record<string, unknown>,
+	opName: string,
+	awaitAck: boolean,
+	timeoutMs: number,
+): Promise<boolean> {
+	if (!awaitAck) return safeSendToAgent(message, opName);
+
+	const requestId = `${opName}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+	let settle!: (ok: boolean) => void;
+	const promise = new Promise<boolean>((resolve) => {
+		settle = resolve;
+	});
+	const unlisten = await listen<string>("agent_response", (event) => {
+		try {
+			const raw =
+				typeof event.payload === "string" ? event.payload : JSON.stringify(event.payload);
+			const chunk = JSON.parse(raw) as { type?: string; requestId?: string; ok?: boolean };
+			if (chunk?.type !== "app_skills_result" || chunk.requestId !== requestId) return;
+			settle(chunk.ok === true);
+		} catch {
+			// 형태가 어긋난 응답은 이 대기의 것이 아니다.
+		}
+	});
+	const timer = setTimeout(() => settle(false), timeoutMs);
+
+	try {
+		const queued = await safeSendToAgent({ ...message, requestId }, opName);
+		if (!queued) return false;
+		return await promise;
+	} finally {
+		clearTimeout(timer);
+		unlisten();
+	}
+}
+
+/**
+ * Send app skill descriptors to the agent (on app activate).
+ *
+ * `awaitAck` 를 켜면 뇌가 실제로 등록했는지까지 기다린다. 기본값은 끔 — 기존 호출자들의
+ * 지연과 실패 양식을 바꾸지 않기 위해서다.
+ */
+export async function sendAppSkills(
 	appId: string,
 	tools: NaiaTool[],
+	opts: { awaitAck?: boolean; timeoutMs?: number } = {},
 ): Promise<boolean> {
-	return safeSendToAgent(
+	return sendAppSkillsMessage(
 		{
-			type: "panel_skills",
+			type: "app_skills",
 			appId,
 			tools: tools.map((t) => ({
 				name: t.name,
@@ -822,25 +875,37 @@ export async function sendPanelSkills(
 				...(t.tier != null && { tier: t.tier }),
 			})),
 		},
-		"sendPanelSkills",
+		"sendAppSkills",
+		opts.awaitAck === true,
+		opts.timeoutMs ?? 5_000,
 	);
 }
 
-/** Tell the agent to remove panel's proxy skills (on panel deactivate) */
-export async function sendPanelSkillsClear(appId: string): Promise<void> {
-	await safeSendToAgent(
-		{ type: "panel_skills_clear", appId },
-		"sendPanelSkillsClear",
+/**
+ * Tell the agent to remove app's proxy skills (on app deactivate).
+ *
+ * 결과를 돌려준다. 버리면 해제가 실패해도 호출자가 알 수 없고, 사용자가 껐는데
+ * 도구 선언이 뇌에 남는다 (2026-08-28 16차 적대리뷰 지적).
+ */
+export async function sendAppSkillsClear(
+	appId: string,
+	opts: { awaitAck?: boolean; timeoutMs?: number } = {},
+): Promise<boolean> {
+	return sendAppSkillsMessage(
+		{ type: "app_skills_clear", appId },
+		"sendAppSkillsClear",
+		opts.awaitAck === true,
+		opts.timeoutMs ?? 5_000,
 	);
 }
 
-/** Install a panel from a git URL or local zip file path (delegated to agent) */
-export async function sendPanelInstall(source: string): Promise<void> {
-	await safeSendToAgent({ type: "app_install", source }, "sendPanelInstall");
+/** Install a app from a git URL or local zip file path (delegated to agent) */
+export async function sendAppInstall(source: string): Promise<void> {
+	await safeSendToAgent({ type: "app_install", source }, "sendAppInstall");
 }
 
-/** Send panel tool execution result back to the agent */
-export async function sendPanelToolResult(
+/** Send app tool execution result back to the agent */
+export async function sendAppToolResult(
 	requestId: string,
 	toolCallId: string,
 	result: string,
@@ -849,14 +914,14 @@ export async function sendPanelToolResult(
 ): Promise<void> {
 	await safeSendToAgent(
 		{
-			type: "panel_tool_result",
+			type: "app_tool_result",
 			requestId,
 			toolCallId,
 			result,
 			success,
 			...(activityId ? { activityId } : {}),
 		},
-		"sendPanelToolResult",
+		"sendAppToolResult",
 	);
 }
 

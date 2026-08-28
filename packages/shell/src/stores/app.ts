@@ -7,10 +7,10 @@ function requestBrowserVisibilitySync() {
 }
 
 /**
- * Context types that persist across panel switches. These belong to always-on
- * UI (the app-bar BGM player) rather than a switchable panel, so they must NOT
- * be cleared when the active panel changes, and they live in a separate keyed
- * bucket so a transient panel push can never overwrite them. See
+ * Context types that persist across app switches. These belong to always-on
+ * UI (the app-bar BGM player) rather than a switchable app, so they must NOT
+ * be cleared when the active app changes, and they live in a separate keyed
+ * bucket so a transient app push can never overwrite them. See
  * `selectPromptAppContexts` for how they are merged into the system prompt.
  */
 const PERSISTENT_CONTEXT_TYPES = new Set<string>(["bgm"]);
@@ -19,22 +19,22 @@ interface AppState {
 	/** Currently active app id. null = default avatar view. */
 	activeApp: string | null;
 	setActiveApp: (id: string | null) => void;
-	/** Latest context pushed by the active (switchable) panel. Cleared on switch. */
+	/** Latest context pushed by the active (switchable) app. Cleared on switch. */
 	activeAppContext: AppContext | null;
 	/**
-	 * Persistent contexts keyed by type (e.g. "bgm"). Survive panel switches and
-	 * are never overwritten by transient panel pushes.
+	 * Persistent contexts keyed by type (e.g. "bgm"). Survive app switches and
+	 * are never overwritten by transient app pushes.
 	 */
 	persistentAppContexts: Record<string, AppContext>;
 	/**
 	 * Route a pushed context: persistent types (bgm) go to the keyed bucket,
-	 * everything else replaces the single active-panel slot. Passing null clears
+	 * everything else replaces the single active-app slot. Passing null clears
 	 * only the active slot (persistent contexts are unaffected).
 	 */
 	setActiveAppContext: (ctx: AppContext | null) => void;
 	/**
-	 * Incremented whenever panels are installed or removed at runtime.
-	 * AppBar and other consumers subscribe to rebuild their panel list.
+	 * Incremented whenever apps are installed or removed at runtime.
+	 * AppBar and other consumers subscribe to rebuild their app list.
 	 */
 	appListVersion: number;
 	bumpAppListVersion: () => void;
@@ -62,7 +62,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 		if (current === "browser" && id !== "browser") {
 			invoke("browser_wv_hide").catch(() => {});
 		}
-		// Clear only the transient active-panel slot; persistent contexts (bgm)
+		// Clear only the transient active-app slot; persistent contexts (bgm)
 		// must survive the switch so background music favorites stay available.
 		set({ activeApp: id, activeAppContext: null });
 		if (id === "browser" && current !== "browser") {
@@ -112,10 +112,10 @@ export const useAppStore = create<AppState>((set, get) => ({
 }));
 
 /**
- * Contexts to inject into Naia's system prompt: the active (switchable) panel
+ * Contexts to inject into Naia's system prompt: the active (switchable) app
  * plus all persistent contexts (bgm). The active context wins if a persistent
- * type collides, and we skip large/all-panel injection — only active +
- * persistent, never every panel that has ever pushed.
+ * type collides, and we skip large/all-app injection — only active +
+ * persistent, never every app that has ever pushed.
  */
 export function selectPromptAppContexts(state: AppState): AppContext[] {
 	const out: AppContext[] = [];

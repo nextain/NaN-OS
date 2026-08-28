@@ -215,7 +215,7 @@ describe("Issue → Terminal link — Phase 4", () => {
 		// 2 terminals = grid mode: focused cell gets --focused class
 		await waitFor(() => {
 			const focused = document.querySelectorAll(
-				".workspace-panel__terminal-cell--focused",
+				".workspace-app__terminal-cell--focused",
 			);
 			expect(focused.length).toBe(1);
 			expect(focused[0].textContent).toContain("alpha");
@@ -302,7 +302,7 @@ describe("Issue → Terminal link — Phase 4", () => {
 		// 3 terminals = grid mode: feat-10 cell gets --focused class
 		await waitFor(() => {
 			const focused = document.querySelectorAll(
-				".workspace-panel__terminal-cell--focused",
+				".workspace-app__terminal-cell--focused",
 			);
 			expect(focused.length).toBe(1);
 			expect(focused[0].textContent).toContain("feat-10");

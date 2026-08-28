@@ -1,0 +1,29 @@
+{
+  "_why": "naia-shell ↔ naia-agent 를 잇는 wire 표본. 두 저장소가 같은 내용을 들고 각자 자기 쪽을 검증한다. 짝: nextain/naia-agent src/test/fixtures/environment-surfaces-wire.json — 두 파일이 달라지면 양쪽 테스트가 깨진다.",
+  "_produced_by": "naia-shell src/main/domain/environment-intent.ts toEnvironmentSegment",
+  "_consumed_by": "naia-agent src/main/adapters/protocol.ts decodeEnvironmentSegments",
+  "segment": {
+    "kind": "environmentSurfaces",
+    "surfaces": [
+      {
+        "ref": "s-1",
+        "label": "빌더",
+        "activity": "working",
+        "focused": true
+      },
+      {
+        "ref": "s-2",
+        "label": "zsh — alpha-adk",
+        "activity": "idle",
+        "focused": false
+      },
+      {
+        "ref": "s-3",
+        "label": "이름없는 표면",
+        "activity": "unknown",
+        "focused": false
+      }
+    ],
+    "omitted": 4
+  }
+}

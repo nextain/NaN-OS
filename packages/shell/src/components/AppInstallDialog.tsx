@@ -1,51 +1,162 @@
 import { invoke } from "@tauri-apps/api/core";
 import { useEffect, useState } from "react";
-import { getStoreGatewayUrl, hasStoreEntitlement, type AppInstallRequest } from "../lib/app-store-client";
+import { Logger } from "../lib/logger";
 import { loadInstalledApps } from "../lib/app-loader";
-import { t } from "../lib/i18n";
 import { useAppStore } from "../stores/app";
 
-interface AppInstallDialogProps { request: AppInstallRequest; onClose(): void }
-interface AppInstallResult { id: string; name: string; path: string }
+interface AppInstallDialogProps {
+	onClose: () => void;
+}
 
-export function AppInstallDialog({ request, onClose }: AppInstallDialogProps) {
-	const [busy, setBusy] = useState(false);
-	const [message, setMessage] = useState("");
+type Mode = "git" | "file";
+
+interface InstallResult {
+	success: boolean;
+	message: string;
+}
+
+interface AppInstallResult {
+	id: string;
+	name: string;
+	path: string;
+}
+
+export function AppInstallDialog({ onClose }: AppInstallDialogProps) {
+	const [mode, setMode] = useState<Mode>("git");
+	const [gitUrl, setGitUrl] = useState("");
+	const [loading, setLoading] = useState(false);
+	const [result, setResult] = useState<InstallResult | null>(null);
 	const pushModal = useAppStore((s) => s.pushModal);
 	const popModal = useAppStore((s) => s.popModal);
 
+	// Hide Chrome X11 embed while dialog is open
 	useEffect(() => {
 		pushModal();
 		return () => popModal();
 	}, [pushModal, popModal]);
 
-	async function install() {
-		setBusy(true);
-		setMessage("");
+	async function handleInstall() {
+		// Zip install is gated (#359) — only Git URL is wired today.
+		if (mode !== "git") return;
+		const source = gitUrl.trim();
+		if (!source) return;
+
+		setLoading(true);
+		setResult(null);
+		Logger.info("AppInstallDialog", `Installing app from ${mode}: ${source}`);
 		try {
-			if (!(await hasStoreEntitlement(request.appId))) throw new Error(t("apps.loginRequired"));
-			const result = await invoke<AppInstallResult>("app_install_store", {
-				appId: request.appId,
-				gatewayUrl: getStoreGatewayUrl(),
+			// Direct shell-side install (HTTPS-only git clone). Ported from the
+			// legacy agent skill (#89 / #257) into a Tauri command — install is a
+			// filesystem operation, not an AI task.
+			const res = await invoke<AppInstallResult>("app_install", { source });
+			setResult({
+				success: true,
+				message: `설치 완료: ${res.name} (${res.id}) → ${res.path}`,
 			});
-			await loadInstalledApps();
-			setMessage(t("apps.installed").replace("{name}", result.name));
-		} catch (error) { setMessage(String(error)); }
-		finally { setBusy(false); }
+			// Refresh the installed-app list so the new tab appears, then close.
+			await loadInstalledApps().catch(() => {});
+			await new Promise((r) => setTimeout(r, 650));
+			onClose();
+		} catch (err) {
+			setResult({ success: false, message: String(err) });
+		} finally {
+			setLoading(false);
+		}
 	}
 
-	return <div className="panel-install-overlay" onClick={onClose} onKeyDown={() => {}}>
-		<div className="panel-install-dialog" onClick={(e) => e.stopPropagation()} onKeyDown={() => {}}>
-			<div className="panel-install-header"><span className="panel-install-title">Naia Apps</span><button type="button" className="panel-install-close" onClick={onClose}>✕</button></div>
-			<div className="panel-install-body">
-				<div className="panel-install-result">
-					<strong>{request.name || request.appId}</strong>
-					<p>{t("apps.defaultDescription")}</p>
-					<button type="button" className="panel-install-confirm-btn" disabled={busy} onClick={() => void install()}>{busy ? t("apps.installing") : t("apps.installPurchased")}</button>
+	return (
+		<div
+			className="app-install-overlay"
+			onClick={onClose}
+			onKeyDown={() => {}}
+		>
+			<div
+				className="app-install-dialog"
+				onClick={(e) => e.stopPropagation()}
+				onKeyDown={() => {}}
+			>
+				<div className="app-install-header">
+					<span className="app-install-title">앱 추가</span>
+					<button
+						type="button"
+						className="app-install-close"
+						onClick={onClose}
+					>
+						✕
+					</button>
 				</div>
-				{message && <div className="panel-install-result">{message}</div>}
+
+				{mode === "git" ? (
+					<div className="app-install-body">
+						<label className="app-install-label" htmlFor="git-url-input">
+							Git URL
+						</label>
+						<input
+							id="git-url-input"
+							type="text"
+							className="app-install-input"
+							placeholder="https://github.com/user/my-app.git"
+							value={gitUrl}
+							onChange={(e) => setGitUrl(e.target.value)}
+							onKeyDown={(e) => e.key === "Enter" && handleInstall()}
+							disabled={loading}
+						/>
+						<p className="app-install-hint">
+							비공개 저장소: URL에 토큰 포함 (https://TOKEN@github.com/...)
+						</p>
+					</div>
+				) : (
+					<div className="app-install-body">
+						<div className="app-install-notice">
+							🚧 Zip 파일 설치는 보안 강화 작업 중입니다 (#359). 현재는 Git URL
+							설치만 지원합니다.
+						</div>
+					</div>
+				)}
+
+				{result && (
+					<div
+						className={`app-install-result ${result.success ? "success" : "error"}`}
+					>
+						{result.message}
+					</div>
+				)}
+
+				<div className="app-install-footer">
+					<div className="app-install-tabs">
+						<button
+							type="button"
+							className={`app-install-tab${mode === "git" ? " active" : ""}`}
+							onClick={() => setMode("git")}
+						>
+							Git URL
+						</button>
+						<button
+							type="button"
+							className={`app-install-tab${mode === "file" ? " active" : ""}`}
+							onClick={() => setMode("file")}
+						>
+							파일 (Zip · 준비 중)
+						</button>
+					</div>
+					<button
+						type="button"
+						className="app-install-cancel-btn"
+						onClick={onClose}
+						disabled={loading}
+					>
+						취소
+					</button>
+					<button
+						type="button"
+						className="app-install-confirm-btn"
+						onClick={handleInstall}
+						disabled={loading || mode !== "git" || !gitUrl.trim()}
+					>
+						{loading ? "설치 중..." : "추가"}
+					</button>
+				</div>
 			</div>
-			<div className="panel-install-footer"><span className="panel-install-hint">{t("apps.purchasePersists")}</span><button type="button" className="panel-install-cancel-btn" onClick={onClose}>{t("apps.close")}</button></div>
 		</div>
-	</div>;
+	);
 }

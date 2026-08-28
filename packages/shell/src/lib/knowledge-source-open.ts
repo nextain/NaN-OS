@@ -24,13 +24,13 @@ export function isSafeSourcePath(path: string): boolean {
 	return !SENSITIVE_SOURCE.some((re) => re.test(norm));
 }
 
-/** 출처 1건 열기 — URL=브라우저(navigate+패널 전환), 파일=워크스페이스 파일뷰어(openFile, 민감경로 거부).
+/** 출처 1건 열기 — URL=브라우저(navigate+앱 전환), 파일=워크스페이스 파일뷰어(openFile, 민감경로 거부).
  *  URL 은 classifySourceUri 가 http(s) 만 url 로 보므로 javascript:/data: 는 url 로 안 감(파일 분기→가드). */
 export function openKnowledgeSource(uri: string): void {
 	if (classifySourceUri(uri) === "url") {
 		const api = appRegistry.getApi("browser");
 		api?.navigate(uri);
-		api?.activatePanel?.();
+		api?.activateApp?.();
 		useAppStore.getState().setActiveApp("browser");
 		return;
 	}

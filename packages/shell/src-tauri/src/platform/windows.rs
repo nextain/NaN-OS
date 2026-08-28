@@ -390,7 +390,7 @@ unsafe extern "system" fn enum_children_cb(hwnd: HWND, lparam: LPARAM) -> BOOL {
 /// window with class `Chrome_WidgetWin_1` (Microsoft reuses the upstream
 /// Chromium class name). We enumerate children and pick the LARGEST visible
 /// Chrome_WidgetWin candidate — the WebView2 host spans the entire content
-/// area while our embedded Chrome panel only covers a portion of it.
+/// area while our embedded Chrome app only covers a portion of it.
 pub(crate) fn find_webview2_child(parent_hwnd: isize) -> Option<isize> {
     let parent = isize_to_hwnd(parent_hwnd);
     let mut ctx = EnumChildrenCtx {
@@ -413,7 +413,7 @@ pub(crate) fn find_webview2_child(parent_hwnd: isize) -> Option<isize> {
     if webview2_candidates.is_empty() {
         return None;
     }
-    // Largest area = WebView2 (full content area > embedded Chrome panel area).
+    // Largest area = WebView2 (full content area > embedded Chrome app area).
     webview2_candidates.sort_by_key(|(_, w, h)| -(*w as i64 * *h as i64));
     Some(hwnd_to_isize(webview2_candidates[0].0))
 }
@@ -607,7 +607,7 @@ impl PlatformWindowManager for Win32WindowManager {
             // input handler lives in the WebView2 child (Chrome_WidgetWin_1
             // covering the full content area). We pick the LARGEST such child
             // — WebView2 spans the whole window; our embedded Chrome only
-            // covers the panel rect, so it's always smaller.
+            // covers the app rect, so it's always smaller.
             if let Some(webview2_isize) = find_webview2_child(pv) {
                 let webview2 = isize_to_hwnd(webview2_isize);
                 SetFocus(webview2);

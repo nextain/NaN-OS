@@ -1,0 +1,17 @@
+{
+  "spec": "packages/shell/e2e-tauri/specs/orchestration-restart.spec.ts",
+  "kinds": [
+    "native"
+  ],
+  "cases": [
+    "모든 탐침이 응답했다 — 빈 결과로 공허하게 통과하지 않는다",
+    "이어받을 참조가 실제 디스크에 남는다 (FR-ORCHESTRATION.10)",
+    "참조는 가리키는 것만 담는다 — 작업자 실행 상태를 복사하지 않는다",
+    "다시 읽었다고 해서 끝났다고 말할 수 있는 것은 아니다"
+  ],
+  "touched": [
+    "packages/shell/e2e-tauri/specs/orchestration-restart.spec.ts",
+    "pid:2871518"
+  ],
+  "at": 1787886844282
+}

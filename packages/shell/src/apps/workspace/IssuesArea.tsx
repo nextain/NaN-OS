@@ -96,7 +96,7 @@ export function IssuesArea({
 	const [issuesListHeight, setIssuesListHeight] = useState(180);
 	const issuesListHeightRef = useRef(180);
 	issuesListHeightRef.current = issuesListHeight;
-	const issuesPanelRef = useRef<HTMLDivElement>(null);
+	const issuesAppRef = useRef<HTMLDivElement>(null);
 	const onIssuesSectionResizeStart = useCallback((e: React.PointerEvent) => {
 		e.preventDefault();
 		const startY = e.clientY;
@@ -225,8 +225,8 @@ export function IssuesArea({
 	const renderIssuesBody = () => {
 		if (fetchState === "loading") {
 			return (
-				<div className="issues-panel__empty">
-					<span className="issues-panel__spinner" />
+				<div className="issues-app__empty">
+					<span className="issues-app__spinner" />
 					<span>이슈 불러오는 중…</span>
 				</div>
 			);
@@ -234,9 +234,9 @@ export function IssuesArea({
 
 		if (fetchState === "no-gh") {
 			return (
-				<div className="issues-panel__empty issues-panel__empty--warn">
-					<div className="issues-panel__empty-title">GitHub CLI 필요</div>
-					<div className="issues-panel__empty-desc">
+				<div className="issues-app__empty issues-app__empty--warn">
+					<div className="issues-app__empty-title">GitHub CLI 필요</div>
+					<div className="issues-app__empty-desc">
 						<code>gh</code> CLI를 설치하고 <code>gh auth login</code>을
 						실행하면 이슈 목록이 표시됩니다.
 					</div>
@@ -246,11 +246,11 @@ export function IssuesArea({
 
 		if (fetchState === "error") {
 			return (
-				<div className="issues-panel__empty issues-panel__empty--warn">
-					<div className="issues-panel__empty-title">불러오기 실패</div>
+				<div className="issues-app__empty issues-app__empty--warn">
+					<div className="issues-app__empty-title">불러오기 실패</div>
 					<button
 						type="button"
-						className="issues-panel__retry"
+						className="issues-app__retry"
 						onClick={() => void fetchIssues(true)}
 					>
 						다시 시도
@@ -261,7 +261,7 @@ export function IssuesArea({
 
 		if (issues.length === 0) {
 			return (
-				<div className="issues-panel__empty">
+				<div className="issues-app__empty">
 					열린 이슈가 없습니다
 				</div>
 			);
@@ -271,23 +271,23 @@ export function IssuesArea({
 			<button
 				key={issue.number}
 				type="button"
-				className="issues-panel__card"
+				className="issues-app__card"
 				onClick={() => onIssueClick?.(issue)}
 				title={issue.title}
 			>
-				<div className="issues-panel__card-top">
-					<span className="issues-panel__card-number">#{issue.number}</span>
-					<span className="issues-panel__card-age">
+				<div className="issues-app__card-top">
+					<span className="issues-app__card-number">#{issue.number}</span>
+					<span className="issues-app__card-age">
 						{relativeTime(issue.updatedAt)}
 					</span>
 				</div>
-				<div className="issues-panel__card-title">{issue.title}</div>
+				<div className="issues-app__card-title">{issue.title}</div>
 				{issue.labels.length > 0 && (
-					<div className="issues-panel__card-labels">
+					<div className="issues-app__card-labels">
 						{issue.labels.slice(0, 3).map((l) => (
 							<span
 								key={l.name}
-								className="issues-panel__card-label"
+								className="issues-app__card-label"
 								style={{ borderColor: `#${l.color}`, color: `#${l.color}` }}
 							>
 								{l.name}
@@ -300,13 +300,13 @@ export function IssuesArea({
 	};
 
 	return (
-		<div className="issues-panel" ref={issuesPanelRef}>
+		<div className="issues-app" ref={issuesAppRef}>
 			{/* ── Issues section ───────────────────────────────────────────── */}
-			<div className="issues-panel__section-header">
-				<span className="issues-panel__section-title">열린 이슈</span>
+			<div className="issues-app__section-header">
+				<span className="issues-app__section-title">열린 이슈</span>
 				<button
 					type="button"
-					className="issues-panel__refresh"
+					className="issues-app__refresh"
 					title="새로고침"
 					onClick={() => void fetchIssues(true)}
 				>
@@ -314,7 +314,7 @@ export function IssuesArea({
 				</button>
 			</div>
 			<div
-				className="issues-panel__list"
+				className="issues-app__list"
 				style={{ height: `${issuesListHeight}px`, flex: "none" }}
 			>
 				{renderIssuesBody()}
@@ -322,22 +322,22 @@ export function IssuesArea({
 
 			{/* ── Drag handle between issues and sessions ───────────────────── */}
 			<div
-				className="workspace-panel__row-resize-handle"
+				className="workspace-app__row-resize-handle"
 				onPointerDown={onIssuesSectionResizeStart}
 			/>
 
 			{/* ── Sessions section (collapsible) ───────────────────────────── */}
 			<button
 				type="button"
-				className="issues-panel__section-header issues-panel__section-header--toggle"
+				className="issues-app__section-header issues-app__section-header--toggle"
 				onClick={() => setSessionsCollapsed((v) => !v)}
 			>
-				<span className="issues-panel__section-title">
+				<span className="issues-app__section-title">
 					{sessionsCollapsed ? "▶" : "▼"} 에이전트 세션
 				</span>
 			</button>
 			{!sessionsCollapsed && (
-				<div className="issues-panel__sessions">
+				<div className="issues-app__sessions">
 					<SessionDashboardInline
 						onSessionClick={onSessionClick}
 						onSessionsUpdate={onSessionsUpdate}
@@ -408,13 +408,13 @@ function SessionDashboardInline({
 
 	if (loading && !hasLoadedRef.current) {
 		return (
-			<div className="issues-panel__sessions-loading">세션 로딩 중…</div>
+			<div className="issues-app__sessions-loading">세션 로딩 중…</div>
 		);
 	}
 
 	if (sessions.length === 0) {
 		return (
-			<div className="issues-panel__sessions-empty">
+			<div className="issues-app__sessions-empty">
 				{workspaceRoot
 					? "실행 중인 Claude Code 세션 없음"
 					: "워크스페이스 경로를 설정해 주세요"}

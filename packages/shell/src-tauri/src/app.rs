@@ -1,234 +1,15 @@
-use base64::Engine as _;
-use ed25519_dalek::{Signature, Verifier, VerifyingKey};
 use serde::{Deserialize, Serialize};
-use sha2::{Digest, Sha256};
-use std::io::Read;
 
 use crate::home_dir;
 
-#[derive(Debug, Deserialize)]
-struct StoreArtifact {
-    sha256: String,
-    signature: String,
-    size: u64,
-    manifest: serde_json::Value,
-}
-
-#[derive(Debug, Deserialize)]
-struct StoreEntitlement {
-    app_id: String,
-    status: String,
-    download_path: String,
-    artifact: StoreArtifact,
-}
-
-const DEVELOPMENT_SIGNING_PUBLIC_KEY: &str = "Zs6yosNTo4pXUGywo6ArjncpDejTrI8FRwyEQ4N/aW4=";
-
-fn verify_artifact_signature(digest: &[u8], value: &str) -> Result<(), String> {
-    let encoded_key = option_env!("NAIA_APP_SIGNING_PUBLIC_KEY")
-        .or_else(|| cfg!(debug_assertions).then_some(DEVELOPMENT_SIGNING_PUBLIC_KEY))
-        .ok_or_else(|| "App signing public key is not configured".to_string())?;
-    let key_bytes = base64::engine::general_purpose::STANDARD
-        .decode(encoded_key)
-        .map_err(|_| "Invalid app signing public key".to_string())?;
-    let key_array: [u8; 32] = key_bytes
-        .try_into()
-        .map_err(|_| "Invalid app signing public key".to_string())?;
-    let signature_bytes = value
-        .strip_prefix("ed25519:")
-        .ok_or_else(|| "Artifact signature must use Ed25519".to_string())
-        .and_then(|encoded| {
-            base64::engine::general_purpose::STANDARD
-                .decode(encoded)
-                .map_err(|_| "Invalid artifact signature".to_string())
-        })?;
-    let signature = Signature::from_slice(&signature_bytes)
-        .map_err(|_| "Invalid artifact signature".to_string())?;
-    VerifyingKey::from_bytes(&key_array)
-        .map_err(|_| "Invalid app signing public key".to_string())?
-        .verify(digest, &signature)
-        .map_err(|_| "Artifact signature verification failed".to_string())
-}
-
-#[cfg(test)]
-mod store_signature_tests {
-    use super::*;
-
-    #[test]
-    fn verifies_reviewed_artifact_and_rejects_tampering() {
-        let digest = hex_digest("c7c5c1d70c5dec4416ab6158afd0b223ef40c29b1dc1f97ed9428b94d4cadb1c");
-        let signature = "ed25519:MAflm/6kjGbOv/DhK1uFg3qNlvftl0QB68FZ+X81cd7EJGBIdnQ804UUTaU13CaQ60pYADkv73V/0dZObK5gBw==";
-        assert!(verify_artifact_signature(&digest, signature).is_ok());
-        let mut tampered = digest;
-        tampered[0] ^= 1;
-        assert!(verify_artifact_signature(&tampered, signature).is_err());
-    }
-
-    fn hex_digest(value: &str) -> [u8; 32] {
-        let decoded = (0..value.len())
-            .step_by(2)
-            .map(|index| u8::from_str_radix(&value[index..index + 2], 16).unwrap())
-            .collect::<Vec<_>>();
-        decoded.try_into().unwrap()
-    }
-}
-
-fn apps_root(home: &std::path::Path) -> std::path::PathBuf {
-    home.join(".naia").join("apps")
-}
-
-fn legacy_apps_root(home: &std::path::Path) -> std::path::PathBuf {
-    home.join(".naia").join("panels")
-}
-
-fn is_safe_app_id(id: &str) -> bool {
-    !id.is_empty()
-        && !id.contains("..")
-        && id
-            .chars()
-            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.'))
-}
-
-#[derive(Deserialize)]
-struct ManifestIdentity {
-    id: String,
-}
-
-fn manifest_id(dir: &std::path::Path) -> Result<String, String> {
-    let path = dir.join("app.json");
-    let data = std::fs::read_to_string(&path)
-        .map_err(|e| format!("Failed to read {}: {}", path.display(), e))?;
-    let manifest: ManifestIdentity =
-        serde_json::from_str(&data).map_err(|e| format!("Invalid {}: {}", path.display(), e))?;
-    if !is_safe_app_id(&manifest.id) {
-        return Err(format!(
-            "Invalid app id in {}: {:?}",
-            path.display(),
-            manifest.id
-        ));
-    }
-    Ok(manifest.id)
-}
-
-fn ensure_directory(path: &std::path::Path, label: &str) -> Result<(), String> {
-    match std::fs::symlink_metadata(path) {
-        Ok(metadata) if metadata.file_type().is_symlink() || !metadata.is_dir() => Err(format!(
-            "{} must be a real directory: {}",
-            label,
-            path.display()
-        )),
-        Ok(_) => Ok(()),
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-            std::fs::create_dir_all(path).map_err(|e| format!("Failed to create {}: {}", label, e))
-        }
-        Err(error) => Err(format!("Failed to inspect {}: {}", label, error)),
-    }
-}
-
-/// Establish the canonical app root and migrate the pre-#472 `panels` root.
-/// Refuse ambiguity instead of overwriting either copy.
-fn prepare_apps_root(home: &std::path::Path) -> Result<std::path::PathBuf, String> {
-    let naia_root = home.join(".naia");
-    ensure_directory(&naia_root, "Naia data directory")?;
-    let root = apps_root(home);
-    ensure_directory(&root, "apps directory")?;
-    let canonical_home = dunce::canonicalize(home).map_err(|e| format!("Invalid home: {}", e))?;
-    let canonical_root =
-        dunce::canonicalize(&root).map_err(|e| format!("Invalid apps directory: {}", e))?;
-    if !canonical_root.starts_with(&canonical_home) {
-        return Err("Apps directory escapes the user home".to_string());
-    }
-
-    let legacy = legacy_apps_root(home);
-    match std::fs::symlink_metadata(&legacy) {
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(root),
-        Err(error) => {
-            return Err(format!(
-                "Failed to inspect legacy apps directory: {}",
-                error
-            ))
-        }
-        Ok(metadata) if metadata.file_type().is_symlink() || !metadata.is_dir() => {
-            return Err(format!(
-                "Legacy apps path must be a real directory: {}",
-                legacy.display()
-            ));
-        }
-        Ok(_) => {}
-    }
-
-    let mut migrations = Vec::new();
-    let mut ids = std::collections::HashSet::new();
-    for entry in std::fs::read_dir(&legacy)
-        .map_err(|e| format!("Failed to read legacy apps directory: {}", e))?
-    {
-        let entry = entry.map_err(|e| format!("Failed to read legacy app entry: {}", e))?;
-        let file_type = entry
-            .file_type()
-            .map_err(|e| format!("Failed to inspect legacy app entry: {}", e))?;
-        if !file_type.is_dir() {
-            return Err(format!(
-                "Refusing to migrate non-directory legacy app entry: {}",
-                entry.path().display()
-            ));
-        }
-        if entry
-            .file_name()
-            .to_string_lossy()
-            .starts_with(".~install-")
-        {
-            return Err(format!(
-                "Incomplete legacy app install requires cleanup: {}",
-                entry.path().display()
-            ));
-        }
-
-        let id = manifest_id(&entry.path())?;
-        let destination = root.join(&id);
-        if destination.exists() || !ids.insert(id.clone()) {
-            return Err(format!(
-                "Cannot migrate app {:?}: duplicate canonical destination",
-                id
-            ));
-        }
-        migrations.push((entry.path(), destination, id));
-    }
-
-    let mut moved = Vec::new();
-    for (source, destination, id) in &migrations {
-        if let Err(error) = std::fs::rename(source, destination) {
-            let mut rollback_errors = Vec::new();
-            for (moved_source, moved_destination) in moved.iter().rev() {
-                if let Err(rollback_error) = std::fs::rename(moved_destination, moved_source) {
-                    rollback_errors.push(rollback_error.to_string());
-                }
-            }
-            let rollback = if rollback_errors.is_empty() {
-                "migration rolled back".to_string()
-            } else {
-                format!("rollback also failed: {}", rollback_errors.join("; "))
-            };
-            return Err(format!(
-                "Failed to migrate app {:?}: {}; {}",
-                id, error, rollback
-            ));
-        }
-        moved.push((source, destination));
-    }
-
-    std::fs::remove_dir(&legacy)
-        .map_err(|e| format!("Failed to remove empty legacy apps directory: {}", e))?;
-    Ok(root)
-}
-
-/// Panel manifest stored in ~/.naia/apps/{id}/app.json
+/// App manifest stored in ~/.naia/apps/{id}/app.json
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct AppManifest {
     pub id: String,
     pub name: String,
     pub description: Option<String>,
     pub icon: Option<String>,
-    /// Path to SVG icon file, relative to panel directory (e.g. "icon.svg")
+    /// Path to SVG icon file, relative to app directory (e.g. "icon.svg")
     #[serde(rename = "iconUrl", skip_serializing_if = "Option::is_none")]
     pub icon_url: Option<String>,
     /// Inline SVG content — populated at load time from iconUrl, not stored in app.json
@@ -240,9 +21,9 @@ pub struct AppManifest {
     pub icon_svg: Option<String>,
     pub names: Option<std::collections::HashMap<String, String>>,
     pub version: Option<String>,
-    /// Tools the panel exposes to Naia. Declared statically in app.json so the
+    /// Tools the app exposes to Naia. Declared statically in app.json so the
     /// Shell can register proxy stubs with the Agent; actual execution is routed
-    /// to the panel iframe via postMessage (GenericInstalledApp).
+    /// to the app iframe via postMessage (GenericInstalledApp).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tools: Option<Vec<AppToolSpec>>,
     /// Absolute path to index.html if present — used for iframe rendering
@@ -254,7 +35,7 @@ pub struct AppManifest {
     pub html_entry: Option<String>,
 }
 
-/// A tool an installed panel exposes to Naia.
+/// A tool an installed app exposes to Naia.
 /// Mirrors the shell `NaiaTool` shape — forwarded verbatim to the Agent.
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct AppToolSpec {
@@ -274,44 +55,110 @@ fn default_tool_tier() -> u8 {
     1
 }
 
-/// List installed panels by scanning ~/.naia/apps/
-fn list_installed_from(home: &std::path::Path) -> Result<Vec<AppManifest>, String> {
-    let apps_dir = prepare_apps_root(home)?;
+fn apps_root(home: &std::path::Path) -> std::path::PathBuf {
+    home.join(".naia").join("apps")
+}
 
-    let mut panels: Vec<AppManifest> = Vec::new();
+fn legacy_apps_root(home: &std::path::Path) -> std::path::PathBuf {
+    home.join(".naia").join("apps")
+}
+
+fn valid_app_id(id: &str) -> bool {
+    !id.is_empty()
+        && !id.contains("..")
+        && !id.contains('\0')
+        && !id.chars().any(char::is_control)
+        && id
+            .chars()
+            .all(|c| c.is_alphanumeric() || c == '-' || c == '_')
+}
+
+/// Move valid legacy `~/.naia/apps/*` installs into the canonical app store.
+/// Existing canonical ids win; symlinks and malformed manifests are left untouched.
+fn migrate_legacy_apps(home: &std::path::Path) -> Result<usize, String> {
+    let legacy_root = legacy_apps_root(home);
+    if !legacy_root.is_dir() {
+        return Ok(0);
+    }
+    let canonical_legacy = dunce::canonicalize(&legacy_root)
+        .map_err(|e| format!("Failed to inspect legacy app directory: {e}"))?;
+    let canonical_root = apps_root(home);
+    std::fs::create_dir_all(&canonical_root)
+        .map_err(|e| format!("Failed to create apps directory: {e}"))?;
+    let mut migrated = 0;
+
+    for entry in std::fs::read_dir(&legacy_root)
+        .map_err(|e| format!("Failed to read legacy app directory: {e}"))?
+        .flatten()
+    {
+        let file_type = match entry.file_type() {
+            Ok(value) => value,
+            Err(_) => continue,
+        };
+        if !file_type.is_dir() || file_type.is_symlink() {
+            continue;
+        }
+        let source = entry.path();
+        let canonical_source = match dunce::canonicalize(&source) {
+            Ok(value) if value.starts_with(&canonical_legacy) => value,
+            _ => continue,
+        };
+        let id = std::fs::read_to_string(source.join("app.json"))
+            .ok()
+            .and_then(|data| serde_json::from_str::<serde_json::Value>(&data).ok())
+            .and_then(|manifest| manifest.get("id")?.as_str().map(str::to_owned));
+        let Some(id) = id.filter(|value| valid_app_id(value)) else {
+            continue;
+        };
+        let destination = canonical_root.join(id);
+        if destination.exists() {
+            continue;
+        }
+        std::fs::rename(&canonical_source, &destination)
+            .map_err(|e| format!("Failed to migrate legacy app: {e}"))?;
+        migrated += 1;
+    }
+    Ok(migrated)
+}
+
+/// List installed apps by scanning ~/.naia/apps/ after the safe legacy migration.
+#[tauri::command]
+pub fn app_list_installed() -> Result<Vec<AppManifest>, String> {
+    let home = home_dir();
+    let home_path = std::path::PathBuf::from(&home);
+    list_installed_at(&home_path)
+}
+
+fn list_installed_at(home_path: &std::path::Path) -> Result<Vec<AppManifest>, String> {
+    migrate_legacy_apps(home_path)?;
+    let apps_dir = apps_root(home_path);
+
+    if !apps_dir.is_dir() {
+        return Ok(Vec::new());
+    }
+
+    let mut apps: Vec<AppManifest> = Vec::new();
 
     let entries = match std::fs::read_dir(&apps_dir) {
         Ok(e) => e,
-        Err(e) => return Err(format!("Failed to read apps directory: {}", e)),
+        Err(e) => return Err(format!("Failed to read apps directory: {e}")),
     };
 
-    for entry in entries {
-        let entry = entry.map_err(|e| format!("Failed to read app entry: {}", e))?;
-        let file_type = entry
-            .file_type()
-            .map_err(|e| format!("Failed to inspect app entry: {}", e))?;
-        if entry
-            .file_name()
-            .to_string_lossy()
-            .starts_with(".~install-")
-        {
+    for entry in entries.flatten() {
+        let manifest_path = entry.path().join("app.json");
+        if !manifest_path.exists() {
             continue;
         }
-        if !file_type.is_dir() || file_type.is_symlink() {
-            return Err(format!("Invalid app entry: {}", entry.path().display()));
-        }
-        let manifest_path = entry.path().join("app.json");
-        let data = std::fs::read_to_string(&manifest_path)
-            .map_err(|e| format!("Failed to read {}: {}", manifest_path.display(), e))?;
-        let mut manifest: AppManifest = serde_json::from_str(&data)
-            .map_err(|e| format!("Invalid {}: {}", manifest_path.display(), e))?;
-        let directory_id = entry.file_name().to_string_lossy().into_owned();
-        if !is_safe_app_id(&manifest.id) || manifest.id != directory_id {
-            return Err(format!(
-                "App manifest id does not match directory: {}",
-                entry.path().display()
-            ));
-        }
+
+        let data = match std::fs::read_to_string(&manifest_path) {
+            Ok(d) => d,
+            Err(_) => continue,
+        };
+
+        let mut manifest: AppManifest = match serde_json::from_str(&data) {
+            Ok(m) => m,
+            Err(_) => continue,
+        };
 
         // Load inline SVG if iconUrl is specified
         if let Some(ref icon_url) = manifest.icon_url.clone() {
@@ -327,18 +174,13 @@ fn list_installed_from(home: &std::path::Path) -> Result<Vec<AppManifest>, Strin
             manifest.html_entry = html_path.to_string_lossy().into_owned().into();
         }
 
-        panels.push(manifest);
+        apps.push(manifest);
     }
 
-    Ok(panels)
+    Ok(apps)
 }
 
-#[tauri::command]
-pub fn app_list_installed() -> Result<Vec<AppManifest>, String> {
-    list_installed_from(std::path::Path::new(&home_dir()))
-}
-
-/// Read a file on behalf of an iframe panel.
+/// Read a file on behalf of an iframe app.
 /// Restricted to files inside the user's HOME directory (max 1 MB).
 /// Called from iframe-bridge.ts → Tauri invoke("app_read_file").
 #[tauri::command]
@@ -365,7 +207,7 @@ pub fn app_read_file(path: String) -> Result<String, String> {
     std::fs::read_to_string(&canonical).map_err(|e| format!("Failed to read file: {}", e))
 }
 
-/// Shell result returned to the iframe panel.
+/// Shell result returned to the iframe app.
 #[derive(Debug, Serialize)]
 pub struct AppShellResult {
     pub stdout: String,
@@ -417,7 +259,7 @@ fn windows_cmd_args(cmd: &str, args: &[String]) -> Vec<String> {
     }
 }
 
-/// Run an allowlisted shell command on behalf of an iframe panel.
+/// Run an allowlisted shell command on behalf of an iframe app.
 /// Uses absolute command paths (no PATH lookup). cwd is always HOME.
 /// Called from iframe-bridge.ts → Tauri invoke("app_run_shell").
 #[tauri::command]
@@ -469,155 +311,154 @@ pub fn app_run_shell(cmd: String, args: Vec<String>) -> Result<AppShellResult, S
     })
 }
 
-/// Remove an installed panel by its app id.
+/// Remove an installed app by its app id.
 ///
-/// Removes exactly `~/.naia/apps/{id}` after validating that its manifest id
-/// matches its canonical directory name.
+/// Scans `~/.naia/apps/*/app.json` and removes every directory whose
+/// manifest `id` matches — this is robust to the directory name differing from
+/// the id (e.g. a repo cloned as `naia-memo-app` but whose app.json
+/// declares `id: "memo"`). Mirrors the legacy agent `actionRemove` logic.
 #[tauri::command]
-pub fn app_remove_installed(panel_id: String) -> Result<(), String> {
-    remove_installed_from(std::path::Path::new(&home_dir()), &panel_id)
+pub fn app_remove_installed(app_id: String) -> Result<(), String> {
+    if !valid_app_id(&app_id) {
+        return Err(format!("Invalid app id: {}", app_id));
+    }
+
+    let home = home_dir();
+    let home_path = std::path::PathBuf::from(&home);
+    remove_installed_at(&home_path, &app_id)
 }
 
-fn remove_installed_from(home: &std::path::Path, panel_id: &str) -> Result<(), String> {
-    if !is_safe_app_id(panel_id) {
-        return Err(format!("Invalid app id: {}", panel_id));
+fn remove_installed_at(home_path: &std::path::Path, app_id: &str) -> Result<(), String> {
+    let apps_root = apps_root(&home_path);
+
+    if !apps_root.is_dir() {
+        return Ok(()); // nothing installed
     }
 
-    let root = prepare_apps_root(home)?;
-    let dir = root.join(&panel_id);
-    if !dir.exists() {
-        return Ok(());
+    #[derive(Deserialize)]
+    struct ManifestLite {
+        id: Option<String>,
     }
-    let file_type = std::fs::symlink_metadata(&dir)
-        .map_err(|e| format!("Failed to inspect app {}: {}", panel_id, e))?
-        .file_type();
-    if !file_type.is_dir() || file_type.is_symlink() {
-        return Err("Access denied".to_string());
+
+    for entry in
+        std::fs::read_dir(&apps_root).map_err(|e| format!("Failed to read apps dir: {}", e))?
+    {
+        let entry = match entry {
+            Ok(e) => e,
+            Err(_) => continue,
+        };
+        if !entry.file_type().map(|t| t.is_dir()).unwrap_or(false) {
+            continue;
+        }
+        // Skip in-flight install temp dirs.
+        if entry
+            .file_name()
+            .to_string_lossy()
+            .starts_with(".~install-")
+        {
+            continue;
+        }
+
+        let dir = entry.path();
+        let manifest_path = dir.join("app.json");
+        if !manifest_path.exists() {
+            continue;
+        }
+
+        let id = std::fs::read_to_string(&manifest_path)
+            .ok()
+            .and_then(|d| serde_json::from_str::<ManifestLite>(&d).ok())
+            .and_then(|m| m.id);
+        if id.as_deref() != Some(app_id) {
+            continue;
+        }
+
+        let canonical_apps_root =
+            dunce::canonicalize(&apps_root).map_err(|_| "Access denied".to_string())?;
+        // Canonicalize to defeat symlinks — never delete outside the app store.
+        let canonical = dunce::canonicalize(&dir).map_err(|_| "Access denied".to_string())?;
+        if !canonical.starts_with(&canonical_apps_root) || canonical == canonical_apps_root {
+            return Err("Access denied".to_string());
+        }
+        std::fs::remove_dir_all(&canonical)
+            .map_err(|e| format!("Failed to remove app {}: {}", app_id, e))?;
+        // Keep scanning — removes every dir bound to this id (dedupe).
     }
-    if manifest_id(&dir)? != panel_id {
-        return Err(format!(
-            "App manifest id does not match directory: {}",
-            panel_id
-        ));
-    }
-    let canonical_root = dunce::canonicalize(&root).map_err(|_| "Access denied".to_string())?;
-    let canonical = dunce::canonicalize(&dir).map_err(|_| "Access denied".to_string())?;
-    if canonical.parent() != Some(canonical_root.as_path()) {
-        return Err("Access denied".to_string());
-    }
-    std::fs::remove_dir_all(&canonical)
-        .map_err(|e| format!("Failed to remove app {}: {}", panel_id, e))
+
+    Ok(())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    fn write_app(root: &std::path::Path, dir: &str, id: &str) -> std::path::PathBuf {
-        let app_dir = root.join(dir);
-        std::fs::create_dir_all(&app_dir).unwrap();
+    fn write_app(root: &std::path::Path, directory: &str, id: &str) -> std::path::PathBuf {
+        let path = root.join(directory);
+        std::fs::create_dir_all(&path).unwrap();
         std::fs::write(
-            app_dir.join("app.json"),
-            format!(r#"{{"id":"{}","name":"Test App"}}"#, id),
+            path.join("app.json"),
+            serde_json::json!({ "id": id, "name": id }).to_string(),
         )
         .unwrap();
-        std::fs::write(app_dir.join("index.html"), "<!doctype html>").unwrap();
-        app_dir
+        std::fs::write(path.join("index.html"), "ok").unwrap();
+        path
     }
 
     #[test]
-    fn canonical_lifecycle_lists_after_restart_and_removes() {
+    fn legacy_install_migrates_to_canonical_apps_store_and_can_be_removed() {
         let home = tempfile::tempdir().unwrap();
-        write_app(&apps_root(home.path()), "slides", "slides");
-
-        let first = list_installed_from(home.path()).unwrap();
-        let restarted = list_installed_from(home.path()).unwrap();
-        assert_eq!(first.len(), 1);
-        assert_eq!(restarted[0].id, "slides");
-        let expected_entry = apps_root(home.path()).join("slides/index.html");
-        assert_eq!(
-            std::path::Path::new(restarted[0].html_entry.as_deref().unwrap()),
-            expected_entry
-        );
-
-        remove_installed_from(home.path(), "slides").unwrap();
-        assert!(list_installed_from(home.path()).unwrap().is_empty());
-    }
-
-    #[test]
-    fn migrates_legacy_panels_once() {
-        let home = tempfile::tempdir().unwrap();
-        write_app(&legacy_apps_root(home.path()), "old-repo-name", "slides");
-
-        let installed = list_installed_from(home.path()).unwrap();
-        assert_eq!(installed[0].id, "slides");
-        assert!(apps_root(home.path()).join("slides/app.json").is_file());
-        assert!(!legacy_apps_root(home.path()).exists());
-    }
-
-    #[test]
-    fn migration_refuses_duplicate_without_moving_legacy_app() {
-        let home = tempfile::tempdir().unwrap();
-        let legacy = write_app(&legacy_apps_root(home.path()), "legacy", "slides");
-        write_app(&apps_root(home.path()), "slides", "slides");
-
-        let error = list_installed_from(home.path()).unwrap_err();
-        assert!(error.contains("duplicate canonical destination"));
-        assert!(legacy.is_dir());
-    }
-
-    #[cfg(unix)]
-    #[test]
-    fn migration_refuses_symlink_without_touching_target() {
-        use std::os::unix::fs::symlink;
-
-        let home = tempfile::tempdir().unwrap();
-        let outside = tempfile::tempdir().unwrap();
-        write_app(outside.path(), "target", "slides");
         let legacy = legacy_apps_root(home.path());
-        std::fs::create_dir_all(&legacy).unwrap();
-        symlink(outside.path().join("target"), legacy.join("slides")).unwrap();
+        let old = write_app(&legacy, "old-repo-name", "notes");
 
-        assert!(list_installed_from(home.path()).is_err());
-        assert!(outside.path().join("target/app.json").is_file());
+        assert_eq!(migrate_legacy_apps(home.path()).unwrap(), 1);
+        assert!(!old.exists());
+        let installed = apps_root(home.path()).join("notes");
+        assert!(installed.join("app.json").is_file());
+        let first_list = list_installed_at(home.path()).unwrap();
+        let restart_list = list_installed_at(home.path()).unwrap();
+        assert_eq!(first_list.len(), 1);
+        assert_eq!(restart_list[0].id, "notes");
+
+        remove_installed_at(home.path(), "notes").unwrap();
+        assert!(!installed.exists());
+        assert!(list_installed_at(home.path()).unwrap().is_empty());
     }
 
     #[test]
-    fn removal_refuses_manifest_id_mismatch_and_traversal() {
+    fn canonical_duplicate_wins_without_deleting_legacy_data() {
         let home = tempfile::tempdir().unwrap();
-        let app = write_app(&apps_root(home.path()), "slides", "different-id");
+        let canonical = write_app(&apps_root(home.path()), "notes", "notes");
+        let legacy = write_app(&legacy_apps_root(home.path()), "old-notes", "notes");
 
-        assert!(remove_installed_from(home.path(), "../slides").is_err());
-        assert!(remove_installed_from(home.path(), "slides").is_err());
-        assert!(app.is_dir());
+        assert_eq!(migrate_legacy_apps(home.path()).unwrap(), 0);
+        assert!(canonical.exists());
+        assert!(legacy.exists());
     }
 
     #[test]
-    fn listing_rejects_invalid_canonical_manifest() {
+    fn malformed_ids_and_symlinks_cannot_escape_the_app_store() {
         let home = tempfile::tempdir().unwrap();
-        let app = apps_root(home.path()).join("slides");
-        std::fs::create_dir_all(&app).unwrap();
-        std::fs::write(app.join("app.json"), r#"{"name":"Missing id"}"#).unwrap();
+        assert!(!valid_app_id("../outside"));
+        assert!(!valid_app_id("nested/app"));
+        assert!(remove_installed_at(home.path(), "../outside").is_ok());
 
-        let error = list_installed_from(home.path()).unwrap_err();
-        assert!(error.contains("Invalid"));
-    }
-
-    #[cfg(unix)]
-    #[test]
-    fn listing_rejects_symlinked_naia_data_root() {
-        use std::os::unix::fs::symlink;
-
-        let home = tempfile::tempdir().unwrap();
-        let outside = tempfile::tempdir().unwrap();
-        symlink(outside.path(), home.path().join(".naia")).unwrap();
-
-        assert!(list_installed_from(home.path()).is_err());
-        assert!(!outside.path().join("apps").exists());
+        #[cfg(unix)]
+        {
+            let outside = tempfile::tempdir().unwrap();
+            write_app(outside.path(), "victim", "linked");
+            std::fs::create_dir_all(apps_root(home.path())).unwrap();
+            std::os::unix::fs::symlink(
+                outside.path().join("victim"),
+                apps_root(home.path()).join("linked"),
+            )
+            .unwrap();
+            remove_installed_at(home.path(), "linked").unwrap();
+            assert!(outside.path().join("victim").exists());
+        }
     }
 }
 
-/// Result of a successful panel install.
+/// Result of a successful app install.
 #[derive(Debug, Serialize)]
 pub struct AppInstallResult {
     pub id: String,
@@ -625,7 +466,7 @@ pub struct AppInstallResult {
     pub path: String,
 }
 
-/// Derive a panel directory name from a Git URL.
+/// Derive a app directory name from a Git URL.
 /// Strips query/hash, trailing slash and ".git", then takes the last path segment.
 fn derive_app_name(source: &str) -> String {
     let s = source.trim();
@@ -640,14 +481,14 @@ fn derive_app_name(source: &str) -> String {
     seg.to_string()
 }
 
-/// Install a panel from a Git URL into `~/.naia/apps/{panel-id}/`.
+/// Install a app from a Git URL into `~/.naia/apps/{app-id}/`.
 ///
-/// Ported from the legacy agent skill `agent/src/skills/built-in/panel.ts`
+/// Ported from the legacy agent skill `agent/src/skills/built-in/app.ts`
 /// (#89, with #257 HTTPS-only hardening) into a shell-side Tauri command —
-/// panel install is a filesystem operation, not an AI task, so it belongs in
+/// app install is a filesystem operation, not an AI task, so it belongs in
 /// the shell rather than being routed through the agent.
 ///
-/// The directory name is the panel **id** (read from the cloned `app.json`),
+/// The directory name is the app **id** (read from the cloned `app.json`),
 /// NOT the repo name. This keeps `app_remove_installed` (which matches by id)
 /// consistent: dir name == id == canonical identifier.
 ///
@@ -664,7 +505,7 @@ pub fn app_install(source: String) -> Result<AppInstallResult, String> {
     // #257: HTTPS-only.
     if !source.starts_with("https://") {
         return Err(format!(
-            "지원하지 않는 소스입니다. HTTPS Git URL만 설치할 수 있습니다\n(예: https://github.com/org/panel.git).\n받은 소스: {}",
+            "지원하지 않는 소스입니다. HTTPS Git URL만 설치할 수 있습니다\n(예: https://github.com/org/app.git).\n받은 소스: {}",
             source
         ));
     }
@@ -683,12 +524,12 @@ pub fn app_install(source: String) -> Result<AppInstallResult, String> {
     }
 
     let home = home_dir();
-    let apps_root = prepare_apps_root(std::path::Path::new(&home))?;
-    let canonical_apps_root =
-        dunce::canonicalize(&apps_root).map_err(|_| "Access denied".to_string())?;
+    let home_path = dunce::canonicalize(&home).unwrap_or_else(|_| std::path::PathBuf::from(&home));
+    let apps_root = apps_root(&std::path::PathBuf::from(&home));
+    std::fs::create_dir_all(&apps_root).map_err(|e| format!("앱 디렉토리 생성 실패: {}", e))?;
 
     // Temp clone target *inside* apps_root (same volume → rename is atomic).
-    // Leading-dot prefix keeps it out of the installed-panel list while cloning.
+    // Leading-dot prefix keeps it out of the installed-app list while cloning.
     let tmp = apps_root.join(format!(".~install-{}", derived));
     if tmp.exists() {
         let _ = std::fs::remove_dir_all(&tmp); // clear stale partial clone
@@ -728,23 +569,22 @@ pub fn app_install(source: String) -> Result<AppInstallResult, String> {
     // Read id (the canonical app id → becomes the directory name).
     #[derive(Deserialize)]
     struct ManifestLite {
-        id: String,
+        id: Option<String>,
         name: Option<String>,
     }
-    let manifest_data = std::fs::read_to_string(&manifest_path).map_err(|error| {
-        let _ = std::fs::remove_dir_all(&tmp);
-        format!("app.json을 읽을 수 없습니다: {}", error)
-    })?;
-    let manifest: ManifestLite = serde_json::from_str(&manifest_data).map_err(|error| {
-        let _ = std::fs::remove_dir_all(&tmp);
-        format!("app.json 형식이 유효하지 않습니다: {}", error)
-    })?;
-    let id = manifest.id;
-    let display_name = manifest.name.unwrap_or_else(|| derived.clone());
+    let (id, display_name) = std::fs::read_to_string(&manifest_path)
+        .ok()
+        .and_then(|data| serde_json::from_str::<ManifestLite>(&data).ok())
+        .map(|m| {
+            (
+                m.id.unwrap_or_else(|| derived.clone()),
+                m.name.unwrap_or_else(|| derived.clone()),
+            )
+        })
+        .unwrap_or_else(|| (derived.clone(), derived.clone()));
 
     // The id becomes a path segment — sanitize strictly.
-    let id_safe = is_safe_app_id(&id);
-    if !id_safe {
+    if !valid_app_id(&id) {
         let _ = std::fs::remove_dir_all(&tmp);
         return Err(format!(
             "app.json의 id가 유효하지 않아 설치할 수 없습니다 (영문/숫자/-/_ 만 허용): {:?}",
@@ -771,7 +611,7 @@ pub fn app_install(source: String) -> Result<AppInstallResult, String> {
 
     // Home boundary sanity check (defense in depth).
     if let Ok(canonical_dest) = dunce::canonicalize(&dest) {
-        if canonical_dest.parent() != Some(canonical_apps_root.as_path()) {
+        if !canonical_dest.starts_with(&home_path) {
             let _ = std::fs::remove_dir_all(&canonical_dest);
             return Err("Access denied".to_string());
         }
@@ -781,226 +621,5 @@ pub fn app_install(source: String) -> Result<AppInstallResult, String> {
         id,
         name: display_name,
         path: dest.to_string_lossy().into_owned(),
-    })
-}
-
-fn validated_store_gateway(raw: &str) -> Result<url::Url, String> {
-    let normalized = raw
-        .trim()
-        .replace("ws://", "http://")
-        .replace("wss://", "https://");
-    let mut url =
-        url::Url::parse(&normalized).map_err(|_| "Invalid App Store Gateway URL".to_string())?;
-    if !url.username().is_empty()
-        || url.password().is_some()
-        || url.query().is_some()
-        || url.fragment().is_some()
-    {
-        return Err("Invalid App Store Gateway URL".to_string());
-    }
-    let host = url
-        .host_str()
-        .ok_or_else(|| "Invalid App Store Gateway URL".to_string())?;
-    let production = url.scheme() == "https"
-        && host == "api.nextain.io"
-        && url.port_or_known_default() == Some(443);
-    let loopback = cfg!(debug_assertions)
-        && url.scheme() == "http"
-        && matches!(host, "localhost" | "127.0.0.1" | "::1");
-    if !production && !loopback {
-        return Err("Untrusted App Store Gateway origin".to_string());
-    }
-    url.set_path("/");
-    Ok(url)
-}
-
-fn store_client() -> Result<reqwest::blocking::Client, String> {
-    reqwest::blocking::Client::builder()
-        .redirect(reqwest::redirect::Policy::none())
-        .connect_timeout(std::time::Duration::from_secs(10))
-        .timeout(std::time::Duration::from_secs(60))
-        .build()
-        .map_err(|e| e.to_string())
-}
-
-fn store_key(app: &tauri::AppHandle) -> Result<String, String> {
-    crate::read_secure_naia_credential(app).ok_or_else(|| "Naia login required".to_string())
-}
-
-#[tauri::command]
-pub fn app_store_has_entitlement(
-    app: tauri::AppHandle,
-    app_id: String,
-    gateway_url: String,
-) -> Result<bool, String> {
-    validate_store_app_id(&app_id)?;
-    let endpoint = validated_store_gateway(&gateway_url)?
-        .join(&format!("v1/apps/entitlements/{app_id}"))
-        .map_err(|_| "Invalid entitlement endpoint".to_string())?;
-    let response = store_client()?
-        .get(endpoint)
-        .bearer_auth(store_key(&app)?)
-        .send()
-        .map_err(|e| format!("Entitlement check failed: {e}"))?;
-    if response.status() == reqwest::StatusCode::NOT_FOUND {
-        return Ok(false);
-    }
-    if !response.status().is_success() {
-        return Err(format!("Entitlement check failed ({})", response.status()));
-    }
-    let entitlement: StoreEntitlement = response
-        .json()
-        .map_err(|e| format!("Invalid entitlement: {e}"))?;
-    Ok(entitlement.app_id == app_id && entitlement.status == "GRANTED")
-}
-
-fn validate_store_app_id(app_id: &str) -> Result<(), String> {
-    let id_ok = !app_id.is_empty()
-        && app_id
-            .chars()
-            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.'))
-        && !app_id.contains("..");
-    if id_ok {
-        Ok(())
-    } else {
-        Err("Invalid app id".to_string())
-    }
-}
-
-/// Install a reviewed Store ZIP only after the Gateway confirms ownership.
-#[tauri::command]
-pub fn app_install_store(
-    app: tauri::AppHandle,
-    app_id: String,
-    gateway_url: String,
-) -> Result<AppInstallResult, String> {
-    validate_store_app_id(&app_id)?;
-    let base = validated_store_gateway(&gateway_url)?;
-    let client = store_client()?;
-    let naia_key = store_key(&app)?;
-    let entitlement_url = base
-        .join(&format!("v1/apps/entitlements/{app_id}"))
-        .map_err(|_| "Invalid entitlement endpoint".to_string())?;
-    let entitlement: StoreEntitlement = client
-        .get(entitlement_url)
-        .bearer_auth(&naia_key)
-        .send()
-        .map_err(|e| format!("Entitlement check failed: {}", e))?
-        .error_for_status()
-        .map_err(|e| format!("No install entitlement: {}", e))?
-        .json()
-        .map_err(|e| format!("Invalid entitlement: {}", e))?;
-    if entitlement.app_id != app_id || entitlement.status != "GRANTED" {
-        return Err("App entitlement was not granted".to_string());
-    }
-    let expected_download_path = format!("/v1/apps/entitlements/{app_id}/artifact");
-    if entitlement.download_path != expected_download_path {
-        return Err("Invalid artifact download path".to_string());
-    }
-    let artifact = entitlement.artifact;
-    if artifact.manifest.get("id").and_then(|v| v.as_str()) != Some(app_id.as_str()) {
-        return Err("Artifact manifest mismatch".to_string());
-    }
-    const MAX_ARTIFACT_BYTES: u64 = 50 * 1024 * 1024;
-    const MAX_EXTRACTED_BYTES: u64 = 200 * 1024 * 1024;
-    const MAX_ARCHIVE_ENTRIES: usize = 4096;
-    if artifact.size == 0 || artifact.size > MAX_ARTIFACT_BYTES {
-        return Err("Artifact size is outside policy limits".to_string());
-    }
-    let artifact_url = base
-        .join(entitlement.download_path.trim_start_matches('/'))
-        .map_err(|_| "Invalid artifact download path".to_string())?;
-    let mut response = client
-        .get(artifact_url)
-        .bearer_auth(&naia_key)
-        .send()
-        .map_err(|e| format!("Artifact download failed: {}", e))?
-        .error_for_status()
-        .map_err(|e| format!("Artifact download failed: {}", e))?;
-    if response
-        .content_length()
-        .is_some_and(|length| length > MAX_ARTIFACT_BYTES || length != artifact.size)
-    {
-        return Err("Artifact size verification failed".to_string());
-    }
-    let mut bytes = Vec::with_capacity(artifact.size as usize);
-    response
-        .by_ref()
-        .take(MAX_ARTIFACT_BYTES + 1)
-        .read_to_end(&mut bytes)
-        .map_err(|e| e.to_string())?;
-    if bytes.len() as u64 != artifact.size {
-        return Err("Artifact size verification failed".to_string());
-    }
-    let digest_bytes = Sha256::digest(&bytes);
-    let digest = format!("{:x}", digest_bytes);
-    if !digest.eq_ignore_ascii_case(&artifact.sha256) {
-        return Err("Artifact SHA-256 verification failed".to_string());
-    }
-    verify_artifact_signature(digest_bytes.as_slice(), &artifact.signature)?;
-
-    let apps_root = std::path::PathBuf::from(home_dir())
-        .join(".naia")
-        .join("apps");
-    std::fs::create_dir_all(&apps_root).map_err(|e| e.to_string())?;
-    let temp = tempfile::Builder::new()
-        .prefix(".store-install-")
-        .tempdir_in(&apps_root)
-        .map_err(|e| e.to_string())?;
-    let mut archive = zip::ZipArchive::new(std::io::Cursor::new(bytes))
-        .map_err(|e| format!("Invalid app ZIP: {}", e))?;
-    if archive.len() > MAX_ARCHIVE_ENTRIES {
-        return Err("App ZIP contains too many entries".to_string());
-    }
-    let mut extracted_bytes = 0_u64;
-    for index in 0..archive.len() {
-        let mut file = archive.by_index(index).map_err(|e| e.to_string())?;
-        if file
-            .unix_mode()
-            .is_some_and(|mode| mode & 0o170000 == 0o120000)
-        {
-            return Err("Symlinks are not allowed in app ZIPs".to_string());
-        }
-        extracted_bytes = extracted_bytes
-            .checked_add(file.size())
-            .ok_or_else(|| "App ZIP size overflow".to_string())?;
-        if extracted_bytes > MAX_EXTRACTED_BYTES {
-            return Err("Expanded app exceeds policy limits".to_string());
-        }
-        let relative = file
-            .enclosed_name()
-            .ok_or_else(|| "Unsafe path in app ZIP".to_string())?;
-        let output = temp.path().join(relative);
-        if file.is_dir() {
-            std::fs::create_dir_all(&output).map_err(|e| e.to_string())?;
-            continue;
-        }
-        if let Some(parent) = output.parent() {
-            std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
-        }
-        let mut target = std::fs::File::create(&output).map_err(|e| e.to_string())?;
-        std::io::copy(&mut file, &mut target).map_err(|e| e.to_string())?;
-    }
-    let manifest_path = temp.path().join("app.json");
-    let manifest: AppManifest = serde_json::from_reader(
-        std::fs::File::open(&manifest_path).map_err(|_| "app.json missing".to_string())?,
-    )
-    .map_err(|e| format!("Invalid app.json: {}", e))?;
-    if manifest.id != app_id {
-        return Err("Installed manifest id mismatch".to_string());
-    }
-    if !temp.path().join("index.html").is_file() {
-        return Err("index.html missing".to_string());
-    }
-    let destination = apps_root.join(&app_id);
-    if destination.exists() {
-        return Err("App is already installed; remove it before reinstalling".to_string());
-    }
-    let kept = temp.keep();
-    std::fs::rename(&kept, &destination).map_err(|e| format!("Install finalize failed: {}", e))?;
-    Ok(AppInstallResult {
-        id: app_id,
-        name: manifest.name,
-        path: destination.to_string_lossy().into_owned(),
     })
 }

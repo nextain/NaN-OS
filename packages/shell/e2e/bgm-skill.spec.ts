@@ -12,14 +12,14 @@ import {
  *    위젯(BgmPlayer)·검색 사이드카(:18791)·agent UC8 어댑터는 전부 존재했으나
  *    나이아가 BGM 존재 자체를 몰랐다. 단위테스트(executeBgmSkill)는 초록불이어도
  *    **배선이 빠지면** 회귀를 못 잡는다 → 그 두 배선을 실 UI 로 고정한다:
- *      (A) 부팅 시 App 이 skill_youtube_bgm 을 agent 에 등록(panel_skills 발신)
- *      (B) 채팅 턴 중 agent 가 panel_tool_call(skill_youtube_bgm) 을 내면
+ *      (A) 부팅 시 App 이 skill_youtube_bgm 을 agent 에 등록(app_skills 발신)
+ *      (B) 채팅 턴 중 agent 가 app_tool_call(skill_youtube_bgm) 을 내면
  *          ChatArea 가 dispatch → 위젯이 실제로 재생 상태로 전환(.bgm-icon--playing)
  *
  * 환경: 실제 vite dev(localhost:1420). Tauri IPC 는 addInitScript 로 mock(React 마운트 전).
  *  - 데모와 동일하게 새 core(__NAIA_NEW_CORE__=true).
- *  - send_to_agent_command payload 를 __E2E_OUTBOUND__ 에 기록(부팅 panel_skills 캡처).
- *  - chat_request 수신 시 agent 대역으로 panel_tool_call(skill_youtube_bgm, play+videoId — 사이드카 불요)
+ *  - send_to_agent_command payload 를 __E2E_OUTBOUND__ 에 기록(부팅 app_skills 캡처).
+ *  - chat_request 수신 시 agent 대역으로 app_tool_call(skill_youtube_bgm, play+videoId — 사이드카 불요)
  *    + finish 를 agent_response 로 emit. dispatch → executeBgmSkill → bgm_youtube_play 이벤트 → 위젯 반응.
  */
 
@@ -77,7 +77,7 @@ const MOCK_SCRIPT = `
       var payload = JSON.parse(args.message);
       window.__E2E_OUTBOUND__.push(payload);
       // 채팅 턴 중 agent 가 BGM 도구를 부르는 상황 재현: chat_request 의 requestId 로
-      // panel_tool_call(skill_youtube_bgm) → finish. requestId 일치라야 handleChunk 가 처리(실 계약).
+      // app_tool_call(skill_youtube_bgm) → finish. requestId 일치라야 handleChunk 가 처리(실 계약).
       if (payload && payload.type === "chat_request") {
         var rid = payload.requestId;
         var requestedTracks = Array.isArray(window.__E2E_SOAK_TRACKS__)
@@ -87,7 +87,7 @@ const MOCK_SCRIPT = `
               { action: "play", videoId: "e2evid001", title: "E2E Same Track Replay" }
             ];
         var chunks = requestedTracks.map(function (track, index) {
-          return { type: "panel_tool_call", requestId: rid, toolCallId: "tc-bgm-" + (index + 1), toolName: "skill_youtube_bgm", args: track };
+          return { type: "app_tool_call", requestId: rid, toolCallId: "tc-bgm-" + (index + 1), toolName: "skill_youtube_bgm", args: track };
         });
         chunks.push(
           { type: "text", requestId: rid, text: "재생을 요청했어요. 실제 재생이 확인되면 곡을 소개할게요." },
@@ -228,13 +228,13 @@ test.describe("UC8 BGM 스킬 배선 (FR-BGM.1)", () => {
 			}),
 		});
 		await page.goto("/");
-		await expect(page.locator(".chat-panel")).toBeVisible({ timeout: 10_000 });
+		await expect(page.locator(".chat-app")).toBeVisible({ timeout: 10_000 });
 	});
 
-	test("(A) 부팅 시 skill_youtube_bgm 이 agent 에 등록된다(panel_skills 발신)", async ({
+	test("(A) 부팅 시 skill_youtube_bgm 이 agent 에 등록된다(app_skills 발신)", async ({
 		page,
 	}) => {
-		// App 부팅 effect 의 sendPanelSkills 가 outbound 에 쌓일 때까지 대기.
+		// App 부팅 effect 의 sendAppSkills 가 outbound 에 쌓일 때까지 대기.
 		await expect
 			.poll(
 				async () =>
@@ -246,7 +246,7 @@ test.describe("UC8 BGM 스킬 배선 (FR-BGM.1)", () => {
 							(m) =>
 								m &&
 								typeof m === "object" &&
-								(m as { type?: string }).type === "panel_skills" &&
+								(m as { type?: string }).type === "app_skills" &&
 								(m as { appId?: string }).appId === "bgm-widget" &&
 								Array.isArray((m as { tools?: unknown[] }).tools) &&
 								(m as { tools: { name?: string }[] }).tools.some(
@@ -259,14 +259,14 @@ test.describe("UC8 BGM 스킬 배선 (FR-BGM.1)", () => {
 			.toBe(true);
 	});
 
-	test("(B) 채팅 턴 중 panel_tool_call(skill_youtube_bgm) → 위젯이 실제 재생 상태로 전환", async ({
+	test("(B) 채팅 턴 중 app_tool_call(skill_youtube_bgm) → 위젯이 실제 재생 상태로 전환", async ({
 		page,
 	}) => {
 		// BGM 위젯이 마운트돼 있고 아직 재생 아님(초기).
 		await expect(page.locator(".bgm-player")).toBeVisible({ timeout: 5_000 });
 		await expect(page.locator(".bgm-icon--playing")).toHaveCount(0);
 
-		// 채팅 전송 → mock 이 chat_request 의 requestId 로 panel_tool_call 발신 → dispatch → 재생.
+		// 채팅 전송 → mock 이 chat_request 의 requestId 로 app_tool_call 발신 → dispatch → 재생.
 		const input = page.locator(".chat-input");
 		await expect(input).toBeEnabled({ timeout: 5_000 });
 		await input.fill("잔잔한 음악 틀어줘");
@@ -286,7 +286,7 @@ test.describe("UC8 BGM 스킬 배선 (FR-BGM.1)", () => {
 				.map((message, index) => ({ message, index }))
 				.filter(
 					({ message }) =>
-						message.type === "panel_skills" && message.appId === "bgm-widget",
+						message.type === "app_skills" && message.appId === "bgm-widget",
 				);
 			return {
 				chatIndex,
@@ -310,7 +310,7 @@ test.describe("UC8 BGM 스킬 배선 (FR-BGM.1)", () => {
 								}
 							).__E2E_OUTBOUND__ ?? [];
 						return (
-							out.find((message) => message.type === "panel_tool_result")
+							out.find((message) => message.type === "app_tool_result")
 								?.result ?? null
 						);
 					}),
@@ -325,7 +325,7 @@ test.describe("UC8 BGM 스킬 배선 (FR-BGM.1)", () => {
 					}
 				).__E2E_OUTBOUND__ ?? [];
 			return String(
-				out.find((message) => message.type === "panel_tool_result")?.result ??
+				out.find((message) => message.type === "app_tool_result")?.result ??
 					"",
 			);
 		});
@@ -343,7 +343,7 @@ test.describe("UC8 BGM 스킬 배선 (FR-BGM.1)", () => {
 					}
 				).__E2E_OUTBOUND__ ?? [];
 			return out
-				.filter((message) => message.type === "panel_tool_result")
+				.filter((message) => message.type === "app_tool_result")
 				.map((message) => JSON.parse(String(message.result)));
 		});
 		expect(toolResults).toHaveLength(2);
@@ -444,14 +444,14 @@ test.describe("UC8 BGM 스킬 배선 (FR-BGM.1)", () => {
 				).__E2E_OUTBOUND__ ?? [],
 		);
 		expect(outbound.map((message) => message.type)).toContain(
-			"panel_tool_result",
+			"app_tool_result",
 		);
-		const panelResults = outbound.filter(
-			(message) => message.type === "panel_tool_result",
+		const appResults = outbound.filter(
+			(message) => message.type === "app_tool_result",
 		);
-		expect(panelResults).toHaveLength(2);
+		expect(appResults).toHaveLength(2);
 		expect(
-			panelResults.map((message) => JSON.parse(String(message.result))),
+			appResults.map((message) => JSON.parse(String(message.result))),
 		).toMatchObject([
 			{ selected: { videoId: "error-unavailable" } },
 			{ queued: { selected: { videoId: "hold-fallback" } } },
@@ -526,7 +526,7 @@ test.describe("UC8 BGM 스킬 배선 (FR-BGM.1)", () => {
 								}
 							).__E2E_OUTBOUND__ ?? [];
 						const result = messages.find(
-							(message) => message.type === "panel_tool_result",
+							(message) => message.type === "app_tool_result",
 						);
 						return result
 							? { success: result.success, result: result.result }
@@ -542,11 +542,11 @@ test.describe("UC8 BGM 스킬 배선 (FR-BGM.1)", () => {
 						__E2E_OUTBOUND__?: Array<Record<string, unknown>>;
 					}
 				).__E2E_OUTBOUND__ ?? [];
-			return messages.find((message) => message.type === "panel_tool_result");
+			return messages.find((message) => message.type === "app_tool_result");
 		});
 		expect(
 			radioToolResult?.success,
-			String(radioToolResult?.result ?? "missing panel tool result"),
+			String(radioToolResult?.result ?? "missing app tool result"),
 		).toBe(true);
 
 		const player = page.locator(".bgm-player");
@@ -773,7 +773,7 @@ test.describe("UC8 BGM 스킬 배선 (FR-BGM.1)", () => {
 						__E2E_OUTBOUND__?: Array<Record<string, unknown>>;
 					}
 				).__E2E_OUTBOUND__?.filter(
-					(message) => message.type === "panel_tool_result",
+					(message) => message.type === "app_tool_result",
 				).length ?? 0,
 		);
 		await page.evaluate(() => {
@@ -807,7 +807,7 @@ test.describe("UC8 BGM 스킬 배선 (FR-BGM.1)", () => {
 								__E2E_OUTBOUND__?: Array<Record<string, unknown>>;
 							}
 						).__E2E_OUTBOUND__?.filter(
-							(message) => message.type === "panel_tool_result",
+							(message) => message.type === "app_tool_result",
 						) ?? [];
 					return results
 						.slice(before)

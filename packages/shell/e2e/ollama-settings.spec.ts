@@ -55,7 +55,7 @@ test("remote Ollama exposes API key and preserves a custom model", async ({
 	);
 
 	await page.goto("/");
-	await expect(page.locator(".chat-panel")).toBeVisible({ timeout: 15_000 });
+	await expect(page.locator(".chat-app")).toBeVisible({ timeout: 15_000 });
 	await page.getByRole("button", { name: /^(Settings|설정)$/ }).click();
 	await page.locator('[data-settings-tab="brain"]').click();
 

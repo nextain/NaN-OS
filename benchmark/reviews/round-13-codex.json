@@ -1,0 +1,30 @@
+{
+  "verdict": "NOT_CLEAN",
+  "frame_assessment": {
+    "scope_is_sufficient": false,
+    "missing_concerns": [
+      "always 상태에서 예산과 watchOwner가 실제로 어떻게 변하고, 다시 auto로 전환될 때 어떤 상태가 복원되는지에 대한 전이 계약이 없다.",
+      "원 요청의 핵심인 LLM 입력 비용 감소를 직렬화 크기나 토큰 수로 비교한 검증이 없다."
+    ]
+  },
+  "findings": [
+    {
+      "id": "R13-ENV-ALWAYS-CONSUMES-LATENT-WATCH",
+      "file_location": "packages/shell/src/components/ChatArea.tsx:1783",
+      "impact": "auto에서 watch가 켜진 뒤 always로 전환해도 매 텍스트 턴마다 noteTurn()이 호출된다. EnvironmentSession.noteTurn()은 예산 소진 시 watchOwner까지 지우므로, always를 사용하는 동안 잠복한 watch 상태가 소진되고 다시 auto로 돌아오면 명시적인 unwatch 없이 목록이 갑자기 숨겨진다.",
+      "why_it_matters": "FR-ENV-ATTENTION.7은 always가 예산과 무관하다고 선언하지만 현재 구현에서 예산은 출력만 못 바꿀 뿐 내부 소유권과 이후 정책 전환 결과를 바꾼다. 기존 테스트는 always 세그먼트가 계속 전체 목록인지까지만 재며 always→auto 전환 뒤 상태를 재지 않아 이 차이를 가린다.",
+      "severity": "medium"
+    },
+    {
+      "id": "R13-ENV-COST-CLAIM-UNMEASURED",
+      "file_location": "docs/user-scenarios.md:1343",
+      "impact": "테스트들은 표면 이름과 손잡이가 빠졌는지 확인하지만, 기본 auto 요청의 environmentSurfaces 세그먼트가 실제 뇌 입력에서 얼마나 많은 바이트나 토큰을 줄였는지는 비교하지 않는다. 개수, kind, surfaces 빈 배열, omitted, listWithheld는 여전히 매 요청에 붙는다.",
+      "why_it_matters": "사용자의 최초 문제 제기는 비용 증가였다. 현재 증거는 노출 감소는 입증하지만 비용 감소의 크기나 회귀 방지는 입증하지 않는다. ChatArea의 10ms 측정은 로컬 Herdr 관측 지연일 뿐 LLM 토큰 비용과 다른 지표다. 따라서 '비용 문제가 해결됐다'는 결론은 테스트가 실제로 잰 범위를 넘어선다.",
+      "severity": "medium"
+    }
+  ],
+  "what_would_make_it_clean": [
+    "always에서 noteTurn이 잠복 watch와 watchOwner를 소진해야 하는지 정책을 명시하고, auto→always→auto 및 voice-owned watch를 포함한 전이 테스트를 추가한다. 예산과 무관해야 한다면 always 동안 noteTurn으로 상태를 변경하지 않게 한다.",
+    "동일한 표면 집합으로 기존 전체목록 요청과 새 auto 요청의 최종 직렬화 크기 또는 실제 수신 측 프롬프트 토큰 수를 비교하는 회귀 테스트를 추가하고, 허용 가능한 감소 기준을 요구사항에 명시한다."
+  ]
+}

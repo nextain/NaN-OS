@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 import { SEED_ADK_PATH } from "./helpers/tauri-base-mock";
 
 /**
- * S05 (sessions 관리 — 대화 transcript 영속/로드) UC E2E. 실 셸 UI(ChatPanel 탭 → HistoryTab →
+ * S05 (sessions 관리 — 대화 transcript 영속/로드) UC E2E. 실 셸 UI(ChatApp 탭 → HistoryTab →
  * conversation-store → Rust IPC)를 자동 구동해 "History 탭 = 로컬 transcript 목록/복원/삭제"가 끝까지 manifest 되는지 판정.
  *
  * 직교(UC ⊥ gRPC naia-agent): Tauri IPC(list/read/delete_conversation)만 mock — 실 agent/gRPC/Rust 불요(헤르메틱).
@@ -63,7 +63,7 @@ const MOCK_SCRIPT = `
     if (cmd === "plugin:store|entries") return [];
     if (cmd === "plugin:store|set" || cmd === "plugin:store|save" || cmd === "frontend_log") return null;
     if (cmd === "workspace_detect_adk_root") return null;
-    if (cmd === "panel_list_installed") return [];
+    if (cmd === "app_list_installed") return [];
     return null;
   };
 })();
@@ -81,7 +81,7 @@ async function boot(page: Page) {
 		content: configScript({ provider: "gemini", model: "gemini-2.5-flash", apiKey: "e2e-mock-key", enableTools: false, locale: "ko", onboardingComplete: true }),
 	});
 	await page.goto("/");
-	await expect(page.locator(".chat-panel")).toBeVisible({ timeout: 10_000 });
+	await expect(page.locator(".chat-app")).toBeVisible({ timeout: 10_000 });
 	// App config hydration can remount the Home chat once; begin the user flow
 	// only after that startup boundary has settled.
 	await page.waitForTimeout(500);

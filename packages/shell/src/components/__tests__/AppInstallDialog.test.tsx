@@ -1,45 +1,47 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const mocks = vi.hoisted(() => ({
-	invoke: vi.fn(), entitlement: vi.fn(), reload: vi.fn(),
+vi.mock("@tauri-apps/api/event", () => ({
+	listen: vi.fn().mockResolvedValue(() => {}),
 }));
-vi.mock("@tauri-apps/api/core", () => ({ invoke: mocks.invoke }));
-vi.mock("../../lib/app-store-client", async (original) => ({
-	...(await original<typeof import("../../lib/app-store-client")>()),
-	hasStoreEntitlement: mocks.entitlement,
-	getStoreGatewayUrl: vi.fn().mockReturnValue("http://localhost:8000"),
+vi.mock("../../lib/chat-service", () => ({
+	sendAppInstall: vi.fn().mockResolvedValue(undefined),
 }));
-vi.mock("../../lib/app-loader", () => ({ loadInstalledApps: mocks.reload }));
-vi.mock("../../stores/app", () => ({ useAppStore: (selector: (s: unknown) => unknown) => selector({ pushModal: vi.fn(), popModal: vi.fn() }) }));
+vi.mock("../../lib/app-loader", () => ({
+	loadInstalledApps: vi.fn().mockResolvedValue(undefined),
+}));
+vi.mock("../../lib/logger", () => ({
+	Logger: { info: vi.fn(), debug: vi.fn(), warn: vi.fn(), error: vi.fn() },
+}));
+vi.mock("../../stores/app", () => ({
+	useAppStore: (selector: (s: unknown) => unknown) =>
+		selector({ pushModal: vi.fn(), popModal: vi.fn() }),
+}));
 
 import { AppInstallDialog } from "../AppInstallDialog";
 
-describe("AppInstallDialog store install", () => {
-	beforeEach(() => {
-		vi.clearAllMocks();
-		mocks.entitlement.mockReset();
-		mocks.invoke.mockReset().mockResolvedValue({ id: "land.naia.slides", name: "Naia Slides", path: "/tmp/slides" });
-	});
-	afterEach(cleanup);
+const addButton = () =>
+	screen.getByRole("button", { name: "추가" }) as HTMLButtonElement;
 
-	it("shows only the deep-linked app and installs after ownership verification", async () => {
-		mocks.entitlement.mockResolvedValue(true);
-		render(<AppInstallDialog request={{ appId: "land.naia.slides", name: "Naia Slides", storeOrigin: "https://naia.nextain.io", state: "once-1" }} onClose={() => {}} />);
-		expect(screen.getByText("Naia Slides")).toBeTruthy();
-		fireEvent.click(screen.getByRole("button", { name: /설치|install/i }));
-		await waitFor(() => expect(mocks.invoke).toHaveBeenCalledWith("app_install_store", { appId: "land.naia.slides", gatewayUrl: "http://localhost:8000" }));
-		expect(mocks.reload).toHaveBeenCalled();
+describe("AppInstallDialog — zip gating (#358 / #359)", () => {
+	beforeEach(() => vi.clearAllMocks());
+	afterEach(() => cleanup());
+
+	it("Git URL tab: Add is disabled until a URL is entered, then enabled", () => {
+		render(<AppInstallDialog onClose={() => {}} />);
+		expect(addButton().disabled).toBe(true);
+		fireEvent.change(screen.getByPlaceholderText(/github\.com/), {
+			target: { value: "https://github.com/example/my-app.git" },
+		});
+		expect(addButton().disabled).toBe(false);
 	});
 
-	it("does not install when ownership is absent", async () => {
-		mocks.entitlement.mockResolvedValue(false);
-		render(<AppInstallDialog request={{ appId: "land.naia.slides", storeOrigin: "https://naia.nextain.io", state: "once-2" }} onClose={() => {}} />);
-		const install = screen.getByRole("button", { name: /설치|install/i });
-		fireEvent.click(install);
-		await waitFor(() => expect(install).not.toBeDisabled());
-		expect(mocks.entitlement).toHaveBeenCalledTimes(1);
-		expect(mocks.invoke).not.toHaveBeenCalled();
+	it("Zip tab is gated: shows an in-development notice and keeps Add disabled", () => {
+		render(<AppInstallDialog onClose={() => {}} />);
+		fireEvent.click(screen.getByRole("button", { name: /파일 \(Zip/ }));
+		expect(screen.getByText(/보안 강화 작업 중/)).toBeTruthy();
+		// Even after switching to the zip tab, install must stay disabled.
+		expect(addButton().disabled).toBe(true);
 	});
 });

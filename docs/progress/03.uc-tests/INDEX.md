@@ -20,7 +20,7 @@
 | TEST-S-005 | UC-005 | 도구루프(도구 tool_use→tool_result) new-core 경유 | e2e(부분) | `packages/shell/e2e/uc1-new-core-variants.spec.ts` (도구 변종) | Partial |
 | TEST-S-002 | UC-002 | 음성 대화(STT→LLM→TTS/avatar) | e2e | — | Planned |
 | TEST-S-006 | UC-006 | 브라우저 조작 | e2e | `packages/shell/e2e/197-browser-login.spec.ts`(old-path) | Planned |
-| TEST-S-007 | UC-007 | workspace 관측/조작 | e2e | `packages/shell/e2e/91-workspace-panel.spec.ts`(old-path) | Planned |
+| TEST-S-007 | UC-007 | workspace 관측/조작 | e2e | `packages/shell/e2e/91-workspace-app.spec.ts`(old-path) | Planned |
 | TEST-S-008 | UC-008 | youtube BGM 검색/재생 | e2e | — | Planned |
 | TEST-S-011 | UC-011 | 자기상태/진단 보고(Diagnostics RPC) | e2e | — | Planned |
 | TEST-S-016 | UC-017 | 계약: activity 표시/TTS·yield/control/stop·stale 폐기. 실제 Tauri: profile 저장·복원, DJ 실제 BGM·첫 결과·stop, 전시 greeting·stop. 실시간 audible TTS·live barge-in은 운영 인수 | 계약+native | `packages/shell/src/lib/__tests__/speech-profile-commands.test.ts`, `packages/shell/e2e-tauri/specs/71-proactive-speech-profiles.spec.ts` | Partial (native 3/3, audible/live 인수 대기) |

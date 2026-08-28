@@ -52,7 +52,7 @@ context exchange, then (P4) complete L3→L2→L1 orchestration.
 
 | Baseline capability | Disposition | Gate |
 |---|---|---|
-| Workspace route and one ChatPanel lifetime | preserve | route/lifetime regression |
+| Workspace route and one ChatApp lifetime | preserve | route/lifetime regression |
 | FileTree, Quick Open, document tabs/viewer, editor line reveal | preserve and integrate | unit + Playwright + native path-click |
 | PTY transport, resize, cleanup, process-exit handling | preserve and reuse | native PTY regressions |
 | Session/worktree/agent tests and fixtures | preserve until replacement parity is proven | no test deletion as a substitute for passing |

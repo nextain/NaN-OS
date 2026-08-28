@@ -3,7 +3,7 @@
  *
  * 사용자 시나리오:
  *   1. naiaKey 저장된 상태 + API key 있음
- *   2. App 진입 → chat panel 표시
+ *   2. App 진입 → chat app 표시
  *   3. "지금 몇시야?" 같은 시간 질의
  *   4. agent → skill_time tool 호출 → 결과 응답
  *   5. assistant message 에 시간 정보 포함
@@ -38,7 +38,7 @@ describe("99 — F4 자체 스킬 이용 (런칭 핵심)", () => {
 			},
 			{
 				timeout: 30_000,
-				timeoutMsg: "skills panel did not appear",
+				timeoutMsg: "skills app did not appear",
 			},
 		);
 	});

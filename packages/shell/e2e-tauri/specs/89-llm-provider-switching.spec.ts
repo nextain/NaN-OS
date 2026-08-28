@@ -229,7 +229,7 @@ async function refreshAndWaitForChat(): Promise<void> {
 		const body = document.body.className;
 		const activeTab =
 			document.querySelector(".chat-tab.active")?.className ?? "(none)";
-		const chatPanel = document.querySelector(".chat-panel");
+		const chatApp = document.querySelector(".chat-app");
 		const chatInputStyle = chatInput
 			? window.getComputedStyle(chatInput).display
 			: "(not in DOM)";
@@ -237,7 +237,7 @@ async function refreshAndWaitForChat(): Promise<void> {
 			chatInputExists: !!chatInput,
 			chatInputDisplay: chatInputStyle,
 			activeTab,
-			chatPanelExists: !!chatPanel,
+			chatAppExists: !!chatApp,
 			bodyClass: body,
 			tabCount: document.querySelectorAll(".chat-tabs .chat-tab").length,
 		};
@@ -324,7 +324,7 @@ describe("89 — LLM provider switching", () => {
 			locale: "ko",
 			onboardingComplete: true,
 			vrmModel: "/avatars/01-OL_Woman.vrm",
-			panelVisible: true,
+			appVisible: true,
 		});
 
 		await refreshAndWaitForChat();

@@ -3,7 +3,7 @@
 import { ControlPlaneBoot, type ControlPlanePorts } from "../app/control/boot.js";
 import {
   tauriConfig, tauriBootState, tauriAdkPath, tauriWorkspace,
-  tauriStartup, tauriPanels, tauriSetup,
+  tauriStartup, tauriApps, tauriSetup,
 } from "../adapters/tauri/index.js";
 
 /** Tauri 어댑터 주입한 control-plane (라이브). */
@@ -14,7 +14,7 @@ export function wireControlPlaneTauri(): ControlPlaneBoot {
     adkPath: tauriAdkPath,
     workspace: tauriWorkspace,
     startup: tauriStartup,
-    panels: tauriPanels,
+    apps: tauriApps,
     setup: tauriSetup,
   };
   return new ControlPlaneBoot(ports);
@@ -156,3 +156,35 @@ export function wireOnboardingLive(f0: LiveDeps, uc12: UC12LiveDeps): Onboarding
     },
   });
 }
+
+// ── #501 슬라이스 (워크스페이스 컨텍스트 해석) ──
+import { WorkspaceContextService } from "../app/control/workspace-context.js";
+import { ObservePortWorkspaceContextAdapter } from "../adapters/workspace-context-observe.js";
+import type { EnvironmentObservePort } from "../ports/f2.js";
+import type { LoadLimits } from "../domain/workspace-context.js";
+
+/** 기본 로드 상한. 대화 한 번에 워크스페이스 전체를 밀어 넣지 않기 위한 값이다. */
+export const DEFAULT_CONTEXT_LIMITS: LoadLimits = { maxDocuments: 20, maxBytes: 512 * 1024 };
+
+/** 셸에서 쓰는 실배선 — 파일 접근은 이미 있는 F2 관측 포트를 재사용한다. */
+export function wireWorkspaceContext(env: EnvironmentObservePort, limits: LoadLimits = DEFAULT_CONTEXT_LIMITS): WorkspaceContextService {
+  return new WorkspaceContextService(new ObservePortWorkspaceContextAdapter(env), limits);
+}
+
+/** Tauri 실배선 — F2 관측 어댑터를 그대로 재사용한다. 파일 접근 경로를 두 벌 만들지 않는다. */
+export function wireWorkspaceContextLive(deps: F2LiveDeps, limits: LoadLimits = DEFAULT_CONTEXT_LIMITS): WorkspaceContextService {
+  return new WorkspaceContextService(new ObservePortWorkspaceContextAdapter(makeF2EnvObserve(deps)), limits);
+}
+
+export { WorkspaceContextService, StaleRevisionError } from "../app/control/workspace-context.js";
+export { canonicalRoot } from "../domain/workspace.js";
+export type { CanonicalRoot } from "../domain/workspace.js";
+export type { ContextManifest, ContextRevision, ContextScope, Diagnostic, LoadIntent, LoadedDocument, Selection } from "../domain/workspace-context.js";
+export type { ResolveOutcome } from "../app/control/workspace-context.js";
+
+// ── #502 환경 접점 (실배선) ──
+// 셸 UI 가 세션 하나를 들고 관측·조작을 이 경계로만 한다. Herdr 어휘는 여기서 멈춘다.
+export { EnvironmentSession, PERMITTED_INTENTS, WATCH_TURN_BUDGET, type ActOutcome, type EnvironmentAwareness } from "../app/control/environment-session.js";
+export { ALLOWED_METHODS, type DispatchGrants, type DispatchOutcome } from "../app/control/environment-dispatch.js";
+export { surfaceRef, type EnvironmentIntent, type EnvironmentReport, type SurfaceReport } from "../domain/environment-intent.js";
+export type { EnvironmentCommandPort } from "../ports/environment-dispatch.js";

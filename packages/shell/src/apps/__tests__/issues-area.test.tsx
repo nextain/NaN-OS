@@ -92,7 +92,7 @@ function makeFailResult(output: string, exit_code = 1) {
 // ─── Import after mocks ───────────────────────────────────────────────────────
 
 // Dynamic import so mocks are set up first
-async function renderPanel(props = {}) {
+async function renderApp(props = {}) {
 	const { IssuesArea } = await import("../workspace/IssuesArea");
 	const onIssueClick = vi.fn();
 	const onSessionClick = vi.fn();
@@ -131,7 +131,7 @@ describe("IssuesArea", () => {
 					else resolve([]);
 				}),
 		);
-		await renderPanel();
+		await renderApp();
 		expect(screen.getByText("이슈 불러오는 중…")).toBeInTheDocument();
 	});
 
@@ -141,7 +141,7 @@ describe("IssuesArea", () => {
 			return [];
 		});
 
-		await renderPanel();
+		await renderApp();
 
 		await waitFor(() => {
 			expect(screen.getByText("#278")).toBeInTheDocument();
@@ -158,7 +158,7 @@ describe("IssuesArea", () => {
 			return [];
 		});
 
-		await renderPanel();
+		await renderApp();
 
 		await waitFor(() => {
 			expect(screen.getByText("P1-high")).toBeInTheDocument();
@@ -172,7 +172,7 @@ describe("IssuesArea", () => {
 			return [];
 		});
 
-		await renderPanel();
+		await renderApp();
 
 		await waitFor(() => {
 			expect(screen.getByText("GitHub CLI 필요")).toBeInTheDocument();
@@ -186,7 +186,7 @@ describe("IssuesArea", () => {
 			return [];
 		});
 
-		await renderPanel();
+		await renderApp();
 
 		await waitFor(() => {
 			expect(screen.getByText("GitHub CLI 필요")).toBeInTheDocument();
@@ -200,7 +200,7 @@ describe("IssuesArea", () => {
 			return [];
 		});
 
-		await renderPanel();
+		await renderApp();
 
 		await waitFor(() => {
 			expect(screen.getByText("다시 시도")).toBeInTheDocument();
@@ -213,7 +213,7 @@ describe("IssuesArea", () => {
 			return [];
 		});
 
-		await renderPanel();
+		await renderApp();
 
 		await waitFor(() => {
 			expect(screen.getByText("열린 이슈가 없습니다")).toBeInTheDocument();
@@ -226,7 +226,7 @@ describe("IssuesArea", () => {
 			return [];
 		});
 
-		const { onIssueClick } = await renderPanel();
+		const { onIssueClick } = await renderApp();
 
 		await waitFor(() => screen.getByText("#278"));
 		fireEvent.click(screen.getByText("feat(naia): project context awareness"));
@@ -241,7 +241,7 @@ describe("IssuesArea", () => {
 		});
 
 		// First render — populates cache
-		const { unmount } = await renderPanel();
+		const { unmount } = await renderApp();
 		await waitFor(() => screen.getByText("#278"));
 		unmount();
 
@@ -250,7 +250,7 @@ describe("IssuesArea", () => {
 			([cmd]) => cmd === "pty_execute_sync",
 		).length;
 
-		await renderPanel();
+		await renderApp();
 		await waitFor(() => screen.getByText("#278"));
 
 		const callCountAfter = mockInvoke.mock.calls.filter(
@@ -266,7 +266,7 @@ describe("IssuesArea", () => {
 			return [];
 		});
 
-		await renderPanel();
+		await renderApp();
 		await waitFor(() => screen.getByText("#278"));
 
 		const beforeCount = mockInvoke.mock.calls.filter(
@@ -289,7 +289,7 @@ describe("IssuesArea", () => {
 			return [];
 		});
 
-		await renderPanel();
+		await renderApp();
 		await waitFor(() => screen.getByText("열린 이슈가 없습니다"));
 
 		// Sessions section is visible initially (text split as "▼ 에이전트 세션")
@@ -312,7 +312,7 @@ describe("IssuesArea", () => {
 			return [];
 		});
 
-		await renderPanel();
+		await renderApp();
 
 		await waitFor(() => {
 			// 1m ago
@@ -396,7 +396,7 @@ describe("IssuesArea", () => {
 				return Promise.resolve([]);
 			});
 
-			await renderPanel();
+			await renderApp();
 			expect(screen.getByText("이슈 불러오는 중…")).toBeInTheDocument();
 
 			// Advance past the 20s JS timeout — use act to flush React state updates
@@ -412,14 +412,14 @@ describe("IssuesArea", () => {
 
 	// ── #294: vertical divider handle ────────────────────────────────────────
 	describe("#294 — IssuesArea vertical divider (issues ↕ sessions)", () => {
-		it("renders workspace-panel__row-resize-handle element", async () => {
+		it("renders workspace-app__row-resize-handle element", async () => {
 			mockInvoke.mockImplementation(async (cmd: string) => {
 				if (cmd === "pty_execute_sync") return makeSuccessResult([]);
 				return [];
 			});
-			await renderPanel();
+			await renderApp();
 			await waitFor(() => screen.getByText("열린 이슈가 없습니다"));
-			const handle = document.querySelector(".workspace-panel__row-resize-handle");
+			const handle = document.querySelector(".workspace-app__row-resize-handle");
 			expect(handle).toBeTruthy();
 		});
 
@@ -428,9 +428,9 @@ describe("IssuesArea", () => {
 				if (cmd === "pty_execute_sync") return makeSuccessResult([]);
 				return [];
 			});
-			await renderPanel();
+			await renderApp();
 			await waitFor(() => screen.getByText("열린 이슈가 없습니다"));
-			const handle = document.querySelector(".workspace-panel__row-resize-handle") as Element;
+			const handle = document.querySelector(".workspace-app__row-resize-handle") as Element;
 			fireEvent.pointerDown(handle, { clientY: 100 });
 			expect(document.body.classList.contains("resizing-row")).toBe(true);
 			// Clean up
@@ -442,15 +442,15 @@ describe("IssuesArea", () => {
 				if (cmd === "pty_execute_sync") return makeSuccessResult([]);
 				return [];
 			});
-			await renderPanel();
+			await renderApp();
 			await waitFor(() => screen.getByText("열린 이슈가 없습니다"));
-			const handle = document.querySelector(".workspace-panel__row-resize-handle") as Element;
+			const handle = document.querySelector(".workspace-app__row-resize-handle") as Element;
 			// Start drag at y=100
 			fireEvent.pointerDown(handle, { clientY: 100 });
 			// Move down 50px → height should increase
 			fireEvent.pointerMove(window, { clientY: 150 });
 			// Initial height 180, delta +50 → 230px
-			const list = document.querySelector(".issues-panel__list") as HTMLElement;
+			const list = document.querySelector(".issues-app__list") as HTMLElement;
 			if (list) {
 				const h = Number.parseInt(list.style.height ?? "0");
 				expect(h).toBeGreaterThan(180);

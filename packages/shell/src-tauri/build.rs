@@ -8,9 +8,11 @@ fn main() {
         env,
         path::{Path, PathBuf},
     };
-    const REQUIRED_AGENT_COMMIT: &str = "bd70c44c39d32f693eab99994374194c21e37f7f";
+    // ⚠️ agent-pairing.json 과 같은 값이어야 한다. 두 곳에 따로 적혀 있으므로
+    //    src/test/agent-pairing-drift.contract.test.ts 가 둘이 갈라지는 것을 막는다.
+    const REQUIRED_AGENT_COMMIT: &str = "510432477dc51eeb7a8cfccbd529aa6a3f84cf1f";
     const REQUIRED_PROTO_SHA256: &str =
-        "b7df5230d6d11c2e2795bd2e9877471d18ec6500d23bd63806bf9f0358566a3c";
+        "4b078d9ebd11335ae5963a842b0dbbb2250bd03a48e880559b82ce7a110e52fd";
     const REQUIRED_PROTO_MARKERS: &[&str] = &[
         "repeated AttachmentRef attachments = 4;",
         "message AttachmentRef",

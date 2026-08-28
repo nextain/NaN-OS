@@ -381,8 +381,8 @@ describe("WorkspaceCenterArea", () => {
 		});
 	});
 
-	it("Panel API: getApi returns WorkspaceAppApi after mount, undefined after unmount", async () => {
-		// Ensure workspace panel is registered in the registry (normally done by index.tsx)
+	it("App API: getApi returns WorkspaceAppApi after mount, undefined after unmount", async () => {
+		// Ensure workspace app is registered in the registry (normally done by index.tsx)
 		await import("../workspace/index");
 		const { WorkspaceCenterArea } = await import(
 			"../workspace/WorkspaceCenterArea"
@@ -398,7 +398,7 @@ describe("WorkspaceCenterArea", () => {
 		expect(typeof api?.openFile).toBe("function");
 		expect(typeof api?.focusSession).toBe("function");
 		expect(typeof api?.getActiveSessions).toBe("function");
-		expect(typeof api?.activatePanel).toBe("function");
+		expect(typeof api?.activateApp).toBe("function");
 
 		// After unmount the API should be cleared
 		unmount();
@@ -1013,7 +1013,7 @@ describe("Editor", () => {
 		const { Editor } = await import("../workspace/Editor");
 
 		render(
-			<Editor filePath="/home/user/dev/naia-os/docs/design/workspace-panel.ko.md" />,
+			<Editor filePath="/home/user/dev/naia-os/docs/design/workspace-app.ko.md" />,
 		);
 
 		// Markdown files start in preview mode → "편집" button is shown to switch back
@@ -1039,62 +1039,62 @@ describe("Editor", () => {
 	});
 });
 
-// ─── Tests: Panel Registry ─────────────────────────────────────────────────
+// ─── Tests: App Registry ─────────────────────────────────────────────────
 
-describe("Workspace panel registry", () => {
+describe("Workspace app registry", () => {
 	beforeEach(async () => {
 		// Import index to trigger registration
 		await import("../workspace/index");
 	});
 
-	it("registers workspace panel as builtIn", async () => {
+	it("registers workspace app as builtIn", async () => {
 		const { appRegistry } = await import("../../lib/app-registry");
-		const panel = appRegistry.get("workspace");
+		const app = appRegistry.get("workspace");
 
-		expect(panel).toBeDefined();
-		expect(panel?.builtIn).toBe(true);
-		expect(panel?.id).toBe("workspace");
+		expect(app).toBeDefined();
+		expect(app?.builtIn).toBe(true);
+		expect(app?.id).toBe("workspace");
 	});
 
-	it("workspace panel has skill_workspace_get_sessions tool", async () => {
+	it("workspace app has skill_workspace_get_sessions tool", async () => {
 		const { appRegistry } = await import("../../lib/app-registry");
-		const panel = appRegistry.get("workspace");
+		const app = appRegistry.get("workspace");
 
-		const tool = panel?.tools?.find(
+		const tool = app?.tools?.find(
 			(t) => t.name === "skill_workspace_get_sessions",
 		);
 		expect(tool).toBeDefined();
 		expect(tool?.tier).toBe(0);
 	});
 
-	it("workspace panel has skill_workspace_open_file tool", async () => {
+	it("workspace app has skill_workspace_open_file tool", async () => {
 		const { appRegistry } = await import("../../lib/app-registry");
-		const panel = appRegistry.get("workspace");
+		const app = appRegistry.get("workspace");
 
-		const tool = panel?.tools?.find(
+		const tool = app?.tools?.find(
 			(t) => t.name === "skill_workspace_open_file",
 		);
 		expect(tool).toBeDefined();
 		expect(tool?.tier).toBe(1);
 	});
 
-	it("workspace panel has skill_workspace_focus_session tool", async () => {
+	it("workspace app has skill_workspace_focus_session tool", async () => {
 		const { appRegistry } = await import("../../lib/app-registry");
-		const panel = appRegistry.get("workspace");
+		const app = appRegistry.get("workspace");
 
-		const tool = panel?.tools?.find(
+		const tool = app?.tools?.find(
 			(t) => t.name === "skill_workspace_focus_session",
 		);
 		expect(tool).toBeDefined();
 		expect(tool?.tier).toBe(1);
 	});
 
-	it("workspace panel has onActivate and onDeactivate hooks", async () => {
+	it("workspace app has onActivate and onDeactivate hooks", async () => {
 		const { appRegistry } = await import("../../lib/app-registry");
-		const panel = appRegistry.get("workspace");
+		const app = appRegistry.get("workspace");
 
-		expect(typeof panel?.onActivate).toBe("function");
-		expect(typeof panel?.onDeactivate).toBe("function");
+		expect(typeof app?.onActivate).toBe("function");
+		expect(typeof app?.onDeactivate).toBe("function");
 	});
 });
 
@@ -1106,7 +1106,7 @@ describe("#294 — WorkspaceCenterArea left sidebar divider (FileTree ↕ SkillL
 		vi.clearAllMocks();
 	});
 
-	it("renders workspace-panel__row-resize-handle in the left sidebar", async () => {
+	it("renders workspace-app__row-resize-handle in the left sidebar", async () => {
 		const { WorkspaceCenterArea } = await import(
 			"../workspace/WorkspaceCenterArea"
 		);
@@ -1115,7 +1115,7 @@ describe("#294 — WorkspaceCenterArea left sidebar divider (FileTree ↕ SkillL
 
 		await waitFor(() => screen.getByText("탐색기"));
 
-		const handle = document.querySelector(".workspace-panel__row-resize-handle");
+		const handle = document.querySelector(".workspace-app__row-resize-handle");
 		expect(handle).toBeTruthy();
 	});
 
@@ -1129,7 +1129,7 @@ describe("#294 — WorkspaceCenterArea left sidebar divider (FileTree ↕ SkillL
 		await waitFor(() => screen.getByText("탐색기"));
 
 		const handle = document.querySelector(
-			".workspace-panel__row-resize-handle",
+			".workspace-app__row-resize-handle",
 		) as Element;
 		expect(handle).toBeTruthy();
 
@@ -1151,7 +1151,7 @@ describe("#294 — WorkspaceCenterArea left sidebar divider (FileTree ↕ SkillL
 		await waitFor(() => screen.getByText("탐색기"));
 
 		const handle = document.querySelector(
-			".workspace-panel__row-resize-handle",
+			".workspace-app__row-resize-handle",
 		) as Element;
 
 		// Start drag at y=300
