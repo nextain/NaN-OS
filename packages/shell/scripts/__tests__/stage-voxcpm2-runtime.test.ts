@@ -245,6 +245,36 @@ describe("stageVoxCpm2Runtime", () => {
 		expect(devManifest.archive.url).toContain("/releases/0.2.2/");
 	});
 
+	it("stages the dev/e2e installer resources into the cargo debug resource_dir (#508)", () => {
+		const devLauncher = readFileSync(
+			resolve(process.cwd(), "scripts/tauri-with-mode.mjs"),
+			"utf8",
+		);
+		expect(devLauncher).toContain("devTargetDebugVoxCpm2Bundle");
+		expect(devLauncher).toContain(
+			'resolve(devTargetDebugVoxCpm2Bundle, "prepare-voxcpm2-model.ps1")',
+		);
+		expect(devLauncher).toContain(
+			'resolve(devTargetDebugVoxCpm2Bundle, "voxcpm2-activation-contract.json")',
+		);
+		expect(devLauncher).toContain(
+			'resolve(devTargetDebugVoxCpm2Bundle, "download-manifest.json")',
+		);
+		const e2eBuilder = readFileSync(
+			resolve(process.cwd(), "scripts/build-e2e-tauri.mjs"),
+			"utf8",
+		);
+		expect(e2eBuilder).toContain(
+			'resolve(e2eVoxCpm2Bundle, "prepare-voxcpm2-model.ps1")',
+		);
+		expect(e2eBuilder).toContain(
+			'resolve(e2eVoxCpm2Bundle, "voxcpm2-activation-contract.json")',
+		);
+		expect(e2eBuilder).toContain(
+			'resolve(e2eVoxCpm2Bundle, "download-manifest.json")',
+		);
+	});
+
 	it("audits every runtime activation prerequisite before release staging", () => {
 		const source = fixture();
 		expect(voxCpm2ArtifactActivationFailures(source.runtimeSource)).toEqual([]);

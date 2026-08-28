@@ -178,6 +178,34 @@ if (mode === "dev") {
 		env.NAIA_VOXCPM2_DOWNLOAD_MANIFEST =
 			env.NAIA_VOXCPM2_DOWNLOAD_MANIFEST ?? devVoxCpm2DownloadManifest;
 	}
+	// #508: Rust resolves the installer resources from resource_dir, which for
+	// a `tauri dev` debug binary is the cargo debug directory — NOT the
+	// src-tauri/voxcpm2-runtime staging above. Without these three files the
+	// installed payload fails its reuse check (voxcpm2_installed_payload_is_
+	// reusable requires the resource-dir installer script), so
+	// voxcpm2_installation_status reports can_start=false and the Shell
+	// silently normalizes a completed install back to browser voice (#507
+	// 실측). Stage them idempotently beside the debug executable.
+	const devTargetDebugVoxCpm2Bundle = resolve(
+		env.CARGO_TARGET_DIR ?? resolve(SHELL, "src-tauri", "target"),
+		"debug",
+		"voxcpm2-runtime",
+	);
+	mkdirSync(devTargetDebugVoxCpm2Bundle, { recursive: true });
+	copyFileSync(
+		resolve(SHELL, "src-tauri/windows/prepare-voxcpm2-model.ps1"),
+		resolve(devTargetDebugVoxCpm2Bundle, "prepare-voxcpm2-model.ps1"),
+	);
+	copyFileSync(
+		resolve(SHELL, "src-tauri/voxcpm2-activation-contract.json"),
+		resolve(devTargetDebugVoxCpm2Bundle, "voxcpm2-activation-contract.json"),
+	);
+	if (existsSync(devVoxCpm2DownloadManifest)) {
+		copyFileSync(
+			devVoxCpm2DownloadManifest,
+			resolve(devTargetDebugVoxCpm2Bundle, "download-manifest.json"),
+		);
+	}
 }
 if (
 	mode === "dev" &&
