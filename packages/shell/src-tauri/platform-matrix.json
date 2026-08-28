@@ -181,7 +181,7 @@
 		"darwin": {
 			"targets": ["app", "dmg"],
 			"bundleArchs": ["x64", "arm64"],
-			"$bundleArchComment": "macOS는 STT stub이라 Vosk 네이티브 제약 없음. CI 완료선은 arm64.",
+			"$bundleArchComment": "macOS는 STT stub이라 Vosk 네이티브 제약 없음. CI는 x64·arm64 개별 번들과 Universal 앱을 검증.",
 			"nodeBinary": "node",
 			"wrappedStaticExecutables": [],
 			"vosk": null,
