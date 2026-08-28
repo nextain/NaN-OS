@@ -161,50 +161,106 @@ describe("환경 호출 전달 — Rust 명령 경계 (#502) [UC-ENV-LIVE-ACT FR
 	//    성공 경로는 브라우저 하네스가 Tauri 를 모의해 덮는다(그쪽은 Rust 를 증명하지 못한다).
 	//    이 한계는 요구사항에 적혀 있다.
 	it("뇌가 없으면 등록 확인이 오지 않는다 — 큐잉을 전달로 읽지 않는다", async () => {
-		const acked = (await browser.execute(() => {
+		const probe = (await browser.execute(() => {
 			const w = window as unknown as {
-				__TAURI_INTERNALS__?: { invoke: (c: string, a: unknown) => Promise<unknown> };
-				__TAURI__?: { core?: { invoke: (c: string, a: unknown) => Promise<unknown> } };
-			};
-			const invoke = w.__TAURI_INTERNALS__?.invoke ?? w.__TAURI__?.core?.invoke;
-			if (!invoke) return Promise.resolve("TAURI_INVOKE_MISSING");
-			const requestId = `native-ack-probe-${Date.now()}`;
-			const message = JSON.stringify({
-				type: "app_skills",
-				appId: "environment",
-				requestId,
-				tools: [{ name: "skill_environment", description: "probe", parameters: { type: "object", properties: {} } }],
-			});
-			return new Promise<string>((resolve) => {
-				let settled = false;
-				const done = (v: string) => {
-					if (!settled) {
-						settled = true;
-						resolve(v);
-					}
+				__TAURI_INTERNALS__?: {
+					invoke: (c: string, a: unknown) => Promise<unknown>;
+					transformCallback?: (fn: (p: unknown) => void, once?: boolean) => number;
 				};
-				setTimeout(() => done("NO_ACK"), 4_000);
-				// Tauri 이벤트 구독 없이도, 명령 자체가 성공(큐잉)하는지는 볼 수 있다.
-				invoke("send_to_agent_command", { message }).then(
-					() => {
-						// 큐잉은 성공한다. 그러나 그것이 "뇌가 등록했다"는 뜻은 아니다.
-						// 확인 응답이 없으면 4초 뒤 NO_ACK 로 떨어진다.
-					},
-					(e: unknown) => done(`QUEUE_FAILED:${String(e)}`),
-				);
+			};
+			const internals = w.__TAURI_INTERNALS__;
+			if (!internals?.invoke || !internals.transformCallback) {
+				return Promise.resolve({ outcome: "TAURI_INVOKE_MISSING", oracleAlive: false });
+			}
+			const invoke = internals.invoke;
+			const realId = `native-ack-probe-${Date.now()}`;
+			const selfTestId = `${realId}-selftest`;
+			let sawReal = false;
+			let sawSelfTest = false;
+
+			// ⚠️ 관측 통로를 먼저 연다. 이것이 없으면 "확인이 오지 않았다"는 주장을 **측정할
+			//    수단이 없어** 무조건 통과한다 — 실제로 그렇게 만들었다(2026-08-28 24차 지적).
+			const handler = internals.transformCallback((raw: unknown) => {
+				const payload = (raw as { payload?: unknown } | undefined)?.payload;
+				const text = typeof payload === "string" ? payload : JSON.stringify(payload ?? "");
+				try {
+					const msg = JSON.parse(text) as { type?: string; requestId?: string };
+					if (msg?.type !== "app_skills_result") return;
+					if (msg.requestId === realId) sawReal = true;
+					if (msg.requestId === selfTestId) sawSelfTest = true;
+				} catch {
+					// 다른 형태의 agent_response 는 이 탐침의 것이 아니다.
+				}
 			});
-		})) as string;
+
+			const diag: string[] = [];
+			// target 은 필수다(실측: "command listen missing required key target").
+			return invoke("plugin:event|listen", {
+				event: "agent_response",
+				target: { kind: "Any" },
+				handler,
+			})
+				.then(
+					(r: unknown) => diag.push(`listen=ok:${String(r)}`),
+					(e: unknown) => diag.push(`listen=err:${String(e)}`),
+				)
+				.then(() =>
+					// 통로가 살아 있는지 스스로 증명한다. 합성 이벤트를 하나 쏴서 보이는지 본다.
+					invoke("plugin:event|emit", {
+						event: "agent_response",
+						payload: JSON.stringify({ type: "app_skills_result", requestId: selfTestId, ok: true }),
+					}).then(
+						(r: unknown) => diag.push(`emit=ok:${String(r)}`),
+						(e: unknown) => diag.push(`emit=err:${String(e)}`),
+					),
+				)
+				.then(() => new Promise((r) => setTimeout(r, 500)))
+				.then(() => {
+					const message = JSON.stringify({
+						type: "app_skills",
+						appId: "environment",
+						requestId: realId,
+						tools: [
+							{
+								name: "skill_environment",
+								description: "probe",
+								parameters: { type: "object", properties: {} },
+							},
+						],
+					});
+					return invoke("send_to_agent_command", { message }).then(
+						() => "QUEUED",
+						(e: unknown) => `QUEUE_FAILED:${String(e)}`,
+					);
+				})
+				.then((queued: string) =>
+					new Promise((r) => setTimeout(r, 4_000)).then(() => ({
+						outcome: sawReal ? "ACKED" : queued === "QUEUED" ? "NO_ACK" : queued,
+						oracleAlive: sawSelfTest,
+						diag: diag.join(" | "),
+					})),
+				)
+				// ⚠️ 거절을 그대로 두면 wdio 가 결과를 파싱하지 못한다(이 파일 머리말 참고).
+				//    어느 단계에서 실패했는지 값으로 돌려준다.
+				.catch((e: unknown) => ({
+					outcome: `PROBE_FAILED:${String(e)}`,
+					oracleAlive: false,
+					diag: diag.join(" | "),
+				}));
+		})) as { outcome: string; oracleAlive: boolean; diag?: string };
+
+		// 관측 통로가 죽어 있으면 아래 단언은 공허하다. 먼저 그것부터 세운다.
+		// 실패 시 어디서 막혔는지 값에 실어 보낸다(이 러너의 expect 는 메시지 인자를 안 받는다).
+		expect(probe.oracleAlive ? "oracle-alive" : `oracle-dead [${probe.diag ?? ""}]`).toBe(
+			"oracle-alive",
+		);
 
 		// 뇌가 없으면 두 가지 중 하나로 끝난다. 둘 다 fail-closed 다:
 		//   QUEUE_FAILED — Tauri 명령 자체가 거절(실측: agent-core restart debounced)
 		//   NO_ACK       — 큐잉은 됐지만 확인이 오지 않음
-		// 절대 일어나면 안 되는 것은 "확인이 왔다"이다. 그것이 오면 뇌가 없는데
-		// 셸이 등록됐다고 믿는 상태가 된다.
-		// ⚠️ 이 러너의 expect 는 두 번째 인자(메시지)를 받지 않는다. 값이 실패 출력에
-		//    드러나도록 정규식으로 단언한다.
-		expect(acked).toMatch(/^(NO_ACK$|QUEUE_FAILED:)/);
-		// 단언이 공허하지 않게: IPC 자체가 없었던 경우를 통과로 세지 않는다.
-		expect(acked).not.toBe("TAURI_INVOKE_MISSING");
+		// ACKED 가 나오면 뇌가 없는데 셸이 등록됐다고 믿는 상태다.
+		expect(probe.outcome).toMatch(/^(NO_ACK$|QUEUE_FAILED:)/);
+		expect(probe.outcome).not.toBe("TAURI_INVOKE_MISSING");
 	});
 
 	it("웹뷰가 유효한 origin 에 떠 있다 — IPC 가 origin 때문에 막히면 나머지 단언은 무의미하다", () => {
