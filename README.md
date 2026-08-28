@@ -148,8 +148,8 @@ xvfb-run pnpm test:e2e:tauri       # 실 Tauri 바이너리 풀스택 (wdio+taur
 
 > Windows 설치 파일의 Authenticode 코드 서명과 macOS 공증은 아직 범위 밖이다. Windows 자동
 > 업데이트 산출물은 Tauri updater 키로 서명하며, 릴리즈에는 `.sig`와 `latest.json`이 반드시 함께
-> 있어야 한다. macOS CI 산출물은 Apple Silicon 전용이며 미공증이므로 Finder의 “열기”로 명시
-> 승인해야 한다. Intel Mac 설치자는 후속 범위다. Windows 절차는
+> 있어야 한다. macOS CI는 Intel·Apple Silicon 아키텍처별 앱과 두 아키텍처를 포함한 Universal 앱을
+> 검증한다. 미공증 macOS 산출물은 Finder의 “열기”로 명시 승인해야 한다. Windows 절차는
 > [docs/progress/windows-release-process.md](docs/progress/windows-release-process.md)를 따른다.
 
 > **사전 요건**: Node 22+ · pnpm · Rust(rustup) · WebView2(Windows)/webkit2gtk(Linux) · C++ 빌드 도구.
