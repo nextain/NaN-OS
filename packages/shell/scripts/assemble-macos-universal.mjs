@@ -17,6 +17,12 @@ import { pathToFileURL } from "node:url";
 
 const REQUIRED_ARCHS = ["x86_64", "arm64"];
 
+// pnpm 설치-상태 메타데이터: 러너별 절대경로·설치 시각이 들어가 두 입력의 바이트가
+// 원리적으로 달라지고, 런타임은 읽지 않는다(pnpm install 전용 상태 파일). 합본 산출물에서
+// 통째로 배제한다 — 동일성 검증의 예외가 아니라 어느 쪽 사본도 신뢰본이 아니기 때문.
+export const PNPM_INSTALL_STATE =
+	/(^|\/)node_modules\/(\.modules\.yaml|\.pnpm-workspace-state\.json|\.pnpm\/lock\.yaml)$/;
+
 function walk(root, current = root, files = []) {
 	for (const entry of readdirSync(current, { withFileTypes: true })) {
 		const path = resolve(current, entry.name);
@@ -112,11 +118,16 @@ export function assembleUniversalApp(
 		if (!existsSync(path) || !lstatSync(path).isDirectory())
 			throw new Error(`[macos-universal] ${label} missing: ${path}`);
 	}
-	const { common, onlyX64 } = classifyFileSets(x64App, arm64App);
+	const { common, onlyX64, onlyArm64 } = classifyFileSets(x64App, arm64App);
 	rmSync(outputApp, { recursive: true, force: true });
 	mkdirSync(dirname(outputApp), { recursive: true });
 	cpSync(arm64App, outputApp, { recursive: true, preserveTimestamps: true });
+	for (const path of [...common, ...onlyArm64]) {
+		if (PNPM_INSTALL_STATE.test(path))
+			rmSync(resolve(outputApp, path), { force: true });
+	}
 	for (const path of onlyX64) {
+		if (PNPM_INSTALL_STATE.test(path)) continue;
 		const source = resolve(x64App, path);
 		const output = resolve(outputApp, path);
 		mkdirSync(dirname(output), { recursive: true });
@@ -126,6 +137,7 @@ export function assembleUniversalApp(
 	}
 	let merged = 0;
 	for (const path of common) {
+		if (PNPM_INSTALL_STATE.test(path)) continue;
 		const x64 = resolve(x64App, path);
 		const arm64 = resolve(arm64App, path);
 		const output = resolve(outputApp, path);

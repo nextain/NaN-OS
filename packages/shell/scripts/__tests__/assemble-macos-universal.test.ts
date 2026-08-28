@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -233,5 +233,54 @@ describe("macOS Universal Binary assembly", () => {
 				exec as never,
 			),
 		).toThrow("scoped Mach-O must be matching thin");
+	});
+
+	it("prunes pnpm install-state metadata instead of failing the neutral-byte contract", () => {
+		const { x64, arm64 } = fixture();
+		writeFileSync(resolve(x64, "Contents/MacOS/naia-shell"), "x86_64");
+		writeFileSync(resolve(arm64, "Contents/MacOS/naia-shell"), "arm64");
+		for (const [app, body] of [
+			[x64, "state-x64"],
+			[arm64, "state-arm64"],
+		] as const) {
+			mkdirSync(resolve(app, "Contents/Resources/agent/node_modules/.pnpm"), {
+				recursive: true,
+			});
+			writeFileSync(
+				resolve(app, "Contents/Resources/agent/node_modules/.modules.yaml"),
+				body,
+			);
+			writeFileSync(
+				resolve(app, "Contents/Resources/agent/node_modules/.pnpm/lock.yaml"),
+				body,
+			);
+		}
+		const output = resolve(x64, "../universal-pnpm.app");
+		const exec = (command: string, args: string[]) => {
+			if (command === "file")
+				return Buffer.from(
+					portablePath(args[1] ?? "").endsWith("Contents/MacOS/naia-shell")
+						? "Mach-O 64-bit executable"
+						: "data",
+				);
+			if (command === "lipo" && args[0] === "-archs")
+				return Buffer.from(readFileSync(args[1], "utf8"));
+			if (command === "lipo" && args[0] === "-create") {
+				writeFileSync(args[2], "x86_64 arm64");
+				return Buffer.alloc(0);
+			}
+			throw new Error(`unexpected ${command}`);
+		};
+		const result = assembleUniversalApp(
+			{ x64App: x64, arm64App: arm64, outputApp: output },
+			exec as never,
+		);
+		expect(result.merged).toBe(1);
+		expect(
+			existsSync(resolve(output, "Contents/Resources/agent/node_modules/.modules.yaml")),
+		).toBe(false);
+		expect(
+			existsSync(resolve(output, "Contents/Resources/agent/node_modules/.pnpm/lock.yaml")),
+		).toBe(false);
 	});
 });
