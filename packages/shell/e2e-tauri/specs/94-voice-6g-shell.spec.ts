@@ -108,7 +108,24 @@ describe("6GB VoxCPM2 voice profile through the real Tauri Shell", () => {
 		const voices = (await fetch("http://127.0.0.1:8910/ref/voices", {
 			headers: { Authorization: authorization },
 		}).then((response) => response.json())) as { voices?: unknown[] };
-		expect(voices.voices).toEqual([]);
+		// 0.2.2 thin runtime ships the complete approved CC0 reference palette
+		// (FR-V017.37) — the facade must expose all eight voices with the
+		// canonical default, not an empty list.
+		const palette = (voices.voices ?? []) as {
+			name?: string;
+			default?: boolean;
+		}[];
+		expect(palette.map((voice) => voice.name)).toEqual([
+			"cc0-ko-female-01",
+			"cc0-ko-female-02",
+			"cc0-ko-female-03",
+			"cc0-ko-male-01",
+			"cc0-ko-male-02",
+			"cc0-ko-male-03",
+			"cc0-ko-male-04",
+			"cc0-ko-male-05",
+		]);
+		expect(palette[0]?.default).toBe(true);
 		await browser.execute(
 			(base64: string, token: string) => {
 				localStorage.setItem("naia.voiceRefAudioB64", base64);
@@ -177,80 +194,33 @@ describe("6GB VoxCPM2 voice profile through the real Tauri Shell", () => {
 					timeoutMsg: "Local voice preset section did not render",
 				},
 			);
-			await browser.execute(() => {
-				const shell = window as typeof window & {
-					__presetPreviewFetches?: Array<{ path: string; status: number }>;
-				};
-				shell.__presetPreviewFetches = [];
-				const original = window.fetch.bind(window);
-				window.fetch = async (...args) => {
-					const response = await original(...args);
-					const request = args[0];
-					const raw =
-						typeof request === "string"
-							? request
-							: request instanceof Request
-								? request.url
-								: String(request);
-					try {
-						shell.__presetPreviewFetches?.push({
-							path: new URL(raw).pathname,
-							status: response.status,
-						});
-					} catch {
-						// Non-URL fetches are irrelevant to the local preset assertion.
-					}
-					return response;
-				};
-				const item = Array.from(
-					document.querySelectorAll(".ref-preset-item"),
-				).find((row) => /default\.wav/i.test(row.textContent ?? ""));
-				(item?.querySelector("button") as HTMLButtonElement | null)?.click();
-			});
+			// The preset picker is the PUBLIC cloud catalog by design — binding it
+			// to the engine's auth-gated /ref/audio made browse/preview dead until
+			// the ~77s model load (a shipped regression, since removed). The
+			// engine-independent contract: rows render from the catalog, and
+			// applying a preset persists its public sampleUrl as the active voice.
 			await browser.waitUntil(
 				() =>
-					browser.execute(() =>
-						(
-							(
-								window as typeof window & {
-									__presetPreviewFetches?: Array<{
-										path: string;
-										status: number;
-									}>;
-								}
-							).__presetPreviewFetches ?? []
-						).some(
-							(event) =>
-								event.path === "/ref/audio/default.wav" && event.status === 200,
-						),
+					browser.execute(
+						() => document.querySelectorAll(".ref-preset-item").length > 0,
 					),
 				{
 					timeout: 30_000,
-					timeoutMsg: "Local preset preview audio was not downloaded",
+					timeoutMsg: "Local voice preset rows did not render",
 				},
 			);
-			await browser.waitUntil(
-				() =>
-					browser.execute(() => {
-						const item = Array.from(
-							document.querySelectorAll(".ref-preset-item"),
-						).find((row) => /default\.wav/i.test(row.textContent ?? ""));
-						const apply = item?.querySelectorAll("button").item(1);
-						if (!(apply instanceof HTMLButtonElement)) return false;
-						apply.click();
-						return true;
-					}),
-				{ timeout: 30_000, timeoutMsg: "default runtime preset did not load" },
-			);
+			await browser.execute(() => {
+				const row = document.querySelector(".ref-preset-item");
+				const apply = row?.querySelectorAll("button").item(1);
+				if (apply instanceof HTMLButtonElement) apply.click();
+			});
 			await browser.waitUntil(
 				() =>
 					browser.execute(() => {
 						const config = JSON.parse(
 							localStorage.getItem("naia-config") ?? "{}",
 						);
-						return String(config.voiceRefUrl ?? "").endsWith(
-							"/ref/audio/default.wav",
-						);
+						return /\.wav($|\?)/i.test(String(config.voiceRefUrl ?? ""));
 					}),
 				{
 					timeout: 30_000,
@@ -276,9 +246,15 @@ describe("6GB VoxCPM2 voice profile through the real Tauri Shell", () => {
 					const config = JSON.parse(
 						localStorage.getItem("naia-config") ?? "{}",
 					);
+					// Applying a preset supersedes the seeded custom clip by design
+					// (it clears the ADK copy and persists the public sampleUrl), so
+					// the surviving reference voice is EITHER the custom B64 or the
+					// applied preset URL — never neither.
+					const refB64 = localStorage.getItem("naia.voiceRefAudioB64");
+					const refUrl = String(config.voiceRefUrl ?? "");
 					return (
 						config.ttsEnabled === true &&
-						localStorage.getItem("naia.voiceRefAudioB64") !== null &&
+						(refB64 !== null || /\.wav($|\?)/i.test(refUrl)) &&
 						sessionStorage.getItem("naia.voxcpm2AccessToken") !== null
 					);
 				}),
@@ -391,9 +367,19 @@ describe("6GB VoxCPM2 voice profile through the real Tauri Shell", () => {
 			(event) => event.path === "/v1/audio/speech" && event.status === 200,
 		);
 		expect(speechRequests).toHaveLength(2);
+		// The test genuinely applies a catalog preset above, which supersedes the
+		// PUT-installed custom clip — so the engine must speak with the LAST
+		// APPLIED voice (the preset's file basename), not the "current" custom
+		// slot. Read the applied voice back from the persisted config so the
+		// assertion follows the user's actual selection.
+		const appliedVoice = await browser.execute(() => {
+			const config = JSON.parse(localStorage.getItem("naia-config") ?? "{}");
+			const url = String(config.voiceRefUrl ?? "");
+			return url ? (url.split("/").pop() ?? "current") : "current";
+		});
 		expect(speechRequests.map((event) => event.voice)).toEqual([
-			"current",
-			"current",
+			appliedVoice,
+			appliedVoice,
 		]);
 		expect(speechRequests.map((event) => event.text)).toEqual([
 			"6GB voice profile is ready.",

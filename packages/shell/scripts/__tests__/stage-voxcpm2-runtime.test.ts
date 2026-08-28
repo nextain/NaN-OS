@@ -234,6 +234,15 @@ describe("stageVoxCpm2Runtime", () => {
 		expect(devLauncher).toContain(
 			"env.NAIA_VOXCPM2_DOWNLOAD_MANIFEST ?? devVoxCpm2DownloadManifest",
 		);
+		expect(devLauncher).toContain("NAIA_VOXCPM2_DOWNLOAD_MANIFEST");
+		const devManifest = JSON.parse(
+			readFileSync(
+				resolve(process.cwd(), "scripts/voxcpm2-download-manifest.json"),
+				"utf8",
+			),
+		);
+		expect(devManifest.profile).toBe("windows_trt_6g");
+		expect(devManifest.archive.url).toContain("/releases/0.2.2/");
 	});
 
 	it("audits every runtime activation prerequisite before release staging", () => {

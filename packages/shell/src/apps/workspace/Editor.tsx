@@ -11,7 +11,7 @@ import { shell } from "@codemirror/legacy-modes/mode/shell";
 import { EditorState, Transaction } from "@codemirror/state";
 import { oneDark } from "@codemirror/theme-one-dark";
 import { EditorView, keymap, lineNumbers } from "@codemirror/view";
-import { convertFileSrc, invoke } from "@tauri-apps/api/core";
+import { invoke } from "@tauri-apps/api/core";
 import AnsiToHtml from "ansi-to-html";
 import DOMPurify from "dompurify";
 import Papa from "papaparse";
@@ -29,6 +29,7 @@ import "react-pdf/dist/Page/AnnotationLayer.css";
 import "react-pdf/dist/Page/TextLayer.css";
 import pdfWorkerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 import { MermaidBlock } from "../../components/MarkdownCodeBlock";
+import { t } from "../../lib/i18n";
 import { Logger } from "../../lib/logger";
 import { MarkdownPreview } from "./MarkdownPreview";
 import { AUTOSAVE_DEBOUNCE_MS } from "./constants";
@@ -152,7 +153,9 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
 	const viewFilePathRef = useRef("");
 	/** Content state — used for MD preview and initial doc load */
 	const [content, setContent] = useState("");
-	const [viewMode, setViewMode] = useState<ViewMode>("editor");
+	const [viewMode, setViewMode] = useState<ViewMode>(() =>
+		filePath ? detectViewMode(filePath) : "editor",
+	);
 	const [hwpSidecar, setHwpSidecar] = useState<string | null>(null);
 	const [hwpLoading, setHwpLoading] = useState(false);
 	// ── Zoom (Ctrl+Scroll) — persisted, not applied during print ─────
@@ -197,6 +200,7 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
 	} | null>(null);
 	const [imageBlobUrl, setImageBlobUrl] = useState<string | null>(null);
 	const [pdfBlobUrl, setPdfBlobUrl] = useState<string | null>(null);
+	const [mediaBlobUrl, setMediaBlobUrl] = useState<string | null>(null);
 	const [mediaError, setMediaError] = useState("");
 	const [playbackRate, setPlaybackRate] = useState(1);
 	const mediaRef = useRef<HTMLMediaElement | null>(null);
@@ -222,6 +226,41 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
 			if (prev) URL.revokeObjectURL(prev);
 			return null;
 		});
+		setMediaBlobUrl((prev) => {
+			if (prev) URL.revokeObjectURL(prev);
+			return null;
+		});
+	}, [filePath]);
+
+	// Load media as bytes instead of asking the text command to decode it as UTF-8.
+	// A blob URL also works consistently in both Tauri and browser E2E runs.
+	useEffect(() => {
+		if (!filePath || !isWorkspaceMediaFile(filePath)) return;
+		const thisPath = filePath;
+		let cancelled = false;
+		invoke<number[]>("workspace_read_file_bytes", { path: thisPath })
+			.then((bytes) => {
+				if (cancelled || filePathRef.current !== thisPath) return;
+				const blob = new Blob([new Uint8Array(bytes)], {
+					type: workspaceMediaMime(thisPath),
+				});
+				const url = URL.createObjectURL(blob);
+				setMediaBlobUrl((prev) => {
+					if (prev) URL.revokeObjectURL(prev);
+					return url;
+				});
+			})
+			.catch((error) => {
+				if (cancelled || filePathRef.current !== thisPath) return;
+				setMediaError(`${t("workspace.mediaOpenError")}: ${String(error)}`);
+			});
+		return () => {
+			cancelled = true;
+			setMediaBlobUrl((prev) => {
+				if (prev) URL.revokeObjectURL(prev);
+				return null;
+			});
+		};
 	}, [filePath]);
 
 	// ── Load image as blob URL (asset protocol unreliable on Linux) ─────
@@ -827,10 +866,10 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
 							}}
 							controls
 							preload="metadata"
-							src={convertFileSrc(filePath)}
+							src={mediaBlobUrl ?? undefined}
 							onError={() =>
 								setMediaError(
-									"이 오디오 파일을 재생할 수 없습니다. 파일이 손상되었거나 지원하지 않는 코덱일 수 있습니다.",
+									t("workspace.audioCodecError"),
 								)
 							}
 							aria-label={`${shortName} audio player`}
@@ -844,10 +883,10 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
 							}}
 							controls
 							preload="metadata"
-							src={convertFileSrc(filePath)}
+							src={mediaBlobUrl ?? undefined}
 							onError={() =>
 								setMediaError(
-									"이 동영상 파일을 재생할 수 없습니다. 파일이 손상되었거나 지원하지 않는 코덱일 수 있습니다.",
+									t("workspace.videoCodecError"),
 								)
 							}
 							aria-label={`${shortName} video player`}

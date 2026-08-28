@@ -118,4 +118,17 @@ describe("AiControlBar proactive cost control", () => {
 			screen.getByRole("button", { name: /Stop proactive speech/i }),
 		).toHaveAttribute("data-proactive-state", "active");
 	});
+
+	it("publishes an immediate cancellation event when TTS is turned off", async () => {
+		mockLoadConfigWithSecrets.mockResolvedValue(baseConfig);
+		const states: boolean[] = [];
+		window.addEventListener("naia:tts-enabled-change", (event) => {
+			states.push(
+				(event as CustomEvent<{ enabled: boolean }>).detail.enabled,
+			);
+		});
+		render(<AiControlBar />);
+		fireEvent.click(screen.getByRole("button", { name: "TTS" }));
+		expect(states).toEqual([false]);
+	});
 });

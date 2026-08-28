@@ -110,9 +110,15 @@ export function AiControlBar() {
 				type="button"
 				className={`bgm-ai-toggle${ttsEnabled ? " bgm-ai-toggle--active" : ""}`}
 				onClick={() => {
+					const enabled = !ttsEnabled;
 					toggleTtsEnabled();
 					const cfg = loadConfig();
-					if (cfg) saveConfig({ ...cfg, ttsEnabled: !ttsEnabled });
+					if (cfg) saveConfig({ ...cfg, ttsEnabled: enabled });
+					window.dispatchEvent(
+						new CustomEvent("naia:tts-enabled-change", {
+							detail: { enabled },
+						}),
+					);
 				}}
 				aria-pressed={ttsEnabled}
 				title={ttsEnabled ? t("ai.ttsOn") : t("ai.ttsOff")}

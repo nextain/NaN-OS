@@ -1753,6 +1753,21 @@ const translations = {
 		id: "Berpikir...",
 		vi: "Đang suy nghĩ...",
 	},
+	"chat.codeCopy": {
+		ko: "복사", en: "Copy", ja: "Copy", zh: "Copy", fr: "Copy", de: "Copy", ru: "Copy", es: "Copy", ar: "Copy", hi: "Copy", bn: "Copy", pt: "Copy", id: "Copy", vi: "Copy",
+	},
+	"chat.codeCopied": {
+		ko: "복사됨", en: "Copied", ja: "Copied", zh: "Copied", fr: "Copied", de: "Copied", ru: "Copied", es: "Copied", ar: "Copied", hi: "Copied", bn: "Copied", pt: "Copied", id: "Copied", vi: "Copied",
+	},
+	"workspace.mediaOpenError": {
+		ko: "미디어 파일을 열 수 없습니다", en: "Could not open the media file", ja: "Could not open the media file", zh: "Could not open the media file", fr: "Could not open the media file", de: "Could not open the media file", ru: "Could not open the media file", es: "Could not open the media file", ar: "Could not open the media file", hi: "Could not open the media file", bn: "Could not open the media file", pt: "Could not open the media file", id: "Could not open the media file", vi: "Could not open the media file",
+	},
+	"workspace.audioCodecError": {
+		ko: "이 오디오 파일을 재생할 수 없습니다. 파일이 손상되었거나 지원하지 않는 코덱일 수 있습니다.", en: "This audio file cannot be played. It may be damaged or use an unsupported codec.", ja: "This audio file cannot be played. It may be damaged or use an unsupported codec.", zh: "This audio file cannot be played. It may be damaged or use an unsupported codec.", fr: "This audio file cannot be played. It may be damaged or use an unsupported codec.", de: "This audio file cannot be played. It may be damaged or use an unsupported codec.", ru: "This audio file cannot be played. It may be damaged or use an unsupported codec.", es: "This audio file cannot be played. It may be damaged or use an unsupported codec.", ar: "This audio file cannot be played. It may be damaged or use an unsupported codec.", hi: "This audio file cannot be played. It may be damaged or use an unsupported codec.", bn: "This audio file cannot be played. It may be damaged or use an unsupported codec.", pt: "This audio file cannot be played. It may be damaged or use an unsupported codec.", id: "This audio file cannot be played. It may be damaged or use an unsupported codec.", vi: "This audio file cannot be played. It may be damaged or use an unsupported codec.",
+	},
+	"workspace.videoCodecError": {
+		ko: "이 동영상 파일을 재생할 수 없습니다. 파일이 손상되었거나 지원하지 않는 코덱일 수 있습니다.", en: "This video file cannot be played. It may be damaged or use an unsupported codec.", ja: "This video file cannot be played. It may be damaged or use an unsupported codec.", zh: "This video file cannot be played. It may be damaged or use an unsupported codec.", fr: "This video file cannot be played. It may be damaged or use an unsupported codec.", de: "This video file cannot be played. It may be damaged or use an unsupported codec.", ru: "This video file cannot be played. It may be damaged or use an unsupported codec.", es: "This video file cannot be played. It may be damaged or use an unsupported codec.", ar: "This video file cannot be played. It may be damaged or use an unsupported codec.", hi: "This video file cannot be played. It may be damaged or use an unsupported codec.", bn: "This video file cannot be played. It may be damaged or use an unsupported codec.", pt: "This video file cannot be played. It may be damaged or use an unsupported codec.", id: "This video file cannot be played. It may be damaged or use an unsupported codec.", vi: "This video file cannot be played. It may be damaged or use an unsupported codec.",
+	},
 	"chat.outputStage.thinking": {
 		ko: "생각 중…",
 		en: "Thinking…",

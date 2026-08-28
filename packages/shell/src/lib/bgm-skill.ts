@@ -22,6 +22,7 @@ import {
 	toBgmQueuedToolResult,
 } from "./bgm-playback";
 import { BGM_SIDECAR_BASE_URL, ensureBgmSidecar } from "./bgm-sidecar-url";
+import { loadConfig } from "./config";
 
 /** appExec 등록용 앱 id — 위젯 전용(앱 아님), app_skills_clear 대상 아님(항상 유지). */
 export const BGM_APP_ID = "bgm-widget";
@@ -159,29 +160,35 @@ export interface BgmSkillDeps {
 	now?: () => number;
 }
 
-function persistedFavoriteCount(): number {
-	try {
-		const parsed = JSON.parse(localStorage.getItem("yt-bgm-favorites") ?? "[]");
-		return Array.isArray(parsed) ? parsed.length : 0;
-	} catch {
-		return 0;
-	}
+function isFavoriteTrack(item: unknown): item is BgmSearchResult {
+	return (
+		item !== null &&
+		typeof item === "object" &&
+		typeof (item as BgmSearchResult).id === "string" &&
+		typeof (item as BgmSearchResult).title === "string"
+	);
 }
 
-function persistedFavoriteTracks(): BgmSearchResult[] {
+/**
+ * Favorites SoT (#476): the workspace naia-settings config
+ * (`bgmYoutubeFavorites`) once it exists; the legacy webview localStorage key
+ * "yt-bgm-favorites" is only a pre-migration fallback (BgmPlayer migrates and
+ * clears it on mount).
+ */
+export function persistedFavoriteTracks(): BgmSearchResult[] {
+	const stored = loadConfig()?.bgmYoutubeFavorites;
+	if (Array.isArray(stored)) return stored.filter(isFavoriteTrack);
 	try {
 		const parsed = JSON.parse(localStorage.getItem("yt-bgm-favorites") ?? "[]");
 		if (!Array.isArray(parsed)) return [];
-		return parsed.filter(
-			(item): item is BgmSearchResult =>
-				item !== null &&
-				typeof item === "object" &&
-				typeof item.id === "string" &&
-				typeof item.title === "string",
-		);
+		return parsed.filter(isFavoriteTrack);
 	} catch {
 		return [];
 	}
+}
+
+function persistedFavoriteCount(): number {
+	return persistedFavoriteTracks().length;
 }
 
 /** 사이드카 검색 — BgmPlayer.ytSearch 동형 표면(GET /yt/search?q=&max=). */

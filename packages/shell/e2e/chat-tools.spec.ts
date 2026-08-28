@@ -94,6 +94,7 @@ const TAURI_MOCK_SCRIPT = `
 
 	function matchScenario(userMessage) {
 		var msg = (userMessage || "").toLowerCase();
+		if (msg.indexOf("formatting-e2e") !== -1) return "formatting";
 		if (msg.indexOf("그래프") !== -1) return "knowledge_graph";
 		if (msg.indexOf("지식") !== -1) return "knowledge";
 		if (msg.indexOf("ls") !== -1 && msg.indexOf("디렉토리") !== -1) return "execute_command";
@@ -106,6 +107,13 @@ const TAURI_MOCK_SCRIPT = `
 
 	function getResponseChunks(requestId, scenario) {
 		switch (scenario) {
+			case "formatting":
+				var fence = String.fromCharCode(96).repeat(3);
+				return [
+					{ type: "thinking", requestId: requestId, text: "private reasoning preview" },
+					{ type: "text", requestId: requestId, text: fence + "python\\nprint('naia')\\n" + fence + "\\n\\n" + fence + "mermaid\\nflowchart LR\\n A-->B\\n" + fence },
+					{ type: "finish", requestId: requestId, cost: { cost: 0.001, inputTokens: 10, outputTokens: 20 } }
+				];
 			case "execute_command":
 				return buildToolResponse(requestId, "execute_command",
 					{ command: "ls" },
@@ -354,6 +362,25 @@ test.describe("Chat + Tool E2E", () => {
 		// 2D↔3D 토글
 		await graph.locator(".knowledge-graph-mode").click();
 		await expect(graph).toHaveAttribute("data-mode", "3d");
+	});
+	test("thinking, highlighted code, copy, and Mermaid render as separate UI", async ({ page }) => {
+		await sendMessage(page, "formatting-e2e");
+
+		const thinking = page.locator(".thinking-inline").last();
+		await expect(thinking).toBeVisible();
+		await expect(thinking).not.toHaveAttribute("open", "");
+		await expect(thinking.locator(".thinking-inline-preview")).toContainText(
+			"private reasoning preview",
+		);
+		const code = page.locator(".chat-code-block").last();
+		await expect(code.locator("code.language-python")).toContainText("print");
+		expect(await code.locator("code.language-python").innerHTML()).toContain(
+			"hljs-string",
+		);
+		await expect(code.getByRole("button", { name: /Copy|복사/ })).toBeVisible();
+		await expect(page.locator(".workspace-editor__mermaid svg").last()).toBeVisible({
+			timeout: 10_000,
+		});
 	});
 });
 

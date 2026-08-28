@@ -21,15 +21,18 @@ describe("MarkdownCodeBlock", () => {
 		});
 	});
 
-	it("shows language controls and copies the exact code", () => {
+	it("shows language controls, copies the exact code, and confirms success", async () => {
 		const openWorkspace = vi.fn();
 		render(
 			<MarkdownCodeBlock className="language-ts" onOpenWorkspace={openWorkspace}>
 				{"const answer = 42;\n"}
 			</MarkdownCodeBlock>,
 		);
-		fireEvent.click(screen.getByRole("button", { name: "복사" }));
+		fireEvent.click(screen.getByRole("button", { name: "Copy" }));
 		expect(navigator.clipboard.writeText).toHaveBeenCalledWith("const answer = 42;");
+		await waitFor(() =>
+			expect(screen.getByRole("button", { name: "Copied" })).toBeInTheDocument(),
+		);
 		fireEvent.click(screen.getByRole("button", { name: "워크스페이스에서 열기" }));
 		expect(openWorkspace).toHaveBeenCalledWith("const answer = 42;", "ts");
 	});

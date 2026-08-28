@@ -81,6 +81,7 @@ import {
 	shouldShowStartupUpdatePrompt,
 	snoozeStartupUpdatePrompt,
 } from "./lib/updater";
+import { hydrateLocalRefAudioB64 } from "./lib/voice/ref-audio-api";
 import { useAvatarStore } from "./stores/avatar";
 import "./apps/browser/index"; // register browser app
 import "./apps/workspace/index"; // register workspace app
@@ -304,10 +305,21 @@ export function App() {
 	const [announcements, setAnnouncements] = useState<Announcement[]>([]);
 	const backgroundVideoUrl = useAvatarStore((s) => s.backgroundVideoUrl);
 	const backgroundMediaType = useAvatarStore((s) => s.backgroundMediaType);
+	const [backgroundFallback, setBackgroundFallback] = useState<{
+		url: string;
+		type: "image" | "video";
+	} | null>(null);
 	const setBackgroundVideoUrl = useAvatarStore((s) => s.setBackgroundVideoUrl);
 	const setBackgroundMediaType = useAvatarStore(
 		(s) => s.setBackgroundMediaType,
 	);
+	useEffect(() => {
+		if (!backgroundVideoUrl || backgroundMediaType === "iframe") return;
+		const type = backgroundMediaType === "video" || isVideoFile(backgroundVideoUrl)
+			? "video"
+			: "image";
+		setBackgroundFallback({ url: backgroundVideoUrl, type });
+	}, [backgroundVideoUrl, backgroundMediaType]);
 	const [avatarProvider, setAvatarProvider] = useState<
 		"vrm" | "naia-video-avatar"
 	>("vrm");
@@ -534,6 +546,15 @@ export function App() {
 			// 되면 이 effect 가 재실행돼 파일→캐시 하이드레이션 후 게이트를 연다.
 			return;
 		}
+		// The selected ADK owns the reference voice clip (naia-settings/voice/
+		// ref-audio.wav). Hydrate the synchronous synthesis cache here at boot so
+		// the restored voice applies even if the settings screen is never opened.
+		// Fire-and-forget — restoring the voice must never block boot.
+		hydrateLocalRefAudioB64().catch((error: unknown) => {
+			Logger.warn("App", "reference audio hydration failed", {
+				error: error instanceof Error ? error.message : String(error),
+			});
+		});
 		Promise.all([readNaiaConfig(), readNaiaUiConfig()])
 			.then(([fileConfig, uiConfig]) => {
 				const merged = mergeBootConfig(
@@ -1075,12 +1096,13 @@ export function App() {
 			    대신 default 가 보이도록 강제 표시. iframe/video/image 가 정상
 			    로드되면 그것이 위로 덮음. 사용자 명시 2026-05-29 "그냥 로컬
 			    배경화면/영상을 기본 보여주던가". */}
-			<img
-				className="app-bg-image"
-				src="/assets/background/background-space.png"
-				alt=""
-				style={{ zIndex: 0 }}
-			/>
+			{backgroundFallback?.type === "video" ? (
+				<video className="app-bg-video" src={backgroundFallback.url} autoPlay loop muted playsInline style={{ zIndex: 0 }} />
+			) : backgroundFallback ? (
+				<img className="app-bg-image" src={backgroundFallback.url} alt="" style={{ zIndex: 0 }} />
+			) : (
+				<div className="app-bg-fallback" aria-hidden="true" />
+			)}
 			{/* ①-b Foreground BGM — overlay on top (z-index:1) when configured */}
 			{backgroundMediaType === "iframe" && backgroundVideoUrl ? (
 				<iframe

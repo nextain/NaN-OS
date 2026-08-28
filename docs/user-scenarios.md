@@ -919,6 +919,19 @@ Test Coverage Map: `lib/tts/__tests__/text-filter.test.ts`가 공통/언어/fall
 - 버튼의 플랫폼별 단축키 표기와 실제 키 해석은 같은 정의를 사용한다.
 - 팝업이 닫히면 리스너가 제거되며, 일반 입력과 추가 수정키 조합은 가로채지 않는다.
 
+## UC-V022-LOCAL-RELEASE-ACCEPTANCE — 동일 빌드 사용자 검증
+
+- 사용자가 한국어로 온보딩하면 Host 음성 설치 준비·진행·실패 안내가 모두 한국어로 보인다.
+- 상단 TTS를 끄는 즉시 현재 발화와 대기 문장이 멈추고 다음 답변도 읽지 않는다.
+- thinking은 생성 중 접힌 한 줄 이탤릭 미리보기로 흐르며 클릭하면 전체 내용을 볼 수 있고, 최종 답변과 TTS에는 섞이지 않는다.
+- Python 등 fenced code는 구문 강조와 정확한 복사·복사 완료 피드백을 제공한다. Mermaid fence는 다이어그램으로 렌더링되고 실패하면 원문이 남는다.
+- Workspace에서 MP3/WAV/MP4를 클릭하면 UTF-8 텍스트 오류 없이 미디어 컨트롤이 열린다.
+- YouTube 패널 상단에서 배경 영상 표시를 끌 수 있고 오디오는 유지된다. 음표와 재생/정지 버튼은 실제 player 이벤트와 일치한다.
+- YouTube BGM을 재생해도 재생이 실제 확인되기 전에는 기존 배경이 그대로 보이고, 임베드가 실패하면 검은 화면 대신 기존 배경으로 돌아온다.
+- 유튜브 즐겨찾기는 앱을 재설치·업데이트하거나 개발빌드↔설치본을 오가도 워크스페이스(naia-settings)를 따라 유지되며, 기존 localStorage 즐겨찾기는 첫 실행에서 자동 이전된다.
+- Herdr가 준비되지 않아도 파일 트리는 열리며, 로컬 OpenAI 호환 Base URL과 `naia <file>` 흐름도 같은 후보 빌드에서 동작한다.
+
+Test Coverage Map: 관련 단위·컴포넌트 테스트만으로 완료하지 않는다. `v0.2.2` 버전과 리소스를 가진 동일 debug/release 후보를 시작해 Playwright UI 여정과 Windows Tauri smoke를 모두 통과해야 한다.
 ## 2026-08-26 워크스페이스 컨텍스트 해석 (#501, 에픽 #497)
 
 > 계약: `docs/progress/issue-497-universal-agent.md`. 여기의 UC는 Naia가 ADK 워크스페이스 루트에서
