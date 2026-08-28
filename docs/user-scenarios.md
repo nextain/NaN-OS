@@ -932,6 +932,7 @@ Test Coverage Map: `lib/tts/__tests__/text-filter.test.ts`가 공통/언어/fall
 - Herdr가 준비되지 않아도 파일 트리는 열리며, 로컬 OpenAI 호환 Base URL과 `naia <file>` 흐름도 같은 후보 빌드에서 동작한다.
 - 설치를 마친 Host 음성은 설정에서 선택하는 즉시 자동 시작되고, 시작 실패나 차단 시 사유와 되돌림 안내가 프로필·음성 화면에 보인다. 무언 revert 는 없다. (#507)
 - 개발·e2e 실행도 설치본과 같은 위치(resource_dir)에서 installer 리소스를 찾으므로, 설치 완료된 엔진이 개발 빌드에서 미설치로 보이거나 재다운로드를 요구하지 않는다. (#508)
+- bgm-skill 검증은 즐겨찾기를 워크스페이스 SoT(`naia-config.bgmYoutubeFavorites`)에서 읽고, 비표준 포트의 공지 API(announcements) CORS 노이즈를 BGM 오류로 오인하지 않는다.
 
 Test Coverage Map: 관련 단위·컴포넌트 테스트만으로 완료하지 않는다. `v0.2.2` 버전과 리소스를 가진 동일 debug/release 후보를 시작해 Playwright UI 여정과 Windows Tauri smoke를 모두 통과해야 한다.
 ## 2026-08-26 워크스페이스 컨텍스트 해석 (#501, 에픽 #497)

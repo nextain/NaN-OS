@@ -735,9 +735,11 @@ test.describe("UC8 BGM 스킬 배선 (FR-BGM.1)", () => {
 		await expect
 			.poll(() =>
 				page.evaluate(() => {
-					const favorites = JSON.parse(
-						localStorage.getItem("yt-bgm-favorites") ?? "[]",
-					) as Array<{ id: string }>;
+					// FR-BGM-FAV.1: 즐겨찾기 SoT = 워크스페이스 config(bgmYoutubeFavorites).
+					// legacy webview localStorage(yt-bgm-favorites)는 더 이상 진실이 아니다.
+					const favorites = (JSON.parse(
+						localStorage.getItem("naia-config") ?? "{}",
+					).bgmYoutubeFavorites ?? []) as Array<{ id: string }>;
 					return favorites.map((item) => item.id);
 				}),
 			)
@@ -791,9 +793,9 @@ test.describe("UC8 BGM 스킬 배선 (FR-BGM.1)", () => {
 		await expect
 			.poll(() =>
 				page.evaluate(() => {
-					const favorites = JSON.parse(
-						localStorage.getItem("yt-bgm-favorites") ?? "[]",
-					) as Array<{ id: string }>;
+					const favorites = (JSON.parse(
+						localStorage.getItem("naia-config") ?? "{}",
+					).bgmYoutubeFavorites ?? []) as Array<{ id: string }>;
 					return favorites.length;
 				}),
 			)
@@ -944,7 +946,12 @@ test.describe("UC8 BGM 스킬 배선 (FR-BGM.1)", () => {
 			runtimeErrors.push(error.stack ?? error.message),
 		);
 		page.on("console", (message) => {
-			if (message.type() === "error") runtimeErrors.push(message.text());
+			// 출처 URL 을 함께 기록 — "Failed to load resource: net::ERR_FAILED" 는
+			// 본문에 URL 이 없어 아래 필터가 announcements 노이즈를 귀속할 수 없다.
+			if (message.type() === "error")
+				runtimeErrors.push(
+					`${message.text()} [${message.location().url ?? ""}]`,
+				);
 		});
 		const tracks = [
 			{
@@ -1021,7 +1028,17 @@ test.describe("UC8 BGM 스킬 배선 (FR-BGM.1)", () => {
 			(error) =>
 				!error.includes("BrowserCenterArea.tsx") &&
 				!error.includes("AvatarCanvas") &&
-				!error.includes("net::ERR_CONNECTION_REFUSED"),
+				!error.includes("net::ERR_CONNECTION_REFUSED") &&
+				// 비표준 포트(dev :1436 등)에선 www.naia.land/api/announcements 의
+				// CORS 거부와 그에 따른 net::ERR_FAILED 가 콘솔 오류로 잡힌다 —
+				// announcements 로 귀속되는 그 계열만 좁게 제외한다(무관 네트워크
+				// 노이즈; youtube/bgm 오류 검출력은 유지).
+				!(
+					error.includes("naia.land/api/announcements") &&
+					/CORS|net::ERR_FAILED|Failed to load resource|Failed to fetch/.test(
+						error,
+					)
+				),
 		);
 		expect(bgmRuntimeErrors).toEqual([]);
 	});
