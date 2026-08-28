@@ -732,9 +732,18 @@ describe("SettingsTab", () => {
 
 		expect(providerSelect.value).toBe("codex");
 		expect(screen.queryByLabelText(/^API/i)).toBeNull();
-		expect(
-			(document.getElementById("model-select") as HTMLSelectElement).value,
-		).toBe("gpt-5.4");
+		const modelSelect = document.getElementById(
+			"model-select",
+		) as HTMLSelectElement;
+		// 2026-08 lineup: gpt-5.6 sol/terra/luna + previous-gen 5.5, retiring 5.4.
+		expect(modelSelect.value).toBe("gpt-5.6-sol");
+		expect([...modelSelect.options].map((option) => option.value)).toEqual([
+			"gpt-5.6-sol",
+			"gpt-5.6-terra",
+			"gpt-5.6-luna",
+			"gpt-5.5",
+			"gpt-5.4",
+		]);
 	});
 
 	it("checks Codex readiness without rendering CLI output or changing credentials", async () => {
@@ -884,7 +893,12 @@ describe("SettingsTab", () => {
 		const roles = JSON.parse(
 			localStorage.getItem("naia-config") || "{}",
 		).llmRoles;
-		expect(roles.sub).toMatchObject({ provider: "codex", model: "gpt-5.4" });
+		// Switching to explicit resolves the provider default (gpt-5.6-sol),
+		// even though the stored main config still names retiring gpt-5.4.
+		expect(roles.sub).toMatchObject({
+			provider: "codex",
+			model: "gpt-5.6-sol",
+		});
 		expect(roles.memory.provider).not.toBe("codex");
 	});
 
