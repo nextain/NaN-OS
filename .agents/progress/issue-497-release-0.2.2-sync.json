@@ -2,11 +2,13 @@
   "schema_version": "1.0",
   "contract_id": "issue-497-release-0.2.2-sync",
   "contract_digest": "fc078680846c7e5511ff6e0e9d5368a416a5e6268cd0f44cdde447c8f19d2e10",
-  "current_phase": "in-progress",
-  "current_task": "origin/main 을 release/0.2.2-memory-freeze 에 병합하고 검증한 뒤 원격에 올린다.",
+  "current_phase": "verified",
+  "current_task": "병합·검증을 마쳤다. 남은 것은 원격 푸시뿐이다.",
   "gates_cleared": [
     "b697bb27 시점: 코어 vitest 966/966 종료코드 0, 네이티브 e2e 17/17 종료코드 0",
-    "b697bb27 시점: 병합 트리가 당시 main 트리와 바이트 단위로 동일"
+    "b697bb27 시점: 병합 트리가 당시 main 트리와 바이트 단위로 동일",
+    "origin/main(5e6a6998) 병합 뒤: 코어 vitest 966/966 종료코드 0",
+    "origin/main(5e6a6998) 병합 뒤: 네이티브 e2e 17/17 종료코드 0"
   ],
   "key_decisions": [
     "릴리스가 고정하던 에이전트 커밋 bd70c44 가 main 의 f521149 에 담겨 있음을 먼저 대조하고 핀을 앞으로 감았다. 동결분이 조용히 빠지지 않는다.",
@@ -15,7 +17,9 @@
   ],
   "evidence": [
     "b697bb27 을 origin/release/0.2.2-memory-freeze 에 올렸다.",
-    "그 뒤 origin/main 이 17커밋 앞서 두 가지가 다시 갈라졌다. git merge-tree 로 미리 재 보니 충돌이 없고 병합 결과 트리가 origin/main 트리(8defafb5)와 같다."
+    "그 뒤 origin/main 이 17커밋 앞서 두 가지가 다시 갈라졌다. git merge-tree 로 미리 재 보니 충돌이 없고 병합 결과 트리가 origin/main 트리(8defafb5)와 같다.",
+    "병합 결과 트리는 origin/main 트리와 이 계약·진행 기록 세 파일만 다르다. 상류 내용이 빠짐없이 들어왔다는 뜻이다.",
+    "검증에 필요한 짝 저장소 체크아웃과 e2e 산출물은 임시로 세웠다가 걷어낸다. 워크스페이스 루트에 미추적 잔재를 남기지 않는다."
   ],
-  "updated_at": "2026-08-28T21:15:00+09:00"
+  "updated_at": "2026-08-28T21:30:00+09:00"
 }
