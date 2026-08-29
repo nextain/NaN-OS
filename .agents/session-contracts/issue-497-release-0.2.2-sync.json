@@ -1,7 +1,7 @@
 {
   "schema_version": "1.0",
   "id": "issue-497-release-0.2.2-sync",
-  "status": "active",
+  "status": "closed",
   "project_root": ".",
   "goal": "검증을 마친 universal-agent 작업이 담긴 naia-shell main 을 release/0.2.2-memory-freeze 에 통합해, 릴리스 가지가 main 과 같은 내용을 담고 원격에 올라간 상태로 만든다.",
   "scope": [
@@ -52,9 +52,9 @@
   "session_bindings": [
     {
       "session_id": "ef466cee-895d-4eed-80d5-497741da5bc8",
-      "contract_digest": "fc078680846c7e5511ff6e0e9d5368a416a5e6268cd0f44cdde447c8f19d2e10"
+      "contract_digest": "6e0872fc6ef4a52f9993dbb1da9f1c96ef10eee8c7725b5f4d8af9dbcc5f819c"
     }
   ],
   "progress_file": ".agents/progress/issue-497-release-0.2.2-sync.json",
-  "contract_digest": "fc078680846c7e5511ff6e0e9d5368a416a5e6268cd0f44cdde447c8f19d2e10"
+  "contract_digest": "6e0872fc6ef4a52f9993dbb1da9f1c96ef10eee8c7725b5f4d8af9dbcc5f819c"
 }

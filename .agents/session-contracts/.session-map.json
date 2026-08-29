@@ -18,7 +18,7 @@
     "ef466cee-895d-4eed-80d5-497741da5bc8": {
       "contract_id": "issue-497-release-0.2.2-sync",
       "contract_path": ".agents/session-contracts/issue-497-release-0.2.2-sync.json",
-      "contract_digest": "fc078680846c7e5511ff6e0e9d5368a416a5e6268cd0f44cdde447c8f19d2e10"
+      "contract_digest": "6e0872fc6ef4a52f9993dbb1da9f1c96ef10eee8c7725b5f4d8af9dbcc5f819c"
     }
   }
 }

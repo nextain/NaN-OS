@@ -1,9 +1,9 @@
 {
   "schema_version": "1.0",
   "contract_id": "issue-497-release-0.2.2-sync",
-  "contract_digest": "fc078680846c7e5511ff6e0e9d5368a416a5e6268cd0f44cdde447c8f19d2e10",
+  "contract_digest": "6e0872fc6ef4a52f9993dbb1da9f1c96ef10eee8c7725b5f4d8af9dbcc5f819c",
   "current_phase": "close",
-  "current_task": "완료. 릴리스 가지가 origin/main 의 내용을 담고 원격에 올라가 있다.",
+  "current_task": "종료. 계약을 closed 로 닫았다.",
   "gates_cleared": [
     "b697bb27 시점: 코어 vitest 966/966 종료코드 0, 네이티브 e2e 17/17 종료코드 0",
     "b697bb27 시점: 병합 트리가 당시 main 트리와 바이트 단위로 동일",
@@ -27,5 +27,5 @@
     "수용기준 1(트리가 origin/main 과 바이트 단위 동일)은 문자 그대로는 미충족이다. 이 계약과 진행 기록, 세션 등록 세 파일이 릴리스 가지에만 있다. 소스 파일 차이는 0건이므로 의도한 편차다.",
     "수용기준 3 을 재려다 build-installers.yml 의 첫 40자 SHA 를 집어 핀이 어긋난 것으로 오측했다. 실제로는 actions/checkout 의 SHA 였고 에이전트 핀은 45번 줄에 정확히 있었다."
   ],
-  "updated_at": "2026-08-29T00:10:00+09:00"
+  "updated_at": "2026-08-29T00:40:00+09:00"
 }
