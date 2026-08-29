@@ -1124,6 +1124,7 @@ export function ChatArea({
 	function interruptTts(): void {
 		// Reveal the canonical response immediately on interruption and invalidate
 		// late playback callbacks from the superseded turn.
+		commitStrandedCanonical(); // #513
 		ttsTextSyncRef.current.generation++;
 		ttsTextSyncRef.current.active = false;
 		ttsTextSyncRef.current.pending = 0;
@@ -1308,11 +1309,28 @@ export function ChatArea({
 				if (ttsMaskReleaseTimerRef.current) clearTimeout(ttsMaskReleaseTimerRef.current);
 				ttsMaskReleaseTimerRef.current = null;
 				clearTtsRevealGuard(); // #511
+				commitStrandedCanonical(); // #513
 				current.active = false;
 				setTtsMaskedMessageId(null);
 				setOutputStage(null);
 			}
 		};
+	}
+
+	// #513 — 좌초 방어 벨트: 동기화가 끝날 때 store 의 마지막 assistant 메시지가 비어 있는데
+	//        canonical 본문이 있으면 canonical 을 확정 기록한다(조기완결 잔재 회수 — 어떤 경로로
+	//        좌초했든 사용자 화면에서 대화가 사라지지 않게 하는 최후 방어).
+	function commitStrandedCanonical(): void {
+		const canonical = ttsTextSyncRef.current.canonical;
+		if (!canonical.trim()) return;
+		const store = useChatStore.getState();
+		const last = store.messages.at(-1);
+		if (last && last.role === "assistant" && !last.content.trim()) {
+			Logger.warn("ChatArea", "Committing stranded reply text to store (#513)", {
+				length: canonical.length,
+			});
+			store.updateLastMessage("assistant", canonical);
+		}
 	}
 
 	function finishStreamingWithTtsMask(terminal = true): void {
@@ -1332,6 +1350,7 @@ export function ChatArea({
 		}
 		if (terminal && sync.pending === 0) {
 			clearTtsRevealGuard(); // #511
+			commitStrandedCanonical(); // #513
 			sync.active = false;
 			setTtsMaskedMessageId(null);
 			setOutputStage(null);
@@ -1344,6 +1363,7 @@ export function ChatArea({
 				const current = ttsTextSyncRef.current;
 				if (!current.active || current.generation !== generation || !current.llmFinished) return;
 				clearTtsRevealGuard(); // #511
+				commitStrandedCanonical(); // #513
 				current.active = false;
 				current.pending = 0;
 				current.ready.clear();
@@ -2440,7 +2460,16 @@ export function ChatArea({
 					Logger.info("ChatArea", "Deferring empty zero-token usage");
 					break;
 				}
-				finishStreamingWithTtsMask(false);
+				// #513 — usage 가 text 보다 먼저 오는 프로바이더(codex 등)에서 빈 스트림을 여기서
+				//        완결하면 빈 assistant 메시지가 확정되고 이후 본문이 streamingContent 에
+				//        좌초한다(마스크가 가리다 동기화 종료 때 "대화가 사라짐"). 내용이 있을 때만
+				//        완결하고, 빈 스트림은 finish/error 종결에 맡긴다(비용 기록은 그대로).
+				if (
+					store.streamingContent.length > 0 ||
+					store.streamingToolCalls.length > 0
+				) {
+					finishStreamingWithTtsMask(false);
+				}
 				store.addCostEntry({
 					inputTokens: chunk.inputTokens,
 					outputTokens: chunk.outputTokens,
