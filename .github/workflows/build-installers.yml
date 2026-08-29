@@ -42,7 +42,7 @@ jobs:
         run: |
           git init ../naia-agent
           git -C ../naia-agent remote add origin https://github.com/nextain/naia-agent.git
-          git -C ../naia-agent fetch --depth 1 origin 3ed9f5e773483d024d672b4e36310b260b44162f
+          git -C ../naia-agent fetch --depth 1 origin 7b94bc5ded7b5e6bfe12b18fd22ef3331515f602
           git -C ../naia-agent checkout --detach FETCH_HEAD
           git init ../naia-kb-compiler
           git -C ../naia-kb-compiler remote add origin https://github.com/nextain/naia-kb-compiler.git

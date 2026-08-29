@@ -21,7 +21,7 @@ const REQUIRED_ARCHS = ["x86_64", "arm64"];
 // 원리적으로 달라지고, 런타임은 읽지 않는다(pnpm install 전용 상태 파일). 합본 산출물에서
 // 통째로 배제한다 — 동일성 검증의 예외가 아니라 어느 쪽 사본도 신뢰본이 아니기 때문.
 export const PNPM_INSTALL_STATE =
-	/(^|\/)node_modules\/(\.modules\.yaml|\.pnpm-workspace-state\.json|\.pnpm\/lock\.yaml)$/;
+	/(^|\/)node_modules\/(\.modules\.yaml|\.pnpm-workspace-state[^/]*\.json|\.pnpm\/lock\.yaml)$/;
 
 function walk(root, current = root, files = []) {
 	for (const entry of readdirSync(current, { withFileTypes: true })) {

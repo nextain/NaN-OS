@@ -673,6 +673,11 @@ export function ChatArea({
 		ready: new Map<number, string>(),
 	});
 	const ttsMaskReleaseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+	// #511 — 정체 공개 pacer: 재생이 멈춰 있어도 5초마다 canonical 을 그대로 내보인다.
+	//        동기화(마스크·reveal 기계)는 유지 — usage 조기완결+마스크 표시 흐름(빈 store 메시지를
+	//        ttsVisibleContent 로 채우는 기존 메커니즘)이 이 표시 경로에 의존한다.
+	const ttsRevealGuardTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+	const ttsStallRevealLenRef = useRef(0);
 	const cascadeTtsJobsRef = useRef(0);
 	// UC-compaction: agent 가 예산 압박으로 이전 대화를 요약했을 때 표시할 알림(흡수된 메시지 수). null=숨김.
 	const [compactionNotice, setCompactionNotice] = useState<number | null>(null);
@@ -1126,6 +1131,7 @@ export function ChatArea({
 		ttsTextSyncRef.current.ready.clear();
 		if (ttsMaskReleaseTimerRef.current) clearTimeout(ttsMaskReleaseTimerRef.current);
 		ttsMaskReleaseTimerRef.current = null;
+		clearTtsRevealGuard(); // #511
 		cascadeTtsJobsRef.current = 0;
 		setTtsMaskedMessageId(null);
 		setOutputStage(null);
@@ -1180,6 +1186,31 @@ export function ChatArea({
 		};
 	}
 
+	// #511 — 로컬 엔진 기동/합성 지연 중 응답이 '생각 중'으로 무기한 숨는 것을 막는다.
+	const TTS_REVEAL_STALL_MS = 5_000;
+	function clearTtsRevealGuard(): void {
+		if (ttsRevealGuardTimerRef.current) clearTimeout(ttsRevealGuardTimerRef.current);
+		ttsRevealGuardTimerRef.current = null;
+	}
+	function armTtsRevealGuard(): void {
+		clearTtsRevealGuard();
+		const generation = ttsTextSyncRef.current.generation;
+		ttsRevealGuardTimerRef.current = setTimeout(() => {
+			ttsRevealGuardTimerRef.current = null;
+			const current = ttsTextSyncRef.current;
+			if (!current.active || current.generation !== generation) return;
+			if (current.canonical.length > ttsStallRevealLenRef.current) {
+				Logger.warn("ChatArea", "TTS reveal stalled — showing text ahead of playback", {
+					shownLen: current.canonical.length,
+					pending: current.pending,
+				});
+				ttsStallRevealLenRef.current = current.canonical.length;
+				setTtsVisibleContent(current.canonical);
+			}
+			armTtsRevealGuard(); // 동기화가 살아있는 동안 계속 pacing
+		}, TTS_REVEAL_STALL_MS);
+	}
+
 	function beginTtsTextSync(): void {
 		if (ttsMaskReleaseTimerRef.current) clearTimeout(ttsMaskReleaseTimerRef.current);
 		ttsMaskReleaseTimerRef.current = null;
@@ -1196,6 +1227,8 @@ export function ChatArea({
 		setTtsVisibleContent("");
 		setTtsMaskedMessageId(null);
 		setOutputStage("thinking");
+		ttsStallRevealLenRef.current = 0; // #511
+		armTtsRevealGuard(); // #511
 	}
 
 	/**
@@ -1219,6 +1252,7 @@ export function ChatArea({
 	function revealFailedProactiveTts(text: string, generation: number): void {
 		const sync = ttsTextSyncRef.current;
 		if (!sync.active || sync.generation !== generation) return;
+		clearTtsRevealGuard(); // #511
 		sync.active = false;
 		sync.pending = 0;
 		sync.ready.clear();
@@ -1262,11 +1296,18 @@ export function ChatArea({
 					current.revealCursor = current.canonical.length;
 				}
 			}
-			setTtsVisibleContent(current.canonical.slice(0, current.revealCursor));
+			// #511 — 정체 공개(pacer)가 이미 보여준 길이보다 되감지 않는다.
+			setTtsVisibleContent(
+				current.canonical.slice(
+					0,
+					Math.max(current.revealCursor, ttsStallRevealLenRef.current),
+				),
+			);
 			if (current.pending === 0) setOutputStage(null);
 			if (current.llmFinished && current.pending === 0) {
 				if (ttsMaskReleaseTimerRef.current) clearTimeout(ttsMaskReleaseTimerRef.current);
 				ttsMaskReleaseTimerRef.current = null;
+				clearTtsRevealGuard(); // #511
 				current.active = false;
 				setTtsMaskedMessageId(null);
 				setOutputStage(null);
@@ -1290,6 +1331,7 @@ export function ChatArea({
 			setTtsMaskedMessageId(completed?.id ?? null);
 		}
 		if (terminal && sync.pending === 0) {
+			clearTtsRevealGuard(); // #511
 			sync.active = false;
 			setTtsMaskedMessageId(null);
 			setOutputStage(null);
@@ -1301,6 +1343,7 @@ export function ChatArea({
 			ttsMaskReleaseTimerRef.current = setTimeout(() => {
 				const current = ttsTextSyncRef.current;
 				if (!current.active || current.generation !== generation || !current.llmFinished) return;
+				clearTtsRevealGuard(); // #511
 				current.active = false;
 				current.pending = 0;
 				current.ready.clear();
@@ -1335,6 +1378,7 @@ export function ChatArea({
 		pipelineVoiceConfigRef.current = {
 			voice: resolveTtsVoiceId(config),
 			ttsProvider: config.ttsProvider || "edge",
+			localVoiceEnabled: config.localVoiceEnabled === true, // #512 관측
 			ttsApiKey:
 				config.ttsProvider === "google"
 					? config.googleApiKey || config.apiKey

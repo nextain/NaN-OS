@@ -34,6 +34,8 @@ const TAG = "tts-pipeline";
 export interface PipelineVoiceConfig {
 	voice?: string;
 	ttsProvider?: string;
+	/** #512 — 로컬 엔진 활성 여부(정체성 데스싱크 관측용). */
+	localVoiceEnabled?: boolean;
 	ttsApiKey?: string;
 	/** nextain provider: gateway credit key. */
 	naiaKey?: string;
@@ -180,6 +182,15 @@ export function createSentenceTtsPipeline(
 		// still starts whenever the WAV lands (reveal is idempotent).
 		if (ttsProviderForCost === "naia-local-voice") {
 			setTimeout(revealText, 5_000);
+		}
+		// #512 — 음성 정체성 데스싱크 관측: 로컬 엔진이 켜져 있는데 다른 provider 로 발화하면
+		//        사용자가 고른 목소리가 조용히 바뀐다(실사용 2026-08-29: Host 자동기동 중
+		//        browser/SunHiNeural 발화). 발생 순간을 남겨 원인 경로를 특정한다.
+		if (voiceCfg?.localVoiceEnabled && ttsProviderForCost !== "naia-local-voice") {
+			Logger.warn(TAG, "voice identity mismatch — local engine enabled but speaking via other provider", {
+				provider: ttsProviderForCost,
+				voice: ttsVoiceForCost,
+			});
 		}
 		Logger.info(TAG, "Sending TTS request", {
 			reqId,

@@ -59,7 +59,7 @@ describe("AiControlBar proactive cost control", () => {
 		});
 		render(<AiControlBar />);
 		const button = await screen.findByRole("button", {
-			name: /requires a profile and TTS/i,
+			name: /requires a profile/i, // #510 — TTS 는 더 이상 게이트가 아니다
 		});
 		expect(button).toHaveAttribute("data-proactive-state", "blocked");
 		expect(button).toHaveAttribute("aria-pressed", "false");
@@ -68,6 +68,20 @@ describe("AiControlBar proactive cost control", () => {
 			"aria-describedby",
 			"proactive-control-tooltip",
 		);
+	});
+
+	it("keeps the proactive toggle usable when TTS is off (#510)", async () => {
+		useAppStore.setState({ ttsEnabled: false });
+		mockLoadConfigWithSecrets.mockResolvedValue({
+			...baseConfig,
+			ttsEnabled: false,
+		});
+		render(<AiControlBar />);
+		const button = await screen.findByRole("button", {
+			name: /Allow proactive speech/i,
+		});
+		// TTS 꺼짐은 발화만 생략(텍스트 도착) — 버튼을 잠그지 않는다.
+		expect(button).toHaveAttribute("data-proactive-state", "off");
 	});
 
 	it("keeps a saved profile off unless permission was explicitly persisted", async () => {

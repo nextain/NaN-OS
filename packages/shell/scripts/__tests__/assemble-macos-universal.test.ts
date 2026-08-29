@@ -251,6 +251,13 @@ describe("macOS Universal Binary assembly", () => {
 				body,
 			);
 			writeFileSync(
+				resolve(
+					app,
+					"Contents/Resources/agent/node_modules/.pnpm-workspace-state-v1.json",
+				),
+				body,
+			);
+			writeFileSync(
 				resolve(app, "Contents/Resources/agent/node_modules/.pnpm/lock.yaml"),
 				body,
 			);
@@ -278,6 +285,14 @@ describe("macOS Universal Binary assembly", () => {
 		expect(result.merged).toBe(1);
 		expect(
 			existsSync(resolve(output, "Contents/Resources/agent/node_modules/.modules.yaml")),
+		).toBe(false);
+		expect(
+			existsSync(
+				resolve(
+					output,
+					"Contents/Resources/agent/node_modules/.pnpm-workspace-state-v1.json",
+				),
+			),
 		).toBe(false);
 		expect(
 			existsSync(resolve(output, "Contents/Resources/agent/node_modules/.pnpm/lock.yaml")),
