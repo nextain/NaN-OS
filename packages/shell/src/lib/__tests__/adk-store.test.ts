@@ -43,6 +43,7 @@ import {
 	readNaiaUiConfig,
 	resetNaiaPersistedSettings,
 	setAdkPath,
+	syncMainRoleOpenAiBaseUrl,
 	toAssetUrl,
 	writeAgentKeyStrict,
 	writeNaiaConfig,
@@ -860,3 +861,100 @@ describe("copyBundledAssets", () => {
 		);
 	});
 });
+// ── #515 — openai 커스텀 호스트의 llmRoles.main.baseUrl 동기화 ─────────────────
+// agent 는 chat_request 의 provider 를 받지 않고(grpc-codec "provider 제거=정본")
+// config.json 의 llmRoles.main 만 읽는다. 최상위 openaiBaseUrl 이 main.baseUrl 로
+// 동기화되지 않으면 채팅이 기본 api.openai.com 으로 새는 실측 결함의 회귀 가드.
+describe("syncMainRoleOpenAiBaseUrl (#515)", () => {
+	it("injects the normalized custom host into llmRoles.main for openai", () => {
+		const cfg: Record<string, unknown> = {
+			provider: "openai",
+			model: "unlocked",
+			openaiBaseUrl: "http://100.91.187.24:11435/v1/",
+			llmRoles: { main: { provider: "openai", model: "unlocked" } },
+		};
+		syncMainRoleOpenAiBaseUrl(cfg);
+		expect(cfg.llmRoles).toMatchObject({
+			main: {
+				provider: "openai",
+				model: "unlocked",
+				baseUrl: "http://100.91.187.24:11435/v1",
+			},
+		});
+	});
+
+	it("creates llmRoles.main from top-level fields when roles are absent", () => {
+		const cfg: Record<string, unknown> = {
+			provider: "openai",
+			model: "gpt-4o",
+			openaiBaseUrl: "http://gpu:8000",
+		};
+		syncMainRoleOpenAiBaseUrl(cfg);
+		expect(cfg.llmRoles).toMatchObject({
+			main: { provider: "openai", model: "gpt-4o", baseUrl: "http://gpu:8000/v1" },
+		});
+	});
+
+	it("removes a fossil baseUrl when the custom host is cleared", () => {
+		const cfg: Record<string, unknown> = {
+			provider: "openai",
+			model: "gpt-4o",
+			llmRoles: {
+				main: { provider: "openai", model: "gpt-4o", baseUrl: "http://old/v1" },
+			},
+		};
+		syncMainRoleOpenAiBaseUrl(cfg);
+		expect(
+			(cfg.llmRoles as { main: Record<string, unknown> }).main,
+		).not.toHaveProperty("baseUrl");
+	});
+
+	it("leaves non-openai mains and inherit markers untouched", () => {
+		const nextain: Record<string, unknown> = {
+			provider: "nextain",
+			openaiBaseUrl: "http://gpu:8000/v1",
+			llmRoles: { main: { provider: "nextain", model: "deepseek-v4-flash" } },
+		};
+		syncMainRoleOpenAiBaseUrl(nextain);
+		expect(
+			(nextain.llmRoles as { main: Record<string, unknown> }).main,
+		).not.toHaveProperty("baseUrl");
+
+		const inherited: Record<string, unknown> = {
+			provider: "openai",
+			openaiBaseUrl: "http://gpu:8000/v1",
+			llmRoles: { main: { inherit: "expert" } },
+		};
+		syncMainRoleOpenAiBaseUrl(inherited);
+		expect(inherited.llmRoles).toEqual({ main: { inherit: "expert" } });
+	});
+
+	it("writeNaiaConfig persists the synced main baseUrl to the agent config", async () => {
+		setAdkPath(WIN_ADK);
+		mockInvoke.mockClear();
+		mockInvoke.mockImplementation(async (command: string) => {
+			if (command === "read_naia_ui_config") return "{}";
+			if (command === "detect_gpu_vram") return null;
+			return undefined;
+		});
+
+		await writeNaiaConfig({
+			provider: "openai",
+			model: "unlocked",
+			openaiBaseUrl: "http://100.91.187.24:11435",
+			llmRoles: { main: { provider: "openai", model: "unlocked" } },
+		});
+
+		const writeCall = mockInvoke.mock.calls.find(
+			([command]) => command === "write_naia_config",
+		);
+		expect(writeCall).toBeDefined();
+		const persisted = JSON.parse(
+			(writeCall?.[1] as { json: string }).json,
+		) as { llmRoles?: { main?: { baseUrl?: string } } };
+		expect(persisted.llmRoles?.main?.baseUrl).toBe(
+			"http://100.91.187.24:11435/v1",
+		);
+	});
+});
+

@@ -279,6 +279,49 @@ const UI_ONLY_CONFIG_KEYS = new Set([
 	"naiaUserId",
 ]);
 
+// #515 — agent 는 chat_request 의 provider 를 받지 않는다(grpc-codec "provider 제거=정본").
+// 활성 provider 는 오로지 이 config.json 의 llmRoles.main 으로 재구성되는데, openai 커스텀
+// 호스트는 최상위 openaiBaseUrl 에만 저장돼 main.baseUrl 이 비면 채팅이 기본 api.openai.com
+// 으로 샌다(모델 목록만 새 호스트를 보는 실측 결함). 기록 직전에 main role 로 동기화한다.
+// URL 정규화는 이 파일의 OPENAI_BASE_URL env 규칙(중복 /v1 방지)과 동일해야 한다.
+export function syncMainRoleOpenAiBaseUrl(
+	agentConfig: Record<string, unknown>,
+): void {
+	const roles =
+		agentConfig.llmRoles && typeof agentConfig.llmRoles === "object"
+			? (agentConfig.llmRoles as Record<string, unknown>)
+			: {};
+	const main =
+		roles.main && typeof roles.main === "object"
+			? (roles.main as Record<string, string>)
+			: {};
+	if (main.inherit) return; // 상속 마커는 건드리지 않는다(agent 가 별도 해석)
+	const provider =
+		main.provider ??
+		(typeof agentConfig.provider === "string" ? agentConfig.provider : undefined);
+	if (provider !== "openai") return;
+	const raw =
+		typeof agentConfig.openaiBaseUrl === "string"
+			? agentConfig.openaiBaseUrl.trim()
+			: "";
+	if (raw) {
+		main.baseUrl = `${raw.replace(/\/+$/, "").replace(/\/v1$/i, "")}/v1`;
+	} else {
+		// 커스텀 호스트를 지웠으면 main role 의 화석 baseUrl 도 지워 공식 endpoint 로 복귀시킨다.
+		delete main.baseUrl;
+		if (Object.keys(main).length === 0) return;
+	}
+	if (!main.provider) main.provider = provider;
+	if (
+		!main.model &&
+		typeof agentConfig.model === "string" &&
+		agentConfig.model
+	)
+		main.model = agentConfig.model;
+	roles.main = main;
+	agentConfig.llmRoles = roles;
+}
+
 function stripForAgent(
 	config: Record<string, unknown>,
 ): Record<string, unknown> {
@@ -734,6 +777,7 @@ async function writeNaiaConfigNow(
 	const adkPath = getAdkPath();
 	if (!adkPath) return;
 	const publicAgentConfig = stripForAgent(config);
+	syncMainRoleOpenAiBaseUrl(publicAgentConfig); // #515
 	const normalizedAgentConfig = {
 		...publicAgentConfig,
 		...buildNaiaConfigEnv(
