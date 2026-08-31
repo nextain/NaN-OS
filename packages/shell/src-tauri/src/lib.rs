@@ -5224,13 +5224,27 @@ fn voxcpm2_payload_control_files_match(
     })
 }
 
+/// FR-V017.38 (#518): control-file equality alone cannot see a runtime-only
+/// upgrade — v0.2.2 shipped the #478 crackle fix in a new archive while both
+/// control files stayed identical, so every existing install kept its stale
+/// payload forever. The bundled download manifest's `artifactManifestSha256`
+/// is the actual runtime version pin; reuse must also match it.
 fn voxcpm2_installed_payload_is_reusable(
     root: &std::path::Path,
     current_installer: Option<&std::path::Path>,
+    expected_artifact_sha256: Option<&str>,
 ) -> bool {
-    voxcpm2_payload_is_valid(root, None)
+    voxcpm2_payload_is_valid(root, expected_artifact_sha256)
         && current_installer
             .is_some_and(|installer| voxcpm2_payload_control_files_match(root, installer))
+}
+
+/// Runtime version pin from the Shell-bundled download manifest (None when the
+/// bundle carries no manifest, e.g. a dev tree without staged resources).
+fn voxcpm2_expected_artifact_sha256(app: &tauri::AppHandle) -> Option<String> {
+    voxcpm2_download_manifest_path(app)
+        .and_then(|path| read_voxcpm2_download_manifest(&path).ok())
+        .map(|manifest| manifest.artifact_manifest_sha256)
 }
 
 fn read_voxcpm2_activation_contract() -> Result<VoxCpm2ActivationContract, String> {
@@ -5388,12 +5402,16 @@ fn voxcpm2_bundle_root(app: &tauri::AppHandle) -> Option<std::path::PathBuf> {
         )
     } else {
         let installed = voxcpm2_installed_payload_root();
+        // FR-V017.38 (#518): reuse requires the bundled runtime pin to match.
         voxcpm2_installed_payload_is_reusable(
             &installed,
             voxcpm2_installer_script_path(app).as_deref(),
+            voxcpm2_expected_artifact_sha256(app).as_deref(),
         )
         .then_some(installed)
     };
+    // dev/e2e bundle roots stay outside the pin check — their staged payloads
+    // are validated structurally only (scope: installed-payload reuse).
     root.filter(|root| voxcpm2_payload_is_valid(root, None))
 }
 
@@ -12192,14 +12210,33 @@ mod tests {
         assert!(voxcpm2_payload_is_valid(root, None));
         assert!(!voxcpm2_installed_payload_is_reusable(
             root,
-            Some(&current_script)
+            Some(&current_script),
+            None
         ));
 
         std::fs::copy(&current_script, &installed_script).unwrap();
         std::fs::copy(&current_contract, &installed_contract).unwrap();
         assert!(voxcpm2_installed_payload_is_reusable(
             root,
-            Some(&current_script)
+            Some(&current_script),
+            None
+        ));
+
+        // FR-V017.38 (#518): identical control files must NOT be enough when the
+        // bundled runtime pin says the artifact moved on. A runtime-only release
+        // (same contract, new archive) has to force a restage.
+        let payload_artifact_sha =
+            sha256_file_hex(&artifact.join("artifact-manifest.json")).unwrap();
+        assert!(voxcpm2_installed_payload_is_reusable(
+            root,
+            Some(&current_script),
+            Some(&payload_artifact_sha)
+        ));
+        let moved_on_pin = "0000000000000000000000000000000000000000000000000000000000000000";
+        assert!(!voxcpm2_installed_payload_is_reusable(
+            root,
+            Some(&current_script),
+            Some(moved_on_pin)
         ));
     }
 

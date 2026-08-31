@@ -118,6 +118,22 @@
 			"P04_implementation_tests": "pending",
 			"P05_done_handoff": "pending"
 		},
+    "voxcpm2_runtime_pin_upgrade_518": {
+      "issue": "https://github.com/nextain/naia-shell/issues/518",
+      "milestone": "v0.2.3",
+      "scope": "런타임 전용 업그레이드(제어 파일 동일·아카이브만 갱신)가 기존 설치자에게 도달하지 않던 전달 경로 결함 — payload 재사용 게이트에 번들 download-manifest의 artifactManifestSha256 핀 대조 추가. #478 째짐 v0.2.2 재발의 근본 원인",
+      "requirements": "docs/requirements.md FR-V017.38",
+      "scenario": "docs/user-scenarios.md UC-V017-VOXCPM2-RUNTIME-PIN-UPGRADE",
+      "status": "done",
+      "P01_user_scenarios": "done",
+      "P02_test_coverage_map": "done",
+      "P03_requirements": "done",
+      "P04_integration_test": "done",
+      "P05_complete": "done",
+      "field_evidence": "2026-08-31 개발 PC: 설치 payload 전체 8/20 생성(artifact-manifest 9827ac3f…), v0.2.2 번들 핀 5dc02662…(r2.zip) 불일치인데도 재사용됨 — 제어 파일 2종이 v0.2.1과 동일해 FR-V017.37 게이트 통과. #478 수정(voxcpm2-tensorrt ff95790 문장 경계 페이드)이 8/28 r2 아카이브에 실렸으나 이 경로로 기존 설치자에게 미전달 → 째짐 재발 확정",
+      "verification": "Rust lib 231/231 — 확장 테스트: 제어 파일 동일 + 핀 일치 → 재사용, 핀 불일치(runtime-only 릴리즈 시뮬레이션) → 재사용 거부, 핀 부재(None) → 기존 동작 보존. dev/e2e 번들 루트 분기는 핀 검사 밖(스코프 최소화 주석). 미검증 경계: 실 설치본에서 핀 불일치 → 재스테이징 → 실발화 확인은 이 머신에서 r2 캐시 프리로드 후 수동 재설치로 검증 예정(결과는 이슈에 기록)",
+      "last_updated": "2026-08-31T15:25:00+09:00"
+    },
     "bgm_orphan_port_recovery_517": {
       "issue": "https://github.com/nextain/naia-shell/issues/517",
       "milestone": "v0.2.3",
