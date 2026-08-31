@@ -15,6 +15,12 @@ on:
     - cron: "0 6 * * 3" # Wednesdays 06:00 UTC — pick up Bazzite base updates
   workflow_dispatch:
     inputs:
+      variant:
+        description: "Which image to build"
+        required: false
+        default: nvidia
+        type: choice
+        options: [nvidia, amd]
       image_ref:
         description: "nextain/naia-os ref to build (branch, tag or SHA)"
         required: false
@@ -27,7 +33,6 @@ permissions:
 
 env:
   IMAGE_REGISTRY: ghcr.io/nextain
-  IMAGE_NAME: naia-os
   IMAGE_LAYER_REPO: nextain/naia-os
 
 jobs:
@@ -48,6 +53,23 @@ jobs:
           ref: ${{ inputs.image_ref || 'main' }}
           path: image
 
+      # The two variants are separate images, not tags. Resolving the pair here
+      # keeps every later step from having to know which one is being built.
+      - name: Resolve the variant
+        id: variant
+        run: |
+          set -euo pipefail
+          case "${{ inputs.variant || 'nvidia' }}" in
+            nvidia) echo "recipe=recipe.yml"     >> "$GITHUB_OUTPUT"
+                    echo "image=naia-os"         >> "$GITHUB_OUTPUT" ;;
+            amd)    echo "recipe=recipe-amd.yml" >> "$GITHUB_OUTPUT"
+                    echo "image=naia-os-amd"     >> "$GITHUB_OUTPUT" ;;
+            *) echo "::error::unknown variant '${{ inputs.variant }}'"; exit 1 ;;
+          esac
+
+      # The scheduled run has no inputs, so it rebuilds the NVIDIA image only.
+      # The AMD image is built on demand until it has hardware regularly testing
+      # it — a weekly image nobody boots is how the last one rotted.
       - name: Read the Naia OS version
         id: version
         working-directory: image
@@ -83,7 +105,7 @@ jobs:
         id: previous
         run: |
           set -euo pipefail
-          REF="${IMAGE_REGISTRY}/${IMAGE_NAME}:latest"
+          REF="${IMAGE_REGISTRY}/${{ steps.variant.outputs.image }}:latest"
           if DIGEST="$(skopeo inspect --format '{{.Digest}}' "docker://${REF}" 2>/dev/null)"; then
             echo "digest=$DIGEST" >> "$GITHUB_OUTPUT"
             echo "Current latest: $DIGEST"
@@ -164,7 +186,7 @@ jobs:
       - name: Build, sign and publish
         uses: blue-build/github-action@v1
         with:
-          recipe: recipe.yml
+          recipe: ${{ steps.variant.outputs.recipe }}
           working_directory: image
           skip_checkout: "true"
           cosign_private_key: ${{ secrets.SIGNING_SECRET }}
@@ -175,7 +197,7 @@ jobs:
         id: published
         run: |
           set -euo pipefail
-          DIGEST="$(skopeo inspect --format '{{.Digest}}' "docker://${IMAGE_REGISTRY}/${IMAGE_NAME}:latest")"
+          DIGEST="$(skopeo inspect --format '{{.Digest}}' "docker://${IMAGE_REGISTRY}/${{ steps.variant.outputs.image }}:latest")"
           test -n "$DIGEST" || { echo "::error::could not resolve the published image"; exit 1; }
           echo "digest=$DIGEST" >> "$GITHUB_OUTPUT"
           echo "Published: $DIGEST"
@@ -188,7 +210,7 @@ jobs:
         run: |
           set -euo pipefail
           podman run --rm --entrypoint /bin/bash \
-            "${IMAGE_REGISTRY}/${IMAGE_NAME}@${{ steps.published.outputs.digest }}" \
+            "${IMAGE_REGISTRY}/${{ steps.variant.outputs.image }}@${{ steps.published.outputs.digest }}" \
             /usr/libexec/naia-verify-image
 
       # If the published image fails, put latest back where it was. Retagging
@@ -201,13 +223,13 @@ jobs:
           echo "${{ github.token }}" | podman login ghcr.io -u "${{ github.actor }}" --password-stdin
           echo "::warning::Restoring ${{ steps.previous.outputs.digest }} as latest"
           skopeo copy --all \
-            "docker://${IMAGE_REGISTRY}/${IMAGE_NAME}@${{ steps.previous.outputs.digest }}" \
-            "docker://${IMAGE_REGISTRY}/${IMAGE_NAME}:latest"
+            "docker://${IMAGE_REGISTRY}/${{ steps.variant.outputs.image }}@${{ steps.previous.outputs.digest }}" \
+            "docker://${IMAGE_REGISTRY}/${{ steps.variant.outputs.image }}:latest"
           echo "::warning::Rolled back. latest is the previous image."
 
       - name: Report
         if: always()
         run: |
-          echo "Naia OS ${{ steps.version.outputs.version }}"
+          echo "Naia OS ${{ steps.version.outputs.version }} (${{ inputs.variant || 'nvidia' }} -> ${{ steps.variant.outputs.image }})"
           echo "previous:  ${{ steps.previous.outputs.digest }}"
           echo "published: ${{ steps.published.outputs.digest }}"

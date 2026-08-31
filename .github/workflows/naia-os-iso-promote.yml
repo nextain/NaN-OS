@@ -10,8 +10,14 @@ name: Naia OS ISO promote
 on:
   workflow_dispatch:
     inputs:
+      variant:
+        description: "Which public download to replace"
+        required: true
+        default: nvidia
+        type: choice
+        options: [nvidia, amd]
       prefix:
-        description: "Build prefix to promote, e.g. builds/0.2.2.20260831T014500Z"
+        description: "Build prefix to promote, e.g. builds/nvidia/0.2.2.20260831T044236Z"
         required: true
       booted:
         description: "Type BOOTED to confirm you started this ISO and saw the Naia window render"
@@ -23,7 +29,16 @@ permissions:
 env:
   R2_PUBLIC: https://pub-affd0538517845d98ce44a5aec11dd98.r2.dev
   R2_BUCKET: s3://naia-releases
-  ISO_KEY: naia-os-live-amd64.iso
+  # The NVIDIA download keeps its historical name — release notes, naia.land and
+  # anyone who bookmarked it all point at it. The AMD build gets its own key
+  # rather than overwriting that one.
+  # Inside builds/ every variant uses the same filename — the prefix already
+  # separates them. Only the public name differs, and only because the NVIDIA
+  # download keeps its historical URL: release notes, naia.land and anyone who
+  # bookmarked it all point at it.
+  BUILD_KEY: naia-os-live-amd64.iso
+  PUBLIC_KEY_NVIDIA: naia-os-live-amd64.iso
+  PUBLIC_KEY_AMD: naia-os-amd-live-amd64.iso
 
 jobs:
   promote:
@@ -34,17 +49,23 @@ jobs:
       # The confirmation is the whole point of this workflow existing. A prefix
       # alone would let it be run reflexively.
       - name: Require the boot confirmation
+        id: gate
         run: |
           set -euo pipefail
+          case "${{ inputs.variant }}" in
+            nvidia) echo "key=${PUBLIC_KEY_NVIDIA}" >> "$GITHUB_OUTPUT" ;;
+            amd)    echo "key=${PUBLIC_KEY_AMD}"    >> "$GITHUB_OUTPUT" ;;
+            *) echo "::error::unknown variant"; exit 1 ;;
+          esac
+          case "${{ inputs.prefix }}" in
+            builds/${{ inputs.variant }}/*) : ;;
+            *) echo "::error::prefix ${{ inputs.prefix }} is not a ${{ inputs.variant }} build"; exit 1 ;;
+          esac
           test "${{ inputs.booted }}" = "BOOTED" || {
             echo "::error::Type BOOTED to confirm you started this ISO and saw the Naia window render."
             echo "::error::A 1x1 window looks identical to a healthy one in every log."
             exit 1
           }
-          case "${{ inputs.prefix }}" in
-            builds/*) : ;;
-            *) echo "::error::prefix must start with builds/"; exit 1 ;;
-          esac
 
       # The candidate has to be intact before anything is overwritten. This
       # hashes the body rather than trusting the checksum file next to it,
@@ -54,13 +75,13 @@ jobs:
         run: |
           set -euo pipefail
           BASE="${R2_PUBLIC}/${{ inputs.prefix }}"
-          curl -sfL "${BASE}/${ISO_KEY}-CHECKSUM" -o candidate-CHECKSUM || {
-            echo "::error::No checksum at ${BASE}/${ISO_KEY}-CHECKSUM — is the prefix right?"
+          curl -sfL "${BASE}/${BUILD_KEY}-CHECKSUM" -o candidate-CHECKSUM || {
+            echo "::error::No checksum at ${BASE}/${BUILD_KEY}-CHECKSUM — is the prefix right?"
             exit 1
           }
           EXPECTED="$(awk '{print $1}' < candidate-CHECKSUM)"
           echo "Hashing the candidate ISO."
-          ACTUAL="$(curl -sfL --retry 3 "${BASE}/${ISO_KEY}" | sha256sum | awk '{print $1}')"
+          ACTUAL="$(curl -sfL --retry 3 "${BASE}/${BUILD_KEY}" | sha256sum | awk '{print $1}')"
           echo "expected: $EXPECTED"
           echo "actual:   $ACTUAL"
           test "$EXPECTED" = "$ACTUAL" || {
@@ -84,11 +105,11 @@ jobs:
           set -euo pipefail
           STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
           BACKUP="${R2_BUCKET}/previous/${STAMP}"
-          if aws s3 ls "${R2_BUCKET}/${ISO_KEY}" >/dev/null 2>&1; then
-            aws s3 cp "${R2_BUCKET}/${ISO_KEY}" "${BACKUP}/${ISO_KEY}" --no-progress
-            aws s3 cp "${R2_BUCKET}/${ISO_KEY}-CHECKSUM" "${BACKUP}/${ISO_KEY}-CHECKSUM" --no-progress
-            aws s3 cp "${BACKUP}/${ISO_KEY}" "${R2_BUCKET}/previous/${ISO_KEY}" --no-progress
-            aws s3 cp "${BACKUP}/${ISO_KEY}-CHECKSUM" "${R2_BUCKET}/previous/${ISO_KEY}-CHECKSUM" --no-progress
+          if aws s3 ls "${R2_BUCKET}/${{ steps.gate.outputs.key }}" >/dev/null 2>&1; then
+            aws s3 cp "${R2_BUCKET}/${{ steps.gate.outputs.key }}" "${BACKUP}/${{ steps.gate.outputs.key }}" --no-progress
+            aws s3 cp "${R2_BUCKET}/${{ steps.gate.outputs.key }}-CHECKSUM" "${BACKUP}/${{ steps.gate.outputs.key }}-CHECKSUM" --no-progress
+            aws s3 cp "${BACKUP}/${{ steps.gate.outputs.key }}" "${R2_BUCKET}/previous/${{ steps.gate.outputs.key }}" --no-progress
+            aws s3 cp "${BACKUP}/${{ steps.gate.outputs.key }}-CHECKSUM" "${R2_BUCKET}/previous/${{ steps.gate.outputs.key }}-CHECKSUM" --no-progress
             echo "path=${BACKUP}" >> "$GITHUB_OUTPUT"
             echo "Backed up to ${BACKUP}/"
           else
@@ -113,20 +134,20 @@ jobs:
         run: |
           set -euo pipefail
           SRC="${R2_BUCKET}/${{ inputs.prefix }}"
-          aws s3 cp "${SRC}/${ISO_KEY}-CHECKSUM" "${R2_BUCKET}/${ISO_KEY}-CHECKSUM" --no-progress
-          aws s3 cp "${SRC}/${ISO_KEY}" "${R2_BUCKET}/${ISO_KEY}" --no-progress
+          aws s3 cp "${SRC}/${BUILD_KEY}-CHECKSUM" "${R2_BUCKET}/${{ steps.gate.outputs.key }}-CHECKSUM" --no-progress
+          aws s3 cp "${SRC}/${BUILD_KEY}" "${R2_BUCKET}/${{ steps.gate.outputs.key }}" --no-progress
 
       - name: Verify the public download
         id: verify
         run: |
           set -euo pipefail
           BUST="?v=$(date -u +%s)"
-          curl -sfL "${R2_PUBLIC}/${ISO_KEY}-CHECKSUM${BUST}" -o public-CHECKSUM
+          curl -sfL "${R2_PUBLIC}/${{ steps.gate.outputs.key }}-CHECKSUM${BUST}" -o public-CHECKSUM
           PUBLIC_SUM="$(awk '{print $1}' < public-CHECKSUM)"
           test "$PUBLIC_SUM" = "${{ steps.candidate.outputs.sha256 }}" \
             || { echo "::error::Public checksum is not the promoted build"; exit 1; }
           echo "Hashing the public ISO."
-          BODY_SUM="$(curl -sfL --retry 3 "${R2_PUBLIC}/${ISO_KEY}${BUST}" | sha256sum | awk '{print $1}')"
+          BODY_SUM="$(curl -sfL --retry 3 "${R2_PUBLIC}/${{ steps.gate.outputs.key }}${BUST}" | sha256sum | awk '{print $1}')"
           echo "promoted: ${{ steps.candidate.outputs.sha256 }}"
           echo "public:   ${BODY_SUM}"
           test "$BODY_SUM" = "${{ steps.candidate.outputs.sha256 }}" \
@@ -148,6 +169,6 @@ jobs:
           set -euo pipefail
           BACKUP="${{ steps.backup.outputs.path }}"
           echo "::warning::Restoring the previous public ISO from ${BACKUP}"
-          aws s3 cp "${BACKUP}/${ISO_KEY}-CHECKSUM" "${R2_BUCKET}/${ISO_KEY}-CHECKSUM" --no-progress
-          aws s3 cp "${BACKUP}/${ISO_KEY}" "${R2_BUCKET}/${ISO_KEY}" --no-progress
+          aws s3 cp "${BACKUP}/${{ steps.gate.outputs.key }}-CHECKSUM" "${R2_BUCKET}/${{ steps.gate.outputs.key }}-CHECKSUM" --no-progress
+          aws s3 cp "${BACKUP}/${{ steps.gate.outputs.key }}" "${R2_BUCKET}/${{ steps.gate.outputs.key }}" --no-progress
           echo "::warning::Rolled back. The public download is the previous ISO."

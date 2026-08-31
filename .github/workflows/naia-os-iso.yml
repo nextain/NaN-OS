@@ -11,6 +11,12 @@ on:
     types: [completed]
   workflow_dispatch:
     inputs:
+      variant:
+        description: "Which image to wrap in an ISO"
+        required: false
+        default: nvidia
+        type: choice
+        options: [nvidia, amd]
       image_ref:
         description: "nextain/naia-os ref to take the ISO hook and version from"
         required: false
@@ -21,11 +27,11 @@ permissions:
   packages: read
 
 env:
-  IMAGE_NAME: naia-os
   IMAGE_REGISTRY: ghcr.io/nextain
   IMAGE_LAYER_REPO: nextain/naia-os
   R2_PUBLIC: https://pub-affd0538517845d98ce44a5aec11dd98.r2.dev
   R2_BUCKET: s3://naia-releases
+  # The two variants must not overwrite each other's ISO.
   ISO_KEY: naia-os-live-amd64.iso
 
 jobs:
@@ -46,6 +52,16 @@ jobs:
           repository: ${{ env.IMAGE_LAYER_REPO }}
           ref: ${{ inputs.image_ref || 'main' }}
 
+      - name: Resolve the variant
+        id: variant
+        run: |
+          set -euo pipefail
+          case "${{ inputs.variant || 'nvidia' }}" in
+            nvidia) echo "image=naia-os"     >> "$GITHUB_OUTPUT" ;;
+            amd)    echo "image=naia-os-amd" >> "$GITHUB_OUTPUT" ;;
+            *) echo "::error::unknown variant '${{ inputs.variant }}'"; exit 1 ;;
+          esac
+
       - name: Read the Naia OS version
         id: version
         run: |
@@ -65,7 +81,7 @@ jobs:
         id: image
         run: |
           set -euo pipefail
-          REF="${IMAGE_REGISTRY}/${IMAGE_NAME}"
+          REF="${IMAGE_REGISTRY}/${{ steps.variant.outputs.image }}"
           DIGEST="$(skopeo inspect --format '{{.Digest}}' "docker://${REF}:latest")"
           test -n "$DIGEST" || { echo "::error::could not resolve ${REF}:latest"; exit 1; }
           echo "ref=${REF}@${DIGEST}" >> "$GITHUB_OUTPUT"
@@ -141,7 +157,7 @@ jobs:
         run: |
           set -euo pipefail
           ISO_PATH="${{ steps.build.outputs.iso-dest }}"
-          PREFIX="builds/${{ steps.version.outputs.version }}.${{ steps.version.outputs.stamp }}"
+          PREFIX="builds/${{ inputs.variant || 'nvidia' }}/${{ steps.version.outputs.version }}.${{ steps.version.outputs.stamp }}"
           aws s3 cp "$ISO_PATH" "${R2_BUCKET}/${PREFIX}/${ISO_KEY}" --no-progress
           aws s3 cp "${ISO_PATH}-CHECKSUM" "${R2_BUCKET}/${PREFIX}/${ISO_KEY}-CHECKSUM" --no-progress
           echo "prefix=${PREFIX}" >> "$GITHUB_OUTPUT"
@@ -175,8 +191,8 @@ jobs:
         if: github.ref == 'refs/heads/main'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: iso-${{ steps.version.outputs.version }}.${{ steps.version.outputs.date }}.${{ github.run_number }}
-          name: "Naia OS ${{ steps.version.outputs.version }} (Build #${{ github.run_number }}, ${{ steps.version.outputs.date }})"
+          tag_name: iso-${{ inputs.variant || 'nvidia' }}-${{ steps.version.outputs.version }}.${{ steps.version.outputs.date }}.${{ github.run_number }}
+          name: "Naia OS ${{ steps.version.outputs.version }} ${{ inputs.variant || 'nvidia' }} (Build #${{ github.run_number }}, ${{ steps.version.outputs.date }})"
           body: |
             Naia OS ${{ steps.version.outputs.version }} live ISO.
 
