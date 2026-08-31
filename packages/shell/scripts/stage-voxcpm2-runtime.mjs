@@ -165,7 +165,7 @@ export function verifyVoxCpm2ArchiveActivationContract({
 			);
 	}
 	if (expectedManifestSha256) {
-		const manifest = spawnSync(
+		let manifest = spawnSync(
 			tar,
 			["-xOf", basename(archive), "artifact-manifest.json"],
 			{
@@ -174,6 +174,19 @@ export function verifyVoxCpm2ArchiveActivationContract({
 				maxBuffer: 16 * 1024 * 1024,
 			},
 		);
+		// GNU tar records files packaged from `.` with a leading `./`, while
+		// bsdtar (used by the Windows release job) accepts the normalized name.
+		// Try the literal archive entry as a portability fallback.
+		if (manifest.status !== 0)
+			manifest = spawnSync(
+				tar,
+				["-xOf", basename(archive), "./artifact-manifest.json"],
+				{
+					windowsHide: true,
+					cwd: dirname(archive),
+					maxBuffer: 16 * 1024 * 1024,
+				},
+			);
 		const actualManifestSha256 =
 			manifest.status === 0
 				? createHash("sha256").update(manifest.stdout).digest("hex")

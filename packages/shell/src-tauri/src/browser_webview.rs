@@ -358,6 +358,59 @@ pub async fn browser_wv_create(
     .await
     .map_err(|e| format!("spawn_blocking: {e}"))??;
 
+    // On Linux, Tauri's unstable `Window::add_child` builds WebKitGTK views
+    // into Tao's default GtkBox. GtkBox ignores child x/y bounds and stacks
+    // the second webview below the main one. Move both views into an overlay
+    // with a positioned overlay so browser bounds are window-relative as they are
+    // on Windows and macOS.
+    #[cfg(target_os = "linux")]
+    {
+        use gtk::prelude::*;
+
+        let browser = app
+            .get_webview(BROWSER_LABEL)
+            .ok_or("Browser webview missing after creation")?;
+        browser
+            .with_webview(move |platform| {
+                let browser_widget = platform.inner();
+                let Some(parent) = browser_widget.parent() else {
+                    return;
+                };
+                let Ok(vbox) = parent.dynamic_cast::<gtk::Box>() else {
+                    return;
+                };
+                let Some(main_widget) = vbox
+                    .children()
+                    .into_iter()
+                    .find(|widget| widget != browser_widget.upcast_ref::<gtk::Widget>())
+                else {
+                    return;
+                };
+
+                vbox.remove(&main_widget);
+                vbox.remove(&browser_widget);
+
+                let overlay = gtk::Overlay::new();
+                overlay.set_hexpand(true);
+                overlay.set_vexpand(true);
+                overlay.add(&main_widget);
+                overlay.add_overlay(&browser_widget);
+                browser_widget.set_halign(gtk::Align::Start);
+                browser_widget.set_valign(gtk::Align::Start);
+                browser_widget.set_margin_start(x as i32);
+                browser_widget.set_margin_top(y as i32);
+                browser_widget.set_size_request(width as i32, height as i32);
+                vbox.pack_start(&overlay, true, true, 0);
+                // Do not use show_all(): the browser is created while its
+                // keep-alive app is inactive, and showing the native widget
+                // here makes it intercept clicks above the React app. Its
+                // visibility remains owned by browser_wv_show/browser_wv_hide.
+                main_widget.show();
+                overlay.show();
+            })
+            .map_err(|e| format!("linux browser overlay: {e}"))?;
+    }
+
     crate::log_verbose("[browser_wv] child webview created");
     Ok(())
 }
@@ -372,11 +425,26 @@ pub async fn browser_wv_resize(
     height: f64,
 ) -> Result<(), String> {
     let wv = get_wv(&app)?;
-    wv.set_position(LogicalPosition::new(x, y))
-        .map_err(|e| format!("set_position: {e}"))?;
-    wv.set_size(LogicalSize::new(width, height))
-        .map_err(|e| format!("set_size: {e}"))?;
-    Ok(())
+    #[cfg(target_os = "linux")]
+    {
+        use gtk::prelude::*;
+        return wv
+            .with_webview(move |platform| {
+                let widget = platform.inner();
+                widget.set_margin_start(x as i32);
+                widget.set_margin_top(y as i32);
+                widget.set_size_request(width as i32, height as i32);
+            })
+            .map_err(|e| format!("linux browser resize: {e}"));
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        wv.set_position(LogicalPosition::new(x, y))
+            .map_err(|e| format!("set_position: {e}"))?;
+        wv.set_size(LogicalSize::new(width, height))
+            .map_err(|e| format!("set_size: {e}"))?;
+        Ok(())
+    }
 }
 
 /// Show the browser webview (app activated).

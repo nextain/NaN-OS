@@ -2,6 +2,12 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+const { mockNavigate, mockSetActiveApp, mockOpenUrl } = vi.hoisted(() => ({
+	mockNavigate: vi.fn(),
+	mockSetActiveApp: vi.fn(),
+	mockOpenUrl: vi.fn().mockResolvedValue(undefined),
+}));
+
 // ── Mocks ──────────────────────────────────────────────────────────────────
 
 vi.mock("@tauri-apps/api/core", () => ({
@@ -11,6 +17,10 @@ vi.mock("@tauri-apps/api/core", () => ({
 vi.mock("@tauri-apps/api/event", () => ({
 	listen: vi.fn().mockResolvedValue(() => {}),
 	emit: vi.fn().mockResolvedValue(undefined),
+}));
+
+vi.mock("@tauri-apps/plugin-opener", () => ({
+	openUrl: mockOpenUrl,
 }));
 
 const mockLoadBrowserShortcuts = vi.fn().mockResolvedValue([]);
@@ -31,6 +41,7 @@ vi.mock("../../lib/browser-prefs", () => ({
 
 vi.mock("../../lib/config", () => ({
 	loadConfig: vi.fn().mockReturnValue(null),
+	NAIA_WEB_BASE_URL: "https://dev.naia.land",
 	saveConfig: vi.fn(),
 }));
 
@@ -42,7 +53,9 @@ vi.mock("../../lib/app-registry", () => ({
 	appRegistry: {
 		list: vi.fn().mockReturnValue([]),
 		get: vi.fn().mockReturnValue(undefined),
-		getApi: vi.fn().mockReturnValue(undefined),
+		getApi: vi.fn((id: string) =>
+			id === "browser" ? { navigate: mockNavigate } : undefined,
+		),
 		unregister: vi.fn(),
 	},
 	// Stub bridge: active-bridge.ts constructs one at module load. Keep it a
@@ -77,7 +90,7 @@ vi.mock("../../stores/app", () => {
 	// state 는 lazy 생성(호출 시점) — 팩토리는 hoist 되어 module-level mock 보다 먼저 실행되므로.
 	const getState = () => ({
 		activeApp: null,
-		setActiveApp: vi.fn(),
+		setActiveApp: mockSetActiveApp,
 		setActiveAppContext: vi.fn(),
 		appListVersion: 0,
 		bumpAppListVersion: vi.fn(),
@@ -116,12 +129,42 @@ describe("AppBar — add dialog", () => {
 		expect(screen.getByTitle("appbar.addItem")).toBeDefined();
 	});
 
-	it("keeps desktop, browser, app store, workspace as the first four tabs", () => {
+	it("keeps desktop, browser, workspace as the first three tabs", () => {
 		render(<AppBar />);
-		const titles = Array.from(document.querySelectorAll(".app-bar-tabs > button"))
-			.slice(0, 4)
-			.map((node) => node.getAttribute("title"));
-		expect(titles).toEqual(["바탕화면", "브라우저", "앱스토어", "작업공간"]);
+		const buttons = Array.from(
+			document.querySelectorAll(".app-bar-tabs > button"),
+		).slice(0, 3);
+		expect(buttons.map((node) => node.getAttribute("aria-label"))).toEqual([
+			"바탕화면",
+			"브라우저",
+			"작업공간",
+		]);
+		expect(buttons.map((node) => node.getAttribute("data-app-id"))).toEqual([
+			"desktop",
+			"browser",
+			"workspace",
+		]);
+		expect(screen.queryByLabelText("앱스토어")).toBeNull();
+	});
+
+	it("keeps direct app install as the second add-dialog item", () => {
+		const onAddApp = vi.fn();
+		render(<AppBar onAddApp={onAddApp} />);
+		fireEvent.click(screen.getByTitle("appbar.addItem"));
+		fireEvent.click(screen.getByText("appbar.addApp").closest("button")!);
+
+		expect(onAddApp).toHaveBeenCalledTimes(1);
+		expect(mockOpenUrl).not.toHaveBeenCalled();
+	});
+
+	it("opens the third app-store item in the system browser", () => {
+		render(<AppBar />);
+		fireEvent.click(screen.getByTitle("appbar.addItem"));
+		fireEvent.click(screen.getByText("appbar.appStore").closest("button")!);
+
+		expect(mockOpenUrl).toHaveBeenCalledWith("https://dev.naia.land/ko/apps");
+		expect(mockSetActiveApp).not.toHaveBeenCalledWith("browser");
+		expect(mockNavigate).not.toHaveBeenCalled();
 	});
 
 	it("opens add-url dialog when + clicked", () => {
@@ -129,6 +172,10 @@ describe("AppBar — add dialog", () => {
 		fireEvent.click(screen.getByTitle("appbar.addItem"));
 		expect(screen.getByText("appbar.addShortcut")).toBeDefined();
 		expect(screen.getByText("appbar.addApp")).toBeDefined();
+		expect(screen.getByText("appbar.appStore")).toBeDefined();
+		expect(
+			document.querySelectorAll(".app-bar-url-dialog__section"),
+		).toHaveLength(3);
 	});
 
 	it("calls pushModal when add dialog opens", () => {

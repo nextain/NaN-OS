@@ -18,29 +18,13 @@ import {
 	stopListening as sttStop,
 } from "tauri-plugin-stt-api";
 import { activeBridge, getBridgeForApp } from "../lib/active-bridge";
-import { MarkdownCodeBlock } from "./MarkdownCodeBlock";
 import {
 	formatAiInterferencePrompt,
 	onAiInterferenceEvent,
 } from "../lib/ai-interference";
+import { appRegistry } from "../lib/app-registry";
 import { type AudioPlayer, createAudioPlayer } from "../lib/audio-player";
-import { makeCoreAudioPlayer } from "../lib/voice-core";
 import { getDefaultVoiceForAvatar } from "../lib/avatar-presets";
-import {
-	cancelChat,
-	configureSpeechProfile,
-	controlSpeechActivity,
-	directToolCall,
-	fetchAgentSkills,
-	isNewCore,
-	sendApprovalResponse,
-	sendChatMessage,
-	sendAppSkills,
-	sendAppSkillsClear,
-	sendAppToolResult,
-	yieldSpeechActivity,
-	type SpeechActivityResume,
-} from "../lib/chat-service";
 import {
 	BGM_APP_ID,
 	SKILL_YOUTUBE_BGM,
@@ -48,37 +32,26 @@ import {
 	shouldActivateRadioDj,
 } from "../lib/bgm-skill";
 import {
-	ENVIRONMENT_APP_ID,
-	SKILL_ENVIRONMENT,
-	executeEnvironmentSkill,
-	liveEnvironmentDeps,
-	environmentClearNeeded,
-	environmentSession,
-	environmentToolRegistered,
-	noteEnvironmentClear,
-	noteEnvironmentToolAck,
-	refreshEnvironment,
-} from "../lib/environment-skill";
+	type SpeechActivityResume,
+	cancelChat,
+	configureSpeechProfile,
+	controlSpeechActivity,
+	directToolCall,
+	fetchAgentSkills,
+	isNewCore,
+	sendAppSkills,
+	sendAppSkillsClear,
+	sendAppToolResult,
+	sendApprovalResponse,
+	sendChatMessage,
+	yieldSpeechActivity,
+} from "../lib/chat-service";
 import {
-	activateMicUnlessSpeechActivityOwnsVoice,
-	canSpeakProactiveText,
-	parseSpeechProfileCommand,
-	resolveSpeechProfileSession,
-	shouldAbortLiveConnectForSpeechActivity,
-	shouldBlockDirectLiveForSpeechActivity,
-	shouldQueueBeforeSpeechYield,
-} from "../lib/speech-profile-commands";
-import {
-	RADIO_DJ_DEFAULT_SETTINGS,
-	normalizeProactiveSpeechSettings,
-	toSpeechProfileCommandInput,
-} from "../lib/proactive-speech-settings";
-import {
+	type AppConfig,
 	DEFAULT_NAIA_LOCAL_URL,
 	DEFAULT_VLLM_HOST,
 	DEFAULT_VOICE_REF_URL,
 	LAB_GATEWAY_URL,
-	type AppConfig,
 	addAllowedTool,
 	getNaiaInstanceId,
 	isToolAllowed,
@@ -89,11 +62,22 @@ import {
 	saveConfig,
 } from "../lib/config";
 import {
+	ENVIRONMENT_APP_ID,
+	SKILL_ENVIRONMENT,
+	environmentClearNeeded,
+	environmentSession,
+	environmentToolRegistered,
+	executeEnvironmentSkill,
+	liveEnvironmentDeps,
+	noteEnvironmentClear,
+	noteEnvironmentToolAck,
+	refreshEnvironment,
+} from "../lib/environment-skill";
+import {
 	discoverAndPersistDiscordDmChannel,
 	resetGatewaySession,
 } from "../lib/gateway-sessions";
 import { getLocale, t } from "../lib/i18n";
-import { wireErrorMessage } from "../lib/wire-errors";
 import {
 	getDefaultLlmModel,
 	getLlmModel,
@@ -104,8 +88,27 @@ import {
 import { ThinkingStreamFilter } from "../lib/llm/thinking-stream-filter";
 import { Logger } from "../lib/logger";
 import { type MicStream, createMicStream } from "../lib/mic-stream";
-import { appRegistry } from "../lib/app-registry";
 import { type MemoryContext, buildSystemPrompt } from "../lib/persona";
+import {
+	RADIO_DJ_DEFAULT_SETTINGS,
+	normalizeProactiveSpeechSettings,
+	toSpeechProfileCommandInput,
+} from "../lib/proactive-speech-settings";
+import {
+	SLIDE_PRESENTER_CANCEL_EVENT,
+	SLIDE_PRESENTER_SPEAK_EVENT,
+	SLIDE_PRESENTER_SPEECH_RESULT_EVENT,
+	type SlidePresenterSpeechRequest,
+} from "../lib/slide-presenter-events";
+import {
+	activateMicUnlessSpeechActivityOwnsVoice,
+	canSpeakProactiveText,
+	parseSpeechProfileCommand,
+	resolveSpeechProfileSession,
+	shouldAbortLiveConnectForSpeechActivity,
+	shouldBlockDirectLiveForSpeechActivity,
+	shouldQueueBeforeSpeechYield,
+} from "../lib/speech-profile-commands";
 import {
 	createApiSttSession,
 	createWebSpeechSttSession,
@@ -119,11 +122,6 @@ import {
 	createSentenceTtsPipeline,
 } from "../lib/tts/sentence-pipeline";
 import { ttsTextFilter } from "../lib/tts/text-filter";
-import {
-	decideSttBargeIn,
-	isLikelySelfEcho,
-	shouldPauseSttForTts,
-} from "../lib/voice/echo-gate";
 import type {
 	AgentResponseChunk,
 	AuditEvent,
@@ -131,6 +129,14 @@ import type {
 	EnvironmentSegment,
 	ProviderId,
 } from "../lib/types";
+import { makeCoreAudioPlayer } from "../lib/voice-core";
+import {
+	decideSttBargeIn,
+	isLikelySelfEcho,
+	shouldPauseSttForTts,
+} from "../lib/voice/echo-gate";
+import { wireErrorMessage } from "../lib/wire-errors";
+import { MarkdownCodeBlock } from "./MarkdownCodeBlock";
 
 type StructuredAgentChunk = Extract<
 	AgentResponseChunk,
@@ -169,8 +175,8 @@ function formatStructuredAgentChunk(chunk: StructuredAgentChunk): string {
 
 import { AudioQueue } from "../lib/voice/audio-queue";
 import {
-	LIVE_PROVIDER_COST_HINTS,
 	type AppContextBridge,
+	LIVE_PROVIDER_COST_HINTS,
 	SPEECH_RMS_THRESHOLD,
 	type VoiceCloseReason,
 	type VoiceConnectionStatus,
@@ -182,11 +188,11 @@ import {
 import { getLocalRefAudioB64 } from "../lib/voice/ref-audio-api";
 import { SentenceChunker } from "../lib/voice/sentence-chunker";
 import { extractExpression, mapServerEmotion } from "../lib/vrm/expression";
+import { selectPromptAppContexts, useAppStore } from "../stores/app";
 import { useAvatarStore } from "../stores/avatar";
 import { useCascadeAvatarStore } from "../stores/cascade-avatar";
 import { useChatStore } from "../stores/chat";
 import { useLogsStore } from "../stores/logs";
-import { selectPromptAppContexts, useAppStore } from "../stores/app";
 import { useProgressStore } from "../stores/progress";
 import { useSkillsStore } from "../stores/skills";
 import { AgentsTab } from "./AgentsTab";
@@ -196,8 +202,8 @@ import {
 	type AtMentionResult,
 	isWorkspaceAvailable,
 } from "./AtMentionPopover";
-import { CostDashboard } from "./CostDashboard";
 import { ChannelsTab } from "./ChannelsTab";
+import { CostDashboard } from "./CostDashboard";
 import { DiagnosticsTab } from "./DiagnosticsTab";
 import { HistoryTab } from "./HistoryTab";
 import { PermissionModal } from "./PermissionModal";
@@ -496,7 +502,10 @@ function buildEnvironmentSegments(
 	// 목록을 보낸다. 사용자 정책이 이긴다는 FR-ENV-ATTENTION.4 와 어긋나지 않게
 	// (2026-08-28 21차 적대리뷰 지적 — 구현이 조용히 반대로 정하고 있었다).
 	const awareness = loadConfig()?.environmentAwareness ?? "auto";
-	const surfaces = awareness === "always" || toolReady ? environmentSession.segment(awareness) : null;
+	const surfaces =
+		awareness === "always" || toolReady
+			? environmentSession.segment(awareness)
+			: null;
 	if (surfaces) {
 		segs.push(surfaces);
 	}
@@ -767,6 +776,8 @@ export function ChatArea({
 	// calls the public interface. The pipeline owns the request lifecycle, the
 	// one-time local-voice notice, and the recent-utterance ring (echo filter).
 	const sentencePipelineRef = useRef<SentenceTtsPipeline | null>(null);
+	const activeSlidePresenterSpeechRef =
+		useRef<SlidePresenterSpeechRequest | null>(null);
 	if (!sentencePipelineRef.current) {
 		sentencePipelineRef.current = createSentenceTtsPipeline({
 			generateRequestId,
@@ -792,7 +803,10 @@ export function ChatArea({
 				setTtsPlaying(on);
 				useAvatarStore.getState().setSpeaking(on);
 				// #423: browser speech end/error releases the held expression.
-				if (!on) settleAvatarEmotionIfIdle();
+				if (!on) {
+					settleAvatarEmotionIfIdle();
+					settleSlidePresenterSpeech("finished");
+				}
 			},
 			getLocalRefAudioB64: () => getLocalRefAudioB64(),
 			addCostEntry: (entry) =>
@@ -1115,7 +1129,27 @@ export function ChatArea({
 	 * does not control. Also clears the sentence chunker and pending request
 	 * tracking, and resets the speaking/avatar state.
 	 */
+	function settleSlidePresenterSpeech(
+		status: "finished" | "cancelled" | "failed",
+		error?: string,
+	): void {
+		const active = activeSlidePresenterSpeechRef.current;
+		if (!active) return;
+		activeSlidePresenterSpeechRef.current = null;
+		window.dispatchEvent(
+			new CustomEvent(SLIDE_PRESENTER_SPEECH_RESULT_EVENT, {
+				detail: { ...active, status, error },
+			}),
+		);
+		Logger.info("ChatArea", "slide narration settled", {
+			page: active.page,
+			generation: active.generation,
+			status,
+		});
+	}
+
 	function interruptTts(): void {
+		settleSlidePresenterSpeech("cancelled");
 		// Reveal the canonical response immediately on interruption and invalidate
 		// late playback callbacks from the superseded turn.
 		ttsTextSyncRef.current.generation++;
@@ -1162,6 +1196,7 @@ export function ChatArea({
 				ttsPlayingRef.current = false;
 				setTtsPlaying(false);
 				settleAvatarEmotionIfIdle();
+				settleSlidePresenterSpeech("finished");
 			}
 		};
 	}
@@ -1294,6 +1329,7 @@ export function ChatArea({
 					setTtsPlaying(false);
 					useCascadeAvatarStore.getState().renderer?.setSpeakingVisual(false);
 					settleAvatarEmotionIfIdle();
+					settleSlidePresenterSpeech("finished");
 				},
 			});
 		}
@@ -1315,6 +1351,87 @@ export function ChatArea({
 			vllmTtsHost: config.vllmTtsHost,
 		};
 	}
+
+	// Slides requests narration but never synthesizes or plays audio itself.
+	// This bridge is the only presentation entry into the Shell TTS pipeline.
+	useEffect(() => {
+		let disposed = false;
+		const handleSpeak = (event: Event) => {
+			const detail = (event as CustomEvent<SlidePresenterSpeechRequest>).detail;
+			if (
+				!detail?.requestId ||
+				!Number.isSafeInteger(detail.generation) ||
+				!Number.isSafeInteger(detail.page) ||
+				!detail.text?.trim()
+			) {
+				return;
+			}
+			interruptTts();
+			activeSlidePresenterSpeechRef.current = detail;
+			void (async () => {
+				for (
+					let attempt = 0;
+					currentRequestId.current && attempt < 100;
+					attempt++
+				) {
+					await new Promise((resolve) => setTimeout(resolve, 100));
+					if (
+						activeSlidePresenterSpeechRef.current?.requestId !==
+						detail.requestId
+					)
+						return;
+				}
+				if (
+					disposed ||
+					activeSlidePresenterSpeechRef.current?.requestId !== detail.requestId
+				)
+					return;
+				if (currentRequestId.current) {
+					settleSlidePresenterSpeech("failed", "chat_busy");
+					return;
+				}
+				const config = await loadConfigWithSecrets();
+				if (!config || config.ttsEnabled !== true) {
+					settleSlidePresenterSpeech("failed", "tts_disabled");
+					return;
+				}
+				initializeSpeechTts(config);
+				beginProactiveTtsTextSync(detail.text.trim());
+				sendSentenceToTts(detail.text.trim());
+				finishLocalVoicePrebuffer();
+				Logger.info("ChatArea", "slide narration entered TTS pipeline", {
+					page: detail.page,
+					generation: detail.generation,
+					characters: detail.text.trim().length,
+				});
+			})().catch((error) => {
+				if (
+					activeSlidePresenterSpeechRef.current?.requestId === detail.requestId
+				) {
+					settleSlidePresenterSpeech("failed", String(error));
+				}
+			});
+		};
+		const handleCancel = (event: Event) => {
+			const detail = (
+				event as CustomEvent<{ requestId?: string; generation?: number }>
+			).detail;
+			const active = activeSlidePresenterSpeechRef.current;
+			if (!active) return;
+			if (detail?.requestId && detail.requestId !== active.requestId) return;
+			if (detail?.generation != null && detail.generation !== active.generation)
+				return;
+			interruptTts();
+		};
+		window.addEventListener(SLIDE_PRESENTER_SPEAK_EVENT, handleSpeak);
+		window.addEventListener(SLIDE_PRESENTER_CANCEL_EVENT, handleCancel);
+		return () => {
+			disposed = true;
+			window.removeEventListener(SLIDE_PRESENTER_SPEAK_EVENT, handleSpeak);
+			window.removeEventListener(SLIDE_PRESENTER_CANCEL_EVENT, handleCancel);
+			if (activeSlidePresenterSpeechRef.current) interruptTts();
+		};
+	}, []);
 
 	// Configure the explicitly persisted opt-in profile and consume its
 	// request-independent activity stream. Ordinary chat listeners deliberately
@@ -1819,17 +1936,24 @@ export function ChatArea({
 				// 등록을 쏘되 기다리지 않는다. 기다리면 확인이 오지 않을 때 사용자의 모든
 				// 대화가 시간초과만큼 멈춘다 — 실제로 그렇게 만들어 12건이 깨졌다(2026-08-28).
 				// 확인이 돌아오면 상태가 바뀌고, 이 턴은 마지막으로 확인된 상태를 쓴다.
-				void sendAppSkills(ENVIRONMENT_APP_ID, [SKILL_ENVIRONMENT], { awaitAck: true })
+				void sendAppSkills(ENVIRONMENT_APP_ID, [SKILL_ENVIRONMENT], {
+					awaitAck: true,
+				})
 					.then((ok) => noteEnvironmentToolAck(ok))
 					.catch(() => noteEnvironmentToolAck(false));
 				// 도구가 꺼져 있으면 나이아는 observe/watch 를 부를 수 없다. 그런데도 개수를
 				// 실으면 안내가 "필요하면 도구를 불러라"라고 말한다 — 닫힌 길을 가리키는 셈이다
 				// (2026-08-28 19차 적대리뷰 지적). 등록 확인과 도구 활성화를 함께 본다.
-				environmentToolReady = environmentToolRegistered() && config.enableTools === true;
+				environmentToolReady =
+					environmentToolRegistered() && config.enableTools === true;
 				if (!environmentToolReady) {
-					Logger.warn("ChatArea", "environment skill not confirmed — skipping surfaces", {
-						requestId,
-					});
+					Logger.warn(
+						"ChatArea",
+						"environment skill not confirmed — skipping surfaces",
+						{
+							requestId,
+						},
+					);
 				}
 				await refreshEnvironment().catch(() => null);
 			}
@@ -2097,7 +2221,9 @@ export function ChatArea({
 				),
 			)
 				.then((result) => {
-					Logger.info("ChatArea", "environment skill result", { result: result.text });
+					Logger.info("ChatArea", "environment skill result", {
+						result: result.text,
+					});
 					return sendAppToolResult(
 						req.requestId,
 						req.toolCallId,
@@ -3313,7 +3439,8 @@ export function ChatArea({
 						// voice can drive apps. Auto-switches to the owner app.
 						// 실시간 음성은 셸이 요청을 조립하지 않는다 — 기본값(false)이 사실이다.
 						// 이 통화가 켠 지켜보기에는 통화 식별자를 남긴다(FR-ENV-ATTENTION.13).
-						onAppToolCall: (req) => dispatchAppToolCall(req, { watchOwner: voiceSessionKey }),
+						onAppToolCall: (req) =>
+							dispatchAppToolCall(req, { watchOwner: voiceSessionKey }),
 						onAppControl: (req) => dispatchAppControl(req),
 					});
 					session.sendToolResponse(callId, result.output);

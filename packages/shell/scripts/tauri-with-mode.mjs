@@ -279,10 +279,11 @@ env.NAIA_CASCADE_LOADER_DIR = env.NAIA_CASCADE_LOADER_DIR ?? WINDOWS_MANAGER;
 // Linux GTK 백엔드: 옛 naia-os 는 x11 무조건 강제(WebKitGTK XReparentWindow embedding).
 // 그러나 XWayland 없는 순수 Wayland 세션(KDE Plasma 등, DISPLAY 비어있음)에선 x11 백엔드가
 // 붙을 X 가 없어 GTK init 패닉(2026-06-13 실측: 루크 KDE Wayland tauri:dev 기동 불가).
-// → X 가 실제로 있을 때만 x11, 아니면 wayland. 호출자 명시값(GDK_BACKEND)은 보존.
+// → X 가 실제로 있을 때는 x11을 강제한다. Wayland에서 Tauri child WebView
+//   좌표가 무시되어 메인 창 아래에 붙는 회귀가 있다.
 if (platform() === "linux") {
-	const hasX = !!(env.DISPLAY && env.DISPLAY.trim());
-	env.GDK_BACKEND = env.GDK_BACKEND ?? (hasX ? "x11" : "wayland");
+	const hasX = !!env.DISPLAY?.trim();
+	env.GDK_BACKEND = hasX ? "x11" : (env.GDK_BACKEND ?? "wayland");
 	// Wayland 백엔드: WebKitGTK DMABUF 렌더 버그(빈 화면) 회피로 소프트웨어 렌더 강제.
 	// (2026-06-13: 이걸 떼고 하드웨어 GL 로 시도했더니 루크 환경에서 *오히려 더 느렸음* → 기동 지연의 원인은
 	// GL 모드가 아니었다. 따라서 DMABUF off 유지가 그나마 나음. 기동 ~90초 지연(webview JS 스레드 블록 — set_root/

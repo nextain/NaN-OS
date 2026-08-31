@@ -833,6 +833,12 @@ html[data-bgm-youtube-background="hidden"] .app-bg-iframe {
 	flex-shrink: 0;
 }
 
+.app-bar-url-dialog__section-icon svg {
+	display: block;
+	width: 32px;
+	height: 32px;
+}
+
 .app-bar-url-dialog__section-text {
 	display: flex;
 	flex-direction: column;
@@ -9440,9 +9446,7 @@ body.resizing-col * {
 
 /* Tab mode: show only the focused terminal (cells are stacked absolute). */
 .workspace-app__terminal-area:not(.workspace-app__terminal-area--grid)
-	.workspace-app__terminal-cell:not(
-		.workspace-app__terminal-cell--focused
-	) {
+	.workspace-app__terminal-cell:not(.workspace-app__terminal-cell--focused) {
 	display: none;
 }
 

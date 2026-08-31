@@ -2,10 +2,18 @@ import { invoke } from "@tauri-apps/api/core";
 import { useEffect, useState } from "react";
 import { Logger } from "../lib/logger";
 import { loadInstalledApps } from "../lib/app-loader";
+import {
+	getStoreGatewayUrl,
+	getStoreProductName,
+	hasStoreEntitlement,
+	type AppInstallRequest,
+} from "../lib/app-store-client";
+import { t } from "../lib/i18n";
 import { useAppStore } from "../stores/app";
 
 interface AppInstallDialogProps {
 	onClose: () => void;
+	request?: AppInstallRequest;
 }
 
 type Mode = "git" | "file";
@@ -21,11 +29,12 @@ interface AppInstallResult {
 	path: string;
 }
 
-export function AppInstallDialog({ onClose }: AppInstallDialogProps) {
+export function AppInstallDialog({ onClose, request }: AppInstallDialogProps) {
 	const [mode, setMode] = useState<Mode>("git");
 	const [gitUrl, setGitUrl] = useState("");
 	const [loading, setLoading] = useState(false);
 	const [result, setResult] = useState<InstallResult | null>(null);
+	const [displayName, setDisplayName] = useState(request?.name || request?.appId || "");
 	const pushModal = useAppStore((s) => s.pushModal);
 	const popModal = useAppStore((s) => s.popModal);
 
@@ -35,7 +44,37 @@ export function AppInstallDialog({ onClose }: AppInstallDialogProps) {
 		return () => popModal();
 	}, [pushModal, popModal]);
 
+	useEffect(() => {
+		if (!request || request.name) return;
+		void getStoreProductName(request.appId)
+			.then((name) => name && setDisplayName(name))
+			.catch(() => {});
+	}, [request]);
+
 	async function handleInstall() {
+		if (request) {
+			setLoading(true);
+			setResult(null);
+			try {
+				if (!(await hasStoreEntitlement(request.appId))) {
+					throw new Error(t("apps.loginRequired"));
+				}
+				const res = await invoke<AppInstallResult>("app_install_store", {
+					appId: request.appId,
+					gatewayUrl: getStoreGatewayUrl(),
+				});
+				await loadInstalledApps();
+				setResult({
+					success: true,
+					message: t("apps.installed").replace("{name}", res.name),
+				});
+			} catch (err) {
+				setResult({ success: false, message: String(err) });
+			} finally {
+				setLoading(false);
+			}
+			return;
+		}
 		// Zip install is gated (#359) — only Git URL is wired today.
 		if (mode !== "git") return;
 		const source = gitUrl.trim();
@@ -76,7 +115,7 @@ export function AppInstallDialog({ onClose }: AppInstallDialogProps) {
 				onKeyDown={() => {}}
 			>
 				<div className="app-install-header">
-					<span className="app-install-title">앱 추가</span>
+					<span className="app-install-title">{request ? "Naia Apps" : "앱 추가"}</span>
 					<button
 						type="button"
 						className="app-install-close"
@@ -86,7 +125,14 @@ export function AppInstallDialog({ onClose }: AppInstallDialogProps) {
 					</button>
 				</div>
 
-				{mode === "git" ? (
+				{request ? (
+					<div className="app-install-body">
+						<div className="app-install-notice" data-testid="app-install-product">
+							<strong>{displayName}</strong>
+							<p>{t("apps.defaultDescription")}</p>
+						</div>
+					</div>
+				) : mode === "git" ? (
 					<div className="app-install-body">
 						<label className="app-install-label" htmlFor="git-url-input">
 							Git URL
@@ -123,7 +169,7 @@ export function AppInstallDialog({ onClose }: AppInstallDialogProps) {
 				)}
 
 				<div className="app-install-footer">
-					<div className="app-install-tabs">
+					{!request && <div className="app-install-tabs">
 						<button
 							type="button"
 							className={`app-install-tab${mode === "git" ? " active" : ""}`}
@@ -138,7 +184,7 @@ export function AppInstallDialog({ onClose }: AppInstallDialogProps) {
 						>
 							파일 (Zip · 준비 중)
 						</button>
-					</div>
+					</div>}
 					<button
 						type="button"
 						className="app-install-cancel-btn"
@@ -151,9 +197,9 @@ export function AppInstallDialog({ onClose }: AppInstallDialogProps) {
 						type="button"
 						className="app-install-confirm-btn"
 						onClick={handleInstall}
-						disabled={loading || mode !== "git" || !gitUrl.trim()}
+						disabled={loading || (!request && (mode !== "git" || !gitUrl.trim()))}
 					>
-						{loading ? "설치 중..." : "추가"}
+						{loading ? "설치 중..." : request ? "설치" : "추가"}
 					</button>
 				</div>
 			</div>

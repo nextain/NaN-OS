@@ -36,9 +36,10 @@ fn main() {
         unsafe {
             std::env::set_var("WEBKIT_DISABLE_DMABUF_RENDERER", "1");
             // Force X11 backend for Chrome embedding (X11 reparenting).
-            // Only set if XWayland is available (check DISPLAY env).
+            // Force it whenever XWayland is available: inherited Wayland makes
+            // child WebViews ignore their bounds and appear below the main window.
             // Wayland-only environments keep native Wayland (browser embedding won't work).
-            if std::env::var("GDK_BACKEND").is_err() && std::env::var("DISPLAY").is_ok() {
+            if std::env::var("DISPLAY").is_ok() {
                 std::env::set_var("GDK_BACKEND", "x11");
             }
         }

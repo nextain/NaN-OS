@@ -85,6 +85,18 @@ fn valid_port_override(value: Option<String>) -> Option<u16> {
         .filter(|port| *port != 0)
 }
 
+fn is_trusted_app_store_origin(value: &str) -> bool {
+    matches!(
+        value,
+        "https://www.naia.land"
+            | "https://naia.land"
+            | "https://dev.naia.land"
+            | "https://naia.nextain.io"
+    ) || (cfg!(debug_assertions)
+        && (value.starts_with("http://localhost:")
+            || value.starts_with("http://127.0.0.1:")))
+}
+
 /// Native E2E must never claim the user's OAuth callback port. The override is
 /// honoured only by the explicit debug acceptance runtime, or by the isolated
 /// dev instance (:18892 by default) so concurrent dev+production runs never
@@ -144,12 +156,7 @@ pub(crate) fn process_deep_link_url(
         }) else {
             return;
         };
-        let Some(store_origin) = store_origin.filter(|value| {
-            value == "https://naia.nextain.io"
-                || (cfg!(debug_assertions)
-                    && (value.starts_with("http://localhost:")
-                        || value.starts_with("http://127.0.0.1:")))
-        }) else {
+        let Some(store_origin) = store_origin.filter(|value| is_trusted_app_store_origin(value)) else {
             return;
         };
         let Some(state) = install_state.filter(|value| {
@@ -11918,6 +11925,21 @@ pub fn run() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn app_store_origin_accepts_azure_and_canonical_naia_hosts() {
+        assert!(is_trusted_app_store_origin("https://dev.naia.land"));
+        assert!(is_trusted_app_store_origin("https://www.naia.land"));
+        assert!(is_trusted_app_store_origin("https://naia.land"));
+        assert!(is_trusted_app_store_origin("https://naia.nextain.io"));
+    }
+
+    #[test]
+    fn app_store_origin_rejects_suffix_and_transport_spoofing() {
+        assert!(!is_trusted_app_store_origin("https://dev.naia.land.evil.test"));
+        assert!(!is_trusted_app_store_origin("http://dev.naia.land"));
+        assert!(!is_trusted_app_store_origin("https://evil.test"));
+    }
 
     fn write_test_file(path: &std::path::Path) {
         std::fs::create_dir_all(path.parent().unwrap()).unwrap();

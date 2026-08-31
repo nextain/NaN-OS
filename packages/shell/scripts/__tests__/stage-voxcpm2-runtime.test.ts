@@ -153,11 +153,12 @@ function fixture() {
 	const manifestPath = resolve(runtimeSource, "artifact-manifest.json");
 	writeFileSync(manifestPath, JSON.stringify(manifest));
 	const runtimeArchive = resolve(root, "voxcpm2-runtime.zip");
+	const tar = process.platform === "win32" ? "C:\\Windows\\System32\\tar.exe" : "tar";
 	packageVoxCpm2Runtime({
 		runtimeSource,
 		expectedManifestSha256: hash(manifestPath),
 		output: runtimeArchive,
-		tar: process.platform === "win32" ? "C:\\Windows\\System32\\tar.exe" : "tar",
+		tar,
 	});
 	return {
 		shellDir,
@@ -165,6 +166,7 @@ function fixture() {
 		expectedManifestSha256: hash(manifestPath),
 		runtimeArchive,
 		runtimeUrl: "https://downloads.nextain.io/voxcpm2/windows_trt_6g/test.zip",
+		tar,
 		verifyRemoteDownload: () => {},
 	};
 }

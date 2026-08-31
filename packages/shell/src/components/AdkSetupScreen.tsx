@@ -12,6 +12,7 @@ import {
 } from "../lib/adk-store";
 import { NAIA_WEB_BASE_URL } from "../lib/config";
 import { type TranslationKey, getLocale, t } from "../lib/i18n";
+import { OAUTH_CALLBACK_URL } from "../lib/oauth-callback-url";
 import { NAIA_SLOT_DEFAULTS, applyNaiaSlotDefaults } from "../lib/slots/model";
 
 interface AdkSetupScreenProps {
@@ -353,21 +354,14 @@ export function AdkSetupScreen({ onComplete }: AdkSetupScreenProps) {
 
 		try {
 			const lang = getLocale();
-			const loginUrl = `${getNaiaWebBaseUrl()}/${lang}/login?redirect=desktop&source=embedded`;
-			const ok = await invoke("browser_open_login", { url: loginUrl }).then(
-				() => true,
-				() => false,
-			);
-			if (ok) {
-				clearTimeout(timer);
-				return;
-			}
 			const state = await invoke<string>("generate_oauth_state").catch(
 				() => "",
 			);
 			const params = new URLSearchParams({
 				redirect: "desktop",
+				app: "naia-os",
 				source: "desktop",
+				redirect_uri: OAUTH_CALLBACK_URL,
 			});
 			if (state) params.set("state", state);
 			await openUrl(

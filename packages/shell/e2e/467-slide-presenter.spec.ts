@@ -265,12 +265,11 @@ test.describe("#467 slide presenter", () => {
 		});
 		await page.setViewportSize({ width: 1440, height: 900 });
 		await page.goto("/");
-		await expect(page.locator(".chat-panel")).toBeVisible({ timeout: 15_000 });
-		const slidesButton = page.locator('button[data-panel-id="land.naia.slides"]');
-		await expect(slidesButton).toBeVisible({ timeout: 10_000 });
+		const slidesButton = page.locator('button[data-app-id="land.naia.slides"]');
+		await expect(slidesButton).toBeVisible({ timeout: 15_000 });
 		await slidesButton.click();
 
-		const installed = page.frameLocator('.generic-installed-panel__iframe');
+		const installed = page.frameLocator('.generic-installed-app__iframe');
 		await expect(installed.locator(".slides-app")).toBeVisible({ timeout: 15_000 });
 		await installed.getByLabel("PDF 열기").setInputFiles({
 			name: "naia-slides-showcase.pdf",
@@ -291,18 +290,25 @@ test.describe("#467 slide presenter", () => {
 			path: "/var/home/luke/alpha-adk/projects/naia-land-worktrees/issue-471-apps/public/assets/apps/naia-slides-thumbnail.png",
 			fullPage: true,
 		});
+		await page.route("**/v1/apps/products", async (route) => {
+			await route.fulfill({
+				contentType: "application/json",
+				body: JSON.stringify({
+					data: [{ app_id: "land.naia.slides", manifest: { nameKo: "나이아 슬라이드" } }],
+				}),
+			});
+		});
 
 		await page.evaluate(() => {
 			(window as any).__NAIA_E2E_EMIT__("app_install_requested", {
 				appId: "land.naia.slides",
-				name: "Naia Slides",
 				storeOrigin: "http://localhost:3000",
 				state: "ir-capture-once",
 			});
 		});
-		await expect(page.locator(".panel-install-dialog")).toBeVisible();
-		await expect(page.locator(".panel-install-result strong")).toHaveText("Naia Slides");
-		await expect(page.locator(".panel-install-result")).toHaveCount(1);
+		await expect(page.locator(".app-install-dialog")).toBeVisible();
+		await expect(page.getByTestId("app-install-product")).toHaveCount(1);
+		await expect(page.getByTestId("app-install-product").locator("strong")).toHaveText("나이아 슬라이드");
 		await page.screenshot({ path: "test-results/issue-471-single-install-confirmation.png", fullPage: true });
 	});
 

@@ -1,3 +1,4 @@
+import { openUrl } from "@tauri-apps/plugin-opener";
 import {
 	type MouseEvent,
 	useCallback,
@@ -7,21 +8,21 @@ import {
 	useState,
 } from "react";
 import { createPortal } from "react-dom";
+import { getBridgeForApp } from "../lib/active-bridge";
+import { removeInstalledApp } from "../lib/app-loader";
+import { appRegistry } from "../lib/app-registry";
 import {
 	type BrowserLink,
 	addBrowserShortcut,
 	loadBrowserShortcuts,
 	onBrowserPrefsChanged,
-	reorderBrowserShortcuts,
 	removeBrowserShortcut,
+	reorderBrowserShortcuts,
 	updateBrowserShortcutIcon,
 } from "../lib/browser-prefs";
-import { loadConfig, saveConfig } from "../lib/config";
+import { NAIA_WEB_BASE_URL, loadConfig, saveConfig } from "../lib/config";
 import { getLocale, t } from "../lib/i18n";
 import { Logger } from "../lib/logger";
-import { getBridgeForApp } from "../lib/active-bridge";
-import { removeInstalledApp } from "../lib/app-loader";
-import { appRegistry } from "../lib/app-registry";
 import { useAppStore } from "../stores/app";
 import { BgmPlayer } from "./BgmPlayer";
 
@@ -37,7 +38,11 @@ function extractInitial(shortcut: BrowserLink): string {
 	return m ? m[1].toUpperCase() : "?";
 }
 
-export function AppBar() {
+interface AppBarProps {
+	onAddApp?: () => void;
+}
+
+export function AppBar({ onAddApp }: AppBarProps) {
 	const {
 		activeApp,
 		setActiveApp,
@@ -84,7 +89,9 @@ export function AppBar() {
 		() =>
 			appRegistry
 				.list()
-				.filter((p) => !["avatar", "settings", "browser", "workspace"].includes(p.id)),
+				.filter(
+					(p) => !["avatar", "settings", "browser", "workspace"].includes(p.id),
+				),
 		// appListVersion is the reactive dependency — registry is not observable directly
 		[appListVersion],
 	);
@@ -159,7 +166,17 @@ export function AppBar() {
 		window.setTimeout(navigate, 50);
 	}
 
-	const storeUrl = `https://naia.nextain.io/${getLocale()}/apps`;
+	const storeUrl = `${NAIA_WEB_BASE_URL.replace(/\/$/u, "")}/${getLocale()}/apps`;
+
+	async function openAppStore() {
+		try {
+			await openUrl(storeUrl);
+		} catch (error) {
+			Logger.warn("AppBar", "Failed to open app store in system browser", {
+				error: String(error),
+			});
+		}
+	}
 
 	function handleCtxRemoveShortcut() {
 		if (!ctxMenu?.shortcutUrl) return;
@@ -323,18 +340,28 @@ export function AppBar() {
 				<button
 					type="button"
 					className={`app-bar-tab${activeApp === null ? " app-bar-tab--active" : ""}`}
+					data-app-id="desktop"
 					onClick={() => setActiveApp(null)}
-					title="바탕화면"
+					aria-label="바탕화면"
 				>
 					<span className="app-bar-tab-icon">🖥️</span>
 				</button>
-				<button type="button" className={`app-bar-tab${activeApp === "browser" ? " app-bar-tab--active" : ""}`} title={getLocale() === "ko" ? "브라우저" : "Browser"} onClick={() => setActiveApp("browser")}>
+				<button
+					type="button"
+					className={`app-bar-tab${activeApp === "browser" ? " app-bar-tab--active" : ""}`}
+					data-app-id="browser"
+					aria-label={getLocale() === "ko" ? "브라우저" : "Browser"}
+					onClick={() => setActiveApp("browser")}
+				>
 					<span className="app-bar-tab-icon">🌐</span>
 				</button>
-				<button type="button" className="app-bar-tab" title={getLocale() === "ko" ? "앱스토어" : "App Store"} onClick={() => openBrowserShortcut(storeUrl)}>
-					<span className="app-bar-tab-icon">🛍️</span>
-				</button>
-				<button type="button" className={`app-bar-tab${activeApp === "workspace" ? " app-bar-tab--active" : ""}`} title={getLocale() === "ko" ? "작업공간" : "Workspace"} onClick={() => setActiveApp("workspace")}>
+				<button
+					type="button"
+					className={`app-bar-tab${activeApp === "workspace" ? " app-bar-tab--active" : ""}`}
+					data-app-id="workspace"
+					aria-label={getLocale() === "ko" ? "작업공간" : "Workspace"}
+					onClick={() => setActiveApp("workspace")}
+				>
 					<span className="app-bar-tab-icon">📁</span>
 				</button>
 				{modes.map((mode) => (
@@ -500,13 +527,82 @@ export function AppBar() {
 								className="app-bar-url-dialog__section"
 								onClick={() => {
 									setAddUrlDialog(false);
-									openBrowserShortcut(storeUrl);
+									onAddApp?.();
 								}}
 							>
 								<span className="app-bar-url-dialog__section-icon">📱</span>
 								<div className="app-bar-url-dialog__section-text">
 									<strong>{t("appbar.addApp")}</strong>
 									<span>{t("appbar.addAppDesc")}</span>
+								</div>
+							</button>
+							<button
+								type="button"
+								className="app-bar-url-dialog__section"
+								onClick={() => {
+									setAddUrlDialog(false);
+									void openAppStore();
+								}}
+							>
+								<span
+									className="app-bar-url-dialog__section-icon"
+									aria-hidden="true"
+								>
+									<svg viewBox="0 0 32 32">
+										<rect
+											x="4"
+											y="9"
+											width="24"
+											height="19"
+											rx="5"
+											fill="#5b67f1"
+										/>
+										<path
+											d="M11 10V8a5 5 0 0 1 10 0v2"
+											fill="none"
+											stroke="white"
+											strokeWidth="2.5"
+											strokeLinecap="round"
+										/>
+										<rect
+											x="9"
+											y="15"
+											width="5"
+											height="5"
+											rx="1.2"
+											fill="white"
+										/>
+										<rect
+											x="18"
+											y="15"
+											width="5"
+											height="5"
+											rx="1.2"
+											fill="white"
+										/>
+										<rect
+											x="9"
+											y="22"
+											width="5"
+											height="3"
+											rx="1.2"
+											fill="white"
+											opacity=".85"
+										/>
+										<rect
+											x="18"
+											y="22"
+											width="5"
+											height="3"
+											rx="1.2"
+											fill="white"
+											opacity=".85"
+										/>
+									</svg>
+								</span>
+								<div className="app-bar-url-dialog__section-text">
+									<strong>{t("appbar.appStore")}</strong>
+									<span>{t("appbar.appStoreDesc")}</span>
 								</div>
 							</button>
 						</div>

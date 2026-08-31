@@ -2,10 +2,12 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { WorkspaceAppApi } from "./apps/workspace/WorkspaceCenterArea";
 import { AdkSetupScreen } from "./components/AdkSetupScreen";
 import { AiControlBar } from "./components/AiControlBar";
 import { AnnouncementBanner } from "./components/AnnouncementBanner";
 import { AppBar } from "./components/AppBar";
+import { AppInstallDialog } from "./components/AppInstallDialog";
 import { AvatarCanvas } from "./components/AvatarCanvas";
 import { ChatArea } from "./components/ChatArea";
 import { ErrorBoundary } from "./components/ErrorBoundary";
@@ -15,7 +17,6 @@ import { TitleBar } from "./components/TitleBar";
 import { UpdateBanner } from "./components/UpdateBanner";
 import { UpdatePrompt } from "./components/UpdatePrompt";
 import { VideoAvatarCanvas } from "./components/VideoAvatarCanvas";
-import type { WorkspaceAppApi } from "./apps/workspace/WorkspaceCenterArea";
 import { getBridgeForApp } from "./lib/active-bridge";
 import {
 	beginNaiaConfigHydration,
@@ -36,24 +37,19 @@ import {
 	fetchUnreadAnnouncements,
 } from "./lib/announcements";
 import { loadInstalledApps } from "./lib/app-loader";
+import type { AppInstallRequest } from "./lib/app-store-client";
 import { appRegistry } from "./lib/app-registry";
 import { effectiveAvatarProviderFromConfig } from "./lib/avatar/nva-gate";
 import { BGM_APP_ID, SKILL_YOUTUBE_BGM } from "./lib/bgm-skill";
-import {
-	ENVIRONMENT_APP_ID,
-	SKILL_ENVIRONMENT,
-	noteEnvironmentToolAck,
-	refreshEnvironment,
-} from "./lib/environment-skill";
 import { detectGpuVramGb } from "./lib/capabilities/gpu";
 import { syncLinkedChannels } from "./lib/channel-sync";
 import {
 	isNewCore,
+	sendAppSkills,
+	sendAppSkillsClear,
 	sendAuthUpdate,
 	sendCredsUpdate,
 	sendNotifyConfig,
-	sendAppSkills,
-	sendAppSkillsClear,
 } from "./lib/chat-service";
 import {
 	type ThemeId,
@@ -70,6 +66,12 @@ import {
 	saveConfig,
 } from "./lib/config";
 import { persistDiscordDefaults } from "./lib/discord-auth";
+import {
+	ENVIRONMENT_APP_ID,
+	SKILL_ENVIRONMENT,
+	noteEnvironmentToolAck,
+	refreshEnvironment,
+} from "./lib/environment-skill";
 import { setLocale } from "./lib/i18n";
 import { startIframeBridge } from "./lib/iframe-bridge";
 import { shouldMigrateNextainModel } from "./lib/llm/registry";
@@ -223,6 +225,9 @@ export function App() {
 		requestId: number;
 	} | null>(null);
 	const [showAdkSetup, setShowAdkSetup] = useState(!isAdkInitialized());
+	const [showAppInstall, setShowAppInstall] = useState(false);
+	const [appInstallRequest, setAppInstallRequest] =
+		useState<AppInstallRequest | null>(null);
 	const [localeHydrated, setLocaleHydrated] = useState(showAdkSetup);
 	const [showOnboarding, setShowOnboarding] = useState(false);
 	const [naiaVisible, setNaiaVisible] = useState(true);
@@ -797,6 +802,19 @@ export function App() {
 	}, [showOnboarding]);
 
 	useEffect(() => {
+		const unlisten = listen<AppInstallRequest>(
+			"app_install_requested",
+			(event) => {
+				setShowAppInstall(false);
+				setAppInstallRequest(event.payload);
+			},
+		);
+		return () => {
+			unlisten.then((fn) => fn());
+		};
+	}, []);
+
+	useEffect(() => {
 		const unlisten = listen<{
 			discordUserId?: string | null;
 			discordChannelId?: string | null;
@@ -1315,9 +1333,15 @@ export function App() {
 					>
 						<div className="right-area">
 							{!showSplash && !showOnboarding && (
-								<>
-									<AppBar />
-								</>
+								<AppBar onAddApp={() => setShowAppInstall(true)} />
+							)}
+							{appInstallRequest ? (
+								<AppInstallDialog
+									request={appInstallRequest}
+									onClose={() => setAppInstallRequest(null)}
+								/>
+							) : showAppInstall && (
+								<AppInstallDialog onClose={() => setShowAppInstall(false)} />
 							)}
 							<div
 								className={`right-content${showOnboarding ? " right-content--onboarding" : ""}`}
