@@ -1,4 +1,5 @@
 import {
+	act,
 	cleanup,
 	fireEvent,
 	render,
@@ -196,6 +197,26 @@ describe("ChatArea", () => {
 		expect(buttons.length).toBeGreaterThanOrEqual(2);
 	});
 
+	it("interrupts the active speech pipeline when the global TTS toggle turns off", async () => {
+		localStorage.setItem(
+			"naia-config",
+			JSON.stringify({ ttsEnabled: true, ttsProvider: "edge" }),
+		);
+		useAvatarStore.getState().setSpeaking(true);
+		render(<ChatArea />);
+
+		window.dispatchEvent(
+			new CustomEvent("naia:tts-enabled-change", {
+				detail: { enabled: false },
+			}),
+		);
+
+		await waitFor(() =>
+			expect(useAvatarStore.getState().isSpeaking).toBe(false),
+		);
+		localStorage.removeItem("naia-config");
+	});
+
 	it("shows think while waiting and returns to neutral when a silent turn finishes", async () => {
 		localStorage.setItem(
 			"naia-config",
@@ -215,6 +236,45 @@ describe("ChatArea", () => {
 		const request = capturedRequests[0];
 		request.onChunk({ type: "finish", requestId: request.requestId });
 		expect(useAvatarStore.getState().currentEmotion).toBe("neutral");
+		localStorage.removeItem("naia-config");
+	});
+
+	it("shows the provider error when a zero-token usage event precedes failure", async () => {
+		localStorage.setItem(
+			"naia-config",
+			JSON.stringify({
+				apiKey: "invalid-test-key",
+				provider: "gemini",
+				model: "gemini-2.5-flash",
+			}),
+		);
+		render(<ChatArea />);
+		const input = screen.getByPlaceholderText(/message/i);
+		fireEvent.change(input, { target: { value: "certification probe" } });
+		fireEvent.keyDown(input, { key: "Enter" });
+
+		await waitFor(() => expect(capturedRequests).toHaveLength(1));
+		const request = capturedRequests[0];
+		request.onChunk({
+			type: "usage",
+			requestId: request.requestId,
+			inputTokens: 0,
+			outputTokens: 0,
+			cost: 0,
+			model: "gemini-2.5-flash",
+		});
+		request.onChunk({
+			type: "error",
+			requestId: request.requestId,
+			message: "provider rejected the API key",
+		});
+
+		await waitFor(() =>
+			expect(
+				useChatStore.getState().messages.at(-1)?.content,
+			).toContain("provider rejected the API key"),
+		);
+		expect(useChatStore.getState().isStreaming).toBe(false);
 		localStorage.removeItem("naia-config");
 	});
 
@@ -484,8 +544,14 @@ describe("ChatArea", () => {
 
 		expect(useChatStore.getState().streamingThinking).toBe("private chain");
 		expect(useChatStore.getState().streamingContent).toBe("Final answer.");
-		const reasoning = await screen.findByText("private chain");
-		expect(reasoning.closest("details")?.hasAttribute("open")).toBe(false);
+		const reasoning = (
+			await screen.findAllByText("private chain")
+		).find((node) => node.classList.contains("thinking-inline-content"));
+		expect(reasoning).toBeDefined();
+		expect(reasoning?.closest("details")?.hasAttribute("open")).toBe(false);
+		expect(
+			reasoning?.closest("details")?.querySelector(".thinking-inline-preview-live > span")?.textContent,
+		).toBe("private chain");
 
 		request.onChunk({ type: "finish", requestId: request.requestId });
 		const assistant = useChatStore
@@ -1341,6 +1407,42 @@ describe("ChatArea", () => {
 			expect(document.body.textContent).toContain(first + second),
 		);
 		expect(document.body.textContent).not.toContain(`${first} ${second}`);
+		localStorage.removeItem("naia-config");
+	});
+
+	it("releases a completed answer when a playback-ready callback is lost", async () => {
+		const playAuthoredClip = vi.fn().mockReturnValue(new Promise(() => {}));
+		useCascadeAvatarStore.setState({
+			renderer: {
+				hasAuthoredClip: () => true,
+				playAuthoredClip,
+				setSpeakingVisual: vi.fn(),
+				setVoice: vi.fn().mockResolvedValue(false),
+				interrupt: vi.fn(),
+				stop: vi.fn(),
+			} as never,
+		});
+		localStorage.setItem("naia-config", JSON.stringify({
+			apiKey: "test-key", provider: "gemini", model: "gemini-2.5-flash",
+			ttsEnabled: true, ttsProvider: "naia-local-voice", vllmTtsHost: "http://localhost:8910",
+		}));
+
+		render(<ChatArea />);
+		const input = screen.getByPlaceholderText(/message/i);
+		fireEvent.change(input, { target: { value: "lost callback" } });
+		fireEvent.keyDown(input, { key: "Enter" });
+		await waitFor(() => expect(capturedRequests).toHaveLength(1));
+		const request = capturedRequests[0];
+		const answer = "The complete answer must remain readable.";
+		request.onChunk({ type: "text", requestId: request.requestId, text: answer });
+		await waitFor(() => expect(playAuthoredClip).toHaveBeenCalledTimes(1));
+		expect(screen.queryByText(answer)).toBeNull();
+
+		vi.useFakeTimers();
+		request.onChunk({ type: "finish", requestId: request.requestId });
+		await act(async () => { await vi.advanceTimersByTimeAsync(8_000); });
+		expect(screen.getByText(answer)).toBeDefined();
+		vi.useRealTimers();
 		localStorage.removeItem("naia-config");
 	});
 

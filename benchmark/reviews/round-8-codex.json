@@ -33,7 +33,7 @@
     },
     {
       "id": "ENV-ATTN-COUNT-SEMANTICS-COLLAPSED",
-      "file_location": "src/main/app/control/environment-session.ts:88; /var/home/luke/alpha-adk/projects/naia-agent-worktrees/env-surfaces-112/src/main/domain/environment-segments.ts:249",
+      "file_location": "src/main/app/control/environment-session.ts:88; <agent-worktree>/src/main/domain/environment-segments.ts:249",
       "impact": "auto 미관찰 상태의 의도적 비공개 개수와 상한 때문에 잘린 개수가 동일한 omitted 필드로 합쳐지고, 수신측은 둘 다 'N more not shown'으로 렌더링한다. 뇌는 목록이 개인정보 정책상 비공개인지, 단순 상한 절단인지 구분할 수 없다.",
       "why_it_matters": "새 기본값은 omitted의 기존 의미를 재사용하지만 wire 형태가 같다는 것이 의미 보존을 뜻하지 않는다. 특히 surfaces가 0개인데 'more'라고 표현되어 무엇에 더한 개수인지 불명확하고, 도구가 비활성화된 턴에도 확인 가능한 목록이 있는 듯한 인상을 준다. 현재 테스트는 숫자와 문자열 비유출만 확인하며 수신측의 의미와 모델 판단 품질을 검증하지 않는다.",
       "severity": "medium"

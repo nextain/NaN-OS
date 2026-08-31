@@ -70,6 +70,39 @@ pub(crate) fn kill_pid(pid: u32) {
     }
 }
 
+/// PID of the process listening on a local TCP port, if any (FR-BGM.13 #517).
+pub(crate) fn pid_listening_on_port(port: u16) -> Option<u32> {
+    let output = Command::new("lsof")
+        .args([
+            "-nP",
+            "-t",
+            &format!("-iTCP:{port}"),
+            "-sTCP:LISTEN",
+        ])
+        .output()
+        .ok()?;
+    String::from_utf8_lossy(&output.stdout)
+        .lines()
+        .next()?
+        .trim()
+        .parse()
+        .ok()
+}
+
+/// Full command line of a PID, if the process exists.
+pub(crate) fn pid_command_line(pid: u32) -> Option<String> {
+    let output = Command::new("ps")
+        .args(["-ww", "-p", &pid.to_string(), "-o", "command="])
+        .output()
+        .ok()?;
+    let text = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    if text.is_empty() {
+        None
+    } else {
+        Some(text)
+    }
+}
+
 /// Clean up orphan processes from a previous session.
 pub(crate) fn cleanup_orphan_processes() {
     for component in &["gateway", "node-host", "bgm-server", "cascade", "voxcpm2"] {

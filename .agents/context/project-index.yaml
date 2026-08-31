@@ -22,6 +22,9 @@ entry_points:
 
 # 온디맨드 로딩 — 필요한 섹션만 로드
 on_demand_loading:
+  quality:
+    - file: .agents/context/feature-test-coverage.yaml
+      topics: [features, regression, test coverage, microsoft store, release readiness]
   process:
     - file: docs/user-scenarios.md
       topics: [UC, 사용자시나리오, test coverage]

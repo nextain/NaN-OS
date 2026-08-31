@@ -51,6 +51,14 @@ describe("extractExpression (robust avatar cue extraction)", () => {
 		expect(extractExpression("[breath] 음, 그건").emotion).toBeNull();
 		expect(extractExpression("[breath] 음.").cleanText).toBe("음.");
 	});
+
+	it("preserves parentheses and asterisks inside fenced code", () => {
+		const markdown = "```python\nprint('naia')\nvalue = *pointer\n```";
+		expect(extractExpression(markdown)).toEqual({
+			emotion: null,
+			cleanText: markdown,
+		});
+	});
 });
 
 describe("mapServerEmotion (naia-omni emotion.updated → avatar)", () => {

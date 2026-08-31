@@ -61,7 +61,9 @@ export function AiControlBar() {
 		};
 	}, []);
 
-	const proactiveBlocked = proactive.profile === "disabled" || !ttsEnabled;
+	// #510 — 능동발화는 TTS와 독립: TTS 꺼짐이면 발화만 생략되고 텍스트로 도착한다
+	//        (canSpeakProactiveText가 발화 여부를 판정). 버튼은 프로필 유무만 본다.
+	const proactiveBlocked = proactive.profile === "disabled";
 	const proactiveActive = proactive.permitted && proactive.activityActive;
 	const proactiveTitle = proactiveBlocked
 		? t("ai.proactiveBlocked")
@@ -110,9 +112,15 @@ export function AiControlBar() {
 				type="button"
 				className={`bgm-ai-toggle${ttsEnabled ? " bgm-ai-toggle--active" : ""}`}
 				onClick={() => {
+					const enabled = !ttsEnabled;
 					toggleTtsEnabled();
 					const cfg = loadConfig();
-					if (cfg) saveConfig({ ...cfg, ttsEnabled: !ttsEnabled });
+					if (cfg) saveConfig({ ...cfg, ttsEnabled: enabled });
+					window.dispatchEvent(
+						new CustomEvent("naia:tts-enabled-change", {
+							detail: { enabled },
+						}),
+					);
 				}}
 				aria-pressed={ttsEnabled}
 				title={ttsEnabled ? t("ai.ttsOn") : t("ai.ttsOff")}

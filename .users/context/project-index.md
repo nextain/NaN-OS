@@ -49,3 +49,8 @@
   - .agents/context/agents-rules.json
   - AGENTS.md
   - .agents/context/project-index.yaml
+
+## 품질·회귀 테스트 컨텍스트
+
+- 사용자용 기능–테스트 매트릭스: `.users/context/feature-test-coverage.md`
+- AI 정본: `.agents/context/feature-test-coverage.yaml`

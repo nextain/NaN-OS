@@ -4,6 +4,7 @@ import {
 	fireEvent,
 	render,
 	screen,
+	waitFor,
 } from "@testing-library/react";
 import { StrictMode } from "react";
 // @vitest-environment jsdom
@@ -267,6 +268,40 @@ describe("SettingsTab", () => {
 		const providerSelect = document.getElementById("provider-select");
 		expect(providerSelect).toBeDefined();
 		expect(screen.getByLabelText(/^API/i)).toBeDefined();
+	});
+
+	it("applies the Google API key to the Agent credential store before reload", async () => {
+		localStorage.setItem("naia-adk-path", "/home/user/naia-adk");
+		localStorage.setItem(
+			"naia-config",
+			JSON.stringify({
+				provider: "gemini",
+				model: "gemini-2.5-flash",
+				apiKey: "",
+			}),
+		);
+		mockInvoke.mockImplementation((command: string) => {
+			if (command === "read_naia_ui_config") return Promise.resolve("{}");
+			return Promise.resolve([]);
+		});
+
+		render(<SettingsTab />);
+		gotoSettingsTab("brain");
+		fireEvent.change(screen.getByLabelText(/^API/i), {
+			target: { value: "store-review-key" },
+		});
+		fireEvent.click(screen.getByRole("button", { name: "Apply" }));
+
+		await waitFor(() =>
+			expect(mockInvoke).toHaveBeenCalledWith("write_agent_key", {
+				adkPath: "/home/user/naia-adk",
+				envKey: "GEMINI_API_KEY",
+				value: "store-review-key",
+			}),
+		);
+		await waitFor(() =>
+			expect(mockInvoke).toHaveBeenCalledWith("reload_agent_settings"),
+		);
 	});
 
 	it("hides API key input for Naia (nextain) provider", () => {
@@ -549,7 +584,7 @@ describe("SettingsTab", () => {
 	});
 
 	it("persists Naia auth callback even when no config exists yet", async () => {
-		localStorage.setItem("naia-adk-path", "C:\\Users\\tester\\naia-adk");
+		localStorage.setItem("naia-adk-path", "C:\\Users\\Public\\naia-adk");
 		mockInvoke.mockResolvedValue([]);
 		const authReady = vi.fn();
 		window.addEventListener("naia_auth_ready", authReady);
@@ -581,14 +616,14 @@ describe("SettingsTab", () => {
 		expect(saved.naiaKey).toBe("gw-test-key");
 		expect(saved.naiaUserId).toBe("user-123");
 		expect(mockInvoke).toHaveBeenCalledWith("write_agent_key", {
-			adkPath: "C:\\Users\\tester\\naia-adk",
+			adkPath: "C:\\Users\\Public\\naia-adk",
 			envKey: "NAIA_ANYLLM_API_KEY",
 			value: "gw-test-key",
 		});
 		expect(mockInvoke).toHaveBeenCalledWith(
 			"write_naia_config",
 			expect.objectContaining({
-				adkPath: "C:\\Users\\tester\\naia-adk",
+				adkPath: "C:\\Users\\Public\\naia-adk",
 				json: expect.any(String),
 			}),
 		);
@@ -605,7 +640,7 @@ describe("SettingsTab", () => {
 	});
 
 	it("replaces a stale Gemini main role when logging in to Naia from Settings", async () => {
-		localStorage.setItem("naia-adk-path", "C:\\Users\\tester\\naia-adk");
+		localStorage.setItem("naia-adk-path", "C:\\Users\\Public\\naia-adk");
 		localStorage.setItem(
 			"naia-config",
 			JSON.stringify({
@@ -697,9 +732,18 @@ describe("SettingsTab", () => {
 
 		expect(providerSelect.value).toBe("codex");
 		expect(screen.queryByLabelText(/^API/i)).toBeNull();
-		expect(
-			(document.getElementById("model-select") as HTMLSelectElement).value,
-		).toBe("gpt-5.4");
+		const modelSelect = document.getElementById(
+			"model-select",
+		) as HTMLSelectElement;
+		// 2026-08 lineup: gpt-5.6 sol/terra/luna + previous-gen 5.5, retiring 5.4.
+		expect(modelSelect.value).toBe("gpt-5.6-sol");
+		expect([...modelSelect.options].map((option) => option.value)).toEqual([
+			"gpt-5.6-sol",
+			"gpt-5.6-terra",
+			"gpt-5.6-luna",
+			"gpt-5.5",
+			"gpt-5.4",
+		]);
 	});
 
 	it("checks Codex readiness without rendering CLI output or changing credentials", async () => {
@@ -849,7 +893,12 @@ describe("SettingsTab", () => {
 		const roles = JSON.parse(
 			localStorage.getItem("naia-config") || "{}",
 		).llmRoles;
-		expect(roles.sub).toMatchObject({ provider: "codex", model: "gpt-5.4" });
+		// Switching to explicit resolves the provider default (gpt-5.6-sol),
+		// even though the stored main config still names retiring gpt-5.4.
+		expect(roles.sub).toMatchObject({
+			provider: "codex",
+			model: "gpt-5.6-sol",
+		});
 		expect(roles.memory.provider).not.toBe("codex");
 	});
 
@@ -1573,6 +1622,115 @@ describe("SettingsTab — memory tab (#298)", () => {
 			expect(saved.ttsProvider).toBe("naia-local-voice");
 			expect(saved.localVoiceEnabled).toBe(true);
 			expect(saved.ttsEnabled).toBe(true);
+		});
+	});
+
+	it("#507: selecting Local voice on an installed engine auto-starts without reverting", async () => {
+		localStorage.setItem("naia-adk-path", "D:\\alpha-adk");
+		localStorage.setItem(
+			"naia-config",
+			JSON.stringify({
+				provider: "nextain",
+				model: "gemini-3.5-flash",
+				naiaKey: "nk",
+				ttsProvider: "edge",
+				ttsEnabled: false,
+				localVoiceEnabled: false,
+			}),
+		);
+		let started = false;
+		mockInvoke.mockImplementation((command: string) => {
+			if (command === "detect_gpu_vram") return Promise.resolve(8);
+			if (command === "voxcpm2_status") return Promise.resolve(false);
+			if (command === "voxcpm2_installation_status")
+				return Promise.resolve({
+					phase: started ? "ready" : "ready-to-start",
+					ready: started,
+					canStart: true,
+					summary: "Local runtime files are ready.",
+					steps: [],
+				});
+			if (command === "start_voxcpm2") {
+				started = true;
+				return Promise.resolve(JSON.stringify({ facade_port: 8910 }));
+			}
+			return Promise.resolve([]);
+		});
+
+		render(<SettingsTab />);
+		gotoSettingsTab("profile");
+		const selector = screen.getByTestId("profile-tts-provider");
+		await vi.waitFor(() =>
+			expect(
+				(selector as HTMLSelectElement).querySelector(
+					'option[value="naia-local-voice"]',
+				),
+			).not.toBeDisabled(),
+		);
+		fireEvent.change(selector, { target: { value: "naia-local-voice" } });
+
+		await vi.waitFor(() => {
+			expect(mockInvoke).toHaveBeenCalledWith("start_voxcpm2", {
+				expectedLoaderProfile: "windows_trt_6g",
+			});
+			const saved = JSON.parse(localStorage.getItem("naia-config") || "{}");
+			expect(saved.ttsProvider).toBe("naia-local-voice");
+			expect(saved.ttsEnabled).toBe(true);
+			expect(saved.localVoiceEnabled).toBe(true);
+		});
+		// Already installed: the selection must start it, never reinstall.
+		expect(mockInvoke).not.toHaveBeenCalledWith("install_voxcpm2_runtime");
+	});
+
+	it("#507: a failed Local voice start surfaces the reason and the explicit revert", async () => {
+		localStorage.setItem("naia-adk-path", "D:\\alpha-adk");
+		localStorage.setItem(
+			"naia-config",
+			JSON.stringify({
+				provider: "nextain",
+				model: "gemini-3.5-flash",
+				naiaKey: "nk",
+				ttsProvider: "edge",
+				ttsEnabled: true,
+				localVoiceEnabled: false,
+			}),
+		);
+		mockInvoke.mockImplementation((command: string) => {
+			if (command === "detect_gpu_vram") return Promise.resolve(8);
+			if (command === "voxcpm2_status") return Promise.resolve(false);
+			if (command === "voxcpm2_installation_status")
+				return Promise.resolve({
+					phase: "ready-to-start",
+					ready: false,
+					canStart: true,
+					summary: "Local runtime files are ready.",
+					steps: [],
+				});
+			if (command === "start_voxcpm2")
+				return Promise.reject(new Error("TRT service failed to start"));
+			return Promise.resolve([]);
+		});
+
+		render(<SettingsTab />);
+		gotoSettingsTab("profile");
+		const selector = screen.getByTestId("profile-tts-provider");
+		await vi.waitFor(() =>
+			expect(
+				(selector as HTMLSelectElement).querySelector(
+					'option[value="naia-local-voice"]',
+				),
+			).not.toBeDisabled(),
+		);
+		fireEvent.change(selector, { target: { value: "naia-local-voice" } });
+
+		await vi.waitFor(() => {
+			const saved = JSON.parse(localStorage.getItem("naia-config") || "{}");
+			expect(saved.ttsProvider).toBe("edge");
+			// The revert is explicit: reason + restored notice, visible on the
+			// profile surface that hosted the selection (no silent snap-back).
+			const status = screen.getByTestId("profile-voice-status");
+			expect(status.textContent).toContain("TRT service failed to start");
+			expect(status.textContent).toMatch(/restored/i);
 		});
 	});
 

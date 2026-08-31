@@ -195,6 +195,10 @@ foundation UC 카탈로그와 직교하는 셸 feature(S72 선례). 각 시나�
 | **S-INSTALL** (#377, FR-INSTALL — 2026-07-17) | 사용자가 **설치 파일을 받아 자기 OS(Windows/Linux/macOS)에 설치하고 첫 실행**한다 — Windows 는 NSIS(사용자 권한, 관리자 불요, **WSL 불요**) + MSI(관리자 설치 — WiX 표준), Linux 는 deb/rpm/AppImage, macOS 는 app/dmg(**arm64(Apple Silicon) 전용** · 미서명 — 우클릭 열기). Node 런타임이 3 OS 모두 동봉되어 **Node 미설치 머신에서도 에이전트가 뜬다**. 개발자는 clean checkout 에서 **명령 1개**로 자기 OS 의 설치 파일을 재현 빌드한다(수동 파일 배치 0). 플랫폼 차이(타깃·동봉 리소스·설치자 설정·기대 산출물)는 **매트릭스 데이터 1곳**이 정의하고, 스크립트는 OS 별 분리 없이 1개 | 배포(설치·첫 부팅) — 매트릭스→생성 conf, OS 분기=데이터 | `scripts/__tests__/platform-matrix.test.ts`(매트릭스 스키마 + conf 생성 golden, 3 OS) [단위] · `check-build-contract.mjs` PASS [계약] · **Windows 실측: 실 NSIS 무인 설치(/S) → 설치본 기동 — 핸드셰이크 AND `[Naia] node = ` 포함 줄이 최소 2줄 AND 전부 `$INSTDIR` 하위**(2조건, FR-INSTALL.4 — 빌드 머신엔 시스템 node 가 있어 기동만으론 번들 분기가 증명 안 됨. 개수 단언은 공허참 차단)(e2e-tauri `TAURI_BINARY` 설치 경로 지정) · **Linux: CI ubuntu job 이 deb 설치 → xvfb 기동 스모크 — 마커 `[Naia] agent-core gRPC @` **AND** node 줄 최소 2줄 **AND** 그 경로가 전부 설치본 resource_dir 하위**(R5: "PATH 에서 node 제거" 는 폐기 — 폴백이 PATH 무관하게 nvm 디렉토리를 직접 스캔하므로 번들 node 를 증명하지 못함. mutation probe 로 red 도 확인) — **Windows·Linux 양쪽 모두 판정 범위 = 마지막 `=== Session started ===` 포함 줄 이후**(`naia.log` 는 누적 파일) · macOS 실빌드 = CI(`build-installers.yml`) · **산출물 검증 스크립트 `scripts/verify-artifacts.mjs` 실행(빌드 머신 + CI 3 OS) + 부정(negative) 케이스 단위 테스트**(FR-INSTALL.6). ⚠️ mac = **arm64 전용**(CI `macos-latest` = arm64 러너, Intel 산출물 미제공 — 후속) + 실기기 설치 실측 미보유(정직 표기: 이번 완료선 = arm64 CI 빌드 성공) |
 | **UC-CLI-OPEN** ([#484](https://github.com/nextain/naia-shell/issues/484), FR-CLI.1~3) | 설치 사용자가 새 터미널에서 `naia`를 실행하면 Naia Shell이 열리거나 기존 창이 포커스된다. `naia <file>`은 상대 경로를 호출 터미널 기준으로 해석해, 셸이 꺼져 있든 실행 중이든 같은 워크스페이스 에디터에 해당 파일을 연다. 존재하지 않는 경로와 디렉터리는 열지 않는다. | 설치 alias/PATH 스모크 · Rust 인자/경로 계약 테스트 · 실행 중/콜드 스타트 네이티브 인수 테스트 |
 
+| **S-MAC-UNIVERSAL** (#505, FR-INSTALL.7 — 2026-08-27) | macOS 사용자는 Intel 또는 Apple Silicon Mac에서 동일한 Universal `Naia.app`을 실행한다. 릴리스 운영자는 동일 커밋을 `macos-15-intel`과 `macos-15`에서 각각 빌드하고, 공통 경로의 Mach-O(셸·Node·네이티브 Node 모듈)를 재귀 병합한다. `darwin-x64`/`darwin-arm64`처럼 런타임 선택용 경로에 든 네이티브 payload는 두 slice를 함께 보존하되, 경로와 slice가 다르거나 그 밖의 한쪽 파일 누락·일반 파일 불일치·thin Mach-O가 있으면 Universal 산출물을 만들지 않는다. 기존 단일 아키텍처 app/dmg는 유지한다. | 배포 — 두 독립 빌드 → 재귀 `lipo` → 전체 Mach-O 검증 | `assemble-macos-universal.test.ts`(파일 집합·분류·thin 바이너리 부정 계약), Intel 실기기 설치본 스모크(agent/BGM/번들 Node), CI arm64+x64 빌드 및 Universal 전체 Mach-O 검사. Apple Silicon 실기기 실행은 별도 출시 증거로 남긴다. |
+
+> S-INSTALL의 arm64-only 표기는 #377 완료 당시의 역사적 기준이다. #505 이후 macOS 릴리스 경로는 S-MAC-UNIVERSAL/FR-INSTALL.7을 따른다.
+
 > **S-INSTALL #411·#412 보강(2026-08-02):** paired Agent와 로컬 의존 프로젝트의 pnpm 버전이
 > 서로 달라도 스테이징은 각 `package.json#packageManager` 선언을 Corepack으로 실행한다.
 > 설치·빌드·deploy는 비대화식 `CI=true`로 수행해 TTY 확인 대기나
@@ -734,6 +738,37 @@ successful until the player reports an observed `playing` transition.
 | unplayable YouTube recovery | no false playing/intro, bounded alternative search, network/sidecar recovery | Playwright covers iframe error, 15-second loading timeout, prepared fallback and exhaustion; Agent DJ-06 covers one fresh replacement after a failed play and a single terminal notice after repeated failure. Physical network-loss recovery remains operational coverage. |
 | sidecar exits or auxiliary window closes | Rust lifecycle tests | native Tauri sidecar restart/health check |
 | one settings owner and durable consent | Settings component rerender test | `settings-slots.spec.ts` Skills ownership, General absence, Save/reload |
+
+## UC-BGM-ORPHAN-PORT-RECOVERY — 고아 sidecar가 BGM 포트를 선점해도 다음 실행이 회복한다 (#517)
+
+설치본 사용자가 유튜브 뮤직플레이어를 켰는데 "BGM server failed its owned
+health check on port 18791"가 뜬다. 원인은 이전 세션이 Destroyed 이벤트 없이
+죽으며 남긴 고아 `bgm-server-bin.js` 프로세스가 포트를 점유한 것이다. 사용자는
+원인을 유추할 수 없고, 앱 재시작은 회복 경로가 아니다 — 오히려 30초 readiness
+probe 도중 앱을 닫으면 추적 불가능한 고아가 하나 더 생긴다.
+
+- 셸은 BGM sidecar를 spawn하기 전에 대상 포트의 점유자를 확인한다. 점유자의
+  command line이 `bgm-server-bin.js`이면 우리 계보의 잔재이므로 종료 후
+  spawn을 계속한다. command line이 다르면 남의 프로세스이므로 손대지 않고
+  점유 사실을 로그로 명확히 남긴다. 판정은 포트 소유자 기준이라 격리 dev
+  인스턴스(#425, :18891)의 sidecar를 오살하지 않는다.
+- sidecar 자신은 `EADDRINUSE`를 만나면 즉시 exit(1)한다. 무한 재시도로
+  살아남아 있다가 기존 점유자가 죽는 순간 낡은 nonce로 포트를 승계하는
+  좀비를 만들지 않는다.
+- 셸 종료 시 `state.bgm_server`에 자식이 없어도(예: readiness probe 중 종료)
+  PID 파일에 살아 있는 sidecar가 기록돼 있으면 검증 후 종료하고 나서 파일을
+  지운다. 기록만 지워 고아를 추적 불가로 만들지 않는다.
+
+### Test Coverage Map
+
+| Scenario | Unit / contract | UI / integration |
+|---|---|---|
+| 포트가 비어 있으면 무개입 | Rust reclaim 단위(주입 프로브: 점유자 없음 → kill 0회) | 기존 BGM 기동 경로 무회귀(vitest/Playwright 기존 스위트) |
+| 고아 sidecar가 점유 → 회수 후 기동 | Rust reclaim 단위(점유자 cmdline 매치 → kill 1회) | Rust 통합 테스트: 실제 `bgm-server-bin.js` 이름의 node 리스너를 포트에 앉히고 reclaim 후 포트 해제 실측 |
+| 남의 프로세스가 점유 → 회수 거부 | Rust reclaim 단위(cmdline 불일치 → kill 0회 + 경고 로그) | 동일 통합 테스트의 불일치 이름 케이스 |
+| sidecar가 EADDRINUSE에서 즉시 종료 | vitest: 점유된 포트로 `startYoutubeServer()` → `process.exit(1)` 호출 검증(재시도 타이머 없음) | — |
+| probe 중 앱 종료 → 다음 세션 회수 | teardown이 미저장 자식을 PID 파일로 종료(검증 후) | 종료 경로는 위 reclaim 백스톱이 최종 방어선(포트 소유자 기준이라 PID 파일 유실과 무관) |
+
 ## UC-SETTINGS-ROUNDTRIP: 설정 변경·재시작·실행 반영
 
 ## UC-ONBOARDING-APPEARANCE-VOICE: 외모와 음성을 독립적으로 시작하기
@@ -804,7 +839,7 @@ Those older sections are historical evidence only.
 
 | Scenario | User-observable outcome | Coverage |
 |---|---|---|
-| **UC-LLM-DEFAULT-DEEPSEEK-FLASH** | Naia 계정으로 로그인하거나 온보딩을 완료하면 메인 LLM이 `DeepSeek V4 Flash`로 자동 선택된다. 설정 탭 모델 선택기에도 `DeepSeek V4 Flash`가 `DeepSeek V4 Pro` 옆에 나타나고, "Naia 기본값 적용"을 눌러도 같은 값이 채워진다. | `lib/llm/__tests__/registry*.test.ts`, `lib/slots/__tests__/settings-slots.contract.test.ts`, `components/__tests__/SettingsTab.test.tsx` |
+| **UC-LLM-DEFAULT-DEEPSEEK-FLASH** | Naia 계정으로 로그인하거나 온보딩을 완료하면 메인 LLM이 `DeepSeek V4 Flash`로 자동 선택된다. 설정 탭 모델 선택기에도 `DeepSeek V4 Flash`가 `DeepSeek V4 Pro` 옆에 나타나고, "Naia 기본값 적용"을 눌러도 같은 값이 채워진다. | `lib/llm/__tests__/registry*.test.ts`, `lib/slots/__tests__/settings-slots.contract.test.ts`, `components/__tests__/SettingsTab.test.tsx`, `e2e-tauri/specs/70c-nextain-default-chat.spec.ts`(라이브, NAIA_E2E_NAIA_KEY 필요) |
 
 any-llm 게이트웨이 쪽(라우팅·가격)은 이미 구현·테스트돼 있어 이번 변경 대상이 아니었다(`pytest tests/gateway/test_naia_azure_models.py tests/unit/test_naia_pricing.py` 78 passed로 확인). 이 시나리오에 대한 전용 Playwright는 없음(모델 선택 자체는 기존 SettingsTab e2e 커버리지 범위 밖) — 이번 세션에서 새로 만들지 않음.
 
@@ -841,6 +876,7 @@ P02 release-state matrix: build preparation, missing required runtime, successfu
 | **UC-V017-VOXCPM2-PUBLIC-DOWNLOAD** | A release operator can build only when the tracked public runtime URL answers without credentials, advertises the exact selected ZIP length, and serves byte ranges. A wrong R2 host or disabled public endpoint fails staging before either installer is created, so a download page cannot publish an installer that deterministically receives HTTP 401. | URL/probe unit tests + live HEAD/range preflight + packaged manifest inspection |
 | **UC-V017-WINDOWS-UPDATE-CLEANUP** | Updating Naia preserves user memory and workspaces but replaces installer-owned Agent, sidecar, runtime, and dependency trees, including stale files absent from the new release. A full uninstall leaves neither the Naia install directory nor app-owned WebView/bootstrap state; reinstall therefore cannot execute an old Agent or old `node_modules`. | NSIS/WiX contract tests + stale-file update mutation + uninstall/reinstall residue smoke |
 | **UC-V017-VOXCPM2-PAYLOAD-UPGRADE** (#465) | A member upgrading from a release whose cached payload installs only the default voice does not see a false success followed by `VOXCPM2_REFERENCE_VOICE_MISSING`. Shell compares the installed control files with its packaged installer and activation contract, reuses the verified local runtime ZIP to atomically refresh a stale payload, installs the complete current voice palette, and reaches ready without another runtime archive download. | default-only stale-payload mutation + control-file digest regression + cached-ZIP upgrade/install smoke |
+| **UC-V017-VOXCPM2-RUNTIME-PIN-UPGRADE** (#518) | 셸 업그레이드가 런타임 아카이브만 갱신한 경우(제어 파일 동일 — 예: v0.2.2 r2의 발화 째짐 수정), 기존 설치자의 구 payload 가 조용히 재사용되지 않는다. 셸은 번들 download-manifest 의 `artifactManifestSha256` 핀을 설치 payload 의 artifact-manifest 해시와 대조해, 불일치면 재사용을 거부하고 기존 취득 플로우로 재스테이징을 유도한다. 사용자는 업그레이드 후 실제로 수정된 엔진으로 발화를 듣는다. | Rust reuse-gate 핀 일치/불일치/manifest 부재 단위 + 실 payload 해시 대조 |
 | **UC-V017-VOXCPM2-ENTITLEMENT-RECOVERY** (#470) | A signed-in member whose stored Naia credential is rejected with HTTP 401/403 starts local VoxCPM2 and sees a localized login-required recovery instead of an installed-but-not-ready generic failure. Shell clears only the rejected credential and keeps the local runtime installed. FREE/inactive membership and unavailable gateway failures remain distinct, fail closed, and preserve the credential for retry. No credential, account identifier, response body, or endpoint appears in stdout, logs, or IPC errors. | runtime BASIC/PRO/FREE/401/403/5xx/transport pytest + bounded startup envelope tests + Rust pre-readiness parser/mapping + Settings rejected/unavailable component tests |
 
 ### 2026-08-14 v0.1.7 launch QA (#447)
@@ -915,6 +951,22 @@ Test Coverage Map: `lib/tts/__tests__/text-filter.test.ts`가 공통/언어/fall
 - 버튼의 플랫폼별 단축키 표기와 실제 키 해석은 같은 정의를 사용한다.
 - 팝업이 닫히면 리스너가 제거되며, 일반 입력과 추가 수정키 조합은 가로채지 않는다.
 
+## UC-V022-LOCAL-RELEASE-ACCEPTANCE — 동일 빌드 사용자 검증
+
+- 사용자가 한국어로 온보딩하면 Host 음성 설치 준비·진행·실패 안내가 모두 한국어로 보인다.
+- 상단 TTS를 끄는 즉시 현재 발화와 대기 문장이 멈추고 다음 답변도 읽지 않는다.
+- thinking은 생성 중 접힌 한 줄 이탤릭 미리보기로 흐르며 클릭하면 전체 내용을 볼 수 있고, 최종 답변과 TTS에는 섞이지 않는다.
+- Python 등 fenced code는 구문 강조와 정확한 복사·복사 완료 피드백을 제공한다. Mermaid fence는 다이어그램으로 렌더링되고 실패하면 원문이 남는다.
+- Workspace에서 MP3/WAV/MP4를 클릭하면 UTF-8 텍스트 오류 없이 미디어 컨트롤이 열린다.
+- YouTube 패널 상단에서 배경 영상 표시를 끌 수 있고 오디오는 유지된다. 음표와 재생/정지 버튼은 실제 player 이벤트와 일치한다.
+- YouTube BGM을 재생해도 재생이 실제 확인되기 전에는 기존 배경이 그대로 보이고, 임베드가 실패하면 검은 화면 대신 기존 배경으로 돌아온다.
+- 유튜브 즐겨찾기는 앱을 재설치·업데이트하거나 개발빌드↔설치본을 오가도 워크스페이스(naia-settings)를 따라 유지되며, 기존 localStorage 즐겨찾기는 첫 실행에서 자동 이전된다.
+- Herdr가 준비되지 않아도 파일 트리는 열리며, 로컬 OpenAI 호환 Base URL과 `naia <file>` 흐름도 같은 후보 빌드에서 동작한다.
+- 설치를 마친 Host 음성은 설정에서 선택하는 즉시 자동 시작되고, 시작 실패나 차단 시 사유와 되돌림 안내가 프로필·음성 화면에 보인다. 무언 revert 는 없다. (#507)
+- 개발·e2e 실행도 설치본과 같은 위치(resource_dir)에서 installer 리소스를 찾으므로, 설치 완료된 엔진이 개발 빌드에서 미설치로 보이거나 재다운로드를 요구하지 않는다. (#508)
+- bgm-skill 검증은 즐겨찾기를 워크스페이스 SoT(`naia-config.bgmYoutubeFavorites`)에서 읽고, 비표준 포트의 공지 API(announcements) CORS 노이즈를 BGM 오류로 오인하지 않는다.
+
+Test Coverage Map: 관련 단위·컴포넌트 테스트만으로 완료하지 않는다. `v0.2.2` 버전과 리소스를 가진 동일 debug/release 후보를 시작해 Playwright UI 여정과 Windows Tauri smoke를 모두 통과해야 한다.
 ## 2026-08-26 워크스페이스 컨텍스트 해석 (#501, 에픽 #497)
 
 > 계약: `docs/progress/issue-497-universal-agent.md`. 여기의 UC는 Naia가 ADK 워크스페이스 루트에서

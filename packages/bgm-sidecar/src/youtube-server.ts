@@ -249,14 +249,14 @@ export function startYoutubeServer(): void {
 	server.on("error", (err: NodeJS.ErrnoException) => {
 		process.stderr.write(`[youtube-server] error: ${err}\n`);
 		if (err.code === "EADDRINUSE") {
-			// Port already in use (stale agent from previous session).
-			// The shell kills the old agent on startup; retry after a short delay.
-			setTimeout(() => {
-				server.close();
-				server.listen(YT_SERVER_PORT, () => {
-					process.stderr.write(`[youtube-server] retry OK on port ${YT_SERVER_PORT}\n`);
-				});
-			}, 1000);
+			// FR-BGM.14 (#517): exit immediately instead of retrying. A retry loop
+			// leaves a zombie that inherits the port with a stale health nonce the
+			// moment the current holder dies, making the failure self-perpetuating.
+			// Port reclaim is the shell's job (FR-BGM.13) before it spawns us.
+			process.stderr.write(
+				`[youtube-server] port ${YT_SERVER_PORT} is taken — exiting so the shell can reclaim it\n`,
+			);
+			process.exit(1);
 		}
 	});
 }

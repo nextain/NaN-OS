@@ -2,6 +2,7 @@ import DOMPurify from "dompurify";
 import hljs from "highlight.js/lib/common";
 import mermaid from "mermaid";
 import { type ReactNode, useEffect, useRef, useState } from "react";
+import { t } from "../lib/i18n";
 
 mermaid.initialize({
 	startOnLoad: false,
@@ -74,6 +75,7 @@ export function MarkdownCodeBlock({
 	children,
 	onOpenWorkspace,
 }: MarkdownCodeBlockProps) {
+	const [copied, setCopied] = useState(false);
 	const language = /language-([\w-]+)/.exec(className ?? "")?.[1] ?? "text";
 	const code = String(children).replace(/\n$/, "");
 	if (language.toLowerCase() === "mermaid") return <MermaidBlock code={code} />;
@@ -81,9 +83,20 @@ export function MarkdownCodeBlock({
 	if (!className) return <code>{children}</code>;
 	return (
 		<details className="chat-code-block" open>
-			<summary>{language}</summary>
+			<summary><span className="chat-code-language">{language}</span></summary>
 			<div className="chat-code-actions">
-				<button type="button" onClick={() => void navigator.clipboard.writeText(code)}>복사</button>
+				<button
+					type="button"
+					onClick={() => {
+						void navigator.clipboard.writeText(code).then(() => {
+							setCopied(true);
+							window.setTimeout(() => setCopied(false), 1600);
+						});
+					}}
+					aria-live="polite"
+				>
+					{copied ? t("chat.codeCopied") : t("chat.codeCopy")}
+				</button>
 				{onOpenWorkspace ? (
 					<button type="button" onClick={() => onOpenWorkspace(code, language)}>워크스페이스에서 열기</button>
 				) : null}

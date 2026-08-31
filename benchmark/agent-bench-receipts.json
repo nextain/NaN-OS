@@ -1,7 +1,7 @@
 {
-  "revision": "6a478436",
-  "stampedAt": "2026-08-28T03:10:22.976Z",
-  "fingerprint": "de301921f684672b",
+  "revision": "24541e04",
+  "stampedAt": "2026-08-28T08:49:07.959Z",
+  "fingerprint": "e77e3ae94e8f79f7",
   "scenarios": {
     "UC-WORKSPACE-CONTEXT-DISCOVER": {
       "receipts": [

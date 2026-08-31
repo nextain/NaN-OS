@@ -38,7 +38,8 @@ import {
 	getRefAudioContent,
 	getRefAudioPresets,
 	getRefAudioStatus,
-	setLocalRefAudioB64,
+	hydrateLocalRefAudioB64,
+	persistLocalRefAudioB64,
 	uploadRefAudio,
 } from "../lib/voice/ref-audio-api";
 import {
@@ -358,6 +359,15 @@ export function RefAudioSection({
 	const [genderFilter, setGenderFilter] = useState<string>("all");
 
 	const refresh = useCallback(async () => {
+		// The selected ADK owns the clip; hydrate the synchronous synthesis cache
+		// before deciding which voice card is active.
+		try {
+			await hydrateLocalRefAudioB64();
+		} catch (err) {
+			Logger.warn(TAG, "ADK reference audio hydration failed", {
+				error: String(err),
+			});
+		}
 		// A Naia Local recorded clip lives only in localStorage (no gateway slot) —
 		// reflect it directly so the card matches the voice actually being sent.
 		if (isLocal) {
@@ -626,7 +636,7 @@ export function RefAudioSection({
 						sourceLabel,
 						b64SizeBytes: b64.length,
 					});
-					setLocalRefAudioB64(b64);
+					await persistLocalRefAudioB64(b64);
 					setConfigVoiceRefUrl(null); // recorded voice supersedes a preset
 					// Best-effort duration for the card (encodeRefAudio normalises to
 					// 16 kHz mono PCM16, so derive it from the WAV data length).
@@ -654,11 +664,12 @@ export function RefAudioSection({
 					void warmLocalVoice({ voice: "current", localRefAudioBase64: b64 });
 					return;
 				}
-				const result = await uploadRefAudio(input);
+				const b64 = await encodeRefAudio(input);
+				const result = await uploadRefAudio(b64);
 				// An upload supersedes any applied preset — clear the preset URL so
 				// it never shadows the uploaded voice (gateway injects uploads).
 				setConfigVoiceRefUrl(null);
-				setLocalRefAudioB64(null);
+				await persistLocalRefAudioB64(b64);
 				// kind:"upload" must be explicit — the active card + replace/remove
 				// affordances branch on it, and the gateway would only echo it on a
 				// follow-up status GET otherwise.
@@ -796,7 +807,18 @@ export function RefAudioSection({
 			// server-side apply below fails (e.g. credit/auth on the dev gateway).
 			// The voice must not depend on the apply round-trip or GET status.
 			setConfigVoiceRefUrl(preset.sampleUrl);
-			setLocalRefAudioB64(null); // a preset supersedes a local recorded clip
+			try {
+				// A preset supersedes a recorded clip. Clearing the ADK copy is
+				// best-effort: without a configured ADK path (tests, pre-setup boot)
+				// the invoke rejects, and an unhandled rejection here would fail the
+				// whole preset selection even though the URL switch above already
+				// took effect.
+				await persistLocalRefAudioB64(null);
+			} catch (err) {
+				Logger.warn(TAG, "clearing ADK reference audio failed", {
+					error: String(err),
+				});
+			}
 			window.dispatchEvent(
 				new CustomEvent("naia:voice-ref-audio", { detail: null }),
 			);
@@ -851,7 +873,7 @@ export function RefAudioSection({
 			// slot to DELETE) is always removed and the live session reverts.
 			const hadLocal = !!getLocalRefAudioB64();
 			setConfigVoiceRefUrl(null);
-			setLocalRefAudioB64(null);
+			await persistLocalRefAudioB64(null);
 			// Don't leave the session unconditioned (weird voice) — switch a live
 			// session to the default "여성 음색 1" instead of clearing the ref.
 			window.dispatchEvent(

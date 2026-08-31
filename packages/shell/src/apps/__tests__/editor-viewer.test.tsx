@@ -126,6 +126,7 @@ vi.mock("mermaid", () => ({
 // ─── Subject ──────────────────────────────────────────────────────────────────
 
 import { Editor, type EditorHandle } from "../workspace/Editor";
+import { t } from "../../lib/i18n";
 
 afterEach(() => {
 	cleanup();
@@ -348,12 +349,18 @@ describe("Editor — file type helpers (via render behaviour)", () => {
 		["clip.mp4", "video", "video player"],
 	])(
 		"streams %s through an accessible local media element",
-		(name, tag, label) => {
+		async (name, tag, label) => {
+			mockInvoke.mockImplementation((command: string) =>
+				Promise.resolve(command === "workspace_read_file_bytes" ? [1, 2, 3] : ""),
+			);
 			render(<Editor filePath={`/media/${name}`} />);
 			const media = screen.getByLabelText(new RegExp(label, "i"));
 			expect(media.tagName.toLowerCase()).toBe(tag);
-			expect(media).toHaveAttribute("src", `asset:///media/${name}`);
+			await waitFor(() => expect(media.getAttribute("src")).toMatch(/^blob:/));
 			expect(media).toHaveAttribute("preload", "metadata");
+			expect(mockInvoke).toHaveBeenCalledWith("workspace_read_file_bytes", {
+				path: `/media/${name}`,
+			});
 			expect(mockInvoke).not.toHaveBeenCalledWith(
 				"workspace_read_file",
 				expect.anything(),
@@ -369,7 +376,9 @@ describe("Editor — file type helpers (via render behaviour)", () => {
 		});
 		expect(video.playbackRate).toBe(1.5);
 		fireEvent.error(video);
-		expect(screen.getByRole("alert")).toHaveTextContent("지원하지 않는 코덱");
+		expect(screen.getByRole("alert")).toHaveTextContent(
+			t("workspace.videoCodecError"),
+		);
 	});
 
 	it("does NOT call workspace_read_file for PDF files", () => {

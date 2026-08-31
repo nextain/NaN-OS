@@ -23,7 +23,7 @@ const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
 const DEFAULT_SHELL = resolve(SCRIPT_DIR, "..");
 const REPOSITORY = "https://github.com/nextain/voxcpm2-tensorrt";
 export const DEFAULT_VOXCPM2_TRT_DOWNLOAD_URL =
-	"https://pub-a587c16974874fc9a168d2a281801a23.r2.dev/windows_trt_6g/releases/0.2.1/voxcpm2-runtime-win-trt6g.zip";
+	"https://stnaiapub83b29893.blob.core.windows.net/releases/windows_trt_6g/releases/0.2.2/voxcpm2-runtime-win-trt6g-r2.zip";
 const ACTIVATION_CONTRACT_PATH = resolve(
 	DEFAULT_SHELL,
 	"src-tauri/voxcpm2-activation-contract.json",
@@ -390,6 +390,9 @@ export function stageVoxCpm2Runtime({
 		DEFAULT_VOXCPM2_TRT_DOWNLOAD_URL,
 	tar = process.env.NAIA_SYSTEM_TAR || "tar.exe",
 	verifyRemoteDownload = verifyVoxCpm2RemoteDownload,
+	allowUnpublishedDownload =
+		process.env.NAIA_UNSIGNED_UPDATER_BUILD === "1" &&
+		process.env.CI !== "true",
 } = {}) {
 	if (!runtimeSource)
 		throw new Error(
@@ -446,7 +449,13 @@ export function stageVoxCpm2Runtime({
 		parsedUrl.password
 	)
 		throw new Error("VoxCPM2 download URL must use credential-free HTTPS");
-	verifyRemoteDownload(parsedUrl.href, statSync(archive).size);
+	if (allowUnpublishedDownload) {
+		console.warn(
+			"[stage-voxcpm2-runtime] unsigned local validation: public download probe skipped",
+		);
+	} else {
+		verifyRemoteDownload(parsedUrl.href, statSync(archive).size);
+	}
 	const downloadManifest = {
 		schemaVersion: 1,
 		profile: "windows_trt_6g",

@@ -172,9 +172,9 @@ function fixture() {
 }
 
 describe("stageVoxCpm2Runtime", () => {
-	it("pins the production R2 URL and verifies its remote byte contract", () => {
+	it("pins the production download URL and verifies its remote byte contract", () => {
 		expect(DEFAULT_VOXCPM2_TRT_DOWNLOAD_URL).toBe(
-			"https://pub-a587c16974874fc9a168d2a281801a23.r2.dev/windows_trt_6g/releases/0.2.1/voxcpm2-runtime-win-trt6g.zip",
+			"https://stnaiapub83b29893.blob.core.windows.net/releases/windows_trt_6g/releases/0.2.2/voxcpm2-runtime-win-trt6g-r2.zip",
 		);
 		const source = fixture();
 		const calls: Array<[string, number]> = [];
@@ -199,6 +199,18 @@ describe("stageVoxCpm2Runtime", () => {
 		).toThrow(/HTTP 401/);
 	});
 
+	it("allows an unpublished download only for an explicit local unsigned build", () => {
+		const source = fixture();
+		let probes = 0;
+		stageVoxCpm2Runtime({
+			...source,
+			allowUnpublishedDownload: true,
+			verifyRemoteDownload: () => {
+				probes += 1;
+			},
+		});
+		expect(probes).toBe(0);
+	});
 	it("pins, verifies, and atomically installs every approved Shell reference voice", () => {
 		const installer = readFileSync(
 			resolve(process.cwd(), "src-tauri/windows/prepare-voxcpm2-model.ps1"),
@@ -220,6 +232,48 @@ describe("stageVoxCpm2Runtime", () => {
 		);
 		expect(devLauncher).toContain(
 			'resolve(devVoxCpm2Bundle, "voxcpm2-activation-contract.json")',
+		);
+		expect(devLauncher).toContain(
+			"env.NAIA_VOXCPM2_DOWNLOAD_MANIFEST ?? devVoxCpm2DownloadManifest",
+		);
+		expect(devLauncher).toContain("NAIA_VOXCPM2_DOWNLOAD_MANIFEST");
+		const devManifest = JSON.parse(
+			readFileSync(
+				resolve(process.cwd(), "scripts/voxcpm2-download-manifest.json"),
+				"utf8",
+			),
+		);
+		expect(devManifest.profile).toBe("windows_trt_6g");
+		expect(devManifest.archive.url).toContain("/releases/0.2.2/");
+	});
+
+	it("stages the dev/e2e installer resources into the cargo debug resource_dir (#508)", () => {
+		const devLauncher = readFileSync(
+			resolve(process.cwd(), "scripts/tauri-with-mode.mjs"),
+			"utf8",
+		);
+		expect(devLauncher).toContain("devTargetDebugVoxCpm2Bundle");
+		expect(devLauncher).toContain(
+			'resolve(devTargetDebugVoxCpm2Bundle, "prepare-voxcpm2-model.ps1")',
+		);
+		expect(devLauncher).toContain(
+			'resolve(devTargetDebugVoxCpm2Bundle, "voxcpm2-activation-contract.json")',
+		);
+		expect(devLauncher).toContain(
+			'resolve(devTargetDebugVoxCpm2Bundle, "download-manifest.json")',
+		);
+		const e2eBuilder = readFileSync(
+			resolve(process.cwd(), "scripts/build-e2e-tauri.mjs"),
+			"utf8",
+		);
+		expect(e2eBuilder).toContain(
+			'resolve(e2eVoxCpm2Bundle, "prepare-voxcpm2-model.ps1")',
+		);
+		expect(e2eBuilder).toContain(
+			'resolve(e2eVoxCpm2Bundle, "voxcpm2-activation-contract.json")',
+		);
+		expect(e2eBuilder).toContain(
+			'resolve(e2eVoxCpm2Bundle, "download-manifest.json")',
 		);
 	});
 

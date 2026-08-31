@@ -15,7 +15,7 @@
     "issue_doc": "docs/progress/ (F0-baseline, F0-contract, F{1,2,3}-baseline-contract, F0-graft) + 00-PHASES.md",
     "github_issue": null,
     "started": "2026-06-08T00:00:00Z",
-    "last_updated": "2026-08-26T00:00:00+09:00",
+    "last_updated": "2026-08-27T17:22:02+09:00",
     "status": "in_progress",
     "epic_497_universal_agent": {
       "issue": 497,
@@ -118,6 +118,38 @@
 			"P04_implementation_tests": "pending",
 			"P05_done_handoff": "pending"
 		},
+    "voxcpm2_runtime_pin_upgrade_518": {
+      "issue": "https://github.com/nextain/naia-shell/issues/518",
+      "milestone": "v0.2.3",
+      "scope": "런타임 전용 업그레이드(제어 파일 동일·아카이브만 갱신)가 기존 설치자에게 도달하지 않던 전달 경로 결함 — payload 재사용 게이트에 번들 download-manifest의 artifactManifestSha256 핀 대조 추가. #478 째짐 v0.2.2 재발의 근본 원인",
+      "requirements": "docs/requirements.md FR-V017.38",
+      "scenario": "docs/user-scenarios.md UC-V017-VOXCPM2-RUNTIME-PIN-UPGRADE",
+      "status": "done",
+      "P01_user_scenarios": "done",
+      "P02_test_coverage_map": "done",
+      "P03_requirements": "done",
+      "P04_integration_test": "done",
+      "P05_complete": "done",
+      "field_evidence": "2026-08-31 개발 PC: 설치 payload 전체 8/20 생성(artifact-manifest 9827ac3f…), v0.2.2 번들 핀 5dc02662…(r2.zip) 불일치인데도 재사용됨 — 제어 파일 2종이 v0.2.1과 동일해 FR-V017.37 게이트 통과. #478 수정(voxcpm2-tensorrt ff95790 문장 경계 페이드)이 8/28 r2 아카이브에 실렸으나 이 경로로 기존 설치자에게 미전달 → 째짐 재발 확정",
+      "verification": "Rust lib 231/231 — 확장 테스트: 제어 파일 동일 + 핀 일치 → 재사용, 핀 불일치(runtime-only 릴리즈 시뮬레이션) → 재사용 거부, 핀 부재(None) → 기존 동작 보존. dev/e2e 번들 루트 분기는 핀 검사 밖(스코프 최소화 주석). 미검증 경계: 실 설치본에서 핀 불일치 → 재스테이징 → 실발화 확인은 이 머신에서 r2 캐시 프리로드 후 수동 재설치로 검증 예정(결과는 이슈에 기록)",
+      "last_updated": "2026-08-31T15:25:00+09:00"
+    },
+    "bgm_orphan_port_recovery_517": {
+      "issue": "https://github.com/nextain/naia-shell/issues/517",
+      "milestone": "v0.2.3",
+      "scope": "고아 bgm-server가 BGM 포트를 선점하면 회복 불가로 영구 고장(EADDRINUSE→stale nonce 헬스체크 실패). 시작 백스톱(포트 소유자 기준 회수)+sidecar EADDRINUSE 즉시 exit(1)+teardown의 미추적 PID kill 후 파일 제거",
+      "requirements": "docs/requirements.md FR-BGM.13~15",
+      "scenario": "docs/user-scenarios.md UC-BGM-ORPHAN-PORT-RECOVERY",
+      "status": "done",
+      "P01_user_scenarios": "done",
+      "P02_test_coverage_map": "done",
+      "P03_requirements": "done",
+      "P04_integration_test": "done",
+      "P05_complete": "done",
+      "field_evidence": "2026-08-31 개발 PC 설치본 0.2.2: 8/28 생성 고아(pid 33580, 부모 사망)가 18791 점유 → 모든 세션 헬스체크 실패. bgm-server-stderr.log는 EADDRINUSE 무한 반복. 고아 kill 직후 다른 좀비(31212, 무한 재시도 루프 생존자)가 즉시 listen 승계 실측 — 재시도 루프가 고장을 자기영속시킴을 확인",
+      "verification": "Rust lib 231/231(신규: reclaim 순수 분기 단위 + Windows 실프로세스 통합 — 진짜 node 리스너를 bgm-server-bin.js 이름으로 포트에 앉혀 회수·포트해제 실측, 비sidecar 이름은 비회수 실측). Shell vitest 1,781 passed/21 skipped/0 failed(신규 EADDRINUSE exit(1) 실소켓 테스트 포함). shell tsc 0, bgm-sidecar tsc 0, assembly coverage PASS. enforce-root-structure.sh는 기존 CRLF 문제로 이 환경 실행 불가(#468 기지). UI 변경 없음(기존 오류 표면 유지)이라 visual-ux 게이트 해당 없음. 미검증 경계: 실 설치본 부팅에서의 reclaim 실측은 0.2.3 릴리즈 빌드에서 확인 예정(고아 재현 절차는 이슈 참조)",
+      "last_updated": "2026-08-31T12:10:00+09:00"
+    },
     "startup_update_prompt_468": {
       "issue": "https://github.com/nextain/naia-shell/issues/468",
       "scope": "앱 시작 시 명시적 동의가 필요한 업데이트 팝업과 버전별 30일 알림 유예, 기존 배너 및 설정 수동 확인 보존",
@@ -183,6 +215,17 @@
       "last_updated": "2026-08-19T23:10:00+09:00",
       "field_evidence": "RTX 2070 v0.1.8 upgrade reused a structurally valid v0.1.7 payload whose stale installer prepared only one voice; current verification required eight and returned VOXCPM2_REFERENCE_VOICE_MISSING.",
       "release_gate": "Windows stage-runtime runs the stale-control upgrade regression before packaging. Installed payload reuse additionally requires SHA-256 equality for the packaged installer script and activation contract; mismatch drives cached-archive restaging instead of archive download."
+    },
+    "macos_universal_505": {
+      "issue": "https://github.com/nextain/naia-shell/issues/505",
+      "scope": "Intel 및 Apple Silicon 아키텍처별 앱을 조립해 공통 경로 Mach-O는 두 slice를 포함하고 명시적 아키텍처 분기 payload만 일치하는 thin slice를 허용하는 Universal macOS 앱 빌드",
+      "requirements": "docs/requirements.md FR-INSTALL.7",
+      "scenario": "docs/user-scenarios.md S-INSTALL macOS Universal 항목",
+      "operator_context": "docs/progress/macos-universal-launch-readiness.md#ai-operator-handoff",
+      "status": "implementation_verified",
+      "last_updated": "2026-08-27T17:22:02+09:00",
+      "validation_evidence": "Intel x86_64 앱 빌드·설치 번들 스모크 통과; 통합 main 스냅샷에서 Universal 조립 및 플랫폼 계약 61개와 루트 계약 231개 통과, Shell production build 통과; 전체 셸은 1,689개 통과·21개 제외, 기존 Windows 전용 tar.exe VoxCPM2 테스트 5개가 macOS에서 status=null로 실패; 동일 기능 snapshot 적대 리뷰 연속 CLEAN 2회",
+      "external_boundary": "실제 CI 실행, Apple Silicon 런타임, 코드 서명, 공증, App Sandbox, App Store Connect 업로드는 별도 증거와 자격 증명이 필요"
     },
     "windows_trt_latency_14": {
       "issue": "https://github.com/nextain/alpha-adk/issues/14",

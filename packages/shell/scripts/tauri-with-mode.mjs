@@ -56,9 +56,10 @@ const AGENT_WORKTREE_ROOTS = [
 ];
 
 function gitOutput(dir, args) {
+	const safeDir = resolve(dir).replaceAll("\\", "/");
 	const r = spawnSync(
 		"git",
-		["-C", dir, ...args],
+		["-c", `safe.directory=${safeDir}`, "-C", dir, ...args],
 		{ encoding: "utf8", shell: false },
 	);
 	if (r.status !== 0) return null;
@@ -154,6 +155,11 @@ const env = interactiveLaunchEnv(process.env);
 // development executable is an installed bundle. Rust ignores this override
 // in release builds.
 const devVoxCpm2Bundle = resolve(SHELL, "src-tauri", "voxcpm2-runtime");
+const devVoxCpm2DownloadManifest = resolve(
+	SHELL,
+	"scripts",
+	"voxcpm2-download-manifest.json",
+);
 if (mode === "dev") {
 	// Thin-runtime dev builds reuse the staged download manifest, but its ignored
 	// control files can predate the checkout. Refresh the small trusted installer
@@ -168,6 +174,38 @@ if (mode === "dev") {
 		resolve(SHELL, "src-tauri/voxcpm2-activation-contract.json"),
 		resolve(devVoxCpm2Bundle, "voxcpm2-activation-contract.json"),
 	);
+	if (existsSync(devVoxCpm2DownloadManifest)) {
+		env.NAIA_VOXCPM2_DOWNLOAD_MANIFEST =
+			env.NAIA_VOXCPM2_DOWNLOAD_MANIFEST ?? devVoxCpm2DownloadManifest;
+	}
+	// #508: Rust resolves the installer resources from resource_dir, which for
+	// a `tauri dev` debug binary is the cargo debug directory — NOT the
+	// src-tauri/voxcpm2-runtime staging above. Without these three files the
+	// installed payload fails its reuse check (voxcpm2_installed_payload_is_
+	// reusable requires the resource-dir installer script), so
+	// voxcpm2_installation_status reports can_start=false and the Shell
+	// silently normalizes a completed install back to browser voice (#507
+	// 실측). Stage them idempotently beside the debug executable.
+	const devTargetDebugVoxCpm2Bundle = resolve(
+		env.CARGO_TARGET_DIR ?? resolve(SHELL, "src-tauri", "target"),
+		"debug",
+		"voxcpm2-runtime",
+	);
+	mkdirSync(devTargetDebugVoxCpm2Bundle, { recursive: true });
+	copyFileSync(
+		resolve(SHELL, "src-tauri/windows/prepare-voxcpm2-model.ps1"),
+		resolve(devTargetDebugVoxCpm2Bundle, "prepare-voxcpm2-model.ps1"),
+	);
+	copyFileSync(
+		resolve(SHELL, "src-tauri/voxcpm2-activation-contract.json"),
+		resolve(devTargetDebugVoxCpm2Bundle, "voxcpm2-activation-contract.json"),
+	);
+	if (existsSync(devVoxCpm2DownloadManifest)) {
+		copyFileSync(
+			devVoxCpm2DownloadManifest,
+			resolve(devTargetDebugVoxCpm2Bundle, "download-manifest.json"),
+		);
+	}
 }
 if (
 	mode === "dev" &&
@@ -203,6 +241,11 @@ env.NAIA_AGENT_STANDALONE = env.NAIA_AGENT_STANDALONE ?? "1";
 function gitDirForPath(path) {
 	let dir = resolve(path);
 	if (existsSync(dir) && statSync(dir).isFile()) dir = dirname(dir);
+	while (!existsSync(resolve(dir, ".git"))) {
+		const parent = dirname(dir);
+		if (parent === dir) throw new Error(`Path is not inside a git checkout: ${path}`);
+		dir = parent;
+	}
 	const root = gitOutput(dir, ["rev-parse", "--show-toplevel"]);
 	if (!root) throw new Error(`Path is not inside a git checkout: ${path}`);
 	return root.replaceAll("\\", "/");

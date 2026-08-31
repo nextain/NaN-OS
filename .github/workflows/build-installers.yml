@@ -16,10 +16,22 @@ jobs:
         include:
           - os: windows-2025
             platform: win32
+            arch: x64
+            artifact: win32
           - os: ubuntu-24.04
             platform: linux
+            arch: x64
+            artifact: linux
           - os: macos-15
             platform: darwin
+            arch: arm64
+            uname_arch: arm64
+            artifact: darwin
+          - os: macos-15-intel
+            platform: darwin
+            arch: x64
+            uname_arch: x86_64
+            artifact: darwin-x64
     runs-on: ${{ matrix.os }}
     timeout-minutes: 150
 
@@ -30,7 +42,7 @@ jobs:
         run: |
           git init ../naia-agent
           git -C ../naia-agent remote add origin https://github.com/nextain/naia-agent.git
-          git -C ../naia-agent fetch --depth 1 origin 510432477dc51eeb7a8cfccbd529aa6a3f84cf1f
+          git -C ../naia-agent fetch --depth 1 origin 7b94bc5ded7b5e6bfe12b18fd22ef3331515f602
           git -C ../naia-agent checkout --detach FETCH_HEAD
           git init ../naia-kb-compiler
           git -C ../naia-kb-compiler remote add origin https://github.com/nextain/naia-kb-compiler.git
@@ -38,7 +50,7 @@ jobs:
           git -C ../naia-kb-compiler checkout --detach FETCH_HEAD
           git init ../naia-memory
           git -C ../naia-memory remote add origin https://github.com/nextain/naia-memory.git
-          git -C ../naia-memory fetch --depth 1 origin 46c300825a22478e062772ec7cab234be956328f
+          git -C ../naia-memory fetch --depth 1 origin 630a0d2f19b559e3f0101bb141048485167fb959
           git -C ../naia-memory checkout --detach FETCH_HEAD
 
       - uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
@@ -67,8 +79,8 @@ jobs:
         if: matrix.platform == 'darwin'
         shell: bash
         run: |
-          test "$(uname -m)" = "arm64" || {
-            echo "::error::macOS installer contract currently supports the CI arm64 completion line only"
+          test "$(uname -m)" = "${{ matrix.uname_arch }}" || {
+            echo "::error::Expected macOS ${{ matrix.uname_arch }} runner, got $(uname -m)"
             exit 1
           }
 
@@ -78,17 +90,17 @@ jobs:
         if: matrix.platform == 'win32'
         shell: pwsh
         run: |
-          $url = "https://pub-a587c16974874fc9a168d2a281801a23.r2.dev/windows_trt_6g/releases/0.2.1/voxcpm2-runtime-win-trt6g.zip"
+          $url = "https://stnaiapub83b29893.blob.core.windows.net/releases/windows_trt_6g/releases/0.2.2/voxcpm2-runtime-win-trt6g-r2.zip"
           $archive = Join-Path $env:RUNNER_TEMP "voxcpm2-runtime-win-trt6g.zip"
           $runtime = Join-Path $env:RUNNER_TEMP "voxcpm2-runtime"
           curl.exe --location --fail --retry 4 --retry-all-errors --output $archive $url
           if ($LASTEXITCODE -ne 0) { throw "VoxCPM2 release input download failed" }
           $item = Get-Item -LiteralPath $archive
-          if ($item.Length -ne 2705919022) {
+          if ($item.Length -ne 2496064260) {
             throw "VoxCPM2 release input size mismatch: $($item.Length)"
           }
           $hash = (Get-FileHash -Algorithm SHA256 -LiteralPath $archive).Hash.ToLowerInvariant()
-          if ($hash -ne "9c87ab0775226d01ff1c9fbafffd193d53e991ad020cc9945233a35138e2b26b") {
+          if ($hash -ne "0057dcd5d440ac2bd736bc407df7822cb66b628ad031024877dd425e8ed2db33") {
             throw "VoxCPM2 release input SHA-256 mismatch"
           }
           New-Item -ItemType Directory -Force -Path $runtime | Out-Null
@@ -96,7 +108,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "VoxCPM2 release input extraction failed" }
           "NAIA_VOXCPM2_TRT_RUNTIME_DIR=$runtime" >> $env:GITHUB_ENV
           "NAIA_VOXCPM2_TRT_ARCHIVE=$archive" >> $env:GITHUB_ENV
-          "NAIA_VOXCPM2_TRT_ARTIFACT_SHA256=235e6bf894213b02a8335c632580e2ae10a03dfbecd1bf73515992853cbfc4b0" >> $env:GITHUB_ENV
+          "NAIA_VOXCPM2_TRT_ARTIFACT_SHA256=5dc02662267f79489896621d39f975af1d081bba49fecf5daac2a1a78e0a4ce5" >> $env:GITHUB_ENV
 
       - name: Build installer bundle from platform matrix
         env:
@@ -485,7 +497,7 @@ jobs:
       - name: Upload installer outputs
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: naia-shell-${{ matrix.platform }}-${{ github.sha }}
+          name: naia-shell-${{ matrix.artifact }}-${{ github.sha }}
           path: |
             packages/shell/src-tauri/target/release/bundle/nsis/*-setup.exe
             packages/shell/src-tauri/target/release/bundle/nsis/*-setup.exe.sig
@@ -509,3 +521,72 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
           retention-days: 14
+
+  macos-universal:
+    needs: build
+    runs-on: macos-15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: naia-shell-darwin-x64-${{ github.sha }}
+          path: universal-input/x64
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: naia-shell-darwin-${{ github.sha }}
+          path: universal-input/arm64
+      - name: Extract architecture app bundles
+        shell: bash
+        run: |
+          mkdir -p universal-input/x64-app universal-input/arm64-app universal-output
+          tar -xzf universal-input/x64/macos/*.app.tar.gz -C universal-input/x64-app
+          tar -xzf universal-input/arm64/macos/*.app.tar.gz -C universal-input/arm64-app
+      - name: Assemble and verify every Universal Mach-O
+        run: >-
+          node packages/shell/scripts/assemble-macos-universal.mjs
+          --x64-app universal-input/x64-app/Naia.app
+          --arm64-app universal-input/arm64-app/Naia.app
+          --output-app universal-output/Naia.app
+      - name: Archive Universal app bundle
+        shell: bash
+        run: tar -C universal-output -czf universal-output/Naia_universal.app.tar.gz Naia.app
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: naia-shell-darwin-universal-${{ github.sha }}
+          path: universal-output/Naia_universal.app.tar.gz
+          if-no-files-found: error
+          retention-days: 14
+
+  macos-universal-smoke:
+    needs: macos-universal
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-15
+            arch: arm64
+            uname_arch: arm64
+          - os: macos-15-intel
+            arch: x64
+            uname_arch: x86_64
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: naia-shell-darwin-universal-${{ github.sha }}
+          path: universal-smoke
+      - name: Extract and launch Universal app
+        shell: bash
+        run: |
+          test "$(uname -m)" = "${{ matrix.uname_arch }}"
+          tar -xzf universal-smoke/Naia_universal.app.tar.gz -C universal-smoke
+          APP="$PWD/universal-smoke/Naia.app"
+          node packages/shell/scripts/verify-installed-smoke.mjs \
+            --binary "$APP/Contents/MacOS/naia-shell" \
+            --resource-dir "$APP/Contents/Resources" \
+            --timeout-ms 120000

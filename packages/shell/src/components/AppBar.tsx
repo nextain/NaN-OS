@@ -8,9 +8,6 @@ import {
 	useState,
 } from "react";
 import { createPortal } from "react-dom";
-import { getBridgeForApp } from "../lib/active-bridge";
-import { removeInstalledApp } from "../lib/app-loader";
-import { appRegistry } from "../lib/app-registry";
 import {
 	type BrowserLink,
 	addBrowserShortcut,
@@ -23,6 +20,9 @@ import {
 import { NAIA_WEB_BASE_URL, loadConfig, saveConfig } from "../lib/config";
 import { getLocale, t } from "../lib/i18n";
 import { Logger } from "../lib/logger";
+import { getBridgeForApp } from "../lib/active-bridge";
+import { removeInstalledApp } from "../lib/app-loader";
+import { appRegistry } from "../lib/app-registry";
 import { useAppStore } from "../stores/app";
 import { BgmPlayer } from "./BgmPlayer";
 

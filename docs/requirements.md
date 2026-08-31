@@ -258,6 +258,8 @@ localStorage `naia-config` 는 파일에서 하이드레이트되는 **순수 �
 | **FR-CLI.2** | `naia <file>`은 호출 cwd 기준 상대 경로와 절대 경로를 정규화하고, 실존하는 일반 파일만 `workspace-open-file-request`로 전달한다. 실행 중인 셸은 포커스 후 열고, 콜드 스타트는 UI 준비 뒤 연다. | UC-CLI-OPEN | Rust 단위 + 네이티브 실행 중/콜드 스타트 인수 테스트 |
 | **FR-CLI.3** | CLI 파일 열기는 기존 workspace `openFile` API를 재사용하며 파일 내용이나 경로를 로그·URL에 복제하지 않는다. 잘못된 인자는 셸 기동을 막지 않는다. | UC-CLI-OPEN | 프론트 이벤트 결선 테스트 + 오류/디렉터리/미존재 경로 부정 테스트 |
 
+| **FR-INSTALL.7** | **macOS Universal Binary 배포** — 동일 커밋을 GitHub Actions `macos-15-intel`(`x86_64`)과 `macos-15`(`arm64`)에서 정규 `tauri:build:bundle`로 각각 빌드한다. 공통 경로의 일반 파일은 SHA256이 같아야 하고, 공통 경로의 아키텍처별 Mach-O(최상위 Tauri 실행 파일, 번들 Node, 네이티브 `.node`/동적 라이브러리 포함)는 `lipo -create`로 병합한다. `darwin-x64`/`darwin-arm64`처럼 경로 자체가 런타임 선택 아키텍처를 명시하는 네이티브 payload만 해당 slice의 thin Mach-O와 한쪽 번들 전용 파일을 허용해 양쪽을 함께 보존한다. 그 외 한쪽 전용 파일·thin Mach-O·경로와 slice가 불일치하는 파일은 산출을 중단한다. 기존 아키텍처별 app/dmg 산출물은 보존한다. Intel 실기기에서는 x86_64 앱의 agent-core/BGM 핸드셰이크와 번들 Node 실제 사용을 검증하며, Apple Silicon 실기기 실행은 별도 출시 증거 없이는 완료로 주장하지 않는다. | S-MAC-UNIVERSAL | `assemble-macos-universal.test.ts` 부정 계약 + Intel 설치본 스모크 + CI 두 아키텍처 빌드·재귀 병합·전체 Mach-O `lipo -archs` 검증 |
+
 > NFR: **NFR-noWSL(불변)** — 빌드·설치·런타임 어느 구간에도 WSL 요구 금지(현행 0건을 요구사항으로 고정). · NFR-honesty — 미실측(mac 실기기)·미서명을 문서와 산출물 설명에 그대로 표기, "지원" 위장 금지. · 재현성 = "사람 기억에 의존하는 수동 단계 0". ⚠️ 범위 밖(별도 이슈로 후속): 코드 서명(win 인증서·mac 공증), updater `.sig` 생성/키, **updater endpoint stale**(base conf 가 폐기된 `nextain/naia-os` releases 를 가리킴 — 설치본 첫 실행 시 죽은 endpoint 조회, 후속 이슈로 교정), flatpak 경로, `WslSetupScreen` 죽은 레거시 삭제(기존 DEFER 유지).
 
 > **FR-INSTALL.2 P3 실측 보강(2026-07-18)**: 필수 스테이징은 agent뿐 아니라 셸 소유 BGM
@@ -663,6 +665,14 @@ Steamworks 포털 설정·SteamPipe 자격증명·스토어 심사 제출은 #31
 | **FR-BGM.11** | Radio-owned `status` returns bounded Shell-owned recent/favorite context, and every Agent activity play carries semantic `mode=radio_dj`. On observed `ended`, Agent speaks a short transition before a fresh dynamic search; Shell filters current/recent normalized duplicates and success remains gated by correlated observed `playing`. | Done | Shell BGM unit/Playwright plus paired Agent DJ-GRPC/DJ-08 contracts |
 | **FR-BGM.12** | 재생 중인 YouTube BGM의 재생 버튼은 bridge listening handshake 뒤 `pauseVideo`를 보내고, iframe 상태 이벤트가 늦거나 누락돼도 UI를 즉시 paused로 전환한다. | Pending verification | BgmPlayer 컴포넌트 + Playwright |
 
+## BGM orphan port recovery (#517, 2026-08-31)
+
+| ID | Requirement | Status | Verification |
+|---|---|---|---|
+| **FR-BGM.13** | Spawn 직전 셸은 대상 BGM 포트의 점유자를 확인한다. 점유자 command line에 `bgm-server-bin.js`가 있으면 종료 후 포트 해제를 확인하고 spawn한다. 없으면 종료하지 않고 점유 사실을 로그에 남긴다. 판정은 포트 소유자 기준(전역 cmdline 매칭 금지 — dev 격리 인스턴스 오살 방지). | Done | Rust reclaim 단위(주입 프로브 3분기) + Windows 실프로세스 통합 테스트 |
+| **FR-BGM.14** | sidecar는 `EADDRINUSE`에서 재시도 없이 즉시 exit(1)한다. 실패한 채 살아남아 낡은 nonce로 포트를 승계하는 좀비를 만들지 않는다. | Done | vitest: 점유 포트에서 `startYoutubeServer()` → exit(1) 호출·재시도 타이머 부재 |
+| **FR-BGM.15** | 셸 teardown은 `state.bgm_server`가 비어 있어도 PID 파일에 살아 있는 sidecar가 있으면 component 검증 후 종료하고 나서 파일을 제거한다. 기록만 삭제해 고아를 추적 불가로 만들지 않는다. | Done | Rust teardown 헬퍼 단위 + FR-BGM.13 백스톱이 최종 방어선 |
+
 ## Onboarding appearance and voice ownership (2026-08-06)
 
 | ID | 요구사항 | 검증 기준 |
@@ -790,6 +800,7 @@ unrelated direct TRT service on port 8910.
 | **FR-V017.35** (#453) | The public VoxCPM2 archive URL has one tracked production default. Release staging performs a credential-free HTTPS HEAD and one-byte range GET, requires HTTP 200/206 and the exact pinned archive byte count, and fails before installer packaging on an inaccessible, private, redirected, or drifted object. A manually supplied URL cannot bypass this availability gate. | staging URL/probe unit tests + live R2 HEAD/range release preflight + generated download-manifest inspection |
 | **FR-V017.36** | Windows updates replace complete installer-owned Agent/runtime/dependency trees instead of overlaying stale `node_modules`. A full NSIS or MSI uninstall removes the exact Naia install root plus Naia-owned roaming/local application state, while preserving `~/.naia` user memory and user workspaces. | NSIS/WiX payload contract tests + update stale-file mutation + full uninstall residue and user-state preservation smoke |
 | **FR-V017.37** (#465) | An installed VoxCPM2 payload is reusable only when both its installer script and activation contract are byte-identical to the control files packaged by the running Shell. A stale but structurally valid payload is atomically restaged from the digest-verified local archive cache, without downloading the multi-gigabyte archive again. Release staging must run the default-only v0.1.7 payload to eight-voice palette upgrade regression before packaging. | Rust control-file digest and stale-payload regression + release-stage targeted test gate + cached-archive upgrade smoke |
+| **FR-V017.38** (#518) | 설치 payload 재사용은 제어 파일 일치에 더해, 러닝 셸이 번들한 `download-manifest.json`의 `artifactManifestSha256`이 설치 payload의 `artifact/artifact-manifest.json` 해시와 일치할 때만 허용된다. 제어 파일은 그대로 두고 런타임 아카이브만 갱신한 릴리즈(예: v0.2.2 r2의 #478 째짐 수정)가 기존 설치자에게 도달하지 못한 채 구조 유효한 구 payload 가 영구 재사용되는 것을 막는다. 핀 불일치 payload는 재사용 불가로 판정되어 기존 취득 플로우(캐시 ZIP 우선, 없으면 재다운로드)로 재스테이징된다. dev/e2e 번들 루트 분기는 이 핀 검사의 대상이 아니다. | Rust reuse-gate 단위(핀 일치/불일치/manifest 부재) + 실 payload 해시 대조 회귀 |
 
 ## v0.2.0 signed Windows updater recovery (2026-08-20)
 
@@ -849,6 +860,26 @@ fenced code는 언어·복사·접기·워크스페이스 전환을 제공하고
 
 도구 권한 팝업은 실행 `Alt+Y`, 항상 실행 `Alt+A`, 취소 `Alt+N`을 하나의 공통 정의에서 표시·해석하고, macOS에서는 같은 Alt 키를 Option 기호로 표시한다. 팝업이 열린 동안에만 수정키가 정확히 일치하는 최초 keydown을 한 번 처리한다.
 
+## v0.2.2 local release acceptance
+
+| ID | Issue | Normative requirement | Verification |
+|---|---:|---|---|
+| **FR-BGM-PLAYBACK.1** | #430 | 늦은 YouTube 재생 확인은 실제 실패로 오인하지 않고, 임베드 차단은 침묵이나 거짓 재생 상태가 아닌 복구 가능한 오류로 표시한다. | BGM 상태 단위 테스트 + 브라우저 패널 도구 E2E |
+| **FR-WORKSPACE-PATH.1** | #432 | 터미널 파일 경로는 플랫폼 기본 보조키로만 열리고 일반 클릭·드래그 선택을 보존한다. | 플랫폼 단축키 단위 테스트 + Workspace 브라우저 E2E |
+| **FR-LOCALE-BOOT.1** | #437 | 저장 언어 또는 OS 언어를 첫 화면 전에 적용하며 온보딩·복구·Host 설치 상태에 백엔드 영문 원문을 노출하지 않는다. | locale hydration/온보딩 컴포넌트 + 한국어 브라우저 E2E |
+| **FR-PROVIDER-BASE-URL.1** | #475 | 로컬 OpenAI 호환 provider의 Base URL을 검증·저장하고 실제 요청에 동일하게 적용한다. | URL 정규화 단위 테스트 + 설정 브라우저 E2E |
+| **FR-WORKSPACE-MEDIA.1** | #482 | MP3/WAV/MP4는 텍스트로 읽지 않고 바이너리로 읽어 로컬 Blob URL을 사용하는 오디오·비디오 컨트롤로 연다. | viewer registry/component + FileTree 브라우저 E2E |
+| **FR-CHAT-MARKDOWN.3** | #483 | 코드 블록은 안전한 구문 강조, 정확한 복사와 성공 피드백을 제공한다. Mermaid는 strict 렌더링하며 실패 시 원문을 보존한다. | MarkdownCodeBlock 단위 테스트 + 실제 채팅 브라우저 E2E |
+| **FR-WORKSPACE-HERDR.2** | #492 | Herdr snapshot이 멈추거나 실패해도 설정된 Workspace 파일 트리는 독립적으로 표시된다. | runtime hook 단위 테스트 + stalled snapshot 브라우저 E2E |
+| **FR-BGM-VIDEO.1** | #493 | YouTube iframe을 유지한 채 배경 영상만 숨겨 오디오 재생을 지속하고 선택을 저장한다. | BGM 컴포넌트 + 브라우저 패널 E2E |
+| **FR-BGM-VIDEO.2** | #476 | YouTube iframe은 해당 재생이 실제로 관측(playing/진행)되기 전에는 기존 배경을 덮지 않으며, error·timeout·ended 시 기존 배경을 다시 보인다. 임베드 실패가 검은 화면으로 나타나서는 안 된다. | BgmPlayer 단위 테스트(`data-bgm-youtube-live` 게이트) + 패키지드 Windows 실기 확인 |
+| **FR-BGM-FAV.1** | #476 | YouTube 즐겨찾기는 사용자 데이터로서 워크스페이스 SoT(naia-settings config `bgmYoutubeFavorites`)에 저장한다. 기존 webview localStorage 사본은 1회 마이그레이션 후 정리하며, 워크스페이스 사본이 존재하면(빈 배열 포함) 그것이 유일한 진실이다. BgmPlayer와 bgm-skill 두 읽기 경로 모두 동일 SoT를 따른다. | BgmPlayer 마이그레이션/영속 단위 테스트 + bgm-skill 기본 리더 단위 테스트 + bgm-skill E2E 즐겨찾기 흐름(워크스페이스 SoT `bgmYoutubeFavorites` 판독) |
+| **FR-BGM-STATE.1** | #494 | 음표 애니메이션은 YouTube의 authoritative playing 이벤트에서만 활성화한다. | player event 단위 테스트 + 브라우저 패널 E2E |
+| **FR-BGM-CONTROL.1** | #495 | 실제 재생 중에는 정지, 정지 후에는 재생 동작과 라벨을 표시한다. | player control 단위 테스트 + 브라우저 패널 E2E |
+| **FR-TTS-GLOBAL-OFF.1** | local QA | 상단 TTS를 끄면 현재 재생, 대기 문장, 진행 중 합성 및 브라우저 발화를 즉시 중단하며 이후 응답을 합성하지 않는다. | AiControlBar→ChatArea 통합 테스트 + 브라우저 E2E |
+| **FR-VOICE-DEV-MANIFEST.1** | local QA | Windows 개발 실행도 검증된 v0.2.2 Host 다운로드 manifest를 명시적으로 전달하며 누락된 패키지로 위장하지 않는다. | dev launcher 계약 테스트 + 동일 debug 바이너리 설치 상태 확인 |
+| **FR-VOICE-SELECT.1** | #507 | 설치된 Host 음성을 설정에서 선택하면 엔진을 자동 시작하고 진행을 표시한다. 시작 실패나 차단으로 선택을 되돌릴 때는 사유와 되돌림 안내를 프로필·음성 화면 모두에 표시하며 무언 revert 를 하지 않는다. | SettingsTab 단위 테스트(자동 시작·revert 사유 표기) + settings-slots 브라우저 E2E |
+| **FR-VOICE-DEV-STAGING.1** | #508 | dev(`tauri-with-mode`)와 e2e(`build-e2e-tauri`) 실행은 installer 리소스 3종(prepare-voxcpm2-model.ps1, voxcpm2-activation-contract.json, download-manifest.json)을 Rust 가 읽는 resource_dir(`<target>/debug/voxcpm2-runtime/`)에 멱등 스테이징한다. 설치 완료된 payload 가 개발 실행에서 미설치로 위장되지 않는다. | `scripts/__tests__/stage-voxcpm2-runtime.test.ts` debug 스테이징 계약 |
 ## 기능 요구사항 (FR) — 워크스페이스 컨텍스트 해석 (#501, 에픽 #497)
 
 > 계약: `docs/progress/issue-497-universal-agent.md`. 출처 시나리오: `user-scenarios.md`의

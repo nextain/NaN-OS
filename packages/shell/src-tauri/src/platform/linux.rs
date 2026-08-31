@@ -186,6 +186,39 @@ pub(crate) fn kill_pid(pid: u32) {
     }
 }
 
+/// PID of the process listening on a local TCP port, if any (FR-BGM.13 #517).
+/// Parses `ss -ltnpH` (iproute2): `... users:(("node",pid=1234,fd=18))`.
+pub(crate) fn pid_listening_on_port(port: u16) -> Option<u32> {
+    let output = Command::new("ss")
+        .args(["-ltnpH", &format!("sport = :{port}")])
+        .output()
+        .ok()?;
+    let text = String::from_utf8_lossy(&output.stdout);
+    let idx = text.find("pid=")?;
+    text[idx + 4..]
+        .chars()
+        .take_while(|c| c.is_ascii_digit())
+        .collect::<String>()
+        .parse()
+        .ok()
+}
+
+/// Full command line of a PID, if the process exists (NUL args joined by spaces).
+pub(crate) fn pid_command_line(pid: u32) -> Option<String> {
+    let bytes = std::fs::read(format!("/proc/{pid}/cmdline")).ok()?;
+    let text = bytes
+        .split(|byte| *byte == 0)
+        .filter(|arg| !arg.is_empty())
+        .map(|arg| String::from_utf8_lossy(arg).to_string())
+        .collect::<Vec<_>>()
+        .join(" ");
+    if text.is_empty() {
+        None
+    } else {
+        Some(text)
+    }
+}
+
 pub(crate) fn cleanup_orphan_processes() {
     for component in &["gateway", "node-host", "bgm-server", "cascade", "voxcpm2"] {
         if let Some(pid) = crate::read_pid_file(component) {
