@@ -118,6 +118,22 @@
 			"P04_implementation_tests": "pending",
 			"P05_done_handoff": "pending"
 		},
+    "bgm_orphan_port_recovery_517": {
+      "issue": "https://github.com/nextain/naia-shell/issues/517",
+      "milestone": "v0.2.3",
+      "scope": "고아 bgm-server가 BGM 포트를 선점하면 회복 불가로 영구 고장(EADDRINUSE→stale nonce 헬스체크 실패). 시작 백스톱(포트 소유자 기준 회수)+sidecar EADDRINUSE 즉시 exit(1)+teardown의 미추적 PID kill 후 파일 제거",
+      "requirements": "docs/requirements.md FR-BGM.13~15",
+      "scenario": "docs/user-scenarios.md UC-BGM-ORPHAN-PORT-RECOVERY",
+      "status": "done",
+      "P01_user_scenarios": "done",
+      "P02_test_coverage_map": "done",
+      "P03_requirements": "done",
+      "P04_integration_test": "done",
+      "P05_complete": "done",
+      "field_evidence": "2026-08-31 개발 PC 설치본 0.2.2: 8/28 생성 고아(pid 33580, 부모 사망)가 18791 점유 → 모든 세션 헬스체크 실패. bgm-server-stderr.log는 EADDRINUSE 무한 반복. 고아 kill 직후 다른 좀비(31212, 무한 재시도 루프 생존자)가 즉시 listen 승계 실측 — 재시도 루프가 고장을 자기영속시킴을 확인",
+      "verification": "Rust lib 231/231(신규: reclaim 순수 분기 단위 + Windows 실프로세스 통합 — 진짜 node 리스너를 bgm-server-bin.js 이름으로 포트에 앉혀 회수·포트해제 실측, 비sidecar 이름은 비회수 실측). Shell vitest 1,781 passed/21 skipped/0 failed(신규 EADDRINUSE exit(1) 실소켓 테스트 포함). shell tsc 0, bgm-sidecar tsc 0, assembly coverage PASS. enforce-root-structure.sh는 기존 CRLF 문제로 이 환경 실행 불가(#468 기지). UI 변경 없음(기존 오류 표면 유지)이라 visual-ux 게이트 해당 없음. 미검증 경계: 실 설치본 부팅에서의 reclaim 실측은 0.2.3 릴리즈 빌드에서 확인 예정(고아 재현 절차는 이슈 참조)",
+      "last_updated": "2026-08-31T12:10:00+09:00"
+    },
     "startup_update_prompt_468": {
       "issue": "https://github.com/nextain/naia-shell/issues/468",
       "scope": "앱 시작 시 명시적 동의가 필요한 업데이트 팝업과 버전별 30일 알림 유예, 기존 배너 및 설정 수동 확인 보존",

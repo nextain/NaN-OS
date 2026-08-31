@@ -665,6 +665,14 @@ Steamworks 포털 설정·SteamPipe 자격증명·스토어 심사 제출은 #31
 | **FR-BGM.11** | Radio-owned `status` returns bounded Shell-owned recent/favorite context, and every Agent activity play carries semantic `mode=radio_dj`. On observed `ended`, Agent speaks a short transition before a fresh dynamic search; Shell filters current/recent normalized duplicates and success remains gated by correlated observed `playing`. | Done | Shell BGM unit/Playwright plus paired Agent DJ-GRPC/DJ-08 contracts |
 | **FR-BGM.12** | 재생 중인 YouTube BGM의 재생 버튼은 bridge listening handshake 뒤 `pauseVideo`를 보내고, iframe 상태 이벤트가 늦거나 누락돼도 UI를 즉시 paused로 전환한다. | Pending verification | BgmPlayer 컴포넌트 + Playwright |
 
+## BGM orphan port recovery (#517, 2026-08-31)
+
+| ID | Requirement | Status | Verification |
+|---|---|---|---|
+| **FR-BGM.13** | Spawn 직전 셸은 대상 BGM 포트의 점유자를 확인한다. 점유자 command line에 `bgm-server-bin.js`가 있으면 종료 후 포트 해제를 확인하고 spawn한다. 없으면 종료하지 않고 점유 사실을 로그에 남긴다. 판정은 포트 소유자 기준(전역 cmdline 매칭 금지 — dev 격리 인스턴스 오살 방지). | Done | Rust reclaim 단위(주입 프로브 3분기) + Windows 실프로세스 통합 테스트 |
+| **FR-BGM.14** | sidecar는 `EADDRINUSE`에서 재시도 없이 즉시 exit(1)한다. 실패한 채 살아남아 낡은 nonce로 포트를 승계하는 좀비를 만들지 않는다. | Done | vitest: 점유 포트에서 `startYoutubeServer()` → exit(1) 호출·재시도 타이머 부재 |
+| **FR-BGM.15** | 셸 teardown은 `state.bgm_server`가 비어 있어도 PID 파일에 살아 있는 sidecar가 있으면 component 검증 후 종료하고 나서 파일을 제거한다. 기록만 삭제해 고아를 추적 불가로 만들지 않는다. | Done | Rust teardown 헬퍼 단위 + FR-BGM.13 백스톱이 최종 방어선 |
+
 ## Onboarding appearance and voice ownership (2026-08-06)
 
 | ID | 요구사항 | 검증 기준 |

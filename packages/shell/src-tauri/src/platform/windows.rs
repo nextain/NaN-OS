@@ -21,6 +21,48 @@ pub(crate) fn is_pid_alive(pid: u32) -> bool {
     alive
 }
 
+/// Force-terminate a process by PID (Windows: TerminateProcess).
+pub(crate) fn kill_pid(pid: u32) {
+    use windows_sys::Win32::Foundation::CloseHandle;
+    use windows_sys::Win32::System::Threading::{OpenProcess, TerminateProcess};
+    let handle = unsafe { OpenProcess(0x0001, 0, pid) }; // PROCESS_TERMINATE
+    if !handle.is_null() {
+        unsafe {
+            TerminateProcess(handle, 1);
+            CloseHandle(handle);
+        }
+    }
+}
+
+/// PID of the process listening on a local TCP port, if any (FR-BGM.13 #517).
+pub(crate) fn pid_listening_on_port(port: u16) -> Option<u32> {
+    let script = format!(
+        "$c=Get-NetTCPConnection -LocalPort {port} -State Listen -ErrorAction SilentlyContinue | Select-Object -First 1; if($null -ne $c){{$c.OwningProcess}}"
+    );
+    let mut command = Command::new("powershell");
+    command.args(["-NoProfile", "-NonInteractive", "-Command", &script]);
+    hide_console(&mut command);
+    let output = command.output().ok()?;
+    String::from_utf8_lossy(&output.stdout).trim().parse().ok()
+}
+
+/// Full command line of a PID, if the process exists and exposes one.
+pub(crate) fn pid_command_line(pid: u32) -> Option<String> {
+    let script = format!(
+        "$p=Get-CimInstance Win32_Process -Filter \"ProcessId={pid}\" -ErrorAction SilentlyContinue; if($null -ne $p){{$p.CommandLine}}"
+    );
+    let mut command = Command::new("powershell");
+    command.args(["-NoProfile", "-NonInteractive", "-Command", &script]);
+    hide_console(&mut command);
+    let output = command.output().ok()?;
+    let text = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    if text.is_empty() {
+        None
+    } else {
+        Some(text)
+    }
+}
+
 pub(crate) fn agent_process_marker(pid: u32, marker: &str) -> Result<Option<bool>, String> {
     let script = format!(
         "$p=Get-CimInstance Win32_Process -Filter \"ProcessId={pid}\" -ErrorAction Stop; if($null -eq $p){{'__NOT_FOUND__'}}else{{$p.CommandLine}}"

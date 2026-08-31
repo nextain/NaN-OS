@@ -738,6 +738,37 @@ successful until the player reports an observed `playing` transition.
 | unplayable YouTube recovery | no false playing/intro, bounded alternative search, network/sidecar recovery | Playwright covers iframe error, 15-second loading timeout, prepared fallback and exhaustion; Agent DJ-06 covers one fresh replacement after a failed play and a single terminal notice after repeated failure. Physical network-loss recovery remains operational coverage. |
 | sidecar exits or auxiliary window closes | Rust lifecycle tests | native Tauri sidecar restart/health check |
 | one settings owner and durable consent | Settings component rerender test | `settings-slots.spec.ts` Skills ownership, General absence, Save/reload |
+
+## UC-BGM-ORPHAN-PORT-RECOVERY — 고아 sidecar가 BGM 포트를 선점해도 다음 실행이 회복한다 (#517)
+
+설치본 사용자가 유튜브 뮤직플레이어를 켰는데 "BGM server failed its owned
+health check on port 18791"가 뜬다. 원인은 이전 세션이 Destroyed 이벤트 없이
+죽으며 남긴 고아 `bgm-server-bin.js` 프로세스가 포트를 점유한 것이다. 사용자는
+원인을 유추할 수 없고, 앱 재시작은 회복 경로가 아니다 — 오히려 30초 readiness
+probe 도중 앱을 닫으면 추적 불가능한 고아가 하나 더 생긴다.
+
+- 셸은 BGM sidecar를 spawn하기 전에 대상 포트의 점유자를 확인한다. 점유자의
+  command line이 `bgm-server-bin.js`이면 우리 계보의 잔재이므로 종료 후
+  spawn을 계속한다. command line이 다르면 남의 프로세스이므로 손대지 않고
+  점유 사실을 로그로 명확히 남긴다. 판정은 포트 소유자 기준이라 격리 dev
+  인스턴스(#425, :18891)의 sidecar를 오살하지 않는다.
+- sidecar 자신은 `EADDRINUSE`를 만나면 즉시 exit(1)한다. 무한 재시도로
+  살아남아 있다가 기존 점유자가 죽는 순간 낡은 nonce로 포트를 승계하는
+  좀비를 만들지 않는다.
+- 셸 종료 시 `state.bgm_server`에 자식이 없어도(예: readiness probe 중 종료)
+  PID 파일에 살아 있는 sidecar가 기록돼 있으면 검증 후 종료하고 나서 파일을
+  지운다. 기록만 지워 고아를 추적 불가로 만들지 않는다.
+
+### Test Coverage Map
+
+| Scenario | Unit / contract | UI / integration |
+|---|---|---|
+| 포트가 비어 있으면 무개입 | Rust reclaim 단위(주입 프로브: 점유자 없음 → kill 0회) | 기존 BGM 기동 경로 무회귀(vitest/Playwright 기존 스위트) |
+| 고아 sidecar가 점유 → 회수 후 기동 | Rust reclaim 단위(점유자 cmdline 매치 → kill 1회) | Rust 통합 테스트: 실제 `bgm-server-bin.js` 이름의 node 리스너를 포트에 앉히고 reclaim 후 포트 해제 실측 |
+| 남의 프로세스가 점유 → 회수 거부 | Rust reclaim 단위(cmdline 불일치 → kill 0회 + 경고 로그) | 동일 통합 테스트의 불일치 이름 케이스 |
+| sidecar가 EADDRINUSE에서 즉시 종료 | vitest: 점유된 포트로 `startYoutubeServer()` → `process.exit(1)` 호출 검증(재시도 타이머 없음) | — |
+| probe 중 앱 종료 → 다음 세션 회수 | teardown이 미저장 자식을 PID 파일로 종료(검증 후) | 종료 경로는 위 reclaim 백스톱이 최종 방어선(포트 소유자 기준이라 PID 파일 유실과 무관) |
+
 ## UC-SETTINGS-ROUNDTRIP: 설정 변경·재시작·실행 반영
 
 ## UC-ONBOARDING-APPEARANCE-VOICE: 외모와 음성을 독립적으로 시작하기

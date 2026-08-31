@@ -3193,6 +3193,86 @@ fn bgm_server_port() -> u16 {
 // allow enough time for that first launch instead of killing a healthy child.
 const BGM_STARTUP_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
 
+/// FR-BGM.13 (#517): true when a command line belongs to our BGM sidecar lineage.
+fn bgm_sidecar_cmdline(cmdline: &str) -> bool {
+    cmdline.contains("bgm-server-bin.js")
+}
+
+#[derive(Debug, PartialEq, Eq)]
+enum BgmPortReclaim {
+    Free,
+    Reclaimed(u32),
+    ForeignHolder(u32),
+    UnknownHolder(u32),
+}
+
+/// Port-reclaim decision with injected probes (unit-testable). Kill only a
+/// proven bgm sidecar; a foreign or identity-less holder fails closed.
+fn reclaim_bgm_port_with(
+    port_owner: impl Fn() -> Option<u32>,
+    command_line: impl Fn(u32) -> Option<String>,
+    kill: impl Fn(u32),
+) -> BgmPortReclaim {
+    let Some(pid) = port_owner() else {
+        return BgmPortReclaim::Free;
+    };
+    match command_line(pid) {
+        Some(cmdline) if bgm_sidecar_cmdline(&cmdline) => {
+            kill(pid);
+            BgmPortReclaim::Reclaimed(pid)
+        }
+        Some(_) => BgmPortReclaim::ForeignHolder(pid),
+        None => BgmPortReclaim::UnknownHolder(pid),
+    }
+}
+
+fn bgm_port_accepts_connection(port: u16) -> bool {
+    let addr = std::net::SocketAddr::from(([127, 0, 0, 1], port));
+    std::net::TcpStream::connect_timeout(&addr, std::time::Duration::from_millis(200)).is_ok()
+}
+
+/// FR-BGM.13 (#517): reclaim the BGM port from a stale sidecar of a dead
+/// session before spawning ours. A leftover holder answers the readiness probe
+/// with its old nonce, so every spawn fails the owned health check until reboot.
+/// Port-owner based, not a global command-line sweep, so the isolated dev
+/// instance's sidecar on its own port (#425) is never collateral.
+fn reclaim_bgm_port(port: u16) {
+    if !bgm_port_accepts_connection(port) {
+        return; // fast path: nothing is listening, skip process-table queries
+    }
+    match reclaim_bgm_port_with(
+        || platform::pid_listening_on_port(port),
+        platform::pid_command_line,
+        platform::kill_pid,
+    ) {
+        BgmPortReclaim::Free => {}
+        BgmPortReclaim::Reclaimed(pid) => {
+            log_both(&format!(
+                "[Naia] Reclaimed BGM port {} from stale sidecar (PID {})",
+                port, pid
+            ));
+            for _ in 0..10 {
+                if !bgm_port_accepts_connection(port) {
+                    break;
+                }
+                std::thread::sleep(std::time::Duration::from_millis(200));
+            }
+        }
+        BgmPortReclaim::ForeignHolder(pid) => {
+            log_both(&format!(
+                "[Naia] WARN BGM port {} is held by a non-sidecar process (PID {}) — leaving it alone",
+                port, pid
+            ));
+        }
+        BgmPortReclaim::UnknownHolder(pid) => {
+            log_both(&format!(
+                "[Naia] WARN BGM port {} holder (PID {}) has no readable command line — leaving it alone",
+                port, pid
+            ));
+        }
+    }
+}
+
 fn spawn_youtube_bgm_server(app_handle: &AppHandle) -> Result<BgmServerProcess, String> {
     // Node binary ??same resolution chain as spawn_agent_core
     let node_path = resolve_spawn_node(app_handle, "NAIA_BGM_NODE_PATH");
@@ -3312,6 +3392,7 @@ fn spawn_youtube_bgm_server(app_handle: &AppHandle) -> Result<BgmServerProcess, 
             .as_nanos()
     );
     let bgm_port = bgm_server_port();
+    reclaim_bgm_port(bgm_port);
     cmd.env("NAIA_BGM_HEALTH_NONCE", &health_nonce);
     cmd.env("NAIA_BGM_PORT", bgm_port.to_string());
 
@@ -11875,6 +11956,21 @@ pub fn run() {
                         if let Some(mut process) = guard.take() {
                             log_verbose("[Naia] Terminating BGM server...");
                             let _ = process.child.kill();
+                        } else if let Some(pid) = read_pid_file("bgm-server") {
+                            // FR-BGM.15 (#517): a spawn still inside its readiness
+                            // probe has written the PID file but not yet stored the
+                            // child in state. Erasing the file alone would leave a
+                            // live sidecar untracked forever; verify identity and
+                            // kill it before removing the record.
+                            if platform::pid_command_line(pid)
+                                .is_some_and(|cmdline| bgm_sidecar_cmdline(&cmdline))
+                            {
+                                log_verbose(&format!(
+                                    "[Naia] Terminating untracked BGM sidecar from PID file (PID {})",
+                                    pid
+                                ));
+                                platform::kill_pid(pid);
+                            }
                         }
                     }
                     remove_pid_file("bgm-server");
@@ -12992,6 +13088,154 @@ mod tests {
     #[test]
     fn bgm_startup_budget_covers_windows_cold_install_scanning() {
         assert_eq!(BGM_STARTUP_TIMEOUT, std::time::Duration::from_secs(30));
+    }
+
+    #[test]
+    fn bgm_sidecar_cmdline_matches_only_sidecar_lineage() {
+        assert!(bgm_sidecar_cmdline(
+            r#""C:\Users\u\AppData\Local\Naia\node.exe" C:\Users\u\AppData\Local\Naia\bgm-sidecar\dist\bgm-server-bin.js"#
+        ));
+        assert!(bgm_sidecar_cmdline(
+            "/usr/bin/node /home/u/naia-shell/packages/bgm-sidecar/dist/bgm-server-bin.js"
+        ));
+        assert!(!bgm_sidecar_cmdline("node some-other-server.js"));
+        assert!(!bgm_sidecar_cmdline(""));
+    }
+
+    #[test]
+    fn bgm_port_reclaim_kills_only_proven_sidecar_holder() {
+        use std::cell::Cell;
+        let killed = Cell::new(0u32);
+
+        // Free port: no kill.
+        assert_eq!(
+            reclaim_bgm_port_with(|| None, |_| unreachable!(), |_| killed.set(killed.get() + 1)),
+            BgmPortReclaim::Free
+        );
+        assert_eq!(killed.get(), 0);
+
+        // Sidecar-lineage holder: killed exactly once.
+        assert_eq!(
+            reclaim_bgm_port_with(
+                || Some(4242),
+                |_| Some("node bgm-sidecar/dist/bgm-server-bin.js".to_string()),
+                |pid| {
+                    assert_eq!(pid, 4242);
+                    killed.set(killed.get() + 1);
+                }
+            ),
+            BgmPortReclaim::Reclaimed(4242)
+        );
+        assert_eq!(killed.get(), 1);
+
+        // Foreign holder: never killed.
+        assert_eq!(
+            reclaim_bgm_port_with(
+                || Some(77),
+                |_| Some("python -m http.server 18791".to_string()),
+                |_| killed.set(killed.get() + 100)
+            ),
+            BgmPortReclaim::ForeignHolder(77)
+        );
+        assert_eq!(killed.get(), 1);
+
+        // Holder without a readable command line: fail closed, never killed.
+        assert_eq!(
+            reclaim_bgm_port_with(|| Some(88), |_| None, |_| killed.set(killed.get() + 100)),
+            BgmPortReclaim::UnknownHolder(88)
+        );
+        assert_eq!(killed.get(), 1);
+    }
+
+    /// FR-BGM.13 (#517) end-to-end on the real OS: a leftover node process whose
+    /// command line names bgm-server-bin.js holds a port; reclaim must terminate
+    /// it and release the port. A non-sidecar name must be left alone.
+    #[cfg(windows)]
+    #[test]
+    fn bgm_port_reclaim_terminates_real_stale_sidecar_listener() {
+        let node = which_node_for_test();
+        let Some(node) = node else {
+            eprintln!("node not found on PATH — skipping real reclaim test");
+            return;
+        };
+
+        let dir = std::env::temp_dir().join("naia-bgm-reclaim-test");
+        std::fs::create_dir_all(&dir).unwrap();
+        let listener_js = "require('http').createServer(()=>{}).listen(Number(process.argv[2]));setInterval(()=>{},1000);";
+
+        // Case 1: holder proves sidecar lineage by script name → reclaimed.
+        let sidecar_script = dir.join("bgm-server-bin.js");
+        std::fs::write(&sidecar_script, listener_js).unwrap();
+        let port = free_local_port();
+        let mut child = Command::new(&node)
+            .arg(&sidecar_script)
+            .arg(port.to_string())
+            .spawn()
+            .expect("spawn fake sidecar");
+        assert!(
+            wait_for_port(port, true),
+            "fake sidecar never started listening"
+        );
+        reclaim_bgm_port(port);
+        assert!(
+            wait_for_port(port, false),
+            "reclaim did not release the port held by a sidecar-lineage process"
+        );
+        let _ = child.kill();
+        let _ = child.wait();
+
+        // Case 2: foreign script name → untouched.
+        let foreign_script = dir.join("not-a-sidecar.js");
+        std::fs::write(&foreign_script, listener_js).unwrap();
+        let port = free_local_port();
+        let mut child = Command::new(&node)
+            .arg(&foreign_script)
+            .arg(port.to_string())
+            .spawn()
+            .expect("spawn foreign listener");
+        assert!(
+            wait_for_port(port, true),
+            "foreign listener never started listening"
+        );
+        reclaim_bgm_port(port);
+        assert!(
+            bgm_port_accepts_connection(port),
+            "reclaim killed a foreign (non-sidecar) port holder"
+        );
+        let _ = child.kill();
+        let _ = child.wait();
+    }
+
+    #[cfg(windows)]
+    fn which_node_for_test() -> Option<String> {
+        let output = Command::new("where").arg("node").output().ok()?;
+        if !output.status.success() {
+            return None;
+        }
+        String::from_utf8_lossy(&output.stdout)
+            .lines()
+            .next()
+            .map(|line| line.trim().to_string())
+    }
+
+    #[cfg(windows)]
+    fn free_local_port() -> u16 {
+        std::net::TcpListener::bind("127.0.0.1:0")
+            .unwrap()
+            .local_addr()
+            .unwrap()
+            .port()
+    }
+
+    #[cfg(windows)]
+    fn wait_for_port(port: u16, expect_listening: bool) -> bool {
+        for _ in 0..50 {
+            if bgm_port_accepts_connection(port) == expect_listening {
+                return true;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(100));
+        }
+        false
     }
 
     #[test]
