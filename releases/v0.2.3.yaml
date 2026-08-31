@@ -1,0 +1,54 @@
+version: "0.2.3"
+date: "2026-09-01"
+summary:
+  en: "The Naia app store arrives. Buy Naia Slides on the web, install it into the shell through a signed deep link, and present a PDF deck while Naia narrates it. Also fixes BGM, spoken replies, the custom OpenAI host, and voice runtime upgrades."
+  ko: "나이아 앱스토어가 나왔습니다. 웹에서 나이아 슬라이드를 구매하고 서명된 딥링크로 셸에 설치한 뒤, PDF 덱을 띄워 나이아가 발표하게 할 수 있습니다. BGM, 음성으로 읽은 답변, OpenAI 커스텀 호스트, 음성 런타임 갱신 문제도 함께 고쳤습니다."
+changes:
+  - type: feature
+    scope: apps
+    issue: 471
+    description:
+      en: "Buy an app on naia.land and install it into the shell through a signed deep link, with purchased apps listed in the app bar and a single install confirmation."
+      ko: "naia.land 에서 앱을 구매하고 서명된 딥링크로 셸에 설치합니다. 보유한 앱은 앱 바에 표시되고 설치 확인은 한 번만 뜹니다."
+  - type: feature
+    scope: apps
+    issue: 467
+    description:
+      en: "Present a PDF deck with Naia Slides: open the deck, follow a presentation script, and let Naia narrate each slide aloud."
+      ko: "나이아 슬라이드로 PDF 덱을 발표합니다. 덱을 열고 발표 스크립트를 따라가면 나이아가 장마다 소리 내어 설명합니다."
+  - type: fix
+    scope: apps
+    issue: 472
+    description:
+      en: "Install, list and remove an app under one canonical directory so installed apps stop disappearing, and refuse symlinked app directories."
+      ko: "설치·목록·삭제가 같은 정본 디렉터리를 쓰게 해 설치한 앱이 사라지지 않게 하고, 심링크로 걸린 앱 디렉터리는 거부합니다."
+  - type: fix
+    scope: bgm
+    issue: 517
+    description:
+      en: "Reclaim the port an orphaned sidecar was holding so background music stops failing permanently after a crash."
+      ko: "고아 sidecar 가 붙들고 있던 포트를 회수해, 한 번 죽은 뒤 배경 음악이 영영 안 나오던 문제를 끊습니다."
+  - type: fix
+    scope: chat
+    issue: 513
+    description:
+      en: "Keep a reply on screen after it is spoken instead of letting it vanish."
+      ko: "음성으로 읽은 답변이 화면에서 사라지지 않게 합니다."
+  - type: fix
+    scope: settings
+    issue: 515
+    description:
+      en: "Carry a custom OpenAI-compatible host into the main model role instead of dropping it."
+      ko: "OpenAI 호환 커스텀 호스트를 메인 모델 역할까지 전달합니다."
+  - type: fix
+    scope: voice
+    issue: 518
+    description:
+      en: "Let a runtime-only upgrade reach an already installed voice payload."
+      ko: "런타임만 갱신할 때도 이미 설치된 음성 payload 까지 반영되게 합니다."
+  - type: refactor
+    scope: shell
+    issue: 497
+    description:
+      en: "Rename panel to app across the interface, the wire protocol and the Rust bridge so one word means one thing."
+      ko: "인터페이스와 통신 규약, Rust 브리지에서 panel 을 app 으로 통일해 한 단어가 한 가지를 뜻하게 합니다."

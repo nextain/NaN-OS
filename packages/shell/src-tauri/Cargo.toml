@@ -1,6 +1,6 @@
 [package]
 name = "naia-shell"
-version = "0.2.2"
+version = "0.2.3"
 description = "Naia Shell - AI Avatar Desktop"
 authors = ["Luke"]
 edition = "2021"
