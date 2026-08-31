@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import { DEFAULT_GATEWAY_URL, loadConfig } from "./config";
+import { LAB_GATEWAY_URL } from "./config";
 
 export interface AppInstallRequest {
 	appId: string;
@@ -13,7 +13,14 @@ function httpGatewayUrl(raw: string): string {
 }
 
 export function getStoreGatewayUrl(): string {
-	return httpGatewayUrl(loadConfig()?.gatewayUrl?.trim() || DEFAULT_GATEWAY_URL);
+	// The app store is an any-llm gateway concern (/v1/apps/*), so it must use
+	// LAB_GATEWAY_URL (prod https://api.nextain.io, or the dev gateway in dev
+	// mode) — the same gateway the web storefront purchases against. The earlier
+	// fallback to config.gatewayUrl / DEFAULT_GATEWAY_URL pointed at the REMOVED
+	// legacy chat WebSocket gateway (ws://localhost:18789), so install hit a dead
+	// localhost port ("error sending request for url http://localhost:18789/...",
+	// 2026-08-31 rehearsal). config.gatewayUrl (chat gateway) is unrelated here.
+	return httpGatewayUrl(LAB_GATEWAY_URL);
 }
 
 export function hasStoreEntitlement(appId: string): Promise<boolean> {

@@ -68,6 +68,12 @@ export function AppInstallDialog({ onClose, request }: AppInstallDialogProps) {
 					success: true,
 					message: t("apps.installed").replace("{name}", res.name),
 				});
+				// Match the git-install path: surface success briefly, launch the
+				// freshly installed app, then close the dialog (previously the store
+				// path left the popup open — "설치되면 팝업 닫혀야지", 2026-08-31).
+				useAppStore.getState().setActiveApp(res.id);
+				await new Promise((r) => setTimeout(r, 650));
+				onClose();
 			} catch (err) {
 				setResult({ success: false, message: String(err) });
 			} finally {

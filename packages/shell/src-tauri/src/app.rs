@@ -22,7 +22,13 @@ struct StoreEntitlement {
     artifact: StoreArtifact,
 }
 
-const DEVELOPMENT_SIGNING_PUBLIC_KEY: &str = "Zs6yosNTo4pXUGywo6ArjncpDejTrI8FRwyEQ4N/aW4=";
+// The Ed25519 public key the published app artifacts are actually signed with —
+// the gateway's configured APP_SIGNING_PUBLIC_KEY (it verifies at seed time, so
+// a served artifact is guaranteed signed by this key's private half). The prior
+// stale placeholder ("Zs6y…") failed verification for the real Naia Slides
+// artifact ("Artifact signature verification failed", 2026-08-31 rehearsal).
+// Release builds should still inject NAIA_APP_SIGNING_PUBLIC_KEY explicitly.
+const DEVELOPMENT_SIGNING_PUBLIC_KEY: &str = "GCqIQ1dXU07erJixc6UjAaDMgnSfh+GB3ZSRxb+VH2g=";
 
 fn verify_artifact_signature(digest: &[u8], value: &str) -> Result<(), String> {
     let encoded_key = option_env!("NAIA_APP_SIGNING_PUBLIC_KEY")
@@ -474,8 +480,11 @@ pub fn app_run_shell(cmd: String, args: Vec<String>) -> Result<AppShellResult, S
 /// Removes exactly `~/.naia/apps/{id}` after validating that its manifest id
 /// matches its canonical directory name.
 #[tauri::command]
-pub fn app_remove_installed(panel_id: String) -> Result<(), String> {
-    remove_installed_from(std::path::Path::new(&home_dir()), &panel_id)
+pub fn app_remove_installed(app_id: String) -> Result<(), String> {
+    // The frontend invokes this with { appId } (removeInstalledApp). Tauri binds
+    // by exact camelCase name, so the old `panel_id` (→ panelId) never received
+    // the value and every removal failed ("제거하지 못했습니다", 2026-08-31).
+    remove_installed_from(std::path::Path::new(&home_dir()), &app_id)
 }
 
 fn remove_installed_from(home: &std::path::Path, panel_id: &str) -> Result<(), String> {

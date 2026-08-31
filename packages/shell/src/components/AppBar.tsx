@@ -389,14 +389,14 @@ export function AppBar({ onAddApp }: AppBarProps) {
 								<span className="app-bar-tab-icon">{mode.icon}</span>
 							) : null}
 						</button>
-						{!mode.builtIn && (
+						{editMode && !mode.builtIn && (
 							<button
 								type="button"
-								className="app-bar-tab-remove"
-								title={`Remove ${mode.name}`}
+								className="app-bar-tab-remove app-bar-tab-remove--shortcut"
+								title={`${mode.names?.[getLocale()] ?? mode.name} 삭제`}
 								onClick={(e) => handleRemoveApp(e, mode.id)}
 							>
-								🗑
+								✕
 							</button>
 						)}
 					</div>
@@ -541,6 +541,24 @@ export function AppBar({ onAddApp }: AppBarProps) {
 								className="app-bar-url-dialog__section"
 								onClick={() => {
 									setAddUrlDialog(false);
+									setEditMode(true);
+								}}
+							>
+								<span className="app-bar-url-dialog__section-icon">🗂️</span>
+								<div className="app-bar-url-dialog__section-text">
+									<strong>{getLocale() === "ko" ? "앱 관리" : "Manage apps"}</strong>
+									<span>
+										{getLocale() === "ko"
+											? "앱과 바로가기에 삭제 버튼을 표시합니다."
+											: "Show delete buttons on apps and shortcuts."}
+									</span>
+								</div>
+							</button>
+							<button
+								type="button"
+								className="app-bar-url-dialog__section"
+								onClick={() => {
+									setAddUrlDialog(false);
 									void openAppStore();
 								}}
 							>
@@ -658,7 +676,7 @@ export function AppBar({ onAddApp }: AppBarProps) {
 			>
 				+
 			</button>
-			{browserShortcuts.length > 0 && (
+			{(editMode || browserShortcuts.length > 0) && (
 				<button
 					type="button"
 					className={`app-bar-edit${editMode ? " app-bar-edit--active" : ""}`}
@@ -666,9 +684,9 @@ export function AppBar({ onAddApp }: AppBarProps) {
 						setEditMode((v) => !v);
 						setIconEditing(null);
 					}}
-					title={editMode ? "편집 완료" : "바로가기 편집"}
+					title={editMode ? "편집 완료" : "앱·바로가기 편집"}
 				>
-					✏
+					{editMode ? "✓" : "✏"}
 				</button>
 			)}
 			{iconEditing &&

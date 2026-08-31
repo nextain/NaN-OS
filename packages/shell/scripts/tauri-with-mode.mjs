@@ -341,6 +341,15 @@ if (mode === "prod") {
 	delete env.VITE_NAIA_DEV_GATEWAY_URL;
 }
 
+// 웹 베이스 URL은 모드가 소유한다 (#523). `tauri:prod`도 vite dev 서버로 뜨므로
+// config.ts 의 `import.meta.env.DEV` 폴백은 항상 dev.naia.land 를 고른다 —
+// `.env.prod` 파일이 없는 머신에서 prod 실행의 앱스토어/로그인이 dev 로 새던
+// 실측 결함(2026-08-31, 시연 리허설). 아래 기본값은 뒤에 로드되는 `.env.{mode}`
+// 파일이 있으면 그 값으로 덮인다(명시 파일 > 모드 기본값).
+env.VITE_NAIA_WEB_BASE_URL =
+	env.VITE_NAIA_WEB_BASE_URL ??
+	(mode === "prod" ? "https://www.naia.land" : "https://dev.naia.land");
+
 /** 최소 KEY=VALUE env 파일 파서(주석·빈줄 skip, 따옴표 제거). */
 function loadEnvFile(path) {
 	const vars = {};
