@@ -74,6 +74,7 @@ import {
 } from "./lib/environment-skill";
 import { setLocale } from "./lib/i18n";
 import { startIframeBridge } from "./lib/iframe-bridge";
+import { startSlidePresenterIframeBridge } from "./lib/slide-presenter-iframe-bridge";
 import { shouldMigrateNextainModel } from "./lib/llm/registry";
 import { Logger } from "./lib/logger";
 import {
@@ -437,7 +438,11 @@ export function App() {
 
 	useEffect(() => {
 		const stopIframeBridge = startIframeBridge();
-		return stopIframeBridge;
+		const stopSlidePresenterBridge = startSlidePresenterIframeBridge();
+		return () => {
+			stopIframeBridge();
+			stopSlidePresenterBridge();
+		};
 	}, []);
 
 	// Register keepAlive app tools with the agent at startup so the LLM can
