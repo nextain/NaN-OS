@@ -294,25 +294,24 @@ export function createSentenceTtsPipeline(
 				// sequence, so a late response must NOT enqueue (would replay as
 				// the new turn's first audio) nor record cost.
 				if (!activeRequests.has(reqId)) return;
-				if (
-					ttsProviderForCost === "naia-local-voice" &&
-					localVoiceScheduler &&
-					seq === 0
-				) {
+				// FR-VOICE.19 (#519): measure every local sentence, not only the
+				// first — a later RTF<1 is the "engine warmed" release signal.
+				if (ttsProviderForCost === "naia-local-voice" && localVoiceScheduler) {
 					const duration = wavDurationSeconds(audioBase64);
 					const elapsed =
 						Math.max(0, performance.now() - synthesisStartedAt) / 1000;
-					const verdict = localVoiceScheduler.onFirstResult(
+					const verdict = localVoiceScheduler.onSentenceResult(
 						localVoiceGeneration,
 						{ elapsedSeconds: elapsed, durationSeconds: duration ?? null },
 					);
 					if (verdict) {
-						Logger.info(TAG, "Local voice adaptive prebuffer", {
+						Logger.info(TAG, "Local voice RTF verdict", {
+							seq,
 							rtf: Number(verdict.rtf.toFixed(2)),
 							duration: verdict.durationSeconds
 								? Number(verdict.durationSeconds.toFixed(2))
 								: null,
-							buffering: verdict.shouldBuffer,
+							warmingHold: verdict.warmingHold,
 						});
 					}
 				}
@@ -322,10 +321,7 @@ export function createSentenceTtsPipeline(
 					onPlaybackUnavailable: revealText,
 				});
 				if (ttsProviderForCost === "naia-local-voice") {
-					localVoiceScheduler?.maybeReleaseAfterEnqueue(
-						localVoiceGeneration,
-						seq,
-					);
+					localVoiceScheduler?.onEnqueued(localVoiceGeneration, seq);
 				}
 				// Track TTS cost: server cost for Naia Cloud, estimate for others.
 				// Naia account (nextain): 10% service markup on top of base cost.

@@ -118,6 +118,22 @@
 			"P04_implementation_tests": "pending",
 			"P05_done_handoff": "pending"
 		},
+    "voice_warmup_underrun_gate_519": {
+      "issue": "https://github.com/nextain/naia-shell/issues/519",
+      "milestone": "v0.2.3",
+      "scope": "로컬 음성 워밍업(RTF>1) 언더런 근본 차단 — warming hold: 폴백 없이 '음성 모델 준비 중…' 표시(루크 결정 2026-08-31), 해제=엔진 웜(RTF<1)/턴 전체 합성 완료(complete-then-play)/문장 실패 3조건. 기존 5초 캡 제거. 서버측 READY 게이트(프라임 완료 전 미노출)는 voxcpm2-tensorrt 별도 트랙",
+      "requirements": "docs/requirements.md FR-VOICE.19",
+      "scenario": "docs/user-scenarios.md UC-WIN-VOICE-WARMUP",
+      "status": "done",
+      "P01_user_scenarios": "done",
+      "P02_test_coverage_map": "done",
+      "P03_requirements": "done",
+      "P04_integration_test": "done",
+      "P05_complete": "done",
+      "field_evidence": "2026-08-31 16:45 r2 엔진 재설치 직후 실측: 첫 로컬 발화가 429 busy 10회(프라임과 경쟁) 후 RTF 7.98 — 5초 캡이 굶주린 큐를 강제 재생해 '쉬고 째지는' 언더런. RTF 8에서 6초 문장 무결 스트리밍엔 ~43초 선버퍼 필요(캡 접근 원리적 불가)",
+      "verification": "셸 vitest 전체 1,781 passed/0 failed — scheduler 신규 9건(hold 진입·3해제조건·interrupt·미측정 보수 경로), sentence-pipeline 전 문장 측정, ChatArea 6GB 직렬화 계약을 FR-VOICE.19 의미론으로 갱신(RTF>1에서 두 번째 문장이 더는 해제하지 않음 — finish 후 complete-then-play 해제 단언). tsc 0. 서버측 짝: voxcpm2-tensorrt#2 구현 커밋 458bdf4(/health warming 추가 노출, pytest 62/62) — 셸의 warming 필드 소비 배선은 r3 런타임 배포와 함께 후속. 미검증 경계: 실기기 콜드부팅 청감 확인(리허설에서)",
+      "last_updated": "2026-08-31T18:10:00+09:00"
+    },
     "voxcpm2_runtime_pin_upgrade_518": {
       "issue": "https://github.com/nextain/naia-shell/issues/518",
       "milestone": "v0.2.3",

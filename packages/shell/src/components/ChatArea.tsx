@@ -755,6 +755,12 @@ export function ChatArea({
 		localVoiceSchedulerRef.current = new LocalVoiceScheduler({
 			pausePlayback: () => audioQueueRef.current?.pauseBeforePlayback(),
 			resumePlayback: () => audioQueueRef.current?.resumePlayback(),
+			// FR-VOICE.19 (#519): warming hold reuses the existing "음성 모델
+			// 준비 중…" indicator instead of falling back to another voice.
+			setWarmingVisible: (visible) =>
+				window.dispatchEvent(
+					new CustomEvent("naia:voice-model-preparing", { detail: visible }),
+				),
 		});
 	}
 	const pipelineVoiceConfigRef = useRef<PipelineVoiceConfig | null>(null);

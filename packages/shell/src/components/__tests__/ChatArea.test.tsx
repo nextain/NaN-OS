@@ -1203,7 +1203,15 @@ describe("ChatArea", () => {
 				expect.any(Object),
 			),
 		);
-		expect(ttsSyncMocks.resumePlayback).toHaveBeenCalledTimes(1);
+		// FR-VOICE.19 (#519): with RTF>1 (cold engine) a later sentence no
+		// longer releases playback — the warming hold survives until the whole
+		// turn is synthesized after stream end (complete-then-play), so a
+		// starved queue can never start mid-warmup.
+		expect(ttsSyncMocks.resumePlayback).not.toHaveBeenCalled();
+		request.onChunk({ type: "finish", requestId: request.requestId });
+		await waitFor(() =>
+			expect(ttsSyncMocks.resumePlayback).toHaveBeenCalledTimes(1),
+		);
 		localStorage.removeItem("naia-config");
 	});
 
