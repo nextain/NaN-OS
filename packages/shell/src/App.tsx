@@ -1092,9 +1092,17 @@ export function App() {
 	const chatVariant: "rail" | "floating" =
 		chatModeOverride === "workspace" ? "rail" : "floating";
 
+	// keepAlive apps (built-ins AND installed apps that don't opt out) stay
+	// mounted in hidden slots so their in-page state survives an app switch —
+	// e.g. an installed Slides app keeps its open PDF instead of the iframe
+	// being destroyed on deactivate. Installed apps register asynchronously
+	// (loadInstalledApps → bumpAppListVersion), so recompute on appListVersion
+	// or a freshly-installed app would never get a persistent slot.
+	const appListVersion = useAppStore((s) => s.appListVersion);
 	const keepAliveApps = useMemo(
-		() => appRegistry.list().filter((p) => p.builtIn && p.keepAlive !== false),
-		[],
+		() => appRegistry.list().filter((p) => p.keepAlive !== false),
+		// biome-ignore lint/correctness/useExhaustiveDependencies: appListVersion is the intentional recompute trigger; appRegistry is a stable singleton.
+		[appListVersion],
 	);
 
 	// Single return — SplashScreen always mounts first as a fixed overlay,

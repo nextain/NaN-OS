@@ -312,6 +312,94 @@ test.describe("#467 slide presenter", () => {
 		await page.screenshot({ path: "test-results/issue-471-single-install-confirmation.png", fullPage: true });
 	});
 
+	test("keeps the installed Slides deck loaded after switching apps and back", async ({
+		page,
+	}) => {
+		// Regression: switching away from an installed app unmounted its iframe,
+		// destroying in-page state — an open PDF deck vanished on return. The fix
+		// keeps installed apps mounted (keepAlive) like built-ins, so the same
+		// iframe DOM node survives a round-trip to another app.
+		await page.addInitScript(SPEECH_MOCK);
+		await page.addInitScript({ content: TAURI_BASE_MOCK_FALLBACK });
+		await page.addInitScript({ content: SEED_ADK_PATH });
+		await page.addInitScript(() => {
+			localStorage.setItem(
+				"naia-config",
+				JSON.stringify({
+					provider: "ollama",
+					model: "qwen3.6:27b",
+					ttsEnabled: true,
+					ttsProvider: "browser",
+					locale: "ko",
+					onboardingComplete: true,
+					agentName: "Naia",
+					vrmModel: "/avatars/03-OL_Woman.vrm",
+				}),
+			);
+		});
+		await page.setViewportSize({ width: 1440, height: 900 });
+		await page.goto("/");
+
+		// Open the installed Slides app and load a deck.
+		const slidesButton = page.locator(
+			'button[data-app-id="land.naia.slides"]',
+		);
+		await expect(slidesButton).toBeVisible({ timeout: 15_000 });
+		await slidesButton.click();
+
+		const installed = page.frameLocator(".generic-installed-app__iframe");
+		await expect(installed.locator(".slides-app")).toBeVisible({
+			timeout: 15_000,
+		});
+		await installed.getByLabel("PDF 열기").setInputFiles({
+			name: "persist-check.pdf",
+			mimeType: "application/pdf",
+			buffer: makeTwoPagePdf(),
+		});
+		await installed.getByLabel("발표 스크립트").setInputFiles({
+			name: "persist-check.md",
+			mimeType: "text/markdown",
+			buffer: Buffer.from("## 1. Alpha\n\n첫 장.\n\n## 2. Beta\n\n둘째 장."),
+		});
+		await expect(
+			installed.locator('.slides-app[data-state="ready"]'),
+		).toBeVisible({ timeout: 30_000 });
+		await expect(
+			installed.locator(".slides-app__page canvas"),
+		).toBeVisible({ timeout: 30_000 });
+
+		// Tag the live iframe DOM node. If the shell unmounts/remounts the app on
+		// switch, React creates a fresh element and this marker is gone.
+		await page
+			.locator(".generic-installed-app__iframe")
+			.evaluate((el) => el.setAttribute("data-e2e-persist", "marker-1"));
+
+		// Switch to another app (Settings) and back to Slides. Assert on the tab
+		// active class — the slot stays in the DOM either way (keepAlive), so the
+		// active marker, not visibility, is what confirms the switch happened.
+		await page.locator(".app-bar-settings").click();
+		await expect(page.locator(".app-bar-settings--active")).toBeVisible({
+			timeout: 15_000,
+		});
+		await slidesButton.click();
+		await expect(
+			page.locator('button[data-app-id="land.naia.slides"].app-bar-tab--active'),
+		).toBeVisible({ timeout: 15_000 });
+
+		// Same iframe node survived the round-trip …
+		await expect(
+			page.locator('.generic-installed-app__iframe[data-e2e-persist="marker-1"]'),
+		).toHaveCount(1);
+		// … and the deck is still loaded — no re-upload, still on the ready state
+		// with a rendered slide canvas.
+		await expect(
+			installed.locator('.slides-app[data-state="ready"]'),
+		).toBeVisible({ timeout: 15_000 });
+		await expect(installed.locator(".slides-app__page canvas")).toBeVisible({
+			timeout: 15_000,
+		});
+	});
+
 	test("loads and presents the current 21-slide IR deck", async ({ page }) => {
 		const pdfPath = process.env.NAIA_SLIDE_IR_PDF ?? "";
 		const scriptPath = process.env.NAIA_SLIDE_IR_SCRIPT ?? "";

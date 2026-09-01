@@ -18,6 +18,12 @@ interface InstalledAppManifest {
 	tools?: NaiaTool[];
 	/** Absolute path to index.html if present */
 	htmlEntry?: string;
+	/**
+	 * Keep the app mounted across app switches (default true). An app may set
+	 * false in its manifest to be unmounted when it loses focus (e.g. a purely
+	 * stateless view where re-render is cheap and a fresh start is preferable).
+	 */
+	keepAlive?: boolean;
 }
 
 /**
@@ -58,6 +64,14 @@ export async function loadInstalledApps(): Promise<void> {
 			htmlEntry: manifest.htmlEntry,
 			tools: manifest.tools,
 			source: "installed",
+			// Keep installed apps mounted across app switches — same treatment as
+			// built-ins (browser/workspace/settings). An installed app renders an
+			// iframe whose in-page state (e.g. a Slides deck's open PDF) is DOM
+			// state: unmounting the slot destroys the iframe and loses it. Hidden
+			// keepAlive slots use opacity:0, not unmount, so the iframe survives a
+			// round-trip to another app and back. An app may opt out with
+			// keepAlive:false in its manifest.
+			keepAlive: manifest.keepAlive ?? true,
 			center: createGenericInstalledApp(manifest.htmlEntry, manifest.tools),
 		});
 

@@ -96,6 +96,28 @@ describe("app-loader", () => {
 			expect(appRegistry.get("app-a")).toBeDefined();
 			expect(appRegistry.get("app-b")).toBeDefined();
 		});
+
+		it("keeps installed apps alive by default so state survives app switches", async () => {
+			// Regression: an installed app (iframe) was unmounted on app switch,
+			// destroying its in-page state (e.g. a Slides deck's open PDF). Installed
+			// apps must default to keepAlive so the shell renders them in a hidden
+			// slot instead of tearing the iframe down.
+			mockInvoke.mockResolvedValue([{ id: "keepalive-default", name: "KA" }]);
+
+			await loadInstalledApps();
+
+			expect(appRegistry.get("keepalive-default")?.keepAlive).toBe(true);
+		});
+
+		it("respects an explicit keepAlive:false opt-out in the manifest", async () => {
+			mockInvoke.mockResolvedValue([
+				{ id: "keepalive-off", name: "KA off", keepAlive: false },
+			]);
+
+			await loadInstalledApps();
+
+			expect(appRegistry.get("keepalive-off")?.keepAlive).toBe(false);
+		});
 	});
 
 	describe("removeInstalledApp", () => {
