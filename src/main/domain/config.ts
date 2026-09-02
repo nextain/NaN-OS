@@ -42,6 +42,6 @@ export function resolveAgentEnvKey(provider: string, keyField: "apiKey" | "naiaK
     case "anthropic": return "ANTHROPIC_API_KEY";
     case "openai": return "OPENAI_API_KEY";
     case "glm": return "GLM_API_KEY";
-    default: return null; // ollama·vllm·gemini·claude-code-cli·nextain — 직접 키 없음
+    default: return null; // ollama·vllm·gemini·claude-code-cli·codex·grok·nextain — 직접 키 없음
   }
 }

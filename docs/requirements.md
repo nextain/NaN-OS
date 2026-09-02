@@ -588,6 +588,15 @@ Steamworks 포털 설정·SteamPipe 자격증명·스토어 심사 제출은 #31
 | **FR-COURSE-CODEX.2** | Codex 준비 확인은 인증 토큰·계정 식별자·CLI 출력 원문을 UI·설정·agent 요청·로그에 저장하거나 표시하지 않으며, provider·모델·워크스페이스 설정을 변경하지 않는다. | 실패 상태 단위 테스트와 IPC 결과 직렬화 검사에서 안전한 상태 코드만 노출되는지 확인한다. |
 | **FR-COURSE-CODEX.3** | Codex가 아닌 provider를 선택하면 Codex 준비 확인 UI를 노출하지 않는다. Codex 선택으로 돌아오면 사용자가 명시적으로 다시 확인할 수 있다. | Settings FE 테스트에서 provider 전환과 재시도 동작을 확인한다. |
 
+## Grok 구독 CLI provider (2026-09-02, #529)
+
+| ID | 요구사항 | 검증 기준 |
+|---|---|---|
+| **FR-GROK.1** | 설정에서 Grok를 API key 없는 local-login provider로 선택할 수 있다. 기본 모델은 `grok-4.6`이다. 기존 `xai` API-key provider는 유지한다. | registry·Settings 단위 테스트 |
+| **FR-GROK.2** | 사용자가 두뇌에서 Grok를 선택하면 Shell은 설치와 로그인만 확인하고 `준비됨`·`설치 필요`·`로그인 필요`·`확인 실패`를 구분해 표시한다. | Rust 분류 테스트와 Settings 단위 테스트 |
+| **FR-GROK.3** | Grok 준비 확인은 인증 토큰·계정 식별자·CLI 출력 원문을 UI·설정·agent 요청·로그에 저장하거나 표시하지 않는다. | Settings IPC 결과 직렬화 검사 |
+| **FR-GROK.4** | 게이트웨이 카탈로그 prefix `grok:`는 계속 `xai`(API)로 묶고, 로컬 구독 provider id `grok`와 섞지 않는다. | Settings 카탈로그 alias 유지 |
+
 ## Codex 코딩 작업자 요구사항 (2026-07-22)
 
 | ID | Requirement | Verification |

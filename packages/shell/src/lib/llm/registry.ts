@@ -28,6 +28,7 @@ const PROVIDER_DISPLAY_ORDER = [
 	"vllm",
 	"codex",
 	"claude-code-cli",
+	"grok",
 	"zai",
 	"openai",
 	"gemini",
@@ -782,6 +783,20 @@ registerLlmProvider({
 		},
 		{ id: "gpt-5.5", label: "GPT-5.5 (Codex)", capabilities: ["llm"] },
 		{ id: "gpt-5.4", label: "GPT-5.4 (Codex)", capabilities: ["llm"] },
+	],
+});
+
+registerLlmProvider({
+	id: "grok",
+	name: "Grok",
+	description: "Grok Build CLI — uses local SuperGrok / X Premium+ login.",
+	descKey: "provider.grok.desc",
+	requiresApiKey: false,
+	supportedRoles: ["expert", "main", "sub"],
+	defaultModel: "grok-4.6",
+	models: [
+		{ id: "grok-4.6", label: "Grok 4.6", capabilities: ["llm"] },
+		{ id: "grok-4.5", label: "Grok 4.5", capabilities: ["llm"] },
 	],
 });
 

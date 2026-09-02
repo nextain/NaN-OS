@@ -475,7 +475,7 @@ function resolveAgentEnvKey(
 		case "ollama":
 			return "OPENAI_API_KEY"; // remote/authenticated Ollama uses the OpenAI-compatible client
 		default:
-			return null; // vllm, claude-code-cli, codex — no persisted key (local / CLI 로그인)
+			return null; // vllm, claude-code-cli, codex, grok — no persisted key (local / CLI 로그인)
 	}
 }
 

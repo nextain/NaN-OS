@@ -7264,6 +7264,68 @@ async fn codex_preflight() -> Result<CodexPreflightResult, String> {
     Ok(CodexPreflightResult { status })
 }
 
+fn classify_grok_preflight(exit_success: bool, output: &str) -> &'static str {
+    let normalized = output.to_ascii_lowercase();
+    if exit_success && normalized.contains("logged in") {
+        "ready"
+    } else if normalized.contains("not logged in")
+        || normalized.contains("login required")
+        || normalized.contains("unauthorized")
+        || normalized.contains("unauthenticated")
+        || normalized.contains("please log in")
+        || normalized.contains("please sign in")
+    {
+        "login-required"
+    } else if normalized.contains("not recognized")
+        || normalized.contains("command not found")
+        || normalized.contains("no such file")
+    {
+        "not-installed"
+    } else {
+        "error"
+    }
+}
+
+fn grok_models_command() -> Command {
+    #[cfg(windows)]
+    let mut command = {
+        let comspec = std::env::var_os("ComSpec").unwrap_or_else(|| "cmd.exe".into());
+        let mut cmd = Command::new(comspec);
+        cmd.args(["/d", "/s", "/c", "grok.cmd models"]);
+        cmd
+    };
+    #[cfg(not(windows))]
+    let mut command = {
+        let mut cmd = Command::new("grok");
+        cmd.args(["models"]);
+        cmd
+    };
+    platform::hide_console(&mut command);
+    command
+}
+
+/// Returns only a safe Grok readiness code. CLI output is intentionally never
+/// exposed because it can contain account identifiers or diagnostic details.
+#[tauri::command]
+async fn grok_preflight() -> Result<CodexPreflightResult, String> {
+    let result = tokio::task::spawn_blocking(|| grok_models_command().output())
+        .await
+        .map_err(|_| "grok_preflight_task_failed".to_string())?;
+    let status = match result {
+        Ok(output) => {
+            let text = format!(
+                "{}\n{}",
+                String::from_utf8_lossy(&output.stdout),
+                String::from_utf8_lossy(&output.stderr)
+            );
+            classify_grok_preflight(output.status.success(), &text)
+        }
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => "not-installed",
+        Err(_) => "error",
+    };
+    Ok(CodexPreflightResult { status })
+}
+
 /// Returns the path to the Naia log file (~/.naia/logs/naia.log).
 #[tauri::command]
 fn get_gateway_log_path() -> String {
@@ -11507,6 +11569,7 @@ pub fn run() {
             reset_window_state,
             gateway_health,
             codex_preflight,
+            grok_preflight,
             get_gateway_log_path,
             get_log_dir,
             open_log_in_editor,
@@ -12750,6 +12813,26 @@ mod tests {
         );
         assert_eq!(
             classify_codex_preflight(false, "unexpected failure"),
+            "error"
+        );
+    }
+
+    #[test]
+    fn grok_preflight_classifies_only_safe_readiness_states() {
+        assert_eq!(
+            classify_grok_preflight(true, "You are logged in with grok.com."),
+            "ready"
+        );
+        assert_eq!(
+            classify_grok_preflight(false, "Not logged in. Run grok login."),
+            "login-required"
+        );
+        assert_eq!(
+            classify_grok_preflight(false, "'grok.cmd' is not recognized"),
+            "not-installed"
+        );
+        assert_eq!(
+            classify_grok_preflight(false, "unexpected failure"),
             "error"
         );
     }

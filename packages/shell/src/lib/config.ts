@@ -540,6 +540,7 @@ export function isReadyToChat(): boolean {
 	const noKeyNeeded =
 		config.provider === "codex" ||
 		config.provider === "claude-code-cli" ||
+		config.provider === "grok" ||
 		config.provider === "ollama" ||
 		config.provider === "vllm";
 	return noKeyNeeded || !!config.apiKey || !!config.naiaKey;

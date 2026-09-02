@@ -26,6 +26,7 @@ describe("registry — provider registration", () => {
 		expect(ids).toContain("zai");
 		expect(ids).toContain("claude-code-cli");
 		expect(ids).toContain("codex");
+		expect(ids).toContain("grok");
 		expect(ids).toContain("ollama");
 		expect(ids).toContain("vllm");
 	});
@@ -55,6 +56,16 @@ describe("registry — Codex app-server provider", () => {
 		expect(providerSupportsRole("codex", "main")).toBe(true);
 		expect(providerSupportsRole("codex", "sub")).toBe(true);
 		expect(providerSupportsRole("codex", "memory")).toBe(false);
+	});
+
+	it("Grok CLI는 API key가 필요 없고 expert/main/sub 역할을 지원한다", () => {
+		const provider = getLlmProvider("grok");
+		expect(provider?.requiresApiKey).toBe(false);
+		expect(getDefaultLlmModel("grok")).toBe("grok-4.6");
+		expect(providerSupportsRole("grok", "main")).toBe(true);
+		expect(providerSupportsRole("grok", "sub")).toBe(true);
+		expect(providerSupportsRole("grok", "memory")).toBe(false);
+		expect(getLlmModel("grok", "grok-4.5")).toBeDefined();
 	});
 
 	it("일반 provider는 공통 registry 기본값으로 세 역할을 지원한다", () => {

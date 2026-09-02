@@ -112,5 +112,6 @@ describe("UC12 domain — config 순수 헬퍼 (secret strip · envKey 매핑)",
     expect(resolveAgentEnvKey("ollama", "apiKey")).toBeNull();
     expect(resolveAgentEnvKey("vllm", "apiKey")).toBeNull();
     expect(resolveAgentEnvKey("claude-code-cli", "apiKey")).toBeNull();
+    expect(resolveAgentEnvKey("grok", "apiKey")).toBeNull();
   });
 });

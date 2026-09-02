@@ -254,6 +254,14 @@ sub 또는 memory의 직접 선택지에 표시하지 않고, main 상속으로�
 Shell은 빌드 때 고정된 정확한 Agent 런타임만 실행한다.
 
 검증은 `SettingsTab`, `adk-store`, `chat-service`, `uc-wire-v1-paired-proto` 계약과 실제 Codex smoke를 함께 사용한다.
+
+## UC-GROK-SUBSCRIPTION — SuperGrok 구독 CLI를 main으로 쓴다
+
+사용자는 설정 두뇌에서 Grok를 선택한다. API key 칸은 없고, `Grok 연결 확인`으로 로컬 Grok Build CLI 설치·로그인만 본다. 기존 xAI API-key provider는 그대로 남아 종량 경로로 쓸 수 있다. 채팅 준비는 키 없이 통과한다.
+
+- 성공: Grok 선택 후 모델 `grok-4.6`이 기본이고, 준비 확인이 `준비됨`을 표시하며 계정/출력을 보여 주지 않는다.
+- 실패: 미설치·미로그인을 구분해 표시하고 기존 설정은 바꾸지 않는다.
+- 경계: `~/.grok/auth.json`을 읽거나 복사하지 않는다. 게이트웨이 카탈로그의 `grok:` prefix는 API(`xai`)로 남는다.
 설정 화면 통합 검증은 `e2e-tauri/specs/95-llm-role-settings.spec.ts`에서 상속 전환, 역할별 provider/model 저장,
 재시작 뒤 config 복원을 확인한다.
 

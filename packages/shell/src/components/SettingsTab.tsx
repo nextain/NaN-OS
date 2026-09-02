@@ -178,6 +178,15 @@ const CODEX_PREFLIGHT_LABELS: Record<CodexPreflightStatus, TranslationKey> = {
 	error: "settings.codexReadinessError",
 };
 
+const GROK_PREFLIGHT_LABELS: Record<CodexPreflightStatus, TranslationKey> = {
+	idle: "settings.grokReadinessIdle",
+	checking: "settings.grokReadinessChecking",
+	ready: "settings.grokReadinessReady",
+	"not-installed": "settings.grokReadinessNotInstalled",
+	"login-required": "settings.grokReadinessLoginRequired",
+	error: "settings.grokReadinessError",
+};
+
 type VoxCpm2InstallationStatus = {
 	phase: "ready" | "ready-to-start" | "requires-action" | "blocked";
 	ready: boolean;
@@ -592,6 +601,8 @@ export function SettingsTab() {
 		null,
 	);
 	const [codexPreflightStatus, setCodexPreflightStatus] =
+		useState<CodexPreflightStatus>("idle");
+	const [grokPreflightStatus, setGrokPreflightStatus] =
 		useState<CodexPreflightStatus>("idle");
 	const existing = loadConfig();
 	const setAvatarModelPath = useAvatarStore((s) => s.setModelPath);
@@ -2544,6 +2555,24 @@ export function SettingsTab() {
 		}
 	}
 
+	async function checkGrokReadiness() {
+		setGrokPreflightStatus("checking");
+		try {
+			const result = await invoke<{ status: CodexPreflightStatus }>(
+				"grok_preflight",
+			);
+			setGrokPreflightStatus(
+				result.status === "ready" ||
+					result.status === "not-installed" ||
+					result.status === "login-required"
+					? result.status
+					: "error",
+			);
+		} catch {
+			setGrokPreflightStatus("error");
+		}
+	}
+
 	function handleLocaleChange(id: Locale) {
 		setLocaleState(id);
 		setLocale(id);
@@ -4448,6 +4477,29 @@ export function SettingsTab() {
 									onClick={() => void checkCodexReadiness()}
 								>
 									{t("settings.codexReadinessCheck")}
+								</button>
+							</div>
+						</div>
+					)}
+
+					{provider === "grok" && (
+						<div className="settings-field" data-testid="grok-readiness">
+							<span>{t("settings.grokReadiness")}</span>
+							<div className="settings-hint">
+								{t("settings.grokReadinessHint")}
+							</div>
+							<div className="settings-row grok-readiness-actions">
+								<span aria-live="polite" data-testid="grok-readiness-status">
+									{t(GROK_PREFLIGHT_LABELS[grokPreflightStatus])}
+								</span>
+								<button
+									type="button"
+									className="btn-secondary"
+									data-testid="grok-readiness-check"
+									disabled={grokPreflightStatus === "checking"}
+									onClick={() => void checkGrokReadiness()}
+								>
+									{t("settings.grokReadinessCheck")}
 								</button>
 							</div>
 						</div>

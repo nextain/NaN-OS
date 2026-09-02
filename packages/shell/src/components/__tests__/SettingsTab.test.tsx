@@ -784,6 +784,67 @@ describe("SettingsTab", () => {
 		);
 	});
 
+	it("shows Grok in the main provider selector without an API key field", () => {
+		mockInvoke.mockResolvedValue([]);
+		render(<SettingsTab />);
+		gotoSettingsTab("brain");
+		const providerSelect = document.getElementById(
+			"provider-select",
+		) as HTMLSelectElement;
+		expect(providerSelect.querySelector('option[value="grok"]')).toBeTruthy();
+
+		fireEvent.change(providerSelect, { target: { value: "grok" } });
+
+		expect(providerSelect.value).toBe("grok");
+		expect(screen.queryByLabelText(/^API/i)).toBeNull();
+		const modelSelect = document.getElementById(
+			"model-select",
+		) as HTMLSelectElement;
+		expect(modelSelect.value).toBe("grok-4.6");
+		expect([...modelSelect.options].map((option) => option.value)).toEqual([
+			"grok-4.6",
+			"grok-4.5",
+		]);
+	});
+
+	it("checks Grok readiness without rendering CLI output or changing credentials", async () => {
+		localStorage.setItem(
+			"naia-config",
+			JSON.stringify({
+				onboardingComplete: true,
+				provider: "grok",
+				model: "grok-4.6",
+				apiKey: "",
+			}),
+		);
+		mockInvoke.mockImplementation((command: string) => {
+			if (command === "grok_preflight") {
+				return Promise.resolve({
+					status: "ready",
+					output: "You are logged in as private@example.com",
+				});
+			}
+			return Promise.resolve([]);
+		});
+
+		render(<SettingsTab />);
+		gotoSettingsTab("brain");
+		const check = await screen.findByTestId("grok-readiness-check");
+		expect(check.parentElement).toHaveClass("grok-readiness-actions");
+		fireEvent.click(check);
+
+		await vi.waitFor(() => {
+			expect(
+				screen.getByTestId("grok-readiness-status").textContent,
+			).toContain("Ready");
+		});
+		expect(mockInvoke).toHaveBeenCalledWith("grok_preflight");
+		expect(screen.queryByText("private@example.com")).toBeNull();
+		expect(JSON.parse(localStorage.getItem("naia-config") || "{}").apiKey).toBe(
+			"",
+		);
+	});
+
 	it("saves main, sub, and memory brains as role settings", () => {
 		localStorage.setItem(
 			"naia-config",
