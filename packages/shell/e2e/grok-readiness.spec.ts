@@ -90,13 +90,40 @@ async function boot(
 	page: import("@playwright/test").Page,
 	cfg: Record<string, unknown>,
 	preflight?: { status: string; output?: string },
+	catalog?: Array<Record<string, unknown>>,
 ) {
+	if (catalog) {
+		await page.route("**/v1/pricing", (route) =>
+			route.fulfill({
+				status: 200,
+				contentType: "application/json",
+				body: JSON.stringify(catalog),
+			}),
+		);
+	}
 	await page.addInitScript({ content: GROK_TAURI_MOCK });
 	await page.addInitScript({ content: TAURI_BASE_MOCK_FALLBACK });
 	await page.addInitScript({ content: SEED_ADK_PATH });
 	await page.addInitScript({ content: seedConfig(cfg, preflight) });
 	await page.goto("/");
 	await expect(page.locator(".chat-app")).toBeVisible({ timeout: 15_000 });
+}
+
+async function openBrain(page: import("@playwright/test").Page) {
+	await page.getByRole("button", { name: /^(Settings|설정)$/ }).click();
+	await page.locator('[data-settings-tab="brain"]').click();
+}
+
+async function grokPreflightCount(page: import("@playwright/test").Page) {
+	return page.evaluate(
+		() =>
+			(
+				window as unknown as {
+					__GROK_INVOKES__: Array<{ cmd: string }>;
+				}
+			).__GROK_INVOKES__.filter((call) => call.cmd === "grok_preflight")
+				.length,
+	);
 }
 
 const GROK_CFG = {
@@ -114,11 +141,12 @@ test.describe("UC-GROK-SUBSCRIPTION", () => {
 			status: "ready",
 			output: "You are logged in as private@example.com",
 		});
-		await page.getByRole("button", { name: /^(Settings|설정)$/ }).click();
-		await page.locator('[data-settings-tab="brain"]').click();
+		await openBrain(page);
 
 		const provider = page.locator("#provider-select");
 		await expect(provider).toHaveValue("grok");
+		await expect(provider.locator('option[value="grok"]')).toHaveCount(1);
+		await expect(provider.locator('option[value="xai"]')).toHaveCount(1);
 		await expect(page.locator("#model-select")).toHaveValue("grok-4.6");
 		await expect(page.locator("#apikey-input")).toHaveCount(0);
 
@@ -128,38 +156,78 @@ test.describe("UC-GROK-SUBSCRIPTION", () => {
 		await readiness.getByTestId("grok-readiness-check").click();
 		await expect(readiness.getByTestId("grok-readiness-status")).toContainText(/Ready|준비됨/);
 
-		await expect
-			.poll(() =>
-				page.evaluate(() =>
-					(
-						window as unknown as {
-							__GROK_INVOKES__: Array<{ cmd: string }>;
-						}
-					).__GROK_INVOKES__.filter((call) => call.cmd === "grok_preflight").length,
-				),
-			)
-			.toBe(1);
+		await expect.poll(() => grokPreflightCount(page)).toBe(1);
 
 		await expect(page.getByText("private@example.com")).toHaveCount(0);
-		expect(
-			await page.evaluate(() => JSON.parse(localStorage.getItem("naia-config") || "{}")),
-		).toMatchObject({
+		await expect(page.getByText("You are logged in as")).toHaveCount(0);
+		const saved = await page.evaluate(() =>
+			JSON.parse(localStorage.getItem("naia-config") || "{}"),
+		);
+		expect(saved).toMatchObject({
 			provider: "grok",
 			model: "grok-4.6",
 			apiKey: "",
 		});
+		expect(JSON.stringify(saved)).not.toContain("private@example.com");
+		expect(JSON.stringify(saved)).not.toContain("You are logged in as");
 	});
 
-	test("로그인 필요와 설치 필요를 구분해 표시하고 설정을 바꾸지 않는다", async ({ page }) => {
+	test("xAI에서 Grok로 바꾸면 API 키 칸이 사라지고 준비 확인이 나온다", async ({ page }) => {
+		await boot(page, {
+			onboardingComplete: true,
+			provider: "xai",
+			model: "grok-4.3",
+			apiKey: "xai-secret",
+			locale: "ko",
+		});
+		await openBrain(page);
+		await expect(page.locator("#apikey-input")).toHaveCount(1);
+		await page.locator("#provider-select").selectOption("grok");
+		await expect(page.locator("#provider-select")).toHaveValue("grok");
+		await expect(page.locator("#model-select")).toHaveValue("grok-4.6");
+		await expect(page.locator("#apikey-input")).toHaveCount(0);
+		await expect(page.getByTestId("grok-readiness")).toBeVisible();
+	});
+
+	test("로그인 필요를 구분해 표시하고 계정과 설정을 바꾸지 않는다", async ({ page }) => {
 		await boot(page, GROK_CFG, { status: "login-required", output: "Not logged in as leak@example.com" });
-		await page.getByRole("button", { name: /^(Settings|설정)$/ }).click();
-		await page.locator('[data-settings-tab="brain"]').click();
+		await openBrain(page);
 		await page.getByTestId("grok-readiness-check").click();
 		await expect(page.getByTestId("grok-readiness-status")).toContainText(/Login required|로그인 필요/);
 		await expect(page.getByText("leak@example.com")).toHaveCount(0);
+		await expect(page.getByText("Not logged in as")).toHaveCount(0);
 		expect(
 			await page.evaluate(() => JSON.parse(localStorage.getItem("naia-config") || "{}").provider),
 		).toBe("grok");
+	});
+
+	test("설치 필요와 확인 실패를 구분해 표시한다", async ({ page }) => {
+		await boot(page, GROK_CFG, { status: "not-installed" });
+		await openBrain(page);
+		await page.getByTestId("grok-readiness-check").click();
+		await expect(page.getByTestId("grok-readiness-status")).toContainText(/Installation required|설치 필요/);
+
+		await page.evaluate(() => {
+			(window as unknown as { __GROK_PREFLIGHT__: { status: string } }).__GROK_PREFLIGHT__ = {
+				status: "error",
+			};
+		});
+		await page.getByTestId("grok-readiness-check").click();
+		await expect(page.getByTestId("grok-readiness-status")).toContainText(/Check failed|확인 실패/);
+	});
+
+	test("로그인 필요 다음에 다시 확인하면 준비됨으로 바뀐다", async ({ page }) => {
+		await boot(page, GROK_CFG, { status: "login-required" });
+		await openBrain(page);
+		await page.getByTestId("grok-readiness-check").click();
+		await expect(page.getByTestId("grok-readiness-status")).toContainText(/Login required|로그인 필요/);
+		await page.evaluate(() => {
+			(window as unknown as { __GROK_PREFLIGHT__: { status: string } }).__GROK_PREFLIGHT__ = {
+				status: "ready",
+			};
+		});
+		await page.getByTestId("grok-readiness-check").click();
+		await expect(page.getByTestId("grok-readiness-status")).toContainText(/Ready|준비됨/);
 	});
 
 	test("xAI API-key provider는 Grok 구독 화면과 섞이지 않는다", async ({ page }) => {
@@ -170,11 +238,44 @@ test.describe("UC-GROK-SUBSCRIPTION", () => {
 			apiKey: "xai-secret",
 			locale: "ko",
 		});
-		await page.getByRole("button", { name: /^(Settings|설정)$/ }).click();
-		await page.locator('[data-settings-tab="brain"]').click();
+		await openBrain(page);
 		await expect(page.locator("#provider-select")).toHaveValue("xai");
 		await expect(page.getByTestId("grok-readiness")).toHaveCount(0);
 		await expect(page.locator("#apikey-input")).toHaveCount(1);
+		expect(await grokPreflightCount(page)).toBe(0);
+	});
+
+	test("게이트웨이 grok: prefix는 xAI API 경로로 남고 구독 화면과 섞이지 않는다", async ({
+		page,
+	}) => {
+		await boot(
+			page,
+			{
+				onboardingComplete: true,
+				provider: "xai",
+				model: "grok-4.3",
+				apiKey: "xai-secret",
+				locale: "ko",
+			},
+			undefined,
+			[
+				{
+					model_key: "grok:grok-4.3",
+					input_price_per_million: 0.4,
+					output_price_per_million: 1.2,
+					cached_price_per_million: null,
+				},
+			],
+		);
+		await openBrain(page);
+		await expect(page.locator("#provider-select")).toHaveValue("xai");
+		await expect(page.locator("#model-select")).toHaveValue("grok-4.3");
+		await expect(page.getByTestId("grok-readiness")).toHaveCount(0);
+		await expect(page.locator("#apikey-input")).toHaveCount(1);
+		await expect(page.locator("#provider-select option[value='grok']")).toHaveCount(
+			1,
+		);
+		expect(await grokPreflightCount(page)).toBe(0);
 	});
 
 	test("Grok 채팅은 API 키 없이 chat_request를 보내고 응답을 렌더한다", async ({ page }) => {
