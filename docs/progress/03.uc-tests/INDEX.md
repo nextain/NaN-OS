@@ -31,6 +31,8 @@
 | TEST-S-015 | UC-016 | 허용목록 ingress, Gateway 송수신·재연결, 두 채널 동시성, durable dedupe, 수명주기 epoch/revoke를 결정론적 fake Gateway와 쌍방 wire로 검증. 실제 bot 2채널 송수신·재연결·403·rotate/revoke는 운영자 인수 대기 | seam통합 + live | `naia-agent:src/test/discord-runtime.integration.test.ts`, `discord-live.integration.test.ts`; `src/test/uc-wire-v1-paired-proto.contract.test.ts` | Partial |
 | TEST-S-017 | UC-018 | Codex provider 선택 UI, role별 설정 저장/복원, apiKey 없는 Codex chat 전달, Agent 정확한 commit/proto pair 강제를 계약·UI 테스트, Agent smoke, 실제 native Shell 종단간 응답으로 검증 | 계약+통합+실 smoke+native E2E | `packages/shell/src/components/__tests__/SettingsTab.test.tsx`, `packages/shell/src/lib/__tests__/adk-store.test.ts`, `chat-service.test.ts`, `src/test/uc-wire-v1-paired-proto.contract.test.ts`, `packages/shell/e2e-tauri/specs/90-codex-live-chat.spec.ts`, `.agents/reviews/codex-shell-live-e2e-2026-07-21.json`; Agent Codex smoke | Pass |
 | TEST-S-018 | UC-019, REQ-015 | Codex provider 선택→안전한 준비 상태 확인→수업 워크스페이스 유지→Discord 연결 화면 진입을 mock Tauri UI에서 검증 | Playwright UI E2E | `packages/shell/e2e/jeonju-course-codex-readiness.spec.ts` | Pass |
+| TEST-S-024 | UC-GROK-SUBSCRIPTION, FR-GROK.1~4 | 설정에서 Grok 구독 CLI 선택, API 키 없음, 준비됨/로그인필요 구분, 계정 비노출, xAI 키 경로 분리, 키 없는 chat_request | Playwright UI E2E | `packages/shell/e2e/grok-readiness.spec.ts` | Pass (4/4, 2026-09-03) |
+| TEST-S-025 | UC-GROK-SUBSCRIPTION, FR-GROK.2 | 로그인된 실제 Grok CLI가 Brain 설정에서 준비됨으로 표시 | native Tauri E2E | `packages/shell/e2e-tauri/specs/96-grok-readiness.spec.ts` | Planned |
 
 ## 비고
 - Pass = 이 세션 직접 실행 확정(2026-06-15). Partial = 인접 변종으로 부분 검증, 전용 TEST-S 미작성. Planned = 시나리오 정의·코드 부재(or old-path).

@@ -593,7 +593,7 @@ Steamworks 포털 설정·SteamPipe 자격증명·스토어 심사 제출은 #31
 | ID | 요구사항 | 검증 기준 |
 |---|---|---|
 | **FR-GROK.1** | 설정에서 Grok를 API key 없는 local-login provider로 선택할 수 있다. 기본 모델은 `grok-4.6`이다. 기존 `xai` API-key provider는 유지한다. | registry·Settings 단위 테스트 |
-| **FR-GROK.2** | 사용자가 두뇌에서 Grok를 선택하면 Shell은 설치와 로그인만 확인하고 `준비됨`·`설치 필요`·`로그인 필요`·`확인 실패`를 구분해 표시한다. | Rust 분류 테스트와 Settings 단위 테스트 |
+| **FR-GROK.2** | 사용자가 두뇌에서 Grok를 선택하면 Shell은 설치와 로그인만 확인하고 `준비됨`·`설치 필요`·`로그인 필요`·`확인 실패`를 구분해 표시한다. | Rust 분류 테스트, Settings 단위 테스트, Playwright `e2e/grok-readiness.spec.ts`. 로그인된 실제 Shell은 `e2e-tauri/specs/96-grok-readiness.spec.ts` |
 | **FR-GROK.3** | Grok 준비 확인은 인증 토큰·계정 식별자·CLI 출력 원문을 UI·설정·agent 요청·로그에 저장하거나 표시하지 않는다. | Settings IPC 결과 직렬화 검사 |
 | **FR-GROK.4** | 게이트웨이 카탈로그 prefix `grok:`는 계속 `xai`(API)로 묶고, 로컬 구독 provider id `grok`와 섞지 않는다. | Settings 카탈로그 alias 유지 |
 

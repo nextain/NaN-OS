@@ -261,9 +261,10 @@ Shell은 빌드 때 고정된 정확한 Agent 런타임만 실행한다.
 
 - 성공: Grok 선택 후 모델 `grok-4.6`이 기본이고, 준비 확인이 `준비됨`을 표시하며 계정/출력을 보여 주지 않는다.
 - 실패: 미설치·미로그인을 구분해 표시하고 기존 설정은 바꾸지 않는다.
+- 채팅: API 키 없이 `chat_request.provider=grok`가 Agent로 가고 응답이 렌더된다.
 - 경계: `~/.grok/auth.json`을 읽거나 복사하지 않는다. 게이트웨이 카탈로그의 `grok:` prefix는 API(`xai`)로 남는다.
-설정 화면 통합 검증은 `e2e-tauri/specs/95-llm-role-settings.spec.ts`에서 상속 전환, 역할별 provider/model 저장,
-재시작 뒤 config 복원을 확인한다.
+
+검증: Playwright 실 UI `packages/shell/e2e/grok-readiness.spec.ts`. 로그인된 실제 Shell은 `e2e-tauri/specs/96-grok-readiness.spec.ts`.
 
 ## UC-JEONJU-COURSE-READINESS — 강의용 Codex 준비 상태를 확인한다
 

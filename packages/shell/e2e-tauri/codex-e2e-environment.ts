@@ -206,9 +206,11 @@ export function resetCodexE2eRoot(): void {
 		mkdirSync(dirname(voiceVrmPath), { recursive: true });
 		cpSync(E2E_VRM_SOURCE, voiceVrmPath);
 	}
+	const mainProvider = process.env.NAIA_E2E_MAIN_PROVIDER ?? "codex";
+	const mainModel = process.env.NAIA_E2E_MAIN_MODEL ?? "gpt-5.4";
 	const config = buildSeedShellConfig({
-		provider: "codex",
-		model: "gpt-5.4",
+		provider: mainProvider,
+		model: mainModel,
 		...(E2E_VOICE_6G_ENABLED
 			? {
 					localVoiceEnabled: true,
