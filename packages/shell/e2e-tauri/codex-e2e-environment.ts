@@ -11,7 +11,7 @@ import {
 } from "node:fs";
 import { connect } from "node:net";
 import { homedir } from "node:os";
-import { basename, dirname, resolve } from "node:path";
+import { basename, delimiter, dirname, resolve } from "node:path";
 import { execPath } from "node:process";
 // FR-VOICE.15 (#418): harness seeds come from the product config schema — a
 // retired field seeded here silently disables local voice via the safety
@@ -391,6 +391,27 @@ export async function startOwnedViteServer(): Promise<void> {
 	await waitForPort(E2E_VITE_PORT);
 }
 
+function embeddedAppEnvironment(): NodeJS.ProcessEnv {
+	const environment: NodeJS.ProcessEnv = {
+		...process.env,
+		TAURI_WEBDRIVER_PORT: String(E2E_WEBDRIVER_PORT),
+	};
+	if (process.platform !== "linux") return environment;
+	const buildDir = resolve(E2E_TARGET_DIR, "debug", "build");
+	const voskDir = existsSync(buildDir)
+		? readdirSync(buildDir)
+				.filter((name) => name.startsWith("tauri-plugin-stt-"))
+				.map((name) => resolve(buildDir, name, "out", "vosk-lib"))
+				.find((path) => existsSync(resolve(path, "libvosk.so")))
+		: undefined;
+	if (voskDir) {
+		environment.LD_LIBRARY_PATH = [voskDir, environment.LD_LIBRARY_PATH]
+			.filter(Boolean)
+			.join(delimiter);
+	}
+	return environment;
+}
+
 export async function startOwnedEmbeddedApp(appBinary: string): Promise<void> {
 	try {
 		await new Promise<void>((resolveOpen, rejectClosed) => {
@@ -413,7 +434,7 @@ export async function startOwnedEmbeddedApp(appBinary: string): Promise<void> {
 	e2eApp = spawn(appBinary, [], {
 		cwd: SHELL_DIR,
 		stdio: ["ignore", "pipe", "pipe"],
-		env: { ...process.env, TAURI_WEBDRIVER_PORT: String(E2E_WEBDRIVER_PORT) },
+		env: embeddedAppEnvironment(),
 	});
 	e2eApp.stderr?.on("data", (data: Buffer) =>
 		process.stderr.write(`[codex-e2e:app] ${data.toString()}`),

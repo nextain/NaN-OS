@@ -1,7 +1,9 @@
+import "./grok-e2e-port.js";
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 import {
 	E2E_TARGET_DIR,
+	E2E_WEBDRIVER_PORT,
 	E2E_WEBVIEW2_DATA,
 	assertCodexE2eIsolation,
 	cleanupCodexE2eRoot,
@@ -28,7 +30,7 @@ export const config = {
 	specs: ["./specs/96-grok-readiness.spec.ts"],
 	maxInstances: 1,
 	hostname: "127.0.0.1",
-	port: Number(process.env.NAIA_E2E_WEBDRIVER_PORT ?? "4451"),
+	port: E2E_WEBDRIVER_PORT,
 	capabilities: [
 		{
 			maxInstances: 1,
