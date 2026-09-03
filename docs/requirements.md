@@ -1096,3 +1096,11 @@ fenced code는 언어·복사·접기·워크스페이스 전환을 제공하고
 | **FR-ENV-ATTENTION.9** | 실시간 음성 턴도 지켜보기 예산을 소비한다. 다만 음성 세션은 연결 시점의 도구 목록을 쓰므로, 통화 중 `off` 로 바꾸면 선언은 그 세션에 남고 실행만 거절된다 — 선언을 걷으려면 재연결이 필요하다. 이 한계는 알고 남긴 것이다. | UC-ENV-ATTENTION | `env-attention-voice.spec.ts` | Done |
 | **FR-ENV-ATTENTION.8** | 일부러 싣지 않은 목록과 상한 때문에 잘린 목록을 `listWithheld` 로 구별해 보내되 숨김일 때만 그 키를 싣고(목록을 싣는 요청에 쓸모없는 바이트를 더하지 않는다), 뇌 쪽이 서로 다른 문구로 읽는다. 숨긴 경우에는 걷는 방법을 함께 알린다. | UC-ENV-ATTENTION | 같음 (받는 쪽은 naia-agent 저장소가 소유) | Done |
 | **FR-ENV-ATTENTION.4** | 사용자의 `environmentAwareness` 설정이 나이아의 선택을 이긴다. `off` 면 도구를 등록하지 않고 세그먼트도 만들지 않으며 도구 호출도 거절한다. `always` 면 나이아가 끌 수 없다. 기본값은 `auto`. | UC-ENV-ATTENTION | 같음 | Done |
+
+## 기능 요구사항 (FR) — v0.2.3 최신 naia-memory 결선 (#534)
+
+| ID | 요구사항 | 출처 시나리오 | 검증(P02) | 상태 |
+|---|---|---|---|---|
+| **FR-MEMORY-PAIRING.1** | pairing manifest는 agent/proto와 함께 naia-memory의 정확한 40자 commit과 package version을 선언한다. | UC-V023-MEMORY-PAIRING | `agent-pairing-drift.contract.test.ts` | Done |
+| **FR-MEMORY-PAIRING.2** | production staging은 선언된 memory 저장소 root·HEAD·clean 상태·package 이름·버전을 빌드 전에 fail-closed로 검증한다. | UC-V023-MEMORY-PAIRING | `agent-pairing-drift.contract.test.ts` | Done |
+| **FR-MEMORY-PAIRING.3** | installer CI가 checkout하는 memory commit은 pairing manifest와 일치한다. | UC-V023-MEMORY-PAIRING | `agent-pairing-drift.contract.test.ts`, `platform-matrix.test.ts` | Done |

@@ -12,9 +12,17 @@ if (!/^[0-9a-f]{40}$/.test(manifest.agentCommit)) {
 if (!/^[0-9a-f]{64}$/.test(manifest.protoSha256)) {
 	throw new Error(`Invalid paired Agent proto SHA256 in ${manifestPath}`);
 }
+if (!/^[0-9a-f]{40}$/.test(manifest.memoryCommit)) {
+	throw new Error(`Invalid paired Memory commit in ${manifestPath}`);
+}
+if (!/^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$/.test(manifest.memoryVersion)) {
+	throw new Error(`Invalid paired Memory version in ${manifestPath}`);
+}
 
 export const REQUIRED_AGENT_COMMIT = manifest.agentCommit;
 export const REQUIRED_PROTO_SHA256 = manifest.protoSha256;
+export const REQUIRED_MEMORY_COMMIT = manifest.memoryCommit;
+export const REQUIRED_MEMORY_VERSION = manifest.memoryVersion;
 
 /** Parse the paths emitted by `git worktree list --porcelain`. */
 export function parseGitWorktreePaths(porcelain) {

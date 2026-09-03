@@ -14,7 +14,12 @@ import { resolve } from "node:path";
 const ROOT = resolve(__dirname, "..", "..");
 const pairing = JSON.parse(
   readFileSync(resolve(ROOT, "packages", "shell", "agent-pairing.json"), "utf8"),
-) as { agentCommit: string; protoSha256: string };
+) as {
+  agentCommit: string;
+  protoSha256: string;
+  memoryCommit: string;
+  memoryVersion: string;
+};
 const buildRs = readFileSync(resolve(ROOT, "packages", "shell", "src-tauri", "build.rs"), "utf8");
 
 function constant(name: string): string {
@@ -37,11 +42,27 @@ describe("페어링 핀이 두 곳에서 갈라지지 않는다", () => {
     // 세 곳 중 이 자리가 가장 조용히 어긋난다.
     const wf = readFileSync(resolve(ROOT, ".github", "workflows", "build-installers.yml"), "utf8");
     expect(wf, "CI 가 핀과 다른 커밋을 받아 간다").toContain(pairing.agentCommit);
+    expect(wf, "CI 가 핀과 다른 memory 커밋을 받아 간다").toContain(
+      `git -C ../naia-memory fetch --depth 1 origin ${pairing.memoryCommit}`,
+    );
     expect(wf, "옛 커밋 문자열이 남아 있다").not.toMatch(/2589e4fc85e13173890e5c9109a744ee4e575854/);
   });
 
   it("핀이 실제 커밋 해시 형태다 — 빈 값이나 자리표시자가 아니다", () => {
     expect(pairing.agentCommit).toMatch(/^[0-9a-f]{40}$/);
     expect(pairing.protoSha256).toMatch(/^[0-9a-f]{64}$/);
+    expect(pairing.memoryCommit).toMatch(/^[0-9a-f]{40}$/);
+    expect(pairing.memoryVersion).toMatch(/^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$/);
+  });
+
+  it("memory 핀이 staging의 commit·clean·package gate에 연결된다", () => {
+    const stage = readFileSync(
+      resolve(ROOT, "packages", "shell", "scripts", "stage-agent.mjs"),
+      "utf8",
+    );
+    expect(stage).toContain("REQUIRED_MEMORY_COMMIT");
+    expect(stage).toContain("REQUIRED_MEMORY_VERSION");
+    expect(stage).toContain("validateMemoryCheckout");
+    expect(stage).toContain('assertPairedMemoryCheckout("after install/build")');
   });
 });

@@ -389,6 +389,21 @@
   },
 
   "active_issue_tracks": {
+    "v023_latest_memory_534": {
+      "work_id": "V023-LATEST-MEMORY-534",
+      "issue": "https://github.com/nextain/naia-shell/issues/534",
+      "scope": "v0.2.3 agent 번들 및 실행 경로가 naia-memory 0.1.4 / 630a0d2f19b559e3f0101bb141048485167fb959를 정확히 사용하도록 commit·version·clean checkout을 staging 전후에 강제한다.",
+      "requirements": "docs/requirements.md FR-MEMORY-PAIR.1~3",
+      "scenario": "docs/user-scenarios.md S-MEMORY-PAIR",
+      "status": "in_progress",
+      "p01_user_scenarios": "done",
+      "p02_test_scenarios": "done",
+      "p03_requirements": "done",
+      "p04_integration_test": "in_progress",
+      "p05_complete": "pending",
+      "verification": "pairing drift 5/5 + shell memory/platform contracts 55/55 passed. Full-suite baseline requires absent e2e binary; shell tsc baseline requires unbuilt @nextain/naia-os-core workspace exports.",
+      "last_updated": "2026-09-03T14:50:00+09:00"
+    },
     "dev_instance_isolation_425": {
       "work_id": "DEV-INSTANCE-ISOLATION-425",
       "issue": "https://github.com/nextain/naia-shell/issues/425",

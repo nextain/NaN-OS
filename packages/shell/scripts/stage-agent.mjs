@@ -35,9 +35,12 @@ import {
 import { dirname, resolve } from "node:path";
 import {
 	REQUIRED_AGENT_COMMIT,
+	REQUIRED_MEMORY_COMMIT,
+	REQUIRED_MEMORY_VERSION,
 	REQUIRED_PROTO_SHA256,
 } from "./agent-pairing.mjs";
 import { runProjectPnpm } from "./package-manager.mjs";
+import { validateMemoryCheckout } from "./validate-memory-checkout.mjs";
 
 const SHELL = process.cwd(); // packages/shell
 const STAGE = resolve(SHELL, "src-tauri/agent");
@@ -180,6 +183,7 @@ function assertPairedCheckoutStillClean(stage) {
 		);
 	}
 }
+
 const AGENT_LOCAL_DEPENDENCIES = [
 	{
 		name: "@naia/kb-compiler",
@@ -200,6 +204,19 @@ if (!existsSync(AGENT)) {
 	process.exit(1);
 }
 
+const MEMORY = resolve(AGENT, "../naia-memory");
+function assertPairedMemoryCheckout(stage) {
+	const problem = validateMemoryCheckout(
+		MEMORY,
+		REQUIRED_MEMORY_COMMIT,
+		REQUIRED_MEMORY_VERSION,
+	);
+	if (problem) {
+		die(`[stage-agent] paired naia-memory ${problem} (${stage}): ${MEMORY}`);
+	}
+}
+assertPairedMemoryCheckout("before build");
+
 function runPnpm(args, cwd) {
 	runProjectPnpm(args, cwd);
 }
@@ -218,6 +235,9 @@ for (const dependency of AGENT_LOCAL_DEPENDENCIES) {
 		dependency.path,
 	);
 	runPnpm(["--ignore-workspace", "run", "build"], dependency.path);
+	if (dependency.path === MEMORY) {
+		assertPairedMemoryCheckout("after install/build");
+	}
 	if (!existsSync(resolve(dependency.path, dependency.output))) {
 		console.error(
 			`[stage-agent] dependency output missing: ${dependency.name}/${dependency.output}`,
