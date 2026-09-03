@@ -1,17 +1,26 @@
 import DOMPurify from "dompurify";
 import hljs from "highlight.js/lib/common";
-import mermaid from "mermaid";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { t } from "../lib/i18n";
 
-mermaid.initialize({
-	startOnLoad: false,
-	theme: "dark",
-	securityLevel: "strict",
-	htmlLabels: false,
-	flowchart: { htmlLabels: false },
-	sequence: { useHtmlLabels: false } as Record<string, unknown>,
-});
+type MermaidApi = typeof import("mermaid")["default"];
+
+let mermaidPromise: Promise<MermaidApi> | undefined;
+
+function loadMermaid(): Promise<MermaidApi> {
+	mermaidPromise ??= import("mermaid").then(({ default: mermaid }) => {
+		mermaid.initialize({
+			startOnLoad: false,
+			theme: "dark",
+			securityLevel: "strict",
+			htmlLabels: false,
+			flowchart: { htmlLabels: false },
+			sequence: { useHtmlLabels: false } as Record<string, unknown>,
+		});
+		return mermaid;
+	});
+	return mermaidPromise;
+}
 
 let mermaidIdCounter = 0;
 
@@ -35,8 +44,8 @@ export function MermaidBlock({ code }: { code: string }) {
 		if (!containerRef.current || !code.trim()) return;
 		const id = `mermaid-${++mermaidIdCounter}`;
 		let cancelled = false;
-		mermaid
-			.render(id, code.trim())
+		void loadMermaid()
+			.then((mermaid) => mermaid.render(id, code.trim()))
 			.then(({ svg }) => {
 				if (!cancelled && containerRef.current) {
 					containerRef.current.innerHTML = DOMPurify.sanitize(svg, {
@@ -57,7 +66,9 @@ export function MermaidBlock({ code }: { code: string }) {
 		return (
 			<div className="markdown-mermaid-error" role="alert">
 				<div>Mermaid 오류 — 원문을 표시합니다.</div>
-				<pre><code>{code}</code></pre>
+				<pre>
+					<code>{code}</code>
+				</pre>
 			</div>
 		);
 	}
@@ -83,7 +94,9 @@ export function MarkdownCodeBlock({
 	if (!className) return <code>{children}</code>;
 	return (
 		<details className="chat-code-block" open>
-			<summary><span className="chat-code-language">{language}</span></summary>
+			<summary>
+				<span className="chat-code-language">{language}</span>
+			</summary>
 			<div className="chat-code-actions">
 				<button
 					type="button"
@@ -98,14 +111,16 @@ export function MarkdownCodeBlock({
 					{copied ? t("chat.codeCopied") : t("chat.codeCopy")}
 				</button>
 				{onOpenWorkspace ? (
-					<button type="button" onClick={() => onOpenWorkspace(code, language)}>워크스페이스에서 열기</button>
+					<button type="button" onClick={() => onOpenWorkspace(code, language)}>
+						워크스페이스에서 열기
+					</button>
 				) : null}
 			</div>
 			<pre>
 				{/* DOMPurify restricts this highlighted fragment to span/class only. */}
-				{/* biome-ignore lint/security/noDangerouslySetInnerHtml: sanitized syntax-highlight markup */}
 				<code
 					className={className}
+					// biome-ignore lint/security/noDangerouslySetInnerHtml: sanitized syntax-highlight markup
 					dangerouslySetInnerHTML={{ __html: highlightCode(code, language) }}
 				/>
 			</pre>

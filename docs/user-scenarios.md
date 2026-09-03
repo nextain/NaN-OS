@@ -1522,3 +1522,20 @@ Test Coverage Map (P02):
 |---|---|---|
 | UC-V023-MEMORY-PAIRING | vitest `src/test/agent-pairing-drift.contract.test.ts` | manifest 형식, CI checkout SHA, staging commit·clean·package gate 결선 |
 | UC-V023-MEMORY-PAIRING | vitest `packages/shell/scripts/__tests__/platform-matrix.test.ts` | installer workflow의 agent·memory 정확한 revision checkout |
+
+### UC-PERF-BUNDLE-BUDGET — 선택 기능은 필요할 때 내려받는다 (#431)
+
+- 사용자가 일반 대화나 편집기를 열 때 Mermaid 렌더러와 그 전이 의존성은 초기 진입 JS에 포함되지 않는다.
+- 워크스페이스가 백그라운드에서 살아 있어도 파일 편집기와 CodeMirror/PDF 의존성은 파일을 실제로 열기 전까지 내려받지 않는다.
+- Mermaid 코드 블록을 실제로 열면 렌더러를 한 번 초기화해 기존과 같은 strict 설정으로 SVG를 만들고 정화한 뒤 표시한다.
+- 렌더러 로드나 문법 해석이 실패하면 기존처럼 원문과 오류 상태를 표시한다.
+- CI는 초기 진입 JS의 raw/gzip 크기와 전체 배포 디렉터리 크기를 재고, 예산을 넘으면 실패하면서 기계 판독 가능한 보고서를 남긴다.
+
+Test Coverage Map (P02):
+
+| UC | 검증 수단 | 대상 |
+|---|---|---|
+| UC-PERF-BUNDLE-BUDGET | vitest `packages/shell/src/components/__tests__/MarkdownCodeBlock.test.tsx` | 지연 로드 뒤 단일 초기화·렌더링·오류 fallback |
+| UC-PERF-BUNDLE-BUDGET | vitest `packages/shell/src/apps/workspace/__tests__/herdr-workspace.test.tsx` | 지연 편집기 경계를 포함한 워크스페이스 터미널·파일 열기 동작 |
+| UC-PERF-BUNDLE-BUDGET | vitest `packages/shell/scripts/__tests__/check-bundle-budget.test.mjs` | 진입점 탐색, raw/gzip/전체 크기, 예산 초과 fail-closed, JSON 보고서 |
+| UC-PERF-BUNDLE-BUDGET | production build + CI artifact | 초기 번들에서 Mermaid 분리 및 예산 보고서 보존 |
