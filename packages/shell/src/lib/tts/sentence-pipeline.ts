@@ -1,3 +1,4 @@
+import type { TtsProviderId } from "../config";
 /**
  * FR-VOICE.16 Phase 2b (#420): the per-sentence TTS orchestration, extracted
  * from ChatArea. The pipeline owns the request lifecycle (active-request set,
@@ -21,13 +22,13 @@
  * SentenceTtsPipelineDeps and calls the public interface only.
  */
 import { Logger } from "../logger";
-import { getTtsProviderMeta } from "./index";
+import { wavDurationSeconds } from "../voice/audio-queue";
 import { estimateTtsCost } from "./cost";
-import { LocalVoiceScheduler } from "./local-voice-scheduler";
+import { getTtsProviderMeta } from "./index";
+import type { LocalVoiceScheduler } from "./local-voice-scheduler";
 import { synthesizeTts } from "./synthesize";
 import { ttsTextFilter } from "./text-filter";
-import type { TtsProviderId } from "../config";
-import { wavDurationSeconds } from "../voice/audio-queue";
+import { isVoiceWarmingHold } from "./warming-hold";
 
 const TAG = "tts-pipeline";
 
@@ -181,16 +182,35 @@ export function createSentenceTtsPipeline(
 		// text shows even though the audio is still being synthesized; playback
 		// still starts whenever the WAV lands (reveal is idempotent).
 		if (ttsProviderForCost === "naia-local-voice") {
-			setTimeout(revealText, 5_000);
+			// #520 — 다만 엔진이 아직 기동 중이면 그 지연은 합성이 느린 것이
+			// 아니라 재생을 일부러 멈춘 것이다(#519). 이때 시한이 그대로
+			// 지나면 음성이 한 번도 나오지 않은 채 텍스트가 먼저 나온다.
+			// 기동이 끝날 때까지 시한을 다시 건다. 재시도 예산이 정해져 있어
+			// 무기한 미뤄지지 않는다.
+			const capReveal = () => {
+				if (isVoiceWarmingHold()) {
+					setTimeout(capReveal, 1_000);
+					return;
+				}
+				revealText();
+			};
+			setTimeout(capReveal, 5_000);
 		}
 		// #512 — 음성 정체성 데스싱크 관측: 로컬 엔진이 켜져 있는데 다른 provider 로 발화하면
 		//        사용자가 고른 목소리가 조용히 바뀐다(실사용 2026-08-29: Host 자동기동 중
 		//        browser/SunHiNeural 발화). 발생 순간을 남겨 원인 경로를 특정한다.
-		if (voiceCfg?.localVoiceEnabled && ttsProviderForCost !== "naia-local-voice") {
-			Logger.warn(TAG, "voice identity mismatch — local engine enabled but speaking via other provider", {
-				provider: ttsProviderForCost,
-				voice: ttsVoiceForCost,
-			});
+		if (
+			voiceCfg?.localVoiceEnabled &&
+			ttsProviderForCost !== "naia-local-voice"
+		) {
+			Logger.warn(
+				TAG,
+				"voice identity mismatch — local engine enabled but speaking via other provider",
+				{
+					provider: ttsProviderForCost,
+					voice: ttsVoiceForCost,
+				},
+			);
 		}
 		Logger.info(TAG, "Sending TTS request", {
 			reqId,

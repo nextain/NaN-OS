@@ -116,6 +116,7 @@ import {
 } from "../lib/stt";
 import { estimateSttCost } from "../lib/tts/cost";
 import { LocalVoiceScheduler } from "../lib/tts/local-voice-scheduler";
+import { decideMaskRelease, decideRevealGuard } from "../lib/tts/reveal-guard";
 import {
 	type PipelineVoiceConfig,
 	type SentenceTtsPipeline,
@@ -502,7 +503,10 @@ function buildEnvironmentSegments(
 	// 목록을 보낸다. 사용자 정책이 이긴다는 FR-ENV-ATTENTION.4 와 어긋나지 않게
 	// (2026-08-28 21차 적대리뷰 지적 — 구현이 조용히 반대로 정하고 있었다).
 	const awareness = loadConfig()?.environmentAwareness ?? "auto";
-	const surfaces = awareness === "always" || toolReady ? environmentSession.segment(awareness) : null;
+	const surfaces =
+		awareness === "always" || toolReady
+			? environmentSession.segment(awareness)
+			: null;
 	if (surfaces) {
 		segs.push(surfaces);
 	}
@@ -656,9 +660,15 @@ export function ChatArea({
 	// "음성 모델 준비 중…" instead of "생각 중…"/"음성 처리 중…" — the wait is the
 	// voice model, not the LLM (user report 2026-08-18).
 	const [voiceModelPreparing, setVoiceModelPreparing] = useState(false);
+	// #520 — 정체 가드(#511)가 타이머 콜백에서 읽어야 하므로 ref 로도 들고 있는다.
+	// state 는 렌더 시점 값이라 setTimeout 안에서는 낡은 값을 본다.
+	const voiceModelPreparingRef = useRef(false);
 	useEffect(() => {
-		const onPreparing = (e: Event) =>
-			setVoiceModelPreparing(!!(e as CustomEvent<boolean>).detail);
+		const onPreparing = (e: Event) => {
+			const preparing = !!(e as CustomEvent<boolean>).detail;
+			voiceModelPreparingRef.current = preparing;
+			setVoiceModelPreparing(preparing);
+		};
 		window.addEventListener("naia:voice-model-preparing", onPreparing);
 		return () =>
 			window.removeEventListener("naia:voice-model-preparing", onPreparing);
@@ -678,11 +688,15 @@ export function ChatArea({
 		nextReveal: 0,
 		ready: new Map<number, string>(),
 	});
-	const ttsMaskReleaseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+	const ttsMaskReleaseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
+		null,
+	);
 	// #511 — 정체 공개 pacer: 재생이 멈춰 있어도 5초마다 canonical 을 그대로 내보인다.
 	//        동기화(마스크·reveal 기계)는 유지 — usage 조기완결+마스크 표시 흐름(빈 store 메시지를
 	//        ttsVisibleContent 로 채우는 기존 메커니즘)이 이 표시 경로에 의존한다.
-	const ttsRevealGuardTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+	const ttsRevealGuardTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
+		null,
+	);
 	const ttsStallRevealLenRef = useRef(0);
 	const cascadeTtsJobsRef = useRef(0);
 	// UC-compaction: agent 가 예산 압박으로 이전 대화를 요약했을 때 표시할 알림(흡수된 메시지 수). null=숨김.
@@ -1167,7 +1181,8 @@ export function ChatArea({
 		ttsTextSyncRef.current.pending = 0;
 		ttsTextSyncRef.current.llmFinished = false;
 		ttsTextSyncRef.current.ready.clear();
-		if (ttsMaskReleaseTimerRef.current) clearTimeout(ttsMaskReleaseTimerRef.current);
+		if (ttsMaskReleaseTimerRef.current)
+			clearTimeout(ttsMaskReleaseTimerRef.current);
 		ttsMaskReleaseTimerRef.current = null;
 		clearTtsRevealGuard(); // #511
 		cascadeTtsJobsRef.current = 0;
@@ -1227,8 +1242,10 @@ export function ChatArea({
 
 	// #511 — 로컬 엔진 기동/합성 지연 중 응답이 '생각 중'으로 무기한 숨는 것을 막는다.
 	const TTS_REVEAL_STALL_MS = 5_000;
+	const TTS_MASK_RELEASE_MS = 8_000;
 	function clearTtsRevealGuard(): void {
-		if (ttsRevealGuardTimerRef.current) clearTimeout(ttsRevealGuardTimerRef.current);
+		if (ttsRevealGuardTimerRef.current)
+			clearTimeout(ttsRevealGuardTimerRef.current);
 		ttsRevealGuardTimerRef.current = null;
 	}
 	function armTtsRevealGuard(): void {
@@ -1237,12 +1254,26 @@ export function ChatArea({
 		ttsRevealGuardTimerRef.current = setTimeout(() => {
 			ttsRevealGuardTimerRef.current = null;
 			const current = ttsTextSyncRef.current;
-			if (!current.active || current.generation !== generation) return;
-			if (current.canonical.length > ttsStallRevealLenRef.current) {
-				Logger.warn("ChatArea", "TTS reveal stalled — showing text ahead of playback", {
-					shownLen: current.canonical.length,
-					pending: current.pending,
-				});
+			// #511/#520 — 판정은 lib/tts/reveal-guard 가 소유한다. 워밍업 홀드 중
+			// 지연은 정체가 아니라는 규칙이 그 안에 이름을 갖고 있다.
+			const decision = decideRevealGuard({
+				active: current.active,
+				armedGeneration: generation,
+				currentGeneration: current.generation,
+				warmingHold: voiceModelPreparingRef.current,
+				canonicalLength: current.canonical.length,
+				alreadyRevealedLength: ttsStallRevealLenRef.current,
+			});
+			if (decision.action === "stop") return;
+			if (decision.action === "reveal") {
+				Logger.warn(
+					"ChatArea",
+					"TTS reveal stalled — showing text ahead of playback",
+					{
+						shownLen: current.canonical.length,
+						pending: current.pending,
+					},
+				);
 				ttsStallRevealLenRef.current = current.canonical.length;
 				setTtsVisibleContent(current.canonical);
 			}
@@ -1251,7 +1282,8 @@ export function ChatArea({
 	}
 
 	function beginTtsTextSync(): void {
-		if (ttsMaskReleaseTimerRef.current) clearTimeout(ttsMaskReleaseTimerRef.current);
+		if (ttsMaskReleaseTimerRef.current)
+			clearTimeout(ttsMaskReleaseTimerRef.current);
 		ttsMaskReleaseTimerRef.current = null;
 		const sync = ttsTextSyncRef.current;
 		sync.generation++;
@@ -1344,7 +1376,8 @@ export function ChatArea({
 			);
 			if (current.pending === 0) setOutputStage(null);
 			if (current.llmFinished && current.pending === 0) {
-				if (ttsMaskReleaseTimerRef.current) clearTimeout(ttsMaskReleaseTimerRef.current);
+				if (ttsMaskReleaseTimerRef.current)
+					clearTimeout(ttsMaskReleaseTimerRef.current);
 				ttsMaskReleaseTimerRef.current = null;
 				clearTtsRevealGuard(); // #511
 				commitStrandedCanonical(); // #513
@@ -1364,9 +1397,13 @@ export function ChatArea({
 		const store = useChatStore.getState();
 		const last = store.messages.at(-1);
 		if (last && last.role === "assistant" && !last.content.trim()) {
-			Logger.warn("ChatArea", "Committing stranded reply text to store (#513)", {
-				length: canonical.length,
-			});
+			Logger.warn(
+				"ChatArea",
+				"Committing stranded reply text to store (#513)",
+				{
+					length: canonical.length,
+				},
+			);
 			store.updateLastMessage("assistant", canonical);
 		}
 	}
@@ -1386,7 +1423,10 @@ export function ChatArea({
 				.find((message) => message.role === "assistant");
 			setTtsMaskedMessageId(completed?.id ?? null);
 		}
-		if (terminal && sync.pending === 0) {
+		// #520 — 대기 중인 문장이 없어도 워밍업 홀드가 열려 있으면 음성은 오는
+		// 중이다. 콜드 엔진에서는 합성이 아직 한 문장도 내놓지 못한 상태가
+		// 정상이므로, 여기서 즉시 풀면 텍스트가 항상 재생을 앞지른다.
+		if (terminal && sync.pending === 0 && !voiceModelPreparingRef.current) {
 			clearTtsRevealGuard(); // #511
 			commitStrandedCanonical(); // #513
 			sync.active = false;
@@ -1394,23 +1434,40 @@ export function ChatArea({
 			setOutputStage(null);
 			return;
 		}
-		if (terminal && sync.pending > 0) {
-			if (ttsMaskReleaseTimerRef.current) clearTimeout(ttsMaskReleaseTimerRef.current);
-			const generation = sync.generation;
-			ttsMaskReleaseTimerRef.current = setTimeout(() => {
-				const current = ttsTextSyncRef.current;
-				if (!current.active || current.generation !== generation || !current.llmFinished) return;
-				clearTtsRevealGuard(); // #511
-				commitStrandedCanonical(); // #513
-				current.active = false;
-				current.pending = 0;
-				current.ready.clear();
-				setTtsVisibleContent(current.canonical);
-				setTtsMaskedMessageId(null);
-				setOutputStage(null);
-				ttsMaskReleaseTimerRef.current = null;
-			}, 8_000);
+		if (terminal) {
+			armTtsMaskRelease(sync.generation);
 		}
+	}
+
+	// #520 — 좌초 방어 해제도 워밍업 홀드를 봐야 한다. 판정은
+	// lib/tts/reveal-guard 가 소유하고, 홀드 중이면 타이머를 다시 건다.
+	function armTtsMaskRelease(generation: number): void {
+		if (ttsMaskReleaseTimerRef.current)
+			clearTimeout(ttsMaskReleaseTimerRef.current);
+		ttsMaskReleaseTimerRef.current = setTimeout(() => {
+			ttsMaskReleaseTimerRef.current = null;
+			const current = ttsTextSyncRef.current;
+			const decision = decideMaskRelease({
+				active: current.active,
+				armedGeneration: generation,
+				currentGeneration: current.generation,
+				llmFinished: current.llmFinished,
+				warmingHold: voiceModelPreparingRef.current,
+			});
+			if (decision.action === "stop") return;
+			if (decision.action === "rearm") {
+				armTtsMaskRelease(generation);
+				return;
+			}
+			clearTtsRevealGuard(); // #511
+			commitStrandedCanonical(); // #513
+			current.active = false;
+			current.pending = 0;
+			current.ready.clear();
+			setTtsVisibleContent(current.canonical);
+			setTtsMaskedMessageId(null);
+			setOutputStage(null);
+		}, TTS_MASK_RELEASE_MS);
 	}
 
 	function initializeSpeechTts(config: AppConfig): void {
@@ -2037,17 +2094,24 @@ export function ChatArea({
 				// 등록을 쏘되 기다리지 않는다. 기다리면 확인이 오지 않을 때 사용자의 모든
 				// 대화가 시간초과만큼 멈춘다 — 실제로 그렇게 만들어 12건이 깨졌다(2026-08-28).
 				// 확인이 돌아오면 상태가 바뀌고, 이 턴은 마지막으로 확인된 상태를 쓴다.
-				void sendAppSkills(ENVIRONMENT_APP_ID, [SKILL_ENVIRONMENT], { awaitAck: true })
+				void sendAppSkills(ENVIRONMENT_APP_ID, [SKILL_ENVIRONMENT], {
+					awaitAck: true,
+				})
 					.then((ok) => noteEnvironmentToolAck(ok))
 					.catch(() => noteEnvironmentToolAck(false));
 				// 도구가 꺼져 있으면 나이아는 observe/watch 를 부를 수 없다. 그런데도 개수를
 				// 실으면 안내가 "필요하면 도구를 불러라"라고 말한다 — 닫힌 길을 가리키는 셈이다
 				// (2026-08-28 19차 적대리뷰 지적). 등록 확인과 도구 활성화를 함께 본다.
-				environmentToolReady = environmentToolRegistered() && config.enableTools === true;
+				environmentToolReady =
+					environmentToolRegistered() && config.enableTools === true;
 				if (!environmentToolReady) {
-					Logger.warn("ChatArea", "environment skill not confirmed — skipping surfaces", {
-						requestId,
-					});
+					Logger.warn(
+						"ChatArea",
+						"environment skill not confirmed — skipping surfaces",
+						{
+							requestId,
+						},
+					);
 				}
 				await refreshEnvironment().catch(() => null);
 			}
@@ -2315,7 +2379,9 @@ export function ChatArea({
 				),
 			)
 				.then((result) => {
-					Logger.info("ChatArea", "environment skill result", { result: result.text });
+					Logger.info("ChatArea", "environment skill result", {
+						result: result.text,
+					});
 					return sendAppToolResult(
 						req.requestId,
 						req.toolCallId,
@@ -3558,7 +3624,8 @@ export function ChatArea({
 						// voice can drive apps. Auto-switches to the owner app.
 						// 실시간 음성은 셸이 요청을 조립하지 않는다 — 기본값(false)이 사실이다.
 						// 이 통화가 켠 지켜보기에는 통화 식별자를 남긴다(FR-ENV-ATTENTION.13).
-						onAppToolCall: (req) => dispatchAppToolCall(req, { watchOwner: voiceSessionKey }),
+						onAppToolCall: (req) =>
+							dispatchAppToolCall(req, { watchOwner: voiceSessionKey }),
 						onAppControl: (req) => dispatchAppControl(req),
 					});
 					session.sendToolResponse(callId, result.output);
@@ -4237,9 +4304,9 @@ export function ChatArea({
 										<span className="thinking-inline-label">
 											💭 {t("chat.thinking") || "Thinking..."}
 										</span>
-									<span className="thinking-inline-preview thinking-inline-preview-live">
-										<span>{streamingThinking.trim()}</span>
-									</span>
+										<span className="thinking-inline-preview thinking-inline-preview-live">
+											<span>{streamingThinking.trim()}</span>
+										</span>
 									</summary>
 									<div className="thinking-inline-content">
 										{streamingThinking}
