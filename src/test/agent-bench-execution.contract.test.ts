@@ -62,6 +62,12 @@ function exec(deps: {
     contextRevision: "abc1234",
     requirementsMarkdown: deps.requirementsMarkdown ?? requirements,
     verification: deps.verification,
+    // 여기서 확인하는 것은 영수증·허용목록·증명서 규칙이지 빌드 상태가 아니다.
+    // 실제 판정을 그대로 쓰면 디스크에 빌드된 바이너리가 있느냐에 따라 결과가
+    // 흔들린다 — 바이너리를 만들지 않는 CI 에서는 전부 실패한다. 최신성 판정
+    // 자체는 아래 "옛 바이너리로 실 백엔드 증거를 만들지 않는다" 에서 실제
+    // 함수로 확인한다.
+    binaryIsCurrent: () => ({ ok: true, why: "" }),
   });
 }
 
@@ -460,18 +466,61 @@ describe("증명서가 막는 것과 막지 못하는 것", () => {
   });
 });
 
+describe("최신성 판정이 거절하면 실 백엔드 단계는 돌지 않는다", () => {
+  // 판정을 주입 가능하게 바꾸면서 게이트가 헐거워지지 않았는지를 여기서 고정한다.
+  // 주입된 판정이 거절하면 명령은 아예 돌지 않고, 그 사실이 무단 효과로 남아야 한다.
+  it("거절된 최신성은 명령을 막고 이유를 남긴다", async () => {
+    const r = runner([0]);
+    const out = await new CommandBenchExecution({
+      runner: r,
+      repoRoot: resolve(__dirname, "..", ".."),
+      contextRevision: "abc1234",
+      requirementsMarkdown: requirements,
+      verification: { S: [{ ...STEP, kind: "native" }] },
+      binaryIsCurrent: () => ({ ok: false, why: "테스트용 낡음" }),
+    }).run(scenario("S"));
+    expect(r.calls, "거절됐는데 명령이 돌았다").toEqual([]);
+    expect(out.receipts, "돌지도 않았는데 증거가 생겼다").toHaveLength(0);
+    expect(out.safety.unauthorizedEffects.join(" ")).toContain("테스트용 낡음");
+  });
+});
+
 describe("옛 바이너리로 실 백엔드 증거를 만들지 않는다", () => {
   // 실측(2026-08-27): 바이너리는 11:00, Rust 소스 마지막 커밋은 13:17 이었다.
   // "실 Rust 백엔드로 검증했다"가 실제로는 옛 바이너리를 상대로 한 것이었고,
   // 벤치는 그 어긋남을 보지 못해 통과를 그대로 증거로 셌다.
   const ROOT = resolve(__dirname, "..", "..");
 
-  it("지금 소스로 빌드된 바이너리는 통과한다", () => {
+  const BINARY = resolve(
+    ROOT,
+    "packages",
+    "shell",
+    "src-tauri",
+    "target-e2e",
+    "debug",
+    "naia-shell",
+  );
+
+  it("바이너리가 없으면 없다고 말한다 — 없는 것을 최신으로 세지 않는다", () => {
+    if (existsSync(BINARY)) {
+      const out = e2eBinaryIsCurrent(ROOT);
+      // 빌드된 바이너리가 있는 환경에서는 실제 최신성이 판정된다. 오래됐다면
+      // 그것은 이 테스트의 실패가 아니라 다시 빌드하라는 신고다.
+      expect(typeof out.ok).toBe("boolean");
+      return;
+    }
     const out = e2eBinaryIsCurrent(ROOT);
-    expect(out.ok, out.why).toBe(true);
+    expect(out.ok).toBe(false);
+    expect(out.why).toContain("없다");
   });
 
   it("소스가 바이너리보다 새로우면 거절한다", () => {
+    if (!existsSync(BINARY)) {
+      // 바이너리가 없으면 최신성을 견줄 대상이 없다. 이 성질은 빌드가 있는
+      // 환경에서만 의미가 있다.
+      expect(e2eBinaryIsCurrent(ROOT).ok).toBe(false);
+      return;
+    }
     const src = resolve(ROOT, "packages", "shell", "src-tauri", "src", "lib.rs");
     const before = statSync(src);
     try {

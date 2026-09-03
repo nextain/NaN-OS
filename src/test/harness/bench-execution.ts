@@ -579,6 +579,20 @@ export interface BenchExecutionDeps {
   readonly contextRevision: string;
   readonly requirementsMarkdown: string;
   readonly verification?: Readonly<Record<string, readonly VerificationStep[]>>;
+  /**
+   * 실 Rust 백엔드 증거의 최신성 판정. 기본값은 실제 바이너리를 보는
+   * `e2eBinaryIsCurrent` 다.
+   *
+   * 주입 가능하게 둔 이유: 이 판정은 디스크에 빌드된 바이너리가 있느냐에 달려
+   * 있다. 그런데 영수증·허용목록 같은 다른 성질을 확인하는 계약 테스트도
+   * wdio 단계를 대역으로 쓰기 때문에, 빌드 상태에 따라 그 테스트들의 결과가
+   * 같이 흔들렸다. CI 처럼 바이너리를 만들지 않는 환경에서는 전부 실패한다.
+   * 최신성 자체를 확인하는 곳에서만 실제 판정을 쓰고, 나머지는 고정한다.
+   */
+  readonly binaryIsCurrent?: (repoRoot: string) => {
+    readonly ok: boolean;
+    readonly why: string;
+  };
 }
 
 /** 실제로 명령을 돌려 증거를 모으는 실행부. */
@@ -660,7 +674,9 @@ export class CommandBenchExecution implements BenchExecutionPort {
       tests.push(step.args[step.args.length - 1] ?? label);
       if (step.args.includes("wdio")) {
         // 실 Rust 백엔드 증거는 지금 소스로 빌드된 바이너리여야 한다.
-        const fresh = e2eBinaryIsCurrent(this.deps.repoRoot);
+        const fresh = (this.deps.binaryIsCurrent ?? e2eBinaryIsCurrent)(
+          this.deps.repoRoot,
+        );
         if (!fresh.ok) {
           artifacts.push(`${label} → ${fresh.why}`);
           unauthorizedEffects.push(`옛 바이너리로 실 백엔드 증거를 만들 뻔했다: ${fresh.why}`);
