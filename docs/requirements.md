@@ -858,6 +858,8 @@ unrelated direct TRT service on port 8910.
 - `FR-VOICE-TEXT.1`: 모든 TTS provider 경로는 `text-filter`의 공통 규칙과 locale별 확장 규칙을 거친 동일한 발화 문자열만 사용해야 한다.
 - `FR-VOICE-TEXT.2`: 필터는 Markdown 표식만 제거해 본문을 보존하고, fenced code/Mermaid, URL, 제어 태그, 이모지·이모티콘과 장식 문자를 제거해야 한다.
 - `FR-VOICE-TEXT.3`: inline code는 locale 레지스트리와 기본 fallback으로 처리하고, 정규화 결과가 비면 발화 요청을 생성하지 않아야 한다.
+- `FR-VOICE-TEXT.4` (#540): 필터는 이모지 외 카오모지 구성 문자(IPA·발음기호 확장, 수식·결합 기호, 반각 가나, 불릿, 기타 기호 `\p{So}`·`\p{Sk}`)와 조각 자모 나열(ㅋㅋ·ㅠㅠ)을 제거하고, 제거 후 남는 빈 괄호 쌍을 정리해야 한다. 한글·영문·일문·중문 본문과 정상 문장부호·숫자는 보존한다.
+- `FR-VOICE-TEXT.5` (#540): ko locale(및 본문이 한글인 fallback)은 발화 전에 숫자를 한국어 읽기로 정규화해야 한다 — 연대·연도·한자어 단위는 한자어 수사(구십 년대), 고유어 단위 1~99는 관형 고유어 수사(세 시), 소수점(삼 점 오)·천단위 콤마·%·℃·구분자 숫자열 자리읽기. 단위 분류는 데이터 테이블로 확장하며 다른 locale의 숫자 표기는 바꾸지 않는다.
 ### FR-CHAT-MARKDOWN.1 — 안전한 채팅 Markdown
 
 assistant 채팅은 GFM을 렌더링하되 원시 HTML 및 스크립트를 실행하지 않아야 한다.
