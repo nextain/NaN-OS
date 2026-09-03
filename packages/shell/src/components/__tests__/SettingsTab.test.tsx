@@ -21,6 +21,19 @@ const secureStoreMock = vi.hoisted(() => ({
 	delete: vi.fn().mockResolvedValue(undefined),
 }));
 
+vi.mock("../../lib/voice/host-profile", () => ({
+	// 이 테스트들이 흉내 내는 기계는 카드 한 장짜리 Windows 다 (#537).
+	// 프로파일 이름은 하드웨어 사실이라 화면이 아니라 여기서 정한다.
+	voiceHostProfile: () =>
+		Promise.resolve({
+			profile: "windows_trt_6g",
+			gpus: [{ index: 0, freeMib: 8192, totalMib: 8192 }],
+			gpuChoiceIsMeaningful: false,
+			defaultGpuIndex: 0,
+		}),
+	resetVoiceHostProfileCache: () => {},
+}));
+
 vi.mock("@tauri-apps/plugin-store", () => {
 	return { load: vi.fn().mockResolvedValue(secureStoreMock) };
 });
@@ -834,9 +847,9 @@ describe("SettingsTab", () => {
 		fireEvent.click(check);
 
 		await vi.waitFor(() => {
-			expect(
-				screen.getByTestId("grok-readiness-status").textContent,
-			).toContain("Ready");
+			expect(screen.getByTestId("grok-readiness-status").textContent).toContain(
+				"Ready",
+			);
 		});
 		expect(mockInvoke).toHaveBeenCalledWith("grok_preflight");
 		expect(screen.queryByText("private@example.com")).toBeNull();

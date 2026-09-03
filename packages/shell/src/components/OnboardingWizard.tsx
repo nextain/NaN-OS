@@ -33,7 +33,7 @@ import {
 	saveConfig,
 	saveConfigSecure,
 } from "../lib/config";
-import { getLocale, t, type Locale, type TranslationKey } from "../lib/i18n";
+import { type Locale, type TranslationKey, getLocale, t } from "../lib/i18n";
 import {
 	fetchLabBalancePayload,
 	parseLabCredits,
@@ -52,6 +52,7 @@ import {
 } from "../lib/onboarding-core";
 import { deleteSecretKey, saveSecretKey } from "../lib/secure-store";
 import { NAIA_SLOT_DEFAULTS, applyNaiaSlotDefaults } from "../lib/slots/model";
+import { voiceHostProfile } from "../lib/voice/host-profile";
 import {
 	clearLocalVoiceAccessToken,
 	localVoiceFacadeUrlFromReady,
@@ -130,7 +131,10 @@ function stepChat(step: Step, name: string, user: string): string {
 			// {user} itself and this only supplies the separator its position
 			// needs. Empty when there is no name, and the line still reads.
 			return t("onboard.chat.complete")
-				.replace("{user}", u ? (LEADS_WITH_NAME.has(getLocale()) ? `${u}, ` : `, ${u}`) : "")
+				.replace(
+					"{user}",
+					u ? (LEADS_WITH_NAME.has(getLocale()) ? `${u}, ` : `, ${u}`) : "",
+				)
 				.replace("{agent}", n);
 	}
 }
@@ -546,8 +550,9 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
 			// A resolved CASCADE_READY payload only proves ports were bound — Rust
 			// checks the facade too, so re-confirm readiness the same way
 			// SettingsTab's startCascadeAndConfirm does before trusting "ready".
+			const host = await voiceHostProfile();
 			const ready = await invoke<string>("start_voxcpm2", {
-				expectedLoaderProfile: "windows_trt_6g",
+				expectedLoaderProfile: host.profile,
 			});
 			const afterStart = await refreshVoxCpm2InstallationForOnboarding();
 			if (!afterStart?.ready) {
@@ -591,7 +596,10 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
 			case "welcome":
 				return { step: "welcome" };
 			case "agentName":
-				return { step: "agentName", agentName: agentName.trim() || t("onboard.defaultAgentName") };
+				return {
+					step: "agentName",
+					agentName: agentName.trim() || t("onboard.defaultAgentName"),
+				};
 			case "userName":
 				return {
 					step: "userName",
@@ -1319,7 +1327,10 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
 						<h2 className="onboarding-step__title">
 							{t("onboard.character.title")
 								.replace("{user}", userName.trim() || "")
-								.replace("{agent}", agentName.trim() || t("onboard.defaultAgentName"))}
+								.replace(
+									"{agent}",
+									agentName.trim() || t("onboard.defaultAgentName"),
+								)}
 						</h2>
 						<div className="onboarding-step__avatar-grid">
 							{naiaVrms.length === 0 && naiaNvas.length === 0 ? (

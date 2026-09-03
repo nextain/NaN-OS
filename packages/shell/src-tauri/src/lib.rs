@@ -9,6 +9,7 @@ mod herdr;
 mod memory;
 mod platform;
 mod pty;
+mod voice_runtime;
 mod stt_models;
 mod workspace;
 
@@ -1260,10 +1261,14 @@ fn local_voxcpm2_is_healthy() -> bool {
                 value.get("ok").and_then(serde_json::Value::as_bool) == Some(true)
                     && value.get("service").and_then(serde_json::Value::as_str)
                         == Some("voxcpm2-tensorrt")
-                    && value.get("profile").and_then(serde_json::Value::as_str)
-                        == Some("windows_trt_6g")
-                    && value.get("backend").and_then(serde_json::Value::as_str)
-                        == Some("tensorrt_locdit")
+                    && value
+                        .get("profile")
+                        .and_then(serde_json::Value::as_str)
+                        .and_then(voice_runtime::profile)
+                        .is_some_and(|p| {
+                            value.get("backend").and_then(serde_json::Value::as_str)
+                                == Some(p.hardware.backend)
+                        })
             }),
         Err(_) => false,
     }
@@ -5059,8 +5064,12 @@ fn read_cascade_loader_profile(manifest: &std::path::Path) -> Option<String> {
     {
         return None;
     }
-    // All persisted hardware profiles now resolve to the voice-only runtime.
-    Some("windows_trt_6g".to_string())
+    // 저장된 하드웨어 프로파일은 전부 음성 전용 런타임으로 모인다. 어느
+    // 프로파일인지는 매니페스트가 아니라 이 기계가 정한다 — 같은 설정 파일을
+    // 다른 기계에 옮겨도 그 기계의 프로파일로 읽혀야 한다.
+    let os = voice_runtime::host_os()?;
+    let accelerator = voice_runtime::detect_accelerator()?;
+    voice_runtime::profile_for_host(os, accelerator).map(|p| p.id.to_string())
 }
 
 /// The Settings UI must distinguish an installed runtime that has not been
@@ -5215,7 +5224,7 @@ fn read_voxcpm2_download_manifest(
     let manifest: VoxCpm2DownloadManifest = serde_json::from_str(&raw)
         .map_err(|error| format!("Naia Host download manifest is invalid: {error}"))?;
     if manifest.schema_version != 1
-        || manifest.profile != "windows_trt_6g"
+        || voice_runtime::profile(&manifest.profile).is_none()
         || !is_sha256(&manifest.artifact_manifest_sha256)
         || !is_sha256(&manifest.archive.sha256)
         || manifest.archive.bytes == 0
@@ -5311,7 +5320,7 @@ fn read_voxcpm2_activation_contract() -> Result<VoxCpm2ActivationContract, Strin
     let contract: VoxCpm2ActivationContract =
         serde_json::from_str(include_str!("../voxcpm2-activation-contract.json"))
             .map_err(|error| format!("activation contract invalid: {error}"))?;
-    if contract.schema_version != 1 || contract.profile != "windows_trt_6g" {
+    if contract.schema_version != 1 || voice_runtime::profile(&contract.profile).is_none() {
         return Err("activation contract identity mismatch".to_string());
     }
     let defaults = contract
@@ -6179,10 +6188,18 @@ async fn install_voxcpm2_runtime(
     let vram = tokio::task::spawn_blocking(detect_vram_gb_blocking)
         .await
         .map_err(|error| format!("VRAM detection task failed: {error}"))?;
-    validate_cascade_vram(vram, Some("windows_trt_6g"))?;
-    if !cfg!(windows) {
-        return Err("Naia Host managed installation is available on Windows only.".to_string());
-    }
+    // 설치도 기동과 같은 판정을 쓴다. 운영체제 잠금 대신, 이 기계에 맞는
+    // 프로파일이 있는지를 묻는다 — 없으면 그 사실이 이유가 된다.
+    let os = voice_runtime::host_os();
+    let accelerator = voice_runtime::detect_accelerator();
+    let host_profile = os
+        .zip(accelerator)
+        .and_then(|(os, accelerator)| voice_runtime::profile_for_host(os, accelerator))
+        .ok_or_else(|| {
+            "이 기계에 맞는 로컬 음성 프로파일이 없습니다 (운영체제·가속기 조합 미지원)"
+                .to_string()
+        })?;
+    voice_runtime::validate_vram(host_profile, vram)?;
     let bundle_root = if let Some(root) = voxcpm2_bundle_root(&app) {
         root
     } else {
@@ -6409,13 +6426,19 @@ fn map_voxcpm2_startup_error(code: &str) -> String {
     .to_string()
 }
 
-fn spawn_windows_voxcpm2(
+/// 로컬 음성 런타임을 띄운다.
+///
+/// 운영체제별 사본을 두지 않는다. 다른 것은 파일이 놓인 자리와 가속기 이름
+/// 뿐이고, 그 둘은 `voice_runtime` 의 두 축이 답한다.
+fn spawn_voxcpm2(
     bundle_root: &std::path::Path,
     naia_key: &str,
+    profile: &voice_runtime::VoiceProfile,
+    configured_gpu: Option<u32>,
 ) -> Result<VoxCpm2Process, String> {
     let runtime_root = voxcpm2_runtime_root();
     let python = std::env::var("NAIA_VOXCPM2_PYTHON")
-        .unwrap_or_else(|_| path_to_string(voxcpm2_bundled_python(bundle_root)));
+        .unwrap_or_else(|_| path_to_string(profile.bundled_python(bundle_root)));
     let artifact_root = bundle_root.join("artifact");
     let engine_dir = runtime_root.join("checkpoints").join("voxcpm2_trt");
     let log_path = log_dir().join("voxcpm2-stderr.log");
@@ -6452,7 +6475,7 @@ fn spawn_windows_voxcpm2(
         "VOXCPM_MODEL_DIR",
         runtime_root.join("models").join("VoxCPM2"),
     )
-    .env("VOXCPM_BACKEND", "tensorrt_locdit")
+    .env("VOXCPM_BACKEND", profile.hardware.backend)
     .env("VOXCPM_TRT_ENGINE_DIR", &engine_dir)
     .env("VOXCPM_INT8", "1")
     .env("VOXCPM_CPU_QUANTIZE", "1")
@@ -6481,10 +6504,45 @@ fn spawn_windows_voxcpm2(
     .stdin(Stdio::piped())
     .stdout(Stdio::piped())
     .stderr(stderr);
+
+    // 어느 카드에 올릴지 정한다. 고르지 않으면 가속기가 0번을 잡는데, 이
+    // 기계는 0번에 아바타가 상주하므로 그 위에 겹친다. 기본은 여유가 가장
+    // 많은 카드이고, 사람이 설정으로 고른 것이 있으면 그것이 이긴다.
+    let gpus = voice_runtime::query_gpus(profile.hardware.accelerator);
+    if let Some(chosen) = voice_runtime::select_gpu(&gpus, configured_gpu) {
+        cmd.env(profile.hardware.visible_devices_var, chosen.to_string());
+        log_both(&format!(
+            "[Naia] 로컬 음성을 {}번 카드에 올립니다 ({}={}, 카드 {}장)",
+            chosen,
+            profile.hardware.visible_devices_var,
+            chosen,
+            gpus.len()
+        ));
+    }
+
+    // 가속기 공유 라이브러리(.dll/.so)를 찾게 한다. 변수 이름은 운영체제가
+    // 정한다 — Windows 는 PATH, Linux 는 LD_LIBRARY_PATH.
+    let library_dir = profile.accelerator_library_dir(bundle_root);
+    if library_dir.is_dir() {
+        let var = profile.layout().library_path_var;
+        let existing = std::env::var(var).unwrap_or_default();
+        let joined = if existing.is_empty() {
+            path_to_string(library_dir)
+        } else {
+            format!(
+                "{}{}{}",
+                path_to_string(library_dir),
+                if cfg!(windows) { ";" } else { ":" },
+                existing
+            )
+        };
+        cmd.env(var, joined);
+    }
+
     platform::hide_console(&mut cmd);
     log_both(&format!(
-        "[Naia] Starting Windows Naia Host TensorRT runtime: {} {}",
-        python, "compiled voxcpm2_tensorrt.http_server"
+        "[Naia] 로컬 음성 런타임 기동 ({}): {} {}",
+        profile.id, python, "compiled voxcpm2_tensorrt.http_server"
     ));
     let mut child = cmd.spawn().map_err(|error| {
         format!(
@@ -6796,10 +6854,10 @@ async fn start_voxcpm2(
     app: tauri::AppHandle,
     state: tauri::State<'_, AppState>,
     expected_loader_profile: Option<String>,
+    // gpu_index: 사람이 설정에서 고른 카드 번호. 없으면 여유가 가장 많은
+    // 카드를 쓴다. 카드가 한 장뿐인 기계에서는 설정 자체가 보이지 않는다.
+    gpu_index: Option<u32>,
 ) -> Result<String, String> {
-    if !cfg!(windows) {
-        return Err("Naia Host TensorRT host voice is available on Windows only.".to_string());
-    }
     let _start_guard = state.voxcpm2_start.lock().await;
     let adk_path = if debug_e2e_enabled() {
         std::env::var("NAIA_E2E_ADK_PATH")
@@ -6823,7 +6881,14 @@ async fn start_voxcpm2(
         .as_deref()
         .filter(|value| !value.is_empty())
         .ok_or_else(|| "voxcpm2_profile_expectation_required".to_string())?;
-    if expected != "windows_trt_6g" || profile.as_deref() != Some(expected) {
+    // 이 프로파일을 이 기계에서 돌려도 되는가. 모르는 이름과 다른 운영체제·
+    // 가속기의 프로파일은 여기서 갈린다. 흩어진 리터럴 비교를 대신한다.
+    let resolved = voice_runtime::ensure_runs_here(
+        expected,
+        voice_runtime::host_os(),
+        voice_runtime::detect_accelerator(),
+    )?;
+    if profile.as_deref() != Some(expected) {
         return Err("voxcpm2_profile_manifest_not_ready".to_string());
     }
 
@@ -6847,7 +6912,7 @@ async fn start_voxcpm2(
     let vram = tokio::task::spawn_blocking(detect_vram_gb_blocking)
         .await
         .map_err(|error| format!("VRAM detection task failed: {error}"))?;
-    validate_cascade_vram(vram, Some(expected))?;
+    voice_runtime::validate_vram(resolved, vram)?;
     let bundle_root = voxcpm2_bundle_root(&app)
         .ok_or_else(|| "Naia Host TensorRT runtime payload is not packaged".to_string())?;
     let install_probe = tokio::task::spawn_blocking({
@@ -6869,7 +6934,9 @@ async fn start_voxcpm2(
     // adopted safely from a different Shell process.
     platform::kill_stale_voxcpm2();
     let process =
-        tokio::task::spawn_blocking(move || spawn_windows_voxcpm2(&bundle_root, naia_key.as_str()))
+        tokio::task::spawn_blocking(move || {
+            spawn_voxcpm2(&bundle_root, naia_key.as_str(), resolved, gpu_index)
+        })
             .await
             .map_err(|error| format!("task error: {error}"))??;
     let ready = process.ready.clone();
@@ -7129,6 +7196,42 @@ async fn write_slots_manifest(adk_path: String, json: String) -> Result<(), Stri
 /// when nvidia-smi is absent / non-NVIDIA / unparseable ??the settings UI then
 /// falls back to manual tier selection (#2 / FR-VRAM.1).
 ///
+/// 이 기계의 로컬 음성 프로파일과 카드 목록.
+///
+/// 프로파일 이름은 운영체제와 가속기가 정하는 하드웨어 사실이다. 화면이 그
+/// 이름을 알 이유가 없다 — 예전에는 화면 세 곳이 `windows_trt_6g` 를 직접
+/// 박아 두어, 기계가 바뀌면 세 곳을 함께 고쳐야 했다. 여기서 한 번 물어
+/// 그대로 되돌려 준다.
+#[tauri::command]
+async fn voice_host_profile() -> Result<serde_json::Value, String> {
+    let resolved = tokio::task::spawn_blocking(|| {
+        let os = voice_runtime::host_os();
+        let accelerator = voice_runtime::detect_accelerator();
+        let profile = os
+            .zip(accelerator)
+            .and_then(|(os, accelerator)| voice_runtime::profile_for_host(os, accelerator));
+        let gpus = accelerator.map(voice_runtime::query_gpus).unwrap_or_default();
+        (profile, gpus)
+    })
+    .await
+    .map_err(|error| format!("task error: {error}"))?;
+    let (profile, gpus) = resolved;
+    Ok(serde_json::json!({
+        "profile": profile.map(|p| p.id),
+        "gpus": gpus
+            .iter()
+            .map(|g| serde_json::json!({
+                "index": g.index,
+                "freeMib": g.free_mib,
+                "totalMib": g.total_mib,
+            }))
+            .collect::<Vec<_>>(),
+        // 카드가 한 장뿐이면 고를 것이 없다 — 설정 항목을 보이지 않게 한다.
+        "gpuChoiceIsMeaningful": voice_runtime::gpu_choice_is_meaningful(&gpus),
+        "defaultGpuIndex": voice_runtime::select_gpu(&gpus, None),
+    }))
+}
+
 /// NOTE: this reports *capacity only*. Real-time (RTF<1) on a given GPU is a
 /// measured gate (windows-manager F1) and is NOT inferred here.
 #[tauri::command]
@@ -11618,6 +11721,7 @@ pub fn run() {
             voxcpm2_installation_status,
             install_voxcpm2_runtime,
             start_voxcpm2,
+            voice_host_profile,
             stop_voxcpm2,
             voxcpm2_status,
 			voxcpm2_runtime_status,
@@ -12889,10 +12993,13 @@ mod tests {
         let manifest = dir.path().join("slots-manifest.json");
         std::fs::write(&manifest, r#"{"gpu":{"loaderProfile":" laptop_4060_8g "}}"#).unwrap();
 
-        assert_eq!(
-            read_cascade_loader_profile(&manifest).as_deref(),
-            Some("windows_trt_6g")
-        );
+        // 저장된 값이 무엇이든 답은 이 기계의 프로파일이다. 같은 설정 파일을
+        // 다른 기계에 옮겨도 그 기계의 것으로 읽힌다.
+        let expected = voice_runtime::host_os()
+            .zip(voice_runtime::detect_accelerator())
+            .and_then(|(os, accelerator)| voice_runtime::profile_for_host(os, accelerator))
+            .map(|p| p.id);
+        assert_eq!(read_cascade_loader_profile(&manifest).as_deref(), expected);
     }
 
     #[test]

@@ -34,6 +34,16 @@ fn verify_artifact_signature(digest: &[u8], value: &str) -> Result<(), String> {
     let encoded_key = option_env!("NAIA_APP_SIGNING_PUBLIC_KEY")
         .or_else(|| cfg!(debug_assertions).then_some(DEVELOPMENT_SIGNING_PUBLIC_KEY))
         .ok_or_else(|| "App signing public key is not configured".to_string())?;
+    verify_artifact_signature_with_key(encoded_key, digest, value)
+}
+
+/// 어느 키로 검증할지를 밖에서 준다. 기본 키 해석과 검증 자체를 나눠 두면,
+/// 검증 규칙을 배포 키에 묶인 벡터 없이 확인할 수 있다.
+fn verify_artifact_signature_with_key(
+    encoded_key: &str,
+    digest: &[u8],
+    value: &str,
+) -> Result<(), String> {
     let key_bytes = base64::engine::general_purpose::STANDARD
         .decode(encoded_key)
         .map_err(|_| "Invalid app signing public key".to_string())?;
@@ -60,14 +70,36 @@ fn verify_artifact_signature(digest: &[u8], value: &str) -> Result<(), String> {
 mod store_signature_tests {
     use super::*;
 
+    /// 검증 경로가 옳은 서명을 받고 건드려진 것을 거절하는가.
+    ///
+    /// 예전에는 실제 배포 산출물의 서명을 그대로 박아 두었다. 그런데
+    /// 2026-08-31 에 기본 공개키를 게이트웨이의 실제 키로 바꾸면서(96394eee)
+    /// 옛 키로 서명된 그 벡터를 그대로 두어, 그때부터 이 테스트가 계속
+    /// 실패했다. 벡터와 키가 따로 움직이면 언제든 다시 어긋난다.
+    ///
+    /// 그래서 여기서는 키와 서명을 이 테스트 안에서 함께 만든다. 씨앗이
+    /// 고정이라 결과도 고정이고, 키를 바꿔도 벡터를 다시 만들 일이 없다.
+    /// 기본 공개키가 실제 배포 산출물과 맞는지는 여기서 잴 수 없다 — 그것은
+    /// 게이트웨이가 배포 시점에 확인한다.
     #[test]
     fn verifies_reviewed_artifact_and_rejects_tampering() {
+        use ed25519_dalek::{Signer as _, SigningKey};
+
+        let signing_key = SigningKey::from_bytes(&[7u8; 32]);
+        let public_key = base64::engine::general_purpose::STANDARD
+            .encode(signing_key.verifying_key().to_bytes());
         let digest = hex_digest("c7c5c1d70c5dec4416ab6158afd0b223ef40c29b1dc1f97ed9428b94d4cadb1c");
-        let signature = "ed25519:MAflm/6kjGbOv/DhK1uFg3qNlvftl0QB68FZ+X81cd7EJGBIdnQ804UUTaU13CaQ60pYADkv73V/0dZObK5gBw==";
-        assert!(verify_artifact_signature(&digest, signature).is_ok());
+        let signature = format!(
+            "ed25519:{}",
+            base64::engine::general_purpose::STANDARD.encode(signing_key.sign(&digest).to_bytes())
+        );
+
+        assert!(verify_artifact_signature_with_key(&public_key, &digest, &signature).is_ok());
         let mut tampered = digest;
         tampered[0] ^= 1;
-        assert!(verify_artifact_signature(&tampered, signature).is_err());
+        assert!(verify_artifact_signature_with_key(&public_key, &tampered, &signature).is_err());
+        // 서명이 Ed25519 임을 밝히지 않으면 받지 않는다.
+        assert!(verify_artifact_signature_with_key(&public_key, &digest, "MAfl").is_err());
     }
 
     fn hex_digest(value: &str) -> [u8; 32] {

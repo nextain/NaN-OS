@@ -1,3 +1,4 @@
+import type { EnvironmentAwareness } from "@nextain/naia-os-core/composition";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { open } from "@tauri-apps/plugin-dialog";
@@ -51,14 +52,6 @@ import {
 	sendCredsUpdate,
 	sendNotifyConfig,
 } from "../lib/chat-service";
-import type { EnvironmentAwareness } from "@nextain/naia-os-core/composition";
-import {
-	ENVIRONMENT_APP_ID,
-	SKILL_ENVIRONMENT,
-	environmentSession,
-	noteEnvironmentClear,
-	noteEnvironmentToolAck,
-} from "../lib/environment-skill";
 import {
 	type AppConfig,
 	DEFAULT_GATEWAY_URL,
@@ -86,6 +79,13 @@ import {
 	getAllAgentFacts,
 	importMemoryBackup,
 } from "../lib/db";
+import {
+	ENVIRONMENT_APP_ID,
+	SKILL_ENVIRONMENT,
+	environmentSession,
+	noteEnvironmentClear,
+	noteEnvironmentToolAck,
+} from "../lib/environment-skill";
 import { resetGatewaySession } from "../lib/gateway-sessions";
 import {
 	type Locale,
@@ -141,6 +141,7 @@ import { listTtsProviderMetas } from "../lib/tts/registry";
 import { synthesizeTts } from "../lib/tts/synthesize";
 import type { ModelCapability, ProviderId } from "../lib/types";
 import { type UpdateInfo, checkForUpdate } from "../lib/updater";
+import { voiceHostProfile } from "../lib/voice/host-profile";
 import {
 	clearLocalVoiceAccessToken,
 	localVoiceFacadeUrlFromReady,
@@ -1121,7 +1122,9 @@ export function SettingsTab() {
 			const store = useCascadeAvatarStore.getState();
 			if (!store.localFacadeUrl) {
 				try {
-					const start = await startCascadeAndConfirm("windows_trt_6g");
+					const start = await startCascadeAndConfirm(
+						(await voiceHostProfile()).profile ?? undefined,
+					);
 					const url = start.ready
 						? localVoiceFacadeUrlFromReady(start.ready)
 						: null;
@@ -1189,7 +1192,9 @@ export function SettingsTab() {
 				...(naiaKey ? { naiaKey } : {}),
 			} as unknown as Record<string, unknown>);
 			await writeSlotsManifest(voiceConfig, detectedVramGb);
-			const start = await startCascadeAndConfirm("windows_trt_6g");
+			const start = await startCascadeAndConfirm(
+				(await voiceHostProfile()).profile ?? undefined,
+			);
 			if (!start.ready) {
 				await rollbackLocalVoiceSelection(
 					cfg,
@@ -3640,7 +3645,9 @@ export function SettingsTab() {
 								className="voice-preview-btn"
 								onClick={async () => {
 									await resetAdkPathBinding();
-									const { relaunch } = await import("@tauri-apps/plugin-process");
+									const { relaunch } = await import(
+										"@tauri-apps/plugin-process"
+									);
 									await relaunch();
 								}}
 							>
@@ -4053,10 +4060,7 @@ export function SettingsTab() {
 										{t("cost.labCharge")}
 									</button>
 									{showLabDisconnect ? (
-										<div
-											className="reset-confirm-app"
-											style={{ marginTop: 8 }}
-										>
+										<div className="reset-confirm-app" style={{ marginTop: 8 }}>
 											<p className="reset-confirm-msg">
 												{t("settings.labDisconnectConfirm")}
 											</p>
@@ -4310,11 +4314,16 @@ export function SettingsTab() {
 													</button>
 													{/* #507: 프로필 탭엔 실패/진행 표면이 없어 revert 가 무언이었다.
 													    선택 트랜잭션의 진행·실패·되돌림 사유를 셀렉터 옆에서 보여준다. */}
-													{(cascadeBusy || voxcpm2InstallError || cascadeMsg) && (
+													{(cascadeBusy ||
+														voxcpm2InstallError ||
+														cascadeMsg) && (
 														<div
 															className="settings-hint"
 															data-testid="profile-voice-status"
-															style={{ flexBasis: "100%", overflowWrap: "anywhere" }}
+															style={{
+																flexBasis: "100%",
+																overflowWrap: "anywhere",
+															}}
 														>
 															{cascadeBusy
 																? t("settings.cascadeBusy")
@@ -4943,22 +4952,40 @@ export function SettingsTab() {
 											// 확인값을 상태에 반영한다. 로그로만 쓰면 셸이 낡은 참을
 											// 들고 있게 된다 (2026-08-28 18차 적대리뷰 지적).
 											noteEnvironmentClear(ok);
-											if (!ok) Logger.warn("SettingsTab", "environment skill clear not delivered", {});
+											if (!ok)
+												Logger.warn(
+													"SettingsTab",
+													"environment skill clear not delivered",
+													{},
+												);
 										})
 										.catch(() => noteEnvironmentClear(false));
 								} else {
-									sendAppSkills(ENVIRONMENT_APP_ID, [SKILL_ENVIRONMENT], { awaitAck: true })
+									sendAppSkills(ENVIRONMENT_APP_ID, [SKILL_ENVIRONMENT], {
+										awaitAck: true,
+									})
 										.then((ok) => {
 											noteEnvironmentToolAck(ok);
-											if (!ok) Logger.warn("SettingsTab", "environment skill register not delivered", {});
+											if (!ok)
+												Logger.warn(
+													"SettingsTab",
+													"environment skill register not delivered",
+													{},
+												);
 										})
 										.catch(() => noteEnvironmentToolAck(false));
 								}
 							}}
 						>
-							<option value="off">{t("settings.environmentAwarenessOff")}</option>
-							<option value="auto">{t("settings.environmentAwarenessAuto")}</option>
-							<option value="always">{t("settings.environmentAwarenessAlways")}</option>
+							<option value="off">
+								{t("settings.environmentAwarenessOff")}
+							</option>
+							<option value="auto">
+								{t("settings.environmentAwarenessAuto")}
+							</option>
+							<option value="always">
+								{t("settings.environmentAwarenessAlways")}
+							</option>
 						</select>
 						<span className="settings-hint">
 							{t("settings.environmentAwarenessHint")}

@@ -11,6 +11,18 @@ import {
 } from "../synthesize";
 
 const mockInvoke = vi.hoisted(() => vi.fn());
+vi.mock("../../voice/host-profile", () => ({
+	// 이 테스트가 흉내 내는 기계 (#537).
+	voiceHostProfile: () =>
+		Promise.resolve({
+			profile: "windows_trt_6g",
+			gpus: [{ index: 0, freeMib: 8192, totalMib: 8192 }],
+			gpuChoiceIsMeaningful: false,
+			defaultGpuIndex: 0,
+		}),
+	resetVoiceHostProfileCache: () => {},
+}));
+
 vi.mock("@tauri-apps/api/core", () => ({ invoke: mockInvoke }));
 
 beforeEach(() => mockInvoke.mockResolvedValue(undefined));

@@ -1,4 +1,5 @@
-﻿import { Logger } from "../logger";
+import { Logger } from "../logger";
+import { voiceHostProfile } from "./host-profile";
 
 export interface LocalVoiceHealth {
 	ttsReady: boolean;
@@ -63,8 +64,11 @@ export async function recoverLocalVoiceToken(
 		recoverInFlight = (async () => {
 			try {
 				const { invoke } = await import("@tauri-apps/api/core");
+				// 프로파일 이름은 기계가 정한다 (#537). 여기서 박아 두면 다른
+				// 운영체제에서 그대로 어긋난다.
+				const host = await voiceHostProfile();
 				const ready = await invoke<string>("start_voxcpm2", {
-					expectedLoaderProfile: "windows_trt_6g",
+					expectedLoaderProfile: host.profile,
 				});
 				const url = localVoiceFacadeUrlFromReady(ready);
 				Logger.debug("LocalRuntime", "recoverLocalVoiceToken:result", {
