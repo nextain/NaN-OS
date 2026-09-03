@@ -54,7 +54,9 @@ export const VOXCPM2_PROFILES = {
 		modelPrep: "src-tauri/linux/prepare-voxcpm2-model.sh",
 		modelPrepName: "prepare-voxcpm2-model.sh",
 		defaultDownloadUrl: "",
-		defaultTar: "tar",
+		// The archive is a ZIP; GNU tar cannot read it. libarchive's bsdtar can,
+		// and a host without it may set NAIA_SYSTEM_TAR=unzip instead.
+		defaultTar: "bsdtar",
 	},
 };
 
@@ -172,7 +174,19 @@ export function verifyVoxCpm2ArchiveActivationContract({
 	// parsing `-tvf` can silently turn a valid archive into an empty inventory.
 	// File content is still covered below by the embedded manifest digest, while
 	// the extracted source is verified file-by-file before this audit runs.
-	const inspected = spawnSync(tar, ["-tf", basename(archive)], {
+	//
+	// The archive is a ZIP. bsdtar (Windows, macOS, libarchive on Linux) reads
+	// it with tar verbs; GNU tar cannot. On a Linux host without bsdtar, point
+	// NAIA_SYSTEM_TAR at `unzip` and the same audit runs through its verbs.
+	const unzipTool = /^unzip(?:\.exe)?$/iu.test(basename(tar));
+	const listArgs = unzipTool
+		? ["-Z1", basename(archive)]
+		: ["-tf", basename(archive)];
+	const readArgs = (entry) =>
+		unzipTool
+			? ["-p", basename(archive), entry]
+			: ["-xOf", basename(archive), entry];
+	const inspected = spawnSync(tar, listArgs, {
 		encoding: "utf8",
 		windowsHide: true,
 		cwd: dirname(archive),
@@ -220,28 +234,20 @@ export function verifyVoxCpm2ArchiveActivationContract({
 			);
 	}
 	if (expectedManifestSha256) {
-		let manifest = spawnSync(
-			tar,
-			["-xOf", basename(archive), "artifact-manifest.json"],
-			{
-				windowsHide: true,
-				cwd: dirname(archive),
-				maxBuffer: 16 * 1024 * 1024,
-			},
-		);
+		let manifest = spawnSync(tar, readArgs("artifact-manifest.json"), {
+			windowsHide: true,
+			cwd: dirname(archive),
+			maxBuffer: 16 * 1024 * 1024,
+		});
 		// GNU tar records files packaged from `.` with a leading `./`, while
 		// bsdtar (used by the Windows release job) accepts the normalized name.
 		// Try the literal archive entry as a portability fallback.
 		if (manifest.status !== 0)
-			manifest = spawnSync(
-				tar,
-				["-xOf", basename(archive), "./artifact-manifest.json"],
-				{
-					windowsHide: true,
-					cwd: dirname(archive),
-					maxBuffer: 16 * 1024 * 1024,
-				},
-			);
+			manifest = spawnSync(tar, readArgs("./artifact-manifest.json"), {
+				windowsHide: true,
+				cwd: dirname(archive),
+				maxBuffer: 16 * 1024 * 1024,
+			});
 		const actualManifestSha256 =
 			manifest.status === 0
 				? createHash("sha256").update(manifest.stdout).digest("hex")
@@ -440,7 +446,9 @@ export function verifyVoxCpm2Artifact(
 		);
 	if (manifest.voice !== null)
 		throw new Error("VoxCPM2 release must not bundle an unapproved voice");
-	const activationFailures = voxCpm2ArtifactActivationFailures(source);
+	// Same operating-system contract as the checks above — the default is the
+	// Windows contract, which quietly demanded python.exe of a Linux artifact.
+	const activationFailures = voxCpm2ArtifactActivationFailures(source, contract);
 	if (activationFailures.length)
 		throw new Error(
 			`VoxCPM2 artifact cannot pass runtime activation: ${activationFailures.join("; ")}`,

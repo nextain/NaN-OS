@@ -15,7 +15,7 @@
     "issue_doc": "docs/progress/ (F0-baseline, F0-contract, F{1,2,3}-baseline-contract, F0-graft) + 00-PHASES.md",
     "github_issue": null,
     "started": "2026-06-08T00:00:00Z",
-    "last_updated": "2026-08-27T17:22:02+09:00",
+    "last_updated": "2026-09-04T03:25:00+09:00",
     "status": "in_progress",
     "epic_497_universal_agent": {
       "issue": 497,
@@ -239,7 +239,7 @@
       "scenario": "docs/user-scenarios.md S-INSTALL macOS Universal 항목",
       "operator_context": "docs/progress/macos-universal-launch-readiness.md#ai-operator-handoff",
       "status": "implementation_verified",
-      "last_updated": "2026-08-27T17:22:02+09:00",
+      "last_updated": "2026-09-04T03:25:00+09:00",
       "validation_evidence": "Intel x86_64 앱 빌드·설치 번들 스모크 통과; 통합 main 스냅샷에서 Universal 조립 및 플랫폼 계약 61개와 루트 계약 231개 통과, Shell production build 통과; 전체 셸은 1,689개 통과·21개 제외, 기존 Windows 전용 tar.exe VoxCPM2 테스트 5개가 macOS에서 status=null로 실패; 동일 기능 snapshot 적대 리뷰 연속 CLEAN 2회",
       "external_boundary": "실제 CI 실행, Apple Silicon 런타임, 코드 서명, 공증, App Sandbox, App Store Connect 업로드는 별도 증거와 자격 증명이 필요"
     },
@@ -389,6 +389,20 @@
   },
 
   "active_issue_tracks": {
+    "linux_voxcpm2_sidecar_537": {
+      "work_id": "LINUX-VOXCPM2-SIDECAR-537",
+      "issue": "https://github.com/nextain/naia-shell/issues/537",
+      "scope": "FR-V017.39 — Linux 로컬 음성을 Windows 와 같은 단일 standalone 경로로: nextain/voxcpm2-tensorrt 의 linux_trt_6g 아티팩트(69312d8), bash 설치기 src-tauri/linux/prepare-voxcpm2-model.sh(Windows 설치기 단계 대응), lib.rs 가 운영체제 레이아웃으로 PowerShell/bash 를 고르고 ZIP 해제 시 unix 모드 복원, 스테이징 감사가 Linux 계약을 받도록 수정(unzip 허용), Windows 설치기의 계약 schema 2 수용. Cascade 무관.",
+      "requirements": "docs/requirements.md FR-V017.39",
+      "scenario": "docs/user-scenarios.md UC-V017-LINUX-VOXCPM2-STANDALONE-RUNTIME",
+      "status": "in_progress",
+      "p01_user_scenarios": "done",
+      "p02_test_scenarios": "done",
+      "p03_requirements": "done",
+      "p04_integration_test": "in_progress",
+      "p05_complete": "pending",
+      "verification": "2026-09-04 RTX 3090 ×2 Bazzite: 컴파일된 서버가 VOXCPM2_READY(profile linux_trt_6g) 후 한국어 44자를 3.0s 에 합성(6.22s 오디오, RMS 0.113). 설치기 8m34s(다운로드·엔진 빌드 포함). vitest 69, cargo voice_runtime 27. 남은 것: 실제 셸 e2e(95-voice-linux-shell.spec — 이 기계의 e2e 포트를 다른 Codex 세션이 점유해 미실행), Linux 아카이브 blob 업로드(루크 게이트) 후 download manifest 채우기."
+    },
     "v023_latest_memory_534": {
       "work_id": "V023-LATEST-MEMORY-534",
       "issue": "https://github.com/nextain/naia-shell/issues/534",

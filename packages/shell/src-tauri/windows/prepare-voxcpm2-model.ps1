@@ -68,7 +68,17 @@ $InstallerPackageLock = Get-Content -LiteralPath $InstallerPackageLockPath -Raw 
 $ActivationContract = Get-Content -LiteralPath $ActivationContractPath -Raw | ConvertFrom-Json
 if ($Manifest.schemaVersion -ne 3 -or $Manifest.profile -ne "windows_trt_6g") { throw "Unsupported VoxCPM2 runtime manifest" }
 if ($InstallerPackageLock.schemaVersion -ne 1 -or $InstallerPackageLock.policy -ne "automatic-installer-only") { throw "Unsupported VoxCPM2 installer package lock" }
-if ($ActivationContract.schemaVersion -ne 1 -or $ActivationContract.profile -ne "windows_trt_6g") { throw "Unsupported Naia Host activation contract" }
+# The activation contract is one file for every operating system (schema 2):
+# OS-specific layout lives under `platforms`, the reference-voice palette is
+# shared under `runtime`. Schema 1 (one OS, `profile` at the root) is accepted
+# for bundles staged before the split.
+$ContractSupported = $false
+if ($ActivationContract.schemaVersion -eq 2) {
+  $ContractSupported = ($null -ne $ActivationContract.platforms) -and ($null -ne $ActivationContract.platforms.windows)
+} elseif ($ActivationContract.schemaVersion -eq 1) {
+  $ContractSupported = ($ActivationContract.profile -eq "windows_trt_6g")
+}
+if (-not $ContractSupported) { throw "Unsupported Naia Host activation contract" }
 $ReferenceVoices = @($ActivationContract.runtime.referenceVoices)
 $DefaultVoices = @($ReferenceVoices | Where-Object { $_.default -eq $true })
 if ($ReferenceVoices.Count -lt 1) { throw "Naia Host activation contract must declare reference voices" }

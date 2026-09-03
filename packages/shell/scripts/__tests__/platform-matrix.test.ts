@@ -308,6 +308,37 @@ describe("platform-matrix 스키마 (FR-INSTALL.1)", () => {
 		);
 	});
 
+	it("linux installer mirrors the Windows phases and rolls back a failed engine replacement (#537)", () => {
+		const provisioner = readFileSync(
+			resolve(SHELL, "src-tauri/linux/prepare-voxcpm2-model.sh"),
+			"utf8",
+		);
+		// No environment management on the user machine: the bundled
+		// interpreter is the only Python, and NVIDIA packages land in the
+		// installer-owned python-packages tree, never inside the artifact.
+		expect(provisioner).not.toMatch(/\b(?:uv pip|uv python|uv venv)\b/i);
+		expect(provisioner).toContain('--target "$NVIDIA_PENDING"');
+		expect(provisioner).toContain("voxcpm2_tensorrt.artifact");
+		expect(provisioner).toContain("voxcpm2_tensorrt.materialize_voxcpm2_model");
+		expect(provisioner).toContain("voxcpm2_tensorrt.build_voxcpm2_trt");
+		expect(provisioner).toContain("MODEL_RECEIPT_NAME");
+		expect(provisioner).toContain("voxcpm2_trt.pending");
+		expect(provisioner).toContain("voxcpm2_trt.backup");
+		expect(provisioner).toContain("PYTHONDONTWRITEBYTECODE");
+		expect(provisioner).toContain("VOXCPM2_MODEL_PREPARE_REQUIRED");
+		expect(provisioner).toContain("VOXCPM2_ENGINE_PREPARE_REQUIRED");
+		expect(provisioner).toContain("VOXCPM2_MODEL_READY");
+		expect(provisioner).toContain('mv "$ENGINE_BACKUP" "$ENGINE"');
+		expect(provisioner).toContain("naia-nvidia-package-receipt.json");
+		expect(provisioner).toContain("voxcpm2-runtime-ready.json");
+		// The Rust side chooses the interpreter by operating system, not by
+		// a second install path.
+		const rust = readFileSync(resolve(SHELL, "src-tauri/src/lib.rs"), "utf8");
+		expect(rust).toContain('Command::new("bash")');
+		expect(rust).toContain('.arg("--bundle-root")');
+		expect(rust).toContain("entry.unix_mode()");
+	});
+
 	it("darwin icon = 전체 배열 (base 5원소 + icns — 부분 델타 금지, RFC 7386 배열 대체)", () => {
 		expect(matrix.os.darwin.icon).toEqual([
 			...baseConf.bundle.icon,

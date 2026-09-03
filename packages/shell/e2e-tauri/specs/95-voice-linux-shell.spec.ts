@@ -1,13 +1,14 @@
 import { readFileSync } from "node:fs";
 import { sendMessage } from "../helpers/chat.js";
 
-const TEST_VOICE_PATH = process.env.NAIA_E2E_VOXCPM2_TEST_VOICE;
-if (!TEST_VOICE_PATH)
-	throw new Error(
-		"NAIA_E2E_VOXCPM2_TEST_VOICE must point to an authorized local-test-only WAV",
-	);
+// Linux twin of 94-voice-6g-shell (#537). Same journey through the real Tauri
+// Shell — install status, standalone start, settings, external LLM reply spoken
+// sentence by sentence — with the profile taken from the host instead of a
+// spelled operating system. A custom test voice is optional here: the shipped
+// CC0 palette is the default the product actually uses.
+const TEST_VOICE_PATH = process.env.NAIA_E2E_VOXCPM2_TEST_VOICE ?? "";
 
-describe("6GB VoxCPM2 voice profile through the real Tauri Shell", () => {
+describe("Linux VoxCPM2 voice profile through the real Tauri Shell", () => {
 	async function tauriInvoke<T>(
 		command: string,
 		args: Record<string, unknown> = {},
@@ -65,12 +66,11 @@ describe("6GB VoxCPM2 voice profile through the real Tauri Shell", () => {
 				`standalone VoxCPM2 prerequisites: ${JSON.stringify(installation)}`,
 			);
 		}
-		// The profile is a fact of this machine (OS × accelerator), owned by the
-		// backend; the spec asks instead of spelling an operating system.
-		const host = await tauriInvoke<{ profile: string | null }>(
+		const host = await tauriInvoke<{ profile: string | null; gpus: unknown[] }>(
 			"voice_host_profile",
 		);
-		expect(host.profile).toMatch(/^[a-z]+_[a-z]+_6g$/);
+		expect(host.profile).toBe("linux_trt_6g");
+		expect(host.gpus.length).toBeGreaterThanOrEqual(1);
 		const ready = JSON.parse(
 			await tauriInvoke<string>("start_voxcpm2", {
 				expectedLoaderProfile: host.profile,
@@ -101,16 +101,20 @@ describe("6GB VoxCPM2 voice profile through the real Tauri Shell", () => {
 		const unauthenticated = await fetch("http://127.0.0.1:8910/ref/voices");
 		expect(unauthenticated.status).toBe(401);
 		const authorization = `Bearer ${ready.local_access_token}`;
-		const voiceBase64 = readFileSync(TEST_VOICE_PATH).toString("base64");
-		const installedVoice = await fetch("http://127.0.0.1:8910/voice", {
-			method: "PUT",
-			headers: {
-				Authorization: authorization,
-				"Content-Type": "application/json",
-			},
-			body: JSON.stringify({ audio_base64: voiceBase64 }),
-		});
-		expect(installedVoice.status).toBe(200);
+		const voiceBase64 = TEST_VOICE_PATH
+			? readFileSync(TEST_VOICE_PATH).toString("base64")
+			: "";
+		if (voiceBase64) {
+			const installedVoice = await fetch("http://127.0.0.1:8910/voice", {
+				method: "PUT",
+				headers: {
+					Authorization: authorization,
+					"Content-Type": "application/json",
+				},
+				body: JSON.stringify({ audio_base64: voiceBase64 }),
+			});
+			expect(installedVoice.status).toBe(200);
+		}
 		const voices = (await fetch("http://127.0.0.1:8910/ref/voices", {
 			headers: { Authorization: authorization },
 		}).then((response) => response.json())) as { voices?: unknown[] };
@@ -134,7 +138,7 @@ describe("6GB VoxCPM2 voice profile through the real Tauri Shell", () => {
 		expect(palette[0]?.default).toBe(true);
 		await browser.execute(
 			(base64: string, token: string) => {
-				localStorage.setItem("naia.voiceRefAudioB64", base64);
+				if (base64) localStorage.setItem("naia.voiceRefAudioB64", base64);
 				sessionStorage.setItem("naia.voxcpm2AccessToken", token);
 			},
 			voiceBase64,

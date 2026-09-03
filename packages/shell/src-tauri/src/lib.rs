@@ -5531,6 +5531,45 @@ fn cascade_bundle_root(app: &tauri::AppHandle) -> Option<std::path::PathBuf> {
 /// PowerShell drive name instead of a filesystem path. Tauri's resource_dir
 /// may return that form for an installed application, so remove only the
 /// transport prefix before handing paths to powershell.exe.
+/// 이 기계의 운영체제에 맞는 설치 스크립트 실행 명령. Windows 는 PowerShell 로
+/// `.ps1` 을, Linux 는 bash 로 `.sh` 를 돌린다. 스크립트 둘의 인자는 뜻이 같고
+/// 이름만 관례를 따른다(`-BundleRoot` / `--bundle-root`).
+fn voxcpm2_installer_command(
+    installer: &std::path::Path,
+    bundle_root: &std::path::Path,
+    runtime_root: &std::path::Path,
+) -> Command {
+    let mut command = if cfg!(windows) {
+        let mut command = Command::new("powershell.exe");
+        command
+            .args([
+                "-NoLogo",
+                "-NoProfile",
+                "-NonInteractive",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-File",
+            ])
+            .arg(installer)
+            .arg("-BundleRoot")
+            .arg(bundle_root)
+            .arg("-RuntimeRoot")
+            .arg(runtime_root);
+        command
+    } else {
+        let mut command = Command::new("bash");
+        command
+            .arg(installer)
+            .arg("--bundle-root")
+            .arg(bundle_root)
+            .arg("--runtime-root")
+            .arg(runtime_root);
+        command
+    };
+    command.env("PYTHONUTF8", "1");
+    command
+}
+
 fn powershell_compatible_path(path: &std::path::Path) -> std::path::PathBuf {
     let raw = path.as_os_str().to_string_lossy();
     if let Some(rest) = raw.strip_prefix(r"\\?\UNC\") {
@@ -5686,6 +5725,17 @@ fn extract_voxcpm2_archive(
             .map_err(|error| format!("Could not extract Naia Host file: {error}"))?;
         std::io::copy(&mut entry, &mut output)
             .map_err(|error| format!("Could not extract Naia Host package: {error}"))?;
+        // Linux 번들의 파이썬 실행기는 실행 비트가 있어야 뜬다. ZIP 은 유닉스
+        // 모드를 항목에 실어 오므로 그것을 그대로 되살린다 — Windows 에서는
+        // 의미가 없고, 모드가 없는 항목은 만든 그대로 둔다.
+        #[cfg(unix)]
+        if let Some(mode) = entry.unix_mode() {
+            use std::os::unix::fs::PermissionsExt;
+            let _ = std::fs::set_permissions(
+                &output_path,
+                std::fs::Permissions::from_mode(mode & 0o7777),
+            );
+        }
     }
     if files != manifest.archive.files || unpacked_bytes != manifest.archive.unpacked_bytes {
         return Err("Naia Host package inventory differs from the release manifest".to_string());
@@ -6293,21 +6343,11 @@ async fn install_voxcpm2_runtime(
             let installer = powershell_compatible_path(&installer);
             let bundle_root = powershell_compatible_path(&bundle_root);
             let runtime_root = powershell_compatible_path(&runtime_root);
-            let mut command = Command::new("powershell.exe");
+            // 설치 스크립트는 운영체제 축의 일부다: Windows 는 PowerShell,
+            // Linux 는 bash. 인자 이름만 다르고 뜻(번들 루트, 런타임 루트)과
+            // 진행 이벤트 형식은 같다.
+            let mut command = voxcpm2_installer_command(&installer, &bundle_root, &runtime_root);
             command
-                .args([
-                    "-NoLogo",
-                    "-NoProfile",
-                    "-NonInteractive",
-                    "-ExecutionPolicy",
-                    "Bypass",
-                    "-File",
-                ])
-                .arg(&installer)
-                .arg("-BundleRoot")
-                .arg(&bundle_root)
-                .arg("-RuntimeRoot")
-                .arg(&runtime_root)
                 .stdin(Stdio::null())
                 .stdout(Stdio::piped())
                 .stderr(Stdio::piped());

@@ -375,8 +375,10 @@ export async function startOwnedViteServer(): Promise<void> {
 				VITE_NAIA_E2E_MODE: "1",
 				BROWSER: "none",
 				VITE_NAIA_E2E_ADK_PATH: E2E_WORKSPACE,
-				VITE_NAIA_E2E_PROVIDER: "codex",
-				VITE_NAIA_E2E_MODEL: "gpt-5.4",
+				// Same override the seeded shell config honours, so the webview and
+				// the file-backed config never disagree about the main provider.
+				VITE_NAIA_E2E_PROVIDER: process.env.NAIA_E2E_MAIN_PROVIDER ?? "codex",
+				VITE_NAIA_E2E_MODEL: process.env.NAIA_E2E_MAIN_MODEL ?? "gpt-5.4",
 				...(E2E_PREBAKED_NVA_ENABLED || E2E_VOICE_6G_ENABLED
 					? {}
 					: { VITE_NAIA_E2E_NO_AVATAR: "1" }),
