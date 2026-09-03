@@ -765,6 +765,9 @@ export function SettingsTab() {
 		};
 	}, [provider]);
 	const [persona, setPersona] = useState(existing?.persona ?? DEFAULT_PERSONA);
+	const [personaDisabled, setPersonaDisabled] = useState(
+		existing?.personaDisabled ?? false,
+	);
 	const [userName, setUserName] = useState(existing?.userName ?? "");
 	const [agentName, setAgentName] = useState(existing?.agentName ?? "");
 	const [honorific, setHonorific] = useState(existing?.honorific ?? "");
@@ -2837,17 +2840,33 @@ export function SettingsTab() {
 		honorific?: string;
 		speechStyle?: string;
 		persona?: string;
+		personaDisabled?: boolean;
 	}) {
 		const cfg = loadConfig();
 		if (!cfg) return;
-		const updated = {
-			...cfg,
-			agentName: (overrides?.agentName ?? agentName).trim() || undefined,
-			userName: (overrides?.userName ?? userName).trim() || undefined,
-			honorific: (overrides?.honorific ?? honorific).trim() || undefined,
-			speechStyle: overrides?.speechStyle ?? speechStyle,
-			persona: (overrides?.persona ?? persona).trim() || undefined,
-		};
+		const disabled = overrides?.personaDisabled ?? personaDisabled;
+		// 끄면 성격에 해당하는 것을 파일에서 비운다. 값을 남겨두면 코어가
+		// config.json 에서 그대로 조립해 프롬프트에 넣는다 — 셸에서만 끄는 것으로는
+		// 부족하다. 에이전트는 페르소나가 없으면 아무것도 붙이지 않는다.
+		const updated = disabled
+			? {
+					...cfg,
+					personaDisabled: true,
+					agentName: (overrides?.agentName ?? agentName).trim() || undefined,
+					userName: undefined,
+					honorific: undefined,
+					speechStyle: undefined,
+					persona: undefined,
+				}
+			: {
+					...cfg,
+					personaDisabled: undefined,
+					agentName: (overrides?.agentName ?? agentName).trim() || undefined,
+					userName: (overrides?.userName ?? userName).trim() || undefined,
+					honorific: (overrides?.honorific ?? honorific).trim() || undefined,
+					speechStyle: overrides?.speechStyle ?? speechStyle,
+					persona: (overrides?.persona ?? persona).trim() || undefined,
+				};
 		saveConfig(updated);
 		void writeNaiaConfig(updated as unknown as Record<string, unknown>);
 	}
@@ -3823,12 +3842,33 @@ export function SettingsTab() {
 						<span>{t("settings.personaSection")}</span>
 					</div>
 
+					{/* 파인튜닝된 모델은 성격이 가중치에 있다. 여기서 또 얹으면 두 정의가
+					    부딪힌다. 앞으로 파인튜닝 관련 설정이 늘어나면 이 자리에 모은다. */}
+					<div className="settings-field settings-toggle-row">
+						<label htmlFor="persona-disabled-toggle">
+							{t("settings.personaDisabled")}
+						</label>
+						<input
+							id="persona-disabled-toggle"
+							type="checkbox"
+							checked={personaDisabled}
+							onChange={(e) => {
+								setPersonaDisabled(e.target.checked);
+								savePersonaFields({ personaDisabled: e.target.checked });
+							}}
+						/>
+					</div>
+					<div className="settings-hint">
+						{t("settings.personaDisabledHint")}
+					</div>
+
 					<div className="settings-field">
 						<label>{t("settings.agentName")}</label>
 						<input
 							type="text"
 							className="settings-input"
 							value={agentName}
+							disabled={personaDisabled}
 							onChange={(e) => setAgentName(e.target.value)}
 							onBlur={(e) => savePersonaFields({ agentName: e.target.value })}
 							placeholder="Naia"
@@ -3840,6 +3880,7 @@ export function SettingsTab() {
 							type="text"
 							className="settings-input"
 							value={userName}
+							disabled={personaDisabled}
 							onChange={(e) => setUserName(e.target.value)}
 							onBlur={(e) => savePersonaFields({ userName: e.target.value })}
 						/>
@@ -3852,6 +3893,7 @@ export function SettingsTab() {
 									type="text"
 									className="settings-input"
 									value={honorific}
+									disabled={personaDisabled}
 									onChange={(e) => setHonorific(e.target.value)}
 									onBlur={(e) =>
 										savePersonaFields({ honorific: e.target.value })
@@ -3865,6 +3907,7 @@ export function SettingsTab() {
 									className="settings-select"
 									data-testid="settings-speech-style"
 									value={speechStyle}
+									disabled={personaDisabled}
 									onChange={(e) => {
 										setSpeechStyle(e.target.value);
 										savePersonaFields({ speechStyle: e.target.value });
@@ -3890,6 +3933,7 @@ export function SettingsTab() {
 							onChange={(e) => setPersona(e.target.value)}
 							onBlur={(e) => savePersonaFields({ persona: e.target.value })}
 							rows={6}
+							disabled={personaDisabled}
 						/>
 						<div className="settings-hint">{t("settings.personaHint")}</div>
 					</div>

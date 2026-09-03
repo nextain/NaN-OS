@@ -135,10 +135,47 @@ export interface MemoryContext {
 }
 
 /** Build full system prompt from persona text + optional memory context */
+
+/**
+ * 페르소나를 끈 상태의 시스템 프롬프트.
+ *
+ * 성격에 해당하는 것(페르소나 본문·사용자 이름·호칭·말투)은 전부 빼고, 성격이
+ * 아닌 것만 남긴다. 언어 지시가 없으면 모델이 영어로 답할 수 있고, 도구 문맥이
+ * 없으면 스킬을 못 쓴다.
+ */
+function buildNonPersonaPrompt(context?: MemoryContext): string {
+	if (!context) return "";
+	const lines: string[] = [];
+
+	if (context.locale) {
+		const lang = localeToLanguage(context.locale);
+		lines.push(`IMPORTANT: Respond in ${lang}. The user's preferred language is ${lang}.`);
+	}
+
+	if (context.discordDefaultUserId || context.discordDmChannelId) {
+		lines.push("Discord DM config (use with skill_naia_discord):");
+		if (context.discordDefaultUserId) lines.push(`- User ID: ${context.discordDefaultUserId}`);
+		if (context.discordDmChannelId) lines.push(`- DM Channel ID: ${context.discordDmChannelId}`);
+	}
+
+	if (context.appContexts?.length) {
+		for (const pc of context.appContexts) {
+			lines.push(`App [${pc.type}] context: ${JSON.stringify(pc.data)}`);
+		}
+	}
+
+	return lines.join("\n");
+}
+
 export function buildSystemPrompt(
 	persona?: string,
 	context?: MemoryContext,
+	personaDisabled?: boolean,
 ): string {
+	// 성격이 가중치에 있는 모델에는 페르소나를 얹지 않는다. 얹으면 두 정의가
+	// 부딪혀 답이 무너진다. 언어 지시와 도구·앱 문맥은 성격이 아니므로 남긴다.
+	if (personaDisabled) return buildNonPersonaPrompt(context);
+
 	let base = persona?.trim() || DEFAULT_PERSONA;
 
 	// Replace "Naia (낸)" with the configured agent name directly in persona text

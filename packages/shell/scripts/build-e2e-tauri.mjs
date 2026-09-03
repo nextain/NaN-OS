@@ -6,6 +6,8 @@ import {
 	mkdirSync,
 	readFileSync,
 	readdirSync,
+	rmSync,
+	statSync,
 } from "node:fs";
 import { resolve } from "node:path";
 import process from "node:process";
@@ -27,6 +29,78 @@ const targetDir = resolve(
 			? `C:/tmp/naia-shell-e2e-${REQUIRED_AGENT_COMMIT.slice(0, 7)}`
 			: resolve(shellDir, "src-tauri", "target-e2e")),
 );
+/**
+ * 지난 페어링 커밋의 e2e 타깃을 지운다 (#522).
+ *
+ * 타깃 경로에 페어링 커밋이 들어가므로 커밋이 바뀔 때마다 새 디렉터리가 생기는데,
+ * 옛것을 지우는 곳이 없었다. 커밋당 11.5GB 가 무한히 쌓여 C: 드라이브를 0GB 까지
+ * 고갈시킨 사고가 실제로 있었다(2026-08-31, 4개 커밋 46GB). C: 고갈은 앱 실사용
+ * 장애로 직결된다 — 같은 날 WebView2 캐시 쓰기 실패와 임시파일 오류가 함께 났다.
+ *
+ * 지우는 것은 test-only cargo 타깃이라 재생성 비용뿐이다. 지금 쓰는 디렉터리와
+ * 호출자가 NAIA_E2E_TARGET_DIR 로 지정한 경로는 건드리지 않는다. 조용히 쌓이게
+ * 두지 않으려고 회수량을 한 줄 남긴다.
+ */
+function pruneStaleE2ETargets(currentTarget) {
+	if (process.env.NAIA_E2E_TARGET_DIR) return; // 호출자가 소유한 경로는 손대지 않는다
+	if (process.platform !== "win32") return;
+	const parent = "C:/tmp";
+	if (!existsSync(parent)) return;
+
+	const keep = resolve(currentTarget);
+	let removed = 0;
+	let bytes = 0;
+	for (const entry of readdirSync(parent, { withFileTypes: true })) {
+		if (!entry.isDirectory() || !entry.name.startsWith("naia-shell-e2e-")) continue;
+		const path = resolve(parent, entry.name);
+		if (path === keep) continue;
+		try {
+			bytes += directorySize(path);
+			rmSync(path, { recursive: true, force: true });
+			removed += 1;
+		} catch (error) {
+			process.stdout.write(
+				`[e2e] 지난 타깃 삭제 실패 ${entry.name}: ${error instanceof Error ? error.message : error}\n`,
+			);
+		}
+	}
+	if (removed > 0) {
+		const gb = bytes / 1024 ** 3;
+		const size = gb >= 1 ? `${gb.toFixed(1)}GB` : `${Math.round(bytes / 1024 ** 2)}MB`;
+		process.stdout.write(`[e2e] 지난 타깃 ${removed}개 삭제, ${size} 회수\n`);
+	}
+}
+
+/** 삭제 전 회수량을 알기 위한 크기 합산. 실패한 항목은 0 으로 넘긴다. */
+function directorySize(path) {
+	let total = 0;
+	const stack = [path];
+	while (stack.length > 0) {
+		const current = stack.pop();
+		let entries;
+		try {
+			entries = readdirSync(current, { withFileTypes: true });
+		} catch {
+			continue;
+		}
+		for (const entry of entries) {
+			const child = resolve(current, entry.name);
+			if (entry.isDirectory()) {
+				stack.push(child);
+				continue;
+			}
+			try {
+				total += statSync(child).size;
+			} catch {
+				// 삭제 중이거나 접근 불가 — 회수량 추정에서 빠질 뿐이다
+			}
+		}
+	}
+	return total;
+}
+
+pruneStaleE2ETargets(targetDir);
+
 const e2eTauriConfig = resolve(shellDir, "src-tauri", "tauri.e2e.conf.json");
 const bgmSidecar = resolve(shellDir, "..", "bgm-sidecar");
 const primaryAgentRoot = resolve(workspaceRoot, "..", "naia-agent");

@@ -1100,10 +1100,15 @@ registerLlmProvider({
 
 registerLlmProvider({
 	id: "vllm",
-	name: "vLLM",
+	// 이름이 vLLM 이라 vLLM 으로 띄운 서버만 되는 것으로 읽힌다. 실제로는
+	// /v1/models 와 /v1/chat/completions 를 내주는 OpenAI 호환 서버면 무엇이든
+	// 붙는다. openai 공급자는 models 가 하드코딩이고 fetchModels 가 없어 사용자가
+	// 자기 서버의 모델을 고를 수 없으므로, 자체 서버를 붙이는 길은 여기뿐이다 (#533).
+	// id 는 vllm 그대로 둔다 — 바꾸면 기존 설정이 깨진다.
+	name: "vLLM / OpenAI-compatible",
 	description:
-		"Local vLLM server — OpenAI-compatible API, no API key required.",
-	descKey: "provider.localRequired",
+		"Any server that exposes an OpenAI-compatible API — vLLM, llama.cpp, or your own. No API key. Models are read from the host.",
+	descKey: "provider.openaiCompatible",
 	requiresApiKey: false,
 	isLocal: true,
 	defaultModel: "",

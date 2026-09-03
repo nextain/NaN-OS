@@ -178,6 +178,18 @@ export interface AppConfig {
 	 */
 	voiceRefUrl?: string;
 	persona?: string;
+	/**
+	 * 페르소나를 시스템 프롬프트로 주입하지 않는다.
+	 *
+	 * 파인튜닝으로 성격을 가중치에 넣은 모델은 프롬프트가 없어도 자기 이름과
+	 * 말투를 유지한다. 거기에 셸이 또 페르소나를 얹으면 두 정의가 부딪힌다.
+	 * 실제로 페르소나 입력을 비우면 DEFAULT_PERSONA("You are Naia")가 대신
+	 * 들어가서, 자기를 알파로 아는 모델에게 너는 나이아라고 말하는 상태가 됐다.
+	 *
+	 * 이 값이 true 면 페르소나 본문·사용자 이름·호칭·말투를 모두 보내지 않는다.
+	 * 응답 언어 지시와 도구/앱 문맥은 성격이 아니므로 그대로 둔다.
+	 */
+	personaDisabled?: boolean;
 	enableTools?: boolean;
 	enableThinking?: boolean;
 	gatewayUrl?: string;

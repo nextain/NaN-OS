@@ -3346,7 +3346,11 @@ export function ChatArea({
 			}
 
 			const memoryCtx = await buildMemoryContext();
-			const systemPrompt = buildSystemPrompt(config.persona, memoryCtx);
+			const systemPrompt = buildSystemPrompt(
+				config.persona,
+				memoryCtx,
+				config.personaDisabled,
+			);
 
 			// Collect active app tools to pass to the voice session
 			const activeAppId = useAppStore.getState().activeApp;
