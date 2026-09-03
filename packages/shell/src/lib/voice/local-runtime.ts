@@ -1,3 +1,4 @@
+import { loadConfig } from "../config";
 import { Logger } from "../logger";
 import { voiceHostProfile } from "./host-profile";
 
@@ -69,6 +70,9 @@ export async function recoverLocalVoiceToken(
 				const host = await voiceHostProfile();
 				const ready = await invoke<string>("start_voxcpm2", {
 					expectedLoaderProfile: host.profile,
+					// 사람이 고른 카드가 있으면 그것으로. 없으면 런타임이 여유가
+					// 가장 많은 카드를 고른다 (#537).
+					gpuIndex: loadConfig()?.localVoiceGpuIndex ?? null,
 				});
 				const url = localVoiceFacadeUrlFromReady(ready);
 				Logger.debug("LocalRuntime", "recoverLocalVoiceToken:result", {

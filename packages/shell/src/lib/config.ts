@@ -245,6 +245,14 @@ export interface AppConfig {
 	/** Explicit user authority for the packaged voxCPM2 local voice runtime. */
 	localVoiceEnabled?: boolean;
 	/**
+	 * 로컬 음성을 올릴 카드 번호 (#537).
+	 *
+	 * 비워 두면 여유가 가장 많은 카드에 올라간다. 카드가 한 장뿐인 기계에서는
+	 * 고를 것이 없으므로 설정 자체가 보이지 않는다. 없는 번호가 남아 있어도
+	 * 런타임은 기본으로 돌아간다 — 카드를 뽑았다고 음성이 아예 안 뜨면 안 된다.
+	 */
+	localVoiceGpuIndex?: number;
+	/**
 	 * FR-VOICE.13 (#419): recorded when a safety migration disabled the local
 	 * voice authority (retired localGpuTier treated as stale authority). The
 	 * Voice settings card must surface this reason with a recovery action;

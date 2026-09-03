@@ -455,6 +455,8 @@ describe("OnboardingWizard", () => {
 
 		expect(invoke).toHaveBeenCalledWith("start_voxcpm2", {
 			expectedLoaderProfile: "windows_trt_6g",
+			// 고르지 않은 기본 상태 — 런타임이 여유로 고른다 (#537).
+			gpuIndex: null,
 		});
 		expect(invoke).toHaveBeenCalledWith("install_voxcpm2_runtime");
 		expect(screen.getByRole("button", { name: /Host voice on/ })).toBeDefined();

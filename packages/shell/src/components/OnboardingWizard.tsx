@@ -553,6 +553,9 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
 			const host = await voiceHostProfile();
 			const ready = await invoke<string>("start_voxcpm2", {
 				expectedLoaderProfile: host.profile,
+				// 온보딩 시점에는 고른 카드가 없다. 세 호출부의 인자를 같게 둬야
+				// 나중에 한 곳만 다르게 동작하지 않는다 (#537).
+				gpuIndex: null,
 			});
 			const afterStart = await refreshVoxCpm2InstallationForOnboarding();
 			if (!afterStart?.ready) {

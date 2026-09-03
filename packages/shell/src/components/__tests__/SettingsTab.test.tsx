@@ -8,7 +8,7 @@ import {
 } from "@testing-library/react";
 import { StrictMode } from "react";
 // @vitest-environment jsdom
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const eventListeners = vi.hoisted(
 	() =>
@@ -21,16 +21,21 @@ const secureStoreMock = vi.hoisted(() => ({
 	delete: vi.fn().mockResolvedValue(undefined),
 }));
 
+// 이 테스트들이 흉내 내는 기계 (#537). 기본은 카드 한 장짜리 Windows 이고,
+// 카드 개수가 문제인 테스트만 setHostMachine 으로 바꿔 끼운다. 프로파일
+// 이름은 하드웨어 사실이라 화면이 아니라 여기서 정한다.
+const ONE_CARD_WINDOWS = {
+	profile: "windows_trt_6g",
+	gpus: [{ index: 0, freeMib: 8192, totalMib: 8192 }],
+	gpuChoiceIsMeaningful: false,
+	defaultGpuIndex: 0,
+};
+let hostMachine: typeof ONE_CARD_WINDOWS = ONE_CARD_WINDOWS;
+function setHostMachine(next: typeof ONE_CARD_WINDOWS) {
+	hostMachine = next;
+}
 vi.mock("../../lib/voice/host-profile", () => ({
-	// 이 테스트들이 흉내 내는 기계는 카드 한 장짜리 Windows 다 (#537).
-	// 프로파일 이름은 하드웨어 사실이라 화면이 아니라 여기서 정한다.
-	voiceHostProfile: () =>
-		Promise.resolve({
-			profile: "windows_trt_6g",
-			gpus: [{ index: 0, freeMib: 8192, totalMib: 8192 }],
-			gpuChoiceIsMeaningful: false,
-			defaultGpuIndex: 0,
-		}),
+	voiceHostProfile: () => Promise.resolve(hostMachine),
 	resetVoiceHostProfileCache: () => {},
 }));
 
@@ -1691,6 +1696,8 @@ describe("SettingsTab — memory tab (#298)", () => {
 			expect(mockInvoke).toHaveBeenCalledWith("install_voxcpm2_runtime");
 			expect(mockInvoke).toHaveBeenCalledWith("start_voxcpm2", {
 				expectedLoaderProfile: "windows_trt_6g",
+				// 고르지 않은 기본 상태 — 런타임이 여유로 고른다 (#537).
+				gpuIndex: null,
 			});
 			const saved = JSON.parse(localStorage.getItem("naia-config") || "{}");
 			expect(saved.ttsProvider).toBe("naia-local-voice");
@@ -1746,6 +1753,8 @@ describe("SettingsTab — memory tab (#298)", () => {
 		await vi.waitFor(() => {
 			expect(mockInvoke).toHaveBeenCalledWith("start_voxcpm2", {
 				expectedLoaderProfile: "windows_trt_6g",
+				// 고르지 않은 기본 상태 — 런타임이 여유로 고른다 (#537).
+				gpuIndex: null,
 			});
 			const saved = JSON.parse(localStorage.getItem("naia-config") || "{}");
 			expect(saved.ttsProvider).toBe("naia-local-voice");
@@ -1965,6 +1974,8 @@ describe("SettingsTab — memory tab (#298)", () => {
 			expect(saved.avatarProvider).toBe("vrm");
 			expect(mockInvoke).toHaveBeenCalledWith("start_voxcpm2", {
 				expectedLoaderProfile: "windows_trt_6g",
+				// 고르지 않은 기본 상태 — 런타임이 여유로 고른다 (#537).
+				gpuIndex: null,
 			});
 		});
 	});
@@ -2033,6 +2044,8 @@ describe("SettingsTab — memory tab (#298)", () => {
 			expect(manifest.slots.avatar.provider).toBe("vrm");
 			expect(mockInvoke).toHaveBeenCalledWith("start_voxcpm2", {
 				expectedLoaderProfile: "windows_trt_6g",
+				// 고르지 않은 기본 상태 — 런타임이 여유로 고른다 (#537).
+				gpuIndex: null,
 			});
 			expect(profileWrites.at(-1)?.gate.naiaAccount).toBe(true);
 		});
@@ -2184,6 +2197,8 @@ describe("SettingsTab — memory tab (#298)", () => {
 		await vi.waitFor(() => {
 			expect(mockInvoke).toHaveBeenCalledWith("start_voxcpm2", {
 				expectedLoaderProfile: "windows_trt_6g",
+				// 고르지 않은 기본 상태 — 런타임이 여유로 고른다 (#537).
+				gpuIndex: null,
 			});
 			const write = mockInvoke.mock.calls.find(
 				([cmd]) => cmd === "write_slots_manifest",
@@ -2230,6 +2245,8 @@ describe("SettingsTab — memory tab (#298)", () => {
 		);
 		expect(mockInvoke).not.toHaveBeenCalledWith("start_voxcpm2", {
 			expectedLoaderProfile: "windows_trt_6g",
+			// 고르지 않은 기본 상태 — 런타임이 여유로 고른다 (#537).
+			gpuIndex: null,
 		});
 	});
 
@@ -2276,6 +2293,8 @@ describe("SettingsTab — memory tab (#298)", () => {
 		});
 		expect(mockInvoke).not.toHaveBeenCalledWith("start_voxcpm2", {
 			expectedLoaderProfile: "windows_trt_6g",
+			// 고르지 않은 기본 상태 — 런타임이 여유로 고른다 (#537).
+			gpuIndex: null,
 		});
 	});
 
@@ -2822,6 +2841,148 @@ describe("SettingsTab — log viewer (#297)", () => {
 
 		await vi.waitFor(() => {
 			expect(mockOpenPath).toHaveBeenCalledWith(logDir);
+		});
+	});
+});
+
+/**
+ * #537 — 로컬 음성을 어느 카드에 올릴지.
+ *
+ * 기본은 여유가 가장 많은 카드다. 사람이 고르는 것은 카드가 두 장 이상일
+ * 때만 의미가 있다 — 한 장뿐인 기계에서 고르라고 물으면 답이 하나뿐인
+ * 질문이 된다.
+ */
+describe("SettingsTab — 로컬 음성 카드 선택 (#537)", () => {
+	const TWO_CARD_LINUX = {
+		profile: "linux_trt_6g",
+		gpus: [
+			{ index: 0, freeMib: 20011, totalMib: 24576 },
+			{ index: 1, freeMib: 24014, totalMib: 24576 },
+		],
+		gpuChoiceIsMeaningful: true,
+		defaultGpuIndex: 1,
+	};
+
+	beforeEach(() => {
+		// 이 블록이 보는 것은 카드 선택뿐이다. 나머지 명령은 조용히 답한다 —
+		// 답이 없으면 화면이 뜨기 전에 터진다.
+		secureStoreMock.get.mockImplementation((key: string) =>
+			Promise.resolve(key === "naiaKey" ? "gw-member" : null),
+		);
+		mockInvoke.mockImplementation((command: string) => {
+			if (command === "detect_gpu_vram") return Promise.resolve(24);
+			if (command === "voxcpm2_status") return Promise.resolve(false);
+			if (command === "voxcpm2_installation_status")
+				return Promise.resolve({
+					phase: "ready",
+					ready: true,
+					canStart: true,
+					summary: "",
+					steps: [],
+				});
+			return Promise.resolve([]);
+		});
+	});
+
+	afterEach(() => {
+		setHostMachine(ONE_CARD_WINDOWS);
+		cleanup();
+		localStorage.clear();
+		vi.clearAllMocks();
+	});
+
+	function seedLocalVoice() {
+		localStorage.setItem(
+			"naia-config",
+			JSON.stringify({
+				provider: "ollama",
+				model: "qwen3:8b",
+				naiaKey: "nk",
+				ttsEnabled: true,
+				ttsProvider: "naia-local-voice",
+				localVoiceEnabled: true,
+			}),
+		);
+	}
+
+	it("카드가 한 장이면 고르라고 묻지 않는다", async () => {
+		seedLocalVoice();
+		render(<SettingsTab />);
+		gotoSettingsTab("voice");
+		// 블록 자체가 없어서 통과하면 아무것도 확인하지 못한 것이다. 로컬 음성
+		// 구역이 실제로 떠 있는 상태에서만 없음을 단언한다.
+		await screen.findByTestId("local-voice-toggle");
+		expect(document.getElementById("local-voice-gpu")).toBeNull();
+	});
+
+	it("카드가 두 장이면 여유와 함께 고를 수 있게 한다", async () => {
+		setHostMachine(TWO_CARD_LINUX);
+		seedLocalVoice();
+		render(<SettingsTab />);
+		gotoSettingsTab("voice");
+
+		const select = await vi.waitFor(() => {
+			const element = document.getElementById("local-voice-gpu");
+			expect(element).toBeTruthy();
+			return element as HTMLSelectElement;
+		});
+		const labels = Array.from(select.options).map((o) => o.textContent ?? "");
+		// 자동 + 카드 두 장.
+		expect(select.options).toHaveLength(3);
+		expect(labels[1]).toContain("GPU 0");
+		expect(labels[2]).toContain("GPU 1");
+		// 고르지 않은 상태가 기본이다 — 값이 비어 있어야 런타임이 여유로 고른다.
+		expect(select.value).toBe("");
+	});
+
+	it("고른 카드가 설정에 남는다", async () => {
+		setHostMachine(TWO_CARD_LINUX);
+		seedLocalVoice();
+		render(<SettingsTab />);
+		gotoSettingsTab("voice");
+
+		const select = await vi.waitFor(() => {
+			const element = document.getElementById("local-voice-gpu");
+			expect(element).toBeTruthy();
+			return element as HTMLSelectElement;
+		});
+		fireEvent.change(select, { target: { value: "0" } });
+
+		await vi.waitFor(() => {
+			const saved = JSON.parse(localStorage.getItem("naia-config") ?? "{}");
+			expect(saved.localVoiceGpuIndex).toBe(0);
+		});
+	});
+
+	it("자동으로 되돌리면 설정에서 지워진다", async () => {
+		setHostMachine(TWO_CARD_LINUX);
+		localStorage.setItem(
+			"naia-config",
+			JSON.stringify({
+				provider: "ollama",
+				model: "qwen3:8b",
+				naiaKey: "nk",
+				ttsEnabled: true,
+				ttsProvider: "naia-local-voice",
+				localVoiceEnabled: true,
+				localVoiceGpuIndex: 1,
+			}),
+		);
+		render(<SettingsTab />);
+		gotoSettingsTab("voice");
+
+		const select = await vi.waitFor(() => {
+			const element = document.getElementById("local-voice-gpu");
+			expect(element).toBeTruthy();
+			return element as HTMLSelectElement;
+		});
+		expect(select.value).toBe("1");
+		fireEvent.change(select, { target: { value: "" } });
+
+		await vi.waitFor(() => {
+			const saved = JSON.parse(localStorage.getItem("naia-config") ?? "{}");
+			// 남겨 두면 "자동" 이 아니라 "1번 고정" 이 된다.
+			expect("localVoiceGpuIndex" in saved).toBe(false);
 		});
 	});
 });

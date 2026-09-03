@@ -141,7 +141,7 @@ import { listTtsProviderMetas } from "../lib/tts/registry";
 import { synthesizeTts } from "../lib/tts/synthesize";
 import type { ModelCapability, ProviderId } from "../lib/types";
 import { type UpdateInfo, checkForUpdate } from "../lib/updater";
-import { voiceHostProfile } from "../lib/voice/host-profile";
+import { type VoiceHostGpu, voiceHostProfile } from "../lib/voice/host-profile";
 import {
 	clearLocalVoiceAccessToken,
 	localVoiceFacadeUrlFromReady,
@@ -978,6 +978,23 @@ export function SettingsTab() {
 	// A loader's CASCADE_READY payload only proves its ports were bound.  Rust
 	// checks the facade too; repeat that public check here so an IPC stub or an
 	// older loader cannot make the Shell show a false ready state.
+	// #537 — 카드가 두 장 이상일 때만 고를 수 있게 한다. 한 장뿐인 기계에서
+	// 고르라고 물으면 답이 하나뿐인 질문이 된다.
+	const [voiceGpus, setVoiceGpus] = useState<VoiceHostGpu[]>([]);
+	const [voiceGpuChoiceMeaningful, setVoiceGpuChoiceMeaningful] =
+		useState(false);
+	useEffect(() => {
+		let alive = true;
+		void voiceHostProfile().then((host) => {
+			if (!alive) return;
+			setVoiceGpus(host.gpus);
+			setVoiceGpuChoiceMeaningful(host.gpuChoiceIsMeaningful);
+		});
+		return () => {
+			alive = false;
+		};
+	}, []);
+
 	const startCascadeAndConfirm = async (
 		expectedLoaderProfile?: string,
 	): Promise<{
@@ -1002,6 +1019,8 @@ export function SettingsTab() {
 		// Pre-baked NVA playback remains independent from this voice runtime.
 		const ready = await invoke<string>("start_voxcpm2", {
 			expectedLoaderProfile,
+			// 사람이 고른 카드가 있으면 그것으로 (#537).
+			gpuIndex: existing?.localVoiceGpuIndex ?? null,
 		});
 		const afterStart = await refreshVoxCpm2Installation();
 		return afterStart?.ready
@@ -5563,6 +5582,39 @@ export function SettingsTab() {
 									? t("settings.localVoiceEngineHint")
 									: t("settings.localVoiceVramRequired")}
 							</div>
+							{voiceGpuChoiceMeaningful && (
+								<div className="settings-field">
+									<label htmlFor="local-voice-gpu">
+										{t("settings.localVoiceGpu")}
+									</label>
+									<select
+										id="local-voice-gpu"
+										value={
+											existing?.localVoiceGpuIndex == null
+												? ""
+												: String(existing.localVoiceGpuIndex)
+										}
+										onChange={(event) => {
+											if (!existing) return;
+											const raw = event.target.value;
+											const next = { ...existing };
+											if (raw === "") delete next.localVoiceGpuIndex;
+											else next.localVoiceGpuIndex = Number(raw);
+											saveConfig(next);
+										}}
+									>
+										<option value="">{t("settings.localVoiceGpuAuto")}</option>
+										{voiceGpus.map((gpu) => (
+											<option key={gpu.index} value={String(gpu.index)}>
+												{`GPU ${gpu.index} — ${Math.round(gpu.freeMib / 1024)}GB / ${Math.round(gpu.totalMib / 1024)}GB`}
+											</option>
+										))}
+									</select>
+									<div className="settings-hint">
+										{t("settings.localVoiceGpuHint")}
+									</div>
+								</div>
+							)}
 						</div>
 					)}
 
