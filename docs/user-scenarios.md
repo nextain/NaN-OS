@@ -950,6 +950,18 @@ P02 상태 매트릭스: thinking 없음, 구조화된 thinking 진행, 한 청�
 - 정규화 결과가 비면 브라우저·로컬·원격 어느 provider에도 발화 요청을 만들지 않는다.
 
 Test Coverage Map: `lib/tts/__tests__/text-filter.test.ts`가 공통/언어/fallback 규칙을 검증하고, `lib/tts/__tests__/sentence-pipeline.test.ts`가 실제 provider payload의 단일 정규화 경계를 검증한다.
+
+## 2026-09-03 발화 텍스트 정규화 확장 — 카오모지 제거·한국어 숫자 읽기 (#540)
+
+### UC-VOICE-TEXT-SPEECH-CLEANUP
+
+- 음성 대화 중 LLM이 카오모지·이모티콘(`｡•ᴗ•｡✨`, `(´▽`)`, ㅠㅠ)을 섞어 답해도 발화에는 장식이 전혀 실리지 않고 본문만 자연스럽게 들린다.
+- "90년대"는 "구십 년대"로, "3시 30분"은 "세 시 삼십 분"으로 읽힌다 — 자리읽기("구공년대")가 발생하지 않는다.
+- 단위별 한자어/고유어 수사 구분, 소수점·콤마·%·℃, 전화번호형 자리읽기까지 한국어 읽기 규칙이 적용된다.
+- 규칙은 provider 공유 정규화 계층에 있어 브라우저·로컬·원격 어느 음성이든 동일하게 적용되고, 영어·일어·중국어 발화의 숫자 표기는 바뀌지 않는다.
+- 로컬 음성처럼 voice 이름이 locale 형식이 아니어도 본문이 한글이면 한국어 숫자 읽기가 적용된다.
+
+Test Coverage Map: `lib/tts/__tests__/text-filter-speech.test.ts`(카오모지 제거·locale 분기)와 `lib/tts/__tests__/ko-number-reading.test.ts`(수사 변환·단위 테이블)가 검증한다.
 ## UC-V022-CHAT-RICH-MARKDOWN — 채팅 Markdown·코드·Mermaid
 
 - assistant 응답의 안전한 GFM을 읽기 좋은 형태로 표시한다.
