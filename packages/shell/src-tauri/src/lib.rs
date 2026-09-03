@@ -5189,10 +5189,26 @@ struct VoxCpm2RuntimeActivationContract {
 #[serde(rename_all = "camelCase")]
 struct VoxCpm2ActivationContract {
     schema_version: u8,
-    profile: String,
+    /// 운영체제별 파일 배치. 키는 `windows`·`linux`.
+    platforms: std::collections::HashMap<String, VoxCpm2PlatformActivationContract>,
+    /// 운영체제와 무관한 것. 참조 음성은 여기 한 벌만 있다.
+    runtime: VoxCpm2RuntimeActivationContract,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct VoxCpm2PlatformActivationContract {
+    artifact: VoxCpm2ArtifactActivationContract,
+    payload: VoxCpm2PayloadActivationContract,
+}
+
+/// 이 기계에 해당하는 계약. 운영체제 몫과 공통 몫을 합쳐 돌려준다.
+struct VoxCpm2ResolvedContract {
     artifact: VoxCpm2ArtifactActivationContract,
     payload: VoxCpm2PayloadActivationContract,
     runtime: VoxCpm2RuntimeActivationContract,
+    /// 컴파일된 모듈의 확장자. 운영체제 축이 정한다.
+    compiled_module_extension: &'static str,
 }
 
 fn is_sha256(value: &str) -> bool {
@@ -5272,7 +5288,8 @@ fn voxcpm2_payload_control_files_match(
 ) -> bool {
     [
         (
-            root.join("prepare-voxcpm2-model.ps1"),
+            // 준비 스크립트의 이름은 운영체제가 정한다 (#537).
+            root.join(host_prepare_script()),
             current_installer.to_path_buf(),
         ),
         (
@@ -5316,13 +5333,30 @@ fn voxcpm2_expected_artifact_sha256(app: &tauri::AppHandle) -> Option<String> {
         .map(|manifest| manifest.artifact_manifest_sha256)
 }
 
-fn read_voxcpm2_activation_contract() -> Result<VoxCpm2ActivationContract, String> {
+fn read_voxcpm2_activation_contract() -> Result<VoxCpm2ResolvedContract, String> {
+    let os = voice_runtime::host_os()
+        .ok_or_else(|| "이 운영체제에는 로컬 음성 런타임이 없습니다".to_string())?;
     let contract: VoxCpm2ActivationContract =
         serde_json::from_str(include_str!("../voxcpm2-activation-contract.json"))
             .map_err(|error| format!("activation contract invalid: {error}"))?;
-    if contract.schema_version != 1 || voice_runtime::profile(&contract.profile).is_none() {
+    if contract.schema_version != 2 {
         return Err("activation contract identity mismatch".to_string());
     }
+    let key = match os {
+        voice_runtime::HostOs::Windows => "windows",
+        voice_runtime::HostOs::Linux => "linux",
+    };
+    let platform = contract
+        .platforms
+        .get(key)
+        .cloned()
+        .ok_or_else(|| format!("activation contract has no {key} platform"))?;
+    let contract = VoxCpm2ResolvedContract {
+        artifact: platform.artifact,
+        payload: platform.payload,
+        runtime: contract.runtime,
+        compiled_module_extension: voice_runtime::layout(os).compiled_module_extension,
+    };
     let defaults = contract
         .runtime
         .reference_voices
@@ -5425,8 +5459,12 @@ fn voxcpm2_payload_validation_failures(
     }
     for compiled in contract.artifact.compiled_modules {
         let directory = artifact.join(&compiled.directory);
-        if compiled.extension != "pyd"
-            || !directory_has_compiled_module(&directory, &compiled.module)
+        if compiled.extension != contract.compiled_module_extension
+            || !directory_has_compiled_module(
+                &directory,
+                &compiled.module,
+                contract.compiled_module_extension,
+            )
         {
             failures.push(format!(
                 "missing compiled module: {}/{}.*.{}",
@@ -5509,8 +5547,7 @@ fn voxcpm2_installer_script_path(app: &tauri::AppHandle) -> Option<std::path::Pa
         .resource_dir()
         .ok()
         .map(|root| {
-            root.join("voxcpm2-runtime")
-                .join("prepare-voxcpm2-model.ps1")
+            root.join("voxcpm2-runtime").join(host_prepare_script())
         })
         .filter(|path| {
             path.is_file()
@@ -5693,7 +5730,7 @@ fn install_voxcpm2_payload(
     extract_voxcpm2_archive(&archive, &pending.join("artifact"), &manifest)?;
     let installer = voxcpm2_installer_script_path(app)
         .ok_or_else(|| "Naia Host installer script is not packaged".to_string())?;
-    std::fs::copy(&installer, pending.join("prepare-voxcpm2-model.ps1"))
+    std::fs::copy(&installer, pending.join(host_prepare_script()))
         .map_err(|error| format!("Could not stage Naia Host installer script: {error}"))?;
     std::fs::copy(
         installer.with_file_name("voxcpm2-activation-contract.json"),
@@ -5800,7 +5837,39 @@ fn voxcpm2_allowed_origins(e2e: bool) -> &'static str {
     }
 }
 
-fn directory_has_compiled_module(dir: &std::path::Path, module: &str) -> bool {
+/// 컴파일된 파이썬 모듈이 그 디렉터리에 있는가.
+///
+/// 확장자는 운영체제 축이 준다 (#537). 예전에는 `pyd` 가 여기 박혀 있어,
+/// 계약이 Linux 를 말해도 코드가 Windows 를 보고 있었다.
+/// 이 기계의 site-packages 자리. 운영체제 축이 정한다 (#537).
+fn host_site_packages(artifact_root: &std::path::Path) -> std::path::PathBuf {
+    let relative = voice_runtime::host_os()
+        .map(|os| voice_runtime::layout(os).site_packages_relative)
+        .unwrap_or("python/lib/site-packages");
+    relative
+        .split('/')
+        .fold(artifact_root.to_path_buf(), |acc, part| acc.join(part))
+}
+
+/// 이 기계의 컴파일 모듈 확장자.
+fn host_compiled_module_extension() -> &'static str {
+    voice_runtime::host_os()
+        .map(|os| voice_runtime::layout(os).compiled_module_extension)
+        .unwrap_or("so")
+}
+
+/// 이 기계의 모델 준비 스크립트 이름.
+fn host_prepare_script() -> &'static str {
+    voice_runtime::host_os()
+        .map(|os| voice_runtime::layout(os).prepare_script)
+        .unwrap_or("prepare-voxcpm2-model.sh")
+}
+
+fn directory_has_compiled_module(
+    dir: &std::path::Path,
+    module: &str,
+    extension: &str,
+) -> bool {
     std::fs::read_dir(dir)
         .ok()
         .into_iter()
@@ -5811,7 +5880,7 @@ fn directory_has_compiled_module(dir: &std::path::Path, module: &str) -> bool {
             path.is_file()
                 && path
                     .extension()
-                    .is_some_and(|value| value.eq_ignore_ascii_case("pyd"))
+                    .is_some_and(|value| value.eq_ignore_ascii_case(extension))
                 && path
                     .file_name()
                     .and_then(|value| value.to_str())
@@ -5998,17 +6067,13 @@ fn probe_voxcpm2_installation(bundle_root: Option<&std::path::Path>) -> VoxCpm2I
     VoxCpm2InstallationProbe {
         runtime_entrypoint: bundle_root.is_some_and(|root| {
             directory_has_compiled_module(
-                &root
-                    .join("artifact")
-                    .join("python")
-                    .join("Lib")
-                    .join("site-packages")
-                    .join("voxcpm2_tensorrt"),
+                &host_site_packages(&root.join("artifact")).join("voxcpm2_tensorrt"),
                 "http_server",
+                host_compiled_module_extension(),
             )
         }),
         installer_available: bundle_root
-            .is_some_and(|root| root.join("prepare-voxcpm2-model.ps1").is_file()),
+            .is_some_and(|root| root.join(host_prepare_script()).is_file()),
         python_runtime: bundled_python.is_some_and(|path| path.is_file())
             && python.as_ref().is_some_and(|python| {
                 artifact_root.as_ref().is_some_and(|root| {
@@ -6016,14 +6081,11 @@ fn probe_voxcpm2_installation(bundle_root: Option<&std::path::Path>) -> VoxCpm2I
                 })
             }),
         trt_service_bundle: artifact_root.is_some_and(|root| {
-            let package = root
-                .join("python")
-                .join("Lib")
-                .join("site-packages")
-                .join("voxcpm2_tensorrt");
-            directory_has_compiled_module(&package, "tts_server")
-                && directory_has_compiled_module(&package, "voxcpm2_trt")
-                && directory_has_compiled_module(&package, "artifact")
+            let package = host_site_packages(&root).join("voxcpm2_tensorrt");
+            let extension = host_compiled_module_extension();
+            directory_has_compiled_module(&package, "tts_server", extension)
+                && directory_has_compiled_module(&package, "voxcpm2_trt", extension)
+                && directory_has_compiled_module(&package, "artifact", extension)
         }),
         voxcpm2_model: voxcpm2_model && voxcpm2_runtime_matches_bundle(&runtime_root, bundle_root),
         reference_voice: voxcpm2_reference_voice_is_ready(&runtime_root),
@@ -6213,7 +6275,7 @@ async fn install_voxcpm2_runtime(
         .map_err(|error| format!("Naia Host payload task failed: {error}"))??
     };
     let runtime_root = voxcpm2_runtime_root();
-    let installer = bundle_root.join("prepare-voxcpm2-model.ps1");
+    let installer = bundle_root.join(host_prepare_script());
     let log_path = runtime_root.join("voxcpm2-install.log");
     let install_result = tokio::task::spawn_blocking({
         let bundle_root = bundle_root.clone();
@@ -12337,53 +12399,71 @@ mod tests {
         assert_eq!(resolve_cli_file(&args, cwd.path()), None);
     }
 
+    /// 계약이 요구하는 그대로 가짜 payload 트리를 짓는다.
+    ///
+    /// 예전에는 Windows 파일명을 손으로 적어 두어, 운영체제가 바뀌면 계약과
+    /// 어긋났다. 계약에서 파생하면 두 운영체제에서 같은 테스트가 돈다.
+    fn build_payload_from_contract(root: &std::path::Path) {
+        let contract = read_voxcpm2_activation_contract().unwrap();
+        let artifact = root.join("artifact");
+        for path in &contract.artifact.required_files {
+            write_test_file(&artifact.join(path));
+        }
+        for path in &contract.artifact.required_directories {
+            std::fs::create_dir_all(artifact.join(path)).unwrap();
+        }
+        for compiled in &contract.artifact.compiled_modules {
+            write_test_file(&artifact.join(&compiled.directory).join(format!(
+                "{}.abi3.{}",
+                compiled.module, compiled.extension
+            )));
+        }
+        for path in &contract.payload.required_files {
+            write_test_file(&root.join(path));
+        }
+        for path in &contract.payload.required_directories {
+            std::fs::create_dir_all(root.join(path)).unwrap();
+        }
+    }
+
     #[test]
     fn voxcpm2_payload_validation_reports_every_activation_contract_failure() {
         let runtime = tempfile::tempdir().unwrap();
         let root = runtime.path();
         let artifact = root.join("artifact");
-        for path in [
-            "artifact-manifest.json",
-            "runtime-manifest.json",
-            "runtime-package-lock.json",
-            "installer-package-lock.json",
-            "sbom.spdx.json",
-            "THIRD_PARTY_NOTICES.md",
-            "licenses/Apache-2.0.txt",
-            "python/python.exe",
-        ] {
-            write_test_file(&artifact.join(path));
-        }
-        std::fs::create_dir_all(artifact.join("voices")).unwrap();
-        write_test_file(
-            &artifact
-                .join("python/Lib/site-packages/voxcpm2_tensorrt")
-                .join("http_server.cp310-win_amd64.pyd"),
+        build_payload_from_contract(root);
+
+        assert!(
+            voxcpm2_payload_validation_failures(root, None).is_empty(),
+            "{:?}",
+            voxcpm2_payload_validation_failures(root, None)
         );
-        write_test_file(&root.join("prepare-voxcpm2-model.ps1"));
-        write_test_file(&root.join("voxcpm2-activation-contract.json"));
 
-        assert!(voxcpm2_payload_validation_failures(root, None).is_empty());
-
+        // 지우는 자리도 계약에서 가져온다 — 운영체제가 바뀌면 이름이 바뀐다.
+        let contract = read_voxcpm2_activation_contract().unwrap();
+        let compiled = &contract.artifact.compiled_modules[0];
         std::fs::remove_dir(artifact.join("voices")).unwrap();
         std::fs::remove_file(artifact.join("sbom.spdx.json")).unwrap();
-        std::fs::remove_file(
-            artifact
-                .join("python/Lib/site-packages/voxcpm2_tensorrt")
-                .join("http_server.cp310-win_amd64.pyd"),
-        )
+        std::fs::remove_file(artifact.join(&compiled.directory).join(format!(
+            "{}.abi3.{}",
+            compiled.module, compiled.extension
+        )))
         .unwrap();
         let failures = voxcpm2_payload_validation_failures(root, None);
-        assert_eq!(failures.len(), 3);
+        assert_eq!(failures.len(), 3, "{failures:?}");
         assert!(failures
             .iter()
             .any(|failure| failure == "missing artifact file: sbom.spdx.json"));
         assert!(failures
             .iter()
             .any(|failure| failure == "missing payload directory: artifact/voices"));
-        assert!(failures.iter().any(|failure| failure.contains(
-            "missing compiled module: python/Lib/site-packages/voxcpm2_tensorrt/http_server.*.pyd"
-        )));
+        assert!(
+            failures.iter().any(|failure| failure.contains(&format!(
+                "missing compiled module: {}/{}.*.{}",
+                compiled.directory, compiled.module, compiled.extension
+            ))),
+            "{failures:?}"
+        );
     }
 
     #[test]
@@ -12403,26 +12483,12 @@ mod tests {
         let current = tempfile::tempdir().unwrap();
         let root = runtime.path();
         let artifact = root.join("artifact");
-        for path in [
-            "artifact-manifest.json",
-            "runtime-manifest.json",
-            "runtime-package-lock.json",
-            "installer-package-lock.json",
-            "sbom.spdx.json",
-            "THIRD_PARTY_NOTICES.md",
-            "licenses/Apache-2.0.txt",
-            "python/python.exe",
-        ] {
-            write_test_file(&artifact.join(path));
-        }
-        std::fs::create_dir_all(artifact.join("voices")).unwrap();
-        write_test_file(
-            &artifact
-                .join("python/Lib/site-packages/voxcpm2_tensorrt")
-                .join("http_server.cp310-win_amd64.pyd"),
-        );
+        build_payload_from_contract(root);
 
-        let installed_script = root.join("prepare-voxcpm2-model.ps1");
+        // 준비 스크립트의 이름도 운영체제가 정한다 (#537).
+        let prepare_script = voice_runtime::layout(voice_runtime::host_os().unwrap())
+            .prepare_script;
+        let installed_script = root.join(prepare_script);
         let installed_contract = root.join("voxcpm2-activation-contract.json");
         std::fs::write(&installed_script, "install default voice only").unwrap();
         std::fs::write(
@@ -12431,7 +12497,7 @@ mod tests {
         )
         .unwrap();
 
-        let current_script = current.path().join("prepare-voxcpm2-model.ps1");
+        let current_script = current.path().join(prepare_script);
         let current_contract = current.path().join("voxcpm2-activation-contract.json");
         std::fs::write(&current_script, "install complete eight-voice palette").unwrap();
         std::fs::write(
@@ -12976,6 +13042,63 @@ mod tests {
 
         assert_eq!(infer_repos_adk_root(user_adk.to_str().unwrap()), None);
     }
+    #[test]
+    /// 활성화 계약은 운영체제마다 다른 배치를 담되, 무관한 것은 한 벌만 둔다.
+    #[test]
+    fn 활성화_계약이_두_운영체제를_담는다() {
+        let raw: serde_json::Value =
+            serde_json::from_str(include_str!("../voxcpm2-activation-contract.json")).unwrap();
+        let platforms = raw["platforms"].as_object().unwrap();
+        assert!(platforms.contains_key("windows"));
+        assert!(platforms.contains_key("linux"));
+
+        // 컴파일된 모듈의 확장자는 운영체제를 따른다.
+        assert_eq!(
+            platforms["windows"]["artifact"]["compiledModules"][0]["extension"],
+            "pyd"
+        );
+        assert_eq!(
+            platforms["linux"]["artifact"]["compiledModules"][0]["extension"],
+            "so"
+        );
+        // 파이썬 실행기의 자리도 마찬가지다.
+        let linux_files = platforms["linux"]["artifact"]["requiredFiles"]
+            .as_array()
+            .unwrap();
+        assert!(linux_files
+            .iter()
+            .any(|v| v == "python/bin/python3"));
+    }
+
+    #[test]
+    fn 참조_음성은_한_벌만_있다() {
+        let raw: serde_json::Value =
+            serde_json::from_str(include_str!("../voxcpm2-activation-contract.json")).unwrap();
+        // 사본을 만들면 한쪽만 고쳐지는 날이 온다.
+        assert!(raw["runtime"]["referenceVoices"].as_array().unwrap().len() >= 1);
+        for (_, platform) in raw["platforms"].as_object().unwrap() {
+            assert!(
+                platform.get("runtime").is_none(),
+                "운영체제 몫에 공통 자료가 섞였다"
+            );
+        }
+    }
+
+    #[test]
+    fn 계약이_이_기계의_배치를_돌려준다() {
+        let contract = read_voxcpm2_activation_contract().unwrap();
+        // 이 빌드가 도는 운영체제의 확장자여야 한다.
+        let expected = if cfg!(windows) { "pyd" } else { "so" };
+        assert_eq!(contract.compiled_module_extension, expected);
+        assert_eq!(
+            contract.artifact.compiled_modules[0].extension,
+            expected,
+            "계약 파일과 운영체제 축이 어긋난다"
+        );
+        // 공통 자료는 어느 운영체제에서 읽든 함께 온다.
+        assert!(!contract.runtime.reference_voices.is_empty());
+    }
+
     #[test]
     fn read_cascade_loader_profile_reads_manifest_gpu_profile() {
         let dir = tempfile::tempdir().unwrap();

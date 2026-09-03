@@ -38,6 +38,7 @@ const REPOSITORY = "https://github.com/nextain/voxcpm2-tensorrt";
 // failing a build. Filling the URL and the digest is what turns it on.
 export const VOXCPM2_PROFILES = {
 	win32: {
+		osKey: "windows",
 		profile: "windows_trt_6g",
 		contract: "src-tauri/voxcpm2-activation-contract.json",
 		modelPrep: "src-tauri/windows/prepare-voxcpm2-model.ps1",
@@ -47,8 +48,9 @@ export const VOXCPM2_PROFILES = {
 		defaultTar: "tar.exe",
 	},
 	linux: {
+		osKey: "linux",
 		profile: "linux_trt_6g",
-		contract: "src-tauri/voxcpm2-activation-contract.linux.json",
+		contract: "src-tauri/voxcpm2-activation-contract.json",
 		modelPrep: "src-tauri/linux/prepare-voxcpm2-model.sh",
 		modelPrepName: "prepare-voxcpm2-model.sh",
 		defaultDownloadUrl: "",
@@ -70,14 +72,25 @@ const ACTIVATION_CONTRACT_PATH = resolve(
 	VOXCPM2_PROFILES.win32.contract,
 );
 
+/**
+ * 활성화 계약을 읽어 이 운영체제 몫을 돌려준다 (#537).
+ *
+ * 계약 파일은 한 벌이다. 운영체제마다 다른 것은 `platforms` 아래에 있고,
+ * 참조 음성처럼 무관한 것은 `runtime` 아래에 한 번만 적힌다 — 사본을 두면
+ * 한쪽만 고쳐지는 날이 온다.
+ */
 export function readVoxCpm2ActivationContract(
 	path = ACTIVATION_CONTRACT_PATH,
-	expectedProfile = VOXCPM2_PROFILES.win32.profile,
+	osKey = VOXCPM2_PROFILES.win32.osKey,
 ) {
-	const contract = JSON.parse(readFileSync(path, "utf8"));
+	const raw = JSON.parse(readFileSync(path, "utf8"));
+	if (raw.schemaVersion !== 2 || !raw.platforms?.[osKey])
+		throw new Error("VoxCPM2 activation contract is invalid");
+	const contract = {
+		...raw.platforms[osKey],
+		runtime: raw.runtime,
+	};
 	if (
-		contract.schemaVersion !== 1 ||
-		contract.profile !== expectedProfile ||
 		!Array.isArray(contract.artifact?.requiredFiles) ||
 		!Array.isArray(contract.artifact?.requiredDirectories) ||
 		!Array.isArray(contract.artifact?.compiledModules) ||
@@ -319,14 +332,18 @@ export function verifyVoxCpm2RemoteDownload(
 		);
 }
 
+/** 운영체제 키가 가리키는 프로파일 이름. 내려받은 아카이브의 신원과 대조한다. */
+function profileIdForOs(osKey) {
+	const row = Object.values(VOXCPM2_PROFILES).find((r) => r.osKey === osKey);
+	if (!row) throw new Error(`no VoxCPM2 runtime profile for os ${osKey}`);
+	return row.profile;
+}
+
 export function verifyVoxCpm2Artifact(
 	source,
 	expectedManifestSha256,
-	expectedProfile = VOXCPM2_PROFILES.win32.profile,
-	contract = readVoxCpm2ActivationContract(
-		ACTIVATION_CONTRACT_PATH,
-		expectedProfile,
-	),
+	osKey = VOXCPM2_PROFILES.win32.osKey,
+	contract = readVoxCpm2ActivationContract(ACTIVATION_CONTRACT_PATH, osKey),
 ) {
 	if (!/^[a-f0-9]{64}$/i.test(expectedManifestSha256 ?? ""))
 		throw new Error(
@@ -340,7 +357,7 @@ export function verifyVoxCpm2Artifact(
 	const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
 	if (
 		manifest.schemaVersion !== 1 ||
-		manifest.profile !== expectedProfile ||
+		manifest.profile !== profileIdForOs(osKey) ||
 		manifest.source?.repository !== REPOSITORY ||
 		!/^[a-f0-9]{40}$/.test(manifest.source?.commit ?? "")
 	)
@@ -458,7 +475,7 @@ export function stageVoxCpm2Runtime({
 	const source = realpathSync(runtimeSource);
 	const activationContract = readVoxCpm2ActivationContract(
 		resolve(shellDir, descriptor.contract),
-		descriptor.profile,
+		descriptor.osKey,
 	);
 	const defaultVoice = activationContract.runtime.referenceVoices.find(
 		(voice) => voice.default,
@@ -479,7 +496,7 @@ export function stageVoxCpm2Runtime({
 	verifyVoxCpm2Artifact(
 		source,
 		expectedManifestSha256,
-		descriptor.profile,
+		descriptor.osKey,
 		activationContract,
 	);
 	if (!runtimeArchive)

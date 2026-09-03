@@ -1,34 +1,69 @@
 {
-  "schemaVersion": 1,
-  "profile": "windows_trt_6g",
-  "artifact": {
-    "requiredFiles": [
-      "artifact-manifest.json",
-      "runtime-manifest.json",
-      "runtime-package-lock.json",
-      "installer-package-lock.json",
-      "sbom.spdx.json",
-      "THIRD_PARTY_NOTICES.md",
-      "licenses/Apache-2.0.txt",
-      "python/python.exe"
-    ],
-    "requiredDirectories": [],
-    "compiledModules": [
-      {
-        "directory": "python/Lib/site-packages/voxcpm2_tensorrt",
-        "module": "http_server",
-        "extension": "pyd"
+  "_doc": "로컬 음성 런타임 활성화 계약. 운영체제마다 파일이 놓이는 자리와 이름이 다르므로 platforms 로 나눈다. 참조 음성처럼 운영체제와 무관한 것은 runtime 아래 한 벌만 둔다 — 사본을 만들면 한쪽만 고쳐지는 날이 온다.",
+  "schemaVersion": 2,
+  "platforms": {
+    "windows": {
+      "artifact": {
+        "requiredFiles": [
+          "artifact-manifest.json",
+          "runtime-manifest.json",
+          "runtime-package-lock.json",
+          "installer-package-lock.json",
+          "sbom.spdx.json",
+          "THIRD_PARTY_NOTICES.md",
+          "licenses/Apache-2.0.txt",
+          "python/python.exe"
+        ],
+        "requiredDirectories": [],
+        "compiledModules": [
+          {
+            "directory": "python/Lib/site-packages/voxcpm2_tensorrt",
+            "module": "http_server",
+            "extension": "pyd"
+          }
+        ]
+      },
+      "payload": {
+        "requiredFiles": [
+          "prepare-voxcpm2-model.ps1",
+          "voxcpm2-activation-contract.json"
+        ],
+        "requiredDirectories": [
+          "artifact/voices"
+        ]
       }
-    ]
-  },
-  "payload": {
-    "requiredFiles": [
-      "prepare-voxcpm2-model.ps1",
-      "voxcpm2-activation-contract.json"
-    ],
-    "requiredDirectories": [
-      "artifact/voices"
-    ]
+    },
+    "linux": {
+      "artifact": {
+        "requiredFiles": [
+          "artifact-manifest.json",
+          "runtime-manifest.json",
+          "runtime-package-lock.json",
+          "installer-package-lock.json",
+          "sbom.spdx.json",
+          "THIRD_PARTY_NOTICES.md",
+          "licenses/Apache-2.0.txt",
+          "python/bin/python3"
+        ],
+        "requiredDirectories": [],
+        "compiledModules": [
+          {
+            "directory": "python/lib/python3.10/site-packages/voxcpm2_tensorrt",
+            "module": "http_server",
+            "extension": "so"
+          }
+        ]
+      },
+      "payload": {
+        "requiredFiles": [
+          "prepare-voxcpm2-model.sh",
+          "voxcpm2-activation-contract.json"
+        ],
+        "requiredDirectories": [
+          "artifact/voices"
+        ]
+      }
+    }
   },
   "runtime": {
     "referenceVoices": [
