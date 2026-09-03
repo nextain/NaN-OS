@@ -9,7 +9,7 @@
 // ⚠️ 모든 작업은 호출자가 준 임시 디렉터리 안에서만 한다.
 import { spawn } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { dirname, resolve } from "node:path";
+import { dirname, resolve, sep } from "node:path";
 import type {
   DelegationBrief,
   WorkerAssignment,
@@ -83,7 +83,7 @@ export class LiveShellWorkerAdapter implements WorkerAdapterPort {
     }
     const owned = assignment.ownedPaths[0] ?? assignment.workerId;
     const target = resolve(this.root, owned, `${assignment.workerId}.out`);
-    if (!target.startsWith(resolve(this.root) + "/")) {
+    if (!target.startsWith(resolve(this.root) + sep)) {
       throw new Error(`소유 경로 밖: ${owned}`);
     }
     mkdirSync(dirname(target), { recursive: true });

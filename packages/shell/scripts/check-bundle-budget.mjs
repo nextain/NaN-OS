@@ -55,7 +55,7 @@ export function measureBundle({ distDirectory, budget }) {
 	);
 	return {
 		passed: Object.values(checks).every((check) => check.passed),
-		entry: relative(distDirectory, entryPath),
+		entry: relative(distDirectory, entryPath).replaceAll("\\", "/"),
 		measurements,
 		budget,
 		checks,
