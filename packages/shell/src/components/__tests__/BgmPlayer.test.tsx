@@ -31,6 +31,7 @@ vi.mock("../../lib/bgm-sidecar-url", () => ({
 	BGM_SIDECAR_BASE_URL: "http://localhost:18791",
 }));
 
+import { Logger } from "../../lib/logger";
 import { BgmPlayer } from "../BgmPlayer";
 
 function bgmCommandHandler() {
@@ -362,5 +363,129 @@ describe("BgmPlayer YouTube playback state machine", () => {
 		expect(
 			JSON.parse(localStorage.getItem("naia-config") ?? "{}"),
 		).toHaveProperty("bgmYoutubeBackgroundVideo", false);
+	});
+});
+
+/**
+ * #521 — 설치본에서 음악이 실제로 들리는데도 재생 관측이 12초 뒤 timeout 으로
+ * 끝났다. 관측 경로가 로그를 남기지 않아 재현될 때마다 원인을 다시 추측해야
+ * 했다. 실패했을 때 어느 관문에서 끊겼는지가 로그 한 줄로 나와야 한다.
+ */
+describe("BgmPlayer 재생 관측 실패 진단 (#521)", () => {
+	beforeEach(() => {
+		bgmPlayback.reset();
+		useAppStore.setState({ aiInterferenceEnabled: true });
+	});
+
+	afterEach(() => {
+		cleanup();
+		vi.useRealTimers();
+		vi.restoreAllMocks();
+		listeners.clear();
+		bgmPlayback.reset();
+		useAppStore.setState(useAppStore.getInitialState());
+		useAvatarStore.setState(useAvatarStore.getInitialState());
+		for (const iframe of document.querySelectorAll(".app-bg-iframe"))
+			iframe.remove();
+		localStorage.clear();
+	});
+
+	type WarnCall = [string, string, Record<string, unknown>?];
+
+	function diagnosisCall(warn: { mock: { calls: unknown[][] } }) {
+		return (warn.mock.calls as WarnCall[]).find((call) =>
+			String(call[1]).includes("재생 관측 실패"),
+		);
+	}
+
+	it("브리지 메시지가 한 건도 없으면 그렇게 적는다", async () => {
+		vi.useFakeTimers();
+		const warn = vi.spyOn(Logger, "warn").mockImplementation(() => {});
+		render(<BgmPlayer />);
+		await startTrack("v1", "Song One");
+		attachIframeForCurrentPlayback();
+
+		await act(async () => {
+			vi.advanceTimersByTime(13_000);
+			await Promise.resolve();
+		});
+
+		const call = diagnosisCall(warn);
+		expect(call, "관측 실패는 반드시 한 줄을 남긴다").toBeDefined();
+		expect(String(call?.[1])).toContain("한 건도 도착하지 않았다");
+		expect((call?.[2] as { cause: string }).cause).toBe("no_bridge_messages");
+	});
+
+	it("소스 필터가 전부 버렸으면 필터로 특정한다", async () => {
+		vi.useFakeTimers();
+		const warn = vi.spyOn(Logger, "warn").mockImplementation(() => {});
+		render(<BgmPlayer />);
+		await startTrack("v1", "Song One");
+		const iframe = attachIframeForCurrentPlayback();
+		// 화면의 iframe 과 다른 창이 보낸 메시지 — 실제 코드가 버리는 경우다.
+		Object.defineProperty(iframe, "contentWindow", {
+			configurable: true,
+			value: {},
+		});
+		for (let i = 0; i < 3; i++) {
+			act(() => {
+				window.dispatchEvent(
+					new MessageEvent("message", {
+						data: JSON.stringify({ event: "infoDelivery", info: {} }),
+						source: window as unknown as MessageEventSource,
+					}),
+				);
+			});
+		}
+
+		await act(async () => {
+			vi.advanceTimersByTime(13_000);
+			await Promise.resolve();
+		});
+
+		const call = diagnosisCall(warn);
+		expect(call).toBeDefined();
+		expect((call?.[2] as { cause: string }).cause).toBe(
+			"source_filter_dropped",
+		);
+		expect((call?.[2] as { filteredOut: number }).filteredOut).toBe(3);
+	});
+
+	it("메시지는 왔는데 재생 상태가 없으면 그렇게 갈린다", async () => {
+		vi.useFakeTimers();
+		const warn = vi.spyOn(Logger, "warn").mockImplementation(() => {});
+		render(<BgmPlayer />);
+		await startTrack("v1", "Song One");
+		attachIframeForCurrentPlayback();
+		// 진행이 0 인 infoDelivery — 재생 증거가 되지 못한다.
+		postYtMessage({ event: "infoDelivery", info: { currentTime: 0 } });
+
+		await act(async () => {
+			vi.advanceTimersByTime(13_000);
+			await Promise.resolve();
+		});
+
+		const call = diagnosisCall(warn);
+		expect(call).toBeDefined();
+		expect((call?.[2] as { cause: string }).cause).toBe("no_playing_state");
+		expect((call?.[2] as { infoDeliverySeen: boolean }).infoDeliverySeen).toBe(
+			true,
+		);
+	});
+
+	it("실제로 재생이 관측되면 진단을 남기지 않는다", async () => {
+		vi.useFakeTimers();
+		const warn = vi.spyOn(Logger, "warn").mockImplementation(() => {});
+		render(<BgmPlayer />);
+		await startTrack("v1", "Song One");
+		attachIframeForCurrentPlayback();
+		postYtMessage({ event: "onStateChange", info: 1 });
+
+		await act(async () => {
+			vi.advanceTimersByTime(13_000);
+			await Promise.resolve();
+		});
+
+		expect(diagnosisCall(warn)).toBeUndefined();
 	});
 });

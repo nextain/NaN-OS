@@ -1,4 +1,8 @@
 import { listen } from "@tauri-apps/api/event";
+import {
+	diagnoseBgmObservationFailure,
+	emptyBgmObservationCounters,
+} from "../lib/bgm-observation-diagnosis";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { listNaiaAssets, toLocalBlobUrl } from "../lib/adk-store";
@@ -476,17 +480,58 @@ export function BgmPlayer({ naia }: Props) {
 	// the infoDelivery cross-check above). Blindly skipping on this timer alone
 	// used to jump to an unrelated track while the current one was still
 	// playing fine.
+	// #521 — 관측이 실패했을 때 어느 관문에서 끊겼는지를 남긴다. 설치본에서
+	// 음악이 실제로 들리는데도 timeout 이 나던 문제를 재현 로그 한 줄로
+	// 특정하기 위한 계측이다.
+	const observationCountersRef = useRef(emptyBgmObservationCounters());
+
 	function beginPlaybackTimeout(playbackId: string) {
 		clearPlaybackTimeout();
+		observationCountersRef.current = emptyBgmObservationCounters();
+		observationCountersRef.current.expectedPlaybackId = playbackId;
 		playbackTimeoutRef.current = setTimeout(() => {
 			const current = bgmPlayback.current();
 			if (current?.playbackId !== playbackId || current.status === "playing")
 				return;
+			const counters = observationCountersRef.current;
+			counters.activePlaybackId = activeIframePlaybackId();
+			const diagnosis = diagnoseBgmObservationFailure(counters);
+			Logger.warn(
+				"BgmPlayer",
+				`재생 관측 실패 (#521): ${diagnosis.summary}`,
+				{
+					cause: diagnosis.cause,
+					received: counters.received,
+					filteredOut: counters.filteredOut,
+					idMismatched: counters.idMismatched,
+					stateChangeSeen: counters.stateChangeSeen,
+					infoDeliverySeen: counters.infoDeliverySeen,
+					expectedPlaybackId: counters.expectedPlaybackId,
+					activePlaybackId: counters.activePlaybackId,
+				},
+			);
 			observePlayback("timeout", {
 				playbackId,
 				reason: "iframe_playing_not_observed",
 			});
 		}, PLAYBACK_TIMEOUT_MS);
+	}
+
+	/** 지금 화면에 붙어 있는 iframe 이 어느 재생을 담고 있는가. */
+	function activeIframePlaybackId(): string | undefined {
+		const iframe = document.querySelector(
+			".app-bg-iframe",
+		) as HTMLIFrameElement | null;
+		if (!iframe) return undefined;
+		try {
+			return (
+				new URL(iframe.src, window.location.href).searchParams.get(
+					"naiaPlayback",
+				) ?? undefined
+			);
+		} catch {
+			return undefined;
+		}
 	}
 
 	useEffect(() => () => clearPlaybackTimeout(), []);
@@ -507,16 +552,27 @@ export function BgmPlayer({ naia }: Props) {
 				e.source &&
 				e.source !== activeIframe.contentWindow
 			) {
+				observationCountersRef.current.filteredOut++; // #521
 				return;
 			}
 			try {
 				const msg = JSON.parse(e.data) as Record<string, unknown>;
+				observationCountersRef.current.received++; // #521
 				const eventPlaybackId = activeIframe
 					? (new URL(activeIframe.src, window.location.href).searchParams.get(
 							"naiaPlayback",
 						) ?? undefined)
 					: undefined;
+				const counters = observationCountersRef.current; // #521
+				if (
+					counters.expectedPlaybackId &&
+					eventPlaybackId &&
+					counters.expectedPlaybackId !== eventPlaybackId
+				) {
+					counters.idMismatched++;
+				}
 				if (msg.event === "onStateChange") {
+					counters.stateChangeSeen = true; // #521
 					const state = Number(msg.info ?? msg.data);
 					if (state === 1) {
 						manuallyStoppedPlaybackRef.current = null;
@@ -565,6 +621,7 @@ export function BgmPlayer({ naia }: Props) {
 						observePlayback("loading", { playbackId: eventPlaybackId });
 					}
 				} else if (msg.event === "infoDelivery") {
+					counters.infoDeliverySeen = true; // #521
 					const info = msg.info;
 					if (info && typeof info === "object") {
 						const currentTime = Number(
