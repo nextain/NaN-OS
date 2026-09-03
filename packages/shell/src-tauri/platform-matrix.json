@@ -73,8 +73,13 @@
 			"voxcpm2RuntimeResources": {
 				"voxcpm2-runtime": "voxcpm2-runtime"
 			},
-			"targets": ["nsis", "msi"],
-			"bundleArchs": ["x64"],
+			"targets": [
+				"nsis",
+				"msi"
+			],
+			"bundleArchs": [
+				"x64"
+			],
 			"$bundleArchComment": "Vosk 0.3.45 산출물이 win64 + /MACHINE:X64 고정 — arm64 전체 번들은 명확 차단. Node arm64 아카이브 메타데이터는 유지.",
 			"nodeBinary": "node.exe",
 			"wrappedStaticExecutables": [],
@@ -93,7 +98,11 @@
 			},
 			"msvcRedist": {
 				"$comment": "원본 = env VCToolsRedistDir 우선, 없으면 vswhere 로 VS 설치 경로 조회 후 VC/Redist/MSVC/<ver>/<arch>/Microsoft.VC*.CRT 규약 탐색. 미발견 = 탐색 경로 나열 후 중단(조용한 생략 금지).",
-				"files": ["msvcp140.dll", "vcruntime140.dll", "vcruntime140_1.dll"]
+				"files": [
+					"msvcp140.dll",
+					"vcruntime140.dll",
+					"vcruntime140_1.dll"
+				]
 			},
 			"installer": {
 				"publisher": "Nextain Inc.",
@@ -106,20 +115,39 @@
 					"nsis": {
 						"installMode": "currentUser",
 						"displayLanguageSelector": false,
-						"languages": ["Korean", "English"],
+						"languages": [
+							"Korean",
+							"English"
+						],
 						"installerHooks": "windows/installer-hooks.nsh"
 					},
 					"wix": {
-						"fragmentPaths": ["windows/clean-app-data.wxs"],
-						"componentRefs": ["NaiaCleanAppDataAnchor"]
+						"fragmentPaths": [
+							"windows/clean-app-data.wxs"
+						],
+						"componentRefs": [
+							"NaiaCleanAppDataAnchor"
+						]
 					}
 				}
 			},
 			"artifacts": [
-				{ "glob": "nsis/*-setup.exe", "minBytes": 237516523 },
-				{ "glob": "nsis/*-setup.exe.sig", "minBytes": 100 },
-				{ "glob": "msi/*.msi", "minBytes": 297402764 },
-				{ "glob": "msi/*.msi.sig", "minBytes": 100 }
+				{
+					"glob": "nsis/*-setup.exe",
+					"minBytes": 237516523
+				},
+				{
+					"glob": "nsis/*-setup.exe.sig",
+					"minBytes": 100
+				},
+				{
+					"glob": "msi/*.msi",
+					"minBytes": 297402764
+				},
+				{
+					"glob": "msi/*.msi.sig",
+					"minBytes": 100
+				}
 			],
 			"steamDepot": {
 				"path": "steam/windows",
@@ -133,13 +161,28 @@
 					"bgm-sidecar/dist/youtube-server.js",
 					"bgm-sidecar/node_modules/youtubei.js/package.json"
 				],
-				"excludedFiles": ["uninstall.exe"],
+				"excludedFiles": [
+					"uninstall.exe"
+				],
 				"manifest": "steam-files.sha256"
 			}
 		},
 		"linux": {
-			"targets": ["appimage", "deb", "rpm"],
-			"bundleArchs": ["x64"],
+			"$voxcpm2Comment": "VoxCPM2 런타임은 optional 이다 — nextain/voxcpm2-tensorrt 가 아직 리눅스 산출물을 발행하지 않기 때문이다(#530). required 로 두면 산출물이 없는 동안 모든 리눅스 빌드가 실패한다. 산출물이 나오면 required 로 올린다.",
+			"staging": {
+				"voxcpm2Runtime": "optional"
+			},
+			"voxcpm2RuntimeResources": {
+				"voxcpm2-runtime": "voxcpm2-runtime"
+			},
+			"targets": [
+				"appimage",
+				"deb",
+				"rpm"
+			],
+			"bundleArchs": [
+				"x64"
+			],
 			"$bundleArchComment": "Vosk 0.3.45 산출물이 linux-x86_64 고정 — arm64 전체 번들은 명확 차단. Node arm64 아카이브 메타데이터는 유지.",
 			"nodeBinary": "node",
 			"wrappedStaticExecutables": [
@@ -150,7 +193,9 @@
 					"file": "vosk-linux-x86_64-0.3.45.zip",
 					"sha256": "bbdc8ed85c43979f6443142889770ea95cbfbc56cffb5c5dcd73afa875c5fbb2"
 				},
-				"files": ["libvosk.so"]
+				"files": [
+					"libvosk.so"
+				]
 			},
 			"msvcRedist": null,
 			"installer": {
@@ -165,7 +210,12 @@
 						"desktopTemplate": null
 					},
 					"rpm": {
-						"depends": ["webkit2gtk4.1", "gtk3", "pipewire-alsa", "alsa-lib"]
+						"depends": [
+							"webkit2gtk4.1",
+							"gtk3",
+							"pipewire-alsa",
+							"alsa-lib"
+						]
 					},
 					"appimage": {
 						"bundleMediaFramework": false
@@ -173,14 +223,29 @@
 				}
 			},
 			"artifacts": [
-				{ "glob": "deb/*.deb", "minBytes": 208510201 },
-				{ "glob": "rpm/*.rpm", "minBytes": 208557768 },
-				{ "glob": "appimage/*.AppImage.tar.gz", "minBytes": 150000000 }
+				{
+					"glob": "deb/*.deb",
+					"minBytes": 208510201
+				},
+				{
+					"glob": "rpm/*.rpm",
+					"minBytes": 208557768
+				},
+				{
+					"glob": "appimage/*.AppImage.tar.gz",
+					"minBytes": 150000000
+				}
 			]
 		},
 		"darwin": {
-			"targets": ["app", "dmg"],
-			"bundleArchs": ["x64", "arm64"],
+			"targets": [
+				"app",
+				"dmg"
+			],
+			"bundleArchs": [
+				"x64",
+				"arm64"
+			],
 			"$bundleArchComment": "macOS는 STT stub이라 Vosk 네이티브 제약 없음. CI는 x64·arm64 개별 번들과 Universal 앱을 검증.",
 			"nodeBinary": "node",
 			"wrappedStaticExecutables": [],
@@ -196,8 +261,14 @@
 			],
 			"installer": {},
 			"artifacts": [
-				{ "glob": "macos/*.app.tar.gz", "minBytes": 150000000 },
-				{ "glob": "dmg/*.dmg", "minBytes": 193604050 }
+				{
+					"glob": "macos/*.app.tar.gz",
+					"minBytes": 150000000
+				},
+				{
+					"glob": "dmg/*.dmg",
+					"minBytes": 193604050
+				}
 			]
 		}
 	}

@@ -666,18 +666,31 @@ describe("conf 생성 golden (FR-INSTALL.2)", () => {
 		}
 	});
 
-	it("Windows VoxCPM2 runtime is a separate required resource", () => {
-		const windows = generateConf(matrix, "win32", {
-			cascadeLoaderPresent: false,
-			voxcpm2RuntimePresent: true,
-		});
-		expect(windows.bundle.resources["voxcpm2-runtime"]).toBe("voxcpm2-runtime");
-		for (const os of ["linux", "darwin"] as const) {
+	it("VoxCPM2 runtime rides along only where a runtime is actually built", () => {
+		// Windows and Linux both ship the runtime as its own resource (#530);
+		// macOS has no build, so asking for it there must stay a no-op rather
+		// than quietly producing a conf that references a directory nobody
+		// stages.
+		for (const os of ["win32", "linux"] as const) {
 			const conf = generateConf(matrix, os, {
+				cascadeLoaderPresent: false,
 				voxcpm2RuntimePresent: true,
 			});
-			expect(conf.bundle.resources["voxcpm2-runtime"]).toBeUndefined();
+			expect(conf.bundle.resources["voxcpm2-runtime"]).toBe("voxcpm2-runtime");
 		}
+		const darwin = generateConf(matrix, "darwin", {
+			voxcpm2RuntimePresent: true,
+		});
+		expect(darwin.bundle.resources["voxcpm2-runtime"]).toBeUndefined();
+	});
+
+	it("a Linux build without the runtime carries no dangling reference", () => {
+		// The Linux artifact is not published yet, so most builds run with
+		// voxcpm2RuntimePresent false. That path must leave the conf clean.
+		const conf = generateConf(matrix, "linux", {
+			voxcpm2RuntimePresent: false,
+		});
+		expect(conf.bundle.resources["voxcpm2-runtime"]).toBeUndefined();
 	});
 
 	it("생성물에 build 키 부재 (check-build-contract 스캔 비대상 성립 조건)", () => {

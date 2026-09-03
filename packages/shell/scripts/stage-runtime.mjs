@@ -351,7 +351,12 @@ export function generateConf(
 
 /* ───────────────────────── 부작용 단계 ───────────────────────── */
 
-const run = (cmd, cwd) => execSync(cmd, { cwd, stdio: "inherit" });
+const run = (cmd, cwd, env) =>
+	execSync(cmd, {
+		cwd,
+		stdio: "inherit",
+		...(env ? { env: { ...process.env, ...env } } : {}),
+	});
 
 function sha256Of(buf) {
 	return createHash("sha256").update(buf).digest("hex");
@@ -680,13 +685,21 @@ async function main() {
 			script: "scripts/stage-herdr.mjs",
 			sibling: resolve(herdrReleaseDir(), "herdr.exe"),
 		},
-		...(platform === "win32"
+		// Which platforms carry a VoxCPM2 runtime is a matrix fact, not a
+		// condition to restate here (#530). Naming win32 in code is what kept
+		// Linux out even after the matrix declared it, and would do so again
+		// for macOS the day an artifact exists.
+		...(matrix.os[platform].staging?.voxcpm2Runtime
 			? [
 					{
 						key: "voxcpm2Runtime",
 						script: "scripts/stage-voxcpm2-runtime.mjs",
 						sibling:
 							process.env.NAIA_VOXCPM2_TRT_RUNTIME_DIR ?? "",
+						// The staging script has to know which release it is
+						// building for, not which machine it is running on: a
+						// Windows release is cross-staged from Linux CI.
+						env: { NAIA_VOXCPM2_TARGET_PLATFORM: platform },
 					},
 				]
 			: []),
@@ -710,7 +723,7 @@ async function main() {
 			continue;
 		}
 		console.log(`[stage-runtime] ③ ${unit.key} 스테이징 (${policy})`);
-		run(`node ${unit.script}`, SHELL); // required + sibling 부재 = 스크립트 자신의 명확한 에러로 중단
+		run(`node ${unit.script}`, SHELL, unit.env); // required + sibling 부재 = 스크립트 자신의 명확한 에러로 중단
 		if (unit.key === "cascadeLoader") cascadeLoaderPresent = true;
 		if (unit.key === "herdr") herdrPresent = true;
 		if (unit.key === "voxcpm2Runtime") voxcpm2RuntimePresent = true;

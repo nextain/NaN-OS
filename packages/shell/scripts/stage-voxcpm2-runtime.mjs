@@ -22,20 +22,62 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
 const DEFAULT_SHELL = resolve(SCRIPT_DIR, "..");
 const REPOSITORY = "https://github.com/nextain/voxcpm2-tensorrt";
+
+// One entry per shipped runtime. Everything that differs between operating
+// systems lives here rather than as literals further down: the same fact
+// written twice is how a second platform silently diverges from the first.
+//
+// `contract` names the activation contract that describes the artifact's
+// insides — which files must exist, which module must be compiled, and with
+// what extension. The staging code reads those from the contract, so adding a
+// platform is a matter of describing it, not of editing checks.
+//
+// The Linux entry has no published artifact yet (nextain/voxcpm2-tensorrt
+// builds Windows only: build_runtime.ps1, profile windows_trt_6g). Its URL is
+// therefore empty, which makes staging skip with an explicit reason instead of
+// failing a build. Filling the URL and the digest is what turns it on.
+export const VOXCPM2_PROFILES = {
+	win32: {
+		profile: "windows_trt_6g",
+		contract: "src-tauri/voxcpm2-activation-contract.json",
+		modelPrep: "src-tauri/windows/prepare-voxcpm2-model.ps1",
+		modelPrepName: "prepare-voxcpm2-model.ps1",
+		defaultDownloadUrl:
+			"https://stnaiapub83b29893.blob.core.windows.net/releases/windows_trt_6g/releases/0.2.2/voxcpm2-runtime-win-trt6g-r2.zip",
+		defaultTar: "tar.exe",
+	},
+	linux: {
+		profile: "linux_trt_6g",
+		contract: "src-tauri/voxcpm2-activation-contract.linux.json",
+		modelPrep: "src-tauri/linux/prepare-voxcpm2-model.sh",
+		modelPrepName: "prepare-voxcpm2-model.sh",
+		defaultDownloadUrl: "",
+		defaultTar: "tar",
+	},
+};
+
+export function voxCpm2Profile(platform = process.platform) {
+	const row = VOXCPM2_PROFILES[platform];
+	if (!row)
+		throw new Error(`no VoxCPM2 runtime profile for platform ${platform}`);
+	return row;
+}
+
 export const DEFAULT_VOXCPM2_TRT_DOWNLOAD_URL =
-	"https://stnaiapub83b29893.blob.core.windows.net/releases/windows_trt_6g/releases/0.2.2/voxcpm2-runtime-win-trt6g-r2.zip";
+	VOXCPM2_PROFILES.win32.defaultDownloadUrl;
 const ACTIVATION_CONTRACT_PATH = resolve(
 	DEFAULT_SHELL,
-	"src-tauri/voxcpm2-activation-contract.json",
+	VOXCPM2_PROFILES.win32.contract,
 );
 
 export function readVoxCpm2ActivationContract(
 	path = ACTIVATION_CONTRACT_PATH,
+	expectedProfile = VOXCPM2_PROFILES.win32.profile,
 ) {
 	const contract = JSON.parse(readFileSync(path, "utf8"));
 	if (
 		contract.schemaVersion !== 1 ||
-		contract.profile !== "windows_trt_6g" ||
+		contract.profile !== expectedProfile ||
 		!Array.isArray(contract.artifact?.requiredFiles) ||
 		!Array.isArray(contract.artifact?.requiredDirectories) ||
 		!Array.isArray(contract.artifact?.compiledModules) ||
@@ -277,7 +319,15 @@ export function verifyVoxCpm2RemoteDownload(
 		);
 }
 
-export function verifyVoxCpm2Artifact(source, expectedManifestSha256) {
+export function verifyVoxCpm2Artifact(
+	source,
+	expectedManifestSha256,
+	expectedProfile = VOXCPM2_PROFILES.win32.profile,
+	contract = readVoxCpm2ActivationContract(
+		ACTIVATION_CONTRACT_PATH,
+		expectedProfile,
+	),
+) {
 	if (!/^[a-f0-9]{64}$/i.test(expectedManifestSha256 ?? ""))
 		throw new Error(
 			"NAIA_VOXCPM2_TRT_ARTIFACT_SHA256 must pin the artifact manifest",
@@ -290,7 +340,7 @@ export function verifyVoxCpm2Artifact(source, expectedManifestSha256) {
 	const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
 	if (
 		manifest.schemaVersion !== 1 ||
-		manifest.profile !== "windows_trt_6g" ||
+		manifest.profile !== expectedProfile ||
 		manifest.source?.repository !== REPOSITORY ||
 		!/^[a-f0-9]{40}$/.test(manifest.source?.commit ?? "")
 	)
@@ -341,21 +391,22 @@ export function verifyVoxCpm2Artifact(source, expectedManifestSha256) {
 		throw new Error(
 			`VoxCPM2 artifact inventory mismatch: extras=${extras.length} missing=${missing.length}`,
 		);
-	for (const required of [
-		"runtime-manifest.json",
-		"runtime-package-lock.json",
-		"installer-package-lock.json",
-		"sbom.spdx.json",
-		"THIRD_PARTY_NOTICES.md",
-		"licenses/Apache-2.0.txt",
-		"python/python.exe",
-	])
-		if (!expected.has(required))
+	// The contract already states which files an artifact must contain and which
+	// module must be compiled. Repeating that list here is what would let a
+	// second platform pass its own contract while failing this check, or the
+	// reverse — so read it rather than restate it.
+	for (const required of contract.artifact.requiredFiles)
+		if (required !== "artifact-manifest.json" && !expected.has(required))
 			throw new Error(`VoxCPM2 artifact is incomplete: ${required}`);
-	const compiledPrefix = "python/Lib/site-packages/voxcpm2_tensorrt/";
-	const sitePackagesPrefix = "python/Lib/site-packages/";
+	const compiled = contract.artifact.compiledModules[0];
+	const compiledPrefix = `${compiled.directory}/`;
+	const sitePackagesPrefix = `${compiled.directory.slice(
+		0,
+		compiled.directory.lastIndexOf("/") + 1,
+	)}`;
+	const compiledSuffix = `.${compiled.extension}`;
 	const compiledModules = [...expected].filter(
-		(path) => path.startsWith(compiledPrefix) && path.endsWith(".pyd"),
+		(path) => path.startsWith(compiledPrefix) && path.endsWith(compiledSuffix),
 	);
 	if (compiledModules.length === 0)
 		throw new Error("VoxCPM2 compiled Nextain payload is missing");
@@ -382,13 +433,19 @@ export function verifyVoxCpm2Artifact(source, expectedManifestSha256) {
 
 export function stageVoxCpm2Runtime({
 	shellDir = DEFAULT_SHELL,
+	// The runtime being staged is a property of the release being built, not of
+	// the machine doing the building: a Windows release is cross-staged from
+	// Linux CI. Defaulting to process.platform would make the same command mean
+	// different things on different runners.
+	platform = process.env.NAIA_VOXCPM2_TARGET_PLATFORM || "win32",
+	descriptor = voxCpm2Profile(platform),
 	runtimeSource = process.env.NAIA_VOXCPM2_TRT_RUNTIME_DIR,
 	expectedManifestSha256 = process.env.NAIA_VOXCPM2_TRT_ARTIFACT_SHA256,
 	runtimeArchive = process.env.NAIA_VOXCPM2_TRT_ARCHIVE,
 	runtimeUrl =
 		process.env.NAIA_VOXCPM2_TRT_DOWNLOAD_URL ||
-		DEFAULT_VOXCPM2_TRT_DOWNLOAD_URL,
-	tar = process.env.NAIA_SYSTEM_TAR || "tar.exe",
+		descriptor.defaultDownloadUrl,
+	tar = process.env.NAIA_SYSTEM_TAR || descriptor.defaultTar,
 	verifyRemoteDownload = verifyVoxCpm2RemoteDownload,
 	allowUnpublishedDownload =
 		process.env.NAIA_UNSIGNED_UPDATER_BUILD === "1" &&
@@ -396,11 +453,12 @@ export function stageVoxCpm2Runtime({
 } = {}) {
 	if (!runtimeSource)
 		throw new Error(
-			"NAIA_VOXCPM2_TRT_RUNTIME_DIR is required for a Windows release",
+			`NAIA_VOXCPM2_TRT_RUNTIME_DIR is required for a ${descriptor.profile} release`,
 		);
 	const source = realpathSync(runtimeSource);
 	const activationContract = readVoxCpm2ActivationContract(
-		resolve(shellDir, "src-tauri/voxcpm2-activation-contract.json"),
+		resolve(shellDir, descriptor.contract),
+		descriptor.profile,
 	);
 	const defaultVoice = activationContract.runtime.referenceVoices.find(
 		(voice) => voice.default,
@@ -418,10 +476,15 @@ export function stageVoxCpm2Runtime({
 		throw new Error(
 			"Shell synthesis default voice id differs from the Naia Host activation contract",
 		);
-	verifyVoxCpm2Artifact(source, expectedManifestSha256);
+	verifyVoxCpm2Artifact(
+		source,
+		expectedManifestSha256,
+		descriptor.profile,
+		activationContract,
+	);
 	if (!runtimeArchive)
 		throw new Error(
-			"NAIA_VOXCPM2_TRT_ARCHIVE is required for a Windows release",
+			`NAIA_VOXCPM2_TRT_ARCHIVE is required for a ${descriptor.profile} release`,
 		);
 	const archive = realpathSync(runtimeArchive);
 	if (!statSync(archive).isFile())
@@ -434,6 +497,7 @@ export function stageVoxCpm2Runtime({
 	verifyVoxCpm2ArchiveActivationContract({
 		archive,
 		tar,
+		contract: activationContract,
 		expectedFiles: inventory,
 		expectedManifestSha256,
 	});
@@ -458,7 +522,7 @@ export function stageVoxCpm2Runtime({
 	}
 	const downloadManifest = {
 		schemaVersion: 1,
-		profile: "windows_trt_6g",
+		profile: descriptor.profile,
 		artifactManifestSha256: expectedManifestSha256.toLowerCase(),
 		archive: {
 			url: parsedUrl.href,
@@ -473,14 +537,17 @@ export function stageVoxCpm2Runtime({
 	rmSync(pending, { recursive: true, force: true });
 	mkdirSync(pending, { recursive: true });
 	copyFileSync(
-		resolve(shellDir, "src-tauri/windows/prepare-voxcpm2-model.ps1"),
-		resolve(pending, "prepare-voxcpm2-model.ps1"),
+		resolve(shellDir, descriptor.modelPrep),
+		resolve(pending, descriptor.modelPrepName),
 	);
 	copyFileSync(
-		resolve(shellDir, "src-tauri/voxcpm2-activation-contract.json"),
-		resolve(pending, "voxcpm2-activation-contract.json"),
+		resolve(shellDir, descriptor.contract),
+		resolve(pending, basename(descriptor.contract)),
 	);
-	const payloadFailures = voxCpm2PayloadFileActivationFailures(pending);
+	const payloadFailures = voxCpm2PayloadFileActivationFailures(
+		pending,
+		activationContract,
+	);
 	if (payloadFailures.length)
 		throw new Error(
 			`VoxCPM2 staged payload cannot pass runtime activation: ${payloadFailures.join("; ")}`,

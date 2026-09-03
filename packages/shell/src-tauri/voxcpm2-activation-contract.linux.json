@@ -1,0 +1,94 @@
+{
+ "$comment": "리눅스 런타임 활성화 계약 — nextain/voxcpm2-tensorrt 가 아직 만들지 않는 산출물의 명세다. 문서가 아니라 검사 가능한 형태로 요구사항을 고정해, 산출물이 도착했을 때 무엇을 담아야 했는지가 다투어지지 않게 한다. 윈도우 계약과 짝을 이룬다: python.exe→bin/python3, .pyd→.so, Lib/site-packages→lib/python3.10/site-packages, PowerShell→셸 스크립트.",
+ "schemaVersion": 1,
+ "profile": "linux_trt_6g",
+ "artifact": {
+  "requiredFiles": [
+   "artifact-manifest.json",
+   "runtime-manifest.json",
+   "runtime-package-lock.json",
+   "installer-package-lock.json",
+   "sbom.spdx.json",
+   "THIRD_PARTY_NOTICES.md",
+   "licenses/Apache-2.0.txt",
+   "python/bin/python3"
+  ],
+  "requiredDirectories": [],
+  "compiledModules": [
+   {
+    "directory": "python/lib/python3.10/site-packages/voxcpm2_tensorrt",
+    "module": "http_server",
+    "extension": "so"
+   }
+  ]
+ },
+ "payload": {
+  "requiredFiles": [
+   "prepare-voxcpm2-model.sh",
+   "voxcpm2-activation-contract.linux.json"
+  ],
+  "requiredDirectories": [
+   "artifact/voices"
+  ]
+ },
+ "runtime": {
+  "referenceVoices": [
+   {
+    "id": "cc0-ko-female-01.wav",
+    "url": "https://stnaiapub83b29893.blob.core.windows.net/ref-audio/cc0/cc0-ko-female-01.wav",
+    "sha256": "b90fd1a86ff8fb74c2e165894c6728d07f16cb69c501f00302d8e25c53805c09",
+    "bytes": 193550,
+    "default": true
+   },
+   {
+    "id": "cc0-ko-female-02.wav",
+    "url": "https://stnaiapub83b29893.blob.core.windows.net/ref-audio/cc0/cc0-ko-female-02.wav",
+    "sha256": "37d2dff6e5bb4ba1d62dff72947a6e455bc92a0f137a1d0b4638e70c528d248e",
+    "bytes": 174746,
+    "default": false
+   },
+   {
+    "id": "cc0-ko-female-03.wav",
+    "url": "https://stnaiapub83b29893.blob.core.windows.net/ref-audio/cc0/cc0-ko-female-03.wav",
+    "sha256": "24e6fe4379e65a2031d02c27f5bd5677ad64cb1de8fa629274d732184db1b73f",
+    "bytes": 143296,
+    "default": false
+   },
+   {
+    "id": "cc0-ko-male-01.wav",
+    "url": "https://stnaiapub83b29893.blob.core.windows.net/ref-audio/cc0/cc0-ko-male-01.wav",
+    "sha256": "3a80e13b12dcdb09c16616a03487cd3553ffbc9b1458e37cef502b4626c68769",
+    "bytes": 234458,
+    "default": false
+   },
+   {
+    "id": "cc0-ko-male-02.wav",
+    "url": "https://stnaiapub83b29893.blob.core.windows.net/ref-audio/cc0/cc0-ko-male-02.wav",
+    "sha256": "3c6da9bd21907aeaa0fd9e908e4f7ccb7d80b4964a6d2f61b38b15cac98dfa7d",
+    "bytes": 170128,
+    "default": false
+   },
+   {
+    "id": "cc0-ko-male-03.wav",
+    "url": "https://stnaiapub83b29893.blob.core.windows.net/ref-audio/cc0/cc0-ko-male-03.wav",
+    "sha256": "573ff9e7a3b023ede01accf45b930c1ff58bad2bd5dc33ca8ad1ce1ee049c83b",
+    "bytes": 189996,
+    "default": false
+   },
+   {
+    "id": "cc0-ko-male-04.wav",
+    "url": "https://stnaiapub83b29893.blob.core.windows.net/ref-audio/cc0/cc0-ko-male-04.wav",
+    "sha256": "1e2cd667e43123ed2c76814bf5c497788cd7dfdaa13ebddc03d605ef988d0a7b",
+    "bytes": 175622,
+    "default": false
+   },
+   {
+    "id": "cc0-ko-male-05.wav",
+    "url": "https://stnaiapub83b29893.blob.core.windows.net/ref-audio/cc0/cc0-ko-male-05.wav",
+    "sha256": "868e9944cb0c04861c59ed4889a11754b37ca41cf7e4b168e36d1299cad0a8e4",
+    "bytes": 192206,
+    "default": false
+   }
+  ]
+ }
+}
