@@ -56,7 +56,7 @@ const COURSE_CODEX_TAURI_MOCK = `
 		};
 		if (cmd === "codex_preflight") return {
 			status: "ready",
-			output: "Logged in as fstory97@gmail.com",
+			output: "Logged in as codex-user@example.com",
 		};
 		return undefined;
 	};
@@ -109,7 +109,9 @@ test("UC-JEONJU-COURSE-READINESS: student checks Codex before selecting the cour
 
 	// Readiness is deliberately a safe status only: no account identity or CLI
 	// output can appear in the course UI or be saved as a credential.
-	await expect(page.getByText("fstory97@gmail.com")).toHaveCount(0);
+	// 표본은 예시 주소를 쓴다 — 신원이 새면 안 된다는 것을 확인하는 자리에
+	// 실제 계정을 적어 두면 공개 저장소로 그 신원이 새어 나간다.
+	await expect(page.getByText("codex-user@example.com")).toHaveCount(0);
 	expect(
 		await page.evaluate(() => JSON.parse(localStorage.getItem("naia-config") || "{}")),
 	).toMatchObject({

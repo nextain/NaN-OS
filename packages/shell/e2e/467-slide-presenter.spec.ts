@@ -242,12 +242,6 @@ test.describe("#467 slide presenter", () => {
 	});
 
 	test("loads the packaged app in Shell and shows one deep-link install confirmation", async ({ page }) => {
-		await page.route("**/assets/background/background-space.png", async (route) => {
-			await route.fulfill({
-				path: "/var/home/luke/alpha-adk/naia-settings/background/naia-dawn-city-uhd.webp",
-				contentType: "image/webp",
-			});
-		});
 		await page.addInitScript(SPEECH_MOCK);
 		await page.addInitScript({ content: TAURI_BASE_MOCK_FALLBACK });
 		await page.addInitScript({ content: SEED_ADK_PATH });
@@ -285,9 +279,8 @@ test.describe("#467 slide presenter", () => {
 		await expect(installed.locator(".slides-app__page canvas")).toBeVisible({ timeout: 30_000 });
 		await expect(page.locator(".avatar-canvas-layer canvas")).toBeVisible({ timeout: 30_000 });
 		await page.waitForTimeout(5_000);
-		await page.screenshot({ path: "test-results/issue-471-installed-naia-slides.png", fullPage: true });
 		await page.screenshot({
-			path: "/var/home/luke/alpha-adk/projects/naia-land-worktrees/issue-471-apps/public/assets/apps/naia-slides-thumbnail.png",
+			path: "test-results/issue-471-installed-naia-slides.png",
 			fullPage: true,
 		});
 		await page.route("**/v1/apps/products", async (route) => {
