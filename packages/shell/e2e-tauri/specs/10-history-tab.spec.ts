@@ -1,9 +1,13 @@
 import { getLastAssistantMessage, sendMessage } from "../helpers/chat.js";
 import { S } from "../helpers/selectors.js";
 import { assertSemantic } from "../helpers/semantic.js";
+import { ensureAppReady } from "../helpers/settings.js";
 
 describe("10 — History Tab", () => {
 	before(async () => {
+		// 스펙마다 앱이 새로 뜬다. 공급자 설정을 스스로 갖춰야 대화가 된다
+		// (#541 — 예전에는 02-configure 가 먼저 돌았다는 전제였다).
+		await ensureAppReady();
 		const chatInput = await $(S.chatInput);
 		await chatInput.waitForEnabled({ timeout: 15_000 });
 	});

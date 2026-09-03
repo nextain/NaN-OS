@@ -11,10 +11,14 @@ describe("Grok readiness through the real Tauri Shell", () => {
 
 		const provider = await $("#provider-select");
 		await provider.waitForDisplayed({ timeout: 30_000 });
-		await browser.waitUntil(async () => (await provider.getValue()) === "grok", {
-			timeout: 30_000,
-			timeoutMsg: "workspace Grok configuration did not hydrate into Brain settings",
-		});
+		await browser.waitUntil(
+			async () => (await provider.getValue()) === "grok",
+			{
+				timeout: 30_000,
+				timeoutMsg:
+					"workspace Grok configuration did not hydrate into Brain settings",
+			},
+		);
 		expect(await provider.getValue()).toBe("grok");
 
 		const readiness = await $("[data-testid='grok-readiness']");

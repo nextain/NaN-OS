@@ -11,8 +11,8 @@
  * directToolCall path (W2 swallow + 33 caller) 가 작동하는지 검증.
  */
 
-import { ensureAppReady } from "../helpers/settings.js";
 import { S } from "../helpers/selectors.js";
+import { ensureAppReady } from "../helpers/settings.js";
 
 const API_KEY =
 	process.env.CAFE_E2E_API_KEY || process.env.GEMINI_API_KEY || "";

@@ -1,3 +1,4 @@
+import { resolve } from "node:path";
 import { S } from "./selectors.js";
 
 /**
@@ -9,14 +10,20 @@ import { S } from "./selectors.js";
 export async function safeRefresh(maxAttempts = 3): Promise<void> {
 	for (let attempt = 0; attempt < maxAttempts; attempt++) {
 		try {
-			await browser.execute(() => { window.location.reload(); }).catch(() => {});
+			await browser
+				.execute(() => {
+					window.location.reload();
+				})
+				.catch(() => {});
 			await browser.pause(800); // reload 네비게이션 시작 여유
 			const appRoot = await $(S.appRoot);
 			await appRoot.waitForExist({ timeout: 30_000 });
 			return;
 		} catch {
 			if (attempt === maxAttempts - 1)
-				throw new Error(`safeRefresh(location.reload) failed after ${maxAttempts} attempts`);
+				throw new Error(
+					`safeRefresh(location.reload) failed after ${maxAttempts} attempts`,
+				);
 			await browser.pause(2_000);
 		}
 	}
@@ -87,6 +94,9 @@ export async function configureSettings(opts: {
 	gatewayUrl: string;
 	gatewayToken: string;
 }): Promise<void> {
+	// 공급자와 키는 '두뇌' 구역에 있다 (#541). 설정을 열기만 하면 프로파일이
+	// 먼저 나오므로 그 구역을 명시적으로 연다.
+	await openSettingsSection("두뇌");
 	// Provider
 	const providerSelect = await $(S.providerSelect);
 	await providerSelect.waitForDisplayed({ timeout: 10_000 });
@@ -193,12 +203,60 @@ export async function configureSettings(opts: {
 }
 
 /** Navigate to the Settings tab and wait for render. */
+/**
+ * 설정 화면이 보일 때까지 기다린다 (#541).
+ *
+ * 예전에는 `.chat-tab:nth-child(8)` 을 눌렀다. 그런데 지금 탭 바에는 대화·기록·
+ * 채널 셋뿐이고 설정은 거기 없다. 없는 것을 누르니 아무 일도 일어나지 않았고,
+ * 스펙은 그것을 "설정이 안 뜬다" 로 읽었다.
+ *
+ * 실제로는 설정이 이미 마운트돼 있고, 스플래시가 걷히기를 기다리면 된다.
+ * 스플래시는 준비 신호나 5초 시한 중 먼저 오는 쪽에서 걷힌다 — 그동안은 앱
+ * 바도 없다. 앱 바가 나타나는 것을 준비의 신호로 삼는다.
+ */
 export async function navigateToSettings(): Promise<void> {
-	await browser.execute((sel: string) => {
-		const el = document.querySelector(sel) as HTMLElement | null;
-		if (el) el.click();
-	}, S.settingsTabBtn);
-	await browser.pause(500);
+	await browser.waitUntil(
+		async () => browser.execute(() => !!document.querySelector(".app-bar")),
+		{
+			timeout: 20_000,
+			timeoutMsg: "앱 바가 나타나지 않았다 — 스플래시가 걷히지 않았다",
+		},
+	);
+	// 설정은 앱 바의 전용 버튼으로 연다. 탭 바에는 없다.
+	await browser.execute(() => {
+		const el = document.querySelector(
+			".app-bar-settings",
+		) as HTMLElement | null;
+		if (el && !el.className.includes("app-bar-settings--active")) el.click();
+	});
+	const settings = await $(S.settingsTab);
+	await settings.waitForDisplayed({ timeout: 20_000 });
+}
+
+/**
+ * 설정 안의 하위 구역을 연다 (#541).
+ *
+ * 설정은 프로파일·두뇌·음성·아바타·페르소나·기억·지식·스킬·연결·일반으로
+ * 나뉘고, 열면 프로파일이 먼저 나온다. 테마처럼 다른 구역에 있는 것을 찾는
+ * 스펙은 그 구역을 먼저 열어야 한다.
+ *
+ * 이름표로 고른다 — 위치(n번째)로 고르면 구역이 하나 늘 때마다 어긋난다.
+ */
+export async function openSettingsSection(label: string): Promise<void> {
+	await navigateToSettings();
+	const opened = await browser.execute((text: string) => {
+		const buttons = Array.from(
+			document.querySelectorAll(".settings-tab-btn"),
+		) as HTMLElement[];
+		const target = buttons.find((b) => b.innerText.trim().startsWith(text));
+		if (!target) return false;
+		target.click();
+		return true;
+	}, label);
+	if (!opened) {
+		throw new Error(`설정에 '${label}' 구역이 없다`);
+	}
+	await browser.pause(300);
 }
 
 /** Scroll a specific element into view. */
@@ -248,9 +306,11 @@ export async function clickBySelector(selector: string): Promise<void> {
 const API_KEY =
 	process.env.CAFE_E2E_API_KEY || process.env.GEMINI_API_KEY || "";
 const NAIA_KEY = process.env.NAIA_API_KEY || "";
+// 기본값이 Windows 드라이브 경로로 박혀 있어 다른 기계에서는 설치 화면이
+// 먼저 뜬다 (#541). 저장소 위치에서 형제 naia-adk 를 찾는다.
 const ADK_FIXTURE =
-	process.env.NAIA_E2E_ADK_FIXTURE ||
-	"D:\\alpha-adk\\projects\\naia-adk";
+	process.env.NAIA_E2E_ADK_FIXTURE ??
+	resolve(import.meta.dirname, "..", "..", "..", "..", "naia-adk");
 
 /**
  * Ensure the app is ready: bypass onboarding, set base config, wait for tabs.
@@ -297,8 +357,7 @@ export async function ensureAppReady(): Promise<void> {
 						naiaKey: naiaKey,
 						agentName: config.agentName || "Naia",
 						userName: config.userName || "Tester",
-						vrmModel:
-							config.vrmModel || "/avatars/01-OL_Woman.vrm",
+						vrmModel: config.vrmModel || "/avatars/01-OL_Woman.vrm",
 						persona: config.persona || "Friendly AI companion",
 						enableTools: true,
 						locale: config.locale || "ko",
@@ -312,8 +371,7 @@ export async function ensureAppReady(): Promise<void> {
 						apiKey: config.apiKey || geminiKey,
 						agentName: config.agentName || "Naia",
 						userName: config.userName || "Tester",
-						vrmModel:
-							config.vrmModel || "/avatars/01-OL_Woman.vrm",
+						vrmModel: config.vrmModel || "/avatars/01-OL_Woman.vrm",
 						persona: config.persona || "Friendly AI companion",
 						enableTools: true,
 						locale: config.locale || "ko",
@@ -396,4 +454,27 @@ export async function ensureAppReady(): Promise<void> {
 			),
 		{ timeout: 60_000 },
 	);
+}
+
+/**
+ * VRM 아바타 피커를 연다 (#541).
+ *
+ * 아바타 구역은 기본이 영상 아바타(NVA)라 VRM 카드가 렌더되지 않는다. 공급자를
+ * 바꿔야 나온다 — 예전 스펙은 그 단계 없이 카드를 세다가 0을 얻었다.
+ */
+export async function openVrmAvatarPicker(): Promise<void> {
+	await openSettingsSection("아바타");
+	await browser.execute(() => {
+		const select = document.getElementById(
+			"avatar-provider",
+		) as HTMLSelectElement | null;
+		if (!select || select.value === "vrm") return;
+		const setter = Object.getOwnPropertyDescriptor(
+			HTMLSelectElement.prototype,
+			"value",
+		)?.set;
+		setter?.call(select, "vrm");
+		select.dispatchEvent(new Event("change", { bubbles: true }));
+	});
+	await browser.pause(500);
 }

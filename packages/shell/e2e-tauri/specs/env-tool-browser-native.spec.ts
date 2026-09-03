@@ -27,14 +27,30 @@ interface Probe {
 /** 이 슬라이스가 확인하는 브라우저 명령. 좌표로 찍는 명령은 목록에 없다. */
 const PROBES: Probe[] = [
 	{ name: "click:registered", cmd: "browser_wv_click", args: { ref: "@e1" } },
-	{ name: "fill:registered", cmd: "browser_wv_fill", args: { ref: "@e1", value: "x" } },
+	{
+		name: "fill:registered",
+		cmd: "browser_wv_fill",
+		args: { ref: "@e1", value: "x" },
+	},
 	{ name: "snapshot:registered", cmd: "browser_wv_snapshot", args: {} },
-	{ name: "navigate:registered", cmd: "browser_wv_navigate", args: { url: "about:blank" } },
+	{
+		name: "navigate:registered",
+		cmd: "browser_wv_navigate",
+		args: { url: "about:blank" },
+	},
 	{ name: "navigate:empty", cmd: "browser_wv_navigate", args: { url: "" } },
 	{ name: "click:noRef", cmd: "browser_wv_click", args: {} },
 	// 좌표로 요소를 찍는 명령은 애초에 없어야 한다.
-	{ name: "unopened:clickAt", cmd: "browser_wv_click_at", args: { x: 10, y: 10 } },
-	{ name: "unopened:tapCoord", cmd: "browser_wv_tap_coordinate", args: { x: 10, y: 10 } },
+	{
+		name: "unopened:clickAt",
+		cmd: "browser_wv_click_at",
+		args: { x: 10, y: 10 },
+	},
+	{
+		name: "unopened:tapCoord",
+		cmd: "browser_wv_tap_coordinate",
+		args: { x: 10, y: 10 },
+	},
 ];
 
 function looksUnregistered(error: string): boolean {
@@ -42,7 +58,6 @@ function looksUnregistered(error: string): boolean {
 }
 
 let results: Record<string, InvokeResult> = {};
-
 
 /**
  * 실환경 관측 증명서. 벤치는 이 파일이 있어야 native 영수증을 준다 —
@@ -81,15 +96,19 @@ afterEach(function (this: Mocha.Context) {
 	if (t && t.state === "passed" && t.title) passedCases.push(t.title);
 });
 
-
-const SPEC_ID = "packages/shell/e2e-tauri/specs/env-tool-browser-native.spec.ts";
+const SPEC_ID =
+	"packages/shell/e2e-tauri/specs/env-tool-browser-native.spec.ts";
 
 describe("브라우저 명령 경계 (#499 UC-ENV-TOOL-BROWSE)", () => {
 	before(async () => {
 		await browser.waitUntil(
 			async () => {
 				try {
-					return (await browser.execute(() => document.location.href.startsWith("http"))) === true;
+					return (
+						(await browser.execute(() =>
+							document.location.href.startsWith("http"),
+						)) === true
+					);
 				} catch {
 					return false;
 				}
@@ -98,19 +117,26 @@ describe("브라우저 명령 경계 (#499 UC-ENV-TOOL-BROWSE)", () => {
 		);
 		results = (await browser.execute((probes: Probe[]) => {
 			const w = window as unknown as {
-				__TAURI_INTERNALS__?: { invoke: (c: string, a: unknown) => Promise<unknown> };
+				__TAURI_INTERNALS__?: {
+					invoke: (c: string, a: unknown) => Promise<unknown>;
+				};
 			};
 			const invoke = w.__TAURI_INTERNALS__?.invoke;
 			if (!invoke) {
 				const missing: Record<string, InvokeResult> = {};
-				for (const p of probes) missing[p.name] = { ok: false, error: "TAURI_INVOKE_MISSING" };
+				for (const p of probes)
+					missing[p.name] = { ok: false, error: "TAURI_INVOKE_MISSING" };
 				return Promise.resolve(missing);
 			}
 			return Promise.all(
 				probes.map((p) =>
 					invoke(p.cmd, p.args).then(
 						() => [p.name, { ok: true, error: "" }] as [string, InvokeResult],
-						(e: unknown) => [p.name, { ok: false, error: typeof e === "string" ? e : String(e) }] as [string, InvokeResult],
+						(e: unknown) =>
+							[
+								p.name,
+								{ ok: false, error: typeof e === "string" ? e : String(e) },
+							] as [string, InvokeResult],
 					),
 				),
 			).then((entries) => Object.fromEntries(entries));
@@ -126,7 +152,12 @@ describe("브라우저 명령 경계 (#499 UC-ENV-TOOL-BROWSE)", () => {
 	});
 
 	describe("참조 기반 조작 명령이 등록돼 있다", () => {
-		for (const name of ["click:registered", "fill:registered", "snapshot:registered", "navigate:registered"]) {
+		for (const name of [
+			"click:registered",
+			"fill:registered",
+			"snapshot:registered",
+			"navigate:registered",
+		]) {
 			it(`${name} — 미등록이 아니다`, () => {
 				const r = results[name];
 				if (looksUnregistered(r?.error ?? "")) {

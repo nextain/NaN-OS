@@ -170,7 +170,9 @@ async function openDjSkillSettings(): Promise<void> {
 	await browser.waitUntil(
 		async () =>
 			browser.execute(() =>
-				Boolean(document.querySelector('[data-testid="youtube-bgm-skill-settings"]')),
+				Boolean(
+					document.querySelector('[data-testid="youtube-bgm-skill-settings"]'),
+				),
 			),
 		{ timeout: 10_000, timeoutMsg: "YouTube BGM skill settings unavailable" },
 	);
@@ -270,8 +272,7 @@ describe("71 — Proactive speech profiles (#82)", () => {
 					model: current.model || (useCodex ? "gpt-5.4" : "qwen3.6:27b"),
 					agentName: current.agentName || "Naia",
 					userName: current.userName || "Tester",
-					vrmModel:
-						current.vrmModel || "/avatars/01-OL_Woman.vrm",
+					vrmModel: current.vrmModel || "/avatars/01-OL_Woman.vrm",
 					persona: current.persona || "Friendly AI companion",
 					enableTools: true,
 					locale: "ko",
@@ -457,7 +458,11 @@ describe("71 — Proactive speech profiles (#82)", () => {
 			ready: boolean;
 			canStart: boolean;
 			summary: string;
-			steps: Array<{ id: string; progressPercent: number; actionAvailable: boolean }>;
+			steps: Array<{
+				id: string;
+				progressPercent: number;
+				actionAvailable: boolean;
+			}>;
 		}>("cascade_installation_status");
 		expect(["ready", "ready-to-start", "blocked", "requires-action"]).toContain(
 			status.phase,
@@ -483,8 +488,9 @@ describe("71 — Proactive speech profiles (#82)", () => {
 
 	it("uses the visible AI/TTS control to allow and stop proactive cost", async () => {
 		await browser.execute(() => {
-			const tts = Array.from(document.querySelectorAll("button"))
-				.find((button) => button.textContent?.trim() === "TTS") as HTMLButtonElement | undefined;
+			const tts = Array.from(document.querySelectorAll("button")).find(
+				(button) => button.textContent?.trim() === "TTS",
+			) as HTMLButtonElement | undefined;
 			if (!tts) throw new Error("TTS control unavailable");
 			if (tts.getAttribute("aria-pressed") !== "true") tts.click();
 			const proactive = document.querySelector(
@@ -497,8 +503,12 @@ describe("71 — Proactive speech profiles (#82)", () => {
 			proactive.click();
 		});
 		await browser.waitUntil(
-			async () => (await fileBackedUiConfig()).proactiveSpeechPermitted === true,
-			{ timeout: 10_000, timeoutMsg: "visible proactive control did not persist permission" },
+			async () =>
+				(await fileBackedUiConfig()).proactiveSpeechPermitted === true,
+			{
+				timeout: 10_000,
+				timeoutMsg: "visible proactive control did not persist permission",
+			},
 		);
 		await browser.execute(() => {
 			const proactive = document.querySelector(
@@ -508,8 +518,12 @@ describe("71 — Proactive speech profiles (#82)", () => {
 			proactive.click();
 		});
 		await browser.waitUntil(
-			async () => (await fileBackedUiConfig()).proactiveSpeechPermitted === false,
-			{ timeout: 10_000, timeoutMsg: "visible proactive control did not stop permission" },
+			async () =>
+				(await fileBackedUiConfig()).proactiveSpeechPermitted === false,
+			{
+				timeout: 10_000,
+				timeoutMsg: "visible proactive control did not stop permission",
+			},
 		);
 	});
 

@@ -1,6 +1,6 @@
 import type { ChildProcess } from "node:child_process";
 import { execSync, spawn } from "node:child_process";
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { connect } from "node:net";
 import { homedir } from "node:os";
 import { resolve } from "node:path";
@@ -105,7 +105,10 @@ const VITE_ENTRY = resolve(SHELL_DIR, "node_modules/vite/bin/vite.js");
 const E2E_DEV_URL = new URL(
 	(
 		JSON.parse(
-			readFileSync(resolve(SHELL_DIR, "src-tauri", "tauri.e2e.conf.json"), "utf8"),
+			readFileSync(
+				resolve(SHELL_DIR, "src-tauri", "tauri.e2e.conf.json"),
+				"utf8",
+			),
 		) as { build?: { devUrl?: string } }
 	).build?.devUrl ?? "http://127.0.0.1:1420",
 );
@@ -125,6 +128,37 @@ let permissionPoller: { dispose: () => void } | undefined;
  *
  * Always swallows errors — "no such process" is the common case.
  */
+/**
+ * 앞선 실행이 흘린 agent 자식을 회수한다 (#541).
+ *
+ * 셸은 종료해도 자기가 띄운 agent 를 함께 데려가지 못할 때가 있다. 그 고아가
+ * lease 를 쥔 채 남으면 다음 실행의 셸이 `agent_lease_live_blocked` 로 대화를
+ * 아예 못 하고, 화면에는 스킬 등록 실패로만 보인다 — 원인과 증상이 멀다.
+ *
+ * lease 파일이 가리키는 것만 정리한다. 이름으로 훑어 죽이면 사람이 쓰고 있는
+ * 앱의 agent 까지 잡는다.
+ */
+function reclaimLeakedAgentChild(): void {
+	const leasePath = resolve(homedir(), ".naia", "agent-child-lease.json");
+	if (!existsSync(leasePath)) return;
+	try {
+		const lease = JSON.parse(readFileSync(leasePath, "utf8")) as {
+			pid?: number;
+			marker?: string;
+		};
+		if (!lease.pid) return;
+		// 그 PID 가 정말 agent 자식인지 표식으로 확인하고 나서 정리한다.
+		const cmdline = resolve("/proc", String(lease.pid), "cmdline");
+		if (existsSync(cmdline)) {
+			const args = readFileSync(cmdline, "utf8");
+			if (lease.marker && !args.includes(lease.marker)) return;
+			process.kill(lease.pid, "SIGTERM");
+		}
+	} catch {
+		// 이미 사라졌거나 읽을 수 없으면 할 일이 없다.
+	}
+}
+
 function killByName(name: string, force = false): void {
 	try {
 		if (IS_WINDOWS) {
@@ -300,6 +334,7 @@ export const config = {
 			killByName("WebKitWebDriver");
 		}
 		killByName("naia-shell");
+		reclaimLeakedAgentChild();
 		await waitForPortClosed(1420);
 		await waitForPortClosed(VITE_PORT);
 		await waitForPortClosed(4448);
@@ -309,7 +344,11 @@ export const config = {
 		viteServer = spawn(execPath, [VITE_ENTRY, "--host", VITE_HOST], {
 			cwd: SHELL_DIR,
 			stdio: ["ignore", "pipe", "pipe"],
-			env: { ...process.env, BROWSER: "none", PLAYWRIGHT_PORT: String(VITE_PORT) },
+			env: {
+				...process.env,
+				BROWSER: "none",
+				PLAYWRIGHT_PORT: String(VITE_PORT),
+			},
 		});
 		viteServer.stdout?.on("data", (d: Buffer) => {
 			const line = d.toString();
@@ -321,7 +360,9 @@ export const config = {
 			process.stderr.write(`[vite:err] ${d.toString()}`),
 		);
 		await waitForPort(VITE_PORT, 30_000);
-		console.log(`[e2e] Vite dev server started on ${VITE_HOST}:${VITE_PORT} (devUrl=${E2E_DEV_URL.href})`);
+		console.log(
+			`[e2e] Vite dev server started on ${VITE_HOST}:${VITE_PORT} (devUrl=${E2E_DEV_URL.href})`,
+		);
 	},
 
 	async beforeSession() {

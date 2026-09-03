@@ -2,7 +2,7 @@ import { S } from "../helpers/selectors.js";
 import {
 	clickBySelector,
 	ensureAppReady,
-	navigateToSettings,
+	openSettingsSection,
 } from "../helpers/settings.js";
 
 /**
@@ -16,9 +16,8 @@ import {
 describe("53 — settings theme & locale", () => {
 	before(async () => {
 		await ensureAppReady();
-		await navigateToSettings();
-		const settingsTab = await $(S.settingsTab);
-		await settingsTab.waitForDisplayed({ timeout: 10_000 });
+		// 테마와 언어는 '일반' 구역에 있다 (#541).
+		await openSettingsSection("일반");
 	});
 
 	it("should render theme swatches", async () => {
@@ -69,54 +68,52 @@ describe("53 — settings theme & locale", () => {
 		expect(newActiveIdx).toBe(clickedIdx);
 	});
 
-	it("should show locale select with current value", async () => {
-		const value = await browser.execute(
+	/**
+	 * 언어 선택은 네이티브 select 에서 커스텀 드롭다운으로 바뀌었다 (#541).
+	 * 예전 스펙은 버튼에 `.value` 를 넣고 도로 읽어 통과했다 — 버튼에도 value
+	 * 속성이 있어서 값은 돌아오지만 React 상태는 한 번도 바뀌지 않았다.
+	 * 이제 실제로 열고 고른다.
+	 */
+	async function currentLocale(): Promise<string> {
+		return browser.execute(
 			(sel: string) =>
-				(document.querySelector(sel) as HTMLSelectElement)?.value ?? "",
+				document.querySelector(sel)?.getAttribute("data-value") ?? "",
 			S.localeSelect,
 		);
-		expect(["ko", "en"]).toContain(value);
+	}
+
+	async function pickLocale(target: string): Promise<void> {
+		await clickBySelector(S.localeSelect);
+		await browser.pause(200);
+		const picked = await browser.execute((want: string) => {
+			const options = Array.from(
+				document.querySelectorAll("#locale-select-options button"),
+			) as HTMLElement[];
+			const labels: Record<string, string> = { ko: "한국", en: "English" };
+			const target = options.find((b) =>
+				b.innerText.trim().startsWith(labels[want] ?? want),
+			);
+			if (!target) return false;
+			target.click();
+			return true;
+		}, target);
+		if (!picked) throw new Error(`언어 목록에 ${target} 가 없다`);
+		await browser.pause(300);
+	}
+
+	it("should show locale select with current value", async () => {
+		expect(["ko", "en"]).toContain(await currentLocale());
 	});
 
 	it("should switch locale from current to the other", async () => {
-		const original = await browser.execute(
-			(sel: string) =>
-				(document.querySelector(sel) as HTMLSelectElement)?.value ?? "",
-			S.localeSelect,
-		);
+		const original = await currentLocale();
 		const target = original === "ko" ? "en" : "ko";
 
-		await browser.execute(
-			(sel: string, val: string) => {
-				const el = document.querySelector(sel) as HTMLSelectElement;
-				if (!el) return;
-				el.value = val;
-				el.dispatchEvent(new Event("change", { bubbles: true }));
-			},
-			S.localeSelect,
-			target,
-		);
-		await browser.pause(300);
+		await pickLocale(target);
+		expect(await currentLocale()).toBe(target);
 
-		const updated = await browser.execute(
-			(sel: string) =>
-				(document.querySelector(sel) as HTMLSelectElement)?.value ?? "",
-			S.localeSelect,
-		);
-		expect(updated).toBe(target);
-
-		// Restore original locale
-		await browser.execute(
-			(sel: string, val: string) => {
-				const el = document.querySelector(sel) as HTMLSelectElement;
-				if (!el) return;
-				el.value = val;
-				el.dispatchEvent(new Event("change", { bubbles: true }));
-			},
-			S.localeSelect,
-			original,
-		);
-		await browser.pause(300);
+		await pickLocale(original);
+		expect(await currentLocale()).toBe(original);
 	});
 
 	it("should navigate back to chat tab", async () => {

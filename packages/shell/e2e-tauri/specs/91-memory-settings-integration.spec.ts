@@ -470,10 +470,7 @@ describe("91 — Memory Settings Integration", () => {
 				const roles = cfg.llmRoles as Record<string, Record<string, unknown>>;
 				return roles?.memory?.provider === "vllm";
 			});
-			const roles = config.llmRoles as Record<
-				string,
-				Record<string, unknown>
-			>;
+			const roles = config.llmRoles as Record<string, Record<string, unknown>>;
 			expect(roles.memory.provider).toBe("vllm");
 			expect(roles.memory.model).toBe("test-model");
 

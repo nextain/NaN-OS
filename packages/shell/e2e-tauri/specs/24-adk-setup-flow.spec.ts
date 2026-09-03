@@ -15,8 +15,7 @@ import { S } from "../helpers/selectors.js";
 import { safeRefresh } from "../helpers/settings.js";
 
 const E2E_ADK_BASE =
-	process.env.NAIA_E2E_ADK_BASE ??
-	"C:\\Windows\\Temp\\naia-e2e-adk";
+	process.env.NAIA_E2E_ADK_BASE ?? "C:\\Windows\\Temp\\naia-e2e-adk";
 
 const API_KEY =
 	process.env.CAFE_E2E_API_KEY ?? process.env.GEMINI_API_KEY ?? "";
@@ -59,8 +58,7 @@ async function tauriInvoke<T>(
 					core?: { invoke: (c: string, a: unknown) => Promise<unknown> };
 				};
 			};
-			const invoke =
-				w.__TAURI_INTERNALS__?.invoke ?? w.__TAURI__?.core?.invoke;
+			const invoke = w.__TAURI_INTERNALS__?.invoke ?? w.__TAURI__?.core?.invoke;
 			if (!invoke) {
 				throw new Error(
 					"Tauri invoke not available (neither __TAURI_INTERNALS__ nor __TAURI__.core)",
@@ -76,8 +74,7 @@ async function tauriInvoke<T>(
 /** Wait for the splash overlay to disappear so option cards become clickable. */
 async function waitForSplashGone(timeout = 30_000): Promise<void> {
 	await browser.waitUntil(
-		async () =>
-			browser.execute(() => !document.querySelector(".splash-ring")),
+		async () => browser.execute(() => !document.querySelector(".splash-ring")),
 		{ timeout, timeoutMsg: "splash overlay did not disappear" },
 	);
 }
@@ -178,57 +175,60 @@ describe("24 — ADK Setup Flow (#328)", function () {
 		await overlay.waitForDisplayed({ timeout: 240_000 });
 	});
 
-	(API_KEY ? it : it.skip)("S3: load existing ADK → onboarding skipped (provider preconfigured)", async () => {
-		// Build a minimal "existing ADK" by running init + copy + writing
-		// provider config so onboarding skips.
-		await tauriInvoke<void>("init_naia_settings", { adkPath: existing });
-		await tauriInvoke<void>("copy_bundled_assets", { adkPath: existing });
-		await browser.execute(
-			(p: string, key: string) => {
-				localStorage.setItem(
-					"naia-config",
-					JSON.stringify({
-						workspaceRoot: p,
-						provider: "gemini",
-						model: "gemini-2.5-flash",
-						apiKey: key,
-						agentName: "Naia",
-						userName: "E2E",
-						vrmModel: "/avatars/01-OL_Woman.vrm",
-						persona: "Friendly companion",
-						enableTools: true,
-						locale: "ko",
-						onboardingComplete: true,
-					}),
-				);
-				localStorage.setItem("naia-adk-path", p);
-			},
-			existing,
-			API_KEY,
-		);
-		await safeRefresh();
+	(API_KEY ? it : it.skip)(
+		"S3: load existing ADK → onboarding skipped (provider preconfigured)",
+		async () => {
+			// Build a minimal "existing ADK" by running init + copy + writing
+			// provider config so onboarding skips.
+			await tauriInvoke<void>("init_naia_settings", { adkPath: existing });
+			await tauriInvoke<void>("copy_bundled_assets", { adkPath: existing });
+			await browser.execute(
+				(p: string, key: string) => {
+					localStorage.setItem(
+						"naia-config",
+						JSON.stringify({
+							workspaceRoot: p,
+							provider: "gemini",
+							model: "gemini-2.5-flash",
+							apiKey: key,
+							agentName: "Naia",
+							userName: "E2E",
+							vrmModel: "/avatars/01-OL_Woman.vrm",
+							persona: "Friendly companion",
+							enableTools: true,
+							locale: "ko",
+							onboardingComplete: true,
+						}),
+					);
+					localStorage.setItem("naia-adk-path", p);
+				},
+				existing,
+				API_KEY,
+			);
+			await safeRefresh();
 
-		// ADK setup must NOT appear (path cached + config complete).
-		const setupGone = await browser.execute((sel: string) => {
-			return !document.querySelector(sel);
-		}, S.adkSetupScreen);
-		expect(setupGone).toBe(true);
+			// ADK setup must NOT appear (path cached + config complete).
+			const setupGone = await browser.execute((sel: string) => {
+				return !document.querySelector(sel);
+			}, S.adkSetupScreen);
+			expect(setupGone).toBe(true);
 
-		// Onboarding must NOT appear.
-		const onboardingGone = await browser.execute((sel: string) => {
-			return !document.querySelector(sel);
-		}, S.onboardingOverlay);
-		expect(onboardingGone).toBe(true);
+			// Onboarding must NOT appear.
+			const onboardingGone = await browser.execute((sel: string) => {
+				return !document.querySelector(sel);
+			}, S.onboardingOverlay);
+			expect(onboardingGone).toBe(true);
 
-		// First chat round-trip.
-		const chatInput = await $(S.chatInput);
-		await chatInput.waitForEnabled({ timeout: 30_000 });
-		await chatInput.setValue("hello");
-		await (await $(S.chatSendBtn)).click();
+			// First chat round-trip.
+			const chatInput = await $(S.chatInput);
+			await chatInput.waitForEnabled({ timeout: 30_000 });
+			await chatInput.setValue("hello");
+			await (await $(S.chatSendBtn)).click();
 
-		const assistant = await $(S.completedAssistantMessage);
-		await assistant.waitForDisplayed({ timeout: 60_000 });
-		const text = await assistant.getText();
-		expect(text.length).toBeGreaterThan(0);
-	});
+			const assistant = await $(S.completedAssistantMessage);
+			await assistant.waitForDisplayed({ timeout: 60_000 });
+			const text = await assistant.getText();
+			expect(text.length).toBeGreaterThan(0);
+		},
+	);
 });

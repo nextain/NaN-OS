@@ -1,5 +1,9 @@
 import { S } from "../helpers/selectors.js";
-import { configureSettings } from "../helpers/settings.js";
+import {
+	configureSettings,
+	navigateToSettings,
+	openSettingsSection,
+} from "../helpers/settings.js";
 
 const API_KEY = process.env.CAFE_E2E_API_KEY || process.env.GEMINI_API_KEY;
 if (!API_KEY) {
@@ -47,23 +51,13 @@ describe("02 — Configure Settings", () => {
 				timeoutMsg: "Onboarding still visible in configure spec",
 			},
 		);
-		await browser.waitUntil(
-			async () =>
-				browser.execute(
-					() => document.querySelectorAll(".chat-tabs .chat-tab").length >= 8,
-				),
-			{ timeout: 15_000, timeoutMsg: "Chat tabs did not render" },
-		);
+		// 탭 바에는 대화·기록·채널 셋뿐이고 설정은 앱 바에 있다 (#541).
+		// 개수를 세면 탭이 하나 늘거나 줄 때마다 어긋난다.
+		await navigateToSettings();
 	});
 
 	it("should switch to settings tab and configure", async () => {
-		await browser.execute((sel: string) => {
-			const el = document.querySelector(sel) as HTMLButtonElement | null;
-			el?.click();
-		}, S.settingsTabBtn);
-
-		const settingsTab = await $(S.settingsTab);
-		await settingsTab.waitForDisplayed({ timeout: 30_000 });
+		await navigateToSettings();
 
 		await configureSettings({
 			provider: "gemini",
@@ -95,20 +89,17 @@ describe("02 — Configure Settings", () => {
 	});
 
 	it("should show Lab section in settings", async () => {
-		await browser.execute((sel: string) => {
-			const el = document.querySelector(sel) as HTMLButtonElement | null;
-			el?.click();
-		}, S.settingsTabBtn);
+		// 계정/Lab 구분선은 '프로파일' 구역에 있다 (#541).
+		await openSettingsSection("프로파일");
 
-		const settingsTab = await $(S.settingsTab);
-		await settingsTab.waitForDisplayed({ timeout: 10_000 });
-
-		const hasLabSection = await browser.execute(() => {
-			const dividers = document.querySelectorAll(".settings-section-divider");
-			return Array.from(dividers).some((d) =>
-				/Naia|Lab|계정|Account/i.test(d.textContent ?? ""),
-			);
-		});
+		// Naia 계정 자리는 구분선 문구가 아니라 표식으로 찾는다 (#541).
+		// 문구로 찾던 예전 방식은 구분선이 "프로파일·엔진" 으로 바뀌자 조용히
+		// 아무것도 못 찾게 됐다.
+		const hasLabSection = await browser.execute(
+			() =>
+				!!document.querySelector('[data-testid="profile-naia-login"]') ||
+				!!document.querySelector('[data-testid="profile-naia-account"]'),
+		);
 		expect(hasLabSection).toBe(true);
 	});
 

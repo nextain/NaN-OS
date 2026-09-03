@@ -1,9 +1,9 @@
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 import {
+	E2E_TARGET_DIR,
 	E2E_WEBDRIVER_PORT,
 	E2E_WEBVIEW2_DATA,
-	E2E_TARGET_DIR,
 	assertCodexE2eIsolation,
 	cleanupCodexE2eRoot,
 	configureCodexE2eEnvironment,
@@ -64,7 +64,9 @@ export const config = {
 		await browser.waitUntil(
 			async () => {
 				try {
-					return await browser.execute(() => document.location.href.startsWith("http"));
+					return await browser.execute(() =>
+						document.location.href.startsWith("http"),
+					);
 				} catch {
 					return false;
 				}

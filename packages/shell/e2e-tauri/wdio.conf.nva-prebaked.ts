@@ -16,9 +16,12 @@ import {
 
 const EXE = process.platform === "win32" ? ".exe" : "";
 const TAURI_BINARY =
-	process.env.TAURI_BINARY ?? resolve(E2E_TARGET_DIR, "debug", `naia-shell${EXE}`);
+	process.env.TAURI_BINARY ??
+	resolve(E2E_TARGET_DIR, "debug", `naia-shell${EXE}`);
 if (process.env.NAIA_E2E_PREBAKED_NVA !== "1") {
-	throw new Error("Set NAIA_E2E_PREBAKED_NVA=1 to run the pre-baked NVA acceptance");
+	throw new Error(
+		"Set NAIA_E2E_PREBAKED_NVA=1 to run the pre-baked NVA acceptance",
+	);
 }
 configureCodexE2eEnvironment();
 

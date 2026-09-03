@@ -40,14 +40,17 @@ const PROBES: Probe[] = [
 		cmd: "write_naia_config",
 		args: {
 			adkPath: ADK,
-			json: JSON.stringify({ orchestrationResume: RESUME_REF, workerPid: 4242, workerAlive: true }),
+			json: JSON.stringify({
+				orchestrationResume: RESUME_REF,
+				workerPid: 4242,
+				workerAlive: true,
+			}),
 		},
 	},
 	{ name: "read", cmd: "read_naia_config", args: { adkPath: ADK } },
 ];
 
 let results: Record<string, InvokeResult> = {};
-
 
 /**
  * 실환경 관측 증명서. 벤치는 이 파일이 있어야 native 영수증을 준다 —
@@ -85,7 +88,6 @@ afterEach(function (this: Mocha.Context) {
 	if (t && t.state === "passed" && t.title) passedCases.push(t.title);
 });
 
-
 const SPEC_ID = "packages/shell/e2e-tauri/specs/orchestration-restart.spec.ts";
 
 describe("재시작 이후 이어가기 — 영속 경계 (#500) [UC-ORCHESTRATION-RESTART-RESUME FR-ORCHESTRATION.10]", () => {
@@ -93,7 +95,11 @@ describe("재시작 이후 이어가기 — 영속 경계 (#500) [UC-ORCHESTRATI
 		await browser.waitUntil(
 			async () => {
 				try {
-					return (await browser.execute(() => document.location.href.startsWith("http"))) === true;
+					return (
+						(await browser.execute(() =>
+							document.location.href.startsWith("http"),
+						)) === true
+					);
 				} catch {
 					return false;
 				}
@@ -102,12 +108,19 @@ describe("재시작 이후 이어가기 — 영속 경계 (#500) [UC-ORCHESTRATI
 		);
 		results = (await browser.execute((probes: Probe[]) => {
 			const w = window as unknown as {
-				__TAURI_INTERNALS__?: { invoke: (c: string, a: unknown) => Promise<unknown> };
+				__TAURI_INTERNALS__?: {
+					invoke: (c: string, a: unknown) => Promise<unknown>;
+				};
 			};
 			const invoke = w.__TAURI_INTERNALS__?.invoke;
 			if (!invoke) {
 				const missing: Record<string, InvokeResult> = {};
-				for (const p of probes) missing[p.name] = { ok: false, value: "", error: "TAURI_INVOKE_MISSING" };
+				for (const p of probes)
+					missing[p.name] = {
+						ok: false,
+						value: "",
+						error: "TAURI_INVOKE_MISSING",
+					};
 				return Promise.resolve(missing);
 			}
 			// 쓰기 → 읽기 순서를 지켜야 한다. 한 번의 왕복으로 사슬을 만든다.
@@ -117,11 +130,19 @@ describe("재시작 이후 이어가기 — 영속 경계 (#500) [UC-ORCHESTRATI
 						chain.then((acc) =>
 							invoke(p.cmd, p.args).then(
 								(v: unknown) => {
-									acc[p.name] = { ok: true, value: typeof v === "string" ? v : JSON.stringify(v ?? ""), error: "" };
+									acc[p.name] = {
+										ok: true,
+										value: typeof v === "string" ? v : JSON.stringify(v ?? ""),
+										error: "",
+									};
 									return acc;
 								},
 								(e: unknown) => {
-									acc[p.name] = { ok: false, value: "", error: typeof e === "string" ? e : String(e) };
+									acc[p.name] = {
+										ok: false,
+										value: "",
+										error: typeof e === "string" ? e : String(e),
+									};
 									return acc;
 								},
 							),
@@ -142,7 +163,8 @@ describe("재시작 이후 이어가기 — 영속 경계 (#500) [UC-ORCHESTRATI
 
 	it("이어받을 참조가 실제 디스크에 남는다 (FR-ORCHESTRATION.10)", () => {
 		// 이 러너의 expect 는 메시지 인자를 받지 않는다 — 사유를 남기려면 던져야 한다.
-		if (!results.write?.ok) throw new Error(`쓰기 실패: ${results.write?.error}`);
+		if (!results.write?.ok)
+			throw new Error(`쓰기 실패: ${results.write?.error}`);
 		if (!results.read?.ok) throw new Error(`읽기 실패: ${results.read?.error}`);
 		expect(results.read?.value).toContain(RESUME_REF.conversationId);
 		expect(results.read?.value).toContain(RESUME_REF.issue);
@@ -153,7 +175,11 @@ describe("재시작 이후 이어가기 — 영속 경계 (#500) [UC-ORCHESTRATI
 			orchestrationResume?: Record<string, unknown>;
 		};
 		const ref = parsed.orchestrationResume ?? {};
-		expect(Object.keys(ref).sort()).toEqual(["conversationId", "issue", "spaceId"]);
+		expect(Object.keys(ref).sort()).toEqual([
+			"conversationId",
+			"issue",
+			"spaceId",
+		]);
 		// 프로세스 식별자나 생존 여부는 참조 안에 없다. 정본은 Herdr 에 있다.
 		expect(Object.keys(ref)).not.toContain("workerPid");
 		expect(Object.keys(ref)).not.toContain("workerAlive");
@@ -163,9 +189,14 @@ describe("재시작 이후 이어가기 — 영속 경계 (#500) [UC-ORCHESTRATI
 		// 재동기화 전에는 태도가 unknown-until-resynced 여야 한다. 규칙 자체는 계약
 		// 테스트가 보고, 여기서는 그 규칙이 볼 입력(참조는 있으나 재동기화 전)이
 		// 실 백엔드에서 실제로 만들어진다는 것을 고정한다.
-		const parsed = JSON.parse(results.read?.value ?? "{}") as Record<string, unknown>;
-		if (parsed.orchestrationResume === undefined) throw new Error("참조가 없다 — unresumable 이어야 한다");
-		if (parsed.resyncedAt !== undefined) throw new Error("재동기화 증거가 없는데 남아 있다");
+		const parsed = JSON.parse(results.read?.value ?? "{}") as Record<
+			string,
+			unknown
+		>;
+		if (parsed.orchestrationResume === undefined)
+			throw new Error("참조가 없다 — unresumable 이어야 한다");
+		if (parsed.resyncedAt !== undefined)
+			throw new Error("재동기화 증거가 없는데 남아 있다");
 		expect(parsed.resyncedAt).toBeUndefined();
 	});
 

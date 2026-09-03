@@ -408,6 +408,10 @@ function LocalePicker({
 				type="button"
 				id="locale-select"
 				className="locale-select__trigger"
+				// 지금 고른 언어를 기계가 읽을 수 있게 남긴다. 네이티브 select 를
+				// 커스텀 드롭다운으로 바꾸면서 값이 이름표 안에만 남아, 밖에서는
+				// 무엇이 골라져 있는지 알 수 없게 됐다.
+				data-value={value}
 				aria-controls="locale-select-options"
 				aria-expanded={open}
 				onClick={() => setOpen((current) => !current)}

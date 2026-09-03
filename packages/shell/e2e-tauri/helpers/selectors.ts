@@ -173,9 +173,10 @@ export const S = {
 	themeSwatchActive: ".theme-swatch.active",
 
 	// VRM/Avatar
-	vrmCard: ".vrm-card",
-	vrmCardActive: ".vrm-card.active",
-	vrmCardAdd: ".vrm-card.vrm-card-add",
+	// VRM 선택은 카드 격자에서 목록으로 바뀌었다 (#541).
+	vrmCard: ".vrm-list-item",
+	vrmCardActive: ".vrm-list-item--active",
+	vrmCardAdd: ".vrm-list-add",
 
 	// Background
 	bgCard: ".bg-card",
