@@ -1,5 +1,11 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+	cleanup,
+	fireEvent,
+	render,
+	screen,
+	waitFor,
+} from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@tauri-apps/api/core", () => ({
@@ -26,10 +32,15 @@ vi.mock("../../lib/app-store-client", () => ({
 vi.mock("../../lib/logger", () => ({
 	Logger: { info: vi.fn(), debug: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
-vi.mock("../../stores/app", () => ({
-	useAppStore: (selector: (s: unknown) => unknown) =>
-		selector({ pushModal: vi.fn(), popModal: vi.fn() }),
-}));
+// 설치 성공 뒤 설치된 앱을 띄우는 경로가 getState 를 쓴다(#471). 목에 없으면
+// 성공 메시지를 세운 직후 던져서 실패 메시지로 덮인다.
+const mockSetActiveApp = vi.fn();
+vi.mock("../../stores/app", () => {
+	const store = (selector: (s: unknown) => unknown) =>
+		selector({ pushModal: vi.fn(), popModal: vi.fn() });
+	store.getState = () => ({ setActiveApp: mockSetActiveApp });
+	return { useAppStore: store };
+});
 
 import { AppInstallDialog } from "../AppInstallDialog";
 
@@ -78,6 +89,10 @@ describe("AppInstallDialog — storefront install (#471)", () => {
 		expect(screen.getAllByTestId("app-install-product")).toHaveLength(1);
 		expect(screen.getByText("Naia Slides")).toBeTruthy();
 		fireEvent.click(screen.getByRole("button", { name: "설치" }));
-		await waitFor(() => expect(screen.getByText(/(?:설치 완료|Installed): Naia Slides/)).toBeTruthy());
+		await waitFor(() =>
+			expect(
+				screen.getByText(/(?:설치 완료|Installed): Naia Slides/),
+			).toBeTruthy(),
+		);
 	});
 });

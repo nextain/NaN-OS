@@ -173,9 +173,10 @@ describe("AppBar — add dialog", () => {
 		expect(screen.getByText("appbar.addShortcut")).toBeDefined();
 		expect(screen.getByText("appbar.addApp")).toBeDefined();
 		expect(screen.getByText("appbar.appStore")).toBeDefined();
+		// 바로가기·앱·파일·앱스토어 넷. 앱스토어 항목이 #471 에서 늘었다.
 		expect(
 			document.querySelectorAll(".app-bar-url-dialog__section"),
-		).toHaveLength(3);
+		).toHaveLength(4);
 	});
 
 	it("calls pushModal when add dialog opens", () => {
@@ -235,7 +236,9 @@ describe("AppBar — installed app removal", () => {
 		);
 
 		render(<AppBar />);
-		fireEvent.click(screen.getByTitle("Remove Notes"));
+		// 제거는 탭 우클릭 메뉴로 옮겨졌다(#471).
+		fireEvent.contextMenu(screen.getByTitle("Notes"));
+		fireEvent.click(screen.getByText("appbar.removeApp"));
 
 		expect(await screen.findByRole("alert")).toHaveTextContent(
 			"앱을 제거하지 못했습니다",
