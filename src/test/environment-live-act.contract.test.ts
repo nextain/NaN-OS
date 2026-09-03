@@ -9,7 +9,7 @@
 //    거부하므로, 손잡이 해석이 틀려도 남의 터미널로 나갈 수 없다.
 //
 // ⚠️ Herdr 이 없으면 건너뛰지 않고 실패한다 — native 증거를 만드는 자리다.
-import { describe, it, expect, beforeAll, afterAll, afterEach } from "vitest";
+import { it, expect, beforeAll, afterAll, afterEach } from "vitest";
 import { writeAttestation } from "./harness/bench-execution.js";
 import { resolve as resolvePath } from "node:path";
 
@@ -18,7 +18,7 @@ import { execFileSync } from "node:child_process";
 import { EnvironmentSession } from "../main/app/control/environment-session.js";
 import { surfaceRef, LABEL_MAX } from "../main/domain/environment-intent.js";
 import type { EnvironmentCommandPort } from "../main/ports/environment-dispatch.js";
-import { liveHerdrSnapshot } from "./harness/herdr-live.js";
+import { describeWithHerdr, herdrIsInstalled, liveHerdrSnapshot  } from "./harness/herdr-live.js";
 
 /**
  * 실제로 돈 케이스를 러너에서 모은다. 손으로 적은 목록은 테스트를 고칠 때 따라오지 않아
@@ -41,6 +41,8 @@ let paneId = "";
 let setupError = "";
 
 beforeAll(() => {
+  // 도구가 없으면 준비할 실환경이 없다 (#536).
+  if (!herdrIsInstalled()) return;
   try {
     const created = JSON.parse(herdr(["workspace", "create", "--cwd", "/tmp", "--label", NONCE])) as {
       result?: { workspace?: { workspace_id?: string }; root_pane?: { pane_id?: string } };
@@ -156,7 +158,7 @@ function tokenForOwnSurface(session: EnvironmentSession): string {
   return mine[0]?.ref.token as string;
 }
 
-describe("살아 있는 Herdr 조작 (native)", () => {
+describeWithHerdr("살아 있는 Herdr 조작 (native)", () => {
   it("전용 워크스페이스를 실제로 만들었다 — 없으면 이 증거는 성립하지 않는다", () => {
     expect(setupError, setupError).toBe("");
     expect(workspaceId).not.toBe("");

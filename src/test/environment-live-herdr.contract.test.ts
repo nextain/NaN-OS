@@ -9,11 +9,11 @@
 //
 // ⚠️ Herdr 이 없으면 건너뛰지 않고 실패한다. 이 파일은 native 증거를 만드는 자리이고,
 //    건너뛴 게이트는 게이트가 아니다.
-import { describe, it, expect, afterAll, afterEach } from "vitest";
+import { it, expect, afterAll, afterEach } from "vitest";
 import { writeAttestation } from "./harness/bench-execution.js";
 import { EnvironmentSession } from "../main/app/control/environment-session.js";
 import { resolve } from "node:path";
-import { liveHerdrSnapshot } from "./harness/herdr-live.js";
+import { describeWithHerdr, liveHerdrSnapshot  } from "./harness/herdr-live.js";
 
 /**
  * 실제로 돈 케이스를 러너에서 모은다. 손으로 적은 목록은 테스트를 고칠 때 따라오지 않아
@@ -26,7 +26,10 @@ afterEach((ctx) => {
 
 const live = liveHerdrSnapshot();
 
-describe("살아 있는 Herdr 관측 (native)", () => {
+// 도구가 설치돼 있지 않은 기계에서는 이 증거를 만들 자리가 없다 (#536).
+// 설치돼 있는데 응답하지 않는 것과는 다르다 — 그쪽은 아래에서 그대로
+// 실패한다. 두 경우를 섞으면 도구 없는 러너에서 "환경이 깨졌다" 로 읽힌다.
+describeWithHerdr("살아 있는 Herdr 관측 (native)", () => {
   it("Herdr 이 실제로 응답한다 — 없으면 이 증거는 성립하지 않는다", () => {
     expect(
       live,

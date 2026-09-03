@@ -7,7 +7,7 @@
 //
 // ⚠️ 읽기는 읽기 전용 명령만 쓴다. 변경은 이 테스트가 만든 워크스페이스 안으로만 하고
 //    끝나면 닫는다. 어댑터가 소유 밖 대상을 거부하므로 판정이 틀려도 남의 터미널로 못 간다.
-import { describe, it, expect, beforeAll, afterAll, afterEach } from "vitest";
+import { it, expect, beforeAll, afterAll, afterEach } from "vitest";
 import { writeAttestation } from "./harness/bench-execution.js";
 import { resolve as resolvePath } from "node:path";
 
@@ -17,6 +17,7 @@ import { HerdrControlPlane } from "../main/app/control/herdr-control.js";
 import { ALL_TIERS } from "../main/domain/capability.js";
 import { liveConnectionPort, liveMutatePort, liveObservePort, toSnapshot } from "./harness/herdr-control-live.js";
 import type { MutationRequest } from "../main/domain/herdr-control.js";
+import { describeWithHerdr, herdrIsInstalled } from "./harness/herdr-live.js";
 
 /**
  * 실제로 돈 케이스를 러너에서 모은다. 손으로 적은 목록은 테스트를 고칠 때 따라오지 않아
@@ -40,6 +41,8 @@ let setupError = "";
 const applied: MutationRequest[] = [];
 
 beforeAll(() => {
+  // 도구가 없으면 준비할 실환경이 없다 (#536).
+  if (!herdrIsInstalled()) return;
   try {
     const created = JSON.parse(herdr(["workspace", "create", "--cwd", "/tmp", "--label", NONCE])) as {
       result?: { workspace?: { workspace_id?: string }; root_pane?: { pane_id?: string } };
@@ -112,7 +115,7 @@ function request(overrides: Partial<MutationRequest> & { expectedRevision: { val
   };
 }
 
-describe("살아 있는 Herdr 제어면 (native)", () => {
+describeWithHerdr("살아 있는 Herdr 제어면 (native)", () => {
   it("전용 워크스페이스를 실제로 만들었다 — 없으면 이 증거는 성립하지 않는다", () => {
     expect(setupError, setupError).toBe("");
     expect(paneId.startsWith(`${workspaceId}:`)).toBe(true);

@@ -6,7 +6,7 @@
 //
 // ⚠️ 이 테스트가 만든 워크스페이스 안에서만 실행한다. 터미널 포트가 소유 밖 대상을
 //    거부하므로 판정이 틀려도 사용자의 터미널로 가지 않는다. 끝나면 워크스페이스를 닫는다.
-import { describe, it, expect, beforeAll, afterAll, afterEach } from "vitest";
+import { it, expect, beforeAll, afterAll, afterEach } from "vitest";
 import { writeAttestation } from "./harness/bench-execution.js";
 import { resolve as resolvePath } from "node:path";
 
@@ -16,6 +16,7 @@ import { EnvironmentToolService } from "../main/app/control/env-tool.js";
 import { ALL_TIERS } from "../main/domain/capability.js";
 import type { StructuredCommand } from "../main/domain/herdr-control.js";
 import type { EnvOperationRequest } from "../main/domain/env-tool.js";
+import { describeWithHerdr, herdrIsInstalled } from "./harness/herdr-live.js";
 
 /**
  * 실제로 돈 케이스를 러너에서 모은다. 손으로 적은 목록은 테스트를 고칠 때 따라오지 않아
@@ -41,6 +42,8 @@ let paneId = "";
 let setupError = "";
 
 beforeAll(() => {
+  // 도구가 없으면 준비할 실환경이 없다 (#536).
+  if (!herdrIsInstalled()) return;
   try {
     const created = JSON.parse(herdr(["workspace", "create", "--cwd", "/tmp", "--label", NONCE])) as {
       result?: { workspace?: { workspace_id?: string }; root_pane?: { pane_id?: string } };
@@ -169,7 +172,7 @@ function waitFor(predicate: () => boolean, ms = 10_000): boolean {
   return predicate();
 }
 
-describe("살아 있는 터미널로 환경 도구 (native)", () => {
+describeWithHerdr("살아 있는 터미널로 환경 도구 (native)", () => {
   it("전용 워크스페이스를 실제로 만들었다", () => {
     expect(setupError, setupError).toBe("");
     expect(paneId.startsWith(`${workspaceId}:`)).toBe(true);

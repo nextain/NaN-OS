@@ -5,6 +5,7 @@ import { describe, it, expect } from "vitest";
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { describeWithHerdr } from "./harness/herdr-live.js";
 import {
   assessProtocol,
   correlates,
@@ -117,7 +118,7 @@ describe("요구사항별 판정 (사실에서 계산된다)", () => {
   });
 });
 
-describe("살아 있는 Herdr 와의 드리프트", () => {
+describeWithHerdr("살아 있는 Herdr 와의 드리프트", () => {
   // 이 머신에 herdr 가 있으면 실제 바이너리로 대조한다. 없으면 건너뛴다 —
   // 없는 것을 있는 척하지 않고, 있는데 안 보는 일도 없게 한다.
   let live: ProtocolFacts | null = null;

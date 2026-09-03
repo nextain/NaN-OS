@@ -101,7 +101,14 @@ const HEADING = /^###\s+(UC-[A-Z0-9-]+)/gm;
  *    어긋나는 걸 막는 유일한 방향이다(2026-08-26: 이 방향이 없어서 #502 의 UC 11개가
  *    조용히 버려지고 있었다).
  */
-const NOT_OWNED_BY_EPIC: readonly string[] = ["UC-DISCORD-", "UC-JEONJU-", "UC-V0"];
+// UC-PERF- 는 #431 성능 줄기다. 범용 에이전트 에픽(#497)이 소유하지 않으므로
+// 그 하네스의 계열에 자리가 없다 — 검사기가 안내한 대로 여기 적는다.
+const NOT_OWNED_BY_EPIC: readonly string[] = [
+  "UC-DISCORD-",
+  "UC-JEONJU-",
+  "UC-V0",
+  "UC-PERF-",
+];
 
 export function ownedByEpic(uc: string): boolean {
   return !NOT_OWNED_BY_EPIC.some((p) => uc.startsWith(p));
