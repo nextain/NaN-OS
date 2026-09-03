@@ -866,9 +866,15 @@ describe("installer workflow integration contracts", () => {
 	);
 
 	it("clones the exact Agent revision declared by the pairing manifest", () => {
-		const pairing = readJson("agent-pairing.json") as { agentCommit: string };
+		const pairing = readJson("agent-pairing.json") as {
+			agentCommit: string;
+			memoryCommit: string;
+		};
 		expect(workflow).toContain(
 			`git -C ../naia-agent fetch --depth 1 origin ${pairing.agentCommit}`,
+		);
+		expect(workflow).toContain(
+			`git -C ../naia-memory fetch --depth 1 origin ${pairing.memoryCommit}`,
 		);
 	});
 

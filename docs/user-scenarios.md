@@ -1509,3 +1509,16 @@ Test Coverage Map (P02):
 | UC | 검증 수단 | 대상 |
 |---|---|---|
 | UC-ORCHESTRATION-CODING-PROVIDER | (아직 없음 — 실제 코딩 모델 제공자를 띄우는 확인 수단이 필요하다) | — |
+
+### UC-V023-MEMORY-PAIRING — 설치본이 검증된 최신 기억 엔진을 재현한다 (#534)
+
+- 같은 shell/agent 커밋으로 빌드하면 어느 개발 머신과 CI에서도 같은 naia-memory가 포함된다.
+- memory checkout의 HEAD가 다르거나 수정 파일이 있거나 package 이름·버전이 다르면 설치본을 만들기 전에 실패한다.
+- 최신 검증본의 제한된 다국어 correction/deletion 진단 표본에서 한국어 현재 사실 회상은 20/24에서 24/24로 +4건(+16.7%p, 상대 +20%) 개선됐다. 현재 사실 회상은 영어·일본어·한국어 모두 24/24이고 stale/deleted 노출은 언어별 각각 0/12다. 이는 해당 진단 workload 결과이며 보편적 성능 우위를 뜻하지 않는다.
+
+Test Coverage Map (P02):
+
+| UC | 검증 수단 | 대상 |
+|---|---|---|
+| UC-V023-MEMORY-PAIRING | vitest `src/test/agent-pairing-drift.contract.test.ts` | manifest 형식, CI checkout SHA, staging commit·clean·package gate 결선 |
+| UC-V023-MEMORY-PAIRING | vitest `packages/shell/scripts/__tests__/platform-matrix.test.ts` | installer workflow의 agent·memory 정확한 revision checkout |

@@ -97,7 +97,8 @@ naia-shell이 다른 데스크톱 앱과 다른 점은 이 3층 분리다 (SoT: 
 
 > ⚠️ naia-shell은 실행·빌드 시 `projects/` 안의 **naia-agent(뇌)** 를 자동으로 빌드해 spawn 한다.
 > 배포본은 agent의 로컬 production 의존성인 `naia-kb-compiler`·`naia-memory`도 워크스페이스
-> 루트에서 먼저 빌드한다. 아래 정규 레이아웃과 이름을 유지해야 한다.
+> 루트에서 먼저 빌드한다. `naia-memory`는 `packages/shell/agent-pairing.json`에 기록된 정확한
+> commit·package version의 clean checkout만 허용한다. 아래 정규 레이아웃과 이름을 유지해야 한다.
 
 ```bash
 # 1) 정규 워크스페이스 레이아웃으로 clone (디렉토리 이름을 바꾸지 말 것)
@@ -105,15 +106,14 @@ mkdir projects
 cd projects
 git clone https://github.com/nextain/naia-shell.git
 git clone https://github.com/nextain/naia-agent.git
-cd ..
 git clone https://github.com/nextain/naia-kb-compiler.git
 git clone https://github.com/nextain/naia-memory.git
 #  워크스페이스/
 #  ├── projects/
 #  │   ├── naia-shell/  ← 아래 명령은 여기서 실행
 #  │   └── naia-agent/  ← 자동 빌드·spawn
-#  ├── naia-kb-compiler/
-#  └── naia-memory/
+#  │   ├── naia-kb-compiler/
+#  │   └── naia-memory/
 
 cd projects/naia-shell
 pnpm install                       # 의존성 설치 (루트)
