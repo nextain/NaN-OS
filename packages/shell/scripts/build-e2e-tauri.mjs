@@ -15,6 +15,7 @@ import {
 	parseGitWorktreePaths,
 	REQUIRED_AGENT_COMMIT,
 	REQUIRED_PROTO_SHA256,
+	resolvePairedAgent,
 } from "./agent-pairing.mjs";
 
 const shellDir = resolve(import.meta.dirname, "..");
@@ -118,70 +119,11 @@ function gitOutput(directory, args) {
 	return result.status === 0 ? result.stdout.trim() : null;
 }
 
-function assertPairedAgent() {
-	const explicit = process.env.NAIA_E2E_AGENT_ROOT;
-	const candidates = explicit
-		? [resolve(explicit)]
-		: existsSync(pairedAgentRoot)
-			? readdirSync(pairedAgentRoot, { withFileTypes: true })
-					.filter((entry) => entry.isDirectory())
-					.map((entry) => resolve(pairedAgentRoot, entry.name))
-			: [];
-	if (!explicit && existsSync(primaryAgentRoot)) {
-		candidates.push(
-			...parseGitWorktreePaths(
-				gitOutput(primaryAgentRoot, ["worktree", "list", "--porcelain"]),
-			),
-		);
-	}
-	for (const pairedAgent of new Set(candidates)) {
-		const agentScript = resolve(
-			pairedAgent,
-			"scripts/builds/agent-stdio-entry.mjs",
-		);
-		const agentProtoDir = resolve(pairedAgent, "src/main/adapters/grpc");
-		if (
-			!existsSync(agentScript) ||
-			!existsSync(resolve(agentProtoDir, "naia_agent.proto"))
-		)
-			continue;
-		if (gitOutput(pairedAgent, ["rev-parse", "HEAD"]) !== REQUIRED_AGENT_COMMIT)
-			continue;
-		// Ignore request-contract crash-recovery leases under
-		// .agents/session-contracts/.recovery/ (pure runtime artifact, never
-		// source). Twin of stage-runtime's isCleanPorcelainIgnoringRecovery.
-		{
-			const porcelain = gitOutput(pairedAgent, ["status", "--porcelain"]);
-			const dirty =
-				porcelain == null ||
-				porcelain
-					.split("\n")
-					.filter((line) => line.trim() !== "")
-					.some(
-						(line) =>
-							!/\.agents[\\/]session-contracts[\\/]\.recovery[\\/]/.test(line),
-					);
-			if (dirty) continue;
-		}
-		const protoHash = createHash("sha256")
-			.update(
-				readFileSync(
-					resolve(agentProtoDir, "naia_agent.proto"),
-					"utf8",
-				).replace(/\r\n/g, "\n"),
-			)
-			.digest("hex");
-		if (protoHash !== REQUIRED_PROTO_SHA256) continue;
-		return { pairedAgent, agentScript, agentProtoDir };
-	}
-	throw new Error(
-		`No clean paired naia-agent checkout contains ${REQUIRED_AGENT_COMMIT} under ${explicit ?? pairedAgentRoot}`,
-	);
-}
-
 if (!existsSync(manifestPath) || !existsSync(e2eTauriConfig))
 	throw new Error("Missing Tauri E2E build input");
-const { pairedAgent, agentScript, agentProtoDir } = assertPairedAgent();
+// 탐색 범위도 실행과 같아야 한다 — 여기서 좁히면 빌드와 실행이 다른 체크아웃을
+// 고를 수 있고, 그것이 #539 의 어긋남이었다.
+const { pairedAgent, agentScript, agentProtoDir } = resolvePairedAgent();
 // A paired checkout is intentionally clean and may not have its ignored
 // dependencies materialized yet. Make the native E2E entry point reproducible
 // from that state instead of reporting unrelated TypeScript "module not found"

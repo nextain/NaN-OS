@@ -1,10 +1,11 @@
 import type { ChildProcess } from "node:child_process";
 import { execSync, spawn } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { connect } from "node:net";
 import { homedir } from "node:os";
 import { resolve } from "node:path";
 import { execPath } from "node:process";
+import { resolvePairedAgent } from "../scripts/agent-pairing.mjs";
 
 // Enable debug logging for Tauri app — Rust logs all agent events to stderr + naia.log
 process.env.CAFE_DEBUG_E2E = "1";
@@ -43,42 +44,46 @@ const IS_WINDOWS = process.platform === "win32";
 const EXE = IS_WINDOWS ? ".exe" : "";
 
 const SHELL_DIR = resolve(import.meta.dirname, "..");
-const pairedAgent = JSON.parse(
-	readFileSync(resolve(SHELL_DIR, "agent-pairing.json"), "utf8"),
-) as { agentCommit: string };
-const PAIRED_AGENT_DIR = resolve(
-	process.env.NAIA_E2E_AGENT_ROOT ??
-		resolve(
-			SHELL_DIR,
-			"../../../..",
-			"naia-agent-worktrees",
-			`shell-pair-${pairedAgent.agentCommit.slice(0, 7)}`,
-		),
-);
-const PAIRED_AGENT_SCRIPT = resolve(
-	PAIRED_AGENT_DIR,
-	"scripts/builds/agent-stdio-entry.mjs",
-);
-const PAIRED_AGENT_PROTO_DIR = resolve(
-	PAIRED_AGENT_DIR,
-	"src/main/adapters/grpc",
-);
-if (
-	!existsSync(PAIRED_AGENT_SCRIPT) ||
-	!existsSync(resolve(PAIRED_AGENT_PROTO_DIR, "naia_agent.proto"))
-) {
-	throw new Error(
-		`paired naia-agent checkout is unavailable: ${PAIRED_AGENT_DIR}`,
-	);
-}
+// 짝 저장소를 찾는 규칙은 빌드와 하나여야 한다 (#539). 빌드가 어느 워크트리를
+// 골라 바이너리에 박아 두면, 실행이 다른 것을 넘길 때 앱이 자기 짝이 아니라며
+// 거절한다. 예전에는 두 규칙이 달라 그 어긋남이 실제로 났다.
+const {
+	pairedAgent: PAIRED_AGENT_DIR,
+	agentScript: PAIRED_AGENT_SCRIPT,
+	agentProtoDir: PAIRED_AGENT_PROTO_DIR,
+} = resolvePairedAgent();
 // The test launches the debug executable directly, bypassing tauri-with-mode.
 // Inject the same verified pair used by `pnpm run tauri:dev`; without this the
 // app opens but deliberately disables chat because no agent script is present.
 process.env.NAIA_AGENT_SCRIPT = PAIRED_AGENT_SCRIPT;
 process.env.NAIA_AGENT_PROTO_DIR = PAIRED_AGENT_PROTO_DIR;
+// `build:e2e:tauri` 는 개발 타깃과 섞이지 않도록 target-e2e 에 짓는다 (#539).
+// 여기서 개발 타깃을 띄우면 지금 고친 코드가 아니라 예전 빌드를 재게 된다 —
+// 실제로 짝 저장소가 어긋난 것처럼 보이던 실패가 이것이었다.
+const E2E_TARGET_DIR = resolve(
+	process.env.NAIA_E2E_TARGET_DIR ?? resolve(SHELL_DIR, "src-tauri/target-e2e"),
+);
 const TAURI_BINARY = process.env.TAURI_BINARY
 	? resolve(process.env.TAURI_BINARY)
-	: resolve(SHELL_DIR, `src-tauri/target/debug/naia-shell${EXE}`);
+	: resolve(E2E_TARGET_DIR, `debug/naia-shell${EXE}`);
+
+// Vosk 의 공유 라이브러리는 빌드 산출물 안에 놓인다. 기본 타깃에서는 바이너리
+// 옆으로 복사되지만 e2e 타깃에서는 그렇지 않아, 앱이 libvosk.so 를 못 찾고
+// 세션 생성 단계에서 죽는다 (#539). 그 자리를 로더에게 알려 준다.
+if (!IS_WINDOWS) {
+	const buildDir = resolve(E2E_TARGET_DIR, "debug", "build");
+	if (existsSync(buildDir)) {
+		for (const entry of readdirSync(buildDir)) {
+			const candidate = resolve(buildDir, entry, "out", "vosk-lib");
+			if (!existsSync(resolve(candidate, "libvosk.so"))) continue;
+			const existing = process.env.LD_LIBRARY_PATH ?? "";
+			process.env.LD_LIBRARY_PATH = existing
+				? `${candidate}:${existing}`
+				: candidate;
+			break;
+		}
+	}
+}
 const TAURI_DRIVER = resolve(homedir(), `.cargo/bin/tauri-driver${EXE}`);
 const NATIVE_DRIVER = IS_WINDOWS
 	? resolve(SHELL_DIR, "e2e-tauri/.drivers/msedgedriver.exe")
