@@ -6505,38 +6505,27 @@ fn spawn_voxcpm2(
     .stdout(Stdio::piped())
     .stderr(stderr);
 
-    // 어느 카드에 올릴지 정한다. 고르지 않으면 가속기가 0번을 잡는데, 이
-    // 기계는 0번에 아바타가 상주하므로 그 위에 겹친다. 기본은 여유가 가장
-    // 많은 카드이고, 사람이 설정으로 고른 것이 있으면 그것이 이긴다.
+    // 어느 카드에 올리고 공유 라이브러리를 어디서 찾을지. 값을 만드는 일은
+    // voice_runtime 이 하고 여기서는 붙이기만 한다 — 만드는 쪽을 아카이브
+    // 없이 잴 수 있어야 하기 때문이다.
     let gpus = voice_runtime::query_gpus(profile.hardware.accelerator);
-    if let Some(chosen) = voice_runtime::select_gpu(&gpus, configured_gpu) {
-        cmd.env(profile.hardware.visible_devices_var, chosen.to_string());
-        log_both(&format!(
-            "[Naia] 로컬 음성을 {}번 카드에 올립니다 ({}={}, 카드 {}장)",
-            chosen,
-            profile.hardware.visible_devices_var,
-            chosen,
-            gpus.len()
-        ));
-    }
-
-    // 가속기 공유 라이브러리(.dll/.so)를 찾게 한다. 변수 이름은 운영체제가
-    // 정한다 — Windows 는 PATH, Linux 는 LD_LIBRARY_PATH.
     let library_dir = profile.accelerator_library_dir(bundle_root);
-    if library_dir.is_dir() {
-        let var = profile.layout().library_path_var;
-        let existing = std::env::var(var).unwrap_or_default();
-        let joined = if existing.is_empty() {
-            path_to_string(library_dir)
-        } else {
-            format!(
-                "{}{}{}",
-                path_to_string(library_dir),
-                if cfg!(windows) { ";" } else { ":" },
-                existing
-            )
-        };
-        cmd.env(var, joined);
+    let library_path_var = profile.layout().library_path_var;
+    let accelerator_env = voice_runtime::accelerator_env(
+        profile,
+        &gpus,
+        configured_gpu,
+        library_dir.is_dir().then_some(library_dir.as_path()),
+        &std::env::var(library_path_var).unwrap_or_default(),
+    );
+    for (key, value) in &accelerator_env {
+        cmd.env(key, value);
+        if key == profile.hardware.visible_devices_var {
+            log_both(&format!(
+                "[Naia] 로컬 음성을 {value}번 카드에 올립니다 ({key}={value}, 카드 {}장)",
+                gpus.len()
+            ));
+        }
     }
 
     platform::hide_console(&mut cmd);

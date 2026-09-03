@@ -265,6 +265,49 @@ pub fn gpu_choice_is_meaningful(gpus: &[GpuInfo]) -> bool {
     gpus.len() >= 2
 }
 
+/// 런타임 프로세스에 세울 가속기 관련 환경 변수.
+///
+/// 왜 따로 빼는가: 이 배선은 `spawn_voxcpm2` 안에 있었고, 그 함수는 런타임
+/// 아카이브가 있어야만 실행된다. Linux 아카이브가 아직 없어 한 번도 돌아본
+/// 적이 없는 코드였다. 어느 카드를 고르는지는 확인할 수 있어도 그 선택이
+/// 실제로 환경 변수가 되는지는 확인할 수 없었다.
+///
+/// 값을 만드는 일과 프로세스에 붙이는 일을 나누면, 만드는 쪽은 아카이브
+/// 없이도 잰다.
+///
+/// `existing_library_path` 는 현재 프로세스가 들고 있는 값이다. 덮지 않고
+/// 앞에 붙인다 — 시스템 라이브러리를 가리면 런타임이 아니라 다른 것이
+/// 깨진다.
+pub fn accelerator_env(
+    profile: &VoiceProfile,
+    gpus: &[GpuInfo],
+    configured_gpu: Option<u32>,
+    library_dir: Option<&std::path::Path>,
+    existing_library_path: &str,
+) -> Vec<(String, String)> {
+    let mut out = Vec::new();
+    if let Some(chosen) = select_gpu(gpus, configured_gpu) {
+        out.push((
+            profile.hardware.visible_devices_var.to_string(),
+            chosen.to_string(),
+        ));
+    }
+    if let Some(dir) = library_dir {
+        let separator = match profile.os {
+            HostOs::Windows => ";",
+            HostOs::Linux => ":",
+        };
+        let dir = dir.to_string_lossy().into_owned();
+        let value = if existing_library_path.is_empty() {
+            dir
+        } else {
+            format!("{dir}{separator}{existing_library_path}")
+        };
+        out.push((profile.layout().library_path_var.to_string(), value));
+    }
+    out
+}
+
 /// 이 기계의 가속기를 찾는다.
 ///
 /// NVIDIA 는 `nvidia-smi`, AMD 는 `rocm-smi` 로 묻는다. 둘 다 없으면 `None` —
@@ -517,6 +560,157 @@ mod tests {
                 .hardware
                 .visible_devices_var,
             "ROCR_VISIBLE_DEVICES"
+        );
+    }
+
+    #[test]
+    fn 고른_카드가_환경_변수가_된다() {
+        // 이 기계의 실제 모양 — 0번에 아바타가 상주한다.
+        let gpus = [gpu(0, 20011), gpu(1, 24014)];
+        let env = accelerator_env(
+            profile("linux_trt_6g").unwrap(),
+            &gpus,
+            None,
+            None,
+            "",
+        );
+        assert_eq!(
+            env,
+            vec![("CUDA_VISIBLE_DEVICES".to_string(), "1".to_string())]
+        );
+    }
+
+    #[test]
+    fn 사람이_고른_카드가_환경_변수가_된다() {
+        let gpus = [gpu(0, 20011), gpu(1, 24014)];
+        let env = accelerator_env(
+            profile("linux_trt_6g").unwrap(),
+            &gpus,
+            Some(0),
+            None,
+            "",
+        );
+        assert_eq!(env[0].1, "0");
+    }
+
+    #[test]
+    fn 가속기마다_변수_이름이_다르다() {
+        let gpus = [gpu(0, 16000)];
+        let rocm = accelerator_env(
+            profile("linux_rocm_6g").unwrap(),
+            &gpus,
+            None,
+            None,
+            "",
+        );
+        assert_eq!(rocm[0].0, "ROCR_VISIBLE_DEVICES");
+    }
+
+    #[test]
+    fn 라이브러리_경로는_덮지_않고_앞에_붙인다() {
+        let dir = std::path::Path::new("/bundle/artifact/lib/tensorrt_libs");
+        let env = accelerator_env(
+            profile("linux_trt_6g").unwrap(),
+            &[],
+            None,
+            Some(dir),
+            "/usr/lib:/usr/local/lib",
+        );
+        assert_eq!(
+            env,
+            vec![(
+                "LD_LIBRARY_PATH".to_string(),
+                "/bundle/artifact/lib/tensorrt_libs:/usr/lib:/usr/local/lib".to_string()
+            )]
+        );
+    }
+
+    #[test]
+    fn 운영체제마다_경로_구분자가_다르다() {
+        let dir = std::path::Path::new("C:/bundle/tensorrt_libs");
+        let env = accelerator_env(
+            profile("windows_trt_6g").unwrap(),
+            &[],
+            None,
+            Some(dir),
+            "C:/Windows",
+        );
+        assert_eq!(env[0].0, "PATH");
+        assert!(env[0].1.contains(";C:/Windows"), "{}", env[0].1);
+    }
+
+    #[test]
+    fn 카드도_라이브러리도_없으면_세울_것이_없다() {
+        let env = accelerator_env(
+            profile("linux_trt_6g").unwrap(),
+            &[],
+            None,
+            None,
+            "",
+        );
+        assert!(env.is_empty());
+    }
+
+    /// 세운 환경 변수가 실제로 그 카드에 올리는가.
+    ///
+    /// 앞의 테스트들은 "어느 카드를 고르는가" 와 "그 선택이 환경 변수가
+    /// 되는가" 까지만 잰다. 그 변수가 정말로 프로세스를 그 카드에 올리는지는
+    /// 붙여 보기 전에는 모른다 — 로컬 음성 런타임은 아카이브가 있어야 뜨므로
+    /// 그것으로는 잴 수 없다.
+    ///
+    /// 그래서 CUDA 를 쓰는 아무 프로세스나 우리가 만든 환경으로 띄우고, 그것이
+    /// 본 장치가 우리가 고른 물리 카드와 같은지 UUID 로 대조한다. 런타임이
+    /// 아니라 **배치 수단**을 재는 자리다.
+    ///
+    /// `NAIA_GPU_PLACEMENT_PYTHON` 에 torch 가 있는 파이썬을 주면 돈다. 없으면
+    /// 건너뛴다 — 기계마다 다른 경로를 코드에 박지 않는다.
+    #[test]
+    fn 세운_환경_변수가_실제로_그_카드에_올린다() {
+        let Ok(python) = std::env::var("NAIA_GPU_PLACEMENT_PYTHON") else {
+            return;
+        };
+        let gpus = query_gpus(Accelerator::TensorRtCuda);
+        if gpus.len() < 2 {
+            return; // 카드가 하나면 배치를 확인할 수 없다
+        }
+        let profile = profile("linux_trt_6g").unwrap();
+        let env = accelerator_env(profile, &gpus, None, None, "");
+        let (var, chosen) = env.first().expect("고른 카드가 있어야 한다");
+        assert_eq!(var, "CUDA_VISIBLE_DEVICES");
+
+        // 물리 카드의 UUID. 우리가 고른 번호가 가리키는 실체다.
+        let uuids = std::process::Command::new("nvidia-smi")
+            .args(["--query-gpu=index,uuid", "--format=csv,noheader"])
+            .output()
+            .expect("nvidia-smi");
+        let expected_uuid = String::from_utf8_lossy(&uuids.stdout)
+            .lines()
+            .find_map(|line| {
+                let (index, uuid) = line.split_once(',')?;
+                (index.trim() == chosen).then(|| uuid.trim().to_string())
+            })
+            .expect("고른 번호의 UUID");
+
+        // 그 환경으로 띄운 프로세스가 보는 유일한 장치의 UUID.
+        let seen = std::process::Command::new(&python)
+            .args([
+                "-c",
+                "import torch;print(torch.cuda.device_count());print(torch.cuda.get_device_properties(0).uuid)",
+            ])
+            .env(var, chosen)
+            .output()
+            .expect("python");
+        let stdout = String::from_utf8_lossy(&seen.stdout);
+        let mut lines = stdout.lines();
+        assert_eq!(
+            lines.next().unwrap_or_default().trim(),
+            "1",
+            "환경 변수를 세웠는데 장치가 하나로 좁혀지지 않았다: {stdout}"
+        );
+        let seen_uuid = lines.next().unwrap_or_default().trim().to_string();
+        assert!(
+            expected_uuid.contains(&seen_uuid) || seen_uuid.contains(expected_uuid.trim_start_matches("GPU-")),
+            "고른 카드({chosen}, {expected_uuid})가 아니라 {seen_uuid} 에 올라갔다"
         );
     }
 
