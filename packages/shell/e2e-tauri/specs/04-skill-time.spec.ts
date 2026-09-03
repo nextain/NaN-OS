@@ -38,8 +38,7 @@ describe("04 — skill_time", () => {
 				const config = {
 					...prev,
 					provider: naiaMode ? "nextain" : "gemini",
-					model:
-						prev.model || (naiaMode ? "gemini-2.5-pro" : "gemini-2.5-flash"),
+					model: prev.model || (naiaMode ? "gemini-2.5-pro" : "gemini-2.5-flash"),
 					apiKey: naiaMode ? "" : key || prev.apiKey || "",
 					naiaKey: naiaMode ? naia : prev.naiaKey || "",
 					enableTools: true,

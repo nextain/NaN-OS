@@ -14,9 +14,7 @@ describe("GPU-free pre-baked NVA through the real Tauri Shell", () => {
 		await browser.waitUntil(
 			() =>
 				browser.execute(() => {
-					const avatar = document.querySelector<HTMLElement>(
-						"[data-video-avatar]",
-					);
+					const avatar = document.querySelector<HTMLElement>("[data-video-avatar]");
 					const video = document.querySelector<HTMLVideoElement>(
 						"[data-video-avatar-prebaked]",
 					);
@@ -90,13 +88,10 @@ describe("GPU-free pre-baked NVA through the real Tauri Shell", () => {
 			expect(value.cascadeRuntimeUrl).toBeUndefined();
 		}
 
-		await browser.waitUntil(
-			() => Promise.resolve(existsSync(E2E_SLOTS_MANIFEST_PATH)),
-			{
-				timeout: 15_000,
-				timeoutMsg: "Shell did not emit slots-manifest.json",
-			},
-		);
+		await browser.waitUntil(() => Promise.resolve(existsSync(E2E_SLOTS_MANIFEST_PATH)), {
+			timeout: 15_000,
+			timeoutMsg: "Shell did not emit slots-manifest.json",
+		});
 		const slots = JSON.parse(readFileSync(E2E_SLOTS_MANIFEST_PATH, "utf8"));
 		expect(slots.slots.avatar).toEqual({
 			provider: "prebaked-video",

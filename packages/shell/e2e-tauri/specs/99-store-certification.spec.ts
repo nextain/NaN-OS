@@ -13,9 +13,7 @@ describe("Store certification native journey", () => {
 		const provider = await $("#provider-select");
 		await provider.waitForDisplayed({ timeout: 30_000 });
 		await browser.execute(() => {
-			const select = document.querySelector(
-				"#provider-select",
-			) as HTMLSelectElement;
+			const select = document.querySelector("#provider-select") as HTMLSelectElement;
 			select.value = "gemini";
 			select.dispatchEvent(new Event("change", { bubbles: true }));
 		});
@@ -37,15 +35,12 @@ describe("Store certification native journey", () => {
 				}),
 			{
 				timeout: 30_000,
-				timeoutMsg:
-					"Settings Apply did not persist Gemini as the main provider",
+				timeoutMsg: "Settings Apply did not persist Gemini as the main provider",
 			},
 		);
 
 		await browser.execute(() => {
-			const tab = document.querySelector(
-				".chat-tabs .chat-tab",
-			) as HTMLElement | null;
+			const tab = document.querySelector(".chat-tabs .chat-tab") as HTMLElement | null;
 			tab?.click();
 		});
 

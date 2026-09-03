@@ -90,3 +90,6 @@ packages/shell/playwright.config.js
 packages/shell/playwright.config.d.ts
 packages/shell/vite.config.js
 packages/shell/vite.config.d.ts
+
+# e2e-tauri 실행이 남기는 추적 산출물 — 저장소에 올리지 않는다.
+packages/shell/e2e-tauri/.artifacts/

@@ -34,7 +34,9 @@ function getBrowserSlotInfo(): Promise<{
 	errorOverlayPe: string;
 }> {
 	return browser.execute(() => {
-		const slots = Array.from(document.querySelectorAll(".content-app__slot"));
+		const slots = Array.from(
+			document.querySelectorAll(".content-app__slot"),
+		);
 		const browserSlot = slots.find((s) => s.querySelector(".browser-app"));
 		if (!browserSlot) {
 			return {
@@ -123,8 +125,12 @@ describe("92 — Browser App: Click Blocking Regression", () => {
 		// browser slot and verify computed pointer-events is "none".
 		// This directly tests the CSS rule introduced to fix the regression.
 		const result = await browser.execute(() => {
-			const slots = Array.from(document.querySelectorAll(".content-app__slot"));
-			const browserSlot = slots.find((s) => s.querySelector(".browser-app"));
+			const slots = Array.from(
+				document.querySelectorAll(".content-app__slot"),
+			);
+			const browserSlot = slots.find((s) =>
+				s.querySelector(".browser-app"),
+			);
 			if (!browserSlot) return { found: false, pe: "n/a", isActive: false };
 
 			const isActive = browserSlot.classList.contains(
@@ -168,8 +174,12 @@ describe("92 — Browser App: Click Blocking Regression", () => {
 
 		// Inject a synthetic overlay into the now-active browser slot.
 		const result = await browser.execute(() => {
-			const slots = Array.from(document.querySelectorAll(".content-app__slot"));
-			const browserSlot = slots.find((s) => s.querySelector(".browser-app"));
+			const slots = Array.from(
+				document.querySelectorAll(".content-app__slot"),
+			);
+			const browserSlot = slots.find((s) =>
+				s.querySelector(".browser-app"),
+			);
 			if (!browserSlot) return { found: false, pe: "n/a", isActive: false };
 
 			const isActive = browserSlot.classList.contains(
@@ -220,7 +230,9 @@ describe("92 — Browser App: Click Blocking Regression", () => {
 
 		// Verify workspace slot is active.
 		const workspaceActive = await browser.execute(() => {
-			const slots = Array.from(document.querySelectorAll(".content-app__slot"));
+			const slots = Array.from(
+				document.querySelectorAll(".content-app__slot"),
+			);
 			const wsSlot = slots.find((s) => s.querySelector(".workspace-app"));
 			return wsSlot?.classList.contains("content-app__slot--active") ?? false;
 		});
@@ -237,9 +249,7 @@ describe("92 — Browser App: Click Blocking Regression", () => {
 			expect(info.errorOverlayPe).toBe("none");
 		}
 
-		await browser.saveScreenshot(
-			`${SHOT}/05-workspace-active-browser-inactive.png`,
-		);
+		await browser.saveScreenshot(`${SHOT}/05-workspace-active-browser-inactive.png`);
 	});
 
 	// ── 06: elementFromPoint in workspace area returns workspace element ──────
@@ -258,8 +268,12 @@ describe("92 — Browser App: Click Blocking Regression", () => {
 		// check that elementFromPoint at the center of the content area does NOT
 		// return that overlay — it must be blocked by pointer-events:none.
 		const result = await browser.execute(() => {
-			const slots = Array.from(document.querySelectorAll(".content-app__slot"));
-			const browserSlot = slots.find((s) => s.querySelector(".browser-app"));
+			const slots = Array.from(
+				document.querySelectorAll(".content-app__slot"),
+			);
+			const browserSlot = slots.find((s) =>
+				s.querySelector(".browser-app"),
+			);
 			if (!browserSlot) return { found: false, hitClass: "n/a" };
 
 			// Add a synthetic overlay styled to fill the entire viewport area so

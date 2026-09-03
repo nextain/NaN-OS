@@ -37,27 +37,21 @@ async function waitForCourseTerminal(cardIndex: number) {
 	// The app polls gRPC and React replaces the card on each snapshot. Do not
 	// retain a WebDriver element from the initial `running` render: doing so can
 	// make a completed Agent job look permanently running to this native test.
-	await browser.waitUntil(
-		async () => {
-			const card = (await $$(".coding-workers__list article"))[cardIndex];
-			if (!card) return false;
-			const state = await card.$("[data-testid^='coding-worker-state-']");
-			try {
-				return ["completed", "failed", "cancelled"].includes(
-					(await state.getAttribute("data-worker-state")) ?? "",
-				);
-			} catch {
-				return false;
-			}
-		},
-		{
-			timeout: 300_000,
-			timeoutMsg: `course worker ${cardIndex} did not reach a terminal state`,
-		},
-	);
+	await browser.waitUntil(async () => {
+		const card = (await $$(".coding-workers__list article"))[cardIndex];
+		if (!card) return false;
+		const state = await card.$("[data-testid^='coding-worker-state-']");
+		try {
+			return ["completed", "failed", "cancelled"].includes(await state.getAttribute("data-worker-state") ?? "");
+		} catch {
+			return false;
+		}
+	}, {
+		timeout: 300_000,
+		timeoutMsg: `course worker ${cardIndex} did not reach a terminal state`,
+	});
 	const card = (await $$(".coding-workers__list article"))[cardIndex];
-	if (!card)
-		throw new Error(`course worker card ${cardIndex} was not rendered`);
+	if (!card) throw new Error(`course worker card ${cardIndex} was not rendered`);
 	const state = await card.$("[data-testid^='coding-worker-state-']");
 	const terminalState = await state.getAttribute("data-worker-state");
 	if (terminalState !== "completed") {

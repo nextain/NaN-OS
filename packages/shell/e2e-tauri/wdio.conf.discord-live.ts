@@ -63,9 +63,7 @@ export const config = {
 		await browser.waitUntil(
 			async () => {
 				try {
-					return await browser.execute(() =>
-						document.location.href.startsWith("http"),
-					);
+					return await browser.execute(() => document.location.href.startsWith("http"));
 				} catch {
 					return false;
 				}

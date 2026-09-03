@@ -12,8 +12,8 @@
  * (W2 swallow + caller surface).
  */
 
-import { S } from "../helpers/selectors.js";
 import { ensureAppReady } from "../helpers/settings.js";
+import { S } from "../helpers/selectors.js";
 
 const API_KEY =
 	process.env.CAFE_E2E_API_KEY || process.env.GEMINI_API_KEY || "";
@@ -56,10 +56,7 @@ describe("98 — F2 로그인 후 대화 (런칭 핵심)", () => {
 				const userMsgs = await $$(S.userMessage);
 				return userMsgs.length > 0;
 			},
-			{
-				timeout: 30_000,
-				timeoutMsg: "user message did not appear after Enter",
-			},
+			{ timeout: 30_000, timeoutMsg: "user message did not appear after Enter" },
 		);
 	});
 });

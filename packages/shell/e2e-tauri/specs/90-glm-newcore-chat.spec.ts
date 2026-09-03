@@ -27,6 +27,7 @@ describe("90 — GLM new-core live chat (직결)", () => {
 		await appRoot.waitForDisplayed({ timeout: 30_000 });
 		const chatInput = await $(S.chatInput);
 		await chatInput.waitForEnabled({ timeout: 60_000 }); // 간헐 workspace_set_root 경합 여유
+
 	});
 
 	it("glm 직결로 실 응답(에러/빈값 아님)", async () => {
@@ -35,9 +36,7 @@ describe("90 — GLM new-core live chat (직결)", () => {
 		// eslint-disable-next-line no-console
 		console.log("=== GLM RESPONSE ===\n" + text + "\n====================");
 		// 본문에 에러 마커 부재(가짜 키면 핸들러가 `[오류] provider error ... 401` 을 본문에 append → 여기서 RED).
-		expect(text).not.toMatch(
-			/\[오류\]|API key not valid|Bad Request|provider error|failed:|\b40[0-9]\b|\b500\b/i,
-		);
+		expect(text).not.toMatch(/\[오류\]|API key not valid|Bad Request|provider error|failed:|\b40[0-9]\b|\b500\b/i);
 		expect(text.trim().length).toBeGreaterThan(1);
 		// 적대 게이트(2026-06-13): length>1 + 에러정규식만으론 약함(footer/우연 통과 여지) → cost-badge 토큰>0 으로
 		//   실 z.ai 호출을 명시 입증. 키 깨지면 usage 0 토큰 → RED. uc-provider-provenance-live(Playwright)와 동일
@@ -50,9 +49,6 @@ describe("90 — GLM new-core live chat (직결)", () => {
 			const m = last.match(/(\d[\d,]*)\s*토큰/);
 			return m ? Number(m[1].replace(/,/g, "")) : 0;
 		});
-		expect(
-			tokens,
-			"cost-badge 토큰>0 = 실 z.ai 호출(키 깨지면 0 토큰)",
-		).toBeGreaterThan(0);
+		expect(tokens, "cost-badge 토큰>0 = 실 z.ai 호출(키 깨지면 0 토큰)").toBeGreaterThan(0);
 	});
 });

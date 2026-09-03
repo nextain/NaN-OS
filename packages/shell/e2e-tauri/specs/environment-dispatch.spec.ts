@@ -27,76 +27,20 @@ interface Probe {
 }
 
 const PROBES: Probe[] = [
-	{
-		name: "run:registered",
-		cmd: "herdr_run_pane",
-		args: { paneId: "잘못된형식", command: "echo hi" },
-	},
-	{
-		name: "keys:registered",
-		cmd: "herdr_send_keys",
-		args: { paneId: "잘못된형식", keys: ["C-c"] },
-	},
-	{
-		name: "id:empty",
-		cmd: "herdr_run_pane",
-		args: { paneId: "", command: "echo hi" },
-	},
-	{
-		name: "id:noPrefix",
-		cmd: "herdr_run_pane",
-		args: { paneId: "p1", command: "echo hi" },
-	},
-	{
-		name: "id:noWorkspace",
-		cmd: "herdr_run_pane",
-		args: { paneId: "w:p1", command: "echo hi" },
-	},
-	{
-		name: "id:injection",
-		cmd: "herdr_run_pane",
-		args: { paneId: "w9:pB;rm -rf /", command: "echo hi" },
-	},
-	{
-		name: "id:tooLong",
-		cmd: "herdr_run_pane",
-		args: { paneId: `w9:p${"a".repeat(65)}`, command: "echo hi" },
-	},
-	{
-		name: "body:empty",
-		cmd: "herdr_run_pane",
-		args: { paneId: "w9:pB", command: "   " },
-	},
-	{
-		name: "body:tooLong",
-		cmd: "herdr_run_pane",
-		args: { paneId: "w9:pB", command: "a".repeat(12 * 1024 + 1) },
-	},
-	{
-		name: "keys:empty",
-		cmd: "herdr_send_keys",
-		args: { paneId: "w9:pB", keys: [] },
-	},
-	{
-		name: "keys:flag",
-		cmd: "herdr_send_keys",
-		args: { paneId: "w9:pB", keys: ["--help"] },
-	},
-	{
-		name: "keys:space",
-		cmd: "herdr_send_keys",
-		args: { paneId: "w9:pB", keys: ["a b"] },
-	},
-	{
-		name: "keys:tooMany",
-		cmd: "herdr_send_keys",
-		args: { paneId: "w9:pB", keys: Array.from({ length: 9 }, () => "esc") },
-	},
-	{
-		name: "unopened",
-		cmd: "herdr_close_workspace",
-		args: { workspaceId: "w9" },
-	},
+	{ name: "run:registered", cmd: "herdr_run_pane", args: { paneId: "잘못된형식", command: "echo hi" } },
+	{ name: "keys:registered", cmd: "herdr_send_keys", args: { paneId: "잘못된형식", keys: ["C-c"] } },
+	{ name: "id:empty", cmd: "herdr_run_pane", args: { paneId: "", command: "echo hi" } },
+	{ name: "id:noPrefix", cmd: "herdr_run_pane", args: { paneId: "p1", command: "echo hi" } },
+	{ name: "id:noWorkspace", cmd: "herdr_run_pane", args: { paneId: "w:p1", command: "echo hi" } },
+	{ name: "id:injection", cmd: "herdr_run_pane", args: { paneId: "w9:pB;rm -rf /", command: "echo hi" } },
+	{ name: "id:tooLong", cmd: "herdr_run_pane", args: { paneId: `w9:p${"a".repeat(65)}`, command: "echo hi" } },
+	{ name: "body:empty", cmd: "herdr_run_pane", args: { paneId: "w9:pB", command: "   " } },
+	{ name: "body:tooLong", cmd: "herdr_run_pane", args: { paneId: "w9:pB", command: "a".repeat(12 * 1024 + 1) } },
+	{ name: "keys:empty", cmd: "herdr_send_keys", args: { paneId: "w9:pB", keys: [] } },
+	{ name: "keys:flag", cmd: "herdr_send_keys", args: { paneId: "w9:pB", keys: ["--help"] } },
+	{ name: "keys:space", cmd: "herdr_send_keys", args: { paneId: "w9:pB", keys: ["a b"] } },
+	{ name: "keys:tooMany", cmd: "herdr_send_keys", args: { paneId: "w9:pB", keys: Array.from({ length: 9 }, () => "esc") } },
+	{ name: "unopened", cmd: "herdr_close_workspace", args: { workspaceId: "w9" } },
 ];
 
 /** 명령이 등록되지 않았으면 Tauri 가 "not allowed"/"not found" 계열로 답한다. */
@@ -105,6 +49,7 @@ function looksUnregistered(error: string): boolean {
 }
 
 let results: Record<string, InvokeResult> = {};
+
 
 /**
  * 실환경 관측 증명서. 벤치는 이 파일이 있어야 native 영수증을 준다 —
@@ -144,6 +89,7 @@ afterEach(function (this: Mocha.Context) {
 	if (t && t.state === "passed" && t.title) passedCases.push(t.title);
 });
 
+
 const SPEC_ID = "packages/shell/e2e-tauri/specs/environment-dispatch.spec.ts";
 
 describe("환경 호출 전달 — Rust 명령 경계 (#502) [UC-ENV-LIVE-ACT FR-ENV-LIVE.4 FR-ENV-LIVE.5] (FR-ENV-LIVE.3 FR-ENV-LIVE.4 FR-ENV-LIVE.5)", () => {
@@ -154,9 +100,7 @@ describe("환경 호출 전달 — Rust 명령 경계 (#502) [UC-ENV-LIVE-ACT FR
 		const handles = await browser.getWindowHandles();
 		for (const handle of handles) {
 			await browser.switchToWindow(handle);
-			const href = (await browser.execute(
-				() => document.location.href,
-			)) as string;
+			const href = (await browser.execute(() => document.location.href)) as string;
 			if (typeof href === "string" && href.startsWith("http")) break;
 		}
 
@@ -168,49 +112,33 @@ describe("환경 호출 전달 — Rust 명령 경계 (#502) [UC-ENV-LIVE-ACT FR
 		await browser.waitUntil(
 			async () => {
 				try {
-					return (
-						(await browser.execute(() =>
-							document.location.href.startsWith("http"),
-						)) === true
-					);
+					return (await browser.execute(() => document.location.href.startsWith("http"))) === true;
 				} catch {
 					return false;
 				}
 			},
-			{
-				timeout: 60_000,
-				timeoutMsg: "웹뷰가 60초 안에 http origin 에 도달하지 못했다",
-			},
+			{ timeout: 60_000, timeoutMsg: "웹뷰가 60초 안에 http origin 에 도달하지 못했다" },
 		);
 		results = (await browser.execute((probes: Probe[]) => {
 			const w = window as unknown as {
-				__TAURI_INTERNALS__?: {
-					invoke: (c: string, a: unknown) => Promise<unknown>;
-				};
-				__TAURI__?: {
-					core?: { invoke: (c: string, a: unknown) => Promise<unknown> };
-				};
+				__TAURI_INTERNALS__?: { invoke: (c: string, a: unknown) => Promise<unknown> };
+				__TAURI__?: { core?: { invoke: (c: string, a: unknown) => Promise<unknown> } };
 			};
 			const invoke = w.__TAURI_INTERNALS__?.invoke ?? w.__TAURI__?.core?.invoke;
 			if (!invoke) {
 				const missing: Record<string, { ok: boolean; error: string }> = {};
-				for (const p of probes)
-					missing[p.name] = { ok: false, error: "TAURI_INVOKE_MISSING" };
+				for (const p of probes) missing[p.name] = { ok: false, error: "TAURI_INVOKE_MISSING" };
 				return Promise.resolve(missing);
 			}
 			return Promise.all(
 				probes.map((p) =>
 					invoke(p.cmd, p.args).then(
-						() =>
-							[p.name, { ok: true, error: "" }] as [
+						() => [p.name, { ok: true, error: "" }] as [string, { ok: boolean; error: string }],
+						(e: unknown) =>
+							[p.name, { ok: false, error: typeof e === "string" ? e : String(e) }] as [
 								string,
 								{ ok: boolean; error: string },
 							],
-						(e: unknown) =>
-							[
-								p.name,
-								{ ok: false, error: typeof e === "string" ? e : String(e) },
-							] as [string, { ok: boolean; error: string }],
 					),
 				),
 			).then((entries) =>
@@ -218,10 +146,7 @@ describe("환경 호출 전달 — Rust 명령 경계 (#502) [UC-ENV-LIVE-ACT FR
 					...entries,
 					// 웹뷰가 어디에 떠 있는지. IPC 가 origin 때문에 거절할 때
 					// "어디서 거절됐나"를 다음 사람이 다시 파헤치지 않도록 결과에 싣는다.
-					[
-						"__where",
-						{ ok: true, error: `${location.href} | origin=${location.origin}` },
-					],
+					["__where", { ok: true, error: `${location.href} | origin=${location.origin}` }],
 				]),
 			);
 		}, PROBES)) as Record<string, InvokeResult>;
@@ -240,18 +165,12 @@ describe("환경 호출 전달 — Rust 명령 경계 (#502) [UC-ENV-LIVE-ACT FR
 			const w = window as unknown as {
 				__TAURI_INTERNALS__?: {
 					invoke: (c: string, a: unknown) => Promise<unknown>;
-					transformCallback?: (
-						fn: (p: unknown) => void,
-						once?: boolean,
-					) => number;
+					transformCallback?: (fn: (p: unknown) => void, once?: boolean) => number;
 				};
 			};
 			const internals = w.__TAURI_INTERNALS__;
 			if (!internals?.invoke || !internals.transformCallback) {
-				return Promise.resolve({
-					outcome: "TAURI_INVOKE_MISSING",
-					oracleAlive: false,
-				});
+				return Promise.resolve({ outcome: "TAURI_INVOKE_MISSING", oracleAlive: false });
 			}
 			const invoke = internals.invoke;
 			const realId = `native-ack-probe-${Date.now()}`;
@@ -263,8 +182,7 @@ describe("환경 호출 전달 — Rust 명령 경계 (#502) [UC-ENV-LIVE-ACT FR
 			//    수단이 없어** 무조건 통과한다 — 실제로 그렇게 만들었다(2026-08-28 24차 지적).
 			const handler = internals.transformCallback((raw: unknown) => {
 				const payload = (raw as { payload?: unknown } | undefined)?.payload;
-				const text =
-					typeof payload === "string" ? payload : JSON.stringify(payload ?? "");
+				const text = typeof payload === "string" ? payload : JSON.stringify(payload ?? "");
 				try {
 					const msg = JSON.parse(text) as { type?: string; requestId?: string };
 					if (msg?.type !== "app_skills_result") return;
@@ -277,75 +195,65 @@ describe("환경 호출 전달 — Rust 명령 경계 (#502) [UC-ENV-LIVE-ACT FR
 
 			const diag: string[] = [];
 			// target 은 필수다(실측: "command listen missing required key target").
-			return (
-				invoke("plugin:event|listen", {
-					event: "agent_response",
-					target: { kind: "Any" },
-					handler,
+			return invoke("plugin:event|listen", {
+				event: "agent_response",
+				target: { kind: "Any" },
+				handler,
+			})
+				.then(
+					(r: unknown) => diag.push(`listen=ok:${String(r)}`),
+					(e: unknown) => diag.push(`listen=err:${String(e)}`),
+				)
+				.then(() =>
+					// 통로가 살아 있는지 스스로 증명한다. 합성 이벤트를 하나 쏴서 보이는지 본다.
+					invoke("plugin:event|emit", {
+						event: "agent_response",
+						payload: JSON.stringify({ type: "app_skills_result", requestId: selfTestId, ok: true }),
+					}).then(
+						(r: unknown) => diag.push(`emit=ok:${String(r)}`),
+						(e: unknown) => diag.push(`emit=err:${String(e)}`),
+					),
+				)
+				.then(() => new Promise((r) => setTimeout(r, 500)))
+				.then(() => {
+					const message = JSON.stringify({
+						type: "app_skills",
+						appId: "environment",
+						requestId: realId,
+						tools: [
+							{
+								name: "skill_environment",
+								description: "probe",
+								parameters: { type: "object", properties: {} },
+							},
+						],
+					});
+					return invoke("send_to_agent_command", { message }).then(
+						() => "QUEUED",
+						(e: unknown) => `QUEUE_FAILED:${String(e)}`,
+					);
 				})
-					.then(
-						(r: unknown) => diag.push(`listen=ok:${String(r)}`),
-						(e: unknown) => diag.push(`listen=err:${String(e)}`),
-					)
-					.then(() =>
-						// 통로가 살아 있는지 스스로 증명한다. 합성 이벤트를 하나 쏴서 보이는지 본다.
-						invoke("plugin:event|emit", {
-							event: "agent_response",
-							payload: JSON.stringify({
-								type: "app_skills_result",
-								requestId: selfTestId,
-								ok: true,
-							}),
-						}).then(
-							(r: unknown) => diag.push(`emit=ok:${String(r)}`),
-							(e: unknown) => diag.push(`emit=err:${String(e)}`),
-						),
-					)
-					.then(() => new Promise((r) => setTimeout(r, 500)))
-					.then(() => {
-						const message = JSON.stringify({
-							type: "app_skills",
-							appId: "environment",
-							requestId: realId,
-							tools: [
-								{
-									name: "skill_environment",
-									description: "probe",
-									parameters: { type: "object", properties: {} },
-								},
-							],
-						});
-						return invoke("send_to_agent_command", { message }).then(
-							() => "QUEUED",
-							(e: unknown) => `QUEUE_FAILED:${String(e)}`,
-						);
-					})
-					.then((queued: string) =>
-						new Promise((r) => setTimeout(r, 4_000)).then(() => ({
-							outcome: sawReal
-								? "ACKED"
-								: queued === "QUEUED"
-									? "NO_ACK"
-									: queued,
-							oracleAlive: sawSelfTest,
-							diag: diag.join(" | "),
-						})),
-					)
-					// ⚠️ 거절을 그대로 두면 wdio 가 결과를 파싱하지 못한다(이 파일 머리말 참고).
-					//    어느 단계에서 실패했는지 값으로 돌려준다.
-					.catch((e: unknown) => ({
-						outcome: `PROBE_FAILED:${String(e)}`,
-						oracleAlive: false,
+				.then((queued: string) =>
+					new Promise((r) => setTimeout(r, 4_000)).then(() => ({
+						outcome: sawReal ? "ACKED" : queued === "QUEUED" ? "NO_ACK" : queued,
+						oracleAlive: sawSelfTest,
 						diag: diag.join(" | "),
-					}))
-			);
+					})),
+				)
+				// ⚠️ 거절을 그대로 두면 wdio 가 결과를 파싱하지 못한다(이 파일 머리말 참고).
+				//    어느 단계에서 실패했는지 값으로 돌려준다.
+				.catch((e: unknown) => ({
+					outcome: `PROBE_FAILED:${String(e)}`,
+					oracleAlive: false,
+					diag: diag.join(" | "),
+				}));
 		})) as { outcome: string; oracleAlive: boolean; diag?: string };
 
 		// 관측 통로가 죽어 있으면 아래 단언은 공허하다. 먼저 그것부터 세운다.
 		// 실패 시 어디서 막혔는지 값에 실어 보낸다(이 러너의 expect 는 메시지 인자를 안 받는다).
-		expect(
-			probe.oracleAlive ? "oracle-alive" : `oracle-dead [${probe.diag ?? ""}]`,
-		).toBe("oracle-alive");
+		expect(probe.oracleAlive ? "oracle-alive" : `oracle-dead [${probe.diag ?? ""}]`).toBe(
+			"oracle-alive",
+		);
 
 		// 뇌가 없으면 두 가지 중 하나로 끝난다. 둘 다 fail-closed 다:
 		//   QUEUE_FAILED — Tauri 명령 자체가 거절(실측: agent-core restart debounced)

@@ -15,14 +15,10 @@ describe("Codex readiness through the real Tauri Shell", () => {
 		// creates the normal onboarding cache and then hydrates it from the
 		// workspace-owned config.json; assert the user-visible settled value,
 		// rather than sampling that short pre-hydration render.
-		await browser.waitUntil(
-			async () => (await provider.getValue()) === "codex",
-			{
-				timeout: 30_000,
-				timeoutMsg:
-					"workspace Codex configuration did not hydrate into Brain settings",
-			},
-		);
+		await browser.waitUntil(async () => (await provider.getValue()) === "codex", {
+			timeout: 30_000,
+			timeoutMsg: "workspace Codex configuration did not hydrate into Brain settings",
+		});
 		expect(await provider.getValue()).toBe("codex");
 
 		const readiness = await $("[data-testid='codex-readiness']");
