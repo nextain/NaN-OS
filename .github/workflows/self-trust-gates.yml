@@ -83,6 +83,16 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: compile integrity (core + shell tsc)
         run: node scripts/check-compile-integrity.mjs
+      - name: production bundle budget
+        run: |
+          pnpm build
+          pnpm -C packages/shell build
+      - name: preserve bundle budget report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: shell-bundle-budget
+          path: packages/shell/dist/bundle-budget-report.json
       - name: logging standard (Logger 강제, console.* 금지)
         run: node packages/shell/scripts/check-logging.mjs
       - name: file anchors (src/main 파일단위 계약)

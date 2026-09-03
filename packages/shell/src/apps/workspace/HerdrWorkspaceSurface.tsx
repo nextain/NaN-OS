@@ -1,10 +1,15 @@
-import type { RefObject } from "react";
+import { type RefObject, Suspense, lazy, useState } from "react";
+import { ErrorBoundary } from "../../components/ErrorBoundary";
 import { t } from "../../lib/i18n";
 import { DocTabBar } from "./DocTabBar";
-import { Editor, type EditorHandle } from "./Editor";
+import type { EditorHandle } from "./Editor";
 import { type FileLocation, Terminal, type TerminalHandle } from "./Terminal";
 import { type HerdrSnapshot, focusedHerdrAgent } from "./herdr";
 import type { HerdrSurface, PtyCreated } from "./useHerdrRuntime";
+import { workspaceText } from "./workspaceText";
+
+const loadEditor = () =>
+	import("./Editor").then((module) => ({ default: module.Editor }));
 
 interface SurfaceProps {
 	pty: PtyCreated | null;
@@ -29,10 +34,18 @@ interface SurfaceProps {
 	setOpenFilePath: (path: string) => void;
 	closeDoc: (path: string) => void;
 	sendToNaia: (path: string) => void;
+	editorLoader?: typeof loadEditor;
 }
 
 export function HerdrWorkspaceSurface(props: SurfaceProps) {
 	const focused = focusedHerdrAgent(props.snapshot);
+	const editorLoader = props.editorLoader ?? loadEditor;
+	const [editorLoadAttempt, setEditorLoadAttempt] = useState(0);
+	const [LazyEditor, setLazyEditor] = useState(() => lazy(editorLoader));
+	const retryEditorLoad = () => {
+		setLazyEditor(lazy(editorLoader));
+		setEditorLoadAttempt((attempt) => attempt + 1);
+	};
 	return (
 		<main className="herdr-workspace__main">
 			<div
@@ -100,7 +113,31 @@ export function HerdrWorkspaceSurface(props: SurfaceProps) {
 						/>
 					</div>
 					<div className="herdr-workspace__editor">
-						<Editor ref={props.editorRef} filePath={props.openFilePath} />
+						<ErrorBoundary
+							key={editorLoadAttempt}
+							scope="HerdrWorkspaceEditor"
+							fallback={
+								<div className="herdr-workspace__state" role="alert">
+									<span>{workspaceText("editorLoadError")}</span>
+									<button type="button" onClick={retryEditorLoad}>
+										{t("common.retry")}
+									</button>
+								</div>
+							}
+						>
+							<Suspense
+								fallback={
+									<output className="herdr-workspace__state">
+										{workspaceText("editorLoading")}
+									</output>
+								}
+							>
+								<LazyEditor
+									ref={props.editorRef}
+									filePath={props.openFilePath}
+								/>
+							</Suspense>
+						</ErrorBoundary>
 					</div>
 				</div>
 			)}

@@ -1104,3 +1104,12 @@ fenced code는 언어·복사·접기·워크스페이스 전환을 제공하고
 | **FR-MEMORY-PAIRING.1** | pairing manifest는 agent/proto와 함께 naia-memory의 정확한 40자 commit과 package version을 선언한다. | UC-V023-MEMORY-PAIRING | `agent-pairing-drift.contract.test.ts` | Done |
 | **FR-MEMORY-PAIRING.2** | production staging은 선언된 memory 저장소 root·HEAD·clean 상태·package 이름·버전을 빌드 전에 fail-closed로 검증한다. | UC-V023-MEMORY-PAIRING | `agent-pairing-drift.contract.test.ts` | Done |
 | **FR-MEMORY-PAIRING.3** | installer CI가 checkout하는 memory commit은 pairing manifest와 일치한다. | UC-V023-MEMORY-PAIRING | `agent-pairing-drift.contract.test.ts`, `platform-matrix.test.ts` | Done |
+
+## 기능 요구사항 (FR) — 초기 번들 예산 (#431)
+
+| ID | 요구사항 | 출처 시나리오 | 검증(P02) | 상태 |
+|---|---|---|---|---|
+| **FR-BUNDLE.1** | Mermaid와 전이 의존성은 Mermaid 코드 블록을 렌더링할 때 동적으로 불러온다. 초기화는 모듈 로드 뒤 한 번만 수행하며 기존 strict 보안 설정과 SVG 정화를 유지한다. | UC-PERF-BUNDLE-BUDGET | `MarkdownCodeBlock.test.tsx`, production build chunk inspection | Done |
+| **FR-BUNDLE.2** | 빌드 검사는 `index.html`이 참조하는 초기 진입 JS의 raw/gzip 크기와 전체 `dist` 크기를 결정론적으로 측정한다. 대상이나 설정을 찾지 못하거나 예산을 넘으면 실패한다. | UC-PERF-BUNDLE-BUDGET | `check-bundle-budget.test.mjs` | Done |
+| **FR-BUNDLE.3** | 빌드는 측정값·예산·통과 여부를 JSON으로 남기고 CI는 성공/실패와 무관하게 그 보고서를 artifact로 보존한다. | UC-PERF-BUNDLE-BUDGET | `check-bundle-budget.test.mjs`, GitHub Actions workflow | Done |
+| **FR-BUNDLE.4** | 항상 마운트되는 워크스페이스는 터미널 상태를 유지하되, 파일 편집기와 그 전이 의존성은 viewer에 파일이 생길 때 동적으로 불러오며, 청크 로드 실패는 셸 새로고침 없이 재시도할 수 있어야 한다. | UC-PERF-BUNDLE-BUDGET | `herdr-workspace.test.tsx`, `HerdrWorkspaceSurface.test.tsx`, production build chunk inspection | Done |
