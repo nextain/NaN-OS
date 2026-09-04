@@ -32,6 +32,7 @@ import {
 	REQUIRED_PROTO_SHA256,
 } from "./agent-pairing.mjs";
 import { developmentInstanceEnv } from "./dev-instance.mjs";
+import { voxCpm2Profile } from "./stage-voxcpm2-runtime.mjs";
 import { interactiveLaunchEnv } from "./launch-env.mjs";
 import { runProjectPnpm } from "./package-manager.mjs";
 
@@ -155,26 +156,44 @@ const env = interactiveLaunchEnv(process.env);
 // development executable is an installed bundle. Rust ignores this override
 // in release builds.
 const devVoxCpm2Bundle = resolve(SHELL, "src-tauri", "voxcpm2-runtime");
-const devVoxCpm2DownloadManifest = resolve(
-	SHELL,
-	"scripts",
-	"voxcpm2-download-manifest.json",
-);
+const hostVoxCpm2Profile = voxCpm2Profile();
+// 내려받기 매니페스트도 운영체제 사실을 담는다 — 어느 아카이브를 받을지가 거기
+// 적혀 있다. 스테이징이 만든 것이 이 빌드의 진짜 매니페스트이고, 저장소에 든
+// 것은 아직 스테이징하지 않은 트리를 위한 Windows 폴백이다(build-e2e-tauri 와
+// 같은 규칙). 폴백을 리눅스에 그대로 놓으면 셸이 Windows 아카이브를 받으러
+// 가므로, 프로파일이 이 기계와 맞을 때만 쓴다.
+const devVoxCpm2DownloadManifest = [
+	resolve(SHELL, "src-tauri", "voxcpm2-runtime", "download-manifest.json"),
+	resolve(SHELL, "scripts", "voxcpm2-download-manifest.json"),
+].find((candidate) => {
+	if (!existsSync(candidate)) return false;
+	try {
+		return (
+			JSON.parse(readFileSync(candidate, "utf8")).profile ===
+			hostVoxCpm2Profile.profile
+		);
+	} catch {
+		return false;
+	}
+});
 if (mode === "dev") {
 	// Thin-runtime dev builds reuse the staged download manifest, but its ignored
 	// control files can predate the checkout. Refresh the small trusted installer
 	// assets before Tauri snapshots resources so RTX field debugging exercises
 	// the same activation/default-voice contract as a release build.
 	mkdirSync(devVoxCpm2Bundle, { recursive: true });
+	// 설치 스크립트는 운영체제 사실이고, 그 사실은 VOXCPM2_PROFILES 한 곳에만 산다
+	// (#537). 여기에 이름을 다시 적으면 두 번째 플랫폼이 조용히 어긋난다 — 실제로
+	// 리눅스 dev 가 PowerShell 스크립트를 받아 설치가 승격 직전에 죽었다.
 	copyFileSync(
-		resolve(SHELL, "src-tauri/windows/prepare-voxcpm2-model.ps1"),
-		resolve(devVoxCpm2Bundle, "prepare-voxcpm2-model.ps1"),
+		resolve(SHELL, hostVoxCpm2Profile.modelPrep),
+		resolve(devVoxCpm2Bundle, hostVoxCpm2Profile.modelPrepName),
 	);
 	copyFileSync(
 		resolve(SHELL, "src-tauri/voxcpm2-activation-contract.json"),
 		resolve(devVoxCpm2Bundle, "voxcpm2-activation-contract.json"),
 	);
-	if (existsSync(devVoxCpm2DownloadManifest)) {
+	if (devVoxCpm2DownloadManifest) {
 		env.NAIA_VOXCPM2_DOWNLOAD_MANIFEST =
 			env.NAIA_VOXCPM2_DOWNLOAD_MANIFEST ?? devVoxCpm2DownloadManifest;
 	}
@@ -193,14 +212,14 @@ if (mode === "dev") {
 	);
 	mkdirSync(devTargetDebugVoxCpm2Bundle, { recursive: true });
 	copyFileSync(
-		resolve(SHELL, "src-tauri/windows/prepare-voxcpm2-model.ps1"),
-		resolve(devTargetDebugVoxCpm2Bundle, "prepare-voxcpm2-model.ps1"),
+		resolve(SHELL, hostVoxCpm2Profile.modelPrep),
+		resolve(devTargetDebugVoxCpm2Bundle, hostVoxCpm2Profile.modelPrepName),
 	);
 	copyFileSync(
 		resolve(SHELL, "src-tauri/voxcpm2-activation-contract.json"),
 		resolve(devTargetDebugVoxCpm2Bundle, "voxcpm2-activation-contract.json"),
 	);
-	if (existsSync(devVoxCpm2DownloadManifest)) {
+	if (devVoxCpm2DownloadManifest) {
 		copyFileSync(
 			devVoxCpm2DownloadManifest,
 			resolve(devTargetDebugVoxCpm2Bundle, "download-manifest.json"),

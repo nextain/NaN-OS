@@ -710,7 +710,9 @@ export function App() {
 			.catch(() => {});
 		// #543: 드래그앤드롭도 CLI 와 같은 파이프라인 — OS 실경로를 open-grant 로
 		// 등록(경계 밖 read/write 동의)한 canonical 경로만 연다. 크로스플랫폼 공통.
-		const dragUnlisten = getCurrentWebview().onDragDropEvent((event) => {
+		let dragUnlisten: Promise<() => void> = Promise.resolve(() => {});
+		try {
+			dragUnlisten = getCurrentWebview().onDragDropEvent((event) => {
 			if (event.payload.type !== "drop") return;
 			Logger.info("App", "file drag-drop received (#543)", {
 				count: event.payload.paths.length,
@@ -728,6 +730,9 @@ export function App() {
 					});
 			}
 		});
+		} catch (error) {
+			Logger.warn("App", "drag-drop subscribe failed (#543)", { error: String(error) });
+		}
 		return () => {
 			unlisten.then((fn) => fn());
 			dragUnlisten.then((fn) => fn());
