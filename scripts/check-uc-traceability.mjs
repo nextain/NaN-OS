@@ -49,7 +49,6 @@ const untracked = titles.filter(
 
 // 오늘의 상태. 줄이는 것이 목표이고, 늘리는 것은 이 게이트가 막는다.
 const BASELINE = [
-	"UC-BGM-ORPHAN-PORT-RECOVERY",
 	"UC-DISCORD",
 	"UC-GROK-SUBSCRIPTION",
 	"UC-KB-MANAGE",
@@ -58,7 +57,6 @@ const BASELINE = [
 	"UC-ONBOARDING-APPEARANCE-VOICE",
 	"UC-PROACTIVE-COST-CONTROL",
 	"UC-RADIO-DJ-DURABLE",
-	"UC-SETTINGS-ROUNDTRIP",
 	"UC-WIRE-V1",
 ];
 

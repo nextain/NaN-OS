@@ -770,6 +770,12 @@ probe 도중 앱을 닫으면 추적 불가능한 고아가 하나 더 생긴다
   PID 파일에 살아 있는 sidecar가 기록돼 있으면 검증 후 종료하고 나서 파일을
   지운다. 기록만 지워 고아를 추적 불가로 만들지 않는다.
 
+Test Coverage Map
+
+| UC | 단위·계약 | 비고 |
+|---|---|---|
+| UC-BGM-ORPHAN-PORT-RECOVERY | `src-tauri/src/lib.rs:13661` `bgm_port_reclaim_terminates_real_stale_sidecar_listener`: 실제 node 리스너를 포트에 앉히고 회수 후 해제까지 실측 / `:13612` `bgm_port_reclaim_kills_only_proven_sidecar_holder`: 남의 프로세스를 죽이지 않는지 | 재시작 회복·포트 경합·사용자에게 보이는 실패 문구를 한 UC 가 함께 덮는다 |
+
 ### Test Coverage Map
 
 | Scenario | Unit / contract | UI / integration |
@@ -781,6 +787,25 @@ probe 도중 앱을 닫으면 추적 불가능한 고아가 하나 더 생긴다
 | probe 중 앱 종료 → 다음 세션 회수 | teardown이 미저장 자식을 PID 파일로 종료(검증 후) | 종료 경로는 위 reclaim 백스톱이 최종 방어선(포트 소유자 기준이라 PID 파일 유실과 무관) |
 
 ## UC-SETTINGS-ROUNDTRIP: 설정 변경·재시작·실행 반영
+
+설정을 바꾸고 앱을 다시 켰을 때 그 값이 살아 있어야 한다. 파일이 정본이고
+localStorage 는 캐시이므로, 부팅 병합에서 파일 값이 캐시를 이겨야 한다
+(FR-CONFIG-SOT.1). 이 UC 는 2026-08-03 에 표제만 선언되고 본문이 비어 있었다
+— 안정성 축의 첫 항목인데 무엇을 확인하는지 적히지 않은 채였다.
+
+- 설정에서 값을 바꾸고 저장하면 `naia-settings/config.json` 에 남는다.
+- 앱을 다시 켜면 그 파일 값이 화면에 반영된다. 스테일 캐시가 이기지 않는다.
+- 작업 공간을 바꾸면 설정·메모리·자격증명 경로가 함께 옮겨가고, 원자적 전환에
+  실패하면 이전 경로로 되돌아간다.
+- 열려 있던 터미널 세션은 다시 켠 뒤에도 복원되고, 복원에 실패한 항목이 있어도
+  앱이 죽지 않는다.
+
+Test Coverage Map
+
+| UC | 단위·계약 | 실기 | 비고 |
+|---|---|---|---|
+| UC-SETTINGS-ROUNDTRIP | `src/lib/__tests__/config-boot-merge.test.ts`: 부팅 병합에서 파일이 캐시를 이긴다 / `src/apps/__tests__/session-persistence.test.tsx`: 터미널 세션 복원 8건 / `src/lib/__tests__/adk-store.test.ts`: 작업 공간 포인터 | `e2e-tauri/specs/95-llm-role-settings.spec.ts`: 설정 저장이 파일에 남고 다시 읽힌다 | 실기 스펙은 아직 CI 에서 돌지 않는다(#550) |
+
 
 ## UC-ONBOARDING-APPEARANCE-VOICE: 외모와 음성을 독립적으로 시작하기
 
