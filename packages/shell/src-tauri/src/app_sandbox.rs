@@ -60,8 +60,12 @@ pub fn app_sandbox_open_in_workspace(app: AppHandle, adk_path: String, app_id: S
     let output = file(&root(&adk_path, &app_id)?, &relative_path)?;
     if !output.is_file() { return Err("sandbox file does not exist".into()); }
     let path = output.to_string_lossy().into_owned();
-    app.emit("workspace-open-file-request", path.clone()).map_err(|error| error.to_string())?;
-    Ok(path)
+    // Sandbox lives under <adkPath>/data-private/apps, outside the git workspace root,
+    // so grant this exact file a session read/write grant (as CLI/drag-drop do) or the
+    // workspace viewer rejects it. Emit the granted (canonical) path.
+    let granted = crate::workspace::grant_open_file(&path).unwrap_or(path);
+    app.emit("workspace-open-file-request", granted.clone()).map_err(|error| error.to_string())?;
+    Ok(granted)
 }
 #[tauri::command]
 pub fn slides_recording_start(adk_path: String) -> Result<(), String> {

@@ -66,10 +66,6 @@ export async function persistBgmLibrary(state: BgmLibraryState): Promise<void> {
 			{ error: String(error) },
 		);
 		const cfg = loadConfig();
-		(globalThis as unknown as { __BGM_LIB_PROBE__?: string[] }).__BGM_LIB_PROBE__ = [
-			...(((globalThis as unknown as { __BGM_LIB_PROBE__?: string[] }).__BGM_LIB_PROBE__) ?? []),
-			`fallback:hasCfg=${!!cfg}`,
-		];
 		if (cfg) saveConfig({ ...cfg, bgmLibrary: state });
 	}
 }
