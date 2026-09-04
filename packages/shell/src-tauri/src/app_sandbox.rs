@@ -100,7 +100,7 @@ pub fn slides_recording_stop() -> Result<String, String> {
 
 #[cfg(test)]
 mod app_sandbox_escape_tests {
-    use super::root;
+    use super::{file, root};
     // Distinct temp ADK per test process; leaves dirs (test scratch) — acceptable.
     fn adk() -> String {
         std::env::temp_dir()
@@ -119,5 +119,38 @@ mod app_sandbox_escape_tests {
         let r = root(&adk(), "land.naia.shell").expect("normal app id ok");
         assert!(r.ends_with("land.naia.shell"));
         assert!(r.to_string_lossy().replace('\\', "/").contains("data-private/apps/land.naia.shell"));
+    }
+
+    // root() 만 잠겨 있고 file() 은 잠겨 있지 않았다. 상대경로 강제·부모 탈출
+    // 거부·최종 symlink 거부는 각각 다른 공격을 막으므로 따로 고정한다.
+    #[test]
+    fn rejects_absolute_and_parent_relative_paths() {
+        let r = root(&adk(), "sbx.file.tests").expect("root ok");
+        assert!(file(&r, "").is_err(), "빈 경로");
+        assert!(file(&r, "../escape.txt").is_err(), "부모 탈출");
+        assert!(file(&r, "a/../../escape.txt").is_err(), "중간 부모 탈출");
+        #[cfg(unix)]
+        assert!(file(&r, "/etc/passwd").is_err(), "절대 경로");
+    }
+
+    #[test]
+    fn allows_nested_relative_path_inside_root() {
+        let r = root(&adk(), "sbx.file.tests").expect("root ok");
+        let out = file(&r, "nested/dir/out.txt").expect("정상 상대경로");
+        assert!(out.starts_with(&r), "샌드박스 안에 있어야 한다");
+        assert!(out.ends_with("out.txt"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn rejects_symlink_at_final_component() {
+        let r = root(&adk(), "sbx.symlink.tests").expect("root ok");
+        let link = r.join("planted.txt");
+        let _ = std::fs::remove_file(&link);
+        // 미리 심어 둔 symlink 는 parent canonicalize 로 잡히지 않는다.
+        std::os::unix::fs::symlink("/etc/passwd", &link).expect("symlink 생성");
+        let outcome = file(&r, "planted.txt");
+        let _ = std::fs::remove_file(&link);
+        assert!(outcome.is_err(), "최종 구성요소 symlink 는 거부해야 한다");
     }
 }

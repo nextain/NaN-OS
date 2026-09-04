@@ -130,8 +130,23 @@ export function measureBundle({
 		throw new Error(`Missing module entry script: ${entryPath}`);
 	const entry = readFileSync(entryPath);
 	const manifestPath = resolve(distDirectory, ".vite/manifest.json");
-	if (!existsSync(manifestPath))
-		throw new Error(`Missing Vite manifest: ${manifestPath}`);
+	if (!existsSync(manifestPath)) {
+		// 매니페스트가 없는 가장 흔한 이유는 설정이 꺼진 것이 아니라, 컴파일된
+		// vite.config.js 가 남아 원본 vite.config.ts 를 가리는 것이다. Vite 는
+		// .js 를 .ts 보다 먼저 로드하므로 낡은 설정이 조용히 이긴다. 그 파일은
+		// gitignore 대상이라 다른 기계에는 없고, 그래서 "여기서만 깨진다".
+		const shadow = ["vite.config.js", "vite.config.mjs"]
+			.map((name) => resolve(distDirectory, "..", name))
+			.find((candidate) => existsSync(candidate));
+		throw new Error(
+			shadow
+				? `Missing Vite manifest: ${manifestPath}\n` +
+					`  ${shadow} 가 vite.config.ts 를 가리고 있다. Vite 는 .js 를 먼저 읽는다.\n` +
+					"  그 파일은 옛 tsc 산출물이며 gitignore 대상이다 — 지우고 다시 빌드하라."
+				: `Missing Vite manifest: ${manifestPath}\n` +
+					"  vite.config 의 build.manifest 가 켜져 있는지 확인하라.",
+		);
+	}
 	const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
 	const entryFile = relative(distDirectory, entryPath).replaceAll("\\", "/");
 	const entryManifest = Object.values(manifest).find(

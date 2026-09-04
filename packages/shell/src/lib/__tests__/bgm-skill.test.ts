@@ -625,7 +625,7 @@ describe("executeBgmSkill", () => {
 
 	it("returns playlist summaries without treating likes as a playback list", async () => {
 		const { deps } = mkDeps();
-		deps.library = () => ({ schemaVersion: 1, likes: [], playlists: [{ id: "p1", name: "Focus", tracks: [], createdAt: 1, updatedAt: 1 }], activePlaylistId: "p1", currentIndex: -1, shuffle: true, repeat: "all", queue: [], history: [] });
+		deps.library = () => ({ schemaVersion: 1, updatedAt: 1, likes: [], playlists: [{ id: "p1", name: "Focus", tracks: [], createdAt: 1, updatedAt: 1 }], activePlaylistId: "p1", currentIndex: -1, shuffle: true, repeat: "all", queue: [], history: [] });
 		const out = JSON.parse(await executeBgmSkill({ action: "playlist_list" }, deps));
 		expect(out.library).toMatchObject({ likesCount: 0, activePlaylist: { id: "p1", name: "Focus" }, shuffle: true, repeat: "all" });
 	});
