@@ -2,6 +2,7 @@ import { S } from "../helpers/selectors.js";
 import {
 	clickBySelector,
 	ensureAppReady,
+	navigateToSettings,
 	openSettingsSection,
 } from "../helpers/settings.js";
 
@@ -16,8 +17,11 @@ import {
 describe("53 — settings theme & locale", () => {
 	before(async () => {
 		await ensureAppReady();
-		// 테마와 언어는 '일반' 구역에 있다 (#541).
-		await openSettingsSection("일반");
+		await navigateToSettings();
+		const settingsTab = await $(S.settingsTab);
+		await settingsTab.waitForDisplayed({ timeout: 10_000 });
+		// #541: 테마·로케일은 General 섹션에 있다.
+		await openSettingsSection("general");
 	});
 
 	it("should render theme swatches", async () => {

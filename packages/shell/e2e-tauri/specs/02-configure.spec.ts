@@ -51,13 +51,22 @@ describe("02 — Configure Settings", () => {
 				timeoutMsg: "Onboarding still visible in configure spec",
 			},
 		);
-		// 탭 바에는 대화·기록·채널 셋뿐이고 설정은 앱 바에 있다 (#541).
-		// 개수를 세면 탭이 하나 늘거나 줄 때마다 어긋난다.
-		await navigateToSettings();
+		await browser.waitUntil(
+			async () =>
+				browser.execute(
+					// #541: 탭은 대화·기록·채널 셋뿐이다. 설정 계열은 앱 전환으로 연다.
+					() => document.querySelectorAll(".chat-tabs .chat-tab").length >= 3,
+				),
+			{ timeout: 15_000, timeoutMsg: "Chat tabs did not render" },
+		);
 	});
 
 	it("should switch to settings tab and configure", async () => {
+		// #541: 설정은 앱 전환 + 내부 섹션 탭 구조. 프로바이더·키·도구는 brain 섹션.
 		await navigateToSettings();
+		const settingsTab = await $(S.settingsTab);
+		await settingsTab.waitForDisplayed({ timeout: 30_000 });
+		await openSettingsSection("brain");
 
 		await configureSettings({
 			provider: "gemini",
@@ -89,16 +98,17 @@ describe("02 — Configure Settings", () => {
 	});
 
 	it("should show Lab section in settings", async () => {
-		// 계정/Lab 구분선은 '프로파일' 구역에 있다 (#541).
-		await openSettingsSection("프로파일");
+		// #541: Naia 계정(Lab) UI 는 profile 섹션의 로그인/계정 필드로 옮겨졌다.
+		await navigateToSettings();
+		const settingsTab = await $(S.settingsTab);
+		await settingsTab.waitForDisplayed({ timeout: 10_000 });
+		await openSettingsSection("profile");
 
-		// Naia 계정 자리는 구분선 문구가 아니라 표식으로 찾는다 (#541).
-		// 문구로 찾던 예전 방식은 구분선이 "프로파일·엔진" 으로 바뀌자 조용히
-		// 아무것도 못 찾게 됐다.
 		const hasLabSection = await browser.execute(
 			() =>
-				!!document.querySelector('[data-testid="profile-naia-login"]') ||
-				!!document.querySelector('[data-testid="profile-naia-account"]'),
+				document.querySelector(
+					'[data-testid="profile-naia-login"], [data-testid="profile-naia-account"]',
+				) !== null,
 		);
 		expect(hasLabSection).toBe(true);
 	});

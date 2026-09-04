@@ -1,7 +1,7 @@
 import type { ChildProcess } from "node:child_process";
 import { execSync, spawn } from "node:child_process";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
-import { connect } from "node:net";
+import { connect, createServer } from "node:net";
 import { homedir } from "node:os";
 import { resolve } from "node:path";
 import { execPath } from "node:process";
@@ -115,7 +115,37 @@ const E2E_DEV_URL = new URL(
 const VITE_PORT = Number(E2E_DEV_URL.port || "1420");
 const VITE_HOST = E2E_DEV_URL.hostname;
 
+// #539(Windows): TIME_WAIT 페어가 최대 4분간 같은 포트의 Rust rebind 를 막는다.
+// 워커(runner 프로세스)마다 포트를 달리해 이전 실행·이전 세션과 절대 겹치지 않게 한다.
+const IN_APP_PORT = IS_WINDOWS ? 4450 + (process.pid % 37) : 4448;
+
 let tauriDriver: ChildProcess;
+
+/** #539(Windows 인앱): 앱 트리를 강제 종료하고 4448 이 실제로 닫힐 때까지 기다린다.
+ *  agent-core/node 자식이 소켓을 물고 늦게 죽어 10초 대기로는 모자라다. */
+async function forceFreeInAppPort(): Promise<void> {
+	try {
+		execSync("taskkill /F /T /IM naia-shell.exe", { stdio: "ignore" });
+	} catch {
+		// 살아 있는 인스턴스가 없으면 taskkill 이 비영으로 끝난다 — 정상.
+	}
+	for (let attempt = 0; attempt < 30; attempt++) {
+		const open = await new Promise<boolean>((done) => {
+			const socket = connect({ host: "127.0.0.1", port: 4448 }, () => {
+				socket.destroy();
+				done(true);
+			});
+			socket.once("error", () => done(false));
+			socket.setTimeout(500, () => {
+				socket.destroy();
+				done(false);
+			});
+		});
+		if (!open) return;
+		await new Promise((wait) => setTimeout(wait, 1_000));
+	}
+	throw new Error("in-app WebDriver port never freed");
+}
 let viteServer: ChildProcess;
 let permissionPoller: { dispose: () => void } | undefined;
 
@@ -290,9 +320,12 @@ export const config = {
 			// 완료 응답을 못 받아 "aborted due to timeout" 으로 세션이 끊기는 문제 → 'eager' 로
 			// DOMContentLoaded 까지만 대기(전체 load 이벤트 대기 안 함). 준비 판정은 명시적 waitUntil 이 담당.
 			pageLoadStrategy: "eager",
-			"tauri:options": {
-				application: TAURI_BINARY,
-			},
+			// #539: Windows 는 인앱 WebDriver(tauri_plugin_wdio_webdriver)에 붙는다 —
+			// msedgedriver 는 WebView2 의 DevToolsActivePort 를 찾지 못해 세션을 못 연다.
+			// Linux 는 WebKitWebDriver 가 정상이라 tauri-driver 경유를 유지한다.
+			...(IS_WINDOWS
+				? { browserName: "tauri" }
+				: { "tauri:options": { application: TAURI_BINARY } }),
 		},
 	],
 
@@ -310,7 +343,7 @@ export const config = {
 		return request;
 	},
 
-	port: 4448,
+	port: IN_APP_PORT,
 	hostname: "127.0.0.1",
 
 	framework: "mocha",
@@ -337,8 +370,10 @@ export const config = {
 		reclaimLeakedAgentChild();
 		await waitForPortClosed(1420);
 		await waitForPortClosed(VITE_PORT);
-		await waitForPortClosed(4448);
-		await waitForPortClosed(4449);
+		if (!IS_WINDOWS) {
+			await waitForPortClosed(4448);
+			await waitForPortClosed(4449);
+		}
 
 		// Start Vite dev server (debug binary loads from devUrl localhost:1420).
 		viteServer = spawn(execPath, [VITE_ENTRY, "--host", VITE_HOST], {
@@ -373,23 +408,47 @@ export const config = {
 		killByName("tauri-driver", true);
 		if (IS_WINDOWS) killByName("msedgedriver", true);
 		else killByName("WebKitWebDriver", true);
-		killByPort(4448);
-		killByPort(4449);
-		await waitForPortClosed(4448);
-		await waitForPortClosed(4449);
+		if (!IS_WINDOWS) {
+			killByPort(4448);
+			killByPort(4449);
+			await waitForPortClosed(4448);
+			await waitForPortClosed(4449);
+		}
 
-		tauriDriver = spawn(
-			TAURI_DRIVER,
-			["--port", "4448", "--native-driver", NATIVE_DRIVER],
-			{
+		if (IS_WINDOWS) {
+			// #539: 인앱 WebDriver — 앱이 곧 서버다. 세션 삭제가 앱을 끝내 주지
+			// 않으므로(구 tauri-driver 와 다름) 스폰 직전 강제 정리로 4448 을 비운다.
+			await forceFreeInAppPort();
+			tauriDriver = spawn(TAURI_BINARY, [], {
 				stdio: [null, process.stdout, process.stderr],
 				env: {
 					...process.env,
-					RUST_LOG: process.env.RUST_LOG ?? "tauri_driver=debug",
+					RUST_LOG:
+						process.env.RUST_LOG ?? "tauri_plugin_wdio_webdriver=debug",
+					TAURI_WEBDRIVER_PORT: String(IN_APP_PORT),
 				},
-			},
-		);
-		await waitForPort(4448, 30_000);
+			});
+		} else {
+			tauriDriver = spawn(
+				TAURI_DRIVER,
+				["--port", "4448", "--native-driver", NATIVE_DRIVER],
+				{
+					stdio: [null, process.stdout, process.stderr],
+					env: {
+						...process.env,
+						RUST_LOG: process.env.RUST_LOG ?? "tauri_driver=debug",
+					},
+				},
+			);
+		}
+		await waitForPort(IN_APP_PORT, 30_000);
+	},
+
+	async afterSession() {
+		// #539(Windows 인앱): 세션이 끝나도 앱 프로세스는 남는다 — 직접 끝낸다.
+		if (IS_WINDOWS) {
+			await forceFreeInAppPort();
+		}
 	},
 
 	async before() {

@@ -96,7 +96,7 @@ export async function configureSettings(opts: {
 }): Promise<void> {
 	// 공급자와 키는 '두뇌' 구역에 있다 (#541). 설정을 열기만 하면 프로파일이
 	// 먼저 나오므로 그 구역을 명시적으로 연다.
-	await openSettingsSection("두뇌");
+	await openSettingsSection("brain");
 	// Provider
 	const providerSelect = await $(S.providerSelect);
 	await providerSelect.waitForDisplayed({ timeout: 10_000 });
@@ -202,61 +202,33 @@ export async function configureSettings(opts: {
 	await chatInput.waitForDisplayed({ timeout: 10_000 });
 }
 
-/** Navigate to the Settings tab and wait for render. */
-/**
- * 설정 화면이 보일 때까지 기다린다 (#541).
- *
- * 예전에는 `.chat-tab:nth-child(8)` 을 눌렀다. 그런데 지금 탭 바에는 대화·기록·
- * 채널 셋뿐이고 설정은 거기 없다. 없는 것을 누르니 아무 일도 일어나지 않았고,
- * 스펙은 그것을 "설정이 안 뜬다" 로 읽었다.
- *
- * 실제로는 설정이 이미 마운트돼 있고, 스플래시가 걷히기를 기다리면 된다.
- * 스플래시는 준비 신호나 5초 시한 중 먼저 오는 쪽에서 걷힌다 — 그동안은 앱
- * 바도 없다. 앱 바가 나타나는 것을 준비의 신호로 삼는다.
- */
-export async function navigateToSettings(): Promise<void> {
-	await browser.waitUntil(
-		async () => browser.execute(() => !!document.querySelector(".app-bar")),
-		{
-			timeout: 20_000,
-			timeoutMsg: "앱 바가 나타나지 않았다 — 스플래시가 걷히지 않았다",
-		},
-	);
-	// 설정은 앱 바의 전용 버튼으로 연다. 탭 바에는 없다.
-	await browser.execute(() => {
-		const el = document.querySelector(
-			".app-bar-settings",
-		) as HTMLElement | null;
-		if (el && !el.className.includes("app-bar-settings--active")) el.click();
-	});
-	const settings = await $(S.settingsTab);
-	await settings.waitForDisplayed({ timeout: 20_000 });
+/** 설정 내부 섹션 탭으로 이동한다 (#541: 설정은 내부 탭 구조). */
+export async function openSettingsSection(id: string): Promise<void> {
+	const tab = await $(`[data-settings-tab="${id}"]`);
+	await tab.waitForDisplayed({ timeout: 10_000 });
+	await tab.click();
+	await browser.pause(300);
 }
 
-/**
- * 설정 안의 하위 구역을 연다 (#541).
- *
- * 설정은 프로파일·두뇌·음성·아바타·페르소나·기억·지식·스킬·연결·일반으로
- * 나뉘고, 열면 프로파일이 먼저 나온다. 테마처럼 다른 구역에 있는 것을 찾는
- * 스펙은 그 구역을 먼저 열어야 한다.
- *
- * 이름표로 고른다 — 위치(n번째)로 고르면 구역이 하나 늘 때마다 어긋난다.
- */
-export async function openSettingsSection(label: string): Promise<void> {
-	await navigateToSettings();
-	const opened = await browser.execute((text: string) => {
-		const buttons = Array.from(
-			document.querySelectorAll(".settings-tab-btn"),
-		) as HTMLElement[];
-		const target = buttons.find((b) => b.innerText.trim().startsWith(text));
-		if (!target) return false;
-		target.click();
-		return true;
-	}, label);
-	if (!opened) {
-		throw new Error(`설정에 '${label}' 구역이 없다`);
-	}
-	await browser.pause(300);
+/** Navigate to Settings via the app-bar button and wait for render (#541). */
+export async function navigateToSettings(): Promise<void> {
+	// 앱바 설정 버튼은 토글이다 — 이미 열려 있으면 다시 누르지 않는다(닫혀 버림).
+	// keepAlive 앱은 opacity:0 슬롯으로 숨겨서 offsetParent 로는 판별 불가 —
+	// 슬롯의 active 클래스가 유일한 진실이다.
+	const alreadyOpen = await browser.execute(() => {
+		const panel = document.querySelector(".settings-tab") as HTMLElement | null;
+		if (!panel) return false;
+		const slot = panel.closest(".content-app__slot");
+		if (slot) return slot.classList.contains("content-app__slot--active");
+		return true; // keepAlive 슬롯 밖에서 렌더 = 실제로 열린 화면
+	});
+	if (alreadyOpen) return;
+	// querySelector 클릭은 요소가 없으면 무음 no-op 라 실패를 숨긴다 —
+	// 버튼 표시를 기다렸다가 실제 클릭으로 연다.
+	const trigger = await $(S.settingsTabBtn);
+	await trigger.waitForDisplayed({ timeout: 15_000 });
+	await trigger.click();
+	await browser.pause(500);
 }
 
 /** Scroll a specific element into view. */
@@ -463,7 +435,7 @@ export async function ensureAppReady(): Promise<void> {
  * 바꿔야 나온다 — 예전 스펙은 그 단계 없이 카드를 세다가 0을 얻었다.
  */
 export async function openVrmAvatarPicker(): Promise<void> {
-	await openSettingsSection("아바타");
+	await openSettingsSection("avatar");
 	await browser.execute(() => {
 		const select = document.getElementById(
 			"avatar-provider",
