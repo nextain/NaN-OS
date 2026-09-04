@@ -4,8 +4,10 @@ tags: [naia-shell, quality, regression, microsoft-store, dual-context]
 related:
   - docs/requirements.md
   - docs/user-scenarios.md
+  - docs/quality-process.md
+  - docs/e2e-inventory.json
   - packages/shell/e2e/store-certification.spec.ts
-updated_at: 2026-08-27
+updated_at: 2026-09-05
 source: user-directive-2026-08-27
 version: 2
 
@@ -23,6 +25,21 @@ commands:
   native_full: "pnpm -C packages/shell test:e2e:tauri"
   native_store: "pnpm -C packages/shell test:regression:store:native"
   build: "pnpm -C packages/shell build"
+  # 배포 전 회귀를 여러 기계로 나눠 돌리고 빈 곳을 찾는다. 등급 이름은 위
+  # coverage_tiers 와 같은 것을 쓴다 — docs/e2e-inventory.json 이 실기 스펙
+  # 하나하나에 그 등급을 매겨 둔다.
+  regression_run: "node scripts/run-regression.mjs --machine=<이름> --tier=deterministic_ci"
+  regression_complete: "node scripts/check-regression-complete.mjs --max-age-hours=24"
+  inventory_refresh: "node scripts/build-e2e-inventory.mjs"
+
+# 숫자가 거짓말하지 않게 하는 게이트. 전부 CI 에서 돌고 LLM 을 부르지 않는다.
+# 자세한 것은 docs/quality-process.md 를 보라.
+gates:
+  - { script: scripts/check-uc-traceability.mjs, guards: "UC 가 어디서 검증되는지 안 적힌 채 늘어나는 것" }
+  - { script: scripts/check-vacuous-tests.mjs, guards: "아무것도 재지 않는 통과와 이유 없는 skip 이 늘어나는 것" }
+  - { script: scripts/check-untranslated-ui.mjs, guards: "화면에 박힌 한국어가 늘어나는 것" }
+  - { script: "scripts/build-e2e-inventory.mjs --check", guards: "실기 스펙 요구조건 목록이 낡는 것" }
+  - { script: packages/shell/scripts/check-bundle-budget.mjs, guards: "진입 번들과 배포본이 정한 크기를 넘는 것" }
 
 entries:
   - id: naia-shell:feature:req-001
