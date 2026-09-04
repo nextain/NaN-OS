@@ -11,7 +11,7 @@
  * 남긴 기록을 check-regression-complete.mjs 가 모아 빈 곳을 찾는다.
  *
  * 쓰는 법:
- *   node scripts/run-regression.mjs --machine=<이름> --tier=ci[,keyed,device]
+ *   node scripts/run-regression.mjs --machine=<이름> --tier=deterministic_ci[,credentialed_live,native_local]
  *   node scripts/run-regression.mjs --machine=<이름> --tier=ci --dry-run
  *
  * --dry-run 은 무엇을 돌릴지만 보여준다. 환경이 갖춰졌는지 먼저 볼 때 쓴다.
@@ -23,11 +23,11 @@ import { join } from "node:path";
 const args = process.argv.slice(2);
 const value = (name) => args.find((a) => a.startsWith(`--${name}=`))?.split("=")[1];
 const machine = value("machine");
-const tiers = (value("tier") ?? "ci").split(",").map((t) => t.trim()).filter(Boolean);
+const tiers = (value("tier") ?? "deterministic_ci").split(",").map((t) => t.trim()).filter(Boolean);
 const dryRun = args.includes("--dry-run");
 
 if (!machine) {
-	console.error("사용법: node scripts/run-regression.mjs --machine=<이름> --tier=ci[,keyed,device] [--dry-run]");
+	console.error("사용법: node scripts/run-regression.mjs --machine=<이름> --tier=deterministic_ci[,credentialed_live,native_local] [--dry-run]");
 	process.exit(2);
 }
 
@@ -38,10 +38,10 @@ if (!existsSync(INVENTORY)) {
 }
 const inventory = JSON.parse(readFileSync(INVENTORY, "utf8"));
 
-const known = new Set(["ci", "keyed", "device"]);
+const known = new Set(["deterministic_ci", "credentialed_live", "native_local"]);
 const unknown = tiers.filter((t) => !known.has(t));
 if (unknown.length) {
-	console.error(`알 수 없는 등급: ${unknown.join(", ")} (쓸 수 있는 것: ci, keyed, device)`);
+	console.error(`알 수 없는 등급: ${unknown.join(", ")} (쓸 수 있는 것: deterministic_ci, credentialed_live, native_local)`);
 	process.exit(2);
 }
 

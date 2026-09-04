@@ -83,35 +83,37 @@ Playwright 64개가 여기다. 느리고 환경을 탄다.
 ## 여러 기계로 나누기
 
 3층은 한 기계에서 다 돌 수 없다. 요구 조건이 다르기 때문이다.
-`scripts/build-e2e-inventory.mjs` 가 스펙마다 무엇을 요구하는지 뽑아
+등급 이름은 새로 짓지 않고 `.agents/context/feature-test-coverage.yaml` 의
+어휘를 그대로 쓴다 — 같은 것을 두 이름으로 부르면 두 목록이 서로 다른 말을
+하게 된다. `scripts/build-e2e-inventory.mjs` 가 스펙마다 무엇을 요구하는지 뽑아
 `docs/e2e-inventory.json` 에 남긴다. 등급은 사람이 붙이지 않고 요구 조건에서
 기계로 정한다 — 사람이 붙인 꼬리표는 곧 낡는다.
 
 | 등급 | 뜻 | 현재 수 |
 |---|---|---|
-| ci | 추가 자격증명도 장치도 필요 없다 | 104 |
-| keyed | 외부 자격증명이 필요하다 | 23 |
-| device | 그 기계의 장치가 필요하다(GPU·오디오·데스크톱 세션) | 3 |
+| `deterministic_ci` | 추가 자격증명도 장치도 필요 없다 | 104 |
+| `credentialed_live` | 외부 자격증명이 필요하다 | 23 |
+| `native_local` | 그 기계의 장치가 필요하다(GPU·오디오·데스크톱 세션) | 3 |
 
-`ci` 라도 Tauri 실행 환경(WebKitWebDriver, tauri-driver, 빌드된 디버그
+`deterministic_ci` 라도 Tauri 실행 환경(WebKitWebDriver, tauri-driver, 빌드된 디버그
 바이너리)은 공통 전제다. "환경 변수를 요구하지 않는다" 가 "아무 데서나
 돈다" 는 뜻은 아니다.
 
 기계별로 이렇게 나눈다.
 
 - **러너**: 1층 전부, 2층 전부, 3층의 Playwright 64개. 지금 CI 가 하는 일이다
-- **리눅스 실기(GPU 있는 개발 기계)**: `device` 등급, 그리고 리눅스 전용 음성
+- **리눅스 실기(GPU 있는 개발 기계)**: `native_local` 등급, 그리고 리눅스 전용 음성
   경로. 다만 이 기계의 WebKitWebDriver 는 일부 스펙에서 앱 준비 단계를 넘지
   못한다(`e2e-tauri/helpers/settings.ts:404` 의 기록, 2026-09-05 재확인)
-- **Windows 실기**: `keyed` 와 `ci` 등급의 실기 스펙. 위 제약이 없는 쪽이다
+- **Windows 실기**: `credentialed_live` 와 `deterministic_ci` 등급의 실기 스펙. 위 제약이 없는 쪽이다
 
 ## 회귀를 나눠 돌리는 법
 
 기계마다 자기 몫을 돌리고 기록을 남긴다.
 
 ```
-node scripts/run-regression.mjs --machine=<이름> --tier=ci[,keyed,device]
-node scripts/run-regression.mjs --machine=<이름> --tier=ci --dry-run
+node scripts/run-regression.mjs --machine=<이름> --tier=deterministic_ci[,credentialed_live,native_local]
+node scripts/run-regression.mjs --machine=<이름> --tier=deterministic_ci --dry-run
 ```
 
 `--dry-run` 은 무엇을 돌릴지와 **환경이 없어 건너뛸 것이 무엇인지** 만

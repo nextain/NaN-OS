@@ -1,6 +1,10 @@
 /**
  * 실기 e2e 스펙이 무엇을 요구하는지 목록으로 뽑는다.
  *
+ * 등급 이름은 새로 짓지 않고 .agents/context/feature-test-coverage.yaml 의
+ * 어휘를 그대로 쓴다. 같은 것을 두 이름으로 부르면 두 목록이 서로 다른 말을
+ * 하게 된다.
+ *
  * 왜 필요한가: 스펙은 130개인데 어느 것이 어디서 돌 수 있는지 아무 데도
  * 적혀 있지 않다. 그 사실이 스펙 안의 환경 변수 조건문과 전용 wdio 설정에
  * 흩어져 있어서, "무엇이 안 돌고 있는가" 를 물어도 셀 수가 없다. 셀 수 없는
@@ -10,10 +14,10 @@
  * 요구하는지 (3) 그래서 어떤 등급인지. 등급은 요구 조건에서 기계로 정한다 —
  * 사람이 붙이는 꼬리표는 곧 낡는다.
  *
- * 등급:
- *   ci       요구 조건 없음. 러너에서 돌 수 있다
- *   keyed    외부 자격증명이 필요하다(모델 키, 게이트웨이 토큰)
- *   device   그 기계의 장치가 필요하다(GPU, 오디오, 실제 데스크톱 세션)
+ * 등급(feature-test-coverage.yaml 과 같은 어휘):
+ *   deterministic_ci   자격증명 없이 돈다
+ *   credentialed_live  외부 자격증명이 필요하다(모델 키, 게이트웨이 토큰)
+ *   native_local       그 기계의 장치가 필요하다(GPU, 오디오, 데스크톱 세션)
  *
  * 산출물: docs/e2e-inventory.json (기계가 읽는 것) 과 표준 출력 요약.
  */
@@ -50,7 +54,7 @@ for (const name of readdirSync(SPEC_DIR).filter((f) => f.endsWith(".spec.ts")).s
 		spec: name,
 		conf: confOwners.get(name) ?? [],
 		env: envs,
-		tier: device ? "device" : keyed ? "keyed" : "ci",
+		tier: device ? "native_local" : keyed ? "credentialed_live" : "deterministic_ci",
 	});
 }
 

@@ -3,7 +3,7 @@
 기계마다 자기 몫의 실기 회귀를 돌리고 결과를 이 디렉터리에 남긴다.
 
 ```
-node scripts/run-regression.mjs --machine=<이름> --tier=ci[,keyed,device]
+node scripts/run-regression.mjs --machine=<이름> --tier=deterministic_ci[,credentialed_live,native_local]
 ```
 
 남는 파일 하나가 그 기계의 한 번 실행이다. 무엇을 맡았는지(`assigned`),
