@@ -96,6 +96,26 @@ vi.mock("../lib/active-bridge", () => ({
 	}),
 }));
 
+vi.mock("@tauri-apps/api/webview", () => ({
+	getCurrentWebview: () => ({
+		onDragDropEvent: vi.fn().mockResolvedValue(() => {}),
+		label: "main",
+	}),
+}));
+vi.mock("@tauri-apps/api/window", () => ({
+	getCurrentWindow: () => ({
+		show: vi.fn().mockResolvedValue(undefined),
+		onResized: vi.fn().mockResolvedValue(() => {}),
+		onScaleChanged: vi.fn().mockResolvedValue(() => {}),
+		setSize: vi.fn().mockResolvedValue(undefined),
+	}),
+}));
+vi.mock("@tauri-apps/plugin-updater", () => ({
+	check: vi.fn().mockResolvedValue(null),
+}));
+vi.mock("@tauri-apps/plugin-process", () => ({
+	relaunch: vi.fn().mockResolvedValue(undefined),
+}));
 import { App } from "../App";
 
 describe("App discord deep-link persistence", () => {
