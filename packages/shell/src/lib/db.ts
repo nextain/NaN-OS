@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 
-// === Agent Memory (reads from Agent's ~/.naia/memory/alpha-memory.json) ===
+// === Agent Memory (via Tauri IPC; Agent SoT = <adkPath>/naia-settings/memory/store.json, per-workspace) ===
 
 /** Agent's semantic Fact — matches agent/src/memory/types.ts Fact interface */
 export interface AgentFact {

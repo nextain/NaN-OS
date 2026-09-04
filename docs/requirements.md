@@ -1119,3 +1119,17 @@ fenced code는 언어·복사·접기·워크스페이스 전환을 제공하고
 | **FR-BUNDLE.5** | 완료된 사용자의 초기 진입에서는 온보딩 wizard와 그 전이 의존성을 내려받지 않는다. 신규 사용자의 온보딩 진입 시 로딩 상태를 표시하고, 청크 로드 실패는 셸 전체를 새로고침하지 않고 해당 화면만 재시도할 수 있어야 한다. | UC-PERF-BUNDLE-BUDGET | `DeferredOnboardingWizard.test.tsx`, `205-onboarding-avatar-grid.spec.ts`, production build chunk inspection | Done |
 | **FR-BUNDLE.6** | ChatArea와 전이 의존성은 초기 진입 파일에서 분리한다. 로딩 중에는 진행 상태를 표시하고, 그 사이 도착한 슬라이드 나레이션 요청은 채팅 가시성과 무관하게 마운트된 지연 표면의 eager 경량 버퍼가 보존해 React StrictMode 재마운트 뒤에도 한 번만 전달한다. 지연 표면이 해제되면 버퍼된 요청을 cancelled 결과로, Chat 청크 로드가 실패하면 failed 결과로 정산하고, 상관된 실패·취소 결과를 받은 프레젠터는 speaking에서 재개 가능한 paused 상태로 전이한다. 동일 URL의 실패한 동적 import는 브라우저 캐시상 새 요청을 보장할 수 없으므로 운영 청크 실패는 명시적인 셸 재로드로 복구한다. 빌드 검사는 대상 청크가 초기 엔트리의 동적 import 그래프에서 실제로 도달 가능한지도 확인한다. | UC-PERF-BUNDLE-BUDGET | `DeferredChatArea.test.tsx`, `slides-center-area.test.tsx`, `slide-presenter.test.ts`, `check-bundle-budget.test.mjs`, production build chunk inspection | Done |
 | **FR-BUNDLE.7** | #431 기준 초기 진입 예산을 개선된 측정값에 맞춰 raw 500,000바이트, gzip 160,000바이트로 강화한다. 최종 후보 실측은 기준선 2,913,442/836,096바이트에서 raw 439,810바이트/gzip 138,469바이트로 감소했다. 빌드 시각이 엔트리에 포함되어 gzip 값은 수 바이트 변동할 수 있으며, 이 수치는 엔트리 파일 크기 감소이지 초기 총 네트워크 전송량 감소를 뜻하지 않는다. | UC-PERF-BUNDLE-BUDGET | production build + `bundle-budget-report.json` | Done |
+
+
+## 기능 요구사항 (FR) — 앱 샌드박스 · BGM 라이브러리 · 슬라이드 녹화 (2026-09-05, #528 #543 #546 통합 완성)
+
+> 리눅스 핸드오프의 bgm-wip 통합을 완성하며 누락돼 있던 신규 파일 셋과 그 계약을 명문화한다.
+> 앱 샌드박스는 "앱 설치·앱 파일 경로가 한 추상화를 지나는가"의 판정 기준이다(docs/app-store-protocol.md).
+
+| FR | 요구사항 | 근거(UC/S) | 검증 |
+|----|----------|-----------|------|
+| **FR-APP-SANDBOX.1** | 앱은 자기 데이터를 `<adkPath>/data-private/apps/<appId>/` 샌드박스에만 읽고 쓴다. Tauri 커맨드 6종(`app_sandbox_root`/`write_file`/`read_file`/`open_in_workspace` + `slides_recording_start`/`stop`, `app_sandbox.rs`)이 경로를 강제한다: appId 화이트리스트(ascii 영숫자·`.-_`, ≤160), 상대경로만(`Component::Normal`), canonicalize 후 `starts_with(root)` 로 탈출 차단. 프런트는 `lib/app-sandbox.ts`(6 export)가 유일 경로. | S-APP-SANDBOX | `app_sandbox.rs` 경로탈출 rust 단위 + `src/lib/__tests__/` + tsc·cargo check(PASS) |
+| **FR-BGM-LIB.1** | BGM 라이브러리(즐겨찾기·재생목록·셔플·반복)의 SoT 는 앱 샌드박스 `land.naia.shell/bgm/library.json`(#528). config.json `bgmLibrary` 는 최초 1회 이관 소스이자 샌드박스 쓰기 실패 시 폴백. 재생목록 CRUD·순서 이동(`movePlaylistTrack`)·좋아요 토글·다음곡 인덱스(셔플/반복)는 순수 함수(`bgm-library.ts`). 동기 판독 캐시(`bgm-library-store.ts`)로 음성 스킬이 읽는다. | S-BGM-LIB (UC8 확장) | `bgm-library.test.ts`·`bgm-library-store.test.ts`(단위) + `BgmPlayer.test.tsx`(플레이리스트 생성·persist·다음곡, 21/21) + `e2e/bgm-skill.spec.ts` |
+| **FR-APP-OPEN-GRANT.1** | 워크스페이스 밖 파일을 여는 경로(CLI 인자·단일 인스턴스·드래그드롭)는 그 파일에 세션 한정 read/write grant 를 등록한다("열림=동의", #543). `workspace.rs grant_open_file` + `lib.rs get_startup_open_file`. | S-APP-OPEN-GRANT | `workspace.rs` rust 단위 |
+| **FR-SLIDES-REC.1** | 슬라이드 발표를 MP4 로 녹화한다(ffmpeg gdigrab, 산출 `<adkPath>/data-private/apps/land.naia.slides/video/`). 시작/정지 커맨드는 단일 활성 녹화만 허용(재진입 거부, poisoned-lock 방어). 프런트 라벨(`slides.recordStart/Stop`·`focusStart/Exit`·`notesShow/Hide`)은 14개 언어 i18n. | S-SLIDES-REC | `app_sandbox.rs` 녹화 상태머신 + i18n 생성 --check + 수동 실기 |
+| **FR-I18N-COMPLETE.1** | 셸 src 의 모든 `t("...")` 키는 i18n 원천(`i18n-translations.source.ts`)에 14개 언어로 존재해야 한다. bgm-wip 이 `bgm.tabPlaylists`·`bgm.newPlaylist`·shuffle/repeat·`bgm.cat.{kpop,citypop}`·`slides.*` 를 코드에만 추가해 모든 언어에서 라벨이 비던 드리프트를 정리. pre-commit `check-compile-integrity.mjs`(TranslationKey 강제)가 회귀 가드. | S-I18N-COMPLETE | `check-compile-integrity.mjs`(PASS) + `generate-i18n-locales --check` |

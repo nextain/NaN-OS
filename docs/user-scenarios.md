@@ -1560,3 +1560,19 @@ Test Coverage Map (P02):
 | UC-PERF-BUNDLE-BUDGET | production build + CI artifact | 초기 번들에서 Mermaid·ChatArea 분리, 강화된 예산 및 보고서 보존 |
 
 Chat 지연 로드 UI 상태 매트릭스: **기본**은 variant를 지정하지 않은 지연 경계가 기본 Chat 표면을 렌더링하는 상태, **빈 상태**는 대화 기록이 없어 `.chat-message`가 0개인 실제 ChatArea, **진행**은 `aria-live` 로딩 출력, **성공**은 로드된 Chat 입력, **오류**는 `alert`와 접근 가능한 재시도 버튼, **좁은 폭**은 480×800에서 주변 AppBar와 Chat을 유지하고 수평 overflow가 없는 상태로 검증한다. `DeferredChatArea.test.tsx`가 기본 variant·진행·성공·오류 및 재시도 분기를 고정한다. production-preview `deferred-chat-area.spec.ts`는 빌드된 청크에서 빈 대화 상태와 주변 셸, 진행→성공, 오류 버튼의 키보드 초점→재로드→복구 및 좁은 폭 레이아웃을 검증한다.
+
+
+> **S-APP-SANDBOX / S-BGM-LIB / S-APP-OPEN-GRANT / S-SLIDES-REC / S-I18N-COMPLETE (2026-09-05, #528 #543 #546 — bgm-wip 통합 완성)**
+> - **S-APP-SANDBOX**: 앱(BGM 위젯·슬라이드)이 자기 파일을 저장·복원할 때 사용자의 다른 파일이나 워크스페이스 밖을 건드리지 못한다. 경로는 항상 `<adkPath>/data-private/apps/<appId>/` 안으로 강제된다(상대경로·탈출 차단). FR-APP-SANDBOX.1.
+> - **S-BGM-LIB**: 사용자가 곡을 즐겨찾기하거나 이름 있는 재생목록을 만들고 순서를 바꾸고 셔플·반복을 켜면, 그 상태가 앱 샌드박스 라이브러리에 저장되어 재시작·워크스페이스 전환 후에도 남고 음성 스킬(라디오 DJ)이 같은 SoT 를 읽는다. FR-BGM-LIB.1. (UC8 "음악 틀어줘" 의 라이브러리 확장.)
+> - **S-APP-OPEN-GRANT**: 사용자가 워크스페이스 밖 파일을 드래그드롭하거나 CLI 로 열면 그 파일만 이 세션에서 열람·쓰기가 허용된다(열림=동의). FR-APP-OPEN-GRANT.1.
+> - **S-SLIDES-REC**: 사용자가 슬라이드 발표를 녹화하면 MP4 가 앱 샌드박스 video 폴더에 남고, 이미 녹화 중이면 새 녹화를 거부한다. FR-SLIDES-REC.1.
+> - **S-I18N-COMPLETE**: 사용자가 어느 언어로 쓰든 플레이리스트 탭·새 재생목록·셔플/반복·장르(K-Pop/시티팝)·슬라이드 컨트롤 라벨이 그 언어로 보인다(빈 라벨 없음). FR-I18N-COMPLETE.1.
+
+| S-ID | 기능 | 근거 UC | 검증 |
+|------|------|---------|------|
+| S-APP-SANDBOX | 앱 샌드박스 경로 강제 | UC9 앱 | app_sandbox.rs 단위·cargo |
+| S-BGM-LIB | BGM 라이브러리 SoT(#528) | UC8 확장 | bgm-library(-store).test.ts·BgmPlayer.test.tsx |
+| S-APP-OPEN-GRANT | 열림=동의 grant(#543) | UC9 앱 | workspace.rs 단위 |
+| S-SLIDES-REC | 슬라이드 MP4 녹화(#546) | UC9 앱 | app_sandbox.rs 상태머신 |
+| S-I18N-COMPLETE | t() 키 14개 언어 완비 | 전 UC | check-compile-integrity·generate --check |
