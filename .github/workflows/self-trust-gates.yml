@@ -105,6 +105,12 @@ jobs:
       # 이 게이트가 현재 체계를 본다.
       - name: UC traceability
         run: node scripts/check-uc-traceability.mjs
+
+      # 통과 수치가 거짓말하지 않게 한다. expect(true).toBe(true) 는 PASS 로
+      # 올라가지만 아무것도 보지 않고, 이유 없이 꺼 둔 테스트는 죽은 채 파일
+      # 수에만 남는다.
+      - name: vacuous tests (자명 단정·죽은 skip 증가 금지)
+        run: node scripts/check-vacuous-tests.mjs
       - name: wire probes (os outbound ⊆ agent accept / agent output ⊆ os classify)
         run: |
           node scripts/builds/uc1-outbound-probe.mjs
