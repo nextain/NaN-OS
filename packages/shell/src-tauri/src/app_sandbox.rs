@@ -7,12 +7,22 @@ use tauri::{AppHandle, Emitter};
 static RECORDING: OnceLock<Mutex<Option<(Child, PathBuf)>>> = OnceLock::new();
 
 fn root(adk_path: &str, app_id: &str) -> Result<PathBuf, String> {
-    if app_id.is_empty() || app_id.len() > 160 || !app_id.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | '_')) {
+    // app_id is a single path component; '.'/'..' would traverse out of apps/ (the
+    // char whitelist permits '.'). Reject them, and defense-in-depth: verify the
+    // canonical root stays under the canonical apps dir so no traversal can escape.
+    if app_id.is_empty() || app_id.len() > 160 || app_id == "." || app_id == ".." || !app_id.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | '_')) {
         return Err("invalid app id".into());
     }
-    let root = Path::new(adk_path).join("data-private").join("apps").join(app_id);
+    let apps = Path::new(adk_path).join("data-private").join("apps");
+    std::fs::create_dir_all(&apps).map_err(|error| error.to_string())?;
+    let apps = apps.canonicalize().map_err(|error| error.to_string())?;
+    let root = apps.join(app_id);
     std::fs::create_dir_all(&root).map_err(|error| error.to_string())?;
-    root.canonicalize().map_err(|error| error.to_string())
+    let root = root.canonicalize().map_err(|error| error.to_string())?;
+    if !root.starts_with(&apps) {
+        return Err("app id escapes the sandbox root".into());
+    }
+    Ok(root)
 }
 
 fn file(root: &Path, relative_path: &str) -> Result<PathBuf, String> {
@@ -75,4 +85,28 @@ pub fn slides_recording_stop() -> Result<String, String> {
     let _ = child.kill();
     let _ = child.wait();
     Ok(output.to_string_lossy().into_owned())
+}
+
+#[cfg(test)]
+mod app_sandbox_escape_tests {
+    use super::root;
+    // Distinct temp ADK per test process; leaves dirs (test scratch) — acceptable.
+    fn adk() -> String {
+        std::env::temp_dir()
+            .join(format!("naia-sbx-{}", std::process::id()))
+            .to_string_lossy()
+            .into_owned()
+    }
+    #[test]
+    fn rejects_parent_traversal_app_id() {
+        // ".." would escape <adk>/data-private/apps into data-private (codex #1).
+        assert!(root(&adk(), "..").is_err());
+        assert!(root(&adk(), ".").is_err());
+    }
+    #[test]
+    fn allows_normal_dotted_app_id_and_contains_it() {
+        let r = root(&adk(), "land.naia.shell").expect("normal app id ok");
+        assert!(r.ends_with("land.naia.shell"));
+        assert!(r.to_string_lossy().replace('\\', "/").contains("data-private/apps/land.naia.shell"));
+    }
 }
