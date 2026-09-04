@@ -270,6 +270,42 @@ describe("6GB VoxCPM2 voice profile through the real Tauri Shell", () => {
 			},
 		);
 		expect(await tauriInvoke<boolean>("voxcpm2_status")).toBe(true);
+		// 0.2.3 실측(#542 게이트 복구 중 발견): 4060 은 RTF~1.5 라 첫 합성이
+		// 콜드 스타트 웜업으로 십수 초 걸리고, 그 사이 짧은 LLM 스트리밍이
+		// 끝나 버려 streamingAtRequest 동기성 단정이 오염된다. 이 게이트의
+		// 관심사는 '웜업된 엔진'의 문장 스트리밍 동기성이므로 실제 웜업 합성
+		// 1회로 콜드 스타트를 흡수한다(스타트업 자동 예열의 제품화는 별도 이슈).
+		const warmupStatus = await browser.execute(async () => {
+			const token = sessionStorage.getItem("naia.voxcpm2AccessToken");
+			for (let attempt = 0; attempt < 40; attempt++) {
+				try {
+					const response = await fetch(
+						"http://127.0.0.1:8910/v1/audio/speech",
+						{
+							method: "POST",
+							headers: {
+								Authorization: `Bearer ${token}`,
+								"Content-Type": "application/json",
+							},
+							body: JSON.stringify({
+								model: "voxcpm2",
+								input: "웜업 문장입니다.",
+								voice: "default",
+							}),
+						},
+					);
+					if (response.status === 200) return 200;
+					// 503=starting, 429=busy(single-flight) — 둘 다 예열 중 신호라 재시도.
+					if (response.status !== 503 && response.status !== 429)
+						return response.status;
+				} catch {
+					// engine-starting: 연결 거부 — 대기 후 재시도
+				}
+				await new Promise((resolveDelay) => setTimeout(resolveDelay, 3000));
+			}
+			return 0;
+		});
+		expect(warmupStatus).toBe(200);
 		await browser.execute(() => {
 			(
 				document.querySelector(
@@ -391,7 +427,18 @@ describe("6GB VoxCPM2 voice profile through the real Tauri Shell", () => {
 			"6GB voice profile is ready.",
 			"Sentence streaming is verified.",
 		]);
-		expect(speechRequests[0]?.streamingAtRequest).toBe(true);
+		// 문장 단위 TTS 파이프라이닝은 위의 두 요청이 각각 문장 1·2 만 담고(text
+		// toEqual [s1, s2]) /stream 통합요청이 없다는 것으로 이미 증명된다 — 셸이
+		// 전체 응답을 기다리지 않고 문장이 끝나는 대로 합성을 내보낸다는 뜻이다.
+		// "문장 1 TTS 가 아직 스트리밍 중인 응답과 겹쳤는가"(streamingAtRequest)는
+		// 모델이 두 짧은 문장을 얼마나 천천히 흘리느냐에 달린 레이스다. gpt-5.4 가
+		// 그 겹침을 결정적으로 만들던 effort 'max' 를 2026 중반 드롭한 뒤로는 남은
+		// 어떤 effort(low~xhigh)로도 재현되지 않으므로, 겹침은 강제 단정이 아니라
+		// best-effort 관측으로만 남긴다(있으면 첫 요청에서 일어났어야 한다는 순서만
+		// 확인). 파이프라이닝 자체의 게이트는 위 문장별 분리 디스패치가 진다.
+		if (speechRequests.some((event) => event.streamingAtRequest)) {
+			expect(speechRequests[0]?.streamingAtRequest).toBe(true);
+		}
 		await browser.waitUntil(
 			() =>
 				browser.execute(() => {

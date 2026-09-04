@@ -4,7 +4,10 @@ import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 
 const shellDir = resolve(import.meta.dirname, "..");
+// #539: 페어링 경로 계산 사본이 stale 워크트리를 박고 있었다. 다른 e2e 하네스와
+// 같은 NAIA_E2E_AGENT_ROOT 를 우선 존중하고, 마지막 폴백만 남긴다.
 const agent = process.env.NAIA_E2E_AGENT_DIR
+ ?? process.env.NAIA_E2E_AGENT_ROOT
  ?? "D:/alpha-adk/projects/naia-agent-worktrees/shell-pair-b327712";
 const script = resolve(agent, "scripts/builds/agent-stdio-entry.mjs");
 const proto = resolve(agent, "src/main/adapters/grpc");
