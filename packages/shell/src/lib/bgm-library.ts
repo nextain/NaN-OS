@@ -29,6 +29,7 @@ export interface BgmPlaylist {
 
 export interface BgmLibraryState {
 	schemaVersion: typeof BGM_LIBRARY_SCHEMA_VERSION;
+	updatedAt: number;
 	likes: BgmLibraryTrack[];
 	playlists: BgmPlaylist[];
 	activePlaylistId: string | null;
@@ -105,6 +106,7 @@ function uniqueTracks(values: unknown, limit: number): BgmLibraryTrack[] {
 export function createEmptyBgmLibrary(now = Date.now()): BgmLibraryState {
 	return {
 		schemaVersion: BGM_LIBRARY_SCHEMA_VERSION,
+		updatedAt: now,
 		likes: [],
 		playlists: [{ id: "default", name: "My Playlist", tracks: [], createdAt: now, updatedAt: now }],
 		activePlaylistId: "default",
@@ -146,6 +148,7 @@ export function loadBgmLibrary(raw: unknown, legacyYoutubeLikes: readonly unknow
 	const currentIndex = Number.isFinite(requestedIndex) && requestedIndex >= 0 && requestedIndex < activeLength ? requestedIndex : -1;
 	return {
 		schemaVersion: BGM_LIBRARY_SCHEMA_VERSION,
+		updatedAt: finiteNonNegative(input.updatedAt) ?? now,
 		likes: uniqueTracks(Array.isArray(input.likes) ? input.likes : legacyYoutubeLikes, BGM_HISTORY_LIMIT),
 		playlists: safePlaylists,
 		activePlaylistId,
@@ -161,7 +164,7 @@ export function createPlaylist(state: BgmLibraryState, name: string, now = Date.
 	if (state.playlists.length >= BGM_PLAYLIST_LIMIT) return state;
 	const safeName = cleanText(name, 100) || `Playlist ${state.playlists.length + 1}`;
 	const id = `playlist-${now}-${Math.random().toString(36).slice(2, 8)}`;
-	return { ...state, playlists: [...state.playlists, { id, name: safeName, tracks: [], createdAt: now, updatedAt: now }], activePlaylistId: id, currentIndex: -1 };
+	return { ...state, playlists: [...state.playlists, { id, name: safeName, tracks: [], createdAt: now, updatedAt: now }], activePlaylistId: id, currentIndex: -1, updatedAt: now };
 }
 
 export function addTrackToPlaylist(state: BgmLibraryState, playlistId: string, trackValue: BgmLibraryTrack, now = Date.now()): BgmLibraryState {
@@ -174,7 +177,7 @@ export function addTrackToPlaylist(state: BgmLibraryState, playlistId: string, t
 		changed = true;
 		return { ...playlist, tracks: [...playlist.tracks, track], updatedAt: now };
 	});
-	return changed ? { ...state, playlists } : state;
+	return changed ? { ...state, playlists, updatedAt: now } : state;
 }
 
 export function removeTrackFromPlaylist(state: BgmLibraryState, playlistId: string, index: number, now = Date.now()): BgmLibraryState {
@@ -188,7 +191,7 @@ export function removeTrackFromPlaylist(state: BgmLibraryState, playlistId: stri
 	const currentIndex = state.activePlaylistId === playlistId
 		? state.currentIndex === index ? -1 : state.currentIndex > index ? state.currentIndex - 1 : state.currentIndex
 		: state.currentIndex;
-	return { ...state, playlists, currentIndex };
+	return { ...state, playlists, currentIndex, updatedAt: now };
 }
 
 export function movePlaylistTrack(state: BgmLibraryState, playlistId: string, from: number, to: number, now = Date.now()): BgmLibraryState {
@@ -206,22 +209,22 @@ export function movePlaylistTrack(state: BgmLibraryState, playlistId: string, fr
 		}
 		return { ...playlist, tracks, updatedAt: now };
 	});
-	return { ...state, playlists, currentIndex: nextIndex };
+	return { ...state, playlists, currentIndex: nextIndex, updatedAt: now };
 }
 
-export function toggleBgmLike(state: BgmLibraryState, trackValue: BgmLibraryTrack): BgmLibraryState {
+export function toggleBgmLike(state: BgmLibraryState, trackValue: BgmLibraryTrack, now = Date.now()): BgmLibraryState {
 	const track = normalizeBgmTrack(trackValue);
 	if (!track) return state;
 	const identity = trackIdentity(track);
 	const exists = state.likes.some((item) => trackIdentity(item) === identity);
-	return { ...state, likes: exists ? state.likes.filter((item) => trackIdentity(item) !== identity) : [track, ...state.likes].slice(0, BGM_HISTORY_LIMIT) };
+	return { ...state, likes: exists ? state.likes.filter((item) => trackIdentity(item) !== identity) : [track, ...state.likes].slice(0, BGM_HISTORY_LIMIT), updatedAt: now };
 }
 
-export function recordBgmHistory(state: BgmLibraryState, trackValue: BgmLibraryTrack): BgmLibraryState {
+export function recordBgmHistory(state: BgmLibraryState, trackValue: BgmLibraryTrack, now = Date.now()): BgmLibraryState {
 	const track = normalizeBgmTrack(trackValue);
 	if (!track) return state;
 	const identity = trackIdentity(track);
-	return { ...state, history: [track, ...state.history.filter((item) => trackIdentity(item) !== identity)].slice(0, BGM_HISTORY_LIMIT) };
+	return { ...state, history: [track, ...state.history.filter((item) => trackIdentity(item) !== identity)].slice(0, BGM_HISTORY_LIMIT), updatedAt: now };
 }
 
 export function nextPlaylistIndex(state: BgmLibraryState, direction: 1 | -1, random: () => number = Math.random): number {

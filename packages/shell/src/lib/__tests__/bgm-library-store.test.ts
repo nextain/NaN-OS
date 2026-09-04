@@ -10,6 +10,12 @@ vi.mock("../app-sandbox", () => ({
 	writeAppSandboxFile: sandbox.write,
 }));
 
+const config = vi.hoisted(() => ({
+	load: vi.fn<() => unknown>(() => null),
+	save: vi.fn<(value: unknown) => void>(),
+}));
+vi.mock("../config", () => ({ loadConfig: config.load, saveConfig: config.save }));
+
 import { createEmptyBgmLibrary } from "../bgm-library";
 import {
 	bgmLibraryCache,
@@ -27,6 +33,9 @@ describe("bgm-library-store", () => {
 		resetBgmLibraryCache();
 		sandbox.read.mockReset();
 		sandbox.write.mockReset();
+		config.load.mockReset();
+		config.load.mockReturnValue(null);
+		config.save.mockReset();
 	});
 
 	it("loads the sandbox file as the source of truth and primes the cache", async () => {
@@ -67,5 +76,26 @@ describe("bgm-library-store", () => {
 
 		expect(bgmLibraryCache()).toBe(state);
 		expect(sandbox.write).toHaveBeenCalledTimes(1);
+	});
+
+	it("adopts config over a stale sandbox when config is newer, then heals the sandbox", async () => {
+		sandbox.read.mockResolvedValue(encode({ ...createEmptyBgmLibrary(1), updatedAt: 1 }));
+		sandbox.write.mockResolvedValue("ok");
+		config.load.mockReturnValue({ bgmLibrary: { ...createEmptyBgmLibrary(5), updatedAt: 5, activePlaylistId: "default" } });
+
+		const loaded = await loadBgmLibraryFromSandbox();
+
+		expect(loaded.updatedAt).toBe(5);
+		expect(sandbox.write).toHaveBeenCalledTimes(1); // stale sandbox healed
+	});
+
+	it("keeps the sandbox when it is at least as new as config", async () => {
+		sandbox.read.mockResolvedValue(encode({ ...createEmptyBgmLibrary(9), updatedAt: 9 }));
+		config.load.mockReturnValue({ bgmLibrary: { ...createEmptyBgmLibrary(3), updatedAt: 3 } });
+
+		const loaded = await loadBgmLibraryFromSandbox();
+
+		expect(loaded.updatedAt).toBe(9);
+		expect(sandbox.write).not.toHaveBeenCalled();
 	});
 });

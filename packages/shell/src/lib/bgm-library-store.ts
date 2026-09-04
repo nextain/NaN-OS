@@ -36,17 +36,32 @@ export function resetBgmLibraryCache(): void {
 export async function loadBgmLibraryFromSandbox(
 	legacyYoutubeLikes: readonly unknown[] = [],
 ): Promise<BgmLibraryState> {
+	let sandbox: BgmLibraryState | null = null;
 	try {
 		const bytes = await readAppSandboxFile(APP_ID, LIBRARY_PATH);
-		const parsed = JSON.parse(
-			new TextDecoder().decode(Uint8Array.from(bytes)),
-		) as unknown;
-		cache = loadBgmLibrary(parsed);
-		return cache;
+		sandbox = loadBgmLibrary(
+			JSON.parse(new TextDecoder().decode(Uint8Array.from(bytes))) as unknown,
+		);
 	} catch {
 		// 파일 부재/파손 — config 이관 경로로 넘어간다.
 	}
 	const cfg = loadConfig();
+	if (sandbox) {
+		// Reconcile: a prior sandbox write may have failed and saved the newer state to
+		// config. Adopt config only when it is strictly newer (updatedAt), then heal the
+		// sandbox so the primary SoT catches up.
+		if (cfg?.bgmLibrary && typeof cfg.bgmLibrary === "object") {
+			const fromConfig = loadBgmLibrary(cfg.bgmLibrary);
+			if (fromConfig.updatedAt > sandbox.updatedAt) {
+				cache = fromConfig;
+				await persistBgmLibrary(fromConfig);
+				return fromConfig;
+			}
+		}
+		cache = sandbox;
+		return sandbox;
+	}
+	// No sandbox file yet — one-time migration from config (+ legacy likes).
 	const migrated = loadBgmLibrary(cfg?.bgmLibrary, legacyYoutubeLikes);
 	cache = migrated;
 	await persistBgmLibrary(migrated);

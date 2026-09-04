@@ -36,6 +36,13 @@ fn file(root: &Path, relative_path: &str) -> Result<PathBuf, String> {
     if !parent.canonicalize().map_err(|error| error.to_string())?.starts_with(root) {
         return Err("sandbox path escape rejected".into());
     }
+    // A pre-planted symlink at the final component would be followed out of the sandbox
+    // (parent canonicalize does not cover it). Reject it when present.
+    if let Ok(meta) = std::fs::symlink_metadata(&output) {
+        if meta.file_type().is_symlink() {
+            return Err("sandbox path must not be a symlink".into());
+        }
+    }
     Ok(output)
 }
 
