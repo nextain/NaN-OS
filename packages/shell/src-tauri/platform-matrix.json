@@ -168,9 +168,9 @@
 			}
 		},
 		"linux": {
-			"$voxcpm2Comment": "VoxCPM2 런타임은 optional 이다 — nextain/voxcpm2-tensorrt 가 아직 리눅스 산출물을 발행하지 않기 때문이다(#530). required 로 두면 산출물이 없는 동안 모든 리눅스 빌드가 실패한다. 산출물이 나오면 required 로 올린다.",
+			"$voxcpm2Comment": "linux_trt_6g 산출물이 발행되어(2026-09-04, voxcpm2-tensorrt 3dbc86c) Windows 와 같은 required 다(#537). 이전에는 리눅스 산출물이 없어 optional 이었다(#530).",
 			"staging": {
-				"voxcpm2Runtime": "optional"
+				"voxcpm2Runtime": "required"
 			},
 			"voxcpm2RuntimeResources": {
 				"voxcpm2-runtime": "voxcpm2-runtime"

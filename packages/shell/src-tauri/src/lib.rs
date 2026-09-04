@@ -5582,11 +5582,24 @@ fn powershell_compatible_path(path: &std::path::Path) -> std::path::PathBuf {
 }
 
 fn voxcpm2_installer_script_path(app: &tauri::AppHandle) -> Option<std::path::PathBuf> {
-    app.path()
-        .resource_dir()
-        .ok()
-        .map(|root| {
-            root.join("voxcpm2-runtime").join(host_prepare_script())
+    // 설치 트랜잭션이 읽는 자원은 셋이다 — 다운로드 매니페스트, 설치 스크립트,
+    // 활성화 계약. 매니페스트에는 개발용 우회가 있었는데 스크립트에는 없어서,
+    // 설치본이 아닌 빌드에서는 내려받기 경로 자체를 잴 수 없었다(#537). 우회는
+    // 디버그 빌드에서만 산다 — 릴리스는 언제나 자기 리소스만 읽는다.
+    let development = if cfg!(debug_assertions) {
+        std::env::var_os("NAIA_VOXCPM2_INSTALLER_DIR")
+            .filter(|value| !value.is_empty())
+            .map(std::path::PathBuf::from)
+    } else {
+        None
+    };
+    development
+        .map(|root| root.join(host_prepare_script()))
+        .or_else(|| {
+            app.path()
+                .resource_dir()
+                .ok()
+                .map(|root| root.join("voxcpm2-runtime").join(host_prepare_script()))
         })
         .filter(|path| {
             path.is_file()

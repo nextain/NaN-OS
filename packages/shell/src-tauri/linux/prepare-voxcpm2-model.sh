@@ -48,7 +48,7 @@ PYTHON="$ARTIFACT_ROOT/python/bin/python3"
 [ -f "$ACTIVATION_CONTRACT_PATH" ] || { echo "Naia Host activation contract is missing" >&2; exit 1; }
 
 # JSON reads go through the bundled interpreter so the script needs no jq.
-jget() { "$PYTHON" -I -c 'import json,sys; d=json.load(open(sys.argv[1])); print(eval("d"+sys.argv[2]))' "$1" "$2"; }
+jget() { "$PYTHON" -B -I -c 'import json,sys; d=json.load(open(sys.argv[1])); print(eval("d"+sys.argv[2]))' "$1" "$2"; }
 
 [ "$(jget "$MANIFEST_PATH" "['schemaVersion']")" = "3" ] || { echo "Unsupported VoxCPM2 runtime manifest" >&2; exit 1; }
 [ "$(jget "$MANIFEST_PATH" "['profile']")" = "linux_trt_6g" ] || { echo "Unsupported VoxCPM2 runtime profile for Linux" >&2; exit 1; }
@@ -98,7 +98,7 @@ NAIA_VOXCPM2_ARTIFACT_ROOT="$ARTIFACT_ROOT" run_python "Bundled VoxCPM2 artifact
 progress "reference-voice" "Preparing the host voice palette" 35
 VOICES_ROOT="$RUNTIME_ROOT/voices"
 mkdir -p "$VOICES_ROOT"
-VOICE_TABLE="$("$PYTHON" -I - "$ACTIVATION_CONTRACT_PATH" <<'PY'
+VOICE_TABLE="$("$PYTHON" -B -I - "$ACTIVATION_CONTRACT_PATH" <<'PY'
 import json, sys, os
 contract = json.load(open(sys.argv[1]))
 voices = contract["runtime"]["referenceVoices"]
@@ -153,7 +153,7 @@ NVIDIA_PENDING="$RUNTIME_ROOT/python-packages.pending"
 NVIDIA_BACKUP="$RUNTIME_ROOT/python-packages.backup"
 NVIDIA_RECEIPT="$NVIDIA_ROOT/naia-nvidia-package-receipt.json"
 INSTALLER_LOCK_SHA="$(sha256sum "$INSTALLER_LOCK_PATH" | cut -d' ' -f1)"
-VERIFY_NVIDIA="$("$PYTHON" -I - "$INSTALLER_LOCK_PATH" <<'PY'
+VERIFY_NVIDIA="$("$PYTHON" -B -I - "$INSTALLER_LOCK_PATH" <<'PY'
 import json, sys
 lock = json.load(open(sys.argv[1]))
 checks = "; ".join(f"assert m.version({name!r}) == {version!r}" for name, version in lock["packages"].items())
@@ -173,7 +173,7 @@ if [ "$NVIDIA_READY" -ne 1 ]; then
   PYPI_REPORT="$NVIDIA_PENDING/pip-report-pypi.json"
   NVIDIA_REQ="$NVIDIA_PENDING/requirements-nvidia.txt"
   PYPI_REQ="$NVIDIA_PENDING/requirements-pypi.txt"
-  "$PYTHON" -I - "$INSTALLER_LOCK_PATH" "$NVIDIA_REQ" "$PYPI_REQ" <<'PY'
+  "$PYTHON" -B -I - "$INSTALLER_LOCK_PATH" "$NVIDIA_REQ" "$PYPI_REQ" <<'PY'
 import json, sys
 lock = json.load(open(sys.argv[1]))
 nvidia, pypi = [], []
@@ -193,7 +193,7 @@ PY
     -B -s -m pip install --disable-pip-version-check --no-deps --target "$NVIDIA_PENDING" \
     --report "$PYPI_REPORT" --index-url https://pypi.org/simple -r "$PYPI_REQ"
   PYTHONPATH="$NVIDIA_PENDING" run_python "Acquired TensorRT package verification failed" -B -s -c "$VERIFY_NVIDIA"
-  "$PYTHON" -I - "$INSTALLER_LOCK_PATH" "$INSTALLER_LOCK_SHA" "$NVIDIA_REPORT" "$PYPI_REPORT" "$NVIDIA_PENDING/naia-nvidia-package-receipt.json" <<'PY'
+  "$PYTHON" -B -I - "$INSTALLER_LOCK_PATH" "$INSTALLER_LOCK_SHA" "$NVIDIA_REPORT" "$PYPI_REPORT" "$NVIDIA_PENDING/naia-nvidia-package-receipt.json" <<'PY'
 import hashlib, json, sys
 lock = json.load(open(sys.argv[1]))
 def sha(path):
@@ -263,7 +263,7 @@ progress "engine" "GPU engine ready" 95
 # Ready receipt: the Shell's post-install probe compares the model revision
 # and the artifact manifest digest against the shipped bundle.
 READY_PATH="$RUNTIME_ROOT/voxcpm2-runtime-ready.json"
-"$PYTHON" -I - "$ARTIFACT_MANIFEST_PATH" "$MANIFEST_PATH" "$ACTIVATION_CONTRACT_PATH" "$READY_PATH.pending" <<'PY'
+"$PYTHON" -B -I - "$ARTIFACT_MANIFEST_PATH" "$MANIFEST_PATH" "$ACTIVATION_CONTRACT_PATH" "$READY_PATH.pending" <<'PY'
 import hashlib, json, sys
 artifact = json.load(open(sys.argv[1]))
 manifest = json.load(open(sys.argv[2]))

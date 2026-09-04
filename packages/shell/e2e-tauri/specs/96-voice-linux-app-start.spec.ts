@@ -17,11 +17,16 @@ const ADK_PATH = process.env.NAIA_E2E_ADK_PATH ?? "";
 const ARTIFACTS = process.env.NAIA_E2E_VOICE_ARTIFACTS ?? "";
 const TEXT = "안녕하세요. 리눅스 셸에서 처음으로 제 목소리로 말하고 있어요.";
 
+/**
+ * A rejected Tauri command carries a Rust string, and letting that reject
+ * inside `execute` surfaces as WebKit's opaque "Could not parse script
+ * result". Return the outcome as JSON so a failure names its own cause.
+ */
 async function tauriInvoke<T>(
 	command: string,
 	args: Record<string, unknown> = {},
 ): Promise<T> {
-	return (await browser.execute(
+	const raw = (await browser.execute(
 		async (name: string, payload: Record<string, unknown>) => {
 			const shell = window as unknown as {
 				__TAURI_INTERNALS__?: {
@@ -29,15 +34,90 @@ async function tauriInvoke<T>(
 				};
 			};
 			if (!shell.__TAURI_INTERNALS__?.invoke)
-				throw new Error("Tauri invoke unavailable");
-			return shell.__TAURI_INTERNALS__.invoke(name, payload);
+				return JSON.stringify({ ok: false, error: "Tauri invoke unavailable" });
+			try {
+				const value = await shell.__TAURI_INTERNALS__.invoke(name, payload);
+				return JSON.stringify({ ok: true, value: value ?? null });
+			} catch (error) {
+				return JSON.stringify({
+					ok: false,
+					error:
+						typeof error === "string"
+							? error
+							: ((error as { message?: string })?.message ?? String(error)),
+				});
+			}
 		},
 		command,
 		args,
-	)) as T;
+	)) as string;
+	const result = JSON.parse(raw) as
+		| { ok: true; value: T }
+		| { ok: false; error: string };
+	if (!result.ok) throw new Error(`${command} failed: ${result.error}`);
+	return result.value;
 }
 
-describe("Linux local voice starts through the real Tauri Shell", () => {
+/**
+ * Run a long command the way the UI does: start it, let progress events flow,
+ * and poll for the outcome. Holding a multi-minute download inside one
+ * `execute` call trips the WebDriver request timeout long before the product
+ * has a problem.
+ */
+async function tauriInvokeLong(
+	command: string,
+	args: Record<string, unknown> = {},
+	{ timeoutMs = 1_800_000, label = command } = {},
+): Promise<void> {
+	await browser.execute(
+		(name: string, payload: Record<string, unknown>) => {
+			const shell = window as unknown as {
+				__TAURI_INTERNALS__?: {
+					invoke: (command: string, value: unknown) => Promise<unknown>;
+				};
+				__naiaLongInvoke?: { done: boolean; error?: string };
+			};
+			shell.__naiaLongInvoke = { done: false };
+			const state = shell.__naiaLongInvoke;
+			void shell.__TAURI_INTERNALS__?.invoke(name, payload).then(
+				() => {
+					state.done = true;
+				},
+				(error: unknown) => {
+					state.done = true;
+					state.error =
+						typeof error === "string"
+							? error
+							: ((error as { message?: string })?.message ?? String(error));
+				},
+			);
+		},
+		command,
+		args,
+	);
+	await browser.waitUntil(
+		async () =>
+			await browser.execute(
+				() =>
+					(window as unknown as { __naiaLongInvoke?: { done: boolean } })
+						.__naiaLongInvoke?.done === true,
+			),
+		{ timeout: timeoutMs, interval: 5_000, timeoutMsg: `${label} did not finish` },
+	);
+	const error = await browser.execute(
+		() =>
+			(window as unknown as { __naiaLongInvoke?: { error?: string } })
+				.__naiaLongInvoke?.error ?? "",
+	);
+	if (error) throw new Error(`${command} failed: ${error}`);
+}
+
+describe("Linux local voice starts through the real Tauri Shell", function () {
+	// A first run downloads ~3 GB, extracts 5.4 GB, and hashes every file
+	// before the engine even loads. The suite default (3 min) is sized for
+	// UI specs, not for a cold local-runtime install.
+	this.timeout(2_400_000);
+
 	before(async () => {
 		if (!NAIA_KEY.startsWith("gw-"))
 			throw new Error("NAIA_E2E_NAIA_KEY must be a Naia member gateway key");
@@ -91,7 +171,10 @@ describe("Linux local voice starts through the real Tauri Shell", () => {
 			steps: { id: string; state: string; failure?: { code: string } }[];
 		}>("voxcpm2_installation_status");
 		if (!installation.canStart) {
-			await tauriInvoke("install_voxcpm2_runtime", {});
+			// A first run downloads and verifies a multi-GB archive.
+			await tauriInvokeLong("install_voxcpm2_runtime", {}, {
+				label: "Naia Host install",
+			});
 		}
 		const after = await tauriInvoke<{ canStart: boolean; steps: unknown[] }>(
 			"voxcpm2_installation_status",
@@ -99,6 +182,14 @@ describe("Linux local voice starts through the real Tauri Shell", () => {
 		expect(after.canStart).toBe(true);
 
 		const startedAt = Date.now();
+		// Model load, engine attach and the default-voice prime run inside this
+		// call, so poll for it instead of holding one request open. The command
+		// is idempotent — the read below returns the same ready payload.
+		await tauriInvokeLong(
+			"start_voxcpm2",
+			{ expectedLoaderProfile: host.profile },
+			{ label: "start_voxcpm2" },
+		);
 		const ready = JSON.parse(
 			await tauriInvoke<string>("start_voxcpm2", {
 				expectedLoaderProfile: host.profile,

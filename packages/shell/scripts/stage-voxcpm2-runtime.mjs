@@ -32,10 +32,10 @@ const REPOSITORY = "https://github.com/nextain/voxcpm2-tensorrt";
 // what extension. The staging code reads those from the contract, so adding a
 // platform is a matter of describing it, not of editing checks.
 //
-// The Linux entry has no published artifact yet (nextain/voxcpm2-tensorrt
-// builds Windows only: build_runtime.ps1, profile windows_trt_6g). Its URL is
-// therefore empty, which makes staging skip with an explicit reason instead of
-// failing a build. Filling the URL and the digest is what turns it on.
+// Both entries now name a published artifact. Linux was empty until
+// nextain/voxcpm2-tensorrt grew its own builder (scripts/build_runtime.sh,
+// profile linux_trt_6g, commit 3dbc86c); the r1 archive was published on
+// 2026-09-04 and verified from this machine (#537).
 export const VOXCPM2_PROFILES = {
 	win32: {
 		osKey: "windows",
@@ -53,7 +53,8 @@ export const VOXCPM2_PROFILES = {
 		contract: "src-tauri/voxcpm2-activation-contract.json",
 		modelPrep: "src-tauri/linux/prepare-voxcpm2-model.sh",
 		modelPrepName: "prepare-voxcpm2-model.sh",
-		defaultDownloadUrl: "",
+		defaultDownloadUrl:
+			"https://stnaiapub83b29893.blob.core.windows.net/releases/linux_trt_6g/releases/0.2.3/voxcpm2-runtime-linux-trt6g-r1.zip",
 		// The archive is a ZIP; GNU tar cannot read it. libarchive's bsdtar can,
 		// and a host without it may set NAIA_SYSTEM_TAR=unzip instead.
 		defaultTar: "bsdtar",
@@ -456,6 +457,36 @@ export function verifyVoxCpm2Artifact(
 	return manifest;
 }
 
+/**
+ * The module that decides which voice id local synthesis sends.
+ *
+ * `resolveTtsVoiceId` owns that decision; its fallback is the default voice.
+ * Locating it by export keeps the release gate pointed at the behaviour even
+ * when the function moves between modules.
+ */
+export function voxCpm2SynthesisDefaultSource(shellDir = DEFAULT_SHELL) {
+	const root = resolve(shellDir, "src");
+	const stack = [root];
+	while (stack.length) {
+		const current = stack.pop();
+		for (const entry of readdirSync(current, { withFileTypes: true })) {
+			const path = resolve(current, entry.name);
+			if (entry.isDirectory()) {
+				if (entry.name !== "__tests__" && entry.name !== "node_modules")
+					stack.push(path);
+				continue;
+			}
+			if (!/\.tsx?$/.test(entry.name)) continue;
+			const source = readFileSync(path, "utf8");
+			if (/export\s+function\s+resolveTtsVoiceId\b/.test(source))
+				return { path: relative(shellDir, path), source };
+		}
+	}
+	throw new Error(
+		"Shell no longer exports resolveTtsVoiceId; the local-voice default is unverifiable",
+	);
+}
+
 export function stageVoxCpm2Runtime({
 	shellDir = DEFAULT_SHELL,
 	// The runtime being staged is a property of the release being built, not of
@@ -489,17 +520,18 @@ export function stageVoxCpm2Runtime({
 		(voice) => voice.default,
 	);
 	const configSource = readFileSync(resolve(shellDir, "src/lib/config.ts"), "utf8");
-	const chatSource = readFileSync(
-		resolve(shellDir, "src/components/ChatArea.tsx"),
-		"utf8",
-	);
 	if (!configSource.includes(JSON.stringify(defaultVoice.url)))
 		throw new Error(
 			"Shell preview default URL differs from the Naia Host activation contract",
 		);
-	if (!chatSource.includes(JSON.stringify(defaultVoice.id)))
+	// The synthesis default lives wherever `resolveTtsVoiceId` is defined, and
+	// that has moved between modules (ChatArea → chat-voice-utils, aa49512f).
+	// Follow the function instead of a filename: naming the file made a pure
+	// refactor break release staging with a message about voices.
+	const synthesisSource = voxCpm2SynthesisDefaultSource(shellDir);
+	if (!synthesisSource.source.includes(JSON.stringify(defaultVoice.id)))
 		throw new Error(
-			"Shell synthesis default voice id differs from the Naia Host activation contract",
+			`Shell synthesis default voice id differs from the Naia Host activation contract (${synthesisSource.path})`,
 		);
 	verifyVoxCpm2Artifact(
 		source,

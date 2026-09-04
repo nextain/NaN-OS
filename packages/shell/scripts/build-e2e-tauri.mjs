@@ -226,20 +226,29 @@ if (process.platform === "win32") {
 // files as an installed bundle instead of a phantom "not packaged" state.
 const e2eVoxCpm2Bundle = resolve(targetDir, "debug", "voxcpm2-runtime");
 mkdirSync(e2eVoxCpm2Bundle, { recursive: true });
+// The installer is an operating-system fact, the same one the Rust side reads
+// from voice_runtime::layout. Spelling "windows" here staged a PowerShell
+// script next to a Linux binary, so install_voxcpm2_runtime reported the
+// installer missing on this machine (#537).
+const e2eInstaller =
+	process.platform === "win32"
+		? ["windows", "prepare-voxcpm2-model.ps1"]
+		: ["linux", "prepare-voxcpm2-model.sh"];
 copyFileSync(
-	resolve(shellDir, "src-tauri", "windows", "prepare-voxcpm2-model.ps1"),
-	resolve(e2eVoxCpm2Bundle, "prepare-voxcpm2-model.ps1"),
+	resolve(shellDir, "src-tauri", ...e2eInstaller),
+	resolve(e2eVoxCpm2Bundle, e2eInstaller[1]),
 );
 copyFileSync(
 	resolve(shellDir, "src-tauri", "voxcpm2-activation-contract.json"),
 	resolve(e2eVoxCpm2Bundle, "voxcpm2-activation-contract.json"),
 );
-const e2eVoxCpm2DownloadManifest = resolve(
-	shellDir,
-	"scripts",
-	"voxcpm2-download-manifest.json",
-);
-if (existsSync(e2eVoxCpm2DownloadManifest)) {
+// A staged bundle is this build's real manifest; the checked-in one is the
+// Windows fallback for a tree that has not staged yet.
+const e2eVoxCpm2DownloadManifest = [
+	resolve(shellDir, "src-tauri", "voxcpm2-runtime", "download-manifest.json"),
+	resolve(shellDir, "scripts", "voxcpm2-download-manifest.json"),
+].find((candidate) => existsSync(candidate));
+if (e2eVoxCpm2DownloadManifest) {
 	copyFileSync(
 		e2eVoxCpm2DownloadManifest,
 		resolve(e2eVoxCpm2Bundle, "download-manifest.json"),

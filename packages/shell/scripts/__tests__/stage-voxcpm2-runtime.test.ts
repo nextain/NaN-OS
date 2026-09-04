@@ -63,9 +63,16 @@ function fixture() {
 		resolve(shellDir, "src/lib/config.ts"),
 		'export const DEFAULT_VOICE_REF_URL = "https://stnaiapub83b29893.blob.core.windows.net/ref-audio/cc0/cc0-ko-female-01.wav";',
 	);
+	// The synthesis default is checked wherever `resolveTtsVoiceId` is defined,
+	// not in a named file — the function has already moved once (ChatArea →
+	// chat-voice-utils) and a pure refactor must not fail release staging.
+	writeFileSync(
+		resolve(shellDir, "src/components/chat-voice-utils.ts"),
+		'export function resolveTtsVoiceId() { return "cc0-ko-female-01.wav"; }',
+	);
 	writeFileSync(
 		resolve(shellDir, "src/components/ChatArea.tsx"),
-		'return "cc0-ko-female-01.wav";',
+		'import { resolveTtsVoiceId } from "./chat-voice-utils";',
 	);
 	const runtimeManifest = resolve(runtimeSource, "runtime-manifest.json");
 	writeFileSync(
@@ -266,8 +273,13 @@ describe("stageVoxCpm2Runtime", () => {
 			resolve(process.cwd(), "scripts/build-e2e-tauri.mjs"),
 			"utf8",
 		);
+		// The staged installer follows the host operating system, the same axis
+		// voice_runtime::layout uses. Naming one script here staged PowerShell
+		// beside a Linux binary and made install report "not packaged" (#537).
+		expect(e2eBuilder).toContain('["windows", "prepare-voxcpm2-model.ps1"]');
+		expect(e2eBuilder).toContain('["linux", "prepare-voxcpm2-model.sh"]');
 		expect(e2eBuilder).toContain(
-			'resolve(e2eVoxCpm2Bundle, "prepare-voxcpm2-model.ps1")',
+			"resolve(e2eVoxCpm2Bundle, e2eInstaller[1])",
 		);
 		expect(e2eBuilder).toContain(
 			'resolve(e2eVoxCpm2Bundle, "voxcpm2-activation-contract.json")',
@@ -458,8 +470,8 @@ describe("stageVoxCpm2Runtime", () => {
 
 		const synthesisDrift = fixture();
 		writeFileSync(
-			resolve(synthesisDrift.shellDir, "src/components/ChatArea.tsx"),
-			'return "other.wav";',
+			resolve(synthesisDrift.shellDir, "src/components/chat-voice-utils.ts"),
+			'export function resolveTtsVoiceId() { return "other.wav"; }',
 		);
 		expect(() => stageVoxCpm2Runtime(synthesisDrift)).toThrow(
 			/synthesis default voice id differs/,
