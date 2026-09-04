@@ -1,23 +1,16 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { getCurrentWindow } from "@tauri-apps/api/window";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { AdkSetupScreen } from "./components/AdkSetupScreen";
-import { AiControlBar } from "./components/AiControlBar";
-import { AnnouncementBanner } from "./components/AnnouncementBanner";
-import { AppBar } from "./components/AppBar";
-import { AppInstallDialog } from "./components/AppInstallDialog";
-import { AvatarCanvas } from "./components/AvatarCanvas";
-import { ChatArea } from "./components/ChatArea";
-import { ErrorBoundary } from "./components/ErrorBoundary";
-import { OnboardingWizard } from "./components/OnboardingWizard";
-import { SplashScreen } from "./components/SplashScreen";
-import { TitleBar } from "./components/TitleBar";
-import { UpdateBanner } from "./components/UpdateBanner";
-import { UpdatePrompt } from "./components/UpdatePrompt";
-import { VideoAvatarCanvas } from "./components/VideoAvatarCanvas";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { WorkspaceAppApi } from "./apps/workspace/WorkspaceCenterArea";
-import { getBridgeForApp } from "./lib/active-bridge";
+import { AppShellFrame } from "./components/AppShellFrame";
+import { useAgentAuthSync } from "./hooks/useAgentAuthSync";
+import {
+	applyTheme,
+	getBackgroundMediaType,
+	useAppReady,
+	useBackgroundFallback,
+	useShowAppWindow,
+} from "./hooks/useAppPresentation";
 import {
 	beginNaiaConfigHydration,
 	buildNaiaConfigEnv,
@@ -37,22 +30,13 @@ import {
 	fetchUnreadAnnouncements,
 } from "./lib/announcements";
 import { loadInstalledApps } from "./lib/app-loader";
-import type { AppInstallRequest } from "./lib/app-store-client";
 import { appRegistry } from "./lib/app-registry";
+import type { AppInstallRequest } from "./lib/app-store-client";
 import { effectiveAvatarProviderFromConfig } from "./lib/avatar/nva-gate";
 import { BGM_APP_ID, SKILL_YOUTUBE_BGM } from "./lib/bgm-skill";
 import { detectGpuVramGb } from "./lib/capabilities/gpu";
-import { syncLinkedChannels } from "./lib/channel-sync";
+import { sendAppSkills, sendAppSkillsClear } from "./lib/chat-service";
 import {
-	isNewCore,
-	sendAppSkills,
-	sendAppSkillsClear,
-	sendAuthUpdate,
-	sendCredsUpdate,
-	sendNotifyConfig,
-} from "./lib/chat-service";
-import {
-	type ThemeId,
 	addAllowedTool,
 	isOnboardingComplete,
 	loadConfig,
@@ -74,14 +58,12 @@ import {
 } from "./lib/environment-skill";
 import { setLocale } from "./lib/i18n";
 import { startIframeBridge } from "./lib/iframe-bridge";
-import { startSlidePresenterIframeBridge } from "./lib/slide-presenter-iframe-bridge";
-import { shouldMigrateNextainModel } from "./lib/llm/registry";
 import { Logger } from "./lib/logger";
+import { startSlidePresenterIframeBridge } from "./lib/slide-presenter-iframe-bridge";
 import {
 	type UpdateInfo,
 	checkForUpdate,
 	shouldShowStartupUpdatePrompt,
-	snoozeStartupUpdatePrompt,
 } from "./lib/updater";
 import { hydrateLocalRefAudioB64 } from "./lib/voice/ref-audio-api";
 import { useAvatarStore } from "./stores/avatar";
@@ -94,93 +76,6 @@ import { useAppStore } from "./stores/app";
 const NAIA_WIDTH_DEFAULT = 320;
 const NAIA_WIDTH_MIN = 120;
 const NAIA_WIDTH_MAX = 1200;
-
-let startupAuthReadyNotified = false;
-
-function notifyNaiaAuthReady(source: "startup" | "auth-complete"): void {
-	if (source === "startup") {
-		if (startupAuthReadyNotified) return;
-		startupAuthReadyNotified = true;
-	}
-	window.dispatchEvent(
-		new CustomEvent("naia_auth_ready", { detail: { source } }),
-	);
-}
-
-const VIDEO_EXTS = new Set(["mp4", "webm", "mov", "ogg", "avi"]);
-const IMAGE_EXTS = new Set(["jpg", "jpeg", "png", "webp", "gif", "avif"]);
-
-function getFileExt(url: string): string {
-	return url.split("?")[0].split(".").pop()?.toLowerCase() ?? "";
-}
-function isVideoFile(url: string): boolean {
-	return VIDEO_EXTS.has(getFileExt(url));
-}
-function isImageFile(url: string): boolean {
-	return IMAGE_EXTS.has(getFileExt(url));
-}
-function getBackgroundMediaType(path: string): "image" | "video" | "" {
-	if (isVideoFile(path)) return "video";
-	if (isImageFile(path)) return "image";
-	return "";
-}
-
-type WinResizeDir =
-	| "North"
-	| "South"
-	| "East"
-	| "West"
-	| "NorthEast"
-	| "NorthWest"
-	| "SouthEast"
-	| "SouthWest";
-
-function resolveSystemTheme(): string {
-	return window.matchMedia("(prefers-color-scheme: dark)").matches
-		? "midnight"
-		: "espresso";
-}
-
-function applyTheme(theme: ThemeId) {
-	const resolved = theme === "system" ? resolveSystemTheme() : theme;
-	document.documentElement.setAttribute("data-theme", resolved);
-}
-
-/**
- * Readiness gate for the splash screen (#254).
- *
- * Branch handling:
- *  - ADK setup screen → ready immediately (AvatarCanvas never mounts)
- *  - Onboarding screen → ready immediately (AvatarCanvas never mounts)
- *  - Normal path → wait for VRM avatar `isLoaded`, with 5 s timeout fallback
- *
- * The timeout is the safety net for VRM load failure / slow GPU init —
- * without it, a single asset failure would freeze the splash indefinitely.
- */
-function useAppReady(
-	showAdkSetup: boolean,
-	showOnboarding: boolean,
-	localeHydrated: boolean,
-): boolean {
-	const avatarLoaded = useAvatarStore((s) => s.isLoaded);
-	const [timedOut, setTimedOut] = useState(false);
-	// 새 core(이식) dev = 채팅 백엔드 검증이 목적, 아바타는 이 슬라이스 밖 → 아바타 로드 대기 안 함(즉시 ready).
-	// 아바타 자산 미배치·로드 행으로 스플래시가 안 풀리는 것 방지(유저 진입 UI 이식 전 임시).
-	const skipAvatarWait = showAdkSetup || showOnboarding || isNewCore();
-
-	useEffect(() => {
-		if (skipAvatarWait || avatarLoaded) return;
-		const t = setTimeout(() => {
-			Logger.warn("App", "useAppReady: 5 s timeout — forcing splash dismiss");
-			setTimedOut(true);
-		}, 5000);
-		return () => clearTimeout(t);
-	}, [skipAvatarWait, avatarLoaded]);
-
-	if (!localeHydrated) return false;
-	if (skipAvatarWait) return true;
-	return avatarLoaded || timedOut;
-}
 
 export function App() {
 	const configHydrationStartedRef = useRef(false);
@@ -232,6 +127,7 @@ export function App() {
 		useState<AppInstallRequest | null>(null);
 	const [localeHydrated, setLocaleHydrated] = useState(showAdkSetup);
 	const [showOnboarding, setShowOnboarding] = useState(false);
+	useAgentAuthSync(showAdkSetup, showOnboarding);
 	const [naiaVisible, setNaiaVisible] = useState(true);
 	const [naiaWidth, setNaiaWidth] = useState(NAIA_WIDTH_DEFAULT);
 	const [appTitle, setAppTitle] = useState(
@@ -291,12 +187,6 @@ export function App() {
 		startH: number;
 		moved: boolean;
 	} | null>(null);
-	const naiaWidthDragRef = useRef<{
-		startX: number;
-		startW: number;
-		currentW: number;
-		moved: boolean;
-	} | null>(null);
 	// UC-CONFIG-SOT / FR-CONFIG-SOT.2 — gates the debounced config→file writeback
 	// until localStorage has been hydrated FROM naia-settings files, so the stale
 	// pre-hydration cache can never be written back into config.json.
@@ -309,21 +199,14 @@ export function App() {
 	const [announcements, setAnnouncements] = useState<Announcement[]>([]);
 	const backgroundVideoUrl = useAvatarStore((s) => s.backgroundVideoUrl);
 	const backgroundMediaType = useAvatarStore((s) => s.backgroundMediaType);
-	const [backgroundFallback, setBackgroundFallback] = useState<{
-		url: string;
-		type: "image" | "video";
-	} | null>(null);
+	const backgroundFallback = useBackgroundFallback(
+		backgroundVideoUrl,
+		backgroundMediaType,
+	);
 	const setBackgroundVideoUrl = useAvatarStore((s) => s.setBackgroundVideoUrl);
 	const setBackgroundMediaType = useAvatarStore(
 		(s) => s.setBackgroundMediaType,
 	);
-	useEffect(() => {
-		if (!backgroundVideoUrl || backgroundMediaType === "iframe") return;
-		const type = backgroundMediaType === "video" || isVideoFile(backgroundVideoUrl)
-			? "video"
-			: "image";
-		setBackgroundFallback({ url: backgroundVideoUrl, type });
-	}, [backgroundVideoUrl, backgroundMediaType]);
 	const [avatarProvider, setAvatarProvider] = useState<
 		"vrm" | "naia-video-avatar"
 	>("vrm");
@@ -371,23 +254,7 @@ export function App() {
 			window.removeEventListener("naia-avatar-preview", onAvatarPreview);
 	}, []);
 
-	// Window starts hidden (visible:false in tauri.conf.json) to prevent white flash.
-	// Show it on first render — splash screen's dark background is already painted.
-	useEffect(() => {
-		// getCurrentWindow() can throw synchronously in test environments
-		try {
-			void getCurrentWindow()
-				.show()
-				.catch((err) => {
-					Logger.warn("App", "failed to show window", { error: String(err) });
-				});
-		} catch (err) {
-			Logger.warn("App", "failed to show window (sync)", {
-				error: String(err),
-			});
-		}
-		Logger.debug("App", "window shown on first render");
-	}, []);
+	useShowAppWindow();
 
 	// Readiness gate: splash stays until the active branch has something to show
 	const appReady = useAppReady(showAdkSetup, showOnboarding, localeHydrated);
@@ -564,7 +431,7 @@ export function App() {
 			});
 		});
 		Promise.all([readNaiaConfig(), readNaiaUiConfig()])
-			.then(([fileConfig, uiConfig]) => {
+			.then(async ([fileConfig, uiConfig]) => {
 				const merged = mergeBootConfig(
 					loadConfig() as unknown as Record<string, unknown> | null,
 					fileConfig ?? null,
@@ -580,7 +447,7 @@ export function App() {
 						...merged,
 						...(adkPath ? { workspaceRoot: adkPath } : {}),
 					} as unknown as Parameters<typeof reconcileExplicitLocalProfile>[0]);
-					if (reconciled.locale) setLocale(reconciled.locale);
+					if (reconciled.locale) await setLocale(reconciled.locale);
 					saveConfig(reconciled);
 				}
 				configHydratedRef.current = true;
@@ -721,31 +588,6 @@ export function App() {
 
 	useEffect(() => {
 		if (showOnboarding) return;
-		// #345: Re-send auth_update after onboarding completion (or on app start when
-		// showOnboarding stays false). This is a defensive guard — primary auth flow
-		// is the auth_update in OnboardingWizard's naia_auth_complete handler, but if
-		// that send was dropped (timing / agent not yet ready), this catches it.
-		// On normal app start this runs in parallel with initAuth() — harmless duplicate.
-		void loadConfigWithSecrets()
-			.then(async (cfg) => {
-				if (!cfg?.naiaKey) return;
-				invoke("store_startup_message", {
-					message: JSON.stringify({
-						type: "auth_update",
-						naiaKey: cfg.naiaKey,
-					}),
-				}).catch(() => {});
-				sendAuthUpdate(cfg.naiaKey).catch(() => {});
-				notifyNaiaAuthReady("startup");
-
-				// GPU detection and restored configuration are not playback authority.
-				// The Voice settings control is the only local-runtime start boundary.
-			})
-			.catch((err) => {
-				Logger.warn("App", "startup auth restore failed", {
-					error: String(err),
-				});
-			});
 		let active = true;
 		if (isOnboardingComplete()) {
 			startupUpdateCheckRef.current ??= checkForUpdate();
@@ -823,6 +665,7 @@ export function App() {
 	}, [naiaWidth]);
 
 	// #344: onboarding takes full screen — notify AvatarCanvas to recompute filmOffset
+	// biome-ignore lint/correctness/useExhaustiveDependencies: the onboarding transition itself triggers the layout notification
 	useEffect(() => {
 		window.dispatchEvent(new CustomEvent("naia-width-changed"));
 	}, [showOnboarding]);
@@ -892,551 +735,65 @@ export function App() {
 		return () => window.clearTimeout(retryTimer);
 	}, [pendingCliFile, showAdkSetup, showOnboarding, showSplash]);
 
-	useEffect(() => {
-		const unlisten = listen<{ naiaKey?: string }>(
-			"naia_auth_complete",
-			(event) => {
-				const key = event.payload.naiaKey;
-				if (key) {
-					// Cache before sending so crash-restart can replay the key.
-					invoke("store_startup_message", {
-						message: JSON.stringify({ type: "auth_update", naiaKey: key }),
-					})
-						.catch(() => {})
-						.then(() => sendAuthUpdate(key).catch(() => {}));
-					notifyNaiaAuthReady("auth-complete");
-				}
-				void syncLinkedChannels();
-			},
-		);
-		return () => {
-			unlisten.then((fn) => fn());
-		};
-	}, []);
-
-	// On init: push auth + credentials + webhooks to the agent (backend).
-	// Uses sequential await so store_startup_message caching precedes the IPC
-	// send — guaranteeing the Rust cache is populated before the message
-	// reaches the agent (safe replay after any future crash/restart).
-	useEffect(() => {
-		if (showAdkSetup || showOnboarding) return;
-		// Migrate saved config that points at a removed gateway model (#248).
-		// Previously-saved gemini-3.x selections on the Naia provider now
-		// fail with "gateway returned 0 bytes" — auto-swap to the provider's
-		// defaultModel (gemini-2.5-pro) and persist before any chat call.
-		const preMigrate = loadConfig();
-		if (preMigrate) {
-			const decision = shouldMigrateNextainModel(
-				preMigrate.provider,
-				preMigrate.model,
-			);
-			if (decision.migrate) {
-				Logger.warn("App", "#248 model migration", {
-					from: preMigrate.model,
-					to: decision.to,
-				});
-				saveConfig({ ...preMigrate, model: decision.to });
-			}
-		}
-
-		let active = true; // unmount guard: prevents stale invocations after cleanup
-
-		async function initAuth() {
-			let cfg: Awaited<ReturnType<typeof loadConfigWithSecrets>>;
-			try {
-				cfg = await loadConfigWithSecrets();
-			} catch (err) {
-				Logger.warn("App", "initAuth config restore failed", {
-					error: String(err),
-				});
-				return;
-			}
-			if (!cfg || !active) return;
-
-			// auth_update: cache first, then send
-			const naiaKey = cfg.naiaKey;
-			if (naiaKey && active) {
-				await invoke("store_startup_message", {
-					message: JSON.stringify({ type: "auth_update", naiaKey }),
-				}).catch(() => {});
-				if (active) await sendAuthUpdate(naiaKey).catch(() => {});
-				if (active) notifyNaiaAuthReady("startup");
-			}
-
-			if (!active) return;
-
-			// notify_config: cache first, then send
-			const notifyPayload = {
-				slackWebhookUrl: cfg.slackWebhookUrl,
-				discordWebhookUrl: cfg.discordWebhookUrl,
-				googleChatWebhookUrl: cfg.googleChatWebhookUrl,
-				discordDefaultUserId: cfg.discordDefaultUserId,
-				discordDefaultTarget: cfg.discordDefaultTarget,
-				discordDmChannelId: cfg.discordDmChannelId,
-			};
-			await invoke("store_startup_message", {
-				message: JSON.stringify({ type: "notify_config", ...notifyPayload }),
-			}).catch(() => {});
-			if (active) await sendNotifyConfig(notifyPayload).catch(() => {});
-
-			if (!active) return;
-
-			// creds_update: cache first, then send
-			// Push all per-session credentials once at startup (#260 follow-up).
-			const ttsKeys: Record<string, string> = {};
-			if (cfg.googleApiKey) ttsKeys.google = cfg.googleApiKey;
-			if (cfg.openaiTtsApiKey) ttsKeys.openai = cfg.openaiTtsApiKey;
-			if (cfg.elevenlabsApiKey) ttsKeys.elevenlabs = cfg.elevenlabsApiKey;
-			// G-11: map naia-os provider → naia-agent creds_update keyMap
-			const credsProvider =
-				cfg.provider === "nextain" ? "naia-anyllm" : cfg.provider;
-			const credsPayload = {
-				keys: cfg.apiKey && cfg.provider ? { [credsProvider]: cfg.apiKey } : {},
-				...(Object.keys(ttsKeys).length > 0 && { ttsKeys }),
-				...(cfg.gatewayToken !== undefined && {
-					gatewayToken: cfg.gatewayToken,
-				}),
-			};
-			await invoke("store_startup_message", {
-				message: JSON.stringify({ type: "creds_update", ...credsPayload }),
-			}).catch(() => {});
-			if (active) await sendCredsUpdate(credsPayload).catch(() => {});
-		}
-
-		void initAuth();
-
-		return () => {
-			active = false; // cancel any in-flight async operations on unmount
-		};
-	}, [showAdkSetup, showOnboarding]);
-
-	const handleWinResize = (dir: WinResizeDir) => (e: React.PointerEvent) => {
-		e.preventDefault();
-		getCurrentWindow().startResizeDragging(dir);
-	};
-
-	const handleNaiaWidthPointerDown = (e: React.PointerEvent) => {
-		e.preventDefault();
-		naiaWidthDragRef.current = {
-			startX: e.clientX,
-			startW: naiaWidth,
-			currentW: naiaWidth,
-			moved: false,
-		};
-		(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-		document.body.classList.add("resizing-col");
-	};
-
-	const handleNaiaWidthPointerMove = (e: React.PointerEvent) => {
-		const ref = naiaWidthDragRef.current;
-		if (!ref) return;
-		const delta = e.clientX - ref.startX;
-		if (!ref.moved && Math.abs(delta) > 4) ref.moved = true;
-		if (!ref.moved) return;
-		const nextWidth = Math.max(
-			NAIA_WIDTH_MIN,
-			Math.min(NAIA_WIDTH_MAX, ref.startW + delta),
-		);
-		ref.currentW = nextWidth;
-		setNaiaWidth(nextWidth);
-	};
-
-	const handleNaiaWidthPointerUp = () => {
-		const ref = naiaWidthDragRef.current;
-		naiaWidthDragRef.current = null;
-		document.body.classList.remove("resizing-col");
-		if (!ref?.moved) return;
-		const config = loadConfig();
-		if (config) {
-			saveConfig({
-				...config,
-				appSize: Math.round((ref.currentW / 1200) * 100),
-			});
-		}
-	};
-
-	const winResizeHandles = (
-		<>
-			<div className="wr-nw" onPointerDown={handleWinResize("NorthWest")} />
-			<div className="wr-n" onPointerDown={handleWinResize("North")} />
-			<div className="wr-ne" onPointerDown={handleWinResize("NorthEast")} />
-			<div className="wr-w" onPointerDown={handleWinResize("West")} />
-			<div className="wr-e" onPointerDown={handleWinResize("East")} />
-			<div className="wr-sw" onPointerDown={handleWinResize("SouthWest")} />
-			<div className="wr-s" onPointerDown={handleWinResize("South")} />
-			<div className="wr-se" onPointerDown={handleWinResize("SouthEast")} />
-		</>
-	);
-
-	const activeAppDescriptor = activeApp ? appRegistry.get(activeApp) : null;
-	const CenterComponent = activeAppDescriptor?.center ?? null;
-
-	// ── UI mode (single persisted user preference) ──
-	// app     = no app active → left compact conversation dock
-	// workspace = workspace app → 4-zone mission-control (chat rail + worktree
-	//             + document viewer/terminal + sub-agent list)
-	// app   = any other app (browser, settings, …) → chat as floating dock
-	// The same single ChatArea instance is repositioned by CSS keyed off
-	// data-ui-mode — it is NEVER unmounted across modes (voice/STT/TTS session
-	// continuity). `variant` only changes the chat UI density, not its logic.
-	// Opening Workspace changes only the center surface. Chat placement follows
-	// the user's 2-way preference and defaults to the lower floating dock.
+	// The persisted two-way preference controls chat placement across apps.
 	const uiMode = showOnboarding
 		? "onboarding"
 		: showAdkSetup
 			? "setup"
 			: chatModeOverride;
-	// Chat fill (rail) follows only the user's explicit chat-mode toggle
-	// (왼쪽 채움), never the Workspace app itself — opening Workspace must not
-	// force the chat to full-width; it stays wherever the user set it.
-	const chatVariant: "rail" | "floating" =
-		chatModeOverride === "workspace" ? "rail" : "floating";
-
-	// keepAlive apps (built-ins AND installed apps that don't opt out) stay
-	// mounted in hidden slots so their in-page state survives an app switch —
-	// e.g. an installed Slides app keeps its open PDF instead of the iframe
-	// being destroyed on deactivate. Installed apps register asynchronously
-	// (loadInstalledApps → bumpAppListVersion), so recompute on appListVersion
-	// or a freshly-installed app would never get a persistent slot.
-	const appListVersion = useAppStore((s) => s.appListVersion);
-	const keepAliveApps = useMemo(
-		() => appRegistry.list().filter((p) => p.keepAlive !== false),
-		// biome-ignore lint/correctness/useExhaustiveDependencies: appListVersion is the intentional recompute trigger; appRegistry is a stable singleton.
-		[appListVersion],
-	);
-
-	// Single return — SplashScreen always mounts first as a fixed overlay,
-	// app content loads underneath, splash removed when ready.
 	return (
-		<div
-			className="app-root"
-			data-ui-mode={uiMode}
-			data-rail-collapsed={
-				uiMode === "workspace" && railCollapsed ? "true" : "false"
-			}
-			style={
-				{
-					"--naia-width": `${naiaWidth}px`,
-				} as React.CSSProperties
-			}
-		>
-			{/* ①-a Default background — always base layer (#36 fix).
-			    YouTube BGM iframe 이 autoplay 안 되거나 로딩 실패해도 깨진 X 박스
-			    대신 default 가 보이도록 강제 표시. iframe/video/image 가 정상
-			    로드되면 그것이 위로 덮음. 사용자 명시 2026-05-29 "그냥 로컬
-			    배경화면/영상을 기본 보여주던가". */}
-			{backgroundFallback?.type === "video" ? (
-				<video className="app-bg-video" src={backgroundFallback.url} autoPlay loop muted playsInline style={{ zIndex: 0 }} />
-			) : backgroundFallback ? (
-				<img className="app-bg-image" src={backgroundFallback.url} alt="" style={{ zIndex: 0 }} />
-			) : (
-				<div className="app-bg-fallback" aria-hidden="true" />
-			)}
-			{/* ①-b Foreground BGM — overlay on top (z-index:1) when configured */}
-			{backgroundMediaType === "iframe" && backgroundVideoUrl ? (
-				<iframe
-					key={backgroundVideoUrl}
-					className="app-bg-iframe"
-					src={backgroundVideoUrl}
-					allow="autoplay"
-					referrerPolicy="origin"
-					sandbox="allow-scripts allow-same-origin allow-presentation"
-					title="BGM"
-					style={{ zIndex: 1 }}
-				/>
-			) : backgroundVideoUrl &&
-				(backgroundMediaType === "video" ||
-					(!backgroundMediaType && isVideoFile(backgroundVideoUrl))) ? (
-				<video
-					key={backgroundVideoUrl}
-					className="app-bg-video"
-					src={backgroundVideoUrl}
-					autoPlay
-					loop
-					muted
-					playsInline
-					style={{ zIndex: 1 }}
-				/>
-			) : backgroundVideoUrl &&
-				(backgroundMediaType === "image" ||
-					(!backgroundMediaType && isImageFile(backgroundVideoUrl))) ? (
-				<img
-					key={backgroundVideoUrl}
-					className="app-bg-image"
-					src={backgroundVideoUrl}
-					alt=""
-					style={{ zIndex: 1 }}
-				/>
-			) : null}
-
-			{/* ② Splash — position:fixed covers everything */}
-			{showSplash && <SplashScreen onDone={onSplashDone} ready={appReady} />}
-
-			{/* ③ Window resize handles */}
-			{winResizeHandles}
-
-			{/* ④ ADK setup */}
-			{showAdkSetup && (
-				<>
-					<TitleBar
-						appVisible={naiaVisible}
-						onToggleApp={toggleNaia}
-						title={appTitle}
-					/>
-					<AdkSetupScreen
-						onComplete={() => {
-							setShowSplash(true);
-							setLocaleHydrated(false);
-							setShowAdkSetup(false);
-							if (!isOnboardingComplete()) setShowOnboarding(true);
-						}}
-					/>
-				</>
-			)}
-
-			{/* ⑤ Main app — always visible after ADK setup */}
-			{!showAdkSetup && (
-				<>
-					<TitleBar
-						appVisible={naiaVisible}
-						onToggleApp={toggleNaia}
-						title={appTitle}
-					/>
-
-					{updateInfo && showUpdatePrompt && !showOnboarding && (
-						<UpdatePrompt
-							info={updateInfo}
-							onLater={(snoozeForMonth) => {
-								setShowUpdatePrompt(false);
-								if (snoozeForMonth) {
-									snoozeStartupUpdatePrompt(updateInfo.version);
-									setUpdateInfo(null);
-								}
-							}}
-						/>
-					)}
-					{updateInfo && !showUpdatePrompt && !showOnboarding && (
-						<UpdateBanner
-							info={updateInfo}
-							onDismiss={() => setUpdateInfo(null)}
-						/>
-					)}
-					{announcements.length > 0 && !showOnboarding && (
-						<AnnouncementBanner
-							announcements={announcements}
-							onDismissOne={(id) =>
-								setAnnouncements((prev) => prev.filter((a) => a.id !== id))
-							}
-							onDismissAll={() => setAnnouncements([])}
-						/>
-					)}
-					{naiaVisible && !showOnboarding && (
-						<div
-							className="naia-work-rail"
-							onPointerDown={handleNaiaWidthPointerDown}
-							onPointerMove={handleNaiaWidthPointerMove}
-							onPointerUp={handleNaiaWidthPointerUp}
-							onPointerCancel={handleNaiaWidthPointerUp}
-							title="작업영역 경계 드래그"
-						/>
-					)}
-					{naiaVisible && (
-						<>
-							{/* Full-screen avatar canvas — renders behind all UI apps.
-							    e2e 헤드리스(cage)서 연속 WebGL 렌더 루프가 webview JS 스레드를 기아시켜 IPC/WebDriver
-							    가 90초 stall/drop 되는 문제 → VITE_NAIA_E2E_NO_AVATAR=1 일 때 렌더 생략(아바타는 chat
-							    UC 와 무관, 실 디스플레이 검증서만 필요). 일반 빌드/런타임엔 영향 없음. */}
-							{!import.meta.env.VITE_NAIA_E2E_NO_AVATAR && (
-								<div className="avatar-canvas-layer">
-									{avatarProvider === "naia-video-avatar" ? (
-										<VideoAvatarCanvas nvaModel={nvaModel} />
-									) : (
-										<AvatarCanvas />
-									)}
-								</div>
-							)}
-							{/* #447-1: keep the chat during onboarding, but as the left rail
-							    (naia-width column) rather than a full-width bottom bar — see the
-							    onboarding --naia-width / chatVariant handling above. */}
-							<div className="naia-overlay">
-								{/* AI + avatar controls — top of avatar column, independent */}
-								<AiControlBar />
-								{/* Chat floats over avatar — absolute at bottom */}
-								<div className="naia-chat-area">
-									<button
-										type="button"
-										className="naia-chat-toggle"
-										aria-label={chatVisible ? "대화창 닫기" : "대화창 열기"}
-										onPointerDown={(e) => {
-											chatDragRef.current = {
-												startY: e.clientY,
-												startH: chatHeight,
-												moved: false,
-											};
-											(e.currentTarget as HTMLElement).setPointerCapture(
-												e.pointerId,
-											);
-										}}
-										onPointerMove={(e) => {
-											const ref = chatDragRef.current;
-											if (!ref) return;
-											const delta = ref.startY - e.clientY;
-											if (!ref.moved && Math.abs(delta) > 4) ref.moved = true;
-											if (ref.moved) {
-												setChatHeight(
-													Math.max(120, Math.min(600, ref.startH + delta)),
-												);
-											}
-										}}
-										onPointerUp={() => {
-											const ref = chatDragRef.current;
-											chatDragRef.current = null;
-											if (!ref?.moved) setChatVisible((v) => !v);
-										}}
-									>
-										{chatVisible ? "▼" : "▲"}
-									</button>
-									{/* 2-way 레이아웃 스위치 — 왼쪽 소형 / 왼쪽 채움. */}
-									<div
-										className="naia-chat-modes"
-										role="group"
-										aria-label="대화창 레이아웃"
-									>
-										<button
-											type="button"
-											className={`naia-chat-mode${uiMode === "app" ? " naia-chat-mode--active" : ""}`}
-											title="왼쪽 소형"
-											aria-pressed={uiMode === "app"}
-											onClick={() => setChatMode("app")}
-										>
-											▖
-										</button>
-										<button
-											type="button"
-											className={`naia-chat-mode${uiMode === "workspace" ? " naia-chat-mode--active" : ""}`}
-											title="왼쪽 채움"
-											aria-pressed={uiMode === "workspace"}
-											onClick={() => setChatMode("workspace")}
-										>
-											▌
-										</button>
-									</div>
-									<div
-										className={`naia-chat-wrapper${chatVisible ? "" : " naia-chat-wrapper--hidden"}`}
-										style={
-											chatVisible && chatVariant !== "rail"
-												? { height: chatHeight }
-												: undefined
-										}
-									>
-										<ErrorBoundary scope="ChatArea">
-											<ChatArea variant={chatVariant} />
-										</ErrorBoundary>
-									</div>
-								</div>
-							</div>
-						</>
-					)}
-
-					{/* Workspace conversation-rail collapse toggle. Collapsing keeps the
-					    ChatArea mounted (CSS width:0) so voice/STT survives. */}
-					{uiMode === "workspace" && naiaVisible && !showOnboarding && (
-						<button
-							type="button"
-							className={`ws-rail-toggle${railCollapsed ? " ws-rail-toggle--collapsed" : ""}`}
-							onClick={toggleRailCollapsed}
-							title={railCollapsed ? "대화 레일 펼치기" : "대화 레일 접기"}
-							aria-label={railCollapsed ? "대화 레일 펼치기" : "대화 레일 접기"}
-						>
-							{railCollapsed ? "💬" : "‹"}
-						</button>
-					)}
-
-					<div
-						className="app-layout"
-						style={
-							{
-								left: showOnboarding
-									? 0
-									: !naiaVisible
-										? 0
-										: uiMode === "workspace" && railCollapsed
-											? 0
-											: naiaWidth,
-							} as React.CSSProperties
-						}
-					>
-						<div className="right-area">
-							{!showSplash && !showOnboarding && (
-								<>
-									<AppBar onAddApp={() => setShowAppInstall(true)} />
-									{appInstallRequest ? (
-										<AppInstallDialog
-											request={appInstallRequest}
-											onClose={() => setAppInstallRequest(null)}
-										/>
-									) : showAppInstall && (
-										<AppInstallDialog
-											onClose={() => setShowAppInstall(false)}
-										/>
-									)}
-								</>
-							)}
-							<div
-								className={`right-content${showOnboarding ? " right-content--onboarding" : ""}`}
-							>
-								{showOnboarding ? (
-									<OnboardingWizard
-										onComplete={() => {
-											const completedConfig = loadConfig();
-											if (completedConfig?.ttsEnabled !== undefined) {
-												setTtsEnabled(completedConfig.ttsEnabled);
-											}
-											Logger.info(
-												"App",
-												"Onboarding complete — mounting main app apps",
-											);
-											setShowOnboarding(false);
-										}}
-									/>
-								) : (
-									<div
-										className={`content-app${!activeApp ? " content-app--hidden" : ""}`}
-									>
-										{keepAliveApps.map((app) => {
-											const AppCenter = app.center;
-											return (
-												<div
-													key={app.id}
-													className={`content-app__slot${activeApp === app.id ? " content-app__slot--active" : ""}`}
-												>
-													<ErrorBoundary scope={`App(${app.id})`}>
-														<AppCenter naia={getBridgeForApp(app.id)} />
-													</ErrorBoundary>
-												</div>
-											);
-										})}
-										{activeApp &&
-											!keepAliveApps.some((p) => p.id === activeApp) && (
-												<div className="content-app__slot content-app__slot--active">
-													<ErrorBoundary scope={`App(${activeApp})`}>
-														{CenterComponent ? (
-															<CenterComponent
-																naia={getBridgeForApp(activeApp)}
-															/>
-														) : (
-															<div className="content-app__home" />
-														)}
-													</ErrorBoundary>
-												</div>
-											)}
-									</div>
-								)}
-							</div>
-						</div>
-					</div>
-				</>
-			)}
-		</div>
+		<AppShellFrame
+			appReady={appReady}
+			backgroundFallback={backgroundFallback}
+			backgroundMediaType={backgroundMediaType}
+			backgroundVideoUrl={backgroundVideoUrl}
+			onSplashDone={onSplashDone}
+			setNaiaWidth={setNaiaWidth}
+			mainContent={{
+				activeApp,
+				announcements,
+				appInstallRequest,
+				appTitle,
+				avatarProvider,
+				chatModeOverride,
+				chatDragRef,
+				chatHeight,
+				chatVisible,
+				naiaVisible,
+				naiaWidth,
+				nvaModel,
+				onAdkSetupComplete: () => {
+					setShowSplash(true);
+					setLocaleHydrated(false);
+					setShowAdkSetup(false);
+					if (!isOnboardingComplete()) setShowOnboarding(true);
+				},
+				onOnboardingComplete: () => {
+					const completedConfig = loadConfig();
+					if (completedConfig?.ttsEnabled !== undefined)
+						setTtsEnabled(completedConfig.ttsEnabled);
+					Logger.info("App", "Onboarding complete — mounting main app apps");
+					setShowOnboarding(false);
+				},
+				railCollapsed,
+				setAnnouncements,
+				setAppInstallRequest,
+				setChatHeight,
+				setChatMode,
+				setChatVisible,
+				setShowAppInstall,
+				setShowUpdatePrompt,
+				setUpdateInfo,
+				showAdkSetup,
+				showAppInstall,
+				showOnboarding,
+				showSplash,
+				showUpdatePrompt,
+				toggleNaia,
+				toggleRailCollapsed,
+				uiMode,
+				updateInfo,
+			}}
+		/>
 	);
 }

@@ -113,7 +113,9 @@ describe("Shell TTS single-ownership speech routing contract", () => {
 			expect(slides).not.toContain(forbidden);
 		}
 		expect(slides).toContain("requestSlidePresenterSpeech({");
-		expect(chatArea).toContain("SLIDE_PRESENTER_SPEAK_EVENT");
+		expect(chatArea).toContain(
+			"window.addEventListener(SLIDE_PRESENTER_SPEAK_EVENT, handleSpeak)",
+		);
 		expect(chatArea).toContain("sendSentenceToTts(detail.text.trim())");
 		expect(chatArea).toContain('settleSlidePresenterSpeech("finished")');
 	});

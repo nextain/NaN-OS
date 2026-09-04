@@ -47,6 +47,7 @@
 			"e2e/demo-output",
 			"test-results",
 			"src-tauri/gen",
+			"src/lib/locales",
 			".claude"
 		]
 	},

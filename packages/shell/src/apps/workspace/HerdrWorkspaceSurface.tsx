@@ -3,13 +3,20 @@ import { ErrorBoundary } from "../../components/ErrorBoundary";
 import { t } from "../../lib/i18n";
 import { DocTabBar } from "./DocTabBar";
 import type { EditorHandle } from "./Editor";
-import { type FileLocation, Terminal, type TerminalHandle } from "./Terminal";
+import type {
+	FileLocation,
+	TerminalHandle,
+} from "./Terminal";
 import { type HerdrSnapshot, focusedHerdrAgent } from "./herdr";
 import type { HerdrSurface, PtyCreated } from "./useHerdrRuntime";
 import { workspaceText } from "./workspaceText";
 
 const loadEditor = () =>
 	import("./Editor").then((module) => ({ default: module.Editor }));
+
+const LazyTerminal = lazy(() =>
+	import("./Terminal").then((module) => ({ default: module.Terminal })),
+);
 
 interface SurfaceProps {
 	pty: PtyCreated | null;
@@ -53,17 +60,19 @@ export function HerdrWorkspaceSurface(props: SurfaceProps) {
 				aria-hidden={props.surface !== "herdr"}
 			>
 				{props.pty ? (
-					<Terminal
-						ref={props.terminalRef}
-						pty_id={props.pty.pty_id}
-						active={props.surface === "herdr"}
-						workingDir={
-							focused?.foreground_cwd || focused?.cwd || props.workspaceRoot
-						}
-						onExit={props.onPtyExit}
-						onReady={props.onTerminalReady}
-						onFileLocation={(location) => void props.openLocation(location)}
-					/>
+					<Suspense fallback={null}>
+						<LazyTerminal
+							ref={props.terminalRef}
+							pty_id={props.pty.pty_id}
+							active={props.surface === "herdr"}
+							workingDir={
+								focused?.foreground_cwd || focused?.cwd || props.workspaceRoot
+							}
+							onExit={props.onPtyExit}
+							onReady={props.onTerminalReady}
+							onFileLocation={(location) => void props.openLocation(location)}
+						/>
+					</Suspense>
 				) : (
 					<div className="herdr-workspace__state">
 						<span>

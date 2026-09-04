@@ -1,9 +1,19 @@
-import { useState } from "react";
+import { Suspense, lazy, useState } from "react";
 import { t } from "../lib/i18n";
+import {
+	isKnowledgeGraphTool,
+	isKnowledgeTool,
+	parseKnowledgeGraph,
+	parseKnowledgeResult,
+} from "../lib/knowledge-result";
 import type { ToolCall } from "../lib/types";
-import { isKnowledgeTool, isKnowledgeGraphTool, parseKnowledgeResult, parseKnowledgeGraph } from "../lib/knowledge-result";
 import { KnowledgeToolResult } from "./KnowledgeToolResult";
-import { KnowledgeGraphView } from "./KnowledgeGraphView";
+
+const KnowledgeGraphView = lazy(() =>
+	import("./KnowledgeGraphView").then((module) => ({
+		default: module.KnowledgeGraphView,
+	})),
+);
 
 const TOOL_NAME_KEYS: Record<string, string> = {
 	execute_command: "tool.execute_command",
@@ -47,7 +57,10 @@ export function ToolActivity({ tool }: Props) {
 		const parsed = parseKnowledgeResult(tool.toolName, tool.output);
 		if (parsed) {
 			return (
-				<div className={`tool-activity tool-${tool.status} tool-knowledge`} data-tool-name={tool.toolName}>
+				<div
+					className={`tool-activity tool-${tool.status} tool-knowledge`}
+					data-tool-name={tool.toolName}
+				>
 					<KnowledgeToolResult data={parsed} />
 				</div>
 			);
@@ -59,8 +72,17 @@ export function ToolActivity({ tool }: Props) {
 		const g = parseKnowledgeGraph(tool.toolName, tool.output);
 		if (g) {
 			return (
-				<div className={`tool-activity tool-${tool.status} tool-knowledge-graph`} data-tool-name={tool.toolName}>
-					<KnowledgeGraphView graph={g} />
+				<div
+					className={`tool-activity tool-${tool.status} tool-knowledge-graph`}
+					data-tool-name={tool.toolName}
+				>
+					<Suspense
+						fallback={
+							<output aria-live="polite">{t("progress.loading")}</output>
+						}
+					>
+						<KnowledgeGraphView graph={g} />
+					</Suspense>
 				</div>
 			);
 		}

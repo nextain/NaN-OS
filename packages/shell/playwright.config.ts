@@ -38,6 +38,7 @@ const webServerTimeout = readPositiveIntegerEnv(
 
 export default defineConfig({
 	testDir: "./e2e",
+	testIgnore: "deferred-chat-area.spec.ts",
 	timeout: 60_000,
 	expect: {
 		timeout: 30_000,

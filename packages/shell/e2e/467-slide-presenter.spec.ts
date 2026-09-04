@@ -162,8 +162,12 @@ async function loadFiles(
 	pdf: string | { name: string; mimeType: string; buffer: Buffer },
 	script: string | { name: string; mimeType: string; buffer: Buffer },
 ) {
-	await page.getByLabel("PDF 열기").setInputFiles(pdf);
-	await page.getByLabel("발표 스크립트").setInputFiles(script);
+	await page
+		.locator('input[type="file"][accept*="application/pdf"]')
+		.setInputFiles(pdf);
+	await page
+		.locator('input[type="file"][accept*="text/markdown"]')
+		.setInputFiles(script);
 }
 
 async function expectRenderedSlide(page: Page) {
@@ -227,7 +231,9 @@ test.describe("#467 slide presenter", () => {
 			"첫 번째 발표입니다.",
 		);
 
-		await page.getByRole("button", { name: "발표 시작" }).click();
+		await page
+			.getByRole("button", { name: /^(발표 시작|Start presenting)$/ })
+			.click();
 		await expect
 			.poll(() =>
 				page.evaluate(() => [...(window as any).__SLIDE_E2E__.spoken]),
@@ -241,21 +247,26 @@ test.describe("#467 slide presenter", () => {
 		);
 	});
 
-	test("loads the packaged app in Shell and shows one deep-link install confirmation", async ({ page }) => {
+	test("loads the packaged app in Shell and shows one deep-link install confirmation", async ({
+		page,
+	}) => {
 		await page.addInitScript(SPEECH_MOCK);
 		await page.addInitScript({ content: TAURI_BASE_MOCK_FALLBACK });
 		await page.addInitScript({ content: SEED_ADK_PATH });
 		await page.addInitScript(() => {
-			localStorage.setItem("naia-config", JSON.stringify({
-				provider: "ollama",
-				model: "qwen3.6:27b",
-				ttsEnabled: true,
-				ttsProvider: "browser",
-				locale: "ko",
-				onboardingComplete: true,
-				agentName: "Naia",
-				vrmModel: "/avatars/03-OL_Woman.vrm",
-			}));
+			localStorage.setItem(
+				"naia-config",
+				JSON.stringify({
+					provider: "ollama",
+					model: "qwen3.6:27b",
+					ttsEnabled: true,
+					ttsProvider: "browser",
+					locale: "ko",
+					onboardingComplete: true,
+					agentName: "Naia",
+					vrmModel: "/avatars/03-OL_Woman.vrm",
+				}),
+			);
 		});
 		await page.setViewportSize({ width: 1440, height: 900 });
 		await page.goto("/");
@@ -263,21 +274,35 @@ test.describe("#467 slide presenter", () => {
 		await expect(slidesButton).toBeVisible({ timeout: 15_000 });
 		await slidesButton.click();
 
-		const installed = page.frameLocator('.generic-installed-app__iframe');
-		await expect(installed.locator(".slides-app")).toBeVisible({ timeout: 15_000 });
-		await installed.getByLabel("PDF 열기").setInputFiles({
-			name: "naia-slides-showcase.pdf",
-			mimeType: "application/pdf",
-			buffer: makeTwoPagePdf(),
+		const installed = page.frameLocator(".generic-installed-app__iframe");
+		await expect(installed.locator(".slides-app")).toBeVisible({
+			timeout: 15_000,
 		});
-		await installed.getByLabel("발표 스크립트").setInputFiles({
-			name: "naia-slides-showcase.md",
-			mimeType: "text/markdown",
-			buffer: Buffer.from("## 1. Naia Slides\n\n나이아와 함께 이야기를 시작합니다.\n\n## 2. Story\n\n음성과 아바타, 슬라이드가 하나로 이어집니다."),
+		await installed
+			.locator('input[type="file"][accept*="application/pdf"]')
+			.setInputFiles({
+				name: "naia-slides-showcase.pdf",
+				mimeType: "application/pdf",
+				buffer: makeTwoPagePdf(),
+			});
+		await installed
+			.locator('input[type="file"][accept*="text/markdown"]')
+			.setInputFiles({
+				name: "naia-slides-showcase.md",
+				mimeType: "text/markdown",
+				buffer: Buffer.from(
+					"## 1. Naia Slides\n\n나이아와 함께 이야기를 시작합니다.\n\n## 2. Story\n\n음성과 아바타, 슬라이드가 하나로 이어집니다.",
+				),
+			});
+		await expect(
+			installed.locator('.slides-app[data-state="ready"]'),
+		).toBeVisible({ timeout: 30_000 });
+		await expect(installed.locator(".slides-app__page canvas")).toBeVisible({
+			timeout: 30_000,
 		});
-		await expect(installed.locator('.slides-app[data-state="ready"]')).toBeVisible({ timeout: 30_000 });
-		await expect(installed.locator(".slides-app__page canvas")).toBeVisible({ timeout: 30_000 });
-		await expect(page.locator(".avatar-canvas-layer canvas")).toBeVisible({ timeout: 30_000 });
+		await expect(page.locator(".avatar-canvas-layer canvas")).toBeVisible({
+			timeout: 30_000,
+		});
 		await page.waitForTimeout(5_000);
 		await page.screenshot({
 			path: "test-results/issue-471-installed-naia-slides.png",
@@ -287,7 +312,12 @@ test.describe("#467 slide presenter", () => {
 			await route.fulfill({
 				contentType: "application/json",
 				body: JSON.stringify({
-					data: [{ app_id: "land.naia.slides", manifest: { nameKo: "나이아 슬라이드" } }],
+					data: [
+						{
+							app_id: "land.naia.slides",
+							manifest: { nameKo: "나이아 슬라이드" },
+						},
+					],
 				}),
 			});
 		});
@@ -301,8 +331,13 @@ test.describe("#467 slide presenter", () => {
 		});
 		await expect(page.locator(".app-install-dialog")).toBeVisible();
 		await expect(page.getByTestId("app-install-product")).toHaveCount(1);
-		await expect(page.getByTestId("app-install-product").locator("strong")).toHaveText("나이아 슬라이드");
-		await page.screenshot({ path: "test-results/issue-471-single-install-confirmation.png", fullPage: true });
+		await expect(
+			page.getByTestId("app-install-product").locator("strong"),
+		).toHaveText("나이아 슬라이드");
+		await page.screenshot({
+			path: "test-results/issue-471-single-install-confirmation.png",
+			fullPage: true,
+		});
 	});
 
 	test("keeps the installed Slides deck loaded after switching apps and back", async ({
@@ -334,9 +369,7 @@ test.describe("#467 slide presenter", () => {
 		await page.goto("/");
 
 		// Open the installed Slides app and load a deck.
-		const slidesButton = page.locator(
-			'button[data-app-id="land.naia.slides"]',
-		);
+		const slidesButton = page.locator('button[data-app-id="land.naia.slides"]');
 		await expect(slidesButton).toBeVisible({ timeout: 15_000 });
 		await slidesButton.click();
 
@@ -344,22 +377,26 @@ test.describe("#467 slide presenter", () => {
 		await expect(installed.locator(".slides-app")).toBeVisible({
 			timeout: 15_000,
 		});
-		await installed.getByLabel("PDF 열기").setInputFiles({
-			name: "persist-check.pdf",
-			mimeType: "application/pdf",
-			buffer: makeTwoPagePdf(),
-		});
-		await installed.getByLabel("발표 스크립트").setInputFiles({
-			name: "persist-check.md",
-			mimeType: "text/markdown",
-			buffer: Buffer.from("## 1. Alpha\n\n첫 장.\n\n## 2. Beta\n\n둘째 장."),
-		});
+		await installed
+			.locator('input[type="file"][accept*="application/pdf"]')
+			.setInputFiles({
+				name: "persist-check.pdf",
+				mimeType: "application/pdf",
+				buffer: makeTwoPagePdf(),
+			});
+		await installed
+			.locator('input[type="file"][accept*="text/markdown"]')
+			.setInputFiles({
+				name: "persist-check.md",
+				mimeType: "text/markdown",
+				buffer: Buffer.from("## 1. Alpha\n\n첫 장.\n\n## 2. Beta\n\n둘째 장."),
+			});
 		await expect(
 			installed.locator('.slides-app[data-state="ready"]'),
 		).toBeVisible({ timeout: 30_000 });
-		await expect(
-			installed.locator(".slides-app__page canvas"),
-		).toBeVisible({ timeout: 30_000 });
+		await expect(installed.locator(".slides-app__page canvas")).toBeVisible({
+			timeout: 30_000,
+		});
 
 		// Tag the live iframe DOM node. If the shell unmounts/remounts the app on
 		// switch, React creates a fresh element and this marker is gone.
@@ -376,12 +413,16 @@ test.describe("#467 slide presenter", () => {
 		});
 		await slidesButton.click();
 		await expect(
-			page.locator('button[data-app-id="land.naia.slides"].app-bar-tab--active'),
+			page.locator(
+				'button[data-app-id="land.naia.slides"].app-bar-tab--active',
+			),
 		).toBeVisible({ timeout: 15_000 });
 
 		// Same iframe node survived the round-trip …
 		await expect(
-			page.locator('.generic-installed-app__iframe[data-e2e-persist="marker-1"]'),
+			page.locator(
+				'.generic-installed-app__iframe[data-e2e-persist="marker-1"]',
+			),
 		).toHaveCount(1);
 		// … and the deck is still loaded — no re-upload, still on the ready state
 		// with a rendered slide canvas.
@@ -419,7 +460,9 @@ test.describe("#467 slide presenter", () => {
 		await page.evaluate(() => {
 			(window as any).__SLIDE_E2E__.delayMs = 1_500;
 		});
-		await page.getByRole("button", { name: "발표 시작" }).click();
+		await page
+			.getByRole("button", { name: /^(발표 시작|Start presenting)$/ })
+			.click();
 		await expect(page.locator(".slides-app__progress strong")).toHaveText(
 			"2 / 21",
 			{ timeout: 30_000 },
@@ -429,7 +472,7 @@ test.describe("#467 slide presenter", () => {
 				page.evaluate(() => (window as any).__SLIDE_E2E__.spoken.length),
 			)
 			.toBeGreaterThan(0);
-		await page.getByRole("button", { name: "일시정지" }).click();
+		await page.getByRole("button", { name: /^(일시정지|Pause)$/ }).click();
 		await expectRenderedSlide(page);
 		await page.locator(".slides-app").evaluate((element) => {
 			element.scrollTop = 0;

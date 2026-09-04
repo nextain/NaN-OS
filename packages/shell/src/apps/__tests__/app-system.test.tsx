@@ -8,11 +8,11 @@ import {
 } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type {
-	NaiaContextBridge,
 	AppContext,
+	NaiaContextBridge,
 	ToolHandler,
 } from "../../lib/app-registry";
-import { appRegistry } from "../../lib/app-registry";
+import { appRegistry, shouldMountKeepAliveApp } from "../../lib/app-registry";
 
 // ─── Mocks ────────────────────────────────────────────────────────────────────
 
@@ -153,6 +153,23 @@ describe("App Registry", () => {
 		const found = appRegistry.list().find((p) => p.id === "installed-app");
 		expect(found?.builtIn).toBeFalsy();
 		appRegistry.unregister("installed-app");
+	});
+
+	it("defers a keep-alive app only until its first activation", () => {
+		const descriptor = {
+			id: "deferred-app",
+			name: "Deferred",
+			keepAlive: true,
+			deferMountUntilActive: true,
+			center: () => <div />,
+		};
+		const activated = new Set<string>();
+
+		expect(shouldMountKeepAliveApp(descriptor, activated)).toBe(false);
+		activated.add(descriptor.id);
+		expect(shouldMountKeepAliveApp(descriptor, activated)).toBe(true);
+		activated.add("another-app");
+		expect(shouldMountKeepAliveApp(descriptor, activated)).toBe(true);
 	});
 });
 

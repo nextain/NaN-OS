@@ -28,11 +28,11 @@ describe("NaiaMetaArea channels tab wiring", () => {
 		vi.clearAllMocks();
 	});
 
-	it("renders the real ChannelsTab, not the retired static placeholder", () => {
+	it("renders the real ChannelsTab, not the retired static placeholder", async () => {
 		mockInvoke.mockReturnValue(new Promise(() => {}));
 		render(<NaiaMetaArea />);
 		fireEvent.click(screen.getByTitle("Channels"));
-		expect(screen.getByTestId("channels-tab")).toBeDefined();
+		expect(await screen.findByTestId("channels-tab")).toBeDefined();
 		expect(screen.queryByText(/안정화 작업 중/)).toBeNull();
 	});
 });

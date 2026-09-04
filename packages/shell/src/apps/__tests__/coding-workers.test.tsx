@@ -415,10 +415,10 @@ describe("CodingWorkersApp", () => {
 		);
 	});
 
-	it("renders the course boundary in Korean without removing the technical terms", () => {
+	it("renders the course boundary in Korean without removing the technical terms", async () => {
 		const previousLocale = getLocale();
 		try {
-			setLocale("ko");
+			await setLocale("ko");
 			render(<CodingWorkersApp adapter={adapter()} />);
 			fireEvent.click(screen.getByTestId("coding-worker-jeonju-course-preset"));
 
@@ -430,7 +430,7 @@ describe("CodingWorkersApp", () => {
 				"Naia가 제안을 적용하고 검증합니다. 변경 범위는 index.html, hero.svg로 고정됩니다.",
 			);
 		} finally {
-			setLocale(previousLocale);
+			await setLocale(previousLocale);
 		}
 	});
 

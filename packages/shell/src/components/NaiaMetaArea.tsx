@@ -1,10 +1,24 @@
-import { useState } from "react";
-import { AgentsTab } from "./AgentsTab";
-import { ChannelsTab } from "./ChannelsTab";
-import { DiagnosticsTab } from "./DiagnosticsTab";
-import { SettingsTab } from "./SettingsTab";
-import { SkillsTab } from "./SkillsTab";
+import { Suspense, lazy, useState } from "react";
 import { WorkProgressArea } from "./WorkProgressArea";
+
+const AgentsTab = lazy(() =>
+	import("./AgentsTab").then(({ AgentsTab }) => ({ default: AgentsTab })),
+);
+const ChannelsTab = lazy(() =>
+	import("./ChannelsTab").then(({ ChannelsTab }) => ({ default: ChannelsTab })),
+);
+const DiagnosticsTab = lazy(() =>
+	import("./DiagnosticsTab").then(({ DiagnosticsTab }) => ({
+		default: DiagnosticsTab,
+	})),
+);
+const SkillsTab = lazy(() =>
+	import("./SkillsTab").then(({ SkillsTab }) => ({ default: SkillsTab })),
+);
+
+const SettingsTab = lazy(() =>
+	import("./SettingsTab").then(({ SettingsTab }) => ({ default: SettingsTab })),
+);
 
 type MetaTabId =
 	| "progress"
@@ -48,11 +62,17 @@ export function NaiaMetaArea() {
 			</div>
 			<div className="naia-meta-app__body">
 				{activeTab === "progress" && <WorkProgressArea />}
-				{activeTab === "skills" && <SkillsTab onAskAI={askAI} />}
-		{activeTab === "channels" && <ChannelsTab />}
+				<Suspense fallback={null}>
+					{activeTab === "skills" && <SkillsTab onAskAI={askAI} />}
+					{activeTab === "channels" && <ChannelsTab />}
 					{activeTab === "agents" && <AgentsTab />}
-				{activeTab === "diagnostics" && <DiagnosticsTab />}
-				{activeTab === "settings" && <SettingsTab />}
+					{activeTab === "diagnostics" && <DiagnosticsTab />}
+				</Suspense>
+				{activeTab === "settings" && (
+					<Suspense fallback={null}>
+						<SettingsTab />
+					</Suspense>
+				)}
 			</div>
 		</div>
 	);

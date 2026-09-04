@@ -1,4 +1,4 @@
-﻿# 요구사항 (P03 — FR/NFR) — 2단계 산출물
+# 요구사항 (P03 — FR/NFR) — 2단계 산출물
 
 > **현재 Windows 로컬 표현 기준 (2026-08-06):** 별도 GPU 프로파일은 없다. NVA는 GPU·로그인과 무관한 사전 생성 web-player다. 감지 VRAM 6GB 이상이면 Voice 설정에서만 `voxCPM 2 local voice`를 명시적으로 켜고 끌 수 있으며 로그인은 필요하지 않다. 자세한 활성 계약은 이 문서의 `2026-08-06 active Windows NVA/Voice/Media contract`와 [`windows-6gb-voice.md`](windows-6gb-voice.md)를 따른다. [`windows-8gb-nva.md`](windows-8gb-nva.md) 및 FR-CASCADE.1~22의 Ditto/TRT/Cascade 프로파일 조항은 비규범 이력이다.
 
@@ -1114,3 +1114,6 @@ fenced code는 언어·복사·접기·워크스페이스 전환을 제공하고
 | **FR-BUNDLE.2** | 빌드 검사는 `index.html`이 참조하는 초기 진입 JS의 raw/gzip 크기와 전체 `dist` 크기를 결정론적으로 측정한다. 대상이나 설정을 찾지 못하거나 예산을 넘으면 실패한다. | UC-PERF-BUNDLE-BUDGET | `check-bundle-budget.test.mjs` | Done |
 | **FR-BUNDLE.3** | 빌드는 측정값·예산·통과 여부를 JSON으로 남기고 CI는 성공/실패와 무관하게 그 보고서를 artifact로 보존한다. | UC-PERF-BUNDLE-BUDGET | `check-bundle-budget.test.mjs`, GitHub Actions workflow | Done |
 | **FR-BUNDLE.4** | 항상 마운트되는 워크스페이스는 터미널 상태를 유지하되, 파일 편집기와 그 전이 의존성은 viewer에 파일이 생길 때 동적으로 불러오며, 청크 로드 실패는 셸 새로고침 없이 재시도할 수 있어야 한다. | UC-PERF-BUNDLE-BUDGET | `herdr-workspace.test.tsx`, `HerdrWorkspaceSurface.test.tsx`, production build chunk inspection | Done |
+| **FR-BUNDLE.5** | 완료된 사용자의 초기 진입에서는 온보딩 wizard와 그 전이 의존성을 내려받지 않는다. 신규 사용자의 온보딩 진입 시 로딩 상태를 표시하고, 청크 로드 실패는 셸 전체를 새로고침하지 않고 해당 화면만 재시도할 수 있어야 한다. | UC-PERF-BUNDLE-BUDGET | `DeferredOnboardingWizard.test.tsx`, `205-onboarding-avatar-grid.spec.ts`, production build chunk inspection | Done |
+| **FR-BUNDLE.6** | ChatArea와 전이 의존성은 초기 진입 파일에서 분리한다. 로딩 중에는 진행 상태를 표시하고, 그 사이 도착한 슬라이드 나레이션 요청은 채팅 가시성과 무관하게 마운트된 지연 표면의 eager 경량 버퍼가 보존해 React StrictMode 재마운트 뒤에도 한 번만 전달한다. 지연 표면이 해제되면 버퍼된 요청을 cancelled 결과로, Chat 청크 로드가 실패하면 failed 결과로 정산하고, 상관된 실패·취소 결과를 받은 프레젠터는 speaking에서 재개 가능한 paused 상태로 전이한다. 동일 URL의 실패한 동적 import는 브라우저 캐시상 새 요청을 보장할 수 없으므로 운영 청크 실패는 명시적인 셸 재로드로 복구한다. 빌드 검사는 대상 청크가 초기 엔트리의 동적 import 그래프에서 실제로 도달 가능한지도 확인한다. | UC-PERF-BUNDLE-BUDGET | `DeferredChatArea.test.tsx`, `slides-center-area.test.tsx`, `slide-presenter.test.ts`, `check-bundle-budget.test.mjs`, production build chunk inspection | Done |
+| **FR-BUNDLE.7** | #431 기준 초기 진입 예산을 개선된 측정값에 맞춰 raw 500,000바이트, gzip 160,000바이트로 강화한다. 최종 후보 실측은 기준선 2,913,442/836,096바이트에서 raw 439,810바이트/gzip 138,469바이트로 감소했다. 빌드 시각이 엔트리에 포함되어 gzip 값은 수 바이트 변동할 수 있으며, 이 수치는 엔트리 파일 크기 감소이지 초기 총 네트워크 전송량 감소를 뜻하지 않는다. | UC-PERF-BUNDLE-BUDGET | production build + `bundle-budget-report.json` | Done |

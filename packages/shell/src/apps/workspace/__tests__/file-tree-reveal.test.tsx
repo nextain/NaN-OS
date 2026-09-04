@@ -25,17 +25,17 @@ import { FileTree, isUnresolvedTemplateEntry } from "../FileTree";
 describe("FileTree open-file reveal", () => {
 	let previousLocale = getLocale();
 
-	beforeEach(() => {
+	beforeEach(async () => {
 		previousLocale = getLocale();
-		setLocale("en");
+		await setLocale("en");
 	});
 
-	afterEach(() => {
+	afterEach(async () => {
 		cleanup();
 		mockInvoke.mockReset();
 		mockUnlisten.mockReset();
 		scrollIntoView.mockReset();
-		setLocale(previousLocale);
+		await setLocale(previousLocale);
 	});
 
 	it("recursively expands ancestors, selects the file, and scrolls it into view", async () => {
@@ -87,7 +87,7 @@ describe("FileTree open-file reveal", () => {
 	});
 
 	it("renders context-menu copy actions in the selected locale", async () => {
-		setLocale("ko");
+		await setLocale("ko");
 		mockInvoke.mockResolvedValue([
 			{ name: "README.md", path: "/work/naia/README.md", is_dir: false },
 		]);

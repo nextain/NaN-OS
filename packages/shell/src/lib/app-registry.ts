@@ -1,4 +1,4 @@
-﻿import { invoke } from "@tauri-apps/api/core";
+import { invoke } from "@tauri-apps/api/core";
 import type React from "react";
 import type { BehaviorEntry, BehaviorFilter } from "./behavior-log";
 import { logBehavior, queryBehavior } from "./behavior-log";
@@ -242,6 +242,11 @@ export interface AppDescriptor {
 	 */
 	keepAlive?: boolean;
 	/**
+	 * Delay the first mount until the app is activated. After that first mount,
+	 * keepAlive semantics still apply, so listeners survive app switches.
+	 */
+	deferMountUntilActive?: boolean;
+	/**
 	 * "installed" ??loaded from ~/.naia/apps/ at runtime.
 	 * Omit or "code" for apps bundled in the shell's source.
 	 * AppBar uses this to decide whether to also delete from disk on remove.
@@ -266,6 +271,15 @@ export interface AppDescriptor {
 	 * Typed via `appRegistry.getApi<MyAppApi>(id)`.
 	 */
 	api?: AppApi;
+}
+
+export function shouldMountKeepAliveApp(
+	descriptor: AppDescriptor,
+	activatedAppIds: ReadonlySet<string>,
+): boolean {
+	return (
+		!descriptor.deferMountUntilActive || activatedAppIds.has(descriptor.id)
+	);
 }
 
 // ??? Registry ????????????????????????????????????????????????????????????????

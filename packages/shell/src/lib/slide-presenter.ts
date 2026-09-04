@@ -32,6 +32,7 @@ export type SlidePresenterAction =
 	| { type: "question" }
 	| { type: "speech-requested"; generation: number }
 	| { type: "speech-finished"; generation: number }
+	| { type: "speech-cancelled"; generation: number }
 	| { type: "speech-failed"; generation: number; error: string };
 
 export const EMPTY_SLIDE_PRESENTER_STATE: SlidePresenterState = {
@@ -187,6 +188,15 @@ export function reduceSlidePresenter(
 				mode: "paused",
 				error: action.error,
 			});
+		case "speech-cancelled":
+			if (
+				state.mode !== "presenting" ||
+				state.speech !== "speaking" ||
+				action.generation !== state.generation
+			) {
+				return state;
+			}
+			return invalidateSpeech(state, { mode: "paused", error: undefined });
 	}
 }
 

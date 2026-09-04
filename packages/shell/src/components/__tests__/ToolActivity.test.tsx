@@ -96,4 +96,23 @@ describe("ToolActivity", () => {
 		fireEvent.click(screen.getByText(/파일 읽기|Read File/));
 		expect(screen.getByText(/\/test\.txt/)).toBeDefined();
 	});
+
+	it("loads the graph viewer only for a successful graph result", async () => {
+		const tool: ToolCall = {
+			...baseTool,
+			toolName: "skill_knowledge_graph",
+			status: "success",
+			output: JSON.stringify({
+				nodes: [{ id: "a", label: "Alpha" }],
+				edges: [],
+				communityCount: 1,
+			}),
+		};
+
+		const { container } = render(<ToolActivity tool={tool} />);
+
+		expect(screen.getByText(/Loading|로딩/)).toBeDefined();
+		expect(await screen.findByTestId("knowledge-graph")).toBeDefined();
+		expect(container.querySelector("canvas")).not.toBeNull();
+	});
 });

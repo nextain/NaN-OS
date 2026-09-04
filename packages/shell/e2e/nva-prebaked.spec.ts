@@ -61,22 +61,27 @@ const NVA_MOCK = `
 `;
 
 test.describe("UC-NVA-PREBAKED - GPU-free Shell video avatar", () => {
-	test("loads pre-baked NVA without exposing or starting the retired server runtime", async ({ page }) => {
+	test("loads pre-baked NVA without exposing or starting the retired server runtime", async ({
+		page,
+	}) => {
 		await page.addInitScript(NVA_MOCK);
 		await page.addInitScript({ content: TAURI_BASE_MOCK_FALLBACK });
 		await page.addInitScript({ content: SEED_ADK_PATH });
 		await page.addInitScript(() => {
-			localStorage.setItem("naia-config", JSON.stringify({
-				provider: "gemini",
-				model: "gemini-3.5-flash",
-				locale: "en",
-				onboardingComplete: true,
-				avatarProvider: "naia-video-avatar",
-				nvaModel: "naia-prebaked",
-				cascadeRuntimeUrl: "https://stale-avatar.invalid:8910",
-				local8gFocus: "avatar",
-				localAvatarVoiceFocus: "both"
-			}));
+			localStorage.setItem(
+				"naia-config",
+				JSON.stringify({
+					provider: "gemini",
+					model: "gemini-3.5-flash",
+					locale: "en",
+					onboardingComplete: true,
+					avatarProvider: "naia-video-avatar",
+					nvaModel: "naia-prebaked",
+					cascadeRuntimeUrl: "https://stale-avatar.invalid:8910",
+					local8gFocus: "avatar",
+					localAvatarVoiceFocus: "both",
+				}),
+			);
 		});
 
 		await page.goto("/");
@@ -91,17 +96,26 @@ test.describe("UC-NVA-PREBAKED - GPU-free Shell video avatar", () => {
 		expect(videoBox?.height).toBeGreaterThan(0);
 		await expect(page.locator("[data-video-avatar-status]")).toHaveCount(0);
 
-		await page.locator('[data-settings-tab="avatar"]').evaluate((element) => (element as HTMLElement).click());
-		const videoOption = page.locator('#avatar-provider option[value="naia-video-avatar"]');
+		await page.locator(".app-bar-settings").click();
+		await page.locator('[data-settings-tab="avatar"]').click();
+		const videoOption = page.locator(
+			'#avatar-provider option[value="naia-video-avatar"]',
+		);
 		await expect(videoOption).toBeEnabled();
 		await expect(page.locator("#cascade-runtime-url")).toHaveCount(0);
-		await expect(page.locator('[data-testid="avatar-cascade-required"]')).toHaveCount(0);
-		await expect(page.locator('[data-testid="nva-vram-requirement"]')).toHaveCount(0);
-		await expect(page.locator('[data-testid="cloud-cascade-coming-soon"]')).toHaveCount(0);
+		await expect(
+			page.locator('[data-testid="avatar-cascade-required"]'),
+		).toHaveCount(0);
+		await expect(
+			page.locator('[data-testid="nva-vram-requirement"]'),
+		).toHaveCount(0);
+		await expect(
+			page.locator('[data-testid="cloud-cascade-coming-soon"]'),
+		).toHaveCount(0);
 
 		const result = await page.evaluate(() => ({
 			commands: (window as any).__nvaInvokes.map((entry) => entry.cmd),
-			config: JSON.parse(localStorage.getItem("naia-config") || "{}")
+			config: JSON.parse(localStorage.getItem("naia-config") || "{}"),
 		}));
 		expect(result.commands).not.toContain("start_voxcpm2");
 		expect(result.commands).not.toContain("probe_cascade_health");

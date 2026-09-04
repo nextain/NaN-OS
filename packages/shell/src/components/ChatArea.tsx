@@ -1,14 +1,14 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import {
-	type ReactNode,
+	Suspense,
+	lazy,
 	useCallback,
 	useEffect,
 	useRef,
 	useState,
 } from "react";
-import Markdown, { type Components } from "react-markdown";
-import remarkGfm from "remark-gfm";
+import type { ReactNode } from "react";
 import {
 	type RecognitionResult,
 	onError as sttOnError,
@@ -88,7 +88,7 @@ import {
 import { ThinkingStreamFilter } from "../lib/llm/thinking-stream-filter";
 import { Logger } from "../lib/logger";
 import { type MicStream, createMicStream } from "../lib/mic-stream";
-import { type MemoryContext, buildSystemPrompt } from "../lib/persona";
+import { buildSystemPrompt } from "../lib/persona";
 import {
 	RADIO_DJ_DEFAULT_SETTINGS,
 	normalizeProactiveSpeechSettings,
@@ -127,54 +127,16 @@ import type {
 	AgentResponseChunk,
 	AuditEvent,
 	AuditFilter,
-	EnvironmentSegment,
 	ProviderId,
+	ToolCall,
 } from "../lib/types";
 import { makeCoreAudioPlayer } from "../lib/voice-core";
+import { AudioQueue } from "../lib/voice/audio-queue";
 import {
 	decideSttBargeIn,
 	isLikelySelfEcho,
 	shouldPauseSttForTts,
 } from "../lib/voice/echo-gate";
-import { wireErrorMessage } from "../lib/wire-errors";
-import { MarkdownCodeBlock } from "./MarkdownCodeBlock";
-
-type StructuredAgentChunk = Extract<
-	AgentResponseChunk,
-	{
-		type:
-			| "grounding"
-			| "artifact"
-			| "provider_session"
-			| "processing_disclosure";
-	}
->;
-
-function formatStructuredAgentChunk(chunk: StructuredAgentChunk): string {
-	switch (chunk.type) {
-		case "grounding": {
-			const sources = chunk.sources
-				.map((source) => {
-					const uris = source.sourceUris.join(", ");
-					return uris ? `${source.title} (${uris})` : source.title;
-				})
-				.join("; ");
-			return `\n\n[Grounding: ${chunk.status}]${sources ? ` ${sources}` : ""}`;
-		}
-		case "artifact": {
-			const name = chunk.artifact.name ?? chunk.artifact.id;
-			return `\n\n[Artifact: ${chunk.artifact.kind} ${name}] id=${chunk.artifact.id} localRef=${chunk.artifact.localRef} ${chunk.artifact.mimeType}, ${chunk.artifact.sizeBytes} bytes`;
-		}
-		case "provider_session":
-			return `\n\n[Provider session: ${chunk.state}] sessionId=${chunk.sessionId} providerSessionRef=${chunk.providerSessionRef}`;
-		case "processing_disclosure": {
-			const target = [chunk.provider, chunk.model].filter(Boolean).join("/");
-			return `\n\n[Processing: ${chunk.workload} -> ${chunk.destination}, ${chunk.decision}] processingProfileRef=${chunk.processingProfileRef}${target ? ` ${target}` : ""}`;
-		}
-	}
-}
-
-import { AudioQueue } from "../lib/voice/audio-queue";
 import {
 	type AppContextBridge,
 	LIVE_PROVIDER_COST_HINTS,
@@ -189,28 +151,93 @@ import {
 import { getLocalRefAudioB64 } from "../lib/voice/ref-audio-api";
 import { SentenceChunker } from "../lib/voice/sentence-chunker";
 import { extractExpression, mapServerEmotion } from "../lib/vrm/expression";
-import { selectPromptAppContexts, useAppStore } from "../stores/app";
+import { wireErrorMessage } from "../lib/wire-errors";
+import { useAppStore } from "../stores/app";
 import { useAvatarStore } from "../stores/avatar";
 import { useCascadeAvatarStore } from "../stores/cascade-avatar";
 import { useChatStore } from "../stores/chat";
 import { useLogsStore } from "../stores/logs";
 import { useProgressStore } from "../stores/progress";
 import { useSkillsStore } from "../stores/skills";
-import { AgentsTab } from "./AgentsTab";
+import type { AtMentionHandle, AtMentionResult } from "./AtMentionPopover";
+import { formatStructuredAgentChunk } from "./chat-presentation";
 import {
-	type AtMentionHandle,
-	AtMentionPopover,
-	type AtMentionResult,
-	isWorkspaceAvailable,
-} from "./AtMentionPopover";
-import { ChannelsTab } from "./ChannelsTab";
-import { CostDashboard } from "./CostDashboard";
-import { DiagnosticsTab } from "./DiagnosticsTab";
-import { HistoryTab } from "./HistoryTab";
-import { PermissionModal } from "./PermissionModal";
-import { SkillsTab } from "./SkillsTab";
-import { ToolActivity } from "./ToolActivity";
-import { WorkProgressArea } from "./WorkProgressArea";
+	buildEnvironmentSegments,
+	buildMemoryContext,
+	nextVoiceSessionKey,
+	playBase64Audio,
+} from "./chat-runtime-utils";
+import {
+	naiaLocalVoiceId,
+	phaseToMode,
+	resolveTtsVoiceId,
+	voiceCloseMessage,
+	voiceFailureMessage,
+} from "./chat-voice-utils";
+
+const AgentsTab = lazy(() =>
+	import("./AgentsTab").then(({ AgentsTab }) => ({ default: AgentsTab })),
+);
+const AtMentionPopover = lazy(() =>
+	import("./AtMentionPopover").then(({ AtMentionPopover }) => ({
+		default: AtMentionPopover,
+	})),
+);
+const ChannelsTab = lazy(() =>
+	import("./ChannelsTab").then(({ ChannelsTab }) => ({ default: ChannelsTab })),
+);
+const CostDashboard = lazy(() =>
+	import("./CostDashboard").then(({ CostDashboard }) => ({
+		default: CostDashboard,
+	})),
+);
+const DiagnosticsTab = lazy(() =>
+	import("./DiagnosticsTab").then(({ DiagnosticsTab }) => ({
+		default: DiagnosticsTab,
+	})),
+);
+const HistoryTab = lazy(() =>
+	import("./HistoryTab").then(({ HistoryTab }) => ({ default: HistoryTab })),
+);
+const SkillsTab = lazy(() =>
+	import("./SkillsTab").then(({ SkillsTab }) => ({ default: SkillsTab })),
+);
+const WorkProgressArea = lazy(() =>
+	import("./WorkProgressArea").then(({ WorkProgressArea }) => ({
+		default: WorkProgressArea,
+	})),
+);
+const ChatMarkdown = lazy(() =>
+	import("./ChatMarkdown").then(({ ChatMarkdown }) => ({
+		default: ChatMarkdown,
+	})),
+);
+const PermissionModal = lazy(() =>
+	import("./PermissionModal").then(({ PermissionModal }) => ({
+		default: PermissionModal,
+	})),
+);
+const ToolActivity = lazy(() =>
+	import("./ToolActivity").then(({ ToolActivity }) => ({
+		default: ToolActivity,
+	})),
+);
+
+function DeferredChatMarkdown({ children }: { children: string }) {
+	return (
+		<Suspense fallback={children as ReactNode}>
+			<ChatMarkdown>{children}</ChatMarkdown>
+		</Suspense>
+	);
+}
+
+function DeferredToolActivity({ tool }: { tool: ToolCall }) {
+	return (
+		<Suspense fallback={null}>
+			<ToolActivity tool={tool} />
+		</Suspense>
+	);
+}
 
 type TabId =
 	| "chat"
@@ -281,358 +308,11 @@ function formatCost(cost: number): string {
 	return `$${cost.toFixed(3)}`;
 }
 
-// ── Chat file deep-link ────────────────────────────────────────────────
-// Matches absolute file paths ending with common extensions.
-// Uses a capturing group so split() includes the matched path in the result.
-// (?<![/\w]) lookbehind prevents false positives on relative paths like "shell/src/App.tsx"
-// (where /src/App.tsx would otherwise be matched as a sub-path).
-const FILE_PATH_RE =
-	/(?<![/\w])(\/[\w\-\.\/]+\.(?:png|jpe?g|gif|webp|csv|json|log|pdf|tsx|ts|jsx|js|rs|py|md|yaml|yml|sh|toml)(?![.\w]))/;
-
-function openFileInWorkspace(path: string): void {
-	appRegistry.getApi("workspace")?.openFile(path);
-	useAppStore.getState().setActiveApp("workspace");
-}
-
-const CODE_FILE_EXTENSIONS: Record<string, string> = {
-	bash: "sh",
-	css: "css",
-	html: "html",
-	javascript: "js",
-	js: "js",
-	json: "json",
-	jsx: "jsx",
-	markdown: "md",
-	md: "md",
-	python: "py",
-	py: "py",
-	rust: "rs",
-	rs: "rs",
-	sh: "sh",
-	tsx: "tsx",
-	typescript: "ts",
-	ts: "ts",
-	yaml: "yaml",
-	yml: "yml",
-};
-
-async function openCodeInWorkspace(
-	code: string,
-	language: string,
-): Promise<void> {
-	const extension = CODE_FILE_EXTENSIONS[language.toLowerCase()] ?? "txt";
-	const path = await invoke<string>("write_temp_text", {
-		filename: `naia-code-${Date.now()}.${extension}`,
-		content: code,
-	});
-	openFileInWorkspace(path);
-}
-
-/** Split a text string on file paths and return an array of strings / buttons. */
-function processFilePaths(text: string): ReactNode[] {
-	const parts = text.split(FILE_PATH_RE);
-	return parts.map((part, idx) =>
-		FILE_PATH_RE.test(part) ? (
-			<button
-				key={`file-${part}-${idx}`}
-				type="button"
-				className="chat-file-deeplink"
-				onClick={() => openFileInWorkspace(part)}
-				title={`워크스페이스에서 열기: ${part}`}
-			>
-				{part}
-			</button>
-		) : (
-			part
-		),
-	);
-}
-
-/** React-Markdown components override — detects file paths in <p> text nodes. */
-const mdComponents: Components = {
-	code: ({ className, children }) => (
-		<MarkdownCodeBlock
-			className={className}
-			onOpenWorkspace={(code, language) =>
-				void openCodeInWorkspace(code, language)
-			}
-		>
-			{children}
-		</MarkdownCodeBlock>
-	),
-	p({ children, ...props }) {
-		const processed = Array.isArray(children)
-			? children.flatMap((child) =>
-					typeof child === "string" ? processFilePaths(child) : [child],
-				)
-			: typeof children === "string"
-				? processFilePaths(children)
-				: children;
-		return <p {...props}>{processed}</p>;
-	},
-};
-
 /** 로컬 음성(naia-local-voice) 음색 id — 사용자 음성 참조(voiceRefUrl, RefAudioSection
  *  프리셋)의 **파일명**이 façade `/ref/voices` 팔레트 id 와 일치하므로 basename 을 그대로
  *  전달한다. (2026-07-15 루크 실증: 하드코딩 "default" 가 프리셋 선택을 façade 에 전달하지
  *  않아 음색이 팔레트 기본으로 고정되던 버그 — 남성 음색을 골라도 여성으로 나옴.)
  *  비팔레트 형식(녹음/업로드 data·로컬경로)은 façade 가 400 fail-closed 라 기본 음색 폴백. */
-function naiaLocalVoiceId(voiceRefUrl?: string): string {
-	// Default = "여성 음색 1" of the CC0 palette the installer provisions.
-	// (The old ref_ko_485 fallback was the CASCADE palette's name — the local
-	// engine doesn't have it, so every sentence took an unknown_voice 400
-	// round-trip before falling back.)
-	if (!voiceRefUrl) return "cc0-ko-female-01.wav";
-	// 쿼리/프래그먼트 제거 후 basename — GCS 서명 URL(...wav?X-Goog-...) 이나 프리셋
-	// sampleUrl 의 쿼리스트링 때문에 정규식이 빗나가 프리셋이 무시되던 것 방지(2026-07-15 리뷰).
-	const noQuery = voiceRefUrl.split(/[?#]/)[0];
-	const base = noQuery.split(/[/\\]/).pop()?.trim() ?? "";
-	// façade 팔레트 id = .wav 파일명. 팔레트 밖 값(녹음/업로드 data·경로)은 서버가 모르는
-	// id 를 200+랜덤음색으로 받으므로(측정), 안전한 기본 음색으로 폴백한다.
-	return /^[\w.-]+\.wav$/i.test(base) ? base : "cc0-ko-female-01.wav";
-}
-
-/** TTS provider 별 voice id 해석 (단일 SoT — 파이프라인·Live 두 경로가 공유해 분기 드리프트
- *  방지, 2026-07-15 리뷰). nextain=클라우드 voice / **naia-local-voice=façade 팔레트 id**(프리셋
- *  파일명) / **vllm=사용자 임의 OpenAI-호환 서버라 "default" 그대로**(팔레트 id 를 모름 — 이걸
- *  섞으면 vllm 이 400/무음) / 그 외=config.ttsVoice. */
-function resolveTtsVoiceId(config: AppConfig): string | undefined {
-	if (config.ttsProvider === "nextain") {
-		return (
-			config.ttsVoice ||
-			`ko-KR-Chirp3-HD-${config.voice ?? getDefaultVoiceForAvatar(config.vrmModel)}`
-		);
-	}
-	if (config.ttsProvider === "naia-local-voice") {
-		if (getLocalRefAudioB64()) return "naia-current";
-		return naiaLocalVoiceId(config.voiceRefUrl);
-	}
-	if (config.ttsProvider === "vllm") {
-		return "default"; // 범용 OpenAI-호환 서버 — 팔레트 id 주입 금지.
-	}
-	return config.ttsVoice;
-}
-
-/** Build MemoryContext for system prompt injection.
- *  Note: User facts are now handled by Agent MemorySystem (sessionRecall).
- *  Shell only provides persona/locale/app context.
- *
- *  S4: this is now used ONLY by the **voice (Live) and Discord** paths, which do
- *  NOT route through the naia-agent core (Gemini Live / OpenAI Realtime / naia-omni
- *  build their own systemInstruction). The gRPC text-chat path no longer bakes a
- *  systemPrompt — the core assembles persona/locale/honorific/speechStyle from
- *  config.json itself, and the shell sends only `environmentSegments` (see
- *  `buildEnvironmentSegments`). */
-async function buildMemoryContext(): Promise<MemoryContext> {
-	const ctx: MemoryContext = {};
-	try {
-		const cfg = loadConfig();
-		ctx.userName = cfg?.userName;
-		ctx.agentName = cfg?.agentName;
-		ctx.locale = cfg?.locale || getLocale();
-		ctx.honorific = cfg?.honorific;
-		ctx.speechStyle = cfg?.speechStyle;
-		ctx.discordDefaultUserId = cfg?.discordDefaultUserId;
-		ctx.discordDmChannelId = cfg?.discordDmChannelId;
-
-		// Active app context + persistent contexts (bgm favorites/current track).
-		// Persistent contexts survive app switches so background music state is
-		// always available — fixes the AI hallucinating favorites when another
-		// app was active.
-		const appCtxList = selectPromptAppContexts(useAppStore.getState());
-		if (appCtxList.length > 0) {
-			ctx.appContexts = appCtxList;
-		}
-	} catch (err) {
-		Logger.warn("ChatArea", "Failed to build memory context", {
-			error: String(err),
-		});
-	}
-	return ctx;
-}
-
-/**
- * S4 — environment-only segments for the gRPC text-chat path. The shell stops
- * baking persona/locale/honorific/speechStyle/userName into a raw systemPrompt
- * (the core owns those, read from config.json). It sends ONLY its environment-
- * specific context:
- *   - `avatarEmotion`: the desktop shell always renders an avatar, so the core
- *     should emit its standard emotion-tag instructions (the wording lives in the
- *     core now; the shell only signals the capability).
- *   - `app`: live UI app context (bgm favorites, browser url, …) as isolated
- *     reference data.
- *   - `responseStyle`: voice-pipeline turns ask for brief spoken answers. The core
- *     owns the brevity wording and appends it AFTER persona, so voice replies stay
- *     in-persona (Alpha) yet short. `"normal"` (text chat) emits nothing.
- * Always returns at least the avatar segment (the desktop shell always has an
- * avatar), so the core merges environment context onto persona+workspace.
- */
-function buildEnvironmentSegments(
-	memoryCtx: MemoryContext,
-	responseStyle: "brief" | "normal" = "normal",
-	/**
-	 * 이번 턴에 환경 도구가 뇌에 실제로 등록되어 있는가 (FR-ENV-ATTENTION.16).
-	 *
-	 * 등록이 전달되지 않았는데 표면을 실으면, 개수만 싣는 안내가 "environment 도구를
-	 * 불러라"라고 말한다 — 나이아에게 없는 도구다. 못 하는 것을 하라고 시키는 셈이라
-	 * 그 턴에는 아예 싣지 않는다.
-	 */
-	toolReady = true,
-): EnvironmentSegment[] {
-	const segs: EnvironmentSegment[] = [{ kind: "avatarEmotion" }];
-	if (memoryCtx.appContexts?.length) {
-		segs.push({
-			kind: "app",
-			entries: memoryCtx.appContexts.map((pc) => ({
-				type: pc.type,
-				data: pc.data,
-			})),
-		});
-	}
-	// #502 실배선 (FR-ENV-LIVE.1·2, FR-ENV-ATTENTION.1~4): 지금 무엇이 돌고 있는지 나이아가
-	// 스스로 알게 한다. 도구를 부르라고 사용자가 말할 필요가 없다. 표면이 없으면 세그먼트를
-	// 만들지 않는다 — 빈 목록을 올려 "아무것도 없다"고 단언하지 않는다.
-	//
-	// 다만 목록 전체를 늘 싣지는 않는다. 기본(auto)에서는 개수만 실리고, 나이아가 watch 로
-	// 지켜보기로 정한 동안에만 목록이 붙는다. 사용자가 config 로 off/always 를 정하면 그것이 이긴다.
-	// 도구를 부를 수 없을 때 무엇을 막아야 하는가 (FR-ENV-ATTENTION.19·20).
-	//
-	// 막아야 하는 것은 "개수만 보내고 도구를 부르라고 안내하는 것"이다. 그 안내가 닫힌 길을
-	// 가리키기 때문이다. 목록 자체는 도구 없이도 쓸모가 있다 — 나이아가 무엇이 돌고 있는지
-	// 말해 줄 수는 있다. 그래서 사용자가 "늘 보내기"를 고른 경우에는 도구가 꺼져 있어도
-	// 목록을 보낸다. 사용자 정책이 이긴다는 FR-ENV-ATTENTION.4 와 어긋나지 않게
-	// (2026-08-28 21차 적대리뷰 지적 — 구현이 조용히 반대로 정하고 있었다).
-	const awareness = loadConfig()?.environmentAwareness ?? "auto";
-	const surfaces =
-		awareness === "always" || toolReady
-			? environmentSession.segment(awareness)
-			: null;
-	if (surfaces) {
-		segs.push(surfaces);
-	}
-	// 음성 파이프라인(STT→채팅→TTS)은 brief — 코어가 간결성 지시를 persona 뒤에 append(persona 안 덮음).
-	// normal(텍스트 채팅)은 무영향(코어가 블록 미생성).
-	if (responseStyle === "brief") {
-		segs.push({ kind: "responseStyle", style: "brief" });
-	}
-	return segs;
-}
-
-// 통화마다 하나씩 늘어나는 번호. 지켜보기의 주인 표에 쓴다 (FR-ENV-ATTENTION.13).
-// 모듈 수준인 이유는 재연결이 같은 컴포넌트 안에서 여러 세션을 만들기 때문이다.
-let voiceSessionSeq = 0;
-
-// Keep reference to prevent garbage collection during playback
-let currentAudio: HTMLAudioElement | null = null;
-
-/** Play base64 MP3 via HTML Audio element (reliable in webkit2gtk). */
-function playBase64Audio(base64: string): void {
-	Logger.info("ChatArea", "Audio chunk received", {
-		length: base64.length,
-	});
-	const avatarStore = useAvatarStore.getState();
-	avatarStore.setSpeaking(true);
-	avatarStore.setPendingAudio(base64);
-
-	// Stop previous audio if still playing
-	if (currentAudio) {
-		currentAudio.pause();
-		currentAudio = null;
-	}
-
-	const audio = new Audio(`data:audio/mp3;base64,${base64}`);
-	currentAudio = audio; // prevent GC
-	audio.onended = () => {
-		Logger.info("ChatArea", "Audio playback ended");
-		currentAudio = null;
-		avatarStore.setSpeaking(false);
-	};
-	audio.onerror = (e) => {
-		Logger.warn("ChatArea", "Audio playback error", {
-			error: String(e),
-		});
-		currentAudio = null;
-		avatarStore.setSpeaking(false);
-	};
-	audio.play().then(
-		() => Logger.info("ChatArea", "Audio play() started"),
-		(err) => {
-			Logger.warn("ChatArea", "Audio play() rejected", {
-				error: String(err),
-			});
-			currentAudio = null;
-			avatarStore.setSpeaking(false);
-		},
-	);
-}
-
-// ⚠️ UC13: 로컬 sendApprovalResponse(직접 invoke) 제거 → chat-service 의 것 사용(NEW_CORE 분기 + once/always→approve 매핑 + fire-and-forget swallow). import 참조.
-
-/**
- * Pick a scenario-specific failure message from the last voice connection
- * status the session emitted (sold-out / out-of-credits / auth / timeout),
- * falling back to a raw error dump. Taking `st` as a typed parameter keeps the
- * full status union in scope (a ref read at the call site gets control-flow
- * narrowed to the literals assigned earlier in the same function).
- */
-function voiceFailureMessage(
-	st: VoiceConnectionStatus | null,
-	err: unknown,
-): string {
-	if (st?.phase === "sold-out") return t("chat.voiceSoldOut");
-	if (st?.phase === "error" && st.reason === "credits")
-		return t("chat.voiceErrorCredits");
-	if (st?.phase === "error" && st.reason === "auth")
-		return t("chat.voiceErrorAuth");
-	if (st?.phase === "error" && st.reason === "superseded")
-		return t("chat.voiceErrorSuperseded");
-	if (st?.phase === "error" && st.reason === "consent")
-		return t("chat.voiceErrorConsent");
-	if (st?.phase === "error" && st.reason === "timeout")
-		return t("chat.voiceErrorTimeout");
-	return `${t("chat.voiceError")}: ${err}`;
-}
-
-/**
- * Message for a mid-call disconnect, keyed off the close reason. Returns null
- * for normal/unknown closes (user stop, clean exit) so they stay silent. Used by
- * the onDisconnect handler — superseded/credits/auth deserve an explanation, a
- * user-initiated stop does not.
- */
-function voiceCloseMessage(reason: VoiceCloseReason): string | null {
-	switch (reason) {
-		case "superseded":
-			return t("chat.voiceErrorSuperseded");
-		case "consent":
-			return t("chat.voiceErrorConsent");
-		case "credits":
-			return t("chat.voiceErrorCredits");
-		case "auth":
-			return t("chat.voiceErrorAuth");
-		default:
-			return null; // normal / unknown → silent
-	}
-}
-
-/**
- * Derive the voice button mode from the connection status — the single source of
- * truth. No parallel voiceMode state. Mirrors www.naia.land deriving its badge
- * straight from ConnectionState.
- */
-function phaseToMode(
-	s: VoiceConnectionStatus | null,
-): "off" | "connecting" | "active" {
-	switch (s?.phase) {
-		case "connecting":
-		case "cold-start":
-			return "connecting";
-		case "active":
-			return "active";
-		default:
-			return "off"; // idle / sold-out / error / closed / null
-	}
-}
-
 export function isDiscordConnectionIntent(text: string): boolean {
 	const normalized = text.trim().toLocaleLowerCase();
 	if (!/(discord|디스코드)/i.test(normalized)) return false;
@@ -3475,8 +3155,7 @@ export function ChatArea({
 			// 붙은 것만 끈다. 시작 시점의 참/거짓으로는 통화 중에 다른 경로가 켠 것과
 			// 구별할 수 없고, 늦게 도착한 옛 세션의 종료가 새 세션의 것을 지운다
 			// (2026-08-27 12차 적대리뷰 지적).
-			voiceSessionSeq += 1;
-			const voiceSessionKey = `voice-${voiceSessionSeq}`;
+			const voiceSessionKey = nextVoiceSessionKey();
 			const session = createVoiceSession(liveProvider, {
 				useProxy: useDirectMode,
 			});
@@ -3984,7 +3663,7 @@ export function ChatArea({
 				if (
 					cursorPos > 0 &&
 					value[cursorPos - 1] === "@" &&
-					isWorkspaceAvailable()
+					appRegistry.get("workspace") !== undefined
 				) {
 					// Only trigger if @ is at start or preceded by whitespace
 					const charBefore = cursorPos >= 2 ? value[cursorPos - 2] : undefined;
@@ -4033,10 +3712,20 @@ export function ChatArea({
 
 	function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
 		// ── @ mention keyboard navigation (intercept before other handlers)
-		if (atMentionOpen && atMentionRef.current) {
-			const handled = atMentionRef.current.handleKeyDown(e);
-			if (handled) {
+		if (atMentionOpen) {
+			if (atMentionRef.current?.handleKeyDown(e)) {
 				e.preventDefault();
+				return;
+			}
+			// The popover is code-split. Do not accidentally send the message if
+			// Enter/Tab arrives during the brief interval before its ref attaches.
+			if (["Enter", "Tab", "ArrowDown", "ArrowUp"].includes(e.key)) {
+				e.preventDefault();
+				return;
+			}
+			if (e.key === "Escape") {
+				e.preventDefault();
+				handleAtMentionClose();
 				return;
 			}
 		}
@@ -4167,47 +3856,49 @@ export function ChatArea({
 					</div>
 				</div>
 
-				{/* Progress tab */}
-				{activeTab === "progress" && <WorkProgressArea />}
+				<Suspense fallback={null}>
+					{/* Progress tab */}
+					{activeTab === "progress" && <WorkProgressArea />}
 
-				{/* Skills tab */}
-				{activeTab === "skills" && (
-					<SkillsTab
-						onAskAI={(message) => {
-							setInput(message);
-							setActiveTab("chat");
-							if (focusTimerRef.current) clearTimeout(focusTimerRef.current);
-							focusTimerRef.current = setTimeout(() => {
-								inputRef.current?.focus();
-								focusTimerRef.current = null;
-							}, 50);
-						}}
-					/>
-				)}
+					{/* Skills tab */}
+					{activeTab === "skills" && (
+						<SkillsTab
+							onAskAI={(message) => {
+								setInput(message);
+								setActiveTab("chat");
+								if (focusTimerRef.current) clearTimeout(focusTimerRef.current);
+								focusTimerRef.current = setTimeout(() => {
+									inputRef.current?.focus();
+									focusTimerRef.current = null;
+								}, 50);
+							}}
+						/>
+					)}
 
-				{/* Agents tab */}
-				{activeTab === "agents" && <AgentsTab />}
+					{/* Agents tab */}
+					{activeTab === "agents" && <AgentsTab />}
 
-				{/* Diagnostics tab */}
-				{activeTab === "diagnostics" && <DiagnosticsTab />}
+					{/* Diagnostics tab */}
+					{activeTab === "diagnostics" && <DiagnosticsTab />}
 
-				{/* Settings tab */}
+					{/* Settings tab */}
 
-				{/* Channels tab */}
-				{activeTab === "channels" && <ChannelsTab />}
+					{/* Channels tab */}
+					{activeTab === "channels" && <ChannelsTab />}
 
-				{/* History tab */}
-				{activeTab === "history" && (
-					<HistoryTab onLoadSession={() => setActiveTab("chat")} />
-				)}
+					{/* History tab */}
+					{activeTab === "history" && (
+						<HistoryTab onLoadSession={() => setActiveTab("chat")} />
+					)}
 
-				{/* Cost dashboard (dropdown) */}
-				{showCostDashboard && activeTab === "chat" && (
-					<CostDashboard
-						messages={messages}
-						sessionCostEntries={sessionCostEntries}
-					/>
-				)}
+					{/* Cost dashboard (dropdown) */}
+					{showCostDashboard && activeTab === "chat" && (
+						<CostDashboard
+							messages={messages}
+							sessionCostEntries={sessionCostEntries}
+						/>
+					)}
+				</Suspense>
 
 				{compactionNotice !== null && activeTab === "chat" && (
 					<div
@@ -4264,15 +3955,11 @@ export function ChatArea({
 									</details>
 								)}
 								{msg.toolCalls?.map((tc) => (
-									<ToolActivity key={tc.toolCallId} tool={tc} />
+									<DeferredToolActivity key={tc.toolCallId} tool={tc} />
 								))}
 								<div className="message-content">
 									{msg.role === "assistant" ? (
-										<Markdown
-											remarkPlugins={[remarkGfm]}
-											skipHtml
-											components={mdComponents}
-										>
+										<DeferredChatMarkdown>
 											{
 												extractExpression(
 													msg.id === effectiveTtsMaskedMessageId
@@ -4280,7 +3967,7 @@ export function ChatArea({
 														: msg.content,
 												).cleanText
 											}
-										</Markdown>
+										</DeferredChatMarkdown>
 									) : (
 										msg.content
 									)}
@@ -4314,15 +4001,11 @@ export function ChatArea({
 								</details>
 							)}
 							{streamingToolCalls.map((tc) => (
-								<ToolActivity key={tc.toolCallId} tool={tc} />
+								<DeferredToolActivity key={tc.toolCallId} tool={tc} />
 							))}
 							<div className="message-content">
 								{streamingContent ? (
-									<Markdown
-										remarkPlugins={[remarkGfm]}
-										skipHtml
-										components={mdComponents}
-									>
+									<DeferredChatMarkdown>
 										{
 											extractExpression(
 												ttsTextSyncRef.current.active
@@ -4330,7 +4013,7 @@ export function ChatArea({
 													: streamingContent,
 											).cleanText
 										}
-									</Markdown>
+									</DeferredChatMarkdown>
 								) : null}
 								<span className="cursor-blink">▌</span>
 							</div>
@@ -4358,10 +4041,12 @@ export function ChatArea({
 
 				{/* Permission Modal */}
 				{pendingApproval && (
-					<PermissionModal
-						pending={pendingApproval}
-						onDecision={handleApprovalDecision}
-					/>
+					<Suspense fallback={null}>
+						<PermissionModal
+							pending={pendingApproval}
+							onDecision={handleApprovalDecision}
+						/>
+					</Suspense>
 				)}
 
 				{/* Cold-start-aware voice connection status (naia-omni RunPod). The
@@ -4422,12 +4107,14 @@ export function ChatArea({
 						<div className="stt-partial">{sttPartial}</div>
 					)}
 					{atMentionOpen && (
-						<AtMentionPopover
-							ref={atMentionRef}
-							query={atMentionQuery}
-							onSelect={handleAtMentionSelect}
-							onClose={handleAtMentionClose}
-						/>
+						<Suspense fallback={null}>
+							<AtMentionPopover
+								ref={atMentionRef}
+								query={atMentionQuery}
+								onSelect={handleAtMentionSelect}
+								onClose={handleAtMentionClose}
+							/>
+						</Suspense>
 					)}
 					<textarea
 						ref={inputRef}

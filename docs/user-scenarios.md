@@ -1,4 +1,4 @@
-﻿# 사용자 시나리오 (P01) + 테스트 커버리지 맵 — 2단계 산출물
+# 사용자 시나리오 (P01) + 테스트 커버리지 맵 — 2단계 산출물
 
 > **현재 Windows 로컬 표현 시나리오:** GPU 감지는 온보딩에서 로컬 음성 사용 가능성만 안내하며 프로파일을 자동 활성화하지 않는다. 사용자는 이후 음성 설정에서 로컬 음성과 레퍼런스 음성을 선택한다. 사전 생성 NVA 외모는 GPU 프로파일과 독립적으로 선택한다. 과거 8GB 서버 렌더링 NVA 기록은 [`windows-8gb-nva.md`](windows-8gb-nva.md)에 보존한다.
 
@@ -1530,7 +1530,10 @@ Test Coverage Map (P02):
 - 워크스페이스가 백그라운드에서 살아 있어도 파일 편집기와 CodeMirror/PDF 의존성은 파일을 실제로 열기 전까지 내려받지 않는다.
 - Mermaid 코드 블록을 실제로 열면 렌더러를 한 번 초기화해 기존과 같은 strict 설정으로 SVG를 만들고 정화한 뒤 표시한다.
 - 렌더러 로드나 문법 해석이 실패하면 기존처럼 원문과 오류 상태를 표시한다.
+- 이미 설정을 마친 사용자의 초기 진입에서는 온보딩 wizard를 내려받지 않으며, 신규 사용자가 온보딩에 진입할 때만 별도 청크를 불러온다. 청크 로딩 중에는 진행 상태를, 실패 시에는 셸을 재시작하지 않는 재시도 동작을 제공한다.
+- ChatArea와 음성·STT/TTS 전이 의존성은 초기 진입 파일과 분리한다. ChatArea가 마운트되면 별도 청크를 요청한다. 로딩 중 도착한 슬라이드 나레이션 요청은 채팅 가시성과 무관하게 eager 경량 버퍼가 보존해 마운트 직후 전달하며, 표면이 해제되면 cancelled 결과로, 청크 로드가 실패하면 failed 결과로 정산한다. 상관된 실패·취소 결과를 받은 프레젠터는 speaking에서 재개 가능한 paused 상태로 전이한다. 로딩·오류 상태는 해당 영역에 표시하되, 운영 청크 실패의 재시도는 동일 URL import 캐시의 한계 때문에 셸을 재로드한다.
 - CI는 초기 진입 JS의 raw/gzip 크기와 전체 배포 디렉터리 크기를 재고, 예산을 넘으면 실패하면서 기계 판독 가능한 보고서를 남긴다.
+- #431 최종 후보 측정에서 초기 진입 파일은 raw 2,913,442→439,810바이트, gzip 836,096→138,469바이트로 감소했다. 빌드 시각이 엔트리에 포함되어 gzip 값은 수 바이트 변동할 수 있다. 이 값은 파싱·평가 대상 엔트리 파일의 크기이며, 즉시 마운트되는 ChatArea 청크까지 포함한 초기 총 전송량 지표로 해석하지 않는다.
 
 Test Coverage Map (P02):
 
@@ -1538,5 +1541,10 @@ Test Coverage Map (P02):
 |---|---|---|
 | UC-PERF-BUNDLE-BUDGET | vitest `packages/shell/src/components/__tests__/MarkdownCodeBlock.test.tsx` | 지연 로드 뒤 단일 초기화·렌더링·오류 fallback |
 | UC-PERF-BUNDLE-BUDGET | vitest `packages/shell/src/apps/workspace/__tests__/herdr-workspace.test.tsx` | 지연 편집기 경계를 포함한 워크스페이스 터미널·파일 열기 동작 |
-| UC-PERF-BUNDLE-BUDGET | vitest `packages/shell/scripts/__tests__/check-bundle-budget.test.mjs` | 진입점 탐색, raw/gzip/전체 크기, 예산 초과 fail-closed, JSON 보고서 |
-| UC-PERF-BUNDLE-BUDGET | production build + CI artifact | 초기 번들에서 Mermaid 분리 및 예산 보고서 보존 |
+| UC-PERF-BUNDLE-BUDGET | vitest `packages/shell/src/components/__tests__/DeferredOnboardingWizard.test.tsx` | 온보딩 청크 로딩·완료 전달·오류 후 국소 재시도 |
+| UC-PERF-BUNDLE-BUDGET | vitest `packages/shell/src/components/__tests__/DeferredChatArea.test.tsx`, `packages/shell/src/apps/__tests__/slides-center-area.test.tsx`, `packages/shell/src/lib/__tests__/slide-presenter.test.ts` | ChatArea 청크 로딩·오류 격리·StrictMode 1회 전달·숨김 상태 버퍼 보존·실제 소비 경로 전달·언마운트 취소 정산·청크 실패 정산·발표자 paused 복구 |
+| UC-PERF-BUNDLE-BUDGET | Playwright `packages/shell/e2e/205-onboarding-avatar-grid.spec.ts`, production-preview `packages/shell/e2e/deferred-chat-area.spec.ts` | 실제 초기 진입에서 지연 로드된 wizard와 Chat 로딩 상태가 표시된다. Chat은 빌드된 `dist`와 manifest가 지정한 해시 청크를 직접 지연·실패시켜 접근 가능한 재시도에서 셸 재로드 후 복구하며, 협폭에서도 주변 셸과 Chat이 유지됨을 검증한다. |
+| UC-PERF-BUNDLE-BUDGET | vitest `packages/shell/scripts/__tests__/check-bundle-budget.test.mjs` | 진입점 탐색, raw/gzip/전체 크기, 동적 import 도달성, orphan 청크 거부, 예산 초과 fail-closed, JSON 보고서 |
+| UC-PERF-BUNDLE-BUDGET | production build + CI artifact | 초기 번들에서 Mermaid·ChatArea 분리, 강화된 예산 및 보고서 보존 |
+
+Chat 지연 로드 UI 상태 매트릭스: **기본**은 variant를 지정하지 않은 지연 경계가 기본 Chat 표면을 렌더링하는 상태, **빈 상태**는 대화 기록이 없어 `.chat-message`가 0개인 실제 ChatArea, **진행**은 `aria-live` 로딩 출력, **성공**은 로드된 Chat 입력, **오류**는 `alert`와 접근 가능한 재시도 버튼, **좁은 폭**은 480×800에서 주변 AppBar와 Chat을 유지하고 수평 overflow가 없는 상태로 검증한다. `DeferredChatArea.test.tsx`가 기본 variant·진행·성공·오류 및 재시도 분기를 고정한다. production-preview `deferred-chat-area.spec.ts`는 빌드된 청크에서 빈 대화 상태와 주변 셸, 진행→성공, 오류 버튼의 키보드 초점→재로드→복구 및 좁은 폭 레이아웃을 검증한다.

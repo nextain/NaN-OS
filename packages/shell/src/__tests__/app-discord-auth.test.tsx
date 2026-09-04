@@ -144,7 +144,7 @@ describe("App discord deep-link persistence", () => {
 		expect(typeof listeners.naia_auth_complete).toBe("function");
 	});
 
-	it("does not mount stale logged-out video avatar config", () => {
+	it("does not mount stale logged-out video avatar config", async () => {
 		localStorage.setItem("naia-adk-path", "C:\\naia");
 		localStorage.setItem(
 			"naia-config",
@@ -162,10 +162,10 @@ describe("App discord deep-link persistence", () => {
 		render(<App />);
 
 		expect(screen.queryByText("video-avatar")).toBeNull();
-		expect(screen.getByText("avatar")).toBeTruthy();
+		expect(await screen.findByText("avatar")).toBeTruthy();
 	});
 
-	it("keeps a logged-out explicit local avatar profile dormant and renders VRM", () => {
+	it("keeps a logged-out explicit local avatar profile dormant and renders VRM", async () => {
 		localStorage.setItem("naia-adk-path", "C:\\naia");
 		localStorage.setItem(
 			"naia-config",
@@ -183,7 +183,7 @@ describe("App discord deep-link persistence", () => {
 		render(<App />);
 
 		expect(screen.queryByText("video-avatar")).toBeNull();
-		expect(screen.getByText("avatar")).toBeTruthy();
+		expect(await screen.findByText("avatar")).toBeTruthy();
 	});
 
 	it("mounts the selected 8GB NVA after restoring the Naia key from secure storage", async () => {

@@ -11,6 +11,26 @@ import { fileURLToPath } from "node:url";
 import { gzipSync } from "node:zlib";
 
 const REPORT_NAME = "bundle-budget-report.json";
+const REQUIRED_DEFERRED_MODULES = [
+	"src/apps/browser/BrowserCenterArea.tsx",
+	"src/apps/workspace/HerdrWorkspaceCenterArea.tsx",
+	"src/apps/workspace/Terminal.tsx",
+	"src/components/AnnouncementBanner.tsx",
+	"src/components/AdkSetupScreen.tsx",
+	"src/components/AppInstallDialog.tsx",
+	"src/components/AvatarCanvas.tsx",
+	"src/components/AtMentionPopover.tsx",
+	"src/components/ChatArea.tsx",
+	"src/components/ChatMarkdown.tsx",
+	"src/components/KnowledgeGraphView.tsx",
+	"src/components/OnboardingWizard.tsx",
+	"src/components/PermissionModal.tsx",
+	"src/components/SettingsTab.tsx",
+	"src/components/ToolActivity.tsx",
+	"src/components/UpdateBanner.tsx",
+	"src/components/UpdatePrompt.tsx",
+	"src/components/VideoAvatarCanvas.tsx",
+];
 
 function directoryBytes(directory) {
 	let total = 0;
@@ -22,7 +42,78 @@ function directoryBytes(directory) {
 	return total;
 }
 
-export function measureBundle({ distDirectory, budget }) {
+function collectStaticImports(manifest, root) {
+	const imports = new Set();
+	const pending = [...(root.imports ?? [])];
+	while (pending.length > 0) {
+		const moduleName = pending.pop();
+		if (typeof moduleName !== "string" || imports.has(moduleName)) continue;
+		imports.add(moduleName);
+		pending.push(...(manifest[moduleName]?.imports ?? []));
+	}
+	return imports;
+}
+
+function collectDeferredImports(manifest, root) {
+	const deferred = new Set();
+	const visited = new Set();
+	const pending = [{ chunk: root, deferred: false }];
+	while (pending.length > 0) {
+		const next = pending.pop();
+		if (!next?.chunk) continue;
+		const stateKey = `${next.chunk.file ?? "<entry>"}:${next.deferred}`;
+		if (visited.has(stateKey)) continue;
+		visited.add(stateKey);
+		const chunk = next.chunk;
+		for (const moduleName of chunk?.imports ?? []) {
+			if (next.deferred) deferred.add(moduleName);
+			pending.push({ chunk: manifest[moduleName], deferred: next.deferred });
+		}
+		for (const moduleName of chunk?.dynamicImports ?? []) {
+			deferred.add(moduleName);
+			pending.push({ chunk: manifest[moduleName], deferred: true });
+		}
+	}
+	return deferred;
+}
+
+function collectModulePreloads(html) {
+	const preloads = new Set();
+	for (const [tag] of html.matchAll(/<link\b[^>]*>/gi)) {
+		const attributes = Object.fromEntries(
+			[...tag.matchAll(/([\w:-]+)\s*=\s*["']([^"']*)["']/g)].map(
+				([, name, value]) => [name.toLowerCase(), value],
+			),
+		);
+		const relations = attributes.rel?.toLowerCase().split(/\s+/) ?? [];
+		if (relations.includes("modulepreload") && attributes.href) {
+			const pathname = new URL(attributes.href, "https://bundle.invalid")
+				.pathname;
+			preloads.add(pathname.replace(/^\//, ""));
+		}
+	}
+	return preloads;
+}
+
+function resolveManifestChunk(manifest, moduleName) {
+	if (manifest[moduleName]) return [moduleName, manifest[moduleName]];
+	const expectedName = moduleName
+		.split("/")
+		.at(-1)
+		?.replace(/\.[^.]+$/, "");
+	return (
+		Object.entries(manifest).find(
+			([, chunk]) =>
+				chunk?.isDynamicEntry === true && chunk.name === expectedName,
+		) ?? [moduleName, undefined]
+	);
+}
+
+export function measureBundle({
+	distDirectory,
+	budget,
+	requiredDeferredModules = REQUIRED_DEFERRED_MODULES,
+}) {
 	const indexPath = resolve(distDirectory, "index.html");
 	if (!existsSync(indexPath))
 		throw new Error(`Missing build entry: ${indexPath}`);
@@ -38,6 +129,50 @@ export function measureBundle({ distDirectory, budget }) {
 	if (!existsSync(entryPath))
 		throw new Error(`Missing module entry script: ${entryPath}`);
 	const entry = readFileSync(entryPath);
+	const manifestPath = resolve(distDirectory, ".vite/manifest.json");
+	if (!existsSync(manifestPath))
+		throw new Error(`Missing Vite manifest: ${manifestPath}`);
+	const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
+	const entryFile = relative(distDirectory, entryPath).replaceAll("\\", "/");
+	const entryManifest = Object.values(manifest).find(
+		(item) => item?.isEntry === true && item.file === entryFile,
+	);
+	if (!entryManifest)
+		throw new Error(`Missing Vite manifest entry for: ${entryFile}`);
+	const modulePreloads = collectModulePreloads(html);
+	const staticImports = collectStaticImports(manifest, entryManifest);
+	const deferredImports = collectDeferredImports(manifest, entryManifest);
+	const deferredChunks = Object.fromEntries(
+		requiredDeferredModules.map((moduleName) => {
+			const [chunkKey, chunk] = resolveManifestChunk(manifest, moduleName);
+			const staticallyImported = staticImports.has(chunkKey);
+			const dynamicallyImported =
+				!staticallyImported && deferredImports.has(chunkKey);
+			const modulePreloaded =
+				typeof chunk?.file === "string" &&
+				[...modulePreloads].some(
+					(path) => path === chunk.file || path.endsWith(`/${chunk.file}`),
+				);
+			const fileExists =
+				typeof chunk?.file === "string" &&
+				chunk.file !== entryFile &&
+				existsSync(resolve(distDirectory, chunk.file));
+			return [
+				moduleName,
+				{
+					file: chunk?.file ?? null,
+					dynamicallyImported,
+					staticallyImported,
+					modulePreloaded,
+					passed:
+						fileExists &&
+						dynamicallyImported &&
+						!staticallyImported &&
+						!modulePreloaded,
+				},
+			];
+		}),
+	);
 	const measurements = {
 		entryRawBytes: entry.byteLength,
 		entryGzipBytes: gzipSync(entry).byteLength,
@@ -54,8 +189,11 @@ export function measureBundle({ distDirectory, budget }) {
 		]),
 	);
 	return {
-		passed: Object.values(checks).every((check) => check.passed),
-		entry: relative(distDirectory, entryPath).replaceAll("\\", "/"),
+		passed:
+			Object.values(checks).every((check) => check.passed) &&
+			Object.values(deferredChunks).every((check) => check.passed),
+		entry: entryFile,
+		deferredChunks,
 		measurements,
 		budget,
 		checks,
@@ -97,6 +235,11 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
 		for (const [name, check] of Object.entries(report.checks)) {
 			console.log(
 				`${check.passed ? "PASS" : "FAIL"} ${name}: ${check.actual} / ${check.limit} bytes`,
+			);
+		}
+		for (const [name, check] of Object.entries(report.deferredChunks)) {
+			console.log(
+				`${check.passed ? "PASS" : "FAIL"} deferred module ${name}: ${check.file ?? "missing"}`,
 			);
 		}
 		if (!report.passed) process.exitCode = 1;

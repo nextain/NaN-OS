@@ -128,7 +128,7 @@ function gotoAvatarVrm() {
 }
 
 describe("SettingsTab", () => {
-	afterEach(() => {
+	afterEach(async () => {
 		cleanup();
 		localStorage.clear();
 		eventListeners.clear();
@@ -136,7 +136,7 @@ describe("SettingsTab", () => {
 		secureStoreMock.get.mockResolvedValue(null);
 		vi.unstubAllGlobals();
 		Reflect.deleteProperty(window, "__TAURI_INTERNALS__");
-		setLocale("en");
+		await setLocale("en");
 	});
 
 	it("keeps a Naia login entry point visible in Profile after logout", () => {
@@ -210,7 +210,7 @@ describe("SettingsTab", () => {
 		expect(document.querySelector('input[type="password"]')).toBeNull();
 	});
 
-	it("renders locale choices in the webview and applies Korean", () => {
+	it("renders locale choices in the webview and applies Korean", async () => {
 		localStorage.setItem("naia-config", JSON.stringify({ locale: "en" }));
 		mockInvoke.mockResolvedValue([]);
 		render(<SettingsTab />);
@@ -221,7 +221,7 @@ describe("SettingsTab", () => {
 		fireEvent.click(picker);
 		fireEvent.click(screen.getByRole("button", { name: "한국어" }));
 
-		expect(picker).toHaveTextContent("한국어");
+		await waitFor(() => expect(picker).toHaveTextContent("한국어"));
 		expect(screen.getByText("언어")).toBeDefined();
 		// Settings keeps the established transaction boundary: the language is
 		// previewed immediately, then persisted with the page's Save action.

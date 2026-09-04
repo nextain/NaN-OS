@@ -172,6 +172,10 @@ export function SlidesCenterArea({ naia }: AppCenterProps) {
 					generation: detail.generation,
 					error: detail.error ?? "speech_failed",
 				});
+				return;
+			}
+			if (detail.status === "cancelled") {
+				dispatch({ type: "speech-cancelled", generation: detail.generation });
 			}
 		};
 		window.addEventListener(SLIDE_PRESENTER_SPEECH_RESULT_EVENT, onResult);

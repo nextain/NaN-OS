@@ -30,6 +30,12 @@ const port = readPositiveIntegerEnv("PLAYWRIGHT_PORT", 1420, { max: 65534 });
 
 export default defineConfig(async () => ({
 	plugins: [react()],
+	build: {
+		// Bundle-budget verification uses this graph to prove that large optional
+		// surfaces stay behind dynamic imports instead of merely producing a
+		// similarly named output file.
+		manifest: true,
+	},
 	define: {
 		__BUILD_ID__: JSON.stringify(
 			new Date().toISOString().replace(/[-:]/g, "").slice(0, 15),

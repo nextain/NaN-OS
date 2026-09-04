@@ -1,6 +1,21 @@
+import { Suspense, lazy } from "react";
 import { appRegistry } from "../../lib/app-registry";
+import type { AppCenterProps } from "../../lib/app-registry";
 import { TAB_SKILL_DESCRIPTORS } from "../../lib/tab-skills";
-import { BrowserCenterArea } from "./BrowserCenterArea";
+
+const BrowserCenterArea = lazy(() =>
+	import("./BrowserCenterArea").then((module) => ({
+		default: module.BrowserCenterArea,
+	})),
+);
+
+function DeferredBrowserCenterArea(props: AppCenterProps) {
+	return (
+		<Suspense fallback={null}>
+			<BrowserCenterArea {...props} />
+		</Suspense>
+	);
+}
 
 appRegistry.register({
 	id: "browser",
@@ -9,7 +24,7 @@ appRegistry.register({
 	icon: "🌐",
 	builtIn: true,
 	keepAlive: true, // visibility controlled by browser_wv_hide/show on app switch
-	center: BrowserCenterArea,
+	center: DeferredBrowserCenterArea,
 	tools: [
 		// ── Navigation ──────────────────────────────────────────────────────
 		{

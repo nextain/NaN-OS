@@ -35,9 +35,9 @@ function updateInfo(
 }
 
 describe("UpdatePrompt", () => {
-	beforeEach(() => {
+	beforeEach(async () => {
 		vi.clearAllMocks();
-		setLocale("ko");
+		await setLocale("ko");
 	});
 	afterEach(() => cleanup());
 

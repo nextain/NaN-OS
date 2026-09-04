@@ -8,6 +8,7 @@ import {
 } from "@testing-library/react";
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { appRegistry } from "../../lib/app-registry";
 import type { AgentResponseChunk } from "../../lib/types";
 import { useAppStore } from "../../stores/app";
 import { useAvatarStore } from "../../stores/avatar";
@@ -197,6 +198,19 @@ describe("ChatArea", () => {
 		expect(buttons.length).toBeGreaterThanOrEqual(2);
 	});
 
+	it("does not send while the lazy at-mention picker is opening", () => {
+		vi.spyOn(appRegistry, "get").mockReturnValueOnce({} as never);
+		render(<ChatArea />);
+		const input = screen.getByPlaceholderText(/메시지|message/i);
+
+		fireEvent.change(input, {
+			target: { value: "@", selectionStart: 1 },
+		});
+		fireEvent.keyDown(input, { key: "Enter" });
+
+		expect(capturedRequests).toHaveLength(0);
+	});
+
 	it("interrupts the active speech pipeline when the global TTS toggle turns off", async () => {
 		localStorage.setItem(
 			"naia-config",
@@ -270,9 +284,9 @@ describe("ChatArea", () => {
 		});
 
 		await waitFor(() =>
-			expect(
-				useChatStore.getState().messages.at(-1)?.content,
-			).toContain("provider rejected the API key"),
+			expect(useChatStore.getState().messages.at(-1)?.content).toContain(
+				"provider rejected the API key",
+			),
 		);
 		expect(useChatStore.getState().isStreaming).toBe(false);
 		localStorage.removeItem("naia-config");
@@ -544,13 +558,15 @@ describe("ChatArea", () => {
 
 		expect(useChatStore.getState().streamingThinking).toBe("private chain");
 		expect(useChatStore.getState().streamingContent).toBe("Final answer.");
-		const reasoning = (
-			await screen.findAllByText("private chain")
-		).find((node) => node.classList.contains("thinking-inline-content"));
+		const reasoning = (await screen.findAllByText("private chain")).find(
+			(node) => node.classList.contains("thinking-inline-content"),
+		);
 		expect(reasoning).toBeDefined();
 		expect(reasoning?.closest("details")?.hasAttribute("open")).toBe(false);
 		expect(
-			reasoning?.closest("details")?.querySelector(".thinking-inline-preview-live > span")?.textContent,
+			reasoning
+				?.closest("details")
+				?.querySelector(".thinking-inline-preview-live > span")?.textContent,
 		).toBe("private chain");
 
 		request.onChunk({ type: "finish", requestId: request.requestId });
@@ -748,7 +764,7 @@ describe("ChatArea", () => {
 		localStorage.removeItem("naia-config");
 	});
 
-	it("renders ToolActivity for completed messages with toolCalls", () => {
+	it("renders ToolActivity for completed messages with toolCalls", async () => {
 		useChatStore.setState({
 			messages: [
 				{
@@ -771,7 +787,7 @@ describe("ChatArea", () => {
 
 		render(<ChatArea />);
 		// Should render the tool activity label
-		expect(screen.getByText(/파일 읽기|Read File/)).toBeDefined();
+		expect(await screen.findByText(/파일 읽기|Read File/)).toBeDefined();
 	});
 
 	it("sets pendingApproval on approval_request chunk", async () => {
@@ -888,7 +904,7 @@ describe("ChatArea", () => {
 		localStorage.removeItem("naia-config");
 	});
 
-	it("renders PermissionModal when pendingApproval is set", () => {
+	it("renders PermissionModal when pendingApproval is set", async () => {
 		useChatStore.setState({
 			isStreaming: true,
 			streamingContent: "",
@@ -904,7 +920,7 @@ describe("ChatArea", () => {
 
 		render(<ChatArea />);
 		expect(
-			screen.getByText(/도구 실행 승인|Tool Execution Approval/),
+			await screen.findByText(/도구 실행 승인|Tool Execution Approval/),
 		).toBeDefined();
 	});
 
@@ -1430,10 +1446,17 @@ describe("ChatArea", () => {
 				stop: vi.fn(),
 			} as never,
 		});
-		localStorage.setItem("naia-config", JSON.stringify({
-			apiKey: "test-key", provider: "gemini", model: "gemini-2.5-flash",
-			ttsEnabled: true, ttsProvider: "naia-local-voice", vllmTtsHost: "http://localhost:8910",
-		}));
+		localStorage.setItem(
+			"naia-config",
+			JSON.stringify({
+				apiKey: "test-key",
+				provider: "gemini",
+				model: "gemini-2.5-flash",
+				ttsEnabled: true,
+				ttsProvider: "naia-local-voice",
+				vllmTtsHost: "http://localhost:8910",
+			}),
+		);
 
 		render(<ChatArea />);
 		const input = screen.getByPlaceholderText(/message/i);
@@ -1442,13 +1465,19 @@ describe("ChatArea", () => {
 		await waitFor(() => expect(capturedRequests).toHaveLength(1));
 		const request = capturedRequests[0];
 		const answer = "The complete answer must remain readable.";
-		request.onChunk({ type: "text", requestId: request.requestId, text: answer });
+		request.onChunk({
+			type: "text",
+			requestId: request.requestId,
+			text: answer,
+		});
 		await waitFor(() => expect(playAuthoredClip).toHaveBeenCalledTimes(1));
 		expect(screen.queryByText(answer)).toBeNull();
 
 		vi.useFakeTimers();
 		request.onChunk({ type: "finish", requestId: request.requestId });
-		await act(async () => { await vi.advanceTimersByTimeAsync(8_000); });
+		await act(async () => {
+			await vi.advanceTimersByTimeAsync(8_000);
+		});
 		expect(screen.getByText(answer)).toBeDefined();
 		vi.useRealTimers();
 		localStorage.removeItem("naia-config");

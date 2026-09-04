@@ -14,7 +14,7 @@ afterEach(cleanup);
 
 describe("PA-DJ-04 proactive settings UI", () => {
 	it("keeps an active profile owned by the other settings section", async () => {
-		setLocale("en");
+		await setLocale("en");
 		const onSave = vi.fn(async () => true);
 		render(
 			<ProactiveSpeechSettingsSection
@@ -41,8 +41,8 @@ describe("PA-DJ-04 proactive settings UI", () => {
 		);
 	});
 
-	it("shows DJ-only and exhibition-only fields in their owning sections", () => {
-		setLocale("en");
+	it("shows DJ-only and exhibition-only fields in their owning sections", async () => {
+		await setLocale("en");
 		const value = {
 			profile: "disabled" as const,
 			timezone: "UTC",
@@ -71,7 +71,7 @@ describe("PA-DJ-04 proactive settings UI", () => {
 	});
 
 	it("fills an unconfigured DJ form with the Windows runtime defaults", async () => {
-		setLocale("en");
+		await setLocale("en");
 		const onSave = vi.fn(async () => true);
 		render(
 			<ProactiveSpeechSettingsSection
@@ -106,8 +106,8 @@ describe("PA-DJ-04 proactive settings UI", () => {
 		);
 	});
 
-	it("keeps weather consent through an equivalent parent rerender", () => {
-		setLocale("en");
+	it("keeps weather consent through an equivalent parent rerender", async () => {
+		await setLocale("en");
 		const value = {
 			profile: "disabled" as const,
 			timezone: "Asia/Seoul",
@@ -140,7 +140,7 @@ describe("PA-DJ-04 proactive settings UI", () => {
 		).toBe(true);
 	});
 	it("edits and persists proactive speech settings", async () => {
-		setLocale("en");
+		await setLocale("en");
 		const onChange = vi.fn();
 		const onSave = vi.fn(async () => true);
 		const view = render(
@@ -197,7 +197,7 @@ describe("PA-DJ-04 proactive settings UI", () => {
 	});
 
 	it("shows a fail-closed error when durable persistence fails", async () => {
-		setLocale("en");
+		await setLocale("en");
 		const view = render(
 			<ProactiveSpeechSettingsSection
 				value={{

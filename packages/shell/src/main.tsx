@@ -4,6 +4,7 @@ import { App } from "./App";
 import { setCodingWorkersAdapterFactory } from "./apps/workspace/coding-workers-adapter";
 import { tauriCodingWorkersAdapter } from "./apps/workspace/coding-workers-tauri";
 import { probeNvaCapabilities } from "./lib/avatar/nva-capability";
+import { initializeI18n } from "./lib/i18n";
 import { Logger } from "./lib/logger";
 import "./styles/global.css";
 
@@ -32,9 +33,14 @@ try {
 	Logger.warn("NvaCapability", "능력 프로브 실패", { error: String(e) });
 }
 
-// biome-ignore lint/style/noNonNullAssertion: root element always exists
-createRoot(document.getElementById("root")!).render(
-	<StrictMode>
-		<App />
-	</StrictMode>,
-);
+async function bootstrap() {
+	await initializeI18n();
+	// biome-ignore lint/style/noNonNullAssertion: root element always exists
+	createRoot(document.getElementById("root")!).render(
+		<StrictMode>
+			<App />
+		</StrictMode>,
+	);
+}
+
+void bootstrap();

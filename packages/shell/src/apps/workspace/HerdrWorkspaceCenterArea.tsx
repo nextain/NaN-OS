@@ -84,3 +84,5 @@ export function HerdrWorkspaceCenterArea({ naia }: AppCenterProps) {
 		</div>
 	);
 }
+
+export default HerdrWorkspaceCenterArea;

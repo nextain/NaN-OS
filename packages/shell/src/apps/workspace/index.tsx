@@ -1,7 +1,19 @@
+import { Suspense, lazy } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { appRegistry } from "../../lib/app-registry";
-import type { NaiaTool } from "../../lib/app-registry";
-import { HerdrWorkspaceCenterArea } from "./HerdrWorkspaceCenterArea";
+import type { AppCenterProps, NaiaTool } from "../../lib/app-registry";
+
+const HerdrWorkspaceCenterArea = lazy(() =>
+	import("./HerdrWorkspaceCenterArea"),
+);
+
+function DeferredHerdrWorkspaceCenterArea(props: AppCenterProps) {
+	return (
+		<Suspense fallback={null}>
+			<HerdrWorkspaceCenterArea {...props} />
+		</Suspense>
+	);
+}
 
 export const WORKSPACE_TOOLS: NaiaTool[] = [
 	{
@@ -182,7 +194,7 @@ appRegistry.register({
 	icon: "💻",
 	builtIn: true,
 	source: "code",
-	center: HerdrWorkspaceCenterArea,
+	center: DeferredHerdrWorkspaceCenterArea,
 	keepAlive: true, // PTY terminals must not unmount on tab switch
 	tools: WORKSPACE_TOOLS,
 	onActivate: startWorkspaceWatcher,

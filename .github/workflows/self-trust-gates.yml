@@ -110,4 +110,4 @@ jobs:
       - name: install Playwright Chromium
         run: pnpm -C packages/shell exec playwright install --with-deps chromium
       - name: shell browser regression (Playwright)
-        run: pnpm -C packages/shell test:e2e
+        run: NAIA_E2E_USE_EXISTING_BUILD=1 pnpm -C packages/shell test:e2e

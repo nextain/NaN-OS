@@ -113,8 +113,8 @@ class MockBridge implements NaiaContextBridge {
 }
 
 describe("SlidesCenterArea", () => {
-	beforeEach(() => {
-		setLocale("ko");
+	beforeEach(async () => {
+		await setLocale("ko");
 		class ResizeObserverMock {
 			observe() {}
 			unobserve() {}
@@ -196,5 +196,29 @@ describe("SlidesCenterArea", () => {
 		await waitFor(() =>
 			expect(bridge.contexts.at(-1)?.data.state).toBe("answering"),
 		);
+	});
+
+	it("pauses when the deferred narration consumer cancels an active request", async () => {
+		const bridge = new MockBridge();
+		const requests: SlidePresenterSpeechRequest[] = [];
+		window.addEventListener(SLIDE_PRESENTER_SPEAK_EVENT, (event) => {
+			requests.push((event as CustomEvent<SlidePresenterSpeechRequest>).detail);
+		});
+		render(<SlidesCenterArea naia={bridge} />);
+		fireEvent.change(screen.getByLabelText("PDF 열기"), {
+			target: {
+				files: [new File(["pdf"], "deck.pdf", { type: "application/pdf" })],
+			},
+		});
+		await waitFor(() => expect(screen.getByText("1 / 3")).toBeInTheDocument());
+		fireEvent.click(screen.getByRole("button", { name: "발표 시작" }));
+		await waitFor(() => expect(requests).toHaveLength(1));
+
+		window.dispatchEvent(
+			new CustomEvent(SLIDE_PRESENTER_SPEECH_RESULT_EVENT, {
+				detail: { ...requests[0], status: "cancelled" },
+			}),
+		);
+		await waitFor(() => expect(screen.getByText("일시정지")).toBeInTheDocument());
 	});
 });

@@ -18,7 +18,7 @@ import {
 import { attachPty, resizePty, writePty } from "./pty-ipc";
 import "@xterm/xterm/css/xterm.css";
 
-interface TerminalProps {
+export interface TerminalProps {
 	pty_id: string;
 	active: boolean;
 	workingDir?: string;

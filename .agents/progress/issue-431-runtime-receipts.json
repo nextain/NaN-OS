@@ -1,0 +1,97 @@
+{
+  "schemaVersion": 1,
+  "issue": 431,
+  "baseline": "c0e00c98b54562cf7bdca5fee9b31f4ddc885d7a",
+  "implementationHead": "577d4548",
+  "receiptStatus": "historical-pre-convergence",
+  "complexitySha256": "sha256:6204bf7b773564010f697a64cc3a48c32ed2929f7091c19ebbd94dc6757c5aac",
+  "reviewRunner": ".agents/skills/review-pass/scripts/invoke-reviewer.mjs",
+  "reviewInvocations": [
+    {
+      "round": 1,
+      "reviewer": "claude-code",
+      "toolArgument": "claude",
+      "modelArgument": "sonnet",
+      "result": "CLEAN",
+      "findings": 0
+    },
+    {
+      "round": 1,
+      "reviewer": "codex",
+      "toolArgument": "codex",
+      "result": "CLEAN",
+      "findings": 0
+    },
+    {
+      "round": 1,
+      "reviewer": "opencode",
+      "toolArgument": "opencode",
+      "result": "CLEAN",
+      "findings": 0
+    },
+    {
+      "round": 2,
+      "reviewer": "codex",
+      "toolArgument": "codex",
+      "result": "CLEAN",
+      "findings": 0
+    },
+    {
+      "round": 2,
+      "reviewer": "opencode",
+      "toolArgument": "opencode",
+      "result": "CLEAN",
+      "findings": 0
+    },
+    {
+      "round": 2,
+      "reviewer": "claude-code",
+      "toolArgument": "claude",
+      "modelArgument": "sonnet",
+      "result": "NOT_CLEAN",
+      "codeFindings": 0,
+      "workflowFinding": "Persist reviewer and DM runtime receipts"
+    },
+    {
+      "round": "receipt-audit-1",
+      "reviewer": "codex",
+      "toolArgument": "codex",
+      "runnerSessionId": 61514,
+      "result": "NOT_CLEAN",
+      "finding": "Correct the BGM listener names in the durable follow-up"
+    },
+    {
+      "round": "receipt-audit-1",
+      "reviewer": "claude-code",
+      "toolArgument": "claude",
+      "modelArgument": "sonnet",
+      "runnerSessionId": 40378,
+      "result": "NOT_CLEAN",
+      "codeFindings": 0,
+      "workflowFinding": "Add identifiable runtime receipts"
+    },
+    {
+      "round": "receipt-audit-1",
+      "reviewer": "opencode",
+      "toolArgument": "opencode",
+      "runnerSessionId": 96787,
+      "result": "TIMEOUT",
+      "reason": "official OpenCode invocation exceeded the 1200 second total limit"
+    }
+  ],
+  "forbiddenReviewers": [
+    "openrouter"
+  ],
+  "discordDm": {
+    "observedAt": "2026-09-03T19:43:00Z",
+    "senderInstance": "naia",
+    "senderConfigPath": "alpha-adk/naia-settings/messenger-sessions/instances/naia/config.json",
+    "recipientSource": "discord.proactiveDmRecipientUserId",
+    "deliveryHelper": "alpha-adk/.agents/skills/manage-discord-sessions/helper/discord-delivery.mjs#postDiscordDirectMessage",
+    "state": "confirmed",
+    "httpStatus": 200,
+    "messageId": "1545157546187427861",
+    "automaticRetry": false
+  },
+  "recordedAt": "2026-09-03T20:15:29Z"
+}

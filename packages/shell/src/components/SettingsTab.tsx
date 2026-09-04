@@ -3,7 +3,15 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { open } from "@tauri-apps/plugin-dialog";
 import { openPath, openUrl } from "@tauri-apps/plugin-opener";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+	Suspense,
+	lazy,
+	useCallback,
+	useEffect,
+	useMemo,
+	useRef,
+	useState,
+} from "react";
 import {
 	agentKeyExists,
 	applyModelSelectionToConfig,
@@ -154,7 +162,10 @@ import { clearSavedCamera } from "./AvatarCanvas";
 import { KnowledgeSettingsTab } from "./KnowledgeSettingsTab";
 import { RadioDjSettingsCard } from "./ProactiveSpeechSettingsSection";
 import { RefAudioSection } from "./RefAudioSection";
-import { SkillsTab } from "./SkillsTab";
+
+const SkillsTab = lazy(() =>
+	import("./SkillsTab").then(({ SkillsTab }) => ({ default: SkillsTab })),
+);
 
 const LLM_PROVIDERS = listLlmProviders();
 
@@ -2604,9 +2615,9 @@ export function SettingsTab() {
 		}
 	}
 
-	function handleLocaleChange(id: Locale) {
+	async function handleLocaleChange(id: Locale) {
+		await setLocale(id);
 		setLocaleState(id);
-		setLocale(id);
 		// 활성 음성 세션(naia-omni)에 새 인식 언어를 즉시 핀(재연결 없음). ChatArea 이 수신.
 		window.dispatchEvent(new CustomEvent("naia:locale-change", { detail: id }));
 	}
@@ -2805,7 +2816,7 @@ export function SettingsTab() {
 			resetGatewaySession().catch(() => {}); // agent skill_sessions(실 도구) — gateway 아님, 유지
 			// (reset_gateway_data 제거됨 2026-06-12 — 죽은 gateway 데이터)
 		}
-		setLocale("ko");
+		await setLocale("ko");
 		document.documentElement.setAttribute("data-theme", "midnight");
 		window.location.reload();
 	}
@@ -3105,7 +3116,7 @@ export function SettingsTab() {
 			ttsKeys,
 			gatewayToken: newConfig.gatewayToken ?? "",
 		});
-		setLocale(locale);
+		await setLocale(locale);
 		setAvatarModelPath(vrmModel);
 		setAvatarBackgroundImage(backgroundImage);
 		setSavedVrmModel(vrmModel);
@@ -6031,12 +6042,14 @@ export function SettingsTab() {
 			)}
 			{activeSettingsTab === "knowledge" && <KnowledgeSettingsTab />}
 			{activeSettingsTab === "skills" && (
-				<SkillsTab>
-					<RadioDjSettingsCard
-						value={proactiveSpeechSettings}
-						onSave={saveProactiveSpeechSettings}
-					/>
-				</SkillsTab>
+				<Suspense fallback={null}>
+					<SkillsTab>
+						<RadioDjSettingsCard
+							value={proactiveSpeechSettings}
+							onSave={saveProactiveSpeechSettings}
+						/>
+					</SkillsTab>
+				</Suspense>
 			)}
 			{activeSettingsTab === "memory" && (
 				<>

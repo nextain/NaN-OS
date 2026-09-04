@@ -69,6 +69,18 @@ describe("slide presenter state", () => {
 		expect(state.page).toBe(3);
 	});
 
+	it("pauses a correlated cancelled narration instead of remaining speaking", () => {
+		let state = reduceSlidePresenter(EMPTY_SLIDE_PRESENTER_STATE, {
+			type: "loaded",
+			totalPages: 3,
+		});
+		state = reduceSlidePresenter(state, { type: "start" });
+		const generation = state.generation;
+		state = reduceSlidePresenter(state, { type: "speech-requested", generation });
+		state = reduceSlidePresenter(state, { type: "speech-cancelled", generation });
+		expect(state).toMatchObject({ mode: "paused", speech: "idle" });
+	});
+
 	it("pauses for a question and resumes from the same page", () => {
 		let state = reduceSlidePresenter(EMPTY_SLIDE_PRESENTER_STATE, {
 			type: "loaded",

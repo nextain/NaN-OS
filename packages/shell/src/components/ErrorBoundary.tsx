@@ -7,6 +7,8 @@ interface ErrorBoundaryProps {
 	children: ReactNode;
 	/** Optional custom fallback UI. Default: empty `<div>` so siblings keep mounting. */
 	fallback?: ReactNode;
+	/** Clear a captured error when this value changes. */
+	resetKey?: unknown;
 }
 
 interface ErrorBoundaryState {
@@ -37,6 +39,12 @@ export class ErrorBoundary extends Component<
 			stack: error.stack?.split("\n").slice(0, 8).join("\n"),
 			componentStack: info.componentStack?.split("\n").slice(0, 6).join("\n"),
 		});
+	}
+
+	componentDidUpdate(previousProps: ErrorBoundaryProps) {
+		if (this.state.error && previousProps.resetKey !== this.props.resetKey) {
+			this.setState({ error: null });
+		}
 	}
 
 	render(): ReactNode {
