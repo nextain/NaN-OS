@@ -105,6 +105,27 @@ Playwright 64개가 여기다. 느리고 환경을 탄다.
   못한다(`e2e-tauri/helpers/settings.ts:404` 의 기록, 2026-09-05 재확인)
 - **Windows 실기**: `keyed` 와 `ci` 등급의 실기 스펙. 위 제약이 없는 쪽이다
 
+## 회귀를 나눠 돌리는 법
+
+기계마다 자기 몫을 돌리고 기록을 남긴다.
+
+```
+node scripts/run-regression.mjs --machine=<이름> --tier=ci[,keyed,device]
+node scripts/run-regression.mjs --machine=<이름> --tier=ci --dry-run
+```
+
+`--dry-run` 은 무엇을 돌릴지와 **환경이 없어 건너뛸 것이 무엇인지** 만
+보여준다. 환경을 갖추기 전에 먼저 본다.
+
+배포 전에는 기록을 모아 빈 곳을 찾는다.
+
+```
+node scripts/check-regression-complete.mjs --max-age-hours=24
+```
+
+아무도 맡지 않은 스펙이 있거나, 건너뛴 것이 있거나, 실패한 기계가 있으면
+통과하지 않는다.
+
 ## 배포 전에 확인하는 것
 
 순서대로 본다. 앞이 붉으면 뒤로 가지 않는다.
