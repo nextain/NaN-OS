@@ -99,6 +99,12 @@ jobs:
         run: node scripts/check-file-anchors.mjs
       - name: assembly coverage (S/UC 전수분류)
         run: node scripts/check-assembly-coverage.mjs
+
+      # 위 게이트는 옛 `**UC1**` 이름만 본다. 문서가 UC-<이름> 체계로 옮겨간
+      # 뒤로 표제 예순다섯 개를 하나도 보지 못한 채 초록을 보고해 왔다.
+      # 이 게이트가 현재 체계를 본다.
+      - name: UC traceability
+        run: node scripts/check-uc-traceability.mjs
       - name: wire probes (os outbound ⊆ agent accept / agent output ⊆ os classify)
         run: |
           node scripts/builds/uc1-outbound-probe.mjs
