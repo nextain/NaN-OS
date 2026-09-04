@@ -157,11 +157,25 @@ const env = interactiveLaunchEnv(process.env);
 // in release builds.
 const devVoxCpm2Bundle = resolve(SHELL, "src-tauri", "voxcpm2-runtime");
 const hostVoxCpm2Profile = voxCpm2Profile();
-const devVoxCpm2DownloadManifest = resolve(
-	SHELL,
-	"scripts",
-	"voxcpm2-download-manifest.json",
-);
+// 내려받기 매니페스트도 운영체제 사실을 담는다 — 어느 아카이브를 받을지가 거기
+// 적혀 있다. 스테이징이 만든 것이 이 빌드의 진짜 매니페스트이고, 저장소에 든
+// 것은 아직 스테이징하지 않은 트리를 위한 Windows 폴백이다(build-e2e-tauri 와
+// 같은 규칙). 폴백을 리눅스에 그대로 놓으면 셸이 Windows 아카이브를 받으러
+// 가므로, 프로파일이 이 기계와 맞을 때만 쓴다.
+const devVoxCpm2DownloadManifest = [
+	resolve(SHELL, "src-tauri", "voxcpm2-runtime", "download-manifest.json"),
+	resolve(SHELL, "scripts", "voxcpm2-download-manifest.json"),
+].find((candidate) => {
+	if (!existsSync(candidate)) return false;
+	try {
+		return (
+			JSON.parse(readFileSync(candidate, "utf8")).profile ===
+			hostVoxCpm2Profile.profile
+		);
+	} catch {
+		return false;
+	}
+});
 if (mode === "dev") {
 	// Thin-runtime dev builds reuse the staged download manifest, but its ignored
 	// control files can predate the checkout. Refresh the small trusted installer
@@ -179,7 +193,7 @@ if (mode === "dev") {
 		resolve(SHELL, "src-tauri/voxcpm2-activation-contract.json"),
 		resolve(devVoxCpm2Bundle, "voxcpm2-activation-contract.json"),
 	);
-	if (existsSync(devVoxCpm2DownloadManifest)) {
+	if (devVoxCpm2DownloadManifest) {
 		env.NAIA_VOXCPM2_DOWNLOAD_MANIFEST =
 			env.NAIA_VOXCPM2_DOWNLOAD_MANIFEST ?? devVoxCpm2DownloadManifest;
 	}
@@ -205,7 +219,7 @@ if (mode === "dev") {
 		resolve(SHELL, "src-tauri/voxcpm2-activation-contract.json"),
 		resolve(devTargetDebugVoxCpm2Bundle, "voxcpm2-activation-contract.json"),
 	);
-	if (existsSync(devVoxCpm2DownloadManifest)) {
+	if (devVoxCpm2DownloadManifest) {
 		copyFileSync(
 			devVoxCpm2DownloadManifest,
 			resolve(devTargetDebugVoxCpm2Bundle, "download-manifest.json"),

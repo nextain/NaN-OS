@@ -561,6 +561,21 @@ describe("설치 스크립트 이름의 단일 출처 (#537)", () => {
 		expect(voxCpm2Profile("linux").modelPrep).toContain("src-tauri/linux/");
 	});
 
+	it("dev 런처는 이 기계 프로파일과 맞는 내려받기 매니페스트만 쓴다", () => {
+		const shellDir = resolve(import.meta.dirname, "..", "..");
+		const devLauncher = readFileSync(
+			resolve(shellDir, "scripts/tauri-with-mode.mjs"),
+			"utf8",
+		);
+		// 매니페스트에는 어느 아카이브를 받을지가 적혀 있다. 저장소에 든 것은
+		// Windows 폴백이라, 프로파일을 보지 않고 놓으면 리눅스가 Windows 아카이브를
+		// 받으러 간다.
+		expect(devLauncher).toContain("hostVoxCpm2Profile.profile");
+		expect(devLauncher).toContain(
+			'resolve(SHELL, "src-tauri", "voxcpm2-runtime", "download-manifest.json")',
+		);
+	});
+
 	it("스테이징 스크립트는 설치 스크립트 이름을 직접 적지 않는다", () => {
 		const shellDir = resolve(import.meta.dirname, "..", "..");
 		for (const relativePath of stagingScripts) {
