@@ -2,6 +2,7 @@ import { S } from "../helpers/selectors.js";
 import {
 	clickBySelector,
 	ensureAppReady,
+	navigateToSettings,
 	openSettingsSection,
 	openVrmAvatarPicker,
 	scrollToSection,
@@ -9,6 +10,9 @@ import {
 
 /**
  * 54 — Settings: Avatar VRM & Background
+ *
+ * #541: VRM 선택은 아바타 섹션의 목록(vrm-list-item)이고, 배경은 General
+ * 섹션의 select 위젯이다 — 옛 카드 그리드 화면을 기다리지 않는다.
  */
 describe("54 — settings avatar & background", () => {
 	before(async () => {
@@ -40,7 +44,7 @@ describe("54 — settings avatar & background", () => {
 		expect(state.active).toBe(1);
 	});
 
-	it("should change active VRM on click", async () => {
+	it("should change the active VRM on click", async () => {
 		const switched = await browser.execute((allSel: string) => {
 			const all = document.querySelectorAll(allSel);
 			for (let i = 0; i < all.length; i++) {
@@ -52,58 +56,46 @@ describe("54 — settings avatar & background", () => {
 			}
 			return false;
 		}, S.vrmCard);
-
-		if (!switched) return; // Only 1 card, skip
+		if (!switched) return; // 모델이 하나뿐이면 전환 검증은 건너뛴다
 		await browser.pause(300);
-
 		const activeCount = await browser.execute(
 			(sel: string) => document.querySelectorAll(sel).length,
 			S.vrmCardActive,
 		);
-		expect(activeCount).toBeGreaterThanOrEqual(1);
+		expect(activeCount).toBe(1);
 	});
 
-	it("배경은 '일반' 구역의 드롭다운으로 고른다", async () => {
-		// 배경은 카드 격자에서 드롭다운으로 바뀌고 '일반' 구역으로 옮겨졌다
-		// (#541 — SettingsTab 주석: "avatar 탭에서 이동").
-		await openSettingsSection("일반");
-		const options = await browser.execute(() => {
-			const labels = Array.from(document.querySelectorAll("label"));
-			const field = labels
-				.map((l) => l.parentElement)
-				.find((el) => !!el?.querySelector("select"));
-			return field?.querySelectorAll("select option").length ?? 0;
-		});
-		// 최소한 "배경 없음" 항목은 있어야 한다.
-		expect(options).toBeGreaterThanOrEqual(1);
+	it("should offer background choices in the general section", async () => {
+		await openSettingsSection("general");
+		const optionCount = await browser.execute((sel: string) => {
+			const select = document.querySelector(sel) as HTMLSelectElement | null;
+			return select ? select.options.length : 0;
+		}, S.bgSelect);
+		// "없음" 옵션 + 실제 배경 1개 이상
+		expect(optionCount).toBeGreaterThanOrEqual(2);
 	});
 
-	it("should change active BG card on click", async () => {
-		const switched = await browser.execute((allSel: string) => {
-			const all = document.querySelectorAll(allSel);
-			for (let i = 0; i < all.length; i++) {
-				if (
-					all[i].classList.contains("bg-card-add") ||
-					all[i].classList.contains("active")
-				)
-					continue;
-				// trigger mousedown+up instead of click due to useLongPress
-				const el = all[i] as HTMLElement;
-				el.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
-				el.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
-				return true;
-			}
-			return false;
-		}, S.bgCard);
-
-		if (!switched) return;
+	it("should switch the background selection", async () => {
+		const changed = await browser.execute((sel: string) => {
+			const select = document.querySelector(sel) as HTMLSelectElement | null;
+			if (!select || select.options.length < 2) return null;
+			const current = select.value;
+			const next = Array.from(select.options)
+				.map((option) => option.value)
+				.find((value) => value !== current);
+			if (next === undefined) return null;
+			select.value = next;
+			select.dispatchEvent(new Event("change", { bubbles: true }));
+			return { from: current, to: next };
+		}, S.bgSelect);
+		if (!changed) return;
 		await browser.pause(300);
-
-		const activeCount = await browser.execute(
-			(sel: string) => document.querySelectorAll(sel).length,
-			S.bgCardActive,
+		const value = await browser.execute(
+			(sel: string) =>
+				(document.querySelector(sel) as HTMLSelectElement | null)?.value ?? "",
+			S.bgSelect,
 		);
-		expect(activeCount).toBeGreaterThanOrEqual(1);
+		expect(value).toBe(changed.to);
 	});
 
 	it("should navigate back to chat tab", async () => {
