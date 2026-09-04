@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { WorkspaceAppApi } from "./apps/workspace/WorkspaceCenterArea";
 import { AppShellFrame } from "./components/AppShellFrame";
@@ -117,10 +118,8 @@ export function App() {
 		);
 	}
 	const [showSplash, setShowSplash] = useState(true);
-	const [pendingCliFile, setPendingCliFile] = useState<{
-		path: string;
-		requestId: number;
-	} | null>(null);
+	// #484 CLI + #543 드래그앤드롭 — 열 파일 경로 큐 (앞에서부터 하나씩 연다).
+	const [pendingOpenFiles, setPendingOpenFiles] = useState<string[]>([]);
 	const [showAdkSetup, setShowAdkSetup] = useState(!isAdkInitialized());
 	const [showAppInstall, setShowAppInstall] = useState(false);
 	const [appInstallRequest, setAppInstallRequest] =
@@ -700,9 +699,8 @@ export function App() {
 	// Keep the path in memory until the keep-alive Workspace API has mounted;
 	// never copy it into a URL, storage, or diagnostic log.
 	useEffect(() => {
-		let requestId = 0;
 		const queueFile = (path: string | null | undefined) => {
-			if (path) setPendingCliFile({ path, requestId: ++requestId });
+			if (path) setPendingOpenFiles((queue) => [...queue, path]);
 		};
 		const unlisten = listen<string>("workspace-open-file-request", (event) => {
 			queueFile(event.payload);
@@ -710,13 +708,35 @@ export function App() {
 		void invoke<string | null>("get_startup_open_file")
 			.then(queueFile)
 			.catch(() => {});
+		// #543: 드래그앤드롭도 CLI 와 같은 파이프라인 — OS 실경로를 open-grant 로
+		// 등록(경계 밖 read/write 동의)한 canonical 경로만 연다. 크로스플랫폼 공통.
+		const dragUnlisten = getCurrentWebview().onDragDropEvent((event) => {
+			if (event.payload.type !== "drop") return;
+			Logger.info("App", "file drag-drop received (#543)", {
+				count: event.payload.paths.length,
+			});
+			for (const dropped of event.payload.paths) {
+				void invoke<string>("workspace_register_open_file", { path: dropped })
+					.then((granted) => {
+						Logger.info("App", "open-grant registered (#543)", { granted });
+						queueFile(granted);
+					})
+					.catch((error) => {
+						Logger.warn("App", "open-grant register failed (#543)", {
+							error: String(error),
+						});
+					});
+			}
+		});
 		return () => {
 			unlisten.then((fn) => fn());
+			dragUnlisten.then((fn) => fn());
 		};
 	}, []);
 
 	useEffect(() => {
-		if (!pendingCliFile || showSplash || showAdkSetup || showOnboarding) return;
+		const next = pendingOpenFiles[0];
+		if (!next || showSplash || showAdkSetup || showOnboarding) return;
 		let attempts = 0;
 		let retryTimer: number | undefined;
 		const openWhenReady = () => {
@@ -726,14 +746,13 @@ export function App() {
 				return;
 			}
 			useAppStore.getState().setActiveApp("workspace");
-			workspace.openFile(pendingCliFile.path);
-			setPendingCliFile((current) =>
-				current?.requestId === pendingCliFile.requestId ? null : current,
-			);
+			Logger.info("App", "opening queued file in workspace (#543)", { next });
+			workspace.openFile(next);
+			setPendingOpenFiles((queue) => (queue[0] === next ? queue.slice(1) : queue));
 		};
 		openWhenReady();
 		return () => window.clearTimeout(retryTimer);
-	}, [pendingCliFile, showAdkSetup, showOnboarding, showSplash]);
+	}, [pendingOpenFiles, showAdkSetup, showOnboarding, showSplash]);
 
 	// The persisted two-way preference controls chat placement across apps.
 	const uiMode = showOnboarding

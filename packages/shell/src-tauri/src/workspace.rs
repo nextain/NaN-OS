@@ -137,8 +137,48 @@ fn canonical_workspace_root() -> Result<PathBuf, String> {
         .map_err(|e| format!("Workspace root inaccessible: {e}"))
 }
 
+/// 사용자가 명시적으로 연 파일의 세션 한정 read/write 허용 목록 (#543).
+/// 열림 = 동의. 정확한 canonical 파일 경로 1개 단위이며 디렉터리는 등록하지
+/// 않고, 경계 밖 신규 파일 생성은 여전히 거부된다.
+static OPEN_FILE_GRANTS: OnceLock<Mutex<std::collections::HashSet<PathBuf>>> = OnceLock::new();
+
+fn open_file_grants() -> &'static Mutex<std::collections::HashSet<PathBuf>> {
+    OPEN_FILE_GRANTS.get_or_init(|| Mutex::new(std::collections::HashSet::new()))
+}
+
+fn is_open_file_granted(canonical: &Path) -> bool {
+    open_file_grants()
+        .lock()
+        .map(|set| set.contains(canonical))
+        .unwrap_or(false)
+}
+
+/// canonical 실파일만 등록하고 그 경로를 돌려준다.
+pub fn grant_open_file(path: &str) -> Result<String, String> {
+    let canonical =
+        dunce::canonicalize(path).map_err(|e| format!("Path inaccessible: {e}"))?;
+    if !canonical.is_file() {
+        return Err("only files can be granted".into());
+    }
+    open_file_grants()
+        .lock()
+        .map_err(|_| "grant lock poisoned".to_string())?
+        .insert(canonical.clone());
+    Ok(canonical.to_string_lossy().into_owned())
+}
+
+/// 드래그앤드롭 등 프론트가 받은 OS 실경로를 CLI 와 같은 계약으로 등록한다.
+#[tauri::command]
+pub fn workspace_register_open_file(path: String) -> Result<String, String> {
+    grant_open_file(&path)
+}
+
 fn validate_in_workspace(path: &str) -> Result<PathBuf, String> {
     let canonical = dunce::canonicalize(path).map_err(|e| format!("Path inaccessible: {e}"))?;
+    // 명시적으로 연 파일은 워크스페이스 밖이어도 허용 (#543).
+    if is_open_file_granted(&canonical) {
+        return Ok(canonical);
+    }
     let root = canonical_workspace_root()?;
     if !canonical.starts_with(&root) {
         return Err(format!("Access denied: path is outside workspace root"));
@@ -148,6 +188,12 @@ fn validate_in_workspace(path: &str) -> Result<PathBuf, String> {
 
 fn validate_write_path(path: &str) -> Result<PathBuf, String> {
     let p = PathBuf::from(path);
+    // 명시적으로 연 기존 파일은 경계 밖이어도 쓰기 허용 (#543). 신규 생성은 제외.
+    if let Ok(canonical_file) = dunce::canonicalize(&p) {
+        if is_open_file_granted(&canonical_file) {
+            return Ok(canonical_file);
+        }
+    }
     let mut check: &std::path::Path = p.as_path();
     loop {
         if check.exists() {
@@ -1012,4 +1058,34 @@ pub fn workspace_get_git_info(path: String) -> Result<GitInfo, String> {
     Ok(GitInfo {
         branch: get_branch(&safe_path),
     })
+}
+
+#[cfg(test)]
+mod open_grant_tests {
+    use super::*;
+
+    #[test]
+    fn grant_allows_read_write_of_an_outside_file_only_after_registration() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("외부노트.md");
+        std::fs::write(&file, "본문").unwrap();
+        let path = file.to_string_lossy().to_string();
+
+        assert!(validate_in_workspace(&path).is_err());
+        assert!(validate_write_path(&path).is_err());
+
+        grant_open_file(&path).unwrap();
+
+        assert!(validate_in_workspace(&path).is_ok());
+        assert!(validate_write_path(&path).is_ok());
+    }
+
+    #[test]
+    fn grant_rejects_directories_and_never_covers_new_outside_files() {
+        let dir = tempfile::tempdir().unwrap();
+        assert!(grant_open_file(&dir.path().to_string_lossy()).is_err());
+
+        let fresh = dir.path().join("아직없음.md");
+        assert!(validate_write_path(&fresh.to_string_lossy()).is_err());
+    }
 }

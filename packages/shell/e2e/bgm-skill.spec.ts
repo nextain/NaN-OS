@@ -262,9 +262,9 @@ test.describe("UC8 BGM 스킬 배선 (FR-BGM.1)", () => {
 	test("(B) 채팅 턴 중 app_tool_call(skill_youtube_bgm) → 위젯이 실제 재생 상태로 전환", async ({
 		page,
 	}) => {
-		// BGM 위젯이 마운트돼 있고 아직 재생 아님(초기).
+		// BGM 위젯 마운트 확인. 라이브러리 큐·반복 의미론(#528)에서는 앞 시나리오의
+		// 재생 상태가 이어질 수 있으므로 초기 0 단정 대신 명령→재생 전환만 검증한다.
 		await expect(page.locator(".bgm-player")).toBeVisible({ timeout: 5_000 });
-		await expect(page.locator(".bgm-icon--playing")).toHaveCount(0);
 
 		// 채팅 전송 → mock 이 chat_request 의 requestId 로 app_tool_call 발신 → dispatch → 재생.
 		const input = page.locator(".chat-input");
@@ -353,11 +353,8 @@ test.describe("UC8 BGM 스킬 배선 (FR-BGM.1)", () => {
 		});
 
 		// 배선 end-to-end 입증: dispatch → executeBgmSkill → bgm_youtube_play → BgmPlayer 재생.
-		// Replacing the iframe is only a request. The fixture has not reported
-		// `playing` at this point, so the compact player must not claim it.
-		await page.waitForTimeout(250);
-		await expect(page.locator(".bgm-icon--playing")).toHaveCount(0);
-
+		// #528: 위젯 UI 는 요청 즉시 재생 의도를 낙관 표시한다. 에이전트 진실은
+		// 위 tool result 의 status=requested / announceTrack=false 가 계속 보증한다.
 		await expect(page.locator(".bgm-icon--playing")).toBeVisible({
 			timeout: 15_000,
 		});
@@ -453,7 +450,8 @@ test.describe("UC8 BGM 스킬 배선 (FR-BGM.1)", () => {
 		expect(
 			appResults.map((message) => JSON.parse(String(message.result))),
 		).toMatchObject([
-			{ selected: { videoId: "error-unavailable" } },
+			// 신계약(#528): play ACK 는 관측 전 상태만 말한다 — 선택 곡명은 싣지 않는다.
+			{ ok: true, action: "play", playback: { status: "requested" }, announceTrack: false },
 			{ queued: { selected: { videoId: "hold-fallback" } } },
 		]);
 		expect(iframeRequests.map((request) => request.videoId)).toContain(
@@ -735,12 +733,19 @@ test.describe("UC8 BGM 스킬 배선 (FR-BGM.1)", () => {
 		await expect
 			.poll(() =>
 				page.evaluate(() => {
-					// FR-BGM-FAV.1: 즐겨찾기 SoT = 워크스페이스 config(bgmYoutubeFavorites).
-					// legacy webview localStorage(yt-bgm-favorites)는 더 이상 진실이 아니다.
-					const favorites = (JSON.parse(
-						localStorage.getItem("naia-config") ?? "{}",
-					).bgmYoutubeFavorites ?? []) as Array<{ id: string }>;
-					return favorites.map((item) => item.id);
+					// #528+#543: 좋아요 SoT = BGM 라이브러리(앱 샌드박스). 브라우저 E2E 는
+					// mock 샌드박스 파일계에서 같은 파일을 판독한다.
+					const sandbox = (
+						window as unknown as {
+							__E2E_SANDBOX_FS__?: Record<string, number[]>;
+						}
+					).__E2E_SANDBOX_FS__;
+					const bytes = sandbox?.["land.naia.shell/bgm/library.json"];
+					if (!bytes) return [];
+					const library = JSON.parse(
+						new TextDecoder().decode(Uint8Array.from(bytes)),
+					) as { likes?: Array<{ youtubeId?: string }> };
+					return (library.likes ?? []).map((track) => track.youtubeId ?? "");
 				}),
 			)
 			.toContain("hold-favorite");

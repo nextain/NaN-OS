@@ -23,6 +23,7 @@ import {
 	onAiInterferenceEvent,
 } from "../lib/ai-interference";
 import { appRegistry } from "../lib/app-registry";
+import { writeAppSandboxFile } from "../lib/app-sandbox";
 import { type AudioPlayer, createAudioPlayer } from "../lib/audio-player";
 import { getDefaultVoiceForAvatar } from "../lib/avatar-presets";
 import {
@@ -120,6 +121,7 @@ import { decideMaskRelease, decideRevealGuard } from "../lib/tts/reveal-guard";
 import {
 	type PipelineVoiceConfig,
 	type SentenceTtsPipeline,
+	type TtsSynthesisResult,
 	createSentenceTtsPipeline,
 } from "../lib/tts/sentence-pipeline";
 import { ttsTextFilter } from "../lib/tts/text-filter";
@@ -517,6 +519,15 @@ export function ChatArea({
 					...entry,
 					provider: entry.provider as ProviderId,
 				}),
+			onSynthesisResult: (result) => {
+				const slide = activeSlidePresenterSpeechRef.current;
+				if (result.provider !== "naia-local-voice") return;
+				return writeVoiceDiagnostic(
+					slide ? "land.naia.slides" : "land.naia.shell",
+					slide,
+					result,
+				);
+			},
 			notifyLocalVoiceUnavailable: async () => {
 				const runtimeState = await invoke<string>(
 					"voxcpm2_runtime_status",
@@ -690,7 +701,13 @@ export function ChatArea({
 			ttsTextSyncRef.current.active ||
 			sentencePipelineRef.current?.hasActiveRequests() === true ||
 			audioQueueRef.current?.isActive === true;
-		if (!store.isStreaming && !ttsActive) return;
+		// The cancellation button is also rendered while the visual TTS state is
+		// pending. A request may have been lost after the UI entered that state;
+		// keep the button meaningful so a stranded "processing voice" indicator
+		// cannot block the next turn forever.
+		const ttsVisualStateActive =
+			outputStage !== null || ttsMaskedMessageId !== null;
+		if (!store.isStreaming && !ttsActive && !ttsVisualStateActive) return;
 		// A cancelled response may never deliver its terminal `finish` chunk.
 		// Do not let an unfinished reasoning block hide the next request.
 		thinkingStreamFilterRef.current.reset();
@@ -718,7 +735,9 @@ export function ChatArea({
 				e.key === "Escape" &&
 				(useChatStore.getState().isStreaming ||
 					ttsTextSyncRef.current.active ||
-					ttsPlayingRef.current)
+					ttsPlayingRef.current ||
+					outputStage !== null ||
+					ttsMaskedMessageId !== null)
 			) {
 				handleCancelStreaming();
 			}
@@ -832,6 +851,37 @@ export function ChatArea({
 	 * does not control. Also clears the sentence chunker and pending request
 	 * tracking, and resets the speaking/avatar state.
 	 */
+	function writeVoiceDiagnostic(
+		appId: "land.naia.shell" | "land.naia.slides",
+		slide: SlidePresenterSpeechRequest | null,
+		result: TtsSynthesisResult,
+	): Promise<void> {
+		const capturedAt = new Date().toISOString();
+		const safeTimestamp = capturedAt.replace(/[:.]/g, "-");
+		const base = `diagnostics/voice/${slide ? `page-${slide.page}` : "chat"}-${safeTimestamp}`;
+		const audioRelativePath = `${base}.wav`;
+		const audioBytes = Uint8Array.from(atob(result.audioBase64), (char) => char.charCodeAt(0));
+		const record = {
+			schemaVersion: 1,
+			captureKind: slide ? "slides-tts" : "chat-tts",
+			capturedAt,
+			slide: slide ? { page: slide.page, generation: slide.generation, requestId: slide.requestId } : null,
+			text: result.text,
+			provider: result.provider,
+			voice: result.voice ?? null,
+			localReferenceAudioPresent: result.localReferenceAudioPresent,
+			localVoiceRuntimeStatus: result.provider === "naia-local-voice" ? "captured-during-local-voice-request" : null,
+			vllmTtsHost: result.vllmTtsHost ?? null,
+			synthesisElapsedMs: result.elapsedMs,
+			audioDurationSeconds: result.audioDurationSeconds,
+			audioRelativePath,
+		};
+		return writeAppSandboxFile(appId, audioRelativePath, Array.from(audioBytes))
+			.then(() => writeAppSandboxFile(appId, `${base}.json`, Array.from(new TextEncoder().encode(JSON.stringify(record, null, 2)))))
+			.then(() => Logger.info("ChatArea", "captured local voice diagnostic", { appId, provider: result.provider, audioRelativePath }))
+			.catch((error) => Logger.warn("ChatArea", "local voice diagnostic capture failed", { appId, error: String(error) }));
+	}
+
 	function settleSlidePresenterSpeech(
 		status: "finished" | "cancelled" | "failed",
 		error?: string,

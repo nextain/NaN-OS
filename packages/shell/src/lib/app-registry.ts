@@ -3,6 +3,7 @@ import type React from "react";
 import type { BehaviorEntry, BehaviorFilter } from "./behavior-log";
 import { logBehavior, queryBehavior } from "./behavior-log";
 import { getSecretKey, saveSecretKey } from "./secure-store";
+import { getAppSandboxRoot, openAppSandboxFileInWorkspace } from "./app-sandbox";
 
 export type { BehaviorEntry, BehaviorFilter };
 
@@ -102,8 +103,12 @@ export interface NaiaContextBridge {
 	 * The Shell enforces an allowlist on the Rust side ??unknown commands are rejected.
 	 */
 	runShell(cmd: string, args?: string[]): Promise<ShellResult>;
-}
 
+	/** App-private root at data-private/apps/{package-id}. */
+	sandboxRoot?(): Promise<string>;
+	openInWorkspace?(relativePath: string): Promise<string>;
+
+}
 /** No-op bridge used as placeholder until a real bridge is wired. */
 export class NoopContextBridge implements NaiaContextBridge {
 	pushContext(_ctx: AppContext): void {}
@@ -128,8 +133,14 @@ export class NoopContextBridge implements NaiaContextBridge {
 	runShell(_cmd: string, _args?: string[]): Promise<ShellResult> {
 		return Promise.resolve({ stdout: "", stderr: "", code: 0 });
 	}
-}
 
+	sandboxRoot(): Promise<string> {
+		return Promise.reject(new Error("App sandbox bridge is unavailable"));
+	}
+	openInWorkspace(_relativePath: string): Promise<string> {
+		return Promise.reject(new Error("Workspace bridge is unavailable"));
+	}
+}
 /**
  * Real bridge: forwards pushContext ??app store (so Naia's system prompt
  * picks it up), and routes onToolCall registrations for app tool execution.
@@ -192,9 +203,18 @@ export class ActiveAppBridge implements NaiaContextBridge {
 	runShell(cmd: string, args?: string[]): Promise<ShellResult> {
 		return invoke<ShellResult>("app_run_shell", { cmd, args: args ?? [] });
 	}
-}
 
+	sandboxRoot(): Promise<string> {
+		return getAppSandboxRoot(this.appId);
+	}
+
+	openInWorkspace(relativePath: string): Promise<string> {
+		return openAppSandboxFileInWorkspace(this.appId, relativePath);
+	}
+
+}
 // ??? App Props ?????????????????????????????????????????????????????????????
+
 
 export interface AppCenterProps {
 	naia: NaiaContextBridge;

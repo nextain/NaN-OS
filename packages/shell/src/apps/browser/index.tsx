@@ -30,7 +30,7 @@ appRegistry.register({
 		{
 			name: "skill_browser_navigate",
 			description:
-				"Navigate the browser to a URL and return an initial visible text excerpt after the page loads. Use this when the user asks you to open, visit, search, read, or go to a website.",
+				"Navigate the browser to a URL and return an initial visible text excerpt after the page loads. Use this when the user asks you to open, visit, search, read, or go to a website. Never use this tool to play music or as a fallback for skill_youtube_bgm; music must stay in Naia's internal BGM player.",
 			parameters: {
 				type: "object",
 				properties: {

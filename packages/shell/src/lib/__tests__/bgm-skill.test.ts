@@ -87,7 +87,7 @@ describe("Radio DJ semantic mode boundary", () => {
 			),
 		);
 
-		expect(result.selected.videoId).toBe("fresh");
+		expect(result).not.toHaveProperty("selected");
 		expect(deps.playback.current()?.selected.videoId).toBe("fresh");
 		expect(deps.playback.queue()).toEqual([]);
 		expect(emitted.at(-1)).toMatchObject({
@@ -338,8 +338,8 @@ describe("executeBgmSkill", () => {
 
 		expect(replacement).toMatchObject({
 			playback: { status: "requested" },
-			selected: { videoId: "second" },
 		});
+		expect(replacement).not.toHaveProperty("selected");
 		expect(emitted.map((event) => event.type)).toEqual([
 			"bgm_youtube_play",
 			"bgm_youtube_play",
@@ -365,7 +365,8 @@ describe("executeBgmSkill", () => {
 			),
 		);
 
-		expect(replacement.selected.videoId).toBe("second");
+		expect(replacement).not.toHaveProperty("selected");
+		expect(deps.playback.current()?.selected.videoId).toBe("second");
 		expect(emitted.at(-1)).toMatchObject({
 			type: "bgm_youtube_play",
 			videoId: "second",
@@ -390,7 +391,8 @@ describe("executeBgmSkill", () => {
 			),
 		);
 
-		expect(replacement.selected.videoId).toBe("fresh-id");
+		expect(replacement).not.toHaveProperty("selected");
+		expect(deps.playback.current()?.selected.videoId).toBe("fresh-id");
 	});
 
 	it("adds/removes the current track and starts a non-current favorite", async () => {
@@ -413,7 +415,8 @@ describe("executeBgmSkill", () => {
 			{ type: "bgm_youtube_fav_add" },
 			{ type: "bgm_youtube_fav_remove" },
 		]);
-		expect(favorite.selected.videoId).toBe("favorite-2");
+		expect(favorite).not.toHaveProperty("selected");
+		expect(deps.playback.current()?.selected.videoId).toBe("favorite-2");
 		expect(deps.playback.queue()).toEqual([]);
 	});
 
@@ -457,9 +460,9 @@ describe("executeBgmSkill", () => {
 			ok: true,
 			action: "play",
 			playback: { status: "requested", sequence: 1 },
-			selected: { videoId: "v1", title: "Lofi Beats" },
 			announceTrack: false,
 		});
+		expect(JSON.parse(out)).not.toHaveProperty("selected");
 	});
 
 	it("play+videoId → 검색 없이 직접 재생", async () => {
@@ -481,9 +484,9 @@ describe("executeBgmSkill", () => {
 			ok: true,
 			action: "play",
 			playback: { status: "requested", sequence: 1 },
-			selected: { videoId: "abc123", title: "직접곡" },
 			announceTrack: false,
 		});
+		expect(JSON.parse(out)).not.toHaveProperty("selected");
 	});
 
 	it("status returns observed iframe playback without emitting a command", async () => {
@@ -585,14 +588,46 @@ describe("executeBgmSkill", () => {
 		}
 	});
 
-	it("reports next/prev failure without emitting when favorites are empty", async () => {
+	it("routes next/prev to the active playlist regardless of the likes count", async () => {
 		for (const action of ["next", "prev"] as const) {
 			const { deps, emitted } = mkDeps();
 			deps.favoriteCount = () => 0;
 			const out = JSON.parse(await executeBgmSkill({ action }, deps));
-			expect(out).toEqual({ ok: false, action, reason: "no_favorites" });
-			expect(emitted).toEqual([]);
+			expect(out).toEqual({ ok: true, action });
+			expect(emitted).toEqual([{ type: `bgm_youtube_${action}` }]);
 		}
+	});
+
+	it("keeps likes and playlist operations as distinct actions", async () => {
+		const { deps, emitted } = mkDeps();
+		await executeBgmSkill({ action: "play", videoId: "current", title: "Current" }, deps);
+		await executeBgmSkill({ action: "like_add" }, deps);
+		await executeBgmSkill({ action: "playlist_create", name: "Focus" }, deps);
+		await executeBgmSkill({ action: "playlist_add_current", playlistId: "focus" }, deps);
+		expect(emitted.slice(1)).toEqual([
+			{ type: "bgm_library_like_add" },
+			{ type: "bgm_playlist_create", name: "Focus" },
+			{ type: "bgm_playlist_add_current", playlistId: "focus" },
+		]);
+	});
+
+	it("routes playlist play, shuffle, and repeat with normalized arguments", async () => {
+		const { deps, emitted } = mkDeps();
+		expect(JSON.parse(await executeBgmSkill({ action: "playlist_play", playlistId: "p1", index: 2 }, deps))).toMatchObject({ ok: true, pending: true });
+		await executeBgmSkill({ action: "shuffle", enabled: false }, deps);
+		await executeBgmSkill({ action: "repeat", repeat: "one" }, deps);
+		expect(emitted).toEqual([
+			{ type: "bgm_playlist_play", playlistId: "p1", index: 2 },
+			{ type: "bgm_playlist_shuffle", enabled: false },
+			{ type: "bgm_playlist_repeat", repeat: "one" },
+		]);
+	});
+
+	it("returns playlist summaries without treating likes as a playback list", async () => {
+		const { deps } = mkDeps();
+		deps.library = () => ({ schemaVersion: 1, likes: [], playlists: [{ id: "p1", name: "Focus", tracks: [], createdAt: 1, updatedAt: 1 }], activePlaylistId: "p1", currentIndex: -1, shuffle: true, repeat: "all", queue: [], history: [] });
+		const out = JSON.parse(await executeBgmSkill({ action: "playlist_list" }, deps));
+		expect(out.library).toMatchObject({ likesCount: 0, activePlaylist: { id: "p1", name: "Focus" }, shuffle: true, repeat: "all" });
 	});
 
 	it("volume → clamp 후 bgm_youtube_volume", async () => {

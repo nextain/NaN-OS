@@ -79,6 +79,19 @@ export interface TtsCostEntry {
 	model: string;
 }
 
+export interface TtsSynthesisResult {
+	reqId: string;
+	seq: number;
+	text: string;
+	provider: string;
+	voice?: string;
+	audioBase64: string;
+	elapsedMs: number;
+	audioDurationSeconds: number | null;
+	localReferenceAudioPresent: boolean;
+	vllmTtsHost?: string;
+}
+
 export interface SentenceTtsPipelineDeps {
 	generateRequestId(): string;
 	/** Mask/reveal reservation for this sentence (UI-owned ordering). */
@@ -96,6 +109,8 @@ export interface SentenceTtsPipelineDeps {
 	setSpeaking(on: boolean): void;
 	getLocalRefAudioB64(): string | null;
 	addCostEntry(entry: TtsCostEntry): void;
+	/** Receives an accepted, non-stale synthesis result for local diagnostics. */
+	onSynthesisResult?(result: TtsSynthesisResult): void | Promise<void>;
 	/**
 	 * Surface the one-time local-voice-unavailable notice (runtime status +
 	 * localized message). The once-per-session guard lives in the pipeline.
@@ -314,6 +329,20 @@ export function createSentenceTtsPipeline(
 				// sequence, so a late response must NOT enqueue (would replay as
 				// the new turn's first audio) nor record cost.
 				if (!activeRequests.has(reqId)) return;
+				const elapsedMs = Math.max(
+					0,
+					Math.round(performance.now() - synthesisStartedAt),
+				);
+				const audioDurationSeconds = wavDurationSeconds(audioBase64);
+				void Promise.resolve()
+					.then(() => deps.onSynthesisResult?.({
+						reqId, seq, text: clean, provider: ttsProviderForCost,
+						voice: ttsVoiceForCost, audioBase64, elapsedMs, audioDurationSeconds,
+						localReferenceAudioPresent: ttsProviderForCost === "naia-local-voice" && Boolean(deps.getLocalRefAudioB64()),
+						vllmTtsHost: voiceCfg?.vllmTtsHost,
+					}))
+					.catch((error) => Logger.warn(TAG, "TTS diagnostic capture failed", { reqId, error: String(error) }));
+
 				// FR-VOICE.19 (#519): measure every local sentence, not only the
 				// first — a later RTF<1 is the "engine warmed" release signal.
 				if (ttsProviderForCost === "naia-local-voice" && localVoiceScheduler) {

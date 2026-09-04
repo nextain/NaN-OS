@@ -1,5 +1,6 @@
 mod agent_grpc;
 mod app;
+mod app_sandbox;
 mod audit;
 mod browser;
 mod browser_webview;
@@ -47,7 +48,10 @@ fn resolve_cli_file(args: &[String], cwd: &std::path::Path) -> Option<String> {
 fn get_startup_open_file() -> Option<String> {
     let args: Vec<String> = std::env::args().collect();
     let cwd = std::env::current_dir().ok()?;
-    resolve_cli_file(&args, &cwd)
+    let path = resolve_cli_file(&args, &cwd)?;
+    // 열림 = 동의 — 워크스페이스 밖 파일도 read/write grant 를 등록한다 (#543).
+    let _ = workspace::grant_open_file(&path);
+    Some(path)
 }
 static USED_APP_INSTALL_STATES: OnceLock<Mutex<HashSet<String>>> = OnceLock::new();
 
@@ -7473,16 +7477,24 @@ async fn codex_preflight() -> Result<CodexPreflightResult, String> {
 
 fn classify_grok_preflight(exit_success: bool, output: &str) -> &'static str {
     let normalized = output.to_ascii_lowercase();
-    if exit_success && normalized.contains("logged in") {
-        "ready"
-    } else if normalized.contains("not logged in")
+    // 신형 독립 CLI 는 미인증이어도 exit 0 으로 모델 목록을 찍고
+    // "You are not authenticated." 한 줄만 앞에 붙인다 — 인증 거부 판정이
+    // 준비 판정보다 먼저 와야 한다.
+    let auth_denied = normalized.contains("not logged in")
         || normalized.contains("login required")
         || normalized.contains("unauthorized")
         || normalized.contains("unauthenticated")
+        || normalized.contains("not authenticated")
         || normalized.contains("please log in")
-        || normalized.contains("please sign in")
-    {
+        || normalized.contains("please sign in");
+    if auth_denied {
         "login-required"
+    } else if exit_success
+        && (normalized.contains("logged in")
+            || normalized.contains("available models")
+            || normalized.contains("default model"))
+    {
+        "ready"
     } else if normalized.contains("not recognized")
         || normalized.contains("command not found")
         || normalized.contains("no such file")
@@ -7498,7 +7510,9 @@ fn grok_models_command() -> Command {
     let mut command = {
         let comspec = std::env::var_os("ComSpec").unwrap_or_else(|| "cmd.exe".into());
         let mut cmd = Command::new(comspec);
-        cmd.args(["/d", "/s", "/c", "grok.cmd models"]);
+        // 셰임 이름을 박지 않는다 — npm 설치는 grok.cmd, 독립 설치는 grok.exe 로
+        // 오는데 cmd 가 PATHEXT 로 양쪽을 모두 해석한다.
+        cmd.args(["/d", "/s", "/c", "grok models"]);
         cmd
     };
     #[cfg(not(windows))]
@@ -11717,6 +11731,7 @@ pub fn run() {
                 }
             }
             if let Some(path) = resolve_cli_file(&args, std::path::Path::new(&_cwd)) {
+                let _ = workspace::grant_open_file(&path);
                 let _ = app.emit(WORKSPACE_OPEN_FILE_EVENT, path);
             }
         }))
@@ -11897,9 +11912,16 @@ pub fn run() {
             app::app_read_file,
             app::app_run_shell,
             app::app_install,
+            app_sandbox::app_sandbox_root,
+            app_sandbox::app_sandbox_write_file,
+            app_sandbox::app_sandbox_read_file,
+            app_sandbox::app_sandbox_open_in_workspace,
+            app_sandbox::slides_recording_start,
+            app_sandbox::slides_recording_stop,
             app::app_store_has_entitlement,
             app::app_install_store,
             workspace::workspace_list_dirs,
+            workspace::workspace_register_open_file,
             workspace::workspace_read_file,
             workspace::workspace_read_file_bytes,
             workspace::workspace_file_size,
@@ -13040,8 +13062,23 @@ mod tests {
             "login-required"
         );
         assert_eq!(
-            classify_grok_preflight(false, "'grok.cmd' is not recognized"),
+            classify_grok_preflight(false, "'grok' is not recognized"),
             "not-installed"
+        );
+        // 신형 독립 CLI: 미인증이어도 exit 0 + 모델 목록 (2026-09-03 win32 실측)
+        assert_eq!(
+            classify_grok_preflight(
+                true,
+                "You are not authenticated.\n\nDefault model: grok-4.6\n\nAvailable models:\n  * grok-4.6 (default)"
+            ),
+            "login-required"
+        );
+        assert_eq!(
+            classify_grok_preflight(
+                true,
+                "Default model: grok-4.6\n\nAvailable models:\n  * grok-4.6 (default)\n  - grok-4.5"
+            ),
+            "ready"
         );
         assert_eq!(
             classify_grok_preflight(false, "unexpected failure"),

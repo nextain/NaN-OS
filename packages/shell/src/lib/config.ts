@@ -319,6 +319,8 @@ export interface AppConfig {
 		duration?: string;
 		channel?: string;
 	}[];
+	/** Persistent mixed-source music library. Stored in naia-settings. */
+	bgmLibrary?: import("./bgm-library").BgmLibraryState;
 	/** Last BGM volume (0–1). */
 	bgmVolume?: number;
 	/** Whether BGM was playing when the app was closed. */

@@ -144,6 +144,24 @@ describe("sentence TTS pipeline (FR-VOICE.16 Phase 2b)", () => {
 		);
 	});
 
+	it("emits an accepted WAV result for diagnostics without blocking playback", async () => {
+		synthesizeMock.mockResolvedValue({ audioBase64: "QUJD" });
+		const onSynthesisResult = vi.fn();
+		const { deps, queue } = makeDeps({ onSynthesisResult });
+		createSentenceTtsPipeline(deps).sendSentence("Recorded sentence.");
+		await flush();
+		expect(onSynthesisResult).toHaveBeenCalledWith(
+			expect.objectContaining({
+				text: "Recorded sentence.",
+				provider: "nextain",
+				audioBase64: "QUJD",
+				elapsedMs: expect.any(Number),
+				audioDurationSeconds: null,
+			}),
+		);
+		expect(queue.enqueueOrdered).toHaveBeenCalledWith(0, "QUJD", expect.any(Object));
+	});
+
 	it("local engine failure: one notice, no browser fallback, slot released", async () => {
 		synthesizeMock.mockRejectedValue(new Error("ECONNREFUSED"));
 		const speak = vi.fn();

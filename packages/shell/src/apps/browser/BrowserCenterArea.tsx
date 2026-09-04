@@ -8,6 +8,7 @@ import {
 } from "../../lib/browser-prefs";
 import { addAllowedTool } from "../../lib/config";
 import { Logger } from "../../lib/logger";
+import { isCurrentBgmYoutubeUrl } from "../../lib/bgm-playback";
 import { appRegistry } from "../../lib/app-registry";
 import type { AppCenterProps } from "../../lib/app-registry";
 import { useTabSkills } from "../../lib/tab-skills";
@@ -510,6 +511,15 @@ export function BrowserCenterArea({ naia }: AppCenterProps) {
 			if (!p.current.navigate) return denied("탐색");
 			const url = String(args.url ?? "");
 			if (!url) return "Error: url required";
+			if (isCurrentBgmYoutubeUrl(url)) {
+				Logger.warn("BrowserArea", "blocked browser fallback for internal BGM", {
+					url,
+				});
+				return (
+					"Blocked: this YouTube video belongs to Naia's internal BGM request. " +
+					"Do not use browser navigation as a music fallback; check skill_youtube_bgm status instead."
+				);
+			}
 			Logger.info("BrowserArea", "skill_browser_navigate invoked", {
 				url,
 				status,

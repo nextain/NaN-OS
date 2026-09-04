@@ -70,6 +70,12 @@ function attachIframeForCurrentPlayback(): HTMLIFrameElement {
 	return iframe;
 }
 
+function postYtObjectMessage(payload: Record<string, unknown>) {
+	act(() => {
+		window.dispatchEvent(new MessageEvent("message", { data: payload }));
+	});
+}
+
 function postYtMessage(payload: Record<string, unknown>) {
 	act(() => {
 		window.dispatchEvent(
@@ -194,6 +200,40 @@ describe("BgmPlayer YouTube playback state machine", () => {
 		).toBe("playing");
 	});
 
+	it("actively starts the internal iframe on ready and announces only confirmed playback", async () => {
+		render(<BgmPlayer />);
+		await startTrack("v1", "Confirmed Song");
+		const iframe = attachIframeForCurrentPlayback();
+		const postMessage = vi.spyOn(iframe.contentWindow!, "postMessage");
+		const events: string[] = [];
+		const unlisten = onAiInterferenceEvent((event) => events.push(event.action));
+
+		postYtObjectMessage({ event: "onReady" });
+		expect(postMessage).toHaveBeenCalledWith(
+			JSON.stringify({ event: "command", func: "playVideo", args: [] }),
+			"*",
+		);
+		expect(events).not.toContain("music_started");
+
+		postYtMessage({ event: "onStateChange", info: 1 });
+		expect(events).toContain("music_started");
+		expect(bgmPlayback.current()?.status).toBe("playing");
+		unlisten();
+	});
+
+	it("ignores non-YouTube iframe messages", async () => {
+		render(<BgmPlayer />);
+		await startTrack("v1", "Protected Song");
+		attachIframeForCurrentPlayback();
+		act(() => {
+			window.dispatchEvent(new MessageEvent("message", {
+				data: JSON.stringify({ event: "onStateChange", info: 1 }),
+				origin: "https://example.com",
+			}));
+		});
+		expect(bgmPlayback.current()?.status).toBe("requested");
+	});
+
 	it("notifies the agent the moment a track genuinely ends, not from the watchdog timer", async () => {
 		render(<BgmPlayer />);
 		await startTrack("v1", "Song One (ended)");
@@ -237,16 +277,46 @@ describe("BgmPlayer YouTube playback state machine", () => {
 		);
 	});
 
-	it("keeps the iframe transparent (previous background visible) until playback is actually observed", async () => {
+	it("keeps a one-click manual stop when a stale playing event arrives", async () => {
+		const { container } = render(<BgmPlayer />);
+		await startTrack("v1", "Stop Race Song");
+		const iframe = attachIframeForCurrentPlayback();
+		const postMessage = vi.spyOn(iframe.contentWindow!, "postMessage");
+		postYtMessage({ event: "onStateChange", info: 1 });
+
+		fireEvent.click(
+			screen.getByRole("button", { name: /^(Stop|정지)$/ }),
+		);
+		postMessage.mockClear();
+		postYtMessage({ event: "onStateChange", info: 1 });
+
+		expect(postMessage).toHaveBeenCalledWith(
+			JSON.stringify({ event: "command", func: "stopVideo", args: [] }),
+			"*",
+		);
+		expect(screen.getByRole("button", { name: /^(Play|재생)$/ })).toHaveTextContent(
+			"▶",
+		);
+		expect(container.querySelector(".bgm-player")).toHaveAttribute(
+			"data-bgm-playback-status",
+			"paused",
+		);
+	});
+
+	it("shows the requested iframe immediately when background video is checked", async () => {
 		render(<BgmPlayer />);
 		await startTrack("v1", "Unconfirmed Song");
 		attachIframeForCurrentPlayback();
 
-		// FR-BGM-VIDEO.2: a freshly requested embed must not cover the user's
-		// background — a packaged WebView2 can render it as a black frame.
+		// UI follows the user's accepted autoplay intent immediately, while the
+		// playback fact boundary remains requested until iframe evidence arrives.
+		expect(bgmPlayback.current()?.status).toBe("requested");
+		expect(
+			screen.getByRole("button", { name: /Stop|정지/ }),
+		).toHaveTextContent("■");
 		expect(document.documentElement).toHaveAttribute(
 			"data-bgm-youtube-live",
-			"false",
+			"true",
 		);
 
 		postYtMessage({ event: "onStateChange", info: 1 });
@@ -273,7 +343,7 @@ describe("BgmPlayer YouTube playback state machine", () => {
 		);
 	});
 
-	it("uncovers the background on a diagnostic timeout and re-covers it when late progress confirms playback", async () => {
+	it("keeps the requested background visible across a diagnostic-only timeout", async () => {
 		vi.useFakeTimers();
 		render(<BgmPlayer />);
 		await startTrack("v1", "Late Confirmed Song");
@@ -285,7 +355,7 @@ describe("BgmPlayer YouTube playback state machine", () => {
 		});
 		expect(document.documentElement).toHaveAttribute(
 			"data-bgm-youtube-live",
-			"false",
+			"true",
 		);
 
 		postYtMessage({
@@ -298,7 +368,7 @@ describe("BgmPlayer YouTube playback state machine", () => {
 		);
 	});
 
-	it("migrates legacy localStorage favorites into the workspace config once and clears the legacy key", async () => {
+	it("migrates legacy localStorage favorites into persistent likes and clears the legacy key", async () => {
 		localStorage.setItem("naia-config", JSON.stringify({ locale: "en" }));
 		localStorage.setItem(
 			"yt-bgm-favorites",
@@ -318,13 +388,13 @@ describe("BgmPlayer YouTube playback state machine", () => {
 		});
 
 		const cfg = JSON.parse(localStorage.getItem("naia-config") ?? "{}");
-		expect(cfg.bgmYoutubeFavorites).toEqual([
-			expect.objectContaining({ id: "old-1", title: "Legacy Fav" }),
+		expect(cfg.bgmLibrary.likes).toEqual([
+			expect.objectContaining({ youtubeId: "old-1", title: "Legacy Fav" }),
 		]);
 		expect(localStorage.getItem("yt-bgm-favorites")).toBeNull();
 	});
 
-	it("persists a newly added favorite into the workspace config, not the webview localStorage", async () => {
+	it("persists a newly added like into the workspace library, not webview localStorage", async () => {
 		localStorage.setItem("naia-config", JSON.stringify({ locale: "en" }));
 		render(<BgmPlayer />);
 		await startTrack("v-fav", "Favorite Candidate");
@@ -338,10 +408,91 @@ describe("BgmPlayer YouTube playback state machine", () => {
 		});
 
 		const cfg = JSON.parse(localStorage.getItem("naia-config") ?? "{}");
-		expect(cfg.bgmYoutubeFavorites).toEqual([
-			expect.objectContaining({ id: "v-fav", title: "Favorite Candidate" }),
+		expect(cfg.bgmLibrary.likes).toEqual([
+			expect.objectContaining({ youtubeId: "v-fav", title: "Favorite Candidate" }),
 		]);
 		expect(localStorage.getItem("yt-bgm-favorites")).toBeNull();
+	});
+
+	it("creates and persists a named playlist from the player UI", async () => {
+		localStorage.setItem("naia-config", JSON.stringify({ locale: "en" }));
+		const { container } = render(<BgmPlayer />);
+		fireEvent.click(container.querySelector(".bgm-icon")!);
+		fireEvent.click(await screen.findByRole("button", { name: "Playlists" }));
+		fireEvent.change(screen.getByPlaceholderText("New playlist name"), {
+			target: { value: "Focus" },
+		});
+		fireEvent.submit(screen.getByPlaceholderText("New playlist name").closest("form")!);
+
+		const cfg = JSON.parse(localStorage.getItem("naia-config") ?? "{}");
+		expect(cfg.bgmLibrary.playlists).toEqual(
+			expect.arrayContaining([expect.objectContaining({ name: "Focus", tracks: [] })]),
+		);
+		expect(screen.getByRole("option", { name: "Focus" })).toBeInTheDocument();
+	});
+
+	it("plays next from the active playlist instead of the likes collection", async () => {
+		localStorage.setItem(
+			"naia-config",
+			JSON.stringify({
+				locale: "en",
+				bgmLibrary: {
+					schemaVersion: 1,
+					likes: [
+						{
+							id: "youtube:liked",
+							source: "youtube",
+							youtubeId: "liked",
+							title: "Liked but not queued",
+						},
+					],
+					playlists: [
+						{
+							id: "focus",
+							name: "Focus",
+							createdAt: 1,
+							updatedAt: 1,
+							tracks: [
+								{
+									id: "youtube:first",
+									source: "youtube",
+									youtubeId: "first",
+									title: "First",
+								},
+								{
+									id: "youtube:second",
+									source: "youtube",
+									youtubeId: "second",
+									title: "Second",
+								},
+							],
+						},
+					],
+					activePlaylistId: "focus",
+					currentIndex: -1,
+					shuffle: false,
+					repeat: "off",
+					queue: [],
+					history: [],
+				},
+			}),
+		);
+		const { container } = render(<BgmPlayer />);
+		fireEvent.click(container.querySelector(".bgm-icon")!);
+		fireEvent.click(await screen.findByRole("button", { name: "Playlists" }));
+		fireEvent.click(screen.getByRole("button", { name: /First/ }));
+		expect(bgmPlayback.current()?.selected.videoId).toBe("first");
+		fireEvent.click(screen.getByTitle("Next"));
+		expect(bgmPlayback.current()?.selected.videoId).toBe("second");
+	});
+
+	it("automatically advances to the next active-playlist track when YouTube ends", async () => {
+		localStorage.setItem("naia-config", JSON.stringify({ locale: "en", bgmLibrary: { schemaVersion: 1, likes: [], playlists: [{ id: "focus", name: "Focus", createdAt: 1, updatedAt: 1, tracks: [{ id: "youtube:first", source: "youtube", youtubeId: "first", title: "First" }, { id: "youtube:second", source: "youtube", youtubeId: "second", title: "Second" }] }], activePlaylistId: "focus", currentIndex: 0, shuffle: false, repeat: "off", queue: [], history: [] } }));
+		render(<BgmPlayer />);
+		await startTrack("first", "First");
+		attachIframeForCurrentPlayback();
+		postYtObjectMessage({ event: "onStateChange", info: 0 });
+		expect(bgmPlayback.current()?.selected.videoId).toBe("second");
 	});
 
 	it("hides only the YouTube picture while keeping its iframe mounted", async () => {
