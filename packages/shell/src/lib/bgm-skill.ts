@@ -14,6 +14,8 @@
 
 import { emit } from "@tauri-apps/api/event";
 import type { NaiaTool } from "./app-registry";
+import { loadBgmLibrary, type BgmLibraryState } from "./bgm-library";
+import { bgmLibraryCache } from "./bgm-library-store";
 import {
 	type BgmPlaybackPort,
 	bgmPlayback,
@@ -39,6 +41,14 @@ export const BGM_ACTIONS = [
 	"favorite_add",
 	"favorite_remove",
 	"favorites_play",
+	"like_add",
+	"like_remove",
+	"playlist_list",
+	"playlist_create",
+	"playlist_add_current",
+	"playlist_play",
+	"shuffle",
+	"repeat",
 	"status",
 	"volume",
 ] as const;
@@ -47,7 +57,7 @@ export type BgmAction = (typeof BGM_ACTIONS)[number];
 export const SKILL_YOUTUBE_BGM: NaiaTool = {
 	name: "skill_youtube_bgm",
 	description:
-		"YouTube BGM(배경음악) 플레이어 제어. 사용자가 어떤 언어로든 음악, BGM, 곡 변경, 다음 곡 또는 라디오 DJ를 요청하면 반드시 이 도구를 의미적으로 선택한다. play(query 검색 결과 재생, videoId 직접 지정 가능)/stop/pause/resume/next(즐겨찾기 다음)/prev(이전)/volume(0~1). 도구 결과가 requested이면 재생 성공이라고 말하지 말고, observed playing만 실제 재생으로 표현한다.",
+		"Naia 음악 플레이어 제어. 좋아요는 선호 표시일 뿐 재생 목록이 아니다. next/prev는 활성 플레이리스트와 실행 큐를 사용한다. playlist_list/create/add_current/play, like_add/remove, shuffle, repeat(off/all/one)를 구분해서 사용한다. 도구 결과가 requested이면 재생 성공이라고 말하지 말고 observed playing만 실제 재생으로 표현한다.",
 	parameters: {
 		type: "object",
 		properties: {
@@ -63,6 +73,14 @@ export const SKILL_YOUTUBE_BGM: NaiaTool = {
 			videoId: { type: "string", description: "YouTube video id (play, 선택)" },
 			title: { type: "string", description: "제목 (play+videoId, 선택)" },
 			volume: { type: "number", description: "0.0~1.0 (volume)" },
+			playlistId: { type: "string", description: "플레이리스트 ID" },
+			name: { type: "string", description: "새 플레이리스트 이름" },
+			index: { type: "number", description: "재생할 플레이리스트 항목 번호(0부터)" },
+			enabled: { type: "boolean", description: "셔플 사용 여부" },
+			repeat: {
+				type: "string",
+				enum: ["off", "all", "one"],
+			},
 			mode: {
 				type: "string",
 				enum: ["player", "radio_dj"],
@@ -156,6 +174,7 @@ export interface BgmSkillDeps {
 	/** Number of YouTube favorites available to next/prev navigation. */
 	favoriteCount?: () => number;
 	favoriteTracks?: () => BgmSearchResult[];
+	library?: () => BgmLibraryState;
 	recentTracks?: () => BgmRecentTrack[];
 	now?: () => number;
 }
@@ -176,7 +195,17 @@ function isFavoriteTrack(item: unknown): item is BgmSearchResult {
  * clears it on mount).
  */
 export function persistedFavoriteTracks(): BgmSearchResult[] {
-	const stored = loadConfig()?.bgmYoutubeFavorites;
+	const config = loadConfig();
+	// SoT 는 샌드박스 — BgmPlayer 가 hydrate 한 캐시를 우선 읽는다.
+	const cachedLibrary = bgmLibraryCache();
+	if (cachedLibrary || config?.bgmLibrary) {
+		return (cachedLibrary ?? loadBgmLibrary(config?.bgmLibrary)).likes.flatMap((track) =>
+			track.source === "youtube" && track.youtubeId
+				? [{ id: track.youtubeId, title: track.title, thumbnail: track.thumbnail }]
+				: [],
+		);
+	}
+	const stored = config?.bgmYoutubeFavorites;
 	if (Array.isArray(stored)) return stored.filter(isFavoriteTrack);
 	try {
 		const parsed = JSON.parse(localStorage.getItem("yt-bgm-favorites") ?? "[]");
@@ -189,6 +218,10 @@ export function persistedFavoriteTracks(): BgmSearchResult[] {
 
 function persistedFavoriteCount(): number {
 	return persistedFavoriteTracks().length;
+}
+
+function persistedMusicLibrary(): BgmLibraryState {
+	return bgmLibraryCache() ?? loadBgmLibrary(loadConfig()?.bgmLibrary);
 }
 
 /** 사이드카 검색 — BgmPlayer.ytSearch 동형 표면(GET /yt/search?q=&max=). */
@@ -215,6 +248,7 @@ const defaultDeps: BgmSkillDeps = {
 	playback: bgmPlayback,
 	favoriteCount: persistedFavoriteCount,
 	favoriteTracks: persistedFavoriteTracks,
+	library: persistedMusicLibrary,
 	recentTracks: getBgmRecentTracks,
 };
 
@@ -478,6 +512,7 @@ export async function executeBgmSkill(
 			title: track.title,
 		}));
 		return JSON.stringify({
+			library: summarizeLibrary(deps.library?.()),
 			ok: true,
 			action: act,
 			...toBgmObservedContext(
@@ -556,6 +591,51 @@ export async function executeBgmSkill(
 		return output;
 	}
 
+	if (act === "playlist_list") {
+		return JSON.stringify({ ok: true, action: act, library: summarizeLibrary(deps.library?.()) });
+	}
+
+	if (act === "playlist_create") {
+		if (typeof args.name !== "string" || !args.name.trim())
+			return JSON.stringify({ ok: false, action: act, reason: "name_required" });
+		await deps.emitBgm({ type: "bgm_playlist_create", name: args.name.trim() });
+		return JSON.stringify({ ok: true, action: act, requestedName: args.name.trim() });
+	}
+
+	if (act === "playlist_add_current") {
+		const current = deps.playback.current();
+		if (!current)
+			return JSON.stringify({ ok: false, action: act, reason: "no_current_track" });
+		await deps.emitBgm({ type: "bgm_playlist_add_current", ...(typeof args.playlistId === "string" ? { playlistId: args.playlistId } : {}) });
+		return JSON.stringify({ ok: true, action: act, pending: true });
+	}
+
+	if (act === "playlist_play") {
+		if (typeof args.playlistId !== "string" || !args.playlistId.trim())
+			return JSON.stringify({ ok: false, action: act, reason: "playlist_id_required" });
+		await deps.emitBgm({ type: "bgm_playlist_play", playlistId: args.playlistId.trim(), index: Number.isFinite(Number(args.index)) ? Math.max(0, Math.trunc(Number(args.index))) : 0 });
+		return JSON.stringify({ ok: true, action: act, pending: true });
+	}
+
+	if (act === "shuffle") {
+		await deps.emitBgm({ type: "bgm_playlist_shuffle", enabled: args.enabled !== false });
+		return JSON.stringify({ ok: true, action: act, enabled: args.enabled !== false });
+	}
+
+	if (act === "repeat") {
+		const repeat = args.repeat === "all" || args.repeat === "one" ? args.repeat : "off";
+		await deps.emitBgm({ type: "bgm_playlist_repeat", repeat });
+		return JSON.stringify({ ok: true, action: act, repeat });
+	}
+
+	if (act === "like_add" || act === "like_remove") {
+		const current = deps.playback.current();
+		if (!current)
+			return JSON.stringify({ ok: false, action: act, reason: "no_current_track" });
+		await deps.emitBgm({ type: act === "like_add" ? "bgm_library_like_add" : "bgm_library_like_remove" });
+		return JSON.stringify({ ok: true, action: act, selected: current.selected });
+	}
+
 	if (act === "favorite_add" || act === "favorite_remove") {
 		const current = deps.playback.current();
 		if (!current) {
@@ -597,17 +677,6 @@ export async function executeBgmSkill(
 		return JSON.stringify({ ok: true, action: act, volume: v });
 	}
 
-	if (
-		(act === "next" || act === "prev") &&
-		(deps.favoriteCount?.() ?? 0) === 0
-	) {
-		return JSON.stringify({
-			ok: false,
-			action: act,
-			reason: "no_favorites",
-		});
-	}
-
 	// stop / pause / resume / next / prev — 위젯 리스너 타입 1:1
 	if (act === "stop" || act === "next" || act === "prev") {
 		cancelRadioDjRecovery();
@@ -615,4 +684,19 @@ export async function executeBgmSkill(
 	const eventType = `bgm_youtube_${act}`;
 	await deps.emitBgm({ type: eventType });
 	return JSON.stringify({ ok: true, action: act });
+}
+
+function summarizeLibrary(library: BgmLibraryState | undefined) {
+	if (!library) return null;
+	const active = library.playlists.find((playlist) => playlist.id === library.activePlaylistId);
+	return {
+		likesCount: library.likes.length,
+		activePlaylist: active
+			? { id: active.id, name: active.name, trackCount: active.tracks.length, currentIndex: library.currentIndex }
+			: null,
+		playlists: library.playlists.map((playlist) => ({ id: playlist.id, name: playlist.name, trackCount: playlist.tracks.length })),
+		queueLength: library.queue.length,
+		shuffle: library.shuffle,
+		repeat: library.repeat,
+	};
 }

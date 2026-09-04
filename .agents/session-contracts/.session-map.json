@@ -19,6 +19,11 @@
       "contract_id": "issue-447-v017-launch-qa",
       "contract_path": ".agents/session-contracts/issue-447-v017-launch-qa.json",
       "contract_digest": "7804b4a9efcd09795286ef33794ca4ebee35db43a1e3a60eb1a04342dca09cfe"
+    },
+    "01a05dd6-9f9e-7192-970a-20fe2250ba00": {
+      "contract_id": "app-sandbox-workspace-protocol-local-2026-09-02",
+      "contract_path": ".agents/session-contracts/app-sandbox-workspace-protocol-local-2026-09-02.json",
+      "contract_digest": "375873249ce0cb3f0bce87039aaa63f6705809a6101f8929b3a77083a3940090"
     }
   }
 }

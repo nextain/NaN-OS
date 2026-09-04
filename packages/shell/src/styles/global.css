@@ -2905,15 +2905,41 @@ body.resizing-row {
 }
 
 /* Keep the Codex readiness result and its action visibly separate. */
-.codex-readiness-actions {
+.codex-readiness-actions,
+.grok-readiness-actions {
 	display: flex;
 	align-items: center;
 	gap: 12px;
 	margin-top: 8px;
 }
 
-.codex-readiness-actions [aria-live] {
+.codex-readiness-actions [aria-live],
+.grok-readiness-actions [aria-live] {
 	flex: 1;
+	font-size: 12px;
+	color: var(--cream-dim);
+}
+
+/* 연결 확인 등 설정 화면 보조 버튼 — voice-preview-btn 과 같은 다크 테마 관례 */
+.btn-secondary {
+	padding: 4px 12px;
+	border-radius: 4px;
+	border: none;
+	background: var(--espresso-light);
+	color: var(--cream-dim);
+	font-size: 12px;
+	cursor: pointer;
+	white-space: nowrap;
+}
+
+.btn-secondary:hover:not(:disabled) {
+	background: var(--wood);
+	color: var(--cream);
+}
+
+.btn-secondary:disabled {
+	opacity: 0.5;
+	cursor: default;
 }
 
 /* Sub-fields shown conditionally below a dropdown — always full width, stacked */
@@ -5791,7 +5817,7 @@ body.resizing-row {
 	display: flex;
 	align-items: center;
 	/* Fixed width so the bar never jumps when track name changes */
-	width: 300px;
+	width: 380px;
 	flex-shrink: 0;
 	padding: 3px 8px;
 	background: rgba(8, 14, 28, 0.45);
@@ -5993,7 +6019,7 @@ body.resizing-row {
 }
 
 .bgm-yt-app {
-	width: min(320px, calc(100vw - 16px));
+	width: min(380px, calc(100vw - 16px));
 	/* height is controlled by inline style (drag-to-resize); max-height is a fallback */
 	max-height: min(700px, calc(100vh - 120px));
 	display: flex;
@@ -6121,6 +6147,25 @@ body.resizing-row {
 	padding: 4px 4px 12px;
 }
 
+/* 다크 스크롤바 — 기본 라이트 스크롤바가 어두운 패널에서 도드라진다 (UI QA). */
+.bgm-yt-list::-webkit-scrollbar,
+.bgm-yt-categories::-webkit-scrollbar {
+	width: 5px;
+}
+.bgm-yt-list::-webkit-scrollbar-track,
+.bgm-yt-categories::-webkit-scrollbar-track {
+	background: transparent;
+}
+.bgm-yt-list::-webkit-scrollbar-thumb,
+.bgm-yt-categories::-webkit-scrollbar-thumb {
+	background: rgba(255, 255, 255, 0.18);
+	border-radius: 3px;
+}
+.bgm-yt-list::-webkit-scrollbar-thumb:hover,
+.bgm-yt-categories::-webkit-scrollbar-thumb:hover {
+	background: rgba(255, 255, 255, 0.32);
+}
+
 .bgm-yt-status {
 	text-align: center;
 	color: rgba(255, 255, 255, 0.4);
@@ -6195,6 +6240,55 @@ body.resizing-row {
 	color: rgba(255, 200, 60, 0.9);
 }
 
+.bgm-like--on,
+.bgm-control--on {
+	color: rgba(255, 110, 140, 0.95);
+}
+
+.bgm-playlists {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	min-height: 0;
+}
+
+.bgm-playlist-toolbar,
+.bgm-playlist-create {
+	display: flex;
+	gap: 4px;
+	padding: 0 8px;
+}
+
+.bgm-playlist-toolbar select,
+.bgm-playlist-create input {
+	min-width: 0;
+	flex: 1;
+	border: 1px solid rgba(255, 255, 255, 0.15);
+	border-radius: 5px;
+	background: rgba(0, 0, 0, 0.25);
+	color: inherit;
+	padding: 4px 6px;
+}
+
+.bgm-playlist-track {
+	display: flex;
+	align-items: center;
+	gap: 7px;
+	min-width: 0;
+	flex: 1;
+	border: 0;
+	background: transparent;
+	color: inherit;
+	text-align: left;
+	cursor: pointer;
+}
+
+.bgm-playlist-track span:last-child {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
 .bgm-ai-toggle {
 	font-size: 14px;
 	padding: 0 4px;
@@ -6263,6 +6357,8 @@ body.resizing-row {
    Drag up/down to resize app height; click to toggle open/closed */
 .bgm-yt-drawer-handle {
 	flex-shrink: 0;
+	/* 콘텐츠가 짧아도 항상 패널 하단에 붙는다 (#540 UI QA) */
+	margin-top: auto;
 	width: 100%;
 	padding: 4px 16px 5px;
 	background: rgba(8, 14, 28, 0.6);
@@ -11765,4 +11861,24 @@ body.resizing-col * {
 	.channels-inbox-back {
 		display: block;
 	}
+}
+
+/* 플레이리스트 드래그 정렬 */
+.bgm-playlist-row {
+	cursor: grab;
+}
+.bgm-playlist-row--dragging {
+	opacity: 0.4;
+}
+.bgm-playlist-row--drop {
+	box-shadow: inset 0 2px 0 var(--sage);
+}
+.bgm-drag-handle {
+	touch-action: none;
+	flex-shrink: 0;
+	padding: 0 2px;
+	color: rgba(255, 255, 255, 0.3);
+	font-size: 10px;
+	cursor: grab;
+	user-select: none;
 }

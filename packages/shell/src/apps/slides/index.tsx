@@ -10,7 +10,7 @@ export const NAIA_SLIDES_DESCRIPTOR = {
 		{
 			name: "skill_slide_presenter",
 			description:
-				"Control the active Slides app. When the user asks to present, call start. Use question before answering a presentation question so automatic advance pauses. Answer from the active slide/deck context plus Naia's existing knowledge, then call resume only when the user asks to continue. Actions: start, pause, resume, stop, next, previous, goto, question, status, get_context.",
+				"Control the active Slides app. It supports starting from the selected 1-based page, focused presentation mode (slides with the Naia avatar), collapsible presenter notes, full-screen viewing, and MP4 recording of the Naia window saved to the app sandbox then opened in Workspace. When the user asks to present, call start. Use question before answering a presentation question so automatic advance pauses. Actions: start, pause, resume, stop, next, previous, goto, question, status, get_context.",
 			parameters: {
 				type: "object",
 				properties: {

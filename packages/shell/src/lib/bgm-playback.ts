@@ -164,11 +164,43 @@ export function createBgmPlaybackPort(
 
 /** Application instance. Tests use createBgmPlaybackPort for isolated state. */
 export const bgmPlayback = createBgmPlaybackPort();
+/**
+ * Prevent the generic browser tool from becoming a silent playback fallback
+ * for the exact video currently owned by the internal BGM state machine.
+ */
+export function isCurrentBgmYoutubeUrl(
+	rawUrl: string,
+	snapshot: BgmPlaybackSnapshot | null = bgmPlayback.current(),
+): boolean {
+	if (!snapshot || ["ended", "error"].includes(snapshot.status)) return false;
+	try {
+		const url = new URL(rawUrl);
+		const hostname = url.hostname.toLowerCase();
+		let videoId = "";
+		if (hostname === "youtu.be" || hostname.endsWith(".youtu.be")) {
+			videoId = url.pathname.split("/").filter(Boolean)[0] ?? "";
+		} else if (
+			hostname === "youtube.com" ||
+			hostname.endsWith(".youtube.com") ||
+			hostname === "youtube-nocookie.com" ||
+			hostname.endsWith(".youtube-nocookie.com")
+		) {
+			videoId = url.searchParams.get("v") ?? "";
+			if (!videoId && url.pathname.startsWith("/embed/")) {
+				videoId = url.pathname.split("/")[2] ?? "";
+			}
+		}
+		return videoId === snapshot.selected.videoId;
+	} catch {
+		return false;
+	}
+}
+
 
 /**
  * Tool result deliberately has no top-level `title`/`currentlyPlaying` field.
- * LLMs may acknowledge a selected track, but must not introduce it until this
- * exact snapshot has an observed, fresh `playing` status.
+ * A request receipt deliberately withholds track metadata so a model cannot
+ * turn a pending selection into a false "now playing" claim.
  */
 export function toBgmPlayToolResult(snapshot: BgmPlaybackSnapshot) {
 	return {
@@ -182,10 +214,12 @@ export function toBgmPlayToolResult(snapshot: BgmPlaybackSnapshot) {
 			updatedAt: snapshot.updatedAt,
 			freshUntil: snapshot.freshUntil,
 		},
-		selected: snapshot.selected,
 		announceTrack: snapshot.status === "playing",
+		...(snapshot.status === "playing"
+			? { currentTrack: snapshot.selected }
+			: {}),
 		instruction:
-			"This only confirms the play request. Do not say the selected track is playing or introduce its title until a later observation has status=playing and announceTrack=true.",
+			"The internal Naia BGM request was accepted but playback is not confirmed. Do not say music is playing, do not name a pending track, and do not open YouTube in the browser as a fallback. Check action=status until status=playing and announceTrack=true.",
 	};
 }
 

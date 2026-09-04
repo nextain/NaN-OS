@@ -28,6 +28,7 @@ import {
 	requestSlidePresenterSpeech,
 } from "../../lib/slide-presenter-events";
 import { useTabSkills } from "../../lib/tab-skills";
+import { startSlidesRecording, stopSlidesRecording } from "../../lib/app-sandbox";
 import { useAppStore } from "../../stores/app";
 import "./slides.css";
 
@@ -66,6 +67,10 @@ export function SlidesCenterArea({ naia }: AppCenterProps) {
 	const [pageTexts, setPageTexts] = useState<string[]>([]);
 	const [viewerWidth, setViewerWidth] = useState(960);
 	const viewerRef = useRef<HTMLDivElement>(null);
+	const [recording, setRecording] = useState(false);
+	const [recordingError, setRecordingError] = useState<string | null>(null);
+	const [focusMode, setFocusMode] = useState(false);
+	const [notesVisible, setNotesVisible] = useState(true);
 	const activeSpeechRef = useRef<string | null>(null);
 	const notesRef = useRef(speakerNotes);
 	const pageTextsRef = useRef(pageTexts);
@@ -227,6 +232,16 @@ export function SlidesCenterArea({ naia }: AppCenterProps) {
 	}, [runAction]);
 
 	useEffect(() => {
+		const onFocusShortcut = (event: KeyboardEvent) => {
+			if (event.key.toLowerCase() !== "f") return;
+			if ((event.target as HTMLElement | null)?.matches("input, textarea, select")) return;
+			event.preventDefault();
+			setFocusMode((focused) => !focused);
+		};
+		window.addEventListener("keydown", onFocusShortcut);
+		return () => window.removeEventListener("keydown", onFocusShortcut);
+	}, []);
+	useEffect(() => {
 		const context = {
 			type: "slides",
 			data: {
@@ -333,11 +348,31 @@ export function SlidesCenterArea({ naia }: AppCenterProps) {
 		Logger.info(TAG, "speaker script loaded", { fileName: file.name });
 	}
 
+	async function toggleRecording() {
+		try {
+			setRecordingError(null);
+			if (!recording) {
+				await startSlidesRecording();
+				setRecording(true);
+				return;
+			}
+			const output = await stopSlidesRecording();
+			setRecording(false);
+			const fileName = output.split(/[\\/]/).pop();
+			if (fileName) await naia.openInWorkspace?.(`video/${fileName}`);
+		} catch (error) {
+			setRecording(false);
+			setRecordingError(String(error));
+		}
+	}
+
 	return (
 		<section
 			className="slides-app"
 			aria-label={t("slides.title")}
+			data-focus={focusMode}
 			data-state={state.mode}
+			data-notes-visible={notesVisible}
 		>
 			<header className="slides-app__header">
 				<div>
@@ -378,8 +413,22 @@ export function SlidesCenterArea({ naia }: AppCenterProps) {
 							}}
 						/>
 					</label>
+				<button
+					type="button"
+					className="slides-app__focus-button"
+					onClick={() => setFocusMode((focused) => !focused)}
+				>
+					{focusMode ? t("slides.focusExit") : t("slides.focusStart")}
+				</button>
 				</div>
 			</header>
+				<button
+					type="button"
+					className="slides-app__focus-button"
+					onClick={() => setNotesVisible((visible) => !visible)}
+				>
+					{notesVisible ? t("slides.notesHide") : t("slides.notesShow")}
+				</button>
 
 			<output className="slides-app__status" aria-live="polite">
 				<span className="slides-app__state-dot" />
@@ -537,11 +586,22 @@ export function SlidesCenterArea({ naia }: AppCenterProps) {
 				>
 					{t("slides.fullscreen")}
 				</button>
+				<button
+					type="button"
+					onClick={() => void toggleRecording()}
+					disabled={state.totalPages === 0}
+					aria-label={recording ? t("slides.recordStop") : t("slides.recordStart")}
+				>
+					{recording ? t("slides.recordStop") : t("slides.recordStart")}
+				</button>
 			</footer>
 			{state.error ? (
 				<div className="slides-app__error" role="alert">
 					{t("slides.speechError")}
 				</div>
+			) : null}
+			{recordingError ? (
+				<div className="slides-app__error" role="alert">{recordingError}</div>
 			) : null}
 		</section>
 	);

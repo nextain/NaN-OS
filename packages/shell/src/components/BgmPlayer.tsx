@@ -10,6 +10,23 @@ import { t } from "../lib/i18n";
 import { emitAiInterferenceEvent } from "../lib/ai-interference";
 import { loadConfig, saveConfig } from "../lib/config";
 import {
+	addTrackToPlaylist,
+	createPlaylist,
+	loadBgmLibrary,
+	movePlaylistTrack,
+	nextPlaylistIndex,
+	removeTrackFromPlaylist,
+	toggleBgmLike,
+	trackIdentity,
+	type BgmLibraryState,
+	type BgmLibraryTrack,
+} from "../lib/bgm-library";
+import {
+	bgmLibraryCache,
+	loadBgmLibraryFromSandbox,
+	persistBgmLibrary,
+} from "../lib/bgm-library-store";
+import {
 	bgmPlayback,
 	toBgmObservedContext,
 	type BgmPlaybackSnapshot,
@@ -62,6 +79,16 @@ const CATEGORIES = [
 		id: "lofi",
 		labelKey: "bgm.cat.lofi",
 		query: "lofi hip hop beats to study relax",
+	},
+	{
+		id: "kpop",
+		labelKey: "bgm.cat.kpop",
+		query: "kpop hits popular songs playlist",
+	},
+	{
+		id: "jpop",
+		labelKey: "bgm.cat.jpop",
+		query: "jpop hits popular songs playlist",
 	},
 	{
 		id: "rain",
@@ -134,8 +161,8 @@ const CATEGORIES = [
 		query: "new age relaxing music 1 hour",
 	},
 	{
-		id: "jpop",
-		labelKey: "bgm.cat.jpop",
+		id: "citypop",
+		labelKey: "bgm.cat.citypop",
 		query: "japanese city pop bgm 1 hour aesthetic",
 	},
 ] as const;
@@ -180,19 +207,6 @@ function loadFavs(): YtVideo[] {
 	return readLegacyLocalFavs();
 }
 
-function saveFavs(favs: YtVideo[]) {
-	const cfg = loadConfig();
-	if (cfg) {
-		saveConfig({ ...cfg, bgmYoutubeFavorites: favs });
-		return;
-	}
-	// Config not hydrated yet — keep the legacy copy so the edit is not lost;
-	// the one-time migration picks it up on the next boot.
-	try {
-		localStorage.setItem(FAV_KEY, JSON.stringify(favs));
-	} catch {}
-}
-
 // ── App height ──────────────────────────────────────────────────────────────
 
 interface Props {
@@ -200,8 +214,39 @@ interface Props {
 }
 
 type Source = "local" | "youtube";
-type AppTab = "youtube" | "local";
-type YtView = "categories" | "search" | "favorites";
+type AppTab = "youtube" | "local" | "playlists";
+type YtView = "categories" | "search" | "likes" | "playlists";
+
+function ytVideoToLibraryTrack(video: YtVideo): BgmLibraryTrack {
+	return {
+		id: `youtube:${video.id}`,
+		source: "youtube",
+		youtubeId: video.id,
+		title: video.title,
+		thumbnail: video.thumbnail,
+		channel: video.channel,
+	};
+}
+
+function libraryTrackToYtVideo(track: BgmLibraryTrack): YtVideo | null {
+	if (track.source !== "youtube" || !track.youtubeId) return null;
+	return {
+		id: track.youtubeId,
+		title: track.title,
+		thumbnail: track.thumbnail ?? "",
+		duration: track.durationSeconds ? String(track.durationSeconds) : "",
+		channel: track.channel ?? "",
+	};
+}
+
+function localLibraryTrack(path: string, title: string): BgmLibraryTrack {
+	return {
+		id: `local:${path}`,
+		source: "local",
+		path,
+		title,
+	};
+}
 
 const YT_APP_H_KEY = "yt-app-height";
 const YT_APP_H_DEFAULT = 360;
@@ -259,7 +304,9 @@ export function BgmPlayer({ naia }: Props) {
 	const prevBgVideoRef = useRef<string>("");
 	const prevBgMediaRef = useRef<BackgroundMediaType>("");
 	const [localTracks, setLocalTracks] = useState<string[]>([]);
+	const [localPaths, setLocalPaths] = useState<string[]>([]);
 	const [localNames, setLocalNames] = useState<string[]>([]);
+	const localPathsRef = useRef<string[]>([]);
 	const [localIndex, setLocalIndex] = useState(0);
 
 	useEffect(() => {
@@ -272,6 +319,8 @@ export function BgmPlayer({ naia }: Props) {
 						.pop()
 						?.replace(/\.[^.]+$/, "") ?? p,
 			);
+			localPathsRef.current = paths;
+			setLocalPaths(paths);
 			setLocalTracks(urls);
 			setLocalNames(names);
 			if (urls.length > 0 && !bgmTrackUrl) setBgmTrackUrl(urls[0]);
@@ -312,13 +361,72 @@ export function BgmPlayer({ naia }: Props) {
 	const [appExpanded, setAppExpanded] = useState(false);
 	const [appTab, setAppTab] = useState<AppTab>("youtube");
 
+	const [library, setLibrary] = useState<BgmLibraryState>(() => {
+		// 첫 페인트는 캐시/구 config 로 즉시, 진짜 SoT(샌드박스)는 마운트 효과가 hydrate.
+		const cached = bgmLibraryCache();
+		if (cached) return cached;
+		const cfg = loadConfig();
+		return loadBgmLibrary(
+			cfg?.bgmLibrary,
+			loadFavs().map(ytVideoToLibraryTrack),
+		);
+	});
+	const libraryRef = useRef(library);
+	const [newPlaylistName, setNewPlaylistName] = useState("");
+	// 플레이리스트 드래그 정렬 — HTML5 DnD, 놓는 순간 한 번만 이동한다.
+	const [dragTrackIndex, setDragTrackIndex] = useState<number | null>(null);
+	const [dragOverTrackIndex, setDragOverTrackIndex] = useState<number | null>(null);
+	const dragOverRef = useRef<number | null>(null);
+
+	// 포인터 기반 정렬 (#543): Tauri 창 drag-drop(파일 열기)이 켜져 있으면
+	// WebView2 에서 HTML5 DnD 가 성립하지 않는다 — 손잡이 pointerdown 으로 시작해
+	// document 포인터 이동/업으로 목적지를 정한다.
+	useEffect(() => {
+		if (dragTrackIndex === null) return;
+		const onMove = (event: PointerEvent) => {
+			const row = (
+				document.elementFromPoint(event.clientX, event.clientY) as HTMLElement | null
+			)?.closest?.("[data-track-index]") as HTMLElement | null;
+			if (!row) return;
+			const over = Number(row.dataset.trackIndex);
+			if (Number.isInteger(over)) {
+				dragOverRef.current = over;
+				setDragOverTrackIndex(over);
+			}
+		};
+		const onUp = () => {
+			const from = dragTrackIndex;
+			const to = dragOverRef.current;
+			const playlistId = libraryRef.current.activePlaylistId;
+			if (playlistId && to !== null && to !== from) {
+				updateLibrary((state) => movePlaylistTrack(state, playlistId, from, to));
+			}
+			dragOverRef.current = null;
+			setDragTrackIndex(null);
+			setDragOverTrackIndex(null);
+		};
+		document.addEventListener("pointermove", onMove);
+		document.addEventListener("pointerup", onUp, { once: true });
+		return () => {
+			document.removeEventListener("pointermove", onMove);
+			document.removeEventListener("pointerup", onUp);
+		};
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [dragTrackIndex]);
+	const activePlaylist =
+		library.playlists.find((playlist) => playlist.id === library.activePlaylistId) ??
+		library.playlists[0];
+	const favs = library.likes.flatMap((track) => {
+		const video = libraryTrackToYtVideo(track);
+		return video ? [video] : [];
+	});
+
 	// ── YouTube state ─────────────────────────────────────────────────────────
 	const [ytView, setYtView] = useState<YtView>("categories");
 	const [searchQuery, setSearchQuery] = useState("");
 	const [searchResults, setSearchResults] = useState<YtVideo[]>([]);
 	const [searching, setSearching] = useState(false);
 	const [searchError, setSearchError] = useState<string | null>(null);
-	const [favs, setFavs] = useState<YtVideo[]>(loadFavs);
 	const [currentYt, setCurrentYt] = useState<YtVideo | null>(() => {
 		const cfg = loadConfig();
 		if (cfg?.bgmYoutubeVideoId) {
@@ -340,6 +448,23 @@ export function BgmPlayer({ naia }: Props) {
 	useEffect(() => {
 		volumeRef.current = volume;
 	}, [volume]);
+
+	function updateLibrary(
+		updater: (current: BgmLibraryState) => BgmLibraryState,
+	) {
+		setLibrary((current) => {
+			const next = updater(current);
+			libraryRef.current = next;
+			if (next !== current) {
+				void persistBgmLibrary(next);
+			}
+			return next;
+		});
+	}
+
+	useEffect(() => {
+		libraryRef.current = library;
+	}, [library]);
 
 	function clearPlaybackTimeout() {
 		if (playbackTimeoutRef.current) {
@@ -380,11 +505,18 @@ export function BgmPlayer({ naia }: Props) {
 			setVideoLive(true);
 		} else if (
 			status === "error" ||
-			status === "timeout" ||
 			status === "ended"
 		) {
 			setVideoLive(false);
 		}
+		if (status === "playing" && current.status !== "playing") {
+			emitAiInterferenceEvent({
+				source: "bgm",
+				action: "music_started",
+				summary: `BGM: internal playback of "${next.selected.title}" is now confirmed playing.`,
+			});
+		}
+
 		if (status === "error" || status === "timeout") {
 			emitAiInterferenceEvent({
 				source: "bgm",
@@ -543,20 +675,46 @@ export function BgmPlayer({ naia }: Props) {
 	// `setVolume` postMessages are silently ignored by the player.
 	useEffect(() => {
 		function onYtMessage(e: MessageEvent) {
-			if (!e.data || typeof e.data !== "string") return;
+			if (!e.data) return;
 			const activeIframe = document.querySelector(
 				".app-bg-iframe",
 			) as HTMLIFrameElement | null;
+			if (!activeIframe) return;
 			if (
-				activeIframe?.contentWindow &&
+				activeIframe.contentWindow &&
 				e.source &&
 				e.source !== activeIframe.contentWindow
 			) {
 				observationCountersRef.current.filteredOut++; // #521
 				return;
 			}
+			const allowedOrigin = (() => {
+				if (!e.origin) return true;
+				// same-origin = E2E 픽스처 iframe 과 자기 브리지 — 항상 신뢰.
+				if (e.origin === window.location.origin) return true;
+				try {
+					const hostname = new URL(e.origin).hostname;
+					return (
+						hostname === "youtube.com" ||
+						hostname.endsWith(".youtube.com") ||
+						hostname === "youtube-nocookie.com" ||
+						hostname.endsWith(".youtube-nocookie.com")
+					);
+				} catch {
+					return false;
+				}
+			})();
+			if (!allowedOrigin) {
+				observationCountersRef.current.filteredOut++; // #521
+				Logger.warn("BgmPlayer", "ignored iframe message from unexpected origin", {
+					origin: e.origin,
+				});
+				return;
+			}
 			try {
-				const msg = JSON.parse(e.data) as Record<string, unknown>;
+				const msg = (typeof e.data === "string"
+					? JSON.parse(e.data)
+					: e.data) as Record<string, unknown>;
 				observationCountersRef.current.received++; // #521
 				const eventPlaybackId = activeIframe
 					? (new URL(activeIframe.src, window.location.href).searchParams.get(
@@ -571,10 +729,33 @@ export function BgmPlayer({ naia }: Props) {
 				) {
 					counters.idMismatched++;
 				}
+				if (
+					["initialDelivery", "onReady", "onStateChange", "onError"].includes(
+						String(msg.event),
+					)
+				) {
+					Logger.debug("BgmPlayer", "YouTube iframe event", {
+						event: msg.event,
+						eventPlaybackId,
+					});
+				}
 				if (msg.event === "onStateChange") {
 					counters.stateChangeSeen = true; // #521
 					const state = Number(msg.info ?? msg.data);
 					if (state === 1) {
+						if (
+							eventPlaybackId &&
+							manuallyStoppedPlaybackRef.current === eventPlaybackId
+						) {
+							// A stale PLAYING event can arrive after stopVideo in WebView2.
+							// Manual stop wins; reaffirm it instead of resurrecting playback.
+							activeIframe.contentWindow?.postMessage(
+								JSON.stringify({ event: "command", func: "stopVideo", args: [] }),
+								"*",
+							);
+							setPlaying(false);
+							return;
+						}
 						manuallyStoppedPlaybackRef.current = null;
 						setPlaying(true);
 						const observed = observePlayback("playing", {
@@ -603,7 +784,7 @@ export function BgmPlayer({ naia }: Props) {
 							playbackId: eventPlaybackId,
 						});
 						if (!ended) return;
-						const continued = startNextQueuedTrack("ended");
+						const continued = startNextQueuedTrack("ended") || playNext();
 						// Notify the agent the moment a track genuinely ends (not on a
 						// timer — this is the real onStateChange ENDED event), the same
 						// way a new track start already does via "music_changed". Without
@@ -631,6 +812,11 @@ export function BgmPlayer({ naia }: Props) {
 						const current = bgmPlayback.current();
 						const isSamePlayback =
 							!!current?.playbackId && current.playbackId === eventPlaybackId;
+						if (
+							eventPlaybackId &&
+							manuallyStoppedPlaybackRef.current === eventPlaybackId
+						)
+							return;
 						// The iframe bridge can lose the onStateChange "playing" (state=1)
 						// message after a src swap (WebView2 handshake loss — see
 						// sendYtCmd's re-listen comment) even though audio is genuinely
@@ -695,6 +881,16 @@ export function BgmPlayer({ naia }: Props) {
 						JSON.stringify({ event: "listening" }),
 						"*",
 					);
+					const current = bgmPlayback.current();
+					if (
+						current && current.playbackId === eventPlaybackId &&
+						["requested", "loading", "timeout"].includes(current.status)
+					) {
+						iframe.contentWindow.postMessage(
+							JSON.stringify({ event: "command", func: "playVideo", args: [] }),
+							"*",
+						);
+					}
 					iframe.contentWindow.postMessage(
 						JSON.stringify({
 							event: "command",
@@ -704,7 +900,11 @@ export function BgmPlayer({ naia }: Props) {
 						"*",
 					);
 				}
-			} catch {}
+			} catch (error) {
+				Logger.warn("BgmPlayer", "invalid YouTube iframe message", {
+					error: String(error),
+				});
+			}
 		}
 		window.addEventListener("message", onYtMessage);
 		return () => window.removeEventListener("message", onYtMessage);
@@ -749,21 +949,22 @@ export function BgmPlayer({ naia }: Props) {
 	}, [bgmTrackUrl, localTracks, playing, source]);
 
 	// ── AI command listener ───────────────────────────────────────────────────
-	// Expose currentYt + favs via ref so the listener (created once) can see latest values
+	// Expose currentYt via ref so the listener (created once) can see latest values.
 	const currentYtRef = useRef<YtVideo | null>(null);
-	const favsRef = useRef<YtVideo[]>([]);
 	useEffect(() => {
 		currentYtRef.current = currentYt;
 	}, [currentYt]);
-	useEffect(() => {
-		favsRef.current = favs;
-	}, [favs]);
 
 	useEffect(() => {
 		const handleBgmEvent = (e: { payload: string }) => {
 			try {
 				const msg = JSON.parse(e.payload) as Record<string, unknown>;
 				if (msg.type === "bgm_youtube_play") {
+				Logger.info("BgmPlayer", "received BGM command", {
+					type: msg.type,
+					playbackId: msg.playbackId,
+					videoId: msg.videoId,
+				});
 					const video: YtVideo = {
 						id: String(msg.videoId ?? ""),
 						title: String(msg.title ?? ""),
@@ -811,45 +1012,27 @@ export function BgmPlayer({ naia }: Props) {
 					setPlaybackSnapshot(bgmPlayback.current());
 					setQueueVersion((version) => version + 1);
 				} else if (msg.type === "bgm_youtube_fav_add") {
-					// Add currently playing YT track to favorites (or explicit videoId)
-					const selected = bgmPlayback.current()?.selected;
-					const cur =
-						currentYtRef.current ??
-						(selected
-							? {
-									id: selected.videoId,
-									title: selected.title,
-									thumbnail: "",
-									duration: "",
-									channel: "",
-								}
-							: null);
+					const cur = currentYtRef.current;
 					if (!cur) return;
-					setFavs((prev) => {
-						if (prev.some((f) => f.id === cur.id)) return prev; // already added
-						const next = [cur, ...prev].slice(0, 50);
-						saveFavs(next);
-						return next;
-					});
+					if (
+						!libraryRef.current.likes.some(
+							(track) => trackIdentity(track) === `youtube:${cur.id}`,
+						)
+					)
+						updateLibrary((state) =>
+							toggleBgmLike(state, ytVideoToLibraryTrack(cur)),
+						);
 				} else if (msg.type === "bgm_youtube_fav_remove") {
-					const selected = bgmPlayback.current()?.selected;
-					const cur =
-						currentYtRef.current ??
-						(selected
-							? {
-									id: selected.videoId,
-									title: selected.title,
-									thumbnail: "",
-									duration: "",
-									channel: "",
-								}
-							: null);
+					const cur = currentYtRef.current;
 					if (!cur) return;
-					setFavs((prev) => {
-						const next = prev.filter((f) => f.id !== cur.id);
-						saveFavs(next);
-						return next;
-					});
+					if (
+						libraryRef.current.likes.some(
+							(track) => trackIdentity(track) === `youtube:${cur.id}`,
+						)
+					)
+						updateLibrary((state) =>
+							toggleBgmLike(state, ytVideoToLibraryTrack(cur)),
+						);
 				} else if (msg.type === "bgm_youtube_pause") {
 					const iframe = document.querySelector(
 						".app-bg-iframe",
@@ -871,25 +1054,31 @@ export function BgmPlayer({ naia }: Props) {
 						);
 					}
 				} else if (msg.type === "bgm_youtube_next") {
-					const curFavs = favsRef.current;
-					const curYt = currentYtRef.current;
-					if (curFavs.length > 0) {
-						const curIdx = curYt
-							? curFavs.findIndex((f) => f.id === curYt.id)
-							: -1;
-						handleYtSelect(curFavs[(curIdx + 1) % curFavs.length]);
-					}
+					playNext();
 				} else if (msg.type === "bgm_youtube_prev") {
-					const curFavs = favsRef.current;
-					const curYt = currentYtRef.current;
-					if (curFavs.length > 0) {
-						const curIdx = curYt
-							? curFavs.findIndex((f) => f.id === curYt.id)
-							: 0;
-						handleYtSelect(
-							curFavs[(curIdx - 1 + curFavs.length) % curFavs.length],
-						);
+					playPrev();
+				} else if (msg.type === "bgm_playlist_create") {
+					updateLibrary((state) => createPlaylist(state, String(msg.name ?? "")));
+				} else if (msg.type === "bgm_playlist_shuffle") {
+					updateLibrary((state) => ({ ...state, shuffle: msg.enabled !== false }));
+				} else if (msg.type === "bgm_playlist_repeat") {
+					const repeat = msg.repeat === "all" || msg.repeat === "one" ? msg.repeat : "off";
+					updateLibrary((state) => ({ ...state, repeat }));
+				} else if (msg.type === "bgm_playlist_add_current") {
+					const video = currentYtRef.current;
+					if (video) {
+						const playlistId = typeof msg.playlistId === "string" ? msg.playlistId : libraryRef.current.activePlaylistId;
+						if (playlistId) updateLibrary((state) => addTrackToPlaylist(state, playlistId, ytVideoToLibraryTrack(video)));
 					}
+				} else if (msg.type === "bgm_playlist_play") {
+					const playlist = libraryRef.current.playlists.find((item) => item.id === msg.playlistId);
+					const index = Math.max(0, Math.trunc(Number(msg.index) || 0));
+					if (playlist?.tracks[index]) playLibraryTrack(playlist.tracks[index], index, playlist.id);
+				} else if (msg.type === "bgm_library_like_add" || msg.type === "bgm_library_like_remove") {
+					const video = currentYtRef.current;
+					if (!video) return;
+					const liked = libraryRef.current.likes.some((track) => trackIdentity(track) === `youtube:${video.id}`);
+					if ((msg.type === "bgm_library_like_add" && !liked) || (msg.type === "bgm_library_like_remove" && liked)) updateLibrary((state) => toggleBgmLike(state, ytVideoToLibraryTrack(video)));
 				} else if (msg.type === "bgm_youtube_volume") {
 					const val = Number(msg.volume ?? 0.5);
 					if (val >= 0 && val <= 1) setVolume(val);
@@ -922,7 +1111,8 @@ export function BgmPlayer({ naia }: Props) {
 			return;
 		}
 		const rect = playerRef.current.getBoundingClientRect();
-		const APP_W = Math.min(320, window.innerWidth - 16);
+		// CSS .bgm-yt-app 의 width(380px)와 반드시 같은 값 — 어긋나면 우측 정렬 계산이 밀린다.
+		const APP_W = Math.min(380, window.innerWidth - 16);
 		// Right-align app to player's right edge, clamp so it doesn't overflow screen
 		const safeLeft = Math.max(
 			8,
@@ -932,24 +1122,15 @@ export function BgmPlayer({ naia }: Props) {
 	}, [appExpanded, ytAppHeight]);
 
 	// ── BGM state persistence ─────────────────────────────────────────────────
-	// #476 — one-time favorites migration: webview localStorage → workspace SoT.
-	// Favorites are user data; the webview profile dies on reinstall/update and
-	// differs between dev and installed builds, so the naia-settings config copy
-	// is authoritative once it exists.
+	// SoT = 앱 샌드박스 (app-store-protocol). 파일이 없으면 구 config/localStorage
+	// 즐겨찾기를 1회 이관한다.
 	useEffect(() => {
-		const cfg = loadConfig();
-		if (!cfg) return; // not hydrated — retry on a later boot
-		if (Array.isArray(cfg.bgmYoutubeFavorites)) {
-			// Workspace copy is authoritative — drop any stale legacy copy.
-			try {
-				localStorage.removeItem(FAV_KEY);
-			} catch {}
-			return;
-		}
-		const legacy = readLegacyLocalFavs();
-		if (legacy.length === 0) return;
-		saveConfig({ ...cfg, bgmYoutubeFavorites: legacy });
-		setFavs(legacy);
+		void loadBgmLibraryFromSandbox(loadFavs().map(ytVideoToLibraryTrack)).then(
+			(state) => {
+				libraryRef.current = state;
+				setLibrary(state);
+			},
+		);
 		try {
 			localStorage.removeItem(FAV_KEY);
 		} catch {}
@@ -1063,7 +1244,8 @@ export function BgmPlayer({ naia }: Props) {
 			type: "bgm",
 			data: {
 				source,
-				playing,
+				playing: observed.announceTrack,
+				playIntentActive: playing,
 				volume,
 				...observed,
 				// YouTube info
@@ -1077,13 +1259,25 @@ export function BgmPlayer({ naia }: Props) {
 				currentChannel: observed.announceTrack
 					? (currentYt?.channel ?? null)
 					: null,
-				isCurrentFavorited: currentYt
+				isCurrentLiked: currentYt
 					? favs.some((f) => f.id === currentYt.id)
 					: false,
-				favoritesCount: favs.length,
-				favoritesList: favs
+				likesCount: library.likes.length,
+				likesList: library.likes
 					.slice(0, 10)
-					.map((f) => ({ id: f.id, title: f.title })),
+					.map((track) => ({ id: track.id, title: track.title, source: track.source })),
+				activePlaylist: activePlaylist
+					? {
+							id: activePlaylist.id,
+							name: activePlaylist.name,
+							trackCount: activePlaylist.tracks.length,
+							currentIndex: library.currentIndex,
+						}
+					: null,
+				playlists: library.playlists.map((playlist) => ({ id: playlist.id, name: playlist.name, trackCount: playlist.tracks.length })),
+				shuffle: library.shuffle,
+				repeat: library.repeat,
+				libraryQueueLength: library.queue.length,
 				recentlyPlayedList: getBgmRecentTracks().map((track) => ({
 					id: track.id,
 					title: track.title,
@@ -1107,7 +1301,7 @@ export function BgmPlayer({ naia }: Props) {
 		playbackSnapshot,
 		queueVersion,
 		currentYt,
-		favs,
+		library,
 		localNames,
 		localIndex,
 		localTracks.length,
@@ -1128,14 +1322,14 @@ export function BgmPlayer({ naia }: Props) {
 		setCurrentYt(video);
 		lastYtRef.current = video;
 		setSource("youtube");
-		// Iframe replacement is a request, not observed audio playback.
-		setPlaying(false);
-		// A fresh iframe is unconfirmed until this playback is observed playing.
-		setVideoLive(false);
+		// Reflect the user's autoplay intent immediately in the controls and in
+		// the checked background surface. Agent truth remains observation-gated.
+		setPlaying(true);
+		setVideoLive(true);
 		emitAiInterferenceEvent({
 			source: "bgm",
-			action: "music_changed",
-			summary: `BGM: YouTube "${video.title}" playback requested`,
+			action: "music_requested",
+			summary: "BGM: internal YouTube playback was requested; it is not playing until a later music_started event confirms it.",
 		});
 
 		if (!prevBgVideoRef.current && prevBgMediaRef.current === "") {
@@ -1190,7 +1384,10 @@ export function BgmPlayer({ naia }: Props) {
 					// No iframe yet (e.g. restored from config) — reload the video
 					handleYtSelect(currentYt);
 				} else {
-					sendYtCmd("playVideo");
+					if (sendYtCmd("playVideo")) {
+						setPlaying(true);
+						setVideoLive(true);
+					}
 				}
 			}
 			return;
@@ -1239,33 +1436,46 @@ export function BgmPlayer({ naia }: Props) {
 			.catch(() => {});
 	}
 
-	function playNext() {
-		if (source === "local") {
-			playLocalAt((localIndex + 1) % Math.max(localTracks.length, 1));
-		} else if (source === "youtube" && favs.length > 0) {
-			// YouTube: cycle through favorites
-			const curIdx = currentYt
-				? favs.findIndex((f) => f.id === currentYt.id)
-				: -1;
-			const nextIdx = (curIdx + 1) % favs.length;
-			handleYtSelect(favs[nextIdx]);
+	function playLibraryTrack(track: BgmLibraryTrack, index: number, playlistId: string) {
+		updateLibrary((state) => ({ ...state, activePlaylistId: playlistId, currentIndex: index }));
+		if (track.source === "youtube") {
+			const video = libraryTrackToYtVideo(track);
+			if (video) handleYtSelect(video);
+			return;
 		}
+		const paths = localPathsRef.current;
+		const exact = track.path ? paths.indexOf(track.path) : -1;
+		const fileName = track.path?.split(/[\\/]/).pop()?.toLocaleLowerCase();
+		const fallback = exact >= 0 ? exact : paths.findIndex((path) => path.split(/[\\/]/).pop()?.toLocaleLowerCase() === fileName);
+		if (fallback >= 0) {
+			playLocalAt(fallback);
+			return;
+		}
+		// Restored metadata may outlive a local file. Keep the player usable by
+		// connecting to the first bundled/default naia-settings BGM when present.
+		if (paths.length > 0) playLocalAt(0);
+	}
+
+	function playNext(): boolean {
+		const state = libraryRef.current;
+		if (state.queue.length > 0) {
+			const [track, ...queue] = state.queue;
+			updateLibrary((current) => ({ ...current, queue }));
+			playLibraryTrack(track, state.currentIndex, state.activePlaylistId ?? activePlaylist.id);
+			return true;
+		}
+		const nextIndex = nextPlaylistIndex(state, 1);
+		const playlist = state.playlists.find((item) => item.id === state.activePlaylistId);
+		if (!playlist || nextIndex < 0) return false;
+		playLibraryTrack(playlist.tracks[nextIndex], nextIndex, playlist.id);
+		return true;
 	}
 
 	function playPrev() {
-		if (source === "local") {
-			playLocalAt(
-				(localIndex - 1 + Math.max(localTracks.length, 1)) %
-					Math.max(localTracks.length, 1),
-			);
-		} else if (source === "youtube" && favs.length > 0) {
-			// YouTube: cycle through favorites in reverse
-			const curIdx = currentYt
-				? favs.findIndex((f) => f.id === currentYt.id)
-				: 0;
-			const prevIdx = (curIdx - 1 + favs.length) % favs.length;
-			handleYtSelect(favs[prevIdx]);
-		}
+		const state = libraryRef.current;
+		const prevIndex = nextPlaylistIndex(state, -1);
+		const playlist = state.playlists.find((item) => item.id === state.activePlaylistId);
+		if (playlist && prevIndex >= 0) playLibraryTrack(playlist.tracks[prevIndex], prevIndex, playlist.id);
 	}
 
 	// ── Search ────────────────────────────────────────────────────────────────
@@ -1303,21 +1513,40 @@ export function BgmPlayer({ naia }: Props) {
 		await doSearch(query);
 	}
 
-	// ── Favorites ─────────────────────────────────────────────────────────────
+	// ── Likes and playlists ───────────────────────────────────────────────────
 
 	function isFav(id: string) {
 		return favs.some((f) => f.id === id);
 	}
 
 	function toggleFav(video: YtVideo) {
-		setFavs((prev) => {
-			const next = isFav(video.id)
-				? prev.filter((f) => f.id !== video.id)
-				: [video, ...prev].slice(0, 50);
-			saveFavs(next);
-			return next;
-		});
+		updateLibrary((state) => toggleBgmLike(state, ytVideoToLibraryTrack(video)));
 	}
+
+	function addToActivePlaylist(track: BgmLibraryTrack) {
+		const playlistId = libraryRef.current.activePlaylistId ?? libraryRef.current.playlists[0]?.id;
+		if (!playlistId) return;
+		updateLibrary((state) => addTrackToPlaylist(state, playlistId, track));
+	}
+
+	function addCurrentToPlaylist() {
+		if (source === "youtube" && currentYt) addToActivePlaylist(ytVideoToLibraryTrack(currentYt));
+		if (source === "local" && localPaths[localIndex]) addToActivePlaylist(localLibraryTrack(localPaths[localIndex], localNames[localIndex]));
+	}
+
+	function toggleCurrentLike() {
+		if (source === "youtube" && currentYt) toggleFav(currentYt);
+		if (source === "local" && localPaths[localIndex]) updateLibrary((state) => toggleBgmLike(state, localLibraryTrack(localPaths[localIndex], localNames[localIndex])));
+	}
+
+	const currentLibraryTrack = source === "youtube" && currentYt
+		? ytVideoToLibraryTrack(currentYt)
+		: source === "local" && localPaths[localIndex]
+			? localLibraryTrack(localPaths[localIndex], localNames[localIndex])
+			: null;
+	const currentLiked = currentLibraryTrack
+		? library.likes.some((track) => trackIdentity(track) === trackIdentity(currentLibraryTrack))
+		: false;
 
 	// ── Track name display ────────────────────────────────────────────────────
 
@@ -1388,6 +1617,24 @@ export function BgmPlayer({ naia }: Props) {
 				>
 					›
 				</button>
+				<button
+					type="button"
+					className={`bgm-btn${currentLiked ? " bgm-like--on" : ""}`}
+					onClick={toggleCurrentLike}
+					disabled={!currentLibraryTrack}
+					title={currentLiked ? t("bgm.favRemove") : t("bgm.favAdd")}
+				>
+					{currentLiked ? "♥" : "♡"}
+				</button>
+				<button
+					type="button"
+					className="bgm-btn"
+					onClick={addCurrentToPlaylist}
+					disabled={!currentLibraryTrack}
+					title={t("bgm.addToPlaylist")}
+				>
+					＋
+				</button>
 
 				{/* Track name — fixed width, marquee when long, click to toggle app */}
 				<button
@@ -1448,6 +1695,13 @@ export function BgmPlayer({ naia }: Props) {
 								>
 									{t("bgm.tabLocal")}
 								</button>
+								<button
+									type="button"
+									className={`bgm-app-tab${appTab === "playlists" ? " bgm-app-tab--active" : ""}`}
+									onClick={() => setAppTab("playlists")}
+								>
+									{t("bgm.tabPlaylists")}
+								</button>
 							</div>
 							<button
 								type="button"
@@ -1457,6 +1711,18 @@ export function BgmPlayer({ naia }: Props) {
 							>
 								✕
 							</button>
+						</div>
+
+						{/* ── 활성 플레이리스트 툴바 — 모든 탭 공통 (선택·셔플·반복) ── */}
+						<div className="bgm-playlist-toolbar">
+							<select
+								value={activePlaylist?.id ?? ""}
+								onChange={(event) => updateLibrary((state) => ({ ...state, activePlaylistId: event.target.value, currentIndex: -1 }))}
+							>
+								{library.playlists.map((playlist) => <option key={playlist.id} value={playlist.id}>{playlist.name}</option>)}
+							</select>
+							<button type="button" className={`bgm-btn${library.shuffle ? " bgm-control--on" : ""}`} onClick={() => updateLibrary((state) => ({ ...state, shuffle: !state.shuffle }))} title={t("bgm.shuffle")}>⤨</button>
+							<button type="button" className={`bgm-btn${library.repeat !== "off" ? " bgm-control--on" : ""}`} onClick={() => updateLibrary((state) => ({ ...state, repeat: state.repeat === "off" ? "all" : state.repeat === "all" ? "one" : "off" }))} title={library.repeat === "one" ? t("bgm.repeatOne") : library.repeat === "all" ? t("bgm.repeatAll") : t("bgm.repeatOff")}>{library.repeat === "one" ? "↻1" : "↻"}</button>
 						</div>
 
 						{/* ── YouTube tab ── */}
@@ -1472,29 +1738,6 @@ export function BgmPlayer({ naia }: Props) {
 									/>
 									{t("bgm.showBackgroundVideo")}
 								</label>
-								<form
-									className="bgm-yt-search-row"
-									onSubmit={(e) => {
-										e.preventDefault();
-										doSearch(searchQuery);
-									}}
-								>
-									<input
-										type="text"
-										className="bgm-yt-search-input"
-										placeholder={t("bgm.searchPlaceholder")}
-										value={searchQuery}
-										onChange={(e) => setSearchQuery(e.target.value)}
-									/>
-									<button
-										type="submit"
-										className="bgm-btn"
-										disabled={searching}
-									>
-										{searching ? "…" : "🔍"}
-									</button>
-								</form>
-
 								<div className="bgm-yt-tabs">
 									<button
 										type="button"
@@ -1512,8 +1755,8 @@ export function BgmPlayer({ naia }: Props) {
 									</button>
 									<button
 										type="button"
-										className={`bgm-yt-tab${ytView === "favorites" ? " bgm-yt-tab--active" : ""}`}
-										onClick={() => setYtView("favorites")}
+										className={`bgm-yt-tab${ytView === "likes" ? " bgm-yt-tab--active" : ""}`}
+										onClick={() => setYtView("likes")}
 									>
 										{t("bgm.tabFavorites")}{" "}
 										{favs.length > 0 && `(${favs.length})`}
@@ -1537,6 +1780,29 @@ export function BgmPlayer({ naia }: Props) {
 
 								{ytView === "search" && (
 									<div className="bgm-yt-list">
+										<form
+											className="bgm-yt-search-row"
+											onSubmit={(e) => {
+												e.preventDefault();
+												doSearch(searchQuery);
+											}}
+										>
+											<input
+												type="text"
+												className="bgm-yt-search-input"
+												placeholder={t("bgm.searchPlaceholder")}
+												value={searchQuery}
+												onChange={(e) => setSearchQuery(e.target.value)}
+											/>
+											<button
+												type="submit"
+												className="bgm-btn"
+												disabled={searching}
+											>
+												{searching ? "…" : "🔍"}
+											</button>
+										</form>
+
 										{searching && (
 											<div className="bgm-yt-status">{t("bgm.searching")}</div>
 										)}
@@ -1561,12 +1827,13 @@ export function BgmPlayer({ naia }: Props) {
 												fav={isFav(v.id)}
 												onPlay={() => handleYtSelect(v)}
 												onFav={() => toggleFav(v)}
+												onAdd={() => addToActivePlaylist(ytVideoToLibraryTrack(v))}
 											/>
 										))}
 									</div>
 								)}
 
-								{ytView === "favorites" && (
+								{ytView === "likes" && (
 									<div className="bgm-yt-list">
 										{favs.length === 0 && (
 											<div className="bgm-yt-status">{t("bgm.favEmpty")}</div>
@@ -1580,12 +1847,55 @@ export function BgmPlayer({ naia }: Props) {
 												fav={true}
 												onPlay={() => handleYtSelect(v)}
 												onFav={() => toggleFav(v)}
+												onAdd={() => addToActivePlaylist(ytVideoToLibraryTrack(v))}
 											/>
 										))}
 									</div>
 								)}
+
 							</>
 						)}
+
+						{/* ── Playlists tab (YouTube+로컬 믹스) ── */}
+						{appTab === "playlists" && (
+									<div className="bgm-playlists">
+										<form className="bgm-playlist-create" onSubmit={(event) => {
+											event.preventDefault();
+											updateLibrary((state) => createPlaylist(state, newPlaylistName));
+											setNewPlaylistName("");
+										}}>
+											<input value={newPlaylistName} onChange={(event) => setNewPlaylistName(event.target.value)} placeholder={t("bgm.newPlaylist")} />
+											<button type="submit" className="bgm-btn">＋</button>
+										</form>
+										{activePlaylist?.tracks.length === 0 && <div className="bgm-yt-status">{t("bgm.playlistEmpty")}</div>}
+										<div className="bgm-yt-list">
+											{activePlaylist?.tracks.map((track, index) => (
+												<div
+													key={`${track.id}-${index}`}
+													className={`bgm-yt-row bgm-playlist-row${library.currentIndex === index ? " bgm-yt-row--playing" : ""}${dragOverTrackIndex === index && dragTrackIndex !== null && dragTrackIndex !== index ? " bgm-playlist-row--drop" : ""}${dragTrackIndex === index ? " bgm-playlist-row--dragging" : ""}`}
+													data-track-index={index}
+												>
+													<span
+													className="bgm-drag-handle"
+													title={t("bgm.dragToReorder")}
+													aria-hidden="true"
+													onPointerDown={(event) => {
+														event.preventDefault();
+														dragOverRef.current = index;
+														setDragOverTrackIndex(index);
+														setDragTrackIndex(index);
+													}}
+												>⠿</span>
+													<button type="button" className="bgm-playlist-track" onClick={() => playLibraryTrack(track, index, activePlaylist.id)}>
+														<span>{track.source === "youtube" ? "▶" : "♪"}</span>
+														<span>{track.title}</span>
+													</button>
+													<button type="button" className="bgm-yt-fav-btn" title={t("bgm.removeFromPlaylist")} onClick={() => updateLibrary((state) => removeTrackFromPlaylist(state, activePlaylist.id, index))}>×</button>
+												</div>
+											))}
+										</div>
+									</div>
+								)}
 
 						{/* ── Local tab ── */}
 						{appTab === "local" && (
@@ -1613,6 +1923,17 @@ export function BgmPlayer({ naia }: Props) {
 													{localNames[idx]}
 												</div>
 											</div>
+											<button
+												type="button"
+												className="bgm-yt-fav-btn"
+												title={t("bgm.addToPlaylist")}
+												onClick={(event) => {
+													event.stopPropagation();
+													addToActivePlaylist(localLibraryTrack(localPaths[idx], localNames[idx]));
+												}}
+											>
+												＋
+											</button>
 										</div>
 									);
 								})}
@@ -1673,9 +1994,10 @@ interface RowProps {
 	fav: boolean;
 	onPlay: () => void;
 	onFav: () => void;
+	onAdd: () => void;
 }
 
-function YtTrackRow({ video, loading, playing, fav, onPlay, onFav }: RowProps) {
+function YtTrackRow({ video, loading, playing, fav, onPlay, onFav, onAdd }: RowProps) {
 	return (
 		<div
 			className={`bgm-yt-row${playing ? " bgm-yt-row--playing" : ""}`}
@@ -1706,6 +2028,17 @@ function YtTrackRow({ video, loading, playing, fav, onPlay, onFav }: RowProps) {
 					{video.duration && <span>{video.duration}</span>}
 				</div>
 			</div>
+			<button
+				type="button"
+				className="bgm-yt-fav-btn"
+				title={t("bgm.addToPlaylist")}
+				onClick={(event) => {
+					event.stopPropagation();
+					onAdd();
+				}}
+			>
+				＋
+			</button>
 			<button
 				type="button"
 				className={`bgm-yt-fav-btn${fav ? " bgm-yt-fav-btn--on" : ""}`}

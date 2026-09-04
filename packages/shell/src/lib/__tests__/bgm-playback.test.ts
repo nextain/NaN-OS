@@ -22,9 +22,10 @@ describe("BGM playback observation contract", () => {
 				sequence: 1,
 				status: "requested",
 			},
-			selected: { videoId: "track-a", title: "Track A" },
 			announceTrack: false,
 		});
+		expect(toBgmPlayToolResult(requested)).not.toHaveProperty("selected");
+		expect(toBgmPlayToolResult(requested)).not.toHaveProperty("currentTrack");
 		expect(toBgmObservedContext(requested)).toMatchObject({
 			currentTrack: null,
 			announceTrack: false,

@@ -8,6 +8,7 @@ import type {
 	ShellResult,
 	ToolHandler,
 } from "../../lib/app-registry";
+import { bgmPlayback } from "../../lib/bgm-playback";
 import {
 	BrowserCenterArea,
 	NAVIGATE_READ_DELAY_MS,
@@ -124,6 +125,7 @@ describe("BrowserCenterArea AI browser tools", () => {
 	beforeEach(() => {
 		vi.useFakeTimers();
 		localStorage.clear();
+		bgmPlayback.reset();
 		listenMock.mockResolvedValue(() => {});
 		invokeMock.mockImplementation(async (cmd: string) => {
 			if (cmd === "browser_wv_page_info") {
@@ -148,6 +150,7 @@ describe("BrowserCenterArea AI browser tools", () => {
 		cleanup();
 		vi.useRealTimers();
 		vi.clearAllMocks();
+		bgmPlayback.reset();
 	});
 
 	it("returns visible page text after browser navigation", async () => {
@@ -178,6 +181,30 @@ describe("BrowserCenterArea AI browser tools", () => {
 		expect(result).toContain("AI 뉴스 제목");
 		expect(result).toContain("AI 뉴스 본문");
 	});
+	it("blocks a matching YouTube URL while the internal BGM request owns it", async () => {
+		bgmPlayback.request({ videoId: "Td4G5MyLyNA", title: "Internal BGM" });
+		const bridge = new MockBridge();
+		render(<BrowserCenterArea naia={bridge} />);
+
+		const result = await bridge.callTool("skill_browser_navigate", {
+			url: "https://www.youtube.com/watch?v=Td4G5MyLyNA",
+		});
+
+		expect(result).toContain("Blocked");
+		expect(invokeMock).not.toHaveBeenCalledWith("browser_wv_navigate", {
+			url: "https://www.youtube.com/watch?v=Td4G5MyLyNA",
+		});
+	});
+
+	it("does not block an unrelated YouTube video", async () => {
+		bgmPlayback.request({ videoId: "owned", title: "Internal BGM" });
+		expect(
+			(await import("../../lib/bgm-playback")).isCurrentBgmYoutubeUrl(
+				"https://www.youtube.com/watch?v=other",
+			),
+		).toBe(false);
+	});
+
 
 	it("does not fail navigation when automatic page text read times out", async () => {
 		invokeMock.mockImplementation(async (cmd: string) => {

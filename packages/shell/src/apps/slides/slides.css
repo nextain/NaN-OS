@@ -311,3 +311,35 @@
 		flex-wrap: wrap;
 	}
 }
+
+.slides-app__focus-button {
+	border: 1px solid var(--border-color);
+	border-radius: 9px;
+	padding: 8px 11px;
+	background: var(--bg-secondary);
+	color: var(--text-primary);
+	cursor: pointer;
+}
+
+.slides-app[data-focus="true"] {
+	overflow: hidden;
+}
+
+.slides-app[data-focus="true"] .slides-app__header,
+.slides-app[data-focus="true"] .slides-app__status,
+.slides-app[data-focus="true"] .slides-app__notes,
+.slides-app[data-focus="true"] .slides-app__controls {
+	display: none;
+}
+
+.slides-app[data-focus="true"] .slides-app__workspace {
+	grid-template-columns: minmax(0, 1fr);
+	padding: 0;
+
+.slides-app[data-notes-visible="false"] .slides-app__notes {
+	display: none;
+}
+
+.slides-app[data-notes-visible="false"] .slides-app__workspace {
+	grid-template-columns: minmax(0, 1fr);
+}

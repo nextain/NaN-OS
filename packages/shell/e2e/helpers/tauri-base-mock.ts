@@ -86,6 +86,20 @@ export const TAURI_BASE_MOCK_FALLBACK = `
 		if (cmd === "browser_check" || cmd === "browser_wv_hide" || cmd === "browser_wv_show" || cmd === "browser_embed_show" || cmd === "browser_embed_close") return null;
 		// Progress
 		if (cmd === "get_progress_data") return { events: [], stats: { totalCost: 0, messageCount: 0, toolCount: 0, errorCount: 0 } };
+		// App sandbox (#543) — 메모리 파일계로 에뮬레이트해 데스크톱과 같은
+		// read/write 왕복을 보장한다. 조용한 성공은 SoT 를 증발시킨다.
+		window.__E2E_SANDBOX_FS__ = window.__E2E_SANDBOX_FS__ || {};
+		if (cmd === "app_sandbox_write_file") {
+			window.__E2E_SANDBOX_FS__[args.appId + "/" + args.relativePath] = args.bytes;
+			return "e2e-sandbox://" + args.appId + "/" + args.relativePath;
+		}
+		if (cmd === "app_sandbox_read_file") {
+			var sandboxFile = window.__E2E_SANDBOX_FS__[args.appId + "/" + args.relativePath];
+			if (sandboxFile) return sandboxFile;
+			throw new Error("sandbox file does not exist");
+		}
+		if (cmd === "app_sandbox_root") return "e2e-sandbox://" + args.appId;
+		if (cmd === "workspace_register_open_file") return args.path;
 		return undefined;
 	};
 })();
