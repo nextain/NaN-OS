@@ -98,4 +98,26 @@ describe("bgm-library-store", () => {
 		expect(loaded.updatedAt).toBe(9);
 		expect(sandbox.write).not.toHaveBeenCalled();
 	});
+
+	it("keeps the sandbox when config has no updatedAt (legacy copy must not clobber)", async () => {
+		sandbox.read.mockResolvedValue(encode({ ...createEmptyBgmLibrary(7), updatedAt: 7 }));
+		config.load.mockReturnValue({
+			bgmLibrary: {
+				schemaVersion: 1,
+				likes: [],
+				playlists: [{ id: "x", name: "X", tracks: [], createdAt: 1, updatedAt: 1 }],
+				activePlaylistId: "x",
+				currentIndex: -1,
+				shuffle: false,
+				repeat: "off",
+				queue: [],
+				history: [],
+			},
+		});
+
+		const loaded = await loadBgmLibraryFromSandbox();
+
+		expect(loaded.updatedAt).toBe(7); // sandbox kept; fieldless config coalesces to 0
+		expect(sandbox.write).not.toHaveBeenCalled();
+	});
 });

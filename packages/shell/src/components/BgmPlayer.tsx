@@ -453,11 +453,14 @@ export function BgmPlayer({ naia }: Props) {
 		updater: (current: BgmLibraryState) => BgmLibraryState,
 	) {
 		setLibrary((current) => {
-			const next = updater(current);
+			const updated = updater(current);
+			if (updated === current) return current;
+			// Stamp a fresh top-level updatedAt on every real change (incl. raw-spread
+			// mutations that skip bgm-library.ts) so the store's restart reconciliation can
+			// compare recency reliably.
+			const next = { ...updated, updatedAt: Date.now() };
 			libraryRef.current = next;
-			if (next !== current) {
-				void persistBgmLibrary(next);
-			}
+			void persistBgmLibrary(next);
 			return next;
 		});
 	}
