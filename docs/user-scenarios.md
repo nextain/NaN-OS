@@ -1576,3 +1576,20 @@ Chat 지연 로드 UI 상태 매트릭스: **기본**은 variant를 지정하지
 | S-APP-OPEN-GRANT | 열림=동의 grant(#543) | UC9 앱 | workspace.rs 단위 |
 | S-SLIDES-REC | 슬라이드 MP4 녹화(#546) | UC9 앱 | app_sandbox.rs 상태머신 |
 | S-I18N-COMPLETE | t() 키 14개 언어 완비 | 전 UC | check-compile-integrity·generate --check |
+
+
+## 2026-09-05 시작 지연 한도 (#549)
+
+### UC-PERF-STARTUP-LATENCY
+
+- 셸을 열면 첫 화면이 한도 안에 뜬다. 번들 크기가 늘지 않아도 초기화가 느려질
+  수 있으므로, 크기와 별개로 시간에 한도를 건다.
+- 러너 성능은 실행마다 흔들리므로 세 번 재서 중앙값으로 판정한다. 한 번의
+  튐으로 붉어지면 사람이 곧 테스트를 꺼 버린다.
+- 한도를 넘으면 실패한다. 측정값을 기록만 하는 것은 아무것도 막지 못한다.
+
+Test Coverage Map
+
+| UC | 단위·계약 | 실기 | 비고 |
+|---|---|---|---|
+| UC-PERF-STARTUP-LATENCY | — | `e2e/900-startup-latency.spec.ts`: 셸 첫 화면까지 벽시계 시간을 세 번 재 중앙값이 한도 미만인지 | 한도 2,000ms. 이 기계 실측 중앙값 134ms |
