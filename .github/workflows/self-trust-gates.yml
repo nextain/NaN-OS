@@ -116,6 +116,11 @@ jobs:
       # 기계를 나누는 사람이 없는 스펙을 나누게 된다.
       - name: e2e inventory (실기 스펙 요구조건 목록 최신)
         run: node scripts/build-e2e-inventory.mjs --check
+
+      # 사용성 축은 문구가 아니라 i18n 키로 재기로 했다. 그 선행 작업이
+      # 화면에 박힌 한국어를 줄이는 것이고, 이 게이트는 늘어나는 것만 막는다.
+      - name: untranslated UI (화면 문자열 하드코딩 증가 금지)
+        run: node scripts/check-untranslated-ui.mjs
       - name: wire probes (os outbound ⊆ agent accept / agent output ⊆ os classify)
         run: |
           node scripts/builds/uc1-outbound-probe.mjs
