@@ -111,6 +111,11 @@ jobs:
       # 수에만 남는다.
       - name: vacuous tests (자명 단정·죽은 skip 증가 금지)
         run: node scripts/check-vacuous-tests.mjs
+
+      # 스펙이 늘거나 요구 조건이 바뀌었는데 목록이 그대로면, 그 목록을 보고
+      # 기계를 나누는 사람이 없는 스펙을 나누게 된다.
+      - name: e2e inventory (실기 스펙 요구조건 목록 최신)
+        run: node scripts/build-e2e-inventory.mjs --check
       - name: wire probes (os outbound ⊆ agent accept / agent output ⊆ os classify)
         run: |
           node scripts/builds/uc1-outbound-probe.mjs

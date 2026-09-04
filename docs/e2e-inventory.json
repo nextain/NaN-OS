@@ -1,0 +1,943 @@
+{
+	"generatedFrom": "packages/shell/e2e-tauri/specs",
+	"total": 130,
+	"summary": {
+		"keyed": 23,
+		"ci": 104,
+		"device": 3
+	},
+	"specs": [
+		{
+			"spec": "01-app-launch.spec.ts",
+			"conf": [],
+			"env": [
+				"CAFE_E2E_API_KEY",
+				"GEMINI_API_KEY"
+			],
+			"tier": "keyed"
+		},
+		{
+			"spec": "02-configure.spec.ts",
+			"conf": [],
+			"env": [
+				"CAFE_E2E_API_KEY",
+				"CAFE_GATEWAY_TOKEN",
+				"GATEWAY_MASTER_KEY",
+				"GEMINI_API_KEY"
+			],
+			"tier": "keyed"
+		},
+		{
+			"spec": "03-basic-chat.spec.ts",
+			"conf": [],
+			"env": [],
+			"tier": "ci"
+		},
+		{
+			"spec": "04-skill-time.spec.ts",
+			"conf": [],
+			"env": [
+				"CAFE_E2E_API_KEY",
+				"CAFE_GATEWAY_TOKEN",
+				"GATEWAY_MASTER_KEY",
+				"GEMINI_API_KEY",
+				"NAIA_API_KEY"
+			],
+			"tier": "keyed"
+		},
+		{
+			"spec": "05-skill-system.spec.ts",
+			"conf": [],
+			"env": [],
+			"tier": "ci"
+		},
+		{
+			"spec": "06-skill-memo.spec.ts",
+			"conf": [],
+			"env": [],
+			"tier": "ci"
+		},
+		{
+			"spec": "07-cleanup.spec.ts",
+			"conf": [],
+			"env": [],
+			"tier": "ci"
+		},
+		{
+			"spec": "08-memory.spec.ts",
+			"conf": [],
+			"env": [],
+			"tier": "ci"
+		},
+		{
+			"spec": "09-onboarding.spec.ts",
+			"conf": [],
+			"env": [
+				"CAFE_E2E_API_KEY",
+				"CAFE_GATEWAY_TOKEN",
+				"GEMINI_API_KEY"
+			],
+			"tier": "keyed"
+		},
+		{
+			"spec": "10-history-tab.spec.ts",
+			"conf": [],
+			"env": [],
+			"tier": "ci"
+		},
+		{
+			"spec": "100-herdr-first-frame.spec.ts",
+			"conf": [],
+			"env": [],
+			"tier": "ci"
+		},
+		{
+			"spec": "11-cost-dashboard.spec.ts",
+			"conf": [],
+			"env": [],
+			"tier": "ci"
+		},
+		{
+			"spec": "12-skills-gateway.spec.ts",
+			"conf": [],
+			"env": [],
+			"tier": "ci"
+		},
+		{
+			"spec": "13-lab-login.spec.ts",
+			"conf": [],
+			"env": [
+				"CAFE_E2E_API_KEY",
+				"CAFE_GATEWAY_TOKEN",
+				"GEMINI_API_KEY"
+			],
+			"tier": "keyed"
+		},
+		{
+			"spec": "13-nva-capability.spec.ts",
+			"conf": [],
+			"env": [],
+			"tier": "ci"
+		},
+		{
+			"spec": "14-skills-tab.spec.ts",
+			"conf": [],
+			"env": [],
+			"tier": "ci"
+		},
+		{
+			"spec": "15-skill-manager-ai.spec.ts",
+			"conf": [],
+			"env": [],
+			"tier": "ci"
+		},
+		{
+			"spec": "16-skill-weather.spec.ts",
+			"conf": [],
+			"env": [],
+			"tier": "ci"
+		},
+		{
+			"spec": "17-skill-notify.spec.ts",
+			"conf": [],
+			"env": [],
+			"tier": "ci"
+		},
+		{
+			"spec": "18-provider-tool-calling.spec.ts",
+			"conf": [],
+			"env": [],
+			"tier": "ci"
+		},
+		{
+			"spec": "19-skills-bulk.spec.ts",
+			"conf": [],
+			"env": [],
+			"tier": "ci"
+		},
+		{
+			"spec": "20-cron-basic.spec.ts",
+			"conf": [],
+			"env": [],
+			"tier": "ci"
+		},
+		{
+			"spec": "21-cron-recurring.spec.ts",
+			"conf": [],
+			"env": [],
+			"tier": "ci"
+		},
+		{
+			"spec": "22-channels-config.spec.ts",
+			"conf": [],
+			"env": [],
+			"tier": "ci"
+		},
+		{
+			"spec": "23-channels-status.spec.ts",
+			"conf": [],
+			"env": [],
+			"tier": "ci"
+		},
+		{
+			"spec": "24-adk-setup-flow.spec.ts",
+			"conf": [],
+			"env": [
+				"CAFE_E2E_API_KEY",
+				"GEMINI_API_KEY",
+				"NAIA_E2E_ADK_BASE"
+			],
+			"tier": "keyed"
+		},
+		{
+			"spec": "24-tts-providers.spec.ts",
+			"conf": [],
+			"env": [],
+			"tier": "ci"
+		},
+		{
+			"spec": "25-voice-wake.spec.ts",
+			"conf": [],
+			"env": [],
+			"tier": "ci"
+		},
+		{
+			"spec": "26-sessions-management.spec.ts",
+			"conf": [],
+			"env": [],
+			"tier": "ci"
+		},
+		{
+			"spec": "27-multi-agent.spec.ts",
+			"conf": [],
+			"env": [],
+			"tier": "ci"
+		},
+		{
+			"spec": "28-skills-install.spec.ts",
+			"conf": [],
+			"env": [],
+			"tier": "ci"
+		},
+		{
+			"spec": "29-cron-gateway.spec.ts",
+			"conf": [],
+			"env": [],
+			"tier": "ci"
+		},
+		{
+			"spec": "30-exec-approvals.spec.ts",
+			"conf": [],
+			"env": [],
+			"tier": "ci"
+		},
+		{
+			"spec": "31-diagnostics.spec.ts",
+			"conf": [],
+			"env": [],
+			"tier": "ci"
+		},
+		{
+			"spec": "32-model-selector.spec.ts",
+			"conf": [],
+			"env": [],
+			"tier": "ci"
+		},
+		{
+			"spec": "33-usage-dashboard.spec.ts",
+			"conf": [],
+			"env": [],
+			"tier": "ci"
+		},
+		{
+			"spec": "34-device-pairing.spec.ts",
+			"conf": [],
+			"env": [],
+			"tier": "ci"
+		},
+		{
+			"spec": "35-onboarding-extended.spec.ts",
+			"conf": [],
+			"env": [],
+			"tier": "ci"
+		},
+		{
+			"spec": "36-memory-semantic.spec.ts",
+			"conf": [],
+			"env": [],
+			"tier": "ci"
+		},
+		{
+			"spec": "37-execute-command.spec.ts",
+			"conf": [],
+			"env": [],
+			"tier": "ci"
+		},
+		{
+			"spec": "38-file-operations.spec.ts",
+			"conf": [],
+			"env": [],
+			"tier": "ci"
+		},
+		{
+			"spec": "39-web-tools.spec.ts",
+			"conf": [],
+			"env": [],
+			"tier": "ci"
+		},
+		{
+			"spec": "40-sessions-spawn.spec.ts",
+			"conf": [],
+			"env": [],
+			"tier": "ci"
+		},
+		{
+			"spec": "41-agents-crud.spec.ts",
+			"conf": [],
+			"env": [],
+			"tier": "ci"
+		},
+		{
+			"spec": "42-sessions-crud.spec.ts",
+			"conf": [],
+			"env": [],
+			"tier": "ci"
+		},
+		{
+			"spec": "43-device-management.spec.ts",
+			"conf": [],
+			"env": [],
+			"tier": "ci"
+		},
+		{
+			"spec": "44-diagnostics-full.spec.ts",
+			"conf": [],
+			"env": [],
+			"tier": "ci"
+		},
+		{
+			"spec": "45-cron-gateway-full.spec.ts",
+			"conf": [],
+			"env": [],
+			"tier": "ci"
+		},
+		{
+			"spec": "46-channels-operations.spec.ts",
+			"conf": [],
+			"env": [],
+			"tier": "ci"
+		},
+		{
+			"spec": "47-tts-full.spec.ts",
+			"conf": [],
+			"env": [],
+			"tier": "ci"
+		},
+		{
+			"spec": "48-voicewake-set.spec.ts",
+			"conf": [],
+			"env": [],
+			"tier": "ci"
+		},
+		{
+			"spec": "49-approvals-full.spec.ts",
+			"conf": [],
+			"env": [],
+			"tier": "ci"
+		},
+		{
+			"spec": "50-config-management.spec.ts",
+			"conf": [],
+			"env": [],
+			"tier": "ci"
+		},
+		{
+			"spec": "51-skills-advanced.spec.ts",
+			"conf": [],
+			"env": [],
+			"tier": "ci"
+		},
+		{
+			"spec": "52-wizard-rpc.spec.ts",
+			"conf": [],
+			"env": [],
+			"tier": "ci"
+		},
+		{
+			"spec": "53-settings-theme.spec.ts",
+			"conf": [],
+			"env": [],
+			"tier": "ci"
+		},
+		{
+			"spec": "54-settings-avatar-bg.spec.ts",
+			"conf": [],
+			"env": [],
+			"tier": "ci"
+		},
+		{
+			"spec": "54b-settings-locale-prompt.spec.ts",
+			"conf": [],
+			"env": [
+				"CAFE_E2E_API_KEY",
+				"GEMINI_API_KEY"
+			],
+			"tier": "keyed"
+		},
+		{
+			"spec": "55-settings-persona-model.spec.ts",
+			"conf": [],
+			"env": [],
+			"tier": "ci"
+		},
+		{
+			"spec": "56-settings-voice.spec.ts",
+			"conf": [],
+			"env": [],
+			"tier": "ci"
+		},
+		{
+			"spec": "57-settings-save-reset.spec.ts",
+			"conf": [],
+			"env": [],
+			"tier": "ci"
+		},
+		{
+			"spec": "58-history-interactions.spec.ts",
+			"conf": [],
+			"env": [],
+			"tier": "ci"
+		},
+		{
+			"spec": "59-skills-interactions.spec.ts",
+			"conf": [],
+			"env": [],
+			"tier": "ci"
+		},
+		{
+			"spec": "60-diagnostics-interactions.spec.ts",
+			"conf": [],
+			"env": [],
+			"tier": "ci"
+		},
+		{
+			"spec": "61-channels-interactions.spec.ts",
+			"conf": [],
+			"env": [],
+			"tier": "ci"
+		},
+		{
+			"spec": "62-agents-interactions.spec.ts",
+			"conf": [],
+			"env": [],
+			"tier": "ci"
+		},
+		{
+			"spec": "63-sessions-actions.spec.ts",
+			"conf": [],
+			"env": [],
+			"tier": "ci"
+		},
+		{
+			"spec": "64-settings-gateway-tts.spec.ts",
+			"conf": [],
+			"env": [],
+			"tier": "ci"
+		},
+		{
+			"spec": "65-settings-voice-wake.spec.ts",
+			"conf": [],
+			"env": [],
+			"tier": "ci"
+		},
+		{
+			"spec": "66-settings-memory-facts.spec.ts",
+			"conf": [],
+			"env": [],
+			"tier": "ci"
+		},
+		{
+			"spec": "67-onboarding-config-save.spec.ts",
+			"conf": [],
+			"env": [
+				"CAFE_E2E_API_KEY",
+				"CAFE_GATEWAY_TOKEN",
+				"GEMINI_API_KEY"
+			],
+			"tier": "keyed"
+		},
+		{
+			"spec": "68-history-auto-title.spec.ts",
+			"conf": [],
+			"env": [],
+			"tier": "ci"
+		},
+		{
+			"spec": "69-notify-discord-live.spec.ts",
+			"conf": [],
+			"env": [
+				"DISCORD_WEBHOOK",
+				"DISCORD_WEBHOOK_URL"
+			],
+			"tier": "ci"
+		},
+		{
+			"spec": "70-channel-sync-dm.spec.ts",
+			"conf": [],
+			"env": [
+				"LAB_KEY",
+				"LAB_USER_ID"
+			],
+			"tier": "keyed"
+		},
+		{
+			"spec": "70b-live-providers-switching.spec.ts",
+			"conf": [],
+			"env": [],
+			"tier": "ci"
+		},
+		{
+			"spec": "70c-nextain-default-chat.spec.ts",
+			"conf": [
+				"wdio.conf.nextain-chat.ts"
+			],
+			"env": [
+				"NAIA_E2E_NAIA_KEY"
+			],
+			"tier": "keyed"
+		},
+		{
+			"spec": "71-proactive-speech-profiles.spec.ts",
+			"conf": [],
+			"env": [
+				"NAIA_E2E_ADK_PATH"
+			],
+			"tier": "ci"
+		},
+		{
+			"spec": "72-naia-discord-skill.spec.ts",
+			"conf": [],
+			"env": [],
+			"tier": "ci"
+		},
+		{
+			"spec": "73-tts-edge-preview.spec.ts",
+			"conf": [],
+			"env": [],
+			"tier": "ci"
+		},
+		{
+			"spec": "74-channel-sync-lifecycle.spec.ts",
+			"conf": [],
+			"env": [
+				"LAB_KEY",
+				"LAB_USER_ID"
+			],
+			"tier": "keyed"
+		},
+		{
+			"spec": "75-app-position.spec.ts",
+			"conf": [],
+			"env": [],
+			"tier": "ci"
+		},
+		{
+			"spec": "76-tts-provider-switching.spec.ts",
+			"conf": [],
+			"env": [
+				"OPENAI_API_KEY"
+			],
+			"tier": "keyed"
+		},
+		{
+			"spec": "77-stt-provider-switching.spec.ts",
+			"conf": [],
+			"env": [],
+			"tier": "ci"
+		},
+		{
+			"spec": "78-voice-pipeline-mode.spec.ts",
+			"conf": [],
+			"env": [],
+			"tier": "ci"
+		},
+		{
+			"spec": "79-pipeline-voice-activation.spec.ts",
+			"conf": [],
+			"env": [],
+			"tier": "ci"
+		},
+		{
+			"spec": "80-tts-preview-all-providers.spec.ts",
+			"conf": [],
+			"env": [
+				"ELEVENLABS_API_KEY",
+				"ELEVENLAPS_API_KEY",
+				"GEMINI_API_KEY",
+				"OPENAI_API_KEY"
+			],
+			"tier": "keyed"
+		},
+		{
+			"spec": "81-chat-tts-response.spec.ts",
+			"conf": [],
+			"env": [],
+			"tier": "ci"
+		},
+		{
+			"spec": "82-chat-tts-multi-model.spec.ts",
+			"conf": [],
+			"env": [],
+			"tier": "ci"
+		},
+		{
+			"spec": "83-tts-per-model-verification.spec.ts",
+			"conf": [],
+			"env": [],
+			"tier": "ci"
+		},
+		{
+			"spec": "84-chat-tts-per-provider.spec.ts",
+			"conf": [],
+			"env": [
+				"ELEVENLABS_API_KEY",
+				"ELEVENLAPS_API_KEY",
+				"GEMINI_API_KEY",
+				"OPENAI_API_KEY"
+			],
+			"tier": "keyed"
+		},
+		{
+			"spec": "85-voice-actual-recording.spec.ts",
+			"conf": [],
+			"env": [],
+			"tier": "ci"
+		},
+		{
+			"spec": "86-stt-tts-full-pipeline.spec.ts",
+			"conf": [],
+			"env": [
+				"ELEVENLABS_API_KEY",
+				"ELEVENLAPS_API_KEY",
+				"GEMINI_API_KEY",
+				"OPENAI_API_KEY"
+			],
+			"tier": "keyed"
+		},
+		{
+			"spec": "87-tts-audio-verification.spec.ts",
+			"conf": [],
+			"env": [
+				"ELEVENLABS_API_KEY",
+				"ELEVENLAPS_API_KEY",
+				"GEMINI_API_KEY",
+				"OPENAI_API_KEY"
+			],
+			"tier": "keyed"
+		},
+		{
+			"spec": "88-stt-tts-combo-verification.spec.ts",
+			"conf": [],
+			"env": [
+				"ELEVENLABS_API_KEY",
+				"ELEVENLAPS_API_KEY",
+				"GEMINI_API_KEY",
+				"OPENAI_API_KEY"
+			],
+			"tier": "keyed"
+		},
+		{
+			"spec": "89-llm-provider-switching.spec.ts",
+			"conf": [],
+			"env": [
+				"ANTHROPIC_API_KEY",
+				"GEMINI_API_KEY",
+				"NAIA_API_KEY",
+				"OPENAI_API_KEY",
+				"XAI_API_KEY",
+				"ZHIPU_API_KEY"
+			],
+			"tier": "keyed"
+		},
+		{
+			"spec": "90-app-system.spec.ts",
+			"conf": [],
+			"env": [],
+			"tier": "ci"
+		},
+		{
+			"spec": "90-codex-live-chat.spec.ts",
+			"conf": [
+				"wdio.conf.codex.ts"
+			],
+			"env": [
+				"NAIA_E2E_ADK_PATH"
+			],
+			"tier": "ci"
+		},
+		{
+			"spec": "90-glm-newcore-chat.spec.ts",
+			"conf": [
+				"wdio.conf.chat.ts"
+			],
+			"env": [],
+			"tier": "ci"
+		},
+		{
+			"spec": "91-jeonju-course-worker.spec.ts",
+			"conf": [
+				"wdio.conf.jeonju-course.ts"
+			],
+			"env": [],
+			"tier": "ci"
+		},
+		{
+			"spec": "91-memory-settings-integration.spec.ts",
+			"conf": [],
+			"env": [
+				"CAFE_E2E_API_KEY",
+				"GEMINI_API_KEY",
+				"NAIA_API_KEY",
+				"NAIA_E2E_ADK_PATH"
+			],
+			"tier": "keyed"
+		},
+		{
+			"spec": "92-browser-app-clicks.spec.ts",
+			"conf": [],
+			"env": [],
+			"tier": "ci"
+		},
+		{
+			"spec": "92-discord-secure-cancel.spec.ts",
+			"conf": [
+				"wdio.conf.discord-settings.ts"
+			],
+			"env": [],
+			"tier": "ci"
+		},
+		{
+			"spec": "93-discord-inbox-handoff.spec.ts",
+			"conf": [
+				"wdio.conf.discord-settings.ts"
+			],
+			"env": [],
+			"tier": "ci"
+		},
+		{
+			"spec": "93-radio-bgm-observation.spec.ts",
+			"conf": [
+				"wdio.conf.radio.ts"
+			],
+			"env": [
+				"VITE_NAIA_BGM_BASE"
+			],
+			"tier": "ci"
+		},
+		{
+			"spec": "94-discord-live-auth.spec.ts",
+			"conf": [
+				"wdio.conf.discord-live.ts"
+			],
+			"env": [],
+			"tier": "ci"
+		},
+		{
+			"spec": "94-nva-prebaked-shell.spec.ts",
+			"conf": [
+				"wdio.conf.nva-prebaked.ts"
+			],
+			"env": [],
+			"tier": "ci"
+		},
+		{
+			"spec": "94-radio-bgm-queue.spec.ts",
+			"conf": [
+				"wdio.conf.radio-queue.ts"
+			],
+			"env": [
+				"NAIA_E2E_BGM_PORT"
+			],
+			"tier": "ci"
+		},
+		{
+			"spec": "94-voice-6g-shell.spec.ts",
+			"conf": [
+				"wdio.conf.voice-6g.ts"
+			],
+			"env": [
+				"NAIA_E2E_VOICE_SCREENSHOT",
+				"NAIA_E2E_VOXCPM2_TEST_VOICE"
+			],
+			"tier": "device"
+		},
+		{
+			"spec": "95-llm-role-settings.spec.ts",
+			"conf": [
+				"wdio.conf.codex.ts"
+			],
+			"env": [
+				"NAIA_E2E_ADK_PATH"
+			],
+			"tier": "ci"
+		},
+		{
+			"spec": "95-voice-linux-shell.spec.ts",
+			"conf": [
+				"wdio.conf.voice-linux.ts"
+			],
+			"env": [
+				"NAIA_E2E_VOICE_SCREENSHOT",
+				"NAIA_E2E_VOXCPM2_TEST_VOICE"
+			],
+			"tier": "device"
+		},
+		{
+			"spec": "95-w1-oauth-callback.spec.ts",
+			"conf": [],
+			"env": [],
+			"tier": "ci"
+		},
+		{
+			"spec": "96-codex-readiness.spec.ts",
+			"conf": [
+				"wdio.conf.codex.ts"
+			],
+			"env": [],
+			"tier": "ci"
+		},
+		{
+			"spec": "96-grok-readiness.spec.ts",
+			"conf": [
+				"wdio.conf.grok.ts"
+			],
+			"env": [],
+			"tier": "ci"
+		},
+		{
+			"spec": "96-memory-storage-boundary.spec.ts",
+			"conf": [],
+			"env": [
+				"NAIA_E2E_ADK_PATH"
+			],
+			"tier": "ci"
+		},
+		{
+			"spec": "96-voice-linux-app-start.spec.ts",
+			"conf": [],
+			"env": [
+				"NAIA_E2E_ADK_PATH",
+				"NAIA_E2E_NAIA_KEY",
+				"NAIA_E2E_VOICE_ARTIFACTS"
+			],
+			"tier": "device"
+		},
+		{
+			"spec": "96-w5-sold-out-ux.spec.ts",
+			"conf": [],
+			"env": [],
+			"tier": "ci"
+		},
+		{
+			"spec": "97-course-worker-guidance.spec.ts",
+			"conf": [
+				"wdio.conf.codex.ts"
+			],
+			"env": [],
+			"tier": "ci"
+		},
+		{
+			"spec": "97-launch-f1-naia-login.spec.ts",
+			"conf": [],
+			"env": [],
+			"tier": "ci"
+		},
+		{
+			"spec": "98-codex-chat-delegation.spec.ts",
+			"conf": [
+				"wdio.conf.codex-delegation.ts"
+			],
+			"env": [],
+			"tier": "ci"
+		},
+		{
+			"spec": "98-launch-f2-chat-with-login.spec.ts",
+			"conf": [],
+			"env": [
+				"CAFE_E2E_API_KEY",
+				"GEMINI_API_KEY"
+			],
+			"tier": "keyed"
+		},
+		{
+			"spec": "99-launch-f4-skill-usage.spec.ts",
+			"conf": [],
+			"env": [
+				"CAFE_E2E_API_KEY",
+				"GEMINI_API_KEY"
+			],
+			"tier": "keyed"
+		},
+		{
+			"spec": "99-screenshots.spec.ts",
+			"conf": [],
+			"env": [
+				"CAFE_E2E_API_KEY",
+				"GEMINI_API_KEY"
+			],
+			"tier": "keyed"
+		},
+		{
+			"spec": "99-store-certification.spec.ts",
+			"conf": [],
+			"env": [],
+			"tier": "ci"
+		},
+		{
+			"spec": "99-stt-mic-test.spec.ts",
+			"conf": [],
+			"env": [],
+			"tier": "ci"
+		},
+		{
+			"spec": "99-vllm-omni-voice.spec.ts",
+			"conf": [],
+			"env": [
+				"VLLM_OMNI_HOST"
+			],
+			"tier": "ci"
+		},
+		{
+			"spec": "99-voice-connect.spec.ts",
+			"conf": [],
+			"env": [
+				"GEMINI_API_KEY"
+			],
+			"tier": "keyed"
+		},
+		{
+			"spec": "channel-reboot.spec.ts",
+			"conf": [],
+			"env": [],
+			"tier": "ci"
+		},
+		{
+			"spec": "env-tool-browser-native.spec.ts",
+			"conf": [],
+			"env": [],
+			"tier": "ci"
+		},
+		{
+			"spec": "environment-dispatch.spec.ts",
+			"conf": [],
+			"env": [],
+			"tier": "ci"
+		},
+		{
+			"spec": "orchestration-restart.spec.ts",
+			"conf": [],
+			"env": [],
+			"tier": "ci"
+		}
+	]
+}
