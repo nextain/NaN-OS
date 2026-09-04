@@ -3608,6 +3608,7 @@ export function SettingsTab() {
 						<label>{t("settings.background")}</label>
 						<div style={{ display: "flex", gap: 8, alignItems: "center" }}>
 							<select
+								data-testid="settings-bg-select"
 								value={activeBgPath ?? ""}
 								onChange={(e) => {
 									const v = e.target.value;
@@ -3741,7 +3742,7 @@ export function SettingsTab() {
 					{effectiveAvatarProvider === "vrm" && (
 						<div className="settings-field">
 							<label>{t("settings.vrmModel")}</label>
-							<div className="vrm-list">
+							<div className="vrm-list" data-testid="settings-vrm-list">
 								{naiaVrms.length === 0 && (
 									<span className="vrm-list-empty">
 										{t("settings.vrmEmpty")}

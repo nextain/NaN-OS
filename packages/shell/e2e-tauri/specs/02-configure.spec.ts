@@ -1,5 +1,9 @@
 import { S } from "../helpers/selectors.js";
-import { configureSettings } from "../helpers/settings.js";
+import {
+	configureSettings,
+	navigateToSettings,
+	openSettingsSection,
+} from "../helpers/settings.js";
 
 const API_KEY = process.env.CAFE_E2E_API_KEY || process.env.GEMINI_API_KEY;
 if (!API_KEY) {
@@ -50,20 +54,19 @@ describe("02 — Configure Settings", () => {
 		await browser.waitUntil(
 			async () =>
 				browser.execute(
-					() => document.querySelectorAll(".chat-tabs .chat-tab").length >= 8,
+					// #541: 탭은 대화·기록·채널 셋뿐이다. 설정 계열은 앱 전환으로 연다.
+					() => document.querySelectorAll(".chat-tabs .chat-tab").length >= 3,
 				),
 			{ timeout: 15_000, timeoutMsg: "Chat tabs did not render" },
 		);
 	});
 
 	it("should switch to settings tab and configure", async () => {
-		await browser.execute((sel: string) => {
-			const el = document.querySelector(sel) as HTMLButtonElement | null;
-			el?.click();
-		}, S.settingsTabBtn);
-
+		// #541: 설정은 앱 전환 + 내부 섹션 탭 구조. 프로바이더·키·도구는 brain 섹션.
+		await navigateToSettings();
 		const settingsTab = await $(S.settingsTab);
 		await settingsTab.waitForDisplayed({ timeout: 30_000 });
+		await openSettingsSection("brain");
 
 		await configureSettings({
 			provider: "gemini",
@@ -95,20 +98,18 @@ describe("02 — Configure Settings", () => {
 	});
 
 	it("should show Lab section in settings", async () => {
-		await browser.execute((sel: string) => {
-			const el = document.querySelector(sel) as HTMLButtonElement | null;
-			el?.click();
-		}, S.settingsTabBtn);
-
+		// #541: Naia 계정(Lab) UI 는 profile 섹션의 로그인/계정 필드로 옮겨졌다.
+		await navigateToSettings();
 		const settingsTab = await $(S.settingsTab);
 		await settingsTab.waitForDisplayed({ timeout: 10_000 });
+		await openSettingsSection("profile");
 
-		const hasLabSection = await browser.execute(() => {
-			const dividers = document.querySelectorAll(".settings-section-divider");
-			return Array.from(dividers).some((d) =>
-				/Naia|Lab|계정|Account/i.test(d.textContent ?? ""),
-			);
-		});
+		const hasLabSection = await browser.execute(
+			() =>
+				document.querySelector(
+					'[data-testid="profile-naia-login"], [data-testid="profile-naia-account"]',
+				) !== null,
+		);
 		expect(hasLabSection).toBe(true);
 	});
 

@@ -3,6 +3,7 @@ import {
 	clickBySelector,
 	ensureAppReady,
 	navigateToSettings,
+	openSettingsSection,
 } from "../helpers/settings.js";
 
 /**
@@ -19,6 +20,8 @@ describe("53 — settings theme & locale", () => {
 		await navigateToSettings();
 		const settingsTab = await $(S.settingsTab);
 		await settingsTab.waitForDisplayed({ timeout: 10_000 });
+		// #541: 테마·로케일은 General 섹션에 있다.
+		await openSettingsSection("general");
 	});
 
 	it("should render theme swatches", async () => {
@@ -69,53 +72,46 @@ describe("53 — settings theme & locale", () => {
 		expect(newActiveIdx).toBe(clickedIdx);
 	});
 
-	it("should show locale select with current value", async () => {
-		const value = await browser.execute(
+	it("should show the locale picker with a current label", async () => {
+		const label = await browser.execute(
 			(sel: string) =>
-				(document.querySelector(sel) as HTMLSelectElement)?.value ?? "",
+				(document.querySelector(sel) as HTMLElement | null)?.textContent?.trim() ??
+				"",
 			S.localeSelect,
 		);
-		expect(["ko", "en"]).toContain(value);
+		expect(label.length).toBeGreaterThan(0);
 	});
 
-	it("should switch locale from current to the other", async () => {
-		const original = await browser.execute(
-			(sel: string) =>
-				(document.querySelector(sel) as HTMLSelectElement)?.value ?? "",
-			S.localeSelect,
-		);
-		const target = original === "ko" ? "en" : "ko";
+	it("should switch locale to the other option and restore", async () => {
+		// #541: 로케일은 <select> 가 아니라 트리거+옵션 버튼 위젯이다.
+		const pick = async () =>
+			browser.execute((sel: string) => {
+				const trigger = document.querySelector(sel) as HTMLElement | null;
+				if (!trigger) return null;
+				trigger.click();
+				const options = Array.from(
+					document.querySelectorAll("#locale-select-options button"),
+				) as HTMLButtonElement[];
+				const target = options.find(
+					(option) => option.getAttribute("aria-pressed") !== "true",
+				);
+				if (!target) return null;
+				const label = target.textContent?.trim() ?? "";
+				target.click();
+				return label;
+			}, S.localeSelect);
 
-		await browser.execute(
-			(sel: string, val: string) => {
-				const el = document.querySelector(sel) as HTMLSelectElement;
-				if (!el) return;
-				el.value = val;
-				el.dispatchEvent(new Event("change", { bubbles: true }));
-			},
-			S.localeSelect,
-			target,
-		);
+		const first = await pick();
+		if (!first) return;
 		await browser.pause(300);
-
-		const updated = await browser.execute(
+		const label = await browser.execute(
 			(sel: string) =>
-				(document.querySelector(sel) as HTMLSelectElement)?.value ?? "",
+				(document.querySelector(sel) as HTMLElement | null)?.textContent?.trim() ??
+				"",
 			S.localeSelect,
 		);
-		expect(updated).toBe(target);
-
-		// Restore original locale
-		await browser.execute(
-			(sel: string, val: string) => {
-				const el = document.querySelector(sel) as HTMLSelectElement;
-				if (!el) return;
-				el.value = val;
-				el.dispatchEvent(new Event("change", { bubbles: true }));
-			},
-			S.localeSelect,
-			original,
-		);
+		expect(label).toContain(first);
+		await pick(); // 원상 복구
 		await browser.pause(300);
 	});
 

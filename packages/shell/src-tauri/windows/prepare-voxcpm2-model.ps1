@@ -68,7 +68,9 @@ $InstallerPackageLock = Get-Content -LiteralPath $InstallerPackageLockPath -Raw 
 $ActivationContract = Get-Content -LiteralPath $ActivationContractPath -Raw | ConvertFrom-Json
 if ($Manifest.schemaVersion -ne 3 -or $Manifest.profile -ne "windows_trt_6g") { throw "Unsupported VoxCPM2 runtime manifest" }
 if ($InstallerPackageLock.schemaVersion -ne 1 -or $InstallerPackageLock.policy -ne "automatic-installer-only") { throw "Unsupported VoxCPM2 installer package lock" }
-if ($ActivationContract.schemaVersion -ne 1 -or $ActivationContract.profile -ne "windows_trt_6g") { throw "Unsupported Naia Host activation contract" }
+# v2 (#537): the contract is split by OS under `platforms`; profile moved off the
+# top level. This Windows installer requires the windows platform entry.
+if ($ActivationContract.schemaVersion -ne 2 -or $null -eq $ActivationContract.platforms.windows) { throw "Unsupported Naia Host activation contract" }
 $ReferenceVoices = @($ActivationContract.runtime.referenceVoices)
 $DefaultVoices = @($ReferenceVoices | Where-Object { $_.default -eq $true })
 if ($ReferenceVoices.Count -lt 1) { throw "Naia Host activation contract must declare reference voices" }

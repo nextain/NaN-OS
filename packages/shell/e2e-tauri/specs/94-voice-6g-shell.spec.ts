@@ -264,6 +264,40 @@ describe("6GB VoxCPM2 voice profile through the real Tauri Shell", () => {
 			},
 		);
 		expect(await tauriInvoke<boolean>("voxcpm2_status")).toBe(true);
+		// 0.2.3 실측(#542 게이트 복구 중 발견): 4060 은 RTF~1.5 라 첫 합성이
+		// 콜드 스타트 웜업으로 십수 초 걸리고, 그 사이 짧은 LLM 스트리밍이
+		// 끝나 버려 streamingAtRequest 동기성 단정이 오염된다. 이 게이트의
+		// 관심사는 '웜업된 엔진'의 문장 스트리밍 동기성이므로 실제 웜업 합성
+		// 1회로 콜드 스타트를 흡수한다(스타트업 자동 예열의 제품화는 별도 이슈).
+		const warmupStatus = await browser.execute(async () => {
+			const token = sessionStorage.getItem("naia.voxcpm2AccessToken");
+			for (let attempt = 0; attempt < 40; attempt++) {
+				try {
+					const response = await fetch(
+						"http://127.0.0.1:8910/v1/audio/speech",
+						{
+							method: "POST",
+							headers: {
+								Authorization: `Bearer ${token}`,
+								"Content-Type": "application/json",
+							},
+							body: JSON.stringify({
+								model: "voxcpm2",
+								input: "웜업 문장입니다.",
+								voice: "default",
+							}),
+						},
+					);
+					if (response.status === 200) return 200;
+					if (response.status !== 503) return response.status;
+				} catch {
+					// engine-starting: 연결 거부 — 대기 후 재시도
+				}
+				await new Promise((resolveDelay) => setTimeout(resolveDelay, 3000));
+			}
+			return 0;
+		});
+		expect(warmupStatus).toBe(200);
 		await browser.execute(() => {
 			(
 				document.querySelector(

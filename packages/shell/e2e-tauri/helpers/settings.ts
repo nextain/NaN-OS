@@ -192,12 +192,32 @@ export async function configureSettings(opts: {
 	await chatInput.waitForDisplayed({ timeout: 10_000 });
 }
 
-/** Navigate to the Settings tab and wait for render. */
+/** 설정 내부 섹션 탭으로 이동한다 (#541: 설정은 내부 탭 구조). */
+export async function openSettingsSection(id: string): Promise<void> {
+	const tab = await $(`[data-settings-tab="${id}"]`);
+	await tab.waitForDisplayed({ timeout: 10_000 });
+	await tab.click();
+	await browser.pause(300);
+}
+
+/** Navigate to Settings via the app-bar button and wait for render (#541). */
 export async function navigateToSettings(): Promise<void> {
-	await browser.execute((sel: string) => {
-		const el = document.querySelector(sel) as HTMLElement | null;
-		if (el) el.click();
-	}, S.settingsTabBtn);
+	// 앱바 설정 버튼은 토글이다 — 이미 열려 있으면 다시 누르지 않는다(닫혀 버림).
+	// keepAlive 앱은 opacity:0 슬롯으로 숨겨서 offsetParent 로는 판별 불가 —
+	// 슬롯의 active 클래스가 유일한 진실이다.
+	const alreadyOpen = await browser.execute(() => {
+		const panel = document.querySelector(".settings-tab") as HTMLElement | null;
+		if (!panel) return false;
+		const slot = panel.closest(".content-app__slot");
+		if (slot) return slot.classList.contains("content-app__slot--active");
+		return true; // keepAlive 슬롯 밖에서 렌더 = 실제로 열린 화면
+	});
+	if (alreadyOpen) return;
+	// querySelector 클릭은 요소가 없으면 무음 no-op 라 실패를 숨긴다 —
+	// 버튼 표시를 기다렸다가 실제 클릭으로 연다.
+	const trigger = await $(S.settingsTabBtn);
+	await trigger.waitForDisplayed({ timeout: 15_000 });
+	await trigger.click();
 	await browser.pause(500);
 }
 

@@ -117,9 +117,17 @@ export function resolveRequiredPairedAgent(): string {
 				execFileSync("git", ["-C", candidate, "rev-parse", "HEAD"], {
 					encoding: "utf8",
 				}).trim() === REQUIRED_AGENT_COMMIT &&
+				// Ignore request-contract crash-recovery leases under
+				// .agents/session-contracts/.recovery/ (pure runtime artifact, never
+				// source). Twin of build-e2e-tauri's paired-agent clean check.
 				execFileSync("git", ["-C", candidate, "status", "--porcelain"], {
 					encoding: "utf8",
-				}).trim() === ""
+				})
+					.split("\n")
+					.filter((line) => line.trim() !== "")
+					.every((line) =>
+						/\.agents[\\/]session-contracts[\\/]\.recovery[\\/]/.test(line),
+					)
 			) {
 				return candidate;
 			}

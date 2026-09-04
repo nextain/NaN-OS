@@ -17,7 +17,8 @@ export const S = {
 
 	// SettingsTab (8th tab: chat, history, progress, skills, channels, agents, diagnostics, settings)
 	settingsTab: ".settings-tab",
-	settingsTabBtn: ".chat-tab:nth-child(8)",
+	// #541: 설정·스킬·진단은 더 이상 채팅 탭바에 없다 — 앱바의 설정 버튼으로 연다.
+	settingsTabBtn: ".app-bar-settings",
 	chatTab: ".chat-tab:first-child",
 	providerSelect: "#provider-select",
 	apiKeyInput: "#apikey-input",
@@ -173,13 +174,13 @@ export const S = {
 	themeSwatchActive: ".theme-swatch.active",
 
 	// VRM/Avatar
-	vrmCard: ".vrm-card",
-	vrmCardActive: ".vrm-card.active",
-	vrmCardAdd: ".vrm-card.vrm-card-add",
+	// #541: VRM 선택 UI 는 카드 그리드에서 목록(vrm-list-item)으로 바뀌었다.
+	vrmCard: '[data-testid="settings-vrm-list"] .vrm-list-item',
+	vrmCardActive: '[data-testid="settings-vrm-list"] .vrm-list-item--active',
 
 	// Background
-	bgCard: ".bg-card",
-	bgCardActive: ".bg-card.active",
+	// #541: 배경 선택은 카드가 아니라 select 위젯이다.
+	bgSelect: '[data-testid="settings-bg-select"]',
 
 	// Settings inputs
 	speechStyleSelect: '[data-testid="settings-speech-style"]',
