@@ -49,10 +49,10 @@ const SILENT_CLICK = new RegExp(
 	// 다만 `if (!el) return false;` 는 다르다. 못 눌렀다는 사실을 값으로
 	// 돌려주고 부르는 쪽이 그것을 단언한다 — 이 게이트가 권하는 형태이고
 	// clickElement 가 그렇게 쓴다. 값 없이 빠져나가는 것만 센다.
-	String.raw`if\s*\(\s*!\s*(\w+)\s*\)\s*\{?\s*(?:return|continue)\s*;\s*\}?[\s\S]{0,120}?\.click\(`,
+	String.raw`if\s*\(\s*!\s*(\w+)\s*\)\s*\{?\s*(?:return|continue)(?:\s+undefined)?\s*;\s*\}?[\s\S]{0,120}?\.click\(`,
 	// TypeScript 에서 null 과 undefined 를 함께 보는 관용이 `== null` 이다.
 	// 부정 조기 이탈을 `!el` 한 형태로만 보면 그 관용이 통째로 빠진다.
-	String.raw`if\s*\(\s*(\w+)\s*==\s*(?:null|undefined)\s*\)\s*\{?\s*(?:return|continue)\s*;\s*\}?[\s\S]{0,120}?\.click\(`,
+	String.raw`if\s*\(\s*(\w+)\s*==\s*(?:null|undefined)\s*\)\s*\{?\s*(?:return|continue)(?:\s+undefined)?\s*;\s*\}?[\s\S]{0,120}?\.click\(`,
 	// 널 비교로 적어도 같은 무음이다. 이 저장소 포매터는 중괄호를 넣으므로
 	// 중괄호 없는 한 줄만 보면 실제 코드 형태를 놓친다.
 	String.raw`if\s*\(\s*(\w+)\s*!==?\s*(?:null|undefined)\s*\)\s*\{?\s*(?:await\s+)?\7\.click\(`,

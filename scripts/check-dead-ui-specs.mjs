@@ -28,6 +28,7 @@
 
 import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
+import ts from "typescript";
 
 const SHELL = "packages/shell";
 
@@ -155,31 +156,49 @@ const KNOWN_MISSING_COMMANDS = new Map([
  * 조건부 `disabled={...}` 는 상태에 따라 열리므로 여기서 보지 않는다.
  * 값 없이 박힌 `disabled` 만 영구로 본다.
  */
-function permanentlyDisabledTestIds(sourceText) {
+function permanentlyDisabledTestIds(files) {
 	const out = new Map();
-	// 여는 태그 하나를 통째로 잡아 그 안에 표지와 disabled 가 함께 있는지 본다.
-	for (const tag of sourceText.matchAll(/<\w+[^>]*?>/gs)) {
-		const text = tag[0];
-		// 값 없는 `disabled` 만 보면 React 에서 같은 뜻인 `disabled={true}` 가
-		// 빠져나간다. 실제로 연결 탭을 그 형태로 바꾸는 것만으로 통과했다.
-		// 조건부 `disabled={expr}` 는 상태에 따라 열리므로 여전히 세지 않는다.
-		// React 에서 영구히 꺼진 형태는 넷이다. 하나만 보면 나머지로 빠져나간다.
-		if (
-			!/\sdisabled\s*(?=[/>\s])/.test(text) &&
-			!/\sdisabled\s*=\s*\{\s*true(?:\s+as\s+const)?\s*\}/.test(text) &&
-			!/\sdisabled\s*=\s*["']true["']/.test(text)
-		)
-			continue;
-		for (const attr of text.matchAll(
-			/data-(?:testid|settings-tab|app-id)=["']([^"']+)["']/g,
-		)) {
-			out.set(attr[1], true);
+	for (const [file, text] of files) {
+		const attrs = jsxAttributes(parseSource(file, text));
+		// 같은 여는 태그 안에 있는 속성끼리 묶는다. 파서가 준 시작 위치로
+		// 가르면 태그 문자열을 다시 쪼갤 필요가 없다.
+		const tags = new Map();
+		const tree = parseSource(file, text);
+		const visit = (node) => {
+			if (ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node)) {
+				const own = node.attributes.properties.filter((a) =>
+					ts.isJsxAttribute(a),
+				);
+				const off = attrs.filter((a) =>
+					own.some((o) => o.getStart(tree) === a.at),
+				);
+				if (off.length) tags.set(node.getStart(tree), off);
+			}
+			ts.forEachChild(node, visit);
+		};
+		visit(tree);
+		for (const group of tags.values()) {
+			// 값 없는 `disabled`, `{true}`, `{true as const}`, `"true"` 는 모두
+			// 영구히 꺼진 것이다. 형태가 아니라 뜻으로 본다.
+			if (!group.some((a) => a.name === "disabled" && a.alwaysTrue)) continue;
+			for (const a of group) {
+				if (!/^data-(?:testid|app-id|[\w-]*tab)$/.test(a.name)) continue;
+				if (a.value) out.set(a.value, true);
+			}
 		}
 	}
 	return out;
 }
 
-const disabledIds = permanentlyDisabledTestIds(sourceText);
+/** 셸 소스 파일과 그 내용. 파서에게 물을 때 쓴다. */
+const shellFiles = [
+	...tracked(`${SHELL}/src`, ".tsx"),
+	...tracked(`${SHELL}/src`, ".ts"),
+]
+	.filter((f) => !/\.test\.|__tests__/.test(f))
+	.map((f) => [f, readFileSync(f, "utf8")]);
+
+const disabledIds = permanentlyDisabledTestIds(shellFiles);
 
 /** 저장소가 아는 파일. `existsSync` 는 git 이 모르는 파일도 참이다. */
 const trackedFiles = new Set(
@@ -220,6 +239,129 @@ const KNOWN_DISABLED = new Map([
  * import 되지 않으면 그 파일은 화면에 오르지 않는다. 진입점(App.tsx 등)과
  * 테스트는 빼고 본다.
  */
+/**
+ * 소스를 파서로 읽는다.
+ *
+ * 아홉 번째까지 이 파일의 지적이 매번 같은 모양이었다 — 내가 문법 형태를
+ * 하나씩 열거하고, 리뷰어가 하나를 더 찾는다. `data-testid="x"` 를 막으면
+ * `{"x"}` 로, 그것을 막으면 `` {`x`} `` 로, 다시 `{"x" as const}` 로 온다.
+ * `import type` 을 막으면 `typeof import()` 로, `type _ =` 로, 줄바꿈으로 온다.
+ *
+ * 형태를 세는 한 이 경주는 끝나지 않는다. 파서에게 물으면 형태가 아니라
+ * **뜻**을 묻게 된다 — 이 속성의 값이 정적 문자열인가, 이 import 가 타입
+ * 자리인가. 6회차에 check-vacuous-tests 에서 얻은 교훈을 여기 늦게 적용한다.
+ */
+function parseSource(file, text) {
+	return ts.createSourceFile(
+		file,
+		text,
+		ts.ScriptTarget.Latest,
+		true,
+		/\.tsx$/.test(file) ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
+	);
+}
+
+/** 정적으로 값이 정해지는 문자열이면 그 값. 아니면 null. */
+function staticString(node) {
+	if (!node) return null;
+	if (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node))
+		return node.text;
+	if (ts.isJsxExpression(node)) return staticString(node.expression);
+	// `"x" as const`, `"x" as string` — 값은 그대로다.
+	if (ts.isAsExpression(node) || ts.isSatisfiesExpression?.(node))
+		return staticString(node.expression);
+	if (ts.isParenthesizedExpression(node)) return staticString(node.expression);
+	return null;
+}
+
+/** 템플릿의 정적 조각들. `${...}` 는 값이 정해지지 않으므로 뺀다. */
+function staticChunks(node) {
+	if (!node) return [];
+	if (ts.isJsxExpression(node)) return staticChunks(node.expression);
+	if (ts.isAsExpression(node) || ts.isParenthesizedExpression(node))
+		return staticChunks(node.expression);
+	if (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node))
+		return [node.text];
+	if (ts.isTemplateExpression(node))
+		return [node.head.text, ...node.templateSpans.map((s) => s.literal.text)];
+	return [];
+}
+
+/** 값으로 끌어오는 import 의 대상. 타입 자리는 뺀다. */
+function valueImportSpecifiers(tree) {
+	const out = [];
+	const visit = (node) => {
+		// `import("x")` 가 **타입 자리**면 ImportTypeNode 다. 값 자리면
+		// CallExpression 이다. 파서가 이미 갈라 준다 — 줄 머리를 볼 필요가 없다.
+		if (ts.isImportTypeNode(node)) return;
+		if (ts.isImportDeclaration(node)) {
+			const clause = node.importClause;
+			const spec = node.moduleSpecifier;
+			if (!ts.isStringLiteral(spec)) return;
+			// 부작용 import(절이 없다)는 값으로 끌어온다.
+			if (!clause) {
+				out.push(spec.text);
+				return;
+			}
+			if (clause.isTypeOnly) return;
+			const named = clause.namedBindings;
+			if (
+				!clause.name &&
+				named &&
+				ts.isNamedImports(named) &&
+				named.elements.length > 0 &&
+				named.elements.every((e) => e.isTypeOnly)
+			)
+				return;
+			out.push(spec.text);
+			return;
+		}
+		if (
+			ts.isCallExpression(node) &&
+			node.expression.kind === ts.SyntaxKind.ImportKeyword &&
+			node.arguments.length > 0 &&
+			ts.isStringLiteral(node.arguments[0])
+		) {
+			out.push(node.arguments[0].text);
+		}
+		ts.forEachChild(node, visit);
+	};
+	visit(tree);
+	return out;
+}
+
+/** JSX 속성을 뜻으로 읽는다. */
+function jsxAttributes(tree) {
+	const found = [];
+	const visit = (node) => {
+		if (ts.isJsxAttribute(node) && node.name && ts.isIdentifier(node.name)) {
+			found.push({
+				name: node.name.text,
+				value: staticString(node.initializer),
+				chunks: staticChunks(node.initializer),
+				// 값이 없는 `disabled` 와 `disabled={true}`·`{true as const}` 는
+				// 모두 영구히 꺼진 것이다. 형태가 아니라 뜻으로 본다.
+				alwaysTrue:
+					node.initializer === undefined ||
+					isTrueLiteral(node.initializer) ||
+					staticString(node.initializer) === "true",
+				at: node.getStart(tree),
+			});
+		}
+		ts.forEachChild(node, visit);
+	};
+	visit(tree);
+	return found;
+}
+
+function isTrueLiteral(node) {
+	if (!node) return false;
+	if (ts.isJsxExpression(node)) return isTrueLiteral(node.expression);
+	if (ts.isAsExpression(node) || ts.isParenthesizedExpression(node))
+		return isTrueLiteral(node.expression);
+	return node.kind === ts.SyntaxKind.TrueKeyword;
+}
+
 function unreachableFiles() {
 	const files = [
 		...tracked(`${SHELL}/src`, ".tsx"),
@@ -240,39 +382,11 @@ function unreachableFiles() {
 	const edges = new Map();
 	for (const [file, source] of code) {
 		const out = new Set();
-		// 부작용 import(`import "./apps/settings/index";`)도 값으로 끌어온다.
-		// 이 저장소는 앱 등록을 그 형태로 한다 — 빠뜨리면 설정·브라우저 화면이
-		// 통째로 닿지 않는 것으로 보인다(실제로 그렇게 보였다).
-		for (const m of source.matchAll(
-			// 절에 따옴표나 세미콜론이 들어가면 여러 줄을 삼킨다 — 실제로 부작용
-			// import 셋이 한 덩어리로 먹혀 사라졌다.
-			//
-			// 줄 앞에서만 본다. 문자열 안에 적어 둔 import 문구가 간선이 되는
-			// 것을 막는다 — 템플릿 한 줄로 고아가 살아났다.
-			/^[ \t]*import\s+([^;"']*?)\s*from\s*["']([^"']+)["']|\bimport\(\s*["']([^"']+)["']|^[ \t]*import\s*["']([^"']+)["']/gm,
-		)) {
-			// `type _ = import("./X")` 와 `typeof import("./X")` 는 값이 아니다.
-			const lineStart = source.lastIndexOf("\n", m.index) + 1;
-			const lineEnd = source.indexOf("\n", m.index);
-			const line = source.slice(lineStart, lineEnd < 0 ? undefined : lineEnd);
-			if (/^[ \t]*(?:export\s+)?(?:type|interface)\b/.test(line)) continue;
-			if (/\btypeof\s+import\s*\(/.test(line)) continue;
-			const clause = m[1] ?? "";
-			const spec = m[2] ?? m[3] ?? m[4];
-			if (!spec || !spec.startsWith(".")) continue;
-			// 접두 `import type` 도, 중괄호 안이 전부 `type` 인 것도 값이 아니다.
-			// 예전에는 접두만 봤고, `import { type X }` 한 형태로 고아가 살아났다.
-			if (/^\s*type\b/.test(clause)) continue;
-			const braces = clause.match(/\{([\s\S]*)\}/);
-			if (braces) {
-				const names = braces[1]
-					.split(",")
-					.map((n) => n.trim())
-					.filter(Boolean);
-				const outside = clause.replace(/\{[\s\S]*\}/, "").replace(/,/g, "").trim();
-				if (names.length > 0 && names.every((n) => /^type\s/.test(n)) && !outside)
-					continue;
-			}
+		// import 간선은 파서에게 묻는다. 형태를 열거하면 `typeof import()`,
+		// `as import()`, 줄 나눈 `type _ =` 처럼 끝없이 하나씩 더 온다.
+		// 파서는 타입 자리의 `import()` 를 ImportTypeNode 로 따로 준다.
+		for (const spec of valueImportSpecifiers(parseSource(file, source))) {
+			if (!spec.startsWith(".")) continue;
 			out.add(resolveImport(file, spec, code));
 		}
 		edges.set(file, [...out].filter(Boolean));
@@ -364,16 +478,24 @@ for (const file of [
 	// 렌더 검사를 통째로 비껴갔다. 표지로 쓰는 data 속성을 모두 본다.
 	// `data-testid="x"` 와 JSX 식 `data-testid={"x"}` 를 함께 본다. 식으로
 	// 적으면 정의 파일이 이어지지 않아 고아 판정을 통째로 비껴갔다.
-	for (const m of source.matchAll(
-		/data-(?:testid|app-id|[\w-]*tab)=\s*(?:\{\s*)?["']([^"']+)["']/g,
-	)) {
-		if (!definedIn.has(m[1])) definedIn.set(m[1], new Set());
-		definedIn.get(m[1]).add(file);
+	// 표지·클래스·꺼짐을 파서로 읽는다. 정규식으로는 `{"x"}`, `` {`x`} ``,
+	// `{"x" as const}` 처럼 같은 뜻의 형태가 끝없이 나오고, 매 회차 그중
+	// 하나가 지적으로 돌아왔다.
+	const attributes = jsxAttributes(parseSource(file, source));
+	for (const attr of attributes) {
+		if (!/^data-(?:testid|app-id|[\w-]*tab)$/.test(attr.name)) continue;
+		if (attr.value) {
+			if (!definedIn.has(attr.value)) definedIn.set(attr.value, new Set());
+			definedIn.get(attr.value).add(file);
+		}
 	}
-	// 조립해 넣는 표지(`data-meta-tab={tab.id}`)의 값 후보는 **그 파일 안의**
+	// 조립해 넣는 표지(`data-meta-tab={tab.id}`)의 값 후보는 그 파일 안의
 	// 리터럴 표에서만 찾는다. 저장소 전체에서 찾으면 관계없는 모듈의 `id:`
-	// 한 줄이 존재하지도 않는 탭을 살려 준다 — 로그 모듈이 그랬다.
-	if (/data-[\w-]*tab=\s*\{/.test(source)) {
+	// 한 줄이 존재하지도 않는 탭을 살려 준다.
+	const hasAssembledTab = attributes.some(
+		(attr) => /^data-[\w-]*tab$/.test(attr.name) && !attr.value,
+	);
+	if (hasAssembledTab) {
 		for (const m of source.matchAll(/\b(?:id|key):\s*["']([\w-]+)["']/g)) {
 			if (!definedIn.has(m[1])) definedIn.set(m[1], new Set());
 			definedIn.get(m[1]).add(file);
@@ -387,25 +509,19 @@ for (const file of [
 	// `className="a b"` 와 `className={`a ${x}`}` 둘 다 본다. 이 저장소의 BEM
 	// 토글 클래스는 대부분 템플릿이라, 리터럴만 보면 그 클래스들이 통째로
 	// 빠진다 — 실제로 그 형태로 고아 화면이 통과했다.
-	const classChunks = [
-		...[...source.matchAll(/className="([^"{}]+)"/g)].map((m) => m[1]),
-		// JSX 식으로 적은 리터럴도 클래스다 — `className={"x"}` 로만 바꿔도
-		// 고아 화면이 검사에서 사라졌다.
-		...[...source.matchAll(/className=\{\s*["']([^"']+)["']\s*\}/g)].map(
-			(m) => m[1],
-		),
-		...[...source.matchAll(/className=\{`([^`]*)`\}/g)].map((m) =>
-			// 템플릿의 `${...}` 부분은 값이 정해지지 않으므로 정적 조각만 본다.
-			m[1].replace(/\$\{[^}]*\}/g, " "),
-		),
-	];
-	for (const m of classChunks.map((c) => [null, c])) {
-		for (const cls of m[1].split(/\s+/).filter(Boolean)) {
-			if (!classDefinedIn.has(cls)) classDefinedIn.set(cls, new Set());
-			classDefinedIn.get(cls).add(file);
+	// 클래스도 파서로 읽는다. `className={"x" as const}` 처럼 한 겹만 달라도
+	// 정규식은 놓치고, 그때마다 화면이 검사에서 사라졌다.
+	for (const attr of attributes) {
+		if (attr.name !== "className") continue;
+		for (const chunk of attr.chunks) {
+			for (const cls of chunk.split(/\s+/).filter(Boolean)) {
+				if (!classDefinedIn.has(cls)) classDefinedIn.set(cls, new Set());
+				classDefinedIn.get(cls).add(file);
+			}
 		}
 	}
 }
+
 
 /**
  * 지금 렌더되지 않는 채로 두는 파일. 왜 남겨 두는지 적어야 한다.
@@ -531,10 +647,18 @@ for (const file of specs) {
 			missing.push({ file, name });
 			continue;
 		}
-		if (sourceText.includes(`data-testid="${name}"`)) continue;
-		// 문자열이 조립될 수도 있으니 이름만으로도 한 번 더 본다.
-		if (sourceText.includes(`"${name}"`)) continue;
-		if (sourceText.includes(`\`${name}\``)) continue;
+		// 파서가 속성으로 읽어 낸 이름이면 화면에 있는 것이다. 형태(`"x"`,
+		// `{"x"}`, `` {`x`} ``, `{"x" as const}`)는 파서가 이미 같은 값으로
+		// 만들어 준다.
+		if (definedIn.has(name)) continue;
+		// 예전에는 소스 **어디든** 그 이름이 따옴표 안에 있으면 살아 있다고
+		// 쳤다. 그래서 로그 모듈에 `const _removed = "ghost-wake-panel";`
+		// 한 줄만 남겨도 사라진 화면이 되살아났다 — 6회차에 닫은 주석
+		// 부활이, 주석이 아닌 문자열로 그대로 남아 있었다.
+		//
+		// 이름을 정하는 문맥 안에서만 본다. `getByTestId("x")` 같은 자리다.
+		if (identifierContexts.some((ctx) => ctx.includes(`"${name}"`))) continue;
+		if (identifierContexts.some((ctx) => ctx.includes(`\`${name}\``))) continue;
 		// 이름이 코드에서 만들어지는 경우가 흔하다
 		// (`data-testid={\`${role}-llm-mode\`}`). 앞이나 뒤가 잘린 꼴로도
 		// 찾아본다 — 그러지 않으면 멀쩡한 자리를 사라졌다고 보고한다.

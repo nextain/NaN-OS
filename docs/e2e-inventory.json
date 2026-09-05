@@ -2,8 +2,8 @@
 	"generatedFrom": "packages/shell/e2e-tauri/specs",
 	"total": 121,
 	"summary": {
-		"credentialed_live": 90,
-		"deterministic_ci": 23,
+		"credentialed_live": 91,
+		"deterministic_ci": 22,
 		"native_local": 8
 	},
 	"specs": [
@@ -1323,7 +1323,7 @@
 			"spec": "channel-reboot.spec.ts",
 			"conf": [],
 			"env": [],
-			"tier": "deterministic_ci"
+			"tier": "credentialed_live"
 		},
 		{
 			"spec": "env-tool-browser-native.spec.ts",

@@ -318,6 +318,8 @@ function guarded(name, depth = 0) {
 }
 
 const unguarded = [];
+// 상수를 거쳐 부른 파괴 명령도 확인이 필요하다. 잇지 않으면 세기만 하고
+// 판정에 들어가지 않아, 감춘 쪽이 이득을 본다.
 /**
  * 명령 이름을 조립해 부르는 자리.
  *
@@ -326,6 +328,8 @@ const unguarded = [];
  * 조립은 그 자체로 이 게이트를 무력화하므로 여기서 막는다.
  */
 const composedInvokes = [];
+/** 상수를 거쳐 부른 파괴 명령. 리터럴 호출과 같이 본다. */
+const resolvedLiteralCalls = [];
 /**
  * 오늘 이미 있는 조립 호출. 포트(경계 객체)라서 이름을 인자로 받는 자리다.
  * 면제하려면 **무엇이 그 자리를 지나는지 어디서 정하는지** 적어야 한다.
@@ -353,9 +357,23 @@ for (const [file, source] of sources) {
 		const arg = match[1].trim();
 		// 리터럴 이름이면 이 게이트가 볼 수 있다.
 		if (/^(["'])[a-z0-9_]+\1/i.test(arg)) continue;
-		// 이름을 상수에 담아 두는 것은 조립이 아니다 — 그 상수의 값이
-		// 리터럴이면 게이트가 따라갈 수 있다.
-		if (/^[A-Z][A-Z0-9_]*$/.test(arg)) continue;
+		// 이름을 상수에 담아 두는 것은 조립이 아니다 — **그 상수의 값을 실제로
+		// 따라갈 수 있을 때만** 그렇다. 예전에는 대문자 이름이면 무조건
+		// 넘겼는데, 리터럴 호출 검사는 `invoke("...")` 만 보므로 그 자리가
+		// 통째로 사라졌다. 값을 찾아 그 이름으로 판정한다.
+		const constant = new RegExp(
+			`\\b(?:const|let|var)\\s+${arg}\\s*(?::[^=]+)?=\\s*["']([a-z0-9_]+)["']`,
+		).exec(code);
+		if (constant) {
+			if (!commands.includes(constant[1])) continue;
+			// 파괴 명령을 상수로 감춘 것이다. 리터럴로 부른 것과 같이 본다.
+			resolvedLiteralCalls.push({
+				file,
+				line: source.slice(0, match.index).split("\n").length,
+				command: constant[1],
+			});
+			continue;
+		}
 		// 이름을 변수로 받아도, 그 변수의 타입이 리터럴 합집합으로 묶여 있으면
 		// 어떤 명령이 지나는지 정해져 있다. 손으로 면제하지 말고 그 리터럴을
 		// 읽어 판정한다 — 면제 목록은 이유가 거짓이 되어도 그대로 남는다.
@@ -451,6 +469,21 @@ if (composedNew.length) {
 		"     Tauri 명령은 리터럴 문자열로 불러라. 조립하면 확인 검사가 그 자리를 통째로 놓친다.",
 	);
 	process.exit(1);
+}
+
+for (const hit of resolvedLiteralCalls) {
+	const source = sources.get(hit.file) ?? "";
+	const at = source.split("\n").slice(0, hit.line).join("\n").length;
+	const block = enclosingFunction(source, Math.max(0, at - 1));
+	const guardedHere =
+		block &&
+		block.text.length <= READABLE_FUNCTION_CHARS &&
+		AFFORDANCE.test(codeOnly(block.text));
+	if (guardedHere) continue;
+	const wrapper = block ? functionNameBefore(source, block.start) : null;
+	if (reversibleHereOrNull(hit.command, wrapper)) continue;
+	if (wrapper && guarded(wrapper)) continue;
+	unguarded.push({ file: hit.file, line: hit.line, command: hit.command, wrapper });
 }
 
 console.log(

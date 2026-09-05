@@ -1,0 +1,165 @@
+{
+	"machine": "naia-os-3090",
+	"tiers": [
+		"credentialed_live"
+	],
+	"ranOn": {
+		"inventorySha256": "6cb9c861803a1d3b14124206a5490d967948d3665a7ab22a8b6742371d97664c",
+		"commit": "594d5d610ec6eb218efce18174f4305adbb9e014",
+		"host": "bazzite",
+		"platform": "linux-x64",
+		"node": "v26.7.0"
+	},
+	"started": "2026-09-05T11:01:23.957Z",
+	"finished": "2026-09-05T11:41:11.741Z",
+	"status": "failed",
+	"planned": [
+		"01-app-launch.spec.ts",
+		"03-basic-chat.spec.ts",
+		"05-skill-system.spec.ts",
+		"07-cleanup.spec.ts",
+		"09-onboarding.spec.ts",
+		"11-cost-dashboard.spec.ts",
+		"13-lab-login.spec.ts",
+		"15-skill-manager-ai.spec.ts",
+		"17-skill-notify.spec.ts",
+		"19-skills-bulk.spec.ts",
+		"21-cron-recurring.spec.ts",
+		"24-adk-setup-flow.spec.ts",
+		"29-cron-gateway.spec.ts",
+		"34-device-pairing.spec.ts",
+		"37-execute-command.spec.ts",
+		"39-web-tools.spec.ts",
+		"41-agents-crud.spec.ts",
+		"43-device-management.spec.ts",
+		"45-cron-gateway-full.spec.ts",
+		"47-tts-full.spec.ts",
+		"49-approvals-full.spec.ts",
+		"51-skills-advanced.spec.ts",
+		"53-settings-theme.spec.ts",
+		"54b-settings-locale-prompt.spec.ts",
+		"56-settings-voice.spec.ts",
+		"58-history-interactions.spec.ts",
+		"60-diagnostics-interactions.spec.ts",
+		"64-settings-gateway-tts.spec.ts",
+		"67-onboarding-config-save.spec.ts",
+		"69-notify-discord-live.spec.ts",
+		"70b-live-providers-switching.spec.ts",
+		"71-proactive-speech-profiles.spec.ts",
+		"73-tts-edge-preview.spec.ts",
+		"75-app-position.spec.ts",
+		"77-stt-provider-switching.spec.ts",
+		"79-pipeline-voice-activation.spec.ts",
+		"81-chat-tts-response.spec.ts",
+		"83-tts-per-model-verification.spec.ts",
+		"87-tts-audio-verification.spec.ts",
+		"90-app-system.spec.ts",
+		"90-glm-newcore-chat.spec.ts",
+		"94-discord-live-auth.spec.ts",
+		"98-codex-chat-delegation.spec.ts",
+		"99-launch-f4-skill-usage.spec.ts",
+		"99-store-certification.spec.ts"
+	],
+	"executed": [
+		"01-app-launch.spec.ts",
+		"34-device-pairing.spec.ts",
+		"53-settings-theme.spec.ts",
+		"60-diagnostics-interactions.spec.ts",
+		"64-settings-gateway-tts.spec.ts",
+		"69-notify-discord-live.spec.ts"
+	],
+	"groups": [
+		{
+			"conf": "wdio.conf.ts",
+			"specs": 42,
+			"status": "failed",
+			"passed": 6,
+			"failedSpecs": [
+				"03-basic-chat.spec.ts",
+				"05-skill-system.spec.ts",
+				"07-cleanup.spec.ts",
+				"09-onboarding.spec.ts",
+				"11-cost-dashboard.spec.ts",
+				"13-lab-login.spec.ts",
+				"15-skill-manager-ai.spec.ts",
+				"17-skill-notify.spec.ts",
+				"19-skills-bulk.spec.ts",
+				"21-cron-recurring.spec.ts",
+				"24-adk-setup-flow.spec.ts",
+				"29-cron-gateway.spec.ts",
+				"37-execute-command.spec.ts",
+				"39-web-tools.spec.ts",
+				"41-agents-crud.spec.ts",
+				"43-device-management.spec.ts",
+				"45-cron-gateway-full.spec.ts",
+				"47-tts-full.spec.ts",
+				"49-approvals-full.spec.ts",
+				"51-skills-advanced.spec.ts",
+				"54b-settings-locale-prompt.spec.ts",
+				"56-settings-voice.spec.ts",
+				"58-history-interactions.spec.ts",
+				"67-onboarding-config-save.spec.ts",
+				"70b-live-providers-switching.spec.ts",
+				"71-proactive-speech-profiles.spec.ts",
+				"73-tts-edge-preview.spec.ts",
+				"75-app-position.spec.ts",
+				"77-stt-provider-switching.spec.ts",
+				"79-pipeline-voice-activation.spec.ts",
+				"81-chat-tts-response.spec.ts",
+				"83-tts-per-model-verification.spec.ts",
+				"87-tts-audio-verification.spec.ts",
+				"90-app-system.spec.ts",
+				"99-launch-f4-skill-usage.spec.ts",
+				"99-store-certification.spec.ts"
+			]
+		},
+		{
+			"conf": "wdio.conf.chat.ts",
+			"specs": 1,
+			"status": "failed",
+			"passed": 0,
+			"failedSpecs": [
+				"90-glm-newcore-chat.spec.ts"
+			]
+		},
+		{
+			"conf": "wdio.conf.discord-live.ts",
+			"specs": 1,
+			"status": "failed",
+			"passed": 0,
+			"failedSpecs": []
+		},
+		{
+			"conf": "wdio.conf.codex-delegation.ts",
+			"specs": 1,
+			"status": "failed",
+			"passed": 0,
+			"failedSpecs": [
+				"98-codex-chat-delegation.spec.ts"
+			]
+		}
+	],
+	"envMissingBeforeRun": {
+		"24-adk-setup-flow.spec.ts": [
+			"NAIA_E2E_ADK_BASE"
+		],
+		"69-notify-discord-live.spec.ts": [
+			"DISCORD_WEBHOOK",
+			"DISCORD_WEBHOOK_URL"
+		],
+		"70b-live-providers-switching.spec.ts": [
+			"XAI_API_KEY",
+			"ZHIPU_API_KEY"
+		],
+		"83-tts-per-model-verification.spec.ts": [
+			"XAI_API_KEY"
+		],
+		"87-tts-audio-verification.spec.ts": [
+			"ELEVENLABS_API_KEY"
+		],
+		"94-discord-live-auth.spec.ts": [
+			"NAIA_E2E_DISCORD_TOKEN_FILE"
+		]
+	},
+	"detail": "wdio.conf.ts: 종료 코드 1; wdio.conf.chat.ts: 종료 코드 1; wdio.conf.discord-live.ts: 종료 코드 1; wdio.conf.codex-delegation.ts: 종료 코드 1"
+}

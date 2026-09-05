@@ -24,6 +24,7 @@
 
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
+import ts from "typescript";
 
 const SHELL = "packages/shell";
 
@@ -166,11 +167,128 @@ function isDeadEnd(source, at) {
 const stranded = [];
 let surfaces = 0;
 
+/**
+ * 알림 화면을 파서로 찾는다.
+ *
+ * 정규식으로 `role="alert"` 를 찾는 동안 지적이 매번 같은 모양이었다 —
+ * `role={"alert"}`, `role={role}`, `role = "alert"`, 그리고 600자 창을
+ * 넘기는 것. 형태를 세는 한 하나가 더 온다.
+ *
+ * 파서에게 물으면 세 가지가 한꺼번에 정해진다. 이 속성의 값이 "alert" 인가,
+ * 이 JSX 가 **return 이 돌려주는 전부**인가, 그 안에 행동이 있는가.
+ * `return` 과 알림 사이의 글자 수를 재는 대신 구문 트리에서 부모를 본다.
+ */
+function alertReturns(file, text) {
+	const tree = ts.createSourceFile(
+		file,
+		text,
+		ts.ScriptTarget.Latest,
+		true,
+		/\.tsx$/.test(file) ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
+	);
+	const out = [];
+	const isAlertTag = (node) =>
+		node.attributes.properties.some(
+			(a) =>
+				ts.isJsxAttribute(a) &&
+				a.name &&
+				ts.isIdentifier(a.name) &&
+				a.name.text === "role" &&
+				staticText(a.initializer, tree) === "alert",
+		);
+	const visit = (node) => {
+		if (ts.isReturnStatement(node) && node.expression) {
+			const returned = unwrap(node.expression);
+			// 껍데기를 하나씩 벗겨 내려간다. 형제가 있으면 알림은 화면의
+			// 일부이지 전부가 아니다. 한 자식만 있는 동안 계속 내려가서
+			// 알림에 닿으면 그것이 화면을 통째로 대신한 것이다.
+			let element = onlyElement(returned);
+			while (element && !isAlertTag(elementOpening(element))) {
+				element = onlyChildElement(element);
+			}
+			if (element && isAlertTag(elementOpening(element))) {
+				out.push({
+					text: element.getText(tree),
+					// 자리는 알림 요소의 줄로 적는다. return 줄로 적으면 껍데기를
+					// 하나 씌우는 것만으로 면제 키가 어긋난다.
+					line: text
+						.slice(0, elementOpening(element).getStart(tree))
+						.split("\n").length,
+				});
+			}
+		}
+		ts.forEachChild(node, visit);
+	};
+	visit(tree);
+	return out;
+}
+
+/** 괄호·단언을 벗긴다. */
+function unwrap(node) {
+	if (ts.isParenthesizedExpression(node) || ts.isAsExpression(node))
+		return unwrap(node.expression);
+	return node;
+}
+
+/** 돌려주는 것이 요소 하나면 그 요소. 조각 하나만 감싼 것도 같다. */
+function onlyElement(node) {
+	if (ts.isJsxElement(node) || ts.isJsxSelfClosingElement(node)) return node;
+	if (ts.isJsxFragment(node)) {
+		const kids = node.children.filter(
+			(c) => !ts.isJsxText(c) || c.getText().trim().length > 0,
+		);
+		if (kids.length === 1) return onlyElement(unwrap(kids[0]));
+	}
+	return null;
+}
+
+/** 자식이 하나뿐이면 그 자식. 형제가 있으면 null. */
+function onlyChildElement(node) {
+	if (!ts.isJsxElement(node)) return null;
+	const kids = node.children.filter(
+		(c) => !ts.isJsxText(c) || c.getText().trim().length > 0,
+	);
+	if (kids.length !== 1) return null;
+	return onlyElement(unwrap(kids[0]));
+}
+
+function elementOpening(node) {
+	return ts.isJsxElement(node) ? node.openingElement : node;
+}
+
+/** 속성 값이 정적으로 정해지면 그 문자열. `{"alert"}` 와 `{role}` 을 가른다. */
+function staticText(init, tree) {
+	if (!init) return null;
+	if (ts.isStringLiteral(init) || ts.isNoSubstitutionTemplateLiteral(init))
+		return init.text;
+	if (ts.isJsxExpression(init)) return staticText(init.expression, tree);
+	if (ts.isParenthesizedExpression(init) || ts.isAsExpression(init))
+		return staticText(init.expression, tree);
+	// `const role = "alert"` 처럼 값을 한 번 거쳐 넣는 형태. 같은 파일에서
+	// 그 이름의 상수 초기값을 찾는다 — 한 겹 거쳤다고 다른 알림이 되지 않는다.
+	if (ts.isIdentifier(init)) {
+		let found = null;
+		const seek = (node) => {
+			if (
+				ts.isVariableDeclaration(node) &&
+				ts.isIdentifier(node.name) &&
+				node.name.text === init.text &&
+				node.initializer
+			) {
+				const value = staticText(node.initializer, tree);
+				if (value !== null) found = value;
+			}
+			ts.forEachChild(node, seek);
+		};
+		seek(tree);
+		return found;
+	}
+	return null;
+}
+
 for (const file of files) {
 	const source = readFileSync(file, "utf8");
-	if (!FAILURE_SURFACE.test(source)) continue;
-	for (const block of alertBlocks(source)) {
-		if (!isDeadEnd(source, block.at)) continue;
+	for (const block of alertReturns(file, source)) {
 		surfaces += 1;
 		if (RECOVERY.test(block.text)) continue;
 		stranded.push({ file, line: block.line });

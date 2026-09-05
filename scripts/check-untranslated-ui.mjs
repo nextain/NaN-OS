@@ -115,7 +115,7 @@ perFile.sort((a, b) => b.lines - a.lines);
  * 형태였다. 언어를 알아내는 길을 모두 적는다.
  */
 const USES_LOCALE =
-	/\bgetLocale\s*\(\)|\bnavigator\.language|\bnavigator\.languages|\bdetectLocale\s*\(|\bi18n\.locale\b|\bcurrentLocale\b|localStorage[^;\n]{0,40}locale|\bloadConfig\s*\([^)]*\)\s*\.\s*locale|\bconfig\.locale\b|["'](?:naia-)?locale["']/i;
+	/\bgetLocale\s*\(\)|\bnavigator\.language|\bnavigator\.languages|\bdetectLocale\s*\(|\bi18n\.locale\b|\bcurrentLocale\b|localStorage[^;\n]{0,40}locale|\bloadConfig\s*\([^)]*\)\s*\.\s*locale|\bconfig\.locale\b|["'](?:naia-)?locale["']|documentElement\.lang|\bIntl\.[A-Za-z]+|\bnavigator\.userLanguage|\bdocument\.lang\b/i;
 const COMPARES_LANGUAGE = [
 	// getLocale() === "ko" / lang === "ko" / locale.startsWith("ko")
 	/[\w.()]+\s*===?\s*["'`][a-z]{2}["'`]/,
