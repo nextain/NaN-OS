@@ -1178,7 +1178,7 @@ for (const locale of ["ko", "en"] as const) {
 
 	// SKIPPED: walks the old onboarding UI (provider cards on the first step).
 	// Re-enable once the screenshot script targets the current agentName-first wizard.
-	test.describe.skip(`Manual Screenshots — ${label}`, () => {
+	test.describe.skip(`rewrite-needed: Manual Screenshots — ${label} (옛 온보딩 UI 가정)`, () => {
 		test(`onboarding flow (${locale})`, async ({ page }) => {
 			await captureOnboarding(page, dir, locale);
 		});

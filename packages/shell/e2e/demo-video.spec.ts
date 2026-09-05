@@ -685,7 +685,7 @@ test.use({
 // which has been replaced. Re-enable after the demo script is updated for the
 // agentName-first wizard. Run manually with `pnpm test:e2e -- demo-video.spec.ts`
 // when the demo flow is rewritten.
-test.describe.skip("Demo Video Recording", () => {
+test.describe.skip("rewrite-needed: Demo Video Recording (데모 흐름이 agentName 우선 마법사로 바뀜)", () => {
 	test(`full 3-minute demo [${DEMO_LANG}]`, async ({ page }, testInfo) => {
 		fs.mkdirSync(LANG_OUTPUT_DIR, { recursive: true });
 		const tl = new SceneTimeline();

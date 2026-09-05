@@ -131,7 +131,7 @@ const MEMORY_MOCK_SCRIPT = `
 // SKIPPED: OpenClaw was migrated to Naia Gateway in #201 — sync_openclaw_config and
 // read_openclaw_memory_files no longer exist. Spec needs a full rewrite against the
 // new sync_gateway_config flow + memory_get_all_facts persistence.
-test.describe.skip("Memory Sync E2E", () => {
+test.describe.skip("rewrite-needed: Memory Sync E2E (#201 로 OpenClaw API 소멸 — 전면 재작성)", () => {
 	test.beforeEach(async ({ page }) => {
 		await page.addInitScript(MEMORY_MOCK_SCRIPT);
 		await page.addInitScript({ content: TAURI_BASE_MOCK_FALLBACK });

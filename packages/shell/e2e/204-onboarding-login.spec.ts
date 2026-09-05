@@ -144,7 +144,7 @@ async function emitTauriEvent(
 // SKIPPED: assumes the old onboarding UI with `.onboarding-provider-card.lab-card`
 // on the first step. The current wizard starts at agentName and reaches Lab login
 // via a different path — rewrite needed.
-test.describe.skip("#204 Onboarding Lab Login — embedded Chrome path", () => {
+test.describe.skip("rewrite-needed: #204 Onboarding Lab Login — embedded Chrome path (옛 온보딩 UI 가정)", () => {
 	// ── B13: source=embedded included when Chrome available ──────────────────
 
 	test("B13: Lab 로그인 시 embedded Chrome 경로에서 URL에 source=embedded 포함", async ({

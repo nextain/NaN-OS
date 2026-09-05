@@ -56,7 +56,7 @@ for (const file of files) {
 			// 이름 앞에 은퇴를 밝힌 것은 "왜 꺼져 있는지" 가 적힌 것이다. 그것까지
 			// 같은 칸에 세면, 사유를 적은 사람과 아무 말 없이 끈 사람이 구별되지
 			// 않는다. 따로 세되 눈에는 보이게 한다.
-			if (/["'`]\s*(?:retired|은퇴)[:：]/.test(line)) retired.push(where);
+			if (/["'`]\s*(?:retired|rewrite-needed|은퇴|재작성필요)[:：]/.test(line)) retired.push(where);
 			else deadSkips.push(where);
 		}
 	});
@@ -64,7 +64,7 @@ for (const file of files) {
 
 // 오늘의 상태.
 const BASELINE_VACUOUS = 0;
-const BASELINE_DEAD_SKIPS = 8;
+const BASELINE_DEAD_SKIPS = 0;
 
 console.log(`[vacuous-tests] 자명 단정 ${vacuous.length} (baseline ${BASELINE_VACUOUS}) / 이유 없는 skip ${deadSkips.length} (baseline ${BASELINE_DEAD_SKIPS}) / 은퇴 선언 ${retired.length}`);
 

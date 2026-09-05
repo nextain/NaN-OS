@@ -660,7 +660,7 @@ describe("OnboardingWizard", () => {
 		// 보이는 분기라 기본 render 만으로 잡히지 않음. cycle 내 follow-up =
 		// provider 사전 설정 + step navigation 정확히. 지금은 listener path
 		// 검증 (test #2) 만 의무 + component-level URL builder = TODO.
-		it.skip("handleNaiaLogin 호출 시 redirect_uri + state CSRF token 포함된 URL 로 system browser 열어야", async () => {
+		it.skip("rewrite-needed: handleNaiaLogin 이 redirect_uri + state CSRF 토큰을 담은 URL 로 시스템 브라우저를 연다 (provider 사전 설정과 단계 이동이 필요)", async () => {
 			const { invoke } = await import("@tauri-apps/api/core");
 			const { openUrl } = await import("@tauri-apps/plugin-opener");
 

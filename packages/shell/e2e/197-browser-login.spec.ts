@@ -166,7 +166,7 @@ test.describe("#197 Chrome Embedding + Login E2E", () => {
 	// SKIPPED: assumes the old onboarding UI with a `.onboarding-provider-card.lab-card`
 	// entry point on the first step. The current onboarding wizard starts at agentName
 	// and surfaces the Lab login via a different control — rewrite needed.
-	test.skip("B9: Lab 로그인 버튼 클릭 시 내장 브라우저 navigate 호출 (#197)", async ({
+	test.skip("rewrite-needed: B9 Lab 로그인 버튼 클릭 시 내장 브라우저 navigate 호출 (#197 — 옛 온보딩 UI 가정)", async ({
 		page,
 	}) => {
 		await setupOnboardingPage(page);
@@ -199,7 +199,7 @@ test.describe("#197 Chrome Embedding + Login E2E", () => {
 
 	// ── B10: Lab login button triggers login flow (#197) ─────────────────
 
-	test.skip("B10: Lab 로그인 버튼 클릭 시 로그인 플로우 시작 (#197)", async ({
+	test.skip("rewrite-needed: B10 Lab 로그인 버튼 클릭 시 로그인 플로우 시작 (#197 — 옛 온보딩 UI 가정)", async ({
 		page,
 	}) => {
 		await setupOnboardingPage(page);
@@ -223,7 +223,7 @@ test.describe("#197 Chrome Embedding + Login E2E", () => {
 
 	// ── B11: Lab login shows waiting state (#197) ────────────────────────
 
-	test.skip("B11: Lab 로그인 대기 상태 표시 (#197)", async ({ page }) => {
+	test.skip("rewrite-needed: B11 Lab 로그인 대기 상태 표시 (#197 — 옛 온보딩 UI 가정)", async ({ page }) => {
 		await setupOnboardingPage(page);
 
 		// Click Lab login
