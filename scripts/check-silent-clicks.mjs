@@ -35,14 +35,21 @@ const SHELL = "packages/shell";
 const SILENT_CLICK = new RegExp(
 	[
 		// if (el) el.click();  /  if (el) await el.click();
-		String.raw`if\s*\(\s*(\w+)\s*\)\s*(?:await\s+)?\1\.click\(\)`,
+		String.raw`if\s*\(\s*(\w+)\s*\)\s*(?:await\s+)?\1\.click\(`,
 		// if (el) { el.click(); }  /  if (el) { await el.click(); }
 		//   포매터가 중괄호를 권하므로 오히려 이쪽이 더 흔하다
-		String.raw`if\s*\(\s*(\w+)\s*\)\s*\{\s*(?:await\s+)?\2\.click\(\)`,
+		String.raw`if\s*\(\s*(\w+)\s*\)\s*\{\s*(?:await\s+)?\2\.click\(`,
 		// el && el.click();  /  el && (await el.click());
-		String.raw`(\w+)\s*&&\s*\(?\s*(?:await\s+)?\3\.click\(\)`,
+		String.raw`(\w+)\s*&&\s*\(?\s*(?:await\s+)?\3\.click\(`,
 		// el?.click();  /  await el?.click();
-		String.raw`(\w+)\?\.click\(\)`,
+		String.raw`(\w+)\?\.click\(`,
+	// 같은 무음 클릭을 뒤집어 적은 형태. `if (!el) return;` 뒤의 클릭도
+	// 요소가 없으면 아무 일 없이 지나간다 — 방향만 바꾼 같은 사고다.
+	//
+	// 다만 `if (!el) return false;` 는 다르다. 못 눌렀다는 사실을 값으로
+	// 돌려주고 부르는 쪽이 그것을 단언한다 — 이 게이트가 권하는 형태이고
+	// clickElement 가 그렇게 쓴다. 값 없이 빠져나가는 것만 센다.
+	String.raw`if\s*\(\s*!\s*(\w+)\s*\)\s*(?:return|continue)\s*;[\s\S]{0,120}?\.click\(`,
 		// waitForClickable — 리눅스 드라이버에서 반드시 시간을 다 쓴다
 		String.raw`waitForClickable\s*\(`,
 	].join("|"),
@@ -56,7 +63,7 @@ const SILENT_CLICK = new RegExp(
  * 한 꼴만 보고 있어서 `if (el) { el.click(); }` 와 `el && el.click()` 을
  * 놓치고 있었다. 포매터가 중괄호를 권하므로 놓치던 쪽이 오히려 더 흔했다.
  */
-const BASELINE = 61;
+const BASELINE = 59;
 
 function tracked(dir, extension) {
 	try {

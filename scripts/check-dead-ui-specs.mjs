@@ -100,6 +100,25 @@ const identifierContexts = [
 		),
 	);
 
+/**
+ * 코드가 조립해 넣는 표지 값의 후보.
+ *
+ * `data-meta-tab={tab.id}` 처럼 값이 변수로 들어가는 자리는 문자열로 만날 수
+ * 없다. 다만 그 후보는 거의 언제나 리터럴 표로 적혀 있다
+ * (`{ id: "progress", ... }`). 그 표에서 값을 모은다. 못 찾으면 그 이름은
+ * 화면에 없는 것이다.
+ */
+let assembledCache = null;
+function assembledValues() {
+	if (assembledCache) return assembledCache;
+	assembledCache = new Set();
+	for (const m of sourceText.matchAll(/\bid:\s*["']([\w-]+)["']/g))
+		assembledCache.add(m[1]);
+	for (const m of sourceText.matchAll(/\bkey:\s*["']([\w-]+)["']/g))
+		assembledCache.add(m[1]);
+	return assembledCache;
+}
+
 /** Rust 가 프런트에 내주는 명령 이름 전부. */
 function tauriCommandNames() {
 	const names = new Set();
@@ -145,7 +164,14 @@ function permanentlyDisabledTestIds(sourceText) {
 	// 여는 태그 하나를 통째로 잡아 그 안에 표지와 disabled 가 함께 있는지 본다.
 	for (const tag of sourceText.matchAll(/<\w+[^>]*?>/gs)) {
 		const text = tag[0];
-		if (!/\sdisabled\s*(?=[/>\s])/.test(text)) continue;
+		// 값 없는 `disabled` 만 보면 React 에서 같은 뜻인 `disabled={true}` 가
+		// 빠져나간다. 실제로 연결 탭을 그 형태로 바꾸는 것만으로 통과했다.
+		// 조건부 `disabled={expr}` 는 상태에 따라 열리므로 여전히 세지 않는다.
+		if (
+			!/\sdisabled\s*(?=[/>\s])/.test(text) &&
+			!/\sdisabled\s*=\s*\{\s*true\s*\}/.test(text)
+		)
+			continue;
 		for (const attr of text.matchAll(
 			/data-(?:testid|settings-tab|app-id)=["']([^"']+)["']/g,
 		)) {
@@ -180,40 +206,105 @@ const KNOWN_DISABLED = new Map([
  * import 되지 않으면 그 파일은 화면에 오르지 않는다. 진입점(App.tsx 등)과
  * 테스트는 빼고 본다.
  */
-function unrenderedComponentFiles() {
+function unreachableFiles() {
 	const files = [
 		...tracked(`${SHELL}/src`, ".tsx"),
 		...tracked(`${SHELL}/src`, ".ts"),
 	].filter((f) => !/\.test\.|__tests__/.test(f));
-	const all = new Map(files.map((f) => [f, readFileSync(f, "utf8")]));
-	const orphans = [];
-	for (const [file, source] of all) {
-		// 컴포넌트를 내보내는 파일만 본다.
-		if (!/export\s+(?:default\s+)?function\s+[A-Z]/.test(source)) continue;
-		const base = file.split("/").pop().replace(/\.[jt]sx?$/, "");
-		if (base === "App" || base === "main") continue;
-		let importedAsValue = false;
-		for (const [other, otherSource] of all) {
-			if (other === file) continue;
-			// `import type { X } from "./Y"` 는 화면에 올리지 않는다.
-			// 경로의 **마지막 조각**이 이 이름이어야 한다. 경계를 안 두면
-			// `./HerdrWorkspaceCenterArea` 가 `WorkspaceCenterArea` 로 잡혀
-			// 렌더되지 않는 파일이 렌더되는 것으로 보인다(실제로 그랬다).
-			const seg = `(?:^|/)${base}(?:\\.[jt]sx?)?`;
-			const valueImport = new RegExp(
-				`import\\s+(?!type\\b)[^;]*?from\\s+["'][^"']*?${seg}["']|import\\(\\s*["'][^"']*?${seg}["']`,
-			);
-			if (valueImport.test(otherSource)) {
-				importedAsValue = true;
-				break;
+	// 주석을 지운다. `// import { X } from "./X"` 한 줄로 고아 파일을
+	// 살려 낼 수 있었다.
+	const code = new Map(
+		files.map((f) => [
+			f,
+			readFileSync(f, "utf8")
+				.replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, " "))
+				.replace(/(^|[^:])\/\/[^\n]*/g, "$1 "),
+		]),
+	);
+
+	/** 이 파일이 값으로 끌어오는 파일들. */
+	const edges = new Map();
+	for (const [file, source] of code) {
+		const out = new Set();
+		// 부작용 import(`import "./apps/settings/index";`)도 값으로 끌어온다.
+		// 이 저장소는 앱 등록을 그 형태로 한다 — 빠뜨리면 설정·브라우저 화면이
+		// 통째로 닿지 않는 것으로 보인다(실제로 그렇게 보였다).
+		for (const m of source.matchAll(
+			// 절에 따옴표나 세미콜론이 들어가면 여러 줄을 삼킨다 — 실제로 부작용
+			// import 셋이 한 덩어리로 먹혀 사라졌다.
+			/import\s+([^;"']*?)\s*from\s*["']([^"']+)["']|import\(\s*["']([^"']+)["']|import\s*["']([^"']+)["']/g,
+		)) {
+			const clause = m[1] ?? "";
+			const spec = m[2] ?? m[3] ?? m[4];
+			if (!spec || !spec.startsWith(".")) continue;
+			// 접두 `import type` 도, 중괄호 안이 전부 `type` 인 것도 값이 아니다.
+			// 예전에는 접두만 봤고, `import { type X }` 한 형태로 고아가 살아났다.
+			if (/^\s*type\b/.test(clause)) continue;
+			const braces = clause.match(/\{([\s\S]*)\}/);
+			if (braces) {
+				const names = braces[1]
+					.split(",")
+					.map((n) => n.trim())
+					.filter(Boolean);
+				const outside = clause.replace(/\{[\s\S]*\}/, "").replace(/,/g, "").trim();
+				if (names.length > 0 && names.every((n) => /^type\s/.test(n)) && !outside)
+					continue;
 			}
+			out.add(resolveImport(file, spec, code));
 		}
-		if (!importedAsValue) orphans.push(file);
+		edges.set(file, [...out].filter(Boolean));
 	}
-	return orphans;
+
+	// 진입점에서 닿는 파일만 살아 있다. 예전에는 "누군가 import 하는가" 를
+	// 물었는데, 그러면 **죽은 부모의 자식**이 살아 있는 것으로 셌다 —
+	// CodingWorkersApp 이 그랬다. 물어야 할 것은 도달 가능성이다.
+	// 진입점. `main`·`App` 말고 앱 등록 파일도 진입점이다 — 슬라이드처럼
+	// 패키지로 묶여 런타임에 매니페스트로 올라오는 앱은 정적 import 사슬에
+	// 나타나지 않는다. 그것을 못 보면 살아 있는 화면을 죽었다고 말한다.
+	const roots = files.filter((f) =>
+		/\/(?:main|App)\.tsx?$/.test(f) ||
+		/\/apps\/[^/]+\/(?:index|standalone)\.tsx?$/.test(f),
+	);
+	const reachable = new Set();
+	const stack = [...roots];
+	while (stack.length) {
+		const file = stack.pop();
+		if (!file || reachable.has(file)) continue;
+		reachable.add(file);
+		for (const next of edges.get(file) ?? []) stack.push(next);
+	}
+	if (roots.length === 0 || reachable.size < 20) {
+		console.error(
+			`[dead-ui] 진입점에서 닿는 파일이 ${reachable.size}개뿐이다 — import 해석이 깨졌다`,
+		);
+		process.exit(2);
+	}
+	return files.filter((f) => !reachable.has(f));
 }
 
-const unrendered = new Set(unrenderedComponentFiles());
+/** 상대 import 를 실제 파일 경로로 맞춘다. */
+function resolveImport(from, spec, code) {
+	const base = from.split("/").slice(0, -1).join("/");
+	const parts = `${base}/${spec}`.split("/");
+	const stack = [];
+	for (const part of parts) {
+		if (part === "." || part === "") continue;
+		if (part === "..") stack.pop();
+		else stack.push(part);
+	}
+	const path = stack.join("/").replace(/\.[jt]sx?$/, "");
+	for (const candidate of [
+		`${path}.tsx`,
+		`${path}.ts`,
+		`${path}/index.tsx`,
+		`${path}/index.ts`,
+	]) {
+		if (code.has(candidate)) return candidate;
+	}
+	return null;
+}
+
+const unrendered = new Set(unreachableFiles());
 
 /** 표지가 어느 파일에서 정의되는지. 렌더 여부를 표지에 잇기 위해서다. */
 const definedIn = new Map();
@@ -224,8 +315,10 @@ for (const file of [
 	...tracked(`${SHELL}/src`, ".ts"),
 ].filter((f) => !/\.test\.|__tests__/.test(f))) {
 	const source = readFileSync(file, "utf8");
+	// `data-meta-tab` 처럼 이 목록에 없던 속성은 정의 파일에 이어지지 않아
+	// 렌더 검사를 통째로 비껴갔다. 표지로 쓰는 data 속성을 모두 본다.
 	for (const m of source.matchAll(
-		/data-(?:testid|settings-tab|app-id)=["']([^"']+)["']/g,
+		/data-(?:testid|app-id|[\w-]*tab)=["']([^"']+)["']/g,
 	)) {
 		if (!definedIn.has(m[1])) definedIn.set(m[1], new Set());
 		definedIn.get(m[1]).add(file);
@@ -233,7 +326,17 @@ for (const file of [
 	// 클래스 이름도 화면의 표지다. 실측에서 드러났다 — `.workspace-app` 은
 	// 렌더되지 않는 WorkspaceCenterArea.tsx 에만 있고, 스펙 셋이 그것으로
 	// 화면을 집는다. data-testid 만 보면 이 부류가 통째로 빠진다.
-	for (const m of source.matchAll(/className="([^"{}]+)"/g)) {
+	// `className="a b"` 와 `className={`a ${x}`}` 둘 다 본다. 이 저장소의 BEM
+	// 토글 클래스는 대부분 템플릿이라, 리터럴만 보면 그 클래스들이 통째로
+	// 빠진다 — 실제로 그 형태로 고아 화면이 통과했다.
+	const classChunks = [
+		...[...source.matchAll(/className="([^"{}]+)"/g)].map((m) => m[1]),
+		...[...source.matchAll(/className=\{`([^`]*)`\}/g)].map((m) =>
+			// 템플릿의 `${...}` 부분은 값이 정해지지 않으므로 정적 조각만 본다.
+			m[1].replace(/\$\{[^}]*\}/g, " "),
+		),
+	];
+	for (const m of classChunks.map((c) => [null, c])) {
 		for (const cls of m[1].split(/\s+/).filter(Boolean)) {
 			if (!classDefinedIn.has(cls)) classDefinedIn.set(cls, new Set());
 			classDefinedIn.get(cls).add(file);
@@ -248,6 +351,10 @@ const KNOWN_UNRENDERED = new Map([
 	[
 		"packages/shell/src/apps/workspace/WorkspaceCenterArea.tsx",
 		"Herdr 통합(db33ef4a)으로 워크스페이스 화면이 HerdrWorkspaceCenterArea 로 바뀌면서 이 1,986줄이 화면에서 빠졌다. 타입만 쓰인다. coding-workers-toggle 이 여기에만 있어 91-jeonju-course-worker 가 두 기계에서 실패한다. 기능을 일부러 뺀 것인지 통합이 떨어뜨린 것인지는 오너가 정한다",
+	],
+	[
+		"packages/shell/src/apps/workspace/CodingWorkersApp.tsx",
+		"코딩 작업자 화면. 값으로 끌어오는 곳이 WorkspaceCenterArea.tsx 하나뿐인데 그 부모가 이미 진입점에서 닿지 않는다. 즉 이 파일도 화면에 오르지 않는다 — #554 와 같은 뿌리다",
 	],
 	[
 		"packages/shell/src/components/ConnectionsSettingsTab.tsx",
@@ -339,6 +446,16 @@ for (const file of specs) {
 			// 못 만난다. 속성 이름이 소스에 있으면 살아 있는 것으로 본다.
 			const attribute = /^(data-[\w-]+)=/.exec(name)?.[1] ?? name;
 			if (sourceText.includes(name)) continue;
+			// 예전에는 `data-meta-tab={` 가 소스에 있으면 **어떤 값이든** 살아
+			// 있다고 쳤다. 그래서 존재하지도 않는 탭을 기다려도 통과했다.
+			// 값이 코드에서 만들어지더라도 그 후보는 대개 리터럴 표로 적혀
+			// 있으므로, 그 표에서 값을 찾아 대조한다.
+			const wanted = /=["']([^"']+)["']$/.exec(name)?.[1];
+			if (sourceText.includes(`${attribute}={`) && wanted) {
+				if (assembledValues().has(wanted)) continue;
+				missing.push({ file, name });
+				continue;
+			}
 			if (sourceText.includes(`${attribute}={`)) continue;
 			missing.push({ file, name });
 			continue;

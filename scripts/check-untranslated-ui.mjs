@@ -48,9 +48,15 @@ function hasHangul(text) {
 		/\\u[0-9a-fA-F]{4}\s*-\s*\\u[0-9a-fA-F]{4}/g,
 		"",
 	);
-	const decoded = withoutRanges.replace(/\\u([0-9a-fA-F]{4})/g, (_, hex) =>
-		String.fromCharCode(Number.parseInt(hex, 16)),
-	);
+	const decoded = withoutRanges
+		// ES6 코드포인트 형태 `\u{c5c5}`. 네 자리 형태만 풀던 동안 이 형태로
+		// 적은 한글이 그대로 지나갔다.
+		.replace(/\\u\{([0-9a-fA-F]{1,6})\}/g, (_, hex) =>
+			String.fromCodePoint(Number.parseInt(hex, 16)),
+		)
+		.replace(/\\u([0-9a-fA-F]{4})/g, (_, hex) =>
+			String.fromCharCode(Number.parseInt(hex, 16)),
+		);
 	return /[가-힣]{2,}/.test(decoded);
 }
 const COMMENT = /^\s*(\/\/|\*|\/\*)/;
