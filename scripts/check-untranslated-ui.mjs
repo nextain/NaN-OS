@@ -65,11 +65,37 @@ perFile.sort((a, b) => b.lines - a.lines);
  * 문자열을 고르는 코드는 그 자리에 적힌 언어만 지원한다 — 나머지는 조용히
  * 영어(또는 한국어)가 나오고, 어느 게이트도 그것을 보지 못한다.
  */
-const SHADOW_TABLE = /getLocale\(\)\s*===\s*["'`]\w+["'`]\s*\?/;
+/**
+ * 로케일을 보고 문자열을 고르는 코드.
+ *
+ * 처음에는 `getLocale() === "ko" ?` 한 꼴만 봤다. 그래서 변수 하나만 거치면
+ * (`const lang = getLocale(); lang === "ko" ? …`) 빠져나갔고, `switch` 나
+ * `startsWith` 도 마찬가지였다. 가장 흔한 형태가 그 밖에 있었던 셈이다.
+ *
+ * 이제는 `getLocale()` 이 나오는 파일에서 언어 코드와 견주는 자리를 찾는다.
+ * 언어 코드는 두 글자 소문자다.
+ */
+const USES_LOCALE = /\bgetLocale\s*\(\)/;
+const COMPARES_LANGUAGE = [
+	// getLocale() === "ko" / lang === "ko" / locale.startsWith("ko")
+	/[\w.()]+\s*===?\s*["'`][a-z]{2}["'`]/,
+	/\.startsWith\(\s*["'`][a-z]{2}["'`]/,
+	// switch (getLocale()) { case "ko": }
+	/case\s+["'`][a-z]{2}["'`]\s*:/,
+];
 
 const shadows = [];
 for (const file of walk(ROOT)) {
-	if (SHADOW_TABLE.test(readFileSync(file, "utf8"))) shadows.push(file);
+	// 주석은 지운다. "예전에는 getLocale() === \"ko\" 로 골랐다" 같은 설명을
+	// 잡으면, 고친 사람이 그 사실을 적을 수 없게 된다.
+	const source = readFileSync(file, "utf8")
+		.replace(/\/\*[\s\S]*?\*\//g, " ")
+		.replace(/(^|[^:])\/\/[^\n]*/g, "$1 ");
+	if (!USES_LOCALE.test(source)) continue;
+	// 로케일을 읽기만 하고 언어로 갈라 문자열을 고르지 않는 자리(예: 날짜
+	// 형식, HTML lang 속성)는 우회가 아니다. 언어와 견주는 자리가 있어야
+	// 표로 본다.
+	if (COMPARES_LANGUAGE.some((pattern) => pattern.test(source))) shadows.push(file);
 }
 
 // 오늘의 상태. 줄이는 것이 목표이고 늘리는 것을 막는다.
@@ -77,7 +103,7 @@ for (const file of walk(ROOT)) {
 // `.tsx` 만 센 것이라 문자열을 `.ts` 로 옮기기만 해도 게이트를 피할 수
 // 있었다. 그 범위로 다시 세면 658줄이었고, 로케일 밖 번역표 다섯을
 // 옮기면서 592줄이 되었다.
-const BASELINE_LINES = 588;
+const BASELINE_LINES = 585;
 const BASELINE_FILES = 66;
 
 console.log(`[untranslated-ui] 화면에 박힌 한국어 ${total}줄 / ${perFile.length}파일 (baseline ${BASELINE_LINES}줄 / ${BASELINE_FILES}파일)`);

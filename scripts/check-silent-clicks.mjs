@@ -21,11 +21,28 @@ import { readFileSync } from "node:fs";
 const SHELL = "packages/shell";
 
 /** 있으면 누르고 없으면 조용히 넘어가는 꼴. */
-const SILENT_CLICK =
-	/if\s*\(\s*(\w+)\s*\)\s*\1\.click\(\)|(\w+)\?\.\click\(\)/g;
+const SILENT_CLICK = new RegExp(
+	[
+		// if (el) el.click();
+		String.raw`if\s*\(\s*(\w+)\s*\)\s*\1\.click\(\)`,
+		// if (el) { el.click(); }  — 포매터가 권하는 쪽이라 오히려 더 흔하다
+		String.raw`if\s*\(\s*(\w+)\s*\)\s*\{\s*\2\.click\(\)`,
+		// el && el.click();
+		String.raw`(\w+)\s*&&\s*\3\.click\(\)`,
+		// el?.click();
+		String.raw`(\w+)\?\.click\(\)`,
+	].join("|"),
+	"g",
+);
 
-/** 지금 상태. 줄이면 이 값도 함께 줄여야 한다. */
-const BASELINE = 49;
+/**
+ * 지금 상태. 줄이면 이 값도 함께 줄여야 한다.
+ *
+ * 49 에서 61 로 올렸다. 새로 생긴 것이 아니라, 검사가 `if (el) el.click()`
+ * 한 꼴만 보고 있어서 `if (el) { el.click(); }` 와 `el && el.click()` 을
+ * 놓치고 있었다. 포매터가 중괄호를 권하므로 놓치던 쪽이 오히려 더 흔했다.
+ */
+const BASELINE = 61;
 
 function tracked(dir, extension) {
 	try {
@@ -58,8 +75,18 @@ console.log(
 );
 
 if (hits.length > BASELINE) {
-	console.error("\n늘었다. 새로 더한 자리:");
-	for (const hit of hits.slice(BASELINE)) console.error(`  ${hit.file}:${hit.line}`);
+	// 어느 자리가 새것인지 순서로 가정하면 안 된다. 파일이 알파벳순으로
+	// 읽히므로, 앞쪽 파일에 하나 더하면 뒤쪽의 멀쩡한 자리가 "새로 늘었다"
+	// 로 지목된다 — 그러면 고치는 사람이 엉뚱한 파일을 판다.
+	console.error(`\n늘었다(${hits.length} > ${BASELINE}). 지금 있는 자리를 파일별로 센다:`);
+	const byFile = new Map();
+	for (const hit of hits) byFile.set(hit.file, (byFile.get(hit.file) ?? 0) + 1);
+	for (const [file, count] of [...byFile].sort((a, b) => b[1] - a[1])) {
+		console.error(`  ${String(count).padStart(3)} ${file}`);
+	}
+	console.error(
+		"\n방금 만진 파일을 보라. 이 검사는 총수만 지키므로 어느 줄이 새것인지는 말하지 못한다.",
+	);
 	console.error(
 		"\n눌렀는지 돌려주고 못 눌렀으면 그 자리에서 말하라 — 헬퍼의 clickElement 가 그렇게 한다.",
 	);

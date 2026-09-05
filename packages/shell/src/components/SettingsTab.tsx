@@ -2696,39 +2696,9 @@ export function SettingsTab() {
 		persistConfig(updates);
 	}
 	function getPreviewText(_voice?: string): string {
-		const lang = locale.slice(0, 2).toLowerCase();
-		switch (lang) {
-			case "ko":
-				return "안녕하세요, 반갑습니다. 오늘도 좋은 하루 되세요.";
-			case "en":
-				return "Hello, nice to meet you. Have a great day!";
-			case "ja":
-				return "こんにちは、はじめまして。良い一日をお過ごしください。";
-			case "zh":
-				return "你好，很高兴认识你。祝你有美好的一天！";
-			case "fr":
-				return "Bonjour, enchanté. Passez une bonne journée !";
-			case "de":
-				return "Hallo, freut mich. Einen schönen Tag noch!";
-			case "es":
-				return "Hola, mucho gusto. ¡Que tengas un buen día!";
-			case "ru":
-				return "Здравствуйте, приятно познакомиться. Хорошего дня!";
-			case "ar":
-				return "مرحباً، سعيد بلقائك. أتمنى لك يوماً سعيداً!";
-			case "hi":
-				return "नमस्ते, आपसे मिलकर खुशी हुई। आपका दिन शुभ हो!";
-			case "bn":
-				return "নমস্কার, আপনার সাথে দেখা হয়ে ভালো লাগলো। শুভ দিন!";
-			case "pt":
-				return "Olá, prazer em conhecê-lo. Tenha um ótimo dia!";
-			case "id":
-				return "Halo, senang bertemu Anda. Semoga hari Anda menyenangkan!";
-			case "vi":
-				return "Xin chào, rất vui được gặp bạn. Chúc bạn một ngày tốt lành!";
-			default:
-				return "Hello, nice to meet you. Have a great day!";
-		}
+		// 미리듣기 문장은 로케일이 정한다. 예전에는 여기서 언어를 보고 골랐는데,
+		// 그러면 새 언어를 더할 때마다 이 함수를 고쳐야 하고 대개 잊는다.
+		return t("settings.voicePreviewText");
 	}
 
 	async function handleVoicePreview() {
@@ -4465,15 +4435,13 @@ export function SettingsTab() {
 													: Math.max(
 															0,
 															Math.min(100, Math.round(progress.percent ?? 0)),
-														);
-												const ko = getLocale() === "ko";
+														);												// 진행 문구는 로케일이 정한다. 예전에는 여기서 한국어인지만 보고
+												// 골랐고, 나머지 열두 언어 사용자는 영어를 봤다.
 												const label = isDownload
-													? `${ko ? "다운로드 중" : "Downloading"} ${Math.round(
+													? `${t("voice.install.downloading")} ${Math.round(
 															(progress.downloaded ?? 0) / 1048576,
 														)} / ${Math.round(total / 1048576)} MiB`
-													: (progress.label ??
-														progress.step ??
-														(ko ? "설치 중" : "Installing"));
+													: (progress.label ?? progress.step ?? t("voice.install.installing"));
 												return (
 													<div
 														className="voxcpm2-install-progress"
@@ -5542,15 +5510,13 @@ export function SettingsTab() {
 										: Math.max(
 												0,
 												Math.min(100, Math.round(progress.percent ?? 0)),
-											);
-									const ko = getLocale() === "ko";
+											);									// 진행 문구는 로케일이 정한다. 예전에는 여기서 한국어인지만 보고
+									// 골랐고, 나머지 열두 언어 사용자는 영어를 봤다.
 									const label = isDownload
-										? `${ko ? "다운로드 중" : "Downloading"} ${Math.round(
+										? `${t("voice.install.downloading")} ${Math.round(
 												(progress.downloaded ?? 0) / 1048576,
 											)} / ${Math.round(total / 1048576)} MiB`
-										: (progress.label ??
-											progress.step ??
-											(ko ? "설치 중" : "Installing"));
+										: (progress.label ?? progress.step ?? t("voice.install.installing"));
 									return (
 										<div
 											className="voxcpm2-install-progress"

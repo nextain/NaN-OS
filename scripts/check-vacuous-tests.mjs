@@ -26,12 +26,17 @@
  * 비활성화 `test.fixme`, 그리고 단정이 아예 없는 본문까지.
  */
 import { readdirSync, readFileSync, statSync } from "node:fs";
+import ts from "typescript";
 import { join } from "node:path";
 
 const ROOTS = [
 	"packages/shell/e2e",
 	"packages/shell/e2e-tauri/specs",
 	"packages/shell/src",
+	// 셸 패키지의 스크립트 테스트. CI 의 `shell tests (vitest)` 가 실제로
+	// 돌린다(130 케이스). 이 자리를 빼놓아 4회차에서 잡힌 것과 같은 부류가
+	// 한 번 더 남아 있었다.
+	"packages/shell/scripts",
 	// 저장소 뿌리의 테스트. CI 가 `pnpm test` 와 훅 자체 검사로 실제 돌린다.
 	"src",
 	"scripts",
@@ -73,11 +78,75 @@ const SELF_ASSERTIONS = [
 /** 주석과 문자열을 지운다. 설명을 잡아 고친 사람의 입을 막지 않기 위해서다. */
 function codeOnly(text) {
 	return text
-		.replace(/\/\*[\s\S]*?\*\//g, " ")
+		// 개행은 남긴다. 지우면 줄 수가 달라져 뒤에서 계산한 줄 번호가
+		// 어긋나고, 게이트가 엉뚱한 줄을 지목한다.
+		.replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, " "))
 		.replace(/(^|[^:])\/\/[^\n]*/g, "$1 ")
 		.replace(/`(?:[^`\\]|\\.)*`/g, "``")
 		.replace(/"(?:[^"\\]|\\.)*"/g, '""')
 		.replace(/'(?:[^'\\]|\\.)*'/g, "''");
+}
+
+/**
+ * 본문에 아무 단정도 없는 테스트.
+ *
+ * 머리말이 이 형태를 잡는다고 적어 두었는데 실제 검사가 없었다 — 적어 놓고
+ * 하지 않은 것이 이 게이트가 없애려는 바로 그 형태다. 제목에는 시나리오가
+ * 적혀 있고, 리포터에는 PASS 로 올라가고, 재는 것은 없다.
+ *
+ * 정규식으로 본문을 잘라 보려 했지만 오탐이 많았다 — 중괄호 균형과 줄
+ * 번호가 어긋나 데이터 배열 한가운데를 "단정 없는 테스트" 로 지목했다.
+ * 구문을 추측하는 대신 파서에게 묻는다.
+ *
+ * 단정으로 보는 것: `expect` 계열, `assert`, 그리고 실패할 수 있는 대기
+ * (`waitUntil`, `waitForDisplayed` 등). 대기는 시간이 지나면 던지므로 그
+ * 자체가 단정이다.
+ */
+const ASSERTS =
+	/\bexpect\b|\bassert\w*\s*\(|\bverify\w*\s*\(|waitUntil\s*\(|waitFor(?:Displayed|Exist|Enabled|Clickable|Function|URL|Selector)\s*\(|\.toThrow|rejects\./;
+
+/** 테스트를 여는 이름. `it.each` 같은 변형도 이름 부분만 본다. */
+function testCallName(expression) {
+	if (ts.isIdentifier(expression)) return expression.text;
+	if (ts.isPropertyAccessExpression(expression))
+		return testCallName(expression.expression);
+	if (ts.isCallExpression(expression)) return testCallName(expression.expression);
+	return "";
+}
+
+/** 이 파일의 테스트 본문을 파서로 찾는다. */
+function testBodies(file, source) {
+	const tree = ts.createSourceFile(
+		file,
+		source,
+		ts.ScriptTarget.Latest,
+		true,
+		file.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
+	);
+	const out = [];
+	const visit = (node) => {
+		if (
+			ts.isCallExpression(node) &&
+			["it", "test"].includes(testCallName(node.expression)) &&
+			node.arguments.length >= 2
+		) {
+			const body = node.arguments[1];
+			if (
+				(ts.isArrowFunction(body) || ts.isFunctionExpression(body)) &&
+				body.body
+			) {
+				out.push({
+					text: body.body.getText(tree),
+					line: tree.getLineAndCharacterOfPosition(node.getStart(tree)).line + 1,
+					// `it.skip` 은 따로 세므로 여기서 뺀다.
+					skipped: /\.(skip|fixme|todo)\b/.test(node.expression.getText(tree)),
+				});
+			}
+		}
+		ts.forEachChild(node, visit);
+	};
+	visit(tree);
+	return out;
 }
 
 for (const file of files) {
@@ -91,6 +160,14 @@ for (const file of files) {
 			vacuous.push(`${file} (${pattern.source})`);
 			break;
 		}
+	}
+
+	for (const body of testBodies(file, source)) {
+		// 꺼 둔 테스트와 본문이 빈 것은 skip 칸에서 센다.
+		if (body.skipped) continue;
+		if (body.text.replace(/[\s{}]/g, "").length === 0) continue;
+		if (ASSERTS.test(body.text)) continue;
+		vacuous.push(`${file}:${body.line} (단정 없음)`);
 	}
 
 	// skip 판정은 원본 줄에서 한다. 주석을 지우면 여러 줄이 한 줄로 합쳐져
@@ -128,7 +205,13 @@ for (const file of files) {
 // 무제한 늘릴 수 있고, 그러면 이 게이트가 스스로 경고한 "baseline 이
 // 알리바이가 된다" 를 이 게이트가 저지르게 된다. 사유를 적는 것은 면제가
 // 아니라 기록일 뿐이다.
-const BASELINE_VACUOUS = 0;
+// 32 는 대부분 화면을 찍기만 하는 스크린샷 스펙이다. 그것도 통과 수치에
+// 더해지므로 "덮였다" 로 읽히는 것은 같지만, 한 번에 고치면 아무도 검토할
+// 수 없는 커밋이 된다. 지금 상태를 잠그고 늘어나는 것만 막는다.
+//
+// `expect(true).toBe(true)` 같은 자기 확인은 0 이다. 이 숫자는 전부 "본문에
+// 단정이 하나도 없는" 쪽이다.
+const BASELINE_VACUOUS = 32;
 const BASELINE_DEAD_SKIPS = 0;
 // 16 에서 19 로 올렸다. 늘어난 셋은 새로 꺼 둔 것이 아니라, 원래 **통과하는
 // 테스트를 만들어 내던** 자리다 — 공급자 키가 없으면 `it("[SKIP] ...")` 로
@@ -147,8 +230,15 @@ console.log(
 
 let failed = false;
 if (vacuous.length > BASELINE_VACUOUS) {
-	console.error("  ❌ 아무것도 재지 않는 단정이 늘었다:");
-	for (const where of vacuous) console.error(`     ${where}`);
+	console.error(`  ❌ 아무것도 재지 않는 단정이 늘었다(${vacuous.length} > ${BASELINE_VACUOUS}):`);
+	const byFile = new Map();
+	for (const where of vacuous) {
+		const file = where.split(":")[0];
+		byFile.set(file, (byFile.get(file) ?? 0) + 1);
+	}
+	for (const [file, count] of [...byFile].sort((a, b) => b[1] - a[1]).slice(0, 8)) {
+		console.error(`     ${String(count).padStart(3)} ${file}`);
+	}
 	console.error("     그 자리가 무엇을 확인해야 하는지 적거나, 테스트를 지워라.");
 	failed = true;
 }
