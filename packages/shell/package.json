@@ -36,7 +36,6 @@
     "test:e2e:tauri:codex-delegation": "pnpm run build:e2e:tauri && wdio run e2e-tauri/wdio.conf.codex-delegation.ts",
     "test:e2e:tauri:nva-prebaked": "node scripts/run-nva-prebaked-e2e.mjs",
     "test:e2e:tauri:voice-6g": "node scripts/run-voice-6g-e2e.mjs",
-    "test:e2e:tauri:jeonju-course": "pnpm run build:e2e:tauri && node scripts/run-jeonju-course-e2e.mjs",
     "test:e2e:tauri:discord-settings": "pnpm run build:e2e:tauri && node scripts/run-discord-settings-e2e.mjs",
     "test:e2e:tauri:radio": "node scripts/build-radio-queue-e2e.mjs && wdio run e2e-tauri/wdio.conf.radio-queue.ts",
     "test:e2e:tauri:nva": "wdio run e2e-tauri/wdio.conf.ts --spec e2e-tauri/specs/13-nva-capability.spec.ts",

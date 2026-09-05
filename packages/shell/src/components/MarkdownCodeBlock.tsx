@@ -35,10 +35,37 @@ export function highlightCode(code: string, language: string): string {
 	});
 }
 
+/**
+ * Clipboard action shared by the code block and the Mermaid failure screen.
+ *
+ * The failure screen used to show the source and nothing else, so the only way
+ * out was to select the text by hand. It now reuses this exact button.
+ */
+function CopyCodeButton({ code }: { code: string }) {
+	const [copied, setCopied] = useState(false);
+	return (
+		<button
+			type="button"
+			onClick={() => {
+				void navigator.clipboard.writeText(code).then(() => {
+					setCopied(true);
+					window.setTimeout(() => setCopied(false), 1600);
+				});
+			}}
+			aria-live="polite"
+		>
+			{copied ? t("chat.codeCopied") : t("chat.codeCopy")}
+		</button>
+	);
+}
+
 /** Shared safe Mermaid renderer for chat and workspace Markdown. */
 export function MermaidBlock({ code }: { code: string }) {
 	const containerRef = useRef<HTMLDivElement>(null);
 	const [error, setError] = useState<string | null>(null);
+	// Bumped by the retry button so the same source is rendered again — a failed
+	// import or a transient worker error does not have to be permanent.
+	const [attempt, setAttempt] = useState(0);
 
 	useEffect(() => {
 		if (!containerRef.current || !code.trim()) return;
@@ -60,12 +87,24 @@ export function MermaidBlock({ code }: { code: string }) {
 		return () => {
 			cancelled = true;
 		};
-	}, [code]);
+	}, [code, attempt]);
 
 	if (error) {
 		return (
 			<div className="markdown-mermaid-error" role="alert">
-				<div>Mermaid 오류 — 원문을 표시합니다.</div>
+				<div>{t("chat.mermaidError")}</div>
+				<div className="chat-code-actions">
+					<CopyCodeButton code={code} />
+					<button
+						type="button"
+						onClick={() => {
+							setError(null);
+							setAttempt((count) => count + 1);
+						}}
+					>
+						{t("common.retry")}
+					</button>
+				</div>
 				<pre>
 					<code>{code}</code>
 				</pre>
@@ -86,7 +125,6 @@ export function MarkdownCodeBlock({
 	children,
 	onOpenWorkspace,
 }: MarkdownCodeBlockProps) {
-	const [copied, setCopied] = useState(false);
 	const language = /language-([\w-]+)/.exec(className ?? "")?.[1] ?? "text";
 	const code = String(children).replace(/\n$/, "");
 	if (language.toLowerCase() === "mermaid") return <MermaidBlock code={code} />;
@@ -98,18 +136,7 @@ export function MarkdownCodeBlock({
 				<span className="chat-code-language">{language}</span>
 			</summary>
 			<div className="chat-code-actions">
-				<button
-					type="button"
-					onClick={() => {
-						void navigator.clipboard.writeText(code).then(() => {
-							setCopied(true);
-							window.setTimeout(() => setCopied(false), 1600);
-						});
-					}}
-					aria-live="polite"
-				>
-					{copied ? t("chat.codeCopied") : t("chat.codeCopy")}
-				</button>
+				<CopyCodeButton code={code} />
 				{onOpenWorkspace ? (
 					<button type="button" onClick={() => onOpenWorkspace(code, language)}>
 						워크스페이스에서 열기

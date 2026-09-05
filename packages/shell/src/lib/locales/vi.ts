@@ -201,6 +201,7 @@ export default {
 	"chat.thinking": "Đang suy nghĩ...",
 	"chat.codeCopy": "Copy",
 	"chat.codeCopied": "Copied",
+	"chat.mermaidError": "Mermaid không thể vẽ sơ đồ này. Văn bản gốc đang được hiển thị.",
 	"workspace.mediaOpenError": "Could not open the media file",
 	"workspace.audioCodecError": "This audio file cannot be played. It may be damaged or use an unsupported codec.",
 	"workspace.videoCodecError": "This video file cannot be played. It may be damaged or use an unsupported codec.",

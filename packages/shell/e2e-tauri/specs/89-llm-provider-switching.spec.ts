@@ -280,6 +280,110 @@ async function captureAppState(): Promise<{
 	}, S.onboardingOverlay);
 }
 
+/**
+ * 기능 단정을 지고 갈 대표 제공자 하나.
+ *
+ * 루크 결정(2026-09-05): 모든 제공자에서 기능까지 다시 재지는 않는다. 이
+ * 순회는 제공자마다 실제 모델을 부르므로, 제공자별 단정을 깊게 둘수록 같은
+ * 비용이 제공자 수만큼 곱해진다. 그래서 기능(설정의 세부 값이 그대로
+ * 복원되는가, 성공 화면을 남기는가)은 대표 하나에서 재고, 나머지 제공자는
+ * "고를 수 있고, 요청이 거절되지 않고, 오류가 아닌 응답이 하나 돌아온다"
+ * 까지만 잰다. 제공자 수는 줄지 않는다 — 줄어드는 것은 제공자별 단정의
+ * 깊이다.
+ *
+ * 대표는 registry(PROVIDER_DISPLAY_ORDER)의 첫째인 `nextain`(사내 lab-proxy)
+ * 이다. 그 키가 없으면 이 스펙의 before() 가 기준선으로 삼는 `gemini` 로,
+ * 그것도 없으면 이번 실행에서 건너뛰지 않는 첫 제공자로 내려간다. 대표를
+ * 하나로 못 박아 두면 그 키가 없는 기계에서 대표가 통째로 skip 되고, 기능
+ * 단정이 어디에서도 돌지 않은 채 초록만 남는다 — 덮개가 조용히 얇아지는
+ * 바로 그 형태다.
+ */
+function pickRepresentative(): string {
+	const runnable = TEST_PROVIDERS.filter(
+		(p) => !p.keyEnv || getApiKey(p.keyEnv),
+	);
+	for (const preferred of ["nextain", "gemini"]) {
+		if (runnable.some((p) => p.provider === preferred)) return preferred;
+	}
+	return runnable[0]?.provider ?? "";
+}
+
+const REPRESENTATIVE = pickRepresentative();
+
+/** 제공자 설정을 쓰고 앱을 새로 고친 뒤 화면 상태를 돌려준다. */
+async function applyProvider(
+	tp: (typeof TEST_PROVIDERS)[number],
+	apiKey: string,
+): Promise<Awaited<ReturnType<typeof captureAppState>>> {
+	const patch: Record<string, unknown> = {
+		provider: tp.provider,
+		model: tp.model,
+		onboardingComplete: true,
+	};
+	const keyField = tp.keyField ?? "apiKey";
+	if (apiKey) patch[keyField] = apiKey;
+	if (tp.extraConfig) Object.assign(patch, tp.extraConfig);
+	await writeConfig(patch);
+
+	// Refresh to apply
+	await refreshAndWaitForChat();
+
+	const state = await captureAppState();
+	console.log(
+		`[89] ${tp.provider} state after switch: ${JSON.stringify(state)}`,
+	);
+	return state;
+}
+
+/**
+ * 메시지를 하나 보내고 응답이 돌아오는지 본다 — 이것이 "동작 여부" 다.
+ *
+ * `keepSuccessArtifacts` 는 대표 제공자에서만 켠다. 통과한 화면과 브라우저
+ * 로그를 제공자 수만큼 남길 이유가 없다. 실패했을 때의 화면·로그·llm 로그는
+ * 제공자를 가리지 않고 그대로 남긴다 — 그것이 없으면 어느 제공자가 왜
+ * 죽었는지 알 수 없다.
+ */
+async function sendAndCheckResponse(
+	tp: (typeof TEST_PROVIDERS)[number],
+	keepSuccessArtifacts: boolean,
+): Promise<void> {
+	await dumpBrowserLogs(`${tp.provider}:before-send`);
+	try {
+		await sendMessage("Say hello in one word.");
+		const response = await getLastAssistantMessage();
+		console.log(`[89] ${tp.provider} response: "${response.slice(0, 200)}"`);
+
+		if (keepSuccessArtifacts) {
+			await screenshot(`89-${tp.provider}-response`);
+			await dumpBrowserLogs(`${tp.provider}:after-response`);
+		}
+
+		expect(response.length).toBeGreaterThan(0);
+
+		// Check for error in response
+		if (
+			response.includes("[오류]") ||
+			response.toLowerCase().includes("error")
+		) {
+			console.error(
+				`[89] ${tp.provider} ERROR in response: ${response.slice(0, 300)}`,
+			);
+			await screenshot(`89-${tp.provider}-error-in-response`);
+		}
+	} catch (err) {
+		// Capture state + screenshot on failure for debugging
+		const state = await captureAppState();
+		console.error(
+			`[89] ${tp.provider} FAILED. App state: ${JSON.stringify(state)}`,
+		);
+		await screenshot(`89-${tp.provider}-FAILED`);
+		await dumpBrowserLogs(`${tp.provider}:FAILED`);
+		// Print current llm-debug.log to see what agent reported
+		printLlmDebugLog(10);
+		throw err;
+	}
+}
+
 describe("89 — LLM provider switching", () => {
 	let originalConfig: string;
 
@@ -352,9 +456,14 @@ describe("89 — LLM provider switching", () => {
 		}
 	});
 
+	console.log(
+		`[89] 기능 단정을 맡는 대표 제공자: ${REPRESENTATIVE || "(없음)"}`,
+	);
+
 	for (const tp of TEST_PROVIDERS) {
 		const apiKey = getApiKey(tp.keyEnv);
 		const skip = tp.keyEnv && !apiKey;
+		const isRepresentative = tp.provider === REPRESENTATIVE;
 
 		describe(`${tp.label} (${tp.provider})`, () => {
 			if (skip) {
@@ -364,68 +473,35 @@ describe("89 — LLM provider switching", () => {
 				return;
 			}
 
+			if (!isRepresentative) {
+				// 동작 여부만 잰다: 제공자를 고를 수 있고, 요청이 거절되지 않고,
+				// 오류가 아닌 응답이 하나 돌아오는가.
+				//
+				// 여기 있던 기능 단정 — 모델 식별자가 설정에 그대로 복원되는지
+				// (`expect(state.model).toBe(tp.model)`) 와 전환 직후의 성공 화면
+				// 저장 — 은 지운 것이 아니라 대표 제공자(REPRESENTATIVE) 경로로
+				// 옮겼다. 설정을 쓰고 되읽는 코드는 제공자와 무관하게 같은
+				// 경로여서 아홉 번 다시 잴 것이 없고, 다시 재면 제공자마다 실제
+				// 모델 호출 비용만 곱해진다.
+				it("should switch provider and answer (동작 여부만)", async () => {
+					const state = await applyProvider(tp, apiKey);
+					expect(state.provider).toBe(tp.provider);
+					await sendAndCheckResponse(tp, false);
+				});
+				return;
+			}
+
 			it("should switch provider and verify config", async () => {
-				// Set provider config
-				const patch: Record<string, unknown> = {
-					provider: tp.provider,
-					model: tp.model,
-					onboardingComplete: true,
-				};
-				const keyField = tp.keyField ?? "apiKey";
-				if (apiKey) patch[keyField] = apiKey;
-				if (tp.extraConfig) Object.assign(patch, tp.extraConfig);
-				await writeConfig(patch);
-
-				// Refresh to apply
-				await refreshAndWaitForChat();
-
-				// Verify config was applied
-				const state = await captureAppState();
-				console.log(
-					`[89] ${tp.provider} state after switch: ${JSON.stringify(state)}`,
-				);
+				const state = await applyProvider(tp, apiKey);
 				await screenshot(`89-${tp.provider}-after-switch`);
 				expect(state.provider).toBe(tp.provider);
+				// 기능: 설정의 세부 값(모델 식별자)이 그대로 복원되는가. 나머지
+				// 제공자에서 이 단정을 여기로 모았다.
 				expect(state.model).toBe(tp.model);
 			});
 
 			it("should get chat response", async () => {
-				await dumpBrowserLogs(`${tp.provider}:before-send`);
-				try {
-					await sendMessage("Say hello in one word.");
-					const response = await getLastAssistantMessage();
-					console.log(
-						`[89] ${tp.provider} response: "${response.slice(0, 200)}"`,
-					);
-
-					// Screenshot of successful response
-					await screenshot(`89-${tp.provider}-response`);
-					await dumpBrowserLogs(`${tp.provider}:after-response`);
-
-					expect(response.length).toBeGreaterThan(0);
-
-					// Check for error in response
-					if (
-						response.includes("[오류]") ||
-						response.toLowerCase().includes("error")
-					) {
-						console.error(
-							`[89] ${tp.provider} ERROR in response: ${response.slice(0, 300)}`,
-						);
-						await screenshot(`89-${tp.provider}-error-in-response`);
-					}
-				} catch (err) {
-					// Capture state + screenshot on failure for debugging
-					const state = await captureAppState();
-					console.error(
-						`[89] ${tp.provider} FAILED. App state: ${JSON.stringify(state)}`,
-					);
-					await screenshot(`89-${tp.provider}-FAILED`);
-					await dumpBrowserLogs(`${tp.provider}:FAILED`);
-					// Print current llm-debug.log to see what agent reported
-					printLlmDebugLog(10);
-					throw err;
-				}
+				await sendAndCheckResponse(tp, true);
 			});
 		});
 	}

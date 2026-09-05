@@ -445,3 +445,356 @@ describe("HerdrWorkspaceCenterArea", () => {
 		expect(toolHandlers.size).toBe(0);
 	});
 });
+
+// ─── Naia 워크스페이스 도구 계약 ─────────────────────────────────────────────
+//
+// 이 블록의 케이스는 2026-09-05 에 `apps/__tests__/workspace-area.test.tsx`
+// 에서 옮겨 왔다. 그 파일은 지운 `WorkspaceCenterArea` 를 그려서 도구 계약을
+// 쟀는데, 도구 자체는 `useHerdrWorkspaceBridge` 와 `useHerdrDocuments` 에
+// 살아 있다. 화면이 없어졌다고 계약 검사까지 지우면 살아 있는 기능이
+// 검사에서 빠진다 — 그래서 이름과 단정을 남기고 대상만 Herdr 로 바꿨다.
+// 반환 문구가 달라진 자리(세션 없음 → no Herdr spaces, Sent to → Prompted)
+// 는 Herdr 가 실제로 내는 값으로 맞췄다.
+
+const emptySnapshot = {
+	protocol: 19,
+	version: "0.8.0",
+	workspaces: [],
+	agents: [],
+};
+
+const statusSnapshot = {
+	protocol: 19,
+	version: "0.8.0",
+	focused_workspace_id: "w1",
+	focused_pane_id: "w1:p1",
+	workspaces: [
+		{
+			workspace_id: "w1",
+			label: "naia-os",
+			focused: true,
+			pane_count: 1,
+			tab_count: 1,
+			worktree: { checkout_path: "/dev/naia-os" },
+		},
+		{
+			workspace_id: "w2",
+			label: "vllm",
+			focused: false,
+			pane_count: 1,
+			tab_count: 1,
+			worktree: { checkout_path: "/dev/vllm" },
+		},
+		{
+			workspace_id: "w3",
+			label: "test",
+			focused: false,
+			pane_count: 0,
+			tab_count: 0,
+			worktree: { checkout_path: "/dev/test" },
+		},
+		{
+			workspace_id: "w4",
+			label: "broken",
+			focused: false,
+			pane_count: 1,
+			tab_count: 1,
+			worktree: { checkout_path: "/dev/broken" },
+		},
+	],
+	agents: [
+		{
+			workspace_id: "w1",
+			tab_id: "w1:t1",
+			pane_id: "w1:p1",
+			agent: "codex",
+			agent_status: "working",
+			cwd: "/dev/naia-os",
+			focused: true,
+		},
+		{
+			workspace_id: "w2",
+			tab_id: "w2:t1",
+			pane_id: "w2:p1",
+			agent: "codex",
+			agent_status: "idle",
+			cwd: "/dev/vllm",
+			focused: false,
+		},
+		{
+			workspace_id: "w4",
+			tab_id: "w4:t1",
+			pane_id: "w4:p1",
+			agent: "codex",
+			agent_status: "blocked",
+			cwd: "/dev/broken",
+			focused: false,
+		},
+	],
+};
+
+function respondWith(current: unknown) {
+	mockInvoke.mockImplementation(async (command: string) => {
+		if (command === "herdr_pty_create") return { pty_id: "pty-7", pid: 7 };
+		if (command === "herdr_snapshot") return current;
+		if (command === "workspace_set_root") return "/work/naia";
+		if (command === "workspace_resolve_file_location")
+			return "/work/naia/src/App.tsx";
+		if (command === "workspace_classify_dirs")
+			return [{ name: "naia", path: "/work/naia", category: "project" }];
+		if (command === "pty_execute_sync")
+			return { stdout: "ok", stderr: "", code: 0 };
+		return null;
+	});
+}
+
+async function renderHerdr() {
+	const { HerdrWorkspaceCenterArea } = await import(
+		"../HerdrWorkspaceCenterArea"
+	);
+	return render(<HerdrWorkspaceCenterArea naia={bridge} />);
+}
+
+describe("Naia workspace tool contract — Herdr bridge", () => {
+	afterEach(() => {
+		cleanup();
+		mockInvoke.mockReset();
+		terminalFocus.mockReset();
+		editorRevealLocation.mockReset();
+		editorReloadFile.mockReset();
+		toolHandlers.clear();
+	});
+
+	it("registers skill_workspace_get_sessions handler on mount", async () => {
+		respondWith(snapshot);
+		await renderHerdr();
+		await waitFor(() =>
+			expect(toolHandlers.has("skill_workspace_get_sessions")).toBe(true),
+		);
+	});
+
+	it("registers skill_workspace_open_file handler on mount", async () => {
+		respondWith(snapshot);
+		await renderHerdr();
+		await waitFor(() =>
+			expect(toolHandlers.has("skill_workspace_open_file")).toBe(true),
+		);
+	});
+
+	it("registers skill_workspace_classify_dirs handler on mount", async () => {
+		respondWith(snapshot);
+		await renderHerdr();
+		await waitFor(() =>
+			expect(toolHandlers.has("skill_workspace_classify_dirs")).toBe(true),
+		);
+		expect(
+			JSON.parse(
+				String(await toolHandlers.get("skill_workspace_classify_dirs")?.({})),
+			),
+		).toEqual([{ name: "naia", path: "/work/naia", category: "project" }]);
+	});
+
+	it("skill_workspace_get_sessions returns JSON session list", async () => {
+		respondWith(emptySnapshot);
+		await renderHerdr();
+		await waitFor(() =>
+			expect(toolHandlers.has("skill_workspace_get_sessions")).toBe(true),
+		);
+
+		const parsed = JSON.parse(
+			String(await toolHandlers.get("skill_workspace_get_sessions")?.({})),
+		);
+		expect(parsed).toHaveProperty("sessions");
+		expect(Array.isArray(parsed.sessions)).toBe(true);
+		expect(parsed).toHaveProperty("summary");
+		expect(parsed.summary.total).toBe(0);
+		expect(parsed.summary.active).toBe(0);
+		expect(parsed.summary.idle).toBe(0);
+		expect(parsed.summary.stopped).toBe(0);
+		expect(parsed.summary.error).toBe(0);
+		// 세션이 없을 때의 문구. Herdr 로 옮기면서 "세션 없음" 이 아니라
+		// "no Herdr spaces" 를 낸다.
+		expect(parsed.summary.description).toBe("no Herdr spaces");
+	});
+
+	it("skill_workspace_get_sessions counts sessions by status correctly", async () => {
+		respondWith(statusSnapshot);
+		await renderHerdr();
+		await waitFor(() =>
+			expect(toolHandlers.has("skill_workspace_get_sessions")).toBe(true),
+		);
+
+		await waitFor(async () => {
+			const p = JSON.parse(
+				String(await toolHandlers.get("skill_workspace_get_sessions")?.({})),
+			);
+			expect(p.summary.total).toBe(4);
+			expect(p.summary.active).toBe(1);
+			expect(p.summary.idle).toBe(1);
+			expect(p.summary.stopped).toBe(1);
+			expect(p.summary.error).toBe(1);
+			expect(
+				p.summary.active + p.summary.idle + p.summary.stopped + p.summary.error,
+			).toBe(p.summary.total);
+			expect(p.summary.description).toContain("naia-os: active");
+			expect(p.summary.description).toContain("vllm: idle");
+			expect(p.summary.description).toContain("test: stopped");
+			expect(p.summary.description).toContain("broken: error");
+		});
+	});
+
+	it("skill_workspace_execute resolves a session basename dir to its absolute path", async () => {
+		// 회귀: get_sessions 는 sessions[].dir 을 이름으로 준다("naia-os"). 실행은
+		// 절대 경로를 요구하므로, 그 이름을 그대로 넘기면 백엔드가 거절했다.
+		respondWith(statusSnapshot);
+		await renderHerdr();
+		await waitFor(() =>
+			expect(toolHandlers.has("skill_workspace_execute")).toBe(true),
+		);
+
+		await waitFor(async () => {
+			await toolHandlers.get("skill_workspace_execute")?.({
+				command: "ls -F",
+				dir: "naia-os",
+			});
+			expect(mockInvoke).toHaveBeenCalledWith("pty_execute_sync", {
+				dir: "/dev/naia-os",
+				command: "ls -F",
+				timeout_secs: undefined,
+			});
+		});
+	});
+
+	it("App API: getApi returns WorkspaceAppApi after mount, undefined after unmount", async () => {
+		respondWith(snapshot);
+		// 워크스페이스 앱이 레지스트리에 등록돼 있어야 updateApi 가 붙는다.
+		await import("../index");
+		const { appRegistry } = await import("../../../lib/app-registry");
+		const { unmount } = await renderHerdr();
+
+		await waitFor(() => expect(appRegistry.getApi("workspace")).toBeDefined());
+		const api = appRegistry.getApi("workspace");
+		expect(typeof api?.openFile).toBe("function");
+		expect(typeof api?.focusSession).toBe("function");
+		expect(typeof api?.getActiveSessions).toBe("function");
+		expect(typeof api?.activateApp).toBe("function");
+
+		unmount();
+		expect(appRegistry.getApi("workspace")).toBeUndefined();
+	});
+
+	it("registers skill_workspace_focus_session handler on mount", async () => {
+		respondWith(snapshot);
+		await renderHerdr();
+		await waitFor(() =>
+			expect(toolHandlers.has("skill_workspace_focus_session")).toBe(true),
+		);
+	});
+
+	it("skill_workspace_focus_session returns error when dir is missing", async () => {
+		respondWith(snapshot);
+		await renderHerdr();
+		await waitFor(() =>
+			expect(toolHandlers.has("skill_workspace_focus_session")).toBe(true),
+		);
+
+		const result = String(
+			await toolHandlers.get("skill_workspace_focus_session")?.({}),
+		);
+		expect(result).toContain("Error");
+	});
+
+	it("skill_workspace_focus_session returns error when session not found", async () => {
+		respondWith(snapshot);
+		await renderHerdr();
+		await waitFor(() =>
+			expect(toolHandlers.has("skill_workspace_focus_session")).toBe(true),
+		);
+
+		const result = String(
+			await toolHandlers.get("skill_workspace_focus_session")?.({
+				dir: "nonexistent",
+			}),
+		);
+		expect(result).toContain("Error");
+		expect(result).toContain("nonexistent");
+	});
+
+	it("skill_workspace_focus_session returns Focused for the matching space", async () => {
+		respondWith(statusSnapshot);
+		await renderHerdr();
+		await waitFor(() =>
+			expect(toolHandlers.has("skill_workspace_focus_session")).toBe(true),
+		);
+
+		await waitFor(async () => {
+			expect(
+				await toolHandlers.get("skill_workspace_focus_session")?.({
+					dir: "naia-os",
+				}),
+			).toBe("Focused: naia-os");
+		});
+		expect(mockInvoke).toHaveBeenCalledWith("herdr_focus_workspace", {
+			workspaceId: "w1",
+		});
+	});
+
+	it("skill_workspace_open_file updates editor filepath", async () => {
+		respondWith(snapshot);
+		await renderHerdr();
+		await waitFor(() =>
+			expect(toolHandlers.has("skill_workspace_open_file")).toBe(true),
+		);
+
+		const result = String(
+			await toolHandlers.get("skill_workspace_open_file")?.({
+				path: "src/App.tsx",
+			}),
+		);
+		expect(result).toContain("Opened");
+		expect(result).toContain("App.tsx");
+		await waitFor(() =>
+			expect(screen.getByTestId("file-tree-selection")).toHaveTextContent(
+				"/work/naia/src/App.tsx",
+			),
+		);
+	});
+
+	it("registers skill_workspace_send_to_session handler on mount", async () => {
+		respondWith(snapshot);
+		await renderHerdr();
+		await waitFor(() =>
+			expect(toolHandlers.has("skill_workspace_send_to_session")).toBe(true),
+		);
+	});
+
+	it("skill_workspace_send_to_session returns error when dir or text is missing", async () => {
+		respondWith(snapshot);
+		await renderHerdr();
+		await waitFor(() =>
+			expect(toolHandlers.has("skill_workspace_send_to_session")).toBe(true),
+		);
+
+		const send = toolHandlers.get("skill_workspace_send_to_session");
+		expect(String(await send?.({}))).toContain("Error");
+		expect(String(await send?.({ dir: "/work/naia" }))).toContain("Error");
+		expect(String(await send?.({ text: "hello\n" }))).toContain("Error");
+	});
+
+	it("skill_workspace_send_to_session returns error when no session is found", async () => {
+		respondWith(snapshot);
+		await renderHerdr();
+		await waitFor(() =>
+			expect(toolHandlers.has("skill_workspace_send_to_session")).toBe(true),
+		);
+
+		const result = String(
+			await toolHandlers.get("skill_workspace_send_to_session")?.({
+				dir: "/dev/nonexistent",
+				text: "hello",
+			}),
+		);
+		expect(result).toContain("Error");
+		expect(result).toContain("nonexistent");
+	});
+});

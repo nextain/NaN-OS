@@ -201,6 +201,7 @@ export default {
 	"chat.thinking": "思考中...",
 	"chat.codeCopy": "Copy",
 	"chat.codeCopied": "Copied",
+	"chat.mermaidError": "Mermaid 无法绘制此图表，改为显示源文本。",
 	"workspace.mediaOpenError": "Could not open the media file",
 	"workspace.audioCodecError": "This audio file cannot be played. It may be damaged or use an unsupported codec.",
 	"workspace.videoCodecError": "This video file cannot be played. It may be damaged or use an unsupported codec.",

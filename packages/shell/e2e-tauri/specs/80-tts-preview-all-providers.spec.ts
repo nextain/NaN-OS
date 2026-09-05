@@ -13,6 +13,19 @@ import {
  *
  * Requires: OPENAI_API_KEY env var. ELEVENLABS_API_KEY for ElevenLabs.
  * Google Cloud TTS requires separate GOOGLE_CLOUD_TTS_KEY (not GEMINI_API_KEY).
+ *
+ * 루크 결정(2026-09-05): 이 순회는 제공자마다 **동작 여부만** 잰다. 기능은
+ * 대표 제공자 하나에서만 잰다.
+ *
+ * 이 스펙은 그 결정을 이미 지키고 있어서 옮길 단정이 없었다. 제공자마다 재는
+ * 것은 하나뿐이고 그것이 곧 동작 여부다 — 미리듣기를 눌렀을 때 그 제공자가
+ * 요청을 거절하지 않는가(`.settings-error` 가 비어 있는가). 만들어진 소리를
+ * 듣지도, 길이나 형식을 재지도, 재생 여부를 보지도 않는다. TTS 제공자별로
+ * 실제 음성 API 를 한 번 부르는 자리는 이 스펙이고, 84 번(대화 + TTS)은
+ * 대표 제공자 하나만 전체 흐름으로 돈다.
+ *
+ * 그러니 여기에 제공자별 오디오 생성·재생 검증을 새로 붙이지 마라. 그런 것이
+ * 필요하면 84 번 스펙의 대표 제공자(edge) 경로에 붙여라.
  */
 const OPENAI_KEY = process.env.OPENAI_API_KEY ?? "";
 const ELEVENLABS_KEY =

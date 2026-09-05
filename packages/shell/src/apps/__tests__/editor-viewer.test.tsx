@@ -428,7 +428,7 @@ describe("Editor — file type helpers (via render behaviour)", () => {
 		);
 		render(<Editor filePath="/docs/bad.md" />);
 		await waitFor(() =>
-			expect(screen.getByText(/Mermaid 오류/)).toBeInTheDocument(),
+			expect(screen.getByText(t("chat.mermaidError"))).toBeInTheDocument(),
 		);
 	});
 
@@ -496,5 +496,59 @@ describe("Editor — file type helpers (via render behaviour)", () => {
 			"workspace_read_file",
 			expect.anything(),
 		);
+	});
+});
+
+// ─── Editor — header and empty state ─────────────────────────────────────────
+//
+// 2026-09-05 에 `workspace-area.test.tsx` 에서 옮겨 왔다. 그 파일은 지운
+// `WorkspaceCenterArea` 를 그려서 함께 지워야 했지만, 여기 다섯은 살아 있는
+// `Editor` 만 재고 있었다.
+describe("Editor — header and empty state", () => {
+	it("renders empty hint when no file is selected", () => {
+		render(<Editor filePath="" />);
+
+		expect(screen.getByText(/파일 탐색기에서 파일을 선택/)).toBeDefined();
+	});
+
+	it("shows filename in header when file is opened", () => {
+		mockInvoke.mockResolvedValue("file content here");
+
+		render(<Editor filePath="/home/user/dev/naia-os/AGENTS.md" />);
+
+		expect(screen.getByText("AGENTS.md")).toBeDefined();
+	});
+
+	it("shows badge when provided", () => {
+		mockInvoke.mockResolvedValue("content");
+
+		render(
+			<Editor filePath="/home/user/dev/naia-os/AGENTS.md" badge="#79 · Build" />,
+		);
+
+		expect(screen.getByText("#79 · Build")).toBeDefined();
+	});
+
+	it("shows edit toggle button for markdown files (default preview mode)", () => {
+		mockInvoke.mockResolvedValue("# Heading\n\nContent");
+
+		render(
+			<Editor filePath="/home/user/dev/naia-os/docs/design/workspace-app.ko.md" />,
+		);
+
+		// 마크다운은 미리보기로 열리므로 "편집" 단추가 보인다.
+		expect(screen.getByText("편집")).toBeDefined();
+	});
+
+	it("shows read-only label for ref- directories", async () => {
+		mockInvoke.mockResolvedValue("readonly content");
+
+		render(
+			<Editor filePath="/home/user/dev/ref-cline/README.md" readOnly={true} />,
+		);
+
+		await waitFor(() => {
+			expect(screen.getByText("읽기 전용")).toBeDefined();
+		});
 	});
 });

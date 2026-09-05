@@ -1,9 +1,15 @@
 import type { ChildProcess } from "node:child_process";
 import { execSync, spawn } from "node:child_process";
-import { existsSync, readFileSync, readdirSync } from "node:fs";
+import {
+	existsSync,
+	mkdirSync,
+	readFileSync,
+	readdirSync,
+	rmSync,
+} from "node:fs";
 import { connect, createServer } from "node:net";
-import { homedir } from "node:os";
-import { resolve } from "node:path";
+import { homedir, tmpdir } from "node:os";
+import { basename, dirname, resolve } from "node:path";
 import { execPath } from "node:process";
 import { resolvePairedAgent } from "../scripts/agent-pairing.mjs";
 
@@ -53,6 +59,49 @@ loadEnvFile(resolve(import.meta.dirname, "../.env"));
 // Keep Linux behavior identical to the original config and branch for win32.
 const IS_WINDOWS = process.platform === "win32";
 const EXE = IS_WINDOWS ? ".exe" : "";
+
+// #539(Windows): TIME_WAIT 페어가 최대 4분간 같은 포트의 Rust rebind 를 막는다.
+// 워커(runner 프로세스)마다 포트를 달리해 이전 실행·이전 세션과 절대 겹치지 않게 한다.
+// 아래 실행 자리(runtime dir)도 이 포트로 이름을 나눠, 동시에 도는 묶음끼리
+// 서로의 리스를 밟지 않게 한다 — 전용 설정 둘이 쓰는 규칙과 같다.
+const IN_APP_PORT = IS_WINDOWS ? 4450 + (process.pid % 37) : 4448;
+
+// ── e2e 실행 자리 격리 ────────────────────────────────────────────────────────
+// Rust 는 CAFE_DEBUG_E2E=1 일 때 로그(lib.rs log_dir)와 실행 중 리스·PID(lib.rs
+// run_dir/agent_child_lease_path)를 `NAIA_E2E_RUNTIME_DIR` 아래에 둔다. 전용 설정
+// 둘(codex-e2e-environment.ts, radio-queue-e2e-environment.ts)은 이미 그 변수를
+// 잡는데 **이 기본 설정만 빠져 있었다**. 그래서 이 설정으로 도는 스펙 백여 개가
+// 운영 앱과 같은 `~/.naia/run`·`~/.naia/logs` 를 썼다.
+//
+// 그 대가가 둘이었다. 하나, 앞 스펙의 에이전트 자식이 리스를 쥔 채 살아남으면
+// 다음 스펙의 셸이 `agent-core not available: agent_lease_live_blocked` 로 뇌 없이
+// 돌았다(이 기계에 그렇게 고아가 된 에이전트가 30개 쌓여 있었다). 둘, "`~/.naia`
+// 에는 `adk-path` 하나만" 이라는 규칙을 회귀가 돌 때마다 다시 어겼다.
+//
+// 자리는 **OS 임시 디렉터리 아래**다. 저장소 안에 두면 `git add` 에 딸려 들어가고
+// (실제로 그 사고가 있었다), 홈 아래에 두면 규칙 위반이 그대로다.
+const E2E_RUNTIME_PARENT = resolve(tmpdir());
+const E2E_RUNTIME_NAME = `naia-shell-e2e-${IN_APP_PORT}`;
+const E2E_RUNTIME_DIR = resolve(E2E_RUNTIME_PARENT, E2E_RUNTIME_NAME);
+// 밖에서 이미 정해 넣었으면 그것이 정본이다 — 감싸는 러너가 자기 자리를 주는
+// 경우를 덮어쓰면, 그 러너는 자기가 정리할 곳이 아닌 데를 보게 된다.
+const OWNS_RUNTIME_DIR = !process.env.NAIA_E2E_RUNTIME_DIR?.trim();
+if (OWNS_RUNTIME_DIR) process.env.NAIA_E2E_RUNTIME_DIR = E2E_RUNTIME_DIR;
+// 자리는 여기서 만들지 않는다. import 만으로 디렉터리가 생기면 계약 테스트가
+// 파일시스템을 더럽힌다. 실제로 만드는 것은 onPrepare 와 Rust 의 create_dir_all.
+
+/** 지울 수 있는 것은 이 설정이 이름까지 정한 자리뿐이다. */
+function assertOwnedRuntimeDir(): string {
+	const candidate = resolve(E2E_RUNTIME_DIR);
+	if (
+		!OWNS_RUNTIME_DIR ||
+		dirname(candidate) !== E2E_RUNTIME_PARENT ||
+		basename(candidate) !== E2E_RUNTIME_NAME
+	) {
+		throw new Error(`Refusing to clean a non-E2E path: ${candidate}`);
+	}
+	return candidate;
+}
 
 const SHELL_DIR = resolve(import.meta.dirname, "..");
 // 짝 저장소를 찾는 규칙은 빌드와 하나여야 한다 (#539). 빌드가 어느 워크트리를
@@ -126,10 +175,6 @@ const E2E_DEV_URL = new URL(
 const VITE_PORT = Number(E2E_DEV_URL.port || "1420");
 const VITE_HOST = E2E_DEV_URL.hostname;
 
-// #539(Windows): TIME_WAIT 페어가 최대 4분간 같은 포트의 Rust rebind 를 막는다.
-// 워커(runner 프로세스)마다 포트를 달리해 이전 실행·이전 세션과 절대 겹치지 않게 한다.
-const IN_APP_PORT = IS_WINDOWS ? 4450 + (process.pid % 37) : 4448;
-
 let tauriDriver: ChildProcess;
 
 /** #539(Windows 인앱): 앱 트리를 강제 종료하고 4448 이 실제로 닫힐 때까지 기다린다.
@@ -180,7 +225,12 @@ let permissionPoller: { dispose: () => void } | undefined;
  * 앱의 agent 까지 잡는다.
  */
 function reclaimLeakedAgentChild(): void {
-	const leasePath = resolve(homedir(), ".naia", "agent-child-lease.json");
+	// 격리한 실행 자리의 리스만 본다. 홈의 리스를 보면 사람이 지금 쓰고 있는
+	// 앱의 에이전트를 잡는다 — 그 자리는 더 이상 e2e 의 것이 아니다.
+	const leasePath = resolve(
+		process.env.NAIA_E2E_RUNTIME_DIR ?? E2E_RUNTIME_DIR,
+		"agent-child-lease.json",
+	);
 	if (!existsSync(leasePath)) return;
 	try {
 		const lease = JSON.parse(readFileSync(leasePath, "utf8")) as {
@@ -378,7 +428,20 @@ export const config = {
 			killByName("WebKitWebDriver");
 		}
 		killByName("naia-shell");
+		// 회수가 먼저다. 자리를 먼저 비우면 앞 실행이 흘린 리스가 사라져,
+		// 고아를 가리키던 유일한 단서를 우리가 지우게 된다.
 		reclaimLeakedAgentChild();
+		if (OWNS_RUNTIME_DIR) {
+			const owned = assertOwnedRuntimeDir();
+			rmSync(owned, {
+				recursive: true,
+				force: true,
+				maxRetries: 10,
+				retryDelay: 200,
+			});
+			mkdirSync(owned, { recursive: true });
+			console.log(`[e2e] isolated runtime dir: ${owned}`);
+		}
 		await waitForPortClosed(1420);
 		await waitForPortClosed(VITE_PORT);
 		if (!IS_WINDOWS) {
@@ -434,8 +497,7 @@ export const config = {
 				stdio: [null, process.stdout, process.stderr],
 				env: {
 					...process.env,
-					RUST_LOG:
-						process.env.RUST_LOG ?? "tauri_plugin_wdio_webdriver=debug",
+					RUST_LOG: process.env.RUST_LOG ?? "tauri_plugin_wdio_webdriver=debug",
 					TAURI_WEBDRIVER_PORT: String(IN_APP_PORT),
 				},
 			});
@@ -529,5 +591,26 @@ export const config = {
 
 	async onComplete() {
 		viteServer?.kill();
+		// 붉은 실행의 로그·리스를 볼 수 있어야 원인을 가린다. codex 전용 설정과
+		// 같은 손잡이를 쓴다.
+		if (!OWNS_RUNTIME_DIR) return;
+		if (process.env.NAIA_E2E_KEEP_ARTIFACTS === "1") {
+			process.stderr.write(
+				`[e2e] preserving isolated runtime dir ${E2E_RUNTIME_DIR}\n`,
+			);
+			return;
+		}
+		try {
+			rmSync(assertOwnedRuntimeDir(), {
+				recursive: true,
+				force: true,
+				maxRetries: 10,
+				retryDelay: 200,
+			});
+		} catch (error) {
+			process.stderr.write(
+				`[e2e] deferred cleanup for ${E2E_RUNTIME_DIR}: ${String(error)}\n`,
+			);
+		}
 	},
 };

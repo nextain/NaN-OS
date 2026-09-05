@@ -1,9 +1,9 @@
 {
 	"generatedFrom": "packages/shell/e2e-tauri/specs",
-	"total": 121,
+	"total": 120,
 	"summary": {
 		"credentialed_live": 91,
-		"deterministic_ci": 22,
+		"deterministic_ci": 21,
 		"native_local": 8
 	},
 	"specs": [
@@ -1073,14 +1073,6 @@
 				"NAIA_E2E_ARTIFACTS_DIR"
 			],
 			"tier": "credentialed_live"
-		},
-		{
-			"spec": "91-jeonju-course-worker.spec.ts",
-			"conf": [
-				"wdio.conf.jeonju-course.ts"
-			],
-			"env": [],
-			"tier": "deterministic_ci"
 		},
 		{
 			"spec": "91-memory-settings-integration.spec.ts",

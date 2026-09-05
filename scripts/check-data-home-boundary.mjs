@@ -5,7 +5,7 @@
  * 나머지는 모두 그 파일이 가리키는 ADK 아래에 있어야 하고, 그 위치는
  * `adk-path` 에서 파생돼야 한다. 코드가 홈을 직접 짚으면 ADK 를 옮겼을 때
  * 데이터가 따라가지 못한다 — 실측에서 홈에 17GB 가 쌓여 있었고, 그 대부분이
- * 음성 런타임이었다(docs/naia-data-home-inventory.md).
+ * 음성 런타임이었다(docs/storage-locations.md).
  *
  * 이 검사는 옮기는 일을 대신하지 않는다. **새로 늘어나는 것을 막는다.**
  * 옮기는 동안에도 새 자리가 생기면 목록이 끝없이 길어진다.
@@ -94,7 +94,7 @@ if (unexpected.length) {
 		console.error(`     ${n} (${[...found.get(n)].join(", ")})`);
 	}
 	console.error(
-		"     ADK 아래로 두고, 그 위치를 adk-path 에서 파생하라. docs/naia-data-home-inventory.md 를 보라.",
+		"     ADK 아래로 두고, 그 위치를 adk-path 에서 파생하라. docs/storage-locations.md 를 보라.",
 	);
 	process.exit(1);
 }

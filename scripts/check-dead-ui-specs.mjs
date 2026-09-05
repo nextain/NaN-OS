@@ -526,15 +526,11 @@ for (const file of [
 /**
  * 지금 렌더되지 않는 채로 두는 파일. 왜 남겨 두는지 적어야 한다.
  */
+// WorkspaceCenterArea.tsx 와 CodingWorkersApp.tsx 는 2026-09-05 에 지웠다.
+// 코딩 작업자 패널과 세션 대시보드가 없어졌고(#554), 그 자리는 Herdr 창의
+// agents 탭과 IDE 뷰어가 대신한다. 파일이 사라졌으므로 이 목록에 남겨 두면
+// "낡았다" 로 붉어진다.
 const KNOWN_UNRENDERED = new Map([
-	[
-		"packages/shell/src/apps/workspace/WorkspaceCenterArea.tsx",
-		"Herdr 통합(db33ef4a)으로 워크스페이스 화면이 HerdrWorkspaceCenterArea 로 바뀌면서 이 1,986줄이 화면에서 빠졌다. 타입만 쓰인다. coding-workers-toggle 이 여기에만 있어 91-jeonju-course-worker 가 두 기계에서 실패한다. 기능을 일부러 뺀 것인지 통합이 떨어뜨린 것인지는 오너가 정한다",
-	],
-	[
-		"packages/shell/src/apps/workspace/CodingWorkersApp.tsx",
-		"코딩 작업자 화면. 값으로 끌어오는 곳이 WorkspaceCenterArea.tsx 하나뿐인데 그 부모가 이미 진입점에서 닿지 않는다. 즉 이 파일도 화면에 오르지 않는다 — #554 와 같은 뿌리다",
-	],
 	[
 		"packages/shell/src/apps/sample-note/SampleNoteCenterArea.tsx",
 		"App.tsx 가 `sample-note app removed — will be replaced by a proper memo app later` 라고 적고 등록 import 를 뺐다. 디렉터리는 남아 있지만 화면에 오르지 않는다. helpers/selectors.ts 와 90-app-system 이 이 표지를 집는다. 메모 앱이 새로 오면 그때 정리한다",

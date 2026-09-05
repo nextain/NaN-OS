@@ -201,6 +201,7 @@ export default {
 	"chat.thinking": "सोच रहा हूँ...",
 	"chat.codeCopy": "Copy",
 	"chat.codeCopied": "Copied",
+	"chat.mermaidError": "Mermaid यह आरेख नहीं बना सका। मूल पाठ दिखाया जा रहा है।",
 	"workspace.mediaOpenError": "Could not open the media file",
 	"workspace.audioCodecError": "This audio file cannot be played. It may be damaged or use an unsupported codec.",
 	"workspace.videoCodecError": "This video file cannot be played. It may be damaged or use an unsupported codec.",

@@ -143,8 +143,12 @@ for (const file of walk(ROOT)) {
 // `.tsx` 만 센 것이라 문자열을 `.ts` 로 옮기기만 해도 게이트를 피할 수
 // 있었다. 그 범위로 다시 세면 658줄이었고, 로케일 밖 번역표 다섯을
 // 옮기면서 592줄이 되었다.
-const BASELINE_LINES = 585;
-const BASELINE_FILES = 66;
+// Mermaid 실패 화면의 문구를 chat.mermaidError/chat.mermaidRetry 로 옮기면서
+// 한 줄 줄었다 (#558).
+// 584 에서 523 으로, 66 파일에서 61 파일로 줄었다. 코딩 작업자 패널과 세션
+// 대시보드를 지우면서(#554) 그 화면들의 한국어 문자열이 함께 사라졌다.
+const BASELINE_LINES = 523;
+const BASELINE_FILES = 61;
 
 console.log(`[untranslated-ui] 화면에 박힌 한국어 ${total}줄 / ${perFile.length}파일 (baseline ${BASELINE_LINES}줄 / ${BASELINE_FILES}파일)`);
 for (const row of perFile.slice(0, 5)) console.log(`  ${String(row.lines).padStart(4)} ${row.file}`);

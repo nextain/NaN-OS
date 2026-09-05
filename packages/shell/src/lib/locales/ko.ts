@@ -201,6 +201,7 @@ export default {
 	"chat.thinking": "생각 중...",
 	"chat.codeCopy": "복사",
 	"chat.codeCopied": "복사됨",
+	"chat.mermaidError": "Mermaid 다이어그램을 그리지 못했습니다. 원문을 표시합니다.",
 	"workspace.mediaOpenError": "미디어 파일을 열 수 없습니다",
 	"workspace.audioCodecError": "이 오디오 파일을 재생할 수 없습니다. 파일이 손상되었거나 지원하지 않는 코덱일 수 있습니다.",
 	"workspace.videoCodecError": "이 동영상 파일을 재생할 수 없습니다. 파일이 손상되었거나 지원하지 않는 코덱일 수 있습니다.",

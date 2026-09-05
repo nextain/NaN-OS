@@ -6,6 +6,20 @@ import { S } from "../helpers/selectors.js";
  *
  * This test iterates through multiple LLM providers (Claude, Grok, OpenAI, ZAI, Ollama)
  * in the UI, sends a message to each, and verifies the response.
+ *
+ * 루크 결정(2026-09-05): 이 순회는 제공자마다 **동작 여부만** 잰다. 기능은
+ * 대표 제공자 하나에서만 잰다.
+ *
+ * 이 스펙은 그 결정을 이미 지키고 있어서 옮길 단정이 없었다. 제공자마다 재는
+ * 것은 둘뿐이고 둘 다 동작 여부다 — 응답이 비어 있지 않은가, 그리고 그 응답이
+ * 앱의 오류 표시나 인증 거절 문구가 아닌가. 응답 내용의 의미를 판정하지도
+ * 않고(`assertSemantic` 을 쓰지 않는다), 음성을 만들지도, 설정의 세부 값을
+ * 되읽지도 않는다.
+ *
+ * 그러니 여기에 제공자별로 의미 판정이나 음성 검증을 새로 붙이지 마라. 그런
+ * 것이 필요하면 89 번 스펙의 대표 제공자 경로에 붙여라 — 이 순회는 제공자
+ * 수만큼 실제 모델을 부르므로, 제공자별 단정을 깊게 할수록 같은 비용이
+ * 제공자 수만큼 곱해진다.
  */
 describe("70 — live providers switching", () => {
 	const providers = [

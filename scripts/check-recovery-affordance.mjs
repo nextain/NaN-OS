@@ -51,12 +51,7 @@ const RECOVERY =
  * 실패를 알리지만 복구 행동을 확인하지 못한 자리. 숫자가 아니라 자리로
  * 적는다 — 무엇이 면제됐는지 드러나야 한다.
  */
-const ACKNOWLEDGED = new Map([
-	[
-		"packages/shell/src/components/MarkdownCodeBlock.tsx:67",
-		"Mermaid 렌더 실패 화면이 원문만 보여 주고 다음에 할 일을 주지 않는다. 진짜 빈자리이고 덮는 것이 아니다 — 복사 단추를 붙이는 일로 #558 에 올렸다. 게이트를 고치자 드러난 자리다",
-	],
-]);
+const ACKNOWLEDGED = new Map();
 
 function tracked(dir, extension) {
 	try {

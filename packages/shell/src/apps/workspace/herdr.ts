@@ -172,4 +172,4 @@ export function activeHerdrRoot(snapshot: HerdrSnapshot | null): string {
 		workspace?.worktree?.checkout_path || focusedHerdrAgent(snapshot)?.cwd || ""
 	);
 }
-import type { SessionInfo } from "./SessionCard";
+import type { SessionInfo } from "./types";
