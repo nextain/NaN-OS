@@ -461,20 +461,16 @@ fn agent_child_lease_path() -> Result<std::path::PathBuf, String> {
     if let Some(runtime) = e2e_runtime_dir() {
         return Ok(runtime.join("agent-child-lease.json"));
     }
-    Ok(data_home::child_of(
-        &data_home::user_home_path().ok_or_else(|| "agent_lease_home_unavailable".to_string())?,
-        DataHomeChild::AgentChildLease,
-    ))
+    data_home::child_from_dirs_home(DataHomeChild::AgentChildLease)
+        .ok_or_else(|| "agent_lease_home_unavailable".to_string())
 }
 
 fn agent_child_lease_lock_path() -> Result<std::path::PathBuf, String> {
     if let Some(runtime) = e2e_runtime_dir() {
         return Ok(runtime.join("agent-child-lease.lock"));
     }
-    Ok(data_home::child_of(
-        &data_home::user_home_path().ok_or_else(|| "agent_lease_home_unavailable".to_string())?,
-        DataHomeChild::AgentChildLeaseLock,
-    ))
+    data_home::child_from_dirs_home(DataHomeChild::AgentChildLeaseLock)
+        .ok_or_else(|| "agent_lease_home_unavailable".to_string())
 }
 
 fn acquire_agent_child_lease_lock() -> Result<AgentChildLeaseLock, String> {
@@ -2166,9 +2162,7 @@ fn spawn_adk_path_snapshot() -> Option<String> {
         }
     }
     spawn_adk_path_snapshot_with(|| {
-        data_home::user_home_path().and_then(|home| {
-            std::fs::read_to_string(data_home::child_of(&home, DataHomeChild::AdkPath)).ok()
-        })
+        data_home::read_child_from_dirs_home(DataHomeChild::AdkPath)
     })
 }
 
@@ -5098,10 +5092,7 @@ fn voxcpm2_runtime_root() -> std::path::PathBuf {
     std::env::var_os("NAIA_VOXCPM2_RUNTIME_ROOT")
         .filter(|value| !value.is_empty())
         .map(std::path::PathBuf::from)
-        .or_else(|| {
-            data_home::user_home_path()
-                .map(|home| data_home::child_of(&home, DataHomeChild::Voxcpm2Runtime))
-        })
+        .or_else(|| data_home::child_from_dirs_home(DataHomeChild::Voxcpm2Runtime))
         .unwrap_or_else(|| std::path::PathBuf::from("voxcpm2-runtime"))
 }
 
@@ -6415,10 +6406,7 @@ async fn voxcpm2_installation_status(
     app: tauri::AppHandle,
     state: tauri::State<'_, AppState>,
 ) -> Result<VoxCpm2InstallationStatus, String> {
-    let adk_path = data_home::user_home_path()
-        .and_then(|home| {
-            std::fs::read_to_string(data_home::child_of(&home, DataHomeChild::AdkPath)).ok()
-        })
+    let adk_path = data_home::read_child_from_dirs_home(DataHomeChild::AdkPath)
         .map(|value| value.trim().to_string())
         .filter(|value| !value.is_empty());
     let loader_profile = adk_path.as_ref().and_then(|path| {
@@ -6950,10 +6938,7 @@ async fn start_voxcpm2(
             .map(|value| value.trim().to_string())
             .filter(|value| !value.is_empty())
     } else {
-        data_home::user_home_path()
-            .and_then(|home| {
-                std::fs::read_to_string(data_home::child_of(&home, DataHomeChild::AdkPath)).ok()
-            })
+        data_home::read_child_from_dirs_home(DataHomeChild::AdkPath)
             .map(|value| value.trim().to_string())
             .filter(|value| !value.is_empty())
     }
@@ -7100,10 +7085,7 @@ async fn start_cascade(
             .map(|s| s.trim().to_string())
             .filter(|s| !s.is_empty())
     } else {
-        data_home::user_home_path()
-            .and_then(|h| {
-                std::fs::read_to_string(data_home::child_of(&h, DataHomeChild::AdkPath)).ok()
-            })
+        data_home::read_child_from_dirs_home(DataHomeChild::AdkPath)
             .map(|s| s.trim().to_string())
             .filter(|s| !s.is_empty())
     }
@@ -7590,10 +7572,7 @@ fn current_adk_path() -> Result<String, String> {
             }
         }
     }
-    let path = data_home::user_home_path()
-        .and_then(|home| {
-            std::fs::read_to_string(data_home::child_of(&home, DataHomeChild::AdkPath)).ok()
-        })
+    let path = data_home::read_child_from_dirs_home(DataHomeChild::AdkPath)
         .ok_or_else(|| "adk_path_unavailable".to_string())?;
     let path = path.trim();
     if path.is_empty() {
@@ -13766,10 +13745,11 @@ mod tests {
     fn log_dir_creates_directory() {
         let dir = log_dir();
         assert!(dir.exists());
-        assert!(dir.ends_with(
-            std::path::Path::new(data_home::DATA_HOME_DIR_NAME)
-                .join(DataHomeChild::Logs.name())
-        ));
+        // 기대값도 이름표에서 받는다 — 깔때기 밖에 `.naia` 라는 이름은 없다.
+        assert!(dir.ends_with(data_home::direct_child_of(
+            std::path::Path::new(""),
+            DataHomeChild::Logs
+        )));
     }
 
     // W1.review P0 (#341 ?듭뀡 B) ??path guard 媛 HTTP callback ?뺤떇??諛쏆븘????
@@ -14932,11 +14912,10 @@ mod tests {
         assert_eq!(naia_path_cache_target(home.clone(), true), None);
         assert_eq!(
             naia_path_cache_target(home, false),
-            Some(
-                std::path::PathBuf::from("C:/naia-test-home")
-                    .join(data_home::DATA_HOME_DIR_NAME)
-                    .join(DataHomeChild::AdkPath.name())
-            )
+            Some(data_home::direct_child_of(
+                std::path::Path::new("C:/naia-test-home"),
+                DataHomeChild::AdkPath
+            ))
         );
     }
 

@@ -48,14 +48,15 @@ interface JsxStatic {
 	parseSource(file: string, text: string): ts.SourceFile;
 	makeEnv(files: Map<string, string>): Env;
 	elementProps(node: ts.Node, sf: ts.SourceFile, env?: Env): ElementProps;
-	elementChildren(node: ts.Node): ts.Node[];
+	elementChildren(node: ts.Node, env?: Env): ts.Node[];
 	jsxElementsIn(node: ts.Node, sf: ts.SourceFile): ts.Node[];
 	stringCandidates(node: ts.Node | undefined, sf: ts.SourceFile, env?: Env): Candidates;
 	staticChunks(node: ts.Node | undefined, sf: ts.SourceFile, env?: Env): string[];
 	alwaysTruthy(node: ts.Node | undefined, sf: ts.SourceFile, env?: Env): boolean;
 	typeStrings(node: ts.TypeNode | undefined, sf: ts.SourceFile, env?: Env): Candidates;
-	isCreateElementCall(node: ts.Node): boolean;
-	isElementNode(node: ts.Node): boolean;
+	isCreateElementCall(node: ts.Node, env?: Env): boolean;
+	isElementNode(node: ts.Node, env?: Env): boolean;
+	elementFactory(node: ts.Node, env?: Env): "classic" | "runtime" | null;
 }
 
 const J = (await import(/* @vite-ignore */ MODULE_URL)) as JsxStatic;
@@ -191,8 +192,10 @@ describe("elementProps — 요소가 실제로 받는 속성", () => {
 		expect(read.unknownSpread).toBe(false);
 	});
 
-	it("React.createElement 도 같다", () => {
-		const read = readProps(`export const E = React.createElement("div", { role: "alert" });`);
+	it("default import 의 React.createElement 도 같다", () => {
+		const read = readProps(
+			`import React from "react";\nexport const E = React.createElement("div", { role: "alert" });`,
+		);
 		expect(valueOfProp(read, "role")).toEqual(["alert"]);
 	});
 
@@ -590,5 +593,233 @@ describe("elementChildren — JSX 와 createElement 의 자식 세기는 대칭�
 		const sf = parse(`export const E = createElement("div", null, "install failed");`);
 		const outer = J.jsxElementsIn(sf, sf)[0] as ts.Node;
 		expect(J.elementChildren(outer).length).toBe(1);
+	});
+});
+
+// ── 11회차 지적 3 ──────────────────────────────────────────────────
+// 요소 판정이 `createElement` 라는 **글자**였다. `import { createElement as h }`
+// 한 줄이면 막다른 오류 화면이 알림으로도 세어지지 않았고, 반대로 브라우저
+// API 인 `document.createElement("canvas")` 가 화면 요소로 세어졌다. 이제
+// 판정은 어느 모듈의 어느 export 를 부르는가다.
+describe("elementFactory — 요소는 이름이 아니라 바인딩이다", () => {
+	function factoryOf(code: string): "classic" | "runtime" | null {
+		const sf = parse(code);
+		let hit: "classic" | "runtime" | null = null;
+		const walk = (node: ts.Node): void => {
+			if (hit) return;
+			const factory = J.elementFactory(node);
+			if (factory) {
+				hit = factory;
+				return;
+			}
+			ts.forEachChild(node, walk);
+		};
+		walk(sf);
+		return hit;
+	}
+
+	const elements: [string, string, "classic" | "runtime"][] = [
+		[
+			"react 의 createElement 를 h 로 별명 붙인 것",
+			`import { createElement as h } from "react";\nexport const E = h("div", { role: "alert" });`,
+			"classic",
+		],
+		[
+			"preact 의 h",
+			`import { h } from "preact";\nexport const E = h("div", { role: "alert" });`,
+			"classic",
+		],
+		[
+			"namespace import 의 멤버",
+			`import * as React from "react";\nexport const E = React.createElement("div", { role: "alert" });`,
+			"classic",
+		],
+		[
+			"default import 의 멤버",
+			`import React from "react";\nexport const E = React.createElement("div", { role: "alert" });`,
+			"classic",
+		],
+		[
+			"같은 파일 const 별명",
+			`import { createElement } from "react";\nconst make = createElement;\nexport const E = make("div", { role: "alert" });`,
+			"classic",
+		],
+		[
+			"bind 로 만든 별명",
+			`import { createElement } from "react";\nconst make = createElement.bind(null);\nexport const E = make("div", { role: "alert" });`,
+			"classic",
+		],
+		[
+			"구조분해로 꺼낸 별명",
+			`import * as React from "react";\nconst { createElement } = React;\nexport const E = createElement("div", { role: "alert" });`,
+			"classic",
+		],
+		[
+			"automatic runtime 의 jsx",
+			`import { jsx } from "react/jsx-runtime";\nexport const E = jsx("div", { role: "alert", children: "boom" });`,
+			"runtime",
+		],
+		[
+			"automatic runtime 의 jsxs",
+			`import { jsxs } from "react/jsx-runtime";\nexport const E = jsxs("div", { role: "alert", children: ["a", "b"] });`,
+			"runtime",
+		],
+		[
+			"개발용 runtime 의 jsxDEV",
+			`import { jsxDEV } from "react/jsx-dev-runtime";\nexport const E = jsxDEV("div", { role: "alert" });`,
+			"runtime",
+		],
+	];
+	for (const [label, code, factory] of elements) {
+		it(`${label} 은 요소다`, () => {
+			expect(factoryOf(code)).toBe(factory);
+		});
+	}
+
+	// 반증. 이름이 같아도 다른 데서 온 것은 화면 요소가 아니다. 여기서 참이
+	// 되면 게이트가 브라우저 API 호출을 화면으로 세어 과탐지로 곧 꺼진다.
+	const notElements: [string, string][] = [
+		["document.createElement 는 브라우저 API 다", `export const c = document.createElement("canvas");`],
+		[
+			"다른 모듈에서 온 같은 이름은 아니다",
+			`import { h } from "hyperscript";\nexport const E = h("div", { role: "alert" });`,
+		],
+		[
+			"상대 경로 모듈의 createElement 도 react 가 아니다",
+			`import { createElement as h } from "./dom-utils";\nexport const E = h("div", { role: "alert" });`,
+		],
+		[
+			"import 없는 h 는 요소가 아니다",
+			`export function F(h: unknown) { return (h as (t: string) => unknown)("div"); }`,
+		],
+	];
+	for (const [label, code] of notElements) {
+		it(`반증: ${label}`, () => {
+			expect(factoryOf(code)).toBeNull();
+		});
+	}
+
+	// 옛 판정을 잠근다. 출처를 못 찾은 자유 식별자 `createElement` 는 여전히
+	// 요소다 — 모르는 것을 아니라고 단정하면 놓치는 쪽으로 틀린다.
+	it("출처를 못 찾은 자유 createElement 는 그대로 요소다", () => {
+		expect(factoryOf(`export const E = createElement("div", { role: "alert" });`)).toBe(
+			"classic",
+		);
+	});
+});
+
+// jsx/jsxs 는 props 안에 자식을 넣는다. 여기서 읽지 않으면 "화면에 오르는
+// 것이 이 알림 하나뿐인가" 판정이 통째로 갈린다.
+describe("elementChildren — automatic runtime 은 자식이 props 안에 있다", () => {
+	function childrenCount(code: string): number {
+		const sf = parse(code);
+		const elements = J.jsxElementsIn(sf, sf);
+		expect(elements.length, "요소를 하나도 찾지 못했다").toBeGreaterThan(0);
+		return J.elementChildren(elements[0] as ts.Node).length;
+	}
+
+	it("jsx 의 children 하나를 자식 하나로 센다", () => {
+		expect(
+			childrenCount(
+				`import { jsx } from "react/jsx-runtime";\nexport const E = jsx("div", { role: "alert", children: "install failed" });`,
+			),
+		).toBe(1);
+	});
+
+	it("jsxs 의 children 배열을 그 수만큼 센다", () => {
+		expect(
+			childrenCount(
+				`import { jsxs } from "react/jsx-runtime";\nexport const E = jsxs("div", { role: "alert", children: ["a", "b"] });`,
+			),
+		).toBe(2);
+	});
+
+	it("공백뿐인 children 은 자식이 아니다", () => {
+		expect(
+			childrenCount(
+				`import { jsxs } from "react/jsx-runtime";\nexport const E = jsxs("div", { children: [" ", "x"] });`,
+			),
+		).toBe(1);
+	});
+
+	it("반증: children 을 props 로만 읽고 자식으로 세지 않으면 0 이 된다", () => {
+		expect(
+			childrenCount(
+				`import { jsx } from "react/jsx-runtime";\nexport const E = jsx("div", { role: "alert", children: "boom" });`,
+			),
+		).not.toBe(0);
+	});
+
+	it("props 목록에는 children 도 그대로 남는다", () => {
+		const read = readProps(
+			`import { jsx } from "react/jsx-runtime";\nexport const E = jsx("div", { role: "alert", children: "boom" });`,
+		);
+		expect(names(read).sort()).toEqual(["children", "role"]);
+		expect(valueOfProp(read, "role")).toEqual(["alert"]);
+	});
+});
+
+// ── 11회차 지적 2 ──────────────────────────────────────────────────
+// 영구 꺼짐 판정이 식별자에서 멈춰 있었다. 같은 모듈의 문자열 후보는 이미
+// `obj.id` 를 푸는데, `disabled={FLAGS.off}` 는 열린 버튼으로 읽혔다. React
+// 에서 `{ off: true }` 의 `off` 와 `true` 는 둘 다 누를 수 없는 버튼이다.
+describe("alwaysTruthy — 속성 접근도 값이다", () => {
+	it("const 객체의 속성이 true 면 영구히 꺼진 것이다", () => {
+		expect(truthyOf("FLAGS.off", "const FLAGS = { off: true };")).toBe(true);
+	});
+
+	it("대괄호로 적은 같은 속성도 같다", () => {
+		expect(truthyOf(`FLAGS["off"]`, "const FLAGS = { off: true };")).toBe(true);
+	});
+
+	it("두 겹 중첩도 따라간다", () => {
+		expect(truthyOf("FLAGS.panel.off", "const FLAGS = { panel: { off: true } };")).toBe(
+			true,
+		);
+	});
+
+	it("`as const` 를 붙여도 뜻은 같다", () => {
+		expect(truthyOf("FLAGS.off", "const FLAGS = { off: true } as const;")).toBe(true);
+	});
+
+	it("부정한 자리도 대칭이다 — 언제나 거짓인 속성의 부정은 언제나 참이다", () => {
+		expect(truthyOf("!FLAGS.on", "const FLAGS = { on: false };")).toBe(true);
+	});
+
+	it("import 로 건너간 const 객체도 같은 값이다", () => {
+		const { env, file } = environment({
+			"app/flags.ts": `export const FLAGS = { off: true };`,
+			"app/screen.tsx":
+				`import { FLAGS } from "./flags";\nexport const Probe = <button d={FLAGS.off} />;`,
+		});
+		const sf = file("app/screen.tsx");
+		expect(J.alwaysTruthy(attributeValue(sf, "d"), sf, env)).toBe(true);
+	});
+
+	// 반증. "모른다" 를 참으로 읽으면 살아 있는 버튼을 죽은 것으로 지운다.
+	it("반증: 재대입되는 이름은 따라가지 않는다", () => {
+		expect(
+			truthyOf("FLAGS.off", "let FLAGS = { off: true };\nFLAGS = { off: false };"),
+		).toBe(false);
+	});
+
+	it("반증: 값이 변수인 속성은 모른다", () => {
+		expect(truthyOf("FLAGS.off", "const FLAGS = { off: flag };")).toBe(false);
+	});
+
+	it("반증: 없는 키는 모른다", () => {
+		expect(truthyOf("FLAGS.missing", "const FLAGS = { off: true };")).toBe(false);
+	});
+
+	it("반증: spread 가 섞여 값을 못 정하면 모른다", () => {
+		expect(truthyOf("FLAGS.off", "const FLAGS = { ...base };")).toBe(false);
+	});
+
+	it("반증: 거짓인 속성은 영구 꺼짐이 아니다", () => {
+		expect(truthyOf("FLAGS.off", "const FLAGS = { off: false };")).toBe(false);
+	});
+
+	it("반증: 계산된 키는 모른다", () => {
+		expect(truthyOf("FLAGS[key]", "const FLAGS = { off: true };")).toBe(false);
 	});
 });

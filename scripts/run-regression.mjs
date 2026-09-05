@@ -305,6 +305,10 @@ function missingPrerequisites() {
 				const login = spawnSync("codex", ["login", "status"], {
 					encoding: "utf8",
 					timeout: 20_000,
+					// 윈도우의 codex 는 .cmd/.ps1 이라 shell 없이는 스폰 자체가
+					// 실패해, 로그인돼 있어도 "안 됐다" 로 읽는다(win-rtx4060 실측,
+					// pnpm.cmd EINVAL 과 같은 부류). 아래 wdio 스폰 둘과 같은 규칙.
+					shell: process.platform === "win32",
 				});
 				// codex 는 이 문장을 **표준 오류**로 낸다. 표준 출력만 보면
 				// 로그인돼 있는데도 안 됐다고 말한다(실측).

@@ -14,9 +14,16 @@
  * 무엇을 모른다고 말하는가: 함수 인자나 import 된 객체를 펼친 spread 처럼
  * 값을 정적으로 알 수 없는 자리는 `unknownSpread` 로 표시한다. 호출자가
  * "모른다" 를 "없다" 로 읽으면, 값을 숨기는 것만으로 검사를 통과한다.
+ *
+ * 무엇이 요소인가는 여기서 정하지 않는다. "이 호출은 어느 모듈의 어느 export
+ * 인가" 는 `scripts/lib/bindings.mjs` 가 답하고, 이 모듈은 그 답을 받아
+ * react·preact 계열의 요소 만드는 함수인지만 묻는다. 열한 번째 회차까지 그
+ * 판정이 `"createElement"` 라는 **글자**였고, 별명 한 줄이면 막다른 오류
+ * 화면이 알림으로도 세어지지 않았다.
  */
 
 import ts from "typescript";
+import { resolveCallee } from "./bindings.mjs";
 
 /* ─────────────── 파싱과 파일 환경 ─────────────── */
 
@@ -94,21 +101,67 @@ export function unwrapAll(node) {
 
 /* ─────────────── 요소와 속성 ─────────────── */
 
-export function isCreateElementCall(node) {
-	if (!node || !ts.isCallExpression(node)) return false;
-	const callee = node.expression;
-	if (ts.isIdentifier(callee)) return callee.text === "createElement";
-	if (ts.isPropertyAccessExpression(callee))
-		return callee.name.text === "createElement";
-	return false;
+/**
+ * 요소를 만드는 함수를 내주는 모듈들. 이름이 아니라 **어디서 온 무엇인가**로
+ * 판정하므로, 별명을 붙이든(`createElement as h`) 네임스페이스로 부르든
+ * (`React.createElement`) 같은 것으로 읽힌다.
+ */
+const ELEMENT_MODULES = new Set([
+	"react",
+	"react/jsx-runtime",
+	"react/jsx-dev-runtime",
+	"preact",
+	"preact/compat",
+	"preact/jsx-runtime",
+	"preact/jsx-dev-runtime",
+]);
+
+/** 옛 방식. 자식은 셋째 인자부터다. */
+const CLASSIC_FACTORIES = new Set(["createElement", "h"]);
+/** 새 방식(automatic runtime). 자식은 props 안의 `children` 이다. */
+const RUNTIME_FACTORIES = new Set(["jsx", "jsxs", "jsxDEV"]);
+
+/**
+ * 이 호출이 요소를 만드는가. 만든다면 자식이 어디 있는 방식인가.
+ *
+ * `"classic"` 이면 `createElement(type, props, ...children)`,
+ * `"runtime"` 이면 `jsx(type, { ...props, children })` 다. 둘 다 props 는 둘째
+ * 인자인데 자식 자리가 다르다 — 그 차이를 여기 한 곳에서만 안다.
+ *
+ * 판정은 `scripts/lib/bindings.mjs` 가 푼 **바인딩**으로 한다. 열한 번째
+ * 회차까지 이 자리는 `"createElement"` 라는 글자였고, `import { createElement
+ * as h }` 한 줄이면 막다른 오류 화면이 알림으로도 세어지지 않았다.
+ *
+ * 딱 한 자리만 이름으로 남긴다: 아무 데서도 오지 않은 자유 식별자
+ * `createElement(...)`. 어디서 왔는지 모르는 것을 요소가 아니라고 단정하면
+ * 놓치는 쪽으로 틀리므로, 옛 판정을 그대로 잠근다. 반대로 `document.
+ * createElement("canvas")` 처럼 **출처가 있는 다른 것**은 이제 요소가 아니다.
+ */
+export function elementFactory(node, env) {
+	if (!node || !ts.isCallExpression(node)) return null;
+	const sf = typeof node.getSourceFile === "function" ? node.getSourceFile() : null;
+	const binding = sf ? resolveCallee(node, sf, env) : null;
+	if (binding) {
+		if (!ELEMENT_MODULES.has(binding.module)) return null;
+		if (CLASSIC_FACTORIES.has(binding.imported)) return "classic";
+		if (RUNTIME_FACTORIES.has(binding.imported)) return "runtime";
+		return null;
+	}
+	const callee = unwrapAll(node.expression);
+	if (callee && ts.isIdentifier(callee) && callee.text === "createElement") return "classic";
+	return null;
 }
 
-export function isElementNode(node) {
+export function isCreateElementCall(node, env) {
+	return elementFactory(node, env) !== null;
+}
+
+export function isElementNode(node, env) {
 	return (
 		!!node &&
 		(ts.isJsxElement(node) ||
 			ts.isJsxSelfClosingElement(node) ||
-			isCreateElementCall(node))
+			isCreateElementCall(node, env))
 	);
 }
 
@@ -207,7 +260,10 @@ export function elementProps(node, sf, env) {
 		}
 		return { props, unknownSpread };
 	}
-	if (isCreateElementCall(node)) {
+	// `createElement` 와 `jsx`/`jsxs` 는 자식 자리가 다르지만 props 는 둘 다
+	// 둘째 인자다. `jsx` 쪽은 그 객체 안에 `children` 이 함께 들어 있고, 그것도
+	// 실제로 넘어가는 prop 이므로 목록에서 빼지 않는다.
+	if (isCreateElementCall(node, env)) {
 		if (node.arguments.length >= 2) fromObject(node.arguments[1], 0, sf);
 		return { props, unknownSpread };
 	}
@@ -221,18 +277,33 @@ export function elementProps(node, sf, env) {
  * 같은 화면을 `createElement` 로 적었을 때 들여쓰기 한 칸이 형제로 세어져
  * "자식이 하나뿐인가" 판정이 갈린다.
  */
-export function elementChildren(node) {
+export function elementChildren(node, env) {
 	const meaningfulJsx = (c) => !ts.isJsxText(c) || c.getText().trim().length > 0;
+	const meaningfulValue = (a) => {
+		const arg = unwrapAll(a);
+		if (!arg) return false;
+		if (ts.isStringLiteral(arg) || ts.isNoSubstitutionTemplateLiteral(arg))
+			return arg.text.trim().length > 0;
+		return true;
+	};
 	if (ts.isJsxElement(node) || ts.isJsxFragment(node))
 		return node.children.filter(meaningfulJsx);
-	if (isCreateElementCall(node))
-		return node.arguments.slice(2).filter((a) => {
-			const arg = unwrapAll(a);
-			if (!arg) return false;
-			if (ts.isStringLiteral(arg) || ts.isNoSubstitutionTemplateLiteral(arg))
-				return arg.text.trim().length > 0;
-			return true;
-		});
+	const factory = elementFactory(node, env);
+	if (factory === "classic") return node.arguments.slice(2).filter(meaningfulValue);
+	// automatic runtime 은 자식을 props 안에 넣는다. `jsx` 는 하나, `jsxs` 는
+	// 배열이다. 여기서 읽지 않으면 `jsx("div", { role: "alert", children: [a, b] })`
+	// 가 자식 없는 요소로 보여, "화면에 오르는 것이 이 알림 하나뿐인가" 판정이
+	// 통째로 갈린다.
+	if (factory === "runtime") {
+		const sf = typeof node.getSourceFile === "function" ? node.getSourceFile() : undefined;
+		const { props } = elementProps(node, sf, env);
+		const slot = props.find((p) => p.name === "children");
+		if (!slot || !slot.value) return [];
+		const value = unwrapAll(slot.value);
+		if (!value) return [];
+		if (ts.isArrayLiteralExpression(value)) return value.elements.filter(meaningfulValue);
+		return meaningfulValue(value) ? [value] : [];
+	}
 	return [];
 }
 
@@ -244,11 +315,11 @@ export function elementChildren(node) {
  * 아니다** — 목록의 크기를 "화면에 오르는 것이 하나뿐인가" 로 읽으면 안
  * 된다. 형제가 있는지는 `elementChildren` 이 세는 자식 수로 묻는다.
  */
-export function jsxElementsIn(node, sf) {
+export function jsxElementsIn(node, sf, env) {
 	const out = [];
 	const visit = (n) => {
 		if (!n) return;
-		if (isElementNode(n)) out.push(n);
+		if (isElementNode(n, env)) out.push(n);
 		ts.forEachChild(n, visit);
 	};
 	visit(node);
@@ -339,6 +410,107 @@ function isReassigned(name, sf) {
 function isConstDeclaration(decl) {
 	const list = decl.parent;
 	return !!list && ts.isVariableDeclarationList(list) && (list.flags & ts.NodeFlags.Const) !== 0;
+}
+
+/**
+ * 재대입 없는 `const` 로만 묶인 값. import 도 한 번 따라간다.
+ *
+ * `constValue` 와 다른 점은 **const 인지 묻는다**는 것뿐이다. 언제나 참인지를
+ * 판정할 때는 값이 도중에 바뀌지 않는다는 사실이 근거의 일부다. `as const`
+ * 인지는 묻지 않는다 — `as const` 는 타입 표기이지 값이 바뀌는지와 무관하고,
+ * 그것을 요구하면 `as const` 를 떼는 것만으로 판정이 빠져나간다.
+ */
+function constOnlyValue(name, sf, env, depth = 0) {
+	if (depth > 3) return null;
+	let seenDeclaration = false;
+	for (const hit of declarationSites(name, sf)) {
+		if (hit.kind !== "var") continue;
+		seenDeclaration = true;
+		if (!hit.decl.initializer) continue;
+		if (!isConstDeclaration(hit.decl)) continue;
+		if (isReassigned(name, sf)) continue;
+		return { node: hit.decl.initializer, sf };
+	}
+	if (seenDeclaration) return null;
+	const imported = importedBinding(name, sf, env);
+	if (imported) return constOnlyValue(imported.name, imported.sf, env, depth + 1);
+	return null;
+}
+
+/** `obj.key` 와 `obj["key"]` 의 그 키. 값으로 계산되는 키는 모른다. */
+function accessKey(node) {
+	if (ts.isPropertyAccessExpression(node)) return node.name.text;
+	if (ts.isElementAccessExpression(node)) {
+		const arg = node.argumentExpression ? unwrapAll(node.argumentExpression) : null;
+		if (arg && (ts.isStringLiteral(arg) || ts.isNoSubstitutionTemplateLiteral(arg)))
+			return arg.text;
+		if (arg && ts.isNumericLiteral(arg)) return arg.text;
+	}
+	return null;
+}
+
+/** 객체·배열 리터럴에서 그 키의 값. spread 때문에 못 정하면 모른다. */
+function literalMember(literal, key, home) {
+	if (ts.isArrayLiteralExpression(literal)) {
+		if (!/^\d+$/.test(key)) return null;
+		const element = literal.elements[Number(key)];
+		if (!element || ts.isSpreadElement(element)) return null;
+		if (literal.elements.some((el) => ts.isSpreadElement(el))) return null;
+		return { node: element, sf: home };
+	}
+	if (!ts.isObjectLiteralExpression(literal)) return null;
+	let spread = false;
+	for (const p of literal.properties) {
+		if (ts.isSpreadAssignment(p)) {
+			spread = true;
+			continue;
+		}
+		if (ts.isPropertyAssignment(p) && propertyName(p.name) === key)
+			return { node: p.initializer, sf: home };
+		if (ts.isShorthandPropertyAssignment(p) && p.name.text === key)
+			return { node: p.name, sf: home };
+	}
+	// 못 찾았는데 spread 가 있으면 그 안에 있을 수도 있다 — 없다고 말하지 않는다.
+	return spread ? null : null;
+}
+
+/**
+ * `FLAGS.off` · `FLAGS["off"]` 가 가리키는 값. 재대입 없는 const 객체만 푼다.
+ *
+ * 왜 필요한가: 표지 문자열(`stringCandidates`)은 이미 `obj.id` 를 이 방식으로
+ * 푸는데 "언제나 참인가" 판정만 한 겹에서 멈춰 있었다. React 에서
+ * `disabled={true}` 와 `disabled={FLAGS.off}`(위에서 `const FLAGS = { off: true }`)
+ * 는 둘 다 누를 수 없는 버튼이다. 한쪽만 영구 꺼짐으로 읽으면, 속성 하나로
+ * 감싸는 것만으로 죽은 화면이 살아 있는 것으로 세어진다.
+ */
+function constAccessValue(node, sf, env, depth = 0) {
+	if (depth > 4) return null;
+	const key = accessKey(node);
+	if (key === null) return null;
+	const base = unwrapAll(node.expression);
+	if (!base) return null;
+	let literal = null;
+	let home = sf;
+	if (ts.isObjectLiteralExpression(base) || ts.isArrayLiteralExpression(base)) {
+		literal = base;
+	} else if (ts.isIdentifier(base)) {
+		const bound = constOnlyValue(base.text, sf, env);
+		const value = bound ? unwrapAll(bound.node) : null;
+		if (!value) return null;
+		if (!ts.isObjectLiteralExpression(value) && !ts.isArrayLiteralExpression(value)) return null;
+		literal = value;
+		home = bound.sf;
+	} else if (ts.isPropertyAccessExpression(base) || ts.isElementAccessExpression(base)) {
+		const inner = constAccessValue(base, sf, env, depth + 1);
+		const value = inner ? unwrapAll(inner.node) : null;
+		if (!value) return null;
+		if (!ts.isObjectLiteralExpression(value) && !ts.isArrayLiteralExpression(value)) return null;
+		literal = value;
+		home = inner.sf;
+	} else {
+		return null;
+	}
+	return literalMember(literal, key, home);
 }
 
 /** 그 이름으로 부르는 호출들. `setActiveTab("general")` 을 찾을 때 쓴다. */
@@ -756,6 +928,13 @@ export function alwaysTruthy(node, sf, env, seen = new Set()) {
 		}
 		return false;
 	}
+	// `disabled={FLAGS.off}` — 문자열 후보(`stringCandidates`)가 이미 푸는 바로
+	// 그 속성이다. 한쪽만 풀면 값을 객체 한 겹에 넣는 것으로 판정이 갈린다.
+	if (ts.isPropertyAccessExpression(n) || ts.isElementAccessExpression(n)) {
+		const member = constAccessValue(n, sf, env);
+		if (member) return alwaysTruthy(member.node, member.sf, env, seen);
+		return false;
+	}
 	return false;
 }
 
@@ -777,6 +956,17 @@ function alwaysFalsy(node, sf, env, seen) {
 			if (isReassigned(n.text, sf)) continue;
 			if (alwaysFalsy(hit.decl.initializer, sf, env, seen)) return true;
 		}
+		const imported = importedBinding(n.text, sf, env);
+		if (imported) {
+			const bound = constOnlyValue(imported.name, imported.sf, env);
+			if (bound) return alwaysFalsy(bound.node, bound.sf, env, seen);
+		}
+	}
+	// `disabled={!FLAGS.on}` 은 `FLAGS.on` 이 언제나 거짓일 때 영구히 꺼져 있다.
+	// 참 쪽만 속성을 풀면 부정 한 겹으로 같은 구멍이 남는다.
+	if (ts.isPropertyAccessExpression(n) || ts.isElementAccessExpression(n)) {
+		const member = constAccessValue(n, sf, env);
+		if (member) return alwaysFalsy(member.node, member.sf, env, seen);
 	}
 	return false;
 }

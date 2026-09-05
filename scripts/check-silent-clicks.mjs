@@ -24,21 +24,38 @@
  * `return void 0` 이었다. `void 0` 은 `return;` 과 같은 값이고, 사람 눈에는
  * 구별되지 않는다. 형태를 하나 더 열거하는 대신 **판정을 파서로 옮겼다.**
  *
- * 이제 TypeScript 파서로 뜻을 읽는다.
+ * ## 무엇을 세는 단위인가 (11회차 지적 5 이후)
  *
- *   - 조건이 **어떤 이름의 있음/없음** 인가 (`el`, `!el`, `el == null`,
- *     `el !== undefined` …).
+ * 열 번째까지 판정의 단위는 **이름**이었다. 조건의 왼쪽이 식별자일 때만
+ * 세었고, 클릭도 `이름.click(...)` 만 세었다. 그래서 같은 무음이 두 가지
+ * 방식으로 빠져나갔다 — 보호되는 것이 이름이 아닐 때
+ * (`(document.querySelector(sel) as HTMLElement)`, `state.el`)와, 클릭을
+ * `void`·`await`·괄호로 한 겹 싼 때다. `void el.click()` 은 `el.click()` 이고,
+ * `el != null && el.click()` 은 `el && el.click()` 이다.
+ *
+ * 이제 단위는 **보호되는 식 E** 다. 존재를 묻는 형태(`E`, `!!E`, `E != null`,
+ * `E !== undefined`, `Boolean(E)`, `typeof E !== "undefined"`)를 하나로 읽어
+ * E 를 꺼내고, 그 자리에서 눌리는 것이 같은 E 인지만 본다. E 는 식별자여야
+ * 할 이유가 없다 — 속성 접근이든 단언으로 싼 호출이든 글자가 같으면 같은
+ * 식으로 본다. 형태가 하나 더 와도 판정의 단위는 그대로다.
+ *
+ * 그래서 이제 파서에게 묻는 것은 이렇다.
+ *
+ *   - 조건이 **어떤 식의 있음/없음** 인가 (`el`, `!el`, `el == null`,
+ *     `el !== undefined`, `Boolean(el)`, `typeof el !== "undefined"` …).
  *   - 없음일 때 그 가지가 **값 없이 빠져나가는가** (`return`, `return undefined`,
  *     `return void …`, `continue`). 값을 돌려주는 `return false` 는 다르다 —
  *     못 눌렀다는 사실을 부르는 쪽에 넘기는 것이고, 이 게이트가 권하는 형태다.
- *   - 그 뒤 같은 블록에서 **그 이름을** 누르는가.
+ *   - 그 뒤 같은 블록에서 **그 식을** 누르는가. 클릭이 `void`·`await`·괄호·`as`
+ *     로 싸여 있어도 같은 클릭이다.
  *
  * `void 0`·`void expr`·`undefined` 는 파서에게 모두 "값 없이 나간다" 로 보이므로,
  * 셋을 따로 적어 둘 자리가 없다.
  *
- * 무엇을 재지 않는가: 이름이 아니라 값이 흘러 들어온 경우(`const el = pick();`
- * 의 `pick` 안쪽)는 보지 않는다. 이 게이트는 한 함수 안에서 사람이 읽어 알 수
- * 있는 자리까지만 말한다.
+ * 무엇을 재지 않는가: 값이 어디서 흘러 들어왔는지(`const el = pick();` 의 `pick`
+ * 안쪽)는 보지 않는다. 같은 식인지는 글자로 비교하므로, 부를 때마다 다른 값을
+ * 주는 식을 두 번 적은 자리는 같은 것으로 읽는다. 이 게이트는 한 함수 안에서
+ * 사람이 읽어 알 수 있는 자리까지만 말한다.
  *
  * 지금 있는 것은 baseline 으로 잠그고 늘어나는 것만 막는다. 한 번에 고치면
  * 그 커밋을 아무도 검토할 수 없다.
@@ -67,6 +84,13 @@ const SHELL = "packages/shell";
  * 그래서 59 = 코드 57 + 주석 2 였고, 지금 107 = 57 + 새로 보인 50 이다. 수가
  * 커진 것은 게이트가 느슨해진 것이 아니라 눈이 밝아진 것이고, 이 값은 그
  * 빚을 잠근다.
+ *
+ * 11회차에 판정의 단위를 이름에서 **보호되는 식**으로 옮기고 다시 세었다.
+ * 값은 107 그대로다 — 새로 보게 된 형태(`E != null && E.click()`,
+ * `void E.click()`, `Boolean(E)`, `typeof E !== "undefined"`, 이름이 아닌 E)가
+ * 지금 이 저장소에는 하나도 없기 때문이다. 그것들이 잡히는지는 셈이 아니라
+ * 주입으로 확인했다(11회차 지적 5). 이 값을 줄이거나 늘리는 기준은 그대로다 —
+ * 파서가 더 밝아진 만큼은 잠그고, 판정 범위 자체는 넓히지 않는다.
  */
 const BASELINE = 107;
 
@@ -94,71 +118,140 @@ function unwrap(node) {
 			current = current.expression;
 		else break;
 	}
-	return current;
+	return current ?? null;
 }
 
-/** 조건이 "이 이름이 **있으면**" 인가. 그렇다면 그 이름. */
-function presenceOf(condition) {
-	const node = unwrap(condition);
-	if (ts.isIdentifier(node)) return node.text;
-	// `!!el`
-	if (
-		ts.isPrefixUnaryExpression(node) &&
-		node.operator === ts.SyntaxKind.ExclamationToken
-	) {
-		const inner = unwrap(node.operand);
-		if (
-			ts.isPrefixUnaryExpression(inner) &&
-			inner.operator === ts.SyntaxKind.ExclamationToken &&
-			ts.isIdentifier(unwrap(inner.operand))
-		)
-			return unwrap(inner.operand).text;
+/**
+ * 값을 버리는 껍데기까지 벗긴다.
+ *
+ * `void el.click()` 은 `el.click()` 과 같은 클릭이다 — 결과를 쓰지 않겠다고
+ * 적었을 뿐이다. 여기서 벗기지 않으면 `void` 세 글자로 같은 무음이 셈에서
+ * 빠진다. 값이 있는지 보는 `exitsWithoutValue` 는 이것을 쓰지 않는다 — 거기서는
+ * `void` 가 "값 없이 나간다" 는 근거 그 자체다.
+ */
+function unwrapDiscarded(node) {
+	let current = unwrap(node);
+	for (let i = 0; i < 8 && current; i += 1) {
+		if (ts.isVoidExpression(current)) current = unwrap(current.expression);
+		else break;
+	}
+	return current ?? null;
+}
+
+/**
+ * 이 식을 가리키는 글자. 같은 식인지는 글자로 비교한다.
+ *
+ * 판정의 단위가 **이름**이던 동안, 보호되는 것이 이름이 아니면
+ * (`(document.querySelector(sel) as HTMLElement)`, `state.el`) 같은 무음이
+ * 세어지지 않았다. 이름이 아니라 식으로 비교하면 그 자리가 닫힌다. 값이
+ * 같은지까지는 모른다 — 같은 글자를 두 번 부르는 식(`pick()`)은 실제로는 다른
+ * 값일 수 있다. 이 게이트는 사람이 읽어 "같은 것을 보고 같은 것을 누른다" 고
+ * 아는 자리까지만 말한다.
+ */
+function exprKey(node) {
+	const n = unwrap(node);
+	if (!n) return null;
+	try {
+		return n.getText().replace(/\s+/g, "");
+	} catch {
 		return null;
 	}
-	// `el !== null` · `el != undefined`
+}
+
+/** `null`·`undefined`·`void 0` 처럼 "없음" 을 뜻하는 자리인가. */
+function isNullish(node) {
+	if (!node) return false;
+	if (node.kind === ts.SyntaxKind.NullKeyword) return true;
+	if (ts.isIdentifier(node) && node.text === "undefined") return true;
+	return ts.isVoidExpression(node);
+}
+
+/** `E`(어떤 식이든) 를 `null`/`undefined` 와 비교하는 식이면 그 `E`. */
+function nullComparand(node) {
+	const left = unwrap(node.left);
+	const right = unwrap(node.right);
+	if (isNullish(right) && !isNullish(left)) return left;
+	if (isNullish(left) && !isNullish(right)) return right;
+	return null;
+}
+
+/** `typeof E <op> "undefined"` 면 그 `E`. */
+function typeofComparand(node) {
+	const pick = (a, b) =>
+		a &&
+		ts.isTypeOfExpression(a) &&
+		b &&
+		(ts.isStringLiteral(b) || ts.isNoSubstitutionTemplateLiteral(b)) &&
+		b.text === "undefined"
+			? unwrap(a.expression)
+			: null;
+	const left = unwrap(node.left);
+	const right = unwrap(node.right);
+	return pick(left, right) ?? pick(right, left);
+}
+
+/** `Boolean(E)` 면 그 `E`. */
+function booleanCallArgument(node) {
+	if (!node || !ts.isCallExpression(node)) return null;
+	const callee = unwrap(node.expression);
+	if (!callee || !ts.isIdentifier(callee) || callee.text !== "Boolean") return null;
+	if (node.arguments.length !== 1) return null;
+	return unwrap(node.arguments[0]);
+}
+
+/**
+ * 조건이 "이 **식**이 있으면" 인가. 그렇다면 그 식.
+ *
+ * 존재를 묻는 방법은 여럿이고 셋 다 같은 뜻이다 — `E`, `!!E`, `E != null`,
+ * `E !== undefined`, `Boolean(E)`, `typeof E !== "undefined"`. 형태를 하나씩
+ * 열거하는 대신 "무엇이 보호되는가" 를 돌려주고, 누르는 쪽과 같은 식인지만
+ * 본다.
+ */
+function presenceOf(condition) {
+	const node = unwrap(condition);
+	if (!node) return null;
+	if (ts.isPrefixUnaryExpression(node) && node.operator === ts.SyntaxKind.ExclamationToken) {
+		const inner = unwrap(node.operand);
+		// `!!E` 만 있음이다. `!E` 는 없음이다.
+		if (inner && ts.isPrefixUnaryExpression(inner) && inner.operator === ts.SyntaxKind.ExclamationToken)
+			return unwrap(inner.operand);
+		return null;
+	}
 	if (ts.isBinaryExpression(node)) {
 		const kind = node.operatorToken.kind;
+		// `a && E && E.click()` — 마지막 조건이 보호하는 것이다.
+		if (kind === ts.SyntaxKind.AmpersandAmpersandToken) return presenceOf(node.right);
 		const notEqual =
 			kind === ts.SyntaxKind.ExclamationEqualsToken ||
 			kind === ts.SyntaxKind.ExclamationEqualsEqualsToken;
 		if (!notEqual) return null;
-		return nullComparisonName(node);
+		return nullComparand(node) ?? typeofComparand(node);
 	}
-	return null;
+	const boolean = booleanCallArgument(node);
+	if (boolean) return boolean;
+	return node;
 }
 
-/** 조건이 "이 이름이 **없으면**" 인가. 그렇다면 그 이름. */
+/** 조건이 "이 **식**이 없으면" 인가. 그렇다면 그 식. */
 function absenceOf(condition) {
 	const node = unwrap(condition);
-	// `!el`
-	if (
-		ts.isPrefixUnaryExpression(node) &&
-		node.operator === ts.SyntaxKind.ExclamationToken
-	) {
+	if (!node) return null;
+	if (ts.isPrefixUnaryExpression(node) && node.operator === ts.SyntaxKind.ExclamationToken) {
 		const inner = unwrap(node.operand);
-		return ts.isIdentifier(inner) ? inner.text : null;
+		if (!inner) return null;
+		// `!!E` 는 있음이다.
+		if (ts.isPrefixUnaryExpression(inner) && inner.operator === ts.SyntaxKind.ExclamationToken)
+			return null;
+		return booleanCallArgument(inner) ?? inner;
 	}
-	// `el == null` · `el === undefined`
 	if (ts.isBinaryExpression(node)) {
 		const kind = node.operatorToken.kind;
 		const equal =
 			kind === ts.SyntaxKind.EqualsEqualsToken ||
 			kind === ts.SyntaxKind.EqualsEqualsEqualsToken;
 		if (!equal) return null;
-		return nullComparisonName(node);
+		return nullComparand(node) ?? typeofComparand(node);
 	}
-	return null;
-}
-
-/** `el` 과 `null`/`undefined` 를 비교하는 식이면 그 이름. 어느 쪽에 있든 같다. */
-function nullComparisonName(node) {
-	const left = unwrap(node.left);
-	const right = unwrap(node.right);
-	const isNullish = (n) =>
-		n.kind === ts.SyntaxKind.NullKeyword ||
-		(ts.isIdentifier(n) && n.text === "undefined");
-	if (ts.isIdentifier(left) && isNullish(right)) return left.text;
-	if (ts.isIdentifier(right) && isNullish(left)) return left.text && null;
 	return null;
 }
 
@@ -181,40 +274,34 @@ function exitsWithoutValue(statement) {
 	return false;
 }
 
-/** 이 문(statement) 이 곧바로 `name.click(...)` 인가. */
-function isDirectClickStatement(statement, name) {
+/** 이 식이 `E.click(...)` 이면 그 `E`. `void`·`await`·괄호·`as` 는 벗긴다. */
+function clickReceiver(node) {
+	const call = unwrapDiscarded(node);
+	if (!call || !ts.isCallExpression(call)) return null;
+	const callee = unwrap(call.expression);
+	if (!callee || !ts.isPropertyAccessExpression(callee)) return null;
+	if (callee.name.text !== "click") return null;
+	return unwrap(callee.expression);
+}
+
+/** 이 문(statement) 이 곧바로 그 식을 누르는가. */
+function isDirectClickStatement(statement, key) {
 	if (!statement) return false;
 	if (ts.isBlock(statement))
-		return isDirectClickStatement(statement.statements[0], name);
+		return isDirectClickStatement(statement.statements[0], key);
 	if (!ts.isExpressionStatement(statement)) return false;
-	return isClickCall(unwrap(statement.expression), name);
+	const receiver = clickReceiver(statement.expression);
+	return !!receiver && exprKey(receiver) === key;
 }
 
-/** `name.click(...)` 호출 그 자체인가. */
-function isClickCall(node, name) {
-	if (!node || !ts.isCallExpression(node)) return false;
-	const callee = node.expression;
-	return (
-		ts.isPropertyAccessExpression(callee) &&
-		callee.name.text === "click" &&
-		ts.isIdentifier(unwrap(callee.expression)) &&
-		unwrap(callee.expression).text === name
-	);
-}
-
-/** 이 노드 아래 어딘가에서 `name.click(...)` 을 부르는가. */
-function clicksName(node, name) {
+/** 이 노드 아래 어딘가에서 그 식을 누르는가. */
+function clicksKey(node, key) {
 	let found = false;
 	const visit = (current) => {
 		if (found || !current) return;
 		if (ts.isCallExpression(current)) {
-			const callee = current.expression;
-			if (
-				ts.isPropertyAccessExpression(callee) &&
-				callee.name.text === "click" &&
-				ts.isIdentifier(unwrap(callee.expression)) &&
-				unwrap(callee.expression).text === name
-			) {
+			const receiver = clickReceiver(current);
+			if (receiver && exprKey(receiver) === key) {
 				found = true;
 				return;
 			}
@@ -265,18 +352,20 @@ function findHits(file, source) {
 			// 판정 범위가 넓어져 지금까지 세지 않던 자리까지 한꺼번에 들어온다 —
 			// 이 회차가 옮긴 것은 형태 열거이지 판정 범위가 아니다.
 			const present = presenceOf(node.expression);
-			if (present && isDirectClickStatement(node.thenStatement, present))
+			const presentKey = present ? exprKey(present) : null;
+			if (presentKey && isDirectClickStatement(node.thenStatement, presentKey))
 				hits.push(at(node));
 
 			// 2) `if (!el) return;` … 뒤에서 `el.click()` — 방향만 뒤집은 같은 무음
 			const absent = absenceOf(node.expression);
-			if (absent && exitsWithoutValue(node.thenStatement)) {
+			const absentKey = absent ? exprKey(absent) : null;
+			if (absentKey && exitsWithoutValue(node.thenStatement)) {
 				const list = statementList(node);
 				if (list) {
 					const index = list.indexOf(node);
 					if (index >= 0) {
 						for (let i = index + 1; i < list.length; i += 1) {
-							if (clicksName(list[i], absent)) {
+							if (clicksKey(list[i], absentKey)) {
 								hits.push(at(node));
 								break;
 							}
@@ -286,14 +375,16 @@ function findHits(file, source) {
 			}
 		}
 
-		// 3) `el && el.click()`
+		// 3) `el && el.click()` — 왼쪽이 존재 검사 어느 형태든, 오른쪽이 그 식을
+		//    누르면 같은 무음이다. `el != null && void el.click()` 도 그렇다.
 		if (
 			ts.isBinaryExpression(node) &&
 			node.operatorToken.kind === ts.SyntaxKind.AmpersandAmpersandToken
 		) {
-			const left = unwrap(node.left);
-			if (ts.isIdentifier(left) && isClickCall(unwrap(node.right), left.text))
-				hits.push(at(node));
+			const guard = presenceOf(node.left);
+			const key = guard ? exprKey(guard) : null;
+			const receiver = clickReceiver(node.right);
+			if (key && receiver && exprKey(receiver) === key) hits.push(at(node));
 		}
 
 		// 4) `el?.click()`

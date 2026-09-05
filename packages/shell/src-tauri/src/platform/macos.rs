@@ -305,20 +305,20 @@ fn ensure_dev_deep_link_helper() {
     let _ = std::fs::create_dir_all(&helper_root);
 
     // 스크립트 안의 자리 이름도 이름표에서 받는다 — 여기만 문자열로 적으면
-    // 데이터 홈 경계 검사가 못 보는 자리가 하나 남는다.
+    // 데이터 홈 경계 검사가 못 보는 자리가 하나 남는다. 데이터 홈 이름은
+    // 깔때기 밖에 없으므로 두 조각을 통째로 받는다.
+    let (data_home_dir, pending) = crate::data_home::deep_link_helper_script_paths();
     let script = format!(
         r#"on open location this_URL
     set homePath to POSIX path of (path to home folder)
     set naiaDir to homePath & "{data_home_dir}"
-    set pendingPath to naiaDir & "/{pending}"
+    set pendingPath to homePath & "{pending}"
     do shell script "/bin/mkdir -p " & quoted form of naiaDir
     do shell script "/bin/chmod 700 " & quoted form of naiaDir
     do shell script "/usr/bin/printf %s " & quoted form of this_URL & " > " & quoted form of pendingPath
     do shell script "/bin/chmod 600 " & quoted form of pendingPath
 end open location
-"#,
-        data_home_dir = crate::data_home::DATA_HOME_DIR_NAME,
-        pending = crate::data_home::DataHomeChild::DeepLinkPending.name(),
+"#
     );
     if std::fs::write(&script_path, script).is_err() {
         return;

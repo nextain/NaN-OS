@@ -62,7 +62,7 @@
 | 옛 앱(패널) | `app.rs:119` | `<데이터 홈>/panels` |
 | 로그 | `lib.rs:1499` | `<데이터 홈>/logs` |
 | PID | `lib.rs:1628` | `<데이터 홈>/run` |
-| 데이터 홈 자체 | `lib.rs:naia_data_home_from` | `NAIA_HOME` 또는 `~/.naia` |
+| 데이터 홈 자체 | `data_home.rs:naia_data_home_from` (비공개) | `NAIA_HOME` 또는 `~/.naia` |
 
 데이터 홈은 이미 한 함수가 정한다. 홈 경로를 여기저기서 조립하지 않는다는
 뜻이고, 이 축은 이미 단일 출처를 갖췄다.
@@ -173,9 +173,11 @@ TypeScript 쪽에서는 `src/lib/app-sandbox` 를 부르는 곳만 있고 그 �
 | `workspace` | `lib.rs` (게이트웨이 기본 설정) | 경로가 아니라 문자열이라 `NAIA_HOME` 도 타지 않는다 |
 
 `.naia` 자체를 직접 짚던 자리(옛 표의 열셋째 줄)는 이름이 아니라 **방식**이었다.
-지금은 `data_home::direct_root_of` / `direct_child_of` 가 그 방식을 들고 있고,
-`NAIA_HOME` 을 존중하는 쪽(`child_of`)과 갈라 두어 어느 자리가 어느 쪽인지 코드에서
-보인다.
+지금은 `data_home` 안의 비공개 `direct_root_of` 와 밖에 내주는 `direct_child_of` 가
+그 방식을 들고 있고, `NAIA_HOME` 을 존중하는 쪽(`child_of`)과 갈라 두어 어느 자리가
+어느 쪽인지 코드에서 보인다. 데이터 홈 뿌리와 그 이름(`.naia`)은 모듈 밖에 없다 —
+밖에서는 이름표를 받는 `child`·`child_of`·`child_from_dirs_home`·
+`read_child_from_dirs_home`·`direct_child`·`direct_child_of`·`tilde_child` 만 쓴다.
 
 검사기는 옮기는 일을 대신하지 않는다. **새로 늘어나는 것을 막는다.** 자리마다
 사유를 적어 두었고, 옮기고 나면 그 항목을 지우면 된다. 목록이 낡으면(옮겼는데

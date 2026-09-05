@@ -12,6 +12,7 @@ import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import ts from "typescript";
 import { afterEach, beforeAll, describe, expect, it } from "vitest";
 
 // 모듈 표면은 여기 적는다. `typeof import("…/credentialed-adk-seed.js")` 로 가져오면
@@ -125,23 +126,128 @@ describe("자격증명 등급 시딩", () => {
 		).toBe(true);
 	});
 
-	it("기본 설정이 그 시딩에 실제로 배선돼 있다", async () => {
+	it("기본 설정이 그 시딩에 실제로 배선돼 있다", () => {
 		// 배선을 지우면 여기가 붉어져야 한다. 시딩 함수만 남고 설정이 부르지 않으면
 		// 계약은 초록인데 회귀는 여전히 fetch failed 로 죽는다.
-		const source = await import("node:fs/promises").then((fs) =>
-			fs.readFile(
-				fileURLToPath(
-					new URL(
-						"../../packages/shell/e2e-tauri/wdio.conf.ts",
-						import.meta.url,
-					),
-				),
-				"utf8",
-			),
-		);
-		expect(source).toMatch(/seedCredentialedAdk\(/);
-		expect(source).toMatch(/credentialedSeedAvailable\(\)/);
+		//
+		// 예전에는 `/seedCredentialedAdk\(/` 같은 정규식 셋으로 쟀다. 그래서 실제
+		// 호출을 지우고 그 줄을 주석으로 남기기만 해도 세 단정이 모두 참이었다 —
+		// 배선을 빼면서 이유를 주석으로 적는 것이야말로 이 테스트가 막겠다고 적어
+		// 둔 사고다(11회차 지적 8). 이제 파서로 **노드**를 찾는다. 주석에는 노드가
+		// 없으므로 주석은 저절로 거짓이다. 10회차에 격리 계약
+		// (`e2e-runtime-isolation.contract.test.ts`)이 같은 자리를 같은 방식으로
+		// 닫았다.
+		const tree = parseWdioConf();
+		const bound = seedImportBindings(tree);
+
+		const seedLocal = bound.get("seedCredentialedAdk");
+		expect(seedLocal, "wdio.conf.ts 가 시딩 함수를 import 하지 않는다").toBeTruthy();
+		expect(
+			callsBinding(tree, seedLocal as string),
+			"import 만 하고 부르지 않으면 격리 워크스페이스는 비어 있다",
+		).toBe(true);
+
+		const availableLocal = bound.get("credentialedSeedAvailable");
+		expect(
+			availableLocal,
+			"wdio.conf.ts 가 시딩 가능 여부 판단을 import 하지 않는다",
+		).toBeTruthy();
+		expect(
+			callsBinding(tree, availableLocal as string),
+			"키가 있는지 실제로 물어야 결정론 등급이 예전 그대로 돈다",
+		).toBe(true);
+
 		// 워커도 같은 판단을 해야 스펙 앞에서 키를 실어 준다.
-		expect(source).toMatch(/NAIA_E2E_CREDENTIALED_SEED/);
+		expect(
+			touchesProcessEnv(tree, "NAIA_E2E_CREDENTIALED_SEED"),
+			"워커에게 넘기는 표시가 없으면 스펙은 키 없이 돈다",
+		).toBe(true);
 	});
 });
+
+/** `wdio.conf.ts` 를 노드로 읽는다. 글자가 아니라 노드로 재기 위해서다. */
+function parseWdioConf(): ts.SourceFile {
+	const path = fileURLToPath(
+		new URL("../../packages/shell/e2e-tauri/wdio.conf.ts", import.meta.url),
+	);
+	return ts.createSourceFile(
+		path,
+		readFileSync(path, "utf8"),
+		ts.ScriptTarget.Latest,
+		true,
+		ts.ScriptKind.TS,
+	);
+}
+
+/**
+ * 시딩 모듈에서 들어온 이름 → 이 파일에서 쓰는 이름.
+ *
+ * 별명(`import { seedCredentialedAdk as seed }`)으로 바꿔도 따라간다 — 이름이
+ * 아니라 바인딩을 본다.
+ */
+function seedImportBindings(tree: ts.SourceFile): Map<string, string> {
+	const bound = new Map<string, string>();
+	for (const statement of tree.statements) {
+		if (!ts.isImportDeclaration(statement)) continue;
+		if (!ts.isStringLiteral(statement.moduleSpecifier)) continue;
+		if (!/(^|\/)credentialed-adk-seed(\.[jt]s)?$/.test(statement.moduleSpecifier.text))
+			continue;
+		const named = statement.importClause?.namedBindings;
+		if (!named || !ts.isNamedImports(named)) continue;
+		for (const element of named.elements) {
+			bound.set((element.propertyName ?? element.name).text, element.name.text);
+		}
+	}
+	return bound;
+}
+
+/** 그 바인딩을 **실제로 부르는** 호출식이 있는가. */
+function callsBinding(tree: ts.SourceFile, name: string): boolean {
+	let found = false;
+	const visit = (node: ts.Node): void => {
+		if (found) return;
+		if (
+			ts.isCallExpression(node) &&
+			ts.isIdentifier(node.expression) &&
+			node.expression.text === name
+		) {
+			found = true;
+			return;
+		}
+		node.forEachChild(visit);
+	};
+	visit(tree);
+	return found;
+}
+
+/** `process.env.<key>` 를 **실제로** 대입하거나 읽는 노드가 있는가. */
+function touchesProcessEnv(tree: ts.SourceFile, key: string): boolean {
+	const isProcessEnv = (node: ts.Expression): boolean =>
+		ts.isPropertyAccessExpression(node) &&
+		node.name.text === "env" &&
+		ts.isIdentifier(node.expression) &&
+		node.expression.text === "process";
+	let found = false;
+	const visit = (node: ts.Node): void => {
+		if (found) return;
+		if (ts.isPropertyAccessExpression(node) && node.name.text === key) {
+			if (isProcessEnv(node.expression)) {
+				found = true;
+				return;
+			}
+		}
+		if (
+			ts.isElementAccessExpression(node) &&
+			node.argumentExpression &&
+			ts.isStringLiteralLike(node.argumentExpression) &&
+			node.argumentExpression.text === key &&
+			isProcessEnv(node.expression)
+		) {
+			found = true;
+			return;
+		}
+		node.forEachChild(visit);
+	};
+	visit(tree);
+	return found;
+}

@@ -41,7 +41,13 @@
 use std::path::{Path, PathBuf};
 
 /// 데이터 홈 디렉터리의 이름. 사용자 홈 아래 이 이름으로 붙는다.
-pub const DATA_HOME_DIR_NAME: &str = ".naia";
+///
+/// **비공개다.** 이 이름이 밖으로 나가면 홈 조회 하나만 더하면 이름표 없이
+/// `~/.naia/<아무거나>` 를 조립할 수 있다. 실제로 11회차 리뷰가 그렇게 뚫었다 —
+/// `user_home_path()?.join(DATA_HOME_DIR_NAME).join("ghost-cache")` 는 금지
+/// 문자열도 금지 식별자도 쓰지 않는다. 이제 그 조립은 컴파일되지 않고,
+/// `check-data-home-boundary.mjs` 의 공개 API 허용 목록이 다시 열리는 것도 막는다.
+const DATA_HOME_DIR_NAME: &str = ".naia";
 
 /// 홈을 못 찾는 윈도우 딥링크 경로의 마지막 수단. 앱이 뜨기 전에 쓰이는 자리라
 /// 사용자 홈 없이도 어딘가에 써야 한다.
@@ -129,8 +135,15 @@ impl DataHomeChild {
 // --- 사용자 홈 -----------------------------------------------------------
 //
 // 홈을 읽는 방법도 이 파일에만 둔다. 밖에서 홈을 다시 구하면 `.naia` 를 이어
-// 붙이는 새 자리가 검사기 눈 밖에서 생길 수 있다. 뜻이 다른 셋을 그대로 옮겨
+// 붙이는 새 자리가 검사기 눈 밖에서 생길 수 있다. 뜻이 다른 넷을 그대로 옮겨
 // 두어 동작이 한 글자도 바뀌지 않게 한다.
+//
+// 아래 넷은 **데이터 홈이 아닌** 자리를 짚으려고 공개돼 있다 — `~/dev`,
+// `~/.agent-browser`, `~/.cache/huggingface`, `~/Library/LaunchAgents`, 그리고
+// 경로 가드가 쓰는 홈 자체다. 데이터 홈은 이것들로 만들 수 없다: `.naia` 라는
+// 이름이 이 파일 밖에 없고(위 상수는 비공개), 문자열로 적으면
+// `check-data-home-boundary.mjs` 가 경로 마디로 잡는다. 데이터 홈 아래를
+// 짚어야 하면 아래 이름표 API 를 쓴다.
 
 /// 크로스 플랫폼 홈: `HOME`(유닉스) 또는 `USERPROFILE`(윈도우).
 pub fn user_home() -> String {
@@ -195,6 +208,24 @@ pub fn child(child: DataHomeChild) -> PathBuf {
     child_of(Path::new(&user_home()), child)
 }
 
+/// `dirs` 가 판단하는 홈 기준 자리. `NAIA_HOME` 을 존중한다.
+///
+/// 밖에서 `user_home_path()` 를 부른 뒤 [`child_of`] 를 이어 붙이던 자리를
+/// 대신한다. 그렇게 두면 호출부가 홈 디렉터리를 손에 쥐게 되고, 그 손에서
+/// 이름표 없는 자리가 나온다.
+pub fn child_from_dirs_home(child: DataHomeChild) -> Option<PathBuf> {
+    user_home_path().map(|home| child_of(&home, child))
+}
+
+/// 데이터 홈 아래 자리의 내용을 읽는다. 없거나 못 읽으면 `None`.
+///
+/// `adk-path` 부트스트랩 포인터를 읽는 자리가 여럿이다. 그 자리들이 저마다
+/// 홈을 구해 경로를 조립하면 깔때기가 다섯 조각으로 갈라진다 — 읽는 일까지
+/// 이름표로 받는다.
+pub fn read_child_from_dirs_home(child: DataHomeChild) -> Option<String> {
+    std::fs::read_to_string(child_from_dirs_home(child)?).ok()
+}
+
 // --- 옛 자리 (NAIA_HOME 을 거치지 않는다) -------------------------------
 //
 // 아래 둘은 `<home>/.naia` 를 직접 짚는다. `NAIA_HOME` 을 무시하므로 격리된
@@ -222,6 +253,24 @@ pub fn direct_child(child: DataHomeChild) -> PathBuf {
 /// 실려 나가는 자리에만 쓴다.
 pub fn tilde_child(child: DataHomeChild) -> String {
     format!("~/{}/{}", DATA_HOME_DIR_NAME, child.name())
+}
+
+/// macOS 딥링크 헬퍼(AppleScript)가 쓰는 **홈 기준 상대 경로** 두 조각:
+/// 데이터 홈 자체와 그 아래 대기 파일.
+///
+/// 그 스크립트는 앱 밖에서 돌며 홈을 스스로 구한다. 그래서 경로를 통째로
+/// 넘길 수 없고 상대 경로가 필요하다. 데이터 홈 이름을 밖으로 내주는 대신,
+/// 이 한 자리에만 쓰이는 조각을 여기서 조립해 준다 — 게이트의 허용 목록이
+/// 이 항목을 `platform/macos.rs` 로 묶어 둔다.
+pub fn deep_link_helper_script_paths() -> (String, String) {
+    (
+        DATA_HOME_DIR_NAME.to_string(),
+        format!(
+            "{}/{}",
+            DATA_HOME_DIR_NAME,
+            DataHomeChild::DeepLinkPending.name()
+        ),
+    )
 }
 
 /// 윈도우 딥링크 대기 파일. 앱이 뜨기 전(`main.rs`)에도 쓰이므로 홈을 못 찾으면
@@ -314,6 +363,21 @@ mod tests {
                 "workspace",
             ]
         );
+    }
+
+    /// 홈을 스스로 구하는 AppleScript 로 나가는 두 조각도 같은 이름표에서
+    /// 나온다. 이 함수가 데이터 홈 이름이 밖으로 나가는 **유일한** 통로라
+    /// 모양을 여기서 고정한다.
+    #[test]
+    fn deep_link_script_paths_are_home_relative() {
+        let (dir, pending) = deep_link_helper_script_paths();
+        assert_eq!(dir, ".naia");
+        assert_eq!(pending, ".naia/deep-link-pending.txt");
+        // 스크립트가 붙이는 `homePath` 는 `/` 로 끝난다 — 두 조각 다 홈 기준
+        // 상대 경로여야 하고, 앞에 구분자가 붙으면 절대 경로가 된다.
+        assert!(!dir.starts_with('/'));
+        assert!(!pending.starts_with('/'));
+        assert!(pending.starts_with(&dir));
     }
 
     /// 설정에 실려 나가는 tilde 문자열도 같은 이름표에서 나온다.

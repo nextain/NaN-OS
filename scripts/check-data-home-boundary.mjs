@@ -45,9 +45,35 @@
  *      그러려면 눈에 띄는 경로 산술을 적어야 한다.
  *   4. Rust 밖(TypeScript·스크립트·wdio 설정)에서 홈을 짚는 것. e2e 실행 자리
  *      격리는 `src/test/e2e-runtime-isolation.contract.test.ts` 가 따로 든다.
+ *
+ * ## 공개 API 를 왜 세는가 (11회차 지적 1 이후)
+ *
+ * 위 세 규칙은 **금지 목록**이다. 그런데 깔때기가 홈 조회(`user_home_path`)와
+ * 데이터 홈 이름(`DATA_HOME_DIR_NAME`)을 함께 공개해 두면, 금지된 글자를 하나도
+ * 쓰지 않고 재료만 이어 붙여 이름표 없는 자리를 만들 수 있다. 실제로 11회차
+ * 리뷰가 `user_home_path()?.join(DATA_HOME_DIR_NAME).join("ghost-cache")` 로
+ * 그렇게 뚫었다 — 금지 식별자도, `.naia` 문자열도 없다.
+ *
+ * 그래서 이름을 하나 더 금지하는 대신 **재료를 없앴다.** 데이터 홈 이름과
+ * 데이터 홈 뿌리를 돌려주는 함수는 이제 모듈 안에서만 보인다(`data_home.rs`).
+ * 그 조립은 컴파일되지 않는다.
+ *
+ * 컴파일러가 막는 것은 오늘의 코드뿐이라, 다음 사람이 `pub` 을 다시 붙이면
+ * 조용히 열린다. 그래서 이 검사는 깔때기의 `pub` 항목을 아래 [`PUBLIC_API`]
+ * 허용 목록과 대조한다. 목록에 없는 `pub` 이 생기면 붉어지고, 목록에 있는데
+ * `pub` 이 아니면(옮겼거나 지웠으면) 낡은 항목으로 붉어진다. 모듈 밖에서
+ * `data_home::` 로 짚는 이름도 같은 목록과 대조한다.
+ *
+ * 항목마다 **어느 파일이 쓸 수 있는지**도 함께 적는다. 홈 그 자체를 돌려주는
+ * 넷은 데이터 홈이 아닌 자리(`~/dev`, `~/.agent-browser`, 경로 가드의 홈)를
+ * 위해 열려 있는데, 그 목록이 없으면 아무 파일이나 홈을 손에 쥐게 된다.
+ * 파일 단위라는 것이 이 목록의 한계다 — 이미 적힌 파일 **안에서** 홈을 한 번
+ * 더 쓰는 것은 세지 않는다. 보증은 위의 "`.naia` 라는 이름이 깔때기 밖에
+ * 없다" 쪽이 지고, 이 목록은 그 위에 얹는 재고 조사다.
  */
 import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
+import { skipBalanced, splitCodeAndStrings, tokenizeRust } from "./lib/rust-tokens.mjs";
 
 const SHELL = "packages/shell";
 const RUST_ROOT = `${SHELL}/src-tauri/src`;
@@ -101,6 +127,210 @@ const BANNED_LITERALS = new Set(["HOME", "USERPROFILE", "NAIA_HOME"]);
 /** 문자열 안에서 `.naia` 가 경로 **마디**로 나오는가. */
 const DATA_HOME_SEGMENT = /(^|[/\\])\.naia($|[/\\])/;
 
+const RUST_FILE = (name) => `${RUST_ROOT}/${name}`;
+
+/**
+ * 깔때기가 밖에 내주는 것 전부. `why` 는 왜 밖에 있어야 하는지, `files` 는 그
+ * 항목을 쓸 수 있는 파일이다(없으면 어디서든 쓸 수 있다).
+ *
+ * 여기 없는 `pub` 이 깔때기에 생기면 붉어진다. 목록에 있는데 `pub` 이 아니면
+ * 낡은 항목으로 붉어진다. 모듈 밖에서 `data_home::` 로 짚는 이름도 이 목록과
+ * 대조한다.
+ *
+ * **여기에 없는 것**이 이 경계의 핵심이다 — `DATA_HOME_DIR_NAME`(`.naia`),
+ * `root_of`, `direct_root_of`, `naia_data_home_*`. 데이터 홈 뿌리를 손에 쥐면
+ * 이름표 없이 그 아래 무엇이든 만들 수 있다.
+ */
+const PUBLIC_API = new Map([
+	["DataHomeChild", { why: "자리 이름표. 자리를 늘리려면 여기에 변형을 더해야 한다" }],
+	["DataHomeChild::name", { why: "이름표 하나의 문자열. 검사기·문서와 맞추는 단일 출처다" }],
+	["ALL_CHILDREN", { why: "이름표 전체 목록. 검사기와 테스트가 센다" }],
+	["child_of", { why: "주어진 홈 기준 자리. 이름표를 받아야만 부를 수 있다" }],
+	["child", { why: "환경에서 읽은 홈 기준 자리" }],
+	["child_from_dirs_home", { why: "`dirs` 홈 기준 자리. 밖에서 홈을 쥐지 않게 조립까지 여기서 한다" }],
+	["read_child_from_dirs_home", { why: "adk-path 부트스트랩 포인터처럼 자리의 내용을 읽는 곳" }],
+	["direct_child_of", { why: "NAIA_HOME 을 무시하는 옛 자리. 이관 전까지 남는다" }],
+	["direct_child", { why: "위와 같다. 환경에서 읽은 홈 기준" }],
+	["tilde_child", { why: "설정에 문자열로 실려 나가는 `~/.naia/<자리>`" }],
+	[
+		"deep_link_helper_script_paths",
+		{
+			why: "홈을 스스로 구하는 AppleScript 에 넘길 홈 기준 상대 경로 두 조각. 이 한 자리에만 쓴다",
+			files: [RUST_FILE("platform/macos.rs")],
+		},
+	],
+	[
+		"windows_deep_link_pending",
+		{
+			why: "앱이 뜨기 전에 쓰는 딥링크 대기 파일. 홈을 못 찾을 때의 예외까지 깔때기가 갖는다",
+			files: [RUST_FILE("platform/windows.rs"), `${RUST_ROOT}/main.rs`],
+		},
+	],
+	// --- 홈 그 자체. 데이터 홈이 **아닌** 자리를 짚으려고 열려 있다.
+	[
+		"user_home",
+		{
+			why: "`HOME`/`USERPROFILE` 홈. 경로 가드의 허용 뿌리와 `~/.agent-browser`·nvm 탐색이 쓴다",
+			files: [
+				RUST_FILE("app.rs"),
+				RUST_FILE("browser.rs"),
+				RUST_FILE("lib.rs"),
+				RUST_FILE("platform/macos.rs"),
+			],
+		},
+	],
+	[
+		"user_home_path",
+		{
+			why: "`dirs` 홈. `~/dev`·`~/naia-omni`·`~/.cache/huggingface` 와 `~` 풀이가 쓴다",
+			files: [
+				RUST_FILE("workspace.rs"),
+				RUST_FILE("herdr/location.rs"),
+				RUST_FILE("lib.rs"),
+			],
+		},
+	],
+	[
+		"unix_home",
+		{
+			why: "유닉스 전용 홈. `~/dev`·LaunchAgents·Chrome for Testing 탐색이 쓴다",
+			files: [
+				RUST_FILE("workspace.rs"),
+				RUST_FILE("agent_grpc.rs"),
+				RUST_FILE("platform/macos.rs"),
+				RUST_FILE("platform/linux.rs"),
+			],
+		},
+	],
+	[
+		"windows_home",
+		{
+			why: "윈도우 전용 홈. `~/dev` 와 Chrome for Testing 탐색이 쓴다",
+			files: [RUST_FILE("workspace.rs"), RUST_FILE("platform/windows.rs")],
+		},
+	],
+]);
+
+/** 항목 이름 앞에 올 수 있는, 이름이 아닌 낱말. */
+const ITEM_MODIFIERS = new Set(["async", "unsafe", "extern", "default"]);
+/** 이름을 뒤에 두는 항목 낱말. */
+const ITEM_KEYWORDS = new Set([
+	"fn",
+	"enum",
+	"struct",
+	"const",
+	"static",
+	"type",
+	"mod",
+	"trait",
+	"union",
+]);
+
+/**
+ * 깔때기가 밖에 내주는 항목 이름 전부를 토큰에서 읽는다.
+ *
+ * `impl` 안의 것은 `타입::이름` 으로 적는다. `pub(crate)` 도 같은 크레이트의
+ * 다른 모듈에서 보이므로 공개로 센다.
+ */
+function publicItems(source) {
+	const tokens = tokenizeRust(source);
+	const items = [];
+	let depth = 0;
+	let implType = null;
+	let implDepth = -1;
+
+	for (let i = 0; i < tokens.length; i += 1) {
+		const t = tokens[i];
+		if (t.kind === "punct" && t.text === "{") {
+			depth += 1;
+			continue;
+		}
+		if (t.kind === "punct" && t.text === "}") {
+			depth -= 1;
+			if (implType !== null && depth <= implDepth) implType = null;
+			continue;
+		}
+		if (t.kind !== "ident") continue;
+		if (t.text === "impl" && implType === null) {
+			let j = i + 1;
+			let last = null;
+			while (j < tokens.length && !(tokens[j].kind === "punct" && tokens[j].text === "{")) {
+				if (tokens[j].kind === "ident") last = tokens[j].text;
+				j += 1;
+			}
+			implType = last;
+			implDepth = depth;
+			continue;
+		}
+		if (t.text !== "pub") continue;
+
+		let j = i + 1;
+		if (tokens[j]?.kind === "punct" && tokens[j].text === "(")
+			j = skipBalanced(tokens, j, "(", ")");
+		let kind = null;
+		let name = null;
+		for (let guard = 0; guard < 8; guard += 1) {
+			const tk = tokens[j];
+			if (!tk || tk.kind !== "ident") break;
+			// `const fn` 의 `const` 는 항목 낱말이 아니라 수식어다.
+			if (tk.text === "const" && tokens[j + 1]?.text === "fn") {
+				j += 1;
+				continue;
+			}
+			if (ITEM_MODIFIERS.has(tk.text)) {
+				j += 1;
+				if (tk.text === "extern" && tokens[j]?.kind === "string") j += 1;
+				continue;
+			}
+			if (ITEM_KEYWORDS.has(tk.text)) {
+				kind = tk.text;
+				name = tokens[j + 1]?.kind === "ident" ? tokens[j + 1].text : null;
+			}
+			break;
+		}
+		if (!kind || !name) continue;
+		items.push({ name: implType ? `${implType}::${name}` : name, kind, line: t.line });
+	}
+	return items;
+}
+
+/**
+ * 모듈 밖에서 `data_home::` 로 짚은 이름. `use` 의 중괄호 묶음도 푼다.
+ *
+ * `self` 는 모듈 자신이라 이름이 아니고, `as` 뒤의 별명도 이름이 아니다.
+ */
+function dataHomeReferences(tokens) {
+	const found = [];
+	for (let i = 0; i < tokens.length; i += 1) {
+		const t = tokens[i];
+		if (t.kind !== "ident" || t.text !== "data_home") continue;
+		if (!(tokens[i + 1]?.text === ":" && tokens[i + 2]?.text === ":")) continue;
+		const head = tokens[i + 3];
+		if (!head) continue;
+		if (head.kind === "punct" && head.text === "{") {
+			const stop = skipBalanced(tokens, i + 3, "{", "}");
+			for (let j = i + 4; j < stop - 1; j += 1) {
+				if (tokens[j].kind !== "ident") continue;
+				if (tokens[j].text === "self") continue;
+				if (tokens[j].text === "as") {
+					j += 1;
+					continue;
+				}
+				// 중첩 경로(`a::b`)의 첫 마디만 항목이다.
+				found.push({ name: tokens[j].text, line: tokens[j].line });
+				while (tokens[j + 1]?.text === ":" && tokens[j + 2]?.text === ":") j += 3;
+			}
+			i = stop - 1;
+			continue;
+		}
+		if (head.kind === "ident" && head.text !== "self") {
+			found.push({ name: head.text, line: head.line });
+		}
+	}
+	return found;
+}
+
+
 function tracked(dir, extension) {
 	try {
 		return execFileSync("git", ["ls-files", "--", dir], { encoding: "utf8" })
@@ -109,110 +339,6 @@ function tracked(dir, extension) {
 	} catch {
 		return [];
 	}
-}
-
-/**
- * Rust 소스를 코드와 문자열로 가른다. 주석은 버린다.
- *
- * 정규식으로 형태를 세지 않기 위한 최소 토크나이저다. 주석 안의 `~/.naia/logs`
- * 설명이 위반으로 잡히거나, 문자열 안의 `home_dir` 이라는 글자가 호출로 잡히는
- * 일이 없어야 판정이 뜻과 맞는다.
- */
-function splitCodeAndStrings(source) {
-	let code = "";
-	const strings = [];
-	let line = 1;
-	let i = 0;
-	const n = source.length;
-
-	const push = (text) => {
-		code += text;
-		for (const ch of text) if (ch === "\n") line += 1;
-	};
-
-	while (i < n) {
-		const ch = source[i];
-
-		// 줄 주석
-		if (ch === "/" && source[i + 1] === "/") {
-			while (i < n && source[i] !== "\n") i += 1;
-			continue;
-		}
-		// 블록 주석 (Rust 는 중첩된다)
-		if (ch === "/" && source[i + 1] === "*") {
-			let depth = 1;
-			i += 2;
-			while (i < n && depth > 0) {
-				if (source[i] === "/" && source[i + 1] === "*") {
-					depth += 1;
-					i += 2;
-				} else if (source[i] === "*" && source[i + 1] === "/") {
-					depth -= 1;
-					i += 2;
-				} else {
-					if (source[i] === "\n") line += 1;
-					i += 1;
-				}
-			}
-			push(" ");
-			continue;
-		}
-		// 로 문자열: r"…", r#"…"#, br##"…"##
-		const raw = /^(b?r)(#*)"/.exec(source.slice(i, i + 40));
-		if (raw && (i === 0 || !/[A-Za-z0-9_]/.test(source[i - 1]))) {
-			const hashes = raw[2];
-			const startLine = line;
-			let j = i + raw[0].length;
-			const terminator = `"${hashes}`;
-			const end = source.indexOf(terminator, j);
-			const stop = end === -1 ? n : end;
-			const value = source.slice(j, stop);
-			strings.push({ value, line: startLine });
-			for (const c of source.slice(i, stop + terminator.length)) {
-				if (c === "\n") line += 1;
-			}
-			i = stop + terminator.length;
-			push(" ");
-			continue;
-		}
-		// 보통 문자열: "…" (b"…" 포함)
-		if (ch === '"' || (ch === "b" && source[i + 1] === '"')) {
-			const startLine = line;
-			let j = ch === '"' ? i + 1 : i + 2;
-			let value = "";
-			while (j < n) {
-				if (source[j] === "\\") {
-					value += source[j + 1] ?? "";
-					if (source[j + 1] === "\n") line += 1;
-					j += 2;
-					continue;
-				}
-				if (source[j] === '"') break;
-				if (source[j] === "\n") line += 1;
-				value += source[j];
-				j += 1;
-			}
-			strings.push({ value, line: startLine });
-			i = j + 1;
-			push(" ");
-			continue;
-		}
-		// 문자 리터럴과 수명(lifetime) 을 가린다
-		if (ch === "'") {
-			const charLiteral = /^'(\\.|[^\\'])'/.exec(source.slice(i, i + 12));
-			if (charLiteral) {
-				i += charLiteral[0].length;
-				push(" ");
-				continue;
-			}
-			push(ch);
-			i += 1;
-			continue;
-		}
-		push(ch);
-		i += 1;
-	}
-	return { code, strings };
 }
 
 /** 코드 텍스트에서 금지 식별자가 나오는 줄을 찾는다. */
@@ -340,6 +466,58 @@ if (!names) {
 				...extra.map((n) => `코드에 없다: ${n}`),
 			]);
 		}
+	}
+}
+
+// --- 3. 깔때기의 공개 API 가 허용 목록과 같은가 ------------------------
+//
+// 컴파일러는 오늘의 코드만 막는다. `pub` 이 하나 다시 붙는 순간을 여기서 잡는다.
+
+if (existsSync(FUNNEL)) {
+	const items = publicItems(readFileSync(FUNNEL, "utf8"));
+	const names = new Set(items.map((item) => item.name));
+	console.log(`[data-home] 깔때기 공개 항목 ${items.length}개 (허용 목록 ${PUBLIC_API.size})`);
+
+	const opened = items.filter((item) => !PUBLIC_API.has(item.name));
+	if (opened.length) {
+		fail(`깔때기가 허용 목록에 없는 것을 공개했다(${opened.length}):`, [
+			...opened.map((item) => `${FUNNEL}:${item.line} — pub ${item.kind} ${item.name}`),
+			"데이터 홈 뿌리와 그 이름은 밖으로 내지 않는다 — 손에 쥐면 이름표 없이 자리를 만든다.",
+			"정말 밖에 필요하면 이름표를 받는 API 로 좁히고, PUBLIC_API 에 이유와 쓸 파일을 적어라.",
+		]);
+	}
+	const gone = [...PUBLIC_API.keys()].filter((name) => !names.has(name));
+	if (gone.length) {
+		fail(`허용 목록이 낡았다(${gone.length}) — 더는 공개가 아니다. 지워라:`, gone);
+	}
+
+	// 모듈 밖에서 짚는 이름도 같은 목록으로 본다.
+	const wrongName = [];
+	const wrongPlace = [];
+	for (const file of files) {
+		if (file === FUNNEL) continue;
+		for (const ref of dataHomeReferences(tokenizeRust(readFileSync(file, "utf8")))) {
+			const entry = PUBLIC_API.get(ref.name);
+			if (!entry) {
+				wrongName.push(`${file}:${ref.line} — data_home::${ref.name}`);
+				continue;
+			}
+			if (entry.files && !entry.files.includes(file)) {
+				wrongPlace.push(`${file}:${ref.line} — data_home::${ref.name} (${entry.why})`);
+			}
+		}
+	}
+	if (wrongName.length) {
+		fail(`깔때기에서 내주지 않는 것을 밖에서 짚었다(${wrongName.length}):`, [
+			...wrongName,
+			"자리를 늘리려면 data_home::DataHomeChild 에 변형을 더하고 이름표로 받아라.",
+		]);
+	}
+	if (wrongPlace.length) {
+		fail(`허용 목록이 정한 파일 밖에서 짚었다(${wrongPlace.length}):`, [
+			...wrongPlace,
+			"홈 그 자체가 정말 필요하면 PUBLIC_API 의 files 에 그 파일과 이유를 적어라.",
+		]);
 	}
 }
 

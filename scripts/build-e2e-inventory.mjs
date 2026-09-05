@@ -46,10 +46,28 @@
  */
 import { readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
+import ts from "typescript";
+import { makeEnv, stringCandidates } from "./lib/jsx-static.mjs";
 
 const SPEC_DIR = "packages/shell/e2e-tauri/specs";
 const CONF_DIR = "packages/shell/e2e-tauri";
 const HELPER_DIR = join(CONF_DIR, "helpers");
+
+/** 주소를 이름 너머로 따라갈 때 쓰는 환경. `../helpers/x.js` 도 같은 값이다. */
+function collectTypeScript(dir, out = new Map()) {
+	for (const entry of readdirSync(dir, { withFileTypes: true })) {
+		const path = join(dir, entry.name);
+		if (entry.isDirectory()) {
+			if (entry.name === "node_modules") continue;
+			collectTypeScript(path, out);
+			continue;
+		}
+		if (entry.isFile() && path.endsWith(".ts")) out.set(path, readFileSync(path, "utf8"));
+	}
+	return out;
+}
+
+const addressEnv = makeEnv(collectTypeScript(CONF_DIR));
 
 // 장치를 요구한다고 보는 신호. 이름이 아니라 무엇을 켜는지로 고른다.
 const DEVICE_ENV = /VOICE|AUDIO|VOXCPM2|NVA|SCREENSHOT|GPU|CASCADE/;
@@ -286,31 +304,67 @@ for (const name of readdirSync(HELPER_DIR).filter((f) => f.endsWith(".ts"))) {
 }
 
 /**
- * 헬퍼·스펙이 `fetch`/`request` 로 부르는 **리터럴** 주소.
+ * 헬퍼·스펙이 `fetch`/`request` 로 부르는 주소.
  *
- * 자기 서버는 포트를 변수로 만든다(`http://127.0.0.1:${port}/health`). 리터럴
- * 포트가 박혀 있으면 그것은 밖에 있는 것이다 — 바깥 인터넷 호스트면 자격증명이,
- * 고정 포트의 로컬 서비스면 그 기계의 서비스가 있어야 돈다. 둘 다 결정론 칸은
- * 아니다.
+ * 자기 서버는 포트를 변수로 만든다(`http://127.0.0.1:${port}/health`). 값이
+ * 실행할 때 정해지는 주소는 여기서 보지 않는다. 반대로 값이 고정돼 있으면 그것은
+ * 밖에 있는 것이다 — 바깥 인터넷 호스트면 자격증명이, 고정 포트의 로컬 서비스면
+ * 그 기계의 서비스가 있어야 돈다. 둘 다 결정론 칸은 아니다.
+ *
+ * ── 11회차에 고친 것 ──────────────────────────────────────────────
+ * 열 번째까지 이 판정은 `fetch(` 바로 뒤에 따옴표가 오는 자리만 봤다. 그래서
+ * 주소를 변수에 한 번 담기만 하면(`const url = "https://…"; fetch(url)`) 바깥
+ * 모델에 닿는 스펙이 결정론 칸에 남았다 — 자격증명 없는 기계가 맡았다가
+ * 실패하는, 이미 세 번 겪은 그 오분류다.
+ *
+ * 이제 인자를 `stringCandidates` 로 푼다. 같은 파일 const, 조건식의 모든 갈래,
+ * 템플릿의 고정 조각, import 로 건너간 const 까지 후보를 전부 보고, **하나라도**
+ * 바깥 호스트면 대화 자국으로 센다. 값을 한 겹 숨기는 것으로는 빠져나가지
+ * 못한다.
+ *
+ * 무엇을 보증하지 않는가: 정적으로 값을 못 정하는 인자다. 함수 매개변수로
+ * 받은 주소(`async function hit(url) { await fetch(url); }`), 실행할 때 조립되는
+ * 템플릿, 객체·배열을 거쳐 흘러간 주소는 후보가 없다. 그런 자리는 "바깥 주소가
+ * 없다" 가 아니라 **모른다** 이고, 이 목록은 그것을 결정론 칸으로 남긴다.
+ * 못 푼 인자 수는 생성할 때 표준 출력에 함께 적는다.
  */
-function outboundAddresses(source) {
+function outboundAddresses(file) {
+	const sf = addressEnv.sourceFile(file);
 	const external = [];
 	const loopback = [];
-	for (const m of source.matchAll(
-		/\b(?:fetch|request)\s*\(\s*(?:`|"|')https?:\/\/([^\s`"'/]*)/g,
-	)) {
+	let unresolved = 0;
+	if (!sf) return { external, loopback, unresolved };
+	const take = (value) => {
+		const m = /^https?:\/\/([^/?#\s]*)/.exec(value);
+		if (!m) return;
 		const authority = m[1];
-		// 자기 서버는 포트를 변수로 만든다(`http://127.0.0.1:${port}/health`).
-		// 값이 실행할 때 정해지는 주소는 리터럴이 아니므로 여기서 보지 않는다.
-		if (/[${}]/.test(authority)) continue;
-		if (!/^[A-Za-z0-9.-]+(?::\d+)?$/.test(authority)) continue;
+		if (!/^[A-Za-z0-9.-]+(?::\d+)?$/.test(authority)) return;
 		if (/^(?:localhost|127\.0\.0\.1)(?::\d+)?$/.test(authority)) loopback.push(authority);
 		else external.push(authority);
-	}
-	return { external, loopback };
+	};
+	const visit = (node) => {
+		if (ts.isCallExpression(node) && node.arguments.length > 0) {
+			const callee = node.expression;
+			const name = ts.isIdentifier(callee)
+				? callee.text
+				: ts.isPropertyAccessExpression(callee)
+					? callee.name.text
+					: null;
+			if (name === "fetch" || name === "request") {
+				const resolved = stringCandidates(node.arguments[0], sf, addressEnv);
+				if (resolved.values.size === 0 && !resolved.complete) unresolved += 1;
+				for (const value of resolved.values) take(value);
+			}
+		}
+		ts.forEachChild(node, visit);
+	};
+	visit(sf);
+	return { external, loopback, unresolved };
 }
 
 const rows = [];
+// 정적으로 값을 못 정한 `fetch`/`request` 인자 수. 보증 밖이라는 사실을 세어 둔다.
+let unresolvedArguments = 0;
 for (const name of readdirSync(SPEC_DIR).filter((f) => f.endsWith(".spec.ts")).sort()) {
 	const source = readFileSync(join(SPEC_DIR, name), "utf8");
 	const direct = requiredEnv(source);
@@ -326,7 +380,8 @@ for (const name of readdirSync(SPEC_DIR).filter((f) => f.endsWith(".spec.ts")).s
 	// 대화 헬퍼를 부르면 모델이 필요하다 — 환경 변수에 드러나지 않아도.
 	// 헬퍼를 거치지 않고 스펙이 직접 모델을 부르는 자리도 있다. 헬퍼 이름만
 	// 보면 그 부류가 통째로 결정론 칸에 남는다.
-	const outbound = outboundAddresses(source);
+	const outbound = outboundAddresses(join(SPEC_DIR, name));
+	unresolvedArguments += outbound.unresolved;
 	const talks =
 		CHAT_HELPERS.test(source) ||
 		TALKS_TO_MODEL.test(source) ||
@@ -379,5 +434,8 @@ writeFileSync(OUT, rendered);
 
 console.log(`[e2e-inventory] 스펙 ${rows.length}개 → docs/e2e-inventory.json`);
 for (const [tier, count] of Object.entries(summary).sort()) console.log(`  ${tier.padEnd(7)} ${count}`);
+// 값을 정적으로 못 정한 인자는 "바깥 주소가 없다" 가 아니라 모른다다. 그 수가
+// 늘면 이 목록이 보증하지 않는 자리가 늘었다는 뜻이다.
+console.log(`  값을 못 푼 fetch/request 인자 ${unresolvedArguments}개 (보증 밖)`);
 const owned = rows.filter((r) => r.conf.length).length;
 console.log(`  전용 wdio 설정이 맡는 것 ${owned} / 메인 harness 만 맡는 것 ${rows.length - owned}`);

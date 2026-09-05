@@ -39,6 +39,7 @@
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import ts from "typescript";
+import { tauriCommandBodies } from "./lib/rust-tokens.mjs";
 
 const SHELL = "packages/shell";
 
@@ -173,31 +174,27 @@ function tracked(dir, extension) {
 	}
 }
 
-/** Rust 가 프런트에 내주는 명령 이름 전부. */
+/**
+ * Rust 가 프런트에 내주는 명령 이름 전부와 그 본문.
+ *
+ * ## 어디서 재는가 (11회차 지적 7 이후)
+ *
+ * 예전에는 `#\[tauri::command[^\]]*\][\s\S]{0,200}?fn` 이라는 **글자 창**으로
+ * 뽑았다. 그래서 속성과 `fn` 사이에 321자짜리 문서 주석을 적으면 그 명령이
+ * 후보에도 오르지 않았고, 프런트의 `invoke("…")` 는 `commands.includes` 에서
+ * 조용히 건너뛰어졌다 — 확인 없는 전체 삭제가 문서를 길게 적는 것만으로
+ * 통과했다.
+ *
+ * 창을 넓히는 대신 측정 지점을 옮겼다. `scripts/lib/rust-tokens.mjs` 의
+ * 토크나이저가 주석을 버리고, 속성·가시성·`async`·`unsafe` 를 토큰으로
+ * 건너뛴 뒤 `fn <이름>` 을 읽는다. 데이터 홈 경계 검사가 쓰는 것과 같은
+ * 토크나이저다 — 세는 자리가 하나면 뚫린 자리도 하나에서 고쳐진다.
+ */
 function tauriCommands() {
 	const names = new Map();
 	for (const file of tracked(`${SHELL}/src-tauri/src`, ".rs")) {
-		const source = readFileSync(file, "utf8");
-		for (const match of source.matchAll(
-			/#\[tauri::command[^\]]*\][\s\S]{0,200}?\bfn\s+([a-z0-9_]+)/g,
-		)) {
-			// 함수 본문을 중괄호 균형으로 잘라 낸다. 하는 일로 판정하기 위해서다.
-			const open = source.indexOf("{", match.index + match[0].length);
-			let body = "";
-			if (open >= 0) {
-				let depth = 0;
-				for (let i = open; i < source.length; i++) {
-					if (source[i] === "{") depth++;
-					else if (source[i] === "}") {
-						depth--;
-						if (depth === 0) {
-							body = source.slice(open, i + 1);
-							break;
-						}
-					}
-				}
-			}
-			names.set(match[1], body);
+		for (const [name, body] of tauriCommandBodies(readFileSync(file, "utf8"))) {
+			names.set(name, body);
 		}
 	}
 	return names;
@@ -402,6 +399,133 @@ function eachNode(node, visit) {
 	node.forEachChild((child) => eachNode(child, visit));
 }
 
+/** 괄호·`as`·`!` 를 벗겨 알맹이 식을 돌려준다. */
+function unwrapExpression(node) {
+	let current = node;
+	for (let guard = 0; guard < 8; guard += 1) {
+		if (ts.isParenthesizedExpression(current)) current = current.expression;
+		else if (ts.isAsExpression(current)) current = current.expression;
+		else if (ts.isNonNullExpression(current)) current = current.expression;
+		else if (ts.isSatisfiesExpression?.(current)) current = current.expression;
+		else break;
+	}
+	return current;
+}
+
+/** `await import("@tauri-apps/api/core")` 처럼 invoke 를 담고 오는 식인가. */
+function isInvokeModuleExpression(node) {
+	const expr = unwrapExpression(node);
+	const call = ts.isAwaitExpression(expr) ? unwrapExpression(expr.expression) : expr;
+	if (!ts.isCallExpression(call)) return false;
+	const callee = call.expression;
+	const isImport =
+		callee.kind === ts.SyntaxKind.ImportKeyword ||
+		(ts.isIdentifier(callee) && callee.text === "require");
+	if (!isImport) return false;
+	const first = call.arguments[0];
+	return !!first && ts.isStringLiteralLike(first) && INVOKE_MODULES.has(first.text);
+}
+
+/**
+ * 이 식을 부르면 Tauri 명령을 부르는 것인가. 그렇다면 **명령 이름이 몇 번째
+ * 인자**인지 돌려준다. 아니면 `null`.
+ *
+ * `-1` 은 "부르기는 하는데 이름이 어느 인자인지 알 수 없다"(`.apply`)는 뜻이다.
+ */
+function invokeAliasOffset(expr, bindings) {
+	const node = unwrapExpression(expr);
+	if (ts.isIdentifier(node)) {
+		return bindings.local.has(node.text)
+			? (bindings.offsets.get(node.text) ?? 0)
+			: null;
+	}
+	if (ts.isPropertyAccessExpression(node)) {
+		// `ns.invoke`
+		if (
+			node.name.text === "invoke" &&
+			ts.isIdentifier(node.expression) &&
+			bindings.namespaces.has(node.expression.text)
+		)
+			return 0;
+		// `invoke.call` — 첫 인자가 this 라 이름은 한 칸 뒤다.
+		const base = invokeAliasOffset(node.expression, bindings);
+		if (base === null) return null;
+		if (node.name.text === "call") return base < 0 ? -1 : base + 1;
+		if (node.name.text === "apply") return -1;
+		return null;
+	}
+	// `invoke.bind(null)` / `invoke.bind(null, "memory_delete_fact")`
+	if (ts.isCallExpression(node)) {
+		const callee = unwrapExpression(node.expression);
+		if (!ts.isPropertyAccessExpression(callee) || callee.name.text !== "bind")
+			return null;
+		const base = invokeAliasOffset(callee.expression, bindings);
+		if (base === null || base < 0) return base;
+		// 첫 인자는 this, 나머지는 미리 묶인 인자다.
+		return Math.max(0, base - Math.max(0, node.arguments.length - 1));
+	}
+	return null;
+}
+
+/**
+ * 이 선언이 한 파일 안에서 `invoke` 의 **별명**을 만드는가.
+ *
+ * 10회차는 `import { invoke as tauriInvoke }` 와 네임스페이스를 닫았다. 그런데
+ * 판정이 여전히 "그 바인딩을 직접 부르는가" 라서, `const call = invoke.bind(null)`
+ * 한 줄이면 확인 없는 기억 삭제가 호출부로도 잡히지 않았다 — 게이트가 "확인이
+ * 있다" 고 말한 것이 아니라 호출 자체를 못 본 것이라 결함이 초록 안에 숨었다
+ * (11회차 지적 6).
+ *
+ * 여기서 닫는 것은 `const call = invoke.bind(null)`·`.call`·`.apply`,
+ * `const x = invoke`, 구조 분해 `const { invoke: iv } = ns`, 그리고 객체
+ * 리터럴로 만든 네임스페이스(`const ns = { invoke }` 뒤의 `ns.invoke(…)`)다.
+ * 별명의 별명도 아래 고정점 루프가 한 단계씩 따라간다.
+ *
+ * **다음 회차 메모:** 이번 회차에 다른 손이 `scripts/lib/bindings.mjs`
+ * (`importBindings`·`resolveCallee`)를 만든다. 그 파일이 생기기 전이라 여기에
+ * 작게 두었고, 합칠 때 이 함수 하나만 옮기면 되도록 격리해 두었다.
+ *
+ * @returns {{ name: string, offset?: number, namespace?: boolean } | null}
+ */
+function resolveInvokeBinding(node, sf, bindings) {
+	if (!node.initializer) return null;
+	const init = unwrapExpression(node.initializer);
+
+	// const ns = { invoke } — 그 뒤의 `ns.invoke(…)` 는 네임스페이스 호출과 같다.
+	if (ts.isIdentifier(node.name) && ts.isObjectLiteralExpression(init)) {
+		for (const property of init.properties) {
+			const key = property.name;
+			if (!key || !ts.isIdentifier(key) || key.text !== "invoke") continue;
+			const value = ts.isShorthandPropertyAssignment(property)
+				? property.name
+				: ts.isPropertyAssignment(property)
+					? property.initializer
+					: null;
+			if (!value) continue;
+			if (invokeAliasOffset(value, bindings) === 0)
+				return { name: node.name.text, namespace: true };
+		}
+		return null;
+	}
+
+	// 구조 분해: const { invoke: iv } = ns / = await import("…/core")
+	if (ts.isObjectBindingPattern(node.name)) {
+		const fromNamespace =
+			ts.isIdentifier(init) && bindings.namespaces.has(init.text);
+		if (!fromNamespace && !isInvokeModuleExpression(init)) return null;
+		for (const element of node.name.elements) {
+			const original = element.propertyName ?? element.name;
+			if (!ts.isIdentifier(original) || original.text !== "invoke") continue;
+			if (!ts.isIdentifier(element.name)) continue;
+			return { name: element.name.text, offset: 0 };
+		}
+		return null;
+	}
+	if (!ts.isIdentifier(node.name)) return null;
+	const offset = invokeAliasOffset(init, bindings);
+	return offset === null ? null : { name: node.name.text, offset };
+}
+
 /**
  * 파일마다 "이 이름을 부르면 Tauri 명령을 부르는 것" 인 이름 집합을 만든다.
  *
@@ -415,11 +539,20 @@ function invokeBindings(sources) {
 	const local = new Map(); // file -> Set<이름>
 	const namespaces = new Map(); // file -> Set<네임스페이스 이름>
 	const exported = new Map(); // file -> Set<내보낸 감싸기 이름>
+	// 이름 -> 명령 이름이 몇 번째 인자인가. `invoke.call(null, "cmd")` 처럼 한 칸
+	// 밀리는 별명이 있어 자리마다 따로 든다. -1 은 알 수 없다(`.apply`)는 뜻.
+	const offsets = new Map(); // file -> Map<이름, 오프셋>
 	for (const file of sources.keys()) {
 		local.set(file, new Set());
 		namespaces.set(file, new Set());
 		exported.set(file, new Set());
+		offsets.set(file, new Map());
 	}
+	const bindingsFor = (file) => ({
+		local: local.get(file),
+		namespaces: namespaces.get(file),
+		offsets: offsets.get(file),
+	});
 
 	// 씨앗: import 로 들어온 invoke
 	for (const [file, tree] of trees) {
@@ -442,18 +575,12 @@ function invokeBindings(sources) {
 		}
 	}
 
-	const callsInvoke = (node, file) => {
-		if (!ts.isCallExpression(node)) return false;
-		const callee = node.expression;
-		if (ts.isIdentifier(callee)) return local.get(file).has(callee.text);
-		if (
-			ts.isPropertyAccessExpression(callee) &&
-			ts.isIdentifier(callee.expression) &&
-			callee.name.text === "invoke"
-		)
-			return namespaces.get(file).has(callee.expression.text);
-		return false;
+	/** 이 호출이 Tauri 명령 호출이면 명령 이름의 인자 자리, 아니면 null. */
+	const invokeCallOffset = (node, file) => {
+		if (!ts.isCallExpression(node)) return null;
+		return invokeAliasOffset(node.expression, bindingsFor(file));
 	};
+	const callsInvoke = (node, file) => invokeCallOffset(node, file) !== null;
 
 	// 고정점: 첫 인자를 그대로 넘기는 감싸기 함수도 호출부다
 	for (let round = 0; round < 6; round += 1) {
@@ -463,8 +590,10 @@ function invokeBindings(sources) {
 				if (!name || local.get(file).has(name)) return;
 				let forwards = false;
 				eachNode(node, (inner) => {
-					if (forwards || !callsInvoke(inner, file)) return;
-					const first = inner.arguments[0];
+					if (forwards) return;
+					const at = invokeCallOffset(inner, file);
+					if (at === null || at < 0) return;
+					const first = inner.arguments[at];
 					const param = node.parameters?.[0];
 					if (
 						first &&
@@ -480,6 +609,34 @@ function invokeBindings(sources) {
 				if (isExported) exported.get(file).add(name);
 				grew = true;
 			};
+			// `invoke` 의 별명. 감싸기 함수보다 먼저 봐야 그 함수 안의 호출이 보인다.
+			eachNode(tree, (statement) => {
+				if (!ts.isVariableDeclaration(statement)) return;
+				const alias = resolveInvokeBinding(statement, tree, bindingsFor(file));
+				if (!alias) return;
+				if (alias.namespace) {
+					if (namespaces.get(file).has(alias.name)) return;
+					namespaces.get(file).add(alias.name);
+					grew = true;
+					return;
+				}
+				if (
+					local.get(file).has(alias.name) &&
+					(offsets.get(file).get(alias.name) ?? 0) === alias.offset
+				)
+					return;
+				local.get(file).add(alias.name);
+				offsets.get(file).set(alias.name, alias.offset);
+				// 내보낸 별명은 그 이름으로 import 한 파일에서도 호출부다.
+				const owner = statement.parent?.parent;
+				if (
+					owner &&
+					ts.isVariableStatement(owner) &&
+					owner.modifiers?.some((m) => m.kind === ts.SyntaxKind.ExportKeyword)
+				)
+					exported.get(file).add(alias.name);
+				grew = true;
+			});
 			for (const statement of tree.statements) {
 				const isExported = !!statement.modifiers?.some(
 					(m) => m.kind === ts.SyntaxKind.ExportKeyword,
@@ -510,6 +667,9 @@ function invokeBindings(sources) {
 					if (!exported.get(target)?.has(original)) continue;
 					if (local.get(file).has(element.name.text)) continue;
 					local.get(file).add(element.name.text);
+					offsets
+						.get(file)
+						.set(element.name.text, offsets.get(target)?.get(original) ?? 0);
 					grew = true;
 				}
 			}
@@ -521,8 +681,11 @@ function invokeBindings(sources) {
 	const sites = [];
 	for (const [file, tree] of trees) {
 		eachNode(tree, (node) => {
-			if (!callsInvoke(node, file)) return;
-			const first = node.arguments[0];
+			const at = invokeCallOffset(node, file);
+			if (at === null) return;
+			// `.apply` 는 인자를 배열로 넘겨 이름이 어느 자리인지 알 수 없다.
+			// 리터럴이 아닌 것으로 세면 아래 조립 검사가 그 자리를 막는다.
+			const first = at < 0 ? undefined : node.arguments[at];
 			const start = node.getStart(tree);
 			const literal =
 				first &&
@@ -533,7 +696,11 @@ function invokeBindings(sources) {
 				file,
 				start,
 				literal,
-				argText: first ? first.getText(tree).slice(0, 40) : "",
+				argText: first
+					? first.getText(tree).slice(0, 40)
+					: at < 0
+						? "…apply(배열)"
+						: "",
 				hasArg: !!first,
 			});
 		});

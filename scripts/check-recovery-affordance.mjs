@@ -51,7 +51,9 @@ import {
 	elementChildren,
 	elementOpening,
 	elementProps,
+	isCreateElementCall,
 	isElementNode,
+	jsxElementsIn,
 	makeEnv,
 	parseSource,
 	staticChunks,
@@ -69,16 +71,87 @@ const SHELL = "packages/shell";
  * 대체 내용으로 인정하려면 사용자가 그것으로 무언가 할 수 있어야 한다
  * (복사, 편집, 이동).
  *
- * `Start` 를 부분문자열로 인정하면 "Start-up failed" 라는 **문구**가 복구
- * 수단이 된다. 실제로 그 한 단어로 통과했다. 행동을 가리키는 것만 센다 —
- * 누를 것, 갈 곳, 고쳐 쓸 곳, 복사할 것.
+ * ── 11회차에 고친 것 ──────────────────────────────────────────────
+ * 열 번째까지 이 판정은 알림 요소의 **원문 전체**에 정규식을 대는 것이었다.
+ * 그래서 `Start` 를 부분문자열로 인정하던 시절에는 "Start-up failed" 라는
+ * 문구가 복구 수단이었고, 그 한 단어를 지운 뒤에도 같은 자리가 남아 있었다 —
+ * 자식 텍스트에 `install failed (missing onClick=)` 라고 적기만 하면 버튼 없는
+ * 막다른 화면이 빠져나갈 길이 있는 것으로 세어졌다. 문구 하나를 막으면 다음
+ * 회차에 다른 문구가 왔다.
  *
- * `createElement` 로 적은 화면은 같은 행동을 `createElement("button", …)` 와
- * `{ onClick: … }` 로 적는다. 알림을 그 형태로 읽게 됐으니 복구도 같은
- * 형태로 읽어야 한 쪽만 세는 일이 없다.
+ * 이제 문구는 **어떤 경우에도 근거가 아니다.** 알림 요소의 하위 트리를 파서로
+ * 걸어 실제 요소를 찾고, 그 요소가 조작인지만 묻는다 — 누를 것(`button`,
+ * `onClick`, `role="button"`), 갈 곳(`a`, `Link` 류, `href`, `to`,
+ * `role="link"`), 고쳐 쓸 곳(`textarea`), 복사할 것(`onCopy`). JSX 로 적었든
+ * `createElement`/`jsx` 로 적었든 같은 목록으로 온다.
  */
-const RECOVERY =
-	/<button|<a\s|onClick[=:]|common\.retry|\.retry\b|\bonStart\b|\bstart[A-Z]\w*\s*\(|href[=:]|<textarea|onCopy|navigator\.clipboard|createElement\(\s*["'`](?:button|a|textarea)["'`]/;
+
+/** 그 자체로 조작인 요소. 태그 이름의 마지막 마디로 본다. */
+const ACTION_TAGS = /^(?:button|a|textarea)$/;
+/** 이동을 뜻하는 컴포넌트. `Link`, `NavLink`, `AppLink` 처럼 쓴다. */
+const LINK_COMPONENT = /^[A-Z]\w*Link$|^Link$/;
+/** 그 요소를 조작으로 만드는 속성. */
+const ACTION_PROPS = new Set(["onClick", "onPress", "onCopy", "href", "to"]);
+/** 조작이라고 스스로 밝힌 역할. */
+const ACTION_ROLES = new Set(["button", "link"]);
+
+/** 이 요소의 태그 이름 후보. `createElement("button", …)` 도 같은 답을 준다. */
+function tagNames(element, sf) {
+	if (
+		ts.isJsxElement(element) ||
+		ts.isJsxSelfClosingElement(element) ||
+		ts.isJsxOpeningElement(element)
+	) {
+		return [elementOpening(element).tagName.getText(sf)];
+	}
+	if (isCreateElementCall(element, env) && element.arguments.length >= 1) {
+		const type = unwrapAll(element.arguments[0]);
+		if (!type) return [];
+		if (ts.isIdentifier(type)) return [type.text];
+		if (ts.isPropertyAccessExpression(type)) return [type.name.text];
+		return staticChunks(type, sf, env);
+	}
+	return [];
+}
+
+/** 값이 대놓고 없는 속성은 조작이 아니다. `onClick={undefined}` 는 죽은 것이다. */
+function hasLiveValue(prop) {
+	if (prop.bare) return true;
+	const value = unwrapAll(prop.value);
+	if (!value) return false;
+	if (value.kind === ts.SyntaxKind.NullKeyword) return false;
+	if (value.kind === ts.SyntaxKind.FalseKeyword) return false;
+	if (ts.isIdentifier(value) && value.text === "undefined") return false;
+	return true;
+}
+
+/** 이 요소 하나가 조작인가. */
+function isActionElement(element, sf) {
+	for (const tag of tagNames(element, sf)) {
+		const last = tag.split(".").pop() ?? tag;
+		if (ACTION_TAGS.test(last)) return true;
+		if (LINK_COMPONENT.test(last)) return true;
+	}
+	const { props } = elementProps(element, sf, env);
+	for (const prop of props) {
+		if (ACTION_PROPS.has(prop.name) && hasLiveValue(prop)) return true;
+		if (prop.name === "role") {
+			for (const role of staticChunks(prop.value, prop.sf ?? sf, env))
+				if (ACTION_ROLES.has(role)) return true;
+		}
+	}
+	return false;
+}
+
+/**
+ * 이 알림의 하위 트리 어딘가에 복구 조작이 있는가.
+ *
+ * 텍스트 노드는 보지 않는다 — 자식 글자에 속성 이름을 적어 두는 것으로
+ * 빠져나가던 자리가 여기다.
+ */
+function hasRecovery(element, sf) {
+	return jsxElementsIn(element, sf, env).some((node) => isActionElement(node, sf));
+}
 
 /**
  * 실패를 알리지만 복구 행동을 확인하지 못한 자리. 숫자가 아니라 자리로
@@ -180,7 +253,8 @@ function alertReturns(file, text) {
 				seen.add(element);
 				if (isAlert(element, tree)) {
 					out.push({
-						text: element.getText(tree),
+						element,
+						tree,
 						// 자리는 알림 요소의 줄로 적는다. return 줄로 적으면 껍데기를
 						// 하나 씌우는 것만으로 면제 키가 어긋난다.
 						line: text
@@ -210,7 +284,7 @@ for (const file of files) {
 	const source = readFileSync(file, "utf8");
 	for (const block of alertReturns(file, source)) {
 		surfaces += 1;
-		if (RECOVERY.test(block.text)) continue;
+		if (hasRecovery(block.element, block.tree)) continue;
 		stranded.push({ file, line: block.line });
 	}
 }

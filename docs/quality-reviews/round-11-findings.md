@@ -63,6 +63,45 @@ node scripts/check-data-home-boundary.mjs; echo EXIT=$?
 # 되돌린 뒤 EXIT=0, git diff 출력 없음
 ```
 
+**상태 (2026-09-06):** 닫았다. 재료를 없애는 쪽으로 고쳤다. 데이터 홈 이름
+(`DATA_HOME_DIR_NAME`)은 이제 `data_home.rs` 안에서만 보인다. 뿌리를 돌려주는
+`root_of`·`direct_root_of`·`naia_data_home_*` 는 전부터 비공개였으니, 밖에서
+`~/.naia` 를 가리키려면 `.naia` 를 문자열로 적는 수밖에 없고 그것은 예전부터
+경로 마디로 잡힌다. 홈 그 자체를 돌려주는 넷(`user_home`, `user_home_path`,
+`unix_home`, `windows_home`)은 데이터 홈이 **아닌** 자리(`~/dev`,
+`~/.agent-browser`, `~/.cache/huggingface`, 경로 가드의 허용 뿌리)를 위해 공개로
+남는다. 대신 밖에서 홈을 쥔 뒤 자리를 조립하던 여덟 자리는 이름표를 받는 새
+API 로 옮겼다 — `child_from_dirs_home` 과 `read_child_from_dirs_home`(adk-path
+부트스트랩 포인터를 읽는 다섯 자리), 그리고 macOS 딥링크 AppleScript 가 쓰는
+`deep_link_helper_script_paths`.
+
+컴파일러는 오늘의 코드만 막으므로, 게이트가 깔때기의 `pub` 항목 열여섯을
+`PUBLIC_API` 허용 목록과 대조한다. 목록에 없는 `pub` 이 생기면 붉어지고, 목록에
+있는데 더는 공개가 아니면 낡은 항목으로 붉어지며, 모듈 밖에서 `data_home::` 로
+짚는 이름도 같은 목록으로 본다. 항목마다 쓸 수 있는 파일도 함께 적었다 — 그
+목록이 파일 단위라는 것이 한계이고, 보증은 "`.naia` 라는 이름이 깔때기 밖에
+없다" 쪽이 진다. 두 게이트가 쓰던 Rust 토크나이저는 `scripts/lib/rust-tokens.mjs`
+로 옮겨 함께 쓴다.
+
+```
+# (a) capture.rs 에 user_home_path()?.join(DATA_HOME_DIR_NAME).join("ghost-cache")
+node scripts/check-data-home-boundary.mjs; echo EXIT=$?
+# ❌ 깔때기에서 내주지 않는 것을 밖에서 짚었다(1) — capture.rs:24 — data_home::DATA_HOME_DIR_NAME
+# ❌ 허용 목록이 정한 파일 밖에서 짚었다(1) — capture.rs:22 — data_home::user_home_path
+# EXIT=1
+cargo test --lib data_home
+# error[E0603]: constant `DATA_HOME_DIR_NAME` is private — capture.rs:24:33 — cargo EXIT=101
+
+# 대조 .join(".naia").join("ghost-cache")
+# ❌ 문자열에 `.naia` 마디가 있다 — capture.rs:24 — EXIT=1
+# 대조 깔때기에서 `pub const DATA_HOME_DIR_NAME` 로 되돌리기
+# ❌ 깔때기가 허용 목록에 없는 것을 공개했다(1) — data_home.rs:50 — EXIT=1
+# 대조 capture.rs 에 dirs::home_dir()
+# ❌ `home_dir` (data_home 모듈 밖에서 홈을 구한다) — capture.rs:22 — EXIT=1
+
+# 되돌린 뒤 EXIT=0 · cargo test --lib data_home 5 passed · git diff 출력 없음
+```
+
 ---
 
 ## 2. `scripts/lib/jsx-static.mjs:711` `alwaysTruthy` — 속성 접근은 따라가지 않는다
@@ -96,6 +135,34 @@ node scripts/check-dead-ui-specs.mjs; echo EXIT=$?
 # 되돌린 뒤 EXIT=0, git diff 출력 없음
 ```
 
+**상태 (2026-09-06):** 닫았다. `alwaysTruthy` 가 문자열 후보와 같은 방식으로
+속성 접근을 푼다. `PropertyAccessExpression` 과 리터럴 키의
+`ElementAccessExpression` 을 재대입 없는 `const` 객체 리터럴에서 찾아 그 값에
+같은 판정을 다시 건다 — 같은 파일이든 `import` 로 건너간 파일이든, 두 겹
+중첩이든 마찬가지다. `as const` 인지는 묻지 않는다. 그것은 타입 표기일 뿐이라
+요구하면 `as const` 를 떼는 것만으로 판정이 빠져나간다. 언제나 거짓인지를 보는
+쪽(`alwaysFalsy`)에도 같은 것을 달았다 — 참 쪽만 열면 `!FLAGS.on` 이라는 부정
+한 겹으로 같은 구멍이 남는다. 못 푸는 자리(spread 가 섞인 객체, 값이 변수인
+속성, 없는 키, 계산된 키, 재대입되는 이름)는 전부 거짓, 즉 **모른다** 다.
+
+```
+# (a) SettingsTab.tsx 에 const GHOST_FLAGS = { off: true }, disabled={GHOST_FLAGS.off}
+node scripts/check-dead-ui-specs.mjs; echo EXIT=$?
+# ❌ 영구히 꺼 둔 조작을 기다리는 스펙 1곳 — 01-app-launch.spec.ts:50 — ghost-wake-panel — EXIT=1
+
+# 같은 뜻의 다른 형태도 같다
+# disabled={GHOST_FLAGS["off"]}                       — EXIT=1
+# disabled={GHOST_FLAGS.panel.off} (두 겹 중첩)        — EXIT=1
+# disabled={!GHOST_FLAGS.on} (on: false)              — EXIT=1
+# 대조 disabled={true}                                 — EXIT=1
+
+# 반증(모른다는 참이 아니다)
+# let GHOST_FLAGS = {...}; GHOST_FLAGS = {...}         — EXIT=0
+# const GHOST_FLAGS = { off: ghostEnabled }            — EXIT=0
+# disabled={GHOST_FLAGS.missing}                       — EXIT=0
+
+# 되돌린 뒤 [dead-ui] 이름 175개 / 없는 것 0 — EXIT=0, git diff 출력 없음
+```
 ---
 
 ## 3. `scripts/lib/jsx-static.mjs:97-104` — `createElement` 는 **이름**이다
@@ -121,6 +188,35 @@ node scripts/check-recovery-affordance.mjs; echo EXIT=$?
 # 되돌린 뒤 EXIT=0, git diff 출력 없음
 ```
 
+**상태 (2026-09-06):** 닫았다. 요소 판정을 이름에서 바인딩으로 옮겼다. 새
+공용 모듈 `scripts/lib/bindings.mjs` 가 "이 호출식의 callee 는 어느 모듈의 어느
+export 인가" 하나만 답한다 — 직접 식별자, default·namespace import 의 멤버,
+같은 파일 `const` 별명, 구조분해 별명, `.bind` 로 만든 별명, 호출부의
+`.call`/`.apply`, 그리고 `env` 를 넘기면 상대 경로로 건너간 파일의 별명까지
+한 단계씩 따라간다. `jsx-static` 의 `elementFactory` 는 그 답을 받아
+`react`·`preact`·`react/jsx-runtime`·`react/jsx-dev-runtime` 의
+`createElement`/`h`/`jsx`/`jsxs`/`jsxDEV` 인지만 묻는다.
+
+두 가지가 함께 바뀌었다. `jsx`/`jsxs` 는 자식을 props 안의 `children` 에 넣으므로
+`elementChildren` 이 그 자리를 읽는다 — 읽지 않으면 자식 없는 요소로 보여
+"화면에 오르는 것이 이 알림 하나뿐인가" 판정이 통째로 갈린다. 반대로 출처가
+있는 다른 `createElement`(`document.createElement("canvas")`)는 이제 화면
+요소가 아니다. 딱 한 자리는 이름으로 남겼다 — 아무 데서도 오지 않은 자유
+식별자 `createElement(...)` 는 그대로 요소다. 모르는 것을 아니라고 단정하면
+놓치는 쪽으로 틀린다.
+
+```
+# (a) import { createElement as h } from "react"; return h("div", { role: "alert" }, "install failed")
+node scripts/check-recovery-affordance.mjs; echo EXIT=$?
+# 자리 2곳 / 다음 행동이 없는 곳 1 — UpdateBanner.tsx:31 — EXIT=1
+
+# 같은 화면을 적는 다른 방법도 모두 같다 (각각 EXIT=1)
+# React.createElement (default import) · Rx.createElement (namespace)
+# const make = createElement.bind(null); make(...)
+# jsx("div", { role: "alert", children: "install failed" })  (react/jsx-runtime)
+
+# 되돌린 뒤 자리 1곳 / 다음 행동이 없는 곳 0 — EXIT=0, git diff 출력 없음
+```
 ---
 
 ## 4. `scripts/check-recovery-affordance.mjs:80-81` — 복구는 여전히 요소 **원문** 정규식이다
@@ -146,6 +242,30 @@ node scripts/check-recovery-affordance.mjs; echo EXIT=$?
 # 되돌린 뒤 EXIT=0, git diff 출력 없음
 ```
 
+**상태 (2026-09-06):** 닫았다. 요소 원문 정규식을 버렸다. 이제 알림 요소의
+하위 트리를 `jsxElementsIn` 으로 걸어 **요소**를 찾고, 그 요소가 조작인지만
+묻는다 — 태그가 `button`·`a`·`textarea` 이거나 `Link` 류 컴포넌트인가,
+`onClick`·`onPress`·`onCopy`·`href`·`to` 를 가졌는가, `role` 이 `button`·`link`
+인가. 값이 대놓고 없는 속성(`onClick={undefined}`)은 조작으로 세지 않는다.
+JSX 로 적었든 `createElement`/`jsx` 로 적었든 같은 목록으로 온다.
+
+텍스트 노드의 글자는 어떤 경우에도 근거가 아니다. 그래서 머리말에서 "문구가
+복구로 세던 자리를 한 번 닫았다" 던 문장을 고쳤다 — 그때 닫은 것은 `Start`
+라는 낱말 하나였고, 자리 자체는 열려 있었다. 지금 닫은 것이 그 자리다.
+
+```
+# (a) return <div role="alert">install failed (missing onClick=)</div>
+node scripts/check-recovery-affordance.mjs; echo EXIT=$?
+# 자리 2곳 / 다음 행동이 없는 곳 1 — UpdateBanner.tsx:31 — EXIT=1
+# 자식 글자에 `<button href=` 를 적어도, `createElement("button")` 을 적어도 EXIT=1
+
+# 대조(진짜 조작이면 초록)
+# <button onClick={…}>retry</button>      — 자리 2곳 / 없는 곳 0 — EXIT=0
+# <AppLink to="/settings">settings</AppLink> — EXIT=0
+# <div role="button">retry</div>           — EXIT=0
+
+# 되돌린 뒤 자리 1곳 / 다음 행동이 없는 곳 0 — EXIT=0, git diff 출력 없음
+```
 ---
 
 ## 5. `scripts/check-silent-clicks.mjs:185,289-296` — `&&` 왼쪽이 식별자가 아니거나, 클릭이 `void` 면 무음이 아니다
@@ -176,6 +296,38 @@ node scripts/check-silent-clicks.mjs; echo EXIT=$?
 # 되돌린 뒤 EXIT=0, git diff 출력 없음
 ```
 
+**상태 (2026-09-06):** 닫았다. 판정의 단위를 이름에서 **보호되는 식 E** 로
+옮겼다. 존재를 묻는 형태(`E`, `!!E`, `E != null`, `E !== null`,
+`E !== undefined`, `Boolean(E)`, `typeof E !== "undefined"`, 그리고 부정형이
+`return`/`continue` 로 이어지는 꼴)를 하나로 읽어 E 를 꺼내고, 그 자리에서
+눌리는 것이 같은 E 인지만 본다. E 는 식별자여야 할 이유가 없다 — 속성 접근도,
+단언으로 싼 호출도 글자가 같으면 같은 식이다. 클릭 쪽은 `void`·`await`·괄호·
+`as` 를 벗기므로 `void el.click()` 은 `el.click()` 과 같은 클릭이다. `void` 를
+벗기는 것은 클릭 자리뿐이다 — 값 없이 나가는지 보는 자리에서는 `void` 가
+근거 그 자체이므로 벗기면 안 된다.
+
+기준선은 107 그대로다. 새로 보게 된 형태가 지금 이 저장소에 하나도 없기
+때문이고, 늘지도 줄지도 않았으니 옮길 이유가 없다. 잡히는지는 셈이 아니라
+주입으로 확인했다. 판단 기준은 옛 방식과 같다 — 파서가 더 밝아진 만큼은
+잠그고, 판정 범위 자체(가지의 **첫 문**만 본다)는 넓히지 않았다.
+
+```
+# 아홉 가지 형태를 하나씩 01-app-launch.spec.ts 에 넣었다. 전부 108 > 107 — EXIT=1
+# ghostEl != null && ghostEl.click();
+# if (ghostEl) void ghostEl.click();
+# Boolean(ghostEl) && ghostEl.click();
+# typeof ghostEl !== "undefined" && ghostEl.click();
+# if (!!ghostEl) await ghostEl.click();
+# if (state.el != null) void (state.el.click() as unknown);   ← E 가 이름이 아니다
+# if (ghostEl === undefined) return; ghostEl.click();
+# 대조 ghostEl && ghostEl.click()  /  if (ghostEl) ghostEl.click()
+
+# 반증(판정 범위를 넓히지 않았다)
+# if (ghostEl) other.click();                        — 107 — EXIT=0
+# if (!ghostEl) throw new Error(...); ghostEl.click(); — 107 — EXIT=0
+
+# 되돌린 뒤 107 (baseline 107) — EXIT=0, git diff 출력 없음
+```
 ---
 
 ## 6. `scripts/check-destructive-affordance.mjs:445-456` — 바인딩을 따라가되 `.bind` 로 부른 삭제는 호출부가 아니다
@@ -210,6 +362,33 @@ node scripts/check-destructive-affordance.mjs; echo EXIT=$?
 # 되돌린 뒤 EXIT=0, git diff 출력 없음
 ```
 
+**상태 (2026-09-06):** 닫았다. 호출부 판정에 별명 추적을 더했다. 같은 파일 안에서
+`const call = invoke.bind(null)`·`.call`·`.apply`, `const x = invoke`, 구조 분해
+`const { invoke: iv } = ns`, 그리고 객체 리터럴로 만든 네임스페이스
+(`const ns = { invoke }` 뒤의 `ns.invoke(…)`)를 고정점으로 따라가고, 그 별명의
+호출도 호출부로 센다. 별명마다 **명령 이름이 몇 번째 인자인지**를 함께 들어
+`invoke.call(null, "…")` 처럼 한 칸 밀리는 꼴도 리터럴로 읽는다. `.apply` 는
+이름이 배열 안에 있어 자리를 알 수 없으므로 조립 호출로 세어 막는다.
+
+판정은 `resolveInvokeBinding(node, sf, bindings)` 하나에 모아 두었다. 이번
+회차에 다른 손이 만드는 `scripts/lib/bindings.mjs`(`importBindings`·
+`resolveCallee`)로 다음 회차에 합칠 수 있도록 그 사실을 함수 주석에 적었다.
+
+```
+# (a) const call = invoke.bind(null); return call("memory_delete_fact", { factId });
+node scripts/check-destructive-affordance.mjs; echo EXIT=$?
+# 되돌릴 수 없는 동작 1곳 — db.ts:30 — memory_delete_fact (감싼 함수 ghostWipeFact) — EXIT=1
+
+# 같은 자리에 심은 다른 꼴도 전부 EXIT=1
+#   invoke.bind(null, "memory_delete_fact") → call({ factId })
+#   invoke.call(null, "memory_delete_fact", { factId })
+#   const call = invoke
+#   const ns = { invoke }; const { invoke: iv } = ns; iv("memory_delete_fact", …)
+# 대조 invoke("memory_delete_fact", { factId }) — EXIT=1
+
+# 되돌린 뒤 EXIT=0, git diff 출력 없음
+```
+
 ---
 
 ## 7. `scripts/check-destructive-affordance.mjs:181-183` — 명령 추출이 `#[tauri::command]` 뒤 **200자** 창이다
@@ -234,6 +413,35 @@ node scripts/check-destructive-affordance.mjs; echo EXIT=$?
 
 # 되돌린 뒤 EXIT=0, git diff 출력 없음
 ```
+
+**상태 (2026-09-06):** 닫았다. 200자 창을 없애고 명령 추출을 토큰 기반으로 바꿨다.
+`scripts/lib/rust-tokens.mjs` 의 `tauriCommandBodies` 가 주석을 버린 뒤
+`#[tauri::command]` 속성 다음의 속성·가시성·`async`·`unsafe` 를 토큰으로 건너뛰고
+`fn <이름>` 을 읽는다. 본문도 원문 문자 세기가 아니라 토큰의 중괄호 균형으로
+자르므로 문자열 안의 `}` 가 본문을 일찍 끊지 않는다. 이 토크나이저는 데이터 홈
+경계 검사가 쓰던 것을 떼어 낸 것이라, 두 게이트가 같은 자리에서 잰다.
+
+```
+# (a) #[tauri::command] + 376자 문서 주석 + fn ghost_wipe_everything
+#     + db.ts 에서 확인 없이 invoke("ghost_wipe_everything")
+node scripts/check-destructive-affordance.mjs; echo EXIT=$?
+# Rust 명령 199개 중 파괴 후보 16개 / 프런트 호출 15곳
+# 되돌릴 수 없는 동작 1곳 — db.ts:29 — ghost_wipe_everything — EXIT=1
+#
+# 같은 소스에서 옛 200자 창이 뽑는 이름: ["capture_screen_region"]
+# 토큰이 뽑는 이름:                      ["ghost_wipe_everything","capture_screen_region"]
+
+# 대조 /// wipe (짧은 주석)
+# 같은 199 · 16 · 15, 같은 자리 — EXIT=1
+
+# 되돌린 뒤 EXIT=0 (198 · 15 · 14), git diff 출력 없음
+```
+
+계약 테스트 `src/test/rust-tokens.contract.test.ts` 여덟을 붙였다 — 321자를 넘는
+문서 주석 뒤의 `fn`, 속성 여러 개, `pub(crate) async fn`·`pub async unsafe fn`·
+`pub(in crate::app) fn`, 줄 주석과 블록 주석 안의 가짜 `#[tauri::command]`,
+보통 문자열과 로 문자열 안의 가짜 선언, 문자열 안의 `}` 를 넘긴 본문 자르기,
+본문 없는 선언, 그리고 코드·문자열 가르기의 줄 번호다.
 
 ---
 
@@ -267,6 +475,26 @@ const seeded = { provider: "nextain", model: "deepseek-v4-flash", ... };
 # seedCredentialedAdk( false / credentialedSeedAvailable() false — EXIT=1
 
 # 되돌린 뒤 세 정규식 참 · live call true · git diff 출력 없음
+```
+
+**상태 (2026-09-06):** 닫았다. 세 정규식을 파서로 바꿨다. `wdio.conf.ts` 를
+`ts.createSourceFile` 로 읽어 `./credentialed-adk-seed.js` 에서 들어온
+`seedCredentialedAdk`·`credentialedSeedAvailable` 의 **바인딩**을 잡고(별명으로
+import 해도 따라간다), 그 바인딩을 실제로 부르는 `CallExpression` 이 있는지,
+그리고 `process.env.NAIA_E2E_CREDENTIALED_SEED` 를 실제로 대입하거나 읽는 노드가
+있는지를 본다. 주석에는 노드가 없으니 주석은 저절로 거짓이다. 10회차가 격리
+계약(`e2e-runtime-isolation.contract.test.ts`)에서 쓴 방식 그대로다.
+
+```
+# (a) 호출을 주석으로 바꾸고 정규식이 찾는 토큰만 남김
+node -e '세 정규식 검사'
+# /seedCredentialedAdk\(/ true · /credentialedSeedAvailable\(\)/ true · /NAIA_E2E_CREDENTIALED_SEED/ true
+npx vitest run src/test/credentialed-adk-seed.contract.test.ts; echo EXIT=$?
+# ✗ 기본 설정이 그 시딩에 실제로 배선돼 있다
+#   "import 만 하고 부르지 않으면 격리 워크스페이스는 비어 있다" — expected false to be true
+# 1 failed | 4 passed — EXIT=1
+
+# 되돌린 뒤 5 passed — EXIT=0, git diff 출력 없음
 ```
 
 ---
@@ -303,6 +531,36 @@ node scripts/build-e2e-inventory.mjs --check; echo EXIT=$?
 # 스펙과 docs/e2e-inventory.json 되돌린 뒤 --check EXIT=0, git diff 출력 없음
 ```
 
+**상태 (2026-09-06):** 닫았다. `outboundAddresses` 가 호출 자리의 글자를 보지
+않는다. 파서로 `fetch`/`request` 호출을 찾아 첫 인자를 `stringCandidates` 로
+풀고 — 같은 파일 `const`, 조건식의 모든 갈래, 템플릿의 고정 조각, `import` 로
+건너간 `const` 까지 — 후보 중 **하나라도** 바깥 호스트면 대화 자국으로 센다.
+값을 변수에 한 겹 담는 것으로는 빠져나가지 못한다. 자기 서버(`http://127.0.0.1:
+${port}`)는 값이 실행할 때 정해져 후보가 없으므로 예전처럼 결정론 칸에 남는다.
+
+보증 밖은 머리말에 적었다: 함수 매개변수로 받은 주소, 실행할 때 조립되는
+템플릿, 객체·배열을 거쳐 흘러간 주소는 후보가 없다. 그런 자리는 "바깥 주소가
+없다" 가 아니라 **모른다** 이고, 이 목록은 그것을 결정론 칸에 남긴다. 못 푼
+인자 수는 생성할 때 표준 출력에 함께 적는다(지금 1개). 지금 스펙에서는 분류가
+하나도 바뀌지 않아 `docs/e2e-inventory.json` 은 그대로다.
+
+```
+# (a) const ghostUrl = "https://ghost-llm.example:9999/ghost-complete"; await fetch(ghostUrl);
+node scripts/build-e2e-inventory.mjs
+# 100-herdr-first-frame.spec.ts tier=credentialed_live (91→92, 결정론 20→19)
+node scripts/build-e2e-inventory.mjs --check; echo EXIT=$?
+# ❌ 지금 스펙과 어긋난다 — EXIT=1
+
+# 같은 주소를 한 겹 더 숨겨도 같다 (각각 tier=credentialed_live · --check EXIT=1)
+# const GHOST_BASE = "https://…:9999"; fetch(`${GHOST_BASE}/x`)
+# const u = cond ? "/local" : "https://…:9999/x"; fetch(u)      ← 갈래 하나면 족하다
+# helpers/click.ts 의 export const 를 import 해서 fetch(GHOST_ENDPOINT)
+
+# 반증 const selfUrl = `http://127.0.0.1:${browser.options.port}/health`; fetch(selfUrl)
+# tier=deterministic_ci · --check EXIT=0
+
+# 되돌린 뒤 결정론 20 / 자격증명 91 / 장치 8 — --check EXIT=0, git diff 출력 없음
+```
 ---
 
 머리말이 보증하지 않는다고 적어 둔 자리(문자열로 `.naia` 를 조립하는 위조, 돌려받은 경로의 `parent`/`pop`, `--check` 가 분류의 옳고 그름을 보증하지 않는다는 문장 자체)는 지적 번호에서 뺐습니다. 9번은 그 `--check` 가 아니라, 분류를 진다고 적은 자국 규칙(`outboundAddresses`)을 겨냥합니다.
