@@ -1136,3 +1136,177 @@ describe("겹의 수를 세는 자리가 없다 (13회차 지적 4 의 같은 �
 		expect(read.props.length).toBe(0);
 	});
 });
+
+/* ─────────────── 14회차에 못 박은 것 ─────────────── */
+
+describe("`void <식>` 은 `undefined` 다 (14회차 지적 1)", () => {
+	it("널 판정에서 `undefined` 와 같다", () => {
+		expect(truthyOf("void 0 ?? true")).toBe(true);
+		expect(truthyOf("!void 0")).toBe(true);
+	});
+
+	it("안쪽 식이 무엇이든 결과는 하나다", () => {
+		// `void x` 는 x 를 계산하고 버린다. 값은 언제나 `undefined` 이므로
+		// 안쪽을 따라갈 것이 없다.
+		expect(truthyOf("void fn() ?? true", "declare function fn(): number;")).toBe(true);
+		expect(truthyOf("void 1 ?? true")).toBe(true);
+	});
+
+	it("반증: `void 0` 자체는 참이 아니다", () => {
+		expect(truthyOf("void 0")).toBe(false);
+	});
+});
+
+describe("리터럴은 만들자마자 참이다 (14회차 지적 3)", () => {
+	it("객체·배열·함수·정규식·`new` 는 언제나 참이다", () => {
+		// "비어 있음" 과 "거짓" 은 다르다. React 에서 `disabled={{}}` 는 누를 수
+		// 없는 버튼이다.
+		for (const src of ["{}", "[]", "(() => 1)", "(function () {})", "new Date()", "/x/"])
+			expect(truthyOf(src), `${src} 가 참이 아니다`).toBe(true);
+	});
+
+	it("템플릿은 글자가 한 자라도 나오면 참이다", () => {
+		expect(truthyOf("`${true}`")).toBe(true);
+		expect(truthyOf("`a${x}`", "declare const x: unknown;")).toBe(true);
+	});
+
+	it("삽입이 거짓 같은 값이어도 글자로는 비어 있지 않다", () => {
+		// `${false}` 는 `"false"`, `${0}` 은 `"0"`, `${null}` 은 `"null"` 이다.
+		// 삽입 값의 참·거짓으로 접으면 여기서 거짓이 되고, 누를 수 없는 버튼이
+		// 열린 것으로 읽힌다.
+		expect(truthyOf("`${false}`")).toBe(true);
+		expect(truthyOf("`${0}`")).toBe(true);
+		expect(truthyOf("`${null}`")).toBe(true);
+		expect(truthyOf("`${void 0}`")).toBe(true);
+	});
+
+	it("반증: 고정 조각이 모두 비고 삽입도 비면 거짓이다", () => {
+		expect(truthyOf("``")).toBe(false);
+		expect(truthyOf('`${""}`')).toBe(false);
+	});
+
+	it("반증: 삽입 값을 모르면 참이 아니다", () => {
+		// `${x}` 는 x 가 무엇이냐에 따라 갈린다. 모른다를 참으로 접으면 열린
+		// 버튼이 영구히 꺼진 것으로 세어진다.
+		expect(truthyOf("`${x}`", "declare const x: unknown;")).toBe(false);
+	});
+
+	it("빈 템플릿의 부정은 언제나 참이다 — 거짓 쪽도 대칭이다", () => {
+		expect(truthyOf('!`${""}`')).toBe(true);
+		expect(truthyOf("!`${true}`")).toBe(false);
+	});
+});
+
+describe("import 해석은 이 파일에 없다 (14회차 지적 2)", () => {
+	const FLAGS = {
+		"app/logger.ts": `export const GHOST_OFF = true;\nexport default { off: true };`,
+		"app/inner.ts": `export const HIDDEN = true;`,
+		"app/mid.ts": `export { HIDDEN } from "./inner";`,
+	};
+
+	function offThrough(screen: string): boolean {
+		const { env, file } = environment({ ...FLAGS, "app/screen.tsx": screen });
+		const sf = file("app/screen.tsx");
+		return J.alwaysTruthy(attributeValue(sf, "d"), sf, env);
+	}
+
+	it("네임스페이스 import 의 멤버도 같은 상수다", () => {
+		expect(
+			offThrough(
+				`import * as flags from "./logger";\nexport const P = <button d={flags.GHOST_OFF} />;`,
+			),
+		).toBe(true);
+	});
+
+	it("`export default { … }` 의 속성도 같은 상수다", () => {
+		expect(
+			offThrough(`import flags from "./logger";\nexport const P = <button d={flags.off} />;`),
+		).toBe(true);
+	});
+
+	it("중간 파일을 지나는 재수출도 따라간다", () => {
+		expect(
+			offThrough(`import { HIDDEN } from "./mid";\nexport const P = <button d={HIDDEN} />;`),
+		).toBe(true);
+	});
+
+	it("named import 와 답이 같다 — import 형태로 판정이 갈리지 않는다", () => {
+		expect(
+			offThrough(
+				`import { GHOST_OFF } from "./logger";\nexport const P = <button d={GHOST_OFF} />;`,
+			),
+		).toBe(true);
+	});
+
+	it("반증: env 없이 부르면 파일을 건너가지 못한다", () => {
+		const sf = parse(
+			`import { GHOST_OFF } from "./logger";\nexport const P = <button d={GHOST_OFF} />;`,
+		);
+		expect(J.alwaysTruthy(attributeValue(sf, "d"), sf, null)).toBe(false);
+	});
+
+	it("이 파일 소스에 import 선언을 직접 읽는 코드가 없다", () => {
+		// import 를 읽는 자리가 두 벌이면 형태 하나가 늘 때마다 두 번 고쳐야
+		// 하고, 리뷰어는 안 고친 쪽으로 넣는다.
+		const text = readFileSync(
+			resolve(__dirname, "..", "..", "scripts", "lib", "jsx-static.mjs"),
+			"utf8",
+		);
+		for (const marker of [
+			"isImportDeclaration",
+			"isNamedImports",
+			"isNamespaceImport",
+			"importClause",
+			"moduleSpecifier",
+		])
+			expect(text.includes(marker), `jsx-static.mjs 이 ${marker} 를 직접 본다`).toBe(false);
+		expect(text.includes("bindings.mjs")).toBe(true);
+	});
+});
+
+describe("자유 `createElement` 의 잠금은 `.call` 에도 걸린다 (14회차 지적 4)", () => {
+	const FREE_CALL = `export const B = () => createElement.call(null, "div", { role: "alert" }, "failed");`;
+	const FREE_PLAIN = `export const B = () => createElement("div", { role: "alert" }, "failed");`;
+
+	it("import 없는 `createElement.call` 도 요소이고 자리가 밀렸다", () => {
+		const sf = parse(FREE_CALL);
+		const shape = J.elementCallShape(firstElement(sf, null), null);
+		expect(shape.factory).toBe("classic");
+		expect(shape.argShift).toBe(1);
+	});
+
+	it("밀린 자리에서 읽은 props 는 곧바로 부른 것과 같다", () => {
+		const called = parse(FREE_CALL);
+		const plain = parse(FREE_PLAIN);
+		expect(J.elementProps(firstElement(called, null), called, null).props.map((p) => p.name)).toEqual(
+			["role"],
+		);
+		expect(J.elementProps(firstElement(plain, null), plain, null).props.map((p) => p.name)).toEqual(
+			["role"],
+		);
+	});
+
+	it("반증: 이름 잠금은 `createElement` 하나뿐이다", () => {
+		// 자유 `h(...)` 까지 요소로 보면 hyperscript 든 무엇이든 끌려 들어와
+		// 게이트가 과탐지로 곧 꺼진다.
+		const sf = parse(`export const B = () => h.call(null, "div", { role: "alert" });`);
+		expect(J.jsxElementsIn(sf, sf, null).length).toBe(0);
+	});
+});
+
+describe("반복 횟수 상수가 없다 (14회차 지적 7)", () => {
+	const SOURCES = [
+		"scripts/check-silent-clicks.mjs",
+		"scripts/lib/unwrap.mjs",
+		"scripts/lib/jsx-static.mjs",
+		"scripts/lib/bindings.mjs",
+	];
+
+	for (const rel of SOURCES) {
+		it(`${rel} 에는 껍데기를 세는 반복 상수가 없다`, () => {
+			const text = readFileSync(resolve(__dirname, "..", "..", rel), "utf8");
+			const hits = text.match(/for\s*\([^;]*;[^;<]*<\s*\d+/g) ?? [];
+			expect(hits, `${rel} 이 겹을 센다: ${hits.join(", ")}`).toEqual([]);
+		});
+	}
+});

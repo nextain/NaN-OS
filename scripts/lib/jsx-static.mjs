@@ -58,7 +58,7 @@
  */
 
 import ts from "typescript";
-import { resolveCallee } from "./bindings.mjs";
+import { exportedValueSite, importedValueSite, resolveCallee } from "./bindings.mjs";
 import { unwrapExpression } from "./unwrap.mjs";
 
 /* ─────────────── 파싱과 파일 환경 ─────────────── */
@@ -243,6 +243,15 @@ export function elementCallShape(node, env) {
 		if (RUNTIME_FACTORIES.has(binding.imported)) return { factory: "runtime", ...shape };
 		return none;
 	}
+	// 아무 데서도 오지 않은 자유 식별자 `createElement` 는 이름으로 잠근다.
+	// 그 잠금은 `.call`/`.apply` 로 부른 것에도 같이 걸린다 — 같은 함수를 한 겹
+	// 다르게 부른 것뿐이고, 자리는 바인딩이 알려 준 만큼 밀린다(14회차 지적 4).
+	if (binding && binding.global === "createElement")
+		return {
+			factory: "classic",
+			argShift: binding.argShift ?? 0,
+			argsUnknown: !!binding.argsUnknown,
+		};
 	const callee = unwrapAll(node.expression);
 	if (callee && ts.isIdentifier(callee) && callee.text === "createElement")
 		return { factory: "classic", argShift: 0, argsUnknown: false };
@@ -467,33 +476,22 @@ function declarationSites(name, sf) {
 	return hits;
 }
 
-/** `import { X } from "./y"` 를 따라간다. */
+/**
+ * 이 이름이 import 로 들어온 것이면, 값이 적혀 있는 **파일과 이름**.
+ *
+ * 판정은 `scripts/lib/bindings.mjs` 하나가 한다 — named·default 는 물론
+ * 네임스페이스·`export default`·재수출(`export { x } from "…"`, `export *`)까지
+ * 같은 규칙으로 따라간다. 예전에는 이 파일이 import 선언을 직접 읽었고, named
+ * import 와 그 파일의 `const` 선언만 알았다. 그래서 import **형태** 한 겹만
+ * 바꾸면 영구히 꺼 둔 버튼이 열린 것으로 읽혔다(14회차 지적 2).
+ *
+ * 값이 하나로 정해지지 않는 자리(네임스페이스 전체, `export default <식>`)는
+ * 여기서 `null` 이다. 그 둘은 멤버를 물을 때 `constAccessValue` 가 따로 푼다.
+ */
 function importedBinding(name, sf, env) {
-	if (!env) return null;
-	let found = null;
-	const visit = (n) => {
-		if (found) return;
-		if (ts.isImportDeclaration(n) && n.importClause && ts.isStringLiteral(n.moduleSpecifier)) {
-			const clause = n.importClause;
-			const named = clause.namedBindings;
-			let exported = null;
-			if (clause.name && clause.name.text === name) exported = "default";
-			if (named && ts.isNamedImports(named)) {
-				for (const el of named.elements) {
-					if (el.name.text !== name) continue;
-					exported = el.propertyName ? el.propertyName.text : el.name.text;
-				}
-			}
-			if (exported) {
-				const path = env.resolve(sf.fileName, n.moduleSpecifier.text);
-				const target = path ? env.sourceFile(path) : null;
-				if (target) found = { name: exported, sf: target };
-			}
-		}
-		ts.forEachChild(n, visit);
-	};
-	visit(sf);
-	return found;
+	const site = importedValueSite(name, sf, env);
+	if (!site || !site.name) return null;
+	return { name: site.name, sf: site.sf };
 }
 
 /**
@@ -625,6 +623,26 @@ function constAccessValue(node, sf, env, state) {
 	if (ts.isObjectLiteralExpression(base) || ts.isArrayLiteralExpression(base)) {
 		literal = base;
 	} else if (ts.isIdentifier(base)) {
+		// 네임스페이스·default import 의 멤버. `import * as flags from "./x"` 뒤의
+		// `flags.OFF` 는 x 가 내주는 `OFF` 이고, `import flags from "./x"`(그 파일이
+		// `export default { off: true }`)의 `flags.off` 는 그 객체의 속성이다.
+		// import 형태가 하나 다르다는 이유로 판정이 갈리면, 형태 한 겹으로
+		// 영구히 꺼 둔 버튼이 열린 것으로 읽힌다(14회차 지적 2).
+		const site = importedValueSite(base.text, sf, env);
+		if (site && site.namespace) {
+			const member = exportedValueSite(key, site.sf, env);
+			if (!member || !member.name) return null;
+			return constOnlyValue(member.name, member.sf, env);
+		}
+		if (site && site.defaultNode) {
+			const value = unwrapAll(site.defaultNode);
+			if (
+				!value ||
+				(!ts.isObjectLiteralExpression(value) && !ts.isArrayLiteralExpression(value))
+			)
+				return null;
+			return literalMember(value, key, site.sf);
+		}
 		const bound = constOnlyValue(base.text, sf, env);
 		const value = bound ? unwrapAll(bound.node) : null;
 		if (!value) return null;
@@ -1012,6 +1030,56 @@ export function staticChunks(node, sf, env, seen = new Set()) {
 }
 
 /**
+ * 이 템플릿이 만드는 문자열이 **빈 문자열인가**. `true`/`false`/`null`(모른다).
+ *
+ * 문자열의 참·거짓은 길이 하나로 정해진다. 그래서 물을 것은 "무슨 글자가
+ * 나오는가" 가 아니라 "한 글자라도 나오는가" 다.
+ *
+ *   - 고정 조각이 하나라도 비어 있지 않으면 → 빈 문자열이 아니다(참인 값).
+ *   - 고정 조각이 모두 비어 있으면 삽입을 본다. 삽입이 정적으로 글자를
+ *     만들면(`${true}` 는 `"true"`) 역시 빈 문자열이 아니다. 모든 삽입이
+ *     정적으로 빈 문자열이면 빈 문자열이다.
+ *   - 그 밖은 모른다. `` `${x}` `` 는 x 가 무엇이냐에 따라 갈린다.
+ *
+ * `${false}`·`${0}`·`${null}` 이 참인 값이라는 데 주의한다 — 글자로 바뀌면
+ * `"false"`·`"0"`·`"null"` 이고, 모두 비어 있지 않다(14회차 지적 3).
+ */
+function templateEmptiness(node, sf, env, seen) {
+	if (node.head.text.length > 0) return false;
+	let known = true;
+	for (const span of node.templateSpans) {
+		if (span.literal.text.length > 0) return false;
+		const piece = staticText(span.expression, sf, env, seen);
+		if (piece === null) known = false;
+		else if (piece.length > 0) return false;
+	}
+	return known ? true : null;
+}
+
+/** 이 식이 글자로 바뀌면 무엇인가. 정적으로 정해지지 않으면 `null`. */
+function staticText(node, sf, env, seen) {
+	const n = unwrapAll(node);
+	if (!n) return null;
+	if (ts.isStringLiteral(n) || ts.isNoSubstitutionTemplateLiteral(n)) return n.text;
+	if (ts.isNumericLiteral(n)) return String(Number(n.text));
+	if (n.kind === ts.SyntaxKind.TrueKeyword) return "true";
+	if (n.kind === ts.SyntaxKind.FalseKeyword) return "false";
+	if (n.kind === ts.SyntaxKind.NullKeyword) return "null";
+	if (ts.isIdentifier(n) && n.text === "undefined") return "undefined";
+	if (ts.isVoidExpression(n)) return "undefined";
+	if (ts.isTemplateExpression(n)) {
+		let out = n.head.text;
+		for (const span of n.templateSpans) {
+			const piece = staticText(span.expression, sf, env, seen);
+			if (piece === null) return null;
+			out += piece + span.literal.text;
+		}
+		return out;
+	}
+	return null;
+}
+
+/**
  * 이 식이 **언제나 널**인가. `true` 면 언제나 널, `false` 면 언제나 널이 아님,
  * `null` 이면 모른다.
  *
@@ -1024,6 +1092,9 @@ function staticNullish(node, sf, env, seen) {
 	if (!n) return null;
 	if (n.kind === ts.SyntaxKind.NullKeyword) return true;
 	if (ts.isIdentifier(n) && n.text === "undefined") return true;
+	// `void <아무 식>` 은 언제나 `undefined` 다. 안쪽 식이 무엇이든 결과는
+	// 하나뿐이라 여기서 따라갈 것이 없다(14회차 지적 1).
+	if (ts.isVoidExpression(n)) return true;
 	if (
 		n.kind === ts.SyntaxKind.TrueKeyword ||
 		n.kind === ts.SyntaxKind.FalseKeyword ||
@@ -1080,6 +1151,27 @@ export function alwaysTruthy(node, sf, env, seen = new Set()) {
 	if (ts.isStringLiteral(n) || ts.isNoSubstitutionTemplateLiteral(n))
 		return n.text.length > 0;
 	if (ts.isNumericLiteral(n)) return Number(n.text) !== 0;
+	if (ts.isBigIntLiteral(n)) return !/^0n?$/.test(n.text);
+	// 객체·배열·함수·정규식·`new X()` 는 만들자마자 참인 값이다. React 에서
+	// `disabled={{}}` 는 누를 수 없는 버튼이다(14회차 지적 3). 빈 객체·빈 배열도
+	// 참이라는 것이 이 자리의 뜻이다 — "비어 있음" 과 "거짓" 은 다르다.
+	if (
+		ts.isObjectLiteralExpression(n) ||
+		ts.isArrayLiteralExpression(n) ||
+		ts.isArrowFunction(n) ||
+		ts.isFunctionExpression(n) ||
+		ts.isClassExpression(n) ||
+		ts.isNewExpression(n) ||
+		ts.isRegularExpressionLiteral(n) ||
+		ts.isJsxElement(n) ||
+		ts.isJsxSelfClosingElement(n) ||
+		ts.isJsxFragment(n)
+	)
+		return true;
+	if (ts.isTemplateExpression(n)) {
+		const filled = templateEmptiness(n, sf, env, seen);
+		return filled === false;
+	}
 	if (ts.isPrefixUnaryExpression(n) && n.operator === ts.SyntaxKind.ExclamationToken)
 		return alwaysFalsy(n.operand, sf, env, seen);
 	// 삼항은 **실제로 도는 갈래**로 판정한다. 조건이 언제나 참이면 결과는 언제나
@@ -1159,9 +1251,23 @@ function alwaysFalsy(node, sf, env, seen) {
 	if (n.kind === ts.SyntaxKind.FalseKeyword) return true;
 	if (n.kind === ts.SyntaxKind.NullKeyword) return true;
 	if (ts.isIdentifier(n) && n.text === "undefined") return true;
+	// `void <아무 식>` 은 언제나 `undefined` 이고, `undefined` 는 거짓이다.
+	if (ts.isVoidExpression(n)) return true;
 	if (ts.isStringLiteral(n) || ts.isNoSubstitutionTemplateLiteral(n))
 		return n.text.length === 0;
 	if (ts.isNumericLiteral(n)) return Number(n.text) === 0;
+	if (ts.isBigIntLiteral(n)) return /^0n?$/.test(n.text);
+	if (ts.isTemplateExpression(n)) return templateEmptiness(n, sf, env, seen) === true;
+	if (
+		ts.isObjectLiteralExpression(n) ||
+		ts.isArrayLiteralExpression(n) ||
+		ts.isArrowFunction(n) ||
+		ts.isFunctionExpression(n) ||
+		ts.isClassExpression(n) ||
+		ts.isNewExpression(n) ||
+		ts.isRegularExpressionLiteral(n)
+	)
+		return false;
 	if (ts.isPrefixUnaryExpression(n) && n.operator === ts.SyntaxKind.ExclamationToken)
 		return alwaysTruthy(n.operand, sf, env, new Set(seen));
 	// 삼항은 참 쪽과 대칭이다. 조건이 언제나 참이면 참 갈래로, 언제나 거짓이면

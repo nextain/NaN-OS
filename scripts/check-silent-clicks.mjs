@@ -169,12 +169,15 @@ function unwrap(node) {
  * `void` 가 "값 없이 나간다" 는 근거 그 자체다.
  */
 function unwrapDiscarded(node) {
+	// 겹의 수를 세지 않는다. 예전에는 여덟 번만 돌았고, 아홉 번째 `void` 에서
+	// 알맹이는 여전히 `el.click()` 인데 클릭이 아니었다(14회차 지적 7). 그런
+	// 숫자는 한계가 아니라 "몇 겹을 더 씌우면 통과하는가" 를 알려 주는 눈금이다.
+	// 껍데기는 언제나 자식 하나로 내려가므로 이 반복은 반드시 끝난다.
 	let current = unwrap(node);
-	for (let i = 0; i < 8 && current; i += 1) {
-		if (ts.isVoidExpression(current)) current = unwrap(current.expression);
-		else break;
+	for (;;) {
+		if (!current || !ts.isVoidExpression(current)) return current ?? null;
+		current = unwrap(current.expression);
 	}
-	return current ?? null;
 }
 
 /**

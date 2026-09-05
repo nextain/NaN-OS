@@ -284,6 +284,132 @@ function skipAttribute(tokens, at) {
 	return skipBalanced(tokens, j, "[", "]");
 }
 
+/**
+ * 이 파일의 `use` 선언이 만드는 지역 이름 전부.
+ *
+ * `{ local, path, glob, line, at }` — `path` 는 마디 배열(`["tauri", "command"]`),
+ * `glob` 은 `use tauri::*` 처럼 별로 끝난 것이다(그때 `local` 은 `null`),
+ * `at` 은 그 선언의 `use` 토큰 자리다. 별명(`use tauri::command as cmd`)은
+ * `local` 이 `cmd`, `path` 는 원래 경로다.
+ *
+ * 왜 필요한가: Rust 에서 `#[tauri::command]` 와 `use tauri::command; #[command]`
+ * 는 같은 proc-macro 다. 속성에 **적힌 경로**만 보면 뒤쪽이 명령에서 빠진다
+ * (14회차 지적 5). 이 저장소의 STT 플러그인이 이미 그 형태로 명령을 연다.
+ * 공개 항목을 세는 쪽(`check-data-home-boundary.mjs`)도 `pub use` 재수출의
+ * 이름을 여기서 읽는다(14회차 지적 8).
+ */
+export function useDeclarations(tokens) {
+	const found = [];
+	for (let i = 0; i < tokens.length; i += 1) {
+		if (tokens[i].kind !== "ident" || tokens[i].text !== "use") continue;
+		// 이 선언은 `;` 까지다. 중괄호 묶음 안의 `;` 는 없지만 짝으로 건너뛴다.
+		let end = i + 1;
+		while (end < tokens.length) {
+			const t = tokens[end];
+			if (t.kind === "punct" && t.text === "{") {
+				end = skipBalanced(tokens, end, "{", "}");
+				continue;
+			}
+			if (t.kind === "punct" && t.text === ";") break;
+			end += 1;
+		}
+		const before = found.length;
+		readUseTree(tokens, i + 1, end, [], found);
+		for (let k = before; k < found.length; k += 1) found[k].at = i;
+		i = end;
+	}
+	return found;
+}
+
+/** `from`(포함)부터 `to`(제외)까지가 `use` 나무 하나. 잎마다 `out` 에 담는다. */
+function readUseTree(tokens, from, to, prefix, out) {
+	const path = [...prefix];
+	let j = from;
+	while (j < to) {
+		const t = tokens[j];
+		if (t.kind === "punct") {
+			// `::` 의 두 토큰과 앞머리 `::` 는 마디가 아니다.
+			if (t.text === ":") {
+				j += 1;
+				continue;
+			}
+			if (t.text === "*") {
+				out.push({ local: null, path, glob: true, line: t.line });
+				return;
+			}
+			if (t.text === "{") {
+				const close = skipBalanced(tokens, j, "{", "}") - 1;
+				let start = j + 1;
+				let depth = 0;
+				for (let k = j + 1; k < close; k += 1) {
+					const u = tokens[k];
+					if (u.kind !== "punct") continue;
+					if (u.text === "{") depth += 1;
+					else if (u.text === "}") depth -= 1;
+					else if (u.text === "," && depth === 0) {
+						readUseTree(tokens, start, k, path, out);
+						start = k + 1;
+					}
+				}
+				if (start < close) readUseTree(tokens, start, close, path, out);
+				return;
+			}
+			j += 1;
+			continue;
+		}
+		if (t.kind !== "ident") {
+			j += 1;
+			continue;
+		}
+		if (t.text === "as") {
+			const alias = tokens[j + 1];
+			out.push({
+				local: alias?.kind === "ident" ? alias.text : null,
+				path,
+				glob: false,
+				line: t.line,
+			});
+			return;
+		}
+		path.push(t.text);
+		j += 1;
+	}
+	if (path.length > prefix.length) {
+		out.push({ local: path[path.length - 1], path, glob: false, line: tokens[from]?.line ?? 0 });
+	}
+}
+
+/** 그 `use` 잎이 `tauri::command` proc-macro 인가. */
+function isTauriCommandUse(leaf) {
+	return leaf.path.length === 2 && leaf.path[0] === "tauri" && leaf.path[1] === "command";
+}
+
+/**
+ * 이 파일에서 명령 속성으로 쓸 수 있는 **한 마디 이름** 전부.
+ *
+ * `use tauri::command;` 면 `command`, `use tauri::command as cmd;` 면 `cmd`,
+ * `use tauri::*;` 면 `command` 다. 같은 이름을 다른 크레이트에서 명시적으로
+ * 들여왔으면(`use clap::command;`) 그쪽이 이기므로 넣지 않는다 — Rust 도 명시
+ * import 를 glob 보다 먼저 고른다.
+ */
+function commandAttributeNames(tokens) {
+	const explicit = new Map();
+	let tauriGlob = false;
+	for (const leaf of useDeclarations(tokens)) {
+		if (leaf.glob) {
+			if (leaf.path.length === 1 && leaf.path[0] === "tauri") tauriGlob = true;
+			continue;
+		}
+		if (!leaf.local) continue;
+		if (isTauriCommandUse(leaf)) explicit.set(leaf.local, true);
+		else if (leaf.local === "command") explicit.set(leaf.local, false);
+	}
+	const names = new Set();
+	for (const [local, isCommand] of explicit) if (isCommand) names.add(local);
+	if (tauriGlob && !explicit.has("command")) names.add("command");
+	return names;
+}
+
 /** `tokens[at]` 부터 `tauri` `::` `command` 세 마디가 이어지는가. */
 function isTauriCommandPath(tokens, at) {
 	return (
@@ -305,15 +431,36 @@ function isTauriCommandPath(tokens, at) {
  * (12회차 지적 4). 짝이 맞는 `]` 까지 전부 보므로 중첩된 `cfg_attr` 도 같다.
  * 문자열은 토큰 하나(`kind: "string"`)라서 글자만 같은 것은 연쇄가 아니다.
  */
-function isTauriCommandAttribute(tokens, at) {
+function isTauriCommandAttribute(tokens, at, localNames) {
 	let j = at + 1;
 	if (tokens[j]?.kind === "punct" && tokens[j].text === "!") j += 1;
 	if (!(tokens[j]?.kind === "punct" && tokens[j].text === "[")) return false;
 	const end = skipBalanced(tokens, j, "[", "]");
 	for (let k = j + 1; k < end; k += 1) {
 		if (isTauriCommandPath(tokens, k)) return true;
+		if (isBareCommandName(tokens, k, localNames)) return true;
 	}
 	return false;
+}
+
+/**
+ * `tokens[at]` 가 `use` 로 들여온 명령 이름을 **한 마디로** 적은 자리인가.
+ *
+ * 앞뒤에 `::` 가 붙어 있으면 더 긴 경로의 마디이므로 아니다 — `clap::command`
+ * 는 다른 크레이트이고, `command::inner` 는 모듈이다.
+ */
+function isBareCommandName(tokens, at, localNames) {
+	const t = tokens[at];
+	if (!t || t.kind !== "ident" || !localNames?.has(t.text)) return false;
+	if (tokens[at - 1]?.kind === "punct" && tokens[at - 1].text === ":") return false;
+	if (
+		tokens[at + 1]?.kind === "punct" &&
+		tokens[at + 1].text === ":" &&
+		tokens[at + 2]?.kind === "punct" &&
+		tokens[at + 2].text === ":"
+	)
+		return false;
+	return true;
 }
 
 /**
@@ -328,11 +475,13 @@ function isTauriCommandAttribute(tokens, at) {
 export function tauriCommandBodies(source) {
 	const tokens = tokenizeRust(source);
 	const commands = new Map();
+	// `use tauri::command;` 로 들여온 한 마디 이름도 같은 속성이다.
+	const localNames = commandAttributeNames(tokens);
 
 	for (let i = 0; i < tokens.length; i += 1) {
 		const t = tokens[i];
 		if (t.kind !== "punct" || t.text !== "#") continue;
-		if (!isTauriCommandAttribute(tokens, i)) continue;
+		if (!isTauriCommandAttribute(tokens, i, localNames)) continue;
 
 		// 속성과 수식어를 건너뛰어 `fn` 에 닿는다. 횟수를 세지 않는다 — 토큰 열은
 		// 유한하고, 아래 갈래는 모두 `j` 를 앞으로만 옮기므로 반드시 끝난다.

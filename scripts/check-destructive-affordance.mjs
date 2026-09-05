@@ -59,9 +59,10 @@
  */
 
 import { execFileSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
+import { dirname, join, normalize } from "node:path";
 import ts from "typescript";
-import { resolveBinding, unwrap } from "./lib/bindings.mjs";
+import { resolveBinding, resolveCallee, unwrap } from "./lib/bindings.mjs";
 import { tauriCommandBodies } from "./lib/rust-tokens.mjs";
 
 const SHELL = "packages/shell";
@@ -213,11 +214,58 @@ function tracked(dir, extension) {
  * 건너뛴 뒤 `fn <이름>` 을 읽는다. 데이터 홈 경계 검사가 쓰는 것과 같은
  * 토크나이저다 — 세는 자리가 하나면 뚫린 자리도 하나에서 고쳐진다.
  */
+/**
+ * 이 앱이 짓는 Rust 크레이트의 소스 뿌리 전부.
+ *
+ * `packages/shell/src-tauri` 하나만 돌던 동안, 같은 저장소의 플러그인 크레이트
+ * (`plugins/tauri-plugin-stt`)가 여는 명령은 목록에 없었다. 목록에 없으면 프런트의
+ * `invoke("…")` 는 `commands.includes` 에서 통째로 건너뛰어진다 — 확인 없는 파괴
+ * 조작이 **디렉터리를 옮기는 것만으로** 초록을 받았다(14회차 지적 9).
+ *
+ * 뿌리를 손으로 적으면 다음 크레이트에서 같은 일이 난다. 그래서 `Cargo.toml` 에게
+ * 묻는다 — `[workspace] members` 와 `path = "…"` 로 적힌 지역 의존을 따라가며
+ * 닿는 크레이트마다 `src` 를 더한다. 크레이트를 하나 붙이려면 Cargo 에 그 자리를
+ * 적어야 하고, 적으면 여기서 보인다.
+ *
+ * 넓어지는 쪽으로만 틀린다 — `path` 를 넉넉히 읽어 소스가 아닌 자리를 더해도
+ * 거기에 `#[tauri::command]` 가 없으면 목록은 그대로다.
+ */
+function crateSourceRoots(entry = `${SHELL}/src-tauri/Cargo.toml`) {
+	const roots = [];
+	const seen = new Set();
+	const queue = [normalize(entry)];
+	while (queue.length) {
+		const manifest = queue.shift();
+		if (seen.has(manifest)) continue;
+		seen.add(manifest);
+		if (!existsSync(manifest)) continue;
+		const dir = dirname(manifest);
+		roots.push(join(dir, "src"));
+		const text = readFileSync(manifest, "utf8");
+		for (const relative of localCrateReferences(text)) {
+			queue.push(normalize(join(dir, relative, "Cargo.toml")));
+		}
+	}
+	return roots;
+}
+
+/** `Cargo.toml` 에 적힌 지역 크레이트 자리 — `path = "…"` 와 `members = [ … ]`. */
+function localCrateReferences(text) {
+	const found = [];
+	for (const m of text.matchAll(/\bpath\s*=\s*"([^"]+)"/g)) found.push(m[1]);
+	for (const m of text.matchAll(/\bmembers\s*=\s*\[([\s\S]*?)\]/g)) {
+		for (const entry of m[1].matchAll(/"([^"]+)"/g)) found.push(entry[1]);
+	}
+	return found;
+}
+
 function tauriCommands() {
 	const names = new Map();
-	for (const file of tracked(`${SHELL}/src-tauri/src`, ".rs")) {
-		for (const [name, body] of tauriCommandBodies(readFileSync(file, "utf8"))) {
-			names.set(name, body);
+	for (const root of crateSourceRoots()) {
+		for (const file of tracked(root, ".rs")) {
+			for (const [name, body] of tauriCommandBodies(readFileSync(file, "utf8"))) {
+				names.set(name, body);
+			}
 		}
 	}
 	return names;
@@ -437,6 +485,21 @@ function isInvokeModuleExpression(node) {
 }
 
 /**
+ * 멤버 접근의 이름과 왼쪽 식. 리터럴 키(`invoke["call"]`)도 속성(`invoke.call`)과
+ * 같게 읽는다 — 같은 메서드를 대괄호로 적었을 뿐이다(14회차 지적 6). 동적 키는
+ * `null` 이고, 그것은 이 게이트의 경계다.
+ */
+function memberOf(node) {
+	if (!node) return null;
+	if (ts.isPropertyAccessExpression(node)) return { name: node.name.text, base: node.expression };
+	if (ts.isElementAccessExpression(node)) {
+		const key = unwrap(node.argumentExpression);
+		if (key && ts.isStringLiteralLike(key)) return { name: key.text, base: node.expression };
+	}
+	return null;
+}
+
+/**
  * 이 식을 부르면 Tauri 명령을 부르는 것인가. 그렇다면 **명령 이름이 몇 번째
  * 인자**인지 돌려준다. 아니면 `null`.
  *
@@ -466,27 +529,27 @@ function invokeAliasOffset(expr, bindings) {
 			? (bindings.offsets.get(node.text) ?? 0)
 			: null;
 	}
-	if (ts.isPropertyAccessExpression(node)) {
+	const member = memberOf(node);
+	if (member) {
 		// `ns.invoke`
 		if (
-			node.name.text === "invoke" &&
-			ts.isIdentifier(node.expression) &&
-			bindings.namespaces.has(node.expression.text)
+			member.name === "invoke" &&
+			ts.isIdentifier(member.base) &&
+			bindings.namespaces.has(member.base.text)
 		)
 			return 0;
 		// `invoke.call` — 첫 인자가 this 라 이름은 한 칸 뒤다.
-		const base = invokeAliasOffset(node.expression, bindings);
+		const base = invokeAliasOffset(member.base, bindings);
 		if (base === null) return null;
-		if (node.name.text === "call") return base < 0 ? -1 : base + 1;
-		if (node.name.text === "apply") return -1;
+		if (member.name === "call") return base < 0 ? -1 : base + 1;
+		if (member.name === "apply") return -1;
 		return null;
 	}
 	// `invoke.bind(null)` / `invoke.bind(null, "memory_delete_fact")`
 	if (ts.isCallExpression(node)) {
-		const callee = unwrap(node.expression);
-		if (!ts.isPropertyAccessExpression(callee) || callee.name.text !== "bind")
-			return null;
-		const base = invokeAliasOffset(callee.expression, bindings);
+		const bound = memberOf(unwrap(node.expression));
+		if (!bound || bound.name !== "bind") return null;
+		const base = invokeAliasOffset(bound.base, bindings);
 		if (base === null || base < 0) return base;
 		// 첫 인자는 this, 나머지는 **미리 먹인 인자**다. 하나라도 먹였으면 명령
 		// 이름이 호출부 인자에 없다 — 자리를 옮겨 세는 것이 아니라 **모른다**
@@ -620,7 +683,24 @@ function invokeBindings(sources) {
 	/** 이 호출이 Tauri 명령 호출이면 명령 이름의 인자 자리, 아니면 null. */
 	const invokeCallOffset = (node, file) => {
 		if (!ts.isCallExpression(node)) return null;
-		return invokeAliasOffset(node.expression, bindingsFor(file));
+		const bindings = bindingsFor(file);
+		// 먼저 공용 모듈에게 **호출식 전체**를 묻는다. 그러면 `.call`/`.apply`/`.bind`
+		// 와 리터럴 키(`invoke["call"]`)가 알림·무음 게이트와 같은 규칙으로 풀리고,
+		// 인자 자리도 그쪽이 아는 `argShift`/`argsUnknown` 이 그대로 답한다. 옛 코드는
+		// callee 식에 `resolveBinding` 만 걸어, 공용 모듈이 이미 아는 답을 버렸다
+		// (14회차 지적 6).
+		if (bindings.sourceFile) {
+			const callee = resolveCallee(node, bindings.sourceFile, bindings.env);
+			if (
+				callee &&
+				callee.module &&
+				INVOKE_MODULES.has(callee.module) &&
+				callee.imported === "invoke"
+			)
+				return callee.argsUnknown ? -1 : callee.argShift;
+		}
+		// 못 풀면 이 게이트만의 보탬으로 내려간다 — 고정점이 키운 감싸기 함수들이다.
+		return invokeAliasOffset(node.expression, bindings);
 	};
 	const callsInvoke = (node, file) => invokeCallOffset(node, file) !== null;
 

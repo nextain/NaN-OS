@@ -251,6 +251,38 @@ function isDeclaredLocally(name, sf) {
 	return declaredNames(sf).has(name);
 }
 
+const DECLARED_TYPES = new WeakMap();
+
+/**
+ * 타입 자리의 선언 이름(별칭·인터페이스·열거).
+ *
+ * 값 이름과 따로 든다. 타입과 값은 서로 다른 이름 공간이라, 타입 별칭 하나가
+ * 같은 이름의 **전역 값**을 가리게 하면 안 된다 — `type fetch = …` 는
+ * `fetch(…)` 를 가리지 않는다. 반대로 파일이 그 이름으로 무엇을 내주는지
+ * 물을 때는 타입도 답이 된다.
+ */
+function declaredTypeNames(sf) {
+	const cached = DECLARED_TYPES.get(sf);
+	if (cached) return cached;
+	const names = new Set();
+	const visit = (n) => {
+		if (!n) return;
+		if (
+			(ts.isTypeAliasDeclaration(n) ||
+				ts.isInterfaceDeclaration(n) ||
+				ts.isEnumDeclaration(n) ||
+				ts.isModuleDeclaration(n)) &&
+			n.name &&
+			ts.isIdentifier(n.name)
+		)
+			names.add(n.name.text);
+		ts.forEachChild(n, visit);
+	};
+	visit(sf);
+	DECLARED_TYPES.set(sf, names);
+	return names;
+}
+
 function globalBinding(name) {
 	return {
 		module: null,
@@ -435,6 +467,79 @@ function memberOfModule(base, name, sf, env, seen) {
 	const target = env.sourceFile(path);
 	if (!target) return null;
 	return resolveExported(name, target, env, seen);
+}
+
+/**
+ * 이 이름이 가리키는 값이 **어느 파일의 어느 이름**인가.
+ *
+ * `resolveBinding` 은 "어느 모듈의 어느 export" 를 답한다. 값을 실제로 읽으려는
+ * 쪽(영구 꺼짐·문자열 후보 판정)은 그것 말고 **파일과 이름**이 필요하다.
+ * 예전에는 그 일이 `jsx-static.mjs` 안에 따로 있었고, named·default import 만
+ * 보고 재수출과 네임스페이스는 몰랐다 — import 형태 한 겹만 바꾸면 영구히 꺼 둔
+ * 버튼이 열린 것으로 읽혔다(14회차 지적 2). 이제 import 선언을 읽는 자리는
+ * 이 모듈 하나다.
+ *
+ * 돌려주는 것:
+ *   - `{ sf, name }` — 그 파일에 그 이름으로 선언돼 있다
+ *   - `{ sf, namespace: true }` — 그 파일 전체가 네임스페이스다
+ *   - `{ sf, defaultNode }` — `export default <식>` 의 그 식
+ *   - `null` — 모른다
+ */
+export function importedValueSite(name, sf, env, state) {
+	if (!env || typeof env.resolve !== "function" || typeof env.sourceFile !== "function")
+		return null;
+	const seen = newSeen(state);
+	const hit = importBindings(sf).get(name);
+	if (!hit) return null;
+	const path = env.resolve(sf.fileName, hit.module);
+	if (!path) return null;
+	const target = env.sourceFile(path);
+	if (!target) return null;
+	return exportedValueSite(hit.imported, target, env, seen);
+}
+
+/** 이 파일이 그 이름으로 내주는 값의 자리. `importedValueSite` 와 같은 모양이다. */
+export function exportedValueSite(name, target, env, state) {
+	const seen = newSeen(state);
+	if (!target) return null;
+	const key = visitKey(target, `site:${name}`);
+	if (seen.has(key)) return null;
+	seen.add(key);
+	if (name === "*") return { sf: target, namespace: true };
+	if (name === "default") {
+		for (const stmt of target.statements) {
+			if (ts.isExportAssignment(stmt) && !stmt.isExportEquals)
+				return { sf: target, defaultNode: stmt.expression };
+		}
+	}
+	// 그 파일에 그 이름의 선언이 있으면 여기가 값의 자리다.
+	if (
+		name !== "default" &&
+		(declaredNames(target).has(name) || declaredTypeNames(target).has(name))
+	)
+		return { sf: target, name };
+	const hop = (module, exported) => {
+		if (!env || typeof env.resolve !== "function") return null;
+		const path = env.resolve(target.fileName, module);
+		if (!path) return null;
+		const next = env.sourceFile(path);
+		if (!next || next === target) return null;
+		return exportedValueSite(exported, next, env, seen);
+	};
+	// `import { off } from "./inner"; export { off }` 와 `import * as ns` 재수출
+	const again = importBindings(target).get(name);
+	if (again) return hop(again.module, again.imported);
+	const { named, stars } = reexportBindings(target);
+	const re = named.get(name);
+	if (re) {
+		if (re.module) return hop(re.module, re.imported);
+		return exportedValueSite(re.imported, target, env, seen);
+	}
+	for (const module of stars) {
+		const through = hop(module, name);
+		if (through) return through;
+	}
+	return null;
 }
 
 /**

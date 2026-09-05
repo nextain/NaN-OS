@@ -36,6 +36,13 @@ interface RustTokensModule {
 		code: string;
 		strings: Array<{ value: string; line: number }>;
 	};
+	useDeclarations(tokens: Array<{ kind: string; text: string; line: number }>): Array<{
+		local: string | null;
+		path: string[];
+		glob: boolean;
+		line: number;
+		at: number;
+	}>;
 }
 
 let rust: RustTokensModule;
@@ -189,6 +196,73 @@ describe("Rust 명령 추출은 거리를 재지 않는다", () => {
 			"fn the_real_one() {}",
 		].join("\n");
 		expect([...rust.tauriCommandBodies(source).keys()]).toEqual(["the_real_one"]);
+	});
+
+	it("`use tauri::command;` 뒤의 `#[command]` 도 명령이다", () => {
+		// 14회차 지적 5. 판정이 속성에 **적힌 경로**만 보던 동안, 이 저장소의 STT
+		// 플러그인이 이미 쓰던 형태가 목록에서 빠졌다. 목록에 없으면 프런트의
+		// `invoke("…")` 는 확인 검사에서 통째로 건너뛰어진다.
+		const source = [
+			"use tauri::{command, AppHandle};",
+			"",
+			"#[command]",
+			"pub fn ghost_wipe_everything(root: String) -> Result<(), String> {",
+			"    std::fs::remove_dir_all(&root).map_err(|e| e.to_string())",
+			"}",
+		].join("\n");
+		const commands = rust.tauriCommandBodies(source);
+		expect([...commands.keys()]).toEqual(["ghost_wipe_everything"]);
+		expect(commands.get("ghost_wipe_everything")).toContain("remove_dir_all");
+	});
+
+	it("별명과 glob 으로 들여온 이름도 같은 속성이다", () => {
+		const alias = "use tauri::command as cmd;\n#[cmd]\nfn wipe_alias() {}";
+		const braced = "use tauri::{command as cmd, Manager};\n#[cmd]\nfn wipe_braced() {}";
+		const glob = "use tauri::*;\n#[command]\nfn wipe_glob() {}";
+		const nested = "use tauri::command;\n#[cfg_attr(all(), command)]\nfn wipe_nested() {}";
+		expect([...rust.tauriCommandBodies(alias).keys()]).toEqual(["wipe_alias"]);
+		expect([...rust.tauriCommandBodies(braced).keys()]).toEqual(["wipe_braced"]);
+		expect([...rust.tauriCommandBodies(glob).keys()]).toEqual(["wipe_glob"]);
+		expect([...rust.tauriCommandBodies(nested).keys()]).toEqual(["wipe_nested"]);
+	});
+
+	it("다른 크레이트의 `command` 는 명령이 아니다", () => {
+		// 이름이 같다고 같은 proc-macro 가 아니다. 명시 import 는 glob 보다 먼저
+		// 고르므로, `use clap::command` 가 있으면 `use tauri::*` 가 있어도 아니다.
+		const other = "use clap::command;\n#[command]\nfn not_a_command() {}";
+		const shadowed = [
+			"use tauri::*;",
+			"use clap::command;",
+			"#[command]",
+			"fn also_not_a_command() {}",
+		].join("\n");
+		const qualified = "use tauri::command;\n#[clap::command]\nfn qualified_elsewhere() {}";
+		expect([...rust.tauriCommandBodies(other).keys()]).toEqual([]);
+		expect([...rust.tauriCommandBodies(shadowed).keys()]).toEqual([]);
+		expect([...rust.tauriCommandBodies(qualified).keys()]).toEqual([]);
+	});
+
+	it("`use` 선언의 잎을 지역 이름·경로로 읽는다", () => {
+		// 공개 항목을 세는 쪽(`check-data-home-boundary.mjs`)이 `pub use` 재수출의
+		// 이름을 이 답에서 읽는다(14회차 지적 8).
+		const tokens = rust.tokenizeRust(
+			[
+				"pub use dirs::home_dir;",
+				"use std::path::{Path, PathBuf};",
+				"use tauri::command as cmd;",
+				"pub use crate::inner::*;",
+			].join("\n"),
+		);
+		const leaves = rust
+			.useDeclarations(tokens)
+			.map((leaf) => [leaf.path.join("::"), leaf.local, leaf.glob]);
+		expect(leaves).toEqual([
+			["dirs::home_dir", "home_dir", false],
+			["std::path::Path", "Path", false],
+			["std::path::PathBuf", "PathBuf", false],
+			["tauri::command", "cmd", false],
+			["crate::inner", null, true],
+		]);
 	});
 
 	it("주석 안의 `#[tauri::command]` 는 명령이 아니다", () => {

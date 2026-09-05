@@ -83,7 +83,12 @@
  */
 import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
-import { skipBalanced, splitCodeAndStrings, tokenizeRust } from "./lib/rust-tokens.mjs";
+import {
+	skipBalanced,
+	splitCodeAndStrings,
+	tokenizeRust,
+	useDeclarations,
+} from "./lib/rust-tokens.mjs";
 
 const SHELL = "packages/shell";
 const RUST_ROOT = `${SHELL}/src-tauri/src`;
@@ -223,7 +228,14 @@ const PUBLIC_API = new Map([
 
 /** 항목 이름 앞에 올 수 있는, 이름이 아닌 낱말. */
 const ITEM_MODIFIERS = new Set(["async", "unsafe", "extern", "default"]);
-/** 이름을 뒤에 두는 항목 낱말. */
+/**
+ * 이름을 뒤에 두는 항목 낱말.
+ *
+ * `use` 는 이름이 뒤가 아니라 경로의 **잎**에 있다(`pub use dirs::home_dir;` 은
+ * `home_dir` 을 내준다). 그 낱말이 빠져 있던 동안 `pub use` 재수출은 공개 항목
+ * 세기를 통째로 빠져나갔다 — 목록에 없는 `pub` 이 붙어도 조용히 재료가 다시
+ * 열렸다(14회차 지적 8). 아래 `publicItems` 가 `use` 만 따로 읽는다.
+ */
 const ITEM_KEYWORDS = new Set([
 	"fn",
 	"enum",
@@ -234,6 +246,10 @@ const ITEM_KEYWORDS = new Set([
 	"mod",
 	"trait",
 	"union",
+	"use",
+	"macro",
+	"macro_rules",
+	"crate",
 ]);
 
 /**
@@ -245,6 +261,12 @@ const ITEM_KEYWORDS = new Set([
 function publicItems(source) {
 	const tokens = tokenizeRust(source);
 	const items = [];
+	// `pub use` 가 내주는 이름은 경로의 잎이다. 선언 자리로 찾아 쓴다.
+	const useLeaves = new Map();
+	for (const leaf of useDeclarations(tokens)) {
+		if (!useLeaves.has(leaf.at)) useLeaves.set(leaf.at, []);
+		useLeaves.get(leaf.at).push(leaf);
+	}
 	let depth = 0;
 	let implType = null;
 	let implDepth = -1;
@@ -294,7 +316,20 @@ function publicItems(source) {
 			}
 			if (ITEM_KEYWORDS.has(tk.text)) {
 				kind = tk.text;
-				name = tokens[j + 1]?.kind === "ident" ? tokens[j + 1].text : null;
+				if (tk.text === "use") {
+					// 재수출은 잎마다 이름 하나다. glob 은 이름을 셀 수 없으니 `*` 로
+					// 남겨 허용 목록에서 반드시 붉어지게 한다.
+					for (const leaf of useLeaves.get(j) ?? []) {
+						items.push({
+							name: leaf.glob ? `${leaf.path.join("::")}::*` : leaf.local,
+							kind: "use",
+							line: t.line,
+						});
+					}
+					kind = null;
+				} else {
+					name = tokens[j + 1]?.kind === "ident" ? tokens[j + 1].text : null;
+				}
 			}
 			break;
 		}
