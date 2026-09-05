@@ -327,14 +327,14 @@ const composedInvokes = [];
  * 면제하려면 **무엇이 그 자리를 지나는지 어디서 정하는지** 적어야 한다.
  * 새로 생기는 조립은 막고, 사라진 항목은 아래에서 낡은 면제로 잡는다.
  */
+// 면제는 **그 자리**에 건다. 파일 전체에 걸면 같은 파일에 확인 없는 파괴
+// 호출을 새로 조립해 넣어도 삼킨다 — 면제 이유가 거짓이 되어도 통과한다.
+// 자리는 감싼 함수 이름으로 적는다. 줄 번호로 적으면 위에 한 줄만 넣어도
+// 어긋나고, 그때마다 목록을 고치게 되어 아무도 읽지 않게 된다.
 const COMPOSED_ALLOWED = new Map([
 	[
-		"packages/shell/src/lib/environment-skill.ts",
+		"packages/shell/src/lib/environment-skill.ts::tauriCommands",
 		"EnvironmentCommandPort 어댑터. 지나가는 이름은 environment-skill 의 동작 표에서 리터럴로 정한다",
-	],
-	[
-		"packages/shell/src/apps/workspace/useHerdrRuntime.ts",
-		"Herdr 런타임 브리지. 명령 이름은 herdr 스냅샷이 주는 고정 목록이고 파괴 명령은 그 목록에 없다",
 	],
 ]);
 let callSites = 0;
@@ -352,8 +352,25 @@ for (const [file, source] of sources) {
 		// 이름을 상수에 담아 두는 것은 조립이 아니다 — 그 상수의 값이
 		// 리터럴이면 게이트가 따라갈 수 있다.
 		if (/^[A-Z][A-Z0-9_]*$/.test(arg)) continue;
+		// 이름을 변수로 받아도, 그 변수의 타입이 리터럴 합집합으로 묶여 있으면
+		// 어떤 명령이 지나는지 정해져 있다. 손으로 면제하지 말고 그 리터럴을
+		// 읽어 판정한다 — 면제 목록은 이유가 거짓이 되어도 그대로 남는다.
+		const union = new RegExp(
+			`\\b${arg}\\s*:\\s*((?:["'][a-z0-9_]+["']\\s*\\|\\s*)*["'][a-z0-9_]+["'])`,
+		).exec(code.slice(0, match.index));
+		if (union) {
+			const names = [...union[1].matchAll(/["']([a-z0-9_]+)["']/g)].map(
+				(m) => m[1],
+			);
+			if (names.length > 0 && !names.some((n) => commands.includes(n))) continue;
+		}
+		const enclosing = enclosingFunction(source, match.index);
+		const owner = enclosing
+			? functionNameBefore(source, enclosing.start)
+			: null;
 		composedInvokes.push({
 			file,
+			site: `${file}::${owner ?? "(이름 없는 자리)"}`,
 			line: source.slice(0, match.index).split("\n").length,
 			arg: arg.slice(0, 40),
 		});
@@ -389,10 +406,10 @@ for (const [file, source] of sources) {
 }
 
 const composedNew = composedInvokes.filter(
-	(hit) => !COMPOSED_ALLOWED.has(hit.file),
+	(hit) => !COMPOSED_ALLOWED.has(hit.site),
 );
 const composedStale = [...COMPOSED_ALLOWED.keys()].filter(
-	(file) => !composedInvokes.some((hit) => hit.file === file),
+	(site) => !composedInvokes.some((hit) => hit.site === site),
 );
 if (composedStale.length) {
 	console.error(

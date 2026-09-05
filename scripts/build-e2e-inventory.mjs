@@ -62,15 +62,27 @@ const KEY_ENV = /API_KEY|_KEY$|TOKEN|SECRET|USER_ID/;
  * 그 모듈이 내보내는 이름은 전부 대화 신호다. 새 헬퍼가 늘어도 목록을
  * 고칠 일이 없고, 고치는 것을 잊어 생기는 오분류도 없다.
  */
-const CHAT_HELPER_MODULES = ["chat", "semantic"];
+// 예전에는 모듈 이름 둘을 손으로 적었다. 그래서 다른 헬퍼 모듈에 모델을
+// 부르는 함수를 두면 결정론 칸에 들어갔다 — 손 목록을 함수에서 모듈로 옮긴
+// 것뿐이었다.
+//
+// 이제 모듈 목록도 만들지 않는다. 헬퍼 디렉터리를 전부 읽고, **모델과 말을
+// 섞는 자국**이 있는 모듈을 대화 모듈로 본다. 자국은 판정 모델 호출, 모델
+// 제공자 주소, 자격증명 이름이다.
+// 자국은 두 갈래다. 하나는 모델을 직접 부르는 것(주소·자격증명·판정 호출),
+// 다른 하나는 **앱의 대화 화면을 통해** 모델과 말하는 것이다. chat.ts 는
+// 뒤쪽이라 HTTP 자국이 하나도 없다 — 앞쪽만 보면 그 모듈이 통째로 빠진다.
+const TALKS_TO_MODEL =
+	/api\.openai\.com|api\.anthropic\.com|generativelanguage\.googleapis|openrouter|\bjudge\w*\s*\(|API_KEY|_KEY\b|GATEWAY|\.chat-message|\bassistant\w*\b|chat-input/;
 const chatHelperNames = new Set(["judge"]);
-for (const mod of CHAT_HELPER_MODULES) {
+for (const entry of readdirSync(HELPER_DIR).filter((f) => f.endsWith(".ts"))) {
 	let source;
 	try {
-		source = readFileSync(join(HELPER_DIR, `${mod}.ts`), "utf8");
+		source = readFileSync(join(HELPER_DIR, entry), "utf8");
 	} catch {
 		continue;
 	}
+	if (!TALKS_TO_MODEL.test(source)) continue;
 	for (const m of source.matchAll(
 		/^export\s+(?:async\s+)?function\s+(\w+)/gm,
 	))

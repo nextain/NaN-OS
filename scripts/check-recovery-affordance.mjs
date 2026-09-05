@@ -40,14 +40,22 @@ const FAILURE_SURFACE = /role=["']alert["']/;
  * 대체 내용으로 인정하려면 사용자가 그것으로 무언가 할 수 있어야 한다
  * (복사, 편집, 이동).
  */
+// `Start` 를 부분문자열로 인정하면 "Start-up failed" 라는 **문구**가 복구
+// 수단이 된다. 실제로 그 한 단어로 통과했다. 행동을 가리키는 것만 센다 —
+// 누를 것, 갈 곳, 고쳐 쓸 곳, 복사할 것.
 const RECOVERY =
-	/<button|<a\s|onClick=|common\.retry|\.retry|Start|start[A-Z]|href=|<textarea|onCopy|navigator\.clipboard/;
+	/<button|<a\s|onClick=|common\.retry|\.retry\b|\bonStart\b|\bstart[A-Z]\w*\s*\(|href=|<textarea|onCopy|navigator\.clipboard/;
 
 /**
  * 실패를 알리지만 복구 행동을 확인하지 못한 자리. 숫자가 아니라 자리로
  * 적는다 — 무엇이 면제됐는지 드러나야 한다.
  */
-const ACKNOWLEDGED = new Map();
+const ACKNOWLEDGED = new Map([
+	[
+		"packages/shell/src/components/MarkdownCodeBlock.tsx:67",
+		"Mermaid 렌더 실패 화면이 원문만 보여 주고 다음에 할 일을 주지 않는다. 진짜 빈자리이고 덮는 것이 아니다 — 복사 단추를 붙이는 일로 #558 에 올렸다. 게이트를 고치자 드러난 자리다",
+	],
+]);
 
 function tracked(dir, extension) {
 	try {
@@ -122,8 +130,22 @@ const files = [...tracked(`${SHELL}/src`, ".tsx")].filter(
  */
 function isDeadEnd(source, at) {
 	const before = source.slice(Math.max(0, at - 600), at);
-	const afterReturn = /return\s*\(([\s\S]*)$/.exec(before);
-	if (!afterReturn) return false;
+	// 예전에는 `return (` 만 봤고, 그것도 창 안의 **첫** 것을 썼다. 그래서
+	// 괄호 없는 `return <div role="alert">` 는 막다른 화면이 아니었고
+	// (머리말이 예시로 든 형태가 바로 그것이다), 위쪽에 이펙트 cleanup
+	// `return () => ...` 가 있으면 그것이 잡혀 판정이 어긋났다.
+	//
+	// 이제 알림에 가장 가까운 return 을 보고, 괄호 없는 형태도 센다.
+	// 이펙트 cleanup(`return () =>`)은 화면을 돌려주는 것이 아니므로 뺀다.
+	const returns = [...before.matchAll(/return\s*(\(|<)/g)].filter(
+		(m) => !/return\s*\(\s*\)\s*=>/.test(before.slice(m.index, m.index + 20)),
+	);
+	const last = returns[returns.length - 1];
+	if (!last) return false;
+	const afterReturn = [
+		null,
+		before.slice(last.index + last[0].length - (last[1] === "<" ? 1 : 0)),
+	];
 	// 사이에 남은 것에서 여는 태그와 공백을 걷어 낸다. 아무것도 남지 않으면
 	// 알림까지 곧장 내려온 것이다.
 	const between = afterReturn[1]

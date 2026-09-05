@@ -27,7 +27,7 @@
  */
 
 import { execFileSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 
 const SHELL = "packages/shell";
 
@@ -111,11 +111,7 @@ const identifierContexts = [
 let assembledCache = null;
 function assembledValues() {
 	if (assembledCache) return assembledCache;
-	assembledCache = new Set();
-	for (const m of sourceText.matchAll(/\bid:\s*["']([\w-]+)["']/g))
-		assembledCache.add(m[1]);
-	for (const m of sourceText.matchAll(/\bkey:\s*["']([\w-]+)["']/g))
-		assembledCache.add(m[1]);
+	assembledCache = assembledInFile;
 	return assembledCache;
 }
 
@@ -167,9 +163,11 @@ function permanentlyDisabledTestIds(sourceText) {
 		// 값 없는 `disabled` 만 보면 React 에서 같은 뜻인 `disabled={true}` 가
 		// 빠져나간다. 실제로 연결 탭을 그 형태로 바꾸는 것만으로 통과했다.
 		// 조건부 `disabled={expr}` 는 상태에 따라 열리므로 여전히 세지 않는다.
+		// React 에서 영구히 꺼진 형태는 넷이다. 하나만 보면 나머지로 빠져나간다.
 		if (
 			!/\sdisabled\s*(?=[/>\s])/.test(text) &&
-			!/\sdisabled\s*=\s*\{\s*true\s*\}/.test(text)
+			!/\sdisabled\s*=\s*\{\s*true(?:\s+as\s+const)?\s*\}/.test(text) &&
+			!/\sdisabled\s*=\s*["']true["']/.test(text)
 		)
 			continue;
 		for (const attr of text.matchAll(
@@ -232,8 +230,17 @@ function unreachableFiles() {
 		for (const m of source.matchAll(
 			// 절에 따옴표나 세미콜론이 들어가면 여러 줄을 삼킨다 — 실제로 부작용
 			// import 셋이 한 덩어리로 먹혀 사라졌다.
-			/import\s+([^;"']*?)\s*from\s*["']([^"']+)["']|import\(\s*["']([^"']+)["']|import\s*["']([^"']+)["']/g,
+			//
+			// 줄 앞에서만 본다. 문자열 안에 적어 둔 import 문구가 간선이 되는
+			// 것을 막는다 — 템플릿 한 줄로 고아가 살아났다.
+			/^[ \t]*import\s+([^;"']*?)\s*from\s*["']([^"']+)["']|\bimport\(\s*["']([^"']+)["']|^[ \t]*import\s*["']([^"']+)["']/gm,
 		)) {
+			// `type _ = import("./X")` 와 `typeof import("./X")` 는 값이 아니다.
+			const lineStart = source.lastIndexOf("\n", m.index) + 1;
+			const lineEnd = source.indexOf("\n", m.index);
+			const line = source.slice(lineStart, lineEnd < 0 ? undefined : lineEnd);
+			if (/^[ \t]*(?:export\s+)?(?:type|interface)\b/.test(line)) continue;
+			if (/\btypeof\s+import\s*\(/.test(line)) continue;
 			const clause = m[1] ?? "";
 			const spec = m[2] ?? m[3] ?? m[4];
 			if (!spec || !spec.startsWith(".")) continue;
@@ -261,10 +268,20 @@ function unreachableFiles() {
 	// 진입점. `main`·`App` 말고 앱 등록 파일도 진입점이다 — 슬라이드처럼
 	// 패키지로 묶여 런타임에 매니페스트로 올라오는 앱은 정적 import 사슬에
 	// 나타나지 않는다. 그것을 못 보면 살아 있는 화면을 죽었다고 말한다.
-	const roots = files.filter((f) =>
-		/\/(?:main|App)\.tsx?$/.test(f) ||
-		/\/apps\/[^/]+\/(?:index|standalone)\.tsx?$/.test(f),
-	);
+	// 앱 등록 파일도 뿌리이지만 **아무 것이나** 뿌리로 세면 안 된다.
+	// 디렉터리가 남아 있다는 것과 앱이 등록된다는 것은 다른 사실이다 —
+	// App.tsx 는 `sample-note app removed` 라고 적고 그 부작용 import 를
+	// 뺐는데, 디렉터리 이름만으로 그 화면이 살아났다.
+	//
+	// 뿌리로 세는 것은 패키지로 묶여 런타임 매니페스트로 올라오는 앱뿐이다.
+	// 그 표식은 `package-public/app.json` 이다. 정적으로 등록되는 앱은
+	// App.tsx 의 import 사슬에서 저절로 닿는다.
+	const roots = files.filter((f) => {
+		if (/\/(?:main|App)\.tsx?$/.test(f)) return true;
+		const app = /^(.*\/apps\/[^/]+)\/(?:index|standalone)\.tsx?$/.exec(f);
+		if (!app) return false;
+		return existsSync(`${app[1]}/package-public/app.json`);
+	});
 	const reachable = new Set();
 	const stack = [...roots];
 	while (stack.length) {
@@ -310,6 +327,8 @@ const unrendered = new Set(unreachableFiles());
 const definedIn = new Map();
 /** 클래스 이름 → 그것을 붙이는 파일들. */
 const classDefinedIn = new Map();
+/** 조립 표지의 값 후보 → 그것을 적어 둔 파일들. */
+const assembledInFile = new Map();
 for (const file of [
 	...tracked(`${SHELL}/src`, ".tsx"),
 	...tracked(`${SHELL}/src`, ".ts"),
@@ -317,11 +336,24 @@ for (const file of [
 	const source = readFileSync(file, "utf8");
 	// `data-meta-tab` 처럼 이 목록에 없던 속성은 정의 파일에 이어지지 않아
 	// 렌더 검사를 통째로 비껴갔다. 표지로 쓰는 data 속성을 모두 본다.
+	// `data-testid="x"` 와 JSX 식 `data-testid={"x"}` 를 함께 본다. 식으로
+	// 적으면 정의 파일이 이어지지 않아 고아 판정을 통째로 비껴갔다.
 	for (const m of source.matchAll(
-		/data-(?:testid|app-id|[\w-]*tab)=["']([^"']+)["']/g,
+		/data-(?:testid|app-id|[\w-]*tab)=\s*(?:\{\s*)?["']([^"']+)["']/g,
 	)) {
 		if (!definedIn.has(m[1])) definedIn.set(m[1], new Set());
 		definedIn.get(m[1]).add(file);
+	}
+	// 조립해 넣는 표지(`data-meta-tab={tab.id}`)의 값 후보는 **그 파일 안의**
+	// 리터럴 표에서만 찾는다. 저장소 전체에서 찾으면 관계없는 모듈의 `id:`
+	// 한 줄이 존재하지도 않는 탭을 살려 준다 — 로그 모듈이 그랬다.
+	if (/data-[\w-]*tab=\s*\{/.test(source)) {
+		for (const m of source.matchAll(/\b(?:id|key):\s*["']([\w-]+)["']/g)) {
+			if (!definedIn.has(m[1])) definedIn.set(m[1], new Set());
+			definedIn.get(m[1]).add(file);
+			if (!assembledInFile.has(m[1])) assembledInFile.set(m[1], new Set());
+			assembledInFile.get(m[1]).add(file);
+		}
 	}
 	// 클래스 이름도 화면의 표지다. 실측에서 드러났다 — `.workspace-app` 은
 	// 렌더되지 않는 WorkspaceCenterArea.tsx 에만 있고, 스펙 셋이 그것으로
@@ -331,6 +363,11 @@ for (const file of [
 	// 빠진다 — 실제로 그 형태로 고아 화면이 통과했다.
 	const classChunks = [
 		...[...source.matchAll(/className="([^"{}]+)"/g)].map((m) => m[1]),
+		// JSX 식으로 적은 리터럴도 클래스다 — `className={"x"}` 로만 바꿔도
+		// 고아 화면이 검사에서 사라졌다.
+		...[...source.matchAll(/className=\{\s*["']([^"']+)["']\s*\}/g)].map(
+			(m) => m[1],
+		),
 		...[...source.matchAll(/className=\{`([^`]*)`\}/g)].map((m) =>
 			// 템플릿의 `${...}` 부분은 값이 정해지지 않으므로 정적 조각만 본다.
 			m[1].replace(/\$\{[^}]*\}/g, " "),
@@ -355,6 +392,14 @@ const KNOWN_UNRENDERED = new Map([
 	[
 		"packages/shell/src/apps/workspace/CodingWorkersApp.tsx",
 		"코딩 작업자 화면. 값으로 끌어오는 곳이 WorkspaceCenterArea.tsx 하나뿐인데 그 부모가 이미 진입점에서 닿지 않는다. 즉 이 파일도 화면에 오르지 않는다 — #554 와 같은 뿌리다",
+	],
+	[
+		"packages/shell/src/apps/sample-note/SampleNoteCenterArea.tsx",
+		"App.tsx 가 `sample-note app removed — will be replaced by a proper memo app later` 라고 적고 등록 import 를 뺐다. 디렉터리는 남아 있지만 화면에 오르지 않는다. helpers/selectors.ts 와 90-app-system 이 이 표지를 집는다. 메모 앱이 새로 오면 그때 정리한다",
+	],
+	[
+		"packages/shell/src/components/NaiaMetaArea.tsx",
+		"나이아 메타 화면(진행·스킬·채널·에이전트·진단·설정 탭). 값으로 끌어오는 곳이 없어 진입점에서 닿지 않는다. helpers/selectors.ts 가 progress·diagnostics 탭을 집는데 그 표지는 여기에만 있다. 이 화면을 되살릴지 스펙을 접을지는 #554 와 같은 성질의 결정이다",
 	],
 	[
 		"packages/shell/src/components/ConnectionsSettingsTab.tsx",
