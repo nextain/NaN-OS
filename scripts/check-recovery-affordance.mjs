@@ -31,8 +31,17 @@ const SHELL = "packages/shell";
 const FAILURE_SURFACE = /role=["']alert["']/;
 
 /** 다음 행동을 주는 표시. */
+/**
+ * 다음 행동을 주는 표시.
+ *
+ * `<pre>` 와 `<code>` 를 한때 인정했다 — 원문을 대신 보여 주는 화면이 있어서다.
+ * 그런데 그러면 오류 문자열을 코드 블록으로 예쁘게 감싸기만 해도 "빠져나갈
+ * 길이 있다" 로 세어진다. 읽을 것을 주는 것과 할 것을 주는 것은 다르다.
+ * 대체 내용으로 인정하려면 사용자가 그것으로 무언가 할 수 있어야 한다
+ * (복사, 편집, 이동).
+ */
 const RECOVERY =
-	/<button|<a\s|onClick=|common\.retry|\.retry|Start|start[A-Z]|href=|<pre|<code|<textarea/;
+	/<button|<a\s|onClick=|common\.retry|\.retry|Start|start[A-Z]|href=|<textarea|onCopy|navigator\.clipboard/;
 
 /**
  * 실패를 알리지만 복구 행동을 확인하지 못한 자리. 숫자가 아니라 자리로
@@ -101,10 +110,27 @@ const files = [...tracked(`${SHELL}/src`, ".tsx")].filter(
 	(f) => !/\.test\.tsx$/.test(f) && !f.includes("__tests__"),
 );
 
-/** `return (` 또는 `return <` 바로 뒤에 오는 알림인가 — 화면을 통째로 대신하는가. */
+/**
+ * 이 알림이 화면을 통째로 대신하는가.
+ *
+ * 처음에는 `return (` 바로 뒤만 봤다. 그래서 `<div className="...">` 로 한 겹
+ * 감싸기만 하면 빠져나갔고, 실무에서 오류 화면을 컨테이너 없이 최상위에 두는
+ * 경우는 드물기 때문에 그 우회가 사실상 이 검사를 무력화했다.
+ *
+ * 이제 `return` 과 알림 사이에 여는 태그만 있는지 본다. 그 사이에 다른
+ * 내용(형제 요소, 조건부 렌더)이 있으면 알림이 화면의 일부이지 전부가 아니다.
+ */
 function isDeadEnd(source, at) {
-	const before = source.slice(Math.max(0, at - 120), at);
-	return /return\s*\(?\s*$/.test(before);
+	const before = source.slice(Math.max(0, at - 600), at);
+	const afterReturn = /return\s*\(([\s\S]*)$/.exec(before);
+	if (!afterReturn) return false;
+	// 사이에 남은 것에서 여는 태그와 공백을 걷어 낸다. 아무것도 남지 않으면
+	// 알림까지 곧장 내려온 것이다.
+	const between = afterReturn[1]
+		.replace(/<[A-Za-z][\w.]*(\s[^>]*)?>/g, " ")
+		.replace(/\{[\s\S]*?\}/g, " ")
+		.trim();
+	return between.length === 0;
 }
 
 const stranded = [];
