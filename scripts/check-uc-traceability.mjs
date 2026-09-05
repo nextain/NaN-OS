@@ -20,7 +20,7 @@
  * 실패" 로 시작한다. 목록을 줄이는 것이 다음 일이며, 줄어들면 이 파일의
  * 목록도 함께 줄여야 한다(늘리기만 하면 baseline 이 알리바이가 된다).
  */
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 
 const scenarios = readFileSync("docs/user-scenarios.md", "utf8");
 const harness = readFileSync("src/test/harness/agent-bench-scenarios.ts", "utf8");
@@ -63,11 +63,60 @@ const BASELINE = [
 const added = untracked.filter((uc) => !BASELINE.includes(uc));
 const fixed = BASELINE.filter((uc) => !untracked.includes(uc));
 
-console.log(`[uc-trace] UC 표제 ${titles.length} / 추적 안 되는 것 ${untracked.length} (baseline ${BASELINE.length})`);
+// 표에 적힌 테스트 경로가 실제로 있는지 본다. 적기만 하면 통과하는 게이트는
+// 표면 게이트다 — 파일이 옮겨가거나 지워져도 표는 그대로 남아, 추적이 살아
+// 있는 것처럼 보인다.
+const referenced = new Set();
+for (const match of scenarios.matchAll(/`([^`]*\.(?:ts|tsx|rs|mjs))(?::\d+)?`/g)) {
+	referenced.add(match[1]);
+}
+// 표는 어떤 줄은 경로로, 어떤 줄은 파일 이름만으로 적혀 있다. 이름만 적힌
+// 것은 저장소 어디엔가 그 이름의 파일이 있으면 산 참조로 본다 — 이름조차
+// 없으면 그 줄은 없는 것을 가리킨다.
+const searchRoots = ["packages/shell", "src", "scripts", "."];
+const namesOnDisk = new Set();
+function collectNames(dir, depth = 0) {
+	if (depth > 8) return;
+	let entries;
+	try {
+		entries = readdirSync(dir, { withFileTypes: true });
+	} catch {
+		return;
+	}
+	for (const entry of entries) {
+		if (entry.name === "node_modules" || entry.name === "target" || entry.name === "dist") continue;
+		if (entry.name.startsWith(".") && entry.name !== ".agents") continue;
+		if (entry.isDirectory()) collectNames(`${dir}/${entry.name}`, depth + 1);
+		else namesOnDisk.add(entry.name);
+	}
+}
+collectNames(".");
+
+const brokenRefs = [...referenced].filter((ref) => {
+	// 표에는 와일드카드로 묶어 적은 줄도 있다(registry*.test.ts). 그것은 파일이
+	// 아니라 패턴이므로 실재 검사의 대상이 아니다.
+	if (ref.includes("*")) return false;
+	const candidates = [ref, ...searchRoots.map((root) => `${root}/${ref}`)];
+	if (candidates.some((candidate) => existsSync(candidate))) return false;
+	return !namesOnDisk.has(ref.split("/").pop());
+});
+
+console.log(`[uc-trace] UC 표제 ${titles.length} / 추적 안 되는 것 ${untracked.length} (baseline ${BASELINE.length}) / 표가 가리키는 파일 ${referenced.size}`);
 if (fixed.length) console.log(`  ✓ 해소됨 ${fixed.length}: ${fixed.join(", ")}  ← BASELINE 에서 빼라`);
 if (added.length) {
 	console.error(`  ❌ 새로 추적이 끊긴 UC ${added.length}: ${added.join(", ")}`);
 	console.error("     Test Coverage Map 에 행을 더하거나, 벤치 계열/에픽 밖으로 선언하라.");
 	process.exit(1);
 }
+// 지금 깨져 있는 참조를 baseline 으로 둔다. 표가 오래되어 옛 경로를 가리키는
+// 것이 이미 여럿이라, 한 번에 붉히면 게이트가 꺼진다. 늘어나는 것만 막는다.
+const BASELINE_BROKEN_REFS = 13;
+if (brokenRefs.length > BASELINE_BROKEN_REFS) {
+	console.error(`  ❌ 표가 가리키는데 없는 파일이 늘었다(${brokenRefs.length} > ${BASELINE_BROKEN_REFS}):`);
+	for (const ref of brokenRefs.slice(0, 10)) console.error(`     ${ref}`);
+	console.error("     경로를 고치거나, 그 줄을 표에서 빼라.");
+	process.exit(1);
+}
+if (brokenRefs.length < BASELINE_BROKEN_REFS)
+	console.log(`  ✓ 깨진 참조가 줄었다(${brokenRefs.length}) — BASELINE_BROKEN_REFS 도 줄여라`);
 console.log("  ✓ 새로 끊긴 UC 없음");
