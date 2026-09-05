@@ -1,0 +1,142 @@
+{
+	"machine": "pc-bazzite",
+	"tiers": [
+		"deterministic_ci"
+	],
+	"started": "2026-09-05T03:39:57.458Z",
+	"finished": "2026-09-05T03:47:10.412Z",
+	"status": "failed",
+	"planned": [
+		"100-herdr-first-frame.spec.ts",
+		"13-nva-capability.spec.ts",
+		"23-channels-status.spec.ts",
+		"24-tts-providers.spec.ts",
+		"31-diagnostics.spec.ts",
+		"32-model-selector.spec.ts",
+		"33-usage-dashboard.spec.ts",
+		"35-onboarding-extended.spec.ts",
+		"91-jeonju-course-worker.spec.ts",
+		"92-browser-app-clicks.spec.ts",
+		"92-discord-secure-cancel.spec.ts",
+		"93-discord-inbox-handoff.spec.ts",
+		"93-radio-bgm-observation.spec.ts",
+		"94-discord-live-auth.spec.ts",
+		"94-nva-prebaked-shell.spec.ts",
+		"94-radio-bgm-queue.spec.ts",
+		"95-llm-role-settings.spec.ts",
+		"95-w1-oauth-callback.spec.ts",
+		"96-codex-readiness.spec.ts",
+		"96-grok-readiness.spec.ts",
+		"96-memory-storage-boundary.spec.ts",
+		"97-course-worker-guidance.spec.ts",
+		"99-stt-mic-test.spec.ts",
+		"99-vllm-omni-voice.spec.ts",
+		"channel-reboot.spec.ts",
+		"env-tool-browser-native.spec.ts",
+		"environment-dispatch.spec.ts",
+		"orchestration-restart.spec.ts"
+	],
+	"executed": [
+		"13-nva-capability.spec.ts",
+		"23-channels-status.spec.ts",
+		"24-tts-providers.spec.ts",
+		"31-diagnostics.spec.ts",
+		"32-model-selector.spec.ts",
+		"33-usage-dashboard.spec.ts",
+		"35-onboarding-extended.spec.ts",
+		"95-w1-oauth-callback.spec.ts",
+		"channel-reboot.spec.ts",
+		"env-tool-browser-native.spec.ts",
+		"environment-dispatch.spec.ts",
+		"orchestration-restart.spec.ts"
+	],
+	"groups": [
+		{
+			"conf": "wdio.conf.ts",
+			"specs": 17,
+			"status": "failed",
+			"passed": 12,
+			"failedSpecs": [
+				"100-herdr-first-frame.spec.ts",
+				"92-browser-app-clicks.spec.ts",
+				"96-memory-storage-boundary.spec.ts",
+				"99-stt-mic-test.spec.ts",
+				"99-vllm-omni-voice.spec.ts"
+			]
+		},
+		{
+			"conf": "wdio.conf.jeonju-course.ts",
+			"specs": 1,
+			"status": "failed",
+			"passed": 0,
+			"failedSpecs": []
+		},
+		{
+			"conf": "wdio.conf.discord-settings.ts",
+			"specs": 2,
+			"status": "failed",
+			"passed": 0,
+			"failedSpecs": []
+		},
+		{
+			"conf": "wdio.conf.radio.ts",
+			"specs": 1,
+			"status": "failed",
+			"passed": 0,
+			"failedSpecs": []
+		},
+		{
+			"conf": "wdio.conf.discord-live.ts",
+			"specs": 1,
+			"status": "failed",
+			"passed": 0,
+			"failedSpecs": []
+		},
+		{
+			"conf": "wdio.conf.nva-prebaked.ts",
+			"specs": 1,
+			"status": "failed",
+			"passed": 0,
+			"failedSpecs": []
+		},
+		{
+			"conf": "wdio.conf.radio-queue.ts",
+			"specs": 1,
+			"status": "failed",
+			"passed": 0,
+			"failedSpecs": []
+		},
+		{
+			"conf": "wdio.conf.codex.ts",
+			"specs": 3,
+			"status": "failed",
+			"passed": 0,
+			"failedSpecs": [
+				"95-llm-role-settings.spec.ts",
+				"96-codex-readiness.spec.ts",
+				"97-course-worker-guidance.spec.ts"
+			]
+		},
+		{
+			"conf": "wdio.conf.grok.ts",
+			"specs": 1,
+			"status": "failed",
+			"passed": 0,
+			"failedSpecs": [
+				"96-grok-readiness.spec.ts"
+			]
+		}
+	],
+	"envMissingBeforeRun": {
+		"93-radio-bgm-observation.spec.ts": [
+			"VITE_NAIA_BGM_BASE"
+		],
+		"95-llm-role-settings.spec.ts": [
+			"NAIA_E2E_ADK_PATH"
+		],
+		"96-memory-storage-boundary.spec.ts": [
+			"NAIA_E2E_ADK_PATH"
+		]
+	},
+	"detail": "wdio.conf.ts: Command failed: sh -c set -o pipefail; 'pnpm' '-C' 'packages/shell' 'exec' 'wdio' 'run' 'e2e-tauri/wdio.conf.ts' '--spec' 'e2e-tauri/specs/100-herdr-first-frame.spec.ts' '--spec' 'e2e-tauri/specs/13-n; wdio.conf.jeonju-course.ts: Command failed: sh -c set -o pipefail; 'pnpm' '-C' 'packages/shell' 'exec' 'wdio' 'run' 'e2e-tauri/wdio.conf.jeonju-course.ts' '--spec' 'e2e-tauri/specs/91-jeonju-course-worker.spec.ts' 2>&1 | tee \"/t; wdio.conf.discord-settings.ts: Command failed: sh -c set -o pipefail; 'pnpm' '-C' 'packages/shell' 'exec' 'wdio' 'run' 'e2e-tauri/wdio.conf.discord-settings.ts' '--spec' 'e2e-tauri/specs/92-discord-secure-cancel.spec.ts' '--spec' '; wdio.conf.radio.ts: Command failed: sh -c set -o pipefail; 'pnpm' '-C' 'packages/shell' 'exec' 'wdio' 'run' 'e2e-tauri/wdio.conf.radio.ts' '--spec' 'e2e-tauri/specs/93-radio-bgm-observation.spec.ts' 2>&1 | tee \"/tmp/naia; wdio.conf.discord-live.ts: Command failed: sh -c set -o pipefail; 'pnpm' '-C' 'packages/shell' 'exec' 'wdio' 'run' 'e2e-tauri/wdio.conf.discord-live.ts' '--spec' 'e2e-tauri/specs/94-discord-live-auth.spec.ts' 2>&1 | tee \"/tmp/n; wdio.conf.nva-prebaked.ts: Command failed: sh -c set -o pipefail; 'pnpm' '-C' 'packages/shell' 'exec' 'wdio' 'run' 'e2e-tauri/wdio.conf.nva-prebaked.ts' '--spec' 'e2e-tauri/specs/94-nva-prebaked-shell.spec.ts' 2>&1 | tee \"/tmp/; wdio.conf.radio-queue.ts: Command failed: sh -c set -o pipefail; 'pnpm' '-C' 'packages/shell' 'exec' 'wdio' 'run' 'e2e-tauri/wdio.conf.radio-queue.ts' '--spec' 'e2e-tauri/specs/94-radio-bgm-queue.spec.ts' 2>&1 | tee \"/tmp/naia; wdio.conf.codex.ts: Command failed: sh -c set -o pipefail; 'pnpm' '-C' 'packages/shell' 'exec' 'wdio' 'run' 'e2e-tauri/wdio.conf.codex.ts' '--spec' 'e2e-tauri/specs/95-llm-role-settings.spec.ts' '--spec' 'e2e-tauri/specs; wdio.conf.grok.ts: Command failed: sh -c set -o pipefail; 'pnpm' '-C' 'packages/shell' 'exec' 'wdio' 'run' 'e2e-tauri/wdio.conf.grok.ts' '--spec' 'e2e-tauri/specs/96-grok-readiness.spec.ts' 2>&1 | tee \"/tmp/naia-regress"
+}

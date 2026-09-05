@@ -37,6 +37,38 @@ const SHOT = resolve(
 );
 mkdirSync(SHOT, { recursive: true });
 
+/**
+ * 브라우저 앱을 켜고, 실제로 켜졌는지 확인한다.
+ *
+ * 무음 클릭(`if (btn) btn.click()`)은 요소가 없을 때 실패를 숨긴다. 여기서는
+ * 없으면 그 자리에서 말하고, 켜질 때까지 기다린다.
+ */
+async function activateBrowserApp(): Promise<void> {
+	const pressed = await browser.execute(() => {
+		const btn = document.querySelector(
+			'.app-bar-tab[data-app-id="browser"]',
+		) as HTMLButtonElement | null;
+		if (!btn) return false;
+		btn.click();
+		return true;
+	});
+	if (!pressed) throw new Error("브라우저 앱 버튼을 찾지 못했다");
+
+	await browser.waitUntil(
+		async () =>
+			browser.execute(() => {
+				const slot = Array.from(
+					document.querySelectorAll(".content-app__slot"),
+				).find((s) => s.querySelector(".browser-app"));
+				return Boolean(slot?.classList.contains("content-app__slot--active"));
+			}),
+		{
+			timeout: 10_000,
+			timeoutMsg: "브라우저 슬롯이 활성으로 바뀌지 않았다",
+		},
+	);
+}
+
 /** Return the .content-app__slot that wraps the browser app, or null. */
 function getBrowserSlotInfo(): Promise<{
 	found: boolean;
@@ -176,13 +208,12 @@ describe("92 — Browser App: Click Blocking Regression", () => {
 
 	it("04 — error overlay in active browser slot gets pointer-events:auto", async () => {
 		// Activate the browser app.
-		await browser.execute(() => {
-			const btn = document.querySelector(
-				'.app-bar-tab[data-app-id="browser"]',
-			) as HTMLButtonElement | null;
-			if (btn) btn.click();
-		});
-		await browser.pause(500);
+		//
+		// 예전에는 `if (btn) btn.click()` 로 눌렀는데, 버튼이 없으면 아무 일도
+		// 일어나지 않고 그 사실이 어디에도 남지 않는다. 그러면 뒤의 단정이
+		// "슬롯이 활성이 아니다" 로 애매하게 실패하고, 원인이 버튼을 못 찾은
+		// 것인지 활성화가 안 된 것인지 알 수 없다.
+		await activateBrowserApp();
 
 		// Inject a synthetic overlay into the now-active browser slot.
 		const result = await browser.execute(() => {

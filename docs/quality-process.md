@@ -226,6 +226,7 @@ LLM 을 부르지 않는다.
 | `check-destructive-affordance.mjs` | 되돌릴 수 없는 동작이 확인도 되돌리기도 없이 늘어나는 것 |
 | `check-recovery-affordance.mjs` | 실패가 화면을 통째로 대신하면서 빠져나갈 수단을 주지 않는 것 |
 | `check-dead-ui-specs.mjs` | 사라진 화면을 검사하는 스펙이 남아 회귀처럼 붉어지는 것 |
+| `check-silent-clicks.mjs` | 요소가 없어도 조용히 넘어가는 클릭이 늘어나는 것 |
 | `build-e2e-inventory.mjs --check` | 실기 스펙 요구조건 목록이 실제 스펙과 어긋난 채 남는 것 |
 | `check-assembly-coverage.mjs` | (옛 이름 체계 전용 — 위 UC 게이트가 지금 체계를 맡는다) |
 

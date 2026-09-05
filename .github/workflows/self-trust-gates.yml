@@ -140,6 +140,11 @@ jobs:
       # 있었다(카드가 0개라 판정이 빈 분기로 흘렀다).
       - name: dead UI specs (사라진 화면을 기다리는 스펙 금지)
         run: node scripts/check-dead-ui-specs.mjs
+
+      # 요소가 없어도 조용히 넘어가는 클릭은 실패를 한 걸음 뒤로 옮긴다.
+      # 원인과 증상이 떨어져 있으면 고치는 사람이 엉뚱한 곳을 판다.
+      - name: silent clicks (무음 클릭 증가 금지)
+        run: node scripts/check-silent-clicks.mjs
       - name: wire probes (os outbound ⊆ agent accept / agent output ⊆ os classify)
         run: |
           node scripts/builds/uc1-outbound-probe.mjs
