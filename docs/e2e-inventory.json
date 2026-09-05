@@ -2,9 +2,9 @@
 	"generatedFrom": "packages/shell/e2e-tauri/specs",
 	"total": 123,
 	"summary": {
-		"credentialed_live": 92,
-		"deterministic_ci": 28,
-		"native_local": 3
+		"credentialed_live": 89,
+		"deterministic_ci": 27,
+		"native_local": 7
 	},
 	"specs": [
 		{
@@ -947,7 +947,7 @@
 				"NAIA_API_KEY",
 				"NAIA_E2E_ADK_FIXTURE"
 			],
-			"tier": "credentialed_live"
+			"tier": "native_local"
 		},
 		{
 			"spec": "86-stt-tts-full-pipeline.spec.ts",
@@ -960,7 +960,7 @@
 				"NAIA_E2E_ADK_FIXTURE",
 				"OPENAI_API_KEY"
 			],
-			"tier": "credentialed_live"
+			"tier": "native_local"
 		},
 		{
 			"spec": "87-tts-audio-verification.spec.ts",
@@ -986,7 +986,7 @@
 				"NAIA_E2E_ADK_FIXTURE",
 				"OPENAI_API_KEY"
 			],
-			"tier": "credentialed_live"
+			"tier": "native_local"
 		},
 		{
 			"spec": "89-llm-provider-switching.spec.ts",
@@ -1268,7 +1268,7 @@
 			"spec": "99-stt-mic-test.spec.ts",
 			"conf": [],
 			"env": [],
-			"tier": "deterministic_ci"
+			"tier": "native_local"
 		},
 		{
 			"spec": "99-vllm-omni-voice.spec.ts",

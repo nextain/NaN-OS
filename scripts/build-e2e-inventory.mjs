@@ -29,6 +29,16 @@ const CONF_DIR = "packages/shell/e2e-tauri";
 
 // 장치를 요구한다고 보는 신호. 이름이 아니라 무엇을 켜는지로 고른다.
 const DEVICE_ENV = /VOICE|AUDIO|VOXCPM2|NVA|SCREENSHOT|GPU|CASCADE/;
+
+/**
+ * 장치를 실제로 여는 스펙이 부르는 것들.
+ *
+ * 마이크·스피커·GPU 는 환경 변수에 드러나지 않는다. 그 스펙이 무엇을 부르는지로
+ * 본다 — PipeWire 로 가상 소스를 만들거나, espeak 로 소리를 내거나,
+ * nvidia-smi 로 GPU 를 묻는 자리다.
+ */
+const DEVICE_TOOLS =
+	/\bpw-play\b|\bpw-cat\b|\bpactl\b|\bespeak\b|\bnvidia-smi\b|getUserMedia|MediaRecorder/;
 // 자격증명으로 보는 신호.
 const KEY_ENV = /API_KEY|_KEY$|TOKEN|SECRET|USER_ID/;
 
@@ -110,12 +120,16 @@ for (const name of readdirSync(SPEC_DIR).filter((f) => f.endsWith(".spec.ts")).s
 	const device = envs.some((e) => DEVICE_ENV.test(e));
 	// 대화 헬퍼를 부르면 모델이 필요하다 — 환경 변수에 드러나지 않아도.
 	const talks = CHAT_HELPERS.test(source);
+	// 장치도 환경 변수로 드러나지 않는다. 마이크를 여는 스펙은 오디오 장치와
+	// 그것을 먹이는 도구를 요구하는데, 그 사실이 env 목록에는 없다 — 실제로
+	// 마이크 스펙 하나가 결정론 칸에 있다가 장치 없는 기계에서 실패했다.
+	const usesDevice = DEVICE_TOOLS.test(source);
 	const keyed = envs.some((e) => KEY_ENV.test(e));
 	rows.push({
 		spec: name,
 		conf: confOwners.get(name) ?? [],
 		env: envs,
-		tier: device
+		tier: device || usesDevice
 			? "native_local"
 			: keyed || talks
 				? "credentialed_live"
