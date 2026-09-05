@@ -133,3 +133,20 @@ jobs:
         run: pnpm -C packages/shell exec playwright install --with-deps chromium
       - name: shell browser regression (Playwright)
         run: NAIA_E2E_USE_EXISTING_BUILD=1 pnpm -C packages/shell test:e2e
+
+      # Rust 쪽 285개가 어디서도 돌지 않고 있었다. 경로 탈출·symlink 거부·포트
+      # 회수·샌드박스 동시성처럼 화면으로는 확인할 수 없는 것들이 거기 있다.
+      # build.rs 가 페어드 agent 스크립트를 요구하므로 그 경로를 먼저 세운다.
+      - uses: dtolnay/rust-toolchain@2c7215f132e9ebf062739d9130488b56d53c060c
+        with:
+          toolchain: stable
+      - name: system deps for tauri
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev librsvg2-dev patchelf
+      - name: native tests (cargo)
+        run: |
+          PAIRED="$(node -e 'import("./packages/shell/scripts/agent-pairing.mjs").then(m=>console.log(m.resolvePairedAgent().agentScript))')"
+          NAIA_AGENT_SCRIPT="$PAIRED" \
+          NAIA_AGENT_PROTO_DIR="$(dirname "$(dirname "$PAIRED")")/../src/main/adapters/grpc" \
+            cargo test --manifest-path packages/shell/src-tauri/Cargo.toml --lib
