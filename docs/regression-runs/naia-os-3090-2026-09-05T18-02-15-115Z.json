@@ -1,0 +1,112 @@
+{
+	"machine": "naia-os-3090",
+	"tiers": [
+		"deterministic_ci",
+		"native_local"
+	],
+	"ranOn": {
+		"inventorySha256": "a5e62ea6bc9d1a8003a2fe4dcc0b62fb7d550e8c65e2f6f576e9c3cd6e95ba64",
+		"commit": "22d70d436f095546476f9d3e65885f6b87eceb19",
+		"host": "bazzite",
+		"platform": "linux-x64",
+		"node": "v26.7.0"
+	},
+	"started": "2026-09-05T18:02:15.115Z",
+	"finished": "2026-09-05T18:05:50.375Z",
+	"status": "failed",
+	"planned": [
+		"100-herdr-first-frame.spec.ts",
+		"23-channels-status.spec.ts",
+		"31-diagnostics.spec.ts",
+		"33-usage-dashboard.spec.ts",
+		"92-browser-app-clicks.spec.ts",
+		"93-discord-inbox-handoff.spec.ts",
+		"95-llm-role-settings.spec.ts",
+		"96-codex-readiness.spec.ts",
+		"96-memory-storage-boundary.spec.ts",
+		"environment-dispatch.spec.ts",
+		"85-voice-actual-recording.spec.ts",
+		"88-stt-tts-combo-verification.spec.ts",
+		"94-voice-6g-shell.spec.ts",
+		"96-voice-linux-app-start.spec.ts"
+	],
+	"executed": [
+		"23-channels-status.spec.ts",
+		"31-diagnostics.spec.ts",
+		"33-usage-dashboard.spec.ts",
+		"92-browser-app-clicks.spec.ts",
+		"96-memory-storage-boundary.spec.ts",
+		"environment-dispatch.spec.ts",
+		"88-stt-tts-combo-verification.spec.ts",
+		"95-llm-role-settings.spec.ts",
+		"96-codex-readiness.spec.ts"
+	],
+	"groups": [
+		{
+			"conf": "wdio.conf.ts",
+			"specs": 10,
+			"status": "failed",
+			"passed": 7,
+			"failedSpecs": [
+				"100-herdr-first-frame.spec.ts",
+				"85-voice-actual-recording.spec.ts",
+				"96-voice-linux-app-start.spec.ts"
+			]
+		},
+		{
+			"conf": "wdio.conf.discord-settings.ts",
+			"specs": 1,
+			"status": "failed",
+			"passed": 0,
+			"failedSpecs": [
+				"93-discord-inbox-handoff.spec.ts"
+			]
+		},
+		{
+			"conf": "wdio.conf.codex.ts",
+			"specs": 2,
+			"status": "passed",
+			"passed": 2,
+			"failedSpecs": []
+		},
+		{
+			"conf": "wdio.conf.voice-6g.ts",
+			"specs": 1,
+			"status": "failed",
+			"passed": 0,
+			"failedSpecs": []
+		}
+	],
+	"envMissingBeforeRun": {
+		"88-stt-tts-combo-verification.spec.ts": [
+			"ELEVENLABS_API_KEY"
+		],
+		"94-voice-6g-shell.spec.ts": [
+			"NAIA_E2E_NAIA_KEY",
+			"NAIA_E2E_VOICE_6G",
+			"NAIA_E2E_VOICE_SCREENSHOT",
+			"NAIA_E2E_VOXCPM2_TEST_VOICE"
+		],
+		"96-voice-linux-app-start.spec.ts": [
+			"NAIA_E2E_NAIA_KEY",
+			"NAIA_E2E_VOICE_ARTIFACTS"
+		]
+	},
+	"detail": "wdio.conf.ts: 종료 코드 1; wdio.conf.discord-settings.ts: 종료 코드 1; wdio.conf.voice-6g.ts: 종료 코드 1",
+	"billableCalls": {},
+	"credentialsPresent": [
+		"NAIA_API_KEY",
+		"GEMINI_API_KEY",
+		"CAFE_E2E_API_KEY",
+		"OPENAI_API_KEY",
+		"ANTHROPIC_API_KEY"
+	],
+	"flakySpecs": [
+		"85-voice-actual-recording.spec.ts"
+	],
+	"stableFailures": [
+		"100-herdr-first-frame.spec.ts",
+		"96-voice-linux-app-start.spec.ts",
+		"93-discord-inbox-handoff.spec.ts"
+	]
+}
