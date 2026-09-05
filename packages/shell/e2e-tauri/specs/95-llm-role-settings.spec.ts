@@ -1,4 +1,5 @@
 import { readFileSync } from "node:fs";
+import { clickElement } from "../helpers/click.js";
 import { resolve } from "node:path";
 
 const adkPath = process.env.NAIA_E2E_ADK_PATH;
@@ -42,11 +43,9 @@ describe("LLM role settings through the real Tauri Shell", () => {
 	it("stores separate sub settings, inherits memory from main, and restores both after a WebView restart", async () => {
 		if (!adkPath) throw new Error("NAIA_E2E_ADK_PATH is required for role settings E2E");
 		const settings = await $(".app-bar-settings");
-		await settings.waitForClickable({ timeout: 30_000 });
-		await settings.click();
+		await clickElement(".app-bar-settings", 30_000);
 		const brainTab = await $("[data-settings-tab='brain']");
-		await brainTab.waitForClickable({ timeout: 30_000 });
-		await brainTab.click();
+		await clickElement("[data-settings-tab='brain']", 30_000);
 
 		const subMode = await $("[data-testid='sub-llm-mode']");
 		const memoryMode = await $("[data-testid='memory-llm-mode']");
@@ -73,11 +72,9 @@ describe("LLM role settings through the real Tauri Shell", () => {
 
 		await browser.refresh();
 		const restartedSettings = await $(".app-bar-settings");
-		await restartedSettings.waitForClickable({ timeout: 45_000 });
-		await restartedSettings.click();
+		await clickElement(".app-bar-settings", 30_000);
 		const restartedBrainTab = await $("[data-settings-tab='brain']");
-		await restartedBrainTab.waitForClickable({ timeout: 30_000 });
-		await restartedBrainTab.click();
+		await clickElement("[data-settings-tab='brain']", 30_000);
 		await browser.waitUntil(
 			async () =>
 				(await (await $("[data-testid='sub-llm-mode']")).getValue()) ===

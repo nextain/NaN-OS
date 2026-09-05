@@ -1,4 +1,5 @@
 import { getLastAssistantMessage, sendMessage } from "../helpers/chat.js";
+import { clickElement } from "../helpers/click.js";
 import { S } from "../helpers/selectors.js";
 import { assertSemantic } from "../helpers/semantic.js";
 import { safeRefresh } from "../helpers/settings.js";
@@ -101,8 +102,7 @@ describe("08 — Memory (conversation persistence)", () => {
 
 		// Click "새 대화" button
 		const newChatBtn = await $(S.newChatBtn);
-		await newChatBtn.waitForClickable({ timeout: 10_000 });
-		await newChatBtn.click();
+		await clickElement(S.newChatBtn, 30_000);
 
 		// Wait for messages to be cleared
 		await browser.waitUntil(

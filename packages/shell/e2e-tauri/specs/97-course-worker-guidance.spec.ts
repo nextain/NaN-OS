@@ -1,3 +1,4 @@
+import { clickElement } from "../helpers/click.js";
 async function workspaceLabel(): Promise<string> {
 	return browser.execute(() => {
 		const input = document.querySelector(
@@ -13,12 +14,10 @@ async function workspaceLabel(): Promise<string> {
 describe("Jeonju course worker guidance through the real Tauri Shell", () => {
 	it("shows an actionable course target state instead of implementation-oriented worker controls", async () => {
 		const workspace = await $("button[data-app-id='workspace']");
-		await workspace.waitForClickable({ timeout: 30_000 });
-		await workspace.click();
+		await clickElement("button[data-app-id='workspace']", 30_000);
 
 		const toggle = await $("[data-testid='coding-workers-toggle']");
-		await toggle.waitForClickable({ timeout: 30_000 });
-		await toggle.click();
+		await clickElement("[data-testid='coding-workers-toggle']", 30_000);
 		const app = await $("[data-testid='coding-workers']");
 		await app.waitForDisplayed({ timeout: 30_000 });
 		const controlRoot = await $("[data-testid='coding-worker-control-root']");

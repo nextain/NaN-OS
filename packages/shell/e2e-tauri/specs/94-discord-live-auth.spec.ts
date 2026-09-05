@@ -1,4 +1,5 @@
 import { existsSync } from "node:fs";
+import { clickElement } from "../helpers/click.js";
 import { resolve } from "node:path";
 import { E2E_SETTINGS } from "../codex-e2e-environment.js";
 
@@ -13,8 +14,7 @@ describe("Discord live authentication through the isolated real Tauri Shell", ()
 		);
 		await $(".app-bar-settings").click();
 		const connectionsTab = await $("[data-settings-tab='connections']");
-		await connectionsTab.waitForClickable({ timeout: 30_000 });
-		await connectionsTab.click();
+		await clickElement("[data-settings-tab='connections']", 30_000);
 
 		const app = await $("[data-testid='discord-connections']");
 		await app.waitForDisplayed({ timeout: 30_000 });

@@ -1,13 +1,12 @@
+import { clickElement } from "../helpers/click.js";
 describe("Codex readiness through the real Tauri Shell", () => {
 	it("reports the signed-in Codex CLI as ready from the Brain settings screen", async () => {
 		const settings = await $(".app-bar-settings");
 		if (!(await settings.getAttribute("class"))?.includes("--active")) {
-			await settings.waitForClickable({ timeout: 30_000 });
-			await settings.click();
+			await clickElement(".app-bar-settings", 30_000);
 		}
 		const brainTab = await $("[data-settings-tab='brain']");
-		await brainTab.waitForClickable({ timeout: 30_000 });
-		await brainTab.click();
+		await clickElement("[data-settings-tab='brain']", 30_000);
 
 		const provider = await $("#provider-select");
 		await provider.waitForDisplayed({ timeout: 30_000 });
@@ -24,8 +23,7 @@ describe("Codex readiness through the real Tauri Shell", () => {
 		const readiness = await $("[data-testid='codex-readiness']");
 		await readiness.waitForDisplayed({ timeout: 30_000 });
 		const check = await $("[data-testid='codex-readiness-check']");
-		await check.waitForClickable({ timeout: 30_000 });
-		await check.click();
+		await clickElement("[data-testid='codex-readiness-check']", 30_000);
 
 		const status = await $("[data-testid='codex-readiness-status']");
 		await browser.waitUntil(

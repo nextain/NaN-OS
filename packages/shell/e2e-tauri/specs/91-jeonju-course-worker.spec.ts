@@ -1,4 +1,5 @@
 import { execFileSync } from "node:child_process";
+import { clickElement } from "../helpers/click.js";
 import { mkdirSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { E2E_WORKSPACE } from "../codex-e2e-environment.js";
@@ -67,11 +68,9 @@ describe("Jeonju course worker through the isolated real Tauri Shell", () => {
 
 	it("completes the initial build and a revision in one student Git root without escaping the two-file boundary", async () => {
 		const workspaceApp = await $("button[data-app-id='workspace']");
-		await workspaceApp.waitForClickable({ timeout: 45_000 });
-		await workspaceApp.click();
+		await clickElement("button[data-app-id='workspace']", 30_000);
 		const workersToggle = await $("[data-testid='coding-workers-toggle']");
-		await workersToggle.waitForClickable({ timeout: 45_000 });
-		await workersToggle.click();
+		await clickElement("[data-testid='coding-workers-toggle']", 30_000);
 
 		await (await $("[data-testid='coding-worker-worktree']")).setValue(
 			COURSE_ROOT,

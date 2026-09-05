@@ -1,4 +1,5 @@
 import { getLastAssistantMessage, sendMessage } from "../helpers/chat.js";
+import { clickElement } from "../helpers/click.js";
 import { S } from "../helpers/selectors.js";
 import { assertSemantic } from "../helpers/semantic.js";
 
@@ -23,8 +24,7 @@ describe("68 — History Auto-Title", () => {
 	it("should start a new conversation and get a valid response", async () => {
 		// Create new conversation
 		const newChatBtn = await $(S.newChatBtn);
-		await newChatBtn.waitForClickable({ timeout: 10_000 });
-		await newChatBtn.click();
+		await clickElement(S.newChatBtn, 30_000);
 
 		// Wait for messages to clear
 		await browser.waitUntil(
@@ -57,8 +57,7 @@ describe("68 — History Auto-Title", () => {
 
 		// Switch to history tab
 		const historyTab = await $(S.historyTab);
-		await historyTab.waitForClickable({ timeout: 10_000 });
-		await historyTab.click();
+		await clickElement(S.historyTab, 30_000);
 
 		// Wait for history items
 		await browser.waitUntil(

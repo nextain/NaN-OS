@@ -1,3 +1,4 @@
+import { clickElement } from "../helpers/click.js";
 describe("Discord secure credential cancellation through the real Tauri Shell", () => {
 	it("keeps the token outside the WebView and renders native cancellation", async () => {
 		try {
@@ -25,8 +26,7 @@ describe("Discord secure credential cancellation through the real Tauri Shell", 
 		await settings.click();
 
 		const connectionsTab = await $("[data-settings-tab='connections']");
-		await connectionsTab.waitForClickable({ timeout: 30_000 });
-		await connectionsTab.click();
+		await clickElement("[data-settings-tab='connections']", 30_000);
 
 		const app = await $("[data-testid='discord-connections']");
 		await app.waitForDisplayed({ timeout: 30_000 });

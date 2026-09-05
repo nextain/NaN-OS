@@ -1,5 +1,6 @@
 /**
- * 요소가 없어도 조용히 넘어가는 클릭을 잡는다.
+ * 요소가 없어도 조용히 넘어가는 클릭과, 리눅스에서 반드시 실패하는 클릭 대기를
+ * 잡는다.
  *
  * 왜 필요한가: `if (el) el.click()` 은 요소가 없으면 아무 일도 하지 않고,
  * 그 사실이 어디에도 남지 않는다. 그래서 실패가 한 걸음 뒤에서 엉뚱한
@@ -11,8 +12,13 @@
  * 눌렀는지 돌려주고 못 눌렀으면 말하는 형태(`if (!pressed) throw`)는 세지
  * 않는다.
  *
- * 지금 있는 것은 baseline 으로 잠그고 늘어나는 것만 막는다. 마흔아홉 자리를
- * 한 번에 고치면 그 커밋을 아무도 검토할 수 없다.
+ * `waitForClickable` 도 함께 본다. WebKitWebDriver 는 요소를 상호작용 가능으로
+ * 보지 않아서 그 대기가 시간을 다 쓰고 실패한다 — 실제로 열 개 스펙이 그
+ * 자리에서 삼십 초씩 기다리다 죽었다. 헬퍼(`clickElement`)는 보이는 것을
+ * 확인한 뒤 페이지 안에서 누르므로 그 환경을 지난다.
+ *
+ * 지금 있는 것은 baseline 으로 잠그고 늘어나는 것만 막는다. 한 번에 고치면
+ * 그 커밋을 아무도 검토할 수 없다.
  */
 
 import { execFileSync } from "node:child_process";
@@ -31,6 +37,8 @@ const SILENT_CLICK = new RegExp(
 		String.raw`(\w+)\s*&&\s*\3\.click\(\)`,
 		// el?.click();
 		String.raw`(\w+)\?\.click\(\)`,
+		// waitForClickable — 리눅스 드라이버에서 반드시 시간을 다 쓴다
+		String.raw`waitForClickable\s*\(`,
 	].join("|"),
 	"g",
 );

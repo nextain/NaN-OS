@@ -1,4 +1,5 @@
 import { getLastAssistantMessage, sendMessage } from "../helpers/chat.js";
+import { clickElement } from "../helpers/click.js";
 import { S } from "../helpers/selectors.js";
 import { assertSemantic } from "../helpers/semantic.js";
 import { ensureAppReady } from "../helpers/settings.js";
@@ -25,8 +26,7 @@ describe("10 — History Tab", () => {
 	it("should switch to history tab and show sessions", async () => {
 		// Click history tab (4th tab)
 		const historyTab = await $(S.historyTab);
-		await historyTab.waitForClickable({ timeout: 10_000 });
-		await historyTab.click();
+		await clickElement(S.historyTab, 30_000);
 
 		// Wait for history items to appear
 		await browser.waitUntil(
@@ -62,8 +62,7 @@ describe("10 — History Tab", () => {
 
 		// Create new conversation
 		const newChatBtn = await $(S.newChatBtn);
-		await newChatBtn.waitForClickable({ timeout: 10_000 });
-		await newChatBtn.click();
+		await clickElement(S.newChatBtn, 30_000);
 
 		// Wait for messages to clear
 		await browser.waitUntil(
