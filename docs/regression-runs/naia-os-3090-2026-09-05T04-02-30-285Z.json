@@ -1,0 +1,25 @@
+{
+	"machine": "naia-os-3090",
+	"tiers": [
+		"deterministic_ci"
+	],
+	"started": "2026-09-05T04:02:30.285Z",
+	"finished": "2026-09-05T04:02:30.286Z",
+	"status": "prerequisites-missing",
+	"assigned": [],
+	"envMissingBeforeRun": {
+		"93-radio-bgm-observation.spec.ts": [
+			"VITE_NAIA_BGM_BASE"
+		],
+		"95-llm-role-settings.spec.ts": [
+			"NAIA_E2E_ADK_PATH"
+		],
+		"96-memory-storage-boundary.spec.ts": [
+			"NAIA_E2E_ADK_PATH"
+		]
+	},
+	"missingPrerequisites": [
+		"짝 naia-agent 체크아웃 (핀 커밋과 같고 작업 트리가 깨끗한 것). NAIA_AGENT_WORKTREES_DIR 로 자리를 알려 주어라"
+	],
+	"detail": "공통 전제가 없어 실행하지 않았다"
+}

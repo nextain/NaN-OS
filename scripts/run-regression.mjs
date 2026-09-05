@@ -1,7 +1,7 @@
 /**
  * 배포 전 회귀를 이 기계가 맡은 몫만큼 돌리고, 무엇을 돌렸는지 남긴다.
  *
- * 왜 이렇게 나누는가: 실기 스펙 129개는 한 기계에서 다 돌 수 없다. 자격증명이
+ * 왜 이렇게 나누는가: 실기 스펙 123개는 한 기계에서 다 돌 수 없다. 자격증명이
  * 필요한 것, 그 기계의 장치(GPU·오디오·데스크톱 세션)가 필요한 것, 아무것도
  * 필요 없는 것이 섞여 있다. 나누려면 무엇이 무엇을 요구하는지 알아야 하고,
  * 그 목록은 build-e2e-inventory.mjs 가 만든다.
@@ -16,7 +16,7 @@
  *
  * --dry-run 은 무엇을 돌릴지만 보여준다. 환경이 갖춰졌는지 먼저 볼 때 쓴다.
  */
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import {
 	existsSync,
 	mkdirSync,
@@ -24,8 +24,7 @@ import {
 	readFileSync,
 	writeFileSync,
 } from "node:fs";
-import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { delimiter, join, resolve } from "node:path";
 
 const args = process.argv.slice(2);
 const value = (name) => args.find((a) => a.startsWith(`--${name}=`))?.split("=")[1];
@@ -52,10 +51,91 @@ if (unknown.length) {
 	process.exit(2);
 }
 
-const mine = inventory.specs.filter((s) => tiers.includes(s.tier));
-console.log(`[regression] ${machine} 이 맡은 몫: ${mine.length} / 전체 ${inventory.total}`);
+/**
+ * 함께 도는 기계들의 명단. `docs/regression-runs/machines.json` 이 한 곳이다.
+ *
+ * 왜 파일에 두는가: 기계마다 `--peers` 를 손으로 적으면 목록이 어긋난다.
+ * 어긋나면 몫이 겹치거나 비는데, 그것은 기록만 보고는 알 수 없다 — 각자
+ * "나는 내 몫을 다 돌았다" 고 말하기 때문이다.
+ */
+const ROSTER = "docs/regression-runs/machines.json";
+const rosterFile = existsSync(ROSTER)
+	? JSON.parse(readFileSync(ROSTER, "utf8"))
+	: { machines: [] };
+// 합류하지 않은 기계는 몫을 받지 않는다. 받으면 그 몫이 영영 비고, 완결성
+// 판정은 그것을 "아무도 맡지 않았다" 로 붉힌다 — 옳은 판정이지만 사람은
+// 그것을 회귀로 읽는다.
+const roster = {
+	...rosterFile,
+	machines: (rosterFile.machines ?? []).filter((m) => m.active !== false),
+};
+
+const profile = roster.machines.find((m) => m.name === machine);
+if (roster.machines.length > 0 && !profile) {
+	const dormant = (rosterFile.machines ?? []).find((m) => m.name === machine);
+	console.error(
+		dormant
+			? `${machine} 는 명단에 있지만 아직 합류하지 않았다(active: false).\n` +
+					`${ROSTER} 에서 active 를 true 로 바꾸면 몫을 받는다.`
+			: `${ROSTER} 에 이 기계(${machine})가 없다.\n` +
+					`지금 도는 기계: ${roster.machines.map((m) => m.name).join(", ")}\n` +
+			"먼저 명단에 이름과 능력을 적어라 — 명단에 없는 기계가 도는 것은 아무도 모르는 실행이다.",
+	);
+	process.exit(2);
+}
+
+// 명단이 있으면 그 기계가 맡기로 한 등급만 받는다. 능력에 없는 등급을
+// 억지로 맡으면 실패가 쌓이는데, 그것은 회귀가 아니라 기계가 못 하는 일이다.
+if (profile) {
+	const notMine = tiers.filter((tier) => !profile.tiers.includes(tier));
+	if (notMine.length > 0) {
+		console.error(
+			`${machine} 는 ${notMine.join(", ")} 을 맡지 않는다 (맡는 것: ${profile.tiers.join(", ")}).\n` +
+				`이유: ${profile.note ?? "명단 참조"}`,
+		);
+		process.exit(2);
+	}
+}
+
+/**
+ * 등급마다 그 등급을 맡은 기계들끼리 나눈다.
+ *
+ * 등급을 합쳐서 나누면 균등하지 않다 — 다섯 대가 맡는 등급과 두 대가 맡는
+ * 등급을 한 줄로 세우면, 두 대짜리 등급의 몫이 다섯 대에 흩어져 그중 셋은
+ * 돌릴 수 없는 것을 받는다.
+ */
+function shareOf(tier) {
+	const inTier = inventory.specs
+		.filter((s) => s.tier === tier)
+		.sort((a, b) => a.spec.localeCompare(b.spec));
+	const owners = roster.machines
+		.filter((m) => m.tiers.includes(tier))
+		.map((m) => m.name)
+		.sort();
+	if (owners.length === 0) return inTier;
+	const index = owners.indexOf(machine);
+	if (index < 0) return [];
+	return inTier.filter((_, i) => i % owners.length === index);
+}
+
+const mine = tiers.flatMap((tier) => shareOf(tier));
+const ownersByTier = new Map(
+	tiers.map((tier) => [
+		tier,
+		roster.machines.filter((m) => m.tiers.includes(tier)).length,
+	]),
+);
+
+console.log(
+	`[regression] ${machine} 이 맡은 몫: ${mine.length} / 전체 ${inventory.total}` +
+		(roster.machines.length > 0 ? ` (명단 ${roster.machines.length}대)` : ""),
+);
 for (const tier of tiers) {
-	console.log(`  ${tier.padEnd(7)} ${mine.filter((s) => s.tier === tier).length}`);
+	const owners = ownersByTier.get(tier) ?? 1;
+	const total = inventory.specs.filter((s) => s.tier === tier).length;
+	console.log(
+		`  ${tier.padEnd(18)} ${String(mine.filter((s) => s.tier === tier).length).padStart(3)} / ${total} (${owners}대가 나눔)`,
+	);
 }
 
 // 등급이 요구하는 환경 변수가 실제로 있는지 먼저 본다. 없으면 스펙은 조용히
@@ -87,17 +167,39 @@ const GATEWAY_SPECS = new Set([
 
 function missingPrerequisites() {
 	const missing = [];
+	// PATH 를 직접 뒤진다. `sh -c "command -v"` 는 윈도우에 sh 가 없으면
+	// 언제나 실패해, 있는 도구를 없다고 말한다. 이 프로세스는 여러 기계가
+	// 나눠 도는 것이 목적이므로 한 플랫폼에서만 도는 검사를 두면 안 된다.
 	const has = (command) => {
-		try {
-			execFileSync("sh", ["-c", `command -v ${command}`], { stdio: "ignore" });
-			return true;
-		} catch {
-			return false;
+		const exts =
+			process.platform === "win32"
+				? (process.env.PATHEXT ?? ".EXE;.CMD;.BAT").split(";")
+				: [""];
+		for (const dir of (process.env.PATH ?? "").split(delimiter)) {
+			if (!dir) continue;
+			for (const ext of exts) {
+				if (existsSync(join(dir, command + ext))) return true;
+			}
 		}
+		return false;
 	};
-	if (!has("WebKitWebDriver")) missing.push("WebKitWebDriver (브라우저 드라이버)");
+	// 짝 naia-agent 체크아웃은 **모든** 스펙의 전제다. 전용 설정만 요구한다고
+	// 오래 믿었는데, 기본 설정(wdio.conf.ts)이 모듈 최상위에서 그것을 부르고
+	// 전용 설정들은 전부 그것을 상속한다. 그래서 짝이 없으면 스펙 전부가
+	// 설정을 읽는 단계에서 죽는다 — 그 죽음을 "회귀가 깨졌다" 로 적으면
+	// 다음 사람이 없는 버그를 찾는다.
+	if (!pairedAgentAvailable())
+		missing.push(
+			"짝 naia-agent 체크아웃 (핀 커밋과 같고 작업 트리가 깨끗한 것). NAIA_AGENT_WORKTREES_DIR 로 자리를 알려 주어라",
+		);
+	if (!has("WebKitWebDriver") && process.platform === "linux")
+		missing.push("WebKitWebDriver (리눅스 웹뷰 드라이버)");
 	if (!has("tauri-driver")) missing.push("tauri-driver");
-	if (!existsSync("packages/shell/src-tauri/target-e2e/debug/naia-shell"))
+	const binary =
+		process.platform === "win32"
+			? "packages/shell/src-tauri/target-e2e/debug/naia-shell.exe"
+			: "packages/shell/src-tauri/target-e2e/debug/naia-shell";
+	if (!existsSync(binary))
 		missing.push("빌드된 e2e 바이너리 (pnpm -C packages/shell run build:e2e:tauri)");
 	// 게이트웨이(:18789)는 그것을 쓰는 스펙이 배정됐을 때만 전제다. 실측에서
 	// 전체 전제로 두었다가 진단을 그르쳤다 — 서른한 개 실패의 실제 사유는
@@ -106,9 +208,9 @@ function missingPrerequisites() {
 	const needsGateway = mine.some((spec) => GATEWAY_SPECS.has(spec.spec));
 	if (needsGateway) {
 		const gatewayPort = process.env.NAIA_E2E_GATEWAY_PORT ?? "18789";
-		try {
-			execFileSync("sh", ["-c", `ss -ltn | grep -q ':${gatewayPort} '`], { stdio: "ignore" });
-		} catch {
+		// 포트가 열려 있는지는 실제로 붙어 본다. `ss` 는 리눅스 전용이고,
+		// 없는 기계에서는 "게이트웨이가 없다" 는 거짓 진단이 된다.
+		if (!portIsOpen(Number(gatewayPort))) {
 			missing.push(`게이트웨이 (:${gatewayPort} 응답 없음 — 이 등급에 그것을 쓰는 스펙이 있다)`);
 		}
 	}
@@ -243,8 +345,6 @@ function pairedAgentAvailable() {
 	return false;
 }
 
-const NEEDS_PAIRED_AGENT = /codex|radio|discord|jeonju|grok|voice-|nextain|nva-/;
-
 const groups = groupByConf(mine);
 console.log(`[regression] wdio 설정 ${groups.size}개로 나눠 돈다`);
 
@@ -293,61 +393,47 @@ function parseSpecOutcomes(output) {
 }
 
 for (const [conf, specs] of groups) {
-	if (conf !== "wdio.conf.ts" && NEEDS_PAIRED_AGENT.test(conf) && !pairedAgentAvailable()) {
-		console.log(
-			`[regression] ${conf} — 짝 naia-agent 체크아웃이 없어 실행하지 않는다 (스펙 ${specs.length}개)`,
-		);
-		groupResults.push({
-			conf,
-			specs: specs.length,
-			status: "prerequisites-missing",
-			detail:
-				"짝 naia-agent 워크트리가 없다. NAIA_AGENT_WORKTREES_DIR 로 자리를 알려 주어라",
-		});
-		continue;
-	}
-
 	const specArgs = specs.flatMap((spec) => ["--spec", `e2e-tauri/specs/${spec}`]);
 	console.log(`[regression] ${conf} — 스펙 ${specs.length}개`);
-	// 출력을 파일로 흘리면서 화면에도 그대로 낸다. 캡처만 하면 wdio 가 도는
-	// 십몇 분 동안 아무 소리가 없어 멈춘 것처럼 보이고, 화면에만 내면 스펙별
-	// 결과를 읽을 수 없다. 둘 다 필요하다.
-	const groupLog = join(
-		tmpdir(),
-		`naia-regression-${process.pid}-${conf.replace(/[^\w.-]/g, "_")}.log`,
-	);
-	const command = [
-		"pnpm",
-		"-C",
-		"packages/shell",
-		"exec",
-		"wdio",
-		"run",
-		`e2e-tauri/${conf}`,
-		...specArgs,
-	]
-		.map((part) => `'${part.replace(/'/g, "'\\''")}'`)
-		.join(" ");
-
+	// 출력을 화면에 그대로 내면서 동시에 모은다. 십몇 분 도는 동안 아무
+	// 소리가 없으면 사람이 멈춘 줄 알고 취소한다. 예전에는 `sh -c "... | tee"`
+	// 로 했는데 윈도우에는 sh 가 없어 그 기계에서는 아예 돌지 않았다.
 	let ok = true;
-	try {
-		// `set -o pipefail` 이 없으면 파이프라인의 종료 코드는 마지막 명령
-		// (tee)의 것이라 언제나 0 이다. 그러면 wdio 가 실패해도 통과로 읽는다.
-		execFileSync(
-			"sh",
-			[
-				"-c",
-				`set -o pipefail; ${command} 2>&1 | tee ${JSON.stringify(groupLog)}`,
-			],
-			{ stdio: "inherit" },
-		);
-	} catch (error) {
+	const chunks = [];
+	const child = spawnSync(
+		process.platform === "win32" ? "pnpm.cmd" : "pnpm",
+		[
+			"-C",
+			"packages/shell",
+			"exec",
+			"wdio",
+			"run",
+			`e2e-tauri/${conf}`,
+			...specArgs,
+		],
+		{
+			encoding: "utf8",
+			stdio: ["inherit", "pipe", "pipe"],
+			maxBuffer: 512 * 1024 * 1024,
+		},
+	);
+	if (child.stdout) {
+		process.stdout.write(child.stdout);
+		chunks.push(child.stdout);
+	}
+	if (child.stderr) {
+		process.stderr.write(child.stderr);
+		chunks.push(child.stderr);
+	}
+	if (child.error || child.status !== 0) {
 		ok = false;
 		status = "failed";
-		const message = String(error?.message ?? error).slice(0, 200);
+		const message = String(
+			child.error?.message ?? `종료 코드 ${child.status}`,
+		).slice(0, 200);
 		detail = detail ? `${detail}; ${conf}: ${message}` : `${conf}: ${message}`;
 	}
-	const output = existsSync(groupLog) ? readFileSync(groupLog, "utf8") : "";
+	const output = chunks.join("\n");
 
 	const outcome = parseSpecOutcomes(output);
 	// 묶음이 통과하면 맡은 것을 다 돈 것이다. 실패했으면 리포터가 통과라고

@@ -2,7 +2,7 @@
  * 배포 전 회귀가 실제로 전부 돌았는지 본다.
  *
  * 왜 필요한가: 기계마다 자기 몫을 돌리면 각자는 "내 몫은 됐다" 고 말할 수
- * 있지만, 그것을 합쳐도 전체가 덮였는지는 아무도 모른다. 129개 중 무엇이
+ * 있지만, 그것을 합쳐도 전체가 덮였는지는 아무도 모른다. 123개 중 무엇이
  * 한 번도 실행되지 않았는지 세는 자리가 없으면, 돌지 않은 것이 통과처럼
  * 보인다 — 리눅스 음성 결함이 넉 달 산 이유가 그것이었다.
  *
@@ -39,10 +39,31 @@ if (!existsSync(RUNS)) {
 }
 
 const cutoff = Date.now() - maxAgeHours * 3600_000;
-const records = readdirSync(RUNS)
+const inWindow = readdirSync(RUNS)
 	.filter((f) => f.endsWith(".json"))
 	.map((f) => JSON.parse(readFileSync(join(RUNS, f), "utf8")))
 	.filter((r) => Date.parse(r.finished ?? r.started ?? 0) >= cutoff);
+
+/**
+ * 기계마다 **가장 최근 실행 하나**만 본다.
+ *
+ * 왜: 예전에는 창 안의 기록을 전부 보았다. 그래서 오전에 실패하고, 원인을
+ * 고치고, 오후에 다시 돌려 전부 통과시켜도 오전의 실패 기록이 창에 남아
+ * 게이트가 계속 붉었다. CI 창이 72시간이므로 사흘간 그랬다. 고친 것이
+ * 반영되지 않는 게이트는 사람이 곧 무시하게 된다.
+ *
+ * 옛 기록을 지우는 것으로 풀면 안 된다 — 그러면 실패를 지워서 초록을 만드는
+ * 길이 열리고, 그것은 이 프로세스가 없애려는 바로 그 형태다. 기록은 남기되
+ * 판정은 최신으로 한다.
+ */
+const latestByMachine = new Map();
+for (const record of inWindow) {
+	const when = Date.parse(record.finished ?? record.started ?? 0);
+	const previous = latestByMachine.get(record.machine);
+	if (!previous || when > previous.when) latestByMachine.set(record.machine, { when, record });
+}
+const records = [...latestByMachine.values()].map((entry) => entry.record);
+const superseded = inWindow.length - records.length;
 
 if (!records.length) {
 	console.error(`[regression-complete] ❌ 최근 ${maxAgeHours}시간 안의 회귀 기록이 없다`);
@@ -76,7 +97,10 @@ for (const record of records) {
 const never = [...all].filter((s) => !covered.has(s));
 const machines = [...new Set(records.map((r) => r.machine))];
 
-console.log(`[regression-complete] 기계 ${machines.length}대(${machines.join(", ")}) / 최근 ${maxAgeHours}시간`);
+console.log(
+	`[regression-complete] 기계 ${machines.length}대(${machines.join(", ")}) / 최근 ${maxAgeHours}시간` +
+		(superseded > 0 ? ` — 기계별 최신 실행만 본다(더 오래된 기록 ${superseded}개는 판정에서 뺐다)` : ""),
+);
 console.log(`  스펙 ${all.size} 중 실제로 돈 것 ${covered.size}, 돌리려 했던 것 ${planned.size}, 아무도 맡지 않은 것 ${never.length}`);
 console.log(`  배정되었으나 요구 환경이 없던 것 ${skipped.size}`);
 

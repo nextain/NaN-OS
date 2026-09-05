@@ -1,0 +1,68 @@
+{
+  "note": "런칭 전 회귀를 나눠 도는 QA 기계 명단. 이름과 능력을 여기 한 곳에 적고 러너가 이것을 읽어 몫을 계산한다. 기계마다 목록을 손으로 적으면 서로 어긋나 몫이 겹치거나 비는데, 각자 '내 몫을 다 돌았다'고 말하므로 기록만 보고는 알 수 없다. active 가 false 인 기계는 몫을 받지 않는다 — 아직 합류하지 않은 기계에 몫을 주면 그 몫이 영영 비고, 완결성 판정은 그것을 '아무도 맡지 않았다'로 정직하게 붉힌다.",
+  "tiers": {
+    "deterministic_ci": "추가 자격증명도 장치도 필요 없다. 모든 기계가 맡는다.",
+    "credentialed_live": "외부 모델 자격증명이 필요하다. 키를 가진 기계만 맡는다.",
+    "native_local": "장치가 필요하다 — GPU, 마이크, 스피커. 로컬 음성 런타임은 NVIDIA 를 전제한다."
+  },
+  "machines": [
+    {
+      "name": "naia-os-3090",
+      "host": "bazzite",
+      "os": "linux",
+      "gpu": "nvidia",
+      "gpu_model": "RTX 3090 x2 (24GB each)",
+      "tiers": [
+        "deterministic_ci",
+        "credentialed_live",
+        "native_local"
+      ],
+      "note": "Naia OS. 로컬 음성 런타임(VoxCPM2 TensorRT, linux_trt_6g)이 여기서 만들어지고 검증된다. GPU 0 은 다른 작업이 쓰므로 음성은 GPU 1 에서 돈다.",
+      "active": true
+    },
+    {
+      "name": "naia-os-bc250",
+      "os": "linux",
+      "gpu": "amd",
+      "tiers": [
+        "deterministic_ci"
+      ],
+      "note": "BC-250 은 AMD 이다. NVIDIA 를 전제하는 음성 런타임을 맡지 않는다 — 여기서 그 실패가 나면 회귀가 아니라 기계 능력이다. 아직 합류하지 않았다 — 준비되면 active 를 true 로 바꾼다.",
+      "active": false
+    },
+    {
+      "name": "win-rtx4060",
+      "os": "windows",
+      "gpu": "nvidia",
+      "gpu_model": "RTX 4060 (8GB)",
+      "tiers": [
+        "deterministic_ci",
+        "credentialed_live",
+        "native_local"
+      ],
+      "note": "윈도우 로컬 음성의 기준 기계. 음성 프로파일이 6GB 를 쓰므로 8GB 로 감당한다.",
+      "active": true
+    },
+    {
+      "name": "win-nogpu",
+      "os": "windows",
+      "gpu": "none",
+      "tiers": [
+        "deterministic_ci",
+        "credentialed_live"
+      ],
+      "note": "외장 GPU 가 없다. 장치가 필요한 등급을 맡지 않는다. 대신 GPU 없는 사용자가 겪는 경로를 이 기계만 볼 수 있다. 아직 합류하지 않았다 — 준비되면 active 를 true 로 바꾼다.",
+      "active": false
+    },
+    {
+      "name": "mac",
+      "os": "darwin",
+      "tiers": [
+        "deterministic_ci",
+        "credentialed_live"
+      ],
+      "note": "합류 예정. native_local 은 맥용 런타임이 확인된 뒤에 연다. 명단에 넣기 전까지 그 몫은 다른 기계가 나눠 맡는다.",
+      "active": false
+    }
+  ]
+}
