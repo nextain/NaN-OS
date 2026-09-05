@@ -133,6 +133,13 @@ jobs:
       # 자리에는 빠져나갈 수단이 함께 있어야 한다.
       - name: recovery affordance (막다른 실패 화면 금지)
         run: node scripts/check-recovery-affordance.mjs
+
+      # 화면이 사라져도 그것을 검사하던 스펙은 남는다. 그 실패는 "회귀가
+      # 생겼다" 로 읽히지만 실제로는 잴 대상이 없어진 것이다. 실측에서
+      # 그런 자리가 열셋 나왔고, 그중 하나는 검증을 통째로 무력화하고
+      # 있었다(카드가 0개라 판정이 빈 분기로 흘렀다).
+      - name: dead UI specs (사라진 화면을 기다리는 스펙 금지)
+        run: node scripts/check-dead-ui-specs.mjs
       - name: wire probes (os outbound ⊆ agent accept / agent output ⊆ os classify)
         run: |
           node scripts/builds/uc1-outbound-probe.mjs

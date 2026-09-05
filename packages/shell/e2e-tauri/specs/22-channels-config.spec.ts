@@ -34,10 +34,9 @@ describe("22 — channels config", () => {
 			await browser.pause(300);
 		}
 
-		// Scroll to channels section hint
-		const channelsHint = await $(S.channelsSettingsHint);
-		const exists = await channelsHint.isExisting();
-		expect(exists).toBe(true);
+		// 설정 화면의 채널 안내는 UI 재구성으로 사라졌다(로케일에 키만 남아
+		// 있고 어디서도 렌더되지 않는다). 채널 관리는 채널 탭이 맡고, 바로
+		// 다음 항목이 그 경로를 검증한다.
 	});
 
 	it("should navigate to channels tab", async () => {

@@ -57,8 +57,8 @@ describe("34 — device pairing", () => {
 					document.querySelector(nodesSel) ||
 					document.querySelector(pairSel) ||
 					document.querySelector(".settings-hint") ||
-					document.querySelector(".device-section") ||
-					document.querySelector('[data-testid="device-section"]') ||
+					// device-section 은 어느 화면에도 없다. 폴백 체인에 죽은
+					// 셀렉터를 남겨 두면 무엇을 기다리는지 흐려진다.
 					document.querySelector(".settings-tab")
 				);
 			},

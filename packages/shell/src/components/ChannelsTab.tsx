@@ -403,7 +403,10 @@ export function ChannelsTab() {
 			<div className="dm-header">
 				<div className="dm-header-title">
 					<span>{t("channels.title")}</span>
-					<span className="dm-header-status connected">
+					<span
+						className="dm-header-status connected"
+						data-testid="channel-status"
+					>
 						{t("channels.connected")}
 					</span>
 				</div>
@@ -425,6 +428,9 @@ export function ChannelsTab() {
 							<button
 								type="button"
 								key={channel.bindingId}
+								// 테스트가 채널 하나를 집을 이름. 없으면 검사가
+								// "카드가 0개다" 로 흘러가 아무것도 재지 않는다.
+								data-testid="channel-card"
 								className={
 									channel.bindingId === selectedId ? "selected" : undefined
 								}

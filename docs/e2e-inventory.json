@@ -1,9 +1,9 @@
 {
 	"generatedFrom": "packages/shell/e2e-tauri/specs",
-	"total": 127,
+	"total": 123,
 	"summary": {
-		"credentialed_live": 94,
-		"deterministic_ci": 30,
+		"credentialed_live": 92,
+		"deterministic_ci": 28,
 		"native_local": 3
 	},
 	"specs": [
@@ -288,18 +288,6 @@
 		},
 		{
 			"spec": "24-tts-providers.spec.ts",
-			"conf": [],
-			"env": [],
-			"tier": "deterministic_ci"
-		},
-		{
-			"spec": "26-sessions-management.spec.ts",
-			"conf": [],
-			"env": [],
-			"tier": "deterministic_ci"
-		},
-		{
-			"spec": "27-multi-agent.spec.ts",
 			"conf": [],
 			"env": [],
 			"tier": "deterministic_ci"
@@ -678,28 +666,6 @@
 		},
 		{
 			"spec": "61-channels-interactions.spec.ts",
-			"conf": [],
-			"env": [
-				"CAFE_E2E_API_KEY",
-				"GEMINI_API_KEY",
-				"NAIA_API_KEY",
-				"NAIA_E2E_ADK_FIXTURE"
-			],
-			"tier": "credentialed_live"
-		},
-		{
-			"spec": "62-agents-interactions.spec.ts",
-			"conf": [],
-			"env": [
-				"CAFE_E2E_API_KEY",
-				"GEMINI_API_KEY",
-				"NAIA_API_KEY",
-				"NAIA_E2E_ADK_FIXTURE"
-			],
-			"tier": "credentialed_live"
-		},
-		{
-			"spec": "63-sessions-actions.spec.ts",
 			"conf": [],
 			"env": [
 				"CAFE_E2E_API_KEY",

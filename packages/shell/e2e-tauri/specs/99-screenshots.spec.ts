@@ -207,14 +207,6 @@ describe("99 — manual screenshots", () => {
 		await screenshot("channels-tab");
 	});
 
-	it("should capture agents tab", async () => {
-		await clickTab(S.agentsTabBtn);
-		try {
-			await $(S.agentCard).waitForDisplayed({ timeout: 5000 });
-		} catch {}
-		await screenshot("agents-tab");
-	});
-
 	it("should capture diagnostics tab", async () => {
 		await clickTab(S.diagnosticsTabBtn);
 		try {

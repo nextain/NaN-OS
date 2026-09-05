@@ -105,9 +105,7 @@ export const S = {
 	channelsTabBtn: '[data-chat-tab="channels"]',
 	channelsTabApp: '[data-testid="channels-tab"]',
 	channelCard: '[data-testid="channel-card"]',
-	channelAccount: '[data-testid="channel-account"]',
 	channelStatus: '[data-testid="channel-status"]',
-	channelsSettingsHint: '[data-testid="channels-settings-hint"]',
 	channelLoginBtn: ".channel-action-btn.login",
 	channelLogoutBtn: ".channel-action-btn.logout",
 	channelsRefreshBtn: ".channels-refresh-btn",
@@ -115,9 +113,7 @@ export const S = {
 	// Agents tab (6th tab)
 	// Agents 는 채팅 탭이 아니라 메타 화면의 탭이다. 순서로 집으면 탭 구성이
 	// 바뀔 때마다 엉뚱한 것을 누르거나 없는 것을 기다린다.
-	agentsTabBtn: '[data-meta-tab="agents"]',
 	agentsTabApp: '[data-testid="agents-tab"]',
-	agentCard: '[data-testid="agent-card"]',
 	sessionCard: '[data-testid="session-card"]',
 	agentsRefreshBtn: ".agents-refresh-btn",
 

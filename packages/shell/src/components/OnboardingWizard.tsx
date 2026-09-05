@@ -1214,6 +1214,7 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
 							<button
 								type="button"
 								className="onboarding-welcome__github-btn"
+								data-testid="onboarding-discord-connect-btn"
 								onClick={() =>
 									import("@tauri-apps/plugin-opener").then(({ openUrl }) =>
 										openUrl("https://discord.com/invite/FGYJN7auty"),
