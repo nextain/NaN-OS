@@ -128,12 +128,52 @@ const KNOWN_MISSING_COMMANDS = new Map([
 	["discord_api", "70-channel-sync-dm 이 부른다. 이름이 바뀌었을 수 있다"],
 ]);
 
+/**
+ * 영구히 꺼 둔 조작을 누르려는 스펙.
+ *
+ * 요소가 소스에 있다는 것과 사용자가 거기 도달할 수 있다는 것은 다른
+ * 질문이다. 실측에서 드러났다 — 92-discord-secure-cancel 은 connections
+ * 탭을 누른 뒤 그 패널을 30초 기다리는데, 그 탭은 `disabled` 가 조건 없이
+ * 박혀 있고 라벨에 "곧 제공" 이 붙어 있다. 기능을 일부러 안 낸 상태인데
+ * 스펙은 매번 30초를 쓰고 실패한다. 두 기계에서 똑같이 그랬다.
+ *
+ * 조건부 `disabled={...}` 는 상태에 따라 열리므로 여기서 보지 않는다.
+ * 값 없이 박힌 `disabled` 만 영구로 본다.
+ */
+function permanentlyDisabledTestIds(sourceText) {
+	const out = new Map();
+	// 여는 태그 하나를 통째로 잡아 그 안에 표지와 disabled 가 함께 있는지 본다.
+	for (const tag of sourceText.matchAll(/<\w+[^>]*?>/gs)) {
+		const text = tag[0];
+		if (!/\sdisabled\s*(?=[/>\s])/.test(text)) continue;
+		for (const attr of text.matchAll(
+			/data-(?:testid|settings-tab|app-id)=["']([^"']+)["']/g,
+		)) {
+			out.set(attr[1], true);
+		}
+	}
+	return out;
+}
+
+const disabledIds = permanentlyDisabledTestIds(sourceText);
+
+/**
+ * 지금 꺼 둔 채로 두는 조작. 왜 스펙이 남아 있는지 적어야 한다.
+ */
+const KNOWN_DISABLED = new Map([
+	[
+		"connections",
+		"설정의 연결 탭. 라벨이 \"곧 제공\" 이고 disabled 가 조건 없이 박혀 있다. 92-discord-secure-cancel 이 이 탭을 눌러 패널을 기다리므로 매번 30초를 쓰고 실패한다. 기능을 낼지 스펙을 접을지는 오너 결정이다",
+	],
+]);
+
 const specs = [
 	...tracked(`${SHELL}/e2e-tauri`, ".ts"),
 	...tracked(`${SHELL}/e2e`, ".ts"),
 ];
 
 const missing = [];
+const disabledAnchors = [];
 const usedAllowances = new Set();
 let anchors = 0;
 
@@ -148,6 +188,15 @@ for (const file of specs) {
 
 	for (const [name, at] of names) {
 		anchors += 1;
+		// 소스에 있어도 영구히 꺼 둔 조작 뒤면 도달할 수 없다.
+		const bare = name.replace(/^data-\w+-tab="|"$/g, "");
+		if (disabledIds.has(name) || disabledIds.has(bare)) {
+			disabledAnchors.push({
+				file,
+				name: bare,
+				line: source.slice(0, at).split("\n").length,
+			});
+		}
 		if (ALLOWED_ABSENT.has(name)) {
 			usedAllowances.add(name);
 			continue;
@@ -237,6 +286,36 @@ for (const file of specs) {
 			line: source.slice(0, match.index).split("\n").length,
 		});
 	}
+}
+
+const disabledNew = disabledAnchors.filter(
+	(hit) => !KNOWN_DISABLED.has(hit.name),
+);
+const disabledStale = [...KNOWN_DISABLED.keys()].filter(
+	(name) => !disabledAnchors.some((hit) => hit.name === name),
+);
+if (disabledStale.length) {
+	console.error(
+		`  ❌ 꺼 둔 조작 목록이 낡았다(${disabledStale.length}) — 이제 열렸거나 스펙이 없어졌으니 목록에서 빼라:`,
+	);
+	for (const name of disabledStale) console.error(`     ${name}`);
+	process.exit(1);
+}
+if (disabledNew.length) {
+	console.error(
+		`  ❌ 영구히 꺼 둔 조작을 기다리는 스펙 ${disabledNew.length}곳 — 이 스펙은 통과할 수 없다:`,
+	);
+	for (const hit of disabledNew)
+		console.error(`     ${hit.file}:${hit.line} — ${hit.name}`);
+	console.error(
+		"     기능을 열거나 스펙을 접어라. 지금 두는 이유가 있으면 KNOWN_DISABLED 에 적어라.",
+	);
+	process.exit(1);
+}
+if (disabledAnchors.length) {
+	console.log(
+		`  꺼 둔 조작을 기다리는 스펙 ${disabledAnchors.length}곳 (사유 적어 둠)`,
+	);
 }
 
 // 같은 명령을 여러 번 불러도 결함은 하나다. 이름으로 센다.

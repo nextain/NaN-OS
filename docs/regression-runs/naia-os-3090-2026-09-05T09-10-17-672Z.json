@@ -4,13 +4,14 @@
 		"deterministic_ci"
 	],
 	"ranOn": {
-		"inventorySha256": "d67ec1e8239e1c28a55adad4e700f1758b6883c4bb607db2992e6a0a963c523f",
-		"commit": "7cf3331e909fb5f6787e49fa8e03f184eb9e336b",
+		"inventorySha256": "7fb2d7bb35637d0c6d128ef63fa7af5d16007fce5bfb1f7c8e6a1e2bf99e1fb2",
+		"commit": "cb853941246227976d009ac03d8e9037bdafaaaf",
+		"host": "bazzite",
 		"platform": "linux-x64",
 		"node": "v26.7.0"
 	},
-	"started": "2026-09-05T06:10:21.100Z",
-	"finished": "2026-09-05T06:14:13.427Z",
+	"started": "2026-09-05T09:10:17.672Z",
+	"finished": "2026-09-05T09:13:48.271Z",
 	"status": "failed",
 	"planned": [
 		"100-herdr-first-frame.spec.ts",
@@ -20,32 +21,29 @@
 		"91-jeonju-course-worker.spec.ts",
 		"92-discord-secure-cancel.spec.ts",
 		"93-radio-bgm-observation.spec.ts",
-		"94-nva-prebaked-shell.spec.ts",
 		"95-llm-role-settings.spec.ts",
 		"96-codex-readiness.spec.ts",
 		"96-memory-storage-boundary.spec.ts",
-		"99-stt-mic-test.spec.ts",
-		"channel-reboot.spec.ts",
-		"environment-dispatch.spec.ts"
+		"env-tool-browser-native.spec.ts",
+		"orchestration-restart.spec.ts"
 	],
 	"executed": [
 		"23-channels-status.spec.ts",
 		"31-diagnostics.spec.ts",
 		"33-usage-dashboard.spec.ts",
-		"channel-reboot.spec.ts",
-		"environment-dispatch.spec.ts",
+		"96-memory-storage-boundary.spec.ts",
+		"env-tool-browser-native.spec.ts",
+		"orchestration-restart.spec.ts",
 		"96-codex-readiness.spec.ts"
 	],
 	"groups": [
 		{
 			"conf": "wdio.conf.ts",
-			"specs": 8,
+			"specs": 7,
 			"status": "failed",
-			"passed": 5,
+			"passed": 6,
 			"failedSpecs": [
-				"100-herdr-first-frame.spec.ts",
-				"96-memory-storage-boundary.spec.ts",
-				"99-stt-mic-test.spec.ts"
+				"100-herdr-first-frame.spec.ts"
 			]
 		},
 		{
@@ -53,28 +51,27 @@
 			"specs": 1,
 			"status": "failed",
 			"passed": 0,
-			"failedSpecs": []
+			"failedSpecs": [
+				"91-jeonju-course-worker.spec.ts"
+			]
 		},
 		{
 			"conf": "wdio.conf.discord-settings.ts",
 			"specs": 1,
 			"status": "failed",
 			"passed": 0,
-			"failedSpecs": []
+			"failedSpecs": [
+				"92-discord-secure-cancel.spec.ts"
+			]
 		},
 		{
 			"conf": "wdio.conf.radio.ts",
 			"specs": 1,
 			"status": "failed",
 			"passed": 0,
-			"failedSpecs": []
-		},
-		{
-			"conf": "wdio.conf.nva-prebaked.ts",
-			"specs": 1,
-			"status": "failed",
-			"passed": 0,
-			"failedSpecs": []
+			"failedSpecs": [
+				"93-radio-bgm-observation.spec.ts"
+			]
 		},
 		{
 			"conf": "wdio.conf.codex.ts",
@@ -89,13 +86,7 @@
 	"envMissingBeforeRun": {
 		"93-radio-bgm-observation.spec.ts": [
 			"VITE_NAIA_BGM_BASE"
-		],
-		"95-llm-role-settings.spec.ts": [
-			"NAIA_E2E_ADK_PATH"
-		],
-		"96-memory-storage-boundary.spec.ts": [
-			"NAIA_E2E_ADK_PATH"
 		]
 	},
-	"detail": "wdio.conf.ts: 종료 코드 1; wdio.conf.jeonju-course.ts: 종료 코드 1; wdio.conf.discord-settings.ts: 종료 코드 1; wdio.conf.radio.ts: 종료 코드 1; wdio.conf.nva-prebaked.ts: 종료 코드 1; wdio.conf.codex.ts: 종료 코드 1"
+	"detail": "wdio.conf.ts: 종료 코드 1; wdio.conf.jeonju-course.ts: 종료 코드 1; wdio.conf.discord-settings.ts: 종료 코드 1; wdio.conf.radio.ts: 종료 코드 1; wdio.conf.codex.ts: 종료 코드 1"
 }
