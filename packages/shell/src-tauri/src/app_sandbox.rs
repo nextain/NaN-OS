@@ -153,4 +153,37 @@ mod app_sandbox_escape_tests {
         let _ = std::fs::remove_file(&link);
         assert!(outcome.is_err(), "최종 구성요소 symlink 는 거부해야 한다");
     }
+
+    // 안정성 축의 동시성 자리. 앱 두 개가 같은 순간에 자기 구역에 쓰면 서로의
+    // 파일을 밟지 않아야 하고, 같은 앱이 같은 파일을 동시에 써도 경로 계산이
+    // 어긋나지 않아야 한다. 실제로 스레드를 띄워 경쟁시킨다 — 논리만 보는
+    // 테스트는 경합을 재지 못한다.
+    #[test]
+    fn concurrent_writes_stay_in_their_own_sandbox() {
+        use std::thread;
+
+        let adk = adk();
+        let handles: Vec<_> = (0..8)
+            .map(|index| {
+                let adk = adk.clone();
+                thread::spawn(move || {
+                    let app_id = format!("sbx.concurrent.{}", index % 2);
+                    let r = root(&adk, &app_id).expect("root ok");
+                    let target = file(&r, &format!("shared/out-{index}.txt")).expect("path ok");
+                    std::fs::write(&target, format!("{index}")).expect("write ok");
+                    (app_id, target)
+                })
+            })
+            .collect();
+
+        for handle in handles {
+            let (app_id, path) = handle.join().expect("thread ok");
+            let text = path.to_string_lossy().replace('\\', "/");
+            assert!(
+                text.contains(&format!("data-private/apps/{app_id}/")),
+                "다른 앱 구역으로 샜다: {text}"
+            );
+            assert!(path.is_file(), "쓰기가 남지 않았다: {text}");
+        }
+    }
 }
