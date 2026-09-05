@@ -3,10 +3,20 @@
   "kinds": [
     "native"
   ],
-  "cases": [],
+  "cases": [
+    "모든 탐침이 응답했다 — 빈 결과로 공허하게 통과하지 않는다",
+    "click:registered — 미등록이 아니다",
+    "fill:registered — 미등록이 아니다",
+    "snapshot:registered — 미등록이 아니다",
+    "navigate:registered — 미등록이 아니다",
+    "빈 URL 로는 이동하지 않는다",
+    "참조 없는 클릭은 성공하지 않는다",
+    "unopened:clickAt — 등록돼 있지 않다",
+    "unopened:tapCoord — 등록돼 있지 않다"
+  ],
   "touched": [
     "packages/shell/e2e-tauri/specs/env-tool-browser-native.spec.ts",
-    "pid:3387018"
+    "pid:3575396"
   ],
-  "at": 1788571951653
+  "at": 1788579873033
 }
