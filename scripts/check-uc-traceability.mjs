@@ -124,6 +124,9 @@ const BASELINE = [
 ];
 
 const added = untracked.filter((uc) => !BASELINE.includes(uc));
+// 목록에 적어 두었는데 이제 걸리지 않는 것. 남겨 두면 다음에 같은 이름으로
+// 끊긴 UC 가 들어와도 조용히 지나간다 — 면제가 알리바이가 되는 자리다.
+const resolved = BASELINE.filter((uc) => !untracked.includes(uc));
 const fixed = BASELINE.filter((uc) => !untracked.includes(uc));
 
 // 표에 적힌 테스트 경로가 실제로 있는지 본다. 적기만 하면 통과하는 게이트는
@@ -170,6 +173,14 @@ const brokenRefs = [...referenced].filter((ref) => {
 
 console.log(`[uc-trace] UC 표제 ${titles.length} / 추적 안 되는 것 ${untracked.length} (baseline ${BASELINE.length}) / 표가 가리키는 파일 ${referenced.size}`);
 if (fixed.length) console.log(`  ✓ 해소됨 ${fixed.length}: ${fixed.join(", ")}  ← BASELINE 에서 빼라`);
+if (resolved.length > 0) {
+	console.error(
+		`\n[uc-trace] ❌ 이제 추적되는데 목록에 남아 있는 UC ${resolved.length}: ${resolved.join(", ")}`,
+	);
+	console.error("   BASELINE 에서 지워라 — 남겨 두면 다음 결함을 덮는다.");
+	process.exit(1);
+}
+
 if (added.length) {
 	console.error(`  ❌ 새로 추적이 끊긴 UC ${added.length}: ${added.join(", ")}`);
 	console.error("     Test Coverage Map 에 행을 더하거나, 벤치 계열/에픽 밖으로 선언하라.");

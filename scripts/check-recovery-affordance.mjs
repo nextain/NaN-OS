@@ -154,6 +154,17 @@ console.log(
 const unexpected = stranded.filter(
 	(hit) => !ACKNOWLEDGED.has(`${hit.file}:${hit.line}`),
 );
+// 걸리지 않게 된 면제는 알리바이다. 남겨 두면 다음 결함이 그 자리로 들어와도
+// 조용히 지나간다.
+const staleAllowances = [...ACKNOWLEDGED.keys()].filter(
+	(key) => !stranded.some((hit) => `${hit.file}:${hit.line}` === key),
+);
+if (staleAllowances.length > 0) {
+	console.error("\n걸리지 않는 면제가 남아 있다:");
+	for (const key of staleAllowances) console.error(`  ${key}`);
+	console.error("\nACKNOWLEDGED 에서 지워라 — 남겨 두면 다음 결함을 덮는다.");
+	process.exit(1);
+}
 
 if (unexpected.length > 0) {
 	console.error("\n실패를 알리면서 다음에 할 일을 주지 않는 자리:");
