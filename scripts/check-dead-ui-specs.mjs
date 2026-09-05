@@ -167,6 +167,83 @@ const KNOWN_DISABLED = new Map([
 	],
 ]);
 
+/**
+ * 렌더되지 않는 파일에만 있는 표지.
+ *
+ * 표지가 소스에 있다는 것과 그 표지가 화면에 오른다는 것은 다른 질문이다.
+ * 실측에서 드러났다 — `coding-workers-toggle` 은 WorkspaceCenterArea.tsx
+ * 에 멀쩡히 있는데, 그 파일(1,986줄)은 Herdr 통합 뒤로 값으로 import 되는
+ * 곳이 하나도 없다. 타입만 쓰인다. 그래서 두 기계에서 똑같이 30초를 기다린
+ * 뒤 실패했고, 기존 검사는 "소스에 있으니 살아 있다" 고 말했다.
+ *
+ * 판정은 단순하게 한다. 컴포넌트를 내보내는 파일이 다른 파일에서 값으로
+ * import 되지 않으면 그 파일은 화면에 오르지 않는다. 진입점(App.tsx 등)과
+ * 테스트는 빼고 본다.
+ */
+function unrenderedComponentFiles() {
+	const files = [
+		...tracked(`${SHELL}/src`, ".tsx"),
+		...tracked(`${SHELL}/src`, ".ts"),
+	].filter((f) => !/\.test\.|__tests__/.test(f));
+	const all = new Map(files.map((f) => [f, readFileSync(f, "utf8")]));
+	const orphans = [];
+	for (const [file, source] of all) {
+		// 컴포넌트를 내보내는 파일만 본다.
+		if (!/export\s+(?:default\s+)?function\s+[A-Z]/.test(source)) continue;
+		const base = file.split("/").pop().replace(/\.[jt]sx?$/, "");
+		if (base === "App" || base === "main") continue;
+		let importedAsValue = false;
+		for (const [other, otherSource] of all) {
+			if (other === file) continue;
+			// `import type { X } from "./Y"` 는 화면에 올리지 않는다.
+			// 경로의 **마지막 조각**이 이 이름이어야 한다. 경계를 안 두면
+			// `./HerdrWorkspaceCenterArea` 가 `WorkspaceCenterArea` 로 잡혀
+			// 렌더되지 않는 파일이 렌더되는 것으로 보인다(실제로 그랬다).
+			const seg = `(?:^|/)${base}(?:\\.[jt]sx?)?`;
+			const valueImport = new RegExp(
+				`import\\s+(?!type\\b)[^;]*?from\\s+["'][^"']*?${seg}["']|import\\(\\s*["'][^"']*?${seg}["']`,
+			);
+			if (valueImport.test(otherSource)) {
+				importedAsValue = true;
+				break;
+			}
+		}
+		if (!importedAsValue) orphans.push(file);
+	}
+	return orphans;
+}
+
+const unrendered = new Set(unrenderedComponentFiles());
+
+/** 표지가 어느 파일에서 정의되는지. 렌더 여부를 표지에 잇기 위해서다. */
+const definedIn = new Map();
+for (const file of [
+	...tracked(`${SHELL}/src`, ".tsx"),
+	...tracked(`${SHELL}/src`, ".ts"),
+].filter((f) => !/\.test\.|__tests__/.test(f))) {
+	const source = readFileSync(file, "utf8");
+	for (const m of source.matchAll(
+		/data-(?:testid|settings-tab|app-id)=["']([^"']+)["']/g,
+	)) {
+		if (!definedIn.has(m[1])) definedIn.set(m[1], new Set());
+		definedIn.get(m[1]).add(file);
+	}
+}
+
+/**
+ * 지금 렌더되지 않는 채로 두는 파일. 왜 남겨 두는지 적어야 한다.
+ */
+const KNOWN_UNRENDERED = new Map([
+	[
+		"packages/shell/src/apps/workspace/WorkspaceCenterArea.tsx",
+		"Herdr 통합(db33ef4a)으로 워크스페이스 화면이 HerdrWorkspaceCenterArea 로 바뀌면서 이 1,986줄이 화면에서 빠졌다. 타입만 쓰인다. coding-workers-toggle 이 여기에만 있어 91-jeonju-course-worker 가 두 기계에서 실패한다. 기능을 일부러 뺀 것인지 통합이 떨어뜨린 것인지는 오너가 정한다",
+	],
+	[
+		"packages/shell/src/components/ConnectionsSettingsTab.tsx",
+		"Discord 연결 패널 전체. 설정의 연결 탭이 영구 disabled 이고 이 파일도 값으로 import 되는 곳이 없다 — 기능이 아직 안 나온 상태다. 스펙 여섯이 이 패널을 기다리므로 매번 실패한다. 루크가 디스코드 연결은 이후 개선 예정으로 유예한다고 했으므로 그 판단을 여기 적어 둔다",
+	],
+]);
+
 const specs = [
 	...tracked(`${SHELL}/e2e-tauri`, ".ts"),
 	...tracked(`${SHELL}/e2e`, ".ts"),
@@ -174,6 +251,7 @@ const specs = [
 
 const missing = [];
 const disabledAnchors = [];
+const unrenderedAnchors = [];
 const usedAllowances = new Set();
 let anchors = 0;
 
@@ -190,6 +268,17 @@ for (const file of specs) {
 		anchors += 1;
 		// 소스에 있어도 영구히 꺼 둔 조작 뒤면 도달할 수 없다.
 		const bare = name.replace(/^data-\w+-tab="|"$/g, "");
+		// 표지를 정의하는 파일이 전부 렌더되지 않으면 그 표지는 화면에
+		// 오르지 않는다. 소스에 있다는 사실만으로는 살아 있다고 못 한다.
+		const homes = definedIn.get(bare);
+		if (homes && homes.size > 0 && [...homes].every((f) => unrendered.has(f))) {
+			unrenderedAnchors.push({
+				file,
+				name: bare,
+				line: source.slice(0, at).split("\n").length,
+				homes: [...homes],
+			});
+		}
 		if (disabledIds.has(name) || disabledIds.has(bare)) {
 			disabledAnchors.push({
 				file,
@@ -286,6 +375,38 @@ for (const file of specs) {
 			line: source.slice(0, match.index).split("\n").length,
 		});
 	}
+}
+
+const unrenderedNew = unrenderedAnchors.filter(
+	(hit) => !hit.homes.every((f) => KNOWN_UNRENDERED.has(f)),
+);
+const unrenderedStale = [...KNOWN_UNRENDERED.keys()].filter(
+	(f) => !unrendered.has(f),
+);
+if (unrenderedStale.length) {
+	console.error(
+		`  ❌ 렌더 안 되는 파일 목록이 낡았다(${unrenderedStale.length}) — 다시 화면에 올랐으니 목록에서 빼라:`,
+	);
+	for (const f of unrenderedStale) console.error(`     ${f}`);
+	process.exit(1);
+}
+if (unrenderedNew.length) {
+	console.error(
+		`  ❌ 화면에 오르지 않는 표지를 기다리는 스펙 ${unrenderedNew.length}곳 — 이 스펙은 통과할 수 없다:`,
+	);
+	for (const hit of unrenderedNew)
+		console.error(
+			`     ${hit.file}:${hit.line} — ${hit.name} (정의: ${hit.homes.join(", ")})`,
+		);
+	console.error(
+		"     그 파일을 다시 화면에 올리거나 스펙을 접어라. 지금 두는 이유가 있으면 KNOWN_UNRENDERED 에 적어라.",
+	);
+	process.exit(1);
+}
+if (unrenderedAnchors.length) {
+	console.log(
+		`  화면에 오르지 않는 표지를 기다리는 스펙 ${unrenderedAnchors.length}곳 (사유 적어 둠)`,
+	);
 }
 
 const disabledNew = disabledAnchors.filter(
