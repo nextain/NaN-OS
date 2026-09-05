@@ -111,6 +111,14 @@ const superseded = inWindow.length - records.length;
 if (rejected.length > 0) {
 	console.log(`  판정에서 뺀 기록 ${rejected.length}개:`);
 	for (const reason of rejected) console.log(`    ${reason}`);
+	const staleList = rejected.filter((r) => r.includes("다른 스펙 목록"));
+	if (staleList.length > 0) {
+		console.log(
+			`  ↳ 그중 ${staleList.length}개는 스펙 목록이 바뀐 뒤의 옛 기록이다.` +
+				" 인벤토리가 바뀌면 그 전 기록은 다른 대상을 잰 것이므로 쓸 수 없다 —" +
+				" 기계들이 다시 돌려야 한다.",
+		);
+	}
 }
 
 if (!records.length) {
