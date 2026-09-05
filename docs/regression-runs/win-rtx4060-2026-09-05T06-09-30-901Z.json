@@ -1,0 +1,95 @@
+{
+	"machine": "win-rtx4060",
+	"tiers": [
+		"deterministic_ci"
+	],
+	"ranOn": {
+		"inventorySha256": "8979891ac6d8a10d6f811176eb9d8573fed7d8c3935a7f7e75239cb6c890342b",
+		"commit": "6be04c14e8cfcb1734fd49c54c87d8342d19fb9b",
+		"platform": "win32-x64",
+		"node": "v24.18.0"
+	},
+	"started": "2026-09-05T06:09:30.901Z",
+	"finished": "2026-09-05T06:16:03.775Z",
+	"status": "failed",
+	"planned": [
+		"13-nva-capability.spec.ts",
+		"24-tts-providers.spec.ts",
+		"32-model-selector.spec.ts",
+		"35-onboarding-extended.spec.ts",
+		"92-browser-app-clicks.spec.ts",
+		"93-discord-inbox-handoff.spec.ts",
+		"94-discord-live-auth.spec.ts",
+		"94-radio-bgm-queue.spec.ts",
+		"95-w1-oauth-callback.spec.ts",
+		"96-grok-readiness.spec.ts",
+		"97-course-worker-guidance.spec.ts",
+		"99-vllm-omni-voice.spec.ts",
+		"env-tool-browser-native.spec.ts",
+		"orchestration-restart.spec.ts"
+	],
+	"executed": [
+		"13-nva-capability.spec.ts",
+		"24-tts-providers.spec.ts",
+		"32-model-selector.spec.ts",
+		"35-onboarding-extended.spec.ts",
+		"95-w1-oauth-callback.spec.ts",
+		"env-tool-browser-native.spec.ts",
+		"orchestration-restart.spec.ts",
+		"94-radio-bgm-queue.spec.ts",
+		"96-grok-readiness.spec.ts"
+	],
+	"groups": [
+		{
+			"conf": "wdio.conf.ts",
+			"specs": 9,
+			"status": "failed",
+			"passed": 7,
+			"failedSpecs": [
+				"92-browser-app-clicks.spec.ts",
+				"99-vllm-omni-voice.spec.ts"
+			]
+		},
+		{
+			"conf": "wdio.conf.discord-settings.ts",
+			"specs": 1,
+			"status": "failed",
+			"passed": 0,
+			"failedSpecs": [
+				"93-discord-inbox-handoff.spec.ts"
+			]
+		},
+		{
+			"conf": "wdio.conf.discord-live.ts",
+			"specs": 1,
+			"status": "failed",
+			"passed": 0,
+			"failedSpecs": []
+		},
+		{
+			"conf": "wdio.conf.radio-queue.ts",
+			"specs": 1,
+			"status": "passed",
+			"passed": 1,
+			"failedSpecs": []
+		},
+		{
+			"conf": "wdio.conf.grok.ts",
+			"specs": 1,
+			"status": "passed",
+			"passed": 1,
+			"failedSpecs": []
+		},
+		{
+			"conf": "wdio.conf.codex.ts",
+			"specs": 1,
+			"status": "failed",
+			"passed": 0,
+			"failedSpecs": [
+				"97-course-worker-guidance.spec.ts"
+			]
+		}
+	],
+	"envMissingBeforeRun": {},
+	"detail": "wdio.conf.ts: 종료 코드 1; wdio.conf.discord-settings.ts: 종료 코드 1; wdio.conf.discord-live.ts: 종료 코드 1; wdio.conf.codex.ts: 종료 코드 1"
+}

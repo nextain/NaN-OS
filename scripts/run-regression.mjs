@@ -34,6 +34,12 @@ const machine = value("machine");
 const tiers = (value("tier") ?? "deterministic_ci").split(",").map((t) => t.trim()).filter(Boolean);
 const dryRun = args.includes("--dry-run");
 
+// 채널에 그대로 붙일 한 줄. 성공/실패(prereq-missing) 경로 양쪽 DONE·BLOCKED 가
+// 이 함수를 부르므로 모듈 최상위에 둔다 — 블록 안에 두면 성공 경로 최종 DONE 에서 ReferenceError.
+function channelLine(state, rest) {
+	return `[${machine}] ${state} ${rest}`;
+}
+
 if (!machine) {
 	console.error("사용법: node scripts/run-regression.mjs --machine=<이름> --tier=deterministic_ci[,credentialed_live,native_local] [--dry-run]");
 	process.exit(2);
@@ -237,16 +243,6 @@ if (dryRun) {
 if (absentPrereqs.length) {
 	// 준비가 안 된 것을 "돌렸는데 실패했다" 로 기록하지 않는다. 기록은 남기되
 	// 상태를 따로 둔다 — 완결성 게이트가 이것을 통과로 세지 않는다.
-	/**
- * 채널에 그대로 붙일 수 있는 한 줄.
- *
- * 왜 러너가 만드는가: 사람이 손으로 적으면 기계 이름이 명단과 어긋나고,
- * 어긋나면 사람은 알아보지만 기록과 대조할 수 없다. 형식은
- * `docs/regression-runs/CHANNEL.md` 에 있다.
- */
-function channelLine(state, rest) {
-	return `[${machine}] ${state} ${rest}`;
-}
 
 const started = new Date().toISOString();
 console.log(
@@ -407,6 +403,16 @@ function parseSpecOutcomes(output) {
 		if (passing) current.passing += Number(passing[1]);
 	}
 
+	// wdio 9.x 스펙 리포터는 `» ... N passing` 대신 워커별로 한 줄로
+	// `[0-3] PASSED in tauri - file:///.../specs/<이름>.spec.ts` 를 낸다. 이
+	// 형식을 못 읽어 통과한 스펙을 안 돌았다로 세던 것이 win-rtx4060 첫
+	// 실행의 과소계상이었다(6/9 통과가 executed 0 으로 남았다).
+	for (const raw of output.split("\n")) {
+		const line = raw.replace(/^\[[^\]]*\]\s*/, "");
+		const m = /\b(PASSED|FAILED) in [\w-]+ - .*?([\w.-]+\.spec\.ts)/.exec(line);
+		if (!m) continue;
+		blocks.push({ spec: m[2], passing: m[1] === "PASSED" ? 1 : 0, failing: m[1] === "FAILED" ? 1 : 0 });
+	}
 	const failed = new Set();
 	const passed = new Set();
 	for (const block of blocks) {
@@ -441,6 +447,10 @@ for (const [conf, specs] of groups) {
 			encoding: "utf8",
 			stdio: ["inherit", "pipe", "pipe"],
 			maxBuffer: 512 * 1024 * 1024,
+			// 윈도우에서 pnpm 은 pnpm.cmd 다. Node 는 .cmd/.bat 를 shell 없이 spawn
+			// 하면 EINVAL 로 죽어(스폰 자체 실패) wdio 가 한 번도 뜨지 않는다.
+			// build-e2e-tauri.mjs 도 같은 이유로 win32 에서 shell 을 켠다.
+			shell: process.platform === "win32",
 		},
 	);
 	if (child.stdout) {
