@@ -82,10 +82,17 @@ localStorage.setItem("naia-adk-path", "/tmp/mock-naia-adk-workspace");
 `;
 
 /**
- * 셸 본 화면의 표지 — 사용자가 실제로 말을 걸 수 있게 되는 자리다.
- * `.naia-work-rail` 은 워크스페이스 모드에서만 나오므로 표지로 쓸 수 없다.
+ * 셸이 준비된 자리.
+ *
+ * 처음에는 화면 요소가 그려진 순간(`.naia-chat-area`)을 잡았다. 그런데 그
+ * 시점에 셸은 아직 설정도 로케일도 하이드레이트하지 않았고, 그 구간에 3초를
+ * 넣어도 숫자가 움직이지 않았다. 성능 축이 잡고 싶어 하는 "번들은 그대로인데
+ * 초기화가 느려지는 회귀" 가 정확히 거기서 일어난다.
+ *
+ * 이제 앱이 스스로 준비됐다고 말하는 표지를 기다린다. 그 표지는 로케일
+ * 하이드레이션까지 반영한다.
  */
-const SHELL_READY = ".naia-chat-area";
+const SHELL_READY = '[data-app-ready="true"]';
 
 /** 설정 화면의 표지. 여기 도달했다면 측정 대상이 틀린 것이다. */
 const SETUP_SCREEN = ".adk-setup-headline";

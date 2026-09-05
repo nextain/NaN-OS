@@ -48,25 +48,31 @@ async function readThroughRuntime(): Promise<Map<Locale, Map<string, string>>> {
 }
 
 describe("사용자에게 보이는 문구는 i18n 을 지난다 (UC-QUALITY-I18N-USER-FACING)", () => {
-	it("열네 로케일이 각각 실제로 다른 문구를 낸다", async () => {
+	it("열네 로케일이 각각 서로 다른 문구를 낸다", async () => {
 		const tables = await readThroughRuntime();
-		const english = tables.get("en")!;
 
-		// 로케일마다 영어와 글자까지 같은 키가 몇 개인지 센다. 배선이 끊겨
-		// 영어로 되돌아가면 이 수가 전체 키 수와 같아진다. 번역이 아직 영어인
-		// 자리가 있으므로 0 을 요구하지는 않되, 통째로 영어가 되는 것은 막는다.
-		for (const locale of LOCALES) {
-			if (locale === "en") continue;
-			const table = tables.get(locale)!;
-			let sameAsEnglish = 0;
-			for (const [key, value] of table) {
-				if (value === english.get(key)) sameAsEnglish += 1;
+		// 예전에는 각 로케일을 **영어와만** 견주었다. 그래서 베트남어 자리에
+		// 인도네시아어가, 포르투갈어 자리에 스페인어가 실려도 초록이었다.
+		// 로케일 로더는 한 줄씩 이어진 표라 복사·붙여넣기 오배선이 가장 있을
+		// 법한 결함인데, 그것만 정확히 빠져나갔다.
+		//
+		// 이제 모든 짝을 견준다. 두 로케일이 서로 거의 같은 문구를 내면 둘 중
+		// 하나가 다른 하나를 가리키고 있다는 뜻이다.
+		for (const a of LOCALES) {
+			for (const b of LOCALES) {
+				if (a >= b) continue;
+				const left = tables.get(a)!;
+				const right = tables.get(b)!;
+				let same = 0;
+				for (const [key, value] of left) {
+					if (value === right.get(key)) same += 1;
+				}
+				const ratio = same / left.size;
+				expect(
+					ratio,
+					`${a} 와 ${b} 의 ${Math.round(ratio * 100)}% 가 글자까지 같다 — 한쪽 로더가 다른 쪽을 가리키고 있을 수 있다`,
+				).toBeLessThan(0.6);
 			}
-			const ratio = sameAsEnglish / table.size;
-			expect(
-				ratio,
-				`${locale} 의 ${Math.round(ratio * 100)}% 가 영어와 글자까지 같다 — 로더가 영어로 되돌아갔을 수 있다`,
-			).toBeLessThan(0.6);
 		}
 	});
 

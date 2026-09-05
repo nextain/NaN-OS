@@ -142,6 +142,11 @@ export function AppShellFrame({
 					? "true"
 					: "false"
 			}
+			// 부팅이 어디까지 왔는지 밖에서 볼 수 있게 한다. 시작 지연을 재는
+			// 스펙이 화면 요소가 그려진 순간을 잡으면, 설정을 읽고 로케일을
+			// 적용하는 구간이 통째로 빠진다 — 실제로 그 구간에 3초를 넣어도
+			// 숫자가 움직이지 않았다.
+			data-app-ready={appReady ? "true" : "false"}
 			style={
 				{ "--naia-width": `${mainContent.naiaWidth}px` } as React.CSSProperties
 			}
