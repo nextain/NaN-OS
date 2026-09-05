@@ -1,0 +1,81 @@
+{
+	"machine": "win-rtx4060",
+	"tiers": [
+		"deterministic_ci"
+	],
+	"ranOn": {
+		"inventorySha256": "7fb2d7bb35637d0c6d128ef63fa7af5d16007fce5bfb1f7c8e6a1e2bf99e1fb2",
+		"commit": "6eeb143356e3ab53c8de577ec95f4e36e3557f49",
+		"host": "luke-victus",
+		"platform": "win32-x64",
+		"node": "v24.18.0"
+	},
+	"started": "2026-09-05T09:00:03.533Z",
+	"finished": "2026-09-05T09:05:23.067Z",
+	"status": "failed",
+	"planned": [
+		"13-nva-capability.spec.ts",
+		"24-tts-providers.spec.ts",
+		"32-model-selector.spec.ts",
+		"35-onboarding-extended.spec.ts",
+		"92-browser-app-clicks.spec.ts",
+		"93-discord-inbox-handoff.spec.ts",
+		"94-radio-bgm-queue.spec.ts",
+		"95-w1-oauth-callback.spec.ts",
+		"96-grok-readiness.spec.ts",
+		"channel-reboot.spec.ts",
+		"environment-dispatch.spec.ts"
+	],
+	"executed": [
+		"13-nva-capability.spec.ts",
+		"24-tts-providers.spec.ts",
+		"35-onboarding-extended.spec.ts",
+		"95-w1-oauth-callback.spec.ts",
+		"channel-reboot.spec.ts",
+		"94-radio-bgm-queue.spec.ts",
+		"96-grok-readiness.spec.ts"
+	],
+	"groups": [
+		{
+			"conf": "wdio.conf.ts",
+			"specs": 8,
+			"status": "failed",
+			"passed": 5,
+			"failedSpecs": [
+				"32-model-selector.spec.ts",
+				"92-browser-app-clicks.spec.ts",
+				"environment-dispatch.spec.ts"
+			]
+		},
+		{
+			"conf": "wdio.conf.discord-settings.ts",
+			"specs": 1,
+			"status": "failed",
+			"passed": 0,
+			"failedSpecs": [
+				"93-discord-inbox-handoff.spec.ts"
+			]
+		},
+		{
+			"conf": "wdio.conf.radio-queue.ts",
+			"specs": 1,
+			"status": "passed",
+			"passed": 1,
+			"failedSpecs": []
+		},
+		{
+			"conf": "wdio.conf.grok.ts",
+			"specs": 1,
+			"status": "passed",
+			"passed": 1,
+			"failedSpecs": []
+		}
+	],
+	"envMissingBeforeRun": {
+		"96-grok-readiness.spec.ts": [
+			"NAIA_E2E_MAIN_MODEL",
+			"NAIA_E2E_MAIN_PROVIDER"
+		]
+	},
+	"detail": "wdio.conf.ts: 종료 코드 1; wdio.conf.discord-settings.ts: 종료 코드 1"
+}
