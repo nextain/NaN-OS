@@ -181,6 +181,22 @@ function permanentlyDisabledTestIds(sourceText) {
 
 const disabledIds = permanentlyDisabledTestIds(sourceText);
 
+/** 저장소가 아는 파일. `existsSync` 는 git 이 모르는 파일도 참이다. */
+const trackedFiles = new Set(
+	execFileSync("git", ["ls-files"], { encoding: "utf8" }).split("\n").filter(Boolean),
+);
+
+/**
+ * 패키지로 배포되는 앱. 빌드가 실제로 묶는 것만 본다 — 소스에 표식 파일이
+ * 있다는 것과 그 앱이 배포된다는 것은 다른 사실이다.
+ */
+const packagedApps = new Set(
+	[...trackedFiles]
+		.filter((f) => /\/apps\/[^/]+\/package-public\//.test(f))
+		.map((f) => /\/apps\/([^/]+)\/package-public\//.exec(f)?.[1])
+		.filter(Boolean),
+);
+
 /**
  * 지금 꺼 둔 채로 두는 조작. 왜 스펙이 남아 있는지 적어야 한다.
  */
@@ -280,7 +296,17 @@ function unreachableFiles() {
 		if (/\/(?:main|App)\.tsx?$/.test(f)) return true;
 		const app = /^(.*\/apps\/[^/]+)\/(?:index|standalone)\.tsx?$/.exec(f);
 		if (!app) return false;
-		return existsSync(`${app[1]}/package-public/app.json`);
+		// 표식 파일이 **있기만** 하면 뿌리로 세면 안 된다. `existsSync` 는 git
+		// 이 모르는 파일도 참이라, 추적되지 않는 app.json 한 줄로 App 이 끊은
+		// 앱이 되살아났다. 저장소가 아는 파일이어야 하고, 그것만으로도
+		// 부족하다 — 런타임 설치 앱은 `~/.naia/apps` 의 매니페스트로 올라오지
+		// 소스 트리의 package-public 으로 올라오지 않는다.
+		//
+		// 그래서 조건을 둘로 둔다. 저장소가 아는 표식이 있고, **그 앱이
+		// 패키지로 배포되도록 빌드에 묶여 있어야** 한다.
+		const manifest = `${app[1]}/package-public/app.json`;
+		if (!trackedFiles.has(manifest)) return false;
+		return packagedApps.has(app[1].split("/").pop());
 	});
 	const reachable = new Set();
 	const stack = [...roots];

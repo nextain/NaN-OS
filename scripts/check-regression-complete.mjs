@@ -178,6 +178,8 @@ const covered = new Set();
 const planned = new Set();
 const skipped = new Map();
 const failedMachines = [];
+/** 다시 돌리면 통과하는 스펙. 보여만 주고 판정에는 넣지 않는다. */
+const flakyByMachine = [];
 const notRun = [];
 for (const record of records) {
 	// 덮였다고 셀 수 있는 것은 실제로 끝까지 돈 것뿐이다. planned 는 무엇을
@@ -196,9 +198,21 @@ for (const record of records) {
 	} else if (record.status !== "passed") {
 		failedMachines.push(`${record.machine}(${record.status})`);
 	}
+	// 다시 돌리면 통과하는 스펙은 통과가 아니다. 다만 매번 실패하는 것과
+	// 구별돼야 사람이 진짜 회귀를 찾을 수 있다. 판정에는 넣지 않고 보여만
+	// 준다 — 이 숫자로 초록을 만들 수는 없다.
+	for (const spec of record.flakySpecs ?? []) {
+		flakyByMachine.push(`${record.machine}: ${spec}`);
+	}
 }
 
 const never = [...all].filter((s) => !covered.has(s));
+if (flakyByMachine.length) {
+	console.log(
+		`  가끔 실패하는 스펙 ${flakyByMachine.length}개 — 다시 돌리면 통과하지만 통과로 세지 않는다:`,
+	);
+	for (const line of flakyByMachine) console.log(`     ${line}`);
+}
 const machines = [...new Set(records.map((r) => r.machine))];
 
 console.log(

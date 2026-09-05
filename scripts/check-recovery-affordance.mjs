@@ -28,7 +28,7 @@ import { readFileSync } from "node:fs";
 const SHELL = "packages/shell";
 
 /** 사용자에게 실패를 알리는 표시. */
-const FAILURE_SURFACE = /role=["']alert["']/;
+const FAILURE_SURFACE = /role=\s*(?:\{\s*)?["']alert["']/;
 
 /** 다음 행동을 주는 표시. */
 /**
@@ -70,7 +70,11 @@ function tracked(dir, extension) {
 /** `role="alert"` 를 단 요소의 본문. 여는 태그부터 짝 닫는 태그까지. */
 function alertBlocks(source) {
 	const blocks = [];
-	for (const match of source.matchAll(/<(\w+)([^>]*role=["']alert["'][^>]*)>/g)) {
+	// JSX 식 `role={"alert"}` 도 같은 알림이다. 표지 정의는 식까지 이었는데
+	// 이 자리만 리터럴이라, 식으로 적으면 알림 자체가 없는 것으로 보였다.
+	for (const match of source.matchAll(
+		/<(\w+)([^>]*role=\s*(?:\{\s*)?["']alert["'][^>]*)>/g,
+	)) {
 		const tag = match[1];
 		const from = match.index;
 		// 자기 닫힘이면 그 자체가 전부다.
@@ -149,6 +153,10 @@ function isDeadEnd(source, at) {
 	// 사이에 남은 것에서 여는 태그와 공백을 걷어 낸다. 아무것도 남지 않으면
 	// 알림까지 곧장 내려온 것이다.
 	const between = afterReturn[1]
+		// `<>` 조각은 글자가 없어 태그로 안 걷혔다. 그래서 알림을 조각으로
+		// 한 번 감싸는 것만으로 막다른 화면이 아니게 됐다 — 실무에서 가장
+		// 흔한 형태다.
+		.replace(/<\/?>/g, " ")
 		.replace(/<[A-Za-z][\w.]*(\s[^>]*)?>/g, " ")
 		.replace(/\{[\s\S]*?\}/g, " ")
 		.trim();

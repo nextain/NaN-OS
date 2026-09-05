@@ -62,6 +62,32 @@ function extractJson(text: string): SemanticJudgeResult {
 	}
 }
 
+
+/**
+ * 이 실행이 어느 청구처를 몇 번 두드렸는지 적는다.
+ *
+ * 비용을 추정으로 적으면 아무도 믿지 않는다. 실제 호출 수를 남기고, 금액은
+ * 각 콘솔의 청구서와 대조한다. 청구처가 갈리므로 이름으로 나눠 적는다 —
+ * 판정 모델은 Google Gemini 이고, 셸이 쓰는 모델은 나이아 게이트웨이다.
+ */
+function recordBillableCall(surface: string): void {
+	const path = process.env.NAIA_E2E_COST_LEDGER;
+	if (!path) return;
+	try {
+		const fs = require("node:fs") as typeof import("node:fs");
+		let ledger: Record<string, number> = {};
+		try {
+			ledger = JSON.parse(fs.readFileSync(path, "utf8"));
+		} catch {
+			ledger = {};
+		}
+		ledger[surface] = (ledger[surface] ?? 0) + 1;
+		fs.writeFileSync(path, JSON.stringify(ledger, null, "\t"));
+	} catch {
+		// 계수 실패가 테스트를 죽이면 안 된다.
+	}
+}
+
 export async function judgeSemantics(opts: {
 	task: string;
 	answer: string;
@@ -79,7 +105,8 @@ export async function judgeSemantics(opts: {
 	const controller = new AbortController();
 	const timeoutId = setTimeout(() => controller.abort(), JUDGE_TIMEOUT_MS);
 	const res = await fetch(
-		`https://generativelanguage.googleapis.com/v1beta/models/${JUDGE_MODEL}:generateContent?key=${JUDGE_API_KEY}`,
+		(recordBillableCall("google-gemini-judge"),
+		`https://generativelanguage.googleapis.com/v1beta/models/${JUDGE_MODEL}:generateContent?key=${JUDGE_API_KEY}`),
 		{
 			method: "POST",
 			headers: { "content-type": "application/json" },
@@ -220,7 +247,8 @@ export async function judgeVisualSemantics(opts: {
 	const controller = new AbortController();
 	const timeoutId = setTimeout(() => controller.abort(), JUDGE_TIMEOUT_MS);
 	const res = await fetch(
-		`https://generativelanguage.googleapis.com/v1beta/models/${JUDGE_MODEL}:generateContent?key=${JUDGE_API_KEY}`,
+		(recordBillableCall("google-gemini-judge"),
+		`https://generativelanguage.googleapis.com/v1beta/models/${JUDGE_MODEL}:generateContent?key=${JUDGE_API_KEY}`),
 		{
 			method: "POST",
 			headers: { "content-type": "application/json" },

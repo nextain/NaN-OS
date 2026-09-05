@@ -72,8 +72,56 @@ const KEY_ENV = /API_KEY|_KEY$|TOKEN|SECRET|USER_ID/;
 // 자국은 두 갈래다. 하나는 모델을 직접 부르는 것(주소·자격증명·판정 호출),
 // 다른 하나는 **앱의 대화 화면을 통해** 모델과 말하는 것이다. chat.ts 는
 // 뒤쪽이라 HTTP 자국이 하나도 없다 — 앞쪽만 보면 그 모듈이 통째로 빠진다.
-const TALKS_TO_MODEL =
-	/api\.openai\.com|api\.anthropic\.com|generativelanguage\.googleapis|openrouter|\bjudge\w*\s*\(|API_KEY|_KEY\b|GATEWAY|\.chat-message|\bassistant\w*\b|chat-input/;
+// 주소 목록을 손으로 적으면 목록에 없는 제공자로 빠져나간다 — 이 저장소가
+// 기본으로 쓰는 xAI(`api.x.ai`)가 빠져 있었다. 제공자 주소는 셸의 registry 가
+// 이미 알고 있으므로 거기서 뽑는다.
+// 셸이 아는 제공자 식별자를 그대로 쓴다. 주소를 손으로 적으면 목록에 없는
+// 제공자로 빠져나간다 — 이 저장소가 쓰는 xAI 가 그렇게 빠져 있었다.
+// 식별자는 `api.x.ai`, `api.openai.com` 같은 주소 안에 그대로 나타난다.
+const registrySource = readFileSync(
+	"packages/shell/src/lib/llm/registry.ts",
+	"utf8",
+);
+const providerIds = [
+	...new Set(
+		[...registrySource.matchAll(/^\t\t?id:\s*["']([a-z0-9-]+)["']/gm)].map(
+			(m) => m[1],
+		),
+	),
+].filter((id) => id.length >= 2);
+const providerHosts = [
+	...new Set([
+		// 주소는 식별자를 그대로 쓰지 않는다 — `xai` 가 `api.x.ai` 다. 글자
+		// 사이에 점이 끼어도 같은 제공자로 본다. `api.` 로 시작하고 점으로
+		// 끝나는 자리에만 쓰므로 넓지 않다.
+		...providerIds.map(
+			// 뒤는 점이거나 경로 구분자다. 점만 요구하면 `api.x.ai/v1` 처럼
+			// 도메인이 거기서 끝나는 주소를 놓친다.
+			(id) => `api\\.${id.replace(/-/g, "").split("").join("\\.?")}[./]`,
+		),
+		...[...registrySource.matchAll(/https?:\/\/([a-z0-9.-]+)/g)]
+			.map((m) => m[1])
+			.filter((host) => /^api\./.test(host)),
+	]),
+];
+if (providerIds.length < 5) {
+	console.error(
+		`[e2e-inventory] 제공자를 ${providerIds.length}개밖에 못 찾았다 — registry 경로가 바뀌었는지 보라`,
+	);
+	process.exit(2);
+}
+const TALKS_TO_MODEL = new RegExp(
+	[
+		...providerHosts,
+		String.raw`\bjudge\w*\s*\(`,
+		"API_KEY",
+		String.raw`_KEY\b`,
+		"GATEWAY",
+		String.raw`\.chat-message`,
+		String.raw`\bassistant\w*\b`,
+		"chat-input",
+	].join("|"),
+);
 const chatHelperNames = new Set(["judge"]);
 for (const entry of readdirSync(HELPER_DIR).filter((f) => f.endsWith(".ts"))) {
 	let source;

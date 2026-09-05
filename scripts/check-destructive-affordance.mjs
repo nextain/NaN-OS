@@ -106,7 +106,11 @@ function reversibleHereOrNull(command, wrapperName) {
  * 주는 자리다.
  */
 const AFFORDANCE =
-	/\bconfirm\s*\(|\bwindow\.confirm\b|Confirm(?:Dialog|Modal|Sheet)\b|\bset\w*Confirm\w*\s*\(|\bconfirm\w*\s*(?:===|!==|\?|&&)|\bundo\s*\(|\bmoveToTrash\b|\btrash\s*\(/;
+	// `confirmed === true` 처럼 **불리언 변수 이름**이 확인으로 세던 자리를
+	// 뺐다. 사용자에게 묻지 않는 지역 변수 하나로 확인 없는 삭제가 통과했다.
+	// 확인은 묻는 동작이지 이름이 아니다. 상태로 확인 화면을 띄우는 자리는
+	// `set*Confirm(` 로 이미 인정한다.
+	/\bconfirm\s*\(|\bwindow\.confirm\b|Confirm(?:Dialog|Modal|Sheet)\b|\bset\w*Confirm\w*\s*\(|\bundo\s*\(|\bmoveToTrash\b|\btrash\s*\(/;
 
 /**
  * 주석과 문자열을 지운 코드. 리뷰에서 실증된 우회가 있었다 —
@@ -355,9 +359,18 @@ for (const [file, source] of sources) {
 		// 이름을 변수로 받아도, 그 변수의 타입이 리터럴 합집합으로 묶여 있으면
 		// 어떤 명령이 지나는지 정해져 있다. 손으로 면제하지 말고 그 리터럴을
 		// 읽어 판정한다 — 면제 목록은 이유가 거짓이 되어도 그대로 남는다.
+		// 앞에서부터 **첫** 일치를 쓰면 파일 위쪽의 관계없는 서명이 잡힌다 —
+		// 파괴 아닌 명령을 받는 함수 하나를 위에 두면 아래의 조립 호출이
+		// 통째로 사라졌다. 이 호출을 감싼 함수 서명 안에서만 읽는다.
+		// 서명은 본문 밖에 있으므로 함수 시작 조금 앞부터 본다. 파일 전체를
+		// 보면 위쪽의 관계없는 서명이 잡힌다.
+		const scope = enclosingFunction(code, match.index);
+		const scopeText = scope
+			? code.slice(Math.max(0, scope.start - 400), match.index)
+			: code.slice(Math.max(0, match.index - 400), match.index);
 		const union = new RegExp(
 			`\\b${arg}\\s*:\\s*((?:["'][a-z0-9_]+["']\\s*\\|\\s*)*["'][a-z0-9_]+["'])`,
-		).exec(code.slice(0, match.index));
+		).exec(scopeText);
 		if (union) {
 			const names = [...union[1].matchAll(/["']([a-z0-9_]+)["']/g)].map(
 				(m) => m[1],
@@ -405,9 +418,19 @@ for (const [file, source] of sources) {
 	}
 }
 
-const composedNew = composedInvokes.filter(
-	(hit) => !COMPOSED_ALLOWED.has(hit.site),
-);
+// 면제는 그 자리의 **그 호출 하나**에만 걸린다. 자리로 좁혔더니 같은 함수
+// 안에 확인 없는 파괴를 하나 더 조립해 넣는 것을 그대로 삼켰다 — 면제
+// 이유("동작 표에서 리터럴로 정한 이름만 지난다")가 거짓이 되어도 통과했다.
+// 자리마다 몇 개까지 면제인지 함께 적는다.
+const composedSeen = new Map();
+const composedNew = composedInvokes.filter((hit) => {
+	if (!COMPOSED_ALLOWED.has(hit.site)) return true;
+	const used = composedSeen.get(hit.site) ?? 0;
+	composedSeen.set(hit.site, used + 1);
+	// 면제된 자리는 조립 호출이 하나뿐이라는 것이 이유의 전제다. 둘째부터는
+	// 그 전제가 깨진 것이므로 막는다.
+	return used >= 1;
+});
 const composedStale = [...COMPOSED_ALLOWED.keys()].filter(
 	(site) => !composedInvokes.some((hit) => hit.site === site),
 );

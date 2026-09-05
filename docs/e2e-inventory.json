@@ -36,7 +36,8 @@
 			"env": [
 				"CAFE_E2E_API_KEY",
 				"GEMINI_API_KEY",
-				"NAIA_E2E_ARTIFACTS_DIR"
+				"NAIA_E2E_ARTIFACTS_DIR",
+				"NAIA_E2E_COST_LEDGER"
 			],
 			"tier": "credentialed_live"
 		},
@@ -49,7 +50,8 @@
 				"GEMINI_API_KEY",
 				"NAIA_API_KEY",
 				"NAIA_E2E_ADK_FIXTURE",
-				"NAIA_E2E_ARTIFACTS_DIR"
+				"NAIA_E2E_ARTIFACTS_DIR",
+				"NAIA_E2E_COST_LEDGER"
 			],
 			"tier": "credentialed_live"
 		},
@@ -59,7 +61,8 @@
 			"env": [
 				"CAFE_E2E_API_KEY",
 				"GEMINI_API_KEY",
-				"NAIA_E2E_ARTIFACTS_DIR"
+				"NAIA_E2E_ARTIFACTS_DIR",
+				"NAIA_E2E_COST_LEDGER"
 			],
 			"tier": "credentialed_live"
 		},
@@ -71,7 +74,8 @@
 				"GEMINI_API_KEY",
 				"NAIA_API_KEY",
 				"NAIA_E2E_ADK_FIXTURE",
-				"NAIA_E2E_ARTIFACTS_DIR"
+				"NAIA_E2E_ARTIFACTS_DIR",
+				"NAIA_E2E_COST_LEDGER"
 			],
 			"tier": "credentialed_live"
 		},
@@ -91,7 +95,8 @@
 				"GEMINI_API_KEY",
 				"NAIA_API_KEY",
 				"NAIA_E2E_ADK_FIXTURE",
-				"NAIA_E2E_ARTIFACTS_DIR"
+				"NAIA_E2E_ARTIFACTS_DIR",
+				"NAIA_E2E_COST_LEDGER"
 			],
 			"tier": "credentialed_live"
 		},
@@ -114,7 +119,8 @@
 				"GEMINI_API_KEY",
 				"NAIA_API_KEY",
 				"NAIA_E2E_ADK_FIXTURE",
-				"NAIA_E2E_ARTIFACTS_DIR"
+				"NAIA_E2E_ARTIFACTS_DIR",
+				"NAIA_E2E_COST_LEDGER"
 			],
 			"tier": "credentialed_live"
 		},
@@ -130,7 +136,8 @@
 			"env": [
 				"CAFE_E2E_API_KEY",
 				"GEMINI_API_KEY",
-				"NAIA_E2E_ARTIFACTS_DIR"
+				"NAIA_E2E_ARTIFACTS_DIR",
+				"NAIA_E2E_COST_LEDGER"
 			],
 			"tier": "credentialed_live"
 		},
@@ -142,7 +149,8 @@
 				"GEMINI_API_KEY",
 				"NAIA_API_KEY",
 				"NAIA_E2E_ADK_FIXTURE",
-				"NAIA_E2E_ARTIFACTS_DIR"
+				"NAIA_E2E_ARTIFACTS_DIR",
+				"NAIA_E2E_COST_LEDGER"
 			],
 			"tier": "credentialed_live"
 		},
@@ -182,7 +190,8 @@
 				"GEMINI_API_KEY",
 				"NAIA_API_KEY",
 				"NAIA_E2E_ADK_FIXTURE",
-				"NAIA_E2E_ARTIFACTS_DIR"
+				"NAIA_E2E_ARTIFACTS_DIR",
+				"NAIA_E2E_COST_LEDGER"
 			],
 			"tier": "credentialed_live"
 		},
@@ -194,7 +203,8 @@
 				"GEMINI_API_KEY",
 				"NAIA_API_KEY",
 				"NAIA_E2E_ADK_FIXTURE",
-				"NAIA_E2E_ARTIFACTS_DIR"
+				"NAIA_E2E_ARTIFACTS_DIR",
+				"NAIA_E2E_COST_LEDGER"
 			],
 			"tier": "credentialed_live"
 		},
@@ -206,7 +216,8 @@
 				"GEMINI_API_KEY",
 				"NAIA_API_KEY",
 				"NAIA_E2E_ADK_FIXTURE",
-				"NAIA_E2E_ARTIFACTS_DIR"
+				"NAIA_E2E_ARTIFACTS_DIR",
+				"NAIA_E2E_COST_LEDGER"
 			],
 			"tier": "credentialed_live"
 		},
@@ -218,7 +229,8 @@
 				"GEMINI_API_KEY",
 				"NAIA_API_KEY",
 				"NAIA_E2E_ADK_FIXTURE",
-				"NAIA_E2E_ARTIFACTS_DIR"
+				"NAIA_E2E_ARTIFACTS_DIR",
+				"NAIA_E2E_COST_LEDGER"
 			],
 			"tier": "credentialed_live"
 		},
@@ -241,7 +253,8 @@
 				"GEMINI_API_KEY",
 				"NAIA_API_KEY",
 				"NAIA_E2E_ADK_FIXTURE",
-				"NAIA_E2E_ARTIFACTS_DIR"
+				"NAIA_E2E_ARTIFACTS_DIR",
+				"NAIA_E2E_COST_LEDGER"
 			],
 			"tier": "credentialed_live"
 		},
@@ -253,7 +266,8 @@
 				"GEMINI_API_KEY",
 				"NAIA_API_KEY",
 				"NAIA_E2E_ADK_FIXTURE",
-				"NAIA_E2E_ARTIFACTS_DIR"
+				"NAIA_E2E_ARTIFACTS_DIR",
+				"NAIA_E2E_COST_LEDGER"
 			],
 			"tier": "credentialed_live"
 		},
@@ -311,7 +325,8 @@
 				"GEMINI_API_KEY",
 				"NAIA_API_KEY",
 				"NAIA_E2E_ADK_FIXTURE",
-				"NAIA_E2E_ARTIFACTS_DIR"
+				"NAIA_E2E_ARTIFACTS_DIR",
+				"NAIA_E2E_COST_LEDGER"
 			],
 			"tier": "credentialed_live"
 		},
@@ -323,7 +338,8 @@
 				"GEMINI_API_KEY",
 				"NAIA_API_KEY",
 				"NAIA_E2E_ADK_FIXTURE",
-				"NAIA_E2E_ARTIFACTS_DIR"
+				"NAIA_E2E_ARTIFACTS_DIR",
+				"NAIA_E2E_COST_LEDGER"
 			],
 			"tier": "credentialed_live"
 		},
@@ -368,7 +384,8 @@
 			"env": [
 				"CAFE_E2E_API_KEY",
 				"GEMINI_API_KEY",
-				"NAIA_E2E_ARTIFACTS_DIR"
+				"NAIA_E2E_ARTIFACTS_DIR",
+				"NAIA_E2E_COST_LEDGER"
 			],
 			"tier": "credentialed_live"
 		},
@@ -380,7 +397,8 @@
 				"GEMINI_API_KEY",
 				"NAIA_API_KEY",
 				"NAIA_E2E_ADK_FIXTURE",
-				"NAIA_E2E_ARTIFACTS_DIR"
+				"NAIA_E2E_ARTIFACTS_DIR",
+				"NAIA_E2E_COST_LEDGER"
 			],
 			"tier": "credentialed_live"
 		},
@@ -392,7 +410,8 @@
 				"GEMINI_API_KEY",
 				"NAIA_API_KEY",
 				"NAIA_E2E_ADK_FIXTURE",
-				"NAIA_E2E_ARTIFACTS_DIR"
+				"NAIA_E2E_ARTIFACTS_DIR",
+				"NAIA_E2E_COST_LEDGER"
 			],
 			"tier": "credentialed_live"
 		},
@@ -404,7 +423,8 @@
 				"GEMINI_API_KEY",
 				"NAIA_API_KEY",
 				"NAIA_E2E_ADK_FIXTURE",
-				"NAIA_E2E_ARTIFACTS_DIR"
+				"NAIA_E2E_ARTIFACTS_DIR",
+				"NAIA_E2E_COST_LEDGER"
 			],
 			"tier": "credentialed_live"
 		},
@@ -416,7 +436,8 @@
 				"GEMINI_API_KEY",
 				"NAIA_API_KEY",
 				"NAIA_E2E_ADK_FIXTURE",
-				"NAIA_E2E_ARTIFACTS_DIR"
+				"NAIA_E2E_ARTIFACTS_DIR",
+				"NAIA_E2E_COST_LEDGER"
 			],
 			"tier": "credentialed_live"
 		},
@@ -428,7 +449,8 @@
 				"GEMINI_API_KEY",
 				"NAIA_API_KEY",
 				"NAIA_E2E_ADK_FIXTURE",
-				"NAIA_E2E_ARTIFACTS_DIR"
+				"NAIA_E2E_ARTIFACTS_DIR",
+				"NAIA_E2E_COST_LEDGER"
 			],
 			"tier": "credentialed_live"
 		},
@@ -440,7 +462,8 @@
 				"GEMINI_API_KEY",
 				"NAIA_API_KEY",
 				"NAIA_E2E_ADK_FIXTURE",
-				"NAIA_E2E_ARTIFACTS_DIR"
+				"NAIA_E2E_ARTIFACTS_DIR",
+				"NAIA_E2E_COST_LEDGER"
 			],
 			"tier": "credentialed_live"
 		},
@@ -452,7 +475,8 @@
 				"GEMINI_API_KEY",
 				"NAIA_API_KEY",
 				"NAIA_E2E_ADK_FIXTURE",
-				"NAIA_E2E_ARTIFACTS_DIR"
+				"NAIA_E2E_ARTIFACTS_DIR",
+				"NAIA_E2E_COST_LEDGER"
 			],
 			"tier": "credentialed_live"
 		},
@@ -464,7 +488,8 @@
 				"GEMINI_API_KEY",
 				"NAIA_API_KEY",
 				"NAIA_E2E_ADK_FIXTURE",
-				"NAIA_E2E_ARTIFACTS_DIR"
+				"NAIA_E2E_ARTIFACTS_DIR",
+				"NAIA_E2E_COST_LEDGER"
 			],
 			"tier": "credentialed_live"
 		},
@@ -476,7 +501,8 @@
 				"GEMINI_API_KEY",
 				"NAIA_API_KEY",
 				"NAIA_E2E_ADK_FIXTURE",
-				"NAIA_E2E_ARTIFACTS_DIR"
+				"NAIA_E2E_ARTIFACTS_DIR",
+				"NAIA_E2E_COST_LEDGER"
 			],
 			"tier": "credentialed_live"
 		},
@@ -488,7 +514,8 @@
 				"GEMINI_API_KEY",
 				"NAIA_API_KEY",
 				"NAIA_E2E_ADK_FIXTURE",
-				"NAIA_E2E_ARTIFACTS_DIR"
+				"NAIA_E2E_ARTIFACTS_DIR",
+				"NAIA_E2E_COST_LEDGER"
 			],
 			"tier": "credentialed_live"
 		},
@@ -500,7 +527,8 @@
 				"GEMINI_API_KEY",
 				"NAIA_API_KEY",
 				"NAIA_E2E_ADK_FIXTURE",
-				"NAIA_E2E_ARTIFACTS_DIR"
+				"NAIA_E2E_ARTIFACTS_DIR",
+				"NAIA_E2E_COST_LEDGER"
 			],
 			"tier": "credentialed_live"
 		},
@@ -512,7 +540,8 @@
 				"GEMINI_API_KEY",
 				"NAIA_API_KEY",
 				"NAIA_E2E_ADK_FIXTURE",
-				"NAIA_E2E_ARTIFACTS_DIR"
+				"NAIA_E2E_ARTIFACTS_DIR",
+				"NAIA_E2E_COST_LEDGER"
 			],
 			"tier": "credentialed_live"
 		},
@@ -524,7 +553,8 @@
 				"GEMINI_API_KEY",
 				"NAIA_API_KEY",
 				"NAIA_E2E_ADK_FIXTURE",
-				"NAIA_E2E_ARTIFACTS_DIR"
+				"NAIA_E2E_ARTIFACTS_DIR",
+				"NAIA_E2E_COST_LEDGER"
 			],
 			"tier": "credentialed_live"
 		},
@@ -536,7 +566,8 @@
 				"GEMINI_API_KEY",
 				"NAIA_API_KEY",
 				"NAIA_E2E_ADK_FIXTURE",
-				"NAIA_E2E_ARTIFACTS_DIR"
+				"NAIA_E2E_ARTIFACTS_DIR",
+				"NAIA_E2E_COST_LEDGER"
 			],
 			"tier": "credentialed_live"
 		},
@@ -548,7 +579,8 @@
 				"GEMINI_API_KEY",
 				"NAIA_API_KEY",
 				"NAIA_E2E_ADK_FIXTURE",
-				"NAIA_E2E_ARTIFACTS_DIR"
+				"NAIA_E2E_ARTIFACTS_DIR",
+				"NAIA_E2E_COST_LEDGER"
 			],
 			"tier": "credentialed_live"
 		},
@@ -560,7 +592,8 @@
 				"GEMINI_API_KEY",
 				"NAIA_API_KEY",
 				"NAIA_E2E_ADK_FIXTURE",
-				"NAIA_E2E_ARTIFACTS_DIR"
+				"NAIA_E2E_ARTIFACTS_DIR",
+				"NAIA_E2E_COST_LEDGER"
 			],
 			"tier": "credentialed_live"
 		},
@@ -714,7 +747,8 @@
 			"env": [
 				"CAFE_E2E_API_KEY",
 				"GEMINI_API_KEY",
-				"NAIA_E2E_ARTIFACTS_DIR"
+				"NAIA_E2E_ARTIFACTS_DIR",
+				"NAIA_E2E_COST_LEDGER"
 			],
 			"tier": "credentialed_live"
 		},
@@ -728,7 +762,8 @@
 				"GEMINI_API_KEY",
 				"NAIA_API_KEY",
 				"NAIA_E2E_ADK_FIXTURE",
-				"NAIA_E2E_ARTIFACTS_DIR"
+				"NAIA_E2E_ARTIFACTS_DIR",
+				"NAIA_E2E_COST_LEDGER"
 			],
 			"tier": "credentialed_live"
 		},
@@ -788,7 +823,8 @@
 				"GEMINI_API_KEY",
 				"NAIA_API_KEY",
 				"NAIA_E2E_ADK_FIXTURE",
-				"NAIA_E2E_ARTIFACTS_DIR"
+				"NAIA_E2E_ARTIFACTS_DIR",
+				"NAIA_E2E_COST_LEDGER"
 			],
 			"tier": "credentialed_live"
 		},
@@ -1008,7 +1044,8 @@
 			"env": [
 				"CAFE_E2E_API_KEY",
 				"GEMINI_API_KEY",
-				"NAIA_E2E_ARTIFACTS_DIR"
+				"NAIA_E2E_ARTIFACTS_DIR",
+				"NAIA_E2E_COST_LEDGER"
 			],
 			"tier": "credentialed_live"
 		},
@@ -1054,7 +1091,8 @@
 				"NAIA_API_KEY",
 				"NAIA_E2E_ADK_FIXTURE",
 				"NAIA_E2E_ADK_PATH",
-				"NAIA_E2E_ARTIFACTS_DIR"
+				"NAIA_E2E_ARTIFACTS_DIR",
+				"NAIA_E2E_COST_LEDGER"
 			],
 			"tier": "credentialed_live"
 		},

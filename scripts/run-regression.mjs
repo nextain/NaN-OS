@@ -204,11 +204,6 @@ if (missingEnv.size) {
 // 아니라 준비 부족이다. 둘을 같은 칸에 넣으면 기록이 "서른한 개가 깨졌다" 고
 // 말하게 되고, 다음 사람이 없는 버그를 찾는다.
 // 게이트웨이를 실제로 쓰는 스펙. 소스에서 포트를 직접 적은 것들이다.
-const GATEWAY_SPECS = new Set([
-	"13-lab-login.spec.ts",
-	"72-naia-discord-skill.spec.ts",
-	"99-screenshots.spec.ts",
-]);
 
 function missingPrerequisites() {
 	const missing = [];
@@ -253,15 +248,15 @@ function missingPrerequisites() {
 	// 전체 전제로 두었다가 진단을 그르쳤다 — 서른한 개 실패의 실제 사유는
 	// 게이트웨이가 아니라 WebDriver 세션이 중간에 끊긴 것이었다
 	// (invalid session id + ECONNREFUSED to the driver socket).
-	const needsGateway = mine.some((spec) => GATEWAY_SPECS.has(spec.spec));
-	if (needsGateway) {
-		const gatewayPort = process.env.NAIA_E2E_GATEWAY_PORT ?? "18789";
-		// 포트가 열려 있는지는 실제로 붙어 본다. `ss` 는 리눅스 전용이고,
-		// 없는 기계에서는 "게이트웨이가 없다" 는 거짓 진단이 된다.
-		if (!portIsOpen(Number(gatewayPort))) {
-			missing.push(`게이트웨이 (:${gatewayPort} 응답 없음 — 이 등급에 그것을 쓰는 스펙이 있다)`);
-		}
-	}
+	// 게이트웨이(:18789) 전제는 지웠다.
+	//
+	// 제품이 그것을 없앴다 — `spawn_gateway` 는 "Gateway removed: naia-agent
+	// handles all tools directly" 를 돌려주는 껍데기다(lib.rs:2010). 그런데
+	// 러너만 그 포트를 전제로 요구해서, 자격증명 등급 45개가 통째로 막혔다.
+	// 세 스펙이 설정에 게이트웨이 주소를 적어 넣기는 하지만 그것은 설정
+	// 문자열일 뿐이고, 정말 필요하면 그 스펙이 그 자리에서 실패하면 된다.
+	// 준비 부족과 결함을 가르려던 장치가, 없어진 것을 요구해 45개를 못 돌게
+	// 만드는 쪽으로 뒤집혔다.
 	return missing;
 }
 
@@ -623,9 +618,99 @@ for (const old of readdirSync(dir)) {
 
 console.log(`[regression] 기록: ${out} (${status})`);
 
+/**
+ * 실패한 스펙을 한 번만 다시 돌려, **매번 실패하는 것**과 **가끔 실패하는
+ * 것**을 가른다.
+ *
+ * 두 기계로 나눠 돌면서 실행마다 번갈아 실패하는 스펙이 보였다. 그것을
+ * 그냥 실패로 적으면 사람은 매번 원인을 다시 쫓고, 진짜 회귀가 그 소음에
+ * 묻힌다.
+ *
+ * ⚠️ 다시 돌아 통과했다고 **통과로 바꾸지 않는다.** 그것은 이 프로그램이
+ * 여덟 번 잡아 온 거짓 통과 그대로다. 실패로 남기되 `flaky` 로 표시해
+ * 판단할 재료를 준다.
+ */
+function retryFailedOnce(failed) {
+	const flaky = [];
+	const stable = [];
+	for (const { conf, spec } of failed) {
+		console.log(`[regression] 다시 한 번: ${spec} (${conf})`);
+		const child = spawnSync(
+			process.platform === "win32" ? "pnpm.cmd" : "pnpm",
+			[
+				"-C",
+				"packages/shell",
+				"exec",
+				"wdio",
+				"run",
+				`e2e-tauri/${conf}`,
+				"--spec",
+				`e2e-tauri/specs/${spec}`,
+			],
+			{
+				encoding: "utf8",
+				stdio: ["inherit", "pipe", "pipe"],
+				maxBuffer: 512 * 1024 * 1024,
+				env: { ...process.env, NAIA_E2E_WEBDRIVER_PORT: "4490" },
+				shell: process.platform === "win32",
+			},
+		);
+		const output = `${child.stdout ?? ""}\n${child.stderr ?? ""}`;
+		const outcome = parseSpecOutcomes(output);
+		if (child.status === 0 || outcome.passed.includes(spec)) flaky.push(spec);
+		else stable.push(spec);
+	}
+	return { flaky, stable };
+}
+
 const failedSpecs = [
 	...new Set(groupResults.flatMap((g) => g.failedSpecs ?? [])),
 ];
+
+// 실패한 것만 한 번 더 돌려 매번 실패와 가끔 실패를 가른다.
+const retryTargets = groupResults.flatMap((g) =>
+	(g.failedSpecs ?? []).map((spec) => ({ conf: g.conf, spec })),
+);
+const { flaky, stable } = retryTargets.length
+	? retryFailedOnce(retryTargets)
+	: { flaky: [], stable: [] };
+if (flaky.length) {
+	console.log(
+		`[regression] 다시 돌리니 통과한 것 ${flaky.length}개 — 통과로 바꾸지 않는다. 가끔 실패한다는 사실 자체가 문제다:`,
+	);
+	for (const spec of flaky) console.log(`  ${spec}`);
+}
+if (stable.length) {
+	console.log(`[regression] 다시 돌려도 실패 ${stable.length}개:`);
+	for (const spec of stable) console.log(`  ${spec}`);
+}
+// 이 실행이 어느 청구처를 몇 번 두드렸는지 기록에 남긴다. 금액은 콘솔의
+// 청구서와 대조한다 — 추정 금액을 적으면 아무도 믿지 않는다.
+if (process.env.NAIA_E2E_COST_LEDGER) {
+	try {
+		record.billableCalls = JSON.parse(
+			readFileSync(process.env.NAIA_E2E_COST_LEDGER, "utf8"),
+		);
+	} catch {
+		record.billableCalls = {};
+	}
+	// 셸이 쓰는 모델은 나이아 게이트웨이를 지난다. 그 호출은 이 프로세스
+	// 밖(앱 안)에서 나므로 여기서 셀 수 없다. 어느 자격증명이 있었는지를
+	// 남겨 청구서를 그 실행에 붙일 수 있게 한다.
+	record.credentialsPresent = [
+		"NAIA_API_KEY",
+		"GEMINI_API_KEY",
+		"CAFE_E2E_API_KEY",
+		"OPENAI_API_KEY",
+		"ANTHROPIC_API_KEY",
+		"XAI_API_KEY",
+	].filter((name) => (process.env[name] ?? "").length > 0);
+}
+
+record.flakySpecs = flaky;
+record.stableFailures = stable;
+writeFileSync(out, `${JSON.stringify(record, null, "\t")}\n`);
+
 console.log(
 	`\n${channelLine(
 		"DONE",
