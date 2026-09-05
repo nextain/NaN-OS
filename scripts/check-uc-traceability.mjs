@@ -20,6 +20,7 @@
  * 실패" 로 시작한다. 목록을 줄이는 것이 다음 일이며, 줄어들면 이 파일의
  * 목록도 함께 줄여야 한다(늘리기만 하면 baseline 이 알리바이가 된다).
  */
+import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 
 const scenarios = readFileSync("docs/user-scenarios.md", "utf8");
@@ -140,23 +141,34 @@ for (const match of scenarios.matchAll(/`([^`]*\.(?:ts|tsx|rs|mjs))(?::\d+)?`/g)
 // 것은 저장소 어디엔가 그 이름의 파일이 있으면 산 참조로 본다 — 이름조차
 // 없으면 그 줄은 없는 것을 가리킨다.
 const searchRoots = ["packages/shell", "src", "scripts", "."];
+/**
+ * 이 저장소가 아는 파일 이름 전부.
+ *
+ * 예전에는 작업 디렉터리를 직접 걸었다. 그래서 저장소 안에 놓인 **다른
+ * 저장소의 체크아웃**(`naia-agent-worktrees/` 여섯 벌)까지 훑었고, 커버리지
+ * 표가 가리키는 파일 둘이 거기서만 발견돼 "실재한다" 로 판정됐다. 깨끗한
+ * 체크아웃에서는 그 둘이 없으므로 게이트가 붉다 — 즉 이 게이트는 CI 에서
+ * 통과한 적이 없고, baseline 은 이 기계의 우연한 상태에 맞춰진 숫자였다.
+ *
+ * git 이 아는 것만 본다. 저장소 밖은 이 저장소의 사실이 아니다.
+ */
+/**
+ * 이 저장소가 아는 파일 이름 전부.
+ *
+ * 예전에는 작업 디렉터리를 직접 걸었다. 그래서 저장소 안에 놓인 **다른
+ * 저장소의 체크아웃**(`naia-agent-worktrees/` 여섯 벌)까지 훑었고, 커버리지
+ * 표가 가리키는 파일 둘이 거기서만 발견돼 "실재한다" 로 판정됐다. 깨끗한
+ * 체크아웃에서는 그 둘이 없으므로 게이트가 붉다 — 즉 이 게이트는 CI 에서
+ * 통과한 적이 없고, baseline 은 이 기계의 우연한 상태에 맞춰진 숫자였다.
+ *
+ * git 이 아는 것만 본다. 저장소 밖은 이 저장소의 사실이 아니다.
+ */
 const namesOnDisk = new Set();
-function collectNames(dir, depth = 0) {
-	if (depth > 8) return;
-	let entries;
-	try {
-		entries = readdirSync(dir, { withFileTypes: true });
-	} catch {
-		return;
-	}
-	for (const entry of entries) {
-		if (entry.name === "node_modules" || entry.name === "target" || entry.name === "dist") continue;
-		if (entry.name.startsWith(".") && entry.name !== ".agents") continue;
-		if (entry.isDirectory()) collectNames(`${dir}/${entry.name}`, depth + 1);
-		else namesOnDisk.add(entry.name);
-	}
+for (const path of execFileSync("git", ["ls-files"], { encoding: "utf8" })
+	.split("\n")
+	.filter(Boolean)) {
+	namesOnDisk.add(path.split("/").pop());
 }
-collectNames(".");
 
 const brokenRefs = [...referenced].filter((ref) => {
 	// 표에는 와일드카드로 묶어 적은 줄도 있다(registry*.test.ts). 그것은 파일이
@@ -188,7 +200,10 @@ if (added.length) {
 }
 // 지금 깨져 있는 참조를 baseline 으로 둔다. 표가 오래되어 옛 경로를 가리키는
 // 것이 이미 여럿이라, 한 번에 붉히면 게이트가 꺼진다. 늘어나는 것만 막는다.
-const BASELINE_BROKEN_REFS = 29;
+// 29 에서 31 로 올렸다. 늘어난 둘은 새로 깨진 것이 아니라, 이 저장소에 없는
+// 파일(짝 naia-agent 저장소의 계약 테스트)을 가리키던 것이 이제 보이게 된
+// 것이다. 예전에는 저장소 밖까지 훑어 "있다" 로 판정했다.
+const BASELINE_BROKEN_REFS = 31;
 if (brokenRefs.length > BASELINE_BROKEN_REFS) {
 	console.error(`  ❌ 표가 가리키는데 없는 파일이 늘었다(${brokenRefs.length} > ${BASELINE_BROKEN_REFS}):`);
 	for (const ref of brokenRefs.slice(0, 10)) console.error(`     ${ref}`);

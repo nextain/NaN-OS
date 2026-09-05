@@ -35,6 +35,10 @@ const COMMENT = /^\s*(\/\/|\*|\/\*)/;
 function walk(dir, out = []) {
 	for (const name of readdirSync(dir)) {
 		if (name === "node_modules" || name === "__tests__") continue;
+		// 저장소 안에 놓인 다른 저장소의 체크아웃은 이 저장소의 사실이
+		// 아니다. UC 게이트가 그것을 훑는 바람에 없는 파일을 있다고
+		// 판정한 적이 있다.
+		if (name.endsWith("-worktrees") || name === "worktrees") continue;
 		const full = join(dir, name);
 		if (statSync(full).isDirectory()) walk(full, out);
 		else if (

@@ -53,6 +53,22 @@ const inventoryDigest = createHash("sha256")
 	.update(readFileSync(INVENTORY))
 	.digest("hex");
 
+/**
+ * 지금 회귀를 나눠 맡는 기계들. 명단이 유일한 출처다.
+ *
+ * 게이트가 명단을 보지 않으면 러너와 판정 기준이 갈린다 — 러너는 명단에 없는
+ * 기계를 거부하는데, 게이트는 그 기계의 기록을 커버리지로 세었다. 실제로
+ * 명단에 한 번도 없던 이름의 기록 여섯이 판정에 섞여, 신선한 실패를 낡은
+ * 통과가 덮고 있었다.
+ */
+const ROSTER = join(RUNS, "machines.json");
+const roster = existsSync(ROSTER)
+	? JSON.parse(readFileSync(ROSTER, "utf8"))
+	: { machines: [] };
+const activeMachines = new Set(
+	(roster.machines ?? []).filter((m) => m.active !== false).map((m) => m.name),
+);
+
 const rejected = [];
 const inWindow = readdirSync(RUNS)
 	// 기계 명단은 기록이 아니다. 같은 디렉터리에 있어 확장자만 보면 기록으로
@@ -62,6 +78,12 @@ const inWindow = readdirSync(RUNS)
 	.filter(({ file, record }) => {
 		if (!record.machine) {
 			rejected.push(`${file}: 기계 이름이 없다 — 회귀 기록이 아니다`);
+			return false;
+		}
+		if (activeMachines.size > 0 && !activeMachines.has(record.machine)) {
+			rejected.push(
+				`${file}: ${record.machine} 은 지금 명단에 없다 — 나눔에 참여하지 않는 기계의 기록이다`,
+			);
 			return false;
 		}
 		const when = Date.parse(record.finished ?? record.started ?? 0);
@@ -77,9 +99,15 @@ const inWindow = readdirSync(RUNS)
 		}
 		if (when < cutoff) return false;
 		const stamp = record.ranOn;
-		// 옛 형식 기록에는 지문이 없다. 그것까지 거부하면 판정이 갑자기
-		// 비어 버리므로 통과시키되, 지문이 있는데 어긋나면 거부한다.
-		if (stamp?.inventorySha256 && stamp.inventorySha256 !== inventoryDigest) {
+		// 지문이 없는 기록은 어느 스펙 목록을 잰 것인지 알 수 없다. 한때는
+		// 옛 형식을 살리려고 통과시켰는데, 그러면 그 면제를 받은 낡은 통과가
+		// 신선한 실패를 덮는다 — 실제로 그 일이 있었다. 알 수 없는 것은 세지
+		// 않는다.
+		if (!stamp?.inventorySha256) {
+			rejected.push(`${file}: 어느 스펙 목록을 잰 것인지 알 수 없다(지문 없음)`);
+			return false;
+		}
+		if (stamp.inventorySha256 !== inventoryDigest) {
 			rejected.push(`${file}: 다른 스펙 목록에서 돌았다`);
 			return false;
 		}
@@ -102,8 +130,16 @@ const inWindow = readdirSync(RUNS)
 const latestByMachine = new Map();
 for (const record of inWindow) {
 	const when = Date.parse(record.finished ?? record.started ?? 0);
-	const previous = latestByMachine.get(record.machine);
-	if (!previous || when > previous.when) latestByMachine.set(record.machine, { when, record });
+	// 기계마다가 아니라 **기계와 등급마다** 최신을 본다.
+	//
+	// 등급은 따로 돌리는 것이 자연스럽다 — 자격증명이 필요한 것과 장치가
+	// 필요한 것은 준비가 다르고, 문서도 한 기계에서 여러 종류를 동시에
+	// 돌리지 말라고 적는다. 그런데 기계 단위로만 최신을 고르면 나중 등급이
+	// 앞 등급의 기록을 통째로 지운다. 실제로 두 기계가 세 등급을 나눠 돌아
+	// 123개를 전부 통과시켜도 게이트는 105개가 미실행이라고 말했다.
+	const key = `${record.machine}::${[...(record.tiers ?? [])].sort().join(",")}`;
+	const previous = latestByMachine.get(key);
+	if (!previous || when > previous.when) latestByMachine.set(key, { when, record });
 }
 const records = [...latestByMachine.values()].map((entry) => entry.record);
 const superseded = inWindow.length - records.length;
