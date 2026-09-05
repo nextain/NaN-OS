@@ -248,6 +248,44 @@ function missingPrerequisites() {
 	// 전체 전제로 두었다가 진단을 그르쳤다 — 서른한 개 실패의 실제 사유는
 	// 게이트웨이가 아니라 WebDriver 세션이 중간에 끊긴 것이었다
 	// (invalid session id + ECONNREFUSED to the driver socket).
+	// 자격증명 등급의 진짜 전제는 **모델에 닿는가** 다.
+	//
+	// 첫 수행에서 45개 중 38개가 실패했는데 대부분 한 뿌리였다 —
+	// `provider error: fetch failed` 로 모델에 못 닿아 그 뒤 단정이 줄줄이
+	// 무너진다. 그것은 제품 결함이 아니라 준비 부족인데, 러너가 그 전제를
+	// 검사하지 않아 서른여덟 개의 결함처럼 기록됐다. 준비 부족과 결함을
+	// 가르겠다는 이 함수가 정작 가장 중요한 하나를 안 보고 있었다.
+	//
+	// 그래서 등급이 모델을 쓰면 그 제공자가 실제로 응답하는지 먼저 본다.
+	// 기본 제공자는 codex 앱서버이고, 그것은 `codex` 실행 파일이 로그인된
+	// 상태로 있어야 뜬다.
+	const needsModel = tiers.includes("credentialed_live");
+	if (needsModel) {
+		if (!has("codex")) {
+			missing.push(
+				"codex 실행 파일 (기본 제공자가 codex 앱서버다 — PATH 에 없으면 모든 대화 스펙이 fetch failed 로 죽는다)",
+			);
+		} else {
+			const login = spawnSync("codex", ["login", "status"], {
+				encoding: "utf8",
+				timeout: 20_000,
+			});
+			// codex 는 이 문장을 **표준 오류**로 낸다. 표준 출력만 보면
+			// 로그인돼 있는데도 안 됐다고 말한다(실측).
+			const said = `${login.stdout ?? ""}${login.stderr ?? ""}`;
+			if (login.status !== 0 || !/logged in/i.test(said)) {
+				missing.push(
+					"codex 로그인 (codex login status 가 로그인을 보고하지 않는다 — 모델에 닿지 못한다)",
+				);
+			}
+		}
+		for (const name of ["NAIA_API_KEY", "GEMINI_API_KEY"]) {
+			if (!(process.env[name] ?? "").length) {
+				missing.push(`${name} (자격증명 등급의 대화·판정에 필요하다)`);
+			}
+		}
+	}
+
 	// 게이트웨이(:18789) 전제는 지웠다.
 	//
 	// 제품이 그것을 없앴다 — `spawn_gateway` 는 "Gateway removed: naia-agent

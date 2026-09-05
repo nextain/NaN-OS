@@ -2,7 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { WorkspaceAppApi } from "./apps/workspace/WorkspaceCenterArea";
+import type { WorkspaceAppApi } from "./apps/workspace/types";
 import { AppShellFrame } from "./components/AppShellFrame";
 import { useAgentAuthSync } from "./hooks/useAgentAuthSync";
 import {

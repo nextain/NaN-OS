@@ -13,6 +13,17 @@ process.env.NAIA_E2E_MODE = "1";
 // E2E mock: bypass GitHub clone + agent-kill-before-delete so ADK setup
 // scenarios run in milliseconds without network/process flakiness (#328).
 process.env.NAIA_E2E_MOCK_CLONE = "1";
+// 네이티브(Rust)는 e2e 에서 NAIA_E2E_ADK_PATH 를 워크스페이스 정본으로 삼는다
+// (lib.rs current_adk_path/spawn_adk_path_snapshot). 그런데 화면(웹) 쪽은
+// localStorage 의 `naia-adk-path` 를 쓰고, 그 값을 e2e 환경에 맞춰 다시 묶는 코드는
+// App.tsx 에서 VITE_NAIA_E2E_MODE=1 일 때만 돈다. 그 두 변수를 여기서 같이 넘겨 주지
+// 않으면, WebKit 프로필에 남아 있던 이전 실행(예: codex-live 격리 워크스페이스)의 경로가
+// 그대로 살아남아 화면은 그 경로에 설정을 쓰고 에이전트는 다른 워크스페이스를 읽는다.
+// 그러면 UI 에서 고른 provider 가 에이전트에 영영 닿지 않는다.
+if (process.env.NAIA_E2E_ADK_PATH?.trim()) {
+	process.env.VITE_NAIA_E2E_MODE = "1";
+	process.env.VITE_NAIA_E2E_ADK_PATH = process.env.NAIA_E2E_ADK_PATH.trim();
+}
 
 // Load shell/.env.e2e first (e2e-only knobs like VITE_NAIA_DEV_GATEWAY_URL),
 // then shell/.env (shared defaults). first-match-wins per key so .env.e2e

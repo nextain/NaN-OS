@@ -3,7 +3,7 @@ import { type RefObject, useEffect } from "react";
 import { type AppCenterProps, appRegistry } from "../../lib/app-registry";
 import { useAppStore } from "../../stores/app";
 import type { EditorHandle } from "./Editor";
-import type { WorkspaceAppApi } from "./WorkspaceCenterArea";
+import type { WorkspaceAppApi } from "./types";
 import {
 	type HerdrSnapshot,
 	type HerdrWorkspace,
