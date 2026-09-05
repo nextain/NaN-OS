@@ -53,6 +53,10 @@ export function NaiaMetaArea() {
 						key={tab.id}
 						type="button"
 						className={`naia-meta-app__tab${activeTab === tab.id ? " naia-meta-app__tab--active" : ""}`}
+						// 테스트가 순서(nth-child)로 탭을 집으면 탭이 하나 늘거나
+						// 줄 때마다 조용히 다른 것을 누른다. 실제로 그 탓에 스펙
+						// 여럿이 없어진 여섯 번째 탭을 기다리다 죽었다.
+						data-meta-tab={tab.id}
 						onClick={() => setActiveTab(tab.id)}
 						title={tab.label}
 					>

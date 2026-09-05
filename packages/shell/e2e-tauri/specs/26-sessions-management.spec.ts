@@ -1,5 +1,5 @@
 import { S } from "../helpers/selectors.js";
-import { clickElement } from "../helpers/settings.js";
+import { clickElement } from "../helpers/click.js";
 
 /**
  * 26 — Sessions Management E2E

@@ -48,7 +48,7 @@ export const S = {
 	permissionAlways: ".permission-btn-always",
 
 	// History tab (2nd tab)
-	historyTab: ".chat-tab:nth-child(2)",
+	historyTab: '[data-chat-tab="history"]',
 	historyItem: ".history-item",
 	historyItemTitle: ".history-item-title",
 	historyDeleteBtn: ".history-delete-btn",
@@ -56,7 +56,7 @@ export const S = {
 	historyCurrentBadge: ".history-current-badge",
 
 	// Progress tab (3rd tab)
-	progressTabBtn: ".chat-tab:nth-child(3)",
+	progressTabBtn: '[data-meta-tab="progress"]',
 
 	// Cost dashboard
 	costBadge: ".cost-badge-clickable",
@@ -86,7 +86,7 @@ export const S = {
 	labChargeBtn: ".lab-charge-btn",
 
 	// Skills tab (4th tab)
-	skillsTab: ".chat-tab:nth-child(4)",
+	skillsTab: '[data-meta-tab="skills"]',
 	skillsTabApp: ".skills-tab",
 	skillsSearch: ".skills-search",
 	skillsCard: ".skill-card",
@@ -113,7 +113,9 @@ export const S = {
 	channelsRefreshBtn: ".channels-refresh-btn",
 
 	// Agents tab (6th tab)
-	agentsTabBtn: ".chat-tab:nth-child(6)",
+	// Agents 는 채팅 탭이 아니라 메타 화면의 탭이다. 순서로 집으면 탭 구성이
+	// 바뀔 때마다 엉뚱한 것을 누르거나 없는 것을 기다린다.
+	agentsTabBtn: '[data-meta-tab="agents"]',
 	agentsTabApp: '[data-testid="agents-tab"]',
 	agentCard: '[data-testid="agent-card"]',
 	sessionCard: '[data-testid="session-card"]',
@@ -123,12 +125,9 @@ export const S = {
 	gatewayTtsProvider: '[data-testid="gateway-tts-provider"]',
 
 	// Voice Wake (Settings, Phase 5)
-	voiceWakeTriggers: '[data-testid="voice-wake-triggers"]',
-	voiceWakeInput: '[data-testid="voice-wake-input"]',
-	voiceWakeSave: '[data-testid="voice-wake-save"]',
 
 	// Diagnostics tab (7th tab)
-	diagnosticsTabBtn: ".chat-tab:nth-child(7)",
+	diagnosticsTabBtn: '[data-meta-tab="diagnostics"]',
 	diagnosticsTabApp: '[data-testid="diagnostics-tab"]',
 	diagnosticsStatusGrid: ".diagnostics-status-grid",
 	diagnosticsStatusItem: ".diagnostics-status-item",
@@ -237,8 +236,6 @@ export const S = {
 	memoryStatsFacts: ".memory-stats-facts",
 
 	// Voice Wake
-	voiceWakeTag: ".voice-wake-tag",
-	voiceWakeTagRemove: ".voice-wake-tag-remove",
 
 	// History (extended)
 	historyList: ".history-list",
