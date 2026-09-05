@@ -398,6 +398,7 @@ export default {
 	"history.messages": "메시지",
 	"history.delete": "삭제",
 	"apps.removeConfirm": "설치된 앱을 디스크에서 지웁니다. 되돌릴 수 없습니다. 계속할까요?",
+	"settings.deleteSttModelConfirm": "이 음성 인식 모델을 디스크에서 지웁니다. 다시 쓰려면 내려받아야 합니다. 계속할까요?",
 	"editor.reloading": "다시 읽는 중…",
 	"appbar.desktop": "바탕화면",
 	"voice.ref.sectionTitle": "음성 참조 (Voice Reference)",

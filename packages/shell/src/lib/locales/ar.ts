@@ -398,6 +398,7 @@ export default {
 	"history.messages": "الرسائل",
 	"history.delete": "حذف",
 	"apps.removeConfirm": "سيؤدي هذا إلى حذف التطبيق المثبت من القرص ولا يمكن التراجع عنه. هل تريد المتابعة؟",
+	"settings.deleteSttModelConfirm": "سيتم حذف نموذج التعرف على الكلام من القرص. ستحتاج إلى تنزيله مجددًا لاستخدامه. هل تريد المتابعة؟",
 	"editor.reloading": "جارٍ إعادة التحميل…",
 	"appbar.desktop": "سطح المكتب",
 	"voice.ref.sectionTitle": "مرجع الصوت",

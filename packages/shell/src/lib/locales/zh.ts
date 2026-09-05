@@ -398,6 +398,7 @@ export default {
 	"history.messages": "消息",
 	"history.delete": "删除",
 	"apps.removeConfirm": "将从磁盘删除已安装的应用，且无法撤销。是否继续？",
+	"settings.deleteSttModelConfirm": "将从磁盘删除该语音识别模型。再次使用需要重新下载。是否继续？",
 	"editor.reloading": "正在重新加载…",
 	"appbar.desktop": "桌面",
 	"voice.ref.sectionTitle": "语音参考",

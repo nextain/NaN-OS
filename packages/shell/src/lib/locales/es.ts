@@ -398,6 +398,7 @@ export default {
 	"history.messages": "mensajes",
 	"history.delete": "Eliminar",
 	"apps.removeConfirm": "Esto elimina la aplicación instalada del disco y no se puede deshacer. ¿Continuar?",
+	"settings.deleteSttModelConfirm": "Esto elimina el modelo de voz del disco. Tendrás que descargarlo de nuevo para usarlo. ¿Continuar?",
 	"editor.reloading": "Recargando…",
 	"appbar.desktop": "Escritorio",
 	"voice.ref.sectionTitle": "Referencia de voz",

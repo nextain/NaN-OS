@@ -29,7 +29,8 @@ import { readFileSync } from "node:fs";
 const SHELL = "packages/shell";
 
 /** 이름에 이것이 들어가면 파괴 후보로 본다. */
-const DESTRUCTIVE_NAME = /(^|_)(delete|remove|clear|reset|wipe|purge|revoke|uninstall)(_|$)/;
+const DESTRUCTIVE_NAME =
+	/(^|_)(delete|remove|clear|reset|wipe|purge|revoke|uninstall|erase|forget|destroy|drop|prune|kill|overwrite|restore)(_|$)/;
 
 /**
  * 파괴 후보처럼 보이지만 되돌릴 수 있어 묻지 않는 것. 면제하려면 **왜 되돌릴
@@ -38,6 +39,10 @@ const DESTRUCTIVE_NAME = /(^|_)(delete|remove|clear|reset|wipe|purge|revoke|unin
 const REVERSIBLE = new Map([
 	["clear_naia_path_cache", "캐시다. 다음 조회에서 다시 채워진다"],
 	["reset_window_state", "창 크기·위치다. 사용자가 다시 옮기면 된다"],
+	[
+		"pty_kill",
+		"터미널 탭을 닫을 때 부른다. 닫기를 누르는 것 자체가 의사표시이고, 터미널은 다시 열 수 있다. 매번 물으면 사용자는 읽지 않고 누른다. 다만 실행 중인 명령이 끊기는 것은 알리지 않는다 — 그 자리는 열려 있다",
+	],
 	[
 		"delete_naia_settings",
 		"설정 파일 하나를 지우면 기본값으로 돌아간다. 부르는 곳도 초기화 흐름 안이다",
@@ -144,6 +149,20 @@ const FUNCTION_HEAD =
  * 호출을 감싼 **함수** 본문. 한 단계만 올라가면 `try {` 같은 안쪽 블록에서
  * 멈춘다 — 확인은 대개 try 바깥에 있으므로 함수 머리가 나올 때까지 넓힌다.
  */
+/**
+ * 감싼 함수가 이보다 크면 그 안에 무슨 글자가 있든 방어로 볼 수 없다.
+ *
+ * 왜 상한을 두는가: 이 저장소에서 가장 파괴적인 동작이 모인 화면이 가장 큰
+ * 파일이다. 함수 머리를 찾아 올라가다 그 컴포넌트 본문 전체(19만 자)를
+ * 집으면, 그 덩어리 어딘가에 있는 `Confirm` 한 글자가 방어로 인정된다.
+ * 실제로 그 탓에 확인 없이 파일을 지우는 경로가 게이트를 통과하고 있었다 —
+ * 사각지대가 위험이 가장 큰 자리에 정확히 겹쳤다.
+ *
+ * 사람이 한 화면에서 읽고 "이 확인이 저 삭제를 막는다" 고 말할 수 있는 크기가
+ * 판정의 한계다. 그보다 크면 못 본 것으로 센다.
+ */
+const READABLE_FUNCTION_CHARS = 4000;
+
 function enclosingFunction(source, at) {
 	let cursor = at;
 	let widest = null;
@@ -205,7 +224,11 @@ function guarded(name, depth = 0) {
 			sawCaller = true;
 			const block = enclosingFunction(source, call.index);
 			if (!block) return false;
-			if (AFFORDANCE.test(codeOnly(block.text))) continue;
+			if (
+			block.text.length <= READABLE_FUNCTION_CHARS &&
+			AFFORDANCE.test(codeOnly(block.text))
+		)
+			continue;
 			const outer = functionNameBefore(source, block.start);
 			if (!outer || !guarded(outer, depth + 1)) return false;
 		}
@@ -224,7 +247,12 @@ for (const [file, source] of sources) {
 			callSites++;
 			const block = enclosingFunction(source, match.index);
 			const line = source.slice(0, match.index).split("\n").length;
-			if (block && AFFORDANCE.test(codeOnly(block.text))) continue;
+			if (
+				block &&
+				block.text.length <= READABLE_FUNCTION_CHARS &&
+				AFFORDANCE.test(codeOnly(block.text))
+			)
+				continue;
 
 			const wrapper = block ? functionNameBefore(source, block.start) : null;
 			if (wrapper && guarded(wrapper)) continue;

@@ -398,6 +398,7 @@ export default {
 	"history.messages": "বার্তা",
 	"history.delete": "মুছে দিন",
 	"apps.removeConfirm": "এটি ইনস্টল করা অ্যাপটি ডিস্ক থেকে মুছে ফেলবে এবং তা ফেরানো যাবে না। চালিয়ে যাবেন?",
+	"settings.deleteSttModelConfirm": "এই বাক্‌ শনাক্তকরণ মডেলটি ডিস্ক থেকে মুছে যাবে। আবার ব্যবহার করতে হলে পুনরায় ডাউনলোড করতে হবে। চালিয়ে যাবেন?",
 	"editor.reloading": "পুনরায় লোড হচ্ছে…",
 	"appbar.desktop": "ডেস্কটপ",
 	"voice.ref.sectionTitle": "ভয়েস রেফারেন্স",

@@ -398,6 +398,7 @@ export default {
 	"history.messages": "mensagens",
 	"history.delete": "Excluir",
 	"apps.removeConfirm": "Isto exclui o aplicativo instalado do disco e não pode ser desfeito. Continuar?",
+	"settings.deleteSttModelConfirm": "Isto exclui o modelo de reconhecimento de fala do disco. Você terá de baixá-lo novamente para usar. Continuar?",
 	"editor.reloading": "Recarregando…",
 	"appbar.desktop": "Área de trabalho",
 	"voice.ref.sectionTitle": "Referência de voz",

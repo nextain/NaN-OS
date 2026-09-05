@@ -398,6 +398,7 @@ export default {
 	"history.messages": "сообщения",
 	"history.delete": "Удалить",
 	"apps.removeConfirm": "Установленное приложение будет удалено с диска без возможности восстановления. Продолжить?",
+	"settings.deleteSttModelConfirm": "Модель распознавания речи будет удалена с диска. Чтобы снова ею пользоваться, придётся скачать заново. Продолжить?",
 	"editor.reloading": "Перезагрузка…",
 	"appbar.desktop": "Рабочий стол",
 	"voice.ref.sectionTitle": "Референс голоса",

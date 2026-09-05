@@ -398,6 +398,7 @@ export default {
 	"history.messages": "tin nhắn",
 	"history.delete": "Xóa",
 	"apps.removeConfirm": "Thao tác này xóa ứng dụng đã cài khỏi ổ đĩa và không thể hoàn tác. Tiếp tục?",
+	"settings.deleteSttModelConfirm": "Thao tác này xóa mô hình nhận dạng giọng nói khỏi ổ đĩa. Bạn sẽ phải tải lại để dùng. Tiếp tục?",
 	"editor.reloading": "Đang tải lại…",
 	"appbar.desktop": "Màn hình chính",
 	"voice.ref.sectionTitle": "Giọng tham chiếu",

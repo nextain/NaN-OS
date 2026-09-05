@@ -2837,6 +2837,9 @@ export function SettingsTab() {
 	}
 
 	async function handleSttModelDelete(modelId: string) {
+		// 내려받은 모델 디렉터리를 디스크에서 지운다. 다시 쓰려면 또 받아야
+		// 하고 그것은 시간이 걸린다(UC-QUALITY-DESTRUCTIVE-AFFORDANCE).
+		if (!globalThis.confirm(t("settings.deleteSttModelConfirm"))) return;
 		try {
 			await invoke("delete_stt_model", { modelId });
 			// Refresh catalog

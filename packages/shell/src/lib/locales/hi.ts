@@ -398,6 +398,7 @@ export default {
 	"history.messages": "संदेश",
 	"history.delete": "हटाएँ",
 	"apps.removeConfirm": "यह स्थापित ऐप को डिस्क से हटा देता है और इसे पूर्ववत नहीं किया जा सकता। जारी रखें?",
+	"settings.deleteSttModelConfirm": "यह वाक् पहचान मॉडल डिस्क से हट जाएगा। दोबारा उपयोग के लिए इसे फिर से डाउनलोड करना होगा। जारी रखें?",
 	"editor.reloading": "फिर से लोड हो रहा है…",
 	"appbar.desktop": "डेस्कटॉप",
 	"voice.ref.sectionTitle": "आवाज़ संदर्भ",

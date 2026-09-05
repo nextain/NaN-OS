@@ -398,6 +398,7 @@ export default {
 	"history.messages": "messages",
 	"history.delete": "Supprimer",
 	"apps.removeConfirm": "Cette action supprime l'application installée du disque et est irréversible. Continuer ?",
+	"settings.deleteSttModelConfirm": "Ce modèle de reconnaissance vocale sera supprimé du disque. Il faudra le retélécharger pour l'utiliser. Continuer ?",
 	"editor.reloading": "Rechargement…",
 	"appbar.desktop": "Bureau",
 	"voice.ref.sectionTitle": "Référence vocale",

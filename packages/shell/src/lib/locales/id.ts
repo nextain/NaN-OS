@@ -398,6 +398,7 @@ export default {
 	"history.messages": "pesan",
 	"history.delete": "Hapus",
 	"apps.removeConfirm": "Ini menghapus aplikasi terinstal dari disk dan tidak dapat dibatalkan. Lanjutkan?",
+	"settings.deleteSttModelConfirm": "Ini menghapus model pengenalan suara dari disk. Anda harus mengunduhnya lagi untuk memakainya. Lanjutkan?",
 	"editor.reloading": "Memuat ulang…",
 	"appbar.desktop": "Desktop",
 	"voice.ref.sectionTitle": "Referensi suara",

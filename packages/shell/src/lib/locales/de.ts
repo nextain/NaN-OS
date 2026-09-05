@@ -398,6 +398,7 @@ export default {
 	"history.messages": "Nachrichten",
 	"history.delete": "Löschen",
 	"apps.removeConfirm": "Dies löscht die installierte App von der Festplatte und kann nicht rückgängig gemacht werden. Fortfahren?",
+	"settings.deleteSttModelConfirm": "Dieses Spracherkennungsmodell wird von der Festplatte gelöscht. Zur erneuten Nutzung musst du es neu herunterladen. Fortfahren?",
 	"editor.reloading": "Wird neu geladen…",
 	"appbar.desktop": "Desktop",
 	"voice.ref.sectionTitle": "Stimmreferenz",

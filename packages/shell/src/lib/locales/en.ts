@@ -398,6 +398,7 @@ export default {
 	"history.messages": "messages",
 	"history.delete": "Delete",
 	"apps.removeConfirm": "This deletes the installed app from disk and cannot be undone. Continue?",
+	"settings.deleteSttModelConfirm": "This deletes the speech model from disk. You will have to download it again to use it. Continue?",
 	"editor.reloading": "Reloading…",
 	"appbar.desktop": "Desktop",
 	"voice.ref.sectionTitle": "Voice Reference",
