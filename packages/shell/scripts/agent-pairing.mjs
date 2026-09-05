@@ -54,6 +54,9 @@ function gitOutput(directory, args) {
  * 찾는 곳: `NAIA_E2E_AGENT_ROOT` → 워크트리 모음 디렉터리 → 주 저장소의 git
  * 워크트리 목록. 모음 디렉터리는 저장소 배치마다 다르므로 여러 후보를 본다.
  */
+/** 임시 디렉터리로 보이는 경로. 이런 자리의 워크트리는 짝이 아니다. */
+const TEMPORARY_PATH = /^(?:\/tmp\/|\/var\/tmp\/|\/private\/var\/folders\/)|[\\/]Temp[\\/]/i;
+
 export function resolvePairedAgent(options = {}) {
 	const explicit = options.explicit ?? process.env.NAIA_E2E_AGENT_ROOT;
 	const worktreeRoots = options.worktreeRoots ?? [
@@ -84,6 +87,35 @@ export function resolvePairedAgent(options = {}) {
 				),
 			);
 		}
+	}
+
+	// 임시 디렉터리에 만든 워크트리는 짝이 아니다.
+	//
+	// 실측에서 드러났다. 진단하려고 `/tmp/.../scratchpad/` 에 만든 워크트리
+	// 둘이 에이전트 저장소에 등록돼 있었고, 이 목록이 그것을 골랐다. 빌드에
+	// 박힌 경로와 달라 앱이 에이전트를 띄우지 못했고, "뇌가 없어야" 성립하는
+	// e2e 단정이 그 덕분에 통과했다 — 사람이 만든 임시 사본 하나가 회귀
+	// 전체의 전제를 조용히 바꾼 것이다. 그 통과를 근거로 다른 기계에
+	// 잘못된 원인을 짚어 주기까지 했다.
+	//
+	// 명시적으로 지정한 것(`NAIA_E2E_AGENT_ROOT`)은 사람이 뜻을 밝힌 것이므로
+	// 그대로 둔다. 목록에서 우연히 딸려 오는 것만 막는다.
+	if (!explicit) {
+		const temporary = candidates.filter((path) => TEMPORARY_PATH.test(path));
+		if (temporary.length > 0) {
+			console.error(
+				`[agent-pairing] 임시 경로의 워크트리 ${temporary.length}개를 짝 후보에서 뺀다 — 이런 사본이 골라지면 회귀 전체의 전제가 바뀐다:`,
+			);
+			for (const path of temporary) console.error(`  ${path}`);
+			console.error(
+				"  더 이상 쓰지 않는다면 git -C <naia-agent> worktree remove 로 지워라.",
+			);
+		}
+		candidates.splice(
+			0,
+			candidates.length,
+			...candidates.filter((path) => !TEMPORARY_PATH.test(path)),
+		);
 	}
 
 	// 후보가 여럿이면 어느 것을 골라도 계약상 같지만, **같은 것을 골라야**
