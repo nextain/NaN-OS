@@ -288,7 +288,17 @@ describe("92 — Browser App: Click Blocking Regression", () => {
 			const slots = Array.from(
 				document.querySelectorAll(".content-app__slot"),
 			);
-			const wsSlot = slots.find((s) => s.querySelector(".workspace-app"));
+			// 워크스페이스 화면이 Herdr 통합으로 바뀌면서 `.workspace-app` 은 더
+			// 이상 그려지지 않는다(그 클래스가 사는 파일이 진입점에서 닿지
+			// 않는다 — #554). 이 단정이 재려는 것은 "워크스페이스로 옮기면
+			// 브라우저가 클릭을 막지 않는다" 이지 옛 클래스의 존재가 아니다.
+			// 지금 실제로 그려지는 표면을 집는다. 두 형태를 다 보는 것은
+			// #554 결정에 따라 옛 화면이 돌아올 수 있기 때문이다.
+			const wsSlot = slots.find(
+				(s) =>
+					s.querySelector(".herdr-workspace__main") ??
+					s.querySelector(".workspace-app"),
+			);
 			return wsSlot?.classList.contains("content-app__slot--active") ?? false;
 		});
 		expect(workspaceActive).toBe(true);
