@@ -424,7 +424,29 @@ function parseSpecOutcomes(output) {
 	return { passed: [...passed], failed: [...failed] };
 }
 
+/**
+ * 앞 묶음이 남긴 상태가 뒤 묶음을 막지 못하게 쉰다.
+ *
+ * 셸은 에이전트를 너무 자주 다시 띄우지 못하도록 5초를 막는다(재시작 폭풍
+ * 방지). 묶음을 연달아 돌리면 앞 묶음이 끝나며 남긴 그 억제가 뒤 묶음의
+ * 시작을 거절한다 — 실제로 전용 설정 셋이 "restart debounced" 로 한 줄도
+ * 못 돌았다. 그 실패는 회귀가 아니라 앞 실행의 잔여다.
+ */
+const COOLDOWN_MS = 6_000;
+
+let first = true;
 for (const [conf, specs] of groups) {
+	if (!first) {
+		console.log(`[regression] 앞 묶음의 재시작 억제가 풀리기를 기다린다 (${COOLDOWN_MS}ms)`);
+		Atomics.wait(
+			new Int32Array(new SharedArrayBuffer(4)),
+			0,
+			0,
+			COOLDOWN_MS,
+		);
+	}
+	first = false;
+
 	const specArgs = specs.flatMap((spec) => ["--spec", `e2e-tauri/specs/${spec}`]);
 	console.log(`[regression] ${conf} — 스펙 ${specs.length}개`);
 	// 출력을 화면에 그대로 내면서 동시에 모은다. 십몇 분 도는 동안 아무
