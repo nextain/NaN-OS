@@ -71,6 +71,13 @@ if (missingEnv.size) {
 // 전제가 없으면 스펙은 ECONNREFUSED 같은 모양으로 죽는데, 그것은 결함이
 // 아니라 준비 부족이다. 둘을 같은 칸에 넣으면 기록이 "서른한 개가 깨졌다" 고
 // 말하게 되고, 다음 사람이 없는 버그를 찾는다.
+// 게이트웨이를 실제로 쓰는 스펙. 소스에서 포트를 직접 적은 것들이다.
+const GATEWAY_SPECS = new Set([
+	"13-lab-login.spec.ts",
+	"72-naia-discord-skill.spec.ts",
+	"99-screenshots.spec.ts",
+]);
+
 function missingPrerequisites() {
 	const missing = [];
 	const has = (command) => {
@@ -85,11 +92,18 @@ function missingPrerequisites() {
 	if (!has("tauri-driver")) missing.push("tauri-driver");
 	if (!existsSync("packages/shell/src-tauri/target-e2e/debug/naia-shell"))
 		missing.push("빌드된 e2e 바이너리 (pnpm -C packages/shell run build:e2e:tauri)");
-	const gatewayPort = process.env.NAIA_E2E_GATEWAY_PORT ?? "18789";
-	try {
-		execFileSync("sh", ["-c", `ss -ltn | grep -q ':${gatewayPort} '`], { stdio: "ignore" });
-	} catch {
-		missing.push(`게이트웨이 (:${gatewayPort} 응답 없음)`);
+	// 게이트웨이(:18789)는 그것을 쓰는 스펙이 배정됐을 때만 전제다. 실측에서
+	// 전체 전제로 두었다가 진단을 그르쳤다 — 서른한 개 실패의 실제 사유는
+	// 게이트웨이가 아니라 WebDriver 세션이 중간에 끊긴 것이었다
+	// (invalid session id + ECONNREFUSED to the driver socket).
+	const needsGateway = mine.some((spec) => GATEWAY_SPECS.has(spec.spec));
+	if (needsGateway) {
+		const gatewayPort = process.env.NAIA_E2E_GATEWAY_PORT ?? "18789";
+		try {
+			execFileSync("sh", ["-c", `ss -ltn | grep -q ':${gatewayPort} '`], { stdio: "ignore" });
+		} catch {
+			missing.push(`게이트웨이 (:${gatewayPort} 응답 없음 — 이 등급에 그것을 쓰는 스펙이 있다)`);
+		}
 	}
 	return missing;
 }
