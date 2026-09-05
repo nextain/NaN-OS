@@ -58,14 +58,30 @@ const hasCoverageRow = (uc) => {
 		.split("|")
 		.map((cell) => cell.trim())
 		.filter((cell) => cell.length > 0 && cell !== "—" && cell !== "-");
-	return cells.length > 0;
+	if (cells.length === 0) return false;
+	// "TODO" 한 마디는 무엇으로 검증하는지 말하지 않는다. 그것을 추적으로
+	// 인정하면 표에 그 글자만 적고 지나갈 수 있다.
+	const placeholder = /^(TODO|TBD|미정|추후|N\/A|없음|\?+)$/i;
+	if (cells.every((cell) => placeholder.test(cell))) return false;
+	// 무엇으로 재는지 적으려면 파일이나 스크립트를 가리켜야 한다. 문장만
+	// 있고 가리키는 것이 없으면 그 줄은 계획이지 추적이 아니다.
+	return cells.some((cell) => /`[^`]+`|\.(ts|tsx|mjs|rs)\b/.test(cell));
 };
 const byBenchFamily = (uc) => families.some((prefix) => uc.startsWith(prefix));
 const outsideEpic = (uc) => notOwned.some((prefix) => uc.startsWith(prefix));
 
-const untracked = titles.filter(
-	(uc) => !hasCoverageRow(uc) && !byBenchFamily(uc) && !outsideEpic(uc),
-);
+/**
+ * 에픽 밖이라는 선언과 어디서 검증되는지 적혔다는 것은 다른 질문이다.
+ *
+ * 예전에는 `NOT_OWNED_BY_EPIC` 에 접두사를 하나 넣으면 커버리지 표까지 면제
+ * 됐다. 그래서 이번 작업이 만든 `UC-QUALITY-` 계열은 앞으로 추가되는 것이
+ * 전부 무임승차하게 되어 있었다 — 스스로 만든 계열에 스스로 관대한 셈이다.
+ *
+ * 벤치 계열은 그 계열이 요구 증거를 정의하므로 표가 따로 필요 없다. 에픽
+ * 밖이라는 선언은 "벤치가 안 맡는다" 는 뜻이지 "아무도 안 봐도 된다" 가
+ * 아니므로, 그쪽은 표를 요구한다.
+ */
+const untracked = titles.filter((uc) => !hasCoverageRow(uc) && !byBenchFamily(uc));
 
 // 커버리지 맵만 채우고 벤치 하네스에 등록하지 않으면, 이 게이트는 통과하고
 // agent-bench-scenario-source 계약 테스트가 대신 붉어진다. 두 곳을 봐야 하는
@@ -91,6 +107,20 @@ const BASELINE = [
 	"UC-PROACTIVE-COST-CONTROL",
 	"UC-RADIO-DJ-DURABLE",
 	"UC-WIRE-V1",
+	// 아래 열하나는 "에픽 밖" 선언 하나로 커버리지 표까지 면제받고 있던
+	// 것들이다. 그 두 가지를 분리하자 드러났다 — 새로 끊긴 것이 아니라
+	// 원래 끊겨 있었는데 보이지 않았다. 표를 채우는 일이 남았다.
+	"UC-JEONJU-COURSE-READINESS",
+	"UC-JEONJU-COURSE-WORKER",
+	"UC-JEONJU-DISCORD-COURSE-TARGET",
+	"UC-DISCORD-1",
+	"UC-DISCORD-2",
+	"UC-DISCORD-3",
+	"UC-V022-TTS-TEXT-NORMALIZATION",
+	"UC-VOICE-TEXT-SPEECH-CLEANUP",
+	"UC-V022-CHAT-RICH-MARKDOWN",
+	"UC-V022-PERMISSION-SHORTCUTS",
+	"UC-V022-LOCAL-RELEASE-ACCEPTANCE",
 ];
 
 const added = untracked.filter((uc) => !BASELINE.includes(uc));
