@@ -10,6 +10,12 @@
 // 거리를 재는 자리 자체를 없앴고, 여기서는 그 사실을 고정한다 — 문서 주석이
 // 몇 자든, 속성이 몇 개든, 가시성과 `async` 가 어떻든 같은 이름이 나오고,
 // 주석이나 문자열 안의 가짜 선언은 나오지 않는다.
+//
+// 같은 사고가 속성 **머리**에서 한 번 더 났다. 판정이 `#[` 다음 네 토큰이던 동안
+// `#[cfg_attr(all(), tauri::command)]` 는 명령이 아니었다(12회차 지적 4). 그래서
+// 속성 안에서도 세는 자리를 없앴고 — 속성 토큰 열 어디든 `tauri::command` 연쇄가
+// 있으면 명령이다 — 아래 세 항목이 그 사실과 그 경계(문자열은 연쇄가 아니다)를
+// 고정한다.
 import { fileURLToPath } from "node:url";
 import { beforeAll, describe, expect, it } from "vitest";
 
@@ -85,6 +91,55 @@ describe("Rust 명령 추출은 거리를 재지 않는다", () => {
 			"wipe_b",
 			"wipe_c",
 		]);
+	});
+
+	it("`#[cfg_attr(…, tauri::command)]` 도 명령이다 — 속성 머리를 세지 않는다", () => {
+		// 12회차 지적 4. 판정이 `#[` 다음 네 토큰이던 동안 이 선언은 명령이 아니었고,
+		// 그래서 프런트의 `invoke("ghost_wipe_everything")` 은 확인 검사에서 통째로
+		// 건너뛰어졌다 — 확인 없는 전체 삭제가 속성을 한 겹 감싸는 것만으로 통과했다.
+		const source = [
+			"#[cfg_attr(all(), tauri::command)]",
+			"pub fn ghost_wipe_everything(root: String) -> Result<(), String> {",
+			"    std::fs::remove_dir_all(&root).map_err(|e| e.to_string())",
+			"}",
+		].join("\n");
+		const commands = rust.tauriCommandBodies(source);
+		expect([...commands.keys()]).toEqual(["ghost_wipe_everything"]);
+		// 본문 판정(파괴 여부)까지 살아 있어야 뜻이 있다.
+		expect(commands.get("ghost_wipe_everything")).toContain("remove_dir_all");
+
+		// 옛 머리 네 토큰 판정은 같은 소스에서 이 명령을 못 봤다. 그 차이가 이 테스트의 뜻이다.
+		expect(/#\[tauri\s*::\s*command/.test(source)).toBe(false);
+	});
+
+	it("중첩된 `cfg_attr` 안에 있어도 명령이다", () => {
+		const source = [
+			'#[cfg_attr(unix, cfg_attr(target_os = "linux", tauri::command))]',
+			"fn wipe_nested() {}",
+			"",
+			'#[cfg_attr(target_os = "windows", tauri::command)]',
+			"pub(crate) async fn wipe_windows() {}",
+		].join("\n");
+		expect([...rust.tauriCommandBodies(source).keys()]).toEqual([
+			"wipe_nested",
+			"wipe_windows",
+		]);
+	});
+
+	it("속성 안의 **문자열**에 적힌 `#[tauri::command]` 는 명령이 아니다", () => {
+		// 토크나이저가 문자열을 토큰 하나로 묶어 두므로 `tauri` `::` `command` 연쇄가
+		// 아니다. 글자만 같은 것과 진짜 경로를 가르는 자리다.
+		const source = [
+			'#[doc = "#[tauri::command] fn ghost_from_doc() {}"]',
+			"fn documented_only() {}",
+			"",
+			'#[cfg_attr(all(), serde(rename = "tauri::command"))]',
+			"fn renamed_only() {}",
+			"",
+			"#[cfg_attr(all(), tauri::command)]",
+			"fn the_real_one() {}",
+		].join("\n");
+		expect([...rust.tauriCommandBodies(source).keys()]).toEqual(["the_real_one"]);
 	});
 
 	it("주석 안의 `#[tauri::command]` 는 명령이 아니다", () => {

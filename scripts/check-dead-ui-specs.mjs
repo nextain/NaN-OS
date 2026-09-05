@@ -143,7 +143,7 @@ function permanentlyDisabledTestIds(files) {
 	const out = new Map();
 	for (const [file, text] of files) {
 		const tree = parseSource(file, text);
-		for (const element of jsxElementsIn(tree, tree)) {
+		for (const element of jsxElementsIn(tree, tree, env)) {
 			// 같은 요소에 붙은 속성끼리 본다. spread 와 `createElement` 의 props 도
 			// 같은 목록으로 온다 — 꺼짐을 spread 로 적으면 열린 것으로 읽혔다.
 			const { props } = elementProps(element, tree, env);
@@ -395,7 +395,7 @@ const spreadBlindFiles = new Set();
 
 for (const [file, source] of shellSources) {
 	const tree = parseSource(file, source);
-	for (const element of jsxElementsIn(tree, tree)) {
+	for (const element of jsxElementsIn(tree, tree, env)) {
 		const { props, unknownSpread } = elementProps(element, tree, env);
 		// 못 읽은 속성이 있는 파일은 표시해 둔다. "못 봤다" 를 "없다" 로 읽으면
 		// 값을 한 겹 숨기는 것만으로 검사를 통과한다.

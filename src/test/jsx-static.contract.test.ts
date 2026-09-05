@@ -47,16 +47,20 @@ interface Env {
 interface JsxStatic {
 	parseSource(file: string, text: string): ts.SourceFile;
 	makeEnv(files: Map<string, string>): Env;
-	elementProps(node: ts.Node, sf: ts.SourceFile, env?: Env): ElementProps;
-	elementChildren(node: ts.Node, env?: Env): ts.Node[];
-	jsxElementsIn(node: ts.Node, sf: ts.SourceFile): ts.Node[];
+	elementProps(node: ts.Node, sf: ts.SourceFile, env: Env | null): ElementProps;
+	elementChildren(node: ts.Node, env: Env | null): ts.Node[];
+	jsxElementsIn(node: ts.Node, sf: ts.SourceFile, env: Env | null): ts.Node[];
 	stringCandidates(node: ts.Node | undefined, sf: ts.SourceFile, env?: Env): Candidates;
 	staticChunks(node: ts.Node | undefined, sf: ts.SourceFile, env?: Env): string[];
 	alwaysTruthy(node: ts.Node | undefined, sf: ts.SourceFile, env?: Env): boolean;
 	typeStrings(node: ts.TypeNode | undefined, sf: ts.SourceFile, env?: Env): Candidates;
-	isCreateElementCall(node: ts.Node, env?: Env): boolean;
-	isElementNode(node: ts.Node, env?: Env): boolean;
-	elementFactory(node: ts.Node, env?: Env): "classic" | "runtime" | null;
+	isCreateElementCall(node: ts.Node, env: Env | null): boolean;
+	isElementNode(node: ts.Node, env: Env | null): boolean;
+	elementFactory(node: ts.Node, env: Env | null): "classic" | "runtime" | null;
+	elementCallShape(
+		node: ts.Node,
+		env: Env | null,
+	): { factory: "classic" | "runtime" | null; argShift: number; argsUnknown: boolean };
 }
 
 const J = (await import(/* @vite-ignore */ MODULE_URL)) as JsxStatic;
@@ -90,7 +94,7 @@ function probe(source: string, prelude = ""): { sf: ts.SourceFile; node: ts.Node
 
 function candidatesOf(source: string, prelude = ""): Candidates {
 	const { sf, node } = probe(source, prelude);
-	return J.stringCandidates(node, sf, undefined);
+	return J.stringCandidates(node, sf, null);
 }
 
 function valuesOf(source: string, prelude = ""): string[] {
@@ -99,26 +103,26 @@ function valuesOf(source: string, prelude = ""): string[] {
 
 function chunksOf(source: string, prelude = ""): string[] {
 	const { sf, node } = probe(source, prelude);
-	return J.staticChunks(node, sf, undefined).sort();
+	return J.staticChunks(node, sf, null).sort();
 }
 
 /** 식 하나를 `<button d={…} />` 로 감싸 영구 참 판정을 묻는다. */
 function truthyOf(source: string, prelude = ""): boolean {
 	const sf = parse(`${prelude}\nexport const Probe = <button d={${source}} />;`);
-	return J.alwaysTruthy(attributeValue(sf, "d"), sf, undefined);
+	return J.alwaysTruthy(attributeValue(sf, "d"), sf, null);
 }
 
-function firstElement(sf: ts.SourceFile): ts.Node {
-	const elements = J.jsxElementsIn(sf, sf);
+function firstElement(sf: ts.SourceFile, env: Env | null = null): ts.Node {
+	const elements = J.jsxElementsIn(sf, sf, env);
 	expect(elements.length, "요소를 하나도 찾지 못했다").toBeGreaterThan(0);
 	return elements[0] as ts.Node;
 }
 
 type ReadProps = ElementProps & { sf: ts.SourceFile };
 
-function readProps(code: string, env?: Env, sf?: ts.SourceFile): ReadProps {
+function readProps(code: string, env: Env | null = null, sf?: ts.SourceFile): ReadProps {
 	const tree = sf ?? parse(code);
-	return { ...J.elementProps(firstElement(tree), tree, env), sf: tree };
+	return { ...J.elementProps(firstElement(tree, env), tree, env), sf: tree };
 }
 
 function names(read: ReadProps): string[] {
@@ -295,8 +299,8 @@ describe("stringCandidates·staticChunks — 이 식이 될 수 있는 문자열
 
 	it("className 처럼 조각으로 붙는 값은 완성값이 없어도 조각이 남는다", () => {
 		const { sf, node } = probe("`panel ${state}`");
-		expect(J.staticChunks(node, sf, undefined)).toContain("panel ");
-		expect(J.stringCandidates(node, sf, undefined).complete).toBe(false);
+		expect(J.staticChunks(node, sf, null)).toContain("panel ");
+		expect(J.stringCandidates(node, sf, null).complete).toBe(false);
 	});
 });
 
@@ -344,7 +348,7 @@ describe("alwaysTruthy — 영구히 꺼 둔 조작의 정의", () => {
 
 	it("함수 인자 식별자는 참이 아니다", () => {
 		const sf = parse(`export function Probe({ flag }) { return <button d={flag} />; }`);
-		expect(J.alwaysTruthy(attributeValue(sf, "d"), sf, undefined)).toBe(false);
+		expect(J.alwaysTruthy(attributeValue(sf, "d"), sf, null)).toBe(false);
 	});
 
 	it("빈 문자열과 0 은 참이 아니다", () => {
@@ -371,21 +375,21 @@ describe("jsxElementsIn — 식 안에서 화면에 오를 수 있는 요소", (
 	for (const [label, code] of oneElement) {
 		it(`${label} 를 하나로 센다`, () => {
 			const sf = parse(code);
-			expect(J.jsxElementsIn(sf, sf).length).toBe(1);
+			expect(J.jsxElementsIn(sf, sf, null).length).toBe(1);
 		});
 	}
 
 	it("createElement 호출 자체가 요소다", () => {
 		const sf = parse(`export function F() { return createElement("div", null, "hi"); }`);
-		const elements = J.jsxElementsIn(sf, sf);
+		const elements = J.jsxElementsIn(sf, sf, null);
 		expect(elements.length).toBe(1);
-		expect(J.isCreateElementCall(elements[0] as ts.Node)).toBe(true);
-		expect(J.isElementNode(elements[0] as ts.Node)).toBe(true);
+		expect(J.isCreateElementCall(elements[0] as ts.Node, null)).toBe(true);
+		expect(J.isElementNode(elements[0] as ts.Node, null)).toBe(true);
 	});
 
 	it("자식의 `{cond && …}` 안에 있는 요소도 열거된다", () => {
 		const sf = parse(`export function F() { return (<div>{c && <A />}</div>); }`);
-		const elements = J.jsxElementsIn(sf, sf);
+		const elements = J.jsxElementsIn(sf, sf, null);
 		expect(elements.length).toBe(2);
 		// 바깥이 먼저다. 게이트는 이 순서로 위에서 아래로 내려간다.
 		expect(ts.isJsxElement(elements[0] as ts.Node)).toBe(true);
@@ -397,28 +401,28 @@ describe("jsxElementsIn — 식 안에서 화면에 오를 수 있는 요소", (
 		// 전부 준다 — 그러므로 그 길이를 "화면에 오르는 것이 하나뿐인가"로 읽으면
 		// 안 된다. 형제 판정은 `elementChildren` 이 세는 자식 수로 한다.
 		const sf = parse(`export function F() { return (<div>{c && <A />}</div>); }`);
-		const elements = J.jsxElementsIn(sf, sf);
+		const elements = J.jsxElementsIn(sf, sf, null);
 		expect(elements.length).not.toBe(1);
-		expect(J.elementChildren(elements[0] as ts.Node).length).toBe(1);
+		expect(J.elementChildren(elements[0] as ts.Node, null).length).toBe(1);
 	});
 
 	it("형제가 둘이면 자식 수가 둘이다 — 알림이 화면 전부가 아닌 자리", () => {
 		const sf = parse(`export function F() { return (<div><A /><B /></div>); }`);
-		const elements = J.jsxElementsIn(sf, sf);
+		const elements = J.jsxElementsIn(sf, sf, null);
 		expect(elements.length).toBe(3);
-		expect(J.elementChildren(elements[0] as ts.Node).length).toBe(2);
-		expect(J.elementChildren(elements[0] as ts.Node).length).not.toBe(1);
+		expect(J.elementChildren(elements[0] as ts.Node, null).length).toBe(2);
+		expect(J.elementChildren(elements[0] as ts.Node, null).length).not.toBe(1);
 	});
 
 	it("공백만 있는 JSX 텍스트는 자식으로 세지 않는다", () => {
 		const sf = parse(`export function F() { return (\n\t<div>\n\t\t<A />\n\t</div>\n); }`);
-		const outer = J.jsxElementsIn(sf, sf)[0] as ts.Node;
-		expect(J.elementChildren(outer).length).toBe(1);
+		const outer = J.jsxElementsIn(sf, sf, null)[0] as ts.Node;
+		expect(J.elementChildren(outer, null).length).toBe(1);
 	});
 
 	it("Fragment 는 요소로 세지 않는다 — 화면에 아무것도 붙이지 않는다", () => {
 		const sf = parse(`export function F() { return (<><A /><B /></>); }`);
-		const elements = J.jsxElementsIn(sf, sf);
+		const elements = J.jsxElementsIn(sf, sf, null);
 		expect(elements.length).toBe(2);
 		expect(elements.every((e) => !ts.isJsxFragment(e))).toBe(true);
 	});
@@ -576,23 +580,23 @@ describe("elementChildren — JSX 와 createElement 의 자식 세기는 대칭�
 		const sf = parse(
 			`export const E = createElement("div", null, " ", createElement("b", null, "x"));`,
 		);
-		const outer = J.jsxElementsIn(sf, sf)[0] as ts.Node;
-		expect(J.elementChildren(outer).length).toBe(1);
+		const outer = J.jsxElementsIn(sf, sf, null)[0] as ts.Node;
+		expect(J.elementChildren(outer, null).length).toBe(1);
 		// 반증: 들여쓰기 한 칸을 형제로 세면 같은 화면을 createElement 로 적었을
 		// 때만 "자식이 하나뿐인가" 판정이 뒤집혀, 막다른 알림이 빠져나간다.
-		expect(J.elementChildren(outer).length).not.toBe(2);
+		expect(J.elementChildren(outer, null).length).not.toBe(2);
 	});
 
 	it("같은 화면을 JSX 로 적어도 자식 수가 같다", () => {
 		const sf = parse(`export const E = (\n\t<div>\n\t\t<b>x</b>\n\t</div>\n);`);
-		const outer = J.jsxElementsIn(sf, sf)[0] as ts.Node;
-		expect(J.elementChildren(outer).length).toBe(1);
+		const outer = J.jsxElementsIn(sf, sf, null)[0] as ts.Node;
+		expect(J.elementChildren(outer, null).length).toBe(1);
 	});
 
 	it("글자가 있는 createElement 자식은 그대로 센다", () => {
 		const sf = parse(`export const E = createElement("div", null, "install failed");`);
-		const outer = J.jsxElementsIn(sf, sf)[0] as ts.Node;
-		expect(J.elementChildren(outer).length).toBe(1);
+		const outer = J.jsxElementsIn(sf, sf, null)[0] as ts.Node;
+		expect(J.elementChildren(outer, null).length).toBe(1);
 	});
 });
 
@@ -607,7 +611,7 @@ describe("elementFactory — 요소는 이름이 아니라 바인딩이다", () 
 		let hit: "classic" | "runtime" | null = null;
 		const walk = (node: ts.Node): void => {
 			if (hit) return;
-			const factory = J.elementFactory(node);
+			const factory = J.elementFactory(node, null);
 			if (factory) {
 				hit = factory;
 				return;
@@ -713,9 +717,9 @@ describe("elementFactory — 요소는 이름이 아니라 바인딩이다", () 
 describe("elementChildren — automatic runtime 은 자식이 props 안에 있다", () => {
 	function childrenCount(code: string): number {
 		const sf = parse(code);
-		const elements = J.jsxElementsIn(sf, sf);
+		const elements = J.jsxElementsIn(sf, sf, null);
 		expect(elements.length, "요소를 하나도 찾지 못했다").toBeGreaterThan(0);
-		return J.elementChildren(elements[0] as ts.Node).length;
+		return J.elementChildren(elements[0] as ts.Node, null).length;
 	}
 
 	it("jsx 의 children 하나를 자식 하나로 센다", () => {
@@ -821,5 +825,160 @@ describe("alwaysTruthy — 속성 접근도 값이다", () => {
 
 	it("반증: 계산된 키는 모른다", () => {
 		expect(truthyOf("FLAGS[key]", "const FLAGS = { off: true };")).toBe(false);
+	});
+});
+
+/* ─────────────── 12회차에 못 박은 것 ─────────────── */
+
+describe("env 는 선택이 아니다 — 안 넘기면 던진다 (12회차 지적 3)", () => {
+	const sf = parse(`export const E = <div role="alert" />;`);
+
+	// 왜 던지는가: 예전에는 안 넘겨도 조용히 같은 파일 안에서만 풀었다. 그래서
+	// 게이트 한 곳이 인자 하나를 빠뜨린 것만으로 파일을 건너간 별명이 화면에서
+	// 사라졌고, 검사기가 "요소가 아니다" 라고 말한 것이 아니라 아예 못 본 것이라
+	// 결함이 초록 안에 숨었다. 침묵을 선언으로 바꾼다.
+	const calls: [string, () => unknown][] = [
+		["jsxElementsIn", () => (J.jsxElementsIn as (a: ts.Node, b: ts.SourceFile) => unknown)(sf, sf)],
+		[
+			"isElementNode",
+			() => (J.isElementNode as (a: ts.Node) => unknown)(firstElement(sf, null)),
+		],
+		[
+			"isCreateElementCall",
+			() => (J.isCreateElementCall as (a: ts.Node) => unknown)(firstElement(sf, null)),
+		],
+		[
+			"elementFactory",
+			() => (J.elementFactory as (a: ts.Node) => unknown)(firstElement(sf, null)),
+		],
+		[
+			"elementChildren",
+			() => (J.elementChildren as (a: ts.Node) => unknown)(firstElement(sf, null)),
+		],
+		[
+			"elementProps",
+			() =>
+				(J.elementProps as (a: ts.Node, b: ts.SourceFile) => unknown)(
+					firstElement(sf, null),
+					sf,
+				),
+		],
+	];
+
+	for (const [name, call] of calls) {
+		it(`${name} 은 env 없이 부르면 던진다`, () => {
+			expect(call).toThrow(/env/);
+		});
+	}
+
+	it("파일을 건너가지 않겠다는 뜻은 null 로 적는다", () => {
+		// 반증: 여기서도 던지면 "같은 파일 안에서만 본다" 를 적을 방법이 없어
+		// 호출자가 아무 env 나 지어내게 된다.
+		expect(() => J.jsxElementsIn(sf, sf, null)).not.toThrow();
+		expect(J.jsxElementsIn(sf, sf, null).length).toBe(1);
+	});
+});
+
+describe("createElement.call — argShift 를 적용해야 props 가 읽힌다 (12회차 지적 2)", () => {
+	const CALLED = `import { createElement } from "react";
+export const Banner = () => createElement.call(null, "div", { role: "alert" }, "install failed");`;
+	const DIRECT = `import { createElement } from "react";
+export const Banner = () => createElement("div", { role: "alert" }, "install failed");`;
+
+	function shapeOf(code: string): {
+		factory: string | null;
+		argShift: number;
+		argsUnknown: boolean;
+	} {
+		const sf = parse(code);
+		return J.elementCallShape(firstElement(sf, null), null);
+	}
+
+	it("`.call` 로 부른 것도 요소이고, 앞자리 하나가 밀렸다고 말한다", () => {
+		const shape = shapeOf(CALLED);
+		expect(shape.factory).toBe("classic");
+		expect(shape.argShift).toBe(1);
+	});
+
+	it("밀린 자리에서 읽으면 props 는 곧바로 부른 것과 같다", () => {
+		// 반증의 자리: 자리를 안 옮기면 여기서 `"div"` 를 props 로 읽어 속성이
+		// 하나도 없게 되고, 막다른 오류 화면이 알림으로도 세어지지 않는다.
+		const read = readProps(CALLED);
+		expect(names(read)).toEqual(["role"]);
+		expect(valueOfProp(read, "role")).toEqual(["alert"]);
+		expect(names(read)).toEqual(names(readProps(DIRECT)));
+	});
+
+	it("자식도 같은 만큼 밀려서 읽힌다", () => {
+		const called = parse(CALLED);
+		const direct = parse(DIRECT);
+		expect(J.elementChildren(firstElement(called, null), null).length).toBe(1);
+		expect(J.elementChildren(firstElement(called, null), null).length).toBe(
+			J.elementChildren(firstElement(direct, null), null).length,
+		);
+	});
+
+	it("`.apply` 는 자리를 믿을 수 없으므로 속성을 모른다로 말한다", () => {
+		// "없다" 로 읽으면 인자를 배열 한 겹에 숨기는 것만으로 검사를 통과한다.
+		const sf = parse(
+			`import { createElement } from "react";\nexport const B = () => createElement.apply(null, ["div", { role: "alert" }]);`,
+		);
+		const read = J.elementProps(firstElement(sf, null), sf, null);
+		expect(read.props.length).toBe(0);
+		expect(read.unknownSpread).toBe(true);
+	});
+
+	it("쉼표식으로 싼 createElement 도 같은 요소다", () => {
+		const sf = parse(
+			`import { createElement } from "react";\nexport const B = () => (0, createElement)("div", { role: "alert" });`,
+		);
+		const read = J.elementProps(firstElement(sf, null), sf, null);
+		expect(read.props.map((p) => p.name)).toEqual(["role"]);
+	});
+});
+
+describe("alwaysTruthy — 삼항은 실제로 도는 갈래로 판정한다 (12회차 지적 1)", () => {
+	const UNKNOWN = "declare const cond: boolean;";
+
+	it("조건이 언제나 참이면 참 갈래만 본다", () => {
+		// 12회차에 dead-ui 게이트를 뚫은 바로 그 식이다. 실행하면 `true` 이고,
+		// React 에서 누를 수 없는 버튼이다. 거짓 갈래를 함께 요구하면 영구히
+		// 꺼 둔 조작이 열린 것으로 읽힌다.
+		expect(truthyOf("true ? true : false")).toBe(true);
+		expect(truthyOf("1 ? \"on\" : false")).toBe(true);
+	});
+
+	it("조건이 언제나 거짓이면 거짓 갈래만 본다", () => {
+		expect(truthyOf("false ? false : true")).toBe(true);
+	});
+
+	// 반증. 여기서 참이 되면 접는 방향이 뒤집힌 것이고, 실행하면 열려 있는
+	// 버튼이 영구히 꺼진 것으로 세어져 게이트가 과탐지로 곧 꺼진다.
+	it("반증: 조건이 언제나 거짓이면 참 갈래는 근거가 아니다", () => {
+		expect(truthyOf("false ? true : false")).toBe(false);
+	});
+
+	it("반증: 조건이 언제나 참이면 거짓 갈래는 근거가 아니다", () => {
+		expect(truthyOf("true ? false : true")).toBe(false);
+	});
+
+	it("조건을 모를 때만 두 갈래가 모두 참이기를 요구한다", () => {
+		expect(truthyOf("cond ? true : 1", UNKNOWN)).toBe(true);
+		expect(truthyOf("cond ? true : false", UNKNOWN)).toBe(false);
+		expect(truthyOf("cond ? false : true", UNKNOWN)).toBe(false);
+	});
+
+	it("조건도 `const` 사슬을 따라 접는다", () => {
+		expect(truthyOf("off ? true : false", "const off = true;")).toBe(true);
+		expect(truthyOf("off ? false : true", "const off = false;")).toBe(true);
+	});
+
+	it("삼항은 거짓 쪽도 대칭이다", () => {
+		// `alwaysFalsy` 는 내보내지 않으므로 부정으로 묻는다.
+		expect(truthyOf("!(true ? false : true)")).toBe(true);
+		expect(truthyOf("!(false ? true : false)")).toBe(true);
+		expect(truthyOf("!(cond ? false : null)", UNKNOWN)).toBe(true);
+		// 반증: 한 갈래가 거짓이 아니면 그 부정은 언제나 참이 아니다.
+		expect(truthyOf("!(cond ? false : true)", UNKNOWN)).toBe(false);
 	});
 });

@@ -137,13 +137,27 @@ describe("자격증명 등급 시딩", () => {
 		// 없으므로 주석은 저절로 거짓이다. 10회차에 격리 계약
 		// (`e2e-runtime-isolation.contract.test.ts`)이 같은 자리를 같은 방식으로
 		// 닫았다.
+		//
+		// 그 다음 구멍은 호출을 **설정이 타지 않는 함수**로 옮기는 것이었다. 파일
+		// 어딘가에 호출 노드가 있기만 하면 참이었으므로, `onPrepare` 의 호출을
+		// 지우고 아무도 부르지 않는 `function unusedGhostSeed()` 안에 같은 호출을
+		// 남기면 계약은 초록인데 격리 워크스페이스는 비어 있었다(12회차 지적 9).
+		// 그래서 이제 파일이 아니라 **기본 설정이 실행하는 자리**에서 잰다 —
+		// `config.onPrepare`/`config.before` 의 몸통에서 시작해 같은 파일의 함수
+		// 선언과 `const` 초기화식을 한 단계씩 따라간 **도달 가능한** 그래프 안에
+		// 호출이 있어야 참이다. 안 쓰는 함수는 그 그래프에 없다.
 		const tree = parseWdioConf();
 		const bound = seedImportBindings(tree);
+		const bodies = moduleScopeBodies(tree);
+
+		const onPrepare = configHookBody(bodies, "onPrepare");
+		expect(onPrepare, "기본 설정에 onPrepare 훅이 없다").toBeTruthy();
+		const prepared = reachableFrom(onPrepare as ts.Node, bodies);
 
 		const seedLocal = bound.get("seedCredentialedAdk");
 		expect(seedLocal, "wdio.conf.ts 가 시딩 함수를 import 하지 않는다").toBeTruthy();
 		expect(
-			callsBinding(tree, seedLocal as string),
+			callsBinding(prepared, seedLocal as string),
 			"import 만 하고 부르지 않으면 격리 워크스페이스는 비어 있다",
 		).toBe(true);
 
@@ -153,13 +167,16 @@ describe("자격증명 등급 시딩", () => {
 			"wdio.conf.ts 가 시딩 가능 여부 판단을 import 하지 않는다",
 		).toBeTruthy();
 		expect(
-			callsBinding(tree, availableLocal as string),
+			callsBinding(prepared, availableLocal as string),
 			"키가 있는지 실제로 물어야 결정론 등급이 예전 그대로 돈다",
 		).toBe(true);
 
-		// 워커도 같은 판단을 해야 스펙 앞에서 키를 실어 준다.
+		// 워커도 같은 판단을 해야 스펙 앞에서 키를 실어 준다. 그 판단은 스펙 앞
+		// 훅에서 실제로 읽혀야 하므로 `config.before` 에서 도달해야 한다.
+		const before = configHookBody(bodies, "before");
+		expect(before, "기본 설정에 before 훅이 없다").toBeTruthy();
 		expect(
-			touchesProcessEnv(tree, "NAIA_E2E_CREDENTIALED_SEED"),
+			touchesProcessEnv(reachableFrom(before as ts.Node, bodies), "NAIA_E2E_CREDENTIALED_SEED"),
 			"워커에게 넘기는 표시가 없으면 스펙은 키 없이 돈다",
 		).toBe(true);
 	});
@@ -201,8 +218,94 @@ function seedImportBindings(tree: ts.SourceFile): Map<string, string> {
 	return bound;
 }
 
-/** 그 바인딩을 **실제로 부르는** 호출식이 있는가. */
-function callsBinding(tree: ts.SourceFile, name: string): boolean {
+/**
+ * 모듈 스코프의 이름 → 그 이름이 가리키는 몸통(함수 선언의 본문, `const` 초기화식).
+ *
+ * 도달 그래프를 한 단계씩 따라갈 때 쓴다. `export const config = {…}` 도 여기
+ * 들어오므로 훅을 찾는 입구이기도 하다.
+ */
+function moduleScopeBodies(tree: ts.SourceFile): Map<string, ts.Node> {
+	const bodies = new Map<string, ts.Node>();
+	for (const statement of tree.statements) {
+		if (ts.isFunctionDeclaration(statement) && statement.name && statement.body) {
+			bodies.set(statement.name.text, statement.body);
+			continue;
+		}
+		if (!ts.isVariableStatement(statement)) continue;
+		for (const declaration of statement.declarationList.declarations) {
+			if (!ts.isIdentifier(declaration.name) || !declaration.initializer) continue;
+			bodies.set(declaration.name.text, declaration.initializer);
+		}
+	}
+	return bodies;
+}
+
+/** 기본 설정 객체의 훅 몸통. 메서드·함수식·화살표·같은 파일 함수 참조를 모두 푼다. */
+function configHookBody(bodies: Map<string, ts.Node>, hook: string): ts.Node | null {
+	const config = bodies.get("config");
+	if (!config || !ts.isObjectLiteralExpression(config)) return null;
+	for (const property of config.properties) {
+		const name = property.name;
+		const key =
+			name && (ts.isIdentifier(name) || ts.isStringLiteralLike(name)) ? name.text : null;
+		if (key !== hook) continue;
+		if (ts.isMethodDeclaration(property)) return property.body ?? null;
+		if (ts.isPropertyAssignment(property)) {
+			const value = property.initializer;
+			if (ts.isFunctionExpression(value) || ts.isArrowFunction(value)) return value.body;
+			if (ts.isIdentifier(value)) return bodies.get(value.text) ?? null;
+			return null;
+		}
+		if (ts.isShorthandPropertyAssignment(property)) return bodies.get(property.name.text) ?? null;
+	}
+	return null;
+}
+
+/** 이 노드가 이름으로 참조하는 것들. `a.b` 는 `a` 만 이름이다. */
+function referencedNames(node: ts.Node, out: string[]): void {
+	const visit = (n: ts.Node): void => {
+		if (ts.isPropertyAccessExpression(n)) {
+			visit(n.expression);
+			return;
+		}
+		if (ts.isQualifiedName(n)) {
+			visit(n.left);
+			return;
+		}
+		if (ts.isIdentifier(n)) {
+			out.push(n.text);
+			return;
+		}
+		n.forEachChild(visit);
+	};
+	visit(node);
+}
+
+/**
+ * 입구에서 **도달 가능한** 몸통 전부. 참조한 이름의 몸통을 한 단계씩 따라가는
+ * 고정점이다.
+ *
+ * 여기 없는 것은 기본 설정이 실행하지 않는다 — 안 쓰는 함수 안의 호출이 배선을
+ * 만족하지 못하게 하는 것이 이 함수의 전부다.
+ */
+function reachableFrom(entry: ts.Node, bodies: Map<string, ts.Node>): ts.Node[] {
+	const roots: ts.Node[] = [entry];
+	const seen = new Set<string>();
+	for (let i = 0; i < roots.length; i += 1) {
+		const names: string[] = [];
+		referencedNames(roots[i], names);
+		for (const name of names) {
+			if (seen.has(name)) continue;
+			seen.add(name);
+			const body = bodies.get(name);
+			if (body) roots.push(body);
+		}
+	}
+	return roots;
+}
+
+/** 그 바인딩을 **실제로 부르는** 호출식이 도달 범위 안에 있는가. */
+function callsBinding(roots: ts.Node[], name: string): boolean {
 	let found = false;
 	const visit = (node: ts.Node): void => {
 		if (found) return;
@@ -216,12 +319,12 @@ function callsBinding(tree: ts.SourceFile, name: string): boolean {
 		}
 		node.forEachChild(visit);
 	};
-	visit(tree);
+	for (const root of roots) visit(root);
 	return found;
 }
 
-/** `process.env.<key>` 를 **실제로** 대입하거나 읽는 노드가 있는가. */
-function touchesProcessEnv(tree: ts.SourceFile, key: string): boolean {
+/** `process.env.<key>` 를 **실제로** 대입하거나 읽는 노드가 도달 범위 안에 있는가. */
+function touchesProcessEnv(roots: ts.Node[], key: string): boolean {
 	const isProcessEnv = (node: ts.Expression): boolean =>
 		ts.isPropertyAccessExpression(node) &&
 		node.name.text === "env" &&
@@ -248,6 +351,6 @@ function touchesProcessEnv(tree: ts.SourceFile, key: string): boolean {
 		}
 		node.forEachChild(visit);
 	};
-	visit(tree);
+	for (const root of roots) visit(root);
 	return found;
 }

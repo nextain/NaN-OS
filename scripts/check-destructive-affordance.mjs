@@ -34,11 +34,34 @@
  * 불리는지 읽고, 그 바인딩을 부르는 `CallExpression` 만 호출부로 센다. 첫 인자를
  * 그대로 넘기는 얇은 감싸기 함수도 한 단계 고정점으로 따라간다 — 파일을
  * 건너뛰어 `export` 된 것도 같다. 이름을 바꾸는 것으로는 빠져나갈 수 없다.
+ *
+ * ## 규칙을 알림 게이트와 합친 것 (12회차 지적 5 이후)
+ *
+ * 열한 번째까지 이 파일은 자기만의 바인딩 해석기를 들고 있었다. 그래서
+ * `(0, invoke)("memory_delete_fact")` — 가져온 함수를 `this` 없이 부르는 흔한
+ * 호출 — 가 여기서는 호출부가 아니었고, 같은 쉼표를 알림에 쓰면 복구 게이트도
+ * 그것을 못 봤다. 두 게이트가 같은 구멍을 각자 들고 있었다.
+ *
+ * 이제 껍데기를 벗기는 것과 바인딩을 푸는 것은 `scripts/lib/bindings.mjs`
+ * 하나가 한다. 괄호·`as`·`!`·쉼표식, import 별명, 같은 파일 const 별명,
+ * 구조분해, `.bind`/`.call`/`.apply` 가 두 게이트에서 같은 규칙으로 읽힌다.
+ * 이 파일에 남은 것은 공용 모듈이 일부러 보지 않는 **이 게이트만의 보탬**
+ * 뿐이고, 아래 `aliasFromDeclaration` 에 그 이유와 함께 적어 두었다.
+ *
+ * ## 이 게이트가 따라가지 않는 것 (보증 밖)
+ *
+ * `bindings.mjs` 의 보증 밖 목록을 그대로 물려받는다 — 동적 속성 이름
+ * (`api[name]("cmd")`), `eval`/`new Function`/`Reflect.apply`/`Function.prototype`
+ * 을 두 겹 이상 거친 호출, 고차 함수가 돌려준 함수, 배열·객체·`Map` 을 거쳐
+ * 흘러간 함수, 실행할 때 조립되는 문자열. 명령 **이름**이 실행할 때 조립되는
+ * 자리는 이 게이트가 따로 "조립 호출" 로 세어 사람이 사유를 적게 한다.
+ * 이 경계 안쪽 형태는 모두 같은 규칙으로 잡히고, 경계 밖은 코드 리뷰의 몫이다.
  */
 
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import ts from "typescript";
+import { resolveBinding, unwrap } from "./lib/bindings.mjs";
 import { tauriCommandBodies } from "./lib/rust-tokens.mjs";
 
 const SHELL = "packages/shell";
@@ -399,23 +422,10 @@ function eachNode(node, visit) {
 	node.forEachChild((child) => eachNode(child, visit));
 }
 
-/** 괄호·`as`·`!` 를 벗겨 알맹이 식을 돌려준다. */
-function unwrapExpression(node) {
-	let current = node;
-	for (let guard = 0; guard < 8; guard += 1) {
-		if (ts.isParenthesizedExpression(current)) current = current.expression;
-		else if (ts.isAsExpression(current)) current = current.expression;
-		else if (ts.isNonNullExpression(current)) current = current.expression;
-		else if (ts.isSatisfiesExpression?.(current)) current = current.expression;
-		else break;
-	}
-	return current;
-}
-
 /** `await import("@tauri-apps/api/core")` 처럼 invoke 를 담고 오는 식인가. */
 function isInvokeModuleExpression(node) {
-	const expr = unwrapExpression(node);
-	const call = ts.isAwaitExpression(expr) ? unwrapExpression(expr.expression) : expr;
+	const expr = unwrap(node);
+	const call = ts.isAwaitExpression(expr) ? unwrap(expr.expression) : expr;
 	if (!ts.isCallExpression(call)) return false;
 	const callee = call.expression;
 	const isImport =
@@ -433,7 +443,24 @@ function isInvokeModuleExpression(node) {
  * `-1` 은 "부르기는 하는데 이름이 어느 인자인지 알 수 없다"(`.apply`)는 뜻이다.
  */
 function invokeAliasOffset(expr, bindings) {
-	const node = unwrapExpression(expr);
+	const node = unwrap(expr);
+	if (!node) return null;
+	// 먼저 공용 모듈에게 묻는다. import 별명·네임스페이스 멤버·같은 파일 const
+	// 별명·구조분해·`.bind`, 그리고 껍데기(괄호·`as`·`!`·쉼표식)가 여기서 알림
+	// 게이트와 **같은 규칙**으로 풀린다. 못 풀면 아래 이 게이트만의 보탬으로
+	// 내려간다 — 고정점이 키운 감싸기 함수 이름들이 그것이다.
+	if (bindings.sourceFile) {
+		const binding = resolveBinding(node, bindings.sourceFile, bindings.env, 0);
+		if (
+			binding &&
+			binding.module &&
+			INVOKE_MODULES.has(binding.module) &&
+			binding.imported === "invoke"
+		)
+			// 인자를 미리 먹인 `.bind` 는 명령 이름이 호출부에 없다. 0 으로 읽으면
+			// 페이로드를 이름으로 보고 "그런 명령 없음" 으로 조용히 흘린다.
+			return binding.boundArgs > 0 ? -1 : 0;
+	}
 	if (ts.isIdentifier(node)) {
 		return bindings.local.has(node.text)
 			? (bindings.offsets.get(node.text) ?? 0)
@@ -456,13 +483,17 @@ function invokeAliasOffset(expr, bindings) {
 	}
 	// `invoke.bind(null)` / `invoke.bind(null, "memory_delete_fact")`
 	if (ts.isCallExpression(node)) {
-		const callee = unwrapExpression(node.expression);
+		const callee = unwrap(node.expression);
 		if (!ts.isPropertyAccessExpression(callee) || callee.name.text !== "bind")
 			return null;
 		const base = invokeAliasOffset(callee.expression, bindings);
 		if (base === null || base < 0) return base;
-		// 첫 인자는 this, 나머지는 미리 묶인 인자다.
-		return Math.max(0, base - Math.max(0, node.arguments.length - 1));
+		// 첫 인자는 this, 나머지는 **미리 먹인 인자**다. 하나라도 먹였으면 명령
+		// 이름이 호출부 인자에 없다 — 자리를 옮겨 세는 것이 아니라 **모른다**
+		// 이다(`bindings.mjs` 의 `argsUnknown` 과 같은 뜻). 옛 산술은 이것을
+		// 0 으로 접어, 이름을 bind 로 미리 먹이는 것만으로 파괴 호출이 초록으로
+		// 흘렀다.
+		return node.arguments.length > 1 ? -1 : base;
 	}
 	return null;
 }
@@ -470,26 +501,28 @@ function invokeAliasOffset(expr, bindings) {
 /**
  * 이 선언이 한 파일 안에서 `invoke` 의 **별명**을 만드는가.
  *
- * 10회차는 `import { invoke as tauriInvoke }` 와 네임스페이스를 닫았다. 그런데
- * 판정이 여전히 "그 바인딩을 직접 부르는가" 라서, `const call = invoke.bind(null)`
- * 한 줄이면 확인 없는 기억 삭제가 호출부로도 잡히지 않았다 — 게이트가 "확인이
- * 있다" 고 말한 것이 아니라 호출 자체를 못 본 것이라 결함이 초록 안에 숨었다
- * (11회차 지적 6).
+ * 별명을 푸는 일반 규칙은 `scripts/lib/bindings.mjs` 로 옮겼다(12회차 지적 5).
+ * `const call = invoke.bind(null)`, `const x = invoke`, 껍데기로 싼 것,
+ * `import { invoke as tauriInvoke }` 는 이제 `invokeAliasOffset` 이 그 모듈에게
+ * 물어 답한다 — 알림 게이트와 같은 규칙이다.
  *
- * 여기서 닫는 것은 `const call = invoke.bind(null)`·`.call`·`.apply`,
- * `const x = invoke`, 구조 분해 `const { invoke: iv } = ns`, 그리고 객체
- * 리터럴로 만든 네임스페이스(`const ns = { invoke }` 뒤의 `ns.invoke(…)`)다.
- * 별명의 별명도 아래 고정점 루프가 한 단계씩 따라간다.
+ * 여기 남은 것은 공용 모듈이 **일부러 보지 않는다고 적어 둔** 두 가지에
+ * 대한 이 게이트만의 보탬이다. 셸 코드에 실제로 있는 형태라 놓치면 파괴
+ * 호출이 목록에서 사라지고, 그래서 경계 밖이라고 적어 두는 대신 여기서
+ * 좁게 받는다.
  *
- * **다음 회차 메모:** 이번 회차에 다른 손이 `scripts/lib/bindings.mjs`
- * (`importBindings`·`resolveCallee`)를 만든다. 그 파일이 생기기 전이라 여기에
- * 작게 두었고, 합칠 때 이 함수 하나만 옮기면 되도록 격리해 두었다.
+ *   - 객체 리터럴로 만든 네임스페이스 — `const ns = { invoke }` 뒤의
+ *     `ns.invoke(…)`. 객체를 거쳐 흘러간 함수는 공용 모듈의 보증 밖이다.
+ *   - 동적 `import`/`require` 의 구조분해 — `const { invoke } = await
+ *     import("@tauri-apps/api/core")`. 셸의 지연 로딩이 이 꼴이다.
+ *
+ * 별명의 별명은 아래 고정점 루프가 한 단계씩 따라간다.
  *
  * @returns {{ name: string, offset?: number, namespace?: boolean } | null}
  */
-function resolveInvokeBinding(node, sf, bindings) {
+function aliasFromDeclaration(node, sf, bindings) {
 	if (!node.initializer) return null;
-	const init = unwrapExpression(node.initializer);
+	const init = unwrap(node.initializer);
 
 	// const ns = { invoke } — 그 뒤의 `ns.invoke(…)` 는 네임스페이스 호출과 같다.
 	if (ts.isIdentifier(node.name) && ts.isObjectLiteralExpression(init)) {
@@ -548,10 +581,19 @@ function invokeBindings(sources) {
 		exported.set(file, new Set());
 		offsets.set(file, new Map());
 	}
+	// 공용 모듈이 파일을 건너갈 때 쓰는 환경. 알림 게이트가 쓰는 것과 같은
+	// 모양이다 — 상대 경로 import 를 저장소 안 파일로 풀어 그 트리를 준다.
+	const env = {
+		has: (path) => sources.has(path),
+		sourceFile: (path) => trees.get(path) ?? null,
+		resolve: (from, spec) => resolveImport(from, spec, sources),
+	};
 	const bindingsFor = (file) => ({
 		local: local.get(file),
 		namespaces: namespaces.get(file),
 		offsets: offsets.get(file),
+		sourceFile: trees.get(file) ?? null,
+		env,
 	});
 
 	// 씨앗: import 로 들어온 invoke
@@ -612,7 +654,7 @@ function invokeBindings(sources) {
 			// `invoke` 의 별명. 감싸기 함수보다 먼저 봐야 그 함수 안의 호출이 보인다.
 			eachNode(tree, (statement) => {
 				if (!ts.isVariableDeclaration(statement)) return;
-				const alias = resolveInvokeBinding(statement, tree, bindingsFor(file));
+				const alias = aliasFromDeclaration(statement, tree, bindingsFor(file));
 				if (!alias) return;
 				if (alias.namespace) {
 					if (namespaces.get(file).has(alias.name)) return;
@@ -683,7 +725,8 @@ function invokeBindings(sources) {
 		eachNode(tree, (node) => {
 			const at = invokeCallOffset(node, file);
 			if (at === null) return;
-			// `.apply` 는 인자를 배열로 넘겨 이름이 어느 자리인지 알 수 없다.
+			// `-1` 은 명령 이름이 호출부의 몇 번째 인자인지 알 수 없다는 뜻이다 —
+			// `.apply` 로 배열을 넘긴 것, 그리고 이름을 `.bind` 로 미리 먹인 것.
 			// 리터럴이 아닌 것으로 세면 아래 조립 검사가 그 자리를 막는다.
 			const first = at < 0 ? undefined : node.arguments[at];
 			const start = node.getStart(tree);
@@ -699,9 +742,13 @@ function invokeBindings(sources) {
 				argText: first
 					? first.getText(tree).slice(0, 40)
 					: at < 0
-						? "…apply(배열)"
+						? "이름자리모름"
 						: "",
 				hasArg: !!first,
+				// 명령 이름이 호출부 인자에 없다는 표시(`.apply`, 이름을 미리 먹인
+				// `.bind`). 세어서 보고 줄에 드러낸다 — 0 이 아니면 그만큼 이
+				// 게이트가 이름을 못 읽고 있다는 뜻이다.
+				nameUnknown: at < 0,
 			});
 		});
 	}
@@ -861,9 +908,15 @@ for (const hit of resolvedLiteralCalls) {
 	unguarded.push({ file: hit.file, line: hit.line, command: hit.command, wrapper });
 }
 
+// 명령 이름 자리를 못 읽은 호출. 지금은 0 이고, 0 이 아니면 그 수만큼 이
+// 게이트가 무엇을 부르는지 모른 채 지나간 것이다. 그런 자리는 아래 조립 호출
+// 검사가 잡아 사람이 사유를 적게 한다 — 초록으로 흘려보내지 않는다.
+const unknownNameSites = invokeSites.filter((site) => site.nameUnknown).length;
+
 console.log(
 	`[destructive] Rust 명령 ${tauriCommands().size}개 중 파괴 후보 ${commands.length}개` +
-		` (되돌릴 수 있어 면제 ${REVERSIBLE.size}개) / 프런트 호출 ${callSites}곳`,
+		` (되돌릴 수 있어 면제 ${REVERSIBLE.size}개) / 프런트 호출 ${callSites}곳` +
+		` / 이름 자리를 못 읽은 호출 ${unknownNameSites}곳`,
 );
 
 const unexpected = unguarded.filter(

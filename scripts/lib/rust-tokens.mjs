@@ -15,11 +15,36 @@
  * 건너뛴다. 형태를 세는 자리가 없으니 형태를 하나 더 만들어도 빠져나갈 곳이
  * 없다.
  *
+ * ## 속성도 머리를 세지 않는다 (12회차 지적 4 이후)
+ *
+ * 명령 판정도 한때 `#[` 바로 다음 **네 토큰**이 `tauri::command` 인지만
+ * 물었다. 그래서 `#[cfg_attr(all(), tauri::command)]` 는 머리가 `cfg_attr(all(`
+ * 이라 명령이 아니었고 — 소스에 `tauri` `::` `command` 토큰이 멀쩡히 있는데도 —
+ * 그 명령이 목록에서 사라져 프런트의 `invoke("…")` 가 확인 검사에서 통째로
+ * 건너뛰어졌다. 창 길이 대신 속성 중첩으로 같은 사고가 났다.
+ *
+ * 그래서 여기서도 세는 자리를 없앴다. 속성 토큰 열(`#[` 부터 짝이 맞는 `]`
+ * 까지) **어디든** `tauri :: command` 토큰 연쇄가 있으면 명령 속성이다. 중첩
+ * (`cfg_attr` 안의 `cfg_attr`)도 같은 규칙으로 잡힌다. 문자열과 주석은
+ * 토크나이저가 이미 갈라 두었으므로 `#[doc = "tauri::command"]` 처럼 글자만
+ * 같은 것은 `string` 토큰 하나라서 연쇄를 이루지 않는다.
+ *
+ * 그물이 넓어진 쪽으로 틀린다 — 명령이 아닌 것을 명령으로 볼 수는 있어도
+ * (`#[남의매크로(tauri::command)]`) 명령을 목록에서 빠뜨리지는 않는다. 이 게이트가
+ * 지키려는 것은 "확인 없는 파괴 조작이 목록 밖으로 새지 않는다" 이므로,
+ * 틀리는 방향은 이쪽이어야 한다.
+ *
  * ## 이 모듈이 보증하지 않는 것
  *
- * 매크로가 만들어 내는 `#[tauri::command]`(예 `macro_rules!` 안에서 이름을
- * 조립하는 것)는 소스에 그 토큰이 없으므로 보지 못한다. 그것은 우회가 아니라
- * 위조라서 리뷰가 볼 몫이다.
+ * 소스에 그 토큰이 **없는** 것은 보지 못한다. 둘이다.
+ *
+ *   1. 매크로가 **생성**하는 `#[tauri::command]` — `macro_rules!` 나 파생
+ *      매크로(proc-macro)가 속성이나 이름을 조립해 내놓는 경우. 확장 결과에만
+ *      토큰이 있고 소스에는 없다.
+ *   2. `include!` 로 다른 파일에서 끌어오는 소스. 이 모듈은 넘겨받은 문자열
+ *      하나만 읽고 파일을 따라가지 않는다.
+ *
+ * 둘 다 우회가 아니라 위조라서 리뷰가 볼 몫이다.
  */
 
 /** 식별자 첫 글자로 쓸 수 있는가. Rust 는 비ASCII 식별자를 허용한다. */
@@ -227,16 +252,36 @@ function skipAttribute(tokens, at) {
 	return skipBalanced(tokens, j, "[", "]");
 }
 
-/** 그 속성이 `#[tauri::command…]` 인가. */
+/** `tokens[at]` 부터 `tauri` `::` `command` 세 마디가 이어지는가. */
+function isTauriCommandPath(tokens, at) {
+	return (
+		tokens[at]?.kind === "ident" &&
+		tokens[at].text === "tauri" &&
+		tokens[at + 1]?.kind === "punct" &&
+		tokens[at + 1].text === ":" &&
+		tokens[at + 2]?.kind === "punct" &&
+		tokens[at + 2].text === ":" &&
+		tokens[at + 3]?.kind === "ident" &&
+		tokens[at + 3].text === "command"
+	);
+}
+
+/**
+ * 그 속성이 명령 속성인가 — 속성 토큰 열 **어디든** `tauri::command` 가 있는가.
+ *
+ * 머리 네 토큰만 보면 `#[cfg_attr(all(), tauri::command)]` 가 빠져나간다
+ * (12회차 지적 4). 짝이 맞는 `]` 까지 전부 보므로 중첩된 `cfg_attr` 도 같다.
+ * 문자열은 토큰 하나(`kind: "string"`)라서 글자만 같은 것은 연쇄가 아니다.
+ */
 function isTauriCommandAttribute(tokens, at) {
 	let j = at + 1;
 	if (tokens[j]?.kind === "punct" && tokens[j].text === "!") j += 1;
 	if (!(tokens[j]?.kind === "punct" && tokens[j].text === "[")) return false;
-	const head = tokens
-		.slice(j + 1, j + 5)
-		.map((t) => t.text)
-		.join("");
-	return head === "tauri::command";
+	const end = skipBalanced(tokens, j, "[", "]");
+	for (let k = j + 1; k < end; k += 1) {
+		if (isTauriCommandPath(tokens, k)) return true;
+	}
+	return false;
 }
 
 /**

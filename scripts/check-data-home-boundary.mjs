@@ -31,6 +31,16 @@
  * 내고, 식별자는 코드 쪽에서, 경로 마디는 문자열 쪽에서만 본다. 형태를 세는
  * 자리가 없으니 형태를 하나 더 만들어도 빠져나갈 곳이 없다.
  *
+ * ## 이름표도 토큰에서 읽는다 (12회차 지적 8 이후)
+ *
+ * 경로 조립만 토크나이저로 옮기고 이름표 목록은 `=> "리터럴"` 정규식으로 남겨
+ * 두었더니, 갈래 본문을 중괄호로 감싸기만 해도(`Self::GhostCache => { "…" }`)
+ * 이름표가 늘지 않았다 — 변형을 하나 더한 사실이 검사기 눈 밖으로 사라졌다.
+ * 이제 갈래도 토큰으로 읽고, `=>` 뒤가 문자열 리터럴이 아니면 통과가 아니라
+ * **실패**다. 더해서 `ALL_CHILDREN` 의 변형 수, `name()` 의 갈래 수,
+ * `docs/storage-locations.md` 표의 행 수가 셋 다 같은지 센다. 자리 하나를
+ * 늘리면서 셋 중 하나만 늘리는 것도 그 자리에서 걸린다.
+ *
  * ## 이 검사가 보증하지 않는 것 (경계를 여기서 끊는다)
  *
  * 보증 범위는 "`~/.naia` **바로 아래** 새 자리가 이름표 없이 생기지 않는다"
@@ -354,17 +364,156 @@ function findIdentifierHits(code) {
 	return hits;
 }
 
-/** `data_home.rs` 의 `DataHomeChild::name()` 대응표에서 이름을 읽는다. */
+/** `tokens[at]` 가 `Self::` 또는 `DataHomeChild::` 로 시작하는 변형 이름인가. */
+function variantAt(tokens, at) {
+	const head = tokens[at];
+	if (!head || head.kind !== "ident") return null;
+	if (head.text !== "Self" && head.text !== "DataHomeChild") return null;
+	if (!(tokens[at + 1]?.text === ":" && tokens[at + 2]?.text === ":")) return null;
+	const name = tokens[at + 3];
+	if (!name || name.kind !== "ident") return null;
+	return { variant: name.text, after: at + 4 };
+}
+
+/** `fn <이름>` 의 본문 블록 범위. 본문 없는 선언이면 `null`. */
+function functionBodyRange(tokens, fnName) {
+	for (let i = 0; i + 1 < tokens.length; i += 1) {
+		if (tokens[i].kind !== "ident" || tokens[i].text !== "fn") continue;
+		if (tokens[i + 1].kind !== "ident" || tokens[i + 1].text !== fnName) continue;
+		for (let j = i + 2; j < tokens.length; j += 1) {
+			const t = tokens[j];
+			if (t.kind !== "punct") continue;
+			if (t.text === ";") return null;
+			if (t.text === "{") return { open: j, end: skipBalanced(tokens, j, "{", "}") };
+		}
+		return null;
+	}
+	return null;
+}
+
+/**
+ * `data_home.rs` 의 `DataHomeChild::name()` 대응표에서 이름표를 **토큰으로** 읽는다.
+ *
+ * 예전에는 `DataHomeChild::\w+\s*=>\s*"([^"]+)"` 정규식이었다. 그래서 갈래 본문이
+ * 중괄호이기만 하면(`Self::GhostCache => { "ghost-cache" }`) 이름표가 늘지 않았고,
+ * 변형을 하나 더한 사실이 검사기 눈 밖으로 사라졌다(12회차 지적 8). 형태를 하나 더
+ * 열거하는 대신 **측정 지점을 옮긴다** — 갈래 머리(`Self::` / `DataHomeChild::`)를
+ * 토큰으로 찾고, `=>` 뒤에서 중괄호·괄호를 벗긴 첫 토큰을 읽는다.
+ *
+ * 그 자리가 문자열 리터럴이 아니면(상수 이름, `concat!`, 함수 호출) **읽지 못한 것**
+ * 으로 실패한다. 모르는 것은 통과가 아니다 — 이름표를 못 읽으면 아래 대조가 전부
+ * 무의미해진다.
+ */
 function funnelNames() {
 	if (!existsSync(FUNNEL)) return null;
-	const source = readFileSync(FUNNEL, "utf8");
-	const body = /const fn name\(self\) -> &'static str \{([\s\S]*?)\n    \}/.exec(source);
+	const tokens = tokenizeRust(readFileSync(FUNNEL, "utf8"));
+	const body = functionBodyRange(tokens, "name");
 	if (!body) return null;
-	const names = [];
-	for (const m of body[1].matchAll(/DataHomeChild::\w+\s*=>\s*"([^"]+)"/g)) {
-		names.push(m[1]);
+
+	let matchAt = -1;
+	for (let i = body.open + 1; i < body.end; i += 1) {
+		if (tokens[i].kind === "ident" && tokens[i].text === "match") {
+			matchAt = i;
+			break;
+		}
 	}
-	return names;
+	if (matchAt === -1) return null;
+	let open = -1;
+	for (let i = matchAt + 1; i < body.end; i += 1) {
+		if (tokens[i].kind === "punct" && tokens[i].text === "{") {
+			open = i;
+			break;
+		}
+	}
+	if (open === -1) return null;
+	const close = skipBalanced(tokens, open, "{", "}") - 1;
+
+	const names = [];
+	const unreadable = [];
+	let i = open + 1;
+	while (i < close) {
+		const head = variantAt(tokens, i);
+		if (!head) {
+			i += 1;
+			continue;
+		}
+		// 패턴 나머지(`|` 갈래, `if` 가드)를 지나 `=>` 를 찾는다.
+		let arrow = -1;
+		for (let j = head.after; j < close; j += 1) {
+			if (tokens[j].kind === "punct" && tokens[j].text === "=" && tokens[j + 1]?.text === ">") {
+				arrow = j;
+				break;
+			}
+		}
+		if (arrow === -1) {
+			unreadable.push({ variant: head.variant, line: tokens[i].line, why: "`=>` 가 없다" });
+			break;
+		}
+
+		// 갈래 본문. 중괄호·괄호를 벗기고 첫 토큰을 본다.
+		let k = arrow + 2;
+		while (tokens[k]?.kind === "punct" && (tokens[k].text === "{" || tokens[k].text === "(")) {
+			k += 1;
+		}
+		const value = tokens[k];
+		if (!value || value.kind !== "string") {
+			unreadable.push({
+				variant: head.variant,
+				line: tokens[i].line,
+				why: `이름표 자리가 문자열이 아니다 (${value ? value.text : "끝"})`,
+			});
+		} else {
+			names.push(value.text);
+		}
+
+		// 다음 갈래로. 중괄호 본문은 통째로 건너뛰어, 본문 안의 `Self::` 를 갈래로 읽지 않는다.
+		if (tokens[arrow + 2]?.kind === "punct" && tokens[arrow + 2].text === "{") {
+			i = skipBalanced(tokens, arrow + 2, "{", "}");
+		} else {
+			let j = arrow + 2;
+			while (j < close && !(tokens[j].kind === "punct" && tokens[j].text === ",")) j += 1;
+			i = j + 1;
+		}
+	}
+	return { names, unreadable };
+}
+
+/** `ALL_CHILDREN` 배열에 적힌 변형. 이름표 갈래 수와 맞물려야 한다. */
+function allChildrenVariants() {
+	if (!existsSync(FUNNEL)) return null;
+	const tokens = tokenizeRust(readFileSync(FUNNEL, "utf8"));
+	for (let i = 0; i < tokens.length; i += 1) {
+		if (tokens[i].kind !== "ident" || tokens[i].text !== "ALL_CHILDREN") continue;
+		// `=` 를 찾되 타입 자리(`: [DataHomeChild; 14]`)는 통째로 건너뛴다 — 그 안의
+		// `;` 를 선언 끝으로 읽으면 초기화식을 못 만난다.
+		let eq = -1;
+		for (let j = i + 1; j < tokens.length; ) {
+			const t = tokens[j];
+			if (t.kind === "punct" && t.text === "[") {
+				j = skipBalanced(tokens, j, "[", "]");
+				continue;
+			}
+			if (t.kind === "punct" && t.text === ";") break;
+			if (t.kind === "punct" && t.text === "=" && tokens[j + 1]?.text !== ">") {
+				eq = j;
+				break;
+			}
+			j += 1;
+		}
+		if (eq === -1) continue;
+		if (!(tokens[eq + 1]?.kind === "punct" && tokens[eq + 1].text === "[")) return null;
+		const open = eq + 1;
+		const end = skipBalanced(tokens, open, "[", "]") - 1;
+		const variants = [];
+		for (let j = open + 1; j < end; j += 1) {
+			const found = variantAt(tokens, j);
+			if (!found) continue;
+			variants.push(found.variant);
+			j = found.after - 1;
+		}
+		return variants;
+	}
+	return null;
 }
 
 /** 문서의 자리 표에서 이름을 읽는다. */
@@ -435,12 +584,19 @@ if (escapes.length) {
 
 // --- 2. 이름표·검사기 목록·문서가 같은가 --------------------------------
 
-const names = funnelNames();
-if (!names) {
+const labels = funnelNames();
+if (!labels) {
 	fail("깔때기 모듈에서 자리 이름표를 읽지 못했다", [
 		"`DataHomeChild::name()` 의 대응표 모양이 바뀌었다면 이 검사도 함께 고쳐라.",
 	]);
+} else if (labels.unreadable.length) {
+	// 모르는 것은 통과가 아니다. 이름표 하나를 못 읽으면 아래 대조가 전부 헛돈다.
+	fail(`이름표를 읽을 수 없는 갈래가 있다(${labels.unreadable.length}):`, [
+		...labels.unreadable.map((u) => `${FUNNEL}:${u.line} — ${u.variant} — ${u.why}`),
+		"이름표는 갈래마다 문자열 리터럴 하나로 적어라. 상수·조립·호출은 단일 출처를 흩뜨린다.",
+	]);
 } else {
+	const names = labels.names;
 	console.log(`[data-home] 이름표 ${names.length}개 (사유 적어 둔 것 ${KNOWN.size})`);
 	const duplicated = names.filter((n, i) => names.indexOf(n) !== i);
 	if (duplicated.length) {
@@ -464,6 +620,29 @@ if (!names) {
 			fail("문서의 자리 표가 이름표와 다르다:", [
 				...missing.map((n) => `문서에 없다: ${n}`),
 				...extra.map((n) => `코드에 없다: ${n}`),
+			]);
+		}
+	}
+
+	// 이름 대조만으로는 갈래를 못 읽었다는 사실이 "이름표가 하나 적다" 로만
+	// 보인다. 변형·갈래·문서 행의 **수**가 셋 다 같은지 따로 센다 — 변형을
+	// 더하면서 이름표를 검사기가 못 읽는 모양으로 적으면 여기서 걸린다.
+	const variants = allChildrenVariants();
+	if (!variants) {
+		fail("깔때기에서 `ALL_CHILDREN` 목록을 읽지 못했다", [
+			"자리 전체 목록은 검사기와 테스트가 세는 단일 출처다.",
+		]);
+	} else {
+		const docCount = documented ? documented.length : null;
+		console.log(
+			`[data-home] 변형 ${variants.length}개 · 이름표 갈래 ${names.length}개 · 문서 ${docCount ?? "?"}행`,
+		);
+		if (variants.length !== names.length || (docCount !== null && docCount !== names.length)) {
+			fail("변형 수·이름표 수·문서 행 수가 다르다:", [
+				`ALL_CHILDREN 변형 ${variants.length}개`,
+				`name() 갈래 ${names.length}개`,
+				`docs/storage-locations.md 행 ${docCount ?? "읽지 못함"}개`,
+				"자리를 하나 늘리면 셋을 함께 늘려라. 하나만 늘면 그 자리는 아무도 세지 않는다.",
 			]);
 		}
 	}

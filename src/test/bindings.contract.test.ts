@@ -43,8 +43,10 @@ type ImportRecord = { module: string; imported: string; kind: string };
  * 검사를 통과하는 자리가 생긴다.
  */
 type Binding = {
-	module: string;
-	imported: string;
+	module: string | null;
+	imported: string | null;
+	/** 모듈이 아니라 전역에서 온 것. `fetch` 가 그것이다. */
+	global?: string;
 	local: string | null;
 	via: string;
 	boundArgs: number;
@@ -263,8 +265,14 @@ describe("resolveCallee — 호출부는 이름이 아니라 바인딩이다", (
 		expect(binding?.module).not.toBe("@tauri-apps/api/core");
 	});
 
-	it("반증: 어디서도 오지 않은 이름은 모른다", () => {
-		expect(calleeOf(`export const r = invoke("memory_delete_fact");`, "invoke")).toBeNull();
+	// 선언이 없는 자유 식별자는 **전역**이다(12회차 지적 6). 그래도 모듈
+	// 바인딩은 아니다 — 여기서 `module` 이 채워지면, 어디서 왔는지 모르는
+	// 이름이 남의 모듈 export 로 세어진다.
+	it("반증: 어디서도 오지 않은 이름은 어느 모듈의 것도 아니다", () => {
+		const binding = calleeOf(`export const r = invoke("memory_delete_fact");`, "invoke");
+		expect(binding?.module).toBeNull();
+		expect(binding?.imported).toBeNull();
+		expect(binding?.global).toBe("invoke");
 	});
 
 	it("반증: named import 객체의 속성은 그 모듈의 export 가 아니다", () => {
@@ -372,5 +380,186 @@ describe("bindingIsOneOf — 판정을 한 줄로 적는다", () => {
 
 	it("반증: 못 푼 바인딩은 거짓이다", () => {
 		expect(B.bindingIsOneOf(null, REACT, FACTORIES)).toBe(false);
+	});
+});
+
+/* ─────────────── 12회차에 못 박은 것 ─────────────── */
+
+describe("unwrap — 껍데기를 벗기는 자리는 하나다 (12회차 지적 5)", () => {
+	it("쉼표식으로 싼 callee 는 마지막 항이 부르는 값이다", () => {
+		// `(0, f)()` 는 가져온 함수를 this 없이 부르는 흔한 호출이다. 여기서
+		// 벗기지 않으면 파괴 게이트와 알림 게이트가 같은 자리에서 따로 뚫린다.
+		const binding = calleeOf(
+			`import { invoke } from "@tauri-apps/api/core";\nexport const r = (0, invoke)("memory_delete_fact");`,
+			"(0,invoke)",
+		);
+		expect(binding?.module).toBe("@tauri-apps/api/core");
+		expect(binding?.imported).toBe("invoke");
+	});
+
+	it("괄호·as·non-null 을 겹쳐 싸도 같은 바인딩이다", () => {
+		const binding = calleeOf(
+			`import { createElement } from "react";\nexport const E = ((0, createElement) as never)!("div");`,
+			"((0,createElement)asnever)!",
+		);
+		expect(binding?.module).toBe("react");
+		expect(binding?.imported).toBe("createElement");
+	});
+
+	it("반증: 쉼표의 마지막 항이 다른 것이면 다른 바인딩이다", () => {
+		// 마지막 항만 값이다. 왼쪽 항을 값으로 읽으면 아무 이름이나 끌려온다.
+		const binding = calleeOf(
+			`import { invoke } from "@tauri-apps/api/core";\nimport { h } from "hyperscript";\nexport const r = (invoke, h)("div");`,
+			"(invoke,h)",
+		);
+		expect(binding?.module).toBe("hyperscript");
+		expect(binding?.module).not.toBe("@tauri-apps/api/core");
+	});
+});
+
+describe("전역 바인딩 — `fetch` 는 어느 모듈에서도 오지 않는다 (12회차 지적 6)", () => {
+	const outbound = (code: string, callee: string): string | undefined =>
+		calleeOf(code, callee)?.global;
+
+	it("선언 없는 자유 식별자는 그 이름의 전역이다", () => {
+		expect(outbound(`export const r = fetch("https://x/y");`, "fetch")).toBe("fetch");
+	});
+
+	it("const 별명은 같은 전역이다", () => {
+		// 이것이 12회차에 결정론 칸을 뚫은 형태다 — 이름은 `ghostGet` 이지만
+		// 부르는 값은 그대로 `fetch` 다.
+		expect(
+			outbound(`const ghostGet = fetch;\nexport const r = ghostGet("https://x/y");`, "ghostGet"),
+		).toBe("fetch");
+	});
+
+	it("전역 뿌리의 멤버도 같은 전역이다", () => {
+		expect(outbound(`export const r = globalThis.fetch("https://x");`, "globalThis.fetch")).toBe(
+			"fetch",
+		);
+		expect(outbound(`export const r = window["fetch"]("https://x");`, 'window["fetch"]')).toBe(
+			"fetch",
+		);
+	});
+
+	it("전역 뿌리에서 구조분해한 이름도 같은 전역이다", () => {
+		expect(
+			outbound(`const { fetch: f } = globalThis;\nexport const r = f("https://x");`, "f"),
+		).toBe("fetch");
+	});
+
+	it("`.call` 로 불러도 같은 전역이고, 인자는 한 칸 밀린다", () => {
+		const binding = calleeOf(`export const r = fetch.call(null, "https://x");`, "fetch.call");
+		expect(binding?.global).toBe("fetch");
+		expect(binding?.argShift).toBe(1);
+	});
+
+	it("반증: 이 파일에 선언이 있는 이름은 전역이 아니다", () => {
+		// 이름이 같다는 이유로 남의 함수를 바깥 통신으로 세면, 게이트는 곧
+		// 과탐지로 꺼진다.
+		expect(
+			calleeOf(`function fetch(u: string) {\n\treturn u;\n}\nexport const r = fetch("https://x");`, "fetch"),
+		).toBeNull();
+	});
+
+	it("반증: 전역은 모듈 바인딩이 아니다", () => {
+		const binding = calleeOf(`export const r = fetch("https://x");`, "fetch");
+		expect(B.bindingIsOneOf(binding, new Set(["react"]), new Set(["fetch"]))).toBe(false);
+	});
+});
+
+describe("재수출 — 파일 하나를 건너가도 원래 모듈을 잃지 않는다 (12회차 지적 3)", () => {
+	const SCREEN = "app/screen.tsx";
+
+	function through(shim: string): Binding | null {
+		const { env, file } = environment({
+			"app/shim.ts": shim,
+			[SCREEN]: `import { ghostCreate } from "./shim";\nexport const E = ghostCreate("div", { role: "alert" });`,
+		});
+		return calleeOf("", "ghostCreate", env, file(SCREEN));
+	}
+
+	it("`export const y = x` 를 따라간다", () => {
+		const binding = through(
+			`import { createElement } from "react";\nexport const ghostCreate = createElement;`,
+		);
+		expect(binding?.module).toBe("react");
+		expect(binding?.imported).toBe("createElement");
+	});
+
+	it("`export { x as y } from \"mod\"` 를 따라간다", () => {
+		const binding = through(`export { createElement as ghostCreate } from "react";`);
+		expect(binding?.module).toBe("react");
+		expect(binding?.imported).toBe("createElement");
+	});
+
+	it("`export { x as y }` (같은 파일 이름 재수출) 를 따라간다", () => {
+		const binding = through(
+			`import { createElement as h } from "react";\nexport { h as ghostCreate };`,
+		);
+		expect(binding?.module).toBe("react");
+		expect(binding?.imported).toBe("createElement");
+	});
+
+	it("`export * from \"mod\"` 는 이름을 그대로 지나보낸다", () => {
+		const { env, file } = environment({
+			"app/shim.ts": `export * from "react";`,
+			[SCREEN]: `import { createElement } from "./shim";\nexport const E = createElement("div");`,
+		});
+		const binding = calleeOf("", "createElement", env, file(SCREEN));
+		expect(binding?.module).toBe("react");
+		expect(binding?.imported).toBe("createElement");
+	});
+
+	it("재수출을 두 파일 건너가도 따라간다", () => {
+		const { env, file } = environment({
+			"app/react-shim.ts": `export { createElement as ghostCreate } from "react";`,
+			"app/shim.ts": `export { ghostCreate } from "./react-shim";`,
+			[SCREEN]: `import { ghostCreate } from "./shim";\nexport const E = ghostCreate("div");`,
+		});
+		const binding = calleeOf("", "ghostCreate", env, file(SCREEN));
+		expect(binding?.module).toBe("react");
+	});
+
+	it("반증: env 를 안 넘기면 파일을 건너가지 못해 shim 에서 멈춘다", () => {
+		// 게이트가 `env` 를 빠뜨리면 정확히 이렇게 읽힌다 — `./shim` 의
+		// `ghostCreate` 는 react 의 `createElement` 가 아니다.
+		const { file } = environment({
+			"app/shim.ts": `export { createElement as ghostCreate } from "react";`,
+			[SCREEN]: `import { ghostCreate } from "./shim";\nexport const E = ghostCreate("div");`,
+		});
+		const binding = calleeOf("", "ghostCreate", undefined, file(SCREEN));
+		expect(binding?.module).toBe("./shim");
+		expect(binding?.module).not.toBe("react");
+	});
+});
+
+describe("argShift — 호출자는 자리를 옮겨야 한다 (12회차 지적 2)", () => {
+	it("`.call` 은 앞자리 하나가 this 다", () => {
+		const binding = calleeOf(
+			`import { createElement } from "react";\nexport const E = createElement.call(null, "div", { role: "alert" }, "failed");`,
+			"createElement.call",
+		);
+		expect(binding?.argShift).toBe(1);
+		expect(binding?.argsUnknown).toBe(false);
+	});
+
+	it("`.apply` 는 인자 자리를 아예 믿을 수 없다", () => {
+		const binding = calleeOf(
+			`import { createElement } from "react";\nexport const E = createElement.apply(null, ["div", { role: "alert" }]);`,
+			"createElement.apply",
+		);
+		expect(binding?.argsUnknown).toBe(true);
+	});
+
+	it("반증: 곧바로 부른 호출은 자리가 밀리지 않는다", () => {
+		// 여기서 `argShift` 가 0 이 아니면 멀쩡한 요소의 props 를 한 칸 밀어
+		// 읽는다. 옮기라는 규칙은 옮길 때만 옮기라는 규칙이기도 하다.
+		const binding = calleeOf(
+			`import { createElement } from "react";\nexport const E = createElement("div", { role: "alert" });`,
+			"createElement",
+		);
+		expect(binding?.argShift).toBe(0);
+		expect(binding?.argsUnknown).toBe(false);
 	});
 });

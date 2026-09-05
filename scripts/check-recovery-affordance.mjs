@@ -48,10 +48,10 @@ import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import ts from "typescript";
 import {
+	elementCallShape,
 	elementChildren,
 	elementOpening,
 	elementProps,
-	isCreateElementCall,
 	isElementNode,
 	jsxElementsIn,
 	makeEnv,
@@ -104,8 +104,11 @@ function tagNames(element, sf) {
 	) {
 		return [elementOpening(element).tagName.getText(sf)];
 	}
-	if (isCreateElementCall(element, env) && element.arguments.length >= 1) {
-		const type = unwrapAll(element.arguments[0]);
+	const shape = elementCallShape(element, env);
+	// 인자 자리는 바인딩이 알려 준 만큼 민다. `createElement.call(null, "button",
+	// …)` 의 태그는 0 번이 아니라 1 번이다.
+	if (shape.factory && !shape.argsUnknown && element.arguments.length > shape.argShift) {
+		const type = unwrapAll(element.arguments[shape.argShift]);
 		if (!type) return [];
 		if (ts.isIdentifier(type)) return [type.text];
 		if (ts.isPropertyAccessExpression(type)) return [type.name.text];
@@ -192,9 +195,9 @@ const env = makeEnv(
 function screenElements(expr, sf) {
 	const node = unwrapAll(expr);
 	if (!node) return [];
-	if (isElementNode(node)) return [node];
+	if (isElementNode(node, env)) return [node];
 	if (ts.isJsxFragment(node)) {
-		const kids = elementChildren(node);
+		const kids = elementChildren(node, env);
 		return kids.length === 1 ? screenElements(kids[0], sf) : [];
 	}
 	if (ts.isConditionalExpression(node))
@@ -266,7 +269,7 @@ function alertReturns(file, text) {
 				// 형제가 있으면 알림은 화면의 일부이지 전부가 아니다. 한 자식만
 				// 있는 동안 계속 내려가서 알림에 닿으면 그것이 화면을 통째로
 				// 대신한 것이다.
-				const kids = elementChildren(element);
+				const kids = elementChildren(element, env);
 				if (kids.length !== 1) continue;
 				stack.push(...screenElements(kids[0], tree));
 			}

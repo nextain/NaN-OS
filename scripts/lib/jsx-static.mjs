@@ -20,6 +20,41 @@
  * react·preact 계열의 요소 만드는 함수인지만 묻는다. 열한 번째 회차까지 그
  * 판정이 `"createElement"` 라는 **글자**였고, 별명 한 줄이면 막다른 오류
  * 화면이 알림으로도 세어지지 않았다.
+ *
+ * ## 호출 규약 — `env` 는 선택이 아니다
+ *
+ * 요소를 다루는 함수(`elementFactory`·`isCreateElementCall`·`isElementNode`·
+ * `elementProps`·`elementChildren`·`jsxElementsIn`)는 `env` 를 **반드시** 받는다.
+ * 안 넘기면 던진다. 예전에는 안 넘겨도 조용히 같은 파일 안에서만 풀었고,
+ * 그래서 게이트 한 곳이 인자 하나를 빠뜨린 것만으로 파일을 건너간 별명이
+ * 화면에서 사라졌다 — 검사기가 "요소가 아니다" 라고 말한 것이 아니라 아예
+ * 못 본 것이라, 결함이 초록 안에 숨었다(12회차 지적 3).
+ *
+ * 파일을 건너가지 않겠다는 것도 뜻이다. 그때는 `null` 을 넘긴다. 침묵이
+ * 아니라 선언이어야 다음 사람이 그것을 읽을 수 있다.
+ *
+ * 그리고 `bindings.mjs` 가 `argShift`/`argsUnknown` 을 돌려주면 **반드시**
+ * 그만큼 인자 자리를 옮기거나 "모른다" 로 다뤄야 한다. `createElement.call(
+ * null, "div", { role: "alert" })` 의 둘째 인자는 props 가 아니라 `"div"` 다.
+ * 자리를 안 옮기면 같은 화면이 `.call` 한 겹으로 검사를 빠져나간다
+ * (12회차 지적 2).
+ *
+ * ## 이 모듈이 따라가지 않는 것 (보증 밖)
+ *
+ * `bindings.mjs` 의 보증 밖 목록을 그대로 물려받는다 — 동적 속성 이름
+ * (`obj[name]`), `eval`/`new Function`/`Reflect.apply`/`Function.prototype` 을
+ * 두 겹 이상 거친 호출, 고차 함수가 돌려준 함수, 배열·객체·`Map` 을 거쳐
+ * 흘러간 함수, 동적 `import()`/`require()` 의 결과, 실행할 때 조립되는 문자열.
+ * 여기에 이 모듈의 것을 더한다.
+ *
+ *   - 함수 인자나 못 푼 이름을 펼친 spread 의 속성. 이것은 "없다" 가 아니라
+ *     `unknownSpread` 로 알린다 — 호출자가 없다로 읽으면 안 된다.
+ *   - 실행할 때 정해지는 값. `alwaysTruthy`/`alwaysFalsy` 는 **리터럴과 그것에
+ *     닿는 `const` 사슬**만 접는다. 값이 상태·인자·함수 결과에서 오는 자리는
+ *     언제나 "모른다" 이고, 그런 조작은 영구히 꺼 둔 것으로 세지 않는다.
+ *
+ * 이 경계 안쪽 형태는 새 모양이 와도 같은 규칙으로 잡힌다. 경계 밖은 코드
+ * 리뷰의 몫이다.
  */
 
 import ts from "typescript";
@@ -99,6 +134,23 @@ export function unwrapAll(node) {
 	}
 }
 
+/* ─────────────── 호출 규약 ─────────────── */
+
+/**
+ * `env` 를 넘기지 않고 부른 것을 잡는다.
+ *
+ * 파일을 건너가지 않겠다는 뜻이면 `null` 을 넘긴다. 빠뜨린 것과 일부러 안
+ * 넘긴 것을 구별할 수 없으면, 인자 하나를 잊은 게이트가 조용히 좁게 판정하고
+ * 그 사실이 아무 데도 남지 않는다.
+ */
+function requireEnv(env, fn) {
+	if (env === undefined)
+		throw new TypeError(
+			`${fn}(…): env 를 넘겨야 한다. 파일을 건너가지 않겠다면 null 을 넘긴다.`,
+		);
+	return env;
+}
+
 /* ─────────────── 요소와 속성 ─────────────── */
 
 /**
@@ -138,25 +190,50 @@ const RUNTIME_FACTORIES = new Set(["jsx", "jsxs", "jsxDEV"]);
  * createElement("canvas")` 처럼 **출처가 있는 다른 것**은 이제 요소가 아니다.
  */
 export function elementFactory(node, env) {
-	if (!node || !ts.isCallExpression(node)) return null;
+	requireEnv(env, "elementFactory");
+	return elementCallShape(node, env).factory;
+}
+
+/**
+ * 요소를 만드는 호출의 **모양** — 방식과 인자 자리.
+ *
+ * `argShift` 는 대상 함수의 것이 아닌 앞자리 인자 수다. `createElement.call(
+ * null, …)` 이면 1 이고, 그래서 type 은 0 이 아니라 1, props 는 1 이 아니라 2 다.
+ * `argsUnknown` 이면 인자 자리를 믿을 수 없다(`.apply`, 인자를 미리 먹인
+ * `.bind`) — 그때는 속성을 "없다" 가 아니라 **모른다** 로 다룬다.
+ */
+export function elementCallShape(node, env) {
+	requireEnv(env, "elementCallShape");
+	const none = { factory: null, argShift: 0, argsUnknown: false };
+	if (!node || !ts.isCallExpression(node)) return none;
 	const sf = typeof node.getSourceFile === "function" ? node.getSourceFile() : null;
 	const binding = sf ? resolveCallee(node, sf, env) : null;
-	if (binding) {
-		if (!ELEMENT_MODULES.has(binding.module)) return null;
-		if (CLASSIC_FACTORIES.has(binding.imported)) return "classic";
-		if (RUNTIME_FACTORIES.has(binding.imported)) return "runtime";
-		return null;
+	// 모듈에서 온 것으로 풀렸을 때만 바인딩으로 판정한다. 전역·자유 식별자는
+	// 아래 옛 판정으로 내려보낸다 — 어디서 왔는지 모르는 `createElement` 를
+	// 요소가 아니라고 단정하면 놓치는 쪽으로 틀린다.
+	if (binding && binding.module) {
+		if (!ELEMENT_MODULES.has(binding.module)) return none;
+		const shape = {
+			argShift: binding.argShift ?? 0,
+			argsUnknown: !!binding.argsUnknown,
+		};
+		if (CLASSIC_FACTORIES.has(binding.imported)) return { factory: "classic", ...shape };
+		if (RUNTIME_FACTORIES.has(binding.imported)) return { factory: "runtime", ...shape };
+		return none;
 	}
 	const callee = unwrapAll(node.expression);
-	if (callee && ts.isIdentifier(callee) && callee.text === "createElement") return "classic";
-	return null;
+	if (callee && ts.isIdentifier(callee) && callee.text === "createElement")
+		return { factory: "classic", argShift: 0, argsUnknown: false };
+	return none;
 }
 
 export function isCreateElementCall(node, env) {
-	return elementFactory(node, env) !== null;
+	requireEnv(env, "isCreateElementCall");
+	return elementCallShape(node, env).factory !== null;
 }
 
 export function isElementNode(node, env) {
+	requireEnv(env, "isElementNode");
 	return (
 		!!node &&
 		(ts.isJsxElement(node) ||
@@ -194,6 +271,7 @@ function propertyName(name) {
  * 반드시 `prop.sf` 를 넘겨야 한다.
  */
 export function elementProps(node, sf, env) {
+	requireEnv(env, "elementProps");
 	const props = [];
 	let unknownSpread = false;
 
@@ -263,8 +341,16 @@ export function elementProps(node, sf, env) {
 	// `createElement` 와 `jsx`/`jsxs` 는 자식 자리가 다르지만 props 는 둘 다
 	// 둘째 인자다. `jsx` 쪽은 그 객체 안에 `children` 이 함께 들어 있고, 그것도
 	// 실제로 넘어가는 prop 이므로 목록에서 빼지 않는다.
-	if (isCreateElementCall(node, env)) {
-		if (node.arguments.length >= 2) fromObject(node.arguments[1], 0, sf);
+	const shape = elementCallShape(node, env);
+	if (shape.factory) {
+		// 인자 자리를 믿을 수 없으면 속성을 **모른다**. 없다로 읽으면 인자를
+		// 한 겹 미리 먹이는 것만으로 검사를 통과한다.
+		if (shape.argsUnknown) {
+			unknownSpread = true;
+			return { props, unknownSpread };
+		}
+		const at = 1 + shape.argShift;
+		if (node.arguments.length > at) fromObject(node.arguments[at], 0, sf);
 		return { props, unknownSpread };
 	}
 	return { props, unknownSpread };
@@ -278,6 +364,7 @@ export function elementProps(node, sf, env) {
  * "자식이 하나뿐인가" 판정이 갈린다.
  */
 export function elementChildren(node, env) {
+	requireEnv(env, "elementChildren");
 	const meaningfulJsx = (c) => !ts.isJsxText(c) || c.getText().trim().length > 0;
 	const meaningfulValue = (a) => {
 		const arg = unwrapAll(a);
@@ -288,8 +375,13 @@ export function elementChildren(node, env) {
 	};
 	if (ts.isJsxElement(node) || ts.isJsxFragment(node))
 		return node.children.filter(meaningfulJsx);
-	const factory = elementFactory(node, env);
-	if (factory === "classic") return node.arguments.slice(2).filter(meaningfulValue);
+	const shape = elementCallShape(node, env);
+	const factory = shape.factory;
+	// 인자 자리를 믿을 수 없으면 자식도 모른다. 빈 목록은 "자식이 없다" 가
+	// 아니라 "여기서는 더 못 본다" 는 뜻으로만 쓴다.
+	if (shape.argsUnknown) return [];
+	if (factory === "classic")
+		return node.arguments.slice(2 + shape.argShift).filter(meaningfulValue);
 	// automatic runtime 은 자식을 props 안에 넣는다. `jsx` 는 하나, `jsxs` 는
 	// 배열이다. 여기서 읽지 않으면 `jsx("div", { role: "alert", children: [a, b] })`
 	// 가 자식 없는 요소로 보여, "화면에 오르는 것이 이 알림 하나뿐인가" 판정이
@@ -316,6 +408,7 @@ export function elementChildren(node, env) {
  * 된다. 형제가 있는지는 `elementChildren` 이 세는 자식 수로 묻는다.
  */
 export function jsxElementsIn(node, sf, env) {
+	requireEnv(env, "jsxElementsIn");
 	const out = [];
 	const visit = (n) => {
 		if (!n) return;
@@ -877,8 +970,8 @@ export function staticChunks(node, sf, env, seen = new Set()) {
  * 이 식이 **언제나** 참인가. 영구히 꺼 둔 조작의 정의다.
  *
  * `disabled={true}` 만 영구로 보면, 같은 뜻인 `disabled={off}`(위에서
- * `const off = true`)나 `disabled={true && true}` 는 열린 것으로 읽힌다.
- * React 에서 셋 다 누를 수 없는 버튼이다.
+ * `const off = true`)나 `disabled={true && true}`, `disabled={true ? true : false}`
+ * 는 열린 것으로 읽힌다. React 에서 넷 다 누를 수 없는 버튼이다.
  */
 export function alwaysTruthy(node, sf, env, seen = new Set()) {
 	const n = unwrapAll(node);
@@ -891,11 +984,21 @@ export function alwaysTruthy(node, sf, env, seen = new Set()) {
 	if (ts.isNumericLiteral(n)) return Number(n.text) !== 0;
 	if (ts.isPrefixUnaryExpression(n) && n.operator === ts.SyntaxKind.ExclamationToken)
 		return alwaysFalsy(n.operand, sf, env, seen);
-	if (ts.isConditionalExpression(n))
+	// 삼항은 **실제로 도는 갈래**로 판정한다. 조건이 언제나 참이면 결과는 언제나
+	// 참 갈래이고, 언제나 거짓이면 언제나 거짓 갈래다 — `true ? true : false` 는
+	// React 에서 누를 수 없는 버튼이다. 조건을 모를 때만 두 갈래가 모두 참이기를
+	// 요구한다. 조건을 안 보면 `c ? a : b` 를 접는 규칙 하나로 영구히 꺼 둔
+	// 조작이 열린 것으로 읽힌다(12회차 지적 1).
+	if (ts.isConditionalExpression(n)) {
+		if (alwaysTruthy(n.condition, sf, env, new Set(seen)))
+			return alwaysTruthy(n.whenTrue, sf, env, seen);
+		if (alwaysFalsy(n.condition, sf, env, new Set(seen)))
+			return alwaysTruthy(n.whenFalse, sf, env, seen);
 		return (
 			alwaysTruthy(n.whenTrue, sf, env, seen) &&
 			alwaysTruthy(n.whenFalse, sf, env, seen)
 		);
+	}
 	if (ts.isBinaryExpression(n)) {
 		const kind = n.operatorToken.kind;
 		if (kind === ts.SyntaxKind.AmpersandAmpersandToken)
@@ -949,6 +1052,18 @@ function alwaysFalsy(node, sf, env, seen) {
 	if (ts.isNumericLiteral(n)) return Number(n.text) === 0;
 	if (ts.isPrefixUnaryExpression(n) && n.operator === ts.SyntaxKind.ExclamationToken)
 		return alwaysTruthy(n.operand, sf, env, new Set(seen));
+	// 삼항은 참 쪽과 대칭이다. 조건이 언제나 참이면 참 갈래로, 언제나 거짓이면
+	// 거짓 갈래로 접고, 조건을 모를 때만 두 갈래가 모두 언제나 거짓이기를
+	// 요구한다. 한쪽만 규칙을 두면 `disabled={!(c ? A : B)}` 에서 판정이 갈린다.
+	if (ts.isConditionalExpression(n)) {
+		if (alwaysTruthy(n.condition, sf, env, new Set(seen)))
+			return alwaysFalsy(n.whenTrue, sf, env, seen);
+		if (alwaysFalsy(n.condition, sf, env, new Set(seen)))
+			return alwaysFalsy(n.whenFalse, sf, env, seen);
+		return (
+			alwaysFalsy(n.whenTrue, sf, env, seen) && alwaysFalsy(n.whenFalse, sf, env, seen)
+		);
+	}
 	if (ts.isIdentifier(n)) {
 		for (const hit of declarationSites(n.text, sf)) {
 			if (hit.kind !== "var" || !hit.decl.initializer) continue;

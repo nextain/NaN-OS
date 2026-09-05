@@ -57,6 +57,27 @@
  * 주는 식을 두 번 적은 자리는 같은 것으로 읽는다. 이 게이트는 한 함수 안에서
  * 사람이 읽어 알 수 있는 자리까지만 말한다.
  *
+ * ## 무엇이 클릭인가 (12회차 지적 7 이후)
+ *
+ * 클릭은 이제 형태가 아니라 **E 에 대한 `click` 멤버 호출**이다. `E.click(...)`,
+ * `E?.click(...)`, `E["click"](...)`(리터럴 키), `E.click.call(E, …)`/`.apply(E, …)`
+ * 가 모두 같은 하나로 읽힌다. 열한 번째까지는 속성 접근 한 형태만 클릭이었고,
+ * 대괄호로 적거나 `.call` 로 부르면 같은 무음이 세어지지 않았다.
+ *
+ * ## 이 게이트가 따라가지 않는 것 (보증 밖)
+ *
+ * 아래는 일부러 보지 않는다 — 정적으로 답이 정해지지 않는 자리다. 여기 적힌
+ * 것은 구멍이 아니라 경계이고, 그 바깥은 코드 리뷰의 몫이다.
+ *
+ *   - 동적 속성 이름 — `E[name]()`, `E[key()]()`. 리터럴 키는 경계 안이다.
+ *   - `eval`/`new Function`/`Reflect.apply`/`Function.prototype` 을 두 겹 이상
+ *     거친 호출(`E.click.call.call(…)`).
+ *   - 고차 함수가 돌려준 함수 — `const press = make(el); press()`.
+ *   - 배열·객체·`Map` 을 거쳐 흘러간 함수 — `handlers[0]()`, `table.get(k)()`.
+ *   - 동적 `import()`/`require()` 로 받아 온 것, 실행할 때 조립되는 문자열로
+ *     정해지는 이름.
+ *   - `E.click.call(other)` 처럼 받는 쪽이 다른 식인 호출. 같은 무음이 아니다.
+ *
  * 지금 있는 것은 baseline 으로 잠그고 늘어나는 것만 막는다. 한 번에 고치면
  * 그 커밋을 아무도 검토할 수 없다.
  */
@@ -274,14 +295,67 @@ function exitsWithoutValue(statement) {
 	return false;
 }
 
-/** 이 식이 `E.click(...)` 이면 그 `E`. `void`·`await`·괄호·`as` 는 벗긴다. */
+/**
+ * 멤버 접근의 이름. 리터럴 키(`E["click"]`)는 속성 접근(`E.click`)과 같다.
+ *
+ * 동적 키(`E[name]`)는 `null` 이다 — 실행할 때 정해지는 이름은 이 게이트의
+ * 보증 밖이고, 그렇게 적힌 자리는 코드 리뷰가 본다.
+ */
+function memberName(node) {
+	if (!node) return null;
+	if (ts.isPropertyAccessExpression(node)) return node.name.text;
+	if (ts.isElementAccessExpression(node)) {
+		const key = unwrap(node.argumentExpression);
+		if (key && (ts.isStringLiteral(key) || ts.isNoSubstitutionTemplateLiteral(key)))
+			return key.text;
+	}
+	return null;
+}
+
+/** 멤버 접근의 왼쪽 식. */
+function memberBase(node) {
+	if (node && (ts.isPropertyAccessExpression(node) || ts.isElementAccessExpression(node)))
+		return node.expression;
+	return null;
+}
+
+/**
+ * 이 식이 **E 에 대한 `click` 멤버 호출** 이면 그 `E`.
+ *
+ * 열한 번째까지 판정은 `E.click(...)` 이라는 **속성 접근 한 형태**였다. 같은
+ * 메서드를 부르는 다른 적는 법이 그대로 통과했다 — `E["click"]()` 은 같은
+ * 메서드이고, `E.click.call(E)` 는 같은 호출이다(12회차 지적 7). 파괴 게이트는
+ * 11회차에 `.call` 을 닫았는데 무음 클릭은 그 수리를 받지 않았다.
+ *
+ * 이제 묻는 것은 형태가 아니라 하나다 — 이 호출이 **어떤 식의 `click` 을
+ * 부르는가**. 그래서 아래가 모두 같은 클릭이다.
+ *
+ *   - `E.click(...)`, `E?.click(...)`
+ *   - `E["click"](...)` (리터럴 키)
+ *   - `E.click.call(E, …)` · `E["click"].apply(E, …)` — 받는 쪽이 같은 식일 때만
+ *
+ * `void`·`await`·괄호·`as` 는 그대로 벗긴다.
+ *
+ * 보증 밖: 동적 키(`E[name]()`), `Reflect.apply`, `Function.prototype` 을 두 겹
+ * 이상 거친 호출, 배열·객체를 거쳐 흘러간 함수. 그런 자리는 여기서 세지 않는다.
+ */
 function clickReceiver(node) {
 	const call = unwrapDiscarded(node);
 	if (!call || !ts.isCallExpression(call)) return null;
 	const callee = unwrap(call.expression);
-	if (!callee || !ts.isPropertyAccessExpression(callee)) return null;
-	if (callee.name.text !== "click") return null;
-	return unwrap(callee.expression);
+	const name = memberName(callee);
+	if (name === "click") return unwrap(memberBase(callee));
+	// `E.click.call(E, …)` / `.apply(E, …)` — 첫 인자가 받는 쪽이다. 그것이
+	// 같은 식일 때만 같은 클릭이다. 남의 요소를 눌러 주는 자리는 다른 뜻이다.
+	if (name === "call" || name === "apply") {
+		const inner = unwrap(memberBase(callee));
+		if (memberName(inner) !== "click") return null;
+		const receiver = unwrap(memberBase(inner));
+		const first = call.arguments[0];
+		if (!receiver || !first) return null;
+		return exprKey(receiver) === exprKey(first) ? receiver : null;
+	}
+	return null;
 }
 
 /** 이 문(statement) 이 곧바로 그 식을 누르는가. */
@@ -316,7 +390,7 @@ function clicksKey(node, key) {
 function isOptionalClick(node) {
 	if (!ts.isCallExpression(node)) return false;
 	const callee = node.expression;
-	if (!ts.isPropertyAccessExpression(callee) || callee.name.text !== "click") return false;
+	if (memberName(callee) !== "click") return false;
 	return !!callee.questionDotToken || !!node.questionDotToken;
 }
 

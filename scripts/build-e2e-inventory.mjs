@@ -42,11 +42,30 @@
  * 틀린 분류라도 목록과 일치하면 초록이다. 분류의 옳고 그름은 위 자국 규칙이
  * 지고, 이 검사는 목록이 낡는 것만 막는다.
  *
+ * ## 호출부를 무엇으로 읽는가 (12회차 지적 6 이후)
+ *
+ * `fetch`/`request` 인지는 **적힌 이름**이 아니라 바인딩으로 읽는다. 자유
+ * 식별자 `fetch`, `globalThis.fetch`/`window.fetch`, 그것으로 만든 const 별명과
+ * 구조분해가 모두 같은 전역으로 돌아온다 — `const ghostGet = fetch;
+ * ghostGet("https://…")` 는 이름만 다른 같은 호출이다. 자세한 것은
+ * `outboundAddresses` 머리말에 적어 두었다.
+ *
+ * ## 이 목록이 따라가지 않는 것 (보증 밖)
+ *
+ * `scripts/lib/bindings.mjs` 의 보증 밖 목록을 그대로 물려받는다 — 동적 속성
+ * 이름(`obj[name]`), `eval`/`new Function`/`Reflect.apply`/`Function.prototype`
+ * 을 두 겹 이상 거친 호출, 고차 함수가 돌려준 함수, 배열·객체·`Map` 을 거쳐
+ * 흘러간 함수, 동적 `import()`/`require()` 의 결과, 실행할 때 조립되는 문자열.
+ * 주소 쪽도 같다 — 함수 매개변수로 받은 주소와 실행할 때 조립되는 템플릿은
+ * "바깥 주소가 없다" 가 아니라 **모른다** 이고, 그 수를 세어 함께 적는다.
+ * 이 경계 안쪽 형태는 모두 같은 규칙으로 잡히며, 경계 밖은 코드 리뷰의 몫이다.
+ *
  * 산출물: docs/e2e-inventory.json (기계가 읽는 것) 과 표준 출력 요약.
  */
 import { readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import ts from "typescript";
+import { resolveCallee } from "./lib/bindings.mjs";
 import { makeEnv, stringCandidates } from "./lib/jsx-static.mjs";
 
 const SPEC_DIR = "packages/shell/e2e-tauri/specs";
@@ -322,11 +341,33 @@ for (const name of readdirSync(HELPER_DIR).filter((f) => f.endsWith(".ts"))) {
  * 바깥 호스트면 대화 자국으로 센다. 값을 한 겹 숨기는 것으로는 빠져나가지
  * 못한다.
  *
+ * ── 12회차에 고친 것 ──────────────────────────────────────────────
+ * 열한 번째까지 "이 호출이 fetch 인가" 는 **적힌 이름**이었다. 식별자 글자나
+ * 속성 이름이 `"fetch"`/`"request"` 인지만 봤고, 그래서 `const ghostGet = fetch;
+ * ghostGet("https://…")` 의 이름은 `ghostGet` 이라 바깥 주소가 없는 것으로
+ * 읽혔다(12회차 지적 6). 주소 인자를 변수에 담는 것은 10·11회차가 닫았는데,
+ * **fetch 자신을 변수에 담는 것**은 열려 있었다.
+ *
+ * 이제 호출부는 `scripts/lib/bindings.mjs` 가 푼다. 선언이 없는 자유 식별자
+ * `fetch`, `globalThis.fetch`/`window.fetch`, 그것으로 만든 const 별명과
+ * 구조분해(`const { fetch: f } = globalThis`)가 모두 같은 전역 바인딩으로
+ * 돌아온다. `fetch.call(null, "https://…")` 처럼 인자 자리가 밀리면 `argShift`
+ * 만큼 옮겨서 주소를 읽고, 자리를 믿을 수 없으면(`.apply`) 못 푼 것으로 센다.
+ * 옛 이름 판정은 그대로 남겨 둔다 — `page.request.get(…)` 처럼 바인딩으로는
+ * 풀리지 않지만 이름으로는 드러나는 자리가 있고, 둘 중 하나라도 걸리면 본다.
+ *
  * 무엇을 보증하지 않는가: 정적으로 값을 못 정하는 인자다. 함수 매개변수로
  * 받은 주소(`async function hit(url) { await fetch(url); }`), 실행할 때 조립되는
  * 템플릿, 객체·배열을 거쳐 흘러간 주소는 후보가 없다. 그런 자리는 "바깥 주소가
  * 없다" 가 아니라 **모른다** 이고, 이 목록은 그것을 결정론 칸으로 남긴다.
  * 못 푼 인자 수는 생성할 때 표준 출력에 함께 적는다.
+ *
+ * 호출부 쪽 보증 밖도 같다 — 동적 속성 이름(`obj[name]("…")`),
+ * `eval`/`new Function`/`Reflect.apply`/`Function.prototype` 을 두 겹 이상 거친
+ * 호출, 고차 함수가 돌려준 함수(`const get = make(); get("…")`), 배열·객체·`Map`
+ * 을 거쳐 흘러간 함수, 동적 `import()`/`require()` 로 받아 온 것, 실행할 때
+ * 조립되는 문자열. 이 경계 안쪽 형태는 모두 같은 규칙으로 잡히고, 경계 밖은
+ * 코드 리뷰의 몫이다.
  */
 function outboundAddresses(file) {
 	const sf = addressEnv.sourceFile(file);
@@ -344,16 +385,36 @@ function outboundAddresses(file) {
 	};
 	const visit = (node) => {
 		if (ts.isCallExpression(node) && node.arguments.length > 0) {
+			// 호출부는 바인딩으로 읽는다. 이름은 그 답의 일부가 아니다.
+			const binding = resolveCallee(node, sf, addressEnv);
+			const global = binding?.global ?? null;
 			const callee = node.expression;
+			// 옛 이름 판정. 바인딩으로 풀리지 않는 자리(`page.request.get`)를 위해
+			// 남긴다 — 둘 중 하나라도 fetch/request 면 본다.
 			const name = ts.isIdentifier(callee)
 				? callee.text
 				: ts.isPropertyAccessExpression(callee)
 					? callee.name.text
 					: null;
-			if (name === "fetch" || name === "request") {
-				const resolved = stringCandidates(node.arguments[0], sf, addressEnv);
-				if (resolved.values.size === 0 && !resolved.complete) unresolved += 1;
-				for (const value of resolved.values) take(value);
+			const outbound =
+				global === "fetch" ||
+				global === "request" ||
+				name === "fetch" ||
+				name === "request";
+			if (outbound) {
+				// 자리를 믿을 수 없으면(`fetch.apply(null, args)`) 주소를 "없다" 가
+				// 아니라 **모른다** 로 센다.
+				if (binding?.argsUnknown) unresolved += 1;
+				else {
+					const at = binding?.argShift ?? 0;
+					const arg = node.arguments[at];
+					if (!arg) unresolved += 1;
+					else {
+						const resolved = stringCandidates(arg, sf, addressEnv);
+						if (resolved.values.size === 0 && !resolved.complete) unresolved += 1;
+						for (const value of resolved.values) take(value);
+					}
+				}
 			}
 		}
 		ts.forEachChild(node, visit);
