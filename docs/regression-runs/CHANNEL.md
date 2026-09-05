@@ -46,7 +46,7 @@
 
 ```
 [win-rtx4060] START deterministic_ci 14개 · 짝 bc468a17 · 산출물 D:\naia-e2e
-[win-rtx4060] DONE 12/14 통과 · 실패 92-browser-app-clicks, 100-herdr-first-frame
+[win-rtx4060] DONE 12/14 통과 · 돈 것 14 · 실패 92-browser-app-clicks, 100-herdr-first-frame
 [naia-os-bc250] BLOCKED 짝 naia-agent 체크아웃 없음 — NAIA_AGENT_WORKTREES_DIR 필요
 [master] STATE 123개 중 덮인 것 26 · 아무도 맡지 않은 것 97 · 실패한 기계 없음
 [win-nogpu] ASK 92번이 이 기계에서만 실패한다 — GPU 없는 경로의 결함인지 봐 달라

@@ -17,7 +17,6 @@
  * --dry-run 은 무엇을 돌릴지만 보여준다. 환경이 갖춰졌는지 먼저 볼 때 쓴다.
  */
 import { execFileSync, spawnSync } from "node:child_process";
-import { createHash } from "node:crypto";
 import {
 	existsSync,
 	mkdirSync,
@@ -30,6 +29,7 @@ import { hostname } from "node:os";
 import { basename } from "node:path";
 import { delimiter, join, resolve } from "node:path";
 import { e2eBinaryPath } from "../packages/shell/scripts/agent-pairing.mjs";
+import { inventoryDigestFromFile } from "./lib/inventory-digest.mjs";
 import { planGroups, wdioSpecArgs } from "./lib/regression-selection.mjs";
 
 const args = process.argv.slice(2);
@@ -403,6 +403,13 @@ console.log(
 			{
 				machine,
 				tiers,
+				// 전제가 없어 못 돌린 기록에도 지문을 남긴다. 없으면 게이트가
+				// 그 기록을 "어느 스펙 목록을 잰 것인지 알 수 없다" 로 통째로
+				// 버려, **돌리지 못한 기계 자체가 판정에서 사라진다** —
+				// 준비가 안 된 기계가 조용히 없는 것이 되면 사람은 그 몫이
+				// 덮였는지 아닌지를 알 수 없다(win-rtx4060 의 2026-09-05
+				// 18-06-58 기록이 실제로 그렇게 빠졌다).
+				ranOn: fingerprint(),
 				started,
 				finished: new Date().toISOString(),
 				status: "prerequisites-missing",
@@ -438,6 +445,9 @@ let detail = "";
 // 것으로 셌다. 그러면 wdio 가 시작하자마자 죽어도 기록에는 전부 덮였다고
 // 남는다.
 const executed = [];
+// 돈 것 중 **통과한** 것. `executed` 와 나누어 두어야 채널 한 줄의 "통과" 와
+// 게이트의 "덮인 것" 이 서로 다른 사실을 말할 수 있다.
+const passedSpecs = [];
 const groupResults = [];
 
 /**
@@ -637,15 +647,28 @@ for (const [conf, specs] of groups) {
 	const output = chunks.join("\n");
 
 	const outcome = parseSpecOutcomes(output);
-	// 묶음이 통과하면 맡은 것을 다 돈 것이다. 실패했으면 리포터가 통과라고
-	// 밝힌 스펙만 센다 — 판정을 못 읽은 스펙은 돌지 않은 것으로 둔다.
-	const ran = ok ? specs : outcome.passed.filter((spec) => specs.includes(spec));
+	// **돈 것** 과 **통과한 것** 은 다른 사실이다. 오래 한 칸에 넣었다 —
+	// 묶음이 실패하면 `executed` 에 통과한 스펙만 담았고, 게이트는 그 칸을
+	// "덮인 것" 으로 센다. 그래서 실제로 돌아 실패한 스펙이 판정에서는
+	// "아무 기계도 맡지 않았다" 로 보였다(win-rtx4060 의 2026-09-05 기록은
+	// 쉰아홉 개를 맡아 열아홉만 `executed` 에 남겼다). 재서 실패한 것을
+	// 재지 않은 것으로 말하면, 사람이 찾아야 할 결함이 빈칸으로 보인다.
+	//
+	// 이제 `executed` 는 **리포터가 판정을 읽은** 스펙이다. 통과든 실패든
+	// 그 스펙은 돌았다. 한 줄도 못 읽은 스펙(예: wdio 가 시작하자마자 죽어
+	// 차례가 오지 않은 것)은 여전히 빠진다 — 그것은 정말로 돌지 않았다.
+	const judged = new Set([...outcome.passed, ...outcome.failed]);
+	const ran = ok ? specs : specs.filter((spec) => judged.has(spec));
+	const passedHere = ok
+		? specs
+		: outcome.passed.filter((spec) => specs.includes(spec));
 	executed.push(...ran);
+	passedSpecs.push(...passedHere);
 	groupResults.push({
 		conf,
 		specs: specs.length,
 		status: ok ? "passed" : "failed",
-		passed: ran.length,
+		passed: passedHere.length,
 		failedSpecs: outcome.failed.filter((spec) => specs.includes(spec)),
 	});
 }
@@ -660,8 +683,12 @@ for (const [conf, specs] of groups) {
  * 다른 코드에서 돈 것이다. 그 사실을 게이트가 보게 한다.
  */
 function fingerprint() {
-	const inventoryRaw = readFileSync(INVENTORY);
-	const digest = createHash("sha256").update(inventoryRaw).digest("hex");
+	// 지문은 바이트가 아니라 내용을 잰다. 원문 바이트로 잡았을 때 윈도우
+	// 체크아웃의 CRLF 가 같은 목록에 다른 해시를 주어, 두 기계가 서로의
+	// 기록을 영원히 "다른 스펙 목록" 으로 버렸다. 계산은
+	// scripts/lib/inventory-digest.mjs 한 곳이 한다 — 러너와 게이트가 같은
+	// 함수를 써야 규칙이 갈라지지 않는다.
+	const digest = inventoryDigestFromFile(INVENTORY);
 	let commit = "unknown";
 	try {
 		commit = execFileSync("git", ["rev-parse", "HEAD"], {
@@ -687,7 +714,12 @@ const record = {
 	finished: new Date().toISOString(),
 	status,
 	planned: mine.map((s) => s.spec),
+	// 리포터가 판정을 읽은 스펙 — 통과든 실패든 **돈 것**이다. 완결성 게이트는
+	// 이 칸을 "덮인 것" 으로 센다.
 	executed,
+	// 그중 통과한 것. 돈 것과 통과한 것을 한 칸에 넣었더니, 실제로 돌아 실패한
+	// 스펙이 판정에서 "아무 기계도 맡지 않았다" 로 보였다.
+	passedSpecs,
 	// 어느 wdio 설정이 어디까지 갔는지. 한 설정이 실패해도 다른 설정의
 	// 결과는 남는다.
 	groups: groupResults,
@@ -827,7 +859,7 @@ writeFileSync(out, `${JSON.stringify(record, null, "\t")}\n`);
 console.log(
 	`\n${channelLine(
 		"DONE",
-		`${executed.length}/${mine.length} 통과` +
+		`${passedSpecs.length}/${mine.length} 통과 · 돈 것 ${executed.length}` +
 			(failedSpecs.length
 				? ` · 실패 ${failedSpecs.slice(0, 4).join(", ")}${failedSpecs.length > 4 ? ` 외 ${failedSpecs.length - 4}` : ""}`
 				: ""),

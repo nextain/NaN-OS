@@ -12,11 +12,21 @@
  *   3) 실패한 기계가 있는가
  * 를 판정한다. 건너뛴 것은 통과가 아니다.
  *
+ * 기록이 어느 스펙 목록을 잰 것인지는 **지문** 으로 본다. 그 계산은
+ * scripts/lib/inventory-digest.mjs 한 곳이 하고, 파일의 원문 바이트가 아니라
+ * 내용을 잰다 — 원문 바이트로 잡았을 때 윈도우 체크아웃의 CRLF 가 같은 목록에
+ * 다른 해시를 주어, 두 기계가 서로의 기록을 영원히 무효로 보았다. 규칙을 바꾸기
+ * 전에 남은 기록을 살리려고 **이행 기간** 동안 옛 규칙의 지문도 받는다. 그
+ * 예외와 만료 조건은 아래 `acceptedDigests` 에 적혀 있다.
+ *
  * 쓰는 법: node scripts/check-regression-complete.mjs [--max-age-hours=24]
  */
-import { createHash } from "node:crypto";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
+import {
+	inventoryDigestFromFile,
+	legacyRawDigests,
+} from "./lib/inventory-digest.mjs";
 
 const args = process.argv.slice(2);
 const maxAgeHours = Number(
@@ -49,9 +59,29 @@ const cutoff = Date.now() - maxAgeHours * 3600_000;
  * 어긋난 기록. 이것들은 악의 없이도 생기고, 생기면 "전부 덮였다" 는 거짓
  * 결론으로 이어진다.
  */
-const inventoryDigest = createHash("sha256")
-	.update(readFileSync(INVENTORY))
-	.digest("hex");
+const inventoryDigest = inventoryDigestFromFile(INVENTORY);
+
+/**
+ * 지금 인벤토리를 잰 기록으로 인정하는 지문들.
+ *
+ * 정본은 첫 번째, `scripts/lib/inventory-digest.mjs` 의 정규화 지문이다. 나머지
+ * 둘은 **이행 기간** 동안만 받는 옛 규칙(원문 바이트 sha256)의 LF·CRLF 판이다.
+ *
+ * 왜 받는가: 규칙을 바꾸기 전에 이미 두 기계가 오늘의 실측을 push 했고, 그
+ * 기록들은 옛 규칙으로 지문을 적었다. 새 규칙만 받으면 고치자마자 그 기록들이
+ * 전부 무효가 되어, 결함을 고치는 일이 이미 잰 것을 지우는 일이 된다.
+ *
+ * 언제 지우는가: **다음에 인벤토리가 바뀔 때** 다. 그때부터 옛 규칙의 지문은
+ * 어차피 지금 목록을 가리키지 않으므로 받을 이유가 없고, 그 뒤의 기록은 전부
+ * 새 규칙으로 남는다. `src/test/inventory-digest.contract.test.ts` 의 마지막
+ * 계약이 그 시점에 붉어져 이 대목을 지우라고 말한다.
+ */
+const legacyRaw = legacyRawDigests(readFileSync(INVENTORY));
+const acceptedDigests = new Map([
+	[inventoryDigest, "정규화 지문"],
+	[legacyRaw.lf, "옛 규칙(LF 원문) — 이행 기간"],
+	[legacyRaw.crlf, "옛 규칙(CRLF 원문) — 이행 기간"],
+]);
 
 /**
  * 지금 회귀를 나눠 맡는 기계들. 명단이 유일한 출처다.
@@ -79,6 +109,8 @@ for (const machine of roster.machines ?? []) {
 }
 
 const rejected = [];
+/** 옛 규칙의 지문으로 들어온 기록. 이행 기간이 끝나면 비어야 한다. */
+const legacyAccepted = [];
 const inWindow = readdirSync(RUNS)
 	// 기계 명단은 기록이 아니다. 같은 디렉터리에 있어 확장자만 보면 기록으로
 	// 읽히고, 기계 이름이 없어 판정이 어긋난다.
@@ -119,9 +151,16 @@ const inWindow = readdirSync(RUNS)
 			rejected.push(`${file}: 어느 스펙 목록을 잰 것인지 알 수 없다(지문 없음)`);
 			return false;
 		}
-		if (stamp.inventorySha256 !== inventoryDigest) {
+		if (!acceptedDigests.has(stamp.inventorySha256)) {
 			rejected.push(`${file}: 다른 스펙 목록에서 돌았다`);
 			return false;
+		}
+		if (stamp.inventorySha256 !== inventoryDigest) {
+			// 버리지는 않되 조용히 넘기지도 않는다. 이행 기간이 언제 끝나는지를
+			// 사람이 보고 판단해야 한다.
+			legacyAccepted.push(
+				`${file}: ${acceptedDigests.get(stamp.inventorySha256)}`,
+			);
 		}
 		return true;
 	})
@@ -155,6 +194,13 @@ for (const record of inWindow) {
 }
 const records = [...latestByMachine.values()].map((entry) => entry.record);
 const superseded = inWindow.length - records.length;
+
+if (legacyAccepted.length > 0) {
+	console.log(
+		`  옛 규칙의 지문으로 받은 기록 ${legacyAccepted.length}개 (이행 기간 — 다음 인벤토리 변경 때 이 예외를 지운다):`,
+	);
+	for (const line of legacyAccepted) console.log(`    ${line}`);
+}
 
 if (rejected.length > 0) {
 	console.log(`  판정에서 뺀 기록 ${rejected.length}개:`);
