@@ -12,6 +12,14 @@ import { homedir, tmpdir } from "node:os";
 import { basename, dirname, resolve } from "node:path";
 import { execPath } from "node:process";
 import { resolvePairedAgent } from "../scripts/agent-pairing.mjs";
+import {
+	CREDENTIALED_KEY_ENV,
+	CREDENTIALED_MAIN_MODEL,
+	CREDENTIALED_MAIN_PROVIDER,
+	credentialedSeedAvailable,
+	credentialedSeedOptionsFromEnv,
+	seedCredentialedAdk,
+} from "./credentialed-adk-seed.js";
 
 // Enable debug logging for Tauri app — Rust logs all agent events to stderr + naia.log
 process.env.CAFE_DEBUG_E2E = "1";
@@ -19,18 +27,6 @@ process.env.NAIA_E2E_MODE = "1";
 // E2E mock: bypass GitHub clone + agent-kill-before-delete so ADK setup
 // scenarios run in milliseconds without network/process flakiness (#328).
 process.env.NAIA_E2E_MOCK_CLONE = "1";
-// 네이티브(Rust)는 e2e 에서 NAIA_E2E_ADK_PATH 를 워크스페이스 정본으로 삼는다
-// (lib.rs current_adk_path/spawn_adk_path_snapshot). 그런데 화면(웹) 쪽은
-// localStorage 의 `naia-adk-path` 를 쓰고, 그 값을 e2e 환경에 맞춰 다시 묶는 코드는
-// App.tsx 에서 VITE_NAIA_E2E_MODE=1 일 때만 돈다. 그 두 변수를 여기서 같이 넘겨 주지
-// 않으면, WebKit 프로필에 남아 있던 이전 실행(예: codex-live 격리 워크스페이스)의 경로가
-// 그대로 살아남아 화면은 그 경로에 설정을 쓰고 에이전트는 다른 워크스페이스를 읽는다.
-// 그러면 UI 에서 고른 provider 가 에이전트에 영영 닿지 않는다.
-if (process.env.NAIA_E2E_ADK_PATH?.trim()) {
-	process.env.VITE_NAIA_E2E_MODE = "1";
-	process.env.VITE_NAIA_E2E_ADK_PATH = process.env.NAIA_E2E_ADK_PATH.trim();
-}
-
 // Load shell/.env.e2e first (e2e-only knobs like VITE_NAIA_DEV_GATEWAY_URL),
 // then shell/.env (shared defaults). first-match-wins per key so .env.e2e
 // values take precedence. Keeping the dev-gateway URL out of .env is what
@@ -89,6 +85,56 @@ const OWNS_RUNTIME_DIR = !process.env.NAIA_E2E_RUNTIME_DIR?.trim();
 if (OWNS_RUNTIME_DIR) process.env.NAIA_E2E_RUNTIME_DIR = E2E_RUNTIME_DIR;
 // 자리는 여기서 만들지 않는다. import 만으로 디렉터리가 생기면 계약 테스트가
 // 파일시스템을 더럽힌다. 실제로 만드는 것은 onPrepare 와 Rust 의 create_dir_all.
+
+// ── 자격증명 등급의 살아 있는 기본 공급자 (#547) ──────────────────────────────
+// 에이전트는 셸이 실어 보내는 provider 를 gRPC 경계에서 버리고, 워크스페이스의
+// `naia-settings/config.json` 으로 활성 공급자를 재구성한다. 그러니 e2e 가 자기
+// 워크스페이스를 갖지 않으면 에이전트는 사람이 쓰던 실제 ADK 의 설정을 읽고,
+// 갖더라도 아무것도 심지 않으면 죽은 값을 물고 `fetch failed` 로 끝난다.
+//
+// 게이트웨이 키가 환경에 있을 때에만(= 자격증명 등급일 때에만) 실행 자리 아래에
+// 워크스페이스를 하나 만들고 거기에 살아 있는 공급자를 심는다. 키가 없으면 아무것도
+// 하지 않는다 — 결정론 등급은 예전 그대로 돈다.
+//
+// 밖에서 이미 `NAIA_E2E_ADK_PATH` 를 준 경우(전용 설정, 감싸는 러너)에는 손대지
+// 않는다. 그쪽이 자기 워크스페이스의 주인이다.
+const SEEDED_ADK_PATH = resolve(
+	process.env.NAIA_E2E_RUNTIME_DIR ?? E2E_RUNTIME_DIR,
+	"adk",
+);
+const SEEDS_CREDENTIALED_ADK =
+	!process.env.NAIA_E2E_ADK_PATH?.trim() && credentialedSeedAvailable();
+if (SEEDS_CREDENTIALED_ADK) {
+	process.env.NAIA_E2E_ADK_PATH = SEEDED_ADK_PATH;
+	// ensureAppReady 의 폴백(`NAIA_E2E_ADK_FIXTURE`, 기본값은 형제 naia-adk)이
+	// 격리와 어긋나면 화면만 다른 워크스페이스를 가리킨다.
+	process.env.NAIA_E2E_ADK_FIXTURE ??= SEEDED_ADK_PATH;
+	// 이 설정은 워커에서도 다시 읽히는데, 그때는 위 경로가 이미 환경에 있어
+	// `SEEDS_CREDENTIALED_ADK` 가 거짓이 된다. 그러면 스펙 앞에서 키를 실어 주는
+	// 대목이 통째로 건너뛰어지고, 실패는 401 이라는 엉뚱한 모습으로만 보인다
+	// (실측). 심었다는 사실 자체를 환경에 남겨 워커가 같은 판단을 하게 한다.
+	process.env.NAIA_E2E_CREDENTIALED_SEED = "1";
+}
+/** 이 실행이 격리 ADK 에 살아 있는 공급자를 심었는가 — 런처와 워커가 같이 본다. */
+const CREDENTIALED_SEED_ACTIVE = process.env.NAIA_E2E_CREDENTIALED_SEED === "1";
+
+// 네이티브(Rust)는 e2e 에서 NAIA_E2E_ADK_PATH 를 워크스페이스 정본으로 삼는다
+// (lib.rs current_adk_path/spawn_adk_path_snapshot). 그런데 화면(웹) 쪽은
+// localStorage 의 `naia-adk-path` 를 쓰고, 그 값을 e2e 환경에 맞춰 다시 묶는 코드는
+// App.tsx 에서 VITE_NAIA_E2E_MODE=1 일 때만 돈다. 그 두 변수를 여기서 같이 넘겨 주지
+// 않으면, WebKit 프로필에 남아 있던 이전 실행(예: codex-live 격리 워크스페이스)의 경로가
+// 그대로 살아남아 화면은 그 경로에 설정을 쓰고 에이전트는 다른 워크스페이스를 읽는다.
+// 그러면 UI 에서 고른 provider 가 에이전트에 영영 닿지 않는다.
+if (process.env.NAIA_E2E_ADK_PATH?.trim()) {
+	process.env.VITE_NAIA_E2E_MODE = "1";
+	process.env.VITE_NAIA_E2E_ADK_PATH = process.env.NAIA_E2E_ADK_PATH.trim();
+	// App.tsx 는 온보딩 전이면 VITE_NAIA_E2E_PROVIDER/MODEL 로 화면 설정을 채우고,
+	// 기본값이 `ollama/e2e` 다 — 이 기계에 없는 서버다. 심은 공급자와 같은 값을 준다.
+	if (CREDENTIALED_SEED_ACTIVE) {
+		process.env.VITE_NAIA_E2E_PROVIDER ??= CREDENTIALED_MAIN_PROVIDER;
+		process.env.VITE_NAIA_E2E_MODEL ??= CREDENTIALED_MAIN_MODEL;
+	}
+}
 
 /** 지울 수 있는 것은 이 설정이 이름까지 정한 자리뿐이다. */
 function assertOwnedRuntimeDir(): string {
@@ -442,6 +488,18 @@ export const config = {
 			mkdirSync(owned, { recursive: true });
 			console.log(`[e2e] isolated runtime dir: ${owned}`);
 		}
+		if (SEEDS_CREDENTIALED_ADK) {
+			// 실행 자리를 비운 **다음**에 심는다. 순서가 뒤집히면 방금 심은 것을
+			// 우리가 지운다.
+			const seeded = seedCredentialedAdk(
+				SEEDED_ADK_PATH,
+				credentialedSeedOptionsFromEnv(),
+			);
+			console.log(
+				`[e2e] credentialed live provider seeded: ${seeded.provider}/${seeded.model}` +
+					` (key from $${seeded.credentialRefEnv}) → ${seeded.configPath}`,
+			);
+		}
 		await waitForPortClosed(1420);
 		await waitForPortClosed(VITE_PORT);
 		if (!IS_WINDOWS) {
@@ -560,6 +618,77 @@ export const config = {
 		// Ensure base config is set so the app bypasses onboarding.
 		const { ensureAppReady } = await import("./helpers/settings.js");
 		await ensureAppReady();
+
+		// 심은 공급자에 쓸 게이트웨이 키를 에이전트에 실어 준다 (#547).
+		//
+		// config.json 의 `credentialRef` 만으로는 부족하다. 에이전트는 매 턴
+		// `credentials.get(provider)` 를 설정 위에 덮어쓰는데, 리눅스에서 그것은 OS
+		// 키체인(`secret-tool`)을 본다. 그 기계에 게이트웨이 키가 하나 남아 있으면
+		// 그 값이 이겨서, 우리가 심은 키 대신 남의 키로 게이트웨이를 두드리다 401 을
+		// 받는다(실측). 로그인 경로와 같은 wire(`creds_update`)로 보내면 그 덮어쓰기
+		// 자체를 런타임 overlay 로 눌러, 어느 기계에서도 같은 키를 쓴다.
+		//
+		// 키는 이 프로세스의 환경에서 곧장 실려 파일에 남지 않는다. 스펙이 스스로
+		// 다른 provider 로 갈아타면 그쪽 슬롯을 쓰므로 충돌하지 않는다.
+		if (CREDENTIALED_SEED_ACTIVE) {
+			// `browser.execute` 는 동기 실행이라 async 콜백의 promise 를 기다리지
+			// 않는다. 결과를 창에 남기고 그것이 나타날 때까지 기다린다 — 안 그러면
+			// 키가 닿았는지 모르는 채로 스펙이 시작하고, 실패는 401 이라는 엉뚱한
+			// 모습으로 나타난다.
+			await browser.execute(
+				(message: string) => {
+					const shell = window as unknown as {
+						__TAURI_INTERNALS__?: {
+							invoke: (command: string, value: unknown) => Promise<unknown>;
+						};
+						__naiaE2eCredsSeed?: string;
+					};
+					shell.__naiaE2eCredsSeed = "pending";
+					const invoke = shell.__TAURI_INTERNALS__?.invoke;
+					if (!invoke) {
+						shell.__naiaE2eCredsSeed = "error: Tauri invoke unavailable";
+						return;
+					}
+					invoke("send_to_agent_command", { message }).then(
+						() => {
+							shell.__naiaE2eCredsSeed = "ok";
+						},
+						(error: unknown) => {
+							shell.__naiaE2eCredsSeed = `error: ${String(error)}`;
+						},
+					);
+				},
+				JSON.stringify({
+					type: "creds_update",
+					// 심을 때 고른 provider 와 같아야 한다. 환경으로 바꿔 끼웠는데
+					// 키를 기본 provider 슬롯에 넣으면 그 키가 영영 안 쓰인다.
+					provider:
+						credentialedSeedOptionsFromEnv().provider ??
+						CREDENTIALED_MAIN_PROVIDER,
+					naiaKey: process.env[CREDENTIALED_KEY_ENV] ?? "",
+				}),
+			);
+			let credsSeedState = "pending";
+			await browser.waitUntil(
+				async () => {
+					credsSeedState = await browser.execute(
+						() =>
+							(window as unknown as { __naiaE2eCredsSeed?: string })
+								.__naiaE2eCredsSeed ?? "pending",
+					);
+					return credsSeedState !== "pending";
+				},
+				{
+					timeout: 15_000,
+					timeoutMsg: "creds_update(게이트웨이 키) 가 에이전트에 닿지 않았다",
+				},
+			);
+			if (credsSeedState !== "ok") {
+				throw new Error(`creds_update failed: ${credsSeedState}`);
+			}
+			console.log("[e2e] gateway key delivered to agent (creds_update)");
+			await browser.pause(500);
+		}
 
 		// Auto-approve permission modals globally for all specs.
 		// Prevents tool-call hangs when AI tries to use a tool not yet approved.

@@ -104,6 +104,7 @@ export default {
 	"slides.state.answering": "Answering",
 	"slides.state.completed": "Completed",
 	"slides.state.error": "Needs attention",
+	"workspace.editorEmptyHint": "← ファイルツリーからファイルを選ぶか、Spaces タブでスペースを選んでください。",
 	"settings.title": "設定",
 	"workspace.codingWorkersTitle": "Coding Workers",
 	"workspace.codingWorkersDescription": "Choose a target and request, then track progress and results.",

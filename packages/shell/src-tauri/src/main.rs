@@ -16,11 +16,10 @@ fn main() {
     {
         let args: Vec<String> = std::env::args().collect();
         if let Some(url) = args.iter().find(|a| a.starts_with("naia://")) {
-            let naia_dir = dirs::home_dir()
-                .map(|h| h.join(".naia"))
-                .unwrap_or_else(|| std::path::PathBuf::from(r"C:\Users\Public\.naia"));
-            let _ = std::fs::create_dir_all(&naia_dir);
-            let pending = naia_dir.join("deep-link-pending.txt");
+            let pending = naia_shell_lib::data_home::windows_deep_link_pending();
+            if let Some(naia_dir) = pending.parent() {
+                let _ = std::fs::create_dir_all(naia_dir);
+            }
             let _ = std::fs::write(&pending, url);
             // Exit — primary instance will pick it up
             return;

@@ -104,6 +104,7 @@ export default {
 	"slides.state.answering": "질문 답변",
 	"slides.state.completed": "발표 완료",
 	"slides.state.error": "확인 필요",
+	"workspace.editorEmptyHint": "← 파일 트리에서 파일을 고르거나, Spaces 탭에서 공간을 고르세요.",
 	"settings.title": "설정",
 	"workspace.codingWorkersTitle": "코딩 작업",
 	"workspace.codingWorkersDescription": "작업 대상과 요청을 정하고, 실행 상태와 결과를 확인합니다.",

@@ -108,15 +108,15 @@ fn default_workspace_root() -> String {
     }
     #[cfg(unix)]
     {
-        match std::env::var("HOME") {
-            Ok(h) if !h.is_empty() => format!("{h}/dev"),
+        match crate::data_home::unix_home() {
+            h if !h.is_empty() => format!("{h}/dev"),
             _ => String::new(),
         }
     }
     #[cfg(windows)]
     {
-        match std::env::var("USERPROFILE") {
-            Ok(h) if !h.is_empty() => format!("{h}\\dev"),
+        match crate::data_home::windows_home() {
+            h if !h.is_empty() => format!("{h}\\dev"),
             _ => String::new(),
         }
     }
@@ -781,7 +781,7 @@ fn collect_search_candidates() -> Vec<PathBuf> {
             }
         }
     }
-    if let Some(home) = dirs::home_dir() {
+    if let Some(home) = crate::data_home::user_home_path() {
         let dev = home.join("dev");
         if dev.is_dir() {
             dirs.push(dev);

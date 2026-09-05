@@ -683,9 +683,17 @@ export function BgmPlayer({ naia }: Props) {
 				".app-bg-iframe",
 			) as HTMLIFrameElement | null;
 			if (!activeIframe) return;
+			// 화면에 붙어 있는 iframe 이 보낸 것만 받는다. 보낸 창을 특정할 수
+			// 없으면 그 이벤트를 어느 playbackId 에 결속할지도 알 수 없고
+			// (FR-RADIO-DJ.2), 아래에서 eventPlaybackId 를 "지금 붙어 있는"
+			// iframe 의 URL 에서 읽으므로 곧 남의 이벤트를 현재 곡에 붙이게 된다.
+			//
+			// 예전에는 `e.source &&` 로 출처 없는 메시지를 그냥 통과시켰다. 그런데
+			// WebKitGTK 는 이미 떨어져 나간 프레임이 보낸 메시지의 `source` 를
+			// null 로 준다 — 곡 A 의 늦은 오류가 곡 B 를 `error` 로 덮어쓰는,
+			// S-RADIO-DJ-1 이 금지하는 바로 그 경로였다(#557).
 			if (
 				activeIframe.contentWindow &&
-				e.source &&
 				e.source !== activeIframe.contentWindow
 			) {
 				observationCountersRef.current.filteredOut++; // #521
@@ -1561,6 +1569,15 @@ export function BgmPlayer({ naia }: Props) {
 	// Always scroll when playing (so AI-triggered tracks with short titles also marquee)
 	const isScrolling = playing || trackLabel.length > MARQUEE_THRESHOLD;
 
+	// FR-RADIO-DJ.5 — `data-bgm-current-title` above is only the request receipt:
+	// it is filled the moment a play command is accepted. This one is what a DJ
+	// may say out loud. It runs the same announce gate the agent context uses
+	// (`toBgmObservedContext`), so a requested-but-not-yet-playing track has no
+	// announceable title at all. #557 restored it so the native radio queue E2E
+	// can observe the receipt/announcement boundary again.
+	const announceableTitle =
+		toBgmObservedContext(playbackSnapshot).currentTrack?.title ?? "";
+
 	// ── Render ────────────────────────────────────────────────────────────────
 
 	return (
@@ -1569,6 +1586,7 @@ export function BgmPlayer({ naia }: Props) {
 			ref={playerRef}
 			data-bgm-playback-status={playbackSnapshot?.status ?? "idle"}
 			data-bgm-current-title={playbackSnapshot?.selected.title ?? ""}
+			data-bgm-announced-title={announceableTitle}
 			data-bgm-queue-length={bgmPlayback.queue().length}
 			data-bgm-current-time={playbackSnapshot?.currentTime ?? ""}
 			data-bgm-duration={playbackSnapshot?.duration ?? ""}

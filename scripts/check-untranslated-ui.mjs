@@ -27,6 +27,7 @@
  */
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join, sep as SEP } from "node:path";
+import ts from "typescript";
 
 const ROOT = "packages/shell/src";
 /**
@@ -115,7 +116,105 @@ perFile.sort((a, b) => b.lines - a.lines);
  * 형태였다. 언어를 알아내는 길을 모두 적는다.
  */
 const USES_LOCALE =
-	/\bgetLocale\s*\(\)|\bnavigator\.language|\bnavigator\.languages|\bdetectLocale\s*\(|\bi18n\.locale\b|\bcurrentLocale\b|localStorage[^;\n]{0,40}locale|\bloadConfig\s*\([^)]*\)\s*\.\s*locale|\bconfig\.locale\b|["'](?:naia-)?locale["']|documentElement\.lang|\bIntl\.[A-Za-z]+|\bnavigator\.userLanguage|\bdocument\.lang\b/i;
+	/\bgetLocale\s*\(\)|\bnavigator\.language|\bnavigator\.languages|\bdetectLocale\s*\(|\bi18n\.locale\b|\bcurrentLocale\b|localStorage[^;\n]{0,40}locale|\bloadConfig\s*\([^)]*\)\s*\.\s*locale|\bconfig\.locale\b|["'](?:naia-)?locale["']|documentElement\.lang|\bIntl\.[A-Za-z]+|\bnavigator\.userLanguage|\bdocument\.lang\b|\bprocess\.env\.(?:LANG|LC_ALL|LC_MESSAGES|LANGUAGE)\b|\bprocess\.env\[[^\]]*(?:LANG|LC_ALL|LANGUAGE)[^\]]*\]|\bapp\.getLocale\s*\(|\bgetSystemLocale\s*\(|\bosLocale\b/i;
+
+/**
+ * 이 저장소가 지원하는 언어 코드. 목록을 손으로 적지 않고 `locales/` 의 파일
+ * 이름에서 얻는다 — 언어가 늘면 판정도 같이 는다.
+ */
+const LOCALE_CODES = new Set(
+	readdirSync(join(ROOT, "lib", "locales"))
+		.filter((f) => /^[a-z]{2}\.ts$/.test(f))
+		.map((f) => f.replace(/\.ts$/, "")),
+);
+if (LOCALE_CODES.size < 5) {
+	console.error(
+		`[untranslated-ui] 로케일을 ${LOCALE_CODES.size}개밖에 못 찾았다 — locales 경로가 바뀌었는지 보라`,
+	);
+	process.exit(2);
+}
+
+/** `"ko"`, `"ko-KR"` 처럼 지원 언어를 가리키는 문자열인가. */
+function isLocaleLiteral(node) {
+	if (!node || !ts.isStringLiteralLike(node)) return false;
+	return LOCALE_CODES.has(node.text.split("-")[0].toLowerCase());
+}
+
+function isStringish(node) {
+	if (!node) return false;
+	if (ts.isStringLiteralLike(node) || ts.isTemplateExpression(node)) return true;
+	if (ts.isParenthesizedExpression(node)) return isStringish(node.expression);
+	if (ts.isConditionalExpression(node))
+		return isStringish(node.whenTrue) || isStringish(node.whenFalse);
+	return false;
+}
+
+/** 조건 안에서 언어 코드와 견주는가. 어떻게 얻은 값인지는 묻지 않는다. */
+function comparesLocale(node) {
+	let found = false;
+	const visit = (current) => {
+		if (found || !current) return;
+		if (ts.isBinaryExpression(current)) {
+			const kind = current.operatorToken.kind;
+			const isEquality =
+				kind === ts.SyntaxKind.EqualsEqualsToken ||
+				kind === ts.SyntaxKind.EqualsEqualsEqualsToken ||
+				kind === ts.SyntaxKind.ExclamationEqualsToken ||
+				kind === ts.SyntaxKind.ExclamationEqualsEqualsToken ||
+				kind === ts.SyntaxKind.InKeyword;
+			if (isEquality && (isLocaleLiteral(current.left) || isLocaleLiteral(current.right))) {
+				found = true;
+				return;
+			}
+		}
+		if (ts.isCallExpression(current) && ts.isPropertyAccessExpression(current.expression)) {
+			const method = current.expression.name.text;
+			if (
+				(method === "startsWith" || method === "includes" || method === "indexOf") &&
+				current.arguments.some(isLocaleLiteral)
+			) {
+				found = true;
+				return;
+			}
+		}
+		current.forEachChild(visit);
+	};
+	visit(node);
+	return found;
+}
+
+/**
+ * 접근자와 무관한 신호: **언어 코드와 견주어 문자열을 고르는 식**.
+ *
+ * `USES_LOCALE` 은 언어를 알아내는 길의 목록이고, 목록은 다음 길에 진다 —
+ * 10회차에 `process.env.LANG` 이 그 길이었다. 그래서 길을 묻지 않는 신호를
+ * 하나 더 둔다. 무엇으로 얻었든 `"ko"` 와 견주어 문자열 둘 중 하나를 고르면
+ * 그 화면은 나머지 열두 언어에서 조용히 한쪽만 나온다.
+ */
+function picksStringByLocale(file, source) {
+	const tree = ts.createSourceFile(
+		file,
+		source,
+		ts.ScriptTarget.Latest,
+		true,
+		/\.tsx$/.test(file) ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
+	);
+	let found = false;
+	const visit = (node) => {
+		if (found) return;
+		if (
+			ts.isConditionalExpression(node) &&
+			comparesLocale(node.condition) &&
+			(isStringish(node.whenTrue) || isStringish(node.whenFalse))
+		) {
+			found = true;
+			return;
+		}
+		node.forEachChild(visit);
+	};
+	visit(tree);
+	return found;
+}
 const COMPARES_LANGUAGE = [
 	// getLocale() === "ko" / lang === "ko" / locale.startsWith("ko")
 	/[\w.()]+\s*===?\s*["'`][a-z]{2}["'`]/,
@@ -131,6 +230,12 @@ for (const file of walk(ROOT)) {
 	const source = readFileSync(file, "utf8")
 		.replace(/\/\*[\s\S]*?\*\//g, " ")
 		.replace(/(^|[^:])\/\/[^\n]*/g, "$1 ");
+	// 접근자 목록에 걸리지 않아도, 언어 코드로 문자열을 고르는 식이 있으면
+	// 그것만으로 우회표다. 목록은 다음 접근자에 지지만 이 신호는 지지 않는다.
+	if (picksStringByLocale(file, source)) {
+		shadows.push(file);
+		continue;
+	}
 	if (!USES_LOCALE.test(source)) continue;
 	// 로케일을 읽기만 하고 언어로 갈라 문자열을 고르지 않는 자리(예: 날짜
 	// 형식, HTML lang 속성)는 우회가 아니다. 언어와 견주는 자리가 있어야
@@ -147,7 +252,11 @@ for (const file of walk(ROOT)) {
 // 한 줄 줄었다 (#558).
 // 584 에서 523 으로, 66 파일에서 61 파일로 줄었다. 코딩 작업자 패널과 세션
 // 대시보드를 지우면서(#554) 그 화면들의 한국어 문자열이 함께 사라졌다.
-const BASELINE_LINES = 523;
+// 523 에서 522 로 한 줄 줄었다. 워크스페이스 편집기의 빈 상태 안내가 지운
+// 화면(세션 카드)을 가리키고 있어 지금 화면에 맞게 고치면서, 그 자리를
+// workspace.editorEmptyHint 로 옮겼다. 파일 수는 그대로다 — Editor.tsx 에는
+// 아직 다른 한국어 줄이 남아 있다.
+const BASELINE_LINES = 522;
 const BASELINE_FILES = 61;
 
 console.log(`[untranslated-ui] 화면에 박힌 한국어 ${total}줄 / ${perFile.length}파일 (baseline ${BASELINE_LINES}줄 / ${BASELINE_FILES}파일)`);

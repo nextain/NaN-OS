@@ -257,31 +257,49 @@ function missingPrerequisites() {
 	// 가르겠다는 이 함수가 정작 가장 중요한 하나를 안 보고 있었다.
 	//
 	// 그래서 등급이 모델을 쓰면 그 제공자가 실제로 응답하는지 먼저 본다.
-	// 기본 제공자는 codex 앱서버이고, 그것은 `codex` 실행 파일이 로그인된
-	// 상태로 있어야 뜬다.
+	//
+	// 기본 제공자는 더 이상 codex 앱서버가 아니다 (#547). 자격증명 등급이 돌 때
+	// 기본 설정(wdio.conf.ts)이 실행 자리 아래에 격리 워크스페이스를 하나 만들고,
+	// 그 안 `naia-settings/config.json` 에 나이아 게이트웨이 공급자를 심는다.
+	// 그 시딩은 `NAIA_API_KEY` 가 있을 때에만 돈다 — 그래서 이 등급의 진짜 전제는
+	// 그 키다. 사람이 쓰는 실제 ADK 의 설정은 이 등급에 영향을 주지 않는다.
 	const needsModel = tiers.includes("credentialed_live");
 	if (needsModel) {
-		if (!has("codex")) {
-			missing.push(
-				"codex 실행 파일 (기본 제공자가 codex 앱서버다 — PATH 에 없으면 모든 대화 스펙이 fetch failed 로 죽는다)",
-			);
-		} else {
-			const login = spawnSync("codex", ["login", "status"], {
-				encoding: "utf8",
-				timeout: 20_000,
-			});
-			// codex 는 이 문장을 **표준 오류**로 낸다. 표준 출력만 보면
-			// 로그인돼 있는데도 안 됐다고 말한다(실측).
-			const said = `${login.stdout ?? ""}${login.stderr ?? ""}`;
-			if (login.status !== 0 || !/logged in/i.test(said)) {
+		for (const name of ["NAIA_API_KEY", "GEMINI_API_KEY"]) {
+			if (!(process.env[name] ?? "").length) {
 				missing.push(
-					"codex 로그인 (codex login status 가 로그인을 보고하지 않는다 — 모델에 닿지 못한다)",
+					`${name} (자격증명 등급의 대화·판정에 필요하다` +
+						(name === "NAIA_API_KEY"
+							? " — 이 키가 없으면 격리 워크스페이스에 살아 있는 공급자를 심지 못해 대화 스펙이 fetch failed 로 죽는다)"
+							: ")"),
 				);
 			}
 		}
-		for (const name of ["NAIA_API_KEY", "GEMINI_API_KEY"]) {
-			if (!(process.env[name] ?? "").length) {
-				missing.push(`${name} (자격증명 등급의 대화·판정에 필요하다)`);
+		// codex 는 이제 그것을 실제로 쓰는 스펙의 전제일 뿐이다. 전체 전제로 두면
+		// 자격증명 등급 마흔다섯 개가 codex 로그인 하나에 통째로 묶인다.
+		const usesCodex = mine.some(
+			(spec) =>
+				/codex/i.test(spec.spec) ||
+				(spec.conf ?? []).some((conf) => /codex/i.test(conf)),
+		);
+		if (usesCodex) {
+			if (!has("codex")) {
+				missing.push(
+					"codex 실행 파일 (codex 앱서버를 쓰는 스펙이 배정됐다 — PATH 에 없으면 그 스펙들이 fetch failed 로 죽는다)",
+				);
+			} else {
+				const login = spawnSync("codex", ["login", "status"], {
+					encoding: "utf8",
+					timeout: 20_000,
+				});
+				// codex 는 이 문장을 **표준 오류**로 낸다. 표준 출력만 보면
+				// 로그인돼 있는데도 안 됐다고 말한다(실측).
+				const said = `${login.stdout ?? ""}${login.stderr ?? ""}`;
+				if (login.status !== 0 || !/logged in/i.test(said)) {
+					missing.push(
+						"codex 로그인 (codex login status 가 로그인을 보고하지 않는다 — codex 스펙이 모델에 닿지 못한다)",
+					);
+				}
 			}
 		}
 	}

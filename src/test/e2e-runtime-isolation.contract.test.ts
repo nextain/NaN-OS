@@ -13,6 +13,7 @@
 import { homedir, tmpdir } from "node:os";
 import { relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
+import ts from "typescript";
 import { beforeAll, describe, expect, it } from "vitest";
 
 const CONFIGS = {
@@ -20,6 +21,60 @@ const CONFIGS = {
 	"codex-e2e-environment.ts": "codex 전용 환경",
 	"radio-queue-e2e-environment.ts": "radio-queue 전용 환경",
 } as const;
+
+/**
+ * 그 소스가 `process.env.NAIA_E2E_RUNTIME_DIR` 에 **실제로 값을 넣는가**.
+ *
+ * 예전에는 `/process\.env\.NAIA_E2E_RUNTIME_DIR\s*=/` 문자열을 찾았다. 그래서
+ * 배선을 지우고 그 줄을 주석으로 남기기만 해도 이 단정이 참이었다 — 전용 설정에서
+ * 배선을 빼면서 이유를 주석으로 적는 것이야말로 이 테스트가 막겠다고 적어 둔
+ * 사고다. 이제 파서로 대입식을 찾는다. 주석에는 노드가 없으므로 주석은 저절로
+ * 거짓이다.
+ */
+function assignsRuntimeDir(name: string, source: string): boolean {
+	const tree = ts.createSourceFile(
+		name,
+		source,
+		ts.ScriptTarget.Latest,
+		true,
+		ts.ScriptKind.TS,
+	);
+	let found = false;
+	const targetsRuntimeDir = (node: ts.Expression): boolean => {
+		// `process.env.NAIA_E2E_RUNTIME_DIR`
+		if (
+			ts.isPropertyAccessExpression(node) &&
+			node.name.text === "NAIA_E2E_RUNTIME_DIR"
+		)
+			return isProcessEnv(node.expression);
+		// `process.env["NAIA_E2E_RUNTIME_DIR"]`
+		if (
+			ts.isElementAccessExpression(node) &&
+			node.argumentExpression &&
+			ts.isStringLiteralLike(node.argumentExpression) &&
+			node.argumentExpression.text === "NAIA_E2E_RUNTIME_DIR"
+		)
+			return isProcessEnv(node.expression);
+		return false;
+	};
+	const isProcessEnv = (node: ts.Expression): boolean =>
+		ts.isPropertyAccessExpression(node) &&
+		node.name.text === "env" &&
+		ts.isIdentifier(node.expression) &&
+		node.expression.text === "process";
+	const visit = (node: ts.Node): void => {
+		if (
+			!found &&
+			ts.isBinaryExpression(node) &&
+			node.operatorToken.kind === ts.SyntaxKind.EqualsToken &&
+			targetsRuntimeDir(node.left as ts.Expression)
+		)
+			found = true;
+		if (!found) node.forEachChild(visit);
+	};
+	visit(tree);
+	return found;
+}
 
 /** `parent` 안(또는 그 자신)인가. 문자열 접두사 비교는 `/tmp2` 를 `/tmp` 안으로 센다. */
 function isInside(parent: string, child: string): boolean {
@@ -90,7 +145,10 @@ describe("기본 e2e 설정이 운영 앱의 데이터 홈과 실행 자리를 �
 					"utf8",
 				),
 			);
-			expect(source).toMatch(/process\.env\.NAIA_E2E_RUNTIME_DIR\s*=/);
+			expect(
+				assignsRuntimeDir(name, source),
+				"주석이 아니라 실제 대입이어야 한다 — 배선을 빼고 이유만 주석으로 남기면 여기가 붉어진다",
+			).toBe(true);
 		},
 	);
 });

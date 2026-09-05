@@ -325,6 +325,25 @@ const slidePresenterUxTranslations = {
 export const translations = {
 	...codingWorkerUxTranslations,
 	...slidePresenterUxTranslations,
+	// 워크스페이스 편집기의 빈 상태. 예전 문구는 "세션 카드를 클릭하세요" 라고
+	// 말했지만 그 카드가 있던 코딩 작업자 패널은 #554 에서 지워졌다. 지금 왼쪽
+	// 레일에 실제로 있는 것은 파일 트리와 Spaces·Agents·컨텍스트 탭이다.
+	"workspace.editorEmptyHint": {
+		ko: "← 파일 트리에서 파일을 고르거나, Spaces 탭에서 공간을 고르세요.",
+		en: "← Choose a file in the file tree, or a space in the Spaces tab.",
+		ja: "← ファイルツリーからファイルを選ぶか、Spaces タブでスペースを選んでください。",
+		zh: "← 在文件树中选择一个文件，或在 Spaces 标签页中选择一个空间。",
+		fr: "← Choisissez un fichier dans l'arborescence, ou un espace dans l'onglet Spaces.",
+		de: "← Wählen Sie eine Datei im Dateibaum oder einen Space im Tab Spaces.",
+		ru: "← Выберите файл в дереве файлов или пространство на вкладке Spaces.",
+		es: "← Elija un archivo en el árbol de archivos, o un espacio en la pestaña Spaces.",
+		ar: "← اختر ملفًا من شجرة الملفات، أو مساحة من تبويب Spaces.",
+		hi: "← फ़ाइल ट्री से कोई फ़ाइल चुनें, या Spaces टैब से कोई स्पेस चुनें।",
+		bn: "← ফাইল ট্রি থেকে একটি ফাইল বেছে নিন, অথবা Spaces ট্যাব থেকে একটি স্পেস বেছে নিন।",
+		pt: "← Escolha um arquivo na árvore de arquivos, ou um espaço na aba Spaces.",
+		id: "← Pilih berkas di pohon berkas, atau ruang di tab Spaces.",
+		vi: "← Chọn một tệp trong cây tệp, hoặc một không gian ở thẻ Spaces.",
+	},
 	// Settings
 	"settings.title": {
 		ko: "설정",

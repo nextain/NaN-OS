@@ -1,9 +1,9 @@
 {
 	"generatedFrom": "packages/shell/e2e-tauri/specs",
-	"total": 120,
+	"total": 119,
 	"summary": {
 		"credentialed_live": 91,
-		"deterministic_ci": 21,
+		"deterministic_ci": 20,
 		"native_local": 8
 	},
 	"specs": [
@@ -1110,16 +1110,6 @@
 				"wdio.conf.discord-settings.ts"
 			],
 			"env": [],
-			"tier": "deterministic_ci"
-		},
-		{
-			"spec": "93-radio-bgm-observation.spec.ts",
-			"conf": [
-				"wdio.conf.radio.ts"
-			],
-			"env": [
-				"VITE_NAIA_BGM_BASE"
-			],
 			"tier": "deterministic_ci"
 		},
 		{

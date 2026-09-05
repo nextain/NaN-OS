@@ -30,6 +30,10 @@ import {
 const OPENAI_KEY = process.env.OPENAI_API_KEY ?? "";
 const ELEVENLABS_KEY =
 	process.env.ELEVENLABS_API_KEY ?? "";
+// Google Cloud TTS 키. 예전에는 테스트 본문 안에서 읽었는데, 그러면 키가 없을
+// 때의 판단도 본문 안에서 하게 되어 "통과" 로 끝났다. 수집 시점에 읽어 켤지
+// 끌지를 정한다.
+const GOOGLE_KEY = process.env.GEMINI_API_KEY ?? "";
 
 function setSelectValue(sel: string, value: string) {
 	return browser.execute(
@@ -114,52 +118,55 @@ describe("80 — TTS preview all providers", () => {
 		expect(error).toBe("");
 	});
 
-	it("OpenAI TTS: preview succeeds with API key", async () => {
-		if (!OPENAI_KEY) {
-			console.log("[SKIP] no OPENAI_API_KEY");
-			return;
-		}
-		await setSelectValue(S.ttsProviderSelect, "openai");
-		await browser.pause(500);
-		await setInputValue(S.ttsApiKeyInput, OPENAI_KEY);
-		await browser.pause(300);
-		await setSelectValue(S.ttsVoiceSelect, "alloy");
-		await browser.pause(300);
-		const error = await previewAndCheckError();
-		expect(error).toBe("");
-	});
+	// 키가 없으면 **건너뛴다**. 예전에는 본문 첫 줄에서 `[SKIP]` 을 찍고
+	// 그대로 반환했는데, 그러면 리포터에 PASS 로 올라가고 회귀 기록에도
+	// "돌았다" 로 남는다 — 실제로는 이 제공자의 미리듣기를 한 번도 부르지
+	// 않았는데 전수 커버로 세어진다. 89·84·83 이 쓰는 형태와 맞춘다.
+	if (!OPENAI_KEY) {
+		it.skip("rewrite-needed: OPENAI_API_KEY 가 없어 OpenAI TTS 를 검증하지 못했다", () => {});
+	} else {
+		it("OpenAI TTS: preview succeeds with API key", async () => {
+			await setSelectValue(S.ttsProviderSelect, "openai");
+			await browser.pause(500);
+			await setInputValue(S.ttsApiKeyInput, OPENAI_KEY);
+			await browser.pause(300);
+			await setSelectValue(S.ttsVoiceSelect, "alloy");
+			await browser.pause(300);
+			const error = await previewAndCheckError();
+			expect(error).toBe("");
+		});
+	}
 
-	it("ElevenLabs TTS: preview succeeds with API key (default voice)", async () => {
-		if (!ELEVENLABS_KEY) {
-			console.log("[SKIP] no ELEVENLABS_API_KEY");
-			return;
-		}
-		await setSelectValue(S.ttsProviderSelect, "elevenlabs");
-		await browser.pause(500);
-		await setInputValue(S.ttsApiKeyInput, ELEVENLABS_KEY);
-		await browser.pause(300);
-		// Uses default voice (Sarah) when no voice selected
-		const error = await previewAndCheckError();
-		if (error) console.error("[ElevenLabs]", error);
-		expect(error).toBe("");
-	});
+	if (!ELEVENLABS_KEY) {
+		it.skip("rewrite-needed: ELEVENLABS_API_KEY 가 없어 ElevenLabs TTS 를 검증하지 못했다", () => {});
+	} else {
+		it("ElevenLabs TTS: preview succeeds with API key (default voice)", async () => {
+			await setSelectValue(S.ttsProviderSelect, "elevenlabs");
+			await browser.pause(500);
+			await setInputValue(S.ttsApiKeyInput, ELEVENLABS_KEY);
+			await browser.pause(300);
+			// Uses default voice (Sarah) when no voice selected
+			const error = await previewAndCheckError();
+			if (error) console.error("[ElevenLabs]", error);
+			expect(error).toBe("");
+		});
+	}
 
-	it("Google Cloud TTS: preview succeeds with GEMINI_API_KEY", async () => {
-		const googleKey = process.env.GEMINI_API_KEY ?? "";
-		if (!googleKey) {
-			console.log("[SKIP] no GEMINI_API_KEY");
-			return;
-		}
-		await setSelectValue(S.ttsProviderSelect, "google");
-		await browser.pause(500);
-		await setInputValue(S.ttsApiKeyInput, googleKey);
-		await browser.pause(300);
-		await setSelectValue(S.ttsVoiceSelect, "ko-KR-Neural2-A");
-		await browser.pause(300);
-		const error = await previewAndCheckError();
-		if (error) console.error("[Google TTS]", error);
-		expect(error).toBe("");
-	});
+	if (!GOOGLE_KEY) {
+		it.skip("rewrite-needed: GEMINI_API_KEY 가 없어 Google Cloud TTS 를 검증하지 못했다", () => {});
+	} else {
+		it("Google Cloud TTS: preview succeeds with GEMINI_API_KEY", async () => {
+			await setSelectValue(S.ttsProviderSelect, "google");
+			await browser.pause(500);
+			await setInputValue(S.ttsApiKeyInput, GOOGLE_KEY);
+			await browser.pause(300);
+			await setSelectValue(S.ttsVoiceSelect, "ko-KR-Neural2-A");
+			await browser.pause(300);
+			const error = await previewAndCheckError();
+			if (error) console.error("[Google TTS]", error);
+			expect(error).toBe("");
+		});
+	}
 
 	it("should restore edge and navigate back", async () => {
 		await setSelectValue(S.ttsProviderSelect, "edge");

@@ -715,7 +715,7 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
 		return (
 			<div className="workspace-editor workspace-editor--empty">
 				<div className="workspace-editor__empty-hint">
-					← 파일 탐색기에서 파일을 선택하거나 세션 카드를 클릭하세요
+					{t("workspace.editorEmptyHint")}
 				</div>
 			</div>
 		);

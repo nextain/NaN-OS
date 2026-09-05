@@ -508,7 +508,7 @@ describe("Editor — header and empty state", () => {
 	it("renders empty hint when no file is selected", () => {
 		render(<Editor filePath="" />);
 
-		expect(screen.getByText(/파일 탐색기에서 파일을 선택/)).toBeDefined();
+		expect(screen.getByText(t("workspace.editorEmptyHint"))).toBeDefined();
 	});
 
 	it("shows filename in header when file is opened", () => {

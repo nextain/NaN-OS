@@ -104,6 +104,7 @@ export default {
 	"slides.state.answering": "Answering",
 	"slides.state.completed": "Completed",
 	"slides.state.error": "Needs attention",
+	"workspace.editorEmptyHint": "← Elija un archivo en el árbol de archivos, o un espacio en la pestaña Spaces.",
 	"settings.title": "Configuración",
 	"workspace.codingWorkersTitle": "Coding Workers",
 	"workspace.codingWorkersDescription": "Choose a target and request, then track progress and results.",

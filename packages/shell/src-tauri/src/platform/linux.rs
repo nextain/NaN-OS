@@ -715,7 +715,7 @@ impl PlatformWindowManager for X11WindowManager {
 
     fn chrome_bin(&self) -> Option<String> {
         // 1. Chrome for Testing (installed by agent-browser install) — preferred
-        let home = std::env::var("HOME").unwrap_or_default();
+        let home = crate::data_home::unix_home();
         if !home.is_empty() {
             let base = std::path::PathBuf::from(&home)
                 .join(".agent-browser")

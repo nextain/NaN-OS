@@ -70,16 +70,37 @@ function attachIframeForCurrentPlayback(): HTMLIFrameElement {
 	return iframe;
 }
 
+/**
+ * 브라우저는 메시지를 보낸 창을 언제나 `source` 에 담는다. 시뮬레이션에서 그
+ * 칸을 비워 두면 셸의 출처 필터를 그냥 지나가므로, 실제 브라우저였다면 버려질
+ * 메시지가 테스트에서만 통과한다 — #557 에서 그 틈으로 떨어져 나간 곡 A 의 늦은
+ * 오류가 곡 B 를 덮어썼다. 화면에 붙어 있는 iframe 이 보낸 것으로 만든다.
+ */
+function activeFrameSource(): MessageEventSource | null {
+	const iframe = document.querySelector(
+		".app-bg-iframe",
+	) as HTMLIFrameElement | null;
+	return (iframe?.contentWindow as MessageEventSource | null) ?? null;
+}
+
 function postYtObjectMessage(payload: Record<string, unknown>) {
 	act(() => {
-		window.dispatchEvent(new MessageEvent("message", { data: payload }));
+		window.dispatchEvent(
+			new MessageEvent("message", {
+				data: payload,
+				source: activeFrameSource(),
+			}),
+		);
 	});
 }
 
 function postYtMessage(payload: Record<string, unknown>) {
 	act(() => {
 		window.dispatchEvent(
-			new MessageEvent("message", { data: JSON.stringify(payload) }),
+			new MessageEvent("message", {
+				data: JSON.stringify(payload),
+				source: activeFrameSource(),
+			}),
 		);
 	});
 }

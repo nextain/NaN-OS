@@ -104,6 +104,7 @@ export default {
 	"slides.state.answering": "Answering",
 	"slides.state.completed": "Completed",
 	"slides.state.error": "Needs attention",
+	"workspace.editorEmptyHint": "← 在文件树中选择一个文件，或在 Spaces 标签页中选择一个空间。",
 	"settings.title": "设置",
 	"workspace.codingWorkersTitle": "Coding Workers",
 	"workspace.codingWorkersDescription": "Choose a target and request, then track progress and results.",

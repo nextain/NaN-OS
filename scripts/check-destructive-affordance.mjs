@@ -21,10 +21,24 @@
  *
  * 무엇을 재지 않는가: 확인 문구가 좋은지, 되돌리기가 실제로 동작하는지는
  * 정적으로 알 수 없다. 이 게이트는 "물어보기라도 하는가" 까지만 말한다.
+ *
+ * ## 호출부를 어떻게 찾는가 (10회차 지적 7 이후)
+ *
+ * 예전에는 `invoke\s*\(` 라는 **이름**을 찾았다. 그래서
+ * `import { invoke as tauriInvoke }` 한 줄이면 확인 없는 기억 삭제가 호출부로도
+ * 안 잡혔다 — 게이트가 "확인이 있다" 고 말한 것이 아니라 호출 자체를 못 본
+ * 것이라, 결함이 초록 안에 숨었다.
+ *
+ * 이제 TypeScript 파서로 **바인딩**을 따라간다. `@tauri-apps/api/core` 에서
+ * 들어온 `invoke` 가 이 파일에서 어떤 이름(별명·네임스페이스 포함)으로
+ * 불리는지 읽고, 그 바인딩을 부르는 `CallExpression` 만 호출부로 센다. 첫 인자를
+ * 그대로 넘기는 얇은 감싸기 함수도 한 단계 고정점으로 따라간다 — 파일을
+ * 건너뛰어 `export` 된 것도 같다. 이름을 바꾸는 것으로는 빠져나갈 수 없다.
  */
 
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
+import ts from "typescript";
 
 const SHELL = "packages/shell";
 
@@ -339,6 +353,196 @@ const resolvedLiteralCalls = [];
 // 호출을 새로 조립해 넣어도 삼킨다 — 면제 이유가 거짓이 되어도 통과한다.
 // 자리는 감싼 함수 이름으로 적는다. 줄 번호로 적으면 위에 한 줄만 넣어도
 // 어긋나고, 그때마다 목록을 고치게 되어 아무도 읽지 않게 된다.
+/** `invoke` 가 들어오는 모듈. 여기서 온 이름만 Tauri 호출로 본다. */
+const INVOKE_MODULES = new Set([
+	"@tauri-apps/api/core",
+	"@tauri-apps/api/tauri",
+]);
+
+/** 주석을 길이 그대로 공백으로 바꾼다. 파서가 준 위치와 어긋나지 않게 한다. */
+function blankComments(source) {
+	return source
+		.replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, " "))
+		.replace(/(^|[^:])\/\/[^\n]*/g, (m, lead) => lead + " ".repeat(m.length - lead.length));
+}
+
+function parse(file, text) {
+	return ts.createSourceFile(
+		file,
+		text,
+		ts.ScriptTarget.Latest,
+		true,
+		/\.tsx$/.test(file) ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
+	);
+}
+
+/** 상대 경로 import 를 저장소 안 파일로 푼다. */
+function resolveImport(from, spec, files) {
+	if (!spec.startsWith(".")) return null;
+	const stack = from.split("/").slice(0, -1);
+	for (const part of spec.split("/")) {
+		if (part === "." || part === "") continue;
+		else if (part === "..") stack.pop();
+		else stack.push(part);
+	}
+	const base = stack.join("/").replace(/\.[jt]sx?$/, "");
+	for (const candidate of [
+		`${base}.tsx`,
+		`${base}.ts`,
+		`${base}/index.tsx`,
+		`${base}/index.ts`,
+	]) {
+		if (files.has(candidate)) return candidate;
+	}
+	return null;
+}
+
+function eachNode(node, visit) {
+	visit(node);
+	node.forEachChild((child) => eachNode(child, visit));
+}
+
+/**
+ * 파일마다 "이 이름을 부르면 Tauri 명령을 부르는 것" 인 이름 집합을 만든다.
+ *
+ * 씨앗은 `@tauri-apps/api/core` 의 `invoke` 이고, 첫 인자를 그대로 그 이름에
+ * 넘기는 감싸기 함수가 나올 때마다 집합이 자란다. 더 자라지 않을 때까지 돈다.
+ */
+function invokeBindings(sources) {
+	const trees = new Map();
+	for (const [file, source] of sources) trees.set(file, parse(file, source));
+
+	const local = new Map(); // file -> Set<이름>
+	const namespaces = new Map(); // file -> Set<네임스페이스 이름>
+	const exported = new Map(); // file -> Set<내보낸 감싸기 이름>
+	for (const file of sources.keys()) {
+		local.set(file, new Set());
+		namespaces.set(file, new Set());
+		exported.set(file, new Set());
+	}
+
+	// 씨앗: import 로 들어온 invoke
+	for (const [file, tree] of trees) {
+		for (const statement of tree.statements) {
+			if (!ts.isImportDeclaration(statement)) continue;
+			if (!ts.isStringLiteral(statement.moduleSpecifier)) continue;
+			const spec = statement.moduleSpecifier.text;
+			const clause = statement.importClause;
+			if (!clause || !clause.namedBindings) continue;
+			if (INVOKE_MODULES.has(spec)) {
+				if (ts.isNamespaceImport(clause.namedBindings)) {
+					namespaces.get(file).add(clause.namedBindings.name.text);
+				} else if (ts.isNamedImports(clause.namedBindings)) {
+					for (const element of clause.namedBindings.elements) {
+						const original = (element.propertyName ?? element.name).text;
+						if (original === "invoke") local.get(file).add(element.name.text);
+					}
+				}
+			}
+		}
+	}
+
+	const callsInvoke = (node, file) => {
+		if (!ts.isCallExpression(node)) return false;
+		const callee = node.expression;
+		if (ts.isIdentifier(callee)) return local.get(file).has(callee.text);
+		if (
+			ts.isPropertyAccessExpression(callee) &&
+			ts.isIdentifier(callee.expression) &&
+			callee.name.text === "invoke"
+		)
+			return namespaces.get(file).has(callee.expression.text);
+		return false;
+	};
+
+	// 고정점: 첫 인자를 그대로 넘기는 감싸기 함수도 호출부다
+	for (let round = 0; round < 6; round += 1) {
+		let grew = false;
+		for (const [file, tree] of trees) {
+			const declare = (name, node, isExported) => {
+				if (!name || local.get(file).has(name)) return;
+				let forwards = false;
+				eachNode(node, (inner) => {
+					if (forwards || !callsInvoke(inner, file)) return;
+					const first = inner.arguments[0];
+					const param = node.parameters?.[0];
+					if (
+						first &&
+						param &&
+						ts.isIdentifier(first) &&
+						ts.isIdentifier(param.name) &&
+						first.text === param.name.text
+					)
+						forwards = true;
+				});
+				if (!forwards) return;
+				local.get(file).add(name);
+				if (isExported) exported.get(file).add(name);
+				grew = true;
+			};
+			for (const statement of tree.statements) {
+				const isExported = !!statement.modifiers?.some(
+					(m) => m.kind === ts.SyntaxKind.ExportKeyword,
+				);
+				if (ts.isFunctionDeclaration(statement) && statement.name) {
+					declare(statement.name.text, statement, isExported);
+				} else if (ts.isVariableStatement(statement)) {
+					for (const d of statement.declarationList.declarations) {
+						if (!d.initializer || !ts.isIdentifier(d.name)) continue;
+						if (
+							ts.isArrowFunction(d.initializer) ||
+							ts.isFunctionExpression(d.initializer)
+						)
+							declare(d.name.text, d.initializer, isExported);
+					}
+				}
+			}
+			// 감싸기 함수를 import 한 파일도 그 이름으로 부른다
+			for (const statement of tree.statements) {
+				if (!ts.isImportDeclaration(statement)) continue;
+				if (!ts.isStringLiteral(statement.moduleSpecifier)) continue;
+				const target = resolveImport(file, statement.moduleSpecifier.text, sources);
+				if (!target) continue;
+				const clause = statement.importClause;
+				if (!clause?.namedBindings || !ts.isNamedImports(clause.namedBindings)) continue;
+				for (const element of clause.namedBindings.elements) {
+					const original = (element.propertyName ?? element.name).text;
+					if (!exported.get(target)?.has(original)) continue;
+					if (local.get(file).has(element.name.text)) continue;
+					local.get(file).add(element.name.text);
+					grew = true;
+				}
+			}
+		}
+		if (!grew) break;
+	}
+
+	// 호출부 수집
+	const sites = [];
+	for (const [file, tree] of trees) {
+		eachNode(tree, (node) => {
+			if (!callsInvoke(node, file)) return;
+			const first = node.arguments[0];
+			const start = node.getStart(tree);
+			const literal =
+				first &&
+				(ts.isStringLiteral(first) || ts.isNoSubstitutionTemplateLiteral(first))
+					? first.text
+					: null;
+			sites.push({
+				file,
+				start,
+				literal,
+				argText: first ? first.getText(tree).slice(0, 40) : "",
+				hasArg: !!first,
+			});
+		});
+	}
+	return sites;
+}
+
+const invokeSites = invokeBindings(sources);
+
 const COMPOSED_ALLOWED = new Map([
 	[
 		"packages/shell/src/lib/environment-skill.ts::tauriCommands",
@@ -347,16 +551,17 @@ const COMPOSED_ALLOWED = new Map([
 ]);
 let callSites = 0;
 
-for (const [file, source] of sources) {
-	// `codeOnly` 는 문자열까지 지운다. 여기서는 인자의 **형태**를 봐야 하므로
-	// 주석만 지운 코드를 쓴다.
-	const code = source
-		.replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, " "))
-		.replace(/(^|[^:])\/\/[^\n]*/g, "$1 ");
-	for (const match of code.matchAll(/invoke\s*(?:<[^>]*>)?\s*\(\s*([^,)]{0,80})/g)) {
-		const arg = match[1].trim();
+for (const site of invokeSites) {
+	{
+		const file = site.file;
+		const source = sources.get(file);
+		// 인자의 **형태**를 봐야 하므로 주석만 지운 코드를 쓴다. 길이를 지켜
+		// 파서가 준 위치와 어긋나지 않게 한다.
+		const code = blankComments(source);
+		const match = { index: site.start };
+		const arg = site.argText.trim();
 		// 리터럴 이름이면 이 게이트가 볼 수 있다.
-		if (/^(["'])[a-z0-9_]+\1/i.test(arg)) continue;
+		if (site.literal !== null) continue;
 		// 이름을 상수에 담아 두는 것은 조립이 아니다 — **그 상수의 값을 실제로
 		// 따라갈 수 있을 때만** 그렇다. 예전에는 대문자 이름이면 무조건
 		// 넘겼는데, 리터럴 호출 검사는 `invoke("...")` 만 보므로 그 자리가
@@ -408,14 +613,17 @@ for (const [file, source] of sources) {
 	}
 }
 
-for (const [file, source] of sources) {
-	for (const command of commands) {
+for (const site of invokeSites) {
+	{
+		const file = site.file;
+		const source = sources.get(file);
+		const command = site.literal;
 		// 예전에는 이름 문자열이 파일 어디에 있든 호출로 셌다. 그래서
 		// 에이전트에게 보내는 메시지(`{ type: "app_install" }`)까지 호출로
-		// 잡혔다. Tauri 명령을 실제로 부르는 자리만 본다.
-		for (const match of source.matchAll(
-			new RegExp(`invoke\\s*(?:<[^>]*>)?\\s*\\(\\s*["'\`]${command}["'\`]`, "g"),
-		)) {
+		// 잡혔다. 파서가 짚은 실제 호출 자리만 본다.
+		{
+			if (command === null || !commands.includes(command)) continue;
+			const match = { index: site.start };
 			callSites++;
 			const block = enclosingFunction(source, match.index);
 			const line = source.slice(0, match.index).split("\n").length;

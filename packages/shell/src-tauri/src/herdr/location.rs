@@ -101,7 +101,7 @@ fn focused_location_context(
 
 fn resolve_file_location(path: &str, cwd: &str, root: &str) -> Result<String, String> {
     let candidate = if let Some(relative) = path.strip_prefix("~/") {
-        dirs::home_dir()
+        crate::data_home::user_home_path()
             .ok_or_else(|| "Home directory unavailable".to_string())?
             .join(relative)
     } else {

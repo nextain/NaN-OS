@@ -19,6 +19,29 @@
  *   credentialed_live  외부 자격증명이 필요하다(모델 키, 게이트웨이 토큰)
  *   native_local       그 기계의 장치가 필요하다(GPU, 오디오, 데스크톱 세션)
  *
+ * ## 대화 자국을 어디서 얻는가 (10회차 지적 9 이후)
+ *
+ * 예전에는 제공자 **식별자**로 `api.<id>` 꼴 호스트만 만들었다. 그래서 이
+ * 저장소가 기본으로 쓰는 로컬 제공자 Ollama 의 실제 주소
+ * (`http://localhost:11434`)가 자국에 없었고, 그것을 부르는 스펙이 결정론 칸에
+ * 남았다 — 자격증명 없는 기계가 맡았다가 실패하는, 이미 두 번 겪은 그 오분류다.
+ *
+ * 이제 셸이 **모델에 닿는 모듈 전체**(`src/lib/llm/` 와 `src/lib/config.ts`)를
+ * 읽어 주소·포트·경로 리터럴을 통째로 자국으로 삼는다. `http(s)://…`,
+ * `localhost:11434`, `:11434`, `/v1/chat/completions`, `/api/tags` 같은 것들이다.
+ * 자국 목록을 손으로 적지 않으므로, 제공자를 하나 더 붙이면 자국도 같이 는다.
+ *
+ * 그리고 주소를 자국으로 못 알아본 경우를 대비해 한 겹 더 둔다 — 헬퍼·스펙이
+ * `fetch`/`request` 로 **자기 서버가 아닌 리터럴 주소**를 부르면 결정론 칸에서
+ * 뺀다. 바깥 인터넷 호스트면 자격증명이 필요한 것으로, 고정 포트의 로컬
+ * 서비스면 그 기계의 것으로 본다. 자기 서버(`http://127.0.0.1:${port}`)는
+ * 포트가 변수라 구별된다.
+ *
+ * `--check` 가 보증하는 것: 저장된 `docs/e2e-inventory.json` 이 **지금 스펙에서
+ * 다시 계산한 것과 글자 그대로 같은가**. 분류가 옳은지는 보증하지 않는다 —
+ * 틀린 분류라도 목록과 일치하면 초록이다. 분류의 옳고 그름은 위 자국 규칙이
+ * 지고, 이 검사는 목록이 낡는 것만 막는다.
+ *
  * 산출물: docs/e2e-inventory.json (기계가 읽는 것) 과 표준 출력 요약.
  */
 import { readdirSync, readFileSync, writeFileSync } from "node:fs";
@@ -110,9 +133,52 @@ if (providerIds.length < 5) {
 	);
 	process.exit(2);
 }
+/**
+ * 셸이 모델에 닿는 모듈에서 주소·포트·경로 리터럴을 통째로 뽑는다.
+ *
+ * 식별자로 만든 `api.<id>` 꼴만 보면 로컬 제공자가 통째로 빠진다 — Ollama 의
+ * 기본 주소는 `http://localhost:11434` 라서 이름이 주소에 없다.
+ */
+const ADDRESS_SOURCES = [
+	...readdirSync("packages/shell/src/lib/llm")
+		.filter((f) => f.endsWith(".ts"))
+		.map((f) => join("packages/shell/src/lib/llm", f)),
+	"packages/shell/src/lib/config.ts",
+];
+const addressFootprints = new Set();
+for (const path of ADDRESS_SOURCES) {
+	let source;
+	try {
+		source = readFileSync(path, "utf8");
+	} catch {
+		continue;
+	}
+	for (const m of source.matchAll(/https?:\/\/([A-Za-z0-9.-]+(?::\d{2,5})?)([^\s"'`)]*)/g)) {
+		const authority = m[1];
+		addressFootprints.add(authority);
+		const port = authority.split(":")[1];
+		if (port && port !== "80" && port !== "443") addressFootprints.add(`:${port}`);
+	}
+	// 스킴 없이 적는 자리(`localhost:11434`, `127.0.0.1:8011`)도 같은 주소다.
+	for (const m of source.matchAll(/\b(?:localhost|127\.0\.0\.1):(\d{2,5})\b/g))
+		addressFootprints.add(`:${m[1]}`);
+	// 모델 API 경로. 템플릿(`${host}/api/tags`)과 주석에 적힌 것도 같은 경로다.
+	for (const m of source.matchAll(/\/(?:v\d+|api)\/[A-Za-z0-9/_.:-]+/g))
+		addressFootprints.add(m[0]);
+}
+if (addressFootprints.size < 5) {
+	console.error(
+		`[e2e-inventory] 모델 주소 자국을 ${addressFootprints.size}개밖에 못 찾았다 — src/lib/llm 경로가 바뀌었는지 보라`,
+	);
+	process.exit(2);
+}
+
+const escapeRe = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
 const TALKS_TO_MODEL = new RegExp(
 	[
 		...providerHosts,
+		...[...addressFootprints].map(escapeRe),
 		String.raw`\bjudge\w*\s*\(`,
 		"API_KEY",
 		String.raw`_KEY\b`,
@@ -219,6 +285,31 @@ for (const name of readdirSync(HELPER_DIR).filter((f) => f.endsWith(".ts"))) {
 	helperEnv.set(name.replace(/\.ts$/, ""), requiredEnv(source));
 }
 
+/**
+ * 헬퍼·스펙이 `fetch`/`request` 로 부르는 **리터럴** 주소.
+ *
+ * 자기 서버는 포트를 변수로 만든다(`http://127.0.0.1:${port}/health`). 리터럴
+ * 포트가 박혀 있으면 그것은 밖에 있는 것이다 — 바깥 인터넷 호스트면 자격증명이,
+ * 고정 포트의 로컬 서비스면 그 기계의 서비스가 있어야 돈다. 둘 다 결정론 칸은
+ * 아니다.
+ */
+function outboundAddresses(source) {
+	const external = [];
+	const loopback = [];
+	for (const m of source.matchAll(
+		/\b(?:fetch|request)\s*\(\s*(?:`|"|')https?:\/\/([^\s`"'/]*)/g,
+	)) {
+		const authority = m[1];
+		// 자기 서버는 포트를 변수로 만든다(`http://127.0.0.1:${port}/health`).
+		// 값이 실행할 때 정해지는 주소는 리터럴이 아니므로 여기서 보지 않는다.
+		if (/[${}]/.test(authority)) continue;
+		if (!/^[A-Za-z0-9.-]+(?::\d+)?$/.test(authority)) continue;
+		if (/^(?:localhost|127\.0\.0\.1)(?::\d+)?$/.test(authority)) loopback.push(authority);
+		else external.push(authority);
+	}
+	return { external, loopback };
+}
+
 const rows = [];
 for (const name of readdirSync(SPEC_DIR).filter((f) => f.endsWith(".spec.ts")).sort()) {
 	const source = readFileSync(join(SPEC_DIR, name), "utf8");
@@ -235,11 +326,16 @@ for (const name of readdirSync(SPEC_DIR).filter((f) => f.endsWith(".spec.ts")).s
 	// 대화 헬퍼를 부르면 모델이 필요하다 — 환경 변수에 드러나지 않아도.
 	// 헬퍼를 거치지 않고 스펙이 직접 모델을 부르는 자리도 있다. 헬퍼 이름만
 	// 보면 그 부류가 통째로 결정론 칸에 남는다.
-	const talks = CHAT_HELPERS.test(source) || TALKS_TO_MODEL.test(source);
+	const outbound = outboundAddresses(source);
+	const talks =
+		CHAT_HELPERS.test(source) ||
+		TALKS_TO_MODEL.test(source) ||
+		outbound.external.length > 0;
 	// 장치도 환경 변수로 드러나지 않는다. 마이크를 여는 스펙은 오디오 장치와
 	// 그것을 먹이는 도구를 요구하는데, 그 사실이 env 목록에는 없다 — 실제로
 	// 마이크 스펙 하나가 결정론 칸에 있다가 장치 없는 기계에서 실패했다.
-	const usesDevice = DEVICE_TOOLS.test(source);
+	// 고정 포트의 로컬 서비스도 그 기계에 그것이 떠 있어야 돈다.
+	const usesDevice = DEVICE_TOOLS.test(source) || outbound.loopback.length > 0;
 	const keyed = envs.some((e) => KEY_ENV.test(e));
 	rows.push({
 		spec: name,

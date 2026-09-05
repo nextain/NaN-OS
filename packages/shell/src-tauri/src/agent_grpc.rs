@@ -1292,7 +1292,7 @@ mod live_tests {
         // agent stderr(DEBUG ingress) → 안정 파일($HOME). cargo test stdout 미포착·/tmp 소실 회피.
         let dbg_path = format!(
             "{}/rust-grpc-agent-stderr.log",
-            std::env::var("HOME").unwrap_or_default()
+            crate::data_home::unix_home()
         );
         let dbg_file = std::fs::File::create(&dbg_path).expect("dbg file");
         let mut child = Command::new("node")
@@ -1368,10 +1368,7 @@ mod live_tests {
             text.chars().take(80).collect::<String>(), err
         );
         let _ = std::fs::write(
-            format!(
-                "{}/rust-grpc-result.txt",
-                std::env::var("HOME").unwrap_or_default()
-            ),
+            format!("{}/rust-grpc-result.txt", crate::data_home::unix_home()),
             &result,
         );
         eprintln!("[RUST-GRPC-TEST] {}", result.replace('\n', " | "));

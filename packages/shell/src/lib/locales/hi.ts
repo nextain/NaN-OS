@@ -104,6 +104,7 @@ export default {
 	"slides.state.answering": "Answering",
 	"slides.state.completed": "Completed",
 	"slides.state.error": "Needs attention",
+	"workspace.editorEmptyHint": "← फ़ाइल ट्री से कोई फ़ाइल चुनें, या Spaces टैब से कोई स्पेस चुनें।",
 	"settings.title": "सेटिंग्स",
 	"workspace.codingWorkersTitle": "Coding Workers",
 	"workspace.codingWorkersDescription": "Choose a target and request, then track progress and results.",

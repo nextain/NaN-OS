@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::io::Read;
 
-use crate::home_dir;
+use crate::data_home::{self, DataHomeChild};
 
 #[derive(Debug, Deserialize)]
 struct StoreArtifact {
@@ -112,11 +112,11 @@ mod store_signature_tests {
 }
 
 fn apps_root(home: &std::path::Path) -> std::path::PathBuf {
-    home.join(".naia").join("apps")
+    data_home::direct_child_of(home, DataHomeChild::Apps)
 }
 
 fn legacy_apps_root(home: &std::path::Path) -> std::path::PathBuf {
-    home.join(".naia").join("panels")
+    data_home::direct_child_of(home, DataHomeChild::Panels)
 }
 
 fn is_safe_app_id(id: &str) -> bool {
@@ -166,9 +166,12 @@ fn ensure_directory(path: &std::path::Path, label: &str) -> Result<(), String> {
 /// Establish the canonical app root and migrate the pre-#472 `panels` root.
 /// Refuse ambiguity instead of overwriting either copy.
 fn prepare_apps_root(home: &std::path::Path) -> Result<std::path::PathBuf, String> {
-    let naia_root = home.join(".naia");
-    ensure_directory(&naia_root, "Naia data directory")?;
     let root = apps_root(home);
+    // 앱 자리의 부모가 곧 데이터 홈이다. 데이터 홈 경로를 따로 받아 오지
+    // 않는다 — 그 디렉터리를 손에 쥐면 이름표 없는 자리를 만들 수 있다.
+    if let Some(naia_root) = root.parent() {
+        ensure_directory(naia_root, "Naia data directory")?;
+    }
     ensure_directory(&root, "apps directory")?;
     let canonical_home = dunce::canonicalize(home).map_err(|e| format!("Invalid home: {}", e))?;
     let canonical_root =
@@ -373,7 +376,7 @@ fn list_installed_from(home: &std::path::Path) -> Result<Vec<AppManifest>, Strin
 
 #[tauri::command]
 pub fn app_list_installed() -> Result<Vec<AppManifest>, String> {
-    list_installed_from(std::path::Path::new(&home_dir()))
+    list_installed_from(std::path::Path::new(&data_home::user_home()))
 }
 
 /// Read a file on behalf of an iframe panel.
@@ -381,7 +384,7 @@ pub fn app_list_installed() -> Result<Vec<AppManifest>, String> {
 /// Called from iframe-bridge.ts → Tauri invoke("app_read_file").
 #[tauri::command]
 pub fn app_read_file(path: String) -> Result<String, String> {
-    let home = home_dir();
+    let home = data_home::user_home();
     // Canonicalize HOME itself to handle symlinks in the home path
     let home_path = dunce::canonicalize(&home).map_err(|_| "Access denied".to_string())?;
 
@@ -484,7 +487,7 @@ pub fn app_run_shell(cmd: String, args: Vec<String>) -> Result<AppShellResult, S
         }
     }
 
-    let home = home_dir();
+    let home = data_home::user_home();
     // Canonicalize HOME consistently with app_read_file; fall back to raw path if unavailable
     let home_path = dunce::canonicalize(&home).unwrap_or_else(|_| std::path::PathBuf::from(&home));
 
@@ -516,7 +519,7 @@ pub fn app_remove_installed(app_id: String) -> Result<(), String> {
     // The frontend invokes this with { appId } (removeInstalledApp). Tauri binds
     // by exact camelCase name, so the old `panel_id` (→ panelId) never received
     // the value and every removal failed ("제거하지 못했습니다", 2026-08-31).
-    remove_installed_from(std::path::Path::new(&home_dir()), &app_id)
+    remove_installed_from(std::path::Path::new(&data_home::user_home()), &app_id)
 }
 
 fn remove_installed_from(home: &std::path::Path, panel_id: &str) -> Result<(), String> {
@@ -651,7 +654,13 @@ mod tests {
 
         let home = tempfile::tempdir().unwrap();
         let outside = tempfile::tempdir().unwrap();
-        symlink(outside.path(), home.path().join(".naia")).unwrap();
+        symlink(
+            outside.path(),
+            data_home::direct_child_of(home.path(), DataHomeChild::Apps)
+                .parent()
+                .unwrap(),
+        )
+        .unwrap();
 
         assert!(list_installed_from(home.path()).is_err());
         assert!(!outside.path().join("apps").exists());
@@ -830,7 +839,7 @@ pub fn app_install(source: String) -> Result<AppInstallResult, String> {
         ));
     }
 
-    let home = home_dir();
+    let home = data_home::user_home();
     let apps_root = prepare_apps_root(std::path::Path::new(&home))?;
     let canonical_apps_root =
         dunce::canonicalize(&apps_root).map_err(|_| "Access denied".to_string())?;
@@ -1090,9 +1099,10 @@ pub fn app_install_store(
     }
     verify_artifact_signature(digest_bytes.as_slice(), &artifact.signature)?;
 
-    let apps_root = std::path::PathBuf::from(home_dir())
-        .join(".naia")
-        .join("apps");
+    let apps_root = data_home::direct_child_of(
+        std::path::Path::new(&data_home::user_home()),
+        DataHomeChild::Apps,
+    );
     std::fs::create_dir_all(&apps_root).map_err(|e| e.to_string())?;
     let temp = tempfile::Builder::new()
         .prefix(".store-install-")

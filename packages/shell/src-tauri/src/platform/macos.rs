@@ -157,7 +157,7 @@ pub(crate) fn kill_stale_gateway() {
             .output();
         let plist = format!(
             "{}/Library/LaunchAgents/ai.openclaw.gateway.plist",
-            std::env::var("HOME").unwrap_or_default()
+            crate::data_home::unix_home()
         );
         let _ = Command::new("launchctl")
             .arg("bootout")
@@ -289,33 +289,37 @@ pub(crate) fn resolve_tsx_from_agent(agent_dir: &std::path::Path) -> Option<(Str
 }
 
 fn pending_deep_link_path() -> PathBuf {
-    PathBuf::from(crate::home_dir())
-        .join(".naia")
-        .join("deep-link-pending.txt")
+    crate::data_home::direct_child(crate::data_home::DataHomeChild::DeepLinkPending)
 }
 
 #[cfg(debug_assertions)]
 fn ensure_dev_deep_link_helper() {
-    let home = crate::home_dir();
+    let home = crate::data_home::user_home();
     if home.is_empty() {
         return;
     }
-    let naia_dir = PathBuf::from(&home).join(".naia");
-    let helper_root = naia_dir.join("dev-deeplink");
+    let helper_root =
+        crate::data_home::direct_child(crate::data_home::DataHomeChild::DevDeepLink);
     let helper_app = helper_root.join("NaiaDevDeepLink.app");
     let script_path = helper_root.join("NaiaDevDeepLink.applescript");
     let _ = std::fs::create_dir_all(&helper_root);
 
-    let script = r#"on open location this_URL
+    // 스크립트 안의 자리 이름도 이름표에서 받는다 — 여기만 문자열로 적으면
+    // 데이터 홈 경계 검사가 못 보는 자리가 하나 남는다.
+    let script = format!(
+        r#"on open location this_URL
     set homePath to POSIX path of (path to home folder)
-    set naiaDir to homePath & ".naia"
-    set pendingPath to naiaDir & "/deep-link-pending.txt"
+    set naiaDir to homePath & "{data_home_dir}"
+    set pendingPath to naiaDir & "/{pending}"
     do shell script "/bin/mkdir -p " & quoted form of naiaDir
     do shell script "/bin/chmod 700 " & quoted form of naiaDir
     do shell script "/usr/bin/printf %s " & quoted form of this_URL & " > " & quoted form of pendingPath
     do shell script "/bin/chmod 600 " & quoted form of pendingPath
 end open location
-"#;
+"#,
+        data_home_dir = crate::data_home::DATA_HOME_DIR_NAME,
+        pending = crate::data_home::DataHomeChild::DeepLinkPending.name(),
+    );
     if std::fs::write(&script_path, script).is_err() {
         return;
     }
@@ -403,7 +407,7 @@ pub struct MacWindowManager;
 
 impl MacWindowManager {
     fn chrome_for_testing_bin() -> Option<String> {
-        let home = std::env::var("HOME").unwrap_or_default();
+        let home = crate::data_home::unix_home();
         if home.is_empty() {
             return None;
         }
@@ -428,7 +432,7 @@ impl MacWindowManager {
     }
 
     fn system_chrome_bin() -> Option<String> {
-        let home = std::env::var("HOME").unwrap_or_default();
+        let home = crate::data_home::unix_home();
         let mut candidates = vec![
             PathBuf::from("/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"),
             PathBuf::from("/Applications/Chromium.app/Contents/MacOS/Chromium"),

@@ -326,9 +326,7 @@ fn agent_browser_bin() -> Option<String> {
     }
 
     // 4. nvm fallback
-    let home = std::env::var("HOME")
-        .or_else(|_| std::env::var("USERPROFILE"))
-        .unwrap_or_default();
+    let home = crate::data_home::user_home();
     if home.is_empty() {
         return None;
     }
@@ -367,9 +365,7 @@ fn agent_browser_bin() -> Option<String> {
 /// Default location: `~/.agent-browser/browsers/chrome-{version}/`
 /// Returns the Chrome executable path if found.
 fn chrome_for_testing_bin() -> Option<String> {
-    let home = std::env::var("HOME")
-        .or_else(|_| std::env::var("USERPROFILE"))
-        .unwrap_or_default();
+    let home = crate::data_home::user_home();
     if home.is_empty() {
         return None;
     }
@@ -646,9 +642,7 @@ pub fn browser_embed_init(
 
     let port = find_free_port();
     // Use a persistent profile directory so Chrome login sessions survive app restarts.
-    let home = std::env::var("HOME")
-        .or_else(|_| std::env::var("USERPROFILE"))
-        .unwrap_or_default();
+    let home = crate::data_home::user_home();
 
     // Determine if Chrome is installed as a Flatpak (bin starts with "flatpak::")
     let chrome_bin = platform::window_manager().chrome_bin().unwrap_or_default();
@@ -667,9 +661,10 @@ pub fn browser_embed_init(
                 .join("naia-profile");
             p.to_string_lossy().to_string()
         } else {
-            let p = std::path::PathBuf::from(&home)
-                .join(".naia")
-                .join("chrome-profile");
+            let p = crate::data_home::direct_child_of(
+                std::path::Path::new(&home),
+                crate::data_home::DataHomeChild::ChromeProfile,
+            );
             p.to_string_lossy().to_string()
         }
     } else {
@@ -1288,15 +1283,14 @@ pub async fn browser_open_login(app: AppHandle, url: String) -> Result<(), Strin
     };
 
     let port = find_free_port();
-    let home = std::env::var("HOME")
-        .or_else(|_| std::env::var("USERPROFILE"))
-        .unwrap_or_default();
+    let home = crate::data_home::user_home();
     let profile_dir = if home.is_empty() {
         std::env::temp_dir().join("naia-login-profile")
     } else {
-        std::path::PathBuf::from(&home)
-            .join(".naia")
-            .join("login-profile")
+        crate::data_home::direct_child_of(
+            std::path::Path::new(&home),
+            crate::data_home::DataHomeChild::LoginProfile,
+        )
     };
     std::fs::create_dir_all(&profile_dir).map_err(|e| format!("Profile dir: {e}"))?;
 

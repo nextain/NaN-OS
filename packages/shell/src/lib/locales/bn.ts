@@ -104,6 +104,7 @@ export default {
 	"slides.state.answering": "Answering",
 	"slides.state.completed": "Completed",
 	"slides.state.error": "Needs attention",
+	"workspace.editorEmptyHint": "← ফাইল ট্রি থেকে একটি ফাইল বেছে নিন, অথবা Spaces ট্যাব থেকে একটি স্পেস বেছে নিন।",
 	"settings.title": "সেটিংস",
 	"workspace.codingWorkersTitle": "Coding Workers",
 	"workspace.codingWorkersDescription": "Choose a target and request, then track progress and results.",

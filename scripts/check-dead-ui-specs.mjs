@@ -27,8 +27,18 @@
  */
 
 import { execFileSync } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import ts from "typescript";
+import {
+	alwaysTruthy,
+	elementProps,
+	jsxElementsIn,
+	makeEnv,
+	parseSource,
+	staticChunks,
+	stringCandidates,
+	unwrapAll,
+} from "./lib/jsx-static.mjs";
 
 const SHELL = "packages/shell";
 
@@ -62,58 +72,32 @@ function tracked(dir, extension) {
 }
 
 /**
- * 주석과 문자열 리터럴을 지운 셸 소스.
+ * 셸 소스 파일과 그 내용. 파서에게 물을 때 쓴다.
  *
- * 주석을 남겨 두면 "지웠다" 는 기록이 곧 "살아 있다" 는 증거가 된다 — 화면을
- * 지우면서 그 사실을 주석으로 적는 것은 정상 습관이므로, 이 게이트가 잡으려는
- * 사고가 그대로 통과했다. 실제로 `// removed: the old "ghost-wake-panel"` 한
- * 줄이면 그 화면을 기다리는 스펙이 초록이 됐다.
+ * 아홉 번째까지 이 자리에 **주석을 지운 소스 전문**과 그 위에 얹은 정규식
+ * `identifierContexts` 가 있었고, 이름의 "존재 증명" 이 거기서 나왔다.
+ * 그 증명에는 파일이 없었다. 파일이 없으면 그 표지가 화면에 오르는지를
+ * 이어서 물을 수 없다 — 그래서 고아 파일에 숨긴 표지가 존재 증명만으로
+ * 살아났고, 살린 것은 표지가 아니라 `id={` 라는 **문맥**이었다.
  *
- * 문자열은 남긴다 — `data-testid="..."` 자체가 문자열이기 때문이다.
+ * 이제 존재는 파서가 읽은 속성에서만 나온다. 속성에는 언제나 그것을 적은
+ * 파일이 딸려 오므로, 존재 판정과 도달 가능성 판정이 같은 자리에서 이어진다.
  */
-const sourceText = [
-	...tracked(`${SHELL}/src`, ".tsx"),
-	...tracked(`${SHELL}/src`, ".ts"),
-]
-	.filter((f) => !/\.test\.|__tests__/.test(f))
-	.map((f) =>
-		readFileSync(f, "utf8")
-			.replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, " "))
-			.replace(/(^|[^:])\/\/[^\n]*/g, "$1 "),
-	)
-	.join("\n");
+const shellSources = new Map(
+	[...tracked(`${SHELL}/src`, ".tsx"), ...tracked(`${SHELL}/src`, ".ts")]
+		.filter((f) => !/\.test\.|__tests__/.test(f))
+		.map((f) => [f, readFileSync(f, "utf8")]),
+);
 
-/**
- * 이름을 만들어 붙이는 자리만 모은다.
- *
- * `data-testid={...}`, `id={...}`, `getByTestId(...)` 처럼 식별자를 정하는
- * 문맥이다. 소스 전체에서 찾으면 관계없는 문자열이 접두사를 가로챈다.
- */
-const identifierContexts = [
-	...sourceText.matchAll(
-		/(?:data-testid|id|htmlFor|data-[\w-]+)\s*=\s*\{([^}]*\{[^}]*\}[^}]*|[^}]*)\}/g,
-	),
-]
-	.map((match) => match[0])
-	.concat(
-		[...sourceText.matchAll(/(?:getByTestId|findByTestId)\s*\(([^)]*)\)/g)].map(
-			(match) => match[0],
-		),
-	);
+/** 상수·타입을 import 너머로 따라갈 때 쓰는 환경. */
+const env = makeEnv(shellSources);
 
-/**
- * 코드가 조립해 넣는 표지 값의 후보.
- *
- * `data-meta-tab={tab.id}` 처럼 값이 변수로 들어가는 자리는 문자열로 만날 수
- * 없다. 다만 그 후보는 거의 언제나 리터럴 표로 적혀 있다
- * (`{ id: "progress", ... }`). 그 표에서 값을 모은다. 못 찾으면 그 이름은
- * 화면에 없는 것이다.
- */
-let assembledCache = null;
-function assembledValues() {
-	if (assembledCache) return assembledCache;
-	assembledCache = assembledInFile;
-	return assembledCache;
+/** 표지로 쓰는 data 속성인가. */
+const MARKER_ATTR = /^data-(?:testid|app-id|[\w-]*tab)$/;
+
+function addTo(map, key, value) {
+	if (!map.has(key)) map.set(key, new Set());
+	map.get(key).add(value);
 }
 
 /** Rust 가 프런트에 내주는 명령 이름 전부. */
@@ -137,10 +121,6 @@ function tauriCommandNames() {
  * 그 판단은 그 기능을 아는 사람이 해야 한다.
  */
 const KNOWN_MISSING_COMMANDS = new Map([
-	[
-		"e2e_emit_bgm_play_request",
-		"93-radio-bgm-observation 이 부른다. e2e 전용 명령으로 만들려다 만 것으로 보인다",
-	],
 	["discord_api", "70-channel-sync-dm 이 부른다. 이름이 바뀌었을 수 있다"],
 ]);
 
@@ -154,49 +134,40 @@ const KNOWN_MISSING_COMMANDS = new Map([
  * 스펙은 매번 30초를 쓰고 실패한다. 두 기계에서 똑같이 그랬다.
  *
  * 조건부 `disabled={...}` 는 상태에 따라 열리므로 여기서 보지 않는다.
- * 값 없이 박힌 `disabled` 만 영구로 본다.
+ * **언제나 참인** `disabled` 만 영구로 본다 — 값 없이 박힌 것, `{true}`,
+ * `{true as const}`, `"true"`, 그리고 같은 뜻인 `{off}`(위에서 `const off =
+ * true`)와 `{true && true}` 까지. 아홉 번째까지는 앞의 넷만 영구로 봤는데,
+ * React 에서는 뒤엣것도 똑같이 누를 수 없는 버튼이다. 뜻이 같으면 같게 본다.
  */
 function permanentlyDisabledTestIds(files) {
 	const out = new Map();
 	for (const [file, text] of files) {
-		const attrs = jsxAttributes(parseSource(file, text));
-		// 같은 여는 태그 안에 있는 속성끼리 묶는다. 파서가 준 시작 위치로
-		// 가르면 태그 문자열을 다시 쪼갤 필요가 없다.
-		const tags = new Map();
 		const tree = parseSource(file, text);
-		const visit = (node) => {
-			if (ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node)) {
-				const own = node.attributes.properties.filter((a) =>
-					ts.isJsxAttribute(a),
-				);
-				const off = attrs.filter((a) =>
-					own.some((o) => o.getStart(tree) === a.at),
-				);
-				if (off.length) tags.set(node.getStart(tree), off);
-			}
-			ts.forEachChild(node, visit);
-		};
-		visit(tree);
-		for (const group of tags.values()) {
-			// 값 없는 `disabled`, `{true}`, `{true as const}`, `"true"` 는 모두
-			// 영구히 꺼진 것이다. 형태가 아니라 뜻으로 본다.
-			if (!group.some((a) => a.name === "disabled" && a.alwaysTrue)) continue;
-			for (const a of group) {
-				if (!/^data-(?:testid|app-id|[\w-]*tab)$/.test(a.name)) continue;
-				if (a.value) out.set(a.value, true);
+		for (const element of jsxElementsIn(tree, tree)) {
+			// 같은 요소에 붙은 속성끼리 본다. spread 와 `createElement` 의 props 도
+			// 같은 목록으로 온다 — 꺼짐을 spread 로 적으면 열린 것으로 읽혔다.
+			const { props } = elementProps(element, tree, env);
+			// 값은 그 값이 **적혀 있는 파일**의 트리로 푼다. import 로 건너온
+			// props 를 불러온 쪽 트리로 풀면, 우연히 같은 이름의 상수가 이쪽에
+			// 있다는 이유로 꺼진 버튼이 열린 것으로 읽힌다.
+			const off = props.some(
+				(p) =>
+					p.name === "disabled" &&
+					(p.bare || alwaysTruthy(p.value, p.sf ?? tree, env)),
+			);
+			if (!off) continue;
+			for (const p of props) {
+				if (!MARKER_ATTR.test(p.name)) continue;
+				for (const value of stringCandidates(p.value, p.sf ?? tree, env).values)
+					out.set(value, true);
 			}
 		}
 	}
 	return out;
 }
 
-/** 셸 소스 파일과 그 내용. 파서에게 물을 때 쓴다. */
-const shellFiles = [
-	...tracked(`${SHELL}/src`, ".tsx"),
-	...tracked(`${SHELL}/src`, ".ts"),
-]
-	.filter((f) => !/\.test\.|__tests__/.test(f))
-	.map((f) => [f, readFileSync(f, "utf8")]);
+/** 파서에게 물을 파일 목록. */
+const shellFiles = [...shellSources];
 
 const disabledIds = permanentlyDisabledTestIds(shellFiles);
 
@@ -250,42 +221,12 @@ const KNOWN_DISABLED = new Map([
  * 형태를 세는 한 이 경주는 끝나지 않는다. 파서에게 물으면 형태가 아니라
  * **뜻**을 묻게 된다 — 이 속성의 값이 정적 문자열인가, 이 import 가 타입
  * 자리인가. 6회차에 check-vacuous-tests 에서 얻은 교훈을 여기 늦게 적용한다.
+ *
+ * 열 번째에는 그 파서 읽기를 `scripts/lib/jsx-static.mjs` 한 곳으로 옮겼다.
+ * 아홉 번째 회차에 같은 구멍이 이 파일과 check-recovery-affordance 에 따로
+ * 났기 때문이다 — 한쪽을 고치면 다른 쪽이 옛 방식으로 남았고, 결함은 고치지
+ * 않은 쪽으로 왔다. 속성을 읽는 자리가 하나면 구멍도 한 번만 막으면 된다.
  */
-function parseSource(file, text) {
-	return ts.createSourceFile(
-		file,
-		text,
-		ts.ScriptTarget.Latest,
-		true,
-		/\.tsx$/.test(file) ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
-	);
-}
-
-/** 정적으로 값이 정해지는 문자열이면 그 값. 아니면 null. */
-function staticString(node) {
-	if (!node) return null;
-	if (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node))
-		return node.text;
-	if (ts.isJsxExpression(node)) return staticString(node.expression);
-	// `"x" as const`, `"x" as string` — 값은 그대로다.
-	if (ts.isAsExpression(node) || ts.isSatisfiesExpression?.(node))
-		return staticString(node.expression);
-	if (ts.isParenthesizedExpression(node)) return staticString(node.expression);
-	return null;
-}
-
-/** 템플릿의 정적 조각들. `${...}` 는 값이 정해지지 않으므로 뺀다. */
-function staticChunks(node) {
-	if (!node) return [];
-	if (ts.isJsxExpression(node)) return staticChunks(node.expression);
-	if (ts.isAsExpression(node) || ts.isParenthesizedExpression(node))
-		return staticChunks(node.expression);
-	if (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node))
-		return [node.text];
-	if (ts.isTemplateExpression(node))
-		return [node.head.text, ...node.templateSpans.map((s) => s.literal.text)];
-	return [];
-}
 
 /** 값으로 끌어오는 import 의 대상. 타입 자리는 뺀다. */
 function valueImportSpecifiers(tree) {
@@ -328,38 +269,6 @@ function valueImportSpecifiers(tree) {
 	};
 	visit(tree);
 	return out;
-}
-
-/** JSX 속성을 뜻으로 읽는다. */
-function jsxAttributes(tree) {
-	const found = [];
-	const visit = (node) => {
-		if (ts.isJsxAttribute(node) && node.name && ts.isIdentifier(node.name)) {
-			found.push({
-				name: node.name.text,
-				value: staticString(node.initializer),
-				chunks: staticChunks(node.initializer),
-				// 값이 없는 `disabled` 와 `disabled={true}`·`{true as const}` 는
-				// 모두 영구히 꺼진 것이다. 형태가 아니라 뜻으로 본다.
-				alwaysTrue:
-					node.initializer === undefined ||
-					isTrueLiteral(node.initializer) ||
-					staticString(node.initializer) === "true",
-				at: node.getStart(tree),
-			});
-		}
-		ts.forEachChild(node, visit);
-	};
-	visit(tree);
-	return found;
-}
-
-function isTrueLiteral(node) {
-	if (!node) return false;
-	if (ts.isJsxExpression(node)) return isTrueLiteral(node.expression);
-	if (ts.isAsExpression(node) || ts.isParenthesizedExpression(node))
-		return isTrueLiteral(node.expression);
-	return node.kind === ts.SyntaxKind.TrueKeyword;
 }
 
 function unreachableFiles() {
@@ -463,60 +372,72 @@ function resolveImport(from, spec, code) {
 
 const unrendered = new Set(unreachableFiles());
 
-/** 표지가 어느 파일에서 정의되는지. 렌더 여부를 표지에 잇기 위해서다. */
+/**
+ * 표지가 어느 파일에서 정의되는지. 렌더 여부를 표지에 잇기 위해서다.
+ *
+ * 등록하는 것은 **모든 속성의 정적 문자열 후보 전부**다. 속성 이름을
+ * `data-testid` 로 좁히면 합성이 빠져나간다 — `<Ghost id={"ghost-wake-panel"} />`
+ * 과 `function Ghost({ id }) { return <div data-testid={id} />; }` 는 화면에
+ * 그 표지를 올리는데, 그 이름이 적힌 자리는 `id` 속성뿐이다. 이름이 어느
+ * 속성에 적혔든 그것을 적은 **파일**이 무엇인지가 여기서 물을 것이다.
+ */
 const definedIn = new Map();
 /** 클래스 이름 → 그것을 붙이는 파일들. */
 const classDefinedIn = new Map();
-/** 조립 표지의 값 후보 → 그것을 적어 둔 파일들. */
-const assembledInFile = new Map();
-for (const file of [
-	...tracked(`${SHELL}/src`, ".tsx"),
-	...tracked(`${SHELL}/src`, ".ts"),
-].filter((f) => !/\.test\.|__tests__/.test(f))) {
-	const source = readFileSync(file, "utf8");
-	// `data-meta-tab` 처럼 이 목록에 없던 속성은 정의 파일에 이어지지 않아
-	// 렌더 검사를 통째로 비껴갔다. 표지로 쓰는 data 속성을 모두 본다.
-	// `data-testid="x"` 와 JSX 식 `data-testid={"x"}` 를 함께 본다. 식으로
-	// 적으면 정의 파일이 이어지지 않아 고아 판정을 통째로 비껴갔다.
-	// 표지·클래스·꺼짐을 파서로 읽는다. 정규식으로는 `{"x"}`, `` {`x`} ``,
-	// `{"x" as const}` 처럼 같은 뜻의 형태가 끝없이 나오고, 매 회차 그중
-	// 하나가 지적으로 돌아왔다.
-	const attributes = jsxAttributes(parseSource(file, source));
-	for (const attr of attributes) {
-		if (!/^data-(?:testid|app-id|[\w-]*tab)$/.test(attr.name)) continue;
-		if (attr.value) {
-			if (!definedIn.has(attr.value)) definedIn.set(attr.value, new Set());
-			definedIn.get(attr.value).add(file);
-		}
-	}
-	// 조립해 넣는 표지(`data-meta-tab={tab.id}`)의 값 후보는 그 파일 안의
-	// 리터럴 표에서만 찾는다. 저장소 전체에서 찾으면 관계없는 모듈의 `id:`
-	// 한 줄이 존재하지도 않는 탭을 살려 준다.
-	const hasAssembledTab = attributes.some(
-		(attr) => /^data-[\w-]*tab$/.test(attr.name) && !attr.value,
-	);
-	if (hasAssembledTab) {
-		for (const m of source.matchAll(/\b(?:id|key):\s*["']([\w-]+)["']/g)) {
-			if (!definedIn.has(m[1])) definedIn.set(m[1], new Set());
-			definedIn.get(m[1]).add(file);
-			if (!assembledInFile.has(m[1])) assembledInFile.set(m[1], new Set());
-			assembledInFile.get(m[1]).add(file);
-		}
-	}
-	// 클래스 이름도 화면의 표지다. 실측에서 드러났다 — `.workspace-app` 은
-	// 렌더되지 않는 WorkspaceCenterArea.tsx 에만 있고, 스펙 셋이 그것으로
-	// 화면을 집는다. data-testid 만 보면 이 부류가 통째로 빠진다.
-	// `className="a b"` 와 `className={`a ${x}`}` 둘 다 본다. 이 저장소의 BEM
-	// 토글 클래스는 대부분 템플릿이라, 리터럴만 보면 그 클래스들이 통째로
-	// 빠진다 — 실제로 그 형태로 고아 화면이 통과했다.
-	// 클래스도 파서로 읽는다. `className={"x" as const}` 처럼 한 겹만 달라도
-	// 정규식은 놓치고, 그때마다 화면이 검사에서 사라졌다.
-	for (const attr of attributes) {
-		if (attr.name !== "className") continue;
-		for (const chunk of attr.chunks) {
-			for (const cls of chunk.split(/\s+/).filter(Boolean)) {
-				if (!classDefinedIn.has(cls)) classDefinedIn.set(cls, new Set());
-				classDefinedIn.get(cls).add(file);
+/** 표지 속성 이름 → (값 → 그 값을 붙이는 파일들). */
+const attrValues = new Map();
+/** 표지 속성 이름 → 값의 출처를 다 풀지 못한 파일들. */
+const attrUnresolved = new Map();
+/** 이름을 조립하는 자리의 고정 앞·뒷조각. 파일을 함께 적는다. */
+const nameFragments = [];
+/** 풀 수 없는 spread 가 있어 속성을 다 읽지 못한 파일. */
+const spreadBlindFiles = new Set();
+
+for (const [file, source] of shellSources) {
+	const tree = parseSource(file, source);
+	for (const element of jsxElementsIn(tree, tree)) {
+		const { props, unknownSpread } = elementProps(element, tree, env);
+		// 못 읽은 속성이 있는 파일은 표시해 둔다. "못 봤다" 를 "없다" 로 읽으면
+		// 값을 한 겹 숨기는 것만으로 검사를 통과한다.
+		if (unknownSpread) spreadBlindFiles.add(file);
+		for (const prop of props) {
+			// 값이 다른 파일에서 왔으면 그 파일 트리로 푼다. 이름을 등록하는
+			// **파일**은 그대로 이 파일이다 — 화면에 그 표지를 올리는 것은
+			// 상수를 적어 둔 파일이 아니라 요소를 렌더하는 이 파일이다.
+			const valueTree = prop.sf ?? tree;
+			const resolved = prop.bare
+				? { values: new Set(), complete: true }
+				: stringCandidates(prop.value, valueTree, env);
+			for (const value of resolved.values) addTo(definedIn, value, file);
+			if (MARKER_ATTR.test(prop.name)) {
+				if (!attrValues.has(prop.name)) attrValues.set(prop.name, new Map());
+				for (const value of resolved.values)
+					addTo(attrValues.get(prop.name), value, file);
+				if (!resolved.complete) addTo(attrUnresolved, prop.name, file);
+			}
+			// 클래스 이름도 화면의 표지다. 실측에서 드러났다 — `.workspace-app` 은
+			// 렌더되지 않는 WorkspaceCenterArea.tsx 에만 있고, 스펙 셋이 그것으로
+			// 화면을 집는다. data-testid 만 보면 이 부류가 통째로 빠진다.
+			// `className="a b"`, `` className={`a ${x}`} ``, spread, createElement 를
+			// 모두 같은 목록에서 읽는다.
+			if (prop.name === "className") {
+				for (const chunk of staticChunks(prop.value, valueTree, env))
+					for (const cls of chunk.split(/\s+/).filter(Boolean))
+						addTo(classDefinedIn, cls, file);
+				continue;
+			}
+			// 이름을 코드로 조립하는 자리(`` data-testid={`${role}-llm-mode`} ``).
+			// 고정 조각을 그 파일과 함께 적어 둔다 — 조각만으로 살아 있다고 하면
+			// 그 표지가 어느 화면에 오르는지 이어서 물을 수 없다.
+			if (!resolved.complete) {
+				const expr = unwrapAll(prop.value);
+				if (expr && ts.isTemplateExpression(expr) && expr.templateSpans.length > 0) {
+					nameFragments.push({
+						head: expr.head.text,
+						tail: expr.templateSpans[expr.templateSpans.length - 1].literal.text,
+						file,
+					});
+				}
 			}
 		}
 	}
@@ -554,6 +475,8 @@ const missing = [];
 const disabledAnchors = [];
 const unrenderedAnchors = [];
 const usedAllowances = new Set();
+/** 클래스 선택자 중 그것을 붙이는 파일을 찾지 못한 것. */
+const classWithoutHome = new Set();
 let anchors = 0;
 
 for (const file of specs) {
@@ -570,7 +493,14 @@ for (const file of specs) {
 	for (const m of source.matchAll(/["'`]\.([a-z][\w-]{3,})["'`\s\]]/g)) {
 		const cls = m[1];
 		const homes = classDefinedIn.get(cls);
-		if (!homes || homes.size === 0) continue;
+		if (!homes || homes.size === 0) {
+			// 집이 비었다. 두 가지가 다르다 — 이 저장소 어디에도 그 클래스를 붙이는
+			// 자리가 없는 것(대개 CSS 에만 있는 이름)과, 파서가 그 파일의 속성을 다
+			// 읽지 못한 것(풀 수 없는 spread). 뒤엣것은 검사가 눈을 감은 자리이므로
+			// 수를 세어 드러낸다. 조용히 건너뛰면 둘이 구별되지 않는다.
+			classWithoutHome.add(cls);
+			continue;
+		}
 		if (![...homes].every((f) => unrendered.has(f))) continue;
 		unrenderedAnchors.push({
 			file,
@@ -584,9 +514,20 @@ for (const file of specs) {
 		anchors += 1;
 		// 소스에 있어도 영구히 꺼 둔 조작 뒤면 도달할 수 없다.
 		const bare = name.replace(/^data-\w+-tab="|"$/g, "");
+		// `data-meta-tab="progress"` 처럼 속성과 값을 함께 집는 자리는 **그
+		// 속성에** 그 값이 붙는 파일만 집으로 센다. 이름만으로 집을 찾으면
+		// 관계없는 속성에 같은 문자열이 있는 파일이 집을 늘려, 고아 화면을
+		// 기다리는 스펙이 조용히 살아 있는 것으로 읽힌다.
+		const attribute = name.startsWith("data-")
+			? (/^(data-[\w-]+)=/.exec(name)?.[1] ?? name)
+			: null;
+		const wanted = attribute ? /=["']([^"']+)["']$/.exec(name)?.[1] : null;
 		// 표지를 정의하는 파일이 전부 렌더되지 않으면 그 표지는 화면에
 		// 오르지 않는다. 소스에 있다는 사실만으로는 살아 있다고 못 한다.
-		const homes = definedIn.get(bare);
+		const homes =
+			attribute && wanted
+				? attrValues.get(attribute)?.get(wanted)
+				: definedIn.get(bare);
 		if (homes && homes.size > 0 && [...homes].every((f) => unrendered.has(f))) {
 			unrenderedAnchors.push({
 				file,
@@ -625,63 +566,47 @@ for (const file of specs) {
 			continue;
 		if (name.startsWith("data-")) {
 			// `data-meta-tab="agents"` 처럼 값까지 집는 것. 값이 코드에서
-			// 만들어지는 경우가 있어(`data-meta-tab={tab.id}`) 문자열로는
-			// 못 만난다. 속성 이름이 소스에 있으면 살아 있는 것으로 본다.
-			const attribute = /^(data-[\w-]+)=/.exec(name)?.[1] ?? name;
-			if (sourceText.includes(name)) continue;
-			// 예전에는 `data-meta-tab={` 가 소스에 있으면 **어떤 값이든** 살아
-			// 있다고 쳤다. 그래서 존재하지도 않는 탭을 기다려도 통과했다.
-			// 값이 코드에서 만들어지더라도 그 후보는 대개 리터럴 표로 적혀
-			// 있으므로, 그 표에서 값을 찾아 대조한다.
-			const wanted = /=["']([^"']+)["']$/.exec(name)?.[1];
-			if (sourceText.includes(`${attribute}={`) && wanted) {
-				if (assembledValues().has(wanted)) continue;
-				missing.push({ file, name });
-				continue;
-			}
-			if (sourceText.includes(`${attribute}={`)) continue;
+			// 만들어지는 경우가 있어(`data-meta-tab={tab.id}`) 문자열로는 못
+			// 만난다. 그때는 그 값이 무엇이 될 수 있는지를 파서에게 묻는다 —
+			// `useState` 가 적어 둔 타입 유니언과 초기값, 세터에 넘기는 리터럴,
+			// `xs.map((x) => …x.id…)` 이 도는 배열의 그 속성까지.
+			//
+			// 예전에는 그 파일의 **아무 `id:`** 나 탭 값으로 쳤다. 그래서 언어
+			// 목록의 `{ id: "ko" }` 한 줄이 존재하지도 않는 설정 탭을 살려 냈다.
+			// 값의 출처를 풀지 못하면 집이 없는 것이고, 집이 없으면 없는 이름이다.
+			if (wanted && attrValues.get(attribute)?.has(wanted)) continue;
 			missing.push({ file, name });
 			continue;
 		}
 		// 파서가 속성으로 읽어 낸 이름이면 화면에 있는 것이다. 형태(`"x"`,
-		// `{"x"}`, `` {`x`} ``, `{"x" as const}`)는 파서가 이미 같은 값으로
-		// 만들어 준다.
+		// `{"x"}`, `` {`x`} ``, `{"x" as const}`, spread, `createElement`)는
+		// 파서가 이미 같은 값으로 만들어 준다.
 		if (definedIn.has(name)) continue;
-		// 예전에는 소스 **어디든** 그 이름이 따옴표 안에 있으면 살아 있다고
-		// 쳤다. 그래서 로그 모듈에 `const _removed = "ghost-wake-panel";`
-		// 한 줄만 남겨도 사라진 화면이 되살아났다 — 6회차에 닫은 주석
-		// 부활이, 주석이 아닌 문자열로 그대로 남아 있었다.
-		//
-		// 이름을 정하는 문맥 안에서만 본다. `getByTestId("x")` 같은 자리다.
-		if (identifierContexts.some((ctx) => ctx.includes(`"${name}"`))) continue;
-		if (identifierContexts.some((ctx) => ctx.includes(`\`${name}\``))) continue;
-		// 이름이 코드에서 만들어지는 경우가 흔하다
-		// (`data-testid={\`${role}-llm-mode\`}`). 앞이나 뒤가 잘린 꼴로도
-		// 찾아본다 — 그러지 않으면 멀쩡한 자리를 사라졌다고 보고한다.
-		// `data-testid={\`${role}-llm-mode\`}` 처럼 앞이나 뒤가 코드로 채워지는
-		// 자리를 찾는다. 자를 때 하이픈을 남겨야 실제 소스와 만난다 —
-		// 빠뜨리면 멀쩡한 자리를 사라졌다고 보고한다.
-		const cuts = [];
-		for (let i = 0; i < name.length; i += 1) {
-			if (name[i] !== "-") continue;
-			// 자를 때 하이픈을 양쪽에 남긴다. 소스는 `slot-${sid}` 와
-			// `${role}-llm-mode` 두 꼴이 모두 있어서, 한쪽만 남기면 다른
-			// 꼴을 놓친다.
-			cuts.push({ head: name.slice(0, i + 1), tail: name.slice(i) });
+		// 이름이 코드에서 조립되는 자리(`` data-testid={`${role}-llm-mode`} ``).
+		// 파서가 읽은 템플릿의 고정 조각과만 맞춘다. 예전에는 소스 전문에
+		// 정규식을 걸었고, 그 증명에는 파일이 없어 고아 화면이 그대로 살아났다.
+		const fragmentHomes = [
+			...new Set(
+				nameFragments
+					.filter(
+						(f) =>
+							(f.head.length > 3 && name.startsWith(f.head)) ||
+							(f.tail.length > 3 && name.endsWith(f.tail)),
+					)
+					.map((f) => f.file),
+			),
+		];
+		if (fragmentHomes.length > 0) {
+			// 조각으로 살아난 이름도 도달 가능성을 묻는다.
+			if (fragmentHomes.every((f) => unrendered.has(f)))
+				unrenderedAnchors.push({
+					file,
+					name,
+					line: source.slice(0, at).split("\n").length,
+					homes: fragmentHomes,
+				});
+			continue;
 		}
-		// 조립된 이름을 찾되 **식별자 문맥 안에서만** 본다. 그러지 않으면
-		// 관계없는 문자열이 접두사를 가로챈다 — 실제로 세션 아이디를 만드는
-		// `` `voice-${seq}` `` 하나 때문에 `voice-` 로 시작하는 모든 이름이
-		// 영원히 살아 있는 것으로 판정됐고, 삭제된 음성 화면을 기다리는 스펙을
-		// 되살려도 게이트가 잡지 못했다.
-		const assembled = cuts.some(({ head, tail }) => {
-			if (tail.length > 3 && identifierContexts.some((ctx) => ctx.includes(`}${tail}\``)))
-				return true;
-			if (head.length > 3 && identifierContexts.some((ctx) => ctx.includes(`\`${head}${"${"}`)))
-				return true;
-			return false;
-		});
-		if (assembled) continue;
 		missing.push({ file, name });
 	}
 }
@@ -802,6 +727,20 @@ if (unexpectedCommands.length > 0) {
 console.log(
 	`[dead-ui] 스펙이 집는 이름 ${anchors}개 / 셸 소스에 없는 것 ${missing.length}`,
 );
+// 집이 비어 렌더 검사를 건너뛴 자리를 드러낸다. 클래스 선택자는 CSS 에만
+// 있는 이름일 수 있어 "없다" 로 세지 않는데, 그 침묵이 파서가 못 읽어서인지
+// 정말 정의가 없어서인지는 구별돼야 한다.
+if (classWithoutHome.size > 0 || spreadBlindFiles.size > 0) {
+	console.log(
+		`  클래스 집을 못 찾은 선택자 ${classWithoutHome.size}개 / 속성을 다 읽지 못한 파일 ${spreadBlindFiles.size}개(풀 수 없는 spread)`,
+	);
+}
+if (attrUnresolved.size > 0) {
+	const where = [...attrUnresolved.entries()]
+		.map(([attr, files]) => `${attr}(${files.size})`)
+		.join(", ");
+	console.log(`  값의 출처를 못 푼 표지 속성: ${where}`);
+}
 
 // 걸리지도 않는 면제는 알리바이다. 남겨 두면 다음 결함이 그 이름으로 들어와
 // 조용히 지나간다 — 실제로 `voice-wake-triggers` 면제가 그러고 있었다.

@@ -143,31 +143,43 @@ TypeScript 쪽에서는 `src/lib/app-sandbox` 를 부르는 곳만 있고 그 �
 사람은 반드시 한쪽만 읽으므로, 요구사항을 새 규칙으로 고치는 일이 남았다.
 그 판단은 요구사항의 주인이 한다 — 이 문서는 어긋남을 기록만 한다.
 
-### 코드가 홈 아래에 만드는 자리 — 열셋
+### 코드가 홈 아래에 만드는 자리 — 열넷
 
 손으로 세었을 때는 다섯이었는데 검사기(`scripts/check-data-home-boundary.mjs`)
 를 만들어 돌리니 열셋이었다. 파일 시스템에 아직 나타나지 않은 것들이 더
-있었다.
+있었다. 2026-09-06 에 검사기를 정규식 창에서 토크나이저로 옮기면서 하나가 더
+나왔다 — `workspace` 다. 그것은 경로가 아니라 `~/.naia/workspace` **문자열**로
+게이트웨이 기본 설정에 실려 나가는 자리라, 창을 보던 옛 검사가 볼 수 없었다.
 
-| 이름 | 만드는 파일 | 옮길 때 함께 풀 것 |
+자리는 이제 `packages/shell/src-tauri/src/data_home.rs` 의 `DataHomeChild` 열넷이
+정본이다. 아래 표의 이름은 그 대응표와 정확히 같아야 하고, 다르면 검사기가
+붉어진다.
+
+| 이름 | 부르는 곳 | 옮길 때 함께 풀 것 |
 |---|---|---|
-| `adk-path` | `lib.rs:2197` | **여기 남는 유일한 것** |
-| `logs` | `lib.rs:1505` | |
-| `run` | `lib.rs:1632` | |
-| `skills` | `lib.rs:4427` | |
-| `voxcpm2-runtime` | `lib.rs:5129` | 음성 서비스가 지금 쓰고 있다 — 사람이 중단 창을 잡아야 한다 |
-| `apps` | `app.rs:115` | |
-| `agent-child-lease.json`·`.lock` | `lib.rs:487` | |
-| `panels` | `app.rs` | |
+| `adk-path` | `lib.rs` (adk 경로 캐시) | **여기 남는 유일한 것** |
+| `logs` | `lib.rs:log_dir` | |
+| `run` | `lib.rs:run_dir` | |
+| `skills` | `lib.rs` (스킬 스캔) | |
+| `voxcpm2-runtime` | `lib.rs:voxcpm2_runtime_root` | 음성 서비스가 지금 쓰고 있다 — 사람이 중단 창을 잡아야 한다 |
+| `apps` | `app.rs:apps_root` | |
+| `panels` | `app.rs:legacy_apps_root` | #472 이전의 앱 자리 |
+| `agent-child-lease.json` | `lib.rs:agent_child_lease_path` | |
+| `agent-child-lease.lock` | `lib.rs:agent_child_lease_lock_path` | |
 | `chrome-profile` | `browser.rs` | 사용자 로그인 상태가 들어 있다 — 옮기면 다시 로그인해야 한다 |
 | `login-profile` | `browser.rs` | 위와 같다 |
-| `.naia` (직접) | `lib.rs` | 데이터 홈 함수를 거치지 않아 `NAIA_HOME` 도 무시한다. 격리된 개발 인스턴스가 운영 데이터를 건드릴 수 있다 |
-| `deep-link-pending.txt` | `platform/macos.rs`, `platform/windows.rs` | 앱이 뜨기 전에 쓰이므로 ADK 위치를 아직 모를 수 있다 — 순서를 함께 풀어야 한다 |
+| `deep-link-pending.txt` | `platform/macos.rs`, `platform/windows.rs`, `main.rs` | 앱이 뜨기 전에 쓰이므로 ADK 위치를 아직 모를 수 있다 — 순서를 함께 풀어야 한다 |
 | `dev-deeplink` | `platform/macos.rs` | 위와 같다 |
+| `workspace` | `lib.rs` (게이트웨이 기본 설정) | 경로가 아니라 문자열이라 `NAIA_HOME` 도 타지 않는다 |
 
-검사기는 옮기는 일을 대신하지 않는다. **새로 늘어나는 것을 막는다.** 열셋은
-사유와 함께 적어 두었고, 옮기고 나면 그 항목을 지우면 된다. 목록이 낡으면
-(옮겼는데 남아 있으면) 그것도 붉어진다. 양쪽 다 결함을 심어 확인했다.
+`.naia` 자체를 직접 짚던 자리(옛 표의 열셋째 줄)는 이름이 아니라 **방식**이었다.
+지금은 `data_home::direct_root_of` / `direct_child_of` 가 그 방식을 들고 있고,
+`NAIA_HOME` 을 존중하는 쪽(`child_of`)과 갈라 두어 어느 자리가 어느 쪽인지 코드에서
+보인다.
+
+검사기는 옮기는 일을 대신하지 않는다. **새로 늘어나는 것을 막는다.** 자리마다
+사유를 적어 두었고, 옮기고 나면 그 항목을 지우면 된다. 목록이 낡으면(옮겼는데
+남아 있으면) 그것도 붉어진다. 양쪽 다 결함을 심어 확인했다.
 
 ### 두 기계 실측 (2026-09-05)
 
@@ -193,3 +205,24 @@ mtime 이 그대로였다. 계약 테스트
 줄 때만 워크스페이스를 격리해서, 안 주면 에이전트가 `~/.naia/adk-path` 가
 가리키는 **실제 ADK** 를 워크스페이스로 잡는다. 리스·로그와 다른 축이라
 따로 풀어야 한다.
+
+### FR-SHELL-ISO(#425) 를 이렇게 고치자 — 초안 (2026-09-06, 루크 결정 대기)
+
+지금 문장은 개발 인스턴스가 "별도 데이터 홈(`NAIA_HOME`, 기본 `~/.naia-dev`) — adk-path
+캐시·lease·logs·run·skills" 를 쓴다고 적어, 실행 부산물이 홈에 사는 것을 규칙으로
+못박고 있다. 루크의 새 규칙과 맞추려면 그 문장을 이렇게 바꾸면 된다.
+
+> **데이터 홈(`NAIA_HOME`, 기본 `~/.naia`)에는 `adk-path` 하나만 둔다.** 그것은 어느
+> ADK 를 볼지 알려 주는 부트스트랩 포인터라 ADK 밖에 있어야 한다. 로그·임차(lease)·PID·
+> 설치된 앱과 스킬·음성 런타임을 포함한 **모든 실행 부산물은 `adk-path` 가 가리키는
+> ADK 아래**(`<ADK>/naia-settings/...` 또는 `<ADK>/.naia/...` — 자리 이름은 별도
+> 결정)에 두고, 그 위치는 `adk-path` 에서 파생한다. 격리된 개발 인스턴스(`~/.naia-dev`)도
+> 같은 규칙을 따른다 — 홈에는 자기 `adk-path` 만 두고 나머지는 자기 ADK 아래로 간다.
+> 네이티브 E2E 격리(`e2e_runtime_dir`)는 그대로 상위다.
+
+바뀌지 않는 것: 개발 인스턴스와 운영 인스턴스의 **분리** 자체(FR-SHELL-ISO 의 본뜻)는
+그대로다. 바뀌는 것은 분리된 데이터가 **어디에** 사는가 — 홈 두 개가 아니라 ADK 두 개다.
+
+루크가 정할 것 둘. 첫째, 위 문안을 그대로 쓸지. 둘째, ADK 아래 부산물 자리의 이름
+(`naia-settings/` 아래로 모을지, `<ADK>/.naia/` 처럼 따로 둘지). 이름이 정해져야
+열넷 자리를 옮기는 코드 변경을 시작할 수 있다.

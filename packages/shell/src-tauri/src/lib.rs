@@ -5,6 +5,7 @@ mod audit;
 mod browser;
 mod browser_webview;
 mod capture;
+pub mod data_home;
 mod gemini_live;
 mod herdr;
 mod memory;
@@ -55,12 +56,7 @@ fn get_startup_open_file() -> Option<String> {
 }
 static USED_APP_INSTALL_STATES: OnceLock<Mutex<HashSet<String>>> = OnceLock::new();
 
-/// Cross-platform home directory: HOME (Unix) or USERPROFILE (Windows).
-pub(crate) fn home_dir() -> String {
-    std::env::var("HOME")
-        .or_else(|_| std::env::var("USERPROFILE"))
-        .unwrap_or_default()
-}
+use crate::data_home::DataHomeChild;
 
 fn is_valid_gateway_key(value: &str) -> bool {
     value.starts_with("gw-")
@@ -435,27 +431,6 @@ struct AgentChildLeaseLock {
     _file: std::fs::File,
 }
 
-/// FR-SHELL-ISO (#425): the Naia data home. A non-empty `NAIA_HOME` overrides
-/// `<home>/.naia` so the isolated dev instance (Naia Dev, launched by
-/// tauri-with-mode with NAIA_HOME=~/.naia-dev) keeps its adk-path cache,
-/// lease files, logs, PID files, and skills apart from the production
-/// install's data. Native E2E isolation (e2e_runtime_dir) stays senior.
-fn naia_data_home_from(home: std::path::PathBuf) -> std::path::PathBuf {
-    naia_data_home_with(home, std::env::var("NAIA_HOME").ok().as_deref())
-}
-
-/// Pure resolution half of [`naia_data_home_from`] — injectable for tests
-/// without process-global env mutation.
-fn naia_data_home_with(
-    home: std::path::PathBuf,
-    override_home: Option<&str>,
-) -> std::path::PathBuf {
-    match override_home {
-        Some(v) if !v.trim().is_empty() => std::path::PathBuf::from(v),
-        _ => home.join(".naia"),
-    }
-}
-
 /// FR-SHELL-ISO (#425): CASCADE_READY-shaped payload for an adopted (already
 /// running, healthy) shared cascade — the same contract the Shell parses from
 /// a fresh spawn (localVoiceFacadeUrlFromReady reads facade_port + a tts
@@ -486,20 +461,20 @@ fn agent_child_lease_path() -> Result<std::path::PathBuf, String> {
     if let Some(runtime) = e2e_runtime_dir() {
         return Ok(runtime.join("agent-child-lease.json"));
     }
-    Ok(naia_data_home_from(
-        dirs::home_dir().ok_or_else(|| "agent_lease_home_unavailable".to_string())?,
-    )
-    .join("agent-child-lease.json"))
+    Ok(data_home::child_of(
+        &data_home::user_home_path().ok_or_else(|| "agent_lease_home_unavailable".to_string())?,
+        DataHomeChild::AgentChildLease,
+    ))
 }
 
 fn agent_child_lease_lock_path() -> Result<std::path::PathBuf, String> {
     if let Some(runtime) = e2e_runtime_dir() {
         return Ok(runtime.join("agent-child-lease.lock"));
     }
-    Ok(naia_data_home_from(
-        dirs::home_dir().ok_or_else(|| "agent_lease_home_unavailable".to_string())?,
-    )
-    .join("agent-child-lease.lock"))
+    Ok(data_home::child_of(
+        &data_home::user_home_path().ok_or_else(|| "agent_lease_home_unavailable".to_string())?,
+        DataHomeChild::AgentChildLeaseLock,
+    ))
 }
 
 fn acquire_agent_child_lease_lock() -> Result<AgentChildLeaseLock, String> {
@@ -1501,11 +1476,9 @@ fn log_dir() -> std::path::PathBuf {
         std::env::var_os("NAIA_E2E_RUNTIME_DIR")
             .map(std::path::PathBuf::from)
             .map(|runtime| runtime.join("logs"))
-            .unwrap_or_else(|| {
-                naia_data_home_from(std::path::PathBuf::from(home_dir())).join("logs")
-            })
+            .unwrap_or_else(|| data_home::child(DataHomeChild::Logs))
     } else {
-        naia_data_home_from(std::path::PathBuf::from(home_dir())).join("logs")
+        data_home::child(DataHomeChild::Logs)
     };
     let _ = std::fs::create_dir_all(&dir);
     dir
@@ -1629,7 +1602,7 @@ fn e2e_runtime_dir() -> Option<std::path::PathBuf> {
 /// Get the run directory (~/.naia/run/) for PID files
 fn run_dir() -> std::path::PathBuf {
     let dir = e2e_runtime_dir()
-        .unwrap_or_else(|| naia_data_home_from(std::path::PathBuf::from(home_dir())).join("run"));
+        .unwrap_or_else(|| data_home::child(DataHomeChild::Run));
     let _ = std::fs::create_dir_all(&dir);
     dir
 }
@@ -1824,7 +1797,7 @@ fn find_node_binary() -> Result<std::path::PathBuf, String> {
         }
     }
 
-    let home = home_dir();
+    let home = data_home::user_home();
 
     // Windows: check nvm-windows, fnm, and Program Files
     #[cfg(windows)]
@@ -1989,7 +1962,7 @@ fn load_bootstrap_config() -> serde_json::Value {
         },
         "agents": {
             "defaults": {
-                "workspace": "~/.naia/workspace"
+                "workspace": data_home::tilde_child(DataHomeChild::Workspace)
             }
         },
         "session": {
@@ -2193,8 +2166,8 @@ fn spawn_adk_path_snapshot() -> Option<String> {
         }
     }
     spawn_adk_path_snapshot_with(|| {
-        dirs::home_dir().and_then(|home| {
-            std::fs::read_to_string(naia_data_home_from(home).join("adk-path")).ok()
+        data_home::user_home_path().and_then(|home| {
+            std::fs::read_to_string(data_home::child_of(&home, DataHomeChild::AdkPath)).ok()
         })
     })
 }
@@ -4423,8 +4396,7 @@ async fn list_skills() -> Result<Vec<SkillManifestInfo>, String> {
     }
 
     // Scan ~/.naia/skills/
-    let home = home_dir();
-    let skills_dir = naia_data_home_from(std::path::PathBuf::from(&home)).join("skills");
+    let skills_dir = data_home::child(DataHomeChild::Skills);
     if skills_dir.is_dir() {
         if let Ok(entries) = std::fs::read_dir(&skills_dir) {
             for entry in entries.flatten() {
@@ -5126,7 +5098,10 @@ fn voxcpm2_runtime_root() -> std::path::PathBuf {
     std::env::var_os("NAIA_VOXCPM2_RUNTIME_ROOT")
         .filter(|value| !value.is_empty())
         .map(std::path::PathBuf::from)
-        .or_else(|| dirs::home_dir().map(|home| naia_data_home_from(home).join("voxcpm2-runtime")))
+        .or_else(|| {
+            data_home::user_home_path()
+                .map(|home| data_home::child_of(&home, DataHomeChild::Voxcpm2Runtime))
+        })
         .unwrap_or_else(|| std::path::PathBuf::from("voxcpm2-runtime"))
 }
 
@@ -5275,7 +5250,7 @@ fn cascade_runtime_root() -> std::path::PathBuf {
     std::env::var_os("NAIA_CASCADE_RUNTIME_ROOT")
         .filter(|value| !value.is_empty())
         .map(std::path::PathBuf::from)
-        .or_else(|| dirs::home_dir().map(|home| home.join("naia-omni")))
+        .or_else(|| data_home::user_home_path().map(|home| home.join("naia-omni")))
         .unwrap_or_else(|| std::path::PathBuf::from("naia-omni"))
 }
 
@@ -6005,7 +5980,7 @@ fn legacy_voxcpm2_model_is_cached(runtime_root: &std::path::Path) -> bool {
     if let Ok(path) = std::env::var("HF_HOME") {
         hubs.push(std::path::PathBuf::from(path).join("hub"));
     }
-    if let Some(home) = dirs::home_dir() {
+    if let Some(home) = data_home::user_home_path() {
         hubs.push(home.join(".cache").join("huggingface").join("hub"));
     }
     if let Some(cache) = dirs::cache_dir() {
@@ -6440,8 +6415,10 @@ async fn voxcpm2_installation_status(
     app: tauri::AppHandle,
     state: tauri::State<'_, AppState>,
 ) -> Result<VoxCpm2InstallationStatus, String> {
-    let adk_path = dirs::home_dir()
-        .and_then(|home| std::fs::read_to_string(naia_data_home_from(home).join("adk-path")).ok())
+    let adk_path = data_home::user_home_path()
+        .and_then(|home| {
+            std::fs::read_to_string(data_home::child_of(&home, DataHomeChild::AdkPath)).ok()
+        })
         .map(|value| value.trim().to_string())
         .filter(|value| !value.is_empty());
     let loader_profile = adk_path.as_ref().and_then(|path| {
@@ -6973,9 +6950,9 @@ async fn start_voxcpm2(
             .map(|value| value.trim().to_string())
             .filter(|value| !value.is_empty())
     } else {
-        dirs::home_dir()
+        data_home::user_home_path()
             .and_then(|home| {
-                std::fs::read_to_string(naia_data_home_from(home).join("adk-path")).ok()
+                std::fs::read_to_string(data_home::child_of(&home, DataHomeChild::AdkPath)).ok()
             })
             .map(|value| value.trim().to_string())
             .filter(|value| !value.is_empty())
@@ -7123,8 +7100,10 @@ async fn start_cascade(
             .map(|s| s.trim().to_string())
             .filter(|s| !s.is_empty())
     } else {
-        dirs::home_dir()
-            .and_then(|h| std::fs::read_to_string(naia_data_home_from(h).join("adk-path")).ok())
+        data_home::user_home_path()
+            .and_then(|h| {
+                std::fs::read_to_string(data_home::child_of(&h, DataHomeChild::AdkPath)).ok()
+            })
             .map(|s| s.trim().to_string())
             .filter(|s| !s.is_empty())
     }
@@ -7611,8 +7590,10 @@ fn current_adk_path() -> Result<String, String> {
             }
         }
     }
-    let path = dirs::home_dir()
-        .and_then(|home| std::fs::read_to_string(naia_data_home_from(home).join("adk-path")).ok())
+    let path = data_home::user_home_path()
+        .and_then(|home| {
+            std::fs::read_to_string(data_home::child_of(&home, DataHomeChild::AdkPath)).ok()
+        })
         .ok_or_else(|| "adk_path_unavailable".to_string())?;
     let path = path.trim();
     if path.is_empty() {
@@ -9664,7 +9645,7 @@ async fn read_local_binary(path: String, allowed_base: Option<String>) -> Result
         .map_err(|e| format!("Cannot resolve path {}: {}", path, e))?;
 
     // Restrict to user home directory and common safe locations.
-    let home = home_dir();
+    let home = data_home::user_home();
     let mut allowed_roots: Vec<std::path::PathBuf> = vec![std::path::PathBuf::from(&home)];
     #[cfg(unix)]
     {
@@ -11299,7 +11280,7 @@ fn naia_path_cache_target(
     home: std::path::PathBuf,
     native_e2e: bool,
 ) -> Option<std::path::PathBuf> {
-    (!native_e2e).then(|| naia_data_home_from(home).join("adk-path"))
+    (!native_e2e).then(|| data_home::child_of(&home, DataHomeChild::AdkPath))
 }
 
 fn naia_path_cache_changed(cache_path: &std::path::Path, adk_path: &str) -> bool {
@@ -11319,7 +11300,8 @@ async fn write_naia_path_cache(
         if adk_path.is_empty() {
             return Err("adk_path is empty".to_string());
         }
-        let home = dirs::home_dir().ok_or_else(|| "Cannot determine home directory".to_string())?;
+        let home = data_home::user_home_path()
+            .ok_or_else(|| "Cannot determine home directory".to_string())?;
         // Native E2E owns its workspace through NAIA_E2E_ADK_PATH. Never let
         // a disposable test run overwrite the real user's next-start cache.
         let Some(cache_path) = naia_path_cache_target(home, debug_e2e_enabled()) else {
@@ -11362,7 +11344,8 @@ fn clear_naia_path_cache_file(cache_path: Option<std::path::PathBuf>) -> Result<
 /// The UI relaunches immediately afterward and returns to ADK setup.
 #[tauri::command]
 async fn clear_naia_path_cache() -> Result<(), String> {
-    let home = dirs::home_dir().ok_or_else(|| "Cannot determine home directory".to_string())?;
+    let home =
+        data_home::user_home_path().ok_or_else(|| "Cannot determine home directory".to_string())?;
     clear_naia_path_cache_file(naia_path_cache_target(home, debug_e2e_enabled()))
 }
 
@@ -13783,7 +13766,10 @@ mod tests {
     fn log_dir_creates_directory() {
         let dir = log_dir();
         assert!(dir.exists());
-        assert!(dir.ends_with(".naia/logs"));
+        assert!(dir.ends_with(
+            std::path::Path::new(data_home::DATA_HOME_DIR_NAME)
+                .join(DataHomeChild::Logs.name())
+        ));
     }
 
     // W1.review P0 (#341 ?듭뀡 B) ??path guard 媛 HTTP callback ?뺤떇??諛쏆븘????
@@ -14924,24 +14910,8 @@ mod tests {
         );
     }
 
-    #[test]
-    fn isolated_dev_home_overrides_the_default_naia_dir() {
-        // FR-SHELL-ISO (#425): NAIA_HOME redirects every data-home consumer;
-        // empty/blank overrides fall back to <home>/.naia.
-        let home = std::path::PathBuf::from("C:/naia-test-home");
-        assert_eq!(
-            naia_data_home_with(home.clone(), Some("C:/naia-test-home/.naia-dev")),
-            std::path::PathBuf::from("C:/naia-test-home/.naia-dev")
-        );
-        assert_eq!(
-            naia_data_home_with(home.clone(), Some("   ")),
-            std::path::PathBuf::from("C:/naia-test-home/.naia")
-        );
-        assert_eq!(
-            naia_data_home_with(home, None),
-            std::path::PathBuf::from("C:/naia-test-home/.naia")
-        );
-    }
+    // NAIA_HOME 우선순위 테스트는 자리를 만드는 모듈이 갖는다
+    // (data_home::tests::override_applies_only_to_the_respecting_half).
 
     #[test]
     fn adopted_cascade_ready_matches_the_spawn_contract_shape() {
@@ -14962,7 +14932,11 @@ mod tests {
         assert_eq!(naia_path_cache_target(home.clone(), true), None);
         assert_eq!(
             naia_path_cache_target(home, false),
-            Some(std::path::PathBuf::from("C:/naia-test-home/.naia/adk-path"))
+            Some(
+                std::path::PathBuf::from("C:/naia-test-home")
+                    .join(data_home::DATA_HOME_DIR_NAME)
+                    .join(DataHomeChild::AdkPath.name())
+            )
         );
     }
 

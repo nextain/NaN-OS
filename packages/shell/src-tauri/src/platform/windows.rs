@@ -318,9 +318,7 @@ pub(crate) fn resolve_tsx_from_agent(agent_dir: &std::path::Path) -> Option<(Str
 /// the single-instance Named Mutex IPC fails silently.
 pub(crate) fn start_deep_link_file_watcher(app_handle: tauri::AppHandle) {
     std::thread::spawn(move || {
-        let pending_path = dirs::home_dir()
-            .map(|h| h.join(".naia").join("deep-link-pending.txt"))
-            .unwrap_or_else(|| PathBuf::from(r"C:\Users\Public\.naia\deep-link-pending.txt"));
+        let pending_path = crate::data_home::windows_deep_link_pending();
         loop {
             std::thread::sleep(std::time::Duration::from_millis(500));
             if pending_path.exists() {
@@ -736,7 +734,7 @@ impl PlatformWindowManager for Win32WindowManager {
     fn chrome_bin(&self) -> Option<String> {
         // 1. Chrome for Testing (installed by agent-browser install) — preferred
         //    because it's version-stable and always available when bundled.
-        let home = std::env::var("USERPROFILE").unwrap_or_default();
+        let home = crate::data_home::windows_home();
         if !home.is_empty() {
             let base = std::path::PathBuf::from(&home)
                 .join(".agent-browser")

@@ -20,18 +20,46 @@
  *
  * 무엇을 재지 않는가: 그 행동이 실제로 복구시키는지는 정적으로 알 수 없다.
  * 이 게이트는 "빠져나갈 길을 보여주기라도 하는가" 까지만 말한다.
+ *
+ * ── 10회차에 고친 것 ──────────────────────────────────────────────
+ * 아홉 번째까지 "화면을 통째로 대신하는가" 를 **돌려주는 것이 JSX 요소
+ * 하나인가** 로 물었다. 그래서 React 에서 가장 흔한 네 가지 return 모양이
+ * 알림으로도 세어지지 않았다 — `cond && <alert/>`, `cond ? <alert/> : null`,
+ * `createElement("div", { role: "alert" })`, 그리고 자식이 `{cond && <alert/>}`
+ * 인 컨테이너. 넷 다 화면에는 그 알림 하나만 뜬다.
+ *
+ * 이제 묻는 것은 모양이 아니라 **그 return 이 화면에 올리는 것이 이 알림
+ * 하나뿐인가** 이다. `&&`·삼항·`createElement`·`{cond && …}` 자식을 뚫고
+ * 내려가되, 어느 층에서든 형제가 둘 이상이면 거기서 멈춘다. 그래야 설정
+ * 화면 한복판의 오류 줄(형제가 열 개인 자리)이 막다른 화면으로 오르지 않는다.
+ *
+ * 형제 규칙은 그대로다: 복구 행동은 **알림 요소의 하위 트리 안에서만** 센다.
+ * 상위 컨테이너에 남아 있는 형제 버튼은 세지 않는다 — 알림이 화면을 통째로
+ * 대신하는 자리에서는 그 형제가 애초에 없다.
+ *
+ * 속성은 `scripts/lib/jsx-static.mjs` 하나로 읽는다. spread(`{...{ role:
+ * "alert" }}`)와 `createElement` 의 props 가 같은 목록으로 온다. 다만 함수
+ * 인자나 import 된 객체를 펼친 spread 는 정적으로 알 수 없다 — 그런 요소는
+ * 알림으로 세지 않는다(놓치는 쪽으로 틀린다). 값을 못 읽는 것을 알림으로
+ * 세면 화면 전체가 알림이 되어 게이트가 곧 꺼진다.
  */
 
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import ts from "typescript";
+import {
+	elementChildren,
+	elementOpening,
+	elementProps,
+	isElementNode,
+	makeEnv,
+	parseSource,
+	staticChunks,
+	unwrapAll,
+} from "./lib/jsx-static.mjs";
 
 const SHELL = "packages/shell";
 
-/** 사용자에게 실패를 알리는 표시. */
-const FAILURE_SURFACE = /role=\s*(?:\{\s*)?["']alert["']/;
-
-/** 다음 행동을 주는 표시. */
 /**
  * 다음 행동을 주는 표시.
  *
@@ -40,12 +68,17 @@ const FAILURE_SURFACE = /role=\s*(?:\{\s*)?["']alert["']/;
  * 길이 있다" 로 세어진다. 읽을 것을 주는 것과 할 것을 주는 것은 다르다.
  * 대체 내용으로 인정하려면 사용자가 그것으로 무언가 할 수 있어야 한다
  * (복사, 편집, 이동).
+ *
+ * `Start` 를 부분문자열로 인정하면 "Start-up failed" 라는 **문구**가 복구
+ * 수단이 된다. 실제로 그 한 단어로 통과했다. 행동을 가리키는 것만 센다 —
+ * 누를 것, 갈 곳, 고쳐 쓸 곳, 복사할 것.
+ *
+ * `createElement` 로 적은 화면은 같은 행동을 `createElement("button", …)` 와
+ * `{ onClick: … }` 로 적는다. 알림을 그 형태로 읽게 됐으니 복구도 같은
+ * 형태로 읽어야 한 쪽만 세는 일이 없다.
  */
-// `Start` 를 부분문자열로 인정하면 "Start-up failed" 라는 **문구**가 복구
-// 수단이 된다. 실제로 그 한 단어로 통과했다. 행동을 가리키는 것만 센다 —
-// 누를 것, 갈 곳, 고쳐 쓸 곳, 복사할 것.
 const RECOVERY =
-	/<button|<a\s|onClick=|common\.retry|\.retry\b|\bonStart\b|\bstart[A-Z]\w*\s*\(|href=|<textarea|onCopy|navigator\.clipboard/;
+	/<button|<a\s|onClick[=:]|common\.retry|\.retry\b|\bonStart\b|\bstart[A-Z]\w*\s*\(|href[=:]|<textarea|onCopy|navigator\.clipboard|createElement\(\s*["'`](?:button|a|textarea)["'`]/;
 
 /**
  * 실패를 알리지만 복구 행동을 확인하지 못한 자리. 숫자가 아니라 자리로
@@ -63,104 +96,66 @@ function tracked(dir, extension) {
 	}
 }
 
-/** `role="alert"` 를 단 요소의 본문. 여는 태그부터 짝 닫는 태그까지. */
-function alertBlocks(source) {
-	const blocks = [];
-	// JSX 식 `role={"alert"}` 도 같은 알림이다. 표지 정의는 식까지 이었는데
-	// 이 자리만 리터럴이라, 식으로 적으면 알림 자체가 없는 것으로 보였다.
-	for (const match of source.matchAll(
-		/<(\w+)([^>]*role=\s*(?:\{\s*)?["']alert["'][^>]*)>/g,
-	)) {
-		const tag = match[1];
-		const from = match.index;
-		// 자기 닫힘이면 그 자체가 전부다.
-		if (match[0].endsWith("/>")) {
-			blocks.push({
-				text: match[0],
-				at: from,
-				line: source.slice(0, from).split("\n").length,
-			});
-			continue;
-		}
-		let depth = 0;
-		let cursor = from;
-		let end = source.length;
-		const opener = new RegExp(`<${tag}[\\s>]`, "g");
-		const closer = new RegExp(`</${tag}>`, "g");
-		opener.lastIndex = from;
-		closer.lastIndex = from;
-		let nextOpen = opener.exec(source);
-		let nextClose = closer.exec(source);
-		while (nextClose) {
-			if (nextOpen && nextOpen.index < nextClose.index) {
-				depth += 1;
-				nextOpen = opener.exec(source);
-				continue;
-			}
-			depth -= 1;
-			if (depth === 0) {
-				end = nextClose.index + nextClose[0].length;
-				break;
-			}
-			nextClose = closer.exec(source);
-		}
-		cursor = end;
-		blocks.push({
-			text: source.slice(from, cursor),
-			at: from,
-			line: source.slice(0, from).split("\n").length,
-		});
-	}
-	return blocks;
-}
-
 const files = [...tracked(`${SHELL}/src`, ".tsx")].filter(
 	(f) => !/\.test\.tsx$/.test(f) && !f.includes("__tests__"),
 );
 
+/** 이름을 파일 너머로 따라갈 때 쓰는 환경. `const role = ALERT` 같은 자리다. */
+const env = makeEnv(
+	new Map(
+		[...tracked(`${SHELL}/src`, ".tsx"), ...tracked(`${SHELL}/src`, ".ts")]
+			.filter((f) => !/\.test\.|__tests__/.test(f))
+			.map((f) => [f, readFileSync(f, "utf8")]),
+	),
+);
+
 /**
- * 이 알림이 화면을 통째로 대신하는가.
+ * 이 식이 화면에 통째로 올리는 요소 후보.
  *
- * 처음에는 `return (` 바로 뒤만 봤다. 그래서 `<div className="...">` 로 한 겹
- * 감싸기만 하면 빠져나갔고, 실무에서 오류 화면을 컨테이너 없이 최상위에 두는
- * 경우는 드물기 때문에 그 우회가 사실상 이 검사를 무력화했다.
- *
- * 이제 `return` 과 알림 사이에 여는 태그만 있는지 본다. 그 사이에 다른
- * 내용(형제 요소, 조건부 렌더)이 있으면 알림이 화면의 일부이지 전부가 아니다.
+ * `&&` 의 오른쪽, 삼항의 두 갈래, `||`·`??` 의 양쪽은 각각 그 자리에 홀로
+ * 오르는 화면이다. 값이 없는 갈래(`null`)는 화면을 만들지 않으므로 세지
+ * 않는다 — 그래서 `cond ? <alert/> : null` 은 후보가 하나다.
  */
-function isDeadEnd(source, at) {
-	const before = source.slice(Math.max(0, at - 600), at);
-	// 예전에는 `return (` 만 봤고, 그것도 창 안의 **첫** 것을 썼다. 그래서
-	// 괄호 없는 `return <div role="alert">` 는 막다른 화면이 아니었고
-	// (머리말이 예시로 든 형태가 바로 그것이다), 위쪽에 이펙트 cleanup
-	// `return () => ...` 가 있으면 그것이 잡혀 판정이 어긋났다.
-	//
-	// 이제 알림에 가장 가까운 return 을 보고, 괄호 없는 형태도 센다.
-	// 이펙트 cleanup(`return () =>`)은 화면을 돌려주는 것이 아니므로 뺀다.
-	const returns = [...before.matchAll(/return\s*(\(|<)/g)].filter(
-		(m) => !/return\s*\(\s*\)\s*=>/.test(before.slice(m.index, m.index + 20)),
-	);
-	const last = returns[returns.length - 1];
-	if (!last) return false;
-	const afterReturn = [
-		null,
-		before.slice(last.index + last[0].length - (last[1] === "<" ? 1 : 0)),
-	];
-	// 사이에 남은 것에서 여는 태그와 공백을 걷어 낸다. 아무것도 남지 않으면
-	// 알림까지 곧장 내려온 것이다.
-	const between = afterReturn[1]
-		// `<>` 조각은 글자가 없어 태그로 안 걷혔다. 그래서 알림을 조각으로
-		// 한 번 감싸는 것만으로 막다른 화면이 아니게 됐다 — 실무에서 가장
-		// 흔한 형태다.
-		.replace(/<\/?>/g, " ")
-		.replace(/<[A-Za-z][\w.]*(\s[^>]*)?>/g, " ")
-		.replace(/\{[\s\S]*?\}/g, " ")
-		.trim();
-	return between.length === 0;
+function screenElements(expr, sf) {
+	const node = unwrapAll(expr);
+	if (!node) return [];
+	if (isElementNode(node)) return [node];
+	if (ts.isJsxFragment(node)) {
+		const kids = elementChildren(node);
+		return kids.length === 1 ? screenElements(kids[0], sf) : [];
+	}
+	if (ts.isConditionalExpression(node))
+		return [
+			...screenElements(node.whenTrue, sf),
+			...screenElements(node.whenFalse, sf),
+		];
+	if (ts.isBinaryExpression(node)) {
+		const kind = node.operatorToken.kind;
+		if (kind === ts.SyntaxKind.AmpersandAmpersandToken)
+			return screenElements(node.right, sf);
+		if (
+			kind === ts.SyntaxKind.BarBarToken ||
+			kind === ts.SyntaxKind.QuestionQuestionToken
+		)
+			return [
+				...screenElements(node.left, sf),
+				...screenElements(node.right, sf),
+			];
+	}
+	return [];
 }
 
-const stranded = [];
-let surfaces = 0;
+/** 이 요소가 실패 알림인가. `role` 이 될 수 있는 값 중에 "alert" 가 있는가. */
+function isAlert(element, sf) {
+	const { props } = elementProps(element, sf, env);
+	// 값은 그 값이 적혀 있는 파일의 트리로 푼다. spread 가 다른 파일의 상수를
+	// 펼친 것이면, 불러온 쪽 트리로 풀 때 그 이름이 없어 알림이 사라진다.
+	return props.some(
+		(p) =>
+			p.name === "role" &&
+			staticChunks(p.value, p.sf ?? sf, env).includes("alert"),
+	);
+}
 
 /**
  * 알림 화면을 파서로 찾는다.
@@ -170,46 +165,36 @@ let surfaces = 0;
  * 넘기는 것. 형태를 세는 한 하나가 더 온다.
  *
  * 파서에게 물으면 세 가지가 한꺼번에 정해진다. 이 속성의 값이 "alert" 인가,
- * 이 JSX 가 **return 이 돌려주는 전부**인가, 그 안에 행동이 있는가.
- * `return` 과 알림 사이의 글자 수를 재는 대신 구문 트리에서 부모를 본다.
+ * 이 요소가 **return 이 화면에 올리는 전부**인가, 그 안에 행동이 있는가.
  */
 function alertReturns(file, text) {
-	const tree = ts.createSourceFile(
-		file,
-		text,
-		ts.ScriptTarget.Latest,
-		true,
-		/\.tsx$/.test(file) ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
-	);
+	const tree = parseSource(file, text);
 	const out = [];
-	const isAlertTag = (node) =>
-		node.attributes.properties.some(
-			(a) =>
-				ts.isJsxAttribute(a) &&
-				a.name &&
-				ts.isIdentifier(a.name) &&
-				a.name.text === "role" &&
-				staticText(a.initializer, tree) === "alert",
-		);
 	const visit = (node) => {
 		if (ts.isReturnStatement(node) && node.expression) {
-			const returned = unwrap(node.expression);
-			// 껍데기를 하나씩 벗겨 내려간다. 형제가 있으면 알림은 화면의
-			// 일부이지 전부가 아니다. 한 자식만 있는 동안 계속 내려가서
-			// 알림에 닿으면 그것이 화면을 통째로 대신한 것이다.
-			let element = onlyElement(returned);
-			while (element && !isAlertTag(elementOpening(element))) {
-				element = onlyChildElement(element);
-			}
-			if (element && isAlertTag(elementOpening(element))) {
-				out.push({
-					text: element.getText(tree),
-					// 자리는 알림 요소의 줄로 적는다. return 줄로 적으면 껍데기를
-					// 하나 씌우는 것만으로 면제 키가 어긋난다.
-					line: text
-						.slice(0, elementOpening(element).getStart(tree))
-						.split("\n").length,
-				});
+			const seen = new Set();
+			const stack = screenElements(node.expression, tree);
+			while (stack.length) {
+				const element = stack.pop();
+				if (seen.has(element)) continue;
+				seen.add(element);
+				if (isAlert(element, tree)) {
+					out.push({
+						text: element.getText(tree),
+						// 자리는 알림 요소의 줄로 적는다. return 줄로 적으면 껍데기를
+						// 하나 씌우는 것만으로 면제 키가 어긋난다.
+						line: text
+							.slice(0, elementOpening(element).getStart(tree))
+							.split("\n").length,
+					});
+					continue;
+				}
+				// 형제가 있으면 알림은 화면의 일부이지 전부가 아니다. 한 자식만
+				// 있는 동안 계속 내려가서 알림에 닿으면 그것이 화면을 통째로
+				// 대신한 것이다.
+				const kids = elementChildren(element);
+				if (kids.length !== 1) continue;
+				stack.push(...screenElements(kids[0], tree));
 			}
 		}
 		ts.forEachChild(node, visit);
@@ -218,68 +203,8 @@ function alertReturns(file, text) {
 	return out;
 }
 
-/** 괄호·단언을 벗긴다. */
-function unwrap(node) {
-	if (ts.isParenthesizedExpression(node) || ts.isAsExpression(node))
-		return unwrap(node.expression);
-	return node;
-}
-
-/** 돌려주는 것이 요소 하나면 그 요소. 조각 하나만 감싼 것도 같다. */
-function onlyElement(node) {
-	if (ts.isJsxElement(node) || ts.isJsxSelfClosingElement(node)) return node;
-	if (ts.isJsxFragment(node)) {
-		const kids = node.children.filter(
-			(c) => !ts.isJsxText(c) || c.getText().trim().length > 0,
-		);
-		if (kids.length === 1) return onlyElement(unwrap(kids[0]));
-	}
-	return null;
-}
-
-/** 자식이 하나뿐이면 그 자식. 형제가 있으면 null. */
-function onlyChildElement(node) {
-	if (!ts.isJsxElement(node)) return null;
-	const kids = node.children.filter(
-		(c) => !ts.isJsxText(c) || c.getText().trim().length > 0,
-	);
-	if (kids.length !== 1) return null;
-	return onlyElement(unwrap(kids[0]));
-}
-
-function elementOpening(node) {
-	return ts.isJsxElement(node) ? node.openingElement : node;
-}
-
-/** 속성 값이 정적으로 정해지면 그 문자열. `{"alert"}` 와 `{role}` 을 가른다. */
-function staticText(init, tree) {
-	if (!init) return null;
-	if (ts.isStringLiteral(init) || ts.isNoSubstitutionTemplateLiteral(init))
-		return init.text;
-	if (ts.isJsxExpression(init)) return staticText(init.expression, tree);
-	if (ts.isParenthesizedExpression(init) || ts.isAsExpression(init))
-		return staticText(init.expression, tree);
-	// `const role = "alert"` 처럼 값을 한 번 거쳐 넣는 형태. 같은 파일에서
-	// 그 이름의 상수 초기값을 찾는다 — 한 겹 거쳤다고 다른 알림이 되지 않는다.
-	if (ts.isIdentifier(init)) {
-		let found = null;
-		const seek = (node) => {
-			if (
-				ts.isVariableDeclaration(node) &&
-				ts.isIdentifier(node.name) &&
-				node.name.text === init.text &&
-				node.initializer
-			) {
-				const value = staticText(node.initializer, tree);
-				if (value !== null) found = value;
-			}
-			ts.forEachChild(node, seek);
-		};
-		seek(tree);
-		return found;
-	}
-	return null;
-}
+const stranded = [];
+let surfaces = 0;
 
 for (const file of files) {
 	const source = readFileSync(file, "utf8");

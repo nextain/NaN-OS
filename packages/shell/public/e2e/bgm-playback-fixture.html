@@ -5,10 +5,21 @@
 <button id="report-ended" type="button">Report ended</button>
 <script>
 (() => {
- const send = (event, info) => parent.postMessage(JSON.stringify({ event, info }), window.location.origin);
+ // The host window and the origin are captured at load time on purpose. When
+ // the Shell swaps to the next track React replaces the whole iframe element
+ // (key={backgroundVideoUrl}), so this document is detached and `parent`
+ // is no longer reachable through the live DOM. S-RADIO-DJ-1 needs exactly
+ // that detached frame to still be able to deliver a late error.
+ const host = parent;
+ const origin = window.location.origin;
+ const send = (event, info) => host.postMessage(JSON.stringify({ event, info }), origin);
  send('initialDelivery', 0);
  document.querySelector('#report-playing').addEventListener('click', () => send('onStateChange', 1));
  document.querySelector('#report-ended').addEventListener('click', () => send('onStateChange', 0));
+ // Late-error path. The spec grabs this function while the frame is still the
+ // active background iframe and calls it after the Shell has moved on, which
+ // reproduces "track A reports an error after B took over".
+ window.__naiaE2eReportLateError = (reason) => send('onError', reason ?? 'fixture_late_error');
 })();
 </script>
 </body></html>
