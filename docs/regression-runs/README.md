@@ -14,6 +14,7 @@ node scripts/run-regression.mjs --machine=<이름> --tier=deterministic_ci[,cred
 | `executed` | 실제로 끝까지 돈 스펙. 완결성 판정은 이것만 센다 |
 | `groups` | wdio 설정별 결과. 한 설정이 실패해도 다른 설정의 결과는 남는다 |
 | `envMissingBeforeRun` | 요구 환경이 없어 **wdio 에 넘기지 않은** 스펙 |
+| `harnessProvidedEnv` | 환경에는 없었지만 그 스펙의 wdio 설정이 스스로 채워 준 변수 |
 | `envMissingGroups` | 스펙이 전부 환경 부재라 아예 띄우지 않은 wdio 설정 |
 | `status` | `passed` / `failed` / `prerequisites-missing` |
 
@@ -139,3 +140,30 @@ node scripts/check-regression-complete.mjs --max-age-hours=24
 — 도구를 부른 뒤 이어지는 답이 화면에 나타나지 않는 경우가 가장 많고, 그 다음이
 스펙이 기대하는 도구(예: `skill_diagnostics`)가 에이전트에 없는 경우다. 벽 하나가
 가리고 있던 것들이므로, 이제부터는 하나씩 따로 추적한다.
+
+## 하네스가 채우는 변수
+
+러너는 스펙이 요구하는 환경 변수를 실행 **전** 프로세스 환경과 대조해, 없으면
+그 스펙을 wdio 에 넘기지 않는다. 그 판단이 옳으려면 "없다" 가 정말 없다는 뜻
+이어야 하는데, 위의 시딩이 들어오면서 기본 설정이 `NAIA_E2E_ADK_PATH` 와
+`NAIA_E2E_ADK_FIXTURE` 를 **자기 손으로** 격리 ADK 로 잡게 됐다. 두 변수는 밖에서
+채우면 안 되는 값이기도 하다 — 실제 ADK 경로를 넣으면 화면은 실제 ADK, 네이티브는
+격리 ADK 를 보는 분리가 다시 난다. 그래서 사람이 일부러 비워 둔 자리를 러너가
+부재로 읽고, 이 기계의 자격증명 등급 마흔여섯 개 중 서른여덟 개를 빼 버렸다
+(넘길 것 8 · 뺄 것 38). 시딩이 들어오기 전까지는 사람이 두 변수를 늘 손으로
+넘겼기 때문에 드러나지 않았다. 지금은 선별이 그 둘을 부재로 세지 않고, `--dry-run`
+이 `하네스가 채우는 변수 2개(시딩)` 한 줄로 몇 개가 왜 빠졌는지 밝힌다. 같은 환경
+에서 뺄 것은 서른여덟에서 여섯으로 줄고, 남는 여섯은 진짜 부재다
+(`NAIA_E2E_ADK_BASE`, `DISCORD_WEBHOOK`, `XAI_API_KEY`, `ELEVENLABS_API_KEY` 류).
+
+목록은 러너에 적혀 있지 않다. 그 사실의 출처는 설정 자신이므로 정본을
+`packages/shell/e2e-tauri/harness-provided-env.mjs` 한 곳에 두고, 시딩 모듈
+(`credentialed-adk-seed.ts`)과 선별 모듈(`scripts/lib/regression-selection.mjs`)이
+둘 다 거기서 읽는다 — 두 곳에 같은 목록을 적으면 다음에 하나가 바뀔 때 조용히
+갈라지고, 갈라진 쪽은 십몇 분짜리 실행에서만 드러난다. 규칙이 붙는 설정은 기본
+설정과 그것을 그대로 상속하는 `wdio.conf.chat.ts` 뿐이다. 전용 설정(codex,
+radio-queue, voice-\*)은 자기 환경 모듈이 따로 있어 **다른 조건으로 다른 변수**를
+채우므로 여기 묶지 않는다. 부재가 아니라고 해서 사라지지도 않는다 — 기록의
+`harnessProvidedEnv` 칸에 무엇이 왜 부재가 아니었는지가 남는다. 계약은
+`src/test/regression-selection.contract.test.ts` 가 고정하고, 그중 하나는 설정
+소스를 파서로 읽어 정본이 말하는 변수를 설정이 **실제로 대입하는지** 본다.

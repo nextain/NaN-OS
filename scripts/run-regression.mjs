@@ -195,10 +195,22 @@ for (const tier of tiers) {
 //
 // 빼도 판정에서 사라지지 않는다. `envMissingBeforeRun` 에 그대로 남고
 // check-regression-complete 가 그것을 "통과가 아니다" 로 센다.
-const { groups, envMissing: missingEnv, skippedGroups } = planGroups(
-	mine,
-	process.env,
-);
+const {
+	groups,
+	envMissing: missingEnv,
+	harnessProvided,
+	skippedGroups,
+} = planGroups(mine, process.env);
+// 하네스가 채우는 변수는 부재가 아니다. 다만 조용히 넘어가면 다음 사람이
+// "이 변수는 왜 안 물어보지" 를 소스에서 되짚어야 하므로 수를 남긴다.
+const harnessProvidedNames = [
+	...new Set([...harnessProvided.values()].flat()),
+].sort();
+if (harnessProvided.size) {
+	console.log(
+		`  하네스가 채우는 변수 ${harnessProvidedNames.length}개(시딩) — 스펙 ${harnessProvided.size}개: ${harnessProvidedNames.join(", ")}`,
+	);
+}
 if (missingEnv.size) {
 	console.log(`  ⚠ 환경이 없어 돌리지 않을 스펙 ${missingEnv.size}개 — 이것은 통과가 아니다`);
 	for (const [spec, absent] of [...missingEnv].slice(0, 5)) {
@@ -399,6 +411,9 @@ console.log(
 	// 판정에서 뺀 것이 아니다 — check-regression-complete 가 이 칸을 읽어
 	// "요구 환경이 없던 스펙, 이것은 통과가 아니다" 로 센다.
 	envMissingBeforeRun: Object.fromEntries(missingEnv),
+				// 환경에는 없지만 그 스펙의 wdio 설정이 자기 손으로 채워 주는 변수.
+				// 부재가 아니므로 위 칸에 없다 — 왜 없는지가 기록에서 보이게 남긴다.
+				harnessProvidedEnv: Object.fromEntries(harnessProvided),
 				// 스펙이 전부 환경 부재라 아예 띄우지 않은 wdio 설정.
 				envMissingGroups: skippedGroups,
 				missingPrerequisites: absentPrereqs,
@@ -682,6 +697,10 @@ const record = {
 	// 판정에서 빠지는 것은 아니다: check-regression-complete 가 이것을 읽어
 	// "이것은 통과가 아니다" 로 게이트를 붉힌다.
 	envMissingBeforeRun: Object.fromEntries(missingEnv),
+	// 환경에는 없지만 그 스펙의 wdio 설정이 자기 손으로 채워 주는 변수(자격증명
+	// 시딩). 부재가 아니므로 위 칸에 없다 — 밖에서 채우면 화면과 네이티브가
+	// 다른 워크스페이스를 보므로, 비어 있는 것이 정상인 값들이다.
+	harnessProvidedEnv: Object.fromEntries(harnessProvided),
 	// 스펙이 전부 환경 부재라 아예 띄우지 않은 wdio 설정. 전용 설정은
 	// onPrepare 에서 사이드카를 띄우므로, 돌릴 것이 없는데 부르면 준비 비용만
 	// 쓰고 죽는다 — 그 죽음이 다시 결함처럼 기록된다.

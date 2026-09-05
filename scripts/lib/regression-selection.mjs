@@ -22,7 +22,23 @@
  * 그대로 적고, `scripts/check-regression-complete.mjs` 가 그것을 "요구 환경이
  * 없던 스펙 — 이것은 통과가 아니다" 로 세어 게이트를 붉힌다. 빼는 것은
  * 실행에서일 뿐이고, 판정에서 빼는 것이 아니다.
+ *
+ * 두 번째 경계는 **하네스가 스스로 채우는 변수** 다. 실행 전 환경과 대조하는
+ * 방식은 wdio 설정이 자기 손으로 넣어 주는 값을 "없다" 로 읽는다. 자격증명
+ * 시딩(#547)이 들어온 뒤 기본 설정은 `NAIA_E2E_ADK_PATH` 와
+ * `NAIA_E2E_ADK_FIXTURE` 를 실행 자리 아래 격리 ADK 로 잡는데, 사람이 그 둘을
+ * 밖에서 채우면 화면과 네이티브가 서로 다른 워크스페이스를 보는 사고가 다시
+ * 나므로 일부러 비워 두어야 한다. 그래서 이 선별이 자격증명 등급 마흔여섯 개
+ * 중 서른여덟 개를 빼 버렸다. 그 사실의 출처는 설정 자신이므로 목록을 여기
+ * 적지 않고 `packages/shell/e2e-tauri/harness-provided-env.mjs` 에서 읽는다 —
+ * 시딩 모듈도 같은 곳을 읽는다.
  */
+import { harnessProvidedEnv } from "../../packages/shell/e2e-tauri/harness-provided-env.mjs";
+
+/** 이 스펙을 돌릴 wdio 설정. 인벤토리가 비워 두면 기본 설정이다. */
+export function confOf(spec) {
+	return (spec.conf ?? [])[0] ?? "wdio.conf.ts";
+}
 
 /**
  * 요구 환경이 갖춰진 스펙과 그렇지 않은 스펙을 가른다.
@@ -30,16 +46,31 @@
  * `env` 는 `process.env` 를 그대로 받아도 되지만, 테스트가 자기 사전을 넘길 수
  * 있게 인자로 둔다. 빈 문자열은 없는 것으로 본다 — 셸에서 `FOO=` 로 지운 키가
  * 있는 것으로 읽히면 그 스펙이 자격증명 없이 돌아 죽는다.
+ *
+ * `harnessProvided` 는 **환경에는 없지만 그 스펙의 설정이 채워 줄** 변수다.
+ * 부재로 세지 않되 사라지게 두지도 않는다 — 러너가 그 수를 찍어, 무엇이 왜
+ * 부재가 아닌지 사람이 볼 수 있게 한다.
  */
 export function partitionByEnv(specs, env) {
 	const runnable = [];
 	const envMissing = new Map();
+	const harnessProvided = new Map();
 	for (const spec of specs) {
-		const absent = (spec.env ?? []).filter((name) => !(env?.[name] ?? ""));
+		const filled = new Set(harnessProvidedEnv(confOf(spec), env ?? {}));
+		const required = spec.env ?? [];
+		const absent = [];
+		const provided = [];
+		for (const name of required) {
+			if (env?.[name]) continue;
+			// 환경에 없다. 설정이 채워 주는 이름이면 부재가 아니다.
+			if (filled.has(name)) provided.push(name);
+			else absent.push(name);
+		}
+		if (provided.length > 0) harnessProvided.set(spec.spec, provided);
 		if (absent.length > 0) envMissing.set(spec.spec, absent);
 		else runnable.push(spec);
 	}
-	return { runnable, envMissing };
+	return { runnable, envMissing, harnessProvided };
 }
 
 /**
@@ -53,7 +84,7 @@ export function partitionByEnv(specs, env) {
 export function groupByConf(specs) {
 	const groups = new Map();
 	for (const spec of specs) {
-		const conf = (spec.conf ?? [])[0] ?? "wdio.conf.ts";
+		const conf = confOf(spec);
 		if (!groups.has(conf)) groups.set(conf, []);
 		groups.get(conf).push(spec.spec);
 	}
@@ -70,7 +101,7 @@ export function groupByConf(specs) {
  * 통과 0, status failed, 그런데 그 하나는 환경이 없어 건너뛰기로 한 것이었다).
  */
 export function planGroups(specs, env) {
-	const { runnable, envMissing } = partitionByEnv(specs, env);
+	const { runnable, envMissing, harnessProvided } = partitionByEnv(specs, env);
 	const groups = groupByConf(runnable);
 	const skippedGroups = [];
 	for (const [conf, names] of groupByConf(specs)) {
@@ -83,7 +114,7 @@ export function planGroups(specs, env) {
 			reason: "이 설정의 스펙이 전부 요구 환경 없음",
 		});
 	}
-	return { groups, runnable, envMissing, skippedGroups };
+	return { groups, runnable, envMissing, harnessProvided, skippedGroups };
 }
 
 /**

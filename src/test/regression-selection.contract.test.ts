@@ -16,12 +16,48 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
+import ts from "typescript";
 import { describe, expect, it } from "vitest";
 
 const ROOT = resolve(__dirname, "..", "..");
-const MODULE_URL = pathToFileURL(
-	resolve(ROOT, "scripts", "lib", "regression-selection.mjs"),
-).href;
+const SELECTION_PATH = resolve(
+	ROOT,
+	"scripts",
+	"lib",
+	"regression-selection.mjs",
+);
+const MODULE_URL = pathToFileURL(SELECTION_PATH).href;
+/** 하네스가 채우는 변수의 정본. 선별과 시딩이 **둘 다** 여기서 읽어야 한다. */
+const HARNESS_ENV_PATH = resolve(
+	ROOT,
+	"packages",
+	"shell",
+	"e2e-tauri",
+	"harness-provided-env.mjs",
+);
+const HARNESS_ENV_URL = pathToFileURL(HARNESS_ENV_PATH).href;
+/** 시딩 모듈. 셸 소스를 정적으로 끌어오면 루트 tsc 가 rootDir 위반으로 붉어진다. */
+const SEED_PATH = resolve(
+	ROOT,
+	"packages",
+	"shell",
+	"e2e-tauri",
+	"credentialed-adk-seed.ts",
+);
+const WDIO_CONF_PATH = resolve(
+	ROOT,
+	"packages",
+	"shell",
+	"e2e-tauri",
+	"wdio.conf.ts",
+);
+const WDIO_CHAT_CONF_PATH = resolve(
+	ROOT,
+	"packages",
+	"shell",
+	"e2e-tauri",
+	"wdio.conf.chat.ts",
+);
 
 /** 인벤토리 한 줄. `docs/e2e-inventory.json` 의 `specs[]` 모양 그대로다. */
 type SpecEntry = {
@@ -35,7 +71,11 @@ type Selection = {
 	partitionByEnv(
 		specs: readonly SpecEntry[],
 		env: Record<string, string | undefined>,
-	): { runnable: SpecEntry[]; envMissing: Map<string, string[]> };
+	): {
+		runnable: SpecEntry[];
+		envMissing: Map<string, string[]>;
+		harnessProvided: Map<string, string[]>;
+	};
 	groupByConf(specs: readonly SpecEntry[]): Map<string, string[]>;
 	planGroups(
 		specs: readonly SpecEntry[],
@@ -44,6 +84,7 @@ type Selection = {
 		groups: Map<string, string[]>;
 		runnable: SpecEntry[];
 		envMissing: Map<string, string[]>;
+		harnessProvided: Map<string, string[]>;
 		skippedGroups: { conf: string; specs: string[]; reason: string }[];
 	};
 	wdioSpecArgs(specNames: readonly string[]): string[];
@@ -51,6 +92,28 @@ type Selection = {
 
 const load = async (): Promise<Selection> =>
 	(await import(MODULE_URL)) as unknown as Selection;
+
+/**
+ * 정본 모듈과 시딩 모듈의 표면. `typeof import(...)` 로 가져오면 루트 tsc 가
+ * 셸 소스를 끌어들여 컴파일 무결성 게이트가 붉어지므로 여기 적는다.
+ */
+interface HarnessEnvModule {
+	CREDENTIALED_KEY_ENV: string;
+	HARNESS_PROVIDED_ENV: readonly string[];
+	HARNESS_PROVIDED_ENV_CONFS: readonly string[];
+	credentialedSeedAvailable(env?: Record<string, string | undefined>): boolean;
+	credentialedSeedActive(env?: Record<string, string | undefined>): boolean;
+	harnessProvidedEnv(
+		conf: string,
+		env?: Record<string, string | undefined>,
+	): string[];
+}
+
+const loadHarnessEnv = async (): Promise<HarnessEnvModule> =>
+	(await import(HARNESS_ENV_URL)) as unknown as HarnessEnvModule;
+
+const loadSeed = async (): Promise<HarnessEnvModule> =>
+	(await import(SEED_PATH)) as unknown as HarnessEnvModule;
 
 /**
  * 실제 기계 기록. 픽스처를 손으로 지어내면 그날 어긋난 모양이 아니라 내가
@@ -129,7 +192,9 @@ describe("회귀 스펙 선별", () => {
 		// 반대 방향의 거짓이다. 키가 없는데 스펙이 스스로 통과해 `executed`
 		// 에 올랐고, 완결성 게이트는 그것을 덮인 것으로 셌다.
 		expect(RECORD.executed).toContain("88-stt-tts-combo-verification.spec.ts");
-		expect(passedToWdio.has("88-stt-tts-combo-verification.spec.ts")).toBe(false);
+		expect(passedToWdio.has("88-stt-tts-combo-verification.spec.ts")).toBe(
+			false,
+		);
 	});
 
 	it("스펙이 전부 환경 부재인 설정은 아예 띄우지 않고, 그 사실을 남긴다", async () => {
@@ -163,7 +228,9 @@ describe("회귀 스펙 선별", () => {
 	it("고른 것이 그대로 wdio 인자가 된다", async () => {
 		const { planGroups, wdioSpecArgs } = await load();
 		const { groups } = planGroups(MINE, envOfThatRun());
-		const args = wdioSpecArgs(groups.get("wdio.conf.discord-settings.ts") ?? []);
+		const args = wdioSpecArgs(
+			groups.get("wdio.conf.discord-settings.ts") ?? [],
+		);
 
 		// 고르는 자리와 인자를 만드는 자리가 다르면 둘이 갈라져도 아무도
 		// 모른다. 한 함수에서 나오는지를 여기서 못 박는다.
@@ -187,3 +254,254 @@ describe("회귀 스펙 선별", () => {
 		expect(partitionByEnv(specs, { K: "v" }).envMissing.size).toBe(0);
 	});
 });
+
+// ── 하네스가 채우는 변수 ────────────────────────────────────────────────────
+//
+// 위의 계약은 "환경에 없으면 빼라" 를 못 박는다. 그런데 그 판단은 실행 **전**
+// 환경만 본다. 자격증명 시딩(#547)이 들어온 뒤로 기본 설정은 스스로
+// `NAIA_E2E_ADK_PATH` 와 `NAIA_E2E_ADK_FIXTURE` 를 실행 자리 아래 격리 ADK 로
+// 잡는다. 그 둘은 밖에서 채우면 **안 되는** 값이다 — 실제 ADK 경로를 넣으면
+// 화면은 실제 ADK, 네이티브는 격리 ADK 를 보는 분리가 난다. 그래서 사람이
+// 일부러 비워 두었는데, 선별이 그것을 부재로 읽어 자격증명 등급 마흔여섯 개
+// 중 서른여덟 개를 뺐다(이 기계 실측, 넘길 것 8 · 뺄 것 38).
+//
+// 여기서 재는 것은 셋이다. 하나, 키가 있으면 기본 설정 스펙의 그 둘은 부재가
+// 아니다. 둘, 키가 없으면 그대로 부재다 — 시딩이 돌지 않으므로. 셋, 그 사실의
+// 출처가 설정 자신이다: 목록이 소스에 하드코딩된 것이 아니라 정본 한 곳에서
+// 오고, 그 정본이 말하는 변수를 설정이 실제로 채운다.
+describe("하네스가 채우는 변수", () => {
+	/** 기본 설정으로 도는, 그 두 변수만 요구하는 스펙 하나. */
+	const baseSpec = (env: readonly string[]): SpecEntry => ({
+		spec: "harness-filled.spec.ts",
+		conf: ["wdio.conf.ts"],
+		env,
+		tier: "credentialed_live",
+	});
+
+	it("키가 있으면 기본 설정 스펙의 두 변수는 부재가 아니다", async () => {
+		const { partitionByEnv } = await load();
+		const { HARNESS_PROVIDED_ENV, CREDENTIALED_KEY_ENV } =
+			await loadHarnessEnv();
+		const spec = baseSpec(HARNESS_PROVIDED_ENV);
+
+		const { runnable, envMissing, harnessProvided } = partitionByEnv([spec], {
+			[CREDENTIALED_KEY_ENV]: "gw-something",
+		});
+
+		// 부재로 세지 않는다 — 이것이 서른여덟 개를 되돌리는 자리다.
+		expect(envMissing.size).toBe(0);
+		expect(runnable.map((s) => s.spec)).toEqual(["harness-filled.spec.ts"]);
+		// 그렇다고 사라지지도 않는다. 왜 안 물었는지가 남아야 러너가 한 줄 찍는다.
+		expect(harnessProvided.get("harness-filled.spec.ts")?.sort()).toEqual(
+			[...HARNESS_PROVIDED_ENV].sort(),
+		);
+	});
+
+	it("키가 없으면 그대로 부재다 — 시딩이 돌지 않으므로", async () => {
+		const { partitionByEnv } = await load();
+		const { HARNESS_PROVIDED_ENV } = await loadHarnessEnv();
+		const spec = baseSpec(HARNESS_PROVIDED_ENV);
+
+		const { runnable, envMissing, harnessProvided } = partitionByEnv(
+			[spec],
+			{},
+		);
+
+		// 키가 없으면 설정은 아무것도 심지 않는다. 그때 이 스펙을 넘기면
+		// 격리 워크스페이스가 비어 `fetch failed` 로 죽는다 — 고치려던 것과
+		// 정확히 반대 방향의 거짓이다.
+		expect(runnable).toEqual([]);
+		expect(envMissing.get("harness-filled.spec.ts")?.sort()).toEqual(
+			[...HARNESS_PROVIDED_ENV].sort(),
+		);
+		expect(harnessProvided.size).toBe(0);
+	});
+
+	it("밖에서 자리를 준 실행에는 규칙이 적용되지 않는다", async () => {
+		const { partitionByEnv } = await load();
+		const { HARNESS_PROVIDED_ENV, CREDENTIALED_KEY_ENV } =
+			await loadHarnessEnv();
+		const spec = baseSpec(HARNESS_PROVIDED_ENV);
+
+		// `NAIA_E2E_ADK_PATH` 가 밖에서 오면 워크스페이스의 주인은 밖이고,
+		// 기본 설정은 손대지 않는다 — 그러면 폴백(`FIXTURE`)도 채워지지 않는다.
+		const { envMissing } = partitionByEnv([spec], {
+			[CREDENTIALED_KEY_ENV]: "gw-something",
+			NAIA_E2E_ADK_PATH: "/somewhere/outside",
+		});
+		expect(envMissing.get("harness-filled.spec.ts")).toEqual([
+			"NAIA_E2E_ADK_FIXTURE",
+		]);
+	});
+
+	it("다른 설정의 스펙에는 규칙이 적용되지 않는다", async () => {
+		const { partitionByEnv } = await load();
+		const { CREDENTIALED_KEY_ENV, HARNESS_PROVIDED_ENV_CONFS } =
+			await loadHarnessEnv();
+
+		// 전용 설정은 자기 환경 모듈이 따로 있고 **다른 조건으로** 채운다.
+		// 예컨대 codex 설정은 키와 무관하게 `configureCodexE2eEnvironment()` 로
+		// 채운다. 조건이 다른 것을 같은 것으로 말하면 그 자리가 다시 어긋난다.
+		expect(HARNESS_PROVIDED_ENV_CONFS).not.toContain("wdio.conf.codex.ts");
+		const spec: SpecEntry = {
+			spec: "codex.spec.ts",
+			conf: ["wdio.conf.codex.ts"],
+			env: ["NAIA_E2E_ADK_PATH"],
+			tier: "credentialed_live",
+		};
+		const { envMissing } = partitionByEnv([spec], {
+			[CREDENTIALED_KEY_ENV]: "gw-something",
+		});
+		expect(envMissing.get("codex.spec.ts")).toEqual(["NAIA_E2E_ADK_PATH"]);
+	});
+
+	it("정본이 하나다 — 선별 모듈과 시딩 모듈이 같은 목록을 본다", async () => {
+		const canonical = await loadHarnessEnv();
+		const seed = await loadSeed();
+
+		// 시딩 모듈은 정본을 그대로 다시 내보낸다. 두 곳에 같은 목록을 적으면
+		// 다음에 하나가 바뀔 때 조용히 갈라지고, 갈라진 쪽은 십몇 분짜리 실행
+		// 에서만 드러난다.
+		expect([...seed.HARNESS_PROVIDED_ENV]).toEqual([
+			...canonical.HARNESS_PROVIDED_ENV,
+		]);
+		expect(seed.CREDENTIALED_KEY_ENV).toBe(canonical.CREDENTIALED_KEY_ENV);
+		expect(
+			seed.harnessProvidedEnv("wdio.conf.ts", { NAIA_API_KEY: "gw-x" }),
+		).toEqual(
+			canonical.harnessProvidedEnv("wdio.conf.ts", { NAIA_API_KEY: "gw-x" }),
+		);
+
+		// 선별 모듈에는 그 이름이 **글자로 없어야** 한다. 값을 되풀이해 적으면
+		// 위의 단정은 참이면서도 두 목록이 따로 살 수 있다.
+		const selectionSource = readFileSync(SELECTION_PATH, "utf8");
+		const importsCanonical = importedModuleSpecifiers(
+			parseSource(SELECTION_PATH),
+		).some((specifier) => /harness-provided-env\.mjs$/.test(specifier));
+		expect(importsCanonical, "선별 모듈이 정본을 import 하지 않는다").toBe(
+			true,
+		);
+		for (const name of canonical.HARNESS_PROVIDED_ENV) {
+			expect(
+				selectionSource.includes(`"${name}"`),
+				`선별 모듈이 ${name} 을 글자로 다시 적었다`,
+			).toBe(false);
+		}
+	});
+
+	it("정본이 말하는 변수를 기본 설정이 실제로 채운다", async () => {
+		const { HARNESS_PROVIDED_ENV, HARNESS_PROVIDED_ENV_CONFS } =
+			await loadHarnessEnv();
+
+		// 목록만 맞고 설정이 그것을 안 채우면, 선별은 "채워질 것" 이라 믿고
+		// 스펙을 넘기는데 스펙은 빈 워크스페이스를 문다. 그래서 설정 소스를
+		// 파서로 읽어 **실제 대입 노드**가 있는지 본다 — 주석에는 노드가 없다.
+		const conf = parseSource(WDIO_CONF_PATH);
+		for (const name of HARNESS_PROVIDED_ENV) {
+			expect(
+				assignsProcessEnv(conf, name),
+				`wdio.conf.ts 가 ${name} 을 채우지 않는다`,
+			).toBe(true);
+		}
+
+		// chat 설정에는 자기 환경 모듈이 없다. 기반 설정을 그대로 import 해
+		// 그 모듈 최상위의 시딩이 함께 도는 것이 근거다. 그 import 가 사라지면
+		// 이 설정을 목록에 둘 이유도 사라진다.
+		expect(HARNESS_PROVIDED_ENV_CONFS).toContain("wdio.conf.chat.ts");
+		expect(
+			importedModuleSpecifiers(parseSource(WDIO_CHAT_CONF_PATH)),
+			"chat 설정이 기반 설정을 상속하지 않는다",
+		).toContain("./wdio.conf.js");
+	});
+
+	it("인벤토리의 실제 스펙에서도 그 둘만 남던 부재가 사라진다", async () => {
+		const { partitionByEnv } = await load();
+		const { HARNESS_PROVIDED_ENV, CREDENTIALED_KEY_ENV } =
+			await loadHarnessEnv();
+
+		// 픽스처를 손으로 지으면 내가 상상한 모양을 재게 된다. 실제 인벤토리에서
+		// 기본 설정으로 돌면서 그 둘을 요구하는 스펙을 집어, 나머지 요구 변수만
+		// 채운 환경에서 넘어가는지 본다.
+		const filled = new Set<string>(HARNESS_PROVIDED_ENV);
+		const specs = INVENTORY.specs.filter(
+			(s) =>
+				((s.conf ?? [])[0] ?? "wdio.conf.ts") === "wdio.conf.ts" &&
+				s.env.some((name) => filled.has(name)),
+		);
+		expect(specs.length).toBeGreaterThan(0);
+
+		const env: Record<string, string> = { [CREDENTIALED_KEY_ENV]: "gw-x" };
+		for (const spec of specs) {
+			for (const name of spec.env) if (!filled.has(name)) env[name] = "present";
+		}
+		const { envMissing } = partitionByEnv(specs, env);
+		expect([...envMissing.keys()]).toEqual([]);
+	});
+});
+
+/** 파일을 노드로 읽는다. 글자가 아니라 노드로 재기 위해서다. */
+function parseSource(path: string): ts.SourceFile {
+	return ts.createSourceFile(
+		path,
+		readFileSync(path, "utf8"),
+		ts.ScriptTarget.Latest,
+		true,
+		ts.ScriptKind.TS,
+	);
+}
+
+/** 이 파일이 import 하는 모듈 지정자들. */
+function importedModuleSpecifiers(tree: ts.SourceFile): string[] {
+	const specifiers: string[] = [];
+	for (const statement of tree.statements) {
+		if (!ts.isImportDeclaration(statement)) continue;
+		if (!ts.isStringLiteral(statement.moduleSpecifier)) continue;
+		specifiers.push(statement.moduleSpecifier.text);
+	}
+	return specifiers;
+}
+
+/**
+ * `process.env.<key> = …` 또는 `process.env.<key> ??= …` 가 실제로 있는가.
+ *
+ * 읽기만 하는 것은 채우는 것이 아니므로 대입 노드만 센다.
+ */
+function assignsProcessEnv(tree: ts.SourceFile, key: string): boolean {
+	const isProcessEnv = (node: ts.Expression): boolean =>
+		ts.isPropertyAccessExpression(node) &&
+		node.name.text === "env" &&
+		ts.isIdentifier(node.expression) &&
+		node.expression.text === "process";
+	const isTarget = (node: ts.Expression): boolean => {
+		if (ts.isPropertyAccessExpression(node))
+			return node.name.text === key && isProcessEnv(node.expression);
+		if (ts.isElementAccessExpression(node))
+			return (
+				!!node.argumentExpression &&
+				ts.isStringLiteralLike(node.argumentExpression) &&
+				node.argumentExpression.text === key &&
+				isProcessEnv(node.expression)
+			);
+		return false;
+	};
+	const assignments = new Set<ts.SyntaxKind>([
+		ts.SyntaxKind.EqualsToken,
+		ts.SyntaxKind.QuestionQuestionEqualsToken,
+		ts.SyntaxKind.BarBarEqualsToken,
+	]);
+	let found = false;
+	const visit = (node: ts.Node): void => {
+		if (found) return;
+		if (
+			ts.isBinaryExpression(node) &&
+			assignments.has(node.operatorToken.kind) &&
+			isTarget(node.left)
+		) {
+			found = true;
+			return;
+		}
+		node.forEachChild(visit);
+	};
+	visit(tree);
+	return found;
+}

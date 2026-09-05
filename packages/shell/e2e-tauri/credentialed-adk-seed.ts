@@ -28,20 +28,22 @@ import {
 export const CREDENTIALED_MAIN_PROVIDER = "nextain";
 export const CREDENTIALED_MAIN_MODEL = "deepseek-v4-flash";
 
-/**
- * 게이트웨이 키가 실린 환경 변수 **이름**. 값이 아니라 이름만 config.json 에
- * 들어간다. 러너(scripts/run-regression.mjs)가 자격증명 등급의 전제로 검사하는
- * 변수와 같은 이름이어야 한다 — 다르면 "전제는 있다" 고 말해 놓고 시딩만 조용히
- * 비게 된다.
- */
-export const CREDENTIALED_KEY_ENV = "NAIA_API_KEY";
+// 키 이름과 "하네스가 채우는 변수" 의 정본은 `harness-provided-env.mjs` 다.
+// 회귀 러너의 선별 모듈(scripts/lib/regression-selection.mjs)이 맨 노드로 도는
+// `.mjs` 라 `.ts` 를 읽을 수 없어, 정본을 `.mjs` 에 두고 이쪽이 읽는 방향으로
+// 뒤집었다. 여기서 그대로 다시 내보내므로 이 모듈을 쓰던 자리는 그대로다 —
+// 두 곳에 같은 목록을 적으면 다음에 하나가 바뀔 때 조용히 갈라진다.
+export {
+	CREDENTIALED_KEY_ENV,
+	HARNESS_PROVIDED_ENV,
+	HARNESS_PROVIDED_ENV_CONFS,
+	credentialedSeedActive,
+	credentialedSeedAvailable,
+	harnessProvidedEnv,
+} from "./harness-provided-env.mjs";
+import { CREDENTIALED_KEY_ENV } from "./harness-provided-env.mjs";
 
 type Env = Record<string, string | undefined>;
-
-/** 이 환경에서 살아 있는 기본 공급자를 심을 수 있는가(= 게이트웨이 키가 있는가). */
-export function credentialedSeedAvailable(env: Env = process.env): boolean {
-	return (env[CREDENTIALED_KEY_ENV] ?? "").trim().length > 0;
-}
 
 export interface CredentialedSeedOptions {
 	provider?: string;
