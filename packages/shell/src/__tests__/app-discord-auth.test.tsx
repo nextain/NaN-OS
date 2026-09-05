@@ -69,6 +69,8 @@ vi.mock("../components/TitleBar", () => ({
 // Mock app system to prevent built-in apps from loading Tauri APIs
 vi.mock("../lib/app-loader", () => ({
 	loadInstalledApps: vi.fn().mockResolvedValue(undefined),
+	areInstalledAppsSettled: vi.fn().mockReturnValue(false),
+	resetInstalledAppsSettled: vi.fn(),
 }));
 vi.mock("../lib/app-registry", () => ({
 	appRegistry: {

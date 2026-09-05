@@ -12,6 +12,11 @@
  * 눌렀는지 돌려주고 못 눌렀으면 말하는 형태(`if (!pressed) throw`)는 세지
  * 않는다.
  *
+ * `await` 가 낀 형태도 함께 본다. e2e 코드에서 자연스러운 것은 오히려 그쪽인데,
+ * 처음에는 동기 형태만 알고 있어서 실제 사고가 난 자리(async 핸들러)를 통째로
+ * 놓치고 있었다 — 게이트가 "무음 클릭 금지" 가 아니라 "await 없는 무음 클릭
+ * 금지" 였던 셈이다.
+ *
  * `waitForClickable` 도 함께 본다. WebKitWebDriver 는 요소를 상호작용 가능으로
  * 보지 않아서 그 대기가 시간을 다 쓰고 실패한다 — 실제로 열 개 스펙이 그
  * 자리에서 삼십 초씩 기다리다 죽었다. 헬퍼(`clickElement`)는 보이는 것을
@@ -29,13 +34,14 @@ const SHELL = "packages/shell";
 /** 있으면 누르고 없으면 조용히 넘어가는 꼴. */
 const SILENT_CLICK = new RegExp(
 	[
-		// if (el) el.click();
-		String.raw`if\s*\(\s*(\w+)\s*\)\s*\1\.click\(\)`,
-		// if (el) { el.click(); }  — 포매터가 권하는 쪽이라 오히려 더 흔하다
-		String.raw`if\s*\(\s*(\w+)\s*\)\s*\{\s*\2\.click\(\)`,
-		// el && el.click();
-		String.raw`(\w+)\s*&&\s*\3\.click\(\)`,
-		// el?.click();
+		// if (el) el.click();  /  if (el) await el.click();
+		String.raw`if\s*\(\s*(\w+)\s*\)\s*(?:await\s+)?\1\.click\(\)`,
+		// if (el) { el.click(); }  /  if (el) { await el.click(); }
+		//   포매터가 중괄호를 권하므로 오히려 이쪽이 더 흔하다
+		String.raw`if\s*\(\s*(\w+)\s*\)\s*\{\s*(?:await\s+)?\2\.click\(\)`,
+		// el && el.click();  /  el && (await el.click());
+		String.raw`(\w+)\s*&&\s*\(?\s*(?:await\s+)?\3\.click\(\)`,
+		// el?.click();  /  await el?.click();
 		String.raw`(\w+)\?\.click\(\)`,
 		// waitForClickable — 리눅스 드라이버에서 반드시 시간을 다 쓴다
 		String.raw`waitForClickable\s*\(`,

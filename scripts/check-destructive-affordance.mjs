@@ -28,26 +28,65 @@ import { readFileSync } from "node:fs";
 
 const SHELL = "packages/shell";
 
-/** 이름에 이것이 들어가면 파괴 후보로 본다. */
+/**
+ * 이름에 이것이 들어가면 파괴 후보로 본다.
+ *
+ * 낱말 목록은 그 자체가 수기 목록이다. `discard`/`unlink`/`truncate` 처럼
+ * 흔한 이름이 빠져 있어서, `app_sandbox_discard_everything`(앱 구역 전체를
+ * `remove_dir_all` 로 지운다)이 후보로도 잡히지 않았다. 목록을 넓히되,
+ * 목록에 기대지 않는 판정을 아래 `destroysInBody` 로 함께 둔다.
+ */
 const DESTRUCTIVE_NAME =
-	/(^|_)(delete|remove|clear|reset|wipe|purge|revoke|uninstall|erase|forget|destroy|drop|prune|kill|overwrite|restore)(_|$)/;
+	/(^|_)(delete|remove|clear|reset|wipe|purge|revoke|uninstall|erase|forget|destroy|drop|prune|kill|overwrite|restore|discard|unlink|truncate|factory|nuke)(_|$)/;
+
+/**
+ * 이름이 무엇이든, **하는 일**이 파괴면 파괴다.
+ *
+ * 이름 목록은 늘 다음 이름에 진다. 명령 본문이 파일이나 디렉터리를 실제로
+ * 없애는지 보고, 그러면 이름과 무관하게 후보로 센다.
+ */
+const DESTRUCTIVE_BODY = /remove_dir_all|remove_file|std::fs::remove/;
 
 /**
  * 파괴 후보처럼 보이지만 되돌릴 수 있어 묻지 않는 것. 면제하려면 **왜 되돌릴
  * 수 있는지** 여기 적어야 한다. 이유 없는 면제는 baseline 과 같은 알리바이다.
  */
 const REVERSIBLE = new Map([
-	["clear_naia_path_cache", "캐시다. 다음 조회에서 다시 채워진다"],
-	["reset_window_state", "창 크기·위치다. 사용자가 다시 옮기면 된다"],
+	["clear_naia_path_cache", { why: "캐시다. 다음 조회에서 다시 채워진다" }],
+	["reset_window_state", { why: "창 크기·위치다. 사용자가 다시 옮기면 된다" }],
 	[
 		"pty_kill",
-		"터미널 탭을 닫을 때 부른다. 닫기를 누르는 것 자체가 의사표시이고, 터미널은 다시 열 수 있다. 매번 물으면 사용자는 읽지 않고 누른다. 다만 실행 중인 명령이 끊기는 것은 알리지 않는다 — 그 자리는 열려 있다",
+		{
+			why: "터미널 탭을 닫을 때 부른다. 닫기를 누르는 것 자체가 의사표시이고, 터미널은 다시 열 수 있다. 매번 물으면 사용자는 읽지 않고 누른다. 다만 실행 중인 명령이 끊기는 것은 알리지 않는다 — 그 자리는 열려 있다",
+			// 이유가 "탭을 닫을 때" 이므로, 닫기 흐름 밖에서 부르면 그 이유가
+			// 성립하지 않는다.
+			callers: /close|dispose|cleanup|unmount|kill|exit|terminate/i,
+		},
 	],
 	[
 		"delete_naia_settings",
-		"설정 파일 하나를 지우면 기본값으로 돌아간다. 부르는 곳도 초기화 흐름 안이다",
+		{
+			why: "설정 파일 하나를 지우면 기본값으로 돌아간다. 부르는 곳도 초기화 흐름 안이다",
+			callers: /reset|clear|initial|bootstrap|onboard|factory/i,
+		},
 	],
 ]);
+
+/**
+ * 면제의 이유가 호출부를 말하면, 그 호출부에서만 면제한다.
+ *
+ * 예전에는 `REVERSIBLE` 에 이름이 있으면 그 명령은 어디서 불려도 후보에서
+ * 통째로 빠졌다. 그래서 `delete_naia_settings` 의 사유가 "부르는 곳도 초기화
+ * 흐름 안이다" 인데, 초기화와 무관한 자리에 확인 없는 새 호출을 넣어도
+ * 아무 일도 일어나지 않았다 — 이유가 거짓이 되어도 면제는 그대로였다.
+ */
+function reversibleHereOrNull(command, wrapperName) {
+	const entry = REVERSIBLE.get(command);
+	if (!entry) return null;
+	if (!entry.callers) return entry;
+	if (wrapperName && entry.callers.test(wrapperName)) return entry;
+	return null;
+}
 
 /**
  * 확인 또는 되돌리기가 있다고 볼 수 있는 표시.
@@ -56,7 +95,18 @@ const REVERSIBLE = new Map([
  * `confirm()` 말고 상태 토글로 확인 화면을 띄우는 자리가 있고
  * (`setShowResetConfirm(true)`), 그것도 사용자에게 묻는 것은 같다.
  */
-const AFFORDANCE = /confirm|ConfirmDialog|\bundo\b|\brestore\b|\btrash\b/i;
+/**
+ * 예전에는 `confirm` 이라는 **글자**가 함수 안에 있으면 방어로 쳤다. 단어
+ * 경계도 없어서, 관계없는 `const emailConfirmedAt = Date.now();` 한 줄로
+ * 확인 없는 삭제가 통과했다 — 4000자 상한과 무관하게, 네 줄짜리 함수에서도
+ * 그랬다.
+ *
+ * 이제 **확인하는 동작**만 인정한다. 부르거나(`confirm(...)`), 확인 화면을
+ * 띄우거나(`setShowResetConfirm(true)`, `<ConfirmDialog`), 되돌릴 수단을
+ * 주는 자리다.
+ */
+const AFFORDANCE =
+	/\bconfirm\s*\(|\bwindow\.confirm\b|Confirm(?:Dialog|Modal|Sheet)\b|\bset\w*Confirm\w*\s*\(|\bconfirm\w*\s*(?:===|!==|\?|&&)|\bundo\s*\(|\bmoveToTrash\b|\btrash\s*\(/;
 
 /**
  * 주석과 문자열을 지운 코드. 리뷰에서 실증된 우회가 있었다 —
@@ -85,6 +135,14 @@ const ACKNOWLEDGED = new Map([
 		"packages/shell/src/lib/adk-store.ts:reset_naia_config_files",
 		"SettingsTab 의 executeReset 이 부르고, 그 앞에 setShowResetConfirm 로 뜨는 확인 화면이 있다. 확인 상태와 실행 함수가 서로 다른 함수에 있어 이 검사기의 추적 범위를 벗어난다",
 	],
+	[
+		"packages/shell/src/lib/tab-skills.ts:capture_screen_region",
+		"화면을 찍어 돌려주는 명령이다. 본문의 remove_file 은 자기가 방금 만든 임시 PNG 를 지우는 것이라 사용자 자산을 없애지 않는다 — 이름이 아니라 하는 일로 판정하기 시작하면서 후보가 됐다",
+	],
+	[
+		"packages/shell/src/components/AppInstallDialog.tsx:app_install",
+		"이 대화상자 자체가 확인이다. 사용자가 주소를 적고 설치를 눌러야 이 자리에 온다. 확인 화면의 이름이 ConfirmDialog 가 아니라 AppInstallDialog 라서 표시로 잡히지 않는다",
+	],
 ]);
 
 function tracked(dir, extension) {
@@ -99,13 +157,29 @@ function tracked(dir, extension) {
 
 /** Rust 가 프런트에 내주는 명령 이름 전부. */
 function tauriCommands() {
-	const names = new Set();
+	const names = new Map();
 	for (const file of tracked(`${SHELL}/src-tauri/src`, ".rs")) {
 		const source = readFileSync(file, "utf8");
 		for (const match of source.matchAll(
 			/#\[tauri::command[^\]]*\][\s\S]{0,200}?\bfn\s+([a-z0-9_]+)/g,
 		)) {
-			names.add(match[1]);
+			// 함수 본문을 중괄호 균형으로 잘라 낸다. 하는 일로 판정하기 위해서다.
+			const open = source.indexOf("{", match.index + match[0].length);
+			let body = "";
+			if (open >= 0) {
+				let depth = 0;
+				for (let i = open; i < source.length; i++) {
+					if (source[i] === "{") depth++;
+					else if (source[i] === "}") {
+						depth--;
+						if (depth === 0) {
+							body = source.slice(open, i + 1);
+							break;
+						}
+					}
+				}
+			}
+			names.set(match[1], body);
 		}
 	}
 	return names;
@@ -203,8 +277,11 @@ const files = [
 
 const sources = new Map(files.map((f) => [f, readFileSync(f, "utf8")]));
 
-const commands = [...tauriCommands()].filter(
-	(name) => DESTRUCTIVE_NAME.test(name) && !REVERSIBLE.has(name),
+const commandBodies = tauriCommands();
+const commands = [...commandBodies.keys()].filter(
+	(name) =>
+		DESTRUCTIVE_NAME.test(name) ||
+		DESTRUCTIVE_BODY.test(commandBodies.get(name) ?? ""),
 );
 
 /**
@@ -237,12 +314,59 @@ function guarded(name, depth = 0) {
 }
 
 const unguarded = [];
+/**
+ * 명령 이름을 조립해 부르는 자리.
+ *
+ * 이 게이트는 이름을 리터럴로 찾는다. 그래서 ``invoke(`${FACT_CMD}_fact`)``
+ * 로 바꾸면 호출부가 통째로 사라졌다 — 확인 없는 삭제가 그대로 통과한다.
+ * 조립은 그 자체로 이 게이트를 무력화하므로 여기서 막는다.
+ */
+const composedInvokes = [];
+/**
+ * 오늘 이미 있는 조립 호출. 포트(경계 객체)라서 이름을 인자로 받는 자리다.
+ * 면제하려면 **무엇이 그 자리를 지나는지 어디서 정하는지** 적어야 한다.
+ * 새로 생기는 조립은 막고, 사라진 항목은 아래에서 낡은 면제로 잡는다.
+ */
+const COMPOSED_ALLOWED = new Map([
+	[
+		"packages/shell/src/lib/environment-skill.ts",
+		"EnvironmentCommandPort 어댑터. 지나가는 이름은 environment-skill 의 동작 표에서 리터럴로 정한다",
+	],
+	[
+		"packages/shell/src/apps/workspace/useHerdrRuntime.ts",
+		"Herdr 런타임 브리지. 명령 이름은 herdr 스냅샷이 주는 고정 목록이고 파괴 명령은 그 목록에 없다",
+	],
+]);
 let callSites = 0;
 
 for (const [file, source] of sources) {
+	// `codeOnly` 는 문자열까지 지운다. 여기서는 인자의 **형태**를 봐야 하므로
+	// 주석만 지운 코드를 쓴다.
+	const code = source
+		.replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, " "))
+		.replace(/(^|[^:])\/\/[^\n]*/g, "$1 ");
+	for (const match of code.matchAll(/invoke\s*(?:<[^>]*>)?\s*\(\s*([^,)]{0,80})/g)) {
+		const arg = match[1].trim();
+		// 리터럴 이름이면 이 게이트가 볼 수 있다.
+		if (/^(["'])[a-z0-9_]+\1/i.test(arg)) continue;
+		// 이름을 상수에 담아 두는 것은 조립이 아니다 — 그 상수의 값이
+		// 리터럴이면 게이트가 따라갈 수 있다.
+		if (/^[A-Z][A-Z0-9_]*$/.test(arg)) continue;
+		composedInvokes.push({
+			file,
+			line: source.slice(0, match.index).split("\n").length,
+			arg: arg.slice(0, 40),
+		});
+	}
+}
+
+for (const [file, source] of sources) {
 	for (const command of commands) {
+		// 예전에는 이름 문자열이 파일 어디에 있든 호출로 셌다. 그래서
+		// 에이전트에게 보내는 메시지(`{ type: "app_install" }`)까지 호출로
+		// 잡혔다. Tauri 명령을 실제로 부르는 자리만 본다.
 		for (const match of source.matchAll(
-			new RegExp(`["'\`]${command}["'\`]`, "g"),
+			new RegExp(`invoke\\s*(?:<[^>]*>)?\\s*\\(\\s*["'\`]${command}["'\`]`, "g"),
 		)) {
 			callSites++;
 			const block = enclosingFunction(source, match.index);
@@ -255,11 +379,38 @@ for (const [file, source] of sources) {
 				continue;
 
 			const wrapper = block ? functionNameBefore(source, block.start) : null;
+			// 되돌릴 수 있다는 면제는 **이유가 말하는 자리에서만** 성립한다.
+			if (reversibleHereOrNull(command, wrapper)) continue;
 			if (wrapper && guarded(wrapper)) continue;
 
 			unguarded.push({ file, line, command, wrapper });
 		}
 	}
+}
+
+const composedNew = composedInvokes.filter(
+	(hit) => !COMPOSED_ALLOWED.has(hit.file),
+);
+const composedStale = [...COMPOSED_ALLOWED.keys()].filter(
+	(file) => !composedInvokes.some((hit) => hit.file === file),
+);
+if (composedStale.length) {
+	console.error(
+		`  ❌ 조립 호출 면제가 낡았다(${composedStale.length}) — 그 자리가 없어졌으니 목록에서 빼라:`,
+	);
+	for (const file of composedStale) console.error(`     ${file}`);
+	process.exit(1);
+}
+if (composedNew.length) {
+	console.error(
+		`  ❌ 명령 이름을 조립해 부르는 자리 ${composedNew.length}곳 — 이 게이트는 리터럴 이름만 본다:`,
+	);
+	for (const hit of composedNew)
+		console.error(`     ${hit.file}:${hit.line} — invoke(${hit.arg})`);
+	console.error(
+		"     Tauri 명령은 리터럴 문자열로 불러라. 조립하면 확인 검사가 그 자리를 통째로 놓친다.",
+	);
+	process.exit(1);
 }
 
 console.log(

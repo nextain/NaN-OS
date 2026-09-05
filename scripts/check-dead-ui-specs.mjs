@@ -60,12 +60,26 @@ function tracked(dir, extension) {
 	}
 }
 
+/**
+ * 주석과 문자열 리터럴을 지운 셸 소스.
+ *
+ * 주석을 남겨 두면 "지웠다" 는 기록이 곧 "살아 있다" 는 증거가 된다 — 화면을
+ * 지우면서 그 사실을 주석으로 적는 것은 정상 습관이므로, 이 게이트가 잡으려는
+ * 사고가 그대로 통과했다. 실제로 `// removed: the old "ghost-wake-panel"` 한
+ * 줄이면 그 화면을 기다리는 스펙이 초록이 됐다.
+ *
+ * 문자열은 남긴다 — `data-testid="..."` 자체가 문자열이기 때문이다.
+ */
 const sourceText = [
 	...tracked(`${SHELL}/src`, ".tsx"),
 	...tracked(`${SHELL}/src`, ".ts"),
 ]
 	.filter((f) => !/\.test\.|__tests__/.test(f))
-	.map((f) => readFileSync(f, "utf8"))
+	.map((f) =>
+		readFileSync(f, "utf8")
+			.replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, " "))
+			.replace(/(^|[^:])\/\/[^\n]*/g, "$1 "),
+	)
 	.join("\n");
 
 /**
@@ -140,8 +154,20 @@ for (const file of specs) {
 		}
 		// 이 자리가 "없어야 한다" 를 확인하는 단정인가. 그렇다면 소스에
 		// 이름이 없는 것이 정상이다.
-		const around = source.slice(at, at + 220);
-		if (/toHaveCount\(\s*0\s*\)|\.not\.|toBeNull\(\)|not toContain/.test(around))
+		// 이 앵커가 든 **그 단정 하나**만 본다. 창을 넓게 잡으면 바로 다음 줄의
+		// 관계없는 `.not.` 이 면제를 만들어 준다 — 실제로 그 우회가 실증됐다.
+		// 단정은 `expect(...)` 로 시작해 세미콜론이나 줄 끝에서 끝난다.
+		const statementStart = source.lastIndexOf("expect", at);
+		const statementEnd = source.indexOf(";", at);
+		const statement =
+			statementStart >= 0 && statementEnd > at
+				? source.slice(statementStart, statementEnd)
+				: source.slice(at, at + 120);
+		if (
+			/toHaveCount\(\s*0\s*\)|\.not\.|toBeNull\(\)|toHaveLength\(\s*0\s*\)/.test(
+				statement,
+			)
+		)
 			continue;
 		if (name.startsWith("data-")) {
 			// `data-meta-tab="agents"` 처럼 값까지 집는 것. 값이 코드에서

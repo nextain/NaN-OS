@@ -92,7 +92,15 @@ localStorage.setItem("naia-adk-path", "/tmp/mock-naia-adk-workspace");
  * 이제 앱이 스스로 준비됐다고 말하는 표지를 기다린다. 그 표지는 로케일
  * 하이드레이션까지 반영한다.
  */
-const SHELL_READY = '[data-app-ready="true"]';
+/**
+ * 예전에는 `[data-app-ready="true"]` 를 기다렸다. 그 표지는 설정·로케일
+ * 하이드레이션과 아바타까지만 반영한다. 그래서 설치 앱 목록 읽기에 3초를
+ * 넣어도 측정값이 807ms / 219ms 로 기준선(1,072 / 167)과 구별되지 않았다 —
+ * 앱바가 3초 동안 비어 있어도 성능 축이 아무 말을 하지 않는 상태였다.
+ *
+ * 부팅의 마지막까지 기다린다.
+ */
+const SHELL_READY = '[data-app-boot-complete="true"]';
 
 /** 설정 화면의 표지. 여기 도달했다면 측정 대상이 틀린 것이다. */
 const SETUP_SCREEN = ".adk-setup-headline";

@@ -107,7 +107,101 @@ function codeOnly(text) {
  * 자체가 단정이다.
  */
 const ASSERTS =
-	/\bexpect\b|\bassert\w*\s*\(|\bverify\w*\s*\(|waitUntil\s*\(|waitFor(?:Displayed|Exist|Enabled|Clickable|Function|URL|Selector)\s*\(|\.toThrow|rejects\./;
+	/\bexpect\b|\bassert\w*\s*\(|waitUntil\s*\(|waitFor(?:Displayed|Exist|Enabled|Clickable|Function|URL|Selector)\s*\(|\.toThrow|rejects\./;
+
+/**
+ * 예전에는 이름이 `verify*` 이기만 하면 단정으로 셌다. 그래서 아무것도 재지
+ * 않는 헬퍼 하나를 부르는 테스트가 통과했고, 헬퍼 이름만 바꾸면 같은 테스트가
+ * 붉어졌다 — 이름을 재고 있었던 것이다.
+ *
+ * 이제는 **그 헬퍼가 실제로 단정하는지** 본다. 저장소의 함수 본문을 읽어
+ * 단정하는 이름 집합을 만들고, 헬퍼가 헬퍼를 부르는 경우까지 고정점에
+ * 이를 때까지 넓힌다.
+ */
+function assertingHelperNames() {
+	const bodies = new Map();
+	for (const dir of HELPER_ROOTS) walkAll(dir, bodies);
+	const asserting = new Set();
+	for (const [name, text] of bodies) if (ASSERTS.test(text)) asserting.add(name);
+	// 헬퍼가 부르는 헬퍼도 단정한다. 더 늘지 않을 때까지 편다.
+	for (;;) {
+		let grew = false;
+		for (const [name, text] of bodies) {
+			if (asserting.has(name)) continue;
+			for (const other of asserting) {
+				if (new RegExp(`\\b${other}\\s*\\(`).test(text)) {
+					asserting.add(name);
+					grew = true;
+					break;
+				}
+			}
+		}
+		if (!grew) break;
+	}
+	return asserting;
+}
+
+const HELPER_ROOTS = [
+	"packages/shell/e2e",
+	"packages/shell/e2e-tauri",
+	"packages/shell/src",
+	"packages/shell/scripts",
+	"src",
+	"scripts",
+];
+
+/** 이 디렉터리 아래 모든 ts/js 에서 이름 붙은 함수의 본문을 모은다. */
+function walkAll(dir, out) {
+	let entries;
+	try {
+		entries = readdirSync(dir);
+	} catch {
+		return out;
+	}
+	for (const name of entries) {
+		if (name === "node_modules" || name === "dist") continue;
+		if (name.endsWith("-worktrees") || name === "worktrees") continue;
+		const full = join(dir, name);
+		if (statSync(full).isDirectory()) {
+			walkAll(full, out);
+			continue;
+		}
+		if (!/\.[cm]?[jt]sx?$/.test(name)) continue;
+		const tree = ts.createSourceFile(
+			full,
+			readFileSync(full, "utf8"),
+			ts.ScriptTarget.Latest,
+			true,
+			/\.tsx?$/.test(name) ? ts.ScriptKind.TSX : ts.ScriptKind.JS,
+		);
+		const visit = (node) => {
+			if (ts.isFunctionDeclaration(node) && node.name && node.body)
+				out.set(node.name.text, node.body.getText(tree));
+			if (
+				ts.isVariableDeclaration(node) &&
+				ts.isIdentifier(node.name) &&
+				node.initializer &&
+				(ts.isArrowFunction(node.initializer) ||
+					ts.isFunctionExpression(node.initializer))
+			)
+				out.set(node.name.text, node.initializer.getText(tree));
+			ts.forEachChild(node, visit);
+		};
+		visit(tree);
+	}
+	return out;
+}
+
+const ASSERTING_HELPERS = assertingHelperNames();
+
+/** 본문이 단정하는가 — 직접 단정하거나, 단정하는 헬퍼를 부르는가. */
+function bodyAsserts(text) {
+	if (ASSERTS.test(text)) return true;
+	for (const name of ASSERTING_HELPERS) {
+		if (new RegExp(`\\b${name}\\s*\\(`).test(text)) return true;
+	}
+	return false;
+}
 
 /** 테스트를 여는 이름. `it.each` 같은 변형도 이름 부분만 본다. */
 function testCallName(expression) {
@@ -170,7 +264,7 @@ for (const file of files) {
 		// 꺼 둔 테스트와 본문이 빈 것은 skip 칸에서 센다.
 		if (body.skipped) continue;
 		if (body.text.replace(/[\s{}]/g, "").length === 0) continue;
-		if (ASSERTS.test(body.text)) continue;
+		if (bodyAsserts(body.text)) continue;
 		vacuous.push(`${file}:${body.line} (단정 없음)`);
 	}
 
@@ -215,7 +309,7 @@ for (const file of files) {
 //
 // `expect(true).toBe(true)` 같은 자기 확인은 0 이다. 이 숫자는 전부 "본문에
 // 단정이 하나도 없는" 쪽이다.
-const BASELINE_VACUOUS = 32;
+const BASELINE_VACUOUS = 25;
 const BASELINE_DEAD_SKIPS = 0;
 // 16 에서 19 로 올렸다. 늘어난 셋은 새로 꺼 둔 것이 아니라, 원래 **통과하는
 // 테스트를 만들어 내던** 자리다 — 공급자 키가 없으면 `it("[SKIP] ...")` 로

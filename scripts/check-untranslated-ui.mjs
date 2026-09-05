@@ -29,7 +29,30 @@ import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join, sep as SEP } from "node:path";
 
 const ROOT = "packages/shell/src";
+/**
+ * 한글. 이스케이프로 적은 것도 같은 한글이다 — `\u{5}c5b...` 처럼 써서
+ * 눈에 보이지 않게 한 문자열이 검사를 그대로 지나갔다. 두 형태를 함께 본다.
+ */
 const HANGUL = /[가-힣]/;
+/**
+ * 한글이 실제로 들어 있는지 — 이스케이프를 풀어서 본다.
+ *
+ * 문구를 `\uc5c5\ub370\uc774\ud2b8` 처럼 적으면 눈에도 검사에도 보이지
+ * 않는다. 다만 정규식의 유니코드 **범위**(`[\uAC00-\uD7AF]`)는 화면
+ * 문자열이 아니므로 먼저 걷어내고, 낱자 하나가 아니라 **두 자 이상
+ * 이어진** 것만 문구로 본다.
+ */
+function hasHangul(text) {
+	if (/[가-힣]/.test(text)) return true;
+	const withoutRanges = text.replace(
+		/\\u[0-9a-fA-F]{4}\s*-\s*\\u[0-9a-fA-F]{4}/g,
+		"",
+	);
+	const decoded = withoutRanges.replace(/\\u([0-9a-fA-F]{4})/g, (_, hex) =>
+		String.fromCharCode(Number.parseInt(hex, 16)),
+	);
+	return /[가-힣]{2,}/.test(decoded);
+}
 const COMMENT = /^\s*(\/\/|\*|\/\*)/;
 
 function walk(dir, out = []) {
@@ -56,7 +79,7 @@ let total = 0;
 for (const file of walk(ROOT)) {
 	const lines = readFileSync(file, "utf8")
 		.split("\n")
-		.filter((line) => !COMMENT.test(line) && HANGUL.test(line));
+		.filter((line) => !COMMENT.test(line) && hasHangul(line));
 	if (lines.length) {
 		perFile.push({ file, lines: lines.length });
 		total += lines.length;
@@ -79,7 +102,14 @@ perFile.sort((a, b) => b.lines - a.lines);
  * 이제는 `getLocale()` 이 나오는 파일에서 언어 코드와 견주는 자리를 찾는다.
  * 언어 코드는 두 글자 소문자다.
  */
-const USES_LOCALE = /\bgetLocale\s*\(\)/;
+/**
+ * 로케일을 읽는 자리. 예전에는 `getLocale()` 한 꼴만 봤다. 그래서 같은 표를
+ * `navigator.language.slice(0, 2)` 로 바꾸는 것만으로 보이지 않게 됐다 —
+ * 하필 이 저장소의 `detectLocale` 이 쓰는 바로 그 값이라 가장 그럴듯한
+ * 형태였다. 언어를 알아내는 길을 모두 적는다.
+ */
+const USES_LOCALE =
+	/\bgetLocale\s*\(\)|\bnavigator\.language|\bnavigator\.languages|\bdetectLocale\s*\(|\bi18n\.locale\b|\bcurrentLocale\b/;
 const COMPARES_LANGUAGE = [
 	// getLocale() === "ko" / lang === "ko" / locale.startsWith("ko")
 	/[\w.()]+\s*===?\s*["'`][a-z]{2}["'`]/,

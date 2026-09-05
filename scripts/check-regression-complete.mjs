@@ -68,6 +68,15 @@ const roster = existsSync(ROSTER)
 const activeMachines = new Set(
 	(roster.machines ?? []).filter((m) => m.active !== false).map((m) => m.name),
 );
+/**
+ * 기계가 예전에 쓰던 이름. 같은 기계인데 이름만 바뀐 기록을 "모르는 기계" 로
+ * 말하면 사람이 헷갈린다 — 실제로 이 저장소의 첫 기록들이 호스트명을 따
+ * 지은 이름으로 남아 있었고, 명단을 만들며 이름을 바꾸었다.
+ */
+const formerNames = new Map();
+for (const machine of roster.machines ?? []) {
+	for (const old of machine.formerNames ?? []) formerNames.set(old, machine.name);
+}
 
 const rejected = [];
 const inWindow = readdirSync(RUNS)
@@ -81,8 +90,11 @@ const inWindow = readdirSync(RUNS)
 			return false;
 		}
 		if (activeMachines.size > 0 && !activeMachines.has(record.machine)) {
+			const renamed = formerNames.get(record.machine);
 			rejected.push(
-				`${file}: ${record.machine} 은 지금 명단에 없다 — 나눔에 참여하지 않는 기계의 기록이다`,
+				renamed
+					? `${file}: ${record.machine} 은 ${renamed} 의 옛 이름이다 — 명단을 만들기 전의 기록이라 지금 판정에는 쓰지 않는다`
+					: `${file}: ${record.machine} 은 명단에 없다 — 나눔에 참여하지 않는 기계의 기록이다`,
 			);
 			return false;
 		}

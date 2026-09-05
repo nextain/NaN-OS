@@ -24,6 +24,20 @@ import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 
 const scenarios = readFileSync("docs/user-scenarios.md", "utf8");
+
+/**
+ * 저장소가 아는 파일의 이름 색인. `git ls-files` 만 쓴다 — 저장소 안에 놓인
+ * 다른 저장소의 체크아웃은 이 저장소의 사실이 아니다.
+ */
+const FILES_BY_NAME = new Map();
+for (const path of execFileSync("git", ["ls-files"], { encoding: "utf8" })
+	.split("\n")
+	.filter(Boolean)) {
+	const name = path.split("/").pop();
+	if (!FILES_BY_NAME.has(name)) FILES_BY_NAME.set(name, []);
+	FILES_BY_NAME.get(name).push(path);
+}
+const namesOnDisk = new Set(FILES_BY_NAME.keys());
 const harness = readFileSync("src/test/harness/agent-bench-scenarios.ts", "utf8");
 
 const families = [...harness.matchAll(/prefix:\s*"([^"]+)"/g)].map((m) => m[1]);
@@ -66,7 +80,25 @@ const hasCoverageRow = (uc) => {
 	if (cells.every((cell) => placeholder.test(cell))) return false;
 	// 무엇으로 재는지 적으려면 파일이나 스크립트를 가리켜야 한다. 문장만
 	// 있고 가리키는 것이 없으면 그 줄은 계획이지 추적이 아니다.
-	return cells.some((cell) => /`[^`]+`|\.(ts|tsx|mjs|rs)\b/.test(cell));
+	// 무엇으로 재는지 적으려면 파일이나 스크립트를 가리켜야 한다. 문장만
+	// 있고 가리키는 것이 없으면 그 줄은 계획이지 추적이 아니다.
+	const pointsAtFile = (cell) => /`[^`]+`|\.(ts|tsx|mjs|rs)\b/.test(cell);
+	if (!cells.some(pointsAtFile)) return false;
+	// 가리키는 것만으로는 부족하다. 문서 맨 끝에
+	// `| UC-X | \`scripts/check-vacuous-tests.mjs\` | 없음 |` 한 줄을 붙이는
+	// 것만으로 추적이 인정됐다 — 실재하는 파일 이름 하나면 됐고 무엇을
+	// 확인하는지는 "없음" 이어도 통과했다.
+	//
+	// 파일을 가리키는 칸 말고, **무엇을 확인하는지 말하는 칸**이 따로
+	// 있어야 한다. 그 칸이 자리 표시자면 그 줄은 아무 말도 하지 않은 것이다.
+	const describes = cells.filter(
+		(cell) => !pointsAtFile(cell) && !placeholder.test(cell),
+	);
+	// 한 칸에 파일과 설명이 함께 적힌 표도 있다(`파일`: 무엇을 본다).
+	const describesInline = cells.some((cell) =>
+		/`[^`]+`\s*[::]\s*\S/.test(cell) || /`[^`]+`[^`]*[가-힣]{2,}/.test(cell),
+	);
+	return describes.length > 0 || describesInline;
 };
 const byBenchFamily = (uc) => families.some((prefix) => uc.startsWith(prefix));
 const outsideEpic = (uc) => notOwned.some((prefix) => uc.startsWith(prefix));
@@ -89,13 +121,54 @@ const untracked = titles.filter((uc) => !hasCoverageRow(uc) && !byBenchFamily(uc
 // 사실이 한쪽에만 적혀 있으면 사람은 반드시 한쪽을 빠뜨린다 — 실제로 #540 이
 // 그랬고, 그것을 고친 사람이 UC-QUALITY 를 더하면서 똑같이 빠뜨렸다.
 // 여기서 함께 본다.
-// 벤치 하네스는 `### UC-` 만 자기 소관으로 본다(agent-bench-scenarios.ts 의
-// HEADING). 여기서 `## UC-` 까지 세면 하네스가 애초에 다루지 않는 것을 잡아
-// 과탐지가 된다. 같은 기준으로 맞춘다.
+// 예전에는 이 검사만 `### UC-` 를 보았다. 하네스의 HEADING 을 그대로 따른
+// 것인데, 그래서 표제를 한 단만 내리면(`#### UC-`) 이 검사에서 사라졌다 —
+// 같은 파일 열 줄 위에서 고친 우회가 여기 그대로 남아 있었다.
+//
+// 깊이는 문서를 읽기 좋게 하려고 쓰는 것이지 소관을 정하는 장치가 아니다.
+// 위의 `titles` 와 같은 기준으로 본다. 하네스가 `###` 만 읽는 것은 하네스
+// 쪽의 별개 사실이고, 그 차이 자체가 여기서 드러나야 한다.
 const benchTitles = [
-	...new Set([...scenarios.matchAll(/^###\s+(UC-[A-Z0-9-]+)/gm)].map((m) => m[1])),
+	...new Set(
+		[...scenarios.matchAll(/^#{2,6}\s+(UC-[A-Z0-9][A-Z0-9-]*)/gm)].map((m) => m[1]),
+	),
 ];
-const benchOrphans = benchTitles.filter((uc) => !byBenchFamily(uc) && !outsideEpic(uc));
+/**
+ * 오늘 벤치 하네스가 모르는 UC. 표제 깊이를 가리지 않고 세기 시작하자
+ * 열네 개가 드러났다 — 새로 끊긴 것이 아니라, 하네스의 `HEADING` 이 `###`
+ * 만 읽는 동안 `##` 로 적힌 UC 열넷이 소관 밖으로 조용히 빠져 있었다.
+ *
+ * 이 목록은 빚이다. 줄이는 것이 목표이고, 늘리는 것을 이 게이트가 막는다.
+ * 여기에 이름을 더해서 통과시키는 것은 빚을 늘리는 일이므로, 목록이
+ * 문서와 어긋나면(이미 등록됐는데 남아 있으면) 그것도 붉어진다.
+ */
+const BENCH_ORPHAN_BASELINE = [
+	"UC-BGM-ORPHAN-PORT-RECOVERY",
+	"UC-CODEX-ROLES",
+	"UC-CODEX-WORKER-LIFECYCLE",
+	"UC-DISCORD",
+	"UC-GROK-SUBSCRIPTION",
+	"UC-KB-MANAGE",
+	"UC-LLM-THREE-TIER",
+	"UC-NAIA-AZURE-MODELS",
+	"UC-NAIA-MODEL-ORDER",
+	"UC-ONBOARDING-APPEARANCE-VOICE",
+	"UC-PROACTIVE-COST-CONTROL",
+	"UC-RADIO-DJ-DURABLE",
+	"UC-SETTINGS-ROUNDTRIP",
+	"UC-WIRE-V1",
+];
+
+const benchOrphansAll = benchTitles.filter(
+	(uc) => !byBenchFamily(uc) && !outsideEpic(uc),
+);
+const benchOrphans = benchOrphansAll.filter(
+	(uc) => !BENCH_ORPHAN_BASELINE.includes(uc),
+);
+// 빚을 갚았는데 목록에 남아 있으면 목록이 거짓말을 하는 것이다.
+const staleBenchBaseline = BENCH_ORPHAN_BASELINE.filter(
+	(uc) => !benchOrphansAll.includes(uc),
+);
 
 // 오늘의 상태. 줄이는 것이 목표이고, 늘리는 것은 이 게이트가 막는다.
 const BASELINE = [
@@ -163,13 +236,6 @@ const searchRoots = ["packages/shell", "src", "scripts", "."];
  *
  * git 이 아는 것만 본다. 저장소 밖은 이 저장소의 사실이 아니다.
  */
-const namesOnDisk = new Set();
-for (const path of execFileSync("git", ["ls-files"], { encoding: "utf8" })
-	.split("\n")
-	.filter(Boolean)) {
-	namesOnDisk.add(path.split("/").pop());
-}
-
 const brokenRefs = [...referenced].filter((ref) => {
 	// 표에는 와일드카드로 묶어 적은 줄도 있다(registry*.test.ts). 그것은 파일이
 	// 아니라 패턴이므로 실재 검사의 대상이 아니다.
@@ -212,6 +278,14 @@ if (brokenRefs.length > BASELINE_BROKEN_REFS) {
 }
 if (brokenRefs.length < BASELINE_BROKEN_REFS)
 	console.log(`  ✓ 깨진 참조가 줄었다(${brokenRefs.length}) — BASELINE_BROKEN_REFS 도 줄여라`);
+if (staleBenchBaseline.length) {
+	console.error(
+		`  ❌ 벤치 미등록 목록이 낡았다(${staleBenchBaseline.length}) — 이미 등록됐으니 목록에서 빼라:`,
+	);
+	for (const uc of staleBenchBaseline) console.error(`     ${uc}`);
+	process.exit(1);
+}
+
 if (benchOrphans.length) {
 	console.error(`  ❌ 벤치 하네스가 모르는 UC ${benchOrphans.length}개:`);
 	for (const uc of benchOrphans) console.error(`     ${uc}`);

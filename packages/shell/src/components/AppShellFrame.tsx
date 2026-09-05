@@ -16,6 +16,12 @@ type MainContentProps = Omit<
 
 interface AppShellFrameProps {
 	appReady: boolean;
+	/**
+	 * 부팅의 마지막까지 끝났는가. `appReady` 는 스플래시를 걷는 시점이고,
+	 * 이것은 앱 목록까지 자리를 잡아 앱바가 채워진 시점이다. 부팅 지연은
+	 * 이 표지로 잰다 — 앞의 표지만 재면 뒤 구간의 회귀가 보이지 않는다.
+	 */
+	bootComplete: boolean;
 	backgroundFallback: { url: string; type: "image" | "video" } | null;
 	backgroundMediaType: "iframe" | "image" | "video" | "";
 	backgroundVideoUrl: string;
@@ -34,6 +40,7 @@ const IMAGE_EXTENSIONS = new Set(["jpg", "jpeg", "png", "webp", "gif", "avif"]);
 
 export function AppShellFrame({
 	appReady,
+	bootComplete,
 	backgroundFallback,
 	backgroundMediaType,
 	backgroundVideoUrl,
@@ -147,6 +154,7 @@ export function AppShellFrame({
 			// 적용하는 구간이 통째로 빠진다 — 실제로 그 구간에 3초를 넣어도
 			// 숫자가 움직이지 않았다.
 			data-app-ready={appReady ? "true" : "false"}
+			data-app-boot-complete={bootComplete ? "true" : "false"}
 			style={
 				{ "--naia-width": `${mainContent.naiaWidth}px` } as React.CSSProperties
 			}

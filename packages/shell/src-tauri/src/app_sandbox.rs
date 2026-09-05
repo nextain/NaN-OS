@@ -252,6 +252,44 @@ mod app_sandbox_escape_tests {
         assert!(outcome.is_err(), "최종 구성요소 symlink 는 거부해야 한다");
     }
 
+    // 중간 경로에 심어 둔 **디렉터리 symlink** 로 나가려는 시도.
+    //
+    // 앞의 세 검사는 각각 다른 것을 막는다. 첫째는 `..` 같은 구성요소를,
+    // 둘째(lexically_inside)는 만들기 전에 논리적으로 밖인 자리를, 셋째
+    // (parent canonicalize)는 **만든 뒤에 symlink 를 따라 밖으로 나간** 자리를
+    // 막는다. 그런데 첫째가 `../` 를 먼저 걷어내기 때문에, 앞선 테스트들만으로는
+    // 뒤의 둘을 한 번도 지나가지 않는다 — 둘을 통째로 지워도 전부 통과했다.
+    //
+    // symlink 는 `..` 없이도 밖으로 나가므로 첫 검사를 지나 뒤의 둘에 도달한다.
+    // 이 테스트가 그 둘을 고정한다.
+    #[cfg(unix)]
+    #[test]
+    fn rejects_directory_symlink_that_leads_outside() {
+        let adk = adk();
+        let r = root(&adk, "sbx.symlink.dir").expect("root ok");
+        let outside = std::env::temp_dir().join("naia-sandbox-symlink-target");
+        let _ = std::fs::remove_dir_all(&outside);
+        std::fs::create_dir_all(&outside).expect("바깥 자리 생성");
+
+        let link = r.join("linked");
+        let _ = std::fs::remove_file(&link);
+        let _ = std::fs::remove_dir_all(&link);
+        std::os::unix::fs::symlink(&outside, &link).expect("디렉터리 symlink 생성");
+
+        let outcome = file(&r, "linked/pwned.txt");
+        let escaped = outside.join("pwned.txt");
+        // 경로만 돌려받아도 부르는 쪽이 거기에 쓴다. 승인 자체가 탈출이다.
+        let approved = outcome.is_ok();
+
+        let _ = std::fs::remove_file(&link);
+        let _ = std::fs::remove_dir_all(&outside);
+        assert!(
+            !approved,
+            "샌드박스 안의 symlink 를 따라 밖으로 나가는 경로를 승인했다: {}",
+            escaped.display()
+        );
+    }
+
     // 안정성 축의 동시성 자리. 앱 두 개가 같은 순간에 자기 구역에 쓰면 서로의
     // 파일을 밟지 않아야 하고, 같은 앱이 같은 파일을 동시에 써도 읽는 쪽이
     // 반쪽짜리를 보지 않아야 한다. 실제로 스레드를 띄워 경쟁시킨다 — 논리만

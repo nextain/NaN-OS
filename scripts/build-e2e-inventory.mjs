@@ -26,6 +26,7 @@ import { basename, join } from "node:path";
 
 const SPEC_DIR = "packages/shell/e2e-tauri/specs";
 const CONF_DIR = "packages/shell/e2e-tauri";
+const HELPER_DIR = join(CONF_DIR, "helpers");
 
 // 장치를 요구한다고 보는 신호. 이름이 아니라 무엇을 켜는지로 고른다.
 const DEVICE_ENV = /VOICE|AUDIO|VOXCPM2|NVA|SCREENSHOT|GPU|CASCADE/;
@@ -51,7 +52,41 @@ const KEY_ENV = /API_KEY|_KEY$|TOKEN|SECRET|USER_ID/;
  * 산출물 디렉터리 하나뿐이라 결정론 칸에 들어가 있었고, 자격증명 없는
  * 기계가 맡았다가 실패했다.
  */
-const CHAT_HELPERS = /\b(sendMessage|waitForToolSuccess|getLastAssistantMessage|judge\w*)\s*\(/;
+/**
+ * 예전에는 이 넷을 손으로 적어 두었다. 같은 파일에 있는
+ * `verifyWithSubAgent`(부심판 모델을 실제로 부른다)가 목록에 없어서, 그
+ * 헬퍼만 쓰는 스펙이 `deterministic_ci` 로 분류됐다 — 자격증명 없는 기계가
+ * 맡았다가 실패하는, 이미 두 번 겪은 그 오분류다.
+ *
+ * 이제 목록을 만들지 않는다. **모델과 말을 섞는 헬퍼 모듈을 통째로** 본다.
+ * 그 모듈이 내보내는 이름은 전부 대화 신호다. 새 헬퍼가 늘어도 목록을
+ * 고칠 일이 없고, 고치는 것을 잊어 생기는 오분류도 없다.
+ */
+const CHAT_HELPER_MODULES = ["chat", "semantic"];
+const chatHelperNames = new Set(["judge"]);
+for (const mod of CHAT_HELPER_MODULES) {
+	let source;
+	try {
+		source = readFileSync(join(HELPER_DIR, `${mod}.ts`), "utf8");
+	} catch {
+		continue;
+	}
+	for (const m of source.matchAll(
+		/^export\s+(?:async\s+)?function\s+(\w+)/gm,
+	))
+		chatHelperNames.add(m[1]);
+	for (const m of source.matchAll(/^export\s+const\s+(\w+)\s*=/gm))
+		chatHelperNames.add(m[1]);
+}
+if (chatHelperNames.size < 5) {
+	console.error(
+		`[e2e-inventory] 대화 헬퍼를 ${chatHelperNames.size}개밖에 못 찾았다 — helpers 경로가 바뀌었는지 보라`,
+	);
+	process.exit(2);
+}
+const CHAT_HELPERS = new RegExp(
+	`\\b(?:${[...chatHelperNames].map((n) => n.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|")})\\s*\\(`,
+);
 
 /**
  * 전용 설정이 요구하는 환경도 그 스펙의 요구다.
@@ -118,7 +153,6 @@ for (const name of readdirSync(CONF_DIR).filter((f) => /^wdio\.conf\..+\.ts$/.te
 	confEnv.set(name, requiredEnv(readFileSync(join(CONF_DIR, name), "utf8")));
 }
 
-const HELPER_DIR = join(CONF_DIR, "helpers");
 const helperEnv = new Map();
 for (const name of readdirSync(HELPER_DIR).filter((f) => f.endsWith(".ts"))) {
 	const source = readFileSync(join(HELPER_DIR, name), "utf8");

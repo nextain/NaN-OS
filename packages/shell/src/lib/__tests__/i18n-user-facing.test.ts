@@ -47,6 +47,37 @@ async function readThroughRuntime(): Promise<Map<Locale, Map<string, string>>> {
 	return out;
 }
 
+/**
+ * 짝 일치율의 한계.
+ *
+ * 예전에는 어느 짝이든 0.6 이었다. 그런데 지금 실측 최대가 42.5%(es-pt)이고
+ * 나머지는 36% 아래라, 0.6 은 **로케일 절반 이상이 영어여도 초록**인
+ * 느슨함이었다. 실제로 한 로케일의 값 270개를 영어로 되돌려 55.9% 로 만들어도
+ * 네 단정이 모두 통과했다.
+ *
+ * 실측한 천장 바로 위에 둔다. 스페인어와 포르투갈어는 같은 어족이라 짧은
+ * 문구가 실제로 겹치므로 그 짝만 따로 잡는다 — 예외는 숫자가 아니라 이유로
+ * 적는다.
+ */
+const SAME_RATIO_LIMIT = 0.5;
+/**
+ * 영어와의 짝은 더 좁게 본다. 이 테스트가 막으려는 실패는 "어떤 로케일이
+ * 조용히 영어로 되돌아감" 이고, 실측에서도 영어 짝이 가장 낮다(최대 35.0%,
+ * de-en). 실제로 한 로케일의 값 270개를 영어로 되돌리면 44.2% 가 되는데,
+ * 일반 한계 0.5 로는 그것이 통과한다.
+ */
+const ENGLISH_RATIO_LIMIT = 0.4;
+const SAME_RATIO_EXCEPTIONS = new Map<string, number>([
+	// 실측 42.5%. 같은 어족이라 "OK", "Discord" 같은 짧은 문구가 겹친다.
+	["es-pt", 0.48],
+]);
+const limitFor = (a: string, b: string) => {
+	const exception = SAME_RATIO_EXCEPTIONS.get(`${a}-${b}`);
+	if (exception !== undefined) return exception;
+	if (a === "en" || b === "en") return ENGLISH_RATIO_LIMIT;
+	return SAME_RATIO_LIMIT;
+};
+
 describe("사용자에게 보이는 문구는 i18n 을 지난다 (UC-QUALITY-I18N-USER-FACING)", () => {
 	it("열네 로케일이 각각 서로 다른 문구를 낸다", async () => {
 		const tables = await readThroughRuntime();
@@ -71,14 +102,34 @@ describe("사용자에게 보이는 문구는 i18n 을 지난다 (UC-QUALITY-I18
 				expect(
 					ratio,
 					`${a} 와 ${b} 의 ${Math.round(ratio * 100)}% 가 글자까지 같다 — 한쪽 로더가 다른 쪽을 가리키고 있을 수 있다`,
-				).toBeLessThan(0.6);
+				).toBeLessThan(limitFor(a, b));
 			}
 		}
 	});
 
 	it("모든 로케일이 같은 키 집합을 갖는다", async () => {
 		const tables = await readThroughRuntime();
-		const base = [...tables.get("ko")!.keys()].sort();
+		// `readThroughRuntime` 은 ko 의 키로 모든 표를 만든다. 그래서 그 표들끼리
+		// 견주면 키 집합은 **원리적으로 언제나 같다** — 이 단정은 아무것도 재지
+		// 않았다. 각 로케일 모듈이 스스로 가진 키를 읽어 견준다.
+		const modules = await Promise.all(
+			LOCALES.map(async (locale) => {
+				const mod = await import(`../locales/${locale}.ts`);
+				return [locale, Object.keys(mod.default).sort()] as const;
+			}),
+		);
+		const union = [
+			...new Set(modules.flatMap(([, keys]) => keys)),
+		].sort();
+		for (const [locale, keys] of modules) {
+			const missing = union.filter((key) => !keys.includes(key));
+			expect(
+				missing,
+				`${locale} 에 없는 키 ${missing.length}개: ${missing.slice(0, 5).join(", ")}`,
+			).toEqual([]);
+		}
+
+		const base = union;
 
 		for (const locale of LOCALES) {
 			const keys = [...tables.get(locale)!.keys()].sort();

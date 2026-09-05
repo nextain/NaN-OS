@@ -32,6 +32,23 @@ interface InstalledAppManifest {
  *
  * Skips apps already registered (e.g. built-ins or re-loaded after restart).
  */
+/**
+ * 설치된 앱 목록을 다 읽었는가.
+ *
+ * 부팅 지연을 재는 표지가 `data-app-ready` 하나뿐이던 동안, 그것은 설정과
+ * 로케일 하이드레이션·아바타까지만 기다렸다. 그래서 이 목록 읽기에 3초를
+ * 넣어도 측정값이 움직이지 않았다 — 앱바가 3초 동안 비어 있어도 성능 축은
+ * 아무 말을 하지 않았다. 부팅의 이 구간을 측정 안으로 들인다.
+ */
+let installedAppsSettled = false;
+export function areInstalledAppsSettled(): boolean {
+	return installedAppsSettled;
+}
+/** 테스트가 부팅을 다시 재기 위해 되돌린다. */
+export function resetInstalledAppsSettled(): void {
+	installedAppsSettled = false;
+}
+
 export async function loadInstalledApps(): Promise<void> {
 	let manifests: InstalledAppManifest[];
 	try {
@@ -41,6 +58,9 @@ export async function loadInstalledApps(): Promise<void> {
 		Logger.warn("AppLoader", "Failed to load installed apps", {
 			err: String(err),
 		});
+		// 실패도 "이 구간이 끝났다" 는 사실이다. 안 세우면 부팅이 영원히
+		// 끝나지 않은 것으로 보인다.
+		installedAppsSettled = true;
 		return;
 	}
 
@@ -79,6 +99,7 @@ export async function loadInstalledApps(): Promise<void> {
 	}
 
 	useAppStore.getState().bumpAppListVersion();
+	installedAppsSettled = true;
 }
 
 /**

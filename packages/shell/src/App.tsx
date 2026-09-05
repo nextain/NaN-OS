@@ -30,7 +30,7 @@ import {
 	type Announcement,
 	fetchUnreadAnnouncements,
 } from "./lib/announcements";
-import { loadInstalledApps } from "./lib/app-loader";
+import { areInstalledAppsSettled, loadInstalledApps } from "./lib/app-loader";
 import { appRegistry } from "./lib/app-registry";
 import type { AppInstallRequest } from "./lib/app-store-client";
 import { effectiveAvatarProviderFromConfig } from "./lib/avatar/nva-gate";
@@ -118,6 +118,11 @@ export function App() {
 		);
 	}
 	const [showSplash, setShowSplash] = useState(true);
+	// 부팅이 실제로 끝났는가. `appReady` 는 설정·로케일·아바타까지만 본다.
+	// 앱 목록 읽기가 끝나야 앱바에 앱이 나타나므로 그 구간도 부팅이다.
+	const [installedAppsReady, setInstalledAppsReady] = useState(
+		areInstalledAppsSettled,
+	);
 	// #484 CLI + #543 드래그앤드롭 — 열 파일 경로 큐 (앞에서부터 하나씩 연다).
 	const [pendingOpenFiles, setPendingOpenFiles] = useState<string[]>([]);
 	const [showAdkSetup, setShowAdkSetup] = useState(!isAdkInitialized());
@@ -480,7 +485,9 @@ export function App() {
 		migrateLegacyDna3OllamaModel();
 		migrateSpeechStyleValues();
 		migrateLiveProviderToUnifiedModel();
-		loadInstalledApps().catch(() => {});
+		loadInstalledApps()
+			.catch(() => {})
+			.finally(() => setInstalledAppsReady(true));
 
 		const config = loadConfig();
 		const adkPath = getAdkPath();
@@ -768,6 +775,7 @@ export function App() {
 	return (
 		<AppShellFrame
 			appReady={appReady}
+			bootComplete={appReady && installedAppsReady}
 			backgroundFallback={backgroundFallback}
 			backgroundMediaType={backgroundMediaType}
 			backgroundVideoUrl={backgroundVideoUrl}

@@ -21,10 +21,13 @@ import { createHash } from "node:crypto";
 import {
 	existsSync,
 	mkdirSync,
+	rmSync,
 	readdirSync,
 	readFileSync,
 	writeFileSync,
 } from "node:fs";
+import { hostname } from "node:os";
+import { basename } from "node:path";
 import { delimiter, join, resolve } from "node:path";
 import { e2eBinaryPath } from "../packages/shell/scripts/agent-pairing.mjs";
 
@@ -78,6 +81,30 @@ const roster = {
 	machines: (rosterFile.machines ?? []).filter((m) => m.active !== false),
 };
 
+/**
+ * 이 기계가 정말 그 이름의 기계인지 본다.
+ *
+ * 왜 필요한가: 이름은 사람이 준다. 그래서 같은 기계가 다른 이름으로 돌 수도
+ * 있고, 다른 기계가 같은 이름으로 돌 수도 있다. 실제로 그 일이 있었다 —
+ * 처음에는 호스트명으로 이름을 짓고 나중에 능력으로 다시 지었는데, 바뀌었다는
+ * 사실이 어디에도 없어서 같은 기계의 기록이 "모르는 기계" 로 보였다. 사람도
+ * 판정하는 쪽도 헷갈렸다.
+ *
+ * 이름이 어긋나면 그 자리에서 막는다. 기록을 남긴 뒤에 알면 늦다.
+ */
+function identityMismatch(profile) {
+	const mismatches = [];
+	if (profile.host && profile.host !== hostname()) {
+		mismatches.push(`호스트명: 명단은 ${profile.host}, 이 기계는 ${hostname()}`);
+	}
+	const osByName = { linux: "linux", windows: "win32", darwin: "darwin" };
+	const expected = osByName[profile.os];
+	if (expected && expected !== process.platform) {
+		mismatches.push(`운영체제: 명단은 ${profile.os}, 이 기계는 ${process.platform}`);
+	}
+	return mismatches;
+}
+
 const profile = roster.machines.find((m) => m.name === machine);
 if (roster.machines.length > 0 && !profile) {
 	const dormant = (rosterFile.machines ?? []).find((m) => m.name === machine);
@@ -95,6 +122,16 @@ if (roster.machines.length > 0 && !profile) {
 // 명단이 있으면 그 기계가 맡기로 한 등급만 받는다. 능력에 없는 등급을
 // 억지로 맡으면 실패가 쌓이는데, 그것은 회귀가 아니라 기계가 못 하는 일이다.
 if (profile) {
+	const mismatches = identityMismatch(profile);
+	if (mismatches.length > 0) {
+		console.error(
+			`이 기계는 ${machine} 이 아닌 것 같다:\n` +
+				mismatches.map((m) => `  ${m}`).join("\n") +
+				"\n\n이름을 잘못 주었거나, 명단이 낡았다. 어느 쪽인지 확인하고 고쳐라 —" +
+				" 이름이 기계를 가리키지 못하면 기록이 누구 것인지 알 수 없다.",
+		);
+		process.exit(2);
+	}
 	const notMine = tiers.filter((tier) => !profile.tiers.includes(tier));
 	if (notMine.length > 0) {
 		console.error(
@@ -538,6 +575,7 @@ function fingerprint() {
 	return {
 		inventorySha256: digest,
 		commit,
+		host: hostname(),
 		platform: `${process.platform}-${process.arch}`,
 		node: process.version,
 	};
@@ -566,6 +604,23 @@ const dir = "docs/regression-runs";
 mkdirSync(dir, { recursive: true });
 const out = join(dir, `${machine}-${started.replace(/[:.]/g, "-")}.json`);
 writeFileSync(out, `${JSON.stringify(record, null, "\t")}\n`);
+// 기계·등급마다 최신 하나만 남긴다. 판정이 어차피 최신만 보므로 옛것은
+// 쌓이기만 하고, 쌓이면 어느 것이 지금 상태인지 사람이 알 수 없다. 실제로
+// 이 디렉터리에 한 기계의 기록 여섯이 남아 무엇이 현재인지 흐려졌다.
+for (const old of readdirSync(dir)) {
+	if (!old.endsWith(".json") || old === "machines.json") continue;
+	if (old === basename(out)) continue;
+	try {
+		const previous = JSON.parse(readFileSync(join(dir, old), "utf8"));
+		const sameMachine = previous.machine === machine;
+		const sameTiers =
+			[...(previous.tiers ?? [])].sort().join(",") === [...tiers].sort().join(",");
+		if (sameMachine && sameTiers) rmSync(join(dir, old));
+	} catch {
+		// 읽을 수 없는 파일은 건드리지 않는다. 판정이 이유와 함께 뺀다.
+	}
+}
+
 console.log(`[regression] 기록: ${out} (${status})`);
 
 const failedSpecs = [
