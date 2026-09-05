@@ -217,6 +217,8 @@ const unrendered = new Set(unrenderedComponentFiles());
 
 /** 표지가 어느 파일에서 정의되는지. 렌더 여부를 표지에 잇기 위해서다. */
 const definedIn = new Map();
+/** 클래스 이름 → 그것을 붙이는 파일들. */
+const classDefinedIn = new Map();
 for (const file of [
 	...tracked(`${SHELL}/src`, ".tsx"),
 	...tracked(`${SHELL}/src`, ".ts"),
@@ -227,6 +229,15 @@ for (const file of [
 	)) {
 		if (!definedIn.has(m[1])) definedIn.set(m[1], new Set());
 		definedIn.get(m[1]).add(file);
+	}
+	// 클래스 이름도 화면의 표지다. 실측에서 드러났다 — `.workspace-app` 은
+	// 렌더되지 않는 WorkspaceCenterArea.tsx 에만 있고, 스펙 셋이 그것으로
+	// 화면을 집는다. data-testid 만 보면 이 부류가 통째로 빠진다.
+	for (const m of source.matchAll(/className="([^"{}]+)"/g)) {
+		for (const cls of m[1].split(/\s+/).filter(Boolean)) {
+			if (!classDefinedIn.has(cls)) classDefinedIn.set(cls, new Set());
+			classDefinedIn.get(cls).add(file);
+		}
 	}
 }
 
@@ -263,6 +274,21 @@ for (const file of specs) {
 	for (const match of source.matchAll(ANCHORS[1]))
 		names.set(`data-${match[1]}-tab="${match[2]}"`, match.index);
 	for (const match of source.matchAll(ANCHORS[2])) names.set(match[1], match.index);
+
+	// 클래스 선택자는 렌더 검사에만 쓴다. CSS 파일은 훑지 않으므로
+	// "소스에 없다" 판정에 넣으면 거짓 지적이 쏟아진다.
+	for (const m of source.matchAll(/["'`]\.([a-z][\w-]{3,})["'`\s\]]/g)) {
+		const cls = m[1];
+		const homes = classDefinedIn.get(cls);
+		if (!homes || homes.size === 0) continue;
+		if (![...homes].every((f) => unrendered.has(f))) continue;
+		unrenderedAnchors.push({
+			file,
+			name: cls,
+			line: source.slice(0, m.index).split("\n").length,
+			homes: [...homes],
+		});
+	}
 
 	for (const [name, at] of names) {
 		anchors += 1;

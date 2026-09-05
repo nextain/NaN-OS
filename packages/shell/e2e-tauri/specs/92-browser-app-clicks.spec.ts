@@ -44,6 +44,13 @@ mkdirSync(SHOT, { recursive: true });
  * 없으면 그 자리에서 말하고, 켜질 때까지 기다린다.
  */
 async function activateBrowserApp(): Promise<void> {
+	// 앱바 탭은 셸이 부팅을 마친 뒤에 그려진다. 예전에는 곧바로 찾아서
+	// 없으면 그 자리에서 던졌고, 두 기계에서 똑같이 04 와 05 가 죽었다 —
+	// 07 은 앞에서 800밀리초를 쉬는 바람에 우연히 지나갔다. 즉 결함은
+	// 브라우저 앱이 아니라 **언제 찾느냐** 에 있었다.
+	await (await $('.app-bar-tab[data-app-id="browser"]')).waitForExist({
+		timeout: 30_000,
+	});
 	const pressed = await browser.execute(() => {
 		const btn = document.querySelector(
 			'.app-bar-tab[data-app-id="browser"]',
@@ -115,6 +122,11 @@ describe("92 — Browser App: Click Blocking Regression", () => {
 	before(async () => {
 		const appRoot = await $(S.appRoot);
 		await appRoot.waitForDisplayed({ timeout: 15_000 });
+		// 화면 뿌리가 떴다는 것과 부팅이 끝났다는 것은 다르다. 앱바가
+		// 채워지는 것은 그 뒤다.
+		await (await $('[data-app-boot-complete="true"]')).waitForExist({
+			timeout: 30_000,
+		});
 		// Give keepAlive apps time to mount and initWebview to resolve.
 		await browser.pause(1_500);
 	});

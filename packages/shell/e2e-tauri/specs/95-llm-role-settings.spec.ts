@@ -54,7 +54,11 @@ describe("LLM role settings through the real Tauri Shell", () => {
 
 		await setSelect("[data-testid='sub-llm-mode']", "explicit");
 		const subProvider = await $("[data-testid='sub-llm-provider']");
-		expect(await subProvider.$("option[value='codex']").isExisting()).toBe(false);
+		// 이 단언은 2026-07-22 에 쓰였고 그때 codex 의 supportedRoles 는 main
+		// 하나였다. 2026-07-29 의 역할 라우팅(880c69fd)이 expert·main·sub 셋으로
+		// 넓혔으므로 이제 보조 자리에도 codex 가 있는 것이 맞다. 40일 동안
+		// 아무도 못 본 이유는 이 스펙이 CI 에서 한 번도 돌지 않았기 때문이다(#550).
+		expect(await subProvider.$("option[value='codex']").isExisting()).toBe(true);
 		await setSelect("[data-testid='sub-llm-provider']", "gemini");
 		await setInput("[data-testid='sub-llm-model']", "gemini-3.1-flash-lite");
 		await setSelect("[data-testid='memory-llm-mode']", "inherit:main");
