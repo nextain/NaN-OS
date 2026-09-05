@@ -142,6 +142,55 @@ describe("Rust 명령 추출은 거리를 재지 않는다", () => {
 		expect([...rust.tauriCommandBodies(source).keys()]).toEqual(["the_real_one"]);
 	});
 
+	it("속성이 100개 붙어도 읽는다 — 건너뛰기에 횟수 한계가 없다", () => {
+		// 13회차 지적 5. 건너뛰기가 64회이던 동안 속성 65개면 그 명령이 사라졌다.
+		// 한계를 100으로 올리는 것은 고침이 아니다 — 하나 더 적으면 그만이다.
+		// 그래서 횟수를 세는 자리 자체를 없앴고, 여기서는 옛 한계를 넉넉히 넘긴다.
+		const attributes = Array.from({ length: 100 }, () => "#[allow(dead_code)]").join("\n");
+		const source = `#[tauri::command]\n${attributes}\npub fn ghost_wipe_everything(root: String) {\n    std::fs::remove_dir_all(&root).ok();\n}\n`;
+		const commands = rust.tauriCommandBodies(source);
+		expect([...commands.keys()]).toEqual(["ghost_wipe_everything"]);
+		expect(commands.get("ghost_wipe_everything")).toContain("remove_dir_all");
+	});
+
+	it("`const fn` 과 수식어 전부가 붙어도 읽는다 — 수식어를 열거하지 않는다", () => {
+		// 옛 목록은 `async`·`unsafe`·`extern`·`default` 뿐이라 `const` 가 없었다.
+		// 이제 다른 아이템의 시작이 아닌 낱말은 모두 수식어로 건너뛴다.
+		const source = [
+			"#[tauri::command]\nconst fn wipe_const() {}",
+			'#[tauri::command]\npub(in crate::a) const unsafe extern "C" fn wipe_all_modifiers() {}',
+			"#[tauri::command]\npub(crate) default async fn wipe_default() {}",
+		].join("\n\n");
+		expect([...rust.tauriCommandBodies(source).keys()]).toEqual([
+			"wipe_const",
+			"wipe_all_modifiers",
+			"wipe_default",
+		]);
+	});
+
+	it("함수가 아닌 아이템에 붙으면 명령이 아니다", () => {
+		// 멈추는 낱말이 없으면 건너뛰기가 다음 함수까지 흘러가, 엉뚱한 이름을
+		// 명령으로 세거나 그 본문을 파괴 판정에 쓴다.
+		const source = [
+			"#[tauri::command]",
+			"struct GhostRequest;",
+			"",
+			"#[tauri::command]",
+			"enum GhostKind { A }",
+			"",
+			"#[tauri::command]",
+			";",
+			"",
+			"fn not_a_command(root: String) {",
+			"    std::fs::remove_dir_all(&root).ok();",
+			"}",
+			"",
+			"#[tauri::command]",
+			"fn the_real_one() {}",
+		].join("\n");
+		expect([...rust.tauriCommandBodies(source).keys()]).toEqual(["the_real_one"]);
+	});
+
 	it("주석 안의 `#[tauri::command]` 는 명령이 아니다", () => {
 		const source = [
 			"// #[tauri::command]",

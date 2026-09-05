@@ -16,6 +16,7 @@
 //
 // 모듈은 `.mjs` ESM 이라 정적 import 로는 이 tsconfig(rootDir=src)의 범위를
 // 벗어난다. 파일 URL 로 동적 import 해서 실제 산출물 그대로를 태운다.
+import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import * as ts from "typescript";
@@ -56,7 +57,12 @@ type Binding = {
 
 interface Bindings {
 	importBindings(sf: ts.SourceFile): Map<string, ImportRecord>;
-	resolveBinding(expr: ts.Node, sf: ts.SourceFile, env?: Env, depth?: number): Binding | null;
+	resolveBinding(
+		expr: ts.Node,
+		sf: ts.SourceFile,
+		env?: Env,
+		seen?: Set<string>,
+	): Binding | null;
 	resolveCallee(node: ts.Node, sf?: ts.SourceFile, env?: Env): Binding | null;
 	bindingIsOneOf(
 		binding: Binding | null,
@@ -66,6 +72,16 @@ interface Bindings {
 }
 
 const B = (await import(/* @vite-ignore */ MODULE_URL)) as Bindings;
+
+const UNWRAP_URL = pathToFileURL(
+	resolve(__dirname, "..", "..", "scripts", "lib", "unwrap.mjs"),
+).href;
+
+interface Unwrap {
+	unwrapExpression(node: ts.Node | undefined): ts.Node | null;
+}
+
+const U = (await import(/* @vite-ignore */ UNWRAP_URL)) as Unwrap;
 
 const HOME = "app/screen.ts";
 
@@ -561,5 +577,175 @@ describe("argShift — 호출자는 자리를 옮겨야 한다 (12회차 지적 
 		);
 		expect(binding?.argShift).toBe(0);
 		expect(binding?.argsUnknown).toBe(false);
+	});
+});
+
+/* ─────────────── 13회차에 못 박은 것 ─────────────── */
+
+describe("껍데기 벗기기는 저장소에 한 벌뿐이다 (13회차 지적 1)", () => {
+	const SOURCES = [
+		"scripts/lib/bindings.mjs",
+		"scripts/lib/jsx-static.mjs",
+		"scripts/check-silent-clicks.mjs",
+	];
+
+	// 12회차는 쉼표식을 `bindings.mjs` 에서만 닫았다. 값 쪽 껍데기는 두 벌이 더
+	// 있었고, 그래서 `(0, true)` 는 영구히 꺼 둔 버튼이 아니었고
+	// `(0, el.click())` 은 클릭이 아니었다. 규칙이 여러 벌이면 구멍도 여러 번
+	// 막아야 하고, 리뷰어는 매번 안 고친 쪽으로 넣는다.
+	for (const rel of SOURCES) {
+		it(`${rel} 에는 자기 껍데기 벗기기가 없다`, () => {
+			const text = readFileSync(resolve(__dirname, "..", "..", rel), "utf8");
+			// 껍데기를 직접 판별하는 술어가 있으면 그 파일이 자기 규칙을 든 것이다.
+			for (const marker of [
+				"isParenthesizedExpression",
+				"isAsExpression",
+				"isNonNullExpression",
+				"isSatisfiesExpression",
+				"TypeAssertionExpression",
+				"isCommaListExpression",
+			]) {
+				expect(text.includes(marker), `${rel} 이 ${marker} 를 직접 본다`).toBe(false);
+			}
+			expect(text.includes("unwrap.mjs"), `${rel} 이 공용 모듈을 안 쓴다`).toBe(true);
+		});
+	}
+
+	it("공용 모듈은 쉼표식의 마지막 항을 값으로 준다", () => {
+		const sf = parse(`export const v = (0, 1, "kept");`);
+		const decl = sf.statements[0] as ts.VariableStatement;
+		const init = decl.declarationList.declarations[0]?.initializer as ts.Node;
+		const value = U.unwrapExpression(init) as ts.Node;
+		expect(ts.isStringLiteral(value) && value.text).toBe("kept");
+	});
+
+	it("반증: 값을 바꾸는 것은 껍데기가 아니다", () => {
+		// `await x`·`void x`·`!x` 를 여기서 벗기면 뜻이 달라진다. 필요한 게이트가
+		// 자기 자리에서 따로 다룬다.
+		const sf = parse(`export const v = void 0;`);
+		const decl = sf.statements[0] as ts.VariableStatement;
+		const init = decl.declarationList.declarations[0]?.initializer as ts.Node;
+		expect(ts.isVoidExpression(U.unwrapExpression(init) as ts.Node)).toBe(true);
+	});
+
+	it("겹의 수를 세지 않는다 — 괄호 서른 겹도 같은 값이다", () => {
+		const wrapped = `${"(".repeat(30)}"kept"${")".repeat(30)}`;
+		const sf = parse(`export const v = ${wrapped};`);
+		const decl = sf.statements[0] as ts.VariableStatement;
+		const init = decl.declarationList.declarations[0]?.initializer as ts.Node;
+		const value = U.unwrapExpression(init) as ts.Node;
+		expect(ts.isStringLiteral(value) && value.text).toBe("kept");
+	});
+});
+
+describe("default 재수출도 이름이다 (13회차 지적 3)", () => {
+	const SCREEN = "app/screen.tsx";
+
+	function throughDefault(shim: string, importLine: string, callee: string): Binding | null {
+		const { env, file } = environment({
+			"app/shim.ts": shim,
+			[SCREEN]: `${importLine}\nexport const E = ${callee}("div", { role: "alert" });`,
+		});
+		return calleeOf("", callee, env, file(SCREEN));
+	}
+
+	it("`export default createElement` 를 따라간다", () => {
+		const binding = throughDefault(
+			`import { createElement } from "react";\nexport default createElement;`,
+			`import ghostCreate from "./shim";`,
+			"ghostCreate",
+		);
+		expect(binding?.module).toBe("react");
+		expect(binding?.imported).toBe("createElement");
+	});
+
+	it("`export { createElement as default }` 를 따라간다", () => {
+		const binding = throughDefault(
+			`import { createElement } from "react";\nexport { createElement as default };`,
+			`import ghostCreate from "./shim";`,
+			"ghostCreate",
+		);
+		expect(binding?.module).toBe("react");
+		expect(binding?.imported).toBe("createElement");
+	});
+
+	it("`export { x as default } from \"mod\"` 를 따라간다", () => {
+		const binding = throughDefault(
+			`export { createElement as default } from "react";`,
+			`import ghostCreate from "./shim";`,
+			"ghostCreate",
+		);
+		expect(binding?.module).toBe("react");
+		expect(binding?.imported).toBe("createElement");
+	});
+
+	it("네임스페이스로 가져온 멤버도 그 파일의 export 로 이어 푼다", () => {
+		// `import * as R from "./shim"` 뒤의 `R.createElement` 는 shim 이
+		// 재수출한 react 의 것이다. 네임스페이스 한 겹으로 판정이 갈리면
+		// 같은 화면이 요소가 아니게 된다.
+		const { env, file } = environment({
+			"app/shim.ts": `export * from "react";`,
+			[SCREEN]: `import * as R from "./shim";\nexport const E = R.createElement("div");`,
+		});
+		const binding = calleeOf("", "R.createElement", env, file(SCREEN));
+		expect(binding?.module).toBe("react");
+		expect(binding?.imported).toBe("createElement");
+	});
+
+	it("반증: 저장소 밖 모듈의 default 는 그 모듈의 default 로 남는다", () => {
+		// `react` 자신은 파일로 풀리지 않는다. 그때까지 지어내면 남의 모듈
+		// export 를 안다고 말하는 것이다.
+		const binding = calleeOf(
+			`import R from "react";\nexport const E = R("div");`,
+			"R",
+		);
+		expect(binding?.module).toBe("react");
+		expect(binding?.imported).toBe("default");
+	});
+});
+
+describe("겹의 수는 한계가 아니다 (13회차 지적 4)", () => {
+	function chain(depth: number): Binding | null {
+		const names = Array.from({ length: depth }, (_, i) => `n${i}`);
+		const lines = names.map(
+			(name, i) => `const ${name} = ${i === 0 ? "createElement" : names[i - 1]};`,
+		);
+		const last = names[names.length - 1] as string;
+		return calleeOf(
+			`import { createElement } from "react";\n${lines.join("\n")}\nexport const E = ${last}("div");`,
+			last,
+		);
+	}
+
+	it("별명 열 겹도 같은 바인딩이다", () => {
+		expect(chain(10)?.module).toBe("react");
+		expect(chain(10)?.imported).toBe("createElement");
+	});
+
+	it("서른 겹도 같다 — 세는 자리가 없다", () => {
+		// 숫자 한계는 "몇 겹을 더 쌓으면 통과하는가" 를 알려 주는 눈금이었다.
+		expect(chain(30)?.imported).toBe("createElement");
+	});
+
+	it("순환 별명은 멈추고 모른다로 답한다", () => {
+		// `const a = b; const b = a;` — 끝나는 이유는 깊이를 세는 것이 아니라
+		// (파일, 이름)을 두 번 지나지 않는 것이다.
+		expect(
+			calleeOf(`const a: unknown = b;\nconst b: unknown = a;\nexport const E = (a as never)("div");`, "(aasnever)"),
+		).toBeNull();
+	});
+
+	it("파일을 건너가는 순환도 멈추고, 없는 모듈을 지어내지 않는다", () => {
+		// 두 파일이 서로를 재수출한다. 답은 "그 파일의 그 이름" 에서 멈춰야
+		// 하고, 그 너머를 지어내면 안 된다. 멈추지 않으면 게이트가 통째로
+		// 돌지 않는다.
+		const { env, file } = environment({
+			"app/one.ts": `import { x } from "./two";\nexport const y = x;`,
+			"app/two.ts": `import { y } from "./one";\nexport const x = y;`,
+			"app/screen.tsx": `import { y } from "./one";\nexport const E = (y as never)("div");`,
+		});
+		const binding = calleeOf("", "(yasnever)", env, file("app/screen.tsx"));
+		expect(binding?.module).toBe("./one");
+		expect(binding?.module).not.toBe("react");
 	});
 });

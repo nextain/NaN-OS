@@ -23,7 +23,10 @@
  *     (`(0, invoke)("cmd")` 는 `invoke("cmd")` 다)
  *   - 상대 경로 import 로 건너간 파일의 const 별명·재수출 (`env` 를 넘겼을 때).
  *     재수출은 `export const y = x`, `export { x as y }`,
- *     `export { x as y } from "mod"`, `export * from "mod"` 를 모두 따라간다.
+ *     `export { x as y } from "mod"`, `export * from "mod"`, 그리고 **default**
+ *     (`export default x`, `export { x as default }`, `import h from "./x"`)를
+ *     모두 따라간다. 네임스페이스로 가져온 멤버(`import * as R from "./x"` 뒤의
+ *     `R.createElement`)도 그 파일의 export 로 이어 푼다.
  *   - **전역 바인딩**: 이 파일 어디에도 선언이 없는 자유 식별자(`fetch`)와
  *     전역 뿌리의 멤버(`globalThis.fetch`, `window.fetch`, `self["fetch"]`),
  *     그리고 그것으로 만든 const 별명·구조분해(`const get = fetch`,
@@ -54,14 +57,18 @@
  *   - 같은 이름이 다시 대입되는 `let`/`var` 별명(재대입이 있는 이름은 아예
  *     풀지 않는다).
  *
+ * 겹의 수는 한계가 아니다. 별명이 몇 겹이든 따라가고, 끝나는 이유는 깊이를
+ * 세는 것이 아니라 (파일, 이름)을 두 번 지나지 않는 것이다. 숫자 한계는
+ * "몇 겹을 더 쌓으면 통과하는가" 를 알려 주는 눈금이었다(13회차 지적 4).
+ *
  * 이 경계 **안쪽** 형태는 새 모양이 와도 같은 규칙으로 잡힌다 — 껍데기는
  * `unwrap` 하나가 벗기고, 이름은 언제나 바인딩으로 되돌려 읽는다. 형태를
  * 하나씩 열거하지 않는 것이 이 모듈의 설계다.
  */
 
 import ts from "typescript";
+import { unwrapExpression } from "./unwrap.mjs";
 
-const MAX_DEPTH = 6;
 
 /** 전역이 담겨 있는 뿌리 이름. 이 멤버는 그 이름의 전역과 같다. */
 const GLOBAL_ROOTS = new Set(["globalThis", "window", "self", "global"]);
@@ -69,41 +76,11 @@ const GLOBAL_ROOTS = new Set(["globalThis", "window", "self", "global"]);
 /**
  * 껍데기를 벗겨 알맹이 식을 돌려준다.
  *
- * 괄호·`as`/`satisfies`·`!`·타입 단언, 그리고 **쉼표식의 마지막 항**이다.
- * `(0, invoke)("cmd")` 는 가져온 함수를 `this` 없이 부르는 JavaScript 의 흔한
- * 호출이고, 값은 그대로 `invoke` 다. 여기서 벗기지 않으면 두 게이트가 같은
- * 자리에서 따로 뚫린다 — 그래서 껍데기를 벗기는 자리는 이 함수 하나다.
+ * 규칙은 `scripts/lib/unwrap.mjs` 하나뿐이다 — 이 모듈은 그것을 그대로 내보내
+ * 호출자가 어디서 부르든 같은 답을 받게 한다. 껍데기를 벗기는 코드를 여기에
+ * 다시 적으면, 다음 회차에 한쪽만 고쳐진 자리로 결함이 들어온다(13회차 지적 1).
  */
-export function unwrap(node) {
-	let cur = node;
-	for (let i = 0; i < 16 && cur; i += 1) {
-		if (
-			ts.isParenthesizedExpression(cur) ||
-			ts.isAsExpression(cur) ||
-			ts.isNonNullExpression(cur) ||
-			(ts.isSatisfiesExpression?.(cur) ?? false) ||
-			cur.kind === ts.SyntaxKind.TypeAssertionExpression
-		) {
-			cur = cur.expression;
-			continue;
-		}
-		// `(a, b, c)` — 값은 마지막 항이다. 파서는 이것을 왼쪽으로 접힌
-		// 쉼표 이항식으로도, `CommaListExpression` 으로도 준다.
-		if (ts.isCommaListExpression?.(cur)) {
-			cur = cur.elements[cur.elements.length - 1];
-			continue;
-		}
-		if (
-			ts.isBinaryExpression(cur) &&
-			cur.operatorToken.kind === ts.SyntaxKind.CommaToken
-		) {
-			cur = cur.right;
-			continue;
-		}
-		break;
-	}
-	return cur ?? null;
-}
+export const unwrap = unwrapExpression;
 
 /** 리터럴 키로 적은 멤버 접근의 이름. 동적 키는 `null` — 보증 밖이다. */
 function memberName(node) {
@@ -317,32 +294,68 @@ function constAlias(name, sf) {
 	return found;
 }
 
+/**
+ * 이름을 따라가며 이미 지난 (파일, 이름) 자리.
+ *
+ * 예전에는 깊이를 여섯까지 세었다. 그 숫자는 한계가 아니라 **눈금**이었다 —
+ * 별명을 일곱 겹 쌓으면 부르는 값이 그대로 `createElement` 인데도 요소가
+ * 아니게 되고, 막다른 오류 화면이 초록 안에 숨었다(13회차 지적 4). 200자
+ * 창·속성 64개와 같은 종류의 자리다.
+ *
+ * 끝나는 이유는 세는 것이 아니라 **다시 가지 않는 것**이다. 이름을 풀 때마다
+ * (파일, 이름)을 적어 두고 같은 자리에 두 번째로 닿으면 모른다로 답한다.
+ * 그래서 `const a = b; const b = a;` 같은 순환은 끊기고, 겹은 몇이든 따라간다.
+ */
+function visitKey(sf, name) {
+	return `${sf && sf.fileName ? sf.fileName : "?"}\u0000${name}`;
+}
+
+function newSeen(state) {
+	return state instanceof Set ? state : new Set();
+}
+
 /** 상대 경로 import 를 건너가 그 파일의 별명·재수출까지 이어 푼다. */
-function crossFile(hit, sf, env, depth) {
-	if (depth > MAX_DEPTH) return null;
+function crossFile(hit, sf, env, seen) {
 	if (!env || typeof env.resolve !== "function" || typeof env.sourceFile !== "function")
 		return null;
-	if (hit.imported === "*" || hit.imported === "default") return null;
+	if (hit.imported === "*") return null;
 	const path = env.resolve(sf.fileName, hit.module);
 	if (!path) return null;
 	const target = env.sourceFile(path);
 	if (!target || target === sf) return null;
-	return resolveExported(hit.imported, target, env, depth + 1);
+	return resolveExported(hit.imported, target, env, seen);
 }
 
-/** 이 파일이 그 이름으로 내보내는 것의 바인딩. */
-function resolveExported(name, target, env, depth) {
-	if (depth > MAX_DEPTH) return null;
+/**
+ * 이 파일이 그 이름으로 내보내는 것의 바인딩.
+ *
+ * `default` 도 이름이다(13회차 지적 3). `export default createElement`,
+ * `export { createElement as default }`, `export { x as default } from "mod"`
+ * 는 모두 정적 재수출이고, 보증 밖 목록(동적 `import`, 고차 함수, 배열·객체)에
+ * 없다. 여기서 멈추면 `import h from "./shim"` 한 줄로 요소 판정이 열린다.
+ */
+function resolveExported(name, target, env, seen) {
+	const key = visitKey(target, name);
+	if (seen.has(key)) return null;
+	seen.add(key);
+	// `export default createElement` — 이름 없는 자리라 별명·import 로는 안 잡힌다.
+	if (name === "default") {
+		for (const stmt of target.statements) {
+			if (!ts.isExportAssignment(stmt) || stmt.isExportEquals) continue;
+			const resolved = resolveBinding(stmt.expression, target, env, seen);
+			if (resolved) return resolved;
+		}
+	}
 	// `export const ghostCreate = createElement`
 	const alias = constAlias(name, target);
 	if (alias) {
-		const resolved = resolveIn(alias, target, env, depth);
+		const resolved = resolveIn(alias, target, env, seen);
 		if (resolved) return resolved;
 	}
 	// `import { createElement } from "react"; export { createElement as ghostCreate }`
 	const again = importBindings(target).get(name);
 	if (again) {
-		const crossed = crossFile(again, target, env, depth);
+		const crossed = crossFile(again, target, env, seen);
 		if (crossed) return crossed;
 		return {
 			module: again.module,
@@ -361,7 +374,7 @@ function resolveExported(name, target, env, depth) {
 				{ module: re.module, imported: re.imported },
 				target,
 				env,
-				depth,
+				seen,
 			);
 			if (crossed) return crossed;
 			return {
@@ -372,11 +385,11 @@ function resolveExported(name, target, env, depth) {
 				boundArgs: 0,
 			};
 		}
-		return resolveExported(re.imported, target, env, depth + 1);
+		return resolveExported(re.imported, target, env, seen);
 	}
 	// `export * from "mod"` — 이름을 바꾸지 않고 지나간다.
 	for (const module of stars) {
-		const crossed = crossFile({ module, imported: name }, target, env, depth);
+		const crossed = crossFile({ module, imported: name }, target, env, seen);
 		if (crossed) return crossed;
 		if (!module.startsWith("."))
 			return { module, imported: name, local: name, via: "reexport", boundArgs: 0 };
@@ -384,14 +397,16 @@ function resolveExported(name, target, env, depth) {
 	return null;
 }
 
-function resolveIn(alias, sf, env, depth) {
-	if (alias.kind === "value") return resolveBinding(alias.node, sf, env, depth);
+function resolveIn(alias, sf, env, seen) {
+	if (alias.kind === "value") return resolveBinding(alias.node, sf, env, seen);
 	// `const { createElement } = React` — 오른쪽이 default/namespace 일 때만 뜻이 정해진다.
-	const base = resolveBinding(alias.node, sf, env, depth);
+	const base = resolveBinding(alias.node, sf, env, seen);
 	if (!base) return null;
 	// `const { fetch: f } = globalThis` — 전역 뿌리의 구조분해도 같은 전역이다.
 	if (base.global && GLOBAL_ROOTS.has(base.global)) return globalBinding(alias.property);
-	if (base.imported === "*" || base.imported === "default")
+	if (base.imported === "*" || base.imported === "default") {
+		const through = memberOfModule(base, alias.property, sf, env, seen);
+		if (through) return through;
 		return {
 			module: base.module,
 			imported: alias.property,
@@ -399,7 +414,27 @@ function resolveIn(alias, sf, env, depth) {
 			via: "destructure",
 			boundArgs: 0,
 		};
+	}
 	return null;
+}
+
+/**
+ * 네임스페이스·default 로 가져온 것의 멤버를 **그 파일의 export** 로 이어 푼다.
+ *
+ * `import * as R from "./shim"` 뒤의 `R.createElement(...)` 는 `./shim` 의
+ * `createElement` 이고, 그 파일이 `export * from "react"` 라면 결국 react 의
+ * 것이다. 여기서 멈추면 같은 화면이 네임스페이스 한 겹으로 요소가 아니게 된다.
+ * 저장소 안 파일로 풀리지 않는 모듈(`react` 같은 것)은 그대로 둔다.
+ */
+function memberOfModule(base, name, sf, env, seen) {
+	if (!base || !base.module) return null;
+	if (!env || typeof env.resolve !== "function" || typeof env.sourceFile !== "function")
+		return null;
+	const path = env.resolve(sf.fileName, base.module);
+	if (!path) return null;
+	const target = env.sourceFile(path);
+	if (!target) return null;
+	return resolveExported(name, target, env, seen);
 }
 
 /**
@@ -409,15 +444,19 @@ function resolveIn(alias, sf, env, depth) {
  * "부르면 그 함수가 도는" 식을 받는다. 부른 **결과**(`f()`)는 값이 무엇인지
  * 정적으로 모르므로 `null` 이다.
  */
-export function resolveBinding(expr, sf, env, depth = 0) {
-	if (depth > MAX_DEPTH || !sf) return null;
+export function resolveBinding(expr, sf, env, state) {
+	if (!sf) return null;
+	const seen = newSeen(state);
 	const node = unwrap(expr);
 	if (!node) return null;
 
 	if (ts.isIdentifier(node)) {
+		const key = visitKey(sf, node.text);
+		if (seen.has(key)) return null;
+		seen.add(key);
 		const hit = importBindings(sf).get(node.text);
 		if (hit) {
-			const crossed = crossFile(hit, sf, env, depth);
+			const crossed = crossFile(hit, sf, env, seen);
 			if (crossed) return crossed;
 			return {
 				module: hit.module,
@@ -429,7 +468,7 @@ export function resolveBinding(expr, sf, env, depth = 0) {
 		}
 		const alias = constAlias(node.text, sf);
 		if (alias) {
-			const resolved = resolveIn(alias, sf, env, depth + 1);
+			const resolved = resolveIn(alias, sf, env, seen);
 			if (resolved)
 				return {
 					...resolved,
@@ -450,14 +489,19 @@ export function resolveBinding(expr, sf, env, depth = 0) {
 	if (ts.isPropertyAccessExpression(node) || ts.isElementAccessExpression(node)) {
 		const name = memberName(node);
 		if (name === null) return null; // 동적 키 — 보증 밖이다.
-		const base = resolveBinding(memberBase(node), sf, env, depth + 1);
+		const base = resolveBinding(memberBase(node), sf, env, seen);
 		if (!base) return null;
 		// `globalThis.fetch` · `window["fetch"]` 는 전역 `fetch` 다.
 		if (base.global) return GLOBAL_ROOTS.has(base.global) ? globalBinding(name) : null;
 		// default·namespace 만 멤버를 그 모듈의 export 로 읽는다. 이름으로 가져온
 		// 객체의 속성(`import { core } from "x"; core.invoke`)은 `x` 의 export 가
 		// 아니므로 모른다고 말한다.
-		if (base.imported === "*" || base.imported === "default")
+		if (base.imported === "*" || base.imported === "default") {
+			// 저장소 안 파일로 풀리는 모듈이면 그 파일의 export 까지 이어 푼다 —
+			// `import * as R from "./shim"` 의 `R.createElement` 는 shim 이
+			// 재수출한 react 의 것이다.
+			const through = memberOfModule(base, name, sf, env, seen);
+			if (through) return through;
 			return {
 				module: base.module,
 				imported: name,
@@ -465,13 +509,14 @@ export function resolveBinding(expr, sf, env, depth = 0) {
 				via: "member",
 				boundArgs: 0,
 			};
+		}
 		return null;
 	}
 
 	if (ts.isCallExpression(node)) {
 		const callee = unwrap(node.expression);
 		if (callee && memberName(callee) === "bind") {
-			const base = resolveBinding(memberBase(callee), sf, env, depth + 1);
+			const base = resolveBinding(memberBase(callee), sf, env, seen);
 			if (base && base.imported !== "*" && base.imported !== "default")
 				return {
 					...base,
@@ -512,7 +557,7 @@ export function resolveCallee(node, sf, env) {
 	// `f.call(this, …)` · `f.apply(this, [...])` 는 f 를 부르는 것이다.
 	const shape = memberName(callee);
 	if (shape === "call" || shape === "apply") {
-		const base = resolveBinding(memberBase(callee), source, env, 0);
+		const base = resolveBinding(memberBase(callee), source, env, new Set());
 		if (base && base.imported !== "*" && base.imported !== "default") {
 			const viaApply = shape === "apply";
 			return {
@@ -524,7 +569,7 @@ export function resolveCallee(node, sf, env) {
 		}
 	}
 
-	const direct = resolveBinding(callee, source, env, 0);
+	const direct = resolveBinding(callee, source, env, new Set());
 	if (!direct) return null;
 	return { ...direct, argShift: 0, argsUnknown: direct.boundArgs > 0 };
 }

@@ -34,6 +34,20 @@
  * 지키려는 것은 "확인 없는 파괴 조작이 목록 밖으로 새지 않는다" 이므로,
  * 틀리는 방향은 이쪽이어야 한다.
  *
+ * ## 수식어도 열거하지 않는다 (13회차 지적 5 이후)
+ *
+ * 속성과 `fn` 사이를 건너뛰는 자리에도 세는 숫자가 둘 남아 있었다 — 건너뛰기
+ * **64회** 한계와, `async`·`unsafe`·`extern`·`default` 뿐인 수식어 **목록**이다.
+ * 그래서 속성을 예순다섯 개 붙이거나 `const fn` 으로 적으면 그 명령이 목록에서
+ * 사라졌고, 프런트의 `invoke("…")` 는 확인 검사에서 통째로 건너뛰어졌다.
+ *
+ * 이제 횟수를 세지 않는다(토큰 열은 유한하고, 건너뛰기는 언제나 앞으로만 간다).
+ * 수식어도 목록으로 **허용**하는 대신 [`ITEM_STARTERS`] 로 **멈춘다** — 속성
+ * 그룹과 가시성 괄호는 짝으로 건너뛰고, 그 밖의 낱말은 모두 수식어로 보되
+ * `struct`·`enum`·`impl`·`mod`·`use`·`static`·`type`·`trait` 같은 다른 아이템의
+ * 시작이나 `;`·`{`·`}` 가 먼저 나오면 함수 선언이 아니다. 언어가 수식어를 하나
+ * 더 늘려도 명령이 사라지지 않고, `#[tauri::command] struct X;` 는 명령이 아니다.
+ *
  * ## 이 모듈이 보증하지 않는 것
  *
  * 소스에 그 토큰이 **없는** 것은 보지 못한다. 둘이다.
@@ -236,8 +250,26 @@ export function skipBalanced(tokens, at, open, close) {
 	return tokens.length;
 }
 
-/** 함수 앞에 붙는 수식어. 명령 이름을 읽기 전에 건너뛴다. */
-const FN_MODIFIERS = new Set(["async", "unsafe", "extern", "default"]);
+/**
+ * 다른 **아이템**의 시작. 이 낱말이 먼저 나오면 그 속성은 함수에 붙은 것이 아니다.
+ *
+ * 함수 앞에 올 수 있는 낱말(`pub`, `const`, `async`, `unsafe`, `extern`, `default`)과
+ * 겹치지 않는다. 그래서 수식어를 **열거**하는 대신 이 목록으로 **멈춘다** — 언어가
+ * 수식어를 하나 더 늘려도 명령이 목록에서 사라지지 않는다(13회차 지적 5).
+ */
+const ITEM_STARTERS = new Set([
+	"struct",
+	"enum",
+	"impl",
+	"mod",
+	"use",
+	"static",
+	"type",
+	"trait",
+	"union",
+	"macro_rules",
+	"let",
+]);
 
 /**
  * `#[…]`(또는 `#![…]`) 속성 하나를 건너뛴다. 속성이 아니면 `at` 을 그대로
@@ -302,33 +334,48 @@ export function tauriCommandBodies(source) {
 		if (t.kind !== "punct" || t.text !== "#") continue;
 		if (!isTauriCommandAttribute(tokens, i)) continue;
 
+		// 속성과 수식어를 건너뛰어 `fn` 에 닿는다. 횟수를 세지 않는다 — 토큰 열은
+		// 유한하고, 아래 갈래는 모두 `j` 를 앞으로만 옮기므로 반드시 끝난다.
 		let j = skipAttribute(tokens, i);
-		// 뒤따르는 속성과 수식어를 건너뛴다.
-		for (let guard = 0; guard < 64; guard += 1) {
+		let reachedFn = false;
+		while (j < tokens.length) {
 			const next = tokens[j];
-			if (!next) break;
-			if (next.kind === "punct" && next.text === "#") {
-				const after = skipAttribute(tokens, j);
-				if (after === j) break;
-				j = after;
-				continue;
+			if (next.kind === "punct") {
+				// 뒤따르는 속성 그룹은 통째로 건너뛴다.
+				if (next.text === "#") {
+					const after = skipAttribute(tokens, j);
+					if (after === j) break;
+					j = after;
+					continue;
+				}
+				// `pub(crate)` · `pub(in crate::a)` 의 가시성 괄호.
+				if (next.text === "(") {
+					const after = skipBalanced(tokens, j, "(", ")");
+					if (after === j) break;
+					j = after;
+					continue;
+				}
+				// `;` · `{` · `}` 를 비롯한 나머지 구두점은 함수 선언이 아니다.
+				break;
 			}
-			if (next.kind === "ident" && next.text === "pub") {
+			// `extern "C"` 의 ABI 문자열.
+			if (next.kind === "string") {
 				j += 1;
-				if (tokens[j]?.kind === "punct" && tokens[j].text === "(")
-					j = skipBalanced(tokens, j, "(", ")");
 				continue;
 			}
-			if (next.kind === "ident" && FN_MODIFIERS.has(next.text)) {
-				j += 1;
-				// `extern "C"` 의 ABI 문자열.
-				if (next.text === "extern" && tokens[j]?.kind === "string") j += 1;
-				continue;
+			if (next.kind !== "ident") break;
+			if (next.text === "fn") {
+				reachedFn = true;
+				break;
 			}
-			break;
+			// 다른 아이템의 시작이면 이 속성은 함수에 붙은 것이 아니다.
+			if (ITEM_STARTERS.has(next.text)) break;
+			// 그 밖의 낱말은 수식어다 — `pub`, `const`, `async`, `unsafe`, `extern`,
+			// `default`, 그리고 언어가 앞으로 더할 것들.
+			j += 1;
 		}
 
-		if (!(tokens[j]?.kind === "ident" && tokens[j].text === "fn")) continue;
+		if (!reachedFn) continue;
 		const name = tokens[j + 1];
 		if (!name || name.kind !== "ident") continue;
 

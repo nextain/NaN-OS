@@ -57,6 +57,14 @@
  * 주는 식을 두 번 적은 자리는 같은 것으로 읽는다. 이 게이트는 한 함수 안에서
  * 사람이 읽어 알 수 있는 자리까지만 말한다.
  *
+ * ## 무엇이 있음 가드인가 (13회차 지적 6 이후)
+ *
+ * 가드는 `if (E) …`, `if (!E) return; …`, `E && …`, `E?.click()` 넷이었다.
+ * `E ? E.click() : undefined` 는 그 넷 어디에도 없는데 같은 무음이다 — 있으면
+ * 누르고 없으면 아무것도 남기지 않는다. 이제 삼항도 같은 하나로 읽는다:
+ * 조건이 있음(또는 없음) 검사이고, 도는 갈래가 그 식을 누르고, 다른 갈래가
+ * 값을 남기지 않으면(`undefined`·`null`·`void …`) 가드다.
+ *
  * ## 무엇이 클릭인가 (12회차 지적 7 이후)
  *
  * 클릭은 이제 형태가 아니라 **E 에 대한 `click` 멤버 호출**이다. `E.click(...)`,
@@ -85,6 +93,7 @@
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import ts from "typescript";
+import { unwrapExpression } from "./lib/unwrap.mjs";
 
 const SHELL = "packages/shell";
 
@@ -129,17 +138,26 @@ function parse(file, text) {
 	return ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
 }
 
-/** `await x` · `(x)` · `x as T` 를 벗겨 알맹이를 돌려준다. */
+/**
+ * 껍데기와 `await` 를 벗겨 알맹이를 돌려준다.
+ *
+ * 문법 껍데기(괄호·단언·non-null·**쉼표식의 마지막 항**)는
+ * `scripts/lib/unwrap.mjs` 하나가 벗긴다. 여기서 더하는 것은 `await` 뿐이다 —
+ * 클릭을 기다렸는지는 같은 클릭이냐를 가르지 않는다. 껍데기 규칙을 이 파일에
+ * 다시 적으면 `(0, el.click())` 처럼 공용 모듈이 이미 아는 형태가 여기서만
+ * 빠져나간다(13회차 지적 1).
+ */
 function unwrap(node) {
 	let current = node;
-	for (let i = 0; i < 8 && current; i += 1) {
-		if (ts.isParenthesizedExpression(current)) current = current.expression;
-		else if (ts.isAwaitExpression(current)) current = current.expression;
-		else if (ts.isAsExpression(current) || ts.isNonNullExpression(current))
+	for (;;) {
+		current = unwrapExpression(current);
+		if (!current) return null;
+		if (ts.isAwaitExpression(current)) {
 			current = current.expression;
-		else break;
+			continue;
+		}
+		return current;
 	}
-	return current ?? null;
 }
 
 /**
@@ -394,6 +412,23 @@ function isOptionalClick(node) {
 	return !!callee.questionDotToken || !!node.questionDotToken;
 }
 
+/**
+ * 이 식이 아무 값도 남기지 않는가.
+ *
+ * `undefined`, `null`, `void …` 는 부르는 쪽에 남는 것이 없다는 점에서 같다.
+ * 삼항의 다른 갈래가 이것이면, 그 삼항은 "있으면 누르고 없으면 넘어간다" 다.
+ * 값을 돌려주는 갈래(`false` 같은 것)는 다르다 — 못 눌렀다는 사실을 부르는
+ * 쪽에 넘기는 것이고, 이 게이트가 권하는 형태다.
+ */
+function isValueless(node) {
+	const value = unwrap(node);
+	if (!value) return true;
+	if (ts.isVoidExpression(value)) return true;
+	if (value.kind === ts.SyntaxKind.NullKeyword) return true;
+	if (ts.isIdentifier(value) && value.text === "undefined") return true;
+	return false;
+}
+
 function isWaitForClickable(node) {
 	if (!ts.isCallExpression(node)) return false;
 	const callee = node.expression;
@@ -459,6 +494,30 @@ function findHits(file, source) {
 			const key = guard ? exprKey(guard) : null;
 			const receiver = clickReceiver(node.right);
 			if (key && receiver && exprKey(receiver) === key) hits.push(at(node));
+		}
+
+		// 3b) `el ? el.click() : undefined` — `el && el.click()` 과 같은 무음이다.
+		//     조건이 있음 검사이고, 도는 갈래가 그 식을 누르고, 다른 갈래가
+		//     아무 값도 남기지 않으면 셋은 같은 뜻이다. `&&` 만 세고 삼항을
+		//     빼 두면, 물음표 하나로 같은 무음이 셈에서 사라진다(13회차 지적 6).
+		//     방향을 뒤집은 `!el ? undefined : el.click()` 도 같다.
+		if (ts.isConditionalExpression(node)) {
+			const present = presenceOf(node.condition);
+			const presentKey = present ? exprKey(present) : null;
+			if (
+				presentKey &&
+				isValueless(node.whenFalse) &&
+				clicksKey(node.whenTrue, presentKey)
+			)
+				hits.push(at(node));
+			const absent = absenceOf(node.condition);
+			const absentKey = absent ? exprKey(absent) : null;
+			if (
+				absentKey &&
+				isValueless(node.whenTrue) &&
+				clicksKey(node.whenFalse, absentKey)
+			)
+				hits.push(at(node));
 		}
 
 		// 4) `el?.click()`

@@ -18,6 +18,7 @@
 //
 // 모듈은 `.mjs` ESM 이라 정적 import 로는 이 tsconfig(rootDir=src)의 범위를
 // 벗어난다. 파일 URL 로 동적 import 해서 실제 산출물 그대로를 태운다.
+import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import * as ts from "typescript";
@@ -50,10 +51,10 @@ interface JsxStatic {
 	elementProps(node: ts.Node, sf: ts.SourceFile, env: Env | null): ElementProps;
 	elementChildren(node: ts.Node, env: Env | null): ts.Node[];
 	jsxElementsIn(node: ts.Node, sf: ts.SourceFile, env: Env | null): ts.Node[];
-	stringCandidates(node: ts.Node | undefined, sf: ts.SourceFile, env?: Env): Candidates;
-	staticChunks(node: ts.Node | undefined, sf: ts.SourceFile, env?: Env): string[];
-	alwaysTruthy(node: ts.Node | undefined, sf: ts.SourceFile, env?: Env): boolean;
-	typeStrings(node: ts.TypeNode | undefined, sf: ts.SourceFile, env?: Env): Candidates;
+	stringCandidates(node: ts.Node | undefined, sf: ts.SourceFile, env?: Env | null): Candidates;
+	staticChunks(node: ts.Node | undefined, sf: ts.SourceFile, env?: Env | null): string[];
+	alwaysTruthy(node: ts.Node | undefined, sf: ts.SourceFile, env?: Env | null): boolean;
+	typeStrings(node: ts.TypeNode | undefined, sf: ts.SourceFile, env?: Env | null): Candidates;
 	isCreateElementCall(node: ts.Node, env: Env | null): boolean;
 	isElementNode(node: ts.Node, env: Env | null): boolean;
 	elementFactory(node: ts.Node, env: Env | null): "classic" | "runtime" | null;
@@ -980,5 +981,158 @@ describe("alwaysTruthy — 삼항은 실제로 도는 갈래로 판정한다 (12
 		expect(truthyOf("!(cond ? false : null)", UNKNOWN)).toBe(true);
 		// 반증: 한 갈래가 거짓이 아니면 그 부정은 언제나 참이 아니다.
 		expect(truthyOf("!(cond ? false : true)", UNKNOWN)).toBe(false);
+	});
+});
+
+/* ─────────────── 13회차에 못 박은 것 ─────────────── */
+
+describe("`??` 는 왼쪽이 널인지로 고른다 (13회차 지적 2)", () => {
+	it("왼쪽이 정적으로 널이면 오른쪽이 결과다", () => {
+		// 13회차에 dead-ui 게이트를 뚫은 식이다. 실행하면 `true` 이고, React
+		// 에서 `disabled={null ?? true}` 는 누를 수 없는 버튼이다.
+		expect(truthyOf("null ?? true")).toBe(true);
+		expect(truthyOf("undefined ?? true")).toBe(true);
+		expect(truthyOf("off ?? true", "const off = null;")).toBe(true);
+	});
+
+	it("왼쪽이 정적으로 널이 아니면 왼쪽이 결과다", () => {
+		// `||` 와 같게 다루지 말라는 반증. 여기서 참이 되면 열린 버튼이 영구히
+		// 꺼진 것으로 세어져 게이트가 과탐지로 곧 꺼진다.
+		expect(truthyOf("false ?? true")).toBe(false);
+		expect(truthyOf("0 ?? true")).toBe(false);
+		expect(truthyOf("true ?? false")).toBe(true);
+	});
+
+	it("반증: 왼쪽이 널인지 모르면 둘 다 참일 때만 참이다", () => {
+		expect(truthyOf("x ?? true", "declare const x: unknown;")).toBe(false);
+		expect(truthyOf("x ?? 1", "declare const x: unknown;")).toBe(false);
+		expect(truthyOf("(x ? 1 : 2) ?? true", "declare const x: boolean;")).toBe(true);
+	});
+
+	it("거짓 쪽도 대칭이다", () => {
+		// `alwaysFalsy` 는 내보내지 않으므로 부정으로 묻는다.
+		expect(truthyOf("!(null ?? false)")).toBe(true);
+		expect(truthyOf("!(false ?? true)")).toBe(true);
+		expect(truthyOf("!(x ?? false)", "declare const x: unknown;")).toBe(false);
+	});
+});
+
+describe("쉼표식은 값 쪽에서도 껍데기다 (13회차 지적 1)", () => {
+	it("`(0, true)` 는 언제나 참이다", () => {
+		expect(truthyOf("(0, true)")).toBe(true);
+		expect(truthyOf("(0, 0, true)")).toBe(true);
+	});
+
+	it("반증: 마지막 항이 값이다", () => {
+		// 앞의 항을 값으로 읽으면 열린 버튼이 꺼진 것으로 세어진다.
+		expect(truthyOf("(true, false)")).toBe(false);
+	});
+
+	it("쉼표로 싼 요소도 같은 요소다", () => {
+		const sf = parse(
+			`export const B = () => (0, (<div role="alert">install failed</div>));`,
+		);
+		const read = J.elementProps(firstElement(sf, null), sf, null);
+		expect(read.props.map((p) => p.name)).toEqual(["role"]);
+	});
+
+	it("껍데기 규칙은 이 파일에 없다 — 공용 모듈을 쓴다", () => {
+		const text = readFileSync(
+			resolve(__dirname, "..", "..", "scripts", "lib", "jsx-static.mjs"),
+			"utf8",
+		);
+		expect(text.includes("unwrap.mjs")).toBe(true);
+		expect(text.includes("isParenthesizedExpression")).toBe(false);
+	});
+});
+
+describe("겹의 수를 세는 자리가 없다 (13회차 지적 4 의 같은 처방)", () => {
+	const MODULES = [
+		"scripts/lib/jsx-static.mjs",
+		"scripts/lib/bindings.mjs",
+		"scripts/lib/unwrap.mjs",
+	];
+
+	// 깊이 상수는 한계가 아니라 눈금이다 — 상수를 한 겹 더 쌓거나 spread 를 한
+	// 겹 더 씌우면 판정이 뒤집힌다. 끝나는 이유는 세는 것이 아니라 같은 자리에
+	// 두 번 가지 않는 것이어야 한다.
+	for (const rel of MODULES) {
+		it(`${rel} 에는 깊이 상수가 없다`, () => {
+			const text = readFileSync(resolve(__dirname, "..", "..", rel), "utf8");
+			const hits = text.match(/depth\s*[><]=?\s*\d/g) ?? [];
+			expect(hits, `${rel} 이 깊이를 센다: ${hits.join(", ")}`).toEqual([]);
+			expect(/\bMAX_DEPTH\b/.test(text), `${rel} 에 MAX_DEPTH 가 남아 있다`).toBe(false);
+		});
+	}
+
+	it("const 사슬 열 겹 뒤의 문자열도 표지로 읽힌다", () => {
+		const chain = Array.from(
+			{ length: 10 },
+			(_, i) => `const n${i} = ${i === 0 ? '"ghost-wake-panel"' : `n${i - 1}`};`,
+		).join("\n");
+		const sf = parse(`${chain}\nexport const P = <button data-testid={n9} />;`);
+		expect(J.stringCandidates(attributeValue(sf, "data-testid"), sf, null).values).toContain(
+			"ghost-wake-panel",
+		);
+	});
+
+	it("파일 여덟 겹을 건너간 표지도 읽힌다", () => {
+		// 여기가 진짜 눈금이었다. 같은 파일 안의 사슬은 예전에도 끝까지
+		// 따라갔지만, `constValue` 의 깊이는 **파일을 건너뛴 횟수**를 셌다.
+		// 네 번을 넘기면 표지가 사라졌고, 그러면 게이트는 "스펙이 기다리는
+		// 이름이 셸 소스에 없다" 고 잘못 말한다.
+		const files: Record<string, string> = {
+			"app/f0.ts": `export const mark = "deep-cross-mark";`,
+		};
+		for (let i = 1; i < 8; i += 1)
+			files[`app/f${i}.ts`] = `import { mark } from "./f${i - 1}";\nexport { mark };`;
+		files["app/screen.tsx"] =
+			`import { mark } from "./f7";\nexport const P = <button data-testid={mark} />;`;
+		const { env, file } = environment(files);
+		const screen = file("app/screen.tsx");
+		const read = J.stringCandidates(attributeValue(screen, "data-testid"), screen, env);
+		expect([...read.values]).toEqual(["deep-cross-mark"]);
+		expect(read.complete).toBe(true);
+	});
+
+	it("서른 겹도 같다 — 세는 자리가 없다", () => {
+		const chain = Array.from(
+			{ length: 30 },
+			(_, i) => `const m${i} = ${i === 0 ? '"deep-mark"' : `m${i - 1}`};`,
+		).join("\n");
+		const sf = parse(`${chain}\nexport const P = <button data-testid={m29} />;`);
+		expect(J.stringCandidates(attributeValue(sf, "data-testid"), sf, null).values).toContain(
+			"deep-mark",
+		);
+	});
+
+	it("spread 여섯 겹 뒤의 `disabled: true` 도 꺼짐으로 읽힌다", () => {
+		const layers = Array.from(
+			{ length: 6 },
+			(_, i) => `const s${i} = ${i === 0 ? "{ disabled: true }" : `{ ...s${i - 1} }`};`,
+		).join("\n");
+		const sf = parse(`${layers}\nexport const P = <button {...s5} data-testid="deep" />;`);
+		const read = J.elementProps(firstElement(sf, null), sf, null);
+		const off = read.props.find((p) => p.name === "disabled");
+		expect(off, "여섯 겹 뒤의 disabled 를 못 읽었다").toBeDefined();
+		expect(J.alwaysTruthy(off?.value, sf, null)).toBe(true);
+	});
+
+	it("순환 const 는 멈추고 모른다로 답한다", () => {
+		// `const a = b; const b = a;` — 끝나는 이유가 깊이가 아니라 방문 표시다.
+		const sf = parse(
+			`const a: string = b;\nconst b: string = a;\nexport const P = <button data-testid={a} />;`,
+		);
+		const read = J.stringCandidates(attributeValue(sf, "data-testid"), sf, null);
+		expect([...read.values]).toEqual([]);
+		expect(read.complete).toBe(false);
+	});
+
+	it("순환 spread 도 멈춘다", () => {
+		const sf = parse(
+			`const A: Record<string, unknown> = { ...B };\nconst B: Record<string, unknown> = { ...A };\nexport const P = <button {...A} />;`,
+		);
+		const read = J.elementProps(firstElement(sf, null), sf, null);
+		expect(read.props.length).toBe(0);
 	});
 });

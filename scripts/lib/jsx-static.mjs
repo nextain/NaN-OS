@@ -59,6 +59,7 @@
 
 import ts from "typescript";
 import { resolveCallee } from "./bindings.mjs";
+import { unwrapExpression } from "./unwrap.mjs";
 
 /* ─────────────── 파싱과 파일 환경 ─────────────── */
 
@@ -110,21 +111,20 @@ export function makeEnv(files) {
 
 /* ─────────────── 껍데기 벗기기 ─────────────── */
 
-/** 괄호·단언·JSX 식 껍데기를 모두 벗긴다. 값이 없는 `{}` 는 null. */
+/**
+ * 껍데기를 모두 벗긴다. 값이 없는 `{}` 는 null.
+ *
+ * 문법 껍데기(괄호·단언·non-null·**쉼표식의 마지막 항**)는
+ * `scripts/lib/unwrap.mjs` 하나가 벗긴다. 여기서 더하는 것은 JSX 식 컨테이너
+ * (`{ ... }`) 뿐이다 — 그것은 JSX 에만 있는 껍데기라 공용 모듈이 알 필요가 없다.
+ * 껍데기 규칙을 이 파일에 다시 적으면, 12회차처럼 callee 쪽만 고쳐지고 값 쪽은
+ * 그대로 남는다(13회차 지적 1).
+ */
 export function unwrapAll(node) {
 	let cur = node;
 	for (;;) {
+		cur = unwrapExpression(cur);
 		if (!cur) return null;
-		if (
-			ts.isParenthesizedExpression(cur) ||
-			ts.isAsExpression(cur) ||
-			ts.isNonNullExpression(cur) ||
-			(ts.isSatisfiesExpression?.(cur) ?? false) ||
-			cur.kind === ts.SyntaxKind.TypeAssertionExpression
-		) {
-			cur = cur.expression;
-			continue;
-		}
 		if (ts.isJsxExpression(cur)) {
 			if (!cur.expression) return null;
 			cur = cur.expression;
@@ -132,6 +132,28 @@ export function unwrapAll(node) {
 		}
 		return cur;
 	}
+}
+
+/* ─────────────── 되돌아가지 않기 ─────────────── */
+
+/**
+ * 이름·값을 따라갈 때 이미 지난 자리.
+ *
+ * 예전에는 겹을 셋·넷까지만 셌다. 그런 숫자는 한계가 아니라 **눈금**이다 —
+ * 상수를 한 겹 더 쌓거나 spread 를 한 겹 더 씌우면 판정이 뒤집힌다. 200자
+ * 창·속성 64개·별명 여섯 겹과 같은 종류의 자리다(13회차 지적 4).
+ *
+ * 끝나는 이유는 세는 것이 아니라 **다시 가지 않는 것**이다. 이름은 (파일,
+ * 이름)으로, 값은 그 노드 자신으로 적어 두고, 같은 자리에 두 번째로 닿으면
+ * 모른다로 답한다. 그래서 `const A = B; const B = A;` 같은 순환은 끊기고,
+ * 겹은 몇이든 따라간다.
+ */
+function trail(state) {
+	return state instanceof Set ? state : new Set();
+}
+
+function nameMark(sf, name) {
+	return `${sf && sf.fileName ? sf.fileName : "?"}\u0000${name}`;
 }
 
 /* ─────────────── 호출 규약 ─────────────── */
@@ -277,12 +299,17 @@ export function elementProps(node, sf, env) {
 
 	// `home` 은 지금 읽고 있는 객체가 적혀 있는 파일이다. 파일을 건너갈 때마다
 	// 함께 옮겨 간다.
-	const fromObject = (expr, depth, home) => {
+	// 이미 펼친 객체. 겹을 세는 대신 같은 자리에 두 번 가지 않는다 —
+	// `const A = { ...B }; const B = { ...A }` 는 여기서 끊긴다.
+	const spreadSeen = new Set();
+	const fromObject = (expr, home) => {
 		const obj = unwrapAll(expr);
 		if (!obj) {
 			unknownSpread = true;
 			return;
 		}
+		if (spreadSeen.has(obj)) return;
+		spreadSeen.add(obj);
 		if (obj.kind === ts.SyntaxKind.NullKeyword) return;
 		if (ts.isIdentifier(obj) && obj.text === "undefined") return;
 		if (ts.isObjectLiteralExpression(obj)) {
@@ -296,18 +323,17 @@ export function elementProps(node, sf, env) {
 				} else if (ts.isSpreadAssignment(p)) {
 					// 객체 안의 spread 도 그 파일 트리에서 이어 푼다. 여기서 멈추면
 					// `{ ...BASE, id: "k" }` 가 BASE 의 속성을 통째로 잃는다.
-					if (depth >= 4) unknownSpread = true;
-					else fromObject(p.expression, depth + 1, home);
+					fromObject(p.expression, home);
 				} else {
 					unknownSpread = true;
 				}
 			}
 			return;
 		}
-		if (ts.isIdentifier(obj) && depth < 4) {
+		if (ts.isIdentifier(obj)) {
 			const bound = constValue(obj.text, home, env);
 			if (bound) {
-				fromObject(bound.node, depth + 1, bound.sf);
+				fromObject(bound.node, bound.sf);
 				return;
 			}
 		}
@@ -331,7 +357,7 @@ export function elementProps(node, sf, env) {
 						sf,
 					});
 			} else if (ts.isJsxSpreadAttribute(a)) {
-				fromObject(a.expression, 0, sf);
+				fromObject(a.expression, sf);
 			} else {
 				unknownSpread = true;
 			}
@@ -350,7 +376,7 @@ export function elementProps(node, sf, env) {
 			return { props, unknownSpread };
 		}
 		const at = 1 + shape.argShift;
-		if (node.arguments.length > at) fromObject(node.arguments[at], 0, sf);
+		if (node.arguments.length > at) fromObject(node.arguments[at], sf);
 		return { props, unknownSpread };
 	}
 	return { props, unknownSpread };
@@ -470,15 +496,22 @@ function importedBinding(name, sf, env) {
 	return found;
 }
 
-/** `const NAME = <식>` 의 그 식. import 도 한 번 따라간다. */
-export function constValue(name, sf, env, depth = 0) {
-	if (depth > 3) return null;
+/**
+ * `const NAME = <식>` 의 그 식. import 를 따라 파일을 건너간다.
+ *
+ * 겹의 수는 세지 않는다. 같은 (파일, 이름)에 두 번째로 닿으면 멈춘다.
+ */
+export function constValue(name, sf, env, state) {
+	const seen = trail(state);
+	const mark = nameMark(sf, name);
+	if (seen.has(mark)) return null;
+	seen.add(mark);
 	for (const hit of declarationSites(name, sf)) {
 		if (hit.kind === "var" && hit.decl.initializer)
 			return { node: hit.decl.initializer, sf };
 	}
 	const imported = importedBinding(name, sf, env);
-	if (imported) return constValue(imported.name, imported.sf, env, depth + 1);
+	if (imported) return constValue(imported.name, imported.sf, env, seen);
 	return null;
 }
 
@@ -513,8 +546,11 @@ function isConstDeclaration(decl) {
  * 인지는 묻지 않는다 — `as const` 는 타입 표기이지 값이 바뀌는지와 무관하고,
  * 그것을 요구하면 `as const` 를 떼는 것만으로 판정이 빠져나간다.
  */
-function constOnlyValue(name, sf, env, depth = 0) {
-	if (depth > 3) return null;
+function constOnlyValue(name, sf, env, state) {
+	const seen = trail(state);
+	const mark = nameMark(sf, name);
+	if (seen.has(mark)) return null;
+	seen.add(mark);
 	let seenDeclaration = false;
 	for (const hit of declarationSites(name, sf)) {
 		if (hit.kind !== "var") continue;
@@ -526,7 +562,7 @@ function constOnlyValue(name, sf, env, depth = 0) {
 	}
 	if (seenDeclaration) return null;
 	const imported = importedBinding(name, sf, env);
-	if (imported) return constOnlyValue(imported.name, imported.sf, env, depth + 1);
+	if (imported) return constOnlyValue(imported.name, imported.sf, env, seen);
 	return null;
 }
 
@@ -576,8 +612,10 @@ function literalMember(literal, key, home) {
  * 는 둘 다 누를 수 없는 버튼이다. 한쪽만 영구 꺼짐으로 읽으면, 속성 하나로
  * 감싸는 것만으로 죽은 화면이 살아 있는 것으로 세어진다.
  */
-function constAccessValue(node, sf, env, depth = 0) {
-	if (depth > 4) return null;
+function constAccessValue(node, sf, env, state) {
+	const seen = trail(state);
+	if (seen.has(node)) return null;
+	seen.add(node);
 	const key = accessKey(node);
 	if (key === null) return null;
 	const base = unwrapAll(node.expression);
@@ -594,7 +632,7 @@ function constAccessValue(node, sf, env, depth = 0) {
 		literal = value;
 		home = bound.sf;
 	} else if (ts.isPropertyAccessExpression(base) || ts.isElementAccessExpression(base)) {
-		const inner = constAccessValue(base, sf, env, depth + 1);
+		const inner = constAccessValue(base, sf, env, seen);
 		const value = inner ? unwrapAll(inner.node) : null;
 		if (!value) return null;
 		if (!ts.isObjectLiteralExpression(value) && !ts.isArrayLiteralExpression(value)) return null;
@@ -626,15 +664,22 @@ function isUseStateCall(node) {
 }
 
 /** 타입 자리의 문자열 유니언. `"a" | "b"` 와 그 별칭. */
-export function typeStrings(typeNode, sf, env, depth = 0) {
+export function typeStrings(typeNode, sf, env, state) {
 	const values = new Set();
 	let complete = true;
-	if (!typeNode || depth > 4) return { values, complete: false };
+	const seen = trail(state);
+	if (!typeNode) return { values, complete: false };
+	// 되돌아온 자리는 모른다. `type A = A | "x"` 같은 순환 별칭이 여기서 끊긴다.
+	if (seen.has(typeNode)) return { values, complete: false };
+	seen.add(typeNode);
 	if (ts.isParenthesizedTypeNode(typeNode))
-		return typeStrings(typeNode.type, sf, env, depth + 1);
+		return typeStrings(typeNode.type, sf, env, seen);
 	if (ts.isUnionTypeNode(typeNode)) {
 		for (const member of typeNode.types) {
-			const r = typeStrings(member, sf, env, depth + 1);
+			// 갈래마다 지나온 자국을 따로 든다. 순환은 **한 갈래 안에서** 되돌아
+			// 오는 것이고, 형제 갈래가 같은 별칭을 쓰는 것은 순환이 아니다.
+			// 자국을 형제끼리 나눠 쓰면 `X | X` 의 둘째가 모른다로 접힌다.
+			const r = typeStrings(member, sf, env, new Set(seen));
 			for (const v of r.values) values.add(v);
 			if (!r.complete) complete = false;
 		}
@@ -666,7 +711,7 @@ export function typeStrings(typeNode, sf, env, depth = 0) {
 			ts.forEachChild(n, visit);
 		};
 		visit(sf);
-		if (alias) return typeStrings(alias.type, sf, env, depth + 1);
+		if (alias) return typeStrings(alias.type, sf, env, seen);
 		const imported = importedBinding(name, sf, env);
 		if (imported) {
 			let target = null;
@@ -676,7 +721,7 @@ export function typeStrings(typeNode, sf, env, depth = 0) {
 				ts.forEachChild(n, seek);
 			};
 			seek(imported.sf);
-			if (target) return typeStrings(target.type, imported.sf, env, depth + 1);
+			if (target) return typeStrings(target.type, imported.sf, env, seen);
 		}
 		return { values, complete: false };
 	}
@@ -967,11 +1012,64 @@ export function staticChunks(node, sf, env, seen = new Set()) {
 }
 
 /**
+ * 이 식이 **언제나 널**인가. `true` 면 언제나 널, `false` 면 언제나 널이 아님,
+ * `null` 이면 모른다.
+ *
+ * `??` 가 어느 쪽을 고르는지는 참·거짓이 아니라 이것으로 정해진다. 세 값을
+ * 돌려주는 이유는 "모른다" 를 "널이 아니다" 로 접으면 `x ?? true` 가 영구
+ * 참으로 읽히기 때문이다 — 실행하면 `x` 가 무엇이냐에 따라 열린 버튼이다.
+ */
+function staticNullish(node, sf, env, seen) {
+	const n = unwrapAll(node);
+	if (!n) return null;
+	if (n.kind === ts.SyntaxKind.NullKeyword) return true;
+	if (ts.isIdentifier(n) && n.text === "undefined") return true;
+	if (
+		n.kind === ts.SyntaxKind.TrueKeyword ||
+		n.kind === ts.SyntaxKind.FalseKeyword ||
+		ts.isStringLiteral(n) ||
+		ts.isNoSubstitutionTemplateLiteral(n) ||
+		ts.isTemplateExpression(n) ||
+		ts.isNumericLiteral(n) ||
+		ts.isBigIntLiteral(n) ||
+		ts.isObjectLiteralExpression(n) ||
+		ts.isArrayLiteralExpression(n) ||
+		ts.isArrowFunction(n) ||
+		ts.isFunctionExpression(n) ||
+		ts.isClassExpression(n) ||
+		ts.isJsxElement(n) ||
+		ts.isJsxSelfClosingElement(n) ||
+		ts.isJsxFragment(n)
+	)
+		return false;
+	// `const off = null` 같은 상수 사슬도 같은 값이다. 한쪽만 풀면 값을 이름
+	// 한 겹에 넣는 것으로 판정이 갈린다.
+	if (ts.isIdentifier(n)) {
+		const guard = seen instanceof Set ? seen : new Set();
+		if (guard.has(n)) return null;
+		guard.add(n);
+		for (const hit of declarationSites(n.text, sf)) {
+			if (hit.kind !== "var" || !hit.decl.initializer) continue;
+			if (!isConstDeclaration(hit.decl)) continue;
+			if (isReassigned(n.text, sf)) continue;
+			return staticNullish(hit.decl.initializer, sf, env, guard);
+		}
+		const imported = importedBinding(n.text, sf, env);
+		if (imported) {
+			const bound = constOnlyValue(imported.name, imported.sf, env);
+			if (bound) return staticNullish(bound.node, bound.sf, env, guard);
+		}
+	}
+	return null;
+}
+
+/**
  * 이 식이 **언제나** 참인가. 영구히 꺼 둔 조작의 정의다.
  *
  * `disabled={true}` 만 영구로 보면, 같은 뜻인 `disabled={off}`(위에서
- * `const off = true`)나 `disabled={true && true}`, `disabled={true ? true : false}`
- * 는 열린 것으로 읽힌다. React 에서 넷 다 누를 수 없는 버튼이다.
+ * `const off = true`)나 `disabled={true && true}`, `disabled={true ? true : false}`,
+ * `disabled={null ?? true}` 는 열린 것으로 읽힌다. React 에서 다섯 다 누를 수
+ * 없는 버튼이다.
  */
 export function alwaysTruthy(node, sf, env, seen = new Set()) {
 	const n = unwrapAll(node);
@@ -1010,9 +1108,23 @@ export function alwaysTruthy(node, sf, env, seen = new Set()) {
 			return (
 				alwaysTruthy(n.left, sf, env, seen) || alwaysTruthy(n.right, sf, env, seen)
 			);
-		// `a ?? b` 는 다르다. `false ?? true` 는 거짓이다.
-		if (kind === ts.SyntaxKind.QuestionQuestionToken)
-			return alwaysTruthy(n.left, sf, env, seen);
+		// `a ?? b` 는 `||` 와 다르다. 고르는 기준이 참·거짓이 아니라 **널인가**
+		// 이므로, 왼쪽이 널인지부터 묻는다. 왼쪽만 보면 `false ?? true` 는
+		// 옳게 거짓이지만 `null ?? true` 도 거짓이 된다 — 실행하면 `true` 이고
+		// React 에서 누를 수 없는 버튼이다(13회차 지적 2).
+		if (kind === ts.SyntaxKind.QuestionQuestionToken) {
+			// 널 판정에 쓰는 방문 표시는 따로 둔다. 같은 집합을 넘기면 왼쪽을
+			// 널로 물어본 것만으로 그 이름이 "이미 본 것" 이 되어, 바로 다음
+			// 줄의 참 판정이 조용히 거짓으로 접힌다.
+			const nullish = staticNullish(n.left, sf, env, new Set(seen));
+			if (nullish === true) return alwaysTruthy(n.right, sf, env, seen);
+			if (nullish === false) return alwaysTruthy(n.left, sf, env, seen);
+			// 왼쪽이 널인지 모르면 어느 쪽이 나올지도 모른다. 둘 다 언제나
+			// 참일 때만 언제나 참이다.
+			return (
+				alwaysTruthy(n.left, sf, env, seen) && alwaysTruthy(n.right, sf, env, seen)
+			);
+		}
 		return false;
 	}
 	if (ts.isIdentifier(n)) {
@@ -1062,6 +1174,19 @@ function alwaysFalsy(node, sf, env, seen) {
 			return alwaysFalsy(n.whenFalse, sf, env, seen);
 		return (
 			alwaysFalsy(n.whenTrue, sf, env, seen) && alwaysFalsy(n.whenFalse, sf, env, seen)
+		);
+	}
+	// `a ?? b` 는 참 쪽과 대칭이다 — 왼쪽이 널이면 오른쪽이, 널이 아니면
+	// 왼쪽이 결과다. `null ?? false` 는 언제나 거짓이고, `false ?? true` 도 그렇다.
+	if (
+		ts.isBinaryExpression(n) &&
+		n.operatorToken.kind === ts.SyntaxKind.QuestionQuestionToken
+	) {
+		const nullish = staticNullish(n.left, sf, env, new Set(seen));
+		if (nullish === true) return alwaysFalsy(n.right, sf, env, seen);
+		if (nullish === false) return alwaysFalsy(n.left, sf, env, seen);
+		return (
+			alwaysFalsy(n.left, sf, env, seen) && alwaysFalsy(n.right, sf, env, seen)
 		);
 	}
 	if (ts.isIdentifier(n)) {

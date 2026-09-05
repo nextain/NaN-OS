@@ -36,7 +36,24 @@ interface SeedModule {
 	};
 }
 
+/**
+ * 호출식의 callee 를 **바인딩**으로 되돌려 읽는 공용 모듈의 표면.
+ *
+ * 이 파일에서 정적으로 가져오면 루트 tsc 프로그램이 `.mjs` 와 자기 dist 를 함께
+ * 끌어들여 컴파일 무결성 게이트가 붉어진다. 아래 beforeAll 이 파일 경로로
+ * 동적 import 한다.
+ */
+interface BindingsModule {
+	unwrap(node: ts.Node | undefined): ts.Node | null;
+	resolveCallee(
+		node: ts.Node,
+		sf: ts.SourceFile,
+		env?: unknown,
+	): { module?: string; imported?: string; global?: string } | null;
+}
+
 let seedModule: SeedModule;
+let bindings: BindingsModule;
 const created: string[] = [];
 
 function freshAdk(): string {
@@ -54,6 +71,9 @@ beforeAll(async () => {
 			),
 		)
 	)) as SeedModule;
+	bindings = (await import(
+		fileURLToPath(new URL("../../scripts/lib/bindings.mjs", import.meta.url))
+	)) as BindingsModule;
 });
 
 afterEach(() => {
@@ -143,40 +163,56 @@ describe("자격증명 등급 시딩", () => {
 		// 지우고 아무도 부르지 않는 `function unusedGhostSeed()` 안에 같은 호출을
 		// 남기면 계약은 초록인데 격리 워크스페이스는 비어 있었다(12회차 지적 9).
 		// 그래서 이제 파일이 아니라 **기본 설정이 실행하는 자리**에서 잰다 —
-		// `config.onPrepare`/`config.before` 의 몸통에서 시작해 같은 파일의 함수
-		// 선언과 `const` 초기화식을 한 단계씩 따라간 **도달 가능한** 그래프 안에
-		// 호출이 있어야 참이다. 안 쓰는 함수는 그 그래프에 없다.
+		// `config.onPrepare`/`config.before` 의 몸통에서 시작한 그래프 안에 호출이
+		// 있어야 참이다. 안 쓰는 함수는 그 그래프에 없다.
+		//
+		// 그 그래프가 처음에는 **이름 언급**이었다. 식별자가 적히기만 하면 그 이름의
+		// 몸통이 들어와, `onPrepare` 첫 줄에 `const _ghostSeed = unusedGhostSeed;`
+		// 한 줄만 두면 아무도 부르지 않는 함수 안의 시딩이 배선으로 읽혔다(13회차
+		// 지적 7). 이제 그래프는 **호출**이다 — 부르는 자리(callee, `new`, 즉시 실행,
+		// 인자 자리로 넘긴 함수)만 따라가고, 값으로 적히기만 한 참조는 따라가지
+		// 않는다. 상수를 거쳐 훅에 닿는 판단은 `consultedFrom` 이 따로 보되, 거기서도
+		// 함수 몸통에는 들어가지 않는다.
 		const tree = parseWdioConf();
 		const bound = seedImportBindings(tree);
-		const bodies = moduleScopeBodies(tree);
+		const declarations = moduleScopeDeclarations(tree);
 
-		const onPrepare = configHookBody(bodies, "onPrepare");
+		const onPrepare = configHookBody(declarations, "onPrepare");
 		expect(onPrepare, "기본 설정에 onPrepare 훅이 없다").toBeTruthy();
-		const prepared = reachableFrom(onPrepare as ts.Node, bodies);
 
-		const seedLocal = bound.get("seedCredentialedAdk");
-		expect(seedLocal, "wdio.conf.ts 가 시딩 함수를 import 하지 않는다").toBeTruthy();
+		// 시딩은 **불려야** 한다. 이름을 값으로 적어 두는 것은 배선이 아니다.
 		expect(
-			callsBinding(prepared, seedLocal as string),
-			"import 만 하고 부르지 않으면 격리 워크스페이스는 비어 있다",
+			bound.get("seedCredentialedAdk"),
+			"wdio.conf.ts 가 시딩 함수를 import 하지 않는다",
+		).toBeTruthy();
+		expect(
+			callsSeedExport(calledFrom(onPrepare as ts.Node, declarations), tree, "seedCredentialedAdk"),
+			"onPrepare 가 그 시딩을 실제로 부르지 않으면 격리 워크스페이스는 비어 있다",
 		).toBe(true);
 
-		const availableLocal = bound.get("credentialedSeedAvailable");
+		// 가능 여부 판단은 상수 하나를 거쳐 훅에 닿는다 — 그 상수까지 본다.
 		expect(
-			availableLocal,
+			bound.get("credentialedSeedAvailable"),
 			"wdio.conf.ts 가 시딩 가능 여부 판단을 import 하지 않는다",
 		).toBeTruthy();
 		expect(
-			callsBinding(prepared, availableLocal as string),
+			callsSeedExport(
+				consultedFrom(onPrepare as ts.Node, declarations),
+				tree,
+				"credentialedSeedAvailable",
+			),
 			"키가 있는지 실제로 물어야 결정론 등급이 예전 그대로 돈다",
 		).toBe(true);
 
 		// 워커도 같은 판단을 해야 스펙 앞에서 키를 실어 준다. 그 판단은 스펙 앞
-		// 훅에서 실제로 읽혀야 하므로 `config.before` 에서 도달해야 한다.
-		const before = configHookBody(bodies, "before");
+		// 훅이 보는 값이어야 하므로 `config.before` 에서 닿아야 한다.
+		const before = configHookBody(declarations, "before");
 		expect(before, "기본 설정에 before 훅이 없다").toBeTruthy();
 		expect(
-			touchesProcessEnv(reachableFrom(before as ts.Node, bodies), "NAIA_E2E_CREDENTIALED_SEED"),
+			touchesProcessEnv(
+				consultedFrom(before as ts.Node, declarations),
+				"NAIA_E2E_CREDENTIALED_SEED",
+			),
 			"워커에게 넘기는 표시가 없으면 스펙은 키 없이 돈다",
 		).toBe(true);
 	});
@@ -219,32 +255,71 @@ function seedImportBindings(tree: ts.SourceFile): Map<string, string> {
 }
 
 /**
- * 모듈 스코프의 이름 → 그 이름이 가리키는 몸통(함수 선언의 본문, `const` 초기화식).
+ * 모듈 스코프에 선언된 이름과 그 정체.
  *
- * 도달 그래프를 한 단계씩 따라갈 때 쓴다. `export const config = {…}` 도 여기
- * 들어오므로 훅을 찾는 입구이기도 하다.
+ *   - `function` — 부르면 실행되는 몸통(함수 선언, `const f = () => {…}`)
+ *   - `alias` — 다른 이름을 그대로 가리키는 `const`(`const g = f`)
+ *   - `value` — 그 밖의 `const` 초기화식(불리언, 객체, 문자열 조립…)
+ *
+ * 이 셋을 가르는 것이 이 계약의 핵심이다. **부름**은 `function`/`alias` 만 따라가고,
+ * **참조**는 `value` 만 따라간다. 그래서 함수를 값으로 적기만 한 자리
+ * (`const _ghostSeed = unusedGhostSeed;`)는 어느 쪽으로도 몸통에 닿지 못한다.
  */
-function moduleScopeBodies(tree: ts.SourceFile): Map<string, ts.Node> {
-	const bodies = new Map<string, ts.Node>();
+type ModuleDeclaration =
+	| { kind: "function"; body: ts.Node }
+	| { kind: "alias"; target: string }
+	| { kind: "value"; node: ts.Node };
+
+function moduleScopeDeclarations(tree: ts.SourceFile): Map<string, ModuleDeclaration> {
+	const declarations = new Map<string, ModuleDeclaration>();
 	for (const statement of tree.statements) {
 		if (ts.isFunctionDeclaration(statement) && statement.name && statement.body) {
-			bodies.set(statement.name.text, statement.body);
+			declarations.set(statement.name.text, { kind: "function", body: statement.body });
 			continue;
 		}
 		if (!ts.isVariableStatement(statement)) continue;
 		for (const declaration of statement.declarationList.declarations) {
 			if (!ts.isIdentifier(declaration.name) || !declaration.initializer) continue;
-			bodies.set(declaration.name.text, declaration.initializer);
+			const initializer = declaration.initializer;
+			if (ts.isFunctionExpression(initializer) || ts.isArrowFunction(initializer)) {
+				declarations.set(declaration.name.text, { kind: "function", body: initializer.body });
+			} else if (ts.isIdentifier(initializer)) {
+				declarations.set(declaration.name.text, { kind: "alias", target: initializer.text });
+			} else {
+				declarations.set(declaration.name.text, { kind: "value", node: initializer });
+			}
 		}
 	}
-	return bodies;
+	return declarations;
+}
+
+/** 그 이름을 **부르면** 실행되는 몸통. `const` 별명은 한 단계씩 따라간다. */
+function callableBody(
+	name: string,
+	declarations: Map<string, ModuleDeclaration>,
+): ts.Node | null {
+	const seen = new Set<string>();
+	let current = name;
+	while (!seen.has(current)) {
+		seen.add(current);
+		const declaration = declarations.get(current);
+		if (!declaration) return null;
+		if (declaration.kind === "function") return declaration.body;
+		if (declaration.kind !== "alias") return null;
+		current = declaration.target;
+	}
+	return null;
 }
 
 /** 기본 설정 객체의 훅 몸통. 메서드·함수식·화살표·같은 파일 함수 참조를 모두 푼다. */
-function configHookBody(bodies: Map<string, ts.Node>, hook: string): ts.Node | null {
-	const config = bodies.get("config");
-	if (!config || !ts.isObjectLiteralExpression(config)) return null;
-	for (const property of config.properties) {
+function configHookBody(
+	declarations: Map<string, ModuleDeclaration>,
+	hook: string,
+): ts.Node | null {
+	const config = declarations.get("config");
+	if (!config || config.kind !== "value" || !ts.isObjectLiteralExpression(config.node))
+		return null;
+	for (const property of config.node.properties) {
 		const name = property.name;
 		const key =
 			name && (ts.isIdentifier(name) || ts.isStringLiteralLike(name)) ? name.text : null;
@@ -253,12 +328,124 @@ function configHookBody(bodies: Map<string, ts.Node>, hook: string): ts.Node | n
 		if (ts.isPropertyAssignment(property)) {
 			const value = property.initializer;
 			if (ts.isFunctionExpression(value) || ts.isArrowFunction(value)) return value.body;
-			if (ts.isIdentifier(value)) return bodies.get(value.text) ?? null;
+			if (ts.isIdentifier(value)) return callableBody(value.text, declarations);
 			return null;
 		}
-		if (ts.isShorthandPropertyAssignment(property)) return bodies.get(property.name.text) ?? null;
+		if (ts.isShorthandPropertyAssignment(property))
+			return callableBody(property.name.text, declarations);
 	}
 	return null;
+}
+
+/**
+ * 이 몸통에서 **실제로 실행되는** 노드를 훑는다.
+ *
+ * 안 부르는 함수식의 몸통에는 들어가지 않는다. 그 몸통은 누가 부를 때에만
+ * 뿌리로 따로 들어온다 — 즉시 실행이거나, 인자 자리로 넘겨졌거나, 이름으로
+ * 불렸을 때다.
+ */
+function forEachExecutedNode(root: ts.Node, fn: (node: ts.Node) => void): void {
+	const visit = (node: ts.Node): void => {
+		if (node !== root && isFunctionLike(node)) return;
+		fn(node);
+		node.forEachChild(visit);
+	};
+	visit(root);
+}
+
+function isFunctionLike(node: ts.Node): boolean {
+	return (
+		ts.isFunctionExpression(node) ||
+		ts.isArrowFunction(node) ||
+		ts.isFunctionDeclaration(node) ||
+		ts.isMethodDeclaration(node)
+	);
+}
+
+/** 호출식의 callee 가 가리키는 지역 이름. `(0, f)()` · `f.call(…)` 도 같은 f 다. */
+function calleeLocalName(callee: ts.Node | null): string | null {
+	if (!callee) return null;
+	if (ts.isIdentifier(callee)) return callee.text;
+	if (ts.isPropertyAccessExpression(callee) || ts.isElementAccessExpression(callee)) {
+		const method = ts.isPropertyAccessExpression(callee)
+			? callee.name.text
+			: ts.isStringLiteralLike(callee.argumentExpression)
+				? callee.argumentExpression.text
+				: null;
+		if (method !== "call" && method !== "apply" && method !== "bind") return null;
+		const base = bindings.unwrap(callee.expression);
+		return base && ts.isIdentifier(base) ? base.text : null;
+	}
+	return null;
+}
+
+/**
+ * 입구에서 **불려서** 실행되는 몸통 전부 — 이름 언급이 아니라 호출 그래프다.
+ *
+ * 12회차는 식별자가 **적히기만** 해도 그 이름의 몸통을 넣었다. 그래서 `onPrepare`
+ * 첫 줄에 `const _ghostSeed = unusedGhostSeed;` 한 줄만 두면, 아무도 부르지 않는
+ * 함수 안의 시딩 호출이 배선으로 읽혔다(13회차 지적 7).
+ *
+ * 이제 따라가는 것은 실행으로 이어지는 자리뿐이다 — 호출식의 callee(식별자,
+ * 껍데기를 벗긴 쉼표식, `f.call`/`f.apply`/`f.bind`, 같은 파일 `const` 별명),
+ * `new X()`, 즉시 실행 함수식, 그리고 인자 자리로 넘겨진 함수 참조·함수식
+ * (`then(fn)`, `forEach(fn)`, `setTimeout(fn)`). 값으로 적히기만 한 참조는
+ * 따라가지 않는다.
+ */
+function calledFrom(entry: ts.Node, declarations: Map<string, ModuleDeclaration>): ts.Node[] {
+	const roots: ts.Node[] = [entry];
+	const seen = new Set<string>();
+	const enqueueName = (name: string): void => {
+		if (seen.has(name)) return;
+		seen.add(name);
+		const body = callableBody(name, declarations);
+		if (body) roots.push(body);
+	};
+	const enqueueValue = (node: ts.Node | null): void => {
+		if (!node) return;
+		if (ts.isIdentifier(node)) {
+			enqueueName(node.text);
+			return;
+		}
+		if (ts.isFunctionExpression(node) || ts.isArrowFunction(node)) roots.push(node.body);
+	};
+
+	for (let i = 0; i < roots.length; i += 1) {
+		forEachExecutedNode(roots[i], (node) => {
+			if (!ts.isCallExpression(node) && !ts.isNewExpression(node)) return;
+			// callee: 이름으로 불렀거나, 함수식을 그 자리에서 바로 부른 것(IIFE).
+			enqueueValue(bindings.unwrap(node.expression));
+			const name = calleeLocalName(bindings.unwrap(node.expression));
+			if (name) enqueueName(name);
+			// 인자 자리로 넘긴 함수는 그 호출이 부른다.
+			for (const argument of node.arguments ?? []) enqueueValue(bindings.unwrap(argument));
+		});
+	}
+	return roots;
+}
+
+/**
+ * 입구가 **보는** 값까지 넓힌 범위. 부름 그래프에 모듈 스코프 `value` 상수의
+ * 초기화식을 더한다.
+ *
+ * 판단이 상수 하나를 거쳐 훅에 닿는 배선(`const SEEDS_… = … && available(); if
+ * (SEEDS_…)`)을 읽기 위해서다. 값만 따라가고 **함수 몸통에는 절대 들어가지
+ * 않으므로**, 함수를 값으로 적기만 한 참조는 여기서도 배선이 되지 못한다.
+ */
+function consultedFrom(entry: ts.Node, declarations: Map<string, ModuleDeclaration>): ts.Node[] {
+	const roots = calledFrom(entry, declarations);
+	const seen = new Set<string>();
+	for (let i = 0; i < roots.length; i += 1) {
+		const names: string[] = [];
+		referencedNames(roots[i], names);
+		for (const name of names) {
+			if (seen.has(name)) continue;
+			seen.add(name);
+			const declaration = declarations.get(name);
+			if (declaration?.kind === "value") roots.push(declaration.node);
+		}
+	}
+	return roots;
 }
 
 /** 이 노드가 이름으로 참조하는 것들. `a.b` 는 `a` 만 이름이다. */
@@ -282,44 +469,21 @@ function referencedNames(node: ts.Node, out: string[]): void {
 }
 
 /**
- * 입구에서 **도달 가능한** 몸통 전부. 참조한 이름의 몸통을 한 단계씩 따라가는
- * 고정점이다.
+ * 시딩 모듈의 그 export 를 **부르는** 호출이 범위 안에 있는가.
  *
- * 여기 없는 것은 기본 설정이 실행하지 않는다 — 안 쓰는 함수 안의 호출이 배선을
- * 만족하지 못하게 하는 것이 이 함수의 전부다.
+ * 이름이 아니라 바인딩으로 묻는다 — `scripts/lib/bindings.mjs` 의 `resolveCallee`
+ * 가 별명·쉼표식·`.call`/`.apply`/`.bind` 를 모두 같은 답으로 되돌린다.
  */
-function reachableFrom(entry: ts.Node, bodies: Map<string, ts.Node>): ts.Node[] {
-	const roots: ts.Node[] = [entry];
-	const seen = new Set<string>();
-	for (let i = 0; i < roots.length; i += 1) {
-		const names: string[] = [];
-		referencedNames(roots[i], names);
-		for (const name of names) {
-			if (seen.has(name)) continue;
-			seen.add(name);
-			const body = bodies.get(name);
-			if (body) roots.push(body);
-		}
-	}
-	return roots;
-}
-
-/** 그 바인딩을 **실제로 부르는** 호출식이 도달 범위 안에 있는가. */
-function callsBinding(roots: ts.Node[], name: string): boolean {
+function callsSeedExport(roots: ts.Node[], tree: ts.SourceFile, exported: string): boolean {
 	let found = false;
-	const visit = (node: ts.Node): void => {
-		if (found) return;
-		if (
-			ts.isCallExpression(node) &&
-			ts.isIdentifier(node.expression) &&
-			node.expression.text === name
-		) {
-			found = true;
-			return;
-		}
-		node.forEachChild(visit);
-	};
-	for (const root of roots) visit(root);
+	for (const root of roots) {
+		forEachExecutedNode(root, (node) => {
+			if (found || !ts.isCallExpression(node)) return;
+			const binding = bindings.resolveCallee(node, tree);
+			if (!binding?.module || binding.imported !== exported) return;
+			if (/(^|\/)credentialed-adk-seed(\.[jt]s)?$/.test(binding.module)) found = true;
+		});
+	}
 	return found;
 }
 
@@ -331,26 +495,27 @@ function touchesProcessEnv(roots: ts.Node[], key: string): boolean {
 		ts.isIdentifier(node.expression) &&
 		node.expression.text === "process";
 	let found = false;
-	const visit = (node: ts.Node): void => {
-		if (found) return;
-		if (ts.isPropertyAccessExpression(node) && node.name.text === key) {
-			if (isProcessEnv(node.expression)) {
+	for (const root of roots) {
+		forEachExecutedNode(root, (node) => {
+			if (found) return;
+			if (
+				ts.isPropertyAccessExpression(node) &&
+				node.name.text === key &&
+				isProcessEnv(node.expression)
+			) {
 				found = true;
 				return;
 			}
-		}
-		if (
-			ts.isElementAccessExpression(node) &&
-			node.argumentExpression &&
-			ts.isStringLiteralLike(node.argumentExpression) &&
-			node.argumentExpression.text === key &&
-			isProcessEnv(node.expression)
-		) {
-			found = true;
-			return;
-		}
-		node.forEachChild(visit);
-	};
-	for (const root of roots) visit(root);
+			if (
+				ts.isElementAccessExpression(node) &&
+				node.argumentExpression &&
+				ts.isStringLiteralLike(node.argumentExpression) &&
+				node.argumentExpression.text === key &&
+				isProcessEnv(node.expression)
+			) {
+				found = true;
+			}
+		});
+	}
 	return found;
 }
