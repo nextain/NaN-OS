@@ -1617,7 +1617,7 @@ Test Coverage Map
 
 | UC | 단위·계약 | 실기 | 비고 |
 |---|---|---|---|
-| UC-PERF-STARTUP-LATENCY | — | `e2e/900-startup-latency.spec.ts`: 셸 첫 화면까지 벽시계 시간을 세 번 재 중앙값이 한도 미만인지 | 한도 2,000ms. 이 기계 실측 중앙값 134ms |
+| UC-PERF-STARTUP-LATENCY | — | `e2e/900-startup-latency.spec.ts`: 셸 첫 화면까지 벽시계 시간을 세 번 재 중앙값이 한도 미만인지 | 한도 1,500ms(최악 표본의 두 배). 이 기계 실측 중앙값 117~150ms |
 
 
 ## 2026-09-05 품질 축 — 사용자에게 보이는 문구 (#549)
