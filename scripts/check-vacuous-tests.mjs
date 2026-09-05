@@ -39,6 +39,7 @@ function walk(dir, out = []) {
 const files = ROOTS.flatMap((root) => walk(root));
 const vacuous = [];
 const deadSkips = [];
+const retired = [];
 
 for (const file of files) {
 	const source = readFileSync(file, "utf8");
@@ -49,16 +50,23 @@ for (const file of files) {
 		if (/^\s*(\/\/|\*|\/\*)/.test(line)) return;
 		// 자기 자신만 확인하는 단정.
 		if (/expect\(\s*true\s*\)\s*\.toBe\(\s*true\s*\)/.test(line)) vacuous.push(where);
-		// 조건 없는 skip. 환경 변수로 거르는 형태는 정당하므로 뺀다.
-		if (/^\s*(?:test|it|describe)(?:\.describe)?\.skip\(\s*["'`]/.test(line)) deadSkips.push(where);
+		// 조건 없는 skip. 환경 변수로 거르는 형태(test.skip(!process.env.X, ...))는
+		// 정당하므로 애초에 이 패턴에 걸리지 않는다.
+		if (/^\s*(?:test|it|describe)(?:\.describe)?\.skip\(\s*["'`]/.test(line)) {
+			// 이름 앞에 은퇴를 밝힌 것은 "왜 꺼져 있는지" 가 적힌 것이다. 그것까지
+			// 같은 칸에 세면, 사유를 적은 사람과 아무 말 없이 끈 사람이 구별되지
+			// 않는다. 따로 세되 눈에는 보이게 한다.
+			if (/["'`]\s*(?:retired|은퇴)[:：]/.test(line)) retired.push(where);
+			else deadSkips.push(where);
+		}
 	});
 }
 
 // 오늘의 상태.
 const BASELINE_VACUOUS = 0;
-const BASELINE_DEAD_SKIPS = 16;
+const BASELINE_DEAD_SKIPS = 8;
 
-console.log(`[vacuous-tests] 자명 단정 ${vacuous.length} (baseline ${BASELINE_VACUOUS}) / 조건 없는 skip ${deadSkips.length} (baseline ${BASELINE_DEAD_SKIPS})`);
+console.log(`[vacuous-tests] 자명 단정 ${vacuous.length} (baseline ${BASELINE_VACUOUS}) / 이유 없는 skip ${deadSkips.length} (baseline ${BASELINE_DEAD_SKIPS}) / 은퇴 선언 ${retired.length}`);
 
 let failed = false;
 if (vacuous.length > BASELINE_VACUOUS) {

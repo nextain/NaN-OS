@@ -171,5 +171,8 @@ LLM 을 부르지 않는다.
    시작하지 않았다
 4. **UC 열한 개가 추적에서 끊겨 있다.** 검증이 없다는 뜻이 아니라 어디서
    검증되는지 적혀 있지 않다는 뜻이다
-5. **아무것도 재지 않는 스펙 두 개와 이유 없이 꺼 둔 테스트 열여섯 개**가
-   남아 있다
+5. **이유 없이 꺼 둔 테스트 여덟 개**가 남아 있다. 자명 단정 둘은 없앴고,
+   은퇴를 이름에 밝힌 여덟 개는 따로 센다. 남은 여덟은 되살리거나 지워야 한다 —
+   `197-browser-login.spec.ts`(3), `204-onboarding-login.spec.ts`,
+   `demo-video.spec.ts`, `memory-sync.spec.ts`, `screenshots.spec.ts`,
+   `OnboardingWizard.test.tsx`
