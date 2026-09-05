@@ -1,0 +1,87 @@
+{
+	"machine": "naia-os-3090",
+	"tiers": [
+		"deterministic_ci"
+	],
+	"ranOn": {
+		"inventorySha256": "87740b9b6a9ffd2bb8d7bf4633f3b9314e0d05055b1d9f96aca52f0ee9e993ef",
+		"commit": "f6de2843c3e5a77a729a170c37e9266c8cf57d31",
+		"platform": "linux-x64",
+		"node": "v26.7.0"
+	},
+	"started": "2026-09-05T06:16:20.134Z",
+	"finished": "2026-09-05T06:18:34.440Z",
+	"status": "failed",
+	"planned": [
+		"100-herdr-first-frame.spec.ts",
+		"23-channels-status.spec.ts",
+		"31-diagnostics.spec.ts",
+		"33-usage-dashboard.spec.ts",
+		"91-jeonju-course-worker.spec.ts",
+		"92-discord-secure-cancel.spec.ts",
+		"93-radio-bgm-observation.spec.ts",
+		"95-llm-role-settings.spec.ts",
+		"96-codex-readiness.spec.ts",
+		"96-memory-storage-boundary.spec.ts",
+		"99-vllm-omni-voice.spec.ts",
+		"env-tool-browser-native.spec.ts",
+		"orchestration-restart.spec.ts"
+	],
+	"executed": [
+		"23-channels-status.spec.ts",
+		"31-diagnostics.spec.ts",
+		"33-usage-dashboard.spec.ts",
+		"96-memory-storage-boundary.spec.ts",
+		"env-tool-browser-native.spec.ts",
+		"orchestration-restart.spec.ts",
+		"96-codex-readiness.spec.ts"
+	],
+	"groups": [
+		{
+			"conf": "wdio.conf.ts",
+			"specs": 8,
+			"status": "failed",
+			"passed": 6,
+			"failedSpecs": [
+				"100-herdr-first-frame.spec.ts",
+				"99-vllm-omni-voice.spec.ts"
+			]
+		},
+		{
+			"conf": "wdio.conf.jeonju-course.ts",
+			"specs": 1,
+			"status": "failed",
+			"passed": 0,
+			"failedSpecs": []
+		},
+		{
+			"conf": "wdio.conf.discord-settings.ts",
+			"specs": 1,
+			"status": "failed",
+			"passed": 0,
+			"failedSpecs": []
+		},
+		{
+			"conf": "wdio.conf.radio.ts",
+			"specs": 1,
+			"status": "failed",
+			"passed": 0,
+			"failedSpecs": []
+		},
+		{
+			"conf": "wdio.conf.codex.ts",
+			"specs": 2,
+			"status": "failed",
+			"passed": 1,
+			"failedSpecs": [
+				"95-llm-role-settings.spec.ts"
+			]
+		}
+	],
+	"envMissingBeforeRun": {
+		"93-radio-bgm-observation.spec.ts": [
+			"VITE_NAIA_BGM_BASE"
+		]
+	},
+	"detail": "wdio.conf.ts: 종료 코드 1; wdio.conf.jeonju-course.ts: 종료 코드 1; wdio.conf.discord-settings.ts: 종료 코드 1; wdio.conf.radio.ts: 종료 코드 1; wdio.conf.codex.ts: 종료 코드 1"
+}
