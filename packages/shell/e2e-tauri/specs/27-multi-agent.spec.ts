@@ -1,4 +1,5 @@
 import { S } from "../helpers/selectors.js";
+import { clickElement } from "../helpers/settings.js";
 
 /**
  * 27 — Multi-Agent E2E
@@ -12,9 +13,7 @@ import { S } from "../helpers/selectors.js";
  */
 describe("27 — multi-agent", () => {
 	it("should navigate to Agents tab", async () => {
-		const agentsBtn = await $(S.agentsTabBtn);
-		await agentsBtn.waitForDisplayed({ timeout: 10_000 });
-		await agentsBtn.click();
+		await clickElement(S.agentsTabBtn);
 
 		const agentsApp = await $(S.agentsTabApp);
 		await agentsApp.waitForDisplayed({ timeout: 5_000 });
@@ -94,7 +93,7 @@ describe("27 — multi-agent", () => {
 
 	it("should navigate back to chat tab", async () => {
 		const chatTabBtn = await $(S.chatTab);
-		await chatTabBtn.click();
+		await clickElement(S.chatTab);
 
 		const chatInput = await $(S.chatInput);
 		await chatInput.waitForDisplayed({ timeout: 5_000 });

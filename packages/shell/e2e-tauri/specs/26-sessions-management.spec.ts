@@ -1,4 +1,5 @@
 import { S } from "../helpers/selectors.js";
+import { clickElement } from "../helpers/settings.js";
 
 /**
  * 26 — Sessions Management E2E
@@ -13,9 +14,7 @@ import { S } from "../helpers/selectors.js";
  */
 describe("26 — sessions management", () => {
 	it("should navigate to Agents tab", async () => {
-		const agentsBtn = await $(S.agentsTabBtn);
-		await agentsBtn.waitForDisplayed({ timeout: 10_000 });
-		await agentsBtn.click();
+		await clickElement(S.agentsTabBtn);
 
 		const agentsApp = await $(S.agentsTabApp);
 		await agentsApp.waitForDisplayed({ timeout: 5_000 });
@@ -71,7 +70,7 @@ describe("26 — sessions management", () => {
 
 		if (exists) {
 			expect(await refreshBtn.isDisplayed()).toBe(true);
-			await refreshBtn.click();
+			await clickElement(S.agentsRefreshBtn);
 			await browser.pause(2_000);
 
 			const agentsApp = await $(S.agentsTabApp);
@@ -81,7 +80,7 @@ describe("26 — sessions management", () => {
 
 	it("should navigate back to chat tab", async () => {
 		const chatTabBtn = await $(S.chatTab);
-		await chatTabBtn.click();
+		await clickElement(S.chatTab);
 
 		const chatInput = await $(S.chatInput);
 		await chatInput.waitForDisplayed({ timeout: 5_000 });

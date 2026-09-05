@@ -21,6 +21,22 @@ node scripts/run-regression.mjs --machine=<이름> --tier=deterministic_ci[,cred
 죽어도 기록에는 전부 덮였다고 남는다. **손으로 기록을 만들 때 `executed` 를
 빠뜨리면 그 기계의 몫은 전부 미실행으로 집계된다.**
 
+### 돌리기 전에 알아야 할 것
+
+전용 wdio 설정 열한 개는 **짝 naia-agent 체크아웃**을 요구한다. 그것이 없으면
+설정 파일을 읽는 단계에서 죽는데, 그것은 회귀가 깨진 것이 아니라 환경이 없는
+것이다. 러너는 이 경우를 `prerequisites-missing` 으로 따로 적는다.
+
+설정이 기본으로 보는 자리(`<저장소 옆>/naia-agent-worktrees`)는 이 배치와
+한 단계 어긋나 있다. 실제 워크트리는 `projects/naia-agent-worktrees` 아래에
+있으므로, 자리를 알려 주고 돌린다.
+
+```
+NAIA_AGENT_WORKTREES_DIR=<alpha-adk>/projects/naia-agent-worktrees \
+NAIA_E2E_ARTIFACTS_DIR=<쓰기 가능한 디렉터리> \
+  node scripts/run-regression.mjs --machine=<이름> --tier=deterministic_ci
+```
+
 배포 전에는 이 기록을 모아 본다.
 
 ```

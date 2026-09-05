@@ -1,4 +1,5 @@
 import { S } from "../helpers/selectors.js";
+import { clickElement } from "../helpers/settings.js";
 
 /**
  * 23 — Channels Status E2E
@@ -12,9 +13,7 @@ import { S } from "../helpers/selectors.js";
  */
 describe("23 — channels status", () => {
 	it("should navigate to channels tab", async () => {
-		const channelsBtn = await $(S.channelsTabBtn);
-		await channelsBtn.waitForDisplayed({ timeout: 10_000 });
-		await channelsBtn.click();
+		await clickElement(S.channelsTabBtn);
 
 		const channelsApp = await $(S.channelsTabApp);
 		await channelsApp.waitForDisplayed({ timeout: 5_000 });
@@ -57,7 +56,7 @@ describe("23 — channels status", () => {
 
 		if (exists) {
 			expect(await refreshBtn.isDisplayed()).toBe(true);
-			await refreshBtn.click();
+			await clickElement(S.channelsRefreshBtn);
 			await browser.pause(2_000);
 
 			// App should still be displayed after refresh
@@ -68,7 +67,7 @@ describe("23 — channels status", () => {
 
 	it("should navigate back to chat tab", async () => {
 		const chatTabBtn = await $(S.chatTab);
-		await chatTabBtn.click();
+		await clickElement(S.chatTab);
 
 		const chatInput = await $(S.chatInput);
 		await chatInput.waitForDisplayed({ timeout: 5_000 });

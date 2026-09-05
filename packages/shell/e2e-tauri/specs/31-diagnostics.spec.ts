@@ -1,4 +1,5 @@
 import { S } from "../helpers/selectors.js";
+import { clickElement } from "../helpers/settings.js";
 
 /**
  * 31 — Diagnostics Tab E2E
@@ -26,7 +27,7 @@ describe("31 — diagnostics tab", () => {
 		} catch {
 			// DiagnosticsTab may not render if Gateway not connected — skip gracefully
 			const chatTabBtn = await $(S.chatTab);
-			await chatTabBtn.click();
+			await clickElement(S.chatTab);
 			return;
 		}
 	});

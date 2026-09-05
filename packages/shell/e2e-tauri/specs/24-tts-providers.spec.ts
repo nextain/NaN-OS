@@ -1,4 +1,5 @@
 import { S } from "../helpers/selectors.js";
+import { clickElement } from "../helpers/settings.js";
 
 /**
  * 24 — TTS Providers E2E
@@ -11,9 +12,7 @@ import { S } from "../helpers/selectors.js";
  */
 describe("24 — TTS providers", () => {
 	it("should navigate to Settings tab", async () => {
-		const settingsBtn = await $(S.settingsTabBtn);
-		await settingsBtn.waitForDisplayed({ timeout: 10_000 });
-		await settingsBtn.click();
+		await clickElement(S.settingsTabBtn);
 
 		const settingsTab = await $(S.settingsTab);
 		await settingsTab.waitForDisplayed({ timeout: 5_000 });
@@ -69,7 +68,7 @@ describe("24 — TTS providers", () => {
 
 	it("should navigate back to chat tab", async () => {
 		const chatTabBtn = await $(S.chatTab);
-		await chatTabBtn.click();
+		await clickElement(S.chatTab);
 
 		const chatInput = await $(S.chatInput);
 		await chatInput.waitForDisplayed({ timeout: 5_000 });

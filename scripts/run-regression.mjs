@@ -18,7 +18,7 @@
  */
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 
 const args = process.argv.slice(2);
 const value = (name) => args.find((a) => a.startsWith(`--${name}=`))?.split("=")[1];
@@ -180,14 +180,89 @@ function groupByConf(specs) {
 	return groups;
 }
 
+/**
+ * 전용 설정 중 짝 naia-agent 체크아웃을 요구하는 것들. 그 체크아웃이 없으면
+ * 설정 파일을 읽는 단계에서 죽는데, 그것은 회귀가 깨진 것이 아니라 환경이
+ * 없는 것이다. 둘을 섞으면 배포 판단이 흐려진다.
+ */
+function pairedAgentAvailable() {
+	const root = process.env.NAIA_AGENT_WORKTREES_DIR;
+	if (root && existsSync(root)) return true;
+	// 설정이 기본으로 보는 자리. 이 저장소 배치에서는 한 단계 아래에 있어,
+	// 환경 변수를 주지 않으면 못 찾는다.
+	return existsSync(resolve("..", "naia-agent-worktrees"));
+}
+
+const NEEDS_PAIRED_AGENT = /codex|radio|discord|jeonju|grok|voice-|nextain|nva-/;
+
 const groups = groupByConf(mine);
 console.log(`[regression] wdio 설정 ${groups.size}개로 나눠 돈다`);
 
+/**
+ * wdio 의 spec 리포터 출력에서 스펙별 결과를 읽는다.
+ *
+ * 왜 필요한가: 묶음 하나가 실패해도 그 안에서 실제로 통과한 스펙이 있다.
+ * 실측에서 스물두 개 묶음이 9 통과 13 실패로 끝났는데, 묶음 단위로만 세면
+ * 그 아홉 개가 "돌지 않았다" 로 기록된다. 돌았는데 안 돌았다고 적는 것도
+ * 안 돌았는데 돌았다고 적는 것만큼 판단을 망친다.
+ *
+ * 리포터는 `» e2e-tauri/specs/<이름>` 뒤에 그 스펙의 `N passing` / `N failing`
+ * 을 낸다. 그 사이를 읽는다.
+ */
+function parseSpecOutcomes(output) {
+	// 한 스펙 블록은 `» ...spec.ts` 로 시작해 다음 `»` 까지다. mocha 는 그
+	// 안에서 `N passing` 을 먼저 내고 실패가 있으면 그 **뒤에** `N failing`
+	// 을 낸다. 줄 단위로 먼저 만난 것을 판정으로 삼으면 실패한 스펙을 통과로
+	// 읽는다 — 실제로 그 버그가 있었다.
+	const blocks = [];
+	let current = null;
+	for (const raw of output.split("\n")) {
+		const line = raw.replace(/^\[[^\]]*\]\s*/, "");
+		const started = /»\s+(?:e2e-tauri\/specs\/)?([\w.-]+\.spec\.ts)/.exec(line);
+		if (started) {
+			current = { spec: started[1], passing: 0, failing: 0 };
+			blocks.push(current);
+			continue;
+		}
+		if (!current) continue;
+		const failing = /^(\d+)\s+failing/.exec(line);
+		if (failing) current.failing += Number(failing[1]);
+		const passing = /^(\d+)\s+passing/.exec(line);
+		if (passing) current.passing += Number(passing[1]);
+	}
+
+	const failed = new Set();
+	const passed = new Set();
+	for (const block of blocks) {
+		if (block.failing > 0) failed.add(block.spec);
+		else if (block.passing > 0) passed.add(block.spec);
+	}
+	// 같은 스펙이 여러 번 돌았고 한 번이라도 실패했으면 실패로 본다.
+	for (const spec of failed) passed.delete(spec);
+	return { passed: [...passed], failed: [...failed] };
+}
+
 for (const [conf, specs] of groups) {
+	if (conf !== "wdio.conf.ts" && NEEDS_PAIRED_AGENT.test(conf) && !pairedAgentAvailable()) {
+		console.log(
+			`[regression] ${conf} — 짝 naia-agent 체크아웃이 없어 실행하지 않는다 (스펙 ${specs.length}개)`,
+		);
+		groupResults.push({
+			conf,
+			specs: specs.length,
+			status: "prerequisites-missing",
+			detail:
+				"짝 naia-agent 워크트리가 없다. NAIA_AGENT_WORKTREES_DIR 로 자리를 알려 주어라",
+		});
+		continue;
+	}
+
 	const specArgs = specs.flatMap((spec) => ["--spec", `e2e-tauri/specs/${spec}`]);
 	console.log(`[regression] ${conf} — 스펙 ${specs.length}개`);
+	let output = "";
+	let ok = true;
 	try {
-		execFileSync(
+		output = execFileSync(
 			"pnpm",
 			[
 				"-C",
@@ -198,25 +273,31 @@ for (const [conf, specs] of groups) {
 				`e2e-tauri/${conf}`,
 				...specArgs,
 			],
-			{ stdio: "inherit" },
+			{ encoding: "utf8", stdio: ["inherit", "pipe", "pipe"], maxBuffer: 256 * 1024 * 1024 },
 		);
-		// 이 묶음이 종료 코드 0 으로 끝났을 때만 그 스펙들을 실제로 돈 것으로
-		// 본다. 묶음을 나눈 덕에 한 설정이 실패해도 다른 설정이 돌린 것은
-		// 그대로 남는다 — 예전에는 하나만 실패해도 그 기계의 몫이 통째로 0 이
-		// 되어, 문서가 정한 절차로는 완결성 게이트가 초록이 될 수 없었다.
-		executed.push(...specs);
-		groupResults.push({ conf, specs: specs.length, status: "passed" });
 	} catch (error) {
+		ok = false;
+		output = `${error?.stdout ?? ""}${error?.stderr ?? ""}`;
 		status = "failed";
 		const message = String(error?.message ?? error).slice(0, 200);
 		detail = detail ? `${detail}; ${conf}: ${message}` : `${conf}: ${message}`;
-		groupResults.push({
-			conf,
-			specs: specs.length,
-			status: "failed",
-			detail: message,
-		});
 	}
+	// 사람이 볼 수 있게 그대로 흘린다. 캡처만 하고 삼키면 무엇이 왜 깨졌는지
+	// 로그에서 사라진다.
+	process.stdout.write(output);
+
+	const outcome = parseSpecOutcomes(output);
+	// 묶음이 통과하면 맡은 것을 다 돈 것이다. 실패했으면 리포터가 통과라고
+	// 밝힌 스펙만 센다 — 판정을 못 읽은 스펙은 돌지 않은 것으로 둔다.
+	const ran = ok ? specs : outcome.passed.filter((spec) => specs.includes(spec));
+	executed.push(...ran);
+	groupResults.push({
+		conf,
+		specs: specs.length,
+		status: ok ? "passed" : "failed",
+		passed: ran.length,
+		failedSpecs: outcome.failed.filter((spec) => specs.includes(spec)),
+	});
 }
 
 const record = {
