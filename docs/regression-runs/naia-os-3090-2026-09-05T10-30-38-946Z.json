@@ -5,13 +5,13 @@
 	],
 	"ranOn": {
 		"inventorySha256": "7fb2d7bb35637d0c6d128ef63fa7af5d16007fce5bfb1f7c8e6a1e2bf99e1fb2",
-		"commit": "9240dcb47ac67080f046650492703ac38c729a68",
+		"commit": "df1768776ebebd80c02270742f0c3242731e3842",
 		"host": "bazzite",
 		"platform": "linux-x64",
 		"node": "v26.7.0"
 	},
-	"started": "2026-09-05T09:51:28.612Z",
-	"finished": "2026-09-05T09:54:49.447Z",
+	"started": "2026-09-05T10:30:38.946Z",
+	"finished": "2026-09-05T10:34:13.788Z",
 	"status": "failed",
 	"planned": [
 		"100-herdr-first-frame.spec.ts",
