@@ -52,12 +52,20 @@ if (!records.length) {
 const covered = new Set();
 const skipped = new Map();
 const failedMachines = [];
+const notRun = [];
 for (const record of records) {
 	for (const spec of record.assigned ?? []) covered.add(spec);
 	for (const [spec, envs] of Object.entries(record.skippedForMissingEnv ?? {})) {
 		skipped.set(spec, envs);
 	}
-	if (record.status !== "passed") failedMachines.push(`${record.machine}(${record.status})`);
+	// prerequisites-missing 은 "돌렸는데 깨졌다" 가 아니라 "돌리지 못했다" 다.
+	// 둘 다 통과가 아니지만 사람이 볼 때 구별돼야 한다 — 하나는 코드를 고칠
+	// 일이고 하나는 기계를 준비할 일이다.
+	if (record.status === "prerequisites-missing") {
+		notRun.push(`${record.machine}: ${(record.missingPrerequisites ?? []).join(", ")}`);
+	} else if (record.status !== "passed") {
+		failedMachines.push(`${record.machine}(${record.status})`);
+	}
 }
 
 const never = [...all].filter((s) => !covered.has(s));
@@ -68,6 +76,12 @@ console.log(`  스펙 ${all.size} 중 배정된 것 ${covered.size}, 아무도 �
 console.log(`  배정되었으나 환경이 없어 건너뛴 것 ${skipped.size}`);
 
 let failed = false;
+if (notRun.length) {
+	console.error(`  ❌ 전제가 없어 돌리지 못한 기계 ${notRun.length}대:`);
+	for (const line of notRun) console.error(`     ${line}`);
+	console.error("     기계를 준비해야 한다. 돌리지 못한 것은 통과가 아니다.");
+	failed = true;
+}
 if (failedMachines.length) {
 	console.error(`  ❌ 실패한 기계: ${failedMachines.join(", ")}`);
 	failed = true;

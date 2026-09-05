@@ -66,9 +66,73 @@ if (missingEnv.size) {
 	if (missingEnv.size > 5) console.log(`      … 그리고 ${missingEnv.size - 5}개 더`);
 }
 
+// 실기 스펙은 환경 변수 말고도 공통 전제를 요구한다 — 브라우저 드라이버,
+// tauri-driver, 빌드된 디버그 바이너리, 그리고 살아 있는 게이트웨이다.
+// 전제가 없으면 스펙은 ECONNREFUSED 같은 모양으로 죽는데, 그것은 결함이
+// 아니라 준비 부족이다. 둘을 같은 칸에 넣으면 기록이 "서른한 개가 깨졌다" 고
+// 말하게 되고, 다음 사람이 없는 버그를 찾는다.
+function missingPrerequisites() {
+	const missing = [];
+	const has = (command) => {
+		try {
+			execFileSync("sh", ["-c", `command -v ${command}`], { stdio: "ignore" });
+			return true;
+		} catch {
+			return false;
+		}
+	};
+	if (!has("WebKitWebDriver")) missing.push("WebKitWebDriver (브라우저 드라이버)");
+	if (!has("tauri-driver")) missing.push("tauri-driver");
+	if (!existsSync("packages/shell/src-tauri/target-e2e/debug/naia-shell"))
+		missing.push("빌드된 e2e 바이너리 (pnpm -C packages/shell run build:e2e:tauri)");
+	const gatewayPort = process.env.NAIA_E2E_GATEWAY_PORT ?? "18789";
+	try {
+		execFileSync("sh", ["-c", `ss -ltn | grep -q ':${gatewayPort} '`], { stdio: "ignore" });
+	} catch {
+		missing.push(`게이트웨이 (:${gatewayPort} 응답 없음)`);
+	}
+	return missing;
+}
+
+const absentPrereqs = missingPrerequisites();
+if (absentPrereqs.length) {
+	console.log(`  ⚠ 공통 전제 ${absentPrereqs.length}개가 없다:`);
+	for (const item of absentPrereqs) console.log(`      ${item}`);
+	console.log("     이 상태로 돌리면 스펙이 결함처럼 죽는다 — 준비 부족과 결함은 다르다.");
+}
+
 if (dryRun) {
 	console.log("  (--dry-run: 실행하지 않는다)");
 	process.exit(0);
+}
+
+if (absentPrereqs.length) {
+	// 준비가 안 된 것을 "돌렸는데 실패했다" 로 기록하지 않는다. 기록은 남기되
+	// 상태를 따로 둔다 — 완결성 게이트가 이것을 통과로 세지 않는다.
+	const started = new Date().toISOString();
+	const dir = "docs/regression-runs";
+	mkdirSync(dir, { recursive: true });
+	const out = join(dir, `${machine}-${started.replace(/[:.]/g, "-")}.json`);
+	writeFileSync(
+		out,
+		`${JSON.stringify(
+			{
+				machine,
+				tiers,
+				started,
+				finished: new Date().toISOString(),
+				status: "prerequisites-missing",
+				assigned: [],
+				skippedForMissingEnv: Object.fromEntries(missingEnv),
+				missingPrerequisites: absentPrereqs,
+				detail: "공통 전제가 없어 실행하지 않았다",
+			},
+			null,
+			"\t",
+		)}\n`,
+	);
+	console.log(`[regression] 실행하지 않았다 — 기록: ${out}`);
+	process.exit(2);
 }
 
 const started = new Date().toISOString();
