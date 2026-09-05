@@ -41,17 +41,14 @@ describe("22 — channels config", () => {
 	});
 
 	it("should navigate to channels tab", async () => {
-		const channelsBtn = await $(S.channelsTabBtn);
-		await channelsBtn.waitForDisplayed({ timeout: 5_000 });
-		await channelsBtn.click();
+		await clickElement(S.channelsTabBtn, 5_000);
 
 		const channelsApp = await $(S.channelsTabApp);
 		await channelsApp.waitForDisplayed({ timeout: 5_000 });
 	});
 
 	it("should navigate back to chat tab", async () => {
-		const chatTabBtn = await $(S.chatTab);
-		await chatTabBtn.click();
+		await clickElement(S.chatTab);
 
 		const chatInput = await $(S.chatInput);
 		await chatInput.waitForDisplayed({ timeout: 5_000 });
