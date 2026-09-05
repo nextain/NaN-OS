@@ -63,10 +63,16 @@ for (const file of files) {
 }
 
 // 오늘의 상태.
+//
+// retired 에도 상한을 둔다. 상한이 없으면 제목 앞에 사유만 붙여 죽은 테스트를
+// 무제한 늘릴 수 있고, 그러면 이 게이트가 스스로 경고한 "baseline 이
+// 알리바이가 된다" 를 이 게이트가 저지르게 된다. 사유를 적는 것은 면제가
+// 아니라 기록일 뿐이다.
 const BASELINE_VACUOUS = 0;
 const BASELINE_DEAD_SKIPS = 0;
+const BASELINE_RETIRED = 16;
 
-console.log(`[vacuous-tests] 자명 단정 ${vacuous.length} (baseline ${BASELINE_VACUOUS}) / 이유 없는 skip ${deadSkips.length} (baseline ${BASELINE_DEAD_SKIPS}) / 은퇴 선언 ${retired.length}`);
+console.log(`[vacuous-tests] 자명 단정 ${vacuous.length} (baseline ${BASELINE_VACUOUS}) / 이유 없는 skip ${deadSkips.length} (baseline ${BASELINE_DEAD_SKIPS}) / 사유 밝힌 skip ${retired.length} (baseline ${BASELINE_RETIRED})`);
 
 let failed = false;
 if (vacuous.length > BASELINE_VACUOUS) {
@@ -75,13 +81,23 @@ if (vacuous.length > BASELINE_VACUOUS) {
 	console.error("     그 자리가 무엇을 확인해야 하는지 적거나, 테스트를 지워라.");
 	failed = true;
 }
+if (retired.length > BASELINE_RETIRED) {
+	console.error(`  ❌ 사유를 밝힌 채 꺼 둔 테스트가 늘었다(${retired.length} > ${BASELINE_RETIRED}):`);
+	for (const where of retired.slice(-5)) console.error(`     ${where}`);
+	console.error("     사유를 적는 것은 면제가 아니다. 되살리거나 지워라.");
+	failed = true;
+}
 if (deadSkips.length > BASELINE_DEAD_SKIPS) {
 	console.error("  ❌ 이유 없이 꺼 둔 테스트가 늘었다:");
 	for (const where of deadSkips) console.error(`     ${where}`);
 	console.error("     환경 조건으로 거르거나(test.skip(!process.env.X, ...)), 되살리거나, 지워라.");
 	failed = true;
 }
-if (vacuous.length < BASELINE_VACUOUS || deadSkips.length < BASELINE_DEAD_SKIPS)
+if (
+	vacuous.length < BASELINE_VACUOUS ||
+	deadSkips.length < BASELINE_DEAD_SKIPS ||
+	retired.length < BASELINE_RETIRED
+)
 	console.log("  ✓ 줄었다 — 이 파일의 baseline 도 함께 줄여라");
 if (!failed) console.log("  ✓ 늘지 않았다");
 process.exit(failed ? 1 : 0);

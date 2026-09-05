@@ -9,7 +9,25 @@ permissions:
   id-token: write
 
 jobs:
+  # 배포 전 회귀가 실제로 전부 돌았는지 본다. 기계마다 자기 몫을 돌리고
+  # docs/regression-runs/ 에 기록을 남기면, 여기서 그것을 모아 아무도 맡지
+  # 않은 스펙과 환경이 없어 건너뛴 것을 찾는다. 기록이 없으면 실패한다 —
+  # 돌지 않은 것을 통과로 세지 않는다는 뜻이다.
+  #
+  # 이 잡이 붉으면 설치본을 만들지 않는다. 설치본이 나가기 전에 회귀가
+  # 돌았어야 하기 때문이다.
+  regression-gate:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: 배포 전 회귀 완결성
+        run: node scripts/check-regression-complete.mjs --max-age-hours=72
+
   build:
+    needs: regression-gate
     strategy:
       fail-fast: false
       matrix:

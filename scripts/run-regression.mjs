@@ -1,7 +1,7 @@
 /**
  * 배포 전 회귀를 이 기계가 맡은 몫만큼 돌리고, 무엇을 돌렸는지 남긴다.
  *
- * 왜 이렇게 나누는가: 실기 스펙 130개는 한 기계에서 다 돌 수 없다. 자격증명이
+ * 왜 이렇게 나누는가: 실기 스펙 129개는 한 기계에서 다 돌 수 없다. 자격증명이
  * 필요한 것, 그 기계의 장치(GPU·오디오·데스크톱 세션)가 필요한 것, 아무것도
  * 필요 없는 것이 섞여 있다. 나누려면 무엇이 무엇을 요구하는지 알아야 하고,
  * 그 목록은 build-e2e-inventory.mjs 가 만든다.
@@ -75,12 +75,17 @@ const started = new Date().toISOString();
 let status = "passed";
 let detail = "";
 try {
-	// 메인 harness 가 specs/**/*.spec.ts 를 맡는다. 등급별로 나눠 넘길 수단이
-	// wdio 설정에 없으므로, 여기서는 그 harness 를 부르고 결과만 기록한다.
-	// 등급별 선택은 harness 가 --spec 을 받는 형태로 넓힌 뒤에 붙인다.
-	execFileSync("pnpm", ["-C", "packages/shell", "exec", "wdio", "run", "e2e-tauri/wdio.conf.ts"], {
-		stdio: "inherit",
-	});
+	// 맡은 스펙만 넘긴다. 예전에는 전체 스위트를 돌리면서 기록에는 맡은 것만
+	// 적었는데, 그러면 --tier=native_local 로 부른 기계가 실제로는 전부 돌리고
+	// 기록은 셋만 남긴다 — 나눈다는 장치가 나누지 않고 기록이 실행과 어긋난다.
+	// wdio 는 --spec 을 여러 번 받는다(package.json 의 test:e2e:tauri:nva 가 이미
+	// 같은 설정에 그렇게 넘긴다).
+	const specArgs = mine.flatMap((s) => ["--spec", `e2e-tauri/specs/${s.spec}`]);
+	execFileSync(
+		"pnpm",
+		["-C", "packages/shell", "exec", "wdio", "run", "e2e-tauri/wdio.conf.ts", ...specArgs],
+		{ stdio: "inherit" },
+	);
 } catch (error) {
 	status = "failed";
 	detail = String(error?.message ?? error).slice(0, 400);
