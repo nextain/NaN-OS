@@ -324,7 +324,19 @@ const BASELINE_DEAD_SKIPS = 0;
 // #557 마무리(2026-09-06): 93-radio-bgm-observation 은 시나리오 표에 대응 문장이
 // 없는 일시정지·재개 검사만 남아 오너가 접기로 했고 파일을 지웠다. 옮긴 두 검사는
 // 94-radio-bgm-queue 에 있다. 기준선은 22 로 돌아온다.
-const BASELINE_RETIRED = 22;
+//
+// #563 으로 23 이 되었다(2026-09-06). 93-discord-inbox-handoff 는 빈 Discord
+// 대화함의 `Discord 연결 설정 열기` 가 연결 탭을 여는지를 재는데, 제품에 그
+// 목적지가 없다 — 버튼이 부르는 `naia-open-settings` 를 듣는 곳이 저장소에
+// 없고, 이어서 누르는 `[data-settings-tab="connections"]` 는 조건 없이
+// disabled 이며, 표지를 정의하는 ConnectionsSettingsTab 은 제품 코드가 값으로
+// 끌어오지 않는다. 그래서 이 스펙은 통과할 수 없는 것을 30초 기다린 뒤 매번
+// 실패했고, 회귀 기록에서 진짜 회귀를 덮는 소음이 되고 있었다. 이번에는 스펙이
+// 낡은 것이 아니라 제품이 정본(UC-DISCORD-1B·FR-DISCORD-SETUP-05)보다 뒤처진
+// 쪽이므로 단정을 고치지 않고 그대로 끈다 — 고쳐서 통과시키면 없는 기능이
+// 덮인 것으로 보인다. #563 이 닫히면 `it.skip` 을 되돌리고 이 기준선도 22 로
+// 내린다. 늘린 이 한 칸은 유예의 값이지 면제가 아니다.
+const BASELINE_RETIRED = 23;
 // 배선을 기다리는 자리. 늘면 "나중에" 가 쌓이는 것이므로 함께 막는다.
 const BASELINE_PENDING = 11;
 

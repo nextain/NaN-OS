@@ -13,8 +13,21 @@ node scripts/run-regression.mjs --machine=<이름> --tier=deterministic_ci[,cred
 | `planned` | 이 기계가 맡기로 한 스펙. **관측이 아니라 계획이다** |
 | `executed` | 실제로 끝까지 돈 스펙. 완결성 판정은 이것만 센다 |
 | `groups` | wdio 설정별 결과. 한 설정이 실패해도 다른 설정의 결과는 남는다 |
-| `envMissingBeforeRun` | 실행 전에 환경이 없어 건너뛸 것으로 예측한 스펙 |
+| `envMissingBeforeRun` | 요구 환경이 없어 **wdio 에 넘기지 않은** 스펙 |
+| `envMissingGroups` | 스펙이 전부 환경 부재라 아예 띄우지 않은 wdio 설정 |
 | `status` | `passed` / `failed` / `prerequisites-missing` |
+
+**요구 환경이 없는 스펙은 실행하지 않고 기록에만 남는다.** 그러니 그 이름은
+`executed`·`stableFailures`·`flakySpecs` 어디에도 오르지 않는다. 오래 반대로
+돌았다 — 러너가 "환경이 없어 건너뛸 스펙" 이라고 찍어 놓고 그 목록을 그대로
+wdio 에 넘겼고, 그중 하나는 `before all` 훅에서 키가 없다며 죽어 결함처럼
+기록됐으며(재시도 한 번까지 썼다), 다른 하나는 스스로 통과해 재지 않은 채
+`executed` 에 올랐다. 말한 것과 한 것이 다르면 기록은 두 갈래로 거짓이 된다.
+실행에서 뺀 것이지 판정에서 뺀 것이 아니다 — 완결성 게이트는
+`envMissingBeforeRun` 을 읽어 "이것은 통과가 아니다" 로 여전히 붉힌다. 선별은
+`scripts/lib/regression-selection.mjs` 한 곳이 하고
+`src/test/regression-selection.contract.test.ts` 가 고정한다. 무엇이 넘어가고
+무엇이 빠지는지는 `--dry-run` 이 wdio 인자 그대로 보여 준다.
 
 `planned` 와 `executed` 를 나눈 이유가 있다. 예전에는 계획을 그대로 배정으로
 적었고 완결성 게이트가 그것을 덮인 것으로 셌다. 그러면 wdio 가 시작하자마자

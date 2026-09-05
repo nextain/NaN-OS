@@ -30,6 +30,7 @@ import { hostname } from "node:os";
 import { basename } from "node:path";
 import { delimiter, join, resolve } from "node:path";
 import { e2eBinaryPath } from "../packages/shell/scripts/agent-pairing.mjs";
+import { planGroups, wdioSpecArgs } from "./lib/regression-selection.mjs";
 
 const args = process.argv.slice(2);
 const value = (name) => args.find((a) => a.startsWith(`--${name}=`))?.split("=")[1];
@@ -183,19 +184,32 @@ for (const tier of tiers) {
 	);
 }
 
-// 등급이 요구하는 환경 변수가 실제로 있는지 먼저 본다. 없으면 스펙은 조용히
-// 건너뛰고, 건너뛴 것이 통과로 세어지는 것이 지금까지의 문제였다.
-const missingEnv = new Map();
-for (const spec of mine) {
-	const absent = spec.env.filter((name) => !process.env[name]);
-	if (absent.length) missingEnv.set(spec.spec, absent);
-}
+// 등급이 요구하는 환경 변수가 실제로 있는지 먼저 본다. 없으면 그 스펙은
+// **wdio 에 넘기지 않는다.**
+//
+// 오래 반대로 돌았다. 여기서 "건너뛸 스펙" 이라고 찍어 놓고 목록은 그대로
+// 넘겼고, 스펙들은 그 안에서 키가 없다며 `before all` 훅에서 죽어 결함처럼
+// 기록됐다(2026-09-05 naia-os-3090 기록의 96-voice-linux-app-start). 반대로
+// 스스로 통과해 버린 것은 재지 않은 채 `executed` 에 올랐다(88-stt-tts-combo).
+// 말한 것과 한 것이 다르면 기록은 두 갈래로 거짓이 된다.
+//
+// 빼도 판정에서 사라지지 않는다. `envMissingBeforeRun` 에 그대로 남고
+// check-regression-complete 가 그것을 "통과가 아니다" 로 센다.
+const { groups, envMissing: missingEnv, skippedGroups } = planGroups(
+	mine,
+	process.env,
+);
 if (missingEnv.size) {
-	console.log(`  ⚠ 환경이 없어 건너뛸 스펙 ${missingEnv.size}개 — 이것은 통과가 아니다`);
+	console.log(`  ⚠ 환경이 없어 돌리지 않을 스펙 ${missingEnv.size}개 — 이것은 통과가 아니다`);
 	for (const [spec, absent] of [...missingEnv].slice(0, 5)) {
 		console.log(`      ${spec}: ${absent.join(", ")}`);
 	}
 	if (missingEnv.size > 5) console.log(`      … 그리고 ${missingEnv.size - 5}개 더`);
+}
+for (const group of skippedGroups) {
+	console.log(
+		`  ⚠ ${group.conf} 는 아예 띄우지 않는다 — ${group.reason} (스펙 ${group.specs.length}개)`,
+	);
 }
 
 // 실기 스펙은 환경 변수 말고도 공통 전제를 요구한다 — 브라우저 드라이버,
@@ -324,8 +338,32 @@ if (absentPrereqs.length) {
 }
 
 if (dryRun) {
+	// 무엇을 넘기고 무엇을 빼는지 **인자 그대로** 보인다. 요약만 찍으면 고른
+	// 것과 실제로 넘어가는 것이 갈라져도 드러나지 않는다 — 이 러너가 바로 그
+	// 방식으로 어긋나 있었다("건너뛴다" 고 찍고 전부 넘겼다).
+	console.log("\n  [--dry-run] wdio 에 넘길 것:");
+	if (groups.size === 0) console.log("      (없다)");
+	for (const [conf, specs] of groups) {
+		console.log(
+			`      pnpm -C packages/shell exec wdio run e2e-tauri/${conf} ${wdioSpecArgs(specs).join(" ")}`,
+		);
+	}
+	console.log("  [--dry-run] 넘기지 않을 것(요구 환경 없음 — 기록에는 남는다):");
+	if (missingEnv.size === 0) console.log("      (없다)");
+	for (const [spec, absent] of missingEnv) {
+		console.log(`      ${spec} ← ${absent.join(", ")}`);
+	}
+	// 두 목록이 겹치면 선별이 깨진 것이다. 사람이 눈으로 대조하지 않아도
+	// 되도록 여기서 센다.
+	const passedToWdio = new Set([...groups.values()].flat());
+	const overlap = [...missingEnv.keys()].filter((spec) => passedToWdio.has(spec));
+	console.log(
+		overlap.length === 0
+			? `  [--dry-run] 두 목록이 겹치지 않는다 (넘길 것 ${passedToWdio.size} · 뺄 것 ${missingEnv.size})`
+			: `  [--dry-run] ❌ 두 목록이 겹친다: ${overlap.join(", ")}`,
+	);
 	console.log("  (--dry-run: 실행하지 않는다)");
-	process.exit(0);
+	process.exit(overlap.length === 0 ? 0 : 1);
 }
 
 if (absentPrereqs.length) {
@@ -353,10 +391,12 @@ console.log(
 				finished: new Date().toISOString(),
 				status: "prerequisites-missing",
 				assigned: [],
-				// 관측이 아니라 사전 예측이다 — 이 스펙들도 wdio 에 넘어가고, 그 안에서
-	// 스스로 건너뛸지 실패할지는 스펙이 정한다. 이름을 그대로 두면 "건너뛰었다"
-	// 는 관측으로 읽히므로 무엇인지 밝힌다.
+				// 요구 환경이 없어 **wdio 에 넘기지 않은** 스펙. 실행에서 뺀 것이지
+	// 판정에서 뺀 것이 아니다 — check-regression-complete 가 이 칸을 읽어
+	// "요구 환경이 없던 스펙, 이것은 통과가 아니다" 로 센다.
 	envMissingBeforeRun: Object.fromEntries(missingEnv),
+				// 스펙이 전부 환경 부재라 아예 띄우지 않은 wdio 설정.
+				envMissingGroups: skippedGroups,
 				missingPrerequisites: absentPrereqs,
 				detail: "공통 전제가 없어 실행하지 않았다",
 			},
@@ -380,24 +420,6 @@ let detail = "";
 // 남는다.
 const executed = [];
 const groupResults = [];
-
-/**
- * 스펙을 wdio 설정별로 묶는다.
- *
- * 예전에는 무엇이든 `wdio.conf.ts` 로 넘겼는데, 열일곱 개 스펙은 전용 설정이
- * 준비하는 환경(격리된 프로필, 자체 사이드카, 다른 바이너리) 없이는 반드시
- * 실패한다. 예컨대 라디오 큐 스펙은 전용 설정의 onPrepare 가 띄우는 BGM
- * 사이드카의 /health 를 단정한다. 기본 설정으로 부르면 그 자리에서 죽는다.
- */
-function groupByConf(specs) {
-	const groups = new Map();
-	for (const spec of specs) {
-		const conf = (spec.conf ?? [])[0] ?? "wdio.conf.ts";
-		if (!groups.has(conf)) groups.set(conf, []);
-		groups.get(conf).push(spec.spec);
-	}
-	return groups;
-}
 
 /**
  * 전용 설정 중 짝 naia-agent 체크아웃을 요구하는 것들. 그 체크아웃이 없으면
@@ -455,8 +477,14 @@ function pairedAgentAvailable() {
 	return false;
 }
 
-const groups = groupByConf(mine);
-console.log(`[regression] wdio 설정 ${groups.size}개로 나눠 돈다`);
+// 묶음은 이미 위에서 정했다(planGroups). 여기서 다시 묶으면 환경이 없어 뺀
+// 스펙이 되살아난다 — 고른 것과 넘기는 것이 갈라지는 그 형태다.
+console.log(
+	`[regression] wdio 설정 ${groups.size}개로 나눠 돈다` +
+		(skippedGroups.length
+			? ` (환경이 없어 띄우지 않는 설정 ${skippedGroups.length}개)`
+			: ""),
+);
 
 /**
  * wdio 의 spec 리포터 출력에서 스펙별 결과를 읽는다.
@@ -537,7 +565,7 @@ for (const [conf, specs] of groups) {
 	first = false;
 	groupIndex += 1;
 
-	const specArgs = specs.flatMap((spec) => ["--spec", `e2e-tauri/specs/${spec}`]);
+	const specArgs = wdioSpecArgs(specs);
 	// 묶음마다 다른 드라이버 포트를 준다. 전용 설정 여럿이 같은 포트(4450)를
 	// 기본값으로 쓰기 때문에, 연달아 돌리면 앞 실행의 드라이버가 아직 그
 	// 포트를 잡고 있어 세션 생성이 실패한다 — 실제로 전용 설정 셋이
@@ -644,10 +672,16 @@ const record = {
 	// 어느 wdio 설정이 어디까지 갔는지. 한 설정이 실패해도 다른 설정의
 	// 결과는 남는다.
 	groups: groupResults,
-	// 관측이 아니라 사전 예측이다 — 이 스펙들도 wdio 에 넘어가고, 그 안에서
-	// 스스로 건너뛸지 실패할지는 스펙이 정한다. 이름을 그대로 두면 "건너뛰었다"
-	// 는 관측으로 읽히므로 무엇인지 밝힌다.
+	// 요구 환경이 없어 **wdio 에 넘기지 않은** 스펙. 그래서 이 이름들은
+	// executed·stableFailures·flakySpecs 어디에도 오르지 않는다 — 재지 않은
+	// 것이 통과로도, 결함으로도 세어지지 않게 하는 것이 이 칸의 목적이다.
+	// 판정에서 빠지는 것은 아니다: check-regression-complete 가 이것을 읽어
+	// "이것은 통과가 아니다" 로 게이트를 붉힌다.
 	envMissingBeforeRun: Object.fromEntries(missingEnv),
+	// 스펙이 전부 환경 부재라 아예 띄우지 않은 wdio 설정. 전용 설정은
+	// onPrepare 에서 사이드카를 띄우므로, 돌릴 것이 없는데 부르면 준비 비용만
+	// 쓰고 죽는다 — 그 죽음이 다시 결함처럼 기록된다.
+	envMissingGroups: skippedGroups,
 	detail,
 };
 
