@@ -55,9 +55,15 @@ const inventoryDigest = createHash("sha256")
 
 const rejected = [];
 const inWindow = readdirSync(RUNS)
-	.filter((f) => f.endsWith(".json"))
+	// 기계 명단은 기록이 아니다. 같은 디렉터리에 있어 확장자만 보면 기록으로
+	// 읽히고, 기계 이름이 없어 판정이 어긋난다.
+	.filter((f) => f.endsWith(".json") && f !== "machines.json")
 	.map((f) => ({ file: f, record: JSON.parse(readFileSync(join(RUNS, f), "utf8")) }))
 	.filter(({ file, record }) => {
+		if (!record.machine) {
+			rejected.push(`${file}: 기계 이름이 없다 — 회귀 기록이 아니다`);
+			return false;
+		}
 		const when = Date.parse(record.finished ?? record.started ?? 0);
 		if (Number.isNaN(when)) {
 			rejected.push(`${file}: 시각을 읽을 수 없다`);
