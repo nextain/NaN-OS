@@ -79,3 +79,35 @@ voxcpm2_service` 는 셸 자기 것만이 아니라 그 기계에 떠 있는 남
 
 - `docs/storage-locations.md` — 셸이 무엇을 어디에 저장하는지 실측
 - `.agents/progress/naia-shell-linux-voice-night-2026-09-05.md`(alpha-adk) — 밤 작업 전체 기록
+
+---
+
+## 그 뒤에 더 한 것 — 품질 프로세스 (#549, #550)
+
+루크가 준 목표는 "0.2.3과 이전 기능 모든 포함한 퀄리티·사용성·성능 기준과
+정식 퀄리티 프로세스 신설 및 수행" 이었다. 만든 것은 `docs/quality-process.md`
+에 다 적혀 있고, 여기에는 **Windows 에서 확인해야 할 것**만 추린다.
+
+### Windows 에서 확인하실 것
+
+1. **앱 삭제 확인창** — 앱 탭을 우클릭해 제거를 고르면 "설치된 앱을 디스크에서
+   지웁니다. 되돌릴 수 없습니다" 가 뜨고, 취소하면 앱이 그대로 남아야 한다.
+   빌드 내장 앱 숨기기는 되돌릴 수 있으므로 묻지 않는 것이 맞다.
+2. **시작 지연 한도** — `pnpm --filter naia-shell exec playwright test
+   e2e/900-startup-latency.spec.ts` 를 돌려 콜드와 웜이 각각 2,000ms / 500ms
+   안에 드는지 본다. Windows 가 느려 붉어지면 그 관측값을 스펙 주석에 적고
+   한도를 넓혀 달라 — 숫자만 바꾸고 이유를 안 적으면 다음 사람이 또 넓힌다.
+3. **회귀 분담 실행** — `node scripts/run-regression.mjs --machine <이름>` 을
+   돌리면 `docs/regression-runs/` 에 기록이 생긴다. 리눅스 기계 기록은 이미
+   하나 있으니 Windows 기록이 붙으면 두 기계 분담이 실제로 성립하는지
+   `node scripts/check-regression-complete.mjs` 가 판정한다.
+
+### 알아 두실 것
+
+- Rust 테스트를 로컬에서 돌리려면 짝 naia-agent 체크아웃이 `build.rs` 가
+  요구하는 리비전(`bc468a17`)이어야 한다. 이 기계의 naia-agent 는 다른 분기에
+  있어서, 그 리비전으로 임시 워크트리를 펼쳐 돌렸다(286 통과). 작업 트리는
+  건드리지 않았다.
+- 게이트는 전부 baseline 을 지금 값으로 잠그고 **늘어나는 것만** 막는다.
+  줄였으면 baseline 도 함께 줄여 달라. 늘리기만 하면 baseline 이 알리바이가
+  된다.
