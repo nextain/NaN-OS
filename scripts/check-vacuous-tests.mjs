@@ -44,6 +44,9 @@ for (const file of files) {
 	const source = readFileSync(file, "utf8");
 	source.split("\n").forEach((line, index) => {
 		const where = `${file}:${index + 1}`;
+		// 주석은 세지 않는다. 왜 이 패턴이 문제인지 설명하는 주석까지 잡으면,
+		// 고친 사람이 그 사실을 적을 수 없게 된다.
+		if (/^\s*(\/\/|\*|\/\*)/.test(line)) return;
 		// 자기 자신만 확인하는 단정.
 		if (/expect\(\s*true\s*\)\s*\.toBe\(\s*true\s*\)/.test(line)) vacuous.push(where);
 		// 조건 없는 skip. 환경 변수로 거르는 형태는 정당하므로 뺀다.
@@ -52,7 +55,7 @@ for (const file of files) {
 }
 
 // 오늘의 상태.
-const BASELINE_VACUOUS = 2;
+const BASELINE_VACUOUS = 0;
 const BASELINE_DEAD_SKIPS = 16;
 
 console.log(`[vacuous-tests] 자명 단정 ${vacuous.length} (baseline ${BASELINE_VACUOUS}) / 조건 없는 skip ${deadSkips.length} (baseline ${BASELINE_DEAD_SKIPS})`);

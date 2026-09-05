@@ -746,14 +746,20 @@ describe("91 — Memory Settings Integration", () => {
 
 		it("should navigate to settings memory section without error", async () => {
 			await gotoSettingsMemory();
-			await browser.execute(() => {
+			// 이동이 끝났는지는 화면에 그 구역이 실제로 있는지로 본다. 예전에는
+			// expect(true).toBe(true) 였는데, 그러면 gotoSettingsMemory 가 조용히
+			// 아무 데도 가지 않아도 통과한다.
+			const arrived = await browser.execute(() => {
 				const el =
 					document.querySelector(".facts-list") ||
 					document.querySelector(".settings-hint");
 				if (el) el.scrollIntoView({ block: "center" });
+				return Boolean(el);
 			});
 			await browser.pause(500);
-			expect(true).toBe(true);
+			expect(arrived, "기억 구역(.facts-list 또는 .settings-hint)이 화면에 없다").toBe(
+				true,
+			);
 		});
 
 		it("should show facts list or empty-state hint", async () => {

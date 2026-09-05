@@ -1,9 +1,9 @@
 {
 	"generatedFrom": "packages/shell/e2e-tauri/specs",
-	"total": 130,
+	"total": 129,
 	"summary": {
 		"credentialed_live": 23,
-		"deterministic_ci": 104,
+		"deterministic_ci": 103,
 		"native_local": 3
 	},
 	"specs": [
@@ -831,12 +831,6 @@
 				"NAIA_E2E_VOICE_ARTIFACTS"
 			],
 			"tier": "native_local"
-		},
-		{
-			"spec": "96-w5-sold-out-ux.spec.ts",
-			"conf": [],
-			"env": [],
-			"tier": "deterministic_ci"
 		},
 		{
 			"spec": "97-course-worker-guidance.spec.ts",
