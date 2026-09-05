@@ -32,20 +32,23 @@ import { readFileSync } from "node:fs";
 const SHELL = "packages/shell";
 
 /** 스펙이 요소를 집는 방식 중 소스와 대조할 수 있는 것. */
+/**
+ * 스펙이 요소를 집는 방식.
+ *
+ * 처음에는 대괄호 셀렉터만 봤다. 그래서 같은 결함을 `getByTestId("...")` 나
+ * `querySelector(".voice-wake-panel")` 로 적으면 세지도 않았다. 실제 스펙에서
+ * 쓰는 형태를 세어 보면 `querySelector` 가 가장 많다.
+ */
 const ANCHORS = [
 	/\[data-testid=["']([\w-]+)["']\]/g,
 	/\[data-([\w-]+)-tab=["']([\w-]+)["']\]/g,
+	/(?:getByTestId|findByTestId)\(\s*["'`]([\w-]+)["'`]/g,
 ];
 
 /**
  * 소스에 없어도 두는 이름. 왜 없어도 되는지 적어야 한다.
  */
-const ALLOWED_ABSENT = new Map([
-	[
-		"voice-wake-triggers",
-		"삭제된 화면. 이 이름을 쓰는 스펙도 함께 지웠으므로 이 목록은 곧 비어야 한다",
-	],
-]);
+const ALLOWED_ABSENT = new Map();
 
 function tracked(dir, extension) {
 	try {
@@ -65,12 +68,31 @@ const sourceText = [
 	.map((f) => readFileSync(f, "utf8"))
 	.join("\n");
 
+/**
+ * 이름을 만들어 붙이는 자리만 모은다.
+ *
+ * `data-testid={...}`, `id={...}`, `getByTestId(...)` 처럼 식별자를 정하는
+ * 문맥이다. 소스 전체에서 찾으면 관계없는 문자열이 접두사를 가로챈다.
+ */
+const identifierContexts = [
+	...sourceText.matchAll(
+		/(?:data-testid|id|htmlFor|data-[\w-]+)\s*=\s*\{([^}]*\{[^}]*\}[^}]*|[^}]*)\}/g,
+	),
+]
+	.map((match) => match[0])
+	.concat(
+		[...sourceText.matchAll(/(?:getByTestId|findByTestId)\s*\(([^)]*)\)/g)].map(
+			(match) => match[0],
+		),
+	);
+
 const specs = [
 	...tracked(`${SHELL}/e2e-tauri`, ".ts"),
 	...tracked(`${SHELL}/e2e`, ".ts"),
 ];
 
 const missing = [];
+const usedAllowances = new Set();
 let anchors = 0;
 
 for (const file of specs) {
@@ -80,10 +102,14 @@ for (const file of specs) {
 		names.set(match[1], match.index);
 	for (const match of source.matchAll(ANCHORS[1]))
 		names.set(`data-${match[1]}-tab="${match[2]}"`, match.index);
+	for (const match of source.matchAll(ANCHORS[2])) names.set(match[1], match.index);
 
 	for (const [name, at] of names) {
 		anchors += 1;
-		if (ALLOWED_ABSENT.has(name)) continue;
+		if (ALLOWED_ABSENT.has(name)) {
+			usedAllowances.add(name);
+			continue;
+		}
 		// 이 자리가 "없어야 한다" 를 확인하는 단정인가. 그렇다면 소스에
 		// 이름이 없는 것이 정상이다.
 		const around = source.slice(at, at + 220);
@@ -117,11 +143,18 @@ for (const file of specs) {
 			// 꼴을 놓친다.
 			cuts.push({ head: name.slice(0, i + 1), tail: name.slice(i) });
 		}
-		const assembled = cuts.some(
-			({ head, tail }) =>
-				(tail.length > 3 && sourceText.includes(`}${tail}\``)) ||
-				(head.length > 3 && sourceText.includes(`\`${head}${"${"}`)),
-		);
+		// 조립된 이름을 찾되 **식별자 문맥 안에서만** 본다. 그러지 않으면
+		// 관계없는 문자열이 접두사를 가로챈다 — 실제로 세션 아이디를 만드는
+		// `` `voice-${seq}` `` 하나 때문에 `voice-` 로 시작하는 모든 이름이
+		// 영원히 살아 있는 것으로 판정됐고, 삭제된 음성 화면을 기다리는 스펙을
+		// 되살려도 게이트가 잡지 못했다.
+		const assembled = cuts.some(({ head, tail }) => {
+			if (tail.length > 3 && identifierContexts.some((ctx) => ctx.includes(`}${tail}\``)))
+				return true;
+			if (head.length > 3 && identifierContexts.some((ctx) => ctx.includes(`\`${head}${"${"}`)))
+				return true;
+			return false;
+		});
 		if (assembled) continue;
 		missing.push({ file, name });
 	}
@@ -130,6 +163,18 @@ for (const file of specs) {
 console.log(
 	`[dead-ui] 스펙이 집는 이름 ${anchors}개 / 셸 소스에 없는 것 ${missing.length}`,
 );
+
+// 걸리지도 않는 면제는 알리바이다. 남겨 두면 다음 결함이 그 이름으로 들어와
+// 조용히 지나간다 — 실제로 `voice-wake-triggers` 면제가 그러고 있었다.
+const staleAllowances = [...ALLOWED_ABSENT.keys()].filter(
+	(name) => !usedAllowances.has(name),
+);
+if (staleAllowances.length > 0) {
+	console.error("\n걸리지 않는 면제가 남아 있다:");
+	for (const name of staleAllowances) console.error(`  ${name}`);
+	console.error("\nALLOWED_ABSENT 에서 지워라 — 남겨 두면 다음 결함을 덮는다.");
+	process.exit(1);
+}
 
 if (missing.length > 0) {
 	console.error("\n스펙이 집는데 셸 소스에 없는 이름:");
