@@ -34,12 +34,32 @@ if (!families.length) {
 	process.exit(1);
 }
 
+// 표제 깊이를 둘·셋으로 못박아 두면 `#### UC-...` 로 한 단 내리는 것만으로
+// 게이트를 피할 수 있다. 실제로 리뷰가 그 우회를 실증했다. 깊이를 가리지
+// 않는다.
 const titles = [
-	...new Set([...scenarios.matchAll(/^#{2,3}\s+(UC-[A-Z0-9][A-Z0-9-]*)/gm)].map((m) => m[1])),
+	...new Set(
+		[...scenarios.matchAll(/^#{2,6}\s+(UC-[A-Z0-9][A-Z0-9-]*)/gm)].map((m) => m[1]),
+	),
 ];
 
 const escaped = (uc) => uc.replace(/-/g, "\\-");
-const hasCoverageRow = (uc) => new RegExp(`^\\|\\s*${escaped(uc)}\\s*\\|`, "m").test(scenarios);
+/**
+ * 커버리지 표에 자기 행이 있고, **그 행이 무언가를 말하는지** 본다.
+ *
+ * 예전에는 행의 존재만 보았다. 그래서 `| UC-X | | |` 처럼 칸이 전부 빈 행을
+ * 넣어도 추적된 것으로 인정됐다 — 무엇으로 검증하는지 한 글자도 적지 않고
+ * 게이트를 지나는 길이다.
+ */
+const hasCoverageRow = (uc) => {
+	const row = new RegExp(`^\\|\\s*${escaped(uc)}\\s*\\|(.*)$`, "m").exec(scenarios);
+	if (!row) return false;
+	const cells = row[1]
+		.split("|")
+		.map((cell) => cell.trim())
+		.filter((cell) => cell.length > 0 && cell !== "—" && cell !== "-");
+	return cells.length > 0;
+};
 const byBenchFamily = (uc) => families.some((prefix) => uc.startsWith(prefix));
 const outsideEpic = (uc) => notOwned.some((prefix) => uc.startsWith(prefix));
 

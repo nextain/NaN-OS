@@ -83,11 +83,9 @@ describe("83 — TTS per-model verification", () => {
 
 		describe(`${tm.label}`, () => {
 			if (skip) {
-				it(`[SKIP] ${tm.keyEnv} not set`, () => {
-					console.log(
-						`[SKIP] ${tm.keyEnv} not available, skipping ${tm.label}`,
-					);
-				});
+				// 키가 없으면 건너뛴다. 통과하는 테스트를 만들면 그 모델을 한 번도
+				// 재지 않고 커버로 세어진다.
+				it.skip(`rewrite-needed: ${tm.keyEnv} 가 없어 ${tm.label} 을 검증하지 못했다`, () => {});
 				return;
 			}
 

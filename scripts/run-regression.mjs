@@ -159,25 +159,64 @@ let detail = "";
 // 예전에는 계획을 그대로 "배정" 으로 적었고, 완결성 게이트가 그것을 덮인
 // 것으로 셌다. 그러면 wdio 가 시작하자마자 죽어도 기록에는 전부 덮였다고
 // 남는다.
-let executed = [];
-try {
-	// 맡은 스펙만 넘긴다. 예전에는 전체 스위트를 돌리면서 기록에는 맡은 것만
-	// 적었는데, 그러면 --tier=native_local 로 부른 기계가 실제로는 전부 돌리고
-	// 기록은 셋만 남긴다 — 나눈다는 장치가 나누지 않고 기록이 실행과 어긋난다.
-	// wdio 는 --spec 을 여러 번 받는다(package.json 의 test:e2e:tauri:nva 가 이미
-	// 같은 설정에 그렇게 넘긴다).
-	const specArgs = mine.flatMap((s) => ["--spec", `e2e-tauri/specs/${s.spec}`]);
-	execFileSync(
-		"pnpm",
-		["-C", "packages/shell", "exec", "wdio", "run", "e2e-tauri/wdio.conf.ts", ...specArgs],
-		{ stdio: "inherit" },
-	);
-	// 여기까지 왔으면 wdio 가 종료 코드 0 으로 끝났다는 뜻이고, 그때만 맡은
-	// 것을 실제로 다 돌린 것으로 본다.
-	executed = mine.map((spec) => spec.spec);
-} catch (error) {
-	status = "failed";
-	detail = String(error?.message ?? error).slice(0, 400);
+const executed = [];
+const groupResults = [];
+
+/**
+ * 스펙을 wdio 설정별로 묶는다.
+ *
+ * 예전에는 무엇이든 `wdio.conf.ts` 로 넘겼는데, 열일곱 개 스펙은 전용 설정이
+ * 준비하는 환경(격리된 프로필, 자체 사이드카, 다른 바이너리) 없이는 반드시
+ * 실패한다. 예컨대 라디오 큐 스펙은 전용 설정의 onPrepare 가 띄우는 BGM
+ * 사이드카의 /health 를 단정한다. 기본 설정으로 부르면 그 자리에서 죽는다.
+ */
+function groupByConf(specs) {
+	const groups = new Map();
+	for (const spec of specs) {
+		const conf = (spec.conf ?? [])[0] ?? "wdio.conf.ts";
+		if (!groups.has(conf)) groups.set(conf, []);
+		groups.get(conf).push(spec.spec);
+	}
+	return groups;
+}
+
+const groups = groupByConf(mine);
+console.log(`[regression] wdio 설정 ${groups.size}개로 나눠 돈다`);
+
+for (const [conf, specs] of groups) {
+	const specArgs = specs.flatMap((spec) => ["--spec", `e2e-tauri/specs/${spec}`]);
+	console.log(`[regression] ${conf} — 스펙 ${specs.length}개`);
+	try {
+		execFileSync(
+			"pnpm",
+			[
+				"-C",
+				"packages/shell",
+				"exec",
+				"wdio",
+				"run",
+				`e2e-tauri/${conf}`,
+				...specArgs,
+			],
+			{ stdio: "inherit" },
+		);
+		// 이 묶음이 종료 코드 0 으로 끝났을 때만 그 스펙들을 실제로 돈 것으로
+		// 본다. 묶음을 나눈 덕에 한 설정이 실패해도 다른 설정이 돌린 것은
+		// 그대로 남는다 — 예전에는 하나만 실패해도 그 기계의 몫이 통째로 0 이
+		// 되어, 문서가 정한 절차로는 완결성 게이트가 초록이 될 수 없었다.
+		executed.push(...specs);
+		groupResults.push({ conf, specs: specs.length, status: "passed" });
+	} catch (error) {
+		status = "failed";
+		const message = String(error?.message ?? error).slice(0, 200);
+		detail = detail ? `${detail}; ${conf}: ${message}` : `${conf}: ${message}`;
+		groupResults.push({
+			conf,
+			specs: specs.length,
+			status: "failed",
+			detail: message,
+		});
+	}
 }
 
 const record = {
@@ -188,6 +227,9 @@ const record = {
 	status,
 	planned: mine.map((s) => s.spec),
 	executed,
+	// 어느 wdio 설정이 어디까지 갔는지. 한 설정이 실패해도 다른 설정의
+	// 결과는 남는다.
+	groups: groupResults,
 	// 관측이 아니라 사전 예측이다 — 이 스펙들도 wdio 에 넘어가고, 그 안에서
 	// 스스로 건너뛸지 실패할지는 스펙이 정한다. 이름을 그대로 두면 "건너뛰었다"
 	// 는 관측으로 읽히므로 무엇인지 밝힌다.

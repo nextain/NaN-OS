@@ -25,7 +25,7 @@ import {
  */
 const OPENAI_KEY = process.env.OPENAI_API_KEY ?? "";
 const ELEVENLABS_KEY =
-	process.env.ELEVENLABS_API_KEY ?? process.env.ELEVENLAPS_API_KEY ?? "";
+	process.env.ELEVENLABS_API_KEY ?? "";
 const GOOGLE_KEY = process.env.GEMINI_API_KEY ?? "";
 
 const TTS_PROVIDERS = [
@@ -55,9 +55,11 @@ describe("84 — chat TTS per provider", () => {
 	for (const prov of TTS_PROVIDERS) {
 		describe(prov.name, () => {
 			if (prov.key === "" && prov.id !== "edge") {
-				it(`[SKIP] no API key for ${prov.name}`, () => {
-					console.log(`[SKIP] ${prov.name} — no API key`);
-				});
+				// 키가 없으면 **건너뛴다**. 예전에는 여기서 통과하는 테스트를
+				// 하나 만들었는데, 그러면 리포터에 PASS 로 올라가고 회귀 기록에도
+				// "돌았다" 로 남는다 — 실제로는 이 공급자를 한 번도 검증하지
+				// 않았는데 전수 커버로 세어진다.
+				it.skip(`rewrite-needed: ${prov.name} 키가 없어 검증하지 못했다`, () => {});
 				return;
 			}
 

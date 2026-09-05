@@ -11,12 +11,12 @@ import {
  * Runs actual TTS preview for each provider with real API keys.
  * Verifies no error message appears after preview (`.settings-error`).
  *
- * Requires: OPENAI_API_KEY env var. ELEVENLAPS_API_KEY for ElevenLabs.
+ * Requires: OPENAI_API_KEY env var. ELEVENLABS_API_KEY for ElevenLabs.
  * Google Cloud TTS requires separate GOOGLE_CLOUD_TTS_KEY (not GEMINI_API_KEY).
  */
 const OPENAI_KEY = process.env.OPENAI_API_KEY ?? "";
 const ELEVENLABS_KEY =
-	process.env.ELEVENLABS_API_KEY ?? process.env.ELEVENLAPS_API_KEY ?? "";
+	process.env.ELEVENLABS_API_KEY ?? "";
 
 function setSelectValue(sel: string, value: string) {
 	return browser.execute(

@@ -188,43 +188,105 @@ mod app_sandbox_escape_tests {
     }
 
     // 안정성 축의 동시성 자리. 앱 두 개가 같은 순간에 자기 구역에 쓰면 서로의
-    // 파일을 밟지 않아야 하고, 같은 앱이 같은 파일을 동시에 써도 경로 계산이
-    // 어긋나지 않아야 한다. 실제로 스레드를 띄워 경쟁시킨다 — 논리만 보는
-    // 테스트는 경합을 재지 못한다.
+    // 파일을 밟지 않아야 하고, 같은 앱이 같은 파일을 동시에 써도 읽는 쪽이
+    // 반쪽짜리를 보지 않아야 한다. 실제로 스레드를 띄워 경쟁시킨다 — 논리만
+    // 보는 테스트는 경합을 재지 못한다.
+    //
+    // 감도에 관하여: 처음에는 한 글자만 썼는데, 그 정도로는 찢어지는 순간이
+    // 너무 짧아 비원자적 구현으로 되돌려도 절반쯤은 초록이 나왔다. CI 는 대개
+    // 한 번만 돌므로 그런 테스트는 회귀를 절반만 잡는다. 그래서 두 가지를
+    // 바꿨다 — 쓰는 내용을 충분히 키우고, 쓰는 **도중에** 읽는 스레드를 함께
+    // 돌린다.
+    const CONTENDED_ROUNDS: usize = 40;
+    const PAYLOAD_BYTES: usize = 64 * 1024;
+
+    fn payload(index: usize) -> Vec<u8> {
+        // 한 글자로 가득 채운다. 반쪽만 읽히면 길이가 어긋나고, 다른 스레드의
+        // 내용이 섞이면 글자가 어긋난다.
+        vec![b'a' + (index as u8 % 8); PAYLOAD_BYTES]
+    }
+
     #[test]
     fn concurrent_writes_stay_in_their_own_sandbox() {
+        use std::sync::atomic::{AtomicBool, Ordering};
+        use std::sync::Arc;
         use std::thread;
 
         let adk = adk();
-        let handles: Vec<_> = (0..8)
+        let done = Arc::new(AtomicBool::new(false));
+
+        // 읽는 쪽. 쓰기가 도는 동안 계속 읽으면서 반쪽짜리를 보는지 감시한다.
+        let readers: Vec<_> = (0..2)
+            .map(|_| {
+                let adk = adk.clone();
+                let done = Arc::clone(&done);
+                thread::spawn(move || {
+                    let r = root(&adk, "sbx.concurrent.0").expect("root ok");
+                    let target = file(&r, "shared/contended.bin").expect("path ok");
+                    let mut torn: Option<usize> = None;
+                    while !done.load(Ordering::Relaxed) {
+                        if let Ok(body) = std::fs::read(&target) {
+                            if body.len() != PAYLOAD_BYTES
+                                || body.iter().any(|byte| *byte != body[0])
+                            {
+                                torn = Some(body.len());
+                                break;
+                            }
+                        }
+                    }
+                    torn
+                })
+            })
+            .collect();
+
+        // 쓰는 쪽. 두 앱 구역에서 같은 이름의 파일을 두고 다툰다.
+        let writers: Vec<_> = (0..8)
             .map(|index| {
                 let adk = adk.clone();
                 thread::spawn(move || {
                     let app_id = format!("sbx.concurrent.{}", index % 2);
                     let r = root(&adk, &app_id).expect("root ok");
-                    // 같은 파일을 두고 다툰다. 스레드마다 다른 이름을 쓰면 경합
-                    // 지점이 없어 진짜 버그가 있어도 통과한다 — 앞선 판이 그랬다.
-                    let target = file(&r, "shared/contended.txt").expect("path ok");
-                    write_atomically(&target, format!("{index}").as_bytes()).expect("write ok");
+                    let target = file(&r, "shared/contended.bin").expect("path ok");
+                    for _ in 0..CONTENDED_ROUNDS {
+                        write_atomically(&target, &payload(index)).expect("write ok");
+                    }
                     (app_id, target)
                 })
             })
             .collect();
 
-        for handle in handles {
-            let (app_id, path) = handle.join().expect("thread ok");
+        let written: Vec<_> = writers
+            .into_iter()
+            .map(|handle| handle.join().expect("writer ok"))
+            .collect();
+        done.store(true, Ordering::Relaxed);
+
+        for reader in readers {
+            let torn = reader.join().expect("reader ok");
+            assert!(
+                torn.is_none(),
+                "쓰는 도중에 반쪽짜리가 읽혔다({} 바이트) — 쓰기가 원자적이지 않다",
+                torn.unwrap_or(0)
+            );
+        }
+
+        for (app_id, path) in written {
             let text = path.to_string_lossy().replace('\\', "/");
             assert!(
                 text.contains(&format!("data-private/apps/{app_id}/")),
                 "다른 앱 구역으로 샜다: {text}"
             );
             assert!(path.is_file(), "쓰기가 남지 않았다: {text}");
-            // 같은 앱이면 같은 경로여야 한다. 경로 계산이 스레드마다 달라지면
-            // 한 앱의 파일이 여러 자리에 흩어진다.
-            let body = std::fs::read_to_string(&path).expect("read ok");
+            let body = std::fs::read(&path).expect("read ok");
+            assert_eq!(
+                body.len(),
+                PAYLOAD_BYTES,
+                "마지막 쓰기가 온전하지 않다: {} 바이트",
+                body.len()
+            );
             assert!(
-                (0..8).any(|i| body == i.to_string()),
-                "마지막 쓰기가 온전하지 않다(찢어진 내용): {body:?}"
+                body.iter().all(|byte| *byte == body[0]),
+                "여러 스레드의 내용이 한 파일에 섞였다"
             );
         }
     }

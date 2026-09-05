@@ -14,11 +14,28 @@
  *
  * 지금 있는 것은 baseline 으로 고정하고 늘어나는 것만 막는다. 한 번에
  * 붉히면 게이트가 꺼지기 때문이다. 줄이면 이 목록도 함께 줄여야 한다.
+ *
+ * 이 게이트의 앞선 판은 스스로 좁혀 놓은 범위 때문에 거의 아무것도 보지
+ * 못했다. 셸 아래 세 곳만 보았고 확장자도 `.ts(x)` 만 받았는데, 저장소
+ * 뿌리의 `src/` 에 테스트가 아흔아홉 개(그중 열여덟은 `.mjs`) 더 있고 CI 는
+ * 그것을 실제로 돌린다. 통과 수치의 큰 몫이 검사 밖에 있었던 셈이다.
+ *
+ * 패턴도 문자열 하나(`expect(true).toBe(true)`)뿐이라, 같은 뜻의 다른 형태가
+ * 전부 빠져나갔다 — `expect(1).toBe(1)`, `expect(true).toBeTruthy()`,
+ * 줄바꿈으로 쪼갠 같은 식, 변수로 우회한 자기 비교, Playwright 의 영구
+ * 비활성화 `test.fixme`, 그리고 단정이 아예 없는 본문까지.
  */
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 
-const ROOTS = ["packages/shell/e2e", "packages/shell/e2e-tauri/specs", "packages/shell/src"];
+const ROOTS = [
+	"packages/shell/e2e",
+	"packages/shell/e2e-tauri/specs",
+	"packages/shell/src",
+	// 저장소 뿌리의 테스트. CI 가 `pnpm test` 와 훅 자체 검사로 실제 돌린다.
+	"src",
+	"scripts",
+];
 
 function walk(dir, out = []) {
 	let entries;
@@ -31,7 +48,7 @@ function walk(dir, out = []) {
 		if (name === "node_modules" || name === "dist") continue;
 		const full = join(dir, name);
 		if (statSync(full).isDirectory()) walk(full, out);
-		else if (/\.(test|spec)\.[cm]?tsx?$/.test(name)) out.push(full);
+		else if (/\.(test|spec)\.[cm]?[jt]sx?$/.test(name)) out.push(full);
 	}
 	return out;
 }
@@ -40,23 +57,66 @@ const files = ROOTS.flatMap((root) => walk(root));
 const vacuous = [];
 const deadSkips = [];
 const retired = [];
+const pending = [];
+
+/** 자기 자신만 확인하는 단정. 공백과 줄바꿈을 지운 뒤 본다. */
+const SELF_ASSERTIONS = [
+	/expect\(true\)\.toBe\(true\)/,
+	/expect\(false\)\.toBe\(false\)/,
+	/expect\((\d+)\)\.toBe\(\1\)/,
+	/expect\(true\)\.toBeTruthy\(\)/,
+	/expect\(false\)\.toBeFalsy\(\)/,
+	/expect\(([A-Za-z_$][\w$]*)\)\.toBe\(\1\)/,
+	/expect\(([A-Za-z_$][\w$]*)\)\.toEqual\(\1\)/,
+];
+
+/** 주석과 문자열을 지운다. 설명을 잡아 고친 사람의 입을 막지 않기 위해서다. */
+function codeOnly(text) {
+	return text
+		.replace(/\/\*[\s\S]*?\*\//g, " ")
+		.replace(/(^|[^:])\/\/[^\n]*/g, "$1 ")
+		.replace(/`(?:[^`\\]|\\.)*`/g, "``")
+		.replace(/"(?:[^"\\]|\\.)*"/g, '""')
+		.replace(/'(?:[^'\\]|\\.)*'/g, "''");
+}
 
 for (const file of files) {
 	const source = readFileSync(file, "utf8");
+	const code = codeOnly(source);
+
+	// 줄바꿈으로 쪼개 놓아도 걸리도록 공백을 지우고 본다.
+	const dense = code.replace(/\s+/g, "");
+	for (const pattern of SELF_ASSERTIONS) {
+		if (pattern.test(dense)) {
+			vacuous.push(`${file} (${pattern.source})`);
+			break;
+		}
+	}
+
+	// skip 판정은 원본 줄에서 한다. 주석을 지우면 여러 줄이 한 줄로 합쳐져
+	// 줄 번호가 어긋나고, 사유를 적었는지도 볼 수 없다.
 	source.split("\n").forEach((line, index) => {
 		const where = `${file}:${index + 1}`;
-		// 주석은 세지 않는다. 왜 이 패턴이 문제인지 설명하는 주석까지 잡으면,
-		// 고친 사람이 그 사실을 적을 수 없게 된다.
 		if (/^\s*(\/\/|\*|\/\*)/.test(line)) return;
-		// 자기 자신만 확인하는 단정.
-		if (/expect\(\s*true\s*\)\s*\.toBe\(\s*true\s*\)/.test(line)) vacuous.push(where);
 		// 조건 없는 skip. 환경 변수로 거르는 형태(test.skip(!process.env.X, ...))는
 		// 정당하므로 애초에 이 패턴에 걸리지 않는다.
-		if (/^\s*(?:test|it|describe)(?:\.describe)?\.skip\(\s*["'`]/.test(line)) {
+		// `fixme` 는 Playwright 에서 영구 비활성화이므로 같은 칸에 센다.
+		// `fixme` 는 "아직 구현되지 않았다" 는 뜻이고 `skip` 은 "지금은 끄자"
+		// 는 뜻이다. 둘 다 돌지 않지만 성격이 다르므로 칸을 나눈다 — 섞으면
+		// 배선을 기다리는 것과 방치된 것이 구별되지 않는다. 다만 fixme 도
+		// 상한을 둔다. 상한 없는 대기 칸은 곧 쓰레기통이 된다.
+		if (/^\s*(?:test|it|describe)(?:\.describe)?\.fixme\(\s*["'`]/.test(line)) {
+			pending.push(where);
+			return;
+		}
+		if (
+			/^\s*(?:test|it|describe)(?:\.describe)?\.skip\(\s*["'`]/.test(line)
+		) {
 			// 이름 앞에 은퇴를 밝힌 것은 "왜 꺼져 있는지" 가 적힌 것이다. 그것까지
 			// 같은 칸에 세면, 사유를 적은 사람과 아무 말 없이 끈 사람이 구별되지
 			// 않는다. 따로 세되 눈에는 보이게 한다.
-			if (/["'`]\s*(?:retired|rewrite-needed|은퇴|재작성필요)[:：]/.test(line)) retired.push(where);
+			if (/["'`]\s*(?:retired|rewrite-needed|은퇴|재작성필요)[:：]/.test(line))
+				retired.push(where);
 			else deadSkips.push(where);
 		}
 	});
@@ -70,9 +130,20 @@ for (const file of files) {
 // 아니라 기록일 뿐이다.
 const BASELINE_VACUOUS = 0;
 const BASELINE_DEAD_SKIPS = 0;
-const BASELINE_RETIRED = 16;
+// 16 에서 19 로 올렸다. 늘어난 셋은 새로 꺼 둔 것이 아니라, 원래 **통과하는
+// 테스트를 만들어 내던** 자리다 — 공급자 키가 없으면 `it("[SKIP] ...")` 로
+// 빈 본문을 통과시켜, 그 공급자를 한 번도 재지 않고 커버로 세었다. 그것을
+// 실제 skip 으로 바꾸자 이 칸에 잡혔다. 숫자는 늘었지만 거짓 통과가 줄었다.
+const BASELINE_RETIRED = 19;
+// 배선을 기다리는 자리. 늘면 "나중에" 가 쌓이는 것이므로 함께 막는다.
+const BASELINE_PENDING = 11;
 
-console.log(`[vacuous-tests] 자명 단정 ${vacuous.length} (baseline ${BASELINE_VACUOUS}) / 이유 없는 skip ${deadSkips.length} (baseline ${BASELINE_DEAD_SKIPS}) / 사유 밝힌 skip ${retired.length} (baseline ${BASELINE_RETIRED})`);
+console.log(
+	`[vacuous-tests] 자명 단정 ${vacuous.length} (baseline ${BASELINE_VACUOUS})` +
+		` / 이유 없는 skip ${deadSkips.length} (baseline ${BASELINE_DEAD_SKIPS})` +
+		` / 사유 밝힌 skip ${retired.length} (baseline ${BASELINE_RETIRED})` +
+		` / 구현 대기 fixme ${pending.length} (baseline ${BASELINE_PENDING})`,
+);
 
 let failed = false;
 if (vacuous.length > BASELINE_VACUOUS) {
@@ -87,6 +158,12 @@ if (retired.length > BASELINE_RETIRED) {
 	console.error("     사유를 적는 것은 면제가 아니다. 되살리거나 지워라.");
 	failed = true;
 }
+if (pending.length > BASELINE_PENDING) {
+	console.error(`  ❌ 구현을 기다리는 테스트가 늘었다(${pending.length} > ${BASELINE_PENDING}):`);
+	for (const where of pending.slice(-5)) console.error(`     ${where}`);
+	console.error("     배선이 끝났으면 켜라. 안 할 것이면 지워라.");
+	failed = true;
+}
 if (deadSkips.length > BASELINE_DEAD_SKIPS) {
 	console.error("  ❌ 이유 없이 꺼 둔 테스트가 늘었다:");
 	for (const where of deadSkips) console.error(`     ${where}`);
@@ -96,7 +173,8 @@ if (deadSkips.length > BASELINE_DEAD_SKIPS) {
 if (
 	vacuous.length < BASELINE_VACUOUS ||
 	deadSkips.length < BASELINE_DEAD_SKIPS ||
-	retired.length < BASELINE_RETIRED
+	retired.length < BASELINE_RETIRED ||
+	pending.length < BASELINE_PENDING
 )
 	console.log("  ✓ 줄었다 — 이 파일의 baseline 도 함께 줄여라");
 if (!failed) console.log("  ✓ 늘지 않았다");

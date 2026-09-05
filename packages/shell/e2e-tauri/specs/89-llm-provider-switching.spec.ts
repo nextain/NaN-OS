@@ -358,9 +358,9 @@ describe("89 — LLM provider switching", () => {
 
 		describe(`${tp.label} (${tp.provider})`, () => {
 			if (skip) {
-				it(`[SKIP] ${tp.keyEnv} not set`, () => {
-					console.log(`[89] SKIP: ${tp.keyEnv} not available for ${tp.label}`);
-				});
+				// 키가 없으면 건너뛴다. 통과하는 테스트를 만들면 그 공급자를 한 번도
+				// 재지 않고 커버로 세어진다.
+				it.skip(`rewrite-needed: ${tp.keyEnv} 가 없어 ${tp.label} 을 검증하지 못했다`, () => {});
 				return;
 			}
 

@@ -46,20 +46,52 @@ for (const name of readdirSync(CONF_DIR).filter((f) => /^wdio\.conf\..+\.ts$/.te
 // 자격증명 없이 돌지 않는다. 실측에서 드러났다 — 06-skill-memo 는 env 를 하나도
 // 적지 않았는데 helpers/semantic 이 판정 모델 키를 요구해 실패했다. 직접 참조만
 // 세면 목록이 "돌 수 있다" 고 거짓말한다.
+/**
+ * 그 소스가 실제로 **필요로 하는** 환경 변수만 뽑는다.
+ *
+ * 세 가지를 가린다.
+ *
+ *   1) 쓸 만한 기본값이 있는 노브는 요구가 아니다. `?? "15000"` 처럼 실제
+ *      값을 뒤에 둔 것은 없어도 돈다. 빈 문자열 기본(`?? ""`)은 다르다 —
+ *      그것은 "없으면 빈 값으로 죽는다" 는 뜻이므로 요구로 센다.
+ *   2) 이름을 변수로 받아 `process.env[name]` 으로 읽는 자리는 직접 참조가
+ *      없다. 대신 그 이름이 소스 안에 문자열로 적혀 있으므로(`keyEnv:
+ *      "OPENAI_API_KEY"`) 자격증명처럼 생긴 문자열도 함께 본다.
+ *   3) 실행 환경이 늘 갖는 것(PATH 계열)은 요구가 아니다.
+ */
+const AMBIENT = /^(?:PATH|HOME|LD_LIBRARY_PATH|RUST_LOG|CI|NODE_ENV|TMPDIR)$/;
+
+function requiredEnv(source) {
+	const found = new Set();
+	for (const m of source.matchAll(
+		/process\.env\.([A-Z_0-9]+)\s*(?:(\|\||\?\?)\s*("(?:[^"\\]|\\.)*"|`[^`]*`|'[^']*'))?/g,
+	)) {
+		const [, name, , fallback] = m;
+		if (AMBIENT.test(name)) continue;
+		// 뒤에 실제 값이 붙어 있으면 없어도 돈다. 빈 문자열은 값이 아니다.
+		if (fallback && fallback.replace(/^["'`]|["'`]$/g, "").length > 0) continue;
+		found.add(name);
+	}
+	// 이름을 문자열로 들고 다니다 `process.env[name]` 으로 읽는 자리.
+	if (/process\.env\[/.test(source)) {
+		for (const m of source.matchAll(/["'`]([A-Z][A-Z_0-9]{3,})["'`]/g)) {
+			if (!AMBIENT.test(m[1]) && KEY_ENV.test(m[1])) found.add(m[1]);
+		}
+	}
+	return [...found];
+}
+
 const HELPER_DIR = join(CONF_DIR, "helpers");
 const helperEnv = new Map();
 for (const name of readdirSync(HELPER_DIR).filter((f) => f.endsWith(".ts"))) {
 	const source = readFileSync(join(HELPER_DIR, name), "utf8");
-	helperEnv.set(
-		name.replace(/\.ts$/, ""),
-		[...new Set([...source.matchAll(/process\.env\.([A-Z_0-9]+)/g)].map((m) => m[1]))],
-	);
+	helperEnv.set(name.replace(/\.ts$/, ""), requiredEnv(source));
 }
 
 const rows = [];
 for (const name of readdirSync(SPEC_DIR).filter((f) => f.endsWith(".spec.ts")).sort()) {
 	const source = readFileSync(join(SPEC_DIR, name), "utf8");
-	const direct = [...source.matchAll(/process\.env\.([A-Z_0-9]+)/g)].map((m) => m[1]);
+	const direct = requiredEnv(source);
 	// import 는 확장자를 붙여 쓴다(NodeNext). 빼고 잡으면 하나도 못 만난다.
 	const viaHelpers = [...source.matchAll(/from\s+"\.\.\/helpers\/([a-z-]+)(?:\.js)?"/g)]
 		.flatMap((m) => helperEnv.get(m[1]) ?? []);

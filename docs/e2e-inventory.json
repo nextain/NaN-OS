@@ -2,8 +2,8 @@
 	"generatedFrom": "packages/shell/e2e-tauri/specs",
 	"total": 129,
 	"summary": {
-		"credentialed_live": 90,
-		"deterministic_ci": 36,
+		"credentialed_live": 91,
+		"deterministic_ci": 35,
 		"native_local": 3
 	},
 	"specs": [
@@ -24,7 +24,6 @@
 			"env": [
 				"CAFE_E2E_API_KEY",
 				"CAFE_GATEWAY_TOKEN",
-				"GATEWAY_MASTER_KEY",
 				"GEMINI_API_KEY",
 				"NAIA_API_KEY",
 				"NAIA_E2E_ADK_FIXTURE"
@@ -36,9 +35,6 @@
 			"conf": [],
 			"env": [
 				"CAFE_E2E_API_KEY",
-				"CAFE_E2E_JUDGE_MODEL",
-				"CAFE_E2E_JUDGE_TIMEOUT_MS",
-				"CAFE_E2E_SEMANTIC_LOG_DIR",
 				"GEMINI_API_KEY",
 				"NAIA_E2E_ARTIFACTS_DIR"
 			],
@@ -49,11 +45,7 @@
 			"conf": [],
 			"env": [
 				"CAFE_E2E_API_KEY",
-				"CAFE_E2E_JUDGE_MODEL",
-				"CAFE_E2E_JUDGE_TIMEOUT_MS",
-				"CAFE_E2E_SEMANTIC_LOG_DIR",
 				"CAFE_GATEWAY_TOKEN",
-				"GATEWAY_MASTER_KEY",
 				"GEMINI_API_KEY",
 				"NAIA_API_KEY",
 				"NAIA_E2E_ADK_FIXTURE",
@@ -66,9 +58,6 @@
 			"conf": [],
 			"env": [
 				"CAFE_E2E_API_KEY",
-				"CAFE_E2E_JUDGE_MODEL",
-				"CAFE_E2E_JUDGE_TIMEOUT_MS",
-				"CAFE_E2E_SEMANTIC_LOG_DIR",
 				"GEMINI_API_KEY",
 				"NAIA_E2E_ARTIFACTS_DIR"
 			],
@@ -79,9 +68,6 @@
 			"conf": [],
 			"env": [
 				"CAFE_E2E_API_KEY",
-				"CAFE_E2E_JUDGE_MODEL",
-				"CAFE_E2E_JUDGE_TIMEOUT_MS",
-				"CAFE_E2E_SEMANTIC_LOG_DIR",
 				"GEMINI_API_KEY",
 				"NAIA_API_KEY",
 				"NAIA_E2E_ADK_FIXTURE",
@@ -102,9 +88,6 @@
 			"conf": [],
 			"env": [
 				"CAFE_E2E_API_KEY",
-				"CAFE_E2E_JUDGE_MODEL",
-				"CAFE_E2E_JUDGE_TIMEOUT_MS",
-				"CAFE_E2E_SEMANTIC_LOG_DIR",
 				"GEMINI_API_KEY",
 				"NAIA_API_KEY",
 				"NAIA_E2E_ADK_FIXTURE",
@@ -117,7 +100,6 @@
 			"conf": [],
 			"env": [
 				"CAFE_E2E_API_KEY",
-				"CAFE_GATEWAY_TOKEN",
 				"GEMINI_API_KEY",
 				"NAIA_API_KEY",
 				"NAIA_E2E_ADK_FIXTURE"
@@ -129,9 +111,6 @@
 			"conf": [],
 			"env": [
 				"CAFE_E2E_API_KEY",
-				"CAFE_E2E_JUDGE_MODEL",
-				"CAFE_E2E_JUDGE_TIMEOUT_MS",
-				"CAFE_E2E_SEMANTIC_LOG_DIR",
 				"GEMINI_API_KEY",
 				"NAIA_API_KEY",
 				"NAIA_E2E_ADK_FIXTURE",
@@ -150,9 +129,6 @@
 			"conf": [],
 			"env": [
 				"CAFE_E2E_API_KEY",
-				"CAFE_E2E_JUDGE_MODEL",
-				"CAFE_E2E_JUDGE_TIMEOUT_MS",
-				"CAFE_E2E_SEMANTIC_LOG_DIR",
 				"GEMINI_API_KEY",
 				"NAIA_E2E_ARTIFACTS_DIR"
 			],
@@ -163,9 +139,6 @@
 			"conf": [],
 			"env": [
 				"CAFE_E2E_API_KEY",
-				"CAFE_E2E_JUDGE_MODEL",
-				"CAFE_E2E_JUDGE_TIMEOUT_MS",
-				"CAFE_E2E_SEMANTIC_LOG_DIR",
 				"GEMINI_API_KEY",
 				"NAIA_API_KEY",
 				"NAIA_E2E_ADK_FIXTURE",
@@ -178,7 +151,6 @@
 			"conf": [],
 			"env": [
 				"CAFE_E2E_API_KEY",
-				"CAFE_GATEWAY_TOKEN",
 				"GEMINI_API_KEY",
 				"NAIA_API_KEY",
 				"NAIA_E2E_ADK_FIXTURE"
@@ -207,9 +179,6 @@
 			"conf": [],
 			"env": [
 				"CAFE_E2E_API_KEY",
-				"CAFE_E2E_JUDGE_MODEL",
-				"CAFE_E2E_JUDGE_TIMEOUT_MS",
-				"CAFE_E2E_SEMANTIC_LOG_DIR",
 				"GEMINI_API_KEY",
 				"NAIA_API_KEY",
 				"NAIA_E2E_ADK_FIXTURE",
@@ -222,9 +191,6 @@
 			"conf": [],
 			"env": [
 				"CAFE_E2E_API_KEY",
-				"CAFE_E2E_JUDGE_MODEL",
-				"CAFE_E2E_JUDGE_TIMEOUT_MS",
-				"CAFE_E2E_SEMANTIC_LOG_DIR",
 				"GEMINI_API_KEY",
 				"NAIA_API_KEY",
 				"NAIA_E2E_ADK_FIXTURE",
@@ -237,9 +203,6 @@
 			"conf": [],
 			"env": [
 				"CAFE_E2E_API_KEY",
-				"CAFE_E2E_JUDGE_MODEL",
-				"CAFE_E2E_JUDGE_TIMEOUT_MS",
-				"CAFE_E2E_SEMANTIC_LOG_DIR",
 				"GEMINI_API_KEY",
 				"NAIA_API_KEY",
 				"NAIA_E2E_ADK_FIXTURE",
@@ -252,9 +215,6 @@
 			"conf": [],
 			"env": [
 				"CAFE_E2E_API_KEY",
-				"CAFE_E2E_JUDGE_MODEL",
-				"CAFE_E2E_JUDGE_TIMEOUT_MS",
-				"CAFE_E2E_SEMANTIC_LOG_DIR",
 				"GEMINI_API_KEY",
 				"NAIA_API_KEY",
 				"NAIA_E2E_ADK_FIXTURE",
@@ -278,9 +238,6 @@
 			"conf": [],
 			"env": [
 				"CAFE_E2E_API_KEY",
-				"CAFE_E2E_JUDGE_MODEL",
-				"CAFE_E2E_JUDGE_TIMEOUT_MS",
-				"CAFE_E2E_SEMANTIC_LOG_DIR",
 				"GEMINI_API_KEY",
 				"NAIA_API_KEY",
 				"NAIA_E2E_ADK_FIXTURE",
@@ -293,9 +250,6 @@
 			"conf": [],
 			"env": [
 				"CAFE_E2E_API_KEY",
-				"CAFE_E2E_JUDGE_MODEL",
-				"CAFE_E2E_JUDGE_TIMEOUT_MS",
-				"CAFE_E2E_SEMANTIC_LOG_DIR",
 				"GEMINI_API_KEY",
 				"NAIA_API_KEY",
 				"NAIA_E2E_ADK_FIXTURE",
@@ -372,9 +326,6 @@
 			"conf": [],
 			"env": [
 				"CAFE_E2E_API_KEY",
-				"CAFE_E2E_JUDGE_MODEL",
-				"CAFE_E2E_JUDGE_TIMEOUT_MS",
-				"CAFE_E2E_SEMANTIC_LOG_DIR",
 				"GEMINI_API_KEY",
 				"NAIA_API_KEY",
 				"NAIA_E2E_ADK_FIXTURE",
@@ -387,9 +338,6 @@
 			"conf": [],
 			"env": [
 				"CAFE_E2E_API_KEY",
-				"CAFE_E2E_JUDGE_MODEL",
-				"CAFE_E2E_JUDGE_TIMEOUT_MS",
-				"CAFE_E2E_SEMANTIC_LOG_DIR",
 				"GEMINI_API_KEY",
 				"NAIA_API_KEY",
 				"NAIA_E2E_ADK_FIXTURE",
@@ -437,9 +385,6 @@
 			"conf": [],
 			"env": [
 				"CAFE_E2E_API_KEY",
-				"CAFE_E2E_JUDGE_MODEL",
-				"CAFE_E2E_JUDGE_TIMEOUT_MS",
-				"CAFE_E2E_SEMANTIC_LOG_DIR",
 				"GEMINI_API_KEY",
 				"NAIA_E2E_ARTIFACTS_DIR"
 			],
@@ -450,9 +395,6 @@
 			"conf": [],
 			"env": [
 				"CAFE_E2E_API_KEY",
-				"CAFE_E2E_JUDGE_MODEL",
-				"CAFE_E2E_JUDGE_TIMEOUT_MS",
-				"CAFE_E2E_SEMANTIC_LOG_DIR",
 				"GEMINI_API_KEY",
 				"NAIA_API_KEY",
 				"NAIA_E2E_ADK_FIXTURE",
@@ -465,9 +407,6 @@
 			"conf": [],
 			"env": [
 				"CAFE_E2E_API_KEY",
-				"CAFE_E2E_JUDGE_MODEL",
-				"CAFE_E2E_JUDGE_TIMEOUT_MS",
-				"CAFE_E2E_SEMANTIC_LOG_DIR",
 				"GEMINI_API_KEY",
 				"NAIA_API_KEY",
 				"NAIA_E2E_ADK_FIXTURE",
@@ -480,9 +419,6 @@
 			"conf": [],
 			"env": [
 				"CAFE_E2E_API_KEY",
-				"CAFE_E2E_JUDGE_MODEL",
-				"CAFE_E2E_JUDGE_TIMEOUT_MS",
-				"CAFE_E2E_SEMANTIC_LOG_DIR",
 				"GEMINI_API_KEY",
 				"NAIA_API_KEY",
 				"NAIA_E2E_ADK_FIXTURE",
@@ -495,9 +431,6 @@
 			"conf": [],
 			"env": [
 				"CAFE_E2E_API_KEY",
-				"CAFE_E2E_JUDGE_MODEL",
-				"CAFE_E2E_JUDGE_TIMEOUT_MS",
-				"CAFE_E2E_SEMANTIC_LOG_DIR",
 				"GEMINI_API_KEY",
 				"NAIA_API_KEY",
 				"NAIA_E2E_ADK_FIXTURE",
@@ -510,9 +443,6 @@
 			"conf": [],
 			"env": [
 				"CAFE_E2E_API_KEY",
-				"CAFE_E2E_JUDGE_MODEL",
-				"CAFE_E2E_JUDGE_TIMEOUT_MS",
-				"CAFE_E2E_SEMANTIC_LOG_DIR",
 				"GEMINI_API_KEY",
 				"NAIA_API_KEY",
 				"NAIA_E2E_ADK_FIXTURE",
@@ -525,9 +455,6 @@
 			"conf": [],
 			"env": [
 				"CAFE_E2E_API_KEY",
-				"CAFE_E2E_JUDGE_MODEL",
-				"CAFE_E2E_JUDGE_TIMEOUT_MS",
-				"CAFE_E2E_SEMANTIC_LOG_DIR",
 				"GEMINI_API_KEY",
 				"NAIA_API_KEY",
 				"NAIA_E2E_ADK_FIXTURE",
@@ -540,9 +467,6 @@
 			"conf": [],
 			"env": [
 				"CAFE_E2E_API_KEY",
-				"CAFE_E2E_JUDGE_MODEL",
-				"CAFE_E2E_JUDGE_TIMEOUT_MS",
-				"CAFE_E2E_SEMANTIC_LOG_DIR",
 				"GEMINI_API_KEY",
 				"NAIA_API_KEY",
 				"NAIA_E2E_ADK_FIXTURE",
@@ -555,9 +479,6 @@
 			"conf": [],
 			"env": [
 				"CAFE_E2E_API_KEY",
-				"CAFE_E2E_JUDGE_MODEL",
-				"CAFE_E2E_JUDGE_TIMEOUT_MS",
-				"CAFE_E2E_SEMANTIC_LOG_DIR",
 				"GEMINI_API_KEY",
 				"NAIA_API_KEY",
 				"NAIA_E2E_ADK_FIXTURE",
@@ -570,9 +491,6 @@
 			"conf": [],
 			"env": [
 				"CAFE_E2E_API_KEY",
-				"CAFE_E2E_JUDGE_MODEL",
-				"CAFE_E2E_JUDGE_TIMEOUT_MS",
-				"CAFE_E2E_SEMANTIC_LOG_DIR",
 				"GEMINI_API_KEY",
 				"NAIA_API_KEY",
 				"NAIA_E2E_ADK_FIXTURE",
@@ -585,9 +503,6 @@
 			"conf": [],
 			"env": [
 				"CAFE_E2E_API_KEY",
-				"CAFE_E2E_JUDGE_MODEL",
-				"CAFE_E2E_JUDGE_TIMEOUT_MS",
-				"CAFE_E2E_SEMANTIC_LOG_DIR",
 				"GEMINI_API_KEY",
 				"NAIA_API_KEY",
 				"NAIA_E2E_ADK_FIXTURE",
@@ -600,9 +515,6 @@
 			"conf": [],
 			"env": [
 				"CAFE_E2E_API_KEY",
-				"CAFE_E2E_JUDGE_MODEL",
-				"CAFE_E2E_JUDGE_TIMEOUT_MS",
-				"CAFE_E2E_SEMANTIC_LOG_DIR",
 				"GEMINI_API_KEY",
 				"NAIA_API_KEY",
 				"NAIA_E2E_ADK_FIXTURE",
@@ -615,9 +527,6 @@
 			"conf": [],
 			"env": [
 				"CAFE_E2E_API_KEY",
-				"CAFE_E2E_JUDGE_MODEL",
-				"CAFE_E2E_JUDGE_TIMEOUT_MS",
-				"CAFE_E2E_SEMANTIC_LOG_DIR",
 				"GEMINI_API_KEY",
 				"NAIA_API_KEY",
 				"NAIA_E2E_ADK_FIXTURE",
@@ -630,9 +539,6 @@
 			"conf": [],
 			"env": [
 				"CAFE_E2E_API_KEY",
-				"CAFE_E2E_JUDGE_MODEL",
-				"CAFE_E2E_JUDGE_TIMEOUT_MS",
-				"CAFE_E2E_SEMANTIC_LOG_DIR",
 				"GEMINI_API_KEY",
 				"NAIA_API_KEY",
 				"NAIA_E2E_ADK_FIXTURE",
@@ -645,9 +551,6 @@
 			"conf": [],
 			"env": [
 				"CAFE_E2E_API_KEY",
-				"CAFE_E2E_JUDGE_MODEL",
-				"CAFE_E2E_JUDGE_TIMEOUT_MS",
-				"CAFE_E2E_SEMANTIC_LOG_DIR",
 				"GEMINI_API_KEY",
 				"NAIA_API_KEY",
 				"NAIA_E2E_ADK_FIXTURE",
@@ -660,9 +563,6 @@
 			"conf": [],
 			"env": [
 				"CAFE_E2E_API_KEY",
-				"CAFE_E2E_JUDGE_MODEL",
-				"CAFE_E2E_JUDGE_TIMEOUT_MS",
-				"CAFE_E2E_SEMANTIC_LOG_DIR",
 				"GEMINI_API_KEY",
 				"NAIA_API_KEY",
 				"NAIA_E2E_ADK_FIXTURE",
@@ -675,9 +575,6 @@
 			"conf": [],
 			"env": [
 				"CAFE_E2E_API_KEY",
-				"CAFE_E2E_JUDGE_MODEL",
-				"CAFE_E2E_JUDGE_TIMEOUT_MS",
-				"CAFE_E2E_SEMANTIC_LOG_DIR",
 				"GEMINI_API_KEY",
 				"NAIA_API_KEY",
 				"NAIA_E2E_ADK_FIXTURE",
@@ -856,7 +753,6 @@
 			"conf": [],
 			"env": [
 				"CAFE_E2E_API_KEY",
-				"CAFE_GATEWAY_TOKEN",
 				"GEMINI_API_KEY",
 				"NAIA_API_KEY",
 				"NAIA_E2E_ADK_FIXTURE"
@@ -868,9 +764,6 @@
 			"conf": [],
 			"env": [
 				"CAFE_E2E_API_KEY",
-				"CAFE_E2E_JUDGE_MODEL",
-				"CAFE_E2E_JUDGE_TIMEOUT_MS",
-				"CAFE_E2E_SEMANTIC_LOG_DIR",
 				"GEMINI_API_KEY",
 				"NAIA_E2E_ARTIFACTS_DIR"
 			],
@@ -881,9 +774,6 @@
 			"conf": [],
 			"env": [
 				"CAFE_E2E_API_KEY",
-				"CAFE_E2E_JUDGE_MODEL",
-				"CAFE_E2E_JUDGE_TIMEOUT_MS",
-				"CAFE_E2E_SEMANTIC_LOG_DIR",
 				"DISCORD_WEBHOOK",
 				"DISCORD_WEBHOOK_URL",
 				"GEMINI_API_KEY",
@@ -910,9 +800,13 @@
 			"spec": "70b-live-providers-switching.spec.ts",
 			"conf": [],
 			"env": [
-				"NAIA_E2E_ARTIFACTS_DIR"
+				"ANTHROPIC_API_KEY",
+				"NAIA_E2E_ARTIFACTS_DIR",
+				"OPENAI_API_KEY",
+				"XAI_API_KEY",
+				"ZHIPU_API_KEY"
 			],
-			"tier": "deterministic_ci"
+			"tier": "credentialed_live"
 		},
 		{
 			"spec": "70c-nextain-default-chat.spec.ts",
@@ -942,9 +836,6 @@
 			"conf": [],
 			"env": [
 				"CAFE_E2E_API_KEY",
-				"CAFE_E2E_JUDGE_MODEL",
-				"CAFE_E2E_JUDGE_TIMEOUT_MS",
-				"CAFE_E2E_SEMANTIC_LOG_DIR",
 				"GEMINI_API_KEY",
 				"NAIA_API_KEY",
 				"NAIA_E2E_ADK_FIXTURE",
@@ -1038,7 +929,6 @@
 			"env": [
 				"CAFE_E2E_API_KEY",
 				"ELEVENLABS_API_KEY",
-				"ELEVENLAPS_API_KEY",
 				"GEMINI_API_KEY",
 				"NAIA_API_KEY",
 				"NAIA_E2E_ADK_FIXTURE",
@@ -1074,11 +964,14 @@
 			"spec": "83-tts-per-model-verification.spec.ts",
 			"conf": [],
 			"env": [
+				"ANTHROPIC_API_KEY",
 				"CAFE_E2E_API_KEY",
 				"GEMINI_API_KEY",
 				"NAIA_API_KEY",
 				"NAIA_E2E_ADK_FIXTURE",
-				"NAIA_E2E_ARTIFACTS_DIR"
+				"NAIA_E2E_ARTIFACTS_DIR",
+				"OPENAI_API_KEY",
+				"XAI_API_KEY"
 			],
 			"tier": "credentialed_live"
 		},
@@ -1088,7 +981,6 @@
 			"env": [
 				"CAFE_E2E_API_KEY",
 				"ELEVENLABS_API_KEY",
-				"ELEVENLAPS_API_KEY",
 				"GEMINI_API_KEY",
 				"NAIA_API_KEY",
 				"NAIA_E2E_ADK_FIXTURE",
@@ -1114,7 +1006,6 @@
 			"env": [
 				"CAFE_E2E_API_KEY",
 				"ELEVENLABS_API_KEY",
-				"ELEVENLAPS_API_KEY",
 				"GEMINI_API_KEY",
 				"NAIA_API_KEY",
 				"NAIA_E2E_ADK_FIXTURE",
@@ -1128,7 +1019,6 @@
 			"env": [
 				"CAFE_E2E_API_KEY",
 				"ELEVENLABS_API_KEY",
-				"ELEVENLAPS_API_KEY",
 				"GEMINI_API_KEY",
 				"NAIA_API_KEY",
 				"NAIA_E2E_ADK_FIXTURE",
@@ -1142,7 +1032,6 @@
 			"env": [
 				"CAFE_E2E_API_KEY",
 				"ELEVENLABS_API_KEY",
-				"ELEVENLAPS_API_KEY",
 				"GEMINI_API_KEY",
 				"NAIA_API_KEY",
 				"NAIA_E2E_ADK_FIXTURE",
@@ -1169,9 +1058,6 @@
 			"conf": [],
 			"env": [
 				"CAFE_E2E_API_KEY",
-				"CAFE_E2E_JUDGE_MODEL",
-				"CAFE_E2E_JUDGE_TIMEOUT_MS",
-				"CAFE_E2E_SEMANTIC_LOG_DIR",
 				"GEMINI_API_KEY",
 				"NAIA_E2E_ARTIFACTS_DIR"
 			],
@@ -1215,9 +1101,6 @@
 			"conf": [],
 			"env": [
 				"CAFE_E2E_API_KEY",
-				"CAFE_E2E_JUDGE_MODEL",
-				"CAFE_E2E_JUDGE_TIMEOUT_MS",
-				"CAFE_E2E_SEMANTIC_LOG_DIR",
 				"GEMINI_API_KEY",
 				"NAIA_API_KEY",
 				"NAIA_E2E_ADK_FIXTURE",
@@ -1279,9 +1162,7 @@
 			"conf": [
 				"wdio.conf.radio-queue.ts"
 			],
-			"env": [
-				"NAIA_E2E_BGM_PORT"
-			],
+			"env": [],
 			"tier": "deterministic_ci"
 		},
 		{
@@ -1441,9 +1322,7 @@
 		{
 			"spec": "99-vllm-omni-voice.spec.ts",
 			"conf": [],
-			"env": [
-				"VLLM_OMNI_HOST"
-			],
+			"env": [],
 			"tier": "deterministic_ci"
 		},
 		{

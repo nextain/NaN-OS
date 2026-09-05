@@ -25,7 +25,7 @@ import {
 const GOOGLE_KEY = process.env.GEMINI_API_KEY ?? "";
 const OPENAI_KEY = process.env.OPENAI_API_KEY ?? "";
 const ELEVENLABS_KEY =
-	process.env.ELEVENLABS_API_KEY ?? process.env.ELEVENLAPS_API_KEY ?? "";
+	process.env.ELEVENLABS_API_KEY ?? "";
 
 /** Inject silent mic stream for API STT */
 async function injectSilentMic() {

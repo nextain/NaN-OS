@@ -19,7 +19,7 @@ import {
 
 const OPENAI_KEY = process.env.OPENAI_API_KEY ?? "";
 const ELEVENLABS_KEY =
-	process.env.ELEVENLABS_API_KEY ?? process.env.ELEVENLAPS_API_KEY ?? "";
+	process.env.ELEVENLABS_API_KEY ?? "";
 const GOOGLE_KEY = process.env.GEMINI_API_KEY ?? "";
 
 /** Inject audio tracking before each test */
