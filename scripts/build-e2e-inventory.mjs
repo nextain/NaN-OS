@@ -53,6 +53,15 @@ const KEY_ENV = /API_KEY|_KEY$|TOKEN|SECRET|USER_ID/;
  */
 const CHAT_HELPERS = /\b(sendMessage|waitForToolSuccess|getLastAssistantMessage|judge\w*)\s*\(/;
 
+/**
+ * 전용 설정이 요구하는 환경도 그 스펙의 요구다.
+ *
+ * 설정은 모듈 최상위에서 그것을 확인하고 없으면 던진다. 그러면 스펙은 한 줄도
+ * 돌지 못하는데, 요구 목록에는 그 사실이 없어 "환경이 갖춰졌다" 로 보인다 —
+ * 실제로 전용 설정 넷이 그렇게 실패했다.
+ */
+const confEnv = new Map();
+
 const confOwners = new Map();
 for (const name of readdirSync(CONF_DIR).filter((f) => /^wdio\.conf\..+\.ts$/.test(f))) {
 	const source = readFileSync(join(CONF_DIR, name), "utf8");
@@ -80,7 +89,8 @@ for (const name of readdirSync(CONF_DIR).filter((f) => /^wdio\.conf\..+\.ts$/.te
  *      "OPENAI_API_KEY"`) 자격증명처럼 생긴 문자열도 함께 본다.
  *   3) 실행 환경이 늘 갖는 것(PATH 계열)은 요구가 아니다.
  */
-const AMBIENT = /^(?:PATH|HOME|LD_LIBRARY_PATH|RUST_LOG|CI|NODE_ENV|TMPDIR)$/;
+const AMBIENT =
+	/^(?:PATH|HOME|LD_LIBRARY_PATH|RUST_LOG|CI|NODE_ENV|TMPDIR|TAURI_BINARY|NAIA_E2E_TARGET_DIR|NAIA_AGENT_WORKTREES_DIR|NAIA_E2E_AGENT_ROOT)$/;
 
 function requiredEnv(source) {
 	const found = new Set();
@@ -102,6 +112,12 @@ function requiredEnv(source) {
 	return [...found];
 }
 
+// 전용 설정의 요구는 requiredEnv 가 정의된 뒤에 채운다. 위에서 부르면
+// 초기화 전 접근이 된다.
+for (const name of readdirSync(CONF_DIR).filter((f) => /^wdio\.conf\..+\.ts$/.test(f))) {
+	confEnv.set(name, requiredEnv(readFileSync(join(CONF_DIR, name), "utf8")));
+}
+
 const HELPER_DIR = join(CONF_DIR, "helpers");
 const helperEnv = new Map();
 for (const name of readdirSync(HELPER_DIR).filter((f) => f.endsWith(".ts"))) {
@@ -116,7 +132,11 @@ for (const name of readdirSync(SPEC_DIR).filter((f) => f.endsWith(".spec.ts")).s
 	// import 는 확장자를 붙여 쓴다(NodeNext). 빼고 잡으면 하나도 못 만난다.
 	const viaHelpers = [...source.matchAll(/from\s+"\.\.\/helpers\/([a-z-]+)(?:\.js)?"/g)]
 		.flatMap((m) => helperEnv.get(m[1]) ?? []);
-	const envs = [...new Set([...direct, ...viaHelpers])].sort();
+	// 이 스펙을 맡는 전용 설정의 요구도 함께 센다.
+	const fromConf = (confOwners.get(name) ?? []).flatMap(
+		(conf) => confEnv.get(conf) ?? [],
+	);
+	const envs = [...new Set([...direct, ...viaHelpers, ...fromConf])].sort();
 	const device = envs.some((e) => DEVICE_ENV.test(e));
 	// 대화 헬퍼를 부르면 모델이 필요하다 — 환경 변수에 드러나지 않아도.
 	const talks = CHAT_HELPERS.test(source);

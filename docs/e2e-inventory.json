@@ -2,9 +2,9 @@
 	"generatedFrom": "packages/shell/e2e-tauri/specs",
 	"total": 123,
 	"summary": {
-		"credentialed_live": 89,
-		"deterministic_ci": 27,
-		"native_local": 7
+		"credentialed_live": 90,
+		"deterministic_ci": 25,
+		"native_local": 8
 	},
 	"specs": [
 		{
@@ -1097,16 +1097,20 @@
 			"conf": [
 				"wdio.conf.discord-live.ts"
 			],
-			"env": [],
-			"tier": "deterministic_ci"
+			"env": [
+				"NAIA_E2E_DISCORD_TOKEN_FILE"
+			],
+			"tier": "credentialed_live"
 		},
 		{
 			"spec": "94-nva-prebaked-shell.spec.ts",
 			"conf": [
 				"wdio.conf.nva-prebaked.ts"
 			],
-			"env": [],
-			"tier": "deterministic_ci"
+			"env": [
+				"NAIA_E2E_PREBAKED_NVA"
+			],
+			"tier": "native_local"
 		},
 		{
 			"spec": "94-radio-bgm-queue.spec.ts",
@@ -1123,6 +1127,8 @@
 			],
 			"env": [
 				"NAIA_E2E_ARTIFACTS_DIR",
+				"NAIA_E2E_NAIA_KEY",
+				"NAIA_E2E_VOICE_6G",
 				"NAIA_E2E_VOICE_SCREENSHOT",
 				"NAIA_E2E_VOXCPM2_TEST_VOICE"
 			],
@@ -1145,6 +1151,8 @@
 			],
 			"env": [
 				"NAIA_E2E_ARTIFACTS_DIR",
+				"NAIA_E2E_NAIA_KEY",
+				"NAIA_E2E_VOICE_6G",
 				"NAIA_E2E_VOICE_SCREENSHOT",
 				"NAIA_E2E_VOXCPM2_TEST_VOICE"
 			],
@@ -1169,7 +1177,10 @@
 			"conf": [
 				"wdio.conf.grok.ts"
 			],
-			"env": [],
+			"env": [
+				"NAIA_E2E_MAIN_MODEL",
+				"NAIA_E2E_MAIN_PROVIDER"
+			],
 			"tier": "deterministic_ci"
 		},
 		{
