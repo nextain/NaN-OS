@@ -5,13 +5,13 @@
 	],
 	"ranOn": {
 		"inventorySha256": "7fb2d7bb35637d0c6d128ef63fa7af5d16007fce5bfb1f7c8e6a1e2bf99e1fb2",
-		"commit": "df1768776ebebd80c02270742f0c3242731e3842",
+		"commit": "c41cae5d6d82ee46ac8a4e2c1d195f4a0636807d",
 		"host": "bazzite",
 		"platform": "linux-x64",
 		"node": "v26.7.0"
 	},
-	"started": "2026-09-05T10:30:38.946Z",
-	"finished": "2026-09-05T10:34:13.788Z",
+	"started": "2026-09-05T10:53:59.849Z",
+	"finished": "2026-09-05T10:57:45.566Z",
 	"status": "failed",
 	"planned": [
 		"100-herdr-first-frame.spec.ts",
@@ -87,5 +87,12 @@
 			"VITE_NAIA_BGM_BASE"
 		]
 	},
-	"detail": "wdio.conf.ts: 종료 코드 1; wdio.conf.jeonju-course.ts: 종료 코드 1; wdio.conf.discord-settings.ts: 종료 코드 1; wdio.conf.radio.ts: 종료 코드 1"
+	"detail": "wdio.conf.ts: 종료 코드 1; wdio.conf.jeonju-course.ts: 종료 코드 1; wdio.conf.discord-settings.ts: 종료 코드 1; wdio.conf.radio.ts: 종료 코드 1",
+	"flakySpecs": [],
+	"stableFailures": [
+		"100-herdr-first-frame.spec.ts",
+		"91-jeonju-course-worker.spec.ts",
+		"92-discord-secure-cancel.spec.ts",
+		"93-radio-bgm-observation.spec.ts"
+	]
 }
