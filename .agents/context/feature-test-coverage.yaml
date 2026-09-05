@@ -1,6 +1,23 @@
 id: naia-shell:feature-test-coverage
 title: Naia Shell feature and regression coverage
 tags: [naia-shell, quality, regression, microsoft-store, dual-context]
+
+# 2026-09-05: 품질 프로세스가 신설되면서 이 파일 밖에 자산이 생겼다. 여기만
+# 보고 "회귀는 이게 전부" 라고 읽지 않도록 자리를 적어 둔다.
+quality_process:
+  document: docs/quality-process.md
+  gates: scripts/check-*.mjs  # self-trust-gates.yml 이 전부 부른다
+  multi_machine_qa:
+    roster: docs/regression-runs/machines.json
+    joining: docs/regression-runs/JOINING.md
+    channel: docs/regression-runs/CHANNEL.md
+    runner: scripts/run-regression.mjs
+    completeness: scripts/check-regression-complete.mjs
+    note: |
+      실기 스펙은 한 기계가 다 돌 수 없다. 자격증명이 필요한 것이 대부분이고
+      장치가 필요한 것도 있다. 기계마다 능력이 다르므로 맡는 등급이 다르고,
+      러너가 명단을 읽어 등급마다 그 등급을 맡은 기계들끼리 나눈다.
+      실패가 회귀인지 기계 능력인지 가르는 것이 마스터의 일이다.
 related:
   - docs/requirements.md
   - docs/user-scenarios.md

@@ -1,0 +1,53 @@
+{
+  "version": 1,
+  "installation_state": "unprovisioned",
+  "enabled_by_default": false,
+  "minimum_clean_rounds": 2,
+  "stop_attempt_limit": 3,
+  "preservation": {
+    "required": true,
+    "protect_test_contracts": true,
+    "protect_vendor_sources": true,
+    "allowed_adapter_digests": []
+  },
+  "authority": {
+    "public_key_env": "REQUEST_CONTRACT_PUBLIC_KEY",
+    "public_key_path": ".agents/context/request-contract-authority.pub",
+    "credential_id": "",
+    "require_user_presence": true,
+    "require_non_exportable": true
+  },
+  "reviewer": {
+    "public_key_env": "REQUEST_CONTRACT_REVIEWER_PUBLIC_KEY",
+    "public_key_path": ".agents/context/request-contract-reviewer.pub",
+    "credential_id": "",
+    "require_no_network": true,
+    "require_repository_blind": true,
+    "require_home_blind": true,
+    "allowed_attestor_digests": []
+  },
+  "review_runner": {
+    "public_key_env": "REQUEST_CONTRACT_REVIEW_RUNNER_PUBLIC_KEY",
+    "public_key_path": ".agents/context/request-contract-review-runner.pub",
+    "credential_id": "",
+    "allowed_reviewer_digests": [],
+    "allowed_sandbox_digests": [],
+    "allowed_attestor_digests": []
+  },
+  "retention": {
+    "success_hours": 24
+  },
+  "product_roots": [
+    "."
+  ],
+  "exclusions": [
+    ".agents/harness",
+    ".agents/progress",
+    ".agents/reviews",
+    "node_modules"
+  ],
+  "supported_clients": {
+    "claude": ">=2.1.207",
+    "codex": ">=0.144.1"
+  }
+}

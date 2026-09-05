@@ -232,7 +232,25 @@ if (dryRun) {
 if (absentPrereqs.length) {
 	// 준비가 안 된 것을 "돌렸는데 실패했다" 로 기록하지 않는다. 기록은 남기되
 	// 상태를 따로 둔다 — 완결성 게이트가 이것을 통과로 세지 않는다.
-	const started = new Date().toISOString();
+	/**
+ * 채널에 그대로 붙일 수 있는 한 줄.
+ *
+ * 왜 러너가 만드는가: 사람이 손으로 적으면 기계 이름이 명단과 어긋나고,
+ * 어긋나면 사람은 알아보지만 기록과 대조할 수 없다. 형식은
+ * `docs/regression-runs/CHANNEL.md` 에 있다.
+ */
+function channelLine(state, rest) {
+	return `[${machine}] ${state} ${rest}`;
+}
+
+const started = new Date().toISOString();
+console.log(
+	`\n${channelLine(
+		"START",
+		`${tiers.join(",")} ${mine.length}개` +
+			(missingEnv.size ? ` · 환경 없어 건너뛸 것 ${missingEnv.size}` : ""),
+	)}\n`,
+);
 	const dir = "docs/regression-runs";
 	mkdirSync(dir, { recursive: true });
 	const out = join(dir, `${machine}-${started.replace(/[:.]/g, "-")}.json`);
@@ -258,6 +276,9 @@ if (absentPrereqs.length) {
 		)}\n`,
 	);
 	console.log(`[regression] 실행하지 않았다 — 기록: ${out}`);
+	console.log(
+		`\n[${machine}] BLOCKED ${absentPrereqs.map((p) => p.split("(")[0].trim()).join(", ")}\n`,
+	);
 	process.exit(2);
 }
 
@@ -472,4 +493,17 @@ mkdirSync(dir, { recursive: true });
 const out = join(dir, `${machine}-${started.replace(/[:.]/g, "-")}.json`);
 writeFileSync(out, `${JSON.stringify(record, null, "\t")}\n`);
 console.log(`[regression] 기록: ${out} (${status})`);
+
+const failedSpecs = [
+	...new Set(groupResults.flatMap((g) => g.failedSpecs ?? [])),
+];
+console.log(
+	`\n${channelLine(
+		"DONE",
+		`${executed.length}/${mine.length} 통과` +
+			(failedSpecs.length
+				? ` · 실패 ${failedSpecs.slice(0, 4).join(", ")}${failedSpecs.length > 4 ? ` 외 ${failedSpecs.length - 4}` : ""}`
+				: ""),
+	)}\n`,
+);
 process.exit(status === "passed" ? 0 : 1);

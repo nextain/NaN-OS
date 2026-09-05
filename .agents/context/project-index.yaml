@@ -25,6 +25,14 @@ on_demand_loading:
   quality:
     - file: .agents/context/feature-test-coverage.yaml
       topics: [features, regression, test coverage, microsoft store, release readiness]
+    - file: docs/quality-process.md
+      topics: [품질 프로세스, 게이트, 사용성, 성능, 안정성, 배포 전 확인, 지금 열려 있는 것]
+    - file: docs/regression-runs/JOINING.md
+      topics: [회귀 QA 합류, 기계 명단, 전제, 짝 체크아웃]
+    - file: docs/regression-runs/CHANNEL.md
+      topics: [회귀 채널 규약, 말머리, START DONE BLOCKED ASK STATE]
+    - file: docs/regression-runs/machines.json
+      topics: [QA 기계 명단, 능력, 등급 분담, active]
   process:
     - file: docs/user-scenarios.md
       topics: [UC, 사용자시나리오, test coverage]

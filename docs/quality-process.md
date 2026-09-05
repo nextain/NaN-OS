@@ -227,6 +227,17 @@ LLM 을 부르지 않는다.
 | `check-recovery-affordance.mjs` | 실패가 화면을 통째로 대신하면서 빠져나갈 수단을 주지 않는 것 |
 | `check-dead-ui-specs.mjs` | 사라진 화면을 검사하는 스펙이 남아 회귀처럼 붉어지는 것 |
 | `check-silent-clicks.mjs` | 요소가 없어도 조용히 넘어가는 클릭이 늘어나는 것 |
+
+### 여러 기계가 함께 도는 법
+
+명단은 `docs/regression-runs/machines.json` 한 곳이다. 러너가 그것을 읽어
+등급마다 그 등급을 맡은 기계들끼리 스펙을 나눈다. 합류 절차는
+`docs/regression-runs/JOINING.md`, 서로 상태를 알리는 규약은
+`docs/regression-runs/CHANNEL.md` 에 있다.
+
+기계마다 `--peers` 를 손으로 적지 않는다. 목록이 어긋나면 몫이 겹치거나
+비는데, 각 기계는 "내 몫을 다 돌았다" 고 말하므로 기록만 보고는 알 수 없다.
+
 | `build-e2e-inventory.mjs --check` | 실기 스펙 요구조건 목록이 실제 스펙과 어긋난 채 남는 것 |
 | `check-assembly-coverage.mjs` | (옛 이름 체계 전용 — 위 UC 게이트가 지금 체계를 맡는다) |
 

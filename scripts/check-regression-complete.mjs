@@ -130,4 +130,17 @@ if (skipped.size) {
 	failed = true;
 }
 if (!failed) console.log("  ✓ 모든 스펙이 어느 기계엔가 배정되었고 건너뛴 것이 없다");
+
+// 채널에 그대로 붙일 수 있는 한 줄. 형식은 docs/regression-runs/CHANNEL.md.
+// 마스터가 각 기계의 DONE 을 모아 전체가 얼마나 덮였는지 알리는 자리다.
+console.log(
+	`\n[master] STATE ${all.size}개 중 덮인 것 ${covered.size}` +
+		` · 아무도 맡지 않은 것 ${never.length}` +
+		(failedMachines.length
+			? ` · 실패한 기계 ${failedMachines.join(", ")}`
+			: " · 실패한 기계 없음") +
+		(notRun.length ? ` · 전제 미비 ${notRun.length}대` : "") +
+		`\n`,
+);
+
 process.exit(failed ? 1 : 0);
