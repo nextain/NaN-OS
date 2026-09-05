@@ -1,4 +1,5 @@
 import { existsSync } from "node:fs";
+import { transformRequest } from "./node26-request.js";
 import { resolve } from "node:path";
 import {
 	E2E_WEBDRIVER_PORT,
@@ -22,6 +23,7 @@ const TAURI_BINARY = process.env.TAURI_BINARY
 configureCodexE2eEnvironment();
 
 export const config = {
+	transformRequest,
 	runner: "local" as const,
 	specs: [
 		"./specs/92-discord-secure-cancel.spec.ts",

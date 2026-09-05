@@ -1,4 +1,5 @@
 import { existsSync } from "node:fs";
+import { transformRequest } from "./node26-request.js";
 import { resolve } from "node:path";
 import {
 	E2E_TARGET_DIR,
@@ -26,6 +27,7 @@ configureCodexE2eEnvironment();
  * coding job against one disposable Git repository under the owned E2E root.
  */
 export const config = {
+	transformRequest,
 	runner: "local" as const,
 	specs: ["./specs/91-jeonju-course-worker.spec.ts"],
 	maxInstances: 1,

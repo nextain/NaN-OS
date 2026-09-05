@@ -2,11 +2,13 @@
 // (다중 refresh churn → 간헐 workspace_set_root 90s 경합 → before-all hook 타임아웃)를 스킵한다.
 // before() = localStorage-writable 대기 + autoApprove 만. 설정/refresh 는 각 spec 의 before 가 1회 수행.
 import { execSync } from "node:child_process";
+import { transformRequest } from "./node26-request.js";
 import { config as base } from "./wdio.conf.js";
 
 let permissionPoller: { dispose: () => void } | undefined;
 
 export const config = {
+	transformRequest,
 	...base,
 	specs: ["./specs/90-glm-newcore-chat.spec.ts"],
 	// hook/test 여유 — 간헐 workspace_set_root(IPC 경합) 대비. 단일 refresh 면 보통 빠름(dev 53ms).

@@ -1,4 +1,5 @@
 import { existsSync } from "node:fs";
+import { transformRequest } from "./node26-request.js";
 import { resolve } from "node:path";
 import {
 	E2E_SETTINGS,
@@ -47,6 +48,7 @@ if (process.env.NAIA_E2E_VOICE_6G !== "1") {
 configureCodexE2eEnvironment();
 
 export const config = {
+	transformRequest,
 	runner: "local" as const,
 	specs: ["./specs/94-voice-6g-shell.spec.ts"],
 	maxInstances: 1,

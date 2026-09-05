@@ -1,4 +1,5 @@
 import { existsSync } from "node:fs";
+import { transformRequest } from "./node26-request.js";
 import { resolve } from "node:path";
 import {
 	E2E_TARGET_DIR,
@@ -27,6 +28,7 @@ if (!TOKEN_FILE || !existsSync(TOKEN_FILE)) {
 configureCodexE2eEnvironment();
 
 export const config = {
+	transformRequest,
 	runner: "local" as const,
 	specs: ["./specs/94-discord-live-auth.spec.ts"],
 	maxInstances: 1,

@@ -1,4 +1,5 @@
 import { existsSync } from "node:fs";
+import { transformRequest } from "./node26-request.js";
 import { resolve } from "node:path";
 import {
 	E2E_TARGET_DIR,
@@ -20,6 +21,7 @@ const TAURI_BINARY =
 configureCodexE2eEnvironment();
 
 export const config = {
+	transformRequest,
 	runner: "local" as const,
 	specs: ["./specs/93-radio-bgm-observation.spec.ts"],
 	maxInstances: 1,

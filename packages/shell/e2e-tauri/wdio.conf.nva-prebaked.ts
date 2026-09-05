@@ -1,4 +1,5 @@
 import { existsSync } from "node:fs";
+import { transformRequest } from "./node26-request.js";
 import { resolve } from "node:path";
 import {
 	E2E_TARGET_DIR,
@@ -23,6 +24,7 @@ if (process.env.NAIA_E2E_PREBAKED_NVA !== "1") {
 configureCodexE2eEnvironment();
 
 export const config = {
+	transformRequest,
 	runner: "local" as const,
 	specs: ["./specs/94-nva-prebaked-shell.spec.ts"],
 	maxInstances: 1,
