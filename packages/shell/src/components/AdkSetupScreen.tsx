@@ -281,6 +281,9 @@ export function AdkSetupScreen({ onComplete }: AdkSetupScreenProps) {
 	}
 
 	async function handleNewRecreate() {
+		// 워크스페이스 폴더를 통째로 지운다. 설정·기억·자산이 함께 사라지고
+		// 되돌릴 수 없다 — 이 셸에서 가장 파괴적인 동작이다.
+		if (!globalThis.confirm(t("adk.setup.recreateConfirm"))) return;
 		if (!beginSetupOperation("deleting")) return;
 		try {
 			const adkPath = path.trim() || newDefaultPath;

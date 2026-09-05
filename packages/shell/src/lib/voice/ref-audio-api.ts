@@ -72,20 +72,28 @@ function bytesToBase64(bytes: number[]): string {
 }
 
 /** Persist the local reference voice in the selected ADK and refresh the cache. */
-export async function persistLocalRefAudioB64(
-	b64: string | null,
-): Promise<void> {
+export async function persistLocalRefAudioB64(b64: string): Promise<void> {
 	const adkPath = getAdkPath();
 	if (!adkPath) throw new Error("ADK path is not configured");
-	if (b64) {
-		await invoke("write_naia_ref_audio", {
-			adkPath,
-			bytes: base64ToBytes(b64),
-		});
-	} else {
-		await invoke("delete_naia_ref_audio", { adkPath });
-	}
+	await invoke("write_naia_ref_audio", {
+		adkPath,
+		bytes: base64ToBytes(b64),
+	});
 	setLocalRefAudioB64(b64);
+}
+
+/**
+ * 녹음해 둔 참조 음성을 워크스페이스에서 지운다.
+ *
+ * 저장과 한 함수였는데 인자가 null 이냐 아니냐로 갈렸다. 그러면 부르는
+ * 쪽만 보고는 이것이 저장인지 삭제인지 알 수 없고, 되돌릴 수 없는 동작에
+ * 확인이 걸렸는지 보는 검사도 둘을 구분하지 못한다. 이름으로 갈라 둔다.
+ */
+export async function clearLocalRefAudio(): Promise<void> {
+	const adkPath = getAdkPath();
+	if (!adkPath) throw new Error("ADK path is not configured");
+	await invoke("delete_naia_ref_audio", { adkPath });
+	setLocalRefAudioB64(null);
 }
 
 /** Hydrate the synchronous runtime cache from the selected ADK source of truth. */

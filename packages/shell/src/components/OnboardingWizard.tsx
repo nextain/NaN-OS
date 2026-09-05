@@ -103,7 +103,10 @@ function stepChat(step: Step, name: string, user: string): string {
 	const n = name || t("onboard.defaultAgentName");
 	// Korean attaches an honorific to the name; other languages do not, so the
 	// suffix belongs to the Korean string rather than to this interpolation.
-	const u = user ? (getLocale() === "ko" ? `${user}님` : user) : "";
+	// 경어 접미사는 언어의 문법이므로 로케일이 정한다. 한국어만 "님" 이고
+	// 나머지는 빈 문자열이다 — 코드가 언어를 보고 고르면 새 언어가 추가될
+	// 때마다 이 자리를 고쳐야 하고, 대개 잊는다.
+	const u = user ? `${user}${t("common.honorificSuffix")}` : "";
 	const fill = (key: TranslationKey) =>
 		t(key).replace("{agent}", n).replace("{user}", u);
 
@@ -1150,9 +1153,7 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
 			}, 1200);
 		} catch (error) {
 			setCompletionError(
-				getLocale() === "ko"
-					? `설정을 적용하지 못했습니다. 다시 시도해 주세요. (${String(error)})`
-					: `Could not apply settings. Please try again. (${String(error)})`,
+				`${t("onboard.applyFailed")} (${String(error)})`,
 			);
 		} finally {
 			setCompleting(false);
@@ -1662,9 +1663,7 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
 						disabled={isCompleteStep && completing}
 					>
 						{isCompleteStep && completing
-							? getLocale() === "ko"
-								? "설정 적용 중…"
-								: "Applying settings…"
+							? t("onboard.applyingSettings")
 							: isCompleteStep
 								? t("onboard.complete.start")
 								: t("onboard.next")}

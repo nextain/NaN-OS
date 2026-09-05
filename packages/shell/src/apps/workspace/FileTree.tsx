@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { type DirEntry, getFileIcon } from "../../lib/file-search";
 import { Logger } from "../../lib/logger";
 import { WORKSPACE_ROOT } from "./constants";
-import { fileTreeText } from "./file-tree-i18n";
+import { t } from "../../lib/i18n";
 import type { ClassifiedDir } from "./types";
 
 // ─── Context menu types ──────────────────────────────────────────────────────
@@ -213,7 +213,7 @@ function TreeNode({
 				{isActive && (
 					<span
 						className="workspace-tree__active-dot"
-						title={fileTreeText("activeSession")}
+						title={t("fileTree.activeSession")}
 					/>
 				)}
 			</button>
@@ -384,14 +384,14 @@ export function FileTree({
 				className="workspace-ctx-menu__item"
 				onClick={handleCopyRelative}
 			>
-				{fileTreeText("copyRelative")}
+				{t("fileTree.copyRelative")}
 			</button>
 			<button
 				type="button"
 				className="workspace-ctx-menu__item"
 				onClick={handleCopyAbsolute}
 			>
-				{fileTreeText("copyAbsolute")}
+				{t("fileTree.copyAbsolute")}
 			</button>
 			{onSendToChat && (
 				<>
@@ -401,7 +401,7 @@ export function FileTree({
 						className="workspace-ctx-menu__item"
 						onClick={handleSendToChat}
 					>
-						{fileTreeText("sendToNaia")}
+						{t("fileTree.sendToNaia")}
 					</button>
 				</>
 			)}
@@ -411,7 +411,7 @@ export function FileTree({
 	if (loading) {
 		return (
 			<div className="workspace-tree workspace-tree--loading">
-				{fileTreeText("loading")}
+				{t("fileTree.loading")}
 			</div>
 		);
 	}
@@ -437,11 +437,11 @@ export function FileTree({
 		}
 
 		const sectionLabels: Record<string, string> = {
-			project: fileTreeText("sectionProject"),
-			worktree: fileTreeText("sectionWorktree"),
-			reference: fileTreeText("sectionReference"),
-			docs: fileTreeText("sectionDocs"),
-			other: fileTreeText("sectionOther"),
+			project: t("fileTree.sectionProject"),
+			worktree: t("fileTree.sectionWorktree"),
+			reference: t("fileTree.sectionReference"),
+			docs: t("fileTree.sectionDocs"),
+			other: t("fileTree.sectionOther"),
 		};
 
 		// Guard: if no classified dir matches any loaded entry (path mismatch or
@@ -456,7 +456,7 @@ export function FileTree({
 			return (
 				<div className="workspace-tree workspace-tree--empty">
 					<div className="workspace-tree__empty-hint">
-						{fileTreeText("noClassifiedDirs")}
+						{t("fileTree.noClassifiedDirs")}
 					</div>
 				</div>
 			);
@@ -500,7 +500,7 @@ export function FileTree({
 		return (
 			<div className="workspace-tree workspace-tree--empty">
 				<div className="workspace-tree__empty-hint">
-					{fileTreeText("empty")}
+					{t("fileTree.empty")}
 				</div>
 				{contextMenuEl}
 			</div>

@@ -84,7 +84,7 @@ export function AppBar({ onAddApp }: AppBarProps) {
 	}, [isAnyDialogOpen, pushModal, popModal]);
 
 	// Rebuild app list whenever appListVersion changes (runtime install/remove)
-	// Exclude avatar app (shown as fixed "바탕화면" tab separately)
+	// Exclude avatar app (shown as a fixed desktop tab separately)
 	const modes = useMemo(
 		() =>
 			appRegistry
@@ -349,7 +349,7 @@ export function AppBar({ onAddApp }: AppBarProps) {
 					className={`app-bar-tab${activeApp === null ? " app-bar-tab--active" : ""}`}
 					data-app-id="desktop"
 					onClick={() => setActiveApp(null)}
-					aria-label="바탕화면"
+					aria-label={t("appbar.desktop")}
 				>
 					<span className="app-bar-tab-icon">🖥️</span>
 				</button>
@@ -357,7 +357,7 @@ export function AppBar({ onAddApp }: AppBarProps) {
 					type="button"
 					className={`app-bar-tab${activeApp === "browser" ? " app-bar-tab--active" : ""}`}
 					data-app-id="browser"
-					aria-label={getLocale() === "ko" ? "브라우저" : "Browser"}
+					aria-label={t("appbar.browser")}
 					onClick={() => setActiveApp("browser")}
 				>
 					<span className="app-bar-tab-icon">🌐</span>
@@ -366,7 +366,7 @@ export function AppBar({ onAddApp }: AppBarProps) {
 					type="button"
 					className={`app-bar-tab${activeApp === "workspace" ? " app-bar-tab--active" : ""}`}
 					data-app-id="workspace"
-					aria-label={getLocale() === "ko" ? "작업공간" : "Workspace"}
+					aria-label={t("appbar.workspace")}
 					onClick={() => setActiveApp("workspace")}
 				>
 					<span className="app-bar-tab-icon">📁</span>
@@ -553,12 +553,8 @@ export function AppBar({ onAddApp }: AppBarProps) {
 							>
 								<span className="app-bar-url-dialog__section-icon">🗂️</span>
 								<div className="app-bar-url-dialog__section-text">
-									<strong>{getLocale() === "ko" ? "앱 관리" : "Manage apps"}</strong>
-									<span>
-										{getLocale() === "ko"
-											? "앱과 바로가기에 삭제 버튼을 표시합니다."
-											: "Show delete buttons on apps and shortcuts."}
-									</span>
+									<strong>{t("appbar.manageApps")}</strong>
+									<span>{t("appbar.manageAppsDesc")}</span>
 								</div>
 							</button>
 							<button

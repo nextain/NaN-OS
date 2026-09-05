@@ -353,6 +353,9 @@ export function ConnectionsSettingsTab() {
 
 	async function removeCredential() {
 		if (credentialOperationPending) return;
+		// 토큰은 이 화면에서 다시 볼 수 없다. 지우면 새로 발급받거나
+		// 어딘가에 적어 둔 것을 다시 넣어야 한다.
+		if (!globalThis.confirm(t("connections.removeTokenConfirm"))) return;
 		setCredentialOperationPending(true);
 		setRuntimeErrorCode(null);
 		setSaved(false);

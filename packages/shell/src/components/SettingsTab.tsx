@@ -2478,6 +2478,7 @@ export function SettingsTab() {
 		// 레거시로 nvaModel 등이 절대경로면 delete_naia_asset 이 경로(\\,/) 를 거부해 삭제 실패 →
 		// basename 만 취해 견고화. 신규 선택은 bare 이름이라 무영향.
 		const bare = filename.split(/[/\\]/).filter(Boolean).pop() ?? filename;
+		if (!globalThis.confirm(t("settings.deleteAssetConfirm"))) return;
 		try {
 			await invoke("delete_naia_asset", { adkPath, subdir, filename: bare });
 			const paths = await listNaiaAssets(subdir);
@@ -6243,6 +6244,10 @@ export function SettingsTab() {
 											type="button"
 											className="fact-delete-btn"
 											onClick={async () => {
+												// 기억은 지우면 되돌릴 수 없다
+												// (UC-QUALITY-DESTRUCTIVE-AFFORDANCE).
+												if (!globalThis.confirm(t("memory.deleteFactConfirm")))
+													return;
 												try {
 													await deleteAgentFact(f.id);
 													setFacts((prev) => prev.filter((x) => x.id !== f.id));

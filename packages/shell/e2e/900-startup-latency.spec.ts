@@ -72,9 +72,23 @@ const TAURI_MOCK = `
 })();
 `;
 
+// 워크스페이스가 이미 골라진 상태로 띄운다. 이것을 넣지 않으면 셸은
+// ADK 설정 화면에서 멈추고, 그 화면은 App.tsx 의 초기화 분기를 통째로
+// 건너뛴다 — 즉 셸이 뜨는 시간이 아니라 "설정하라는 안내" 가 뜨는 시간을
+// 재게 된다. 이 상수는 원래 파일에 있었지만 어디에서도 쓰이지 않았고,
+// 그래서 이 스펙은 오랫동안 엉뚱한 화면을 재고 있었다.
 const SET_ADK_PATH = `
 localStorage.setItem("naia-adk-path", "/tmp/mock-naia-adk-workspace");
 `;
+
+/**
+ * 셸 본 화면의 표지 — 사용자가 실제로 말을 걸 수 있게 되는 자리다.
+ * `.naia-work-rail` 은 워크스페이스 모드에서만 나오므로 표지로 쓸 수 없다.
+ */
+const SHELL_READY = ".naia-chat-area";
+
+/** 설정 화면의 표지. 여기 도달했다면 측정 대상이 틀린 것이다. */
+const SETUP_SCREEN = ".adk-setup-headline";
 
 // 콜드와 웜을 한 숫자로 뭉개면 한도가 콜드에 끌려가 웜 회귀를 못 잡는다.
 // 이 기계 실측이 그 구조를 그대로 보여 준다 — 3회 반복 실행에서 첫 표본은
@@ -97,10 +111,16 @@ function median(values: number[]): number {
 
 async function measure(page: import("@playwright/test").Page): Promise<number> {
 	await page.addInitScript({ content: TAURI_MOCK });
+	await page.addInitScript({ content: SET_ADK_PATH });
 	const started = Date.now();
 	await page.goto("/");
-	await expect(page.locator(".adk-setup-headline")).toBeVisible();
-	return Date.now() - started;
+	await expect(page.locator(SHELL_READY)).toBeVisible();
+	const elapsed = Date.now() - started;
+
+	// 재는 대상이 맞는지 스스로 확인한다. 설정 화면이 떠 있으면 이 숫자는
+	// 셸 시작 시간이 아니다.
+	await expect(page.locator(SETUP_SCREEN)).toHaveCount(0);
+	return elapsed;
 }
 
 test("셸 첫 화면이 콜드·웜 한도 안에 뜬다 (UC-PERF-STARTUP-LATENCY)", async ({ page }) => {

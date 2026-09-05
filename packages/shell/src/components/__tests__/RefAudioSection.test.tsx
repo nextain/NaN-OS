@@ -113,6 +113,10 @@ describe("RefAudioSection", () => {
 		// The engine may be down — refresh must not care (health probe fails).
 		const fetchMock = vi.fn().mockRejectedValue(new Error("engine down"));
 		vi.stubGlobal("fetch", fetchMock);
+		// 녹음본이 있는 상태에서 프리셋을 고르면 그것이 사라지므로 먼저 묻는다
+		// (UC-QUALITY-DESTRUCTIVE-AFFORDANCE). 이 테스트가 보는 것은 확인 이후
+		// 동작이므로 승낙해 둔다.
+		vi.stubGlobal("confirm", vi.fn().mockReturnValue(true));
 
 		render(<RefAudioSection />);
 

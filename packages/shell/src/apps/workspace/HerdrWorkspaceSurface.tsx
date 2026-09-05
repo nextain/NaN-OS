@@ -9,7 +9,6 @@ import type {
 } from "./Terminal";
 import { type HerdrSnapshot, focusedHerdrAgent } from "./herdr";
 import type { HerdrSurface, PtyCreated } from "./useHerdrRuntime";
-import { workspaceText } from "./workspaceText";
 
 const loadEditor = () =>
 	import("./Editor").then((module) => ({ default: module.Editor }));
@@ -127,7 +126,7 @@ export function HerdrWorkspaceSurface(props: SurfaceProps) {
 							scope="HerdrWorkspaceEditor"
 							fallback={
 								<div className="herdr-workspace__state" role="alert">
-									<span>{workspaceText("editorLoadError")}</span>
+									<span>{t("workspace.editorLoadError")}</span>
 									<button type="button" onClick={retryEditorLoad}>
 										{t("common.retry")}
 									</button>
@@ -137,7 +136,7 @@ export function HerdrWorkspaceSurface(props: SurfaceProps) {
 							<Suspense
 								fallback={
 									<output className="herdr-workspace__state">
-										{workspaceText("editorLoading")}
+										{t("workspace.editorLoading")}
 									</output>
 								}
 							>

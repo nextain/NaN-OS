@@ -87,6 +87,22 @@ export async function setLocale(locale: Locale): Promise<void> {
 	currentTranslations = next;
 }
 
-export function t(key: TranslationKey): string {
-	return currentTranslations[key];
+/**
+ * 번역 문자열을 가져온다. 값이 끼어드는 문구는 `{name}` 자리를 두고
+ * 두 번째 인자로 채운다.
+ *
+ * 왜 자리표시자인가: 값이 낀 문구를 코드에서 이어 붙이면 어순이 언어마다
+ * 다른 것을 표현할 수 없다. "3초 녹음됨" 과 "Recorded 3 s" 는 값의 위치가
+ * 다르고, 아랍어처럼 방향이 다른 언어는 더 그렇다. 자리표시자를 문자열
+ * 안에 두면 그 배치를 번역자가 정한다.
+ */
+export function t(
+	key: TranslationKey,
+	params?: Readonly<Record<string, string | number>>,
+): string {
+	const value = currentTranslations[key];
+	if (!params) return value;
+	return value.replace(/\{(\w+)\}/g, (whole, name) =>
+		Object.prototype.hasOwnProperty.call(params, name) ? String(params[name]) : whole,
+	);
 }

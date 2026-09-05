@@ -134,10 +134,12 @@ describe("AppBar — add dialog", () => {
 		const buttons = Array.from(
 			document.querySelectorAll(".app-bar-tabs > button"),
 		).slice(0, 3);
+		// 문구가 아니라 키로 단정한다. 글자로 단정하면 그 자리가 i18n 을
+		// 지나는지 알 수 없고, 번역이 바뀔 때마다 테스트가 깨진다.
 		expect(buttons.map((node) => node.getAttribute("aria-label"))).toEqual([
-			"바탕화면",
-			"브라우저",
-			"작업공간",
+			"appbar.desktop",
+			"appbar.browser",
+			"appbar.workspace",
 		]);
 		expect(buttons.map((node) => node.getAttribute("data-app-id"))).toEqual([
 			"desktop",

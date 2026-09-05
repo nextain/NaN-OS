@@ -16,14 +16,14 @@
  * Inline ko/en strings — full 14-language i18n is deferred to a follow-up.
  */
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
 	DEFAULT_VOICE_REF_URL,
 	canonicalRefAudioUrl,
 	loadConfig,
 	saveConfig,
 } from "../lib/config";
-import { getLocale } from "../lib/i18n";
+import { getLocale, t } from "../lib/i18n";
 import { Logger } from "../lib/logger";
 import { warmLocalVoice } from "../lib/tts/synthesize";
 import { fetchLocalVoiceHealth } from "../lib/voice/local-runtime";
@@ -39,6 +39,7 @@ import {
 	getRefAudioPresets,
 	getRefAudioStatus,
 	hydrateLocalRefAudioB64,
+	clearLocalRefAudio,
 	persistLocalRefAudioB64,
 	uploadRefAudio,
 } from "../lib/voice/ref-audio-api";
@@ -70,149 +71,87 @@ function setConfigVoiceRefUrl(url: string | null): void {
 	if (url) void useCascadeAvatarStore.getState().renderer?.setVoice(url);
 }
 
-const STRINGS = {
-	ko: {
-		sectionTitle: "음성 참조 (Voice Reference)",
-		hint: "Naia 실시간 음성이 사용할 음색입니다. 5–30초 녹음하거나 클립을 업로드하세요.",
-		currentTitle: "현재 음색",
-		statusNone: "설정된 음색 없음 — 기본 음색 사용 중",
-		statusActiveUpload: (d: string, kb: string, when: string) =>
-			`내 업로드 · ${d}초 · ${kb} KB · ${when}`,
-		statusUploadRestored: "내 업로드 음색 사용 중",
-		presetActiveLabel: (name: string) => `프리셋 · ${name}`,
-		previewBtn: "▶ 듣기",
-		previewStop: "■ 정지",
-		previewLoading: "불러오는 중…",
-		removeBtn: "제거",
-		confirmRemove: "현재 음색을 제거할까요?",
-		confirmYes: "제거",
-		confirmNo: "취소",
-		myVoiceTitle: "내 목소리로 만들기",
-		recordBtn: "🎤 녹음",
-		recordStop: "■ 녹음 정지",
-		recording: (s: string) => `녹음 중… ${s}초`,
-		recordTooShort: `너무 짧습니다 (최소 ${MIN_DURATION_S}초).`,
-		recordCancel: "취소",
-		takeReady: (s: string) => `녹음됨 · ${s}초 — 들어보고 적용하세요`,
-		takeApply: "적용 ($0.01)",
-		takeApplyFree: "적용 (무료)",
-		takeDiscard: "다시 녹음",
-		uploadBtn: "파일 업로드",
-		replaceBtn: "파일로 교체",
-		uploading: "업로드 중…",
-		cost: "적용·업로드 시 1회당 $0.01 차감 (녹음만으로는 차감 없음)",
-		costLocal: "로컬 모델 — 녹음·업로드 무료 (크레딧 차감 없음)",
-		localEngineOff:
-			"호스트 음성 엔진이 실행 중이 아닙니다. 아래 버튼으로 시작하세요.",
-		localEngineStarting:
-			"호스트 음성 엔진 준비 중 — 음성 서비스가 아직 사용 가능하지 않습니다. 잠시 후 자동으로 이어집니다.",
-		localEngineStart: "호스트 음성 엔진 시작",
-		localEngineOffToggleHint:
-			"호스트 음성 엔진이 꺼져 있어 목소리를 고를 수 없습니다. 위의 “호스트 음성 엔진 시작” 버튼으로 켜세요.",
-		err: {
-			network: "네트워크 오류 — 재시도해주세요.",
-			auth: "naia 계정 로그인이 필요합니다.",
-			creditInsufficient:
-				"크레딧 잔액이 부족합니다. naia 계정에서 충전 후 다시 시도하세요.",
-			format: "오디오 형식 오류 — 5–30초, 16 kHz mono 권장.",
-			tooLarge: "파일이 너무 큽니다 (최대 4 MiB).",
-			uploadInProgress: "동일한 업로드가 진행 중입니다.",
-			soldOut:
-				"현재 매진입니다. 잠시 후 다시 시도해주세요. naia OS 로컬 모델로 즉시 사용도 가능합니다.",
-			noActiveRef: "재생할 음색이 없습니다.",
-			record: "녹음을 시작할 수 없습니다 — 마이크 권한을 확인하세요.",
-			unknown: "알 수 없는 오류 — 다시 시도해주세요.",
-		},
-		uploadSuccess: (newBal: string) => `완료 · 잔액 $${newBal}`,
-		localRefApplied: "녹음 음색이 적용되었습니다 (로컬 · 무료).",
-		removeSuccess: "음색이 제거되었습니다.",
-		presetTitle: "프리셋에서 고르기",
-		presetLoading: "프리셋 불러오는 중…",
-		presetEmpty: "사용 가능한 프리셋이 없습니다.",
-		presetPlay: "듣기",
-		presetStop: "정지",
-		presetApply: "적용",
-		presetApplied: "적용 중",
-		presetApplySuccess: (name: string) => `${name} 음색으로 변경되었습니다.`,
-		presetFilterAll: "전체",
-		presetFemale: "여성 음색",
-		presetMale: "남성 음색",
-		presetDefault: "기본",
-		presetNotFound: "선택한 프리셋을 찾을 수 없습니다.",
-	},
-	en: {
-		sectionTitle: "Voice Reference",
-		hint: "The voice Naia clones for realtime replies. Record 5–30 s or upload a clip.",
-		currentTitle: "Current voice",
-		statusNone: "No voice set — using the default voice",
-		statusActiveUpload: (d: string, kb: string, when: string) =>
-			`My upload · ${d}s · ${kb} KB · ${when}`,
-		statusUploadRestored: "Using my uploaded voice",
-		presetActiveLabel: (name: string) => `Preset · ${name}`,
-		previewBtn: "▶ Play",
-		previewStop: "■ Stop",
-		previewLoading: "Loading…",
-		removeBtn: "Remove",
-		confirmRemove: "Remove the current voice?",
-		confirmYes: "Remove",
-		confirmNo: "Cancel",
-		myVoiceTitle: "Make your voice",
-		recordBtn: "🎤 Record",
-		recordStop: "■ Stop",
-		recording: (s: string) => `Recording… ${s}s`,
-		recordTooShort: `Too short (min ${MIN_DURATION_S}s).`,
-		recordCancel: "Cancel",
-		takeReady: (s: string) => `Recorded · ${s}s — preview, then apply`,
-		takeApply: "Apply ($0.01)",
-		takeApplyFree: "Apply (free)",
-		takeDiscard: "Record again",
-		uploadBtn: "Upload file",
-		replaceBtn: "Replace with file",
-		uploading: "Uploading…",
-		cost: "$0.01 charged when you apply or upload (recording itself is free)",
-		costLocal: "Local model — recording & upload are free (no credit charge)",
-		localEngineOff:
-			"The host voice engine is not running. Start it with the button below.",
-		localEngineStarting:
-			"Host voice engine is getting ready — the speech service is not available yet. It will continue automatically.",
-		localEngineStart: "Start host voice engine",
-		localEngineOffToggleHint:
-			"The host voice engine is off, so no voice can be selected. Turn it on with the “Start host voice engine” button above.",
-		err: {
-			network: "Network error — please retry.",
-			auth: "Please sign in to your naia account.",
-			creditInsufficient:
-				"Insufficient credits. Top up your naia account and retry.",
-			format: "Invalid audio — please use a 5–30s 16 kHz mono clip.",
-			tooLarge: "File too large (4 MiB max).",
-			uploadInProgress: "An upload with the same key is in progress.",
-			soldOut:
-				"Sold out — please retry shortly. You can also switch to the naia OS local model.",
-			noActiveRef: "No voice to play.",
-			record: "Couldn't start recording — check microphone permission.",
-			unknown: "Unknown error — please retry.",
-		},
-		uploadSuccess: (newBal: string) => `Done · balance $${newBal}`,
-		localRefApplied: "Recorded voice applied (local · free).",
-		removeSuccess: "Voice removed.",
-		presetTitle: "Pick from presets",
-		presetLoading: "Loading presets…",
-		presetEmpty: "No presets available.",
-		presetPlay: "Play",
-		presetStop: "Stop",
-		presetApply: "Apply",
-		presetApplied: "Active",
-		presetApplySuccess: (name: string) => `Voice changed to ${name}.`,
-		presetFilterAll: "All",
-		presetFemale: "Female voice",
-		presetMale: "Male voice",
-		presetDefault: "Default",
-		presetNotFound: "The selected preset was not found.",
-	},
-} as const;
 
+
+/**
+ * 이 화면의 문구.
+ *
+ * 예전에는 여기 ko/en 두 벌짜리 표가 있었고 `getLocale() === "ko"` 로
+ * 골랐다. 셸은 로케일이 열넷인데 이 표는 둘뿐이라, 나머지 열두 언어
+ * 사용자는 이 화면에서 무조건 영어를 봤다. 그런 표는 locales/ 밖에 있어서
+ * i18n 게이트에도 걸리지 않았다.
+ *
+ * 지금은 전부 locales/ 의 `voice.ref.*` 키를 지난다. 반환 모양은 예전과
+ * 같게 두어 부르는 쪽을 건드리지 않았다.
+ */
 function pickStrings() {
-	return getLocale() === "ko" ? STRINGS.ko : STRINGS.en;
+	return {
+		sectionTitle: t("voice.ref.sectionTitle"),
+		hint: t("voice.ref.hint"),
+		currentTitle: t("voice.ref.currentTitle"),
+		statusNone: t("voice.ref.statusNone"),
+		statusActiveUpload: (duration: string, kb: string, when: string) =>
+			t("voice.ref.statusActiveUpload", { duration, kb, when }),
+		statusUploadRestored: t("voice.ref.statusUploadRestored"),
+		presetActiveLabel: (name: string) =>
+			t("voice.ref.presetActiveLabel", { name }),
+		previewBtn: t("voice.ref.previewBtn"),
+		previewStop: t("voice.ref.previewStop"),
+		previewLoading: t("voice.ref.previewLoading"),
+		removeBtn: t("voice.ref.removeBtn"),
+		confirmRemove: t("voice.ref.confirmRemove"),
+		confirmYes: t("voice.ref.confirmYes"),
+		confirmNo: t("voice.ref.confirmNo"),
+		myVoiceTitle: t("voice.ref.myVoiceTitle"),
+		recordBtn: t("voice.ref.recordBtn"),
+		recordStop: t("voice.ref.recordStop"),
+		recording: (seconds: string) => t("voice.ref.recording", { seconds }),
+		recordTooShort: t("voice.ref.recordTooShort", { min: MIN_DURATION_S }),
+		recordCancel: t("voice.ref.recordCancel"),
+		takeReady: (seconds: string) => t("voice.ref.takeReady", { seconds }),
+		takeApply: t("voice.ref.takeApply"),
+		takeApplyFree: t("voice.ref.takeApplyFree"),
+		takeDiscard: t("voice.ref.takeDiscard"),
+		uploadBtn: t("voice.ref.uploadBtn"),
+		replaceBtn: t("voice.ref.replaceBtn"),
+		uploading: t("voice.ref.uploading"),
+		cost: t("voice.ref.cost"),
+		costLocal: t("voice.ref.costLocal"),
+		localEngineOff: t("voice.ref.localEngineOff"),
+		localEngineStarting: t("voice.ref.localEngineStarting"),
+		localEngineStart: t("voice.ref.localEngineStart"),
+		localEngineOffToggleHint: t("voice.ref.localEngineOffToggleHint"),
+		err: {
+			network: t("voice.ref.errNetwork"),
+			auth: t("voice.ref.errAuth"),
+			creditInsufficient: t("voice.ref.errCreditInsufficient"),
+			format: t("voice.ref.errFormat"),
+			tooLarge: t("voice.ref.errTooLarge"),
+			uploadInProgress: t("voice.ref.errUploadInProgress"),
+			soldOut: t("voice.ref.errSoldOut"),
+			noActiveRef: t("voice.ref.errNoActiveRef"),
+			record: t("voice.ref.errRecord"),
+			unknown: t("voice.ref.errUnknown"),
+		},
+		uploadSuccess: (balance: string) =>
+			t("voice.ref.uploadSuccess", { balance }),
+		localRefApplied: t("voice.ref.localRefApplied"),
+		removeSuccess: t("voice.ref.removeSuccess"),
+		presetTitle: t("voice.ref.presetTitle"),
+		presetLoading: t("voice.ref.presetLoading"),
+		presetEmpty: t("voice.ref.presetEmpty"),
+		presetPlay: t("voice.ref.presetPlay"),
+		presetStop: t("voice.ref.presetStop"),
+		presetApply: t("voice.ref.presetApply"),
+		presetApplied: t("voice.ref.presetApplied"),
+		presetApplySuccess: (name: string) =>
+			t("voice.ref.presetApplySuccess", { name }),
+		presetFilterAll: t("voice.ref.presetFilterAll"),
+		presetFemale: t("voice.ref.presetFemale"),
+		presetMale: t("voice.ref.presetMale"),
+		presetDefault: t("voice.ref.presetDefault"),
+		presetNotFound: t("voice.ref.presetNotFound"),
+	};
 }
 
 /** Decode a raw base64 WAV (as produced by encodeRefAudio) into a Blob. */
@@ -306,7 +245,11 @@ export function RefAudioSection({
 	ensureLocalVoiceReady,
 	hideEngineStartControl,
 }: RefAudioSectionProps = {}) {
-	const S = pickStrings();
+	// 로케일이 그대로면 같은 객체를 돌려준다. 예전 구현은 고정된 ko/en 표를
+	// 그대로 반환해 참조가 안정적이었는데, t() 기반으로 바꾸면서 렌더마다
+	// 새 객체가 되었다. S 는 훅 일곱 곳의 의존성이라 그대로 두면 렌더가
+	// 끝없이 되풀이된다 — 실제로 테스트가 그 자리에서 멈췄다.
+	const S = useMemo(pickStrings, [getLocale()]);
 	// Naia Local runs on the user's own GPU — recording/uploading a reference
 	// voice is free and never touches the gateway, so hide the $0.01 hints.
 	const config = loadConfig();
@@ -806,6 +749,14 @@ export function RefAudioSection({
 			// sends it directly as ref_audio_url (web-demo parity) — even if the
 			// server-side apply below fails (e.g. credit/auth on the dev gateway).
 			// The voice must not depend on the apply round-trip or GET status.
+			// 프리셋은 녹음본을 대체한다. 녹음해 둔 것이 있으면 그것이
+			// 사라지므로 먼저 묻는다 — 녹음이 없으면 잃을 것이 없어 묻지
+			// 않는다. 모든 선택마다 물으면 사용자는 읽지 않고 누른다.
+			if (
+				getLocalRefAudioB64() &&
+				!globalThis.confirm(t("voice.deleteRefAudioConfirm"))
+			)
+				return;
 			setConfigVoiceRefUrl(preset.sampleUrl);
 			try {
 				// A preset supersedes a recorded clip. Clearing the ADK copy is
@@ -813,7 +764,7 @@ export function RefAudioSection({
 				// the invoke rejects, and an unhandled rejection here would fail the
 				// whole preset selection even though the URL switch above already
 				// took effect.
-				await persistLocalRefAudioB64(null);
+				await clearLocalRefAudio();
 			} catch (err) {
 				Logger.warn(TAG, "clearing ADK reference audio failed", {
 					error: String(err),
@@ -873,7 +824,7 @@ export function RefAudioSection({
 			// slot to DELETE) is always removed and the live session reverts.
 			const hadLocal = !!getLocalRefAudioB64();
 			setConfigVoiceRefUrl(null);
-			await persistLocalRefAudioB64(null);
+			await clearLocalRefAudio();
 			// Don't leave the session unconditioned (weird voice) — switch a live
 			// session to the default "여성 음색 1" instead of clearing the ref.
 			window.dispatchEvent(

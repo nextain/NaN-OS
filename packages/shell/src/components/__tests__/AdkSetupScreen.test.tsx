@@ -123,7 +123,38 @@ describe("AdkSetupScreen operation locking", () => {
 		await waitFor(() => expect(onComplete).toHaveBeenCalledTimes(1));
 	});
 
+	// 워크스페이스를 통째로 지우는 것은 되돌릴 수 없다
+	// (UC-QUALITY-DESTRUCTIVE-AFFORDANCE). 확인을 거절하면 지우는 호출이
+	// 아예 일어나지 않아야 한다 — 묻기만 하고 답과 무관하게 지우면 확인은
+	// 장식이다.
+	it("does not touch the workspace when the user declines the confirmation", async () => {
+		mocks.invoke.mockImplementation((command: string) => {
+			if (command === "workspace_detect_adk_root") return Promise.resolve("");
+			if (command === "inspect_adk_dir") return Promise.resolve("has_other_files");
+			return Promise.resolve(undefined);
+		});
+		vi.stubGlobal("confirm", vi.fn().mockReturnValue(false));
+
+		const { container } = render(<AdkSetupScreen onComplete={vi.fn()} />);
+		await openNewSetup(container);
+		fireEvent.click(
+			container.querySelector<HTMLButtonElement>(".adk-setup-confirm-btn")!,
+		);
+		await screen.findByText("adk.setup.exists.filesTitle");
+		fireEvent.click(
+			screen.getByText("adk.setup.exists.recreate").closest("button")!,
+		);
+
+		expect(globalThis.confirm).toHaveBeenCalledTimes(1);
+		expect(
+			mocks.invoke.mock.calls.filter(
+				([command]) => command === "delete_naia_adk",
+			),
+		).toHaveLength(0);
+	});
+
 	it("prevents duplicate delete and recreate transactions", async () => {
+		vi.stubGlobal("confirm", vi.fn().mockReturnValue(true));
 		const deleteGate = deferred<void>();
 		mocks.invoke.mockImplementation((command: string) => {
 			if (command === "workspace_detect_adk_root") return Promise.resolve("");
