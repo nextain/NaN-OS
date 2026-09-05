@@ -24,6 +24,7 @@ import {
 	readFileSync,
 	writeFileSync,
 } from "node:fs";
+import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
 const args = process.argv.slice(2);
@@ -308,32 +309,45 @@ for (const [conf, specs] of groups) {
 
 	const specArgs = specs.flatMap((spec) => ["--spec", `e2e-tauri/specs/${spec}`]);
 	console.log(`[regression] ${conf} — 스펙 ${specs.length}개`);
-	let output = "";
+	// 출력을 파일로 흘리면서 화면에도 그대로 낸다. 캡처만 하면 wdio 가 도는
+	// 십몇 분 동안 아무 소리가 없어 멈춘 것처럼 보이고, 화면에만 내면 스펙별
+	// 결과를 읽을 수 없다. 둘 다 필요하다.
+	const groupLog = join(
+		tmpdir(),
+		`naia-regression-${process.pid}-${conf.replace(/[^\w.-]/g, "_")}.log`,
+	);
+	const command = [
+		"pnpm",
+		"-C",
+		"packages/shell",
+		"exec",
+		"wdio",
+		"run",
+		`e2e-tauri/${conf}`,
+		...specArgs,
+	]
+		.map((part) => `'${part.replace(/'/g, "'\\''")}'`)
+		.join(" ");
+
 	let ok = true;
 	try {
-		output = execFileSync(
-			"pnpm",
+		// `set -o pipefail` 이 없으면 파이프라인의 종료 코드는 마지막 명령
+		// (tee)의 것이라 언제나 0 이다. 그러면 wdio 가 실패해도 통과로 읽는다.
+		execFileSync(
+			"sh",
 			[
-				"-C",
-				"packages/shell",
-				"exec",
-				"wdio",
-				"run",
-				`e2e-tauri/${conf}`,
-				...specArgs,
+				"-c",
+				`set -o pipefail; ${command} 2>&1 | tee ${JSON.stringify(groupLog)}`,
 			],
-			{ encoding: "utf8", stdio: ["inherit", "pipe", "pipe"], maxBuffer: 256 * 1024 * 1024 },
+			{ stdio: "inherit" },
 		);
 	} catch (error) {
 		ok = false;
-		output = `${error?.stdout ?? ""}${error?.stderr ?? ""}`;
 		status = "failed";
 		const message = String(error?.message ?? error).slice(0, 200);
 		detail = detail ? `${detail}; ${conf}: ${message}` : `${conf}: ${message}`;
 	}
-	// 사람이 볼 수 있게 그대로 흘린다. 캡처만 하고 삼키면 무엇이 왜 깨졌는지
-	// 로그에서 사라진다.
-	process.stdout.write(output);
+	const output = existsSync(groupLog) ? readFileSync(groupLog, "utf8") : "";
 
 	const outcome = parseSpecOutcomes(output);
 	// 묶음이 통과하면 맡은 것을 다 돈 것이다. 실패했으면 리포터가 통과라고
