@@ -5,7 +5,7 @@ name: self-trust gates
 on:
   pull_request:
   push:
-    branches: [main]
+    branches: [main, ci/notify-probe] # ci/notify-probe: 알림 잡 실증용 임시(브랜치와 함께 폐기)
 
 jobs:
   verify:
@@ -182,3 +182,71 @@ jobs:
           NAIA_AGENT_SCRIPT="$(cd .. && pwd)/naia-agent/scripts/builds/agent-stdio-entry.mjs" \
           NAIA_AGENT_PROTO_DIR="$(cd .. && pwd)/naia-agent/src/main/adapters/grpc" \
             cargo test --manifest-path packages/shell/src-tauri/Cargo.toml --lib
+
+  # 이 워크플로가 붉어도 아무도 몰랐다 — 2026-08-16 이후 20일간 초록이 한 번도 없었고
+  # (최근 250회 중 222회 실패) 실패를 사람에게 알리는 단계가 어느 워크플로에도 없었다(#560).
+  # 잡 단계 안의 `if: failure()` 는 그 잡 자신의 앞 단계만 본다. 두 잡의 결론을 함께 보려면
+  # 두 잡을 needs 로 받는 별도 잡이어야 한다.
+  notify-failure:
+    needs: [verify, code-gates]
+    if: always() && (needs.verify.result == 'failure' || needs.code-gates.result == 'failure')
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read # 직전 실행 결론 조회(gh run list)
+      contents: read
+    steps:
+      # 시크릿이 없으면 조용히 끝낸다. 알림 잡이 붉어지면 원래 실패를 가린다.
+      - name: QA 채널 실패 알림 (Discord)
+        env:
+          WEBHOOK: ${{ secrets.QA_DISCORD_WEBHOOK }}
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          VERIFY_RESULT: ${{ needs.verify.result }}
+          CODE_GATES_RESULT: ${{ needs.code-gates.result }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          BRANCH: ${{ github.ref_name }}
+          SHA: ${{ github.sha }}
+        run: |
+          set -uo pipefail
+
+          failed=""
+          if [ "$VERIFY_RESULT" = "failure" ]; then failed="verify"; fi
+          if [ "$CODE_GATES_RESULT" = "failure" ]; then failed="${failed:+$failed, }code-gates"; fi
+          short="$(printf '%.7s' "$SHA")"
+
+          # 연속 붉음 — 같은 문장이 매 커밋 반복되면 곧 무시된다. 직전 실행 결론을 하나 읽어 덧붙인다.
+          streak=""
+          prev=""
+          if prev_json="$(gh run list --workflow self-trust-gates.yml --branch "$BRANCH" \
+                --limit 20 --json databaseId,conclusion,status 2>/dev/null)"; then
+            prev="$(printf '%s' "$prev_json" | jq -r --arg id "$GITHUB_RUN_ID" \
+              '[ .[] | select(.status == "completed") | select((.databaseId | tostring) != $id) ][0].conclusion // ""')"
+          fi
+          case "$prev" in
+            failure | timed_out) streak=" / 직전 실행도 실패(연속 붉음)" ;;
+            success) streak=" / 직전 실행은 성공" ;;
+            *) streak="" ;;
+          esac
+
+          msg="[CI self-trust-gates] 실패 — ${failed} 잡 / 브랜치 ${BRANCH} / 커밋 ${short}${streak} / ${RUN_URL}"
+          # 한 줄·앞뒤 공백 없음·Discord 2000자 한도 이내로 고정한다.
+          msg="$(printf '%s' "$msg" | tr '\n\r\t' '   ' | sed -e 's/  */ /g' -e 's/^ *//' -e 's/ *$//')"
+          # 바이트로 자르므로 한글이 중간에서 끊길 수 있다 — iconv -c 로 깨진 꼬리를 떨군다.
+          msg="$(printf '%s' "$msg" | head -c 1900 | iconv -c -f UTF-8 -t UTF-8)"
+
+          if [ -z "${WEBHOOK}" ]; then
+            echo "webhook 미설정 — 알림을 보내지 못했다 (저장소 시크릿 QA_DISCORD_WEBHOOK 이 비어 있음)."
+            echo "보내려던 내용: ${msg}"
+            exit 0
+          fi
+
+          payload="$(jq -nc --arg c "$msg" '{content: $c, allowed_mentions: {parse: []}}')"
+          code="$(curl -sS -o /tmp/discord-response.json -w '%{http_code}' \
+            -X POST -H 'Content-Type: application/json' -d "$payload" "$WEBHOOK")"
+          echo "Discord 응답 코드: ${code}"
+          if [ "$code" != "204" ] && [ "$code" != "200" ]; then
+            echo "알림 전송 실패 — 그래도 이 잡은 실패로 두지 않는다(원래 CI 실패를 가리지 않기 위해)."
+            head -c 500 /tmp/discord-response.json || true
+            echo
+          fi
+          exit 0
