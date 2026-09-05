@@ -1,9 +1,9 @@
 {
 	"generatedFrom": "packages/shell/e2e-tauri/specs",
-	"total": 123,
+	"total": 121,
 	"summary": {
 		"credentialed_live": 90,
-		"deterministic_ci": 25,
+		"deterministic_ci": 23,
 		"native_local": 8
 	},
 	"specs": [
@@ -1206,14 +1206,6 @@
 			"tier": "native_local"
 		},
 		{
-			"spec": "97-course-worker-guidance.spec.ts",
-			"conf": [
-				"wdio.conf.codex.ts"
-			],
-			"env": [],
-			"tier": "deterministic_ci"
-		},
-		{
 			"spec": "97-launch-f1-naia-login.spec.ts",
 			"conf": [],
 			"env": [
@@ -1280,12 +1272,6 @@
 			"conf": [],
 			"env": [],
 			"tier": "native_local"
-		},
-		{
-			"spec": "99-vllm-omni-voice.spec.ts",
-			"conf": [],
-			"env": [],
-			"tier": "deterministic_ci"
 		},
 		{
 			"spec": "99-voice-connect.spec.ts",
