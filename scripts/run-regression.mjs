@@ -435,6 +435,7 @@ function parseSpecOutcomes(output) {
 const COOLDOWN_MS = 6_000;
 
 let first = true;
+let groupIndex = 0;
 for (const [conf, specs] of groups) {
 	if (!first) {
 		console.log(`[regression] 앞 묶음의 재시작 억제가 풀리기를 기다린다 (${COOLDOWN_MS}ms)`);
@@ -446,8 +447,14 @@ for (const [conf, specs] of groups) {
 		);
 	}
 	first = false;
+	groupIndex += 1;
 
 	const specArgs = specs.flatMap((spec) => ["--spec", `e2e-tauri/specs/${spec}`]);
+	// 묶음마다 다른 드라이버 포트를 준다. 전용 설정 여럿이 같은 포트(4450)를
+	// 기본값으로 쓰기 때문에, 연달아 돌리면 앞 실행의 드라이버가 아직 그
+	// 포트를 잡고 있어 세션 생성이 실패한다 — 실제로 전용 설정 셋이
+	// `UND_ERR_INVALID_ARG` 로 죽었다. 그 실패는 회귀가 아니라 자리 다툼이다.
+	const groupPort = 4450 + groupIndex * 4;
 	console.log(`[regression] ${conf} — 스펙 ${specs.length}개`);
 	// 출력을 화면에 그대로 내면서 동시에 모은다. 십몇 분 도는 동안 아무
 	// 소리가 없으면 사람이 멈춘 줄 알고 취소한다. 예전에는 `sh -c "... | tee"`
@@ -469,6 +476,7 @@ for (const [conf, specs] of groups) {
 			encoding: "utf8",
 			stdio: ["inherit", "pipe", "pipe"],
 			maxBuffer: 512 * 1024 * 1024,
+			env: { ...process.env, NAIA_E2E_WEBDRIVER_PORT: String(groupPort) },
 			// 윈도우에서 pnpm 은 pnpm.cmd 다. Node 는 .cmd/.bat 를 shell 없이 spawn
 			// 하면 EINVAL 로 죽어(스폰 자체 실패) wdio 가 한 번도 뜨지 않는다.
 			// build-e2e-tauri.mjs 도 같은 이유로 win32 에서 shell 을 켠다.
