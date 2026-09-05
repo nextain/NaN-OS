@@ -26,6 +26,7 @@ import {
 	writeFileSync,
 } from "node:fs";
 import { delimiter, join, resolve } from "node:path";
+import { e2eBinaryPath } from "../packages/shell/scripts/agent-pairing.mjs";
 
 const args = process.argv.slice(2);
 const value = (name) => args.find((a) => a.startsWith(`--${name}=`))?.split("=")[1];
@@ -196,12 +197,15 @@ function missingPrerequisites() {
 	if (!has("WebKitWebDriver") && process.platform === "linux")
 		missing.push("WebKitWebDriver (리눅스 웹뷰 드라이버)");
 	if (!has("tauri-driver")) missing.push("tauri-driver");
-	const binary =
-		process.platform === "win32"
-			? "packages/shell/src-tauri/target-e2e/debug/naia-shell.exe"
-			: "packages/shell/src-tauri/target-e2e/debug/naia-shell";
+	// 자리 계산은 agent-pairing 이 하나로 갖는다. 여기에 다시 적으면 빌드가
+	// 두는 자리와 갈라진다 — 실제로 그랬다. Windows 빌드는 MSVC 경로 길이
+	// 때문에 `C:/tmp/...` 에 짓는데 러너는 리눅스 자리만 보고 있었고, 그래서
+	// 그 기계는 빌드에 성공하고도 "바이너리 없음" 으로 거부당했다.
+	const binary = e2eBinaryPath(resolve("packages/shell"));
 	if (!existsSync(binary))
-		missing.push("빌드된 e2e 바이너리 (pnpm -C packages/shell run build:e2e:tauri)");
+		missing.push(
+			`빌드된 e2e 바이너리 — ${binary} (pnpm -C packages/shell run build:e2e:tauri)`,
+		);
 	// 게이트웨이(:18789)는 그것을 쓰는 스펙이 배정됐을 때만 전제다. 실측에서
 	// 전체 전제로 두었다가 진단을 그르쳤다 — 서른한 개 실패의 실제 사유는
 	// 게이트웨이가 아니라 WebDriver 세션이 중간에 끊긴 것이었다

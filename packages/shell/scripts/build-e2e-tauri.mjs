@@ -17,6 +17,7 @@ import {
 	REQUIRED_AGENT_COMMIT,
 	REQUIRED_PROTO_SHA256,
 	resolvePairedAgent,
+	e2eTargetDir,
 } from "./agent-pairing.mjs";
 
 const shellDir = resolve(import.meta.dirname, "..");
@@ -25,12 +26,9 @@ const manifestPath = resolve(shellDir, "src-tauri", "Cargo.toml");
 // MSVC's FileTracker and CMake scratch projects still fail at ordinary
 // worktree depths. Keep the *test-only* target short on Windows; callers may
 // override it, and production/development targets are never reused.
-const targetDir = resolve(
-	process.env.NAIA_E2E_TARGET_DIR ??
-		(process.platform === "win32"
-			? `C:/tmp/naia-shell-e2e-${REQUIRED_AGENT_COMMIT.slice(0, 7)}`
-			: resolve(shellDir, "src-tauri", "target-e2e")),
-);
+// 자리 계산은 agent-pairing 이 하나로 갖는다. 여기에 다시 적으면 러너의
+// 전제 검사와 갈라지고, 실제로 그 탓에 Windows 가 회귀를 못 남겼다.
+const targetDir = e2eTargetDir(shellDir);
 /**
  * 지난 페어링 커밋의 e2e 타깃을 지운다 (#522).
  *

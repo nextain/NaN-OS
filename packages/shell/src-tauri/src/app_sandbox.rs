@@ -25,6 +25,32 @@ fn root(adk_path: &str, app_id: &str) -> Result<PathBuf, String> {
     Ok(root)
 }
 
+/// 파일시스템을 만지지 않고 경로가 뿌리 안인지 본다.
+///
+/// `canonicalize` 는 존재하는 경로에만 쓸 수 있어서, 만들기 전에는 쓸 수 없다.
+/// 그래서 논리적으로 먼저 본다 — `..` 를 걷어 낸 결과가 뿌리 밖이면 그 자리는
+/// 만들지도 않는다.
+fn lexically_inside(root: &Path, candidate: &Path) -> bool {
+    let mut depth: i32 = 0;
+    let Ok(tail) = candidate.strip_prefix(root) else {
+        return false;
+    };
+    for part in tail.components() {
+        match part {
+            Component::Normal(_) => depth += 1,
+            Component::CurDir => {}
+            Component::ParentDir => {
+                depth -= 1;
+                if depth < 0 {
+                    return false;
+                }
+            }
+            _ => return false,
+        }
+    }
+    true
+}
+
 fn file(root: &Path, relative_path: &str) -> Result<PathBuf, String> {
     let relative = Path::new(relative_path);
     if relative_path.is_empty() || relative.is_absolute() || relative.components().any(|part| !matches!(part, Component::Normal(_))) {
@@ -32,7 +58,15 @@ fn file(root: &Path, relative_path: &str) -> Result<PathBuf, String> {
     }
     let output = root.join(relative);
     let parent = output.parent().ok_or("sandbox path has no parent")?;
+    // 만들기 **전에** 자리를 확인한다. 예전에는 create_dir_all 이 봉인 검사보다
+    // 먼저 돌아서, 거부되기 전에 샌드박스 밖에 디렉터리가 실제로 만들어졌다.
+    // 반환값은 Err 였으므로 부르는 쪽은 막혔다고 믿지만 흔적은 남았다.
+    if !lexically_inside(root, parent) {
+        return Err("sandbox path escape rejected".into());
+    }
     std::fs::create_dir_all(parent).map_err(|error| error.to_string())?;
+    // 만든 뒤 다시 본다. 중간에 symlink 가 끼어 있으면 논리적 검사만으로는
+    // 잡히지 않는다.
     if !parent.canonicalize().map_err(|error| error.to_string())?.starts_with(root) {
         return Err("sandbox path escape rejected".into());
     }
@@ -165,6 +199,41 @@ mod app_sandbox_escape_tests {
         #[cfg(unix)]
         assert!(file(&r, "/etc/passwd").is_err(), "절대 경로");
     }
+
+    // 거부하는 것만으로는 부족하다. 거부되기 **전에** 무엇이 만들어졌는지도
+    // 봐야 한다. 예전에는 디렉터리를 먼저 만들고 나서 자리를 확인했기
+    // 때문에, 반환값은 Err 인데 샌드박스 밖에 디렉터리가 실제로 남았다.
+    // 앞의 테스트는 반환값만 보아 그 사실을 잡지 못했다 — 경로 가드를 통째로
+    // 지워도 여섯 테스트가 전부 초록이었다.
+    // 거부하는 것만으로는 부족하다. 거부되기 **전에** 무엇이 만들어졌는지도
+    // 봐야 한다. 예전에는 디렉터리를 먼저 만들고 나서 자리를 확인했기
+    // 때문에, 반환값은 Err 인데 샌드박스 밖에 디렉터리가 실제로 남았다.
+    // 앞의 테스트는 반환값만 보아 그 사실을 잡지 못했다.
+    //
+    // 한 단계만 나간다. 루트를 넘도록 올라가면 `/..` 가 `/` 로 접혀 검사하려던
+    // 자리와 실제로 만들어지는 자리가 달라진다 — 처음에 그 탓에 이 테스트가
+    // 아무것도 잡지 못했다.
+    #[test]
+    fn rejected_paths_leave_nothing_behind() {
+        let adk = adk();
+        let r = root(&adk, "sbx.escape.sideeffect").expect("root ok");
+        let outside = r
+            .parent()
+            .expect("root has a parent")
+            .join("naia-sandbox-escape-witness");
+        let _ = std::fs::remove_dir_all(&outside);
+
+        let outcome = file(&r, "../naia-sandbox-escape-witness/x.txt");
+        assert!(outcome.is_err(), "샌드박스 밖 경로는 거부해야 한다");
+        let left_behind = outside.exists();
+        let _ = std::fs::remove_dir_all(&outside);
+        assert!(
+            !left_behind,
+            "거부했지만 샌드박스 밖에 자리를 만들었다: {}",
+            outside.display()
+        );
+    }
+
 
     #[test]
     fn allows_nested_relative_path_inside_root() {

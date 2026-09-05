@@ -122,3 +122,31 @@ export function resolvePairedAgent(options = {}) {
 			(explicit ? ` under ${explicit}` : ` under ${worktreeRoots.join(", ")}`),
 	);
 }
+
+/**
+ * e2e 전용 빌드 산출 자리.
+ *
+ * 왜 여기에 두는가: 이 계산이 빌드 스크립트 안에만 있어서, 회귀 러너의 전제
+ * 검사는 리눅스 자리(`target-e2e`)를 하드코딩하고 있었다. 그래서 Windows 는
+ * 빌드에 성공하고도 러너가 "바이너리 없음" 으로 실행을 거부했다 — 그 기계가
+ * 회귀 기록을 한 번도 남기지 못한 진짜 원인이다. 자리를 계산하는 곳이 둘이면
+ * 반드시 갈라진다.
+ *
+ * MSVC 의 FileTracker 와 CMake 스크래치는 보통 워크트리 깊이에서도 실패한다.
+ * 그래서 Windows 에서만 짧은 자리를 쓰고, 부르는 쪽은 환경 변수로 바꿀 수 있다.
+ */
+export function e2eTargetDir(shellDir) {
+	if (process.env.NAIA_E2E_TARGET_DIR) return resolve(process.env.NAIA_E2E_TARGET_DIR);
+	return process.platform === "win32"
+		? resolve(`C:/tmp/naia-shell-e2e-${REQUIRED_AGENT_COMMIT.slice(0, 7)}`)
+		: resolve(shellDir, "src-tauri", "target-e2e");
+}
+
+/** 그 자리의 실행 파일. 확장자는 플랫폼이 정한다. */
+export function e2eBinaryPath(shellDir) {
+	return resolve(
+		e2eTargetDir(shellDir),
+		"debug",
+		process.platform === "win32" ? "naia-shell.exe" : "naia-shell",
+	);
+}
