@@ -1,0 +1,57 @@
+{
+	"machine": "win-rtx4060",
+	"tiers": [
+		"deterministic_ci",
+		"credentialed_live",
+		"native_local"
+	],
+	"started": "2026-09-05T18:06:58.467Z",
+	"finished": "2026-09-05T18:06:58.468Z",
+	"status": "prerequisites-missing",
+	"assigned": [],
+	"envMissingBeforeRun": {
+		"96-grok-readiness.spec.ts": [
+			"NAIA_E2E_MAIN_MODEL",
+			"NAIA_E2E_MAIN_PROVIDER"
+		],
+		"02-configure.spec.ts": [
+			"CAFE_GATEWAY_TOKEN"
+		],
+		"04-skill-time.spec.ts": [
+			"CAFE_GATEWAY_TOKEN"
+		],
+		"70-channel-sync-dm.spec.ts": [
+			"LAB_KEY",
+			"LAB_USER_ID"
+		],
+		"74-channel-sync-lifecycle.spec.ts": [
+			"LAB_KEY",
+			"LAB_USER_ID"
+		],
+		"80-tts-preview-all-providers.spec.ts": [
+			"ELEVENLABS_API_KEY"
+		],
+		"84-chat-tts-per-provider.spec.ts": [
+			"ELEVENLABS_API_KEY"
+		],
+		"89-llm-provider-switching.spec.ts": [
+			"XAI_API_KEY",
+			"ZHIPU_API_KEY"
+		],
+		"86-stt-tts-full-pipeline.spec.ts": [
+			"ELEVENLABS_API_KEY"
+		],
+		"94-nva-prebaked-shell.spec.ts": [
+			"NAIA_E2E_PREBAKED_NVA"
+		],
+		"95-voice-linux-shell.spec.ts": [
+			"NAIA_E2E_VOICE_6G",
+			"NAIA_E2E_VOICE_SCREENSHOT",
+			"NAIA_E2E_VOXCPM2_TEST_VOICE"
+		]
+	},
+	"missingPrerequisites": [
+		"codex 로그인 (codex login status 가 로그인을 보고하지 않는다 — codex 스펙이 모델에 닿지 못한다)"
+	],
+	"detail": "공통 전제가 없어 실행하지 않았다"
+}
