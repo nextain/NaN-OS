@@ -2,8 +2,8 @@
 	"generatedFrom": "packages/shell/e2e-tauri/specs",
 	"total": 129,
 	"summary": {
-		"credentialed_live": 23,
-		"deterministic_ci": 103,
+		"credentialed_live": 89,
+		"deterministic_ci": 37,
 		"native_local": 3
 	},
 	"specs": [
@@ -12,7 +12,9 @@
 			"conf": [],
 			"env": [
 				"CAFE_E2E_API_KEY",
-				"GEMINI_API_KEY"
+				"GEMINI_API_KEY",
+				"NAIA_API_KEY",
+				"NAIA_E2E_ADK_FIXTURE"
 			],
 			"tier": "credentialed_live"
 		},
@@ -23,51 +25,92 @@
 				"CAFE_E2E_API_KEY",
 				"CAFE_GATEWAY_TOKEN",
 				"GATEWAY_MASTER_KEY",
-				"GEMINI_API_KEY"
+				"GEMINI_API_KEY",
+				"NAIA_API_KEY",
+				"NAIA_E2E_ADK_FIXTURE"
 			],
 			"tier": "credentialed_live"
 		},
 		{
 			"spec": "03-basic-chat.spec.ts",
 			"conf": [],
-			"env": [],
-			"tier": "deterministic_ci"
+			"env": [
+				"CAFE_E2E_API_KEY",
+				"CAFE_E2E_JUDGE_MODEL",
+				"CAFE_E2E_JUDGE_TIMEOUT_MS",
+				"CAFE_E2E_SEMANTIC_LOG_DIR",
+				"GEMINI_API_KEY",
+				"NAIA_E2E_ARTIFACTS_DIR"
+			],
+			"tier": "credentialed_live"
 		},
 		{
 			"spec": "04-skill-time.spec.ts",
 			"conf": [],
 			"env": [
 				"CAFE_E2E_API_KEY",
+				"CAFE_E2E_JUDGE_MODEL",
+				"CAFE_E2E_JUDGE_TIMEOUT_MS",
+				"CAFE_E2E_SEMANTIC_LOG_DIR",
 				"CAFE_GATEWAY_TOKEN",
 				"GATEWAY_MASTER_KEY",
 				"GEMINI_API_KEY",
-				"NAIA_API_KEY"
+				"NAIA_API_KEY",
+				"NAIA_E2E_ADK_FIXTURE",
+				"NAIA_E2E_ARTIFACTS_DIR"
 			],
 			"tier": "credentialed_live"
 		},
 		{
 			"spec": "05-skill-system.spec.ts",
 			"conf": [],
-			"env": [],
-			"tier": "deterministic_ci"
+			"env": [
+				"CAFE_E2E_API_KEY",
+				"CAFE_E2E_JUDGE_MODEL",
+				"CAFE_E2E_JUDGE_TIMEOUT_MS",
+				"CAFE_E2E_SEMANTIC_LOG_DIR",
+				"GEMINI_API_KEY",
+				"NAIA_E2E_ARTIFACTS_DIR"
+			],
+			"tier": "credentialed_live"
 		},
 		{
 			"spec": "06-skill-memo.spec.ts",
 			"conf": [],
-			"env": [],
-			"tier": "deterministic_ci"
+			"env": [
+				"CAFE_E2E_API_KEY",
+				"CAFE_E2E_JUDGE_MODEL",
+				"CAFE_E2E_JUDGE_TIMEOUT_MS",
+				"CAFE_E2E_SEMANTIC_LOG_DIR",
+				"GEMINI_API_KEY",
+				"NAIA_API_KEY",
+				"NAIA_E2E_ADK_FIXTURE",
+				"NAIA_E2E_ARTIFACTS_DIR"
+			],
+			"tier": "credentialed_live"
 		},
 		{
 			"spec": "07-cleanup.spec.ts",
 			"conf": [],
-			"env": [],
+			"env": [
+				"NAIA_E2E_ARTIFACTS_DIR"
+			],
 			"tier": "deterministic_ci"
 		},
 		{
 			"spec": "08-memory.spec.ts",
 			"conf": [],
-			"env": [],
-			"tier": "deterministic_ci"
+			"env": [
+				"CAFE_E2E_API_KEY",
+				"CAFE_E2E_JUDGE_MODEL",
+				"CAFE_E2E_JUDGE_TIMEOUT_MS",
+				"CAFE_E2E_SEMANTIC_LOG_DIR",
+				"GEMINI_API_KEY",
+				"NAIA_API_KEY",
+				"NAIA_E2E_ADK_FIXTURE",
+				"NAIA_E2E_ARTIFACTS_DIR"
+			],
+			"tier": "credentialed_live"
 		},
 		{
 			"spec": "09-onboarding.spec.ts",
@@ -75,15 +118,26 @@
 			"env": [
 				"CAFE_E2E_API_KEY",
 				"CAFE_GATEWAY_TOKEN",
-				"GEMINI_API_KEY"
+				"GEMINI_API_KEY",
+				"NAIA_API_KEY",
+				"NAIA_E2E_ADK_FIXTURE"
 			],
 			"tier": "credentialed_live"
 		},
 		{
 			"spec": "10-history-tab.spec.ts",
 			"conf": [],
-			"env": [],
-			"tier": "deterministic_ci"
+			"env": [
+				"CAFE_E2E_API_KEY",
+				"CAFE_E2E_JUDGE_MODEL",
+				"CAFE_E2E_JUDGE_TIMEOUT_MS",
+				"CAFE_E2E_SEMANTIC_LOG_DIR",
+				"GEMINI_API_KEY",
+				"NAIA_API_KEY",
+				"NAIA_E2E_ADK_FIXTURE",
+				"NAIA_E2E_ARTIFACTS_DIR"
+			],
+			"tier": "credentialed_live"
 		},
 		{
 			"spec": "100-herdr-first-frame.spec.ts",
@@ -94,14 +148,30 @@
 		{
 			"spec": "11-cost-dashboard.spec.ts",
 			"conf": [],
-			"env": [],
-			"tier": "deterministic_ci"
+			"env": [
+				"CAFE_E2E_API_KEY",
+				"CAFE_E2E_JUDGE_MODEL",
+				"CAFE_E2E_JUDGE_TIMEOUT_MS",
+				"CAFE_E2E_SEMANTIC_LOG_DIR",
+				"GEMINI_API_KEY",
+				"NAIA_E2E_ARTIFACTS_DIR"
+			],
+			"tier": "credentialed_live"
 		},
 		{
 			"spec": "12-skills-gateway.spec.ts",
 			"conf": [],
-			"env": [],
-			"tier": "deterministic_ci"
+			"env": [
+				"CAFE_E2E_API_KEY",
+				"CAFE_E2E_JUDGE_MODEL",
+				"CAFE_E2E_JUDGE_TIMEOUT_MS",
+				"CAFE_E2E_SEMANTIC_LOG_DIR",
+				"GEMINI_API_KEY",
+				"NAIA_API_KEY",
+				"NAIA_E2E_ADK_FIXTURE",
+				"NAIA_E2E_ARTIFACTS_DIR"
+			],
+			"tier": "credentialed_live"
 		},
 		{
 			"spec": "13-lab-login.spec.ts",
@@ -109,7 +179,9 @@
 			"env": [
 				"CAFE_E2E_API_KEY",
 				"CAFE_GATEWAY_TOKEN",
-				"GEMINI_API_KEY"
+				"GEMINI_API_KEY",
+				"NAIA_API_KEY",
+				"NAIA_E2E_ADK_FIXTURE"
 			],
 			"tier": "credentialed_live"
 		},
@@ -122,50 +194,114 @@
 		{
 			"spec": "14-skills-tab.spec.ts",
 			"conf": [],
-			"env": [],
-			"tier": "deterministic_ci"
+			"env": [
+				"CAFE_E2E_API_KEY",
+				"GEMINI_API_KEY",
+				"NAIA_API_KEY",
+				"NAIA_E2E_ADK_FIXTURE"
+			],
+			"tier": "credentialed_live"
 		},
 		{
 			"spec": "15-skill-manager-ai.spec.ts",
 			"conf": [],
-			"env": [],
-			"tier": "deterministic_ci"
+			"env": [
+				"CAFE_E2E_API_KEY",
+				"CAFE_E2E_JUDGE_MODEL",
+				"CAFE_E2E_JUDGE_TIMEOUT_MS",
+				"CAFE_E2E_SEMANTIC_LOG_DIR",
+				"GEMINI_API_KEY",
+				"NAIA_API_KEY",
+				"NAIA_E2E_ADK_FIXTURE",
+				"NAIA_E2E_ARTIFACTS_DIR"
+			],
+			"tier": "credentialed_live"
 		},
 		{
 			"spec": "16-skill-weather.spec.ts",
 			"conf": [],
-			"env": [],
-			"tier": "deterministic_ci"
+			"env": [
+				"CAFE_E2E_API_KEY",
+				"CAFE_E2E_JUDGE_MODEL",
+				"CAFE_E2E_JUDGE_TIMEOUT_MS",
+				"CAFE_E2E_SEMANTIC_LOG_DIR",
+				"GEMINI_API_KEY",
+				"NAIA_API_KEY",
+				"NAIA_E2E_ADK_FIXTURE",
+				"NAIA_E2E_ARTIFACTS_DIR"
+			],
+			"tier": "credentialed_live"
 		},
 		{
 			"spec": "17-skill-notify.spec.ts",
 			"conf": [],
-			"env": [],
-			"tier": "deterministic_ci"
+			"env": [
+				"CAFE_E2E_API_KEY",
+				"CAFE_E2E_JUDGE_MODEL",
+				"CAFE_E2E_JUDGE_TIMEOUT_MS",
+				"CAFE_E2E_SEMANTIC_LOG_DIR",
+				"GEMINI_API_KEY",
+				"NAIA_API_KEY",
+				"NAIA_E2E_ADK_FIXTURE",
+				"NAIA_E2E_ARTIFACTS_DIR"
+			],
+			"tier": "credentialed_live"
 		},
 		{
 			"spec": "18-provider-tool-calling.spec.ts",
 			"conf": [],
-			"env": [],
-			"tier": "deterministic_ci"
+			"env": [
+				"CAFE_E2E_API_KEY",
+				"CAFE_E2E_JUDGE_MODEL",
+				"CAFE_E2E_JUDGE_TIMEOUT_MS",
+				"CAFE_E2E_SEMANTIC_LOG_DIR",
+				"GEMINI_API_KEY",
+				"NAIA_API_KEY",
+				"NAIA_E2E_ADK_FIXTURE",
+				"NAIA_E2E_ARTIFACTS_DIR"
+			],
+			"tier": "credentialed_live"
 		},
 		{
 			"spec": "19-skills-bulk.spec.ts",
 			"conf": [],
-			"env": [],
-			"tier": "deterministic_ci"
+			"env": [
+				"CAFE_E2E_API_KEY",
+				"GEMINI_API_KEY",
+				"NAIA_API_KEY",
+				"NAIA_E2E_ADK_FIXTURE"
+			],
+			"tier": "credentialed_live"
 		},
 		{
 			"spec": "20-cron-basic.spec.ts",
 			"conf": [],
-			"env": [],
-			"tier": "deterministic_ci"
+			"env": [
+				"CAFE_E2E_API_KEY",
+				"CAFE_E2E_JUDGE_MODEL",
+				"CAFE_E2E_JUDGE_TIMEOUT_MS",
+				"CAFE_E2E_SEMANTIC_LOG_DIR",
+				"GEMINI_API_KEY",
+				"NAIA_API_KEY",
+				"NAIA_E2E_ADK_FIXTURE",
+				"NAIA_E2E_ARTIFACTS_DIR"
+			],
+			"tier": "credentialed_live"
 		},
 		{
 			"spec": "21-cron-recurring.spec.ts",
 			"conf": [],
-			"env": [],
-			"tier": "deterministic_ci"
+			"env": [
+				"CAFE_E2E_API_KEY",
+				"CAFE_E2E_JUDGE_MODEL",
+				"CAFE_E2E_JUDGE_TIMEOUT_MS",
+				"CAFE_E2E_SEMANTIC_LOG_DIR",
+				"GEMINI_API_KEY",
+				"NAIA_API_KEY",
+				"NAIA_E2E_ADK_FIXTURE",
+				"NAIA_E2E_ARTIFACTS_DIR"
+			],
+			"tier": "credentialed_live"
 		},
 		{
 			"spec": "22-channels-config.spec.ts",
@@ -185,7 +321,9 @@
 			"env": [
 				"CAFE_E2E_API_KEY",
 				"GEMINI_API_KEY",
-				"NAIA_E2E_ADK_BASE"
+				"NAIA_API_KEY",
+				"NAIA_E2E_ADK_BASE",
+				"NAIA_E2E_ADK_FIXTURE"
 			],
 			"tier": "credentialed_live"
 		},
@@ -216,20 +354,43 @@
 		{
 			"spec": "28-skills-install.spec.ts",
 			"conf": [],
-			"env": [],
-			"tier": "deterministic_ci"
+			"env": [
+				"CAFE_E2E_API_KEY",
+				"GEMINI_API_KEY",
+				"NAIA_API_KEY",
+				"NAIA_E2E_ADK_FIXTURE"
+			],
+			"tier": "credentialed_live"
 		},
 		{
 			"spec": "29-cron-gateway.spec.ts",
 			"conf": [],
-			"env": [],
-			"tier": "deterministic_ci"
+			"env": [
+				"CAFE_E2E_API_KEY",
+				"CAFE_E2E_JUDGE_MODEL",
+				"CAFE_E2E_JUDGE_TIMEOUT_MS",
+				"CAFE_E2E_SEMANTIC_LOG_DIR",
+				"GEMINI_API_KEY",
+				"NAIA_API_KEY",
+				"NAIA_E2E_ADK_FIXTURE",
+				"NAIA_E2E_ARTIFACTS_DIR"
+			],
+			"tier": "credentialed_live"
 		},
 		{
 			"spec": "30-exec-approvals.spec.ts",
 			"conf": [],
-			"env": [],
-			"tier": "deterministic_ci"
+			"env": [
+				"CAFE_E2E_API_KEY",
+				"CAFE_E2E_JUDGE_MODEL",
+				"CAFE_E2E_JUDGE_TIMEOUT_MS",
+				"CAFE_E2E_SEMANTIC_LOG_DIR",
+				"GEMINI_API_KEY",
+				"NAIA_API_KEY",
+				"NAIA_E2E_ADK_FIXTURE",
+				"NAIA_E2E_ARTIFACTS_DIR"
+			],
+			"tier": "credentialed_live"
 		},
 		{
 			"spec": "31-diagnostics.spec.ts",
@@ -252,8 +413,13 @@
 		{
 			"spec": "34-device-pairing.spec.ts",
 			"conf": [],
-			"env": [],
-			"tier": "deterministic_ci"
+			"env": [
+				"CAFE_E2E_API_KEY",
+				"GEMINI_API_KEY",
+				"NAIA_API_KEY",
+				"NAIA_E2E_ADK_FIXTURE"
+			],
+			"tier": "credentialed_live"
 		},
 		{
 			"spec": "35-onboarding-extended.spec.ts",
@@ -264,197 +430,421 @@
 		{
 			"spec": "36-memory-semantic.spec.ts",
 			"conf": [],
-			"env": [],
-			"tier": "deterministic_ci"
+			"env": [
+				"CAFE_E2E_API_KEY",
+				"CAFE_E2E_JUDGE_MODEL",
+				"CAFE_E2E_JUDGE_TIMEOUT_MS",
+				"CAFE_E2E_SEMANTIC_LOG_DIR",
+				"GEMINI_API_KEY",
+				"NAIA_E2E_ARTIFACTS_DIR"
+			],
+			"tier": "credentialed_live"
 		},
 		{
 			"spec": "37-execute-command.spec.ts",
 			"conf": [],
-			"env": [],
-			"tier": "deterministic_ci"
+			"env": [
+				"CAFE_E2E_API_KEY",
+				"CAFE_E2E_JUDGE_MODEL",
+				"CAFE_E2E_JUDGE_TIMEOUT_MS",
+				"CAFE_E2E_SEMANTIC_LOG_DIR",
+				"GEMINI_API_KEY",
+				"NAIA_API_KEY",
+				"NAIA_E2E_ADK_FIXTURE",
+				"NAIA_E2E_ARTIFACTS_DIR"
+			],
+			"tier": "credentialed_live"
 		},
 		{
 			"spec": "38-file-operations.spec.ts",
 			"conf": [],
-			"env": [],
-			"tier": "deterministic_ci"
+			"env": [
+				"CAFE_E2E_API_KEY",
+				"CAFE_E2E_JUDGE_MODEL",
+				"CAFE_E2E_JUDGE_TIMEOUT_MS",
+				"CAFE_E2E_SEMANTIC_LOG_DIR",
+				"GEMINI_API_KEY",
+				"NAIA_API_KEY",
+				"NAIA_E2E_ADK_FIXTURE",
+				"NAIA_E2E_ARTIFACTS_DIR"
+			],
+			"tier": "credentialed_live"
 		},
 		{
 			"spec": "39-web-tools.spec.ts",
 			"conf": [],
-			"env": [],
-			"tier": "deterministic_ci"
+			"env": [
+				"CAFE_E2E_API_KEY",
+				"CAFE_E2E_JUDGE_MODEL",
+				"CAFE_E2E_JUDGE_TIMEOUT_MS",
+				"CAFE_E2E_SEMANTIC_LOG_DIR",
+				"GEMINI_API_KEY",
+				"NAIA_API_KEY",
+				"NAIA_E2E_ADK_FIXTURE",
+				"NAIA_E2E_ARTIFACTS_DIR"
+			],
+			"tier": "credentialed_live"
 		},
 		{
 			"spec": "40-sessions-spawn.spec.ts",
 			"conf": [],
-			"env": [],
-			"tier": "deterministic_ci"
+			"env": [
+				"CAFE_E2E_API_KEY",
+				"CAFE_E2E_JUDGE_MODEL",
+				"CAFE_E2E_JUDGE_TIMEOUT_MS",
+				"CAFE_E2E_SEMANTIC_LOG_DIR",
+				"GEMINI_API_KEY",
+				"NAIA_API_KEY",
+				"NAIA_E2E_ADK_FIXTURE",
+				"NAIA_E2E_ARTIFACTS_DIR"
+			],
+			"tier": "credentialed_live"
 		},
 		{
 			"spec": "41-agents-crud.spec.ts",
 			"conf": [],
-			"env": [],
-			"tier": "deterministic_ci"
+			"env": [
+				"CAFE_E2E_API_KEY",
+				"CAFE_E2E_JUDGE_MODEL",
+				"CAFE_E2E_JUDGE_TIMEOUT_MS",
+				"CAFE_E2E_SEMANTIC_LOG_DIR",
+				"GEMINI_API_KEY",
+				"NAIA_API_KEY",
+				"NAIA_E2E_ADK_FIXTURE",
+				"NAIA_E2E_ARTIFACTS_DIR"
+			],
+			"tier": "credentialed_live"
 		},
 		{
 			"spec": "42-sessions-crud.spec.ts",
 			"conf": [],
-			"env": [],
-			"tier": "deterministic_ci"
+			"env": [
+				"CAFE_E2E_API_KEY",
+				"CAFE_E2E_JUDGE_MODEL",
+				"CAFE_E2E_JUDGE_TIMEOUT_MS",
+				"CAFE_E2E_SEMANTIC_LOG_DIR",
+				"GEMINI_API_KEY",
+				"NAIA_API_KEY",
+				"NAIA_E2E_ADK_FIXTURE",
+				"NAIA_E2E_ARTIFACTS_DIR"
+			],
+			"tier": "credentialed_live"
 		},
 		{
 			"spec": "43-device-management.spec.ts",
 			"conf": [],
-			"env": [],
-			"tier": "deterministic_ci"
+			"env": [
+				"CAFE_E2E_API_KEY",
+				"CAFE_E2E_JUDGE_MODEL",
+				"CAFE_E2E_JUDGE_TIMEOUT_MS",
+				"CAFE_E2E_SEMANTIC_LOG_DIR",
+				"GEMINI_API_KEY",
+				"NAIA_API_KEY",
+				"NAIA_E2E_ADK_FIXTURE",
+				"NAIA_E2E_ARTIFACTS_DIR"
+			],
+			"tier": "credentialed_live"
 		},
 		{
 			"spec": "44-diagnostics-full.spec.ts",
 			"conf": [],
-			"env": [],
-			"tier": "deterministic_ci"
+			"env": [
+				"CAFE_E2E_API_KEY",
+				"CAFE_E2E_JUDGE_MODEL",
+				"CAFE_E2E_JUDGE_TIMEOUT_MS",
+				"CAFE_E2E_SEMANTIC_LOG_DIR",
+				"GEMINI_API_KEY",
+				"NAIA_API_KEY",
+				"NAIA_E2E_ADK_FIXTURE",
+				"NAIA_E2E_ARTIFACTS_DIR"
+			],
+			"tier": "credentialed_live"
 		},
 		{
 			"spec": "45-cron-gateway-full.spec.ts",
 			"conf": [],
-			"env": [],
-			"tier": "deterministic_ci"
+			"env": [
+				"CAFE_E2E_API_KEY",
+				"CAFE_E2E_JUDGE_MODEL",
+				"CAFE_E2E_JUDGE_TIMEOUT_MS",
+				"CAFE_E2E_SEMANTIC_LOG_DIR",
+				"GEMINI_API_KEY",
+				"NAIA_API_KEY",
+				"NAIA_E2E_ADK_FIXTURE",
+				"NAIA_E2E_ARTIFACTS_DIR"
+			],
+			"tier": "credentialed_live"
 		},
 		{
 			"spec": "46-channels-operations.spec.ts",
 			"conf": [],
-			"env": [],
-			"tier": "deterministic_ci"
+			"env": [
+				"CAFE_E2E_API_KEY",
+				"CAFE_E2E_JUDGE_MODEL",
+				"CAFE_E2E_JUDGE_TIMEOUT_MS",
+				"CAFE_E2E_SEMANTIC_LOG_DIR",
+				"GEMINI_API_KEY",
+				"NAIA_API_KEY",
+				"NAIA_E2E_ADK_FIXTURE",
+				"NAIA_E2E_ARTIFACTS_DIR"
+			],
+			"tier": "credentialed_live"
 		},
 		{
 			"spec": "47-tts-full.spec.ts",
 			"conf": [],
-			"env": [],
-			"tier": "deterministic_ci"
+			"env": [
+				"CAFE_E2E_API_KEY",
+				"CAFE_E2E_JUDGE_MODEL",
+				"CAFE_E2E_JUDGE_TIMEOUT_MS",
+				"CAFE_E2E_SEMANTIC_LOG_DIR",
+				"GEMINI_API_KEY",
+				"NAIA_API_KEY",
+				"NAIA_E2E_ADK_FIXTURE",
+				"NAIA_E2E_ARTIFACTS_DIR"
+			],
+			"tier": "credentialed_live"
 		},
 		{
 			"spec": "48-voicewake-set.spec.ts",
 			"conf": [],
-			"env": [],
-			"tier": "deterministic_ci"
+			"env": [
+				"CAFE_E2E_API_KEY",
+				"CAFE_E2E_JUDGE_MODEL",
+				"CAFE_E2E_JUDGE_TIMEOUT_MS",
+				"CAFE_E2E_SEMANTIC_LOG_DIR",
+				"GEMINI_API_KEY",
+				"NAIA_API_KEY",
+				"NAIA_E2E_ADK_FIXTURE",
+				"NAIA_E2E_ARTIFACTS_DIR"
+			],
+			"tier": "credentialed_live"
 		},
 		{
 			"spec": "49-approvals-full.spec.ts",
 			"conf": [],
-			"env": [],
-			"tier": "deterministic_ci"
+			"env": [
+				"CAFE_E2E_API_KEY",
+				"CAFE_E2E_JUDGE_MODEL",
+				"CAFE_E2E_JUDGE_TIMEOUT_MS",
+				"CAFE_E2E_SEMANTIC_LOG_DIR",
+				"GEMINI_API_KEY",
+				"NAIA_API_KEY",
+				"NAIA_E2E_ADK_FIXTURE",
+				"NAIA_E2E_ARTIFACTS_DIR"
+			],
+			"tier": "credentialed_live"
 		},
 		{
 			"spec": "50-config-management.spec.ts",
 			"conf": [],
-			"env": [],
-			"tier": "deterministic_ci"
+			"env": [
+				"CAFE_E2E_API_KEY",
+				"CAFE_E2E_JUDGE_MODEL",
+				"CAFE_E2E_JUDGE_TIMEOUT_MS",
+				"CAFE_E2E_SEMANTIC_LOG_DIR",
+				"GEMINI_API_KEY",
+				"NAIA_API_KEY",
+				"NAIA_E2E_ADK_FIXTURE",
+				"NAIA_E2E_ARTIFACTS_DIR"
+			],
+			"tier": "credentialed_live"
 		},
 		{
 			"spec": "51-skills-advanced.spec.ts",
 			"conf": [],
-			"env": [],
-			"tier": "deterministic_ci"
+			"env": [
+				"CAFE_E2E_API_KEY",
+				"CAFE_E2E_JUDGE_MODEL",
+				"CAFE_E2E_JUDGE_TIMEOUT_MS",
+				"CAFE_E2E_SEMANTIC_LOG_DIR",
+				"GEMINI_API_KEY",
+				"NAIA_API_KEY",
+				"NAIA_E2E_ADK_FIXTURE",
+				"NAIA_E2E_ARTIFACTS_DIR"
+			],
+			"tier": "credentialed_live"
 		},
 		{
 			"spec": "52-wizard-rpc.spec.ts",
 			"conf": [],
-			"env": [],
-			"tier": "deterministic_ci"
+			"env": [
+				"CAFE_E2E_API_KEY",
+				"CAFE_E2E_JUDGE_MODEL",
+				"CAFE_E2E_JUDGE_TIMEOUT_MS",
+				"CAFE_E2E_SEMANTIC_LOG_DIR",
+				"GEMINI_API_KEY",
+				"NAIA_API_KEY",
+				"NAIA_E2E_ADK_FIXTURE",
+				"NAIA_E2E_ARTIFACTS_DIR"
+			],
+			"tier": "credentialed_live"
 		},
 		{
 			"spec": "53-settings-theme.spec.ts",
 			"conf": [],
-			"env": [],
-			"tier": "deterministic_ci"
+			"env": [
+				"CAFE_E2E_API_KEY",
+				"GEMINI_API_KEY",
+				"NAIA_API_KEY",
+				"NAIA_E2E_ADK_FIXTURE"
+			],
+			"tier": "credentialed_live"
 		},
 		{
 			"spec": "54-settings-avatar-bg.spec.ts",
 			"conf": [],
-			"env": [],
-			"tier": "deterministic_ci"
+			"env": [
+				"CAFE_E2E_API_KEY",
+				"GEMINI_API_KEY",
+				"NAIA_API_KEY",
+				"NAIA_E2E_ADK_FIXTURE"
+			],
+			"tier": "credentialed_live"
 		},
 		{
 			"spec": "54b-settings-locale-prompt.spec.ts",
 			"conf": [],
 			"env": [
 				"CAFE_E2E_API_KEY",
-				"GEMINI_API_KEY"
+				"GEMINI_API_KEY",
+				"NAIA_API_KEY",
+				"NAIA_E2E_ADK_FIXTURE"
 			],
 			"tier": "credentialed_live"
 		},
 		{
 			"spec": "55-settings-persona-model.spec.ts",
 			"conf": [],
-			"env": [],
-			"tier": "deterministic_ci"
+			"env": [
+				"CAFE_E2E_API_KEY",
+				"GEMINI_API_KEY",
+				"NAIA_API_KEY",
+				"NAIA_E2E_ADK_FIXTURE"
+			],
+			"tier": "credentialed_live"
 		},
 		{
 			"spec": "56-settings-voice.spec.ts",
 			"conf": [],
-			"env": [],
-			"tier": "deterministic_ci"
+			"env": [
+				"CAFE_E2E_API_KEY",
+				"GEMINI_API_KEY",
+				"NAIA_API_KEY",
+				"NAIA_E2E_ADK_FIXTURE"
+			],
+			"tier": "credentialed_live"
 		},
 		{
 			"spec": "57-settings-save-reset.spec.ts",
 			"conf": [],
-			"env": [],
-			"tier": "deterministic_ci"
+			"env": [
+				"CAFE_E2E_API_KEY",
+				"GEMINI_API_KEY",
+				"NAIA_API_KEY",
+				"NAIA_E2E_ADK_FIXTURE"
+			],
+			"tier": "credentialed_live"
 		},
 		{
 			"spec": "58-history-interactions.spec.ts",
 			"conf": [],
-			"env": [],
-			"tier": "deterministic_ci"
+			"env": [
+				"CAFE_E2E_API_KEY",
+				"GEMINI_API_KEY",
+				"NAIA_API_KEY",
+				"NAIA_E2E_ADK_FIXTURE",
+				"NAIA_E2E_ARTIFACTS_DIR"
+			],
+			"tier": "credentialed_live"
 		},
 		{
 			"spec": "59-skills-interactions.spec.ts",
 			"conf": [],
-			"env": [],
-			"tier": "deterministic_ci"
+			"env": [
+				"CAFE_E2E_API_KEY",
+				"GEMINI_API_KEY",
+				"NAIA_API_KEY",
+				"NAIA_E2E_ADK_FIXTURE"
+			],
+			"tier": "credentialed_live"
 		},
 		{
 			"spec": "60-diagnostics-interactions.spec.ts",
 			"conf": [],
-			"env": [],
-			"tier": "deterministic_ci"
+			"env": [
+				"CAFE_E2E_API_KEY",
+				"GEMINI_API_KEY",
+				"NAIA_API_KEY",
+				"NAIA_E2E_ADK_FIXTURE"
+			],
+			"tier": "credentialed_live"
 		},
 		{
 			"spec": "61-channels-interactions.spec.ts",
 			"conf": [],
-			"env": [],
-			"tier": "deterministic_ci"
+			"env": [
+				"CAFE_E2E_API_KEY",
+				"GEMINI_API_KEY",
+				"NAIA_API_KEY",
+				"NAIA_E2E_ADK_FIXTURE"
+			],
+			"tier": "credentialed_live"
 		},
 		{
 			"spec": "62-agents-interactions.spec.ts",
 			"conf": [],
-			"env": [],
-			"tier": "deterministic_ci"
+			"env": [
+				"CAFE_E2E_API_KEY",
+				"GEMINI_API_KEY",
+				"NAIA_API_KEY",
+				"NAIA_E2E_ADK_FIXTURE"
+			],
+			"tier": "credentialed_live"
 		},
 		{
 			"spec": "63-sessions-actions.spec.ts",
 			"conf": [],
-			"env": [],
-			"tier": "deterministic_ci"
+			"env": [
+				"CAFE_E2E_API_KEY",
+				"GEMINI_API_KEY",
+				"NAIA_API_KEY",
+				"NAIA_E2E_ADK_FIXTURE"
+			],
+			"tier": "credentialed_live"
 		},
 		{
 			"spec": "64-settings-gateway-tts.spec.ts",
 			"conf": [],
-			"env": [],
-			"tier": "deterministic_ci"
+			"env": [
+				"CAFE_E2E_API_KEY",
+				"GEMINI_API_KEY",
+				"NAIA_API_KEY",
+				"NAIA_E2E_ADK_FIXTURE"
+			],
+			"tier": "credentialed_live"
 		},
 		{
 			"spec": "65-settings-voice-wake.spec.ts",
 			"conf": [],
-			"env": [],
-			"tier": "deterministic_ci"
+			"env": [
+				"CAFE_E2E_API_KEY",
+				"GEMINI_API_KEY",
+				"NAIA_API_KEY",
+				"NAIA_E2E_ADK_FIXTURE"
+			],
+			"tier": "credentialed_live"
 		},
 		{
 			"spec": "66-settings-memory-facts.spec.ts",
 			"conf": [],
-			"env": [],
-			"tier": "deterministic_ci"
+			"env": [
+				"CAFE_E2E_API_KEY",
+				"GEMINI_API_KEY",
+				"NAIA_API_KEY",
+				"NAIA_E2E_ADK_FIXTURE"
+			],
+			"tier": "credentialed_live"
 		},
 		{
 			"spec": "67-onboarding-config-save.spec.ts",
@@ -462,38 +852,61 @@
 			"env": [
 				"CAFE_E2E_API_KEY",
 				"CAFE_GATEWAY_TOKEN",
-				"GEMINI_API_KEY"
+				"GEMINI_API_KEY",
+				"NAIA_API_KEY",
+				"NAIA_E2E_ADK_FIXTURE"
 			],
 			"tier": "credentialed_live"
 		},
 		{
 			"spec": "68-history-auto-title.spec.ts",
 			"conf": [],
-			"env": [],
-			"tier": "deterministic_ci"
+			"env": [
+				"CAFE_E2E_API_KEY",
+				"CAFE_E2E_JUDGE_MODEL",
+				"CAFE_E2E_JUDGE_TIMEOUT_MS",
+				"CAFE_E2E_SEMANTIC_LOG_DIR",
+				"GEMINI_API_KEY",
+				"NAIA_E2E_ARTIFACTS_DIR"
+			],
+			"tier": "credentialed_live"
 		},
 		{
 			"spec": "69-notify-discord-live.spec.ts",
 			"conf": [],
 			"env": [
+				"CAFE_E2E_API_KEY",
+				"CAFE_E2E_JUDGE_MODEL",
+				"CAFE_E2E_JUDGE_TIMEOUT_MS",
+				"CAFE_E2E_SEMANTIC_LOG_DIR",
 				"DISCORD_WEBHOOK",
-				"DISCORD_WEBHOOK_URL"
+				"DISCORD_WEBHOOK_URL",
+				"GEMINI_API_KEY",
+				"NAIA_API_KEY",
+				"NAIA_E2E_ADK_FIXTURE",
+				"NAIA_E2E_ARTIFACTS_DIR"
 			],
-			"tier": "deterministic_ci"
+			"tier": "credentialed_live"
 		},
 		{
 			"spec": "70-channel-sync-dm.spec.ts",
 			"conf": [],
 			"env": [
+				"CAFE_E2E_API_KEY",
+				"GEMINI_API_KEY",
 				"LAB_KEY",
-				"LAB_USER_ID"
+				"LAB_USER_ID",
+				"NAIA_API_KEY",
+				"NAIA_E2E_ADK_FIXTURE"
 			],
 			"tier": "credentialed_live"
 		},
 		{
 			"spec": "70b-live-providers-switching.spec.ts",
 			"conf": [],
-			"env": [],
+			"env": [
+				"NAIA_E2E_ARTIFACTS_DIR"
+			],
 			"tier": "deterministic_ci"
 		},
 		{
@@ -502,6 +915,7 @@
 				"wdio.conf.nextain-chat.ts"
 			],
 			"env": [
+				"NAIA_E2E_ARTIFACTS_DIR",
 				"NAIA_E2E_NAIA_KEY"
 			],
 			"tier": "credentialed_live"
@@ -510,41 +924,72 @@
 			"spec": "71-proactive-speech-profiles.spec.ts",
 			"conf": [],
 			"env": [
+				"CAFE_E2E_API_KEY",
+				"GEMINI_API_KEY",
+				"NAIA_API_KEY",
+				"NAIA_E2E_ADK_FIXTURE",
 				"NAIA_E2E_ADK_PATH"
 			],
-			"tier": "deterministic_ci"
+			"tier": "credentialed_live"
 		},
 		{
 			"spec": "72-naia-discord-skill.spec.ts",
 			"conf": [],
-			"env": [],
-			"tier": "deterministic_ci"
+			"env": [
+				"CAFE_E2E_API_KEY",
+				"CAFE_E2E_JUDGE_MODEL",
+				"CAFE_E2E_JUDGE_TIMEOUT_MS",
+				"CAFE_E2E_SEMANTIC_LOG_DIR",
+				"GEMINI_API_KEY",
+				"NAIA_API_KEY",
+				"NAIA_E2E_ADK_FIXTURE",
+				"NAIA_E2E_ARTIFACTS_DIR"
+			],
+			"tier": "credentialed_live"
 		},
 		{
 			"spec": "73-tts-edge-preview.spec.ts",
 			"conf": [],
-			"env": [],
-			"tier": "deterministic_ci"
+			"env": [
+				"CAFE_E2E_API_KEY",
+				"GEMINI_API_KEY",
+				"NAIA_API_KEY",
+				"NAIA_E2E_ADK_FIXTURE"
+			],
+			"tier": "credentialed_live"
 		},
 		{
 			"spec": "74-channel-sync-lifecycle.spec.ts",
 			"conf": [],
 			"env": [
+				"CAFE_E2E_API_KEY",
+				"GEMINI_API_KEY",
 				"LAB_KEY",
-				"LAB_USER_ID"
+				"LAB_USER_ID",
+				"NAIA_API_KEY",
+				"NAIA_E2E_ADK_FIXTURE"
 			],
 			"tier": "credentialed_live"
 		},
 		{
 			"spec": "75-app-position.spec.ts",
 			"conf": [],
-			"env": [],
-			"tier": "deterministic_ci"
+			"env": [
+				"CAFE_E2E_API_KEY",
+				"GEMINI_API_KEY",
+				"NAIA_API_KEY",
+				"NAIA_E2E_ADK_FIXTURE"
+			],
+			"tier": "credentialed_live"
 		},
 		{
 			"spec": "76-tts-provider-switching.spec.ts",
 			"conf": [],
 			"env": [
+				"CAFE_E2E_API_KEY",
+				"GEMINI_API_KEY",
+				"NAIA_API_KEY",
+				"NAIA_E2E_ADK_FIXTURE",
 				"OPENAI_API_KEY"
 			],
 			"tier": "credentialed_live"
@@ -552,28 +997,46 @@
 		{
 			"spec": "77-stt-provider-switching.spec.ts",
 			"conf": [],
-			"env": [],
-			"tier": "deterministic_ci"
+			"env": [
+				"CAFE_E2E_API_KEY",
+				"GEMINI_API_KEY",
+				"NAIA_API_KEY",
+				"NAIA_E2E_ADK_FIXTURE"
+			],
+			"tier": "credentialed_live"
 		},
 		{
 			"spec": "78-voice-pipeline-mode.spec.ts",
 			"conf": [],
-			"env": [],
-			"tier": "deterministic_ci"
+			"env": [
+				"CAFE_E2E_API_KEY",
+				"GEMINI_API_KEY",
+				"NAIA_API_KEY",
+				"NAIA_E2E_ADK_FIXTURE"
+			],
+			"tier": "credentialed_live"
 		},
 		{
 			"spec": "79-pipeline-voice-activation.spec.ts",
 			"conf": [],
-			"env": [],
-			"tier": "deterministic_ci"
+			"env": [
+				"CAFE_E2E_API_KEY",
+				"GEMINI_API_KEY",
+				"NAIA_API_KEY",
+				"NAIA_E2E_ADK_FIXTURE"
+			],
+			"tier": "credentialed_live"
 		},
 		{
 			"spec": "80-tts-preview-all-providers.spec.ts",
 			"conf": [],
 			"env": [
+				"CAFE_E2E_API_KEY",
 				"ELEVENLABS_API_KEY",
 				"ELEVENLAPS_API_KEY",
 				"GEMINI_API_KEY",
+				"NAIA_API_KEY",
+				"NAIA_E2E_ADK_FIXTURE",
 				"OPENAI_API_KEY"
 			],
 			"tier": "credentialed_live"
@@ -581,28 +1044,50 @@
 		{
 			"spec": "81-chat-tts-response.spec.ts",
 			"conf": [],
-			"env": [],
-			"tier": "deterministic_ci"
+			"env": [
+				"CAFE_E2E_API_KEY",
+				"GEMINI_API_KEY",
+				"NAIA_API_KEY",
+				"NAIA_E2E_ADK_FIXTURE",
+				"NAIA_E2E_ARTIFACTS_DIR"
+			],
+			"tier": "credentialed_live"
 		},
 		{
 			"spec": "82-chat-tts-multi-model.spec.ts",
 			"conf": [],
-			"env": [],
-			"tier": "deterministic_ci"
+			"env": [
+				"CAFE_E2E_API_KEY",
+				"GEMINI_API_KEY",
+				"NAIA_API_KEY",
+				"NAIA_E2E_ADK_FIXTURE",
+				"NAIA_E2E_ARTIFACTS_DIR"
+			],
+			"tier": "credentialed_live"
 		},
 		{
 			"spec": "83-tts-per-model-verification.spec.ts",
 			"conf": [],
-			"env": [],
-			"tier": "deterministic_ci"
+			"env": [
+				"CAFE_E2E_API_KEY",
+				"GEMINI_API_KEY",
+				"NAIA_API_KEY",
+				"NAIA_E2E_ADK_FIXTURE",
+				"NAIA_E2E_ARTIFACTS_DIR"
+			],
+			"tier": "credentialed_live"
 		},
 		{
 			"spec": "84-chat-tts-per-provider.spec.ts",
 			"conf": [],
 			"env": [
+				"CAFE_E2E_API_KEY",
 				"ELEVENLABS_API_KEY",
 				"ELEVENLAPS_API_KEY",
 				"GEMINI_API_KEY",
+				"NAIA_API_KEY",
+				"NAIA_E2E_ADK_FIXTURE",
+				"NAIA_E2E_ARTIFACTS_DIR",
 				"OPENAI_API_KEY"
 			],
 			"tier": "credentialed_live"
@@ -610,16 +1095,24 @@
 		{
 			"spec": "85-voice-actual-recording.spec.ts",
 			"conf": [],
-			"env": [],
-			"tier": "deterministic_ci"
+			"env": [
+				"CAFE_E2E_API_KEY",
+				"GEMINI_API_KEY",
+				"NAIA_API_KEY",
+				"NAIA_E2E_ADK_FIXTURE"
+			],
+			"tier": "credentialed_live"
 		},
 		{
 			"spec": "86-stt-tts-full-pipeline.spec.ts",
 			"conf": [],
 			"env": [
+				"CAFE_E2E_API_KEY",
 				"ELEVENLABS_API_KEY",
 				"ELEVENLAPS_API_KEY",
 				"GEMINI_API_KEY",
+				"NAIA_API_KEY",
+				"NAIA_E2E_ADK_FIXTURE",
 				"OPENAI_API_KEY"
 			],
 			"tier": "credentialed_live"
@@ -628,9 +1121,12 @@
 			"spec": "87-tts-audio-verification.spec.ts",
 			"conf": [],
 			"env": [
+				"CAFE_E2E_API_KEY",
 				"ELEVENLABS_API_KEY",
 				"ELEVENLAPS_API_KEY",
 				"GEMINI_API_KEY",
+				"NAIA_API_KEY",
+				"NAIA_E2E_ADK_FIXTURE",
 				"OPENAI_API_KEY"
 			],
 			"tier": "credentialed_live"
@@ -639,9 +1135,12 @@
 			"spec": "88-stt-tts-combo-verification.spec.ts",
 			"conf": [],
 			"env": [
+				"CAFE_E2E_API_KEY",
 				"ELEVENLABS_API_KEY",
 				"ELEVENLAPS_API_KEY",
 				"GEMINI_API_KEY",
+				"NAIA_API_KEY",
+				"NAIA_E2E_ADK_FIXTURE",
 				"OPENAI_API_KEY"
 			],
 			"tier": "credentialed_live"
@@ -653,6 +1152,7 @@
 				"ANTHROPIC_API_KEY",
 				"GEMINI_API_KEY",
 				"NAIA_API_KEY",
+				"NAIA_E2E_ARTIFACTS_DIR",
 				"OPENAI_API_KEY",
 				"XAI_API_KEY",
 				"ZHIPU_API_KEY"
@@ -662,8 +1162,15 @@
 		{
 			"spec": "90-app-system.spec.ts",
 			"conf": [],
-			"env": [],
-			"tier": "deterministic_ci"
+			"env": [
+				"CAFE_E2E_API_KEY",
+				"CAFE_E2E_JUDGE_MODEL",
+				"CAFE_E2E_JUDGE_TIMEOUT_MS",
+				"CAFE_E2E_SEMANTIC_LOG_DIR",
+				"GEMINI_API_KEY",
+				"NAIA_E2E_ARTIFACTS_DIR"
+			],
+			"tier": "credentialed_live"
 		},
 		{
 			"spec": "90-codex-live-chat.spec.ts",
@@ -671,7 +1178,8 @@
 				"wdio.conf.codex.ts"
 			],
 			"env": [
-				"NAIA_E2E_ADK_PATH"
+				"NAIA_E2E_ADK_PATH",
+				"NAIA_E2E_ARTIFACTS_DIR"
 			],
 			"tier": "deterministic_ci"
 		},
@@ -680,8 +1188,14 @@
 			"conf": [
 				"wdio.conf.chat.ts"
 			],
-			"env": [],
-			"tier": "deterministic_ci"
+			"env": [
+				"CAFE_E2E_API_KEY",
+				"GEMINI_API_KEY",
+				"NAIA_API_KEY",
+				"NAIA_E2E_ADK_FIXTURE",
+				"NAIA_E2E_ARTIFACTS_DIR"
+			],
+			"tier": "credentialed_live"
 		},
 		{
 			"spec": "91-jeonju-course-worker.spec.ts",
@@ -696,9 +1210,14 @@
 			"conf": [],
 			"env": [
 				"CAFE_E2E_API_KEY",
+				"CAFE_E2E_JUDGE_MODEL",
+				"CAFE_E2E_JUDGE_TIMEOUT_MS",
+				"CAFE_E2E_SEMANTIC_LOG_DIR",
 				"GEMINI_API_KEY",
 				"NAIA_API_KEY",
-				"NAIA_E2E_ADK_PATH"
+				"NAIA_E2E_ADK_FIXTURE",
+				"NAIA_E2E_ADK_PATH",
+				"NAIA_E2E_ARTIFACTS_DIR"
 			],
 			"tier": "credentialed_live"
 		},
@@ -766,6 +1285,7 @@
 				"wdio.conf.voice-6g.ts"
 			],
 			"env": [
+				"NAIA_E2E_ARTIFACTS_DIR",
 				"NAIA_E2E_VOICE_SCREENSHOT",
 				"NAIA_E2E_VOXCPM2_TEST_VOICE"
 			],
@@ -787,6 +1307,7 @@
 				"wdio.conf.voice-linux.ts"
 			],
 			"env": [
+				"NAIA_E2E_ARTIFACTS_DIR",
 				"NAIA_E2E_VOICE_SCREENSHOT",
 				"NAIA_E2E_VOXCPM2_TEST_VOICE"
 			],
@@ -826,6 +1347,10 @@
 			"spec": "96-voice-linux-app-start.spec.ts",
 			"conf": [],
 			"env": [
+				"CAFE_E2E_API_KEY",
+				"GEMINI_API_KEY",
+				"NAIA_API_KEY",
+				"NAIA_E2E_ADK_FIXTURE",
 				"NAIA_E2E_ADK_PATH",
 				"NAIA_E2E_NAIA_KEY",
 				"NAIA_E2E_VOICE_ARTIFACTS"
@@ -843,15 +1368,22 @@
 		{
 			"spec": "97-launch-f1-naia-login.spec.ts",
 			"conf": [],
-			"env": [],
-			"tier": "deterministic_ci"
+			"env": [
+				"CAFE_E2E_API_KEY",
+				"GEMINI_API_KEY",
+				"NAIA_API_KEY",
+				"NAIA_E2E_ADK_FIXTURE"
+			],
+			"tier": "credentialed_live"
 		},
 		{
 			"spec": "98-codex-chat-delegation.spec.ts",
 			"conf": [
 				"wdio.conf.codex-delegation.ts"
 			],
-			"env": [],
+			"env": [
+				"NAIA_E2E_ARTIFACTS_DIR"
+			],
 			"tier": "deterministic_ci"
 		},
 		{
@@ -859,7 +1391,9 @@
 			"conf": [],
 			"env": [
 				"CAFE_E2E_API_KEY",
-				"GEMINI_API_KEY"
+				"GEMINI_API_KEY",
+				"NAIA_API_KEY",
+				"NAIA_E2E_ADK_FIXTURE"
 			],
 			"tier": "credentialed_live"
 		},
@@ -868,7 +1402,9 @@
 			"conf": [],
 			"env": [
 				"CAFE_E2E_API_KEY",
-				"GEMINI_API_KEY"
+				"GEMINI_API_KEY",
+				"NAIA_API_KEY",
+				"NAIA_E2E_ADK_FIXTURE"
 			],
 			"tier": "credentialed_live"
 		},
@@ -877,14 +1413,18 @@
 			"conf": [],
 			"env": [
 				"CAFE_E2E_API_KEY",
-				"GEMINI_API_KEY"
+				"GEMINI_API_KEY",
+				"NAIA_API_KEY",
+				"NAIA_E2E_ADK_FIXTURE"
 			],
 			"tier": "credentialed_live"
 		},
 		{
 			"spec": "99-store-certification.spec.ts",
 			"conf": [],
-			"env": [],
+			"env": [
+				"NAIA_E2E_ARTIFACTS_DIR"
+			],
 			"tier": "deterministic_ci"
 		},
 		{

@@ -42,12 +42,28 @@ for (const name of readdirSync(CONF_DIR).filter((f) => /^wdio\.conf\..+\.ts$/.te
 	}
 }
 
+// 스펙이 직접 부르지 않아도, 불러 쓰는 헬퍼가 자격증명을 요구하면 그 스펙은
+// 자격증명 없이 돌지 않는다. 실측에서 드러났다 — 06-skill-memo 는 env 를 하나도
+// 적지 않았는데 helpers/semantic 이 판정 모델 키를 요구해 실패했다. 직접 참조만
+// 세면 목록이 "돌 수 있다" 고 거짓말한다.
+const HELPER_DIR = join(CONF_DIR, "helpers");
+const helperEnv = new Map();
+for (const name of readdirSync(HELPER_DIR).filter((f) => f.endsWith(".ts"))) {
+	const source = readFileSync(join(HELPER_DIR, name), "utf8");
+	helperEnv.set(
+		name.replace(/\.ts$/, ""),
+		[...new Set([...source.matchAll(/process\.env\.([A-Z_0-9]+)/g)].map((m) => m[1]))],
+	);
+}
+
 const rows = [];
 for (const name of readdirSync(SPEC_DIR).filter((f) => f.endsWith(".spec.ts")).sort()) {
 	const source = readFileSync(join(SPEC_DIR, name), "utf8");
-	const envs = [
-		...new Set([...source.matchAll(/process\.env\.([A-Z_0-9]+)/g)].map((m) => m[1])),
-	].sort();
+	const direct = [...source.matchAll(/process\.env\.([A-Z_0-9]+)/g)].map((m) => m[1]);
+	// import 는 확장자를 붙여 쓴다(NodeNext). 빼고 잡으면 하나도 못 만난다.
+	const viaHelpers = [...source.matchAll(/from\s+"\.\.\/helpers\/([a-z-]+)(?:\.js)?"/g)]
+		.flatMap((m) => helperEnv.get(m[1]) ?? []);
+	const envs = [...new Set([...direct, ...viaHelpers])].sort();
 	const device = envs.some((e) => DEVICE_ENV.test(e));
 	const keyed = envs.some((e) => KEY_ENV.test(e));
 	rows.push({
