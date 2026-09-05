@@ -1,4 +1,4 @@
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 const JUDGE_MODEL = process.env.CAFE_E2E_JUDGE_MODEL || "gemini-2.5-flash";
@@ -74,15 +74,14 @@ function recordBillableCall(surface: string): void {
 	const path = process.env.NAIA_E2E_COST_LEDGER;
 	if (!path) return;
 	try {
-		const fs = require("node:fs") as typeof import("node:fs");
 		let ledger: Record<string, number> = {};
 		try {
-			ledger = JSON.parse(fs.readFileSync(path, "utf8"));
+			ledger = JSON.parse(readFileSync(path, "utf8"));
 		} catch {
 			ledger = {};
 		}
 		ledger[surface] = (ledger[surface] ?? 0) + 1;
-		fs.writeFileSync(path, JSON.stringify(ledger, null, "\t"));
+		writeFileSync(path, JSON.stringify(ledger, null, "\t"));
 	} catch {
 		// 계수 실패가 테스트를 죽이면 안 된다.
 	}

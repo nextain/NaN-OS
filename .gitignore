@@ -93,3 +93,9 @@ packages/shell/vite.config.d.ts
 
 # e2e-tauri 실행이 남기는 추적 산출물 — 저장소에 올리지 않는다.
 packages/shell/e2e-tauri/.artifacts/
+
+# 픽스처가 만든 윈도우 절대경로 디렉터리. 리눅스에서는 유효한 파일명이라
+# `git add -A` 에 딸려 들어가지만, 윈도우에서는 git 이 그 이름으로 디렉터리를
+# 만들려다 "Invalid argument" 로 죽어 checkout 자체가 막힌다(2026-09-05 실측).
+C:\\*
+packages/shell/C:\\*
