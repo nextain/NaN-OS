@@ -86,6 +86,34 @@ const identifierContexts = [
 		),
 	);
 
+/** Rust 가 프런트에 내주는 명령 이름 전부. */
+function tauriCommandNames() {
+	const names = new Set();
+	for (const file of tracked(`${SHELL}/src-tauri/src`, ".rs")) {
+		const source = readFileSync(file, "utf8");
+		for (const match of source.matchAll(
+			/#\[tauri::command[^\]]*\][\s\S]{0,200}?\bfn\s+([a-z0-9_]+)/g,
+		)) {
+			names.add(match[1]);
+		}
+	}
+	return names;
+}
+
+/**
+ * 지금 없는 채로 두는 명령. 왜 없는지 적어야 한다.
+ *
+ * 둘 다 스펙만 남고 구현이 없는 자리다. 지우거나 만들거나 둘 중 하나인데,
+ * 그 판단은 그 기능을 아는 사람이 해야 한다.
+ */
+const KNOWN_MISSING_COMMANDS = new Map([
+	[
+		"e2e_emit_bgm_play_request",
+		"93-radio-bgm-observation 이 부른다. e2e 전용 명령으로 만들려다 만 것으로 보인다",
+	],
+	["discord_api", "70-channel-sync-dm 이 부른다. 이름이 바뀌었을 수 있다"],
+]);
+
 const specs = [
 	...tracked(`${SHELL}/e2e-tauri`, ".ts"),
 	...tracked(`${SHELL}/e2e`, ".ts"),
@@ -158,6 +186,57 @@ for (const file of specs) {
 		if (assembled) continue;
 		missing.push({ file, name });
 	}
+}
+
+/**
+ * 스펙이 부르는 Tauri 명령이 실제로 있는지 본다.
+ *
+ * 사라진 화면과 같은 성격이다 — 명령이 없어지거나 이름이 바뀌어도 그것을
+ * 부르는 스펙은 남고, 그 실패는 "회귀가 생겼다" 로 읽힌다. 실제로 두 스펙이
+ * 존재하지 않는 명령을 부르고 있었고, 그중 하나는 e2e 전용으로 만들려다
+ * 만 것이 스펙에만 남은 자리다.
+ */
+const commandNames = tauriCommandNames();
+const missingCommands = [];
+for (const file of specs) {
+	const source = readFileSync(file, "utf8");
+	for (const match of source.matchAll(
+		/(?:tauriInvoke|invoke)\(\s*["'`]([a-z0-9_]+)["'`]/g,
+	)) {
+		const name = match[1];
+		if (name.startsWith("plugin:") || commandNames.has(name)) continue;
+		missingCommands.push({
+			file,
+			name,
+			line: source.slice(0, match.index).split("\n").length,
+		});
+	}
+}
+
+// 같은 명령을 여러 번 불러도 결함은 하나다. 이름으로 센다.
+const unexpectedCommands = missingCommands.filter(
+	(hit) => !KNOWN_MISSING_COMMANDS.has(hit.name),
+);
+const staleKnown = [...KNOWN_MISSING_COMMANDS.keys()].filter(
+	(name) => !missingCommands.some((hit) => hit.name === name),
+);
+
+if (staleKnown.length > 0) {
+	console.error("\n없다고 적어 둔 명령이 이제 걸리지 않는다:");
+	for (const name of staleKnown) console.error(`  ${name}`);
+	console.error("\nKNOWN_MISSING_COMMANDS 에서 지워라 — 남겨 두면 다음 결함을 덮는다.");
+	process.exit(1);
+}
+
+if (unexpectedCommands.length > 0) {
+	console.error("\n스펙이 부르는데 Rust 에 없는 명령:");
+	for (const hit of unexpectedCommands) {
+		console.error(`  ${hit.file}:${hit.line} — ${hit.name}`);
+	}
+	console.error(
+		"\n명령이 사라졌으면 그 스펙도 지워라. 이름이 바뀐 것이면 스펙을 따라오게 하라.",
+	);
+	process.exit(1);
 }
 
 console.log(
