@@ -397,6 +397,7 @@ export default {
 	"history.untitled": "بدون عنوان",
 	"history.messages": "الرسائل",
 	"history.delete": "حذف",
+	"apps.removeConfirm": "سيؤدي هذا إلى حذف التطبيق المثبت من القرص ولا يمكن التراجع عنه. هل تريد المتابعة؟",
 	"history.deleteConfirm": "هل تريد حذف هذه المحادثة؟",
 	"history.current": "الحالي",
 	"history.tabHistory": "التاريخ",

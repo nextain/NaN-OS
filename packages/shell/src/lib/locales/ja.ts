@@ -397,6 +397,7 @@ export default {
 	"history.untitled": "無題",
 	"history.messages": "メッセージ",
 	"history.delete": "削除",
+	"apps.removeConfirm": "インストール済みアプリをディスクから削除します。元に戻せません。続けますか?",
 	"history.deleteConfirm": "この会話を削除しますか?",
 	"history.current": "現在",
 	"history.tabHistory": "歴史",

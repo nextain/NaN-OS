@@ -155,6 +155,11 @@ if (absentPrereqs.length) {
 const started = new Date().toISOString();
 let status = "passed";
 let detail = "";
+// 무엇을 돌리려 했는지(planned)와 실제로 끝까지 돈 것(executed)은 다르다.
+// 예전에는 계획을 그대로 "배정" 으로 적었고, 완결성 게이트가 그것을 덮인
+// 것으로 셌다. 그러면 wdio 가 시작하자마자 죽어도 기록에는 전부 덮였다고
+// 남는다.
+let executed = [];
 try {
 	// 맡은 스펙만 넘긴다. 예전에는 전체 스위트를 돌리면서 기록에는 맡은 것만
 	// 적었는데, 그러면 --tier=native_local 로 부른 기계가 실제로는 전부 돌리고
@@ -167,6 +172,9 @@ try {
 		["-C", "packages/shell", "exec", "wdio", "run", "e2e-tauri/wdio.conf.ts", ...specArgs],
 		{ stdio: "inherit" },
 	);
+	// 여기까지 왔으면 wdio 가 종료 코드 0 으로 끝났다는 뜻이고, 그때만 맡은
+	// 것을 실제로 다 돌린 것으로 본다.
+	executed = mine.map((spec) => spec.spec);
 } catch (error) {
 	status = "failed";
 	detail = String(error?.message ?? error).slice(0, 400);
@@ -178,7 +186,8 @@ const record = {
 	started,
 	finished: new Date().toISOString(),
 	status,
-	assigned: mine.map((s) => s.spec),
+	planned: mine.map((s) => s.spec),
+	executed,
 	// 관측이 아니라 사전 예측이다 — 이 스펙들도 wdio 에 넘어가고, 그 안에서
 	// 스스로 건너뛸지 실패할지는 스펙이 정한다. 이름을 그대로 두면 "건너뛰었다"
 	// 는 관측으로 읽히므로 무엇인지 밝힌다.

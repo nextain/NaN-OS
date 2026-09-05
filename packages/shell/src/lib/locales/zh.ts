@@ -397,6 +397,7 @@ export default {
 	"history.untitled": "无题",
 	"history.messages": "消息",
 	"history.delete": "删除",
+	"apps.removeConfirm": "将从磁盘删除已安装的应用，且无法撤销。是否继续？",
 	"history.deleteConfirm": "删除此对话？",
 	"history.current": "当前",
 	"history.tabHistory": "历史",

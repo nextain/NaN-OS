@@ -397,6 +397,7 @@ export default {
 	"history.untitled": "Без названия",
 	"history.messages": "сообщения",
 	"history.delete": "Удалить",
+	"apps.removeConfirm": "Установленное приложение будет удалено с диска без возможности восстановления. Продолжить?",
 	"history.deleteConfirm": "Удалить этот разговор?",
 	"history.current": "Текущий",
 	"history.tabHistory": "История",

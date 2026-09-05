@@ -50,11 +50,16 @@ if (!records.length) {
 }
 
 const covered = new Set();
+const planned = new Set();
 const skipped = new Map();
 const failedMachines = [];
 const notRun = [];
 for (const record of records) {
-	for (const spec of record.assigned ?? []) covered.add(spec);
+	// 덮였다고 셀 수 있는 것은 실제로 끝까지 돈 것뿐이다. planned 는 무엇을
+	// 돌리려 했는지일 뿐이고, 그것을 커버로 세면 wdio 가 죽어도 전수 커버로
+	// 보고된다. 옛 기록의 assigned 는 계획이었으므로 planned 로 읽는다.
+	for (const spec of record.executed ?? []) covered.add(spec);
+	for (const spec of record.planned ?? record.assigned ?? []) planned.add(spec);
 	for (const [spec, envs] of Object.entries(record.envMissingBeforeRun ?? record.skippedForMissingEnv ?? {})) {
 		skipped.set(spec, envs);
 	}
@@ -72,7 +77,7 @@ const never = [...all].filter((s) => !covered.has(s));
 const machines = [...new Set(records.map((r) => r.machine))];
 
 console.log(`[regression-complete] 기계 ${machines.length}대(${machines.join(", ")}) / 최근 ${maxAgeHours}시간`);
-console.log(`  스펙 ${all.size} 중 배정된 것 ${covered.size}, 아무도 맡지 않은 것 ${never.length}`);
+console.log(`  스펙 ${all.size} 중 실제로 돈 것 ${covered.size}, 돌리려 했던 것 ${planned.size}, 아무도 맡지 않은 것 ${never.length}`);
 console.log(`  배정되었으나 요구 환경이 없던 것 ${skipped.size}`);
 
 let failed = false;

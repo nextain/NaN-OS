@@ -397,6 +397,7 @@ export default {
 	"history.untitled": "Untitled",
 	"history.messages": "messages",
 	"history.delete": "Delete",
+	"apps.removeConfirm": "This deletes the installed app from disk and cannot be undone. Continue?",
 	"history.deleteConfirm": "Delete this conversation?",
 	"history.current": "Current",
 	"history.tabHistory": "History",

@@ -397,6 +397,7 @@ export default {
 	"history.untitled": "Ohne Titel",
 	"history.messages": "Nachrichten",
 	"history.delete": "Löschen",
+	"apps.removeConfirm": "Dies löscht die installierte App von der Festplatte und kann nicht rückgängig gemacht werden. Fortfahren?",
 	"history.deleteConfirm": "Diese Konversation löschen?",
 	"history.current": "Aktuell",
 	"history.tabHistory": "Geschichte",

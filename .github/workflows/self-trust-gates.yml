@@ -101,7 +101,7 @@ jobs:
         run: node scripts/check-assembly-coverage.mjs
 
       # 위 게이트는 옛 `**UC1**` 이름만 본다. 문서가 UC-<이름> 체계로 옮겨간
-      # 뒤로 표제 예순다섯 개를 하나도 보지 못한 채 초록을 보고해 왔다.
+      # 뒤로 표제를 하나도 보지 못한 채 초록을 보고해 왔다.
       # 이 게이트가 현재 체계를 본다.
       - name: UC traceability
         run: node scripts/check-uc-traceability.mjs
@@ -121,6 +121,12 @@ jobs:
       # 화면에 박힌 한국어를 줄이는 것이고, 이 게이트는 늘어나는 것만 막는다.
       - name: untranslated UI (화면 문자열 하드코딩 증가 금지)
         run: node scripts/check-untranslated-ui.mjs
+
+      # 사용성에서 가장 비싼 실패는 못 쓰는 것이 아니라 되돌릴 수 없게 잃는
+      # 것이다. 이 게이트를 처음 돌렸을 때 실제로 그 결함이 있었다 — 대화
+      # 삭제에는 확인이 있는데 설치된 앱을 디스크에서 지우는 경로에는 없었다.
+      - name: destructive affordance (되돌릴 수 없는 동작에 확인 필수)
+        run: node scripts/check-destructive-affordance.mjs
       - name: wire probes (os outbound ⊆ agent accept / agent output ⊆ os classify)
         run: |
           node scripts/builds/uc1-outbound-probe.mjs
@@ -134,7 +140,7 @@ jobs:
       - name: shell browser regression (Playwright)
         run: NAIA_E2E_USE_EXISTING_BUILD=1 pnpm -C packages/shell test:e2e
 
-      # Rust 쪽 285개가 어디서도 돌지 않고 있었다. 경로 탈출·symlink 거부·포트
+      # Rust 쪽 테스트 전체가 어디서도 돌지 않고 있었다(발견 당시 285개). 경로 탈출·symlink 거부·포트
       # 회수·샌드박스 동시성처럼 화면으로는 확인할 수 없는 것들이 거기 있다.
       # build.rs 가 페어드 agent 스크립트를 요구하므로 그 경로를 먼저 세운다.
       - uses: dtolnay/rust-toolchain@2c7215f132e9ebf062739d9130488b56d53c060c

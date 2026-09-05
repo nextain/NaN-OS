@@ -128,6 +128,9 @@ export function AppBar({ onAddApp }: AppBarProps) {
 		});
 
 		if (descriptor?.source === "installed") {
+			// 설치된 앱 제거는 디스크에서 지우는 것이라 되돌릴 수 없다.
+			// 빌드 내장 앱 제거는 설정에 기록만 하므로 되돌릴 수 있어 묻지 않는다.
+			if (!globalThis.confirm(t("apps.removeConfirm"))) return;
 			try {
 				await removeInstalledApp(appId);
 				setRemoveError("");
@@ -196,6 +199,10 @@ export function AppBar({ onAddApp }: AppBarProps) {
 		const appId = ctxMenu.appId;
 		const descriptor = appRegistry.get(appId);
 		if (descriptor?.source === "installed") {
+			if (!globalThis.confirm(t("apps.removeConfirm"))) {
+				setCtxMenu(null);
+				return;
+			}
 			try {
 				await removeInstalledApp(appId);
 				setRemoveError("");

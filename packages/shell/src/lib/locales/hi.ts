@@ -397,6 +397,7 @@ export default {
 	"history.untitled": "शीर्षकहीन",
 	"history.messages": "संदेश",
 	"history.delete": "हटाएँ",
+	"apps.removeConfirm": "यह स्थापित ऐप को डिस्क से हटा देता है और इसे पूर्ववत नहीं किया जा सकता। जारी रखें?",
 	"history.deleteConfirm": "यह वार्तालाप हटाएँ?",
 	"history.current": "वर्तमान",
 	"history.tabHistory": "इतिहास",

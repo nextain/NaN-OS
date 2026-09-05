@@ -397,6 +397,7 @@ export default {
 	"history.untitled": "Không có tiêu đề",
 	"history.messages": "tin nhắn",
 	"history.delete": "Xóa",
+	"apps.removeConfirm": "Thao tác này xóa ứng dụng đã cài khỏi ổ đĩa và không thể hoàn tác. Tiếp tục?",
 	"history.deleteConfirm": "Xóa cuộc trò chuyện này?",
 	"history.current": "hiện tại",
 	"history.tabHistory": "Lịch sử",

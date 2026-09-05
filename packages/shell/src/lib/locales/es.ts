@@ -397,6 +397,7 @@ export default {
 	"history.untitled": "Sin título",
 	"history.messages": "mensajes",
 	"history.delete": "Eliminar",
+	"apps.removeConfirm": "Esto elimina la aplicación instalada del disco y no se puede deshacer. ¿Continuar?",
 	"history.deleteConfirm": "¿Eliminar esta conversación?",
 	"history.current": "Actual",
 	"history.tabHistory": "Historia",

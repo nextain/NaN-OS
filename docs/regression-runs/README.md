@@ -7,7 +7,7 @@ node scripts/run-regression.mjs --machine=<이름> --tier=deterministic_ci[,cred
 ```
 
 남는 파일 하나가 그 기계의 한 번 실행이다. 무엇을 맡았는지(`assigned`),
-환경이 없어 건너뛴 것이 무엇인지(`skippedForMissingEnv`), 통과했는지를 담는다.
+환경이 없어 건너뛴 것이 무엇인지(`envMissingBeforeRun`), 통과했는지를 담는다.
 
 배포 전에는 이 기록을 모아 본다.
 

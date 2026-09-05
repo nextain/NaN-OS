@@ -53,8 +53,41 @@ pub fn app_sandbox_root(adk_path: String, app_id: String) -> Result<String, Stri
 #[tauri::command]
 pub fn app_sandbox_write_file(adk_path: String, app_id: String, relative_path: String, bytes: Vec<u8>) -> Result<String, String> {
     let output = file(&root(&adk_path, &app_id)?, &relative_path)?;
-    std::fs::write(&output, bytes).map_err(|error| error.to_string())?;
+    write_atomically(&output, &bytes)?;
     Ok(output.to_string_lossy().into_owned())
+}
+
+/// 옆에 쓰고 제자리로 옮긴다.
+///
+/// 왜 필요한가: `fs::write` 는 자르고 나서 쓴다. 두 곳이 같은 파일을 동시에
+/// 저장하면 자른 직후와 쓰기 완료 사이에 빈 파일이 보인다 — 앱이 자기 상태를
+/// 저장하다 그 순간에 읽으면 빈 것을 얻는다. 동시성 테스트가 실제로 그 빈
+/// 내용을 잡았다(2026-09-05).
+///
+/// 같은 디렉터리에 쓰고 rename 하면 읽는 쪽은 옛 내용이나 새 내용 중 하나만
+/// 본다. 마지막에 쓴 쪽이 이기는 것은 그대로이고, 찢어진 중간 상태가
+/// 사라진다.
+fn write_atomically(output: &Path, bytes: &[u8]) -> Result<(), String> {
+    let parent = output.parent().ok_or("sandbox path has no parent")?;
+    let unique = format!(
+        ".{}.{}.tmp",
+        output.file_name().and_then(|n| n.to_str()).unwrap_or("out"),
+        std::process::id() as u64 * 1_000_000
+            + (std::time::SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .map(|d| d.subsec_nanos() as u64)
+                .unwrap_or(0)
+                % 1_000_000)
+    );
+    let staging = parent.join(unique);
+    std::fs::write(&staging, bytes).map_err(|error| error.to_string())?;
+    match std::fs::rename(&staging, output) {
+        Ok(()) => Ok(()),
+        Err(error) => {
+            let _ = std::fs::remove_file(&staging);
+            Err(error.to_string())
+        }
+    }
 }
 #[tauri::command]
 pub fn app_sandbox_read_file(adk_path: String, app_id: String, relative_path: String) -> Result<Vec<u8>, String> {
@@ -100,7 +133,7 @@ pub fn slides_recording_stop() -> Result<String, String> {
 
 #[cfg(test)]
 mod app_sandbox_escape_tests {
-    use super::{file, root};
+    use super::{file, root, write_atomically};
     // Distinct temp ADK per test process; leaves dirs (test scratch) — acceptable.
     fn adk() -> String {
         std::env::temp_dir()
@@ -169,8 +202,10 @@ mod app_sandbox_escape_tests {
                 thread::spawn(move || {
                     let app_id = format!("sbx.concurrent.{}", index % 2);
                     let r = root(&adk, &app_id).expect("root ok");
-                    let target = file(&r, &format!("shared/out-{index}.txt")).expect("path ok");
-                    std::fs::write(&target, format!("{index}")).expect("write ok");
+                    // 같은 파일을 두고 다툰다. 스레드마다 다른 이름을 쓰면 경합
+                    // 지점이 없어 진짜 버그가 있어도 통과한다 — 앞선 판이 그랬다.
+                    let target = file(&r, "shared/contended.txt").expect("path ok");
+                    write_atomically(&target, format!("{index}").as_bytes()).expect("write ok");
                     (app_id, target)
                 })
             })
@@ -184,6 +219,13 @@ mod app_sandbox_escape_tests {
                 "다른 앱 구역으로 샜다: {text}"
             );
             assert!(path.is_file(), "쓰기가 남지 않았다: {text}");
+            // 같은 앱이면 같은 경로여야 한다. 경로 계산이 스레드마다 달라지면
+            // 한 앱의 파일이 여러 자리에 흩어진다.
+            let body = std::fs::read_to_string(&path).expect("read ok");
+            assert!(
+                (0..8).any(|i| body == i.to_string()),
+                "마지막 쓰기가 온전하지 않다(찢어진 내용): {body:?}"
+            );
         }
     }
 }

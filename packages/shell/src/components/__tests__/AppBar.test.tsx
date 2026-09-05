@@ -218,6 +218,49 @@ describe("AppBar — installed app removal", () => {
 	afterEach(() => {
 		cleanup();
 		vi.clearAllMocks();
+		vi.unstubAllGlobals();
+	});
+
+	/** 설치된 앱을 목록에 하나 세우고 우클릭 메뉴를 연다. */
+	async function renderWithInstalledApp() {
+		const { appRegistry } = await import("../../lib/app-registry");
+		const descriptor = {
+			id: "notes",
+			name: "Notes",
+			source: "installed" as const,
+			center: () => null,
+		};
+		vi.mocked(appRegistry.list).mockReturnValue([descriptor]);
+		vi.mocked(appRegistry.get).mockReturnValue(descriptor);
+		render(<AppBar />);
+		fireEvent.contextMenu(screen.getByTitle("Notes"));
+	}
+
+	// 디스크에서 지우는 것은 되돌릴 수 없다(UC-QUALITY-DESTRUCTIVE-AFFORDANCE).
+	// 확인을 거절하면 지우는 호출 자체가 일어나지 않아야 한다 — 물어만 보고
+	// 답과 무관하게 지우면 확인은 장식이다.
+	it("does not remove anything when the user declines the confirmation", async () => {
+		const { removeInstalledApp } = await import("../../lib/app-loader");
+		vi.stubGlobal("confirm", vi.fn().mockReturnValue(false));
+
+		await renderWithInstalledApp();
+		fireEvent.click(screen.getByText("appbar.removeApp"));
+
+		expect(globalThis.confirm).toHaveBeenCalledTimes(1);
+		expect(removeInstalledApp).not.toHaveBeenCalled();
+		expect(screen.getByTitle("Notes")).toBeInTheDocument();
+	});
+
+	it("removes the app only after the user confirms", async () => {
+		const { removeInstalledApp } = await import("../../lib/app-loader");
+		vi.stubGlobal("confirm", vi.fn().mockReturnValue(true));
+		vi.mocked(removeInstalledApp).mockResolvedValueOnce(undefined);
+
+		await renderWithInstalledApp();
+		fireEvent.click(screen.getByText("appbar.removeApp"));
+
+		expect(globalThis.confirm).toHaveBeenCalledTimes(1);
+		expect(removeInstalledApp).toHaveBeenCalledWith("notes");
 	});
 
 	it("keeps the app visible and announces a disk removal failure", async () => {
@@ -234,6 +277,7 @@ describe("AppBar — installed app removal", () => {
 		vi.mocked(removeInstalledApp).mockRejectedValueOnce(
 			new Error("permission denied"),
 		);
+		vi.stubGlobal("confirm", vi.fn().mockReturnValue(true));
 
 		render(<AppBar />);
 		// 제거는 탭 우클릭 메뉴로 옮겨졌다(#471).

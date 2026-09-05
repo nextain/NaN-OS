@@ -397,6 +397,7 @@ export default {
 	"history.untitled": "Tanpa judul",
 	"history.messages": "pesan",
 	"history.delete": "Hapus",
+	"apps.removeConfirm": "Ini menghapus aplikasi terinstal dari disk dan tidak dapat dibatalkan. Lanjutkan?",
 	"history.deleteConfirm": "Hapus percakapan ini?",
 	"history.current": "Saat ini",
 	"history.tabHistory": "Sejarah",

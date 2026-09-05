@@ -3,7 +3,7 @@
  *
  * 왜 필요한가: 옆에 있는 check-assembly-coverage.mjs 는 `**UC1**` 같은 옛
  * 숫자 이름만 찾는다(정규식 /\*\*(UC\d+[a-z-]*)/). 그 사이 문서는
- * `UC-<이름>` 체계로 옮겨갔고, 지금 표제는 예순다섯 개다. 게이트는 그중
+ * `UC-<이름>` 체계로 옮겨갔고, 게이트는 그 표제 중
  * 하나도 보지 못한 채 "모든 UC 분류 ✓" 로 초록을 보고한다. 눈이 먼 게이트는
  * 없는 게이트보다 나쁘다 — 통과가 무언가를 보증한다고 믿게 만든다.
  *
@@ -46,6 +46,19 @@ const outsideEpic = (uc) => notOwned.some((prefix) => uc.startsWith(prefix));
 const untracked = titles.filter(
 	(uc) => !hasCoverageRow(uc) && !byBenchFamily(uc) && !outsideEpic(uc),
 );
+
+// 커버리지 맵만 채우고 벤치 하네스에 등록하지 않으면, 이 게이트는 통과하고
+// agent-bench-scenario-source 계약 테스트가 대신 붉어진다. 두 곳을 봐야 하는
+// 사실이 한쪽에만 적혀 있으면 사람은 반드시 한쪽을 빠뜨린다 — 실제로 #540 이
+// 그랬고, 그것을 고친 사람이 UC-QUALITY 를 더하면서 똑같이 빠뜨렸다.
+// 여기서 함께 본다.
+// 벤치 하네스는 `### UC-` 만 자기 소관으로 본다(agent-bench-scenarios.ts 의
+// HEADING). 여기서 `## UC-` 까지 세면 하네스가 애초에 다루지 않는 것을 잡아
+// 과탐지가 된다. 같은 기준으로 맞춘다.
+const benchTitles = [
+	...new Set([...scenarios.matchAll(/^###\s+(UC-[A-Z0-9-]+)/gm)].map((m) => m[1])),
+];
+const benchOrphans = benchTitles.filter((uc) => !byBenchFamily(uc) && !outsideEpic(uc));
 
 // 오늘의 상태. 줄이는 것이 목표이고, 늘리는 것은 이 게이트가 막는다.
 const BASELINE = [
@@ -123,4 +136,11 @@ if (brokenRefs.length > BASELINE_BROKEN_REFS) {
 }
 if (brokenRefs.length < BASELINE_BROKEN_REFS)
 	console.log(`  ✓ 깨진 참조가 줄었다(${brokenRefs.length}) — BASELINE_BROKEN_REFS 도 줄여라`);
+if (benchOrphans.length) {
+	console.error(`  ❌ 벤치 하네스가 모르는 UC ${benchOrphans.length}개:`);
+	for (const uc of benchOrphans) console.error(`     ${uc}`);
+	console.error("     src/test/harness/agent-bench-scenarios.ts 의 계열에 더하거나,");
+	console.error("     에이전트 능력 축이 아니면 NOT_OWNED_BY_EPIC 에 접두사를 적어라.");
+	process.exit(1);
+}
 console.log("  ✓ 새로 끊긴 UC 없음");

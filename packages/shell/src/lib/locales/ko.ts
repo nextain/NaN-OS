@@ -397,6 +397,7 @@ export default {
 	"history.untitled": "제목 없음",
 	"history.messages": "메시지",
 	"history.delete": "삭제",
+	"apps.removeConfirm": "설치된 앱을 디스크에서 지웁니다. 되돌릴 수 없습니다. 계속할까요?",
 	"history.deleteConfirm": "이 대화를 삭제하시겠습니까?",
 	"history.current": "현재",
 	"history.tabHistory": "기록",

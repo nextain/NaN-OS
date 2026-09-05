@@ -76,35 +76,53 @@ const SET_ADK_PATH = `
 localStorage.setItem("naia-adk-path", "/tmp/mock-naia-adk-workspace");
 `;
 
-const SAMPLES = 3;
-// 한도를 처음에 2,000ms 로 두었는데, 이 기계 중앙값이 45~136ms 라 열다섯 배가
-// 넘었다. 그 한도로는 "배 이상 느려지는 회귀를 잡는다" 는 이 스펙의 목적을
-// 이룰 수 없다 — 열 배가 느려져도 통과한다.
+// 콜드와 웜을 한 숫자로 뭉개면 한도가 콜드에 끌려가 웜 회귀를 못 잡는다.
+// 이 기계 실측이 그 구조를 그대로 보여 준다 — 3회 반복 실행에서 첫 표본은
+// 829/851/927ms 로 일관되게 느리고, 그 뒤 표본은 141~217ms 로 모인다.
+// 한 한도로 덮으면 콜드에 맞춰야 하므로 웜이 다섯 배 느려져도 통과한다.
 //
-// 그렇다고 실측에 바싹 붙이면 러너 성능 차이로 흔들려 곧 꺼진다. 중앙값으로
-// 판정하는 것이 튐을 이미 걸러 주므로, 이 기계 최악 표본(약 750ms 콜드
-// 스타트)의 두 배를 한도로 둔다. 2배 회귀는 잡고 러너 차이는 견디는 자리다.
-// CI 러너에서 한 번 재 보고 흔들리면 그때 넓히되, 이유를 여기 적어라.
-const STARTUP_BUDGET_MS = 1_500;
+// 그래서 둘로 나눈다. 첫 표본은 콜드로 따로 판정하고, 웜은 워밍업 뒤 표본의
+// 중앙값으로 판정한다. 각 한도는 이 기계 최악 관측의 두 배를 조금 넘는 자리다
+// (콜드 927 → 2,000 / 웜 217 → 500). 중앙값이 이미 튐을 걸러 주므로 이보다
+// 넓힐 이유가 없고, 이 폭이면 2배 회귀는 잡으면서 러너 차이는 견딘다.
+// CI 러너에서 재 보고 흔들리면 넓히되, 관측값과 이유를 여기 적어라.
+const WARM_SAMPLES = 5;
+const COLD_BUDGET_MS = 2_000;
+const WARM_BUDGET_MS = 500;
 
 function median(values: number[]): number {
 	const sorted = [...values].sort((a, b) => a - b);
 	return sorted[Math.floor(sorted.length / 2)];
 }
 
-test("셸 첫 화면이 한도 안에 뜬다 (UC-PERF-STARTUP-LATENCY)", async ({ page }) => {
-	const samples: number[] = [];
-	for (let attempt = 0; attempt < SAMPLES; attempt++) {
-		await page.addInitScript({ content: TAURI_MOCK });
-		const started = Date.now();
-		await page.goto("/");
-		await expect(page.locator(".adk-setup-headline")).toBeVisible();
-		samples.push(Date.now() - started);
+async function measure(page: import("@playwright/test").Page): Promise<number> {
+	await page.addInitScript({ content: TAURI_MOCK });
+	const started = Date.now();
+	await page.goto("/");
+	await expect(page.locator(".adk-setup-headline")).toBeVisible();
+	return Date.now() - started;
+}
+
+test("셸 첫 화면이 콜드·웜 한도 안에 뜬다 (UC-PERF-STARTUP-LATENCY)", async ({ page }) => {
+	const cold = await measure(page);
+
+	const warm: number[] = [];
+	for (let attempt = 0; attempt < WARM_SAMPLES; attempt++) {
+		warm.push(await measure(page));
 	}
-	const value = median(samples);
-	console.log(`[startup-latency] 표본 ${samples.join(", ")}ms → 중앙값 ${value}ms (한도 ${STARTUP_BUDGET_MS}ms)`);
+	const warmMedian = median(warm);
+
+	console.log(
+		`[startup-latency] 콜드 ${cold}ms (한도 ${COLD_BUDGET_MS}ms) / ` +
+			`웜 표본 ${warm.join(", ")}ms → 중앙값 ${warmMedian}ms (한도 ${WARM_BUDGET_MS}ms)`,
+	);
+
 	expect(
-		value,
-		`셸 첫 화면까지 ${value}ms — 한도 ${STARTUP_BUDGET_MS}ms 를 넘었다. 표본 ${samples.join(", ")}`,
-	).toBeLessThan(STARTUP_BUDGET_MS);
+		cold,
+		`콜드 시작이 ${cold}ms — 한도 ${COLD_BUDGET_MS}ms 를 넘었다.`,
+	).toBeLessThan(COLD_BUDGET_MS);
+	expect(
+		warmMedian,
+		`웜 시작 중앙값이 ${warmMedian}ms — 한도 ${WARM_BUDGET_MS}ms 를 넘었다. 표본 ${warm.join(", ")}`,
+	).toBeLessThan(WARM_BUDGET_MS);
 });

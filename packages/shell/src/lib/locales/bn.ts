@@ -397,6 +397,7 @@ export default {
 	"history.untitled": "শিরোনামহীন",
 	"history.messages": "বার্তা",
 	"history.delete": "মুছে দিন",
+	"apps.removeConfirm": "এটি ইনস্টল করা অ্যাপটি ডিস্ক থেকে মুছে ফেলবে এবং তা ফেরানো যাবে না। চালিয়ে যাবেন?",
 	"history.deleteConfirm": "এই কথোপকথন মুছবেন?",
 	"history.current": "কারেন্ট",
 	"history.tabHistory": "ইতিহাস",
