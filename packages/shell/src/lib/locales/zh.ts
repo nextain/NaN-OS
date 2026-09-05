@@ -398,6 +398,7 @@ export default {
 	"history.messages": "消息",
 	"history.delete": "删除",
 	"apps.removeConfirm": "将从磁盘删除已安装的应用，且无法撤销。是否继续？",
+	"editor.reloading": "正在重新加载…",
 	"appbar.desktop": "桌面",
 	"voice.ref.sectionTitle": "语音参考",
 	"voice.ref.hint": "Naia 在实时回复中复刻的音色。请录制 5–30 秒或上传一段音频。",

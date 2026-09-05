@@ -13,6 +13,7 @@
  *  - Sessions section renders and collapses
  */
 import "@testing-library/jest-dom/vitest";
+import { t } from "../../lib/i18n";
 import {
 	cleanup,
 	fireEvent,
@@ -203,7 +204,9 @@ describe("IssuesArea", () => {
 		await renderApp();
 
 		await waitFor(() => {
-			expect(screen.getByText("다시 시도")).toBeInTheDocument();
+			// 글자가 아니라 키로 찾는다. 글자로 찾으면 그 자리가 i18n 을 지나는지
+			// 알 수 없고, 번역이 바뀔 때마다 테스트가 깨진다.
+			expect(screen.getByText(t("common.retry"))).toBeInTheDocument();
 		});
 	});
 

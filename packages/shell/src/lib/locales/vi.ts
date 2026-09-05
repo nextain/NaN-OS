@@ -398,6 +398,7 @@ export default {
 	"history.messages": "tin nhắn",
 	"history.delete": "Xóa",
 	"apps.removeConfirm": "Thao tác này xóa ứng dụng đã cài khỏi ổ đĩa và không thể hoàn tác. Tiếp tục?",
+	"editor.reloading": "Đang tải lại…",
 	"appbar.desktop": "Màn hình chính",
 	"voice.ref.sectionTitle": "Giọng tham chiếu",
 	"voice.ref.hint": "Giọng mà Naia mô phỏng khi trả lời thời gian thực. Ghi 5–30 giây hoặc tải lên một đoạn.",

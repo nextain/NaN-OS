@@ -398,6 +398,7 @@ export default {
 	"history.messages": "mensagens",
 	"history.delete": "Excluir",
 	"apps.removeConfirm": "Isto exclui o aplicativo instalado do disco e não pode ser desfeito. Continuar?",
+	"editor.reloading": "Recarregando…",
 	"appbar.desktop": "Área de trabalho",
 	"voice.ref.sectionTitle": "Referência de voz",
 	"voice.ref.hint": "A voz que a Naia clona nas respostas em tempo real. Grave de 5 a 30 s ou envie um trecho.",

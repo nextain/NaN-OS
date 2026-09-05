@@ -77,7 +77,7 @@ for (const file of walk(ROOT)) {
 // `.tsx` 만 센 것이라 문자열을 `.ts` 로 옮기기만 해도 게이트를 피할 수
 // 있었다. 그 범위로 다시 세면 658줄이었고, 로케일 밖 번역표 다섯을
 // 옮기면서 592줄이 되었다.
-const BASELINE_LINES = 592;
+const BASELINE_LINES = 588;
 const BASELINE_FILES = 66;
 
 console.log(`[untranslated-ui] 화면에 박힌 한국어 ${total}줄 / ${perFile.length}파일 (baseline ${BASELINE_LINES}줄 / ${BASELINE_FILES}파일)`);

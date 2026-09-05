@@ -398,6 +398,7 @@ export default {
 	"history.messages": "Nachrichten",
 	"history.delete": "Löschen",
 	"apps.removeConfirm": "Dies löscht die installierte App von der Festplatte und kann nicht rückgängig gemacht werden. Fortfahren?",
+	"editor.reloading": "Wird neu geladen…",
 	"appbar.desktop": "Desktop",
 	"voice.ref.sectionTitle": "Stimmreferenz",
 	"voice.ref.hint": "Die Stimme, die Naia für Echtzeitantworten nachbildet. Nimm 5–30 s auf oder lade einen Clip hoch.",

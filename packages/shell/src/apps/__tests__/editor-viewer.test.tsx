@@ -439,7 +439,7 @@ describe("Editor — file type helpers (via render behaviour)", () => {
 			expect(screen.getByText(/파일을 열 수 없습니다/)).toBeInTheDocument(),
 		);
 		expect(
-			screen.getByRole("button", { name: "다시 시도" }),
+			screen.getByRole("button", { name: t("common.retry") }),
 		).toBeInTheDocument();
 	});
 

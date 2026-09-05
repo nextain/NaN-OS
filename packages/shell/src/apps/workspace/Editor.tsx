@@ -745,7 +745,7 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
 						onClick={() => void reloadFile()}
 						disabled={reloading}
 					>
-						{reloading ? "다시 읽는 중…" : "다시 시도"}
+						{reloading ? t("editor.reloading") : t("common.retry")}
 					</button>
 				</div>
 			</div>

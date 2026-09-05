@@ -398,6 +398,7 @@ export default {
 	"history.messages": "메시지",
 	"history.delete": "삭제",
 	"apps.removeConfirm": "설치된 앱을 디스크에서 지웁니다. 되돌릴 수 없습니다. 계속할까요?",
+	"editor.reloading": "다시 읽는 중…",
 	"appbar.desktop": "바탕화면",
 	"voice.ref.sectionTitle": "음성 참조 (Voice Reference)",
 	"voice.ref.hint": "Naia 실시간 음성이 사용할 음색입니다. 5–30초 녹음하거나 클립을 업로드하세요.",

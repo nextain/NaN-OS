@@ -398,6 +398,7 @@ export default {
 	"history.messages": "メッセージ",
 	"history.delete": "削除",
 	"apps.removeConfirm": "インストール済みアプリをディスクから削除します。元に戻せません。続けますか?",
+	"editor.reloading": "再読み込み中…",
 	"appbar.desktop": "デスクトップ",
 	"voice.ref.sectionTitle": "音声リファレンス",
 	"voice.ref.hint": "Naia がリアルタイム応答で再現する声です。5〜30 秒録音するか、クリップをアップロードしてください。",

@@ -398,6 +398,7 @@ export default {
 	"history.messages": "संदेश",
 	"history.delete": "हटाएँ",
 	"apps.removeConfirm": "यह स्थापित ऐप को डिस्क से हटा देता है और इसे पूर्ववत नहीं किया जा सकता। जारी रखें?",
+	"editor.reloading": "फिर से लोड हो रहा है…",
 	"appbar.desktop": "डेस्कटॉप",
 	"voice.ref.sectionTitle": "आवाज़ संदर्भ",
 	"voice.ref.hint": "वह आवाज़ जिसे Naia रीयल-टाइम उत्तरों में दोहराती है। 5–30 सेकंड रिकॉर्ड करें या क्लिप अपलोड करें।",

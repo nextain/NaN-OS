@@ -398,6 +398,7 @@ export default {
 	"history.messages": "mensajes",
 	"history.delete": "Eliminar",
 	"apps.removeConfirm": "Esto elimina la aplicación instalada del disco y no se puede deshacer. ¿Continuar?",
+	"editor.reloading": "Recargando…",
 	"appbar.desktop": "Escritorio",
 	"voice.ref.sectionTitle": "Referencia de voz",
 	"voice.ref.hint": "La voz que Naia clona para las respuestas en tiempo real. Graba de 5 a 30 s o sube un clip.",

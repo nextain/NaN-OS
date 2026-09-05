@@ -398,6 +398,7 @@ export default {
 	"history.messages": "الرسائل",
 	"history.delete": "حذف",
 	"apps.removeConfirm": "سيؤدي هذا إلى حذف التطبيق المثبت من القرص ولا يمكن التراجع عنه. هل تريد المتابعة؟",
+	"editor.reloading": "جارٍ إعادة التحميل…",
 	"appbar.desktop": "سطح المكتب",
 	"voice.ref.sectionTitle": "مرجع الصوت",
 	"voice.ref.hint": "الصوت الذي تحاكيه Naia في الردود الفورية. سجّل من ٥ إلى ٣٠ ثانية أو ارفع مقطعًا.",

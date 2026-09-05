@@ -398,6 +398,7 @@ export default {
 	"history.messages": "বার্তা",
 	"history.delete": "মুছে দিন",
 	"apps.removeConfirm": "এটি ইনস্টল করা অ্যাপটি ডিস্ক থেকে মুছে ফেলবে এবং তা ফেরানো যাবে না। চালিয়ে যাবেন?",
+	"editor.reloading": "পুনরায় লোড হচ্ছে…",
 	"appbar.desktop": "ডেস্কটপ",
 	"voice.ref.sectionTitle": "ভয়েস রেফারেন্স",
 	"voice.ref.hint": "Naia রিয়েল-টাইম উত্তরে যে কণ্ঠ অনুকরণ করে। ৫–৩০ সেকেন্ড রেকর্ড করুন বা ক্লিপ আপলোড করুন।",

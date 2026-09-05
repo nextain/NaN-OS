@@ -398,6 +398,7 @@ export default {
 	"history.messages": "messages",
 	"history.delete": "Delete",
 	"apps.removeConfirm": "This deletes the installed app from disk and cannot be undone. Continue?",
+	"editor.reloading": "Reloading…",
 	"appbar.desktop": "Desktop",
 	"voice.ref.sectionTitle": "Voice Reference",
 	"voice.ref.hint": "The voice Naia clones for realtime replies. Record 5–30 s or upload a clip.",

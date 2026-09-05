@@ -398,6 +398,7 @@ export default {
 	"history.messages": "messages",
 	"history.delete": "Supprimer",
 	"apps.removeConfirm": "Cette action supprime l'application installée du disque et est irréversible. Continuer ?",
+	"editor.reloading": "Rechargement…",
 	"appbar.desktop": "Bureau",
 	"voice.ref.sectionTitle": "Référence vocale",
 	"voice.ref.hint": "La voix que Naia reproduit pour les réponses en temps réel. Enregistrez 5 à 30 s ou importez un extrait.",

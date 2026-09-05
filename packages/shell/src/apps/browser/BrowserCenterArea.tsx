@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import { t } from "../../lib/i18n";
 import { listen } from "@tauri-apps/api/event";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { emitAiInterferenceEvent } from "../../lib/ai-interference";
@@ -921,7 +922,7 @@ return {
 						className="browser-app__install-btn"
 						onClick={initWebview}
 					>
-						다시 시도
+						{t("common.retry")}
 					</button>
 				</div>
 			)}

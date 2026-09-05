@@ -398,6 +398,7 @@ export default {
 	"history.messages": "pesan",
 	"history.delete": "Hapus",
 	"apps.removeConfirm": "Ini menghapus aplikasi terinstal dari disk dan tidak dapat dibatalkan. Lanjutkan?",
+	"editor.reloading": "Memuat ulang…",
 	"appbar.desktop": "Desktop",
 	"voice.ref.sectionTitle": "Referensi suara",
 	"voice.ref.hint": "Suara yang ditiru Naia untuk balasan waktu nyata. Rekam 5–30 detik atau unggah klip.",
