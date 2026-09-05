@@ -1,12 +1,11 @@
+import { clickElement } from "../helpers/click.js";
+
 describe("100 — Herdr first frame", () => {
 	it("renders the native PTY surface without falling into the no-frame retry loop", async () => {
-		await browser.execute(() => {
-			const workspace = document.querySelector(
-				'button[data-app-id="workspace"]',
-			) as HTMLButtonElement | null;
-			if (!workspace) throw new Error("Workspace app button is missing");
-			workspace.click();
-		});
+		// 앱바가 뜨기를 기다렸다가 누른다. 기다리지 않고 바로 찾으면 셸이
+		// 아직 그리는 중일 때 "버튼이 없다" 로 죽는다 — 실제로 그 자리에서
+		// 실패했고, 버튼 자체는 멀쩡히 있다.
+		await clickElement('button[data-app-id="workspace"]', 20_000);
 
 		await browser.waitUntil(
 			async () =>

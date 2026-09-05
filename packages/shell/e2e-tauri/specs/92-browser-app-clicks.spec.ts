@@ -21,9 +21,21 @@
  * the rule would also protect against future regressions.
  */
 
+import { mkdirSync } from "node:fs";
+import { resolve } from "node:path";
 import { S } from "../helpers/selectors.js";
 
-const SHOT = "/tmp/browser-app-clicks";
+// 스크린샷 자리. 예전에는 `/tmp/browser-app-clicks` 를 그대로 썼는데, 그
+// 디렉터리를 만드는 사람이 아무도 없어서 저장하는 순간 스펙이 죽었다
+// ("directory doesn't exist"). 산출물 자리는 다른 스펙들과 같은 규약을
+// 따르고, 없으면 만든다.
+const SHOT = resolve(
+	process.env.NAIA_E2E_ARTIFACTS_DIR
+		? resolve(process.env.NAIA_E2E_ARTIFACTS_DIR)
+		: resolve(process.cwd(), "e2e-tauri/.artifacts"),
+	"browser-app-clicks",
+);
+mkdirSync(SHOT, { recursive: true });
 
 /** Return the .content-app__slot that wraps the browser app, or null. */
 function getBrowserSlotInfo(): Promise<{

@@ -32,6 +32,17 @@ const DEVICE_ENV = /VOICE|AUDIO|VOXCPM2|NVA|SCREENSHOT|GPU|CASCADE/;
 // 자격증명으로 보는 신호.
 const KEY_ENV = /API_KEY|_KEY$|TOKEN|SECRET|USER_ID/;
 
+/**
+ * 실제로 모델과 대화하는 스펙이 쓰는 헬퍼.
+ *
+ * 왜 이름으로 보는가: 셸은 모델 키를 환경 변수가 아니라 앱 설정에서 읽는다.
+ * 그래서 "이 스펙이 진짜 대화를 하는가" 는 환경 변수 참조로는 알 수 없다.
+ * 실제로 07-cleanup 은 모델에게 메모 삭제를 시키는데 요구 목록에는
+ * 산출물 디렉터리 하나뿐이라 결정론 칸에 들어가 있었고, 자격증명 없는
+ * 기계가 맡았다가 실패했다.
+ */
+const CHAT_HELPERS = /\b(sendMessage|waitForToolSuccess|getLastAssistantMessage|judge\w*)\s*\(/;
+
 const confOwners = new Map();
 for (const name of readdirSync(CONF_DIR).filter((f) => /^wdio\.conf\..+\.ts$/.test(f))) {
 	const source = readFileSync(join(CONF_DIR, name), "utf8");
@@ -97,12 +108,18 @@ for (const name of readdirSync(SPEC_DIR).filter((f) => f.endsWith(".spec.ts")).s
 		.flatMap((m) => helperEnv.get(m[1]) ?? []);
 	const envs = [...new Set([...direct, ...viaHelpers])].sort();
 	const device = envs.some((e) => DEVICE_ENV.test(e));
+	// 대화 헬퍼를 부르면 모델이 필요하다 — 환경 변수에 드러나지 않아도.
+	const talks = CHAT_HELPERS.test(source);
 	const keyed = envs.some((e) => KEY_ENV.test(e));
 	rows.push({
 		spec: name,
 		conf: confOwners.get(name) ?? [],
 		env: envs,
-		tier: device ? "native_local" : keyed ? "credentialed_live" : "deterministic_ci",
+		tier: device
+			? "native_local"
+			: keyed || talks
+				? "credentialed_live"
+				: "deterministic_ci",
 	});
 }
 

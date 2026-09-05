@@ -2,8 +2,8 @@
 	"generatedFrom": "packages/shell/e2e-tauri/specs",
 	"total": 127,
 	"summary": {
-		"credentialed_live": 90,
-		"deterministic_ci": 34,
+		"credentialed_live": 94,
+		"deterministic_ci": 30,
 		"native_local": 3
 	},
 	"specs": [
@@ -81,7 +81,7 @@
 			"env": [
 				"NAIA_E2E_ARTIFACTS_DIR"
 			],
-			"tier": "deterministic_ci"
+			"tier": "credentialed_live"
 		},
 		{
 			"spec": "08-memory.spec.ts",
@@ -1055,7 +1055,7 @@
 				"NAIA_E2E_ADK_PATH",
 				"NAIA_E2E_ARTIFACTS_DIR"
 			],
-			"tier": "deterministic_ci"
+			"tier": "credentialed_live"
 		},
 		{
 			"spec": "90-glm-newcore-chat.spec.ts",
@@ -1095,7 +1095,9 @@
 		{
 			"spec": "92-browser-app-clicks.spec.ts",
 			"conf": [],
-			"env": [],
+			"env": [
+				"NAIA_E2E_ARTIFACTS_DIR"
+			],
 			"tier": "deterministic_ci"
 		},
 		{
@@ -1253,7 +1255,7 @@
 			"env": [
 				"NAIA_E2E_ARTIFACTS_DIR"
 			],
-			"tier": "deterministic_ci"
+			"tier": "credentialed_live"
 		},
 		{
 			"spec": "98-launch-f2-chat-with-login.spec.ts",
@@ -1294,7 +1296,7 @@
 			"env": [
 				"NAIA_E2E_ARTIFACTS_DIR"
 			],
-			"tier": "deterministic_ci"
+			"tier": "credentialed_live"
 		},
 		{
 			"spec": "99-stt-mic-test.spec.ts",
