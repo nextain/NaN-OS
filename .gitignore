@@ -99,3 +99,9 @@ packages/shell/e2e-tauri/.artifacts/
 # 만들려다 "Invalid argument" 로 죽어 checkout 자체가 막힌다(2026-09-05 실측).
 C:\\*
 packages/shell/C:\\*
+
+# 짝 에이전트 워크트리와 작업용 워크트리. 저장소 안에 놓인 **다른 저장소**라
+# `git add -A` 에 gitlink 로 딸려 들어간다(2026-09-05 두 번 그랬다). 커밋되면
+# 다른 기계가 clone 할 때 내용을 못 받고, 짝 해석까지 흔들린다.
+naia-agent-worktrees/
+worktrees/
