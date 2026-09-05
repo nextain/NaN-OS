@@ -12,7 +12,7 @@
  *
  * 쓰는 법:
  *   node scripts/run-regression.mjs --machine=<이름> --tier=deterministic_ci[,credentialed_live,native_local]
- *   node scripts/run-regression.mjs --machine=<이름> --tier=ci --dry-run
+ *   node scripts/run-regression.mjs --machine=<이름> --tier=deterministic_ci --dry-run
  *
  * --dry-run 은 무엇을 돌릴지만 보여준다. 환경이 갖춰졌는지 먼저 볼 때 쓴다.
  */
@@ -137,7 +137,10 @@ if (absentPrereqs.length) {
 				finished: new Date().toISOString(),
 				status: "prerequisites-missing",
 				assigned: [],
-				skippedForMissingEnv: Object.fromEntries(missingEnv),
+				// 관측이 아니라 사전 예측이다 — 이 스펙들도 wdio 에 넘어가고, 그 안에서
+	// 스스로 건너뛸지 실패할지는 스펙이 정한다. 이름을 그대로 두면 "건너뛰었다"
+	// 는 관측으로 읽히므로 무엇인지 밝힌다.
+	envMissingBeforeRun: Object.fromEntries(missingEnv),
 				missingPrerequisites: absentPrereqs,
 				detail: "공통 전제가 없어 실행하지 않았다",
 			},
@@ -176,7 +179,10 @@ const record = {
 	finished: new Date().toISOString(),
 	status,
 	assigned: mine.map((s) => s.spec),
-	skippedForMissingEnv: Object.fromEntries(missingEnv),
+	// 관측이 아니라 사전 예측이다 — 이 스펙들도 wdio 에 넘어가고, 그 안에서
+	// 스스로 건너뛸지 실패할지는 스펙이 정한다. 이름을 그대로 두면 "건너뛰었다"
+	// 는 관측으로 읽히므로 무엇인지 밝힌다.
+	envMissingBeforeRun: Object.fromEntries(missingEnv),
 	detail,
 };
 

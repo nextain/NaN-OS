@@ -17,6 +17,10 @@ jobs:
   # 이 잡이 붉으면 설치본을 만들지 않는다. 설치본이 나가기 전에 회귀가
   # 돌았어야 하기 때문이다.
   regression-gate:
+    # 이 워크플로는 모든 푸시에서 돈다. 회귀 기록을 모든 푸시에 요구하면
+    # 설치본 생산이 통째로 막히고, 그러면 게이트는 곧 꺼진다. 나가는 것에만
+    # 건다 — 태그를 붙이거나 손으로 돌릴 때다.
+    if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
@@ -27,7 +31,9 @@ jobs:
         run: node scripts/check-regression-complete.mjs --max-age-hours=72
 
   build:
+    # 게이트가 건너뛰어진 경우(일반 푸시)에도 빌드는 돈다. 실패했을 때만 막는다.
     needs: regression-gate
+    if: always() && needs.regression-gate.result != 'failure'
     strategy:
       fail-fast: false
       matrix:

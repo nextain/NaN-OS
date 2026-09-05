@@ -2,8 +2,8 @@
 	"generatedFrom": "packages/shell/e2e-tauri/specs",
 	"total": 129,
 	"summary": {
-		"credentialed_live": 89,
-		"deterministic_ci": 37,
+		"credentialed_live": 90,
+		"deterministic_ci": 36,
 		"native_local": 3
 	},
 	"specs": [
@@ -306,8 +306,13 @@
 		{
 			"spec": "22-channels-config.spec.ts",
 			"conf": [],
-			"env": [],
-			"tier": "deterministic_ci"
+			"env": [
+				"CAFE_E2E_API_KEY",
+				"GEMINI_API_KEY",
+				"NAIA_API_KEY",
+				"NAIA_E2E_ADK_FIXTURE"
+			],
+			"tier": "credentialed_live"
 		},
 		{
 			"spec": "23-channels-status.spec.ts",

@@ -98,7 +98,11 @@ const brokenRefs = [...referenced].filter((ref) => {
 	if (ref.includes("*")) return false;
 	const candidates = [ref, ...searchRoots.map((root) => `${root}/${ref}`)];
 	if (candidates.some((candidate) => existsSync(candidate))) return false;
-	return !namesOnDisk.has(ref.split("/").pop());
+	// 경로까지 적은 줄은 그 경로로 판정한다. 이름만 남기고 넘어가면 파일이
+	// 다른 곳으로 옮겨가도 표가 낡은 채 통과한다.
+	if (ref.includes("/")) return true;
+	// 이름만 적힌 줄은 저장소 어디엔가 그 이름이 있으면 산 참조로 본다.
+	return !namesOnDisk.has(ref);
 });
 
 console.log(`[uc-trace] UC 표제 ${titles.length} / 추적 안 되는 것 ${untracked.length} (baseline ${BASELINE.length}) / 표가 가리키는 파일 ${referenced.size}`);
@@ -110,7 +114,7 @@ if (added.length) {
 }
 // 지금 깨져 있는 참조를 baseline 으로 둔다. 표가 오래되어 옛 경로를 가리키는
 // 것이 이미 여럿이라, 한 번에 붉히면 게이트가 꺼진다. 늘어나는 것만 막는다.
-const BASELINE_BROKEN_REFS = 13;
+const BASELINE_BROKEN_REFS = 29;
 if (brokenRefs.length > BASELINE_BROKEN_REFS) {
 	console.error(`  ❌ 표가 가리키는데 없는 파일이 늘었다(${brokenRefs.length} > ${BASELINE_BROKEN_REFS}):`);
 	for (const ref of brokenRefs.slice(0, 10)) console.error(`     ${ref}`);

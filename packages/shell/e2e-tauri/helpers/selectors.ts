@@ -19,7 +19,8 @@ export const S = {
 	settingsTab: ".settings-tab",
 	// #541: 설정·스킬·진단은 더 이상 채팅 탭바에 없다 — 앱바의 설정 버튼으로 연다.
 	settingsTabBtn: ".app-bar-settings",
-	chatTab: ".chat-tab:first-child",
+	// 위치가 아니라 식별자로 잡는다 — 탭이 하나만 늘어도 위치는 어긋난다.
+	chatTab: '[data-chat-tab="chat"]',
 	providerSelect: "#provider-select",
 	apiKeyInput: "#apikey-input",
 	toolsToggle: "#tools-toggle",
@@ -101,7 +102,7 @@ export const S = {
 	skillInstallResultError: ".skill-install-result.error",
 
 	// Channels tab (5th tab)
-	channelsTabBtn: ".chat-tab:nth-child(5)",
+	channelsTabBtn: '[data-chat-tab="channels"]',
 	channelsTabApp: '[data-testid="channels-tab"]',
 	channelCard: '[data-testid="channel-card"]',
 	channelAccount: '[data-testid="channel-account"]',

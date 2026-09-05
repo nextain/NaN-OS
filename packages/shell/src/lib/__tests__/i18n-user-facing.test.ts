@@ -1,8 +1,19 @@
 import { describe, expect, it } from "vitest";
 import { setLocale, t } from "../i18n";
-import ko from "../locales/ko";
+import ar from "../locales/ar";
+import bn from "../locales/bn";
+import de from "../locales/de";
 import en from "../locales/en";
+import es from "../locales/es";
+import fr from "../locales/fr";
+import hi from "../locales/hi";
+import id from "../locales/id";
 import ja from "../locales/ja";
+import ko from "../locales/ko";
+import pt from "../locales/pt";
+import ru from "../locales/ru";
+import vi from "../locales/vi";
+import zh from "../locales/zh";
 
 /**
  * 사용성 축의 첫 자리 (UC-QUALITY-I18N-USER-FACING).
@@ -40,9 +51,13 @@ describe("사용자에게 보이는 문구는 i18n 을 지난다 (UC-QUALITY-I18
 
 	it("모든 로케일이 같은 키 집합을 갖는다", () => {
 		const base = Object.keys(ko).sort();
+		// 문서는 "로케일 열넷이 같은 키 집합을 갖는다" 고 적었는데 예전에는 둘만
+		// 비교했다. 적힌 보증과 재는 것이 다르면, 이 테스트가 없애려던 바로 그
+		// 형태가 된다. 열셋 전부와 견준다.
 		for (const [name, table] of [
-			["en", en],
-			["ja", ja],
+			["ar", ar], ["bn", bn], ["de", de], ["en", en], ["es", es],
+			["fr", fr], ["hi", hi], ["id", id], ["ja", ja], ["pt", pt],
+			["ru", ru], ["vi", vi], ["zh", zh],
 		] as const) {
 			const keys = Object.keys(table).sort();
 			const missing = base.filter((k) => !keys.includes(k));

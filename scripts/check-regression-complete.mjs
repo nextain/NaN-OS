@@ -8,7 +8,7 @@
  *
  * 무엇을 보는가: docs/regression-runs/ 의 기록을 모아
  *   1) 인벤토리의 모든 스펙이 어느 기계엔가 배정되었는가
- *   2) 배정되었지만 환경이 없어 건너뛴 것은 무엇인가
+ *   2) 배정되었지만 요구 환경이 없던 것은 무엇인가(실행 전 예측이다)
  *   3) 실패한 기계가 있는가
  * 를 판정한다. 건너뛴 것은 통과가 아니다.
  *
@@ -55,7 +55,7 @@ const failedMachines = [];
 const notRun = [];
 for (const record of records) {
 	for (const spec of record.assigned ?? []) covered.add(spec);
-	for (const [spec, envs] of Object.entries(record.skippedForMissingEnv ?? {})) {
+	for (const [spec, envs] of Object.entries(record.envMissingBeforeRun ?? record.skippedForMissingEnv ?? {})) {
 		skipped.set(spec, envs);
 	}
 	// prerequisites-missing 은 "돌렸는데 깨졌다" 가 아니라 "돌리지 못했다" 다.
@@ -73,7 +73,7 @@ const machines = [...new Set(records.map((r) => r.machine))];
 
 console.log(`[regression-complete] 기계 ${machines.length}대(${machines.join(", ")}) / 최근 ${maxAgeHours}시간`);
 console.log(`  스펙 ${all.size} 중 배정된 것 ${covered.size}, 아무도 맡지 않은 것 ${never.length}`);
-console.log(`  배정되었으나 환경이 없어 건너뛴 것 ${skipped.size}`);
+console.log(`  배정되었으나 요구 환경이 없던 것 ${skipped.size}`);
 
 let failed = false;
 if (notRun.length) {
@@ -94,7 +94,7 @@ if (never.length) {
 	failed = true;
 }
 if (skipped.size) {
-	console.error(`  ❌ 환경이 없어 건너뛴 스펙 ${skipped.size}개 — 이것은 통과가 아니다:`);
+	console.error(`  ❌ 요구 환경이 없던 스펙 ${skipped.size}개 — 이것은 통과가 아니다:`);
 	for (const [spec, envs] of [...skipped].slice(0, 10)) {
 		console.error(`     ${spec} ← ${envs.join(", ")}`);
 	}

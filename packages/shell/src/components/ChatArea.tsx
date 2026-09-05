@@ -3848,6 +3848,7 @@ export function ChatArea({
 						<button
 							type="button"
 							className={`chat-tab${activeTab === "chat" ? " active" : ""}`}
+							data-chat-tab="chat"
 							onClick={() => handleTabChange("chat")}
 							title={t("progress.tabChat")}
 							aria-label={t("progress.tabChat")}
@@ -3860,6 +3861,7 @@ export function ChatArea({
 						<button
 							type="button"
 							className={`chat-tab${activeTab === "history" ? " active" : ""}`}
+							data-chat-tab="history"
 							onClick={() => handleTabChange("history")}
 							title={t("history.tabHistory")}
 							aria-label={t("history.tabHistory")}
@@ -3872,6 +3874,7 @@ export function ChatArea({
 						<button
 							type="button"
 							className={`chat-tab${activeTab === "channels" ? " active" : ""}`}
+							data-chat-tab="channels"
 							onClick={() => handleTabChange("channels")}
 							title={t("channels.tabChannels")}
 							aria-label={t("channels.tabChannels")}

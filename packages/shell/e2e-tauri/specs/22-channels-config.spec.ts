@@ -1,4 +1,5 @@
 import { S } from "../helpers/selectors.js";
+import { clickElement } from "../helpers/settings.js";
 
 /**
  * 22 — Channels Config E2E
@@ -12,7 +13,7 @@ describe("22 — channels config", () => {
 	it("should navigate to Settings tab", async () => {
 		const settingsBtn = await $(S.settingsTabBtn);
 		await settingsBtn.waitForDisplayed({ timeout: 10_000 });
-		await settingsBtn.click();
+		await clickElement(S.settingsTabBtn);
 
 		const settingsTab = await $(S.settingsTab);
 		await settingsTab.waitForDisplayed({ timeout: 5_000 });
