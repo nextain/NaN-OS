@@ -17,7 +17,13 @@
  * --dry-run 은 무엇을 돌릴지만 보여준다. 환경이 갖춰졌는지 먼저 볼 때 쓴다.
  */
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import {
+	existsSync,
+	mkdirSync,
+	readdirSync,
+	readFileSync,
+	writeFileSync,
+} from "node:fs";
 import { join, resolve } from "node:path";
 
 const args = process.argv.slice(2);
@@ -186,11 +192,54 @@ function groupByConf(specs) {
  * 없는 것이다. 둘을 섞으면 배포 판단이 흐려진다.
  */
 function pairedAgentAvailable() {
-	const root = process.env.NAIA_AGENT_WORKTREES_DIR;
-	if (root && existsSync(root)) return true;
-	// 설정이 기본으로 보는 자리. 이 저장소 배치에서는 한 단계 아래에 있어,
-	// 환경 변수를 주지 않으면 못 찾는다.
-	return existsSync(resolve("..", "naia-agent-worktrees"));
+	const root =
+		process.env.NAIA_AGENT_WORKTREES_DIR ?? resolve("..", "naia-agent-worktrees");
+	if (!existsSync(root)) return false;
+
+	// 디렉터리가 있다고 되는 것이 아니다. 설정은 **검증된 커밋과 같고 작업
+	// 트리가 깨끗한** 체크아웃만 받는다. 짝이 조금이라도 다르면 결과를
+	// 믿을 수 없기 때문이다. 여기서 같은 판정을 하지 않으면, 있는데 못 쓰는
+	// 상태를 "있다" 로 보고 그룹을 돌렸다가 설정 로딩에서 죽는다.
+	// Rust 선언은 `const REQUIRED_AGENT_COMMIT: &str = "..."` 이다. 타입
+	// 표기를 빼먹으면 매치되지 않고, 그러면 이 검사가 조용히 "짝이 없다" 로
+	// 답한다 — 있는데 없다고 말하는 쪽도 판단을 망친다.
+	const required = /REQUIRED_AGENT_COMMIT\s*(?::\s*&str\s*)?=\s*"([0-9a-f]{40})"/.exec(
+		readFileSync("packages/shell/src-tauri/build.rs", "utf8"),
+	)?.[1];
+	if (!required) return false;
+
+	let entries = [];
+	try {
+		entries = readdirSync(root, { withFileTypes: true })
+			.filter((entry) => entry.isDirectory())
+			.map((entry) => join(root, entry.name));
+	} catch {
+		return false;
+	}
+
+	for (const candidate of entries) {
+		if (!existsSync(join(candidate, "scripts/builds/agent-stdio-entry.mjs")))
+			continue;
+		try {
+			const head = execFileSync("git", ["-C", candidate, "rev-parse", "HEAD"], {
+				encoding: "utf8",
+			}).trim();
+			if (head !== required) continue;
+			const dirty = execFileSync(
+				"git",
+				["-C", candidate, "status", "--porcelain"],
+				{ encoding: "utf8" },
+			)
+				.split("\n")
+				.filter((line) => line.trim() !== "")
+				// 크래시 복구 lease 는 실행 중에 생기는 것이라 소스가 아니다.
+				.filter((line) => !/\.agents[\\/]session-contracts[\\/]\.recovery[\\/]/.test(line));
+			if (dirty.length === 0) return true;
+		} catch {
+			// 후보가 아니다. 계속 찾는다.
+		}
+	}
+	return false;
 }
 
 const NEEDS_PAIRED_AGENT = /codex|radio|discord|jeonju|grok|voice-|nextain|nva-/;
