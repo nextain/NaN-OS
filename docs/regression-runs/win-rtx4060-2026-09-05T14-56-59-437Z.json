@@ -1,0 +1,210 @@
+{
+	"machine": "win-rtx4060",
+	"tiers": [
+		"credentialed_live"
+	],
+	"ranOn": {
+		"inventorySha256": "b75b106546cb01cacce7811fc1ebf306cde96967222c1ebb123e29fa0bce9e9e",
+		"commit": "d1ca38c0ee71da31cc5ecb749a347b517227c062",
+		"host": "luke-victus",
+		"platform": "win32-x64",
+		"node": "v24.18.0"
+	},
+	"started": "2026-09-05T14:56:59.437Z",
+	"finished": "2026-09-05T15:44:27.890Z",
+	"status": "failed",
+	"planned": [
+		"02-configure.spec.ts",
+		"04-skill-time.spec.ts",
+		"06-skill-memo.spec.ts",
+		"08-memory.spec.ts",
+		"10-history-tab.spec.ts",
+		"12-skills-gateway.spec.ts",
+		"14-skills-tab.spec.ts",
+		"16-skill-weather.spec.ts",
+		"18-provider-tool-calling.spec.ts",
+		"20-cron-basic.spec.ts",
+		"22-channels-config.spec.ts",
+		"28-skills-install.spec.ts",
+		"30-exec-approvals.spec.ts",
+		"36-memory-semantic.spec.ts",
+		"38-file-operations.spec.ts",
+		"40-sessions-spawn.spec.ts",
+		"42-sessions-crud.spec.ts",
+		"44-diagnostics-full.spec.ts",
+		"46-channels-operations.spec.ts",
+		"48-voicewake-set.spec.ts",
+		"50-config-management.spec.ts",
+		"52-wizard-rpc.spec.ts",
+		"54-settings-avatar-bg.spec.ts",
+		"55-settings-persona-model.spec.ts",
+		"57-settings-save-reset.spec.ts",
+		"59-skills-interactions.spec.ts",
+		"61-channels-interactions.spec.ts",
+		"66-settings-memory-facts.spec.ts",
+		"68-history-auto-title.spec.ts",
+		"70-channel-sync-dm.spec.ts",
+		"70c-nextain-default-chat.spec.ts",
+		"72-naia-discord-skill.spec.ts",
+		"74-channel-sync-lifecycle.spec.ts",
+		"76-tts-provider-switching.spec.ts",
+		"78-voice-pipeline-mode.spec.ts",
+		"80-tts-preview-all-providers.spec.ts",
+		"82-chat-tts-multi-model.spec.ts",
+		"84-chat-tts-per-provider.spec.ts",
+		"89-llm-provider-switching.spec.ts",
+		"90-codex-live-chat.spec.ts",
+		"91-memory-settings-integration.spec.ts",
+		"97-launch-f1-naia-login.spec.ts",
+		"98-launch-f2-chat-with-login.spec.ts",
+		"99-screenshots.spec.ts",
+		"99-voice-connect.spec.ts"
+	],
+	"executed": [
+		"02-configure.spec.ts",
+		"16-skill-weather.spec.ts",
+		"22-channels-config.spec.ts",
+		"40-sessions-spawn.spec.ts",
+		"48-voicewake-set.spec.ts",
+		"70-channel-sync-dm.spec.ts",
+		"74-channel-sync-lifecycle.spec.ts",
+		"80-tts-preview-all-providers.spec.ts",
+		"97-launch-f1-naia-login.spec.ts",
+		"99-screenshots.spec.ts",
+		"70c-nextain-default-chat.spec.ts"
+	],
+	"groups": [
+		{
+			"conf": "wdio.conf.ts",
+			"specs": 43,
+			"status": "failed",
+			"passed": 10,
+			"failedSpecs": [
+				"04-skill-time.spec.ts",
+				"06-skill-memo.spec.ts",
+				"08-memory.spec.ts",
+				"10-history-tab.spec.ts",
+				"12-skills-gateway.spec.ts",
+				"14-skills-tab.spec.ts",
+				"18-provider-tool-calling.spec.ts",
+				"20-cron-basic.spec.ts",
+				"28-skills-install.spec.ts",
+				"30-exec-approvals.spec.ts",
+				"36-memory-semantic.spec.ts",
+				"38-file-operations.spec.ts",
+				"42-sessions-crud.spec.ts",
+				"44-diagnostics-full.spec.ts",
+				"46-channels-operations.spec.ts",
+				"50-config-management.spec.ts",
+				"52-wizard-rpc.spec.ts",
+				"54-settings-avatar-bg.spec.ts",
+				"55-settings-persona-model.spec.ts",
+				"57-settings-save-reset.spec.ts",
+				"59-skills-interactions.spec.ts",
+				"61-channels-interactions.spec.ts",
+				"66-settings-memory-facts.spec.ts",
+				"68-history-auto-title.spec.ts",
+				"72-naia-discord-skill.spec.ts",
+				"76-tts-provider-switching.spec.ts",
+				"78-voice-pipeline-mode.spec.ts",
+				"82-chat-tts-multi-model.spec.ts",
+				"84-chat-tts-per-provider.spec.ts",
+				"89-llm-provider-switching.spec.ts",
+				"91-memory-settings-integration.spec.ts",
+				"98-launch-f2-chat-with-login.spec.ts",
+				"99-voice-connect.spec.ts"
+			]
+		},
+		{
+			"conf": "wdio.conf.nextain-chat.ts",
+			"specs": 1,
+			"status": "passed",
+			"passed": 1,
+			"failedSpecs": []
+		},
+		{
+			"conf": "wdio.conf.codex.ts",
+			"specs": 1,
+			"status": "failed",
+			"passed": 0,
+			"failedSpecs": [
+				"90-codex-live-chat.spec.ts"
+			]
+		}
+	],
+	"envMissingBeforeRun": {
+		"02-configure.spec.ts": [
+			"CAFE_GATEWAY_TOKEN"
+		],
+		"04-skill-time.spec.ts": [
+			"CAFE_GATEWAY_TOKEN"
+		],
+		"70-channel-sync-dm.spec.ts": [
+			"LAB_KEY",
+			"LAB_USER_ID"
+		],
+		"74-channel-sync-lifecycle.spec.ts": [
+			"LAB_KEY",
+			"LAB_USER_ID"
+		],
+		"80-tts-preview-all-providers.spec.ts": [
+			"ELEVENLABS_API_KEY"
+		],
+		"84-chat-tts-per-provider.spec.ts": [
+			"ELEVENLABS_API_KEY"
+		],
+		"89-llm-provider-switching.spec.ts": [
+			"XAI_API_KEY",
+			"ZHIPU_API_KEY"
+		]
+	},
+	"detail": "wdio.conf.ts: 종료 코드 1; wdio.conf.codex.ts: 종료 코드 1",
+	"billableCalls": {
+		"google-gemini-judge": 139
+	},
+	"credentialsPresent": [
+		"NAIA_API_KEY",
+		"GEMINI_API_KEY",
+		"CAFE_E2E_API_KEY",
+		"OPENAI_API_KEY",
+		"ANTHROPIC_API_KEY"
+	],
+	"flakySpecs": [
+		"66-settings-memory-facts.spec.ts"
+	],
+	"stableFailures": [
+		"04-skill-time.spec.ts",
+		"06-skill-memo.spec.ts",
+		"08-memory.spec.ts",
+		"10-history-tab.spec.ts",
+		"12-skills-gateway.spec.ts",
+		"14-skills-tab.spec.ts",
+		"18-provider-tool-calling.spec.ts",
+		"20-cron-basic.spec.ts",
+		"28-skills-install.spec.ts",
+		"30-exec-approvals.spec.ts",
+		"36-memory-semantic.spec.ts",
+		"38-file-operations.spec.ts",
+		"42-sessions-crud.spec.ts",
+		"44-diagnostics-full.spec.ts",
+		"46-channels-operations.spec.ts",
+		"50-config-management.spec.ts",
+		"52-wizard-rpc.spec.ts",
+		"54-settings-avatar-bg.spec.ts",
+		"55-settings-persona-model.spec.ts",
+		"57-settings-save-reset.spec.ts",
+		"59-skills-interactions.spec.ts",
+		"61-channels-interactions.spec.ts",
+		"68-history-auto-title.spec.ts",
+		"72-naia-discord-skill.spec.ts",
+		"76-tts-provider-switching.spec.ts",
+		"78-voice-pipeline-mode.spec.ts",
+		"82-chat-tts-multi-model.spec.ts",
+		"84-chat-tts-per-provider.spec.ts",
+		"89-llm-provider-switching.spec.ts",
+		"91-memory-settings-integration.spec.ts",
+		"98-launch-f2-chat-with-login.spec.ts",
+		"99-voice-connect.spec.ts",
+		"90-codex-live-chat.spec.ts"
+	]
+}
