@@ -32,8 +32,16 @@ describe("70 — live providers switching", () => {
 	});
 
 	for (const p of providers) {
-		const testFn = p.id === "ollama" ? it.skip : it;
-		testFn(`should work with ${p.label} (${p.model})`, async () => {
+		// 키가 없으면 건너뛴다. 예전에는 가짜 키(`"test-key"`)를 넣고 실제
+		// 공급자를 불렀는데, 그 요청은 인증 오류로 돌아와 아래 단정에서
+		// 실패한다. 그러면 "환경이 없다" 가 "회귀가 깨졌다" 로 보고된다 —
+		// 둘은 다른 사실이고, 섞이면 배포 판단이 흐려진다.
+		const missingKey = p.envKey ? !process.env[p.envKey] : false;
+		const testFn = p.id === "ollama" || missingKey ? it.skip : it;
+		const label = missingKey
+			? `rewrite-needed: ${p.envKey} 가 없어 ${p.label} 을 검증하지 못했다`
+			: `should work with ${p.label} (${p.model})`;
+		testFn(label, async () => {
 			// 1. Switch to Settings
 			await browser.execute((sel: string) => {
 				const el = document.querySelector(sel) as HTMLElement | null;
@@ -71,7 +79,7 @@ describe("70 — live providers switching", () => {
 			}, p.model);
 
 			// 3.5 Set API Key & Save
-			const apiKey = p.envKey ? process.env[p.envKey] || "test-key" : "ollama";
+			const apiKey = p.envKey ? (process.env[p.envKey] ?? "") : "ollama";
 			await browser.execute((key: string) => {
 				const input = document.querySelector(
 					"input#apikey-input",
