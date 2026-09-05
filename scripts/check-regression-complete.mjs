@@ -14,6 +14,7 @@
  *
  * 쓰는 법: node scripts/check-regression-complete.mjs [--max-age-hours=24]
  */
+import { createHash } from "node:crypto";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 
@@ -39,10 +40,46 @@ if (!existsSync(RUNS)) {
 }
 
 const cutoff = Date.now() - maxAgeHours * 3600_000;
+/**
+ * 기록이 이 코드·이 스펙 목록에서 나왔는지 본다.
+ *
+ * 위조를 막지는 못한다 — 저장소에 커밋할 수 있는 사람이면 기록 파일도 쓸 수
+ * 있고, 그것을 코드로 구별할 방법은 없다. 여기서 막는 것은 **실수**다.
+ * 인벤토리가 바뀐 뒤의 낡은 기록, 다른 브랜치에서 돈 기록, 그리고 시계가
+ * 어긋난 기록. 이것들은 악의 없이도 생기고, 생기면 "전부 덮였다" 는 거짓
+ * 결론으로 이어진다.
+ */
+const inventoryDigest = createHash("sha256")
+	.update(readFileSync(INVENTORY))
+	.digest("hex");
+
+const rejected = [];
 const inWindow = readdirSync(RUNS)
 	.filter((f) => f.endsWith(".json"))
-	.map((f) => JSON.parse(readFileSync(join(RUNS, f), "utf8")))
-	.filter((r) => Date.parse(r.finished ?? r.started ?? 0) >= cutoff);
+	.map((f) => ({ file: f, record: JSON.parse(readFileSync(join(RUNS, f), "utf8")) }))
+	.filter(({ file, record }) => {
+		const when = Date.parse(record.finished ?? record.started ?? 0);
+		if (Number.isNaN(when)) {
+			rejected.push(`${file}: 시각을 읽을 수 없다`);
+			return false;
+		}
+		// 미래 날짜는 창을 영원히 통과한다. 시계가 어긋났거나 손으로 적은
+		// 것이고, 어느 쪽이든 실행 시각이 아니다.
+		if (when > Date.now() + 5 * 60_000) {
+			rejected.push(`${file}: 실행 시각이 미래다`);
+			return false;
+		}
+		if (when < cutoff) return false;
+		const stamp = record.ranOn;
+		// 옛 형식 기록에는 지문이 없다. 그것까지 거부하면 판정이 갑자기
+		// 비어 버리므로 통과시키되, 지문이 있는데 어긋나면 거부한다.
+		if (stamp?.inventorySha256 && stamp.inventorySha256 !== inventoryDigest) {
+			rejected.push(`${file}: 다른 스펙 목록에서 돌았다`);
+			return false;
+		}
+		return true;
+	})
+	.map(({ record }) => record);
 
 /**
  * 기계마다 **가장 최근 실행 하나**만 본다.
@@ -64,6 +101,11 @@ for (const record of inWindow) {
 }
 const records = [...latestByMachine.values()].map((entry) => entry.record);
 const superseded = inWindow.length - records.length;
+
+if (rejected.length > 0) {
+	console.log(`  판정에서 뺀 기록 ${rejected.length}개:`);
+	for (const reason of rejected) console.log(`    ${reason}`);
+}
 
 if (!records.length) {
 	console.error(`[regression-complete] ❌ 최근 ${maxAgeHours}시간 안의 회귀 기록이 없다`);

@@ -17,6 +17,7 @@
  * --dry-run 은 무엇을 돌릴지만 보여준다. 환경이 갖춰졌는지 먼저 볼 때 쓴다.
  */
 import { execFileSync, spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import {
 	existsSync,
 	mkdirSync,
@@ -470,9 +471,38 @@ for (const [conf, specs] of groups) {
 	});
 }
 
+/**
+ * 이 실행이 어느 코드·어느 목록에서 나왔는지 남긴다.
+ *
+ * 기록은 저장소에 커밋되는 JSON 일 뿐이라, 손으로 써도 게이트가 받아들인다.
+ * 그것을 완전히 막을 수는 없다 — 같은 저장소에 커밋할 수 있는 사람이면
+ * 파일도 쓸 수 있다. 다만 **실수로 낡거나 어긋난 기록이 통과하는 것**은 막을
+ * 수 있다. 인벤토리가 다르면 다른 스펙 목록으로 돈 것이고, 커밋이 다르면
+ * 다른 코드에서 돈 것이다. 그 사실을 게이트가 보게 한다.
+ */
+function fingerprint() {
+	const inventoryRaw = readFileSync(INVENTORY);
+	const digest = createHash("sha256").update(inventoryRaw).digest("hex");
+	let commit = "unknown";
+	try {
+		commit = execFileSync("git", ["rev-parse", "HEAD"], {
+			encoding: "utf8",
+		}).trim();
+	} catch {
+		// git 이 없는 자리에서도 기록은 남긴다. 다만 추적이 약해진다.
+	}
+	return {
+		inventorySha256: digest,
+		commit,
+		platform: `${process.platform}-${process.arch}`,
+		node: process.version,
+	};
+}
+
 const record = {
 	machine,
 	tiers,
+	ranOn: fingerprint(),
 	started,
 	finished: new Date().toISOString(),
 	status,
