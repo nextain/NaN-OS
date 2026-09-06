@@ -70,6 +70,17 @@ vi.mock("../lib/environment-skill", () => ({
 	refreshEnvironment: vi.fn().mockResolvedValue(null),
 }));
 
+vi.mock("../lib/chat-service", async () => {
+	const actual = await vi.importActual<typeof import("../lib/chat-service")>(
+		"../lib/chat-service",
+	);
+	return {
+		...actual,
+		sendAppSkills: vi.fn().mockResolvedValue(true),
+		sendAppSkillsClear: vi.fn().mockResolvedValue(true),
+	};
+});
+
 vi.mock("../lib/adk-store", async () => {
 	const actual = await vi.importActual<typeof import("../lib/adk-store")>(
 		"../lib/adk-store",
@@ -173,6 +184,8 @@ vi.mock("@tauri-apps/plugin-process", () => ({
 	relaunch: vi.fn().mockResolvedValue(undefined),
 }));
 import { App } from "../App";
+import { sendAppSkills } from "../lib/chat-service";
+import { refreshEnvironment } from "../lib/environment-skill";
 import { useAppStore } from "../stores/app";
 
 describe("App discord deep-link persistence", () => {
@@ -191,7 +204,69 @@ describe("App discord deep-link persistence", () => {
 		backgroundState.listNaiaAssets.mockImplementation(async () => backgroundState.assets);
 		backgroundState.toLocalBlobUrl.mockReset();
 		backgroundState.toLocalBlobUrl.mockImplementation(async (path: string) => path);
+		vi.mocked(refreshEnvironment).mockClear();
+		vi.mocked(sendAppSkills).mockClear();
 		useAppStore.setState(useAppStore.getInitialState());
+	});
+
+	it("does not register environment before a disabled cold ADK finishes hydrating", async () => {
+		localStorage.setItem("naia-adk-path", "/adk/environment-off");
+		backgroundState.configReadDeferred = true;
+		adkState.config = {
+			provider: "ollama",
+			model: "e2e",
+			onboardingComplete: true,
+			environmentAwareness: "off",
+		};
+
+		render(<App />);
+
+		expect(backgroundState.releaseConfigRead).toEqual(expect.any(Function));
+		expect(refreshEnvironment).not.toHaveBeenCalled();
+		expect(sendAppSkills).not.toHaveBeenCalledWith(
+			"environment",
+			expect.anything(),
+			expect.anything(),
+		);
+
+		backgroundState.releaseConfigRead?.();
+		await waitFor(() => {
+			expect(
+				JSON.parse(localStorage.getItem("naia-config") || "{}").environmentAwareness,
+			).toBe("off");
+		});
+		expect(refreshEnvironment).not.toHaveBeenCalled();
+		expect(sendAppSkills).not.toHaveBeenCalledWith(
+			"environment",
+			expect.anything(),
+			expect.anything(),
+		);
+	});
+
+	it("registers environment after a cold ADK enables awareness", async () => {
+		localStorage.setItem("naia-adk-path", "/adk/environment-on");
+		backgroundState.configReadDeferred = true;
+		adkState.config = {
+			provider: "ollama",
+			model: "e2e",
+			onboardingComplete: true,
+			environmentAwareness: "auto",
+		};
+
+		render(<App />);
+
+		expect(backgroundState.releaseConfigRead).toEqual(expect.any(Function));
+		expect(refreshEnvironment).not.toHaveBeenCalled();
+		backgroundState.releaseConfigRead?.();
+
+		await waitFor(() => {
+			expect(refreshEnvironment).toHaveBeenCalledTimes(1);
+			expect(sendAppSkills).toHaveBeenCalledWith(
+				"environment",
+				expect.any(Array),
+				expect.objectContaining({ awaitAck: true }),
+			);
+		});
 	});
 
 	it("waits for the ADK background preference when assets resolve first", async () => {

@@ -361,6 +361,10 @@ export function App() {
 	// call them regardless of which app is currently active (e.g. asking Naia
 	// to open a website while on the Chat app).
 	useEffect(() => {
+		// ADK files are the source of truth. Wait until the selected workspace has
+		// been hydrated so an empty/stale render cache cannot enable a skill that
+		// the restored config explicitly disabled.
+		if (!configHydrated) return;
 		// UC8 BGM (FR-BGM.1): BgmPlayer 는 위젯(앱 아님)이라 descriptor.tools 경로가
 		// 없다 — 전용 등록. 실행은 ChatArea dispatchAppToolCall 의 BGM 분기.
 		sendAppSkills(BGM_APP_ID, [SKILL_YOUTUBE_BGM])
@@ -427,7 +431,7 @@ export function App() {
 					});
 			}
 		}
-	}, []);
+	}, [configHydrated]);
 
 	// Load background from naia-settings/background/. May be a video (.mp4) or a
 	// still image (.webp) — getBackgroundMediaType() below resolves which.
