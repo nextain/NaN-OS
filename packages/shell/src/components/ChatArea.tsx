@@ -1726,7 +1726,18 @@ export function ChatArea({
 			configuredModel || getDefaultLlmModel(activeProvider) || "gemini-2.5-flash";
 		const providerMeta = getLlmProvider(activeProvider);
 		const hasDynamicModels = providerMeta && providerMeta.models.length === 0;
+		// The gateway catalog is populated asynchronously, so a model selected
+		// from that catalog may not be present in the static registry yet. A
+		// structured main role is the canonical persisted selection and must
+		// survive that gap.
+		const hasExplicitStructuredMainModel = Boolean(
+			config?.llmRoles?.main &&
+				!config.llmRoles.main.inherit &&
+				config.llmRoles.main.provider === activeProvider &&
+				config.llmRoles.main.model === savedModel,
+		);
 		const modelIsValid =
+			hasExplicitStructuredMainModel ||
 			!providerMeta ||
 			hasDynamicModels ||
 			providerMeta.models.some((m) => m.id === savedModel);

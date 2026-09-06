@@ -286,6 +286,33 @@ describe("ChatArea", () => {
 		localStorage.removeItem("naia-config");
 	});
 
+	it("preserves a dynamically catalogued structured main model", async () => {
+		vi.mocked(isNewCore).mockReturnValue(true);
+		localStorage.setItem(
+			"naia-config",
+			JSON.stringify({
+				provider: "gemini",
+				model: "gemini-2.5-flash",
+				llmRoles: {
+					main: { provider: "nextain", model: "gemini-3.7-flash" },
+				},
+				enableTools: false,
+			}),
+		);
+
+		render(<ChatArea />);
+		const input = screen.getByPlaceholderText(/message/i);
+		fireEvent.change(input, { target: { value: "dynamic gateway model" } });
+		fireEvent.keyDown(input, { key: "Enter" });
+
+		await waitFor(() => expect(capturedRequests).toHaveLength(1));
+		expect(capturedRequests[0].provider).toMatchObject({
+			provider: "nextain",
+			model: "gemini-3.7-flash",
+		});
+		localStorage.removeItem("naia-config");
+	});
+
 	it("shows the provider error when a zero-token usage event precedes failure", async () => {
 		localStorage.setItem(
 			"naia-config",
