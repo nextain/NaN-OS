@@ -1,3 +1,5 @@
+import { resolve } from "node:path";
+import { mkdirSync } from "node:fs";
 import {
 	getLastAssistantMessage,
 	sendMessage,
@@ -6,7 +8,11 @@ import {
 import { S } from "../helpers/selectors.js";
 import { assertSemantic } from "../helpers/semantic.js";
 
-const SHOT = "/tmp/app-system-screenshots";
+// 스크린샷 자리는 하네스의 산출물 디렉터리 아래다. `/tmp/app-system-screenshots` 로 박아 두고
+// 만들지 않아서 "directory doesn't exist" 로 스펙 자체가 죽었다 — 화면이 아니라
+// 저장 자리가 없어서 붉은 것은 회귀가 재려는 것이 아니다.
+const SHOT = resolve(process.env.NAIA_E2E_ARTIFACTS_DIR ?? "/tmp", "app-system-screenshots");
+mkdirSync(SHOT, { recursive: true });
 
 /** Click a app tab by its app id (data-app-id attribute) */
 async function clickAppTab(appId: string): Promise<boolean> {

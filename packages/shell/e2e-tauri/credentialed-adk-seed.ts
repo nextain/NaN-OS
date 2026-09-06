@@ -10,9 +10,15 @@
 // `provider error: fetch failed` 로 죽는다. 자격증명 등급 마흔다섯 개 중 서른셋이
 // 두 기계에서 같은 자리에 걸린 이유가 그것이다.
 //
-// 심는 값은 대조군이 이미 통과시킨 것과 같다 — 나이아 게이트웨이(`nextain`)의
-// `deepseek-v4-flash`. 게이트웨이는 리눅스·윈도우 양쪽에서 닿고, 기계마다 다른
-// 로컬 서버를 전제하지 않는다.
+// 공급자는 나이아 게이트웨이(`nextain`)다 — 리눅스·윈도우 양쪽에서 닿고, 기계마다
+// 다른 로컬 서버를 전제하지 않는다. 모델은 `gemini-3.7-flash` 다. 처음에는 제품
+// 기본값과 같은 `deepseek-v4-flash` 를 심었는데, 그 모델은 게이트웨이를 거치면
+// 도구 호출 인자가 `{}""` 로 깨져(naia-anyllm#73) 도구를 쓰는 스펙 열한 개가
+// 전부 "후속 답이 오지 않는다" 로 죽었다(2026-09-06 인벤토리 109 첫 실행). 같은
+// 게이트웨이의 gemini-3.7-flash 와 gpt-5.6-sol 은 인자가 `{}` 로 온다(직접 프로브).
+// 회귀는 셸을 재는 것이지 게이트웨이의 그 결함을 재는 것이 아니므로, 도구 호출이
+// 규약대로 오는 모델을 기준으로 삼는다. #73 자체는 제품 기본 모델의 결함으로
+// 따로 열려 있다.
 //
 // 키는 **파일에 쓰지 않는다.** `llmRoles.main.credentialRef` 에 환경 변수 *이름*만
 // 적어 두면 에이전트가 자기 환경(`resolveSecret = env[ref] ?? 키체인`)에서 값을
@@ -26,7 +32,7 @@ import {
 
 /** 자격증명 등급의 기본 공급자. 대조군 70c 가 통과시킨 조합과 같다. */
 export const CREDENTIALED_MAIN_PROVIDER = "nextain";
-export const CREDENTIALED_MAIN_MODEL = "deepseek-v4-flash";
+export const CREDENTIALED_MAIN_MODEL = "gemini-3.7-flash";
 
 // 키 이름과 "하네스가 채우는 변수" 의 정본은 `harness-provided-env.mjs` 다.
 // 회귀 러너의 선별 모듈(scripts/lib/regression-selection.mjs)이 맨 노드로 도는

@@ -1,0 +1,389 @@
+{
+	"machine": "naia-os-3090",
+	"tiers": [
+		"deterministic_ci",
+		"credentialed_live",
+		"native_local"
+	],
+	"ranOn": {
+		"inventorySha256": "120bc7500f920ef208ddc473b4ef6393a559c617597c7151653c673a741d59b3",
+		"commit": "bf3a515b2016db8f19c027df6b66d73dd0e7eddd",
+		"host": "bazzite",
+		"platform": "linux-x64",
+		"node": "v26.7.0"
+	},
+	"started": "2026-09-06T05:45:28.744Z",
+	"finished": "2026-09-06T06:39:34.549Z",
+	"status": "failed",
+	"planned": [
+		"100-herdr-first-frame.spec.ts",
+		"23-channels-status.spec.ts",
+		"31-diagnostics.spec.ts",
+		"33-usage-dashboard.spec.ts",
+		"92-browser-app-clicks.spec.ts",
+		"93-discord-inbox-handoff.spec.ts",
+		"95-llm-role-settings.spec.ts",
+		"96-codex-readiness.spec.ts",
+		"96-memory-storage-boundary.spec.ts",
+		"environment-dispatch.spec.ts",
+		"01-app-launch.spec.ts",
+		"03-basic-chat.spec.ts",
+		"06-skill-memo.spec.ts",
+		"08-memory.spec.ts",
+		"10-history-tab.spec.ts",
+		"12-skills-gateway.spec.ts",
+		"14-skills-tab.spec.ts",
+		"16-skill-weather.spec.ts",
+		"18-provider-tool-calling.spec.ts",
+		"20-cron-basic.spec.ts",
+		"24-adk-setup-flow.spec.ts",
+		"34-device-pairing.spec.ts",
+		"37-execute-command.spec.ts",
+		"39-web-tools.spec.ts",
+		"42-sessions-crud.spec.ts",
+		"46-channels-operations.spec.ts",
+		"50-config-management.spec.ts",
+		"53-settings-theme.spec.ts",
+		"54b-settings-locale-prompt.spec.ts",
+		"56-settings-voice.spec.ts",
+		"58-history-interactions.spec.ts",
+		"60-diagnostics-interactions.spec.ts",
+		"64-settings-gateway-tts.spec.ts",
+		"67-onboarding-config-save.spec.ts",
+		"69-notify-discord-live.spec.ts",
+		"70b-live-providers-switching.spec.ts",
+		"71-proactive-speech-profiles.spec.ts",
+		"73-tts-edge-preview.spec.ts",
+		"75-app-position.spec.ts",
+		"77-stt-provider-switching.spec.ts",
+		"79-pipeline-voice-activation.spec.ts",
+		"81-chat-tts-response.spec.ts",
+		"83-tts-per-model-verification.spec.ts",
+		"87-tts-audio-verification.spec.ts",
+		"90-app-system.spec.ts",
+		"90-glm-newcore-chat.spec.ts",
+		"94-discord-live-auth.spec.ts",
+		"98-codex-chat-delegation.spec.ts",
+		"99-launch-f4-skill-usage.spec.ts",
+		"99-store-certification.spec.ts",
+		"channel-reboot.spec.ts",
+		"85-voice-actual-recording.spec.ts",
+		"88-stt-tts-combo-verification.spec.ts",
+		"94-voice-6g-shell.spec.ts",
+		"96-voice-linux-app-start.spec.ts"
+	],
+	"executed": [
+		"100-herdr-first-frame.spec.ts",
+		"23-channels-status.spec.ts",
+		"31-diagnostics.spec.ts",
+		"33-usage-dashboard.spec.ts",
+		"92-browser-app-clicks.spec.ts",
+		"96-memory-storage-boundary.spec.ts",
+		"environment-dispatch.spec.ts",
+		"01-app-launch.spec.ts",
+		"03-basic-chat.spec.ts",
+		"06-skill-memo.spec.ts",
+		"08-memory.spec.ts",
+		"10-history-tab.spec.ts",
+		"12-skills-gateway.spec.ts",
+		"14-skills-tab.spec.ts",
+		"16-skill-weather.spec.ts",
+		"18-provider-tool-calling.spec.ts",
+		"20-cron-basic.spec.ts",
+		"34-device-pairing.spec.ts",
+		"37-execute-command.spec.ts",
+		"39-web-tools.spec.ts",
+		"42-sessions-crud.spec.ts",
+		"46-channels-operations.spec.ts",
+		"50-config-management.spec.ts",
+		"53-settings-theme.spec.ts",
+		"54b-settings-locale-prompt.spec.ts",
+		"56-settings-voice.spec.ts",
+		"58-history-interactions.spec.ts",
+		"60-diagnostics-interactions.spec.ts",
+		"64-settings-gateway-tts.spec.ts",
+		"67-onboarding-config-save.spec.ts",
+		"71-proactive-speech-profiles.spec.ts",
+		"73-tts-edge-preview.spec.ts",
+		"75-app-position.spec.ts",
+		"77-stt-provider-switching.spec.ts",
+		"79-pipeline-voice-activation.spec.ts",
+		"81-chat-tts-response.spec.ts",
+		"90-app-system.spec.ts",
+		"99-launch-f4-skill-usage.spec.ts",
+		"99-store-certification.spec.ts",
+		"channel-reboot.spec.ts",
+		"85-voice-actual-recording.spec.ts",
+		"93-discord-inbox-handoff.spec.ts",
+		"96-codex-readiness.spec.ts",
+		"90-glm-newcore-chat.spec.ts",
+		"98-codex-chat-delegation.spec.ts"
+	],
+	"passedSpecs": [
+		"100-herdr-first-frame.spec.ts",
+		"23-channels-status.spec.ts",
+		"31-diagnostics.spec.ts",
+		"33-usage-dashboard.spec.ts",
+		"92-browser-app-clicks.spec.ts",
+		"96-memory-storage-boundary.spec.ts",
+		"01-app-launch.spec.ts",
+		"03-basic-chat.spec.ts",
+		"34-device-pairing.spec.ts",
+		"53-settings-theme.spec.ts",
+		"58-history-interactions.spec.ts",
+		"60-diagnostics-interactions.spec.ts",
+		"64-settings-gateway-tts.spec.ts",
+		"channel-reboot.spec.ts",
+		"85-voice-actual-recording.spec.ts",
+		"93-discord-inbox-handoff.spec.ts",
+		"96-codex-readiness.spec.ts"
+	],
+	"premise": "ok",
+	"premiseSignals": {
+		"agentStarts": 45,
+		"leaseBlocked": 0,
+		"executed": 45,
+		"reason": ""
+	},
+	"groups": [
+		{
+			"conf": "wdio.conf.ts",
+			"specs": 41,
+			"status": "failed",
+			"passed": 15,
+			"failedSpecs": [
+				"environment-dispatch.spec.ts",
+				"06-skill-memo.spec.ts",
+				"08-memory.spec.ts",
+				"10-history-tab.spec.ts",
+				"12-skills-gateway.spec.ts",
+				"14-skills-tab.spec.ts",
+				"16-skill-weather.spec.ts",
+				"18-provider-tool-calling.spec.ts",
+				"20-cron-basic.spec.ts",
+				"37-execute-command.spec.ts",
+				"39-web-tools.spec.ts",
+				"42-sessions-crud.spec.ts",
+				"46-channels-operations.spec.ts",
+				"50-config-management.spec.ts",
+				"54b-settings-locale-prompt.spec.ts",
+				"56-settings-voice.spec.ts",
+				"67-onboarding-config-save.spec.ts",
+				"71-proactive-speech-profiles.spec.ts",
+				"73-tts-edge-preview.spec.ts",
+				"75-app-position.spec.ts",
+				"77-stt-provider-switching.spec.ts",
+				"79-pipeline-voice-activation.spec.ts",
+				"81-chat-tts-response.spec.ts",
+				"90-app-system.spec.ts",
+				"99-launch-f4-skill-usage.spec.ts",
+				"99-store-certification.spec.ts"
+			]
+		},
+		{
+			"conf": "wdio.conf.discord-settings.ts",
+			"specs": 1,
+			"status": "passed",
+			"passed": 1,
+			"failedSpecs": []
+		},
+		{
+			"conf": "wdio.conf.codex.ts",
+			"specs": 1,
+			"status": "passed",
+			"passed": 1,
+			"failedSpecs": []
+		},
+		{
+			"conf": "wdio.conf.chat.ts",
+			"specs": 1,
+			"status": "failed",
+			"passed": 0,
+			"failedSpecs": [
+				"90-glm-newcore-chat.spec.ts"
+			]
+		},
+		{
+			"conf": "wdio.conf.codex-delegation.ts",
+			"specs": 1,
+			"status": "failed",
+			"passed": 0,
+			"failedSpecs": [
+				"98-codex-chat-delegation.spec.ts"
+			]
+		}
+	],
+	"envMissingBeforeRun": {
+		"95-llm-role-settings.spec.ts": [
+			"NAIA_E2E_ADK_PATH"
+		],
+		"24-adk-setup-flow.spec.ts": [
+			"NAIA_E2E_ADK_BASE"
+		],
+		"69-notify-discord-live.spec.ts": [
+			"DISCORD_WEBHOOK",
+			"DISCORD_WEBHOOK_URL"
+		],
+		"70b-live-providers-switching.spec.ts": [
+			"XAI_API_KEY",
+			"ZHIPU_API_KEY"
+		],
+		"83-tts-per-model-verification.spec.ts": [
+			"XAI_API_KEY"
+		],
+		"87-tts-audio-verification.spec.ts": [
+			"ELEVENLABS_API_KEY"
+		],
+		"94-discord-live-auth.spec.ts": [
+			"NAIA_E2E_DISCORD_TOKEN_FILE"
+		],
+		"88-stt-tts-combo-verification.spec.ts": [
+			"ELEVENLABS_API_KEY"
+		],
+		"94-voice-6g-shell.spec.ts": [
+			"NAIA_E2E_NAIA_KEY",
+			"NAIA_E2E_VOICE_6G",
+			"NAIA_E2E_VOICE_SCREENSHOT",
+			"NAIA_E2E_VOXCPM2_TEST_VOICE"
+		],
+		"96-voice-linux-app-start.spec.ts": [
+			"NAIA_E2E_NAIA_KEY",
+			"NAIA_E2E_VOICE_ARTIFACTS"
+		]
+	},
+	"harnessProvidedEnv": {
+		"96-memory-storage-boundary.spec.ts": [
+			"NAIA_E2E_ADK_PATH"
+		],
+		"01-app-launch.spec.ts": [
+			"NAIA_E2E_ADK_FIXTURE"
+		],
+		"06-skill-memo.spec.ts": [
+			"NAIA_E2E_ADK_FIXTURE"
+		],
+		"08-memory.spec.ts": [
+			"NAIA_E2E_ADK_FIXTURE"
+		],
+		"10-history-tab.spec.ts": [
+			"NAIA_E2E_ADK_FIXTURE"
+		],
+		"12-skills-gateway.spec.ts": [
+			"NAIA_E2E_ADK_FIXTURE"
+		],
+		"14-skills-tab.spec.ts": [
+			"NAIA_E2E_ADK_FIXTURE"
+		],
+		"16-skill-weather.spec.ts": [
+			"NAIA_E2E_ADK_FIXTURE"
+		],
+		"18-provider-tool-calling.spec.ts": [
+			"NAIA_E2E_ADK_FIXTURE"
+		],
+		"20-cron-basic.spec.ts": [
+			"NAIA_E2E_ADK_FIXTURE"
+		],
+		"24-adk-setup-flow.spec.ts": [
+			"NAIA_E2E_ADK_FIXTURE"
+		],
+		"34-device-pairing.spec.ts": [
+			"NAIA_E2E_ADK_FIXTURE"
+		],
+		"37-execute-command.spec.ts": [
+			"NAIA_E2E_ADK_FIXTURE"
+		],
+		"39-web-tools.spec.ts": [
+			"NAIA_E2E_ADK_FIXTURE"
+		],
+		"42-sessions-crud.spec.ts": [
+			"NAIA_E2E_ADK_PATH"
+		],
+		"46-channels-operations.spec.ts": [
+			"NAIA_E2E_ADK_FIXTURE"
+		],
+		"50-config-management.spec.ts": [
+			"NAIA_E2E_ADK_FIXTURE"
+		],
+		"53-settings-theme.spec.ts": [
+			"NAIA_E2E_ADK_FIXTURE"
+		],
+		"54b-settings-locale-prompt.spec.ts": [
+			"NAIA_E2E_ADK_FIXTURE"
+		],
+		"56-settings-voice.spec.ts": [
+			"NAIA_E2E_ADK_FIXTURE"
+		],
+		"58-history-interactions.spec.ts": [
+			"NAIA_E2E_ADK_FIXTURE"
+		],
+		"60-diagnostics-interactions.spec.ts": [
+			"NAIA_E2E_ADK_FIXTURE"
+		],
+		"64-settings-gateway-tts.spec.ts": [
+			"NAIA_E2E_ADK_FIXTURE"
+		],
+		"67-onboarding-config-save.spec.ts": [
+			"NAIA_E2E_ADK_FIXTURE"
+		],
+		"69-notify-discord-live.spec.ts": [
+			"NAIA_E2E_ADK_FIXTURE"
+		],
+		"71-proactive-speech-profiles.spec.ts": [
+			"NAIA_E2E_ADK_FIXTURE",
+			"NAIA_E2E_ADK_PATH"
+		],
+		"73-tts-edge-preview.spec.ts": [
+			"NAIA_E2E_ADK_FIXTURE"
+		],
+		"75-app-position.spec.ts": [
+			"NAIA_E2E_ADK_FIXTURE"
+		],
+		"77-stt-provider-switching.spec.ts": [
+			"NAIA_E2E_ADK_FIXTURE"
+		],
+		"79-pipeline-voice-activation.spec.ts": [
+			"NAIA_E2E_ADK_FIXTURE"
+		],
+		"81-chat-tts-response.spec.ts": [
+			"NAIA_E2E_ADK_FIXTURE"
+		],
+		"83-tts-per-model-verification.spec.ts": [
+			"NAIA_E2E_ADK_FIXTURE"
+		],
+		"87-tts-audio-verification.spec.ts": [
+			"NAIA_E2E_ADK_FIXTURE"
+		],
+		"90-glm-newcore-chat.spec.ts": [
+			"NAIA_E2E_ADK_FIXTURE"
+		],
+		"99-launch-f4-skill-usage.spec.ts": [
+			"NAIA_E2E_ADK_FIXTURE"
+		],
+		"85-voice-actual-recording.spec.ts": [
+			"NAIA_E2E_ADK_FIXTURE"
+		],
+		"88-stt-tts-combo-verification.spec.ts": [
+			"NAIA_E2E_ADK_FIXTURE"
+		],
+		"96-voice-linux-app-start.spec.ts": [
+			"NAIA_E2E_ADK_FIXTURE",
+			"NAIA_E2E_ADK_PATH"
+		]
+	},
+	"envMissingGroups": [
+		{
+			"conf": "wdio.conf.discord-live.ts",
+			"specs": [
+				"94-discord-live-auth.spec.ts"
+			],
+			"reason": "이 설정의 스펙이 전부 요구 환경 없음"
+		},
+		{
+			"conf": "wdio.conf.voice-6g.ts",
+			"specs": [
+				"94-voice-6g-shell.spec.ts"
+			],
+			"reason": "이 설정의 스펙이 전부 요구 환경 없음"
+		}
+	],
+	"detail": "wdio.conf.ts: 종료 코드 1; wdio.conf.chat.ts: 종료 코드 1; wdio.conf.codex-delegation.ts: 종료 코드 1"
+}
