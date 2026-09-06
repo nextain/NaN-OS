@@ -4,9 +4,15 @@ import type { Locale } from "./i18n";
 import { Logger } from "./logger";
 import {
 	SECRET_KEYS,
-	deleteSecretKey,
+	deleteSecretKeyAtPath,
+	getLegacySecretEntries,
 	getSecretKey,
-	saveSecretKey,
+	getSecretKeyAtPath,
+	getSecureStorePath,
+	hasFirstAdkBindingReceipt,
+	isSecretKey,
+	markFirstAdkBinding,
+	saveSecretKeyAtPath,
 } from "./secure-store";
 import type { ProviderId } from "./types";
 // LiveProviderId kept for migration only — will be removed after migration period
@@ -595,51 +601,28 @@ export function resolveConfiguredGatewayUrl(
 	return raw;
 }
 
-// ── Async API (secure store + localStorage fallback) ──
+// ── Async API (ADK-backed secure store) ──
 
 /**
- * Load full config: localStorage fields + secrets from secure store.
+ * Load the public config cache plus secrets from the selected ADK store.
  */
-async function getSecretKeySafe(key: string): Promise<string | null> {
-	try {
-		return await getSecretKey(key);
-	} catch {
-		return null;
-	}
-}
-
-async function saveSecretKeySafe(key: string, value: string): Promise<void> {
-	try {
-		await saveSecretKey(key, value);
-	} catch {
-		// localStorage fallback remains usable; startup auth will retry secure store
-		// on the next load instead of blocking the whole config restore path.
-	}
-}
-
 export async function loadConfigWithSecrets(): Promise<AppConfig | null> {
 	const config = loadConfig();
 	if (!config) return null;
+	const securePath = getSecureStorePath();
 
 	for (const key of SECRET_KEYS) {
-		const localVal = (config as any)[key];
-		const secureVal = await getSecretKeySafe(key);
-		if (localVal) {
-			// localStorage has a fresh value (e.g. just saved by login handler)
-			// Sync to secure store if different
-			if (localVal !== secureVal) {
-				await saveSecretKeySafe(key, localVal);
-			}
-		} else if (secureVal) {
-			// Only use secure store when localStorage doesn't have the value
-			(config as any)[key] = secureVal;
-		}
+		// The selected ADK is the only source of truth. Clear any legacy secret
+		// left in localStorage so switching A → B cannot reuse A's credential.
+		(config as any)[key] = securePath
+			? (await getSecretKeyAtPath(key, securePath)) ?? undefined
+			: undefined;
 	}
 	return config;
 }
 
 /**
- * Save config: sensitive fields → secure store, rest → localStorage.
+ * Save sensitive fields to the selected ADK store and the public config cache.
  *
  * #329 (B) hygiene: provider="nextain" relies solely on `naiaKey`. Any
  * stale `apiKey` from an earlier direct-provider session would collide
@@ -648,18 +631,33 @@ export async function loadConfigWithSecrets(): Promise<AppConfig | null> {
  */
 export async function saveConfigSecure(config: AppConfig): Promise<void> {
 	const publicConfig = { ...config };
+	const securePath = getSecureStorePath();
+	const configValues = config as unknown as Record<string, unknown>;
+	const hasSecretInput = SECRET_KEYS.some((key) => {
+		const value = configValues[key];
+		return typeof value === "string" && value.length > 0;
+	});
+	if (!securePath && hasSecretInput) {
+		throw new Error(
+			"Cannot save credentials without a selected ADK workspace",
+		);
+	}
 
 	for (const key of SECRET_KEYS) {
 		const val = (config as any)[key];
 		if (typeof val === "string" && val.length > 0) {
-			await saveSecretKey(key, val);
+			if (securePath) {
+				await saveSecretKeyAtPath(key, val, securePath);
+			}
 		}
 		(publicConfig as any)[key] = undefined;
 	}
 
 	// #329 (B) — purge collision-causing stale fields per provider.
 	if (config.provider === "nextain") {
-		await deleteSecretKey("apiKey");
+		if (securePath) {
+			await deleteSecretKeyAtPath("apiKey", securePath);
+		}
 	}
 
 	// Keep the ordinary config-change contract: Settings/App listeners must see
@@ -667,46 +665,130 @@ export async function saveConfigSecure(config: AppConfig): Promise<void> {
 	saveConfig(publicConfig);
 }
 
-/**
- * Migrate secrets from localStorage to secure store.
- * Call once on app startup. Idempotent.
- */
-export async function migrateSecretsToSecureStore(): Promise<void> {
-	const config = loadConfig();
-	if (!config) return;
+let secretMigrationPromise: Promise<void> | null = null;
 
-	let migrated = false;
-	for (const key of SECRET_KEYS) {
-		const val = (config as any)[key];
-		if (typeof val === "string" && val.length > 0) {
-			const existing = await getSecretKey(key);
-			if (!existing) {
-				await saveSecretKey(key, val);
-			}
-			(config as any)[key] = undefined;
-			migrated = true;
+function isMigratableLegacyKey(key: string): boolean {
+	return isSecretKey(key) || key === "labKey" || key.startsWith("app:");
+}
+
+function clearLocalSecretFields(config: AppConfig): boolean {
+	const raw = config as unknown as Record<string, unknown>;
+	let changed = false;
+	for (const key of [...SECRET_KEYS, "labKey"] as const) {
+		if (raw[key] !== undefined) {
+			raw[key] = undefined;
+			changed = true;
 		}
 	}
-
-	if (migrated) {
-		saveConfig(config);
-	}
+	if (changed) saveConfig(config);
+	return changed;
 }
 
 /**
- * Async version: check secure store first, then localStorage.
+ * Migrate pre-ADK credentials once into the first selected ADK.
+ *
+ * The selected path is captured before any await. This keeps one migration
+ * from writing to a different ADK if the user changes the bootstrap pointer
+ * while the old store is being read. The receipt is persisted by the secure
+ * store module, rather than being treated as a localStorage cache.
+ */
+export async function migrateSecretsToSecureStore(): Promise<void> {
+	if (secretMigrationPromise) return secretMigrationPromise;
+
+	secretMigrationPromise = (async () => {
+		const securePath = getSecureStorePath();
+		// No selected ADK means there is nowhere safe to put a credential. More
+		// importantly, do not write a receipt until one actually exists.
+		if (!securePath || (await hasFirstAdkBindingReceipt())) return;
+
+		const config = loadConfig();
+		const legacyEntries = new Map<string, string>();
+		for (const [key, value] of await getLegacySecretEntries()) {
+			if (
+				isMigratableLegacyKey(key) &&
+				typeof value === "string" &&
+				value.length > 0
+			) {
+				legacyEntries.set(key, value);
+			}
+		}
+
+		for (const key of SECRET_KEYS) {
+			const existing = await getSecretKeyAtPath(key, securePath);
+			if (existing) continue;
+
+			// The old device store wins over a still-present localStorage value.
+			// Both remain intact until the ADK write has completed.
+			const legacy =
+				legacyEntries.get(key) ??
+				(key === "naiaKey" ? legacyEntries.get("labKey") : undefined);
+			const local = config
+				? (config as unknown as Record<string, unknown>)[key]
+				: undefined;
+			const value = legacy ?? local;
+			if (typeof value === "string" && value.length > 0) {
+				await saveSecretKeyAtPath(key, value, securePath);
+			}
+		}
+
+		// A pre-ADK labKey is renamed while the captured path is still in hand.
+		// Keep the old device-store entry intact for recovery, but never leave the
+		// credential in the selected ADK under its obsolete name.
+		const localLabKey = config
+			? (config as unknown as Record<string, unknown>).labKey
+			: undefined;
+		const oldLabKey =
+			legacyEntries.get("labKey") ??
+			(typeof localLabKey === "string" ? localLabKey : undefined) ??
+			(await getSecretKeyAtPath("labKey", securePath));
+		if (
+			typeof oldLabKey === "string" &&
+			oldLabKey.length > 0 &&
+			!(await getSecretKeyAtPath("naiaKey", securePath))
+		) {
+			await saveSecretKeyAtPath("naiaKey", oldLabKey, securePath);
+		}
+		if (await getSecretKeyAtPath("labKey", securePath)) {
+			await deleteSecretKeyAtPath("labKey", securePath);
+		}
+
+		// Preserve legacy app credentials even though they are outside
+		// SECRET_KEYS. The `app:` namespace is intentionally copied verbatim.
+		for (const [key, value] of legacyEntries) {
+			if (isSecretKey(key) || key === "labKey") {
+				continue;
+			}
+			if (!(await getSecretKeyAtPath(key, securePath))) {
+				await saveSecretKeyAtPath(key, value, securePath);
+			}
+		}
+
+		// Strip the old webview cache only after every canonical write succeeded.
+		// The old Tauri store remains untouched, so an interrupted migration can
+		// be retried without losing the original credential.
+		if (config) clearLocalSecretFields(config);
+
+		// A later ADK must start empty rather than inheriting localStorage or the
+		// pre-ADK device credential. The receipt is durable across cache resets.
+		await markFirstAdkBinding(securePath);
+	})().finally(() => {
+		secretMigrationPromise = null;
+	});
+
+	return secretMigrationPromise;
+}
+
+/**
+ * Async version: check the selected ADK store only.
  */
 export async function hasApiKeySecure(): Promise<boolean> {
-	const apiKey = await getSecretKeySafe("apiKey");
-	const naiaKey = await getSecretKeySafe("naiaKey");
-	if (apiKey || naiaKey) return true;
-	return hasApiKey();
+	const apiKey = await getSecretKey("apiKey");
+	const naiaKey = await getSecretKey("naiaKey");
+	return !!(apiKey || naiaKey);
 }
 
 export async function getNaiaKeySecure(): Promise<string | undefined> {
-	const secureVal = await getSecretKeySafe("naiaKey");
-	if (secureVal) return secureVal;
-	return getNaiaKey();
+	return (await getSecretKey("naiaKey")) ?? undefined;
 }
 
 export async function hasNaiaKeySecure(): Promise<boolean> {
@@ -719,26 +801,41 @@ export async function hasNaiaKeySecure(): Promise<boolean> {
  * Call once on app startup after migrateSecretsToSecureStore(). Idempotent.
  */
 export async function migrateLabKeyToNaiaKey(): Promise<void> {
-	// 1. Secure store: labKey → naiaKey (skip if Tauri not available)
+	const securePath = getSecureStorePath();
+	let secureMigrationCompleted = false;
+	// This is the existing startup migration entry point. Keep the legacy
+	// credential copy behind the first-ADK binding guard rather than relying on
+	// every caller to remember to invoke it separately.
 	try {
-		const oldKey = await getSecretKey("labKey" as any);
-		if (oldKey) {
-			await saveSecretKey("naiaKey", oldKey);
-			await deleteSecretKey("labKey" as any);
+		await migrateSecretsToSecureStore();
+		secureMigrationCompleted = Boolean(securePath);
+	} catch {
+		// Leave the marker unset so the migration remains retryable on startup.
+	}
+
+	// 1. Secure store: labKey → naiaKey (skip if Tauri not available). The
+	// captured path prevents an ADK switch during the await chain from writing
+	// the old credential into a different workspace.
+	try {
+		if (securePath) {
+			const oldKey = await getSecretKeyAtPath("labKey", securePath);
+			if (oldKey && !(await getSecretKeyAtPath("naiaKey", securePath))) {
+				await saveSecretKeyAtPath("naiaKey", oldKey, securePath);
+			}
+			if (oldKey) await deleteSecretKeyAtPath("labKey", securePath);
 		}
 	} catch {
 		// Tauri store not available (e.g. tests) — skip secure store migration
 	}
 
-	// 2. localStorage: labKey → naiaKey, labUserId → naiaUserId
+	// 2. localStorage: only the non-secret user id is migrated. Secret fields
+	// are removed after successful ADK binding and are never recreated locally.
 	const config = loadConfig();
 	if (!config) return;
 	const raw = config as any;
 	let changed = false;
-	if (raw.labKey && !raw.naiaKey) {
-		raw.naiaKey = raw.labKey;
-		raw.labKey = undefined;
-		changed = true;
+	if (secureMigrationCompleted) {
+		changed = clearLocalSecretFields(config) || changed;
 	}
 	if (raw.labUserId && !raw.naiaUserId) {
 		raw.naiaUserId = raw.labUserId;

@@ -601,7 +601,6 @@ export function App() {
 	}, []);
 
 	useEffect(() => {
-		void migrateLabKeyToNaiaKey();
 		migrateLegacyDna3OllamaModel();
 		migrateSpeechStyleValues();
 		migrateLiveProviderToUnifiedModel();
@@ -629,9 +628,21 @@ export function App() {
 		// differs from adkPath (localStorage) — it never touches the agent's file.
 		// Force-resync the agent's path file to the shell's ADK on every boot so the
 		// save-path and the load-path can never silently diverge.
-		if (adkPath)
-			void setAdkPath(adkPath).catch((error) => {
+		const bindAdk = adkPath
+			? setAdkPath(adkPath).catch((error) => {
 				Logger.error("App", "workspace binding failed", {
+					error: String(error),
+				});
+				throw error;
+			})
+			: Promise.resolve();
+		// Secure-store migration must observe the same native ADK binding as the
+		// subsequent config reads. If binding fails, keep the legacy/local values
+		// intact so a later startup can retry instead of clearing them.
+		void bindAdk
+			.then(() => migrateLabKeyToNaiaKey())
+			.catch((error) => {
+				Logger.error("App", "credential migration failed", {
 					error: String(error),
 				});
 			});
