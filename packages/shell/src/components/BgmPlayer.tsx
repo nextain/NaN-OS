@@ -790,10 +790,16 @@ export function BgmPlayer({ naia }: Props) {
 							playbackId: eventPlaybackId,
 						});
 						if (observed) {
-							recordBgmPlayedTrack({
+							const persist = recordBgmPlayedTrack({
 								id: observed.selected.videoId,
 								title: observed.selected.title,
 							});
+							const recorded = bgmLibraryCache();
+							if (recorded) {
+								libraryRef.current = recorded;
+								setLibrary(recorded);
+							}
+							void persist;
 						}
 					} else if (state === 2) {
 						setPlaying(false);
