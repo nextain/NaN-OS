@@ -404,6 +404,7 @@ export async function startOwnedViteServer(): Promise<void> {
 				...process.env,
 				VITE_NAIA_SECURE_STORE_FILE: process.env.NAIA_E2E_SECURE_STORE_FILE,
 				VITE_NAIA_E2E_MODE: "1",
+				VITE_NAIA_NEW_CORE: "1",
 				BROWSER: "none",
 				VITE_NAIA_E2E_ADK_PATH: E2E_WORKSPACE,
 				// Same override the seeded shell config honours, so the webview and
