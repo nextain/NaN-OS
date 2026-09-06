@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { WorkspaceAppApi } from "./apps/workspace/types";
 import { AppShellFrame } from "./components/AppShellFrame";
@@ -57,7 +58,7 @@ import {
 	noteEnvironmentToolAck,
 	refreshEnvironment,
 } from "./lib/environment-skill";
-import { setLocale } from "./lib/i18n";
+import { setLocale, t } from "./lib/i18n";
 import { startIframeBridge } from "./lib/iframe-bridge";
 import { Logger } from "./lib/logger";
 import { startSlidePresenterIframeBridge } from "./lib/slide-presenter-iframe-bridge";
@@ -68,6 +69,12 @@ import {
 } from "./lib/updater";
 import { hydrateLocalRefAudioB64 } from "./lib/voice/ref-audio-api";
 import { useAvatarStore } from "./stores/avatar";
+import {
+	UI_PREFERENCE_KEYS,
+	hydrateUiPreferences,
+	patchUiPreferences,
+	useUiPreference,
+} from "./lib/ui-preferences";
 import "./apps/browser/index"; // register browser app
 import "./apps/workspace/index"; // register workspace app
 import "./apps/settings/index"; // register settings app
@@ -77,6 +84,24 @@ import { useAppStore } from "./stores/app";
 const NAIA_WIDTH_DEFAULT = 320;
 const NAIA_WIDTH_MIN = 120;
 const NAIA_WIDTH_MAX = 1200;
+
+function applyPersistedPresentationConfig(
+	config: ReturnType<typeof loadConfig>,
+	setVisible: (visible: boolean) => void,
+	setWidth: (width: number) => void,
+): void {
+	applyTheme(config?.theme ?? "midnight");
+	if (config?.deletedApps?.length) {
+		for (const id of config.deletedApps) appRegistry.unregister(id);
+	}
+	if (typeof config?.appVisible === "boolean")
+		setVisible(config.appVisible);
+	if (typeof config?.appSize === "number" && Number.isFinite(config.appSize)) {
+		// appSize is stored as a percentage (15–80) and rendered as fixed pixels.
+		const px = Math.round((config.appSize / 100) * 1200);
+		setWidth(Math.max(NAIA_WIDTH_MIN, Math.min(NAIA_WIDTH_MAX, px)));
+	}
+}
 
 /**
  * 자동 실행에서 **이번 부팅은 온보딩을 보여야 한다** 는 표식.
@@ -117,9 +142,8 @@ export function App() {
 	// 통째로 다시 쓴다. 그래서 스펙이 `localStorage.removeItem("naia-config")` 로
 	// 온보딩을 되살리려 해도, 새로 고침 직후 이 코드가 `onboardingComplete: true`
 	// 를 되돌려 놓아 오버레이가 영영 뜨지 않았다(#564 — 09·13·67·54b 가 같은
-	// 자리에서 죽었다). 하이드레이션이 범인이라고 적혀 있었지만, `mergeBootConfig`
-	// 는 이미 파일의 `onboardingComplete` 를 지우고 로컬 값을 쓴다 — 실제로
-	// 되돌리는 것은 이 씨앗이다.
+	// 자리에서 죽었다). 하이드레이션은 선택한 ADK의 파일 값을 복원하므로, 실제로
+	// 이 부트스트랩 씨앗이 필요한 경우는 명시적인 E2E 실행뿐이다.
 	//
 	// 표식은 자동 실행 안에서만 뜻이 있다(`e2eAdkPath` 가 있을 때만 본다).
 	// 지우는 것은 헬퍼의 몫이다 — 여기서 지우면 이 블록이 렌더마다 돌므로
@@ -155,6 +179,7 @@ export function App() {
 		useState<AppInstallRequest | null>(null);
 	const [localeHydrated, setLocaleHydrated] = useState(showAdkSetup);
 	const [showOnboarding, setShowOnboarding] = useState(false);
+	const [configSaveError, setConfigSaveError] = useState<string | null>(null);
 	useAgentAuthSync(showAdkSetup, showOnboarding);
 	const [naiaVisible, setNaiaVisible] = useState(true);
 	const [naiaWidth, setNaiaWidth] = useState(NAIA_WIDTH_DEFAULT);
@@ -167,46 +192,37 @@ export function App() {
 	);
 	// 챗 레이아웃 2-way 수동 override. 이전 "home" 중앙 모드는 읽을 때
 	// 좌측 소형(app)으로 마이그레이션한다.
-	const [chatModeOverride, setChatModeOverride] = useState<"workspace" | "app">(
-		() => {
-			try {
-				const v = localStorage.getItem("naia-chat-mode-v1");
-				if (v === "home") {
-					localStorage.setItem("naia-chat-mode-v1", "app");
-					return "app";
-				}
-				if (v === "workspace" || v === "app") return v;
-				localStorage.setItem("naia-chat-mode-v1", "app");
-				return "app";
-			} catch {
-				return "app";
-			}
-		},
+	const persistedChatMode = useUiPreference<"workspace" | "app">(
+		UI_PREFERENCE_KEYS.chatMode,
+		"app",
 	);
+	const [chatModeOverride, setChatModeOverride] = useState<"workspace" | "app">(
+		persistedChatMode,
+	);
+	useEffect(() => {
+		setChatModeOverride(persistedChatMode);
+	}, [persistedChatMode]);
 	const setChatMode = (m: "workspace" | "app") => {
 		setChatModeOverride((cur) => (cur === m ? cur : m));
-		try {
-			localStorage.setItem("naia-chat-mode-v1", m);
-		} catch {
-			/* best-effort */
-		}
+		void patchUiPreferences({ [UI_PREFERENCE_KEYS.chatMode]: m });
 	};
 	// Workspace conversation-rail collapse (reclaims horizontal space for the
 	// work area). Collapse hides the rail via CSS width:0 — ChatArea stays
 	// MOUNTED so an in-flight voice/STT session survives. Persisted (FR-UI.6).
-	const [railCollapsed, setRailCollapsed] = useState<boolean>(() => {
-		try {
-			return localStorage.getItem("naia-ws-rail-collapsed") === "1";
-		} catch {
-			return false;
-		}
-	});
+	const persistedRailCollapsed = useUiPreference<boolean>(
+		UI_PREFERENCE_KEYS.workspaceRailCollapsed,
+		false,
+	);
+	const [railCollapsed, setRailCollapsed] = useState(persistedRailCollapsed);
+	useEffect(() => {
+		setRailCollapsed(persistedRailCollapsed);
+	}, [persistedRailCollapsed]);
 	const toggleRailCollapsed = useCallback(() => {
 		setRailCollapsed((v) => {
 			const next = !v;
-			try {
-				localStorage.setItem("naia-ws-rail-collapsed", next ? "1" : "0");
-			} catch {}
+			void patchUiPreferences({
+				[UI_PREFERENCE_KEYS.workspaceRailCollapsed]: next,
+			});
 			return next;
 		});
 	}, []);
@@ -436,7 +452,8 @@ export function App() {
 	// localStorage is a render cache (UC-CONFIG-SOT / FR-CONFIG-SOT.1).
 	// The only authoritative localStorage key is "naia-adk-path"; "naia-config"
 	// is derived from the files here. `mergeBootConfig` drops the `...local` base
-	// that previously let a stale persona (알파) overwrite config.json.
+	// that previously let a stale persona (알파) overwrite config.json while
+	// retaining file-owned onboarding and UI values.
 	// `configHydratedRef` gates the debounced file writeback below so it cannot
 	// push the stale pre-hydration cache back into config.json (FR-CONFIG-SOT.2).
 	useEffect(() => {
@@ -458,43 +475,92 @@ export function App() {
 				error: error instanceof Error ? error.message : String(error),
 			});
 		});
-		Promise.all([readNaiaConfig(), readNaiaUiConfig()])
+		let cancelled = false;
+		const adkPathAtRead = getAdkPath();
+		Promise.all([
+			readNaiaConfig(adkPathAtRead),
+			readNaiaUiConfig(adkPathAtRead),
+		])
 			.then(async ([fileConfig, uiConfig]) => {
+				if (cancelled || getAdkPath() !== adkPathAtRead) return;
+				const adkPath = adkPathAtRead;
+				// A selected ADK with no config files is a clean first run. Discard
+				// the old render cache so it cannot silently become this ADK's
+				// identity, then open the normal onboarding path after the gate is
+				// complete. A real read error takes the catch path and leaves the
+				// gate closed.
+				if (!fileConfig && !uiConfig) {
+					if (adkPath) {
+						localStorage.removeItem("naia-config");
+						await hydrateUiPreferences(null, {
+							adkPath,
+							canPersist: false,
+						});
+						if (cancelled || getAdkPath() !== adkPath) return;
+						configHydratedRef.current = true;
+						completeNaiaConfigHydration();
+						await hydrateUiPreferences(null, {
+							adkPath,
+							canPersist: true,
+						});
+						if (cancelled || getAdkPath() !== adkPath) return;
+						setShowOnboarding(true);
+					}
+					if (cancelled || getAdkPath() !== adkPath) return;
+					setLocaleHydrated(true);
+					return;
+				}
+				// Publish file UI values before the full config merge, but keep
+				// persistence closed until that merge has replaced the render cache.
+				await hydrateUiPreferences(uiConfig, {
+					adkPath,
+					canPersist: false,
+				});
+				if (cancelled || getAdkPath() !== adkPath) return;
 				const merged = mergeBootConfig(
 					loadConfig() as unknown as Record<string, unknown> | null,
 					fileConfig ?? null,
 					uiConfig ?? null,
 				);
-				// null = files absent → keep existing cache (no wipe). Still hydrated.
 				if (merged) {
 					// `naia-adk-path` is the only authoritative bootstrap pointer.
 					// Never let a stale render-cache workspaceRoot redirect the next
 					// file read/write cycle to another workspace.
-					const adkPath = getAdkPath();
 					const reconciled = reconcileExplicitLocalProfile({
 						...merged,
 						...(adkPath ? { workspaceRoot: adkPath } : {}),
 					} as unknown as Parameters<typeof reconcileExplicitLocalProfile>[0]);
 					if (reconciled.locale) await setLocale(reconciled.locale);
+					if (cancelled || getAdkPath() !== adkPath) return;
 					saveConfig(reconciled);
 				}
 				configHydratedRef.current = true;
 				completeNaiaConfigHydration();
+				// Run legacy migration only after the complete config snapshot is
+				// safely cached and the ADK write gate is open.
+				await hydrateUiPreferences(uiConfig, {
+					adkPath,
+					canPersist: true,
+				});
+				if (cancelled || getAdkPath() !== adkPath) return;
 				setLocaleHydrated(true);
 				// Re-run the gateway-mode sync now that the file value is in cache
 				// (the immediate sync on mount was gated off until this point).
 				window.dispatchEvent(new CustomEvent("naia-config-changed"));
-			})
-			.catch((error: unknown) => {
-				// Keep the writeback gate closed when workspace hydration fails. The
+				})
+				.catch((error: unknown) => {
+					if (cancelled || getAdkPath() !== adkPathAtRead) return;
+					// Keep the writeback gate closed when workspace hydration fails. The
 				// provider/model are intentionally omitted from the log; this is a
 				// seam diagnostic, not configuration telemetry.
 				Logger.error("App", "workspace config hydration failed", {
 					error: error instanceof Error ? error.message : String(error),
 				});
-				completeNaiaConfigHydration();
 				setLocaleHydrated(true);
 			});
+		return () => {
+			cancelled = true;
+		};
 	}, [showAdkSetup]);
 
 	// Auto-allow built-in skills that are always available (no per-session approval needed).
@@ -530,19 +596,7 @@ export function App() {
 					error: String(error),
 				});
 			});
-		applyTheme(config?.theme ?? "midnight");
-		// Suppress build-time apps the user has explicitly deleted
-		if (config?.deletedApps?.length) {
-			for (const id of config.deletedApps) {
-				appRegistry.unregister(id);
-			}
-		}
-		if (config?.appVisible === false) setNaiaVisible(false);
-		if (config?.appSize) {
-			// appSize was 15-80 (%) — convert to px for fixed naia app
-			const px = Math.round((config.appSize / 100) * 1200);
-			setNaiaWidth(Math.max(NAIA_WIDTH_MIN, Math.min(NAIA_WIDTH_MAX, px)));
-		}
+		applyPersistedPresentationConfig(config, setNaiaVisible, setNaiaWidth);
 
 		const needsOnboarding = !isOnboardingComplete();
 		if (showAdkSetup) return; // wait for ADK setup first
@@ -562,6 +616,40 @@ export function App() {
 		// Debounced file sync: write naia-settings/config.json on every saveConfig call.
 		// Covers all saveConfig callers without patching each one individually.
 		let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+		let closeUnlisten: (() => void) | null = null;
+		let disposed = false;
+		const closeUnlistenPromise = getCurrentWindow()
+			.onCloseRequested(async (event) => {
+				if (debounceTimer) {
+					clearTimeout(debounceTimer);
+					debounceTimer = null;
+				}
+				if (!configHydratedRef.current) return;
+				const cfg = loadConfig();
+				if (!cfg) return;
+				try {
+					await writeNaiaConfig({
+						...(cfg as unknown as Record<string, unknown>),
+						...buildNaiaConfigEnv(cfg),
+					});
+					setConfigSaveError(null);
+				} catch (error) {
+					event.preventDefault();
+					setConfigSaveError(t("settings.saveFailed"));
+					Logger.error("App", "workspace config save failed during close", {
+						error: error instanceof Error ? error.message : String(error),
+					});
+				}
+			})
+			.then((unlisten) => {
+				if (disposed) unlisten();
+				else closeUnlisten = unlisten;
+			})
+			.catch((error: unknown) => {
+				Logger.warn("App", "close-save listener unavailable", {
+					error: error instanceof Error ? error.message : String(error),
+				});
+			});
 		const syncConfigToFile = () => {
 			if (debounceTimer) clearTimeout(debounceTimer);
 			debounceTimer = setTimeout(() => {
@@ -574,6 +662,11 @@ export function App() {
 					void writeNaiaConfig({
 						...(cfg as unknown as Record<string, unknown>),
 						...buildNaiaConfigEnv(cfg),
+					}).catch((error: unknown) => {
+						setConfigSaveError(t("settings.saveFailed"));
+						Logger.error("App", "workspace config save failed", {
+							error: error instanceof Error ? error.message : String(error),
+						});
 					});
 			}, 800);
 		};
@@ -593,14 +686,25 @@ export function App() {
 			setAppTitle(loadConfig()?.agentName?.trim() || "Naia");
 		};
 		const handleConfigChanged = () => {
+			// Hydration dispatches this event after config.json has replaced the
+			// pre-hydration render cache. Apply presentation values again so a cold
+			// start reflects the selected ADK's theme, visibility, and width.
+			applyPersistedPresentationConfig(
+				loadConfig(),
+				setNaiaVisible,
+				setNaiaWidth,
+			);
 			updateTitle();
 			syncConfigToFile();
 		};
 		window.addEventListener("naia-config-changed", handleConfigChanged);
 		window.addEventListener("storage", updateTitle);
 		return () => {
+			disposed = true;
 			window.removeEventListener("naia-config-changed", handleConfigChanged);
 			window.removeEventListener("storage", updateTitle);
+			closeUnlisten?.();
+			void closeUnlistenPromise;
 			// G-10: flush pending debounced write immediately on unmount / app close.
 			// Still gated on hydration (FR-CONFIG-SOT.2) — a flush before hydration
 			// would persist the stale cache to config.json.
@@ -815,6 +919,7 @@ export function App() {
 				chatDragRef,
 				chatHeight,
 				chatVisible,
+				configSaveError,
 				naiaVisible,
 				naiaWidth,
 				nvaModel,

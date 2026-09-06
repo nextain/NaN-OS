@@ -41,6 +41,11 @@ import {
 } from "../lib/bgm-skill";
 import { Logger } from "../lib/logger";
 import type { NaiaContextBridge } from "../lib/app-registry";
+import {
+	UI_PREFERENCE_KEYS,
+	patchUiPreferences,
+	useUiPreference,
+} from "../lib/ui-preferences";
 import { type BackgroundMediaType, useAvatarStore } from "../stores/avatar";
 
 // ── YouTube server ────────────────────────────────────────────────────────────
@@ -287,12 +292,24 @@ export function BgmPlayer({ naia }: Props) {
 		top: number;
 		left: number;
 	} | null>(null);
-	const [ytAppHeight, setYtAppHeight] = useState(loadAppHeight);
+	const persistedYtAppHeight = useUiPreference<number>(
+		UI_PREFERENCE_KEYS.youtubeAppHeight,
+		loadAppHeight(),
+	);
+	const [ytAppHeight, setYtAppHeight] = useState(() =>
+		Math.max(YT_APP_H_MIN, Math.min(YT_APP_H_MAX, persistedYtAppHeight)),
+	);
+	useEffect(() => {
+		setYtAppHeight(
+			Math.max(YT_APP_H_MIN, Math.min(YT_APP_H_MAX, persistedYtAppHeight)),
+		);
+	}, [persistedYtAppHeight]);
 	const handleDragRef = useRef<{
 		startY: number;
 		startH: number;
 		moved: boolean;
 	} | null>(null);
+	const dragHeightRef = useRef(ytAppHeight);
 
 	// ── Local BGM ─────────────────────────────────────────────────────────────
 	const bgmTrackUrl = useAvatarStore((s) => s.bgmTrackUrl);
@@ -1967,11 +1984,12 @@ export function BgmPlayer({ naia }: Props) {
 							title={t("bgm.drawerTitle")}
 							onPointerDown={(e) => {
 								e.currentTarget.setPointerCapture(e.pointerId);
-								handleDragRef.current = {
-									startY: e.clientY,
-									startH: ytAppHeight,
-									moved: false,
-								};
+									handleDragRef.current = {
+										startY: e.clientY,
+										startH: ytAppHeight,
+										moved: false,
+									};
+								dragHeightRef.current = ytAppHeight;
 							}}
 							onPointerMove={(e) => {
 								const ref = handleDragRef.current;
@@ -1981,16 +1999,20 @@ export function BgmPlayer({ naia }: Props) {
 								if (ref.moved) {
 									const next = Math.max(
 										YT_APP_H_MIN,
-										Math.min(YT_APP_H_MAX, ref.startH + delta),
-									);
-									setYtAppHeight(next);
-									localStorage.setItem(YT_APP_H_KEY, String(next));
-								}
+											Math.min(YT_APP_H_MAX, ref.startH + delta),
+										);
+										setYtAppHeight(next);
+										dragHeightRef.current = next;
+									}
 							}}
 							onPointerUp={() => {
 								const ref = handleDragRef.current;
-								handleDragRef.current = null;
-								if (!ref?.moved) setAppExpanded(false);
+									handleDragRef.current = null;
+									if (!ref?.moved) setAppExpanded(false);
+									else
+										void patchUiPreferences({
+											[UI_PREFERENCE_KEYS.youtubeAppHeight]: dragHeightRef.current,
+										});
 							}}
 							onPointerCancel={() => {
 								handleDragRef.current = null;
