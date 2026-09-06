@@ -66,6 +66,7 @@
  *   - `E && E.click()` — 왼쪽이 있음 검사면 오른쪽은 있을 때만 돈다
  *   - `!E || E.click()` — 왼쪽이 없음 검사면 오른쪽은 있을 때만 돈다
  *     (드모르간으로 위와 같은 문장이다)
+ *   - `E &&= E.click()` · `E ||= …` — 짧은회로 대입도 같은 뜻의 이항으로 읽는다
  *   - `E ? E.click() : undefined` · `!E ? undefined : E.click()`
  *   - `E?.click()`
  *
@@ -444,6 +445,27 @@ function isOptionalClick(node) {
 }
 
 /**
+ * 짧은회로 대입을 같은 뜻의 이항으로 읽는다.
+ *
+ * `E &&= f()` 는 `E && (E = f())` 이고, `E ||= f()` 는 `E || (E = f())` 이며,
+ * `E ??= f()` 는 `E ?? (E = f())` 다. 오른쪽이 언제 도는가는 셋 다 같은 이름의
+ * 이항과 똑같다 — 대입이라는 것만 다르다. 토큰을 세면 매 회차에 하나가 더
+ * 온다(16회차 지적 6). 그래서 토큰을 같은 뜻으로 바꾼 뒤 한 규칙으로 읽는다.
+ *
+ * `??=` 는 여기서 `??` 가 되고, `??` 에는 있음 가드가 없다 — `E ??= E.click()`
+ * 은 **없을 때** 오른쪽이 돌므로 무음 클릭이 아니라 그냥 깨지는 코드다.
+ * 그 사실이 규칙에서 저절로 따라 나온다.
+ */
+function shortCircuitOf(kind) {
+	if (kind === ts.SyntaxKind.AmpersandAmpersandEqualsToken)
+		return ts.SyntaxKind.AmpersandAmpersandToken;
+	if (kind === ts.SyntaxKind.BarBarEqualsToken) return ts.SyntaxKind.BarBarToken;
+	if (kind === ts.SyntaxKind.QuestionQuestionEqualsToken)
+		return ts.SyntaxKind.QuestionQuestionToken;
+	return kind;
+}
+
+/**
  * 이 식이 아무 값도 남기지 않는가.
  *
  * `undefined`, `null`, `void …` 는 부르는 쪽에 남는 것이 없다는 점에서 같다.
@@ -523,7 +545,7 @@ function findHits(file, source) {
 		//    누른다. `&&` 만 세고 `||` 를 빼 두면 부정 하나로 같은 무음이 셈에서
 		//    사라진다(15회차 지적 5).
 		if (ts.isBinaryExpression(node)) {
-			const kind = node.operatorToken.kind;
+			const kind = shortCircuitOf(node.operatorToken.kind);
 			const guard =
 				kind === ts.SyntaxKind.AmpersandAmpersandToken
 					? presenceOf(node.left)

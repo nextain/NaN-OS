@@ -29,6 +29,7 @@
 | 쉼표식 `(0, f)()` (callee) | 12 | 파괴 호출부 | 닫힘 |
 | 쉼표식 `(0, true)` · `(0, <alert/>)` · `(0, el.click())` (값) | 13 | 영구 꺼짐·알림·무음 클릭 | 닫힘 |
 | `void 0` 을 널로 안 봄 | 14 | 영구 꺼짐(`void 0 ?? true`) | 닫힘 |
+| `void (0)` · `(f["call"])()` — 린트 검출기의 껍데기 한 겹 | 16 | **린트 경계 자신** | 닫힘 — 검출기도 `unwrap.mjs` |
 
 한 줄 요약: **껍데기는 값을 바꾸지 않는다.** 형태를 하나씩 세는 대신 공용
 `scripts/lib/unwrap.mjs` 하나가 벗기고, 겹의 수는 세지 않는다.
@@ -50,6 +51,8 @@
 | `export default createElement` · `export { x as default }` | 13 | 알림 요소 | 닫힘 |
 | `import * as R from "./shim"` 의 `R.createElement` | 13 | 알림 요소 | 닫힘 |
 | 자유 식별자 `createElement.call(null, …)` | 14 | 알림 요소 — 이름 잠금에 `.call` 미포함 | 닫힘 |
+| `const { "createElement": h } = React` · `{ ["createElement"]: h }` | 16 | 알림 요소·파괴 호출부 | 닫힘 |
+| `from "react/index.js"` (같은 패키지, 다른 경로) | 16 | 알림 요소 | 닫힘 — 패키지 이름 대조 |
 | 네임스페이스·default·재수출로 가져온 **상수** | 14 | 영구 꺼짐 | 닫힘 |
 | `invoke["call"](null, "cmd")` | 14 | 파괴 호출부 | 다른 손이 진행 |
 
@@ -92,6 +95,8 @@
 | `null ?? true` (널 판정) | 13 | 영구 꺼짐 | 닫힘 |
 | `E ? E.click() : undefined` | 13 | 무음 클릭 | 닫힘 |
 | `` `${true}` `` (템플릿) | 14 | 영구 꺼짐 | 닫힘 |
+| `1 === 1` · `1 + 0` · `1 \| 0` (리터럴 위의 이항) | 16 | 영구 꺼짐 | 닫힘 |
+| `E &&= E.click()` (짧은회로 대입) | 16 | 무음 클릭 | 닫힘 |
 | `{}` · `[]` (리터럴은 참) | 14 | 영구 꺼짐 | 닫힘 |
 | `DataHomeChild::X => { "이름" }` (중괄호 갈래) | 12 | 데이터 홈 이름표 | 닫힘 |
 | `#[cfg_attr(all(), tauri::command)]` | 12 | Rust 명령 목록 | 닫힘 |

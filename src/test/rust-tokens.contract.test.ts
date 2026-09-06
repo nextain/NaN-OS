@@ -42,7 +42,10 @@ interface RustTokensModule {
 		glob: boolean;
 		line: number;
 		at: number;
+		pub: boolean;
 	}>;
+	isKeyword(token: unknown, word: string): boolean;
+	keywordIn(token: unknown, words: Set<string>): boolean;
 }
 
 let rust: RustTokensModule;
@@ -332,6 +335,82 @@ describe("Rust 명령 추출은 거리를 재지 않는다", () => {
 			"ident:match",
 			"punct:;",
 		]);
+	});
+
+	it("생 식별자 `r#use` 는 `use` 키워드가 아니다", () => {
+		// 16회차 지적 1. 15회차가 `r#이름` 의 이름을 `#` 뒤로 바로잡으면서 키워드와
+		// 생 식별자가 **같은 글자**가 됐다. 낱말 비교가 `text === "use"` 이던 동안
+		// `fn r#use()` 가 선언의 시작으로 읽혀 함수 본문의 `{` 를 `use` 나무로
+		// 건너뛰었고, 그 뒤에 오는 진짜 `use tauri::command;` 가 통째로 사라져
+		// `#[command]` 가 명령이 아니게 됐다.
+		const source = [
+			"fn r#use() {",
+			"    let _ghost = 1;",
+			"}",
+			"use tauri::command;",
+			"#[command]",
+			"fn ghost_wipe_everything() {",
+			'    let _ = std::fs::remove_dir_all("/tmp/ghost-wipe");',
+			"}",
+		].join("\n");
+
+		// 뒤따르는 진짜 `use` 가 선언으로 읽힌다.
+		const leaves = rust
+			.useDeclarations(rust.tokenizeRust(source))
+			.map((leaf) => [leaf.path.join("::"), leaf.local]);
+		expect(leaves).toEqual([["tauri::command", "command"]]);
+
+		// 그래서 `#[command]` 가 명령이고, 본문 판정까지 살아 있다.
+		const commands = rust.tauriCommandBodies(source);
+		expect([...commands.keys()]).toEqual(["ghost_wipe_everything"]);
+		expect(commands.get("ghost_wipe_everything")).toContain("remove_dir_all");
+	});
+
+	it("키워드와 같은 이름의 생 식별자도 그냥 이름이다", () => {
+		// 이름이 `use` 인 명령이 목록에 `use` 로 실린다 — 프런트도 그 이름으로 부른다.
+		expect([...rust.tauriCommandBodies("#[tauri::command]\nfn r#use() {}").keys()]).toEqual([
+			"use",
+		]);
+		expect([...rust.tauriCommandBodies("#[tauri::command]\npub fn r#fn() {}").keys()]).toEqual([
+			"fn",
+		]);
+		// 아이템 시작 낱말과 같은 이름이어도 함수는 함수다.
+		expect([...rust.tauriCommandBodies("#[tauri::command]\nfn r#struct() {}").keys()]).toEqual([
+			"struct",
+		]);
+		// 진짜 아이템 시작은 여전히 명령이 아니다.
+		expect([...rust.tauriCommandBodies("#[tauri::command]\nstruct X;").keys()]).toEqual([]);
+	});
+
+	it("`r#pub use` 는 재수출이 아니다", () => {
+		const leaves = rust
+			.useDeclarations(rust.tokenizeRust("let r#pub = 1;\nuse a::b;"))
+			.map((leaf) => [leaf.path.join("::"), leaf.pub]);
+		expect(leaves).toEqual([["a::b", false]]);
+		expect(
+			rust
+				.useDeclarations(rust.tokenizeRust("pub use a::b;"))
+				.map((leaf) => [leaf.path.join("::"), leaf.pub]),
+		).toEqual([["a::b", true]]);
+	});
+
+	it("낱말 판정은 글자가 아니라 `keyword` 표시로 한다", () => {
+		// 이 모듈의 **모든** 낱말 비교가 이 판정을 지나야 한다. 글자 비교가 하나라도
+		// 남으면 그 자리로 생 식별자가 들어온다 — 16회차 지적 1 이 그 자리였다.
+		const words = ["use", "fn", "pub", "as", "const", "struct", "enum", "impl", "mod", "match"];
+		for (const word of words) {
+			const [plain] = rust.tokenizeRust(`${word} `);
+			const [raw] = rust.tokenizeRust(`r#${word} `);
+			expect(rust.isKeyword(plain, word), `${word} 는 키워드다`).toBe(true);
+			expect(rust.isKeyword(raw, word), `r#${word} 는 키워드가 아니다`).toBe(false);
+			// 이름은 둘 다 같다 — 가르는 것은 글자가 아니라 표시다.
+			expect(raw.text).toBe(word);
+			expect(rust.keywordIn(raw, new Set(words))).toBe(false);
+			expect(rust.keywordIn(plain, new Set(words))).toBe(true);
+		}
+		// 키워드가 아닌 이름은 생 식별자든 아니든 키워드가 아니다.
+		const [ordinary] = rust.tokenizeRust("ghost ");
+		expect(rust.keywordIn(ordinary, new Set(words))).toBe(false);
 	});
 
 	it("주석 안의 `#[tauri::command]` 는 명령이 아니다", () => {

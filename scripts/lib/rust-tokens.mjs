@@ -67,6 +67,43 @@
  * 둘 다 우회가 아니라 위조라서 리뷰가 볼 몫이다.
  */
 
+/**
+ * Rust 의 낱말 전부 — 엄격·예약·약한 키워드를 한자리에 둔다.
+ *
+ * 이 목록의 쓸모는 하나다: **키워드와 같은 이름의 생 식별자를 가르는 것.**
+ * `r#use` 는 이름이 `use` 인 식별자이지 `use` 키워드가 아니다. 그 둘을 글자로만
+ * 가르면 `fn r#use()` 가 선언의 시작으로 읽혀, 그 뒤에 오는 진짜 `use …;` 가
+ * 통째로 목록에서 사라진다(16회차 지적 1).
+ *
+ * `self`·`crate`·`super`·`Self` 는 Rust 가 생 식별자로 쓰지 못하게 막으므로
+ * 여기 있어도 `r#` 형태가 나올 수 없다.
+ */
+const RUST_KEYWORDS = new Set([
+	"abstract", "as", "async", "await", "become", "box", "break", "const",
+	"continue", "crate", "default", "do", "dyn", "else", "enum", "extern",
+	"false", "final", "fn", "for", "if", "impl", "in", "let", "loop", "macro",
+	"macro_rules", "match", "mod", "move", "mut", "override", "priv", "pub",
+	"ref", "return", "Self", "self", "static", "struct", "super", "trait",
+	"true", "try", "type", "typeof", "union", "unsafe", "unsized", "use",
+	"virtual", "where", "while", "yield",
+]);
+
+/**
+ * 이 토큰이 그 **키워드**인가. 생 식별자(`r#use`)는 결코 키워드가 아니다.
+ *
+ * 이 모듈과 이 모듈을 쓰는 게이트의 **모든** 낱말 비교는 이 함수(또는 아래
+ * `keywordIn`)를 지나야 한다. `token.text === "use"` 같은 글자 비교가 하나라도
+ * 남으면 그 자리로 생 식별자가 들어온다.
+ */
+export function isKeyword(token, word) {
+	return !!token && token.kind === "ident" && token.keyword === true && token.text === word;
+}
+
+/** 이 토큰이 그 낱말 묶음 중 하나인가. 생 식별자는 아니다. */
+export function keywordIn(token, words) {
+	return !!token && token.kind === "ident" && token.keyword === true && words.has(token.text);
+}
+
 /** 식별자 첫 글자로 쓸 수 있는가. Rust 는 비ASCII 식별자를 허용한다. */
 function isIdentStart(ch) {
 	return /[A-Za-z_]/.test(ch) || ch.charCodeAt(0) > 127;
@@ -158,11 +195,23 @@ export function tokenizeRust(source) {
 		}
 		// 생 식별자 `r#type` — 이름은 `#` 뒤다. 위의 생 문자열(`r"…"`, `r#"…"#`)이
 		// 먼저 갈리므로 여기 오는 `r#` 는 반드시 식별자다(15회차 지적 3).
+		//
+		// `keyword` 는 **언제나 거짓**이다. `r#use` 는 이름이 `use` 인 식별자일 뿐
+		// `use` 키워드가 아니다 — 그 둘을 글자로만 가르면 `fn r#use()` 가 선언의
+		// 시작으로 읽힌다(16회차 지적 1).
 		if (ch === "r" && source[i + 1] === "#" && isIdentStart(source[i + 2] ?? "")) {
 			const start = i;
 			let j = i + 2;
 			while (j < n && isIdentPart(source[j])) j += 1;
-			tokens.push({ kind: "ident", text: source.slice(i + 2, j), line, start, end: j, raw: true });
+			tokens.push({
+				kind: "ident",
+				text: source.slice(i + 2, j),
+				line,
+				start,
+				end: j,
+				raw: true,
+				keyword: false,
+			});
 			i = j;
 			continue;
 		}
@@ -227,12 +276,15 @@ export function tokenizeRust(source) {
 		if (isIdentStart(ch)) {
 			const start = i;
 			while (i < n && isIdentPart(source[i])) i += 1;
+			const text = source.slice(start, i);
 			tokens.push({
 				kind: "ident",
-				text: source.slice(start, i),
+				text,
 				line,
 				start,
 				end: i,
+				raw: false,
+				keyword: RUST_KEYWORDS.has(text),
 			});
 			continue;
 		}
@@ -323,7 +375,7 @@ function skipAttribute(tokens, at) {
 export function useDeclarations(tokens) {
 	const found = [];
 	for (let i = 0; i < tokens.length; i += 1) {
-		if (tokens[i].kind !== "ident" || tokens[i].text !== "use") continue;
+		if (!isKeyword(tokens[i], "use")) continue;
 		// 이 선언은 `;` 까지다. 중괄호 묶음 안의 `;` 는 없지만 짝으로 건너뛴다.
 		let end = i + 1;
 		while (end < tokens.length) {
@@ -368,7 +420,7 @@ function useIsPublic(tokens, at) {
 		}
 		k -= 1;
 	}
-	return tokens[k]?.kind === "ident" && tokens[k].text === "pub";
+	return isKeyword(tokens[k], "pub");
 }
 
 /** `from`(포함)부터 `to`(제외)까지가 `use` 나무 하나. 잎마다 `out` 에 담는다. */
@@ -411,7 +463,7 @@ function readUseTree(tokens, from, to, prefix, out) {
 			j += 1;
 			continue;
 		}
-		if (t.text === "as") {
+		if (isKeyword(t, "as")) {
 			const alias = tokens[j + 1];
 			out.push({
 				local: alias?.kind === "ident" ? alias.text : null,
@@ -595,12 +647,12 @@ export function tauriCommandBodies(source) {
 				continue;
 			}
 			if (next.kind !== "ident") break;
-			if (next.text === "fn") {
+			if (isKeyword(next, "fn")) {
 				reachedFn = true;
 				break;
 			}
 			// 다른 아이템의 시작이면 이 속성은 함수에 붙은 것이 아니다.
-			if (ITEM_STARTERS.has(next.text)) break;
+			if (keywordIn(next, ITEM_STARTERS)) break;
 			// 그 밖의 낱말은 수식어다 — `pub`, `const`, `async`, `unsafe`, `extern`,
 			// `default`, 그리고 언어가 앞으로 더할 것들.
 			j += 1;

@@ -99,6 +99,30 @@ const GLOBAL_ROOTS = new Set(["globalThis", "window", "self", "global"]);
  */
 export const unwrap = unwrapExpression;
 
+/**
+ * 선언에 적힌 **속성 이름**. 식별자든 문자열 리터럴이든 계산된 리터럴 키든
+ * 같은 이름이다.
+ *
+ * `const { createElement: h }`, `const { "createElement": h }`,
+ * `const { ["createElement"]: h }` 는 모두 `React` 의 같은 속성을 묶는다.
+ * 식별자만 속성으로 읽으면 나머지 둘은 지역 이름(`h`)이 export 이름이 되고,
+ * 그러면 따옴표 한 쌍으로 요소·호출부 판정이 갈린다(16회차 지적 2).
+ * 동적 키(`{ [name]: h }`)는 `null` — 보증 밖이다.
+ */
+function declaredPropertyName(name) {
+	if (!name) return null;
+	if (ts.isIdentifier(name)) return name.text;
+	if (ts.isStringLiteral(name) || ts.isNoSubstitutionTemplateLiteral(name)) return name.text;
+	if (ts.isNumericLiteral(name)) return name.text;
+	if (ts.isComputedPropertyName(name)) {
+		const key = unwrapExpression(name.expression);
+		if (key && (ts.isStringLiteral(key) || ts.isNoSubstitutionTemplateLiteral(key)))
+			return key.text;
+		if (key && ts.isNumericLiteral(key)) return key.text;
+	}
+	return null;
+}
+
 /** 리터럴 키로 적은 멤버 접근의 이름. 동적 키는 `null` — 보증 밖이다. */
 function memberName(node) {
 	if (ts.isPropertyAccessExpression(node)) return node.name.text;
@@ -186,11 +210,11 @@ export function importBindings(sf) {
 			out.set(named.name.text, { module, imported: "*", kind: "namespace" });
 		if (named && ts.isNamedImports(named)) {
 			for (const el of named.elements) {
-				out.set(el.name.text, {
-					module,
-					imported: el.propertyName ? el.propertyName.text : el.name.text,
-					kind: "named",
-				});
+				const imported = el.propertyName
+					? declaredPropertyName(el.propertyName)
+					: el.name.text;
+				if (imported === null) continue;
+				out.set(el.name.text, { module, imported, kind: "named" });
 			}
 		}
 	}
@@ -380,10 +404,13 @@ function constAlias(name, sf) {
 			} else if (ts.isObjectBindingPattern(n.name)) {
 				for (const el of n.name.elements) {
 					if (!ts.isIdentifier(el.name) || el.name.text !== name) continue;
-					const property =
-						el.propertyName && ts.isIdentifier(el.propertyName)
-							? el.propertyName.text
-							: el.name.text;
+					// 속성 이름은 적힌 형태와 무관하다. 못 읽는 키(동적)는 지역
+					// 이름으로 떨어뜨리지 않고 아예 따라가지 않는다 — 모르는 것을
+					// 아는 이름으로 바꿔 읽으면 남의 export 가 걸려 든다.
+					const property = el.propertyName
+						? declaredPropertyName(el.propertyName)
+						: el.name.text;
+					if (property === null) continue;
 					found = { kind: "property", node: n.initializer, property };
 				}
 			}

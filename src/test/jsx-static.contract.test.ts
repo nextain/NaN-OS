@@ -1410,3 +1410,86 @@ describe("staticStringsIn — 값이 아니라 그 안에 적힌 문자열 (15�
 		expect(stringsIn("a", "const a: string = b;\nconst b: string = a;")).toEqual([]);
 	});
 });
+
+/* ─────────────── 16회차에 못 박은 것 ─────────────── */
+
+describe("리터럴 위의 이항도 접는다 (16회차 지적 3)", () => {
+	it("비교는 실제 값으로 계산한다", () => {
+		expect(truthyOf("1 === 1")).toBe(true);
+		expect(truthyOf("1 == 1")).toBe(true);
+		expect(truthyOf("1 > 0")).toBe(true);
+		expect(truthyOf('"a" === "a"')).toBe(true);
+	});
+
+	it("산술·비트도 같다", () => {
+		expect(truthyOf("1 + 0")).toBe(true);
+		expect(truthyOf("1 | 0")).toBe(true);
+		expect(truthyOf("2 ** 0")).toBe(true);
+		expect(truthyOf('"a" + ""')).toBe(true);
+	});
+
+	it("반증: 계산 결과가 거짓이면 거짓이다", () => {
+		// 이항이 붙었다는 이유로 참으로 접으면 열린 버튼이 꺼진 것으로 세어진다.
+		expect(truthyOf("1 !== 1")).toBe(false);
+		expect(truthyOf("1 - 1")).toBe(false);
+		expect(truthyOf("5 % 5")).toBe(false);
+		expect(truthyOf("1 < 0")).toBe(false);
+	});
+
+	it("반증: 한쪽이라도 모르면 결과도 모른다", () => {
+		expect(truthyOf("x === 1", "declare const x: number;")).toBe(false);
+		expect(truthyOf("1 === x", "declare const x: number;")).toBe(false);
+		expect(truthyOf("x + 1", "declare const x: number;")).toBe(false);
+	});
+
+	it("const 사슬을 지나서도 접는다", () => {
+		expect(truthyOf("one === 1", "const one = 1;")).toBe(true);
+		expect(truthyOf("one === 2", "const one = 1;")).toBe(false);
+	});
+
+	it("거짓 쪽도 대칭이다", () => {
+		expect(truthyOf("!(1 - 1)")).toBe(true);
+		expect(truthyOf("!(1 === 1)")).toBe(false);
+	});
+
+	it("`&&`·`||`·`??` 의 갈래 판정은 그대로다", () => {
+		// 값이 안 정해져도 "언제나 참인가" 는 답할 수 있는 자리가 있다.
+		expect(truthyOf("x || true", "declare const x: unknown;")).toBe(true);
+		expect(truthyOf("true && true")).toBe(true);
+		expect(truthyOf("null ?? true")).toBe(true);
+	});
+});
+
+describe("요소 모듈은 패키지 이름이다 (16회차 지적 5)", () => {
+	function factoryOf(specifier: string, name: string): string | null {
+		const sf = parse(
+			`import { ${name} } from "${specifier}";\nexport const E = ${name}("div");`,
+		);
+		const elements = J.jsxElementsIn(sf, sf, null);
+		if (elements.length === 0) return null;
+		return J.elementCallShape(elements[0] as ts.Node, null).factory;
+	}
+
+	it("하위 경로가 붙어도 같은 패키지다", () => {
+		expect(factoryOf("react", "createElement")).toBe("classic");
+		expect(factoryOf("react/index.js", "createElement")).toBe("classic");
+		expect(factoryOf("preact/compat/dist/compat.mjs", "createElement")).toBe("classic");
+	});
+
+	it("어떤 방식인지는 여전히 가져온 이름이 정한다", () => {
+		// `react` 본체와 `react/jsx-runtime` 의 export 집합이 섞이면 자식 자리가
+		// 뒤바뀐다.
+		expect(factoryOf("react/jsx-runtime", "jsx")).toBe("runtime");
+		expect(factoryOf("react/jsx-runtime.js", "jsx")).toBe("runtime");
+		expect(factoryOf("react", "jsx")).toBe("runtime");
+	});
+
+	it("반증: 이름이 비슷한 다른 패키지는 아니다", () => {
+		expect(factoryOf("react-dom", "createElement")).toBeNull();
+		expect(factoryOf("hyperscript", "h")).toBeNull();
+	});
+
+	it("반증: 저장소 안 파일은 패키지가 아니다", () => {
+		expect(factoryOf("./shim", "createElement")).toBeNull();
+	});
+});

@@ -207,6 +207,38 @@ const ELEMENT_MODULES = new Set([
 	"preact/jsx-dev-runtime",
 ]);
 
+/**
+ * 모듈 지정자의 **패키지 이름**. 저장소 안 파일을 가리키면 `null`.
+ *
+ * `react/index.js`·`react/jsx-runtime.js`·`preact/compat/dist/compat.mjs` 는
+ * Node 와 Vite 가 같은 패키지로 푸는 같은 값인데, 적힌 문자열은 다르다. 적힌
+ * 문자열로 대조하면 하위 경로 한 마디로 알림 요소가 요소가 아니게 된다
+ * (16회차 지적 5). 그래서 첫 마디(스코프 패키지면 두 마디)로 묻는다.
+ *
+ * 무엇이 요소를 만드는 함수인가는 그대로 **가져온 이름**이 정한다 —
+ * `createElement`/`h` 는 옛 방식, `jsx`/`jsxs`/`jsxDEV` 는 automatic runtime
+ * 이다. 그래야 `react` 본체와 `react/jsx-runtime` 의 export 집합이 섞이지
+ * 않는다.
+ */
+function packageOf(specifier) {
+	if (typeof specifier !== "string" || specifier === "") return null;
+	if (specifier.startsWith(".") || specifier.startsWith("/")) return null;
+	const parts = specifier.split("/");
+	if (specifier.startsWith("@")) return parts.length >= 2 ? `${parts[0]}/${parts[1]}` : null;
+	return parts[0];
+}
+
+/** 요소 만드는 함수를 내주는 **패키지**들. 위 목록에서 패키지 이름만 남긴다. */
+const ELEMENT_PACKAGES = new Set(
+	[...ELEMENT_MODULES].map((module) => packageOf(module)).filter(Boolean),
+);
+
+/** 이 모듈이 요소를 내주는 패키지의 것인가. */
+function isElementModule(module) {
+	const pkg = packageOf(module);
+	return pkg !== null && ELEMENT_PACKAGES.has(pkg);
+}
+
 /** 옛 방식. 자식은 셋째 인자부터다. */
 const CLASSIC_FACTORIES = new Set(["createElement", "h"]);
 /** 새 방식(automatic runtime). 자식은 props 안의 `children` 이다. */
@@ -251,7 +283,7 @@ export function elementCallShape(node, env) {
 	// 아래 옛 판정으로 내려보낸다 — 어디서 왔는지 모르는 `createElement` 를
 	// 요소가 아니라고 단정하면 놓치는 쪽으로 틀린다.
 	if (binding && binding.module) {
-		if (!ELEMENT_MODULES.has(binding.module)) return none;
+		if (!isElementModule(binding.module)) return none;
 		const shape = {
 			argShift: binding.argShift ?? 0,
 			argsUnknown: !!binding.argsUnknown,
@@ -1197,6 +1229,136 @@ function staticNumber(node, sf, env, seen) {
 	return null;
 }
 
+/**
+ * 이 식이 정적으로 정해지는 **원시값**인가. 정해지면 그 값, 아니면 `UNKNOWN`.
+ *
+ * 리터럴과 그것에 닿는 `const` 사슬만 접는다. 그 위의 단항·이항은 실제
+ * JavaScript 연산으로 계산한다 — `1 === 1` 은 참이고 React 에서
+ * `disabled={1 === 1}` 은 누를 수 없는 버튼이다(16회차 지적 3). 연산자를
+ * 하나씩 열거하는 대신, **두 피연산자가 정해지면 결과도 정해진다**는 규칙
+ * 하나로 읽는다.
+ *
+ * 한쪽이라도 모르면 결과도 모른다. 모르는 것을 참으로도 거짓으로도 접지 않는다.
+ */
+const UNKNOWN = Symbol("정적으로 정해지지 않음");
+
+function foldBinary(op, left, right) {
+	switch (op) {
+		case ts.SyntaxKind.EqualsEqualsEqualsToken:
+			return left === right;
+		case ts.SyntaxKind.ExclamationEqualsEqualsToken:
+			return left !== right;
+		// biome-ignore lint/suspicious/noDoubleEquals: `==` 의 뜻을 그대로 계산한다
+		case ts.SyntaxKind.EqualsEqualsToken:
+			return left == right;
+		// biome-ignore lint/suspicious/noDoubleEquals: `!=` 의 뜻을 그대로 계산한다
+		case ts.SyntaxKind.ExclamationEqualsToken:
+			return left != right;
+		case ts.SyntaxKind.LessThanToken:
+			return left < right;
+		case ts.SyntaxKind.LessThanEqualsToken:
+			return left <= right;
+		case ts.SyntaxKind.GreaterThanToken:
+			return left > right;
+		case ts.SyntaxKind.GreaterThanEqualsToken:
+			return left >= right;
+		case ts.SyntaxKind.PlusToken:
+			return left + right;
+		case ts.SyntaxKind.MinusToken:
+			return left - right;
+		case ts.SyntaxKind.AsteriskToken:
+			return left * right;
+		case ts.SyntaxKind.SlashToken:
+			return left / right;
+		case ts.SyntaxKind.PercentToken:
+			return left % right;
+		case ts.SyntaxKind.AsteriskAsteriskToken:
+			return left ** right;
+		case ts.SyntaxKind.AmpersandToken:
+			return left & right;
+		case ts.SyntaxKind.BarToken:
+			return left | right;
+		case ts.SyntaxKind.CaretToken:
+			return left ^ right;
+		case ts.SyntaxKind.LessThanLessThanToken:
+			return left << right;
+		case ts.SyntaxKind.GreaterThanGreaterThanToken:
+			return left >> right;
+		case ts.SyntaxKind.GreaterThanGreaterThanGreaterThanToken:
+			return left >>> right;
+		default:
+			return UNKNOWN;
+	}
+}
+
+function staticPrimitive(node, sf, env, seen) {
+	const n = unwrapAll(node);
+	if (!n) return UNKNOWN;
+	const guard = seen instanceof Set ? seen : new Set();
+	if (guard.has(n)) return UNKNOWN;
+	guard.add(n);
+	if (ts.isStringLiteral(n) || ts.isNoSubstitutionTemplateLiteral(n)) return n.text;
+	if (ts.isNumericLiteral(n)) return Number(n.text);
+	if (n.kind === ts.SyntaxKind.TrueKeyword) return true;
+	if (n.kind === ts.SyntaxKind.FalseKeyword) return false;
+	if (n.kind === ts.SyntaxKind.NullKeyword) return null;
+	if (ts.isIdentifier(n) && n.text === "undefined") return undefined;
+	if (ts.isVoidExpression(n)) return undefined;
+	if (ts.isTemplateExpression(n)) {
+		const text = staticText(n, sf, env, guard);
+		return text === null ? UNKNOWN : text;
+	}
+	if (ts.isTypeOfExpression(n)) {
+		const inner = staticPrimitive(n.expression, sf, env, guard);
+		return inner === UNKNOWN ? UNKNOWN : typeof inner;
+	}
+	if (ts.isPrefixUnaryExpression(n)) {
+		const inner = staticPrimitive(n.operand, sf, env, guard);
+		if (inner === UNKNOWN) return UNKNOWN;
+		if (n.operator === ts.SyntaxKind.PlusToken) return +inner;
+		if (n.operator === ts.SyntaxKind.MinusToken) return -inner;
+		if (n.operator === ts.SyntaxKind.TildeToken) return ~inner;
+		if (n.operator === ts.SyntaxKind.ExclamationToken) return !inner;
+		return UNKNOWN;
+	}
+	if (ts.isConditionalExpression(n)) {
+		const cond = staticPrimitive(n.condition, sf, env, guard);
+		if (cond === UNKNOWN) return UNKNOWN;
+		return staticPrimitive(cond ? n.whenTrue : n.whenFalse, sf, env, guard);
+	}
+	if (ts.isBinaryExpression(n)) {
+		const kind = n.operatorToken.kind;
+		const left = staticPrimitive(n.left, sf, env, guard);
+		if (left === UNKNOWN) return UNKNOWN;
+		// 짧은회로는 오른쪽을 안 볼 수도 있다. 그 뜻 그대로 계산한다.
+		if (kind === ts.SyntaxKind.AmpersandAmpersandToken)
+			return left ? staticPrimitive(n.right, sf, env, guard) : left;
+		if (kind === ts.SyntaxKind.BarBarToken)
+			return left ? left : staticPrimitive(n.right, sf, env, guard);
+		if (kind === ts.SyntaxKind.QuestionQuestionToken)
+			return left === null || left === undefined
+				? staticPrimitive(n.right, sf, env, guard)
+				: left;
+		const right = staticPrimitive(n.right, sf, env, guard);
+		if (right === UNKNOWN) return UNKNOWN;
+		return foldBinary(kind, left, right);
+	}
+	if (ts.isIdentifier(n)) {
+		for (const hit of declarationSites(n.text, sf)) {
+			if (hit.kind !== "var" || !hit.decl.initializer) continue;
+			if (!isConstDeclaration(hit.decl)) continue;
+			if (isReassigned(n.text, sf)) continue;
+			return staticPrimitive(hit.decl.initializer, sf, env, guard);
+		}
+		const imported = importedBinding(n.text, sf, env);
+		if (imported) {
+			const bound = constOnlyValue(imported.name, imported.sf, env);
+			if (bound) return staticPrimitive(bound.node, bound.sf, env, guard);
+		}
+	}
+	return UNKNOWN;
+}
+
 /** 값을 숫자·문자열로 바꾸는 단항인가. 그 결과는 결코 널이 아니다. */
 function isCoercingUnary(n) {
 	if (ts.isTypeOfExpression(n)) return true;
@@ -1340,6 +1502,20 @@ export function alwaysTruthy(node, sf, env, seen = new Set()) {
 			return (
 				alwaysTruthy(n.left, sf, env, seen) || alwaysTruthy(n.right, sf, env, seen)
 			);
+		// 비교·산술·비트 이항은 두 피연산자가 정해지면 결과도 정해진다.
+		// 연산자를 하나씩 열거하지 않고 그 규칙 하나로 읽는다(16회차 지적 3).
+		// `&&`·`||`·`??` 는 아래에서 갈래로 따로 읽는다 — 값이 안 정해져도
+		// "언제나 참인가" 는 답할 수 있는 자리가 있기 때문이다.
+		if (
+			kind !== ts.SyntaxKind.AmpersandAmpersandToken &&
+			kind !== ts.SyntaxKind.BarBarToken &&
+			kind !== ts.SyntaxKind.QuestionQuestionToken
+		) {
+			// 자국은 새로 든다. `alwaysTruthy` 가 이미 이 노드를 지난 것으로
+			// 적어 두었으므로, 그 집합을 넘기면 접기가 시작하자마자 멈춘다.
+			const folded = staticPrimitive(n, sf, env, new Set());
+			return folded === UNKNOWN ? false : Boolean(folded);
+		}
 		// `a ?? b` 는 `||` 와 다르다. 고르는 기준이 참·거짓이 아니라 **널인가**
 		// 이므로, 왼쪽이 널인지부터 묻는다. 왼쪽만 보면 `false ?? true` 는
 		// 옳게 거짓이지만 `null ?? true` 도 거짓이 된다 — 실행하면 `true` 이고
@@ -1428,6 +1604,16 @@ function alwaysFalsy(node, sf, env, seen) {
 		return (
 			alwaysFalsy(n.whenTrue, sf, env, seen) && alwaysFalsy(n.whenFalse, sf, env, seen)
 		);
+	}
+	// 비교·산술·비트 이항은 참 쪽과 대칭으로 접는다.
+	if (
+		ts.isBinaryExpression(n) &&
+		n.operatorToken.kind !== ts.SyntaxKind.AmpersandAmpersandToken &&
+		n.operatorToken.kind !== ts.SyntaxKind.BarBarToken &&
+		n.operatorToken.kind !== ts.SyntaxKind.QuestionQuestionToken
+	) {
+		const folded = staticPrimitive(n, sf, env, new Set());
+		return folded === UNKNOWN ? false : !folded;
 	}
 	// `a ?? b` 는 참 쪽과 대칭이다 — 왼쪽이 널이면 오른쪽이, 널이 아니면
 	// 왼쪽이 결과다. `null ?? false` 는 언제나 거짓이고, `false ?? true` 도 그렇다.

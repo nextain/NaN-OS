@@ -841,3 +841,38 @@ describe("모듈 바인딩을 만드는 선언은 두 종이다 (15회차 지적
 		).toBeNull();
 	});
 });
+
+/* ─────────────── 16회차에 못 박은 것 ─────────────── */
+
+describe("구조분해 키는 적힌 형태와 무관하다 (16회차 지적 2)", () => {
+	function importedOf(pattern: string): string | null | undefined {
+		return calleeOf(
+			`import * as React from "react";\nconst ${pattern} = React;\nexport const E = ghostCreate("div");`,
+			"ghostCreate",
+		)?.imported;
+	}
+
+	it("식별자 키·문자열 키·계산된 리터럴 키가 같은 속성이다", () => {
+		expect(importedOf("{ createElement: ghostCreate }")).toBe("createElement");
+		expect(importedOf('{ "createElement": ghostCreate }')).toBe("createElement");
+		expect(importedOf('{ ["createElement"]: ghostCreate }')).toBe("createElement");
+	});
+
+	it("반증: 못 읽는 키는 지역 이름으로 떨어뜨리지 않는다", () => {
+		// 모르는 것을 아는 이름으로 바꿔 읽으면, 지역 이름이 export 이름이 되어
+		// 남의 모듈 export 가 걸려 든다.
+		expect(
+			calleeOf(
+				`import * as React from "react";\ndeclare const key: string;\nconst { [key]: ghostCreate } = React;\nexport const E = ghostCreate("div");`,
+				"ghostCreate",
+			),
+		).toBeNull();
+	});
+
+	it("named import 의 문자열 키도 같다", () => {
+		const map = B.importBindings(
+			parse(`import { "createElement" as ghostCreate } from "react";`),
+		);
+		expect(map.get("ghostCreate")?.imported).toBe("createElement");
+	});
+});

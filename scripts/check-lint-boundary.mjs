@@ -32,6 +32,7 @@ import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import ts from "typescript";
 import {
+	LINT_BOUNDARY_DETECTORS,
 	LINT_BOUNDARY_EXCEPTIONS,
 	LINT_BOUNDARY_EXTENSIONS,
 	LINT_BOUNDARY_FORMS,
@@ -102,6 +103,9 @@ function biomeHits(rule) {
 
 /* ─────────────── 파서가 세는 형태 ─────────────── */
 
+// 형태의 **정의**는 정본(`scripts/lib/lint-boundary-forms.mjs`)에 있다. 여기에
+// 다시 적으면 목록이 두 벌이 되고, 한쪽만 고쳐진 자리로 결함이 들어온다.
+
 function parse(file, text) {
 	return ts.createSourceFile(
 		file,
@@ -112,39 +116,7 @@ function parse(file, text) {
 	);
 }
 
-/** 리터럴에 씌운 `void`. `void 0` 은 `undefined` 를 다르게 적은 것이다. */
-function voidLiteral(node) {
-	if (!ts.isVoidExpression(node)) return false;
-	const inner = node.expression;
-	return (
-		ts.isNumericLiteral(inner) ||
-		ts.isBigIntLiteral(inner) ||
-		ts.isStringLiteral(inner) ||
-		ts.isNoSubstitutionTemplateLiteral(inner) ||
-		inner.kind === ts.SyntaxKind.TrueKeyword ||
-		inner.kind === ts.SyntaxKind.FalseKeyword ||
-		inner.kind === ts.SyntaxKind.NullKeyword ||
-		(ts.isIdentifier(inner) && inner.text === "undefined")
-	);
-}
 
-/** 겹쳐 쌓은 `void`. 겹의 수만 늘리는 형태다. */
-function voidStacked(node) {
-	return ts.isVoidExpression(node) && ts.isVoidExpression(node.expression);
-}
-
-/** 리터럴 키로 곧바로 부르기. `f["call"](…)` 은 `f.call(…)` 이다. */
-function computedCallee(node) {
-	if (!ts.isCallExpression(node)) return false;
-	const callee = node.expression;
-	if (!ts.isElementAccessExpression(callee)) return false;
-	const key = callee.argumentExpression;
-	return (
-		!!key && (ts.isStringLiteral(key) || ts.isNoSubstitutionTemplateLiteral(key))
-	);
-}
-
-const DETECTORS = { voidLiteral, voidStacked, computedCallee };
 
 function parserHits(names) {
 	const found = new Map(names.map((name) => [name, []]));
@@ -157,11 +129,11 @@ function parserHits(names) {
 			continue;
 		}
 		// 값싼 선별. 어느 형태의 글자도 없는 파일은 파싱하지 않는다.
-		if (!/void|\[\s*["'`]/.test(text)) continue;
+		if (!/void|\[/.test(text)) continue;
 		const tree = parse(file, text);
 		const visit = (node) => {
 			for (const name of names) {
-				if (DETECTORS[name](node))
+				if (LINT_BOUNDARY_DETECTORS[name](node))
 					found.get(name).push({
 						file,
 						line: text.slice(0, node.getStart(tree)).split("\n").length,

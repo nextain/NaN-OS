@@ -36,6 +36,9 @@
  * 생기면 붉어진다.
  */
 
+import ts from "typescript";
+import { unwrapExpression } from "./unwrap.mjs";
+
 /** 게이트가 분석하는 소스. 린트 경계도 같은 범위를 본다. */
 export const LINT_BOUNDARY_SCOPE = [
 	"scripts",
@@ -164,3 +167,61 @@ export const LINT_BOUNDARY_EXCEPTIONS = [
 export function boundaryLines() {
 	return LINT_BOUNDARY_FORMS.map((form) => ` *   - \`${form.id}\` — ${form.title}`);
 }
+
+/* ─────────────── 형태의 정의 ─────────────── */
+
+/**
+ * 리터럴에 씌운 `void`. `void 0` 은 `undefined` 를 다르게 적은 것이다.
+ *
+ * 껍데기는 `scripts/lib/unwrap.mjs` 가 벗긴다 — 검출기가 자식 노드를 그대로
+ * 맞추면 `void (0)` 괄호 한 겹으로 경계가 뚫린다(16회차 지적 4). 경계를 지는
+ * 게이트가 게이트 모듈보다 얕게 보면 안 된다.
+ */
+function voidLiteral(node) {
+	if (!ts.isVoidExpression(node)) return false;
+	const inner = unwrapExpression(node.expression);
+	if (!inner) return false;
+	return (
+		ts.isNumericLiteral(inner) ||
+		ts.isBigIntLiteral(inner) ||
+		ts.isStringLiteral(inner) ||
+		ts.isNoSubstitutionTemplateLiteral(inner) ||
+		inner.kind === ts.SyntaxKind.TrueKeyword ||
+		inner.kind === ts.SyntaxKind.FalseKeyword ||
+		inner.kind === ts.SyntaxKind.NullKeyword ||
+		(ts.isIdentifier(inner) && inner.text === "undefined")
+	);
+}
+
+/** 겹쳐 쌓은 `void`. 겹의 수만 늘리는 형태다. 껍데기를 벗기고 본다. */
+function voidStacked(node) {
+	if (!ts.isVoidExpression(node)) return false;
+	const inner = unwrapExpression(node.expression);
+	return !!inner && ts.isVoidExpression(inner);
+}
+
+/**
+ * 리터럴 키로 곧바로 부르기. `f["call"](…)` 은 `f.call(…)` 이다.
+ *
+ * callee 와 키 **양쪽** 껍데기를 벗긴다. `(f["call"])()` 의 callee 는 괄호이고
+ * `f["call" as const]()` 의 키는 단언이다 — 둘 다 같은 호출이고, 바인딩 쪽은
+ * 이미 그렇게 읽는다(16회차 지적 4).
+ */
+function computedCallee(node) {
+	if (!ts.isCallExpression(node)) return false;
+	const callee = unwrapExpression(node.expression);
+	if (!callee || !ts.isElementAccessExpression(callee)) return false;
+	const key = unwrapExpression(callee.argumentExpression);
+	return (
+		!!key && (ts.isStringLiteral(key) || ts.isNoSubstitutionTemplateLiteral(key))
+	);
+}
+
+/**
+ * 검출기 이름 → 그 형태를 판별하는 함수.
+ *
+ * 게이트가 이것을 그대로 쓴다. 형태의 정의가 정본과 게이트 두 곳에 있으면
+ * 한쪽만 고쳐진 자리로 결함이 들어온다 — 실제로 껍데기 벗기기가 그렇게
+ * 뚫렸다(16회차 지적 4).
+ */
+export const LINT_BOUNDARY_DETECTORS = { voidLiteral, voidStacked, computedCallee };

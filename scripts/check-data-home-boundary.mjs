@@ -92,6 +92,8 @@
 import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import {
+	isKeyword,
+	keywordIn,
 	pathAt,
 	skipBalanced,
 	splitCodeAndStrings,
@@ -292,7 +294,7 @@ function publicItems(source) {
 			continue;
 		}
 		if (t.kind !== "ident") continue;
-		if (t.text === "impl" && implType === null) {
+		if (isKeyword(t, "impl") && implType === null) {
 			let j = i + 1;
 			let last = null;
 			while (j < tokens.length && !(tokens[j].kind === "punct" && tokens[j].text === "{")) {
@@ -303,7 +305,7 @@ function publicItems(source) {
 			implDepth = depth;
 			continue;
 		}
-		if (t.text !== "pub") continue;
+		if (!isKeyword(t, "pub")) continue;
 
 		let j = i + 1;
 		if (tokens[j]?.kind === "punct" && tokens[j].text === "(")
@@ -314,18 +316,18 @@ function publicItems(source) {
 			const tk = tokens[j];
 			if (!tk || tk.kind !== "ident") break;
 			// `const fn` 의 `const` 는 항목 낱말이 아니라 수식어다.
-			if (tk.text === "const" && tokens[j + 1]?.text === "fn") {
+			if (isKeyword(tk, "const") && isKeyword(tokens[j + 1], "fn")) {
 				j += 1;
 				continue;
 			}
-			if (ITEM_MODIFIERS.has(tk.text)) {
+			if (keywordIn(tk, ITEM_MODIFIERS)) {
 				j += 1;
-				if (tk.text === "extern" && tokens[j]?.kind === "string") j += 1;
+				if (isKeyword(tk, "extern") && tokens[j]?.kind === "string") j += 1;
 				continue;
 			}
-			if (ITEM_KEYWORDS.has(tk.text)) {
+			if (keywordIn(tk, ITEM_KEYWORDS)) {
 				kind = tk.text;
-				if (tk.text === "use") {
+				if (isKeyword(tk, "use")) {
 					// 재수출은 잎마다 이름 하나다. glob 은 이름을 셀 수 없으니 `*` 로
 					// 남겨 허용 목록에서 반드시 붉어지게 한다.
 					for (const leaf of useLeaves.get(j) ?? []) {
@@ -391,8 +393,8 @@ function dataHomeReferences(tokens, publicNames) {
 				const stop = skipBalanced(tokens, i + 3, "{", "}");
 				for (let j = i + 4; j < stop - 1; j += 1) {
 					if (tokens[j].kind !== "ident") continue;
-					if (tokens[j].text === "self") continue;
-					if (tokens[j].text === "as") {
+					if (isKeyword(tokens[j], "self")) continue;
+					if (isKeyword(tokens[j], "as")) {
 						j += 1;
 						continue;
 					}
@@ -404,7 +406,7 @@ function dataHomeReferences(tokens, publicNames) {
 				continue;
 			}
 			// `use …::data_home::*` 의 별은 항목 이름이 아니다 — 아래 glob 이 든다.
-			if (head.kind === "ident" && head.text !== "self") {
+			if (head.kind === "ident" && !isKeyword(head, "self")) {
 				found.push({ name: head.text, line: head.line });
 			}
 			continue;
@@ -448,7 +450,7 @@ function findIdentifierHits(code) {
 function variantAt(tokens, at) {
 	const head = tokens[at];
 	if (!head || head.kind !== "ident") return null;
-	if (head.text !== "Self" && head.text !== "DataHomeChild") return null;
+	if (!isKeyword(head, "Self") && !(head.text === "DataHomeChild" && !head.raw)) return null;
 	if (!(tokens[at + 1]?.text === ":" && tokens[at + 2]?.text === ":")) return null;
 	const name = tokens[at + 3];
 	if (!name || name.kind !== "ident") return null;
@@ -458,7 +460,7 @@ function variantAt(tokens, at) {
 /** `fn <이름>` 의 본문 블록 범위. 본문 없는 선언이면 `null`. */
 function functionBodyRange(tokens, fnName) {
 	for (let i = 0; i + 1 < tokens.length; i += 1) {
-		if (tokens[i].kind !== "ident" || tokens[i].text !== "fn") continue;
+		if (!isKeyword(tokens[i], "fn")) continue;
 		if (tokens[i + 1].kind !== "ident" || tokens[i + 1].text !== fnName) continue;
 		for (let j = i + 2; j < tokens.length; j += 1) {
 			const t = tokens[j];
@@ -492,7 +494,7 @@ function funnelNames() {
 
 	let matchAt = -1;
 	for (let i = body.open + 1; i < body.end; i += 1) {
-		if (tokens[i].kind === "ident" && tokens[i].text === "match") {
+		if (isKeyword(tokens[i], "match")) {
 			matchAt = i;
 			break;
 		}

@@ -16,6 +16,7 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
+import * as ts from "typescript";
 import { describe, expect, it } from "vitest";
 
 const ROOT = resolve(__dirname, "..", "..");
@@ -48,6 +49,7 @@ interface Exception {
 
 interface FormsModule {
 	LINT_BOUNDARY_FORMS: BoundaryForm[];
+	LINT_BOUNDARY_DETECTORS: Record<string, (node: ts.Node) => boolean>;
 	LINT_BOUNDARY_REJECTED: RejectedForm[];
 	LINT_BOUNDARY_EXCEPTIONS: Exception[];
 	LINT_BOUNDARY_SCOPE: string[];
@@ -110,15 +112,75 @@ describe("린트 경계 — 게이트가 같은 목록을 본다", () => {
 		}
 	});
 
-	it("파서 검출기 이름이 게이트에 실제로 구현돼 있다", () => {
-		const gate = read("scripts/check-lint-boundary.mjs");
+	it("파서 검출기가 정본에 실제로 구현돼 있다", () => {
+		// 형태의 **정의**도 정본에 있어야 한다. 게이트가 자기 판별을 들면
+		// 껍데기 벗기기처럼 한쪽만 고쳐진 자리가 생긴다(16회차 지적 4).
 		for (const form of F.LINT_BOUNDARY_FORMS) {
 			if (!form.detector) continue;
 			expect(
-				new RegExp(`function ${form.detector}\\b`).test(gate),
+				typeof F.LINT_BOUNDARY_DETECTORS[form.detector],
 				`${form.detector} 검출기가 없다`,
-			).toBe(true);
+			).toBe("function");
 		}
+	});
+
+	it("린트 게이트 소스에 자기 껍데기 벗기기가 없다", () => {
+		// 경계를 지는 게이트가 게이트 모듈보다 얕게 보면 안 된다. `void (0)`
+		// 괄호 한 겹으로 경계가 뚫렸던 자리다(16회차 지적 4).
+		const gate = read("scripts/check-lint-boundary.mjs");
+		const forms = read("scripts/lib/lint-boundary-forms.mjs");
+		for (const marker of [
+			"isParenthesizedExpression",
+			"isAsExpression",
+			"isNonNullExpression",
+			"isSatisfiesExpression",
+			"isCommaListExpression",
+		]) {
+			expect(gate.includes(marker), `게이트가 ${marker} 를 직접 본다`).toBe(false);
+			expect(forms.includes(marker), `정본이 ${marker} 를 직접 본다`).toBe(false);
+		}
+		expect(forms.includes("unwrap.mjs"), "정본이 공용 껍데기 모듈을 안 쓴다").toBe(true);
+	});
+
+	describe("검출기는 껍데기 한 겹에 뚫리지 않는다 (16회차 지적 4)", () => {
+		function first(code: string, pick: (n: ts.Node) => boolean): ts.Node {
+			const sf = ts.createSourceFile("p.ts", code, ts.ScriptTarget.Latest, true);
+			let hit: ts.Node | undefined;
+			const walk = (n: ts.Node): void => {
+				if (hit) return;
+				if (pick(n)) hit = n;
+				else ts.forEachChild(n, walk);
+			};
+			walk(sf);
+			expect(hit, `${code} 에서 노드를 찾지 못했다`).not.toBeUndefined();
+			return hit as ts.Node;
+		}
+
+		const voidLiteral = (code: string): boolean =>
+			F.LINT_BOUNDARY_DETECTORS.voidLiteral(first(code, ts.isVoidExpression));
+		const computedCallee = (code: string): boolean =>
+			F.LINT_BOUNDARY_DETECTORS.computedCallee(first(code, ts.isCallExpression));
+
+		it("`void (0)` 은 `void 0` 과 같다", () => {
+			expect(voidLiteral("void 0;")).toBe(true);
+			expect(voidLiteral("void (0);")).toBe(true);
+			expect(voidLiteral("void ((0));")).toBe(true);
+			expect(voidLiteral("void (0 as never);")).toBe(true);
+		});
+
+		it("`(f[\"call\"])()` 은 `f[\"call\"]()` 과 같다", () => {
+			expect(computedCallee('f["call"](null);')).toBe(true);
+			expect(computedCallee('(f["call"])(null);')).toBe(true);
+			expect(computedCallee('f["call" as const](null);')).toBe(true);
+		});
+
+		it("반증: 껍데기를 벗겨도 형태가 아니면 걸리지 않는다", () => {
+			// `void asyncFn()` 은 정당한 관용구다. 벗기기를 넓혔다고 이것까지
+			// 잡으면 규칙이 곧 예외 목록이 된다.
+			expect(voidLiteral("void (asyncFn());")).toBe(false);
+			expect(computedCallee("f[name](null);")).toBe(false);
+			expect(computedCallee("f.call(null);")).toBe(false);
+		});
 	});
 
 	it("검사 범위는 게이트가 분석하는 소스와 같다", () => {
