@@ -12,6 +12,13 @@ const adkState = vi.hoisted(() => ({
 	config: null as Record<string, unknown> | null,
 	uiConfig: null as Record<string, unknown> | null,
 }));
+const backgroundState = vi.hoisted(() => ({
+	assets: [] as string[],
+	configReadDeferred: false,
+	releaseConfigRead: null as (() => void) | null,
+	listNaiaAssets: vi.fn(async () => [] as string[]),
+	toLocalBlobUrl: vi.fn(async (path: string) => path),
+}));
 
 vi.mock("@tauri-apps/api/event", () => ({
 	listen: vi.fn((name: string, cb: (event: { payload: any }) => void) => {
@@ -70,11 +77,18 @@ vi.mock("../lib/adk-store", async () => {
 	return {
 		...actual,
 		readNaiaConfig: vi.fn(async () => {
+			if (backgroundState.configReadDeferred) {
+				return await new Promise<Record<string, unknown> | null>((resolve) => {
+					backgroundState.releaseConfigRead = () => resolve(adkState.config);
+				});
+			}
 			if (adkState.config) return adkState.config;
 			const raw = globalThis.localStorage?.getItem("naia-config");
 			return raw ? JSON.parse(raw) : null;
 		}),
 		readNaiaUiConfig: vi.fn(async () => adkState.uiConfig),
+		listNaiaAssets: backgroundState.listNaiaAssets,
+		toLocalBlobUrl: backgroundState.toLocalBlobUrl,
 		setAdkPath: vi.fn().mockResolvedValue(undefined),
 		writeNaiaConfig: vi.fn().mockResolvedValue(undefined),
 		writeNaiaUiConfig: vi.fn().mockResolvedValue(undefined),
@@ -169,6 +183,41 @@ describe("App discord deep-link persistence", () => {
 		tauriState.startupMessages = [];
 		adkState.config = null;
 		adkState.uiConfig = null;
+		backgroundState.assets = [];
+		backgroundState.configReadDeferred = false;
+		backgroundState.releaseConfigRead = null;
+		backgroundState.listNaiaAssets.mockReset();
+		backgroundState.listNaiaAssets.mockImplementation(async () => backgroundState.assets);
+		backgroundState.toLocalBlobUrl.mockReset();
+		backgroundState.toLocalBlobUrl.mockImplementation(async (path: string) => path);
+	});
+
+	it("waits for the ADK background preference when assets resolve first", async () => {
+		const adkPath = "/adk/custom-background";
+		const customBackground = `${adkPath}/naia-settings/background/custom.webp`;
+		const defaultBackground = `${adkPath}/naia-settings/background/naia-dawn-city-uhd.webp`;
+		localStorage.setItem("naia-adk-path", adkPath);
+		backgroundState.assets = [customBackground, defaultBackground];
+		backgroundState.listNaiaAssets.mockImplementation(async () => backgroundState.assets);
+		backgroundState.toLocalBlobUrl.mockImplementation(async (path: string) => path);
+		backgroundState.configReadDeferred = true;
+		adkState.config = {
+			provider: "gemini",
+			model: "gemini-3-flash-preview",
+			onboardingComplete: true,
+			backgroundVideo: "custom.webp",
+		};
+
+		render(<App />);
+
+		expect(backgroundState.listNaiaAssets).not.toHaveBeenCalled();
+		backgroundState.releaseConfigRead?.();
+
+		await waitFor(() => {
+			expect(backgroundState.listNaiaAssets).toHaveBeenCalledWith("background");
+			expect(backgroundState.toLocalBlobUrl).toHaveBeenCalledWith(customBackground);
+		});
+		expect(backgroundState.toLocalBlobUrl).not.toHaveBeenCalledWith(defaultBackground);
 	});
 
 	it("persists discord defaults from global listener", () => {

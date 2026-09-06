@@ -435,19 +435,29 @@ export function App() {
 	// (this default had regressed back to morning-coffee).
 	const DEFAULT_BG_VIDEO = "naia-dawn-city-uhd.webp";
 	useEffect(() => {
-		if (showAdkSetup) return;
-		listNaiaAssets("background").then(async (paths) => {
-			if (paths.length === 0) return;
+		if (showAdkSetup || !configHydrated) return;
+		let cancelled = false;
+		void listNaiaAssets("background").then(async (paths) => {
+			if (cancelled || paths.length === 0) return;
 			const config = loadConfig();
 			const saved =
 				(config?.backgroundVideo as string | undefined) ?? DEFAULT_BG_VIDEO;
 			const match = paths.find((p) => p.endsWith(saved));
-			if (match) {
-				setBackgroundMediaType(getBackgroundMediaType(match));
-				setBackgroundVideoUrl(await toLocalBlobUrl(match));
-			}
+			if (!match || cancelled) return;
+			const blobUrl = await toLocalBlobUrl(match);
+			if (cancelled) return;
+			setBackgroundMediaType(getBackgroundMediaType(match));
+			setBackgroundVideoUrl(blobUrl);
 		});
-	}, [showAdkSetup, setBackgroundMediaType, setBackgroundVideoUrl]);
+		return () => {
+			cancelled = true;
+		};
+	}, [
+		configHydrated,
+		showAdkSetup,
+		setBackgroundMediaType,
+		setBackgroundVideoUrl,
+	]);
 
 	// Hydrate localStorage FROM naia-settings files on startup — files are SoT,
 	// localStorage is a render cache (UC-CONFIG-SOT / FR-CONFIG-SOT.1).
