@@ -1208,15 +1208,36 @@ impl Drop for BgmServerProcess {
 // Rust ??Child drop ??二쎌씠吏 ?딆쑝誘濡?Drop ?먯꽌 紐낆떆 kill(AgentProcess ?숉삎, orphan 諛⑹?).
 struct CascadeProcess {
     child: Child,
+    ownership: platform::CascadeOwnership,
     /// stdout `CASCADE_READY {json}` ?섏씠濡쒕뱶(facade_port + services). UI ?곹깭?쒖떆??
     ready: String,
 }
+impl CascadeProcess {
+    /// Stop the supervisor and its exact owned process tree.  The bounded
+    /// escalation is deliberately kept here instead of using a global
+    /// command-name cleanup so a healthy Cascade adopted by another Shell is
+    /// never touched.
+    fn terminate(&mut self) {
+        // The supervisor may have exited while its loader descendants are
+        // still unwinding.  The platform ownership handle/group remains
+        // valid, so signal it even after the leader is gone.
+        platform::terminate_cascade(Some(&self.ownership), self.child.id());
+        let deadline = std::time::Instant::now() + std::time::Duration::from_millis(500);
+        while std::time::Instant::now() < deadline {
+            if matches!(self.child.try_wait(), Ok(Some(_))) {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        }
+        // Escalate through the same ownership boundary even when the leader
+        // exited early: descendants can remain in the private group/job.
+        platform::kill_cascade(Some(&self.ownership), self.child.id());
+        let _ = self.child.wait();
+    }
+}
 impl Drop for CascadeProcess {
     fn drop(&mut self) {
-        let _ = self.child.kill();
-        // kill()? ?쒓렇?먮쭔 ??wait()濡?reap ?댁빞 Unix(Bazzite)?먯꽌 醫鍮?<defunct>)媛 ???⑥쓬.
-        // stop_cascade/WindowEvent ??take()?묭rop 寃쎌쑀??????怨녹씠 ??寃쎈줈瑜?而ㅻ쾭.
-        let _ = self.child.wait();
+        self.terminate();
     }
 }
 
@@ -1748,29 +1769,426 @@ fn run_dir() -> std::path::PathBuf {
     dir
 }
 
-/// Write PID file for a managed process
-fn write_pid_file(component: &str, pid: u32) {
-    let path = run_dir().join(format!("{}.pid", component));
-    let _ = std::fs::write(&path, pid.to_string());
-    log_verbose(&format!(
-        "[Naia] PID file written: {} (PID {})",
-        path.display(),
-        pid
-    ));
+const PROCESS_RECORD_VERSION: u8 = 1;
+
+/// The single durable ownership record for a managed child.
+///
+/// A PID is only a locator.  The platform start identities make both the
+/// Shell owner and its child unambiguous across crashes and PID reuse.  The
+/// record is replaced atomically, so a reader sees either the old complete
+/// record or the new complete record.
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
+pub(crate) struct ProcessRecord {
+    pub version: u8,
+    pub child_pid: u32,
+    pub child_identity: String,
+    pub owner_pid: u32,
+    pub owner_identity: String,
 }
 
-/// Read PID from a PID file (returns None if file doesn't exist or is invalid)
-fn read_pid_file(component: &str) -> Option<u32> {
-    let path = run_dir().join(format!("{}.pid", component));
-    std::fs::read_to_string(&path)
+impl ProcessRecord {
+    fn is_valid(&self) -> bool {
+        self.version == PROCESS_RECORD_VERSION
+            && self.child_pid > 0
+            && self.owner_pid > 0
+            && !self.child_identity.is_empty()
+            && !self.owner_identity.is_empty()
+    }
+}
+
+fn parse_process_record(bytes: &[u8]) -> Option<ProcessRecord> {
+    serde_json::from_slice::<ProcessRecord>(bytes)
         .ok()
-        .and_then(|s| s.trim().parse().ok())
+        .filter(ProcessRecord::is_valid)
 }
 
-/// Remove a PID file
+pub(crate) fn process_record_path(component: &str) -> std::path::PathBuf {
+    run_dir().join(format!("{component}.pid"))
+}
+
+/// Read only the new ownership record.  Legacy bare PID files intentionally
+/// do not become eligible for cleanup because they have no proof of ownership.
+pub(crate) fn read_process_record(component: &str) -> Option<ProcessRecord> {
+    let path = process_record_path(component);
+    let metadata = std::fs::metadata(&path).ok()?;
+    if !metadata.is_file() || metadata.len() > 16 * 1024 {
+        return None;
+    }
+    parse_process_record(&std::fs::read(path).ok()?)
+}
+
+/// Serialize a record to a same-directory temporary file and atomically
+/// replace the destination.  The destination is the only lifecycle record;
+/// no identity sidecar can drift away from its PID.
+fn write_process_record_atomically(path: &std::path::Path, record: &ProcessRecord) -> bool {
+    let bytes = match serde_json::to_vec(record) {
+        Ok(bytes) => bytes,
+        Err(error) => {
+            log_verbose(&format!(
+                "[Naia] Could not serialize process record {}: {error}",
+                path.display()
+            ));
+            return false;
+        }
+    };
+    let stamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_nanos();
+    let component = path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or("process")
+        .replace('.', "_");
+    let temp = path.with_file_name(format!(".{component}.{}.{}.tmp", std::process::id(), stamp));
+    let result = (|| -> std::io::Result<()> {
+        let mut file = std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&temp)?;
+        file.write_all(&bytes)?;
+        file.sync_all()?;
+        platform::replace_file_atomically(&temp, path)
+    })();
+    let _ = std::fs::remove_file(&temp);
+    if let Err(error) = result {
+        log_verbose(&format!(
+            "[Naia] Could not atomically write process record {}: {error}",
+            path.display()
+        ));
+        return false;
+    }
+    true
+}
+
+/// Serialize access to one component record.  The lock is advisory and
+/// transient; a crashed Shell releases it through the operating system.  It
+/// is not used as ownership evidence and is never consulted for cleanup.
+pub(crate) fn with_process_record_lock<R>(
+    component: &str,
+    operation: impl FnOnce() -> R,
+) -> Option<R> {
+    use fs2::FileExt;
+
+    let lock_path = run_dir().join(format!("{component}.pid.lock"));
+    let file = std::fs::OpenOptions::new()
+        .create(true)
+        .read(true)
+        .write(true)
+        .open(lock_path)
+        .ok()?;
+    file.lock_exclusive().ok()?;
+    Some(operation())
+}
+
+fn current_process_record(child_pid: u32) -> Option<ProcessRecord> {
+    Some(ProcessRecord {
+        version: PROCESS_RECORD_VERSION,
+        child_pid,
+        child_identity: platform::process_identity(child_pid)?,
+        owner_pid: std::process::id(),
+        owner_identity: platform::process_identity(std::process::id())?,
+    })
+}
+
+fn process_record_owner_is_live(record: &ProcessRecord) -> bool {
+    match platform::process_identity(record.owner_pid) {
+        Some(identity) => identity == record.owner_identity,
+        None => platform::is_pid_alive(record.owner_pid),
+    }
+}
+
+/// Return true only when the recorded owner is provably gone or its PID has
+/// been reused.  An owner whose identity cannot currently be queried remains
+/// protected by the conservative `is_pid_alive` fallback.
+pub(crate) fn process_record_owner_is_dead(record: &ProcessRecord) -> bool {
+    !process_record_owner_is_live(record)
+}
+
+/// Return true only when the target PID currently has the recorded start
+/// identity.  A missing or changed identity is never a kill authorization.
+pub(crate) fn process_record_child_is_exact(record: &ProcessRecord) -> bool {
+    platform::process_identity(record.child_pid)
+        .is_some_and(|identity| identity == record.child_identity)
+}
+
+pub(crate) fn process_record_owned_by_current_shell(record: &ProcessRecord) -> bool {
+    record.owner_pid == std::process::id()
+        && platform::process_identity(record.owner_pid)
+            .is_some_and(|identity| identity == record.owner_identity)
+}
+
+fn process_record_write_allowed(
+    existing: &ProcessRecord,
+    candidate: &ProcessRecord,
+    existing_owner_live: bool,
+) -> bool {
+    let same_owner = existing.owner_pid == candidate.owner_pid
+        && existing.owner_identity == candidate.owner_identity;
+    same_owner || !existing_owner_live
+}
+
+/// Re-check the record and both process identities immediately before a kill.
+pub(crate) fn process_record_can_be_reaped(record: &ProcessRecord) -> bool {
+    let owner_identity = platform::process_identity(record.owner_pid);
+    let owner_alive = platform::is_pid_alive(record.owner_pid);
+    let child_identity = platform::process_identity(record.child_pid);
+    process_record_can_be_reaped_with(
+        record,
+        owner_identity.as_deref(),
+        owner_alive,
+        child_identity.as_deref(),
+    )
+}
+
+/// Pure ownership policy used by focused regression tests.  An unavailable
+/// owner identity is safe only when the owner is also known to be gone; the
+/// child must still have the exact recorded identity.
+pub(crate) fn process_record_can_be_reaped_with(
+    record: &ProcessRecord,
+    observed_owner_identity: Option<&str>,
+    owner_alive: bool,
+    observed_child_identity: Option<&str>,
+) -> bool {
+    let owner_dead = match observed_owner_identity {
+        Some(identity) => identity != record.owner_identity,
+        None => !owner_alive,
+    };
+    owner_dead && observed_child_identity == Some(record.child_identity.as_str())
+}
+
+/// Read PID from a PID file.  Existing diagnostic/status consumers remain
+/// compatible with both the new JSON record and legacy bare PID files.
+#[allow(dead_code)]
+fn read_pid_file(component: &str) -> Option<u32> {
+    let path = process_record_path(component);
+    let bytes = std::fs::read(path).ok()?;
+    parse_process_record(&bytes)
+        .map(|record| record.child_pid)
+        .or_else(|| {
+            std::str::from_utf8(&bytes)
+                .ok()
+                .and_then(|value| value.trim().parse().ok())
+        })
+}
+
+/// Remove a record only when it is still the exact record supplied by the
+/// caller.  Callers that use this function during cleanup already hold the
+/// component lock.
+pub(crate) fn remove_process_record_if_matches_locked(
+    component: &str,
+    expected: &ProcessRecord,
+) -> bool {
+    if read_process_record(component).as_ref() != Some(expected) {
+        return false;
+    }
+    std::fs::remove_file(process_record_path(component)).is_ok()
+}
+
+pub(crate) fn process_record_matches(component: &str, expected: &ProcessRecord) -> bool {
+    read_process_record(component).as_ref() == Some(expected)
+}
+
+/// Kill the BGM child left in the record while its readiness probe was still
+/// running.  This path has no `Child` handle, so it must take the component
+/// lock and prove the current Shell owns both identities immediately before
+/// the targeted kill.  A record from another Shell is left untouched.
+fn terminate_untracked_bgm_record() {
+    let _ = with_process_record_lock("bgm-server", || {
+        let Some(record) = read_process_record("bgm-server") else {
+            return;
+        };
+        if !process_record_owned_by_current_shell(&record)
+            || !process_record_child_is_exact(&record)
+            || !process_record_matches("bgm-server", &record)
+            || !platform::pid_command_line(record.child_pid)
+                .is_some_and(|cmdline| bgm_sidecar_cmdline(&cmdline))
+        {
+            return;
+        }
+
+        // Revalidate after the command-line read: PID reuse or a concurrent
+        // record replacement must never turn this into an unrelated kill.
+        if !process_record_owned_by_current_shell(&record)
+            || !process_record_child_is_exact(&record)
+            || !process_record_matches("bgm-server", &record)
+        {
+            return;
+        }
+        log_verbose(&format!(
+            "[Naia] Terminating untracked BGM sidecar from PID file (PID {})",
+            record.child_pid
+        ));
+        platform::kill_pid(record.child_pid);
+    });
+}
+
+/// Remove the current Shell's record.  A record written by another live
+/// Shell, a legacy PID file, or an unverifiable record is left untouched.
 fn remove_pid_file(component: &str) {
-    let path = run_dir().join(format!("{}.pid", component));
-    let _ = std::fs::remove_file(&path);
+    let Some(owner_identity) = platform::process_identity(std::process::id()) else {
+        log_verbose(&format!(
+            "[Naia] Cannot remove {component} record without owner identity"
+        ));
+        return;
+    };
+    let owner_pid = std::process::id();
+    let _ = with_process_record_lock(component, || {
+        let Some(record) = read_process_record(component) else {
+            return;
+        };
+        if record.owner_pid == owner_pid && record.owner_identity == owner_identity {
+            let _ = remove_process_record_if_matches_locked(component, &record);
+        } else {
+            log_verbose(&format!(
+                "[Naia] Preserving {component} record owned by another Shell"
+            ));
+        }
+    });
+}
+
+fn write_pid_file(component: &str, pid: u32) -> bool {
+    let Some(record) = current_process_record(pid) else {
+        log_verbose(&format!(
+            "[Naia] Refusing unverifiable {component} process record (PID {pid})"
+        ));
+        return false;
+    };
+    let Some(written) = with_process_record_lock(component, || {
+        if let Some(existing) = read_process_record(component) {
+            if !process_record_write_allowed(
+                &existing,
+                &record,
+                process_record_owner_is_live(&existing),
+            ) {
+                log_verbose(&format!(
+                    "[Naia] Preserving live {component} record owned by another Shell"
+                ));
+                return false;
+            }
+        }
+        write_process_record_atomically(&process_record_path(component), &record)
+    }) else {
+        log_verbose(&format!(
+            "[Naia] Could not lock {component} process record; leaving it unchanged"
+        ));
+        return false;
+    };
+    if written {
+        log_verbose(&format!(
+            "[Naia] Process record written: {} (PID {})",
+            process_record_path(component).display(),
+            pid
+        ));
+    }
+    written
+}
+
+#[cfg(test)]
+mod process_record_tests {
+    use super::*;
+
+    fn record() -> ProcessRecord {
+        ProcessRecord {
+            version: PROCESS_RECORD_VERSION,
+            child_pid: 41,
+            child_identity: "child-start-1".to_string(),
+            owner_pid: 40,
+            owner_identity: "owner-start-1".to_string(),
+        }
+    }
+
+    #[test]
+    fn legacy_bare_pid_is_not_a_reclaimable_record() {
+        assert!(parse_process_record(b"41").is_none());
+    }
+
+    #[test]
+    fn live_recorded_owner_cannot_be_reaped() {
+        let value = record();
+        assert!(!process_record_can_be_reaped_with(
+            &value,
+            Some("owner-start-1"),
+            true,
+            Some("child-start-1"),
+        ));
+    }
+
+    #[test]
+    fn owner_pid_reuse_is_treated_as_dead_old_owner() {
+        let value = record();
+        assert!(process_record_can_be_reaped_with(
+            &value,
+            Some("owner-start-2"),
+            true,
+            Some("child-start-1"),
+        ));
+    }
+
+    #[test]
+    fn dead_owner_and_exact_child_can_be_reaped() {
+        let value = record();
+        assert!(process_record_can_be_reaped_with(
+            &value,
+            None,
+            false,
+            Some("child-start-1"),
+        ));
+    }
+
+    #[test]
+    fn reused_child_pid_cannot_be_reaped() {
+        let value = record();
+        assert!(!process_record_can_be_reaped_with(
+            &value,
+            None,
+            false,
+            Some("child-start-2"),
+        ));
+    }
+
+    #[test]
+    fn unverifiable_live_owner_is_protected() {
+        let value = record();
+        assert!(!process_record_can_be_reaped_with(
+            &value,
+            None,
+            true,
+            Some("child-start-1"),
+        ));
+    }
+
+    #[test]
+    fn record_serializes_both_owner_and_child_identities() {
+        let value = serde_json::to_value(record()).expect("record is serializable");
+        assert_eq!(value["owner_identity"], "owner-start-1");
+        assert_eq!(value["child_identity"], "child-start-1");
+    }
+
+    #[test]
+    fn live_foreign_owner_rejects_record_replacement() {
+        let existing = record();
+        let candidate = ProcessRecord {
+            child_pid: 42,
+            child_identity: "child-start-2".to_string(),
+            owner_pid: 99,
+            owner_identity: "owner-start-9".to_string(),
+            ..existing.clone()
+        };
+        assert!(!process_record_write_allowed(&existing, &candidate, true));
+        assert!(process_record_write_allowed(&existing, &candidate, false));
+    }
+
+    #[test]
+    fn same_owner_may_refresh_its_component_record() {
+        let existing = record();
+        let candidate = ProcessRecord {
+            child_pid: 42,
+            child_identity: "child-start-2".to_string(),
+            ..existing.clone()
+        };
+        assert!(process_record_write_allowed(&existing, &candidate, true));
+    }
 }
 
 // Note: is_pid_alive, kill_pid, and cleanup_orphan_processes live in the
@@ -3385,6 +3803,7 @@ enum BgmPortReclaim {
     Reclaimed(u32),
     ForeignHolder(u32),
     UnknownHolder(u32),
+    ProtectedSidecar(u32),
 }
 
 /// Port-reclaim decision with injected probes (unit-testable). Kill only a
@@ -3392,19 +3811,54 @@ enum BgmPortReclaim {
 fn reclaim_bgm_port_with(
     port_owner: impl Fn() -> Option<u32>,
     command_line: impl Fn(u32) -> Option<String>,
-    kill: impl Fn(u32),
+    kill: impl Fn(u32) -> bool,
 ) -> BgmPortReclaim {
     let Some(pid) = port_owner() else {
         return BgmPortReclaim::Free;
     };
     match command_line(pid) {
         Some(cmdline) if bgm_sidecar_cmdline(&cmdline) => {
-            kill(pid);
-            BgmPortReclaim::Reclaimed(pid)
+            if kill(pid) {
+                BgmPortReclaim::Reclaimed(pid)
+            } else {
+                BgmPortReclaim::ProtectedSidecar(pid)
+            }
         }
         Some(_) => BgmPortReclaim::ForeignHolder(pid),
         None => BgmPortReclaim::UnknownHolder(pid),
     }
+}
+
+/// Reclaim a BGM listener only when its durable record proves that the
+/// previous Shell is gone and the listener still has the exact recorded
+/// identity.  A sidecar command line by itself is insufficient because a
+/// healthy BGM sidecar may belong to another Shell.
+fn reclaim_recorded_bgm_if_owned(pid: u32) -> bool {
+    with_process_record_lock("bgm-server", || {
+        let Some(record) = read_process_record("bgm-server") else {
+            return false;
+        };
+        if record.child_pid != pid
+            || !process_record_owner_is_dead(&record)
+            || !process_record_matches("bgm-server", &record)
+            || !process_record_can_be_reaped(&record)
+            || !platform::pid_command_line(pid).is_some_and(|cmdline| bgm_sidecar_cmdline(&cmdline))
+        {
+            return false;
+        }
+
+        // Re-read the owner, child, and record after the command-line query;
+        // a PID reuse or concurrent record replacement must never authorize a
+        // kill based on the earlier observations.
+        if !process_record_can_be_reaped(&record)
+            || !process_record_matches("bgm-server", &record)
+        {
+            return false;
+        }
+        platform::kill_pid(pid);
+        true
+    })
+    .unwrap_or(false)
 }
 
 fn bgm_port_accepts_connection(port: u16) -> bool {
@@ -3424,7 +3878,7 @@ fn reclaim_bgm_port(port: u16) {
     match reclaim_bgm_port_with(
         || platform::pid_listening_on_port(port),
         platform::pid_command_line,
-        platform::kill_pid,
+        reclaim_recorded_bgm_if_owned,
     ) {
         BgmPortReclaim::Free => {}
         BgmPortReclaim::Reclaimed(pid) => {
@@ -3448,6 +3902,12 @@ fn reclaim_bgm_port(port: u16) {
         BgmPortReclaim::UnknownHolder(pid) => {
             log_both(&format!(
                 "[Naia] WARN BGM port {} holder (PID {}) has no readable command line — leaving it alone",
+                port, pid
+            ));
+        }
+        BgmPortReclaim::ProtectedSidecar(pid) => {
+            log_both(&format!(
+                "[Naia] WARN BGM port {} is held by a sidecar owned by another or unverifiable Shell (PID {}) — leaving it alone",
                 port, pid
             ));
         }
@@ -3580,7 +4040,7 @@ fn spawn_youtube_bgm_server(app_handle: &AppHandle) -> Result<BgmServerProcess, 
     #[cfg(windows)]
     platform::hide_console(&mut cmd);
 
-    let child = cmd
+    let mut child = cmd
         .spawn()
         .map_err(|e| format!("Failed to spawn BGM server: {}", e))?;
 
@@ -3593,7 +4053,14 @@ fn spawn_youtube_bgm_server(app_handle: &AppHandle) -> Result<BgmServerProcess, 
     // Persist PID so the next session's cleanup_orphan_processes() can kill an
     // orphan if Tauri crashes before WindowEvent::Destroyed fires (#335 codex
     // review finding 1). The on-exit handler calls remove_pid_file("bgm-server").
-    write_pid_file("bgm-server", pid);
+    if !write_pid_file("bgm-server", pid) {
+        let _ = child.kill();
+        let _ = child.wait();
+        return Err(
+            "BGM server ownership record is held by another Shell; refusing an untracked child"
+                .to_string(),
+        );
+    }
 
     // Readiness probe: poll /health for the bounded cold-start budget (#335).
     // 2). Catches EADDRINUSE and other startup failures that the spawn handle
@@ -3606,7 +4073,6 @@ fn spawn_youtube_bgm_server(app_handle: &AppHandle) -> Result<BgmServerProcess, 
             bgm_port,
             BGM_STARTUP_TIMEOUT.as_secs()
         ));
-        let mut child = child;
         let _ = child.kill();
         let _ = child.wait();
         remove_pid_file("bgm-server");
@@ -6833,7 +7299,14 @@ fn spawn_voxcpm2(
         let _ = child.kill();
         return Err(error);
     }
-    write_pid_file("voxcpm2", child.id());
+    if !write_pid_file("voxcpm2", child.id()) {
+        let _ = child.kill();
+        let _ = child.wait();
+        return Err(
+            "Naia Host TensorRT ownership record is held by another Shell; refusing an untracked child"
+                .to_string(),
+        );
+    }
     // The readiness payload contains a per-launch loopback bearer used by the
     // WebView. Never write that credential to logs.
     log_both("[Naia] Windows Naia Host TensorRT ready on loopback");
@@ -6929,6 +7402,10 @@ fn spawn_cascade(
         .stderr(stderr_stdio);
     #[cfg(windows)]
     platform::hide_console(&mut cmd);
+    // On Windows this adds CREATE_SUSPENDED.  The platform claim assigns the
+    // supervisor to its private Job Object before resuming its primary thread,
+    // closing the launch-time descendant race.
+    platform::prepare_cascade_command(&mut cmd);
 
     log_both(&format!(
         "[Naia] Starting local cascade: {} -m loader launch (cwd={}, profile={}, repos_adk={})",
@@ -6948,10 +7425,23 @@ fn spawn_cascade(
         )
     })?;
 
-    let stdout = child
-        .stdout
-        .take()
-        .ok_or_else(|| "Failed to get cascade stdout".to_string())?;
+    let ownership = match platform::claim_cascade_process(child.id()) {
+        Ok(ownership) => ownership,
+        Err(error) => {
+            platform::kill_cascade(None, child.id());
+            let _ = child.wait();
+            return Err(error);
+        }
+    };
+
+    let stdout = match child.stdout.take() {
+        Some(stdout) => stdout,
+        None => {
+            platform::kill_cascade(Some(&ownership), child.id());
+            let _ = child.wait();
+            return Err("Failed to get cascade stdout".to_string());
+        }
+    };
     let (ready_tx, ready_rx) = std::sync::mpsc::channel::<String>();
     thread::spawn(move || {
         let reader = BufReader::new(stdout);
@@ -6978,7 +7468,8 @@ fn spawn_cascade(
             Ok(r) => break r,
             Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
                 // stdout reader 醫낅즺 = loader ?꾨줈?몄뒪 exit(ready 誘몄닔??.
-                let _ = child.try_wait();
+                platform::kill_cascade(Some(&ownership), child.id());
+                let _ = child.wait();
                 let tail = read_cascade_stderr_tail();
                 return Err(format!(
                     "濡쒖뺄 ?뚯꽦 ?붿쭊???쒖옉?섏? 紐삵뻽?듬땲??loader 醫낅즺).{}",
@@ -6991,6 +7482,8 @@ fn spawn_cascade(
             }
             Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
                 if let Ok(Some(status)) = child.try_wait() {
+                    platform::kill_cascade(Some(&ownership), child.id());
+                    let _ = child.wait();
                     let tail = read_cascade_stderr_tail();
                     return Err(format!(
                         "濡쒖뺄 ?뚯꽦 ?붿쭊???쒖옉?섏? 紐삵뻽?듬땲??loader 醫낅즺 code={:?}).{}",
@@ -7003,7 +7496,8 @@ fn spawn_cascade(
                     ));
                 }
                 if std::time::Instant::now() >= deadline {
-                    let _ = child.kill();
+                    platform::kill_cascade(Some(&ownership), child.id());
+                    let _ = child.wait();
                     return Err(
                         "cascade readiness handshake timeout (CASCADE_READY 誘몄닔??".to_string(),
                     );
@@ -7012,9 +7506,20 @@ fn spawn_cascade(
         }
     };
 
-    write_pid_file("cascade", child.id());
+    if !write_pid_file("cascade", child.id()) {
+        platform::kill_cascade(Some(&ownership), child.id());
+        let _ = child.wait();
+        return Err(
+            "Cascade ownership record is held by another Shell; refusing an untracked child"
+                .to_string(),
+        );
+    }
     log_both(&format!("[Naia] local cascade ready: {}", ready));
-    Ok(CascadeProcess { child, ready })
+    Ok(CascadeProcess {
+        child,
+        ownership,
+        ready,
+    })
 }
 
 /// Resolve the public facade URL only from the loader's readiness payload.
@@ -7332,11 +7837,8 @@ async fn start_cascade(
 async fn stop_cascade(state: tauri::State<'_, AppState>) -> Result<(), String> {
     if let Some(mut c) = lock_or_recover(&state.cascade, "cascade").take() {
         log_verbose("[Naia] Terminating local cascade...");
-        let _ = c.child.kill();
+        c.terminate();
     }
-    // Child::kill force-terminates the Python supervisor on Windows, so its
-    // finally block cannot reliably release GPU-owning grandchildren.
-    platform::kill_stale_cascade();
     remove_pid_file("cascade");
     Ok(())
 }
@@ -12753,31 +13255,24 @@ pub fn run() {
                         if let Some(mut process) = guard.take() {
                             log_verbose("[Naia] Terminating BGM server...");
                             let _ = process.child.kill();
-                        } else if let Some(pid) = read_pid_file("bgm-server") {
+                        } else {
                             // FR-BGM.15 (#517): a spawn still inside its readiness
                             // probe has written the PID file but not yet stored the
-                            // child in state. Erasing the file alone would leave a
-                            // live sidecar untracked forever; verify identity and
-                            // kill it before removing the record.
-                            if platform::pid_command_line(pid)
-                                .is_some_and(|cmdline| bgm_sidecar_cmdline(&cmdline))
-                            {
-                                log_verbose(&format!(
-                                    "[Naia] Terminating untracked BGM sidecar from PID file (PID {})",
-                                    pid
-                                ));
-                                platform::kill_pid(pid);
-                            }
+                            // child in state. The helper takes the record lock and
+                            // revalidates this Shell's owner/child identities before
+                            // the targeted kill; another Shell's record is preserved.
+                            terminate_untracked_bgm_record();
                         }
                     }
                     remove_pid_file("bgm-server");
 
-                    // Kill local cascade supervisor (R2.2b) ??loader teardowns its
-                    // children. Drop also kills, but take()+kill here is explicit.
+                    // Kill the owned local cascade tree (R2.2b). The platform
+                    // ownership handle/process group covers loader descendants;
+                    // Drop remains a final safety net if this path changes.
                     if let Ok(mut guard) = state.cascade.lock() {
                         if let Some(mut process) = guard.take() {
                             log_verbose("[Naia] Terminating local cascade...");
-                            let _ = process.child.kill();
+                            process.terminate();
                         }
                     }
                     remove_pid_file("cascade");
@@ -14283,7 +14778,14 @@ mod tests {
 
         // Free port: no kill.
         assert_eq!(
-            reclaim_bgm_port_with(|| None, |_| unreachable!(), |_| killed.set(killed.get() + 1)),
+            reclaim_bgm_port_with(
+                || None,
+                |_| unreachable!(),
+                |_| {
+                    killed.set(killed.get() + 1);
+                    true
+                },
+            ),
             BgmPortReclaim::Free
         );
         assert_eq!(killed.get(), 0);
@@ -14296,6 +14798,7 @@ mod tests {
                 |pid| {
                     assert_eq!(pid, 4242);
                     killed.set(killed.get() + 1);
+                    true
                 }
             ),
             BgmPortReclaim::Reclaimed(4242)
@@ -14307,7 +14810,10 @@ mod tests {
             reclaim_bgm_port_with(
                 || Some(77),
                 |_| Some("python -m http.server 18791".to_string()),
-                |_| killed.set(killed.get() + 100)
+                |_| {
+                    killed.set(killed.get() + 100);
+                    true
+                }
             ),
             BgmPortReclaim::ForeignHolder(77)
         );
@@ -14315,18 +14821,37 @@ mod tests {
 
         // Holder without a readable command line: fail closed, never killed.
         assert_eq!(
-            reclaim_bgm_port_with(|| Some(88), |_| None, |_| killed.set(killed.get() + 100)),
+            reclaim_bgm_port_with(
+                || Some(88),
+                |_| None,
+                |_| {
+                    killed.set(killed.get() + 100);
+                    true
+                },
+            ),
             BgmPortReclaim::UnknownHolder(88)
         );
         assert_eq!(killed.get(), 1);
+
+        // A sidecar lineage is still protected when the ownership proof says
+        // it belongs to another live Shell (or cannot be proven reclaimable).
+        assert_eq!(
+            reclaim_bgm_port_with(
+                || Some(99),
+                |_| Some("node bgm-sidecar/dist/bgm-server-bin.js".to_string()),
+                |_| false,
+            ),
+            BgmPortReclaim::ProtectedSidecar(99)
+        );
     }
 
-    /// FR-BGM.13 (#517) end-to-end on the real OS: a leftover node process whose
-    /// command line names bgm-server-bin.js holds a port; reclaim must terminate
-    /// it and release the port. A non-sidecar name must be left alone.
+    /// FR-BGM.13 (#517) end-to-end on the real OS: a node process whose command
+    /// line names bgm-server-bin.js is still protected when it has no durable
+    /// ownership record.  Command-line lineage alone cannot prove that the
+    /// listener belongs to this Shell; a non-sidecar name is protected too.
     #[cfg(windows)]
     #[test]
-    fn bgm_port_reclaim_terminates_real_stale_sidecar_listener() {
+    fn bgm_port_reclaim_leaves_unrecorded_sidecar_listener() {
         let node = which_node_for_test();
         let Some(node) = node else {
             eprintln!("node not found on PATH — skipping real reclaim test");
@@ -14337,7 +14862,7 @@ mod tests {
         std::fs::create_dir_all(&dir).unwrap();
         let listener_js = "require('http').createServer(()=>{}).listen(Number(process.argv[2]));setInterval(()=>{},1000);";
 
-        // Case 1: holder proves sidecar lineage by script name → reclaimed.
+        // Case 1: sidecar lineage without an ownership record → protected.
         let sidecar_script = dir.join("bgm-server-bin.js");
         std::fs::write(&sidecar_script, listener_js).unwrap();
         let port = free_local_port();
@@ -14352,8 +14877,8 @@ mod tests {
         );
         reclaim_bgm_port(port);
         assert!(
-            wait_for_port(port, false),
-            "reclaim did not release the port held by a sidecar-lineage process"
+            bgm_port_accepts_connection(port),
+            "reclaim killed an unrecorded sidecar port holder"
         );
         let _ = child.kill();
         let _ = child.wait();
