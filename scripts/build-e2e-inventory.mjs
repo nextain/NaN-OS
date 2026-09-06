@@ -61,6 +61,23 @@
  * 이 경계 안쪽 형태는 모두 같은 규칙으로 잡히며, 경계 밖은 코드 리뷰의 몫이다.
  *
  * 산출물: docs/e2e-inventory.json (기계가 읽는 것) 과 표준 출력 요약.
+ *
+ * ## 이 저장소의 린트 경계가 금지하는 형태
+ *
+ * 아래는 게이트가 읽지 않기로 **선언**한 형태이고, 저장소에 들어오지 못한다 —
+ * `scripts/check-lint-boundary.mjs` 가 막는다. 목록의 정본은
+ * `scripts/lib/lint-boundary-forms.mjs` 하나이고, 이 머리말·린트 게이트·
+ * `docs/quality-reviews/obfuscation-forms.md` 가 같은 목록을 본다. 셋이
+ * 어긋나면 `src/test/lint-boundary.contract.test.ts` 가 붉어진다.
+ *
+ *   - `comma-operator` — 쉼표식 `(a, b)` · `(0, f)()`
+ *   - `void-literal` — 리터럴에 씌운 `void` (`void 0`, `void "x"`)
+ *   - `void-stacked` — 겹쳐 쌓은 `void` (`void void …`)
+ *   - `computed-callee` — 리터럴 키로 곧바로 부르기 (`f["call"](…)`, `el["click"]()`)
+ *
+ * 이 모듈은 위 형태를 지금도 읽는다(이미 닫힌 자리다). 다만 **읽는 것에
+ * 기대지 않는다** — 경계는 린트가 지고, 게이트는 자기가 읽는 범위를 지킨다.
+ * 그래서 다음 회차의 도전은 린트를 통과하는 형태여야 한다.
  */
 import { readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";

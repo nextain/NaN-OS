@@ -3,7 +3,11 @@
 // before() = localStorage-writable 대기 + autoApprove 만. 설정/refresh 는 각 spec 의 before 가 1회 수행.
 import { execSync } from "node:child_process";
 import { transformRequest } from "./node26-request.js";
-import { config as base } from "./wdio.conf.js";
+import {
+	config as base,
+	deliverCredentialedGatewayKey,
+	reclaimLeakedAgentChild,
+} from "./wdio.conf.js";
 
 let permissionPoller: { dispose: () => void } | undefined;
 
@@ -32,6 +36,8 @@ export const config = {
 				/* best-effort */
 			}
 		}
+		// 앱을 죽이면 그 agent 자식이 리스를 쥔 채 남아 다음 세션이 뇌 없이 뜬다.
+		reclaimLeakedAgentChild();
 	},
 	async before(this: unknown) {
 		// http origin + localStorage 쓰기 가능까지 대기(base 와 동일 — WebView 초기 navigate 보장).
@@ -59,6 +65,10 @@ export const config = {
 					"webview never reached http origin with writable localStorage",
 			},
 		);
+		// 시딩한 공급자의 게이트웨이 키는 여기서도 실어야 한다. base 의 before() 를
+		// 갈아 끼우면서 이 한 줄을 빠뜨려, 이 설정만 심은 키 대신 기계 키체인의
+		// 옛 키로 게이트웨이를 두드리다 401 을 받았다(실측 2026-09-05).
+		await deliverCredentialedGatewayKey();
 		// ensureAppReady() 스킵(이중 refresh churn 회피). 권한 모달 자동 승인만 유지.
 		const { autoApprovePermissions } = await import("./helpers/permissions.js");
 		permissionPoller = autoApprovePermissions();

@@ -103,9 +103,9 @@ export async function judgeSemantics(opts: {
 
 	const controller = new AbortController();
 	const timeoutId = setTimeout(() => controller.abort(), JUDGE_TIMEOUT_MS);
+	recordBillableCall("google-gemini-judge");
 	const res = await fetch(
-		(recordBillableCall("google-gemini-judge"),
-		`https://generativelanguage.googleapis.com/v1beta/models/${JUDGE_MODEL}:generateContent?key=${JUDGE_API_KEY}`),
+		`https://generativelanguage.googleapis.com/v1beta/models/${JUDGE_MODEL}:generateContent?key=${JUDGE_API_KEY}`,
 		{
 			method: "POST",
 			headers: { "content-type": "application/json" },
@@ -245,9 +245,9 @@ export async function judgeVisualSemantics(opts: {
 
 	const controller = new AbortController();
 	const timeoutId = setTimeout(() => controller.abort(), JUDGE_TIMEOUT_MS);
+	recordBillableCall("google-gemini-judge");
 	const res = await fetch(
-		(recordBillableCall("google-gemini-judge"),
-		`https://generativelanguage.googleapis.com/v1beta/models/${JUDGE_MODEL}:generateContent?key=${JUDGE_API_KEY}`),
+		`https://generativelanguage.googleapis.com/v1beta/models/${JUDGE_MODEL}:generateContent?key=${JUDGE_API_KEY}`,
 		{
 			method: "POST",
 			headers: { "content-type": "application/json" },

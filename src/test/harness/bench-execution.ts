@@ -754,10 +754,13 @@ export class CommandBenchExecution implements BenchExecutionPort {
     const uncheckedRequirements = [...scenarioRequirements].filter(
       (id) => ![...allPassed].some((n) => n.includes(id)),
     );
-    const finalReceipts =
-      uncheckedRequirements.length > 0 && receipts.length > 0
-        ? (artifacts.push(`선언한 요구사항이 확인되지 않았다: ${uncheckedRequirements.join(" / ")}`), [])
-        : receipts;
+    const requirementsUnmet = uncheckedRequirements.length > 0 && receipts.length > 0;
+    if (requirementsUnmet) {
+      artifacts.push(
+        `선언한 요구사항이 확인되지 않았다: ${uncheckedRequirements.join(" / ")}`,
+      );
+    }
+    const finalReceipts = requirementsUnmet ? [] : receipts;
 
     // 안전 관측을 상수로 두면 자기충족이다 — 아무것도 안 보고 "깨끗하다"고 말하게 된다
     // (2026-08-27 적대리뷰 지적). 실행 뒤 실제 잔재를 훑어 채운다.

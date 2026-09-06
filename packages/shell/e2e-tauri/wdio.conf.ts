@@ -12,6 +12,7 @@ import { homedir, tmpdir } from "node:os";
 import { basename, dirname, resolve } from "node:path";
 import { execPath } from "node:process";
 import { resolvePairedAgent } from "../scripts/agent-pairing.mjs";
+import { reclaimLeakedAgentChild as reclaimAgentChild } from "./agent-child-lease.js";
 import {
 	CREDENTIALED_KEY_ENV,
 	CREDENTIALED_MAIN_MODEL,
@@ -270,30 +271,19 @@ let permissionPoller: { dispose: () => void } | undefined;
  * lease 파일이 가리키는 것만 정리한다. 이름으로 훑어 죽이면 사람이 쓰고 있는
  * 앱의 agent 까지 잡는다.
  */
-function reclaimLeakedAgentChild(): void {
+/** 실행 자리의 리스가 가리키는 agent 자식을 회수한다. 회수했으면 한 줄 남긴다. */
+function reclaimLeakedAgentChild(): boolean {
 	// 격리한 실행 자리의 리스만 본다. 홈의 리스를 보면 사람이 지금 쓰고 있는
 	// 앱의 에이전트를 잡는다 — 그 자리는 더 이상 e2e 의 것이 아니다.
-	const leasePath = resolve(
+	const outcome = reclaimAgentChild(
 		process.env.NAIA_E2E_RUNTIME_DIR ?? E2E_RUNTIME_DIR,
-		"agent-child-lease.json",
 	);
-	if (!existsSync(leasePath)) return;
-	try {
-		const lease = JSON.parse(readFileSync(leasePath, "utf8")) as {
-			pid?: number;
-			marker?: string;
-		};
-		if (!lease.pid) return;
-		// 그 PID 가 정말 agent 자식인지 표식으로 확인하고 나서 정리한다.
-		const cmdline = resolve("/proc", String(lease.pid), "cmdline");
-		if (existsSync(cmdline)) {
-			const args = readFileSync(cmdline, "utf8");
-			if (lease.marker && !args.includes(lease.marker)) return;
-			process.kill(lease.pid, "SIGTERM");
-		}
-	} catch {
-		// 이미 사라졌거나 읽을 수 없으면 할 일이 없다.
+	if (outcome.reclaimed) {
+		console.log(
+			`[e2e] reclaimed leaked agent child (pid ${outcome.pid}, ${outcome.reason})`,
+		);
 	}
+	return outcome.reclaimed;
 }
 
 function killByName(name: string, force = false): void {
@@ -409,6 +399,97 @@ function waitForPortClosed(port: number, timeoutMs = 10_000): Promise<void> {
 		};
 		tryConnect();
 	});
+}
+
+/**
+ * 심은 공급자에 쓸 게이트웨이 키를 에이전트에 실어 준다 (#547).
+ *
+ * 이것을 함수로 빼 둔 이유가 있다. 이 설정을 상속하면서 `before()` 만 갈아
+ * 끼우는 설정이 있는데(wdio.conf.chat.ts), 그러면 키 전달이 통째로 빠진다.
+ * 그 설정이 실제로 401 을 받았다 — 시딩은 상속되는데 키는 안 실린 것이다.
+ * 상속하는 쪽이 자기 `before()` 에서 이 하나만 부르면 된다.
+ */
+export async function deliverCredentialedGatewayKey(): Promise<void> {
+	// 심은 공급자에 쓸 게이트웨이 키를 에이전트에 실어 준다 (#547).
+	//
+	// config.json 의 `credentialRef` 만으로는 부족하다. 에이전트는 매 턴
+	// `credentials.get(provider)` 를 설정 위에 덮어쓰는데, 리눅스에서 그것은 OS
+	// 키체인(`secret-tool`)을 본다. 그 기계에 게이트웨이 키가 하나 남아 있으면
+	// 그 값이 이겨서, 우리가 심은 키 대신 남의 키로 게이트웨이를 두드리다 401 을
+	// 받는다(실측). 로그인 경로와 같은 wire(`creds_update`)로 보내면 그 덮어쓰기
+	// 자체를 런타임 overlay 로 눌러, 어느 기계에서도 같은 키를 쓴다.
+	//
+	// 키는 이 프로세스의 환경에서 곧장 실려 파일에 남지 않는다. 스펙이 스스로
+	// 다른 provider 로 갈아타면 그쪽 슬롯을 쓰므로 충돌하지 않는다.
+	if (CREDENTIALED_SEED_ACTIVE) {
+		// `browser.execute` 는 동기 실행이라 async 콜백의 promise 를 기다리지
+		// 않는다. 결과를 창에 남기고 그것이 나타날 때까지 기다린다 — 안 그러면
+		// 키가 닿았는지 모르는 채로 스펙이 시작하고, 실패는 401 이라는 엉뚱한
+		// 모습으로 나타난다.
+		await browser.execute(
+			(message: string) => {
+				const shell = window as unknown as {
+					__TAURI_INTERNALS__?: {
+						invoke: (command: string, value: unknown) => Promise<unknown>;
+					};
+					__naiaE2eCredsSeed?: string;
+				};
+				shell.__naiaE2eCredsSeed = "pending";
+				const invoke = shell.__TAURI_INTERNALS__?.invoke;
+				if (!invoke) {
+					shell.__naiaE2eCredsSeed = "error: Tauri invoke unavailable";
+					return;
+				}
+				invoke("send_to_agent_command", { message }).then(
+					() => {
+						shell.__naiaE2eCredsSeed = "ok";
+					},
+					(error: unknown) => {
+						shell.__naiaE2eCredsSeed = `error: ${String(error)}`;
+					},
+				);
+			},
+			JSON.stringify({
+				type: "creds_update",
+				// 심을 때 고른 provider 와 같아야 한다. 환경으로 바꿔 끼웠는데
+				// 키를 기본 provider 슬롯에 넣으면 그 키가 영영 안 쓰인다.
+				provider:
+					credentialedSeedOptionsFromEnv().provider ??
+					CREDENTIALED_MAIN_PROVIDER,
+				naiaKey: process.env[CREDENTIALED_KEY_ENV] ?? "",
+			}),
+		);
+		let credsSeedState = "pending";
+		await browser.waitUntil(
+			async () => {
+				credsSeedState = await browser.execute(
+					() =>
+						(window as unknown as { __naiaE2eCredsSeed?: string })
+							.__naiaE2eCredsSeed ?? "pending",
+				);
+				return credsSeedState !== "pending";
+			},
+			{
+				timeout: 15_000,
+				timeoutMsg: "creds_update(게이트웨이 키) 가 에이전트에 닿지 않았다",
+			},
+		);
+		if (credsSeedState !== "ok") {
+			// 이 실패는 대개 키 문제가 아니라 **뇌가 없다** 는 뜻이다. 네이티브가 앞
+			// 세션이 흘린 리스 때문에 agent 를 안 띄우면(`agent_lease_live_blocked`)
+			// 이 wire 가 곧장 막히고 재시작마저 억제(cooldown)에 걸린다. 이름을 그대로
+			// 두면 다음 사람이 자격증명을 뒤진다 — 실제로 그렇게 한 번 샜다.
+			throw new Error(
+				`creds_update failed: ${credsSeedState}` +
+					(/restart debounced|not running|died/.test(credsSeedState)
+						? " — 이 세션은 agent 없이 떴다. 앞 세션의 agent 자식이 리스를 쥐고" +
+							" 있었을 가능성이 크다 (naia.log 의 agent_lease_live_blocked)."
+						: ""),
+			);
+		}
+		console.log("[e2e] gateway key delivered to agent (creds_update)");
+		await browser.pause(500);
+	}
 }
 
 export const config = {
@@ -537,6 +618,12 @@ export const config = {
 		// creating a fresh session; the previous session is never killed mid-start.
 		killByName("naia-shell", true);
 		if (!IS_WINDOWS) killByName("naia-node", true);
+		// 앱을 죽이면 그 agent 자식은 고아가 되고, 리스는 그 PID 를 계속 가리킨다.
+		// 다음 세션의 네이티브는 그 리스를 보고 agent 를 아예 안 띄운다
+		// (`agent_lease_live_blocked`). 그래서 **여기서**, 앱을 띄우기 전에
+		// 회수한다. onPrepare 한 번으로는 스펙 사이를 못 막는다 — 실측에서
+		// 서른여덟 중 서른일곱이 뇌 없이 돌았다.
+		reclaimLeakedAgentChild();
 		killByName("tauri-driver", true);
 		if (IS_WINDOWS) killByName("msedgedriver", true);
 		else killByName("WebKitWebDriver", true);
@@ -619,76 +706,7 @@ export const config = {
 		const { ensureAppReady } = await import("./helpers/settings.js");
 		await ensureAppReady();
 
-		// 심은 공급자에 쓸 게이트웨이 키를 에이전트에 실어 준다 (#547).
-		//
-		// config.json 의 `credentialRef` 만으로는 부족하다. 에이전트는 매 턴
-		// `credentials.get(provider)` 를 설정 위에 덮어쓰는데, 리눅스에서 그것은 OS
-		// 키체인(`secret-tool`)을 본다. 그 기계에 게이트웨이 키가 하나 남아 있으면
-		// 그 값이 이겨서, 우리가 심은 키 대신 남의 키로 게이트웨이를 두드리다 401 을
-		// 받는다(실측). 로그인 경로와 같은 wire(`creds_update`)로 보내면 그 덮어쓰기
-		// 자체를 런타임 overlay 로 눌러, 어느 기계에서도 같은 키를 쓴다.
-		//
-		// 키는 이 프로세스의 환경에서 곧장 실려 파일에 남지 않는다. 스펙이 스스로
-		// 다른 provider 로 갈아타면 그쪽 슬롯을 쓰므로 충돌하지 않는다.
-		if (CREDENTIALED_SEED_ACTIVE) {
-			// `browser.execute` 는 동기 실행이라 async 콜백의 promise 를 기다리지
-			// 않는다. 결과를 창에 남기고 그것이 나타날 때까지 기다린다 — 안 그러면
-			// 키가 닿았는지 모르는 채로 스펙이 시작하고, 실패는 401 이라는 엉뚱한
-			// 모습으로 나타난다.
-			await browser.execute(
-				(message: string) => {
-					const shell = window as unknown as {
-						__TAURI_INTERNALS__?: {
-							invoke: (command: string, value: unknown) => Promise<unknown>;
-						};
-						__naiaE2eCredsSeed?: string;
-					};
-					shell.__naiaE2eCredsSeed = "pending";
-					const invoke = shell.__TAURI_INTERNALS__?.invoke;
-					if (!invoke) {
-						shell.__naiaE2eCredsSeed = "error: Tauri invoke unavailable";
-						return;
-					}
-					invoke("send_to_agent_command", { message }).then(
-						() => {
-							shell.__naiaE2eCredsSeed = "ok";
-						},
-						(error: unknown) => {
-							shell.__naiaE2eCredsSeed = `error: ${String(error)}`;
-						},
-					);
-				},
-				JSON.stringify({
-					type: "creds_update",
-					// 심을 때 고른 provider 와 같아야 한다. 환경으로 바꿔 끼웠는데
-					// 키를 기본 provider 슬롯에 넣으면 그 키가 영영 안 쓰인다.
-					provider:
-						credentialedSeedOptionsFromEnv().provider ??
-						CREDENTIALED_MAIN_PROVIDER,
-					naiaKey: process.env[CREDENTIALED_KEY_ENV] ?? "",
-				}),
-			);
-			let credsSeedState = "pending";
-			await browser.waitUntil(
-				async () => {
-					credsSeedState = await browser.execute(
-						() =>
-							(window as unknown as { __naiaE2eCredsSeed?: string })
-								.__naiaE2eCredsSeed ?? "pending",
-					);
-					return credsSeedState !== "pending";
-				},
-				{
-					timeout: 15_000,
-					timeoutMsg: "creds_update(게이트웨이 키) 가 에이전트에 닿지 않았다",
-				},
-			);
-			if (credsSeedState !== "ok") {
-				throw new Error(`creds_update failed: ${credsSeedState}`);
-			}
-			console.log("[e2e] gateway key delivered to agent (creds_update)");
-			await browser.pause(500);
-		}
+		await deliverCredentialedGatewayKey();
 
 		// Auto-approve permission modals globally for all specs.
 		// Prevents tool-call hangs when AI tries to use a tool not yet approved.
@@ -708,6 +726,9 @@ export const config = {
 			killByName("naia-node");
 		}
 		killByName("naia-shell");
+		// 앱이 죽은 직후가 고아를 잡기 가장 쉬운 때다. 다음 세션이 시작할 때
+		// 한 번 더 보지만, 여기서 걷어 두면 그 대기가 짧아진다.
+		reclaimLeakedAgentChild();
 		if (IS_WINDOWS) {
 			killByName("msedgedriver");
 		} else {

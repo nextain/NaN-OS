@@ -145,6 +145,11 @@ jobs:
       # 원인과 증상이 떨어져 있으면 고치는 사람이 엉뚱한 곳을 판다.
       - name: silent clicks (무음 클릭 증가 금지)
         run: node scripts/check-silent-clicks.mjs
+      # 정적 게이트가 원리상 다 읽을 수 없는 문법 꼬리(쉼표식·리터럴에 씌운
+      # void·리터럴 키 호출)는 게이트를 넓히는 대신 저장소에 못 들어오게 막는다.
+      # 목록의 정본은 scripts/lib/lint-boundary-forms.mjs 하나다.
+      - name: lint boundary (게이트가 읽지 않기로 한 형태 금지)
+        run: node scripts/check-lint-boundary.mjs
       - name: wire probes (os outbound ⊆ agent accept / agent output ⊆ os classify)
         run: |
           node scripts/builds/uc1-outbound-probe.mjs
