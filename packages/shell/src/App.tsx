@@ -729,7 +729,7 @@ export function App() {
 	}, []);
 
 	useEffect(() => {
-		if (showOnboarding) return;
+		if (showOnboarding || !configHydrated) return;
 		let active = true;
 		if (isOnboardingComplete()) {
 			startupUpdateCheckRef.current ??= checkForUpdate();
@@ -750,7 +750,7 @@ export function App() {
 		return () => {
 			active = false;
 		};
-	}, [showOnboarding]);
+	}, [configHydrated, showOnboarding]);
 
 	// Follow OS color scheme changes — apply only when saved theme is "system"
 	useEffect(() => {

@@ -14,6 +14,7 @@ export const UI_PREFERENCE_KEYS = {
 	editorZoom: "editorZoom",
 	classifiedDirs: "classifiedDirs",
 	readAnnouncementIds: "readAnnouncementIds",
+	updatePromptSnooze: "updatePromptSnooze",
 } as const;
 
 export type UiPreferenceKey =
@@ -21,10 +22,13 @@ export type UiPreferenceKey =
 export type UiPreferences = Record<string, unknown>;
 
 const LEGACY_OWNER_KEY = "naia-ui-preferences-legacy-owner";
+const UPDATE_PROMPT_SNOOZE_LEGACY_KEY = "naia.updatePromptSnooze";
 
 function readStorage(key: string): string | null {
 	try {
-		return typeof localStorage === "undefined" ? null : localStorage.getItem(key);
+		return typeof localStorage === "undefined"
+			? null
+			: localStorage.getItem(key);
 	} catch {
 		return null;
 	}
@@ -57,6 +61,17 @@ function parseJson(raw: string | null): unknown {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isUpdatePromptSnooze(value: unknown): value is {
+	version: string;
+	until: number;
+} {
+	return (
+		isRecord(value) &&
+		typeof value.version === "string" &&
+		Number.isFinite(value.until)
+	);
 }
 
 function normalizeAdkPath(path: string | null | undefined): string | null {
@@ -106,6 +121,12 @@ function readLegacyPreferences(): UiPreferences {
 	if (Array.isArray(readAnnouncementIds))
 		next[UI_PREFERENCE_KEYS.readAnnouncementIds] = readAnnouncementIds;
 
+	const updatePromptSnooze = parseJson(
+		readStorage(UPDATE_PROMPT_SNOOZE_LEGACY_KEY),
+	);
+	if (isUpdatePromptSnooze(updatePromptSnooze))
+		next[UI_PREFERENCE_KEYS.updatePromptSnooze] = updatePromptSnooze;
+
 	return next;
 }
 
@@ -121,6 +142,7 @@ function clearLegacyPreferences(): void {
 		"workspace-editor-zoom",
 		"workspace-classified-dirs",
 		"naia_read_announcements",
+		UPDATE_PROMPT_SNOOZE_LEGACY_KEY,
 	])
 		removeStorage(key);
 }
@@ -212,8 +234,7 @@ export async function hydrateUiPreferences(
 	publish(next);
 	persistRenderCache(next);
 
-	if (!migrated || !canPersist || !path)
-		return { migrated, persisted: false };
+	if (!migrated || !canPersist || !path) return { migrated, persisted: false };
 
 	const persistedToAdk = await enqueueWrite(path, next);
 	if (persistedToAdk) clearLegacyPreferences();
@@ -265,7 +286,8 @@ export function patchUiPreferences(
 	}
 	publish(next);
 	persistRenderCache(next);
-	if (!hydrated || !writesEnabled || !activeAdkPath) return Promise.resolve(false);
+	if (!hydrated || !writesEnabled || !activeAdkPath)
+		return Promise.resolve(false);
 	return enqueueWrite(activeAdkPath, next);
 }
 
