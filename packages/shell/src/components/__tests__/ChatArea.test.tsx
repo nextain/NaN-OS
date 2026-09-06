@@ -1527,6 +1527,131 @@ describe("ChatArea", () => {
 		localStorage.removeItem("naia-config");
 	});
 
+	it("keeps the final text streaming after tool-round usage", async () => {
+		localStorage.removeItem("naia-adk-path");
+		vi.mocked(isNewCore).mockReturnValue(true);
+		localStorage.setItem(
+			"naia-config",
+			JSON.stringify({
+				apiKey: "test-key",
+				provider: "gemini",
+				model: "gemini-2.5-flash",
+			}),
+		);
+
+		render(<ChatArea />);
+		const input = screen.getByPlaceholderText(/message/i);
+		fireEvent.change(input, { target: { value: "continue after tool" } });
+		fireEvent.keyDown(input, { key: "Enter" });
+		await waitFor(() => expect(capturedRequests).toHaveLength(1));
+		const request = capturedRequests[0];
+		request.onChunk({
+			type: "tool_use",
+			requestId: request.requestId,
+			toolCallId: "tool-1",
+			toolName: "list_dir",
+			args: { path: "." },
+		});
+		request.onChunk({
+			type: "tool_result",
+			requestId: request.requestId,
+			toolCallId: "tool-1",
+			toolName: "list_dir",
+			output: "[]",
+			success: true,
+		});
+		request.onChunk({
+			type: "usage",
+			requestId: request.requestId,
+			inputTokens: 3,
+			outputTokens: 2,
+			cost: 0.0059,
+			model: "gemini-2.5-flash",
+		});
+		// The first text chunk is still inside a thinking tag, so there is no
+		// visible text yet. The usage event must not commit a blank assistant.
+		request.onChunk({
+			type: "text",
+			requestId: request.requestId,
+			text: "<thi",
+		});
+		expect(useChatStore.getState().isStreaming).toBe(true);
+		request.onChunk({
+			type: "text",
+			requestId: request.requestId,
+			text: "nk>private chain</think>Visible answer.",
+		});
+		request.onChunk({ type: "finish", requestId: request.requestId });
+
+		await waitFor(() => expect(screen.getByText("Visible answer.")).toBeDefined());
+		const assistants = useChatStore
+			.getState()
+			.messages.filter((message) => message.role === "assistant");
+		expect(assistants).toHaveLength(1);
+		expect(assistants[0].content).toContain("Visible answer.");
+		await waitFor(() =>
+			expect(document.querySelector(".cost-badge")).not.toBeNull(),
+		);
+		localStorage.removeItem("naia-config");
+	});
+
+	it("commits accumulated tool-round cost when a response is cancelled", async () => {
+		localStorage.removeItem("naia-adk-path");
+		vi.mocked(isNewCore).mockReturnValue(true);
+		localStorage.setItem(
+			"naia-config",
+			JSON.stringify({
+				apiKey: "test-key",
+				provider: "gemini",
+				model: "gemini-2.5-flash",
+			}),
+		);
+
+		render(<ChatArea />);
+		const input = screen.getByPlaceholderText(/message/i);
+		fireEvent.change(input, { target: { value: "cancel after tool usage" } });
+		fireEvent.keyDown(input, { key: "Enter" });
+		await waitFor(() => expect(capturedRequests).toHaveLength(1));
+		const request = capturedRequests[0];
+		request.onChunk({
+			type: "text",
+			requestId: request.requestId,
+			text: "Partial answer.",
+		});
+		request.onChunk({
+			type: "usage",
+			requestId: request.requestId,
+			inputTokens: 1,
+			outputTokens: 2,
+			cost: 0.001,
+			model: "gemini-2.5-flash",
+		});
+		request.onChunk({
+			type: "usage",
+			requestId: request.requestId,
+			inputTokens: 3,
+			outputTokens: 4,
+			cost: 0.002,
+			model: "gemini-2.5-flash",
+		});
+
+		fireEvent.click(screen.getByTitle("ESC"));
+		await waitFor(() =>
+			expect(useChatStore.getState().isStreaming).toBe(false),
+		);
+		const assistants = useChatStore
+			.getState()
+			.messages.filter((message) => message.role === "assistant");
+		expect(assistants).toHaveLength(1);
+		expect(assistants[0].content).toContain("Partial answer.");
+		expect(assistants[0].cost).toMatchObject({
+			inputTokens: 4,
+			outputTokens: 6,
+			cost: 0.003,
+		});
+		localStorage.removeItem("naia-config");
+	});
+
 	// #571 — 문장 단위 공개가 사라지면서 "문장 사이에 공백이 끼는가" 는 이어 붙인
 	// 본문을 그대로 그리는 문제가 됐다. 계약은 남는다: 두 문장이 붙어 나오되
 	// 사이에 없던 공백이 생기지 않는다. 달라진 것은 시점뿐이다 — 재생을 기다리지

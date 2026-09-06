@@ -130,6 +130,7 @@ import type {
 	AgentResponseChunk,
 	AuditEvent,
 	AuditFilter,
+	CostEntry,
 	ProviderId,
 	ToolCall,
 } from "../lib/types";
@@ -442,6 +443,10 @@ export function ChatArea({
 	const inputRef = useRef<HTMLTextAreaElement>(null);
 	const sessionLoaded = useRef(false);
 	const currentRequestId = useRef<string | null>(null);
+	// Providers may emit one usage event for each tool round before the final
+	// assistant text. Keep those entries with the live request so usage cannot
+	// finalize an empty assistant message before the terminal finish chunk.
+	const pendingCostRef = useRef<CostEntry | null>(null);
 	/** #572 — 마지막으로 보낸 사용자 발화. 실패 알림의 재시도가 이것을 다시 보낸다. */
 	const lastSentTextRef = useRef("");
 	const activeSpeechActivityRef = useRef<{
@@ -763,6 +768,9 @@ export function ChatArea({
 			});
 		}
 		if (store.isStreaming) store.finishStreaming();
+		// Cancellation has no terminal provider chunk, but usage already emitted
+		// for completed tool rounds still belongs to the partial assistant.
+		commitPendingCost();
 		setEmotion("neutral");
 		completeCurrentRequest(reqId);
 	}
@@ -1102,10 +1110,34 @@ export function ChatArea({
 		}
 	}
 
+	function deferCostEntry(entry: CostEntry): void {
+		const previous = pendingCostRef.current;
+		pendingCostRef.current = previous
+			? {
+					inputTokens: previous.inputTokens + entry.inputTokens,
+					outputTokens: previous.outputTokens + entry.outputTokens,
+					cost: previous.cost + entry.cost,
+					provider: entry.provider,
+					model: entry.model,
+				}
+			: entry;
+	}
+
+	function commitPendingCost(): void {
+		const pending = pendingCostRef.current;
+		if (!pending) return;
+		pendingCostRef.current = null;
+		useChatStore.getState().addCostEntry(pending);
+	}
+
 	function finishStreamingWithVoiceTail(terminal = true): void {
 		const store = useChatStore.getState();
 		const wasStreaming = store.isStreaming;
 		if (wasStreaming) store.finishStreaming();
+		// Usage entries arrive before or alongside the terminal chunk. Commit only
+		// after finishStreaming creates the assistant message so tool-round costs
+		// attach to the final visible reply.
+		commitPendingCost();
 		const sync = ttsTextSyncRef.current;
 		if (!sync.active) return;
 		if (terminal) sync.llmFinished = true;
@@ -1620,6 +1652,7 @@ export function ChatArea({
 		// without a final chunk (cancel, disconnect, provider error).
 		thinkingStreamFilterRef.current.reset();
 		currentRequestId.current = requestId;
+		pendingCostRef.current = null;
 		// #572 — 실패했을 때 "같은 입력을 다시" 를 제안하려면 그 입력을 알아야 한다.
 		lastSentTextRef.current = text;
 
@@ -2347,17 +2380,10 @@ export function ChatArea({
 					Logger.info("ChatArea", "Deferring empty zero-token usage");
 					break;
 				}
-				// #513 — usage 가 text 보다 먼저 오는 프로바이더(codex 등)에서 빈 스트림을 여기서
-				//        완결하면 빈 assistant 메시지가 확정되고 이후 본문이 streamingContent 에
-				//        좌초한다(마스크가 가리다 동기화 종료 때 "대화가 사라짐"). 내용이 있을 때만
-				//        완결하고, 빈 스트림은 finish/error 종결에 맡긴다(비용 기록은 그대로).
-				if (
-					store.streamingContent.length > 0 ||
-					store.streamingToolCalls.length > 0
-				) {
-					finishStreamingWithVoiceTail(false);
-				}
-				store.addCostEntry({
+				// A provider may emit usage after a tool round and before the final
+				// assistant text. Keep the request streaming until its terminal finish;
+				// otherwise the later text would be stranded outside the message.
+				deferCostEntry({
 					inputTokens: chunk.inputTokens,
 					outputTokens: chunk.outputTokens,
 					cost: chunk.cost,
