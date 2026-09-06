@@ -33,6 +33,10 @@ export function completeNaiaConfigHydration(): void {
 	configHydrationPending = false;
 }
 
+export function isNaiaConfigHydrationPending(): boolean {
+	return configHydrationPending;
+}
+
 // ── ADK Path ──────────────────────────────────────────────────────────────────
 
 export function getAdkPath(): string | null {
