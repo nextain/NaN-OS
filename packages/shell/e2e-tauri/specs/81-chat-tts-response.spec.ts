@@ -54,15 +54,36 @@ describe("81 — chat TTS response", () => {
 			await browser.pause(300);
 		}
 
-		// Set edge provider
+		// Set edge provider.
+		//
+		// 이미 보이는 값을 그대로 다시 넣으면 React 가 그 change 를 **삼킨다**
+		// (value tracker 가 "바뀌지 않았다" 로 판정 → onChange 가 안 불린다). 화면에
+		// 이미 `edge` 가 떠 있는 것이 기본이라(저장된 값이 없을 때의 유효 기본,
+		// `slots/model.ts` 의 `effectiveTtsProvider`) 예전 방식으로는 설정이 파일에
+		// 남지 않았고, 다음 단정이 `null` 을 받았다. 다른 값을 한 번 거쳐 **진짜
+		// 변화**를 만든 뒤 edge 로 돌아온다.
 		await scrollToSection(S.ttsProviderSelect);
 		await browser.execute((sel: string) => {
 			const select = document.querySelector(sel) as HTMLSelectElement | null;
-			if (select) {
-				select.value = "edge";
+			if (!select) return;
+			const setValue = (value: string) => {
+				const setter = Object.getOwnPropertyDescriptor(
+					HTMLSelectElement.prototype,
+					"value",
+				)?.set;
+				setter?.call(select, value);
 				select.dispatchEvent(new Event("change", { bubbles: true }));
-			}
+			};
+			const other = Array.from(select.options)
+				.map((option) => option.value)
+				.find(
+					(value) =>
+						value && value !== "edge" && value !== "naia-local-voice",
+				);
+			if (other && select.value === "edge") setValue(other);
+			setValue("edge");
 		}, S.ttsProviderSelect);
+		await browser.pause(300);
 
 		await browser.pause(300);
 

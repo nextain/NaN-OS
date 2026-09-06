@@ -49,6 +49,8 @@ describe("90 — GLM new-core live chat (직결)", () => {
 			const m = last.match(/(\d[\d,]*)\s*토큰/);
 			return m ? Number(m[1].replace(/,/g, "")) : 0;
 		});
-		expect(tokens, "cost-badge 토큰>0 = 실 z.ai 호출(키 깨지면 0 토큰)").toBeGreaterThan(0);
+		// cost-badge 토큰>0 = 실 z.ai 호출(키 깨지면 0 토큰). wdio 의 expect 는 두 번째
+		// 인자(메시지)를 받지 않는다 — "Expect takes at most one argument" 로 죽었다.
+		expect(tokens).toBeGreaterThan(0);
 	});
 });

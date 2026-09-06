@@ -12,7 +12,7 @@
 // 길이다. 그래서 여기서 재는 것은 둘이다. 무엇을 고르는가, 그리고 고른 것을
 // 다시 돌린 기록이 완결성 판정에 들어가지 **못하는가**.
 import { execFileSync, spawnSync } from "node:child_process";
-import { cpSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -265,5 +265,29 @@ describe("재시험은 전체 기록을 대신하지 못한다", () => {
 		// 기록으로도 덮임을 말할 수 없게 되어 게이트가 영영 붉는다.
 		expect(out).not.toContain("재시험 기록");
 		expect(code).toBe(0);
+	});
+});
+
+// 첫 재시험이 전체 기록을 지웠고, 기록을 쓴 뒤에도 실패를 한 번 더 도는 단계가
+// 이어져 다음 실행과 포트를 다퉜다. 둘 다 러너 소스에서 형태로 잰다 — 이 두 조건은
+// 함수 밖 최상위 흐름에 있어 import 로 떼어 잴 수 없다.
+describe("재시험 기록은 전체 기록을 지우지 않고, 재실행 단계는 기본으로 꺼져 있다", () => {
+	const runnerSource = readFileSync(
+		resolve(ROOT, "scripts/run-regression.mjs"),
+		"utf8",
+	);
+
+	it("옛 기록을 지우는 조건에 kind 가 들어 있다", () => {
+		expect(runnerSource).toMatch(
+			/if \(sameMachine && sameTiers && sameKind\) rmSync/,
+		);
+		expect(runnerSource).toMatch(
+			/const sameKind = \(previous\.kind \?\? "full"\) === \(record\.kind \?\? "full"\)/,
+		);
+	});
+
+	it("실패를 한 번 더 도는 단계는 --classify-flaky 를 줄 때만 표적을 만든다", () => {
+		expect(runnerSource).toMatch(/const classifyFlaky = args\.includes\("--classify-flaky"\)/);
+		expect(runnerSource).toMatch(/const retryTargets = classifyFlaky\s*\?/);
 	});
 });

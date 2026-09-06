@@ -133,3 +133,77 @@ describe("기본 설정을 상속하는 e2e 설정", () => {
 		},
 	);
 });
+
+/** 기본 설정에서 이름으로 가져오는 것들. */
+function namedImportsFromBase(tree: ts.SourceFile): string[] {
+	const names: string[] = [];
+	const visit = (node: ts.Node): void => {
+		if (
+			ts.isImportDeclaration(node) &&
+			ts.isStringLiteral(node.moduleSpecifier) &&
+			node.moduleSpecifier.text === "./wdio.conf.js" &&
+			node.importClause?.namedBindings &&
+			ts.isNamedImports(node.importClause.namedBindings)
+		) {
+			for (const el of node.importClause.namedBindings.elements) {
+				names.push((el.propertyName ?? el.name).text);
+			}
+		}
+		ts.forEachChild(node, visit);
+	};
+	visit(tree);
+	return names;
+}
+
+/** 기본 설정이 실제로 내보내는 이름. `export function|const|let` 과 `export { a, b }`. */
+function exportedNames(tree: ts.SourceFile): Set<string> {
+	const names = new Set<string>();
+	const isExported = (node: ts.Node) =>
+		ts.canHaveModifiers(node) &&
+		(ts.getModifiers(node) ?? []).some(
+			(m) => m.kind === ts.SyntaxKind.ExportKeyword,
+		);
+	const visit = (node: ts.Node): void => {
+		if (ts.isFunctionDeclaration(node) && node.name && isExported(node)) {
+			names.add(node.name.text);
+		}
+		if (ts.isVariableStatement(node) && isExported(node)) {
+			for (const d of node.declarationList.declarations) {
+				if (ts.isIdentifier(d.name)) names.add(d.name.text);
+			}
+		}
+		if (
+			ts.isExportDeclaration(node) &&
+			node.exportClause &&
+			ts.isNamedExports(node.exportClause)
+		) {
+			for (const el of node.exportClause.elements) names.add(el.name.text);
+		}
+		ts.forEachChild(node, visit);
+	};
+	visit(tree);
+	return names;
+}
+
+// 전용 설정이 기본 설정에서 이름으로 가져가는 것은 기본 설정이 실제로 내보내야 한다.
+// wdio.conf.chat.ts 가 `reclaimLeakedAgentChild` 를 가져갔는데 기본 설정에서는
+// export 가 아닌 지역 함수였다. 타입 검사는 e2e 디렉터리를 따로 돌리지 않아 잡지
+// 못했고, 그 설정의 afterSession 은 처음 쓰일 때부터 매번 `is not a function` 으로
+// 죽었다 — 그 설정으로 도는 스펙(90-glm-newcore-chat)의 뒷정리가 한 번도 돌지 않았다.
+describe("전용 설정이 가져가는 이름은 기본 설정이 내보낸다", () => {
+	const base = parse(resolve(E2E_DIR, "wdio.conf.ts"));
+	const exported = exportedNames(base);
+
+	it("기본 설정이 내보내는 이름을 실제로 읽는다", () => {
+		expect(exported.has("config")).toBe(true);
+	});
+
+	for (const { name, tree } of INHERITORS) {
+		it(`${name}: 가져가는 이름이 전부 내보내진다`, () => {
+			const missing = namedImportsFromBase(tree).filter(
+				(n) => !exported.has(n),
+			);
+			expect(missing).toEqual([]);
+		});
+	}
+});

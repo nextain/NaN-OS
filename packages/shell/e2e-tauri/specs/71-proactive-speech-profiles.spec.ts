@@ -160,6 +160,16 @@ async function openDjSkillSettings(): Promise<void> {
 			button.click();
 		});
 	}
+	// 설정은 지연 렌더라 버튼을 누른 **직후**에는 안쪽 탭이 아직 없다. 기다리지 않고
+	// 찾으면 `skills settings tab unavailable` 로 죽고, 그 뒤 프로필 설정이 통째로
+	// 건너뛰어져 뒤따르는 단정들이 줄줄이 무너진다(재시험 2차에서 실측).
+	await browser.waitUntil(
+		async () =>
+			browser.execute(() =>
+				Boolean(document.querySelector('[data-settings-tab="skills"]')),
+			),
+		{ timeout: 10_000, timeoutMsg: "skills settings tab unavailable" },
+	);
 	await browser.execute(() => {
 		const tab = document.querySelector(
 			'[data-settings-tab="skills"]',
@@ -482,6 +492,15 @@ describe("71 — Proactive speech profiles (#82)", () => {
 	});
 
 	it("uses the visible AI/TTS control to allow and stop proactive cost", async () => {
+		// #510 이후 능동 발화는 TTS 와 **독립**이다 — 버튼의 막힘은 프로필만 본다
+		// (`AiControlBar.tsx` 의 `proactiveBlocked = proactive.profile === "disabled"`).
+		// TTS 를 켜면 풀린다고 적힌 옛 모델로는, 프로필이 없는 깨끗한 프로필에서
+		// 언제나 막힘이다. 이 시험이 재려는 것은 "허용/중지가 파일에 남는가" 이므로
+		// 프로필을 먼저 세우고 잰 뒤 되돌린다.
+		agentProfileMutated = true;
+		await submitProfilePhrase("개인 라디오 시작해");
+		await waitForPersistedProfile("personal_radio_dj");
+
 		await browser.execute(() => {
 			const tts = Array.from(document.querySelectorAll("button"))
 				.find((button) => button.textContent?.trim() === "TTS") as HTMLButtonElement | undefined;
@@ -511,6 +530,8 @@ describe("71 — Proactive speech profiles (#82)", () => {
 			async () => (await fileBackedUiConfig()).proactiveSpeechPermitted === false,
 			{ timeout: 10_000, timeoutMsg: "visible proactive control did not stop permission" },
 		);
+
+		await submitProfilePhrase("라디오 종료");
 	});
 
 	it("starts exhibition introduction without waiting for ordinary chat", async () => {

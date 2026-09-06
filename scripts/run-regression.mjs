@@ -66,6 +66,8 @@ const dryRun = args.includes("--dry-run");
  * 전체 한 번 확정] 이다. 예전에는 실패 하나를 다시 보려면 그 기계의 몫 전부를
  * 돌려야 했다 — 자격증명 등급이면 쉰다섯 개, 한 시간이다.
  */
+/** 실패를 한 번 더 돌려 가끔 실패를 가르는 단계. 기본은 끔 — 실패 우선 루프가 대신한다. */
+const classifyFlaky = args.includes("--classify-flaky");
 const onlyFailedArg = args.find((a) => a === "--only-failed" || a.startsWith("--only-failed="));
 const onlyFailed = onlyFailedArg !== undefined;
 const onlyFailedFrom = onlyFailedArg?.includes("=")
@@ -1007,7 +1009,11 @@ for (const old of readdirSync(dir)) {
 		const sameMachine = previous.machine === machine;
 		const sameTiers =
 			[...(previous.tiers ?? [])].sort().join(",") === [...tiers].sort().join(",");
-		if (sameMachine && sameTiers) rmSync(join(dir, old));
+		// 같은 종류끼리만 갈아 끼운다. 재시험 기록이 전체 기록을 지우면 완결성
+		// 판정은 재시험을 무시하므로 "기록 없음" 이 되고, 다음 --only-failed 는
+		// 실패 목록의 출처를 잃는다 — 실제로 첫 재시험이 전체 기록을 지웠다.
+		const sameKind = (previous.kind ?? "full") === (record.kind ?? "full");
+		if (sameMachine && sameTiers && sameKind) rmSync(join(dir, old));
 	} catch {
 		// 읽을 수 없는 파일은 건드리지 않는다. 판정이 이유와 함께 뺀다.
 	}
@@ -1065,9 +1071,14 @@ const failedSpecs = [
 ];
 
 // 실패한 것만 한 번 더 돌려 매번 실패와 가끔 실패를 가른다.
-const retryTargets = groupResults.flatMap((g) =>
-	(g.failedSpecs ?? []).map((spec) => ({ conf: g.conf, spec })),
-);
+// 이 단계는 `--classify-flaky` 를 줄 때만 돈다. 실패 우선 루프(--only-failed)가
+// 같은 일을 사람이 보는 앞에서 하므로, 기록을 쓴 뒤 몰래 이어 도는 재실행은
+// 다음 실행과 포트를 다투는 사고만 낳았다(2026-09-06, 세 실행 겹침).
+const retryTargets = classifyFlaky
+	? groupResults.flatMap((g) =>
+			(g.failedSpecs ?? []).map((spec) => ({ conf: g.conf, spec })),
+		)
+	: [];
 const { flaky, stable } = retryTargets.length
 	? retryFailedOnce(retryTargets)
 	: { flaky: [], stable: [] };

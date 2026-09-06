@@ -1,0 +1,221 @@
+{
+	"machine": "naia-os-3090",
+	"tiers": [
+		"deterministic_ci",
+		"credentialed_live",
+		"native_local"
+	],
+	"kind": "retest",
+	"retestOf": "naia-os-3090-2026-09-06T05-45-28-744Z.json",
+	"ranOn": {
+		"inventorySha256": "594b68430c151a0f4b7e92f637295a6cc02e6fa77339f41fdeeed32830861858",
+		"commit": "e60dbaff58601c2e77d5b52ccf9e4dc76991ccfa",
+		"host": "bazzite",
+		"platform": "linux-x64",
+		"node": "v26.7.0"
+	},
+	"started": "2026-09-06T06:44:28.866Z",
+	"finished": "2026-09-06T07:14:42.750Z",
+	"status": "failed",
+	"planned": [
+		"06-skill-memo.spec.ts",
+		"08-memory.spec.ts",
+		"10-history-tab.spec.ts",
+		"12-skills-gateway.spec.ts",
+		"14-skills-tab.spec.ts",
+		"16-skill-weather.spec.ts",
+		"18-provider-tool-calling.spec.ts",
+		"20-cron-basic.spec.ts",
+		"37-execute-command.spec.ts",
+		"39-web-tools.spec.ts",
+		"42-sessions-crud.spec.ts",
+		"46-channels-operations.spec.ts",
+		"50-config-management.spec.ts",
+		"54b-settings-locale-prompt.spec.ts",
+		"56-settings-voice.spec.ts",
+		"67-onboarding-config-save.spec.ts",
+		"71-proactive-speech-profiles.spec.ts",
+		"73-tts-edge-preview.spec.ts",
+		"75-app-position.spec.ts",
+		"77-stt-provider-switching.spec.ts",
+		"79-pipeline-voice-activation.spec.ts",
+		"81-chat-tts-response.spec.ts",
+		"90-app-system.spec.ts",
+		"90-glm-newcore-chat.spec.ts",
+		"98-codex-chat-delegation.spec.ts",
+		"99-launch-f4-skill-usage.spec.ts",
+		"99-store-certification.spec.ts",
+		"environment-dispatch.spec.ts"
+	],
+	"executed": [
+		"06-skill-memo.spec.ts",
+		"08-memory.spec.ts",
+		"10-history-tab.spec.ts",
+		"12-skills-gateway.spec.ts",
+		"14-skills-tab.spec.ts",
+		"16-skill-weather.spec.ts",
+		"18-provider-tool-calling.spec.ts",
+		"20-cron-basic.spec.ts",
+		"37-execute-command.spec.ts",
+		"39-web-tools.spec.ts",
+		"42-sessions-crud.spec.ts",
+		"46-channels-operations.spec.ts",
+		"50-config-management.spec.ts",
+		"54b-settings-locale-prompt.spec.ts",
+		"56-settings-voice.spec.ts",
+		"67-onboarding-config-save.spec.ts",
+		"71-proactive-speech-profiles.spec.ts",
+		"73-tts-edge-preview.spec.ts",
+		"75-app-position.spec.ts",
+		"77-stt-provider-switching.spec.ts",
+		"79-pipeline-voice-activation.spec.ts",
+		"81-chat-tts-response.spec.ts",
+		"90-app-system.spec.ts",
+		"99-launch-f4-skill-usage.spec.ts",
+		"99-store-certification.spec.ts",
+		"environment-dispatch.spec.ts",
+		"90-glm-newcore-chat.spec.ts",
+		"98-codex-chat-delegation.spec.ts"
+	],
+	"passedSpecs": [
+		"14-skills-tab.spec.ts",
+		"16-skill-weather.spec.ts",
+		"39-web-tools.spec.ts",
+		"46-channels-operations.spec.ts",
+		"56-settings-voice.spec.ts",
+		"73-tts-edge-preview.spec.ts",
+		"77-stt-provider-switching.spec.ts",
+		"79-pipeline-voice-activation.spec.ts",
+		"environment-dispatch.spec.ts"
+	],
+	"premise": "ok",
+	"premiseSignals": {
+		"agentStarts": 28,
+		"leaseBlocked": 0,
+		"executed": 28,
+		"reason": ""
+	},
+	"groups": [
+		{
+			"conf": "wdio.conf.ts",
+			"specs": 26,
+			"status": "failed",
+			"passed": 9,
+			"failedSpecs": [
+				"06-skill-memo.spec.ts",
+				"08-memory.spec.ts",
+				"10-history-tab.spec.ts",
+				"12-skills-gateway.spec.ts",
+				"18-provider-tool-calling.spec.ts",
+				"20-cron-basic.spec.ts",
+				"37-execute-command.spec.ts",
+				"42-sessions-crud.spec.ts",
+				"54b-settings-locale-prompt.spec.ts",
+				"67-onboarding-config-save.spec.ts",
+				"71-proactive-speech-profiles.spec.ts",
+				"81-chat-tts-response.spec.ts",
+				"99-launch-f4-skill-usage.spec.ts",
+				"99-store-certification.spec.ts",
+				"50-config-management.spec.ts",
+				"75-app-position.spec.ts",
+				"90-app-system.spec.ts"
+			]
+		},
+		{
+			"conf": "wdio.conf.chat.ts",
+			"specs": 1,
+			"status": "failed",
+			"passed": 0,
+			"failedSpecs": [
+				"90-glm-newcore-chat.spec.ts"
+			]
+		},
+		{
+			"conf": "wdio.conf.codex-delegation.ts",
+			"specs": 1,
+			"status": "failed",
+			"passed": 0,
+			"failedSpecs": [
+				"98-codex-chat-delegation.spec.ts"
+			]
+		}
+	],
+	"envMissingBeforeRun": {},
+	"harnessProvidedEnv": {
+		"06-skill-memo.spec.ts": [
+			"NAIA_E2E_ADK_FIXTURE"
+		],
+		"08-memory.spec.ts": [
+			"NAIA_E2E_ADK_FIXTURE"
+		],
+		"10-history-tab.spec.ts": [
+			"NAIA_E2E_ADK_FIXTURE"
+		],
+		"12-skills-gateway.spec.ts": [
+			"NAIA_E2E_ADK_FIXTURE"
+		],
+		"14-skills-tab.spec.ts": [
+			"NAIA_E2E_ADK_FIXTURE"
+		],
+		"16-skill-weather.spec.ts": [
+			"NAIA_E2E_ADK_FIXTURE"
+		],
+		"18-provider-tool-calling.spec.ts": [
+			"NAIA_E2E_ADK_FIXTURE"
+		],
+		"20-cron-basic.spec.ts": [
+			"NAIA_E2E_ADK_FIXTURE"
+		],
+		"37-execute-command.spec.ts": [
+			"NAIA_E2E_ADK_FIXTURE"
+		],
+		"39-web-tools.spec.ts": [
+			"NAIA_E2E_ADK_FIXTURE"
+		],
+		"42-sessions-crud.spec.ts": [
+			"NAIA_E2E_ADK_PATH"
+		],
+		"46-channels-operations.spec.ts": [
+			"NAIA_E2E_ADK_FIXTURE"
+		],
+		"50-config-management.spec.ts": [
+			"NAIA_E2E_ADK_FIXTURE"
+		],
+		"54b-settings-locale-prompt.spec.ts": [
+			"NAIA_E2E_ADK_FIXTURE"
+		],
+		"56-settings-voice.spec.ts": [
+			"NAIA_E2E_ADK_FIXTURE"
+		],
+		"67-onboarding-config-save.spec.ts": [
+			"NAIA_E2E_ADK_FIXTURE"
+		],
+		"71-proactive-speech-profiles.spec.ts": [
+			"NAIA_E2E_ADK_FIXTURE",
+			"NAIA_E2E_ADK_PATH"
+		],
+		"73-tts-edge-preview.spec.ts": [
+			"NAIA_E2E_ADK_FIXTURE"
+		],
+		"75-app-position.spec.ts": [
+			"NAIA_E2E_ADK_FIXTURE"
+		],
+		"77-stt-provider-switching.spec.ts": [
+			"NAIA_E2E_ADK_FIXTURE"
+		],
+		"79-pipeline-voice-activation.spec.ts": [
+			"NAIA_E2E_ADK_FIXTURE"
+		],
+		"81-chat-tts-response.spec.ts": [
+			"NAIA_E2E_ADK_FIXTURE"
+		],
+		"90-glm-newcore-chat.spec.ts": [
+			"NAIA_E2E_ADK_FIXTURE"
+		],
+		"99-launch-f4-skill-usage.spec.ts": [
+			"NAIA_E2E_ADK_FIXTURE"
+		]
+	},
+	"envMissingGroups": [],
+	"detail": "wdio.conf.ts: 종료 코드 1; wdio.conf.chat.ts: 종료 코드 1; wdio.conf.codex-delegation.ts: 종료 코드 1"
+}

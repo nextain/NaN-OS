@@ -294,7 +294,10 @@ let permissionPoller: { dispose: () => void } | undefined;
  * 앱의 agent 까지 잡는다.
  */
 /** 실행 자리의 리스가 가리키는 agent 자식을 회수한다. 회수했으면 한 줄 남긴다. */
-function reclaimLeakedAgentChild(): boolean {
+// 전용 설정(wdio.conf.chat.ts)이 이 이름을 import 하는데 export 가 아니어서 그쪽
+// afterSession 이 매번 `is not a function` 으로 죽었다 — 처음 쓰일 때부터 그랬다.
+// 계약(e2e-inherited-conf-contracts)이 이제 "가져가는 이름은 내보낸다" 를 잰다.
+export function reclaimLeakedAgentChild(): boolean {
 	// 격리한 실행 자리의 리스만 본다. 홈의 리스를 보면 사람이 지금 쓰고 있는
 	// 앱의 에이전트를 잡는다 — 그 자리는 더 이상 e2e 의 것이 아니다.
 	const outcome = reclaimAgentChild(
