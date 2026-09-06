@@ -10,7 +10,7 @@ import {
 	writeFileSync,
 } from "node:fs";
 import { connect } from "node:net";
-import { homedir } from "node:os";
+import { tmpdir } from "node:os";
 import { basename, delimiter, dirname, resolve } from "node:path";
 import { execPath } from "node:process";
 // FR-VOICE.15 (#418): harness seeds come from the product config schema — a
@@ -22,19 +22,31 @@ export const SHELL_DIR = resolve(import.meta.dirname, "..");
 const pairing = JSON.parse(
 	readFileSync(resolve(SHELL_DIR, "agent-pairing.json"), "utf8"),
 ) as { agentCommit: string };
+// 실행 자리는 **OS 임시 디렉터리 아래**다 (#577).
+//
+// 예전에는 `~/.naia/run` 이었다. 오너 규칙은 데이터 홈에 `adk-path` 포인터 하나만
+// 두는 것인데(FR-SHELL-ISO · docs/storage-locations.md), 이 전용 설정만 그 아래에
+// 자기 자리를 만들었다. 그 대가는 실측으로 드러났다 — 2026-09-06 이 기계에
+// `~/.naia/run/codex-live-e2e-<포트>` 일곱 자리가 사라진 뒤에도 그 자리를 물고 있던
+// BGM 사이드카 여덟이 남아 있었다. 데이터 홈 게이트(check-data-home-boundary)는
+// Rust 만 읽으므로 TS 하네스의 이 자리는 잡히지 않았다.
+//
+// 이름에 `codex-` 마디를 남기는 이유가 있다. 기본 설정은 자기 자리를
+// `<tmpdir>/naia-shell-e2e-<포트>` 로 잡고 `onPrepare` 에서 그것을 통째로 지운다.
+// 윈도우의 기본 설정 포트는 `4450 + (pid % 37)` 라 이 설정의 기본값 4450 과 겹칠 수
+// 있다 — 이름이 같으면 기본 설정이 살아 있는 codex 실행의 자리를 지운다.
+// 숫자로만 나누면 그 충돌을 막을 수 없으므로 마디로 나눈다.
 export const E2E_RUN_PARENT = resolve(
-	process.env.NAIA_E2E_RUN_PARENT ?? resolve(homedir(), ".naia", "run"),
+	process.env.NAIA_E2E_RUN_PARENT ?? tmpdir(),
 );
 export const E2E_WEBDRIVER_PORT = Number(
 	process.env.NAIA_E2E_WEBDRIVER_PORT ?? "4450",
 );
 const E2E_BGM_PORT = 18_000 + (E2E_WEBDRIVER_PORT % 1_000);
+export const E2E_ROOT_NAME = `naia-shell-e2e-codex-${E2E_WEBDRIVER_PORT}`;
 // A port-scoped root prevents a delayed Windows WebView2 teardown from
 // contaminating the next independent native run.
-export const E2E_ROOT = resolve(
-	E2E_RUN_PARENT,
-	`codex-live-e2e-${E2E_WEBDRIVER_PORT}`,
-);
+export const E2E_ROOT = resolve(E2E_RUN_PARENT, E2E_ROOT_NAME);
 export const E2E_WORKSPACE = resolve(E2E_ROOT, "workspace");
 export const E2E_SETTINGS = resolve(E2E_WORKSPACE, "naia-settings");
 export const E2E_WEBVIEW2_DATA = resolve(E2E_ROOT, "webview2");
@@ -89,7 +101,7 @@ function assertOwnedRoot(path: string): void {
 	if (
 		candidate !== E2E_ROOT ||
 		dirname(candidate) !== E2E_RUN_PARENT ||
-		basename(candidate) !== `codex-live-e2e-${E2E_WEBDRIVER_PORT}`
+		basename(candidate) !== E2E_ROOT_NAME
 	) {
 		throw new Error(`Refusing to clean a non-E2E path: ${candidate}`);
 	}

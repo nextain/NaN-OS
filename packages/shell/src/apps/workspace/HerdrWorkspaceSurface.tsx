@@ -72,16 +72,48 @@ export function HerdrWorkspaceSurface(props: SurfaceProps) {
 							onFileLocation={(location) => void props.openLocation(location)}
 						/>
 					</Suspense>
+				) : props.launchError ? (
+					// 터미널 백엔드(herdr 자식)가 끊겼다. 그 사실은 **알림**이어야 한다 —
+					// 화면 한구석의 글자로만 두면 보조 기술도, 다른 곳을 보던 사람도
+					// 터미널이 사라진 것을 모른다. 다음 행동(다시 연결)을 같은 자리에 둔다.
+					//
+					// 역할을 삼항으로 적지 않고 갈래를 나눈 것은 일부러다. 정적 검사
+					// (`check-recovery-affordance`)가 실패 알림마다 다음 행동이 있는지
+					// 보는데, 역할이 실행 시에만 정해지면 그 자리를 세지 못한다.
+					<div
+						className="herdr-workspace__state"
+						role="alert"
+						data-testid="workspace-terminal-state"
+					>
+						<span>{props.launchError}</span>
+						<button
+							type="button"
+							onClick={props.launchHerdr}
+							data-testid="workspace-terminal-reconnect"
+						>
+							{t("workspace.herdrRetry")}
+						</button>
+					</div>
 				) : (
-					<div className="herdr-workspace__state">
+					// 시작 중인 것은 실패가 아니다. 그 자리를 알림으로 두면 매번 뜨는
+					// 알림이 되어, 정작 끊겼을 때의 알림이 묻힌다.
+					<div
+						className="herdr-workspace__state"
+						role="status"
+						aria-live="polite"
+						data-testid="workspace-terminal-state"
+					>
 						<span>
-							{props.launchError ||
-								(props.launching
-									? t("workspace.herdrStarting")
-									: t("workspace.herdrExited"))}
+							{props.launching
+								? t("workspace.herdrStarting")
+								: t("workspace.herdrExited")}
 						</span>
 						{!props.launching && (
-							<button type="button" onClick={props.launchHerdr}>
+							<button
+								type="button"
+								onClick={props.launchHerdr}
+								data-testid="workspace-terminal-reconnect"
+							>
 								{t("workspace.herdrRetry")}
 							</button>
 						)}

@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act, cleanup, render } from "@testing-library/react";
+import { act, cleanup, fireEvent, render } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type {
 	BehaviorEntry,
@@ -9,6 +9,8 @@ import type {
 	ToolHandler,
 } from "../../lib/app-registry";
 import { bgmPlayback } from "../../lib/bgm-playback";
+import { t } from "../../lib/i18n";
+import en from "../../lib/locales/en";
 import {
 	BrowserCenterArea,
 	NAVIGATE_READ_DELAY_MS,
@@ -232,5 +234,142 @@ describe("BrowserCenterArea AI browser tools", () => {
 		expect(result).toContain("Navigated to https://news.naver.com");
 		expect(result).toContain("Page text read failed");
 		expect(result).not.toContain("Navigation failed");
+	});
+});
+
+// ── 화면이 비었을 때 그 사실을 말하는가 (#576) ──────────────────────────────
+//
+// 왜 이 묶음이 있는가: 2026-09-06 실기 탐색에서 브라우저 앱으로 example.com 을
+// 열고 6초를 기다려도 화면은 검은 채였고 주소창에는 example.com 이 그대로
+// 있었다. 성공한 것처럼 보이는데 아무것도 없었다. 원인은 두 가지였고 둘 다
+// 침묵이었다 — 이 실행에는 자식 웹뷰가 아예 없었는데 화면이 "준비됨" 이었고,
+// 이동 실패는 `.catch(() => {})` 가 삼켰다.
+//
+// 페이지를 그리는 것은 HTML 이 아니라 네이티브 자식 웹뷰다. 그러니 그 표면이
+// 없을 수 있다는 것 자체는 정상이다. 결함은 그 상태를 말하지 않는 것이다.
+describe("BrowserCenterArea 빈 화면 안내", () => {
+	let rectSpy: ReturnType<typeof vi.spyOn>;
+
+	beforeEach(() => {
+		vi.useFakeTimers();
+		localStorage.clear();
+		bgmPlayback.reset();
+		listenMock.mockResolvedValue(() => {});
+		class ResizeObserverMock {
+			observe() {}
+			unobserve() {}
+			disconnect() {}
+		}
+		globalThis.ResizeObserver = ResizeObserverMock as typeof ResizeObserver;
+		window.requestAnimationFrame = (cb: FrameRequestCallback) =>
+			window.setTimeout(() => cb(performance.now()), 0);
+		// jsdom 은 모든 요소를 0×0 으로 잰다. 그러면 컴포넌트가 자리를 못 잡았다고
+		// 보고 웹뷰를 만들지 않는다 — 이 묶음이 재려는 자리에 닿지 못한다.
+		rectSpy = vi
+			.spyOn(Element.prototype, "getBoundingClientRect")
+			.mockReturnValue({
+				x: 0,
+				y: 0,
+				top: 0,
+				left: 0,
+				right: 800,
+				bottom: 600,
+				width: 800,
+				height: 600,
+				toJSON: () => ({}),
+			} as DOMRect);
+	});
+
+	afterEach(() => {
+		rectSpy.mockRestore();
+		cleanup();
+		vi.useRealTimers();
+		vi.clearAllMocks();
+		bgmPlayback.reset();
+	});
+
+	/** 웹뷰 생성이 무엇을 돌려주는지만 바꾼 기본 목. */
+	function mockInvoke(created: boolean, navigateFails = false) {
+		invokeMock.mockImplementation(async (cmd: string) => {
+			if (cmd === "browser_wv_create") return created;
+			if (cmd === "browser_wv_page_info") return ["", ""];
+			if (cmd === "browser_wv_navigate") {
+				if (navigateFails) throw new Error("No browser webview");
+				return undefined;
+			}
+			return undefined;
+		});
+	}
+
+	async function settle() {
+		await act(async () => {
+			await vi.advanceTimersByTimeAsync(500);
+		});
+	}
+
+	it("자식 웹뷰가 없는 실행이면 그 사실을 화면에 적는다", async () => {
+		mockInvoke(false);
+		const bridge = new MockBridge();
+		const { queryByTestId } = render(<BrowserCenterArea naia={bridge} />);
+		await settle();
+
+		// 예전에는 여기가 아무 표시 없는 검은 자리였다. 스크린샷만 보면 제품이
+		// 깨진 것과 구별되지 않아, 사람이 없는 결함을 찾았다.
+		const notice = queryByTestId("browser-surface-notice");
+		expect(notice).not.toBeNull();
+		// 글자로 견주지 않는다 — 로케일이 열넷이라 문구로 재면 한 언어에서만
+		// 참인 단정이 된다. 표에서 읽은 값과 견주어 배선을 잰다.
+		expect(notice?.textContent ?? "").toBe(en["browser.noSurface"]);
+	});
+
+	it("자식 웹뷰가 있으면 안내를 적지 않는다", async () => {
+		mockInvoke(true);
+		const bridge = new MockBridge();
+		const { queryByTestId } = render(<BrowserCenterArea naia={bridge} />);
+		await settle();
+
+		// 이 반대 방향이 없으면 안내가 늘 떠 있어도 통과한다. 그러면 정상
+		// 실행에서 페이지 위에 안내가 겹친다.
+		expect(queryByTestId("browser-surface-notice")).toBeNull();
+	});
+
+	it("주소창으로 이동하다 실패하면 삼키지 않고 말한다", async () => {
+		mockInvoke(true, true);
+		const bridge = new MockBridge();
+		const { queryByTestId, container } = render(
+			<BrowserCenterArea naia={bridge} />,
+		);
+		await settle();
+		expect(queryByTestId("browser-surface-notice")).toBeNull();
+
+		const input = container.querySelector(
+			".browser-app__url-form input",
+		) as HTMLInputElement;
+		const form = container.querySelector(
+			".browser-app__url-form",
+		) as HTMLFormElement;
+		expect(input).not.toBeNull();
+		expect(form).not.toBeNull();
+		await act(async () => {
+			fireEvent.change(input, { target: { value: "example.com" } });
+			fireEvent.submit(form);
+			await vi.advanceTimersByTimeAsync(200);
+		});
+
+		// 실패를 삼키면 주소창만 바뀌고 화면은 검은 채로 남는다 — 사용자는
+		// 자기가 무엇을 잘못했는지조차 알 수 없다. 실측한 그 화면이 그것이다.
+		const notice = queryByTestId("browser-surface-notice");
+		expect(notice).not.toBeNull();
+		const text = notice?.textContent ?? "";
+		// 주소와 이유는 값이라 번역되지 않는다. 둘 다 없으면 사용자는 무엇이
+		// 왜 안 됐는지 알 수 없다.
+		expect(text).toContain("https://example.com");
+		expect(text).toContain("No browser webview");
+		expect(text).toBe(
+			t("browser.navigateFailed", {
+				url: "https://example.com",
+				error: "Error: No browser webview",
+			}),
+		);
 	});
 });

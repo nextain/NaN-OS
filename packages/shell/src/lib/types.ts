@@ -93,6 +93,13 @@ export interface ChatMessage {
 	timestamp: number;
 	cost?: CostEntry;
 	toolCalls?: ToolCall[];
+	/**
+	 * #572 — 이 턴은 답을 만들지 못했다. 원시 오류 문자열(`provider error:
+	 * invalid tool_call index`)을 답변 자리에 흘리는 대신, 이 표시를 단 메시지는
+	 * 사용자 말로 된 안내와 재시도 버튼으로 그려진다. `detail` 은 접힌 영역에
+	 * 두는 원문이고, `retryText` 는 같은 입력을 다시 보내기 위한 사용자 발화다.
+	 */
+	failure?: { detail: string; retryText: string };
 }
 
 // === Agent Protocol (stdin/stdout JSON lines) ===

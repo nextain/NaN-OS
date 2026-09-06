@@ -256,7 +256,10 @@ for (const file of walk(ROOT)) {
 // 화면(세션 카드)을 가리키고 있어 지금 화면에 맞게 고치면서, 그 자리를
 // workspace.editorEmptyHint 로 옮겼다. 파일 수는 그대로다 — Editor.tsx 에는
 // 아직 다른 한국어 줄이 남아 있다.
-const BASELINE_LINES = 522;
+// 522 에서 521 로 한 줄 줄었다. 브라우저 앱의 "표면 없음"·"이동 실패" 안내를
+// browser.noSurface/browser.navigateFailed 로 옮겼다(#576). 같은 회차에 새로
+// 생긴 아바타 없음 안내는 처음부터 avatar.noModel 키로 들어가 집계에 오르지 않았다.
+const BASELINE_LINES = 521;
 const BASELINE_FILES = 61;
 
 console.log(`[untranslated-ui] 화면에 박힌 한국어 ${total}줄 / ${perFile.length}파일 (baseline ${BASELINE_LINES}줄 / ${BASELINE_FILES}파일)`);

@@ -185,6 +185,20 @@ let _browserWvCreated = false;
 
 export function BrowserCenterArea({ naia }: AppCenterProps) {
 	const [status, setStatus] = useState<AppStatus>("launching");
+	/**
+	 * 화면이 비었을 때 **왜 비었는지** 를 말하는 한 줄.
+	 *
+	 * 이 앱은 HTML 이 아니라 네이티브 자식 웹뷰로 페이지를 그린다. 그래서 그
+	 * 웹뷰가 없거나 이동이 실패하면 이 자리가 그냥 검게 남고, 주소창에는 사용자가
+	 * 친 주소가 그대로 남아 성공한 것처럼 보인다. 실측한 탐색에서 example.com 을
+	 * 열고 6초를 기다려도 화면은 검은 채였고 아무 안내도 없었다(#576). 실패를
+	 * 삼키던 `.catch(() => {})` 가 그 침묵의 자리였다.
+	 *
+	 * 전면 덮개로 만들지 않는다 — 브라우저 앱의 오류 덮개가 그 뒤 화면의 클릭을
+	 * 먹은 사고가 있었다(92-browser-app-clicks). 뷰포트 안에 pointer-events 없이
+	 * 얹는다.
+	 */
+	const [surfaceNotice, setSurfaceNotice] = useState("");
 	const [error, setError] = useState("");
 	// viewport div is always rendered so getBoundingClientRect is available
 	const viewportRef = useRef<HTMLDivElement>(null);
@@ -301,12 +315,18 @@ export function BrowserCenterArea({ naia }: AppCenterProps) {
 				setStatus("ready");
 				return;
 			}
-			await invoke("browser_wv_create", {
+			// 이 명령은 **웹뷰가 실제로 생겼는지** 를 돌려준다. 자동 테스트처럼
+			// 자식 웹뷰를 띄우지 않는 실행에서는 성공이면서 `false` 다. 예전에는
+			// 그 구별이 없어 화면이 "준비됨" 인 채로 비어 있었다.
+			const created = await invoke<boolean>("browser_wv_create", {
 				x: rect.left,
 				y: rect.top,
 				width: rect.width,
 				height: rect.height,
 			});
+			// 다시 부르지 않게 표시는 남긴다 — 없는 것을 계속 만들려 하면 매 앱
+			// 전환마다 헛일을 한다.
+			setSurfaceNotice(created === false ? t("browser.noSurface") : "");
 			_browserWvCreated = true;
 			_browserWvCreating = false;
 			// Immediately hide if browser is not the active app on startup.
@@ -706,7 +726,19 @@ export function BrowserCenterArea({ naia }: AppCenterProps) {
 		let url = raw.trim();
 		if (!url) return;
 		if (!url.includes("://")) url = `https://${url}`;
-		invoke("browser_wv_navigate", { url }).catch(() => {});
+		invoke("browser_wv_navigate", { url })
+			.then(() => setSurfaceNotice(""))
+			.catch((error) => {
+				// 삼키지 않는다. 삼키면 주소창만 바뀌고 화면은 검은 채로 남아,
+				// 사용자는 자기가 무엇을 잘못했는지조차 알 수 없다.
+				Logger.warn("BrowserCenterArea", "navigate failed", {
+					url,
+					error: String(error),
+				});
+				setSurfaceNotice(
+					t("browser.navigateFailed", { url, error: String(error) }),
+				);
+			});
 		setCurrentUrl(url);
 		setInputUrl(url);
 	}
@@ -936,7 +968,16 @@ return {
 				<div
 					ref={viewportRef}
 					className="browser-app__viewport browser-app__viewport--embedded"
-				/>
+				>
+					{surfaceNotice && (
+						<div
+							className="browser-app__viewport-notice"
+							data-testid="browser-surface-notice"
+						>
+							{surfaceNotice}
+						</div>
+					)}
+				</div>
 
 				{bookmarksOpen && (
 					<div className="browser-app__bookmark-drawer">

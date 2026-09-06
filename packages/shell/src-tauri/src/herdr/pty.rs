@@ -9,7 +9,9 @@ use tauri::{AppHandle, Emitter};
 
 use crate::pty::{emit_or_buffer_pty_output, PtyCreated, PtyHandle, PtyKind, PtyRegistry};
 
-use super::config::{herdr_bin, herdr_command, validate_herdr, write_embedded_herdr_config};
+use super::config::{
+    herdr_bin, herdr_command, herdr_session_name, validate_herdr, write_embedded_herdr_config,
+};
 
 static HERDR_LAUNCH_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
 const HERDR_SERVER_START_TIMEOUT: Duration = Duration::from_secs(15);
@@ -218,6 +220,12 @@ pub async fn herdr_pty_create(
             })
             .map_err(|e| format!("open Herdr PTY failed: {e}"))?;
         let mut command = CommandBuilder::new(herdr_bin());
+        // 하네스에서는 사람의 herdr 세션에 붙지 않는다 — `herdr_session_name` 을 보라.
+        // `--session` 은 전역 옵션이라 다른 인자보다 앞에 온다.
+        if let Some(session) = herdr_session_name() {
+            command.arg("--session");
+            command.arg(session);
+        }
         command.cwd(&dir_path);
         command.env("HERDR_CONFIG_PATH", config_path);
         let child = pair

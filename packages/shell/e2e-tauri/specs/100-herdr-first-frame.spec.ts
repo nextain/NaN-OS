@@ -36,6 +36,9 @@ describe("100 — Herdr first frame", () => {
 				?.textContent?.trim(),
 		}));
 		expect(state.hasTerminal).toBe(true);
-		expect(state.error).toBeUndefined();
+		// `browser.execute` 는 `undefined` 를 JSON 으로 실어 오며 `null` 로 바꾼다.
+		// `toBeUndefined()` 로 재면 오버레이가 **없을 때에도** 붉어져, 이 스펙은
+		// 어느 실행에서도 통과할 수 없었다(실측: 격리 전후 두 실행 모두 같은 자리).
+		expect(state.error ?? null).toBeNull();
 	});
 });

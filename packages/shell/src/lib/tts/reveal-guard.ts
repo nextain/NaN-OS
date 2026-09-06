@@ -1,56 +1,16 @@
 /**
- * 정체 공개 판정 (#511, #520).
+ * 음성 진행 표시 해제 판정 (#520, #571).
  *
- * 로컬 엔진이 느릴 때 응답이 "생각 중" 으로 무기한 숨는 것을 막으려고, 일정
- * 시간이 지나면 재생을 기다리지 않고 텍스트를 드러낸다(#511). 그런데 워밍업
- * 홀드(#519) 는 엔진이 준비될 때까지 재생을 **일부러** 멈춘 상태다. 정체가
- * 아니다.
+ * 이 파일은 한때 두 가지를 판정했다 — 재생을 앞질러 **본문을 드러낼지**(#511
+ * 정체 공개)와 화면 마스크를 언제 풀지(#513/#520). 둘 다 답 텍스트가 음성 뒤에
+ * 숨어 있다는 전제 위에 있었다.
  *
- * 두 경로가 서로의 상태를 모르면 어긋난다. 콜드 엔진에서 홀드는 5초를 쉽게
- * 넘기고(실측 RTF 7.98), 그때마다 음성보다 텍스트가 먼저 나왔다. 반대로 홀드가
- * 풀린 뒤에도 공개를 계속 미루면 응답이 숨는 원래 문제로 돌아간다.
- *
- * 판정을 여기 한곳에 둬서 규칙이 이름을 갖게 한다.
+ * #571 에서 그 전제를 버렸다. 답 텍스트는 도착하는 대로 그려진다. 그래서 "언제
+ * 드러낼까" 라는 질문 자체가 없어졌고, 정체 공개 판정도 함께 사라졌다. 남은
+ * 질문은 하나다 — **음성 진행 표시를 언제 내리는가.**
  */
 
-export interface RevealGuardInput {
-	/** 이 턴의 텍스트 동기화가 살아 있는가. 죽었으면 판정할 것이 없다. */
-	active: boolean;
-	/** 가드를 걸 때의 세대. 턴이 바뀌면 낡은 타이머는 버린다. */
-	armedGeneration: number;
-	/** 지금 세대. */
-	currentGeneration: number;
-	/** 워밍업 홀드가 열려 있는가. 열려 있으면 재생 지연은 의도된 것이다. */
-	warmingHold: boolean;
-	/** 지금까지 모인 전체 길이. */
-	canonicalLength: number;
-	/** 정체 공개로 이미 보여준 길이. 되감지 않는다. */
-	alreadyRevealedLength: number;
-}
-
-export type RevealGuardDecision =
-	/** 낡은 타이머이거나 동기화가 끝났다. 아무것도 하지 않고 멈춘다. */
-	| { action: "stop" }
-	/** 지금은 공개하지 않고 다시 기다린다. */
-	| { action: "wait"; reason: "warming-hold" | "nothing-new" }
-	/** 재생을 앞질러 텍스트를 드러낸다. */
-	| { action: "reveal" };
-
-export function decideRevealGuard(
-	input: RevealGuardInput,
-): RevealGuardDecision {
-	if (!input.active || input.armedGeneration !== input.currentGeneration) {
-		return { action: "stop" };
-	}
-	// 홀드 중 지연은 정체가 아니다. 홀드가 풀린 뒤부터 정체 판정이 의미를 갖는다.
-	if (input.warmingHold) return { action: "wait", reason: "warming-hold" };
-	if (input.canonicalLength <= input.alreadyRevealedLength) {
-		return { action: "wait", reason: "nothing-new" };
-	}
-	return { action: "reveal" };
-}
-
-export interface MaskReleaseInput {
+export interface VoiceTailReleaseInput {
 	/** 이 턴의 텍스트 동기화가 살아 있는가. */
 	active: boolean;
 	/** 해제 타이머를 걸 때의 세대. */
@@ -63,29 +23,28 @@ export interface MaskReleaseInput {
 	warmingHold: boolean;
 }
 
-export type MaskReleaseDecision =
+export type VoiceTailReleaseDecision =
 	/** 조건이 깨졌다. 해제하지 않고 끝낸다. */
 	| { action: "stop" }
 	/** 홀드 중이다. 해제를 미루고 타이머를 다시 건다. */
 	| { action: "rearm" }
-	/** 마스크를 풀고 전체 본문을 확정한다. */
+	/** 음성 진행 표시를 내린다. */
 	| { action: "release" };
 
 /**
- * 마스크 해제 판정 (#513, #520).
+ * 음성 진행 표시를 언제 내리는가.
  *
- * 마스크 해제는 좌초 방어다. 재생이 영영 오지 않아도 대화가 화면에서 사라지지
- * 않게, LLM 이 끝나고 일정 시간이 지나면 본문을 확정한다. 그런데 그 타이머도
- * 워밍업 홀드를 몰랐다. 콜드 엔진에서는 홀드가 그 시간을 넘기므로, 재생이 한
- * 번도 시작되지 않은 채 전체 본문이 먼저 드러났다 — 정체 가드와 같은 결함이다.
+ * 재생이 영영 오지 않아도 "음성 처리 중…" 이 화면에 남아 있지 않게, LLM 이
+ * 끝나고 일정 시간이 지나면 표시를 내린다. 워밍업 홀드가 열려 있는 동안은
+ * 음성이 정말 오는 중이므로 타이머를 다시 건다.
  *
- * 홀드 중에는 타이머를 다시 건다. 무기한 미루는 것이 아니다. 엔진 기동 재시도는
- * 예산이 정해져 있고, 예산이 끝나면 합성이 실패하면서 실패 경로가 본문을
- * 드러낸다. 홀드는 그 예산만큼만 해제를 늦춘다.
+ * 이 재걸기가 예전에는 본문까지 붙잡았다(#571). 지금은 표시만 붙잡는다 —
+ * 본문은 이 판정과 무관하게 이미 그려져 있으므로, 홀드가 길어져도 사용자가
+ * 잃는 것은 "말하는 중" 표시가 조금 늦게 사라지는 것뿐이다.
  */
-export function decideMaskRelease(
-	input: MaskReleaseInput,
-): MaskReleaseDecision {
+export function decideVoiceTailRelease(
+	input: VoiceTailReleaseInput,
+): VoiceTailReleaseDecision {
 	if (
 		!input.active ||
 		input.armedGeneration !== input.currentGeneration ||

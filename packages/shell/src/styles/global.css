@@ -1806,6 +1806,45 @@ body.resizing-row {
 	border-radius: 2px;
 }
 
+/* #572 — 답을 만들지 못한 턴. 원시 오류를 답변처럼 보이게 두지 않는다. */
+.chat-error-notice {
+	margin: 6px 0;
+	padding: 10px 12px;
+	border: 1px solid rgba(255, 138, 128, 0.45);
+	border-left: 3px solid rgba(255, 138, 128, 0.9);
+	border-radius: 6px;
+	background: rgba(255, 138, 128, 0.08);
+	font-size: 13px;
+}
+.chat-error-notice__lead {
+	margin: 0 0 8px;
+	line-height: 1.5;
+}
+.chat-error-notice__retry {
+	padding: 4px 12px;
+	border: 1px solid rgba(255, 138, 128, 0.6);
+	border-radius: 4px;
+	background: transparent;
+	color: inherit;
+	cursor: pointer;
+	font-size: 12px;
+}
+.chat-error-notice__retry:hover {
+	background: rgba(255, 138, 128, 0.16);
+}
+.chat-error-notice__details {
+	margin-top: 8px;
+	opacity: 0.75;
+	font-size: 12px;
+}
+.chat-error-notice__detail-text {
+	margin: 6px 0 0;
+	max-height: 160px;
+	overflow: auto;
+	white-space: pre-wrap;
+	word-break: break-word;
+}
+
 .chat-message {
 	display: flex;
 	flex-direction: column;
@@ -8068,6 +8107,27 @@ body.resizing-row {
 	height: 100%;
 	object-fit: contain;
 	display: block;
+}
+
+/*
+ * 뷰포트 안에 얹는 한 줄 안내. 페이지를 그리는 것은 네이티브 자식 웹뷰이므로,
+ * 그 웹뷰가 없거나 이동이 실패하면 이 자리가 검은 채로 남는다. 그때 무슨 일이
+ * 있었는지 말한다. 클릭은 먹지 않는다 — 오류 덮개가 그 뒤 화면의 클릭을 막은
+ * 사고가 있었다(92-browser-app-clicks). 웹뷰가 있으면 그 위에 네이티브 표면이
+ * 덮이므로 보이지 않는다.
+ */
+.browser-app__viewport-notice {
+	position: absolute;
+	inset: 0;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	padding: 0 32px;
+	text-align: center;
+	font-size: 13px;
+	line-height: 1.6;
+	color: var(--cream-dim);
+	pointer-events: none;
 }
 
 /* X11-embedded viewport — Chrome is reparented here; no visual background needed */

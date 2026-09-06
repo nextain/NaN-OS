@@ -1,5 +1,5 @@
 import type { ChildProcess } from "node:child_process";
-import { execSync, spawn } from "node:child_process";
+import { execSync, spawn, spawnSync } from "node:child_process";
 import {
 	existsSync,
 	mkdirSync,
@@ -13,6 +13,8 @@ import { basename, dirname, resolve } from "node:path";
 import { execPath } from "node:process";
 import { resolvePairedAgent } from "../scripts/agent-pairing.mjs";
 import { reclaimLeakedAgentChild as reclaimAgentChild } from "./agent-child-lease.js";
+import { reclaimSidecarForRuntimeDir } from "./bgm-sidecar-lease.mjs";
+import { harnessHerdrSessionName } from "./herdr-session.mjs";
 import { startNotifyWebhookStub } from "./notify-webhook-stub.mjs";
 import {
 	CREDENTIALED_KEY_ENV,
@@ -299,6 +301,27 @@ function reclaimLeakedAgentChild(): boolean {
 	return outcome.reclaimed;
 }
 
+/**
+ * 이 실행 자리를 물고 있던 BGM 사이드카를 회수한다 (#577).
+ *
+ * 에이전트 자식과 같은 자리에서, 같은 순서로 돈다 — 자리를 지우기 **전에**.
+ * 자리를 먼저 지우면 `bgm-server.pid` 가 함께 사라져 고아를 가리키던 단서가
+ * 없어진다. 실측에서 그렇게 남은 사이드카가 여덟이었다.
+ *
+ * 자리와 표식과 환경이 모두 맞을 때에만 손댄다. 이름으로 훑지 않는다.
+ */
+function reclaimLeakedBgmSidecar(): boolean {
+	const outcome = reclaimSidecarForRuntimeDir(
+		process.env.NAIA_E2E_RUNTIME_DIR ?? E2E_RUNTIME_DIR,
+	);
+	if (outcome.reclaimed) {
+		console.log(
+			`[e2e] reclaimed leaked BGM sidecar (pid ${outcome.pid}, ${outcome.reason})`,
+		);
+	}
+	return outcome.reclaimed;
+}
+
 function killByName(name: string, force = false): void {
 	try {
 		if (IS_WINDOWS) {
@@ -505,6 +528,30 @@ export async function deliverCredentialedGatewayKey(): Promise<void> {
 	}
 }
 
+/**
+ * 실행이 남긴 herdr 세션 서버를 내린다.
+ *
+ * 셸은 워크스페이스를 열 때 이 세션의 헤드리스 서버를 띄우는데, 그 서버는 앱이
+ * 꺼져도 남는다(그것이 herdr 의 뜻이다 — 세션은 오래 산다). 하네스 세션은 오래
+ * 살 이유가 없으므로 실행 자리와 함께 지운다. 안 지우면 실행마다 서버 하나와
+ * `~/.config/herdr/sessions/` 아래 디렉터리 하나가 쌓인다.
+ */
+function stopHarnessHerdrSession(): void {
+	const runtimeDir = process.env.NAIA_E2E_RUNTIME_DIR;
+	if (!OWNS_RUNTIME_DIR || !runtimeDir) return;
+	const session = harnessHerdrSessionName(runtimeDir);
+	for (const args of [
+		["--session", session, "server", "stop"],
+		["session", "delete", session],
+	]) {
+		try {
+			spawnSync("herdr", args, { stdio: "ignore", timeout: 10_000 });
+		} catch {
+			// herdr 이 없는 기계에서는 할 일이 없다.
+		}
+	}
+}
+
 export const config = {
 	runner: "local" as const,
 
@@ -571,6 +618,7 @@ export const config = {
 		// 회수가 먼저다. 자리를 먼저 비우면 앞 실행이 흘린 리스가 사라져,
 		// 고아를 가리키던 유일한 단서를 우리가 지우게 된다.
 		reclaimLeakedAgentChild();
+		reclaimLeakedBgmSidecar();
 		if (OWNS_RUNTIME_DIR) {
 			const owned = assertOwnedRuntimeDir();
 			rmSync(owned, {
@@ -685,13 +733,6 @@ export const config = {
 		await waitForPort(IN_APP_PORT, 30_000);
 	},
 
-	async afterSession() {
-		// #539(Windows 인앱): 세션이 끝나도 앱 프로세스는 남는다 — 직접 끝낸다.
-		if (IS_WINDOWS) {
-			await forceFreeInAppPort();
-		}
-	},
-
 	async before() {
 		// Each spec runs in its own session (fresh app).
 		// On Windows/WebView2 the session returns before the webview has
@@ -742,7 +783,10 @@ export const config = {
 		permissionPoller = undefined;
 	},
 
-	afterSession() {
+	async afterSession() {
+		// 객체 리터럴에 같은 키가 둘이면 뒤엣것만 남는다. #539 의 윈도우 인앱 포트
+		// 해제가 별도 afterSession 에 있다가 이 훅에 덮여 한 번도 돌지 않았다 —
+		// 그래서 훅은 하나뿐이어야 하고, 그 검사는 계약 테스트가 맡는다.
 		// The service owns the driver processes. Only clean the app/legacy child
 		// after a session so the next native spec starts from a known state.
 		if (!IS_WINDOWS) {
@@ -760,11 +804,16 @@ export const config = {
 		killByName("tauri-driver");
 		killByPort(4448);
 		killByPort(4449);
+		// #539(Windows 인앱): 세션이 끝나도 앱 프로세스는 남는다 — 직접 끝낸다.
+		if (IS_WINDOWS) {
+			await forceFreeInAppPort();
+		}
 	},
 
 	async onComplete() {
 		viteServer?.kill();
 		await notifyStub?.close();
+		stopHarnessHerdrSession();
 		// 붉은 실행의 로그·리스를 볼 수 있어야 원인을 가린다. codex 전용 설정과
 		// 같은 손잡이를 쓴다.
 		if (!OWNS_RUNTIME_DIR) return;

@@ -16,6 +16,7 @@ import {
 } from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { randFloat } from "three/src/math/MathUtils.js";
+import { avatarEmptyNotice } from "../lib/avatar-notice";
 import { getAdkPath } from "../lib/adk-store";
 import { getCameraActions } from "../lib/avatar/camera-actions";
 import { Logger } from "../lib/logger";
@@ -639,6 +640,15 @@ export function AvatarCanvas() {
 		};
 	}, [modelPath, animationPath, setLoaded, setLoadProgress]);
 
+	// 화면이 비었을 때 **왜 비었는지** 를 말한다.
+	//
+	// 아바타 모델은 ADK 가 가진 자산이라 기본값이 빈 문자열이다. 그래서 아직
+	// 캐릭터를 고르지 않았거나, 골라 둔 파일이 사라졌거나, 불러오다 실패하면
+	// 이 자리가 그냥 검게 남는다. 예전에는 그 사실이 `data-avatar-load-error`
+	// 속성과 로그에만 있었다 — 사람이 보는 화면에는 한 글자도 없었다. 첫 실행
+	// 탐색에서 스플래시가 걷힌 뒤 아무것도 없는 화면이 나온 것이 그것이다(#574).
+	const notice = avatarEmptyNotice(modelPath, loadStage);
+
 	return (
 		<div
 			ref={containerRef}
@@ -650,10 +660,35 @@ export function AvatarCanvas() {
 				width: "100%",
 				height: "100%",
 				position: "relative",
-				opacity: loadStage === "ready" || loadStage.startsWith("error:") ? 1 : 0,
+				opacity:
+					loadStage === "ready" || loadStage.startsWith("error:") || !modelPath
+						? 1
+						: 0,
 				transition: "opacity 0.3s ease",
 			}}
 		>
+			{notice && (
+				<div
+					data-testid="avatar-empty-state"
+					style={{
+						position: "absolute",
+						inset: 0,
+						display: "flex",
+						alignItems: "center",
+						justifyContent: "center",
+						padding: "0 32px",
+						textAlign: "center",
+						fontSize: 13,
+						lineHeight: 1.6,
+						color: "rgba(255,255,255,0.55)",
+						// 이 안내가 클릭을 먹으면 그 뒤의 화면을 못 쓴다. 브라우저 앱의
+						// 오류 덮개가 정확히 그 사고를 낸 적이 있다(92-browser-app-clicks).
+						pointerEvents: "none",
+					}}
+				>
+					{notice}
+				</div>
+			)}
 			<div
 				ref={debugRef}
 				style={{

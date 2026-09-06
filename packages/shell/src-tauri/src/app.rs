@@ -1099,11 +1099,13 @@ pub fn app_install_store(
     }
     verify_artifact_signature(digest_bytes.as_slice(), &artifact.signature)?;
 
-    let apps_root = data_home::direct_child_of(
-        std::path::Path::new(&data_home::user_home()),
-        DataHomeChild::Apps,
-    );
-    std::fs::create_dir_all(&apps_root).map_err(|e| e.to_string())?;
+    // 설치·목록·삭제가 같은 자리 함수를 쓰게 한다.
+    //
+    // 이 자리만 `direct_child_of` 를 직접 불렀다. 그러면 옛 `panels` 자리를
+    // 옮기는 이주도, 홈 밖으로 새는지 보는 검사도 건너뛴다 — 설치는 성공했다고
+    // 말하는데 목록·탭에는 안 보이던 #472 가 정확히 그 갈라짐이었다. 스토어
+    // 설치가 그 자리에 다시 서면 같은 사고가 다시 난다.
+    let apps_root = prepare_apps_root(std::path::Path::new(&data_home::user_home()))?;
     let temp = tempfile::Builder::new()
         .prefix(".store-install-")
         .tempdir_in(&apps_root)

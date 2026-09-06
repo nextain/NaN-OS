@@ -28,6 +28,11 @@ import {
 import { hostname } from "node:os";
 import { basename } from "node:path";
 import { delimiter, join, resolve } from "node:path";
+import {
+	describeReclaimed,
+	reclaimStrandedSidecars,
+	surveyStrandedSidecars,
+} from "../packages/shell/e2e-tauri/bgm-sidecar-lease.mjs";
 import { e2eBinaryPath } from "../packages/shell/scripts/agent-pairing.mjs";
 import { inventoryDigestFromFile } from "./lib/inventory-digest.mjs";
 import {
@@ -187,6 +192,39 @@ for (const tier of tiers) {
 	console.log(
 		`  ${tier.padEnd(18)} ${String(mine.filter((s) => s.tier === tier).length).padStart(3)} / ${total} (${owners}대가 나눔)`,
 	);
+}
+
+// 죽은 실행이 남긴 BGM 사이드카를 걷어 낸다 (#577).
+//
+// 왜 러너가 하는가: 자리가 사라진 사이드카는 그 자리의 `bgm-server.pid` 도 함께
+// 잃어서, 다음 실행의 `onPrepare` 가 짚어 갈 단서가 없다. 그것을 아는 유일한
+// 자리는 그 프로세스 자신의 환경(`NAIA_E2E_RUNTIME_DIR`)이다. 2026-09-06
+// naia-os-3090 에서 그렇게 남은 사이드카가 여덟이었고, 그 포트를 물고 있어서
+// 다음 실행의 사이드카가 뜨지 못했다.
+//
+// 이름으로 훑지 않는다(`pkill -f` 금지). 표식과 환경이 둘 다 맞고, 그 환경이
+// 가리키는 자리가 이미 없는 것만 손댄다. 자리가 살아 있으면 그 실행이 아직 돌고
+// 있을 수 있고, 환경에 그 변수가 없으면 애초에 우리 것이 아니다.
+{
+	const survey = surveyStrandedSidecars();
+	const stranded = survey.filter((s) => s.verdict === "stranded");
+	const kept = survey.length - stranded.length;
+	if (survey.length > 0) {
+		console.log(
+			`\n[regression] BGM 사이드카 ${survey.length}개 — 자리 없는 것 ${stranded.length}, 두는 것 ${kept}`,
+		);
+		for (const candidate of survey) {
+			const where = candidate.runtimeDir ?? "(실행 자리 변수 없음)";
+			console.log(`      pid ${candidate.pid} ${candidate.verdict} ${where}`);
+		}
+	}
+	if (dryRun) {
+		if (stranded.length > 0)
+			console.log("      [--dry-run] 걷어 내지 않는다 — 마른 실행은 아무것도 죽이지 않는다.");
+	} else if (stranded.length > 0) {
+		for (const line of describeReclaimed(reclaimStrandedSidecars()))
+			console.log(`      ${line}`);
+	}
 }
 
 // 등급이 요구하는 환경 변수가 실제로 있는지 먼저 본다. 없으면 그 스펙은

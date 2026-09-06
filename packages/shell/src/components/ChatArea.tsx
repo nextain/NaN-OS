@@ -117,7 +117,7 @@ import {
 } from "../lib/stt";
 import { estimateSttCost } from "../lib/tts/cost";
 import { LocalVoiceScheduler } from "../lib/tts/local-voice-scheduler";
-import { decideMaskRelease, decideRevealGuard } from "../lib/tts/reveal-guard";
+import { decideVoiceTailRelease } from "../lib/tts/reveal-guard";
 import {
 	type PipelineVoiceConfig,
 	type SentenceTtsPipeline,
@@ -324,6 +324,47 @@ export function isDiscordConnectionIntent(text: string): boolean {
 }
 
 /**
+ * 답을 만들지 못한 턴 (#572).
+ *
+ * 현장 관측(win-rtx4060): 메모 저장을 시키면 답변 자리에 `[오류] provider error:
+ * invalid tool_call index` 가 그대로 찍혔다. 사용자는 무슨 일이 났는지도, 무엇을
+ * 할 수 있는지도 알 수 없었다. `provider returned reasoning without a final
+ * answer` 도 같은 자리에 같은 방식으로 올라왔다.
+ *
+ * 그래서 이 자리는 세 가지를 함께 준다 — 사용자 말로 된 한 줄, **다시 시도**,
+ * 그리고 접힌 원문. `role="alert"` 은 장식이 아니다: 복구 표지 게이트
+ * (`scripts/check-recovery-affordance.mjs`)가 실패 알림을 그 역할로 찾고, 그
+ * 알림의 하위 트리 안에서만 조작을 센다. 재시도 버튼을 지우면 그 게이트가 이
+ * 자리를 "빠져나갈 길이 없는 화면" 으로 붉힌다 — 그것이 이 버튼의 보증이다.
+ */
+function ChatErrorNotice({
+	detail,
+	onRetry,
+}: {
+	/** 원문 오류. 접힌 영역에만 둔다. */
+	detail: string;
+	/** 같은 입력을 다시 보낸다. */
+	onRetry: () => void;
+}) {
+	return (
+		<div className="chat-error-notice" role="alert">
+			<p className="chat-error-notice__lead">{t("chat.answerFailed.lead")}</p>
+			<button
+				type="button"
+				className="chat-error-notice__retry"
+				onClick={onRetry}
+			>
+				{t("chat.answerFailed.retry")}
+			</button>
+			<details className="chat-error-notice__details">
+				<summary>{t("chat.answerFailed.detailsLabel")}</summary>
+				<pre className="chat-error-notice__detail-text">{detail}</pre>
+			</details>
+		</div>
+	);
+}
+
+/**
  * Visual variant of the chat surface. The component is a SINGLE instance so
  * mode changes preserve the live voice/STT/TTS session:
  *   - "floating": compact lower-left dock below the avatar (default)
@@ -355,31 +396,27 @@ export function ChatArea({
 		return () =>
 			window.removeEventListener("naia:voice-model-preparing", onPreparing);
 	}, []);
-	const [ttsVisibleContent, setTtsVisibleContent] = useState("");
-	const [ttsMaskedMessageId, setTtsMaskedMessageId] = useState<string | null>(
-		null,
-	);
+	// #571 — 답 텍스트는 음성과 무관하게 도착하는 대로 그린다.
+	//
+	// 예전에는 이 자리에 화면 마스크(ttsVisibleContent·ttsMaskedMessageId)와, 그
+	// 마스크가 영영 안 풀리는 것을 막으려고 덧댄 타이머 둘(#511 정체 공개, #520
+	// 마스크 해제)이 있었다. 그런데 워밍업 홀드가 열려 있는 동안 두 타이머는 모두
+	// 스스로를 다시 걸었다(lib/tts/reveal-guard 의 wait/rearm). 음성이 느린 기계에서
+	// 홀드는 쉽게 1분을 넘고, 그동안 본문은 인질이 됐다 — win-rtx4060 실기에서
+	// 비용 배지는 즉시 찍히는데 답은 없고 스피너만 돌았다(#571).
+	//
+	// 이제 남는 것은 음성 진행 상태뿐이다: 아직 말해지지 않은 문장이 몇 개인가.
+	// 텍스트는 store 의 값을 그대로 그린다.
 	const ttsTextSyncRef = useRef({
 		generation: 0,
 		active: false,
 		pending: 0,
 		llmFinished: false,
 		canonical: "",
-		revealCursor: 0,
-		nextReservation: 0,
-		nextReveal: 0,
-		ready: new Map<number, string>(),
 	});
-	const ttsMaskReleaseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
+	const ttsVoiceTailTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
 		null,
 	);
-	// #511 — 정체 공개 pacer: 재생이 멈춰 있어도 5초마다 canonical 을 그대로 내보인다.
-	//        동기화(마스크·reveal 기계)는 유지 — usage 조기완결+마스크 표시 흐름(빈 store 메시지를
-	//        ttsVisibleContent 로 채우는 기존 메커니즘)이 이 표시 경로에 의존한다.
-	const ttsRevealGuardTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
-		null,
-	);
-	const ttsStallRevealLenRef = useRef(0);
 	const cascadeTtsJobsRef = useRef(0);
 	// UC-compaction: agent 가 예산 압박으로 이전 대화를 요약했을 때 표시할 알림(흡수된 메시지 수). null=숨김.
 	const [compactionNotice, setCompactionNotice] = useState<number | null>(null);
@@ -404,6 +441,8 @@ export function ChatArea({
 	const inputRef = useRef<HTMLTextAreaElement>(null);
 	const sessionLoaded = useRef(false);
 	const currentRequestId = useRef<string | null>(null);
+	/** #572 — 마지막으로 보낸 사용자 발화. 실패 알림의 재시도가 이것을 다시 보낸다. */
+	const lastSentTextRef = useRef("");
 	const activeSpeechActivityRef = useRef<{
 		activityId: string;
 		profileGeneration: number;
@@ -490,7 +529,7 @@ export function ChatArea({
 			// paths, playback-unavailable) must also settle the held expression —
 			// settleAvatarEmotionIfIdle is internally guarded against live speech.
 			reserveReveal: (sentence) => {
-				const reveal = reserveTtsTextReveal(sentence);
+				const reveal = reserveTtsSentence(sentence);
 				return () => {
 					reveal();
 					settleAvatarEmotionIfIdle();
@@ -705,8 +744,7 @@ export function ChatArea({
 		// pending. A request may have been lost after the UI entered that state;
 		// keep the button meaningful so a stranded "processing voice" indicator
 		// cannot block the next turn forever.
-		const ttsVisualStateActive =
-			outputStage !== null || ttsMaskedMessageId !== null;
+		const ttsVisualStateActive = outputStage !== null;
 		if (!store.isStreaming && !ttsActive && !ttsVisualStateActive) return;
 		// A cancelled response may never deliver its terminal `finish` chunk.
 		// Do not let an unfinished reasoning block hide the next request.
@@ -736,8 +774,7 @@ export function ChatArea({
 				(useChatStore.getState().isStreaming ||
 					ttsTextSyncRef.current.active ||
 					ttsPlayingRef.current ||
-					outputStage !== null ||
-					ttsMaskedMessageId !== null)
+					outputStage !== null)
 			) {
 				handleCancelStreaming();
 			}
@@ -910,13 +947,8 @@ export function ChatArea({
 		ttsTextSyncRef.current.active = false;
 		ttsTextSyncRef.current.pending = 0;
 		ttsTextSyncRef.current.llmFinished = false;
-		ttsTextSyncRef.current.ready.clear();
-		if (ttsMaskReleaseTimerRef.current)
-			clearTimeout(ttsMaskReleaseTimerRef.current);
-		ttsMaskReleaseTimerRef.current = null;
-		clearTtsRevealGuard(); // #511
+		clearVoiceTailTimer();
 		cascadeTtsJobsRef.current = 0;
-		setTtsMaskedMessageId(null);
 		setOutputStage(null);
 		audioQueueRef.current?.clear();
 		sentenceChunkerRef.current?.clear();
@@ -970,73 +1002,32 @@ export function ChatArea({
 		};
 	}
 
-	// #511 — 로컬 엔진 기동/합성 지연 중 응답이 '생각 중'으로 무기한 숨는 것을 막는다.
-	const TTS_REVEAL_STALL_MS = 5_000;
-	const TTS_MASK_RELEASE_MS = 8_000;
-	function clearTtsRevealGuard(): void {
-		if (ttsRevealGuardTimerRef.current)
-			clearTimeout(ttsRevealGuardTimerRef.current);
-		ttsRevealGuardTimerRef.current = null;
-	}
-	function armTtsRevealGuard(): void {
-		clearTtsRevealGuard();
-		const generation = ttsTextSyncRef.current.generation;
-		ttsRevealGuardTimerRef.current = setTimeout(() => {
-			ttsRevealGuardTimerRef.current = null;
-			const current = ttsTextSyncRef.current;
-			// #511/#520 — 판정은 lib/tts/reveal-guard 가 소유한다. 워밍업 홀드 중
-			// 지연은 정체가 아니라는 규칙이 그 안에 이름을 갖고 있다.
-			const decision = decideRevealGuard({
-				active: current.active,
-				armedGeneration: generation,
-				currentGeneration: current.generation,
-				warmingHold: voiceModelPreparingRef.current,
-				canonicalLength: current.canonical.length,
-				alreadyRevealedLength: ttsStallRevealLenRef.current,
-			});
-			if (decision.action === "stop") return;
-			if (decision.action === "reveal") {
-				Logger.warn(
-					"ChatArea",
-					"TTS reveal stalled — showing text ahead of playback",
-					{
-						shownLen: current.canonical.length,
-						pending: current.pending,
-					},
-				);
-				ttsStallRevealLenRef.current = current.canonical.length;
-				setTtsVisibleContent(current.canonical);
-			}
-			armTtsRevealGuard(); // 동기화가 살아있는 동안 계속 pacing
-		}, TTS_REVEAL_STALL_MS);
+	// #520 — 로컬 엔진이 아직 데워지는 중이면 음성 표시를 성급히 내리지 않는다.
+	//         판정은 lib/tts/reveal-guard 가 소유한다. 이제 이 판정이 정하는 것은
+	//         본문 공개가 아니라 "음성 진행 표시를 언제 내리는가" 뿐이다(#571).
+	const TTS_VOICE_TAIL_MS = 8_000;
+	function clearVoiceTailTimer(): void {
+		if (ttsVoiceTailTimerRef.current)
+			clearTimeout(ttsVoiceTailTimerRef.current);
+		ttsVoiceTailTimerRef.current = null;
 	}
 
 	function beginTtsTextSync(): void {
-		if (ttsMaskReleaseTimerRef.current)
-			clearTimeout(ttsMaskReleaseTimerRef.current);
-		ttsMaskReleaseTimerRef.current = null;
+		clearVoiceTailTimer();
 		const sync = ttsTextSyncRef.current;
 		sync.generation++;
 		sync.active = true;
 		sync.pending = 0;
 		sync.llmFinished = false;
 		sync.canonical = "";
-		sync.revealCursor = 0;
-		sync.nextReservation = 0;
-		sync.nextReveal = 0;
-		sync.ready.clear();
-		setTtsVisibleContent("");
-		setTtsMaskedMessageId(null);
 		setOutputStage("thinking");
-		ttsStallRevealLenRef.current = 0; // #511
-		armTtsRevealGuard(); // #511
 	}
 
 	/**
 	 * Proactive speech arrives as an already-complete activity message rather
-	 * than an ordinary streamed chat response.  Put it through the same visual
-	 * playback fence: keep the canonical transcript in the store, but do not
-	 * reveal it until the exact TTS/avatar media starts playing.
+	 * than an ordinary streamed chat response. The transcript goes into the
+	 * store immediately — the same rule as an ordinary answer (#571) — and only
+	 * the voice progress indicator waits for playback.
 	 */
 	function beginProactiveTtsTextSync(text: string): number {
 		beginTtsTextSync();
@@ -1045,74 +1036,46 @@ export function ChatArea({
 		sync.llmFinished = true;
 		setOutputStage("tts");
 		useChatStore.getState().addMessage({ role: "assistant", content: text });
-		const message = useChatStore.getState().messages.at(-1);
-		setTtsMaskedMessageId(message?.id ?? null);
 		return sync.generation;
 	}
 
-	function revealFailedProactiveTts(text: string, generation: number): void {
+	/** Speech never started for this turn; drop the voice indicator. */
+	function endFailedProactiveTts(generation: number): void {
 		const sync = ttsTextSyncRef.current;
 		if (!sync.active || sync.generation !== generation) return;
-		clearTtsRevealGuard(); // #511
+		clearVoiceTailTimer();
 		sync.active = false;
 		sync.pending = 0;
-		sync.ready.clear();
-		setTtsVisibleContent(text);
-		setTtsMaskedMessageId(null);
 		setOutputStage(null);
 	}
 
-	function reserveTtsTextReveal(sentence: string): () => void {
+	/**
+	 * One sentence has been handed to the voice pipeline. The returned callback
+	 * runs when that sentence actually starts playing.
+	 *
+	 * #571 — this used to also decide when the matching text became visible.
+	 * It no longer touches the transcript: text is already on screen. What is
+	 * left is the count of sentences not yet spoken, which drives the voice
+	 * progress chip and the cancel button.
+	 */
+	function reserveTtsSentence(_sentence: string): () => void {
 		const sync = ttsTextSyncRef.current;
 		if (!sync.active) return () => {};
 		const generation = sync.generation;
-		const reservation = sync.nextReservation++;
 		sync.pending++;
 		setOutputStage("tts");
-		let revealed = false;
+		let settled = false;
 		return () => {
-			if (revealed) return;
-			revealed = true;
+			if (settled) return;
+			settled = true;
 			const current = ttsTextSyncRef.current;
 			if (!current.active || current.generation !== generation) return;
-			current.ready.set(reservation, sentence);
-			while (current.ready.has(current.nextReveal)) {
-				const readySentence = current.ready.get(current.nextReveal) ?? "";
-				current.ready.delete(current.nextReveal);
-				current.nextReveal++;
-				current.pending = Math.max(0, current.pending - 1);
-				const needle = readySentence.trim();
-				const found = needle
-					? current.canonical.indexOf(needle, current.revealCursor)
-					: -1;
-				if (found >= 0) {
-					let end = found + needle.length;
-					while (
-						end < current.canonical.length &&
-						/\s/.test(current.canonical[end])
-					)
-						end++;
-					current.revealCursor = end;
-				} else {
-					current.revealCursor = current.canonical.length;
-				}
-			}
-			// #511 — 정체 공개(pacer)가 이미 보여준 길이보다 되감지 않는다.
-			setTtsVisibleContent(
-				current.canonical.slice(
-					0,
-					Math.max(current.revealCursor, ttsStallRevealLenRef.current),
-				),
-			);
+			current.pending = Math.max(0, current.pending - 1);
 			if (current.pending === 0) setOutputStage(null);
 			if (current.llmFinished && current.pending === 0) {
-				if (ttsMaskReleaseTimerRef.current)
-					clearTimeout(ttsMaskReleaseTimerRef.current);
-				ttsMaskReleaseTimerRef.current = null;
-				clearTtsRevealGuard(); // #511
+				clearVoiceTailTimer();
 				commitStrandedCanonical(); // #513
 				current.active = false;
-				setTtsMaskedMessageId(null);
 				setOutputStage(null);
 			}
 		};
@@ -1138,46 +1101,38 @@ export function ChatArea({
 		}
 	}
 
-	function finishStreamingWithTtsMask(terminal = true): void {
+	function finishStreamingWithVoiceTail(terminal = true): void {
 		const store = useChatStore.getState();
 		const wasStreaming = store.isStreaming;
 		if (wasStreaming) store.finishStreaming();
 		const sync = ttsTextSyncRef.current;
 		if (!sync.active) return;
 		if (terminal) sync.llmFinished = true;
-		if (wasStreaming) {
-			const completed = useChatStore
-				.getState()
-				.messages.slice()
-				.reverse()
-				.find((message) => message.role === "assistant");
-			setTtsMaskedMessageId(completed?.id ?? null);
-		}
 		// #520 — 대기 중인 문장이 없어도 워밍업 홀드가 열려 있으면 음성은 오는
 		// 중이다. 콜드 엔진에서는 합성이 아직 한 문장도 내놓지 못한 상태가
-		// 정상이므로, 여기서 즉시 풀면 텍스트가 항상 재생을 앞지른다.
+		// 정상이므로 여기서 표시를 즉시 내리면 곧 다시 켜진다. 본문은 이미
+		// 화면에 있으므로(#571) 이 대기는 텍스트를 붙잡지 않는다.
 		if (terminal && sync.pending === 0 && !voiceModelPreparingRef.current) {
-			clearTtsRevealGuard(); // #511
+			clearVoiceTailTimer();
 			commitStrandedCanonical(); // #513
 			sync.active = false;
-			setTtsMaskedMessageId(null);
 			setOutputStage(null);
 			return;
 		}
 		if (terminal) {
-			armTtsMaskRelease(sync.generation);
+			armVoiceTailRelease(sync.generation);
 		}
 	}
 
-	// #520 — 좌초 방어 해제도 워밍업 홀드를 봐야 한다. 판정은
-	// lib/tts/reveal-guard 가 소유하고, 홀드 중이면 타이머를 다시 건다.
-	function armTtsMaskRelease(generation: number): void {
-		if (ttsMaskReleaseTimerRef.current)
-			clearTimeout(ttsMaskReleaseTimerRef.current);
-		ttsMaskReleaseTimerRef.current = setTimeout(() => {
-			ttsMaskReleaseTimerRef.current = null;
+	// #520/#571 — 음성이 영영 오지 않아도 진행 표시가 남아 있지 않게 한다.
+	// 판정은 lib/tts/reveal-guard 가 소유한다. 이 타이머가 정하는 것은 표시뿐이며,
+	// 본문은 이 경로와 무관하게 이미 그려져 있다.
+	function armVoiceTailRelease(generation: number): void {
+		clearVoiceTailTimer();
+		ttsVoiceTailTimerRef.current = setTimeout(() => {
+			ttsVoiceTailTimerRef.current = null;
 			const current = ttsTextSyncRef.current;
-			const decision = decideMaskRelease({
+			const decision = decideVoiceTailRelease({
 				active: current.active,
 				armedGeneration: generation,
 				currentGeneration: current.generation,
@@ -1186,18 +1141,14 @@ export function ChatArea({
 			});
 			if (decision.action === "stop") return;
 			if (decision.action === "rearm") {
-				armTtsMaskRelease(generation);
+				armVoiceTailRelease(generation);
 				return;
 			}
-			clearTtsRevealGuard(); // #511
 			commitStrandedCanonical(); // #513
 			current.active = false;
 			current.pending = 0;
-			current.ready.clear();
-			setTtsVisibleContent(current.canonical);
-			setTtsMaskedMessageId(null);
 			setOutputStage(null);
-		}, TTS_MASK_RELEASE_MS);
+		}, TTS_VOICE_TAIL_MS);
 	}
 
 	function initializeSpeechTts(config: AppConfig): void {
@@ -1510,13 +1461,13 @@ export function ChatArea({
 							ttsTextSyncRef.current.generation !== ttsGeneration ||
 							!ttsTextSyncRef.current.active
 						) {
-							if (!config) revealFailedProactiveTts(text, ttsGeneration);
+							if (!config) endFailedProactiveTts(ttsGeneration);
 							return;
 						}
 						initializeSpeechTts(config);
 						const chunker = sentenceChunkerRef.current;
 						if (!chunker) {
-							revealFailedProactiveTts(text, ttsGeneration);
+							endFailedProactiveTts(ttsGeneration);
 							return;
 						}
 						const sentences = chunker.feed(text);
@@ -1525,10 +1476,10 @@ export function ChatArea({
 						if (remaining) sendSentenceToTts(remaining);
 						finishLocalVoicePrebuffer();
 						if (sentences.length === 0 && !remaining) {
-							revealFailedProactiveTts(text, ttsGeneration);
+							endFailedProactiveTts(ttsGeneration);
 						}
 					})
-					.catch(() => revealFailedProactiveTts(text, ttsGeneration));
+					.catch(() => endFailedProactiveTts(ttsGeneration));
 				return;
 			}
 			// `finish` closes one streamed turn, not the owning long-lived speech
@@ -1668,6 +1619,8 @@ export function ChatArea({
 		// without a final chunk (cancel, disconnect, provider error).
 		thinkingStreamFilterRef.current.reset();
 		currentRequestId.current = requestId;
+		// #572 — 실패했을 때 "같은 입력을 다시" 를 제안하려면 그 입력을 알아야 한다.
+		lastSentTextRef.current = text;
 
 		setInput("");
 		useChatStore.getState().addMessage({ role: "user", content: text });
@@ -1911,14 +1864,14 @@ export function ChatArea({
 		} catch (err) {
 			const errStr = String(err);
 			if (errStr.includes("Naia provider requires")) {
-				finishStreamingWithTtsMask();
+				finishStreamingWithVoiceTail();
 				finishLocalVoicePrebuffer();
 				setShowNoAuthModal(true);
 				completeCurrentRequest(requestId);
 			} else {
 				useChatStore.getState().appendStreamChunk(`
 [${t("chat.error")}] ${errStr}`);
-				finishStreamingWithTtsMask();
+				finishStreamingWithVoiceTail();
 				finishLocalVoicePrebuffer();
 				completeCurrentRequest(requestId);
 			}
@@ -2384,7 +2337,7 @@ export function ChatArea({
 					store.streamingContent.length > 0 ||
 					store.streamingToolCalls.length > 0
 				) {
-					finishStreamingWithTtsMask(false);
+					finishStreamingWithVoiceTail(false);
 				}
 				store.addCostEntry({
 					inputTokens: chunk.inputTokens,
@@ -2411,7 +2364,7 @@ export function ChatArea({
 						sentenceChunkerRef.current = null;
 					}
 				}
-				finishStreamingWithTtsMask();
+				finishStreamingWithVoiceTail();
 				finishLocalVoicePrebuffer();
 				completeCurrentRequest(chunk.requestId);
 				break;
@@ -2492,10 +2445,17 @@ export function ChatArea({
 					}
 					if (!pipelineActiveRef.current) sentenceChunkerRef.current = null;
 				}
-				store.appendStreamChunk(
-					`\n[${t("chat.error")}] ${wireErrorMessage(chunk.code, chunk.message)}`,
-				);
-				finishStreamingWithTtsMask();
+				// #572 — 원시 오류를 답변 자리에 흘리지 않는다. 지금까지 온 본문이
+				// 있으면 그대로 보존하고, 실패는 재시도를 낀 별도 알림으로 세운다.
+				finishStreamingWithVoiceTail();
+				useChatStore.getState().addMessage({
+					role: "assistant",
+					content: "",
+					failure: {
+						detail: wireErrorMessage(chunk.code, chunk.message),
+						retryText: lastSentTextRef.current,
+					},
+				});
 				finishLocalVoicePrebuffer();
 				completeCurrentRequest(chunk.requestId);
 				break;
@@ -3826,19 +3786,6 @@ export function ChatArea({
 			});
 		}
 	}
-	// `finishStreaming()` moves the streaming text into `messages` synchronously,
-	// while React state updates for the concrete message id are batched. Derive the
-	// just-completed target during that handoff so the full answer cannot flash for
-	// one paint before `ttsMaskedMessageId` catches up.
-	const effectiveTtsMaskedMessageId =
-		ttsMaskedMessageId ??
-		(!isStreaming && ttsTextSyncRef.current.active
-			? (messages
-					.slice()
-					.reverse()
-					.find((message) => message.role === "assistant")?.id ?? null)
-			: null);
-
 	return (
 		<>
 			<div className={`chat-app chat-app--${variant}`}>
@@ -4010,21 +3957,26 @@ export function ChatArea({
 								{msg.toolCalls?.map((tc) => (
 									<DeferredToolActivity key={tc.toolCallId} tool={tc} />
 								))}
-								<div className="message-content">
-									{msg.role === "assistant" ? (
-										<DeferredChatMarkdown>
-											{
-												extractExpression(
-													msg.id === effectiveTtsMaskedMessageId
-														? ttsVisibleContent
-														: msg.content,
-												).cleanText
-											}
-										</DeferredChatMarkdown>
-									) : (
-										msg.content
-									)}
-								</div>
+								{msg.failure ? (
+									<ChatErrorNotice
+										detail={msg.failure.detail}
+										onRetry={() => {
+											const retryText = msg.failure?.retryText ?? "";
+											if (retryText) handleSend(retryText);
+										}}
+									/>
+								) : (
+									<div className="message-content">
+										{msg.role === "assistant" ? (
+											// #571 — 음성 상태와 무관하게 본문을 그대로 그린다.
+											<DeferredChatMarkdown>
+												{extractExpression(msg.content).cleanText}
+											</DeferredChatMarkdown>
+										) : (
+											msg.content
+										)}
+									</div>
+								)}
 								{msg.cost && provider !== "ollama" && provider !== "vllm" && (
 									<span className="cost-badge">
 										{formatCost(msg.cost.cost)} ·{" "}
@@ -4058,14 +4010,9 @@ export function ChatArea({
 							))}
 							<div className="message-content">
 								{streamingContent ? (
+									// #571 — 스트리밍 본문도 TTS 큐를 기다리지 않는다.
 									<DeferredChatMarkdown>
-										{
-											extractExpression(
-												ttsTextSyncRef.current.active
-													? ttsVisibleContent
-													: streamingContent,
-											).cleanText
-										}
+										{extractExpression(streamingContent).cleanText}
 									</DeferredChatMarkdown>
 								) : null}
 								<span className="cursor-blink">▌</span>
@@ -4198,10 +4145,7 @@ export function ChatArea({
 							{messageQueue.length} {t("chat.queued")}
 						</span>
 					)}
-					{isStreaming ||
-					ttsMaskedMessageId !== null ||
-					outputStage !== null ||
-					ttsPlaying ? (
+					{isStreaming || outputStage !== null || ttsPlaying ? (
 						<button
 							type="button"
 							onClick={handleCancelStreaming}

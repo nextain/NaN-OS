@@ -283,11 +283,13 @@ describe("ChatArea", () => {
 			message: "provider rejected the API key",
 		});
 
+		// #572 — 원문은 답변 본문이 아니라 실패 표시의 접힌 상세로 간다.
 		await waitFor(() =>
-			expect(useChatStore.getState().messages.at(-1)?.content).toContain(
+			expect(useChatStore.getState().messages.at(-1)?.failure?.detail).toContain(
 				"provider rejected the API key",
 			),
 		);
+		expect(useChatStore.getState().messages.at(-1)?.content).toBe("");
 		expect(useChatStore.getState().isStreaming).toBe(false);
 		localStorage.removeItem("naia-config");
 	});
@@ -1283,7 +1285,11 @@ describe("ChatArea", () => {
 		localStorage.removeItem("naia-config");
 	});
 
-	it("reveals TTS chat text only when embedded avatar playback starts", async () => {
+	// #571 — 예전 계약은 "재생이 시작될 때까지 본문을 감춘다" 였다. 그 감춤이 음성이
+	// 느린 기계에서 본문을 인질로 잡았다(win-rtx4060: 비용 배지만 찍히고 60초 공백).
+	// 지금 계약은 그 반대다 — 본문은 재생과 무관하게 즉시 그려지고, 재생 상태는
+	// 별도의 진행 표시로만 나타난다.
+	it("renders chat text immediately and tracks avatar playback only in the voice chip", async () => {
 		const playback = deferred<void>();
 		const interrupt = vi.fn();
 		const playAuthoredClip = vi.fn(
@@ -1325,7 +1331,8 @@ describe("ChatArea", () => {
 		});
 
 		await waitFor(() => expect(playAuthoredClip).toHaveBeenCalledTimes(1));
-		expect(screen.queryByText("Visible with speech.")).toBeNull();
+		// 재생이 시작되기 전에 이미 읽을 수 있어야 한다.
+		expect(screen.getByText("Visible with speech.")).toBeDefined();
 		expect(screen.getByRole("status").getAttribute("data-stage")).toBe(
 			"render",
 		);
@@ -1333,10 +1340,8 @@ describe("ChatArea", () => {
 			onPlaybackReady?: () => void;
 		};
 		playbackOptions.onPlaybackReady?.();
-		await waitFor(() =>
-			expect(screen.getByText("Visible with speech.")).toBeDefined(),
-		);
-		expect(screen.queryByRole("status")).toBeNull();
+		await waitFor(() => expect(screen.queryByRole("status")).toBeNull());
+		expect(screen.getByText("Visible with speech.")).toBeDefined();
 		interrupt.mockClear();
 		const cancel = screen.getByTitle("ESC");
 		fireEvent.click(cancel);
@@ -1349,7 +1354,124 @@ describe("ChatArea", () => {
 		localStorage.removeItem("naia-config");
 	});
 
-	it("keeps the completed message masked and preserves CJK spacing across sentences", async () => {
+	// #572 — 현장 관측: 메모 저장을 시키면 답변 자리에 `[오류] provider error:
+	// invalid tool_call index` 가 그대로 찍혔다. 계약은 셋이다 — 원시 문자열이
+	// 답변 버블에 없을 것, 사용자 말로 된 안내와 재시도가 있을 것, 원문은 접힌
+	// 영역에만 있을 것. 재시도는 같은 입력을 다시 보낸다.
+	it("replaces a raw provider error with a recoverable notice and retries the same input", async () => {
+		localStorage.setItem(
+			"naia-config",
+			JSON.stringify({
+				apiKey: "test-key",
+				provider: "gemini",
+				model: "gemini-2.5-flash",
+			}),
+		);
+		render(<ChatArea />);
+		const input = screen.getByPlaceholderText(/message/i);
+		fireEvent.change(input, { target: { value: "save a memo" } });
+		fireEvent.keyDown(input, { key: "Enter" });
+		await waitFor(() => expect(capturedRequests).toHaveLength(1));
+		const request = capturedRequests[0];
+		const raw = "provider error: invalid tool_call index";
+		request.onChunk({
+			type: "error",
+			requestId: request.requestId,
+			message: raw,
+		});
+
+		const alert = await screen.findByRole("alert");
+		expect(alert.textContent).toContain("I could not finish that answer");
+		// 원문은 접힌 영역 안에만 둔다.
+		expect(alert.querySelector("details")?.textContent).toContain(raw);
+		// 답변 버블 어디에도 원시 문자열이 없다.
+		for (const bubble of document.querySelectorAll(".message-content")) {
+			expect(bubble.textContent ?? "").not.toContain("invalid tool_call index");
+		}
+
+		fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+		await waitFor(() => expect(capturedRequests).toHaveLength(2));
+		expect(capturedRequests[1].message).toBe("save a memo");
+		localStorage.removeItem("naia-config");
+	});
+
+	// #571 — 이 기계(리눅스)는 음성이 빨라 현장 증상이 재현되지 않는다. 그래서
+	// 합성을 5초 뒤에 끝나게 만들어 느린 기계를 흉내낸다. 계약은 하나다:
+	// **답 텍스트는 TTS 합성이 끝나기 전에 이미 DOM 에 있다.** 현장 보고(win-rtx4060)
+	// 에서 비용 배지는 즉시 찍히는데 본문만 없었으므로, 둘이 같은 시점에 있는지도
+	// 함께 잰다.
+	it("shows the answer and its cost badge before a slow TTS synthesis finishes", async () => {
+		let finishSynthesis!: () => void;
+		const synthesis = new Promise<{ audioBase64: string; costUsd: number }>(
+			(resolve) => {
+				finishSynthesis = () =>
+					resolve({ audioBase64: "slow-audio", costUsd: 0 });
+			},
+		);
+		ttsSyncMocks.synthesizeTts.mockReturnValue(synthesis);
+		ttsSyncMocks.streamsAvatarPcm.mockReturnValue(false);
+		localStorage.setItem(
+			"naia-config",
+			JSON.stringify({
+				apiKey: "test-key",
+				provider: "gemini",
+				model: "gemini-2.5-flash",
+				ttsEnabled: true,
+				ttsProvider: "naia-local-voice",
+				vllmTtsHost: "http://localhost:8910",
+			}),
+		);
+
+		render(<ChatArea />);
+		const input = screen.getByPlaceholderText(/message/i);
+		fireEvent.change(input, { target: { value: "slow voice" } });
+		fireEvent.keyDown(input, { key: "Enter" });
+		await waitFor(() => expect(capturedRequests).toHaveLength(1));
+		const request = capturedRequests[0];
+		const answer = "Text must not wait for the voice.";
+		request.onChunk({
+			type: "text",
+			requestId: request.requestId,
+			text: answer,
+		});
+		request.onChunk({
+			type: "usage",
+			requestId: request.requestId,
+			inputTokens: 1,
+			outputTokens: 2,
+			cost: 0.0059,
+			model: "test",
+		});
+		request.onChunk({ type: "finish", requestId: request.requestId });
+		await waitFor(() => expect(ttsSyncMocks.synthesizeTts).toHaveBeenCalled());
+
+		// 합성은 아직 끝나지 않았다 — 그런데도 본문과 비용 배지가 함께 있어야 한다.
+		expect(screen.getByText(answer)).toBeDefined();
+		await waitFor(() =>
+			expect(document.querySelector(".cost-badge")).not.toBeNull(),
+		);
+		expect(screen.getByText(answer)).toBeDefined();
+
+		// 느린 기계 흉내: 합성은 5초 뒤에야 끝난다. 그 뒤에도 본문은 그대로다.
+		vi.useFakeTimers();
+		setTimeout(finishSynthesis, 5_000);
+		await act(async () => {
+			await vi.advanceTimersByTimeAsync(5_000);
+		});
+		expect(screen.getByText(answer)).toBeDefined();
+		vi.useRealTimers();
+		ttsSyncMocks.synthesizeTts.mockResolvedValue({
+			audioBase64: "default-audio",
+			costUsd: 0,
+		});
+		localStorage.removeItem("naia-config");
+	});
+
+	// #571 — 문장 단위 공개가 사라지면서 "문장 사이에 공백이 끼는가" 는 이어 붙인
+	// 본문을 그대로 그리는 문제가 됐다. 계약은 남는다: 두 문장이 붙어 나오되
+	// 사이에 없던 공백이 생기지 않는다. 달라진 것은 시점뿐이다 — 재생을 기다리지
+	// 않는다.
+	it("renders both CJK sentences as they arrive without inserting a space", async () => {
 		const playAuthoredClip = vi.fn().mockResolvedValue(undefined);
 		useCascadeAvatarStore.setState({
 			renderer: {
@@ -1381,13 +1503,13 @@ describe("ChatArea", () => {
 		const request = capturedRequests[0];
 		const first = "这是第一句测试内容。";
 		const second = "这是第二句测试内容。";
-		let completedBeforePlayback = false;
-		const completedObserver = new MutationObserver(() => {
-			if (document.body.textContent?.includes(first + second)) {
-				completedBeforePlayback = true;
+		let spacedApart = false;
+		const spacingObserver = new MutationObserver(() => {
+			if (document.body.textContent?.includes(`${first} ${second}`)) {
+				spacedApart = true;
 			}
 		});
-		completedObserver.observe(document.body, {
+		spacingObserver.observe(document.body, {
 			childList: true,
 			characterData: true,
 			subtree: true,
@@ -1413,28 +1535,26 @@ describe("ChatArea", () => {
 		request.onChunk({ type: "finish", requestId: request.requestId });
 
 		await waitFor(() => expect(playAuthoredClip).toHaveBeenCalledTimes(2));
-		expect(completedBeforePlayback).toBe(false);
-		completedObserver.disconnect();
-		expect(screen.queryByText(first + second)).toBeNull();
+		// 재생 콜백이 하나도 오지 않은 지금 이미 전문이 읽힌다.
+		expect(document.body.textContent).toContain(first + second);
 		const firstOptions = playAuthoredClip.mock.calls[0][1] as {
 			onPlaybackReady?: () => void;
 		};
 		firstOptions.onPlaybackReady?.();
-		await waitFor(() => expect(screen.getByText(first)).toBeDefined());
-		expect(document.body.textContent).not.toContain(`${first} ${second}`);
-
 		const secondOptions = playAuthoredClip.mock.calls[1][1] as {
 			onPlaybackReady?: () => void;
 		};
 		secondOptions.onPlaybackReady?.();
-		await waitFor(() =>
-			expect(document.body.textContent).toContain(first + second),
-		);
-		expect(document.body.textContent).not.toContain(`${first} ${second}`);
+		await waitFor(() => expect(screen.queryByRole("status")).toBeNull());
+		expect(document.body.textContent).toContain(first + second);
+		spacingObserver.disconnect();
+		expect(spacedApart).toBe(false);
 		localStorage.removeItem("naia-config");
 	});
 
-	it("releases a completed answer when a playback-ready callback is lost", async () => {
+	// #571 — 재생 준비 콜백이 유실돼도 본문은 애초에 가려져 있지 않다. 남은 계약은
+	// "말하는 중" 표시가 영영 남지 않는가이다.
+	it("keeps a completed answer readable and drops the voice chip when a playback-ready callback is lost", async () => {
 		const playAuthoredClip = vi.fn().mockReturnValue(new Promise(() => {}));
 		useCascadeAvatarStore.setState({
 			renderer: {
@@ -1471,7 +1591,7 @@ describe("ChatArea", () => {
 			text: answer,
 		});
 		await waitFor(() => expect(playAuthoredClip).toHaveBeenCalledTimes(1));
-		expect(screen.queryByText(answer)).toBeNull();
+		expect(screen.getByText(answer)).toBeDefined();
 
 		vi.useFakeTimers();
 		request.onChunk({ type: "finish", requestId: request.requestId });
@@ -1479,6 +1599,7 @@ describe("ChatArea", () => {
 			await vi.advanceTimersByTimeAsync(8_000);
 		});
 		expect(screen.getByText(answer)).toBeDefined();
+		expect(screen.queryByRole("status")).toBeNull();
 		vi.useRealTimers();
 		localStorage.removeItem("naia-config");
 	});

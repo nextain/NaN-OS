@@ -34,8 +34,19 @@ export function useAppReady(
 	localeHydrated: boolean,
 ): boolean {
 	const avatarLoaded = useAvatarStore((state) => state.isLoaded);
+	const avatarModelPath = useAvatarStore((state) => state.modelPath);
 	const [timedOut, setTimedOut] = useState(false);
-	const skipAvatarWait = showAdkSetup || showOnboarding || isNewCore();
+	// 띄울 모델이 없으면 기다릴 것도 없다.
+	//
+	// 아바타 모델은 ADK 가 가진 자산이라 기본값이 빈 문자열이다
+	// (`avatar-presets.ts` 의 DEFAULT_AVATAR_MODEL). 그래서 아직 캐릭터를
+	// 고르지 않았거나 비디오 아바타를 쓰는 사용자는 `modelPath` 가 비어 있고,
+	// `AvatarCanvas` 는 그 경우 아무것도 불러오지 않으므로 `isLoaded` 가
+	// 영영 참이 되지 않는다. 예전에는 그때도 아래 5초 시한을 다 쓰고서야
+	// 스플래시가 걷혔다 — 부팅마다 아무 진행 표시 없이 5초를 잃었고, 실측한
+	// 첫 실행에서 스플래시는 8초를 머물렀다(#574).
+	const skipAvatarWait =
+		showAdkSetup || showOnboarding || isNewCore() || !avatarModelPath;
 
 	useEffect(() => {
 		if (skipAvatarWait || avatarLoaded) return;

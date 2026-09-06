@@ -277,20 +277,24 @@ pub fn browser_wv_check() -> bool {
 /// `run_on_main_thread` + `rx.recv()` internally — calling it from the
 /// main thread deadlocks because the main thread is already blocked.
 #[tauri::command]
+/// Returns whether a child webview is actually present after the call.
+/// `false` means this run deliberately has no browser surface (E2E mode) —
+/// the caller must say so instead of showing an empty area that reads as a
+/// product defect. That silence cost a full investigation round (#576).
 pub async fn browser_wv_create(
     app: AppHandle,
     x: f64,
     y: f64,
     width: f64,
     height: f64,
-) -> Result<(), String> {
+) -> Result<bool, String> {
     // Skip in E2E test mode — a second WebView2 in the same window disrupts the
     // WebDriver CDP session (tauri-driver attaches to exactly one WebView per
     // session; a child WebView causes "session deleted as the browser has closed
     // the connection" within seconds of startup).
     if crate::debug_e2e_enabled() {
         crate::log_verbose("[browser_wv] E2E mode — skipping child webview creation");
-        return Ok(());
+        return Ok(false);
     }
 
     let _lock = browser_create_lock().lock().await;
@@ -302,7 +306,7 @@ pub async fn browser_wv_create(
             .map_err(|e| format!("set_position: {e}"))?;
         wv.set_size(LogicalSize::new(width, height))
             .map_err(|e| format!("set_size: {e}"))?;
-        return Ok(());
+        return Ok(true);
     }
 
     let window = app.get_window("main").ok_or("Main window not found")?;
@@ -412,7 +416,7 @@ pub async fn browser_wv_create(
     }
 
     crate::log_verbose("[browser_wv] child webview created");
-    Ok(())
+    Ok(true)
 }
 
 /// Resize / reposition the browser webview (called on app resize).

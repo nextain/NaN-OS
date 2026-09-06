@@ -35,8 +35,50 @@ pub(super) fn herdr_bin() -> std::ffi::OsString {
         .unwrap_or_else(|| std::ffi::OsString::from("herdr"))
 }
 
+/// e2e 하네스가 붙을 herdr 세션 이름. 제품 실행에서는 `None`.
+///
+/// 워크스페이스 탭이 사람의 herdr 세션을 그대로 보여 주는 것은 **설계**다. 그런데
+/// 그 설계가 하네스에도 그대로 적용되면, e2e 가 워크스페이스를 열 때마다 사람이
+/// 지금 쓰고 있는 세션에 클라이언트가 하나 더 붙어 그 세션을 앱 터미널 크기로
+/// 리사이즈한다(실측: `~/.config/herdr/herdr-server.log` 의 `client resize …
+/// cols=80 rows=24`). 사람이 보던 화면이 시험 때문에 움직인다.
+///
+/// herdr 은 이름 있는 세션마다 디렉터리와 소켓을 따로 둔다
+/// (`herdr session list` 의 `directory`·`socket` 열). 그래서 하네스일 때만
+/// `--session <이름>` 을 얹어 빈 세션에 붙는다. 제품 경로는 한 글자도 바뀌지 않는다.
+pub(super) fn herdr_session_name() -> Option<String> {
+    crate::e2e_runtime_dir().map(|runtime| session_name_for_runtime(&runtime))
+}
+
+/// 실행 자리 이름에서 세션 이름을 만든다. 실행마다 다른 이름이어야 두 실행이
+/// 서로의 세션에 붙지 않는다.
+fn session_name_for_runtime(runtime: &std::path::Path) -> String {
+    let raw = runtime
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or("run");
+    let tag: String = raw
+        .strip_prefix("naia-shell-e2e-")
+        .unwrap_or(raw)
+        .chars()
+        .map(|c| if c.is_ascii_alphanumeric() { c } else { '-' })
+        .collect();
+    let tag = tag.trim_matches('-');
+    if tag.is_empty() {
+        "naia-e2e".to_string()
+    } else {
+        format!("naia-e2e-{tag}")
+    }
+}
+
+/// `herdr` 를 부르는 모든 자리는 이 함수를 지난다 — 하네스 세션이 한 자리에서
+/// 얹힌다. `--session` 은 하위 명령보다 **앞**에 와야 하는 전역 옵션이라 여기서
+/// 먼저 넣는다.
 pub(super) fn herdr_command() -> std::process::Command {
     let mut command = std::process::Command::new(herdr_bin());
+    if let Some(session) = herdr_session_name() {
+        command.arg("--session").arg(session);
+    }
     crate::platform::hide_console(&mut command);
     command
 }
@@ -216,6 +258,30 @@ pub(super) fn validate_herdr() -> Result<String, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn harness_session_name_is_per_run_and_never_the_default_session() {
+        // 사람의 세션은 `default` 다. 하네스가 그 이름을 만들어 내면 안 된다.
+        let name = session_name_for_runtime(std::path::Path::new("/tmp/naia-shell-e2e-4448"));
+        assert_eq!(name, "naia-e2e-4448");
+        assert_ne!(name, "default");
+
+        // 실행마다 자리 이름이 다르므로 세션도 다르다.
+        assert_ne!(
+            session_name_for_runtime(std::path::Path::new("/tmp/naia-shell-e2e-4448")),
+            session_name_for_runtime(std::path::Path::new("/tmp/naia-shell-e2e-4449")),
+        );
+
+        // 이름에 쓸 수 없는 글자는 지운다. 빈 이름이 되면 고정 이름으로 떨어진다.
+        assert_eq!(
+            session_name_for_runtime(std::path::Path::new("/tmp/run dir.1")),
+            "naia-e2e-run-dir-1"
+        );
+        assert_eq!(
+            session_name_for_runtime(std::path::Path::new("/tmp/---")),
+            "naia-e2e"
+        );
+    }
 
     #[test]
     fn embedded_config_preserves_other_settings_and_replaces_sidebar_values() {

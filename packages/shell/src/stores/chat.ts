@@ -41,7 +41,7 @@ interface ChatState {
 	setMessages: (messages: ChatMessage[]) => void;
 	addMessage: (
 		msg: Pick<ChatMessage, "role" | "content"> &
-			Partial<Pick<ChatMessage, "cost">>,
+			Partial<Pick<ChatMessage, "cost" | "failure">>,
 	) => void;
 	updateLastMessage: (role: ChatMessage["role"], content: string) => void;
 	startStreaming: () => void;
