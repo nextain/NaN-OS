@@ -173,6 +173,7 @@ vi.mock("@tauri-apps/plugin-process", () => ({
 	relaunch: vi.fn().mockResolvedValue(undefined),
 }));
 import { App } from "../App";
+import { useAppStore } from "../stores/app";
 
 describe("App discord deep-link persistence", () => {
 	afterEach(() => {
@@ -190,6 +191,7 @@ describe("App discord deep-link persistence", () => {
 		backgroundState.listNaiaAssets.mockImplementation(async () => backgroundState.assets);
 		backgroundState.toLocalBlobUrl.mockReset();
 		backgroundState.toLocalBlobUrl.mockImplementation(async (path: string) => path);
+		useAppStore.setState(useAppStore.getInitialState());
 	});
 
 	it("waits for the ADK background preference when assets resolve first", async () => {
@@ -340,6 +342,67 @@ describe("App discord deep-link persistence", () => {
 				document.querySelector(".app-root")?.getAttribute("data-app-ready"),
 			).toBe("true");
 			expect(screen.queryByRole("button", { name: "onboarding" })).toBeNull();
+		});
+	});
+
+	it("hydrates the persisted TTS enabled state into the app store", async () => {
+		localStorage.setItem("naia-adk-path", "/adk/complete");
+		adkState.config = {
+			provider: "ollama",
+			model: "e2e",
+			onboardingComplete: true,
+			ttsEnabled: true,
+		};
+		useAppStore.setState({ ttsEnabled: false });
+
+		render(<App />);
+
+		await waitFor(() => {
+			expect(useAppStore.getState().ttsEnabled).toBe(true);
+		});
+	});
+
+	it("clears a stale TTS enabled state when cold ADK config disables it", async () => {
+		localStorage.setItem("naia-adk-path", "/adk/complete");
+		adkState.config = {
+			provider: "ollama",
+			model: "e2e",
+			onboardingComplete: true,
+			ttsEnabled: false,
+		};
+		useAppStore.setState({ ttsEnabled: true });
+
+		render(<App />);
+
+		await waitFor(() => {
+			expect(useAppStore.getState().ttsEnabled).toBe(false);
+		});
+	});
+
+	it("defaults TTS off when cold ADK config omits the setting", async () => {
+		localStorage.setItem("naia-adk-path", "/adk/complete");
+		adkState.config = {
+			provider: "ollama",
+			model: "e2e",
+			onboardingComplete: true,
+		};
+		useAppStore.setState({ ttsEnabled: true });
+
+		render(<App />);
+
+		await waitFor(() => {
+			expect(useAppStore.getState().ttsEnabled).toBe(false);
+		});
+	});
+
+	it("resets TTS when a selected ADK has no config files yet", async () => {
+		localStorage.setItem("naia-adk-path", "/adk/empty");
+		useAppStore.setState({ ttsEnabled: true });
+
+		render(<App />);
+
+		await waitFor(() => {
+			expect(useAppStore.getState().ttsEnabled).toBe(false);
 		});
 	});
 

@@ -501,6 +501,7 @@ export function App() {
 				// complete. A real read error takes the catch path and leaves the
 				// gate closed.
 				if (!fileConfig && !uiConfig) {
+					setTtsEnabled(false);
 					if (adkPath) {
 						localStorage.removeItem("naia-config");
 						await hydrateUiPreferences(null, {
@@ -545,6 +546,10 @@ export function App() {
 					if (reconciled.locale) await setLocale(reconciled.locale);
 					if (cancelled || getAdkPath() !== adkPath) return;
 					saveConfig(reconciled);
+					// The file snapshot is authoritative after async hydration. Keep the
+					// quick TTS control aligned with it, including an explicit false or
+					// an omitted value (which means the default is off).
+					setTtsEnabled(reconciled.ttsEnabled === true);
 					// The ADK file is authoritative after hydration. In particular, this
 					// clears a stale onboarding overlay that was selected from an empty or
 					// older render cache during the initial mount.
