@@ -90,6 +90,7 @@ import { ThinkingStreamFilter } from "../lib/llm/thinking-stream-filter";
 import { Logger } from "../lib/logger";
 import { type MicStream, createMicStream } from "../lib/mic-stream";
 import { buildSystemPrompt } from "../lib/persona";
+import { effectiveMainRole } from "../lib/slots/model";
 import {
 	RADIO_DJ_DEFAULT_SETTINGS,
 	normalizeProactiveSpeechSettings,
@@ -1635,8 +1636,14 @@ export function ChatArea({
 		const store = useChatStore.getState();
 
 		const config = await loadConfigWithSecrets();
+		// Structured llmRoles.main is the source of truth. The flat provider/model
+		// fields remain a compatibility mirror and may be stale or absent after an
+		// ADK seed, so route the turn from the same effective role as Settings.
+		const mainRole = config ? effectiveMainRole(config) : {};
+		const configuredProvider = mainRole.provider ?? config?.provider;
+		const configuredModel = mainRole.model ?? config?.model;
 		// 새 core 는 에이전트가 GLM 키를 쥐므로 nextain 로그인 게이트 우회(naiaKey 없어도 전송).
-		if (!isNewCore() && config?.provider === "nextain" && !config?.naiaKey) {
+		if (!isNewCore() && configuredProvider === "nextain" && !config?.naiaKey) {
 			useChatStore
 				.getState()
 				.appendStreamChunk(
@@ -1657,9 +1664,9 @@ export function ChatArea({
 		// 모델셋팅 슬라이스). 여기에 !isNewCore() 가드를 걸면 omni 모델 텍스트가 새 core 로 잘못 흘러
 		// uc1-new-core "omni → realtime 우회" 계약을 깬다(라이브 검증서 회귀로 적발, 2026-06-12).
 		if (
-			config?.provider === "nextain" &&
-			config?.model &&
-			isOmniModel(config.provider, config.model)
+			configuredProvider === "nextain" &&
+			configuredModel &&
+			isOmniModel(configuredProvider, configuredModel)
 		) {
 			useChatStore.getState().finishStreaming();
 			completeCurrentRequest(requestId);
@@ -1671,7 +1678,7 @@ export function ChatArea({
 		// 새 core 는 에이전트가 provider/key(GLM_KEY env) 를 쥐므로 UI 키 게이트 우회(없어도 전송).
 		if (
 			!isNewCore() &&
-			!isApiKeyOptional(config?.provider ?? "") &&
+			!isApiKeyOptional(configuredProvider ?? "") &&
 			!config?.apiKey &&
 			!config?.naiaKey
 		) {
@@ -1696,7 +1703,7 @@ export function ChatArea({
 		// Agent auto-TTS disabled — Shell controls TTS directly via requestTts IPC.
 		const chatTtsEnabled =
 			!pipelineActiveRef.current && config.ttsEnabled === true;
-		const activeProvider = config.provider || provider;
+		const activeProvider = configuredProvider || provider;
 
 		// Initialize/update SentenceChunker + AudioQueue for chat TTS
 		if (chatTtsEnabled) {
@@ -1716,7 +1723,7 @@ export function ChatArea({
 		// When the saved model is not valid for the active provider, fall back to the default.
 		// Skip validation for providers with dynamic models (e.g. Ollama — empty static model list).
 		const savedModel =
-			config.model || getDefaultLlmModel(activeProvider) || "gemini-2.5-flash";
+			configuredModel || getDefaultLlmModel(activeProvider) || "gemini-2.5-flash";
 		const providerMeta = getLlmProvider(activeProvider);
 		const hasDynamicModels = providerMeta && providerMeta.models.length === 0;
 		const modelIsValid =

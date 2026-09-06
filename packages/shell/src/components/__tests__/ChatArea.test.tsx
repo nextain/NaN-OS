@@ -9,6 +9,7 @@ import {
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { appRegistry } from "../../lib/app-registry";
+import { isNewCore } from "../../lib/chat-service";
 import type { AgentResponseChunk } from "../../lib/types";
 import { useAppStore } from "../../stores/app";
 import { useAvatarStore } from "../../stores/avatar";
@@ -107,6 +108,10 @@ vi.mock("@tauri-apps/plugin-store", () => {
 let capturedOnChunk: ((chunk: AgentResponseChunk) => void) | null = null;
 const capturedRequests: {
 	message: string;
+	provider?: {
+		provider?: string;
+		model?: string;
+	};
 	history: { role: "user" | "assistant"; content: string }[];
 	requestId: string;
 	onChunk: (chunk: AgentResponseChunk) => void;
@@ -175,6 +180,7 @@ describe("ChatArea", () => {
 		capturedOnChunk = null;
 		capturedRequests.length = 0;
 		vi.clearAllMocks();
+		vi.mocked(isNewCore).mockReturnValue(false);
 		mockInvoke.mockResolvedValue(undefined);
 		useChatStore.setState(useChatStore.getInitialState());
 		useAvatarStore.setState(useAvatarStore.getInitialState());
@@ -250,6 +256,33 @@ describe("ChatArea", () => {
 		const request = capturedRequests[0];
 		request.onChunk({ type: "finish", requestId: request.requestId });
 		expect(useAvatarStore.getState().currentEmotion).toBe("neutral");
+		localStorage.removeItem("naia-config");
+	});
+
+	it("routes the structured main role when the flat provider mirror is stale", async () => {
+		vi.mocked(isNewCore).mockReturnValue(true);
+		localStorage.setItem(
+			"naia-config",
+			JSON.stringify({
+				provider: "gemini",
+				model: "gemini-2.5-flash",
+				llmRoles: {
+					main: { provider: "nextain", model: "deepseek-v4-flash" },
+				},
+				enableTools: false,
+			}),
+		);
+
+		render(<ChatArea />);
+		const input = screen.getByPlaceholderText(/message/i);
+		fireEvent.change(input, { target: { value: "structured role route" } });
+		fireEvent.keyDown(input, { key: "Enter" });
+
+		await waitFor(() => expect(capturedRequests).toHaveLength(1));
+		expect(capturedRequests[0].provider).toMatchObject({
+			provider: "nextain",
+			model: "deepseek-v4-flash",
+		});
 		localStorage.removeItem("naia-config");
 	});
 
