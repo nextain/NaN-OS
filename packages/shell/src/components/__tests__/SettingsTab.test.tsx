@@ -1428,7 +1428,7 @@ describe("SettingsTab — memory tab (#298)", () => {
 		expect(tabBtns.length).toBe(10);
 	});
 
-	it("owns radio DJ parameters under skill_youtube_bgm, not General", async () => {
+	it("keeps radio DJ parameters under skills and exhibition parameters under General", async () => {
 		mockInvoke.mockResolvedValue([]);
 		render(<SettingsTab />);
 		gotoSettingsTab("skills");
@@ -1458,10 +1458,15 @@ describe("SettingsTab — memory tab (#298)", () => {
 		expect(screen.queryByTestId("proactive-knowledge-scope")).toBeNull();
 
 		gotoSettingsTab("general");
-		expect(screen.queryByTestId("proactive-speech-settings")).toBeNull();
-		expect(screen.queryByTestId("proactive-speech-profile")).toBeNull();
+		expect(screen.getByTestId("proactive-speech-settings")).toBeDefined();
+		expect(screen.getByTestId("proactive-knowledge-scope")).toBeDefined();
 		expect(screen.queryByTestId("proactive-bgm-autoplay")).toBeNull();
-		expect(screen.queryByTestId("proactive-knowledge-scope")).toBeNull();
+		expect(
+			Array.from(
+				(screen.getByTestId("proactive-speech-profile") as HTMLSelectElement)
+					.options,
+			).map((option) => option.value),
+		).toEqual(["disabled", "exhibition_intro"]);
 	});
 
 	it("does not expose a GPU profile or start local voice from detection", async () => {

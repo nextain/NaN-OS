@@ -162,7 +162,10 @@ import { useCascadeAvatarStore } from "../stores/cascade-avatar";
 import { useChatStore } from "../stores/chat";
 import { clearSavedCamera } from "./AvatarCanvas";
 import { KnowledgeSettingsTab } from "./KnowledgeSettingsTab";
-import { RadioDjSettingsCard } from "./ProactiveSpeechSettingsSection";
+import {
+	ProactiveSpeechSettingsSection,
+	RadioDjSettingsCard,
+} from "./ProactiveSpeechSettingsSection";
 import { RefAudioSection } from "./RefAudioSection";
 
 const SkillsTab = lazy(() =>
@@ -3578,6 +3581,11 @@ export function SettingsTab() {
 			)}
 			{activeSettingsTab === "general" && (
 				<>
+					<ProactiveSpeechSettingsSection
+						mode="exhibition"
+						value={proactiveSpeechSettings}
+						onSave={saveProactiveSpeechSettings}
+					/>
 					<div className="settings-field">
 						<div style={{ display: "flex", alignItems: "center", gap: 8 }}>
 							<label htmlFor="locale-select" style={{ margin: 0 }}>

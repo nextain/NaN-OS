@@ -554,6 +554,9 @@ export function App() {
 					if (reconciled.locale) await setLocale(reconciled.locale);
 					if (cancelled || getAdkPath() !== adkPath) return;
 					saveConfig(reconciled);
+					// Run legacy value migrations after the ADK file has been merged.
+					// The mount-time migration can only see the pre-hydration render cache.
+					migrateSpeechStyleValues();
 					// The file snapshot is authoritative after async hydration. Keep the
 					// quick TTS control aligned with it, including an explicit false or
 					// an omitted value (which means the default is off).
