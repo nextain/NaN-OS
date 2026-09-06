@@ -142,6 +142,7 @@ import {
 	type SlotId,
 	applyNaiaSlotDefaults,
 	deriveGate,
+	effectiveMainRole,
 	effectiveTtsProvider,
 	readSlots,
 } from "../lib/slots/model";
@@ -640,11 +641,10 @@ export function SettingsTab() {
 	const [savedVrmModel, setSavedVrmModel] = useState(
 		normalizeLocalPath(existing?.vrmModel ?? DEFAULT_AVATAR_MODEL),
 	);
-	const [provider, setProvider] = useState<ProviderId>(
-		existing?.provider ?? "gemini",
-	);
-	const initProvider = existing?.provider ?? "gemini";
-	const savedModel = existing?.model;
+	const initialMainRole = existing ? effectiveMainRole(existing) : {};
+	const initProvider = (initialMainRole.provider ?? "gemini") as ProviderId;
+	const savedModel = initialMainRole.model;
+	const [provider, setProvider] = useState<ProviderId>(initProvider);
 	const modelValid =
 		savedModel &&
 		(initProvider === "ollama" ||
@@ -664,12 +664,14 @@ export function SettingsTab() {
 	useEffect(() => {
 		const syncMainBrainFromConfig = () => {
 			const cfg = loadConfig();
-			if (!cfg?.provider) return;
-			const nextProvider = cfg.provider as ProviderId;
+			if (!cfg) return;
+			const mainRole = effectiveMainRole(cfg);
+			if (!mainRole.provider) return;
+			const nextProvider = mainRole.provider as ProviderId;
 			setProvider(nextProvider);
 			setModel(
-				typeof cfg.model === "string" && cfg.model.trim()
-					? cfg.model
+				typeof mainRole.model === "string" && mainRole.model.trim()
+					? mainRole.model
 					: getDefaultLlmModel(nextProvider),
 			);
 		};
@@ -3011,10 +3013,22 @@ export function SettingsTab() {
 			qdrantApiKey:
 				memoryAdapter === "qdrant" ? qdrantApiKey || undefined : undefined,
 		};
-		newConfig = writeConfiguredLlmRole(newConfig, "main", {
+		const persistedConfig = loadConfig() ?? existing;
+		const persistedMainRole = persistedConfig
+			? readConfiguredLlmRoles(persistedConfig).main
+			: undefined;
+		const mainProviderUnchanged = persistedMainRole?.provider === provider;
+		const mainRole: LlmRoleConfig = {
 			provider,
 			model,
-		});
+			...(mainProviderUnchanged && persistedMainRole?.credentialRef !== undefined
+				? { credentialRef: persistedMainRole.credentialRef }
+				: {}),
+			...(mainProviderUnchanged && persistedMainRole?.baseUrl !== undefined
+				? { baseUrl: persistedMainRole.baseUrl }
+				: {}),
+		};
+		newConfig = writeConfiguredLlmRole(newConfig, "main", mainRole);
 		newConfig = writeConfiguredLlmRole(newConfig, "sub", subLlmRole);
 		newConfig = writeConfiguredLlmRole(newConfig, "expert", expertLlmRole);
 		newConfig = writeConfiguredLlmRole(newConfig, "memory", memoryLlmRole);
@@ -4736,15 +4750,31 @@ export function SettingsTab() {
 									// (e.g. an omni gemini-2.5-flash-live from a prior voice session) survived.
 									// Skip while a nextain login is pending (naia_auth_complete persists then).
 									if (!(provider === "nextain" && !naiaKey)) {
+										const persistedConfig = loadConfig();
 										const legacySelection = applyModelSelectionToConfig(
-											loadConfig() as Record<string, unknown> | null,
+											persistedConfig as Record<string, unknown> | null,
 											provider,
 											e.target.value,
 										);
+										const persistedMainRole = persistedConfig
+											? readConfiguredLlmRoles(persistedConfig).main
+											: undefined;
+										const mainRole: LlmRoleConfig = {
+											provider,
+											model: e.target.value,
+											...(persistedMainRole?.provider === provider &&
+											persistedMainRole.credentialRef !== undefined
+												? { credentialRef: persistedMainRole.credentialRef }
+												: {}),
+											...(persistedMainRole?.provider === provider &&
+											persistedMainRole.baseUrl !== undefined
+												? { baseUrl: persistedMainRole.baseUrl }
+												: {}),
+										};
 										const nextSel = writeConfiguredLlmRole(
 											legacySelection as unknown as AppConfig,
 											"main",
-											{ provider, model: e.target.value },
+											mainRole,
 										);
 										saveConfig(
 											nextSel as unknown as Parameters<typeof saveConfig>[0],
