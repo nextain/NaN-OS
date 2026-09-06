@@ -11532,6 +11532,29 @@ async fn copy_bundled_assets(app_handle: tauri::AppHandle, adk_path: String) -> 
     Ok(())
 }
 
+/// Allow asset:// URLs for installed apps in the selected ADK.
+///
+/// The static scope contains the default home placement, but a selected ADK
+/// can live elsewhere and its hidden `.naia/apps` directory is not covered by
+/// a broad ADK directory rule when literal leading-dot matching is enabled.
+/// Keep this grant limited to the canonical installed-app root; callers invoke
+/// it when the root is first listed or an app is installed.
+pub(crate) fn allow_installed_app_asset_scope(
+    app_handle: &tauri::AppHandle,
+    apps_root: &std::path::Path,
+) {
+    let scope_root = dunce::canonicalize(apps_root).unwrap_or_else(|_| apps_root.to_path_buf());
+    if let Err(error) = app_handle
+        .asset_protocol_scope()
+        .allow_directory(&scope_root, true)
+    {
+        log_verbose(&format!(
+            "[apps] installed app asset scope extend failed for {}: {error}",
+            scope_root.display()
+        ));
+    }
+}
+
 /// Write binary data to `{adk_path}/naia-settings/{subdir}/{filename}`.
 /// Only whitelisted subdirs are allowed.
 #[tauri::command]

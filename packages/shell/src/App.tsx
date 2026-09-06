@@ -31,7 +31,11 @@ import {
 	type Announcement,
 	fetchUnreadAnnouncements,
 } from "./lib/announcements";
-import { areInstalledAppsSettled, loadInstalledApps } from "./lib/app-loader";
+import {
+	areInstalledAppsSettled,
+	invalidateInstalledApps,
+	loadInstalledApps,
+} from "./lib/app-loader";
 import { appRegistry } from "./lib/app-registry";
 import type { AppInstallRequest } from "./lib/app-store-client";
 import { effectiveAvatarProviderFromConfig } from "./lib/avatar/nva-gate";
@@ -604,6 +608,15 @@ export function App() {
 		loadInstalledApps()
 			.catch(() => {})
 			.finally(() => setInstalledAppsReady(true));
+		const handleAdkPathChanged = () => {
+			invalidateInstalledApps();
+			void loadInstalledApps().catch((error: unknown) => {
+				Logger.warn("App", "Failed to reload installed apps after ADK switch", {
+					error: error instanceof Error ? error.message : String(error),
+				});
+			});
+		};
+		window.addEventListener("naia-adk-path-changed", handleAdkPathChanged);
 
 		const config = loadConfig();
 		const adkPath = getAdkPath();
@@ -624,7 +637,11 @@ export function App() {
 			});
 		applyPersistedPresentationConfig(config, setNaiaVisible, setNaiaWidth);
 
-		if (showAdkSetup || !configHydratedRef.current) return;
+		if (showAdkSetup || !configHydratedRef.current) {
+			return () => {
+				window.removeEventListener("naia-adk-path-changed", handleAdkPathChanged);
+			};
+		}
 
 		const needsOnboarding = !isOnboardingComplete();
 
@@ -637,6 +654,9 @@ export function App() {
 		// web process 를 막는다. voice/STT(UC2)는 아직 이식 전이라 pre-warm 은 현재 가치 0. 마이크 권한은
 		// 실제 voice 사용 시점(getUserMedia in mic-stream/api-stt)에 요청한다. UC2 이식 시 GstIntRange 장치
 		// 회피(장치 선택/GStreamer 설정)와 함께 pre-warm 재도입 여부 재검토.
+		return () => {
+			window.removeEventListener("naia-adk-path-changed", handleAdkPathChanged);
+		};
 	}, [showAdkSetup]);
 
 	useEffect(() => {
