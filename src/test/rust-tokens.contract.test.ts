@@ -265,6 +265,75 @@ describe("Rust 명령 추출은 거리를 재지 않는다", () => {
 		]);
 	});
 
+	it("크레이트 별명과 매크로 크레이트 직접 경로도 명령이다", () => {
+		// 15회차 지적 2. 적힌 글자만 보면 `use tauri as t; #[t::command]` 가 빠지고,
+		// `tauri::command` 가 `tauri_macros::command` 의 재수출이라는 사실도 놓친다.
+		// 속성 안의 경로를 이 파일의 `use` 로 정규화한 뒤 정본 경로와 대조한다.
+		const crateAlias = "use tauri as t;\n#[t::command]\nfn wipe_alias() {}";
+		const macroCrate = "#[tauri_macros::command]\nfn wipe_macro_crate() {}";
+		const leadingColons = "#[::tauri::command]\nfn wipe_absolute() {}";
+		const selfAlias = "use tauri::{self as t, Manager};\n#[t::command]\nfn wipe_self() {}";
+		const nested = "use tauri as t;\n#[cfg_attr(all(), t::command)]\nfn wipe_nested() {}";
+		expect([...rust.tauriCommandBodies(crateAlias).keys()]).toEqual(["wipe_alias"]);
+		expect([...rust.tauriCommandBodies(macroCrate).keys()]).toEqual(["wipe_macro_crate"]);
+		expect([...rust.tauriCommandBodies(leadingColons).keys()]).toEqual(["wipe_absolute"]);
+		expect([...rust.tauriCommandBodies(selfAlias).keys()]).toEqual(["wipe_self"]);
+		expect([...rust.tauriCommandBodies(nested).keys()]).toEqual(["wipe_nested"]);
+	});
+
+	it("별명이 다른 크레이트를 가리키면 명령이 아니다", () => {
+		// 정규화는 양쪽으로 작동한다 — 이름이 `tauri` 여도 그 이름이 `clap` 이면
+		// 명령이 아니다.
+		const shadowedCrate = "use clap as tauri;\n#[tauri::command]\nfn not_a_command() {}";
+		const otherCrate = "#[clap::command]\nfn also_not() {}";
+		expect([...rust.tauriCommandBodies(shadowedCrate).keys()]).toEqual([]);
+		expect([...rust.tauriCommandBodies(otherCrate).keys()]).toEqual([]);
+	});
+
+	it("생 식별자 `r#이름` 의 명령 이름은 `#` 뒤다", () => {
+		// 15회차 지적 3. 토크나이저가 `r`·`#`·`이름` 셋으로 가르던 동안 목록에는
+		// `r` 이 실렸고, 프런트의 `invoke("ghost_wipe_everything")` 은 그 목록에서
+		// 이름을 못 찾아 확인 검사를 통째로 건너뛰었다.
+		const source = [
+			"#[tauri::command]",
+			"pub fn r#ghost_wipe_everything(root: String) -> Result<(), String> {",
+			"    std::fs::remove_dir_all(&root).map_err(|e| e.to_string())",
+			"}",
+		].join("\n");
+		const commands = rust.tauriCommandBodies(source);
+		expect([...commands.keys()]).toEqual(["ghost_wipe_everything"]);
+		expect(commands.get("ghost_wipe_everything")).toContain("remove_dir_all");
+	});
+
+	it("생 식별자와 생 문자열을 가른다", () => {
+		// `r#"…"#` 는 문자열이고 `r#type` 은 식별자다. 둘을 섞으면 문자열 안의
+		// `#` 가 이름이 되거나, 이름이 문자열로 삼켜진다.
+		const tokens = rust.tokenizeRust(
+			[
+				'let a = r##"he said "#" here"##;',
+				'let b = r#"plain"#;',
+				"let r#type = r#match;",
+			].join("\n"),
+		);
+		expect(tokens.map((t) => `${t.kind}:${t.text}`)).toEqual([
+			"ident:let",
+			"ident:a",
+			"punct:=",
+			'string:he said "#" here',
+			"punct:;",
+			"ident:let",
+			"ident:b",
+			"punct:=",
+			"string:plain",
+			"punct:;",
+			"ident:let",
+			"ident:type",
+			"punct:=",
+			"ident:match",
+			"punct:;",
+		]);
+	});
+
 	it("주석 안의 `#[tauri::command]` 는 명령이 아니다", () => {
 		const source = [
 			"// #[tauri::command]",

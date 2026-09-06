@@ -57,6 +57,8 @@ type Binding = {
 
 interface Bindings {
 	importBindings(sf: ts.SourceFile): Map<string, ImportRecord>;
+	/** 모듈 바인딩을 만드는 선언인가 — `import …` 와 `import x = …` 두 종. */
+	isModuleBindingDeclaration(node: ts.Node): boolean;
 	resolveBinding(
 		expr: ts.Node,
 		sf: ts.SourceFile,
@@ -747,5 +749,95 @@ describe("겹의 수는 한계가 아니다 (13회차 지적 4)", () => {
 		const binding = calleeOf("", "(yasnever)", env, file("app/screen.tsx"));
 		expect(binding?.module).toBe("./one");
 		expect(binding?.module).not.toBe("react");
+	});
+});
+
+/* ─────────────── 15회차에 못 박은 것 ─────────────── */
+
+describe("`export * as ns from \"mod\"` 도 재수출이다 (15회차 지적 1)", () => {
+	const SCREEN = "app/screen.tsx";
+
+	it("이름 있는 네임스페이스 재수출의 멤버가 원래 모듈까지 간다", () => {
+		const { env, file } = environment({
+			"app/shim.ts": `export * as GhostReact from "react";`,
+			[SCREEN]: `import { GhostReact } from "./shim";\nexport const E = GhostReact.createElement("div");`,
+		});
+		const binding = calleeOf("", "GhostReact.createElement", env, file(SCREEN));
+		expect(binding?.module).toBe("react");
+		expect(binding?.imported).toBe("createElement");
+	});
+
+	it("저장소 안 파일을 가리키는 네임스페이스 재수출도 따라간다", () => {
+		const { env, file } = environment({
+			"app/core.ts": `import { invoke } from "@tauri-apps/api/core";\nexport { invoke };`,
+			"app/shim.ts": `export * as ghostCore from "./core";`,
+			[SCREEN]: `import { ghostCore } from "./shim";\nexport const R = ghostCore.invoke("cmd");`,
+		});
+		const binding = calleeOf("", "ghostCore.invoke", env, file(SCREEN));
+		expect(binding?.module).toBe("@tauri-apps/api/core");
+		expect(binding?.imported).toBe("invoke");
+	});
+
+	it("반증: 재수출 형태가 달라도 답은 같아야 한다", () => {
+		// 판정의 단위가 `export *` 와 `export { … }` 두 문법이면, 형태 한 겹만
+		// 바꿔 알림·꺼짐·파괴가 같이 열린다.
+		const viaNamed = (() => {
+			const { env, file } = environment({
+				"app/shim.ts": `export { createElement as GhostReact } from "react";`,
+				[SCREEN]: `import { GhostReact } from "./shim";\nexport const E = GhostReact("div");`,
+			});
+			return calleeOf("", "GhostReact", env, file(SCREEN));
+		})();
+		expect(viaNamed?.module).toBe("react");
+		expect(viaNamed?.imported).toBe("createElement");
+	});
+});
+
+describe("모듈 바인딩을 만드는 선언은 두 종이다 (15회차 지적 8)", () => {
+	it("`ImportDeclaration` 과 `ImportEqualsDeclaration` 만 그 술어를 만족한다", () => {
+		const sf = parse(
+			`import { a } from "x";\nimport h = require("react");\nconst c = 1;\nexport { a };`,
+		);
+		const kinds = sf.statements.map((s) => B.isModuleBindingDeclaration(s));
+		expect(kinds).toEqual([true, true, false, false]);
+	});
+
+	it("`import h = require(\"react\")` 는 그 모듈 전체다", () => {
+		const map = B.importBindings(parse(`import h = require("react");`));
+		expect(map.get("h")?.module).toBe("react");
+		expect(map.get("h")?.imported).toBe("*");
+	});
+
+	it("그 이름의 멤버는 그 모듈의 export 다", () => {
+		const binding = calleeOf(
+			`import h = require("react");\nexport const E = h.createElement("div");`,
+			"h.createElement",
+		);
+		expect(binding?.module).toBe("react");
+		expect(binding?.imported).toBe("createElement");
+	});
+
+	it("`import x = ns.member` 는 그 이름을 다시 푼다", () => {
+		const binding = calleeOf(
+			`import * as R from "react";\nimport mk = R.createElement;\nexport const E = mk("div");`,
+			"mk",
+		);
+		expect(binding?.module).toBe("react");
+		expect(binding?.imported).toBe("createElement");
+	});
+
+	it("반증: 그 이름은 전역이 아니다", () => {
+		// 선언을 못 보면 자유 식별자로 읽혀 전역이 된다. 그러면 요소 판정이
+		// 통째로 갈린다.
+		const binding = calleeOf(`import h = require("react");\nexport const E = h("div");`, "h");
+		expect(binding?.global).toBeUndefined();
+		expect(binding?.module).toBe("react");
+	});
+
+	it("반증: 동적 `require()` **호출**은 여전히 보증 밖이다", () => {
+		// 정적 선언(`import h = require("x")`)과 실행할 때 부르는 호출은 다르다.
+		expect(
+			calleeOf(`const h = require("react");\nexport const E = h.createElement("div");`, "h.createElement"),
+		).toBeNull();
 	});
 });

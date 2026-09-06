@@ -81,6 +81,7 @@ import { dirname, join, normalize } from "node:path";
 import ts from "typescript";
 import { resolveBinding, resolveCallee, unwrap } from "./lib/bindings.mjs";
 import { tauriCommandBodies } from "./lib/rust-tokens.mjs";
+import { parseToml } from "./lib/toml-min.mjs";
 
 const SHELL = "packages/shell";
 
@@ -266,13 +267,38 @@ function crateSourceRoots(entry = `${SHELL}/src-tauri/Cargo.toml`) {
 	return roots;
 }
 
-/** `Cargo.toml` 에 적힌 지역 크레이트 자리 — `path = "…"` 와 `members = [ … ]`. */
+/**
+ * `Cargo.toml` 에 적힌 지역 크레이트 자리 — 어느 테이블에 있든 `path` 값과
+ * `members` 배열.
+ *
+ * 예전에는 `\bpath\s*=\s*"([^"]+)"` 정규식이라 **겹따옴표만** 읽었다. TOML 은
+ * 홑따옴표를 같은 문자열로 보므로 `path = 'plugins/…'` 로 적기만 하면 그
+ * 크레이트가 뿌리에서 빠졌다(15회차 지적 6). 따옴표를 하나 더 열거하는 대신
+ * 읽는 자리를 옮겼다 — `scripts/lib/toml-min.mjs` 가 문법으로 읽고, 여기서는
+ * 값 나무를 훑는다. 주석과 여러 줄 문자열 안의 `path = "…"` 는 값이지 키가
+ * 아니므로 저절로 빠진다.
+ *
+ * 어느 테이블인지 가리지 않는 것은 일부러다 — `[dependencies]`,
+ * `[dev-dependencies]`, `[target."cfg(unix)".dependencies]`, `[patch.crates-io]`
+ * 를 열거하면 다음 테이블에서 같은 일이 난다. 넓어지는 쪽으로만 틀린다.
+ */
 function localCrateReferences(text) {
 	const found = [];
-	for (const m of text.matchAll(/\bpath\s*=\s*"([^"]+)"/g)) found.push(m[1]);
-	for (const m of text.matchAll(/\bmembers\s*=\s*\[([\s\S]*?)\]/g)) {
-		for (const entry of m[1].matchAll(/"([^"]+)"/g)) found.push(entry[1]);
-	}
+	const visit = (node) => {
+		if (Array.isArray(node)) {
+			for (const item of node) visit(item);
+			return;
+		}
+		if (!node || typeof node !== "object") return;
+		for (const [key, value] of Object.entries(node)) {
+			if (key === "path" && typeof value === "string") found.push(value);
+			if (key === "members" && Array.isArray(value)) {
+				for (const member of value) if (typeof member === "string") found.push(member);
+			}
+			visit(value);
+		}
+	};
+	visit(parseToml(text));
 	return found;
 }
 

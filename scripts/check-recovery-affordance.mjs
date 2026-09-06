@@ -10,7 +10,10 @@
  * 오류를 띄우고 끝나면 사용자는 앱을 껐다 켜는 것 말고 할 수 있는 일이 없다.
  *
  * 어디를 보는가: **막다른 화면**만 본다. 즉 실패했을 때 그 알림이 화면을
- * 통째로 대신하는 자리다(`if (error) return <... role="alert">`). 알림이
+ * 통째로 대신하는 자리다(`if (error) return <... role="alert">`). 알림 역할은
+ * `alert` 와 `alertdialog` 둘이다 — WAI-ARIA 에서 뒤엣것은 앞엣것의 하위
+ * 역할이고, 사용자의 응답을 요구한다는 것만 다르다. 응답을 요구하면서 빠져
+ * 나갈 길을 안 주는 화면이 더 나쁘므로 같이 본다. 알림이
  * 다른 내용과 나란히 뜨는 경우는 대개 원래 화면의 버튼이 그대로 남아 있어
  * 사용자가 다시 시도할 수 있다 — 그런 자리까지 세면 과탐지가 되고, 과탐지가
  * 많은 게이트는 곧 꺼진다.
@@ -221,7 +224,17 @@ function screenElements(expr, sf) {
 	return [];
 }
 
-/** 이 요소가 실패 알림인가. `role` 이 될 수 있는 값 중에 "alert" 가 있는가. */
+/**
+ * 실패를 알리는 역할.
+ *
+ * WAI-ARIA 에서 `alertdialog` 는 `alert` 의 **하위 역할**이다 — 같은 알림인데
+ * 사용자의 응답을 요구한다는 것만 다르다. 그러니 막다른 화면 판정에서 둘을
+ * 가르면, 역할 글자 하나로 같은 화면이 셈에서 빠진다(15회차, 번호 없는 지적).
+ * 응답을 요구하는 알림이 빠져나갈 길을 안 주면 더 나쁘다.
+ */
+const ALERT_ROLES = new Set(["alert", "alertdialog"]);
+
+/** 이 요소가 실패 알림인가. `role` 이 될 수 있는 값 중에 알림 역할이 있는가. */
 function isAlert(element, sf) {
 	const { props } = elementProps(element, sf, env);
 	// 값은 그 값이 적혀 있는 파일의 트리로 푼다. spread 가 다른 파일의 상수를
@@ -229,7 +242,7 @@ function isAlert(element, sf) {
 	return props.some(
 		(p) =>
 			p.name === "role" &&
-			staticChunks(p.value, p.sf ?? sf, env).includes("alert"),
+			staticChunks(p.value, p.sf ?? sf, env).some((role) => ALERT_ROLES.has(role)),
 	);
 }
 

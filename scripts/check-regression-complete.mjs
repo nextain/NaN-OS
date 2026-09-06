@@ -227,11 +227,31 @@ const failedMachines = [];
 /** 다시 돌리면 통과하는 스펙. 보여만 주고 판정에는 넣지 않는다. */
 const flakyByMachine = [];
 const notRun = [];
+/** 전제가 깨진 실행. 그 실패는 제품의 것이 아니므로 커버리지가 아니다. */
+const premiseBroken = [];
+/** 전제를 재지 않은 옛 기록. 세되, 무엇을 모르는지 밝힌다. */
+const premiseUnmeasured = [];
 for (const record of records) {
+	// 이 실행에 뇌가 있었는가. 없으면 그 스펙들은 앱만 뜬 채 돌았고, 실패는
+	// 저마다 다른 자리에서 난다 — 2026-09-06 naia-os-3090 의 자격증명 실행이
+	// 서른여덟 개 중 서른일곱을 그렇게 돌렸다. 그 기록을 덮인 것으로 세면
+	// 다음 사람이 없는 제품 결함을 찾는다.
+	const premise = record.premise;
+	if (premise === "invalid") {
+		const reason = record.premiseSignals?.reason ?? "이유가 적히지 않았다";
+		premiseBroken.push(`${record.machine}: ${reason}`);
+	} else if (premise === undefined) {
+		// 옛 기록에는 이 칸이 없다. 세되 무엇을 모르는지 말한다 — 알 수 없는
+		// 것을 아는 것처럼 세면 그 숫자가 다시 사람을 속인다.
+		premiseUnmeasured.push(record.machine);
+	}
+
 	// 덮였다고 셀 수 있는 것은 실제로 끝까지 돈 것뿐이다. planned 는 무엇을
 	// 돌리려 했는지일 뿐이고, 그것을 커버로 세면 wdio 가 죽어도 전수 커버로
 	// 보고된다. 옛 기록의 assigned 는 계획이었으므로 planned 로 읽는다.
-	for (const spec of record.executed ?? []) covered.add(spec);
+	if (premise !== "invalid") {
+		for (const spec of record.executed ?? []) covered.add(spec);
+	}
 	for (const spec of record.planned ?? record.assigned ?? []) planned.add(spec);
 	for (const [spec, envs] of Object.entries(record.envMissingBeforeRun ?? record.skippedForMissingEnv ?? {})) {
 		skipped.set(spec, envs);
@@ -269,6 +289,19 @@ console.log(`  스펙 ${all.size} 중 실제로 돈 것 ${covered.size}, 돌리�
 console.log(`  배정되었으나 요구 환경이 없던 것 ${skipped.size}`);
 
 let failed = false;
+if (premiseUnmeasured.length) {
+	console.log(
+		`  전제를 재지 않은 기록 ${premiseUnmeasured.length}개(${[...new Set(premiseUnmeasured)].join(", ")}) — 미측정. 그 실행에 뇌가 있었는지 알 수 없다.`,
+	);
+}
+if (premiseBroken.length) {
+	console.error(`  ❌ 전제 불성립 — 다시 돌려야 한다 (${premiseBroken.length}개):`);
+	for (const line of premiseBroken) console.error(`     ${line}`);
+	console.error(
+		"     에이전트 없이 돈 세션의 실패는 제품의 것이 아니다. 이 기록은 덮인 것으로 세지 않는다.",
+	);
+	failed = true;
+}
 if (notRun.length) {
 	console.error(`  ❌ 전제가 없어 돌리지 못한 기계 ${notRun.length}대:`);
 	for (const line of notRun) console.error(`     ${line}`);
@@ -304,6 +337,7 @@ console.log(
 			? ` · 실패한 기계 ${failedMachines.join(", ")}`
 			: " · 실패한 기계 없음") +
 		(notRun.length ? ` · 전제 미비 ${notRun.length}대` : "") +
+		(premiseBroken.length ? ` · 전제 불성립 ${premiseBroken.length}개` : "") +
 		`\n`,
 );
 

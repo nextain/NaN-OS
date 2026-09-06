@@ -1018,6 +1018,60 @@ export function stringCandidates(node, sf, env, seen = new Set()) {
  * 더해 템플릿의 **고정 조각**까지 돌려준다. 클래스처럼 조각으로 붙는 값은
  * 완성값이 없어도 조각이 화면에 그대로 오른다.
  */
+/**
+ * 이 식에서 **정적으로 나올 수 있는 문자열 전부**.
+ *
+ * `stringCandidates` 와 무엇이 다른가: 저것은 "이 식의 값이 무엇인가" 를 묻고,
+ * 이것은 "이 식 **안 어딘가에** 적혀 있는 문자열이 무엇인가" 를 묻는다. 주소를
+ * 찾는 자리가 필요로 하는 것은 뒤엣것이다 —
+ * `fetch(new Request("https://…"))` 의 값은 `Request` 객체이지 문자열이 아니지만,
+ * 그 호출이 닿는 곳은 생성자에 적힌 그 주소다(15회차 지적 9).
+ *
+ * 그래서 형태를 열거하지 않고 **값이 담겨 흘러가는 자리**를 따라간다 —
+ * 호출·`new` 의 인자, 객체 리터럴의 속성값, 배열 요소, 그리고 그 사슬에 놓인
+ * `const`. 같은 노드에 두 번 가지 않으므로 순환은 끊기고 겹은 세지 않는다.
+ *
+ * 무엇을 모르는가: `stringCandidates` 와 같다. 함수 매개변수로 받은 값, 실행할
+ * 때 조립되는 문자열, 배열·객체·Map 에서 **꺼내 온** 값(`table.get(k)`)은
+ * 후보가 없다. 그런 자리는 "없다" 가 아니라 `complete: false` 다.
+ *
+ * 주의: 이것으로 판정을 넓히면 과탐지가 된다. `elementProps` 나 표지 판정처럼
+ * "이 식의 값" 이 필요한 자리는 그대로 `stringCandidates` 를 쓴다.
+ */
+export function staticStringsIn(node, sf, env, seen = new Set()) {
+	const values = new Set();
+	let complete = true;
+	const visit = (expr, home) => {
+		const n = unwrapAll(expr);
+		if (!n || seen.has(n)) return;
+		seen.add(n);
+		const direct = stringCandidates(n, home, env, new Set());
+		for (const value of direct.values) values.add(value);
+		if (!direct.complete) complete = false;
+		if (ts.isNewExpression(n) || ts.isCallExpression(n)) {
+			for (const arg of n.arguments ?? []) visit(arg, home);
+			return;
+		}
+		if (ts.isObjectLiteralExpression(n)) {
+			for (const p of n.properties) {
+				if (ts.isPropertyAssignment(p)) visit(p.initializer, home);
+				else if (ts.isShorthandPropertyAssignment(p)) visit(p.name, home);
+			}
+			return;
+		}
+		if (ts.isArrayLiteralExpression(n)) {
+			for (const element of n.elements) visit(element, home);
+			return;
+		}
+		if (ts.isIdentifier(n)) {
+			const bound = constValue(n.text, home, env);
+			if (bound) visit(bound.node, bound.sf);
+		}
+	};
+	visit(node, sf);
+	return { values, complete };
+}
+
 export function staticChunks(node, sf, env, seen = new Set()) {
 	const out = new Set();
 	const resolved = stringCandidates(node, sf, env, new Set(seen));
@@ -1097,6 +1151,65 @@ function staticText(node, sf, env, seen) {
 }
 
 /**
+ * 이 식이 숫자로 바뀌면 얼마인가. 정적으로 정해지지 않으면 `null`.
+ *
+ * `+true` 는 `1` 이고 React 에서 `disabled={+true}` 는 누를 수 없는 버튼이다.
+ * 단항 `+`·`-`·`~` 는 값을 숫자로 바꿀 뿐이라, 안쪽이 리터럴이면 결과도
+ * 리터럴이다(15회차 지적 7). 안쪽을 모르면 결과도 모른다 — `-x` 를 참으로도
+ * 거짓으로도 접지 않는다.
+ */
+function staticNumber(node, sf, env, seen) {
+	const n = unwrapAll(node);
+	if (!n) return null;
+	if (ts.isNumericLiteral(n)) return Number(n.text);
+	if (n.kind === ts.SyntaxKind.TrueKeyword) return 1;
+	if (n.kind === ts.SyntaxKind.FalseKeyword) return 0;
+	if (n.kind === ts.SyntaxKind.NullKeyword) return 0;
+	if (ts.isIdentifier(n) && n.text === "undefined") return Number.NaN;
+	if (ts.isVoidExpression(n)) return Number.NaN;
+	if (ts.isStringLiteral(n) || ts.isNoSubstitutionTemplateLiteral(n))
+		return n.text.trim() === "" ? 0 : Number(n.text);
+	if (ts.isPrefixUnaryExpression(n)) {
+		const inner = staticNumber(n.operand, sf, env, seen);
+		if (inner === null) return null;
+		if (n.operator === ts.SyntaxKind.PlusToken) return inner;
+		if (n.operator === ts.SyntaxKind.MinusToken) return -inner;
+		if (n.operator === ts.SyntaxKind.TildeToken)
+			return Number.isNaN(inner) ? ~0 : ~Math.trunc(inner);
+		return null;
+	}
+	if (ts.isIdentifier(n)) {
+		const guard = seen instanceof Set ? seen : new Set();
+		if (guard.has(n)) return null;
+		guard.add(n);
+		for (const hit of declarationSites(n.text, sf)) {
+			if (hit.kind !== "var" || !hit.decl.initializer) continue;
+			if (!isConstDeclaration(hit.decl)) continue;
+			if (isReassigned(n.text, sf)) continue;
+			return staticNumber(hit.decl.initializer, sf, env, guard);
+		}
+		const imported = importedBinding(n.text, sf, env);
+		if (imported) {
+			const bound = constOnlyValue(imported.name, imported.sf, env);
+			if (bound) return staticNumber(bound.node, bound.sf, env, guard);
+		}
+	}
+	return null;
+}
+
+/** 값을 숫자·문자열로 바꾸는 단항인가. 그 결과는 결코 널이 아니다. */
+function isCoercingUnary(n) {
+	if (ts.isTypeOfExpression(n)) return true;
+	if (!ts.isPrefixUnaryExpression(n)) return false;
+	return (
+		n.operator === ts.SyntaxKind.PlusToken ||
+		n.operator === ts.SyntaxKind.MinusToken ||
+		n.operator === ts.SyntaxKind.TildeToken ||
+		n.operator === ts.SyntaxKind.ExclamationToken
+	);
+}
+
+/**
  * 이 식이 **언제나 널**인가. `true` 면 언제나 널, `false` 면 언제나 널이 아님,
  * `null` 이면 모른다.
  *
@@ -1112,6 +1225,9 @@ function staticNullish(node, sf, env, seen) {
 	// `void <아무 식>` 은 언제나 `undefined` 다. 안쪽 식이 무엇이든 결과는
 	// 하나뿐이라 여기서 따라갈 것이 없다(14회차 지적 1).
 	if (ts.isVoidExpression(n)) return true;
+	// `+x`·`-x`·`~x`·`!x`·`typeof x` 는 숫자나 불리언이나 문자열이 된다.
+	// 안쪽이 무엇이든 결과는 결코 널이 아니다.
+	if (isCoercingUnary(n)) return false;
 	if (
 		n.kind === ts.SyntaxKind.TrueKeyword ||
 		n.kind === ts.SyntaxKind.FalseKeyword ||
@@ -1191,6 +1307,13 @@ export function alwaysTruthy(node, sf, env, seen = new Set()) {
 	}
 	if (ts.isPrefixUnaryExpression(n) && n.operator === ts.SyntaxKind.ExclamationToken)
 		return alwaysFalsy(n.operand, sf, env, seen);
+	// `typeof x` 는 안쪽이 무엇이든 비어 있지 않은 문자열이다 — 언제나 참이다.
+	if (ts.isTypeOfExpression(n)) return true;
+	// `+`·`-`·`~` 는 값을 숫자로 바꾼다. 리터럴 위의 단항은 접는다(15회차 지적 7).
+	if (ts.isPrefixUnaryExpression(n)) {
+		const value = staticNumber(n, sf, env, seen);
+		return value === null ? false : Boolean(value);
+	}
 	// 삼항은 **실제로 도는 갈래**로 판정한다. 조건이 언제나 참이면 결과는 언제나
 	// 참 갈래이고, 언제나 거짓이면 언제나 거짓 갈래다 — `true ? true : false` 는
 	// React 에서 누를 수 없는 버튼이다. 조건을 모를 때만 두 갈래가 모두 참이기를
@@ -1270,6 +1393,8 @@ function alwaysFalsy(node, sf, env, seen) {
 	if (ts.isIdentifier(n) && n.text === "undefined") return true;
 	// `void <아무 식>` 은 언제나 `undefined` 이고, `undefined` 는 거짓이다.
 	if (ts.isVoidExpression(n)) return true;
+	// `typeof x` 는 비어 있지 않은 문자열이라 결코 거짓이 아니다.
+	if (ts.isTypeOfExpression(n)) return false;
 	if (ts.isStringLiteral(n) || ts.isNoSubstitutionTemplateLiteral(n))
 		return n.text.length === 0;
 	if (ts.isNumericLiteral(n)) return Number(n.text) === 0;
@@ -1287,6 +1412,11 @@ function alwaysFalsy(node, sf, env, seen) {
 		return false;
 	if (ts.isPrefixUnaryExpression(n) && n.operator === ts.SyntaxKind.ExclamationToken)
 		return alwaysTruthy(n.operand, sf, env, new Set(seen));
+	// `-0`·`+""`·`+"a"`(NaN) 는 언제나 거짓이다. 참 쪽과 대칭으로 접는다.
+	if (ts.isPrefixUnaryExpression(n)) {
+		const value = staticNumber(n, sf, env, seen);
+		return value === null ? false : !value;
+	}
 	// 삼항은 참 쪽과 대칭이다. 조건이 언제나 참이면 참 갈래로, 언제나 거짓이면
 	// 거짓 갈래로 접고, 조건을 모를 때만 두 갈래가 모두 언제나 거짓이기를
 	// 요구한다. 한쪽만 규칙을 두면 `disabled={!(c ? A : B)}` 에서 판정이 갈린다.

@@ -77,13 +77,22 @@
  * 항목마다 **어느 파일이 쓸 수 있는지**도 함께 적는다. 홈 그 자체를 돌려주는
  * 넷은 데이터 홈이 아닌 자리(`~/dev`, `~/.agent-browser`, 경로 가드의 홈)를
  * 위해 열려 있는데, 그 목록이 없으면 아무 파일이나 홈을 손에 쥐게 된다.
- * 파일 단위라는 것이 이 목록의 한계다 — 이미 적힌 파일 **안에서** 홈을 한 번
- * 더 쓰는 것은 세지 않는다. 보증은 위의 "`.naia` 라는 이름이 깔때기 밖에
- * 없다" 쪽이 지고, 이 목록은 그 위에 얹는 재고 조사다.
+ *
+ * 그 파일 목록은 **쓰는 것**을 허락한다. **다시 내주는 것**은 허락하지 않는다.
+ * 허용된 파일 안에 `pub use crate::data_home::user_home_path;` 한 줄을 두면 그
+ * 이름이 크레이트 전체에 다시 열리고, 그 뒤로는 목록에 없는 파일이
+ * `crate::user_home_path()` 로 원 함수를 쓴다 — 파일 단위 목록이 통째로 우회된다.
+ * 그래서 깔때기 밖 **어느 파일이든** 깔때기 항목을 `pub`/`pub(crate)` 로 재수출하면
+ * 그 자체가 위반이다(15회차 리뷰의 번호 없는 지적).
+ *
+ * 남는 한계는 하나다 — 이미 적힌 파일 **안에서** 홈을 한 번 더 쓰는 것은 세지
+ * 않는다. 보증은 위의 "`.naia` 라는 이름이 깔때기 밖에 없다" 쪽이 지고, 이
+ * 목록은 그 위에 얹는 재고 조사다.
  */
 import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import {
+	pathAt,
 	skipBalanced,
 	splitCodeAndStrings,
 	tokenizeRust,
@@ -340,36 +349,72 @@ function publicItems(source) {
 }
 
 /**
- * 모듈 밖에서 `data_home::` 로 짚은 이름. `use` 의 중괄호 묶음도 푼다.
+ * 모듈 밖에서 깔때기의 항목을 짚은 자리 전부.
  *
- * `self` 는 모듈 자신이라 이름이 아니고, `as` 뒤의 별명도 이름이 아니다.
+ * 예전에는 식별자 `data_home` 뒤에 `::` 가 오는 자리만 봤다. 그래서 모듈을 별명으로
+ * 받거나(`use crate::data_home as dh; dh::user_home_path()`) 통째로 들여오면
+ * (`use crate::data_home::*; user_home_path()`) 글자 `data_home::` 가 사라져 기록이
+ * 없었다 — 금지 식별자도 `.naia` 문자열도 쓰지 않고 허용 파일 밖에서 홈을 손에
+ * 쥘 수 있었다(15회차 지적 4).
+ *
+ * 그래서 이름 대신 **이 파일의 `use` 가 만든 지역 이름**으로 본다. 그 풀이의 정본은
+ * `rust-tokens.mjs` 의 `useDeclarations` 하나다 — 명령 속성 판정과 공개 항목 세기가
+ * 쓰는 것과 같다.
+ *
+ *   - 모듈 이름(`data_home` 자신과 `as dh` 별명) 뒤의 `::X` 는 항목 X 다.
+ *   - glob(`use …::data_home::*`)이면 깔때기의 공개 이름 전부가 이 파일의 지역
+ *     이름이므로, 그 이름을 한 마디로 적은 자리가 곧 항목 참조다.
+ *   - 잎을 이름으로 들여온 것(`use …::data_home::user_home_path`)은 그 `use` 줄에서
+ *     이미 `data_home::X` 로 잡히므로 따로 세지 않는다.
  */
-function dataHomeReferences(tokens) {
+function dataHomeReferences(tokens, publicNames) {
+	// 이 파일에서 깔때기 **모듈**을 가리키는 지역 이름과, glob 으로 들어온 항목 이름.
+	const moduleLocals = new Set(["data_home"]);
+	let globbed = false;
+	for (const leaf of useDeclarations(tokens)) {
+		const path = leaf.path[leaf.path.length - 1] === "self" ? leaf.path.slice(0, -1) : leaf.path;
+		if (!path.length || path[path.length - 1] !== "data_home") continue;
+		if (leaf.glob) globbed = true;
+		else if (leaf.local) moduleLocals.add(leaf.local);
+	}
+	const globNames = globbed ? publicNames : new Set();
+
 	const found = [];
 	for (let i = 0; i < tokens.length; i += 1) {
 		const t = tokens[i];
-		if (t.kind !== "ident" || t.text !== "data_home") continue;
-		if (!(tokens[i + 1]?.text === ":" && tokens[i + 2]?.text === ":")) continue;
-		const head = tokens[i + 3];
-		if (!head) continue;
-		if (head.kind === "punct" && head.text === "{") {
-			const stop = skipBalanced(tokens, i + 3, "{", "}");
-			for (let j = i + 4; j < stop - 1; j += 1) {
-				if (tokens[j].kind !== "ident") continue;
-				if (tokens[j].text === "self") continue;
-				if (tokens[j].text === "as") {
-					j += 1;
-					continue;
+		if (t.kind !== "ident") continue;
+
+		if (moduleLocals.has(t.text) && tokens[i + 1]?.text === ":" && tokens[i + 2]?.text === ":") {
+			const head = tokens[i + 3];
+			if (!head) continue;
+			if (head.kind === "punct" && head.text === "{") {
+				const stop = skipBalanced(tokens, i + 3, "{", "}");
+				for (let j = i + 4; j < stop - 1; j += 1) {
+					if (tokens[j].kind !== "ident") continue;
+					if (tokens[j].text === "self") continue;
+					if (tokens[j].text === "as") {
+						j += 1;
+						continue;
+					}
+					// 중첩 경로(`a::b`)의 첫 마디만 항목이다.
+					found.push({ name: tokens[j].text, line: tokens[j].line });
+					while (tokens[j + 1]?.text === ":" && tokens[j + 2]?.text === ":") j += 3;
 				}
-				// 중첩 경로(`a::b`)의 첫 마디만 항목이다.
-				found.push({ name: tokens[j].text, line: tokens[j].line });
-				while (tokens[j + 1]?.text === ":" && tokens[j + 2]?.text === ":") j += 3;
+				i = stop - 1;
+				continue;
 			}
-			i = stop - 1;
+			// `use …::data_home::*` 의 별은 항목 이름이 아니다 — 아래 glob 이 든다.
+			if (head.kind === "ident" && head.text !== "self") {
+				found.push({ name: head.text, line: head.line });
+			}
 			continue;
 		}
-		if (head.kind === "ident" && head.text !== "self") {
-			found.push({ name: head.text, line: head.line });
+
+		if (globNames.has(t.text)) {
+			const segments = pathAt(tokens, i);
+			if (segments && segments.length === 1) {
+				found.push({ name: t.text, line: t.line, via: "use …::*" });
+			}
 		}
 	}
 	return found;
@@ -705,12 +750,38 @@ if (existsSync(FUNNEL)) {
 		fail(`허용 목록이 낡았다(${gone.length}) — 더는 공개가 아니다. 지워라:`, gone);
 	}
 
+	// glob(`use …::data_home::*`)으로 들어오는 이름은 허용 목록의 **첫 마디**다
+	// (`DataHomeChild::name` 은 항목 `DataHomeChild` 하나로 들어온다).
+	const publicNames = new Set([...PUBLIC_API.keys()].map((name) => name.split("::")[0]));
+
+	// 깔때기 항목을 **다시 내주는** 자리. 허용 목록은 그 파일이 쓰는 것을 허락할
+	// 뿐이고, 재수출은 그 이름을 크레이트 전체에 다시 여는 일이라 파일 단위 목록을
+	// 통째로 우회한다. 허용된 파일이라도 위반이다.
+	const reexported = [];
+	for (const file of files) {
+		if (file === FUNNEL) continue;
+		for (const leaf of useDeclarations(tokenizeRust(readFileSync(file, "utf8")))) {
+			if (!leaf.pub) continue;
+			if (!leaf.path.includes("data_home")) continue;
+			const what = leaf.glob ? `${leaf.path.join("::")}::*` : leaf.path.join("::");
+			reexported.push(`${file}:${leaf.line} — pub use ${what}`);
+		}
+	}
+	if (reexported.length) {
+		fail(`깔때기 항목을 밖에서 다시 내줬다(${reexported.length}):`, [
+			...reexported,
+			"허용 목록은 그 파일이 **쓰는** 것만 허락한다. 재수출하면 그 이름이 크레이트 전체에 열려,",
+			"목록에 없는 파일이 `crate::<이름>()` 으로 원 함수를 쓴다 — 파일 단위 목록이 무의미해진다.",
+			"정말 필요하면 깔때기의 PUBLIC_API 에 항목과 쓸 파일을 적고, 그 파일이 직접 부르게 하라.",
+		]);
+	}
+
 	// 모듈 밖에서 짚는 이름도 같은 목록으로 본다.
 	const wrongName = [];
 	const wrongPlace = [];
 	for (const file of files) {
 		if (file === FUNNEL) continue;
-		for (const ref of dataHomeReferences(tokenizeRust(readFileSync(file, "utf8")))) {
+		for (const ref of dataHomeReferences(tokenizeRust(readFileSync(file, "utf8")), publicNames)) {
 			const entry = PUBLIC_API.get(ref.name);
 			if (!entry) {
 				wrongName.push(`${file}:${ref.line} — data_home::${ref.name}`);

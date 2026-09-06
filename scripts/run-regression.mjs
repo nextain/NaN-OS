@@ -30,6 +30,11 @@ import { basename } from "node:path";
 import { delimiter, join, resolve } from "node:path";
 import { e2eBinaryPath } from "../packages/shell/scripts/agent-pairing.mjs";
 import { inventoryDigestFromFile } from "./lib/inventory-digest.mjs";
+import {
+	addPremiseSignals,
+	countPremiseSignals,
+	judgePremise,
+} from "./lib/run-premise.mjs";
 import { planGroups, wdioSpecArgs } from "./lib/regression-selection.mjs";
 
 const args = process.argv.slice(2);
@@ -448,6 +453,10 @@ const executed = [];
 // 돈 것 중 **통과한** 것. `executed` 와 나누어 두어야 채널 한 줄의 "통과" 와
 // 게이트의 "덮인 것" 이 서로 다른 사실을 말할 수 있다.
 const passedSpecs = [];
+// 이 실행의 **전제** 지표. 스펙 하나가 세션 하나이고 세션마다 에이전트가 한 번
+// 떠야 하는데, 앞 세션의 고아가 리스를 쥐면 앱만 뜨고 뇌 없이 돈다. 그 사실이
+// 기록에 없으면 남는 것은 제품 결함처럼 보이는 실패 숫자뿐이다.
+let premiseSignals = { agentStarts: 0, leaseBlocked: 0 };
 const groupResults = [];
 
 /**
@@ -646,6 +655,14 @@ for (const [conf, specs] of groups) {
 	}
 	const output = chunks.join("\n");
 
+	// 전제는 묶음마다 센다. 묶음마다 wdio 를 따로 부르므로 출력도 따로다.
+	// 다시 돌리는 대목(retryFailedOnce)은 세지 않는다 — 그쪽 기동까지 더하면
+	// 기동 수가 돈 스펙 수를 넘어 전제가 거짓으로 깨진다.
+	premiseSignals = addPremiseSignals(
+		premiseSignals,
+		countPremiseSignals(output),
+	);
+
 	const outcome = parseSpecOutcomes(output);
 	// **돈 것** 과 **통과한 것** 은 다른 사실이다. 오래 한 칸에 넣었다 —
 	// 묶음이 실패하면 `executed` 에 통과한 스펙만 담았고, 게이트는 그 칸을
@@ -706,6 +723,21 @@ function fingerprint() {
 	};
 }
 
+/**
+ * 이 실행에 뇌가 있었는가. 스펙 하나가 세션 하나이고 세션마다 에이전트가 한 번
+ * 떠야 하므로, 기동 수가 돈 스펙 수와 같고 리스에 막힌 세션이 없어야 성립한다.
+ */
+const premiseVerdict = judgePremise({
+	agentStarts: premiseSignals.agentStarts,
+	leaseBlocked: premiseSignals.leaseBlocked,
+	executed: executed.length,
+});
+if (premiseVerdict.premise !== "ok") {
+	console.log(
+		`[regression] ⚠ 전제 불성립 — ${premiseVerdict.reason}. 이 실행의 실패는 제품의 것이라고 말할 수 없다.`,
+	);
+}
+
 const record = {
 	machine,
 	tiers,
@@ -720,6 +752,18 @@ const record = {
 	// 그중 통과한 것. 돈 것과 통과한 것을 한 칸에 넣었더니, 실제로 돌아 실패한
 	// 스펙이 판정에서 "아무 기계도 맡지 않았다" 로 보였다.
 	passedSpecs,
+	// 이 실행에 뇌가 있었는가 — `"ok"` 또는 `"invalid"`. 전제가 깨진 실행의
+	// 실패는 제품의 것이 아니므로 완결성 게이트가 커버리지로 세지 않는다.
+	// 2026-09-06 이 기계의 자격증명 실행이 정확히 그 모양이었다: 서른여덟 개
+	// 중 서른일곱이 뇌 없이 돌았는데 기록에는 그 사실이 한 글자도 없었다.
+	premise: premiseVerdict.premise,
+	// 그 판정의 근거 숫자. 로그는 다음 실행이 덮어쓰므로 여기 남긴다.
+	premiseSignals: {
+		agentStarts: premiseSignals.agentStarts,
+		leaseBlocked: premiseSignals.leaseBlocked,
+		executed: executed.length,
+		reason: premiseVerdict.reason,
+	},
 	// 어느 wdio 설정이 어디까지 갔는지. 한 설정이 실패해도 다른 설정의
 	// 결과는 남는다.
 	groups: groupResults,
@@ -860,6 +904,7 @@ console.log(
 	`\n${channelLine(
 		"DONE",
 		`${passedSpecs.length}/${mine.length} 통과 · 돈 것 ${executed.length}` +
+			` · 전제 ${premiseVerdict.premise}` +
 			(failedSpecs.length
 				? ` · 실패 ${failedSpecs.slice(0, 4).join(", ")}${failedSpecs.length > 4 ? ` 외 ${failedSpecs.length - 4}` : ""}`
 				: ""),

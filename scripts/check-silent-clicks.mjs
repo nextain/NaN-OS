@@ -57,9 +57,20 @@
  * 주는 식을 두 번 적은 자리는 같은 것으로 읽는다. 이 게이트는 한 함수 안에서
  * 사람이 읽어 알 수 있는 자리까지만 말한다.
  *
- * ## 무엇이 있음 가드인가 (13회차 지적 6 이후)
+ * ## 무엇이 있음 가드인가 (13회차 지적 6 · 15회차 지적 5 이후)
  *
- * 가드는 `if (E) …`, `if (!E) return; …`, `E && …`, `E?.click()` 넷이었다.
+ * 묻는 것은 문법이 아니라 하나다 — **클릭이 E 가 있을 때만 도는가.** 그래서
+ * 아래가 모두 같은 하나로 읽힌다.
+ *
+ *   - `if (E) E.click()` · `if (!E) return; … E.click()`
+ *   - `E && E.click()` — 왼쪽이 있음 검사면 오른쪽은 있을 때만 돈다
+ *   - `!E || E.click()` — 왼쪽이 없음 검사면 오른쪽은 있을 때만 돈다
+ *     (드모르간으로 위와 같은 문장이다)
+ *   - `E ? E.click() : undefined` · `!E ? undefined : E.click()`
+ *   - `E?.click()`
+ *
+ * 연산자를 세면 매 회차에 하나가 더 온다. 가드는 `if (E) …`, `if (!E) return; …`,
+ * `E && …`, `E?.click()` 넷이었다.
  * `E ? E.click() : undefined` 는 그 넷 어디에도 없는데 같은 무음이다 — 있으면
  * 누르고 없으면 아무것도 남기지 않는다. 이제 삼항도 같은 하나로 읽는다:
  * 조건이 있음(또는 없음) 검사이고, 도는 갈래가 그 식을 누르고, 다른 갈래가
@@ -504,13 +515,21 @@ function findHits(file, source) {
 			}
 		}
 
-		// 3) `el && el.click()` — 왼쪽이 존재 검사 어느 형태든, 오른쪽이 그 식을
-		//    누르면 같은 무음이다. `el != null && void el.click()` 도 그렇다.
-		if (
-			ts.isBinaryExpression(node) &&
-			node.operatorToken.kind === ts.SyntaxKind.AmpersandAmpersandToken
-		) {
-			const guard = presenceOf(node.left);
+		// 3) 짧은회로 두 형태. 무엇이 같은가는 연산자가 아니라 **오른쪽이 언제
+		//    도는가** 다.
+		//      `el && el.click()`   — 왼쪽이 있음 검사이면 오른쪽은 있을 때만 돈다
+		//      `!el || el.click()`  — 왼쪽이 없음 검사이면 오른쪽은 있을 때만 돈다
+		//    둘은 드모르간으로 같은 문장이고, 없으면 왼쪽에서 끝나고 있으면
+		//    누른다. `&&` 만 세고 `||` 를 빼 두면 부정 하나로 같은 무음이 셈에서
+		//    사라진다(15회차 지적 5).
+		if (ts.isBinaryExpression(node)) {
+			const kind = node.operatorToken.kind;
+			const guard =
+				kind === ts.SyntaxKind.AmpersandAmpersandToken
+					? presenceOf(node.left)
+					: kind === ts.SyntaxKind.BarBarToken
+						? absenceOf(node.left)
+						: null;
 			const key = guard ? exprKey(guard) : null;
 			const receiver = clickReceiver(node.right);
 			if (key && receiver && exprKey(receiver) === key) hits.push(at(node));

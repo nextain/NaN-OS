@@ -125,6 +125,23 @@ function memberBase(node) {
  * (`{ createElement as h }`)은 지역 이름이 `h`, `imported` 가 `createElement` 다 —
  * 판정은 언제나 `imported` 쪽으로 한다.
  */
+/**
+ * **모듈 바인딩을 만드는 선언**은 TypeScript 에 두 종뿐이다.
+ *
+ *   - `ts.isImportDeclaration` — `import … from "mod"`
+ *   - `ts.isImportEqualsDeclaration` — `import h = require("mod")`,
+ *     `import x = ns.member`
+ *
+ * 형태를 열거하지 않고 이 두 술어로 묻는다. 앞엣것만 보면 `import h =
+ * require("react")` 가 import 가 아니게 되고, 그러면 `h` 는 선언 없는 자유
+ * 식별자로 읽혀 전역이 된다 — 요소 판정이 통째로 갈린다(15회차 지적 8).
+ * 이것은 **정적** 선언이고, 보증 밖인 동적 `import()`/`require()` **호출**과
+ * 다르다.
+ */
+export function isModuleBindingDeclaration(node) {
+	return !!node && (ts.isImportDeclaration(node) || ts.isImportEqualsDeclaration(node));
+}
+
 const IMPORTS = new WeakMap();
 
 export function importBindings(sf) {
@@ -133,7 +150,32 @@ export function importBindings(sf) {
 	if (!sf || !sf.statements) return out;
 	IMPORTS.set(sf, out);
 	for (const stmt of sf.statements) {
-		if (!ts.isImportDeclaration(stmt)) continue;
+		if (!isModuleBindingDeclaration(stmt)) continue;
+		if (ts.isImportEqualsDeclaration(stmt)) {
+			const ref = stmt.moduleReference;
+			// `import h = require("react")` — 그 모듈 전체를 한 이름에 묶는다.
+			// 네임스페이스 import 와 같은 뜻이라 같은 답을 준다.
+			if (
+				ts.isExternalModuleReference(ref) &&
+				ref.expression &&
+				ts.isStringLiteral(ref.expression)
+			)
+				out.set(stmt.name.text, {
+					module: ref.expression.text,
+					imported: "*",
+					kind: "import-equals",
+				});
+			// `import x = ns.member` — 이름을 다른 이름에 붙인 것이다. 값이
+			// 무엇인지는 그 이름을 풀어야 안다.
+			else if (ts.isQualifiedName(ref) || ts.isIdentifier(ref))
+				out.set(stmt.name.text, {
+					module: null,
+					imported: null,
+					kind: "import-equals-entity",
+					entity: ref,
+				});
+			continue;
+		}
 		if (!stmt.importClause || !ts.isStringLiteral(stmt.moduleSpecifier)) continue;
 		const module = stmt.moduleSpecifier.text;
 		const clause = stmt.importClause;
@@ -170,7 +212,9 @@ export function importBindings(sf) {
 export function reexportBindings(sf) {
 	const named = new Map();
 	const stars = [];
-	if (!sf || !sf.statements) return { named, stars };
+	/** `export * as ns from "mod"` — 내보낸 이름 → 그 모듈. */
+	const namespaces = new Map();
+	if (!sf || !sf.statements) return { named, stars, namespaces };
 	for (const stmt of sf.statements) {
 		if (!ts.isExportDeclaration(stmt)) continue;
 		const module =
@@ -182,7 +226,14 @@ export function reexportBindings(sf) {
 			if (module) stars.push(module);
 			continue;
 		}
-		if (ts.isNamespaceExport(stmt.exportClause)) continue;
+		// `export * as ns from "mod"` — 그 모듈 전체를 한 이름으로 내준다.
+		// 정적 재수출이고, 보증 밖 목록(동적 import·고차 함수·배열/객체)에 없다.
+		// 여기서 버리면 재수출 **형태** 한 겹만 바꿔 알림·꺼짐·파괴가 같이
+		// 열린다(15회차 지적 1).
+		if (ts.isNamespaceExport(stmt.exportClause)) {
+			if (module) namespaces.set(stmt.exportClause.name.text, module);
+			continue;
+		}
 		for (const el of stmt.exportClause.elements) {
 			named.set(el.name.text, {
 				module,
@@ -190,7 +241,7 @@ export function reexportBindings(sf) {
 			});
 		}
 	}
-	return { named, stars };
+	return { named, stars, namespaces };
 }
 
 /** 이 이름이 파일 어딘가에서 다시 대입되는가. 그렇다면 값을 따라가지 않는다. */
@@ -252,6 +303,7 @@ function declaredNames(sf) {
 				ts.isImportSpecifier(n) ||
 				ts.isImportClause(n) ||
 				ts.isNamespaceImport(n) ||
+				ts.isImportEqualsDeclaration(n) ||
 				ts.isFunctionExpression(n)) &&
 			n.name &&
 			ts.isIdentifier(n.name)
@@ -414,7 +466,17 @@ function resolveExported(name, target, env, seen) {
 			boundArgs: 0,
 		};
 	}
-	const { named, stars } = reexportBindings(target);
+	const { named, stars, namespaces } = reexportBindings(target);
+	// `export * as GhostReact from "react"` — 그 이름은 그 모듈 전체다.
+	const asNamespace = namespaces.get(name);
+	if (asNamespace)
+		return {
+			module: asNamespace,
+			imported: "*",
+			local: name,
+			via: "reexport-namespace",
+			boundArgs: 0,
+		};
 	// `export { createElement as ghostCreate } from "react"` / `export { h as ghostCreate }`
 	const re = named.get(name);
 	if (re) {
@@ -546,7 +608,14 @@ export function exportedValueSite(name, target, env, state) {
 	// `import { off } from "./inner"; export { off }` 와 `import * as ns` 재수출
 	const again = importBindings(target).get(name);
 	if (again) return hop(again.module, again.imported);
-	const { named, stars } = reexportBindings(target);
+	const { named, stars, namespaces } = reexportBindings(target);
+	// `export * as flags from "./logger"` — 그 이름은 저 파일 전체다.
+	const asNamespace = namespaces.get(name);
+	if (asNamespace) {
+		const through = hop(asNamespace, "*");
+		if (through) return through;
+		return null;
+	}
 	const re = named.get(name);
 	if (re) {
 		if (re.module) return hop(re.module, re.imported);
@@ -555,6 +624,29 @@ export function exportedValueSite(name, target, env, state) {
 	for (const module of stars) {
 		const through = hop(module, name);
 		if (through) return through;
+	}
+	return null;
+}
+
+/**
+ * `import x = a.b.c` 의 오른쪽(EntityName)을 푼다.
+ *
+ * 식이 아니라 이름 경로라 `resolveBinding` 이 그대로 받지 못한다. 왼쪽 끝을
+ * 이름으로 풀고, 그 뒤 마디를 멤버로 하나씩 적용한다 — 멤버 규칙은 속성 접근과
+ * 같다(default·네임스페이스만 그 모듈의 export 로 읽는다).
+ */
+function resolveEntityName(entity, sf, env, seen) {
+	if (!entity) return null;
+	if (ts.isIdentifier(entity)) return resolveBinding(entity, sf, env, seen);
+	if (!ts.isQualifiedName(entity)) return null;
+	const base = resolveEntityName(entity.left, sf, env, seen);
+	if (!base) return null;
+	const name = entity.right.text;
+	if (base.global) return GLOBAL_ROOTS.has(base.global) ? globalBinding(name) : null;
+	if (base.imported === "*" || base.imported === "default") {
+		const through = memberOfModule(base, name, sf, env, seen);
+		if (through) return through;
+		return { module: base.module, imported: name, local: null, via: "member", boundArgs: 0 };
 	}
 	return null;
 }
@@ -577,6 +669,9 @@ export function resolveBinding(expr, sf, env, state) {
 		if (seen.has(key)) return null;
 		seen.add(key);
 		const hit = importBindings(sf).get(node.text);
+		// `import x = ns.member` — 이름을 이름에 붙인 것이다. 그 이름을 푼다.
+		if (hit && hit.kind === "import-equals-entity")
+			return resolveEntityName(hit.entity, sf, env, seen);
 		if (hit) {
 			const crossed = crossFile(hit, sf, env, seen);
 			if (crossed) return crossed;

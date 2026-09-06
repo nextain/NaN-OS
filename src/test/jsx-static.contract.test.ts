@@ -53,6 +53,7 @@ interface JsxStatic {
 	jsxElementsIn(node: ts.Node, sf: ts.SourceFile, env: Env | null): ts.Node[];
 	stringCandidates(node: ts.Node | undefined, sf: ts.SourceFile, env?: Env | null): Candidates;
 	staticChunks(node: ts.Node | undefined, sf: ts.SourceFile, env?: Env | null): string[];
+	staticStringsIn(node: ts.Node, sf: ts.SourceFile, env?: Env | null): Candidates;
 	alwaysTruthy(node: ts.Node | undefined, sf: ts.SourceFile, env?: Env | null): boolean;
 	typeStrings(node: ts.TypeNode | undefined, sf: ts.SourceFile, env?: Env | null): Candidates;
 	isCreateElementCall(node: ts.Node, env: Env | null): boolean;
@@ -1309,4 +1310,103 @@ describe("반복 횟수 상수가 없다 (14회차 지적 7)", () => {
 			expect(hits, `${rel} 이 겹을 센다: ${hits.join(", ")}`).toEqual([]);
 		});
 	}
+});
+
+/* ─────────────── 15회차에 못 박은 것 ─────────────── */
+
+describe("리터럴 위의 단항도 접는다 (15회차 지적 7)", () => {
+	it("`+`·`-`·`~` 는 값을 숫자로 바꿀 뿐이다", () => {
+		expect(truthyOf("+true")).toBe(true);
+		expect(truthyOf("-true")).toBe(true);
+		expect(truthyOf("~0")).toBe(true);
+	});
+
+	it("`typeof x` 는 안쪽이 무엇이든 비어 있지 않은 문자열이다", () => {
+		expect(truthyOf("typeof x", "declare const x: unknown;")).toBe(true);
+		expect(truthyOf("typeof undefined")).toBe(true);
+	});
+
+	it("반증: 숫자로 바꾼 결과가 0 이면 거짓이다", () => {
+		// 단항이 붙었다는 이유로 참으로 접으면, 열린 버튼이 영구히 꺼진 것으로
+		// 세어져 게이트가 과탐지로 곧 꺼진다.
+		expect(truthyOf("-0")).toBe(false);
+		expect(truthyOf('+""')).toBe(false);
+		expect(truthyOf('+"a"')).toBe(false);
+		expect(truthyOf("~-1")).toBe(false);
+	});
+
+	it("반증: 안쪽을 모르면 결과도 모른다", () => {
+		expect(truthyOf("-x", "declare const x: number;")).toBe(false);
+		expect(truthyOf("!(-x)", "declare const x: number;")).toBe(false);
+	});
+
+	it("const 사슬을 지나서도 접는다", () => {
+		expect(truthyOf("+off", "const off = true;")).toBe(true);
+		expect(truthyOf("+zero", "const zero = 0;")).toBe(false);
+	});
+
+	it("거짓 쪽도 대칭이다", () => {
+		expect(truthyOf("!(-0)")).toBe(true);
+		expect(truthyOf("!(+true)")).toBe(false);
+		expect(truthyOf("!(typeof x)", "declare const x: unknown;")).toBe(false);
+	});
+
+	it("단항의 결과는 결코 널이 아니다", () => {
+		// `??` 는 왼쪽이 널인지로 갈래를 고른다. `+x` 는 숫자라 언제나 왼쪽이다.
+		expect(truthyOf("+1 ?? true")).toBe(true);
+		expect(truthyOf("+0 ?? true")).toBe(false);
+	});
+});
+
+describe("staticStringsIn — 값이 아니라 그 안에 적힌 문자열 (15회차 지적 9)", () => {
+	function stringsIn(source: string, prelude = ""): string[] {
+		const sf = parse(`${prelude}\nexport const P = <button t={${source}} />;`);
+		return [...J.staticStringsIn(attributeValue(sf, "t") as ts.Node, sf, null).values].sort();
+	}
+
+	it("`new Request(\"…\")` 의 생성자 인자를 본다", () => {
+		expect(stringsIn('new Request("https://ghost.example/x")')).toContain(
+			"https://ghost.example/x",
+		);
+	});
+
+	it("`new URL(\"…\", base)` 도 같다", () => {
+		expect(stringsIn('new URL("https://ghost.example/x", base)', "declare const base: string;")).toContain(
+			"https://ghost.example/x",
+		);
+	});
+
+	it("객체 속성값과 배열 요소도 본다", () => {
+		expect(stringsIn('{ url: "https://ghost.example/x" }')).toContain(
+			"https://ghost.example/x",
+		);
+		expect(stringsIn('["https://ghost.example/x"]')).toContain("https://ghost.example/x");
+	});
+
+	it("사슬에 놓인 const 를 지나서도 본다", () => {
+		expect(
+			stringsIn("req", 'const req = new Request("https://ghost.example/x");'),
+		).toContain("https://ghost.example/x");
+	});
+
+	it("반증: 이것은 `stringCandidates` 와 다른 질문이다", () => {
+		// `stringCandidates` 는 "이 식의 **값**이 무엇인가" 다. `new Request(…)`
+		// 의 값은 Request 객체이지 문자열이 아니다. 판정을 이것으로 넓히면
+		// 과탐지가 되므로, 값이 필요한 자리는 그대로 저것을 쓴다.
+		const sf = parse(
+			`export const P = <button t={new Request("https://ghost.example/x")} />;`,
+		);
+		const value = J.stringCandidates(attributeValue(sf, "t"), sf, null);
+		expect([...value.values]).toEqual([]);
+		expect(value.complete).toBe(false);
+	});
+
+	it("반증: 못 푸는 자리는 여전히 모른다", () => {
+		const read = stringsIn("makeUrl()", "declare function makeUrl(): string;");
+		expect(read).toEqual([]);
+	});
+
+	it("순환 const 는 멈춘다", () => {
+		expect(stringsIn("a", "const a: string = b;\nconst b: string = a;")).toEqual([]);
+	});
 });

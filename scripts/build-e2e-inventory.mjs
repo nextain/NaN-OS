@@ -83,7 +83,7 @@ import { readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import ts from "typescript";
 import { resolveCallee } from "./lib/bindings.mjs";
-import { makeEnv, stringCandidates } from "./lib/jsx-static.mjs";
+import { makeEnv, staticStringsIn } from "./lib/jsx-static.mjs";
 
 const SPEC_DIR = "packages/shell/e2e-tauri/specs";
 const CONF_DIR = "packages/shell/e2e-tauri";
@@ -353,10 +353,11 @@ for (const name of readdirSync(HELPER_DIR).filter((f) => f.endsWith(".ts"))) {
  * 모델에 닿는 스펙이 결정론 칸에 남았다 — 자격증명 없는 기계가 맡았다가
  * 실패하는, 이미 세 번 겪은 그 오분류다.
  *
- * 이제 인자를 `stringCandidates` 로 푼다. 같은 파일 const, 조건식의 모든 갈래,
- * 템플릿의 고정 조각, import 로 건너간 const 까지 후보를 전부 보고, **하나라도**
- * 바깥 호스트면 대화 자국으로 센다. 값을 한 겹 숨기는 것으로는 빠져나가지
- * 못한다.
+ * 이제 인자를 `staticStringsIn` 으로 푼다. 같은 파일 const, 조건식의 모든 갈래,
+ * 템플릿의 고정 조각, import 로 건너간 const 는 물론, **값이 담겨 흘러가는
+ * 자리**(호출·`new` 의 인자, 객체 속성값, 배열 요소)까지 따라가 후보를 전부
+ * 보고, **하나라도** 바깥 호스트면 대화 자국으로 센다. 값을 한 겹 숨기거나
+ * `new Request("…")` 로 감싸는 것으로는 빠져나가지 못한다(15회차 지적 9).
  *
  * ── 12회차에 고친 것 ──────────────────────────────────────────────
  * 열한 번째까지 "이 호출이 fetch 인가" 는 **적힌 이름**이었다. 식별자 글자나
@@ -427,7 +428,10 @@ function outboundAddresses(file) {
 					const arg = node.arguments[at];
 					if (!arg) unresolved += 1;
 					else {
-						const resolved = stringCandidates(arg, sf, addressEnv);
+						// 값이 아니라 **그 안 어딘가에 적힌 주소**를 찾는다.
+						// `fetch(new Request("https://…"))` 의 값은 Request 객체이지만
+						// 닿는 곳은 생성자에 적힌 그 주소다(15회차 지적 9).
+						const resolved = staticStringsIn(arg, sf, addressEnv);
 						if (resolved.values.size === 0 && !resolved.complete) unresolved += 1;
 						for (const value of resolved.values) take(value);
 					}

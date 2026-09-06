@@ -46,7 +46,7 @@
 
 ```
 [win-rtx4060] START deterministic_ci 14개 · 짝 bc468a17 · 산출물 D:\naia-e2e
-[win-rtx4060] DONE 12/14 통과 · 돈 것 14 · 실패 92-browser-app-clicks, 100-herdr-first-frame
+[win-rtx4060] DONE 12/14 통과 · 돈 것 14 · 전제 ok · 실패 92-browser-app-clicks, 100-herdr-first-frame
 [naia-os-bc250] BLOCKED 짝 naia-agent 체크아웃 없음 — NAIA_AGENT_WORKTREES_DIR 필요
 [master] STATE 123개 중 덮인 것 26 · 아무도 맡지 않은 것 97 · 실패한 기계 없음
 [win-nogpu] ASK 92번이 이 기계에서만 실패한다 — GPU 없는 경로의 결함인지 봐 달라
@@ -54,6 +54,11 @@
 
 `START` 와 `DONE` 한 줄은 러너가 만들어 준다. 실행이 끝나면 화면 마지막에
 그대로 복사할 수 있는 형태로 나온다.
+
+`DONE` 의 **전제** 칸이 `invalid` 면 그 실행의 실패는 제품의 것이라고 말할 수
+없다 — 세션에 에이전트가 없었다는 뜻이다. 그때는 실패 목록을 옮기지 말고
+다시 돌린다. 마스터도 그 기록을 덮인 것으로 세지 않는다. 무엇을 근거로 그렇게
+판정했는지는 기록의 `premiseSignals` 에 숫자로 남는다.
 
 ### 누가 채널에 쓰는가
 
