@@ -50,16 +50,46 @@ pub(super) fn herdr_session_name() -> Option<String> {
     crate::e2e_runtime_dir().map(|runtime| session_name_for_runtime(&runtime))
 }
 
-/// 실행 자리 이름에서 세션 이름을 만든다. 실행마다 다른 이름이어야 두 실행이
-/// 서로의 세션에 붙지 않는다.
+/// 일반어로 끝나는 마디. 이것만 보면 실행이 서로 같은 이름을 갖는다.
+const GENERIC_RUNTIME_SEGMENTS: [&str; 7] = ["runtime", "run", "tmp", "temp", "e2e", "data", "."];
+
+/// 실행 자리 경로에서 세션 이름을 만든다. 실행마다 달라야 두 실행이 서로의 세션에
+/// 붙지 않는다.
+///
+/// 마지막 마디만 보면 안 된다 — 전용 환경의 실행 자리는
+/// `<tmp>/naia-shell-e2e-codex-<포트>/runtime` 처럼 일반어로 끝나서, codex 실행이
+/// 전부 `naia-e2e-runtime` 한 이름을 나눠 갖고 그 세션이 사람 홈에 남았다
+/// (2026-09-06 실측). 그래서 경로에서 `naia-shell-e2e-…` 마디를 **찾아** 그 뒤를 쓰고,
+/// 그런 마디가 없으면 일반어가 아닌 마지막 마디로 내려간다.
+///
+/// 규칙은 `e2e-tauri/herdr-session.mjs` 와 **같아야 한다** — 여기가 세션을 만들고
+/// 거기가 내린다. 계약이 같은 예제들로 둘을 묶는다.
 fn session_name_for_runtime(runtime: &std::path::Path) -> String {
-    let raw = runtime
-        .file_name()
-        .and_then(|name| name.to_str())
-        .unwrap_or("run");
+    let segments: Vec<&str> = runtime
+        .components()
+        .filter_map(|component| component.as_os_str().to_str())
+        .filter(|segment| !segment.is_empty() && *segment != "/" && *segment != "\\")
+        .collect();
+    let mut raw = "";
+    for segment in segments.iter().rev() {
+        if let Some(rest) = segment.strip_prefix("naia-shell-e2e-") {
+            raw = rest;
+            break;
+        }
+    }
+    if raw.is_empty() {
+        for segment in segments.iter().rev() {
+            if GENERIC_RUNTIME_SEGMENTS
+                .iter()
+                .any(|generic| segment.eq_ignore_ascii_case(generic))
+            {
+                continue;
+            }
+            raw = segment.strip_prefix("naia-shell-e2e-").unwrap_or(segment);
+            break;
+        }
+    }
     let tag: String = raw
-        .strip_prefix("naia-shell-e2e-")
-        .unwrap_or(raw)
         .chars()
         .map(|c| if c.is_ascii_alphanumeric() { c } else { '-' })
         .collect();
@@ -270,6 +300,27 @@ mod tests {
         assert_ne!(
             session_name_for_runtime(std::path::Path::new("/tmp/naia-shell-e2e-4448")),
             session_name_for_runtime(std::path::Path::new("/tmp/naia-shell-e2e-4449")),
+        );
+
+        // 전용 환경은 일반어로 끝난다 — 마지막 마디만 보면 codex 실행이 모두 같은
+        // 이름을 갖고 그 세션이 사람 홈에 남는다(2026-09-06 실측).
+        assert_eq!(
+            session_name_for_runtime(std::path::Path::new(
+                "/tmp/naia-shell-e2e-codex-4455/runtime"
+            )),
+            "naia-e2e-codex-4455"
+        );
+        assert_ne!(
+            session_name_for_runtime(std::path::Path::new(
+                "/tmp/naia-shell-e2e-codex-4455/runtime"
+            )),
+            session_name_for_runtime(std::path::Path::new(
+                "/tmp/naia-shell-e2e-codex-4456/runtime"
+            )),
+        );
+        assert_ne!(
+            session_name_for_runtime(std::path::Path::new("/tmp/naia-shell-e2e-4448/runtime")),
+            "naia-e2e-runtime"
         );
 
         // 이름에 쓸 수 없는 글자는 지운다. 빈 이름이 되면 고정 이름으로 떨어진다.

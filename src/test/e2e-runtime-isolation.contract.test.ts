@@ -180,6 +180,20 @@ describe("하네스는 사람의 herdr 세션에 붙지 않는다", () => {
 		)) as { harnessHerdrSessionName: (runtimeDir: string) => string };
 		expect(harnessHerdrSessionName("/tmp/naia-shell-e2e-4448")).toBe("naia-e2e-4448");
 
+		// 전용 환경의 실행 자리는 일반어로 끝난다
+		// (`codex-e2e-environment.ts` 의 `resolve(E2E_ROOT, "runtime")`). 마지막 마디만
+		// 보면 codex 실행이 전부 `naia-e2e-runtime` 한 이름을 나눠 갖고, 그 세션이
+		// 사람 홈 `~/.config/herdr/sessions/` 에 남는다(2026-09-06 실측).
+		expect(harnessHerdrSessionName("/tmp/naia-shell-e2e-codex-4455/runtime")).toBe(
+			"naia-e2e-codex-4455",
+		);
+		expect(harnessHerdrSessionName("/tmp/naia-shell-e2e-4448/runtime")).not.toBe(
+			"naia-e2e-runtime",
+		);
+		expect(harnessHerdrSessionName("/tmp/naia-shell-e2e-codex-4455/runtime")).not.toBe(
+			harnessHerdrSessionName("/tmp/naia-shell-e2e-codex-4456/runtime"),
+		);
+
 		// wdio teardown 이 그 규칙을 실제로 부르는가.
 		const conf = readFileSync(
 			fileURLToPath(
@@ -197,6 +211,9 @@ describe("하네스는 사람의 herdr 세션에 붙지 않는다", () => {
 			.map((token) => token.value);
 		expect(literals).toContain("/tmp/naia-shell-e2e-4448");
 		expect(literals).toContain("naia-e2e-4448");
+		// codex 예제도 양쪽에 있어야 규칙이 갈라지지 않는다.
+		expect(literals).toContain("/tmp/naia-shell-e2e-codex-4455/runtime");
+		expect(literals).toContain("naia-e2e-codex-4455");
 	});
 
 	it("PTY 로 띄우는 클라이언트도 같은 세션을 쓴다", () => {

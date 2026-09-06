@@ -1,5 +1,5 @@
 import type { ChildProcess } from "node:child_process";
-import { execFileSync, spawn } from "node:child_process";
+import { execFileSync, spawn, spawnSync } from "node:child_process";
 import {
 	cpSync,
 	existsSync,
@@ -10,6 +10,8 @@ import {
 	writeFileSync,
 } from "node:fs";
 import { connect } from "node:net";
+import { applyHarnessXdg } from "./e2e-xdg.mjs";
+import { stopHarnessHerdrSession } from "./herdr-session.mjs";
 import { tmpdir } from "node:os";
 import { basename, delimiter, dirname, resolve } from "node:path";
 import { execPath } from "node:process";
@@ -164,6 +166,11 @@ export function configureCodexE2eEnvironment(): void {
 	process.env.NAIA_E2E_MOCK_CLONE = "1";
 	process.env.NAIA_E2E_ADK_PATH = E2E_WORKSPACE;
 	process.env.NAIA_E2E_RUNTIME_DIR = E2E_RUNTIME;
+	// 전용 설정은 기본 wdio.conf 의 onPrepare/onComplete 를 **상속하지 않는다** —
+	// 앱 프로필 격리와 herdr 세션 정리를 여기서 명시로 부른다. 안 부르면 프로필이
+	// `~/.config/com.naia.shell.e2e/` 에, herdr 세션이 `~/.config/herdr/sessions/` 에
+	// 남는다(2026-09-06 실측).
+	applyHarnessXdg();
 	process.env.NAIA_VOXCPM2_RUNTIME_ROOT = resolve(
 		process.env.NAIA_E2E_VOXCPM2_RUNTIME_ROOT ??
 			resolve(E2E_RUNTIME, "voxcpm2-runtime"),
@@ -216,6 +223,10 @@ export function resetCodexE2eRoot(): void {
 	mkdirSync(E2E_APPDATA, { recursive: true });
 	mkdirSync(E2E_ARTIFACTS, { recursive: true });
 	mkdirSync(E2E_RUNTIME, { recursive: true });
+	// 실행 자리를 비운 뒤에 만든다 — 순서가 뒤집히면 방금 만든 자리를 rmSync 가 지운다.
+	for (const dir of Object.values(applyHarnessXdg() ?? {})) {
+		mkdirSync(dir, { recursive: true });
+	}
 	const voiceVrmPath = resolve(E2E_SETTINGS, "vrm-files", "01-OL_Woman.vrm");
 	if (E2E_VOICE_6G_ENABLED) {
 		if (!E2E_VRM_SOURCE || !existsSync(E2E_VRM_SOURCE)) {
@@ -514,6 +525,7 @@ export async function stopOwnedEmbeddedApp(): Promise<void> {
 
 export function cleanupCodexE2eRoot(): void {
 	assertOwnedRoot(E2E_ROOT);
+	stopHarnessHerdrSession(process.env.NAIA_E2E_RUNTIME_DIR, spawnSync);
 	// A red E2E run otherwise removes the only durable Agent record before the
 	// failure can be classified. This opt-in is intentionally test-only and
 	// preserves only the port-scoped root owned by this harness; normal runs

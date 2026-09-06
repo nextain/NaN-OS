@@ -2560,6 +2560,42 @@ describe("SettingsTab — memory tab (#298)", () => {
 		expect(document.getElementById("model-select")).toBeTruthy();
 	});
 
+	it("keeps the selected TTS provider when its default voice is persisted", () => {
+		localStorage.setItem(
+			"naia-config",
+			JSON.stringify({
+				provider: "nextain",
+				model: "gemini-3.5-flash",
+				locale: "ko",
+				ttsProvider: "browser",
+				ttsVoice: "old-browser-voice",
+			}),
+		);
+		mockInvoke.mockResolvedValue([]);
+
+		const rendered = render(<SettingsTab />);
+		gotoSettingsTab("voice");
+
+		const provider = screen.getByTestId(
+			"gateway-tts-provider",
+		) as HTMLSelectElement;
+		fireEvent.change(provider, { target: { value: "edge" } });
+
+		const saved = JSON.parse(localStorage.getItem("naia-config") || "{}");
+		expect(saved.ttsProvider).toBe("edge");
+		expect(saved.ttsVoice).toBe("ko-KR-SunHiNeural");
+
+		rendered.unmount();
+		render(<SettingsTab />);
+		gotoSettingsTab("voice");
+		expect(
+			(screen.getByTestId("gateway-tts-provider") as HTMLSelectElement).value,
+		).toBe("edge");
+		expect(
+			(screen.getByTestId("gateway-tts-voice") as HTMLSelectElement).value,
+		).toBe("ko-KR-SunHiNeural");
+	});
+
 	it("first tab button is active by default", () => {
 		mockInvoke.mockResolvedValue([]);
 		render(<SettingsTab />);

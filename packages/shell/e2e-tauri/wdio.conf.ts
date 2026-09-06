@@ -15,7 +15,8 @@ import { resolvePairedAgent } from "../scripts/agent-pairing.mjs";
 import { reclaimLeakedAgentChild as reclaimAgentChild } from "./agent-child-lease.js";
 import { reclaimSidecarForRuntimeDir } from "./bgm-sidecar-lease.mjs";
 import { applyHarnessXdg } from "./e2e-xdg.mjs";
-import { harnessHerdrSessionName } from "./herdr-session.mjs";
+import { isCoverFailure, reportCover } from "./helpers/cover-probe.mjs";
+import { stopHarnessHerdrSession } from "./herdr-session.mjs";
 import { startNotifyWebhookStub } from "./notify-webhook-stub.mjs";
 import {
 	CREDENTIALED_KEY_ENV,
@@ -538,30 +539,6 @@ export async function deliverCredentialedGatewayKey(): Promise<void> {
 	}
 }
 
-/**
- * 실행이 남긴 herdr 세션 서버를 내린다.
- *
- * 셸은 워크스페이스를 열 때 이 세션의 헤드리스 서버를 띄우는데, 그 서버는 앱이
- * 꺼져도 남는다(그것이 herdr 의 뜻이다 — 세션은 오래 산다). 하네스 세션은 오래
- * 살 이유가 없으므로 실행 자리와 함께 지운다. 안 지우면 실행마다 서버 하나와
- * `~/.config/herdr/sessions/` 아래 디렉터리 하나가 쌓인다.
- */
-function stopHarnessHerdrSession(): void {
-	const runtimeDir = process.env.NAIA_E2E_RUNTIME_DIR;
-	if (!OWNS_RUNTIME_DIR || !runtimeDir) return;
-	const session = harnessHerdrSessionName(runtimeDir);
-	for (const args of [
-		["--session", session, "server", "stop"],
-		["session", "delete", session],
-	]) {
-		try {
-			spawnSync("herdr", args, { stdio: "ignore", timeout: 10_000 });
-		} catch {
-			// herdr 이 없는 기계에서는 할 일이 없다.
-		}
-	}
-}
-
 export const config = {
 	runner: "local" as const,
 
@@ -828,10 +805,37 @@ export const config = {
 		}
 	},
 
+	/**
+	 * 클릭이 "가려짐" 으로 죽으면 무엇이 덮었는지 그 자리에서 남긴다 (#569).
+	 *
+	 * `element not interactable` · `element click intercepted` 는 요소가 없다는 뜻이
+	 * 아니라 다른 것이 위에 있다는 뜻인데, 로그에는 그 "다른 것" 이 남지 않아 회차마다
+	 * 화면을 다시 띄워 눈으로 확인해야 했다. 실패한 그 실행이 스스로 말하게 한다.
+	 */
+	async afterTest(
+		_test: unknown,
+		_context: unknown,
+		result: { passed?: boolean; error?: { message?: string } },
+	) {
+		if (result?.passed) return;
+		if (!isCoverFailure(result?.error?.message)) return;
+		await reportCover(
+			(script: unknown, ...args: unknown[]) =>
+				(browser.execute as (s: unknown, ...a: unknown[]) => Promise<unknown>)(
+					script,
+					...args,
+				),
+			(line: string) => {
+				process.stderr.write(`${line}\n`);
+			},
+		);
+	},
+
 	async onComplete() {
 		viteServer?.kill();
 		await notifyStub?.close();
-		stopHarnessHerdrSession();
+		if (OWNS_RUNTIME_DIR)
+			stopHarnessHerdrSession(process.env.NAIA_E2E_RUNTIME_DIR, spawnSync);
 		// 붉은 실행의 로그·리스를 볼 수 있어야 원인을 가린다. codex 전용 설정과
 		// 같은 손잡이를 쓴다.
 		if (!OWNS_RUNTIME_DIR) return;

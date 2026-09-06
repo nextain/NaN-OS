@@ -65,6 +65,12 @@ type SpecEntry = {
 	conf: readonly string[];
 	env: readonly string[];
 	tier: string;
+	requires?: readonly CapabilityRequirement[];
+};
+
+type CapabilityRequirement = {
+	capability: string;
+	tracker: string;
 };
 
 type Selection = {
@@ -75,6 +81,7 @@ type Selection = {
 		runnable: SpecEntry[];
 		envMissing: Map<string, string[]>;
 		harnessProvided: Map<string, string[]>;
+		capabilityBlocked: Map<string, CapabilityRequirement[]>;
 	};
 	groupByConf(specs: readonly SpecEntry[]): Map<string, string[]>;
 	planGroups(
@@ -85,6 +92,7 @@ type Selection = {
 		runnable: SpecEntry[];
 		envMissing: Map<string, string[]>;
 		harnessProvided: Map<string, string[]>;
+		capabilityBlocked: Map<string, CapabilityRequirement[]>;
 		skippedGroups: { conf: string; specs: string[]; reason: string }[];
 	};
 	wdioSpecArgs(specNames: readonly string[]): string[];

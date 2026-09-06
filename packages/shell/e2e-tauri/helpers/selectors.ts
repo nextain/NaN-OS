@@ -64,7 +64,11 @@ export const S = {
 	costTable: ".cost-table",
 
 	// Onboarding wizard
-	onboardingOverlay: ".onboarding-overlay",
+	// 마법사 뿌리. 예전 값 `.onboarding-overlay` 는 **제품에 없는 클래스**였다 —
+	// CSS 에만 남아 있고 어느 컴포넌트도 쓰지 않아, 이것을 기다리던 스펙 넷이
+	// 삼십 초를 채우고 죽었다(#564 재조사). check-dead-ui-specs 는 클래스
+	// 선택자를 풀지 못해 그 드리프트를 보지 못했으므로 표지로 바꾼다.
+	onboardingOverlay: '[data-testid="onboarding"]',
 	onboardingNextBtn: ".onboarding-next-btn",
 	onboardingSkipBtn: ".onboarding-skip-btn",
 	onboardingBackBtn: ".onboarding-back-btn",

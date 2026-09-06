@@ -2683,9 +2683,10 @@ export function SettingsTab() {
 	// Persist TTS voice/provider changes immediately (without full handleSave)
 	function persistTtsVoice(voice: string) {
 		setTtsVoice(voice);
-		if (existing) {
-			saveConfig({ ...existing, ttsVoice: voice });
-		}
+		// Provider changes are persisted immediately before this callback runs.
+		// Read the current config through the same path so a static or asynchronously
+		// fetched voice cannot write the render-time `existing` snapshot back over it.
+		persistConfig({ ttsVoice: voice });
 		debouncedLabSync();
 	}
 	async function selectProfileTtsProvider(next: TtsProviderId) {

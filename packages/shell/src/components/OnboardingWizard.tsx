@@ -1174,7 +1174,11 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
 	const progressSteps = STEPS.slice(0, -1); // exclude "complete" from dot indicators
 
 	return (
-		<div className="onboarding-app">
+		// `data-testid` 를 두는 이유: 이 화면을 기다리는 스펙이 오래 죽은 클래스
+		// (`.onboarding-overlay`)를 짚고 있었는데, check-dead-ui-specs 는 클래스
+		// 선택자를 풀지 못해 그 드리프트를 보지 못했다. 표지로 두면 그 게이트가
+		// 이름을 실제로 확인할 수 있다.
+		<div className="onboarding-app" data-testid="onboarding">
 			{/* Progress dots */}
 			<div className="onboarding-progress">
 				{progressSteps.map((s, i) => (
@@ -1188,7 +1192,11 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
 			</div>
 
 			{/* Step content */}
-			<div className="onboarding-step">
+			<div
+				className="onboarding-step"
+				data-testid="onboarding-step"
+				data-step={step}
+			>
 				{step === "welcome" && (
 					<>
 						<h2 className="onboarding-step__title">Naia Alpha</h2>
@@ -1245,6 +1253,7 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
 						</h2>
 						<input
 							className="onboarding-step__input"
+							data-testid="onboarding-input"
 							value={agentName}
 							onChange={(e) => setAgentName(e.target.value)}
 							placeholder="Naia"
@@ -1268,6 +1277,7 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
 						</h2>
 						<input
 							className="onboarding-step__input"
+							data-testid="onboarding-input"
 							value={userName}
 							onChange={(e) => setUserName(e.target.value)}
 							placeholder={t("onboard.name.placeholder")}
@@ -1289,7 +1299,10 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
 								agentName.trim() || t("onboard.defaultAgentName"),
 							)}
 						</h2>
-						<div className="onboarding-step__options">
+						<div
+							className="onboarding-step__options"
+							data-testid="onboarding-speech-style"
+						>
 							{(["casual", "formal"] as const).map((style) => (
 								<button
 									key={style}
@@ -1355,6 +1368,7 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
 												aria-pressed={
 													avatarProvider === "vrm" && selectedVrm === path
 												}
+												data-testid="onboarding-avatar-card"
 												className={`onboarding-step__avatar-card${avatarProvider === "vrm" && selectedVrm === path ? " onboarding-step__avatar-card--selected" : ""}`}
 												onClick={() => handleVrmSelect(path)}
 											>
@@ -1420,6 +1434,7 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
 								<button
 									key={bg.url}
 									type="button"
+									data-testid="onboarding-bg-card"
 									className={`onboarding-step__bg-card${selectedBg === bg.url ? " onboarding-step__bg-card--selected" : ""}`}
 									onClick={() => handleBgSelect(bg.url)}
 								>
@@ -1514,6 +1529,7 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
 									<button
 										type="button"
 										className="onboarding-step__link onboarding-step__link--muted"
+										data-testid="onboarding-provider-later"
 										onClick={goNext}
 									>
 										{t("onboard.connect.setupLater")}
@@ -1650,6 +1666,7 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
 					<button
 						type="button"
 						className="onboarding-step__back-btn"
+						data-testid="onboarding-back"
 						onClick={goBack}
 					>
 						{t("onboard.back")}
@@ -1660,6 +1677,7 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
 					<button
 						type="button"
 						className="onboarding-step__next-btn"
+						data-testid="onboarding-next"
 						onClick={isCompleteStep ? handleComplete : goNext}
 						disabled={isCompleteStep && completing}
 					>
@@ -1674,6 +1692,7 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
 					<button
 						type="button"
 						className="onboarding-step__next-btn"
+						data-testid="onboarding-next"
 						onClick={goNext}
 					>
 						{t("onboard.next")}

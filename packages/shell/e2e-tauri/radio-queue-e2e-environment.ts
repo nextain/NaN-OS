@@ -1,4 +1,7 @@
 import type { ChildProcess } from "node:child_process";
+import { spawnSync } from "node:child_process";
+import { applyHarnessXdg } from "./e2e-xdg.mjs";
+import { stopHarnessHerdrSession } from "./herdr-session.mjs";
 import { spawn } from "node:child_process";
 import { existsSync, mkdirSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { connect } from "node:net";
@@ -70,6 +73,9 @@ export function configure() {
  process.env.NAIA_E2E_MOCK_CLONE = "1";
  process.env.NAIA_E2E_ADK_PATH = workspace;
  process.env.NAIA_E2E_RUNTIME_DIR = runtime;
+ // 전용 설정은 기본 wdio.conf 의 훅을 상속하지 않는다 — 앱 프로필 격리를 여기서
+ // 명시로 부른다(#569 상태 누수, herdr 세션이 사람 홈에 남던 것).
+ applyHarnessXdg();
  process.env.WEBVIEW2_USER_DATA_FOLDER = webview;
  process.env.NAIA_BGM_PORT = String(bgmPort);
  process.env.NAIA_E2E_OAUTH_CALLBACK_PORT = String(oauthPort);
@@ -82,8 +88,11 @@ export function configure() {
  process.env.NAIA_AGENT_PROTO_DIR = resolve(pairedAgent, "src/main/adapters/grpc");
 }
 export function reset() {
- assertOwnedRoot(root); rmSync(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
+ assertOwnedRoot(root);
+ stopHarnessHerdrSession(process.env.NAIA_E2E_RUNTIME_DIR, spawnSync); rmSync(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
  for (const dir of [settings, runtime, webview, appData]) mkdirSync(dir, { recursive: true });
+ // 실행 자리를 비운 뒤에 만든다 — 순서가 뒤집히면 방금 만든 자리를 rmSync 가 지운다.
+ for (const dir of Object.values(applyHarnessXdg() ?? {})) mkdirSync(dir, { recursive: true });
  writeFileSync(resolve(settings, "config.json"), JSON.stringify({ provider: "ollama", model: "e2e", NAIA_MAIN_PROVIDER: "ollama", NAIA_MAIN_MODEL: "e2e", workspaceRoot: workspace, onboardingComplete: true }), { mode: 0o600 });
 }
 export async function start(binary: string) {

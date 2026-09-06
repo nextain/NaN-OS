@@ -1426,6 +1426,74 @@ fn centered_window_state(size: PhysicalSize<u32>, bounds: WindowBounds) -> Windo
     }
 }
 
+/// Convert the logical dimensions declared in tauri.conf.json to physical
+/// pixels for the monitor where the new window will be centered.
+///
+/// A hidden Tauri window can report a transient 1x1 outer size before the
+/// compositor configures it. Startup must therefore use the declared config
+/// dimensions instead of reading geometry from that hidden window.
+fn logical_window_size_to_physical(
+    logical_width: f64,
+    logical_height: f64,
+    scale_factor: f64,
+) -> PhysicalSize<u32> {
+    let scale = if scale_factor.is_finite() && scale_factor > 0.0 {
+        scale_factor
+    } else {
+        1.0
+    };
+
+    let to_physical = |logical: f64| {
+        let logical = if logical.is_finite() && logical > 0.0 {
+            logical
+        } else {
+            1.0
+        };
+        (logical * scale).round().clamp(1.0, u32::MAX as f64) as u32
+    };
+
+    PhysicalSize::new(to_physical(logical_width), to_physical(logical_height))
+}
+
+fn centered_window_state_from_config(
+    logical_width: f64,
+    logical_height: f64,
+    scale_factor: f64,
+    bounds: WindowBounds,
+) -> WindowState {
+    centered_window_state(
+        logical_window_size_to_physical(logical_width, logical_height, scale_factor),
+        bounds,
+    )
+}
+
+fn configured_window_dimensions(
+    app_handle: &AppHandle,
+    window_label: &str,
+) -> (f64, f64) {
+    // These values match the main and E2E tauri.conf.json declarations. The
+    // fallback only applies if a config has no window entries at all.
+    app_handle
+        .config()
+        .app
+        .windows
+        .iter()
+        .find(|config| config.label == window_label)
+        .or_else(|| app_handle.config().app.windows.first())
+        .map(|config| (config.width, config.height))
+        .unwrap_or((1366.0, 768.0))
+}
+
+fn configured_window_state(
+    app_handle: &AppHandle,
+    window_label: &str,
+    scale_factor: f64,
+    bounds: WindowBounds,
+) -> WindowState {
+    let (logical_width, logical_height) = configured_window_dimensions(app_handle, window_label);
+    centered_window_state_from_config(logical_width, logical_height, scale_factor, bounds)
+}
+
 fn monitor_for_window_state(
     app_handle: &AppHandle,
     window: &tauri::WebviewWindow,
@@ -12059,15 +12127,18 @@ pub fn run() {
                         .flatten()
                         .or_else(|| window.primary_monitor().ok().flatten())
                     {
-                        if let Ok(size) = window.outer_size() {
-                            let fitted = centered_window_state(size, monitor_bounds(&monitor));
-                            let _ = window.set_size(PhysicalSize::new(fitted.width, fitted.height));
-                            let _ = window.set_position(PhysicalPosition::new(fitted.x, fitted.y));
-                            log_verbose(&format!(
-                                "[Naia] Window centered: {}x{} at ({},{})",
-                                fitted.width, fitted.height, fitted.x, fitted.y
-                            ));
-                        }
+                        let fitted = configured_window_state(
+                            &app_handle,
+                            window.label(),
+                            monitor.scale_factor(),
+                            monitor_bounds(&monitor),
+                        );
+                        let _ = window.set_size(PhysicalSize::new(fitted.width, fitted.height));
+                        let _ = window.set_position(PhysicalPosition::new(fitted.x, fitted.y));
+                        log_verbose(&format!(
+                            "[Naia] Window centered: {}x{} at ({},{})",
+                            fitted.width, fitted.height, fitted.x, fitted.y
+                        ));
                     }
                 }
                 let _ = window.show();
@@ -12927,6 +12998,55 @@ mod tests {
                 y: 20,
                 width: 1280,
                 height: 720,
+            }
+        );
+    }
+
+    #[test]
+    fn logical_window_size_scales_config_default_for_monitor() {
+        assert_eq!(
+            logical_window_size_to_physical(1366.0, 768.0, 1.0),
+            PhysicalSize::new(1366, 768)
+        );
+        assert_eq!(
+            logical_window_size_to_physical(1366.0, 768.0, 1.25),
+            PhysicalSize::new(1708, 960)
+        );
+    }
+
+    #[test]
+    fn logical_window_size_rejects_invalid_dimensions_and_scale() {
+        assert_eq!(
+            logical_window_size_to_physical(0.0, f64::NAN, 0.0),
+            PhysicalSize::new(1, 1)
+        );
+        assert_eq!(
+            logical_window_size_to_physical(1366.0, 768.0, f64::NAN),
+            PhysicalSize::new(1366, 768)
+        );
+    }
+
+    #[test]
+    fn centered_config_size_scales_and_fits_negative_monitor_origin() {
+        let fitted = centered_window_state_from_config(
+            1366.0,
+            768.0,
+            1.25,
+            WindowBounds {
+                x: -1920,
+                y: -200,
+                width: 1600,
+                height: 1000,
+            },
+        );
+
+        assert_eq!(
+            fitted,
+            WindowState {
+                x: -1920,
+                y: -180,
+                width: 1600,
+                height: 960,
             }
         );
     }

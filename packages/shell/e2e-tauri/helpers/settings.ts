@@ -458,7 +458,7 @@ export async function openVrmAvatarPicker(): Promise<void> {
 //
 //   localStorage.removeItem("naia-config");
 //   await safeRefresh();
-//   await $(".onboarding-overlay").waitForDisplayed();
+//   await $(S.onboardingOverlay).waitForDisplayed();
 //
 // 그런데 그 세 줄로는 온보딩이 돌아오지 않는다. 자동 실행에서는 `App.tsx` 가
 // 매 부팅마다 `naia-config` 를 다시 써서 마법사를 건너뛰기 때문이다. 새로 고침
@@ -534,9 +534,7 @@ export async function resetOnboarding(
 	);
 
 	await safeRefresh();
-
-	const overlay = await $(S.onboardingOverlay);
-	await overlay.waitForDisplayed({ timeout: 30_000 });
+	await waitForOnboardingSurface();
 
 	// 3) 표식은 여기서 지운다. 남겨 두면 뒤따르는 다른 스펙 파일까지 마법사가
 	//    뜨는 상태가 되어, 이 헬퍼가 고치려던 것과 반대 방향으로 어긋난다.
@@ -544,6 +542,103 @@ export async function resetOnboarding(
 		localStorage.removeItem(key);
 	}, FORCE_ONBOARDING_KEY);
 }
+
+/** 온보딩 표면의 관측값. 관측값으로 원인을 단정하지 않는다. */
+interface OnboardingSurface {
+	readonly uiMode: string | null;
+	readonly hasOverlay: boolean;
+	readonly windowGeometry: {
+		readonly innerWidth: number;
+		readonly innerHeight: number;
+		readonly outerWidth: number;
+		readonly outerHeight: number;
+		readonly clientWidth: number;
+		readonly clientHeight: number;
+		readonly devicePixelRatio: number;
+	};
+	readonly errorText: string[];
+	readonly onboardingComplete: unknown;
+	readonly hasMarker: boolean;
+	readonly adkPath: string | null;
+}
+
+async function readOnboardingSurface(): Promise<OnboardingSurface> {
+	return (await browser.execute((key: string) => {
+		const raw = localStorage.getItem("naia-config");
+		let onboardingComplete: unknown = "(config 없음)";
+		if (raw) {
+			try {
+				onboardingComplete = JSON.parse(raw).onboardingComplete ?? null;
+			} catch {
+				onboardingComplete = "(config 파싱 실패)";
+			}
+		}
+		const shell = document.querySelector<HTMLElement>("[data-ui-mode]");
+		const visibleText = (selector: string): string[] =>
+			Array.from(document.querySelectorAll<HTMLElement>(selector))
+				.map((element) => {
+					const style = window.getComputedStyle(element);
+					if (style.display === "none" || style.visibility === "hidden") {
+						return "";
+					}
+					return (element.innerText || element.textContent || "")
+						.trim()
+						.replace(/\s+/g, " ")
+						.slice(0, 500);
+				})
+				.filter(Boolean)
+				.slice(0, 4);
+		const errorText = Array.from(
+			new Set([
+				...visibleText('[role="alert"]'),
+				...visibleText("output[aria-live]"),
+			]),
+		).slice(0, 4);
+		return {
+			uiMode: shell?.dataset.uiMode ?? null,
+			hasOverlay: Boolean(document.querySelector('[data-testid="onboarding"]')),
+			windowGeometry: {
+				innerWidth: window.innerWidth,
+				innerHeight: window.innerHeight,
+				outerWidth: window.outerWidth,
+				outerHeight: window.outerHeight,
+				clientWidth: document.documentElement.clientWidth,
+				clientHeight: document.documentElement.clientHeight,
+				devicePixelRatio: window.devicePixelRatio,
+			},
+			errorText,
+			onboardingComplete,
+			hasMarker: localStorage.getItem(key) === "1",
+			adkPath: localStorage.getItem("naia-adk-path"),
+		};
+	}, FORCE_ONBOARDING_KEY)) as OnboardingSurface;
+}
+
+/** 30초 동안 한 번만 기다리고, 실패하면 관측값을 함께 보고한다. */
+async function waitForOnboardingSurface(): Promise<void> {
+	let surface = await readOnboardingSurface();
+	try {
+		await $(S.onboardingOverlay).waitForDisplayed({ timeout: 30_000 });
+	} catch (error) {
+		surface = await readOnboardingSurface();
+		const reason = error instanceof Error ? error.message : String(error);
+		const geometry = surface.windowGeometry;
+		throw new Error(
+			`Onboarding surface did not become visible within 30 seconds: ${reason}; ` +
+			`uiMode=${surface.uiMode ?? "unknown"}, ` +
+			`overlay=${surface.hasOverlay ? "present" : "missing"}, ` +
+			`window=${geometry.innerWidth}x${geometry.innerHeight}, ` +
+			`outer=${geometry.outerWidth}x${geometry.outerHeight}, ` +
+			`client=${geometry.clientWidth}x${geometry.clientHeight}, ` +
+			`dpr=${geometry.devicePixelRatio}, ` +
+			`errorText=${surface.errorText.length > 0 ? JSON.stringify(surface.errorText) : "none"}, ` +
+			`onboardingComplete=${String(surface.onboardingComplete)}, ` +
+			`marker=${surface.hasMarker ? "set" : "unset"}, ` +
+			`adkPath=${surface.adkPath ?? "unset"}`,
+		);
+	}
+}
+
 
 /**
  * 설정 값을 **파일까지** 저장한다.
