@@ -10,6 +10,8 @@ import {
 	applyNaiaSlotDefaults,
 	deriveGate,
 	deriveGateFromConfig,
+	effectiveMainRole,
+	effectiveTtsProvider,
 	readSlots,
 	writeSlot,
 } from "../model";
@@ -389,5 +391,86 @@ describe("S-EMBKO · FR-SLOT.6 한글 오프라인 임베딩 모델 노출 (2026
 			provider: "offline",
 			model: "paraphrase-multilingual-MiniLM-L12-v2",
 		});
+	});
+});
+
+/**
+ * #575 — 프로파일 카드와 설정 탭이 **같은 값**을 말한다.
+ *
+ * 관측: VOICE 카드가 "TTS 미설정" 인데 바로 아래 드롭다운은 Microsoft Edge TTS 였고,
+ * BRAIN 카드는 "— / gemini-3.7-flash" 인데 두뇌 탭은 Naia / DeepSeek V4 Flash 였다.
+ * 둘 다 자기 출처로는 옳았다 — 출처가 둘이라 갈렸다. 값을 두 군데서 계산하지 않는다.
+ */
+describe("#575 · 카드와 탭은 한 출처에서 읽는다", () => {
+	it("main 은 llmRoles 가 정본이고 옛 최상위 거울이 아니다", () => {
+		// 시딩(#568)은 llmRoles.main 만 쓰고, 화면 하이드레이션이 최상위 provider 를
+		// 예전 기본값으로 되쓴다. 카드가 거울을 읽으면 공급자 자리가 대시가 된다.
+		const cfg = {
+			provider: "",
+			model: "gemini-3.7-flash",
+			llmRoles: {
+				main: { provider: "nextain", model: "deepseek-v4-flash" },
+			},
+		} as unknown as AppConfig;
+
+		expect(effectiveMainRole(cfg)).toEqual({
+			provider: "nextain",
+			model: "deepseek-v4-flash",
+		});
+		// 카드가 그리는 값도 같다.
+		expect(readSlots(cfg).main).toEqual({
+			provider: "nextain",
+			model: "deepseek-v4-flash",
+		});
+	});
+
+	it("llmRoles 가 없으면 예전처럼 최상위 값을 쓴다", () => {
+		const cfg = {
+			provider: "nextain",
+			model: "gemini-3.5-flash",
+		} as unknown as AppConfig;
+		expect(readSlots(cfg).main).toEqual({
+			provider: "nextain",
+			model: "gemini-3.5-flash",
+		});
+	});
+
+	it("저장된 TTS 공급자가 없어도 카드는 미설정이라 하지 않는다", () => {
+		// 기본값이 음성 탭의 useState 에만 있던 동안, 저장된 값이 없으면 카드는
+		// 빈 값(→ "미설정")을, 드롭다운은 Edge 를 보여 줬다.
+		const cfg = {} as AppConfig;
+		expect(effectiveTtsProvider(cfg)).toBe("edge");
+		expect(readSlots(cfg).tts.provider).toBe("edge");
+		expect(readSlots(cfg).tts.provider).toBe(effectiveTtsProvider(cfg));
+	});
+
+	it("옛 ttsEngine 도 같은 규칙으로 푼다", () => {
+		expect(effectiveTtsProvider({ ttsEngine: "google" } as AppConfig)).toBe(
+			"google",
+		);
+		expect(effectiveTtsProvider({ ttsEngine: "gateway" } as AppConfig)).toBe(
+			"edge",
+		);
+	});
+
+	it("음성 탭이 그 기본값을 스스로 다시 적지 않는다", async () => {
+		// 규칙이 두 자리에 있으면 한쪽만 고쳐져 다시 갈린다. 탭은 공용 함수를 부르고,
+		// 인라인 `"edge"` 폴백을 자기 상태 초기값에 다시 적지 않는다.
+		const { readFileSync } = await import("node:fs");
+		const { fileURLToPath } = await import("node:url");
+		const source = readFileSync(
+			fileURLToPath(
+				new URL("../../../components/SettingsTab.tsx", import.meta.url),
+			),
+			"utf8",
+		);
+		expect(source).toContain("effectiveTtsProvider((existing ?? {}) as AppConfig)");
+		expect(source).not.toContain('existing?.ttsEngine === "gateway"');
+	});
+
+	it("저장된 값이 있으면 그것이 이긴다", () => {
+		const cfg = { ttsProvider: "nextain", ttsEngine: "google" } as AppConfig;
+		expect(effectiveTtsProvider(cfg)).toBe("nextain");
+		expect(readSlots(cfg).tts.provider).toBe("nextain");
 	});
 });

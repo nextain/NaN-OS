@@ -104,6 +104,42 @@ export interface SlotSnapshot {
 	};
 }
 
+/**
+ * 화면이 실제로 쓰는 TTS 공급자. 저장된 값이 없을 때의 기본까지 **여기서** 정한다.
+ *
+ * 왜 함수인가: 이 기본값이 음성 탭의 `useState` 초기값에만 있던 동안, 프로파일
+ * 카드는 저장된 `ttsProvider` 를 그대로 읽어 `미설정` 이라 적고 바로 아래 드롭다운은
+ * `Microsoft Edge TTS` 를 보여 줬다 — 둘 다 자기 출처로는 옳았고, 출처가 둘이라
+ * 갈렸다(#575). 값을 두 군데서 계산하지 않는다.
+ */
+export function effectiveTtsProvider(config: AppConfig): TtsProviderId {
+	if (config.ttsProvider) return config.ttsProvider;
+	return config.ttsEngine === "google" ? "google" : "edge";
+}
+
+/**
+ * 화면이 실제로 쓰는 main 역할의 공급자·모델.
+ *
+ * `llmRoles.main` 이 정본이고 최상위 `provider`/`model` 은 옛 거울이다(#568 이후
+ * 시딩은 거울을 쓰지 않는다). 카드가 거울을 읽는 동안 두뇌 탭은 정본을 읽어,
+ * 공급자 자리가 대시인데 탭에는 Naia 가 보이는 상태가 그대로 노출됐다(#575).
+ * `sub` 는 이미 유효 역할에서 읽고 있었다 — `main` 만 빠져 있었다.
+ */
+export function effectiveMainRole(config: AppConfig): {
+	provider?: string;
+	model?: string;
+} {
+	const resolved = resolveEffectiveLlmRoles(config);
+	const main = resolved.ok
+		? resolved.roles.find((role) => role.role === "main")
+		: undefined;
+	const configured = readConfiguredLlmRoles(config).main;
+	return {
+		provider: main?.provider ?? configured?.provider ?? config.provider,
+		model: main?.model ?? configured?.model ?? config.model,
+	};
+}
+
 /** AppConfig → 6슬롯 스냅샷 읽기(순수). */
 export function readSlots(config: AppConfig): SlotSnapshot {
 	const isNvaAvatar =
@@ -122,8 +158,12 @@ export function readSlots(config: AppConfig): SlotSnapshot {
 		effectiveSub?.model ??
 		(!configuredSub?.inherit ? configuredSub?.model : undefined) ??
 		config.subLlmModel;
+	const effectiveMain = effectiveMainRole(config);
 	return {
-		main: { provider: config.provider, model: config.model },
+		main: {
+			provider: (effectiveMain.provider ?? "") as ProviderId,
+			model: effectiveMain.model ?? "",
+		},
 		sub: {
 			provider: subProvider as ProviderId | undefined,
 			model: subModel,
@@ -140,7 +180,7 @@ export function readSlots(config: AppConfig): SlotSnapshot {
 			model: config.sttModel,
 		},
 		tts: {
-			provider: config.ttsProvider,
+			provider: effectiveTtsProvider(config),
 			voice: config.ttsVoice,
 		},
 		avatar: {

@@ -180,6 +180,44 @@ describe("SettingsTab", () => {
 		});
 	});
 
+	it("says the balance lookup failed and offers a way to try again (#575)", async () => {
+		// 실패해도 "잔액 조회 중…" 이 그대로 남으면 사용자는 기다리는 것과 실패한 것을
+		// 가를 수 없다. 실패는 그 뜻을 말해야 하고, 알림에는 다음 행동이 있어야 한다.
+		localStorage.setItem(
+			"naia-config",
+			JSON.stringify({
+				provider: "nextain",
+				model: "gemini-2.5-flash",
+				apiKey: "",
+				naiaKey: "balance-failure-key",
+			}),
+		);
+		mockInvoke.mockImplementation((command: string) => {
+			if (command === "fetch_naia_balance")
+				return Promise.reject(new Error("gateway unreachable"));
+			return Promise.resolve([]);
+		});
+		Object.defineProperty(window, "__TAURI_INTERNALS__", {
+			configurable: true,
+			value: {},
+		});
+
+		render(<SettingsTab />);
+
+		const retry = await screen.findByTestId("lab-balance-retry");
+		expect(retry).toBeInTheDocument();
+		// 조회 중 문구가 남아 있으면 실패를 기다림으로 읽는다.
+		expect(screen.queryByText(/Checking balance|잔액 조회 중/)).toBeNull();
+
+		mockInvoke.mockImplementation((command: string) => {
+			if (command === "fetch_naia_balance")
+				return Promise.resolve({ balance: 1_000_000 });
+			return Promise.resolve([]);
+		});
+		fireEvent.click(retry);
+		expect(await screen.findByText(/10\.00/)).toBeDefined();
+	});
+
 	it("keeps unfinished Connections disabled between Skills and General", async () => {
 		mockInvoke.mockImplementation((command: string) => {
 			if (command === "discord_bot_token_available")

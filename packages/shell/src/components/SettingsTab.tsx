@@ -142,6 +142,7 @@ import {
 	type SlotId,
 	applyNaiaSlotDefaults,
 	deriveGate,
+	effectiveTtsProvider,
 	readSlots,
 } from "../lib/slots/model";
 import { listSttProviders } from "../lib/stt/registry";
@@ -719,13 +720,11 @@ export function SettingsTab() {
 	const [googleApiKey, setGoogleApiKey] = useState(
 		existing?.googleApiKey ?? "",
 	);
+	// 기본값은 `effectiveTtsProvider` 한 곳에서 정한다 — 프로파일 카드도 같은 함수를
+	// 읽는다. 여기에만 두면 카드가 "미설정" 이라 적는 동안 이 드롭다운은 Edge 를
+	// 보여 준다(#575).
 	const [ttsProvider, setTtsProvider] = useState<TtsProviderId>(
-		existing?.ttsProvider ??
-			(existing?.ttsEngine === "gateway"
-				? "edge"
-				: existing?.ttsEngine === "google"
-					? "google"
-					: "edge"),
+		effectiveTtsProvider((existing ?? {}) as AppConfig),
 	);
 	const [sttProvider, setSttProvider] = useState<SttProviderId>(
 		existing?.sttProvider ?? "",
@@ -2284,7 +2283,11 @@ export function SettingsTab() {
 			return null;
 		} finally {
 			window.clearTimeout(timeout);
-			if (mountedRef.current) setLabBalanceLoading(false);
+			// 마운트 여부를 묻지 않는다. 물으면 StrictMode 의 setup→cleanup→setup 이나
+			// 언마운트와 겹친 실패에서 "잔액 조회 중…" 이 영원히 남는다 — 실패해도
+			// 문구가 바뀌지 않는다는 관측이 그 자리였다(#575). 언마운트 뒤의 상태
+			// 갱신은 React 18 에서 조용한 no-op 이다.
+			setLabBalanceLoading(false);
 		}
 	}
 
@@ -4044,6 +4047,19 @@ export function SettingsTab() {
 													? `${labBalance.toFixed(2)} ${t("cost.labCredits")}`
 													: "-"}
 									</span>
+									{!labBalanceLoading && labBalanceError && (
+										// 조회 실패는 알림이고, 알림에는 다음 행동이 있어야 한다.
+										<button
+											type="button"
+											className="voice-preview-btn"
+											data-testid="lab-balance-retry"
+											onClick={() => {
+												if (naiaKey) void fetchLabBalance(naiaKey);
+											}}
+										>
+											{t("common.retry")}
+										</button>
+									)}
 								</div>
 								<div className="lab-actions-row">
 									<button
