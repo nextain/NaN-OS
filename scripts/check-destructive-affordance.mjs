@@ -88,7 +88,7 @@ import {
 	resolveCallee,
 	unwrap,
 } from "./lib/bindings.mjs";
-import { tauriCommandBodies } from "./lib/rust-tokens.mjs";
+import { tauriCommandDeclarations } from "./lib/rust-tokens.mjs";
 import { parseToml } from "./lib/toml-min.mjs";
 
 const SHELL = "packages/shell";
@@ -310,12 +310,21 @@ function localCrateReferences(text) {
 	return found;
 }
 
+/**
+ * 프런트가 부르는 **IPC 이름** → 그 명령의 본문과 Rust 함수 이름.
+ *
+ * 열쇠는 함수 이름이 아니라 IPC 이름이다. `#[tauri::command(rename = "…")]` 은
+ * 프런트가 부르는 이름을 바꾸므로, 함수 이름으로 목록을 만들면
+ * `invoke("ghost_wipe_everything")` 이 `commands.includes` 에서 그냥 건너뛴다
+ * (18회차 지적 7). 사람에게 보여 줄 때는 함수 이름도 함께 적는다 — 소스에서
+ * 찾을 이름은 그쪽이다.
+ */
 function tauriCommands() {
 	const names = new Map();
 	for (const root of crateSourceRoots()) {
 		for (const file of tracked(root, ".rs")) {
-			for (const [name, body] of tauriCommandBodies(readFileSync(file, "utf8"))) {
-				names.set(name, body);
+			for (const decl of tauriCommandDeclarations(readFileSync(file, "utf8"))) {
+				names.set(decl.ipcName, { body: decl.body, fnName: decl.fnName });
 			}
 		}
 	}
@@ -418,11 +427,16 @@ const files = [
 const sources = new Map(files.map((f) => [f, readFileSync(f, "utf8")]));
 
 const commandBodies = tauriCommands();
-const commands = [...commandBodies.keys()].filter(
-	(name) =>
+// 이름으로 파괴 후보를 고를 때는 IPC 이름과 함수 이름을 **둘 다** 본다.
+// `rename` 으로 한쪽만 무해해 보이게 적는 것이 곧 이번 회차의 우회였다.
+const commands = [...commandBodies.keys()].filter((name) => {
+	const decl = commandBodies.get(name) ?? {};
+	return (
 		DESTRUCTIVE_NAME.test(name) ||
-		DESTRUCTIVE_BODY.test(commandBodies.get(name) ?? ""),
-);
+		DESTRUCTIVE_NAME.test(decl.fnName ?? "") ||
+		DESTRUCTIVE_BODY.test(decl.body ?? "")
+	);
+});
 
 /**
  * 이름이 가리키는 함수 안에 확인이 있는지, 없으면 그 함수를 부르는 쪽으로

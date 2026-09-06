@@ -106,7 +106,18 @@ import {
 	packageOf,
 	resolveCallee,
 } from "./bindings.mjs";
+import {
+	STATIC_EVAL_KINDS,
+	STATIC_EVAL_OUT_OF_SCOPE,
+	STATIC_UNKNOWN,
+	declaredPropertyName,
+	staticValue,
+} from "./static-eval.mjs";
 import { unwrapExpression } from "./unwrap.mjs";
+
+// 정적 평가 범위의 정본은 `scripts/lib/static-eval.mjs` 다. 이 모듈을 쓰는
+// 게이트가 한 곳만 보게 그대로 다시 내보낸다.
+export { STATIC_EVAL_KINDS, STATIC_EVAL_OUT_OF_SCOPE, STATIC_UNKNOWN };
 
 /* ─────────────── 파싱과 파일 환경 ─────────────── */
 
@@ -514,17 +525,57 @@ export function jsxElementsIn(node, sf, env) {
 /* ─────────────── 이름 풀기 ─────────────── */
 
 /** 같은 파일(또는 import 로 건너간 파일)에서 그 이름의 선언들. */
+/**
+ * 구조분해 패턴 안에서 그 이름에 닿는 키의 차례들.
+ *
+ * `const { a: { b: deep } } = X` 는 `["a", "b"]`, `const [first] = X` 는 `["0"]`
+ * 이다. 겹의 수를 세지 않고 패턴을 그대로 따라간다.
+ */
+function bindingPaths(pattern, name, sf, prefix = []) {
+	const out = [];
+	if (ts.isArrayBindingPattern(pattern)) {
+		pattern.elements.forEach((el, index) => {
+			if (!ts.isBindingElement(el)) return;
+			const step = [...prefix, String(index)];
+			if (ts.isIdentifier(el.name)) {
+				if (el.name.text === name) out.push(step);
+			} else out.push(...bindingPaths(el.name, name, sf, step));
+		});
+		return out;
+	}
+	if (!ts.isObjectBindingPattern(pattern)) return out;
+	for (const el of pattern.elements) {
+		if (!ts.isBindingElement(el)) continue;
+		const key = el.propertyName
+			? declaredPropertyName(el.propertyName, sf, null, new Set())
+			: ts.isIdentifier(el.name)
+				? el.name.text
+				: null;
+		if (key === null) continue;
+		const step = [...prefix, key];
+		if (ts.isIdentifier(el.name)) {
+			if (el.name.text === name) out.push(step);
+		} else out.push(...bindingPaths(el.name, name, sf, step));
+	}
+	return out;
+}
+
 function declarationSites(name, sf) {
 	const hits = [];
 	const visit = (n) => {
 		if (ts.isVariableDeclaration(n)) {
 			if (ts.isIdentifier(n.name) && n.name.text === name) {
 				hits.push({ kind: "var", decl: n });
-			} else if (ts.isArrayBindingPattern(n.name)) {
-				n.name.elements.forEach((el, index) => {
-					if (ts.isBindingElement(el) && ts.isIdentifier(el.name) && el.name.text === name)
-						hits.push({ kind: "arrayBinding", decl: n, index });
-				});
+			} else if (ts.isArrayBindingPattern(n.name) || ts.isObjectBindingPattern(n.name)) {
+				// 구조분해는 깊이 몇 겹이든 "초기화식에서 이 키들을 차례로 꺼낸
+				// 것" 이다. 그 차례를 `path` 로 적어 둔다(18회차 지적 3).
+				for (const path of bindingPaths(n.name, name, sf))
+					hits.push({
+						kind: ts.isArrayBindingPattern(n.name) ? "arrayBinding" : "objectBinding",
+						decl: n,
+						path,
+						index: Number(path[0]),
+					});
 			}
 		}
 		ts.forEachChild(n, visit);
@@ -1046,7 +1097,12 @@ export function stringCandidates(node, sf, env, seen = new Set()) {
 		}
 		return { values, complete: false };
 	}
-	if (ts.isIdentifier(n)) return resolveIdentifier(n, sf, env, seen);
+	if (ts.isIdentifier(n)) {
+		const read = resolveIdentifier(n, sf, env, seen);
+		// 못 풀면 정적 평가 표에 한 번 더 묻는다 — 구조분해로 묶인 이름
+		// (`const { role } = { role: "alert" }`)이 거기서 풀린다(18회차 지적 3).
+		if (read.values.size > 0 || read.complete) return read;
+	}
 	if (ts.isPropertyAccessExpression(n)) {
 		const read = resolvePropertyAccess(n, sf, env, seen);
 		if (read.values.size > 0 || read.complete) return read;
@@ -1253,7 +1309,7 @@ function staticNumber(node, sf, env, seen) {
 }
 
 /**
- * 이 식이 정적으로 정해지는 **원시값**인가. 정해지면 그 값, 아니면 `UNKNOWN`.
+ * 이 식이 정적으로 정해지는 **원시값**인가. 정해지면 그 값, 아니면 `STATIC_UNKNOWN`.
  *
  * 리터럴과 그것에 닿는 `const` 사슬만 접는다. 그 위의 단항·이항은 실제
  * JavaScript 연산으로 계산한다 — `1 === 1` 은 참이고 React 에서
@@ -1263,227 +1319,37 @@ function staticNumber(node, sf, env, seen) {
  *
  * 한쪽이라도 모르면 결과도 모른다. 모르는 것을 참으로도 거짓으로도 접지 않는다.
  */
-/** `staticPrimitive` 가 "모른다" 로 돌려주는 표식. 값과 헷갈리지 않게 심볼이다. */
-export const STATIC_UNKNOWN = Symbol("정적으로 정해지지 않음");
-const UNKNOWN = STATIC_UNKNOWN;
-
 /**
- * **정적으로 접는 노드 종류의 정본.**
+ * 이 식이 정적으로 정해지는 원시값인가. 접는 일은
+ * `scripts/lib/static-eval.mjs` 하나가 하고, 이 모듈은 **이름을 어떻게 푸는지**
+ * 만 알려 준다 — 어느 `const` 를, 어느 import 를 따라갈지가 이 파일의 몫이다.
  *
- * 왜 표로 두는가: 열일곱 번의 교차 리뷰에서 이 모듈이 뚫린 자리는 거의 언제나
- * "이 형태는 접고 저 형태는 안 접는다" 였다. `+true` 는 접는데 `1 === 1` 은
- * 안 접고, `{a:"x"}.a` 는 접는데 `"x".length` 는 안 접었다. 무엇을 접는지가
- * 코드 여기저기에 흩어져 있으면 리뷰어는 매 회차에 안 접는 갈래를 하나 더
- * 찾는다.
- *
- * 그래서 접는 범위를 여기 한 곳에 적는다. 모듈 머리말과
- * `docs/quality-reviews/obfuscation-forms.md` 의 "정적 평가 범위" 절이 이
- * 목록을 그대로 싣고, `src/test/jsx-static.contract.test.ts` 가 셋이 어긋나면
- * 붉어진다. 표 **안**은 전부 접고, 표 **밖**은 전부 "모른다" 다.
+ * 구조분해도 같은 훅으로 답한다. `const { role } = { role: "alert" }` 는
+ * "그 초기화식의 `role` 키" 이고, `const [first] = ["alert"]` 는 "그 초기화식의
+ * 0 번" 이다(18회차 지적 3).
  */
-export const STATIC_EVAL_KINDS = [
-	{ id: "literal", title: "리터럴 — 문자열·숫자·불리언·`null`·`undefined`" },
-	{ id: "template", title: "템플릿 — 보간까지 정적이면 이어 붙인다" },
-	{ id: "tagged-raw", title: "태그 템플릿 `String.raw` — 고정 조각 그대로" },
-	{ id: "unary", title: "단항 — `+` `-` `~` `!` `void` `typeof`" },
-	{ id: "binary", title: "이항 — 비교·산술·비트, 그리고 `&&` `||` `??`" },
-	{ id: "conditional", title: "삼항 — 조건이 정해지면 그 갈래" },
-	{ id: "const-chain", title: "`const` 사슬 — 같은 파일과 import 로 건너간 파일" },
-	{ id: "literal-member", title: "리터럴의 멤버 — `\"x\".length`, `[1,2].length`, `{a:1}.a`" },
-	{ id: "literal-index", title: "리터럴의 리터럴 인덱스 — `[\"alert\"][0]`, `{a:\"x\"}[\"a\"]`" },
-];
-
-/**
- * 표 **밖**은 보증하지 않는다. 함수 호출의 결과 일반(`makeUrl()`), 정규식 실행,
- * `Date`·`Math` 같은 전역 객체의 속성, 실행할 때 조립되는 값이 그것이다.
- * 그런 자리는 "없다" 가 아니라 **모른다** 이고, 판정은 놓치는 쪽으로 틀린다.
- */
-export const STATIC_EVAL_OUT_OF_SCOPE = [
-	"함수 호출의 결과 일반 (`makeUrl()`, `arr.map(...)`)",
-	"정규식 실행 (`/x/.test(s)`)",
-	"전역 객체의 속성 (`Date.now`, `Math.PI`, `process.env`)",
-	"실행할 때 조립되는 값",
-];
-
-/** 리터럴 값의 정적 속성. 표의 `literal-member` 갈래다. */
-function literalPropertyValue(value, key) {
-	if (typeof value === "string") {
-		if (key === "length") return value.length;
-		const index = Number(key);
-		if (Number.isInteger(index) && index >= 0 && index < value.length)
-			return value[index];
-		return UNKNOWN;
-	}
-	return UNKNOWN;
-}
-
-function foldBinary(op, left, right) {
-	switch (op) {
-		case ts.SyntaxKind.EqualsEqualsEqualsToken:
-			return left === right;
-		case ts.SyntaxKind.ExclamationEqualsEqualsToken:
-			return left !== right;
-		// biome-ignore lint/suspicious/noDoubleEquals: `==` 의 뜻을 그대로 계산한다
-		case ts.SyntaxKind.EqualsEqualsToken:
-			return left == right;
-		// biome-ignore lint/suspicious/noDoubleEquals: `!=` 의 뜻을 그대로 계산한다
-		case ts.SyntaxKind.ExclamationEqualsToken:
-			return left != right;
-		case ts.SyntaxKind.LessThanToken:
-			return left < right;
-		case ts.SyntaxKind.LessThanEqualsToken:
-			return left <= right;
-		case ts.SyntaxKind.GreaterThanToken:
-			return left > right;
-		case ts.SyntaxKind.GreaterThanEqualsToken:
-			return left >= right;
-		case ts.SyntaxKind.PlusToken:
-			return left + right;
-		case ts.SyntaxKind.MinusToken:
-			return left - right;
-		case ts.SyntaxKind.AsteriskToken:
-			return left * right;
-		case ts.SyntaxKind.SlashToken:
-			return left / right;
-		case ts.SyntaxKind.PercentToken:
-			return left % right;
-		case ts.SyntaxKind.AsteriskAsteriskToken:
-			return left ** right;
-		case ts.SyntaxKind.AmpersandToken:
-			return left & right;
-		case ts.SyntaxKind.BarToken:
-			return left | right;
-		case ts.SyntaxKind.CaretToken:
-			return left ^ right;
-		case ts.SyntaxKind.LessThanLessThanToken:
-			return left << right;
-		case ts.SyntaxKind.GreaterThanGreaterThanToken:
-			return left >> right;
-		case ts.SyntaxKind.GreaterThanGreaterThanGreaterThanToken:
-			return left >>> right;
-		default:
-			return UNKNOWN;
-	}
-}
-
 export function staticPrimitive(node, sf, env, seen) {
-	const n = unwrapAll(node);
-	if (!n) return UNKNOWN;
-	const guard = seen instanceof Set ? seen : new Set();
-	if (guard.has(n)) return UNKNOWN;
-	guard.add(n);
-	if (ts.isStringLiteral(n) || ts.isNoSubstitutionTemplateLiteral(n)) return n.text;
-	if (ts.isNumericLiteral(n)) return Number(n.text);
-	if (n.kind === ts.SyntaxKind.TrueKeyword) return true;
-	if (n.kind === ts.SyntaxKind.FalseKeyword) return false;
-	if (n.kind === ts.SyntaxKind.NullKeyword) return null;
-	if (ts.isIdentifier(n) && n.text === "undefined") return undefined;
-	if (ts.isVoidExpression(n)) return undefined;
-	if (ts.isTemplateExpression(n)) {
-		const text = staticText(n, sf, env, guard);
-		return text === null ? UNKNOWN : text;
-	}
-	if (ts.isTypeOfExpression(n)) {
-		const inner = staticPrimitive(n.expression, sf, env, guard);
-		return inner === UNKNOWN ? UNKNOWN : typeof inner;
-	}
-	if (ts.isPrefixUnaryExpression(n)) {
-		const inner = staticPrimitive(n.operand, sf, env, guard);
-		if (inner === UNKNOWN) return UNKNOWN;
-		if (n.operator === ts.SyntaxKind.PlusToken) return +inner;
-		if (n.operator === ts.SyntaxKind.MinusToken) return -inner;
-		if (n.operator === ts.SyntaxKind.TildeToken) return ~inner;
-		if (n.operator === ts.SyntaxKind.ExclamationToken) return !inner;
-		return UNKNOWN;
-	}
-	if (ts.isConditionalExpression(n)) {
-		const cond = staticPrimitive(n.condition, sf, env, guard);
-		if (cond === UNKNOWN) return UNKNOWN;
-		return staticPrimitive(cond ? n.whenTrue : n.whenFalse, sf, env, guard);
-	}
-	if (ts.isBinaryExpression(n)) {
-		const kind = n.operatorToken.kind;
-		const left = staticPrimitive(n.left, sf, env, guard);
-		if (left === UNKNOWN) return UNKNOWN;
-		// 짧은회로는 오른쪽을 안 볼 수도 있다. 그 뜻 그대로 계산한다.
-		if (kind === ts.SyntaxKind.AmpersandAmpersandToken)
-			return left ? staticPrimitive(n.right, sf, env, guard) : left;
-		if (kind === ts.SyntaxKind.BarBarToken)
-			return left ? left : staticPrimitive(n.right, sf, env, guard);
-		if (kind === ts.SyntaxKind.QuestionQuestionToken)
-			return left === null || left === undefined
-				? staticPrimitive(n.right, sf, env, guard)
-				: left;
-		const right = staticPrimitive(n.right, sf, env, guard);
-		if (right === UNKNOWN) return UNKNOWN;
-		return foldBinary(kind, left, right);
-	}
-	// 보간 없는 태그 템플릿의 값은 고정 조각 그대로다. `String.raw` 는 그
-	// 조각을 이스케이프 없이 내주므로 적힌 글자가 곧 값이다.
-	if (ts.isTaggedTemplateExpression(n)) {
-		const tag = unwrapAll(n.tag);
-		const isRaw =
-			tag &&
-			((ts.isPropertyAccessExpression(tag) &&
-				tag.name.text === "raw" &&
-				ts.isIdentifier(tag.expression) &&
-				tag.expression.text === "String") ||
-				(ts.isIdentifier(tag) && tag.text === "raw"));
-		if (!isRaw) return UNKNOWN;
-		const body = n.template;
-		if (ts.isNoSubstitutionTemplateLiteral(body)) return body.rawText ?? body.text;
-		return UNKNOWN;
-	}
-	// 리터럴의 멤버와 리터럴 인덱스. 소스에 값이 그대로 적혀 있는 자리다.
-	if (ts.isPropertyAccessExpression(n) || ts.isElementAccessExpression(n)) {
-		const key = accessKey(n);
-		if (key === null) return UNKNOWN;
-		let container = unwrapAll(n.expression);
-		let home = sf;
-		// 담는 것이 이름이면 그 `const` 값으로 바꿔 든다. `const ROLES = ["alert"]`
-		// 뒤의 `ROLES[0]` 은 소스에 값이 그대로 적혀 있는 같은 자리다.
-		if (container && ts.isIdentifier(container)) {
-			const bound = constOnlyValue(container.text, sf, env);
-			if (bound) {
-				container = unwrapAll(bound.node);
-				home = bound.sf;
+	return staticValue(node, sf, constScope(env), seen instanceof Set ? seen : new Set());
+}
+
+/** 평가기에 넘길 이름 해석 훅. 이름을 푸는 규칙이 이 파일의 몫이다. */
+function constScope(env) {
+	return {
+		constBindingOf(name, home) {
+			for (const hit of declarationSites(name, home)) {
+				if (!hit.decl.initializer) continue;
+				if (!isConstDeclaration(hit.decl)) continue;
+				if (isReassigned(name, home)) continue;
+				if (hit.kind === "var") return { node: hit.decl.initializer, sf: home, path: [] };
+				if (hit.path)
+					return { node: hit.decl.initializer, sf: home, path: hit.path };
 			}
-		}
-		if (!container) return UNKNOWN;
-		if (ts.isArrayLiteralExpression(container)) {
-			if (key === "length") return container.elements.length;
-			const index = Number(key);
-			if (!Number.isInteger(index) || index < 0 || index >= container.elements.length)
-				return UNKNOWN;
-			return staticPrimitive(container.elements[index], home, env, guard);
-		}
-		if (ts.isObjectLiteralExpression(container)) {
-			for (const property of container.properties) {
-				if (ts.isPropertyAssignment(property) && propertyName(property.name) === key)
-					return staticPrimitive(property.initializer, home, env, guard);
-				if (ts.isShorthandPropertyAssignment(property) && property.name.text === key)
-					return staticPrimitive(property.name, home, env, guard);
-			}
-			return UNKNOWN;
-		}
-		const inner = staticPrimitive(container, home, env, guard);
-		if (inner === UNKNOWN) return UNKNOWN;
-		return literalPropertyValue(inner, key);
-	}
-	if (ts.isIdentifier(n)) {
-		for (const hit of declarationSites(n.text, sf)) {
-			if (hit.kind !== "var" || !hit.decl.initializer) continue;
-			if (!isConstDeclaration(hit.decl)) continue;
-			if (isReassigned(n.text, sf)) continue;
-			return staticPrimitive(hit.decl.initializer, sf, env, guard);
-		}
-		const imported = importedBinding(n.text, sf, env);
-		if (imported) {
+			const imported = importedBinding(name, home, env);
+			if (!imported) return null;
 			const bound = constOnlyValue(imported.name, imported.sf, env);
-			if (bound) return staticPrimitive(bound.node, bound.sf, env, guard);
-		}
-	}
-	return UNKNOWN;
+			return bound ? { node: bound.node, sf: bound.sf, path: [] } : null;
+		},
+	};
 }
 
 /** 값을 숫자·문자열로 바꾸는 단항인가. 그 결과는 결코 널이 아니다. */
@@ -1641,7 +1507,7 @@ export function alwaysTruthy(node, sf, env, seen = new Set()) {
 			// 자국은 새로 든다. `alwaysTruthy` 가 이미 이 노드를 지난 것으로
 			// 적어 두었으므로, 그 집합을 넘기면 접기가 시작하자마자 멈춘다.
 			const folded = staticPrimitive(n, sf, env, new Set());
-			return folded === UNKNOWN ? false : Boolean(folded);
+			return folded === STATIC_UNKNOWN ? false : Boolean(folded);
 		}
 		// `a ?? b` 는 `||` 와 다르다. 고르는 기준이 참·거짓이 아니라 **널인가**
 		// 이므로, 왼쪽이 널인지부터 묻는다. 왼쪽만 보면 `false ?? true` 는
@@ -1676,7 +1542,9 @@ export function alwaysTruthy(node, sf, env, seen = new Set()) {
 			if (bound && !isReassigned(imported.name, imported.sf))
 				return alwaysTruthy(bound.node, bound.sf, env, seen);
 		}
-		return false;
+		// 구조분해로 묶인 이름은 정적 평가 표가 푼다.
+		const folded = staticPrimitive(n, sf, env, new Set());
+		return folded === STATIC_UNKNOWN ? false : Boolean(folded);
 	}
 	// `disabled={FLAGS.off}` — 문자열 후보(`stringCandidates`)가 이미 푸는 바로
 	// 그 속성이다. 한쪽만 풀면 값을 객체 한 겹에 넣는 것으로 판정이 갈린다.
@@ -1685,11 +1553,11 @@ export function alwaysTruthy(node, sf, env, seen = new Set()) {
 		if (member) return alwaysTruthy(member.node, member.sf, env, seen);
 		// 리터럴의 멤버·인덱스는 정적 평가 표 안이다(`"x".length`, `["a"][0]`).
 		const folded = staticPrimitive(n, sf, env, new Set());
-		return folded === UNKNOWN ? false : Boolean(folded);
+		return folded === STATIC_UNKNOWN ? false : Boolean(folded);
 	}
 	if (ts.isTaggedTemplateExpression(n)) {
 		const folded = staticPrimitive(n, sf, env, new Set());
-		return folded === UNKNOWN ? false : Boolean(folded);
+		return folded === STATIC_UNKNOWN ? false : Boolean(folded);
 	}
 	return false;
 }
@@ -1746,7 +1614,7 @@ function alwaysFalsy(node, sf, env, seen) {
 		n.operatorToken.kind !== ts.SyntaxKind.QuestionQuestionToken
 	) {
 		const folded = staticPrimitive(n, sf, env, new Set());
-		return folded === UNKNOWN ? false : !folded;
+		return folded === STATIC_UNKNOWN ? false : !folded;
 	}
 	// `a ?? b` 는 참 쪽과 대칭이다 — 왼쪽이 널이면 오른쪽이, 널이 아니면
 	// 왼쪽이 결과다. `null ?? false` 는 언제나 거짓이고, `false ?? true` 도 그렇다.
@@ -1780,11 +1648,11 @@ function alwaysFalsy(node, sf, env, seen) {
 		const member = constAccessValue(n, sf, env);
 		if (member) return alwaysFalsy(member.node, member.sf, env, seen);
 		const folded = staticPrimitive(n, sf, env, new Set());
-		if (folded !== UNKNOWN) return !folded;
+		if (folded !== STATIC_UNKNOWN) return !folded;
 	}
 	if (ts.isTaggedTemplateExpression(n)) {
 		const folded = staticPrimitive(n, sf, env, new Set());
-		if (folded !== UNKNOWN) return !folded;
+		if (folded !== STATIC_UNKNOWN) return !folded;
 	}
 	return false;
 }

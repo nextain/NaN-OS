@@ -404,6 +404,7 @@ function memberBase(node) {
  *   - `E.click(...)`, `E?.click(...)`
  *   - `E["click"](...)` (리터럴 키)
  *   - `E.click.call(E, …)` · `E["click"].apply(E, …)` — 받는 쪽이 같은 식일 때만
+ *   - `E.click.bind(E)()` — 한 겹 묶어 두고 부른 것도 같은 클릭이다
  *
  * `void`·`await`·괄호·`as` 는 그대로 벗긴다.
  *
@@ -416,6 +417,17 @@ function clickReceiver(node) {
 	const callee = unwrap(call.expression);
 	const name = memberName(callee);
 	if (name === "click") return unwrap(memberBase(callee));
+	// `E.click.bind(E)()` — 한 겹 묶어 두고 부른 것도 같은 클릭이다. `bind` 의
+	// 첫 인자가 받는 쪽이고, 없으면 받는 쪽을 안 바꾼 것이다(18회차 지적 6).
+	if (callee && ts.isCallExpression(callee) && memberName(unwrap(callee.expression)) === "bind") {
+		const bound = unwrap(memberBase(unwrap(callee.expression)));
+		if (memberName(bound) !== "click") return null;
+		const receiver = unwrap(memberBase(bound));
+		if (!receiver) return null;
+		const first = callee.arguments[0];
+		if (first && exprKey(first) !== exprKey(receiver)) return null;
+		return receiver;
+	}
 	// `E.click.call(E, …)` / `.apply(E, …)` — 첫 인자가 받는 쪽이다. 그것이
 	// 같은 식일 때만 같은 클릭이다. 남의 요소를 눌러 주는 자리는 다른 뜻이다.
 	if (name === "call" || name === "apply") {

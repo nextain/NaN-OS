@@ -691,19 +691,50 @@ function isCommandPath(path) {
  *
  * 문자열은 토큰 하나(`kind: "string"`)라서 글자만 같은 것은 경로가 아니다.
  */
-function isTauriCommandAttribute(tokens, at, resolution) {
+function matchCommandAttribute(tokens, at, resolution) {
 	let j = at + 1;
 	if (tokens[j]?.kind === "punct" && tokens[j].text === "!") j += 1;
-	if (!(tokens[j]?.kind === "punct" && tokens[j].text === "[")) return false;
+	if (!(tokens[j]?.kind === "punct" && tokens[j].text === "[")) return null;
 	const end = skipBalanced(tokens, j, "[", "]");
 	for (let k = j + 1; k < end; k += 1) {
 		const segments = pathAt(tokens, k);
 		if (!segments) continue;
+		let matched = false;
 		for (const candidate of candidatePaths(segments, resolution)) {
-			if (isCommandPath(candidate)) return true;
+			if (isCommandPath(candidate)) {
+				matched = true;
+				break;
+			}
 		}
+		if (!matched) continue;
+		// 경로 끝 바로 다음이 인자 묶음이다 — `#[tauri::command(rename = "…")]`.
+		// 마디 하나에 토큰 하나, 이어지는 마디마다 `::` 둘을 더해 셋이다.
+		const after = k + 1 + 3 * (segments.length - 1);
+		const args =
+			tokens[after]?.kind === "punct" && tokens[after].text === "(" ? after : -1;
+		return { rename: args === -1 ? null : renameArgument(tokens, args) };
 	}
-	return false;
+	return null;
+}
+
+/**
+ * 명령 속성 인자에서 `rename = "…"` 의 값. 없으면 `null`.
+ *
+ * `rename_all` 은 **이름이 아니라 인자 키**의 표기를 바꾼다 — 여기서 읽지 않는다.
+ * 자세한 이유는 [`tauriCommandDeclarations`] 머리말에 적었다.
+ */
+function renameArgument(tokens, openParen) {
+	const end = skipBalanced(tokens, openParen, "(", ")");
+	for (let i = openParen + 1; i < end - 1; i += 1) {
+		const t = tokens[i];
+		if (t.kind !== "ident" || t.text !== "rename") continue;
+		// 더 긴 경로의 마디는 인자 이름이 아니다.
+		if (tokens[i - 1]?.kind === "punct" && tokens[i - 1].text === ":") continue;
+		if (!(tokens[i + 1]?.kind === "punct" && tokens[i + 1].text === "=")) continue;
+		const value = tokens[i + 2];
+		if (value?.kind === "string") return value.value;
+	}
+	return null;
 }
 
 /**
@@ -716,15 +747,58 @@ function isTauriCommandAttribute(tokens, at, resolution) {
  * 본문을 일찍 끊지 않는다.
  */
 export function tauriCommandBodies(source) {
-	const tokens = tokenizeRust(source);
 	const commands = new Map();
+	for (const declared of tauriCommandDeclarations(source)) {
+		commands.set(declared.fnName, declared.body);
+	}
+	return commands;
+}
+
+/**
+ * 프런트가 부르는 **IPC 이름** 전부. 호출부 대조는 이 이름으로 해야 한다.
+ *
+ * `tauriCommandBodies` 의 열쇠는 Rust 함수 이름이라 `rename` 이 붙은 명령에서
+ * 프런트가 부르는 이름과 어긋난다(18회차 지적 7).
+ */
+export function tauriCommandNames(source) {
+	return tauriCommandDeclarations(source).map((declared) => declared.ipcName);
+}
+
+/**
+ * `#[tauri::command(…)]` 로 열린 명령 선언 전부 —
+ * `{ fnName, ipcName, body, line }`.
+ *
+ * ## 왜 이름이 둘인가 (18회차 지적 7)
+ *
+ * Rust 함수 이름과 프런트가 부르는 IPC 이름은 같지 않을 수 있다.
+ * `#[tauri::command(rename = "ghost_wipe_everything")]` 를 붙이면 함수가
+ * `innocent_placeholder` 여도 프런트는 `invoke("ghost_wipe_everything")` 로
+ * 부른다. 목록이 함수 이름만 담으면 그 호출은 `commands.includes` 에서 통째로
+ * 건너뛰어지고, 확인 없는 파괴 조작이 **이름을 바꿔 적는 것만으로** 통과한다.
+ *
+ * 근거는 이 기계에 받아 둔 매크로 소스다 —
+ * `tauri-macros-2.6.2/src/command/wrapper.rs:300` 이 `RenamePolicy::Rename` 일
+ * 때 외부에서 부르는 이름을 그 리터럴로 두고, 아니면 함수 식별자를 쓴다.
+ *
+ * ## `rename_all` 은 이름을 바꾸지 않는다
+ *
+ * 같은 파일 `62~78` 줄에서 `rename_all` 은 `"camelCase"` 와 `"snake_case"` 둘만
+ * 받아 `argument_case` 를 정한다. 그것이 바꾸는 것은 **인자 키**의 표기이지
+ * 명령 이름이 아니다(같은 파일 `510~520` 줄의 `key`). 그래서 이 함수는
+ * `rename_all` 로 이름을 바꾸지 않는다 — 바꾸면 Tauri 가 등록하지도 않는 이름을
+ * 목록에 넣고, 진짜 이름(함수 이름)을 잃는다.
+ */
+export function tauriCommandDeclarations(source) {
+	const tokens = tokenizeRust(source);
+	const declarations = [];
 	// 속성에 적힌 경로를 이 파일의 `use` 로 풀어 정본 경로와 대조한다.
 	const resolution = useResolution(tokens);
 
 	for (let i = 0; i < tokens.length; i += 1) {
 		const t = tokens[i];
 		if (t.kind !== "punct" || t.text !== "#") continue;
-		if (!isTauriCommandAttribute(tokens, i, resolution)) continue;
+		const attribute = matchCommandAttribute(tokens, i, resolution);
+		if (!attribute) continue;
 
 		// 속성과 수식어를 건너뛰어 `fn` 에 닿는다. 횟수를 세지 않는다 — 토큰 열은
 		// 유한하고, 아래 갈래는 모두 `j` 를 앞으로만 옮기므로 반드시 끝난다.
@@ -771,10 +845,15 @@ export function tauriCommandBodies(source) {
 		const name = tokens[j + 1];
 		if (!name || name.kind !== "ident") continue;
 
-		commands.set(name.text, functionBodyAfter(tokens, j + 2, source));
+		declarations.push({
+			fnName: name.text,
+			ipcName: attribute.rename ?? name.text,
+			body: functionBodyAfter(tokens, j + 2, source),
+			line: name.line,
+		});
 		i = j + 1;
 	}
-	return commands;
+	return declarations;
 }
 
 /**

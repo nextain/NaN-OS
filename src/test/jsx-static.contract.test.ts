@@ -1508,8 +1508,10 @@ describe("정적 평가 범위는 표 하나다 (17회차 지적 1·2·8)", () =
 	});
 
 	it("모듈 머리말이 표를 그대로 싣는다", () => {
+		// 정본은 `scripts/lib/static-eval.mjs` 다(18회차에 평가기를 떼면서
+		// 옮겼다). 표를 싣는 머리말도 그 파일의 것이다.
 		const text = readFileSync(
-			resolve(__dirname, "..", "..", "scripts", "lib", "jsx-static.mjs"),
+			resolve(__dirname, "..", "..", "scripts", "lib", "static-eval.mjs"),
 			"utf8",
 		);
 		const header = text.slice(0, text.indexOf("\n */\n") + 4);
@@ -1588,5 +1590,63 @@ describe("보간 없는 태그 템플릿은 그 글자다 (17회차 지적 8)", 
 		expect(
 			at("tag`https://evil.example/hook`", "declare function tag(s: TemplateStringsArray): string;"),
 		).toEqual([]);
+	});
+});
+
+/* ─────────────── 18회차에 못 박은 것 ─────────────── */
+
+describe("평가기는 재귀로 닫혀 있다 (18회차 지적 1·2·3·4)", () => {
+	function at(src: string, pre = ""): string[] {
+		const sf = parse(`${pre}\nexport const P = <button d={${src}} />;`);
+		return [...J.stringCandidates(attributeValue(sf, "d"), sf, null).values];
+	}
+
+	it("인덱스 자리도 접어서 쓴다", () => {
+		expect(at('["alert"][0 + 0]')).toEqual(["alert"]);
+		expect(at('["x", "alert"]["1"]')).toEqual(["alert"]);
+		expect(at('["alert"][+"0"]')).toEqual(["alert"]);
+	});
+
+	it("객체 리터럴의 계산된 리터럴 키도 속성 이름이다", () => {
+		expect(at('{ ["role"]: "alert" }.role')).toEqual(["alert"]);
+		expect(at('{ ["ro" + "le"]: "alert" }["role"]')).toEqual(["alert"]);
+	});
+
+	it("구조분해와 배열 분해도 const 사슬이다", () => {
+		expect(at("role", 'const { role } = { role: "alert" };')).toEqual(["alert"]);
+		expect(at("first", 'const [first] = ["alert"];')).toEqual(["alert"]);
+		expect(at("deep", 'const { a: { b: deep } } = { a: { b: "alert" } };')).toEqual([
+			"alert",
+		]);
+		expect(at("aliased", 'const { ["role"]: aliased } = { role: "alert" };')).toEqual([
+			"alert",
+		]);
+	});
+
+	it("`String.raw` 의 보간도 정적이면 접는다", () => {
+		expect(at('String.raw`${"al"}ert`')).toEqual(["alert"]);
+		expect(at('String.raw`${"al"}${"ert"}`')).toEqual(["alert"]);
+	});
+
+	it("반증: 한 자리라도 모르면 전체가 모른다", () => {
+		expect(at('["alert"][i]', "declare const i: number;")).toEqual([]);
+		expect(at('{ [k]: "alert" }.role', "declare const k: string;")).toEqual([]);
+		expect(at("String.raw`x${y}`", "declare const y: string;")).toEqual([]);
+		expect(at("role", "declare const src: { role: string };\nconst { role } = src;")).toEqual(
+			[],
+		);
+	});
+
+	it("반증: spread 가 섞이면 무엇이 덮였는지 모른다", () => {
+		expect(at('{ ...base, role: "alert" }.role', "declare const base: object;")).toEqual([]);
+		expect(at('[...more, "alert"][0]', "declare const more: string[];")).toEqual([]);
+	});
+
+	it("영구 참 판정도 같은 표를 지난다", () => {
+		expect(truthyOf('["a"][0 + 0]')).toBe(true);
+		expect(truthyOf("off", "const { off } = { off: true };")).toBe(true);
+		expect(truthyOf("off", "declare const src: { off: boolean };\nconst { off } = src;")).toBe(
+			false,
+		);
 	});
 });

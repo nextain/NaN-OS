@@ -1030,3 +1030,54 @@ describe("파괴 게이트는 자기 해석을 들지 않는다 (17회차 지적
 		expect(gate.includes("invokeAliasOffset")).toBe(false);
 	});
 });
+
+/* ─────────────── 18회차에 못 박은 것 ─────────────── */
+
+describe("동적 모듈 지정자도 접어서 읽는다 (18회차 지적 5)", () => {
+	function moduleOf(code: string, callee = "invoke"): string | null | undefined {
+		return calleeOf(code, callee)?.module;
+	}
+
+	it("템플릿 지정자도 리터럴과 같다", () => {
+		expect(
+			moduleOf(
+				"export async function w() {\n const { invoke } = await import(`@tauri-apps/api/core`);\n return invoke('cmd');\n}",
+			),
+		).toBe("@tauri-apps/api/core");
+	});
+
+	it("이어 붙인 지정자도 같다", () => {
+		expect(
+			moduleOf(
+				`export async function w() {\n const { invoke } = await import("@tauri-apps/api" + "/core");\n return invoke("cmd");\n}`,
+			),
+		).toBe("@tauri-apps/api/core");
+	});
+
+	it("`const` 사슬을 지나서도 같다", () => {
+		expect(
+			moduleOf(
+				`const CORE = "@tauri-apps/api/core";\nexport async function w() {\n const { invoke } = await import(CORE);\n return invoke("cmd");\n}`,
+			),
+		).toBe("@tauri-apps/api/core");
+	});
+
+	it("반증: 실행할 때 정해지는 지정자는 여전히 모른다", () => {
+		expect(
+			calleeOf(
+				`declare const spec: string;\nexport async function w() {\n const { invoke } = await import(spec);\n return invoke("cmd");\n}`,
+				"invoke",
+			),
+		).toBeNull();
+	});
+
+	it("접는 범위는 공용 평가기 하나다", () => {
+		const source = readFileSync(
+			resolve(__dirname, "..", "..", "scripts", "lib", "bindings.mjs"),
+			"utf8",
+		);
+		expect(source.includes("static-eval.mjs")).toBe(true);
+		// 반증: 자기 평가기를 다시 들면 형제 모듈에서 고친 것이 옮겨 오지 않는다.
+		expect(/function\s+staticValue\s*\(/.test(source)).toBe(false);
+	});
+});

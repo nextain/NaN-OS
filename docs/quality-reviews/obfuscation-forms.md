@@ -146,20 +146,21 @@
 게이트가 값을 **접는** 범위다. 무엇을 접는지가 흩어져 있으면 리뷰어는 매
 회차에 안 접는 갈래를 하나 더 찾는다 — 실제로 `+true` 는 접는데 `1 === 1` 은
 안 접었고, `{a:"x"}.a` 는 접는데 `"x".length` 는 안 접었다. 정본은
-`scripts/lib/jsx-static.mjs` 의 `STATIC_EVAL_KINDS` 하나이고, 그 모듈 머리말과
+`scripts/lib/static-eval.mjs` 의 `STATIC_EVAL_KINDS` 하나이고, 그 모듈 머리말과
 이 절이 같은 표를 싣는다.
 
 | id | 접는 것 |
 |---|---|
 | `literal` | 리터럴 — 문자열·숫자·불리언·`null`·`undefined` |
 | `template` | 템플릿 — 보간까지 정적이면 이어 붙인다 |
-| `tagged-raw` | 태그 템플릿 `String.raw` — 고정 조각 그대로 |
+| `tagged-raw` | 태그 템플릿 `String.raw` — raw 조각과 정적 보간 |
 | `unary` | 단항 — `+` `-` `~` `!` `void` `typeof` |
 | `binary` | 이항 — 비교·산술·비트, 그리고 `&&` `||` `??` |
 | `conditional` | 삼항 — 조건이 정해지면 그 갈래 |
-| `const-chain` | `const` 사슬 — 같은 파일과 import 로 건너간 파일 |
+| `const-chain` | `const` 사슬 — 구조분해와 배열 분해까지 |
 | `literal-member` | 리터럴의 멤버 — `"x".length`, `[1,2].length`, `{a:1}.a` |
-| `literal-index` | 리터럴의 리터럴 인덱스 — `["alert"][0]`, `{a:"x"}["a"]` |
+| `literal-index` | 리터럴의 인덱스 — 인덱스 식도 접어서 쓴다 (`["a"][0+0]`) |
+| `computed-key` | 계산된 리터럴 키 — `{ ["role"]: "alert" }` 는 `role` 이다 |
 
 표 **밖**은 보증하지 않는다. "없다" 가 아니라 **모른다** 이고, 판정은 놓치는
 쪽으로 틀린다.

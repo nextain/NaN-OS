@@ -50,6 +50,10 @@ interface RustTokensModule {
 	externCrateDeclarations(
 		tokens: Array<{ kind: string; text: string; line: number }>,
 	): Array<{ crate: string; local: string; line: number; at: number }>;
+	tauriCommandDeclarations(
+		source: string,
+	): Array<{ fnName: string; ipcName: string; body: string; line: number }>;
+	tauriCommandNames(source: string): string[];
 }
 
 let rust: RustTokensModule;
@@ -501,6 +505,82 @@ describe("Rust 명령 추출은 거리를 재지 않는다", () => {
 			["tauri", "t"],
 			["serde", "serde"],
 		]);
+	});
+
+	it("`rename` 인자가 있으면 프런트가 부르는 이름은 그 리터럴이다", () => {
+		// 18회차 지적 7. 목록이 Rust 함수 이름만 담던 동안, 이름을 바꿔 적으면
+		// 프런트의 `invoke("ghost_wipe_everything")` 이 `commands.includes` 에서
+		// 통째로 건너뛰어졌다 — 확인 없는 전체 삭제가 그것만으로 통과했다.
+		//
+		// 근거는 이 기계에 받아 둔 매크로 소스다:
+		// tauri-macros-2.6.2/src/command/wrapper.rs:300 이 RenamePolicy::Rename 일 때
+		// 외부에서 부르는 이름을 그 리터럴로 둔다.
+		const source = [
+			'#[tauri::command(rename = "ghost_wipe_everything")]',
+			"fn innocent_placeholder(root: String) {",
+			"    let _ = std::fs::remove_dir_all(&root);",
+			"}",
+		].join("\n");
+		const [declared] = rust.tauriCommandDeclarations(source);
+		expect(declared.fnName).toBe("innocent_placeholder");
+		expect(declared.ipcName).toBe("ghost_wipe_everything");
+		expect(declared.body).toContain("remove_dir_all");
+		expect(rust.tauriCommandNames(source)).toEqual(["ghost_wipe_everything"]);
+	});
+
+	it("`rename_all` 은 명령 이름을 바꾸지 않는다 — 인자 키의 표기다", () => {
+		// 같은 매크로 소스 62~78 줄에서 `rename_all` 은 "camelCase" 와 "snake_case"
+		// 둘만 받아 `argument_case` 를 정하고, 510~520 줄이 그것으로 **인자 키**를
+		// 바꾼다. 이름을 그 규칙으로 바꾸면 Tauri 가 등록하지도 않는 이름을 목록에
+		// 넣고 진짜 이름을 잃는다.
+		const camel = '#[tauri::command(rename_all = "camelCase")]\nfn ghost_wipe_everything() {}';
+		const snake = '#[tauri::command(rename_all = "snake_case")]\nfn ghostWipeEverything() {}';
+		expect(rust.tauriCommandNames(camel)).toEqual(["ghost_wipe_everything"]);
+		expect(rust.tauriCommandNames(snake)).toEqual(["ghostWipeEverything"]);
+	});
+
+	it("`rename_all` 과 `rename` 이 함께 있으면 `rename` 이 이름이다", () => {
+		const source =
+			'#[tauri::command(rename_all = "camelCase", rename = "ghost_wipe_everything")]\nfn innocent() {}';
+		const [declared] = rust.tauriCommandDeclarations(source);
+		expect([declared.fnName, declared.ipcName]).toEqual([
+			"innocent",
+			"ghost_wipe_everything",
+		]);
+	});
+
+	it("인자가 없으면 IPC 이름은 함수 이름이다", () => {
+		const plain = "#[tauri::command]\nfn plain_name() {}";
+		const withAsync = "#[tauri::command(async)]\nfn async_name() {}";
+		const argsOnly = '#[tauri::command(rename_all = "snake_case")]\nfn args_only() {}';
+		for (const [source, name] of [
+			[plain, "plain_name"],
+			[withAsync, "async_name"],
+			[argsOnly, "args_only"],
+		] as Array<[string, string]>) {
+			const [declared] = rust.tauriCommandDeclarations(source);
+			expect([declared.fnName, declared.ipcName]).toEqual([name, name]);
+		}
+	});
+
+	it("`rename` 은 중첩·별명 형태에서도 읽힌다", () => {
+		const nested = '#[cfg_attr(all(), tauri::command(rename = "ghost"))]\nfn plain() {}';
+		const aliased = 'use tauri as t;\n#[t::command(rename = "ghost")]\nfn plain() {}';
+		const macroCrate = '#[tauri_macros::command(rename = "ghost")]\nfn plain() {}';
+		for (const source of [nested, aliased, macroCrate]) {
+			expect(rust.tauriCommandNames(source)).toEqual(["ghost"]);
+		}
+		// 이름이 비슷한 다른 인자는 이름이 아니다.
+		const decoy = '#[tauri::command(rename_all = "camelCase")]\nfn plain() {}';
+		expect(rust.tauriCommandNames(decoy)).toEqual(["plain"]);
+	});
+
+	it("`tauriCommandBodies` 는 예전 그대로 함수 이름을 열쇠로 쓴다", () => {
+		// 게이트가 옮겨 가기 전까지 두 답이 함께 있어야 한다. 옮기고 나면 이 항목이
+		// 그 사실을 알려 주는 자리다.
+		const source = '#[tauri::command(rename = "ghost")]\nfn plain() { let _ = 1; }';
+		expect([...rust.tauriCommandBodies(source).keys()]).toEqual(["plain"]);
+		expect(rust.tauriCommandNames(source)).toEqual(["ghost"]);
 	});
 
 	it("주석 안의 `#[tauri::command]` 는 명령이 아니다", () => {

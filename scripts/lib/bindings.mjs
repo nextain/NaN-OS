@@ -87,6 +87,7 @@
  */
 
 import ts from "typescript";
+import { STATIC_UNKNOWN, declaredPropertyName, staticValue } from "./static-eval.mjs";
 import { unwrapExpression } from "./unwrap.mjs";
 
 
@@ -124,30 +125,6 @@ const GLOBAL_ROOTS = new Set(["globalThis", "window", "self", "global"]);
  * 다시 적으면, 다음 회차에 한쪽만 고쳐진 자리로 결함이 들어온다(13회차 지적 1).
  */
 export const unwrap = unwrapExpression;
-
-/**
- * 선언에 적힌 **속성 이름**. 식별자든 문자열 리터럴이든 계산된 리터럴 키든
- * 같은 이름이다.
- *
- * `const { createElement: h }`, `const { "createElement": h }`,
- * `const { ["createElement"]: h }` 는 모두 `React` 의 같은 속성을 묶는다.
- * 식별자만 속성으로 읽으면 나머지 둘은 지역 이름(`h`)이 export 이름이 되고,
- * 그러면 따옴표 한 쌍으로 요소·호출부 판정이 갈린다(16회차 지적 2).
- * 동적 키(`{ [name]: h }`)는 `null` — 보증 밖이다.
- */
-function declaredPropertyName(name) {
-	if (!name) return null;
-	if (ts.isIdentifier(name)) return name.text;
-	if (ts.isStringLiteral(name) || ts.isNoSubstitutionTemplateLiteral(name)) return name.text;
-	if (ts.isNumericLiteral(name)) return name.text;
-	if (ts.isComputedPropertyName(name)) {
-		const key = unwrapExpression(name.expression);
-		if (key && (ts.isStringLiteral(key) || ts.isNoSubstitutionTemplateLiteral(key)))
-			return key.text;
-		if (key && ts.isNumericLiteral(key)) return key.text;
-	}
-	return null;
-}
 
 /** 리터럴 키로 적은 멤버 접근의 이름. 동적 키는 `null` — 보증 밖이다. */
 function memberName(node) {
@@ -237,7 +214,7 @@ export function importBindings(sf) {
 		if (named && ts.isNamedImports(named)) {
 			for (const el of named.elements) {
 				const imported = el.propertyName
-					? declaredPropertyName(el.propertyName)
+					? declaredPropertyName(el.propertyName, sf, constScope(sf, null), new Set())
 					: el.name.text;
 				if (imported === null) continue;
 				out.set(el.name.text, { module, imported, kind: "named" });
@@ -402,18 +379,54 @@ function declaredTypeNames(sf) {
 	return names;
 }
 
-/** `import("mod")` · `require("mod")` 의 그 모듈. 리터럴 지정자만. */
-function dynamicModuleOf(node) {
+/**
+ * `import(…)` · `require(…)` 의 그 모듈.
+ *
+ * 지정자는 **정적으로 정해지면** 그 값으로 읽는다 — 리터럴만 보면
+ * `import(\`@tauri-apps/api/core\`)` 나 `import(CORE)`(위에서 `const CORE = "…"`)
+ * 가 형태 한 겹으로 빠져나간다(18회차 지적 5). 접는 범위는
+ * `scripts/lib/static-eval.mjs` 의 표 하나이고, 실행할 때 조립되는 지정자는
+ * 그 표 밖이라 여전히 모른다.
+ */
+function dynamicModuleOf(node, sf, env) {
 	if (!ts.isCallExpression(node)) return null;
 	const callee = unwrap(node.expression);
 	const isLoader =
 		(callee && callee.kind === ts.SyntaxKind.ImportKeyword) ||
 		(callee && ts.isIdentifier(callee) && callee.text === "require");
 	if (!isLoader) return null;
-	const first = unwrap(node.arguments[0]);
+	const first = node.arguments[0];
 	if (!first) return null;
-	if (!ts.isStringLiteral(first) && !ts.isNoSubstitutionTemplateLiteral(first)) return null;
-	return first.text;
+	const value = staticValue(first, sf, constScope(sf, env), new Set());
+	return typeof value === "string" && value !== "" ? value : null;
+}
+
+/**
+ * 평가기에 넘길 이름 해석 훅.
+ *
+ * 이 모듈은 `const` 를 자기 규칙(`constAlias`)으로 찾는다 — 재대입이 있는
+ * 이름은 아예 풀지 않는다는 그 규칙이다. 평가기는 값만 접고, 어느 이름을
+ * 따라갈지는 부르는 쪽이 정한다.
+ */
+function constScope(sf, env) {
+	return {
+		constBindingOf(name, home) {
+			const where = home ?? sf;
+			let alias = constAlias(name, where);
+			let file = where;
+			if (!alias) {
+				// import 로 건너간 이름도 같은 규칙으로 따라간다.
+				const site = importedValueSite(name, where, env);
+				if (site?.name && site.sf) {
+					alias = constAlias(site.name, site.sf);
+					file = site.sf;
+				}
+			}
+			if (!alias) return null;
+			if (alias.kind === "value") return { node: alias.node, sf: file, path: [] };
+			return { node: alias.node, sf: file, path: [alias.property] };
+		},
+	};
 }
 
 function globalBinding(name) {
@@ -448,7 +461,7 @@ function constAlias(name, sf) {
 					// 이름으로 떨어뜨리지 않고 아예 따라가지 않는다 — 모르는 것을
 					// 아는 이름으로 바꿔 읽으면 남의 export 가 걸려 든다.
 					const property = el.propertyName
-						? declaredPropertyName(el.propertyName)
+						? declaredPropertyName(el.propertyName, sf, constScope(sf, null), new Set())
 						: el.name.text;
 					if (property === null) continue;
 					found = { kind: "property", node: n.initializer, property };
@@ -615,7 +628,7 @@ function objectNamespaceMember(baseExpr, name, sf, env, seen) {
 			return resolveBinding(property.name, sf, env, seen);
 		}
 		if (!ts.isPropertyAssignment(property)) continue;
-		if (declaredPropertyName(property.name) !== name) continue;
+		if (declaredPropertyName(property.name, sf, constScope(sf, null), new Set()) !== name) continue;
 		return resolveBinding(property.initializer, sf, env, seen);
 	}
 	return null;
@@ -833,7 +846,7 @@ export function resolveBinding(expr, sf, env, state) {
 		// 그 모듈 전체로 읽는다. 실행할 때 정해지는 지정자는 그대로 모른다.
 		// 셸의 지연 로딩이 이 꼴이고, 예전에는 파괴 게이트가 자기 안에 따로
 		// 들고 있었다(17회차 지적 6).
-		const loaded = dynamicModuleOf(node);
+		const loaded = dynamicModuleOf(node, sf, env);
 		if (loaded)
 			return { module: loaded, imported: "*", local: null, via: "dynamic", boundArgs: 0 };
 		const callee = unwrap(node.expression);
