@@ -1368,6 +1368,9 @@ struct WindowState {
     height: u32,
 }
 
+const WINDOW_STATE_SETTINGS_DIR: &str = "naia-settings";
+const WINDOW_STATE_FILE_NAME: &str = "window-state.json";
+
 #[derive(Debug, Clone, Copy)]
 struct WindowBounds {
     x: i32,
@@ -1509,28 +1512,83 @@ fn monitor_for_window_state(
         .or_else(|| window.primary_monitor().ok().flatten())
 }
 
-fn window_state_path(app_handle: &AppHandle) -> Option<std::path::PathBuf> {
-    app_handle
-        .path()
-        .app_config_dir()
-        .ok()
-        .map(|d| d.join("window-state.json"))
+fn adk_window_state_path(adk_path: &str) -> Option<std::path::PathBuf> {
+    let adk_path = adk_path.trim();
+    (!adk_path.is_empty()).then(|| {
+        std::path::PathBuf::from(adk_path)
+            .join(WINDOW_STATE_SETTINGS_DIR)
+            .join(WINDOW_STATE_FILE_NAME)
+    })
 }
 
-fn load_window_state(app_handle: &AppHandle) -> Option<WindowState> {
-    let path = window_state_path(app_handle)?;
+fn window_state_path(_app_handle: &AppHandle) -> Option<std::path::PathBuf> {
+    adk_window_state_path(&current_adk_path().ok()?)
+}
+
+fn legacy_window_state_path_for(
+    app_config_dir: Option<&std::path::Path>,
+    isolated_runtime_dir: Option<&std::path::Path>,
+    e2e_enabled: bool,
+) -> Option<std::path::PathBuf> {
+    if e2e_enabled {
+        return isolated_runtime_dir.map(|path| path.join(WINDOW_STATE_FILE_NAME));
+    }
+    app_config_dir.map(|path| path.join(WINDOW_STATE_FILE_NAME))
+}
+
+fn legacy_window_state_path(app_handle: &AppHandle) -> Option<std::path::PathBuf> {
+    let app_config_dir = app_handle.path().app_config_dir().ok();
+    let isolated_runtime_dir = e2e_runtime_dir();
+    legacy_window_state_path_for(
+        app_config_dir.as_deref(),
+        isolated_runtime_dir.as_deref(),
+        debug_e2e_enabled(),
+    )
+}
+
+fn read_window_state_file(path: &std::path::Path) -> Option<WindowState> {
     let data = std::fs::read_to_string(path).ok()?;
     serde_json::from_str(&data).ok()
 }
 
+fn write_window_state_file(path: &std::path::Path, state: &WindowState) -> bool {
+    let bytes = match serde_json::to_vec(state) {
+        Ok(bytes) => bytes,
+        Err(_) => return false,
+    };
+    write_owner_only_atomic(path, &bytes).is_ok()
+}
+
+/// Read the ADK window state, migrating the old app-config copy only when the
+/// ADK does not have a state yet. The legacy file is removed only after the
+/// canonical file has been written successfully.
+fn load_or_migrate_window_state(
+    adk_path: &std::path::Path,
+    legacy_path: Option<&std::path::Path>,
+) -> Option<WindowState> {
+    if adk_path.exists() {
+        return read_window_state_file(adk_path);
+    }
+
+    let legacy_path = legacy_path?;
+    let state = read_window_state_file(legacy_path)?;
+    if write_window_state_file(adk_path, &state) {
+        let _ = std::fs::remove_file(legacy_path);
+    }
+    Some(state)
+}
+
+fn load_window_state(app_handle: &AppHandle) -> Option<WindowState> {
+    let adk_path = window_state_path(app_handle)?;
+    load_or_migrate_window_state(
+        &adk_path,
+        legacy_window_state_path(app_handle).as_deref(),
+    )
+}
+
 fn save_window_state(app_handle: &AppHandle, state: &WindowState) {
     if let Some(path) = window_state_path(app_handle) {
-        if let Some(parent) = path.parent() {
-            let _ = std::fs::create_dir_all(parent);
-        }
-        if let Ok(json) = serde_json::to_string(state) {
-            let _ = std::fs::write(&path, json);
-        }
+        let _ = write_window_state_file(&path, state);
     }
 }
 
@@ -7622,8 +7680,15 @@ async fn generate_oauth_state(state: tauri::State<'_, AppState>) -> Result<Strin
 
 #[tauri::command]
 async fn reset_window_state(app: AppHandle) -> Result<(), String> {
-    if let Some(path) = window_state_path(&app) {
-        let _ = std::fs::remove_file(&path);
+    let canonical = window_state_path(&app);
+    let legacy = legacy_window_state_path(&app);
+    let mut removed = false;
+    for path in [canonical.as_deref(), legacy.as_deref()].into_iter().flatten() {
+        if std::fs::remove_file(path).is_ok() {
+            removed = true;
+        }
+    }
+    if removed {
         log_verbose("[Naia] Window state reset");
     }
     Ok(())
@@ -10134,16 +10199,21 @@ async fn delete_naia_asset(
     }
 }
 
+fn read_naia_settings_file(path: &std::path::Path) -> Result<String, String> {
+    match std::fs::read_to_string(path) {
+        Ok(config) => Ok(config),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(String::new()),
+        Err(error) => Err(error.to_string()),
+    }
+}
+
 /// Read `{adk_path}/naia-settings/config.json`. Returns empty string if not found.
 #[tauri::command]
 async fn read_naia_config(adk_path: String) -> Result<String, String> {
     let path = std::path::PathBuf::from(&adk_path)
         .join("naia-settings")
         .join("config.json");
-    if !path.exists() {
-        return Ok(String::new());
-    }
-    std::fs::read_to_string(&path).map_err(|e| e.to_string())
+    read_naia_settings_file(&path)
 }
 
 fn write_naia_config_atomic(path: &std::path::Path, json: &str) -> Result<(), String> {
@@ -10184,18 +10254,14 @@ async fn read_naia_ui_config(adk_path: String) -> Result<String, String> {
     let path = std::path::PathBuf::from(&adk_path)
         .join("naia-settings")
         .join("ui-config.json");
-    if !path.exists() {
-        return Ok(String::new());
-    }
-    std::fs::read_to_string(&path).map_err(|e| e.to_string())
+    read_naia_settings_file(&path)
 }
 
 /// Write `{adk_path}/naia-settings/ui-config.json` (???꾩슜 ??agent 誘몄냼鍮?.
 #[tauri::command]
 async fn write_naia_ui_config(adk_path: String, json: String) -> Result<(), String> {
     let dir = std::path::PathBuf::from(&adk_path).join("naia-settings");
-    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-    std::fs::write(dir.join("ui-config.json"), json).map_err(|e| e.to_string())
+    write_naia_config_atomic(&dir.join("ui-config.json"), &json)
 }
 
 fn reset_naia_config_files_at(adk: &std::path::Path) -> Result<(), String> {
@@ -12085,8 +12151,8 @@ pub fn run() {
             // discard it so the new desktop-window default takes effect.
             const LEGACY_APP_WIDTH_CAP: u32 = 600;
             if let Some(window) = app.get_webview_window("main") {
-                let restored = load_window_state(&app_handle)
-                    .filter(|s| s.width >= LEGACY_APP_WIDTH_CAP);
+                let loaded_state = load_window_state(&app_handle);
+                let restored = loaded_state.filter(|s| s.width >= LEGACY_APP_WIDTH_CAP);
 
                 if let Some(saved) = restored {
                     let fitted = monitor_for_window_state(&app_handle, &window, &saved)
@@ -12115,8 +12181,8 @@ pub fn run() {
                 } else {
                     // Discard any legacy side-app state so the desktop default
                     // is not overwritten on next start.
-                    if let Some(path) = window_state_path(&app_handle) {
-                        if path.exists() {
+                    if loaded_state.is_some() {
+                        if let Some(path) = window_state_path(&app_handle) {
                             let _ = std::fs::remove_file(&path);
                             log_verbose("[Naia] Discarded legacy side-app window state");
                         }
@@ -12307,7 +12373,7 @@ pub fn run() {
         })
         .on_window_event(|window, event| {
             match event {
-                tauri::WindowEvent::Moved(pos) => {
+                tauri::WindowEvent::Moved(pos) if window.label() == "main" => {
                     if let Ok(size) = window.outer_size() {
                         save_window_state(&window.app_handle(), &WindowState {
                             x: pos.x,
@@ -12317,7 +12383,7 @@ pub fn run() {
                         });
                     }
                 }
-                tauri::WindowEvent::Resized(size) => {
+                tauri::WindowEvent::Resized(size) if window.label() == "main" => {
                     if let Ok(pos) = window.outer_position() {
                         save_window_state(&window.app_handle(), &WindowState {
                             x: pos.x,
@@ -12921,6 +12987,109 @@ mod tests {
         let parsed: WindowState = serde_json::from_str(&json).unwrap();
         assert_eq!(parsed.x, 100);
         assert_eq!(parsed.width, 380);
+    }
+
+    #[test]
+    fn adk_window_state_path_uses_workspace_settings_dir() {
+        let adk = tempfile::tempdir().unwrap();
+
+        assert_eq!(
+            adk_window_state_path(adk.path().to_str().unwrap()),
+            Some(
+                adk.path()
+                    .join("naia-settings")
+                    .join("window-state.json")
+            )
+        );
+        assert_eq!(adk_window_state_path("  "), None);
+    }
+
+    #[test]
+    fn e2e_window_state_legacy_path_is_isolated_from_app_config() {
+        let root = tempfile::tempdir().unwrap();
+        let app_config = root.path().join("app-config");
+        let runtime = root.path().join("e2e-runtime");
+
+        assert_eq!(
+            legacy_window_state_path_for(Some(&app_config), Some(&runtime), true),
+            Some(runtime.join(WINDOW_STATE_FILE_NAME))
+        );
+        assert_eq!(
+            legacy_window_state_path_for(Some(&app_config), None, true),
+            None
+        );
+        assert_eq!(
+            legacy_window_state_path_for(Some(&app_config), Some(&runtime), false),
+            Some(app_config.join(WINDOW_STATE_FILE_NAME))
+        );
+    }
+
+    #[test]
+    fn window_state_migrates_legacy_file_after_adk_write() {
+        let root = tempfile::tempdir().unwrap();
+        let legacy = root.path().join("legacy/window-state.json");
+        let canonical = root
+            .path()
+            .join("workspace/naia-settings/window-state.json");
+        let state = WindowState {
+            x: -800,
+            y: 40,
+            width: 1366,
+            height: 768,
+        };
+
+        std::fs::create_dir_all(legacy.parent().unwrap()).unwrap();
+        std::fs::write(&legacy, serde_json::to_vec(&state).unwrap()).unwrap();
+
+        assert_eq!(
+            load_or_migrate_window_state(&canonical, Some(&legacy)),
+            Some(state)
+        );
+        assert_eq!(read_window_state_file(&canonical), Some(state));
+        assert!(!legacy.exists());
+    }
+
+    #[test]
+    fn existing_adk_window_state_wins_over_legacy_file() {
+        let root = tempfile::tempdir().unwrap();
+        let legacy = root.path().join("legacy/window-state.json");
+        let canonical = root
+            .path()
+            .join("workspace/naia-settings/window-state.json");
+        let adk_state = WindowState {
+            x: 100,
+            y: 200,
+            width: 1366,
+            height: 768,
+        };
+        let legacy_state = WindowState {
+            x: 10,
+            y: 20,
+            width: 800,
+            height: 600,
+        };
+
+        assert!(write_window_state_file(&canonical, &adk_state));
+        std::fs::create_dir_all(legacy.parent().unwrap()).unwrap();
+        std::fs::write(&legacy, serde_json::to_vec(&legacy_state).unwrap()).unwrap();
+
+        assert_eq!(
+            load_or_migrate_window_state(&canonical, Some(&legacy)),
+            Some(adk_state)
+        );
+        assert_eq!(read_window_state_file(&canonical), Some(adk_state));
+        assert!(legacy.exists());
+    }
+
+    #[test]
+    fn settings_reads_treat_only_missing_files_as_empty() {
+        let root = tempfile::tempdir().unwrap();
+        let missing = root.path().join("missing.json");
+        assert_eq!(read_naia_settings_file(&missing).unwrap(), "");
+
+        let directory = root.path().join("settings.json");
+        std::fs::create_dir(&directory).unwrap();
+        assert!(read_naia_settings_file(&directory).is_err());
     }
 
     #[test]
