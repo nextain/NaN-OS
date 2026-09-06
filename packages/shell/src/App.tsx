@@ -179,8 +179,9 @@ export function App() {
 		useState<AppInstallRequest | null>(null);
 	const [localeHydrated, setLocaleHydrated] = useState(showAdkSetup);
 	const [showOnboarding, setShowOnboarding] = useState(false);
+	const [configHydrated, setConfigHydrated] = useState(false);
 	const [configSaveError, setConfigSaveError] = useState<string | null>(null);
-	useAgentAuthSync(showAdkSetup, showOnboarding);
+	useAgentAuthSync(showAdkSetup, showOnboarding, configHydrated);
 	const [naiaVisible, setNaiaVisible] = useState(true);
 	const [naiaWidth, setNaiaWidth] = useState(NAIA_WIDTH_DEFAULT);
 	const [appTitle, setAppTitle] = useState(
@@ -499,6 +500,7 @@ export function App() {
 						if (cancelled || getAdkPath() !== adkPath) return;
 						configHydratedRef.current = true;
 						completeNaiaConfigHydration();
+						setConfigHydrated(true);
 						await hydrateUiPreferences(null, {
 							adkPath,
 							canPersist: true,
@@ -533,9 +535,14 @@ export function App() {
 					if (reconciled.locale) await setLocale(reconciled.locale);
 					if (cancelled || getAdkPath() !== adkPath) return;
 					saveConfig(reconciled);
+					// The ADK file is authoritative after hydration. In particular, this
+					// clears a stale onboarding overlay that was selected from an empty or
+					// older render cache during the initial mount.
+					setShowOnboarding(reconciled.onboardingComplete !== true);
 				}
 				configHydratedRef.current = true;
 				completeNaiaConfigHydration();
+				setConfigHydrated(true);
 				// Run legacy migration only after the complete config snapshot is
 				// safely cached and the ADK write gate is open.
 				await hydrateUiPreferences(uiConfig, {
@@ -598,8 +605,9 @@ export function App() {
 			});
 		applyPersistedPresentationConfig(config, setNaiaVisible, setNaiaWidth);
 
+		if (showAdkSetup || !configHydratedRef.current) return;
+
 		const needsOnboarding = !isOnboardingComplete();
-		if (showAdkSetup) return; // wait for ADK setup first
 
 		if (needsOnboarding) setShowOnboarding(true);
 
@@ -926,8 +934,9 @@ export function App() {
 				onAdkSetupComplete: () => {
 					setShowSplash(true);
 					setLocaleHydrated(false);
+					configHydratedRef.current = false;
+					setConfigHydrated(false);
 					setShowAdkSetup(false);
-					if (!isOnboardingComplete()) setShowOnboarding(true);
 				},
 				onOnboardingComplete: () => {
 					const completedConfig = loadConfig();

@@ -26,6 +26,7 @@ function notifyNaiaAuthReady(source: "startup" | "auth-complete"): void {
 export function useAgentAuthSync(
 	showAdkSetup: boolean,
 	showOnboarding: boolean,
+	configHydrated: boolean,
 ): void {
 	useEffect(() => {
 		const unlisten = listen<{ naiaKey?: string }>(
@@ -49,7 +50,7 @@ export function useAgentAuthSync(
 	}, []);
 
 	useEffect(() => {
-		if (showAdkSetup || showOnboarding) return;
+		if (showAdkSetup || showOnboarding || !configHydrated) return;
 		const preMigrate = loadConfig();
 		if (preMigrate) {
 			const decision = shouldMigrateNextainModel(
@@ -127,5 +128,5 @@ export function useAgentAuthSync(
 		return () => {
 			active = false;
 		};
-	}, [showAdkSetup, showOnboarding]);
+	}, [showAdkSetup, showOnboarding, configHydrated]);
 }

@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 const listeners: Record<
@@ -7,6 +7,11 @@ const listeners: Record<
 	((event: { payload: any }) => void) | undefined
 > = {};
 const secureState = vi.hoisted(() => ({ naiaKey: null as string | null }));
+const tauriState = vi.hoisted(() => ({ startupMessages: [] as string[] }));
+const adkState = vi.hoisted(() => ({
+	config: null as Record<string, unknown> | null,
+	uiConfig: null as Record<string, unknown> | null,
+}));
 
 vi.mock("@tauri-apps/api/event", () => ({
 	listen: vi.fn((name: string, cb: (event: { payload: any }) => void) => {
@@ -19,9 +24,11 @@ vi.mock("@tauri-apps/api/event", () => ({
 
 vi.mock("@tauri-apps/api/core", () => ({
 	convertFileSrc: vi.fn((path: string) => path),
-	invoke: vi.fn((command: string) =>
-		Promise.resolve(command === "detect_gpu_vram" ? 8 : null),
-	),
+	invoke: vi.fn((command: string, args?: { message?: string }) => {
+		if (command === "store_startup_message" && args?.message)
+			tauriState.startupMessages.push(args.message);
+		return Promise.resolve(command === "detect_gpu_vram" ? 8 : null);
+	}),
 }));
 
 // App 마운트 effect(secure-store via migrate*/loadConfig)가 @tauri-apps/plugin-store `load` 를 호출한다.
@@ -41,6 +48,38 @@ vi.mock("@tauri-apps/plugin-store", () => ({
 		}),
 	),
 }));
+
+// The workspace tests run without the native composition package. Keep the App
+// boundary focused on startup state rather than constructing its live session.
+vi.mock("../lib/environment-skill", () => ({
+	ENVIRONMENT_APP_ID: "environment",
+	SKILL_ENVIRONMENT: {
+		name: "skill_environment",
+		description: "test environment skill",
+		parameters: { type: "object", properties: {} },
+		tier: 1,
+	},
+	noteEnvironmentToolAck: vi.fn(),
+	refreshEnvironment: vi.fn().mockResolvedValue(null),
+}));
+
+vi.mock("../lib/adk-store", async () => {
+	const actual = await vi.importActual<typeof import("../lib/adk-store")>(
+		"../lib/adk-store",
+	);
+	return {
+		...actual,
+		readNaiaConfig: vi.fn(async () => {
+			if (adkState.config) return adkState.config;
+			const raw = globalThis.localStorage?.getItem("naia-config");
+			return raw ? JSON.parse(raw) : null;
+		}),
+		readNaiaUiConfig: vi.fn(async () => adkState.uiConfig),
+		setAdkPath: vi.fn().mockResolvedValue(undefined),
+		writeNaiaConfig: vi.fn().mockResolvedValue(undefined),
+		writeNaiaUiConfig: vi.fn().mockResolvedValue(undefined),
+	};
+});
 
 vi.mock("../components/OnboardingWizard", () => ({
 	OnboardingWizard: ({ onComplete }: { onComplete: () => void }) => (
@@ -110,6 +149,7 @@ vi.mock("@tauri-apps/api/window", () => ({
 		onResized: vi.fn().mockResolvedValue(() => {}),
 		onScaleChanged: vi.fn().mockResolvedValue(() => {}),
 		setSize: vi.fn().mockResolvedValue(undefined),
+		onCloseRequested: vi.fn().mockResolvedValue(() => {}),
 	}),
 }));
 vi.mock("@tauri-apps/plugin-updater", () => ({
@@ -126,6 +166,9 @@ describe("App discord deep-link persistence", () => {
 		localStorage.clear();
 		Object.keys(listeners).forEach((key) => delete listeners[key]);
 		secureState.naiaKey = null;
+		tauriState.startupMessages = [];
+		adkState.config = null;
+		adkState.uiConfig = null;
 	});
 
 	it("persists discord defaults from global listener", () => {
@@ -228,5 +271,54 @@ describe("App discord deep-link persistence", () => {
 
 		expect(await screen.findByText("video-avatar")).toBeTruthy();
 		expect(screen.queryByText("avatar")).toBeNull();
+	});
+
+	it("does not leave onboarding open when a cold cache restores completed ADK config", async () => {
+		localStorage.setItem("naia-adk-path", "/adk/complete");
+		adkState.config = {
+			provider: "gemini",
+			model: "gemini-3-flash-preview",
+			onboardingComplete: true,
+		};
+
+		render(<App />);
+
+		await waitFor(() => {
+			expect(
+				JSON.parse(localStorage.getItem("naia-config") || "{}").onboardingComplete,
+			).toBe(true);
+			expect(
+				document.querySelector(".app-root")?.getAttribute("data-app-ready"),
+			).toBe("true");
+			expect(screen.queryByRole("button", { name: "onboarding" })).toBeNull();
+		});
+	});
+
+	it("replays secure startup auth after cold ADK hydration", async () => {
+		secureState.naiaKey = "secure-cold-key";
+		localStorage.setItem("naia-adk-path", "/adk/complete");
+		adkState.config = {
+			provider: "nextain",
+			model: "gemini-2.5-flash",
+			onboardingComplete: true,
+		};
+
+		render(<App />);
+
+		await waitFor(() => {
+			expect(
+				tauriState.startupMessages.some((message) => {
+					try {
+						const parsed = JSON.parse(message) as {
+							type?: string;
+							naiaKey?: string;
+						};
+						return parsed.type === "auth_update" && parsed.naiaKey === "secure-cold-key";
+					} catch {
+						return false;
+					}
+				}),
+			).toBe(true);
+		});
 	});
 });
