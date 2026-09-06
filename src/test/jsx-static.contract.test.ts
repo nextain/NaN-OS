@@ -1650,3 +1650,64 @@ describe("평가기는 재귀로 닫혀 있다 (18회차 지적 1·2·3·4)", ()
 		);
 	});
 });
+
+/* ─────────────── 19회차에 못 박은 것 ─────────────── */
+
+describe("이름을 읽는 자리도 정적 평가 표를 지난다 (19회차)", () => {
+	const MODULES = [
+		"scripts/lib/jsx-static.mjs",
+		"scripts/lib/bindings.mjs",
+		"scripts/check-silent-clicks.mjs",
+		"scripts/lib/lint-boundary-forms.mjs",
+	];
+
+	// 18회차에 값을 접는 평가기를 정본으로 뗐지만, **이름을 읽는 자리** 넷은
+	// 여전히 각자 문자열 리터럴 AST 만 받았다. 그래서 같은 결함이 한 회차에
+	// 다섯 곳으로 터졌다. 이름도 값이다.
+	for (const rel of MODULES) {
+		it(`${rel} 에는 자기 멤버 이름 해석이 없다`, () => {
+			const text = readFileSync(resolve(__dirname, "..", "..", rel), "utf8");
+			for (const marker of ["argumentExpression", "isComputedPropertyName"])
+				expect(text.includes(marker), `${rel} 이 ${marker} 로 키를 직접 읽는다`).toBe(false);
+			expect(text.includes("memberNameOf"), `${rel} 이 공용 이름 해석을 안 쓴다`).toBe(true);
+		});
+	}
+
+	it("점·대괄호·계산된 키가 모두 같은 이름이다", () => {
+		function propsOf(spread: string, prelude = ""): string[] {
+			const sf = parse(`${prelude}\nexport const P = <div ${spread} />;`);
+			const first = J.jsxElementsIn(sf, sf, null)[0] as ts.Node;
+			return J.elementProps(first, sf, null).props.map((p) => p.name);
+		}
+		expect(propsOf('{...{ role: "alert" }}')).toEqual(["role"]);
+		expect(propsOf('{...{ ["role"]: "alert" }}')).toEqual(["role"]);
+		expect(propsOf('{...{ ["ro" + "le"]: "alert" }}')).toEqual(["role"]);
+		expect(propsOf("{...{ [String.raw`role`]: \"alert\" }}")).toEqual(["role"]);
+	});
+
+	it("반증: 못 접는 키는 속성이 아니라 **모른다** 다", () => {
+		const sf = parse(
+			'declare const k: string;\nexport const P = <div {...{ [k]: "alert" }} />;',
+		);
+		const first = J.jsxElementsIn(sf, sf, null)[0] as ts.Node;
+		const read = J.elementProps(first, sf, null);
+		expect(read.props.map((p) => p.name)).toEqual([]);
+		// "없다" 가 아니라 "못 봤다" 로 올라가야 한다.
+		expect(read.unknownSpread).toBe(true);
+	});
+
+	it("`String.raw` 태그도 이름으로 읽는다", () => {
+		function at(src: string): string[] {
+			const sf = parse(`export const P = <button d={${src}} />;`);
+			return [...J.stringCandidates(attributeValue(sf, "d"), sf, null).values];
+		}
+		expect(at("String.raw`alert`")).toEqual(["alert"]);
+		expect(at('String["raw"]`alert`')).toEqual(["alert"]);
+		expect(at("String[String.raw`raw`]`alert`")).toEqual(["alert"]);
+	});
+
+	it("반증: 태그를 모르면 값이 아니다", () => {
+		const sf = parse("declare const k: string;\nexport const P = <button d={String[k]`alert`} />;");
+		expect([...J.stringCandidates(attributeValue(sf, "d"), sf, null).values]).toEqual([]);
+	});
+});

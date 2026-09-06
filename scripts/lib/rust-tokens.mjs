@@ -738,27 +738,12 @@ function renameArgument(tokens, openParen) {
 }
 
 /**
- * `#[tauri::command]` 로 프런트에 열린 명령 이름과 그 본문.
- *
- * 속성과 `fn` 사이의 거리를 재지 않는다. 속성이 몇 개든, 문서 주석이 몇 자든,
- * `pub(crate) async unsafe fn` 이든 토큰으로 건너뛴 뒤 `fn <이름>` 을 읽는다.
- *
- * 본문은 중괄호 균형으로 잘라 낸다. 균형도 토큰에서 세므로 문자열 안의 `}` 가
- * 본문을 일찍 끊지 않는다.
- */
-export function tauriCommandBodies(source) {
-	const commands = new Map();
-	for (const declared of tauriCommandDeclarations(source)) {
-		commands.set(declared.fnName, declared.body);
-	}
-	return commands;
-}
-
-/**
  * 프런트가 부르는 **IPC 이름** 전부. 호출부 대조는 이 이름으로 해야 한다.
  *
- * `tauriCommandBodies` 의 열쇠는 Rust 함수 이름이라 `rename` 이 붙은 명령에서
- * 프런트가 부르는 이름과 어긋난다(18회차 지적 7).
+ * Rust 함수 이름으로 세면 `rename` 이 붙은 명령에서 프런트가 부르는 이름과
+ * 어긋난다(18회차 지적 7). 명령 목록을 뽑는 게이트 둘 — 확인 없는 파괴 조작을
+ * 보는 쪽과 스펙이 부르는 명령이 실제로 있는지 보는 쪽 — 이 모두 이 이름으로
+ * 대조한다(19회차 지적 6).
  */
 export function tauriCommandNames(source) {
 	return tauriCommandDeclarations(source).map((declared) => declared.ipcName);
@@ -787,6 +772,12 @@ export function tauriCommandNames(source) {
  * 명령 이름이 아니다(같은 파일 `510~520` 줄의 `key`). 그래서 이 함수는
  * `rename_all` 로 이름을 바꾸지 않는다 — 바꾸면 Tauri 가 등록하지도 않는 이름을
  * 목록에 넣고, 진짜 이름(함수 이름)을 잃는다.
+ *
+ * ## 본문과 거리
+ *
+ * 본문은 중괄호 균형으로 잘라 낸다. 균형도 토큰에서 세므로 문자열 안의 `}` 가
+ * 본문을 일찍 끊지 않는다. 속성과 `fn` 사이의 거리도 재지 않는다 — 속성이 몇
+ * 개든, 문서 주석이 몇 자든, `pub(crate) async unsafe fn` 이든 토큰으로 건너뛴다.
  */
 export function tauriCommandDeclarations(source) {
 	const tokens = tokenizeRust(source);

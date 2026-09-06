@@ -329,9 +329,12 @@ describe("하네스가 채우는 변수", () => {
 			[CREDENTIALED_KEY_ENV]: "gw-something",
 			NAIA_E2E_ADK_PATH: "/somewhere/outside",
 		});
-		expect(envMissing.get("harness-filled.spec.ts")).toEqual([
-			"NAIA_E2E_ADK_FIXTURE",
-		]);
+		// 목록을 글자로 다시 적지 않는다 — 정본에 이름이 하나 늘 때마다 이
+		// 단정이 갈라지면, 갈라진 쪽을 아무도 보지 않는다(이 모듈이 있는 이유와
+		// 같은 사고다). 밖에서 준 하나를 뺀 나머지 전부가 안 채워진다.
+		expect(envMissing.get("harness-filled.spec.ts")).toEqual(
+			HARNESS_PROVIDED_ENV.filter((name) => name !== "NAIA_E2E_ADK_PATH"),
+		);
 	});
 
 	it("다른 설정의 스펙에는 규칙이 적용되지 않는다", async () => {

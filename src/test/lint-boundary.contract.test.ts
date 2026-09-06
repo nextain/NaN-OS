@@ -258,3 +258,30 @@ describe("린트 경계 — 예외는 자리로 적는다", () => {
 		expect(/baseline/i.test(forms), "정본에 baseline 이 있다").toBe(false);
 	});
 });
+
+describe("금지 키도 접히는 키 전부다 (19회차 지적 4)", () => {
+	function computedCallee(code: string): boolean {
+		const sf = ts.createSourceFile("p.ts", code, ts.ScriptTarget.Latest, true);
+		let hit: ts.Node | undefined;
+		const walk = (n: ts.Node): void => {
+			if (hit) return;
+			if (ts.isCallExpression(n)) hit = n;
+			else ts.forEachChild(n, walk);
+		};
+		walk(sf);
+		expect(hit, `${code} 에서 호출을 찾지 못했다`).not.toBeUndefined();
+		return F.LINT_BOUNDARY_DETECTORS.computedCallee(hit as ts.Node);
+	}
+
+	it("리터럴이 아니어도 접히면 같은 형태다", () => {
+		expect(computedCallee('f["call"](null);')).toBe(true);
+		expect(computedCallee("f[String.raw`call`](null);")).toBe(true);
+		expect(computedCallee('f["ca" + "ll"](null);')).toBe(true);
+		expect(computedCallee('const KEY = "call";\nf[KEY](null);')).toBe(true);
+	});
+
+	it("반증: 못 접는 키는 보증 밖이라 금지 대상이 아니다", () => {
+		expect(computedCallee("declare const k: string;\nf[k](null);")).toBe(false);
+		expect(computedCallee("f.call(null);")).toBe(false);
+	});
+});

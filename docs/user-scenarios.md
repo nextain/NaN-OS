@@ -376,6 +376,66 @@ Gateway의 가격은 이미 10%가 반영된 고객가이므로 Shell은 다시 
 ### ⚠️ 측정 불가/깨짐 ≠ baseline (R1 수렴 — 핵심 교정)
 미배선(memory·cron)·깨짐(Discord)·disabled(memory backup)는 **golden baseline 아님** → **별도 "기능 격리/면제 목록"** 으로. **격리 상태 라벨(비-bug, 오류-유형 축과 별개)**: `unwired · unimplemented · disabled-by-design · unsupported-env` + 사유. ⚠️ **적용 자격(R7)**: 격리는 *old-baseline 에서도 본래 부재/비지원이 확인된 경우에만* 허용 — old 에서 **작동하던 것의 상실**은 격리 불가 = `new-regression` FAIL(재라벨 우회 차단). baseline 에 넣으면 *구현 실패*와 *원래 없음*이 섞여 **regression 은닉 장치**가 됨(codex). 격리 목록 항목은 slice 격리 + UC11 자기상태 보고 대상. **거버넌스(R2): high-importance 격리 항목은 해당 tranche exit 를 차단**(중요도만 적고 진행 금지 — 루크 명시 면제만 통과).
 
+### 기능 격리/면제 목록 — 게이트웨이 시대 도구 (#567, 2026-09-06)
+
+위 규칙(R1/R7)에 따라 라벨한다. 이 항목들은 **대화로 도구를 시켜** 확인하던
+e2e 스펙이었고, 그 도구 이름은 지금 에이전트의 도구 집합에 없다. 판정 기준은
+"이름이 있느냐" 가 아니라 **"그 능력이 지금 어느 경로로 사는가"** 다 — 살아 있으면
+그 경로로 다시 겨누고, 죽었으면 스펙을 지운다(판례: 코딩 작업자 화면 폐기 = 삭제,
+workspace-area 41개 = Herdr 브리지로 재조준).
+
+⚠️ **R7 경계**: 이 도구들은 게이트웨이 시대에 작동했다. 규칙은 "작동하던 것의
+상실은 격리 불가" 라고 못박는다. 게이트웨이 제거는 `FR-SHELL-ISO.1` 이 적은
+**의도된 설계 변경**(`spawn_gateway` = 제거된 스텁)이므로 `disabled-by-design` 으로
+둔다. 그 판단은 오너의 것이고, 아래 삭제는 그 판단 위에 선다.
+
+| 지운 스펙 | 부르던 도구 | 사유 부류 | 격리 라벨 | 중요도 |
+|---|---|---|---|---|
+| 05-skill-system | `skill_system_status` | 게이트웨이 표면 소멸 — 자기 상태는 `Diagnostics` RPC + DiagnosticsTab 이 맡고 `31`·`60` 이 덮는다 | `disabled-by-design` | 중 |
+| 21-cron-recurring | `skill_cron` | 오너 확인된 cron 기능 트랙 존재(아웃룩형 캘린더 포함) — 그 트랙이 도구를 정하면 그때 다시 쓴다 | `unwired` | 중 |
+| 29-cron-gateway | `skill_cron gateway_*` | 게이트웨이 표면 소멸 | `disabled-by-design` | 하 |
+| 45-cron-gateway-full | `skill_cron gateway_*` | 게이트웨이 표면 소멸 | `disabled-by-design` | 하 |
+| 41-agents-crud | `skill_agents` | 게이트웨이 표면 소멸 — 능력은 AgentsTab | `disabled-by-design` | 중 |
+| 43-device-management | `skill_device` | 게이트웨이 표면 소멸 — **덮는 스펙 없음**(34 는 얕은 화면 스모크) | `disabled-by-design` | **상 — 의도된 커버리지 상실** |
+| 47-tts-full | `skill_tts` | 게이트웨이 표면 소멸 — `24`·`73`·`76`·`80`·`81` 이 화면 경로를 덮는다 | `disabled-by-design` | 하 |
+| 49-approvals-full | `skill_approvals` | 게이트웨이 표면 소멸 — 승인은 ApprovalPort + 권한 모달 | `disabled-by-design` | 중 |
+| 30-exec-approvals | `skill_approvals get_rules` · `skill_time` | 같은 가족(49 를 덮는다던 스펙 자신이 같은 도구를 부른다) | `disabled-by-design` | 중 |
+| 51-skills-advanced | `skill_skill_manager` | 게이트웨이 표면 소멸 — 능력은 SkillsTab, `14`·`28`·`59` 가 덮는다 | `disabled-by-design` | 하 |
+| 39-web-tools 의 `web_search` 단정 | `web_search` | 게이트웨이 표면 소멸(S55 = gateway-tier) | `disabled-by-design` | 하 |
+
+> **43 = 의도된 커버리지 상실.** 디바이스 조작(`node_describe` · token rotate/revoke ·
+> rename · pair request/verify/approve) 여덟 단정을 지우면서 대체를 두지 않았다.
+> `34-device-pairing` 은 설정 탭으로 가서 섹션과 빈 상태를 보는 얕은 스모크라 같은
+> 깊이가 아니다. 재확보는 별도 이슈로 연다.
+
+**재조준한 것**(스펙은 남는다):
+
+| 스펙 | 예전 도구 | 지금 겨누는 경로 |
+|---|---|---|
+| 42-sessions-crud | `skill_sessions`(셸이 "new-core 미지원 — chat 도구루프로만" 이라 막음) | `ConversationLogPort` → `<ADK>/conversations/<sessionId>.jsonl` append-only 기록 |
+| 39-web-tools | `browser` | 셸 앱 스킬 `skill_browser_navigate` |
+
+**전제를 세워 다시 겨눈 것 둘** (#567 후속):
+
+`17-skill-notify`(`skill_notify_slack`/`_discord`)와 `37-execute-command`
+(`execute_command`)는 "미배선 어댑터" 로 분류됐으나, e2e 가 실제로 도는 짝
+체크아웃에서 그 어댑터들은 **프로덕션 진입점이 import 한다**. 도달하지 못한 이유는
+배선 부재가 아니라 **합성 전제**였다 — `shell_exec` 는 `NAIA_SHELL_TOOL=1`,
+`notify` 는 webhook 주소가 있을 때만 도구 목록에 오른다. 진짜 미배선은 naia-agent 의
+cron-skills 뿐이다(프로덕션 import 0, naia-agent#128).
+
+그래서 지우지 않고 전제를 하네스가 세우도록 했다. 목록의 정본은
+`packages/shell/e2e-tauri/harness-provided-env.mjs` 이고 러너의 선별도 같은 곳을
+읽으므로, 러너·설정·문서가 한 목록을 본다.
+
+| 스펙 | 예전 도구 | 지금 겨누는 것 | 하네스가 세우는 전제 |
+|---|---|---|---|
+| 37-execute-command | `execute_command` | `shell_exec` 로 `echo` 실행 후 출력 확인 | `NAIA_SHELL_TOOL=1` |
+| 17-skill-notify | `skill_notify_slack`/`_discord` · `allowedTools` 배열 | `notify` 로 보낸 알림이 **받는 쪽 스텁**에 도착하는가, 그리고 요청한 채널로 갔는가 | 로컬 webhook 스텁(무작위 포트) + `NAIA_NOTIFY_*_WEBHOOK` + `NAIA_E2E_NOTIFY_LOG` |
+
+`allowedTools` 단정은 지웠다. 그 배열은 에이전트가 읽지 않으므로 이름이 거기 있든
+없든 도구가 붙는지와 무관하고, 알림이 실제로 나갔는지도 말하지 못한다.
+
 ### baseline 갱신·coverage 규칙 (R1)
 - **old-bug 승계 vs new 교정**: old 버그 *승계(동일 재현)* 기본, 교정은 별도 결정. ⚠️ **단 민감-도메인(security/policy/approval/safety) old-bug = 승계 금지**(명시 승인 필요) — deny-by-default 우선(R2 codex, R5 safety 포함).
 - **coverage = 중요도 기준**(루크 측정가능성 skew 방지): 측정 불가여도 중요 시나리오는 격리 목록에 *중요도* 명시(후순위 자동화 방지).

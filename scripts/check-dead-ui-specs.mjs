@@ -39,6 +39,8 @@ import {
 	stringCandidates,
 	unwrapAll,
 } from "./lib/jsx-static.mjs";
+import { crateSourceRoots } from "./lib/crate-roots.mjs";
+import { tauriCommandNames } from "./lib/rust-tokens.mjs";
 
 const SHELL = "packages/shell";
 
@@ -100,15 +102,29 @@ function addTo(map, key, value) {
 	map.get(key).add(value);
 }
 
-/** Rust 가 프런트에 내주는 명령 이름 전부. */
-function tauriCommandNames() {
+/**
+ * Rust 가 프런트에 내주는 **IPC 이름** 전부.
+ *
+ * 예전에는 명령 속성과 `fn` 사이를 원문에서 재는 정규식이었다(창 200자). 주석을
+ * 버리지 않으므로 주석에 적어 둔 명령 속성 옆의 `fn` 이 명령으로 셌고, 창 길이도
+ * 그대로였다 — 파괴 게이트가 11회차에 닫은 바로 그 측정 지점이 여기 남아 있었다
+ * (19회차 지적 6). 스펙이 없는 명령을 불러도 주석 두 줄이면 초록이었다.
+ *
+ * 그 정규식은 이 파일에 다시 적히면 안 된다. `src/test/rust-command-list.contract.test.ts`
+ * 가 그 사실을 고정한다.
+ *
+ * 이제 두 게이트가 같은 자리에서 센다. 이름은 `rust-tokens.mjs` 의
+ * `tauriCommandNames`(토크나이저 — 주석과 문자열은 토큰이 아니고, `rename` 인자가
+ * 있으면 그 IPC 이름이다), 소스 뿌리는 `crate-roots.mjs` 의 `crateSourceRoots`
+ * (`Cargo.toml` 의 workspace·path 의존)다.
+ */
+function rustCommandNames() {
 	const names = new Set();
-	for (const file of tracked(`${SHELL}/src-tauri/src`, ".rs")) {
-		const source = readFileSync(file, "utf8");
-		for (const match of source.matchAll(
-			/#\[tauri::command[^\]]*\][\s\S]{0,200}?\bfn\s+([a-z0-9_]+)/g,
-		)) {
-			names.add(match[1]);
+	for (const root of crateSourceRoots()) {
+		for (const file of tracked(root, ".rs")) {
+			for (const name of tauriCommandNames(readFileSync(file, "utf8"))) {
+				names.add(name);
+			}
 		}
 	}
 	return names;
@@ -619,7 +635,7 @@ for (const file of specs) {
  * 존재하지 않는 명령을 부르고 있었고, 그중 하나는 e2e 전용으로 만들려다
  * 만 것이 스펙에만 남은 자리다.
  */
-const commandNames = tauriCommandNames();
+const commandNames = rustCommandNames();
 const missingCommands = [];
 for (const file of specs) {
 	const source = readFileSync(file, "utf8");

@@ -13,6 +13,7 @@ import { basename, dirname, resolve } from "node:path";
 import { execPath } from "node:process";
 import { resolvePairedAgent } from "../scripts/agent-pairing.mjs";
 import { reclaimLeakedAgentChild as reclaimAgentChild } from "./agent-child-lease.js";
+import { startNotifyWebhookStub } from "./notify-webhook-stub.mjs";
 import {
 	CREDENTIALED_KEY_ENV,
 	CREDENTIALED_MAIN_MODEL,
@@ -115,6 +116,17 @@ if (SEEDS_CREDENTIALED_ADK) {
 	// 대목이 통째로 건너뛰어지고, 실패는 401 이라는 엉뚱한 모습으로만 보인다
 	// (실측). 심었다는 사실 자체를 환경에 남겨 워커가 같은 판단을 하게 한다.
 	process.env.NAIA_E2E_CREDENTIALED_SEED = "1";
+	// 조건부로만 합성되는 도구의 전제를 세운다 (#567 재조준). 어댑터는 배선돼
+	// 있는데 이 값이 없으면 그 도구가 목록에 오르지 않아, 모델이 "그런 도구가
+	// 없다" 고 답한다 — 배선 부재와 구별되지 않는 모습이다. 목록의 정본은
+	// `harness-provided-env.mjs` 이고 러너의 선별도 같은 곳을 본다.
+	//
+	// `shell_exec` 는 격리 실행 자리 아래(`allowRoots = adkPath`)로만 나간다.
+	process.env.NAIA_SHELL_TOOL = "1";
+	process.env.NAIA_E2E_NOTIFY_LOG = resolve(
+		process.env.NAIA_E2E_RUNTIME_DIR ?? E2E_RUNTIME_DIR,
+		"notify-received.jsonl",
+	);
 }
 /** 이 실행이 격리 ADK 에 살아 있는 공급자를 심었는가 — 런처와 워커가 같이 본다. */
 const CREDENTIALED_SEED_ACTIVE = process.env.NAIA_E2E_CREDENTIALED_SEED === "1";
@@ -223,6 +235,7 @@ const VITE_PORT = Number(E2E_DEV_URL.port || "1420");
 const VITE_HOST = E2E_DEV_URL.hostname;
 
 let tauriDriver: ChildProcess;
+let notifyStub: Awaited<ReturnType<typeof startNotifyWebhookStub>> | undefined;
 
 /** #539(Windows 인앱): 앱 트리를 강제 종료하고 4448 이 실제로 닫힐 때까지 기다린다.
  *  agent-core/node 자식이 소켓을 물고 늦게 죽어 10초 대기로는 모자라다. */
@@ -581,6 +594,16 @@ export const config = {
 					` (key from $${seeded.credentialRefEnv}) → ${seeded.configPath}`,
 			);
 		}
+		if (CREDENTIALED_SEED_ACTIVE) {
+			// 받는 쪽이 있어야 `notify` 가 합성된다. 주소는 무작위 포트라 여기서
+			// 정해 환경에 넣는다 — 워커와 앱은 이 환경을 물려받는다.
+			notifyStub = await startNotifyWebhookStub(
+				process.env.NAIA_E2E_NOTIFY_LOG as string,
+			);
+			process.env.NAIA_NOTIFY_SLACK_WEBHOOK = notifyStub.urlFor("slack");
+			process.env.NAIA_NOTIFY_DISCORD_WEBHOOK = notifyStub.urlFor("discord");
+			console.log(`[e2e] notify webhook stub on 127.0.0.1:${notifyStub.port}`);
+		}
 		await waitForPortClosed(1420);
 		await waitForPortClosed(VITE_PORT);
 		if (!IS_WINDOWS) {
@@ -741,6 +764,7 @@ export const config = {
 
 	async onComplete() {
 		viteServer?.kill();
+		await notifyStub?.close();
 		// 붉은 실행의 로그·리스를 볼 수 있어야 원인을 가린다. codex 전용 설정과
 		// 같은 손잡이를 쓴다.
 		if (!OWNS_RUNTIME_DIR) return;

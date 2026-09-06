@@ -309,3 +309,73 @@ failed"}` — 공지 가져오기를 건너뛴 INFO 로그다. 실패로 세면 
 `llmRoles.main: nextain/deepseek-v4-flash`(시딩이 심은 값)가 **함께** 남아 있었고,
 에이전트는 기동 시 `naia-settings(nextain/deepseek-v4-flash)` 를 골랐다.
 
+---
+
+# #567 최종안 — 지운 것, 다시 겨눈 것, 보류한 것 (2026-09-06)
+
+규칙은 일괄 라벨이 아니다. **스펙이 부르는 능력이 지금 에이전트에 살아 있으면 그
+경로로 다시 겨누고, 죽었으면 스펙을 지운다.** 판례가 둘이다 — 코딩 작업자 화면을
+없앨 때는 스펙을 지웠고, workspace-area 마흔한 개는 Herdr 브리지로 다시 겨눴다.
+
+win-rtx4060 이 반대 관점에서 검증했고, 그 결과가 초안을 셋 바꿨다.
+
+- `30-exec-approvals` 자신이 `skill_approvals get_rules` 를 부른다 — 49 를 덮는다던
+  스펙이 같은 가족이었다. 함께 지운다.
+- `34-device-pairing` 은 43 을 못 덮는다. 다섯 단정이 전부 얕은 화면 스모크다
+  (탭 이동·섹션 존재·빈 상태). 조작을 하나도 하지 않는다.
+- cron 능력은 오너가 별도 기능 트랙으로 이미 등록했다(아웃룩형 캘린더 포함).
+
+그리고 이쪽에서 4060 의 판정 하나를 되짚어 반증했다. 아래 "보류" 를 보라.
+
+## 지운 것 — 스펙 파일 열, 단정 서른둘
+
+| 스펙 | 부르던 도구 | 단정 | 사유 |
+|---|---|---|---|
+| 05-skill-system | `skill_system_status` | 1 | 표면 소멸 · 31·60 이 화면 경로를 덮는다 |
+| 21-cron-recurring | `skill_cron` | 3 | 오너 확인된 cron 기능 트랙 존재 |
+| 29-cron-gateway | `skill_cron gateway_list` | 1 | 게이트웨이 표면 소멸 |
+| 45-cron-gateway-full | `skill_cron gateway_*` | 5 | 게이트웨이 표면 소멸 |
+| 41-agents-crud | `skill_agents` | 4 | 표면 소멸 · 능력은 AgentsTab |
+| 43-device-management | `skill_device` | 8 | 표면 소멸 · **덮는 스펙 없음 = 의도된 상실** |
+| 47-tts-full | `skill_tts` | 5 | 표면 소멸 · 24·73·76·80·81 이 덮는다 |
+| 49-approvals-full | `skill_approvals` | 2 | 표면 소멸 · ApprovalPort + 권한 모달 |
+| 30-exec-approvals | `skill_approvals get_rules` · `skill_time` | 2 | 같은 가족(4060 적발) |
+| 51-skills-advanced | `skill_skill_manager` | 3 | 표면 소멸 · 14·28·59 가 덮는다 |
+| 39-web-tools 의 한 단정 | `web_search` | 1 | 표면 소멸(S55 = gateway-tier) |
+
+라벨과 사유는 `docs/user-scenarios.md` 의 격리·면제 목록에 규칙대로 적었다.
+43 은 중요도 **상 · 의도된 커버리지 상실**로 따로 표시하고 이슈를 열었다.
+
+## 다시 겨눈 것 — 둘
+
+| 스펙 | 예전 | 지금 겨누는 것 |
+|---|---|---|
+| 42-sessions-crud | `skill_sessions` 로 preview/patch/reset | `<ADK>/conversations/<sessionId>.jsonl` 이 append-only 로 쌓이는가 — 턴이 기록되는가, 다음 턴이 덮지 않고 이어 붙는가 |
+| 39-web-tools | `browser` 도구 | 셸 앱 스킬 `skill_browser_navigate` 로 페이지 읽기 |
+
+42 는 도구 이름을 부르지 않는다. 세션이라는 개념이 딛고 선 바닥(대화록)을 직접
+읽는다 — 기록이 없으면 preview 도 patch 도 뜻이 없기 때문이다.
+
+## 보류한 둘 — 전제가 반증됐다
+
+4060 은 `notify-skills`·`shell-tool` 을 `cron-skills` 와 같은 미배선 어댑터로 보고
+17·37 삭제를 권했다. e2e 가 실제로 도는 짝 체크아웃 `bc468a17` 에서 다시 재 보니
+그 둘은 **프로덕션 진입점이 import 한다**. 도달하지 못한 이유는 배선 부재가 아니라
+**합성 전제**다.
+
+| 도구 | 합성 조건 | 실제 상태 |
+|---|---|---|
+| `shell_exec` | `NAIA_SHELL_TOOL=1` | 배선됨 · 전제 미충족이라 목록에 안 뜸 |
+| `notify` | `skills.json` 의 webhook 또는 `NAIA_NOTIFY_*_WEBHOOK` | 배선됨 · 같은 이유 |
+| `cron` | — | **프로덕션 import 0 = 진짜 미배선** |
+
+전제를 갖추면 살아 있는 능력이므로 17·37 은 삭제가 아니라 재조준 대상이다.
+확인 없이 지우면 산 커버리지를 잃는다. 그래서 두 파일은 남겼고, 미배선 가족
+자체는 naia-agent 쪽 이슈로 열었다.
+
+## 남긴 자국
+
+- 인벤토리: 119 → 109 (credentialed_live 91 → 81, 나머지 불변).
+- 사유 밝힌 skip 기준선: **23 그대로.** 지우거나 다시 겨눴기 때문에 꺼 둔 테스트가
+  늘지 않았다 — 일괄 skip 이었으면 서른둘이 그 기준선에 얹혔을 것이다.
+- 커버리지 표의 깨진 참조: 29 그대로.

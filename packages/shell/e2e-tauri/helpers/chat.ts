@@ -158,7 +158,18 @@ export async function getNewAssistantMessages(
 /**
  * Set textarea value via JS (avoids React re-render stale element issues)
  * and click the send button.
+ *
+ * 내보내는 이유: 답변을 기다리지 않고 **보내기만** 해야 하는 스펙이 있다. 증거가
+ * 화면이 아니라 밖에 남는 경우다(예: 알림이 정말 나갔는지는 받는 쪽이 안다).
+ * 그런 스펙까지 `sendMessage` 로 최종 답을 기다리면, 답이 늦는 모델에서
+ * 실패가 "알림이 안 갔다" 로 잘못 보인다.
  */
+export async function sendMessageWithoutWaiting(text: string): Promise<void> {
+	const input = await $(S.chatInput);
+	await input.waitForEnabled({ timeout: 10_000 });
+	await setTextareaAndSend(S.chatInput, text);
+}
+
 async function setTextareaAndSend(
 	selector: string,
 	text: string,

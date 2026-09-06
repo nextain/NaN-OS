@@ -79,9 +79,9 @@
  */
 
 import { execFileSync } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
-import { dirname, join, normalize } from "node:path";
+import { readFileSync } from "node:fs";
 import ts from "typescript";
+import { crateSourceRoots } from "./lib/crate-roots.mjs";
 import {
 	importBindings,
 	isModuleOfPackage,
@@ -89,7 +89,6 @@ import {
 	unwrap,
 } from "./lib/bindings.mjs";
 import { tauriCommandDeclarations } from "./lib/rust-tokens.mjs";
-import { parseToml } from "./lib/toml-min.mjs";
 
 const SHELL = "packages/shell";
 
@@ -239,78 +238,13 @@ function tracked(dir, extension) {
  * 토크나이저가 주석을 버리고, 속성·가시성·`async`·`unsafe` 를 토큰으로
  * 건너뛴 뒤 `fn <이름>` 을 읽는다. 데이터 홈 경계 검사가 쓰는 것과 같은
  * 토크나이저다 — 세는 자리가 하나면 뚫린 자리도 하나에서 고쳐진다.
- */
-/**
- * 이 앱이 짓는 Rust 크레이트의 소스 뿌리 전부.
  *
- * `packages/shell/src-tauri` 하나만 돌던 동안, 같은 저장소의 플러그인 크레이트
- * (`plugins/tauri-plugin-stt`)가 여는 명령은 목록에 없었다. 목록에 없으면 프런트의
- * `invoke("…")` 는 `commands.includes` 에서 통째로 건너뛰어진다 — 확인 없는 파괴
- * 조작이 **디렉터리를 옮기는 것만으로** 초록을 받았다(14회차 지적 9).
+ * **어느 크레이트를 훑는가**도 이 파일이 정하지 않는다.
+ * `scripts/lib/crate-roots.mjs` 가 `Cargo.toml` 에게 물어 소스 뿌리를 준다 —
+ * 명령 목록을 뽑는 게이트가 둘이고(이 게이트와 죽은 UI 게이트) 둘이 서로 다른
+ * 자리에서 세면 한쪽에서 닫은 구멍이 다른 쪽에 남기 때문이다(19회차 지적 6).
+ * 그래서 이 파일에는 `Cargo.toml` 을 읽는 코드가 없다.
  *
- * 뿌리를 손으로 적으면 다음 크레이트에서 같은 일이 난다. 그래서 `Cargo.toml` 에게
- * 묻는다 — `[workspace] members` 와 `path = "…"` 로 적힌 지역 의존을 따라가며
- * 닿는 크레이트마다 `src` 를 더한다. 크레이트를 하나 붙이려면 Cargo 에 그 자리를
- * 적어야 하고, 적으면 여기서 보인다.
- *
- * 넓어지는 쪽으로만 틀린다 — `path` 를 넉넉히 읽어 소스가 아닌 자리를 더해도
- * 거기에 `#[tauri::command]` 가 없으면 목록은 그대로다.
- */
-function crateSourceRoots(entry = `${SHELL}/src-tauri/Cargo.toml`) {
-	const roots = [];
-	const seen = new Set();
-	const queue = [normalize(entry)];
-	while (queue.length) {
-		const manifest = queue.shift();
-		if (seen.has(manifest)) continue;
-		seen.add(manifest);
-		if (!existsSync(manifest)) continue;
-		const dir = dirname(manifest);
-		roots.push(join(dir, "src"));
-		const text = readFileSync(manifest, "utf8");
-		for (const relative of localCrateReferences(text)) {
-			queue.push(normalize(join(dir, relative, "Cargo.toml")));
-		}
-	}
-	return roots;
-}
-
-/**
- * `Cargo.toml` 에 적힌 지역 크레이트 자리 — 어느 테이블에 있든 `path` 값과
- * `members` 배열.
- *
- * 예전에는 `\bpath\s*=\s*"([^"]+)"` 정규식이라 **겹따옴표만** 읽었다. TOML 은
- * 홑따옴표를 같은 문자열로 보므로 `path = 'plugins/…'` 로 적기만 하면 그
- * 크레이트가 뿌리에서 빠졌다(15회차 지적 6). 따옴표를 하나 더 열거하는 대신
- * 읽는 자리를 옮겼다 — `scripts/lib/toml-min.mjs` 가 문법으로 읽고, 여기서는
- * 값 나무를 훑는다. 주석과 여러 줄 문자열 안의 `path = "…"` 는 값이지 키가
- * 아니므로 저절로 빠진다.
- *
- * 어느 테이블인지 가리지 않는 것은 일부러다 — `[dependencies]`,
- * `[dev-dependencies]`, `[target."cfg(unix)".dependencies]`, `[patch.crates-io]`
- * 를 열거하면 다음 테이블에서 같은 일이 난다. 넓어지는 쪽으로만 틀린다.
- */
-function localCrateReferences(text) {
-	const found = [];
-	const visit = (node) => {
-		if (Array.isArray(node)) {
-			for (const item of node) visit(item);
-			return;
-		}
-		if (!node || typeof node !== "object") return;
-		for (const [key, value] of Object.entries(node)) {
-			if (key === "path" && typeof value === "string") found.push(value);
-			if (key === "members" && Array.isArray(value)) {
-				for (const member of value) if (typeof member === "string") found.push(member);
-			}
-			visit(value);
-		}
-	};
-	visit(parseToml(text));
-	return found;
-}
-
-/**
  * 프런트가 부르는 **IPC 이름** → 그 명령의 본문과 Rust 함수 이름.
  *
  * 열쇠는 함수 이름이 아니라 IPC 이름이다. `#[tauri::command(rename = "…")]` 은

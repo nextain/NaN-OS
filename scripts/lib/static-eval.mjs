@@ -24,7 +24,9 @@
  *   - `const-chain` — `const` 사슬 — 구조분해와 배열 분해까지
  *   - `literal-member` — 리터럴의 멤버 — `"x".length`, `[1,2].length`, `{a:1}.a`
  *   - `literal-index` — 리터럴의 인덱스 — 인덱스 식도 접어서 쓴다 (`["a"][0+0]`)
- *   - `computed-key` — 계산된 리터럴 키 — `{ ["role"]: "alert" }` 는 `role` 이다
+ *   - `computed-key` — 계산된 키 — `{ ["role"]: "alert" }` 도 `el[String.raw`click`]`
+ *     도 같은 이름이다. 값을 접는 표가 **이름을 읽는 자리**에도 그대로 쓰인다
+ *     (`memberNameOf` 하나가 그 일을 한다).
  *
  * 표 밖은 보증하지 않는다.
  *
@@ -80,29 +82,74 @@ export const STATIC_EVAL_OUT_OF_SCOPE = [
  * 지적 2) 같은 사고가 났다. 계산된 키는 이 모듈의 평가기로 접어서 읽는다.
  * 접히지 않으면 `null` — 동적 키는 보증 밖이다.
  */
-export function declaredPropertyName(name, sf, scope, seen) {
-	if (!name) return null;
-	if (ts.isIdentifier(name) || ts.isPrivateIdentifier(name)) return name.text;
-	if (ts.isStringLiteral(name) || ts.isNoSubstitutionTemplateLiteral(name)) return name.text;
-	if (ts.isNumericLiteral(name)) return name.text;
-	if (ts.isComputedPropertyName(name)) {
-		const value = staticValue(name.expression, sf, scope, seen);
-		if (value === STATIC_UNKNOWN) return null;
-		if (typeof value === "string") return value;
-		if (typeof value === "number") return String(value);
-	}
-	return null;
-}
-
-/** `obj.key` · `obj[식]` 의 그 키. 인덱스 식도 접어서 읽는다. */
-export function accessKeyOf(node, sf, scope, seen) {
-	if (ts.isPropertyAccessExpression(node)) return node.name.text;
-	if (!ts.isElementAccessExpression(node)) return null;
-	const value = staticValue(node.argumentExpression, sf, scope, seen);
+export function memberNameOf(node, sf, scope, seen) {
+	if (!node) return null;
+	// 이름 자리에 적힌 것 — 객체 리터럴 속성, 구조분해 요소, 클래스 멤버.
+	if (ts.isIdentifier(node) || ts.isPrivateIdentifier(node)) return node.text;
+	if (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) return node.text;
+	if (ts.isNumericLiteral(node)) return node.text;
+	// 멤버 접근 — 점이든 대괄호든 같은 이름이다.
+	if (ts.isPropertyAccessExpression(node)) return memberNameOf(node.name, sf, scope, seen);
+	const key = ts.isComputedPropertyName(node)
+		? node.expression
+		: ts.isElementAccessExpression(node)
+			? node.argumentExpression
+			: null;
+	if (!key) return null;
+	// 키도 값이다. 접는 범위는 이 파일의 표 하나다 — 못 접으면 `null`(보증 밖).
+	const value = staticValue(key, sf, scope, seen instanceof Set ? new Set(seen) : new Set());
 	if (value === STATIC_UNKNOWN) return null;
 	if (typeof value === "string") return value;
 	if (typeof value === "number") return String(value);
 	return null;
+}
+
+/** 옛 이름. 선언에 적힌 속성 이름도 결국 같은 질문이다. */
+export function declaredPropertyName(name, sf, scope, seen) {
+	return memberNameOf(name, sf, scope, seen);
+}
+
+/** `obj.key` · `obj[식]` 의 그 키. */
+export function accessKeyOf(node, sf, scope, seen) {
+	if (!ts.isPropertyAccessExpression(node) && !ts.isElementAccessExpression(node)) return null;
+	return memberNameOf(node, sf, scope, seen);
+}
+
+/**
+ * 같은 파일의 `const` 만 따라가는 최소 훅.
+ *
+ * 이름 해석 규칙(어느 import 를 따라갈지)이 없는 게이트가 쓴다. 파일을
+ * 건너가지는 않지만, 같은 파일에 적힌 상수 키(`const KEY = "click"` 뒤의
+ * `el[KEY]()`)는 접는다.
+ */
+export function sameFileConstScope() {
+	const cache = new WeakMap();
+	const table = (sf) => {
+		if (cache.has(sf)) return cache.get(sf);
+		const names = new Map();
+		const visit = (n) => {
+			if (
+				ts.isVariableDeclaration(n) &&
+				n.initializer &&
+				ts.isIdentifier(n.name) &&
+				n.parent &&
+				ts.isVariableDeclarationList(n.parent) &&
+				(n.parent.flags & ts.NodeFlags.Const) !== 0
+			)
+				names.set(n.name.text, n.initializer);
+			ts.forEachChild(n, visit);
+		};
+		visit(sf);
+		cache.set(sf, names);
+		return names;
+	};
+	return {
+		constBindingOf(name, home) {
+			if (!home) return null;
+			const node = table(home).get(name);
+			return node ? { node, sf: home, path: [] } : null;
+		},
+	};
 }
 
 /* ─────────────── 값 ─────────────── */
@@ -193,7 +240,7 @@ export function literalMemberNode(literal, key, sf, scope, seen) {
 	for (const property of literal.properties) {
 		if (ts.isSpreadAssignment(property)) return null;
 		if (ts.isPropertyAssignment(property)) {
-			if (declaredPropertyName(property.name, sf, scope, seen) === key)
+			if (memberNameOf(property.name, sf, scope, seen) === key)
 				found = property.initializer;
 		} else if (ts.isShorthandPropertyAssignment(property)) {
 			if (property.name.text === key) found = property.name;
@@ -239,7 +286,7 @@ export function staticValue(node, sf, scope = {}, seen = new Set()) {
 	// `String.raw` 는 이스케이프를 풀지 않은 조각을 그대로 이어 붙인다.
 	// 보간이 있으면 그 값도 접어서 넣는다(18회차 지적 4).
 	if (ts.isTaggedTemplateExpression(n)) {
-		if (!isStringRawTag(n.tag)) return STATIC_UNKNOWN;
+		if (!isStringRawTag(n.tag, sf, scope, guard)) return STATIC_UNKNOWN;
 		const body = n.template;
 		if (ts.isNoSubstitutionTemplateLiteral(body)) return body.rawText ?? body.text;
 		if (!ts.isTemplateExpression(body)) return STATIC_UNKNOWN;
@@ -286,7 +333,7 @@ export function staticValue(node, sf, scope = {}, seen = new Set()) {
 	}
 
 	if (ts.isPropertyAccessExpression(n) || ts.isElementAccessExpression(n)) {
-		const key = accessKeyOf(n, sf, scope, guard);
+		const key = memberNameOf(n, sf, scope, guard);
 		if (key === null) return STATIC_UNKNOWN;
 		const container = containerOf(n.expression, sf, scope, guard);
 		if (!container) return STATIC_UNKNOWN;
@@ -316,13 +363,16 @@ export function staticValue(node, sf, scope = {}, seen = new Set()) {
 	return STATIC_UNKNOWN;
 }
 
-function isStringRawTag(tag) {
+function isStringRawTag(tag, sf, scope, seen) {
 	const t = unwrapExpression(tag);
 	if (!t) return false;
-	if (ts.isPropertyAccessExpression(t))
-		return (
-			t.name.text === "raw" && ts.isIdentifier(t.expression) && t.expression.text === "String"
-		);
+	// 태그도 멤버 이름으로 읽는다 — `String.raw` 와 `String["raw"]` 와
+	// ``String[String.raw`raw`]`` 는 같은 함수다(19회차 지적 2).
+	if (ts.isPropertyAccessExpression(t) || ts.isElementAccessExpression(t)) {
+		const base = unwrapExpression(t.expression);
+		if (!base || !ts.isIdentifier(base) || base.text !== "String") return false;
+		return memberNameOf(t, sf, scope, seen) === "raw";
+	}
 	return ts.isIdentifier(t) && t.text === "raw";
 }
 

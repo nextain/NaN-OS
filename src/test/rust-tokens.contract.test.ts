@@ -24,7 +24,6 @@ import { beforeAll, describe, expect, it } from "vitest";
 // 컴파일 무결성 게이트가 붉어진다. 실제 모듈은 아래 beforeAll 이 파일 경로로
 // 동적 import 한다.
 interface RustTokensModule {
-	tauriCommandBodies(source: string): Map<string, string>;
 	tokenizeRust(source: string): Array<{
 		kind: string;
 		text: string;
@@ -82,10 +81,10 @@ describe("Rust 명령 추출은 거리를 재지 않는다", () => {
 		expect(doc.length).toBeGreaterThan(321);
 		const source = `#[tauri::command]\n${doc}\npub fn ghost_wipe_everything(root: String) -> Result<(), String> {\n    std::fs::remove_dir_all(&root).map_err(|e| e.to_string())\n}\n`;
 
-		const commands = rust.tauriCommandBodies(source);
-		expect([...commands.keys()]).toEqual(["ghost_wipe_everything"]);
+		const [declared] = rust.tauriCommandDeclarations(source);
+		expect(rust.tauriCommandNames(source)).toEqual(["ghost_wipe_everything"]);
 		// 본문으로 판정하는 쪽(파괴 여부)도 같이 살아 있어야 뜻이 있다.
-		expect(commands.get("ghost_wipe_everything")).toContain("remove_dir_all");
+		expect(declared.body).toContain("remove_dir_all");
 
 		// 옛 200자 창은 같은 소스에서 이 명령을 못 봤다. 그 차이가 이 테스트의 뜻이다.
 		const oldWindow =
@@ -95,7 +94,7 @@ describe("Rust 명령 추출은 거리를 재지 않는다", () => {
 
 	it("속성이 여러 개 붙어도, 순서가 어떻든 읽는다", () => {
 		const source = `#[tauri::command]\n#[allow(dead_code)]\n#[cfg(any(target_os = "linux", target_os = "macos"))]\n#[doc = "지운다"]\nfn wipe_one() {}\n`;
-		expect([...rust.tauriCommandBodies(source).keys()]).toEqual(["wipe_one"]);
+		expect(rust.tauriCommandNames(source)).toEqual(["wipe_one"]);
 	});
 
 	it("`pub(crate) async fn` 처럼 가시성과 수식어가 붙어도 읽는다", () => {
@@ -104,7 +103,7 @@ describe("Rust 명령 추출은 거리를 재지 않는다", () => {
 			"#[tauri::command]\npub async unsafe fn wipe_b() {}",
 			"#[tauri::command(rename_all = \"snake_case\")]\npub(in crate::app) fn wipe_c() {}",
 		].join("\n\n");
-		expect([...rust.tauriCommandBodies(source).keys()]).toEqual([
+		expect(rust.tauriCommandNames(source)).toEqual([
 			"wipe_a",
 			"wipe_b",
 			"wipe_c",
@@ -121,10 +120,10 @@ describe("Rust 명령 추출은 거리를 재지 않는다", () => {
 			"    std::fs::remove_dir_all(&root).map_err(|e| e.to_string())",
 			"}",
 		].join("\n");
-		const commands = rust.tauriCommandBodies(source);
-		expect([...commands.keys()]).toEqual(["ghost_wipe_everything"]);
+		const [declared] = rust.tauriCommandDeclarations(source);
+		expect(rust.tauriCommandNames(source)).toEqual(["ghost_wipe_everything"]);
 		// 본문 판정(파괴 여부)까지 살아 있어야 뜻이 있다.
-		expect(commands.get("ghost_wipe_everything")).toContain("remove_dir_all");
+		expect(declared.body).toContain("remove_dir_all");
 
 		// 옛 머리 네 토큰 판정은 같은 소스에서 이 명령을 못 봤다. 그 차이가 이 테스트의 뜻이다.
 		expect(/#\[tauri\s*::\s*command/.test(source)).toBe(false);
@@ -138,7 +137,7 @@ describe("Rust 명령 추출은 거리를 재지 않는다", () => {
 			'#[cfg_attr(target_os = "windows", tauri::command)]',
 			"pub(crate) async fn wipe_windows() {}",
 		].join("\n");
-		expect([...rust.tauriCommandBodies(source).keys()]).toEqual([
+		expect(rust.tauriCommandNames(source)).toEqual([
 			"wipe_nested",
 			"wipe_windows",
 		]);
@@ -157,7 +156,7 @@ describe("Rust 명령 추출은 거리를 재지 않는다", () => {
 			"#[cfg_attr(all(), tauri::command)]",
 			"fn the_real_one() {}",
 		].join("\n");
-		expect([...rust.tauriCommandBodies(source).keys()]).toEqual(["the_real_one"]);
+		expect(rust.tauriCommandNames(source)).toEqual(["the_real_one"]);
 	});
 
 	it("속성이 100개 붙어도 읽는다 — 건너뛰기에 횟수 한계가 없다", () => {
@@ -166,9 +165,9 @@ describe("Rust 명령 추출은 거리를 재지 않는다", () => {
 		// 그래서 횟수를 세는 자리 자체를 없앴고, 여기서는 옛 한계를 넉넉히 넘긴다.
 		const attributes = Array.from({ length: 100 }, () => "#[allow(dead_code)]").join("\n");
 		const source = `#[tauri::command]\n${attributes}\npub fn ghost_wipe_everything(root: String) {\n    std::fs::remove_dir_all(&root).ok();\n}\n`;
-		const commands = rust.tauriCommandBodies(source);
-		expect([...commands.keys()]).toEqual(["ghost_wipe_everything"]);
-		expect(commands.get("ghost_wipe_everything")).toContain("remove_dir_all");
+		const [declared] = rust.tauriCommandDeclarations(source);
+		expect(rust.tauriCommandNames(source)).toEqual(["ghost_wipe_everything"]);
+		expect(declared.body).toContain("remove_dir_all");
 	});
 
 	it("`const fn` 과 수식어 전부가 붙어도 읽는다 — 수식어를 열거하지 않는다", () => {
@@ -179,7 +178,7 @@ describe("Rust 명령 추출은 거리를 재지 않는다", () => {
 			'#[tauri::command]\npub(in crate::a) const unsafe extern "C" fn wipe_all_modifiers() {}',
 			"#[tauri::command]\npub(crate) default async fn wipe_default() {}",
 		].join("\n\n");
-		expect([...rust.tauriCommandBodies(source).keys()]).toEqual([
+		expect(rust.tauriCommandNames(source)).toEqual([
 			"wipe_const",
 			"wipe_all_modifiers",
 			"wipe_default",
@@ -206,7 +205,7 @@ describe("Rust 명령 추출은 거리를 재지 않는다", () => {
 			"#[tauri::command]",
 			"fn the_real_one() {}",
 		].join("\n");
-		expect([...rust.tauriCommandBodies(source).keys()]).toEqual(["the_real_one"]);
+		expect(rust.tauriCommandNames(source)).toEqual(["the_real_one"]);
 	});
 
 	it("`use tauri::command;` 뒤의 `#[command]` 도 명령이다", () => {
@@ -221,9 +220,9 @@ describe("Rust 명령 추출은 거리를 재지 않는다", () => {
 			"    std::fs::remove_dir_all(&root).map_err(|e| e.to_string())",
 			"}",
 		].join("\n");
-		const commands = rust.tauriCommandBodies(source);
-		expect([...commands.keys()]).toEqual(["ghost_wipe_everything"]);
-		expect(commands.get("ghost_wipe_everything")).toContain("remove_dir_all");
+		const [declared] = rust.tauriCommandDeclarations(source);
+		expect(rust.tauriCommandNames(source)).toEqual(["ghost_wipe_everything"]);
+		expect(declared.body).toContain("remove_dir_all");
 	});
 
 	it("별명과 glob 으로 들여온 이름도 같은 속성이다", () => {
@@ -231,10 +230,10 @@ describe("Rust 명령 추출은 거리를 재지 않는다", () => {
 		const braced = "use tauri::{command as cmd, Manager};\n#[cmd]\nfn wipe_braced() {}";
 		const glob = "use tauri::*;\n#[command]\nfn wipe_glob() {}";
 		const nested = "use tauri::command;\n#[cfg_attr(all(), command)]\nfn wipe_nested() {}";
-		expect([...rust.tauriCommandBodies(alias).keys()]).toEqual(["wipe_alias"]);
-		expect([...rust.tauriCommandBodies(braced).keys()]).toEqual(["wipe_braced"]);
-		expect([...rust.tauriCommandBodies(glob).keys()]).toEqual(["wipe_glob"]);
-		expect([...rust.tauriCommandBodies(nested).keys()]).toEqual(["wipe_nested"]);
+		expect(rust.tauriCommandNames(alias)).toEqual(["wipe_alias"]);
+		expect(rust.tauriCommandNames(braced)).toEqual(["wipe_braced"]);
+		expect(rust.tauriCommandNames(glob)).toEqual(["wipe_glob"]);
+		expect(rust.tauriCommandNames(nested)).toEqual(["wipe_nested"]);
 	});
 
 	it("다른 크레이트의 `command` 는 명령이 아니다", () => {
@@ -248,9 +247,9 @@ describe("Rust 명령 추출은 거리를 재지 않는다", () => {
 			"fn also_not_a_command() {}",
 		].join("\n");
 		const qualified = "use tauri::command;\n#[clap::command]\nfn qualified_elsewhere() {}";
-		expect([...rust.tauriCommandBodies(other).keys()]).toEqual([]);
-		expect([...rust.tauriCommandBodies(shadowed).keys()]).toEqual([]);
-		expect([...rust.tauriCommandBodies(qualified).keys()]).toEqual([]);
+		expect(rust.tauriCommandNames(other)).toEqual([]);
+		expect(rust.tauriCommandNames(shadowed)).toEqual([]);
+		expect(rust.tauriCommandNames(qualified)).toEqual([]);
 	});
 
 	it("`use` 선언의 잎을 지역 이름·경로로 읽는다", () => {
@@ -285,11 +284,11 @@ describe("Rust 명령 추출은 거리를 재지 않는다", () => {
 		const leadingColons = "#[::tauri::command]\nfn wipe_absolute() {}";
 		const selfAlias = "use tauri::{self as t, Manager};\n#[t::command]\nfn wipe_self() {}";
 		const nested = "use tauri as t;\n#[cfg_attr(all(), t::command)]\nfn wipe_nested() {}";
-		expect([...rust.tauriCommandBodies(crateAlias).keys()]).toEqual(["wipe_alias"]);
-		expect([...rust.tauriCommandBodies(macroCrate).keys()]).toEqual(["wipe_macro_crate"]);
-		expect([...rust.tauriCommandBodies(leadingColons).keys()]).toEqual(["wipe_absolute"]);
-		expect([...rust.tauriCommandBodies(selfAlias).keys()]).toEqual(["wipe_self"]);
-		expect([...rust.tauriCommandBodies(nested).keys()]).toEqual(["wipe_nested"]);
+		expect(rust.tauriCommandNames(crateAlias)).toEqual(["wipe_alias"]);
+		expect(rust.tauriCommandNames(macroCrate)).toEqual(["wipe_macro_crate"]);
+		expect(rust.tauriCommandNames(leadingColons)).toEqual(["wipe_absolute"]);
+		expect(rust.tauriCommandNames(selfAlias)).toEqual(["wipe_self"]);
+		expect(rust.tauriCommandNames(nested)).toEqual(["wipe_nested"]);
 	});
 
 	it("별명이 다른 크레이트를 가리키면 명령이 아니다", () => {
@@ -297,8 +296,8 @@ describe("Rust 명령 추출은 거리를 재지 않는다", () => {
 		// 명령이 아니다.
 		const shadowedCrate = "use clap as tauri;\n#[tauri::command]\nfn not_a_command() {}";
 		const otherCrate = "#[clap::command]\nfn also_not() {}";
-		expect([...rust.tauriCommandBodies(shadowedCrate).keys()]).toEqual([]);
-		expect([...rust.tauriCommandBodies(otherCrate).keys()]).toEqual([]);
+		expect(rust.tauriCommandNames(shadowedCrate)).toEqual([]);
+		expect(rust.tauriCommandNames(otherCrate)).toEqual([]);
 	});
 
 	it("생 식별자 `r#이름` 의 명령 이름은 `#` 뒤다", () => {
@@ -311,9 +310,9 @@ describe("Rust 명령 추출은 거리를 재지 않는다", () => {
 			"    std::fs::remove_dir_all(&root).map_err(|e| e.to_string())",
 			"}",
 		].join("\n");
-		const commands = rust.tauriCommandBodies(source);
-		expect([...commands.keys()]).toEqual(["ghost_wipe_everything"]);
-		expect(commands.get("ghost_wipe_everything")).toContain("remove_dir_all");
+		const [declared] = rust.tauriCommandDeclarations(source);
+		expect(rust.tauriCommandNames(source)).toEqual(["ghost_wipe_everything"]);
+		expect(declared.body).toContain("remove_dir_all");
 	});
 
 	it("생 식별자와 생 문자열을 가른다", () => {
@@ -369,25 +368,25 @@ describe("Rust 명령 추출은 거리를 재지 않는다", () => {
 		expect(leaves).toEqual([["tauri::command", "command"]]);
 
 		// 그래서 `#[command]` 가 명령이고, 본문 판정까지 살아 있다.
-		const commands = rust.tauriCommandBodies(source);
-		expect([...commands.keys()]).toEqual(["ghost_wipe_everything"]);
-		expect(commands.get("ghost_wipe_everything")).toContain("remove_dir_all");
+		const [declared] = rust.tauriCommandDeclarations(source);
+		expect(rust.tauriCommandNames(source)).toEqual(["ghost_wipe_everything"]);
+		expect(declared.body).toContain("remove_dir_all");
 	});
 
 	it("키워드와 같은 이름의 생 식별자도 그냥 이름이다", () => {
 		// 이름이 `use` 인 명령이 목록에 `use` 로 실린다 — 프런트도 그 이름으로 부른다.
-		expect([...rust.tauriCommandBodies("#[tauri::command]\nfn r#use() {}").keys()]).toEqual([
+		expect(rust.tauriCommandNames("#[tauri::command]\nfn r#use() {}")).toEqual([
 			"use",
 		]);
-		expect([...rust.tauriCommandBodies("#[tauri::command]\npub fn r#fn() {}").keys()]).toEqual([
+		expect(rust.tauriCommandNames("#[tauri::command]\npub fn r#fn() {}")).toEqual([
 			"fn",
 		]);
 		// 아이템 시작 낱말과 같은 이름이어도 함수는 함수다.
-		expect([...rust.tauriCommandBodies("#[tauri::command]\nfn r#struct() {}").keys()]).toEqual([
+		expect(rust.tauriCommandNames("#[tauri::command]\nfn r#struct() {}")).toEqual([
 			"struct",
 		]);
 		// 진짜 아이템 시작은 여전히 명령이 아니다.
-		expect([...rust.tauriCommandBodies("#[tauri::command]\nstruct X;").keys()]).toEqual([]);
+		expect(rust.tauriCommandNames("#[tauri::command]\nstruct X;")).toEqual([]);
 	});
 
 	it("`r#pub use` 는 재수출이 아니다", () => {
@@ -489,13 +488,13 @@ describe("Rust 명령 추출은 거리를 재지 않는다", () => {
 		const aliased = "extern crate tauri as t;\n#[t::command]\nfn wipe_extern_alias() {}";
 		const plain = "extern crate tauri;\n#[tauri::command]\nfn wipe_extern_plain() {}";
 		const otherCrate = "extern crate clap as t;\n#[t::command]\nfn not_a_command() {}";
-		expect([...rust.tauriCommandBodies(aliased).keys()]).toEqual(["wipe_extern_alias"]);
-		expect([...rust.tauriCommandBodies(plain).keys()]).toEqual(["wipe_extern_plain"]);
-		expect([...rust.tauriCommandBodies(otherCrate).keys()]).toEqual([]);
+		expect(rust.tauriCommandNames(aliased)).toEqual(["wipe_extern_alias"]);
+		expect(rust.tauriCommandNames(plain)).toEqual(["wipe_extern_plain"]);
+		expect(rust.tauriCommandNames(otherCrate)).toEqual([]);
 
 		// `extern "C" fn` 의 `extern` 은 뒤가 문자열이라 크레이트 선언이 아니다.
 		const abi = 'extern "C" fn ghost() {}\n#[tauri::command]\nfn wipe_after_abi() {}';
-		expect([...rust.tauriCommandBodies(abi).keys()]).toEqual(["wipe_after_abi"]);
+		expect(rust.tauriCommandNames(abi)).toEqual(["wipe_after_abi"]);
 
 		expect(
 			rust
@@ -575,11 +574,13 @@ describe("Rust 명령 추출은 거리를 재지 않는다", () => {
 		expect(rust.tauriCommandNames(decoy)).toEqual(["plain"]);
 	});
 
-	it("`tauriCommandBodies` 는 예전 그대로 함수 이름을 열쇠로 쓴다", () => {
-		// 게이트가 옮겨 가기 전까지 두 답이 함께 있어야 한다. 옮기고 나면 이 항목이
-		// 그 사실을 알려 주는 자리다.
+	it("함수 이름과 IPC 이름을 함께 돌려준다", () => {
+		// 18회차에는 게이트가 옮겨 가기 전이라 함수 이름만 돌려주는 옛 함수
+		// (`tauriCommandBodies`)를 함께 두었다. 두 게이트가 모두 옮겨 간 지금은
+		// 답이 하나다 — 선언마다 두 이름을 같이 준다(19회차 지적 6).
 		const source = '#[tauri::command(rename = "ghost")]\nfn plain() { let _ = 1; }';
-		expect([...rust.tauriCommandBodies(source).keys()]).toEqual(["plain"]);
+		const [declared] = rust.tauriCommandDeclarations(source);
+		expect([declared.fnName, declared.ipcName]).toEqual(["plain", "ghost"]);
 		expect(rust.tauriCommandNames(source)).toEqual(["ghost"]);
 	});
 
@@ -597,7 +598,7 @@ describe("Rust 명령 추출은 거리를 재지 않는다", () => {
 			"#[tauri::command]",
 			"fn the_real_one() {}",
 		].join("\n");
-		expect([...rust.tauriCommandBodies(source).keys()]).toEqual(["the_real_one"]);
+		expect(rust.tauriCommandNames(source)).toEqual(["the_real_one"]);
 	});
 
 	it("문자열 안의 `#[tauri::command]` 도 명령이 아니다", () => {
@@ -607,7 +608,7 @@ describe("Rust 명령 추출은 거리를 재지 않는다", () => {
 			"#[tauri::command]",
 			"fn the_real_one() {}",
 		].join("\n");
-		expect([...rust.tauriCommandBodies(source).keys()]).toEqual(["the_real_one"]);
+		expect(rust.tauriCommandNames(source)).toEqual(["the_real_one"]);
 	});
 
 	it("본문은 중괄호 균형으로 자르고, 문자열 안의 `}` 는 세지 않는다", () => {
@@ -623,7 +624,9 @@ describe("Rust 명령 추출은 거리를 재지 않는다", () => {
 			"",
 			"fn after() {}",
 		].join("\n");
-		const body = rust.tauriCommandBodies(source).get("wipe_with_braces") ?? "";
+		const body =
+			rust.tauriCommandDeclarations(source).find((d) => d.fnName === "wipe_with_braces")?.body ??
+			"";
 		expect(body).toContain("remove_dir_all");
 		expect(body.endsWith("}")).toBe(true);
 		// 뒤따르는 함수까지 삼키지 않는다.
@@ -639,7 +642,9 @@ describe("Rust 명령 추출은 거리를 재지 않는다", () => {
 			"    std::fs::remove_dir_all(\"/\").ok();",
 			"}",
 		].join("\n");
-		expect(rust.tauriCommandBodies(source).get("declared_only")).toBe("");
+		expect(
+			rust.tauriCommandDeclarations(source).find((d) => d.fnName === "declared_only")?.body,
+		).toBe("");
 	});
 
 	it("코드와 문자열을 가르되 줄 번호를 지킨다", () => {

@@ -1,8 +1,8 @@
 {
 	"generatedFrom": "packages/shell/e2e-tauri/specs",
-	"total": 119,
+	"total": 109,
 	"summary": {
-		"credentialed_live": 91,
+		"credentialed_live": 81,
 		"deterministic_ci": 20,
 		"native_local": 8
 	},
@@ -50,17 +50,6 @@
 				"GEMINI_API_KEY",
 				"NAIA_API_KEY",
 				"NAIA_E2E_ADK_FIXTURE",
-				"NAIA_E2E_ARTIFACTS_DIR",
-				"NAIA_E2E_COST_LEDGER"
-			],
-			"tier": "credentialed_live"
-		},
-		{
-			"spec": "05-skill-system.spec.ts",
-			"conf": [],
-			"env": [
-				"CAFE_E2E_API_KEY",
-				"GEMINI_API_KEY",
 				"NAIA_E2E_ARTIFACTS_DIR",
 				"NAIA_E2E_COST_LEDGER"
 			],
@@ -217,7 +206,7 @@
 				"NAIA_API_KEY",
 				"NAIA_E2E_ADK_FIXTURE",
 				"NAIA_E2E_ARTIFACTS_DIR",
-				"NAIA_E2E_COST_LEDGER"
+				"NAIA_E2E_NOTIFY_LOG"
 			],
 			"tier": "credentialed_live"
 		},
@@ -247,19 +236,6 @@
 		},
 		{
 			"spec": "20-cron-basic.spec.ts",
-			"conf": [],
-			"env": [
-				"CAFE_E2E_API_KEY",
-				"GEMINI_API_KEY",
-				"NAIA_API_KEY",
-				"NAIA_E2E_ADK_FIXTURE",
-				"NAIA_E2E_ARTIFACTS_DIR",
-				"NAIA_E2E_COST_LEDGER"
-			],
-			"tier": "credentialed_live"
-		},
-		{
-			"spec": "21-cron-recurring.spec.ts",
 			"conf": [],
 			"env": [
 				"CAFE_E2E_API_KEY",
@@ -314,32 +290,6 @@
 				"GEMINI_API_KEY",
 				"NAIA_API_KEY",
 				"NAIA_E2E_ADK_FIXTURE"
-			],
-			"tier": "credentialed_live"
-		},
-		{
-			"spec": "29-cron-gateway.spec.ts",
-			"conf": [],
-			"env": [
-				"CAFE_E2E_API_KEY",
-				"GEMINI_API_KEY",
-				"NAIA_API_KEY",
-				"NAIA_E2E_ADK_FIXTURE",
-				"NAIA_E2E_ARTIFACTS_DIR",
-				"NAIA_E2E_COST_LEDGER"
-			],
-			"tier": "credentialed_live"
-		},
-		{
-			"spec": "30-exec-approvals.spec.ts",
-			"conf": [],
-			"env": [
-				"CAFE_E2E_API_KEY",
-				"GEMINI_API_KEY",
-				"NAIA_API_KEY",
-				"NAIA_E2E_ADK_FIXTURE",
-				"NAIA_E2E_ARTIFACTS_DIR",
-				"NAIA_E2E_COST_LEDGER"
 			],
 			"tier": "credentialed_live"
 		},
@@ -442,59 +392,16 @@
 			"tier": "credentialed_live"
 		},
 		{
-			"spec": "41-agents-crud.spec.ts",
-			"conf": [],
-			"env": [
-				"CAFE_E2E_API_KEY",
-				"GEMINI_API_KEY",
-				"NAIA_API_KEY",
-				"NAIA_E2E_ADK_FIXTURE",
-				"NAIA_E2E_ARTIFACTS_DIR",
-				"NAIA_E2E_COST_LEDGER"
-			],
-			"tier": "credentialed_live"
-		},
-		{
 			"spec": "42-sessions-crud.spec.ts",
 			"conf": [],
 			"env": [
-				"CAFE_E2E_API_KEY",
-				"GEMINI_API_KEY",
-				"NAIA_API_KEY",
-				"NAIA_E2E_ADK_FIXTURE",
-				"NAIA_E2E_ARTIFACTS_DIR",
-				"NAIA_E2E_COST_LEDGER"
-			],
-			"tier": "credentialed_live"
-		},
-		{
-			"spec": "43-device-management.spec.ts",
-			"conf": [],
-			"env": [
-				"CAFE_E2E_API_KEY",
-				"GEMINI_API_KEY",
-				"NAIA_API_KEY",
-				"NAIA_E2E_ADK_FIXTURE",
-				"NAIA_E2E_ARTIFACTS_DIR",
-				"NAIA_E2E_COST_LEDGER"
+				"NAIA_E2E_ADK_PATH",
+				"NAIA_E2E_ARTIFACTS_DIR"
 			],
 			"tier": "credentialed_live"
 		},
 		{
 			"spec": "44-diagnostics-full.spec.ts",
-			"conf": [],
-			"env": [
-				"CAFE_E2E_API_KEY",
-				"GEMINI_API_KEY",
-				"NAIA_API_KEY",
-				"NAIA_E2E_ADK_FIXTURE",
-				"NAIA_E2E_ARTIFACTS_DIR",
-				"NAIA_E2E_COST_LEDGER"
-			],
-			"tier": "credentialed_live"
-		},
-		{
-			"spec": "45-cron-gateway-full.spec.ts",
 			"conf": [],
 			"env": [
 				"CAFE_E2E_API_KEY",
@@ -520,19 +427,6 @@
 			"tier": "credentialed_live"
 		},
 		{
-			"spec": "47-tts-full.spec.ts",
-			"conf": [],
-			"env": [
-				"CAFE_E2E_API_KEY",
-				"GEMINI_API_KEY",
-				"NAIA_API_KEY",
-				"NAIA_E2E_ADK_FIXTURE",
-				"NAIA_E2E_ARTIFACTS_DIR",
-				"NAIA_E2E_COST_LEDGER"
-			],
-			"tier": "credentialed_live"
-		},
-		{
 			"spec": "48-voicewake-set.spec.ts",
 			"conf": [],
 			"env": [
@@ -546,33 +440,7 @@
 			"tier": "credentialed_live"
 		},
 		{
-			"spec": "49-approvals-full.spec.ts",
-			"conf": [],
-			"env": [
-				"CAFE_E2E_API_KEY",
-				"GEMINI_API_KEY",
-				"NAIA_API_KEY",
-				"NAIA_E2E_ADK_FIXTURE",
-				"NAIA_E2E_ARTIFACTS_DIR",
-				"NAIA_E2E_COST_LEDGER"
-			],
-			"tier": "credentialed_live"
-		},
-		{
 			"spec": "50-config-management.spec.ts",
-			"conf": [],
-			"env": [
-				"CAFE_E2E_API_KEY",
-				"GEMINI_API_KEY",
-				"NAIA_API_KEY",
-				"NAIA_E2E_ADK_FIXTURE",
-				"NAIA_E2E_ARTIFACTS_DIR",
-				"NAIA_E2E_COST_LEDGER"
-			],
-			"tier": "credentialed_live"
-		},
-		{
-			"spec": "51-skills-advanced.spec.ts",
 			"conf": [],
 			"env": [
 				"CAFE_E2E_API_KEY",

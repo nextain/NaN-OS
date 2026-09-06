@@ -43,6 +43,15 @@ export const CREDENTIALED_KEY_ENV = "NAIA_API_KEY";
 export const HARNESS_PROVIDED_ENV = Object.freeze([
 	"NAIA_E2E_ADK_PATH",
 	"NAIA_E2E_ADK_FIXTURE",
+	// 아래 넷은 **조건부로만 합성되는 에이전트 도구**의 전제다 (#567 재조준).
+	// 어댑터는 배선돼 있는데 전제가 없으면 그 도구가 목록에 아예 오르지 않아,
+	// 모델이 "그런 도구가 없다" 고 답한다 — 배선 부재와 구별되지 않는 모습이라
+	// 실제로 한 번 미배선으로 잘못 읽혔다. 전제를 하네스가 세워 주고, 그 사실을
+	// 여기 한 곳에 적어 러너·설정·문서가 같은 목록을 본다.
+	"NAIA_SHELL_TOOL", // shell_exec 합성 조건
+	"NAIA_NOTIFY_SLACK_WEBHOOK", // notify 합성 조건(slack)
+	"NAIA_NOTIFY_DISCORD_WEBHOOK", // notify 합성 조건(discord)
+	"NAIA_E2E_NOTIFY_LOG", // 스텁이 받은 것을 스펙이 읽는 자리
 ]);
 
 /**

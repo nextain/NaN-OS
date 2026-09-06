@@ -23,16 +23,6 @@ const DIGEST_URL = pathToFileURL(DIGEST_PATH).href;
 const RUNNER_PATH = resolve(ROOT, "scripts", "run-regression.mjs");
 const GATE_PATH = resolve(ROOT, "scripts", "check-regression-complete.mjs");
 const INVENTORY_PATH = resolve(ROOT, "docs", "e2e-inventory.json");
-/**
- * 이행 기간의 근거가 되는 실제 기록. 윈도우에서 옛 규칙으로 남긴 지문이 담겨
- * 있어, 게이트가 그것을 받아야 그날의 실측이 판정에 들어간다.
- */
-const WINDOWS_RECORD_PATH = resolve(
-	ROOT,
-	"docs",
-	"regression-runs",
-	"win-rtx4060-2026-09-05T18-08-41-202Z.json",
-);
 
 /**
  * 모듈 표면은 여기 적는다. `.mjs` 를 정적으로 끌어오면 루트 tsc 프로그램이
@@ -153,20 +143,6 @@ describe("인벤토리 지문", () => {
 		expect(inventoryDigestFromFile(INVENTORY_PATH)).toMatch(/^[0-9a-f]{64}$/);
 	});
 
-	it("이행 기간 동안 옛 규칙의 지문도 지금 목록을 가리킨다", async () => {
-		const { legacyRawDigests } = await load();
-		const legacy = legacyRawDigests(readFileSync(INVENTORY_PATH));
-		const record = JSON.parse(readFileSync(WINDOWS_RECORD_PATH, "utf8")) as {
-			ranOn?: { inventorySha256?: string };
-		};
-
-		// 이것이 이행 예외의 근거다. 윈도우 기계가 오늘 남긴 기록의 지문은 지금
-		// 인벤토리를 CRLF 원문으로 해시한 값과 같다 — 즉 같은 목록을 잰 기록이다.
-		//
-		// ⚠️ 인벤토리가 바뀌면 이 단정은 붉어진다. 그것이 **만료 신호**다:
-		// 그때 `check-regression-complete.mjs` 의 `acceptedDigests` 에서 옛 규칙
-		// 두 줄을 지우고 이 계약도 함께 지운다. 그 뒤의 기록은 전부 새 규칙으로
-		// 남으므로 예외가 필요 없다.
-		expect(record.ranOn?.inventorySha256).toBe(legacy.crlf);
-	});
+	// 이행 기간 항목은 2026-09-07 인벤토리 변경(#567)으로 만료돼 지웠다 — 게이트의
+	// acceptedDigests 도 같은 커밋에서 정규화 지문 하나만 남았다.
 });

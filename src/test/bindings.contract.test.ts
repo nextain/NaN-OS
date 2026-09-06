@@ -1008,6 +1008,17 @@ describe("파괴 게이트는 자기 해석을 들지 않는다 (17회차 지적
 		expect(gate.includes("isModuleOfPackage")).toBe(true);
 	});
 
+	it("Cargo.toml 을 읽는 코드가 없다", () => {
+		// 명령 목록을 뽑는 게이트가 둘이다. 뿌리를 정하는 판단이 두 벌이면
+		// 한쪽에서 닫은 구멍이 다른 쪽에 그대로 남는다(19회차 지적 6).
+		const code = gate
+			.replace(/\/\*[\s\S]*?\*\//g, "")
+			.replace(/(^|[^:])\/\/[^\n]*/g, "$1");
+		for (const marker of ["Cargo.toml", "parseToml", "localCrateReferences", "existsSync"])
+			expect(code.includes(marker), `파괴 게이트가 ${marker} 를 직접 본다`).toBe(false);
+		expect(code.includes("crate-roots.mjs"), "공용 뿌리 모듈을 안 쓴다").toBe(true);
+	});
+
 	it("겹의 수를 세는 자리가 없다", () => {
 		// 감싸기 고정점이 여섯 바퀴만 돌았다. 그런 숫자는 한계가 아니라
 		// "몇 겹 더 쌓으면 통과하는가" 를 알려 주는 눈금이다 — 13·14회차에

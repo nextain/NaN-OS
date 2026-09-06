@@ -87,7 +87,7 @@
  */
 
 import ts from "typescript";
-import { STATIC_UNKNOWN, declaredPropertyName, staticValue } from "./static-eval.mjs";
+import { memberNameOf, staticValue } from "./static-eval.mjs";
 import { unwrapExpression } from "./unwrap.mjs";
 
 
@@ -126,15 +126,15 @@ const GLOBAL_ROOTS = new Set(["globalThis", "window", "self", "global"]);
  */
 export const unwrap = unwrapExpression;
 
-/** 리터럴 키로 적은 멤버 접근의 이름. 동적 키는 `null` — 보증 밖이다. */
-function memberName(node) {
-	if (ts.isPropertyAccessExpression(node)) return node.name.text;
-	if (ts.isElementAccessExpression(node)) {
-		const key = unwrap(node.argumentExpression);
-		if (key && (ts.isStringLiteral(key) || ts.isNoSubstitutionTemplateLiteral(key)))
-			return key.text;
-	}
-	return null;
+/**
+ * 멤버 접근의 이름. 점이든 대괄호든, 키가 접히는 식이면 같은 이름이다.
+ *
+ * 이름을 읽는 자리를 이 파일에 다시 적지 않는다 — `scripts/lib/static-eval.mjs`
+ * 의 `memberNameOf` 하나가 한다. 값을 접는 표를 만들고도 이름 자리에는 안 쓴
+ * 것이 19회차에 네 곳을 한꺼번에 뚫은 이유다.
+ */
+function memberName(node, sf, env) {
+	return memberNameOf(node, sf, constScope(sf, env), new Set());
 }
 
 /** 멤버 접근(속성이든 리터럴 키든)의 왼쪽 식. */
@@ -214,7 +214,7 @@ export function importBindings(sf) {
 		if (named && ts.isNamedImports(named)) {
 			for (const el of named.elements) {
 				const imported = el.propertyName
-					? declaredPropertyName(el.propertyName, sf, constScope(sf, null), new Set())
+					? memberNameOf(el.propertyName, sf, constScope(sf, null), new Set())
 					: el.name.text;
 				if (imported === null) continue;
 				out.set(el.name.text, { module, imported, kind: "named" });
@@ -461,7 +461,7 @@ function constAlias(name, sf) {
 					// 이름으로 떨어뜨리지 않고 아예 따라가지 않는다 — 모르는 것을
 					// 아는 이름으로 바꿔 읽으면 남의 export 가 걸려 든다.
 					const property = el.propertyName
-						? declaredPropertyName(el.propertyName, sf, constScope(sf, null), new Set())
+						? memberNameOf(el.propertyName, sf, constScope(sf, null), new Set())
 						: el.name.text;
 					if (property === null) continue;
 					found = { kind: "property", node: n.initializer, property };
@@ -628,7 +628,7 @@ function objectNamespaceMember(baseExpr, name, sf, env, seen) {
 			return resolveBinding(property.name, sf, env, seen);
 		}
 		if (!ts.isPropertyAssignment(property)) continue;
-		if (declaredPropertyName(property.name, sf, constScope(sf, null), new Set()) !== name) continue;
+		if (memberNameOf(property.name, sf, constScope(sf, null), new Set()) !== name) continue;
 		return resolveBinding(property.initializer, sf, env, seen);
 	}
 	return null;
@@ -809,7 +809,7 @@ export function resolveBinding(expr, sf, env, state) {
 	}
 
 	if (ts.isPropertyAccessExpression(node) || ts.isElementAccessExpression(node)) {
-		const name = memberName(node);
+		const name = memberName(node, sf, env);
 		if (name === null) return null; // 동적 키 — 보증 밖이다.
 		const base = resolveBinding(memberBase(node), sf, env, seen);
 		// `const ns = { invoke }; ns.invoke(…)` — 그 자리에서 만든 객체
@@ -850,7 +850,7 @@ export function resolveBinding(expr, sf, env, state) {
 		if (loaded)
 			return { module: loaded, imported: "*", local: null, via: "dynamic", boundArgs: 0 };
 		const callee = unwrap(node.expression);
-		if (callee && memberName(callee) === "bind") {
+		if (callee && memberName(callee, sf, env) === "bind") {
 			const base = resolveBinding(memberBase(callee), sf, env, seen);
 			if (base && base.imported !== "*" && base.imported !== "default")
 				return {
@@ -890,7 +890,7 @@ export function resolveCallee(node, sf, env) {
 	if (!callee) return null;
 
 	// `f.call(this, …)` · `f.apply(this, [...])` 는 f 를 부르는 것이다.
-	const shape = memberName(callee);
+	const shape = memberName(callee, source, env);
 	if (shape === "call" || shape === "apply") {
 		const base = resolveBinding(memberBase(callee), source, env, new Set());
 		if (base && base.imported !== "*" && base.imported !== "default") {

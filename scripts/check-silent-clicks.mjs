@@ -127,6 +127,7 @@ import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import ts from "typescript";
 import { resolveCallee } from "./lib/bindings.mjs";
+import { memberNameOf, sameFileConstScope } from "./lib/static-eval.mjs";
 import { unwrapExpression } from "./lib/unwrap.mjs";
 
 const SHELL = "packages/shell";
@@ -367,20 +368,21 @@ function exitsWithoutValue(statement) {
 }
 
 /**
- * 멤버 접근의 이름. 리터럴 키(`E["click"]`)는 속성 접근(`E.click`)과 같다.
+ * 멤버 접근의 이름. 점이든 대괄호든, 키가 접히는 식이면 같은 이름이다.
  *
- * 동적 키(`E[name]`)는 `null` 이다 — 실행할 때 정해지는 이름은 이 게이트의
- * 보증 밖이고, 그렇게 적힌 자리는 코드 리뷰가 본다.
+ * 이름을 읽는 자리를 이 파일에 다시 적지 않는다 — `scripts/lib/static-eval.mjs`
+ * 의 `memberNameOf` 하나가 한다. 그래서 `E["click"]` 뿐 아니라
+ * ``E[String.raw`click`]`` 와 `const KEY = "click"` 뒤의 `E[KEY]` 도 같은
+ * 클릭이다(19회차 지적 5). 못 접는 키(`E[name]`)는 `null` — 보증 밖이다.
  */
+const CLICK_SCOPE = sameFileConstScope();
+
 function memberName(node) {
 	if (!node) return null;
-	if (ts.isPropertyAccessExpression(node)) return node.name.text;
-	if (ts.isElementAccessExpression(node)) {
-		const key = unwrap(node.argumentExpression);
-		if (key && (ts.isStringLiteral(key) || ts.isNoSubstitutionTemplateLiteral(key)))
-			return key.text;
-	}
-	return null;
+	if (!ts.isPropertyAccessExpression(node) && !ts.isElementAccessExpression(node)) return null;
+	const sf = typeof node.getSourceFile === "function" ? node.getSourceFile() : null;
+	if (!sf) return null;
+	return memberNameOf(node, sf, CLICK_SCOPE, new Set());
 }
 
 /** 멤버 접근의 왼쪽 식. */

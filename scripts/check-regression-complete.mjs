@@ -25,7 +25,6 @@ import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import {
 	inventoryDigestFromFile,
-	legacyRawDigests,
 } from "./lib/inventory-digest.mjs";
 
 const args = process.argv.slice(2);
@@ -76,12 +75,11 @@ const inventoryDigest = inventoryDigestFromFile(INVENTORY);
  * 새 규칙으로 남는다. `src/test/inventory-digest.contract.test.ts` 의 마지막
  * 계약이 그 시점에 붉어져 이 대목을 지우라고 말한다.
  */
-const legacyRaw = legacyRawDigests(readFileSync(INVENTORY));
 const acceptedDigests = new Map([
 	[inventoryDigest, "정규화 지문"],
-	[legacyRaw.lf, "옛 규칙(LF 원문) — 이행 기간"],
-	[legacyRaw.crlf, "옛 규칙(CRLF 원문) — 이행 기간"],
 ]);
+// 이행 기간(옛 규칙 LF·CRLF 원문 지문 인정)은 2026-09-07 인벤토리 변경(#567, 119→109)으로
+// 끝났다. 그 전 기록은 다른 목록을 잰 것이므로 다시 돌린다.
 
 /**
  * 지금 회귀를 나눠 맡는 기계들. 명단이 유일한 출처다.

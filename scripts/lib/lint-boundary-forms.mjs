@@ -38,6 +38,7 @@
 
 import ts from "typescript";
 import { STATIC_UNKNOWN, staticPrimitive } from "./jsx-static.mjs";
+import { memberNameOf, sameFileConstScope } from "./static-eval.mjs";
 import { unwrapExpression } from "./unwrap.mjs";
 
 /** 게이트가 분석하는 소스. 린트 경계도 같은 범위를 본다. */
@@ -215,14 +216,19 @@ function voidStacked(node) {
  * `f["call" as const]()` 의 키는 단언이다 — 둘 다 같은 호출이고, 바인딩 쪽은
  * 이미 그렇게 읽는다(16회차 지적 4).
  */
+const CALLEE_SCOPE = sameFileConstScope();
+
 function computedCallee(node) {
 	if (!ts.isCallExpression(node)) return false;
 	const callee = unwrapExpression(node.expression);
 	if (!callee || !ts.isElementAccessExpression(callee)) return false;
-	const key = unwrapExpression(callee.argumentExpression);
-	return (
-		!!key && (ts.isStringLiteral(key) || ts.isNoSubstitutionTemplateLiteral(key))
-	);
+	// "리터럴 키" 는 형태가 아니라 **접히는 키**다. 형태로 세면
+	// ``f[String.raw`call`]()`` 처럼 매번 하나가 새로 온다(19회차 지적 4).
+	// 판정은 `static-eval.mjs` 의 `memberNameOf` 하나로 한다 — 못 접는
+	// 동적 키(`f[name]()`)는 그 표 밖이라 금지 대상이 아니다.
+	const sf = typeof callee.getSourceFile === "function" ? callee.getSourceFile() : null;
+	if (!sf) return false;
+	return memberNameOf(callee, sf, CALLEE_SCOPE, new Set()) !== null;
 }
 
 /**

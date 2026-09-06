@@ -110,7 +110,7 @@ import {
 	STATIC_EVAL_KINDS,
 	STATIC_EVAL_OUT_OF_SCOPE,
 	STATIC_UNKNOWN,
-	declaredPropertyName,
+	memberNameOf,
 	staticValue,
 } from "./static-eval.mjs";
 import { unwrapExpression } from "./unwrap.mjs";
@@ -346,11 +346,15 @@ export function elementOpening(node) {
 	return ts.isJsxElement(node) ? node.openingElement : node;
 }
 
-function propertyName(name) {
-	if (!name) return null;
-	if (ts.isIdentifier(name)) return name.text;
-	if (ts.isStringLiteral(name) || ts.isNumericLiteral(name)) return name.text;
-	return null;
+/**
+ * 속성 이름. 점이든 문자열이든 계산된 키든 같은 이름이다.
+ *
+ * 이름을 읽는 자리를 이 파일에 다시 적지 않는다 — `static-eval.mjs` 의
+ * `memberNameOf` 하나가 한다. 값 자리에서는 계산된 키를 접으면서 **요소 속성을
+ * 모으는 자리**에서는 안 접었던 것이 19회차 지적 1 이다.
+ */
+function propertyName(name, sf, env) {
+	return memberNameOf(name, sf, constScope(env), new Set());
 }
 
 /**
@@ -392,7 +396,7 @@ export function elementProps(node, sf, env) {
 		if (ts.isObjectLiteralExpression(obj)) {
 			for (const p of obj.properties) {
 				if (ts.isPropertyAssignment(p)) {
-					const name = propertyName(p.name);
+					const name = propertyName(p.name, home, env);
 					if (name === null) unknownSpread = true;
 					else props.push({ name, value: p.initializer, bare: false, sf: home });
 				} else if (ts.isShorthandPropertyAssignment(p)) {
@@ -547,7 +551,7 @@ function bindingPaths(pattern, name, sf, prefix = []) {
 	for (const el of pattern.elements) {
 		if (!ts.isBindingElement(el)) continue;
 		const key = el.propertyName
-			? declaredPropertyName(el.propertyName, sf, null, new Set())
+			? memberNameOf(el.propertyName, sf, constScope(null), new Set())
 			: ts.isIdentifier(el.name)
 				? el.name.text
 				: null;
@@ -672,20 +676,17 @@ function constOnlyValue(name, sf, env, state) {
 	return null;
 }
 
-/** `obj.key` 와 `obj["key"]` 의 그 키. 값으로 계산되는 키는 모른다. */
-function accessKey(node) {
-	if (ts.isPropertyAccessExpression(node)) return node.name.text;
-	if (ts.isElementAccessExpression(node)) {
-		const arg = node.argumentExpression ? unwrapAll(node.argumentExpression) : null;
-		if (arg && (ts.isStringLiteral(arg) || ts.isNoSubstitutionTemplateLiteral(arg)))
-			return arg.text;
-		if (arg && ts.isNumericLiteral(arg)) return arg.text;
-	}
-	return null;
+/**
+ * `obj.key` 와 `obj[식]` 의 그 키. 못 접는 키는 모른다.
+ *
+ * 이름을 읽는 자리는 `static-eval.mjs` 의 `memberNameOf` 하나다.
+ */
+function accessKey(node, sf, env) {
+	return memberNameOf(node, sf, constScope(env), new Set());
 }
 
 /** 객체·배열 리터럴에서 그 키의 값. spread 때문에 못 정하면 모른다. */
-function literalMember(literal, key, home) {
+function literalMember(literal, key, home, env) {
 	if (ts.isArrayLiteralExpression(literal)) {
 		if (!/^\d+$/.test(key)) return null;
 		const element = literal.elements[Number(key)];
@@ -700,7 +701,7 @@ function literalMember(literal, key, home) {
 			spread = true;
 			continue;
 		}
-		if (ts.isPropertyAssignment(p) && propertyName(p.name) === key)
+		if (ts.isPropertyAssignment(p) && propertyName(p.name, home, env) === key)
 			return { node: p.initializer, sf: home };
 		if (ts.isShorthandPropertyAssignment(p) && p.name.text === key)
 			return { node: p.name, sf: home };
@@ -722,7 +723,7 @@ function constAccessValue(node, sf, env, state) {
 	const seen = trail(state);
 	if (seen.has(node)) return null;
 	seen.add(node);
-	const key = accessKey(node);
+	const key = accessKey(node, sf, env);
 	if (key === null) return null;
 	const base = unwrapAll(node.expression);
 	if (!base) return null;
@@ -749,7 +750,7 @@ function constAccessValue(node, sf, env, state) {
 				(!ts.isObjectLiteralExpression(value) && !ts.isArrayLiteralExpression(value))
 			)
 				return null;
-			return literalMember(value, key, site.sf);
+			return literalMember(value, key, site.sf, env);
 		}
 		const bound = constOnlyValue(base.text, sf, env);
 		const value = bound ? unwrapAll(bound.node) : null;
@@ -767,7 +768,7 @@ function constAccessValue(node, sf, env, state) {
 	} else {
 		return null;
 	}
-	return literalMember(literal, key, home);
+	return literalMember(literal, key, home, env);
 }
 
 /** 그 이름으로 부르는 호출들. `setActiveTab("general")` 을 찾을 때 쓴다. */
@@ -924,7 +925,7 @@ function arrayPropertyValues(arrayExpr, property, sf, env, seen) {
 		const prop = obj.properties.find(
 			(p) =>
 				(ts.isPropertyAssignment(p) || ts.isShorthandPropertyAssignment(p)) &&
-				propertyName(p.name) === property,
+				propertyName(p.name, sf, env) === property,
 		);
 		if (!prop) {
 			complete = false;
@@ -1016,7 +1017,7 @@ function resolvePropertyAccess(node, sf, env, seen) {
 			const prop = obj.properties.find(
 				(p) =>
 					(ts.isPropertyAssignment(p) || ts.isShorthandPropertyAssignment(p)) &&
-					propertyName(p.name) === node.name.text,
+					propertyName(p.name, bound.sf, env) === node.name.text,
 			);
 			if (prop)
 				return stringCandidates(
