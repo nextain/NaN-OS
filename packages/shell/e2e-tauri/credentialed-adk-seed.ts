@@ -73,36 +73,39 @@ export function credentialedSeedOptionsFromEnv(
 /**
  * 격리 ADK 에 쓸 config.json 내용. 순수 함수 — 파일도 환경도 건드리지 않는다.
  *
- * `llmRoles.main` 이 제품의 정본이고 최상위 `provider`/`model` 은 구 릴리스를 위한
- * 호환 거울이다(naia-settings-store 의 fromConfigJson 주석). 둘을 같이 적어야 셸의
- * 하이드레이션이 온보딩을 이미 마친 것으로 보고 자기 기본값으로 덮지 않는다
- * (e2e-tauri/helpers/settings.ts 의 ensureAppReady 가 `onboardingComplete` 와
- * provider 를 그 판정에 쓴다).
+ * **에이전트가 읽는 것만 적는다.** `llmRoles.main` 하나다. 그것이 제품의 정본이고
+ * (`naia-settings-store` 의 `fromConfigJson` 이 최상위 `provider` 보다 먼저 본다),
+ * 화면은 이 파일에서 그 밖의 것을 받지 않아야 한다.
+ *
+ * 처음에는 최상위 `provider`/`model` 거울과 `onboardingComplete`, 그리고 이름·로케일
+ * 같은 화면 기본값까지 함께 적었다. "그러지 않으면 `ensureAppReady` 가 심은 것을
+ * 덮어쓴다" 고 보았는데, 코드를 읽어 보니 둘 다 틀렸다.
+ *
+ *  - `onboardingComplete` 는 **하이드레이션이 파일에서 지운다**
+ *    (`mergeBootConfig`: `delete normalizedFile.onboardingComplete`, 값은 로컬에서만
+ *    온다). 그러니 파일에 적어도 `ensureAppReady` 를 건너뛰게 하지 못한다.
+ *  - `ensureAppReady` 는 덮어쓰기가 아니라 **병합**이다
+ *    (`Object.assign(config, { provider: config.provider || "gemini", … })`).
+ *    `llmRoles` 를 건드리지 않으므로 시딩은 그대로 살아남는다.
+ *
+ * 실제로 일어난 일은 그 반대였다. 최상위 거울이 하이드레이션을 타고 화면에 들어가면
+ * `config.provider || "gemini"` 의 왼쪽이 참이 되어 **화면이 게이트웨이 공급자로
+ * 고정된다.** 그러면 공급자에 따라 갈리는 설정 목록이 달라져, TTS 선택에 `edge` 가
+ * 없어지고 `81-chat-tts-response` 가 `edge` 대신 `nextain` 을 받는 식으로 여덟 스펙이
+ * 어긋났다(#568).
+ *
+ * 그래서 지금은 화면 기본값을 한 글자도 적지 않는다. 화면은 예전처럼
+ * `ensureAppReady` 가 세우고, 에이전트만 게이트웨이를 부른다.
  */
 export function buildCredentialedAdkConfig(
-	adkPath: string,
 	options: CredentialedSeedOptions = {},
 ): SeedableShellConfig {
 	const provider = options.provider ?? CREDENTIALED_MAIN_PROVIDER;
 	const model = options.model ?? CREDENTIALED_MAIN_MODEL;
 	const credentialRef = options.credentialRefEnv ?? CREDENTIALED_KEY_ENV;
+	// 키는 여기에 없다 — 환경 변수 *이름*만 적는다.
 	return buildSeedShellConfig({
-		provider,
-		model,
-		// 키는 여기에 없다. 셸도 `write_naia_config` 로 쓸 때 시크릿을 벗겨 낸다.
-		apiKey: "",
-		llmRoles: {
-			main: { provider, model, credentialRef },
-		},
-		onboardingComplete: true,
-		workspaceRoot: adkPath,
-		appVisible: true,
-		locale: "ko",
-		enableTools: true,
-		agentName: "Naia",
-		userName: "Tester",
-		persona: "Friendly AI companion",
-		vrmModel: "/avatars/01-OL_Woman.vrm",
+		llmRoles: { main: { provider, model, credentialRef } },
 	});
 }
 
@@ -127,7 +130,7 @@ export function seedCredentialedAdk(
 	const settingsDir = resolve(root, "naia-settings");
 	mkdirSync(settingsDir, { recursive: true });
 	const configPath = resolve(settingsDir, "config.json");
-	const config = buildCredentialedAdkConfig(root, options);
+	const config = buildCredentialedAdkConfig(options);
 	writeFileSync(configPath, `${JSON.stringify(config, null, 2)}\n`, {
 		mode: 0o600,
 	});
@@ -143,8 +146,8 @@ export function seedCredentialedAdk(
 	return {
 		adkPath: root,
 		configPath,
-		provider: config.provider ?? CREDENTIALED_MAIN_PROVIDER,
-		model: config.model ?? CREDENTIALED_MAIN_MODEL,
+		provider: options.provider ?? CREDENTIALED_MAIN_PROVIDER,
+		model: options.model ?? CREDENTIALED_MAIN_MODEL,
 		credentialRefEnv: options.credentialRefEnv ?? CREDENTIALED_KEY_ENV,
 	};
 }

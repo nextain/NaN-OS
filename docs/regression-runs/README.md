@@ -134,6 +134,34 @@ node scripts/check-regression-complete.mjs --max-age-hours=24
 *이름*만 적히고, 값은 로그인과 같은 wire 로 에이전트에 실린다. 실행이 끝나면 그
 워크스페이스는 실행 자리와 함께 지워진다.
 
+**심는 것은 `llmRoles.main` 하나뿐이다 (#568).** 처음에는 최상위 `provider`/`model`
+거울과 `onboardingComplete`, 이름·로케일 같은 화면 기본값까지 함께 적었다. 그러지
+않으면 `ensureAppReady` 가 심은 것을 덮어쓴다고 보았는데, 코드를 읽고 실측해 보니
+둘 다 틀렸다.
+
+- `onboardingComplete` 는 **하이드레이션이 파일에서 지운다**(`mergeBootConfig` 이
+  `delete normalizedFile.onboardingComplete` 를 하고 값은 로컬에서만 가져온다).
+  파일에 적어도 `ensureAppReady` 를 건너뛰게 하지 못한다.
+- `ensureAppReady` 는 덮어쓰기가 아니라 **병합**이다
+  (`Object.assign(config, { provider: config.provider || "gemini", … })`).
+  `llmRoles` 를 건드리지 않는다.
+
+실제로 일어난 일은 그 반대였다. 최상위 거울이 하이드레이션을 타고 화면에 들어가면
+`config.provider || "gemini"` 의 왼쪽이 참이 되어 **화면이 게이트웨이 공급자로
+고정된다.** 그러면 공급자에 따라 갈리는 설정 목록이 달라져
+`81-chat-tts-response` 가 `edge` 대신 `nextain` 을 받았다.
+
+거울을 뺀 뒤 한 세션을 돌려 그 자리에서 잰 값이다.
+
+| | 값 |
+|---|---|
+| 에이전트가 기동 시 고른 것 | `naia-settings(nextain/deepseek-v4-flash)` |
+| 화면이 되쓴 `config.json` 의 `provider` | `gemini` (예전 기본값) |
+| 그 파일의 `llmRoles.main` | `nextain/deepseek-v4-flash` (그대로 남는다) |
+| `03-basic-chat` | EXIT=0 — 게이트웨이로 실제 대화 |
+
+즉 화면은 예전처럼 `ensureAppReady` 가 세우고, 에이전트만 게이트웨이를 부른다.
+
 따라서 이 등급의 결과는 사람이 쓰는 실제 ADK 의 설정과 무관하다. 그 ADK 의 활성
 모델이 무엇이든, 어느 기계에서 돌리든 자격증명 등급은 같은 공급자를 쓴다. 반대로
 키가 없으면 아무것도 심지 않고 예전처럼 돈다 — 러너의 전제 검사가 그 사실을

@@ -88,18 +88,47 @@ describe("자격증명 등급 시딩", () => {
 		const result = seedModule.seedCredentialedAdk(adk);
 		expect(result.configPath).toBe(resolve(adk, "naia-settings", "config.json"));
 		const written = JSON.parse(readFileSync(result.configPath, "utf8"));
-		// `llmRoles.main` 이 제품 정본이고 최상위 provider/model 은 호환 거울이다.
-		// 둘 중 하나만 쓰면 구 릴리스나 신 릴리스 한쪽이 공급자를 못 찾는다.
+		// `llmRoles.main` 이 제품 정본이다 — 에이전트의 `fromConfigJson` 이 최상위
+		// provider 보다 먼저 본다. 시딩이 적어야 하는 것은 이것뿐이다.
 		expect(written.llmRoles.main.provider).toBe(
 			seedModule.CREDENTIALED_MAIN_PROVIDER,
 		);
 		expect(written.llmRoles.main.model).toBe(seedModule.CREDENTIALED_MAIN_MODEL);
-		expect(written.provider).toBe(seedModule.CREDENTIALED_MAIN_PROVIDER);
-		expect(written.model).toBe(seedModule.CREDENTIALED_MAIN_MODEL);
-		// 셸의 하이드레이션이 이것을 "이미 설정된 워크스페이스" 로 읽어야 한다.
-		// 아니면 ensureAppReady 가 자기 기본값으로 덮어써 심은 것이 사라진다.
-		expect(written.onboardingComplete).toBe(true);
-		expect(written.workspaceRoot).toBe(resolve(adk));
+	});
+
+	it("화면 기본값을 한 글자도 바꾸지 않는다", () => {
+		// 한때 최상위 `provider`/`model` 거울과 `onboardingComplete`, 이름·로케일까지
+		// 함께 적었다. 그 거울이 하이드레이션을 타고 화면에 들어가면
+		// `ensureAppReady` 의 `config.provider || "gemini"` 왼쪽이 참이 되어 화면이
+		// 게이트웨이 공급자로 고정된다. 그러면 공급자에 따라 갈리는 설정 목록이
+		// 달라져, TTS 선택에서 `edge` 가 사라지고 여덟 스펙이 어긋났다(#568).
+		//
+		// 그러니 이 파일에는 에이전트가 읽는 열쇠 하나만 있어야 한다. 새 화면
+		// 기본값을 여기에 얹으려는 다음 변경은 여기서 붉어진다.
+		const adk = freshAdk();
+		const result = seedModule.seedCredentialedAdk(adk);
+		const written = JSON.parse(readFileSync(result.configPath, "utf8"));
+		expect(Object.keys(written)).toEqual(["llmRoles"]);
+		expect(Object.keys(written.llmRoles)).toEqual(["main"]);
+		for (const key of [
+			"provider",
+			"model",
+			"onboardingComplete",
+			"ttsProvider",
+			"locale",
+			"apiKey",
+			"workspaceRoot",
+			"agentName",
+			"userName",
+			"persona",
+			"vrmModel",
+			"appVisible",
+			"enableTools",
+		]) {
+			expect(written[key], `${key} 는 화면의 것이다 — 시딩이 적으면 안 된다`).toBe(
+				undefined,
+			);
+		}
 	});
 
 	it("키 값을 파일에 남기지 않는다 — 환경 변수 이름만 적는다", () => {
