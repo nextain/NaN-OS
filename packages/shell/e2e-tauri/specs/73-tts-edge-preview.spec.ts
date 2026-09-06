@@ -2,6 +2,7 @@ import { S } from "../helpers/selectors.js";
 import {
 	ensureAppReady,
 	navigateToSettings,
+	openSettingsSection,
 	scrollToSection,
 } from "../helpers/settings.js";
 
@@ -16,6 +17,11 @@ describe("73 — Edge TTS preview", () => {
 	before(async () => {
 		await ensureAppReady();
 		await navigateToSettings();
+		// #541 이후 설정은 내부 탭이고 **활성 탭만 렌더**한다
+		// (`SettingsTab.tsx` 의 `activeSettingsTab === "voice" && …`). 설정만 열면
+		// 프로필 탭이 서므로 음성 컨트롤은 DOM 에 아예 없다 — 셀렉터가 낡은 것이
+		// 아니라 가는 길이 빠져 있었다.
+		await openSettingsSection("voice");
 		const settingsTab = await $(S.settingsTab);
 		await settingsTab.waitForDisplayed({ timeout: 10_000 });
 	});

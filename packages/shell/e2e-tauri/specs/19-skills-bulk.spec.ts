@@ -1,5 +1,8 @@
 import { S } from "../helpers/selectors.js";
-import { safeRefresh } from "../helpers/settings.js";
+import {
+	navigateToSettings,
+	safeRefresh,
+} from "../helpers/settings.js";
 
 describe("19 — skills bulk migration", () => {
 	before(async () => {
@@ -13,6 +16,9 @@ describe("19 — skills bulk migration", () => {
 		await safeRefresh();
 		const chatInput = await $(S.chatInput);
 		await chatInput.waitForEnabled({ timeout: 15_000 });
+		// 스킬 화면은 설정 안에 있다 — 설정을 먼저 열어야 그 탭 버튼이 존재한다
+		// (옛 메타 탭 표지를 그리던 NaiaMetaArea 는 지웠다 — 2026-09-06).
+		await navigateToSettings();
 	});
 
 	it("should show built-in skills in skills tab", async () => {

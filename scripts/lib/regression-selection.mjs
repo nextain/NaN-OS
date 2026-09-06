@@ -55,7 +55,19 @@ export function partitionByEnv(specs, env) {
 	const runnable = [];
 	const envMissing = new Map();
 	const harnessProvided = new Map();
+	const capabilityBlocked = new Map();
 	for (const spec of specs) {
+		// 아직 이어지지 않은 능력을 요구하는 스펙은 돌리지 않는다.
+		//
+		// 요구 환경이 없는 것과 같은 성격이다 — 제품이 틀려서 실패하는 것이
+		// 아니라, 그 능력이 아직 배선되지 않아 실패한다. 지우면 배선되는 날
+		// 아무도 되살리지 않고, 그대로 두면 매 실행마다 사람이 제품 결함이
+		// 아닌 것을 들여다본다. 그래서 빼되 이유와 추적처를 남긴다.
+		const requires = spec.requires ?? [];
+		if (requires.length > 0) {
+			capabilityBlocked.set(spec.spec, requires);
+			continue;
+		}
 		const filled = new Set(harnessProvidedEnv(confOf(spec), env ?? {}));
 		const required = spec.env ?? [];
 		const absent = [];
@@ -70,7 +82,7 @@ export function partitionByEnv(specs, env) {
 		if (absent.length > 0) envMissing.set(spec.spec, absent);
 		else runnable.push(spec);
 	}
-	return { runnable, envMissing, harnessProvided };
+	return { runnable, envMissing, harnessProvided, capabilityBlocked };
 }
 
 /**
@@ -101,7 +113,8 @@ export function groupByConf(specs) {
  * 통과 0, status failed, 그런데 그 하나는 환경이 없어 건너뛰기로 한 것이었다).
  */
 export function planGroups(specs, env) {
-	const { runnable, envMissing, harnessProvided } = partitionByEnv(specs, env);
+	const { runnable, envMissing, harnessProvided, capabilityBlocked } =
+		partitionByEnv(specs, env);
 	const groups = groupByConf(runnable);
 	const skippedGroups = [];
 	for (const [conf, names] of groupByConf(specs)) {
@@ -114,7 +127,14 @@ export function planGroups(specs, env) {
 			reason: "이 설정의 스펙이 전부 요구 환경 없음",
 		});
 	}
-	return { groups, runnable, envMissing, harnessProvided, skippedGroups };
+	return {
+		groups,
+		runnable,
+		envMissing,
+		harnessProvided,
+		capabilityBlocked,
+		skippedGroups,
+	};
 }
 
 /**

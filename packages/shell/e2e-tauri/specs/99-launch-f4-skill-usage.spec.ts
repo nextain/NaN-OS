@@ -11,7 +11,11 @@
  * directToolCall path (W2 swallow + 33 caller) 가 작동하는지 검증.
  */
 
-import { ensureAppReady } from "../helpers/settings.js";
+import {
+	clickBySelector,
+	ensureAppReady,
+	navigateToSettings,
+} from "../helpers/settings.js";
 import { S } from "../helpers/selectors.js";
 
 const API_KEY =
@@ -23,10 +27,14 @@ describe("99 — F4 자체 스킬 이용 (런칭 핵심)", () => {
 	});
 
 	it("Skills tab 진입 가능 + Skills 목록 표시", async () => {
-		// chat-tab:nth-child(4) = Skills tab (default 8-tab 레이아웃)
-		const skillsTab = await $(".chat-tabs .chat-tab:nth-child(4)");
+		// 예전에는 채팅 탭 넷째가 스킬이었다. 지금 채팅 탭은 셋뿐이고
+		// (chat · history · channels — `ChatArea.tsx` 의 `data-chat-tab`),
+		// 스킬 화면은 설정 안으로 옮겨졌다. 자리 번호로 집으면 조용히 다른 것을
+		// 누르거나(있을 때) 영영 기다린다(없을 때).
+		await navigateToSettings();
+		const skillsTab = await $(S.skillsTab);
 		await skillsTab.waitForDisplayed({ timeout: 30_000 });
-		await skillsTab.click();
+		await clickBySelector(S.skillsTab);
 
 		// Skills 목록 UI render
 		await browser.waitUntil(

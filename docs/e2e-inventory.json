@@ -1,8 +1,8 @@
 {
 	"generatedFrom": "packages/shell/e2e-tauri/specs",
-	"total": 109,
+	"total": 106,
 	"summary": {
-		"credentialed_live": 81,
+		"credentialed_live": 78,
 		"deterministic_ci": 20,
 		"native_local": 8
 	},
@@ -136,8 +136,6 @@
 			"env": [
 				"CAFE_E2E_API_KEY",
 				"GEMINI_API_KEY",
-				"NAIA_API_KEY",
-				"NAIA_E2E_ADK_FIXTURE",
 				"NAIA_E2E_ARTIFACTS_DIR",
 				"NAIA_E2E_COST_LEDGER"
 			],
@@ -244,6 +242,12 @@
 				"NAIA_E2E_ADK_FIXTURE",
 				"NAIA_E2E_ARTIFACTS_DIR",
 				"NAIA_E2E_COST_LEDGER"
+			],
+			"requires": [
+				{
+					"capability": "cron",
+					"tracker": "naia-agent#128"
+				}
 			],
 			"tier": "credentialed_live"
 		},
@@ -428,19 +432,6 @@
 		},
 		{
 			"spec": "48-voicewake-set.spec.ts",
-			"conf": [],
-			"env": [
-				"CAFE_E2E_API_KEY",
-				"GEMINI_API_KEY",
-				"NAIA_API_KEY",
-				"NAIA_E2E_ADK_FIXTURE",
-				"NAIA_E2E_ARTIFACTS_DIR",
-				"NAIA_E2E_COST_LEDGER"
-			],
-			"tier": "credentialed_live"
-		},
-		{
-			"spec": "50-config-management.spec.ts",
 			"conf": [],
 			"env": [
 				"CAFE_E2E_API_KEY",
@@ -721,17 +712,6 @@
 			"tier": "credentialed_live"
 		},
 		{
-			"spec": "75-app-position.spec.ts",
-			"conf": [],
-			"env": [
-				"CAFE_E2E_API_KEY",
-				"GEMINI_API_KEY",
-				"NAIA_API_KEY",
-				"NAIA_E2E_ADK_FIXTURE"
-			],
-			"tier": "credentialed_live"
-		},
-		{
 			"spec": "76-tts-provider-switching.spec.ts",
 			"conf": [],
 			"env": [
@@ -903,17 +883,6 @@
 				"OPENAI_API_KEY",
 				"XAI_API_KEY",
 				"ZHIPU_API_KEY"
-			],
-			"tier": "credentialed_live"
-		},
-		{
-			"spec": "90-app-system.spec.ts",
-			"conf": [],
-			"env": [
-				"CAFE_E2E_API_KEY",
-				"GEMINI_API_KEY",
-				"NAIA_E2E_ARTIFACTS_DIR",
-				"NAIA_E2E_COST_LEDGER"
 			],
 			"tier": "credentialed_live"
 		},

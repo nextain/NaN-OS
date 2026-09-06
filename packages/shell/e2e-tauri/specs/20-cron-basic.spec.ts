@@ -4,6 +4,18 @@ import { S } from "../helpers/selectors.js";
 import { assertSemantic } from "../helpers/semantic.js";
 import { enableToolsForSpec } from "../helpers/settings.js";
 
+// requires: capability:cron (naia-agent#128)
+//
+// 왜 선언하는가: `skill_cron` 은 **죽은 능력이 아니라 아직 안 이어진 능력**이다.
+// 지금 에이전트는 "현재 사용 가능한 도구 목록에 skill_cron 이 포함되어 있지
+// 않습니다" 로 답한다 — cron 어댑터가 아직 배선되지 않았고 naia-agent#128 이 그
+// 몫을 들고 있다. 그래서 지우지 않는다. 배선되는 날 이 선언 한 줄을 지우면 이
+// 스펙이 그대로 다시 돈다.
+//
+// 러너는 이 줄을 읽어 실행에서 빼되 기록과 화면에 이유와 함께 남긴다 — 요구
+// 환경이 없어 빼는 것과 같은 방식이다. 조용히 건너뛰면 재지 않은 것이 통과처럼
+// 보이고, 실패로 두면 매 실행마다 제품 결함이 아닌 것을 사람이 들여다본다.
+
 describe("20 — cron basic (one-shot)", () => {
 	let dispose: (() => void) | undefined;
 

@@ -1,5 +1,5 @@
 import { S } from "../helpers/selectors.js";
-import { safeRefresh } from "../helpers/settings.js";
+import { resetOnboarding, safeRefresh } from "../helpers/settings.js";
 
 describe("13 — Lab Login Flow", () => {
 	let savedConfig: string | null = null;
@@ -10,14 +10,9 @@ describe("13 — Lab Login Flow", () => {
 			return localStorage.getItem("naia-config");
 		});
 
-		// Clear config to trigger onboarding
-		await browser.execute(() => {
-			localStorage.removeItem("naia-config");
-		});
-		await safeRefresh();
-
-		const overlay = await $(S.onboardingOverlay);
-		await overlay.waitForDisplayed({ timeout: 30_000 });
+		// 온보딩을 처음 상태로 되돌린다 — 캐시와 워크스페이스 파일을 함께
+		// 비우고, 자동 실행의 건너뛰기 씨앗을 이번 부팅만 끈다(#564).
+		await resetOnboarding();
 	});
 
 	it("should navigate to provider step", async () => {

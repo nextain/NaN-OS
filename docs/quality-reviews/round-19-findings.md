@@ -426,3 +426,17 @@ node scripts/check-lint-boundary.mjs; echo EXIT=$?   # EXIT=0
 - 데이터 홈 허용 목록이 파일 단위라는 점, `--check`가 분류의 옳고 그름을 보증하지 않는다는 문장 자체, 동적 키·`eval`·두 겹 `Function.prototype`은 머리말 그대로 보증 밖입니다.
 
 되돌린 뒤 기준선 게이트 전부 `EXIT=0`, `git status --porcelain` 출력 없음.
+
+---
+
+## 다음 회차 표적 (2026-09-06, 실패 우선 루프 1회차에서 발견)
+
+`check-dead-ui-specs` 는 **소스에 그 표지가 있는가**를 묻고, **그 화면에 닿을 수 있는가**는 묻지 않는다.
+`14-skills-tab` 이 `[data-meta-tab="skills"]` 를 기다리다 죽는 동안 게이트는 초록이었다 — 그 속성이
+`NaiaMetaArea.tsx` 에 적혀 있었기 때문이다. 그런데 그 컴포넌트는 **어디에서도 렌더되지 않았다**
+(임포터가 자기 테스트뿐, 클래스는 CSS 에도 없음). 소스 존재 ≠ 도달 가능이다.
+
+같은 뿌리로 `99-launch-f4`(채팅 넷째 탭), `75-app-position`(`.side-app`), `90-app-system`
+(sample-note)이 함께 붉었다. 표지가 **렌더 트리에 닿는지**(앱 등록·라우팅·조건부 렌더)를 세는 쪽으로
+측정 지점을 옮기는 것이 다음 회차의 자리다.
+

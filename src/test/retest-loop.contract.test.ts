@@ -95,6 +95,23 @@ describe("실패 우선 — 무엇을 다시 돌리는가", () => {
 		expect(envMissing).toEqual(["c.spec.ts"]);
 	});
 
+	it("능력이 아직 안 이어져 뺀 것도 다시 돌리지 않는다", async () => {
+		const { retestTargets } = await load();
+		const { specs, envMissing } = retestTargets(
+			record({
+				capabilityBlockedBeforeRun: {
+					"c.spec.ts": [{ capability: "cron", tracker: "naia-agent#128" }],
+				},
+			}),
+		);
+
+		// 실패가 아니라 미배선이다. 다시 돌려도 같은 이유로 빠지므로 재시험
+		// 대상이 아니고, 그렇다고 목록에서 지우면 배선되는 날 아무도 되살리지
+		// 않는다 — 요구 환경이 없는 것과 같은 자리에 남긴다.
+		expect(specs).toEqual(["b.spec.ts", "d.spec.ts"]);
+		expect(envMissing).toEqual(["c.spec.ts"]);
+	});
+
 	it("passedSpecs 가 없던 옛 기록은 그 사실을 밝힌다", async () => {
 		const { retestTargets } = await load();
 		const legacyRecord = record();

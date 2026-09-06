@@ -1,5 +1,5 @@
 import { S } from "../helpers/selectors.js";
-import { safeRefresh } from "../helpers/settings.js";
+import { resetOnboarding, safeRefresh } from "../helpers/settings.js";
 
 const API_KEY =
 	process.env.CAFE_E2E_API_KEY || process.env.GEMINI_API_KEY || "";
@@ -11,13 +11,10 @@ if (!API_KEY) {
 
 describe("09 — Onboarding Wizard", () => {
 	it("should show onboarding when config is cleared", async () => {
-		await browser.execute(() => {
-			localStorage.removeItem("naia-config");
-		});
-		await safeRefresh();
-
-		const overlay = await $(S.onboardingOverlay);
-		await overlay.waitForDisplayed({ timeout: 30_000 });
+		// 캐시만 비우면 온보딩이 돌아오지 않는다 — 자동 실행의 씨앗이 새로
+		// 고침 직후 `onboardingComplete: true` 를 되돌리고, 워크스페이스
+		// `config.json` 에도 값이 남아 있다(#564). 헬퍼가 둘 다 비운다.
+		await resetOnboarding();
 	});
 
 	it("should show provider step with lab login area", async () => {

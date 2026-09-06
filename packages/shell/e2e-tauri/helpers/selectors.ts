@@ -86,7 +86,10 @@ export const S = {
 	labChargeBtn: ".lab-charge-btn",
 
 	// Skills tab (4th tab)
-	skillsTab: '[data-meta-tab="skills"]',
+	// 스킬 화면은 설정 안으로 옮겨졌다(#541 이후 `SettingsTab` 의 skills 탭이
+	// `<SkillsTab>` 을 그린다). 옛 메타 탭 표지(skills)를 그리던
+	// `NaiaMetaArea` 는 지금 어디에서도 렌더되지 않아, 그 셀렉터는 영영 뜨지 않는다.
+	skillsTab: '[data-settings-tab="skills"]',
 	skillsTabApp: ".skills-tab",
 	skillsSearch: ".skills-search",
 	skillsCard: ".skill-card",

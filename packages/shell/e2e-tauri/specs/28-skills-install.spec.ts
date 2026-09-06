@@ -1,5 +1,9 @@
 import { S } from "../helpers/selectors.js";
-import { clickBySelector } from "../helpers/settings.js";
+import {
+	clickBySelector,
+	ensureAppReady,
+	navigateToSettings,
+} from "../helpers/settings.js";
 
 /**
  * 28 — Skills Install E2E
@@ -12,6 +16,13 @@ import { clickBySelector } from "../helpers/settings.js";
  * Covers RPC: skills.status
  */
 describe("28 — skills install", () => {
+	before(async () => {
+		// 스킬 화면은 설정 안에 있다 — 설정을 먼저 열어야 그 탭 버튼이 존재한다
+		// (옛 메타 탭 표지를 그리던 NaiaMetaArea 는 지웠다 — 2026-09-06).
+		await ensureAppReady();
+		await navigateToSettings();
+	});
+
 	it("should navigate to Skills tab", async () => {
 		const skillsBtn = await $(S.skillsTab);
 		await skillsBtn.waitForDisplayed({ timeout: 10_000 });

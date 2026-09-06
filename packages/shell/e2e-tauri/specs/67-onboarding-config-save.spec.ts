@@ -1,5 +1,5 @@
 import { S } from "../helpers/selectors.js";
-import { safeRefresh } from "../helpers/settings.js";
+import { resetOnboarding, safeRefresh } from "../helpers/settings.js";
 
 const API_KEY =
 	process.env.CAFE_E2E_API_KEY || process.env.GEMINI_API_KEY || "";
@@ -20,13 +20,8 @@ describe("67 — Onboarding Config Save", () => {
 		"https://discord.com/api/webhooks/000000/fake-token";
 
 	it("should clear config to trigger onboarding", async () => {
-		await browser.execute(() => {
-			localStorage.removeItem("naia-config");
-		});
-		await safeRefresh();
-
-		const overlay = await $(S.onboardingOverlay);
-		await overlay.waitForDisplayed({ timeout: 30_000 });
+		// 캐시·워크스페이스 파일을 함께 비우고 마법사가 뜰 때까지 기다린다(#564).
+		await resetOnboarding();
 	});
 
 	it("should select provider and enter API key", async () => {

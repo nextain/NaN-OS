@@ -1,5 +1,10 @@
 import { S } from "../helpers/selectors.js";
-import { navigateToSettings, safeRefresh } from "../helpers/settings.js";
+import {
+	navigateToSettings,
+	persistConfigPatch,
+	resetOnboarding,
+	safeRefresh,
+} from "../helpers/settings.js";
 
 /** Locales with formal/informal distinction — must match FORMALITY_LOCALES in persona.ts */
 const FORMALITY_LOCALES = [
@@ -18,18 +23,17 @@ const FORMALITY_LOCALES = [
 /** Locales WITHOUT formal/informal distinction */
 const NON_FORMALITY_LOCALES = ["en", "zh", "bn"];
 
-/** Helper: set locale (and optionally speechStyle) in config and refresh */
+/**
+ * locale(그리고 필요하면 speechStyle)을 설정에 넣고 새로 고친다.
+ *
+ * 예전에는 `localStorage` 만 고쳤다. 그런데 설정의 정본은 워크스페이스의
+ * `config.json` 이고 부팅 병합에서 파일이 이기므로(FR-CONFIG-SOT.1), 새로 고침
+ * 직후 그 값이 사라졌다 — 이 파일의 단정 열다섯 개가 그 자리에서 죽었다(#564).
+ * 이제 제품의 되쓰기 경로를 그대로 타 파일까지 저장한 뒤 새로 고친다.
+ */
 async function setLocale(locale: string, speechStyle?: string) {
-	await browser.execute(
-		(loc: string, ss?: string) => {
-			const raw = localStorage.getItem("naia-config");
-			const config = raw ? JSON.parse(raw) : {};
-			config.locale = loc;
-			if (ss) config.speechStyle = ss;
-			localStorage.setItem("naia-config", JSON.stringify(config));
-		},
-		locale,
-		speechStyle,
+	await persistConfigPatch(
+		speechStyle ? { locale, speechStyle } : { locale },
 	);
 	await safeRefresh();
 	await browser.pause(2000);
@@ -128,16 +132,16 @@ describe("54b — Onboarding speechStyle step skip by locale", () => {
 	const API_KEY =
 		process.env.CAFE_E2E_API_KEY || process.env.GEMINI_API_KEY || "test-e2e";
 
-	/** Set up onboarding with given locale and refresh */
+	/**
+	 * 그 locale 로 온보딩을 처음 상태에서 시작한다.
+	 *
+	 * 캐시만 비우는 것으로는 마법사가 돌아오지 않는다 — 자동 실행의 씨앗이
+	 * 새로 고침 직후 `onboardingComplete: true` 를 되돌리고, 워크스페이스
+	 * `config.json` 에도 값이 남는다(#564). 헬퍼가 둘 다 비우고, 되돌린 뒤에도
+	 * 남길 값으로 locale 만 심는다.
+	 */
 	async function setupOnboarding(locale: string) {
-		await browser.execute((loc: string) => {
-			localStorage.removeItem("naia-config");
-			const config = {
-				locale: loc,
-			};
-			localStorage.setItem("naia-config", JSON.stringify(config));
-		}, locale);
-		await safeRefresh();
+		await resetOnboarding({ locale });
 		await browser.pause(2000);
 	}
 
@@ -221,12 +225,9 @@ describe("54b — Onboarding speechStyle step skip by locale", () => {
 
 	// Restore normal config after all onboarding tests
 	after(async () => {
-		await browser.execute(() => {
-			const raw = localStorage.getItem("naia-config");
-			const config = raw ? JSON.parse(raw) : {};
-			config.onboardingComplete = true;
-			localStorage.setItem("naia-config", JSON.stringify(config));
-		});
+		// 뒤따르는 스펙이 마법사에 막히지 않게 되돌린다. 파일까지 저장해야
+		// 새로 고침 뒤에도 남는다.
+		await persistConfigPatch({ onboardingComplete: true });
 		await safeRefresh();
 		await browser.pause(2000);
 	});

@@ -347,8 +347,22 @@ const {
 	groups,
 	envMissing: missingEnv,
 	harnessProvided,
+	capabilityBlocked,
 	skippedGroups,
 } = planGroups(mine, process.env);
+// 아직 이어지지 않은 능력 때문에 뺀 스펙. 통과가 아니고 결함도 아니다 —
+// 추적처와 함께 남겨 두어야 배선되는 날 누가 되살릴지 알 수 있다.
+if (capabilityBlocked.size) {
+	console.log(
+		`  ⚠ 능력이 아직 이어지지 않아 돌리지 않을 스펙 ${capabilityBlocked.size}개 — 이것은 통과가 아니다`,
+	);
+	for (const [spec, requires] of capabilityBlocked) {
+		const why = requires
+			.map((r) => `${r.capability} (${r.tracker})`)
+			.join(", ");
+		console.log(`      ${spec}: 능력 미배선 — ${why}`);
+	}
+}
 // 하네스가 채우는 변수는 부재가 아니다. 다만 조용히 넘어가면 다음 사람이
 // "이 변수는 왜 안 물어보지" 를 소스에서 되짚어야 하므로 수를 남긴다.
 const harnessProvidedNames = [
@@ -569,6 +583,8 @@ console.log(
 				// 환경에는 없지만 그 스펙의 wdio 설정이 자기 손으로 채워 주는 변수.
 				// 부재가 아니므로 위 칸에 없다 — 왜 없는지가 기록에서 보이게 남긴다.
 				harnessProvidedEnv: Object.fromEntries(harnessProvided),
+				// 아직 이어지지 않은 능력 때문에 넘기지 않은 스펙과 그 추적처.
+				capabilityBlockedBeforeRun: Object.fromEntries(capabilityBlocked),
 				// 스펙이 전부 환경 부재라 아예 띄우지 않은 wdio 설정.
 				envMissingGroups: skippedGroups,
 				missingPrerequisites: absentPrereqs,
@@ -966,6 +982,9 @@ const record = {
 	// 시딩). 부재가 아니므로 위 칸에 없다 — 밖에서 채우면 화면과 네이티브가
 	// 다른 워크스페이스를 보므로, 비어 있는 것이 정상인 값들이다.
 	harnessProvidedEnv: Object.fromEntries(harnessProvided),
+	// 아직 이어지지 않은 능력 때문에 넘기지 않은 스펙과 그 추적처.
+	// 실행에서 뺀 것이지 판정에서 뺀 것이 아니다.
+	capabilityBlockedBeforeRun: Object.fromEntries(capabilityBlocked),
 	// 스펙이 전부 환경 부재라 아예 띄우지 않은 wdio 설정. 전용 설정은
 	// onPrepare 에서 사이드카를 띄우므로, 돌릴 것이 없는데 부르면 준비 비용만
 	// 쓰고 죽는다 — 그 죽음이 다시 결함처럼 기록된다.

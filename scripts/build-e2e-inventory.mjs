@@ -474,16 +474,45 @@ for (const name of readdirSync(SPEC_DIR).filter((f) => f.endsWith(".spec.ts")).s
 	// 고정 포트의 로컬 서비스도 그 기계에 그것이 떠 있어야 돈다.
 	const usesDevice = DEVICE_TOOLS.test(source) || outbound.loopback.length > 0;
 	const keyed = envs.some((e) => KEY_ENV.test(e));
+	const requires = requiresCapabilities(source);
 	rows.push({
 		spec: name,
 		conf: confOwners.get(name) ?? [],
 		env: envs,
+		// 아직 이어지지 않은 능력. 스펙이 스스로 선언한다.
+		...(requires.length > 0 ? { requires } : {}),
 		tier: device || usesDevice
 			? "native_local"
 			: keyed || talks
 				? "credentialed_live"
 				: "deterministic_ci",
 	});
+}
+
+/**
+ * 스펙이 선언한 **아직 이어지지 않은 능력**.
+ *
+ * 형식: `// requires: capability:<이름> (<추적처>)`
+ *
+ * 왜 필요한가: 어떤 스펙은 제품이 틀려서가 아니라 그 능력이 아직 배선되지
+ * 않아서 실패한다(예: `skill_cron` — naia-agent#128). 지우면 배선되는 날 아무도
+ * 되살리지 않고, 그대로 두면 매 실행마다 사람이 제품 결함이 아닌 것을
+ * 들여다본다. 그래서 요구 환경과 같은 방식으로 다룬다 — 실행에서 빼되 기록과
+ * 화면에는 이유와 추적처를 남긴다.
+ *
+ * 주석에서 읽는 이유: 스펙 파일에 메타를 둘 다른 자리가 없고, 배선되는 날
+ * 지워야 할 것이 한 줄이어야 하기 때문이다.
+ */
+function requiresCapabilities(source) {
+	const out = [];
+	const pattern =
+		/^[ \t]*\/\/[ \t]*requires:[ \t]*capability:([A-Za-z0-9_-]+)[ \t]*\(([^)]+)\)/gm;
+	let match = pattern.exec(source);
+	while (match) {
+		out.push({ capability: match[1], tracker: match[2].trim() });
+		match = pattern.exec(source);
+	}
+	return out;
 }
 
 const summary = rows.reduce((acc, row) => {

@@ -743,4 +743,29 @@ describe("chat-service", () => {
 			).rejects.toThrow(/agent-core died/);
 		});
 	});
+
+	// 허용 버튼이 거부로 전달되던 결함의 고정. Rust 는 decision 이 정확히 "approve"
+	// 일 때만 Approve 를 넘기므로, 화면 값 "once"/"always" 가 그대로 나가면 도구가
+	// 전부 거부된다. 옛 경로가 무엇을 실어 보내는지 문자열로 잰다.
+	describe("sendApprovalResponse (옛 경로) 는 approve/reject 만 보낸다", () => {
+		for (const [ui, wire] of [
+			["once", "approve"],
+			["always", "approve"],
+			["reject", "reject"],
+		] as const) {
+			it(`${ui} → ${wire}`, async () => {
+				const { sendApprovalResponse } = await import("../chat-service");
+				await sendApprovalResponse("req-1", "call-1", ui);
+				const call = mockInvoke.mock.calls.find(
+					(c) => c[0] === "send_to_agent_command",
+				);
+				expect(call).toBeDefined();
+				const payload = JSON.parse(
+					(call?.[1] as { message: string }).message,
+				) as { type: string; decision: string };
+				expect(payload.type).toBe("approval_response");
+				expect(payload.decision).toBe(wire);
+			});
+		}
+	});
 });

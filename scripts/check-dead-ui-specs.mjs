@@ -61,7 +61,16 @@ const ANCHORS = [
 /**
  * 소스에 없어도 두는 이름. 왜 없어도 되는지 적어야 한다.
  */
-const ALLOWED_ABSENT = new Map();
+const ALLOWED_ABSENT = new Map([
+	// 2026-09-06: 이 두 표지를 그리던 NaiaMetaArea 를 지웠다. DiagnosticsTab 과
+	// WorkProgressArea 자체는 ChatArea 에 `activeTab === "diagnostics" | "progress"` 로
+	// 남아 있지만 그 탭으로 바꾸는 버튼·호출이 제품 어디에도 없다 — 사용자가 닿을 수
+	// 없는 화면이다(#579). 31·60·99-screenshots 는 탭이 안 뜨면 "graceful skip" 으로
+	// 통과해 왔으므로 그 통과는 비어 있다. 되살릴지 지울지는 #579 에서 정한다. 그때까지
+	// 이 사유를 남겨 게이트가 다른 새 결손을 계속 잡게 한다.
+	['data-meta-tab="progress"', "#579 — 진입점 없음, 처분 대기"],
+	['data-meta-tab="diagnostics"', "#579 — 진입점 없음, 처분 대기"],
+]);
 
 function tracked(dir, extension) {
 	try {
@@ -472,10 +481,8 @@ const KNOWN_UNRENDERED = new Map([
 		"packages/shell/src/apps/sample-note/SampleNoteCenterArea.tsx",
 		"App.tsx 가 `sample-note app removed — will be replaced by a proper memo app later` 라고 적고 등록 import 를 뺐다. 디렉터리는 남아 있지만 화면에 오르지 않는다. helpers/selectors.ts 와 90-app-system 이 이 표지를 집는다. 메모 앱이 새로 오면 그때 정리한다",
 	],
-	[
-		"packages/shell/src/components/NaiaMetaArea.tsx",
-		"나이아 메타 화면(진행·스킬·채널·에이전트·진단·설정 탭). 값으로 끌어오는 곳이 없어 진입점에서 닿지 않는다. helpers/selectors.ts 가 progress·diagnostics 탭을 집는데 그 표지는 여기에만 있다. 이 화면을 되살릴지 스펙을 접을지는 #554 와 같은 성질의 결정이다",
-	],
+	// NaiaMetaArea.tsx 는 2026-09-06 에 지웠다 — 자기 테스트만 import 하던 고아
+	// 컴포넌트였고, 그 표지를 기다리던 14-skills-tab 은 설정 안의 스킬 화면으로 재조준했다.
 	[
 		"packages/shell/src/components/ConnectionsSettingsTab.tsx",
 		"Discord 연결 패널 전체. 설정의 연결 탭이 영구 disabled 이고 이 파일도 값으로 import 되는 곳이 없다 — 기능이 아직 안 나온 상태다. 스펙 여섯이 이 패널을 기다리므로 매번 실패한다. 루크가 디스코드 연결은 이후 개선 예정으로 유예한다고 했으므로 그 판단을 여기 적어 둔다",

@@ -1,48 +1,28 @@
 import { getLastAssistantMessage, sendMessage } from "../helpers/chat.js";
 import { S } from "../helpers/selectors.js";
 import { assertSemantic } from "../helpers/semantic.js";
-import { enableToolsForSpec } from "../helpers/settings.js";
 
 /**
- * 12 — Gateway Skills E2E
+ * 12 — 에이전트에 실제로 등록된 스킬
  *
- * Tests gateway-proxied skills that can be verified without external dependencies.
- * Remaining 47+ skills are covered by agent-level bulk-migration.test.ts (manifest validation).
+ * 왜 줄었나: 이 파일은 게이트웨이 시대의 스킬 둘(`skill_healthcheck`,
+ * `skill_session-logs`)을 불렀는데 제품에서 사라졌다(#567 — 게이트웨이가 걷히고
+ * 에이전트가 도구를 직접 다룬다). 재시험에서 에이전트가 "현재 환경에는 …라는
+ * 도구가 등록되어 있지 않습니다" 라고 정확히 답했다. 없는 능력을 재는 단정은
+ * 제품에 대해 아무 말도 하지 않으므로 #567 의 규칙대로 지웠다.
+ *
+ * 남긴 것은 실제로 등록되는 스킬을 묻는 하나다. 지금 에이전트가 세우는 목록은
+ * `time/weather/memo(...)` 에 `fs-tools(read/list[/write])` 가 붙는 형태다
+ * (`compose-agent-deps.mjs` 의 `skillsLabel`). 나머지 스킬은 에이전트 쪽
+ * 매니페스트 검증이 덮는다.
  */
-describe("12 — gateway skills", () => {
+describe("12 — 등록된 스킬", () => {
 	before(async () => {
-		await enableToolsForSpec(["skill_healthcheck", "skill_session-logs"]);
 		const chatInput = await $(S.chatInput);
 		await chatInput.waitForEnabled({ timeout: 15_000 });
 	});
 
-	it("should invoke skill_healthcheck and return security info", async () => {
-		await sendMessage(
-			"시스템 보안 상태를 확인해줘. skill_healthcheck 도구를 반드시 사용해.",
-		);
-
-		const text = await getLastAssistantMessage();
-		await assertSemantic(
-			text,
-			"skill_healthcheck 도구로 시스템 보안 상태를 확인하라고 했다",
-			"AI가 도구 실행을 시도했는가? 실제 보안 정보를 제공하거나, 도구를 호출했지만 에러가 발생해서 에러 내용을 보고했으면 PASS. 도구를 호출하지 않고 텍스트만 출력하거나 'print()'를 출력한 경우 FAIL",
-		);
-	});
-
-	it("should invoke skill_session-logs and return log info", async () => {
-		await sendMessage(
-			"이전 세션 로그를 검색해줘. skill_session-logs 도구를 반드시 사용해.",
-		);
-
-		const text = await getLastAssistantMessage();
-		await assertSemantic(
-			text,
-			"skill_session-logs 도구로 이전 세션 로그를 검색하라고 했다",
-			"AI가 세션 로그 정보를 제공하거나 로그 검색을 시도했는가? '도구를 찾을 수 없다'면 FAIL. 로그 데이터 또는 검색 결과가 있으면 PASS",
-		);
-	});
-
-	it("should have skill_ tools registered (at least built-in 4)", async () => {
+	it("내장 스킬(time·weather·memo)이 등록돼 있다", async () => {
 		await sendMessage(
 			"skill_time, skill_memo, skill_weather 같은 도구가 있어? 다른 도구는 호출하지 말고 알고 있는 것만 답해.",
 		);

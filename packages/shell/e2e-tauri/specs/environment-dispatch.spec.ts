@@ -152,15 +152,17 @@ describe("환경 호출 전달 — Rust 명령 경계 (#502) [UC-ENV-LIVE-ACT FR
 		}, PROBES)) as Record<string, InvokeResult>;
 	});
 
-	// 뇌가 없을 때 등록이 "확인됨"으로 새지 않는가 (FR-ENV-ATTENTION.16).
+	// 등록 확인이 **실제 응답에서만** 오는가 (FR-ENV-ATTENTION.16, FR-ENV-LIVE.5).
 	//
-	// ⚠️ 성공 경로(gRPC 왕복 후 ok:true)는 이 픽스처에서 잴 수 없다. e2e 환경은 에이전트를
-	//    의도적으로 막는다(로그: agent-core not available: agent_lease_live_blocked).
-	//    그래서 여기서 재는 것은 **fail-closed 방향**이다 — 뇌가 없으면 확인이 오지 않고,
-	//    셸은 등록됐다고 주장하면 안 된다. 안전에 중요한 쪽은 이 방향이다.
-	//    성공 경로는 브라우저 하네스가 Tauri 를 모의해 덮는다(그쪽은 Rust 를 증명하지 못한다).
-	//    이 한계는 요구사항에 적혀 있다.
-	it("뇌가 없으면 등록 확인이 오지 않는다 — 큐잉을 전달로 읽지 않는다", async () => {
+	// 앞선 판은 "e2e 는 에이전트를 의도적으로 막는다" 를 전제로 삼았다. 그것은 더
+	// 이상 사실이 아니다 — 자격증명 등급이 격리 워크스페이스에 살아 있는 공급자를
+	// 심으면서(#547) 뇌는 언제나 살아 있다. 그래서 전제에 기대지 않는 방식으로
+	// 같은 것을 잰다: 에이전트가 답할 수 없는 요청을 하나 더 보내고, 거기에 확인이
+	// 오지 않는지 본다. 셸이 확인을 지어낸다면 그 요청에도 확인이 온다.
+	//
+	// ⚠️ 성공 경로의 **내용**(gRPC 왕복 결과가 옳은가)은 여전히 여기서 재지 않는다.
+	//    이 자리는 Rust 명령 경계와 확인의 출처를 재는 곳이다.
+	it("확인은 실제 응답에서만 온다 — 셸이 지어내지 않는다", async () => {
 		const probe = (await browser.execute(() => {
 			const w = window as unknown as {
 				__TAURI_INTERNALS__?: {
@@ -170,13 +172,21 @@ describe("환경 호출 전달 — Rust 명령 경계 (#502) [UC-ENV-LIVE-ACT FR
 			};
 			const internals = w.__TAURI_INTERNALS__;
 			if (!internals?.invoke || !internals.transformCallback) {
-				return Promise.resolve({ outcome: "TAURI_INVOKE_MISSING", oracleAlive: false });
+				return Promise.resolve({
+					outcome: "TAURI_INVOKE_MISSING",
+					bogusOutcome: "TAURI_INVOKE_MISSING",
+					oracleAlive: false,
+				});
 			}
 			const invoke = internals.invoke;
 			const realId = `native-ack-probe-${Date.now()}`;
 			const selfTestId = `${realId}-selftest`;
+			// 뇌가 살아 있어도 **답이 올 수 없는** 요청. 형식이 아는 것이 아니므로
+			// 에이전트는 무시한다. 여기에 확인이 오면 그것은 셸이 지어낸 것이다.
+			const bogusId = `${realId}-unroutable`;
 			let sawReal = false;
 			let sawSelfTest = false;
+			let sawBogus = false;
 
 			// ⚠️ 관측 통로를 먼저 연다. 이것이 없으면 "확인이 오지 않았다"는 주장을 **측정할
 			//    수단이 없어** 무조건 통과한다 — 실제로 그렇게 만들었다(2026-08-28 24차 지적).
@@ -188,6 +198,7 @@ describe("환경 호출 전달 — Rust 명령 경계 (#502) [UC-ENV-LIVE-ACT FR
 					if (msg?.type !== "app_skills_result") return;
 					if (msg.requestId === realId) sawReal = true;
 					if (msg.requestId === selfTestId) sawSelfTest = true;
+					if (msg.requestId === bogusId) sawBogus = true;
 				} catch {
 					// 다른 형태의 agent_response 는 이 탐침의 것이 아니다.
 				}
@@ -228,14 +239,30 @@ describe("환경 호출 전달 — Rust 명령 경계 (#502) [UC-ENV-LIVE-ACT FR
 							},
 						],
 					});
-					return invoke("send_to_agent_command", { message }).then(
-						() => "QUEUED",
-						(e: unknown) => `QUEUE_FAILED:${String(e)}`,
-					);
+					const unroutable = JSON.stringify({
+						type: "app_skills_unroutable_probe",
+						appId: "environment",
+						requestId: bogusId,
+					});
+					return invoke("send_to_agent_command", { message })
+						.then(
+							() => "QUEUED",
+							(e: unknown) => `QUEUE_FAILED:${String(e)}`,
+						)
+						.then((queued: string) =>
+							invoke("send_to_agent_command", { message: unroutable }).then(
+								() => queued,
+								(e: unknown) => {
+									diag.push(`bogusSend=err:${String(e)}`);
+									return queued;
+								},
+							),
+						);
 				})
 				.then((queued: string) =>
 					new Promise((r) => setTimeout(r, 4_000)).then(() => ({
 						outcome: sawReal ? "ACKED" : queued === "QUEUED" ? "NO_ACK" : queued,
+						bogusOutcome: sawBogus ? "ACKED" : "NO_ACK",
 						oracleAlive: sawSelfTest,
 						diag: diag.join(" | "),
 					})),
@@ -244,10 +271,16 @@ describe("환경 호출 전달 — Rust 명령 경계 (#502) [UC-ENV-LIVE-ACT FR
 				//    어느 단계에서 실패했는지 값으로 돌려준다.
 				.catch((e: unknown) => ({
 					outcome: `PROBE_FAILED:${String(e)}`,
+					bogusOutcome: "PROBE_FAILED",
 					oracleAlive: false,
 					diag: diag.join(" | "),
 				}));
-		})) as { outcome: string; oracleAlive: boolean; diag?: string };
+		})) as {
+			outcome: string;
+			bogusOutcome: string;
+			oracleAlive: boolean;
+			diag?: string;
+		};
 
 		// 관측 통로가 죽어 있으면 아래 단언은 공허하다. 먼저 그것부터 세운다.
 		// 실패 시 어디서 막혔는지 값에 실어 보낸다(이 러너의 expect 는 메시지 인자를 안 받는다).
@@ -255,35 +288,32 @@ describe("환경 호출 전달 — Rust 명령 경계 (#502) [UC-ENV-LIVE-ACT FR
 			"oracle-alive",
 		);
 
-		// 전제를 먼저 확인한다.
+		// 전제에 기대지 않는다.
 		//
-		// 이 단정은 "뇌가 없다" 를 전제로만 뜻이 있다. 그런데 그 전제를 재지
-		// 않으면, 전제가 서면 통과하고 안 서면 실패하는데 **둘 다 제품에
-		// 대해서는 아무 말도 하지 않는다.**
+		// 앞선 판은 "뇌가 없다" 를 전제로만 뜻이 있었다. 그런데 자격증명 등급이
+		// 격리 워크스페이스에 살아 있는 공급자를 심게 된 뒤(#547) 그 전제는
+		// **영구히** 깨졌다 — 에이전트가 언제나 살아 있으므로 이 단정은 매번
+		// "전제 불성립" 으로 죽는다. 그 상태로 두면 재는 것이 없는 스펙이 실패로
+		// 남아, 사람이 매 실행마다 제품 결함이 아닌 것을 들여다보게 된다.
 		//
-		// 실제로 그렇게 갈렸다. 리눅스에서는 통과했는데 이유가 픽스처의 의도된
-		// 차단이 아니라 잘못 남은 NAIA_AGENT_SCRIPT 였고, 기대하던
-		// QUEUE_FAILED 도 agent-core 재시작 억제 쿨다운에서 나왔다. 같은 시각
-		// 윈도우는 ACKED 를 돌려주어 "윈도우 전용 fail-open" 으로 읽혔다.
-		// 둘 다 제품 판정이 아니었다.
+		// 재려던 것은 "뇌가 없음" 자체가 아니라 **셸이 확인을 지어내지 않는가**
+		// 였다(FR-ENV-LIVE.5 — 거절과 오류를 성공으로 바꾸지 않는다). 그것은
+		// 뇌가 살아 있어도 잴 수 있다: 에이전트가 답할 수 없는 요청을 하나 더
+		// 보내고, 그것에 확인이 오지 않는지 본다. 셸이 확인을 지어낸다면 그
+		// 요청에도 확인이 온다.
 		//
-		// ACKED 는 뇌가 살아 있다는 뜻이다. 그때는 이 단정을 재는 것이
-		// 불가능하므로, 제품이 틀렸다고 말하지 말고 전제가 안 섰다고 말한다.
-		if (probe.outcome === "ACKED") {
-			throw new Error(
-				"전제 불성립: 이 픽스처에서 에이전트가 살아 있다(ACKED). " +
-					"이 단정은 뇌가 없을 때만 뜻이 있으므로 지금 측정이 불가능하다. " +
-					"셸 로그의 `agent-core not available` 을 확인하고, " +
-					"NAIA_AGENT_SCRIPT 가 짝 체크아웃을 가리키는지 보라. " +
-					"제품이 fail-open 이라고 읽지 마라 — 그 판정은 이 자리에서 나올 수 없다.",
-			);
-		}
+		// 그래서 아래 단정은 세 갈래 어디에서도 뜻이 있다.
+		//   뇌 있음   — 정상 요청은 ACKED, 답할 수 없는 요청은 NO_ACK
+		//   뇌 없음   — 정상 요청도 NO_ACK 이거나 QUEUE_FAILED
+		//   통로 죽음 — 위 `oracleAlive` 단정이 먼저 잡는다
 
-		// 뇌가 없으면 두 가지 중 하나로 끝난다. 둘 다 fail-closed 다:
-		//   QUEUE_FAILED — Tauri 명령 자체가 거절(실측: agent-core restart debounced)
-		//   NO_ACK       — 큐잉은 됐지만 확인이 오지 않음
-		// ACKED 가 나오면 뇌가 없는데 셸이 등록됐다고 믿는 상태다.
-		expect(probe.outcome).toMatch(/^(NO_ACK$|QUEUE_FAILED:)/);
+		// ① 답이 올 수 없는 요청에는 확인이 오지 않는다. 이것이 이 스펙의 핵심이고
+		//    뇌의 생사와 무관하다. 여기서 ACKED 가 나오면 셸이 지어낸 것이다.
+		expect(probe.bogusOutcome).toBe("NO_ACK");
+
+		// ② 정상 요청의 결과는 셋 중 하나여야 한다. `TAURI_INVOKE_MISSING` 이나
+		//    `PROBE_FAILED` 는 측정 자체가 안 된 것이므로 통과가 아니다.
+		expect(probe.outcome).toMatch(/^(ACKED$|NO_ACK$|QUEUE_FAILED:)/);
 		expect(probe.outcome).not.toBe("TAURI_INVOKE_MISSING");
 	});
 

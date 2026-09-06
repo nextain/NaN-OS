@@ -14,6 +14,7 @@ import { execPath } from "node:process";
 import { resolvePairedAgent } from "../scripts/agent-pairing.mjs";
 import { reclaimLeakedAgentChild as reclaimAgentChild } from "./agent-child-lease.js";
 import { reclaimSidecarForRuntimeDir } from "./bgm-sidecar-lease.mjs";
+import { applyHarnessXdg } from "./e2e-xdg.mjs";
 import { harnessHerdrSessionName } from "./herdr-session.mjs";
 import { startNotifyWebhookStub } from "./notify-webhook-stub.mjs";
 import {
@@ -89,6 +90,12 @@ const OWNS_RUNTIME_DIR = !process.env.NAIA_E2E_RUNTIME_DIR?.trim();
 if (OWNS_RUNTIME_DIR) process.env.NAIA_E2E_RUNTIME_DIR = E2E_RUNTIME_DIR;
 // 자리는 여기서 만들지 않는다. import 만으로 디렉터리가 생기면 계약 테스트가
 // 파일시스템을 더럽힌다. 실제로 만드는 것은 onPrepare 와 Rust 의 create_dir_all.
+
+// 앱 프로필(WebKit 의 localStorage·IndexedDB, audit.db)도 그 자리 아래로 옮긴다.
+// 안 옮기면 `~/.config/com.naia.shell.e2e/` 에 남아 스펙 사이·실행 사이에 상태가
+// 살아남는다 — 자세한 이유는 `e2e-xdg.mjs` 머리말. 값은 여기서 세우고 자리는
+// onPrepare 가 만든다.
+const HARNESS_XDG = applyHarnessXdg();
 
 // ── 자격증명 등급의 살아 있는 기본 공급자 (#547) ──────────────────────────────
 // 에이전트는 셸이 실어 보내는 provider 를 gRPC 경계에서 버리고, 워크스페이스의
@@ -629,6 +636,14 @@ export const config = {
 			});
 			mkdirSync(owned, { recursive: true });
 			console.log(`[e2e] isolated runtime dir: ${owned}`);
+		}
+		if (HARNESS_XDG) {
+			// 실행 자리를 비운 **다음**에 만든다. 순서가 뒤집히면 방금 만든 자리를
+			// 우리가 지운다. 앱이 기동하기 전에 있어야 WebKit 이 프로필을 거기 만든다.
+			for (const dir of Object.values(HARNESS_XDG)) {
+				mkdirSync(dir, { recursive: true });
+			}
+			console.log(`[e2e] isolated app profile: ${HARNESS_XDG.XDG_CONFIG_HOME}`);
 		}
 		if (SEEDS_CREDENTIALED_ADK) {
 			// 실행 자리를 비운 **다음**에 심는다. 순서가 뒤집히면 방금 심은 것을

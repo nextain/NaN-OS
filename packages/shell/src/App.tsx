@@ -78,6 +78,14 @@ const NAIA_WIDTH_DEFAULT = 320;
 const NAIA_WIDTH_MIN = 120;
 const NAIA_WIDTH_MAX = 1200;
 
+/**
+ * 자동 실행에서 **이번 부팅은 온보딩을 보여야 한다** 는 표식.
+ *
+ * 값이 `"1"` 이면 아래 e2e 씨앗을 건너뛴다. `e2e-tauri/helpers/settings.ts` 의
+ * `resetOnboarding()` 이 세우고, 오버레이를 확인한 뒤 지운다.
+ */
+export const E2E_FORCE_ONBOARDING_KEY = "naia-e2e-force-onboarding";
+
 export function App() {
 	const configHydrationStartedRef = useRef(false);
 	if (!configHydrationStartedRef.current) {
@@ -103,7 +111,23 @@ export function App() {
 				error: String(error),
 			});
 		});
-	if (e2eAdkPath && !isOnboardingComplete()) {
+	// 온보딩을 재는 스펙은 이 자리를 한 번 꺼야 한다.
+	//
+	// 위 대목은 자동 실행이 매 부팅마다 마법사를 건너뛰게 하려고 `naia-config` 를
+	// 통째로 다시 쓴다. 그래서 스펙이 `localStorage.removeItem("naia-config")` 로
+	// 온보딩을 되살리려 해도, 새로 고침 직후 이 코드가 `onboardingComplete: true`
+	// 를 되돌려 놓아 오버레이가 영영 뜨지 않았다(#564 — 09·13·67·54b 가 같은
+	// 자리에서 죽었다). 하이드레이션이 범인이라고 적혀 있었지만, `mergeBootConfig`
+	// 는 이미 파일의 `onboardingComplete` 를 지우고 로컬 값을 쓴다 — 실제로
+	// 되돌리는 것은 이 씨앗이다.
+	//
+	// 표식은 자동 실행 안에서만 뜻이 있다(`e2eAdkPath` 가 있을 때만 본다).
+	// 지우는 것은 헬퍼의 몫이다 — 여기서 지우면 이 블록이 렌더마다 돌므로
+	// 마법사 중간에 표식이 사라져 다시 건너뛰게 된다.
+	const e2eForceOnboarding =
+		typeof localStorage !== "undefined" &&
+		localStorage.getItem(E2E_FORCE_ONBOARDING_KEY) === "1";
+	if (e2eAdkPath && !e2eForceOnboarding && !isOnboardingComplete()) {
 		localStorage.setItem(
 			"naia-config",
 			JSON.stringify({

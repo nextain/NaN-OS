@@ -214,12 +214,18 @@ export async function sendApprovalResponse(
 			await coreChat().sendApprovalResponse(requestId, toolCallId, mapped);
 			return;
 		}
+		// 옛 경로도 `mapped` 를 보낸다. 셸(Rust)은 `decision == "approve"` 일 때만
+		// 에이전트에 Approve 를 넘기는데, 여기가 화면 값("once"/"always")을 그대로
+		// 실어 보내 "한 번 허용"·"항상 허용" 이 전부 Reject 로 전달됐다(2026-06-13
+		// aab90d6d 이후). 사용자에게는 허용을 눌러도 도구가 "거부되었습니다" 로
+		// 보였고, 기본 모델의 도구 호출이 먼저 깨져 있어(naia-anyllm#73) 석 달간
+		// 드러나지 않았다. "always" 는 addAllowedTool 이 셸 쪽에서 기억한다.
 		await safeSendToAgent(
 			{
 				type: "approval_response",
 				requestId,
 				toolCallId,
-				decision: uiDecision,
+				decision: mapped,
 			},
 			"sendApprovalResponse",
 		);

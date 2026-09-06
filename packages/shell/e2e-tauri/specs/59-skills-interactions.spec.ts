@@ -1,5 +1,9 @@
 import { S } from "../helpers/selectors.js";
-import { clickBySelector, ensureAppReady } from "../helpers/settings.js";
+import {
+	clickBySelector,
+	ensureAppReady,
+	navigateToSettings,
+} from "../helpers/settings.js";
 
 /**
  * 59 — Skills Tab Interactions
@@ -13,6 +17,9 @@ import { clickBySelector, ensureAppReady } from "../helpers/settings.js";
 describe("59 — skills interactions", () => {
 	before(async () => {
 		await ensureAppReady();
+		// 스킬 화면은 설정 안에 있다 — 설정을 먼저 열어야 그 탭 버튼이 존재한다
+		// (옛 메타 탭 표지를 그리던 NaiaMetaArea 는 지웠다 — 2026-09-06).
+		await navigateToSettings();
 		await clickBySelector(S.skillsTab);
 		const skillsApp = await $(S.skillsTabApp);
 		await skillsApp.waitForDisplayed({ timeout: 10_000 });

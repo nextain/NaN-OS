@@ -213,6 +213,92 @@ describe("하네스는 사람의 herdr 세션에 붙지 않는다", () => {
 	});
 });
 
+describe("앱 프로필도 실행 자리 아래로 간다", () => {
+	// e2e 바이너리의 identifier 는 `com.naia.shell.e2e` 라, 리눅스의 XDG 기본값으로는
+	// 설정·데이터가 `~/.config/com.naia.shell.e2e/` 에 **사람 홈 아래 고정**이었다.
+	// 실행 자리와 무관하므로 WebKit 의 localStorage·IndexedDB 가 스펙 사이는 물론
+	// 실행 사이에도 살아남고, 앞 스펙이 남긴 화면 상태가 다음 스펙의 "기본 상태"
+	// 단정을 깬다. 하네스 어디에도 스펙 사이 초기화가 없다는 것도 확인했다.
+	let xdg: {
+		applyHarnessXdg: (
+			env?: Record<string, string | undefined>,
+			platform?: string,
+		) => Record<string, string> | null;
+		xdgDirsFor: (runtimeDir: string) => Record<string, string>;
+	};
+
+	beforeAll(async () => {
+		xdg = (await import(
+			fileURLToPath(new URL("../../packages/shell/e2e-tauri/e2e-xdg.mjs", import.meta.url))
+		)) as typeof xdg;
+	});
+
+	it("실행 자리가 있으면 XDG 셋을 그 아래로 세운다", () => {
+		const env: Record<string, string | undefined> = {
+			NAIA_E2E_RUNTIME_DIR: "/tmp/naia-shell-e2e-4448",
+		};
+		const dirs = xdg.applyHarnessXdg(env, "linux");
+		expect(dirs).toEqual({
+			XDG_CONFIG_HOME: "/tmp/naia-shell-e2e-4448/xdg/config",
+			XDG_DATA_HOME: "/tmp/naia-shell-e2e-4448/xdg/data",
+			XDG_CACHE_HOME: "/tmp/naia-shell-e2e-4448/xdg/cache",
+		});
+		expect(env.XDG_CONFIG_HOME).toBe("/tmp/naia-shell-e2e-4448/xdg/config");
+	});
+
+	it("실행 자리가 없으면(제품 실행) 아무 XDG 도 건드리지 않는다", () => {
+		// 이것이 무너지면 사람이 쓰는 앱의 설정 자리가 옮겨진다. 하네스 밖에서는
+		// 한 글자도 바뀌면 안 된다.
+		const env: Record<string, string | undefined> = {
+			XDG_CONFIG_HOME: "/home/luke/.config",
+		};
+		expect(xdg.applyHarnessXdg(env, "linux")).toBeNull();
+		expect(env.XDG_CONFIG_HOME).toBe("/home/luke/.config");
+		expect(env.XDG_DATA_HOME).toBeUndefined();
+		expect(env.XDG_CACHE_HOME).toBeUndefined();
+	});
+
+	it("윈도우에서는 XDG 를 쓰지 않는다", () => {
+		// WebView2 는 `WEBVIEW2_USER_DATA_FOLDER` 로 자리를 받는다(전용 설정 둘이
+		// 그렇게 한다). XDG 는 리눅스 규약이다.
+		const env: Record<string, string | undefined> = {
+			NAIA_E2E_RUNTIME_DIR: "C:\\tmp\\naia-shell-e2e-4448",
+		};
+		expect(xdg.applyHarnessXdg(env, "win32")).toBeNull();
+		expect(env.XDG_CONFIG_HOME).toBeUndefined();
+	});
+
+	it("데이터 홈(`~/.naia`)은 XDG 를 옮겨도 그대로다", () => {
+		// `data_home.rs` 는 `$HOME` 에서 홈을 구한다(`dirs::home_dir`). XDG 를 옮기는
+		// 것과 무관하다 — 그 경계는 이 변경이 건드리지 않는다.
+		const env: Record<string, string | undefined> = {
+			HOME: "/home/luke",
+			NAIA_E2E_RUNTIME_DIR: "/tmp/naia-shell-e2e-4448",
+		};
+		const before = resolve(env.HOME as string, ".naia");
+		xdg.applyHarnessXdg(env, "linux");
+		expect(env.HOME).toBe("/home/luke");
+		expect(resolve(env.HOME as string, ".naia")).toBe(before);
+		expect(before.startsWith("/tmp/")).toBe(false);
+	});
+
+	it("기본 설정이 그 배선을 지니고 있다", async () => {
+		const conf = readFileSync(
+			fileURLToPath(
+				new URL("../../packages/shell/e2e-tauri/wdio.conf.ts", import.meta.url),
+			),
+			"utf8",
+		);
+		expect(conf).toContain('from "./e2e-xdg.mjs"');
+		expect(conf).toContain("applyHarnessXdg()");
+		// 자리는 실행 자리를 비운 **뒤**에 만들어야 한다 — 순서가 뒤집히면 방금 만든
+		// 자리를 rmSync 가 지운다.
+		expect(conf.indexOf("isolated runtime dir")).toBeLessThan(
+			conf.indexOf("isolated app profile"),
+		);
+	});
+});
+
 describe("기본 e2e 설정이 운영 앱의 데이터 홈과 실행 자리를 나눈다", () => {
 	let runtimeDir: string | undefined;
 

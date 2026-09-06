@@ -1,5 +1,10 @@
 import { S } from "../helpers/selectors.js";
-import { clickBySelector, setNativeValue } from "../helpers/settings.js";
+import {
+	clickBySelector,
+	ensureAppReady,
+	navigateToSettings,
+	setNativeValue,
+} from "../helpers/settings.js";
 
 /**
  * 14 — Skills Tab E2E
@@ -12,6 +17,13 @@ import { clickBySelector, setNativeValue } from "../helpers/settings.js";
  * - Built-in skills cannot be toggled
  */
 describe("14 — skills tab", () => {
+	before(async () => {
+		// 스킬 화면은 설정 안에 있다 — 옛 메타 탭(`NaiaMetaArea`)은 지금 제품 어디에도
+		// 렌더되지 않는다. 설정을 먼저 열어야 그 탭 버튼이 존재한다.
+		await ensureAppReady();
+		await navigateToSettings();
+	});
+
 	it("should navigate to Skills tab and show skills list", async () => {
 		const skillsTabBtn = await $(S.skillsTab);
 		await skillsTabBtn.waitForDisplayed({ timeout: 10_000 });

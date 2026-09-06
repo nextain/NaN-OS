@@ -508,3 +508,75 @@ function assignsProcessEnv(tree: ts.SourceFile, key: string): boolean {
 	visit(tree);
 	return found;
 }
+
+// ── 아직 이어지지 않은 능력 (naia-agent#128 류) ─────────────────────────────
+//
+// 왜 이 묶음이 있는가: 어떤 스펙은 제품이 틀려서가 아니라 그 능력이 아직
+// 배선되지 않아 실패한다. `20-cron-basic` 이 그랬다 — 에이전트가 "현재 사용
+// 가능한 도구 목록에 skill_cron 이 포함되어 있지 않습니다" 로 답한다. cron
+// 어댑터는 naia-agent#128 이 들고 있다.
+//
+// 지우면 배선되는 날 아무도 되살리지 않는다. 그대로 두면 매 실행마다 사람이
+// 제품 결함이 아닌 것을 들여다본다. 그래서 요구 환경과 같은 방식으로 다룬다 —
+// 스펙이 스스로 선언하고(`// requires: capability:cron (naia-agent#128)`),
+// 러너가 실행에서 빼되 기록과 화면에 이유와 추적처를 남긴다.
+describe("능력이 아직 이어지지 않은 스펙", () => {
+	const blocked: SpecEntry & { requires: { capability: string; tracker: string }[] } = {
+		spec: "20-cron-basic.spec.ts",
+		conf: [],
+		env: [],
+		tier: "credentialed_live",
+		requires: [{ capability: "cron", tracker: "naia-agent#128" }],
+	};
+
+	it("실행에서 빼되 이유와 추적처를 남긴다", async () => {
+		const { partitionByEnv } = await load();
+		const { runnable, capabilityBlocked } = partitionByEnv([blocked], {});
+
+		// 돌리면 매번 같은 자리에서 실패한다 — 능력이 없으니까.
+		expect(runnable).toEqual([]);
+		// 사라지면 배선되는 날 누가 되살릴지 알 수 없다.
+		expect(capabilityBlocked.get("20-cron-basic.spec.ts")).toEqual([
+			{ capability: "cron", tracker: "naia-agent#128" },
+		]);
+	});
+
+	it("선언이 없으면 예전과 똑같이 판단한다", async () => {
+		const { partitionByEnv } = await load();
+		const plain: SpecEntry = {
+			spec: "plain.spec.ts",
+			conf: [],
+			env: [],
+			tier: "deterministic_ci",
+		};
+
+		// 반대 방향을 못 박지 않으면 "언제나 뺀다" 도 통과한다. 그러면 아무것도
+		// 돌지 않으면서 초록이 된다.
+		const { runnable, capabilityBlocked } = partitionByEnv([plain], {});
+		expect(runnable.map((s) => s.spec)).toEqual(["plain.spec.ts"]);
+		expect(capabilityBlocked.size).toBe(0);
+	});
+
+	it("wdio 에 넘기는 묶음에도 들어가지 않는다", async () => {
+		const { planGroups } = await load();
+		const { groups, capabilityBlocked } = planGroups([blocked], {});
+
+		// 넘겨 버리면 스펙이 그 안에서 죽어 결함처럼 기록된다 — 요구 환경이
+		// 없는 스펙을 그대로 넘겼던 옛 사고와 같은 모양이다.
+		expect([...groups.values()].flat()).toEqual([]);
+		expect(capabilityBlocked.size).toBe(1);
+	});
+
+	it("인벤토리가 그 선언을 실제로 싣고 있다", () => {
+		// 규칙만 있고 인벤토리가 안 실으면 러너는 아무것도 보지 못한다.
+		// `docs/e2e-inventory.json` 은 `build-e2e-inventory.mjs` 가 스펙 주석에서
+		// 읽어 채운다.
+		const cron = INVENTORY.specs.find(
+			(s) => s.spec === "20-cron-basic.spec.ts",
+		) as (SpecEntry & { requires?: { capability: string; tracker: string }[] }) | undefined;
+		expect(cron, "20-cron-basic 이 인벤토리에 없다").toBeTruthy();
+		expect(cron?.requires).toEqual([
+			{ capability: "cron", tracker: "naia-agent#128" },
+		]);
+	});
+});

@@ -34,11 +34,14 @@ import { basename } from "node:path";
 export function retestTargets(record) {
 	const executed = new Set(record?.executed ?? []);
 	const planned = record?.planned ?? record?.assigned ?? [];
-	const envMissing = new Set(
-		Object.keys(
+	// 다시 돌려도 같은 이유로 빠지는 것들. 실패가 아니므로 재시험 대상이 아니다.
+	const envMissing = new Set([
+		...Object.keys(
 			record?.envMissingBeforeRun ?? record?.skippedForMissingEnv ?? {},
 		),
-	);
+		// 능력이 아직 이어지지 않아 뺀 것(예: skill_cron — naia-agent#128).
+		...Object.keys(record?.capabilityBlockedBeforeRun ?? {}),
+	]);
 	const legacy = !Array.isArray(record?.passedSpecs);
 	const passed = new Set(record?.passedSpecs ?? []);
 

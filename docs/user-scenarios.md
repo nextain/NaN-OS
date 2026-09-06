@@ -88,7 +88,7 @@ UC15 제품 수용 확장(#84):
 | S27 | browser 앱 | UC6 | EnvironmentPort.app-surface | 측정 |
 | S28 | app 설치(app) | UC9 | skill·EnvironmentPort.app-surface | 측정 |
 | S29 | generic-installed 앱 | UC9 | EnvironmentPort.app-surface | 측정 |
-| S30 | sample-note 앱 | UC9 | EnvironmentPort.app-surface | ⚠️ App.tsx 에서 제거/미배선(완전성R12) — rejected 후보 |
+| S30 | sample-note 앱 | UC9 | EnvironmentPort.app-surface | ❌ 제품에서 내림 — `App.tsx` 의 등록 import 가 주석 처리돼 앱바에 뜨지 않는다. 그 UI 를 재던 90번 앱 시스템 스펙도 2026-09-06 에 지웠다(#567 "능력이 죽으면 삭제"). 메모 앱이 들어오면 이 줄과 스펙을 함께 되살린다 |
 | S31 | youtube-bgm | UC8 | EnvironmentPort.space | 측정(YouTube 변동) |
 | S32 | 배경화면/scene | UC8 | EnvironmentPort.space | 측정 |
 | S33 | workspace(fs·editor·filetree) | UC7 | EnvironmentPort.host-system | 측정 |

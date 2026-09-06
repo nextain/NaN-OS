@@ -451,3 +451,122 @@ export async function openVrmAvatarPicker(): Promise<void> {
 	});
 	await browser.pause(500);
 }
+
+// ── 온보딩을 처음 상태로 되돌리기 (#564) ──────────────────────────────────────
+//
+// 왜 헬퍼가 필요한가: 스펙 넷(09·13·67·54b)이 저마다 같은 세 줄을 적고 있었다.
+//
+//   localStorage.removeItem("naia-config");
+//   await safeRefresh();
+//   await $(".onboarding-overlay").waitForDisplayed();
+//
+// 그런데 그 세 줄로는 온보딩이 돌아오지 않는다. 자동 실행에서는 `App.tsx` 가
+// 매 부팅마다 `naia-config` 를 다시 써서 마법사를 건너뛰기 때문이다. 새로 고침
+// 직후 `onboardingComplete: true` 가 되돌아와 오버레이가 영영 뜨지 않았고, 네
+// 스펙이 30초를 기다리다 함께 죽었다.
+//
+// 두 번째 자리는 워크스페이스 파일이다. `config.json` 이 설정의 정본이므로,
+// 브라우저 캐시만 비우면 남은 값이 다시 실려 온다. 그래서 파일도 함께 비운다.
+
+/** `App.tsx` 와 같은 이름을 쓴다 — 어긋나면 표식이 아무 일도 하지 않는다. */
+const FORCE_ONBOARDING_KEY = "naia-e2e-force-onboarding";
+
+/**
+ * 페이지 안에서 Tauri 명령을 부른다.
+ *
+ * `__TAURI_INTERNALS__` 는 `withGlobalTauri` 설정과 무관하게 늘 있다. 프런트의
+ * `invoke()` 도 결국 이것을 감싼다 — eval 되는 코드에서 import 를 피하려고 직접
+ * 쓴다(24-adk-setup-flow 가 같은 방식이다).
+ */
+async function tauriInvokeInPage<T>(
+	command: string,
+	args: Record<string, unknown> = {},
+): Promise<T> {
+	return (await browser.execute(
+		async (cmd: string, a: Record<string, unknown>) => {
+			const w = window as unknown as {
+				__TAURI_INTERNALS__?: {
+					invoke: (c: string, a: unknown) => Promise<unknown>;
+				};
+				__TAURI__?: {
+					core?: { invoke: (c: string, a: unknown) => Promise<unknown> };
+				};
+			};
+			const invoke = w.__TAURI_INTERNALS__?.invoke ?? w.__TAURI__?.core?.invoke;
+			if (!invoke) throw new Error("Tauri invoke not available");
+			return invoke(cmd, a);
+		},
+		command,
+		args,
+	)) as T;
+}
+
+/**
+ * 온보딩을 처음 상태로 되돌리고, 마법사가 실제로 뜰 때까지 기다린다.
+ *
+ * `seed` 는 되돌린 뒤에도 남길 값이다(예: `{ locale: "ko" }`). 파일이 둘 다
+ * 없으면 부팅 병합은 `null` 을 내고 호출자가 기존 캐시를 유지하므로, 여기 적은
+ * 값은 새로 고침 뒤에도 살아남는다.
+ *
+ * 표식을 지우는 것은 오버레이를 본 **뒤**다. `App.tsx` 의 씨앗 블록은 렌더마다
+ * 도는 자리라, 부팅 한 번에 지워 버리면 마법사 중간에 다시 건너뛰게 된다.
+ */
+export async function resetOnboarding(
+	seed: Record<string, unknown> = {},
+): Promise<void> {
+	// 1) 워크스페이스 파일을 비운다 — 설정의 정본이 그쪽이다.
+	const adkPath = await browser.execute(() =>
+		localStorage.getItem("naia-adk-path"),
+	);
+	if (adkPath) {
+		await tauriInvokeInPage("reset_naia_config_files", { adkPath });
+	}
+
+	// 2) 브라우저 캐시를 비우고, 이번 부팅은 마법사를 보라는 표식을 세운다.
+	await browser.execute(
+		(key: string, s: Record<string, unknown>) => {
+			localStorage.setItem(key, "1");
+			if (Object.keys(s).length === 0) localStorage.removeItem("naia-config");
+			else localStorage.setItem("naia-config", JSON.stringify(s));
+		},
+		FORCE_ONBOARDING_KEY,
+		seed,
+	);
+
+	await safeRefresh();
+
+	const overlay = await $(S.onboardingOverlay);
+	await overlay.waitForDisplayed({ timeout: 30_000 });
+
+	// 3) 표식은 여기서 지운다. 남겨 두면 뒤따르는 다른 스펙 파일까지 마법사가
+	//    뜨는 상태가 되어, 이 헬퍼가 고치려던 것과 반대 방향으로 어긋난다.
+	await browser.execute((key: string) => {
+		localStorage.removeItem(key);
+	}, FORCE_ONBOARDING_KEY);
+}
+
+/**
+ * 설정 값을 **파일까지** 저장한다.
+ *
+ * `localStorage` 만 고치고 새로 고치면 값이 사라진다. `config.json` 이 정본이라
+ * 부팅 병합에서 파일이 이기기 때문이다(FR-CONFIG-SOT.1). 54b 의 locale·
+ * speechStyle 단정 열다섯 개가 그 자리에서 죽었다 — 스펙은 캐시에 썼고 화면은
+ * 파일에서 다시 읽었다.
+ *
+ * 제품의 되쓰기 경로를 그대로 탄다. `saveConfig` 가 내는 것과 같은 사건을 내고,
+ * `App.tsx` 의 디바운스(800ms)가 파일에 밀어 넣을 때까지 기다린다.
+ */
+export async function persistConfigPatch(
+	patch: Record<string, unknown>,
+): Promise<void> {
+	await browser.execute((p: Record<string, unknown>) => {
+		const raw = localStorage.getItem("naia-config");
+		const config = raw ? JSON.parse(raw) : {};
+		Object.assign(config, p);
+		localStorage.setItem("naia-config", JSON.stringify(config));
+		window.dispatchEvent(new CustomEvent("naia-config-changed"));
+	}, patch);
+	// 디바운스 800ms + 파일 쓰기 여유. 이 기다림을 빼면 새로 고침이 먼저 일어나
+	// 값이 사라진다.
+	await browser.pause(1500);
+}
