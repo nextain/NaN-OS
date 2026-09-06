@@ -256,6 +256,7 @@ export function App() {
 	const setBackgroundMediaType = useAvatarStore(
 		(s) => s.setBackgroundMediaType,
 	);
+	const setAvatarModelPath = useAvatarStore((s) => s.setModelPath);
 	const [avatarProvider, setAvatarProvider] = useState<
 		"vrm" | "naia-video-avatar"
 	>("vrm");
@@ -275,6 +276,10 @@ export function App() {
 			if (!active || currentRevision !== revision) return;
 			setAvatarProvider(effectiveAvatarProviderFromConfig(cfg, detectedVramGb));
 			setNvaModel(cfg?.nvaModel ?? "");
+			const nextAvatarModelPath = cfg?.vrmModel ?? "";
+			if (useAvatarStore.getState().modelPath !== nextAvatarModelPath) {
+				setAvatarModelPath(nextAvatarModelPath);
+			}
 		}
 		void syncAvatarConfig();
 		window.addEventListener("naia-config-changed", syncAvatarConfig);
@@ -282,7 +287,7 @@ export function App() {
 			active = false;
 			window.removeEventListener("naia-config-changed", syncAvatarConfig);
 		};
-	}, [detectedVramGb]);
+	}, [detectedVramGb, setAvatarModelPath]);
 
 	// #447-2: onboarding drives the live avatar canvas via a preview event. A
 	// fresh install has no saved config during onboarding, so we apply the choice
