@@ -860,7 +860,12 @@ async function writeNaiaConfigNow(
 	// Without this, any ordinary UI-config sync overwrites a valid member manifest
 	// with gate.naiaAccount=false and tears down the selected local voice/avatar.
 	let manifestConfig = config as unknown as AppConfig;
-	if (!manifestConfig.naiaKey) {
+	// The write path is captured when the transaction is queued. If the user
+	// switches ADKs while an awaited write is in flight, never read the newly
+	// selected ADK's credential into the old workspace's manifest. Login/setup
+	// passes its freshly persisted key in `config`, so it remains safe even
+	// while hydration is still pending.
+	if (!manifestConfig.naiaKey && adkPath === getAdkPath()) {
 		try {
 			const naiaKey = await getSecretKey("naiaKey");
 			if (naiaKey) manifestConfig = { ...manifestConfig, naiaKey };
@@ -882,20 +887,36 @@ async function writeNaiaConfigNow(
 	await invoke("reload_agent_settings");
 }
 
-/** Keep config, UI config, and the derived slots manifest as one ordered
- * transaction. In particular, logout must remain after any pending restore. */
-export function writeNaiaConfig(
+/**
+ * Persist a complete config to one captured ADK path.
+ *
+ * Setup uses this while App hydration is pending: the ordinary writer remains
+ * gated so an incomplete localStorage snapshot cannot win the startup race,
+ * while the explicit selected-workspace transaction can finish before setup
+ * calls onComplete(). Both the path and deep config snapshot are captured
+ * before entering the shared write tail.
+ */
+export function writeNaiaConfigAtPath(
 	config: Record<string, unknown>,
+	adkPath: string | null,
 ): Promise<void> {
-	if (configHydrationPending) return Promise.resolve();
 	const configSnapshot = snapshotConfig(config);
-	const adkPath = getAdkPath();
+	const pathSnapshot = adkPath ? adkPath.replace(/[/\\]+$/, "") : null;
 	const operation = naiaConfigWriteTail.then(() =>
-		writeNaiaConfigNow(configSnapshot, adkPath),
+		writeNaiaConfigNow(configSnapshot, pathSnapshot),
 	);
 	naiaConfigWriteTail = operation.then(
 		() => undefined,
 		() => undefined,
 	);
 	return operation;
+}
+
+/** Keep config, UI config, and the derived slots manifest as one ordered
+ * transaction. In particular, logout must remain after any pending restore. */
+export function writeNaiaConfig(
+	config: Record<string, unknown>,
+): Promise<void> {
+	if (configHydrationPending) return Promise.resolve();
+	return writeNaiaConfigAtPath(config, getAdkPath());
 }

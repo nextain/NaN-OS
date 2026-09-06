@@ -49,6 +49,7 @@ import {
 	toAssetUrl,
 	writeAgentKeyStrict,
 	writeNaiaConfig,
+	writeNaiaConfigAtPath,
 	writeNaiaUiConfig,
 } from "../adk-store";
 
@@ -566,6 +567,60 @@ describe("writeNaiaConfig", () => {
 		expect(
 			mockInvoke.mock.calls.some(([command]) => command === "write_naia_config"),
 		).toBe(false);
+	});
+
+	it("allows setup to persist the selected ADK while ordinary hydration writes stay gated", async () => {
+		setAdkPath(WIN_ADK);
+		beginNaiaConfigHydration();
+
+		const selectedWrite = writeNaiaConfigAtPath(
+			{ provider: "openai", model: "selected-adk-model" },
+			WIN_ADK,
+		);
+		const blockedWrite = writeNaiaConfig({
+			provider: "openai",
+			model: "stale-local-cache",
+		});
+
+		await selectedWrite;
+		await blockedWrite;
+		completeNaiaConfigHydration();
+
+		const configWrites = mockInvoke.mock.calls.filter(
+			([command]) => command === "write_naia_config",
+		);
+		expect(configWrites).toHaveLength(1);
+		expect(configWrites[0]?.[1]).toEqual(
+			expect.objectContaining({ adkPath: WIN_ADK }),
+		);
+		expect(
+			JSON.parse((configWrites[0]?.[1] as { json: string }).json).model,
+		).toBe("selected-adk-model");
+	});
+
+	it("does not borrow the newly selected ADK credential for a queued old-path manifest", async () => {
+		setAdkPath(WIN_ADK);
+		secureState.naiaKey = "credential-from-new-selection";
+		mockInvoke.mockImplementation(async (command: string) => {
+			if (command === "write_naia_config") {
+				// Simulate a workspace switch while the old path is awaiting native I/O.
+				localStorage.setItem("naia-adk-path", UNIX_ADK);
+			}
+			if (command === "read_naia_ui_config") return "";
+			if (command === "detect_gpu_vram") return null;
+			return undefined;
+		});
+
+		await writeNaiaConfigAtPath(
+			{ provider: "nextain", model: "old-workspace-model" },
+			WIN_ADK,
+		);
+
+		const manifestCall = mockInvoke.mock.calls.find(
+			([command]) => command === "write_slots_manifest",
+		);
+		const manifest = JSON.parse((manifestCall?.[1] as { json: string }).json);
+		expect(manifest.gate.naiaAccount).toBe(false);
 	});
 
 	it("completes an approved write when hydration starts while it waits", async () => {
