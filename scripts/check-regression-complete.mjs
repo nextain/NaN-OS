@@ -26,6 +26,7 @@ import { join } from "node:path";
 import {
 	inventoryDigestFromFile,
 } from "./lib/inventory-digest.mjs";
+import { isRetestRecord } from "./lib/retest-selection.mjs";
 
 const args = process.argv.slice(2);
 const maxAgeHours = Number(
@@ -109,6 +110,18 @@ for (const machine of roster.machines ?? []) {
 const rejected = [];
 /** 옛 규칙의 지문으로 들어온 기록. 이행 기간이 끝나면 비어야 한다. */
 const legacyAccepted = [];
+/**
+ * 실패만 다시 돌린 기록. 판정에서 뺀다.
+ *
+ * 왜 빼는가: 재시험은 그 기계의 몫 **전체**가 아니라 지난 실행에서 실패했거나
+ * 돌지 못한 것만 잰다. 그것을 전체 기록으로 세면, 실패 셋을 다시 돌려 통과시킨
+ * 것만으로 "다 덮였다" 가 된다 — 실패 우선 고리가 곧 거짓 초록이 되는 길이다.
+ * 재시험이 초록이면 그다음에 전체를 한 번 돌아 기록을 확정해야 한다.
+ *
+ * 지우지는 않는다. 몇 개가 있었는지는 화면에 남겨, 사람이 "확정 실행을 아직
+ * 안 돌았다" 를 알 수 있게 한다.
+ */
+const retests = [];
 const inWindow = readdirSync(RUNS)
 	// 기계 명단은 기록이 아니다. 같은 디렉터리에 있어 확장자만 보면 기록으로
 	// 읽히고, 기계 이름이 없어 판정이 어긋난다.
@@ -147,6 +160,12 @@ const inWindow = readdirSync(RUNS)
 		// 않는다.
 		if (!stamp?.inventorySha256) {
 			rejected.push(`${file}: 어느 스펙 목록을 잰 것인지 알 수 없다(지문 없음)`);
+			return false;
+		}
+		if (isRetestRecord(record)) {
+			retests.push(
+				`${file}: 재시험(${record.retestOf ?? "원 기록 미상"}) — 몫 전체가 아니라 판정에서 뺀다`,
+			);
 			return false;
 		}
 		if (!acceptedDigests.has(stamp.inventorySha256)) {
@@ -192,6 +211,16 @@ for (const record of inWindow) {
 }
 const records = [...latestByMachine.values()].map((entry) => entry.record);
 const superseded = inWindow.length - records.length;
+
+if (retests.length > 0) {
+	console.log(
+		`  재시험 기록 ${retests.length}개 — 실패만 다시 돌린 것이라 "전체 덮임" 판정에는 넣지 않는다:`,
+	);
+	for (const line of retests) console.log(`    ${line}`);
+	console.log(
+		"    재시험이 초록이면 전체를 한 번 돌려 기록을 확정하라 — 그 기록만이 덮임을 말할 수 있다.",
+	);
+}
 
 if (legacyAccepted.length > 0) {
 	console.log(

@@ -13,10 +13,15 @@
  * 쓰는 법:
  *   node scripts/run-regression.mjs --machine=<이름> --tier=deterministic_ci[,credentialed_live,native_local]
  *   node scripts/run-regression.mjs --machine=<이름> --tier=deterministic_ci --dry-run
+ *   node scripts/run-regression.mjs --machine=<이름> --only-failed
+ *
+ * --only-failed 는 지난 기록에서 **실패했거나 아예 돌지 못한 것**만 다시 돌린다.
+ * 실패 우선 고리([전체 → 실패만 재시험 → 고침 → 재시험 → 실패 0 → 전체 확정])의
+ * 가운데 걸음이고, 그 기록에는 `kind: "retest"` 가 붙어 완결성 판정에서 빠진다.
  *
  * --dry-run 은 무엇을 돌릴지만 보여준다. 환경이 갖춰졌는지 먼저 볼 때 쓴다.
  */
-import { execFileSync, spawnSync } from "node:child_process";
+import { execFileSync, spawn, spawnSync } from "node:child_process";
 import {
 	existsSync,
 	mkdirSync,
@@ -41,12 +46,33 @@ import {
 	judgePremise,
 } from "./lib/run-premise.mjs";
 import { planGroups, wdioSpecArgs } from "./lib/regression-selection.mjs";
+import {
+	isRetestRecord,
+	pickLatestRecord,
+	retestSourceName,
+	retestTargets,
+} from "./lib/retest-selection.mjs";
+import { createProgressTracker } from "./lib/wdio-progress.mjs";
 
 const args = process.argv.slice(2);
 const value = (name) => args.find((a) => a.startsWith(`--${name}=`))?.split("=")[1];
 const machine = value("machine");
 const tiers = (value("tier") ?? "deterministic_ci").split(",").map((t) => t.trim()).filter(Boolean);
 const dryRun = args.includes("--dry-run");
+/**
+ * 실패한 것만 다시 돌린다 (`--only-failed[=<기록 경로>]`).
+ *
+ * 오너가 정한 고리는 [전체 → 실패 → **실패만 재시험** → 고침 → 재시험 실패 0 →
+ * 전체 한 번 확정] 이다. 예전에는 실패 하나를 다시 보려면 그 기계의 몫 전부를
+ * 돌려야 했다 — 자격증명 등급이면 쉰다섯 개, 한 시간이다.
+ */
+const onlyFailedArg = args.find((a) => a === "--only-failed" || a.startsWith("--only-failed="));
+const onlyFailed = onlyFailedArg !== undefined;
+const onlyFailedFrom = onlyFailedArg?.includes("=")
+	? onlyFailedArg.slice(onlyFailedArg.indexOf("=") + 1)
+	: undefined;
+/** `--tier` 를 사람이 직접 준 경우에만 재시험 목록을 그 등급으로 좁힌다. */
+const tierGiven = value("tier") !== undefined;
 
 // 채널에 그대로 붙일 한 줄. 성공/실패(prereq-missing) 경로 양쪽 DONE·BLOCKED 가
 // 이 함수를 부르므로 모듈 최상위에 둔다 — 블록 안에 두면 성공 경로 최종 DONE 에서 ReferenceError.
@@ -55,7 +81,9 @@ function channelLine(state, rest) {
 }
 
 if (!machine) {
-	console.error("사용법: node scripts/run-regression.mjs --machine=<이름> --tier=deterministic_ci[,credentialed_live,native_local] [--dry-run]");
+	console.error(
+		"사용법: node scripts/run-regression.mjs --machine=<이름> --tier=deterministic_ci[,credentialed_live,native_local] [--dry-run] [--only-failed[=<기록 경로>]]",
+	);
 	process.exit(2);
 }
 
@@ -174,7 +202,84 @@ function shareOf(tier) {
 	return inTier.filter((_, i) => i % owners.length === index);
 }
 
-const mine = tiers.flatMap((tier) => shareOf(tier));
+/**
+ * 이 실행이 맡을 스펙.
+ *
+ * 보통은 등급별 몫이다. `--only-failed` 면 지난 기록에서 다시 볼 것만 고른다 —
+ * 그 목록은 이미 이 기계의 몫이었으므로 다시 나누지 않는다. 등급을 사람이 직접
+ * 주었으면 그 등급으로 좁힌다(`--tier=credentialed_live --only-failed`).
+ */
+function retestSelection() {
+	const dir = "docs/regression-runs";
+	let file = onlyFailedFrom;
+	let record = null;
+	if (file) {
+		if (!existsSync(file)) {
+			console.error(`${file} 이 없다 — --only-failed 가 가리킨 기록을 찾지 못했다`);
+			process.exit(2);
+		}
+		record = JSON.parse(readFileSync(file, "utf8"));
+	} else {
+		const entries = (existsSync(dir) ? readdirSync(dir) : [])
+			.filter((name) => name.endsWith(".json") && name !== "machines.json")
+			.map((name) => {
+				try {
+					return { file: join(dir, name), record: JSON.parse(readFileSync(join(dir, name), "utf8")) };
+				} catch {
+					return null;
+				}
+			})
+			.filter(Boolean);
+		const picked = pickLatestRecord(entries, machine);
+		if (!picked) {
+			console.error(
+				`${dir} 에 ${machine} 의 기록이 없다 — 먼저 전체를 한 번 돌려야 재시험할 것이 생긴다`,
+			);
+			process.exit(2);
+		}
+		file = picked.file;
+		record = picked.record;
+	}
+	const targets = retestTargets(record);
+	const byName = new Map(inventory.specs.map((spec) => [spec.spec, spec]));
+	const unknown = targets.specs.filter((name) => !byName.has(name));
+	let chosen = targets.specs.map((name) => byName.get(name)).filter(Boolean);
+	if (tierGiven) chosen = chosen.filter((spec) => tiers.includes(spec.tier));
+	return { file, record, targets, chosen, unknown };
+}
+
+const retest = onlyFailed ? retestSelection() : null;
+const mine = retest ? retest.chosen : tiers.flatMap((tier) => shareOf(tier));
+if (retest) {
+	console.log(
+		`[regression] --only-failed — ${retestSourceName(retest.file)} 에서 다시 볼 스펙 ${retest.chosen.length}개` +
+			(retest.targets.envMissing.length
+				? ` (요구 환경이 없어 빼는 것 ${retest.targets.envMissing.length}개)`
+				: ""),
+	);
+	for (const name of retest.targets.envMissing) {
+		console.log(`      제외(환경 없음): ${name}`);
+	}
+	if (retest.unknown.length > 0) {
+		console.log(
+			`  ⚠ 지금 인벤토리에 없는 스펙 ${retest.unknown.length}개는 뺀다: ${retest.unknown.join(", ")}`,
+		);
+	}
+	if (retest.targets.legacy) {
+		console.log(
+			"  ⚠ 이 기록에는 passedSpecs 칸이 없다(옛 형식). 돌지 못한 것만 골랐고, 돌았다가 실패한 것은 알 수 없다 — 전체를 한 번 돌려 기록을 새로 만드는 편이 낫다.",
+		);
+	}
+	if (isRetestRecord(retest.record)) {
+		console.log(`  (앞 재시험 ${retestSourceName(retest.file)} 을 이어받는다)`);
+	}
+	if (retest.chosen.length === 0) {
+		console.log(
+			"\n[regression] 실패 0 — 이제 전체를 한 번 돌려 기록을 확정하라.\n",
+		);
+		process.exit(0);
+	}
+}
 const ownersByTier = new Map(
 	tiers.map((tier) => [
 		tier,
@@ -626,6 +731,76 @@ function parseSpecOutcomes(output) {
  */
 const COOLDOWN_MS = 6_000;
 
+/**
+ * 한 묶음의 wdio 를 돌리면서 **진행을 즉시 흘린다.**
+ *
+ * 예전에는 `spawnSync` 로 붙들어 두었다가 끝난 뒤에 출력을 한꺼번에 냈다. 한
+ * 묶음이 마흔한 개, 한 시간이라 그동안 화면에는 아무것도 없었고, 사람은 앱이
+ * 남긴 흔적 파일의 수정 시각을 뒤져 몇 번째인지 추정했다. 이제 줄 단위로 읽어
+ * 그대로 흘리고, 스펙 하나가 끝날 때마다 `[regression] 12/41 ✓ …` 한 줄을 끼워
+ * 넣는다.
+ *
+ * 바뀌지 않는 것: 종료 코드 판정, 윈도우의 `shell` 처리(`pnpm.cmd` 를 shell
+ * 없이 spawn 하면 EINVAL 로 죽어 wdio 가 한 번도 뜨지 않는다), 그리고 출력
+ * 전체를 모아 나중에 다시 파싱하는 것 — 진행 줄은 표시일 뿐 판정이 아니다.
+ */
+function runWdioGroup(conf, specArgs, groupPort, total) {
+	return new Promise((resolve) => {
+		const chunks = [];
+		const tracker = createProgressTracker(total);
+		const child = spawn(
+			process.platform === "win32" ? "pnpm.cmd" : "pnpm",
+			[
+				"-C",
+				"packages/shell",
+				"exec",
+				"wdio",
+				"run",
+				`e2e-tauri/${conf}`,
+				...specArgs,
+			],
+			{
+				stdio: ["inherit", "pipe", "pipe"],
+				env: { ...process.env, NAIA_E2E_WEBDRIVER_PORT: String(groupPort) },
+				shell: process.platform === "win32",
+			},
+		);
+
+		/** 스트림은 줄 경계로 오지 않는다. 남은 조각을 이어 붙인다. */
+		const attach = (stream, sink) => {
+			let rest = "";
+			stream.setEncoding("utf8");
+			stream.on("data", (piece) => {
+				chunks.push(piece);
+				sink.write(piece);
+				rest += piece;
+				const lines = rest.split("\n");
+				rest = lines.pop() ?? "";
+				for (const line of lines) {
+					const note = tracker.feed(line);
+					if (note) console.log(note);
+				}
+			});
+			stream.on("end", () => {
+				if (!rest) return;
+				const note = tracker.feed(rest);
+				if (note) console.log(note);
+			});
+		};
+		attach(child.stdout, process.stdout);
+		attach(child.stderr, process.stderr);
+
+		let settled = false;
+		const finish = (result) => {
+			if (settled) return;
+			settled = true;
+			resolve({ ...result, output: chunks.join("") });
+		};
+		child.on("error", (error) => finish({ error, status: null }));
+		child.on("close", (code) => finish({ error: null, status: code }));
+	});
+}
+
 let first = true;
 let groupIndex = 0;
 for (const [conf, specs] of groups) {
@@ -652,37 +827,7 @@ for (const [conf, specs] of groups) {
 	// 소리가 없으면 사람이 멈춘 줄 알고 취소한다. 예전에는 `sh -c "... | tee"`
 	// 로 했는데 윈도우에는 sh 가 없어 그 기계에서는 아예 돌지 않았다.
 	let ok = true;
-	const chunks = [];
-	const child = spawnSync(
-		process.platform === "win32" ? "pnpm.cmd" : "pnpm",
-		[
-			"-C",
-			"packages/shell",
-			"exec",
-			"wdio",
-			"run",
-			`e2e-tauri/${conf}`,
-			...specArgs,
-		],
-		{
-			encoding: "utf8",
-			stdio: ["inherit", "pipe", "pipe"],
-			maxBuffer: 512 * 1024 * 1024,
-			env: { ...process.env, NAIA_E2E_WEBDRIVER_PORT: String(groupPort) },
-			// 윈도우에서 pnpm 은 pnpm.cmd 다. Node 는 .cmd/.bat 를 shell 없이 spawn
-			// 하면 EINVAL 로 죽어(스폰 자체 실패) wdio 가 한 번도 뜨지 않는다.
-			// build-e2e-tauri.mjs 도 같은 이유로 win32 에서 shell 을 켠다.
-			shell: process.platform === "win32",
-		},
-	);
-	if (child.stdout) {
-		process.stdout.write(child.stdout);
-		chunks.push(child.stdout);
-	}
-	if (child.stderr) {
-		process.stderr.write(child.stderr);
-		chunks.push(child.stderr);
-	}
+	const child = await runWdioGroup(conf, specArgs, groupPort, specs.length);
 	if (child.error || child.status !== 0) {
 		ok = false;
 		status = "failed";
@@ -691,7 +836,7 @@ for (const [conf, specs] of groups) {
 		).slice(0, 200);
 		detail = detail ? `${detail}; ${conf}: ${message}` : `${conf}: ${message}`;
 	}
-	const output = chunks.join("\n");
+	const output = child.output;
 
 	// 전제는 묶음마다 센다. 묶음마다 wdio 를 따로 부르므로 출력도 따로다.
 	// 다시 돌리는 대목(retryFailedOnce)은 세지 않는다 — 그쪽 기동까지 더하면
@@ -779,6 +924,12 @@ if (premiseVerdict.premise !== "ok") {
 const record = {
 	machine,
 	tiers,
+	// 이 기록이 무엇인가. 재시험은 그 기계의 몫 **전체**를 잰 것이 아니므로
+	// 완결성 게이트가 판정에서 뺀다 — 실패 셋만 다시 돌려 통과시키고 "다
+	// 덮였다" 가 되는 길을 막는다.
+	...(retest
+		? { kind: "retest", retestOf: retestSourceName(retest.file) }
+		: {}),
 	ranOn: fingerprint(),
 	started,
 	finished: new Date().toISOString(),
@@ -937,6 +1088,21 @@ if (process.env.NAIA_E2E_COST_LEDGER) {
 record.flakySpecs = flaky;
 record.stableFailures = stable;
 writeFileSync(out, `${JSON.stringify(record, null, "\t")}\n`);
+
+// 실패 우선 고리의 다음 걸음을 러너가 말한다. 사람이 기록을 열어 빼기를 하지
+// 않도록, 무엇이 남았는지 또는 이제 전체를 돌 차례인지 여기서 찍는다.
+if (retest) {
+	const left = retestTargets(record);
+	if (left.specs.length === 0) {
+		console.log(
+			"\n[regression] 실패 0 — 이제 전체를 한 번 돌려 기록을 확정하라.\n",
+		);
+	} else {
+		console.log(`\n[regression] 아직 실패하는 스펙 ${left.specs.length}개:`);
+		for (const name of left.specs) console.log(`      ${name}`);
+		console.log("      고친 뒤 같은 명령을 다시 돌려라 (--only-failed).\n");
+	}
+}
 
 console.log(
 	`\n${channelLine(
