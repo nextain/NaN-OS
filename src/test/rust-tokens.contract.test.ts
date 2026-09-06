@@ -28,6 +28,7 @@ interface RustTokensModule {
 	tokenizeRust(source: string): Array<{
 		kind: string;
 		text: string;
+		value?: string;
 		line: number;
 		start: number;
 		end: number;
@@ -46,6 +47,9 @@ interface RustTokensModule {
 	}>;
 	isKeyword(token: unknown, word: string): boolean;
 	keywordIn(token: unknown, words: Set<string>): boolean;
+	externCrateDeclarations(
+		tokens: Array<{ kind: string; text: string; line: number }>,
+	): Array<{ crate: string; local: string; line: number; at: number }>;
 }
 
 let rust: RustTokensModule;
@@ -411,6 +415,92 @@ describe("Rust 명령 추출은 거리를 재지 않는다", () => {
 		// 키워드가 아닌 이름은 생 식별자든 아니든 키워드가 아니다.
 		const [ordinary] = rust.tokenizeRust("ghost ");
 		expect(rust.keywordIn(ordinary, new Set(words))).toBe(false);
+	});
+
+	it("문자열의 값은 적는 법이 아니라 뜻이다", () => {
+		// 17회차 지적 3. 이스케이프를 한 글자씩 삼키던 동안 `"\x48OME"` 의 값이
+		// `x48OME` 라서 금지 집합(`HOME`)에 들지 않았고, `"\x2enaia"` 도 `.naia`
+		// 마디로 읽히지 않았다 — 같은 글자를 다르게 적는 것만으로 홈을 짚을 수
+		// 있었다. 조각을 이어 붙이는 위조와 달리 이것은 리터럴 하나다.
+		const source = [
+			'let a = "\\x48OME";',
+			'let b = "\\x2enaia";',
+			'let c = "\\u{48}OME";',
+			'let d = "\\u{2e}naia";',
+			'let e = b"\\x48OME";',
+			'let f = "a\\nb\\tc\\\\d\\"e";',
+			'let g = r"\\x48OME";',
+		].join("\n");
+		const values = rust
+			.tokenizeRust(source)
+			.filter((token) => token.kind === "string")
+			.map((token) => token.value);
+		expect(values).toEqual([
+			"HOME",
+			".naia",
+			"HOME",
+			".naia",
+			"HOME",
+			'a\nb\tc\\d"e',
+			// 생 문자열에는 이스케이프가 없다 — 적힌 그대로가 값이다.
+			"\\x48OME",
+		]);
+	});
+
+	it("줄 끝 `\\` 이어쓰기는 줄바꿈과 공백을 지운다", () => {
+		const source = 'let a = "line\\\n        cont";';
+		const [string] = rust.tokenizeRust(source).filter((token) => token.kind === "string");
+		expect(string.value).toBe("linecont");
+	});
+
+	it("값을 보는 자리가 어느 필드를 읽든 답이 같다", () => {
+		// 15~17회차에 값을 읽는 자리가 셋으로 늘었다(홈 검사·`.naia` 마디·이름표).
+		// 그중 하나가 `text` 를 읽어도 틀리지 않아야 한다 — 그래서 두 필드가 언제나
+		// 같은 값이다. 소스에서 `.text` 를 찾아 없애는 것보다 이 불변식이 강하다.
+		const source = [
+			'let a = "\\x48OME";',
+			'let b = r#"raw \\x48 stays"#;',
+			"let c = '\\n';",
+			'let d = b"\\u{2e}naia";',
+		].join("\n");
+		for (const token of rust.tokenizeRust(source)) {
+			if (token.kind !== "string" && token.kind !== "char") continue;
+			expect(token.text, `${token.kind} 토큰의 두 필드가 다르다`).toBe(token.value);
+		}
+	});
+
+	it("코드와 문자열을 가를 때도 값을 넘긴다", () => {
+		// 데이터 홈 검사가 금지 환경 변수와 `.naia` 마디를 여기서 받는다.
+		const { strings } = rust.splitCodeAndStrings(
+			['let home = std::env::var("\\x48OME");', 'let path = "\\x2enaia/logs";'].join("\n"),
+		);
+		expect(strings.map((entry) => [entry.line, entry.value])).toEqual([
+			[1, "HOME"],
+			[2, ".naia/logs"],
+		]);
+	});
+
+	it("`extern crate tauri as t;` 도 크레이트 별명이다", () => {
+		// 17회차 지적 4. 별명 표를 `use` 만 채우던 동안 이 형태가 빠졌다.
+		const aliased = "extern crate tauri as t;\n#[t::command]\nfn wipe_extern_alias() {}";
+		const plain = "extern crate tauri;\n#[tauri::command]\nfn wipe_extern_plain() {}";
+		const otherCrate = "extern crate clap as t;\n#[t::command]\nfn not_a_command() {}";
+		expect([...rust.tauriCommandBodies(aliased).keys()]).toEqual(["wipe_extern_alias"]);
+		expect([...rust.tauriCommandBodies(plain).keys()]).toEqual(["wipe_extern_plain"]);
+		expect([...rust.tauriCommandBodies(otherCrate).keys()]).toEqual([]);
+
+		// `extern "C" fn` 의 `extern` 은 뒤가 문자열이라 크레이트 선언이 아니다.
+		const abi = 'extern "C" fn ghost() {}\n#[tauri::command]\nfn wipe_after_abi() {}';
+		expect([...rust.tauriCommandBodies(abi).keys()]).toEqual(["wipe_after_abi"]);
+
+		expect(
+			rust
+				.externCrateDeclarations(rust.tokenizeRust(`${aliased}\nextern crate serde;`))
+				.map((declared) => [declared.crate, declared.local]),
+		).toEqual([
+			["tauri", "t"],
+			["serde", "serde"],
+		]);
 	});
 
 	it("주석 안의 `#[tauri::command]` 는 명령이 아니다", () => {

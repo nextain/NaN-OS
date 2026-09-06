@@ -545,7 +545,8 @@ function funnelNames() {
 				why: `이름표 자리가 문자열이 아니다 (${value ? value.text : "끝"})`,
 			});
 		} else {
-			names.push(value.text);
+			// 이름표는 **값**이다 — `"\x2enaia"` 처럼 적어도 뜻이 같아야 한다.
+			names.push(value.value);
 		}
 
 		// 다음 갈래로. 중괄호 본문은 통째로 건너뛰어, 본문 안의 `Self::` 를 갈래로 읽지 않는다.

@@ -72,10 +72,40 @@
  * 이 모듈은 위 형태를 지금도 읽는다(이미 닫힌 자리다). 다만 **읽는 것에
  * 기대지 않는다** — 경계는 린트가 지고, 게이트는 자기가 읽는 범위를 지킨다.
  * 그래서 다음 회차의 도전은 린트를 통과하는 형태여야 한다.
+ *
+ * ## 정적 평가 범위 (표 안은 접고, 표 밖은 모른다)
+ *
+ * 무엇을 접는지가 코드 여기저기에 흩어져 있으면 리뷰어는 매 회차에 안 접는
+ * 갈래를 하나 더 찾는다. 그래서 범위를 `STATIC_EVAL_KINDS` 한 표로 두고,
+ * 이 머리말과 `docs/quality-reviews/obfuscation-forms.md` 가 그것을 그대로
+ * 싣는다. 셋이 어긋나면 계약 테스트가 붉어진다.
+ *
+ *   - `literal` — 리터럴 — 문자열·숫자·불리언·`null`·`undefined`
+ *   - `template` — 템플릿 — 보간까지 정적이면 이어 붙인다
+ *   - `tagged-raw` — 태그 템플릿 `String.raw` — 고정 조각 그대로
+ *   - `unary` — 단항 — `+` `-` `~` `!` `void` `typeof`
+ *   - `binary` — 이항 — 비교·산술·비트, 그리고 `&&` `||` `??`
+ *   - `conditional` — 삼항 — 조건이 정해지면 그 갈래
+ *   - `const-chain` — `const` 사슬 — 같은 파일과 import 로 건너간 파일
+ *   - `literal-member` — 리터럴의 멤버 — `"x".length`, `[1,2].length`, `{a:1}.a`
+ *   - `literal-index` — 리터럴의 리터럴 인덱스 — `["alert"][0]`, `{a:"x"}["a"]`
+ *
+ * 표 밖은 보증하지 않는다.
+ *
+ *   - 함수 호출의 결과 일반 (`makeUrl()`, `arr.map(...)`)
+ *   - 정규식 실행 (`/x/.test(s)`)
+ *   - 전역 객체의 속성 (`Date.now`, `Math.PI`, `process.env`)
+ *   - 실행할 때 조립되는 값
  */
 
 import ts from "typescript";
-import { exportedValueSite, importedValueSite, resolveCallee } from "./bindings.mjs";
+import {
+	exportedValueSite,
+	importedValueSite,
+	isModuleOfPackage,
+	packageOf,
+	resolveCallee,
+} from "./bindings.mjs";
 import { unwrapExpression } from "./unwrap.mjs";
 
 /* ─────────────── 파싱과 파일 환경 ─────────────── */
@@ -207,27 +237,6 @@ const ELEMENT_MODULES = new Set([
 	"preact/jsx-dev-runtime",
 ]);
 
-/**
- * 모듈 지정자의 **패키지 이름**. 저장소 안 파일을 가리키면 `null`.
- *
- * `react/index.js`·`react/jsx-runtime.js`·`preact/compat/dist/compat.mjs` 는
- * Node 와 Vite 가 같은 패키지로 푸는 같은 값인데, 적힌 문자열은 다르다. 적힌
- * 문자열로 대조하면 하위 경로 한 마디로 알림 요소가 요소가 아니게 된다
- * (16회차 지적 5). 그래서 첫 마디(스코프 패키지면 두 마디)로 묻는다.
- *
- * 무엇이 요소를 만드는 함수인가는 그대로 **가져온 이름**이 정한다 —
- * `createElement`/`h` 는 옛 방식, `jsx`/`jsxs`/`jsxDEV` 는 automatic runtime
- * 이다. 그래야 `react` 본체와 `react/jsx-runtime` 의 export 집합이 섞이지
- * 않는다.
- */
-function packageOf(specifier) {
-	if (typeof specifier !== "string" || specifier === "") return null;
-	if (specifier.startsWith(".") || specifier.startsWith("/")) return null;
-	const parts = specifier.split("/");
-	if (specifier.startsWith("@")) return parts.length >= 2 ? `${parts[0]}/${parts[1]}` : null;
-	return parts[0];
-}
-
 /** 요소 만드는 함수를 내주는 **패키지**들. 위 목록에서 패키지 이름만 남긴다. */
 const ELEMENT_PACKAGES = new Set(
 	[...ELEMENT_MODULES].map((module) => packageOf(module)).filter(Boolean),
@@ -235,8 +244,7 @@ const ELEMENT_PACKAGES = new Set(
 
 /** 이 모듈이 요소를 내주는 패키지의 것인가. */
 function isElementModule(module) {
-	const pkg = packageOf(module);
-	return pkg !== null && ELEMENT_PACKAGES.has(pkg);
+	return isModuleOfPackage(module, ELEMENT_PACKAGES);
 }
 
 /** 옛 방식. 자식은 셋째 인자부터다. */
@@ -1039,7 +1047,15 @@ export function stringCandidates(node, sf, env, seen = new Set()) {
 		return { values, complete: false };
 	}
 	if (ts.isIdentifier(n)) return resolveIdentifier(n, sf, env, seen);
-	if (ts.isPropertyAccessExpression(n)) return resolvePropertyAccess(n, sf, env, seen);
+	if (ts.isPropertyAccessExpression(n)) {
+		const read = resolvePropertyAccess(n, sf, env, seen);
+		if (read.values.size > 0 || read.complete) return read;
+	}
+	// 마지막으로 정적 평가 표에 묻는다. 리터럴의 인덱스(`["alert"][0]`)와 보간
+	// 없는 태그 템플릿(`` String.raw`https://…` ``)이 여기서 풀린다 —
+	// 형태를 열거하는 대신 "표 안이면 접는다" 한 규칙으로 읽는다.
+	const folded = staticPrimitive(n, sf, env, new Set());
+	if (typeof folded === "string") return { values: new Set([folded]), complete: true };
 	return { values, complete: false };
 }
 
@@ -1082,6 +1098,13 @@ export function staticStringsIn(node, sf, env, seen = new Set()) {
 		if (!direct.complete) complete = false;
 		if (ts.isNewExpression(n) || ts.isCallExpression(n)) {
 			for (const arg of n.arguments ?? []) visit(arg, home);
+			return;
+		}
+		// 태그 템플릿도 값이 흘러가는 자리다 — 고정 조각과 보간을 모두 본다.
+		if (ts.isTaggedTemplateExpression(n)) {
+			const body = n.template;
+			if (ts.isTemplateExpression(body))
+				for (const span of body.templateSpans) visit(span.expression, home);
 			return;
 		}
 		if (ts.isObjectLiteralExpression(n)) {
@@ -1240,7 +1263,59 @@ function staticNumber(node, sf, env, seen) {
  *
  * 한쪽이라도 모르면 결과도 모른다. 모르는 것을 참으로도 거짓으로도 접지 않는다.
  */
-const UNKNOWN = Symbol("정적으로 정해지지 않음");
+/** `staticPrimitive` 가 "모른다" 로 돌려주는 표식. 값과 헷갈리지 않게 심볼이다. */
+export const STATIC_UNKNOWN = Symbol("정적으로 정해지지 않음");
+const UNKNOWN = STATIC_UNKNOWN;
+
+/**
+ * **정적으로 접는 노드 종류의 정본.**
+ *
+ * 왜 표로 두는가: 열일곱 번의 교차 리뷰에서 이 모듈이 뚫린 자리는 거의 언제나
+ * "이 형태는 접고 저 형태는 안 접는다" 였다. `+true` 는 접는데 `1 === 1` 은
+ * 안 접고, `{a:"x"}.a` 는 접는데 `"x".length` 는 안 접었다. 무엇을 접는지가
+ * 코드 여기저기에 흩어져 있으면 리뷰어는 매 회차에 안 접는 갈래를 하나 더
+ * 찾는다.
+ *
+ * 그래서 접는 범위를 여기 한 곳에 적는다. 모듈 머리말과
+ * `docs/quality-reviews/obfuscation-forms.md` 의 "정적 평가 범위" 절이 이
+ * 목록을 그대로 싣고, `src/test/jsx-static.contract.test.ts` 가 셋이 어긋나면
+ * 붉어진다. 표 **안**은 전부 접고, 표 **밖**은 전부 "모른다" 다.
+ */
+export const STATIC_EVAL_KINDS = [
+	{ id: "literal", title: "리터럴 — 문자열·숫자·불리언·`null`·`undefined`" },
+	{ id: "template", title: "템플릿 — 보간까지 정적이면 이어 붙인다" },
+	{ id: "tagged-raw", title: "태그 템플릿 `String.raw` — 고정 조각 그대로" },
+	{ id: "unary", title: "단항 — `+` `-` `~` `!` `void` `typeof`" },
+	{ id: "binary", title: "이항 — 비교·산술·비트, 그리고 `&&` `||` `??`" },
+	{ id: "conditional", title: "삼항 — 조건이 정해지면 그 갈래" },
+	{ id: "const-chain", title: "`const` 사슬 — 같은 파일과 import 로 건너간 파일" },
+	{ id: "literal-member", title: "리터럴의 멤버 — `\"x\".length`, `[1,2].length`, `{a:1}.a`" },
+	{ id: "literal-index", title: "리터럴의 리터럴 인덱스 — `[\"alert\"][0]`, `{a:\"x\"}[\"a\"]`" },
+];
+
+/**
+ * 표 **밖**은 보증하지 않는다. 함수 호출의 결과 일반(`makeUrl()`), 정규식 실행,
+ * `Date`·`Math` 같은 전역 객체의 속성, 실행할 때 조립되는 값이 그것이다.
+ * 그런 자리는 "없다" 가 아니라 **모른다** 이고, 판정은 놓치는 쪽으로 틀린다.
+ */
+export const STATIC_EVAL_OUT_OF_SCOPE = [
+	"함수 호출의 결과 일반 (`makeUrl()`, `arr.map(...)`)",
+	"정규식 실행 (`/x/.test(s)`)",
+	"전역 객체의 속성 (`Date.now`, `Math.PI`, `process.env`)",
+	"실행할 때 조립되는 값",
+];
+
+/** 리터럴 값의 정적 속성. 표의 `literal-member` 갈래다. */
+function literalPropertyValue(value, key) {
+	if (typeof value === "string") {
+		if (key === "length") return value.length;
+		const index = Number(key);
+		if (Number.isInteger(index) && index >= 0 && index < value.length)
+			return value[index];
+		return UNKNOWN;
+	}
+	return UNKNOWN;
+}
 
 function foldBinary(op, left, right) {
 	switch (op) {
@@ -1291,7 +1366,7 @@ function foldBinary(op, left, right) {
 	}
 }
 
-function staticPrimitive(node, sf, env, seen) {
+export function staticPrimitive(node, sf, env, seen) {
 	const n = unwrapAll(node);
 	if (!n) return UNKNOWN;
 	const guard = seen instanceof Set ? seen : new Set();
@@ -1342,6 +1417,58 @@ function staticPrimitive(node, sf, env, seen) {
 		const right = staticPrimitive(n.right, sf, env, guard);
 		if (right === UNKNOWN) return UNKNOWN;
 		return foldBinary(kind, left, right);
+	}
+	// 보간 없는 태그 템플릿의 값은 고정 조각 그대로다. `String.raw` 는 그
+	// 조각을 이스케이프 없이 내주므로 적힌 글자가 곧 값이다.
+	if (ts.isTaggedTemplateExpression(n)) {
+		const tag = unwrapAll(n.tag);
+		const isRaw =
+			tag &&
+			((ts.isPropertyAccessExpression(tag) &&
+				tag.name.text === "raw" &&
+				ts.isIdentifier(tag.expression) &&
+				tag.expression.text === "String") ||
+				(ts.isIdentifier(tag) && tag.text === "raw"));
+		if (!isRaw) return UNKNOWN;
+		const body = n.template;
+		if (ts.isNoSubstitutionTemplateLiteral(body)) return body.rawText ?? body.text;
+		return UNKNOWN;
+	}
+	// 리터럴의 멤버와 리터럴 인덱스. 소스에 값이 그대로 적혀 있는 자리다.
+	if (ts.isPropertyAccessExpression(n) || ts.isElementAccessExpression(n)) {
+		const key = accessKey(n);
+		if (key === null) return UNKNOWN;
+		let container = unwrapAll(n.expression);
+		let home = sf;
+		// 담는 것이 이름이면 그 `const` 값으로 바꿔 든다. `const ROLES = ["alert"]`
+		// 뒤의 `ROLES[0]` 은 소스에 값이 그대로 적혀 있는 같은 자리다.
+		if (container && ts.isIdentifier(container)) {
+			const bound = constOnlyValue(container.text, sf, env);
+			if (bound) {
+				container = unwrapAll(bound.node);
+				home = bound.sf;
+			}
+		}
+		if (!container) return UNKNOWN;
+		if (ts.isArrayLiteralExpression(container)) {
+			if (key === "length") return container.elements.length;
+			const index = Number(key);
+			if (!Number.isInteger(index) || index < 0 || index >= container.elements.length)
+				return UNKNOWN;
+			return staticPrimitive(container.elements[index], home, env, guard);
+		}
+		if (ts.isObjectLiteralExpression(container)) {
+			for (const property of container.properties) {
+				if (ts.isPropertyAssignment(property) && propertyName(property.name) === key)
+					return staticPrimitive(property.initializer, home, env, guard);
+				if (ts.isShorthandPropertyAssignment(property) && property.name.text === key)
+					return staticPrimitive(property.name, home, env, guard);
+			}
+			return UNKNOWN;
+		}
+		const inner = staticPrimitive(container, home, env, guard);
+		if (inner === UNKNOWN) return UNKNOWN;
+		return literalPropertyValue(inner, key);
 	}
 	if (ts.isIdentifier(n)) {
 		for (const hit of declarationSites(n.text, sf)) {
@@ -1556,7 +1683,13 @@ export function alwaysTruthy(node, sf, env, seen = new Set()) {
 	if (ts.isPropertyAccessExpression(n) || ts.isElementAccessExpression(n)) {
 		const member = constAccessValue(n, sf, env);
 		if (member) return alwaysTruthy(member.node, member.sf, env, seen);
-		return false;
+		// 리터럴의 멤버·인덱스는 정적 평가 표 안이다(`"x".length`, `["a"][0]`).
+		const folded = staticPrimitive(n, sf, env, new Set());
+		return folded === UNKNOWN ? false : Boolean(folded);
+	}
+	if (ts.isTaggedTemplateExpression(n)) {
+		const folded = staticPrimitive(n, sf, env, new Set());
+		return folded === UNKNOWN ? false : Boolean(folded);
 	}
 	return false;
 }
@@ -1646,6 +1779,12 @@ function alwaysFalsy(node, sf, env, seen) {
 	if (ts.isPropertyAccessExpression(n) || ts.isElementAccessExpression(n)) {
 		const member = constAccessValue(n, sf, env);
 		if (member) return alwaysFalsy(member.node, member.sf, env, seen);
+		const folded = staticPrimitive(n, sf, env, new Set());
+		if (folded !== UNKNOWN) return !folded;
+	}
+	if (ts.isTaggedTemplateExpression(n)) {
+		const folded = staticPrimitive(n, sf, env, new Set());
+		if (folded !== UNKNOWN) return !folded;
 	}
 	return false;
 }

@@ -50,9 +50,12 @@
  *     를 **두 겹 이상** 거친 호출(`f.call.call(...)`, `Reflect.apply(f, …)`).
  *     한 겹의 `f.call(…)`/`f.apply(…)`/`f.bind(…)` 는 경계 안이다.
  *   - 고차 함수가 돌려준 함수 — `const f = make(); f()` 의 `make` 안쪽.
- *   - 배열·객체·`Map` 을 거쳐 흘러간 함수 — `handlers[0]()`, `table.get(k)()`.
- *   - 동적 `import()`/`require()` 의 결과 — `const { invoke } = await
- *     import("…")`. 정적 `import` 선언만 따라간다.
+ *   - 배열·`Map` 을 거쳐 흘러간 함수 — `handlers[0]()`, `table.get(k)()`.
+ *     그 자리에서 만든 **객체 리터럴 네임스페이스**(`const ns = { invoke };
+ *     ns.invoke(…)`)는 어느 속성이 무엇인지 소스에 그대로 적혀 있어 따라간다.
+ *   - 동적 `import()`/`require()` 의 결과 중 **지정자가 리터럴이 아닌 것**.
+ *     `await import("@tauri-apps/api/core")` 처럼 소스에 모듈 이름이 그대로
+ *     적혀 있으면 따라간다(17회차 지적 6). 실행할 때 조립되는 지정자는 모른다.
  *   - 실행할 때 조립되는 문자열로 정해지는 것.
  *   - 같은 이름이 다시 대입되는 `let`/`var` 별명(재대입이 있는 이름은 아예
  *     풀지 않는다).
@@ -86,6 +89,29 @@
 import ts from "typescript";
 import { unwrapExpression } from "./unwrap.mjs";
 
+
+/**
+ * 모듈 지정자의 **패키지 이름**. 저장소 안 파일을 가리키면 `null`.
+ *
+ * `react/index.js`·`@tauri-apps/api/core.js` 는 Node 와 번들러가 같은 패키지로
+ * 푸는 같은 값인데 적힌 문자열이 다르다. 적힌 문자열로 대조하면 하위 경로 한
+ * 마디로 판정이 갈린다 — 요소 판정에서 한 번(16회차 지적 5), 파괴 호출부에서
+ * 한 번(17회차 지적 5) 같은 사고가 났다. 그래서 대조하는 자리는 모두 이 함수를
+ * 지난다.
+ */
+export function packageOf(specifier) {
+	if (typeof specifier !== "string" || specifier === "") return null;
+	if (specifier.startsWith(".") || specifier.startsWith("/")) return null;
+	const parts = specifier.split("/").filter((part) => part !== "");
+	if (specifier.startsWith("@")) return parts.length >= 2 ? `${parts[0]}/${parts[1]}` : null;
+	return parts[0] ?? null;
+}
+
+/** 이 모듈이 그 패키지들 중 하나의 것인가. */
+export function isModuleOfPackage(module, packages) {
+	const pkg = packageOf(module);
+	return pkg !== null && packages.has(pkg);
+}
 
 /** 전역이 담겨 있는 뿌리 이름. 이 멤버는 그 이름의 전역과 같다. */
 const GLOBAL_ROOTS = new Set(["globalThis", "window", "self", "global"]);
@@ -376,6 +402,20 @@ function declaredTypeNames(sf) {
 	return names;
 }
 
+/** `import("mod")` · `require("mod")` 의 그 모듈. 리터럴 지정자만. */
+function dynamicModuleOf(node) {
+	if (!ts.isCallExpression(node)) return null;
+	const callee = unwrap(node.expression);
+	const isLoader =
+		(callee && callee.kind === ts.SyntaxKind.ImportKeyword) ||
+		(callee && ts.isIdentifier(callee) && callee.text === "require");
+	if (!isLoader) return null;
+	const first = unwrap(node.arguments[0]);
+	if (!first) return null;
+	if (!ts.isStringLiteral(first) && !ts.isNoSubstitutionTemplateLiteral(first)) return null;
+	return first.text;
+}
+
 function globalBinding(name) {
 	return {
 		module: null,
@@ -552,6 +592,31 @@ function resolveIn(alias, sf, env, seen) {
 			via: "destructure",
 			boundArgs: 0,
 		};
+	}
+	return null;
+}
+
+/**
+ * `const ns = { invoke }` 처럼 객체 리터럴로 만든 네임스페이스의 멤버.
+ *
+ * 속성 이름은 `declaredPropertyName` 으로 읽으므로 `{ "invoke": invoke }` 와
+ * `{ ["invoke"]: invoke }` 도 같다. 값은 그 자리의 식이므로 그대로 이어 푼다.
+ */
+function objectNamespaceMember(baseExpr, name, sf, env, seen) {
+	const base = unwrap(baseExpr);
+	if (!base || !ts.isIdentifier(base)) return null;
+	const alias = constAlias(base.text, sf);
+	if (!alias || alias.kind !== "value") return null;
+	const literal = unwrap(alias.node);
+	if (!literal || !ts.isObjectLiteralExpression(literal)) return null;
+	for (const property of literal.properties) {
+		if (ts.isShorthandPropertyAssignment(property)) {
+			if (property.name.text !== name) continue;
+			return resolveBinding(property.name, sf, env, seen);
+		}
+		if (!ts.isPropertyAssignment(property)) continue;
+		if (declaredPropertyName(property.name) !== name) continue;
+		return resolveBinding(property.initializer, sf, env, seen);
 	}
 	return null;
 }
@@ -734,12 +799,16 @@ export function resolveBinding(expr, sf, env, state) {
 		const name = memberName(node);
 		if (name === null) return null; // 동적 키 — 보증 밖이다.
 		const base = resolveBinding(memberBase(node), sf, env, seen);
-		if (!base) return null;
+		// `const ns = { invoke }; ns.invoke(…)` — 그 자리에서 만든 객체
+		// 네임스페이스. 배열·Map 을 거쳐 흘러간 함수는 여전히 모르지만, 객체
+		// 리터럴 한 겹은 **어느 속성이 무엇인지 소스에 그대로 적혀 있다**.
+		if (!base) return objectNamespaceMember(memberBase(node), name, sf, env, seen);
 		// `globalThis.fetch` · `window["fetch"]` 는 전역 `fetch` 다.
 		if (base.global) return GLOBAL_ROOTS.has(base.global) ? globalBinding(name) : null;
 		// default·namespace 만 멤버를 그 모듈의 export 로 읽는다. 이름으로 가져온
 		// 객체의 속성(`import { core } from "x"; core.invoke`)은 `x` 의 export 가
 		// 아니므로 모른다고 말한다.
+		if (!base.module && !base.global && base.imported === null) return null;
 		if (base.imported === "*" || base.imported === "default") {
 			// 저장소 안 파일로 풀리는 모듈이면 그 파일의 export 까지 이어 푼다 —
 			// `import * as R from "./shim"` 의 `R.createElement` 는 shim 이
@@ -757,7 +826,16 @@ export function resolveBinding(expr, sf, env, state) {
 		return null;
 	}
 
+	if (ts.isAwaitExpression(node)) return resolveBinding(node.expression, sf, env, seen);
+
 	if (ts.isCallExpression(node)) {
+		// `await import("mod")` · `require("mod")` — **지정자가 리터럴일 때만**
+		// 그 모듈 전체로 읽는다. 실행할 때 정해지는 지정자는 그대로 모른다.
+		// 셸의 지연 로딩이 이 꼴이고, 예전에는 파괴 게이트가 자기 안에 따로
+		// 들고 있었다(17회차 지적 6).
+		const loaded = dynamicModuleOf(node);
+		if (loaded)
+			return { module: loaded, imported: "*", local: null, via: "dynamic", boundArgs: 0 };
 		const callee = unwrap(node.expression);
 		if (callee && memberName(callee) === "bind") {
 			const base = resolveBinding(memberBase(callee), sf, env, seen);

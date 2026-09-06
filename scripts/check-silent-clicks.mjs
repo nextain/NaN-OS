@@ -70,6 +70,10 @@
  *   - `E ? E.click() : undefined` · `!E ? undefined : E.click()`
  *   - `E?.click()`
  *
+ * 존재를 묻는 형태(`E`, `!!E`, `E != null`, `Boolean(E)`, `typeof E !== …`)도
+ * 같은 규칙으로 읽는다. `Boolean` 을 부르는 것인지는 이름이 아니라 바인딩이
+ * 답하므로 `Boolean.call(null, E)` 도 같은 검사다(17회차 지적 7).
+ *
  * 연산자를 세면 매 회차에 하나가 더 온다. 가드는 `if (E) …`, `if (!E) return; …`,
  * `E && …`, `E?.click()` 넷이었다.
  * `E ? E.click() : undefined` 는 그 넷 어디에도 없는데 같은 무음이다 — 있으면
@@ -122,6 +126,7 @@
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import ts from "typescript";
+import { resolveCallee } from "./lib/bindings.mjs";
 import { unwrapExpression } from "./lib/unwrap.mjs";
 
 const SHELL = "packages/shell";
@@ -261,13 +266,29 @@ function typeofComparand(node) {
 	return pick(left, right) ?? pick(right, left);
 }
 
-/** `Boolean(E)` 면 그 `E`. */
+/**
+ * 전역 `Boolean` 을 부르는 호출이면 그 **실인자**.
+ *
+ * 무엇을 부르는지는 `scripts/lib/bindings.mjs` 가 답한다 — 그러면
+ * `Boolean.call(null, E)`·`Boolean["call"](null, E)`·`(0, Boolean)(E)` 가
+ * 모두 `Boolean(E)` 와 같은 답을 받고, 인자 자리는 그쪽이 아는 `argShift` 가
+ * 옮겨 준다. 예전에는 callee 가 **식별자 `Boolean`** 일 때만 E 를 꺼냈다 —
+ * 클릭 쪽은 이미 `E.click.call(E)` 를 같은 클릭으로 읽는데 가드만 이름을
+ * 요구했다(17회차 지적 7).
+ *
+ * `.apply` 처럼 인자 자리를 믿을 수 없으면 가드가 아니다 — 무엇을 검사했는지
+ * 모르는 것을 "그 식을 검사했다" 로 읽으면 안 된다.
+ */
 function booleanCallArgument(node) {
 	if (!node || !ts.isCallExpression(node)) return null;
-	const callee = unwrap(node.expression);
-	if (!callee || !ts.isIdentifier(callee) || callee.text !== "Boolean") return null;
-	if (node.arguments.length !== 1) return null;
-	return unwrap(node.arguments[0]);
+	const sf = typeof node.getSourceFile === "function" ? node.getSourceFile() : null;
+	if (!sf) return null;
+	const binding = resolveCallee(node, sf, null);
+	if (!binding || binding.global !== "Boolean") return null;
+	if (binding.argsUnknown) return null;
+	const shift = binding.argShift ?? 0;
+	if (node.arguments.length !== shift + 1) return null;
+	return unwrap(node.arguments[shift]);
 }
 
 /**

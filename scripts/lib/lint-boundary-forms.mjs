@@ -37,6 +37,7 @@
  */
 
 import ts from "typescript";
+import { STATIC_UNKNOWN, staticPrimitive } from "./jsx-static.mjs";
 import { unwrapExpression } from "./unwrap.mjs";
 
 /** 게이트가 분석하는 소스. 린트 경계도 같은 범위를 본다. */
@@ -170,6 +171,7 @@ export function boundaryLines() {
 
 /* ─────────────── 형태의 정의 ─────────────── */
 
+
 /**
  * 리터럴에 씌운 `void`. `void 0` 은 `undefined` 를 다르게 적은 것이다.
  *
@@ -181,6 +183,12 @@ function voidLiteral(node) {
 	if (!ts.isVoidExpression(node)) return false;
 	const inner = unwrapExpression(node.expression);
 	if (!inner) return false;
+	// "리터럴" 은 형태가 아니라 **정적으로 값이 정해지는가** 다. 형태로 세면
+	// `void +0`·`void ~0`·`void "x".length` 가 매번 하나씩 새로 온다
+	// (17회차 지적 9). 판정은 `jsx-static.mjs` 의 정적 평가 표 하나로 한다 —
+	// 그 표 밖(함수 호출 결과 등)은 `void asyncFn()` 이라 금지 대상이 아니다.
+	const sf = typeof inner.getSourceFile === "function" ? inner.getSourceFile() : null;
+	if (sf && staticPrimitive(inner, sf, null, new Set()) !== STATIC_UNKNOWN) return true;
 	return (
 		ts.isNumericLiteral(inner) ||
 		ts.isBigIntLiteral(inner) ||

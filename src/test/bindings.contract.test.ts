@@ -59,6 +59,9 @@ interface Bindings {
 	importBindings(sf: ts.SourceFile): Map<string, ImportRecord>;
 	/** 모듈 바인딩을 만드는 선언인가 — `import …` 와 `import x = …` 두 종. */
 	isModuleBindingDeclaration(node: ts.Node): boolean;
+	/** 모듈 지정자의 패키지 이름. 저장소 안 파일이면 null. */
+	packageOf(specifier: string): string | null;
+	isModuleOfPackage(module: string, packages: Set<string>): boolean;
 	resolveBinding(
 		expr: ts.Node,
 		sf: ts.SourceFile,
@@ -834,10 +837,23 @@ describe("모듈 바인딩을 만드는 선언은 두 종이다 (15회차 지적
 		expect(binding?.module).toBe("react");
 	});
 
-	it("반증: 동적 `require()` **호출**은 여전히 보증 밖이다", () => {
-		// 정적 선언(`import h = require("x")`)과 실행할 때 부르는 호출은 다르다.
+	it("지정자가 리터럴이면 동적 `require()` 호출도 그 모듈이다", () => {
+		// 17회차에 경계를 좁혔다. 소스에 모듈 이름이 그대로 적혀 있으면 정적
+		// 선언과 다를 것이 없다 — 셸의 지연 로딩이 그 꼴이다.
+		const binding = calleeOf(
+			`const h = require("react");\nexport const E = h.createElement("div");`,
+			"h.createElement",
+		);
+		expect(binding?.module).toBe("react");
+		expect(binding?.imported).toBe("createElement");
+	});
+
+	it("반증: 지정자를 실행할 때 정하면 여전히 모른다", () => {
 		expect(
-			calleeOf(`const h = require("react");\nexport const E = h.createElement("div");`, "h.createElement"),
+			calleeOf(
+				`declare const spec: string;\nconst h = require(spec);\nexport const E = h.createElement("div");`,
+				"h.createElement",
+			),
 		).toBeNull();
 	});
 });
@@ -874,5 +890,143 @@ describe("구조분해 키는 적힌 형태와 무관하다 (16회차 지적 2)"
 			parse(`import { "createElement" as ghostCreate } from "react";`),
 		);
 		expect(map.get("ghostCreate")?.imported).toBe("createElement");
+	});
+});
+
+/* ─────────────── 17회차에 못 박은 것 ─────────────── */
+
+describe("모듈 대조는 패키지 이름이다 (17회차 지적 5)", () => {
+	it("하위 경로가 붙어도 같은 패키지다", () => {
+		expect(B.packageOf("@tauri-apps/api/core")).toBe("@tauri-apps/api");
+		expect(B.packageOf("@tauri-apps/api/core.js")).toBe("@tauri-apps/api");
+		expect(B.packageOf("@tauri-apps/api/core/index.js")).toBe("@tauri-apps/api");
+		expect(B.packageOf("react/index.js")).toBe("react");
+	});
+
+	it("반증: 저장소 안 파일은 패키지가 아니다", () => {
+		expect(B.packageOf("./shim")).toBeNull();
+		expect(B.packageOf("../lib/logger")).toBeNull();
+		expect(B.packageOf("/abs/path")).toBeNull();
+	});
+
+	it("반증: 이름이 비슷한 다른 패키지는 아니다", () => {
+		expect(B.packageOf("react-dom")).toBe("react-dom");
+		expect(B.isModuleOfPackage("react-dom", new Set(["react"]))).toBe(false);
+	});
+});
+
+describe("공용 모듈이 흡수한 두 형태 (17회차 지적 6)", () => {
+	it("지정자가 리터럴인 동적 import 는 그 모듈이다", () => {
+		const binding = calleeOf(
+			`export async function w() {\n const { invoke } = await import("@tauri-apps/api/core");\n return invoke("cmd");\n}`,
+			"invoke",
+		);
+		expect(binding?.module).toBe("@tauri-apps/api/core");
+		expect(binding?.imported).toBe("invoke");
+	});
+
+	it("그 구조분해의 문자열·계산된 리터럴 키도 같다", () => {
+		for (const key of ['"invoke": g', '["invoke"]: g']) {
+			const binding = calleeOf(
+				`export async function w() {\n const { ${key} } = await import("@tauri-apps/api/core");\n return g("cmd");\n}`,
+				"g",
+			);
+			expect(binding?.imported, `${key} 를 못 읽었다`).toBe("invoke");
+		}
+	});
+
+	it("반증: 지정자가 리터럴이 아니면 여전히 모른다", () => {
+		expect(
+			calleeOf(
+				`declare const spec: string;\nexport async function w() {\n const { invoke } = await import(spec);\n return invoke("cmd");\n}`,
+				"invoke",
+			),
+		).toBeNull();
+	});
+
+	it("객체 리터럴로 만든 네임스페이스의 멤버를 따라간다", () => {
+		const binding = calleeOf(
+			`import { invoke } from "@tauri-apps/api/core";\nconst ns = { invoke };\nexport const r = ns.invoke("cmd");`,
+			"ns.invoke",
+		);
+		expect(binding?.module).toBe("@tauri-apps/api/core");
+		expect(binding?.imported).toBe("invoke");
+	});
+
+	it("그 객체의 문자열·계산된 리터럴 키도 같다", () => {
+		for (const key of ['"invoke": invoke', '["invoke"]: invoke']) {
+			const binding = calleeOf(
+				`import { invoke } from "@tauri-apps/api/core";\nconst ns = { ${key} };\nexport const r = ns.invoke("cmd");`,
+				"ns.invoke",
+			);
+			expect(binding?.imported, `${key} 를 못 읽었다`).toBe("invoke");
+		}
+	});
+
+	it("반증: 배열을 거쳐 흘러간 함수는 여전히 모른다", () => {
+		expect(
+			calleeOf(
+				`import { invoke } from "@tauri-apps/api/core";\nconst fns = [invoke];\nexport const r = fns[0]("cmd");`,
+				"fns[0]",
+			),
+		).toBeNull();
+	});
+});
+
+describe("파괴 게이트는 자기 해석을 들지 않는다 (17회차 지적 5·6)", () => {
+	const gate = readFileSync(
+		resolve(__dirname, "..", "..", "scripts", "check-destructive-affordance.mjs"),
+		"utf8",
+	);
+
+	it("import·구조분해·모듈 문자열 해석 코드가 없다", () => {
+		// 같은 해석이 두 벌이면 형제 모듈에서 고친 것이 옮겨 오지 않는다 —
+		// 실제로 그 이유로 같은 결함이 두 번 났다.
+		// 주석은 뺀다 — 왜 그렇게 했는지 적은 문장까지 금지할 이유는 없다.
+		const code = gate
+			.replace(/\/\*[\s\S]*?\*\//g, "")
+			.replace(/(^|[^:])\/\/[^\n]*/g, "$1");
+		for (const marker of [
+			"isImportDeclaration",
+			"isNamedImports",
+			"isNamespaceImport",
+			"isObjectBindingPattern",
+			"importClause",
+			"@tauri-apps/api/",
+			"INVOKE_MODULES",
+		])
+			expect(code.includes(marker), `파괴 게이트가 ${marker} 를 직접 본다`).toBe(false);
+		// 패키지 **이름**은 이 게이트의 것이다 — "Tauri 의 invoke 란 무엇인가" 는
+		// 이 게이트가 정의한다. 금지하는 것은 하위 경로가 붙은 **모듈 경로
+		// 문자열**이다. 그 형태가 곧 17회차에 뚫린 자리다.
+		expect(code.includes('"@tauri-apps/api"'), "패키지 이름은 여기 있어야 한다").toBe(true);
+		expect(code.includes("importBindings"), "import 는 공용 모듈로 읽어야 한다").toBe(true);
+	});
+
+	it("호출부 판정을 공용 모듈에 맡긴다", () => {
+		expect(gate.includes("resolveCallee")).toBe(true);
+		expect(gate.includes("isModuleOfPackage")).toBe(true);
+	});
+
+	it("겹의 수를 세는 자리가 없다", () => {
+		// 감싸기 고정점이 여섯 바퀴만 돌았다. 그런 숫자는 한계가 아니라
+		// "몇 겹 더 쌓으면 통과하는가" 를 알려 주는 눈금이다 — 13·14회차에
+		// 별명 깊이·상수 사슬·`void` 겹에서 없앤 것과 같은 종류다. 끝나는
+		// 이유는 이름 집합이 **더 자라지 않는 것**이어야 한다.
+		const code = gate
+			.replace(/\/\*[\s\S]*?\*\//g, "")
+			.replace(/(^|[^:])\/\/[^\n]*/g, "$1");
+		expect(/round\s*<\s*\d/.test(code), "고정점이 바퀴 수를 센다").toBe(false);
+		expect(/\bMAX_[A-Z_]*\b/.test(code), "게이트에 한계 상수가 있다").toBe(false);
+		const loops = code.match(/for\s*\([^;]*;[^;<]*<\s*\d+/g) ?? [];
+		expect(loops, `게이트가 겹을 센다: ${loops.join(", ")}`).toEqual([]);
+	});
+
+	it("이 게이트만의 보탬은 감싸기 함수 하나뿐이다", () => {
+		// 고정점이 키우는 이름 집합은 여기 남는다 — 그것은 바인딩이 아니라
+		// 이 게이트가 정의하는 개념이다.
+		expect(/function wrapperOffset\(/.test(gate)).toBe(true);
+		expect(gate.includes("aliasFromDeclaration")).toBe(false);
+		expect(gate.includes("invokeAliasOffset")).toBe(false);
 	});
 });

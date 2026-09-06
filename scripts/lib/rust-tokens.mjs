@@ -104,6 +104,70 @@ export function keywordIn(token, words) {
 	return !!token && token.kind === "ident" && token.keyword === true && words.has(token.text);
 }
 
+/** `\n` 처럼 한 글자로 끝나는 이스케이프. */
+const SIMPLE_ESCAPES = new Map([
+	["n", "\n"],
+	["r", "\r"],
+	["t", "\t"],
+	["0", "\0"],
+	["\\", "\\"],
+	['"', '"'],
+	["'", "'"],
+]);
+
+/**
+ * Rust 문자열 리터럴의 **값**. 적는 법이 아니라 뜻이다.
+ *
+ * 왜 필요한가: 데이터 홈 검사는 문자열의 값을 `HOME` · `.naia` 와 대조한다. 그
+ * 값이 이스케이프를 한 글자씩 삼키는 방식이던 동안 `"\x48OME"` 은 `x48OME` 로,
+ * `"\x2enaia"` 는 `x2enaia` 로 읽혀 금지 집합에 들지 않았다 — 같은 글자를 다르게
+ * 적는 것만으로 홈을 짚을 수 있었다(17회차 지적 3). 조각을 이어 붙이는 위조
+ * (`format!(".{}", "naia")`)와 달리 이것은 **리터럴 하나**다.
+ *
+ * 푸는 것: `\xNN`, `\u{…}`, `\n \r \t \0 \\ \" \'`, 그리고 줄 끝 `\` 이어쓰기
+ * (뒤따르는 공백을 함께 지운다).
+ */
+function unescapeRust(raw) {
+	let out = "";
+	for (let i = 0; i < raw.length; i += 1) {
+		if (raw[i] !== "\\") {
+			out += raw[i];
+			continue;
+		}
+		const next = raw[i + 1];
+		if (next === undefined) break;
+		if (next === "x") {
+			const code = Number.parseInt(raw.slice(i + 2, i + 4), 16);
+			if (Number.isFinite(code)) {
+				out += String.fromCharCode(code);
+				i += 3;
+				continue;
+			}
+		}
+		if (next === "u" && raw[i + 2] === "{") {
+			const close = raw.indexOf("}", i + 3);
+			if (close !== -1) {
+				const code = Number.parseInt(raw.slice(i + 3, close), 16);
+				if (Number.isFinite(code)) {
+					out += String.fromCodePoint(code);
+					i = close;
+					continue;
+				}
+			}
+		}
+		// 줄 끝 백슬래시는 줄바꿈과 뒤따르는 공백을 지운다.
+		if (next === "\n" || next === "\r") {
+			let j = i + 1;
+			while (j < raw.length && /\s/.test(raw[j])) j += 1;
+			i = j - 1;
+			continue;
+		}
+		out += SIMPLE_ESCAPES.get(next) ?? next;
+		i += 1;
+	}
+	return out;
+}
+
 /** 식별자 첫 글자로 쓸 수 있는가. Rust 는 비ASCII 식별자를 허용한다. */
 function isIdentStart(ch) {
 	return /[A-Za-z_]/.test(ch) || ch.charCodeAt(0) > 127;
@@ -124,6 +188,11 @@ function isIdentPart(ch) {
  * `r#foo` 의 이름은 `foo` 이고, 프런트가 `invoke("foo")` 로 부르는 이름도 그것이다.
  * 그 토큰은 `raw: true` 를 함께 단다. 생 **문자열**(`r"…"`, `r#"…"#`)은 그보다
  * 먼저 갈려 `string` 토큰이 된다.
+ *
+ * `string` 과 `char` 토큰은 `value` 를 함께 단다 — **이스케이프를 푼 값**이다
+ * (`"\x48OME"` 은 `HOME`). `text` 에도 같은 값을 넣는다. 값을 보는 자리가 어느
+ * 필드를 읽든 답이 같아야, 다음에 붙는 검사가 적는 법과 뜻을 혼동하지 않는다
+ * (17회차 지적 3).
  */
 export function tokenizeRust(source) {
 	const tokens = [];
@@ -183,9 +252,11 @@ export function tokenizeRust(source) {
 			const startLine = line;
 			const after = end === -1 ? n : stop + terminator.length;
 			bump(start, after);
+			// 생 문자열에는 이스케이프가 없다 — 적힌 그대로가 값이다.
 			tokens.push({
 				kind: "string",
 				text: value,
+				value,
 				line: startLine,
 				start,
 				end: after,
@@ -215,27 +286,31 @@ export function tokenizeRust(source) {
 			i = j;
 			continue;
 		}
-		// 보통 문자열: "…" (b"…" 포함)
+		// 보통 문자열: "…" (바이트 문자열 b"…" 포함)
 		if (ch === '"' || (ch === "b" && source[i + 1] === '"')) {
 			const start = i;
 			const startLine = line;
 			let j = ch === '"' ? i + 1 : i + 2;
-			let value = "";
+			// 원문을 그대로 모은 뒤 **한 번에** 푼다. 한 글자씩 삼키면 `\xNN` 과
+			// `\u{…}` 가 글자 `x`·`u` 로 남는다(17회차 지적 3).
+			let literal = "";
 			while (j < n) {
 				if (source[j] === "\\") {
-					value += source[j + 1] ?? "";
+					literal += source.slice(j, j + 2);
 					j += 2;
 					continue;
 				}
 				if (source[j] === '"') break;
-				value += source[j];
+				literal += source[j];
 				j += 1;
 			}
 			const after = Math.min(j + 1, n);
 			bump(start, after);
+			const value = unescapeRust(literal);
 			tokens.push({
 				kind: "string",
 				text: value,
+				value,
 				line: startLine,
 				start,
 				end: after,
@@ -247,9 +322,11 @@ export function tokenizeRust(source) {
 		if (ch === "'") {
 			const charLiteral = /^'(\\.|[^\\'])'/.exec(source.slice(i, i + 12));
 			if (charLiteral) {
+				const value = unescapeRust(charLiteral[1]);
 				tokens.push({
 					kind: "char",
-					text: charLiteral[1],
+					text: value,
+					value,
 					line,
 					start: i,
 					end: i + charLiteral[0].length,
@@ -493,6 +570,33 @@ const COMMAND_PATHS = [
 ];
 
 /**
+ * 이 파일의 `extern crate` 선언.
+ *
+ * `{ crate, local, line, at }` — `local` 은 `as` 별명이고, 별명이 없으면 크레이트
+ * 이름과 같다. 2018 edition 이후로 잘 쓰이지 않지만 여전히 유효하고, 별명은
+ * `use tauri as t;` 와 똑같이 그 이름을 만든다. 이 선언이 표에 없던 동안
+ * `extern crate tauri as t; #[t::command]` 는 명령이 아니었다(17회차 지적 4).
+ *
+ * `extern "C" fn` 의 `extern` 은 뒤가 문자열이라 여기 걸리지 않는다.
+ */
+export function externCrateDeclarations(tokens) {
+	const found = [];
+	for (let i = 0; i < tokens.length; i += 1) {
+		if (!isKeyword(tokens[i], "extern")) continue;
+		if (!isKeyword(tokens[i + 1], "crate")) continue;
+		const name = tokens[i + 2];
+		if (!name || name.kind !== "ident") continue;
+		let local = name.text;
+		if (isKeyword(tokens[i + 3], "as") && tokens[i + 4]?.kind === "ident") {
+			local = tokens[i + 4].text;
+		}
+		found.push({ crate: name.text, local, line: tokens[i].line, at: i });
+		i += 2;
+	}
+	return found;
+}
+
+/**
  * 이 파일의 `use` 가 만든 지역 이름 → 그 이름이 가리키는 **전체 경로**.
  *
  * 크레이트 별명(`use tauri as t`)도, 잎 별명(`use tauri::command as cmd`)도 같은
@@ -502,6 +606,11 @@ const COMMAND_PATHS = [
 export function useResolution(tokens) {
 	const alias = new Map();
 	const globs = [];
+	// `extern crate tauri as t;` 도 크레이트 별명이다 — `use tauri as t;` 와 같은
+	// 이름을 만든다(17회차 지적 4).
+	for (const declared of externCrateDeclarations(tokens)) {
+		if (declared.local) alias.set(declared.local, [declared.crate]);
+	}
 	for (const leaf of useDeclarations(tokens)) {
 		// `use tauri::{self as t}` 의 `self` 는 모듈 자신이라 마디가 아니다.
 		const path = leaf.path[leaf.path.length - 1] === "self" ? leaf.path.slice(0, -1) : leaf.path;
@@ -706,7 +815,7 @@ export function splitCodeAndStrings(source) {
 			line += 1;
 		}
 		if (token.kind === "string") {
-			strings.push({ value: token.text, line: token.line });
+			strings.push({ value: token.value, line: token.line });
 			code += " ";
 			continue;
 		}

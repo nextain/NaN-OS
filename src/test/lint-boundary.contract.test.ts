@@ -174,10 +174,22 @@ describe("린트 경계 — 게이트가 같은 목록을 본다", () => {
 			expect(computedCallee('f["call" as const](null);')).toBe(true);
 		});
 
+		it("`void +0` 처럼 정적으로 값이 정해지면 같은 형태다", () => {
+			// "리터럴" 은 형태가 아니라 정적으로 값이 정해지는가다. 형태로 세면
+			// 매 회차에 하나씩 새로 온다(17회차 지적 9).
+			expect(voidLiteral("void +0;")).toBe(true);
+			expect(voidLiteral("void -1;")).toBe(true);
+			expect(voidLiteral("void ~0;")).toBe(true);
+			expect(voidLiteral("void !0;")).toBe(true);
+			expect(voidLiteral('void "x".length;')).toBe(true);
+			expect(voidLiteral("void (1 === 1);")).toBe(true);
+		});
+
 		it("반증: 껍데기를 벗겨도 형태가 아니면 걸리지 않는다", () => {
 			// `void asyncFn()` 은 정당한 관용구다. 벗기기를 넓혔다고 이것까지
 			// 잡으면 규칙이 곧 예외 목록이 된다.
 			expect(voidLiteral("void (asyncFn());")).toBe(false);
+			expect(voidLiteral("void +asyncFn();")).toBe(false);
 			expect(computedCallee("f[name](null);")).toBe(false);
 			expect(computedCallee("f.call(null);")).toBe(false);
 		});

@@ -54,6 +54,10 @@ interface JsxStatic {
 	stringCandidates(node: ts.Node | undefined, sf: ts.SourceFile, env?: Env | null): Candidates;
 	staticChunks(node: ts.Node | undefined, sf: ts.SourceFile, env?: Env | null): string[];
 	staticStringsIn(node: ts.Node, sf: ts.SourceFile, env?: Env | null): Candidates;
+	staticPrimitive(node: ts.Node, sf: ts.SourceFile, env: Env | null, seen: Set<ts.Node>): unknown;
+	STATIC_UNKNOWN: symbol;
+	STATIC_EVAL_KINDS: { id: string; title: string }[];
+	STATIC_EVAL_OUT_OF_SCOPE: string[];
 	alwaysTruthy(node: ts.Node | undefined, sf: ts.SourceFile, env?: Env | null): boolean;
 	typeStrings(node: ts.TypeNode | undefined, sf: ts.SourceFile, env?: Env | null): Candidates;
 	isCreateElementCall(node: ts.Node, env: Env | null): boolean;
@@ -1491,5 +1495,98 @@ describe("요소 모듈은 패키지 이름이다 (16회차 지적 5)", () => {
 
 	it("반증: 저장소 안 파일은 패키지가 아니다", () => {
 		expect(factoryOf("./shim", "createElement")).toBeNull();
+	});
+});
+
+/* ─────────────── 17회차에 못 박은 것 ─────────────── */
+
+describe("정적 평가 범위는 표 하나다 (17회차 지적 1·2·8)", () => {
+	it("표가 비어 있지 않고 id 가 겹치지 않는다", () => {
+		expect(J.STATIC_EVAL_KINDS.length).toBeGreaterThan(0);
+		const ids = J.STATIC_EVAL_KINDS.map((k) => k.id);
+		expect(new Set(ids).size).toBe(ids.length);
+	});
+
+	it("모듈 머리말이 표를 그대로 싣는다", () => {
+		const text = readFileSync(
+			resolve(__dirname, "..", "..", "scripts", "lib", "jsx-static.mjs"),
+			"utf8",
+		);
+		const header = text.slice(0, text.indexOf("\n */\n") + 4);
+		for (const kind of J.STATIC_EVAL_KINDS)
+			expect(header.includes(kind.id), `머리말에 ${kind.id} 가 없다`).toBe(true);
+		for (const out of J.STATIC_EVAL_OUT_OF_SCOPE)
+			expect(header.includes(out), `머리말에 보증 밖 "${out}" 이 없다`).toBe(true);
+	});
+
+	it("회차별 문서가 같은 표를 싣는다", () => {
+		const doc = readFileSync(
+			resolve(__dirname, "..", "..", "docs", "quality-reviews", "obfuscation-forms.md"),
+			"utf8",
+		);
+		expect(doc.includes("## 정적 평가 범위")).toBe(true);
+		for (const kind of J.STATIC_EVAL_KINDS)
+			expect(doc.includes(kind.id), `문서에 ${kind.id} 가 없다`).toBe(true);
+	});
+});
+
+describe("리터럴의 멤버와 인덱스도 접는다 (17회차 지적 1·2)", () => {
+	it("문자열·배열 리터럴의 `.length`", () => {
+		expect(truthyOf('"x".length')).toBe(true);
+		expect(truthyOf("[1].length")).toBe(true);
+		expect(truthyOf('"abc"[0]')).toBe(true);
+	});
+
+	it("반증: 길이가 0 이면 거짓이다", () => {
+		expect(truthyOf('"".length')).toBe(false);
+		expect(truthyOf("[].length")).toBe(false);
+	});
+
+	it("리터럴 인덱스는 문자열 후보가 된다", () => {
+		const at = (src: string, pre = ""): string[] => {
+			const sf = parse(`${pre}\nexport const P = <button d={${src}} />;`);
+			return [...J.stringCandidates(attributeValue(sf, "d"), sf, null).values];
+		};
+		expect(at('["alert"][0]')).toEqual(["alert"]);
+		expect(at('{ a: "alert" }["a"]')).toEqual(["alert"]);
+		expect(at("ROLES[0]", 'const ROLES = ["alert"];')).toEqual(["alert"]);
+	});
+
+	it("반증: 인덱스를 모르면 후보가 없다", () => {
+		const sf = parse(
+			'const ROLES = ["alert"];\ndeclare const i: number;\nexport const P = <button d={ROLES[i]} />;',
+		);
+		const read = J.stringCandidates(attributeValue(sf, "d"), sf, null);
+		expect([...read.values]).toEqual([]);
+		expect(read.complete).toBe(false);
+	});
+
+	it("반증: 표 밖(함수 결과)은 여전히 모른다", () => {
+		expect(truthyOf("makeIt().length", "declare function makeIt(): string;")).toBe(false);
+	});
+});
+
+describe("보간 없는 태그 템플릿은 그 글자다 (17회차 지적 8)", () => {
+	function at(src: string, pre = ""): string[] {
+		const sf = parse(`${pre}\nexport const P = <button d={${src}} />;`);
+		return [...J.staticStringsIn(attributeValue(sf, "d") as ts.Node, sf, null).values];
+	}
+
+	it("`String.raw` 의 고정 조각을 읽는다", () => {
+		expect(at("String.raw`https://evil.example/hook`")).toContain(
+			"https://evil.example/hook",
+		);
+	});
+
+	it("호출 인자 안에 있어도 읽는다", () => {
+		expect(at("wrap(String.raw`https://evil.example/hook`)", "declare function wrap(s: string): string;")).toContain(
+			"https://evil.example/hook",
+		);
+	});
+
+	it("반증: 모르는 태그는 값이 아니다", () => {
+		expect(
+			at("tag`https://evil.example/hook`", "declare function tag(s: TemplateStringsArray): string;"),
+		).toEqual([]);
 	});
 });

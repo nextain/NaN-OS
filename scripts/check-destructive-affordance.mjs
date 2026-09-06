@@ -45,8 +45,11 @@
  * 이제 껍데기를 벗기는 것과 바인딩을 푸는 것은 `scripts/lib/bindings.mjs`
  * 하나가 한다. 괄호·`as`·`!`·쉼표식, import 별명, 같은 파일 const 별명,
  * 구조분해, `.bind`/`.call`/`.apply` 가 두 게이트에서 같은 규칙으로 읽힌다.
- * 이 파일에 남은 것은 공용 모듈이 일부러 보지 않는 **이 게이트만의 보탬**
- * 뿐이고, 아래 `aliasFromDeclaration` 에 그 이유와 함께 적어 두었다.
+ * 이 파일에 남은 것은 이 게이트만의 보탬 하나뿐이다 — 첫 인자를 그대로 넘기는
+ * **감싸기 함수**를 고정점으로 키우는 일이다(`wrapperOffset`). 별명·구조분해·
+ * 네임스페이스·동적 import·모듈 이름 대조는 전부 공용 모듈이 한다. 예전에는
+ * 그 해석이 이 파일에도 한 벌 있었고, 형제 모듈에서 고친 것이 옮겨 오지 않아
+ * 같은 결함이 두 번 났다(17회차 지적 5·6).
  *
  * ## 이 게이트가 따라가지 않는 것 (보증 밖)
  *
@@ -79,7 +82,12 @@ import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join, normalize } from "node:path";
 import ts from "typescript";
-import { resolveBinding, resolveCallee, unwrap } from "./lib/bindings.mjs";
+import {
+	importBindings,
+	isModuleOfPackage,
+	resolveCallee,
+	unwrap,
+} from "./lib/bindings.mjs";
 import { tauriCommandBodies } from "./lib/rust-tokens.mjs";
 import { parseToml } from "./lib/toml-min.mjs";
 
@@ -369,7 +377,10 @@ const READABLE_FUNCTION_CHARS = 4000;
 function enclosingFunction(source, at) {
 	let cursor = at;
 	let widest = null;
-	for (let step = 0; step < 12; step++) {
+	// 바깥으로 한 겹씩 나간다. 겹의 수는 세지 않는다 — 중첩을 몇 겹 더 쌓으면
+	// 감싼 함수를 못 찾는가는 눈금이지 한계가 아니다. `cursor` 가 매번 앞으로
+	// 줄어들고 0 에서 멈추므로 이 반복은 반드시 끝난다.
+	for (;;) {
 		const block = enclosingBlock(source, cursor);
 		if (!block) break;
 		widest = block;
@@ -464,11 +475,25 @@ const resolvedLiteralCalls = [];
 // 호출을 새로 조립해 넣어도 삼킨다 — 면제 이유가 거짓이 되어도 통과한다.
 // 자리는 감싼 함수 이름으로 적는다. 줄 번호로 적으면 위에 한 줄만 넣어도
 // 어긋나고, 그때마다 목록을 고치게 되어 아무도 읽지 않게 된다.
-/** `invoke` 가 들어오는 모듈. 여기서 온 이름만 Tauri 호출로 본다. */
-const INVOKE_MODULES = new Set([
-	"@tauri-apps/api/core",
-	"@tauri-apps/api/tauri",
-]);
+/**
+ * `invoke` 가 들어오는 **패키지**. 여기서 온 이름만 Tauri 호출로 본다.
+ *
+ * 적힌 문자열이 아니라 패키지 이름으로 대조한다 — `@tauri-apps/api/core.js`·
+ * `@tauri-apps/api/core/index.js` 는 같은 값인데 글자가 다르다. 요소 모듈에서
+ * 한 번 같은 사고가 났고(16회차 지적 5), 여기서 또 났다(17회차 지적 5).
+ * 대조하는 자리는 모두 `bindings.mjs` 의 `packageOf` 를 지난다.
+ */
+const INVOKE_PACKAGES = new Set(["@tauri-apps/api"]);
+
+/** 이 바인딩이 Tauri 의 `invoke` 인가. */
+function isTauriInvoke(binding) {
+	return (
+		!!binding &&
+		!!binding.module &&
+		binding.imported === "invoke" &&
+		isModuleOfPackage(binding.module, INVOKE_PACKAGES)
+	);
+}
 
 /** 주석을 길이 그대로 공백으로 바꾼다. 파서가 준 위치와 어긋나지 않게 한다. */
 function blankComments(source) {
@@ -513,156 +538,19 @@ function eachNode(node, visit) {
 	node.forEachChild((child) => eachNode(child, visit));
 }
 
-/** `await import("@tauri-apps/api/core")` 처럼 invoke 를 담고 오는 식인가. */
-function isInvokeModuleExpression(node) {
-	const expr = unwrap(node);
-	const call = ts.isAwaitExpression(expr) ? unwrap(expr.expression) : expr;
-	if (!ts.isCallExpression(call)) return false;
-	const callee = call.expression;
-	const isImport =
-		callee.kind === ts.SyntaxKind.ImportKeyword ||
-		(ts.isIdentifier(callee) && callee.text === "require");
-	if (!isImport) return false;
-	const first = call.arguments[0];
-	return !!first && ts.isStringLiteralLike(first) && INVOKE_MODULES.has(first.text);
-}
-
 /**
- * 멤버 접근의 이름과 왼쪽 식. 리터럴 키(`invoke["call"]`)도 속성(`invoke.call`)과
- * 같게 읽는다 — 같은 메서드를 대괄호로 적었을 뿐이다(14회차 지적 6). 동적 키는
- * `null` 이고, 그것은 이 게이트의 경계다.
- */
-function memberOf(node) {
-	if (!node) return null;
-	if (ts.isPropertyAccessExpression(node)) return { name: node.name.text, base: node.expression };
-	if (ts.isElementAccessExpression(node)) {
-		const key = unwrap(node.argumentExpression);
-		if (key && ts.isStringLiteralLike(key)) return { name: key.text, base: node.expression };
-	}
-	return null;
-}
-
-/**
- * 이 식을 부르면 Tauri 명령을 부르는 것인가. 그렇다면 **명령 이름이 몇 번째
- * 인자**인지 돌려준다. 아니면 `null`.
+ * 이 **이름**을 부르면 Tauri 명령을 부르는 것인가. 그렇다면 명령 이름이 몇 번째
+ * 인자인지, 아니면 `null`.
  *
- * `-1` 은 "부르기는 하는데 이름이 어느 인자인지 알 수 없다"(`.apply`)는 뜻이다.
+ * 여기 남은 것은 이 게이트만의 보탬 하나다 — 고정점이 키운 **감싸기 함수 이름**.
+ * 별명·구조분해·네임스페이스·모듈 이름 해석은 전부 `scripts/lib/bindings.mjs`
+ * 가 한다(17회차 지적 5·6). 예전에는 그 해석이 이 파일에도 한 벌 있었고, 형제
+ * 모듈에서 고친 것이 여기로 옮겨 오지 않아 같은 결함이 두 번 났다.
  */
-function invokeAliasOffset(expr, bindings) {
+function wrapperOffset(expr, bindings) {
 	const node = unwrap(expr);
-	if (!node) return null;
-	// 먼저 공용 모듈에게 묻는다. import 별명·네임스페이스 멤버·같은 파일 const
-	// 별명·구조분해·`.bind`, 그리고 껍데기(괄호·`as`·`!`·쉼표식)가 여기서 알림
-	// 게이트와 **같은 규칙**으로 풀린다. 못 풀면 아래 이 게이트만의 보탬으로
-	// 내려간다 — 고정점이 키운 감싸기 함수 이름들이 그것이다.
-	if (bindings.sourceFile) {
-		const binding = resolveBinding(node, bindings.sourceFile, bindings.env, 0);
-		if (
-			binding &&
-			binding.module &&
-			INVOKE_MODULES.has(binding.module) &&
-			binding.imported === "invoke"
-		)
-			// 인자를 미리 먹인 `.bind` 는 명령 이름이 호출부에 없다. 0 으로 읽으면
-			// 페이로드를 이름으로 보고 "그런 명령 없음" 으로 조용히 흘린다.
-			return binding.boundArgs > 0 ? -1 : 0;
-	}
-	if (ts.isIdentifier(node)) {
-		return bindings.local.has(node.text)
-			? (bindings.offsets.get(node.text) ?? 0)
-			: null;
-	}
-	const member = memberOf(node);
-	if (member) {
-		// `ns.invoke`
-		if (
-			member.name === "invoke" &&
-			ts.isIdentifier(member.base) &&
-			bindings.namespaces.has(member.base.text)
-		)
-			return 0;
-		// `invoke.call` — 첫 인자가 this 라 이름은 한 칸 뒤다.
-		const base = invokeAliasOffset(member.base, bindings);
-		if (base === null) return null;
-		if (member.name === "call") return base < 0 ? -1 : base + 1;
-		if (member.name === "apply") return -1;
-		return null;
-	}
-	// `invoke.bind(null)` / `invoke.bind(null, "memory_delete_fact")`
-	if (ts.isCallExpression(node)) {
-		const bound = memberOf(unwrap(node.expression));
-		if (!bound || bound.name !== "bind") return null;
-		const base = invokeAliasOffset(bound.base, bindings);
-		if (base === null || base < 0) return base;
-		// 첫 인자는 this, 나머지는 **미리 먹인 인자**다. 하나라도 먹였으면 명령
-		// 이름이 호출부 인자에 없다 — 자리를 옮겨 세는 것이 아니라 **모른다**
-		// 이다(`bindings.mjs` 의 `argsUnknown` 과 같은 뜻). 옛 산술은 이것을
-		// 0 으로 접어, 이름을 bind 로 미리 먹이는 것만으로 파괴 호출이 초록으로
-		// 흘렀다.
-		return node.arguments.length > 1 ? -1 : base;
-	}
-	return null;
-}
-
-/**
- * 이 선언이 한 파일 안에서 `invoke` 의 **별명**을 만드는가.
- *
- * 별명을 푸는 일반 규칙은 `scripts/lib/bindings.mjs` 로 옮겼다(12회차 지적 5).
- * `const call = invoke.bind(null)`, `const x = invoke`, 껍데기로 싼 것,
- * `import { invoke as tauriInvoke }` 는 이제 `invokeAliasOffset` 이 그 모듈에게
- * 물어 답한다 — 알림 게이트와 같은 규칙이다.
- *
- * 여기 남은 것은 공용 모듈이 **일부러 보지 않는다고 적어 둔** 두 가지에
- * 대한 이 게이트만의 보탬이다. 셸 코드에 실제로 있는 형태라 놓치면 파괴
- * 호출이 목록에서 사라지고, 그래서 경계 밖이라고 적어 두는 대신 여기서
- * 좁게 받는다.
- *
- *   - 객체 리터럴로 만든 네임스페이스 — `const ns = { invoke }` 뒤의
- *     `ns.invoke(…)`. 객체를 거쳐 흘러간 함수는 공용 모듈의 보증 밖이다.
- *   - 동적 `import`/`require` 의 구조분해 — `const { invoke } = await
- *     import("@tauri-apps/api/core")`. 셸의 지연 로딩이 이 꼴이다.
- *
- * 별명의 별명은 아래 고정점 루프가 한 단계씩 따라간다.
- *
- * @returns {{ name: string, offset?: number, namespace?: boolean } | null}
- */
-function aliasFromDeclaration(node, sf, bindings) {
-	if (!node.initializer) return null;
-	const init = unwrap(node.initializer);
-
-	// const ns = { invoke } — 그 뒤의 `ns.invoke(…)` 는 네임스페이스 호출과 같다.
-	if (ts.isIdentifier(node.name) && ts.isObjectLiteralExpression(init)) {
-		for (const property of init.properties) {
-			const key = property.name;
-			if (!key || !ts.isIdentifier(key) || key.text !== "invoke") continue;
-			const value = ts.isShorthandPropertyAssignment(property)
-				? property.name
-				: ts.isPropertyAssignment(property)
-					? property.initializer
-					: null;
-			if (!value) continue;
-			if (invokeAliasOffset(value, bindings) === 0)
-				return { name: node.name.text, namespace: true };
-		}
-		return null;
-	}
-
-	// 구조 분해: const { invoke: iv } = ns / = await import("…/core")
-	if (ts.isObjectBindingPattern(node.name)) {
-		const fromNamespace =
-			ts.isIdentifier(init) && bindings.namespaces.has(init.text);
-		if (!fromNamespace && !isInvokeModuleExpression(init)) return null;
-		for (const element of node.name.elements) {
-			const original = element.propertyName ?? element.name;
-			if (!ts.isIdentifier(original) || original.text !== "invoke") continue;
-			if (!ts.isIdentifier(element.name)) continue;
-			return { name: element.name.text, offset: 0 };
-		}
-		return null;
-	}
-	if (!ts.isIdentifier(node.name)) return null;
-	const offset = invokeAliasOffset(init, bindings);
-	return offset === null ? null : { name: node.name.text, offset };
+	if (!node || !ts.isIdentifier(node)) return null;
+	return bindings.local.has(node.text) ? (bindings.offsets.get(node.text) ?? 0) : null;
 }
 
 /**
@@ -675,15 +563,13 @@ function invokeBindings(sources) {
 	const trees = new Map();
 	for (const [file, source] of sources) trees.set(file, parse(file, source));
 
-	const local = new Map(); // file -> Set<이름>
-	const namespaces = new Map(); // file -> Set<네임스페이스 이름>
+	const local = new Map(); // file -> Set<감싸기 함수 이름>
 	const exported = new Map(); // file -> Set<내보낸 감싸기 이름>
 	// 이름 -> 명령 이름이 몇 번째 인자인가. `invoke.call(null, "cmd")` 처럼 한 칸
 	// 밀리는 별명이 있어 자리마다 따로 든다. -1 은 알 수 없다(`.apply`)는 뜻.
 	const offsets = new Map(); // file -> Map<이름, 오프셋>
 	for (const file of sources.keys()) {
 		local.set(file, new Set());
-		namespaces.set(file, new Set());
 		exported.set(file, new Set());
 		offsets.set(file, new Map());
 	}
@@ -696,32 +582,14 @@ function invokeBindings(sources) {
 	};
 	const bindingsFor = (file) => ({
 		local: local.get(file),
-		namespaces: namespaces.get(file),
 		offsets: offsets.get(file),
 		sourceFile: trees.get(file) ?? null,
 		env,
 	});
 
-	// 씨앗: import 로 들어온 invoke
-	for (const [file, tree] of trees) {
-		for (const statement of tree.statements) {
-			if (!ts.isImportDeclaration(statement)) continue;
-			if (!ts.isStringLiteral(statement.moduleSpecifier)) continue;
-			const spec = statement.moduleSpecifier.text;
-			const clause = statement.importClause;
-			if (!clause || !clause.namedBindings) continue;
-			if (INVOKE_MODULES.has(spec)) {
-				if (ts.isNamespaceImport(clause.namedBindings)) {
-					namespaces.get(file).add(clause.namedBindings.name.text);
-				} else if (ts.isNamedImports(clause.namedBindings)) {
-					for (const element of clause.namedBindings.elements) {
-						const original = (element.propertyName ?? element.name).text;
-						if (original === "invoke") local.get(file).add(element.name.text);
-					}
-				}
-			}
-		}
-	}
+	// 씨앗을 따로 두지 않는다. `import { invoke as tauriInvoke }`·네임스페이스·
+	// 구조분해·`.bind` 는 전부 `bindings.mjs` 가 호출식에서 바로 답한다. 이
+	// 집합에는 아래 고정점이 찾아낸 **감싸기 함수 이름**만 담긴다.
 
 	/** 이 호출이 Tauri 명령 호출이면 명령 이름의 인자 자리, 아니면 null. */
 	const invokeCallOffset = (node, file) => {
@@ -734,21 +602,25 @@ function invokeBindings(sources) {
 		// (14회차 지적 6).
 		if (bindings.sourceFile) {
 			const callee = resolveCallee(node, bindings.sourceFile, bindings.env);
-			if (
-				callee &&
-				callee.module &&
-				INVOKE_MODULES.has(callee.module) &&
-				callee.imported === "invoke"
-			)
-				return callee.argsUnknown ? -1 : callee.argShift;
+			if (isTauriInvoke(callee)) return callee.argsUnknown ? -1 : callee.argShift;
 		}
 		// 못 풀면 이 게이트만의 보탬으로 내려간다 — 고정점이 키운 감싸기 함수들이다.
-		return invokeAliasOffset(node.expression, bindings);
+		return wrapperOffset(node.expression, bindings);
 	};
 	const callsInvoke = (node, file) => invokeCallOffset(node, file) !== null;
 
-	// 고정점: 첫 인자를 그대로 넘기는 감싸기 함수도 호출부다
-	for (let round = 0; round < 6; round += 1) {
+	// 고정점: 첫 인자를 그대로 넘기는 감싸기 함수도 호출부다.
+	//
+	// 겹의 수를 세지 않는다. 예전에는 여섯 바퀴만 돌았는데, 그런 숫자는 한계가
+	// 아니라 "감싸기를 몇 겹 더 쌓으면 통과하는가" 를 알려 주는 눈금이다 —
+	// 13회차에 별명 깊이·상수 사슬에서, 14회차에 `void` 겹에서 없앤 것과 같은
+	// 종류의 자리다.
+	//
+	// 끝나는 이유는 세는 것이 아니라 **더 자라지 않는 것**이다. 이름 집합은
+	// 한 방향으로만 자라고(이미 있는 이름은 `has` 로 걸러 다시 넣지 않는다),
+	// 저장소의 선언 수는 유한하다. 그래서 이 반복은 반드시 끝난다 — 그 집합
+	// 자체가 "이미 지난 자리" 표시다.
+	for (;;) {
 		let grew = false;
 		for (const [file, tree] of trees) {
 			const declare = (name, node, isExported) => {
@@ -774,34 +646,6 @@ function invokeBindings(sources) {
 				if (isExported) exported.get(file).add(name);
 				grew = true;
 			};
-			// `invoke` 의 별명. 감싸기 함수보다 먼저 봐야 그 함수 안의 호출이 보인다.
-			eachNode(tree, (statement) => {
-				if (!ts.isVariableDeclaration(statement)) return;
-				const alias = aliasFromDeclaration(statement, tree, bindingsFor(file));
-				if (!alias) return;
-				if (alias.namespace) {
-					if (namespaces.get(file).has(alias.name)) return;
-					namespaces.get(file).add(alias.name);
-					grew = true;
-					return;
-				}
-				if (
-					local.get(file).has(alias.name) &&
-					(offsets.get(file).get(alias.name) ?? 0) === alias.offset
-				)
-					return;
-				local.get(file).add(alias.name);
-				offsets.get(file).set(alias.name, alias.offset);
-				// 내보낸 별명은 그 이름으로 import 한 파일에서도 호출부다.
-				const owner = statement.parent?.parent;
-				if (
-					owner &&
-					ts.isVariableStatement(owner) &&
-					owner.modifiers?.some((m) => m.kind === ts.SyntaxKind.ExportKeyword)
-				)
-					exported.get(file).add(alias.name);
-				grew = true;
-			});
 			for (const statement of tree.statements) {
 				const isExported = !!statement.modifiers?.some(
 					(m) => m.kind === ts.SyntaxKind.ExportKeyword,
@@ -819,24 +663,17 @@ function invokeBindings(sources) {
 					}
 				}
 			}
-			// 감싸기 함수를 import 한 파일도 그 이름으로 부른다
-			for (const statement of tree.statements) {
-				if (!ts.isImportDeclaration(statement)) continue;
-				if (!ts.isStringLiteral(statement.moduleSpecifier)) continue;
-				const target = resolveImport(file, statement.moduleSpecifier.text, sources);
+			// 감싸기 함수를 import 한 파일도 그 이름으로 부른다.
+			// import 선언을 읽는 자리도 공용 모듈 하나다 — 그래야
+			// `import { "wrap" as w }` 같은 형태가 여기서만 빠지지 않는다.
+			for (const [localName, hit] of importBindings(tree)) {
+				const target = resolveImport(file, hit.module, sources);
 				if (!target) continue;
-				const clause = statement.importClause;
-				if (!clause?.namedBindings || !ts.isNamedImports(clause.namedBindings)) continue;
-				for (const element of clause.namedBindings.elements) {
-					const original = (element.propertyName ?? element.name).text;
-					if (!exported.get(target)?.has(original)) continue;
-					if (local.get(file).has(element.name.text)) continue;
-					local.get(file).add(element.name.text);
-					offsets
-						.get(file)
-						.set(element.name.text, offsets.get(target)?.get(original) ?? 0);
-					grew = true;
-				}
+				if (!exported.get(target)?.has(hit.imported)) continue;
+				if (local.get(file).has(localName)) continue;
+				local.get(file).add(localName);
+				offsets.get(file).set(localName, offsets.get(target)?.get(hit.imported) ?? 0);
+				grew = true;
 			}
 		}
 		if (!grew) break;
