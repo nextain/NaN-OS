@@ -1669,6 +1669,15 @@ fn valid_e2e_dev_url(raw: &str) -> Option<url::Url> {
 }
 
 #[cfg(feature = "webdriver-e2e")]
+fn valid_e2e_run_id(raw: &str) -> bool {
+    !raw.is_empty()
+        && raw.len() <= 64
+        && raw
+            .chars()
+            .all(|character| character.is_ascii_alphanumeric() || matches!(character, '-' | '_'))
+}
+
+#[cfg(feature = "webdriver-e2e")]
 #[tauri::command]
 fn e2e_emit_bgm_event(
     app: tauri::AppHandle,
@@ -12148,6 +12157,14 @@ pub fn run() {
     let mut context = tauri::generate_context!("tauri.e2e.conf.json");
     #[cfg(feature = "webdriver-e2e")]
     if debug_e2e_enabled() {
+        if let Ok(run_id) = std::env::var("NAIA_E2E_RUN_ID") {
+            if valid_e2e_run_id(&run_id) {
+                let base_identifier = context.config().identifier.clone();
+                context.config_mut().identifier = format!("{base_identifier}.run-{run_id}");
+            } else {
+                log_verbose("[Naia] ignoring invalid NAIA_E2E_RUN_ID for E2E identifier");
+            }
+        }
         if let Ok(raw) = std::env::var("NAIA_E2E_DEV_URL") {
             if let Some(dev_url) = valid_e2e_dev_url(&raw) {
                 context.config_mut().build.dev_url = Some(dev_url);
@@ -15536,6 +15553,19 @@ mod tests {
         ] {
             assert!(valid_e2e_dev_url(raw).is_none(), "accepted invalid URL: {raw}");
         }
+    }
+
+    #[cfg(feature = "webdriver-e2e")]
+    #[test]
+    fn e2e_run_id_accepts_only_bounded_safe_identifier_suffixes() {
+        for raw in ["run-a", "a_b-2", "0123456789"] {
+            assert!(valid_e2e_run_id(raw), "expected valid E2E run ID: {raw}");
+        }
+        for raw in ["", "a.b", "a/b", "a b", "a\n"] {
+            assert!(!valid_e2e_run_id(raw), "accepted invalid E2E run ID: {raw:?}");
+        }
+        assert!(valid_e2e_run_id(&"a".repeat(64)));
+        assert!(!valid_e2e_run_id(&"a".repeat(65)));
     }
 
     #[test]

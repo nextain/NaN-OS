@@ -134,6 +134,81 @@ const CHAT_ERROR_NOTICE_SELECTOR = ".chat-error-notice";
 const CHAT_ERROR_LEAD_SELECTOR = ".chat-error-notice__lead";
 const CHAT_ERROR_DETAIL_SELECTOR = ".chat-error-notice__detail-text";
 
+type SendDomState = {
+	inputExists: boolean;
+	inputValueLength: number;
+	inputMatchesExpected: boolean;
+	inputDisabled: boolean;
+	normalSendReady: boolean;
+	buttons: Array<{ className: string; disabled: boolean }>;
+	isStreaming: boolean;
+	outputStage: string | null;
+	ttsSpeaking: boolean;
+	userCount: number;
+	userTextLengths: number[];
+};
+
+async function readSendDomState(
+	inputSelector: string,
+	buttonSelector: string,
+	expectedText: string,
+	context: string,
+): Promise<SendDomState> {
+	const state = await browser.execute(
+		(inputSel: string, buttonSel: string, expected: string) => {
+			const input = document.querySelector(
+				inputSel,
+			) as HTMLTextAreaElement | null;
+			const buttons = Array.from(document.querySelectorAll(buttonSel)).map(
+				(element) => {
+					const button = element as HTMLButtonElement;
+					return {
+						className: button.className,
+						disabled: button.disabled,
+					};
+				},
+			);
+			const normalSendReady = buttons.some(
+				(button) =>
+					!button.className.split(/\s+/).includes("chat-cancel-btn") &&
+					!button.disabled,
+			);
+			const users = Array.from(
+				document.querySelectorAll(".chat-message.user .message-content"),
+			).map((element) => element.textContent?.trim().length ?? 0);
+			return {
+				inputExists: input !== null,
+				inputValueLength: input?.value.length ?? 0,
+				inputMatchesExpected: input?.value === expected,
+				inputDisabled: input?.disabled ?? true,
+				normalSendReady,
+				buttons,
+				isStreaming: !!document.querySelector(".cursor-blink"),
+				outputStage:
+					document
+						.querySelector(".chat-output-stage")
+						?.getAttribute("data-stage") ?? null,
+				ttsSpeaking: !!document.querySelector(".chat-voice-btn.speaking"),
+				userCount: users.length,
+				userTextLengths: users,
+			};
+		},
+		inputSelector,
+		buttonSelector,
+		expectedText,
+	);
+	mkdirSync(UI_TRACE_DIR, { recursive: true });
+	appendFileSync(
+		UI_TRACE_FILE,
+		`${JSON.stringify({
+			ts: new Date().toISOString(),
+			context,
+			...state,
+		})}\n`,
+	);
+	return state;
+}
+
 type SendMessageWaitResult = boolean | { error: string };
 
 /**
@@ -260,12 +335,52 @@ async function setTextareaAndSend(
 		text,
 	);
 
-	// Wait for React state to settle, then click send button via JS (WebDriver click unsupported in some Tauri versions)
+	// Wait for React state to settle. The same class is used for the normal send
+	// button and the streaming/TTS cancel button, so selecting the first match
+	// can cancel unrelated startup output instead of sending this message.
 	await browser.pause(100);
-	await browser.execute((sel: string) => {
-		const btn = document.querySelector(sel) as HTMLButtonElement | null;
-		if (btn) btn.click();
+	let state = await readSendDomState(
+		selector,
+		S.chatSendBtn,
+		text,
+		"send:after-input",
+	);
+	await browser.waitUntil(
+		async () => {
+			state = await readSendDomState(
+				selector,
+				S.chatSendBtn,
+				text,
+				"send:wait-ready",
+			);
+			return (
+				state.inputMatchesExpected &&
+				!state.inputDisabled &&
+				state.normalSendReady
+			);
+		},
+		{
+			timeout: 10_000,
+			timeoutMsg: `Chat input was not send-ready: ${JSON.stringify(state)}`,
+		},
+	);
+	const clicked = await browser.execute((sel: string) => {
+		const buttons = Array.from(
+			document.querySelectorAll(sel),
+		) as HTMLButtonElement[];
+		const button = buttons.find(
+			(candidate) =>
+				!candidate.classList.contains("chat-cancel-btn") && !candidate.disabled,
+		);
+		if (!button) return false;
+		button.click();
+		return true;
 	}, S.chatSendBtn);
+	if (!clicked) {
+		throw new Error("A normal enabled chat send button was not found");
+	}
+	await browser.pause(100);
+	await readSendDomState(selector, S.chatSendBtn, text, "send:after-click");
 }
 
 /**
@@ -294,6 +409,20 @@ export async function sendMessage(
 				await traceDelta();
 				const error = await getNewChatErrorNotice(beforeChatErrors);
 				if (error) return { error };
+				const completedAssistant = await browser.execute(
+					(baseCount: number, msgSel: string) => {
+						const msgs = document.querySelectorAll(msgSel);
+						if (msgs.length <= baseCount) return "";
+						return msgs[msgs.length - 1]?.textContent?.trim() ?? "";
+					},
+					beforeCount,
+					".chat-message.assistant:not(.streaming) .message-content",
+				);
+				if (completedAssistant) {
+					return {
+						error: `Assistant completed before streaming started: ${completedAssistant.slice(0, 4_000)}`,
+					};
+				}
 				const started = await browser.execute(
 					(sel: string) => !!document.querySelector(sel),
 					S.cursorBlink,
