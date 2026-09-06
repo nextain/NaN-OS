@@ -40,30 +40,115 @@ export function processAlive(pid: number): boolean {
 }
 
 /**
- * 그 PID 의 명령줄에 표식이 들어 있는가. 확인할 수 없으면 `undefined` —
- * 그때는 죽이지 않는다. PID 는 재사용되므로 "살아 있다" 만으로는 부족하다.
+ * 회수가 바깥세상에 묻고 시키는 것 전부. 계약이 진짜 프로세스를 건드리지 않고
+ * 두 플랫폼의 갈래를 다 재려면 이 자리가 주입 가능해야 한다.
  */
+export interface ProcessSystem {
+	platform: NodeJS.Platform;
+	/** 명령을 돌리고 표준출력을 돌려준다. 실패는 던진다. */
+	run(command: string): string;
+	/** 신호를 보낸다(POSIX). 윈도우에서는 쓰지 않는다. */
+	signal(pid: number, signal: NodeJS.Signals | 0): void;
+	/** 대상이 아직 살아 있는지 확인한다. 계약 테스트가 이 판정을 주입한다. */
+	alive(pid: number): boolean;
+	/** 계약 테스트가 재시도 deadline을 기다리지 않고 진행하도록 시계를 주입한다. */
+	now(): number;
+	wait(ms: number): void;
+}
+
+export const realProcessSystem: ProcessSystem = {
+	platform: process.platform,
+	run: (command) =>
+		execSync(command, {
+			encoding: "utf8",
+			stdio: ["ignore", "pipe", "ignore"],
+			timeout: 8_000,
+		}),
+	signal: (pid, signal) => {
+		process.kill(pid, signal as NodeJS.Signals);
+	},
+	alive: processAlive,
+	now: Date.now,
+	wait: sleepSync,
+};
+
+function cimQuery(pid: number, property: string): string {
+	return `powershell -NoProfile -Command "(Get-CimInstance Win32_Process -Filter 'ProcessId=${pid}').${property}"`;
+}
+
+function commandLineCarriesMarker(commandLine: string, marker: string): boolean {
+	return commandLine.split(/[\0\s]+/u).some((argument) => argument === marker);
+}
+
 export function processCarriesMarker(
 	pid: number,
 	marker: string,
+	system: ProcessSystem = realProcessSystem,
 ): boolean | undefined {
-	if (process.platform !== "win32") {
+	if (system.platform !== "win32") {
 		const cmdline = resolve("/proc", String(pid), "cmdline");
 		if (!existsSync(cmdline)) return undefined;
 		try {
-			return readFileSync(cmdline, "utf8").includes(marker);
+			return commandLineCarriesMarker(readFileSync(cmdline, "utf8"), marker);
 		} catch {
 			return undefined;
 		}
 	}
 	try {
-		const out = execSync(
-			`powershell -NoProfile -Command "(Get-CimInstance Win32_Process -Filter 'ProcessId=${pid}').CommandLine"`,
-			{ encoding: "utf8", stdio: ["ignore", "pipe", "ignore"], timeout: 8_000 },
-		);
-		return out.includes(marker);
+		const commandLine = system.run(cimQuery(pid, "CommandLine"));
+		if (typeof commandLine !== "string") return undefined;
+		return commandLineCarriesMarker(commandLine, marker);
 	} catch {
 		return undefined;
+	}
+}
+
+/**
+ * 부모 조회가 고아라는 증거가 될 수 있는지 진단한다.
+ *
+ * 이 값은 회수 허가에 사용하지 않는다. 윈도우 CIM 조회의 빈 출력은 부모가
+ * 없다는 뜻인지 조회가 실패했다는 뜻인지 이 창구만으로 구별할 수 없으므로,
+ * 양성 증거가 없으면 항상 `undefined` 를 돌려준다.
+ */
+export function processIsOrphan(
+	pid: number,
+	system: ProcessSystem = realProcessSystem,
+): boolean | undefined {
+	if (system.platform !== "win32") return undefined;
+	try {
+		const rawParent = system.run(cimQuery(pid, "ParentProcessId")).trim();
+		if (!/^\d+$/.test(rawParent)) return undefined;
+		const parent = Number(rawParent);
+		if (!Number.isSafeInteger(parent) || parent <= 0) return undefined;
+		const parentResult = system.run(cimQuery(parent, "ProcessId")).trim();
+		if (!/^\d+$/.test(parentResult)) return undefined;
+		return Number(parentResult) !== parent ? undefined : false;
+	} catch {
+		return undefined;
+	}
+}
+
+/**
+ * 그 PID 와 **그 아래 자식까지** 끝낸다.
+ *
+ * 윈도우에서 `process.kill` 은 그 프로세스 하나만 끝낸다. 에이전트는 자식 node 를
+ * 더 띄울 수 있으므로 부모만 죽이면 자손이 남을 수 있다.
+ * `taskkill /PID <pid> /T /F` 가 트리를 내린다. `/IM`(이름으로)은 쓰지 않는다.
+ */
+export function killProcessTree(
+	pid: number,
+	system: ProcessSystem = realProcessSystem,
+	hard = false,
+): boolean {
+	try {
+		if (system.platform === "win32") {
+			system.run(`taskkill /PID ${pid} /T /F`);
+			return true;
+		}
+		system.signal(pid, hard ? "SIGKILL" : "SIGTERM");
+		return true;
+	} catch {
+		return false;
 	}
 }
 
@@ -74,8 +159,16 @@ export function processCarriesMarker(
  * 비어 있어 네이티브 쪽에서는 이미 없는 것으로 읽힌다 — 두 기준이 갈라지면
  * 하네스는 "아직 안 죽었다" 며 헛되이 기다린다.
  */
-function holdsLease(pid: number, marker: string): boolean {
-	return processCarriesMarker(pid, marker) === true;
+function holdsLease(
+	pid: number,
+	marker: string,
+	system: ProcessSystem = realProcessSystem,
+): boolean {
+	// 윈도우에서 표식 조회는 PowerShell 한 번이라 100ms 간격으로 부르면 기다림이
+	// 조회 시간에 잡아먹힌다. soft wait 동안에는 살아 있는지만 보고, hard 재시도
+	// 직전에 표식을 다시 확인해 PID 재사용을 종료 권한으로 착각하지 않는다.
+	if (system.platform === "win32") return system.alive(pid);
+	return processCarriesMarker(pid, marker, system) === true;
 }
 
 export function readAgentChildLease(
@@ -110,34 +203,44 @@ export interface ReclaimResult {
  * 살아 있는 것으로 읽어 그 세션도 뇌 없이 뜬다 — 신호를 보냈다는 것과 자리가
  * 비었다는 것은 다르다.
  */
-export function reclaimLeakedAgentChild(runtimeDir: string): ReclaimResult {
+export function reclaimLeakedAgentChild(
+	runtimeDir: string,
+	system: ProcessSystem = realProcessSystem,
+): ReclaimResult {
 	const lease = readAgentChildLease(runtimeDir);
 	const pid = lease?.pid;
 	const marker = lease?.marker;
 	if (!pid || !marker) return { reclaimed: false, reason: "no-lease" };
-	if (!processAlive(pid)) return { reclaimed: false, pid, reason: "not-alive" };
-	if (processCarriesMarker(pid, marker) !== true) {
+	if (!system.alive(pid)) return { reclaimed: false, pid, reason: "not-alive" };
+
+	const carries = processCarriesMarker(pid, marker, system);
+	// PID 는 재사용될 수 있다. 플랫폼과 무관하게 양성 표식 증명이 없으면
+	// 종료하지 않는다. 부모가 없다는 추정은 이 허가를 대체하지 못한다.
+	if (carries !== true) return { reclaimed: false, pid, reason: "marker-unverified" };
+
+	if (!killProcessTree(pid, system)) {
+		return system.alive(pid)
+			? { reclaimed: false, pid, reason: "still-alive" }
+			: { reclaimed: true, pid, reason: "terminated" };
+	}
+	const softDeadline = system.now() + 5_000;
+	while (system.now() < softDeadline) {
+		if (!holdsLease(pid, marker, system)) {
+			return {
+				reclaimed: true,
+				pid,
+				reason: "terminated",
+			};
+		}
+		system.wait(100);
+	}
+	if (!system.alive(pid)) return { reclaimed: true, pid, reason: "terminated" };
+	if (processCarriesMarker(pid, marker, system) !== true) {
 		return { reclaimed: false, pid, reason: "marker-unverified" };
 	}
-	try {
-		process.kill(pid, "SIGTERM");
-	} catch {
-		return { reclaimed: false, pid, reason: "not-alive" };
-	}
-	const softDeadline = Date.now() + 5_000;
-	while (Date.now() < softDeadline) {
-		if (!holdsLease(pid, marker)) {
-			return { reclaimed: true, pid, reason: "terminated" };
-		}
-		sleepSync(100);
-	}
-	try {
-		process.kill(pid, "SIGKILL");
-	} catch {
-		/* 그 사이 끝났다 */
-	}
-	for (let i = 0; i < 20 && holdsLease(pid, marker); i += 1) sleepSync(100);
-	return holdsLease(pid, marker)
+	killProcessTree(pid, system, true);
+	for (let i = 0; i < 20 && holdsLease(pid, marker, system); i += 1) system.wait(100);
+	return holdsLease(pid, marker, system)
 		? { reclaimed: false, pid, reason: "still-alive" }
 		: { reclaimed: true, pid, reason: "killed" };
 }

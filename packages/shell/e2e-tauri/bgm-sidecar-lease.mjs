@@ -155,6 +155,17 @@ export function procSystem() {
 			}
 		},
 		signal(pid, signal) {
+			// 윈도우에서 `process.kill` 은 그 프로세스 하나만 끝낸다. 사이드카가 자식
+			// node 를 더 띄우면 손자가 남는다. `taskkill /PID <pid> /T /F` 가 트리를 내린다.
+			// 대상은 언제나
+			// 리스가 가리키는 PID 하나이고, `/IM`(이름으로)은 쓰지 않는다.
+			if (process.platform === "win32") {
+				execSync(`taskkill /PID ${pid} /T /F`, {
+					stdio: ["ignore", "ignore", "ignore"],
+					timeout: 8_000,
+				});
+				return;
+			}
 			process.kill(pid, signal);
 		},
 		wait(ms) {
@@ -185,22 +196,44 @@ export function sidecarRuntimeDir(pid, system) {
 }
 
 /**
+ * 강제 종료 직전에 같은 사이드카인지 다시 확인한다. PID 는 재사용될 수 있으므로
+ * 처음 본 표식만 믿고 5초 뒤의 PID 를 종료하지 않는다.
+ *
+ * @param {number} pid @param {string | undefined} runtimeDir
+ * @param {SidecarSystem} system
+ * @returns {"marker-unverified"|"not-ours"|undefined}
+ */
+function sidecarIdentityFailure(pid, runtimeDir, system) {
+	if (!carriesSidecarMarker(pid, system)) return "marker-unverified";
+	const claimed = sidecarRuntimeDir(pid, system);
+	return claimed !== undefined && claimed !== runtimeDir ? "not-ours" : undefined;
+}
+
+/**
  * 끝내고 **정말 사라질 때까지 기다린다.** 신호를 보냈다는 것과 포트가 비었다는
  * 것은 다르다 — 곧장 다음 사이드카를 띄우면 그 포트를 못 잡는다.
  *
  * @param {number} pid @param {string | undefined} runtimeDir
- * @param {SidecarSystem} system @returns {SidecarOutcome}
+ * @param {SidecarSystem} system
+ * @param {() => "marker-unverified"|"not-ours"|undefined} verifyIdentity
+ * @returns {SidecarOutcome}
  */
-function terminate(pid, runtimeDir, system) {
+function terminate(pid, runtimeDir, system, verifyIdentity) {
 	try {
 		system.signal(pid, "SIGTERM");
 	} catch {
-		return { reclaimed: false, pid, runtimeDir, reason: "not-alive" };
+		return system.alive(pid)
+			? { reclaimed: false, pid, runtimeDir, reason: "still-alive" }
+			: { reclaimed: false, pid, runtimeDir, reason: "not-alive" };
 	}
 	for (let i = 0; i < 50; i += 1) {
 		if (!system.alive(pid))
 			return { reclaimed: true, pid, runtimeDir, reason: "terminated" };
 		system.wait(100);
+	}
+	const identityFailure = verifyIdentity();
+	if (identityFailure) {
+		return { reclaimed: false, pid, runtimeDir, reason: identityFailure };
 	}
 	try {
 		system.signal(pid, "SIGKILL");
@@ -236,7 +269,9 @@ export function reclaimSidecarForRuntimeDir(runtimeDir, system = procSystem()) {
 	const claimed = sidecarRuntimeDir(pid, system);
 	if (claimed !== undefined && claimed !== owned)
 		return { reclaimed: false, pid, runtimeDir: claimed, reason: "not-ours" };
-	return terminate(pid, owned, system);
+	return terminate(pid, owned, system, () =>
+		sidecarIdentityFailure(pid, owned, system),
+	);
 }
 
 /**
@@ -282,7 +317,9 @@ export function surveyStrandedSidecars(system = procSystem()) {
 export function reclaimStrandedSidecars(system = procSystem()) {
 	return surveyStrandedSidecars(system).map((candidate) =>
 		candidate.verdict === "stranded"
-			? terminate(candidate.pid, candidate.runtimeDir, system)
+			? terminate(candidate.pid, candidate.runtimeDir, system, () =>
+					sidecarIdentityFailure(candidate.pid, candidate.runtimeDir, system),
+			  )
 			: {
 					reclaimed: false,
 					pid: candidate.pid,
