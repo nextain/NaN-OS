@@ -19,7 +19,7 @@ const BUILTIN_SKILLS = [
 async function countSuccessfulSkillTimeActivities(): Promise<number> {
 	return browser.execute(() => {
 		return document.querySelectorAll(
-			'.tool-activity.tool-success[data-tool-name="skill_time"]',
+			'.tool-activity.tool-success[data-tool-name="get_time"]',
 		).length;
 	});
 }
@@ -164,7 +164,7 @@ describe("04 — skill_time", () => {
 		const beforeToolCount = await countSuccessfulSkillTimeActivities();
 		const beforeAssistantCount = await countCompletedAssistantMessages();
 		await sendMessage(
-			"지금 몇 시야? skill_time 도구를 반드시 사용해서 알려줘.",
+			"지금 몇 시야? 반드시 get_time 도구를 실제 호출해서 알려줘.",
 		);
 		let toolOk = true;
 		try {
@@ -179,7 +179,7 @@ describe("04 — skill_time", () => {
 			const retryBeforeToolCount = await countSuccessfulSkillTimeActivities();
 			const retryBeforeAssistantCount = await countCompletedAssistantMessages();
 			await sendMessage(
-				"반드시 skill_time 도구를 실제 호출해서 현재 시각을 HH:MM 형식으로만 답해.",
+				"반드시 get_time 도구를 실제 호출해서 현재 시각을 HH:MM 형식으로만 답해.",
 			);
 			try {
 				await waitForCurrentSkillTimeSuccess(
@@ -189,7 +189,7 @@ describe("04 — skill_time", () => {
 			} catch {
 				const last = await getLastAssistantMessage();
 				throw new Error(
-					`skill_time not executed after retry. last="${last.slice(0, 240)}"`,
+					`get_time not executed after retry. last="${last.slice(0, 240)}"`,
 				);
 			}
 		}
@@ -199,7 +199,7 @@ describe("04 — skill_time", () => {
 		);
 		await assertSemantic(
 			text,
-			"skill_time 도구를 사용해서 현재 시각을 알려달라고 했다",
+			"get_time 도구를 사용해서 현재 시각을 알려달라고 했다",
 			"AI가 실제 시간 정보(시:분 형태)를 제공했는가? '도구를 찾을 수 없다/실행할 수 없다'는 FAIL. 실제 시각 데이터가 포함되어야 PASS",
 		);
 	});
