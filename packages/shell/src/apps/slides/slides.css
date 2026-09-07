@@ -335,6 +335,7 @@
 .slides-app[data-focus="true"] .slides-app__workspace {
 	grid-template-columns: minmax(0, 1fr);
 	padding: 0;
+}
 
 .slides-app[data-notes-visible="false"] .slides-app__notes {
 	display: none;
