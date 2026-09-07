@@ -14,6 +14,7 @@ import {
 	markFirstAdkBinding,
 	saveSecretKeyAtPath,
 } from "./secure-store";
+import { NAIA_SLOT_DEFAULTS } from "./slots/model";
 import type { ProviderId } from "./types";
 // LiveProviderId kept for migration only — will be removed after migration period
 import type { LiveProviderId } from "./voice/types";
@@ -607,10 +608,18 @@ export function resolveConfiguredGatewayUrl(
  * Load the public config cache plus secrets from the selected ADK store.
  */
 export async function loadConfigWithSecrets(): Promise<AppConfig | null> {
-	const config = loadConfig();
-	if (!config) return null;
+	const publicConfig = loadConfig();
 	const securePath = getSecureStorePath();
-
+	// A first-run ADK can have its Naia credential before the public config is
+	// written (OAuth callback and onboarding completion are separate steps). Build
+	// the same minimal Naia config used by onboarding in that case. The selected
+	// ADK remains the authority; an empty ADK still returns null and cannot inherit
+	// another ADK's credential.
+	const config: AppConfig = publicConfig ?? {
+		provider: NAIA_SLOT_DEFAULTS.main.provider,
+		model: NAIA_SLOT_DEFAULTS.main.model,
+		apiKey: "",
+	};
 	for (const key of SECRET_KEYS) {
 		// The selected ADK is the only source of truth. Clear any legacy secret
 		// left in localStorage so switching A → B cannot reuse A's credential.
@@ -618,6 +627,7 @@ export async function loadConfigWithSecrets(): Promise<AppConfig | null> {
 			? (await getSecretKeyAtPath(key, securePath)) ?? undefined
 			: undefined;
 	}
+	if (!publicConfig && !config.naiaKey) return null;
 	return config;
 }
 

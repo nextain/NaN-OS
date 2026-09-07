@@ -117,6 +117,22 @@ describe("ADK-backed credential persistence", () => {
 		});
 	});
 
+	it("restores a Naia-only config when the public cache is absent", async () => {
+		const a = mockState.stateFor(adkStorePath("/adk-a"));
+		a.set("naiaKey", "adk-a-key");
+		localStorage.removeItem("naia-config");
+
+		await expect(loadConfigWithSecrets()).resolves.toMatchObject({
+			provider: "nextain",
+			model: "deepseek-v4-flash",
+			naiaKey: "adk-a-key",
+		});
+		expect(localStorage.getItem("naia-remote-key")).toBeNull();
+
+		localStorage.setItem("naia-adk-path", "/adk-b");
+		await expect(loadConfigWithSecrets()).resolves.toBeNull();
+	});
+
 	it("round-trips secrets through A while B stays empty", async () => {
 		await saveConfigSecure({
 			...baseConfig(),
