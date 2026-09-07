@@ -419,9 +419,11 @@ export async function sendMessage(
 					".chat-message.assistant:not(.streaming) .message-content",
 				);
 				if (completedAssistant) {
-					return {
-						error: `Assistant completed before streaming started: ${completedAssistant.slice(0, 4_000)}`,
-					};
+					// A fast response can commit before WebDriver observes the
+					// cursor-blink node.  The count and non-empty text already prove
+					// this is a new assistant response; responseReady below performs
+					// the same count-based completion check again.
+					return true;
 				}
 				const started = await browser.execute(
 					(sel: string) => !!document.querySelector(sel),

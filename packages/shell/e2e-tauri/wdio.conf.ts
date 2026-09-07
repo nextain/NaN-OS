@@ -437,7 +437,15 @@ function requirePortFree(port: number, host = "127.0.0.1"): Promise<void> {
 function childIsRunning(
 	child: ChildProcess | undefined,
 ): child is ChildProcess {
-	return Boolean(child && child.exitCode === null && child.signalCode === null);
+	// A failed spawn (for example ENOENT or a missing DLL on Windows) can return
+	// a ChildProcess object before it emits `error`, but it never owns a PID. Do
+	// not treat that object as a live process during cleanup.
+	return Boolean(
+		child &&
+		child.pid &&
+		child.exitCode === null &&
+		child.signalCode === null,
+	);
 }
 
 function signalOwnedProcess(child: ChildProcess, signal: NodeJS.Signals): void {
@@ -502,30 +510,94 @@ function waitForChildExit(
 }
 
 /** Wait until a port is accepting connections. */
-function waitForPort(port: number, timeoutMs = 30_000): Promise<void> {
+export function waitForPort(
+	port: number,
+	timeoutMs = 30_000,
+	ownedChild?: { child: ChildProcess; label: string },
+	connectPort: typeof connect = connect,
+): Promise<void> {
 	return new Promise((ok, fail) => {
 		const deadline = Date.now() + timeoutMs;
+		const sockets = new Set<ReturnType<typeof connect>>();
+		let retryTimer: ReturnType<typeof setTimeout> | undefined;
+		let settled = false;
+
+		const cleanup = () => {
+			if (retryTimer !== undefined) clearTimeout(retryTimer);
+			for (const socket of sockets) socket.destroy();
+			sockets.clear();
+			if (ownedChild) {
+				ownedChild.child.removeListener("error", onChildError);
+				ownedChild.child.removeListener("exit", onChildExit);
+			}
+		};
+		const finish = (error?: Error) => {
+			if (settled) return;
+			settled = true;
+			cleanup();
+			if (error) fail(error);
+			else ok();
+		};
+		const failForChild = (reason: string) => {
+			const label = ownedChild?.label ?? "owned process";
+			finish(
+				new Error(
+					`Owned ${label} failed before port ${port} was ready: ${reason}`,
+				),
+			);
+		};
+		const onChildError = (error: Error) => {
+			failForChild(`startup error: ${error.message}`);
+		};
+		const onChildExit = (code: number | null, signal: NodeJS.Signals | null) => {
+			failForChild(
+				`exited before readiness (code=${code ?? "null"}, signal=${signal ?? "none"})`,
+			);
+		};
+
+		if (ownedChild) {
+			ownedChild.child.once("error", onChildError);
+			ownedChild.child.once("exit", onChildExit);
+			if (
+				ownedChild.child.exitCode !== null ||
+				ownedChild.child.signalCode !== null
+			) {
+				failForChild(
+					`already exited (code=${ownedChild.child.exitCode ?? "null"}, signal=${ownedChild.child.signalCode ?? "none"})`,
+				);
+				return;
+			}
+		}
+
 		const tryConnect = () => {
+			if (settled) return;
+			retryTimer = undefined;
 			const hosts = ["127.0.0.1", "::1", "localhost"] as const;
 			let attempts = hosts.length;
 			let connected = false;
 			for (const host of hosts) {
-				const sock = connect(port, host);
-				sock.once("connect", () => {
-					if (connected) return;
+				if (settled) return;
+				const socket = connectPort(port, host);
+				sockets.add(socket);
+				socket.once("connect", () => {
+					sockets.delete(socket);
+					if (connected || settled) {
+						socket.destroy();
+						return;
+					}
 					connected = true;
-					sock.destroy();
-					ok();
+					socket.destroy();
+					finish();
 				});
-				sock.once("error", () => {
-					sock.destroy();
+				socket.once("error", () => {
+					sockets.delete(socket);
+					socket.destroy();
 					attempts -= 1;
-					if (connected) return;
-					if (attempts > 0) return;
-					if (Date.now() > deadline) {
-						fail(new Error(`Port ${port} not ready within ${timeoutMs}ms`));
+					if (connected || settled || attempts > 0) return;
+					if (Date.now() >= deadline) {
+						finish(new Error(`Port ${port} not ready within ${timeoutMs}ms`));
 					} else {
-						setTimeout(tryConnect, 500);
+						retryTimer = setTimeout(tryConnect, 500);
 					}
 				});
 			}
@@ -840,7 +912,32 @@ export const config = {
 				},
 			);
 		}
-		await waitForPort(IN_APP_PORT, 30_000);
+		try {
+			await waitForPort(
+				IN_APP_PORT,
+				30_000,
+				IS_WINDOWS
+					? {
+							child: tauriDriver as ChildProcess,
+							label: `native WebDriver/app (${TAURI_BINARY})`,
+						}
+					: undefined,
+			);
+		} catch (error) {
+			// Startup failures must clean only the child created by this hook. Keep
+			// the original spawn/exit error visible instead of replacing it with a
+			// cleanup timeout, and prevent onComplete from attempting a second kill.
+			const failedChild = tauriDriver;
+			tauriDriver = undefined;
+			try {
+				await stopOwnedProcess(failedChild, "native WebDriver/app");
+			} catch (cleanupError) {
+				process.stderr.write(
+					`[e2e] native startup cleanup failed: ${String(cleanupError)}\n`,
+				);
+			}
+			throw error;
+		}
 	},
 
 	async before() {

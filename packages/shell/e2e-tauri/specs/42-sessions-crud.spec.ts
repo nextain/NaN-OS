@@ -55,13 +55,20 @@ function userTurnIndex(
 	);
 }
 
-function hasAssistantAfter(
+function hasNonEmptyAssistantAfter(
 	turns: { role: string; content: string }[],
 	userIndex: number,
 ): boolean {
 	return (
 		userIndex >= 0 &&
-		turns.slice(userIndex + 1).some((turn) => turn.role === "assistant")
+		turns
+			.slice(userIndex + 1)
+			.some(
+				(turn) =>
+					turn.role === "assistant" &&
+					typeof turn.content === "string" &&
+					turn.content.trim().length > 0,
+			)
 	);
 }
 
@@ -102,18 +109,19 @@ describe("42 — 세션 대화록(ConversationLogPort)", () => {
 		await browser.waitUntil(
 			async () => {
 				const turns = readTurns(path);
-				return hasAssistantAfter(turns, userTurnIndex(turns, marker));
+				return hasNonEmptyAssistantAfter(turns, userTurnIndex(turns, marker));
 			},
 			{
 				timeout: 30_000,
-				timeoutMsg: "이번 user 뒤에 assistant 응답이 남지 않았다",
+				timeoutMsg:
+					"이번 user 뒤에 비어 있지 않은 assistant 응답이 남지 않았다",
 			},
 		);
 
 		const turns = readTurns(path);
 		const currentUserIndex = userTurnIndex(turns, marker);
 		expect(currentUserIndex).toBeGreaterThanOrEqual(0);
-		expect(hasAssistantAfter(turns, currentUserIndex)).toBe(true);
+		expect(hasNonEmptyAssistantAfter(turns, currentUserIndex)).toBe(true);
 	});
 
 	it("다음 턴이 같은 세션 파일에 이어 붙는다 — 덮어쓰지 않는다", async () => {
@@ -129,12 +137,12 @@ describe("42 — 세션 대화록(ConversationLogPort)", () => {
 			async () => {
 				const turns = readTurns(path);
 				const currentUserIndex = userTurnIndex(turns, marker, before.length);
-				return hasAssistantAfter(turns, currentUserIndex);
+				return hasNonEmptyAssistantAfter(turns, currentUserIndex);
 			},
 			{
 				timeout: 30_000,
 				timeoutMsg:
-					"다음 턴이 같은 대화록에 user 뒤 assistant로 이어 붙지 않았다",
+					"다음 턴이 같은 대화록에 user 뒤 비어 있지 않은 assistant로 이어 붙지 않았다",
 			},
 		);
 
@@ -146,6 +154,6 @@ describe("42 — 세션 대화록(ConversationLogPort)", () => {
 		expect(after.length).toBeGreaterThan(before.length);
 		const currentUserIndex = userTurnIndex(after, marker, before.length);
 		expect(currentUserIndex).toBeGreaterThanOrEqual(before.length);
-		expect(hasAssistantAfter(after, currentUserIndex)).toBe(true);
+		expect(hasNonEmptyAssistantAfter(after, currentUserIndex)).toBe(true);
 	});
 });

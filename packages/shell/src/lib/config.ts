@@ -605,6 +605,23 @@ export function resolveConfiguredGatewayUrl(
 // ── Async API (ADK-backed secure store) ──
 
 /**
+ * An ADK pointer is a bootstrap selector, not a stable global.  Async secure
+ * store operations capture their expected path, but callers also need to avoid
+ * publishing an old workspace's public cache after the user switches ADKs
+ * while the operation is waiting on native I/O.
+ */
+function assertSelectedAdkPath(
+	securePath: string | null,
+	operation: string,
+): void {
+	if (securePath && getSecureStorePath() !== securePath) {
+		throw new Error(
+			`${operation} aborted: selected ADK changed during the operation`,
+		);
+	}
+}
+
+/**
  * Load the public config cache plus secrets from the selected ADK store.
  */
 export async function loadConfigWithSecrets(): Promise<AppConfig | null> {
@@ -621,12 +638,15 @@ export async function loadConfigWithSecrets(): Promise<AppConfig | null> {
 		apiKey: "",
 	};
 	for (const key of SECRET_KEYS) {
+		assertSelectedAdkPath(securePath, "Loading configuration");
 		// The selected ADK is the only source of truth. Clear any legacy secret
 		// left in localStorage so switching A → B cannot reuse A's credential.
 		(config as any)[key] = securePath
 			? (await getSecretKeyAtPath(key, securePath)) ?? undefined
 			: undefined;
+		assertSelectedAdkPath(securePath, "Loading configuration");
 	}
+	assertSelectedAdkPath(securePath, "Loading configuration");
 	if (!publicConfig && !config.naiaKey) return null;
 	return config;
 }
@@ -654,12 +674,14 @@ export async function saveConfigSecure(config: AppConfig): Promise<void> {
 	}
 
 	for (const key of SECRET_KEYS) {
+		assertSelectedAdkPath(securePath, "Saving configuration");
 		const val = (config as any)[key];
 		if (typeof val === "string" && val.length > 0) {
 			if (securePath) {
 				await saveSecretKeyAtPath(key, val, securePath);
 			}
 		}
+		assertSelectedAdkPath(securePath, "Saving configuration");
 		(publicConfig as any)[key] = undefined;
 	}
 
@@ -672,6 +694,7 @@ export async function saveConfigSecure(config: AppConfig): Promise<void> {
 
 	// Keep the ordinary config-change contract: Settings/App listeners must see
 	// the public snapshot immediately, while secret values remain keychain-only.
+	assertSelectedAdkPath(securePath, "Saving configuration");
 	saveConfig(publicConfig);
 }
 

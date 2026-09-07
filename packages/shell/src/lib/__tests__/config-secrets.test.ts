@@ -117,6 +117,18 @@ describe("ADK-backed credential persistence", () => {
 		});
 	});
 
+	it("rejects a load when the selected ADK changes during native reads", async () => {
+		mockState.invoke.mockImplementationOnce(async () => {
+			// Simulate the user selecting B while A's first secure read is pending.
+			localStorage.setItem("naia-adk-path", "/adk-b");
+			return "adk-a-key";
+		});
+
+		await expect(loadConfigWithSecrets()).rejects.toThrow(
+			/selected ADK changed during the operation/,
+		);
+	});
+
 	it("restores a Naia-only config when the public cache is absent", async () => {
 		const a = mockState.stateFor(adkStorePath("/adk-a"));
 		a.set("naiaKey", "adk-a-key");
@@ -219,5 +231,21 @@ describe("ADK-backed credential persistence", () => {
 		expect(JSON.parse(localStorage.getItem("naia-config") ?? "{}")).not.toHaveProperty(
 			"apiKey",
 		);
+	});
+
+	it("does not publish A's public cache after switching to B mid-save", async () => {
+		saveConfig({ ...baseConfig(), model: "cached-before-save" });
+		mockState.invoke.mockImplementationOnce(async () => {
+			// The secret write is still addressed to A, but the selected workspace
+			// changes before saveConfig(publicConfig) would notify the shell.
+			localStorage.setItem("naia-adk-path", "/adk-b");
+		});
+
+		await expect(
+			saveConfigSecure({ ...baseConfig(), apiKey: "adk-a-key", model: "from-a" }),
+		).rejects.toThrow(/selected ADK changed during the operation/);
+		expect(JSON.parse(localStorage.getItem("naia-config") ?? "{}")).toMatchObject({
+			model: "cached-before-save",
+		});
 	});
 });
